@@ -1,6 +1,6 @@
 ---
 name: autopilot-doc
-description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. 6 modes produce both strategy AND draft (markdown only). review/rebuttal mode use `--format-ref <path>` (path to a venue-specific format reference doc; no built-in presets — venues differ year-to-year). review mode requires `--format-ref` (fail-fast at pre-flight); rebuttal mode optional-but-recommended. presentation mode produces slide-by-slide markdown; PPTX export is NOT supported (use PowerPoint directly). `--refs` accepts an autopilot-research artifact_dir to chain pipelines."
+description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. 6 modes produce both strategy AND draft (markdown only). All modes accept `--format-ref <path>` (universal flag — venue/journal/lab-specific guidelines, template, sample, or rebuttal-format file). No built-in presets (venues/years/journals differ). When omitted, agent auto-discovers a format spec inside `--refs` by filename keywords (guidelines/template/format/cfp/instructions/...); review mode hard-fails if neither is found, other modes warn-and-fallback to a generic layout. presentation mode produces slide-by-slide markdown; PPTX export is NOT supported (use PowerPoint directly). `--refs` accepts an autopilot-research artifact_dir to chain pipelines."
 argument-hint: "<task description> [--mode rebuttal|write|review|report|proposal|presentation] [--refs <folder>] [--format-ref <path>] [--qa light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 ---
 
@@ -66,31 +66,41 @@ If 연구팀 added no memos, the pause is skipped (nothing to refine).
 
 When resuming with `--from`, the positional argument should be either the artifact directory path or a fuzzy-matchable short name. The orchestrator resolves it via the same fuzzy lookup used by Plan Resolution in autopilot-code: `ls -d .claude_reports/documents/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `mode`, `qa_level`, `refs_folder`, `user_refine`. CLI flags override state file; missing flags inherit from state.
 
-**`--format-ref <path>`** — path to a venue-specific format reference document. Used by `review` and `rebuttal` modes:
+**`--format-ref <path>`** — universal flag. Path to a venue/journal/lab-specific format reference document. Available in **every mode**.
 
-- **No built-in presets**. There is no single "openreview format" or "journal format" — even the same venue changes its review/rebuttal template year-to-year (NeurIPS 2024 ≠ NeurIPS 2026), and journals each define their own. The user must supply the actual document for the target venue/round.
+- **No built-in presets**. There is no single "openreview format" or "journal format" — even the same venue changes its review/rebuttal template year-to-year, and journals/labs each define their own. The user supplies the actual document for the target venue/round.
 - **Acceptable file types**: `.md`, `.txt`, `.pdf`, `.html`, `.docx` (or any plain-text-ish format the agent can Read). Validated at Step 0 pre-flight.
-- **What the file should contain** (any combination is fine — agent extracts what it can):
-  - For `review` mode: review template sections / rating axes (1-N scale definitions) / length limit / tone guidelines / submission portal layout (e.g., Hotcrp / OpenReview / individual journal portal)
-  - For `rebuttal` mode: rebuttal length limit / allowed scope / sub-type signals (see below) / submission window / formatting rules / examples of the venue's previous-year rebuttals if available
 
-**Mode-by-mode behavior**:
+**What the file should contain** (any subset — agent extracts what it can):
 
-- `review`: **REQUIRED**. Pipeline aborts at Step 0 if missing. Use the venue's reviewer guidelines PDF or a sample review template you've prepared.
-- `rebuttal`: **Optional but strongly recommended**. If omitted, the agent defaults to a generic conference rebuttal layout AND prompts the user at Step 0 to specify the rebuttal sub-type via task description (see below). Providing a `--format-ref` skips this prompt.
-- All other modes (`write`/`proposal`/`report`/`presentation`): ignored.
+| Mode | format-ref typical content |
+|---|---|
+| `review` | review template sections / rating axes (1-N with labels) / length limit / tone / submission portal layout |
+| `rebuttal` | rebuttal length limit / allowed scope / **sub-type indication** (meta-reviewer-only one-shot vs reviewer-dialogue multi-round vs response-with-paper-revision) / submission window / examples of past-year rebuttals if available |
+| `write` | venue paper template (e.g. NeurIPS 2026 LaTeX style) / page limits / section requirements / citation style / required disclosures |
+| `presentation` | lab/venue slide template / time limits / required sections / branding rules / sample past presentations |
+| `proposal` | grant body's required sections (NRF/NSF/internal) / page/word limits / required attachments / evaluation criteria |
+| `report` | company/team report template / required sections / branding / audience expectations |
 
-**Rebuttal sub-types** (the format-ref or task description must signal one):
+**Resolution order** (every mode):
 
-| Sub-type | 특징 | 표준 사례 |
-|---|---|---|
-| **Meta-reviewer-only response** | reviewer와 직접 왕복 X. AC/SAC가 보는 _단일 응답_. 길이 짧음. | NeurIPS rebuttal phase가 일부 행사에서 |
-| **Reviewer dialogue (multi-round)** | reviewer가 응답 후 추가 질문 → 또 답변. OpenReview의 토론 단계. | ICLR / OpenReview 토론 |
-| **Response with paper revision** | rebuttal 본문 + 수정된 paper 업로드 가능. | ACL ARR, 일부 저널 major revision |
+1. **Explicit `--format-ref <path>`** — agent reads it as authoritative format spec.
+2. **Auto-discovery in `--refs`** — if `--format-ref` is omitted, agent searches `--refs` for files whose name contains keywords: `guidelines`, `template`, `format`, `cfp`, `instructions`, `submission`, `rebuttal_format`, `review_form`, `style_guide`. Acceptable extensions same as above.
+   - 1 candidate found → use it, log to user: "format-ref auto-discovered: {path}".
+   - 2+ candidates → ask user at Step 0 to pick one (or pass `--format-ref <path>` to specify).
+   - 0 candidates → mode-specific fallback (next step).
+3. **Mode-specific fallback** when neither explicit nor auto-discovered:
 
-세 타입은 _전략·톤·길이·범위_가 모두 다름. format-ref 파일에서 추출되거나, task description에 명시 (예: "ICLR 2026 rebuttal — reviewer dialogue 가능, 9000자 한도").
+| Mode | Behavior when no format-ref available |
+|---|---|
+| `review` | **Hard fail at pre-flight** — review mode cannot proceed without a venue review form. Abort with: "review mode requires either --format-ref <path> or a guideline file in --refs (keyword: guidelines/template/format/...). Venues differ year-to-year — no built-in presets." |
+| `rebuttal` | **Pre-flight prompt** — ask user: (a) provide --format-ref now, or (b) declare format constraints inline in `<task description>` (length limit, sub-type, scope), or (c) opt into generic conference rebuttal layout (warn quality drop). |
+| `proposal` | Warn-and-fallback to generic proposal layout. Recommend `--format-ref <funding_body_template>` for NRF/NSF/internal grants. |
+| `write` | Warn-and-fallback to generic paper/article layout. Strong warning if target venue is academic — Suggest: "venue paper template (e.g. NeurIPS LaTeX style) significantly improves draft quality". |
+| `presentation` | Warn-and-fallback to generic slide-by-slide markdown. Lab/venue slide templates improve fit but not blocking. |
+| `report` | Warn-and-fallback to generic report layout. Suggest internal company template if applicable. |
 
-If reviewer-guidelines PDFs are also found in `--refs`, those are layered on top of `--format-ref`.
+> Sub-type information for rebuttal (meta-only / reviewer-dialogue / response-with-revision), section structure for review, page limits for write, etc. are all **extracted from the format-ref file**. No separate flags. If the file lacks the info, agent asks the user at Step 0 (within fallback prompt) or proceeds with documented assumptions.
 
 The remaining text (after removing mode and flags) is the task description.
 
@@ -107,8 +117,7 @@ The pipeline runs with sane defaults and only pauses on genuinely ambiguous or d
 | No reviewer comments for rebuttal | **Always ask** at pre-flight. |
 | Strategy review → memos added | Auto-refine (or pause for user-memo if `--user-refine` is set). |
 | Draft review → memos added | Auto-refine (or pause for user-memo if `--user-refine` is set). |
-| `--format-ref` missing (review mode) | Abort at pre-flight. |
-| `--format-ref` missing (rebuttal mode) | Ask user at Step 0 whether to (a) supply a format-ref file or (b) declare the rebuttal sub-type via task description. |
+| `--format-ref` missing | Auto-discover in `--refs` (filename keywords). If none, mode-specific fallback (review hard-fails; rebuttal prompts user; write/proposal/report/presentation warn-and-fallback to generic layout). |
 | Reviewer guidelines absent in refs (review mode) | Use built-in spec only; inform user. |
 | Scope Clarification triggered | Ask 2-4 questions; auto-proceed if `--no-clarify`. |
 
@@ -124,8 +133,8 @@ mode: presentation
 qa_level: thorough
 user_refine: true
 refs_folder: <path>
-format_ref: <path or null>          # for review (required) and rebuttal (optional)
-rebuttal_subtype: <meta-only|reviewer-dialogue|response-with-revision or null>
+format_ref: <path or null>          # universal — explicit flag, auto-discovered, or null after fallback
+format_ref_source: <explicit|auto-discovered|user-supplied-at-prompt|fallback-generic>
 clarified_intent: <string or null>    # captured by Step 0 Scope Clarification, used on resume
 last_completed_stage: strategy        # one of: clarify, analyze, strategy, strategy-refine, draft, draft-refine, finalize
 paused_at_stage: strategy-refine      # set only when --user-refine triggered a pause
@@ -167,15 +176,26 @@ Validate mode-specific required inputs. If any check fails, **abort immediately*
 
 **Mode-specific checks**:
 
-- **review mode** — `--format-ref <path>` is REQUIRED. Validate:
-  - `os.path.exists(value)` must be True AND extension must be one of `.md`, `.txt`, `.pdf`, `.html`, `.docx`. Otherwise abort.
-  - If flag is missing entirely → abort with: "review mode requires --format-ref <path>. Provide a path to the venue's review template/guidelines file (no built-in presets — venues differ year-to-year and journal-to-journal). Acceptable types: .md/.txt/.pdf/.html/.docx."
+**Universal `--format-ref` resolution** (runs before mode-specific checks):
 
-- **presentation mode** — no extra pre-flight requirements. PPTX export is NOT performed; user converts the markdown draft to PPT manually.
+1. If `--format-ref <path>` explicit → validate path exists + extension in {`.md`,`.txt`,`.pdf`,`.html`,`.docx`}. Otherwise abort.
+2. If omitted → auto-discover in `--refs` by filename keywords (`guidelines`, `template`, `format`, `cfp`, `instructions`, `submission`, `rebuttal_format`, `review_form`, `style_guide`):
+   - 1 candidate → use it; log "format-ref auto-discovered: {path}".
+   - 2+ candidates → ask user at Step 0 which to use, or to pass `--format-ref` explicitly.
+   - 0 candidates → mode-specific fallback below.
+
+**Mode-specific pre-flight** (after universal resolution):
+
+- **review mode** — format-ref is REQUIRED.
+  - If still no format-ref after auto-discovery → **abort** with: "review mode requires either --format-ref <path> or a guideline file in --refs (keyword: guidelines/template/format/...). Venues differ year-to-year — no built-in presets. Acceptable file types: .md/.txt/.pdf/.html/.docx."
 
 - **rebuttal mode** — two checks:
   - refs folder must contain at least one reviewer-comment file (txt/md/pdf with reviewer-style content detected by filename or content scan). If none found, ask the user before proceeding.
-  - `--format-ref <path>` is **optional but recommended**. If provided, validate same as review mode. If not provided, ask the user at Step 0 to either (a) supply a format-ref file, or (b) declare the rebuttal sub-type via task description (`meta-only` / `reviewer-dialogue` / `response-with-revision`). Defaults to a generic conference layout if user explicitly opts out, but warn that strategy/draft quality drops without venue-specific format info.
+  - format-ref absent (no flag, no auto-discovery hit) → prompt user at Step 0: "(a) provide --format-ref now / (b) declare format constraints (length, sub-type, scope) inline in <task description> / (c) opt into generic conference rebuttal layout (warns quality drop)". Sub-type info (meta-only / reviewer-dialogue / response-with-revision) is extracted from the format-ref file or stated in task description — _no separate flag_.
+
+- **presentation mode** — format-ref optional. If absent, fallback to generic slide-by-slide markdown layout (warning logged).
+
+- **proposal / report / write modes** — format-ref optional. If absent, fallback to generic mode-specific layout. For `write` targeting an academic venue (detected from task description or refs/), strongly recommend supplying the venue's paper template.
 
 **Abort behavior**:
 - Print the error message in Korean to the user.
@@ -537,7 +557,7 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
 ```markdown
 # Document Strategy Pipeline Summary: {task name}
 
-- **Date**: {YYYY-MM-DD} | **Mode**: {mode} | **Format-ref**: {format_ref or "N/A"} | **Rebuttal sub-type**: {rebuttal_subtype or "N/A"} | **Status**: done / reviewed / draft
+- **Date**: {YYYY-MM-DD} | **Mode**: {mode} | **Format-ref**: {format_ref or "fallback-generic"} ({format_ref_source}) | **Status**: done / reviewed / draft
 - **User-Refine**: {true | false}
 - **Refs folder**: {refs_folder}
 
@@ -577,8 +597,9 @@ Then report to the user:
 - Do NOT fabricate citations or invent results — only reference materials actually present in the refs folder.
 - The draft is a working first draft for user editing, NOT a final document. Mark uncertain content with `[TODO: ...]`.
 - For rebuttal mode: ensure EVERY reviewer point is addressed — missing a point is a critical error.
-- For review mode: scores must be justified with concrete evidence; never fabricate scores without backing in the paper text. `--format-ref <path>` is mandatory (no built-in presets) — pre-flight aborts otherwise.
-- For rebuttal mode: `rebuttal_subtype` (`meta-only` / `reviewer-dialogue` / `response-with-revision`) must be known by Step 1, either from `--format-ref` extraction or from task description / Step 0 prompt. Strategy and tone differ across sub-types.
+- For review mode: scores must be justified with concrete evidence; never fabricate scores without backing in the paper text. `--format-ref <path>` (explicit or auto-discovered) is mandatory — pre-flight aborts otherwise.
+- For rebuttal mode: rebuttal sub-type (meta-only / reviewer-dialogue / response-with-revision) must be derivable from format-ref content OR task description by Step 1. Strategy and tone differ across sub-types — if neither source provides it, Step 0 prompt asks the user to declare.
+- For all other modes: format-ref is optional but improves quality significantly when supplied. The agent should note the format-ref source in the strategy frontmatter so future refine-doc rounds know what to honor.
 - For presentation mode: never insert real figures/images automatically — describe visuals in the `**시각자료**:` block with concrete-enough wording (e.g., "5-stage timeline 가로 막대, 색상 5개"). PPTX export is NOT performed by this pipeline; the user reads the cheatsheet markdown and creates slides manually in PowerPoint with their lab template.
 - Present material inventory to the user briefly and auto-proceed.
 

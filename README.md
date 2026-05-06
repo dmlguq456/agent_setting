@@ -1,7 +1,7 @@
 # Claude Setting
 
 > Source: `~/.claude/skills/*/SKILL.md` + `~/.claude/agents/*.md`
-> 마지막 sync: 2026-05-06 20:10 KST (`/sync-skills` 자동) — 직접 편집 금지.
+> 마지막 sync: 2026-05-06 20:30 KST (`/sync-skills` 자동) — 직접 편집 금지.
 > Notion 대문: [Agents/Skills](https://www.notion.so/34987c2bb75380d68df4d6ce4d469bff) (본 README와 동일 콘텐츠)
 > Notion 운영 가이드: [`notion_guide.md`](notion_guide.md) (페이지 타입 템플릿 + workspace 구조)
 
@@ -59,23 +59,30 @@ flowchart LR
 
 모든 모드 공통 패턴: **strategy + draft markdown** 산출 → 사용자가 최종 작성·빌드·디자인 마무리. 산출물은 `documents/{date}_{name}/`. **첫 positional arg = `<task description>`** (research/code와 동일하게 작업의 _구체적 의도·목표·범위_를 한 줄로. `--refs`는 자료 폴더, task 설명과 _별개_).
 
-| 모드 | 용도 (예시) | 명령 |
+| 모드 | 용도 (예시) | 명령 (`--format-ref` optional, review만 필수) |
 |---|---|---|
-| `write` | 논문 / camera-ready / 백서 / 기술 블로그 / 책 챕터 / 일반 글쓰기 | `/autopilot-doc "<task: 무슨 글, 어떤 청중, 어떤 메시지>" --mode write --refs <dir> --user-refine` |
-| `presentation` | 논문 발표 / 사내 세미나 / 컨퍼런스 키노트 / 데모 데이 / 강의 | `/autopilot-doc "<task: 발표 주제, 청중, 시간>" --mode presentation --refs <dir> --user-refine` |
-| `rebuttal` | 학회 reviewer 응답 (sub-type 3종 — 아래 참조) | `/autopilot-doc "<task: paper 제목, 학회·라운드, 강조점>" --mode rebuttal --refs <reviewer_comments> --format-ref <venue_rebuttal_guidelines> --user-refine` |
+| `write` | 논문 / camera-ready / 백서 / 기술 블로그 / 책 챕터 / 일반 글쓰기 | `/autopilot-doc "<task: 무슨 글, 어떤 청중, 어떤 메시지>" --mode write --refs <dir> [--format-ref <venue_paper_template>] --user-refine` |
+| `presentation` | 논문 발표 / 사내 세미나 / 컨퍼런스 키노트 / 데모 데이 / 강의 | `/autopilot-doc "<task: 발표 주제, 청중, 시간>" --mode presentation --refs <dir> [--format-ref <slide_template>] --user-refine` |
+| `rebuttal` | 학회 reviewer 응답 (sub-type 3종은 format-ref/task에 명시) | `/autopilot-doc "<task: paper 제목, 학회·라운드, 강조점>" --mode rebuttal --refs <reviewer_comments> [--format-ref <venue_rebuttal_guidelines>] --user-refine` |
 | `review` | 본인이 reviewer 입장 (peer review) | `/autopilot-doc "<task: paper 제목, 평가 관점>" --mode review --refs <paper_dir> --format-ref <venue_review_template> --user-refine` |
-| `proposal` | 연구 grant (NRF/NSF) / 사업 제안 / 내부 프로젝트 제안 | `/autopilot-doc "<task: 무엇을 제안, 누구에게>" --mode proposal --refs <idea+research_dir> --user-refine` |
-| `report` | 기술 보고서 / 시장 분석 / 분기 보고 / 사고 분석 (post-mortem) | `/autopilot-doc "<task: 무엇에 대한 보고, 청중>" --mode report --refs <dir> --user-refine` |
+| `proposal` | 연구 grant (NRF/NSF) / 사업 제안 / 내부 프로젝트 제안 | `/autopilot-doc "<task: 무엇을 제안, 누구에게>" --mode proposal --refs <idea+research_dir> [--format-ref <funding_body_template>] --user-refine` |
+| `report` | 기술 보고서 / 시장 분석 / 분기 보고 / 사고 분석 (post-mortem) | `/autopilot-doc "<task: 무엇에 대한 보고, 청중>" --mode report --refs <dir> [--format-ref <internal_template>] --user-refine` |
 
 > **task vs --refs의 역할 분리**: `<task>`는 _목표·의도·범위·청중_을 명확히 (Step 0 Scope Clarification에 사용). `--refs`는 _참고 자료 폴더_ (cards / PDFs / 본인 결과 등). 둘 다 강할수록 strategy + draft 품질이 올라감 — `--refs`만 강하면 자료는 풍부한데 _무엇을 만들지_가 모호해서 첫 draft에서 사용자가 다시 잡아줘야 함.
 
-> **`--format-ref <path>` (review/rebuttal 전용)**: 학회·저널·연도마다 다른 _개별 가이드라인 / 템플릿 / 샘플 파일_을 path로 전달. **built-in preset 없음** ("openreview" 같은 이름은 매년·학회마다 다른 형태이므로). 사용자가 해당 venue의 reviewer guidelines PDF / sample review / 작년 rebuttal 예시 등을 폴더에 넣고 그 파일 경로를 지정. `review` 모드는 _필수_, `rebuttal` 모드는 _선택이지만 강력 권장_.
-
-> **rebuttal 3 sub-type** (format-ref 또는 task description에서 명시):
-> - **meta-only** — meta-reviewer/AC만 보는 단일 응답. reviewer 직접 왕복 X. 짧고 압축적.
-> - **reviewer-dialogue** — reviewer가 응답을 보고 추가 질문 → 또 답변. OpenReview 스타일 토론.
-> - **response-with-revision** — rebuttal 본문 + 수정된 paper 업로드 가능. ACL ARR / 저널 major revision 류.
+> **`--format-ref <path>` (universal flag)**: 모든 모드에서 사용 가능한 단일 path 인자. 학회·저널·연도·랩마다 다른 _개별 가이드라인 / 템플릿 / 샘플 / format-spec 파일_을 path로 전달. **built-in preset 없음** (venue마다 매년 다르므로).
+>
+> **Resolution 순서**: (1) explicit `--format-ref <path>` → (2) `--refs` 폴더에서 키워드 자동 탐색 (`guidelines`/`template`/`format`/`cfp`/`instructions`/`submission`/...) → (3) 모드별 fallback:
+> - `review`: **hard fail** — reviewer guideline 없이 진행 X
+> - `rebuttal`: Step 0에서 사용자에게 prompt (format-ref 제공 / task에 inline 명시 / generic layout 동의)
+> - `write` / `presentation` / `proposal` / `report`: warn-and-fallback (generic layout으로 진행, 품질 저하 경고)
+>
+> **rebuttal sub-type 3종**은 format-ref 파일 또는 task description에 명시 (별도 flag 없음):
+> - _meta-only_: AC/SAC 단일 응답. 짧고 압축적
+> - _reviewer-dialogue_: 다회 왕복 (OpenReview 토론)
+> - _response-with-revision_: rebuttal + paper 수정본 업로드 (ACL ARR / 저널 major revision)
+>
+> 단순화 원칙: sub-type별 별도 flag 두지 않고 _venue가 발행한 가이드 문서 1개_에 모든 정보를 담아 `--format-ref`로 전달.
 
 ### 자주 쓰는 chaining 패턴
 
@@ -116,7 +123,7 @@ flowchart LR
 | `analyze-papers` | PDF → `docs_paper/` | (없음) |
 | `autopilot-research` | 분야 조사 — mode별 보고서 (academic 9 / technology 7 / market 5) | `--mode academic/technology/market` · `--depth shallow/medium/deep` · `--qa` · `--from search/analyze/report` · `--no-clarify` |
 | `autopilot-code` | 코드 dev/audit/debug | `--mode dev/audit/debug` · `--qa` · `--from plan/refine/execute/test/report` · `--user-refine` |
-| `autopilot-doc` | 문서 strategy + draft (markdown) | `--mode rebuttal/write/review/report/proposal/presentation` · `--refs <dir>` · `--format-ref <path>` (review 필수, rebuttal 권장) · `--qa` · `--from analyze/strategy/strategy-refine/draft/draft-refine/finalize` · `--user-refine` · `--no-clarify` |
+| `autopilot-doc` | 문서 strategy + draft (markdown) | `--mode rebuttal/write/review/report/proposal/presentation` · `--refs <dir>` · `--format-ref <path>` (universal — review 필수, 나머지 mode는 권장; 자동 탐색 fallback) · `--qa` · `--from analyze/strategy/strategy-refine/draft/draft-refine/finalize` · `--user-refine` · `--no-clarify` |
 | `sync-skills` | 본 README + 노션 대시보드 동기화 | `--check` · `--readme-only` · `--notion-only` · `--force` |
 
 > sub-skill (`init-plan`, `refine-plan`, `init-doc-strategy`, `refine-doc`, `execute-plan`, `run-test`, `final-report`)은 autopilot 내부에서 자동 호출 — 직접 사용은 pause 재개 시점에만.
