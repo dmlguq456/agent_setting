@@ -1,7 +1,7 @@
 ---
 name: autopilot-doc
-description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. 6 modes produce both strategy AND draft (markdown only). review mode requires `--review-format` (fail-fast at pre-flight if missing). presentation mode produces slide-by-slide markdown; PPTX export is NOT supported by this pipeline (use PowerPoint directly). `--refs` accepts an autopilot-research artifact_dir to chain pipelines. For source discovery (학술/산업/시장 조사), use autopilot-research first."
-argument-hint: "<task description> [--mode rebuttal|write|review|report|proposal|presentation] [--refs <folder>] [--review-format <name|path>] [--qa light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
+description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. 6 modes produce both strategy AND draft (markdown only). review/rebuttal mode use `--format-ref <path>` (path to a venue-specific format reference doc; no built-in presets — venues differ year-to-year). review mode requires `--format-ref` (fail-fast at pre-flight); rebuttal mode optional-but-recommended. presentation mode produces slide-by-slide markdown; PPTX export is NOT supported (use PowerPoint directly). `--refs` accepts an autopilot-research artifact_dir to chain pipelines."
+argument-hint: "<task description> [--mode rebuttal|write|review|report|proposal|presentation] [--refs <folder>] [--format-ref <path>] [--qa light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 ---
 
 ## Language Rule
@@ -66,16 +66,31 @@ If 연구팀 added no memos, the pause is skipped (nothing to refine).
 
 When resuming with `--from`, the positional argument should be either the artifact directory path or a fuzzy-matchable short name. The orchestrator resolves it via the same fuzzy lookup used by Plan Resolution in autopilot-code: `ls -d .claude_reports/documents/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `mode`, `qa_level`, `refs_folder`, `user_refine`. CLI flags override state file; missing flags inherit from state.
 
-**`--review-format <format>`** — review form/template (**REQUIRED** for mode=review; pipeline aborts if missing):
-- Built-in venue specs (preset name → internal section template):
-  - `openreview` — Summary / Strengths and Weaknesses / Soundness, Presentation, Significance, Originality (1-4) / Questions for Authors / Limitations / Overall Recommendation (1-6) / Confidence (1-5) / Compliance with policies. Used by NeurIPS, ICML, ICLR, AAAI, etc.
-  - `acl-arr` — ACL Rolling Review: Paper Summary / Summary of Strengths / Summary of Weaknesses / Comments, Suggestions and Typos / Confidence / Soundness (1-5) / Excitement (1-5) / Reproducibility (1-5) / Ethical Concerns / Reviewer Confidence
-  - `ieee-conf` — IEEE conference style (ICASSP, INTERSPEECH, etc.): narrative review with Strengths / Weaknesses / Detailed Comments / Recommendation (Accept/Reject/Borderline) / Confidence
-  - `journal` — Generic journal review (T-ASLP, JASA, IEEE TPAMI, etc.): free-form narrative covering Significance / Originality / Technical Quality / Clarity / Recommendation (Accept/Minor Revision/Major Revision/Reject) + Detailed comments by section
-- `<path>` — path to a custom review format spec file (markdown/txt/pdf) describing the venue's required sections. The file MUST exist; verified at Step 0 pre-flight.
-- **NO default** — must be explicitly chosen. If `--review-format` is omitted in review mode, the pipeline aborts at Step 0 with a clear error message and the list of built-in options.
-- If reviewer guidelines PDF/doc is also found in `--refs`, the agent layers those constraints on top of the chosen template.
-- Ignored for all non-review modes.
+**`--format-ref <path>`** — path to a venue-specific format reference document. Used by `review` and `rebuttal` modes:
+
+- **No built-in presets**. There is no single "openreview format" or "journal format" — even the same venue changes its review/rebuttal template year-to-year (NeurIPS 2024 ≠ NeurIPS 2026), and journals each define their own. The user must supply the actual document for the target venue/round.
+- **Acceptable file types**: `.md`, `.txt`, `.pdf`, `.html`, `.docx` (or any plain-text-ish format the agent can Read). Validated at Step 0 pre-flight.
+- **What the file should contain** (any combination is fine — agent extracts what it can):
+  - For `review` mode: review template sections / rating axes (1-N scale definitions) / length limit / tone guidelines / submission portal layout (e.g., Hotcrp / OpenReview / individual journal portal)
+  - For `rebuttal` mode: rebuttal length limit / allowed scope / sub-type signals (see below) / submission window / formatting rules / examples of the venue's previous-year rebuttals if available
+
+**Mode-by-mode behavior**:
+
+- `review`: **REQUIRED**. Pipeline aborts at Step 0 if missing. Use the venue's reviewer guidelines PDF or a sample review template you've prepared.
+- `rebuttal`: **Optional but strongly recommended**. If omitted, the agent defaults to a generic conference rebuttal layout AND prompts the user at Step 0 to specify the rebuttal sub-type via task description (see below). Providing a `--format-ref` skips this prompt.
+- All other modes (`write`/`proposal`/`report`/`presentation`): ignored.
+
+**Rebuttal sub-types** (the format-ref or task description must signal one):
+
+| Sub-type | 특징 | 표준 사례 |
+|---|---|---|
+| **Meta-reviewer-only response** | reviewer와 직접 왕복 X. AC/SAC가 보는 _단일 응답_. 길이 짧음. | NeurIPS rebuttal phase가 일부 행사에서 |
+| **Reviewer dialogue (multi-round)** | reviewer가 응답 후 추가 질문 → 또 답변. OpenReview의 토론 단계. | ICLR / OpenReview 토론 |
+| **Response with paper revision** | rebuttal 본문 + 수정된 paper 업로드 가능. | ACL ARR, 일부 저널 major revision |
+
+세 타입은 _전략·톤·길이·범위_가 모두 다름. format-ref 파일에서 추출되거나, task description에 명시 (예: "ICLR 2026 rebuttal — reviewer dialogue 가능, 9000자 한도").
+
+If reviewer-guidelines PDFs are also found in `--refs`, those are layered on top of `--format-ref`.
 
 The remaining text (after removing mode and flags) is the task description.
 
@@ -92,7 +107,8 @@ The pipeline runs with sane defaults and only pauses on genuinely ambiguous or d
 | No reviewer comments for rebuttal | **Always ask** at pre-flight. |
 | Strategy review → memos added | Auto-refine (or pause for user-memo if `--user-refine` is set). |
 | Draft review → memos added | Auto-refine (or pause for user-memo if `--user-refine` is set). |
-| `--review-format` missing (review mode) | Abort at pre-flight. |
+| `--format-ref` missing (review mode) | Abort at pre-flight. |
+| `--format-ref` missing (rebuttal mode) | Ask user at Step 0 whether to (a) supply a format-ref file or (b) declare the rebuttal sub-type via task description. |
 | Reviewer guidelines absent in refs (review mode) | Use built-in spec only; inform user. |
 | Scope Clarification triggered | Ask 2-4 questions; auto-proceed if `--no-clarify`. |
 
@@ -108,7 +124,8 @@ mode: presentation
 qa_level: thorough
 user_refine: true
 refs_folder: <path>
-review_format: <name|path or null>
+format_ref: <path or null>          # for review (required) and rebuttal (optional)
+rebuttal_subtype: <meta-only|reviewer-dialogue|response-with-revision or null>
 clarified_intent: <string or null>    # captured by Step 0 Scope Clarification, used on resume
 last_completed_stage: strategy        # one of: clarify, analyze, strategy, strategy-refine, draft, draft-refine, finalize
 paused_at_stage: strategy-refine      # set only when --user-refine triggered a pause
@@ -150,14 +167,15 @@ Validate mode-specific required inputs. If any check fails, **abort immediately*
 
 **Mode-specific checks**:
 
-- **review mode** — `--review-format` is REQUIRED. Validate:
-  - If value is one of `openreview` / `acl-arr` / `ieee-conf` / `journal` → OK (built-in spec).
-  - Else treat as a path → `os.path.exists(value)` must be True AND extension must be one of `.md`, `.txt`, `.pdf`. Otherwise abort.
-  - If flag is missing entirely → abort with: "review mode requires --review-format. Built-in options: openreview, acl-arr, ieee-conf, journal. Or provide a path to a custom format spec (.md/.txt/.pdf)."
+- **review mode** — `--format-ref <path>` is REQUIRED. Validate:
+  - `os.path.exists(value)` must be True AND extension must be one of `.md`, `.txt`, `.pdf`, `.html`, `.docx`. Otherwise abort.
+  - If flag is missing entirely → abort with: "review mode requires --format-ref <path>. Provide a path to the venue's review template/guidelines file (no built-in presets — venues differ year-to-year and journal-to-journal). Acceptable types: .md/.txt/.pdf/.html/.docx."
 
 - **presentation mode** — no extra pre-flight requirements. PPTX export is NOT performed; user converts the markdown draft to PPT manually.
 
-- **rebuttal mode** — refs folder must contain at least one reviewer-comment file (txt/md/pdf with reviewer-style content detected by filename or content scan). If none found, ask the user before proceeding.
+- **rebuttal mode** — two checks:
+  - refs folder must contain at least one reviewer-comment file (txt/md/pdf with reviewer-style content detected by filename or content scan). If none found, ask the user before proceeding.
+  - `--format-ref <path>` is **optional but recommended**. If provided, validate same as review mode. If not provided, ask the user at Step 0 to either (a) supply a format-ref file, or (b) declare the rebuttal sub-type via task description (`meta-only` / `reviewer-dialogue` / `response-with-revision`). Defaults to a generic conference layout if user explicitly opts out, but warn that strategy/draft quality drops without venue-specific format info.
 
 **Abort behavior**:
 - Print the error message in Korean to the user.
@@ -338,56 +356,25 @@ Read the strategy document and all analysis files. Generate a complete first dra
 - Risk Assessment
 
 ### review
-Adapt the section structure to `--review-format` (default: openreview). If reviewer guidelines exist in refs/, follow those; otherwise use the format-specific template below.
+Adapt the section structure to the file at `--format-ref` (read it first). No built-in presets — extract the venue's required sections / rating axes / length limits from the user-supplied format-ref. If extra reviewer guidelines exist in refs/, layer them on top.
 
-**Frontmatter** (always): type, venue, paper_title, status: draft, date, review_format
+**Frontmatter** (always): type, venue, paper_title, status: draft, date, format_ref (path to user-supplied format spec)
 
-**`openreview` (default — NeurIPS/ICML/ICLR/AAAI)**:
-- Summary (3-5 sentences: paper's core contribution, approach, main results)
-- Strengths and Weaknesses
-  - Strengths (4-6 specific, evidence-anchored points)
-  - Weaknesses (4-6 specific, evidence-anchored points; tie each to a section/figure/table where possible)
-- Soundness (1-4): score + 1-2 sentence justification
-- Presentation (1-4): score + justification
-- Significance (1-4): score + justification
-- Originality (1-4): score + justification
-- Questions for Authors (3-7 numbered, actionable; prioritize ones that could change the score)
-- Limitations (does the paper acknowledge them? are there unaddressed ones?)
-- Overall Recommendation (1-6, e.g., "4: Weak Accept") + 2-3 sentence justification
-- Confidence (1-5)
-- Compliance With LLM Reviewing Policy: Affirmed (boilerplate)
-- Code Of Conduct Acknowledgement: Affirmed (boilerplate)
+**Procedure**:
 
-**`acl-arr`**:
-- Paper Summary
-- Summary of Strengths
-- Summary of Weaknesses
-- Comments, Suggestions and Typos (line-anchored where possible)
-- Confidence
-- Soundness (1-5)
-- Excitement (1-5)
-- Reproducibility (1-5)
-- Ethical Concerns (Yes/No + explanation)
-- Reviewer Confidence
+1. Read the file at `--format-ref` first. Extract: required sections, rating axes (with score scales 1-N and meanings), length limits, tone/style guidelines, submission portal layout.
+2. If the format-ref is a venue's reviewer guidelines PDF/doc, prefer its exact section names verbatim. If it's a sample review, infer the structure.
+3. Layer any additional reviewer guidelines from `--refs` on top.
+4. Produce a draft that satisfies every required section from the format-ref.
 
-**`ieee-conf` (ICASSP, INTERSPEECH, etc.)**:
-- Brief Summary
-- Strengths
-- Weaknesses
-- Detailed Comments (ordered by significance; include actionable suggestions)
-- Recommendation (Accept / Borderline Accept / Borderline Reject / Reject)
-- Confidence (Low / Medium / High)
+**Common patterns** (reference only — the actual structure must come from format-ref, not from these):
 
-**`journal` (T-ASLP, JASA, IEEE TPAMI, etc.)**:
-- Significance and Originality
-- Technical Quality and Soundness
-- Clarity of Presentation
-- Recommendation (Accept / Minor Revision / Major Revision / Reject)
-- Detailed Comments by Section (per-section bullet points)
-- Specific Comments (line-anchored or page-anchored)
-- Required Changes / Suggested Changes (split if revision recommended)
+- _OpenReview-family_ (NeurIPS, ICML, ICLR, AAAI variants): Summary / Strengths / Weaknesses / numeric ratings (Soundness, Presentation, Significance, Originality on 1-4 or 1-5) / Questions / Limitations / Overall Recommendation + Confidence
+- _ACL ARR_: Paper Summary / Strengths / Weaknesses / Comments+Typos / Soundness, Excitement, Reproducibility (1-5) / Ethical Concerns
+- _IEEE conference_ (ICASSP, INTERSPEECH): Brief Summary / Strengths / Weaknesses / Detailed Comments / Recommendation (Accept/Reject scale) / Confidence
+- _Journal_ (T-ASLP, JASA, TPAMI, etc.): Significance / Technical Quality / Clarity / Recommendation (Accept/Minor Revision/Major Revision/Reject) / Per-section comments
 
-**Custom path**: read the format spec file and produce a draft that satisfies its required sections.
+These are starting hints only. Always follow the format-ref file's actual specification — venue templates change year-to-year.
 
 ### presentation
 Generate a **PPT cheatsheet markdown** — single file, optimized for human reading and slide-by-slide copy/paste into PowerPoint. **NOT a pandoc conversion target**. Avoid pandoc-specific syntax (`::: notes`, `:::: {.columns}`, YAML frontmatter for auto-title generation).
@@ -466,7 +453,7 @@ Generate a **PPT cheatsheet markdown** — single file, optimized for human read
 - **Mode-specific completeness criteria**:
   - **rebuttal**: 90%+ — every reviewer point MUST have a drafted response (hard constraint). Missing a point is a critical error.
   - **write/report/proposal**: 70-80% — all sections with substantive content, no heading-only sections.
-  - **review**: 80%+ — every required section per `--review-format` must be filled with concrete claims. Strengths/weaknesses must reference specific paper sections/figures/tables. Score justifications are mandatory.
+  - **review**: 80%+ — every required section per the `--format-ref` file must be filled with concrete claims. Strengths/weaknesses must reference specific paper sections/figures/tables. Score justifications are mandatory.
   - **presentation**: 70-80% — every slide has 제목/부제(선택)/bullets/시각자료/Speaker note 5개 슬롯이 채워짐 (시각자료가 텍스트만 있는 슬라이드에 빠지면 cheatsheet 가치 손상). Speaker notes ≥80% of content slides. 슬라이드 카운트는 strategy outline과 ±10% 이내. `---` 구분자가 모든 슬라이드 사이에 있는지 확인.
 
 Write both files directly. Return ONLY the file paths and a 3-5 line Korean summary.
@@ -550,7 +537,7 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
 ```markdown
 # Document Strategy Pipeline Summary: {task name}
 
-- **Date**: {YYYY-MM-DD} | **Mode**: {mode} | **Format**: {review_format or "N/A"} | **Status**: done / reviewed / draft
+- **Date**: {YYYY-MM-DD} | **Mode**: {mode} | **Format-ref**: {format_ref or "N/A"} | **Rebuttal sub-type**: {rebuttal_subtype or "N/A"} | **Status**: done / reviewed / draft
 - **User-Refine**: {true | false}
 - **Refs folder**: {refs_folder}
 
@@ -584,13 +571,14 @@ Then report to the user:
 - Strategy file paths + 2-3 line summary of the strategy.
 - Draft file paths + 2-3 line summary of the draft.
 - For presentation mode: remind the user that PPTX export is manual — they should open the markdown draft and copy slide content into PowerPoint with their lab template.
-- For review mode: confirm the `--review-format` used (default: openreview) and any venue-specific adaptations from refs/.
+- For review mode: confirm the `--format-ref` file used and any venue-specific adaptations from refs/. No built-in presets.
 
 ## Safety Rules
 - Do NOT fabricate citations or invent results — only reference materials actually present in the refs folder.
 - The draft is a working first draft for user editing, NOT a final document. Mark uncertain content with `[TODO: ...]`.
 - For rebuttal mode: ensure EVERY reviewer point is addressed — missing a point is a critical error.
-- For review mode: scores must be justified with concrete evidence; never fabricate scores without backing in the paper text. `--review-format` is mandatory — pre-flight aborts otherwise.
+- For review mode: scores must be justified with concrete evidence; never fabricate scores without backing in the paper text. `--format-ref <path>` is mandatory (no built-in presets) — pre-flight aborts otherwise.
+- For rebuttal mode: `rebuttal_subtype` (`meta-only` / `reviewer-dialogue` / `response-with-revision`) must be known by Step 1, either from `--format-ref` extraction or from task description / Step 0 prompt. Strategy and tone differ across sub-types.
 - For presentation mode: never insert real figures/images automatically — describe visuals in the `**시각자료**:` block with concrete-enough wording (e.g., "5-stage timeline 가로 막대, 색상 5개"). PPTX export is NOT performed by this pipeline; the user reads the cheatsheet markdown and creates slides manually in PowerPoint with their lab template.
 - Present material inventory to the user briefly and auto-proceed.
 

@@ -479,7 +479,7 @@ Agent(subagent_type="연구팀"):
    | write | `/autopilot-doc --mode write --refs {artifact_dir}` | Full paper draft (Abstract → Conclusion) generation |
    | research | `/autopilot-doc --mode proposal --refs {artifact_dir}` (or stay in research-only mode) | Proposal mode covers hypothesis + experiment design framing |
    | adopt | `/autopilot-doc --mode report --refs {artifact_dir}` (or `--mode proposal` for go/no-go decision) | Tech adoption is a structured report/proposal |
-   | review | `/autopilot-doc --mode review --refs {artifact_dir} --review-format <openreview\|acl-arr\|ieee-conf\|journal\|PATH>` (REQUIRED; pipeline aborts at pre-flight if missing) | Reviewer report draft following the venue's review form |
+   | review | `/autopilot-doc --mode review --refs {artifact_dir} --format-ref <path>` (REQUIRED; path-only, no built-in presets — venues differ year-to-year) | Reviewer report draft following the venue's review form |
 
    Include the recommended next command verbatim in this section so the user can copy-paste it. Note that the artifact_dir produced by autopilot-research is directly usable as `--refs` for autopilot-doc.
 
