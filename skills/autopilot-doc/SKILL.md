@@ -1,7 +1,7 @@
 ---
 name: autopilot-doc
-description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. All 7 modes produce both strategy AND draft (markdown only). review mode requires `--review-format` (fail-fast at pre-flight if missing). presentation mode produces slide-by-slide markdown; PPTX export is NOT supported by this pipeline (use PowerPoint directly). `--refs` accepts an autopilot-research artifact_dir to chain pipelines."
-argument-hint: "<mode> <task description> [--refs <folder>] [--type <survey-type>] [--review-format <name|path>] [--qa light|standard|thorough] [--user-refine] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
+description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. 6 modes produce both strategy AND draft (markdown only). review mode requires `--review-format` (fail-fast at pre-flight if missing). presentation mode produces slide-by-slide markdown; PPTX export is NOT supported by this pipeline (use PowerPoint directly). `--refs` accepts an autopilot-research artifact_dir to chain pipelines. For source discovery (학술/산업/시장 조사), use autopilot-research first."
+argument-hint: "<task description> [--mode rebuttal|write|review|report|proposal|presentation] [--refs <folder>] [--review-format <name|path>] [--qa light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 ---
 
 ## Language Rule
@@ -10,20 +10,29 @@ argument-hint: "<mode> <task description> [--refs <folder>] [--type <survey-type
 ## Argument Parsing
 Parse `$ARGUMENTS` for mode, flags, and task description:
 
-**Mode** (first word, required):
+**`--mode` (optional, auto-inferred from query)**:
 - `rebuttal` — Rebuttal strategy for reviewer comments
 - `write` — Paper writing strategy (outline, positioning, contributions)
 - `review` — Paper/document review (as reviewer: strengths/weaknesses/questions). Produces strategy + full review draft (OpenReview-ready).
-- `survey` — General-purpose research survey with **active source discovery**: literature, market, technology, product, or company analysis. Searches for sources automatically; `--refs` is optional supplementary input.
 - `report` — Technical report / white paper (findings, analysis, recommendations)
 - `proposal` — Research or project proposal (problem, approach, plan, budget)
 - `presentation` — Presentation strategy (story arc, slide structure, key messages) + slide-by-slide markdown draft. PPTX export is NOT performed by this pipeline (markdown-only); use PowerPoint manually with the lab template.
 
+**Auto-inference** (mode 미지정 시):
+- "리뷰 응답·rebuttal·reviewer comment" → `rebuttal`
+- "발표·세미나·슬라이드·presentation" → `presentation`
+- "리뷰·review·peer review·reviewer 입장" → `review`
+- "보고서·report·기술 분석" → `report`
+- "제안서·proposal·연구계획·grant" → `proposal`
+- 그 외 / 명시적이지 않으면 → `write` (default for paper writing)
+- 추론 결과를 한 줄로 사용자에게 통보 후 진행. 모호하면 Step 0 Scope Clarification에서 확인.
+
+> **Note**: `survey` mode is removed. For 학술/산업/시장 조사, use `/autopilot-research --mode academic|technology|market` first, then chain to `autopilot-doc --mode write` (또는 report/proposal 등) by passing the research artifact_dir as `--refs`.
+
 **`--refs <folder>`** — path to reference materials folder:
 - Contains: PDFs, reviewer comments (txt/md), original paper, conference guidelines, data files, etc.
-- **Required** for: rebuttal, write, review, report, proposal, presentation.
-- **Optional** for: survey (survey mode discovers sources automatically; `--refs` provides supplementary materials to merge with search results).
-- If omitted and mode is NOT survey: ask the user for the folder path. Do NOT assume a default location.
+- **Required** for all modes (rebuttal, write, review, report, proposal, presentation).
+- If omitted: ask the user for the folder path. Do NOT assume a default location.
 
 **`--qa <level>`** — override QA intensity for the pipeline:
 - `--qa light` → 연구팀 review uses sonnet, single-pass review
@@ -47,7 +56,7 @@ Pause behavior: after 연구팀 writes memos at Step 3 (strategy review) or Step
 If 연구팀 added no memos, the pause is skipped (nothing to refine).
 
 **`--from <stage>`** — resume the pipeline at a specific stage. Stages:
-- `analyze` — Step 1 (Material Analysis); for survey mode also re-runs Step 0 (Source Discovery)
+- `analyze` — Step 1 (Material Analysis)
 - `strategy` — Step 2 (init-doc-strategy)
 - `strategy-refine` — Step 3 wrapper: 연구팀 review + (user memos if `--user-refine`) + refine-doc-strategy on the strategy
 - `draft` — Step 4 (Draft Generation)
@@ -55,15 +64,6 @@ If 연구팀 added no memos, the pause is skipped (nothing to refine).
 - `finalize` — Step 6 (Pipeline Summary)
 
 When resuming with `--from`, the positional argument should be either the artifact directory path or a fuzzy-matchable short name. The orchestrator resolves it via the same fuzzy lookup used by Plan Resolution in autopilot-code: `ls -d .claude_reports/documents/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `mode`, `qa_level`, `refs_folder`, `user_refine`. CLI flags override state file; missing flags inherit from state.
-
-**`--type <survey-type>`** — sub-type for survey mode (only used when mode=survey):
-- `literature` (default) — academic literature survey
-- `market` — market landscape, competitors, trends
-- `technology` — technology comparison, maturity assessment
-- `product` — product analysis, feature comparison
-- `company` — company research, strategy analysis
-- If omitted and mode=survey, defaults to `literature`.
-- Ignored for all non-survey modes.
 
 **`--review-format <format>`** — review form/template (**REQUIRED** for mode=review; pipeline aborts if missing):
 - Built-in venue specs (preset name → internal section template):
@@ -93,8 +93,7 @@ The pipeline runs with sane defaults and only pauses on genuinely ambiguous or d
 | Draft review → memos added | Auto-refine (or pause for user-memo if `--user-refine` is set). |
 | `--review-format` missing (review mode) | Abort at pre-flight. |
 | Reviewer guidelines absent in refs (review mode) | Use built-in spec only; inform user. |
-| Survey search results review | Auto-proceed. |
-| Survey search found 0 results | **Always ask** — proceed with `--refs` only or adjust query. |
+| Scope Clarification triggered | Ask 2-4 questions; auto-proceed if `--no-clarify`. |
 
 **Logging**: When the pipeline pauses (missing required input, 0 search results, or `--user-refine`), record the event for the Decision Points table in `pipeline_summary.md`. Auto-decisions are not individually logged.
 
@@ -109,8 +108,8 @@ qa_level: thorough
 user_refine: true
 refs_folder: <path>
 review_format: <name|path or null>
-survey_type: <type or null>
-last_completed_stage: strategy        # one of: discovery, analyze, strategy, strategy-refine, draft, draft-refine, finalize
+clarified_intent: <string or null>    # captured by Step 0 Scope Clarification, used on resume
+last_completed_stage: strategy        # one of: clarify, analyze, strategy, strategy-refine, draft, draft-refine, finalize
 paused_at_stage: strategy-refine      # set only when --user-refine triggered a pause
 artifact_dir: <abs path>
 ```
@@ -127,11 +126,9 @@ All outputs go to:
 ├─ strategy/
 │  ├─ strategy.md          (English strategy document)
 │  └─ strategy_ko.md       (Korean strategy document)
-├─ draft/                   (generated for: rebuttal, write, report, proposal, survey, review, presentation)
+├─ draft/                   (generated for all 6 modes)
 │  ├─ draft.md             (English draft; for presentation: slide-by-slide markdown)
 │  └─ draft_ko.md          (Korean draft)
-├─ discovery/               (survey mode only: search results)
-│  └─ search_results.json  (discovered sources with metadata)
 ├─ analysis/
 │  ├─ reviewer_analysis.md  (rebuttal: per-reviewer breakdown)
 │  ├─ ref_analysis.md       (reference material analysis)
@@ -144,11 +141,11 @@ All outputs go to:
 ## Pipeline
 
 ### Pre-flight Validation [ALL modes — runs first, before any work]
-Validate mode-specific required inputs. If any check fails, **abort immediately** with a clear error message — do NOT create the artifact directory or invoke any sub-skills/agents. The user must rerun with the missing input.
+Validate mode-specific required inputs. If any check fails, **abort immediately** with a clear error message — do NOT create the artifact directory or invoke any sub-skills/agents.
 
 **Universal checks** (all modes):
-1. Mode is one of the 7 supported modes (rebuttal / write / review / survey / report / proposal / presentation). Otherwise abort: "Unknown mode: {mode}. Supported: ...".
-2. For all modes except `survey`: `--refs` is provided AND folder exists. Otherwise abort: "--refs <folder> is required for {mode} mode and was not found at {path}."
+1. Mode is one of the 6 supported modes (rebuttal / write / review / report / proposal / presentation) — explicit `--mode` 또는 auto-inference. Otherwise abort: "Unknown mode: {mode}. Supported: ...".
+2. `--refs` is provided AND folder exists. Otherwise abort: "--refs <folder> is required and was not found at {path}."
 
 **Mode-specific checks**:
 
@@ -161,88 +158,46 @@ Validate mode-specific required inputs. If any check fails, **abort immediately*
 
 - **rebuttal mode** — refs folder must contain at least one reviewer-comment file (txt/md/pdf with reviewer-style content detected by filename or content scan). If none found, ask the user before proceeding.
 
-- **survey mode** — if `--refs` not provided, no check needed (search will discover sources).
-
 **Abort behavior**:
 - Print the error message in Korean to the user.
 - Do NOT call `mkdir`, do NOT invoke any sub-skill, do NOT write `pipeline_summary.md`.
 - Exit with status: aborted (pre-flight).
 
-After all pre-flight checks pass: create `artifact_dir` and proceed to Step 0 (survey) or Step 1 (other modes).
+After all pre-flight checks pass: create `artifact_dir` and proceed to Step 0.
 
-### Step 0: Source Discovery [survey mode only — skip for all other modes]
-**Applicable modes**: survey only. All other modes skip to Step 1.
+### Step 0: Scope Clarification (사전 조율) — skipped if `--no-clarify`
+**Purpose**: Catch ambiguous queries before launching the pipeline. autopilot-doc 산출물 품질은 task 명확도에 비례하므로, 모호한 입력은 30% signal·70% noise를 만든다.
 
-Survey mode actively searches for sources instead of relying solely on `--refs`. The search approach adapts to `--type`:
+**Trigger conditions** (any one matches → run clarification):
+- Mode auto-inference 신뢰도 낮음 (키워드 매치 약함, 또는 multi-match)
+- Task description < 15 words AND no specific deliverable hint
+- Mode가 `review`인데 venue/length/style 미명시
+- Mode가 `presentation`인데 청중·시간 미명시
+- Mode가 `proposal`인데 grant body·deadline·예산 범위 미명시
 
-**0a. Query Expansion**
-Generate 2-3 synonym/alternative queries from the task description using LLM knowledge:
-- `literature`: academic terminology variants (e.g., "speech enhancement" → "speech denoising", "noise reduction")
-- `market`: industry/business terms (e.g., "음성 향상 시장" → "speech enhancement market", "audio AI industry")
-- `technology`: technical variants + product names
-- `product`: product category + brand names
-- `company`: company name + subsidiaries + competitors
+**Action**: 메인 Claude가 mode-aware 2-4개 sharp question을 던진다. 사용자 답변을 task description에 통합 후 Step 1 진행.
 
-**0b. Multi-Source Search**
-Invoke the **research-team** (연구팀) agent for source discovery:
+**Mode-specific question seed**:
+- `write` / `report` / `proposal`: 청중, 길이/페이지 제한, 강조 포인트, deadline
+- `presentation`: 청중 (전공자/비전공자/임원), 시간 (30/45/60min), 핵심 메시지 1개
+- `review`: venue / 리뷰 가이드라인 / 점수 체계
+- `rebuttal`: rebuttal 길이 제한, 추가 실험 가능 여부, 톤 (defensive vs concessive)
 
-```
-Research survey mode: Source discovery for {survey_type} survey.
+**Skip 조건**:
+- `--no-clarify` 명시
+- task description이 충분히 구체적 (12+ words + concrete deliverable + constraints)
+- `--from <stage>` 재개 (기존 pipeline_state.yaml에 이미 정보 있음)
 
-Queries: {queries_list}
-Original query: {original_query}
-Survey type: {survey_type}
-Output directory: {artifact_dir}/discovery/
-{If --refs: 'Supplementary materials folder: {refs_folder}'}
-
-Search sources by survey type:
-- literature: HF paper_search, Semantic Scholar, arXiv, WebSearch (Google Scholar)
-- market: WebSearch (industry reports, news, analyst coverage), WebFetch (company sites)
-- technology: WebSearch (tech blogs, benchmarks, documentation), HF paper_search (if academic)
-- product: WebSearch (product reviews, comparisons, official sites), WebFetch
-- company: WebSearch (company info, press releases, financials), WebFetch (investor pages)
-
-Max results per source per query: 10
-Timeout: 3 minutes per source; skip on timeout.
-
-Save results to: {artifact_dir}/discovery/search_results.json
-Schema: {"query": "string", "survey_type": "string", "date": "YYYY-MM-DD",
-  "sources_used": ["string"], "total_results": int,
-  "results": [{"title": "string", "url": "string", "source": "string",
-    "year": int|null, "snippet": "string", "relevance_score": float|null}]}
-
-Return file path + a brief Korean summary of what was found.
-```
-
-**0c. Post-Search Validation**
-1. Read `search_results.json` — verify valid JSON and non-empty results
-2. If 0 results found → ask the user whether to proceed with `--refs` only or adjust the query.
-3. Otherwise present a brief search summary (N results from M sources) and auto-proceed.
-
-**0d. Reference Chaining** (literature type only)
-For literature surveys, extract references from top-ranked papers and discover additional sources:
-1. Read top 5 papers from search results (by citation count or relevance)
-2. Extract cited references and check if any important ones are missing from results
-3. If new relevant references found: run one additional search round with extracted keywords
-4. Merge into `search_results.json` (update discovery_count for duplicates)
-
-**0e. Merge with --refs**
-If `--refs` was provided, merge:
-1. Inventory `--refs` folder → add to `search_results.json` as source="user_provided"
-2. Deduplicate by title similarity
-3. User-provided materials get priority (higher relevance score)
-
-After Step 0, proceed to Step 1 with the combined discovery results as the analysis input.
+**Output**: 사용자 답변을 통합한 refined task description을 메모리에 저장 + `pipeline_state.yaml`의 `clarified_intent` 필드에 기록.
 
 ### Step 1: Material Analysis
-Read and catalog all materials from refs folder (non-survey modes) or discovery results (survey mode).
+Read and catalog all materials from refs folder.
 
 1. **Inventory**: List all files with brief descriptions. Write to `analysis/material_index.md`.
 2. **Analyze by mode**:
    - **rebuttal**: Parse reviewer comments → `analysis/reviewer_analysis.md` (per-reviewer, per-point breakdown with severity classification)
    - **write**: Analyze reference papers → `analysis/ref_analysis.md` (methods, gaps, positioning opportunities)
    - **review**: Analyze target paper/document → `analysis/ref_analysis.md` (methodology assessment, quality analysis)
-   - **survey**: Analyze all reference materials → `analysis/ref_analysis.md` (categorization, comparison, gap analysis — adapted to survey type: literature/market/technology/product/company)
    - **report**: Analyze source data/papers → `analysis/ref_analysis.md` (findings, evidence assessment, data quality)
    - **proposal**: Analyze related work and context → `analysis/ref_analysis.md` (prior art, feasibility evidence, competitive landscape)
    - **presentation**: Analyze source document/paper → `analysis/ref_analysis.md` (key messages, audience analysis, narrative structure)
@@ -250,7 +205,7 @@ Read and catalog all materials from refs folder (non-survey modes) or discovery 
 4. Present the analysis summary briefly and auto-proceed to Step 2 — no confirmation required.
 
 ### Step 2: init-doc-strategy
-Invoke Skill: `init-doc-strategy` with args: `<mode> --refs <folder> --output <artifact-dir> [--type <survey-type>] <task description>`. Wait for completion.
+Invoke Skill: `init-doc-strategy` with args: `<mode> --refs <folder> --output <artifact-dir> <task description>`. Wait for completion.
 
 ### Step 3: Strategy Review (연구팀 as domain expert)
 1. Resolve strategy paths:
@@ -295,7 +250,7 @@ Invoke Skill: `init-doc-strategy` with args: `<mode> --refs <folder> --output <a
 4. If no memos: Skip to Step 4. (When resumed via `--from strategy-refine`, the orchestrator skips the 연구팀 review and runs refine-doc-strategy directly using the pre-existing memos.)
 
 ### Step 4: Draft Generation
-**Applicable modes**: rebuttal, write, report, proposal, survey, review, presentation. (All modes generate drafts.)
+**Applicable modes**: rebuttal, write, report, proposal, review, presentation. (All 6 modes generate drafts.)
 
 1. Verify strategy is finalized: `{strategy_folder}/strategy/strategy.md` exists and has no `## 미해결 이슈` section (or issues are acceptable).
 2. Invoke the **research-team** (연구팀) agent as a subagent:
@@ -356,14 +311,6 @@ Read the strategy document and all analysis files. Generate a complete first dra
 - Expected Outcomes / Impact
 - Risk Assessment
 
-### survey
-- Frontmatter: type, survey_type, status: draft, date
-- For literature survey: Taxonomy → Chronological Development → Detailed Comparison → Gaps → Future Directions
-- For market survey: Market Overview → Competitor Analysis → Trend Analysis → Opportunity Assessment → Recommendations
-- For technology survey: Technology Landscape → Comparison Matrix → Maturity Assessment → Adoption Recommendations
-- For product survey: Product Overview → Feature Comparison → User/Market Fit → Recommendations
-- For company survey: Company Profile → Strategy Analysis → Competitive Position → Outlook
-
 ### review
 Adapt the section structure to `--review-format` (default: openreview). If reviewer guidelines exist in refs/, follow those; otherwise use the format-specific template below.
 
@@ -417,21 +364,74 @@ Adapt the section structure to `--review-format` (default: openreview). If revie
 **Custom path**: read the format spec file and produce a draft that satisfies its required sections.
 
 ### presentation
-Generate slide-by-slide markdown. **PPTX export is NOT performed** — the user will copy/paste content into PowerPoint manually using their lab template.
+Generate a **PPT cheatsheet markdown** — single file, optimized for human reading and slide-by-slide copy/paste into PowerPoint. **NOT a pandoc conversion target**. Avoid pandoc-specific syntax (`::: notes`, `:::: {.columns}`, YAML frontmatter for auto-title generation).
 
-- **Frontmatter** (YAML): title, subtitle (optional), author, date
-- **Slide structure**: each slide is a level-1 heading (`# Slide title`). Use the slide structure from the strategy doc as the source of truth for chapter divisions and per-slide content.
-- **Required sections**:
-  1. Title slide (frontmatter — first slide content)
-  2. Outline / Table of Contents (`# Outline` or `# 목차`)
-  3. Section dividers (`# Ch.1 — chapter title`, `# Ch.2 — ...`)
-  4. Per-slide content slides (with concise bullets, tables, image placeholders `[FIGURE: description]`, code blocks where useful)
-  5. Conclusion / Take-home messages
-  6. Q&A / Thank you / References
-- **Speaker notes**: every content slide should have a clearly-marked speaker note section (e.g., `> **Speaker note**: ...` blockquote) bridging slide content with verbal narration
-- **Slide budget**: derive from strategy doc's time allocation (e.g., 60-min talk = 30-50 slides; 20-min conference talk = 12-18 slides). Mark backup slides with `# Backup — title` after the main flow.
-- **Visual placeholders**: use `[FIGURE: brief description of what should be drawn]` for diagrams that the user will add manually in PowerPoint.
-- **References slide**: list key paper citations near the end (typically `# References`).
+**Top-of-file guide** (mandatory header before any slides):
+
+```markdown
+# {발표 제목} — Seminar Slide Deck
+
+> **사용 가이드**: 본 markdown은 PPT 복사·붙여넣기용 단일 파일이다. 각 슬라이드는 `---`로 분리되어 있으며, 슬라이드 번호·제목·bullet·시각자료·Speaker note 순서로 구성된다.
+>
+> - **총 슬라이드 수**: **N main + M backup = total**
+> - **시간 분배 ({X}분 기준)**: Opening / Ch.0 / Ch.1 / ... 분 단위 명시
+> - **청중 baseline**: 한 줄로 청중 특성과 작성 톤 (약어 풀어쓰기 / 직관 비유 / 수식 최소 등)
+> - **설계 의도**: 챕터 구성·narrative arc 한 단락
+```
+
+**슬라이드 단위 형식** (모든 main + backup 슬라이드):
+
+```markdown
+---
+
+## Slide N — {짧은 슬라이드 제목}
+
+**제목**: {실제 슬라이드에 들어갈 제목 문구 (한국어 또는 본인이 쓰는 발표 언어)}
+
+**부제** (선택): {부제 문구 — 첫 슬라이드 또는 챕터 디바이더에 한정}
+
+- 본문 bullet 1 (개념/이름/수치 위주, 간결하게)
+- 본문 bullet 2
+- 본문 bullet 3 (보통 3-5개)
+
+| 표가 더 적합한 경우 | 이렇게 markdown 표 |
+|---|---|
+| 모델 A | 수치 |
+| 모델 B | 수치 |
+
+**시각자료**:
+- 좌측 1/2 (또는 메인): {도식·차트 설명}
+- 우측 1/2 (또는 보조): {보조 시각}
+- 또는 전체 화면: {풀 페이지 도식 설명}
+
+**Speaker note**:
+1. {발화 1 — 슬라이드 본문 보충, 직관 풀이, 비유, 일화}
+2. {발화 2 — 다음 슬라이드/챕터로 가는 transition}
+3. {발화 3 — 청중 질문 예상 시 짧은 답변 메모, 선택}
+
+**Citation** (선택): [Author Year, Venue](cards/{file}.md) — 정확한 paper card를 가리키는 인라인 링크
+```
+
+**구조 요건**:
+- **표지** (Slide 1) — 제목 + 부제 + 발표자/소속 + 날짜 + 발표 자료 출처 한 줄
+- **목차** (Slide 2) — 챕터별 슬라이드 수와 한 줄 설명
+- **챕터 디바이더** — `## Slide N — Ch.X 제목` 형식. 슬라이드 본문은 챕터 의도/시기 한두 줄. 별도 슬라이드 카운트에 포함.
+- **본문 슬라이드** — 위 슬라이드 단위 형식
+- **챕터 마무리** (선택) — Ch.X 정리 + Ch.X+1 transition. 인지 부담 분산용
+- **Conclusion** — Take-home 5 / Open Problems / 한 페이지 요약 / Q&A / Thank you
+- **Backup** — `## Slide BN — Backup: 제목` 형식. 메인 흐름 끝난 뒤 배치
+- **References** (선택) — 마지막에 핵심 인용 정리
+
+**작성 톤**:
+- 본문 bullet은 *키워드 + 수치 + 모델명* 위주. 풀 문장 지양 (그건 speaker note에).
+- 약어는 첫 등장 시 풀어쓰기: `Speech Enhancement (SE)`, `NFE (Number of Function Evaluations)` 등.
+- Citation은 paper card markdown 링크로 (`[Author Year](../../research/{topic}/cards/{file}.md)` 또는 같은 artifact_dir 내 cards/).
+
+**Quality**:
+- 모든 본문 슬라이드에 **Speaker note 필수** (≥80% — 기술 비중 낮은 표지·인사 슬라이드 제외).
+- 모든 슬라이드에 시각자료 placeholder (텍스트만으로 끝나는 슬라이드는 cheatsheet로서 약함).
+- 시각자료 설명은 *PPT에서 그릴 수 있을 만큼 구체적*으로 (예: "5-stage timeline 가로 막대, 색상 5개" 같은 수준).
+- Strategy doc의 슬라이드 outline을 그대로 매핑 (총 슬라이드 수와 챕터 시간 분배 일치).
 
 ## Quality Requirements
 - Every claim must trace back to a specific reference in the refs folder or analysis.
@@ -440,9 +440,8 @@ Generate slide-by-slide markdown. **PPTX export is NOT performed** — the user 
 - **Mode-specific completeness criteria**:
   - **rebuttal**: 90%+ — every reviewer point MUST have a drafted response (hard constraint). Missing a point is a critical error.
   - **write/report/proposal**: 70-80% — all sections with substantive content, no heading-only sections.
-  - **survey**: 60-70% — flexible based on reference volume. Comparison matrices and taxonomy structure are required; individual item details may use [TODO].
   - **review**: 80%+ — every required section per `--review-format` must be filled with concrete claims. Strengths/weaknesses must reference specific paper sections/figures/tables. Score justifications are mandatory.
-  - **presentation**: 70-80% — every slide has a title and at least one substantive bullet/figure placeholder/table. Speaker notes for ≥80% of content slides. Slide count within ±20% of strategy's target.
+  - **presentation**: 70-80% — every slide has 제목/부제(선택)/bullets/시각자료/Speaker note 5개 슬롯이 채워짐 (시각자료가 텍스트만 있는 슬라이드에 빠지면 cheatsheet 가치 손상). Speaker notes ≥80% of content slides. 슬라이드 카운트는 strategy outline과 ±10% 이내. `---` 구분자가 모든 슬라이드 사이에 있는지 확인.
 
 Write both files directly. Return ONLY the file paths and a 3-5 line Korean summary.
 ```
@@ -450,7 +449,7 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
 3. **IMPORTANT**: Do NOT read, re-write, or duplicate the draft files yourself. The agent writes them directly.
 
 ### Step 5: Draft Review (연구팀 as QA)
-**Applicable modes**: rebuttal, write, report, proposal, survey, review, presentation. (All modes that generated drafts.)
+**Applicable modes**: rebuttal, write, report, proposal, review, presentation. (All 6 modes that generated drafts.)
 
 1. Resolve draft paths:
    - `en_draft_path` = `{strategy_folder}/draft/draft.md`
@@ -501,14 +500,14 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
 ```markdown
 # Document Strategy Pipeline Summary: {task name}
 
-- **Date**: {YYYY-MM-DD} | **Mode**: {mode} | **Type**: {survey_type or "N/A"} | **Status**: done / reviewed / draft
+- **Date**: {YYYY-MM-DD} | **Mode**: {mode} | **Format**: {review_format or "N/A"} | **Status**: done / reviewed / draft
 - **User-Refine**: {true | false}
 - **Refs folder**: {refs_folder}
 
 ## Process Log
 | Step | Action | Result | Notes |
 |---|---|---|---|
-| 0 | Source Discovery | completed / skipped (non-survey) | {N} results from {M} sources |
+| 0 | Scope Clarification | clarified / skipped | {questions asked or "--no-clarify"} |
 | 1 | Material Analysis | completed | {N} files |
 | 2 | init-doc-strategy | created | {strategy path} |
 | 3 | Strategy Review (연구팀) | memos added / no issues | {memo count} |
@@ -542,7 +541,7 @@ Then report to the user:
 - The draft is a working first draft for user editing, NOT a final document. Mark uncertain content with `[TODO: ...]`.
 - For rebuttal mode: ensure EVERY reviewer point is addressed — missing a point is a critical error.
 - For review mode: scores must be justified with concrete evidence; never fabricate scores without backing in the paper text. `--review-format` is mandatory — pre-flight aborts otherwise.
-- For presentation mode: never insert real figures/images automatically — use `[FIGURE: ...]` placeholders. PPTX export is NOT performed by this pipeline; the user converts the markdown draft to PPT manually using their lab template.
+- For presentation mode: never insert real figures/images automatically — describe visuals in the `**시각자료**:` block with concrete-enough wording (e.g., "5-stage timeline 가로 막대, 색상 5개"). PPTX export is NOT performed by this pipeline; the user reads the cheatsheet markdown and creates slides manually in PowerPoint with their lab template.
 - Present material inventory to the user briefly and auto-proceed.
 
 ## Task

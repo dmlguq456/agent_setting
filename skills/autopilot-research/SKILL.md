@@ -1,7 +1,7 @@
 ---
 name: autopilot-research
-description: "Research survey pipeline — paper search, analysis, and 9 markdown reports (field intelligence only; no PPT/paper drafts). 2-level architecture (orchestrator → agent). Hand off to autopilot-doc (writing/slides) or autopilot-code (build) for actual document/code creation."
-argument-hint: "<query> [--depth shallow|medium|deep] [--refs <folder>] [--qa light|standard|thorough] [--from search|analyze|report]"
+description: "Research survey pipeline — multi-mode investigation (academic / technology / market). Mode-specific search sources and report templates. Field intelligence only; no PPT/paper drafts. Hand off to autopilot-doc (writing/slides) or autopilot-code (build) for actual document/code creation."
+argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--refs <folder>] [--qa light|standard|thorough] [--no-clarify] [--from search|analyze|report]"
 ---
 
 ## Language Rule
@@ -11,10 +11,51 @@ argument-hint: "<query> [--depth shallow|medium|deep] [--refs <folder>] [--qa li
 Parse `$ARGUMENTS` for optional flags:
 
 - **query**: research topic, paper title, arXiv ID, or PDF path (remaining text after flags)
+- **--mode**: `academic` (default) | `technology` | `market` — investigation type (see Modes below)
 - **--depth**: `shallow` | `medium` (default) | `deep`
 - **--refs \<folder\>**: path to local reference PDFs (user must specify, no default)
 - **--qa**: `light` | `standard` (default) | `thorough` — override QA intensity for report QA loop
 - **--from**: `search` | `analyze` | `report` — resume the pipeline at a specific stage (see Resume below)
+- **--no-clarify**: skip Step 0 Scope Clarification (force-run with current query as-is)
+
+## Modes
+
+The mode determines (a) search sources used in Step 2, (b) Phase A/B/C activation in Step 3, and (c) report templates in Step 4. The pipeline structure (search → analyze → report) is the same across modes.
+
+### `--mode academic` (default)
+**Use when**: 학술 논문 중심 조사 (deep learning method survey, 알고리즘 비교, 분야 trend).
+- **Search sources**: arXiv, Semantic Scholar, OpenAlex, Hugging Face paper_search, Google Scholar
+- **Phases**: A (skimming) + B (reference chaining) + C (code & model search) — 모두 활성
+- **Reports**: 9개 (briefing → landscape → core_papers → baselines → technical_deep_dive → datasets → implementation → resources → reading_guide) — 현행 동일
+
+### `--mode technology`
+**Use when**: 산업 표준·기술 ecosystem 조사 (코덱/프로토콜, 표준 문서, vendor 솔루션 비교, 배포 고려사항).
+- **Search sources**: WebSearch (industry blogs, technical whitepapers, vendor docs), WebFetch (standards orgs: 3GPP / ITU-T / IEEE / W3C), arXiv (보조), Hugging Face (관련 모델)
+- **Phases**: A (full skim of standards + whitepapers) — 활성. B (reference chaining) — 약화 (academic citation 그래프가 의미 약함). C (code search) — 활성 (open-source 구현체).
+- **Reports** (7개):
+  - `00_briefing.md` — Executive briefing
+  - `01_landscape.md` — Technology landscape (categories, players, lineage)
+  - `02_standards.md` — Standards & specs (3GPP/ITU-T/IEEE/RFC numbers, key sections)
+  - `03_vendor_comparison.md` — Vendor / solution comparison (Qualcomm vs Samsung vs Apple vs ...)
+  - `04_technical_deep_dive.md` — Algorithm·protocol details
+  - `05_deployment.md` — Deployment considerations (latency, cost, integration paths)
+  - `06_implementation.md` — Goal-adaptive roadmap (existing template, build/adopt 우선)
+  - `07_resources.md` — Open-source code, model weights, evaluation tools
+
+### `--mode market`
+**Use when**: 시장 동향·경쟁사·analyst report 조사 (제품/서비스 시장 사이즈, key players, 채택률).
+- **Search sources**: WebSearch (analyst content, news, earnings reports, press releases), WebFetch (company sites, investor pages)
+- **Phases**: A (skim of market reports + news) — 활성. B / C — 비활성 (학술 검색 X, 코드 검색 X).
+- **Reports** (5개):
+  - `00_briefing.md` — Executive briefing
+  - `01_market_overview.md` — Market sizing, segmentation, growth rate
+  - `02_key_players.md` — Competitor profiles, market share, positioning
+  - `03_trends.md` — Trends, drivers, inhibitors, disruptors
+  - `04_opportunities.md` — Opportunity assessment + actionable recommendations
+
+> Mode 미지정 시 query 키워드로 추론 — "논문/algorithm/method/SOTA" → academic, "표준/codec/protocol/3GPP/ITU/chip/MCU" → technology, "market/시장/competitor/analyst" → market.
+> **Fallback**: 어느 키워드도 매치되지 않으면 → `academic` (한 줄 통보: "키워드 매칭 실패 → academic으로 진행. 다른 모드는 --mode 명시").
+> **Multi-match (>=2 modes 동시 매치)**: Step 0 Scope Clarification에서 사용자에게 확정 질문.
 
 ## Decision Defaults (no autonomy gating)
 
@@ -36,7 +77,7 @@ The pipeline auto-proceeds with sane defaults. There is no autonomy-level dial. 
 - `analyze` — Step 3 (Phase A skimming + B chaining + C code search + analysis_summary)
 - `report` — Step 4 (Report Generation + QA loop)
 
-When `--from` is used, the positional argument should be either the artifact directory path or a fuzzy-matchable topic name. The orchestrator resolves it via `ls -d .claude_reports/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `query`, `depth`, `qa_level`, `refs_folder`. CLI flags override stored values.
+When `--from` is used, the positional argument should be either the artifact directory path or a fuzzy-matchable topic name. The orchestrator resolves it via `ls -d .claude_reports/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `query`, `mode`, `depth`, `qa_level`, `refs_folder`, `clarified_intent`. CLI flags override stored values. Step 0 Scope Clarification is always skipped on resume (already captured in first run).
 
 ### pipeline_state.yaml
 
@@ -45,10 +86,12 @@ Written/updated at `{artifact_dir}/pipeline_state.yaml` after each completed sta
 ```yaml
 pipeline: autopilot-research
 query: <original query>
+mode: academic                   # academic | technology | market (resolved at Step 1)
 depth: medium
 qa_level: standard
 refs_folder: <path or null>
-last_completed_stage: analyze    # one of: search, analyze, report
+clarified_intent: <string or null>    # Step 0 output (if Clarification ran)
+last_completed_stage: analyze    # one of: clarify, search, analyze, report
 artifact_dir: <abs path>
 ```
 
@@ -56,12 +99,38 @@ artifact_dir: <abs path>
 
 ### Step 1: Input Parsing & Validation
 - Detect query type: keyword, paper title, arXiv ID, PDF path, folder path
+- Resolve `--mode`: explicit flag value, or infer from query keywords (academic / technology / market — see Modes section). Notify user of inferred mode in one line. Multi-match → defer resolution to Step 1.5 Scope Clarification.
 - If `--refs` specified: verify folder exists. If not → ask user (Critical, always ask). Abort if user says no.
 - Construct topic name (sanitize: lowercase, hyphens, max 30 chars)
 - Set artifact_dir: `.claude_reports/research/{topic}/`
 - `mkdir -p {artifact_dir}` (only AFTER validation)
 
-### Step 2: Paper Search (direct Agent call)
+### Step 1.5: Scope Clarification (사전 조율) — skipped if `--no-clarify` or `--from`
+**Purpose**: 모호한 query는 mode 선택과 검색 폭을 잘못 잡아 9/7/5개 보고서 출력이 무용지물이 됨. 모호 detection 시 사용자에게 2-4 sharp question을 던진다.
+
+**Trigger conditions** (any one matches → run):
+- Mode multi-match (≥2 modes 동시 매치)
+- Query 길이 < 50 Korean chars 또는 < 12 English words AND no specific constraint (예: time range, specific platform, target metric)
+- Query에 "조사/분석/survey" 같은 메타 키워드만 있고 구체적 deliverable·범위 없음
+
+**Mode-specific question seed**:
+- `academic`: 조사 깊이(--depth 명시 의도?), 필독 컷오프(citation > N or year ≥ Y), 분야 경계(예: speech only? including audio in general?)
+- `technology`: 대상 표준 그룹/년도, 배포 환경(production/research), vendor 범위, 비교 축(performance/cost/license 우선순위)
+- `market`: 지역/시간 범위, 경쟁자 명시 여부, 의사결정 목적(투자 판단? 진출 결정? competitive intel?)
+
+**Skip 조건**:
+- `--no-clarify` 명시
+- `--from <stage>` 재개 (이미 캡처됨)
+- Query 길이 ≥ 50 Korean chars 또는 ≥ 12 English words AND mode 명확
+
+**Output**: 사용자 답변을 통합한 refined query를 Step 2로 전달 + `pipeline_state.yaml`의 `clarified_intent` 필드에 한 줄 요약 기록.
+
+### Step 2: Source Search (direct Agent call) — mode-aware
+
+> **Search source selection per mode**:
+> - `academic`: arXiv + Semantic Scholar + OpenAlex + Hugging Face paper_search + Google Scholar (현행)
+> - `technology`: WebSearch (industry blogs, vendor whitepapers) + WebFetch (3GPP/ITU-T/IEEE/W3C standards pages) + arXiv (보조) + Hugging Face (관련 모델)
+> - `market`: WebSearch (analyst content, news, press releases) + WebFetch (company sites, investor pages). **arXiv·Semantic Scholar·OpenAlex 비활성**.
 
 #### Step 2a: 초기 쿼리 확장 (LLM 지식 기반)
 오케스트레이터가 사용자 쿼리로부터 **2~3개 동의어/대체 표현**을 생성한다.
@@ -153,7 +222,12 @@ Agent(subagent_type="연구팀"):
 
 Auto-proceed after expansion rounds (no user gate).
 
-### Step 3: Paper Analysis (direct Agent calls)
+### Step 3: Source Analysis (direct Agent calls) — mode-aware
+
+> **Phase activation per mode**:
+> - `academic`: Phase A (skim) + B (reference chaining) + C (code/model search) — 모두 활성
+> - `technology`: Phase A (full skim of standards + whitepapers) — 활성. Phase B (reference chaining) — **비활성** (academic citation graph가 의미 약함). Phase C — 활성 (open-source 구현체 탐색)
+> - `market`: Phase A (skim of market reports + news) — 활성. Phase B / C — **비활성**
 
 #### Step 3a: Playwright Pre-Check + 탐색팀 Pre-Fetch
 ```
@@ -277,7 +351,15 @@ Agent(subagent_type="연구팀"):
    - search_results.json (paper metadata)
    - Read key card files from cards/ (at least top 15-20 by discovery_count)
 
-   ## Report Structure (9 files, ALL in Korean, technical terms English-parenthesized)
+   ## Report Structure (mode-specific)
+
+   The report set differs per mode. Common rules across all modes:
+   - All Korean prose, technical terms English-parenthesized
+   - Every comparison table ends with bold **Takeaway** line
+   - Numbers/claims sourced only from analysis_summary / cards — NO fabrication
+   - Cross-references via `[text](filename.md)`
+
+   ### Mode `academic` (default) — 9 files
 
    ### 00_briefing.md — Executive Briefing
    - **Level 0** (1 line): 한 문장 요약
@@ -420,6 +502,81 @@ Agent(subagent_type="연구팀"):
    - Each track: target audience, goal, ordered paper list (5-7), reading point per paper, estimated time
    - Per-paper markers: 필수/권장/선택 for each track
 
+   ### Mode `technology` — 7 files
+
+   ### 00_briefing.md — Executive Briefing
+   - 1-line summary, 3-5 line key findings, 1-page overview
+   - Mermaid: technology landscape (categories, vendors, standards) — `graph TD`
+   - Top-3 actionable insights (e.g., "production 환경엔 X 코덱이 사실상 표준", "오픈소스 대안 Y가 부상")
+
+   ### 01_landscape.md — Technology Landscape
+   - Category taxonomy (codecs / protocols / processing / hardware 등)
+   - Key technologies × categories matrix
+   - Lineage diagram (어떤 기술이 어디서 파생됐는지)
+   - Adoption stage per technology (emerging / mainstream / legacy)
+
+   ### 02_standards.md — Standards & Specs
+   - Standards inventory: org (3GPP / ITU-T / IEEE / W3C / IETF) | spec ID | scope | year | status
+   - Per-standard detail: 핵심 sections, mandatory vs optional features, profile/level
+   - Cross-references between specs (예: VoLTE는 3GPP 26.171 + IETF SDP + ITU-T G.722.2)
+   - **Takeaway**: 어느 표준을 따라야 하는가 (production / research 별도)
+
+   ### 03_vendor_comparison.md — Vendor / Solution Comparison
+   - Vendor matrix: vendor | product/SDK | licensing | platform | strengths | weaknesses
+   - Capability checklist: feature × vendor (Yes/No/Partial)
+   - Cost·license model 비교 (proprietary / open-source / royalty)
+   - **Takeaway**: 사용 시나리오별 추천 솔루션
+
+   ### 04_technical_deep_dive.md — Algorithm·Protocol Details
+   - 3-5 핵심 기술 테마, each: 문제 정의 → 알고리즘 비교 → key insight
+   - Critical equations / pseudocode / state machines (필요 시)
+   - Performance trade-off 분석 (latency / quality / complexity)
+
+   ### 05_deployment.md — Deployment Considerations
+   - Reference architectures (network topology / signal flow)
+   - Latency budget breakdown
+   - Integration paths (existing system → new tech 마이그레이션)
+   - Failure modes + mitigation
+   - Cost model (CapEx / OpEx / per-call cost 등 해당 시)
+
+   ### 06_implementation.md — Goal-Adaptive Action Roadmap (academic mode와 동일 템플릿; build / adopt 우선)
+
+   ### 07_resources.md — Open-source Code, Models, Tools
+   - Tier-based resources: Tier 1 (직접 사용 가능) / Tier 2 (참조용) / Tier 3 (실험용)
+   - Pre-trained checkpoints (있다면) | platform support | license
+   - Evaluation tools, test datasets, benchmarking suites
+
+   ### Mode `market` — 5 files
+
+   ### 00_briefing.md — Executive Briefing
+   - 1-line summary, 3-5 line key findings, 1-page overview
+   - Top-3 strategic implications
+
+   ### 01_market_overview.md — Market Sizing & Segmentation
+   - Total Addressable Market (TAM) / Serviceable (SAM) / Obtainable (SOM)
+   - Segment breakdown: by region / customer type / use case
+   - Growth rate (CAGR) + projection 3-5년
+   - Source attribution table (출처 / 발행일 / 신뢰도)
+   - **Takeaway**: 시장 규모 + 어디서 성장 동인이 나오는가
+
+   ### 02_key_players.md — Competitor Profiles
+   - Top 5-10 players: name | revenue / market share | products | strategy | recent moves
+   - Positioning map (2D, 예: price vs feature)
+   - Recent M&A / partnership / funding 동향
+   - **Takeaway**: 경쟁 구도 1줄 요약
+
+   ### 03_trends.md — Market Trends & Drivers
+   - Driver factors (technology / regulation / customer need)
+   - Inhibitor factors (cost / risk / inertia)
+   - Disruptor candidates (incumbent를 위협할 수 있는 신기술·플레이어)
+   - Timeline (단기 / 중기 / 장기 trend 분리)
+
+   ### 04_opportunities.md — Opportunity Assessment
+   - Whitespace identification (충족되지 않는 needs)
+   - Entry strategy options (organic / partnership / acquisition)
+   - Risk register
+   - **Recommended actions** (prioritized)
+
    ## Quality Directives
    - Cross-reference other reports: [text](filename.md)
    - Every comparison table MUST end with bold **Takeaway** line
@@ -468,12 +625,12 @@ Write `{artifact_dir}/pipeline_summary.md` BEFORE reporting:
 | 2b-c | Paper Search (Agent) | {N} papers | sources: {list} |
 | 2e | Query Expansion Rounds | {N} rounds | new papers per round: {list} |
 | 3 | Paper Analysis (Agent x N) | {N} analyzed | depth: {depth}, loopbacks: {N} |
-| 4 | Report Generation (Agent + QA) | 9 files | QA: {level}, rounds: {N} |
+| 4 | Report Generation (Agent + QA) | {N} files (mode={mode}: academic=9 / technology=7 / market=5) | QA: {level}, rounds: {N} |
 
 ## Artifacts
 - Search: {artifact_dir}/search_results.json
 - Analysis: {artifact_dir}/analysis_summary.md
-- Reports: {artifact_dir}/00_briefing.md ~ 08_reading_guide.md
+- Reports: {artifact_dir}/00_briefing.md ~ {last_report.md} (mode-aware: academic→08_reading_guide / technology→07_resources / market→04_opportunities)
 
 ## Decision Points
 | Step | Decision | Response | Action |
@@ -486,7 +643,7 @@ Read `00_briefing.md` and `06_implementation.md` (for the inferred goal + Next P
 1. Level 0 summary (one line)
 2. Level 1 overview (3-5 lines)
 3. Key stats: total papers, core papers, code availability
-4. File paths for all 9 reports (00_briefing ~ 08_reading_guide)
+4. File paths for all reports (mode-aware: academic→00~08 / technology→00~07 / market→00~04)
 5. **Next pipeline recommendation**: read the `## Next Pipeline` section from `06_implementation.md` and present the inferred goal + recommended next command verbatim. Make it copy-paste-ready.
 6. "질문이 있으시면 물어보세요. 보고서를 기반으로 답변드리겠습니다."
 

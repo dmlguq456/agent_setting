@@ -1,7 +1,7 @@
 ---
 name: init-doc-strategy
-description: Create an initial document strategy (rebuttal/write/review/survey/report/proposal/presentation) based on analyzed reference materials
-argument-hint: "<mode> --refs <folder> --output <artifact-dir> [--type <survey-type>] <task description>"
+description: Create an initial document strategy (rebuttal/write/review/report/proposal/presentation) based on analyzed reference materials
+argument-hint: "<mode> --refs <folder> --output <artifact-dir> <task description>"
 ---
 
 ## Language Rule
@@ -10,8 +10,7 @@ argument-hint: "<mode> --refs <folder> --output <artifact-dir> [--type <survey-t
 
 ## Argument Parsing
 Parse `$ARGUMENTS`:
-- **mode**: first word — `rebuttal | write | review | survey | report | proposal | presentation`
-- **--type <survey-type>**: `literature | market | technology | product | company` (only for survey mode, default: `literature`)
+- **mode**: first word — `rebuttal | write | review | report | proposal | presentation`
 - **--refs <folder>**: path to reference materials
 - **--output <dir>**: artifact output directory (`.claude_reports/documents/{date}_{name}/`)
 - Remaining text: task description / context
@@ -20,7 +19,7 @@ Parse `$ARGUMENTS`:
 - Verify analysis files exist in `{output_dir}/analysis/`:
   - `material_index.md` (required for all modes)
   - `reviewer_analysis.md` (required for rebuttal mode)
-  - `ref_analysis.md` (required for write/review/survey/report/proposal/presentation modes)
+  - `ref_analysis.md` (required for write/review/report/proposal/presentation modes)
 - If missing, report error — autopilot-doc Step 1 should have created these.
 
 ## Delegate to 연구팀
@@ -30,7 +29,6 @@ Invoke the **research-team** (연구팀) agent as a subagent with the following 
 Document strategy mode. Create an initial {mode} strategy document.
 
 Mode: {mode}
-{If mode == survey: 'Survey type: {survey_type}'}
 Task: {task description}
 Date: {YYYY-MM-DD}
 Reference materials folder: {refs_folder}
@@ -41,7 +39,7 @@ Target venues (for academic modes): NeurIPS, ICML, ICLR, ICASSP, Interspeech, IE
 ## Inputs
 1. Read all analysis files in the analysis directory (material_index.md, reviewer_analysis.md or ref_analysis.md)
 2. Read relevant reference PDFs from the refs folder as needed for deeper understanding
-3. Consider venue-specific conventions and expectations (for academic modes: rebuttal/write/review/literature survey) or domain best practices and industry standards (for professional modes: report/proposal/presentation/non-literature survey)
+3. Consider venue-specific conventions and expectations (for academic modes: rebuttal/write/review) or domain best practices and industry standards (for professional modes: report/proposal/presentation)
 
 ## Mode-Specific Instructions
 
@@ -129,76 +127,6 @@ type: review / status: draft / date: {YYYY-MM-DD}
 ## Missing References / ## Minor Issues / ## Overall Assessment & Recommendation / ## Confidence
 ```
 
-### If mode = survey
-Survey type determines the template structure:
-
-#### survey (literature)
-```markdown
----
-type: survey / survey_type: literature / status: draft / date: {YYYY-MM-DD}
----
-# Literature Survey Strategy: {topic}
-## 1. Scope Definition — research questions, inclusion/exclusion criteria, time range
-## 2. Taxonomy — categorization framework for the literature
-## 3. Chronological Development — key milestones and evolution
-## 4. Method Comparison Matrix — dimensions, metrics, trade-offs
-## 5. Research Gaps — identified gaps with evidence and significance
-## 6. Future Directions — promising research directions with justification
-## 7. Key Papers — must-read papers with rationale
-```
-
-#### survey (market)
-```markdown
----
-type: survey / survey_type: market / status: draft / date: {YYYY-MM-DD}
----
-# Market Survey Strategy: {topic}
-## 1. Market Definition — scope, segments, size estimates
-## 2. Competitive Landscape — key players, positioning, market share
-## 3. Trend Analysis — emerging trends, drivers, inhibitors
-## 4. SWOT / Opportunity Assessment — for the user's context
-## 5. Recommendations — strategic actions with prioritization
-```
-
-#### survey (technology)
-```markdown
----
-type: survey / survey_type: technology / status: draft / date: {YYYY-MM-DD}
----
-# Technology Survey Strategy: {topic}
-## 1. Technology Landscape — categories, key technologies, relationships
-## 2. Comparison Matrix — features, performance, maturity, ecosystem
-## 3. Maturity Assessment — TRL / adoption stage per technology
-## 4. Trade-off Analysis — when to use which technology
-## 5. Adoption Recommendations — with risk/benefit analysis
-```
-
-#### survey (product)
-```markdown
----
-type: survey / survey_type: product / status: draft / date: {YYYY-MM-DD}
----
-# Product Survey Strategy: {topic}
-## 1. Product Landscape — categories, key products
-## 2. Feature Comparison Matrix — features, pricing, target users
-## 3. User/Market Fit Analysis — strengths, weaknesses per use case
-## 4. Gap Analysis — unmet needs in current offerings
-## 5. Recommendations — product selection or design guidance
-```
-
-#### survey (company)
-```markdown
----
-type: survey / survey_type: company / status: draft / date: {YYYY-MM-DD}
----
-# Company Survey Strategy: {topic}
-## 1. Company Profile(s) — overview, mission, key products/services
-## 2. Strategic Analysis — business model, competitive advantages, recent moves
-## 3. Competitive Positioning — relative to peers
-## 4. Financial / Growth Indicators — if available from refs
-## 5. Outlook & Recommendations — implications for the user's context
-```
-
 ### If mode = report
 ```markdown
 ---
@@ -249,7 +177,7 @@ type: presentation / status: draft / date: {YYYY-MM-DD}
 ```
 
 ## Quality Requirements
-Every reviewer point must appear in rebuttal strategy (missing a point is a critical error). Severity classification must be justified. All citations must reference actual materials in the refs folder — do NOT fabricate. Strategy must be actionable with specific plans, not vague advice. For academic modes (rebuttal/write/review): apply venue-specific norms (e.g., NeurIPS rebuttal length limits, ICASSP culture). For professional modes (report/proposal/presentation/non-literature survey): apply industry best practices relevant to the domain.
+Every reviewer point must appear in rebuttal strategy (missing a point is a critical error). Severity classification must be justified. All citations must reference actual materials in the refs folder — do NOT fabricate. Strategy must be actionable with specific plans, not vague advice. For academic modes (rebuttal/write/review): apply venue-specific norms (e.g., NeurIPS rebuttal length limits, ICASSP culture). For professional modes (report/proposal/presentation): apply industry best practices relevant to the domain.
 
 Write the strategy file directly. Return ONLY the file path and a 3-5 line Korean summary of the strategy. Do NOT return the strategy content itself.
 ````
@@ -261,9 +189,9 @@ Auto-detect from strategy scope:
 
 | Level | Condition | Action |
 |---|---|---|
-| **Light** | review/presentation mode, or survey with ≤3 refs | 1× 품질관리팀 (`model: "sonnet"`) |
-| **Standard** | write/report/proposal mode, or rebuttal with ≤3 reviewers, or survey with 4-9 refs | 1× 품질관리팀 (default opus) |
-| **Thorough** | rebuttal with ≥4 reviewers, or survey with ≥10 refs | 2× 품질관리팀 in parallel (opus) |
+| **Light** | review/presentation mode, or report with ≤3 refs | 1× 품질관리팀 (`model: "sonnet"`) |
+| **Standard** | write/report/proposal mode, or rebuttal with ≤3 reviewers | 1× 품질관리팀 (default opus) |
+| **Thorough** | rebuttal with ≥4 reviewers, or report/proposal with ≥10 refs | 2× 품질관리팀 in parallel (opus) |
 
 ## Post-Strategy Review Loop (max 2 revision rounds)
 The log directory is the artifact root folder (parent of `strategy/`).
