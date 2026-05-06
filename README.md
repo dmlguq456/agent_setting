@@ -36,7 +36,7 @@ flowchart LR
 
 | 단계 | 사용자 자산 | 자동화 (skill/agent) | 수동 영역 |
 |---|---|---|---|
-| **1. 분야 조사** | (없음) | `/autopilot-research <주제>` → `research/` | — |
+| **1. 분야 조사** | (없음) | `/autopilot-research <주제> --mode academic\|technology\|market` → `research/` | — |
 | **2. 기반 논문 정독** | 받은 PDF | `/analyze-papers` → `docs_paper/` | — |
 | **3. 코드베이스 파악** | 코드 | `/analyze-project` → `docs_code/` | — |
 | **4. 코드 구현** | 코드베이스 | `/autopilot-code --mode dev --user-refine "<task>"` (debug/audit 모드도 동일) | — |
@@ -60,16 +60,18 @@ flowchart LR
 | 상황 | 명령 |
 |---|---|
 | **코드베이스 / 논문 PDF 분석** | `/analyze-project` · `/analyze-papers` |
-| **새 분야 조사** | `/autopilot-research <주제> --depth medium` |
+| **학술 분야 조사** (논문) | `/autopilot-research <주제> --mode academic --depth medium` |
+| **산업·기술 조사** (표준·코덱·칩 비교) | `/autopilot-research <주제> --mode technology --depth medium` |
+| **시장 동향 조사** | `/autopilot-research <주제> --mode market` |
+| **hybrid 조사** (예: 통화 코덱 학술 + 산업 표준) | academic 1번 + technology 1번 → `--refs`로 합쳐 doc에 전달 |
 | **새 기능 개발** | `/autopilot-code --mode dev --user-refine "<task>"` (pause 후 `--from refine <plan>`) |
 | **코드 사후 감사** | `/autopilot-code --mode audit <plan-name>` |
 | **디버그** | `/autopilot-code --mode debug "<error / log path>"` |
 | **논문 초안·camera-ready** | `/autopilot-doc --mode write --refs <combined_dir> --user-refine` (전략 + 초안 markdown — 최종 작성은 사용자) |
-| **연구 grant 신청서** | `/autopilot-doc --mode proposal --refs <idea+research_dir> --user-refine` (NRF/NSF 등) |
 | **발표자료** | `/autopilot-doc --mode presentation --refs <combined_dir> --user-refine` |
 | **리뷰 응답** | `/autopilot-doc --mode rebuttal --refs <reviewer_comments> --user-refine` |
-| **분야 서베이 작성** | `/autopilot-doc --mode survey --refs <research_dir> --user-refine` |
 | **paper review (논문 reviewer 입장)** | `/autopilot-doc --mode review --refs <paper_dir> --review-format openreview --user-refine` |
+| **연구 grant 신청서** | `/autopilot-doc --mode proposal --refs <idea+research_dir> --user-refine` (NRF/NSF 등) |
 
 ---
 
@@ -97,18 +99,21 @@ flowchart LR
 |---|---|---|
 | `analyze-project` | 코드 → `docs_code/` | (없음) |
 | `analyze-papers` | PDF → `docs_paper/` | (없음) |
-| `autopilot-research` | 논문 조사 + 9개 보고서 | `--depth shallow/medium/deep` · `--qa` · `--from search/analyze/report` |
+| `autopilot-research` | 분야 조사 — mode별 보고서 (academic 9 / technology 7 / market 5) | `--mode academic/technology/market` · `--depth shallow/medium/deep` · `--qa` · `--from search/analyze/report` · `--no-clarify` |
 | `autopilot-code` | 코드 dev/audit/debug | `--mode dev/audit/debug` · `--qa` · `--from plan/refine/execute/test/report` · `--user-refine` |
-| `autopilot-doc` | 문서 strategy + draft (markdown) | `--mode rebuttal/write/review/survey/report/proposal/presentation` · `--refs <dir>` · `--qa` · `--from analyze/strategy/strategy-refine/draft/draft-refine/finalize` · `--user-refine` |
+| `autopilot-doc` | 문서 strategy + draft (markdown) | `--mode rebuttal/write/review/report/proposal/presentation` · `--refs <dir>` · `--qa` · `--from analyze/strategy/strategy-refine/draft/draft-refine/finalize` · `--user-refine` · `--no-clarify` |
 | `sync-skills` | 본 README + 노션 대시보드 동기화 | `--check` · `--readme-only` · `--notion-only` · `--force` |
 
 > sub-skill (`init-plan`, `refine-plan`, `init-doc-strategy`, `refine-doc-strategy`, `execute-plan`, `run-test`, `final-report`)은 autopilot 내부에서 자동 호출 — 직접 사용은 pause 재개 시점에만.
 
-### 핵심 옵션 3가지
+### 핵심 옵션 4가지
 
 - **`--user-refine`** (autopilot-code dev / autopilot-doc) — 연구팀 메모 직후 pause. 같은 문서에 `<!-- memo: ... -->`를 직접 추가한 뒤 출력된 `--from <stage>` 명령으로 재개.
 - **`--from <stage>`** — pause 또는 중간 실패 후 특정 단계부터 재개. stage 이름은 위 표.
 - **`--qa light/standard/thorough/adversarial`** — 리뷰 강도. `adversarial`은 Codex 외부 리뷰 추가 (autopilot-code).
+- **`--no-clarify`** (autopilot-research / autopilot-doc) — Step 0 Scope Clarification 강제 skip. 모호한 query라도 사전 질문 없이 즉시 진행.
+
+> **Step 0 Scope Clarification**: query가 모호하거나 mode multi-match일 때 autopilot이 2-4개 sharp question을 던지고 사용자 답변을 받아 진행. 충분히 구체적인 query는 자동 skip. 매번 묻지 않으니 부담 없음.
 
 ---
 
