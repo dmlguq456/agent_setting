@@ -1,7 +1,7 @@
 # Claude Setting
 
 > Source: `~/.claude/skills/*/SKILL.md` + `~/.claude/agents/*.md`
-> 마지막 sync: 2026-05-06 19:30 KST (`/sync-skills` 자동) — 직접 편집 금지.
+> 마지막 sync: 2026-05-06 19:50 KST (`/sync-skills` 자동) — 직접 편집 금지.
 > Notion 대문: [Agents/Skills](https://www.notion.so/34987c2bb75380d68df4d6ce4d469bff) (본 README와 동일 콘텐츠)
 > Notion 운영 가이드: [`notion_guide.md`](notion_guide.md) (페이지 타입 템플릿 + workspace 구조)
 
@@ -57,16 +57,18 @@ flowchart LR
 
 ### C. 문서 작성 (document deliverables)
 
-모든 모드 공통 패턴: **strategy + draft markdown** 산출 → 사용자가 최종 작성·빌드·디자인 마무리. 산출물은 `documents/{date}_{name}/`.
+모든 모드 공통 패턴: **strategy + draft markdown** 산출 → 사용자가 최종 작성·빌드·디자인 마무리. 산출물은 `documents/{date}_{name}/`. **첫 positional arg = `<task description>`** (research/code와 동일하게 작업의 _구체적 의도·목표·범위_를 한 줄로. `--refs`는 자료 폴더, task 설명과 _별개_).
 
 | 모드 | 용도 (예시) | 명령 |
 |---|---|---|
-| `write` | 논문 / camera-ready / 백서 / 기술 블로그 / 책 챕터 / 일반 글쓰기 | `/autopilot-doc --mode write --refs <dir> --user-refine` |
-| `presentation` | 논문 발표 / 사내 세미나 / 컨퍼런스 키노트 / 데모 데이 / 강의 | `/autopilot-doc --mode presentation --refs <dir> --user-refine` |
-| `rebuttal` | 학회 reviewer 응답 | `/autopilot-doc --mode rebuttal --refs <reviewer_comments> --user-refine` |
-| `review` | 본인이 reviewer 입장 (peer review) | `/autopilot-doc --mode review --refs <paper_dir> --review-format openreview --user-refine` |
-| `proposal` | 연구 grant (NRF/NSF) / 사업 제안 / 내부 프로젝트 제안 | `/autopilot-doc --mode proposal --refs <idea+research_dir> --user-refine` |
-| `report` | 기술 보고서 / 시장 분석 / 분기 보고 / 사고 분석 (post-mortem) | `/autopilot-doc --mode report --refs <dir> --user-refine` |
+| `write` | 논문 / camera-ready / 백서 / 기술 블로그 / 책 챕터 / 일반 글쓰기 | `/autopilot-doc "<task: 무슨 글, 어떤 청중, 어떤 메시지>" --mode write --refs <dir> --user-refine` |
+| `presentation` | 논문 발표 / 사내 세미나 / 컨퍼런스 키노트 / 데모 데이 / 강의 | `/autopilot-doc "<task: 발표 주제, 청중, 시간>" --mode presentation --refs <dir> --user-refine` |
+| `rebuttal` | 학회 reviewer 응답 | `/autopilot-doc "<task: 어떤 paper의 rebuttal, 어떤 점 강조>" --mode rebuttal --refs <reviewer_comments> --user-refine` |
+| `review` | 본인이 reviewer 입장 (peer review) | `/autopilot-doc "<task: paper 제목, 평가 관점>" --mode review --refs <paper_dir> --review-format openreview --user-refine` |
+| `proposal` | 연구 grant (NRF/NSF) / 사업 제안 / 내부 프로젝트 제안 | `/autopilot-doc "<task: 무엇을 제안, 누구에게>" --mode proposal --refs <idea+research_dir> --user-refine` |
+| `report` | 기술 보고서 / 시장 분석 / 분기 보고 / 사고 분석 (post-mortem) | `/autopilot-doc "<task: 무엇에 대한 보고, 청중>" --mode report --refs <dir> --user-refine` |
+
+> **task vs --refs의 역할 분리**: `<task>`는 _목표·의도·범위·청중_을 명확히 (Step 0 Scope Clarification에 사용). `--refs`는 _참고 자료 폴더_ (cards / PDFs / 본인 결과 등). 둘 다 강할수록 strategy + draft 품질이 올라감 — `--refs`만 강하면 자료는 풍부한데 _무엇을 만들지_가 모호해서 첫 draft에서 사용자가 다시 잡아줘야 함.
 
 ### 자주 쓰는 chaining 패턴
 
