@@ -1,7 +1,7 @@
 # Claude Setting
 
 > Source: `~/.claude/skills/*/SKILL.md` + `~/.claude/agents/*.md`
-> 마지막 sync: 2026-05-06 19:00 KST (`/sync-skills` 자동) — 직접 편집 금지.
+> 마지막 sync: 2026-05-06 19:30 KST (`/sync-skills` 자동) — 직접 편집 금지.
 > Notion 대문: [Agents/Skills](https://www.notion.so/34987c2bb75380d68df4d6ce4d469bff) (본 README와 동일 콘텐츠)
 > Notion 운영 가이드: [`notion_guide.md`](notion_guide.md) (페이지 타입 템플릿 + workspace 구조)
 
@@ -31,48 +31,53 @@ flowchart LR
 
 ---
 
-## 🔬 연구 라이프사이클 — 단계별 사용 가이드
+## 🧭 활용 갈래 — 3 카테고리
 
-연구는 단순한 직선 흐름이 아닙니다. 각 단계마다 **사용자 자산** / **자동화 가능 영역** / **수동 영역**이 다릅니다.
+세 갈래는 **독립적으로** 사용. "논문 한 줄짜리 라이프사이클"이 아니라 다양한 코드·문서 산출물을 각각 만들 수 있음. 갈래 간 chaining은 `--refs`로.
 
-| 단계 | 사용자 자산 | 자동화 (skill/agent) | 수동 영역 |
-|---|---|---|---|
-| **1. 분야 조사** | (없음) | `/autopilot-research <주제> --mode academic\|technology\|market` → `research/` | — |
-| **2. 기반 논문 정독** | 받은 PDF | `/analyze-papers` → `docs_paper/` | — |
-| **3. 코드베이스 파악** | 코드 | `/analyze-project` → `docs_code/` | — |
-| **4. 코드 구현** | 코드베이스 | `/autopilot-code --mode dev --user-refine "<task>"` (debug/audit 모드도 동일) | — |
-| **5. 실험 실행·결과 수집** | 실험 결과 (logs, ckpt, plots) | **자동화 없음** | 사용자가 직접 실행. 결과 정리 후 메인 Claude에게 "노션에 기록해" → `notion_guide.md` 트리거, 또는 본인 폴더에 모음 |
-| **6. 논문 초안** | 본인 결과 + research artifact + 본인 노트 | `/autopilot-doc --mode write --refs <combined_dir> --user-refine` → **전략 + 초안 markdown** 생성 | **최종 작성은 사용자가 마무리** (실험 표·그림 수동 삽입, 본인 결과 narrative, LaTeX 빌드, 인용 정리) |
-| **7. 발표자료** | 논문 + research artifact | `/autopilot-doc --mode presentation --refs <combined_dir> --user-refine` → **슬라이드 흐름·내용 markdown** | 슬라이드 시각화·디자인 마무리 |
-| **8. 리뷰 대응** | reviewer comments | `/autopilot-doc --mode rebuttal --refs <reviewer_comments> --user-refine` → **응답 전략 + 초안 markdown** | 응답 톤 다듬기, 추가 실험 필요 시 4–5단계 재진입 |
-| **9. Camera-ready** | 최종 논문 + 변경 의도 | `/autopilot-doc --mode write --refs <기존_doc_dir> --user-refine` (write mode 재사용) → **수정 전략 + 가이드 markdown** | **최종 작성·빌드는 사용자가 마무리** (논문 초안과 동일 패턴) |
-| **(연구 grant 신청 시)** | 본인 idea + preliminary results | `/autopilot-doc --mode proposal --refs <idea+research_dir> --user-refine` → 전략 + 초안 markdown | NRF/NSF/기관 양식에 맞게 사용자 마무리 |
+### A. 사전 조사 & 분석 (input gathering)
 
-> **autopilot-doc의 모든 모드는 같은 패턴**: 전략(strategy) + 초안/가이드(draft) markdown 산출 → **사용자가 최종 작성을 마무리**. skill은 방향과 구조를 잡아주는 역할.
+조사·분석 결과는 후속 갈래(B/C)의 `--refs` 입력으로 사용.
 
-> **핵심 갭**: 5번(실험 실행)은 Claude가 대신할 수 없음 — 코드 구현(4)과 결과 정리(6) 사이에 사용자 본인이 실험을 돌리고, 결과를 모아 다음 skill의 `--refs`에 함께 넣어 줘야 합니다. 실험 결과의 노션 로깅은 메인 Claude에게 직접 부탁 (`notion_guide.md` 자동 참조).
+| 입력 | skill | 산출 |
+|---|---|---|
+| 외부 분야 조사 — 논문 / 기술표준 / 시장 동향 | `/autopilot-research <주제> --mode academic\|technology\|market` | `research/{topic}/` — 9 / 7 / 5개 markdown 보고서 |
+| 보유한 논문 PDF 정독 | `/analyze-papers` | `docs_paper/` — 논문별 cards + overview |
+| 기존 코드베이스 파악 | `/analyze-project` | `docs_code/` — 모듈 매핑 + 구조 분석 |
 
-> **`--refs` 사용 팁**: 논문 작성·발표자료 같은 '본인 자료가 핵심'인 단계에서는 단일 폴더에 (a) `autopilot-research`의 artifact_dir, (b) 본인 결과 표·그림, (c) 본인 노트를 함께 모아 두고 그 폴더를 `--refs`로 지정. 두 종류의 자료가 모두 들어가야 강한 draft가 나옵니다.
+### B. 코드 개발 & 감사 (code deliverables)
 
----
+**연구 실험뿐 아니라 실제 서비스 / 제품 / 라이브러리 / 사이드 프로젝트 / CI·빌드 도구** 개발에도 동일하게 사용. task description만 명확하면 도메인 무관.
 
-## ⚡ 자주 쓰는 명령
+| 작업 | skill | 산출 |
+|---|---|---|
+| 새 기능 / 신규 모듈 개발 (plan → execute → test) | `/autopilot-code --mode dev --user-refine "<task>"` | `plans/{date}_{name}/` — 코드 + dev/test logs |
+| 사후 감사 (지난 변경의 risk / quality 점검) | `/autopilot-code --mode audit <plan>` | audit log + recommendations |
+| 디버그 (에러·로그 기반 root-cause 추적) | `/autopilot-code --mode debug "<error>"` | debug log + 원인 + fix |
 
-| 상황 | 명령 |
-|---|---|
-| **코드베이스 / 논문 PDF 분석** | `/analyze-project` · `/analyze-papers` |
-| **학술 분야 조사** (논문) | `/autopilot-research <주제> --mode academic --depth medium` |
-| **산업·기술 조사** (표준·코덱·칩 비교) | `/autopilot-research <주제> --mode technology --depth medium` |
-| **시장 동향 조사** | `/autopilot-research <주제> --mode market` |
-| **hybrid 조사** (예: 통화 코덱 학술 + 산업 표준) | academic 1번 + technology 1번 → `--refs`로 합쳐 doc에 전달 |
-| **새 기능 개발** | `/autopilot-code --mode dev --user-refine "<task>"` (pause 후 `--from refine <plan>`) |
-| **코드 사후 감사** | `/autopilot-code --mode audit <plan-name>` |
-| **디버그** | `/autopilot-code --mode debug "<error / log path>"` |
-| **논문 초안·camera-ready** | `/autopilot-doc --mode write --refs <combined_dir> --user-refine` (전략 + 초안 markdown — 최종 작성은 사용자) |
-| **발표자료** | `/autopilot-doc --mode presentation --refs <combined_dir> --user-refine` |
-| **리뷰 응답** | `/autopilot-doc --mode rebuttal --refs <reviewer_comments> --user-refine` |
-| **paper review (논문 reviewer 입장)** | `/autopilot-doc --mode review --refs <paper_dir> --review-format openreview --user-refine` |
-| **연구 grant 신청서** | `/autopilot-doc --mode proposal --refs <idea+research_dir> --user-refine` (NRF/NSF 등) |
+### C. 문서 작성 (document deliverables)
+
+모든 모드 공통 패턴: **strategy + draft markdown** 산출 → 사용자가 최종 작성·빌드·디자인 마무리. 산출물은 `documents/{date}_{name}/`.
+
+| 모드 | 용도 (예시) | 명령 |
+|---|---|---|
+| `write` | 논문 / camera-ready / 백서 / 기술 블로그 / 책 챕터 / 일반 글쓰기 | `/autopilot-doc --mode write --refs <dir> --user-refine` |
+| `presentation` | 논문 발표 / 사내 세미나 / 컨퍼런스 키노트 / 데모 데이 / 강의 | `/autopilot-doc --mode presentation --refs <dir> --user-refine` |
+| `rebuttal` | 학회 reviewer 응답 | `/autopilot-doc --mode rebuttal --refs <reviewer_comments> --user-refine` |
+| `review` | 본인이 reviewer 입장 (peer review) | `/autopilot-doc --mode review --refs <paper_dir> --review-format openreview --user-refine` |
+| `proposal` | 연구 grant (NRF/NSF) / 사업 제안 / 내부 프로젝트 제안 | `/autopilot-doc --mode proposal --refs <idea+research_dir> --user-refine` |
+| `report` | 기술 보고서 / 시장 분석 / 분기 보고 / 사고 분석 (post-mortem) | `/autopilot-doc --mode report --refs <dir> --user-refine` |
+
+### 자주 쓰는 chaining 패턴
+
+- **A → C**: 분야 조사 결과 (research artifact_dir) 를 doc의 `--refs`로 전달 → 논문/발표/제안서/보고서
+- **A → B**: 외부 표준 조사 + 코드베이스 파악 → autopilot-code의 plan 단계 motivation·constraint 으로 사용
+- **B → C**: 코드 변경 / 실험 / 운영 결과 정리 → doc의 `report` 또는 `write` 모드로 narrative화
+- **외부 (사용자 본인 자료)**: Claude가 만들 수 없는 영역 — 실험 결과·표·그림·데이터·노트는 사용자가 폴더에 모아 doc의 `--refs`에 함께 전달
+
+> **`--refs` 사용 팁**: 단일 폴더에 (a) research artifact, (b) 본인 결과 / 데이터 / 그림, (c) 본인 노트를 함께 모아 두고 그 폴더를 `--refs`로 지정. 두 종류 자료가 모두 들어가야 강한 draft가 나옵니다.
+
+> **`--user-refine` 패턴**: dev/doc 모드에서 연구팀 메모 직후 pause → 사용자가 직접 `<!-- memo: ... -->` 추가 → 출력된 `--from <stage>` 명령으로 재개. 미세 컨트롤이 필요할 때.
 
 ---
 
