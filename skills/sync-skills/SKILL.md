@@ -152,133 +152,27 @@ flowchart LR
 
 > 매 sync 시 argument-hint에서 `--mode` / `--from` 옵션 값을 추출해 Diagram 1의 노드 라벨을 자동 갱신.
 
-#### 4b. Quickstart (자주 쓰는 워크플로우 4종 — 고정 텍스트, sync 시 그대로 박음)
+#### 4b. README 본문 구조 (canonical layout)
 
-```markdown
-### 🎯 Quickstart 시나리오
+`~/.claude/README.md`가 본 sync의 단일 진실 출처(reference layout). sync 시 다음 순서로 섹션을 채운다:
 
-**A. 세미나 발표자료**
-1. `/autopilot-research <주제> --depth medium`
-2. `/autopilot-doc --mode presentation --refs <research_artifact_dir> --pptx-template <path> --user-refine`
-3. (pause) — `seminar_slides.md`에 직접 메모 추가
-4. `/autopilot-doc --mode presentation --from strategy-refine <doc_artifact_dir>`
+1. **Header** — title + sync 시각 + Notion 대문 링크
+2. **워크플로우** — Diagram 1 (위 4a)
+3. **자주 쓰는 명령** — 시나리오 × 명령 표 (7행: 세미나/논문/개발/감사/디버그/리뷰/사전준비)
+4. **Skills 표** — name / 역할 / 주요 옵션. 옵션 값은 각 SKILL.md의 argument-hint에서 자동 추출. sub-skill은 표 하단 한 줄로 요약.
+5. **핵심 옵션 3가지** — `--user-refine`, `--from`, `--qa`. 한 줄씩.
+6. **Agents** — "직접 호출 2개" 짧은 설명 + 표 (name / 모델 / 호출자) + `<details>` 안에 호출 구조 mermaid (Diagram 2)
+7. **동기화** — `/sync-skills` 두 명령 + GitHub 링크
 
-**B. 새 기능 개발**
-1. (선택) `/analyze-project` — 첫 사용 시
-2. `/autopilot-code --mode dev --user-refine "<task description>"`
-3. (pause) — plan 검토·메모 추가
-4. `/autopilot-code --mode dev --from refine <plan-name>`
-5. (선택) `/autopilot-code --mode audit <plan-name>` — 사후 감사
+원칙:
+- prose는 최소화. 표·bullet 우선.
+- 같은 정보를 두 군데 반복하지 않음 (예: 옵션 값은 Skills 표에 한 번만).
+- 디렉토리 구조나 파이프라인별 prose 같은 "참고용" 섹션은 넣지 않음 — 표 하나로 대체.
 
-**C. 논문 rebuttal**
-1. `/autopilot-doc --mode rebuttal --refs <reviewer_comments_folder> --user-refine`
-2. (pause × 2: strategy-refine, draft-refine) — 매번 사용자 메모
-
-**D. 디버그**
-1. `/autopilot-code --mode debug "<error description / log path>"`
-   (debug는 `--user-refine`, `--from` 미지원 — 빠른 진단·수정에 최적화)
-```
-
-#### 4c. Skills Cheat-Sheet (table)
-
-| Skill | 역할 | 주요 옵션 | 쓰는 시점 |
-|---|---|---|---|
-| `analyze-project` | 코드 → `docs_code/` | (없음) | 프로젝트 최초 1회 |
-| `analyze-papers` | PDF → `docs_paper/` | (없음) | 논문 자료 최초 1회 |
-| `autopilot-research` | 논문 조사 + 9개 보고서 | `--depth` `--qa` `--from` | 새 분야 조사 / 세미나 사전 준비 |
-| `autopilot-code` | 코드 dev/audit/debug | `--mode` `--qa` `--from` `--user-refine` | 코드 변경 작업 |
-| `autopilot-doc` | 문서 strategy + draft | `--mode`(7종) `--refs` `--qa` `--from` `--user-refine` | 논문/슬라이드/보고서 작성 |
-| `init-plan` / `refine-plan` | autopilot-code의 sub | `--qa` | 보통 직접 호출 X |
-| `init-doc-strategy` / `refine-doc-strategy` | autopilot-doc의 sub | `--qa` | autopilot-doc pause 후 직접 재개할 때 |
-| `execute-plan` / `run-test` / `final-report` | autopilot-code의 sub | (각자) | 보통 내부 호출 |
-| `sync-skills` | 본 스킬 — README + Notion 대시보드 동기화 | `--check` `--readme-only` `--notion-only` `--force` | 스킬·에이전트 수정 후 |
-
-각 cell의 description/options는 SKILL.md frontmatter에서 자동 추출 (위 표는 sync 시점 스냅샷으로 채워 넣음).
-
-#### 4d. Agents Cheat-Sheet (table)
-
-| Agent | 역할 | 모델 | 호출자 / 직접 사용 |
-|---|---|---|---|
-| 기획팀 (plan-team) | plan 문서 작성·갱신 | opus | init-plan / refine-plan |
-| 품질관리팀 (qa-team) | plan·diff 리뷰 | opus | 모든 autopilot의 review loop |
-| 연구팀 (research-team) | 논문 검색·분석·plan domain review | opus | autopilot-research / -code / -doc |
-| 테스트팀 (test-team) | syntax→import→smoke→functional→integration 단계 검증 | opus | run-test |
-| 개발팀 (dev-team) | refactor·rename·정리 | sonnet | 사용자 직접 호출 (interactive 또는 auto) |
-| 탐색팀 (browser-team) | Playwright 기반 paywall/JS 사이트 접근 | sonnet | autopilot-research |
-| 기록팀 (record-team) | Notion CRUD (페이지·DB·실험 로그) | sonnet | 사용자 직접 호출 ("노션에 기록해") |
-| codex-review-team | Codex CLI 기반 외부 리뷰 | opus | `--qa adversarial` 시 autopilot-code |
-
-#### 4e. 통합 가이드라인 (사용자가 agents를 어떻게 활용하나)
-
-```markdown
-### 🧭 통합 가이드라인
-
-**원칙**: 대부분의 Agent는 Skill이 자동으로 호출한다. 사용자가 직접 부르는 agent는 두 종류뿐:
-
-1. **개발팀** — 작은 리팩토링/정리 ("이 함수 이름 바꿔줘", "이 코드 정리해줘"). plan을 만들 정도가 아닐 때.
-2. **기록팀** — Notion 작업 ("노션에 기록해", "이번 실험 노션에 추가").
-
-**나머지 agents는 skill에 위임**:
-- 코드 변경이 필요하다 → `/autopilot-code` (내부에서 기획팀 → 품질관리팀 → 연구팀 → 테스트팀 자동 호출)
-- 논문 조사 → `/autopilot-research` (연구팀 + 탐색팀)
-- 문서 작성 → `/autopilot-doc` (연구팀 + 품질관리팀)
-- 외부 리뷰 추가 → `/autopilot-code --qa adversarial` (codex-review-team 추가)
-
-**언제 skill 대신 agent를 직접?**
-- skill의 오버헤드가 부담스러울 만큼 작은 작업 → 개발팀
-- 단발성 노션 정리 → 기록팀
-- 그 외에는 항상 skill을 통해 — agent 단독 호출은 컨텍스트가 분리돼 plan/log 산출물이 남지 않으므로 추적이 어렵다.
-
-**Skill 옵션 cheat-sheet**:
-- `--user-refine`: 연구팀 메모 직후 pause해서 사용자가 직접 메모 추가 (autopilot-code dev / autopilot-doc만)
-- `--from <stage>`: pause 후 또는 중간 실패 후 재개
-- `--qa light|standard|thorough|adversarial`: 리뷰 강도 (adversarial은 codex-review-team 추가)
-```
+현행 README가 이 layout의 reference. 대규모 변경 시 README를 먼저 손보고 본 SKILL.md를 동기화.
 
 ### Step 5: Write README.md
-`~/.claude/README.md`를 다음 구조로 통째로 작성:
-
-```markdown
-# Claude Setting — Personal Skills & Agents
-
-> **Source of Truth**: `~/.claude/skills/*/SKILL.md` + `~/.claude/agents/*.md`
-> **마지막 sync**: {ISO8601 KST}
-> **자동 생성**: 직접 편집 금지. 수정하려면 SKILL.md / agent.md를 고치고 `/sync-skills`.
-
-## 📊 전체 워크플로우
-
-{Step 4a Mermaid}
-
-{Step 4b Quickstart}
-
-## 📋 Skills Cheat-Sheet
-
-{Step 4c table}
-
-## 🤝 Agents Cheat-Sheet
-
-{Step 4d table}
-
-{Step 4e 통합 가이드라인}
-
-## 📁 디렉토리 구조
-
-```
-~/.claude/
-├─ skills/         # /<name> 형태로 호출되는 슬래시 스킬
-├─ agents/         # Agent 도구로 위임되는 서브에이전트
-├─ settings.json   # hooks, permissions, env, model 등
-└─ README.md       # 이 파일 (자동 생성)
-```
-
-## 🔗 관련 링크
-
-- Notion 대문: [Agents/Skills](https://www.notion.so/34987c2bb75380d68df4d6ce4d469bff)
-- GitHub: https://github.com/dmlguq456/claude_setting
-
----
-*sync 명령*: `/sync-skills` (변경 감지 시 README + Notion 갱신) / `/sync-skills --check` (drift만 확인)
-```
+`~/.claude/README.md`를 4b의 layout 그대로 통째로 작성. 현행 README가 reference이므로 큰 구조 변경 없이는 sync 시점 데이터(시각, SHA 기반 변경 표시 등)만 갱신한다. argument-hint 변화로 옵션 값이 바뀌었으면 Skills 표의 "주요 옵션" 컬럼을 갱신.
 
 ### Step 6: Update Notion 대문 상단 (기록팀 위임)
 
