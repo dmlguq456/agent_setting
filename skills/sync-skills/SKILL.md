@@ -101,9 +101,9 @@ flowchart LR
     end
     subgraph RUN["🚀 런타임 파이프라인"]
         direction TB
-        ARES["[1] autopilot-research<br/>--depth shallow|medium|deep<br/>--from search|analyze|report"]
-        ACODE["[2] autopilot-code<br/>--mode dev|audit|debug<br/>--from plan|refine|execute|test|report<br/>--user-refine"]
-        ADOC["[3] autopilot-doc<br/>--mode rebuttal|write|review|survey|<br/>report|proposal|presentation<br/>--from analyze|strategy|strategy-refine|<br/>draft|draft-refine|finalize<br/>--user-refine"]
+        ARES["[1] autopilot-research<br/>--depth shallow/medium/deep<br/>--from search/analyze/report"]
+        ACODE["[2] autopilot-code<br/>--mode dev/audit/debug<br/>--from plan/refine/execute/test/report<br/>--user-refine"]
+        ADOC["[3] autopilot-doc<br/>--mode rebuttal/write/review/survey/<br/>report/proposal/presentation<br/>--from analyze/strategy/strategy-refine/<br/>draft/draft-refine/finalize<br/>--user-refine"]
     end
     subgraph AGENTS["🤝 Agents (skills가 호출)"]
         direction TB
@@ -137,7 +137,7 @@ flowchart LR
     ARES --> BT
     ADOC --> RT
     ADOC --> QT
-    ACODE -.--qa adversarial.-> CRT
+    ACODE -.qa adversarial.-> CRT
     ACODE -.final-report auto-update.-> AP
 ```
 
