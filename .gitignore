@@ -24,3 +24,6 @@ projects/
 
 # NFS temp files
 .nfs*
+
+# MCP runtime cache (per-machine, ephemeral)
+mcp-needs-auth-cache.json
