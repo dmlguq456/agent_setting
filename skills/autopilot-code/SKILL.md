@@ -1,7 +1,7 @@
 ---
 name: autopilot-code
 description: "Unified code pipeline — dev/audit/debug modes. Orchestrates init-plan → refine-plan → execute-plan → run-test → final-report with mode-specific behavior."
-argument-hint: "--mode dev|audit|debug <task/plan/error description> [--from <step>] [--qa light|standard|thorough|adversarial] [--autonomy proactive|standard|passive]"
+argument-hint: "--mode dev|audit|debug <task/plan/error description> [--from <step>] [--qa light|standard|thorough|adversarial] [--user-refine]"
 ---
 
 ## Language Rule
@@ -26,68 +26,65 @@ argument-hint: "--mode dev|audit|debug <task/plan/error description> [--from <st
 - `--qa light` → sonnet, single reviewer
 - `--qa standard` → opus, single reviewer (default)
 - `--qa thorough` → opus, parallel reviewers
-- `--qa adversarial` → opus, parallel reviewers + Codex adversarial-review. **dev mode only.**
+- `--qa adversarial` → opus, parallel reviewers + Codex adversarial-review.
 - Mode-specific validation:
   - dev: accepts light|standard|thorough|adversarial (4 levels)
-  - audit: accepts light|standard|thorough only. If adversarial passed → downgrade to thorough + warn.
+  - audit: accepts light|standard|thorough|adversarial (4 levels)
   - debug: accepts light|standard|thorough only. If adversarial passed → downgrade to thorough + warn.
 - If the value is not one of the accepted levels for the mode, treat as `standard` and warn the user: "유효하지 않은 QA level '{value}'. standard로 기본 설정합니다."
 - If omitted, each skill auto-detects level based on scope.
 - **Propagation**: Pass `--qa <level>` to init-plan and refine-plan as a flag. For execute-plan, run-test, and final-report, write `qa_level: <level>` into the English plan's frontmatter at Step 1 or Step 3 initialization.
 - **Mid-pipeline switching**: When starting from Step 2+ AND `--qa` is explicitly passed, update `qa_level` in the existing plan's YAML frontmatter before invoking the sub-skill. Explicit CLI flag always overrides frontmatter. If `--qa` is NOT passed on resume, preserve the existing frontmatter value (or default to `standard` if absent).
 
-### --autonomy <level>
-- `--autonomy proactive` → system decides almost everything; only asks when no safe default exists
-- `--autonomy standard` → system pauses at significant decision points (medium-risk choices)
-- `--autonomy passive` → system asks more frequently (all meaningful choices, not trivial ones)
-- Mode-specific defaults:
-  - dev mode default: proactive
-  - audit mode default: proactive
-  - debug mode default: standard (diagnosis confirmation is a meaningful checkpoint)
-- If the value is not one of `proactive|standard|passive`, treat as the mode default and warn the user: "유효하지 않은 autonomy level '{value}'. {default}로 기본 설정합니다."
-- **Propagation**: Pass `--autonomy <level>` to init-plan and refine-plan as a flag. Write `autonomy_level: <level>` into the plan's frontmatter at Step 1 or Step 3 initialization.
-- **Mid-pipeline switching**: When starting from Step 2+ AND `--autonomy` is explicitly passed, update `autonomy_level` in the existing plan's YAML frontmatter before invoking the sub-skill. Explicit CLI flag always overrides frontmatter. If `--autonomy` is NOT passed on resume, preserve the existing frontmatter value (or default to the mode default if absent).
+### --user-refine (boolean flag)
+When present, the orchestrator **pauses** at refine points so the user can add their own `<!-- memo: ... -->` comments on top of 연구팀's memos before refine-plan runs.
+
+- Applies to: **dev mode only** (Step 2 plan refine, and the failure-loop refine after test failure).
+- Audit mode: no refine step → flag ignored with one-line warning.
+- Debug mode: 연구팀 review skipped → flag ignored with one-line warning.
+
+**Pause behavior** (dev mode):
+1. After 연구팀 writes memos at Step 2 (or after failure memos are written in the test-failure retry loop), do NOT invoke refine-plan.
+2. Update plan frontmatter: `user_refine: true`, `paused_at_stage: refine`.
+3. Print to user (Korean) the memo file path and the resume command:
+   ```
+   연구팀 메모가 {ko_plan_path}에 기록되었습니다.
+   직접 메모를 추가한 뒤 다음 명령으로 재개하세요:
+       /autopilot-code --mode dev --from refine <plan-name>
+   ```
+4. Exit. Do NOT write pipeline_summary.md (pipeline is paused, not terminated).
+
+**Resume behavior**: When invoked with `--from refine`, the orchestrator skips Step 1 and goes directly to Step 2's refine-plan invocation, then continues normally.
+
+**Persistence**: `user_refine: <true|false>` lives in the English plan's YAML frontmatter (same place as `qa_level`). On `--from` resume, if `--user-refine` is not re-specified, preserve the frontmatter value.
+
+When `--from` is used together with `--user-refine` (dev only), `--from refine` is the natural resume point after a user-refine pause.
 
 The remaining text (after removing flags) is the task description, plan name, or error description (depending on mode).
 
 **When starting from Step 2+** (dev/audit modes), the argument must be a plan name (not a task description). Use the Plan Resolution section below to locate the plan folder.
 
-## Autonomy Gating
+## Decision Defaults (no autonomy gating)
 
-### Common Framework
-When the pipeline reaches a gated decision point:
-- If the current autonomy level includes that severity → **pause and ask** the user.
-- Otherwise → **proceed with the default action** (described in the proactive column).
-- All "ask" prompts must include: (1) the situation summary, (2) available options, (3) the default action if no response.
-- **Logging**: After each decision (auto or user), record in memory: `{step} | {decision description} | {user response or "auto"} | {action taken}`. These records are written to the Decision Points table in `pipeline_summary.md` when it is created at pipeline end.
+The pipeline runs with sane defaults and only pauses on genuinely ambiguous or destructive situations. There is no autonomy-level dial.
 
-### Mode: dev — Decision Points
+| Decision Point | Default Behavior |
+|---|---|
+| Test failure (after run-test internal hotfix loop) | Auto-retry once (mode dev; mode audit auto-stops with no retry). |
+| Pipeline-level catastrophic failure (plan status = failed) | Stop and report; no retry. |
+| Final retry failure | Auto-stop, write pipeline_summary(failed), report. |
+| Research team adds many memos | Auto-refine (or pause if `--user-refine` is set). |
+| init-plan: existing plan with status `active` | **Always ask** — no safe default; user must choose resume vs. create new. |
+| init-plan: existing plan with status `done` / `failed` | Auto-create a new plan (note the previous one for reference). |
+| init-plan: existing plan with status `partial` | Auto-create a new plan covering the failed steps (read `failed_steps` from frontmatter). |
+| audit: existing audit plan conflict | Auto-decide by status — `active` → resume; `done`/`partial`/`failed` → create new. |
+| audit: test failure | Auto-rollback audit changes + stop (dev changes already committed). |
+| debug: confirm diagnosis before fix | Auto-proceed unless root cause is ambiguous. |
+| debug: ambiguous root cause (multiple possible) | **Always ask** — list candidates, ask which to investigate first. |
+| debug: fix verification failed | Auto-rollback + report. |
+| debug: environment issue (not code bug) | Auto-report env-fix steps; do not modify code. |
 
-| Decision Point | Severity | proactive | standard | passive |
-|---|---|---|---|---|
-| Test failure → retry or stop | Critical | auto-retry (current) | ask user | ask user |
-| Pipeline failure → stop | Critical | ask user | ask user | ask user |
-| Final retry failure → stop | Critical | auto-stop (current) | ask user | ask user |
-| Research team added many memos (≥5) | Significant | auto-refine | ask: "연구팀이 {N}개 메모를 추가했습니다. 검토 후 refine을 진행할까요?" | ask |
-| init-plan detected existing plan (active) | Critical | ask (current — no safe default for active plan) | ask | ask |
-| init-plan detected existing plan (done/partial/failed) | Significant | auto-decide (done/failed → proceed, partial → create new) | ask (current) | ask |
-
-### Mode: audit — Decision Points
-
-| Decision Point | Severity | proactive | standard | passive |
-|---|---|---|---|---|
-| Existing audit plan conflict | Significant | auto-decide by status | ask (current behavior) | ask |
-| Test failure → stop (no retry) | Critical | auto-stop + report | ask: "감사 테스트가 실패했습니다. 롤백하고 중단할까요?" | ask |
-| Pipeline failure | Critical | ask | ask | ask |
-
-### Mode: debug — Decision Points
-
-| Decision Point | Severity | proactive | standard | passive |
-|---|---|---|---|---|
-| Confirm diagnosis before fix | Significant | auto-proceed | ask (current, default for debug) | ask |
-| Ambiguous root cause (multiple possible) | Critical | ask (current) | ask | ask |
-| Fix verification failed → stop | Critical | auto-rollback + report | ask | ask |
-| Environment issue (not code bug) | Significant | auto-report env steps | ask: "환경 문제로 확인됩니다. 코드 수정 대신 환경 조치 안내만 할까요?" | ask |
+**Logging**: When the pipeline pauses (active-plan ambiguity, ambiguous root cause, or `--user-refine`), record the event for the Decision Points table in `pipeline_summary.md`. Auto-decisions are not individually logged.
 
 ## Plan Resolution (canonical — keep in sync with execute-plan, run-test, final-report, refine-plan)
 Resolve `$ARG` to a plan file path:
@@ -107,12 +104,8 @@ Before creating a new audit plan, check if an audit plan already exists:
 - Search for `{dev_plan_folder_name}_audit` in `.claude_reports/plans/`
 - If found AND `--from plan` (default):
   - Read its frontmatter `status`:
-    - `active`: An incomplete audit exists.
-      - If `proactive`: auto-decide — resume existing audit plan.
-      - If `standard`/`passive`: ask the user: "기존 audit plan이 있습니다. 이어서 진행할까요, 새로 만들까요? (기본값: 이어서 진행)"
-    - `done`/`partial`/`failed`:
-      - If `proactive`: auto-decide — create a new audit plan.
-      - If `standard`/`passive`: note for reference, ask the user whether to create a new audit plan.
+    - `active`: An incomplete audit exists. Auto-decide — resume existing audit plan.
+    - `done`/`partial`/`failed`: Auto-decide — note for reference and create a new audit plan.
 - If found AND `--from` is execute/test/report: use the existing audit plan.
 
 ## Pipeline: Mode dev
@@ -126,8 +119,8 @@ Wait for completion before proceeding.
 1. Resolve plan paths from init-plan output: `en_plan_path`, `ko_plan_path`, `log_dir`.
 2. Invoke **연구팀** (research-team) agent: "Review this plan as user proxy. Korean plan: {ko_plan_path}. English plan: {en_plan_path}. Review log: {log_dir}/plan_reviews/research_review.md."
 3. If memos added:
-   - **Autonomy gate (Significant)**: If `standard`/`passive`, ask: "연구팀이 {N}개 메모를 추가했습니다. 검토 후 refine을 진행할까요? (기본값: 진행)". If `proactive`, auto-proceed.
-   - Invoke Skill: `refine-plan` with the Korean plan path.
+   - **`--user-refine` pause**: if the flag is set (CLI or plan frontmatter), update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command, and exit. Do NOT invoke refine-plan.
+   - Otherwise: invoke Skill `refine-plan` with the Korean plan path.
 4. If no memos: skip to Step 3.
 
 ### Step 3: execute-plan
@@ -151,9 +144,7 @@ Wait for completion before proceeding.
 - At each run-test invocation, the hotfix counter resets.
 
 #### Test Failure → Retry Loop (max 1 pipeline-level retry)
-If run-test reports failure (after its internal hotfix loop of 2 attempts):
-
-**Autonomy gate (Critical)**: If `autonomy_level` is `standard` or `passive`, ask: "테스트가 실패했습니다. 재시도할까요, 중단할까요? (기본값: 재시도)". If `proactive`, auto-retry.
+If run-test reports failure (after its internal hotfix loop of 2 attempts), auto-retry once:
 
 1. **Collect failure context**: Note the test failure verdict from run-test's return. Failure details are in `test_logs/test_report.md` and `test_reviews/` — these will be consumed by refine-plan's agent, not by the orchestrator.
 
@@ -166,7 +157,9 @@ If run-test reports failure (after its internal hotfix loop of 2 attempts):
 
 4. **Reset checklist**: Reset all step marks in `plan/checklist.md` to `[ ]`.
 
-5. **Loop back to Step 2**: Invoke Skill: `refine-plan` with the plan path (QA review loop runs as usual, max 3 rounds).
+5. **Loop back to Step 2**:
+   - **`--user-refine` pause**: if the flag is set, update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command (`/autopilot-code --mode dev --from refine <plan>`), and exit. The user can review the failure memos plus add their own before re-resuming.
+   - Otherwise: invoke Skill `refine-plan` with the plan path (QA review loop runs as usual, max 3 rounds).
 
 6. **Re-execute**: Invoke Skill: `execute-plan` with the same plan path.
 
@@ -204,12 +197,10 @@ Invoke Skill: `execute-plan` with the audit plan path.
 
 ### Step 3: run-test
 Invoke Skill: `run-test` with the audit plan path.
-- **NO retry loop** (max 0 retries). If tests fail after the internal hotfix loop (2 attempts):
-  - If `proactive`: auto-rollback and stop —
-    - Rollback audit changes only: determine changed paths from checklist or git diff. The audit plan's safety commit is stored in its own `plan/checklist.md` header, written by execute-plan during audit execution. Run `git checkout <audit-safety-commit> -- <changed paths>`
-    - This restores to post-dev state (dev changes are already committed).
-    - Write pipeline_summary.md (status: failed) FIRST, then report to user, and stop.
-  - If `standard`/`passive`: ask the user: "감사 테스트가 실패했습니다. 롤백하고 중단할까요? (기본값: 롤백 후 중단)" — include: (1) which tests failed, (2) options: rollback+stop / keep changes+stop / keep changes+continue, (3) default: rollback+stop. On confirmation (or no response): proceed with rollback and stop as described above.
+- **NO retry loop** (max 0 retries). If tests fail after the internal hotfix loop (2 attempts), auto-rollback and stop:
+  - Rollback audit changes only: determine changed paths from checklist or git diff. The audit plan's safety commit is stored in its own `plan/checklist.md` header, written by execute-plan during audit execution. Run `git checkout <audit-safety-commit> -- <changed paths>`
+  - This restores to post-dev state (dev changes are already committed).
+  - Write pipeline_summary.md (status: failed) FIRST, then report to user, and stop.
 
 ### Step 4: final-report
 Invoke Skill: `final-report` with the audit plan path.
@@ -239,10 +230,9 @@ Do NOT delegate this step. You (the main Claude) perform the diagnosis directly.
    - **영향 범위**: {what else might be affected}
    - **수정 방향**: {proposed fix approach}
    ```
-5. **Diagnosis confirmation** (gated):
-   - If `proactive`: skip confirmation, auto-proceed to fix plan.
-   - If `standard` or `passive`: ask for confirmation before proceeding to fix. If the user disagrees or wants a different approach, adjust.
-   - Note: autopilot-code debug mode defaults to `standard`, so diagnosis confirmation remains the default behavior.
+5. **Diagnosis confirmation**:
+   - If the root cause is **unambiguous** (single clearly-identified cause): auto-proceed to fix plan.
+   - If the root cause is **ambiguous** (multiple plausible causes): list the candidates and ask the user which to investigate first before creating the fix plan. This is the only debug-mode pause point.
 
 ### Step 2: Create fix plan
 Invoke Skill: `init-plan` with a fix task description:
@@ -277,9 +267,7 @@ Invoke Skill: `run-test` with the fix plan path.
 - If the error was during inference, run an inference test.
 - Report whether the original error is resolved.
 
-If tests fail or the original error persists (gated):
-- If `proactive`: auto-rollback and then proceed to reporting (current behavior).
-- If `standard` or `passive`: ask before rollback: "수정 검증이 실패했습니다. 롤백할까요, 다시 시도할까요? (기본값: 롤백)"
+If tests fail or the original error persists, auto-rollback and then proceed to reporting.
 
 On rollback path:
 1. **Rollback**: Determine changed paths from checklist or git diff. Read the Safety commit hash from the fix plan's `plan/checklist.md` header line: `Safety commit: {hash}`. Run `git checkout <safety-commit> -- <changed paths>`
@@ -312,7 +300,7 @@ Populate the Decision Points table from in-memory decision records. If none: `| 
 - **Date**: {YYYY-MM-DD}
 - **Status**: done / partial / failed{debug: " / unresolved"}
 {mode_specific_fields}
-- **Autonomy**: {autonomy_level}
+- **User-Refine**: {true | false}
 
 ## Process Log
 | Step | Skill/Action | Result | Notes |
@@ -352,6 +340,5 @@ Populate the Decision Points table from in-memory decision records. If none: `| 
 ### Mode debug
 - **Minimal scope**: Fix the bug only. Do not refactor, improve, or clean up surrounding code.
 - **Preserve existing behavior**: The fix should not change behavior for cases that were already working.
-- Before fixing, confirm the diagnosis per the Autonomy Gating rule (Diagnosis confirmation, Significant severity).
-- If the root cause is ambiguous (multiple possible causes), list them and ask the user which to investigate first.
-- If the root cause is an environment issue (not a code bug), follow the Environment issue autonomy gate: `proactive` auto-reports env fix steps, `standard`/`passive` asks per the Autonomy Gating table.
+- If the root cause is ambiguous (multiple possible causes), list them and ask the user which to investigate first — this is the only debug-mode pause point.
+- If the root cause is an environment issue (not a code bug), auto-report env fix steps; do not modify code.

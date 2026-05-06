@@ -1,7 +1,7 @@
 ---
 name: autopilot-doc
-description: "Document strategy & draft pipeline — [survey: source discovery →] analyze-refs → init-doc-strategy → review → refine-doc-strategy → draft → draft-review. Supports modes: rebuttal, write, review, survey (with active search), report, proposal, presentation."
-argument-hint: "<mode> <task description> [--refs <folder>] [--type <survey-type>] [--qa light|standard|thorough] [--autonomy proactive|standard|passive]"
+description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. All 7 modes produce both strategy AND draft. review mode requires `--review-format`; presentation mode requires `--pptx-template` (both fail-fast at pre-flight if missing). `--refs` accepts an autopilot-research artifact_dir to chain pipelines."
+argument-hint: "<mode> <task description> [--refs <folder>] [--type <survey-type>] [--review-format <name|path>] [--pptx-template <path>] [--qa light|standard|thorough] [--user-refine] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 ---
 
 ## Language Rule
@@ -13,11 +13,11 @@ Parse `$ARGUMENTS` for mode, flags, and task description:
 **Mode** (first word, required):
 - `rebuttal` — Rebuttal strategy for reviewer comments
 - `write` — Paper writing strategy (outline, positioning, contributions)
-- `review` — Paper/document review (as reviewer: strengths/weaknesses/questions) [strategy only]
+- `review` — Paper/document review (as reviewer: strengths/weaknesses/questions). Produces strategy + full review draft (OpenReview-ready).
 - `survey` — General-purpose research survey with **active source discovery**: literature, market, technology, product, or company analysis. Searches for sources automatically; `--refs` is optional supplementary input.
 - `report` — Technical report / white paper (findings, analysis, recommendations)
 - `proposal` — Research or project proposal (problem, approach, plan, budget)
-- `presentation` — Presentation strategy (story arc, slide structure, key messages) [strategy only]
+- `presentation` — Presentation strategy (story arc, slide structure, key messages) + slide-by-slide markdown draft. If `--pptx-template <path>` is provided (or default IIP template detected), automatically converts to .pptx.
 
 **`--refs <folder>`** — path to reference materials folder:
 - Contains: PDFs, reviewer comments (txt/md), original paper, conference guidelines, data files, etc.
@@ -32,9 +32,29 @@ Parse `$ARGUMENTS` for mode, flags, and task description:
 - If omitted, defaults to `thorough`.
 - **Propagation**: Pass `--qa <level>` to init-doc-strategy and refine-doc-strategy as an argument flag.
 
-**`--autonomy <level>`** — same as autopilot-code. Default: `proactive`.
-Same validation rules as autopilot-code (invalid value → fallback to `proactive`, with warning).
-Pass `--autonomy <level>` to init-doc-strategy and refine-doc-strategy as an argument flag.
+**`--user-refine`** (boolean flag) — pause at refine points so the user can add their own `<!-- memo: ... -->` comments on top of 연구팀's memos before refine-doc-strategy runs.
+
+Pause behavior: after 연구팀 writes memos at Step 3 (strategy review) or Step 5 (draft review), do NOT invoke refine-doc-strategy. Instead:
+1. Update `pipeline_state.yaml` at `{strategy_folder}/` with `user_refine: true`, `paused_at_stage: <strategy-refine|draft-refine>`.
+2. Print to user (Korean) the memo file path and the resume command:
+   ```
+   연구팀 메모가 {ko_path}에 기록되었습니다.
+   직접 메모를 추가한 뒤 다음 명령으로 재개하세요:
+       /autopilot-doc --mode {mode} --from <strategy-refine|draft-refine> <strategy_folder>
+   ```
+3. Exit. Do NOT write `pipeline_summary.md` (pipeline is paused, not terminated).
+
+If 연구팀 added no memos, the pause is skipped (nothing to refine).
+
+**`--from <stage>`** — resume the pipeline at a specific stage. Stages:
+- `analyze` — Step 1 (Material Analysis); for survey mode also re-runs Step 0 (Source Discovery)
+- `strategy` — Step 2 (init-doc-strategy)
+- `strategy-refine` — Step 3 wrapper: 연구팀 review + (user memos if `--user-refine`) + refine-doc-strategy on the strategy
+- `draft` — Step 4 (Draft Generation) + Step 4b (PPTX export)
+- `draft-refine` — Step 5 wrapper: 연구팀 review + (user memos if `--user-refine`) + refine-doc-strategy on the draft
+- `finalize` — Step 6 (Pipeline Summary)
+
+When resuming with `--from`, the positional argument should be either the artifact directory path or a fuzzy-matchable short name. The orchestrator resolves it via the same fuzzy lookup used by Plan Resolution in autopilot-code: `ls -d .claude_reports/documents/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `mode`, `qa_level`, `refs_folder`, `pptx_template`, `user_refine`. CLI flags override state file; missing flags inherit from state.
 
 **`--type <survey-type>`** — sub-type for survey mode (only used when mode=survey):
 - `literature` (default) — academic literature survey
@@ -45,28 +65,63 @@ Pass `--autonomy <level>` to init-doc-strategy and refine-doc-strategy as an arg
 - If omitted and mode=survey, defaults to `literature`.
 - Ignored for all non-survey modes.
 
-> **Note on doc sub-skills**: `init-doc-strategy` and `refine-doc-strategy` do NOT need to parse `--autonomy` themselves — they don't have user-facing decision points. The flag is passed through but they simply ignore it. Unlike `refine-plan` (which has path resolution that could be corrupted), doc sub-skills use positional args so an unrecognized `--autonomy` flag is harmless.
+**`--review-format <format>`** — review form/template (**REQUIRED** for mode=review; pipeline aborts if missing):
+- Built-in venue specs (preset name → internal section template):
+  - `openreview` — Summary / Strengths and Weaknesses / Soundness, Presentation, Significance, Originality (1-4) / Questions for Authors / Limitations / Overall Recommendation (1-6) / Confidence (1-5) / Compliance with policies. Used by NeurIPS, ICML, ICLR, AAAI, etc.
+  - `acl-arr` — ACL Rolling Review: Paper Summary / Summary of Strengths / Summary of Weaknesses / Comments, Suggestions and Typos / Confidence / Soundness (1-5) / Excitement (1-5) / Reproducibility (1-5) / Ethical Concerns / Reviewer Confidence
+  - `ieee-conf` — IEEE conference style (ICASSP, INTERSPEECH, etc.): narrative review with Strengths / Weaknesses / Detailed Comments / Recommendation (Accept/Reject/Borderline) / Confidence
+  - `journal` — Generic journal review (T-ASLP, JASA, IEEE TPAMI, etc.): free-form narrative covering Significance / Originality / Technical Quality / Clarity / Recommendation (Accept/Minor Revision/Major Revision/Reject) + Detailed comments by section
+- `<path>` — path to a custom review format spec file (markdown/txt/pdf) describing the venue's required sections. The file MUST exist; verified at Step 0 pre-flight.
+- **NO default** — must be explicitly chosen. If `--review-format` is omitted in review mode, the pipeline aborts at Step 0 with a clear error message and the list of built-in options.
+- If reviewer guidelines PDF/doc is also found in `--refs`, the agent layers those constraints on top of the chosen template.
+- Ignored for all non-review modes.
+
+**`--pptx-template <path>`** — PPTX reference template (**REQUIRED** for mode=presentation; pipeline aborts if missing):
+- Path to an existing .pptx file whose slide masters/theme/colors will be applied during PPT export. Verified at Step 0 pre-flight (file must exist + must be a valid .pptx).
+- **NO default** — must be explicitly provided. If `--pptx-template` is omitted in presentation mode, the pipeline aborts at Step 0 with a clear error explaining that a template is required (and suggesting placement at e.g. `~/etc/IIP_template.pptx` if the user wants to make it their own).
+- Conversion uses `~/etc/md2pptx.py`. If `md2pptx.py` is missing, the pipeline also aborts at Step 0 (md2pptx is part of the required dependency set for presentation mode).
+- Ignored for all non-presentation modes.
 
 The remaining text (after removing mode and flags) is the task description.
 
-## Autonomy Gating
+## Decision Defaults (no autonomy gating)
 
-| Decision Point | Severity | proactive | standard | passive |
-|---|---|---|---|---|
-| Confirm material analysis | Routine | auto-proceed | auto-proceed | ask |
-| Missing refs folder | Critical | ask (always) | ask | ask |
-| No reviewer comments for rebuttal | Significant | ask | ask | ask |
-| Strategy review → many memos | Routine | auto-refine | auto-refine | ask |
-| Draft review → many memos | Routine | auto-refine | auto-refine | ask |
-| Skip draft (review/presentation mode) | Routine | auto-skip | auto-skip | inform + auto-skip |
-| Survey search results review | Routine | auto-proceed | auto-proceed | ask |
-| Survey search found 0 results | Significant | ask | ask | ask |
+The pipeline runs with sane defaults and only pauses on genuinely ambiguous or destructive situations.
 
-When the pipeline reaches a gated decision point:
-- If the current autonomy level includes that severity → **pause and ask** the user.
-- Otherwise → **proceed with the default action** (described in the proactive column).
-- All "ask" prompts must include: (1) the situation summary, (2) available options, (3) the default action if no response.
-- **Logging**: After each decision (auto or user), record in memory: `{step} | {decision description} | {user response or "auto"} | {action taken}`. These records are written to the Decision Points table in `pipeline_summary.md` when it is created at pipeline end.
+| Decision Point | Default Behavior |
+|---|---|
+| Confirm material analysis | Auto-proceed. |
+| Missing refs folder | **Always ask** at pre-flight (mode-dependent). |
+| No reviewer comments for rebuttal | **Always ask** at pre-flight. |
+| Strategy review → memos added | Auto-refine (or pause for user-memo if `--user-refine` is set). |
+| Draft review → memos added | Auto-refine (or pause for user-memo if `--user-refine` is set). |
+| `--review-format` missing (review mode) | Abort at pre-flight. |
+| `--pptx-template` missing or invalid (presentation mode) | Abort at pre-flight. |
+| Reviewer guidelines absent in refs (review mode) | Use built-in spec only; inform user. |
+| Survey search results review | Auto-proceed. |
+| Survey search found 0 results | **Always ask** — proceed with `--refs` only or adjust query. |
+
+**Logging**: When the pipeline pauses (missing required input, 0 search results, or `--user-refine`), record the event for the Decision Points table in `pipeline_summary.md`. Auto-decisions are not individually logged.
+
+## pipeline_state.yaml
+
+Written/updated at `{strategy_folder}/pipeline_state.yaml` after each completed stage. Used by `--from` resume:
+
+```yaml
+pipeline: autopilot-doc
+mode: presentation
+qa_level: thorough
+user_refine: true
+refs_folder: <path>
+review_format: <name|path or null>
+pptx_template: <path or null>
+survey_type: <type or null>
+last_completed_stage: strategy        # one of: discovery, analyze, strategy, strategy-refine, draft, draft-refine, finalize
+paused_at_stage: strategy-refine      # set only when --user-refine triggered a pause
+artifact_dir: <abs path>
+```
+
+CLI flags on resume override stored values. After the pause is consumed (refine completes), clear `paused_at_stage` and update `last_completed_stage`.
 
 ## Refs Folder Convention
 The `--refs` folder is user-specified (no default). May contain PDFs, txt/md reviewer comments, notes, data files, subdirectories. On first invocation, list contents and confirm with the user. For rebuttal mode, warn if no reviewer comments are found.
@@ -78,9 +133,10 @@ All outputs go to:
 ├─ strategy/
 │  ├─ strategy.md          (English strategy document)
 │  └─ strategy_ko.md       (Korean strategy document)
-├─ draft/                   (generated for: rebuttal, write, report, proposal, survey)
-│  ├─ draft.md             (English draft)
-│  └─ draft_ko.md          (Korean draft)
+├─ draft/                   (generated for: rebuttal, write, report, proposal, survey, review, presentation)
+│  ├─ draft.md             (English draft; for presentation: slide-by-slide markdown)
+│  ├─ draft_ko.md          (Korean draft)
+│  └─ draft.pptx           (presentation mode only — always produced; pre-flight enforces template presence)
 ├─ discovery/               (survey mode only: search results)
 │  └─ search_results.json  (discovered sources with metadata)
 ├─ analysis/
@@ -93,6 +149,39 @@ All outputs go to:
 ```
 
 ## Pipeline
+
+### Pre-flight Validation [ALL modes — runs first, before any work]
+Validate mode-specific required inputs. If any check fails, **abort immediately** with a clear error message — do NOT create the artifact directory or invoke any sub-skills/agents. The user must rerun with the missing input.
+
+**Universal checks** (all modes):
+1. Mode is one of the 7 supported modes (rebuttal / write / review / survey / report / proposal / presentation). Otherwise abort: "Unknown mode: {mode}. Supported: ...".
+2. For all modes except `survey`: `--refs` is provided AND folder exists. Otherwise abort: "--refs <folder> is required for {mode} mode and was not found at {path}."
+
+**Mode-specific checks**:
+
+- **review mode** — `--review-format` is REQUIRED. Validate:
+  - If value is one of `openreview` / `acl-arr` / `ieee-conf` / `journal` → OK (built-in spec).
+  - Else treat as a path → `os.path.exists(value)` must be True AND extension must be one of `.md`, `.txt`, `.pdf`. Otherwise abort.
+  - If flag is missing entirely → abort with: "review mode requires --review-format. Built-in options: openreview, acl-arr, ieee-conf, journal. Or provide a path to a custom format spec (.md/.txt/.pdf)."
+
+- **presentation mode** — `--pptx-template <path>` is REQUIRED. Validate:
+  - Path provided (no auto-default fallback).
+  - File exists at that path.
+  - File extension is `.pptx`.
+  - File is a valid PPTX (open with python-pptx; if it raises, abort).
+  - Also verify `~/etc/md2pptx.py` exists. If absent, abort: "presentation mode requires md2pptx.py at ~/etc/md2pptx.py. Install it before retrying."
+  - If `--pptx-template` is missing entirely → abort with: "presentation mode requires --pptx-template <path>. Place a reference .pptx (e.g. lab template) and pass its path explicitly. Pipeline does NOT use any auto-default."
+
+- **rebuttal mode** — refs folder must contain at least one reviewer-comment file (txt/md/pdf with reviewer-style content detected by filename or content scan). If none found, ask the user before proceeding.
+
+- **survey mode** — if `--refs` not provided, no check needed (search will discover sources).
+
+**Abort behavior**:
+- Print the error message in Korean to the user.
+- Do NOT call `mkdir`, do NOT invoke any sub-skill, do NOT write `pipeline_summary.md`.
+- Exit with status: aborted (pre-flight).
+
+After all pre-flight checks pass: create `artifact_dir` and proceed to Step 0 (survey) or Step 1 (other modes).
 
 ### Step 0: Source Discovery [survey mode only — skip for all other modes]
 **Applicable modes**: survey only. All other modes skip to Step 1.
@@ -140,8 +229,8 @@ Return file path + a brief Korean summary of what was found.
 
 **0c. Post-Search Validation**
 1. Read `search_results.json` — verify valid JSON and non-empty results
-2. **Autonomy gate (Significant)**: If 0 results found → ask user whether to proceed with `--refs` only or adjust query
-3. **Autonomy gate (Routine)**: Present search summary (N results from M sources) — `proactive`/`standard` auto-proceed, `passive` asks
+2. If 0 results found → ask the user whether to proceed with `--refs` only or adjust the query.
+3. Otherwise present a brief search summary (N results from M sources) and auto-proceed.
 
 **0d. Reference Chaining** (literature type only)
 For literature surveys, extract references from top-ranked papers and discover additional sources:
@@ -171,9 +260,7 @@ Read and catalog all materials from refs folder (non-survey modes) or discovery 
    - **proposal**: Analyze related work and context → `analysis/ref_analysis.md` (prior art, feasibility evidence, competitive landscape)
    - **presentation**: Analyze source document/paper → `analysis/ref_analysis.md` (key messages, audience analysis, narrative structure)
 3. Read PDF files using the Read tool. For large PDFs (>10 pages), read in page ranges.
-4. **Autonomy gate (Routine)**: Present the analysis summary.
-   - `proactive` / `standard`: auto-proceed to Step 2. Do not wait for user acknowledgment; proceed immediately after presenting the summary.
-   - `passive`: ask the user for confirmation before proceeding.
+4. Present the analysis summary briefly and auto-proceed to Step 2 — no confirmation required.
 
 ### Step 2: init-doc-strategy
 Invoke Skill: `init-doc-strategy` with args: `<mode> --refs <folder> --output <artifact-dir> [--type <survey-type>] <task description>`. Wait for completion.
@@ -215,11 +302,13 @@ Invoke Skill: `init-doc-strategy` with args: `<mode> --refs <folder> --output <a
    Return a summary of memos added (or "no issues found").
    ```
 
-3. If memos were added: Invoke Skill: `refine-doc-strategy` with the Korean strategy path as args.
-4. If no memos: Skip to Step 4.
+3. If memos were added:
+   - **`--user-refine` pause**: if the flag is set, update `pipeline_state.yaml` (`user_refine: true`, `paused_at_stage: strategy-refine`), print the resume command (`/autopilot-doc --mode {mode} --from strategy-refine {strategy_folder}`), and exit. Do NOT invoke refine-doc-strategy.
+   - Otherwise: invoke Skill `refine-doc-strategy` with the Korean strategy path as args.
+4. If no memos: Skip to Step 4. (When resumed via `--from strategy-refine`, the orchestrator skips the 연구팀 review and runs refine-doc-strategy directly using the pre-existing memos.)
 
-### Step 4: Draft Generation [decision: routine — skip for review/presentation modes]
-**Applicable modes**: rebuttal, write, report, proposal, survey. **Skip for**: review, presentation (these produce strategy only).
+### Step 4: Draft Generation
+**Applicable modes**: rebuttal, write, report, proposal, survey, review, presentation. (All modes generate drafts.)
 
 1. Verify strategy is finalized: `{strategy_folder}/strategy/strategy.md` exists and has no `## 미해결 이슈` section (or issues are acceptable).
 2. Invoke the **research-team** (연구팀) agent as a subagent:
@@ -288,6 +377,76 @@ Read the strategy document and all analysis files. Generate a complete first dra
 - For product survey: Product Overview → Feature Comparison → User/Market Fit → Recommendations
 - For company survey: Company Profile → Strategy Analysis → Competitive Position → Outlook
 
+### review
+Adapt the section structure to `--review-format` (default: openreview). If reviewer guidelines exist in refs/, follow those; otherwise use the format-specific template below.
+
+**Frontmatter** (always): type, venue, paper_title, status: draft, date, review_format
+
+**`openreview` (default — NeurIPS/ICML/ICLR/AAAI)**:
+- Summary (3-5 sentences: paper's core contribution, approach, main results)
+- Strengths and Weaknesses
+  - Strengths (4-6 specific, evidence-anchored points)
+  - Weaknesses (4-6 specific, evidence-anchored points; tie each to a section/figure/table where possible)
+- Soundness (1-4): score + 1-2 sentence justification
+- Presentation (1-4): score + justification
+- Significance (1-4): score + justification
+- Originality (1-4): score + justification
+- Questions for Authors (3-7 numbered, actionable; prioritize ones that could change the score)
+- Limitations (does the paper acknowledge them? are there unaddressed ones?)
+- Overall Recommendation (1-6, e.g., "4: Weak Accept") + 2-3 sentence justification
+- Confidence (1-5)
+- Compliance With LLM Reviewing Policy: Affirmed (boilerplate)
+- Code Of Conduct Acknowledgement: Affirmed (boilerplate)
+
+**`acl-arr`**:
+- Paper Summary
+- Summary of Strengths
+- Summary of Weaknesses
+- Comments, Suggestions and Typos (line-anchored where possible)
+- Confidence
+- Soundness (1-5)
+- Excitement (1-5)
+- Reproducibility (1-5)
+- Ethical Concerns (Yes/No + explanation)
+- Reviewer Confidence
+
+**`ieee-conf` (ICASSP, INTERSPEECH, etc.)**:
+- Brief Summary
+- Strengths
+- Weaknesses
+- Detailed Comments (ordered by significance; include actionable suggestions)
+- Recommendation (Accept / Borderline Accept / Borderline Reject / Reject)
+- Confidence (Low / Medium / High)
+
+**`journal` (T-ASLP, JASA, IEEE TPAMI, etc.)**:
+- Significance and Originality
+- Technical Quality and Soundness
+- Clarity of Presentation
+- Recommendation (Accept / Minor Revision / Major Revision / Reject)
+- Detailed Comments by Section (per-section bullet points)
+- Specific Comments (line-anchored or page-anchored)
+- Required Changes / Suggested Changes (split if revision recommended)
+
+**Custom path**: read the format spec file and produce a draft that satisfies its required sections.
+
+### presentation
+Generate slide-by-slide markdown compatible with the md2pptx pipeline.
+
+- **Frontmatter** (YAML): title, subtitle (optional), author, date, theme/template note
+- **Slide structure**: each slide is a level-1 heading (`# Slide title`). Use the slide structure from the strategy doc as the source of truth for chapter divisions and per-slide content.
+- **Required sections**:
+  1. Title slide (auto-generated from frontmatter)
+  2. Outline / Table of Contents (`# Outline` or `# 목차`)
+  3. Section dividers (`# Ch.1 — chapter title`, `# Ch.2 — ...`) — these will be auto-detected by md2pptx and converted to title-only layout
+  4. Per-slide content slides (with concise bullets, tables, image placeholders `[FIGURE: description]`, code blocks where useful)
+  5. Conclusion / Take-home messages
+  6. Q&A / Thank you / References
+- **Speaker notes**: every content slide should have `::: notes ... :::` block bridging slide content with verbal narration
+- **Two-column layouts**: use `::::: {.columns}` / `::: {.column width="50%"}` blocks for compare/contrast slides
+- **Slide budget**: derive from strategy doc's time allocation (e.g., 60-min talk = 30-50 slides; 20-min conference talk = 12-18 slides). Mark backup slides with `# Backup — title` after the main flow.
+- **Visual placeholders**: use `[FIGURE: brief description of what should be drawn]` for diagrams that the user will add manually in PowerPoint after PPT export.
+- **References slide**: list key paper citations near the end (typically `# References`).
+
 ## Quality Requirements
 - Every claim must trace back to a specific reference in the refs folder or analysis.
 - Do NOT fabricate citations, data, or results.
@@ -296,14 +455,30 @@ Read the strategy document and all analysis files. Generate a complete first dra
   - **rebuttal**: 90%+ — every reviewer point MUST have a drafted response (hard constraint). Missing a point is a critical error.
   - **write/report/proposal**: 70-80% — all sections with substantive content, no heading-only sections.
   - **survey**: 60-70% — flexible based on reference volume. Comparison matrices and taxonomy structure are required; individual item details may use [TODO].
+  - **review**: 80%+ — every required section per `--review-format` must be filled with concrete claims. Strengths/weaknesses must reference specific paper sections/figures/tables. Score justifications are mandatory.
+  - **presentation**: 70-80% — every slide has a title and at least one substantive bullet/figure placeholder/table. Speaker notes for ≥80% of content slides. Slide count within ±20% of strategy's target.
 
 Write both files directly. Return ONLY the file paths and a 3-5 line Korean summary.
 ```
 
 3. **IMPORTANT**: Do NOT read, re-write, or duplicate the draft files yourself. The agent writes them directly.
 
+### Step 4b: PPTX Export [presentation mode only]
+Pre-flight already verified `--pptx-template` and `~/etc/md2pptx.py` exist. Convert markdown draft to PPTX.
+
+1. Invoke conversion:
+   ```bash
+   python3 ~/etc/md2pptx.py {strategy_folder}/draft/draft.md \
+     -o {strategy_folder}/draft/draft.pptx \
+     --template {pptx_template_path}
+   ```
+
+2. Validate output: open `draft.pptx` with python-pptx; must have ≥ 2 slides. If validation fails, log the error in pipeline_summary as "PPTX export failed" and continue to Step 5 (do not abort the whole pipeline — markdown draft is still usable).
+
+3. **Note**: pre-flight already aborted if template/md2pptx were missing, so this step assumes both are present. If the conversion itself fails (pandoc error, malformed markdown, etc.), it's a runtime issue logged but not fatal.
+
 ### Step 5: Draft Review (연구팀 as QA)
-**Applicable modes**: same as Step 4 (rebuttal, write, report, proposal, survey). Skip for review, presentation.
+**Applicable modes**: rebuttal, write, report, proposal, survey, review, presentation. (All modes that generated drafts.)
 
 1. Resolve draft paths:
    - `en_draft_path` = `{strategy_folder}/draft/draft.md`
@@ -342,9 +517,11 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
    Return a summary of memos added (or "no issues found").
    ```
 
-3. If memos were added: Invoke Skill: `refine-doc-strategy` with the Korean draft path as args.
+3. If memos were added:
+   - **`--user-refine` pause**: if the flag is set, update `pipeline_state.yaml` (`user_refine: true`, `paused_at_stage: draft-refine`), print the resume command (`/autopilot-doc --mode {mode} --from draft-refine {strategy_folder}`), and exit. Do NOT invoke refine-doc-strategy.
+   - Otherwise: invoke Skill `refine-doc-strategy` with the Korean draft path as args.
    - Note: refine-doc-strategy handles draft paths (draft/draft.md ↔ draft/draft_ko.md) via auto-detection.
-4. If no memos: Skip to Step 6.
+4. If no memos: Skip to Step 6. (When resumed via `--from draft-refine`, run refine-doc-strategy directly on the pre-existing memos.)
 
 ### Step 6: Pipeline Summary
 **Always write** `{strategy_folder}/pipeline_summary.md` before reporting to the user.
@@ -353,7 +530,7 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
 # Document Strategy Pipeline Summary: {task name}
 
 - **Date**: {YYYY-MM-DD} | **Mode**: {mode} | **Type**: {survey_type or "N/A"} | **Status**: done / reviewed / draft
-- **Autonomy**: {autonomy_level}
+- **User-Refine**: {true | false}
 - **Refs folder**: {refs_folder}
 
 ## Process Log
@@ -364,15 +541,17 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
 | 2 | init-doc-strategy | created | {strategy path} |
 | 3 | Strategy Review (연구팀) | memos added / no issues | {memo count} |
 | 3b | refine-doc-strategy | refined / skipped | |
-| 4 | Draft Generation | created / skipped (review/presentation) | {draft path or "N/A"} |
-| 5 | Draft Review (연구팀) | memos added / no issues / skipped | {memo count or "N/A"} |
+| 4 | Draft Generation | created | {draft path} |
+| 4b | PPTX Export (presentation only) | created / skipped (no template) / N/A | {pptx path or reason} |
+| 5 | Draft Review (연구팀) | memos added / no issues | {memo count} |
 | 5b | refine-doc-strategy (draft) | refined / skipped | |
 
 ## Artifacts
 - Strategy (EN/KO): {en_path} / {ko_path}
-- Draft (EN/KO): {draft_en_path} / {draft_ko_path} (or "N/A — strategy-only mode")
+- Draft (EN/KO): {draft_en_path} / {draft_ko_path}
+- PPTX (presentation only): {pptx_path or "N/A — non-presentation mode or template missing"}
 - Analysis: {reviewer_analysis or ref_analysis path}
-- Material Index: {path} | Strategy Review: {path} | Draft Review: {path or "N/A"}
+- Material Index: {path} | Strategy Review: {path} | Draft Review: {path}
 
 ## Decision Points
 | Step | Decision | User Response | Action Taken |
@@ -380,19 +559,21 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
 | (filled from orchestrator's in-memory decision log) |
 ```
 
-When writing pipeline_summary.md, populate the Decision Points table from the in-memory decision records. If no decisions were recorded (proactive mode, clean run), write: `| - | No gated decisions triggered | - | - |`. Note: autopilot-doc typically has fewer decision points (material analysis confirmation at passive level is the main one).
+When writing pipeline_summary.md, populate the Decision Points table from the in-memory decision records. If no decisions were recorded (clean run with no `--user-refine`, no missing inputs), write: `| - | No pause points triggered | - | - |`.
 
 Then report to the user:
 - Strategy file paths + 2-3 line summary of the strategy.
-- Draft file paths + 2-3 line summary of the draft (if applicable).
-- For review/presentation modes: note that these modes produce strategy only (no draft).
+- Draft file paths + 2-3 line summary of the draft.
+- For presentation mode: also report the .pptx path if PPTX export succeeded, or the reason it was skipped.
+- For review mode: confirm the `--review-format` used (default: openreview) and any venue-specific adaptations from refs/.
 
 ## Safety Rules
 - Do NOT fabricate citations or invent results — only reference materials actually present in the refs folder.
 - The draft is a working first draft for user editing, NOT a final document. Mark uncertain content with `[TODO: ...]`.
 - For rebuttal mode: ensure EVERY reviewer point is addressed — missing a point is a critical error.
-- Present material inventory to the user. Proceed per the Autonomy Gating table (material analysis confirmation).
-- For review/presentation modes: do NOT attempt draft generation — these are strategy-only modes.
+- For review mode: scores must be justified with concrete evidence; never fabricate scores without backing in the paper text. `--review-format` is mandatory — pre-flight aborts otherwise.
+- For presentation mode: never insert real figures/images automatically — use `[FIGURE: ...]` placeholders. `--pptx-template` is mandatory — pre-flight aborts otherwise. PPTX export at runtime is still best-effort (logged but not fatal if conversion errors).
+- Present material inventory to the user briefly and auto-proceed.
 
 ## Task
 $ARGUMENTS

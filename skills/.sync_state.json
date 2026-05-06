@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "last_readme_sync": "2026-05-06T14:27:45+09:00",
+  "last_notion_sync": "2026-05-06T14:27:45+09:00",
+  "items": {
+    "skills/analyze-papers": {"sha256": "f41e8de114d485a55a0110be29f6dd97e7524abec4f84f01855bdee9b579c6b7", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/analyze-project": {"sha256": "9ccb9b5f1dfa8ee3e3939d88880ea45de45e2745f70d04e281ff06bfef777aa7", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/autopilot-code": {"sha256": "a2b74ac58d1610c3778afd6e0eb9acf89103295e2d5c5e16c110c6c7b1a34424", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/autopilot-doc": {"sha256": "91aada152fb2efbed5478dee491cc116650655b86957d1b6dcbc52a00fab4965", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/autopilot-research": {"sha256": "d1025c7b4102f4aeaa1cf1099c1b10e72cfdfaad949b0d3b42a648a2eb54ccb8", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/execute-plan": {"sha256": "c1359e074a6fc1121d5e34085886a720a252b6287bc40966e73a3d7f17846028", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/final-report": {"sha256": "8cd4ea673d38a5bdf41439489ef7b306c484bab29c1732f279b9cea8d45959a2", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/init-doc-strategy": {"sha256": "730388e1f2c25ad3171809767b03a102867327d5fcc4ffd3597d1f335649cb8e", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/init-plan": {"sha256": "058cca4a427f2d7a856fb8b6ca636b3a85854ed320c6798412d982c755d7987e", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/refine-doc-strategy": {"sha256": "e17408187adde44bc1e08e4fb5646266ee99306afec094363f6b83d057faa518", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/refine-plan": {"sha256": "1d69802f7c34b3c737b4c6bee1e0e1d23c4dda190cc6478ea1dd2db080b2b770", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/run-test": {"sha256": "f59a0340f449ac9afe8fa3b9fd3f85ed3d912d484e279fbca38883ed695ced3f", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/sync-skills": {"sha256": "9d6e0b9b514e321c2c86603cc6e6c5af691e86f1828aa95eaceeaf2c1c11429c", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "agents/browser-team": {"sha256": "7f61dccea5d1f13e0a9b41104aae7d614a53b7ba0319571711ce94bcda4ff879", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "agents/codex-review-team": {"sha256": "b54d24dacf8d7bc6a733a35c8fa4c0671745d74a0121092b0b0785eed3561a9d", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "agents/dev-team": {"sha256": "7248959c587c17a3d2da8425fa32580ab96134258074a678334c1777f6e0263b", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "agents/plan-team": {"sha256": "974e75aff84cf4977a90c455a9e6c407222b8daf1f5714413f512c06f88e708c", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "agents/qa-team": {"sha256": "3ae5c36ca1fb6ce37c21b641f842dcc90ccd8913fffe87a3c7c0d93ef6e6d900", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "agents/record-team": {"sha256": "9fdfda9eb0968778896930a3c8b2ea2cf2de53462d85c90bfd27b28dfadf9258", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "agents/research-team": {"sha256": "208b3df343c94457668c770c23b7800aa31f3752fcc6fb3196db506d7a4328a2", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "agents/test-team": {"sha256": "aa84a4a3d52fb7fb0491326caca2e398fa835f36ce72d3d392ebf4129aef521d", "synced_at": "2026-05-06T14:27:45+09:00"}
+  }
+}

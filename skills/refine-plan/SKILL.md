@@ -43,8 +43,6 @@ Return which steps were changed and a brief summary.
 ## QA Scaling
 If `$ARGUMENTS` contains `--qa light|standard|thorough|adversarial`, use that level and strip the flag.
 
-If `$ARGUMENTS` contains `--autonomy proactive|standard|passive`, strip the flag (value is discarded — refine-plan does not gate any decisions based on autonomy level; autonomy_level is already in plan frontmatter for downstream consumers).
-
 > Note: refine-plan delegates to 기획팀 and runs a QA review loop. The "3 rounds with 🔴 remaining" outcome is handled at the init-plan level and does not need separate gating here.
 
 Otherwise, auto-detect from the refinement scope:

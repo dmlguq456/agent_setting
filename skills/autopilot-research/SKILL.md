@@ -1,7 +1,7 @@
 ---
 name: autopilot-research
-description: "Research survey pipeline — direct agent orchestration for paper search, analysis, and report generation. 2-level architecture (orchestrator -> agent)."
-argument-hint: "<query> [--depth shallow|medium|deep] [--refs <folder>] [--qa light|standard|thorough] [--autonomy proactive|standard|passive]"
+description: "Research survey pipeline — paper search, analysis, and 9 markdown reports (field intelligence only; no PPT/paper drafts). 2-level architecture (orchestrator → agent). Hand off to autopilot-doc (writing/slides) or autopilot-code (build) for actual document/code creation."
+argument-hint: "<query> [--depth shallow|medium|deep] [--refs <folder>] [--qa light|standard|thorough] [--from search|analyze|report]"
 ---
 
 ## Language Rule
@@ -14,17 +14,43 @@ Parse `$ARGUMENTS` for optional flags:
 - **--depth**: `shallow` | `medium` (default) | `deep`
 - **--refs \<folder\>**: path to local reference PDFs (user must specify, no default)
 - **--qa**: `light` | `standard` (default) | `thorough` — override QA intensity for report QA loop
-- **--autonomy**: `proactive` (default) | `standard` | `passive` — orchestrator-level only
+- **--from**: `search` | `analyze` | `report` — resume the pipeline at a specific stage (see Resume below)
 
-## Autonomy Gating
+## Decision Defaults (no autonomy gating)
 
-| Decision Point | Severity | proactive | standard | passive |
-|---|---|---|---|---|
-| Search results review | Routine | auto-proceed | auto-proceed | ask: "검색 결과 {N}편을 확인했습니다. 분석을 진행할까요?" |
-| Query expansion rounds | Routine | auto-proceed | auto-proceed | ask: "새 키워드 {N}개 발견. 추가 검색 라운드를 진행할까요?" |
-| Phase B loopback | Routine | auto-proceed | auto-proceed | ask: "체이닝에서 새 논문 {N}편 발견. 추가 분석할까요?" |
-| Missing refs folder | Critical | ask (always) | ask | ask |
-| Report generation | Routine | auto-proceed | auto-proceed | ask |
+The pipeline auto-proceeds with sane defaults. There is no autonomy-level dial. Pause points are limited to:
+
+| Decision Point | Default Behavior |
+|---|---|
+| Search results review | Auto-proceed. |
+| Query expansion rounds | Auto-proceed. |
+| Phase B loopback | Auto-proceed up to the depth-gated limit. |
+| Missing refs folder | **Always ask** (only when `--refs` was specified but the path is invalid). |
+| Search returned 0 papers | Auto-stop with `pipeline_summary(failed)` (no useful continuation possible). |
+| Report generation | Auto-proceed. |
+
+## Resume (`--from`)
+
+`--from <stage>` re-enters an existing artifact directory and runs from that stage onward. Stages:
+- `search` — Step 2 (Paper Search)
+- `analyze` — Step 3 (Phase A skimming + B chaining + C code search + analysis_summary)
+- `report` — Step 4 (Report Generation + QA loop)
+
+When `--from` is used, the positional argument should be either the artifact directory path or a fuzzy-matchable topic name. The orchestrator resolves it via `ls -d .claude_reports/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `query`, `depth`, `qa_level`, `refs_folder`. CLI flags override stored values.
+
+### pipeline_state.yaml
+
+Written/updated at `{artifact_dir}/pipeline_state.yaml` after each completed stage:
+
+```yaml
+pipeline: autopilot-research
+query: <original query>
+depth: medium
+qa_level: standard
+refs_folder: <path or null>
+last_completed_stage: analyze    # one of: search, analyze, report
+artifact_dir: <abs path>
+```
 
 ## Pipeline
 
@@ -125,7 +151,7 @@ Agent(subagent_type="연구팀"):
 - 추가 라운드에서 새 논문 < 3편 → 더 이상 확장하지 않음
 - 새 키워드를 추출할 수 없음 (기존 쿼리와 동일) → 종료
 
-Autonomy gate (Routine): proactive/standard → auto-proceed; passive → show top-5, ask.
+Auto-proceed after expansion rounds (no user gate).
 
 ### Step 3: Paper Analysis (direct Agent calls)
 
@@ -304,18 +330,71 @@ Agent(subagent_type="연구팀"):
    - Dataset usage map (ASCII diagram: training datasets → evaluation benchmarks)
    - Recommended benchmark combination table: scenario → datasets → metrics
 
-   ### 06_implementation.md — Implementation Roadmap
-   - Architecture decision matrix (6+ decisions): enrollment type, backbone, matching strategy, granularity, loss function, text encoder — each with Option A/B/C + Recommendation + reasoning
-   - Phased implementation plan (8-10 weeks):
-     Phase 0: Infrastructure (dataset pipeline, eval metrics, reference code setup)
-     Phase 1: Backbone encoder reproduction (BC-ResNet or equivalent)
-     Phase 2: Text-enrollment baseline (PhonMatchNet direction)
-     Phase 3: QbE baseline (GE2E direction)
-     Phase 4: Improvements (phoneme CL, multi-granularity, audio discrimination)
-     Phase 5: On-device optimization (quantization, pruning, streaming, MCU)
-   - Key technical decisions with runnable Python code snippets: feature extraction, G2P pipeline, evaluation protocol
+   ### 06_implementation.md — Goal-Adaptive Action Roadmap
+   First **infer the user's primary goal** from the original query and select the matching template. Always state the inferred goal at the top of the file (`> Inferred goal: {goal} — {one-line rationale}`). If ambiguous, default to **build** but log the assumption.
+
+   **Goal detection cues** (non-exhaustive, infer from `original_query`):
+   - **build** — "구현", "implement", "develop", "build a system", "재현", "프로젝트" → code/system implementation
+   - **seminar** — "세미나", "발표", "lecture", "presentation", "slides", "talk" → talk/slide preparation
+   - **write** — "논문 작성", "survey 쓰기", "review writing", "thesis" → paper/survey writing
+   - **research** — "연구 방향", "research direction", "open problem", "hypothesis", "what's next" → research direction scoping
+   - **adopt** — "기술 도입", "선택", "어떤 모델 써야", "production 적용" → technology selection / adoption decision
+
+   **Template by goal** (always end with a Cross-References section + 5-7 line Korean summary):
+
+   #### Goal: build — Implementation Roadmap
+   - Architecture decision matrix (5-8 decisions): each with Option A/B/C + Recommendation + reasoning. Decision keys depend on domain (e.g., backbone, loss, training paradigm, deployment target, data pipeline).
+   - Phased implementation plan (typically 6-12 weeks): Phase 0 (Infrastructure: dataset pipeline, eval metrics, reference code) → Phase 1-N (incremental capability buildup, ending with optimization/deployment).
+   - Key technical decisions with runnable Python code snippets (feature extraction, evaluation protocol, etc.)
    - Paper-to-code mapping table: technique → source paper → reference repo → status
    - Risk assessment table: risk | probability | impact | mitigation
+
+   #### Goal: seminar — Seminar Preparation Roadmap
+   - Slide structure outline organized by chapter (target audience-aware slide count, e.g., 30-50 for 60-min)
+   - Per-chapter cheat sheet (key papers, takeaways, transitions, time budget)
+   - Deep-dive slide candidates for expert audiences (5-10 backup slides)
+   - Demo candidates with reproducible inference setup (link to repos)
+   - Q&A anticipation table (5-10 likely questions with brief answers + supporting paper)
+
+   #### Goal: write — Writing Roadmap
+   - Section-by-section outline (Abstract → Intro → Related Work → Methods → Experiments → Conclusion, or domain-appropriate variant)
+   - Argument scaffolding: thesis → supporting evidence per claim → counter-considerations / limitations
+   - Figure/table candidates with caption drafts and source paper references
+   - Citation map: which papers to cite where (with rationale linking to claim)
+   - Writing-stage timeline (literature consolidation → outline → draft → revision → submission)
+
+   #### Goal: research — Research Direction Roadmap
+   - Open-problem identification: 5-8 gaps with severity (impact × tractability) ratings
+   - Hypothesis candidates: testable hypotheses with expected outcomes
+   - Experimental setup proposals: minimal viable experiment per hypothesis (data, baseline, metric, resource estimate)
+   - Decision matrix: which direction first (impact × feasibility × novelty)
+   - Risk register: scientific risks (negative results, scooping) + mitigation
+
+   #### Goal: adopt — Technology Adoption Roadmap
+   - Selection criteria matrix (cost, latency, accuracy, license, maintenance) weighted to user constraints
+   - Candidate shortlist (3-5 options) with pros/cons aligned to criteria
+   - Pilot evaluation plan: which to try first, measurement protocol, decision threshold
+   - Integration considerations: data pipeline, monitoring, rollback path
+   - Risk assessment: technical + organizational
+
+   **Schema flexibility**: section names above are guides, not hard requirements. Adapt headings, decision keys, phase counts to the actual domain (e.g., "MCU optimization" only relevant if on-device is in scope). Numbers/examples in cards must drive the template, not the other way around.
+
+   **MANDATORY closing section — `## Next Pipeline`** (always include at end of `06_implementation.md`, regardless of goal):
+
+   This file is a **high-level outline / sketch** based on field analysis. For the actual document creation or implementation, hand off to a downstream pipeline. Pick the recommendation by detected goal:
+
+   | Inferred Goal | Recommended next command | Hand-off rationale |
+   |---|---|---|
+   | build | `/autopilot-code` (dev mode) with this artifact_dir as context | Code implementation needs init-plan → execute-plan → run-test loop |
+   | seminar | `/autopilot-doc --mode presentation --refs {artifact_dir} --pptx-template <PATH>` (PATH is REQUIRED; pipeline aborts at pre-flight if missing) | Slide-by-slide markdown draft + PPTX export with template |
+   | write | `/autopilot-doc --mode write --refs {artifact_dir}` | Full paper draft (Abstract → Conclusion) generation |
+   | research | `/autopilot-doc --mode proposal --refs {artifact_dir}` (or stay in research-only mode) | Proposal mode covers hypothesis + experiment design framing |
+   | adopt | `/autopilot-doc --mode report --refs {artifact_dir}` (or `--mode proposal` for go/no-go decision) | Tech adoption is a structured report/proposal |
+   | review | `/autopilot-doc --mode review --refs {artifact_dir} --review-format <openreview\|acl-arr\|ieee-conf\|journal\|PATH>` (REQUIRED; pipeline aborts at pre-flight if missing) | Reviewer report draft following the venue's review form |
+
+   Include the recommended next command verbatim in this section so the user can copy-paste it. Note that the artifact_dir produced by autopilot-research is directly usable as `--refs` for autopilot-doc.
+
+   **Boundary disclaimer** (also include): "이 06_implementation.md는 분야 분석에서 도출된 high-level 계획입니다. 본격적인 문서 작성·코드 구현은 autopilot-doc / autopilot-code로 인계됩니다."
 
    ### 07_resources.md — Code, Data & Model Resources
    - Tier-based repos: Tier 1 (directly usable for UD-KWS) / Tier 2 (backbone/infra) / Tier 3 (supplementary)
@@ -372,7 +451,7 @@ Write `{artifact_dir}/pipeline_summary.md` BEFORE reporting:
 - **Query**: {query}
 - **Depth**: {depth}
 - **Status**: done / partial / failed
-- **Autonomy**: {autonomy_level}
+- **From-Stage**: {stage if resumed via --from, else "N/A"}
 
 ## Process Log
 | Step | Action | Result | Notes |
@@ -396,14 +475,17 @@ Write `{artifact_dir}/pipeline_summary.md` BEFORE reporting:
 ```
 
 ### Step 6: Briefing
-Read `00_briefing.md` and present:
+Read `00_briefing.md` and `06_implementation.md` (for the inferred goal + Next Pipeline) and present:
 1. Level 0 summary (one line)
 2. Level 1 overview (3-5 lines)
 3. Key stats: total papers, core papers, code availability
 4. File paths for all 9 reports (00_briefing ~ 08_reading_guide)
-5. "질문이 있으시면 물어보세요. 보고서를 기반으로 답변드리겠습니다."
+5. **Next pipeline recommendation**: read the `## Next Pipeline` section from `06_implementation.md` and present the inferred goal + recommended next command verbatim. Make it copy-paste-ready.
+6. "질문이 있으시면 물어보세요. 보고서를 기반으로 답변드리겠습니다."
 
 > Pipeline completion: Step 5 determines formal status. Step 6 is optional interaction.
+
+**Scope boundary**: autopilot-research produces *field intelligence* (markdown analysis only). It does NOT produce final documents (papers/slides/PPTX/code). For document/slide creation, hand off to autopilot-doc; for code implementation, hand off to autopilot-code. The `06_implementation.md` outline is the bridge artifact between these pipelines.
 
 ## Decision Logging
 Record after each gate: `{step | decision | response | action}`. Populate pipeline_summary Decision Points table.
