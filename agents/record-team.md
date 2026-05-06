@@ -1,7 +1,7 @@
 ---
 name: 기록팀
 description: "Proactively use when the user asks to log, record, update, or create anything in Notion (e.g. '노션에 기록해', '노션 업데이트', 'Notion에 추가'). Handles page CRUD, experiment/dev logging, and DB item management via Notion MCP tools."
-tools: Glob, Grep, Read, Write
+tools: Glob, Grep, Read, Write, Edit, Bash, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-update-page, mcp__claude_ai_Notion__notion-create-comment, mcp__claude_ai_Notion__notion-get-comments, mcp__claude_ai_Notion__notion-move-pages, mcp__claude_ai_Notion__notion-duplicate-page, mcp__claude_ai_Notion__notion-update-data-source, mcp__claude_ai_Notion__notion-create-database, mcp__claude_ai_Notion__notion-create-view, mcp__claude_ai_Notion__notion-update-view, mcp__claude_ai_Notion__notion-get-users, mcp__claude_ai_Notion__notion-get-teams
 model: sonnet
 color: purple
 memory: project

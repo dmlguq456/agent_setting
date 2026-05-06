@@ -78,7 +78,8 @@ When resuming with `--from`, the positional argument should be either the artifa
 
 **`--pptx-template <path>`** — PPTX reference template (**REQUIRED** for mode=presentation; pipeline aborts if missing):
 - Path to an existing .pptx file whose slide masters/theme/colors will be applied during PPT export. Verified at Step 0 pre-flight (file must exist + must be a valid .pptx).
-- **NO default** — must be explicitly provided. If `--pptx-template` is omitted in presentation mode, the pipeline aborts at Step 0 with a clear error explaining that a template is required (and suggesting placement at e.g. `~/etc/IIP_template.pptx` if the user wants to make it their own).
+- **NO default** — must be explicitly provided. If `--pptx-template` is omitted in presentation mode, the pipeline aborts at Step 0 with a clear error explaining that a template is required (and suggesting placement at e.g. `~/etc/IIP_template_pandoc.pptx` if the user wants to make it their own).
+- **Important — pandoc 3.x layout name compatibility**: The reference PPTX must have its slide layouts named in English (Title Slide / Title and Content / Two Content / Section Header / Comparison / Content with Caption / Blank). Korean layout names (제목 슬라이드 등) are NOT recognized by pandoc 3.x and will fall back to pandoc's default layouts (losing the lab branding). To convert a lab template with Korean layout names, use the helper at `~/etc/rename_pptx_layouts.py` (or directly edit `ppt/slideLayouts/slideLayoutN.xml`'s `cSld@name` attribute).
 - Conversion uses `~/etc/md2pptx.py`. If `md2pptx.py` is missing, the pipeline also aborts at Step 0 (md2pptx is part of the required dependency set for presentation mode).
 - Ignored for all non-presentation modes.
 
