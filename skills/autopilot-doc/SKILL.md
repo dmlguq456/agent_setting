@@ -1,7 +1,7 @@
 ---
 name: autopilot-doc
-description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. All 7 modes produce both strategy AND draft. review mode requires `--review-format`; presentation mode requires `--pptx-template` (both fail-fast at pre-flight if missing). `--refs` accepts an autopilot-research artifact_dir to chain pipelines."
-argument-hint: "<mode> <task description> [--refs <folder>] [--type <survey-type>] [--review-format <name|path>] [--pptx-template <path>] [--qa light|standard|thorough] [--user-refine] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
+description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. All 7 modes produce both strategy AND draft (markdown only). review mode requires `--review-format` (fail-fast at pre-flight if missing). presentation mode produces slide-by-slide markdown; PPTX export is NOT supported by this pipeline (use PowerPoint directly). `--refs` accepts an autopilot-research artifact_dir to chain pipelines."
+argument-hint: "<mode> <task description> [--refs <folder>] [--type <survey-type>] [--review-format <name|path>] [--qa light|standard|thorough] [--user-refine] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 ---
 
 ## Language Rule
@@ -17,7 +17,7 @@ Parse `$ARGUMENTS` for mode, flags, and task description:
 - `survey` — General-purpose research survey with **active source discovery**: literature, market, technology, product, or company analysis. Searches for sources automatically; `--refs` is optional supplementary input.
 - `report` — Technical report / white paper (findings, analysis, recommendations)
 - `proposal` — Research or project proposal (problem, approach, plan, budget)
-- `presentation` — Presentation strategy (story arc, slide structure, key messages) + slide-by-slide markdown draft. If `--pptx-template <path>` is provided (or default IIP template detected), automatically converts to .pptx.
+- `presentation` — Presentation strategy (story arc, slide structure, key messages) + slide-by-slide markdown draft. PPTX export is NOT performed by this pipeline (markdown-only); use PowerPoint manually with the lab template.
 
 **`--refs <folder>`** — path to reference materials folder:
 - Contains: PDFs, reviewer comments (txt/md), original paper, conference guidelines, data files, etc.
@@ -50,11 +50,11 @@ If 연구팀 added no memos, the pause is skipped (nothing to refine).
 - `analyze` — Step 1 (Material Analysis); for survey mode also re-runs Step 0 (Source Discovery)
 - `strategy` — Step 2 (init-doc-strategy)
 - `strategy-refine` — Step 3 wrapper: 연구팀 review + (user memos if `--user-refine`) + refine-doc-strategy on the strategy
-- `draft` — Step 4 (Draft Generation) + Step 4b (PPTX export)
+- `draft` — Step 4 (Draft Generation)
 - `draft-refine` — Step 5 wrapper: 연구팀 review + (user memos if `--user-refine`) + refine-doc-strategy on the draft
 - `finalize` — Step 6 (Pipeline Summary)
 
-When resuming with `--from`, the positional argument should be either the artifact directory path or a fuzzy-matchable short name. The orchestrator resolves it via the same fuzzy lookup used by Plan Resolution in autopilot-code: `ls -d .claude_reports/documents/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `mode`, `qa_level`, `refs_folder`, `pptx_template`, `user_refine`. CLI flags override state file; missing flags inherit from state.
+When resuming with `--from`, the positional argument should be either the artifact directory path or a fuzzy-matchable short name. The orchestrator resolves it via the same fuzzy lookup used by Plan Resolution in autopilot-code: `ls -d .claude_reports/documents/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `mode`, `qa_level`, `refs_folder`, `user_refine`. CLI flags override state file; missing flags inherit from state.
 
 **`--type <survey-type>`** — sub-type for survey mode (only used when mode=survey):
 - `literature` (default) — academic literature survey
@@ -76,14 +76,9 @@ When resuming with `--from`, the positional argument should be either the artifa
 - If reviewer guidelines PDF/doc is also found in `--refs`, the agent layers those constraints on top of the chosen template.
 - Ignored for all non-review modes.
 
-**`--pptx-template <path>`** — PPTX reference template (**REQUIRED** for mode=presentation; pipeline aborts if missing):
-- Path to an existing .pptx file whose slide masters/theme/colors will be applied during PPT export. Verified at Step 0 pre-flight (file must exist + must be a valid .pptx).
-- **NO default** — must be explicitly provided. If `--pptx-template` is omitted in presentation mode, the pipeline aborts at Step 0 with a clear error explaining that a template is required (and suggesting placement at e.g. `~/etc/IIP_template_pandoc.pptx` if the user wants to make it their own).
-- **Important — pandoc 3.x layout name compatibility**: The reference PPTX must have its slide layouts named in English (Title Slide / Title and Content / Two Content / Section Header / Comparison / Content with Caption / Blank). Korean layout names (제목 슬라이드 등) are NOT recognized by pandoc 3.x and will fall back to pandoc's default layouts (losing the lab branding). To convert a lab template with Korean layout names, use the helper at `~/etc/rename_pptx_layouts.py` (or directly edit `ppt/slideLayouts/slideLayoutN.xml`'s `cSld@name` attribute).
-- Conversion uses `~/etc/md2pptx.py`. If `md2pptx.py` is missing, the pipeline also aborts at Step 0 (md2pptx is part of the required dependency set for presentation mode).
-- Ignored for all non-presentation modes.
-
 The remaining text (after removing mode and flags) is the task description.
+
+> **Note on presentation mode**: This pipeline produces only the slide-by-slide markdown draft (`draft/draft.md` and `draft/draft_ko.md`). PPTX export is **NOT supported** because pandoc + Korean lab templates have unreliable compatibility (font/layout drift, OOXML strictness). The user converts markdown → PPT manually in PowerPoint using their lab template directly.
 
 ## Decision Defaults (no autonomy gating)
 
@@ -97,7 +92,6 @@ The pipeline runs with sane defaults and only pauses on genuinely ambiguous or d
 | Strategy review → memos added | Auto-refine (or pause for user-memo if `--user-refine` is set). |
 | Draft review → memos added | Auto-refine (or pause for user-memo if `--user-refine` is set). |
 | `--review-format` missing (review mode) | Abort at pre-flight. |
-| `--pptx-template` missing or invalid (presentation mode) | Abort at pre-flight. |
 | Reviewer guidelines absent in refs (review mode) | Use built-in spec only; inform user. |
 | Survey search results review | Auto-proceed. |
 | Survey search found 0 results | **Always ask** — proceed with `--refs` only or adjust query. |
@@ -115,7 +109,6 @@ qa_level: thorough
 user_refine: true
 refs_folder: <path>
 review_format: <name|path or null>
-pptx_template: <path or null>
 survey_type: <type or null>
 last_completed_stage: strategy        # one of: discovery, analyze, strategy, strategy-refine, draft, draft-refine, finalize
 paused_at_stage: strategy-refine      # set only when --user-refine triggered a pause
@@ -136,8 +129,7 @@ All outputs go to:
 │  └─ strategy_ko.md       (Korean strategy document)
 ├─ draft/                   (generated for: rebuttal, write, report, proposal, survey, review, presentation)
 │  ├─ draft.md             (English draft; for presentation: slide-by-slide markdown)
-│  ├─ draft_ko.md          (Korean draft)
-│  └─ draft.pptx           (presentation mode only — always produced; pre-flight enforces template presence)
+│  └─ draft_ko.md          (Korean draft)
 ├─ discovery/               (survey mode only: search results)
 │  └─ search_results.json  (discovered sources with metadata)
 ├─ analysis/
@@ -165,13 +157,7 @@ Validate mode-specific required inputs. If any check fails, **abort immediately*
   - Else treat as a path → `os.path.exists(value)` must be True AND extension must be one of `.md`, `.txt`, `.pdf`. Otherwise abort.
   - If flag is missing entirely → abort with: "review mode requires --review-format. Built-in options: openreview, acl-arr, ieee-conf, journal. Or provide a path to a custom format spec (.md/.txt/.pdf)."
 
-- **presentation mode** — `--pptx-template <path>` is REQUIRED. Validate:
-  - Path provided (no auto-default fallback).
-  - File exists at that path.
-  - File extension is `.pptx`.
-  - File is a valid PPTX (open with python-pptx; if it raises, abort).
-  - Also verify `~/etc/md2pptx.py` exists. If absent, abort: "presentation mode requires md2pptx.py at ~/etc/md2pptx.py. Install it before retrying."
-  - If `--pptx-template` is missing entirely → abort with: "presentation mode requires --pptx-template <path>. Place a reference .pptx (e.g. lab template) and pass its path explicitly. Pipeline does NOT use any auto-default."
+- **presentation mode** — no extra pre-flight requirements. PPTX export is NOT performed; user converts the markdown draft to PPT manually.
 
 - **rebuttal mode** — refs folder must contain at least one reviewer-comment file (txt/md/pdf with reviewer-style content detected by filename or content scan). If none found, ask the user before proceeding.
 
@@ -431,21 +417,20 @@ Adapt the section structure to `--review-format` (default: openreview). If revie
 **Custom path**: read the format spec file and produce a draft that satisfies its required sections.
 
 ### presentation
-Generate slide-by-slide markdown compatible with the md2pptx pipeline.
+Generate slide-by-slide markdown. **PPTX export is NOT performed** — the user will copy/paste content into PowerPoint manually using their lab template.
 
-- **Frontmatter** (YAML): title, subtitle (optional), author, date, theme/template note
+- **Frontmatter** (YAML): title, subtitle (optional), author, date
 - **Slide structure**: each slide is a level-1 heading (`# Slide title`). Use the slide structure from the strategy doc as the source of truth for chapter divisions and per-slide content.
 - **Required sections**:
-  1. Title slide (auto-generated from frontmatter)
+  1. Title slide (frontmatter — first slide content)
   2. Outline / Table of Contents (`# Outline` or `# 목차`)
-  3. Section dividers (`# Ch.1 — chapter title`, `# Ch.2 — ...`) — these will be auto-detected by md2pptx and converted to title-only layout
+  3. Section dividers (`# Ch.1 — chapter title`, `# Ch.2 — ...`)
   4. Per-slide content slides (with concise bullets, tables, image placeholders `[FIGURE: description]`, code blocks where useful)
   5. Conclusion / Take-home messages
   6. Q&A / Thank you / References
-- **Speaker notes**: every content slide should have `::: notes ... :::` block bridging slide content with verbal narration
-- **Two-column layouts**: use `::::: {.columns}` / `::: {.column width="50%"}` blocks for compare/contrast slides
+- **Speaker notes**: every content slide should have a clearly-marked speaker note section (e.g., `> **Speaker note**: ...` blockquote) bridging slide content with verbal narration
 - **Slide budget**: derive from strategy doc's time allocation (e.g., 60-min talk = 30-50 slides; 20-min conference talk = 12-18 slides). Mark backup slides with `# Backup — title` after the main flow.
-- **Visual placeholders**: use `[FIGURE: brief description of what should be drawn]` for diagrams that the user will add manually in PowerPoint after PPT export.
+- **Visual placeholders**: use `[FIGURE: brief description of what should be drawn]` for diagrams that the user will add manually in PowerPoint.
 - **References slide**: list key paper citations near the end (typically `# References`).
 
 ## Quality Requirements
@@ -463,20 +448,6 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
 ```
 
 3. **IMPORTANT**: Do NOT read, re-write, or duplicate the draft files yourself. The agent writes them directly.
-
-### Step 4b: PPTX Export [presentation mode only]
-Pre-flight already verified `--pptx-template` and `~/etc/md2pptx.py` exist. Convert markdown draft to PPTX.
-
-1. Invoke conversion:
-   ```bash
-   python3 ~/etc/md2pptx.py {strategy_folder}/draft/draft.md \
-     -o {strategy_folder}/draft/draft.pptx \
-     --template {pptx_template_path}
-   ```
-
-2. Validate output: open `draft.pptx` with python-pptx; must have ≥ 2 slides. If validation fails, log the error in pipeline_summary as "PPTX export failed" and continue to Step 5 (do not abort the whole pipeline — markdown draft is still usable).
-
-3. **Note**: pre-flight already aborted if template/md2pptx were missing, so this step assumes both are present. If the conversion itself fails (pandoc error, malformed markdown, etc.), it's a runtime issue logged but not fatal.
 
 ### Step 5: Draft Review (연구팀 as QA)
 **Applicable modes**: rebuttal, write, report, proposal, survey, review, presentation. (All modes that generated drafts.)
@@ -543,14 +514,12 @@ Pre-flight already verified `--pptx-template` and `~/etc/md2pptx.py` exist. Conv
 | 3 | Strategy Review (연구팀) | memos added / no issues | {memo count} |
 | 3b | refine-doc-strategy | refined / skipped | |
 | 4 | Draft Generation | created | {draft path} |
-| 4b | PPTX Export (presentation only) | created / skipped (no template) / N/A | {pptx path or reason} |
 | 5 | Draft Review (연구팀) | memos added / no issues | {memo count} |
 | 5b | refine-doc-strategy (draft) | refined / skipped | |
 
 ## Artifacts
 - Strategy (EN/KO): {en_path} / {ko_path}
 - Draft (EN/KO): {draft_en_path} / {draft_ko_path}
-- PPTX (presentation only): {pptx_path or "N/A — non-presentation mode or template missing"}
 - Analysis: {reviewer_analysis or ref_analysis path}
 - Material Index: {path} | Strategy Review: {path} | Draft Review: {path}
 
@@ -565,7 +534,7 @@ When writing pipeline_summary.md, populate the Decision Points table from the in
 Then report to the user:
 - Strategy file paths + 2-3 line summary of the strategy.
 - Draft file paths + 2-3 line summary of the draft.
-- For presentation mode: also report the .pptx path if PPTX export succeeded, or the reason it was skipped.
+- For presentation mode: remind the user that PPTX export is manual — they should open the markdown draft and copy slide content into PowerPoint with their lab template.
 - For review mode: confirm the `--review-format` used (default: openreview) and any venue-specific adaptations from refs/.
 
 ## Safety Rules
@@ -573,7 +542,7 @@ Then report to the user:
 - The draft is a working first draft for user editing, NOT a final document. Mark uncertain content with `[TODO: ...]`.
 - For rebuttal mode: ensure EVERY reviewer point is addressed — missing a point is a critical error.
 - For review mode: scores must be justified with concrete evidence; never fabricate scores without backing in the paper text. `--review-format` is mandatory — pre-flight aborts otherwise.
-- For presentation mode: never insert real figures/images automatically — use `[FIGURE: ...]` placeholders. `--pptx-template` is mandatory — pre-flight aborts otherwise. PPTX export at runtime is still best-effort (logged but not fatal if conversion errors).
+- For presentation mode: never insert real figures/images automatically — use `[FIGURE: ...]` placeholders. PPTX export is NOT performed by this pipeline; the user converts the markdown draft to PPT manually using their lab template.
 - Present material inventory to the user briefly and auto-proceed.
 
 ## Task

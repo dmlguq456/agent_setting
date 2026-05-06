@@ -89,37 +89,26 @@ Agents:  변경 0 / 신규 0 / 삭제 0 / 동일 8
 
 ### Step 4: Generate dashboard sections (공통 — README와 Notion 상단 모두 사용)
 
-#### 4a. 두 다이어그램으로 분리 (시각적 잡음 최소화)
+#### 4a. 두 다이어그램 (워크플로우는 단순화, agent 호출은 별도)
 
-**Diagram 1: 사용자 워크플로우** — Skills + 산출물만. 본문 상단 `## 사용자 워크플로우` 섹션에 박음.
+**Diagram 1: 워크플로우** — 5노드 단순 구조. 옵션 플래그는 노드 라벨에 박지 않고 본문 prose로 풀어쓴다.
 ```mermaid
 flowchart LR
-    subgraph PREP["📋 사전 준비 (최초 1회)"]
-        direction TB
-        AP["[0] analyze-project<br/>코드 → docs_code/"]
-        ARP["[0] analyze-papers<br/>PDF → docs_paper/"]
-    end
-    subgraph RUN["🚀 런타임 파이프라인"]
-        direction TB
-        ARES["[1] autopilot-research<br/>--depth shallow/medium/deep<br/>--from search/analyze/report"]
-        ACODE["[2] autopilot-code<br/>--mode dev/audit/debug<br/>--from plan/refine/execute/test/report<br/>--user-refine"]
-        ADOC["[3] autopilot-doc<br/>--mode rebuttal/write/review/survey/<br/>report/proposal/presentation<br/>--from analyze/strategy/strategy-refine/<br/>draft/draft-refine/finalize<br/>--user-refine"]
-    end
-    subgraph OUT["📦 산출물"]
-        direction TB
-        PL[".claude_reports/plans/"]
-        RS[".claude_reports/research/"]
-        DO[".claude_reports/documents/"]
-    end
-    AP -.docs_code.-> ACODE
-    ARP -.docs_paper.-> ACODE
-    ARP -.docs_paper.-> ADOC
-    ARES -.research artifact_dir.-> ADOC
-    ACODE --> PL
-    ARES --> RS
-    ADOC --> DO
-    ACODE -.final-report auto-update.-> AP
+    PREP["📋 사전 준비<br/>analyze-project · analyze-papers"]
+    R["[1] autopilot-research"]
+    C["[2] autopilot-code"]
+    D["[3] autopilot-doc"]
+    OUT[("📦 .claude_reports/")]
+    PREP --> C
+    PREP --> D
+    R --> D
+    R --> C
+    C --> OUT
+    R --> OUT
+    D --> OUT
 ```
+
+다이어그램 직후 본문에 **파이프라인별 역할 (4 paragraphs)** + **자주 쓰는 체이닝 패턴 (5 bullets)** + **사용자 개입 지점 (--user-refine, --from)** 섹션을 prose로 작성.
 
 **Diagram 2: Agent 호출 구조** — Agents Cheat-Sheet 표 직후 `### Agent 호출 구조 (참고용)` 섹션에 박음.
 ```mermaid

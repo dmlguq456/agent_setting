@@ -379,6 +379,13 @@ Agent(subagent_type="연구팀"):
 
    **Schema flexibility**: section names above are guides, not hard requirements. Adapt headings, decision keys, phase counts to the actual domain (e.g., "MCU optimization" only relevant if on-device is in scope). Numbers/examples in cards must drive the template, not the other way around.
 
+   **CRITICAL — Output scope strictly limited to the 9 markdown reports** (00_briefing through 08_reading_guide). Specifically for goal=seminar:
+   - Produce `06_implementation.md` with chapter outline + cheat sheet + Q&A + deep-dive candidates ONLY.
+   - Do **NOT** produce `seminar_slides.md`, `notion_seminar_slides.md`, slide-by-slide markdown, PPTX, or any other slide-rendering artifact.
+   - Slide-by-slide draft generation belongs to autopilot-doc presentation mode. Never overstep.
+
+   Same restriction applies to other goals: do NOT generate paper drafts, code, PPTX, or any final-form document — only the 9 markdown analysis reports.
+
    **MANDATORY closing section — `## Next Pipeline`** (always include at end of `06_implementation.md`, regardless of goal):
 
    This file is a **high-level outline / sketch** based on field analysis. For the actual document creation or implementation, hand off to a downstream pipeline. Pick the recommendation by detected goal:
@@ -386,7 +393,7 @@ Agent(subagent_type="연구팀"):
    | Inferred Goal | Recommended next command | Hand-off rationale |
    |---|---|---|
    | build | `/autopilot-code` (dev mode) with this artifact_dir as context | Code implementation needs init-plan → execute-plan → run-test loop |
-   | seminar | `/autopilot-doc --mode presentation --refs {artifact_dir} --pptx-template <PATH>` (PATH is REQUIRED; pipeline aborts at pre-flight if missing) | Slide-by-slide markdown draft + PPTX export with template |
+   | seminar | `/autopilot-doc --mode presentation --refs {artifact_dir}` | Slide-by-slide markdown draft (PPTX export is NOT supported — user converts to PPT manually with their lab template) |
    | write | `/autopilot-doc --mode write --refs {artifact_dir}` | Full paper draft (Abstract → Conclusion) generation |
    | research | `/autopilot-doc --mode proposal --refs {artifact_dir}` (or stay in research-only mode) | Proposal mode covers hypothesis + experiment design framing |
    | adopt | `/autopilot-doc --mode report --refs {artifact_dir}` (or `--mode proposal` for go/no-go decision) | Tech adoption is a structured report/proposal |

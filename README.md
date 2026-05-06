@@ -6,59 +6,52 @@
 
 ---
 
-## 📊 사용자 워크플로우 — Skills + 산출물
+## 📊 워크플로우
 
 ```mermaid
 flowchart LR
-    subgraph PREP["📋 사전 준비 (최초 1회)"]
-        direction TB
-        AP["[0] analyze-project<br/>코드 → docs_code/"]
-        ARP["[0] analyze-papers<br/>PDF → docs_paper/"]
-    end
-    subgraph RUN["🚀 런타임 파이프라인"]
-        direction TB
-        ARES["[1] autopilot-research<br/>--depth shallow/medium/deep<br/>--from search/analyze/report"]
-        ACODE["[2] autopilot-code<br/>--mode dev/audit/debug<br/>--from plan/refine/execute/test/report<br/>--user-refine"]
-        ADOC["[3] autopilot-doc<br/>--mode rebuttal/write/review/survey/<br/>report/proposal/presentation<br/>--from analyze/strategy/strategy-refine/<br/>draft/draft-refine/finalize<br/>--user-refine"]
-    end
-    subgraph OUT["📦 산출물"]
-        direction TB
-        PL[".claude_reports/plans/"]
-        RS[".claude_reports/research/"]
-        DO[".claude_reports/documents/"]
-    end
-    AP -.docs_code.-> ACODE
-    ARP -.docs_paper.-> ACODE
-    ARP -.docs_paper.-> ADOC
-    ARES -.research artifact_dir.-> ADOC
-    ACODE --> PL
-    ARES --> RS
-    ADOC --> DO
-    ACODE -.final-report auto-update.-> AP
+    PREP["📋 사전 준비<br/>analyze-project · analyze-papers"]
+    R["[1] autopilot-research"]
+    C["[2] autopilot-code"]
+    D["[3] autopilot-doc"]
+    OUT[("📦 .claude_reports/")]
+    PREP --> C
+    PREP --> D
+    R --> D
+    R --> C
+    C --> OUT
+    R --> OUT
+    D --> OUT
 ```
 
-### 🎯 Quickstart 시나리오
+### 파이프라인별 역할
 
-**A. 세미나 발표자료**
-1. `/autopilot-research <주제> --depth medium`
-2. `/autopilot-doc --mode presentation --refs <research_artifact_dir> --pptx-template <path> --user-refine`
-3. (pause) — 슬라이드 초안에 직접 메모 추가
-4. `/autopilot-doc --mode presentation --from strategy-refine <doc_artifact_dir>`
+**[0] analyze-project / analyze-papers — 사전 준비 (최초 1회)**
+프로젝트 코드와 논문 PDF를 미리 분석해 정적 지식 베이스(`docs_code/`, `docs_paper/`)를 깔아 두는 단계. 이후 `autopilot-code`의 `final-report`가 코드 변경분만큼 `docs_code/`를 자동 갱신하므로 **재실행이 거의 필요 없음** (self-maintaining). 새 논문을 받았을 때만 `analyze-papers`를 한 번씩 더 돌려 주면 됩니다.
 
-**B. 새 기능 개발**
-1. (선택) `/analyze-project` — 첫 사용 시
-2. `/autopilot-code --mode dev --user-refine "<task description>"`
-3. (pause) — plan 검토·메모 추가
-4. `/autopilot-code --mode dev --from refine <plan-name>`
-5. (선택) `/autopilot-code --mode audit <plan-name>` — 사후 감사
+**[1] autopilot-research — 새 분야 조사**
+arXiv / Semantic Scholar / OpenAlex / Hugging Face 등에서 논문을 검색·분석해 9개 markdown 보고서(`00_briefing.md` ~ `08_reading_guide.md`)로 정리. 산출물은 `.claude_reports/research/{topic}/`. 세미나 사전 준비, 논문 review를 위한 배경 조사, 새 분야 진입 시 시작점.
 
-**C. 논문 rebuttal**
-1. `/autopilot-doc --mode rebuttal --refs <reviewer_comments_folder> --user-refine`
-2. (pause × 2: strategy-refine, draft-refine) — 매번 사용자 메모 추가
+**[2] autopilot-code — 코드 변경**
+세 모드: `dev`(신기능·리팩토링), `audit`(직전 dev cycle 사후 감사), `debug`(런타임 에러 진단·수정). 내부적으로 plan → review → execute → test → report 5단계를 거치며, 기획팀·품질관리팀·연구팀·테스트팀이 자동으로 위임된다. 산출물은 `.claude_reports/plans/{date}_{task}/`.
 
-**D. 디버그**
-1. `/autopilot-code --mode debug "<error description / log path>"`
-   (debug는 `--user-refine`, `--from` 미지원 — 빠른 진단·수정에 최적화)
+**[3] autopilot-doc — 문서 작성**
+7개 모드(`rebuttal`, `write`, `review`, `survey`, `report`, `proposal`, `presentation`). 모두 strategy(전략 문서)와 draft(초안)을 함께 markdown으로 생성. 산출물은 `.claude_reports/documents/{date}_{name}/`. `--refs`에 `autopilot-research`의 artifact_dir을 그대로 넘기면 자동 체이닝.
+
+### 자주 쓰는 체이닝 패턴
+
+- **세미나 발표 자료**: `/autopilot-research <주제>` → `/autopilot-doc --mode presentation --refs <research_dir>`
+- **논문 작성**: `/autopilot-research <주제>` → `/autopilot-doc --mode write --refs <research_dir>`
+- **코드 변경 + 사후 감사**: `/autopilot-code --mode dev <task>` → `/autopilot-code --mode audit <plan>`
+- **리뷰 응답**: `/autopilot-doc --mode rebuttal --refs <reviewer_comments>` (단일)
+- **디버그**: `/autopilot-code --mode debug "<error description / log path>"` (빠른 진단·수정, pause 없음)
+
+### 사용자 개입 지점
+
+기본적으로 자동 진행하지만, 두 가지 옵션으로 개입 가능:
+
+- **`--user-refine`** (autopilot-code dev / autopilot-doc) — 연구팀이 자동 메모를 박은 직후 pause. 사용자가 같은 문서에 `<!-- memo: ... -->` 형태로 직접 메모를 추가한 뒤, 출력된 명령으로 재개.
+- **`--from <stage>`** — pause 후 또는 중간 실패 후 특정 단계부터 재개. 각 skill의 stage 이름은 아래 cheat-sheet 참고.
 
 ---
 
