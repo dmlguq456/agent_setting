@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "last_readme_sync": "2026-05-06T20:30:00+09:00",
-  "last_notion_sync": "2026-05-06T20:30:00+09:00",
+  "last_readme_sync": "2026-05-07T09:17:40+09:00",
+  "last_notion_sync": "2026-05-07T09:17:40+09:00",
   "items": {
     "skills/analyze-papers": {"sha256": "f41e8de114d485a55a0110be29f6dd97e7524abec4f84f01855bdee9b579c6b7", "synced_at": "2026-05-06T14:27:45+09:00"},
     "skills/analyze-project": {"sha256": "9ccb9b5f1dfa8ee3e3939d88880ea45de45e2745f70d04e281ff06bfef777aa7", "synced_at": "2026-05-06T14:27:45+09:00"},
@@ -12,6 +12,7 @@
     "skills/final-report": {"sha256": "8cd4ea673d38a5bdf41439489ef7b306c484bab29c1732f279b9cea8d45959a2", "synced_at": "2026-05-06T14:27:45+09:00"},
     "skills/init-doc-strategy": {"sha256": "4c261709bfb1872b38f820764a25dd0e72db4ae62556f38d7013a184bd222990", "synced_at": "2026-05-06T18:00:00+09:00"},
     "skills/init-plan": {"sha256": "058cca4a427f2d7a856fb8b6ca636b3a85854ed320c6798412d982c755d7987e", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "skills/quick-refine": {"sha256": "ea274161df02bde5b3ac397f5ed82f96ea6baf60ee941a476c30f78334ea4116", "synced_at": "2026-05-07T09:17:40+09:00"},
     "skills/refine-doc": {"sha256": "7e6a3c67b0f162f87f975194579c27d0c6b455d1725ce1ff3d54641b7fe2913f", "synced_at": "2026-05-06T18:00:00+09:00"},
     "skills/refine-plan": {"sha256": "1d69802f7c34b3c737b4c6bee1e0e1d23c4dda190cc6478ea1dd2db080b2b770", "synced_at": "2026-05-06T14:27:45+09:00"},
     "skills/run-test": {"sha256": "f59a0340f449ac9afe8fa3b9fd3f85ed3d912d484e279fbca38883ed695ced3f", "synced_at": "2026-05-06T14:27:45+09:00"},
