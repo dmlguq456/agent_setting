@@ -1,13 +1,13 @@
 {
   "version": 2,
-  "last_readme_sync": "2026-05-07T09:52:54+09:00",
-  "last_notion_sync": "2026-05-07T09:52:54+09:00",
+  "last_readme_sync": "2026-05-07T10:31:58+09:00",
+  "last_notion_sync": "2026-05-07T10:31:58+09:00",
   "items": {
     "skills/analyze-papers": {"sha256": "f41e8de114d485a55a0110be29f6dd97e7524abec4f84f01855bdee9b579c6b7", "synced_at": "2026-05-06T14:27:45+09:00"},
     "skills/analyze-project": {"sha256": "9ccb9b5f1dfa8ee3e3939d88880ea45de45e2745f70d04e281ff06bfef777aa7", "synced_at": "2026-05-06T14:27:45+09:00"},
     "skills/autopilot-code": {"sha256": "4d6088822da959aabb5d609848e9a28d9109a122ec8f012059535593ed41b828", "synced_at": "2026-05-07T09:30:28+09:00"},
     "skills/autopilot-doc": {"sha256": "5f79258ba782b0cc57feb7791bc96371793feb68afd6f1e01897ee24a5405632", "synced_at": "2026-05-07T09:30:28+09:00"},
-    "skills/autopilot-refine": {"sha256": "60d049539a1180d99ba4a134dd0b7ba5e2ca0e7421f7a89c5babaecece1bbd63", "synced_at": "2026-05-07T09:52:54+09:00"},
+    "skills/autopilot-refine": {"sha256": "87e1b78f28ff18f4f1bec88e8c758183334955e20c330d10a3da5caf68e39353", "synced_at": "2026-05-07T10:31:58+09:00"},
     "skills/autopilot-research": {"sha256": "c516bf9f015f9cc54a906f44a97b465aa7a113847528ab34fcb58ad75338f97a", "synced_at": "2026-05-07T09:30:28+09:00"},
     "skills/execute-plan": {"sha256": "c1359e074a6fc1121d5e34085886a720a252b6287bc40966e73a3d7f17846028", "synced_at": "2026-05-06T14:27:45+09:00"},
     "skills/final-report": {"sha256": "8cd4ea673d38a5bdf41439489ef7b306c484bab29c1732f279b9cea8d45959a2", "synced_at": "2026-05-06T14:27:45+09:00"},

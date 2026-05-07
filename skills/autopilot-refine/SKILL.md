@@ -1,7 +1,7 @@
 ---
 name: autopilot-refine
-description: Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: auto-discovers the artifact's file structure, plans edits from a one-line prompt, shows a diff preview in chat, and on user confirm applies edits with versioning + CHANGELOG logging. Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough for multi-round review or fact-check. Optional `--memo <file>` falls back to file-memo style for deferred reviews.
-argument-hint: "<artifact_dir_or_topic> \"<prompt>\" [--qa quick|light|standard|thorough] [--auto | --review-only | --memo <file>]"
+description: Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: auto-discovers the artifact's file structure (from `--refs <dir>` or fuzzy-matched from prompt), plans edits, shows a diff preview in chat, and on user confirm applies edits with versioning + CHANGELOG logging. Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough for multi-round review or fact-check. Optional `--memo <file>` falls back to file-memo style for deferred reviews.
+argument-hint: "\"<prompt>\" [--refs <artifact_dir>] [--qa quick|light|standard|thorough] [--review-only | --memo <file>]"
 ---
 
 ## Position in autopilot family
@@ -33,21 +33,31 @@ Higher levels add a pre-apply review pass on the planned diff — they do NOT ad
 
 | Form | Behavior |
 |---|---|
-| `autopilot-refine <a> "<p>"` | **Default**: investigate → diff preview → user confirm → apply + version + log |
-| `autopilot-refine <a> "<p>" --auto` | Auto-apply MECH changes; pause only on SEM. Skips confirmation when all proposals are mechanical. |
-| `autopilot-refine <a> "<p>" --review-only` | Investigate + diff preview. No edits, no version, no log. |
-| `autopilot-refine <a> --memo <file>` | Read memo file as proposal source (compat with refine-doc memo style). Apply same as default. |
+| `autopilot-refine "<p>" [--refs <dir>]` | **Default**: investigate → diff preview → user confirm → apply + version + log |
+| `autopilot-refine "<p>" --review-only [--refs <dir>]` | Investigate + diff preview. No edits, no version, no log. |
+| `autopilot-refine --memo <file> [--refs <dir>]` | Read memo file as proposal source (compat with refine-doc memo style). Apply same as default. |
+
+> Auto-apply behavior: if the user explicitly writes "확인 없이 적용" / "자동 적용" / "그대로 적용" in the prompt AND all classified changes are MECH (no SEM/STRUCT), the skill may skip the confirm step and apply directly. Otherwise the default chat-pause-and-confirm always applies. (Translation: the prompt itself is the auto-apply signal — no separate flag.)
 
 ## Artifact Resolution
 
-1. If `<arg>` is a path that exists → use as-is. Detect type by path:
+Resolve to artifact root in this priority order:
+
+1. **Explicit `--refs <path>`** — use as-is if path exists. Detect type by path:
    - `.claude_reports/research/*` → **research**
    - `.claude_reports/documents/*` → **doc**
-2. Else fuzzy search both:
+   - Other path → error (autopilot-refine targets only research/doc).
+
+2. **Fuzzy match from `--refs` argument** (if `--refs` is given but the literal path doesn't exist):
    ```bash
-   ls -d .claude_reports/research/*<arg>* .claude_reports/documents/*<arg>* 2>/dev/null
+   ls -d .claude_reports/research/*<refs_arg>* .claude_reports/documents/*<refs_arg>* 2>/dev/null
    ```
-   - 1 match → use it. Multiple → list, ask user. 0 → error.
+   1 match → use. Multiple → list and ask. 0 → error.
+
+3. **Fuzzy match from `<prompt>` keywords** (if `--refs` is omitted): extract candidate keywords from the prompt (skip stop words; pick noun-ish tokens) and run the same fuzzy search.
+   - 1 match → use it. Multiple → list and ask. 0 → ask user to provide `--refs <dir>`.
+
+If `--refs` is provided AND prompt keywords also match a different artifact, `--refs` always wins (explicit beats inferred).
 
 ## Language Rule
 
@@ -118,7 +128,7 @@ Prompt: "{prompt verbatim, ≤200자 trim}"
 
 End turn. Wait for user reply.
 
-**`--auto` mode exception**: if all proposals are MECH, skip Stage C output and proceed directly to Stage D. Print a one-line summary instead: `[auto] {N} mech changes 적용 중...`. SEM 항목이 하나라도 있으면 chat 출력 + pause로 fallback.
+**Auto-apply (prompt-driven)**: if the prompt contains an explicit auto-apply signal (`자동 적용` / `확인 없이 적용` / `그대로 적용`) AND all classified changes are MECH, skip the chat pause and proceed directly to Stage D. Print a one-line summary instead: `[auto-apply] {N} mech changes 적용 중...`. If any SEM/STRUCT exists, ignore the signal and fall back to chat-pause as usual.
 
 **`--review-only` mode exception**: print Stage C output, then end. No Stage D.
 
@@ -147,7 +157,7 @@ Parse the user's reply, then:
    - Insert NEW entry at top (newest first), below the header:
      ```
      ## v{N} — {YYYY-MM-DD HH:MM} — {prompt 요약 ≤80자}
-     - Mode: {Quick chat-loop | Quick auto | Memo}
+     - Mode: {Quick chat-loop | Quick auto-applied | Memo}
      - Prompt: "{prompt verbatim, ≤200자 trim}"
      - Reason: {1-2줄}
      - Files touched:
@@ -194,23 +204,29 @@ Parse the user's reply, then:
 ## Examples
 
 ```
-# Default — chat-loop with diff preview
-/autopilot-refine speech-enhancement-trends "General Restoration과 Universal SE는 혼용 개념이라 task family를 통합"
-# (skill discovers files, shows diff, ends turn)
+# Default — chat-loop with diff preview. Artifact inferred from prompt.
+/autopilot-refine "speech-enhancement-trends에서 General Restoration과 Universal SE를 task family로 통합"
+# (skill fuzzy-matches "speech-enhancement-trends" → research artifact, shows diff, ends turn)
 # user replies: "all"
 # → applies, snapshots to versions/v1/, writes CHANGELOG v2 entry
 
-# Auto mode — mechanical changes apply without confirm
-/autopilot-refine speech-enhancement-trends "Year×Paradigm heatmap의 2026년 칸 채우기" --auto
+# Explicit --refs (no ambiguity)
+/autopilot-refine "task family 표를 4행으로 변경" --refs .claude_reports/documents/2026-05-06_se-seminar-tfrestormer/
+
+# Auto-apply via prompt signal (no separate flag)
+/autopilot-refine "speech-enhancement-trends Year×Paradigm heatmap의 2026년 칸 채우기. 확인 없이 자동 적용."
 
 # Review only — no edits
-/autopilot-refine speech-enhancement-trends "최신 카드 5편이 분류표에 누락됐는지 검토" --review-only
+/autopilot-refine "최신 카드 5편이 분류표에 누락됐는지 검토" --refs speech-enhancement-trends --review-only
 
 # Memo mode — fall back to file-memo for deferred review
-/autopilot-refine 2026-05-06_se-seminar-tfrestormer --memo .../review_memo.md
+/autopilot-refine --memo .../review_memo.md --refs 2026-05-06_se-seminar-tfrestormer
 
-# Doc artifact (auto-detected from path)
-/autopilot-refine 2026-05-06_se-seminar-tfrestormer "Slide 4 task family 표를 4행으로 변경"
+# Doc artifact (auto-detected from prompt keyword)
+/autopilot-refine "se-seminar-tfrestormer draft Slide 4 task family 표를 4행으로 변경"
+
+# Higher QA — pre-apply reviewer pass
+/autopilot-refine "se-seminar-tfrestormer 결론 챕터 wording 다듬기" --qa standard
 ```
 
 ## When NOT to use
