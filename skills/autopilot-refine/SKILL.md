@@ -1,23 +1,42 @@
 ---
-name: quick-refine
-description: Prompt-driven artifact refinement for research and doc artifacts (NOT code). Auto-discovers the artifact's file structure, plans edits from a one-line prompt, shows a diff preview in chat, and on user confirm applies edits with versioning + CHANGELOG logging. Optional `--memo <file>` falls back to file-memo style for deferred reviews. Lightweight by default; memo path is opt-in.
-argument-hint: "<artifact_dir_or_topic> \"<prompt>\" [--auto | --review-only | --memo <file>]"
+name: autopilot-refine
+description: Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: auto-discovers the artifact's file structure, plans edits from a one-line prompt, shows a diff preview in chat, and on user confirm applies edits with versioning + CHANGELOG logging. Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough for multi-round review or fact-check. Optional `--memo <file>` falls back to file-memo style for deferred reviews.
+argument-hint: "<artifact_dir_or_topic> \"<prompt>\" [--qa quick|light|standard|thorough] [--auto | --review-only | --memo <file>]"
 ---
+
+## Position in autopilot family
+
+`autopilot-refine` is the **post-creation iteration** counterpart to the creation pipelines:
+- `autopilot-research` / `autopilot-code` / `autopilot-doc` create artifacts (forward direction).
+- `autopilot-refine` reads and updates existing artifacts (reverse direction).
+
+Naming consistency: same `--qa quick|light|standard|thorough` flag as the rest of the family, but with `quick` as the **default** (because the skill targets routine, scoped edits — not full re-creation).
 
 ## Scope
 
 - **Targets**: `.claude_reports/research/*` and `.claude_reports/documents/*`
 - **NOT for**: `.claude_reports/plans/*` (code) — use `/refine-plan`, `/execute-plan`, or `/autopilot-code` instead. Code changes need test-based verification, not diff review.
-- Why this skill exists: the existing `refine-doc` / `refine-plan` workflow is file-memo only, which is too heavy for routine prompt-driven edits. `quick-refine` is the lightweight default; memo style is reduced to an opt-in fallback.
+- Why this skill exists: the existing `refine-doc` / `refine-plan` workflow is file-memo only, which is too heavy for routine prompt-driven edits. `autopilot-refine` is the lightweight default; memo style is reduced to an opt-in fallback.
 
-## Argument Forms
+## --qa <level> (default: quick)
+
+| Level | Behavior |
+|---|---|
+| **quick** (default) | Single-pass: investigate → diff preview → apply. No internal review loop on proposed changes. Same semantics as the `--qa quick` mode in autopilot-research/code/doc. |
+| **light** | Adds a 1× quality reviewer (sonnet) pass on the proposed diff before showing it. Catches obvious regressions but stays fast. |
+| **standard** | Adds 1× quality reviewer (opus) + 1× fact-checker (sonnet, parallel) on the proposed diff. Cards/refs verbatim 대조 for research; strategy alignment for doc. |
+| **thorough** | 2× quality reviewers (opus, parallel) + 1× fact-checker. Use for high-stakes refines (final-version paper draft, public-facing report). |
+
+Higher levels add a pre-apply review pass on the planned diff — they do NOT add post-apply review (that's not what this skill is for; use `/refine-doc` if you want full memo-style review cycles).
+
+## Mode Forms (orthogonal to --qa)
 
 | Form | Behavior |
 |---|---|
-| `quick-refine <a> "<p>"` | **Default**: investigate → diff preview → user confirm → apply + version + log |
-| `quick-refine <a> "<p>" --auto` | Auto-apply MECH changes; pause only on SEM. Skips confirmation when all proposals are mechanical. |
-| `quick-refine <a> "<p>" --review-only` | Investigate + diff preview. No edits, no version, no log. |
-| `quick-refine <a> --memo <file>` | Read memo file as proposal source (compat with refine-doc memo style). Apply same as default. |
+| `autopilot-refine <a> "<p>"` | **Default**: investigate → diff preview → user confirm → apply + version + log |
+| `autopilot-refine <a> "<p>" --auto` | Auto-apply MECH changes; pause only on SEM. Skips confirmation when all proposals are mechanical. |
+| `autopilot-refine <a> "<p>" --review-only` | Investigate + diff preview. No edits, no version, no log. |
+| `autopilot-refine <a> --memo <file>` | Read memo file as proposal source (compat with refine-doc memo style). Apply same as default. |
 
 ## Artifact Resolution
 
@@ -61,7 +80,7 @@ Reason internally in English. All user-facing output (chat diffs, CHANGELOG entr
 5. **If STRUCT detected** → halt before Stage C. Recommend the user run a heavier flow:
    - Research: `/autopilot-research --from analyze` (full re-analysis)
    - Doc: `/refine-doc <name>` (memo-based deferred) or `/autopilot-doc --from strategy`
-   Do NOT proceed with quick-refine.
+   Do NOT proceed with autopilot-refine.
 
 ### Stage C — Diff preview (chat)
 
@@ -149,7 +168,7 @@ Parse the user's reply, then:
    • CHANGELOG: {artifact_dir}/CHANGELOG.md
    {if downstream sync needed:}
    ⚠ Downstream sync 필요:
-     /quick-refine {dependent_path} "CHANGELOG v{N} 반영"
+     /autopilot-refine {dependent_path} "CHANGELOG v{N} 반영"
    ```
 
 ### Stage E — Memo mode (`--memo <file>`)
@@ -167,7 +186,7 @@ Parse the user's reply, then:
 - **Versioning is mandatory** when applying — every apply increments version + creates snapshot. Only `--review-only` skips this (because it doesn't apply).
 - **Cards = primary source for research** — for taxonomy/definition/coverage prompts, always re-read `cards/*.md` and cite in reasoning.
 - **Don't auto-rename historical citations** — paper titles, baseline names as published, specific challenge names. List these in Stage C as "intentionally untouched" if relevant.
-- **Cross-artifact ripple is announced, not auto-propagated** — if a research change affects a downstream doc artifact, surface this in CHANGELOG's `Downstream sync needed` field. The user invokes `/quick-refine` again on the doc; this skill never auto-cascades.
+- **Cross-artifact ripple is announced, not auto-propagated** — if a research change affects a downstream doc artifact, surface this in CHANGELOG's `Downstream sync needed` field. The user invokes `/autopilot-refine` again on the doc; this skill never auto-cascades.
 - **STRUCT escape hatch** — if changes look structural, halt with a recommendation; don't try to handle structural rewrites in this skill.
 
 ---
@@ -176,22 +195,22 @@ Parse the user's reply, then:
 
 ```
 # Default — chat-loop with diff preview
-/quick-refine speech-enhancement-trends "General Restoration과 Universal SE는 혼용 개념이라 task family를 통합"
+/autopilot-refine speech-enhancement-trends "General Restoration과 Universal SE는 혼용 개념이라 task family를 통합"
 # (skill discovers files, shows diff, ends turn)
 # user replies: "all"
 # → applies, snapshots to versions/v1/, writes CHANGELOG v2 entry
 
 # Auto mode — mechanical changes apply without confirm
-/quick-refine speech-enhancement-trends "Year×Paradigm heatmap의 2026년 칸 채우기" --auto
+/autopilot-refine speech-enhancement-trends "Year×Paradigm heatmap의 2026년 칸 채우기" --auto
 
 # Review only — no edits
-/quick-refine speech-enhancement-trends "최신 카드 5편이 분류표에 누락됐는지 검토" --review-only
+/autopilot-refine speech-enhancement-trends "최신 카드 5편이 분류표에 누락됐는지 검토" --review-only
 
 # Memo mode — fall back to file-memo for deferred review
-/quick-refine 2026-05-06_se-seminar-tfrestormer --memo .../review_memo.md
+/autopilot-refine 2026-05-06_se-seminar-tfrestormer --memo .../review_memo.md
 
 # Doc artifact (auto-detected from path)
-/quick-refine 2026-05-06_se-seminar-tfrestormer "Slide 4 task family 표를 4행으로 변경"
+/autopilot-refine 2026-05-06_se-seminar-tfrestormer "Slide 4 task family 표를 4행으로 변경"
 ```
 
 ## When NOT to use
@@ -204,6 +223,6 @@ Parse the user's reply, then:
 ## Post-Apply Checklist
 
 After successful apply, suggest to user:
-1. If `Downstream sync needed: Yes` → run `/quick-refine <downstream> "CHANGELOG v{N} 반영"` for each dependent artifact.
-2. Optionally `git add -A && git commit -m "quick-refine: {prompt summary}"` if artifact is under git.
+1. If `Downstream sync needed: Yes` → run `/autopilot-refine <downstream> "CHANGELOG v{N} 반영"` for each dependent artifact.
+2. Optionally `git add -A && git commit -m "autopilot-refine: {prompt summary}"` if artifact is under git.
 3. Run `/sync-skills` if this SKILL.md was just updated (rare — only when user iterates on the skill itself).

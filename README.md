@@ -1,7 +1,7 @@
 # Claude Setting
 
 > Source: `~/.claude/skills/*/SKILL.md` + `~/.claude/agents/*.md`
-> 마지막 sync: 2026-05-07 KST (`/sync-skills` 자동) — 직접 편집 금지. (latest: --qa quick mode 추가)
+> 마지막 sync: 2026-05-07 KST (`/sync-skills` 자동) — 직접 편집 금지. (latest: quick-refine → autopilot-refine 리네임 + 워크플로우 양방향)
 > Notion 대문: [Agents/Skills](https://www.notion.so/34987c2bb75380d68df4d6ce4d469bff) (본 README와 동일 콘텐츠)
 > Notion 운영 가이드: [`notion_guide.md`](notion_guide.md) (페이지 타입 템플릿 + workspace 구조)
 
@@ -16,6 +16,7 @@ flowchart LR
     R["autopilot-research<br/>(외부에서 새 조사)"]
     C["autopilot-code"]
     D["autopilot-doc"]
+    REF["autopilot-refine<br/>(사후 수정, research/doc)"]
     OUT[("📦 .claude_reports/")]
     AP --> C
     ARP --> C
@@ -25,11 +26,12 @@ flowchart LR
     C --> OUT
     D --> OUT
     R --> OUT
+    OUT <--> REF
 ```
 
 세 가지 자료 수집 스킬(`analyze-project`, `analyze-papers`, `autopilot-research`)은 같은 레벨 — 손에 든 자료(코드/논문)가 이미 있는지(`analyze-*`) vs 외부에서 새로 조사해야 하는지(`autopilot-research`)에 따라 선택. 그 결과를 `autopilot-code` / `autopilot-doc`이 참조해 코드 변경·문서 생성을 수행.
 
-> **산출물 사후 수정**: research/doc 산출물의 routine 정정·refine은 `/quick-refine <artifact> "<prompt>"` (prompt-driven, 자동 파일 체계 파악, diff preview, 버전 + CHANGELOG). file-memo 기반 `/refine-doc`은 deferred review가 필요할 때만 opt-in. code 산출물은 `/refine-plan` / `/autopilot-code` 사용.
+> **산출물 사후 수정**: research/doc 산출물의 routine 정정·refine은 `/autopilot-refine <artifact> "<prompt>"` (prompt-driven, 자동 파일 체계 파악, diff preview, 버전 + CHANGELOG, 기본 `--qa quick`). file-memo 기반 `/refine-doc`은 deferred review가 필요할 때만 opt-in. code 산출물은 `/refine-plan` / `/autopilot-code` 사용.
 
 ---
 
@@ -112,7 +114,7 @@ flowchart LR
 | **노션 페이지·DB 갱신, 실험 결과 로깅** | 메인 컨텍스트에서 Notion MCP 도구 직접 호출 ([`notion_guide.md`](notion_guide.md) 참조) | sub-agent X (MCP 도구 접근 제약) |
 | 특정 paywall 논문 1편 fetch | `Agent(탐색팀)` | autopilot-research 안 돌리고 단발성 |
 | 단계별 테스트만 실행 | `/run-test <plan>` skill | autopilot-code 전체 X |
-| **이미 만든 research/doc 산출물의 prompt 기반 정정** | `/quick-refine <artifact> "<prompt>"` skill | refine-doc memo 안 쓰고 chat에서 diff confirm |
+| **이미 만든 research/doc 산출물의 prompt 기반 정정** | `/autopilot-refine <artifact> "<prompt>"` skill | refine-doc memo 안 쓰고 chat에서 diff confirm |
 
 **원칙**: agent 단독 호출은 **plan/log 산출물이 남지 않으므로** 그때그때만 쓰고, 추적이 필요한 작업은 autopilot으로. 기획팀은 직접 호출 거의 X — `/init-plan` 사용.
 
@@ -127,17 +129,17 @@ flowchart LR
 | `autopilot-research` | 분야 조사 — mode별 보고서 (academic 9 / technology 7 / market 5) | `--mode academic/technology/market` · `--depth shallow/medium/deep` · `--qa quick/light/standard/thorough` · `--from search/analyze/report` · `--no-clarify` |
 | `autopilot-code` | 코드 dev/audit/debug | `--mode dev/audit/debug` · `--qa quick/light/standard/thorough/adversarial` · `--from plan/refine/execute/test/report` · `--user-refine` |
 | `autopilot-doc` | 문서 strategy + draft (markdown) | `--mode rebuttal/write/review/report/proposal/presentation` · `--refs <dir>` · `--format-ref <path>` (universal — review 필수, 나머지 mode는 권장; 자동 탐색 fallback) · `--qa quick/light/standard/thorough` · `--from analyze/strategy/strategy-refine/draft/draft-refine/finalize` · `--user-refine` · `--no-clarify` |
-| `quick-refine` | 이미 만든 research/doc 산출물 prompt 기반 사후 수정 (auto-discover 파일 체계 → diff preview → 적용 + 버전 + CHANGELOG). code 제외. | `<artifact_dir or topic> "<prompt>"` · `--auto` (MECH 자동 적용) · `--review-only` (검수만) · `--memo <file>` (memo fallback) |
+| `autopilot-refine` | autopilot family — research/doc 산출물 prompt 기반 사후 수정 (auto-discover 파일 체계 → diff preview → 적용 + 버전 + CHANGELOG). code 제외. | `<artifact_dir or topic> "<prompt>"` · `--qa quick(default)/light/standard/thorough` · `--auto` (MECH 자동 적용) · `--review-only` (검수만) · `--memo <file>` (memo fallback) |
 | `sync-skills` | 본 README + 노션 대시보드 동기화 | `--check` · `--readme-only` · `--notion-only` · `--force` |
 
-> sub-skill (`init-plan`, `refine-plan`, `init-doc-strategy`, `refine-doc`, `execute-plan`, `run-test`, `final-report`)은 autopilot 내부에서 자동 호출 — 직접 사용은 pause 재개 시점에만. `quick-refine`은 sub-skill이 아니라 사용자 직접 호출용 top-level skill.
+> sub-skill (`init-plan`, `refine-plan`, `init-doc-strategy`, `refine-doc`, `execute-plan`, `run-test`, `final-report`)은 autopilot 내부에서 자동 호출 — 직접 사용은 pause 재개 시점에만. `autopilot-refine`은 autopilot family의 4번째 멤버 (사후 수정 전용 top-level skill).
 
 ### 핵심 옵션 4가지
 
 - **`--user-refine`** (autopilot-code dev / autopilot-doc) — 연구팀 메모 직후 pause. 같은 문서에 `<!-- memo: ... -->`를 직접 추가한 뒤 출력된 `--from <stage>` 명령으로 재개.
 - **`--from <stage>`** — pause 또는 중간 실패 후 특정 단계부터 재개. stage 이름은 위 표.
 - **`--qa quick/light/standard/thorough/adversarial`** — 리뷰 강도.
-  - `quick` (NEW): **fastest path** — refine 단계 전부 skip + QA review loop **1라운드** 강제 종료 (issue 잔존 시에도 unresolved.md / 미해결 이슈 섹션에만 기록 후 통과). autopilot-code는 test-failure 시 retry도 skip. `--user-refine`은 silently ignored. autopilot 종료 후 `/quick-refine`으로 따로 사후 수정 권장.
+  - `quick` (NEW): **fastest path** — refine 단계 전부 skip + QA review loop **1라운드** 강제 종료 (issue 잔존 시에도 unresolved.md / 미해결 이슈 섹션에만 기록 후 통과). autopilot-code는 test-failure 시 retry도 skip. `--user-refine`은 silently ignored. autopilot 종료 후 `/autopilot-refine`으로 따로 사후 수정 권장. (`autopilot-refine`의 default qa도 quick.)
   - `light`: quality reviewer 1× (sonnet) 단독.
   - `standard`+: doc/research 파이프라인은 quality reviewer (opus) **+ fact-checker (sonnet, parallel)** — fact-checker는 cards/PDFs verbatim 대조로 venue/year/metric/citation 검증을 narrow하게 수행. autopilot-code는 fact-checker 없음.
   - `thorough`: doc은 quality 2× parallel + fact-checker 1× / research도 동일 / code는 quality 2× parallel.
