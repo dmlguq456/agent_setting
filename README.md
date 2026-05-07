@@ -1,13 +1,15 @@
 # Claude Setting
 
 > Source: `~/.claude/skills/*/SKILL.md` + `~/.claude/agents/*.md`
-> 마지막 sync: 2026-05-07 KST (`/sync-skills` 자동) — 직접 편집 금지. (latest: 워크플로우 다이어그램 — analyze-* 도 `.claude_reports/`로 화살표, write/read(--refs) 시각 분리)
+> 마지막 sync: 2026-05-07 KST (`/sync-skills` 자동) — 직접 편집 금지. (latest: 워크플로우를 2개 다이어그램으로 분리 — skill 흐름 + 산출물 I/O)
 > Notion 대문: [Agents/Skills](https://www.notion.so/34987c2bb75380d68df4d6ce4d469bff) (본 README와 동일 콘텐츠)
 > Notion 운영 가이드: [`notion_guide.md`](notion_guide.md) (페이지 타입 템플릿 + workspace 구조)
 
 ---
 
 ## 📊 워크플로우
+
+### Skill 호출 흐름 (어떤 skill이 어떤 skill에 자료를 넘기나)
 
 ```mermaid
 flowchart LR
@@ -16,21 +18,40 @@ flowchart LR
     R["autopilot-research<br/>(외부에서 새 조사)"]
     C["autopilot-code"]
     D["autopilot-doc"]
-    REF["autopilot-refine<br/>(사후 수정, research/doc)"]
+    REF["autopilot-refine<br/>(R/D 산출물 사후 수정)"]
+    AP --> C
+    ARP --> C
+    ARP --> D
+    R --> C
+    R --> D
+    R -.-> REF
+    D -.-> REF
+```
+
+세 가지 자료 수집 스킬(`analyze-project`, `analyze-papers`, `autopilot-research`)은 같은 레벨 — 손에 든 자료(코드/논문)가 이미 있는지(`analyze-*`) vs 외부에서 새로 조사해야 하는지(`autopilot-research`)에 따라 선택. 그 결과를 `autopilot-code` / `autopilot-doc`이 참조해 코드 변경·문서 생성을 수행. autopilot-refine은 research/doc 산출물에 대한 사후 정정 루프(점선).
+
+### 산출물 I/O (`.claude_reports/` 관점)
+
+```mermaid
+flowchart LR
+    subgraph IN["자료 수집"]
+        AP["analyze-project"]
+        ARP["analyze-papers"]
+        R["autopilot-research"]
+    end
+    subgraph PROD["산출"]
+        C["autopilot-code"]
+        D["autopilot-doc"]
+    end
+    REF["autopilot-refine"]
     OUT[("📦 .claude_reports/")]
-    AP --> OUT
-    ARP --> OUT
-    R --> OUT
-    OUT -. --refs .-> C
-    OUT -. --refs .-> D
-    C --> OUT
-    D --> OUT
+    IN --> OUT
+    OUT -- --refs --> PROD
+    PROD --> OUT
     OUT <--> REF
 ```
 
-> 화살표 의미: 실선(`→`) = 산출물을 `.claude_reports/`에 _쓰는_ 흐름. 점선(`-. --refs .->`) = `.claude_reports/`의 기존 산출물을 후속 skill이 _읽는_ 흐름 (`--refs <dir>`로 전달). 양방향(`↔`) = read+write (`autopilot-refine`만 해당).
-
-세 가지 자료 수집 스킬(`analyze-project`, `analyze-papers`, `autopilot-research`)은 같은 레벨 — 손에 든 자료(코드/논문)가 이미 있는지(`analyze-*`) vs 외부에서 새로 조사해야 하는지(`autopilot-research`)에 따라 선택. 그 결과를 `autopilot-code` / `autopilot-doc`이 참조해 코드 변경·문서 생성을 수행.
+> 모든 skill 산출물은 `.claude_reports/` 하위 5개 폴더에 누적 (`docs_code/`, `docs_paper/`, `research/`, `documents/`, `plans/`). 자료 수집 결과는 산출 단계의 `--refs`로 전달. autopilot-refine만 read+write 양방향.
 
 > **산출물 사후 수정**: research/doc 산출물의 routine 정정·refine은 `/autopilot-refine "<prompt>" [--refs <artifact_dir>]` (prompt-driven, 자동 파일 체계 파악, diff preview, 버전 + CHANGELOG, 기본 `--qa quick`). `--refs` 생략 시 prompt 키워드로 fuzzy match. file-memo 기반 `/refine-doc`은 deferred review가 필요할 때만 opt-in. code 산출물은 `/refine-plan` / `/autopilot-code` 사용.
 
