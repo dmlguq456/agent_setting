@@ -1,7 +1,7 @@
 ---
 name: autopilot-research
 description: "Research survey pipeline — multi-mode investigation (academic / technology / market). Mode-specific search sources and report templates. Field intelligence only; no PPT/paper drafts. Hand off to autopilot-doc (writing/slides) or autopilot-code (build) for actual document/code creation."
-argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--refs <folder>] [--qa light|standard|thorough] [--no-clarify] [--from search|analyze|report]"
+argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--refs <folder>] [--qa quick|light|standard|thorough] [--no-clarify] [--from search|analyze|report]"
 ---
 
 ## Language Rule
@@ -14,7 +14,7 @@ Parse `$ARGUMENTS` for optional flags:
 - **--mode**: `academic` (default) | `technology` | `market` — investigation type (see Modes below)
 - **--depth**: `shallow` | `medium` (default) | `deep`
 - **--refs \<folder\>**: path to local reference PDFs (user must specify, no default)
-- **--qa**: `light` | `standard` (default) | `thorough` — override QA intensity for report QA loop. Standard+ runs a parallel **fact-checker** (sonnet) alongside quality reviewer(s) for cards verbatim 대조 (citation/venue/year/metric verification).
+- **--qa**: `quick` | `light` | `standard` (default) | `thorough` — override QA intensity for report QA loop. Standard+ runs a parallel **fact-checker** (sonnet) alongside quality reviewer(s) for cards verbatim 대조 (citation/venue/year/metric verification). `quick`은 review loop를 1라운드로 강제 종료하는 fastest path — 1× 품질관리팀(sonnet) 단일 패스 후 🔴 잔존 시에도 재호출 없이 unresolved.md만 기록하고 종료. fact-checker 비활성, refine-style re-invoke 비활성.
 - **--from**: `search` | `analyze` | `report` — resume the pipeline at a specific stage (see Resume below)
 - **--no-clarify**: skip Step 0 Scope Clarification (force-run with current query as-is)
 
@@ -587,18 +587,19 @@ Agent(subagent_type="연구팀"):
    Return file paths + 3-5 line Korean summary."
 ```
 
-#### Step 4b: QA Loop (max 2 rounds)
+#### Step 4b: QA Loop (max 2 rounds; quick = 1 round)
 QA level: `--qa` flag if provided, else auto-detect (<=10 papers: light, 11-25: standard, >25 or deep: thorough).
 
 **Two reviewer roles run in parallel** at standard+:
 - **Quality reviewer(s)**: coverage / no-fabrication / progressive disclosure / actionable roadmap
 - **Fact-checker** (NEW): cards/ verbatim 대조 — reports에 인용된 venue/year/metric/lineage가 source cards와 일치하는지 narrow 검증
 
-| Level | Quality reviewer | Fact-checker (parallel) |
-|---|---|---|
-| **light** | 1× 품질관리팀 (sonnet) | _skip_ (quality reviewer covers basic spot-checks) |
-| **standard** | 1× 품질관리팀 (opus) | **1× 품질관리팀 fact-check (sonnet)** |
-| **thorough** | 2× 품질관리팀 parallel (opus, completeness + accuracy) | **1× 품질관리팀 fact-check (sonnet)** |
+| Level | Quality reviewer | Fact-checker (parallel) | Max rounds |
+|---|---|---|---|
+| **quick** | 1× 품질관리팀 (sonnet), spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
+| **light** | 1× 품질관리팀 (sonnet) | _skip_ (quality reviewer covers basic spot-checks) | 2 |
+| **standard** | 1× 품질관리팀 (opus) | **1× 품질관리팀 fact-check (sonnet)** | 2 |
+| **thorough** | 2× 품질관리팀 parallel (opus, completeness + accuracy) | **1× 품질관리팀 fact-check (sonnet)** | 2 |
 
 **Why Sonnet for fact-checker**: cards verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 Sonnet으로 충분. 비용 효율적.
 
@@ -637,6 +638,7 @@ Loop:
      Return ONLY path + one-line verdict."
 
   No 🔴 from any reviewer → exit.
+  qa_level == quick → after round 1, write unresolved.md if any 🔴 remain (tag fact-check residuals as [FACT-RESIDUAL]), exit. NEVER re-invoke 연구팀.
   🔴 from quality + round < 2 → re-invoke 연구팀 with quality findings.
   🔴 from fact-checker + round < 2 → re-invoke 연구팀 with mandatory ref-grounding (re-read named cards).
   🔴 from both + round < 2 → re-invoke 연구팀 with combined findings.

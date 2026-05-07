@@ -1,7 +1,7 @@
 ---
 name: refine-doc
 description: Reflect user memos/review feedback in a document strategy or draft. Versioned output (`*_v1.md`, `*_v2.md`, ...) with auto-managed CHANGELOG block at top. Mandatory ref-grounding per memo (re-read source; override memo if it conflicts with source).
-argument-hint: "<strategy or draft name or path>"
+argument-hint: "<strategy or draft name or path> [--qa quick|light|standard|thorough]"
 ---
 
 ## Document Resolution
@@ -118,15 +118,16 @@ Auto-detect from sections changed. Two reviewer roles run **in parallel** at Sta
 - **Quality reviewer**: narrative arc / cohesion / audience fit / strategy alignment
 - **Fact-checker** (NEW): cards/PDFs verbatim 대조, venue/year/metric/lineage/classification 검증
 
-| Level | Condition | Quality reviewer | Fact-checker (parallel) |
-|---|---|---|---|
-| **Light** | ≤3 sections | 1× 품질관리팀 (`model: "sonnet"`) | _skip_ (quality reviewer covers basic spot-checks) |
-| **Standard** | 4+ sections | 1× 품질관리팀 (default opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** |
-| **Thorough** | Major overhaul or new evidence | 2× 품질관리팀 in parallel (opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** |
+| Level | Condition | Quality reviewer | Fact-checker (parallel) | Max rounds |
+|---|---|---|---|---|
+| **Quick** | (manual via `--qa quick` only — autopilot skips refine entirely in quick mode) | 1× 품질관리팀 (`model: "sonnet"`), spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
+| **Light** | ≤3 sections | 1× 품질관리팀 (`model: "sonnet"`) | _skip_ (quality reviewer covers basic spot-checks) | 2 |
+| **Standard** | 4+ sections | 1× 품질관리팀 (default opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** | 2 |
+| **Thorough** | Major overhaul or new evidence | 2× 품질관리팀 in parallel (opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** | 2 |
 
 **Why Sonnet for fact-checker**: card verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 Sonnet으로 충분하고, 비용 효율적이다.
 
-## Post-Refine Review Loop (max 2 rounds)
+## Post-Refine Review Loop (max 2 rounds; quick = 1 round)
 After 연구팀 returns:
 1. **Resolve log dir**: artifact root (e.g., `.claude_reports/documents/2026-03-25_foo/`).
    - For strategy refinement: `mkdir -p {log_dir}/strategy_reviews`
@@ -170,6 +171,7 @@ After 연구팀 returns:
 
 3. **Check verdict (both reviewers):**
    - **No 🔴 from either**: Report to user (both verdicts inline).
+   - **qa_level == quick**: After round 1, exit regardless of 🔴. Add 🔴 issues to `## 미해결 이슈`. Report to user.
    - **🔴 from quality reviewer**: Re-invoke 연구팀 with quality findings. Max 2 rounds.
    - **🔴 from fact-checker**: Re-invoke 연구팀 with **mandatory ref-grounding** instruction (re-read the named cards/PDFs). Max 2 rounds.
    - **🔴 from both**: Re-invoke 연구팀 with combined findings. Max 2 rounds.

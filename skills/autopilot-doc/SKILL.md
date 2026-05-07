@@ -1,7 +1,7 @@
 ---
 name: autopilot-doc
 description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. 6 modes produce both strategy AND draft (markdown only). All modes accept `--format-ref <path>` (universal flag — venue/journal/lab-specific guidelines, template, sample, or rebuttal-format file). No built-in presets (venues/years/journals differ). When omitted, agent auto-discovers a format spec inside `--refs` by filename keywords (guidelines/template/format/cfp/instructions/...); review mode hard-fails if neither is found, other modes warn-and-fallback to a generic layout. presentation mode produces slide-by-slide markdown; PPTX export is NOT supported (use PowerPoint directly). `--refs` accepts an autopilot-research artifact_dir to chain pipelines."
-argument-hint: "<task description> [--mode rebuttal|write|review|report|proposal|presentation] [--refs <folder>] [--format-ref <path>] [--qa light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
+argument-hint: "<task description> [--mode rebuttal|write|review|report|proposal|presentation] [--refs <folder>] [--format-ref <path>] [--qa quick|light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 ---
 
 ## Language Rule
@@ -35,12 +35,14 @@ Parse `$ARGUMENTS` for mode, flags, and task description:
 - If omitted: ask the user for the folder path. Do NOT assume a default location.
 
 **`--qa <level>`** — override QA intensity for the pipeline:
+- `--qa quick` → fastest path: **skip Step 3 (strategy refine) and Step 5 (draft refine) entirely** + run a single sonnet quality reviewer pass at each review point with **no re-invoke** even if memos are added (memos are saved as audit trail, refine-doc is NOT invoked). `--user-refine` is silently ignored. fact-checker disabled.
 - `--qa light` → 연구팀 review uses sonnet, single-pass review
 - `--qa standard` → 연구팀 quality reviewer (opus) **+ 연구팀 fact-checker (sonnet, parallel)** — fact-checker performs verbatim cards/PDFs 대조
 - `--qa thorough` → 2× 연구팀 quality reviewers in parallel (opus, domain expert + methodology) **+ 연구팀 fact-checker (sonnet, parallel)**, cross-validation against all reference materials **(default)**
 - If omitted, defaults to `thorough`.
 - **Why a separate fact-checker**: quality reviewers focus on narrative/coverage/logic; fact-checker narrowly verifies citation/venue/year/metric/lineage against ground-truth sources (cards/PDFs). Sonnet is sufficient because fact-check is a matching task, not creative judgment.
 - **Propagation**: Pass `--qa <level>` to init-doc-strategy and refine-doc as an argument flag.
+- **`quick` mode interactions**: On `--from strategy-refine` or `--from draft-refine`, if frontmatter `qa_level == quick`, abort with: "qa_level=quick에서는 refine 단계가 스킵됩니다. --qa <level>을 다른 값으로 명시해 재개하세요."
 
 **`--user-refine`** (boolean flag) — pause at refine points so the user can add their own `<!-- memo: ... -->` comments on top of 연구팀's memos before refine-doc runs.
 
@@ -254,6 +256,10 @@ Invoke Skill: `init-doc-strategy` with args: `<mode> --refs <folder> --output <a
 
 2. Invoke reviewers based on `--qa` level. **Quality reviewer(s) and fact-checker run in parallel** at standard+:
 
+   **`quick`** — Single 연구팀 quality reviewer (sonnet, spot-check only):
+   - One-pass review. Memos may be added but refine-doc is NOT invoked at Step 3 (see step 3 below).
+   - Review log: `{strategy_folder}/strategy_reviews/research_review.md`
+
    **`light`** — Single 연구팀 quality reviewer (sonnet):
    - One-pass review focusing on critical issues only.
    - Review log: `{strategy_folder}/strategy_reviews/research_review.md`
@@ -309,6 +315,7 @@ Invoke Skill: `init-doc-strategy` with args: `<mode> --refs <folder> --output <a
    ```
 
 3. If memos were added:
+   - **`qa_level == quick` short-circuit**: do NOT invoke refine-doc. Memos remain in the strategy as audit trail (no edits applied). Log to pipeline_summary Decision Points: `Step 3 | strategy refine skipped (qa=quick) | auto | proceed to Step 4`. Skip to Step 4.
    - **`--user-refine` pause**: if the flag is set, update `pipeline_state.yaml` (`user_refine: true`, `paused_at_stage: strategy-refine`), print the resume command (`/autopilot-doc --mode {mode} --from strategy-refine {strategy_folder}`), and exit. Do NOT invoke refine-doc.
    - Otherwise: invoke Skill `refine-doc` with the Korean strategy path as args.
 4. If no memos: Skip to Step 4. (When resumed via `--from strategy-refine`, the orchestrator skips the 연구팀 review and runs refine-doc directly using the pre-existing memos.)
@@ -490,6 +497,10 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
 
 2. Invoke reviewers based on `--qa` level (same scaling as Step 3). **Quality reviewer(s) and fact-checker run in parallel** at standard+:
 
+   **`quick`** — Single 연구팀 quality reviewer (sonnet, spot-check only):
+   - One-pass review. Memos may be added but refine-doc is NOT invoked at Step 5 (see step 3 below).
+   - Review log: `{strategy_folder}/draft_reviews/draft_review.md`
+
    **`light`** — Single 연구팀 quality reviewer (sonnet):
    - One-pass review focusing on critical issues only.
    - Review log: `{strategy_folder}/draft_reviews/draft_review.md`
@@ -546,6 +557,7 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
    ```
 
 3. If memos were added:
+   - **`qa_level == quick` short-circuit**: do NOT invoke refine-doc. Memos remain in the draft as audit trail (no edits applied). Log to pipeline_summary Decision Points: `Step 5 | draft refine skipped (qa=quick) | auto | proceed to Step 6`. Skip to Step 6.
    - **`--user-refine` pause**: if the flag is set, update `pipeline_state.yaml` (`user_refine: true`, `paused_at_stage: draft-refine`), print the resume command (`/autopilot-doc --mode {mode} --from draft-refine {strategy_folder}`), and exit. Do NOT invoke refine-doc.
    - Otherwise: invoke Skill `refine-doc` with the Korean draft path as args.
    - Note: refine-doc handles draft paths (draft/draft.md ↔ draft/draft_ko.md) via auto-detection.

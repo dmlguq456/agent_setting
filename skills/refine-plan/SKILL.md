@@ -1,7 +1,7 @@
 ---
 name: refine-plan
 description: Reflect user memos/comments in a plan and update it (do NOT implement)
-argument-hint: "<plan name or path> [--qa light|standard|thorough|adversarial]"
+argument-hint: "<plan name or path> [--qa quick|light|standard|thorough|adversarial]"
 ---
 
 ## Plan Resolution (canonical — keep in sync with execute-plan, run-test, final-report, refine-plan, autopilot-code)
@@ -49,6 +49,7 @@ Otherwise, auto-detect from the refinement scope:
 
 | Level | Auto-detect condition | Action |
 |---|---|---|
+| **Quick** | (manual via `--qa quick` only — autopilot skips refine entirely in quick mode, so this only matters on direct invocation) | 1× 품질관리팀 (`model: "sonnet"`), single pass, **max 1 round** (no fix-round on 🔴 — record as 미해결 이슈 and exit) |
 | **Light** | ≤3 steps changed, mechanical | 1× 품질관리팀 (`model: "sonnet"`) |
 | **Standard** | 4-10 steps changed, logic changes | 1× 품질관리팀 (default opus) |
 | **Thorough** | >10 steps changed, architectural | 2× 품질관리팀 in parallel: A correctness (opus), B completeness (sonnet) |
@@ -63,7 +64,7 @@ Otherwise, auto-detect from the refinement scope:
 - Agent B: "Focus on **completeness**: Are downstream impacts of the changes reflected? Any missing steps?"
 - Each writes to a separate review file. All 🔴 issues from ANY agent must be addressed.
 
-## Post-Refine Review Loop (max 3 rounds)
+## Post-Refine Review Loop (max 3 rounds; quick = 1 round)
 Log dir = task root folder (parent of `plan/`). Run `mkdir -p {log_dir}/plan_reviews` before invoking QA.
 
 After 기획팀 returns, assess QA level (changed step count, nature) per the table above, then:
@@ -72,6 +73,7 @@ After 기획팀 returns, assess QA level (changed step count, nature) per the ta
 
 **Check verdict:**
 - **No 🔴**: Loop ends. Report changed steps and review results to user.
+- **qa_level == quick AND 🔴 found**: Loop ends after round 1. Add 🔴 issues to plan's **리스크** section under `## 미해결 이슈` (no fix-round). Report to user.
 - **🔴 found**: Re-invoke 기획팀 — "Refine mode. Fix QA issues. Plan: {plan_path}, QA review: {log_dir}/plan_reviews/refine_round_{N}.md. Re-read sources if needed. Return changed steps + summary." Then re-invoke QA. Repeat until clear or max rounds.
 - **After 3 rounds with 🔴 remaining**: Add to plan's **리스크** section under `## 미해결 이슈`. Report to user: changed steps, resolved issues, unresolved issues and why.
 

@@ -1,7 +1,7 @@
 ---
 name: autopilot-code
 description: "Unified code pipeline — dev/audit/debug modes. Orchestrates init-plan → refine-plan → execute-plan → run-test → final-report with mode-specific behavior."
-argument-hint: "--mode dev|audit|debug <task/plan/error description> [--from <step>] [--qa light|standard|thorough|adversarial] [--user-refine]"
+argument-hint: "--mode dev|audit|debug <task/plan/error description> [--from <step>] [--qa quick|light|standard|thorough|adversarial] [--user-refine]"
 ---
 
 ## Language Rule
@@ -23,18 +23,20 @@ argument-hint: "--mode dev|audit|debug <task/plan/error description> [--from <st
 - If --from is used with debug mode: warn "debug 모드에서는 --from이 지원되지 않습니다. 진단부터 시작합니다." and ignore.
 
 ### --qa <level>
+- `--qa quick` → fastest path: **skip refine-plan entirely** (Step 2) + **skip test-failure retry loop** (no rollback-and-retry on test fail) + cap init-plan internal QA review at **1 round** (no iteration even if reviewer flags 🔴). Sub-skills receive `--qa quick` and honor it: init-plan runs 1 reviewer (sonnet) and exits.
 - `--qa light` → sonnet, single reviewer
 - `--qa standard` → opus, single reviewer (default)
 - `--qa thorough` → opus, parallel reviewers
 - `--qa adversarial` → opus, parallel reviewers + Codex adversarial-review.
 - Mode-specific validation:
-  - dev: accepts light|standard|thorough|adversarial (4 levels)
-  - audit: accepts light|standard|thorough|adversarial (4 levels)
-  - debug: accepts light|standard|thorough only. If adversarial passed → downgrade to thorough + warn.
+  - dev: accepts quick|light|standard|thorough|adversarial (5 levels)
+  - audit: accepts quick|light|standard|thorough|adversarial (5 levels)
+  - debug: accepts quick|light|standard|thorough only. If adversarial passed → downgrade to thorough + warn.
 - If the value is not one of the accepted levels for the mode, treat as `standard` and warn the user: "유효하지 않은 QA level '{value}'. standard로 기본 설정합니다."
 - If omitted, each skill auto-detects level based on scope.
 - **Propagation**: Pass `--qa <level>` to init-plan and refine-plan as a flag. For execute-plan, run-test, and final-report, write `qa_level: <level>` into the English plan's frontmatter at Step 1 or Step 3 initialization.
 - **Mid-pipeline switching**: When starting from Step 2+ AND `--qa` is explicitly passed, update `qa_level` in the existing plan's YAML frontmatter before invoking the sub-skill. Explicit CLI flag always overrides frontmatter. If `--qa` is NOT passed on resume, preserve the existing frontmatter value (or default to `standard` if absent).
+- **`quick` mode interactions**: `--user-refine` is silently ignored when `--qa quick` (refine is skipped, so the pause point doesn't exist). On `--from refine`, if frontmatter `qa_level == quick`, abort with: "qa_level=quick에서는 refine 단계가 스킵됩니다. --qa <level>을 다른 값으로 명시해 재개하세요."
 
 ### --user-refine (boolean flag)
 When present, the orchestrator **pauses** at refine points so the user can add their own `<!-- memo: ... -->` comments on top of 연구팀's memos before refine-plan runs.
@@ -116,6 +118,9 @@ Invoke Skill: `init-plan` with the task description as args.
 Wait for completion before proceeding.
 
 ### Step 2: refine-plan (연구팀 as user proxy)
+**`--qa quick` short-circuit**: if `qa_level == quick`, skip the entire 연구팀 review + refine-plan invocation. Log to pipeline_summary Decision Points: `Step 2 | refine skipped (qa=quick) | auto | proceed to Step 3`. Proceed directly to Step 3.
+
+Otherwise:
 1. Resolve plan paths from init-plan output: `en_plan_path`, `ko_plan_path`, `log_dir`.
 2. Invoke **연구팀** (research-team) agent: "Review this plan as user proxy. Korean plan: {ko_plan_path}. English plan: {en_plan_path}. Review log: {log_dir}/plan_reviews/research_review.md."
 3. If memos added:
@@ -143,8 +148,10 @@ Wait for completion before proceeding.
 - Total theoretical maximum: 2 (first run-test) + 2 (second run-test after retry) = 4 hotfix attempts
 - At each run-test invocation, the hotfix counter resets.
 
-#### Test Failure → Retry Loop (max 1 pipeline-level retry)
-If run-test reports failure (after its internal hotfix loop of 2 attempts), auto-retry once:
+#### Test Failure → Retry Loop (max 1 pipeline-level retry; quick = no retry)
+**`--qa quick` short-circuit**: if `qa_level == quick` and run-test reports failure, do NOT retry. Skip the retry loop below and go directly to Step 5 (final-report) with status reflecting the test failure. Log to pipeline_summary Decision Points: `Step 4 | test failure, no retry (qa=quick) | auto | proceed to final-report`.
+
+Otherwise (qa_level != quick), if run-test reports failure (after its internal hotfix loop of 2 attempts), auto-retry once:
 
 1. **Collect failure context**: Note the test failure verdict from run-test's return. Failure details are in `test_logs/test_report.md` and `test_reviews/` — these will be consumed by refine-plan's agent, not by the orchestrator.
 

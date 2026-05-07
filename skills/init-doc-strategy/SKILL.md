@@ -1,7 +1,7 @@
 ---
 name: init-doc-strategy
 description: Create an initial document strategy (rebuttal/write/review/report/proposal/presentation) based on analyzed reference materials
-argument-hint: "<mode> --refs <folder> --output <artifact-dir> <task description>"
+argument-hint: "<mode> --refs <folder> --output <artifact-dir> [--qa quick|light|standard|thorough] <task description>"
 ---
 
 ## Language Rule
@@ -13,6 +13,7 @@ Parse `$ARGUMENTS`:
 - **mode**: first word — `rebuttal | write | review | report | proposal | presentation`
 - **--refs <folder>**: path to reference materials
 - **--output <dir>**: artifact output directory (`.claude_reports/documents/{date}_{name}/`)
+- **--qa <level>**: `quick | light | standard | thorough` — overrides auto-detect (autopilot-doc propagates this)
 - Remaining text: task description / context
 
 ## Pre-Check
@@ -189,15 +190,16 @@ Auto-detect from strategy scope. Two reviewer roles run **in parallel** at Stand
 - **Quality reviewer**: completeness / logical soundness / venue norms / reviewer-coverage (rebuttal)
 - **Fact-checker** (NEW): refs/cards/PDFs verbatim 대조, citation/venue/metric/year 검증
 
-| Level | Condition | Quality reviewer | Fact-checker (parallel) |
-|---|---|---|---|
-| **Light** | review/presentation mode, or report with ≤3 refs | 1× 품질관리팀 (`model: "sonnet"`) | _skip_ |
-| **Standard** | write/report/proposal mode, or rebuttal with ≤3 reviewers | 1× 품질관리팀 (default opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** |
-| **Thorough** | rebuttal with ≥4 reviewers, or report/proposal with ≥10 refs | 2× 품질관리팀 in parallel (opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** |
+| Level | Condition | Quality reviewer | Fact-checker (parallel) | Max rounds |
+|---|---|---|---|---|
+| **Quick** | (manual via `--qa quick` only) | 1× 품질관리팀 (`model: "sonnet"`), spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
+| **Light** | review/presentation mode, or report with ≤3 refs | 1× 품질관리팀 (`model: "sonnet"`) | _skip_ | 2 |
+| **Standard** | write/report/proposal mode, or rebuttal with ≤3 reviewers | 1× 품질관리팀 (default opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** | 2 |
+| **Thorough** | rebuttal with ≥4 reviewers, or report/proposal with ≥10 refs | 2× 품질관리팀 in parallel (opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** | 2 |
 
 **Why Sonnet for fact-checker**: refs/cards verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 Sonnet으로 충분, 비용 효율적.
 
-## Post-Strategy Review Loop (max 2 revision rounds)
+## Post-Strategy Review Loop (max 2 revision rounds; quick = 1 round)
 The log directory is the artifact root folder (parent of `strategy/`).
 - `mkdir -p {log_dir}/strategy_reviews` before invoking QA.
 
@@ -240,6 +242,7 @@ After the 연구팀 agent returns:
 
 2. **Check verdict (both reviewers):**
    - **No 🔴 from either**: proceed to Korean Version Generation.
+   - **qa_level == quick**: after round 1, exit regardless of 🔴. Add 🔴 issues to `## 미해결 이슈` section in the strategy. Proceed to Korean Version Generation.
    - **🔴 from quality reviewer**: re-invoke 연구팀 with quality findings (max 2 rounds).
    - **🔴 from fact-checker**: re-invoke 연구팀 with **mandatory ref-grounding** (re-read named cards/PDFs). Max 2 rounds.
    - **🔴 from both**: re-invoke 연구팀 with combined findings.

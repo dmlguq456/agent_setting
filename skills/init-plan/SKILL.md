@@ -1,7 +1,7 @@
 ---
 name: init-plan
 description: Create a detailed implementation plan based on actual codebase
-argument-hint: "<task description> [--qa light|standard|thorough|adversarial]"
+argument-hint: "<task description> [--qa quick|light|standard|thorough|adversarial]"
 ---
 
 > Caller note: planning benefits from `high` or `xhigh` effort; lower effort may miss call sites in cross-file analysis.
@@ -37,10 +37,11 @@ Write the plan files directly. Return ONLY the file paths and a 3-5 line Korean 
 The agent writes the plan file directly; the orchestrator only receives paths and a summary.
 
 ## QA Scaling
-If `$ARGUMENTS` contains `--qa light|standard|thorough|adversarial`, use that level and strip the flag from the task description. Otherwise, auto-detect from the plan's scope. When `qa_level` is set in plan frontmatter, it overrides auto-detect.
+If `$ARGUMENTS` contains `--qa quick|light|standard|thorough|adversarial`, use that level and strip the flag from the task description. Otherwise, auto-detect from the plan's scope. When `qa_level` is set in plan frontmatter, it overrides auto-detect.
 
 | Level | Auto-detect condition | Action |
 |---|---|---|
+| **Quick** | (manual only — never auto-selected) | 1× 품질관리팀 (`model: "sonnet"`), single pass, **max 1 review round** (no iteration even if 🔴 found — 🔴 are recorded as 미해결 이슈 and loop exits) |
 | **Light** | ≤3 steps, mechanical, single-variant | 1× 품질관리팀 (`model: "sonnet"`) |
 | **Standard** | 4-10 steps, logic changes, single module | 1× 품질관리팀 (default opus) |
 | **Thorough** | >10 steps, cross-module/variant, architectural | 2-3× 품질관리팀 in parallel: Agent A correctness (opus), B completeness (sonnet), C risk (opus, optional, >15 steps); each writes `round_{N}_{focus}.md`; all 🔴 issues must be resolved |
@@ -48,13 +49,13 @@ If `$ARGUMENTS` contains `--qa light|standard|thorough|adversarial`, use that le
 
 **Codex availability check**: Before selecting Adversarial, run `codex --version` (suppress stderr). If the command fails or Codex is not authenticated, fall back to Thorough silently. This check is skipped if `--qa adversarial` is explicitly specified (fail loudly instead).
 
-## Post-Plan Review Loop (max 3 revision rounds)
+## Post-Plan Review Loop (max 3 revision rounds; quick = 1 round)
 
 The log directory is the task root folder (parent of `plan/`). Example: `.claude_reports/plans/2026-03-18_task/plan/plan.md` → log dir is `.claude_reports/plans/2026-03-18_task/`. Run `mkdir -p {log_dir}/plan_reviews` before invoking QA.
 
-**Round counting:** Initialize `round = 0`. A round = one plan-team fix → QA review cycle; all parallel Thorough agents count as one round. Increment `round` only when QA is re-invoked after a revision. "max 3 rounds" means 기획팀 is invoked at most 3 times to fix issues.
+**Round counting:** Initialize `round = 0`. A round = one plan-team fix → QA review cycle; all parallel Thorough agents count as one round. Increment `round` only when QA is re-invoked after a revision. "max 3 rounds" means 기획팀 is invoked at most 3 times to fix issues. **`quick` mode**: max rounds = 1 — after the single review pass, exit regardless of 🔴 (record residuals as 미해결 이슈 and skip the fix-round).
 
-**QA level lock:** QA level is determined once at loop start; only upward escalation allowed (no downgrade). If `--qa` was NOT specified, the orchestrator MAY upgrade once (starting round 2) when 🔴 count ≥3 in the one-line verdict (no review file reading needed); round counter does NOT reset. If `--qa` was manually specified, no change allowed.
+**QA level lock:** QA level is determined once at loop start; only upward escalation allowed (no downgrade). If `--qa` was NOT specified, the orchestrator MAY upgrade once (starting round 2) when 🔴 count ≥3 in the one-line verdict (no review file reading needed); round counter does NOT reset. If `--qa` was manually specified, no change allowed. `quick` is never auto-upgraded (user opted in for fastest path).
 
 After the 기획팀 agent returns:
 1. **Assess QA level** from plan scope per the QA Scaling table above.
@@ -62,6 +63,7 @@ After the 기획팀 agent returns:
    - Light: pass `model: 'sonnet'`. Thorough: 2-3 parallel agents with focus suffix and separate output files; pass `model: 'sonnet'` for the B (completeness) agent, default opus for A (correctness) and C (risk). Do NOT read the review file unless relaying verdict to user.
 3. **Check one-line verdict:**
    - **No 🔴**: Loop ends → proceed to Korean Version Generation.
+   - **🔴 found AND qa_level == quick**: Loop ends (no fix-round). Invoke 기획팀: "Refine mode. Add 🔴 issues from {log_dir}/plan_reviews/round_1.md to the plan's 리스크 section under ## 미해결 이슈. Return brief Korean summary." Then proceed to Korean Version Generation.
    - **🔴 found**: Re-invoke 기획팀: "Refine mode. Plan file: {plan_path}. QA review: {log_dir}/plan_reviews/round_{N}.md. Fix 🔴 issues. Return only changed steps + brief Korean summary." Increment `round`, re-invoke 품질관리팀. Repeat until no 🔴 or `round >= 3`.
 4. **If 🔴 remain after `round >= 3`**: Auto-proceed — invoke 기획팀: "Refine mode. Add remaining 🔴 issues to the plan's 리스크 section under ## 미해결 이슈. Return brief Korean summary." Then report to user: plan path, resolved issues, and unresolved issues with reasons.
 
