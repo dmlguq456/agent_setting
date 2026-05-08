@@ -10,7 +10,7 @@
     "skills/autopilot-research": {"sha256": "e20bf3fe89385fe1bad3b266a5e00b50fe6663326cd47e324febcf1921c1efa8", "synced_at": "2026-05-08T13:27:38+09:00"},
     "skills/execute-plan": {"sha256": "5879fd989ac9935d64f2f9fb63bc30d38754860fc81683347f264afd94a74057", "synced_at": "2026-05-07T11:37:44+09:00"},
     "skills/final-report": {"sha256": "311888ab42fd0214d321130dea40b6881263d75171a59e244409d6b4781dde2a", "synced_at": "2026-05-07T11:37:44+09:00"},
-    "skills/init-doc-strategy": {"sha256": "83899e12fe383ec430482c641b091bede84bb1b5590e8699e2348a646670944b", "synced_at": "2026-05-08T00:00:00+09:00"},
+    "skills/init-doc-strategy": {"sha256": "971e956024b917971b5e00a27db15aea42c07bfca327def5ce2e7f81a3c0b439", "synced_at": "2026-05-08T13:27:38+09:00"},
     "skills/init-plan": {"sha256": "240b8022b4f89d0aed7b766f4d616ae729ed5e1426220607bc5d19fb751a421f", "synced_at": "2026-05-07T11:37:44+09:00"},
     "skills/refine-doc": {"sha256": "f76077193d51575c191be32aaac75d216f1abbcf5534efdd63dbc6bd7753b7d8", "synced_at": "2026-05-07T11:37:44+09:00"},
     "skills/refine-plan": {"sha256": "5f1665434b500341ced3983ec2ff41e37e0c68699580d69fc3d4aed4839f2187", "synced_at": "2026-05-07T11:37:44+09:00"},

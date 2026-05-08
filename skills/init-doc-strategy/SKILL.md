@@ -1,7 +1,7 @@
 ---
 name: init-doc-strategy
 description: Create an initial document strategy (rebuttal/write/review/report/proposal/presentation) based on analyzed reference materials
-argument-hint: "<mode> --refs <folder> --output <artifact-dir> [--qa quick|light|standard|thorough] <task description>"
+argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--qa quick|light|standard|thorough] <task description>"
 ---
 
 ## Language Rule
@@ -11,7 +11,7 @@ argument-hint: "<mode> --refs <folder> --output <artifact-dir> [--qa quick|light
 ## Argument Parsing
 Parse `$ARGUMENTS`:
 - **mode**: first word — `rebuttal | write | review | report | proposal | presentation`
-- **--refs <folder>**: path to reference materials
+- **--inputs <comma-separated-paths>**: comma-joined list of pre-discovered input paths (from autopilot-doc Pre-flight Step 2 Input Discovery — typically `analysis_project/{paper,doc}/...` and/or `research/{topic}/`). Each path is an artifact directory containing pre-analyzed materials.
 - **--output <dir>**: artifact output directory (`.claude_reports/documents/{date}_{name}/`)
 - **--qa <level>**: `quick | light | standard | thorough` — overrides auto-detect (autopilot-doc propagates this)
 - Remaining text: task description / context
@@ -32,14 +32,14 @@ Document strategy mode. Create an initial {mode} strategy document.
 Mode: {mode}
 Task: {task description}
 Date: {YYYY-MM-DD}
-Reference materials folder: {refs_folder}
+Pre-discovered input paths (from autopilot-doc): {inputs_paths_list}
 Analysis directory: {output_dir}/analysis/
 Save English strategy to: {output_dir}/strategy/strategy.md
 Target venues (for academic modes): NeurIPS, ICML, ICLR, ICASSP, Interspeech, IEEE/ACM T-ASLP
 
 ## Inputs
 1. Read all analysis files in the analysis directory (material_index.md, reviewer_analysis.md or ref_analysis.md)
-2. Read relevant reference PDFs from the refs folder as needed for deeper understanding
+2. Read pre-analyzed materials from the discovered input paths (each path is a `analysis_project/{paper,doc}/{name}/` or `research/{topic}/` artifact — use the structured analysis files there, NOT external raw PDFs)
 3. Consider venue-specific conventions and expectations (for academic modes: rebuttal/write/review) or domain best practices and industry standards (for professional modes: report/proposal/presentation)
 
 ## Mode-Specific Instructions
@@ -236,7 +236,7 @@ When the strategy includes a slide-by-slide outline (presentation mode Section 4
   - (f) Chapter meta lines ("M장 중 K번째")
 
 ## Quality Requirements
-Every reviewer point must appear in rebuttal strategy (missing a point is a critical error). Severity classification must be justified. All citations must reference actual materials in the refs folder — do NOT fabricate. Strategy must be actionable with specific plans, not vague advice. For academic modes (rebuttal/write/review): apply venue-specific norms (e.g., NeurIPS rebuttal length limits, ICASSP culture). For professional modes (report/proposal/presentation): apply industry best practices relevant to the domain.
+Every reviewer point must appear in rebuttal strategy (missing a point is a critical error). Severity classification must be justified. All citations must reference actual materials in the discovered input paths (analysis_project/{paper,doc}/, research/{topic}/) — do NOT fabricate. Strategy must be actionable with specific plans, not vague advice. For academic modes (rebuttal/write/review): apply venue-specific norms (e.g., NeurIPS rebuttal length limits, ICASSP culture). For professional modes (report/proposal/presentation): apply industry best practices relevant to the domain.
 
 Write the strategy file directly. Return ONLY the file path and a 3-5 line Korean summary of the strategy. Do NOT return the strategy content itself.
 ````
@@ -246,16 +246,16 @@ The agent writes the strategy file directly; the orchestrator only receives path
 ## QA Scaling
 Auto-detect from strategy scope. Two reviewer roles run **in parallel** at Standard+:
 - **Quality reviewer**: completeness / logical soundness / venue norms / reviewer-coverage (rebuttal)
-- **Fact-checker** (NEW): refs/cards/PDFs verbatim 대조, citation/venue/metric/year 검증
+- **Fact-checker** (NEW): in-artifact materials verbatim 대조 (`analysis_project/paper/cards/*.md`, `analysis_project/doc/*/...`, `research/{topic}/cards/*.md`), citation/venue/metric/year 검증
 
 | Level | Condition | Quality reviewer | Fact-checker (parallel) | Max rounds |
 |---|---|---|---|---|
 | **Quick** | (manual via `--qa quick` only) | 1× 품질관리팀 (`model: "sonnet"`), spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
-| **Light** | review/presentation mode, or report with ≤3 refs | 1× 품질관리팀 (`model: "sonnet"`) | _skip_ | 2 |
+| **Light** | review/presentation mode, or report with ≤3 input paths | 1× 품질관리팀 (`model: "sonnet"`) | _skip_ | 2 |
 | **Standard** | write/report/proposal mode, or rebuttal with ≤3 reviewers | 1× 품질관리팀 (default opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** | 2 |
-| **Thorough** | rebuttal with ≥4 reviewers, or report/proposal with ≥10 refs | 2× 품질관리팀 in parallel (opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** | 2 |
+| **Thorough** | rebuttal with ≥4 reviewers, or report/proposal with ≥10 input items (papers + doc materials) | 2× 품질관리팀 in parallel (opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** | 2 |
 
-**Why Sonnet for fact-checker**: refs/cards verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 Sonnet으로 충분, 비용 효율적.
+**Why Sonnet for fact-checker**: in-artifact cards verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 Sonnet으로 충분, 비용 효율적.
 
 ## Post-Strategy Review Loop (max 2 revision rounds; quick = 1 round)
 The log directory is the artifact root folder (parent of `strategy/`).
@@ -277,7 +277,7 @@ After the 연구팀 agent returns:
    **Fact-checker prompt** (sonnet, parallel — Standard/Thorough only):
    ```
    You are a fact-check focused reviewer — NOT narrative quality.
-   Strategy file: [path]. Mode: {mode}. Refs folder: {refs_folder}.
+   Strategy file: [path]. Mode: {mode}. Discovered inputs: {inputs_paths_list}.
 
    For every domain claim in the strategy (citation / model name / venue / year /
    metric / dataset / lineage / classification), open the corresponding ground-truth
