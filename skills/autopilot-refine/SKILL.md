@@ -1,7 +1,7 @@
 ---
 name: autopilot-refine
-description: Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: auto-discovers the artifact's file structure (from `--refs <dir>` or fuzzy-matched from prompt), plans edits, shows a diff preview in chat, and on user confirm applies edits with versioning + integrated history logging in `pipeline_summary.md` (single source of truth — no separate CHANGELOG). Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough for multi-round review or fact-check. Optional `--memo <file>` falls back to file-memo style for deferred reviews.
-argument-hint: "\"<prompt>\" [--refs <artifact_dir>] [--qa quick|light|standard|thorough] [--review-only | --memo <file>]"
+description: Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: target artifact identified via prompt fuzzy match against `.claude_reports/{research,documents}/*`, then auto-discovers the artifact's file structure, plans edits, shows a diff preview in chat, and on user confirm applies edits with versioning + integrated history logging in `pipeline_summary.md` (single source of truth — no separate CHANGELOG). Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough for multi-round review or fact-check. Optional `--memo <file>` falls back to file-memo style for deferred reviews.
+argument-hint: "\"<prompt>\" [--qa quick|light|standard|thorough] [--review-only | --memo <file>]"
 ---
 
 > **산출물 폴더 컨벤션**: [SKILL_OUTPUT_CONVENTION.md](../../SKILL_OUTPUT_CONVENTION.md) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
@@ -26,7 +26,7 @@ Naming consistency: same `--qa quick|light|standard|thorough` flag as the rest o
 |---|---|
 | **quick** (default) | Single-pass: investigate → diff preview → apply. No internal review loop on proposed changes. Same semantics as the `--qa quick` mode in autopilot-research/code/doc. |
 | **light** | Adds a 1× quality reviewer (sonnet) pass on the proposed diff before showing it. Catches obvious regressions but stays fast. |
-| **standard** | Adds 1× quality reviewer (opus) + 1× fact-checker (sonnet, parallel) on the proposed diff. Cards/refs verbatim 대조 for research; strategy alignment for doc. |
+| **standard** | Adds 1× quality reviewer (opus) + 1× fact-checker (sonnet, parallel) on the proposed diff. Verbatim 대조 against in-artifact ground truth — research: `cards/*.md`; doc: `analysis/*.md` + 기존 strategy/draft 본문. 외부 refs PDFs는 재독 안 함. |
 | **thorough** | 2× quality reviewers (opus, parallel) + 1× fact-checker. Use for high-stakes refines (final-version paper draft, public-facing report). |
 
 Higher levels add a pre-apply review pass on the planned diff — they do NOT add post-apply review (that's not what this skill is for; use `/refine-doc` if you want full memo-style review cycles).
@@ -35,31 +35,30 @@ Higher levels add a pre-apply review pass on the planned diff — they do NOT ad
 
 | Form | Behavior |
 |---|---|
-| `autopilot-refine "<p>" [--refs <dir>]` | **Default**: investigate → diff preview → user confirm → apply + version + log |
-| `autopilot-refine "<p>" --review-only [--refs <dir>]` | Investigate + diff preview. No edits, no version, no log. |
-| `autopilot-refine --memo <file> [--refs <dir>]` | Read memo file as proposal source (compat with refine-doc memo style). Apply same as default. |
+| `autopilot-refine "<prompt>"` | **Default**: investigate → diff preview → user confirm → apply + version + log |
+| `autopilot-refine "<prompt>" --review-only` | Investigate + diff preview. No edits, no version, no log. |
+| `autopilot-refine --memo <file> "<prompt or artifact hint>"` | Read memo file as proposal source (compat with refine-doc memo style). Apply same as default. |
+
+> **Target artifact identification**: prompt에 포함된 키워드로 `.claude_reports/{research,documents}/*` fuzzy match. 매치 1 → 사용. 다수 → 사용자에게 list 보여주고 선택 요청. 0 → "어느 산출물? prompt에 명시 부탁" 안내.
 
 > Auto-apply behavior: if the user explicitly writes "확인 없이 적용" / "자동 적용" / "그대로 적용" in the prompt AND all classified changes are MECH (no SEM/STRUCT), the skill may skip the confirm step and apply directly. Otherwise the default chat-pause-and-confirm always applies. (Translation: the prompt itself is the auto-apply signal — no separate flag.)
 
 ## Artifact Resolution
 
-Resolve to artifact root in this priority order:
+Extract candidate keywords from the `<prompt>` (skip stop words; pick noun-ish tokens like artifact names, topic names, dates). Run fuzzy match:
 
-1. **Explicit `--refs <path>`** — use as-is if path exists. Detect type by path:
-   - `.claude_reports/research/*` → **research**
-   - `.claude_reports/documents/*` → **doc**
-   - Other path → error (autopilot-refine targets only research/doc).
+```bash
+ls -d .claude_reports/research/*<keyword>* .claude_reports/documents/*<keyword>* 2>/dev/null
+```
 
-2. **Fuzzy match from `--refs` argument** (if `--refs` is given but the literal path doesn't exist):
-   ```bash
-   ls -d .claude_reports/research/*<refs_arg>* .claude_reports/documents/*<refs_arg>* 2>/dev/null
-   ```
-   1 match → use. Multiple → list and ask. 0 → error.
+- **1 match** → use as artifact root. Detect type by path prefix.
+- **Multiple matches** → list candidates to user, ask which.
+- **0 matches** → ask user to clarify the artifact name in the prompt (e.g., "어느 산출물에 대한 작업인가요? prompt에 식별자(`speech-enhancement-trends`, `2026-05-06_se-seminar-tfrestormer` 같은) 포함 부탁").
 
-3. **Fuzzy match from `<prompt>` keywords** (if `--refs` is omitted): extract candidate keywords from the prompt (skip stop words; pick noun-ish tokens) and run the same fuzzy search.
-   - 1 match → use it. Multiple → list and ask. 0 → ask user to provide `--refs <dir>`.
-
-If `--refs` is provided AND prompt keywords also match a different artifact, `--refs` always wins (explicit beats inferred).
+Detect type by path prefix:
+- `.claude_reports/research/*` → **research** type
+- `.claude_reports/documents/*` → **doc** type
+- 그 외 (e.g., user typed an absolute path that's not a research/documents artifact) → error: "autopilot-refine은 research/documents 산출물 전용".
 
 ## Language Rule
 
@@ -211,7 +210,7 @@ Parse the user's reply, then:
    • Updated: {artifact_dir}/pipeline_summary.md (버전 히스토리 + v{N} 변경 사항)
    {if downstream sync needed:}
    ⚠ Downstream sync 필요:
-     /autopilot-refine "{dependent} pipeline_summary v{N} 반영" --refs {dependent_path}
+     /autopilot-refine "{dependent_artifact_name} pipeline_summary v{N} 반영"
    ```
 
 ### Stage E — Memo mode (`--memo <file>`)
@@ -243,17 +242,14 @@ Parse the user's reply, then:
 # user replies: "all"
 # → applies, snapshots to _internal/versions/v1/, updates pipeline_summary.md with v2 row + 변경 사항 section
 
-# Explicit --refs (no ambiguity)
-/autopilot-refine "task family 표를 4행으로 변경" --refs .claude_reports/documents/2026-05-06_se-seminar-tfrestormer/
-
 # Auto-apply via prompt signal (no separate flag)
 /autopilot-refine "speech-enhancement-trends Year×Paradigm heatmap의 2026년 칸 채우기. 확인 없이 자동 적용."
 
-# Review only — no edits
-/autopilot-refine "최신 카드 5편이 분류표에 누락됐는지 검토" --refs speech-enhancement-trends --review-only
+# Review only — no edits (artifact 식별자는 prompt에 포함)
+/autopilot-refine "speech-enhancement-trends에서 최신 카드 5편이 분류표에 누락됐는지 검토" --review-only
 
 # Memo mode — fall back to file-memo for deferred review
-/autopilot-refine --memo .../review_memo.md --refs 2026-05-06_se-seminar-tfrestormer
+/autopilot-refine --memo .../review_memo.md "2026-05-06_se-seminar-tfrestormer 메모 반영"
 
 # Doc artifact (auto-detected from prompt keyword)
 /autopilot-refine "se-seminar-tfrestormer draft Slide 4 task family 표를 4행으로 변경"
@@ -272,6 +268,6 @@ Parse the user's reply, then:
 ## Post-Apply Checklist
 
 After successful apply, suggest to user:
-1. If `Downstream sync needed: Yes` → run `/autopilot-refine "{dependent} pipeline_summary v{N} 반영" --refs <dependent_path>` for each dependent artifact.
+1. If `Downstream sync needed: Yes` → run `/autopilot-refine "{dependent_artifact_name} pipeline_summary v{N} 반영"` for each dependent artifact.
 2. Optionally `git add -A && git commit -m "autopilot-refine: {prompt summary}"` if artifact is under git.
 3. Run `/sync-skills` if this SKILL.md was just updated (rare — only when user iterates on the skill itself).

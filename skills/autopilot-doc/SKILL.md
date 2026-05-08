@@ -1,7 +1,7 @@
 ---
 name: autopilot-doc
-description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. 6 modes produce both strategy AND draft (markdown only). All modes accept `--format-ref <path>` (universal flag — venue/journal/lab-specific guidelines, template, sample, or rebuttal-format file). No built-in presets (venues/years/journals differ). When omitted, agent auto-discovers a format spec inside `--refs` by filename keywords (guidelines/template/format/cfp/instructions/...); review mode hard-fails if neither is found, other modes warn-and-fallback to a generic layout. presentation mode produces slide-by-slide markdown; PPTX export is NOT supported (use PowerPoint directly). `--refs` accepts an autopilot-research artifact_dir to chain pipelines."
-argument-hint: "<task description> [--mode rebuttal|write|review|report|proposal|presentation] [--refs <folder>] [--format-ref <path>] [--qa quick|light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
+description: "Document strategy & draft pipeline — analyze-refs → strategy → review → draft → draft-review. 6 modes produce both strategy AND draft (markdown only). Inputs are discovered implicitly from .claude_reports/{analysis_project,research}/* (no --refs flag — pre-process external materials via /analyze-project --mode {paper|doc} first). All modes accept `--format-ref <path>` (universal flag — venue/journal/lab-specific guidelines, template, sample, or rebuttal-format file). No built-in presets (venues/years/journals differ). When omitted, agent auto-discovers a format spec inside analysis_project/doc/{matching}/formats/; review mode hard-fails if not found, other modes warn-and-fallback to a generic layout. presentation mode produces slide-by-slide markdown; PPTX export is NOT supported (use PowerPoint directly)."
+argument-hint: "<task description> [--mode rebuttal|write|review|report|proposal|presentation] [--qa quick|light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 ---
 
 > **산출물 폴더 컨벤션**: [SKILL_OUTPUT_CONVENTION.md](../../SKILL_OUTPUT_CONVENTION.md) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). reviewer 로그는 `_internal/strategy_reviews/`·`_internal/draft_reviews/`. 버전 스냅샷은 `_internal/versions/v{N}/strategy/`, `v{N}/draft/` (refine-doc의 `_v{N}.md` 형제 패턴은 폐기).
@@ -29,12 +29,37 @@ Parse `$ARGUMENTS` for mode, flags, and task description:
 - 그 외 / 명시적이지 않으면 → `write` (default for paper writing)
 - 추론 결과를 한 줄로 사용자에게 통보 후 진행. 모호하면 Step 0 Scope Clarification에서 확인.
 
-> **Note**: `survey` mode is removed. For 학술/산업/시장 조사, use `/autopilot-research --mode academic|technology|market` first, then chain to `autopilot-doc --mode write` (또는 report/proposal 등) by passing the research artifact_dir as `--refs`.
+> **Note**: `survey` mode is removed. For 학술/산업/시장 조사, use `/autopilot-research --mode academic|technology|market` first → autopilot-doc은 `research/{topic}/` artifact를 implicit으로 자동 발견.
 
-**`--refs <folder>`** — path to reference materials folder:
-- Contains: PDFs, reviewer comments (txt/md), original paper, conference guidelines, data files, etc.
-- **Required** for all modes (rebuttal, write, review, report, proposal, presentation).
-- If omitted: ask the user for the folder path. Do NOT assume a default location.
+**Input Discovery (implicit, no `--refs` flag)** — `--refs <folder>`는 family에서 제거됨. 입력은 `.claude_reports/` 하위 영속 산출물에서 자동 발견:
+
+- **`analysis_project/paper/`** — 보유 논문 분석 (autopilot-doc의 모든 모드에서 활용 가능)
+- **`analysis_project/doc/{matching}/`** — doc-creation 자료 (reviewer comments, format templates, samples). `{matching}`은 task description 키워드와 fuzzy match.
+- **`research/{topic}/`** — 외부 분야 조사 (autopilot-research가 만든 artifact). 마찬가지로 fuzzy match.
+- **`analysis_project/code/`** — 코드 컨텍스트 (proposal/report 모드에서 종종 인용)
+
+mode별 _필수_ 입력:
+| mode | 필수 input | 권장 input |
+|---|---|---|
+| `rebuttal` | `analysis_project/doc/{matching}/reviewers/` (reviewer comments) | `analysis_project/paper/` (원 paper 분석), `analysis_project/doc/{matching}/formats/` (rebuttal guideline) |
+| `review` | `analysis_project/doc/{matching}/formats/` (review form) | `analysis_project/paper/` (대상 paper 분석) |
+| `write` | (없음) | `analysis_project/paper/`, `analysis_project/doc/{matching}/formats/` (venue paper template), `research/{topic}/` (분야 컨텍스트) |
+| `proposal`, `report`, `presentation` | (없음) | mode 적합한 자료들 (위 패턴 응용) |
+
+매치 0: 사용자에게 안내 — "필요 자료를 `analyze-project --mode {paper|doc} <folder>` 로 먼저 사전 분석하세요" + 진행 여부 확인.
+매치 다수: 후보 list 보여주고 선택 요청.
+
+> **Implementation note (sub-skill / agent prompt 처리)**: 이하 본 SKILL.md 본문에서 `{refs_folder}`, `--refs`, `Refs folder:` 같은 표현은 _legacy 표기_이며 다음과 같이 해석·치환:
+> - 단일 `{refs_folder}` 변수 → `discovered_inputs` list를 newline-join한 문자열 (또는 콤마 join). Agent prompt에서 "Refs folder: {refs_folder}" 식 표현은 "Discovered inputs:\n  - <path1>\n  - <path2>\n  ..." 로 expand.
+> - sub-skill 호출 (init-doc-strategy, refine-doc) → `--inputs <comma-separated paths>` 인수로 전달 (Step 2/3/5 참조).
+> - 이전 Decision Defaults / Safety Rules의 `--refs` 분기 → 모두 dead. Pre-flight Step 2 (Input Discovery)가 매치 0/다수 처리.
+>
+> Mode별 _자동 발견 입력 카테고리_ (Pre-flight에서 결정):
+> - rebuttal: `analysis_project/doc/{matching}/reviewers/` + `analysis_project/paper/` (선택) + `analysis_project/doc/{matching}/formats/` (선택)
+> - review: `analysis_project/doc/{matching}/formats/` (REQUIRED) + `analysis_project/paper/` (선택)
+> - write/proposal/report/presentation: 사용 가능한 `analysis_project/paper/` + `research/{topic}/` + `analysis_project/doc/{matching}/formats/` 조합
+>
+> 본 SKILL.md를 점진적으로 정리하면서 legacy `{refs_folder}` 표현이 새 expand 형태로 대체될 예정.
 
 **`--qa <level>`** — override QA intensity for the pipeline:
 - `--qa quick` → fastest path: **skip Step 3 (strategy refine) and Step 5 (draft refine) entirely** + run a single sonnet quality reviewer pass at each review point with **no re-invoke** even if memos are added (memos are saved as audit trail, refine-doc is NOT invoked). `--user-refine` is silently ignored. fact-checker disabled.
@@ -68,7 +93,7 @@ If 연구팀 added no memos, the pause is skipped (nothing to refine).
 - `draft-refine` — Step 5 wrapper: 연구팀 review + (user memos if `--user-refine`) + refine-doc on the draft
 - `finalize` — Step 6 (Pipeline Summary)
 
-When resuming with `--from`, the positional argument should be either the artifact directory path or a fuzzy-matchable short name. The orchestrator resolves it via the same fuzzy lookup used by Plan Resolution in autopilot-code: `ls -d .claude_reports/documents/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `mode`, `qa_level`, `refs_folder`, `user_refine`. CLI flags override state file; missing flags inherit from state.
+When resuming with `--from`, the positional argument should be either the artifact directory path or a fuzzy-matchable short name. The orchestrator resolves it via the same fuzzy lookup used by Plan Resolution in autopilot-code: `ls -d .claude_reports/documents/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `mode`, `qa_level`, `discovered_inputs` (list), `user_refine`. CLI flags override state file; missing flags inherit from state.
 
 **`--format-ref <path>`** — universal flag. Path to a venue/journal/lab-specific format reference document. Available in **every mode**.
 
@@ -89,7 +114,7 @@ When resuming with `--from`, the positional argument should be either the artifa
 **Resolution order** (every mode):
 
 1. **Explicit `--format-ref <path>`** — agent reads it as authoritative format spec.
-2. **Auto-discovery in `--refs`** — if `--format-ref` is omitted, agent searches `--refs` for files whose name contains keywords: `guidelines`, `template`, `format`, `cfp`, `instructions`, `submission`, `rebuttal_format`, `review_form`, `style_guide`. Acceptable extensions same as above.
+2. **Auto-discovery in `analysis_project/doc/{matching}/formats/`** — if `--format-ref` is omitted, agent looks at `analysis_project/doc/{matching}/formats/*` (where `{matching}` was discovered by Input Discovery). The format extraction was already performed by `analyze-project --mode doc`. Acceptable extensions same as above.
    - 1 candidate found → use it, log to user: "format-ref auto-discovered: {path}".
    - 2+ candidates → ask user at Step 0 to pick one (or pass `--format-ref <path>` to specify).
    - 0 candidates → mode-specific fallback (next step).
@@ -97,7 +122,7 @@ When resuming with `--from`, the positional argument should be either the artifa
 
 | Mode | Behavior when no format-ref available |
 |---|---|
-| `review` | **Hard fail at pre-flight** — review mode cannot proceed without a venue review form. Abort with: "review mode requires either --format-ref <path> or a guideline file in --refs (keyword: guidelines/template/format/...). Venues differ year-to-year — no built-in presets." |
+| `review` | **Hard fail at pre-flight** — review mode cannot proceed without a venue review form. Abort with: "review mode requires either `--format-ref <path>` or a format file in `analysis_project/doc/{matching}/formats/` (run `/analyze-project --mode doc <folder>` first). Venues differ year-to-year — no built-in presets." |
 | `rebuttal` | **Pre-flight prompt** — ask user: (a) provide --format-ref now, or (b) declare format constraints inline in `<task description>` (length limit, sub-type, scope), or (c) opt into generic conference rebuttal layout (warn quality drop). |
 | `proposal` | Warn-and-fallback to generic proposal layout. Recommend `--format-ref <funding_body_template>` for NRF/NSF/internal grants. |
 | `write` | Warn-and-fallback to generic paper/article layout. Strong warning if target venue is academic — Suggest: "venue paper template (e.g. NeurIPS LaTeX style) significantly improves draft quality". |
@@ -121,7 +146,7 @@ The pipeline runs with sane defaults and only pauses on genuinely ambiguous or d
 | No reviewer comments for rebuttal | **Always ask** at pre-flight. |
 | Strategy review → memos added | Auto-refine (or pause for user-memo if `--user-refine` is set). |
 | Draft review → memos added | Auto-refine (or pause for user-memo if `--user-refine` is set). |
-| `--format-ref` missing | Auto-discover in `--refs` (filename keywords). If none, mode-specific fallback (review hard-fails; rebuttal prompts user; write/proposal/report/presentation warn-and-fallback to generic layout). |
+| `--format-ref` missing | Auto-discover in `analysis_project/doc/{matching}/formats/` (already classified by `analyze-project --mode doc`). If none, mode-specific fallback (review hard-fails; rebuttal prompts user; write/proposal/report/presentation warn-and-fallback to generic layout). |
 | Reviewer guidelines absent in refs (review mode) | Use built-in spec only; inform user. |
 | Scope Clarification triggered | Ask 2-4 questions; auto-proceed if `--no-clarify`. |
 
@@ -136,7 +161,9 @@ pipeline: autopilot-doc
 mode: presentation
 qa_level: thorough
 user_refine: true
-refs_folder: <path>
+discovered_inputs:                    # list of paths discovered by Pre-flight Step 2 (Input Discovery)
+  - <path-to-analysis_project/paper-or-doc-or-research-artifact>
+  - ...
 format_ref: <path or null>          # universal — explicit flag, auto-discovered, or null after fallback
 format_ref_source: <explicit|auto-discovered|user-supplied-at-prompt|fallback-generic>
 clarified_intent: <string or null>    # captured by Step 0 Scope Clarification, used on resume
@@ -147,8 +174,18 @@ artifact_dir: <abs path>
 
 CLI flags on resume override stored values. After the pause is consumed (refine completes), clear `paused_at_stage` and update `last_completed_stage`.
 
-## Refs Folder Convention
-The `--refs` folder is user-specified (no default). May contain PDFs, txt/md reviewer comments, notes, data files, subdirectories. On first invocation, list contents and confirm with the user. For rebuttal mode, warn if no reviewer comments are found.
+## Input Sources Convention
+
+External materials must be pre-processed into `.claude_reports/` _before_ invoking autopilot-doc. The pipeline reads from these persistent sources only — no `--refs` flag, no ad-hoc folder paths.
+
+| Input type | Pre-processing skill | Output location |
+|---|---|---|
+| Academic papers (PDFs) | `/analyze-project --mode paper` | `analysis_project/paper/` |
+| Reviewer comments / format templates / past samples / mixed doc materials | `/analyze-project --mode doc <folder>` | `analysis_project/doc/{name}/` |
+| External field research | `/autopilot-research <topic>` | `research/{topic}/` |
+| Codebase context (proposal/report 모드에서 언급용) | `/analyze-project --mode code` | `analysis_project/code/` |
+
+On invocation, autopilot-doc runs Input Discovery (Pre-flight Step 2) — fuzzy match task description vs above persistent sources — and gathers `discovered_inputs` paths to pass to sub-skills. For rebuttal mode, fails with clear message if no reviewer materials match.
 
 ## Artifact Structure
 All outputs go to:
@@ -180,14 +217,18 @@ Validate mode-specific required inputs. If any check fails, **abort immediately*
 
 **Universal checks** (all modes):
 1. Mode is one of the 6 supported modes (rebuttal / write / review / report / proposal / presentation) — explicit `--mode` 또는 auto-inference. Otherwise abort: "Unknown mode: {mode}. Supported: ...".
-2. `--refs` is provided AND folder exists. Otherwise abort: "--refs <folder> is required and was not found at {path}."
+2. **Input Discovery** (replacing old `--refs` check): run fuzzy match on task description vs `.claude_reports/analysis_project/{paper,doc}/*` and `.claude_reports/research/*`. Per mode:
+   - rebuttal: at least one match in `analysis_project/doc/*/reviewers/` REQUIRED. If none → abort with: "rebuttal mode needs reviewer comments. Run `/analyze-project --mode doc <folder>` first to materialize them."
+   - review: at least one match in `analysis_project/doc/*/formats/` REQUIRED. If none → abort with similar message for review form.
+   - write/proposal/report/presentation: no hard requirement, but warn if no matches at all and ask user to confirm.
+   - Stash discovered paths into orchestrator context as `{discovered_inputs}` for downstream Steps.
 
 **Mode-specific checks**:
 
 **Universal `--format-ref` resolution** (runs before mode-specific checks):
 
 1. If `--format-ref <path>` explicit → validate path exists + extension in {`.md`,`.txt`,`.pdf`,`.html`,`.docx`}. Otherwise abort.
-2. If omitted → auto-discover in `--refs` by filename keywords (`guidelines`, `template`, `format`, `cfp`, `instructions`, `submission`, `rebuttal_format`, `review_form`, `style_guide`):
+2. If omitted → auto-discover in `analysis_project/doc/{matching}/formats/` (already classified by `analyze-project --mode doc`):
    - 1 candidate → use it; log "format-ref auto-discovered: {path}".
    - 2+ candidates → ask user at Step 0 which to use, or to pass `--format-ref` explicitly.
    - 0 candidates → mode-specific fallback below.
@@ -195,7 +236,7 @@ Validate mode-specific required inputs. If any check fails, **abort immediately*
 **Mode-specific pre-flight** (after universal resolution):
 
 - **review mode** — format-ref is REQUIRED.
-  - If still no format-ref after auto-discovery → **abort** with: "review mode requires either --format-ref <path> or a guideline file in --refs (keyword: guidelines/template/format/...). Venues differ year-to-year — no built-in presets. Acceptable file types: .md/.txt/.pdf/.html/.docx."
+  - If still no format-ref after auto-discovery → **abort** with: "review mode requires either `--format-ref <path>` or a format file in `analysis_project/doc/{matching}/formats/` (run `/analyze-project --mode doc <folder>` first to extract). Venues differ year-to-year — no built-in presets. Acceptable file types: .md/.txt/.pdf/.html/.docx."
 
 - **rebuttal mode** — two checks:
   - refs folder must contain at least one reviewer-comment file (txt/md/pdf with reviewer-style content detected by filename or content scan). If none found, ask the user before proceeding.
@@ -252,7 +293,7 @@ Read and catalog all materials from refs folder.
 4. Present the analysis summary briefly and auto-proceed to Step 2 — no confirmation required.
 
 ### Step 2: init-doc-strategy
-Invoke Skill: `init-doc-strategy` with args: `<mode> --refs <folder> --output <artifact-dir> <task description>`. Wait for completion.
+Invoke Skill: `init-doc-strategy` with args: `<mode> --inputs <comma-separated-discovered-paths> --output <artifact-dir> <task description>`. `<discovered-paths>`는 Pre-flight Step 2 (Input Discovery)가 발견한 `analysis_project/{paper,doc}/...`, `research/{topic}/` 경로 list (콤마 join). 매치 0이면 Pre-flight에서 이미 abort/warn 처리됨. Wait for completion.
 
 ### Step 3: Strategy Review (연구팀 as domain expert)
 1. Resolve strategy paths:
@@ -346,6 +387,18 @@ Save Korean draft to: {strategy_folder}/draft/draft_ko.md
 
 Read the strategy document and all analysis files. Generate a complete first draft following the mode-specific structure below. The draft should be a working document ready for user editing — not a summary of the strategy.
 
+## Tone Propagation (modes: report / proposal / presentation)
+
+**FIRST**, read the strategy frontmatter `tone` field:
+- If `tone: administrative` — apply administrative-tone constraints to the **entire draft** (slide titles, bullets, conclusion, visual placeholders). Specifically:
+  - **AVOID**: marketing superlatives ("genuinely novel", "sole occupied axis", "global rights asset", "world-first", "compelling contribution"), "X strengths summary" framing, "core message" + "Hook → Call-to-Action" arc, heroic asks ("Approve to secure as global asset"), decision-options box (approve/conditional/hold), animated narrative voice
+  - **PREFER**: simple fact lists, status updates, neutral reporter stance, calm review request ("검토 부탁드립니다" / "kindly request the committee's review")
+  - Conclusion slide: replace "Key messages + Call-to-Action" with **"Presentation summary + review request"**; remove "X strengths" enumeration in favor of plain fact recap
+  - Speaker stance: **neutral reporter, not advocate**. The speaker (often a student or researcher) is reporting upward to decision-makers, not pitching to peers
+- If `tone: default` or absent — existing pitch-deck patterns apply (Hook, Core Message, Story Arc, Call-to-Action, persuasive framing)
+
+This propagation is mandatory: a `tone: administrative` strategy with a heroic-pitch draft is a critical mismatch and must be reworked.
+
 ## Mode-Specific Draft Structure
 
 ### rebuttal
@@ -397,7 +450,7 @@ Adapt the section structure to the file at `--format-ref` (read it first). No bu
 
 1. Read the file at `--format-ref` first. Extract: required sections, rating axes (with score scales 1-N and meanings), length limits, tone/style guidelines, submission portal layout.
 2. If the format-ref is a venue's reviewer guidelines PDF/doc, prefer its exact section names verbatim. If it's a sample review, infer the structure.
-3. Layer any additional reviewer guidelines from `--refs` on top.
+3. Layer any additional reviewer guidelines from `analysis_project/doc/{matching}/formats/` on top.
 4. Produce a draft that satisfies every required section from the format-ref.
 
 **Common patterns** (reference only — the actual structure must come from format-ref, not from these):
@@ -411,6 +464,36 @@ These are starting hints only. Always follow the format-ref file's actual specif
 
 ### presentation
 Generate a **PPT cheatsheet markdown** — single file, optimized for human reading and slide-by-slide copy/paste into PowerPoint. **NOT a pandoc conversion target**. Avoid pandoc-specific syntax (`::: notes`, `:::: {.columns}`, YAML frontmatter for auto-title generation).
+
+**Slide Format Conventions** (mandatory — derived from user feedback to prevent revision loops):
+
+1. **Chapter visualization in slide headers** — every body slide's heading: `## Slide N — [Ch.N 챕터명] (sub.번호) 슬라이드 제목`. Chapter-transition slides marked with `— 시작` / `— start`. Each slide has a `**챕터**: N. 챕터명 (M장 중 K번째)` meta line below the title.
+
+2. **Visual placeholder must include chapter band** — every body slide's `**시각자료**:` block first line: `- **상단 헤더 띠**: "N. 챕터명"` (per Korean industry-academia format-ref). Chapter-transition slides additionally specify "Ch.X와 색상/strength를 다르게 — 챕터 전환 시각 신호".
+
+3. **Concrete visual placeholders** — NO vague terms like "X 카드", "적절한 도식", "comparison chart". Every visual specifies (a) diagram type + (b) component list + (c) layout/color hints. Example: ❌ "학회 위상 카드" → ✅ "NeurIPS/ICLR/ICML 3-row table (h5-index 컬럼 + acceptance-rate 컬럼)".
+
+4. **Table column header clarity** — NO ambiguous headers like "비교 1위" or "vs ours". Use full noun phrases with clear semantic units. If needed, add a 1-line column-meaning footnote above the table.
+
+5. **Foreign-language quote → Korean keyword gloss** (mandatory for non-AI audiences) — every English quote (paper review citation, technical term, model description) gets a Korean appeal-commentary box directly below:
+   ```
+   > "English quote..."
+   > — Source
+
+   📌 **핵심 키워드 — "X"**: 한국어 풀이 1문장 (청중 친화 어필 메시지)
+   ```
+
+6. **Speaker notes default = empty** — do NOT auto-fill speaker notes in the initial draft. Wait for explicit user request as a separate post-polish step. Reason: speaker notes drift with slide-content edits; auto-fill wastes regeneration cost during iterative refinement.
+
+7. **No body-bullet ↔ visual redundancy** — the same fact should NOT appear in both body bullets AND visual placeholder. Body bullets = "what the speaker says"; visual = "what the audience sees at-a-glance". If redundant, simplify one of the two.
+
+8. **Slide-number consistency on insertion/deletion** — when inserting/removing/renumbering a slide, update ALL of the following in the same edit pass:
+   - (a) All subsequent slide numbers (`Slide N+1`, `Slide N+2`, ...)
+   - (b) Contents slide's chapter slide-counts ("Ch.N (M장)")
+   - (c) CHANGELOG entry at file top
+   - (d) Time-budget line in the top-of-file guide
+   - (e) Cross-references in other slides ("Slide M의 ...")
+   - (f) Chapter meta lines ("M장 중 K번째")
 
 **Top-of-file guide** (mandatory header before any slides):
 

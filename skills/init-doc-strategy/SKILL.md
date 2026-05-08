@@ -131,7 +131,7 @@ type: review / status: draft / date: {YYYY-MM-DD}
 ### If mode = report
 ```markdown
 ---
-type: report / status: draft / date: {YYYY-MM-DD}
+type: report / status: draft / date: {YYYY-MM-DD} / tone: {administrative | default}
 ---
 # Report Strategy: {topic}
 ## 1. Objective & Scope — what the report aims to establish, audience, constraints
@@ -146,7 +146,7 @@ type: report / status: draft / date: {YYYY-MM-DD}
 ### If mode = proposal
 ```markdown
 ---
-type: proposal / status: draft / date: {YYYY-MM-DD}
+type: proposal / status: draft / date: {YYYY-MM-DD} / tone: {administrative | default}
 ---
 # Proposal Strategy: {topic}
 ## 1. Problem Statement — clear articulation of the problem and its significance
@@ -164,18 +164,76 @@ type: proposal / status: draft / date: {YYYY-MM-DD}
 
 ```markdown
 ---
-type: presentation / status: draft / date: {YYYY-MM-DD}
+type: presentation / status: draft / date: {YYYY-MM-DD} / tone: {administrative | default}
 ---
 # Presentation Strategy: {topic}
 ## 1. Audience Analysis — who they are, what they know, what they need
-## 2. Core Message — one sentence the audience should remember
-## 3. Story Arc — narrative structure (hook → problem → solution → evidence → call-to-action)
+## 2. Core Message — one sentence the audience should remember (**administrative tone: replace with "Presentation purpose — what the speaker is reporting"; no marketing one-liner**)
+## 3. Story Arc — narrative structure (hook → problem → solution → evidence → call-to-action) (**administrative tone: replace with simple "Information flow — what is presented in what order"; NO Hook / NO Call-to-Action**)
 ## 4. Slide Outline — slide-by-slide plan with key visuals and talking points
 ## 5. Key Visuals Strategy — diagrams, charts, demos to include
 ## 6. Anticipated Questions — likely Q&A and prepared responses
 ## 7. Time Allocation — per-section timing budget
 ## 8. Delivery Notes — tone, pacing, emphasis points
 ```
+
+### Tone Auto-Detection (modes: report / proposal / presentation) — **FIRST step before drafting any of the three above templates**
+
+Infer audience tone from the task description and set `tone:` in the strategy frontmatter. **The detected tone propagates to draft generation in autopilot-doc Step 4** — the draft must respect the same constraints.
+
+| Tone | Detection signals | Style constraints |
+|---|---|---|
+| **administrative** | Task contains Korean keywords "위원회 / 심의 / 사전심의 / 산학협력단 / **정부** / 정부 기관 / 규제 / 검토 요청 / 보고 / 평가단 / 이사회 / 감사 / 사업 보고 / 사후 보고" or English equivalents ("committee / regulatory / **government** / agency review / compliance / board review / pre-screening / audit / status report"); speaker is a student or researcher reporting **upward** to decision-makers (the committee evaluates the speaker; the speaker is NOT pitching to peers or selling). Goal: information presentation + review request, NOT persuasion / sales / investor pitch. | **Plain factual delivery, objective information.** AVOID: marketing superlatives ("genuinely novel", "sole occupied axis", "global rights asset", "world-first"), "X strengths summary" framing, "core message" / "Hook → Call-to-Action" arc, heroic asks ("Approve to secure as global asset"), decision-options box (approve/conditional/hold), animated narrative voice. PREFER: simple fact lists, status updates, calm review request ("검토 부탁드립니다" / "kindly request the committee's review"). Speaker stance: **neutral reporter, not advocate**. |
+| **default** | Otherwise — academic conference talk, internal R&D briefing, industry pitch, sales/marketing presentation, investor IR | Existing pitch-deck patterns apply (Hook, Core Message, Story Arc, Call-to-Action, persuasive framing). |
+
+**Why this matters**: Korean administrative presentations (산학협력단 사전심의, 정부 위원회 보고, 규제 기관 사후 보고 등) follow a fundamentally different convention from English-language pitch decks. Without this guard, default LLM patterns lean toward US/English pitch-deck superlatives ("compelling contribution", "single-axis advantage", "secured as a global asset") that are uncomfortable for student presenters and inappropriate for the audience. The same applies to administrative reports/proposals submitted to government agencies or institutional review boards.
+
+### Slide Format Conventions (mode: presentation) — **mandatory in slide outline (Section 4)**
+
+When the strategy includes a slide-by-slide outline (presentation mode Section 4), each slide entry MUST follow these formatting principles. **The same conventions propagate to draft generation in autopilot-doc Step 4.**
+
+**1. Chapter visualization in slide headers**
+- Every body-slide title prefixed with `[Ch.N 챕터명]` (Korean) or `[Ch.N Chapter-name]` (English)
+- Chapter-transition slides marked with `[Ch.N 챕터명 — 시작]` / `[~ start]`
+- Each slide includes a `**챕터**: N. 챕터명 (M장 중 K번째)` meta line below the title — chapter-transition slides add "**챕터 전환**" annotation
+- Visual placeholder's first line: `- **상단 헤더 띠**: "N. 챕터명"` (per format-ref Korean industry-academia standard deck) — chapter-transition slides add "Ch.X와 색상/strength를 다르게 — 챕터 전환 시각 신호"
+
+**2. Visual placeholder concreteness**
+- AVOID vague terms: "X 카드", "Y 도식", "적절한 시각화", "comparison chart"
+- PREFER: (a) diagram type + (b) component list + (c) color/layout hints
+- Example: ❌ "학회 위상 카드" → ✅ "NeurIPS / ICLR / ICML 3-row table (h5-index 컬럼 + acceptance-rate 컬럼)"
+
+**3. Table column header clarity**
+- AVOID abbreviations or ambiguous headers (e.g., "비교 1위" — comparison with what?)
+- PREFER: full Korean/English noun phrases with clear semantic units; add a 1-line column-meaning footnote above the table if helpful
+
+**4. Foreign-language quote → Korean keyword gloss** (mandatory for non-AI audiences)
+- Whenever a slide contains an English quote (paper review, citation, technical term), add a Korean appeal-commentary box directly below:
+  ```
+  > "English quote..."
+  > — Source
+
+  📌 **핵심 키워드 — "X"**: 한국어 풀이 1문장
+  ```
+
+**5. Speaker notes default = empty (do NOT auto-fill)**
+- The strategy outline and the initial draft must NOT auto-fill speaker notes
+- Only generate speaker notes when the user explicitly requests as a separate post-polish step
+- Reason: speaker notes drift with slide-content edits; auto-fill produces wasted regeneration cost in iterative refinement
+
+**6. No body-bullet ↔ visual redundancy**
+- The same fact should NOT appear both in body bullets AND in the visual placeholder
+- Body bullets = "what the speaker says"; visual = "what the audience sees at-a-glance"
+- If both express the same fact, simplify one of the two
+
+**7. Slide-number consistency on insertion/deletion**
+- When inserting/removing a slide, update ALL of the following in the same edit pass:
+  - (a) All subsequent slide numbers (`Slide N+1`, `Slide N+2`, ...)
+  - (b) Contents slide's chapter slide-counts ("Ch.N (M장)")
+  - (c) CHANGELOG entry at file top
+  - (d) Time-budget line in the file's top guide
+  - (e) Cross-references in other slides ("Slide M의 ...")
+  - (f) Chapter meta lines ("M장 중 K번째")
 
 ## Quality Requirements
 Every reviewer point must appear in rebuttal strategy (missing a point is a critical error). Severity classification must be justified. All citations must reference actual materials in the refs folder — do NOT fabricate. Strategy must be actionable with specific plans, not vague advice. For academic modes (rebuttal/write/review): apply venue-specific norms (e.g., NeurIPS rebuttal length limits, ICASSP culture). For professional modes (report/proposal/presentation): apply industry best practices relevant to the domain.

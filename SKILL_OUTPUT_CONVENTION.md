@@ -1,8 +1,18 @@
 # Skill Output Convention — 3-Tier Artifact Structure
 
-> 모든 autopilot family + analyze-* skill이 따르는 산출물 폴더 구조 표준. 이 문서는 single source of truth — 각 SKILL.md는 이 문서를 참조한다 (재정의 금지).
+> 모든 autopilot family + analyze-project skill이 따르는 산출물 폴더 구조 표준. 이 문서는 single source of truth — 각 SKILL.md는 이 문서를 참조한다 (재정의 금지).
 >
-> 본 컨벤션은 **2026-05-07 도입**. 이전 산출물은 legacy 구조(파일들이 평면 배치, `_v{N}.md` 형제, reviews/ 메인 레벨)를 유지하며, **새 호출부터 신 컨벤션 적용**.
+> 본 컨벤션은 **2026-05-07 도입**, **2026-05-08 확장** (analyze-* 통합 + `--refs` family-wide 제거). 이전 산출물은 legacy 구조(파일들이 평면 배치, `_v{N}.md` 형제, reviews/ 메인 레벨)를 유지하며, **새 호출부터 신 컨벤션 적용**.
+
+## Workspace assumption (전제)
+
+**모든 skill은 Claude가 _프로젝트 루트에서 실행됨_을 전제로 함**:
+- `.claude_reports/`는 _현재 작업 디렉토리_에 생성·읽기·쓰기
+- analyze-project는 현재 dir의 파일을 읽음 (code/paper/doc 모드)
+- autopilot-code는 현재 dir에서 코드 변경
+- autopilot-{doc,research,refine}는 `.claude_reports/` 하위 영속 산출물을 input으로 implicit 인지 (cross-project 작업은 `cd <other>` 후 별도 세션)
+
+→ `--refs <folder>` 같은 외부 폴더 flag는 **family에서 제거됨**. 모든 입력은 _프로젝트 컨텍스트 내부의 영속 산출물_ (`.claude_reports/analysis_project/*`, `.claude_reports/research/{topic}/`)에서 옴. 외부 raw 자료가 있으면 먼저 `analyze-project --mode {paper|doc}`로 영속 산출물화.
 
 ## Tier 정의
 
@@ -99,23 +109,33 @@
 
 > 코드 산출물에 autopilot-refine 적용 안 됨 (기본). 그래도 _internal/versions/는 차후 plan refine 시 사용 가능.
 
-### analyze-project → `.claude_reports/docs_code/`
+### analyze-project (3 modes) → `.claude_reports/analysis_project/{code,paper,doc}/`
+
+`analyze-project` skill이 단일 entry point. `--mode <X>`로 분기. `analyze-papers` skill은 본 통합으로 폐기.
 
 ```
-docs_code/
-├── 00_overview.md                [T1] 모듈 매핑 + 구조
-├── modules/                      [T2] per-module 분석
-└── _internal/                    [T3] raw scan logs (있으면)
+analysis_project/
+├── code/                            [--mode code, flat]
+│   ├── 00_overview.md or topic_*.md  [T1]
+│   ├── interface_reference          [T1]
+│   └── _internal/                   [T3] raw scan + QA logs
+├── paper/                           [--mode paper, flat]
+│   ├── 00_overview_and_constraints.md [T1]
+│   ├── per-paper *.md               [T1·T2]
+│   └── _internal/                   [T3]
+└── doc/                             [--mode doc, per-task]
+    └── {name}/
+        ├── 00_overview.md           [T1] inventory + classification
+        ├── reviewers/               [T2]
+        ├── formats/                 [T2]
+        ├── samples/                 [T2]
+        ├── misc/                    [T2]
+        └── _internal/               [T3]
 ```
 
-### analyze-papers → `.claude_reports/docs_paper/`
-
-```
-docs_paper/
-├── 00_overview_and_constraints.md  [T1] 통합 overview
-├── papers/                         [T2] per-paper cards
-└── _internal/                      [T3] raw notes (있으면)
-```
+scoping 비대칭 의도:
+- `code/`, `paper/` flat: 프로젝트당 1개씩 누적 (코드는 1개 codebase, 논문은 1개 모음)
+- `doc/{name}/` per-task subdir: doc 자료는 task별로 입력 폴더가 다름 (reviewer1, template2, patent3...)
 
 ## Legacy 호환
 

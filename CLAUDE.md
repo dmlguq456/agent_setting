@@ -2,7 +2,7 @@
 
 > 이 파일은 Claude Code 세션 시작 시 **자동 로드**됩니다. 본 문서는 *얇은 부트스트랩* 역할만 하고, 실제 워크플로우 맵 / cheat-sheet / 가이드라인은 **`~/.claude/README.md`**에 있습니다 (sync-skills로 자동 동기화).
 >
-> **세션 시작 시 권장 행동**: skills/agents 흐름이 필요한 작업이면 먼저 `Read ~/.claude/README.md`로 전체 그림 확인.
+> **세션 시작 시 필수 행동 (강제)**: 작업 종류·요청 복잡도와 무관하게 **가장 먼저** `Read ~/.claude/README.md`를 실행해 전체 워크플로우 맵·skill/agent 흐름·cheat-sheet를 콘텍스트에 적재한 뒤 사용자 요청에 응답한다. 단순 질문이라도 **예외 없음** — README는 길지 않으며, 흐름을 모르고 답하는 비용이 매번 읽는 비용보다 크다. (이미 같은 세션에서 읽었다면 재독 불필요.)
 
 ---
 
@@ -35,13 +35,21 @@
 
 아래는 skill 변경에 따라 흔들리지 않는 **불변 사실**만:
 
-### 3개 autopilot 파이프라인의 산출물 위치
+### Workspace assumption (대 전제)
 
-| Pipeline | Artifact Dir |
+**모든 skill은 Claude가 _프로젝트 루트에서 실행됨_을 전제**. `.claude_reports/`는 현재 dir에 생성. 외부 cross-project 작업은 `cd <other>` 후 별도 세션. `--refs <folder>` 같은 외부 폴더 flag는 **family에서 제거됨** — 모든 입력은 `.claude_reports/` 하위 영속 산출물에서 implicit 자동 발견 (필요 시 `analyze-project`로 사전 분석).
+
+### 산출물 위치
+
+| Skill | Artifact Dir |
 |---|---|
+| `analyze-project --mode code` | `.claude_reports/analysis_project/code/` |
+| `analyze-project --mode paper` | `.claude_reports/analysis_project/paper/` |
+| `analyze-project --mode doc` | `.claude_reports/analysis_project/doc/{name}/` |
 | `autopilot-research` | `.claude_reports/research/{topic}/` |
 | `autopilot-doc` | `.claude_reports/documents/{YYYY-MM-DD}_{name}/` |
 | `autopilot-code` | `.claude_reports/plans/{YYYY-MM-DD}_{name}/` |
+| `autopilot-refine` | (대상 artifact를 read+write, 자체 폴더 X) |
 
 ### Scope 경계 (절대 침범 금지)
 
@@ -53,7 +61,7 @@
 
 ### 공통 플래그 패턴
 
-- `--refs <folder>` — 입력 자료. research artifact_dir도 doc의 `--refs`로 그대로 사용 가능.
+- ~~`--refs <folder>`~~ — **family에서 제거됨 (2026-05-08)**. 입력은 `.claude_reports/{analysis_project,research}/*`에서 implicit 자동 발견.
 - `--qa light|standard|thorough` — QA 강도.
 - `--from <stage>` — pipeline 재개 (`pipeline_state.yaml` 기반).
 - `--user-refine` (doc 전용) — refine 시점 일시정지.

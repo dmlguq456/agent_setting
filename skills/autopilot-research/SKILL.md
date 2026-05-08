@@ -1,7 +1,7 @@
 ---
 name: autopilot-research
 description: "Research survey pipeline — multi-mode investigation (academic / technology / market). Mode-specific search sources and report templates. Field intelligence only; no PPT/paper drafts. Hand off to autopilot-doc (writing/slides) or autopilot-code (build) for actual document/code creation."
-argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--refs <folder>] [--qa quick|light|standard|thorough] [--no-clarify] [--from search|analyze|report]"
+argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--qa quick|light|standard|thorough] [--no-clarify] [--from search|analyze|report]"
 ---
 
 > **산출물 폴더 컨벤션**: [SKILL_OUTPUT_CONVENTION.md](../../SKILL_OUTPUT_CONVENTION.md) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 본 skill의 raw metadata (`search_results.json`, `phase_a_*.json`, `chaining_results.md`, `code_search.md` 등) + reviews는 모두 `_internal/` 하위로 격리. T1/T2 chapter 파일과 `cards/`는 root.
@@ -15,7 +15,7 @@ Parse `$ARGUMENTS` for optional flags:
 - **query**: research topic, paper title, arXiv ID, or PDF path (remaining text after flags)
 - **--mode**: `academic` (default) | `technology` | `market` — investigation type (see Modes below)
 - **--depth**: `shallow` | `medium` (default) | `deep`
-- **--refs \<folder\>**: path to local reference PDFs (user must specify, no default)
+- (no `--refs` flag — local reference materials should be pre-processed via `/analyze-project --mode paper` first → output goes to `.claude_reports/analysis_project/paper/` which autopilot-research auto-detects)
 - **--qa**: `quick` | `light` | `standard` (default) | `thorough` — override QA intensity for report QA loop. Standard+ runs a parallel **fact-checker** (sonnet) alongside quality reviewer(s) for cards verbatim 대조 (citation/venue/year/metric verification). `quick`은 review loop를 1라운드로 강제 종료하는 fastest path — 1× 품질관리팀(sonnet) 단일 패스 후 🔴 잔존 시에도 재호출 없이 unresolved.md만 기록하고 종료. fact-checker 비활성, refine-style re-invoke 비활성.
 - **--from**: `search` | `analyze` | `report` — resume the pipeline at a specific stage (see Resume below)
 - **--no-clarify**: skip Step 0 Scope Clarification (force-run with current query as-is)
@@ -68,7 +68,7 @@ The pipeline auto-proceeds with sane defaults. There is no autonomy-level dial. 
 | Search results review | Auto-proceed. |
 | Query expansion rounds | Auto-proceed. |
 | Phase B loopback | Auto-proceed up to the depth-gated limit. |
-| Missing refs folder | **Always ask** (only when `--refs` was specified but the path is invalid). |
+| External material discovery | If `analysis_project/paper/` exists in current dir, auto-include as supplementary input. If user expects external materials but none found → suggest `/analyze-project --mode paper` first. |
 | Search returned 0 papers | Auto-stop with `pipeline_summary(failed)` (no useful continuation possible). |
 | Report generation | Auto-proceed. |
 
@@ -79,7 +79,7 @@ The pipeline auto-proceeds with sane defaults. There is no autonomy-level dial. 
 - `analyze` — Step 3 (Phase A skimming + B chaining + C code search + analysis_summary)
 - `report` — Step 4 (Report Generation + QA loop)
 
-When `--from` is used, the positional argument should be either the artifact directory path or a fuzzy-matchable topic name. The orchestrator resolves it via `ls -d .claude_reports/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `query`, `mode`, `depth`, `qa_level`, `refs_folder`, `clarified_intent`. CLI flags override stored values. Step 0 Scope Clarification is always skipped on resume (already captured in first run).
+When `--from` is used, the positional argument should be either the artifact directory path or a fuzzy-matchable topic name. The orchestrator resolves it via `ls -d .claude_reports/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `query`, `mode`, `depth`, `qa_level`, `clarified_intent`. CLI flags override stored values. Step 0 Scope Clarification is always skipped on resume (already captured in first run).
 
 ### pipeline_state.yaml
 
@@ -91,7 +91,6 @@ query: <original query>
 mode: academic                   # academic | technology | market (resolved at Step 1)
 depth: medium
 qa_level: standard
-refs_folder: <path or null>
 clarified_intent: <string or null>    # Step 0 output (if Clarification ran)
 last_completed_stage: analyze    # one of: clarify, search, analyze, report
 artifact_dir: <abs path>
@@ -102,7 +101,7 @@ artifact_dir: <abs path>
 ### Step 1: Input Parsing & Validation
 - Detect query type: keyword, paper title, arXiv ID, PDF path, folder path
 - Resolve `--mode`: explicit flag value, or infer from query keywords (academic / technology / market — see Modes section). Notify user of inferred mode in one line. Multi-match → defer resolution to Step 1.5 Scope Clarification.
-- If `--refs` specified: verify folder exists. If not → ask user (Critical, always ask). Abort if user says no.
+- Auto-detect supplementary input: if `.claude_reports/analysis_project/paper/` exists in current dir, include as supplementary input for chaining. If user explicitly requested "use my local PDFs" but no `analysis_project/paper/` → suggest running `/analyze-project --mode paper` first.
 - Construct topic name (sanitize: lowercase, hyphens, max 30 chars)
 - Set artifact_dir: `.claude_reports/research/{topic}/`
 - `mkdir -p {artifact_dir}` (only AFTER validation)
@@ -158,7 +157,7 @@ Agent(subagent_type="연구팀"):
    Output directory: {artifact_dir}
    **Routing**: All raw metadata files (search_results.json, phase_a_*.json, access_classification.json, browser_extracts/) → write to `{artifact_dir}/_internal/`. T1/T2 deliverables (cards/, chapter .md files, analysis_summary.md) → root `{artifact_dir}/`. mkdir -p `_internal` before first write if absent.
    Max results per source per query: 10
-   {If --refs: 'Reference folder: {refs_path}'}
+   {If analysis_project/paper/ available: 'Supplementary local paper analysis: {artifact_dir}/../analysis_project/paper/'}
    {If hf_results_json: 'HF paper_search results (pre-fetched): {hf_results_json}'}
    Timeout rule: If any single source takes >3 minutes, skip it and proceed to the next.
 
@@ -272,7 +271,7 @@ Agent(subagent_type="연구팀"):
   "Research survey mode: Paper analysis.
    Papers: {batch_json}
    Output directory: {artifact_dir}
-   Refs folder: {refs_path or 'none'}
+   Supplementary inputs (if any): `{artifact_dir}/../analysis_project/paper/` (use if exists, otherwise none)
    Browser extracts: {artifact_dir}/_internal/browser_extracts/ (pre-fetched by 탐색팀, if available)
 
    ## CRITICAL RULES
@@ -479,14 +478,14 @@ Agent(subagent_type="연구팀"):
 
    | Inferred Goal | Recommended next command | Hand-off rationale |
    |---|---|---|
-   | build | `/autopilot-code` (dev mode) with this artifact_dir as context | Code implementation needs init-plan → execute-plan → run-test loop |
-   | seminar | `/autopilot-doc --mode presentation --refs {artifact_dir}` | Slide-by-slide markdown draft (PPTX export is NOT supported — user converts to PPT manually with their lab template) |
-   | write | `/autopilot-doc --mode write --refs {artifact_dir}` | Full paper draft (Abstract → Conclusion) generation |
-   | research | `/autopilot-doc --mode proposal --refs {artifact_dir}` (or stay in research-only mode) | Proposal mode covers hypothesis + experiment design framing |
-   | adopt | `/autopilot-doc --mode report --refs {artifact_dir}` (or `--mode proposal` for go/no-go decision) | Tech adoption is a structured report/proposal |
-   | review | `/autopilot-doc --mode review --refs {artifact_dir} --format-ref <path>` (REQUIRED; path-only, no built-in presets — venues differ year-to-year) | Reviewer report draft following the venue's review form |
+   | build | `/autopilot-code --mode dev "<task>"` | Code implementation needs init-plan → execute-plan → run-test loop. autopilot-code reads `analysis_project/{code,paper}/` + `research/{topic}/` implicitly. |
+   | seminar | `/autopilot-doc "<task>" --mode presentation` | Slide-by-slide markdown draft (PPTX export is NOT supported — user converts to PPT manually with their lab template). research artifact는 implicit 인지. |
+   | write | `/autopilot-doc "<task>" --mode write` | Full paper draft (Abstract → Conclusion) generation. |
+   | research | `/autopilot-doc "<task>" --mode proposal` (or stay in research-only mode) | Proposal mode covers hypothesis + experiment design framing. |
+   | adopt | `/autopilot-doc "<task>" --mode report` (or `--mode proposal` for go/no-go decision) | Tech adoption is a structured report/proposal. |
+   | review | `/autopilot-doc "<task>" --mode review --format-ref <path>` (REQUIRED; path-only, no built-in presets — venues differ year-to-year) | Reviewer report draft following the venue's review form. |
 
-   Include the recommended next command verbatim in this section so the user can copy-paste it. Note that the artifact_dir produced by autopilot-research is directly usable as `--refs` for autopilot-doc.
+   Include the recommended next command verbatim in this section so the user can copy-paste it. autopilot-doc은 `research/{topic}/` 산출물을 prompt 키워드 fuzzy match로 자동 인지하므로 별도 path 인자 불요.
 
    **Boundary disclaimer** (also include): "이 06_implementation.md는 분야 분석에서 도출된 high-level 계획입니다. 본격적인 문서 작성·코드 구현은 autopilot-doc / autopilot-code로 인계됩니다."
 
@@ -703,7 +702,7 @@ Record after each gate: `{step | decision | response | action}`. Populate pipeli
 ## Safety Rules
 - Do NOT fabricate citations, URLs, or metrics
 - Source failure → continue with remaining sources
-- `--refs` folder missing → ask (Critical, always)
+- (no `--refs` flag — supplementary local materials read from `analysis_project/paper/` if exists; not asked otherwise)
 - Rate limits: arXiv ~3s, OpenAlex 10 req/s, S2 1 req/s, Google Scholar 3s + 50/day
 - Context protection: each Agent returns ONLY file paths + 3-5 line summary
 - Context budget: deep 모드에서 오케스트레이터 context가 누적됨 (쿼리 확장 라운드 + 스키밍 배치 + loopback). Agent 결과는 항상 파일로 저장하고 요약만 context에 유지. search_results.json 전체를 context에 올리지 않고 paper count + top-5만 참조.

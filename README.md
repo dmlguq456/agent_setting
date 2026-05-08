@@ -1,7 +1,6 @@
 # Claude Setting
 
-> Source: `~/.claude/skills/*/SKILL.md` + `~/.claude/agents/*.md`
-> 마지막 sync: 2026-05-07 KST (`/sync-skills` 자동) — 직접 편집 금지. (latest: 산출물 폴더 컨벤션 3-tier 도입 — T1/T2 root, T3 `_internal/` 격리. 새 산출물 적용)
+> Source: `~/.claude/skills/*/SKILL.md` + `~/.claude/agents/*.md` (`/sync-skills` 자동 갱신 — 직접 편집 금지)
 > Notion 대문: [Agents/Skills](https://www.notion.so/34987c2bb75380d68df4d6ce4d469bff) (본 README와 동일 콘텐츠)
 > Notion 운영 가이드: [`notion_guide.md`](notion_guide.md) (페이지 타입 템플릿 + workspace 구조)
 
@@ -11,67 +10,72 @@
 
 ### Skill 호출 흐름 (어떤 skill이 어떤 skill에 자료를 넘기나)
 
+> **Workspace 전제**: Claude는 프로젝트 루트에서 실행. `.claude_reports/`는 현재 dir에 생성. cross-project 작업은 `cd <other>` 후 별도 세션. `--refs <folder>` 같은 외부 폴더 flag는 **family에서 제거됨** — 모든 입력은 `.claude_reports/` 하위 영속 산출물에서 자동 발견.
+
 ```mermaid
 flowchart LR
-    AP["analyze-project<br/>(있는 코드베이스)"]
-    ARP["analyze-papers<br/>(있는 논문 PDF)"]
-    R["autopilot-research<br/>(외부에서 새 조사)"]
+    A["analyze-project<br/>(--mode code/paper/doc)"]
+    R["autopilot-research<br/>(외부 분야 조사)"]
     C["autopilot-code"]
     D["autopilot-doc"]
     REF["autopilot-refine<br/>(R/D 산출물 사후 수정)"]
-    AP --> C
-    ARP --> C
-    ARP --> D
+    A --> C
+    A --> D
     R --> C
     R --> D
     R -.-> REF
     D -.-> REF
 ```
 
-세 가지 자료 수집 스킬(`analyze-project`, `analyze-papers`, `autopilot-research`)은 같은 레벨 — 손에 든 자료(코드/논문)가 이미 있는지(`analyze-*`) vs 외부에서 새로 조사해야 하는지(`autopilot-research`)에 따라 선택. 그 결과를 `autopilot-code` / `autopilot-doc`이 참조해 코드 변경·문서 생성을 수행. autopilot-refine은 research/doc 산출물에 대한 사후 정정 루프(점선).
+`analyze-project`는 사전 분석을 _세 종류_로 단일 skill에서 처리:
+- `--mode code` (default if 코드베이스 감지) → 모듈 매핑·interface
+- `--mode paper` (명시 필요) → 논문 PDFs cards + overview
+- `--mode doc` (default if doc-only 자료 감지) → reviewer comments / format templates / past samples 분류
+
+`autopilot-research`는 _외부_ 새 조사 (검색 + 분석). `autopilot-code` / `autopilot-doc`은 위 _영속 산출물_을 implicit 자동 발견. autopilot-refine은 research/doc artifact에 대한 사후 정정 루프(점선).
 
 ### 산출물 I/O (`.claude_reports/` 관점)
 
 ```mermaid
 flowchart LR
-    subgraph IN["자료 수집"]
-        AP["analyze-project"]
-        ARP["analyze-papers"]
+    subgraph IN["자료 수집 (사전 분석)"]
+        A["analyze-project<br/>(code/paper/doc)"]
         R["autopilot-research"]
     end
-    subgraph PROD["산출"]
+    subgraph PROD["산출 (deliverables)"]
         C["autopilot-code"]
         D["autopilot-doc"]
     end
     REF["autopilot-refine"]
     OUT[("📦 .claude_reports/")]
     IN --> OUT
-    OUT -->|--refs| PROD
+    OUT -.->|implicit| PROD
     PROD --> OUT
     OUT <--> REF
 ```
 
-> 모든 skill 산출물은 `.claude_reports/` 하위 5개 폴더에 누적 (`docs_code/`, `docs_paper/`, `research/`, `documents/`, `plans/`). 자료 수집 결과는 산출 단계의 `--refs`로 전달. autopilot-refine만 read+write 양방향.
+> 모든 skill 산출물은 `.claude_reports/` 하위에 누적: `analysis_project/{code,paper,doc}/`, `research/{topic}/`, `documents/{date}_{name}/`, `plans/{date}_{name}/`. 후속 skill은 점선(implicit)으로 자동 발견. autopilot-refine만 read+write 양방향.
 >
 > **산출물 폴더 컨벤션 (3-tier)**: 각 artifact는 [SKILL_OUTPUT_CONVENTION.md](SKILL_OUTPUT_CONVENTION.md) 기준 **T1 (root)** = entry/메인 산출물 (`pipeline_summary.md`, `draft/`, `00_briefing.md`, research chapters `01_*.md~NN_*.md`은 root flat 배치) / **T2 (named subdir)** = 필요 시 검토 (`strategy/`, `analysis/`, `cards/`, `dev_logs/`, `test_logs/`) / **T3 (`_internal/` 격리)** = audit·raw·versions (reviewer 로그, search_results.json 같은 raw metadata, 버전 스냅샷). 사용자는 보통 T1만 보면 됨.
 
-> **산출물 사후 수정**: research/doc 산출물의 routine 정정·refine은 `/autopilot-refine "<prompt>" [--refs <artifact_dir>]` (prompt-driven, 자동 파일 체계 파악, diff preview, 적용 시 버전 + 통합 history `pipeline_summary.md`에 누적, 기본 `--qa quick`). `--refs` 생략 시 prompt 키워드로 fuzzy match. file-memo 기반 `/refine-doc`은 deferred review가 필요할 때만 opt-in. code 산출물은 `/refine-plan` / `/autopilot-code` 사용.
+> **산출물 사후 수정**: research/doc 산출물의 routine 정정·refine은 `/autopilot-refine "<prompt>"` (prompt-driven, artifact는 prompt 키워드 fuzzy match로 자동 식별, diff preview, 적용 시 버전 + 통합 history `pipeline_summary.md`에 누적, 기본 `--qa quick`). file-memo 기반 `/refine-doc`은 deferred review가 필요할 때만 opt-in. code 산출물은 `/refine-plan` / `/autopilot-code` 사용.
 
 ---
 
 ## 🧭 활용 갈래 — 3 카테고리
 
-세 갈래는 **독립적으로** 사용. "논문 한 줄짜리 라이프사이클"이 아니라 다양한 코드·문서 산출물을 각각 만들 수 있음. 갈래 간 chaining은 `--refs`로.
+세 갈래는 **독립적으로** 사용. "논문 한 줄짜리 라이프사이클"이 아니라 다양한 코드·문서 산출물을 각각 만들 수 있음. 갈래 간 chaining은 `.claude_reports/` 영속 산출물의 _implicit_ 인지로 처리 (`--refs` flag 없음).
 
 ### A. 사전 조사 & 분석 (input gathering)
 
-조사·분석 결과는 후속 갈래(B/C)의 `--refs` 입력으로 사용.
+조사·분석 결과는 후속 갈래(B/C)에서 _implicit_으로 자동 인지.
 
 | 입력 | skill | 산출 |
 |---|---|---|
 | 외부 분야 조사 — 논문 / 기술표준 / 시장 동향 | `/autopilot-research <주제> --mode academic\|technology\|market` | `research/{topic}/` — 9 / 7 / 5개 markdown 보고서 |
-| 보유한 논문 PDF 정독 | `/analyze-papers` | `docs_paper/` — 논문별 cards + overview |
-| 기존 코드베이스 파악 | `/analyze-project` | `docs_code/` — 모듈 매핑 + 구조 분석 |
+| 보유한 논문 PDF 정독 | `/analyze-project --mode paper` | `analysis_project/paper/` — 논문별 cards + overview |
+| 기존 코드베이스 파악 | `/analyze-project [--mode code]` | `analysis_project/code/` — 모듈 매핑 + 구조 분석 |
+| 기타 doc 자료 (리뷰어 코멘트, 템플릿, 회의록 등) | `/analyze-project --mode doc <folder>` | `analysis_project/doc/{name}/` — 분류된 인덱스 |
 
 ### B. 코드 개발 & 감사 (code deliverables)
 
@@ -85,41 +89,25 @@ flowchart LR
 
 ### C. 문서 작성 (document deliverables)
 
-모든 모드 공통 패턴: **strategy + draft markdown** 산출 → 사용자가 최종 작성·빌드·디자인 마무리. 산출물은 `documents/{date}_{name}/`. **첫 positional arg = `<task description>`** (research/code와 동일하게 작업의 _구체적 의도·목표·범위_를 한 줄로. `--refs`는 자료 폴더, task 설명과 _별개_).
+모든 모드 공통 패턴: **strategy + draft markdown** 산출 → 사용자가 최종 작성·빌드·디자인 마무리. 산출물은 `documents/{date}_{name}/`. **첫 positional arg = `<task description>`** (research/code와 동일하게 작업의 _구체적 의도·목표·범위_를 한 줄로). 입력 자료는 `analyze-project --mode {paper,doc}` 또는 `autopilot-research`로 사전 분석된 `.claude_reports/` 영속 산출물에서 _implicit 자동 발견_.
 
-| 모드 | 용도 (예시) | 명령 (`--format-ref` optional, review만 필수) |
+| 모드 | 용도 (예시) | 명령 |
 |---|---|---|
-| `write` | 논문 / camera-ready / 백서 / 기술 블로그 / 책 챕터 / 일반 글쓰기 | `/autopilot-doc "<task: 무슨 글, 어떤 청중, 어떤 메시지>" --mode write --refs <dir> [--format-ref <venue_paper_template>] --user-refine` |
-| `presentation` | 논문 발표 / 사내 세미나 / 컨퍼런스 키노트 / 데모 데이 / 강의 | `/autopilot-doc "<task: 발표 주제, 청중, 시간>" --mode presentation --refs <dir> [--format-ref <slide_template>] --user-refine` |
-| `rebuttal` | 학회 reviewer 응답 (sub-type 3종은 format-ref/task에 명시) | `/autopilot-doc "<task: paper 제목, 학회·라운드, 강조점>" --mode rebuttal --refs <reviewer_comments> [--format-ref <venue_rebuttal_guidelines>] --user-refine` |
-| `review` | 본인이 reviewer 입장 (peer review) | `/autopilot-doc "<task: paper 제목, 평가 관점>" --mode review --refs <paper_dir> --format-ref <venue_review_template> --user-refine` |
-| `proposal` | 연구 grant (NRF/NSF) / 사업 제안 / 내부 프로젝트 제안 | `/autopilot-doc "<task: 무엇을 제안, 누구에게>" --mode proposal --refs <idea+research_dir> [--format-ref <funding_body_template>] --user-refine` |
-| `report` | 기술 보고서 / 시장 분석 / 분기 보고 / 사고 분석 (post-mortem) | `/autopilot-doc "<task: 무엇에 대한 보고, 청중>" --mode report --refs <dir> [--format-ref <internal_template>] --user-refine` |
+| `write` | 논문 / camera-ready / 백서 / 기술 블로그 / 책 챕터 / 일반 글쓰기 | `/autopilot-doc "<task: 무슨 글, 어떤 청중, 어떤 메시지>" --mode write [--format-ref <venue_paper_template>] --user-refine` |
+| `presentation` | 논문 발표 / 사내 세미나 / 컨퍼런스 키노트 / 데모 데이 / 강의 | `/autopilot-doc "<task: 발표 주제, 청중, 시간>" --mode presentation [--format-ref <slide_template>] --user-refine` |
+| `rebuttal` | 학회 reviewer 응답 (사전 `/analyze-project --mode doc <reviewer_folder>` 필수) | `/autopilot-doc "<task: paper 제목, 학회·라운드, 강조점>" --mode rebuttal [--format-ref <venue_rebuttal_guidelines>] --user-refine` |
+| `review` | 본인이 reviewer 입장 (peer review) — venue review form REQUIRED | `/autopilot-doc "<task: paper 제목, 평가 관점>" --mode review --format-ref <venue_review_template> --user-refine` |
+| `proposal` | 연구 grant (NRF/NSF) / 사업 제안 / 내부 프로젝트 제안 | `/autopilot-doc "<task: 무엇을 제안, 누구에게>" --mode proposal [--format-ref <funding_body_template>] --user-refine` |
+| `report` | 기술 보고서 / 시장 분석 / 분기 보고 / 사고 분석 (post-mortem) | `/autopilot-doc "<task: 무엇에 대한 보고, 청중>" --mode report [--format-ref <internal_template>] --user-refine` |
 
-> **task vs --refs의 역할 분리**: `<task>`는 _목표·의도·범위·청중_을 명확히 (Step 0 Scope Clarification에 사용). `--refs`는 _참고 자료 폴더_ (cards / PDFs / 본인 결과 등). 둘 다 강할수록 strategy + draft 품질이 올라감 — `--refs`만 강하면 자료는 풍부한데 _무엇을 만들지_가 모호해서 첫 draft에서 사용자가 다시 잡아줘야 함.
-
-> **`--format-ref <path>` (universal flag)**: 모든 모드에서 사용 가능한 단일 path 인자. 학회·저널·연도·랩마다 다른 _개별 가이드라인 / 템플릿 / 샘플 / format-spec 파일_을 path로 전달. **built-in preset 없음** (venue마다 매년 다르므로).
->
-> **Resolution 순서**: (1) explicit `--format-ref <path>` → (2) `--refs` 폴더에서 키워드 자동 탐색 (`guidelines`/`template`/`format`/`cfp`/`instructions`/`submission`/...) → (3) 모드별 fallback:
-> - `review`: **hard fail** — reviewer guideline 없이 진행 X
-> - `rebuttal`: Step 0에서 사용자에게 prompt (format-ref 제공 / task에 inline 명시 / generic layout 동의)
-> - `write` / `presentation` / `proposal` / `report`: warn-and-fallback (generic layout으로 진행, 품질 저하 경고)
->
-> **rebuttal sub-type 3종**은 format-ref 파일 또는 task description에 명시 (별도 flag 없음):
-> - _meta-only_: AC/SAC 단일 응답. 짧고 압축적
-> - _reviewer-dialogue_: 다회 왕복 (OpenReview 토론)
-> - _response-with-revision_: rebuttal + paper 수정본 업로드 (ACL ARR / 저널 major revision)
->
-> 단순화 원칙: sub-type별 별도 flag 두지 않고 _venue가 발행한 가이드 문서 1개_에 모든 정보를 담아 `--format-ref`로 전달.
+> **`--format-ref <path>`**: 학회·저널·랩별 가이드라인/템플릿/샘플 path. 생략 시 `analysis_project/doc/{matching}/formats/`에서 자동 탐색. `review`만 hard-fail, 나머지는 generic 진행. 상세는 [autopilot-doc/SKILL.md](skills/autopilot-doc/SKILL.md).
 
 ### 자주 쓰는 chaining 패턴
 
-- **A → C**: 분야 조사 결과 (research artifact_dir) 를 doc의 `--refs`로 전달 → 논문/발표/제안서/보고서
-- **A → B**: 외부 표준 조사 + 코드베이스 파악 → autopilot-code의 plan 단계 motivation·constraint 으로 사용
-- **B → C**: 코드 변경 / 실험 / 운영 결과 정리 → doc의 `report` 또는 `write` 모드로 narrative화
-- **외부 (사용자 본인 자료)**: Claude가 만들 수 없는 영역 — 실험 결과·표·그림·데이터·노트는 사용자가 폴더에 모아 doc의 `--refs`에 함께 전달
-
-> **`--refs` 사용 팁**: 단일 폴더에 (a) research artifact, (b) 본인 결과 / 데이터 / 그림, (c) 본인 노트를 함께 모아 두고 그 폴더를 `--refs`로 지정. 두 종류 자료가 모두 들어가야 강한 draft가 나옵니다.
+- **A → C**: `autopilot-research <topic>` → `research/{topic}/` 생성 → autopilot-doc이 implicit 인지
+- **A → B**: 코드베이스 분석(`analyze-project [--mode code]`) + 외부 표준 조사 → autopilot-code plan 단계 자동 인지
+- **B → C**: autopilot-code dev/audit 결과 → autopilot-doc `report`/`write`로 narrative화 (plans/dev_logs 자동 인지)
+- **외부 (사용자 본인 자료)**: 실험 결과·표·그림·데이터를 _분석 가능한 형태_로 폴더에 모은 뒤 `analyze-project --mode doc <folder>` 1회 → autopilot-doc이 자동 인지
 
 > **`--user-refine` 패턴**: dev/doc 모드에서 연구팀 메모 직후 pause → 사용자가 직접 `<!-- memo: ... -->` 추가 → 출력된 `--from <stage>` 명령으로 재개. 미세 컨트롤이 필요할 때.
 
@@ -138,7 +126,7 @@ flowchart LR
 | **노션 페이지·DB 갱신, 실험 결과 로깅** | 메인 컨텍스트에서 Notion MCP 도구 직접 호출 ([`notion_guide.md`](notion_guide.md) 참조) | sub-agent X (MCP 도구 접근 제약) |
 | 특정 paywall 논문 1편 fetch | `Agent(탐색팀)` | autopilot-research 안 돌리고 단발성 |
 | 단계별 테스트만 실행 | `/run-test <plan>` skill | autopilot-code 전체 X |
-| **이미 만든 research/doc 산출물의 prompt 기반 정정** | `/autopilot-refine "<prompt>" [--refs <dir>]` skill | refine-doc memo 안 쓰고 chat에서 diff confirm |
+| **이미 만든 research/doc 산출물의 prompt 기반 정정** | `/autopilot-refine "<prompt>"` skill | refine-doc memo 안 쓰고 chat에서 diff confirm. artifact는 prompt fuzzy match로 식별. |
 
 **원칙**: agent 단독 호출은 **plan/log 산출물이 남지 않으므로** 그때그때만 쓰고, 추적이 필요한 작업은 autopilot으로. 기획팀은 직접 호출 거의 X — `/init-plan` 사용.
 
@@ -148,12 +136,11 @@ flowchart LR
 
 | Skill | 역할 | 주요 옵션 |
 |---|---|---|
-| `analyze-project` | 코드 → `docs_code/` | (없음) |
-| `analyze-papers` | PDF → `docs_paper/` | (없음) |
+| `analyze-project` | 사전 분석 — code/paper/doc 자료를 `analysis_project/`에 영속화 (모든 후속 autopilot의 implicit input source) | `--mode code/paper/doc` (생략 시 code/doc 자동 감지; paper는 명시 필요) · `[<scope/target/input-folder>]` · `--skip-qa` |
 | `autopilot-research` | 분야 조사 — mode별 보고서 (academic 9 / technology 7 / market 5) | `--mode academic/technology/market` · `--depth shallow/medium/deep` · `--qa quick/light/standard/thorough` · `--from search/analyze/report` · `--no-clarify` |
 | `autopilot-code` | 코드 dev/audit/debug | `--mode dev/audit/debug` · `--qa quick/light/standard/thorough/adversarial` · `--from plan/refine/execute/test/report` · `--user-refine` |
-| `autopilot-doc` | 문서 strategy + draft (markdown) | `--mode rebuttal/write/review/report/proposal/presentation` · `--refs <dir>` · `--format-ref <path>` (universal — review 필수, 나머지 mode는 권장; 자동 탐색 fallback) · `--qa quick/light/standard/thorough` · `--from analyze/strategy/strategy-refine/draft/draft-refine/finalize` · `--user-refine` · `--no-clarify` |
-| `autopilot-refine` | autopilot family — research/doc 산출물 prompt 기반 사후 수정 (auto-discover 파일 체계 → diff preview → 적용 + 버전 + `pipeline_summary.md`에 통합 history 누적). code 제외. | `"<prompt>"` · `--refs <artifact_dir>` (생략 시 prompt에서 fuzzy match) · `--qa quick(default)/light/standard/thorough` · `--review-only` (검수만) · `--memo <file>` (memo fallback) |
+| `autopilot-doc` | 문서 strategy + draft (markdown). 입력은 `analysis_project/{paper,doc}/` + `research/{topic}/` 자동 발견 | `--mode rebuttal/write/review/report/proposal/presentation` · `--format-ref <path>` (생략 시 `analysis_project/doc/{matching}/formats/`에서 자동 탐색) · `--qa quick/light/standard/thorough` · `--from analyze/strategy/strategy-refine/draft/draft-refine/finalize` · `--user-refine` · `--no-clarify` |
+| `autopilot-refine` | autopilot family — research/doc 산출물 prompt 기반 사후 수정. 대상 artifact는 prompt 키워드로 fuzzy match. | `"<prompt>"` · `--qa quick(default)/light/standard/thorough` · `--review-only` (검수만) · `--memo <file>` (memo fallback) |
 | `sync-skills` | 본 README + 노션 대시보드 동기화 | `--check` · `--readme-only` · `--notion-only` · `--force` |
 
 > sub-skill (`init-plan`, `refine-plan`, `init-doc-strategy`, `refine-doc`, `execute-plan`, `run-test`, `final-report`)은 autopilot 내부에서 자동 호출 — 직접 사용은 pause 재개 시점에만. `autopilot-refine`은 autopilot family의 4번째 멤버 (사후 수정 전용 top-level skill).

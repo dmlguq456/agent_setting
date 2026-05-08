@@ -154,7 +154,7 @@ flowchart LR
 
 `~/.claude/README.md`가 본 sync의 단일 진실 출처(reference layout). sync 시 다음 순서로 섹션을 채운다:
 
-1. **Header** — title + sync 시각 + Notion 대문 링크
+1. **Header** — title + source 안내 + Notion 대문 링크 (sync 시각/이력은 git commit으로만 추적, README 본문에 기록 X)
 2. **워크플로우** — Diagram 1 (위 4a)
 3. **자주 쓰는 명령** — 시나리오 × 명령 표 (7행: 세미나/논문/개발/감사/디버그/리뷰/사전준비)
 4. **Skills 표** — name / 역할 / 주요 옵션. 옵션 값은 각 SKILL.md의 argument-hint에서 자동 추출. sub-skill은 표 하단 한 줄로 요약.
@@ -170,7 +170,7 @@ flowchart LR
 현행 README가 이 layout의 reference. 대규모 변경 시 README를 먼저 손보고 본 SKILL.md를 동기화.
 
 ### Step 5: Write README.md
-`~/.claude/README.md`를 4b의 layout 그대로 통째로 작성. 현행 README가 reference이므로 큰 구조 변경 없이는 sync 시점 데이터(시각, SHA 기반 변경 표시 등)만 갱신한다. argument-hint 변화로 옵션 값이 바뀌었으면 Skills 표의 "주요 옵션" 컬럼을 갱신.
+`~/.claude/README.md`를 4b의 layout 그대로 통째로 작성. 현행 README가 reference이므로 큰 구조 변경 없이는 SHA 기반 변경 부분만 갱신한다. argument-hint 변화로 옵션 값이 바뀌었으면 Skills 표의 "주요 옵션" 컬럼을 갱신. **sync 시각/이력은 README 본문에 쓰지 않음** (git commit log가 단일 출처).
 
 ### Step 6: Update Notion 대문 상단 (메인 컨텍스트 직접 호출)
 
