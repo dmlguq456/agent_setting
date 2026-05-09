@@ -64,7 +64,7 @@ flowchart LR
 
 ## 🧭 활용 갈래 — 4 카테고리
 
-네 갈래는 **독립적으로** 사용. "논문 한 줄짜리 라이프사이클"이 아니라 다양한 코드·문서 산출물을 각각 만들고, 만든 뒤에는 **D**로 반복 polish. 갈래 간 chaining은 `.claude_reports/` 영속 산출물의 _implicit_ 인지로 처리 (`--refs` flag 없음).
+네 갈래는 **독립적으로** 사용. "논문 한 줄짜리 라이프사이클"이 아니라 다양한 코드·문서 산출물을 각각 만들고, 그중 **C 산출물(과 A의 research 보고서)** 은 **D**로 반복 polish (B의 code는 `/refine-plan`, A의 `analyze-project`는 같은 명령 재실행으로 갱신). 갈래 간 chaining은 `.claude_reports/` 영속 산출물의 _implicit_ 인지로 처리 (`--refs` flag 없음).
 
 ### A. 사전 조사 & 분석 (input gathering)
 
@@ -104,7 +104,7 @@ flowchart LR
 
 ### D. 사후 정정 & refine (post-production polish)
 
-**A/B/C로 만든 산출물은 거의 한 번에 끝나지 않는다** — 챕터 톤 다듬기, 표/숫자 교정, reviewer-style 의견 반영, 부분 wording 수정 같은 _routine한 사후 수정_이 실제 작업 시간의 큰 부분을 차지. 이 갈래는 `/autopilot-refine` 단일 entry로 처리하며 prompt와 사용자 메모 두 입력을 모두 받음.
+**C로 만든 문서가 한 번에 끝나는 일은 거의 없다** — 챕터 톤 다듬기, 표/숫자 교정, reviewer-style 의견 반영, 부분 wording 수정 같은 _routine한 사후 정정_이 실제 작업 시간의 큰 비중. D는 **C 산출물**과 **A의 `autopilot-research` 보고서** 사후 정정 루프로, `/autopilot-refine` 단일 entry가 prompt와 사용자 메모 두 입력을 모두 받음.
 
 | 입력 형태 | 명령 | 비고 |
 |---|---|---|
@@ -112,11 +112,14 @@ flowchart LR
 | 산출물에 직접 적어둔 메모 (`<!-- memo: ... -->` 또는 별도 file) | `/autopilot-refine --memo <file>` | deferred review — 산출물 읽으며 적어둔 메모를 일괄 반영. |
 | 적용 없이 검수만 | `/autopilot-refine "<prompt>" --review-only` | 제안 diff만 보고 종료. |
 
-- **대상**: `.claude_reports/research/*` + `.claude_reports/documents/*`. code 산출물은 D 대상이 아님 — `/refine-plan` 또는 `/autopilot-code` 사용.
+- **D 대상**: `.claude_reports/documents/*` (C 산출물) + `.claude_reports/research/*` (A의 `autopilot-research` 산출물).
+- **D 비대상** — 다른 갈래는 다른 메커니즘으로 사후 수정:
+  - **A의 `analyze-project`** — 입력 자료가 바뀌면 _같은 명령을 한 번 더 돌리면 자동 재생성·업데이트_. 별도 refine 루프 불필요.
+  - **B (autopilot-code)** — code 산출물의 사후 수정은 `/refine-plan` 또는 `/autopilot-code`로.
 - **버전 + 이력**: 적용 시 `_internal/versions/v{N}/` 스냅샷 + `pipeline_summary.md`에 통합 history 누적 (별도 CHANGELOG 없음).
 - **QA**: 기본 `--qa quick` (1-pass, 가장 빠름). 중요한 산출물은 `light` (reviewer 1×) → `standard` (+ fact-checker) → `thorough` (reviewer 2× parallel + fact-checker).
 
-> **왜 first-class인가**: A/B/C가 "초안 생성"이라면 D는 "정련". 실무에서는 D를 5-20회 반복하는 게 일반적이므로 autopilot family의 4번째 갈래로 격상. memo든 prompt든 진입점은 `/autopilot-refine` 하나로 통일 — `refine-doc`은 그 sub-skill로 흡수됨.
+> **왜 first-class인가**: C/A-research의 "초안 생성"과 D의 "정련"은 작업 성격·시간 비중 모두 다름. 실무에서는 D를 5-20회 반복하는 게 일반적이므로 autopilot family의 4번째 갈래로 격상. memo든 prompt든 진입점은 `/autopilot-refine` 하나로 통일 — `refine-doc`은 그 sub-skill로 흡수됨.
 
 ### 자주 쓰는 chaining 패턴
 
