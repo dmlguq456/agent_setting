@@ -14,17 +14,17 @@
 
 ```mermaid
 flowchart LR
-    A["analyze-project<br/>(--mode code/paper/doc)"]
-    R["autopilot-research<br/>(외부 분야 조사)"]
-    C["autopilot-code"]
-    D["autopilot-doc"]
-    REF["autopilot-refine<br/>(R/D 산출물 사후 수정)"]
+    A["[A] analyze-project<br/>(--mode code/paper/doc)"]
+    R["[A'] autopilot-research<br/>(외부 분야 조사)"]
+    B["[B] autopilot-code"]
+    C["[C] autopilot-doc"]
+    D["[D] autopilot-refine<br/>(R/C 산출물 사후 정정)"]
+    A --> B
     A --> C
-    A --> D
+    R --> B
     R --> C
     R --> D
-    R -.-> REF
-    D -.-> REF
+    C --> D
 ```
 
 `analyze-project`는 사전 분석을 _세 종류_로 단일 skill에서 처리:
@@ -32,39 +32,39 @@ flowchart LR
 - `--mode paper` (명시 필요) → 논문 PDFs cards + overview
 - `--mode doc` (default if doc-only 자료 감지) → reviewer comments / format templates / past samples 분류
 
-`autopilot-research`는 _외부_ 새 조사 (검색 + 분석). `autopilot-code` / `autopilot-doc`은 위 _영속 산출물_을 implicit 자동 발견. autopilot-refine은 research/doc artifact에 대한 사후 정정 루프(점선).
+`autopilot-research`는 _외부_ 새 조사 (검색 + 분석). `autopilot-code` / `autopilot-doc`은 위 _영속 산출물_을 implicit 자동 발견. **`autopilot-refine`은 research/doc 산출물의 사후 정정 루프(D) — prompt 또는 사용자 메모를 단일 entry로 일괄 처리**. 실제 작업 시간의 상당 부분이 여기에 들어가므로 A/B/C와 동등한 first-class 갈래로 취급.
 
 ### 산출물 I/O (`.claude_reports/` 관점)
 
 ```mermaid
 flowchart LR
-    subgraph IN["자료 수집 (사전 분석)"]
-        A["analyze-project<br/>(code/paper/doc)"]
-        R["autopilot-research"]
+    subgraph IN["[A] 자료 수집 (사전 분석)"]
+        AP["analyze-project<br/>(code/paper/doc)"]
+        AR["autopilot-research"]
     end
-    subgraph PROD["산출 (deliverables)"]
-        C["autopilot-code"]
-        D["autopilot-doc"]
+    subgraph PROD["[B/C] 산출 (deliverables)"]
+        B["autopilot-code"]
+        C["autopilot-doc"]
     end
-    REF["autopilot-refine"]
+    D["[D] autopilot-refine"]
     OUT[("📦 .claude_reports/")]
     IN --> OUT
     OUT -.->|implicit| PROD
     PROD --> OUT
-    OUT <--> REF
+    OUT <--> D
 ```
 
-> 모든 skill 산출물은 `.claude_reports/` 하위에 누적: `analysis_project/{code,paper,doc}/`, `research/{topic}/`, `documents/{date}_{name}/`, `plans/{date}_{name}/`. 후속 skill은 점선(implicit)으로 자동 발견. autopilot-refine만 read+write 양방향.
+> 모든 skill 산출물은 `.claude_reports/` 하위에 누적: `analysis_project/{code,paper,doc}/`, `research/{topic}/`, `documents/{date}_{name}/`, `plans/{date}_{name}/`. 후속 skill은 점선(implicit)으로 자동 발견. **D(autopilot-refine)** 만 read+write 양방향 — research/doc 산출물에 prompt 또는 사용자 메모를 반영해 버전+history를 누적.
 >
 > **산출물 폴더 컨벤션 (3-tier)**: 각 artifact는 [SKILL_OUTPUT_CONVENTION.md](SKILL_OUTPUT_CONVENTION.md) 기준 **T1 (root)** = entry/메인 산출물 (`pipeline_summary.md`, `draft/`, `00_briefing.md`, research chapters `01_*.md~NN_*.md`은 root flat 배치) / **T2 (named subdir)** = 필요 시 검토 (`strategy/`, `analysis/`, `cards/`, `dev_logs/`, `test_logs/`) / **T3 (`_internal/` 격리)** = audit·raw·versions (reviewer 로그, search_results.json 같은 raw metadata, 버전 스냅샷). 사용자는 보통 T1만 보면 됨.
 
-> **산출물 사후 수정**: research/doc 산출물의 routine 정정·refine은 `/autopilot-refine "<prompt>"` (prompt-driven, artifact는 prompt 키워드 fuzzy match로 자동 식별, diff preview, 적용 시 버전 + 통합 history `pipeline_summary.md`에 누적, 기본 `--qa quick`). file-memo 기반 `/refine-doc`은 deferred review가 필요할 때만 opt-in. code 산출물은 `/refine-plan` / `/autopilot-code` 사용.
+> **산출물 사후 수정 (D)**: research/doc 산출물의 routine 정정·refine은 모두 `/autopilot-refine`이 단일 진입. **prompt-driven** — `/autopilot-refine "<prompt>"`로 자연어 요청, artifact는 키워드 fuzzy match로 자동 식별, diff preview 후 적용. **memo-driven** — 산출물에 직접 적어둔 `<!-- memo: ... -->` 또는 별도 memo 파일을 `/autopilot-refine --memo <file>`로 일괄 반영 (deferred review용). 적용 시 버전 스냅샷 + `pipeline_summary.md`에 통합 history 누적. 기본 `--qa quick`. code 산출물은 D 대상이 아님 — `/refine-plan` / `/autopilot-code` 사용.
 
 ---
 
-## 🧭 활용 갈래 — 3 카테고리
+## 🧭 활용 갈래 — 4 카테고리
 
-세 갈래는 **독립적으로** 사용. "논문 한 줄짜리 라이프사이클"이 아니라 다양한 코드·문서 산출물을 각각 만들 수 있음. 갈래 간 chaining은 `.claude_reports/` 영속 산출물의 _implicit_ 인지로 처리 (`--refs` flag 없음).
+네 갈래는 **독립적으로** 사용. "논문 한 줄짜리 라이프사이클"이 아니라 다양한 코드·문서 산출물을 각각 만들고, 만든 뒤에는 **D**로 반복 polish. 갈래 간 chaining은 `.claude_reports/` 영속 산출물의 _implicit_ 인지로 처리 (`--refs` flag 없음).
 
 ### A. 사전 조사 & 분석 (input gathering)
 
@@ -102,6 +102,22 @@ flowchart LR
 
 > **`--format-ref <path>`**: 학회·저널·랩별 가이드라인/템플릿/샘플 path. 생략 시 `analysis_project/doc/{matching}/formats/`에서 자동 탐색. `review`만 hard-fail, 나머지는 generic 진행. 상세는 [autopilot-doc/SKILL.md](skills/autopilot-doc/SKILL.md).
 
+### D. 사후 정정 & refine (post-production polish)
+
+**A/B/C로 만든 산출물은 거의 한 번에 끝나지 않는다** — 챕터 톤 다듬기, 표/숫자 교정, reviewer-style 의견 반영, 부분 wording 수정 같은 _routine한 사후 수정_이 실제 작업 시간의 큰 부분을 차지. 이 갈래는 `/autopilot-refine` 단일 entry로 처리하며 prompt와 사용자 메모 두 입력을 모두 받음.
+
+| 입력 형태 | 명령 | 비고 |
+|---|---|---|
+| chat에서 자연어 prompt | `/autopilot-refine "<prompt>"` | artifact는 prompt 키워드 fuzzy match로 자동 식별. diff preview 후 confirm. |
+| 산출물에 직접 적어둔 메모 (`<!-- memo: ... -->` 또는 별도 file) | `/autopilot-refine --memo <file>` | deferred review — 산출물 읽으며 적어둔 메모를 일괄 반영. |
+| 적용 없이 검수만 | `/autopilot-refine "<prompt>" --review-only` | 제안 diff만 보고 종료. |
+
+- **대상**: `.claude_reports/research/*` + `.claude_reports/documents/*`. code 산출물은 D 대상이 아님 — `/refine-plan` 또는 `/autopilot-code` 사용.
+- **버전 + 이력**: 적용 시 `_internal/versions/v{N}/` 스냅샷 + `pipeline_summary.md`에 통합 history 누적 (별도 CHANGELOG 없음).
+- **QA**: 기본 `--qa quick` (1-pass, 가장 빠름). 중요한 산출물은 `light` (reviewer 1×) → `standard` (+ fact-checker) → `thorough` (reviewer 2× parallel + fact-checker).
+
+> **왜 first-class인가**: A/B/C가 "초안 생성"이라면 D는 "정련". 실무에서는 D를 5-20회 반복하는 게 일반적이므로 autopilot family의 4번째 갈래로 격상. memo든 prompt든 진입점은 `/autopilot-refine` 하나로 통일 — `refine-doc`은 그 sub-skill로 흡수됨.
+
 ### 자주 쓰는 chaining 패턴
 
 - **A → C**: `autopilot-research <topic>` → `research/{topic}/` 생성 → autopilot-doc이 implicit 인지
@@ -126,7 +142,7 @@ flowchart LR
 | **노션 페이지·DB 갱신, 실험 결과 로깅** | 메인 컨텍스트에서 Notion MCP 도구 직접 호출 ([`notion_guide.md`](notion_guide.md) 참조) | sub-agent X (MCP 도구 접근 제약) |
 | 특정 paywall 논문 1편 fetch | `Agent(탐색팀)` | autopilot-research 안 돌리고 단발성 |
 | 단계별 테스트만 실행 | `/run-test <plan>` skill | autopilot-code 전체 X |
-| **이미 만든 research/doc 산출물의 prompt 기반 정정** | `/autopilot-refine "<prompt>"` skill | refine-doc memo 안 쓰고 chat에서 diff confirm. artifact는 prompt fuzzy match로 식별. |
+| **이미 만든 research/doc 산출물 정정 (D)** | `/autopilot-refine "<prompt>"` 또는 `/autopilot-refine --memo <file>` skill | prompt·memo 동일 entry. diff preview 후 confirm, 버전+history 자동 누적. artifact는 prompt fuzzy match로 식별. |
 
 **원칙**: agent 단독 호출은 **plan/log 산출물이 남지 않으므로** 그때그때만 쓰고, 추적이 필요한 작업은 autopilot으로. 기획팀은 직접 호출 거의 X — `/init-plan` 사용.
 
@@ -140,10 +156,10 @@ flowchart LR
 | `autopilot-research` | 분야 조사 — mode별 보고서 (academic 9 / technology 7 / market 5) | `--mode academic/technology/market` · `--depth shallow/medium/deep` · `--qa quick/light/standard/thorough` · `--from search/analyze/report` · `--no-clarify` |
 | `autopilot-code` | 코드 dev/audit/debug | `--mode dev/audit/debug` · `--qa quick/light/standard/thorough/adversarial` · `--from plan/refine/execute/test/report` · `--user-refine` |
 | `autopilot-doc` | 문서 strategy + draft (markdown). 입력은 `analysis_project/{paper,doc}/` + `research/{topic}/` 자동 발견 | `--mode rebuttal/write/review/report/proposal/presentation` · `--format-ref <path>` (생략 시 `analysis_project/doc/{matching}/formats/`에서 자동 탐색) · `--qa quick/light/standard/thorough` · `--from analyze/strategy/strategy-refine/draft/draft-refine/finalize` · `--user-refine` · `--no-clarify` |
-| `autopilot-refine` | autopilot family — research/doc 산출물 prompt 기반 사후 수정. 대상 artifact는 prompt 키워드로 fuzzy match. | `"<prompt>"` · `--qa quick(default)/light/standard/thorough` · `--review-only` (검수만) · `--memo <file>` (memo fallback) |
+| `autopilot-refine` | **갈래 D** — research/doc 산출물 사후 정정. prompt와 사용자 메모 두 입력을 통일된 entry로 처리. artifact는 fuzzy match로 자동 식별. | `"<prompt>"` 또는 `--memo <file>` · `--qa quick(default)/light/standard/thorough` · `--review-only` (검수만) |
 | `sync-skills` | 본 README + 노션 대시보드 동기화 | `--check` · `--readme-only` · `--notion-only` · `--force` |
 
-> sub-skill (`init-plan`, `refine-plan`, `init-doc-strategy`, `refine-doc`, `execute-plan`, `run-test`, `final-report`)은 autopilot 내부에서 자동 호출 — 직접 사용은 pause 재개 시점에만. `autopilot-refine`은 autopilot family의 4번째 멤버 (사후 수정 전용 top-level skill).
+> sub-skill (`init-plan`, `refine-plan`, `init-doc-strategy`, `refine-doc`, `execute-plan`, `run-test`, `final-report`)은 autopilot 내부에서 자동 호출 — 직접 사용은 pause 재개 시점에만. `autopilot-refine`은 autopilot family의 **4번째 갈래(D)** — 사후 정정 전용 top-level skill로, prompt와 memo 두 입력 형태를 단일 entry로 처리 (`refine-doc`은 그 sub-skill로 흡수).
 
 ### 핵심 옵션 4가지
 
@@ -183,8 +199,9 @@ flowchart LR
     USER(("사용자"))
     subgraph SKILLS[" "]
         ARES["autopilot-research"]
-        ACODE["autopilot-code"]
-        ADOC["autopilot-doc"]
+        ACODE["autopilot-code (B)"]
+        ADOC["autopilot-doc (C)"]
+        AREF["autopilot-refine (D)"]
     end
     subgraph AUTO["자동 위임"]
         PT["기획팀"]
@@ -200,6 +217,7 @@ flowchart LR
     USER --> ARES
     USER --> ACODE
     USER --> ADOC
+    USER --> AREF
     USER -. 작은 작업 .-> DT
     USER -. 단발성 검토 .-> QT
     USER -. 도메인 cross-check .-> RT
@@ -214,6 +232,8 @@ flowchart LR
     ACODE -. qa adversarial .-> CRT
     ADOC --> RT
     ADOC --> QT
+    AREF --> QT
+    AREF -. fact-check .-> RT
 ```
 </details>
 
