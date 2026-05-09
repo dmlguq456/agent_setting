@@ -64,7 +64,7 @@ flowchart LR
 
 ## 🧭 활용 갈래 — 4 카테고리
 
-네 갈래는 **독립적으로** 사용. "논문 한 줄짜리 라이프사이클"이 아니라 다양한 코드·문서 산출물을 각각 만들고, 그중 **C 산출물(과 A의 research 보고서)** 은 **D**로 반복 polish (B의 code는 `/refine-plan`, A의 `analyze-project`는 같은 명령 재실행으로 갱신). 갈래 간 chaining은 `.claude_reports/` 영속 산출물의 _implicit_ 인지로 처리 (`--refs` flag 없음).
+네 갈래는 **독립적으로** 사용. "논문 한 줄짜리 라이프사이클"이 아니라 다양한 코드·문서 산출물을 각각 만들고, 그중 **C 산출물(과 A의 research 보고서)** 은 **D**로 반복 polish. 다른 갈래는 D 대신 자체 update 매커니즘 — A의 `analyze-project`는 같은 명령 재실행 시 기존 요약을 read+merge, B의 autopilot-code는 `--from <stage>` 또는 `/refine-plan`으로 기존 plan을 update. 갈래 간 chaining은 `.claude_reports/` 영속 산출물의 _implicit_ 인지로 처리 (`--refs` flag 없음).
 
 ### A. 사전 조사 & 분석 (input gathering)
 
@@ -113,9 +113,9 @@ flowchart LR
 | 적용 없이 검수만 | `/autopilot-refine "<prompt>" --review-only` | 제안 diff만 보고 종료. |
 
 - **D 대상**: `.claude_reports/documents/*` (C 산출물) + `.claude_reports/research/*` (A의 `autopilot-research` 산출물).
-- **D 비대상** — 다른 갈래는 다른 메커니즘으로 사후 수정:
-  - **A의 `analyze-project`** — 입력 자료가 바뀌면 _같은 명령을 한 번 더 돌리면 자동 재생성·업데이트_. 별도 refine 루프 불필요.
-  - **B (autopilot-code)** — code 산출물의 사후 수정은 `/refine-plan` 또는 `/autopilot-code`로.
+- **D 비대상** — 다른 갈래는 _기존 산출물을 그 자리에서 update하는_ 별도 메커니즘을 가지고 있어서 D 루프가 필요 없음:
+  - **A의 `analyze-project`** — 같은 명령을 한 번 더 돌리면 _기존 `analysis_project/{code,paper,doc}/*.md`를 읽고 변경분을 병합·업데이트_ (덮어쓰기 X). 입력 자료가 바뀌었을 때의 자연스러운 재실행이 곧 update.
+  - **B (autopilot-code)** — `/autopilot-code --from <stage> <plan>` 으로 기존 `plans/{name}/`의 특정 단계부터 재개·update, 또는 `/refine-plan`으로 plan 안의 memo 기반 정정. 둘 다 기존 frontmatter(`qa_level`, `user_refine`)와 dev/test logs를 보존하며 update.
 - **버전 + 이력**: 적용 시 `_internal/versions/v{N}/` 스냅샷 + `pipeline_summary.md`에 통합 history 누적 (별도 CHANGELOG 없음).
 - **QA**: 기본 `--qa quick` (1-pass, 가장 빠름). 중요한 산출물은 `light` (reviewer 1×) → `standard` (+ fact-checker) → `thorough` (reviewer 2× parallel + fact-checker).
 
