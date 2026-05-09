@@ -1,7 +1,7 @@
 ---
 name: autopilot-refine
-description: Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: target artifact identified via prompt fuzzy match against `.claude_reports/{research,documents}/*`, then auto-discovers the artifact's file structure, plans edits, shows a diff preview in chat, and on user confirm applies edits with versioning + integrated history logging in `pipeline_summary.md` (single source of truth — no separate CHANGELOG). Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough for multi-round review or fact-check. Optional `--memo <file>` falls back to file-memo style for deferred reviews.
-argument-hint: "\"<prompt>\" [--qa quick|light|standard|thorough] [--review-only | --memo <file>]"
+description: Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: target artifact identified via prompt fuzzy match against `.claude_reports/{research,documents}/*`, then auto-discovers the artifact's file structure, plans edits, shows a diff preview in chat, and on user confirm applies edits with versioning + integrated history logging in `pipeline_summary.md` (single source of truth — no separate CHANGELOG). Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough/adversarial for multi-round review, fact-check, or external Codex adversarial pass. Optional `--memo <file>` falls back to file-memo style for deferred reviews.
+argument-hint: "\"<prompt>\" [--qa quick|light|standard|thorough|adversarial] [--review-only | --memo <file>]"
 ---
 
 > **산출물 폴더 컨벤션**: [SKILL_OUTPUT_CONVENTION.md](../../SKILL_OUTPUT_CONVENTION.md) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
@@ -12,7 +12,7 @@ argument-hint: "\"<prompt>\" [--qa quick|light|standard|thorough] [--review-only
 - `autopilot-research` / `autopilot-code` / `autopilot-doc` create artifacts (forward direction).
 - `autopilot-refine` reads and updates existing artifacts (reverse direction).
 
-Naming consistency: same `--qa quick|light|standard|thorough` flag as the rest of the family, but with `quick` as the **default** (because the skill targets routine, scoped edits — not full re-creation).
+Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag as the rest of the family, but with `quick` as the **default** (because the skill targets routine, scoped edits — not full re-creation).
 
 ## Scope
 
@@ -28,8 +28,11 @@ Naming consistency: same `--qa quick|light|standard|thorough` flag as the rest o
 | **light** | Adds a 1× quality reviewer (sonnet) pass on the proposed diff before showing it. Catches obvious regressions but stays fast. |
 | **standard** | Adds 1× quality reviewer (opus) + 1× fact-checker (sonnet, parallel) on the proposed diff. Verbatim 대조 against in-artifact ground truth — research: `cards/*.md`; doc: `analysis/*.md` + 기존 strategy/draft 본문. 외부 refs PDFs는 재독 안 함. |
 | **thorough** | 2× quality reviewers (opus, parallel) + 1× fact-checker. Use for high-stakes refines (final-version paper draft, public-facing report). |
+| **adversarial** | `standard` (1× quality opus + 1× fact-checker, parallel) + **Codex external adversarial review** via `Agent(codex-review-team)` on the proposed diff. Use when the artifact will face strong external scrutiny (camera-ready paper, grant submission, public rebuttal) — Codex acts as a hostile reader. Slowest tier. |
 
 Higher levels add a pre-apply review pass on the planned diff — they do NOT add post-apply review (that's not what this skill is for; use `/refine-doc` if you want full memo-style review cycles).
+
+> **`adversarial` propagation**: at this tier, after the standard reviewers return, spawn `Agent(codex-review-team)` with (a) the proposed diff, (b) the artifact's intent (from `pipeline_summary.md`), and (c) the source ground-truth (research: `cards/*.md`; doc: `analysis/*.md` + existing strategy/draft). Surface Codex findings alongside internal reviewer findings before the user-confirm step. If Codex flags a blocking issue, mark it in the diff preview as `⚠ Codex: <issue>` so the user can decide whether to apply, revise, or abort.
 
 ## Mode Forms (orthogonal to --qa)
 
