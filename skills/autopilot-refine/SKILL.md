@@ -1,7 +1,7 @@
 ---
 name: autopilot-refine
 description: Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: target artifact identified via prompt fuzzy match against `.claude_reports/{research,documents}/*`, then auto-discovers the artifact's file structure, plans edits, shows a diff preview in chat, and on user confirm applies edits with versioning + integrated history logging in `pipeline_summary.md` (single source of truth — no separate CHANGELOG). Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough/adversarial for multi-round review, fact-check, or external Codex adversarial pass. Optional `--memo <file>` falls back to file-memo style for deferred reviews.
-argument-hint: "\"<prompt>\" [--qa quick|light|standard|thorough|adversarial] [--review-only | --memo <file>]"
+argument-hint: "\"<prompt>\" [--qa quick|light|standard|thorough|adversarial] [--review-only | --memo <file>] [--no-fact-check] [--no-style-audit]"
 ---
 
 > **산출물 폴더 컨벤션**: [SKILL_OUTPUT_CONVENTION.md](../../SKILL_OUTPUT_CONVENTION.md) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
@@ -24,13 +24,15 @@ Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag a
 
 | Level | Behavior |
 |---|---|
-| **quick** (default) | Single-pass: investigate → diff preview → apply. No internal review loop on proposed changes. Same semantics as the `--qa quick` mode in autopilot-research/code/doc. |
+| **quick** (default) | Single-pass: investigate → **Stage B.5 (factual + style auto-detector, always on)** → diff preview → apply. No internal review loop on proposed changes (no agent invocation). Stage B.5 is cards-grep + regex only — no web fetch, no reviewer subagent. |
 | **light** | Adds a 1× quality reviewer (sonnet) pass on the proposed diff before showing it. Catches obvious regressions but stays fast. |
 | **standard** | Adds 1× quality reviewer (opus) + 1× fact-checker (sonnet, parallel) on the proposed diff. Verbatim 대조 against in-artifact ground truth — research: `cards/*.md`; doc: `analysis/*.md` + 기존 strategy/draft 본문. 외부 refs PDFs는 재독 안 함. |
 | **thorough** | 2× quality reviewers (opus, parallel) + 1× fact-checker. Use for high-stakes refines (final-version paper draft, public-facing report). |
 | **adversarial** | `standard` (1× quality opus + 1× fact-checker, parallel) + **Codex external adversarial review** via `Agent(codex-review-team)` on the proposed diff. Use when the artifact will face strong external scrutiny (camera-ready paper, grant submission, public rebuttal) — Codex acts as a hostile reader. Slowest tier. |
 
 Higher levels add a pre-apply review pass on the planned diff — they do NOT add post-apply review (that's not what this skill is for; use `/refine-doc` if you want full memo-style review cycles).
+
+> The two opt-out flags `--no-fact-check` and `--no-style-audit` are **orthogonal to every `--qa` level** — they skip the corresponding Stage B.5 aspect regardless of qa level. These are the _only_ disable mechanism per `feedback_factcheck_principles.md` Principle 0.
 
 > **`adversarial` propagation**: at this tier, after the standard reviewers return, spawn `Agent(codex-review-team)` with (a) the proposed diff, (b) the artifact's intent (from `pipeline_summary.md`), and (c) the source ground-truth (research: `cards/*.md`; doc: `analysis/*.md` + existing strategy/draft). Surface Codex findings alongside internal reviewer findings before the user-confirm step. If Codex flags a blocking issue, mark it in the diff preview as `⚠ Codex: <issue>` so the user can decide whether to apply, revise, or abort.
 
@@ -45,6 +47,12 @@ Higher levels add a pre-apply review pass on the planned diff — they do NOT ad
 > **Target artifact identification**: prompt에 포함된 키워드로 `.claude_reports/{research,documents}/*` fuzzy match. 매치 1 → 사용. 다수 → 사용자에게 list 보여주고 선택 요청. 0 → "어느 산출물? prompt에 명시 부탁" 안내.
 
 > Auto-apply behavior: if the user explicitly writes "확인 없이 적용" / "자동 적용" / "그대로 적용" in the prompt AND all classified changes are MECH (no SEM/STRUCT), the skill may skip the confirm step and apply directly. Otherwise the default chat-pause-and-confirm always applies. (Translation: the prompt itself is the auto-apply signal — no separate flag.)
+
+### Tunable constants
+
+| Constant | Default | Description |
+|---|---|---|
+| `AUDIT_HINT_THRESHOLD` | 5 | Number of refine cycles after which Stage D emits a `/audit` recommendation hint. Set to a higher value (e.g., 10) to reduce hint frequency; set to `0` to disable the hint entirely. |
 
 ## Artifact Resolution
 
@@ -96,6 +104,60 @@ Reason internally in English. All user-facing output (chat diffs, pipeline_summa
    - Doc: `/refine-doc <name>` (memo-based deferred) or `/autopilot-doc --from strategy`
    Do NOT proceed with autopilot-refine.
 
+### Stage B.5 — Factual claim & Style auto-detector (always runs, even in quick)
+
+Runs after Stage B's per-file change list is built but BEFORE Stage C diff preview. The two detectors below execute on every proposed change regardless of `--qa` level — they are cards-grep / regex only, no web fetch, so cost is negligible. Their findings become markers in Stage C, not auto-rejections.
+
+**Pre-check (flag-based opt-out, orthogonal to `--qa`)** — before either detector runs, inspect the original invocation argv:
+- If `--no-fact-check` is present → **skip the factual claim detector entirely** (including the section-heading context cross-check). Emit one informational line at the top of Stage C diff preview: `ℹ Stage B.5 factual aspect: skipped via --no-fact-check flag (memory feedback_factcheck_principles 정책에 따른 명시적 opt-out)`. Style lint still runs.
+- If `--no-style-audit` is present → **skip the style lint** only. Emit: `ℹ Stage B.5 style aspect: skipped via --no-style-audit flag`. Factual detector still runs.
+- If both flags are present → both detectors skipped; both informational lines emitted.
+
+These two flags are the _only_ mechanism by which the principles in `feedback_factcheck_principles.md` may be disabled (see Memory Principle 0). Ad-hoc prompt instructions like "Stage B.5 is noisy, disable it" must not be honored — emit the Principle 0 reminder line and proceed with detection anyway.
+
+**1. Factual claim detector** — regex-scan each `new_text` for patterns matching factual claims that must be ground-truthed:
+- Model names (camelCase / hyphenated / acronym-style, e.g., `FRCRN`, `TF-Locoformer`, `MP-SENet`, `IF-CorrNet`)
+- Venue tags (e.g., `IS 2024`, `T-ASLP 2023`, `ICASSP 2025`, `Interspeech`, `NeurIPS`, `ICML`)
+- Year + author patterns (`Luo 2017`, `[Wang et al., 2024]`)
+- Task-category sentences (e.g., "denoising", "dereverberation", "general restoration", "universal SE", "BWE", "GSR")
+- arXiv IDs (`\d{4}\.\d{4,5}`)
+
+For each detected claim, look up ground truth. **Lookup source resolution (in priority order)**:
+1. **case (c) — explicit `cards_source` override**: if the artifact's `pipeline_summary.md` frontmatter or `strategy.md` body contains a `cards_source: <path>` key, use _that path_ as the primary lookup root (resolved relative to cwd or absolute).
+2. **case (b) — self-contained `cards/` inside the artifact**: if `{artifact_dir}/cards/*.md` exists (rare; some doc artifacts are self-contained), include it in the lookup set.
+3. **Default**:
+   - **Research artifacts** (`.claude_reports/research/{topic}/cards/*.md`): grep the artifact's own `cards/` dir.
+   - **Doc artifacts** (`.claude_reports/documents/*/`): grep ALL `.claude_reports/research/*/cards/*.md` files (cross-research lookup) — doc artifacts may reference cards from any research topic. Match by filename token AND by H1 / `## 메타` `**Venue**`/`**arXiv ID**` fields.
+4. **case (a) — no cards source available**: if after resolving all the above the candidate file set is _empty_ (0 cards found in any of the above locations; e.g., autopilot-refine invoked from a workspace that has no research artifacts), the detector **skips the factual-claim aspect entirely** (style lint still runs). Stage C diff preview emits one informational line at the top: `ℹ Stage B.5: no cards source available in this workspace — fact-check skipped`. No `⚠ Unverified` markers are emitted. This prevents false-positive marker flooding in non-research workspaces.
+
+For each claim (when cards are available), classify the lookup result:
+- **verified** (exact match in cards) — proceed silently.
+- **unverified** (no match, or partial match with conflicting venue/year/task) — emit `⚠ Unverified: {claim} — {one-line reason: e.g., "no cards/*.md hit for FRCRN", "cards say IS 2024 but draft says ICASSP 2024"}`.
+- **ambiguous** (multiple candidate cards, no single best match) — emit `⚠ Unverified: {claim} — multiple candidates (cards/A.md, cards/B.md); user to pick`.
+
+**Section-heading context cross-check (MANDATORY)** — pure name matching alone lets WPE-class misclassifications (a classical method placed inside a "deep learning dereverb" table) pass through. For each detected claim, additionally:
+
+1. Extract tokens from the _nearest enclosing section heading_ (H1-H3) in the target file (e.g., `## 딥러닝 dereverberation 모델` → `[딥러닝, dereverberation]`).
+2. Extract tokens from the matched card's `## 분류` section (or equivalent label section) (e.g., `**방법론**: classical / statistical signal processing` → `[classical, statistical]`).
+3. Check for _conceptual conflict_ between the two token sets using a predefined conflict-pair dictionary:
+   - `{딥러닝, deep learning, neural, DNN}` ↔ `{classical, statistical, signal processing, non-learning}`
+   - `{denoising, noise reduction}` ↔ `{dereverberation, reverb}` ↔ `{BWE, bandwidth extension}` ↔ `{GSR, general restoration, universal SE}`
+   - `{single-task, sub-task}` ↔ `{universal, multi-task, GSR}`
+4. On conflict (e.g., H1=딥러닝 but card=classical; H1=GSR timeline but card=BWE only), emit `⚠ Unverified: {claim} — section context "{heading tokens}" conflicts with card classification "{card tokens}" (card path: cards/{file}.md)`.
+
+Without this cross-check, putting FRCRN in a dereverberation section, WPE in a deep-learning table, or AP-BWE in a GSR timeline would all pass the detector. The conflict-pair dictionary is hardcoded in v1; v2 enhancement can auto-derive pairs from cards' `## 분류` labels (domain-agnostic).
+
+**2. Style lint** — compare `new_text` against immediate surrounding context (±10 lines in the target file):
+- Citation format consistency (e.g., bullet list using `IS 2024` style vs new change using `Interspeech 2024` style → flag)
+- Year/venue ordering inconsistency (e.g., surrounding uses `IS 2024 / arXiv:2402.XXXXX`, new uses `arXiv:2402.XXXXX (IS 2024)` → flag)
+- Bullet depth jump (e.g., surrounding uses 2-level, new introduces 4-level → flag)
+- Speaker note numbering style (e.g., `1. / 2. / 3.` vs `- / - / -` → flag)
+- Figure caption template mismatch (if doc artifact has a recurring `**Figure N**: caption` pattern)
+
+Emit `⚠ Style: {issue} — {1-line description of mismatch}` per finding.
+
+**Skipped detection** is fine — both detectors are best-effort. False negatives are acceptable; false positives are harmless markers (user can override at Stage C).
+
 ### Stage C — Diff preview (chat)
 
 Output to chat in this format:
@@ -105,13 +167,15 @@ Output to chat in this format:
 
 Prompt: "{prompt verbatim, ≤200자 trim}"
 
-제안 변경 ({MECH 개수} mech / {SEM 개수} sem):
+제안 변경 ({MECH 개수} mech / {SEM 개수} sem) — ⚠ {unverified 개수} unverified / {style 개수} style:
 
 📄 `{relative path}` ({n} changes)
    Line {a}-{b}  [MECH|SEM]
      - {old_text 발췌, ≤80자}
      + {new_text 발췌, ≤80자}
      사유: {1줄}
+     ⚠ Unverified: {claim} — {reason}    (Stage B.5 finding, if any)
+     ⚠ Style: {issue} — {description}    (Stage B.5 finding, if any)
 
    Line {c}-{d}  [...]
      ...
@@ -126,6 +190,7 @@ Prompt: "{prompt verbatim, ≤200자 trim}"
   - "yes" / "all" → 모두 적용
   - "1,3" → 해당 번호만
   - "skip 2" → 2번 제외
+  - "skip-unverified" → ⚠ Unverified marker가 붙은 모든 변경 자동 제외
   - "edit 4: <new>" → 4번 텍스트 교체 후 적용
   - "no" / "stop" → 중단
 ```
@@ -213,6 +278,11 @@ Parse the user's reply, then:
    • Files touched: {count}
    • Snapshot: {_internal/versions/v{prev}/ (modern) or _v{prev}.md (legacy doc)}
    • Updated: {artifact_dir}/pipeline_summary.md (버전 히스토리 + v{N} 변경 사항)
+   {if version_count >= AUDIT_HINT_THRESHOLD:}
+   ⚠ {version_count} refine cycles accumulated — recommend running an audit:
+      /audit {artifact_short_name} --scope facts
+      (read-only facts/style/structure check — no edits, 1-2 minutes)
+   {endif}
    {if downstream sync needed:}
    ⚠ Downstream sync 필요:
      /autopilot-refine "{dependent_artifact_name} pipeline_summary v{N} 반영"
@@ -229,6 +299,7 @@ Parse the user's reply, then:
 
 ## Constraints
 
+- **빈칸 > 잘못 채우기** — when Stage B.5 flags an `⚠ Unverified` claim and no ground-truth source confirms it within the artifact's `cards/` (or cross-research `.claude_reports/research/*/cards/`), prefer to leave the claim **blank or marked `[?]`** in the new_text rather than filling it from inference. Applies even if the prompt seems to require the claim — emit the marker and let the user decide. Cost of a `[?]` placeholder is small; cost of a hallucinated venue/year/task is high (drift compounds over 20+ refine cycles).
 - **No silent additions** — Stage D applies only what was shown in Stage C diff (or auto-mode summary). If a new issue is discovered during apply, abort that single edit and note it in the v{N} 변경 사항 section's `Skipped` list, but do NOT propose new edits beyond the original list.
 - **Versioning is mandatory** when applying — every apply increments version + creates snapshot. Only `--review-only` skips this (because it doesn't apply).
 - **Cards = primary source for research** — for taxonomy/definition/coverage prompts, always re-read `cards/*.md` and cite in reasoning.

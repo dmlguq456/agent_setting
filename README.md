@@ -19,12 +19,16 @@ flowchart LR
     B["[B] autopilot-code"]
     C["[C] autopilot-doc"]
     D["[D] autopilot-refine<br/>(R/C 산출물 사후 정정)"]
+    AU["[E] audit<br/>(R/C/B 산출물 read-only 점검)"]
     A --> B
     A --> C
     R --> B
     R --> C
     R --> D
     C --> D
+    R --> AU
+    C --> AU
+    B --> AU
 ```
 
 `analyze-project`는 사전 분석을 _세 종류_로 단일 skill에서 처리:
@@ -32,7 +36,7 @@ flowchart LR
 - `--mode paper` (명시 필요) → 논문 PDFs cards + overview
 - `--mode doc` (default if doc-only 자료 감지) → reviewer comments / format templates / past samples 분류
 
-`autopilot-research`는 _외부_ 새 조사 (검색 + 분석). `autopilot-code` / `autopilot-doc`은 위 _영속 산출물_을 implicit 자동 발견. **`autopilot-refine`은 research/doc 산출물의 사후 정정 루프(D) — prompt 또는 사용자 메모를 단일 entry로 일괄 처리**. 실제 작업 시간의 상당 부분이 여기에 들어가므로 A/B/C와 동등한 first-class 갈래로 취급.
+`autopilot-research`는 _외부_ 새 조사 (검색 + 분석). `autopilot-code` / `autopilot-doc`은 위 _영속 산출물_을 implicit 자동 발견. **`autopilot-refine`은 research/doc 산출물의 사후 정정 루프(D) — prompt 또는 사용자 메모를 단일 entry로 일괄 처리**. 실제 작업 시간의 상당 부분이 여기에 들어가므로 A/B/C와 동등한 first-class 갈래로 취급. **`/audit`는 D의 read-only counterpart** — 수정 없이 facts / style / structure를 점검만 하고 보고서를 남긴다. drift 누적 후 sanity check 또는 인계 전 검수에 사용.
 
 ### 산출물 I/O (`.claude_reports/` 관점)
 
@@ -62,7 +66,7 @@ flowchart LR
 
 ---
 
-## 🧭 활용 갈래 — 4 카테고리
+## 🧭 활용 갈래 — 5 카테고리
 
 네 갈래는 **독립적으로** 사용. "논문 한 줄짜리 라이프사이클"이 아니라 다양한 코드·문서 산출물을 각각 만들고, 그중 **C 산출물(과 A의 research 보고서)** 은 **D**로 반복 polish (B의 code는 `/refine-plan`, A의 `analyze-project`는 같은 명령 재실행으로 갱신). 갈래 간 chaining은 `.claude_reports/` 영속 산출물의 _implicit_ 인지로 처리 (`--refs` flag 없음).
 
@@ -121,6 +125,19 @@ flowchart LR
 
 > **왜 first-class인가**: C/A-research의 "초안 생성"과 D의 "정련"은 작업 성격·시간 비중 모두 다름. 실무에서는 D를 5-20회 반복하는 게 일반적이므로 autopilot family의 4번째 갈래로 격상. memo든 prompt든 진입점은 `/autopilot-refine` 하나로 통일 — `refine-doc`은 그 sub-skill로 흡수됨.
 
+### E. 사후 점검 — 읽기만 (post-production audit)
+
+`/audit`는 산출물을 **수정하지 않고** facts / style / structure / cross-ref 다각도 점검만 수행. 누적 drift가 의심되거나 인계 전 sanity check가 필요할 때.
+
+| 입력 형태 | 명령 | 비고 |
+|---|---|---|
+| 산출물 경로 또는 fuzzy 이름 | `/audit <artifact_path>` | type 자동 인식 (plans/research/documents). 보고서를 `_internal/audit/`에 기록. 수정 없음. |
+| 특정 측면만 | `/audit <artifact> --scope facts\|style\|structure\|cross-ref\|coverage` | facts = 모델·venue·year cards 대조 (section-context cross-check) / style = 양식 일관성 / structure = T1/T2/T3 컨벤션 / cross-ref = 인용 깨짐 / coverage = cards 중 한 번도 인용되지 않은 orphan 검출 (omission 방지) |
+| Code plan static-only 점검 | `/audit <plan> --read-only` | 테스트 실행 없이 정적 점검만 (test_report.md 읽기만) |
+
+- **D vs E 차이**: `autopilot-refine` = 수정 흐름 (diff → confirm → apply + version). `/audit` = 점검 흐름 (report-only, 항상 read-only). E의 결과를 받아 D를 호출하는 게 일반 패턴.
+- **언제 사용**: (a) C 산출물을 20회+ refine한 후 누적 drift 점검 / (b) 다른 사람이 만든 artifact 인계 전 검수 / (c) plan 종료 후 audit-mode dev cycle 대신 가벼운 static-only 점검.
+
 ### 자주 쓰는 chaining 패턴
 
 - **A → C**: `autopilot-research <topic>` → `research/{topic}/` 생성 → autopilot-doc이 implicit 인지
@@ -146,6 +163,7 @@ flowchart LR
 | 특정 paywall 논문 1편 fetch | `Agent(탐색팀)` | autopilot-research 안 돌리고 단발성 |
 | **PDF figure 일괄 추출** (paper PDFs → PNG figures) | `Agent(탐색팀, mode="extract_pdf_figures")` | research/{topic}/figures/ 또는 documents/{...}/assets/figures/에 PNG + figure_index.md 적층 |
 | **인터넷 reference 그림 검색** (스타일 참고용) | `Agent(탐색팀, mode="web_reference")` | URL + caption + (옵션) image binary fetch. 저작권 fair use 안내 |
+| **산출물 다각도 read-only 점검** (facts/style/structure cross-check, 수정 없음) | `/audit <artifact>` skill | autopilot-refine과 달리 _수정 없음_. 누적 drift 점검·인계 전 검수에 사용 |
 | 단계별 테스트만 실행 | `/run-test <plan>` skill | autopilot-code 전체 X |
 | **이미 만든 research/doc 산출물 정정 (D)** | `/autopilot-refine "<prompt>"` 또는 `/autopilot-refine --memo <file>` skill | prompt·memo 동일 entry. diff preview 후 confirm, 버전+history 자동 누적. artifact는 prompt fuzzy match로 식별. |
 
@@ -162,6 +180,7 @@ flowchart LR
 | `autopilot-code` | 코드 dev/audit/debug | `--mode dev/audit/debug` · `--qa quick/light/standard/thorough/adversarial` · `--from plan/refine/execute/test/report` · `--user-refine` |
 | `autopilot-doc` | 문서 strategy + draft (markdown). 입력은 `analysis_project/{paper,doc}/` + `research/{topic}/` 자동 발견 | `--mode rebuttal/write/review/report/proposal/presentation` · `--format-ref <path>` (생략 시 `analysis_project/doc/{matching}/formats/`에서 자동 탐색) · `--qa quick/light/standard/thorough` · `--from analyze/strategy/strategy-refine/draft/draft-refine/finalize` · `--user-refine` · `--no-clarify` |
 | `autopilot-refine` | **갈래 D** — research/doc 산출물 사후 정정. prompt와 사용자 메모 두 입력을 통일된 entry로 처리. artifact는 fuzzy match로 자동 식별. | `"<prompt>"` 또는 `--memo <file>` · `--qa quick(default)/light/standard/thorough/adversarial` · `--review-only` (검수만) |
+| `audit` | **갈래 E** — read-only multi-aspect 점검. plans/research/documents 자동 인식, type별 aspect set (facts/style/structure/cross-ref/coverage or cards 정합성/Tier/coverage/cross-card or test/lint/code-review/TODO). 수정 없음, 보고서만. | `<artifact_path>` · `--scope facts/style/structure/cross-ref/coverage/all` (default all) · `--read-only` (plans 정적-only) |
 | `sync-skills` | 본 README + 노션 대시보드 동기화 | `--check` · `--readme-only` · `--notion-only` · `--force` |
 
 > sub-skill (`init-plan`, `refine-plan`, `init-doc-strategy`, `refine-doc`, `execute-plan`, `run-test`, `final-report`)은 autopilot 내부에서 자동 호출 — 직접 사용은 pause 재개 시점에만. `autopilot-refine`은 autopilot family의 **4번째 갈래(D)** — 사후 정정 전용 top-level skill로, prompt와 memo 두 입력 형태를 단일 entry로 처리 (`refine-doc`은 그 sub-skill로 흡수).
@@ -177,6 +196,7 @@ flowchart LR
   - `thorough`: doc은 quality 2× parallel + fact-checker 1× / research도 동일 / code는 quality 2× parallel.
   - `adversarial` (autopilot-code, autopilot-refine): standard + Codex 외부 리뷰 추가 (`Agent(codex-review-team)`이 제안된 변경에 대해 hostile reader 역할). camera-ready / grant / public rebuttal 같이 외부 검증이 강한 산출물 전용.
 - **`--no-clarify`** (autopilot-research / autopilot-doc) — Step 0 Scope Clarification 강제 skip. 모호한 query라도 사전 질문 없이 즉시 진행.
+- **`/audit <artifact>`** — 사후 점검 (read-only). facts/style/structure 다각도 lint, 보고서만, 수정 X. autopilot-refine 호출 _전_에 한 번 돌려 drift 파악 권장.
 
 > **Step 0 Scope Clarification**: query가 모호하거나 mode multi-match일 때 autopilot이 2-4개 sharp question을 던지고 사용자 답변을 받아 진행. 충분히 구체적인 query는 자동 skip. 매번 묻지 않으니 부담 없음.
 
@@ -207,6 +227,7 @@ flowchart LR
         ACODE["autopilot-code (B)"]
         ADOC["autopilot-doc (C)"]
         AREF["autopilot-refine (D)"]
+        AUD["audit (E)"]
     end
     subgraph AUTO["자동 위임"]
         PT["기획팀"]
@@ -223,6 +244,7 @@ flowchart LR
     USER --> ACODE
     USER --> ADOC
     USER --> AREF
+    USER --> AUD
     USER -. 작은 작업 .-> DT
     USER -. 단발성 검토 .-> QT
     USER -. 도메인 cross-check .-> RT

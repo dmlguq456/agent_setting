@@ -295,6 +295,43 @@ Read and catalog all materials from refs folder.
 ### Step 2: init-doc-strategy
 Invoke Skill: `init-doc-strategy` with args: `<mode> --inputs <comma-separated-discovered-paths> --output <artifact-dir> <task description>`. `<discovered-paths>`는 Pre-flight Step 2 (Input Discovery)가 발견한 `analysis_project/{paper,doc}/...`, `research/{topic}/` 경로 list (콤마 join). 매치 0이면 Pre-flight에서 이미 abort/warn 처리됨. Wait for completion.
 
+**Post-invocation requirement**: After `init-doc-strategy` returns, read the generated `{strategy_folder}/strategy/strategy.md`. **Verify it contains a `## Style Guide` section.** If absent, append the following template at the strategy file's end, then write the same content (translated) to `strategy_ko.md`:
+
+    ## Style Guide
+
+    > 본 산출물 전반에 적용되는 양식 규칙. Draft 생성·refine 모든 단계에서 이 섹션을 우선 참조.
+
+    ### Citation format
+    - 학회/저널 published 우선: `IS 2024`, `T-ASLP 2023`, `ICASSP 2025`, `Interspeech 2024`, `NeurIPS 2024` (학회명 약어 + 4-digit year, 공백 1개).
+    - arXiv-only 논문: `_arXiv:XXXX.XXXXX_` (italic, prefix `arXiv:`).
+    - 둘 다 존재: 학회 우선 표기 + arXiv id 보조 `IS 2024 / arXiv:2402.XXXXX` (slash 구분, 학회 → arXiv 순).
+    - Author-year inline: `[Wang et al., 2024]` (대괄호 + comma + space).
+
+    ### Year / venue 표기 표준
+    - 학회 논문: `{학회 약어} {year}` (e.g., `Interspeech 2024`, `ICASSP 2025`).
+    - 약어 매핑 고정: `Interspeech → IS`, `ICASSP → ICASSP`, `NeurIPS → NeurIPS`, `ICLR → ICLR`, `T-ASLP → T-ASLP`, `JASA → JASA`.
+    - arXiv preprint: `arXiv:{YYMM.XXXXX}` (italic 권장).
+    - Year 단독 표기 금지: 항상 venue 동반.
+
+    ### Figure caption template
+    - `**Figure N**: {caption 1줄}. Source: cards/{file}.md` (논문 인용 figure인 경우)
+    - 자체 도식: `**Figure N**: {caption}` (Source 줄 생략)
+
+    ### Bullet depth
+    - 본문 bullet: 최대 3-level. 4-level 이상 금지 (구조 약화).
+    - Speaker note (presentation mode): numbered `1. / 2. / 3.` (Markdown ordered list).
+
+    ### Speaker note numbering
+    - `1. {발화 1}` / `2. {발화 2}` / `3. {발화 3}` — ordered list, period + space.
+    - Dash bullets (`- ...`) 사용 금지 (Speaker note 한정).
+
+    ### 모델 분류 표기 (research cards 기반)
+    - 모델명 / venue / task / year는 _반드시_ research cards (`{research_artifact}/cards/*.md`)에서 verbatim 인용.
+    - cards에 없는 모델: 본문에서 _제외_하거나 `[?]` 표시. 인용 책임 단일 source: cards.
+    - Task category 라벨 통일: 사용된 cards의 `## 분류` section에 등장한 라벨만 사용 (자체 분류 카테고리 신설 금지 — 새 라벨이 필요하면 strategy 본문에 명시 후 cards 보강 별도 진행).
+
+이 Style Guide는 본 artifact의 _single source of truth_ for 양식. Draft 생성·refine 시 이 섹션이 변경되지 않으면 양식 일관성 유지.
+
 ### Step 3: Strategy Review (연구팀 as domain expert)
 1. Resolve strategy paths:
    - `strategy_folder` = `.claude_reports/documents/{YYYY-MM-DD}_{short-name}/`
@@ -404,6 +441,9 @@ Strategy (EN): {en_strategy_path}
 Strategy (KO): {ko_strategy_path}
 Analysis directory: {strategy_folder}/analysis/
 Reference materials: {refs_folder}
+
+**Style Guide (MANDATORY)**: Before writing any draft content, read `{strategy_folder}/strategy/strategy.md` and locate the `## Style Guide` section. Apply its rules to **every** citation, figure caption, bullet depth, speaker note, model classification, and venue/year tag in the draft. Style Guide rules override any default formatting you might use. If the Style Guide says `IS 2024` for Interspeech 2024 papers, you must use `IS 2024` — never `Interspeech 2024` or `Interspeech, 2024`. If a model lookup fails (the cards/* don't contain it), use `[?]` rather than fabricating venue/year.
+
 Save English draft to: {strategy_folder}/draft/draft.md
 Save Korean draft to: {strategy_folder}/draft/draft_ko.md
 
@@ -592,6 +632,7 @@ Generate a **PPT cheatsheet markdown** — single file, optimized for human read
 - Strategy doc의 슬라이드 outline을 그대로 매핑 (총 슬라이드 수와 챕터 시간 분배 일치).
 
 ## Quality Requirements
+- **Style Guide compliance**: every claim, citation, figure caption, bullet, and speaker note must match the `## Style Guide` section in `strategy.md`. Style Guide is _the_ authoritative format spec for this artifact — not your generic markdown habits.
 - Every claim must trace back to a specific reference in the refs folder or analysis.
 - Do NOT fabricate citations, data, or results.
 - Mark uncertain or placeholder content with `[TODO: ...]`.
@@ -605,6 +646,26 @@ Write both files directly. Return ONLY the file paths and a 3-5 line Korean summ
 ```
 
 3. **IMPORTANT**: Do NOT read, re-write, or duplicate the draft files yourself. The agent writes them directly.
+
+### Step 4b — Post-draft factual detector (orchestrator-side, all modes)
+
+**Always runs** — even at `--qa quick` or `--qa light`. Orchestrator executes directly (no sub-agent). Cost is small: regex + cards grep only.
+
+1. **Run detector**: apply regex + cards lookup + section-context cross-check to `{strategy_folder}/draft/draft.md` and `{strategy_folder}/draft/draft_ko.md`.
+   - For each domain claim (model name / venue / year / metric / dataset / lineage / citation), attempt lookup in `{research_artifact}/cards/*.md`.
+   - Classify each claim as: **verified** (exact match in cards), **unverified** (no matching card found), **ambiguous** (partial match or unclear), **conflict** (cards contain contradicting value).
+2. **Classify results**: count N (unverified), M (ambiguous), K (conflict).
+3. **Do NOT modify the draft** — preserve the sub-agent's output verbatim.
+4. **Append row to `{strategy_folder}/pipeline_summary.md` Decision Points section**:
+   ```
+   | Step 4 | draft factual check | auto | {N + K} unverified/conflict + {M} ambiguous in draft — recommend /audit before publish |
+   ```
+5. **One-line chat alert** (Korean):
+   ```
+   ⚠ Draft 사실 확인: 미검증 {N}건, 모호 {M}건, 충돌 {K}건 — /audit {artifact_short_name} --scope facts 권장
+   ```
+
+If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}건, 문제 없음` and log accordingly.
 
 ### Step 5: Draft Review (연구팀 as QA)
 **Applicable modes**: rebuttal, write, report, proposal, review, presentation. (All 6 modes that generated drafts.)
