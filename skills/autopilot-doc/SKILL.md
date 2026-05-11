@@ -423,25 +423,51 @@ Invoke Skill: `init-doc-strategy` with args: `<mode> --inputs <comma-separated-d
 ### Step 4: Draft Generation
 **Applicable modes**: rebuttal, write, report, proposal, review, presentation. (All 6 modes generate drafts.)
 
-#### Step 4.0: Figure Discovery (조사 단계 figure 자동 인지)
+#### Step 4.0a: Multi-source Figure Discovery
 
-Draft 생성 전, _research/{topic}/figures/figure_index.md_ 존재 여부를 확인하고 paper figure list를 인지:
+Draft 생성 전, figure_index.md 또는 figure asset이 있을 수 있는 _세 source_를 순차 검색:
 
-1. **Discovery**: `.claude_reports/research/*/figures/figure_index.md` glob (top match by topic relevance to task description).
-2. 존재 시: figure_index.md 파싱 → paper_id × figure path 매핑 dict 생성.
-3. 부재 시: warn "research figures 미존재. 자동 추출 옵션 — autopilot-research를 먼저 호출하여 Step 3.5 (figure extraction) 실행 권장." → 그대로 draft 진행 (figure embed 없이).
+1. **Source 1 — research figures**: `.claude_reports/research/*/figures/figure_index.md` glob (top match by topic relevance to task description).
+2. **Source 2 — analysis_project paper figures**: `.claude_reports/analysis_project/paper/figures/figure_index.md` (analyze-project --mode paper에서 figure extraction이 함께 수행된 경우 존재).
+3. **Source 3 — artifact self figures**: `{artifact_dir}/assets/figures/figure_index.md` 또는 단순히 `{artifact_dir}/assets/figures/*.png` (사용자 직접 추출·생성).
 
-#### Step 4.0b: Path Convention (자동 계산, 사용자 수동 X)
+발견된 모든 source의 figure_index를 merge → paper_id × figure path 매핑 dict 생성. 중복은 source 1 > 2 > 3 우선 (research가 가장 신뢰).
+
+#### Step 4.0b: On-demand Figure Extraction (figure_index 부재 시)
+
+세 source 모두 figure_index.md가 없거나 figure assets이 비어 있으면, draft orchestrator가 _자체적으로_ figure extraction 시도:
+
+1. **Source paper PDFs 위치 확인**:
+   - `.claude_reports/analysis_project/paper/cards/*.md`에서 `**PDF 위치**` 또는 `**arXiv ID**` field grep
+   - `.claude_reports/research/*/cards/*.md`에서 동일 field grep
+   - 발견된 PDF paths를 input set으로 수집
+2. **PDF input set이 비어 있지 않으면 → 탐색팀 호출**:
+   ```
+   Agent(subagent_type="탐색팀",
+         description="PDF figure extraction for doc",
+         prompt="extract_pdf_figures mode. Input PDFs: {pdf_paths}.
+                 Output: .claude_reports/analysis_project/paper/figures/ (또는 적합한 공용 위치).
+                 figure_index.md 생성 — paper_id × figure path 매핑.
+                 본 doc draft에서 자동 embed 용도.")
+   ```
+3. **추출 완료 후** figure_index.md를 다시 파싱하여 매핑 dict에 추가 (Source 2 위치).
+4. **PDF source도 없으면** warn "figure source 부재 — analyze-project --mode paper 또는 autopilot-research 먼저 호출 권장" → 그대로 draft 진행 (figure embed 없이).
+
+이로써 _autopilot-research를 거치지 않은 doc artifact_도 figure 자동 embed 가능.
+
+#### Step 4.0c: Path Convention (자동 계산, 사용자 수동 X)
 
 Draft markdown에 figure embed 시 _상대 경로_는 **draft 파일 위치 기준 자동 계산** — 사용자가 수동으로 path 입력 X. 표준 환경:
 
 - draft 위치: `{artifact_dir}/draft/draft_ko.md` (or draft.md)
 - artifact_dir: `.claude_reports/documents/{date}_{name}/`
-- 자동 제작 가안 위치: `{artifact_dir}/assets/figures/` → draft 기준 `../assets/figures/{file}.png` (1단 위)
-- 추출 paper figure 위치: `.claude_reports/research/{topic}/figures/` → draft 기준 `../../../research/{topic}/figures/{file}.png` (3단 위 — draft → 2026-... → documents → .claude_reports → research)
-- figure_index.md: `../../../research/{topic}/figures/figure_index.md`
+- 세 source 별 path:
+  - **Source 1 (research)**: `.claude_reports/research/{topic}/figures/` → draft 기준 `../../../research/{topic}/figures/{file}.png` (3단 위)
+  - **Source 2 (analysis_project paper)**: `.claude_reports/analysis_project/paper/figures/` → draft 기준 `../../../analysis_project/paper/figures/{file}.png` (3단 위)
+  - **Source 3 (artifact self)**: `{artifact_dir}/assets/figures/` → draft 기준 `../assets/figures/{file}.png` (1단 위)
+- figure_index.md 경로도 위와 동일 패턴
 
-Draft 작성 sub-agent (연구팀)에게 위 path convention을 전달; sub-agent가 잘못된 상대 경로 사용하지 않도록 명시.
+Draft 작성 sub-agent (연구팀)에게 위 path convention을 전달; sub-agent가 잘못된 상대 경로 사용하지 않도록 명시. 세 source 중 어디서 가져온 figure인지에 따라 상대 경로 결정.
 
 #### Step 4.1: Draft Generation (연구팀 호출)
 
@@ -611,11 +637,12 @@ Generate a **PPT cheatsheet markdown** — single file, optimized for human read
 - 우측 1/2 (또는 보조): {보조 시각}
 - 또는 전체 화면: {풀 페이지 도식 설명}
 
-<!-- 자동 figure embed (Step 4.0 결과 figure_index.md 매핑이 있는 슬라이드만) -->
-<!-- 자동 제작 가안: <img src="../assets/figures/slideXX_*.png" alt="..." width="500" /> -->
-<!-- 추출 paper figure: <img src="../../../research/{topic}/figures/{paper_id}_fig{N}.png" alt="..." width="500" /> -->
+<!-- 자동 figure embed (Step 4.0a/4.0b 결과 figure_index.md 매핑이 있는 슬라이드만) -->
+<!-- Source 1 (research): <img src="../../../research/{topic}/figures/{paper_id}_fig{N}.png" alt="..." width="500" /> -->
+<!-- Source 2 (analysis paper): <img src="../../../analysis_project/paper/figures/{paper_id}_fig{N}.png" alt="..." width="500" /> -->
+<!-- Source 3 (artifact self): <img src="../assets/figures/slideXX_*.png" alt="..." width="500" /> -->
 <!-- 작은 크기 (width=500) 미리보기 수준; 사용자 메모리 정책 — feedback_figure_combined_pptx_only.md 참조 -->
-<!-- Path은 draft 위치 기준 자동 계산 (Step 4.0b Path Convention) — 사용자 수동 X -->
+<!-- Path은 draft 위치 기준 자동 계산 (Step 4.0c Path Convention) — 사용자 수동 X -->
 {자동 embed: 사용 가능 figure 목록 (figure_index.md 매핑) 중 본 슬라이드 토픽과 매치되는 figure가 있으면 inline `<img width="500" />` syntax로 자동 embed. 자동 매핑이 모호하면 placeholder만 두고 사용자 polish 영역으로 표시.}
 
 **Speaker note**:
