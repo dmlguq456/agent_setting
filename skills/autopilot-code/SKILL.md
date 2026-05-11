@@ -113,7 +113,20 @@ Otherwise:
    - If targets are under `.claude_reports/research/*` → `task_type=research artifact`.
    - Mixed → `task_type=mixed`.
 
-   Invoke **연구팀** (research-team) agent: "Review this plan as user proxy. **Task type: {task_type}** — apply the type-specific review axes from your Role 1 Step 3 table. Korean plan: {ko_plan_path}. English plan: {en_plan_path}. Review log: {log_dir}/_internal/plan_reviews/research_review.md. Beyond the default paper/domain axes, weight the task-type-specific axes heavily (for meta-skill: family-level naming conflict + cross-skill scope overlap + sync-skills downstream + frontmatter validity)."
+   **By `qa_level`**:
+   - **light / standard** (default) — single 연구팀 instance covers all task-type axes:
+     ```
+     Invoke 연구팀: "Review this plan as user proxy. **Task type: {task_type}** — apply ALL Role 1 Step 3 axes for this task type (no Focus axis). Korean plan: {ko_plan_path}. English plan: {en_plan_path}. Review log: {log_dir}/_internal/plan_reviews/research_review.md. Weight task-type-specific axes heavily (for meta-skill: family-level naming conflict + cross-skill scope overlap + sync-skills downstream + frontmatter validity)."
+     ```
+   - **thorough / adversarial** — **axis-decomposed parallel 연구팀** (each axis = separate instance, parallel batch):
+     - Per `agents/research-team.md` Role 1 _Multi-axis parallel mode_, dispatch N parallel 연구팀 instances. Each invocation includes `Focus axis: <axis_name>` to limit that instance to a single lens.
+     - Axes per task type (from the same Role 1 table):
+       * paper-driven code → `paper-alignment` / `api-contracts` / `test-coverage` / `code-style`
+       * meta-skill → `naming-conflict` / `scope-overlap` / `sync-downstream` / `frontmatter-mermaid`
+       * infra/config → `permissions` / `hook-side-effects` / `settings-drift`
+     - Each instance writes memos with `[<axis_name>]` prefix (e.g., `[NAMING-CONFLICT]`, `[TEST-COVERAGE]`) and a separate review log: `{log_dir}/_internal/plan_reviews/research_review_<axis_name>.md`.
+     - After all parallel instances return, merge memos + deduplicate, then proceed with refine-plan.
+   - **Why decomposition at thorough+**: a single 연구팀 instance handling many axes can dilute attention. Parallel decomposition lets each instance focus narrowly while collectively covering everything a careful user would catch (especially audit-aligned aspects: naming conflicts / test coverage gaps / style drift).
 3. If memos added:
    - **`--user-refine` pause**: if the flag is set (CLI or plan frontmatter), update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command, and exit. Do NOT invoke refine-plan.
    - Otherwise: invoke Skill `refine-plan` with the Korean plan path.

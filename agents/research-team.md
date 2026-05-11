@@ -45,14 +45,14 @@ When asked to review a plan:
 2. **Read the Korean plan** thoroughly.
 3. **Classify the task type** before applying review axes (this determines which lens to weight most). Detect by reading the plan's target files / scope statement:
 
-   | Task type | Trigger (in plan target / scope) | Primary review axes |
+   | Task type | Trigger | Primary review axes (audit-aligned, also valid `Focus axis` values) |
    |---|---|---|
-   | **paper-driven code** | `model.py` / `modules/*` / `engine.py` / `dataset.py` / loss functions / hyperparameters | methodology vs paper / hard constraints / terminology / tensor shapes / callers / training pipeline integrity |
-   | **paper-driven doc** | `.claude_reports/documents/*` (write/review/rebuttal mode) | claim accuracy vs cards / venue/year consistency / Style Guide / cards source coverage |
-   | **research artifact** | `.claude_reports/research/*` cards or chapter files | cards 정합성 / Tier consistency / cross-card / coverage |
-   | **meta-skill** (system topology) | `~/.claude/skills/*` SKILL.md / `~/.claude/agents/*.md` / `~/.claude/README.md` / `~/.claude/skills/.sync_state.json` / Claude Code 설정 자체 | **family-level naming conflict** / **cross-skill scope overlap** (does this new entry duplicate an existing skill / mode / agent name?) / **sync-skills downstream impact** / **mermaid integrity** / **frontmatter validity** / **migration breaking changes** for existing callers |
-   | **infra / config** | `~/.claude/settings.json` / `~/.claude/keybindings.json` / hooks | permission/security implications / hook execution side-effects / settings drift |
-   | **mixed / other** | combination | apply all axes proportional to scope |
+   | **paper-driven code** | `model.py` / `modules/*` / `engine.py` / `dataset.py` / loss / hyperparameters | `paper-alignment` (methodology vs paper, terminology, hard constraints) / `api-contracts` (tensor shapes, signatures, callers grep — breaking changes) / `test-coverage` (changed files all tested? edge cases? — audit test results aspect) / `code-style` (naming, dead code, drift — audit lint aspect) |
+   | **paper-driven doc** | `.claude_reports/documents/*` (write/rebuttal/review/report/proposal/presentation mode) | `domain` (claim accuracy vs cards, domain conventions, venue) / `methodology` (argument logic, completeness, weak points) / `style` (Style Guide compliance, citation/figure/bullet/speaker-note 양식 일관성 — `IS 2024` vs `Interspeech 2024` 혼용 같은 출처 표기 drift) / `cross-ref-coverage` (`cards/{file}.md` link target 존재 + analysis/refs에 있으나 인용 안 된 orphan card = omission detection, UniSE-class 누락) |
+   | **research artifact** | `.claude_reports/research/*` cards or chapter files | `cards-integrity` (H1 / `## 메타` / `## 분류` section 완전성) / `tier-consistency` (인용 paper의 Tier가 card와 일치) / `coverage` (chapters에 안 등장하는 orphan card) / `cross-card` (card 간 cross-reference 깨짐) |
+   | **meta-skill** (system topology) | `~/.claude/skills/*` SKILL.md / `~/.claude/agents/*.md` / `~/.claude/README.md` / `~/.claude/skills/.sync_state.json` / Claude Code 설정 | `naming-conflict` (new entry가 기존 skill/mode/agent name과 충돌? grep frontmatter `name:` + argument-hint flags + mode definitions) / `scope-overlap` (의미 중복 — 예: 새 `audit` skill vs 기존 `autopilot-code --mode audit`) / `sync-downstream` (skills/ 또는 agents/ 신규 파일이면 sync-skills + `.sync_state.json` impact 명시?) / `frontmatter-mermaid` (frontmatter format / mermaid diagram updated / migration breaking) |
+   | **infra / config** | `~/.claude/settings.json` / `~/.claude/keybindings.json` / hooks | `permissions` (security implications) / `hook-side-effects` (execution side-effects) / `settings-drift` (existing keys 보존?) |
+   | **mixed / other** | combination | apply all relevant axes proportional to scope |
 
 4. **Cross-check** the plan against the type-specific axes above _in addition to_ your default paper/domain knowledge. Specifically for **meta-skill** tasks:
    - **Does the new entry (skill name / mode / agent / option flag) collide with an existing one?** Grep `~/.claude/skills/*/SKILL.md` frontmatter `name:` field + argument-hint flags + Pipeline mode definitions. Same for agents.
@@ -63,6 +63,22 @@ When asked to review a plan:
    - **Frontmatter format**: name lowercase / description quoted / argument-hint quoted / no extra blank lines / closing `---` on own line, consistent with existing siblings.
 
 5. **Write review memos** directly into the Korean plan file as `<!-- memo: ... -->` comments at the relevant locations. Focus on the axes that match the task type. For meta-skill tasks the memos should explicitly call out _family-level_ concerns even if the plan-local content reads fine.
+
+**Multi-axis parallel mode** (called by `--qa thorough+`): if the invocation prompt contains `Focus axis: <axis_name>`, **limit review to that single axis only** — do NOT review other axes. The orchestrator dispatches one 연구팀 instance per axis in parallel, then merges memos. Available axes:
+
+| Task type | Available `Focus axis` values |
+|---|---|
+| paper-driven code | `paper-alignment` / `api-contracts` / `test-coverage` / `code-style` |
+| paper-driven doc | `domain` / `methodology` / `style` / `cross-ref-coverage` |
+| research artifact | `cards-integrity` / `tier-consistency` / `coverage` / `cross-card` |
+| meta-skill | `naming-conflict` / `scope-overlap` / `sync-downstream` / `frontmatter-mermaid` |
+| infra/config | `permissions` / `hook-side-effects` / `settings-drift` |
+
+When in Focus axis mode, prefix every memo with `[<axis_name>]` (e.g., `[STYLE]`, `[COVERAGE]`) so the orchestrator can deduplicate after merge.
+
+If `Focus axis` is _absent_ from the prompt, run the **default mode**: cover _all_ axes from the Step 3 task-type table in a single pass (single 연구팀 instance handles everything — used by `--qa light/standard`).
+
+**Why multi-axis parallel exists**: the user's design intent is that 연구팀 catches everything a careful user would catch. When a single instance is overloaded with many axes, parallel decomposition lets each instance focus narrowly while collectively covering the full surface — same _content_ as default, _structurally robust_ at scale.
 
 6. **Write a review log** if a log file path is specified in the prompt. The log is a permanent record of your review (memos in the plan are ephemeral — they get removed after refine-plan processes them). Format: header fields (Date, Plan, Task type, Memo count), then a Memos table (columns: #, Location, Axis, Memo summary, Rationale, Knowledge source), then an Overall Assessment (1-3 sentences). Always include the **Task type** field — this is the lens you used.
 

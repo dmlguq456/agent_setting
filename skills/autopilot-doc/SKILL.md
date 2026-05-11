@@ -352,24 +352,40 @@ Invoke Skill: `init-doc-strategy` with args: `<mode> --inputs <comma-separated-d
    - Quality review log: `{strategy_folder}/_internal/strategy_reviews/research_review_quality.md`
    - Fact-check log: `{strategy_folder}/_internal/strategy_reviews/research_review_factcheck.md`
 
-   **`thorough`** (default) — 2× 연구팀 quality reviewers (opus, parallel) + 1× 연구팀 fact-checker (sonnet, parallel):
-   - **Quality Reviewer A (Domain Expert)**: Cross-checks strategy against reference materials, domain conventions (academic venues for paper modes: NeurIPS, ICML, ICLR, ICASSP, Interspeech, T-ASLP; industry standards for report/proposal/presentation modes), and completeness of coverage.
+   **`thorough`** (default) — **axis-decomposed parallel 연구팀** (모든 audit-aligned axes를 각각 별도 instance가 검토) + 1× 연구팀 fact-checker:
+   - **Axis A — Domain quality** (opus): refs/reviewer comments 대조, 학술 venue 컨벤션 (NeurIPS / ICML / ICASSP / Interspeech / T-ASLP — paper modes), industry standards (report/proposal/presentation), 완전성 / cohesion.
      - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review_domain.md`
-   - **Quality Reviewer B (Methodology Reviewer)**: Evaluates logical consistency, persuasiveness of arguments, experimental design soundness, and identifies potential weaknesses an adversarial reviewer would exploit.
+   - **Axis B — Methodology** (opus): 논리 일관성, 주장 설득력, 실험 설계, adversarial reviewer 약점.
      - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review_methodology.md`
-   - **Fact-checker (sonnet, parallel)**: Verbatim cross-check of citation/venue/year/metric/lineage against cards/PDFs.
+   - **Axis C — Style Guide** (sonnet): `## Style Guide` section 존재 + citation/figure-caption/bullet-depth/speaker-note 양식 일관성.
+     - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review_style.md`
+   - **Axis D — Cross-ref + Coverage** (sonnet): `cards/{file}.md` 인용 target 존재 + analysis/refs에 있으나 strategy에 인용 안 된 _orphan card_ 식별 (omission detection — UniSE-class 누락 방지).
+     - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review_coverage.md`
+   - **Fact-checker** (sonnet): citation/venue/year/metric/lineage verbatim 대조 (cards/PDFs).
      - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review_factcheck.md`
-   - All reviewers write `<!-- memo: ... -->` comments in the Korean strategy.
-   - After all complete, merge memos and deduplicate.
+   - 모든 reviewer가 `<!-- memo: ... -->` 코멘트를 KO strategy에 작성. 각자 `[axis name]` prefix 명시 (예: `[STYLE]`, `[COVERAGE]`).
+   - 5 instance 완료 후 메모 merge + 중복 제거.
+
+   _이 axis decomposition은 "user-catchable points 전부 연구팀이 대신"의 multi-axis 구현 — 한 instance가 모든 axis를 다루기 부담스러운 thorough+에서 활성_.
 
    **Quality reviewer prompt** (light/standard/thorough A & B):
    ```
-   Review this document strategy as the user's domain expert proxy — _quality / cohesion / coverage_ focus.
+   Review this document strategy as the user's domain expert proxy.
+   **Task type: paper-driven doc** (mode: {mode}) — apply Role 1 Step 3 axes from agents/research-team.md, with audit-aspect alignment.
+
    Mode: {mode} | KO strategy: {ko_strategy_path} | EN strategy: {en_strategy_path}
    Analysis: {strategy_folder}/analysis/ | Refs: {refs_folder} | Log: {review_log_path}
 
-   Cross-check: actual refs/reviewer comments, domain conventions,
-   logical consistency, completeness (any missed reviewer points or gaps?).
+   **Default axes** (quality / cohesion / coverage):
+   - Cross-check: actual refs/reviewer comments, domain conventions
+   - Logical consistency, completeness (any missed reviewer points or gaps?)
+
+   **Audit-aspect axes** (catch what /audit would catch, _at plan time_):
+   - **Style Guide compliance** — `## Style Guide` section exists in strategy.md? Citation/figure-caption/bullet-depth/speaker-note rules followed?
+   - **Structure** — T1/T2/T3 layout per SKILL_OUTPUT_CONVENTION.md respected?
+   - **Cross-ref** — every `cards/{file}.md` citation target exists?
+   - **Coverage (omission detection)** — are there cards/papers in analysis/refs that the strategy SHOULD cite but doesn't? Flag as `<!-- memo: [COVERAGE] ... -->` per orphan.
+
    Do NOT verify individual fact citations (model venue/year/metric) — that's the fact-checker's role at standard+.
    Write memos as `<!-- memo: ... -->` in the Korean strategy.
    Write a structured review log to the log file.
@@ -688,27 +704,42 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
    - Quality review log: `{strategy_folder}/_internal/draft_reviews/draft_review_quality.md`
    - Fact-check log: `{strategy_folder}/_internal/draft_reviews/draft_review_factcheck.md`
 
-   **`thorough`** — 2× 연구팀 quality reviewers (opus, parallel) + 1× 연구팀 fact-checker (sonnet, parallel):
-   - **Quality Reviewer A (Content Expert)**: Cross-checks draft against strategy, verifies all strategy points are addressed, checks high-level factual coherence.
+   **`thorough`** — **axis-decomposed parallel 연구팀** (audit-aligned axes 각각 별도 instance) + 1× 연구팀 fact-checker:
+   - **Axis A — Content / Strategy coverage** (opus): strategy 본문이 draft에 모두 반영됐는지, factual coherence, rebuttal mode면 모든 reviewer point에 응답 있는지.
      - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review_content.md`
-   - **Quality Reviewer B (Writing Quality)**: Evaluates writing quality, logical flow, completeness, identifies gaps and weak arguments.
+   - **Axis B — Writing quality** (opus): 논리 flow, 완전성, 약한 주장 / [TODO] 잔존 등.
      - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review_quality.md`
-   - **Fact-checker (sonnet, parallel)**: Verbatim cross-check of citation/venue/year/metric/lineage against cards/PDFs — _independent_ of strategy/quality concerns.
+   - **Axis C — Style Guide compliance** (sonnet): strategy의 `## Style Guide` rule을 draft가 _모든_ citation / figure caption / bullet depth / speaker note에서 따랐는지. 일관성 일탈 (`IS 2024` vs `Interspeech 2024` 혼용 같은 것) 식별.
+     - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review_style.md`
+   - **Axis D — Cross-ref + Coverage** (sonnet): draft 안 `cards/{file}.md` link target 존재 + analysis/refs에 있으나 draft에 인용 안 된 orphan card 식별 (omission detection — UniSE-class 누락 방지).
+     - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review_coverage.md`
+   - **Fact-checker** (sonnet): citation/venue/year/metric/lineage verbatim 대조 (cards/PDFs).
      - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review_factcheck.md`
-   - All reviewers write `<!-- memo: ... -->` comments in the Korean draft.
-   - After all complete, merge memos and deduplicate.
+   - 모든 reviewer가 KO draft에 `<!-- memo: ... -->` 작성. 각자 `[axis name]` prefix 명시 (예: `[STYLE]`, `[COVERAGE]`, `[FACT]`).
+   - 5 instance 완료 후 메모 merge + 중복 제거.
 
-   **Quality reviewer prompt** (light/standard/thorough A & B):
+   _이 axis decomposition은 "user-catchable points 전부 연구팀이 대신"의 multi-axis 구현. 예: presentation mode 자료에서 사용자가 거슬려할 출처 표기 일관성·orphan 카드 누락·잘못된 모델 분류 모두 별도 axis instance가 책임._
+
+   **Quality reviewer prompt** (light/standard에서 단일 instance가 모든 axes 다룰 때):
    ```
-   Review this document draft as the user's domain expert proxy — _strategy coverage / writing quality / logic_ focus.
+   Review this document draft as the user's domain expert proxy.
+   **Task type: paper-driven doc** (mode: {mode}) — apply Role 1 Step 3 axes from agents/research-team.md, audit-aspect aligned.
+
    Mode: {mode} | KO draft: {ko_draft_path} | EN draft: {en_draft_path}
    Strategy: {en_strategy_path} | Analysis: {strategy_folder}/analysis/ | Refs: {refs_folder}
    Log: {review_log_path}
 
-   Cross-check: strategy coverage (all points addressed?), logical flow, writing quality, completeness, [TODO] items.
-   For rebuttal: verify every reviewer point has a response.
-   Do NOT individually verify each fact citation (model venue/year/metric) — that's the fact-checker's role at standard+.
-   Write memos as `<!-- memo: ... -->` in the Korean draft.
+   **Default axes** (content / writing quality):
+   - Strategy coverage (모든 strategy point가 draft에 반영?), logical flow, completeness, [TODO] 항목.
+   - rebuttal mode: 모든 reviewer point에 응답 존재?
+
+   **Audit-aspect axes** (사용자가 거슬려할 만한 점 — plan-time에 미리 catch):
+   - **Style Guide compliance** — `## Style Guide` rule이 모든 citation / figure caption / bullet / speaker note에서 _일관_되게 따라졌는가? 출처 표기 혼용 (`IS 2024` vs `Interspeech 2024`) 같은 게 있으면 `[STYLE]` memo.
+   - **Cross-ref** — `cards/{file}.md` link target이 모두 존재?
+   - **Coverage (omission detection)** — analysis/refs에 있으나 draft에 인용 안 된 _orphan card_ 식별. presentation mode면 슬라이드 어디에도 안 등장하는 card list. `[COVERAGE]` memo.
+
+   Do NOT individually verify each fact citation (venue/year/metric verbatim) — that's the fact-checker's role at standard+.
+   Write memos as `<!-- memo: ... -->` in the Korean draft. `[axis prefix]` (예: `[STYLE]`, `[COVERAGE]`) 명시.
    Write a structured review log to the log file.
    Return a summary of memos added (or "no issues found").
    ```
