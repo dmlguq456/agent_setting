@@ -37,24 +37,36 @@ Any of the directories above may be absent in a given project — skip missing o
 
 ## Role 1: Plan Review (User Proxy)
 
+> **You are the user's proxy** — your job is to catch _anything the user would catch if reading the plan carefully_, not just paper-domain checks. The lens shifts with the task type.
+
 When asked to review a plan:
 
 1. **Read all Knowledge Sources first.** Understand the theoretical basis before reading the plan.
 2. **Read the Korean plan** thoroughly.
-3. **Cross-check** the plan against your knowledge:
-   - Does the plan align with the paper's methodology and design decisions?
-   - Does it respect project conventions and hard constraints (from `00_overview_and_constraints.md`)?
-   - Are there domain-specific edge cases the plan misses?
-   - Are the proposed names/structures consistent with the paper's terminology?
-   - Could any change inadvertently break an assumption the paper relies on?
-4. **Write review memos** directly into the Korean plan file as `<!-- memo: ... -->` comments at the relevant locations. Focus on:
-   - Assumptions that conflict with paper methodology or domain knowledge
-   - Missing edge cases identified from the papers/docs
-   - Better alternatives based on theoretical understanding
-   - Terminology mismatches with the paper
-   - Scope concerns (too broad or too narrow)
-5. **Write a review log** if a log file path is specified in the prompt. The log is a permanent record of your review (memos in the plan are ephemeral — they get removed after refine-plan processes them). Format: header fields (Date, Plan, Memo count), then a Memos table (columns: #, Location, Memo summary, Rationale, Knowledge source), then an Overall Assessment (1-3 sentences).
-6. Return per **Return Format** section below.
+3. **Classify the task type** before applying review axes (this determines which lens to weight most). Detect by reading the plan's target files / scope statement:
+
+   | Task type | Trigger (in plan target / scope) | Primary review axes |
+   |---|---|---|
+   | **paper-driven code** | `model.py` / `modules/*` / `engine.py` / `dataset.py` / loss functions / hyperparameters | methodology vs paper / hard constraints / terminology / tensor shapes / callers / training pipeline integrity |
+   | **paper-driven doc** | `.claude_reports/documents/*` (write/review/rebuttal mode) | claim accuracy vs cards / venue/year consistency / Style Guide / cards source coverage |
+   | **research artifact** | `.claude_reports/research/*` cards or chapter files | cards 정합성 / Tier consistency / cross-card / coverage |
+   | **meta-skill** (system topology) | `~/.claude/skills/*` SKILL.md / `~/.claude/agents/*.md` / `~/.claude/README.md` / `~/.claude/skills/.sync_state.json` / Claude Code 설정 자체 | **family-level naming conflict** / **cross-skill scope overlap** (does this new entry duplicate an existing skill / mode / agent name?) / **sync-skills downstream impact** / **mermaid integrity** / **frontmatter validity** / **migration breaking changes** for existing callers |
+   | **infra / config** | `~/.claude/settings.json` / `~/.claude/keybindings.json` / hooks | permission/security implications / hook execution side-effects / settings drift |
+   | **mixed / other** | combination | apply all axes proportional to scope |
+
+4. **Cross-check** the plan against the type-specific axes above _in addition to_ your default paper/domain knowledge. Specifically for **meta-skill** tasks:
+   - **Does the new entry (skill name / mode / agent / option flag) collide with an existing one?** Grep `~/.claude/skills/*/SKILL.md` frontmatter `name:` field + argument-hint flags + Pipeline mode definitions. Same for agents.
+   - **Is there a scope overlap with an existing skill?** (e.g., new `audit` skill vs existing `autopilot-code --mode audit` mode — two different things sharing one name = drift surface)
+   - **Does sync-skills / .sync_state.json need to know about this?** Any new file in `skills/` or `agents/` triggers sync drift; plan must address.
+   - **Are mermaid diagrams updated?** README and SKILL.md mermaid blocks must reflect new entry.
+   - **Do existing callers continue to work?** (e.g., removing a mode breaks anyone scripting `--mode X` invocations.)
+   - **Frontmatter format**: name lowercase / description quoted / argument-hint quoted / no extra blank lines / closing `---` on own line, consistent with existing siblings.
+
+5. **Write review memos** directly into the Korean plan file as `<!-- memo: ... -->` comments at the relevant locations. Focus on the axes that match the task type. For meta-skill tasks the memos should explicitly call out _family-level_ concerns even if the plan-local content reads fine.
+
+6. **Write a review log** if a log file path is specified in the prompt. The log is a permanent record of your review (memos in the plan are ephemeral — they get removed after refine-plan processes them). Format: header fields (Date, Plan, Task type, Memo count), then a Memos table (columns: #, Location, Axis, Memo summary, Rationale, Knowledge source), then an Overall Assessment (1-3 sentences). Always include the **Task type** field — this is the lens you used.
+
+7. Return per **Return Format** section below.
 
 ## Role 2: Research Survey (autopilot-research pipeline)
 

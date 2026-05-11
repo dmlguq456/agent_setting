@@ -5,7 +5,7 @@
   "items": {
     "skills/analyze-project": {"sha256": "74f0695c976be8fd467a8bb95d5b4792336dbfc0108c7aea5a8e416ecac1d04c", "synced_at": "2026-05-08T13:27:38+09:00"},
     "skills/audit": {"sha256": "83dd39841cc6e96d270bd4c2b6d909b72347511cd94716d48ccea583e1017566", "synced_at": "2026-05-11T22:30:00+09:00"},
-    "skills/autopilot-code": {"sha256": "28dffb741927d939f2e195033827206288764fa880700f65a77e9e108e18b4f3", "synced_at": "2026-05-07T11:37:44+09:00"},
+    "skills/autopilot-code": {"sha256": "80c01a552872932d794924d4ad139feee994a43629edb6b504383713b11b83a6", "synced_at": "2026-05-11T22:55:00+09:00"},
     "skills/autopilot-doc": {"sha256": "749cec0884b1e968cb1880af5ce863ccea6888ecd64ffb1dcfccc0b79f4ddb4d", "synced_at": "2026-05-11T22:30:00+09:00"},
     "skills/autopilot-refine": {"sha256": "000cb29506415abeeb2c1b77aec3bd6a0dc5dd729667dc1bb2caf3638ff791e1", "synced_at": "2026-05-11T22:30:00+09:00"},
     "skills/autopilot-research": {"sha256": "0656d364e85080b0c5e9a6f346342179c9167366b7225b7798fc7eadecd310d7", "synced_at": "2026-05-09T18:05:00+09:00"},
@@ -22,7 +22,7 @@
     "agents/dev-team": {"sha256": "7248959c587c17a3d2da8425fa32580ab96134258074a678334c1777f6e0263b", "synced_at": "2026-05-06T14:27:45+09:00"},
     "agents/plan-team": {"sha256": "974e75aff84cf4977a90c455a9e6c407222b8daf1f5714413f512c06f88e708c", "synced_at": "2026-05-06T14:27:45+09:00"},
     "agents/qa-team": {"sha256": "3ae5c36ca1fb6ce37c21b641f842dcc90ccd8913fffe87a3c7c0d93ef6e6d900", "synced_at": "2026-05-06T14:27:45+09:00"},
-    "agents/research-team": {"sha256": "208b3df343c94457668c770c23b7800aa31f3752fcc6fb3196db506d7a4328a2", "synced_at": "2026-05-06T14:27:45+09:00"},
+    "agents/research-team": {"sha256": "742dbb620319ee13ef8818d49216924cb51b8b5a5ef79771ada52c62d40b0dce", "synced_at": "2026-05-11T22:55:00+09:00"},
     "agents/test-team": {"sha256": "aa84a4a3d52fb7fb0491326caca2e398fa835f36ce72d3d392ebf4129aef521d", "synced_at": "2026-05-06T14:27:45+09:00"}
   }
 }
