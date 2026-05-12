@@ -10,7 +10,7 @@
 | 필드 | 값 |
 |---|---|
 | name | `품질관리팀` |
-| model | opus (Light일 때 sonnet) |
+| model | **가변** — QA level별. Light=1× sonnet / Standard=1× opus / Thorough=2× opus parallel (frontmatter `model: opus`는 default level 기준) |
 | color | red |
 | memory | project |
 | tools | Glob, Grep, Read, Write, WebFetch, WebSearch, Bash |

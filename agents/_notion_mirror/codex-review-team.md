@@ -10,7 +10,7 @@ Codex CLI를 활용한 심층 리뷰 에이전트. review / adversarial-review /
 | 필드 | 값 |
 |---|---|
 | name | `codex-review-team` |
-| model | opus |
+| model | **Codex CLI (GPT-5)** for actual review · opus for sub-agent orchestration (호출·결과 한국어 재정리) |
 | color | red |
 | memory | project |
 | tools | Bash, Read, Grep, Glob, Write |

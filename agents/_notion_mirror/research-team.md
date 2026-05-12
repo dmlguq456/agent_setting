@@ -14,7 +14,7 @@
 | 필드 | 값 |
 |---|---|
 | name | `연구팀` |
-| model | opus (light QA 시 sonnet) |
+| model | **가변** — default opus (Plan Review·domain reviewer 등). fact-checker subrole·light QA는 sonnet (cost-aware verbatim matching) |
 | color | purple |
 | memory | project |
 | tools | Glob, Grep, Read, Write, Edit, Bash, WebFetch, WebSearch |
