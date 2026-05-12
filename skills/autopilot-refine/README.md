@@ -1,6 +1,6 @@
 # autopilot-refine
 
-> ⚠️ **Notion 페이지 없음**. 다음 `/sync-skills` 실행 시 자동으로 노션 자식 페이지 생성됩니다 (sync-skills SKILL.md §5c-5 절차). `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README는 Notion 페이지 [🔁 autopilot-refine](https://www.notion.so/35e87c2bb75381fab020d6f7c2685aef)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 Autopilot family — **post-creation iteration pipeline for research and doc artifacts** (NOT code). 갈래 E (사후 정정). 

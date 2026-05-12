@@ -1,6 +1,6 @@
 # sync-skills
 
-> ⚠️ **Notion 페이지 없음**. 다음 `/sync-skills` 실행 시 자동으로 노션 자식 페이지 생성됩니다 (sync-skills SKILL.md §5c-5 절차). `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README는 Notion 페이지 [🔄 sync-skills](https://www.notion.so/35e87c2bb75381a0b0c9ca3fa3159919)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 Skills + Agents 정의 변경을 감지해 다음을 동기화하는 skill:

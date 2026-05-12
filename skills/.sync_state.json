@@ -1,7 +1,7 @@
 {
   "version": 3,
-  "last_readme_sync": "2026-05-12T19:40:00+09:00",
-  "last_notion_sync": "2026-05-12T19:55:00+09:00",
+  "last_readme_sync": "2026-05-13T00:42:30+09:00",
+  "last_notion_sync": "2026-05-13T00:42:30+09:00",
   "items": {
     "skills/analyze-project": {
       "sha256": "db949ea7a6311b898accc66945d4dab552f4df925fe7ee111db71588a9100cc5",
@@ -15,13 +15,13 @@
     },
     "skills/audit": {
       "sha256": "a013d0c79ea1c0963c6e2843b850a84e80bc2c3628f870a6ed78f354ac9451d4",
-      "synced_at": "2026-05-12T02:30:00+09:00",
+      "synced_at": "2026-05-13T00:42:30+09:00",
       "readme_path": "skills/audit/README.md",
-      "readme_sha256": "20dab21288f29113e82c2e7341469698d546bb3379ce0cb1982072da9548efa8",
-      "readme_mtime": "2026-05-12T19:38:22+09:00",
+      "readme_sha256": "930df72b08a2be64f286b7fd9c7a5523fc481771a85100697b04bba36f50e673",
+      "readme_mtime": "2026-05-13T00:42:10+09:00",
       "notion_page_id": "35e87c2b-b753-81cf-b5c0-f5f22500eccc",
-      "notion_last_edited_time": "2026-05-12T19:50:00+09:00",
-      "notion_synced_sha256": "20dab21288f29113e82c2e7341469698d546bb3379ce0cb1982072da9548efa8"
+      "notion_last_edited_time": "2026-05-13T00:42:30+09:00",
+      "notion_synced_sha256": "930df72b08a2be64f286b7fd9c7a5523fc481771a85100697b04bba36f50e673"
     },
     "skills/autopilot-code": {
       "sha256": "0243aa7cca6f4aa77de883505795e6b950e489f6c0369d1bdbdb84084918291e",
@@ -45,13 +45,13 @@
     },
     "skills/autopilot-refine": {
       "sha256": "0916a5eca8debea707a6e774f5c6a824a8df6c505e944cfaaa96db8ce39e4835",
-      "synced_at": "2026-05-12T03:00:00+09:00",
+      "synced_at": "2026-05-13T00:42:30+09:00",
       "readme_path": "skills/autopilot-refine/README.md",
-      "readme_sha256": "b5925d67e9c1c4ace27e112da9ef3b7c7fbc81d9c79a82f379cf1074d26115e3",
-      "readme_mtime": "2026-05-12T19:38:35+09:00",
+      "readme_sha256": "33551b18e42f0822d903256a58a6dc67fde629ca69f3950f8f8c97bc01905095",
+      "readme_mtime": "2026-05-13T00:42:15+09:00",
       "notion_page_id": "35e87c2b-b753-81fa-b020-d6f7c2685aef",
-      "notion_last_edited_time": "2026-05-12T19:50:00+09:00",
-      "notion_synced_sha256": "b5925d67e9c1c4ace27e112da9ef3b7c7fbc81d9c79a82f379cf1074d26115e3"
+      "notion_last_edited_time": "2026-05-13T00:42:30+09:00",
+      "notion_synced_sha256": "33551b18e42f0822d903256a58a6dc67fde629ca69f3950f8f8c97bc01905095"
     },
     "skills/autopilot-research": {
       "sha256": "cc47611985592983b92e36c418511ec81b29388e833fb2620621f6cac7ad459b",
@@ -135,14 +135,14 @@
       "notion_synced_sha256": null
     },
     "skills/sync-skills": {
-      "sha256": "8a2bbd768dd4f7e84f1addbe4d8ecd5a8098355df32b958e7188e33d889abd64",
-      "synced_at": "2026-05-13T00:38:00+09:00",
+      "sha256": "c55015925ec0a968ba96d4c4cd197f6fb05c1f4585936d203a1565d1f538f1eb",
+      "synced_at": "2026-05-13T00:42:30+09:00",
       "readme_path": "skills/sync-skills/README.md",
-      "readme_sha256": "8b8f903d615ba26872c4ce262459b01900bd5eaf7c2a850acd8d0715cfcad933",
-      "readme_mtime": "2026-05-12T19:38:50+09:00",
+      "readme_sha256": "af315a52a50eb7488a6fce3fc772759b31e608abe21c1df998bf0d5ee07ae02d",
+      "readme_mtime": "2026-05-13T00:42:20+09:00",
       "notion_page_id": "35e87c2b-b753-81a0-b0c9-ca3fa3159919",
-      "notion_last_edited_time": "2026-05-12T19:50:00+09:00",
-      "notion_synced_sha256": "8b8f903d615ba26872c4ce262459b01900bd5eaf7c2a850acd8d0715cfcad933"
+      "notion_last_edited_time": "2026-05-13T00:42:30+09:00",
+      "notion_synced_sha256": "af315a52a50eb7488a6fce3fc772759b31e608abe21c1df998bf0d5ee07ae02d"
     },
     "agents/browser-team": {
       "sha256": "27914b2e22501cb816c4e88f09f1e13a0b11e7882e40186a5f5c2a8450abf26f",

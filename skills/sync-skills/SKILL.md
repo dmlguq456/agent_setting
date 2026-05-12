@@ -290,6 +290,7 @@ local README는 있는데 Notion에 매칭 페이지 없음:
 1. `mcp__claude_ai_Notion__notion-create-pages` 호출
 2. parent: 대문 페이지의 `<columns>` 영역 (skill은 첫 컬럼, agent는 두 번째 컬럼). 단, 컬럼 안에 새 페이지 추가는 MCP가 직접 지원 안 할 수 있음 — 그 경우 대문 페이지 직속 자식으로 생성 후 사용자에게 "컬럼에 이동 필요" 안내.
 3. 생성 응답의 page_id를 `.sync_state.json`에 저장.
+4. **로컬 README의 stub 헤더 교체** — local README가 `> ⚠️ **Notion 페이지 없음**...` stub 헤더로 시작하면, 표준 미러 헤더 `> 본 README는 Notion 페이지 [{icon} {name}]({url})의 미러. \`/sync-skills\`로 양방향 동기화. 권위 있는 동작 명세는 \`SKILL.md\` (skill) 또는 \`{agent_basename}.md\` (agent).` 로 교체. 누락 시 다음 sync에서 stub이 영구히 남는 버그가 발생 (예: 2026-05-12 audit/autopilot-refine/sync-skills 3건).
 
 #### 5c-6. 충돌 처리 (양쪽 모두 변경)
 

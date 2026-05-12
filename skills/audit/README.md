@@ -1,6 +1,6 @@
 # audit
 
-> ⚠️ **Notion 페이지 없음**. 다음 `/sync-skills` 실행 시 자동으로 노션 자식 페이지 생성됩니다 (sync-skills SKILL.md §5c-5 절차). `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README는 Notion 페이지 [🔍 audit](https://www.notion.so/35e87c2bb75381cfb5c0f5f22500eccc)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 Read-only multi-aspect audit / lint for `.claude_reports/{plans,research,documents}/*` artifacts. Single global entry — auto-detects artifact type from path prefix (plans=code; research=field-survey; documents=doc deliverable).
