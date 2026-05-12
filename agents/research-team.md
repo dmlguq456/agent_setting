@@ -245,7 +245,7 @@ Generate 7 structured reports to the output directory. The orchestrator provides
 | `02_baselines.md` | Comparison table: Model, Year, Metrics, Dataset, Code, Notes |
 | `03_code_resources.md` | Per-paper: repo, checkpoint, training code, license, stars |
 | `04_datasets.md` | Per-dataset: name, size, task, URL, license, splits |
-| `05_implementation.md` | Recommended baseline + setup steps + autopilot-dev command |
+| `05_implementation.md` | Recommended baseline + setup steps + `autopilot-code --mode dev` command |
 | `06_reading_guide.md` | Tier 1 (필독 2-3), Tier 2 (스킴 3-5), Tier 3 (Abstract) + narrative |
 
 **Graceful degradation**:
