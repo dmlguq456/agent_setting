@@ -43,13 +43,13 @@ Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag a
 | **light** | Adds a 1× quality reviewer (sonnet) pass on the proposed diff before showing it. Catches obvious regressions but stays fast. |
 | **standard** | Adds 1× quality reviewer (opus) + 1× fact-checker (sonnet, parallel) on the proposed diff. Verbatim 대조 against in-artifact ground truth — research: `cards/*.md`; doc: `analysis/*.md` + 기존 strategy/draft 본문. 외부 refs PDFs는 재독 안 함. |
 | **thorough** | 2× quality reviewers (opus, parallel) + 1× fact-checker. Use for high-stakes refines (final-version paper draft, public-facing report). |
-| **adversarial** | `standard` (1× quality opus + 1× fact-checker, parallel) + **Codex external adversarial review** via `Agent(codex-review-team)` on the proposed diff. Use when the artifact will face strong external scrutiny (camera-ready paper, grant submission, public rebuttal) — Codex acts as a hostile reader. Slowest tier. |
+| **adversarial** | `thorough` (2× quality opus parallel + 1× fact-checker, parallel) + **Codex external adversarial review** via `Agent(codex-review-team)` on the proposed diff. Use when the artifact will face strong external scrutiny (camera-ready paper, grant submission, public rebuttal) — Codex acts as a hostile reader. Slowest tier. |
 
 Higher levels add a pre-apply review pass on the planned diff — they do NOT add post-apply review (that's not what this skill is for; use `/refine-doc` if you want full memo-style review cycles).
 
 > The two opt-out flags `--no-fact-check` and `--no-style-audit` are **orthogonal to every `--qa` level** — they skip the corresponding Stage B.5 aspect regardless of qa level. These are the _only_ disable mechanism per `feedback_factcheck_principles.md` Principle 0.
 
-> **`adversarial` propagation**: at this tier, after the standard reviewers return, spawn `Agent(codex-review-team)` with (a) the proposed diff, (b) the artifact's intent (from `pipeline_summary.md`), and (c) the source ground-truth (research: `cards/*.md`; doc: `analysis/*.md` + existing strategy/draft). Surface Codex findings alongside internal reviewer findings before the user-confirm step. If Codex flags a blocking issue, mark it in the diff preview as `⚠ Codex: <issue>` so the user can decide whether to apply, revise, or abort.
+> **`adversarial` propagation**: at this tier, after the thorough reviewers return, spawn `Agent(codex-review-team)` with (a) the proposed diff, (b) the artifact's intent (from `pipeline_summary.md`), and (c) the source ground-truth (research: `cards/*.md`; doc: `analysis/*.md` + existing strategy/draft). Surface Codex findings alongside internal reviewer findings before the user-confirm step. If Codex flags a blocking issue, mark it in the diff preview as `⚠ Codex: <issue>` so the user can decide whether to apply, revise, or abort.
 
 ## Mode Forms (orthogonal to --qa)
 

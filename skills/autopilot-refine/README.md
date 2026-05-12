@@ -40,7 +40,7 @@ Autopilot family — **post-creation iteration pipeline for research and doc art
 | light | quality reviewer 1× (sonnet) |
 | standard | quality reviewer (opus) + fact-checker (sonnet, parallel) |
 | thorough | quality reviewer 2× parallel + fact-checker |
-| adversarial | standard + Codex 외부 리뷰 (camera-ready·grant 등) |
+| adversarial | thorough (2× opus + fact-checker) + Codex 외부 리뷰 (camera-ready·grant 등) |
 
 ## 버전 + 이력
 - 적용 시 `_internal/versions/v{N}/` 스냅샷
