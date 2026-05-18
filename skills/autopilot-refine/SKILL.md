@@ -16,16 +16,77 @@ Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag a
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
-메인 Claude는 사용자가 `.claude_reports/{documents,research}/*` 하위 artifact에 대한 **자연어 수정·정정·보강·스타일 변경**을 prompt로 요청하면, `/autopilot-refine` slash command 명시 없이도 **자동으로 본 skill을 `--qa quick`로 invoke**한다.
+메인 Claude는 사용자가 `.claude_reports/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 자동 invoke 한다 (`--qa quick`). **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
 
 **Scope**: `.claude_reports/{documents,research}/*` 엄격 한정. project root의 임의 `.md`/`.txt`나 코드 산출물(`.claude_reports/plans/*`)은 적용 X — 전자는 일반 Edit, 후자는 `/refine-plan` 또는 `/autopilot-code`.
 
-**Override 1순위** (다음 중 하나가 prompt에 있으면 자동 룰 무시):
-- 다른 qa level 명시 — `standard`/`thorough`/`adversarial`
-- "refine 없이 직접 edit" / "Edit으로 처리" / "versioning 없이"
-- `--review-only` 검수만 요청
+### Major vs Minor — 3-criteria 판정
 
-**Why**: 사용자가 doc/research 산출물에 자잘한 수정 지침을 매우 자주 내림 — 매번 slash command 명시는 friction. 본 skill은 자동 versioning(`_internal/versions/v{N}/`) + `pipeline_summary.md` 통합 history라 직접 Edit보다 추적성·복구성 우위. `--qa quick`은 1-pass라 latency도 직접 편집에 가까움.
+**Major** (하나라도 해당 → autopilot-refine 자동 invoke):
+
+1. **사용자 명시 표현**: "major", "v{N+1}", "/autopilot-refine", "메이저 버전", "전면 재작성", "phase 재시작", "cycle 재진입"
+2. **구조적 대규모 변경**: ≥200 줄 영향 / 전체 section rewrite / mutation tier 재분류 batch / strategy↔draft alignment overhaul
+3. **외부 검토 직전 ceremony**: "camera-ready 마무리", "submission 직전 finalize", "external review 전 마지막", "grant 제출", "PR open 직전"
+
+**Minor** (default — 위 3-criteria 미해당):
+
+- 단일 entry mutation 추가·제거·wording 조정
+- cross-ref 한두 줄 추가/수정
+- caption / table cell / typo / wording polish
+- 사용자가 미리 caption/wording을 본 turn에 명시한 뒤 _그걸 반영해 달라_ 는 요청
+- 누락된 reference 1-2건 보강
+- figure/asset 경로 정정
+
+→ Claude는 **직접 Edit 도구**로 즉시 적용 + `pipeline_summary.md`에 **상세 minor log entry** 추가. snapshot 생성 **X** (last major snapshot이 audit의 baseline).
+
+### Minor log entry 형식 (반드시 준수 — 추적성 핵심)
+
+`pipeline_summary.md`의 (a) 버전 히스토리 표에 1줄 row 추가 + (b) `## 마이너 변경 로그 (v{N} → next major 누적)` 섹션에 상세 block 추가 (newest entry 위쪽).
+
+**(a) 버전 히스토리 row** (기존 표에 append):
+
+```markdown
+| v{N}_M | YYYY-MM-DD | (minor) 한 줄 요지 ≤120자 |
+```
+
+**(b) 마이너 변경 로그 entry** (없으면 섹션 신규 생성 — 위치: `## 미해결 이슈` 직전 또는 표 직후):
+
+```markdown
+### v{N}_M — YYYY-MM-DD HH:MM
+- **Trigger**: 사용자 prompt verbatim 한 줄 인용 (≤80자)
+- **Scope**: minor (직접 Edit, no snapshot)
+- **Rationale**: 왜 minor로 분류했는지 (3-criteria 중 어디에도 해당 안 함 / 단일 entry 단위 / etc.)
+- **Files touched**:
+  - `relative/path/file1.md` — 무엇을 어떻게 바꿨는지 1-2줄
+  - `relative/path/file2.md` — 무엇을 어떻게 바꿨는지 1-2줄
+- **Cross-ref / deps**: 다른 mutation·label·downstream artifact와의 의존 (없으면 "—")
+- **Audit-flag**: 향후 audit이 점검해야 할 측면 — `facts`/`style`/`structure`/`cross-ref`/`coverage` 중 해당 (none이면 "—")
+- **Reversibility**: 이 변경을 되돌리려면 어디를 어떻게 (Edit 위치 + 원본 wording) — 없으면 "git revert 또는 last major snapshot reference"
+```
+
+> **Audit-flag**는 핵심 — 누적 minor 점검 시 audit이 각 entry의 audit-flag를 collate해 dual-perspective 첫 번째 pass (vs last major)를 효율적으로 scope.
+
+### Major 적용 시 동작
+
+`autopilot-refine --qa quick` (default) 자동 invoke:
+
+1. Stage A-D 정상 흐름 (investigate → diff preview → 자동 apply → snapshot)
+2. snapshot: `_internal/versions/v{N+1}/` 생성
+3. **누적 minor log migration**: pipeline_summary.md의 `## 마이너 변경 로그 (v{N} → next major)` 섹션 전체를 _verbatim_ 으로 새 major의 `## v{N+1} 변경 사항` 섹션 안 `### 누적 마이너 변경 사항 (v{N}_1 → v{N}_M)` sub-block 으로 migrate. 활성 마이너 로그 섹션 clear (다음 major까지 빈 상태).
+4. `## 버전 히스토리` 표에 major row `| **v{N+1}** | ... | (major) ... |` 추가
+
+### Override 1순위 (자동 룰 무시)
+
+다음 중 하나라도 prompt에 있으면 위 분기 룰을 건너뛴다:
+
+- 다른 qa level 명시 — `standard`/`thorough`/`adversarial` (강제 refine, level 명시)
+- "refine 없이 직접 edit" / "Edit으로 처리" / "versioning 없이" / "snapshot 없이" — 강제 minor 경로
+- `--review-only` — 검수만, 적용 X
+- `/autopilot-refine` slash 명시 invoke — 강제 refine flow (qa level은 따로 명시 안 하면 `quick`)
+
+### Why this split
+
+대부분 일상 변경은 entry-level minor — 매 minor마다 refine flow (QA agent invocation + snapshot + version bump)를 묶는 건 cost 대비 가치 낮음. 단 **추적성은 유지**: 모든 minor가 `pipeline_summary.md` minor log에 trigger / files / audit-flag / reversibility까지 기록되므로 last major 이후 변경 이력은 _완전히_ 보존된다. 누적된 minor가 일정 임계치를 넘으면 audit이 **dual-perspective** (vs last major snapshot diff + vs universal principles)로 batch 점검 → fix chain dispatch. major는 _진짜 ceremony 시점_ (외부 검토 직전·구조 재설계·cycle 재진입)에만 refine flow의 ceremony cost를 발생시킨다.
 
 > 본 섹션은 `/sync-skills`가 `~/.claude/README.md`의 "운영 룰" 섹션으로 자동 반영한다.
 
@@ -306,7 +367,25 @@ Parse the user's reply, then:
      - If Yes: `{dependent_artifact_path}` — {왜 영향받는지}
    ```
 
-   These three updates together reproduce the integrated pattern users observe in manually-curated pipeline_summary files (single file = full lifecycle).
+   **(d) Migrate accumulated minor log** — autopilot-refine은 Default Invocation Rule에 따라 **major-level**에만 invoke되므로, 본 stage가 도달했다는 것은 v{N-1}_1 ~ v{N-1}_M 누적 minor가 있을 수 있다는 뜻. `pipeline_summary.md`의 `## 마이너 변경 로그 (v{N-1} → next major 누적)` 섹션이 존재하면:
+
+   1. 섹션 본문 전체를 _verbatim_ 으로 cut.
+   2. 새 `## v{N} 변경 사항` 섹션의 끝에 다음 sub-block으로 paste:
+      ```markdown
+      ### 누적 마이너 변경 사항 (v{N-1}_1 → v{N-1}_M, audit consumed)
+      
+      {migrated minor log entries verbatim, newest-first 순서 유지}
+      ```
+   3. 활성 `## 마이너 변경 로그 (v{N} → next major 누적)` 섹션을 _빈 상태_ 로 초기화 (헤더만 남기고 entries 제거):
+      ```markdown
+      ## 마이너 변경 로그 (v{N} → next major 누적)
+
+      _(empty — 다음 minor에서 첫 entry 추가됨)_
+      ```
+
+   audit이 fix dispatch 후 major bump한 경우엔 audit log가 이미 누적분을 검토했으므로 위 sub-block 헤더에 ` — audit consumed` 마커 추가. audit 없이 사용자 직접 major refine한 경우엔 마커 생략 (단, audit 권장 alert를 Stage 5 report에 surface).
+
+   These four updates together reproduce the integrated pattern users observe in manually-curated pipeline_summary files (single file = full lifecycle, plus minor log migration trail).
 
 5. **Report** to user (≤6 lines):
    ```

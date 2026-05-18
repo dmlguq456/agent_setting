@@ -13,12 +13,38 @@ argument-hint: "<artifact_path> [--scope auto|facts|style|structure|cross-ref|co
 - `audit` reads only (lints, reports issues, never edits).
 
 Use `audit` when:
-- 누적 drift 점검: 20+ refine cycle 후 _전반적 양식·factual 정합성_이 무너졌는지 확인.
+- 누적 minor drift batch 점검 — autopilot-refine의 Default Invocation Rule에 따라 minor는 직접 Edit + `pipeline_summary.md` 상세 log만 남기므로, 누적된 minor를 audit이 일괄 점검하는 게 정상 워크플로우.
 - 새 산출물 인계 전 sanity check.
 - 다른 사람이 만든 artifact 평가.
 
 Use `autopilot-refine` when:
-- 구체적 수정 의도가 있고 곧장 적용까지 가져갈 때.
+- 구체적 major-level 수정 의도가 있고 곧장 적용까지 가져갈 때 (3-criteria 충족 — 사용자 명시 / 구조적 대규모 / 외부 검토 직전).
+
+## Dual-perspective audit (doc / research 전용)
+
+doc / research artifact에 대한 audit은 **두 관점**으로 동시 점검한다:
+
+| Perspective | 무엇을 보는가 | 산출물 섹션 |
+|---|---|---|
+| **P1 — vs last major baseline** | `pipeline_summary.md`의 `## 마이너 변경 로그 (v{N} → next major 누적)` 섹션 + `_internal/versions/v{N}/` 스냅샷 diff. 누적된 minor가 _집합적으로_ artifact를 어디로 drift시켰는지. | `## Perspective 1 — 누적 minor drift` |
+| **P2 — vs universal principles** | 현재 artifact 상태를 Stage C aspect lint (facts / style / structure / cross-ref / coverage)로 점검. 시점 무관 정합성. | `## Perspective 2 — Universal principles` |
+
+**왜 두 관점이 필요한가**:
+- P1만 보면 — "변경된 것"만 보이고 "오래 전부터 누적된 미해결 issue"는 놓침.
+- P2만 보면 — 현재 상태 평가는 정확하지만 "어느 minor가 issue를 introduce 했는지" 추적 불가 → revert 또는 major refine 시 baseline 설정이 어려움.
+- 둘을 cross-correlate 하면: P2의 issue가 P1의 minor log audit-flag와 매칭되는지 확인 → "최근 도입된 issue (fix 우선순위 高)" vs "기존 잔존 issue (next cycle 처리 OK)" 분류 가능.
+
+**plans type**: minor log 컨벤션 없음 → P1 skip, P2만 실행 (현 동작과 동일).
+
+## Cadence (언제 audit 실행)
+
+| 트리거 | 동작 |
+|---|---|
+| **사용자 명시 `/audit <artifact>`** (기본) | 즉시 실행 |
+| **AUDIT_HINT_THRESHOLD 도달** (default 5 minors since last major) | 직전 작업 (minor Edit 또는 autopilot-refine) 종료 후 chat alert: `⚠ {N} minor edits accumulated since v{N} — recommend /audit {artifact_short_name}`. _자동 실행 X_ — 사용자가 invoke. |
+| **자동 fix chain dispatch에서 spawned audit** | autopilot-refine 또는 autopilot-code의 fix routing에서 호출 시 |
+
+threshold는 doc/research artifact의 `pipeline_summary.md` `## 마이너 변경 로그` 섹션의 entry 수 또는 `## 버전 히스토리` 표의 `v{N}_M` 형식 row 수로 계산.
 
 ## Language Rule
 
@@ -105,6 +131,47 @@ Scope: {value} (사용자 지정, override)
 
 **Why `coverage` is new for documents**: the Stage B.5 regex detector can only flag _present_ claims in `new_text` — it cannot, by construction, flag _absent_ claims (e.g., UniSE missing from a timeline). Omission requires a separate _set-diff_ mechanism. The `coverage` aspect fills this: reports the difference between the full cards source vs cards actually cited in the draft. Without it, UniSE-class omissions recur.
 
+### Stage B.5 — Minor log baseline ingestion (doc / research 전용)
+
+plans type은 본 단계 skip (minor log 컨벤션 없음).
+
+**입력**:
+- `pipeline_summary.md`의 `## 마이너 변경 로그 (v{N} → next major 누적)` 섹션 (있으면)
+- `_internal/versions/v{N}/` 가장 최근 major snapshot 디렉토리 (있으면)
+
+**동작**:
+
+1. `## 마이너 변경 로그` 섹션 파싱 — 각 entry의 다음 정보 수집:
+   - 버전 (`v{N}_M`)
+   - 일시
+   - Files touched (경로 list)
+   - Audit-flag (`facts`/`style`/`structure`/`cross-ref`/`coverage` 중 표시된 것)
+   - Trigger / Rationale (요약 인용)
+
+2. 마지막 major snapshot vs 현재 artifact 디렉토리 diff:
+   ```bash
+   diff -ruN _internal/versions/v{N}/ {artifact_root} \
+     --exclude=_internal --exclude=pipeline_summary.md \
+     > /tmp/audit_p1_diff.txt
+   ```
+   (`_internal/`과 `pipeline_summary.md`는 audit log/version 메타라 diff에서 제외.)
+
+3. 두 정보를 cross-correlate — 각 minor entry의 audit-flag를 현재 stage C aspect set에 _bias_로 전달:
+   - audit-flag에 `facts`가 있는 minor가 N개 → Stage C `facts` lint에서 해당 file의 diff 영역을 우선 검사.
+   - audit-flag가 `none`인 minor — Stage C는 default behavior로 점검 (특별 bias 없음).
+
+4. 산출: `p1_findings` dict (minor entry별 변경 요지 + cross-correlate 결과)를 Stage D 보고용으로 보관.
+
+**chat 출력 (1줄)**:
+```
+P1 baseline: v{N} snapshot 발견, 누적 minor {count}건 ingest (audit-flag 집계: facts={A} / style={B} / structure={C} / cross-ref={D} / coverage={E})
+```
+
+snapshot 또는 minor log 부재 시:
+```
+P1 baseline: skipped — last major snapshot 또는 minor log 부재. P2 only.
+```
+
 ### Stage C — Per-aspect lint (report-only, no edits)
 
 **Pre-check (flag-based opt-out)** — before dispatching any aspect:
@@ -167,6 +234,7 @@ Write the audit report to `{artifact_dir}/_internal/audit/audit_{YYYY-MM-DDTHHMM
 - **Type**: {plans | research | documents}
 - **Scope**: {flag value or "all"}
 - **Aspects checked**: {comma-separated}
+- **P1 baseline**: v{N} snapshot ({YYYY-MM-DD}), 누적 minor {count}건 | _skipped (snapshot/minor log 부재)_
 
 ## Summary
 
@@ -177,7 +245,35 @@ Write the audit report to `{artifact_dir}/_internal/audit/audit_{YYYY-MM-DDTHHMM
 
 **Total**: 🔴 {N} / 🟡 {M} / 🟢 {K}
 
-## Issues by aspect
+## Perspective 1 — 누적 minor drift (vs v{N} baseline)
+
+> doc / research 전용. plans는 본 섹션 skip.
+
+### 1.1 Accumulated minor entries (newest-first)
+
+| 버전 | 일시 | Trigger 요약 | Audit-flag | Files |
+|---|---|---|---|---|
+| v{N}_M | ... | ... | facts/style/... | {count} |
+| v{N}_M-1 | ... | ... | ... | ... |
+
+### 1.2 Diff summary vs v{N} snapshot
+
+- **Lines added/removed**: +{A} / -{B} (전체 누적 diff, excluding `_internal/` + `pipeline_summary.md`)
+- **Files modified**: {list of relative paths}
+- **Hot spots** (diff lines ≥20인 파일): {list}
+
+### 1.3 Cross-correlation with Perspective 2 findings
+
+| P2 finding | 매칭 minor entry | 도입 시점 |
+|---|---|---|
+| {aspect:🔴 issue title} | v{N}_M ({YYYY-MM-DD}) | 최근 도입 — fix 우선순위 高 |
+| {aspect:🟡 issue title} | (매칭 없음) | 기존 잔존 — 정상 cycle 내 처리 |
+
+(매칭 = P2 finding의 file:line이 minor entry의 Files touched에 포함되는 경우)
+
+## Perspective 2 — Universal principles
+
+> 현재 artifact 상태의 aspect-by-aspect 정합성 점검 (시점 무관).
 
 ### Aspect: {name}
 
@@ -185,6 +281,7 @@ Write the audit report to `{artifact_dir}/_internal/audit/audit_{YYYY-MM-DDTHHMM
 - **File**: `{relative path}:{line}`
 - **Severity**: 🔴
 - **Detail**: {1-3 line description}
+- **Introduced**: v{N}_M ({YYYY-MM-DD}) | _기존 잔존 (v{N} baseline 이전 또는 추적 불가)_
 - **Suggested fix**: {one-line — e.g., "/autopilot-refine '<artifact> {fix description}'"} | (또는 null)
 
 #### 🟡 {issue title}
@@ -197,6 +294,7 @@ Write the audit report to `{artifact_dir}/_internal/audit/audit_{YYYY-MM-DDTHHMM
 
 - **Status**: 🔴 issues require attention | 🟡 minor warnings only | 🟢 clean
 - **Recommended next action**: {1-line — e.g., "Run /autopilot-refine 'X' to fix the 5 critical facts issues" or "No action required"}
+- **Baseline reset 권장**: {if 누적 minor가 5건 이상 + P2 finding 모두 🟢 또는 fix 완료} `다음 작업을 major refine으로 묶어 v{N+1} snapshot + minor log 정리 권장` | (또는 omitted)
 
 ---
 
