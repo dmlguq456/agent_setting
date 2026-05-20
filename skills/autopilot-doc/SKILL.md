@@ -610,6 +610,8 @@ These are starting hints only. Always follow the format spec file's actual speci
 ### presentation
 Generate a **PPT cheatsheet markdown** — single file, optimized for human reading and slide-by-slide copy/paste into PowerPoint. **NOT a pandoc conversion target**. Avoid pandoc-specific syntax (`::: notes`, `:::: {.columns}`, YAML frontmatter for auto-title generation).
 
+> **Figure & Tone conventions (MANDATORY)**: see [`PRESENTATION_FIGURE_CONVENTIONS.md`](./PRESENTATION_FIGURE_CONVENTIONS.md) — figure 안 텍스트 최소화 / spectrogram per-signal 정규화 / 50 ms RMS / 청중 친화 단위 (dBFS / 배수) / 기존 deck 톤 분석 (python-pptx) / asset 게으르게 활용 금지 / 상대 경로 / 한국어 폰트 / draft 전 plot 검토. cheatsheet variant (기존 PPT 본문 일부 보강) 에서 특히 강제.
+
 **Slide Format Conventions** (mandatory — derived from user feedback to prevent revision loops):
 
 1. **Chapter visualization in slide headers** — every body slide's heading: `## Slide N — [Ch.N 챕터명] (sub.번호) 슬라이드 제목`. Chapter-transition slides marked with `— 시작` / `— start`. Each slide has a `**챕터**: N. 챕터명 (M장 중 K번째)` meta line below the title.
