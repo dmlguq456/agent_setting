@@ -2,7 +2,7 @@
 
 > 본 README는 Notion 페이지 [🔧 autopilot-code](https://www.notion.so/32787c2bb75381d48170dae1e5074b5c)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
 
-> **autopilot-code**: dev/debug 2개 모드의 통합 코드 파이프라인. 기존 3개 독립 파이프라인(autopilot-dev, autopilot-audit, autopilot-debug)을 `--mode`로 통합한 후 audit 모드는 별도 `/audit` skill로 분리 (갈래 D). 현재 autopilot-code는 dev/debug만 담당.
+> **autopilot-code**: dev/debug 2개 모드의 통합 코드 파이프라인. audit 은 별도 `/audit` skill (갈래 D) — autopilot-code 는 dev/debug 만 담당.
 
 ## 파이프라인 워크플로우
 
@@ -93,11 +93,6 @@ flowchart TD
 10. 스킬 간 인터페이스는 계약 — 키워드 라우팅, 파일 스키마, 변수 패턴은 암묵적 계약
 11. 루프 제어는 코드처럼 — 자연어 제약 대신 카운터 변수, 증가 조건, 종료 조건 명시
 12. 역할 밖 위임 금지 — 에이전트의 Mode Selection에 정의되지 않은 작업은 핸들러 추가 후 위임
-
-## 변경 이력 (요약)
-- **2026-04-10**: autopilot-code 통합 — 기존 3개 독립 skill(autopilot-dev, autopilot-audit, autopilot-debug)을 `--mode` 파라미터로 통합. 동작 100% 호환.
-- **2026-05-06**: fact-checker reviewer는 doc/research에만 적용, code에는 미적용 명시.
-- **2026-05-12**: audit 모드는 별도 `/audit` skill로 분리됨 (갈래 D).
 
 ---
 *원본: `~/.claude/skills/autopilot-code/SKILL.md`*

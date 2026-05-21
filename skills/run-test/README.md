@@ -15,8 +15,6 @@ execute-plan 이후 또는 온디맨드로 기능 테스트를 실행해 코드 
 2. 디렉토리 → `/plan/plan.md`
 3. 퍼지 검색 → `_audit`/`_fix_` 없는 폴더 우선. **없으면 fallback**: 인자를 파일/디렉토리 경로로 간주하여 직접 테스트
 
-> `autonomy_level`은 deprecated (CONVENTIONS.md §3, 2026-05-13). 모든 게이트(커밋·hotfix 2차 시도)는 auto-proceed.
-
 ## 위임 — 테스트팀
 프롬프트 유형별:
 - **plan 파일 경로**: "Run graduated tests for plan: {$ARG}. Read verification sections and checklist.md. Execute Level 1→2→3→4→5, stop on first failure."

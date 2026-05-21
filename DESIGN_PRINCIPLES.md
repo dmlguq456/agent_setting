@@ -3,7 +3,7 @@
 > `~/.claude/` 의 _아키텍처 헌법_ — autopilot family 가 어떻게 분리되고 어떻게 협력하는지의 single source.
 >
 > 자매 문서 (각자 단일 출처, 본 문서는 포인터만):
-> - `CONVENTIONS.md` — QA 5단계 / agent model 표기 / 폐기 flag / 산출물 폴더 컨벤션 (§7) / hard invariants
+> - `CONVENTIONS.md` — QA 5단계 / agent model 표기 / 산출물 폴더 컨벤션 (§5) / hard invariants
 > - `CLAUDE.md` §1~§5 — 메인 Claude 자체 행동 메타 원칙 (응답 원칙)
 > - `notion_guide.md` — Notion MCP 작업 가이드
 >
@@ -15,7 +15,7 @@
 
 | Tier | Role | 예 | Anti-pattern |
 |------|------|-----|--------------|
-| **Orchestrator** | Deterministic state machine. 라우팅·gate·verdict 만, content 안 봄. | `autopilot-code` / `autopilot-doc` / `autopilot-research` / `autopilot-refine` 의 SKILL.md 본체 | Orchestrator 가 file content 읽기·요약·판단 |
+| **Orchestrator** | Deterministic state machine. 라우팅·gate·verdict 만, content 안 봄. | `autopilot-code` / `autopilot-draft` / `autopilot-research` / `autopilot-refine` 의 SKILL.md 본체 | Orchestrator 가 file content 읽기·요약·판단 |
 | **Skill** | Expert capability module. WHAT + verification loop 정의. | `init-plan` · `execute-plan` · `run-test` · `init-doc-strategy` · `refine-doc` 등 | Skill 안에 orchestration 로직 (다른 skill 호출 chain, QA budget) |
 | **Agent** | Persona with tools. Skill 안에서 실제 작업 수행. | `기획팀` · `품질관리팀` · `연구팀` · `편집팀` · `테스트팀` · `개발팀` · `탐색팀` · `codex-review-team` | Agent 가 verbose 결과를 orchestrator 로 반환 |
 
@@ -59,15 +59,13 @@ family 의 모든 멤버는 confirm 없이 pipeline 을 끝까지 돌린다. 사
 - `.claude_reports/research/{topic}/*` — autopilot-research 산출물
 - 외부 raw 자료는 `analyze-project --mode {code|paper|doc}` 으로 먼저 영속화 → 이후 skill 이 fuzzy match 로 implicit 인지
 
-폐기된 flag (잔존 시 drift): `--refs <folder>` (2026-05-08), `--format-ref <path>` (2026-05-12). CONVENTIONS.md §3 single source.
-
 **Why**: 한 세션 한 프로젝트의 단순한 가정 (cwd = working dir) 이 cognitive cost 를 낮추고, 영속 산출물 재활용성을 높인다. cross-project 작업은 `cd <other>` 후 별도 세션.
 
 ---
 
 ## 4. Artifact Convention — 3-tier T1/T2/T3
 
-Artifact 폴더 안의 _가시성 분리_. 상세는 CONVENTIONS.md §7 single source.
+Artifact 폴더 안의 _가시성 분리_. 상세는 CONVENTIONS.md §5 single source.
 
 | Tier | 위치 | 예 |
 |---|---|---|
@@ -96,7 +94,7 @@ QA loop 는 _skill 안에서 닫힌 loop_ 으로 돌고, orchestrator 는 verdic
 
 - **QA 5단계** (quick / light / standard / thorough / adversarial) — CONVENTIONS.md §1 single source. wording / Skill 별 매트릭스 / opt-out flag 그곳.
 - **Fact-checker** — doc / research / refine 한정 (code 는 ground-truth 가 코드 자신이라 fact-check 무의미). `--no-fact-check` 단독 skip 가능 — autopilot-refine · audit 전용, 다른 skill 노출 시 drift.
-- **Natural-integration rule** (paper mode 한정) — reviewer 의견 → 본문 mutation 옮길 때 표·enumeration 통째 paste 금지. 1~2 문장 in-line rewrite 가 안 되면 drop 또는 Appendix. 4-step Paragraph Cohesion Pre-Check (substance 중복 / paragraph axis / cross-section redundancy / EDIT·REPLACE·INSERT·DROP 분류) 가 mechanical INSERT 사전 차단. 상세 — `init-doc-strategy/SKILL.md` paper mode + `autopilot-doc/SKILL.md` Step 4.1.
+- **Natural-integration rule** (paper mode 한정) — reviewer 의견 → 본문 mutation 옮길 때 표·enumeration 통째 paste 금지. 1~2 문장 in-line rewrite 가 안 되면 drop 또는 Appendix. 4-step Paragraph Cohesion Pre-Check (substance 중복 / paragraph axis / cross-section redundancy / EDIT·REPLACE·INSERT·DROP 분류) 가 mechanical INSERT 사전 차단. 상세 — `init-doc-strategy/SKILL.md` paper mode + `autopilot-draft/SKILL.md` Step 4.1.
 
 **Why**: QA 가 orchestrator 에 박혀 있으면 skill 마다 budget 정책이 어긋남. Skill 안 닫혀 있어야 _expert + verification_ 한 단위가 reuse 가능. fact-checker 의 _verbatim 대조_ 와 quality reviewer 의 _구조 판단_ 은 다른 layer 라 parallel.
 
@@ -150,7 +148,7 @@ per-project 메모는 두 layer 분리.
 | §1 3-Tier role | 초기 autopilot family 설계 — orchestrator 가 file 읽고 reasoning 하던 시기 → state machine 으로 분리 |
 | §2 Autopilot 정신 | `782ccf6` autopilot-refine default 자동 apply / `2058325` user-refine opt-in only (2026-05-21 사용자 지적) |
 | §3 Implicit discovery | `444616a` analyze-project cwd default / `d8f42cd` `--format-ref` 제거 / `215fc23` legacy cleanup |
-| §4 T1/T2/T3 + Minor·Major | 초기 SKILL_OUTPUT_CONVENTION 도입 → 2026-05-21 CONVENTIONS.md §7 흡수 / `56708c4` minor vs major + dual-perspective audit |
+| §4 T1/T2/T3 + Minor·Major | 초기 SKILL_OUTPUT_CONVENTION 도입 → 2026-05-21 CONVENTIONS.md §5 흡수 / `56708c4` minor vs major + dual-perspective audit |
 | §5 Natural-integration | `bf8d565` rebuttal 표 본문 paste 거부 (2026-05-19 ICML camera-ready M11/M15 incident) + 2026-05-20 M8/M9 Paragraph Cohesion Pre-Check 4-step |
 | §6 편집팀 + 응답 원칙 | `3f5a48c` translation-team 신설 → `cfb0e12` editorial-team rename + scope 확장 / `bf8d565` 응답 원칙 §3 / `2058325` §4 / `3f5a48c` §1 (판교체) |
 | §7 Memory layers | `60f141a` `/notes` skill 신설 — 사용자 통제 layer 와 자동 메모리 분리 |

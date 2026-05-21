@@ -5,7 +5,7 @@
 ## 개요
 분석된 참고 자료를 기반으로 초기 문서 전략(rebuttal/paper/review/report/proposal/presentation)을 생성하는 skill. 연구팀에 위임 + QA 루프 (quality + fact-checker 병렬) + 한국어 번역.
 
-> autopilot-doc 내부에서 자동 호출. 직접 사용은 거의 없음 (autopilot-doc의 Step 2).
+> autopilot-draft 내부에서 자동 호출. 직접 사용은 거의 없음 (autopilot-draft의 Step 2).
 >
 > **Paragraph Cohesion Pre-Check (모든 mode, 2026-05-20)**: paste-ready block (LaTeX / markdown / slide / table) 작성 전 target paragraph **전체 narrative flow** 분석 + 4-step self-check — (1) substance 이미 명시 여부 / (2) paragraph axis (motivation→design→formalization 등) 단절 여부 / (3) §-level cross-section redundancy / (4) edit type 선택 (응집성 순 EDIT in-line > REPLACE > INSERT > DROP). Anti-pattern: mechanical "INSERT after sentence X", AFTER가 BEFORE보다 verbose, 같은 substance § 레벨 반복. 상세 — `SKILL.md` ## Paragraph Cohesion Pre-Check 섹션.
 >
@@ -18,7 +18,7 @@
 
 ### 인자
 - **mode**: 첫 단어 — `rebuttal | paper | review | report | proposal | presentation` (6개)
-- **--inputs**: Input Discovery 결과 path list (콤마 구분). autopilot-doc Pre-flight Step 2에서 결정.
+- **--inputs**: Input Discovery 결과 path list (콤마 구분). autopilot-draft Pre-flight Step 2에서 결정.
 - **--output**: artifact 디렉토리 (`.claude_reports/documents/{date}_{name}/`)
 - 남은 텍스트: task description
 
@@ -31,7 +31,7 @@
 - `reviewer_analysis.md` (rebuttal 필수)
 - `ref_analysis.md` (paper/review/report/proposal/presentation 필수)
 
-누락 시 에러 — autopilot-doc Step 1이 생성했어야 함.
+누락 시 에러 — autopilot-draft Step 1이 생성했어야 함.
 
 ## 위임 — 연구팀
 mode별 전략 템플릿으로 전략 문서 작성. 자동 발견된 format spec이 있으면 venue-specific section/length/tone 추출.

@@ -6,7 +6,7 @@ argument-hint: "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa
 
 > Caller note: this skill performs deep analysis. Callers should invoke at `high` or `xhigh` effort when the runtime supports it; at lower effort, depth narrows automatically.
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §7](../../CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3) (3-tier T1/T2/T3). 본 skill의 산출물은 `.claude_reports/analysis_project/{code,paper,doc}/` 하위. 각 mode의 main outputs는 root, raw scan log/QA reviews는 `_internal/`.
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier T1/T2/T3). 본 skill의 산출물은 `.claude_reports/analysis_project/{code,paper,doc}/` 하위. 각 mode의 main outputs는 root, raw scan log/QA reviews는 `_internal/`.
 
 > **Workspace assumption**: Claude는 프로젝트 루트에서 실행됨. `.claude_reports/`는 현재 dir에 생성. 본 skill의 input scope (코드 / PDFs / doc materials)도 현재 dir 또는 그 하위 폴더 기준.
 
@@ -221,8 +221,8 @@ For each file in input folder, classify and produce structured analysis:
 Also write 00_overview.md at root of {name}/:
 - Inventory of all files in the input folder, with classification
 - Key findings per category
-- Cross-references useful for autopilot-doc downstream
-- "intended for mode": likely autopilot-doc mode this material targets (rebuttal/write/review/proposal/report/presentation)
+- Cross-references useful for autopilot-draft downstream
+- "intended for mode": likely autopilot-draft mode this material targets (rebuttal/write/review/proposal/report/presentation)
 
 Korean prose for narrative; English/source language for verbatim quotes.
 Return ONLY paths + Korean summary.
@@ -272,14 +272,14 @@ analysis_project/doc/{name}/
 `analyze-project`의 산출물은 _영속 자산_으로 후속 autopilot-* skill이 implicit으로 읽음:
 
 - `autopilot-code`는 `analysis_project/code/`를 자동 인지 (init-plan에서 모듈 매핑 참조)
-- `autopilot-doc`는 mode에 따라:
+- `autopilot-draft`는 mode에 따라:
   - `rebuttal` → `analysis_project/doc/{matching}/reviewers/` + `analysis_project/paper/`
   - `write` → `analysis_project/paper/` + `analysis_project/doc/{matching}/formats/`
   - `review` → `analysis_project/doc/{matching}/formats/` (REQUIRED)
   - 그 외 mode 비슷한 패턴
 - `autopilot-research`는 자체 외부 검색 위주이지만, 보유 자료가 있으면 `analysis_project/paper/` 인지 가능
 
-`--refs <folder>` flag는 family 전체에서 _제거_ — 모든 입력은 `analysis_project/*` 또는 `research/*` 같은 `.claude_reports/` 하위 영속 산출물에서 자동 발견.
+모든 입력은 `analysis_project/*` 또는 `research/*` 같은 `.claude_reports/` 하위 영속 산출물에서 자동 발견. family 전체가 외부 폴더를 직접 가리키는 flag 없음.
 
 ## Typical workflow
 
@@ -298,7 +298,7 @@ cd <project_root>     # 자료를 프로젝트에 가져다 둔 후
 
 # 2. 후속 작업 (input은 자동 인지)
 /autopilot-code --mode dev "<task>"
-/autopilot-doc "<task>" --mode presentation
+/autopilot-draft "<task>" --mode presentation
 /autopilot-research <topic>
 /autopilot-refine "<prompt>"
 ```

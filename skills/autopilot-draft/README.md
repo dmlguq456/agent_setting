@@ -1,13 +1,13 @@
-# autopilot-doc
+# autopilot-draft
 
-> 본 README는 Notion 페이지 [📄 autopilot-doc](https://www.notion.so/33e87c2bb75381338b82d75e34bb04c9)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README는 Notion 페이지 [📄 autopilot-draft](https://www.notion.so/33e87c2bb75381338b82d75e34bb04c9)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
 
 > **Paper mode camera-ready / major revision 특이 룰** (2026-05-19): reviewer concern → paper-body mutation 변환 시 **natural-integration rule** 적용. Single gating question — *"1-2 sentence inline rewrite로 자연 통합 가능한가?"* YES → M15-style inline rewrite. NO → drop / Appendix defer (rebuttal-format은 본문 mutation 금지). 상세 — `SKILL.md` Mode-Specific Draft Structure `### paper` 끝.
 
 ## 전체 구조
 ```mermaid
 flowchart LR
-    A["사용자 쿼리"] -->|<task> + --mode + --qa| B["autopilot-doc (오케스트레이터)"]
+    A["사용자 쿼리"] -->|<task> + --mode + --qa| B["autopilot-draft (오케스트레이터)"]
     B --> SC["Step 0: Scope Clarification"]
     SC --> C["Step 1: Material Analysis (implicit input discovery)"]
     C -->|Step 2| D["init-doc-strategy (연구팀 위임)"]
@@ -25,7 +25,7 @@ flowchart LR
 
 ## 명령 형식
 ```
-/autopilot-doc "<task description>" [--mode rebuttal|paper|review|report|proposal|presentation] [--qa quick|light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]
+/autopilot-draft "<task description>" [--mode paper|presentation|doc] [--qa quick|light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]
 ```
 
 | 플래그 | 설명 |
@@ -54,7 +54,7 @@ flowchart LR
 > 모든 모드 공통 패턴: strategy + draft markdown 산출 → **사용자가 최종 작성·빌드·디자인 마무리**.
 
 ## Format spec auto-discovery (no flag)
-학회·저널·연도·랩마다 다른 _개별 가이드라인 / 템플릿 / 샘플 / format-spec 파일_을 사전에 `/analyze-project --mode doc`으로 처리해 두면, autopilot-doc이 `analysis_project/doc/{matching}/formats/`에서 자동 발견. **built-in preset 없음** (venue마다 매년 다르므로).
+학회·저널·연도·랩마다 다른 _개별 가이드라인 / 템플릿 / 샘플 / format-spec 파일_을 사전에 `/analyze-project --mode doc`으로 처리해 두면, autopilot-draft이 `analysis_project/doc/{matching}/formats/`에서 자동 발견. **built-in preset 없음** (venue마다 매년 다르므로).
 
 **Resolution 순서**:
 1. Auto-discovery in `analysis_project/doc/{matching}/formats/`
@@ -92,7 +92,7 @@ query가 모호하거나 mode multi-match일 때 autopilot이 2-4개 sharp quest
 - [init-doc-strategy](init-doc-strategy/README.md)
 - [refine-doc](refine-doc/README.md)
 
-> 서브스킬은 autopilot-doc 내부에서 자동 호출. 직접 사용은 pause 재개 시점에만.
+> 서브스킬은 autopilot-draft 내부에서 자동 호출. 직접 사용은 pause 재개 시점에만.
 
 ## 산출물 구조
 ```
@@ -127,11 +127,11 @@ query가 모호하거나 mode multi-match일 때 autopilot이 2-4개 sharp quest
 ## autopilot-research와의 chaining
 ```mermaid
 flowchart LR
-    AR["autopilot-research (분야 조사)"] -->|implicit| AD["autopilot-doc (문서 작성)"]
+    AR["autopilot-research (분야 조사)"] -->|implicit| AD["autopilot-draft (문서 작성)"]
     AD --> OUT[("📦 documents/")]
 ```
 
-학술/산업/시장 조사가 필요하면 autopilot-research를 먼저 돌리면 그 산출물(`research/{topic}/`)을 autopilot-doc이 implicit 자동 발견.
+학술/산업/시장 조사가 필요하면 autopilot-research를 먼저 돌리면 그 산출물(`research/{topic}/`)을 autopilot-draft이 implicit 자동 발견.
 
 ---
-*원본: `~/.claude/skills/autopilot-doc/SKILL.md`*
+*원본: `~/.claude/skills/autopilot-draft/SKILL.md`*

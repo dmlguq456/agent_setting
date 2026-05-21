@@ -1,10 +1,10 @@
 ---
 name: refine-doc
-description: Reflect user memos/review feedback in a document strategy or draft. Snapshots prior version under `_internal/versions/v{N}/` (modern; per CONVENTIONS.md §7) or `_v{N}.md` siblings (legacy). Auto-managed `changelog:` array inside YAML frontmatter (NOT a top-of-file HTML comment — that breaks markdown preview when frontmatter is also present). Mandatory ref-grounding per memo (re-read source; override memo if it conflicts with source).
+description: Reflect user memos/review feedback in a document strategy or draft. Snapshots prior version under `_internal/versions/v{N}/` (modern; per CONVENTIONS.md §5) or `_v{N}.md` siblings (legacy). Auto-managed `changelog:` array inside YAML frontmatter (NOT a top-of-file HTML comment — that breaks markdown preview when frontmatter is also present). Mandatory ref-grounding per memo (re-read source; override memo if it conflicts with source).
 argument-hint: "<strategy or draft name or path> [--qa quick|light|standard|thorough]"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §7](../../CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 review 로그를 `_internal/strategy_reviews/` 또는 `_internal/draft_reviews/`에 기록. 버전 스냅샷은 modern artifact면 `_internal/versions/v{N}/`, legacy artifact면 `_v{N}.md` 형제 (자동 감지).
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 review 로그를 `_internal/strategy_reviews/` 또는 `_internal/draft_reviews/`에 기록. 버전 스냅샷은 modern artifact면 `_internal/versions/v{N}/`, legacy artifact면 `_v{N}.md` 형제 (자동 감지).
 
 ## Document Resolution
 Resolve `$ARGUMENTS` to document file paths. Detect whether this is a **strategy** or **draft** refinement:
@@ -27,7 +27,7 @@ Resolve `$ARGUMENTS` to document file paths. Detect whether this is a **strategy
 
 ## Pre-Refine: Versioning Setup
 
-Before invoking 연구팀, the orchestrator establishes versioning. Snapshots go to `{artifact_root}/_internal/versions/v{N}/<relative-path>` (per [CONVENTIONS.md §7](../../CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3)). The legacy `_v{N}.md` sibling pattern is **deprecated** for new artifacts.
+Before invoking 연구팀, the orchestrator establishes versioning. Snapshots go to `{artifact_root}/_internal/versions/v{N}/<relative-path>` (per [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). The legacy `_v{N}.md` sibling pattern is **deprecated** for new artifacts.
 
 1. **Determine next version number**:
    - **Modern** (`{artifact_root}/_internal/` exists): scan `_internal/versions/` for `v{N}` subdirs. Find max N. If none → `next_version = 2`.
@@ -140,7 +140,7 @@ changelog:
 2. **Order**: Newest version first. Prepend the new `version: v{next_version}` block above the existing entries.
 3. **Block scalars (`|`) for entries**: Each entry uses a YAML literal block scalar so backticks, backslashes, colons, brackets, and emoji inside the change description need NO escaping. Indent each entry's content one level under the `|`.
 4. **First refine (no prior changelog)**: create the `changelog:` key with both:
-   - v1 entry — `version: v1`, `date: "{creation date from existing frontmatter, or the literal string \"initial\" if unknown}"`, `note: "initial draft from autopilot-doc {mode} pipeline"`, no `entries:` required.
+   - v1 entry — `version: v1`, `date: "{creation date from existing frontmatter, or the literal string \"initial\" if unknown}"`, `note: "initial draft from autopilot-draft {mode} pipeline"`, no `entries:` required.
    - v2 entry — this round's changes (above v1).
 5. **No frontmatter at all (rare)**: create a minimal frontmatter block at the very top of the file with at least `changelog:` (and any other keys you can derive from the document).
 6. **Legacy migration (required on first encounter)**: if the file has a `<!-- CHANGELOG (auto-managed by refine-doc ... -->` HTML block (above or below the frontmatter), convert each `vN (date, applied X / overrode Y): ...` line into a frontmatter array entry **in the same refine pass** and **delete the HTML block** (including its surrounding blank lines). After migration the file must begin with `---` on line 1. This migration applies to BOTH `{ko_path}` and `{en_path}`.
@@ -153,7 +153,7 @@ Before (legacy, broken preview):
 <!-- CHANGELOG (auto-managed by refine-doc — do NOT edit manually)
 v2 (2026-05-14T14:00, applied 22 memos / overrode 0 memos):
   - [M25 QUALITY 🔴] [verified .bib L366]: `\citep{defossez2023}` → `\citep{defossez2023high}`
-v1 (2026-05-14, initial draft from autopilot-doc paper pipeline): camera-ready cheatsheet ...
+v1 (2026-05-14, initial draft from autopilot-draft paper pipeline): camera-ready cheatsheet ...
 -->
 
 ---
@@ -182,7 +182,7 @@ changelog:
         [M25 QUALITY 🔴] [verified .bib L366]: `\citep{defossez2023}` → `\citep{defossez2023high}`
   - version: v1
     date: "2026-05-14"
-    note: "initial draft from autopilot-doc paper pipeline"
+    note: "initial draft from autopilot-draft paper pipeline"
     entries:
       - |
         camera-ready cheatsheet ...

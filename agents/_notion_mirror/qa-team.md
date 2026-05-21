@@ -18,7 +18,7 @@
 ## 모드
 - **Code Review** — git diff, 변경 파일, execute-plan step log
 - **Plan Review** — `.claude_reports/plans/` 파일 언급
-- **Document Review** — autopilot-doc / autopilot-refine 산출물
+- **Document Review** — autopilot-draft / autopilot-refine 산출물
 
 ## Code Review 절차
 - 사용자 직접: `git diff` → 변경 파일 전체 읽기

@@ -65,10 +65,10 @@
 - **QA 모델**: Light QA (sonnet)
 
 ## paper mode
-보유 논문 PDFs를 읽어 `.claude_reports/analysis_project/paper/`에 논문별 cards + `00_overview_and_constraints.md` 생성. 연구팀에 위임. autopilot-doc·autopilot-code·autopilot-research가 implicit input source로 활용.
+보유 논문 PDFs를 읽어 `.claude_reports/analysis_project/paper/`에 논문별 cards + `00_overview_and_constraints.md` 생성. 연구팀에 위임. autopilot-draft·autopilot-code·autopilot-research가 implicit input source로 활용.
 
 ## doc mode
-reviewer comments / format templates / past samples / mixed doc 자료를 `.claude_reports/analysis_project/doc/{name}/` 하위에 분류 (reviewers/, formats/, samples/, misc/). autopilot-doc의 format spec auto-discovery source.
+reviewer comments / format templates / past samples / mixed doc 자료를 `.claude_reports/analysis_project/doc/{name}/` 하위에 분류 (reviewers/, formats/, samples/, misc/). autopilot-draft의 format spec auto-discovery source.
 
 ---
 *원본: `~/.claude/skills/analyze-project/SKILL.md`*

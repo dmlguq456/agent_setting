@@ -15,8 +15,6 @@ Resolve `$ARG` to a plan file path:
 
 Example: `/run-test inference-refactor` → `.claude_reports/plans/2026-03-18_inference-refactor/plan/plan.md`
 
-> **Note**: `autonomy_level` is deprecated (CONVENTIONS.md §3, 2026-05-13). All gates (commit-on-success, hotfix attempt 2) auto-proceed. The frontmatter field, if present in older plans, is silently ignored.
-
 ## Language Rule
 - Think and reason in English internally.
 - Write all user-facing output in Korean.
@@ -111,7 +109,7 @@ After the 테스트팀 agent returns:
 ## Report Results
 1. Relay the test results to the user (concise summary table).
 2. If all levels passed and QA approved:
-   - Check `git status` for uncommitted changes. If changes exist: **auto-commit** with a success commit message following the Commit Message Convention above (no user gating — per "no autonomy gating" policy, CONVENTIONS.md §3).
+   - Check `git status` for uncommitted changes. If changes exist: **auto-commit** with a success commit message following the Commit Message Convention above (no user gating — per the family-wide "no autonomy gating" policy).
    - Report success and stop.
 3. If any level failed, enter the **Hotfix Loop** (max 2 attempts):
 

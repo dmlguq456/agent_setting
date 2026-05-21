@@ -70,8 +70,6 @@ Before any code changes, ensure the working tree is clean and up-to-date:
 ## QA Scaling
 `qa_level` in plan frontmatter overrides auto-detect for ALL phases. Otherwise, detect per phase.
 
-> **Note**: `autonomy_level` is deprecated (CONVENTIONS.md §3, 2026-05-13). All decision gates auto-proceed per the policy below; no per-level branching.
-
 | Level | Auto-detect condition | Action |
 |---|---|---|
 | **Quick** | (manual via `--qa quick` only — inherited from autopilot-code) | 1× 품질관리팀 (`model: "sonnet"`), single pass; major 🔴 issues are logged but the pipeline does NOT branch to rollback retry — issues propagate to `pipeline_summary.md` Decision Points instead |
@@ -102,7 +100,7 @@ Adversarial mode — runs all Thorough agents PLUS an additional `codex-review-t
   2. **Read the review file** (skill-level read — permitted per DESIGN_PRINCIPLES 3.3) to determine next action:
      - 🟡 only: log in checklist and continue.
      - 🔴 minor: fix once via 개발팀 → re-verify (output `phase_{NN}_fix.md`). If still 🔴, treat as major.
-     - 🔴 major: **auto-rollback phase and continue** (no user gating — per "no autonomy gating" policy, CONVENTIONS.md §3):
+     - 🔴 major: **auto-rollback phase and continue** (no user gating — per the family-wide "no autonomy gating" policy):
        1. Delegate rollback to 개발팀 — restore every `old_string` from the phase's step logs.
        2. If rollback fails: read `$SAFETY_COMMIT` from checklist header → `git checkout .` (reverts ALL uncommitted changes including prior phases). Mark ALL steps `[FAIL]` ("Reverted by git checkout due to rollback failure in Phase N"). **Stop and go to Final Report.**
        3. If rollback succeeded: mark all steps in this phase `[FAIL]` with reason.

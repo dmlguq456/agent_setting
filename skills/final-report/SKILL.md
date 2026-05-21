@@ -29,8 +29,6 @@ Resolve `$ARG` to a plan file path:
 
 QA level from plan frontmatter `qa_level` or `--qa` flag still flows in (for context logging), but in final-report it affects **only the prompt's context**, not the model or any post-write review. No codex review of the report. No parallel writers. No review loop.
 
-> **Note**: `autonomy_level` is deprecated (CONVENTIONS.md §3, 2026-05-13). final-report no longer reads or propagates it.
-
 ## Delegate to 품질관리팀
 Invoke the **qa-team** (품질관리팀) agent with `model: "sonnet"` (all levels) as a subagent with the following prompt:
 

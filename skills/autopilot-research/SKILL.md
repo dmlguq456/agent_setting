@@ -1,10 +1,10 @@
 ---
 name: autopilot-research
-description: "Research survey pipeline — multi-mode investigation (academic / technology / market). Mode-specific search sources and report templates. Field intelligence only; no PPT/paper drafts. Hand off to autopilot-doc (writing/slides) or autopilot-code (build) for actual document/code creation."
+description: "Research survey pipeline — multi-mode investigation (academic / technology / market). Mode-specific search sources and report templates. Field intelligence only; no PPT/paper drafts. Hand off to autopilot-draft (writing/slides) or autopilot-code (build) for actual document/code creation."
 argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--qa quick|light|standard|thorough] [--no-clarify] [--no-figures] [--from search|analyze|report]"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §7](../../CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 본 skill의 raw metadata (`search_results.json`, `phase_a_*.json`, `chaining_results.md`, `code_search.md` 등) + reviews는 모두 `_internal/` 하위로 격리. T1/T2 chapter 파일과 `cards/`는 root.
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 본 skill의 raw metadata (`search_results.json`, `phase_a_*.json`, `chaining_results.md`, `code_search.md` 등) + reviews는 모두 `_internal/` 하위로 격리. T1/T2 chapter 파일과 `cards/`는 root.
 
 ## Language Rule
 - When explaining something to the user, write in Korean.
@@ -513,7 +513,7 @@ Agent(subagent_type="연구팀"):
    **CRITICAL — Output scope strictly limited to the 9 markdown reports** (00_briefing through 08_reading_guide). Specifically for goal=seminar:
    - Produce `06_implementation.md` with chapter outline + cheat sheet + Q&A + deep-dive candidates ONLY.
    - Do **NOT** produce `seminar_slides.md`, `notion_seminar_slides.md`, slide-by-slide markdown, PPTX, or any other slide-rendering artifact.
-   - Slide-by-slide draft generation belongs to autopilot-doc presentation mode. Never overstep.
+   - Slide-by-slide draft generation belongs to autopilot-draft presentation mode. Never overstep.
 
    Same restriction applies to other goals: do NOT generate paper drafts, code, PPTX, or any final-form document — only the 9 markdown analysis reports.
 
@@ -524,15 +524,15 @@ Agent(subagent_type="연구팀"):
    | Inferred Goal | Recommended next command | Hand-off rationale |
    |---|---|---|
    | build | `/autopilot-code --mode dev "<task>"` | Code implementation needs init-plan → execute-plan → run-test loop. autopilot-code reads `analysis_project/{code,paper}/` + `research/{topic}/` implicitly. |
-   | seminar | `/autopilot-doc "<task>" --mode presentation` | Slide-by-slide markdown draft (PPTX export is NOT supported — user converts to PPT manually with their lab template). research artifact는 implicit 인지. |
-   | write | `/autopilot-doc "<task>" --mode write` | Full paper draft (Abstract → Conclusion) generation. |
-   | research | `/autopilot-doc "<task>" --mode proposal` (or stay in research-only mode) | Proposal mode covers hypothesis + experiment design framing. |
-   | adopt | `/autopilot-doc "<task>" --mode report` (or `--mode proposal` for go/no-go decision) | Tech adoption is a structured report/proposal. |
-   | review | `/autopilot-doc "<task>" --mode review` (REQUIRED: pre-process the venue's review form via `/analyze-project --mode doc <folder>` first — no built-in presets, venues differ year-to-year) | Reviewer report draft following the venue's review form. |
+   | seminar | `/autopilot-draft "<task>" --mode presentation` | Slide-by-slide markdown draft (PPTX export is NOT supported — user converts to PPT manually with their lab template). research artifact는 implicit 인지. |
+   | write | `/autopilot-draft "<task>" --mode paper` | LaTeX paper draft (Abstract → Conclusion) generation. |
+   | research | `/autopilot-draft "<task> grant proposal" --mode doc` (or stay in research-only mode) | doc mode + grant-proposal genre intent — hypothesis + experiment design framing. |
+   | adopt | `/autopilot-draft "<task> tech adoption report" --mode doc` | doc mode + report/proposal intent — structured go/no-go decision document. |
+   | review | `/autopilot-draft "<task> peer review" --mode doc` (REQUIRED: pre-process the venue's review form via `/analyze-project --mode doc <folder>` first — no built-in presets, venues differ year-to-year) | doc mode + peer-review intent — reviewer report draft following the venue's review form. |
 
-   Include the recommended next command verbatim in this section so the user can copy-paste it. autopilot-doc은 `research/{topic}/` 산출물을 prompt 키워드 fuzzy match로 자동 인지하므로 별도 path 인자 불요.
+   Include the recommended next command verbatim in this section so the user can copy-paste it. autopilot-draft은 `research/{topic}/` 산출물을 prompt 키워드 fuzzy match로 자동 인지하므로 별도 path 인자 불요.
 
-   **Boundary disclaimer** (also include): "이 06_implementation.md는 분야 분석에서 도출된 high-level 계획입니다. 본격적인 문서 작성·코드 구현은 autopilot-doc / autopilot-code로 인계됩니다."
+   **Boundary disclaimer** (also include): "이 06_implementation.md는 분야 분석에서 도출된 high-level 계획입니다. 본격적인 문서 작성·코드 구현은 autopilot-draft / autopilot-code로 인계됩니다."
 
    ### 07_resources.md — Code, Data & Model Resources
    - Tier-based repos: Tier 1 (directly usable for UD-KWS) / Tier 2 (backbone/infra) / Tier 3 (supplementary)
@@ -763,7 +763,7 @@ Read `00_briefing.md` and `06_implementation.md` (for the inferred goal + Next P
 
 > Pipeline completion: Step 5 determines formal status. Step 6 is optional interaction.
 
-**Scope boundary**: autopilot-research produces *field intelligence* (markdown analysis only). It does NOT produce final documents (papers/slides/PPTX/code). For document/slide creation, hand off to autopilot-doc; for code implementation, hand off to autopilot-code. The `06_implementation.md` outline is the bridge artifact between these pipelines.
+**Scope boundary**: autopilot-research produces *field intelligence* (markdown analysis only). It does NOT produce final documents (papers/slides/PPTX/code). For document/slide creation, hand off to autopilot-draft; for code implementation, hand off to autopilot-code. The `06_implementation.md` outline is the bridge artifact between these pipelines.
 
 ## Decision Logging
 Record after each gate: `{step | decision | response | action}`. Populate pipeline_summary Decision Points table.

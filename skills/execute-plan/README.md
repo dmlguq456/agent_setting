@@ -43,8 +43,6 @@
 ## QA Scaling
 plan frontmatter의 `qa_level`이 모든 phase auto-detect를 override.
 
-> `autonomy_level`은 deprecated (CONVENTIONS.md §3, 2026-05-13). 모든 게이트는 auto-proceed로 일원화.
-
 | Level | 조건 | 행동 |
 |---|---|---|
 | Quick | `--qa quick` 명시 시 (autopilot-code에서 전파) | 1× 품질관리팀 (sonnet), 1-pass; 🔴 이슈는 `pipeline_summary.md` Decision Points에 기록만 |

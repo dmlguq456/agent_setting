@@ -7,7 +7,7 @@
 1. **Plan Review** — 논문 지식·도메인 전문성으로 plan 리뷰, 사용자 대행
 2. **Research Survey** — `autopilot-research` 파이프라인용 논문 검색·분석·보고서 작성
 
-또한 `autopilot-doc`에서 Source Discovery, 전략 작성, 도메인 리뷰, 초안 작성, 초안 리뷰, 한국어 번역 전담. `autopilot-refine`에서 fact-checker로도 호출.
+또한 `autopilot-draft`에서 Source Discovery, 전략 작성, 도메인 리뷰, 초안 작성, 초안 리뷰, 한국어 번역 전담. `autopilot-refine`에서 fact-checker로도 호출.
 
 ## 메타데이터
 

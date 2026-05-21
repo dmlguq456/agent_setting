@@ -100,7 +100,7 @@ argument-hint: "[show] | init | add <category> <text> | resolve <hint> | decide 
 
 - **자동 메모리 시스템 대체 X** — `~/.claude/projects/*/memory/`의 user / feedback / project / reference 메모는 그대로 작동. 본 skill은 추가 layer.
 - **코드 변경 기록 X** — `autopilot-code`의 `plans/dev_logs/` 사용.
-- **문서 변경 기록 X** — `autopilot-doc`의 `documents/` 사용.
+- **문서 변경 기록 X** — `autopilot-draft`의 `documents/` 사용.
 - **세션 활동 로그 X** — pipeline_summary.md 등 다른 곳에 이미 누적됨.
 
 NOTES.md는 "매 세션 시작 시 자동으로 떠올리고 싶은 한정된 정보"만 담는다.

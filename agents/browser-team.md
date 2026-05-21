@@ -158,9 +158,9 @@ Test whether a URL is accessible (returns full content vs abstract-only vs block
 
 ### Cross-skill Reuse (figure extraction)
 
-Figures extracted in **`extract_pdf_figures`** mode during autopilot-research are persisted at `research/{topic}/figures/` and indexed in `cards/{paper}.md` (예: `**Figures**: ../figures/{paper_id}_fig1.png`). Subsequent skills (autopilot-doc, refine) discover these implicitly via `.claude_reports/research/{topic}/` reading.
+Figures extracted in **`extract_pdf_figures`** mode during autopilot-research are persisted at `research/{topic}/figures/` and indexed in `cards/{paper}.md` (예: `**Figures**: ../figures/{paper_id}_fig1.png`). Subsequent skills (autopilot-draft, refine) discover these implicitly via `.claude_reports/research/{topic}/` reading.
 
-When **autopilot-doc** processes the same topic, the main Claude can:
+When **autopilot-draft** processes the same topic, the main Claude can:
 - Symlink or copy relevant figures to `documents/{...}/assets/figures/extracted/`
 - Embed via markdown in draft placeholder (`![](../../../research/{topic}/figures/{paper_id}_fig1.png)`)
 

@@ -7,9 +7,7 @@
 > **Paper mode camera-ready 특이 룰** (2026-05-19): 새 mutation 추가 또는 기존 mutation refine 시 **natural-integration rule** 적용 (위 Pre-Check 통과 후 추가 gate). Single gating question — *"1-2 sentence inline rewrite로 자연 통합 가능한가?"* YES → M15-style inline rewrite. NO → drop (refine으로 polish 대신 entry 폐기). Rebuttal-format 잔존 mutation 발견 시 폐기. 상세 — `SKILL.md` Other rules.
 
 ## 개요
-autopilot-doc의 refine 단계 서브스킬. 사용자 메모 또는 review 피드백을 strategy 또는 draft에 반영. **versioned output** + **mandatory ref-grounding** (메모마다 source re-read).
-
-> 이전 이름 `refine-doc-strategy`에서 2026-05-06에 `refine-doc`로 리네임 — strategy + draft 양쪽 처리하므로 generic한 이름으로 변경.
+autopilot-draft의 refine 단계 서브스킬. 사용자 메모 또는 review 피드백을 strategy 또는 draft에 반영. **versioned output** + **mandatory ref-grounding** (메모마다 source re-read).
 
 ## 호출 흐름
 ```mermaid

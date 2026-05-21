@@ -38,8 +38,6 @@ created: {YYYY-MM-DD}
 ---
 ```
 
-> **Note**: `autonomy_level` 필드는 CONVENTIONS.md §3에 따라 2026-05-13 폐기. orchestrator·sub-skill 모두 "no autonomy gating" 정책으로 통일. 결정 gate는 step description의 `[decision: critical|significant|routine]` 태그 + autopilot의 ask-policy로 일원화. 기존 plan의 frontmatter `autonomy_level` 필드는 무시(silently ignored).
-
 Body structure (in English):
 1. **Goal**: One-line summary
 2. **Current State Analysis**: Current state of relevant files/functions (include file paths and key line numbers)

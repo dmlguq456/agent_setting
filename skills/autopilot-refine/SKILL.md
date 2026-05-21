@@ -4,12 +4,12 @@ description: Autopilot family — post-creation iteration pipeline for research 
 argument-hint: "\"<prompt>\" [--qa quick|light|standard|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §7](../../CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
 
 ## Position in autopilot family
 
 `autopilot-refine` is the **post-creation iteration** counterpart to the creation pipelines:
-- `autopilot-research` / `autopilot-code` / `autopilot-doc` create artifacts (forward direction).
+- `autopilot-research` / `autopilot-code` / `autopilot-draft` create artifacts (forward direction).
 - `autopilot-refine` reads and updates existing artifacts (reverse direction).
 
 Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag as the rest of the family, but with `quick` as the **default** (because the skill targets routine, scoped edits — not full re-creation).
@@ -142,7 +142,7 @@ Higher levels add a pre-apply review pass on the planned diff — they do NOT ad
 
 > **Default = 자동 apply 근거**: family 다른 멤버(`autopilot-research/code/doc`)는 모두 confirm 없이 pipeline 끝까지 실행 — autopilot 정신. refine만 default가 confirm이면 이름과 mismatch. Safety net: (a) `_internal/versions/v{prev}/` 스냅샷, (b) `pipeline_summary.md` 통합 history, (c) `git diff` 즉시 검토, (d) Stage B.5 `⚠ Unverified/Style` marker가 본문에 박혀 사후 git diff에서 식별 가능, (e) audit auto-fix chain dispatch와 정합.
 
-> **STRUCT halt (escape hatch)**: 변경이 5+ files / 전체 section rewrite / autopilot pipeline 재실행 필요로 분류되면 _자동 apply 안 함_. halt + 사용자에게 heavier flow 권장 (`/autopilot-research --from analyze` 또는 `/autopilot-doc --from strategy`). 이건 default 변경 후에도 유지.
+> **STRUCT halt (escape hatch)**: 변경이 5+ files / 전체 section rewrite / autopilot pipeline 재실행 필요로 분류되면 _자동 apply 안 함_. halt + 사용자에게 heavier flow 권장 (`/autopilot-research --from analyze` 또는 `/autopilot-draft --from strategy`). 이건 default 변경 후에도 유지.
 
 ### Tunable constants
 
@@ -197,7 +197,7 @@ Reason internally in English. All user-facing output (chat diffs, pipeline_summa
    - **STRUCT** — touches 5+ files OR rewrites whole sections OR requires re-running an autopilot pipeline.
 5. **If STRUCT detected** → halt before Stage C. Recommend the user run a heavier flow:
    - Research: `/autopilot-research --from analyze` (full re-analysis)
-   - Doc: `/refine-doc <name>` (memo-based deferred) or `/autopilot-doc --from strategy`
+   - Doc: `/refine-doc <name>` (memo-based deferred) or `/autopilot-draft --from strategy`
    Do NOT proceed with autopilot-refine.
 
 ### Stage B.5 — Factual claim & Style auto-detector (always runs, even in quick)
@@ -494,7 +494,7 @@ Parse the user's reply, then:
 
 - Single-file typo / cosmetic edit → just `Edit`.
 - Code artifacts → `/refine-plan`, `/execute-plan`, `/autopilot-code`.
-- Whole-axis structural redesign → `/autopilot-research --from analyze` or `/autopilot-doc --from strategy`.
+- Whole-axis structural redesign → `/autopilot-research --from analyze` or `/autopilot-draft --from strategy`.
 - Pure deferred review (annotate over hours/days) → `/refine-doc` (file-memo) or this skill's `--memo` form.
 
 ## Post-Apply Checklist

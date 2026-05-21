@@ -5,7 +5,7 @@
 ## 개요
 외부 분야 조사 파이프라인 — 학술/산업/시장 3개 mode별 보고서를 생성합니다. 논문 검색 + 분석 + 코드/모델/데이터셋 자원 발견 + 분야 implementation 가이드를 자동으로 산출.
 
-> **Scope 경계**: markdown 분석 리포트만 산출. 슬라이드 본문 / paper draft / code / PPTX는 만들지 않음. 그것들은 autopilot-doc / autopilot-code에 인계.
+> **Scope 경계**: markdown 분석 리포트만 산출. 슬라이드 본문 / paper draft / code / PPTX는 만들지 않음. 그것들은 autopilot-draft / autopilot-code에 인계.
 
 ## 호출 형식
 ```
@@ -50,10 +50,10 @@
 1. **Step 0 Scope Clarification** (모호 query 시 2-4개 질문)
 2. **Step 1 Paper Search** — HF / OpenAlex / arXiv / Google Scholar / Semantic Scholar 6 sources 순차
 3. **Step 2 Paper Analysis** — 인용수·venue tier 기반 reading depth 결정, paywall은 탐색팀 위임
-4. **Step 3 Report Generation** — mode별 5-9개 markdown 산출 + 06_implementation.md의 Next Pipeline 표로 autopilot-code / autopilot-doc / refine 인계
+4. **Step 3 Report Generation** — mode별 5-9개 markdown 산출 + 06_implementation.md의 Next Pipeline 표로 autopilot-code / autopilot-draft / refine 인계
 
 ## Chaining (implicit)
-- autopilot-research → autopilot-doc: `research/{topic}/`을 prompt 키워드 fuzzy match로 자동 발견
+- autopilot-research → autopilot-draft: `research/{topic}/`을 prompt 키워드 fuzzy match로 자동 발견
 - autopilot-research → autopilot-code: init-plan이 implicit 인지
 
 ## Wiki database 안내
