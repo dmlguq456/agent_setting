@@ -37,7 +37,10 @@ argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [
 - **Mid-pipeline switching**: When starting from Step 2+ AND `--qa` is explicitly passed, update `qa_level` in the existing plan's YAML frontmatter before invoking the sub-skill. Explicit CLI flag always overrides frontmatter. If `--qa` is NOT passed on resume, preserve the existing frontmatter value (or default to `standard` if absent).
 - **`quick` mode interactions**: `--user-refine` is silently ignored when `--qa quick` (refine is skipped, so the pause point doesn't exist). On `--from refine`, if frontmatter `qa_level == quick`, abort with: "qa_level=quick에서는 refine 단계가 스킵됩니다. --qa <level>을 다른 값으로 명시해 재개하세요."
 
-### --user-refine (boolean flag)
+### --user-refine (boolean flag — opt-in only)
+
+**Default: false. The orchestrator (메인 Claude) MUST NOT add this flag on its own — it is set only when the user typed `--user-refine` (or an explicit Korean equivalent like "사용자 검토 끼워" / "memo 추가하게 멈춰줘") in the original prompt.** Inferring this flag from generic "신중히 진행해 줘" / "한 번 봐줘" / 길고 복잡한 task 같은 신호로 자동 추가하는 행동 금지 — 그 경우 사용자가 의도하지 않은 pause 가 걸려 작업이 멈춘다.
+
 When present, the orchestrator **pauses** at refine points so the user can add their own `<!-- memo: ... -->` comments on top of 연구팀's memos before refine-plan runs.
 
 - Applies to: **dev mode only** (Step 2 plan refine, and the failure-loop refine after test failure).
