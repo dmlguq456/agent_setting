@@ -121,15 +121,8 @@ Otherwise:
      ```
      Invoke 연구팀: "Review this plan as user proxy. **Task type: {task_type}** — apply ALL Role 1 Step 3 axes for this task type (no Focus axis). Korean plan: {ko_plan_path}. English plan: {en_plan_path}. Review log: {log_dir}/_internal/plan_reviews/research_review.md. Weight task-type-specific axes heavily (for meta-skill: family-level naming conflict + cross-skill scope overlap + sync-skills downstream + frontmatter validity)."
      ```
-   - **thorough / adversarial** — **axis-decomposed parallel 연구팀** (each axis = separate instance, parallel batch):
-     - Per `agents/research-team.md` Role 1 _Multi-axis parallel mode_, dispatch N parallel 연구팀 instances. Each invocation includes `Focus axis: <axis_name>` to limit that instance to a single lens.
-     - Axes per task type (from the same Role 1 table):
-       * paper-driven code → `paper-alignment` / `api-contracts` / `test-coverage` / `code-style`
-       * meta-skill → `naming-conflict` / `scope-overlap` / `sync-downstream` / `frontmatter-mermaid`
-       * infra/config → `permissions` / `hook-side-effects` / `settings-drift`
-     - Each instance writes memos with `[<axis_name>]` prefix (e.g., `[NAMING-CONFLICT]`, `[TEST-COVERAGE]`) and a separate review log: `{log_dir}/_internal/plan_reviews/research_review_<axis_name>.md`.
-     - After all parallel instances return, merge memos + deduplicate, then proceed with refine-plan.
-   - **Why decomposition at thorough+**: a single 연구팀 instance handling many axes can dilute attention. Parallel decomposition lets each instance focus narrowly while collectively covering everything a careful user would catch (especially audit-aligned aspects: naming conflicts / test coverage gaps / style drift).
+   - **thorough / adversarial** — **axis-decomposed parallel 연구팀**: dispatch N parallel instances, 각 invocation 에 `Focus axis: <axis_name>` 포함해 single lens 로 제한. axis list 와 task-type 별 axis 매핑은 `agents/research-team.md` Role 1 _Multi-axis parallel mode_ 표 single source. 각 instance 는 `[<axis_name>]` prefix 메모 + separate review log (`{log_dir}/_internal/plan_reviews/research_review_<axis_name>.md`) 작성. 모든 parallel 완료 후 메모 merge + dedup → refine-plan.
+   - **Why decomposition at thorough+**: 단일 instance 가 많은 axis 를 다루면 주의가 분산. parallel decomposition 으로 각 instance 가 좁게 집중해 사용자가 직접 잡아낼 만한 자리 (naming conflict / test coverage gap / style drift) 전부 커버.
 3. If memos added:
    - **`--user-refine` pause**: if the flag is set (CLI or plan frontmatter), update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command, and exit. Do NOT invoke refine-plan.
    - Otherwise: invoke Skill `refine-plan` with the Korean plan path.

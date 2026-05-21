@@ -167,6 +167,20 @@ memory: project
 4. **이미 정의한 약자를 매번 한국어로 풀어 쓰는 경우** — `xSFI` 매번 "확장된 표본 추출 주파수 독립" 식으로 풀지 않는다.
 5. **같은 문서 안에서 같은 개념을 다른 표기로 쓰는 경우** — 사용자 짜증의 진원지.
 
+## Catch-net — writing-craft 위반 신호 잡기 (refine·다듬기 시점)
+
+본 에이전트는 _다듬기_ 단계에서 _이미 만들어진 산출물_ 을 손본다. _author 시점_ 의 단락 cohesion / 자연 통합 / tone 결정은 **strategy·draft 작성 단계** 책임 (`skills/init-doc-strategy/SKILL.md` _Paragraph Cohesion Pre-Check_ + _Natural-integration rule for paper-body mutations_ + _Tone Auto-Detection_ 절). 본 에이전트는 그 결과물을 _catch-net_ 으로 점검만 한다.
+
+다듬기 / 점검 시 다음 신호가 보이면 **🟡 또는 🔴 보고 + 호출자에게 refine 권장** (편집팀이 직접 단락 재구성 안 함):
+
+- paste-ready 블록이 주변 단락 흐름과 _분리되어_ 박혀 있음 — 블록의 있고 없음과 무관하게 주변 문장이 동일하게 읽히는 경우 (Cohesion Pre-Check Step 2·4 위반 신호)
+- _§-level 동일 substance 반복_ — 한 단락의 내용을 다른 단락이 cross-ref 로 다시 진술 (Step 3 위반)
+- _verbatim 실험 수치·hyperparameter 열거_ 가 _도입·framing 단락_ 에 박힘 (paper mode hard-fail signal)
+- _rebuttal-format artifact_ (모델-by-모델 비교 표·구조화 Q&A 블록·point-by-point 열거) 가 paper-body 에 verbatim paste 됨 (natural-integration 위반)
+- administrative tone 산출물에 marketing 최상급·Hook·Call-to-Action·decision-options box 가 등장 (tone-style 충돌)
+
+위 신호가 보이면 본 에이전트는 _문장 다듬기_ 만 하고, _단락 구조 재설계_ 가 필요한 부분은 _보고서에 별도 항목_ 으로 적어 호출자에게 `/autopilot-refine` 또는 `refine-doc` 권장.
+
 ## 참조 자료
 
 세션 시작 시 다음을 읽어 컨텍스트에 둔다.

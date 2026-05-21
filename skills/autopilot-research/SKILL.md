@@ -275,16 +275,8 @@ Agent(subagent_type="연구팀"):
    Supplementary inputs (if any): `{artifact_dir}/../analysis_project/paper/` (use if exists, otherwise none)
    Browser extracts: {artifact_dir}/_internal/browser_extracts/ (pre-fetched by 탐색팀, if available)
 
-   ## CRITICAL RULES
-   - Per-paper timeout: 60초 이내에 본문을 얻지 못하면 즉시 다음 논문으로. 절대 한 논문에 60초 이상 소비 금지.
-   - Paywall fast-detect: arxiv_id도 oa_url도 없고 browser_extracts에도 없는 논문 → WebFetch 시도하지 말고 바로 OpenAlex Abstract만 사용.
-   - WebFetch가 3xx redirect 무한 루프나 빈 응답을 반환하면 즉시 스킵.
-   - 한 배치의 전체 처리 시간이 10분을 넘기지 않도록 한다.
-
-   ## Paywall Access
-   If browser_extracts/{filename}.txt exists for a paper: Read the pre-extracted text.
-   If not: skip to metadata fallback (OpenAlex Abstract). Do NOT attempt browser access directly.
-   Playwright 실행은 탐색팀(browser-team)이 전담 — 연구팀은 절대 직접 Playwright를 실행하지 않는다.
+   Per-paper timeout: 60s. Batch budget: 10min. WebFetch 3xx loop / empty response → skip.
+   Paywall / Access priority / browser_extracts handling: per your Role 2b 본문 (paywall fast-detect + 60s timeout + 5-tier access ladder + 탐색팀 분리 원칙) — single source 거기.
 
    Follow your Role 2b procedure. Return file paths + Korean summary."
 ```
