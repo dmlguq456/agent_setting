@@ -106,7 +106,20 @@ After the 품질관리팀 agent returns:
    - **Line numbers**: if the report cites `file.py:NNN`, verify you remember the same location (drift is common).
    - **Status of follow-ups**: report may claim an item is "pending" when memory says it was resolved in a later round.
    - **Deviations**: did any subagent flag a deviation from the plan that the report missed?
-   
+
+2.5. **Invoke 편집팀 with mode B** (polish, in-place — 사용자 영역 한국어 가독성):
+
+   ```
+   Agent({
+     subagent_type: "편집팀",
+     prompt: `polish {log_directory}/final_report.md
+   사용자가 직접 읽는 변경 보고서다. 편집팀 모드 B 다듬기 — 판교체 정리·표기 일관성·호흡.
+   보존: 변경 내용·변경 이유·핵심 원리·QA 리뷰 요약·자율 판단 기록 본문 (수치·file:line·decision 본문). 다듬기 대상: 한국어 wording 만.`
+   })
+   ```
+
+   편집팀이 in-place Edit 으로 마무리한 뒤 step 3 진행. (단발성 — single-pass, snapshot X.)
+
 3. **Relay a concise Korean brief to the user** (2-3 paragraphs, NOT just the file path). The brief should:
    - State the final status (done/partial/failed) and final commit hash
    - Highlight 3-5 concrete deliverables / changes

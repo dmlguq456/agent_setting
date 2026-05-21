@@ -17,7 +17,7 @@
 | **quick** | 1× sonnet, 1-pass | skip | skip | refine entire skip / loop 1라운드 강제 종료 / 🔴 잔존 시 `unresolved.md`에 기록만 |
 | **light** | 1× sonnet, single-pass | skip (quality reviewer가 spot-check 커버) | skip | 경량 리뷰 |
 | **standard** | 1× opus, single-pass | 1× sonnet, parallel¹ | skip | _doc/research/refine 한정_ — fact-checker는 cards/PDFs verbatim 대조 (venue/year/metric/citation) |
-| **thorough** | 2× opus, parallel (다른 focus²) | 1× sonnet, parallel¹ | skip | 고위험 산출물 (final-version paper draft, public-facing report 등) |
+| **thorough** | doc/research/refine: 2× opus, parallel (다른 focus²) · code (init-plan/refine-plan/execute-plan): 1× opus + 1× sonnet, parallel (A=correctness focus opus / B=completeness focus sonnet, cost-aware) | 1× sonnet, parallel¹ | skip | 고위험 산출물 (final-version paper draft, public-facing report 등). code 갈래에서 completeness reviewer 가 sonnet 인 이유는 §2 비고 |
 | **adversarial** | 2× opus, parallel (= thorough quality) | 1× sonnet, parallel¹ | 1× `Agent(codex-review-team)` parallel — Codex CLI (GPT-5) external review | _autopilot-code · autopilot-refine 전용_ — autopilot-draft / autopilot-research는 지원 X (thorough까지) |
 
 ¹ Fact-checker는 _doc/research/refine 파이프라인_에만 적용. autopilot-code 계열 (init-plan / refine-plan / execute-plan / run-test)은 fact-checker 없음 — code는 ground-truth source가 코드 자신이므로 quality reviewer만 운용.
@@ -65,7 +65,7 @@
 | Agent | frontmatter `model:` | 실제 작동 |
 |---|---|---|
 | `기획팀` (plan-team) | opus | opus 단일 |
-| `품질관리팀` (qa-team) | opus | **가변** — Light=1× sonnet / Standard=1× opus / Thorough=2× opus parallel |
+| `품질관리팀` (qa-team) | opus | **가변** — Light=1× sonnet / Standard=1× opus / Thorough=doc·research·refine 갈래 2× opus parallel · code 갈래 (init-plan/refine-plan/execute-plan) 1× opus + 1× sonnet parallel (completeness reviewer 가 비교적 mechanical 매칭이라 sonnet 가 cost-efficient — code 의 ground-truth 가 코드 자신이므로 verbatim 비교 비중이 큼) |
 | `연구팀` (research-team) | opus | **가변** — default opus (Plan Review·domain reviewer); fact-checker subrole·light QA는 sonnet (cost-aware verbatim matching) |
 | `테스트팀` (test-team) | opus | opus + sonnet 혼합 (Agent A=sonnet coverage / Agent B=opus accuracy) |
 | `탐색팀` (browser-team) | sonnet | sonnet 단일 |

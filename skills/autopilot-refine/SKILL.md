@@ -26,7 +26,7 @@ Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag a
 
 1. **사용자 명시 표현**: "major", "v{N+1}", "/autopilot-refine", "메이저 버전", "전면 재작성", "phase 재시작", "cycle 재진입"
 2. **구조적 대규모 변경**: ≥200 줄 영향 / 전체 section rewrite / mutation tier 재분류 batch / strategy↔draft alignment overhaul
-3. **외부 검토 직전 ceremony**: "camera-ready 마무리", "submission 직전 finalize", "external review 전 마지막", "grant 제출", "PR open 직전"
+3. **외부 검토 직전 ceremony**: 사용자 prompt 본문에 verbatim 으로 "camera-ready 마무리" / "submission 직전 finalize" / "external review 전 마지막" / "grant 제출" / "PR open 직전" 표현이 _직접_ 등장한 경우만. cwd 이름 (예: `..._camera_ready/`) · 메모리 맥락 · 작업 디렉토리 신호로 추론 금지 (응답 원칙 §4 정합)
 
 **Minor** (default — 위 3-criteria 미해당):
 
@@ -160,7 +160,7 @@ ls -d .claude_reports/research/*<keyword>* .claude_reports/documents/*<keyword>*
 
 - **1 match** → use as artifact root. Detect type by path prefix.
 - **Multiple matches** → list candidates to user, ask which.
-- **0 matches** → ask user to clarify the artifact name in the prompt (e.g., "어느 산출물에 대한 작업인가요? prompt에 식별자(`speech-enhancement-trends`, `2026-05-06_se-seminar-tfrestormer` 같은) 포함 부탁").
+- **0 matches** → ask user to clarify the artifact name in the prompt (e.g., "어느 산출물에 대한 작업인가요? prompt에 식별자(`speech-enhancement-trends`, `2026-05-06_se-seminar-tfrestormer` 같은) 포함 부탁"). 글로벌 [CLAUDE.md](../../CLAUDE.md) §5 적용 — ScheduleWakeup 10분 동시 호출, 답 없으면 가장 최근 수정된 artifact 로 자율 진행.
 
 Detect type by path prefix:
 - `.claude_reports/research/*` → **research** type
@@ -311,7 +311,7 @@ Prompt: "{prompt verbatim, ≤200자 trim}"
   - "edit 4: <new>" → 4번 텍스트 교체 후 적용
   - "no" / "stop" → 중단
 ```
-End turn. Wait for user reply.
+End turn. Wait for user reply. 글로벌 [CLAUDE.md](../../CLAUDE.md) §5 적용 — ScheduleWakeup 15분 동시 호출, 답 없으면 "yes / all" 추천 방향 (default auto-apply 패턴) 으로 자율 진행.
 
 **`--review-only` mode**: print Stage C output, then end. No Stage D.
 

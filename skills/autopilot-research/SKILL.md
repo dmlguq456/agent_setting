@@ -163,6 +163,8 @@ artifact_dir: <abs path>
 
 **Output**: 사용자 답변을 통합한 refined query를 Step 2로 전달 + `pipeline_state.yaml`의 `clarified_intent` 필드에 한 줄 요약 기록.
 
+**§5 자율 진행**: 질문 던질 때 글로벌 [CLAUDE.md](../../CLAUDE.md) §5 적용 — ScheduleWakeup 15-20분 동시 호출, 답 없으면 mode 추론 결과 + depth medium + 가장 좁은 범위 default 로 자율 진행.
+
 ### Step 2: Source Search (direct Agent call) — mode-aware
 
 > **Search source selection per mode**:

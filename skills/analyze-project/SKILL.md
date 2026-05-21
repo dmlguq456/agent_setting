@@ -39,7 +39,7 @@ Inspect current directory:
 | `src/`, `lib/`, `models/`, `.git`, `package.json`, `pyproject.toml`, OR `*.py`/`*.ts`/`*.go`/`*.rs` files at root | **code** |
 | Many `*.pdf` / `*.docx` / `*.md` files; no source dirs; no build manifests | **doc** |
 | Both indicators present | **code** (default — user can override with `--mode doc`) |
-| Neither / unclear | ask user: "code, paper, doc 중 어느 mode인가요?" |
+| Neither / unclear | ask user: "code, paper, doc 중 어느 mode인가요?" — 글로벌 [CLAUDE.md](../../CLAUDE.md) §5 적용 (ScheduleWakeup 10-15분 동시 호출; 답 없으면 cwd 신호 강한 쪽으로 자율 진행) |
 
 > **`paper` mode is never auto-selected** — paper analysis requires explicit `--mode paper` because PDF presence alone is ambiguous (could be reviewer comments, templates, etc. for doc mode). The boundary between paper and doc is genuinely fuzzy in the wild.
 
@@ -272,11 +272,13 @@ analysis_project/doc/{name}/
 `analyze-project`의 산출물은 _영속 자산_으로 후속 autopilot-* skill이 implicit으로 읽음:
 
 - `autopilot-code`는 `analysis_project/code/`를 자동 인지 (init-plan에서 모듈 매핑 참조)
-- `autopilot-draft`는 mode에 따라:
-  - `rebuttal` → `analysis_project/doc/{matching}/reviewers/` + `analysis_project/paper/`
-  - `write` → `analysis_project/paper/` + `analysis_project/doc/{matching}/formats/`
-  - `review` → `analysis_project/doc/{matching}/formats/` (REQUIRED)
-  - 그 외 mode 비슷한 패턴
+- `autopilot-draft`는 form-first 3-mode (paper / presentation / doc) 에 따라:
+  - `paper` → `analysis_project/paper/` (academic body 본문)
+  - `presentation` → `analysis_project/paper/` + `analysis_project/doc/{matching}/formats/` (slide template)
+  - `doc` → task description intent 키워드별:
+    - rebuttal-response intent (응답·OpenReview·reviewer) → `analysis_project/doc/{matching}/reviewers/` + `analysis_project/paper/` (REQUIRED)
+    - peer review intent (심사·review form) → `analysis_project/doc/{matching}/formats/` (REQUIRED — 부재 시 hard-fail)
+    - report · proposal · generic prose intent → `analysis_project/doc/{matching}/formats/` (optional)
 - `autopilot-research`는 자체 외부 검색 위주이지만, 보유 자료가 있으면 `analysis_project/paper/` 인지 가능
 
 모든 입력은 `analysis_project/*` 또는 `research/*` 같은 `.claude_reports/` 하위 영속 산출물에서 자동 발견. family 전체가 외부 폴더를 직접 가리키는 flag 없음.

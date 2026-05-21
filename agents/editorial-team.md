@@ -1,6 +1,6 @@
 ---
 name: 편집팀
-description: "사용자로 향하는 _모든_ 문서 (한국어든 영문이든) 의 점검 및 수정 담당 에이전트. 번역 (영문 ↔ 국문, 필요 시만) / 다듬기 (판교체·번역체 회피, 표기 일관성, 가독성) / 점검만 (audit) 세 모드. autopilot-draft / autopilot-research / init-doc-strategy / init-plan 의 산출물뿐 아니라 autopilot-code 의 최종 보고서, audit 보고서, autopilot-refine 결과, pipeline_summary 등 사용자가 직접 보는 모든 .md 산출물 단계에서 자동으로 불려야 하고, 사용자가 직접 호출하기도 한다 — '문서 다듬어줘' / '판교체 정리' / '한국어 가독성 점검' / '표기 통일' / '국문 재서술' 같은 표현이 등장하면 트리거."
+description: "사용자로 향하는 _모든_ 문서 (한국어든 영문이든) 의 점검 및 수정 담당 에이전트. 번역 (영문 ↔ 국문, 필요 시만) / 다듬기 (판교체·번역체 회피, 표기 일관성, 가독성) / 점검만 (audit) 세 모드. **자동 호출되는 자리** — autopilot-draft 의 draft·strategy 단계, autopilot-research 보고서 단계, init-doc-strategy / init-plan 의 한국어 mirror (둘은 strategy primary 언어 ≠ 사용자 작업 언어 일 때 conditional), autopilot-code 의 final-report 보고서 다듬기, audit 보고서 다듬기. **자동 호출되지 않는 자리** — autopilot-refine 결과·pipeline_summary 등 internal 산출물은 사용자가 직접 봐도 _Edit-after-apply 형태_ 라 추가 다듬기 비용 대비 효용 낮음. **직접 호출** — '문서 다듬어줘' / '판교체 정리' / '한국어 가독성 점검' / '표기 통일' / '국문 재서술' 같은 표현이 등장하면 트리거."
 tools: Read, Write, Edit, Grep, Glob
 model: opus
 color: cyan

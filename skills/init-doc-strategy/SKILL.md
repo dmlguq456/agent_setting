@@ -1,6 +1,6 @@
 ---
 name: init-doc-strategy
-description: Create an initial document strategy (rebuttal/paper/review/report/proposal/presentation) based on analyzed reference materials
+description: Create an initial document strategy. Internal mode enum 6종 (rebuttal / paper / review / report / proposal / presentation) — autopilot-draft 의 form-first 3-mode (paper / presentation / doc) 에서 doc intent (자연어 키워드 → rebuttal-response / review / report / proposal / generic) 가 본 sub-skill 의 직접 mode 라벨로 변환되어 전달됨. 직접 호출 시는 사용자가 첫 인자로 6-mode 중 하나를 명시.
 argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--qa quick|light|standard|thorough] <task description>"
 ---
 
@@ -62,6 +62,24 @@ This rule applies to **every doc-strategy mode** (rebuttal / paper / review / re
 - *Trailing sentence appended after a "design choice" sentence that already names the choice* — the new content overlaps with the design-choice sentence and should be folded in via EDIT, not appended.
 
 **Why** (2026-05-20 incident, ICML 2026 camera-ready M8 / M9): M8 paste-ready ignored the existing *"we share the same projection layer..."* sentence and appended a separate trailing INSERT, breaking the transition to the next equation block. M9 restated a §3.2 conditional-information-flow paragraph inside §3.3 P2 via cross-ref, increasing verbosity rather than compressing it. The user's explicit feedback was *"그걸 삽입할 단락의 전체 cohesive, coherence를 고려해야하는데"* — every paste-ready mutation must be designed against the target paragraph's full cohesion/coherence, not in isolation. This 4-step pre-check operationalizes that judgment so the failure mode does not repeat across modes.
+
+## Mode mapping — autopilot-draft 3-mode 와의 정합
+
+autopilot-draft 의 form-first 3-mode 와 본 sub-skill 의 strategy template 6종 매핑:
+
+| autopilot-draft mode | task description 키워드 (doc intent) | 본 sub-skill mode 라벨 | strategy template 헤더 |
+|---|---|---|---|
+| `paper` | (intent 분기 없음) | `paper` | `### If mode = paper` |
+| `presentation` | (intent 분기 없음) | `presentation` | `### If mode = presentation` |
+| `doc` | rebuttal · 응답 · OpenReview · reviewer · 반박 | `rebuttal` | `### If mode = rebuttal` |
+| `doc` | peer review · 심사 · 검토 의견 | `review` | `### If mode = review` |
+| `doc` | 보고서 · report · 진행 · 결과 · status · 중간보고 | `report` | `### If mode = report` |
+| `doc` | 제안서 · proposal · grant · RFP | `proposal` | `### If mode = proposal` |
+| `doc` | 그 외 (memo · blog · 일반 prose) | `report` (default fallback) | `### If mode = report` |
+
+본 매핑은 autopilot-draft Pre-flight Step 2 (Input Discovery) 가 task description keyword 매칭으로 doc intent 라벨 결정 후, 본 sub-skill 의 첫 인자 mode 로 그 라벨을 _직접 mode 라벨로 변환_ 해 전달. autopilot-draft 의 `--mode doc` 자체는 본 sub-skill 에 전달되지 않음 (변환 후 6-mode 중 하나).
+
+직접 `/init-doc-strategy` 호출 시는 사용자가 첫 인자로 6-mode 중 하나 명시. autopilot-draft 의 doc intent 매핑 keyword 가 모호한 경우 default 는 `report`.
 
 ## Mode-Specific Instructions
 

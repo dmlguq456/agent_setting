@@ -292,7 +292,7 @@ After all pre-flight checks pass: create `artifact_dir` and proceed to Step 0.
 - Mode가 `presentation`인데 청중·시간 미명시
 - Mode가 `proposal`인데 grant body·deadline·예산 범위 미명시
 
-**Action**: 메인 Claude가 mode-aware 2-4개 sharp question을 던진다. 사용자 답변을 task description에 통합 후 Step 1 진행.
+**Action**: 메인 Claude가 mode-aware 2-4개 sharp question을 던진다. 사용자 답변을 task description에 통합 후 Step 1 진행. 글로벌 [CLAUDE.md](../../CLAUDE.md) §5 적용 — 질문 던질 때 ScheduleWakeup 15-20분 동시 호출, 답 없으면 가장 가능성 높은 mode·길이·청중 default 로 자율 진행.
 
 **Mode-specific question seed**:
 - `paper` / `report` / `proposal`: 청중, 길이/페이지 제한, 강조 포인트, deadline
@@ -322,7 +322,21 @@ Read and catalog all materials from refs folder.
 4. Present the analysis summary briefly and auto-proceed to Step 2 — no confirmation required.
 
 ### Step 2: init-doc-strategy
-Invoke Skill: `init-doc-strategy` with args: `<mode> --inputs <comma-separated-discovered-paths> --output <artifact-dir> <task description>`. `<discovered-paths>`는 Pre-flight Step 2 (Input Discovery)가 발견한 `analysis_project/{paper,doc}/...`, `research/{topic}/` 경로 list (콤마 join). 매치 0이면 Pre-flight에서 이미 abort/warn 처리됨. Wait for completion.
+Invoke Skill: `init-doc-strategy` with args: `<resolved_mode> --inputs <comma-separated-discovered-paths> --output <artifact-dir> <task description>`.
+
+**Mode 변환** (autopilot-draft 의 form-first 3-mode + doc intent → init-doc-strategy 의 직접 mode 라벨 6종 — 단일 source 는 init-doc-strategy/SKILL.md `## Mode mapping`):
+
+| autopilot-draft mode | task description intent 키워드 | `<resolved_mode>` |
+|---|---|---|
+| `paper` | (분기 없음) | `paper` |
+| `presentation` | (분기 없음) | `presentation` |
+| `doc` | rebuttal · 응답 · OpenReview · reviewer · 반박 | `rebuttal` |
+| `doc` | peer review · 심사 · review form · 검토 의견 | `review` |
+| `doc` | 보고서 · report · 진행 · 결과 · status · 중간보고 | `report` |
+| `doc` | 제안서 · proposal · grant · RFP | `proposal` |
+| `doc` | 그 외 (memo · blog · 일반 prose) | `report` (default fallback) |
+
+`<discovered-paths>`는 Pre-flight Step 2 (Input Discovery)가 발견한 `analysis_project/{paper,doc}/...`, `research/{topic}/` 경로 list (콤마 join). 매치 0이면 Pre-flight에서 이미 abort/warn 처리됨. Wait for completion.
 
 **Post-invocation requirement**: After `init-doc-strategy` returns, read the generated `{strategy_folder}/strategy/strategy.md`. **Verify it contains a `## Style Guide` section.** If absent, append the following template at the strategy file's end, then write the same content (translated) to `strategy_ko.md`:
 
