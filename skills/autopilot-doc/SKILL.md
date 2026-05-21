@@ -4,7 +4,7 @@ description: "Document strategy & draft pipeline — analyze → strategy → st
 argument-hint: "<task description> [--mode rebuttal|paper|review|report|proposal|presentation] [--qa quick|light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 ---
 
-> **산출물 폴더 컨벤션**: [SKILL_OUTPUT_CONVENTION.md](../../SKILL_OUTPUT_CONVENTION.md) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). reviewer 로그는 `_internal/strategy_reviews/`·`_internal/draft_reviews/`. 버전 스냅샷은 `_internal/versions/v{N}/strategy/`, `v{N}/draft/` (refine-doc의 `_v{N}.md` 형제 패턴은 폐기).
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §7](../../CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). reviewer 로그는 `_internal/strategy_reviews/`·`_internal/draft_reviews/`. 버전 스냅샷은 `_internal/versions/v{N}/strategy/`, `v{N}/draft/` (refine-doc의 `_v{N}.md` 형제 패턴은 폐기).
 
 ## Language Rule
 - Write user-facing output in Korean. (Material analysis results and pipeline_summary.md are written directly in the artifacts — no separate user output needed for those steps.)
@@ -382,7 +382,7 @@ Invoke Skill: `init-doc-strategy` with args: `<mode> --inputs <comma-separated-d
 
    **Audit-aspect axes** (catch what /audit would catch, _at plan time_):
    - **Style Guide compliance** — `## Style Guide` section exists in strategy.md? Citation/figure-caption/bullet-depth/speaker-note rules followed?
-   - **Structure** — T1/T2/T3 layout per SKILL_OUTPUT_CONVENTION.md respected?
+   - **Structure** — T1/T2/T3 layout per CONVENTIONS.md §7 respected?
    - **Cross-ref** — every `cards/{file}.md` citation target exists?
    - **Coverage (omission detection)** — are there cards/papers in analysis/refs that the strategy SHOULD cite but doesn't? Flag as `<!-- memo: [COVERAGE] ... -->` per orphan.
 
@@ -521,14 +521,36 @@ Discovered inputs: {discovered_inputs}
 
 **Style Guide (MANDATORY)**: Before writing any draft content, read `{strategy_folder}/strategy/strategy.md` and locate the `## Style Guide` section. Apply its rules to **every** citation, figure caption, bullet depth, speaker note, model classification, and venue/year tag in the draft. Style Guide rules override any default formatting you might use. If the Style Guide says `IS 2024` for Interspeech 2024 papers, you must use `IS 2024` — never `Interspeech 2024` or `Interspeech, 2024`. If a model lookup fails (the cards/* don't contain it), use `[?]` rather than fabricating venue/year.
 
-Save English draft to: {strategy_folder}/draft/draft.md
+Save draft to: {strategy_folder}/draft/draft.md (single file — primary language is determined by mode/subtype default below).
 
-**Language enforcement (critical — overrides 연구팀 agent default Language Rule)**:
-- The body of `draft.md` itself MUST be **English prose** end-to-end — all narrative, headers (H1/H2/H3), 위치 lines, reasoning lines, paste sequence list, final verification checklist, every comment outside LaTeX blocks. **Zero Korean characters** in the body except where the source material requires (e.g., a Korean proper noun verbatim).
-- `draft.md` 의 _파일 이름_ 만 English 인 것이 아니라 _본문 자체_ 가 English prose. 연구팀 agent 의 default Language Rule (_user-facing output in Korean_) 은 본 단계에서 **명시 override** — 본 산출은 _영문 source_ 이고, 한국어 사용자 영역은 Step 4-KO 의 편집팀이 별도 산출한다.
-- LaTeX blocks themselves stay as-is (any English / mathematical content inside is preserved verbatim). Only the markdown prose outside LaTeX is enforced English.
+**Draft language determination — single source per mode/subtype**:
 
-**Do NOT write `draft_ko.md` yourself.** The Korean mirror is produced by the **편집팀** (editorial-team) agent in a follow-up step (Step 4-KO below). 연구팀 internal reasoning happens in English (per agent Language Rule), output stays in English (per the override above), and the dedicated translator handles Korean readability — this split is what prevents 판교체 leaking into the user-facing artifact.
+_draft.md is a **single output** in the primary language for the mode/subtype. There is no `draft_ko.md` / `draft_en.md` mirror by default. A mirror is generated only when the primary language is **not** the user's working language — in that case Step 4-KO is invoked to produce a `_ko.md` mirror; otherwise Step 4-KO is **skipped**._
+
+Mode/subtype default table:
+
+| mode/subtype | primary language | rationale |
+|---|---|---|
+| `paper` (academic body — submission/camera-ready full paper draft) | **English** | venue is English-only; user reviews English source directly |
+| `paper` with `subtype: camera-ready-paste-ready` or `paste-ready-cheatsheet` (작업 안내문 / paste-ready cards / mutation cheatsheet) | **Korean** | user reads the cheatsheet while pasting LaTeX into the paper — the cheatsheet itself is internal work-tool, Korean is natural |
+| `rebuttal` | venue-driven (usually English) | reviewer reads in venue language |
+| `review` | venue-driven (usually English) | OpenReview / journal portal in English |
+| `presentation` | audience-driven | Korean audience → Korean; English conference talk → English (`strategy.tone` or task description should indicate) |
+| `report` | audience-driven | Korean institution / 위원회 → Korean; international report → English |
+| `proposal` | audience-driven | Korean grant body (NRF) → Korean; international grant (NSF/Horizon) → English |
+
+If the user explicitly states the output language in the task description (e.g., "영문 paper 본문 작성" / "한국어 보고서"), that always wins.
+
+**Language enforcement** — once the primary language is determined, the body of `draft.md` MUST be that language end-to-end:
+- All narrative, headers (H1/H2/H3), 위치/Location lines, reasoning lines, paste sequence list, final verification checklist, every comment outside LaTeX blocks
+- LaTeX blocks themselves stay as-is (English / math content preserved verbatim)
+- For mixed-source content (e.g., a quoted English title in a Korean body), the quote itself stays English but the surrounding prose follows the primary language
+- 연구팀 agent default Language Rule (_user-facing output in Korean_) is **overridden** by this primary-language assignment — if primary is English, output English; if Korean, Korean. The orchestrator's prompt must state the primary language explicitly.
+
+**Mirror generation** (Step 4-KO — conditional, NOT default):
+- Trigger: primary language ≠ user's working language (e.g., paper body in English, user works in Korean — mirror needed for review).
+- If the user's working language is Korean and primary is also Korean (paste-ready cheatsheet / Korean presentation / Korean report), Step 4-KO is **skipped entirely** — no `_ko.md` file produced.
+- The editorial-team owns the mirror; 연구팀 does not write `_ko.md` directly.
 
 Read the strategy document and all analysis files. Generate a complete first draft following the mode-specific structure below. The draft should be a working document ready for user editing — not a summary of the strategy.
 
@@ -851,29 +873,37 @@ Write **only** the English draft. Return ONLY the file path and a 3-5 line Korea
 
 3. **IMPORTANT**: Do NOT read, re-write, or duplicate the draft file yourself. The agent writes it directly.
 
-#### Step 4-KO: Korean draft generation (편집팀)
+#### Step 4-KO: Mirror generation (편집팀) — _conditional, NOT default_
 
-After 연구팀 finishes the English draft, invoke the **편집팀** (editorial-team) agent. 편집팀 owns Korean readability and is the only path to `draft_ko.md`.
+**Skip condition (default)**: primary draft language == user's working language. In that case `draft.md` 자체가 사용자 영역 산출이므로 mirror 단계 자체가 불필요. 진행하지 않는다.
+
+**Trigger**: primary draft language ≠ user's working language. 예:
+- paper mode (academic body) — primary English, user works in Korean → English `draft.md` + Korean `draft_ko.md` mirror for review
+- presentation mode with English audience, Korean user → English `draft.md` + Korean `draft_ko.md` mirror
+
+When triggered, invoke the **편집팀** (editorial-team) agent in 모드 A (옮기기) — the only path to `_ko.md` / `_en.md` mirror.
 
 ```
-모드 A — 영문에서 국문으로 옮기기.
-영문 draft 경로: {strategy_folder}/draft/draft.md
-국문 출력 경로: {strategy_folder}/draft/draft_ko.md
+모드 A — {원본 언어}에서 {대상 언어}로 옮기기.
+원본 draft 경로: {strategy_folder}/draft/draft.md
+대상 출력 경로: {strategy_folder}/draft/draft_{ko|en}.md
 ~/.claude/agents/editorial-team.md 의 모드 A 절차를 따른다.
-~/.claude/projects/*/memory/feedback_korean_readability_policy.md 의 판교체 회피 원칙을 강제 적용.
+~/.claude/projects/*/memory/feedback_korean_readability_policy.md 의 판교체 회피 원칙을 강제 적용 (한국어 산출 시).
 모드별 영어 유지 어휘 ({mode} 에 맞게):
 - paper/rebuttal/review: LaTeX 명령·논문 제목·저자·학회·약자·모델·데이터셋·지표는 영어 그대로
 - report/proposal: 회사·기관·프로젝트·기술 용어는 영어 그대로
-- presentation: 슬라이드의 본문 영어 인용·LaTeX·모델·논문 제목은 영어 그대로
+- presentation: 슬라이드의 본문 인용·LaTeX·모델·논문 제목은 원본 언어 그대로
 한 문서 안에서 같은 개념은 같은 표기로 통일.
 완료 시 파일 경로 + 한국어 요약 3-5 줄 + 의도적으로 한 표기 결정 한두 개만 돌려준다.
 ```
+
+> **사용자 작업 언어 판정**: orchestrator (메인 Claude) 가 task description 의 language signal (사용자가 어느 언어로 prompt 를 줬는지, _영문/국문 양쪽_ 같은 명시 단어, venue 정보) 을 보고 판정. 모호하면 Step 0 Scope Clarification 에서 확인 (있으면).
 
 ### Step 4b — Post-draft factual detector (orchestrator-side, all modes)
 
 **Always runs** — even at `--qa quick` or `--qa light`. Orchestrator executes directly (no sub-agent). Cost is small: regex + cards grep only.
 
-1. **Run detector**: apply regex + cards lookup + section-context cross-check to `{strategy_folder}/draft/draft.md` and `{strategy_folder}/draft/draft_ko.md`.
+1. **Run detector**: apply regex + cards lookup + section-context cross-check to `{strategy_folder}/draft/draft.md` (and the mirror file `draft_ko.md` or `draft_en.md` if Step 4-KO was triggered).
    - For each domain claim (model name / venue / year / metric / dataset / lineage / citation), attempt lookup in `{research_artifact}/cards/*.md`.
    - Classify each claim as: **verified** (exact match in cards), **unverified** (no matching card found), **ambiguous** (partial match or unclear), **conflict** (cards contain contradicting value).
 2. **Classify results**: count N (unverified), M (ambiguous), K (conflict).

@@ -69,8 +69,14 @@ After the 기획팀 agent returns:
 
 > Record any user-facing pause (e.g., active-plan ambiguity) so the pipeline skill can surface it in pipeline_summary.md.
 
-## Korean Version Generation
-After the review loop completes, invoke the **편집팀** (editorial-team) agent — NOT 기획팀. The 편집팀 owns Korean readability and is the only path to producing the `_ko.md` mirror.
+## Mirror Generation (편집팀 — conditional)
+
+코드 plan 은 _코드 식별자 + 단계 설명_ 묶음 — primary language 는 English (코드 자체가 영문 자연). 한국어 사용자 검토용 mirror 가 보통 필요. 사용자가 영문 plan 만 본다고 명시한 경우 mirror 생성 skip.
+
+**Skip condition**: 사용자가 영문 plan 만 검토한다고 명시 또는 영문 사용자.
+
+**Trigger** (default for 한국어 사용자): plan.md 영문 + 한국어 mirror 필요.
+
 ```
 모드 A — 영문에서 국문으로 옮기기.
 영문 plan 경로: {plan_path}
@@ -81,7 +87,8 @@ After the review loop completes, invoke the **편집팀** (editorial-team) agent
 section 제목 매핑: Goals → 목표, Current State → 현황 분석, Change Plan → 변경 계획, Risks → 리스크, Verification → 검증 방법.
 완료 시 파일 경로 + 한국어 요약 3-5 줄 + 의도적으로 한 표기 결정 한두 개만 돌려준다.
 ```
-Then report to the user: English plan path, Korean plan path, plan summary, and QA verdict.
+
+Then report to the user: plan path(s) + summary + QA verdict.
 
 ## Task
 $ARGUMENTS

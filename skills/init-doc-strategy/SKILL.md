@@ -357,18 +357,25 @@ After the 연구팀 agent returns:
    - **🔴 from both**: re-invoke 연구팀 with combined findings.
 3. **If 🔴 issues remain after 2 rounds**: Add to `## 미해결 이슈` section in the strategy, report to user. Tag fact-check residuals with `[FACT-RESIDUAL]`.
 
-## Korean Version Generation
-After review loop completes, invoke the **편집팀** (editorial-team) agent — NOT 연구팀. The 편집팀 owns Korean readability and is the only path to producing the `_ko.md` mirror.
+## Mirror Generation (편집팀 — conditional, NOT default)
+
+**Skip condition (default)**: strategy primary language == 사용자 작업 언어. strategy.md 자체가 사용자 영역 산출이라 mirror 단계가 불필요.
+
+**Trigger**: strategy primary language ≠ 사용자 작업 언어 (예: academic paper strategy in English, 한국어 사용자 → strategy_ko.md mirror). 그때만 편집팀 모드 A 호출.
+
 ```
-모드 A — 영문에서 국문으로 옮기기.
-영문 strategy 경로: {strategy_path}
-국문 출력 경로: {same directory}/strategy_ko.md
+모드 A — {원본 언어}에서 {대상 언어}로 옮기기.
+원본 strategy 경로: {strategy_path}
+대상 출력 경로: {same directory}/strategy_{ko|en}.md
 ~/.claude/agents/editorial-team.md 의 모드 A 절차를 따른다.
-~/.claude/projects/*/memory/feedback_korean_readability_policy.md 의 판교체 회피 원칙을 강제 적용.
-LaTeX 명령·논문 제목·학회 이름·약자·모델 이름·데이터셋·지표는 영어 그대로, 그 외 일반 표현은 한국어로.
+~/.claude/projects/*/memory/feedback_korean_readability_policy.md 의 판교체 회피 원칙을 강제 적용 (한국어 산출 시).
+LaTeX 명령·논문 제목·학회 이름·약자·모델 이름·데이터셋·지표는 원본 언어 그대로, 그 외 일반 표현은 대상 언어로.
 완료 시 파일 경로 + 한국어 요약 3-5 줄 + 의도적으로 한 표기 결정 한두 개만 돌려준다.
 ```
-Then report to the user: English and Korean strategy paths, strategy summary, and QA verdict.
+
+> Primary language 는 autopilot-doc SKILL.md 의 mode/subtype 표를 따름 (paper academic body → English / paper paste-ready cheatsheet → Korean / rebuttal·review → venue / presentation·report·proposal → audience). 사용자가 task description 에서 명시한 언어가 1순위 override.
+
+Then report to the user: strategy path(s) + summary + QA verdict.
 
 ## Task
 $ARGUMENTS

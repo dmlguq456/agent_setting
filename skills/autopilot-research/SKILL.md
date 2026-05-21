@@ -4,7 +4,7 @@ description: "Research survey pipeline — multi-mode investigation (academic / 
 argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--qa quick|light|standard|thorough] [--no-clarify] [--no-figures] [--from search|analyze|report]"
 ---
 
-> **산출물 폴더 컨벤션**: [SKILL_OUTPUT_CONVENTION.md](../../SKILL_OUTPUT_CONVENTION.md) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 본 skill의 raw metadata (`search_results.json`, `phase_a_*.json`, `chaining_results.md`, `code_search.md` 등) + reviews는 모두 `_internal/` 하위로 격리. T1/T2 chapter 파일과 `cards/`는 root.
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §7](../../CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 본 skill의 raw metadata (`search_results.json`, `phase_a_*.json`, `chaining_results.md`, `code_search.md` 등) + reviews는 모두 `_internal/` 하위로 격리. T1/T2 chapter 파일과 `cards/`는 root.
 
 ## Language Rule
 - When explaining something to the user, write in Korean.
@@ -401,12 +401,12 @@ Agent(subagent_type="연구팀"):
    ## Report Structure (mode-specific)
 
    The report set differs per mode. Common rules across all modes:
-   - **All English prose.** Do NOT write Korean — the Korean mirror is produced by the **편집팀** (editorial-team) agent in Step 4a-KO below. Splitting Korean off to a dedicated translator is what prevents 판교체 leaking into the user-facing artifact.
-   - Save each report file to `_internal/en/{filename}.md` (NOT root `{filename}.md`). Root paths are reserved for the Korean mirror produced by Step 4a-KO.
-   - Technical terms stay in English (no Korean parenthesization needed since the whole file is English).
+   - **Korean prose** (default). autopilot-research 의 보고서는 _한국어 사용자가 직접 읽고 검토_ 하는 산출물이라 _주 언어 한국어 단일_ 이 자연. 사용자가 task description 에서 _영문 보고서_ 를 명시한 경우만 영문 산출.
+   - Technical terms stay in English (논문 제목·저자·학회·모델·약자·지표 영어 그대로) — 한국어 본문 + 영문 도메인 용어 혼합 (판교체 와 다름: 판교체는 _한국어로 자연스럽게 쓸 수 있는_ 일반 명사를 굳이 영어로 박는 패턴).
+   - Save each report file to root `{artifact_dir}/{filename}.md`. _internal/en/ 같은 분리 경로 안 씀 — 단일 산출.
    - Every comparison table ends with bold **Takeaway** line
    - Numbers/claims sourced only from analysis_summary / cards — NO fabrication
-   - Cross-references via `[text](filename.md)` — use the _root filename without `_internal/en/` prefix_ so the Korean mirror at root keeps the same cross-ref shape.
+   - Cross-references via `[text](filename.md)` (same-directory link).
 
    ### Mode `academic` (default) — 9 files
 
@@ -633,30 +633,32 @@ Agent(subagent_type="연구팀"):
    - Code snippets in 06_implementation.md must be runnable Python
    - Numbers only from card files / analysis_summary — NO fabrication
    - Do NOT return report content in response — write files only
-   Return file paths (under `_internal/en/`) + 3-5 line Korean summary."
+   Return file paths (under `{artifact_dir}/`) + 3-5 line Korean summary."
 ```
 
-#### Step 4a-KO: Korean translation (편집팀)
+#### Step 4a-Polish: Editorial polish (편집팀 모드 B — optional)
 
-After 연구팀 finishes the English report set in `_internal/en/`, invoke the **편집팀** (editorial-team) agent. 편집팀 owns Korean readability and is the only path to the user-facing Korean reports at the artifact root.
+연구팀이 한국어로 직접 작성한 보고서 세트에 편집팀 모드 B (다듬기) 호출 — 판교체·번역체 회피, 표기 일관성, 줄바꿈·호흡 마무리. _수정만_ (mirror 생성 아님).
+
+호출 조건:
+- **기본**: `--qa standard` 이상에서 자동 호출
+- **skip**: `--qa quick` / `--qa light` 또는 사용자 명시 skip
 
 ```
-모드 A — 영문에서 국문으로 옮기기 (다중 파일).
-입력 디렉토리: {artifact_dir}/_internal/en/
-출력 디렉토리: {artifact_dir}/  (root — user-facing artifact 위치)
-대상 파일: 연구팀이 작성한 mode-specific report 세트 (academic 모드면 00_briefing.md ~ 08_*.md 등 9 개, technology 모드면 7 개, market 모드면 5 개)
+모드 B — 다듬기 (다중 파일, in-place).
+대상 디렉토리: {artifact_dir}/
+대상 파일: 연구팀이 작성한 mode-specific report 세트 전체 (academic 9 개, technology 7 개, market 5 개)
 
-~/.claude/agents/editorial-team.md 의 모드 A 절차를 각 파일마다 순차 적용한다.
-~/.claude/projects/*/memory/feedback_korean_readability_policy.md 의 판교체 회피 원칙을 강제 적용.
-영어로 그대로 둘 어휘: 논문 제목·저자·학회 이름·약자 (KWS, ASR 등)·모델 이름·데이터셋·지표·코드 식별자·LaTeX 명령·URL·BibTeX 키.
-한국어로 옮길 어휘: 그 외 일반 본문·작업 흐름·상태·관계 표현.
-파일 간 표기 일관성을 유지하려면 첫 파일에서 결정한 표기를 이후 모든 파일에 동일하게 적용 (예: "trade-off" 를 "트레이드오프" 로 옮기기로 했다면 9 개 파일 전부 동일 표기).
-Cross-reference 형식 `[text](filename.md)` 의 filename 은 영문 파일명 그대로 유지 (번역 후에도 root `{filename}.md` 가 가리키는 한국어 파일이 동일 위치에 있으므로).
+~/.claude/agents/editorial-team.md 의 모드 B 절차를 적용한다.
+판교체·번역체 회피 + 표기 일관성 (한 문서 안 같은 개념은 같은 표기) + 줄바꿈·bullet·공백 호흡.
+영어로 그대로 둘 어휘: 논문 제목·저자·학회·약자·모델·데이터셋·지표 등 도메인 용어. 그 외 일반 표현은 한국어로.
+파일 간 표기 일관성도 강제 — 첫 파일에서 결정한 표기를 이후 파일에도 동일 적용.
+내용 (claim / 수치 / citation) 은 손대지 않음 — 표현·표기·가독성만.
 
-완료 시 한국어 파일 경로 목록 + 한국어 요약 3-5 줄 + 의도적으로 한 표기 결정 두세 개 (어떤 영어 어휘를 한국어로 어떻게 옮겼는지 — 다음 사이클 일관성 참고용) 만 돌려준다.
+완료 시 변경 요약 + 의도적으로 한 표기 결정 두세 개만 돌려준다.
 ```
 
-After Step 4a-KO completes, the user-facing reports live at `{artifact_dir}/{filename}.md` (Korean). The English source remains at `{artifact_dir}/_internal/en/{filename}.md` as an audit trail.
+> _이전의 _내부 영문 산출 → 편집팀이 한국어 mirror_ 두 단 패턴은 폐기_ (2026-05-21). 연구팀이 자연 산출 언어 (한국어) 로 직접 작성하고, 편집팀이 _수정만_ — 두 번 쓰는 노동 회피.
 
 #### Step 4b: QA Loop (max 2 rounds; quick = 1 round)
 QA level: `--qa` flag if provided, else auto-detect (<=10 papers: light, 11-25: standard, >25 or deep: thorough).
