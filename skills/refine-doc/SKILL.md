@@ -1,10 +1,10 @@
 ---
 name: refine-doc
-description: Reflect user memos/review feedback in a document strategy or draft. Snapshots prior version under `_internal/versions/v{N}/` (modern; per SKILL_OUTPUT_CONVENTION.md) or `_v{N}.md` siblings (legacy). Auto-managed `changelog:` array inside YAML frontmatter (NOT a top-of-file HTML comment — that breaks markdown preview when frontmatter is also present). Mandatory ref-grounding per memo (re-read source; override memo if it conflicts with source).
+description: Reflect user memos/review feedback in a document strategy or draft. Snapshots prior version under `_internal/versions/v{N}/` (modern; per CONVENTIONS.md §7) or `_v{N}.md` siblings (legacy). Auto-managed `changelog:` array inside YAML frontmatter (NOT a top-of-file HTML comment — that breaks markdown preview when frontmatter is also present). Mandatory ref-grounding per memo (re-read source; override memo if it conflicts with source).
 argument-hint: "<strategy or draft name or path> [--qa quick|light|standard|thorough]"
 ---
 
-> **산출물 폴더 컨벤션**: [SKILL_OUTPUT_CONVENTION.md](../../SKILL_OUTPUT_CONVENTION.md) (3-tier). 본 skill은 review 로그를 `_internal/strategy_reviews/` 또는 `_internal/draft_reviews/`에 기록. 버전 스냅샷은 modern artifact면 `_internal/versions/v{N}/`, legacy artifact면 `_v{N}.md` 형제 (자동 감지).
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §7](../../CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 review 로그를 `_internal/strategy_reviews/` 또는 `_internal/draft_reviews/`에 기록. 버전 스냅샷은 modern artifact면 `_internal/versions/v{N}/`, legacy artifact면 `_v{N}.md` 형제 (자동 감지).
 
 ## Document Resolution
 Resolve `$ARGUMENTS` to document file paths. Detect whether this is a **strategy** or **draft** refinement:
@@ -27,7 +27,7 @@ Resolve `$ARGUMENTS` to document file paths. Detect whether this is a **strategy
 
 ## Pre-Refine: Versioning Setup
 
-Before invoking 연구팀, the orchestrator establishes versioning. Snapshots go to `{artifact_root}/_internal/versions/v{N}/<relative-path>` (per [SKILL_OUTPUT_CONVENTION.md](../../SKILL_OUTPUT_CONVENTION.md)). The legacy `_v{N}.md` sibling pattern is **deprecated** for new artifacts.
+Before invoking 연구팀, the orchestrator establishes versioning. Snapshots go to `{artifact_root}/_internal/versions/v{N}/<relative-path>` (per [CONVENTIONS.md §7](../../CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3)). The legacy `_v{N}.md` sibling pattern is **deprecated** for new artifacts.
 
 1. **Determine next version number**:
    - **Modern** (`{artifact_root}/_internal/` exists): scan `_internal/versions/` for `v{N}` subdirs. Find max N. If none → `next_version = 2`.
@@ -194,6 +194,8 @@ changelog:
 ## Other rules
 - Do NOT touch the version archive of previous versions (`*_v{prev_version}.md` and earlier) — they are immutable historical record.
 - Do NOT skip ref-grounding even if memo seems trivial. Trivial-looking memos can have hidden errors.
+- **Paragraph Cohesion Pre-Check (mandatory for every memo that rewrites paste-ready content — all modes)** (cross-ref `init-doc-strategy/SKILL.md` § _Paragraph Cohesion Pre-Check_ for the full 4-step spec; single source of truth there):
+  Before applying any memo that adds or rewrites a paste-ready block (LaTeX / markdown / slide / table), run the 4-step pre-check on the **target paragraph as a whole**: (1) is the substance already stated? (2) does the new sentence break the paragraph axis (motivation → design → formalization, claim → evidence → caveat, etc.)? (3) is this substance already canonical at another §-level / slide-level site? (4) classify the edit as EDIT (in-line) / REPLACE / INSERT / DROP — prefer EDIT/REPLACE over INSERT for cohesion. **When refining an existing mutation that fails this check** (e.g., a trailing INSERT whose content overlaps a prior sentence, or a cross-ref that restates substance already covered elsewhere), the correct refine action is to **rewrite the mutation as EDIT / REPLACE / DROP**, not polish the existing INSERT further.
 - **Paper mode — Natural-integration rule** (cross-ref `init-doc-strategy/SKILL.md` paper mode for full spec; single source of truth there):
   When a memo asks to **add a new mutation from a reviewer concern or rebuttal material**, apply the same gating question as init-doc-strategy: *"Can this be naturally integrated as a 1-2 sentence inline rewrite that flows with the surrounding paragraphs?"* YES → inline rewrite mutation (M15-style: subsection-head opening + body-paragraph touch-up + Figure cascade; numbers/hyperparameters stay in body or Appendix). NO → reject and inform the user — rebuttal-format artifacts (model-comparison tables, structured Q&A blocks, point-by-point enumerations) must not become paper-body mutations even if the reviewer "strongly recommended integration."
   - When **refining an existing mutation**, re-evaluate it against the same rule. If a previously-drafted mutation fails the natural-integration test (e.g., a standalone `\begin{table}` lifted from rebuttal materials with no embedding paragraph rewrite), the correct refine action is **drop the mutation entry**, not polish it further.

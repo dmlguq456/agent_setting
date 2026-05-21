@@ -62,7 +62,7 @@ flowchart LR
 
 > 모든 자료는 `.claude_reports/` 하위(`analysis_project/{code,paper,doc}/`, `research/{topic}/`, `documents/{date}_{name}/`, `plans/{date}_{name}/`)에 누적. 후속 skill은 점선(implicit)으로 자동 발견. **audit(D)는 OUT을 _읽기만_** (점검), **refine(E)는 OUT을 _read+write_** (수정 + 버전 누적). audit이 issue 발견 시 fix를 _자동으로_ refine/code로 dispatch (점선 화살표).
 
-> **3-tier 산출물 컨벤션** ([SKILL_OUTPUT_CONVENTION.md](SKILL_OUTPUT_CONVENTION.md)): T1 root = 메인 산출물 / T2 named subdir = 검토 자료 (`strategy/`, `cards/`, `dev_logs/` 등) / T3 `_internal/` = audit·raw·versions. 사용자는 보통 T1만 보면 됨.
+> **3-tier 산출물 컨벤션** ([CONVENTIONS.md §7](CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3)): T1 root = 메인 산출물 / T2 named subdir = 검토 자료 (`strategy/`, `cards/`, `dev_logs/` 등) / T3 `_internal/` = audit·raw·versions. 사용자는 보통 T1만 보면 됨.
 
 ---
 

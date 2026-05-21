@@ -7,7 +7,9 @@
 
 > autopilot-doc 내부에서 자동 호출. 직접 사용은 거의 없음 (autopilot-doc의 Step 2).
 >
-> **Paper mode camera-ready / major revision 특이 룰** (2026-05-19): reviewer concern → paper-body mutation 변환 시 **natural-integration rule** 적용. Single gating question — *"1-2 sentence inline rewrite로 자연 통합 가능한가?"* YES → M15-style inline rewrite (subsection-head opening + 본론 paragraph touch-up + Figure cascade). NO → drop / Appendix defer (rebuttal-format table·Q&A block은 본문 mutation 금지). 상세 — `SKILL.md` paper mode "Natural-integration rule" 섹션.
+> **Paragraph Cohesion Pre-Check (모든 mode, 2026-05-20)**: paste-ready block (LaTeX / markdown / slide / table) 작성 전 target paragraph **전체 narrative flow** 분석 + 4-step self-check — (1) substance 이미 명시 여부 / (2) paragraph axis (motivation→design→formalization 등) 단절 여부 / (3) §-level cross-section redundancy / (4) edit type 선택 (응집성 순 EDIT in-line > REPLACE > INSERT > DROP). Anti-pattern: mechanical "INSERT after sentence X", AFTER가 BEFORE보다 verbose, 같은 substance § 레벨 반복. 상세 — `SKILL.md` ## Paragraph Cohesion Pre-Check 섹션.
+>
+> **Paper mode camera-ready / major revision 특이 룰** (2026-05-19): reviewer concern → paper-body mutation 변환 시 **natural-integration rule** 적용 (위 Pre-Check 통과 후 추가 gate). Single gating question — *"1-2 sentence inline rewrite로 자연 통합 가능한가?"* YES → M15-style inline rewrite (subsection-head opening + 본론 paragraph touch-up + Figure cascade). NO → drop / Appendix defer (rebuttal-format table·Q&A block은 본문 mutation 금지). 상세 — `SKILL.md` paper mode "Natural-integration rule" 섹션.
 
 ## 호출 형식
 ```

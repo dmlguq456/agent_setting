@@ -6,7 +6,7 @@ argument-hint: "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa
 
 > Caller note: this skill performs deep analysis. Callers should invoke at `high` or `xhigh` effort when the runtime supports it; at lower effort, depth narrows automatically.
 
-> **산출물 폴더 컨벤션**: [SKILL_OUTPUT_CONVENTION.md](../../SKILL_OUTPUT_CONVENTION.md) (3-tier T1/T2/T3). 본 skill의 산출물은 `.claude_reports/analysis_project/{code,paper,doc}/` 하위. 각 mode의 main outputs는 root, raw scan log/QA reviews는 `_internal/`.
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §7](../../CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3) (3-tier T1/T2/T3). 본 skill의 산출물은 `.claude_reports/analysis_project/{code,paper,doc}/` 하위. 각 mode의 main outputs는 root, raw scan log/QA reviews는 `_internal/`.
 
 > **Workspace assumption**: Claude는 프로젝트 루트에서 실행됨. `.claude_reports/`는 현재 dir에 생성. 본 skill의 input scope (코드 / PDFs / doc materials)도 현재 dir 또는 그 하위 폴더 기준.
 

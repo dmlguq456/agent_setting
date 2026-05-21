@@ -4,7 +4,7 @@ description: Autopilot family — post-creation iteration pipeline for research 
 argument-hint: "\"<prompt>\" [--qa quick|light|standard|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
 ---
 
-> **산출물 폴더 컨벤션**: [SKILL_OUTPUT_CONVENTION.md](../../SKILL_OUTPUT_CONVENTION.md) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §7](../../CONVENTIONS.md#7-skill-output-convention-3-tier-t1t2t3) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
 
 ## Position in autopilot family
 
