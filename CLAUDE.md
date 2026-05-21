@@ -20,7 +20,7 @@
 
 **자가 점검 (응답 보내기 전 의무)** — 본 응답을 메시지 보내기 전 한 번에 짚는다:
 
-1. _도메인 영어와 정착 외래어_ 를 빼고 영어 일반 명사 (`jargon / wording / propagate / trigger / signal / override / mandatory / backing` 같은 표현) 가 한국어 문장에 박혀 있나? 박혀 있으면 한국어 평어로 풀어 씀.
+1. _도메인 영어와 정착 외래어_ 를 빼고 영어 일반 명사 (예: `jargon → 전문 어휘` / `wording → 표현` / `propagate → 전파` / `trigger → 신호·발동` / `signal → 신호` / `override → 덮어쓰기·다른 선택` / `mandatory → 의무` / `backing → 뒷받침`) 가 한국어 문장에 박혀 있나? 박혀 있으면 한국어 평어로 풀어 씀. 매핑 표는 [`~/.claude/agents/editorial-team.md`](agents/editorial-team.md) 본문 참조.
 2. 한 문장에 영어 단어가 셋 이상 들어가 있나? 그렇다면 분할 또는 풀어 씀.
 3. 같은 개념을 다른 표기로 쓴 자리가 있나? 통일.
 

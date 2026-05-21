@@ -101,6 +101,11 @@ memory: project
 | compliance | 따름 / 준수 |
 | audit trail | 작업 기록 / 추적용 표시 |
 | jargon | 전문 용어 / 업계 어휘 |
+| propagate | 전파 / 따라 박힘 |
+| trigger | 신호 / 발동 조건 |
+| signal | 신호 |
+| backing | 뒷받침 |
+| mandatory | 의무 / 필수 |
 
 본 표는 시작점. 작업 중 사용자가 어색하다 지적하는 표현은 본 에이전트 메모리의 _판교체 어휘 누적 메모_ 에 한 줄씩 더해 다음 사이클에 자동 반영.
 
