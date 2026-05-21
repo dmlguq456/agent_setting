@@ -588,9 +588,15 @@ This propagation is mandatory: a `tone: administrative` strategy with a heroic-p
 
 이유: YAML frontmatter 가 길면 preview 에서 줄글로 깨져 사용자가 본문 첫 줄까지 도달하는 데 한 화면을 소비한다.
 
-**2. 본문 맨 앞 안내 blockquote 최대 1개, 한 줄**
+**2. 문서 정체성 — H1 제목 + 한 단락 개요 + Legend blockquote 1개**
 
-`> **Legend**: ...` 같이 한 번 보면 끝나는 안내는 _하나_ 만, _한 줄_ 로. "사용 방식" / "Strategy details" / "Wording invariants" / "Preserve note" 같은 추가 안내 blockquote 는 박지 않는다 — 사이클이 끝나면 의미 없는 메타.
+사용자가 문서를 처음 열었을 때 _이게 무엇인지_ 한 화면에서 인지할 수 있도록:
+
+- **H1 제목 1줄** — 예: `# TF-Restormer Camera-Ready Cheatsheet v3 — Appendix + Conclusion`
+- **한 단락 개요 (2-4문장)** — 본 cheatsheet 가 다루는 범위 / 산출 entries 수 / paste 작업 흐름 한 줄 안내. 추적용 메타 (changelog / mutation 분포 통계) 는 박지 않음 — _문서 정체성_ 만.
+- **Legend blockquote 1줄** — `> **Legend**: 🔴 mandatory · 🟡 high · 🟢 optional · ✅ already applied · audit link inline`
+
+여기까지가 _문서 첫 화면_ 의 사용자 영역. "사용 방식" / "Strategy details" / "Wording invariants" / "Preserve note" 같은 _추가 안내 blockquote 는 박지 않는다_ — 사이클이 끝나면 의미 없는 메타.
 
 **3. 각 entry 는 _카드 단위_**
 
@@ -651,7 +657,8 @@ Pre-flight 표 / 분기점 표로 앞 페이지에 7행 표 박지 않는다. M2
 
 **Hard-fail 추가** — 사용자 영역 draft 본문에 다음이 등장하면 즉시 거부 + 재작성:
 - frontmatter 줄 수 > 7 (필수 6 필드 + `---` 두 줄)
-- 본문 맨 앞 안내 blockquote 2 개 이상
+- 본문 첫 화면에 **H1 제목 또는 한 단락 개요 부재** (사용자가 _이게 무엇인지_ 인지 못 하는 상태)
+- 본문 맨 앞 안내 blockquote (Legend 외) 2 개 이상
 - 한 entry 안 markdown 표 (paste-ready LaTeX 안의 `\begin{tabular}` 는 OK — markdown `|...|` 표 만 hard-fail)
 - 본문 안 inline `<!-- memo: ... -->` marker 등장
 - ordered list 아니라 _표 형태_ 의 paste 순서 안내
