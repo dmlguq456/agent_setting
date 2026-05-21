@@ -570,6 +570,94 @@ This propagation is mandatory: a `tone: administrative` strategy with a heroic-p
 
 **Why**: established 2026-05-19 after a camera-ready cycle that mechanically converted every reviewer concern into 🔴 mandatory body mutations (including rebuttal-format comparison tables). User-rejected pattern: "rebuttal자료를 본문에 그대로 가져다 붙이지 말고 자연스럽게 문장으로 녹여 넣어라."
 
+#### Paste-ready cheatsheet 형식 강제 (paper mode camera-ready / paste-ready subtype)
+
+> **언제 적용되는가**: paper mode 의 산출물이 _연속 본문 paragraph 가 아니라 사용자가 LaTeX 에 직접 paste 하는 _카드 묶음__ 일 때 (camera-ready / major revision / `subtype: camera-ready-paste-ready` 같은 frontmatter). 즉 사용자가 _preview 로 보면서_ 카드 단위로 paste 작업하는 산출물.
+
+본 형식은 **사용자가 preview 에서 보는 것** 과 **에이전트 추적용 메타** 를 _명확히 분리_ 한다. 사용자가 한 사이클에 한 번 보면 끝나는 정보가 매 entry 옆에 박혀 있으면 preview 가 줄글로 깨지고 paste 자리를 찾기 어려워진다. 사용자 불만 (2026-05-21): _"preview 에서 그냥 쭉 줄글로 깨진다 — 형식 자체 문제다"_.
+
+**1. Frontmatter 는 최소만**
+
+`draft.md` / `draft_ko.md` 의 frontmatter 에는 **사용자에게 의미 있는 필드만**:
+- `type`, `venue`, `paper_id`, `status`, `date`, `baseline` (LaTeX 파일 경로)
+
+**금지 (추적용은 별도 파일로)**:
+- `changelog:` 배열 → `_internal/draft_meta.yaml` 또는 `pipeline_summary.md` 으로 격리
+- `mutation_count`, `intentional_id_gaps`, `predecessor`, `strategy_ref`, `qa_level`, `subtype`, `scope` 같은 추적용 → 같은 격리 파일로
+- frontmatter 안 긴 `note` 줄 (변경 이력) → frontmatter 밖 평문으로 또는 격리 파일로
+
+이유: YAML frontmatter 가 길면 preview 에서 줄글로 깨져 사용자가 본문 첫 줄까지 도달하는 데 한 화면을 소비한다.
+
+**2. 본문 맨 앞 안내 blockquote 최대 1개, 한 줄**
+
+`> **Legend**: ...` 같이 한 번 보면 끝나는 안내는 _하나_ 만, _한 줄_ 로. "사용 방식" / "Strategy details" / "Wording invariants" / "Preserve note" 같은 추가 안내 blockquote 는 박지 않는다 — 사이클이 끝나면 의미 없는 메타.
+
+**3. 각 entry 는 _카드 단위_**
+
+한 entry 의 골격:
+
+```markdown
+### {ID} {tier 이모지} — {짧은 한 줄 action}
+
+**위치**: `\section{...}` 또는 `\label{...}` 또는 `\paragraph{...}` (한 줄, inline code 활용)
+
+​```latex
+% paste-ready 블록
+...
+​```
+
+**한 줄 이유** (선택): 왜 이 자리에 이게 필요한지 한 문장. 두 줄 넘어가면 cut.
+```
+
+- H3 헤더 한 줄
+- `**위치**:` 한 줄 — `**Anchor**` / `**latex anchor**` 같은 영어 라벨 금지, `**위치**:` 통일
+- LaTeX 블록 한 개 (필요 시 함께 paste 할 짧은 블록 하나 더)
+- `**한 줄 이유**` 선택, 두 줄 이내
+
+**4. entry 안 절대 박지 않는 것**
+
+- Reviewer 매핑 (`Reviewer: cytr-W3`) → `_internal/draft_meta.md`
+- dependency 표 / cross-ref dependency 표 → `_internal/draft_meta.md`
+- Wording invariant 안내 / Style Guide 인용 → 본문 맨 앞에 한 줄 또는 격리 파일
+- Verification gate / column count 안내 → 본문 끝의 _마무리 확인 목록_ 안 한 줄로 통합
+- inline `<!-- memo: [REFINE-R2] F{N} applied: ... -->` 표시 → 본문에 절대 박지 않음. refine 추적은 `pipeline_summary.md` `## 마이너 변경 로그` 안에만.
+
+**5. paste 순서는 본문 끝에 단순 ordered list**
+
+- 표 (`| 단계 | mutation | 위치 |`) 가 아니라 ordered list (`1. M34: ...` / `2. M37 Step 1: ...`)
+- 각 단계는 한 줄 — mutation ID + 한 줄짜리 action. 의존성은 본문 entry 안 `**위치**:` 옆에 inline 으로 한 줄 (`함께 paste: M{X}`) — 별도 표 X.
+
+**6. 사용자 결정 분기점은 _발생 entry 안 한 줄_**
+
+Pre-flight 표 / 분기점 표로 앞 페이지에 7행 표 박지 않는다. M2 위치 분기는 M2 entry 안에 한 줄 (`> 위치 선택: (a) §1 끝 / (b) §Acknowledgements 옆 — spec 기준 (a) 권장`), M27-Step3 BibTeX 부재 분기는 M27 entry 안에 한 줄. _발생 자리에서 한 번_.
+
+**7. body audit 진단표는 한 번 보고 끝 — 본문에 박지 않음**
+
+본문 적용 현황 (`§A Applied 16건 / Intentional 5건 / 잔존 2건`) 표 는 사용자가 _작업 시작 전 한 번_ 보고 끝나는 reference. 본문 카드 흐름 안에 박지 말고 `_internal/body_audit.md` 또는 `analysis/` 안 별도 파일로. 본문에는 한 줄 link 만 (`> 본문 적용 현황: [audit.md](./audit.md) 참조`).
+
+**8. 마무리 확인 목록은 본문 맨 끝 한 묶음**
+
+`§F final verification checklist` 는 한 곳에. 각 entry 마다 verification gate 박지 않고 마지막에 한 번에 모음.
+
+**9. 추적 정보는 `_internal/draft_meta.md` 으로 격리**
+
+사이클 중 추적용 메타:
+- 변경 이력 (changelog 배열 본문)
+- mutation 별 Reviewer 매핑 + dependency 표 + Wording note
+- inline refine marker (`[REFINE-R2] F{N} applied`)
+- mutation_count / tier 통계
+
+이 모두 `_internal/draft_meta.md` 안. 사용자 영역 (`draft.md` / `draft_ko.md`) 에는 절대 안 박는다.
+
+**Hard-fail 추가** — 사용자 영역 draft 본문에 다음이 등장하면 즉시 거부 + 재작성:
+- frontmatter 줄 수 > 7 (필수 6 필드 + `---` 두 줄)
+- 본문 맨 앞 안내 blockquote 2 개 이상
+- 한 entry 안 markdown 표 (paste-ready LaTeX 안의 `\begin{tabular}` 는 OK — markdown `|...|` 표 만 hard-fail)
+- 본문 안 inline `<!-- memo: ... -->` marker 등장
+- ordered list 아니라 _표 형태_ 의 paste 순서 안내
+
+**Why**: 사용자가 preview 로 보면서 paste 작업한다. preview 에서는 frontmatter / blockquote / 메타 표 가 줄글로 깨져 _paste 자리를 찾기 어렵다_. 사용자 영역과 추적 영역이 같은 위계로 섞이면 매번 사용자가 "이게 내가 봐야 할 건가, 에이전트 추적용인가" 분간해야 한다 — 짜증의 직접 원인.
+
 ### report
 - Frontmatter: type, status: draft, date
 - Executive Summary
