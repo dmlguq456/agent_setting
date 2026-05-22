@@ -188,6 +188,7 @@ ceremony 큰 autopilot-* 4 개의 자연어 trigger 신호 한눈에:
 | `autopilot-draft` | "발표 자료 만들어줘" / "논문 본문 작성" / "rebuttal 응답 작성" / "보고서 작성" | `--mode paper/presentation/doc` 자동 추론 · `--qa thorough` |
 | `autopilot-research` | "X 분야 조사" / "동향 알려줘" / "literature review" / "표준 비교" | `--mode academic/technology/market` 자동 추론 · `--depth medium` · `--qa thorough` |
 | `autopilot-refine` | doc/research artifact 의 major-level 수정 (3-criteria — 사용자 명시 "major"/"v{N+1}"/"전면 재작성" / 구조 ≥200 줄 / 외부 검토 직전 ceremony) | `--qa thorough` (default) · 자동 apply (STRUCT 만 halt) |
+| `analyze-user` | "내 figure 스타일 분석" / "발표 자료들 보고 프로필 갱신" / cross-project 사용자 자료 분석 의도 | `<aspect>` 자동 추론 (figure / writing / presentation / code / collab / domain / all) · `--mode init/update` 자동 추론 · `--qa adversarial` (고정) |
 | `analyze-user` | "내 figure 스타일 분석해줘" / "발표 자료들 보고 프로필 갱신" / "user_profile 업데이트" / 새 paper·발표·보고서 완성 직후 반영 의도 | `<aspect>` 발화 추론 (전부 시 `all`) · `--mode update` (default) / `init` (첫 셋업) · `--qa` 없음 (adversarial 고정) |
 
 각 skill 의 _상세 trigger·override 1순위·skip 조건_ 은 SKILL.md `## Default Invocation Rule` 섹션 single source — `/sync-skills` 자동 동기화.
