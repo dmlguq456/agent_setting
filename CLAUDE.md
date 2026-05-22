@@ -188,7 +188,7 @@ autopilot-code dev 모드로 X 를 Y 하게 진행 (qa standard, user-refine off
 
 ### Workspace assumption (대 전제)
 
-**모든 skill은 Claude가 _프로젝트 루트에서 실행됨_을 전제**. `.claude_reports/`는 현재 dir에 생성. 외부 cross-project 작업은 `cd <other>` 후 별도 세션. `--refs <folder>` 같은 외부 폴더 flag는 **family에서 제거됨** — 모든 입력은 `.claude_reports/` 하위 영속 산출물에서 implicit 자동 발견 (필요 시 `analyze-project`로 사전 분석).
+**모든 skill은 Claude가 _프로젝트 루트에서 실행됨_을 전제**. `.claude_reports/`는 현재 dir에 생성. 외부 cross-project 작업은 `cd <other>` 후 별도 세션. 모든 입력은 `.claude_reports/` 하위 영속 산출물에서 implicit 자동 발견 (필요 시 `analyze-project`로 사전 분석).
 
 ### 산출물 위치
 
@@ -212,7 +212,6 @@ autopilot-code dev 모드로 X 를 Y 하게 진행 (qa standard, user-refine off
 
 ### 공통 플래그 패턴
 
-- ~~`--refs <folder>`~~ — **family에서 제거됨 (2026-05-08)**. 입력은 `.claude_reports/{analysis_project,research}/*`에서 implicit 자동 발견.
 - `--qa light|standard|thorough` — QA 강도.
 - `--from <stage>` — pipeline 재개 (`pipeline_state.yaml` 기반).
 - `--user-refine` (doc 전용) — refine 시점 일시정지.

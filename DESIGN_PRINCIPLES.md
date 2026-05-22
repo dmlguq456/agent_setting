@@ -59,7 +59,7 @@ family 의 모든 멤버는 confirm 없이 pipeline 을 끝까지 돌린다. 사
 
 ## 3. Implicit Input Discovery
 
-입력 자료는 _프로젝트 컨텍스트 내부의 영속 산출물_ 에서 자동 발견한다. 외부 폴더 flag 는 family 에서 제거됨.
+입력 자료는 _프로젝트 컨텍스트 내부의 영속 산출물_ 에서 자동 발견한다.
 
 - `.claude_reports/analysis_project/{code,paper,doc}/*` — analyze-project 산출물
 - `.claude_reports/research/{topic}/*` — autopilot-research 산출물

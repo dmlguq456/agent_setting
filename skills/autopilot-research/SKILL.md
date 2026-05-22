@@ -688,7 +688,7 @@ Agent(subagent_type="연구팀"):
 완료 시 변경 요약 + 의도적으로 한 표기 결정 두세 개만 돌려준다.
 ```
 
-> _이전의 _내부 영문 산출 → 편집팀이 한국어 mirror_ 두 단 패턴은 폐기_ (2026-05-21). 연구팀이 자연 산출 언어 (한국어) 로 직접 작성하고, 편집팀이 _수정만_ — 두 번 쓰는 노동 회피.
+> 연구팀이 자연 산출 언어 (한국어) 로 직접 작성하고, 편집팀이 _수정만_ — 두 번 쓰는 노동 회피.
 
 #### Step 4b: QA Loop (max 2 rounds; quick = 1 round)
 QA level: `--qa` flag if provided, else auto-detect (<=10 papers: light, 11-25: standard, >25 or deep: thorough).

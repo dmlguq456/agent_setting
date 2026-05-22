@@ -4,7 +4,7 @@ description: "Document draft pipeline — analyze → strategy → strategy-refi
 argument-hint: "<task description> [--mode paper|presentation|doc] [--qa quick|light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). reviewer 로그는 `_internal/strategy_reviews/`·`_internal/draft_reviews/`. 버전 스냅샷은 `_internal/versions/v{N}/strategy/`, `v{N}/draft/` (refine-doc의 `_v{N}.md` 형제 패턴은 폐기).
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). reviewer 로그는 `_internal/strategy_reviews/`·`_internal/draft_reviews/`. 버전 스냅샷은 `_internal/versions/v{N}/strategy/`, `v{N}/draft/`.
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
@@ -69,7 +69,7 @@ Parse `$ARGUMENTS` for mode, flags, and task description:
 
 > **Note**: `survey` mode is removed. For 학술/산업/시장 조사, use `/autopilot-research --mode academic|technology|market` first → autopilot-draft은 `research/{topic}/` artifact를 implicit으로 자동 발견.
 
-**Input Discovery (implicit, no `--refs` flag)** — `--refs <folder>`는 family에서 제거됨. 입력은 `.claude_reports/` 하위 영속 산출물에서 자동 발견:
+**Input Discovery (implicit)** — 입력은 `.claude_reports/` 하위 영속 산출물에서 자동 발견:
 
 - **`analysis_project/paper/`** — 보유 논문 분석 (autopilot-draft의 모든 모드에서 활용 가능)
 - **`analysis_project/doc/{matching}/`** — doc-creation 자료 (reviewer comments, format templates, samples). `{matching}`은 task description 키워드와 fuzzy match.
@@ -91,7 +91,7 @@ mode별 _필수·권장_ 입력:
 
 > **Prompt template variables**: 본 SKILL.md의 agent/sub-skill prompt 안에 등장하는 변수:
 > - `{discovered_inputs}` — Pre-flight Step 2 (Input Discovery)에서 결정된 input path list. Agent prompt 구성 시 orchestrator가 newline-join 형식으로 expand (`Discovered inputs:\n  - <path1>\n  - <path2>\n  ...`). sub-skill 호출 시에는 `--inputs <comma-separated paths>` 인수로 전달.
-> - 단일 ground-truth 경로는 `analysis_project/paper/*.md` (analyze-project --mode paper 산출물; cards/ 서브디렉터리는 폐기된 옛 컨벤션).
+> - 단일 ground-truth 경로는 `analysis_project/paper/*.md` (analyze-project --mode paper 산출물).
 
 **`--qa <level>`** — override QA intensity for the pipeline:
 - `--qa quick` → fastest path: **skip Step 3 (strategy refine) and Step 5 (draft refine) entirely** + run a single sonnet quality reviewer pass at each review point with **no re-invoke** even if memos are added (memos are saved as audit trail, refine-doc is NOT invoked). `--user-refine` is silently ignored. fact-checker disabled.

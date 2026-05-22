@@ -3,8 +3,6 @@
 > autopilot-draft `--mode presentation` 의 본문 구조 + 강제 룰. `common.md` (§Common) 의 룰도 모두 적용.
 >
 > 적용 범위 — 학회 발표 / 세미나 / 강의 / cheatsheet variant (기존 PPT 본문 일부 보강). full deck + cheatsheet variant 모두.
->
-> **출처**: 2026-05-21 이전 단독 파일 `PRESENTATION_FIGURE_CONVENTIONS.md` 폐기 후 본 파일로 흡수.
 
 본 skill 의 산출은 **PPT cheatsheet markdown** — 사용자가 PowerPoint 로 직접 옮기는 _slide-by-slide copy/paste 용 단일 파일_. pandoc 자동 변환 대상 아님 (`::: notes`, `:::: {.columns}`, YAML frontmatter for auto-title generation 같은 pandoc 전용 syntax 회피).
 

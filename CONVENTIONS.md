@@ -101,7 +101,7 @@
 
 > 모든 autopilot family + analyze-project skill이 따르는 산출물 폴더 구조 표준. 본 절이 single source of truth — 각 SKILL.md는 본 절을 참조한다 (재정의 금지).
 >
-> 본 컨벤션은 **2026-05-07 도입**, **2026-05-08 확장** (analyze-* 통합 + `--refs` family-wide 제거), **2026-05-21 CONVENTIONS.md §7로 흡수** (이전 `SKILL_OUTPUT_CONVENTION.md` 단독 파일은 폐기). 이전 산출물은 legacy 구조(파일들이 평면 배치, `_v{N}.md` 형제, reviews/ 메인 레벨)를 유지하며, **새 호출부터 신 컨벤션 적용**.
+> 이전 산출물은 legacy 구조(파일들이 평면 배치, `_v{N}.md` 형제, reviews/ 메인 레벨)를 유지하며, **새 호출부터 신 컨벤션 적용**.
 
 ### §5.1. Workspace assumption (전제)
 
@@ -287,7 +287,3 @@ fi
 ```
 
 신규 산출물에는 항상 `_internal/` 디렉토리를 생성 (빈 폴더라도) → modern 표시.
-
----
-
-*마지막 업데이트: 2026-05-21 — §3 Removed Flags / §4 Deprecated Names 표 삭제 + §5 invariants 중 폐기 관련 4건 (Removed Flags / Deprecated Names / autonomy_level / docs_paper·docs_code) 삭제. §2 Agent Model 표기에 편집팀 행 추가. 이전 §7 (Skill Output Convention) 를 §5 로 번호 재정리. 폐기 reference 표가 사라졌으므로 다른 파일의 deprecation 안내 줄도 함께 정리됨.*

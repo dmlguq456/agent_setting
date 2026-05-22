@@ -12,7 +12,7 @@ argument-hint: "[--check] [--readme-only] [--notion-only] [--force] [--prefer-lo
 
 **Source of Truth**:
 - `~/.claude/skills/*/SKILL.md` + `~/.claude/agents/*.md` — 각 skill·agent의 frontmatter + 본문
-- **`~/.claude/CONVENTIONS.md`** — family-wide 운영 규칙의 단일 source (QA 5단계 정의 / agent model 표기 / 폐기 flag·name / cross-doc invariants). 본 skill의 Step 5b가 본 문서를 canonical로 cross-doc grep해 drift 보고·자동 fix.
+- **`~/.claude/CONVENTIONS.md`** — family-wide 운영 규칙의 단일 source (QA 5단계 정의 / agent model 표기 / cross-doc invariants). 본 skill의 Step 5b가 본 문서를 canonical로 cross-doc grep해 drift 보고·자동 fix.
 
 **파생 산출물**: GitHub README.md, Notion 대문 페이지 상단 대시보드
 
@@ -196,7 +196,7 @@ flowchart LR
 | **§3 사용 방식** | **§3.(1) 자연어 발화 예시 표 + 그 직전 prose 는 사람 유지 영역 — 현행 wording 그대로 보존 (SHA 비교 skip).** 사용자가 직접 편집한 발화 예시 표 그대로. 단 _섹션 헤딩 자체_ 가 누락됐으면 placeholder 헤딩 + 한 줄 안내만 자동 삽입. §3.(2) slash 예시 code block 은 각 SKILL.md frontmatter `argument-hint` 에서 자동 생성 + ceremony 4 vs 가벼운 3 컨펌 의무 안내·QA 5단계 reference 자동 갱신 |
 | §4 Skills 표 | name / 역할 자동 추출. 옵션 컬럼 X. 새 skill 추가·삭제 자동 반영 |
 | §5 Agents 표 | name / 모델 / 역할 자동 추출. 자동 호출자 컬럼 X |
-| §6 운영 룰 | _글로벌 CLAUDE.md §6 가리킴 한 단락_ — 표 자동 채우기 X (이전 spec 의 4컬럼 표 폐기) |
+| §6 운영 룰 | _글로벌 CLAUDE.md §6 가리킴 한 단락_. 표 자동 채우기 X |
 | §7 동기화 | 두 명령 + GitHub 링크 고정 wording |
 
 **sync 시각·이력은 README 본문에 쓰지 않음** (git commit log 가 단일 출처).
@@ -220,7 +220,7 @@ Step 5 에서 README 본문 wording 을 자동 생성·갱신한 자리 (§1 Hea
 
 ### Step 5b: Cross-doc invariant scan (QA 정의 & family-wide 규칙)
 
-> 이전 spec 의 _운영 룰 표 추출_ (각 SKILL.md `## Default Invocation Rule` grep → 4컬럼 표) 은 **폐기**. 새 README §6 운영 룰은 _글로벌 CLAUDE.md §6 가리킴 한 단락_ 으로 단순화. 각 SKILL.md `## Default Invocation Rule` 은 _그 SKILL.md 안에서만_ 의미를 가지고 README 에 모으지 않음. (autopilot-* 4 개 SKILL.md 의 trigger 신호·default 옵션·override 는 글로벌 §6 의 일반 패턴 + 각 SKILL.md 의 skill-specific 정보로 분리.)
+> 각 SKILL.md `## Default Invocation Rule` 은 _그 SKILL.md 안에서만_ 의미를 가지고 README 에 모으지 않음 (README §6 운영 룰은 _글로벌 CLAUDE.md §6 가리킴 한 단락_). autopilot-* 4 개 SKILL.md 의 trigger 신호·default 옵션·override 는 글로벌 §6 의 일반 패턴 + 각 SKILL.md 의 skill-specific 정보로 분리.
 
 QA level / model 표기 / family-wide invariant은 **`~/.claude/CONVENTIONS.md`**가 단일 source of truth. 각 SKILL.md / README / `_notion_mirror`의 QA 표 wording은 본 문서와 의미상 일치해야 함.
 
