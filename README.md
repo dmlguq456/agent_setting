@@ -2,7 +2,6 @@
 
 <p align="center">🇰🇷 <a href="README.ko.md">한국어</a></p>
 
-> Source: `~/.claude/skills/*/SKILL.md` + `~/.claude/agents/*.md` (auto-refreshed by `/sync-skills` — do not edit directly)
 > Notion entry: [Agents/Skills](https://www.notion.so/34987c2bb75380d68df4d6ce4d469bff)  ·  Operating guide: [`notion_guide.md`](notion_guide.md)
 
 ---
