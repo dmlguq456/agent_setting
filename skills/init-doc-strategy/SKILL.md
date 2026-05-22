@@ -1,7 +1,7 @@
 ---
 name: init-doc-strategy
 description: Create an initial document strategy. Internal mode enum 6종 (rebuttal / paper / review / report / proposal / presentation) — autopilot-draft 의 form-first 3-mode (paper / presentation / doc) 에서 doc intent (자연어 키워드 → rebuttal-response / review / report / proposal / generic) 가 본 sub-skill 의 직접 mode 라벨로 변환되어 전달됨. 직접 호출 시는 사용자가 첫 인자로 6-mode 중 하나를 명시.
-argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--qa quick|light|standard|thorough] <task description>"
+argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--qa quick|light|standard|thorough|adversarial] <task description>"
 ---
 
 ## Language Rule
@@ -13,7 +13,7 @@ Parse `$ARGUMENTS`:
 - **mode**: first word — `rebuttal | paper | review | report | proposal | presentation`
 - **--inputs <comma-separated-paths>**: comma-joined list of pre-discovered input paths (from autopilot-draft Pre-flight Step 2 Input Discovery — typically `analysis_project/{paper,doc}/...` and/or `research/{topic}/`). Each path is an artifact directory containing pre-analyzed materials.
 - **--output <dir>**: artifact output directory (`.claude_reports/documents/{date}_{name}/`)
-- **--qa <level>**: `quick | light | standard | thorough` — overrides auto-detect (autopilot-draft propagates this)
+- **--qa <level>**: `quick | light | standard | thorough | adversarial` — overrides auto-detect (autopilot-draft propagates this). 단일 source: [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical)
 - Remaining text: task description / context
 
 ## Pre-Check
