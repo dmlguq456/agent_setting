@@ -25,7 +25,7 @@ argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [
 ### Default 옵션 권장값 (컨펌 시 메인 Claude 가 제안)
 
 - `--mode`: 발화 신호로 dev/debug 자동 추론. cwd 가 plan 폴더 + 최근 dev_log 있으면 dev 우세, 에러 로그·traceback 있으면 debug 우세.
-- `--qa`: dev=standard, debug=light
+- `--qa`: dev=thorough, debug=standard (default — global §6 high-stakes 신호 시 adversarial 자동 상향)
 - `--from`: 자동 추론 (`pipeline_state.yaml` 발견 시 마지막 성공 stage 다음부터)
 - `--user-refine`: **off** (글로벌 §4 — "사용자 검토 끼워" / "memo 추가하게 멈춰줘" 같은 명시 신호 있을 때만 켬)
 
@@ -54,19 +54,18 @@ argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [
 - If --from is used with debug mode: warn "debug 모드에서는 --from이 지원되지 않습니다. 진단부터 시작합니다." and ignore.
 
 ### --qa <level>
-- `--qa quick` → fastest path: **skip refine-plan entirely** (Step 2) + **skip test-failure retry loop** (no rollback-and-retry on test fail) + cap init-plan internal QA review at **1 round** (no iteration even if reviewer flags 🔴). Sub-skills receive `--qa quick` and honor it: init-plan runs 1 reviewer (sonnet) and exits.
-- `--qa light` → sonnet, single reviewer
-- `--qa standard` → opus, single reviewer (default)
-- `--qa thorough` → opus, parallel reviewers
-- `--qa adversarial` → opus, parallel reviewers + Codex adversarial-review.
-- Mode-specific validation:
-  - dev: accepts quick|light|standard|thorough|adversarial (5 levels)
-  - debug: accepts quick|light|standard|thorough only. If adversarial passed → downgrade to thorough + warn.
-- If the value is not one of the accepted levels for the mode, treat as `standard` and warn the user: "유효하지 않은 QA level '{value}'. standard로 기본 설정합니다."
-- If omitted, each skill auto-detects level based on scope.
-- **Propagation**: Pass `--qa <level>` to init-plan and refine-plan as a flag. For execute-plan, run-test, and final-report, write `qa_level: <level>` into the English plan's frontmatter at Step 1 or Step 3 initialization.
-- **Mid-pipeline switching**: When starting from Step 2+ AND `--qa` is explicitly passed, update `qa_level` in the existing plan's YAML frontmatter before invoking the sub-skill. Explicit CLI flag always overrides frontmatter. If `--qa` is NOT passed on resume, preserve the existing frontmatter value (or default to `standard` if absent).
-- **`quick` mode interactions**: `--user-refine` is silently ignored when `--qa quick` (refine is skipped, so the pause point doesn't exist). On `--from refine`, if frontmatter `qa_level == quick`, abort with: "qa_level=quick에서는 refine 단계가 스킵됩니다. --qa <level>을 다른 값으로 명시해 재개하세요."
+
+QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
+
+- Supported: `quick` / `light` / `standard` / `thorough` (default) / `adversarial`
+- Mode-specific:
+  - dev: 5 levels 모두 accept. default `thorough`.
+  - debug: `adversarial` 받으면 `thorough` 로 downgrade + warn. default `standard` (빠른 root-cause 우선).
+- 유효하지 않은 값 → `standard` fallback + warn ("유효하지 않은 QA level '{value}'. standard 로 기본 설정합니다.")
+- Auto-detect: omitted 시 각 sub-skill 이 scope 기반 추정
+- **Propagation**: `--qa <level>` 를 init-plan / refine-plan 에 flag 로 전달. execute-plan / run-test / final-report 는 plan frontmatter `qa_level: <level>` 로
+- **Mid-pipeline switching**: Step 2+ 에서 `--qa` 명시 시 plan frontmatter 갱신. 명시 안 하면 frontmatter 값 보존 (없으면 `thorough`)
+- **`quick` interactions**: `--user-refine` silently ignored (refine skip). `--from refine` 으로 재개 시 frontmatter `qa_level == quick` 이면 abort ("qa_level=quick 에서는 refine 단계가 skip 됩니다. --qa <level> 을 다른 값으로 명시해 재개하세요.")
 
 ### --user-refine (boolean flag — opt-in only)
 
@@ -129,6 +128,8 @@ Resolve `$ARG` to a plan file path:
 
 ## Pipeline: Mode dev
 You (the main Claude) orchestrate by invoking each skill directly via the Skill tool. All tasks go through the full pipeline. The **연구팀** (research-team) agent is invoked only for Step 2 (plan review as user proxy) and Step 6 (meta-report).
+
+> **분석팀 위임 (옵션, 2026-05-22 신설)** — task 가 _결과 시각화·실험 log plot·result table 정리_ 같은 분석 자료를 요구하면 execute-plan / final-report 단계 안에서 `Agent(분석팀, "<spec>")` 직접 호출. _훈련·실험 실행_ 자체는 autopilot-code 본 영역, 결과의 _후처리·시각화_ 만 분석팀 영역. 분석팀이 figure / 스크립트 / 표 한 묶음 생성 후 dev_log 의 해당 step 안에 결과 자산 경로 박음.
 
 ### Step 1: init-plan
 Invoke Skill: `init-plan` with the task description as args.

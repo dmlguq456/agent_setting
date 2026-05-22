@@ -1,7 +1,7 @@
 ---
 name: autopilot-draft
 description: "Document draft pipeline — analyze → strategy → strategy-refine → draft → draft-refine → finalize. 3 modes by output form: `paper` (LaTeX academic body) / `presentation` (slide-by-slide markdown for PPT) / `doc` (prose for Word/HWP/markdown — reports·proposals·rebuttal responses·peer reviews·tech blogs·memos). Mode is form-first; purpose/genre is conveyed via natural-language task description (no subtype enum). All inputs implicitly discovered from `.claude_reports/{analysis_project,research}/*` — pre-process external materials via `/analyze-project --mode {paper|doc}` first (cwd 자동 발견). Format specs auto-loaded from `analysis_project/doc/{matching}/formats/` — no explicit `--format-ref` flag. Mode-specific conventions live in `## Mode-Specific Conventions` (§Common + §paper / §presentation / §doc). `presentation` produces markdown only (PPTX export NOT supported — use PowerPoint directly)."
-argument-hint: "<task description> [--mode paper|presentation|doc] [--qa quick|light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
+argument-hint: "<task description> [--mode paper|presentation|doc] [--qa quick|light|standard|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 ---
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). reviewer 로그는 `_internal/strategy_reviews/`·`_internal/draft_reviews/`. 버전 스냅샷은 `_internal/versions/v{N}/strategy/`, `v{N}/draft/`.
@@ -30,7 +30,7 @@ argument-hint: "<task description> [--mode paper|presentation|doc] [--qa quick|l
 ### Default 옵션 권장값 (컨펌 시 메인 Claude 가 제안)
 
 - `--mode`: 발화 신호로 paper/presentation/doc 자동 추론
-- `--qa`: standard (default). camera-ready / submission 직전 ceremony 신호 인지 시 thorough 권장 (컨펌 안에 근거 명시).
+- `--qa`: thorough (default — global §6 high-stakes 신호 시 adversarial 자동 상향)
 - `--user-refine`: **off** (글로벌 §4 준수)
 - `--no-clarify`: off (default — Step 0 Scope Clarification 보존)
 
@@ -93,15 +93,13 @@ mode별 _필수·권장_ 입력:
 > - `{discovered_inputs}` — Pre-flight Step 2 (Input Discovery)에서 결정된 input path list. Agent prompt 구성 시 orchestrator가 newline-join 형식으로 expand (`Discovered inputs:\n  - <path1>\n  - <path2>\n  ...`). sub-skill 호출 시에는 `--inputs <comma-separated paths>` 인수로 전달.
 > - 단일 ground-truth 경로는 `analysis_project/paper/*.md` (analyze-project --mode paper 산출물).
 
-**`--qa <level>`** — override QA intensity for the pipeline:
-- `--qa quick` → fastest path: **skip Step 3 (strategy refine) and Step 5 (draft refine) entirely** + run a single sonnet quality reviewer pass at each review point with **no re-invoke** even if memos are added (memos are saved as audit trail, refine-doc is NOT invoked). `--user-refine` is silently ignored. fact-checker disabled.
-- `--qa light` → 연구팀 review uses sonnet, single-pass review
-- `--qa standard` → 연구팀 quality reviewer (opus) **+ 연구팀 fact-checker (sonnet, parallel)** — fact-checker performs verbatim cards/PDFs 대조
-- `--qa thorough` → 2× 연구팀 quality reviewers in parallel (opus, domain expert + methodology) **+ 연구팀 fact-checker (sonnet, parallel)**, cross-validation against all reference materials **(default)**
-- If omitted, defaults to `thorough`.
-- **Why a separate fact-checker**: quality reviewers focus on narrative/coverage/logic; fact-checker narrowly verifies citation/venue/year/metric/lineage against ground-truth sources (cards/PDFs). Sonnet is sufficient because fact-check is a matching task, not creative judgment.
-- **Propagation**: Pass `--qa <level>` to init-doc-strategy and refine-doc as an argument flag.
-- **`quick` mode interactions**: On `--from strategy-refine` or `--from draft-refine`, if frontmatter `qa_level == quick`, abort with: "qa_level=quick에서는 refine 단계가 스킵됩니다. --qa <level>을 다른 값으로 명시해 재개하세요."
+**`--qa <level>`** — QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
+
+- Supported: `quick` / `light` / `standard` / `thorough` (default) / `adversarial`
+- Omitted → `thorough`
+- **Why fact-checker is separate**: quality reviewer 는 narrative/coverage/logic 에 집중, fact-checker 는 citation/venue/year/metric/lineage 만 narrow 하게 ground-truth (cards/PDFs) 와 verbatim 대조 — matching task 라 sonnet 충분
+- **Propagation**: `--qa <level>` 를 init-doc-strategy / refine-doc 에 flag 로 전달
+- **`quick` interactions**: `--from strategy-refine` 또는 `--from draft-refine` 으로 재개 시 frontmatter `qa_level == quick` 이면 abort ("qa_level=quick 에서는 refine 단계가 skip 됩니다. --qa <level> 을 다른 값으로 명시해 재개하세요.")
 
 **`--user-refine`** (boolean flag — opt-in only)
 

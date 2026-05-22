@@ -1,7 +1,7 @@
 ---
 name: autopilot-research
 description: "Research survey pipeline — multi-mode investigation (academic / technology / market). Mode-specific search sources and report templates. Field intelligence only; no PPT/paper drafts. Hand off to autopilot-draft (writing/slides) or autopilot-code (build) for actual document/code creation."
-argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--qa quick|light|standard|thorough] [--no-clarify] [--no-figures] [--from search|analyze|report]"
+argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--qa quick|light|standard|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]"
 ---
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 본 skill의 raw metadata (`search_results.json`, `phase_a_*.json`, `chaining_results.md`, `code_search.md` 등) + reviews는 모두 `_internal/` 하위로 격리. T1/T2 chapter 파일과 `cards/`는 root.
@@ -29,7 +29,7 @@ argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|med
 
 - `--mode`: 발화 신호로 academic/technology/market 자동 추론. 명확하지 않으면 academic.
 - `--depth`: medium (default). "빠르게" / "간단히" → shallow, "체계적으로" / "deep dive" → deep.
-- `--qa`: light (default — research 는 refine 만큼 cost 들이지 않음)
+- `--qa`: thorough (default — global §6 high-stakes 신호 시 adversarial 자동 상향)
 - `--no-clarify`: off (default — Step 0 Scope Clarification 보존; query 가 모호하면 메인 Claude 가 직접 clarify 후 invoke 가능)
 
 ### Override 1순위 — autopilot 우회
@@ -52,7 +52,7 @@ Parse `$ARGUMENTS` for optional flags:
 - **--mode**: `academic` (default) | `technology` | `market` — investigation type (see Modes below)
 - **--depth**: `shallow` | `medium` (default) | `deep`
 - (no `--refs` flag — local reference materials should be pre-processed via `/analyze-project --mode paper` first → output goes to `.claude_reports/analysis_project/paper/` which autopilot-research auto-detects)
-- **--qa**: `quick` | `light` | `standard` (default) | `thorough` — override QA intensity for report QA loop. Standard+ runs a parallel **fact-checker** (sonnet) alongside quality reviewer(s) for cards verbatim 대조 (citation/venue/year/metric verification). `quick`은 review loop를 1라운드로 강제 종료하는 fastest path — 1× 품질관리팀(sonnet) 단일 패스 후 🔴 잔존 시에도 재호출 없이 unresolved.md만 기록하고 종료. fact-checker 비활성, refine-style re-invoke 비활성.
+- **--qa**: `quick` | `light` | `standard` | `thorough` (default) | `adversarial` — QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical) 단일 source. `quick` 은 1라운드 강제 종료 + refine skip + fact-checker 비활성. `standard`+ 는 fact-checker (sonnet, parallel) 가 cards verbatim 대조 (citation/venue/year/metric). `adversarial` 은 thorough + Codex external review (camera-ready / public report 같은 외부 strong scrutiny 자리).
 - **--from**: `search` | `analyze` | `report` — resume the pipeline at a specific stage (see Resume below)
 - **--no-clarify**: skip Step 0 Scope Clarification (force-run with current query as-is)
 - **--no-figures**: skip Step 3.5 Web Figure Extraction (figure 자동 추출 단계 건너뜀; cards 본문은 그대로 생성, 단 `**Figures**:` 줄만 누락)
@@ -410,6 +410,8 @@ Agent(subagent_type="탐색팀"):
 - `--no-figures` flag 명시 시 skip.
 
 ### Step 4: Report Generation (direct Agent call + QA loop)
+
+> **분석팀 위임 (옵션)** — 보고서에 _집계 통계 시각화_ 나 _cross-card metric 비교 plot_ 등 _custom 분석 figure_ 가 필요하면 본 Step 안에서 `Agent(분석팀, "<spec>")` 직접 호출 가능. paper figure 직접 추출 (탐색팀 영역) 과 다른 자리 — 분석팀은 _카드 데이터로부터 새 시각화_ 만들 때. 일반 survey 자료 (taxonomy table / lineage ASCII / per-paper card) 는 연구팀 본 자리 처리. (2026-05-22 신설.)
 
 #### Step 4a: Generate Reports
 ```

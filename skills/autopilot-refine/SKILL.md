@@ -113,17 +113,19 @@ frontmatter `changelog:` 필드 자체가 없는 file은 skip. **이 step은 pip
 - **NOT for**: `.claude_reports/plans/*` (code) — use `/refine-plan`, `/execute-plan`, or `/autopilot-code` instead. Code changes need test-based verification, not diff review.
 - Why this skill exists: the existing `refine-doc` / `refine-plan` workflow is file-memo only, which is too heavy for routine prompt-driven edits. `autopilot-refine` is the lightweight default; memo style is reduced to an opt-in fallback.
 
-## --qa <level> (default: quick)
+## --qa <level> (default: thorough)
 
-| Level | Behavior |
+QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용 (proposed diff 에 pre-apply review):
+
+| Level | Behavior on proposed diff |
 |---|---|
-| **quick** (default) | Single-pass: investigate → **Stage B.5 (factual + style auto-detector, always on)** → diff preview → apply. No internal review loop on proposed changes (no agent invocation). Stage B.5 is cards-grep + regex only — no web fetch, no reviewer subagent. |
-| **light** | Adds a 1× quality reviewer (sonnet) pass on the proposed diff before showing it. Catches obvious regressions but stays fast. |
-| **standard** | Adds 1× quality reviewer (opus) + 1× fact-checker (sonnet, parallel) on the proposed diff. Verbatim 대조 against in-artifact ground truth — research: `cards/*.md`; doc: `analysis/*.md` + 기존 strategy/draft 본문. 외부 refs PDFs는 재독 안 함. |
-| **thorough** | 2× quality reviewers (opus, parallel) + 1× fact-checker. Use for high-stakes refines (final-version paper draft, public-facing report). |
-| **adversarial** | `thorough` (2× quality opus parallel + 1× fact-checker, parallel) + **Codex external adversarial review** via `Agent(codex-review-team)` on the proposed diff. Use when the artifact will face strong external scrutiny (camera-ready paper, grant submission, public rebuttal) — Codex acts as a hostile reader. Slowest tier. |
+| **quick** | Investigate → Stage B.5 (factual + style auto-detector, always on) → diff preview → apply. No internal review loop. Stage B.5 는 cards-grep + regex 만. |
+| **light** | + 2× sonnet quality reviewer (다른 axes) single pass. obvious regression catch. |
+| **standard** | + 1× opus + 2× sonnet quality reviewer (다른 axes) + 1× sonnet fact-checker (parallel, in-artifact ground truth verbatim 대조 — research: `cards/*.md`; doc: `analysis/*.md` + 기존 strategy/draft). round 1. |
+| **thorough** (default) | + 2× opus + 2× sonnet quality reviewer (다른 axes) + 1× sonnet fact-checker. round 2. high-stakes refine 용. |
+| **adversarial** | thorough + 1× `Agent(codex-review-team)` (Codex CLI external review). camera-ready / grant / public rebuttal 같은 외부 strong scrutiny 자리. |
 
-Higher levels add a pre-apply review pass on the planned diff — they do NOT add post-apply review (that's not what this skill is for; use `/refine-doc` if you want full memo-style review cycles).
+Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/refine-doc` 사용).
 
 > The two opt-out flags `--no-fact-check` and `--no-style-audit` are **orthogonal to every `--qa` level** — they skip the corresponding Stage B.5 aspect regardless of qa level. These are the _only_ disable mechanism per `feedback_factcheck_principles.md` Principle 0.
 

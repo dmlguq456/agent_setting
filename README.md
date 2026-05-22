@@ -77,12 +77,12 @@ ceremony 가 큰 4 개 (`autopilot-code` / `autopilot-draft` / `autopilot-resear
 
 | 사용자 발화 | 메인 Claude 컨펌 (자연어 요약) |
 |---|---|
-| "ICML camera-ready 마무리 도와줘" | autopilot-draft paper 모드로 camera-ready 본문 다듬기 (qa standard) |
-| "이 에러 디버그해봐" | autopilot-code debug 모드로 root-cause 분석 + 수정 (qa light) |
-| "diffusion 분야 최근 동향 조사해줘" | autopilot-research academic 모드, depth medium, 최근 1년 (qa light) |
-| "이 문서 v2 로 정리" | autopilot-refine major-level (qa quick, 자동 apply) |
-| "X 기능 새로 만들어줘" | autopilot-code dev 모드로 plan→execute→test→report (qa standard) |
-| "이번 발표 자료 만들어줘" | autopilot-draft presentation 모드로 슬라이드 markdown 작성 (qa standard) |
+| "ICML camera-ready 마무리 도와줘" | autopilot-draft paper 모드로 camera-ready 본문 다듬기 (qa adversarial — high-stakes ceremony) |
+| "이 에러 디버그해봐" | autopilot-code debug 모드로 root-cause 분석 + 수정 (qa standard) |
+| "diffusion 분야 최근 동향 조사해줘" | autopilot-research academic 모드, depth medium, 최근 1년 (qa thorough) |
+| "이 문서 v2 로 정리" | autopilot-refine major-level (qa thorough, 자동 apply) |
+| "X 기능 새로 만들어줘" | autopilot-code dev 모드로 plan→execute→test→report (qa thorough) |
+| "이번 발표 자료 만들어줘" | autopilot-draft presentation 모드로 슬라이드 markdown 작성 (qa thorough) |
 
 ### (2) slash 명령 직접 입력
 
@@ -125,15 +125,15 @@ QA 5 단계 (quick / light / standard / thorough / adversarial) 정의는 [`CONV
 | Agent | 모델 | 역할 |
 |---|---|---|
 | [기획팀](agents/plan-team.md) | opus | 구현 plan 문서 작성·갱신 (source code 기반 step-by-step) |
-| [품질관리팀](agents/qa-team.md) | opus (light: sonnet) | 코드/문서/plan diff 리뷰 — 구조적 한국어 feedback (🔴/🟡/🟢) |
+| [품질관리팀](agents/qa-team.md) | opus (light: sonnet) | 통합 QA — review 모드 (code / plan diff 리뷰, 🔴 / 🟡 / 🟢 피드백) + test 모드 (단계별 검증: syntax → import → smoke → functional → integration). _2026-05-22 테스트팀 흡수._ |
 | [연구팀](agents/research-team.md) | opus (fact-check: sonnet) | user proxy — paper knowledge + 도메인 cross-check + audit-aligned axes |
-| [테스트팀](agents/test-team.md) | opus | graduated verification tests (syntax → import → smoke → functional → integration) |
+| [분석팀](agents/analysis-team.md) | opus | 수치·시각 분석 자료 생성 — matplotlib figure 자산 (PDF + 재현 스크립트 + preview), 데이터 분석 스크립트, 결과 후처리 표·통계. autopilot-draft / research 자동 호출 + 직접 호출 지원 |
 | [탐색팀](agents/browser-team.md) | sonnet | Playwright fetch (paywall/SPA) + PDF figure 추출 + reference 그림 |
 | [codex-review-team](agents/codex-review-team.md) | Codex CLI (GPT-5) + opus orchestrator | 외부 hostile reader 관점 review (`--qa adversarial` 자동) |
 | [개발팀](agents/dev-team.md) | sonnet | refactor / rename / cleanup — 기능 보존 우선 |
 | [편집팀](agents/editorial-team.md) | opus | 사용자 영역 문서 점검·수정 (옮기기 / 다듬기 / 점검만) |
 
-**직접 호출** — 작은 작업 / 단발성 검토는 `Agent(개발팀)` / `Agent(품질관리팀)` / `Agent(연구팀)` / `Agent(편집팀)` 등으로 autopilot 우회. plan/log 가 안 남으므로 추적 필요한 작업은 autopilot 으로.
+**직접 호출** — 작은 작업 / 단발성 검토는 `Agent(개발팀)` / `Agent(품질관리팀)` / `Agent(연구팀)` / `Agent(분석팀)` / `Agent(편집팀)` 등으로 autopilot 우회. plan/log 가 안 남으므로 추적 필요한 작업은 autopilot 으로.
 
 > Notion 작업은 sub-agent 위임 X (MCP 도구 접근 제약). 메인 Claude 가 `mcp__claude_ai_Notion__*` 직접 호출 — [`notion_guide.md`](notion_guide.md).
 
@@ -150,10 +150,10 @@ ceremony 큰 autopilot-* 4 개의 자연어 trigger 신호 한눈에:
 
 | Skill | Trigger 신호 (자연어 발화) | Default 옵션 권장값 |
 |---|---|---|
-| `autopilot-code` | "X 기능 만들어줘" / "X 디버그해봐" / "이 에러 고쳐줘" / 코드 변경 의도 | `--mode dev/debug` 자동 추론 · `--qa standard` (default) |
-| `autopilot-draft` | "발표 자료 만들어줘" / "논문 본문 작성" / "rebuttal 응답 작성" / "보고서 작성" | `--mode paper/presentation/doc` 자동 추론 · `--qa standard` |
-| `autopilot-research` | "X 분야 조사" / "동향 알려줘" / "literature review" / "표준 비교" | `--mode academic/technology/market` 자동 추론 · `--depth medium` · `--qa light` |
-| `autopilot-refine` | doc/research artifact 의 major-level 수정 (3-criteria — 사용자 명시 "major"/"v{N+1}"/"전면 재작성" / 구조 ≥200 줄 / 외부 검토 직전 ceremony) | `--qa quick` (default) · 자동 apply (STRUCT 만 halt) |
+| `autopilot-code` | "X 기능 만들어줘" / "X 디버그해봐" / "이 에러 고쳐줘" / 코드 변경 의도 | `--mode dev/debug` 자동 추론 · `--qa thorough` (dev) / `standard` (debug) |
+| `autopilot-draft` | "발표 자료 만들어줘" / "논문 본문 작성" / "rebuttal 응답 작성" / "보고서 작성" | `--mode paper/presentation/doc` 자동 추론 · `--qa thorough` |
+| `autopilot-research` | "X 분야 조사" / "동향 알려줘" / "literature review" / "표준 비교" | `--mode academic/technology/market` 자동 추론 · `--depth medium` · `--qa thorough` |
+| `autopilot-refine` | doc/research artifact 의 major-level 수정 (3-criteria — 사용자 명시 "major"/"v{N+1}"/"전면 재작성" / 구조 ≥200 줄 / 외부 검토 직전 ceremony) | `--qa thorough` (default) · 자동 apply (STRUCT 만 halt) |
 
 각 skill 의 _상세 trigger·override 1순위·skip 조건_ 은 SKILL.md `## Default Invocation Rule` 섹션 single source — `/sync-skills` 자동 동기화.
 

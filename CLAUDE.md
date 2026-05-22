@@ -151,21 +151,16 @@ ceremony 큰 skill (`autopilot-code` / `autopilot-draft` / `autopilot-research` 
 - _일반 high-stakes_ — "중요한거니까 신중하게" / "꼼꼼하게" / "확실하게" / "실수 없게" / "신중히"
 - _외부 검토 직전 ceremony_ — "camera-ready 마무리" / "submission 직전" / "PR open 직전" / "grant 제출"
 
-상향 규칙 (skill 별 max 까지):
+상향 규칙 — 모든 autopilot-* 4 개 (`autopilot-code` / `autopilot-draft` / `autopilot-research` / `autopilot-refine`) 통일: high-stakes 신호 인지 시 **adversarial** (Codex 외부 review 포함) 까지 자동 상향. default `thorough` 보다 한 단계 위.
 
-| Skill | high-stakes 신호 인지 시 자동 상향 |
-|---|---|
-| `autopilot-code` / `autopilot-refine` | **adversarial** (Codex 외부 review 포함) |
-| `autopilot-draft` / `autopilot-research` | **thorough** (max — CONVENTIONS.md §1 invariant, adversarial 미지원) |
-
-컨펌 자리에서 _근거_ 한 줄 명시. 예 — _"'중요하게' 신호 → qa adversarial 상향 (default standard 대비; Codex 외부 review 포함)"_.
+컨펌 자리에서 _근거_ 한 줄 명시. 예 — _"'중요하게' 신호 → qa adversarial 상향 (default thorough 대비; Codex 외부 review 포함)"_.
 
 **§4 와의 차이** — §4 는 _pause flag_ (`--user-refine` 등 작업 진행 막는 옵션) 의 자동 추가 금지. 본 룰의 _qa 자동 상향_ 은 review 강도만 — 작업 진행은 그대로. adversarial 도 자동 허용 (대신 _Codex 외부 review_ 비용 큰 자리라 컨펌 자리에서 사용자가 거절·축소 결정 가능).
 
 **컨펌 형태** — 자연어 한 줄 요약 + 옵션 펼침 + 옵션 선택 근거. 예:
 
 ```
-autopilot-code dev 모드로 X 를 Y 하게 진행 (qa standard, user-refine off)
+autopilot-code dev 모드로 X 를 Y 하게 진행 (qa thorough, user-refine off)
   ↳ task: "..."
   ↳ 근거: cwd 가 plan 폴더 + 최근 dev_log 있음 → debug 아닌 dev
 ```
