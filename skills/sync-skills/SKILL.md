@@ -256,11 +256,11 @@ QA level / model 표기 / family-wide invariant은 **`~/.claude/CONVENTIONS.md`*
 
 | Invariant | 검사 패턴 | drift 시 보고 |
 |---|---|---|
-| **adversarial = thorough + Codex** | `adversarial.*standard.*Codex` 또는 `adversarial.*=.*standard` | 🔴 `잘못된 정의: adversarial은 thorough + Codex이지 standard + Codex가 아님` |
-| **autopilot-code는 fact-checker 없음** | autopilot-code/SKILL.md or autopilot-code/README.md에서 `fact-checker` 언급 (단, "doc/research에만"이라는 negative 안내는 OK) | 🔴 `code 파이프라인은 fact-checker 미적용` |
-| **adversarial은 autopilot-code · autopilot-refine 전용** | autopilot-draft/SKILL.md or autopilot-research/SKILL.md의 argument-hint에 `adversarial` | 🔴 `doc/research는 adversarial 미지원` |
-| **quick은 refine skip + 1라운드 강제 종료** | quick 정의에서 위 둘 중 하나 누락 | 🟡 `quick 정의 incomplete` |
-| **`--no-fact-check` / `--no-style-audit`는 autopilot-refine·audit 전용** | 다른 skill의 argument-hint에 노출 | 🔴 `해당 flag는 refine·audit 외 노출 금지` |
+| **adversarial = thorough + Codex** | `adversarial.*standard.*Codex` 또는 `adversarial.*=.*standard` | 🔴 `잘못된 정의: adversarial 은 thorough + Codex 이지 standard + Codex 가 아님` |
+| **autopilot-code 는 fact-checker 없음** | autopilot-code/SKILL.md or autopilot-code/README.md 에서 `fact-checker` 언급 (단, "doc/research 에만" 이라는 negative 안내는 OK) | 🔴 `code 파이프라인은 fact-checker 미적용` |
+| **모든 autopilot-* 4 개 adversarial 지원** | autopilot-code / autopilot-draft / autopilot-research / autopilot-refine 의 argument-hint 에 `adversarial` 누락 | 🔴 `2026-05-22 통일 — 모든 autopilot 에 adversarial 포함` |
+| **quick 은 refine skip + 1라운드 강제 종료** | quick 정의에서 위 둘 중 하나 누락 | 🟡 `quick 정의 incomplete` |
+| **`--no-fact-check` / `--no-style-audit` 는 autopilot-refine·audit 전용** | 다른 skill 의 argument-hint 에 노출 | 🔴 `해당 flag 는 refine·audit 외 노출 금지` |
 
 #### 5b-4. 보고 형식
 

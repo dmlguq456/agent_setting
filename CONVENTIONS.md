@@ -12,17 +12,17 @@
 
 ### §1.1. 5단계 공통 정의
 
-| Level | Quality reviewer | Fact-checker (parallel) | Codex (parallel) | 비고 |
-|---|---|---|---|---|
-| **quick** | 1× sonnet, 1-pass | skip | skip | refine entire skip / loop 1라운드 강제 종료 / 🔴 잔존 시 `unresolved.md`에 기록만 |
-| **light** | 1× sonnet, single-pass | skip (quality reviewer가 spot-check 커버) | skip | 경량 리뷰 |
-| **standard** | 1× opus, single-pass | 1× sonnet, parallel¹ | skip | _doc/research/refine 한정_ — fact-checker는 cards/PDFs verbatim 대조 (venue/year/metric/citation) |
-| **thorough** | doc/research/refine: 2× opus, parallel (다른 focus²) · code (init-plan/refine-plan/execute-plan): 1× opus + 1× sonnet, parallel (A=correctness focus opus / B=completeness focus sonnet, cost-aware) | 1× sonnet, parallel¹ | skip | 고위험 산출물 (final-version paper draft, public-facing report 등). code 갈래에서 completeness reviewer 가 sonnet 인 이유는 §2 비고 |
-| **adversarial** | 2× opus, parallel (= thorough quality) | 1× sonnet, parallel¹ | 1× `Agent(codex-review-team)` parallel — Codex CLI (GPT-5) external review | _autopilot-code · autopilot-refine 전용_ — autopilot-draft / autopilot-research는 지원 X (thorough까지) |
+| Level | Quality reviewer (parallel) | Fact-checker¹ (parallel) | Codex (parallel) | Max round | 비고 |
+|---|---|---|---|---|---|
+| **quick** | 1× sonnet | skip | skip | 1 (강제) | refine 단계 skip / 1라운드 강제 종료 / 🔴 잔존 시 `unresolved.md` 에 기록만 |
+| **light** | 2× sonnet (다른 axes²) | skip | skip | 1 | 사소 작업 — refine 단계 skip |
+| **standard** | 1× opus + 2× sonnet (다른 axes²) | 1× sonnet | skip | 1 | 간단 작업 — refine 단계 가능 |
+| **thorough** | 2× opus + 2× sonnet (다른 axes²) | 1× sonnet | skip | 2 | **default** — refine 단계 가능 |
+| **adversarial** | 2× opus + 2× sonnet (다른 axes²) | 1× sonnet | 1× `Agent(codex-review-team)` — Codex CLI (GPT-5) external review | 2 + Codex 1 | high-stakes — _모든 autopilot-* 4 개 지원_ |
 
-¹ Fact-checker는 _doc/research/refine 파이프라인_에만 적용. autopilot-code 계열 (init-plan / refine-plan / execute-plan / run-test)은 fact-checker 없음 — code는 ground-truth source가 코드 자신이므로 quality reviewer만 운용.
+¹ Fact-checker 는 _doc/research/refine 파이프라인_ 에만 적용. autopilot-code 계열 (init-plan / refine-plan / execute-plan / run-test) 은 fact-checker 없음 — ground-truth 가 코드 자신이라 verbatim 대조 무용.
 
-² thorough에서 2개 quality reviewer는 _다른 axes_ 분담: 예: A=domain expert + methodology / B=content expert + quality / C=safety. 각 skill SKILL.md가 자기 axis 분담 명시.
+² 다중 reviewer 는 _다른 axes_ 분담: opus 행은 도메인 expertise / methodology / completeness / safety 같은 깊이 필요 axis, sonnet 행은 coverage·typo·표기 일관성·structure 같은 surface scan axis. 각 skill SKILL.md 가 자기 axis 분담 명시.
 
 ### §1.2. Codex availability 정책 (adversarial 전용)
 
@@ -41,18 +41,18 @@
 
 | Skill | Supported levels | Default | Adversarial | Fact-checker | 비고 |
 |---|---|---|---|---|---|
-| `autopilot-research` | quick/light/standard/thorough | `standard` | X | standard+ | thorough max |
-| `autopilot-code` | quick/light/standard/thorough/**adversarial** | `standard` | ✓ (dev only; debug는 thorough로 downgrade) | **X** (code는 fact-checker 없음) | adversarial 전용 |
-| `autopilot-draft` | quick/light/standard/thorough | `thorough` | X | standard+ | thorough max, default thorough |
-| `autopilot-refine` | quick/light/standard/thorough/**adversarial** | `quick` | ✓ | standard+ | adversarial 전용 + default quick |
-| `audit` | — | — | — | `--no-fact-check` flag | `--qa` 대신 `--scope` 사용; fact-check는 Stage B.5에서 별도 |
+| `autopilot-research` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | 모든 autopilot 통일 |
+| `autopilot-code` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ (dev only; debug 는 thorough 로 downgrade) | **X** (code 는 fact-checker 없음) | |
+| `autopilot-draft` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | |
+| `autopilot-refine` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | default 변경 (이전 quick → thorough) |
+| `audit` | — | — | — | `--no-fact-check` flag | `--qa` 대신 `--scope` 사용; fact-check 는 Stage B.5 에서 별도 |
 | `init-plan` (sub) | quick/light/standard/thorough/adversarial | auto-detect from scope (plan frontmatter override) | ✓ | X | autopilot-code 내부 |
 | `refine-plan` (sub) | quick/light/standard/thorough/adversarial | inherit from plan frontmatter | ✓ | X | autopilot-code 내부 |
 | `execute-plan` (sub) | inherit | inherit | inherit | X | autopilot-code 내부 |
 | `run-test` (sub) | **forced thorough** (`--qa` 무시) | thorough | auto-upgrade if Codex available | X | 항상 2팀 병렬, Codex 가용 시 자동 상향 |
-| `final-report` (sub) | sonnet 1× (level-independent) | — | — | — | 모든 level에서 writer는 항상 sonnet |
-| `init-doc-strategy` (sub) | quick/light/standard/thorough | inherit from autopilot-draft | X | standard+ | autopilot-draft 내부 |
-| `refine-doc` (sub) | quick/light/standard/thorough | inherit | X | standard+ | autopilot-draft 내부 |
+| `final-report` (sub) | sonnet 1× (level-independent) | — | — | — | 모든 level 에서 writer 는 항상 sonnet |
+| `init-doc-strategy` (sub) | quick/light/standard/thorough/adversarial | inherit from autopilot-draft | ✓ | standard+ | autopilot-draft 내부 |
+| `refine-doc` (sub) | quick/light/standard/thorough/adversarial | inherit | ✓ | standard+ | autopilot-draft 내부 |
 
 > _Sub-skill_ (init-plan / refine-plan / execute-plan / run-test / final-report / init-doc-strategy / refine-doc): orchestrator가 결정한 `--qa` 값을 그대로 받음. 직접 호출 시는 자체 default 사용.
 
