@@ -148,13 +148,13 @@ Otherwise:
    - If targets are under `.claude_reports/research/*` → `task_type=research artifact`.
    - Mixed → `task_type=mixed`.
 
-   **By `qa_level`**:
-   - **light / standard** (default) — single 연구팀 instance covers all task-type axes:
+   **By `qa_level`** (reviewer 수·model 매트릭스는 [CONVENTIONS.md §1.1](../../CONVENTIONS.md#11-5단계-공통-정의) 단일 source — 본 sub-skill 은 그 spec 을 instance·axis 분담으로 풀어씀):
+   - **quick / light** — 1× / 2× sonnet single pass, all task-type axes 단일 prompt 로:
      ```
      Invoke 연구팀: "Review this plan as user proxy. **Task type: {task_type}** — apply ALL Role 1 Step 3 axes for this task type (no Focus axis). Korean plan: {ko_plan_path}. English plan: {en_plan_path}. Review log: {log_dir}/_internal/plan_reviews/research_review.md. Weight task-type-specific axes heavily (for meta-skill: family-level naming conflict + cross-skill scope overlap + sync-skills downstream + frontmatter validity)."
      ```
-   - **thorough / adversarial** — **axis-decomposed parallel 연구팀**: dispatch N parallel instances, 각 invocation 에 `Focus axis: <axis_name>` 포함해 single lens 로 제한. axis list 와 task-type 별 axis 매핑은 `agents/research-team.md` Role 1 _Multi-axis parallel mode_ 표 single source. 각 instance 는 `[<axis_name>]` prefix 메모 + separate review log (`{log_dir}/_internal/plan_reviews/research_review_<axis_name>.md`) 작성. 모든 parallel 완료 후 메모 merge + dedup → refine-plan.
-   - **Why decomposition at thorough+**: 단일 instance 가 많은 axis 를 다루면 주의가 분산. parallel decomposition 으로 각 instance 가 좁게 집중해 사용자가 직접 잡아낼 만한 자리 (naming conflict / test coverage gap / style drift) 전부 커버.
+   - **standard / thorough / adversarial** — **axis-decomposed parallel 연구팀**: dispatch N parallel instances (standard = 1× opus + 2× sonnet, thorough/adversarial = 2× opus + 2× sonnet). 각 invocation 에 `Focus axis: <axis_name>` 포함해 single lens 로 제한. axis list 와 task-type 별 axis 매핑은 `agents/research-team.md` Role 1 _Multi-axis parallel mode_ 표 single source. opus instance 는 _깊이 axis_ (correctness / methodology / domain), sonnet instance 는 _coverage axis_ (completeness / style / cross-ref / test gap). 각 instance 는 `[<axis_name>]` prefix 메모 + separate review log (`{log_dir}/_internal/plan_reviews/research_review_<axis_name>.md`) 작성. 모든 parallel 완료 후 메모 merge + dedup → refine-plan. adversarial 은 추가로 `Agent(codex-review-team)` external review parallel.
+   - **Why decomposition at standard+**: 단일 instance 가 많은 axis 를 다루면 주의가 분산. parallel decomposition 으로 각 instance 가 좁게 집중해 사용자가 직접 잡아낼 만한 자리 (naming conflict / test coverage gap / style drift) 전부 커버.
 3. If memos added:
    - **`--user-refine` pause**: if the flag is set (CLI or plan frontmatter), update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command, and exit. Do NOT invoke refine-plan.
    - Otherwise: invoke Skill `refine-plan` with the Korean plan path.
