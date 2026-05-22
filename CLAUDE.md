@@ -26,7 +26,7 @@
 
 본 자가 점검은 운영 문서 본문 작성·수정에도 같이 적용. 단어 매핑을 _목록으로 외우려 들지 말고_ 자리마다 평어로 풀어 쓰는 습관. (감 잡는 예시는 [`~/.claude/agents/editorial-team.md`](agents/editorial-team.md) 본문.)
 
-**어미 톤도 자리에 맞춰 분리** — 판교체 점검과 같이 묶어 본다. chat 응답 본문은 보고서 평어 "~다 / ~이다" 만 쭉 깔리면 차갑다. 대화 흐름에 맞춰 "~했어 / ~네 / ~인 듯 / ~겠다" 같이 풀어 씀 ("완료." 단답 시작도 피함). 반대로 문서 안 짧은 메타 라벨 — cheatsheet 의 `**위치**` / `**이유**` 한두 줄, changelog 한 줄, audit finding 한 줄, 표 셀 같은 자리 — 는 흐르는 prose 대신 개조식 ("~함 / ~임" 단정 fragment) 이 자연. 문서 본문 prose (paper / strategy / report 본문) 는 기존 정책 (도메인·청중·언어) 유지.
+**어미 톤 자리별 분리** — 판교체 점검과 같이 묶어 본다. chat 응답 본문 default = _공손한 한국어 존댓말 (해요체)_, 어미 "~했어요 / ~네요 / ~인 듯해요 / ~겠어요" 가 자연. 반말 ("~했어 / ~네 / ~겠다") 은 친근한 자리만 허용, 사용자 발화가 반말이라도 자동 추종 X. 보고서 평어 ("~다 / ~이다") dump 또는 "완료." 단답 시작은 차가워서 피함 — 한 줄이라도 공손한 호흡으로 풀어 씀. 문서 안 짧은 메타 라벨 — cheatsheet `**위치**` / `**이유**`, changelog 한 줄, audit finding, 표 셀 — 은 개조식 ("~함 / ~임" fragment) 이 자연. 문서 본문 prose (paper / strategy / report) 는 기존 정책 (도메인·청중·언어) 유지. _공손_ ≠ _친절 안내체_ — "~해 드릴게요 / 어떻게 도와드릴까요 / ~가 좋겠습니다" 같은 모범생 화법은 §1 _LLM-flavor 어휘 회피_ 자리와 같이 여전히 금지.
 
 ### §2. 출력 자제 — 사용자 인지 부담 최소화
 
@@ -208,7 +208,7 @@ autopilot-code dev 모드로 X 를 Y 하게 진행 (qa thorough, user-refine off
 | **doc/research 산출물 _major-level_ 수정 요청** (`.claude_reports/{documents,research}/*` — 사용자 명시 "major"/"v{N+1}"/"/autopilot-refine" / 구조적 대규모 ≥200줄·전체 section rewrite / 외부 검토 직전 ceremony 중 하나에 해당) | 본 문서 §6 "autopilot-* 호출 패턴" + autopilot-refine SKILL.md `## Default Invocation Rule` | 메인 Claude가 `/autopilot-refine` 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 `autopilot-refine "<prompt>" --qa quick` invoke. **minor-level (default)** 변경은 직접 Edit + `pipeline_summary.md`에 상세 minor log entry 추가. 누적 minor는 AUDIT_HINT_THRESHOLD (5) 도달 시 chat alert로 `/audit` 권장 → audit이 dual-perspective (vs last major + vs principles) 점검. 상세는 SKILL.md 단일 source of truth (sync-skills 자동 동기화). |
 | **QA level·agent model·family-wide invariant 작업** (SKILL.md / README의 QA 표 작성·수정, agent model 표기, 신규 skill의 `--qa` 옵션 채택, cross-doc invariant 추가 등) | `~/.claude/CONVENTIONS.md` | 정의 wording은 본 문서 §1~§5 그대로 사용. 신규 정의 추가·변경 시 본 문서를 먼저 수정한 후 `/sync-skills`로 다른 곳에 propagate. drift 발견 시 본 문서가 진실의 출처. |
 | **세션 시작 / 새 working dir 진입** (`/clear` 후 첫 사용자 메시지 포함) | `<cwd>/.claude_reports/NOTES.md` (있을 때만 — 없으면 무시) | 사용자가 `/notes` skill로 명시적으로 관리하는 per-project 메모. 메인 Claude가 즉시 Read해서 컨텍스트 적재. 갱신은 항상 `/notes` 명령으로 (Claude 자동 X — 자동 메모리 `~/.claude/projects/*/memory/`와는 별개 layer). |
-| **사용자 영역 메타 문서 작성·수정** (`~/.claude/README.md`, `~/.claude/notion_guide.md`, 글로벌 `~/.claude/CLAUDE.md` 같이 사용자가 직접 읽는 운영 문서의 _새 wording 작성·큰 wording 변경_) | `~/.claude/agents/editorial-team.md` | 변경 직후 _같은 turn 안에_ `Agent(편집팀)` _다듬기 모드_ 호출 의무. LLM 스러운 인공적 어조 ("~가 평등하게 있습니다" / "어느 쪽을 써도 ~합니다" 같은 풀어쓰기·모범생 화법·친절 안내체) 회피, 간결·단정 한국어 (~다 / ~이다 어미). 한두 줄 typo 정정·단순 propagate 는 면제. 2026-05-22 사용자 지적. |
+| **사용자 향 산출물 작성·수정** (paper / strategy / report / 발표 자료 / 노션 운영 페이지 / `~/.claude/README.md` 같이 _사용자 또는 외부 독자가 직접 읽도록 기대되는 산출물_ 의 _새 wording 작성·큰 wording 변경_) | `~/.claude/agents/editorial-team.md` | 변경 직후 _같은 turn 안에_ `Agent(편집팀)` _다듬기 모드_ 호출 의무. LLM 스러운 인공적 어조 ("~가 평등하게 있습니다" / "어느 쪽을 써도 ~합니다" 같은 풀어쓰기·모범생 화법·친절 안내체) 회피, 간결·단정 한국어. 한두 줄 typo 정정·단순 propagate 는 면제. **트리거 대상 X** — _Claude 가 읽는 instruction 파일_ (CLAUDE.md / SKILL.md / agents/*.md / CONVENTIONS.md / DESIGN_PRINCIPLES.md / notion_guide.md) 은 _terse / dense / fragment_ 형태가 Claude 친화적이라 편집팀 다듬기가 오히려 가독성 떨어뜨림. 2026-05-22 사용자 지적 + 같은 날 보강. |
 
 > 이 표는 의도적으로 **작게** 유지. 새 도메인 트리거 추가 시 `(트리거, 가이드 파일, 준수 규칙 한 줄)` 형식으로 한 행만 추가.
 
