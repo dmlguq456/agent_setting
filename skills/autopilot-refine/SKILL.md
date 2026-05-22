@@ -12,11 +12,11 @@ argument-hint: "\"<prompt>\" [--qa quick|light|standard|thorough|adversarial] [-
 - `autopilot-research` / `autopilot-code` / `autopilot-draft` create artifacts (forward direction).
 - `autopilot-refine` reads and updates existing artifacts (reverse direction).
 
-Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag as the rest of the family, but with `quick` as the **default** (because the skill targets routine, scoped edits — not full re-creation).
+Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag as the rest of the family. Default `thorough` (2026-05-22 통일 — 모든 autopilot-* default thorough). routine·scoped edits 자리는 `--qa light` / `quick` 명시.
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §6 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude는 사용자가 `.claude_reports/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다 (`--qa quick` default). **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
+본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §6 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude는 사용자가 `.claude_reports/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다 (`--qa thorough` default). **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
 
 **Scope**: `.claude_reports/{documents,research}/*` 엄격 한정. project root의 임의 `.md`/`.txt`나 코드 산출물(`.claude_reports/plans/*`)은 적용 X — 전자는 일반 Edit, 후자는 `/refine-plan` 또는 `/autopilot-code`.
 
@@ -85,7 +85,7 @@ frontmatter `changelog:` 필드 자체가 없는 file은 skip. **이 step은 pip
 
 ### Major 적용 시 동작
 
-`autopilot-refine --qa quick` (default) 자동 invoke:
+`autopilot-refine --qa thorough` (default) 자동 invoke:
 
 1. Stage A-D 정상 흐름 (investigate → diff preview → 자동 apply → snapshot)
 2. snapshot: `_internal/versions/v{N+1}/` 생성

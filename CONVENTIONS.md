@@ -45,6 +45,7 @@
 | `autopilot-code` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ (dev only; debug 는 thorough 로 downgrade) | **X** (code 는 fact-checker 없음) | |
 | `autopilot-draft` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | |
 | `autopilot-refine` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | default 변경 (이전 quick → thorough) |
+| `analyze-user` | **adversarial (고정)** | `adversarial` | ✓ (강제) | standard+ | user profile 정확성 critical — qa 협상 불가, 다른 level 명시해도 adversarial 로 force |
 | `audit` | — | — | — | `--no-fact-check` flag | `--qa` 대신 `--scope` 사용; fact-check 는 Stage B.5 에서 별도 |
 | `init-plan` (sub) | quick/light/standard/thorough/adversarial | auto-detect from scope (plan frontmatter override) | ✓ | X | autopilot-code 내부 |
 | `refine-plan` (sub) | quick/light/standard/thorough/adversarial | inherit from plan frontmatter | ✓ | X | autopilot-code 내부 |

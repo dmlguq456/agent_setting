@@ -180,7 +180,7 @@ QA 5 단계 (quick / light / standard / thorough / adversarial) 정의는 [`CONV
 - **§6 autopilot-\* 호출 Pre-check** — turn 첫 단계 분기 판단 + 옵션 자동 구성 + 자연어 요약 컨펌 + §5 자율 진행 적용
 - **도메인 트리거 표** — Notion 작업 / doc·research major-level 수정 / QA·model invariant 작업 / 세션 시작
 
-ceremony 큰 autopilot-* 4 개의 자연어 trigger 신호 한눈에:
+ceremony 큰 5 개 (autopilot-* 4 + analyze-user) 의 자연어 trigger 신호 한눈에:
 
 | Skill | Trigger 신호 (자연어 발화) | Default 옵션 권장값 |
 |---|---|---|
