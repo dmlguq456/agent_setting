@@ -19,8 +19,8 @@ Example: `/run-test inference-refactor` → `.claude_reports/plans/2026-03-18_in
 - Think and reason in English internally.
 - Write all user-facing output in Korean.
 
-## Delegate to 테스트팀
-Invoke the **test-team** (테스트팀) agent as a subagent with the following prompt:
+## Delegate to 품질관리팀 (test 모드)
+Invoke the **품질관리팀** agent in **test mode** (the agent absorbed the former 테스트팀 in 2026-05-22; specify "test 모드" in the prompt so mode dispatch is unambiguous) with the following prompt:
 
 - If $ARG points to a plan file:
   ```
@@ -45,7 +45,7 @@ Invoke the **test-team** (테스트팀) agent as a subagent with the following p
   ```
 
 ### Test Log Requirement (CRITICAL)
-**Always** include this in the 테스트팀 prompt. Every test must record: exact command, full stdout/stderr (last 50 lines if long), and PASS/FAIL verdict with error message.
+**Always** include this in the 품질관리팀 (test 모드) prompt. Every test must record: exact command, full stdout/stderr (last 50 lines if long), and PASS/FAIL verdict with error message.
 
 ```
 Write a detailed test log to: {log_dir}/test_logs/test_report.md
@@ -75,7 +75,7 @@ Format:
 All issues from ANY agent (including Codex) must be addressed before proceeding.
 
 ## Post-Test: QA Review
-After the 테스트팀 agent returns:
+After the 품질관리팀 (test 모드) agent returns:
 1. **Read the test log** (skill-level read — permitted per DESIGN_PRINCIPLES 3.3) (`{log_dir}/test_logs/test_report.md`).
 2. **Invoke 2× 품질관리팀 in parallel** (Agent A with `model: 'sonnet'`, Agent B with default opus):
 
@@ -99,7 +99,7 @@ After the 테스트팀 agent returns:
    Return the file path and a one-line verdict.
    ```
 
-3. **Read both QA reviews** (skill-level read — permitted per DESIGN_PRINCIPLES 3.3). If either finds issues: re-invoke 테스트팀 for those items, appending to test_report.md. If both pass: proceed to result reporting.
+3. **Read both QA reviews** (skill-level read — permitted per DESIGN_PRINCIPLES 3.3). If either finds issues: re-invoke 품질관리팀 (test 모드) for those items, appending to test_report.md. If both pass: proceed to result reporting.
 
 ## Commit Message Convention
 - Safety checkpoint: `chore: Safety checkpoint before {plan-name} execution`
@@ -117,7 +117,7 @@ After the 테스트팀 agent returns:
 > Note: This loop is self-contained within a single run-test invocation. If the calling pipeline retries, this loop resets.
 
 1. **Attempt 1** (always automatic — low risk): Invoke a 개발팀 (dev-team) subagent in auto mode with the failing level, exact error, files involved, and instruction: "Auto mode. Hotfix: fix the following test failure. Read the error, read the file, fix it directly. Write a step log to the plan's log directory if available, otherwise skip logging."
-2. Re-invoke 테스트팀 from the failed level onward (same logging requirements).
+2. Re-invoke 품질관리팀 (test 모드) from the failed level onward (same logging requirements).
 3. If tests pass AND QA approves: auto-commit and report success.
 4. **Attempt 2** (always automatic — repeated failure but bounded retry budget): repeat with new error context.
 5. If still failing after 2 attempts: report failure with original error, what was attempted, and suggested next steps.

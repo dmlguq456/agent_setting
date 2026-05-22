@@ -1,17 +1,37 @@
 ---
 name: notes
-description: Manually-controlled per-project memory. Single file `.claude_reports/NOTES.md` with 5 categories (conventions / external resources / open threads / decisions / next session hints). Auto-loaded at session start, edited only via explicit `/notes` sub-actions. Separate from the auto-memory system at `~/.claude/projects/*/memory/`.
-argument-hint: "[show] | init | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm]"
+description: Manually-controlled memory — two scopes. `--scope project` (default): `.claude_reports/NOTES.md` (per-cwd, 5 categories). `--scope user`: `~/.claude/user_profile/NOTES.md` (cross-project free-form, paired with structured aspect files updated via `/analyze-user`). Auto-loaded at session start, edited only via explicit `/notes` sub-actions. Separate from the auto-memory system at `~/.claude/projects/*/memory/`.
+argument-hint: "[show] | init | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] [--scope project|user]"
 ---
 
 ## 목적
 
-사용자가 **직접 통제하는** per-project 메모리. `~/.claude/projects/*/memory/`의 자동 메모리 시스템과는 별개로, 사용자가 명시적으로 `/notes` 명령을 호출할 때만 변경된다. 세션 종료 시 conversation이 사라지는 휘발성을 메우는 목적 (compact는 일시적 보존이라 불충분).
+사용자가 **직접 통제하는** 메모리. `~/.claude/projects/*/memory/`의 자동 메모리 시스템과는 별개로, 사용자가 명시적으로 `/notes` 명령을 호출할 때만 변경된다. 세션 종료 시 conversation이 사라지는 휘발성을 메우는 목적 (compact는 일시적 보존이라 불충분).
+
+## Scope — project vs user
+
+본 skill 은 _두 자리_ 에 자료를 저장할 수 있음. `--scope` flag 로 분기:
+
+| Scope | 파일 위치 | 다루는 자료 | 자동 로드 |
+|---|---|---|---|
+| `project` (default) | `.claude_reports/NOTES.md` | 현 cwd 의 _프로젝트 단위_ 자료 — 진행 중 작업·결정·외부 자원·다음 세션 hint 등 | 글로벌 `~/.claude/CLAUDE.md` 도메인 트리거 |
+| `user` | `~/.claude/user_profile/NOTES.md` | _사용자 단위 cross-project_ 자료 — 범용 패턴·preference·도메인 메모. 구조화 자료 (`01_paper_figure_style.md` 등) 와 같은 폴더 안 free-form 자리 | 별도 자동 로드 X (sub-agent 가 작업 자리에서 Read) |
+
+**Scope 선택 기준**:
+
+- _이 프로젝트에서만 의미 있는 자료_ → `--scope project`
+- _다른 프로젝트에서도 이어 쓸 사용자 자료_ → `--scope user`
+- 애매하면 `project` (default)
+
+**user scope 자리는 `/analyze-user` 와 짝**:
+
+- 구조화 사용자 자료 (figure 스타일·paper 작성 톤·발표 전략 등) 는 `/analyze-user <aspect>` 가 `~/.claude/user_profile/{01~06}_*.md` 갱신.
+- 본 skill `--scope user` 는 그 폴더 안 _free-form NOTES.md_ — 구조화 자리에 안 들어가는 짧은 메모·미정 자료.
 
 ## 파일 위치 & 자동 로드
 
-- **위치**: 현재 working directory의 `.claude_reports/NOTES.md` (단일 파일)
-- **자동 로드**: 글로벌 `~/.claude/CLAUDE.md`의 도메인 트리거 표에 의해 메인 Claude가 새 세션 시작 시 Read. 파일이 없으면 무시.
+- **project scope**: 현재 working directory의 `.claude_reports/NOTES.md` (단일 파일). 글로벌 `~/.claude/CLAUDE.md`의 도메인 트리거 표에 의해 메인 Claude가 새 세션 시작 시 Read. 파일이 없으면 무시.
+- **user scope**: `~/.claude/user_profile/NOTES.md`. 자동 로드 X — sub-agent 가 작업 자리에서 명시적으로 Read.
 - **갱신**: 항상 `/notes` 명령으로만. Claude가 자동으로 쓰지 않는다.
 
 ## 파일 형식 (5 카테고리)

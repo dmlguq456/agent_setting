@@ -15,7 +15,7 @@ execute-plan 이후 또는 온디맨드로 기능 테스트를 실행해 코드 
 2. 디렉토리 → `/plan/plan.md`
 3. 퍼지 검색 → `_audit`/`_fix_` 없는 폴더 우선. **없으면 fallback**: 인자를 파일/디렉토리 경로로 간주하여 직접 테스트
 
-## 위임 — 테스트팀
+## 위임 — 품질관리팀 (test 모드)
 프롬프트 유형별:
 - **plan 파일 경로**: "Run graduated tests for plan: {$ARG}. Read verification sections and checklist.md. Execute Level 1→2→3→4→5, stop on first failure."
 - **파일/디렉토리**: "Run graduated tests on: {$ARG}. Execute Level 1→5, stop on first failure. Skip levels that don't apply."
@@ -50,10 +50,10 @@ Format:
 ANY agent의 이슈 처리 필수.
 
 ## Post-Test — QA Review
-테스트팀 반환 후:
+품질관리팀 (test 모드) 반환 후:
 1. 테스트 로그 읽기
 2. **2× 품질관리팀 병렬**
-3. 양쪽 리뷰 읽기. 이슈 발견 → 테스트팀 재호출 (test_report.md에 append). 둘 다 통과 → 결과 보고
+3. 양쪽 리뷰 읽기. 이슈 발견 → 품질관리팀 (test 모드) 재호출 (test_report.md에 append). 둘 다 통과 → 결과 보고
 
 ## 결과 보고
 1. 요약 테이블로 테스트 결과 전달

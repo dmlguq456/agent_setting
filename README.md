@@ -106,12 +106,13 @@ QA 5 단계 (quick / light / standard / thorough / adversarial) 정의는 [`CONV
 | Skill | 역할 |
 |---|---|
 | [`analyze-project`](skills/analyze-project/SKILL.md) | code/paper/doc 자료 → `analysis_project/` 영속화 |
+| [`analyze-user`](skills/analyze-user/SKILL.md) | 사용자 과거 산출물 (paper / presentation / report / code) 분석 → `~/.claude/user_profile/*.md` 갱신 (figure 스타일·작성 톤·발표 전략·도메인 expertise 등 cross-project 사용자 패턴) |
 | [`autopilot-research`](skills/autopilot-research/SKILL.md) | 분야 조사 — mode 별 보고서 (academic/technology/market) |
 | [`autopilot-code`](skills/autopilot-code/SKILL.md) | 코드 dev/debug — plan → execute → test → report |
 | [`autopilot-draft`](skills/autopilot-draft/SKILL.md) | 문서 strategy + draft (paper/presentation/doc, markdown 만) |
 | [`autopilot-refine`](skills/autopilot-refine/SKILL.md) | doc/research 사후 정정 — major ceremony, prompt + memo 통합 entry |
 | [`audit`](skills/audit/SKILL.md) | 산출물 multi-aspect 점검 + 기본 auto-fix chain |
-| [`notes`](skills/notes/SKILL.md) | per-project 메모 — `.claude_reports/NOTES.md` 단일 파일 |
+| [`notes`](skills/notes/SKILL.md) | 사용자 통제 메모 — `--scope project` (cwd `.claude_reports/NOTES.md`) / `--scope user` (`~/.claude/user_profile/NOTES.md`) |
 | [`sync-skills`](skills/sync-skills/SKILL.md) | 본 README + 노션 대시보드 동기화 |
 
 > sub-skill (`init-plan`, `refine-plan`, `init-doc-strategy`, `refine-doc`, `execute-plan`, `run-test`, `final-report`) 은 autopilot 내부에서 자동 호출. 사용자가 직접 부르지 않음.

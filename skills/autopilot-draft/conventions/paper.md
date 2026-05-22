@@ -66,6 +66,8 @@
 ```markdown
 ### {ID} {tier 이모지} — {짧은 한 줄 action}
 
+- [ ] 📌📌📌📌📌 **반영 완료** 📌📌📌📌📌
+
 **위치**: `\section{...}` 또는 `\label{...}` 또는 `\paragraph{...}` (한 줄, inline code 활용)
 
 ​```latex
@@ -76,7 +78,7 @@
 **한 줄 이유** (선택): 왜 이 자리에 이게 필요한지 한 문장. 두 줄 넘어가면 cut.
 ```
 
-- H3 헤더 한 줄
+- H3 헤더 한 줄 + _바로 아래 task-list 체크박스 한 줄 의무_. cheatsheet 가 사용자의 최종 paste 작업을 위한 자료라, 진행 중에 어디까지 반영했는지 추적할 수 있게 entry 첫 자리에 체크박스 anchor 가 박혀야 함. 형식은 `- [ ] 📌📌📌📌📌 **반영 완료** 📌📌📌📌📌` 한 줄 고정 — `- [ ]` markdown task-list 가 preview 에서 interactive 체크박스로 렌더링, 좌우 📌 다섯 개씩이 시각 anchor (H3 tier 이모지 🔴🟡🟢 와 역할 분리), bold 라벨이 강조. 사용자가 반영 완료한 항목은 직접 `[x]` 로 갈아 끼움.
 - `**위치**:` 한 줄 — `**Anchor**` / `**latex anchor**` 같은 영어 라벨 금지, `**위치**:` 통일
 - LaTeX 블록 한 개 (필요 시 함께 paste 할 짧은 블록 하나 더)
 - `**한 줄 이유**` 선택, 두 줄 이내
@@ -138,3 +140,30 @@ Pre-flight 표 / 분기점 표로 앞 페이지에 7행 표 박지 않는다. M2
 - ordered list 아니라 _표 형태_ 의 paste 순서 안내
 
 **Why**: 사용자가 preview 로 보면서 paste 작업한다. preview 에서는 frontmatter / blockquote / 메타 표 가 줄글로 깨져 _paste 자리를 찾기 어렵다_. 사용자 영역과 추적 영역이 같은 위계로 섞이면 매번 사용자가 "이게 내가 봐야 할 건가, 에이전트 추적용인가" 분간해야 한다 — 짜증의 직접 원인.
+
+## Figure 자산 게이트 — 분석팀 위임 (2026-05-22 신설)
+
+paste-ready cheatsheet 안 `\includegraphics{<path>}` 참조 PDF 가 `<paper_dir>/<path>` 에 없을 때, _자산 누락_ 을 사용자가 paste 단계에서야 발견하지 않도록 cheatsheet 작성 자리에서 미리 처리.
+
+**사전 자산 점검** — Step 4 (draft 작성) 직후 / Step 5 (review) 직전 자동:
+
+1. cheatsheet 본문에서 `\includegraphics{...}` 인자 모두 추출.
+2. 각 경로에 대해 `<paper_dir>/<path>` 존재 여부 확인.
+3. 부재 자산 발견 시 두 경로 중 하나:
+
+**경로 A — `--figures auto` (default)**
+
+`Agent(분석팀, "<자산 spec>")` 자동 위임. spec 은 cheatsheet 의 figure caption + 주변 본문에서 추출 — 함수 / 축 / curve 목록 / 목표 사이즈 / 학회 기본 스타일. 분석팀이 PDF + 스크립트 + preview PNG 생성 후 entry 의 _알아둘 점_ 자동 갱신 (`figure 자산 생성 완료: <path>, 재현 스크립트 <script path>`).
+
+**경로 B — `--figures flag`**
+
+부재 자산만 _알아둘 점_ 에 flag 박고 사용자 직접 처리에 맡김. spec 은 자세하게 (curve 별 함수·축·사이즈 권장 포함). 사용자가 그 spec 으로 직접 만들거나 별도 `Agent(분석팀)` 호출 가능.
+
+**왜 분석팀에 위임하나**: cheatsheet 의 LaTeX 본문은 _paste-ready_ 가 본질이지 _자산 생성_ 책임은 아니다. 분석팀이 학회·논문 기본 스타일 (Times serif / OrRd palette / 6.4×2.8" landscape 등) 의 단일 source 라 figure 들 사이 _스타일 일관성_ 도 한 자리에서 누적된다.
+
+**자산 위치 컨벤션** (분석팀 default 와 정합):
+- PDF: `<paper_dir>/figures/<name>.pdf`
+- 재현 스크립트: `<paper_dir>/figures/plot_<name>.py`
+- preview PNG: `<paper_dir>/figures/<name>_preview.png`
+
+cheatsheet entry 안 _figure preview_ 임베드는 preview PNG 상대 경로로 — 사용자가 markdown preview 띄울 때 자동 표시. (예시: `![Figure description](../../../../<paper_dir>/figures/<name>_preview.png)`)
