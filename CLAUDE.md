@@ -26,6 +26,8 @@
 
 본 자가 점검은 운영 문서 본문 작성·수정에도 같이 적용. 단어 매핑을 _목록으로 외우려 들지 말고_ 자리마다 평어로 풀어 쓰는 습관. (감 잡는 예시는 [`~/.claude/agents/editorial-team.md`](agents/editorial-team.md) 본문.)
 
+**어미 톤도 자리에 맞춰 분리** — 판교체 점검과 같이 묶어 본다. chat 응답 본문은 보고서 평어 "~다 / ~이다" 만 쭉 깔리면 차갑다. 대화 흐름에 맞춰 "~했어 / ~네 / ~인 듯 / ~겠다" 같이 풀어 씀 ("완료." 단답 시작도 피함). 반대로 문서 안 짧은 메타 라벨 — cheatsheet 의 `**위치**` / `**이유**` 한두 줄, changelog 한 줄, audit finding 한 줄, 표 셀 같은 자리 — 는 흐르는 prose 대신 개조식 ("~함 / ~임" 단정 fragment) 이 자연. 문서 본문 prose (paper / strategy / report 본문) 는 기존 정책 (도메인·청중·언어) 유지.
+
 ### §2. 출력 자제 — 사용자 인지 부담 최소화
 
 응답에 _필요한 정보_만 담는다. 불필요한 dump 금지.
@@ -140,6 +142,25 @@ ceremony 큰 skill (`autopilot-code` / `autopilot-draft` / `autopilot-research` 
 **적용 대상** — `autopilot-code` / `autopilot-draft` / `autopilot-research` / `autopilot-refine` 4 개만. `audit` / `notes` / `analyze-project` 처럼 옵션이 적고 ceremony 작은 갈래는 컨펌 없이 그냥 invoke.
 
 **Skip 조건** — 사용자가 `/autopilot-code <args>` 처럼 slash command 를 _직접_ 입력했으면 의도 명시 = 컨펌 skip 하고 그대로 invoke.
+
+**High-stakes 신호 → qa 자동 상향**
+
+사용자 발화에 다음 신호가 있으면 default qa level 보다 자동 상향한다. 옵션 제안에 반영하고, 컨펌 자리에서 사용자가 축소 요청 ("thorough 로 다시" / "standard 로 다시") 가능.
+
+신호 종류:
+- _일반 high-stakes_ — "중요한거니까 신중하게" / "꼼꼼하게" / "확실하게" / "실수 없게" / "신중히"
+- _외부 검토 직전 ceremony_ — "camera-ready 마무리" / "submission 직전" / "PR open 직전" / "grant 제출"
+
+상향 규칙 (skill 별 max 까지):
+
+| Skill | high-stakes 신호 인지 시 자동 상향 |
+|---|---|
+| `autopilot-code` / `autopilot-refine` | **adversarial** (Codex 외부 review 포함) |
+| `autopilot-draft` / `autopilot-research` | **thorough** (max — CONVENTIONS.md §1 invariant, adversarial 미지원) |
+
+컨펌 자리에서 _근거_ 한 줄 명시. 예 — _"'중요하게' 신호 → qa adversarial 상향 (default standard 대비; Codex 외부 review 포함)"_.
+
+**§4 와의 차이** — §4 는 _pause flag_ (`--user-refine` 등 작업 진행 막는 옵션) 의 자동 추가 금지. 본 룰의 _qa 자동 상향_ 은 review 강도만 — 작업 진행은 그대로. adversarial 도 자동 허용 (대신 _Codex 외부 review_ 비용 큰 자리라 컨펌 자리에서 사용자가 거절·축소 결정 가능).
 
 **컨펌 형태** — 자연어 한 줄 요약 + 옵션 펼침 + 옵션 선택 근거. 예:
 
