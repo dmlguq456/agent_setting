@@ -206,15 +206,16 @@ Where `{doc_type}` is either "strategy" or "draft" based on auto-detection.
 
 ## QA Scaling
 Auto-detect from sections changed. Two reviewer roles run **in parallel** at Standard+:
-- **Quality reviewer**: narrative arc / cohesion / audience fit / strategy alignment
-- **Fact-checker** (NEW): cards/PDFs verbatim 대조, venue/year/metric/lineage/classification 검증
+- **Quality reviewer** (품질관리팀): narrative arc / cohesion / audience fit / strategy alignment
+- **Fact-checker** (연구팀 subrole): cards/PDFs verbatim 대조, venue/year/metric/lineage/classification 검증. classification 8-row table 의 canonical 정의는 [`research-team.md`](../../agents/research-team.md) L258-300 single source.
 
 | Level | Condition | Quality reviewer | Fact-checker (parallel) | Max rounds |
 |---|---|---|---|---|
 | **Quick** | (manual via `--qa quick` only — autopilot skips refine entirely in quick mode) | 1× 품질관리팀 (`model: "sonnet"`), spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
 | **Light** | ≤3 sections | 1× 품질관리팀 (`model: "sonnet"`) | _skip_ (quality reviewer covers basic spot-checks) | 2 |
-| **Standard** | 4+ sections | 1× 품질관리팀 (default opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** | 2 |
-| **Thorough** | Major overhaul or new evidence | 2× 품질관리팀 in parallel (opus) | **1× 품질관리팀 fact-check (`model: "sonnet"`)** | 2 |
+| **Standard** | 4+ sections | 1× 품질관리팀 (default opus) | **1× 연구팀 fact-checker (`model: "sonnet"`)** | 2 |
+| **Thorough** | Major overhaul or new evidence | 2× 품질관리팀 in parallel (opus) | **1× 연구팀 fact-checker (`model: "sonnet"`)** | 2 |
+| **Adversarial** | external-review-imminent (camera-ready / submission), or manual via `--qa adversarial` | 2× 품질관리팀 in parallel (opus) + 1× `Agent(codex-review-team)` (Codex CLI external review) | **1× 연구팀 fact-checker (`model: "sonnet"`)** | 2 + Codex 1 |
 
 **Why Sonnet for fact-checker**: card verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 Sonnet으로 충분하고, 비용 효율적이다.
 

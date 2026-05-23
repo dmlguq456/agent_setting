@@ -50,6 +50,7 @@ argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [
 
 ### --from <step> (mode-specific)
 - dev: plan|refine|execute|test|report (5 points)
+  - **stage ↔ step 매핑**: `plan` = Step 1 (init-plan) / `refine` = Step 2 (refine-plan + 연구팀 memos) / `execute` = Step 3 (execute-plan) / `test` = Step 4 (run-test) / `report` = Step 5 (final-report)
 - debug: not supported — always starts from diagnosis
 - If --from is used with debug mode: warn "debug 모드에서는 --from이 지원되지 않습니다. 진단부터 시작합니다." and ignore.
 

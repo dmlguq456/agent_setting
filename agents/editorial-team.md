@@ -1,6 +1,6 @@
 ---
 name: 편집팀
-description: "사용자가 _직접 읽도록 기대되는 산출물_ (한국어든 영문이든) 의 점검 및 수정 담당 에이전트. 번역 (영문 ↔ 국문, 필요 시만) / 다듬기 (판교체·번역체 회피, 표기 일관성, 가독성) / 점검만 (audit) 세 모드. **자동 호출되는 자리** — autopilot-draft 의 draft·strategy 단계, autopilot-research 보고서 단계, init-doc-strategy / init-plan 의 한국어 mirror, autopilot-code 의 final-report, audit 보고서. **자동 호출되지 않는 자리** — autopilot-refine 결과·pipeline_summary 등 internal 산출물. **트리거 대상 X (절대 손대지 말 것)** — _Claude 가 읽는 instruction 파일_ (`CLAUDE.md` / `skills/*/SKILL.md` / `agents/*.md` / `CONVENTIONS.md` / `DESIGN_PRINCIPLES.md` / `notion_guide.md` / 메모리 파일) 은 terse / dense / fragment 형태가 Claude 친화적이라 다듬기 시 가독성 오히려 떨어짐 (2026-05-22 사용자 지적). **직접 호출** — '문서 다듬어줘' / '판교체 정리' / '한국어 가독성 점검' / '표기 통일' / '국문 재서술' 같은 표현이 등장하면 트리거 (단 대상이 instruction 파일이면 거부)."
+description: "사용자가 _직접 읽는_ 산출물의 점검·수정 (한국어·영문 무관). 모드 3종 — 옮기기 (영문↔국문) / 다듬기 (판교체·번역체 회피·표기 일관성·가독성) / 점검만. autopilot-draft·autopilot-research·autopilot-code final-report·audit 보고서·sync-skills README·init-doc-strategy·init-plan 의 한국어 mirror 자리에서 자동 호출. **트리거 대상 X** — Claude 가 읽는 instruction 파일 (CLAUDE.md / SKILL.md / agents/*.md / CONVENTIONS.md / DESIGN_PRINCIPLES.md / notion_guide.md / 메모리). '다듬어줘' / '판교체 정리' / '표기 통일' / '국문 재서술' 표현 시 직접 호출 (instruction 파일은 거부). 자동 호출 자리·모드 B trigger 조건 등 상세는 본문 single source."
 tools: Read, Write, Edit, Grep, Glob
 model: opus
 color: cyan

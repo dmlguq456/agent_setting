@@ -672,8 +672,8 @@ Agent(subagent_type="연구팀"):
 
 연구팀이 한국어로 직접 작성한 보고서 세트에 편집팀 모드 B (다듬기) 호출 — 판교체·번역체 회피, 표기 일관성, 줄바꿈·호흡 마무리. _수정만_ (mirror 생성 아님).
 
-호출 조건:
-- **기본**: `--qa standard` 이상에서 자동 호출
+호출 조건 (single source — `agents/editorial-team.md` 모드 B 호출 조건):
+- **기본**: `--qa standard / thorough / adversarial` 일 때만 호출
 - **skip**: `--qa quick` / `--qa light` 또는 사용자 명시 skip
 
 ```
@@ -692,19 +692,20 @@ Agent(subagent_type="연구팀"):
 
 > 연구팀이 자연 산출 언어 (한국어) 로 직접 작성하고, 편집팀이 _수정만_ — 두 번 쓰는 노동 회피.
 
-#### Step 4b: QA Loop (max 2 rounds; quick = 1 round)
-QA level: `--qa` flag if provided, else auto-detect (<=10 papers: light, 11-25: standard, >25 or deep: thorough).
+#### Step 4b: QA Loop (max 2 rounds; quick = 1 round; adversarial = 2 + Codex 1)
+QA level: `--qa` flag if provided, else default `thorough` (모든 autopilot-* 통일 — [CONVENTIONS.md §1.4](../../CONVENTIONS.md#14-skill별-사용-매트릭스)).
 
 **Two reviewer roles run in parallel** at standard+:
 - **Quality reviewer(s)**: coverage / no-fabrication / progressive disclosure / actionable roadmap
-- **Fact-checker** (NEW): cards/ verbatim 대조 — reports에 인용된 venue/year/metric/lineage가 source cards와 일치하는지 narrow 검증
+- **Fact-checker** (연구팀 subrole): cards/ verbatim 대조 — reports에 인용된 venue/year/metric/lineage가 source cards와 일치하는지 narrow 검증. classification 8-row table 의 canonical 정의는 [`research-team.md`](../../agents/research-team.md) L258-300 single source.
 
 | Level | Quality reviewer | Fact-checker (parallel) | Max rounds |
 |---|---|---|---|
 | **quick** | 1× 품질관리팀 (sonnet), spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
 | **light** | 1× 품질관리팀 (sonnet) | _skip_ (quality reviewer covers basic spot-checks) | 2 |
-| **standard** | 1× 품질관리팀 (opus) | **1× 품질관리팀 fact-check (sonnet)** | 2 |
-| **thorough** | 2× 품질관리팀 parallel (opus, completeness + accuracy) | **1× 품질관리팀 fact-check (sonnet)** | 2 |
+| **standard** | 1× 품질관리팀 (opus) | **1× 연구팀 fact-checker (sonnet)** | 2 |
+| **thorough** | 2× 품질관리팀 parallel (opus, completeness + accuracy) | **1× 연구팀 fact-checker (sonnet)** | 2 |
+| **adversarial** | 2× 품질관리팀 parallel (opus) + 1× `Agent(codex-review-team)` (Codex CLI external review) | **1× 연구팀 fact-checker (sonnet)** | 2 + Codex 1 |
 
 **Why Sonnet for fact-checker**: cards verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 Sonnet으로 충분. 비용 효율적.
 

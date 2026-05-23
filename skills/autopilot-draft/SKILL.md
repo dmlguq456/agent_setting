@@ -796,7 +796,7 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
 draft 본문이 사용자가 직접 검토 / paste 작업하는 산출물 — final 단계 직전에 _마지막 1회_ 편집팀 다듬기. 
 
 호출 조건 (single source — `agents/editorial-team.md` 모드 B 호출 조건):
-- `qa_level` 가 **standard / thorough** 일 때만 호출. `quick` / `light` 는 skip.
+- `qa_level` 가 **standard / thorough / adversarial** 일 때만 호출. `quick` / `light` 는 skip.
 - skip 시 곧장 Step 6 (pipeline_summary) 진행.
 
 ```

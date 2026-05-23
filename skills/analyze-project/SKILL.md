@@ -222,7 +222,7 @@ Also write 00_overview.md at root of {name}/:
 - Inventory of all files in the input folder, with classification
 - Key findings per category
 - Cross-references useful for autopilot-draft downstream
-- "intended for mode": likely autopilot-draft mode this material targets (rebuttal/write/review/proposal/report/presentation)
+- "intended for mode": likely autopilot-draft mode this material targets (`paper` / `presentation` / `doc` — `doc` 안 intent 라벨: rebuttal / review / report / proposal)
 
 Korean prose for narrative; English/source language for verbatim quotes.
 Return ONLY paths + Korean summary.
