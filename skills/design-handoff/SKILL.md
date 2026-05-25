@@ -1,6 +1,6 @@
 ---
 name: design-handoff
-description: Final handoff — consolidates design artifacts into a single handoff.md that frontend devs (or autopilot-app build phase) can use directly. Lists components, token paths, import paths, reproduction guide.
+description: Final handoff — consolidates design artifacts into a single handoff.md that frontend devs (or autopilot-spec build phase) can use directly. Lists components, token paths, import paths, reproduction guide.
 argument-hint: "<design path or app path>"
 ---
 
@@ -65,7 +65,7 @@ design phase 의 모든 자산 모음:
 
 ---
 
-## Frontend 개발자 가이드 (frontend-eng / autopilot-app 의 build phase 가 import)
+## Frontend 개발자 가이드 (frontend-eng / autopilot-spec 의 build phase 가 import)
 
 ```tsx
 // 토큰
@@ -93,7 +93,7 @@ export default function TasksPage() {
 ## 다음 사이클
 
 이 design 을 사용해 build 진행:
-- autopilot-app 에서 호출됐다면: 자동으로 Phase 3 (build) 로 인계
+- autopilot-spec 에서 호출됐다면: 자동으로 Phase 3 (build) 로 인계
 - 직접 호출이었다면: `frontend-eng` 또는 `/app-build` 호출 권장
 
 피드백 있으면:
@@ -104,10 +104,10 @@ export default function TasksPage() {
 
 ### Step 3: 호출자별 인계
 
-#### autopilot-app 에서 위임된 경우
+#### autopilot-spec 에서 위임된 경우
 
-- 산출 path 를 autopilot-app 에 반환
-- autopilot-app 의 `pipeline_state.yaml` 의 `phases.design: done` 갱신
+- 산출 path 를 autopilot-spec 에 반환
+- autopilot-spec 의 `pipeline_state.yaml` 의 `phases.design: done` 갱신
 
 #### 사용자 직접 호출
 
@@ -121,7 +121,7 @@ export default function TasksPage() {
 ## Output
 
 - `05_handoff/handoff.md` — 단일 통합 문서
-- 호출자 (autopilot-app 또는 사용자) 에 path 반환
+- 호출자 (autopilot-spec 또는 사용자) 에 path 반환
 
 ## Return Format
 
@@ -129,9 +129,9 @@ export default function TasksPage() {
 <design_path>/05_handoff/handoff.md -- ✅ design cycle completed (cycle <N>)
 ```
 
-autopilot-app 위임:
+autopilot-spec 위임:
 ```
-<app_path>/02_design/05_handoff/handoff.md -- ✅ handed off to autopilot-app build phase
+<app_path>/02_design/05_handoff/handoff.md -- ✅ handed off to autopilot-spec build phase
 ```
 
 ## Update agent memory

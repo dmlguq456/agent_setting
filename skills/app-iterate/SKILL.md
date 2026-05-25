@@ -12,7 +12,7 @@ argument-hint: "<app name or path> + user feedback  # DEPRECATED — /autopilot-
 ## App Resolution
 
 1. `--app <name>` 또는 폴더 경로
-2. fuzzy search `.claude_reports/apps/*$ARG*`
+2. fuzzy search `.claude_reports/specs/*$ARG*`
 
 ## Pre-Check
 
@@ -23,7 +23,7 @@ argument-hint: "<app name or path> + user feedback  # DEPRECATED — /autopilot-
 
 ### Step 1: 현재 spec Read
 
-`.claude_reports/apps/<name>/01_spec/PRD.md` + 최근 사이클 변경 (`build_log.md`).
+`.claude_reports/specs/<name>/01_spec/PRD.md` + 최근 사이클 변경 (`build_log.md`).
 
 ### Step 2: 사용자 피드백 수집
 
@@ -68,7 +68,7 @@ F5 "X 가 안 됨"                 → discard         (의도된 동작)
 
 ### Step 5: feedback_log.md 작성
 
-`.claude_reports/apps/<name>/06_iterate/feedback_log.md`:
+`.claude_reports/specs/<name>/06_iterate/feedback_log.md`:
 
 ```markdown
 # Feedback Log — Cycle <N>
@@ -135,13 +135,13 @@ F5 "X 가 안 됨"                 → discard         (의도된 동작)
 
 ## Output
 
-- `.claude_reports/apps/<name>/06_iterate/feedback_log.md`
+- `.claude_reports/specs/<name>/06_iterate/feedback_log.md`
 - `pipeline_state.yaml` (`current_cycle++`, phases reset)
 
 ## Return Format
 
 ```
-.claude_reports/apps/<name>/06_iterate/ -- ✅ feedback logged (N new spec, K fixes, P discarded)
+.claude_reports/specs/<name>/06_iterate/ -- ✅ feedback logged (N new spec, K fixes, P discarded)
 ```
 
 ## Update agent memory

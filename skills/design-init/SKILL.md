@@ -9,7 +9,7 @@ argument-hint: "<design task description> [--scope ui|slide|icon|diagram|mixed]"
 
 ## Pre-Check
 
-`.claude_reports/designs/<name>/` 또는 `.claude_reports/apps/<name>/02_design/` 에 이미 `design_state.yaml` 있는지 확인.
+`.claude_reports/designs/<name>/` 또는 `.claude_reports/specs/<name>/02_design/` 에 이미 `design_state.yaml` 있는지 확인.
 - 있음 → "이미 init 완료. 새 사이클 시작하려면 폴더 정리." 안내 후 중단
 - 부재 → 계속
 
@@ -17,7 +17,7 @@ argument-hint: "<design task description> [--scope ui|slide|icon|diagram|mixed]"
 
 ### Step 1: Design name 결정
 
-사용자 입력 또는 호출자 (autopilot-app) 가 준 app name 사용. 모호 시 한 줄 확인.
+사용자 입력 또는 호출자 (autopilot-spec) 가 준 app name 사용. 모호 시 한 줄 확인.
 
 ### Step 2: 환경 점검 (`00_init/environment_check.md`)
 

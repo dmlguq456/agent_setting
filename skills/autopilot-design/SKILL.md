@@ -1,12 +1,12 @@
 ---
 name: autopilot-design
-description: "Unified design pipeline — orchestrates design-init → design-refs → design-tokens → design-components → design-review → design-handoff. For visual artifacts across UI/UX, slides, diagrams, icons, logos. Can be invoked standalone or auto-delegated from autopilot-app Phase 2. Distinct from autopilot-draft (text-only documents) — autopilot-design handles visual deliverables."
+description: "Unified design pipeline — orchestrates design-init → design-refs → design-tokens → design-components → design-review → design-handoff. For visual artifacts across UI/UX, slides, diagrams, icons, logos. Can be invoked standalone or auto-delegated from autopilot-spec Phase 2. Distinct from autopilot-draft (text-only documents) — autopilot-design handles visual deliverables."
 argument-hint: "<design task or app path> [--scope ui|slide|icon|diagram|mixed] [--from <phase>] [--qa quick|standard|thorough]"
 ---
 
 > 산출물 폴더:
 > - 사용자 직접 호출: `.claude_reports/designs/<name>/`
-> - autopilot-app 에서 위임: `.claude_reports/apps/<name>/02_design/`
+> - autopilot-spec 에서 위임: `.claude_reports/specs/<name>/02_design/`
 >
 > CONVENTIONS.md §5 3-tier — T1: root + design_state.yaml / T2: `00_init/`, `01_refs/`, … / T3: `_internal/` per phase.
 
@@ -19,7 +19,7 @@ argument-hint: "<design task or app path> [--scope ui|slide|icon|diagram|mixed] 
 - "로고 / 아이콘 / 일러스트 만들어줘"
 - "디자인 토큰 정해줘" / "색 팔레트 짜줘"
 - "이 화면 비평해줘" — design-review 만 직접 호출 권장
-- autopilot-app Phase 2 자동 위임
+- autopilot-spec Phase 2 자동 위임
 
 ### Default 옵션
 
@@ -70,7 +70,7 @@ Phase 4: design-review      (비평 — 디자인팀 critic, 6축 점검)
 Phase 5: design-handoff     (코드 위치·import path·재현 가이드)
 ```
 
-각 phase 끝에 **[CONFIRM Gate]** — autopilot-app 의 4 갈래 응답 (진행 / 수정 / back-jump / 중단) 패턴 그대로. 발화가 모호하면 메인 Claude 가 옵션 다시 물음 (임의 추측 X).
+각 phase 끝에 **[CONFIRM Gate]** — autopilot-spec 의 4 갈래 응답 (진행 / 수정 / back-jump / 중단) 패턴 그대로. 발화가 모호하면 메인 Claude 가 옵션 다시 물음 (임의 추측 X).
 
 | 응답 | 동작 |
 |---|---|
@@ -158,7 +158,7 @@ Invoke Skill: `design-handoff` with the design path as args.
 
 결과:
 - `05_handoff/handoff.md` — 사용된 컴포넌트·토큰 위치, frontend 개발자가 import 할 path, 재현 가이드
-- autopilot-app 에서 위임된 경우: 호출자에 결과 path 반환
+- autopilot-spec 에서 위임된 경우: 호출자에 결과 path 반환
 
 **[Final Confirm]** — "디자인 사이클 완료. (확인 / back-jump — 어느 phase 든 / 중단)"
 
@@ -180,12 +180,12 @@ phases:
 last_updated: <timestamp>
 ```
 
-## Auto-delegation from autopilot-app
+## Auto-delegation from autopilot-spec
 
-autopilot-app Phase 2 가 `Invoke Skill: autopilot-design --app <name>` 호출 시:
-- 산출물 위치를 `.claude_reports/apps/<name>/02_design/` 로 자동 설정
-- `--qa` 옵션은 autopilot-app 의 그것 상속
-- 완료 후 `phases.design: done` 을 autopilot-app 의 `pipeline_state.yaml` 에 갱신
+autopilot-spec Phase 2 가 `Invoke Skill: autopilot-design --app <name>` 호출 시:
+- 산출물 위치를 `.claude_reports/specs/<name>/02_design/` 로 자동 설정
+- `--qa` 옵션은 autopilot-spec 의 그것 상속
+- 완료 후 `phases.design: done` 을 autopilot-spec 의 `pipeline_state.yaml` 에 갱신
 
 ## Return Format
 

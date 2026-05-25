@@ -10,7 +10,7 @@ argument-hint: "<design path or app path>"
 ## Design Resolution
 
 `design_state.yaml` 발견:
-- `.claude_reports/designs/<name>/` 또는 `.claude_reports/apps/<name>/02_design/`
+- `.claude_reports/designs/<name>/` 또는 `.claude_reports/specs/<name>/02_design/`
 
 ## Pre-Check
 

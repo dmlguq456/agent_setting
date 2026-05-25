@@ -10,7 +10,7 @@ argument-hint: "<task or feature description> [--app <name>] [--user-refine]"
 ## App Resolution
 
 1. `--app <name>` 있으면 그것 사용
-2. 없으면 `.claude_reports/apps/` 안 최신 `pipeline_state.yaml` 의 app 사용
+2. 없으면 `.claude_reports/specs/` 안 최신 `pipeline_state.yaml` 의 app 사용
 3. 여러 개 있으면 "어느 앱?" 한 줄 확인
 4. 부재 → "먼저 `/app-init` 실행 필요" 안내
 
@@ -33,7 +33,7 @@ argument-hint: "<task or feature description> [--app <name>] [--user-refine]"
 
 ### Step 2: PRD 작성 또는 갱신
 
-`.claude_reports/apps/<name>/01_spec/PRD.md` 구조:
+`.claude_reports/specs/<name>/01_spec/PRD.md` 구조:
 
 ```markdown
 # <App Name> PRD
@@ -148,19 +148,19 @@ DELETE /api/tasks/:id             → { ok: true }
 
 ## Output
 
-- `.claude_reports/apps/<name>/01_spec/PRD.md`
-- `.claude_reports/apps/<name>/01_spec/scenarios.md` (시나리오 5+ 시)
+- `.claude_reports/specs/<name>/01_spec/PRD.md`
+- `.claude_reports/specs/<name>/01_spec/scenarios.md` (시나리오 5+ 시)
 - `_internal/refine_v{N}.md` (refine loop 시)
 
 ## Return Format
 
 ```
-.claude_reports/apps/<name>/01_spec/ -- ✅ PRD completed (N features, M scenarios)
+.claude_reports/specs/<name>/01_spec/ -- ✅ PRD completed (N features, M scenarios)
 ```
 
 업데이트 mode:
 ```
-.claude_reports/apps/<name>/01_spec/PRD.md -- ✅ PRD updated (+K features, +M scenarios)
+.claude_reports/specs/<name>/01_spec/PRD.md -- ✅ PRD updated (+K features, +M scenarios)
 ```
 
 ## Update agent memory

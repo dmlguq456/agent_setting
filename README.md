@@ -17,23 +17,30 @@ flowchart LR
         NT["notes --scope user"]
     end
     ANA["analyze-project<br/>(code/paper/doc)"]
-    RES["autopilot-research"]
-    CODE["autopilot-code"]
+    RES["autopilot-research<br/>(academic/tech/market)"]
+    SPEC["autopilot-spec<br/>(app/library/api/cli/research)"]
+    CODE["autopilot-code<br/>(spec mode 자동 분기)"]
     DOC["autopilot-draft"]
+    DES["autopilot-design<br/>(시각)"]
     REF["autopilot-refine<br/>(doc + research 정정)"]
     AUD["audit<br/>(모든 산출물 점검)"]
-    ANA --> CODE
+    ANA --> SPEC
     ANA --> DOC
-    RES --> CODE
+    RES --> SPEC
     RES --> DOC
     RES --> REF
+    SPEC --> CODE
+    SPEC -.->|app mode 자리| DES
+    DES -.->|컴포넌트·토큰| CODE
     DOC --> REF
     RES --> AUD
     DOC --> AUD
     CODE --> AUD
+    SPEC --> AUD
     AUD -.->|auto-fix doc/research| REF
-    AUD -.->|auto-fix plans| CODE
+    AUD -.->|auto-fix code| CODE
     AU -.->|user_profile 참조| CODE
+    AU -.->|user_profile 참조| SPEC
     AU -.->|user_profile 참조| DOC
     AU -.->|user_profile 참조| RES
     NT -.->|append 사용자 메모| AU
@@ -51,8 +58,12 @@ flowchart LR
         ANA2["analyze-project"]
         RES2["autopilot-research"]
     end
-    subgraph PROD["B/C. 산출"]
-        CODE2["autopilot-code"]
+    subgraph PROD["B. 코드 영역"]
+        SPEC2["autopilot-spec<br/>(청사진)"]
+        CODE2["autopilot-code<br/>(작업)"]
+        DES2["autopilot-design<br/>(시각)"]
+    end
+    subgraph DOCS["C. 문서"]
         DOC2["autopilot-draft"]
     end
     AUD2["D. audit"]
@@ -62,13 +73,19 @@ flowchart LR
     UP[("👤 ~/.claude/user_profile/<br/>(cross-project)")]
     IN --> OUT
     OUT -.->|implicit input| PROD
+    OUT -.->|implicit input| DOCS
     PROD --> OUT
+    DOCS --> OUT
+    SPEC2 --> CODE2
+    SPEC2 -.->|app mode 자리| DES2
+    DES2 -.-> CODE2
     OUT --> AUD2
-    AUD2 -.->|auto-fix plans| CODE2
+    AUD2 -.->|auto-fix code| CODE2
     AUD2 -.->|auto-fix doc/research| REF2
     OUT <--> REF2
     AU2 --> UP
     UP -.->|default 참조| PROD
+    UP -.->|default 참조| DOCS
     UP -.->|default 참조| IN
 ```
 
@@ -99,6 +116,9 @@ ceremony 가 큰 7 개 (`autopilot-code` / `autopilot-spec` / `autopilot-draft` 
 | "diffusion 분야 최근 동향 조사해줘" | autopilot-research academic 모드, depth medium, 최근 1년 (qa thorough) |
 | "이 문서 v2 로 정리" | autopilot-refine major-level (qa thorough, 자동 apply) |
 | "X 기능 새로 만들어줘" | autopilot-code dev 모드 (specs/ 자리면 spec mode 별 분기 — app/library/cli/research 자동) |
+| "할 일 앱 만들고 싶어, PRD 부터" | autopilot-spec app 모드 (PRD + 스택 + scaffolding + skeleton) |
+| "TF-Restormer 학회 공개 코드로 정돈" | autopilot-spec auto → research,cli 추론 (재현 명령 + entry script 청사진) |
+| "Vercel 에 올리자" / "env 변경" | autopilot-spec setup-only 모드 (ship 첫 setup / env / domain / migration deploy 안내) |
 | "이번 발표 자료 만들어줘" | autopilot-draft presentation 모드로 슬라이드 markdown 작성 (qa thorough) |
 | "내 figure 스타일 분석해줘" / "발표 자료들 보고 프로필 갱신" | analyze-user figure (또는 all) — incremental update (qa adversarial 고정) |
 

@@ -1,10 +1,10 @@
 ---
 name: app-build
-description: "[DEPRECATED — autopilot-code 의 _앱 mode_ 가 본 역할 대체. 신규 호출 X. 이미 진행 중인 작업 자리에서만 참고]. 과거: Implementation phase — PRD + design tokens 읽고 implementation plan 작성 후 개발팀 backend/frontend mode 병렬 호출. 현재: 동일 작업이 `/autopilot-code` 호출 시 _앱 컨텍스트 자동 감지_ (apps/<name>/ 발견) 로 처리됨."
+description: "[DEPRECATED — autopilot-code 의 _앱 mode_ 가 본 역할 대체. 신규 호출 X. 이미 진행 중인 작업 자리에서만 참고]. 과거: Implementation phase — PRD + design tokens 읽고 implementation plan 작성 후 개발팀 backend/frontend mode 병렬 호출. 현재: 동일 작업이 `/autopilot-code` 호출 시 _앱 컨텍스트 자동 감지_ (specs/<name>/ 발견) 로 처리됨."
 argument-hint: "<app name or path>  # DEPRECATED — /autopilot-code 사용"
 ---
 
-> **DEPRECATED (2026-05-25)** — 본 sub-skill 의 _구현 자리_ 는 **autopilot-code 의 앱 mode** 가 대체. 사용자는 `/autopilot-code "기능 추가"` 자연어 발화로 호출, autopilot-code 가 `apps/<name>/` 컨텍스트 발견 시 자동 활성화. 본 파일은 _레거시 참조_ 용 — 새 호출 X.
+> **DEPRECATED (2026-05-25)** — 본 sub-skill 의 _구현 자리_ 는 **autopilot-code 의 앱 mode** 가 대체. 사용자는 `/autopilot-code "기능 추가"` 자연어 발화로 호출, autopilot-code 가 `specs/<name>/` 컨텍스트 발견 시 자동 활성화. 본 파일은 _레거시 참조_ 용 — 새 호출 X.
 
 ## Language Rule
 - Korean output, English code identifiers.
@@ -12,7 +12,7 @@ argument-hint: "<app name or path>  # DEPRECATED — /autopilot-code 사용"
 ## App Resolution
 
 1. `$ARG` 가 폴더 경로면 그것 사용
-2. fuzzy search `.claude_reports/apps/*$ARG*`
+2. fuzzy search `.claude_reports/specs/*$ARG*`
 3. 단일 매치 → 사용. 다중 → "어느 앱?" 확인
 
 ## Pre-Check
@@ -27,7 +27,7 @@ argument-hint: "<app name or path>  # DEPRECATED — /autopilot-code 사용"
 - `01_spec/PRD.md` Read — 피처·시나리오 파악 + **API Contract 섹션** (spec 단계의 단일 source of truth) + **데이터 모델 초안 + migration plan** (있으면)
 - `02_design/` 있으면 디자인 토큰·컴포넌트 spec Read
 
-> spec 안 API Contract 가 _build phase 의 입력_. build 안에서 contract 임의 변경 X — 변경 필요 시 spec 으로 back-jump (autopilot-app `--from spec`).
+> spec 안 API Contract 가 _build phase 의 입력_. build 안에서 contract 임의 변경 X — 변경 필요 시 spec 으로 back-jump (autopilot-spec `--from spec`).
 
 ### Step 2: Implementation plan 작성
 
@@ -150,19 +150,19 @@ contract _변경_ 자체가 필요한 자리 — 본 build phase 진행 _안 함
 
 ## Output
 
-- `.claude_reports/apps/<name>/03_build/plan.md` — implementation plan
-- `.claude_reports/apps/<name>/03_build/build_log.md` — phase 요약
-- `.claude_reports/apps/<name>/03_build/_internal/step_logs/step_*.md`
+- `.claude_reports/specs/<name>/03_build/plan.md` — implementation plan
+- `.claude_reports/specs/<name>/03_build/build_log.md` — phase 요약
+- `.claude_reports/specs/<name>/03_build/_internal/step_logs/step_*.md`
 
 ## Return Format
 
 ```
-.claude_reports/apps/<name>/03_build/ -- ✅ build completed (N steps, K files changed)
+.claude_reports/specs/<name>/03_build/ -- ✅ build completed (N steps, K files changed)
 ```
 
 실패 시:
 ```
-.claude_reports/apps/<name>/03_build/ -- ❌ build failed at step N: <reason>
+.claude_reports/specs/<name>/03_build/ -- ❌ build failed at step N: <reason>
 ```
 
 ## Update agent memory

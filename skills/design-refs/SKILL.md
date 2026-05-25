@@ -10,7 +10,7 @@ argument-hint: "<design task> [--design <path>] [--refs <image paths>] [--no-web
 ## Design Resolution
 
 1. `--design <path>` 있으면 그것
-2. 없으면 `.claude_reports/designs/` 또는 `.claude_reports/apps/*/02_design/` 안 최신 `design_state.yaml`
+2. 없으면 `.claude_reports/designs/` 또는 `.claude_reports/specs/*/02_design/` 안 최신 `design_state.yaml`
 3. 부재 → "먼저 `/design-init` 실행 필요"
 
 ## Procedure

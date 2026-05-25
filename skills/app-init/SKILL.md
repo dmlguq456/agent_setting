@@ -1,6 +1,6 @@
 ---
 name: app-init
-description: App project initial setup — environment check, stack selection, directory scaffolding, pipeline_state.yaml creation. First phase of autopilot-app (only on cold start).
+description: App project initial setup — environment check, stack selection, directory scaffolding, pipeline_state.yaml creation. First phase of autopilot-spec (only on cold start).
 argument-hint: "<app description>"
 ---
 
@@ -9,7 +9,7 @@ argument-hint: "<app description>"
 
 ## Pre-Check
 
-Check if `.claude_reports/apps/<inferred-name>/` already exists:
+Check if `.claude_reports/specs/<inferred-name>/` already exists:
 - 존재 + `pipeline_state.yaml` 있음 → "이미 init 완료된 앱이 있습니다. 새로 시작하려면 폴더 삭제 후 재실행." 안내 후 중단
 - 부재 → 계속
 
@@ -107,7 +107,7 @@ Package:   <chosen>
 
 **3-5. pipeline_state.yaml 생성**
 
-`.claude_reports/apps/<name>/pipeline_state.yaml`:
+`.claude_reports/specs/<name>/pipeline_state.yaml`:
 
 ```yaml
 app_name: <name>
@@ -130,15 +130,15 @@ last_updated: <timestamp>
 
 ## Output
 
-- `.claude_reports/apps/<name>/00_init/environment_check.md`
-- `.claude_reports/apps/<name>/00_init/stack_decision.md`
-- `.claude_reports/apps/<name>/pipeline_state.yaml`
+- `.claude_reports/specs/<name>/00_init/environment_check.md`
+- `.claude_reports/specs/<name>/00_init/stack_decision.md`
+- `.claude_reports/specs/<name>/pipeline_state.yaml`
 - 프로젝트 루트의 `CLAUDE.md` (없을 시 신규 생성)
 
 ## Return Format
 
 ```
-.claude_reports/apps/<name>/00_init/ -- ✅ init completed (stack: <framework>+<db>)
+.claude_reports/specs/<name>/00_init/ -- ✅ init completed (stack: <framework>+<db>)
 ```
 
 ## Update agent memory

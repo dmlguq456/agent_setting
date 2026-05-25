@@ -27,7 +27,7 @@ argument-hint: "<design path or app path>"
 
 #### scope=ui (가장 흔함)
 
-PRD (autopilot-app 에서 위임된 경우) 또는 사용자 명시에서 _필요한 컴포넌트 목록_ 추출:
+PRD (autopilot-spec 에서 위임된 경우) 또는 사용자 명시에서 _필요한 컴포넌트 목록_ 추출:
 
 ```
 Agent(디자인팀, mode=maker):
