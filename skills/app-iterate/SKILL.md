@@ -32,7 +32,7 @@ argument-hint: "<app name or path> + user feedback (chat 또는 file)"
 - "W 가 느림" (성능)
 - "사용자 흐름이 헷갈림" (UX)
 
-### Step 3: 분류
+### Step 3: 분류 (Claude 1차 분류)
 
 각 피드백 항목을 세 카테고리로:
 
@@ -42,7 +42,29 @@ argument-hint: "<app name or path> + user feedback (chat 또는 file)"
 | **즉시 fix** | 버그 / 명백한 회귀 | `/app-build` 즉시 호출 (fix scope) 또는 `Agent(개발팀, mode=<backend|frontend>, "bug fix: <issue>")` 직접 호출 |
 | **discard** | out of scope / 사용자 confusion / 이미 의도된 동작 | 이유 명시 후 기록만 |
 
-### Step 4: feedback_log.md 작성
+### Step 4: 사용자 분류 검토 (필수 컨펌)
+
+Claude 의 1 차 분류는 _추정_ 이라 사용자 검토 자리 필수. 다음 자리에 _개입 기회 명시_:
+
+```
+=== 피드백 분류 결과 ===
+F1 "X 페이지 Y 버튼 안 보임"     → 즉시 fix       (버그)
+F2 "Z 기능 있으면 좋겠음"         → 다음 사이클 spec (새 피처, P1)
+F3 "W 가 느림"                  → 다음 사이클 spec (성능, P0?)
+F4 "사용자 흐름 헷갈림"           → 다음 사이클 spec (UX, P1)
+F5 "X 가 안 됨"                 → discard         (의도된 동작)
+
+분류 검토 — 어떻게 진행할까요?
+  (a) 이 분류 그대로
+  (b) 재분류 — "F2 즉시 fix 로" / "F5 도 spec 으로" 같이 명시
+  (c) priority 조정 — "F3 P0" 같이 명시
+  (d) 항목 추가 / 제거 — "F6 으로 X 도 추가" / "F5 빼" 같이 명시
+  (e) 중단
+```
+
+응답 받아 분류 재조정 후 Step 5 (feedback_log.md 작성) 으로.
+
+### Step 5: feedback_log.md 작성
 
 `.claude_reports/apps/<name>/06_iterate/feedback_log.md`:
 
@@ -77,7 +99,7 @@ argument-hint: "<app name or path> + user feedback (chat 또는 file)"
 - **discard 사유**: ...
 ```
 
-### Step 5: 다음 사이클 인계
+### Step 6: 다음 사이클 인계
 
 요약 보고:
 
@@ -93,7 +115,7 @@ argument-hint: "<app name or path> + user feedback (chat 또는 file)"
   (이미 정리된 feedback_log.md 를 자동 참조)
 ```
 
-### Step 6: pipeline_state.yaml 업데이트
+### Step 7: pipeline_state.yaml 업데이트
 
 - `phases.iterate: done`
 - `current_cycle` 증가 (1 → 2, 등)

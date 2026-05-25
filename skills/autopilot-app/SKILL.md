@@ -60,7 +60,22 @@ Phase 5: app-ship        (배포·CI/CD)
 Phase 6: app-iterate     (피드백 → spec 갱신, loop back to Phase 1)
 ```
 
-각 phase 끝에 **[CONFIRM Gate]** — 사용자 OK 받은 후 다음 phase.
+각 phase 끝에 **[CONFIRM Gate]** — 사용자 응답 받은 후 다음 phase.
+
+### CONFIRM Gate 응답 분기 (모든 Gate 공통)
+
+Gate 자리에서 사용자 응답을 _4 갈래_ 로 받는다:
+
+| 응답 유형 | 발화 신호 | 메인 Claude 처리 |
+|---|---|---|
+| **진행** | "응" / "ok" / "go" / "다음" / 무응답 30분 (자율 진행) | 다음 phase 로 |
+| **수정 (refine)** | "이 부분만 다시" / "X 추가" / "메모 있어" + 구체 내용 | 현 phase 의 `--user-refine` 모드로 진입 (`_internal/refine_v{N}.md` 백업 후 v2 작성). _phase 자체는 다시 안 함_ |
+| **back-jump (재진입)** | "spec 부터 다시" / "방향 자체가 잘못" / "X phase 로 돌아가" | 아래 _§Mid-cycle Back-jump_ 의 원인 분류 표 → `--from <phase>` 자동 실행 (하위 phase reset + 산출물 백업) |
+| **중단** | "그만" / "cancel" / "취소" | pipeline 멈춤, `pipeline_state.yaml` 의 현 phase 상태 보존 |
+
+발화가 모호한 경우 (예: "이건 좀 그래" / "음...") — 메인 Claude 가 _세 가지 옵션 (refine / back-jump / 진행)_ 한 화면으로 다시 물음. 임의 추측 X.
+
+> _수정_ 과 _back-jump_ 의 차이: 수정 = 현 phase 안에서 산출물 v2 작성. back-jump = _이전 phase_ 재실행 (의도·요구사항·계약 자체 변경).
 
 ## Pipeline Execution
 
@@ -74,7 +89,7 @@ Invoke Skill: `app-init` with the app description as args.
 
 결과: `.claude_reports/apps/<app-name>/00_init/` + `pipeline_state.yaml` 생성
 
-**[CONFIRM Gate 0]** — "Phase 0 init 완료. 환경/스택 결정 보고서 검토 후 spec 으로 진행할까요?"
+**[CONFIRM Gate 0]** — "Phase 0 init 완료. 환경·스택 결정 검토 후 spec 으로 진행할까요? (진행 / 수정 / 중단 — 응답 분기 표 참조)"
 
 ### Phase 1: app-spec
 
@@ -84,7 +99,7 @@ Invoke Skill: `app-spec` with the task/feature description + `--app <name>` as a
 
 If `--user-refine`: 사용자 메모 받은 후 refine. `_internal/refine_v{N}.md` 에 버전.
 
-**[CONFIRM Gate 1]** — "PRD 작성 완료. design 으로 진행할까요?"
+**[CONFIRM Gate 1]** — "PRD 작성 완료. design 으로 진행할까요? (진행 / 수정 — refine v2 / 중단)"
 
 ### Phase 2: autopilot-design (UI 있는 경우만)
 
@@ -96,7 +111,7 @@ Invoke Skill: `autopilot-design` with the app path as args.
 
 결과: `.claude_reports/apps/<app-name>/02_design/` (디자인 토큰, 컴포넌트 mockup, 시각 결정)
 
-**[CONFIRM Gate 2]** — "디자인 완료. build 로 진행할까요?"
+**[CONFIRM Gate 2]** — "디자인 완료. build 로 진행할까요? (진행 / 수정 — design 안 refine / back-jump — spec 으로 / 중단)"
 
 ### Phase 3: app-build
 
@@ -106,7 +121,7 @@ Invoke Skill: `app-build` with the app path as args.
 
 결과: `.claude_reports/apps/<app-name>/03_build/build_log.md` + `_internal/step_logs/`
 
-**[CONFIRM Gate 3]** — "구현 완료. QA 로 진행할까요?"
+**[CONFIRM Gate 3]** — "구현 완료. QA 로 진행할까요? (진행 / 수정 — 구현 보강 / back-jump — spec·design 으로 / 중단)"
 
 ### Phase 4: app-qa
 
@@ -122,7 +137,7 @@ If 🔴 발견:
   - Invoke Skill: `app-build` 다시 (fix scope 명시)
   - 또는 `Agent(개발팀, mode=<backend|frontend>)` 직접 호출
 
-**[CONFIRM Gate 4]** — "QA 통과. 배포할까요?"
+**[CONFIRM Gate 4]** — "QA 통과. 배포할까요? (진행 / 수정 — 추가 점검 자리 지정 / back-jump — 구현·계약·요구사항·디자인 자리 / 중단)"
 
 ### Phase 5: app-ship
 
@@ -132,7 +147,7 @@ Invoke Skill: `app-ship` with the app path as args.
 
 결과: `.claude_reports/apps/<app-name>/05_ship/deploy_record.md`
 
-**[CONFIRM Gate 5]** — "배포 완료. 사용 후 피드백 있을 때 iterate phase 호출하세요."
+**[CONFIRM Gate 5]** — "배포 완료. 사용 후 피드백 있을 때 iterate phase 호출하세요. (확인 / back-jump — 배포 전 단계 보강 / 중단)"
 
 ### Phase 6: app-iterate
 

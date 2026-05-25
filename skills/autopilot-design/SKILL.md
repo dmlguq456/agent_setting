@@ -70,7 +70,14 @@ Phase 4: design-review      (비평 — 디자인팀 critic, 6축 점검)
 Phase 5: design-handoff     (코드 위치·import path·재현 가이드)
 ```
 
-각 phase 끝에 **[CONFIRM Gate]**.
+각 phase 끝에 **[CONFIRM Gate]** — autopilot-app 의 4 갈래 응답 (진행 / 수정 / back-jump / 중단) 패턴 그대로. 발화가 모호하면 메인 Claude 가 옵션 다시 물음 (임의 추측 X).
+
+| 응답 | 동작 |
+|---|---|
+| **진행** | 다음 phase |
+| **수정** | 현 phase `--user-refine` 진입 (산출물 v2 작성) |
+| **back-jump** | `--from <phase>` (refs / tokens / components 자리 선택, 하위 phase reset) |
+| **중단** | pipeline 멈춤, `design_state.yaml` 상태 보존 |
 
 ## Pipeline Execution
 
@@ -84,7 +91,7 @@ Invoke Skill: `design-init` with the design task as args.
 
 결과: `00_init/environment_check.md` + `design_state.yaml` 생성
 
-**[CONFIRM Gate 0]** — "환경 점검 완료. refs phase 로 진행할까요?"
+**[CONFIRM Gate 0]** — "환경 점검 완료. refs 로 진행할까요? (진행 / 수정 / 중단)"
 
 ### Phase 1: design-refs
 
@@ -97,7 +104,7 @@ Invoke Skill: `design-refs` with task description + (옵션) image paths as args
 
 결과: `01_refs/brief.md` + `_internal/references/` 폴더 (이미지·URL·메모)
 
-**[CONFIRM Gate 1]** — "레퍼런스 정리 완료. tokens phase 로 진행할까요?"
+**[CONFIRM Gate 1]** — "레퍼런스 정리 완료. tokens 로 진행할까요? (진행 / 수정 — 레퍼런스 추가·교체 / 중단)"
 
 ### Phase 2: design-tokens
 
@@ -111,7 +118,7 @@ Invoke Skill: `design-tokens` with the design path as args.
 
 기존 토큰 파일 발견 시 _확장_ (덮어쓰기 X).
 
-**[CONFIRM Gate 2]** — "토큰 결정. components 로 진행할까요?"
+**[CONFIRM Gate 2]** — "토큰 결정. components 로 진행할까요? (진행 / 수정 — 토큰 조정 / back-jump — refs 로 / 중단)"
 
 ### Phase 3: design-components
 
@@ -127,7 +134,7 @@ Invoke Skill: `design-components` with the design path as args.
   - `icon`: SVG 또는 이미지
   - `diagram`: mermaid / excalidraw
 
-**[CONFIRM Gate 3]** — "컴포넌트 완료. review 로 진행할까요?"
+**[CONFIRM Gate 3]** — "컴포넌트 완료. review 로 진행할까요? (진행 / 수정 — 컴포넌트 보강 / back-jump — tokens / refs 로 / 중단)"
 
 ### Phase 4: design-review
 
@@ -143,7 +150,7 @@ Invoke Skill: `design-review` with the design path as args.
 - `design_state.yaml` 의 `phases.review: failed`
 - 사용자에 보고 후 components phase 재호출 권장
 
-**[CONFIRM Gate 4]** — "review 통과. handoff 로 진행할까요?"
+**[CONFIRM Gate 4]** — "review 통과. handoff 로 진행할까요? (진행 / 수정 — 비평 반영 / back-jump — tokens·components / 중단)"
 
 ### Phase 5: design-handoff
 
@@ -153,7 +160,7 @@ Invoke Skill: `design-handoff` with the design path as args.
 - `05_handoff/handoff.md` — 사용된 컴포넌트·토큰 위치, frontend 개발자가 import 할 path, 재현 가이드
 - autopilot-app 에서 위임된 경우: 호출자에 결과 path 반환
 
-**[Final Confirm]** — "디자인 사이클 완료."
+**[Final Confirm]** — "디자인 사이클 완료. (확인 / back-jump — 어느 phase 든 / 중단)"
 
 ## Design state 관리
 
