@@ -90,7 +90,7 @@ flowchart LR
 
 발화가 들어오면 메인 Claude 는 turn 첫 단계로 _skill 호출 후보 vs 직접 처리_ 를 분기 판단한다 (글로벌 [`CLAUDE.md`](CLAUDE.md) §6 Pre-check). skill 후보면 컨텍스트 (cwd / `.claude_reports/` 산출물 / 발화) 를 읽고 skill + 옵션 + task description 을 조립, **한 줄 요약 + 옵션 펼침 + 선택 근거** 로 컨펌을 묻는다. yes / 수정 ("qa thorough 로", "X 빼고") / cancel. 무응답이면 10-30 분 뒤 추천안으로 자율 진행.
 
-ceremony 가 큰 5 개 (`autopilot-code` / `autopilot-draft` / `autopilot-research` / `autopilot-refine` / `analyze-user`) 만 컨펌 의무. `audit` / `notes` / `analyze-project` 는 즉시 invoke. 상세 룰은 글로벌 [`CLAUDE.md`](CLAUDE.md) §6.
+ceremony 가 큰 7 개 (`autopilot-code` / `autopilot-app` / `autopilot-draft` / `autopilot-design` / `autopilot-research` / `autopilot-refine` / `analyze-user`) 만 컨펌 의무. `audit` / `notes` / `analyze-project` 는 즉시 invoke. 상세 룰은 글로벌 [`CLAUDE.md`](CLAUDE.md) §6.
 
 | 사용자 발화 | 메인 Claude 컨펌 (자연어 요약) |
 |---|---|
@@ -108,7 +108,9 @@ ceremony 가 큰 5 개 (`autopilot-code` / `autopilot-draft` / `autopilot-resear
 
 ```
 /autopilot-code     --mode dev|debug --qa quick|light|standard|thorough|adversarial [--user-refine] [--from plan|refine|execute|test|report] "<task>"
+/autopilot-app      "<app or feature>" [--from <phase>] [--qa quick|light|standard|thorough] [--user-refine]
 /autopilot-draft    --mode paper|presentation|doc [--qa ...] [--user-refine] [--from <stage>] "<task>"
+/autopilot-design   "<design task or app path>" [--scope ui|slide|icon|diagram|mixed] [--from <phase>] [--qa quick|standard|thorough]
 /autopilot-research <topic> --mode academic|technology|market --depth shallow|medium|deep [--qa ...] [--from search|analyze|report]
 /autopilot-refine   "<prompt>" [--qa ...] [--review-only | --memo <file>] [--no-fact-check] [--no-style-audit]
 /analyze-user       <aspect> [--source <path>] [--mode init|update] [--user-refine]
@@ -127,14 +129,16 @@ QA 5 단계 (quick / light / standard / thorough / adversarial) 정의는 [`CONV
 | [`analyze-user`](skills/analyze-user/SKILL.md) | 사용자 cross-project 산출물 (paper / presentation / report / code / memory) 분석 → `~/.claude/user_profile/*.md` 갱신 (figure 스타일·작성 톤·발표 전략·도메인 expertise 등). autopilot-* 동급 ceremony, QA adversarial 고정, _3-instance consensus + 가중합_ (1.0 / 0.6 / 0.3 quarantine). |
 | [`analyze-project`](skills/analyze-project/SKILL.md) | code/paper/doc 자료 → `analysis_project/` 영속화 |
 | [`autopilot-research`](skills/autopilot-research/SKILL.md) | 분야 조사 — mode 별 보고서 (academic/technology/market) |
-| [`autopilot-code`](skills/autopilot-code/SKILL.md) | 코드 dev/debug — plan → execute → test → report |
+| [`autopilot-code`](skills/autopilot-code/SKILL.md) | 코드 dev/debug — plan → execute → test → report (library/research code, 사용자 = 개발자) |
+| [`autopilot-app`](skills/autopilot-app/SKILL.md) | 앱 개발 (사용자 = 일반 소비자) — init → spec → design → build → qa → ship → iterate |
 | [`autopilot-draft`](skills/autopilot-draft/SKILL.md) | 문서 strategy + draft (paper/presentation/doc, markdown 만) |
+| [`autopilot-design`](skills/autopilot-design/SKILL.md) | 시각 산출물 — UI/UX·슬라이드·다이어그램·아이콘 (init → refs → tokens → components → review → handoff). autopilot-app Phase 2 에서 자동 호출 또는 단독 호출 |
 | [`autopilot-refine`](skills/autopilot-refine/SKILL.md) | doc/research 사후 정정 — major ceremony, prompt + memo 통합 entry |
 | [`audit`](skills/audit/SKILL.md) | 산출물 multi-aspect 점검 + 기본 auto-fix chain |
 | [`notes`](skills/notes/SKILL.md) | 사용자 통제 메모 — `--scope project` (cwd `.claude_reports/NOTES.md`) / `--scope user <aspect>` (`~/.claude/user_profile/0X_*.md` 의 `## 사용자 수동 메모` 절, default aspect `collab`) |
 | [`sync-skills`](skills/sync-skills/SKILL.md) | 본 README 동기화 (Notion 연동 제외) |
 
-> sub-skill (`init-plan`, `refine-plan`, `init-doc-strategy`, `refine-doc`, `execute-plan`, `run-test`, `final-report`) 은 autopilot 내부에서 자동 호출. 사용자가 직접 부르지 않음.
+> sub-skill 은 autopilot 내부 자동 호출 — code 가족 (`code-plan` / `code-refine` / `code-execute` / `code-test` / `code-report`), draft 가족 (`draft-strategy` / `draft-refine`), app 가족 (`app-init` / `app-spec` / `app-build` / `app-qa` / `app-ship` / `app-iterate`), design 가족 (`design-init` / `design-refs` / `design-tokens` / `design-components` / `design-review` / `design-handoff`). 사용자가 직접 부르지 않음.
 
 세부 옵션 (`--mode`, `--qa`, `--from`, `--user-refine` 등) 은 각 SKILL.md. QA 5단계 단일 정의는 [`CONVENTIONS.md`](CONVENTIONS.md) §1.
 
@@ -144,16 +148,16 @@ QA 5 단계 (quick / light / standard / thorough / adversarial) 정의는 [`CONV
 
 | Agent | 모델 | 역할 |
 |---|---|---|
-| [기획팀](agents/plan-team.md) | opus | 구현 plan 문서 작성·갱신 (source code 기반 step-by-step) |
-| [품질관리팀](agents/qa-team.md) | opus (light: sonnet) | 통합 QA — review 모드 (code / plan diff 리뷰, 🔴 / 🟡 / 🟢 피드백) + test 모드 (단계별 검증: syntax → import → smoke → functional → integration). _2026-05-22 테스트팀 흡수._ |
-| [연구팀](agents/research-team.md) | opus (fact-check: sonnet) | user proxy — paper knowledge + 도메인 cross-check + audit-aligned axes |
-| [분석팀](agents/analysis-team.md) | opus | 수치·시각 분석 자료 생성 — matplotlib figure 자산 (PDF + 재현 스크립트 + preview), 데이터 분석 스크립트, 결과 후처리 표·통계. autopilot-draft / research 자동 호출 + 직접 호출 지원 |
-| [탐색팀](agents/browser-team.md) | sonnet | Playwright fetch (paywall/SPA) + PDF figure 추출 + reference 그림 |
+| [기획팀](agents/plan-team.md) | opus | 구현 plan 문서 작성·갱신 (source code 기반 step-by-step). `code-plan` / `code-refine` 자동 호출 |
+| [품질관리팀](agents/qa-team.md) | opus (light: sonnet) | QA 라우터 — code-review / plan-review / test (syntax→import→smoke→functional→integration) / ml-debug / data-curate. 모두 read-only |
+| [연구팀](agents/research-team.md) | opus (fact-check: sonnet) | 연구 라우터 — plan-review (paper-grounding) / research-survey / fact-check (verbatim cards 대조) |
+| [자료팀](agents/material-team.md) | opus | 자료 수집·시각·분석 라우터 — browser-fetch (paywall/SPA Playwright) / pdf-extract (caption-aware figure) / web-image-search (reference 그림) / figure-gen (matplotlib 자산) / data-script (CSV 집계·log 통계·표). _2026-05-25 분석팀 + 탐색팀 통합_ |
+| [디자인팀](agents/design-team.md) | sonnet | 시각 산출물 라우터 — maker (UI mockup·디자인 토큰·컴포넌트·다이어그램·슬라이드 비주얼·아이콘) / critic (read-only 비평) |
+| [개발팀](agents/dev-team.md) | sonnet | 코드 작업 라우터 — backend / frontend (user-facing app) / refactor (preserve-behavior) / new-lib (library/CLI/research) |
+| [편집팀](agents/editorial-team.md) | opus | 사용자 영역 문서 라우터 — translate (영문↔국문) / polish (판교체 회피·표기 일관성) / review (read-only) |
 | [codex-review-team](agents/codex-review-team.md) | Codex CLI (GPT-5) + opus orchestrator | 외부 hostile reader 관점 review (`--qa adversarial` 자동) |
-| [개발팀](agents/dev-team.md) | sonnet | refactor / rename / cleanup — 기능 보존 우선 |
-| [편집팀](agents/editorial-team.md) | opus | 사용자 영역 문서 점검·수정 (옮기기 / 다듬기 / 점검만) |
 
-**직접 호출** — 작은 작업 / 단발성 검토는 `Agent(개발팀)` / `Agent(품질관리팀)` / `Agent(연구팀)` / `Agent(분석팀)` / `Agent(편집팀)` 등으로 autopilot 우회. plan/log 가 안 남으므로 추적 필요한 작업은 autopilot 으로.
+**직접 호출** — 작은 작업 / 단발성 검토는 `Agent(개발팀)` / `Agent(품질관리팀)` / `Agent(연구팀)` / `Agent(자료팀)` / `Agent(디자인팀)` / `Agent(편집팀)` 등으로 autopilot 우회. plan/log 가 안 남으므로 추적 필요한 작업은 autopilot 으로.
 
 ### user_profile 참조 매트릭스
 
@@ -161,7 +165,8 @@ QA 5 단계 (quick / light / standard / thorough / adversarial) 정의는 [`CONV
 
 | Agent | Read 대상 (작업 시작 시) | 이유 |
 |---|---|---|
-| 분석팀 | `01_paper_figure_style.md` · `03_presentation_strategy.md` · `04_analysis_methodology.md` | figure / 슬라이드 자산 · 데이터 분석 시각·표 표준 |
+| 자료팀 | `01_paper_figure_style.md` · `03_presentation_strategy.md` · `04_analysis_methodology.md` | figure 자산·슬라이드 참고 그림·데이터 분석 시각·표 표준 |
+| 디자인팀 | `01_paper_figure_style.md` · `03_presentation_strategy.md` | UI mockup·슬라이드 비주얼·다이어그램 톤 |
 | 연구팀 | `02_paper_writing_style.md` · `04_analysis_methodology.md` · `05_domain_expertise.md` | paper 본문 톤 · 검증 방법론 · 도메인 용어 |
 | 편집팀 | `01_*` · `02_*` · `03_*` · `05_*` · `06_collaboration_style.md` | figure caption · paper · 슬라이드 다듬기 · 도메인 약자 · 응답 톤 |
 | 기획팀 | `04_analysis_methodology.md` · `06_collaboration_style.md` | plan 검증 패턴 · 작업 흐름 |
@@ -180,12 +185,14 @@ QA 5 단계 (quick / light / standard / thorough / adversarial) 정의는 [`CONV
 - **§6 autopilot-\* 호출 Pre-check** — turn 첫 단계 분기 판단 + 옵션 자동 구성 + 자연어 요약 컨펌 + §5 자율 진행 적용
 - **도메인 트리거 표** — Notion 작업 / doc·research major-level 수정 / QA·model invariant 작업 / 세션 시작
 
-ceremony 큰 5 개 (autopilot-* 4 + analyze-user) 의 자연어 trigger 신호 한눈에:
+ceremony 큰 7 개 (autopilot-* 6 + analyze-user) 의 자연어 trigger 신호 한눈에:
 
 | Skill | Trigger 신호 (자연어 발화) | Default 옵션 권장값 |
 |---|---|---|
-| `autopilot-code` | "X 기능 만들어줘" / "X 디버그해봐" / "이 에러 고쳐줘" / 코드 변경 의도 | `--mode dev/debug` 자동 추론 · `--qa thorough` (dev) / `standard` (debug) |
+| `autopilot-code` | "X 기능 만들어줘" / "X 디버그해봐" / "이 에러 고쳐줘" / 라이브러리·연구 코드 변경 의도 (사용자 = 개발자) | `--mode dev/debug` 자동 추론 · `--qa thorough` (dev) / `standard` (debug) |
+| `autopilot-app` | "X 앱 만들어줘" / "사용자 대상 웹·모바일 앱" / 일반 소비자용 앱 개발 의도 (사용자 ≠ 개발자) | `--qa thorough` · 첫 호출 시 init 부터, 재진입은 `--from <phase>` |
 | `autopilot-draft` | "발표 자료 만들어줘" / "논문 본문 작성" / "rebuttal 응답 작성" / "보고서 작성" | `--mode paper/presentation/doc` 자동 추론 · `--qa thorough` |
+| `autopilot-design` | "UI mockup 그려줘" / "디자인 토큰 잡아줘" / "슬라이드 비주얼" / "다이어그램 그려줘" / 시각 산출물 의도 | `--scope ui/slide/icon/diagram/mixed` 자동 추론 · `--qa thorough` · autopilot-app Phase 2 에서 자동 호출 |
 | `autopilot-research` | "X 분야 조사" / "동향 알려줘" / "literature review" / "표준 비교" | `--mode academic/technology/market` 자동 추론 · `--depth medium` · `--qa thorough` |
 | `autopilot-refine` | doc/research artifact 의 major-level 수정 (3-criteria — 사용자 명시 "major"/"v{N+1}"/"전면 재작성" / 구조 ≥200 줄 / 외부 검토 직전 ceremony) | `--qa thorough` (default) · 자동 apply (STRUCT 만 halt) |
 | `analyze-user` | "내 figure 스타일 분석해줘" / "발표 자료들 보고 프로필 갱신" / "user_profile 업데이트" / cross-project 사용자 자료 분석 의도 / 새 paper·발표·보고서 완성 직후 반영 의도 | `<aspect>` 발화 추론 (figure / writing / presentation / analysis / domain / collab; 전부 시 `all`) · `--mode update` (default) / `init` (첫 셋업) · `--qa` 없음 (adversarial 고정) |

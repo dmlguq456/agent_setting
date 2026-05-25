@@ -1,228 +1,158 @@
 {
-  "version": 3,
-  "last_readme_sync": "2026-05-23T10:52:23.624325+09:00",
-  "last_notion_sync": "2026-05-21T21:35:06.877198+09:00",
+  "version": 4,
+  "last_readme_sync": "2026-05-25T14:24:05.695731+09:00",
   "items": {
     "skills/analyze-project": {
-      "sha256": "6e05d51afbce9c583487618f7781365dfe156a03aded1f5f78a946c7ab235f6f",
-      "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "skills/analyze-project/README.md",
-      "readme_sha256": "f58d63afb7911f2c0961232edc13ebeefd8e9823112905625176af7900b78dd7",
-      "readme_mtime": "2026-05-12T19:24:49+09:00",
-      "notion_page_id": "34987c2b-b753-81f5-bdb4-e159b63ea72e",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "f58d63afb7911f2c0961232edc13ebeefd8e9823112905625176af7900b78dd7"
+      "sha256": "14e4e45fdaf1663f5866fa41593a4a7145c75340474277fe2e93874de14f212f",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/analyze-user": {
+      "sha256": "b8464bab8997aa4e009637b3494a64870845d4d11ab4b025f555318368d848ba",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/app-build": {
+      "sha256": "efc38b8e73bb03f4505f0d421cb0df58a0f5055701465a634cb1611293ae13d1",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/app-init": {
+      "sha256": "5bc7d5aea887dcba1e12a334ebd99fdf259bef874e98e9840460251355d84578",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/app-iterate": {
+      "sha256": "9d5b7918e6ab1b0f1e54a7d769fa1dc5b32b0f0e2e6d4454ff764db2ad57d0f7",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/app-qa": {
+      "sha256": "d9175921a5e008385bc6b270b8018b7c2d45bb9d062b56d6e36e11f7e6874dde",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/app-ship": {
+      "sha256": "8d2a5ed9f267b917770ba01c78d3436664b2a27f388edd3a94b8db4cbb37f72d",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/app-spec": {
+      "sha256": "9b776702251740e4f9aed062762706b42285b6953475c6c9151ad9860801fbd1",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
     },
     "skills/audit": {
       "sha256": "54d39db2b30560fdc97b70a5891b6d6a32b415715fd4bb57809e6c552060f95a",
-      "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/audit/README.md",
-      "readme_sha256": "a48b5ae916233b3c67ae30e58759aa90da625b788711a092ab4232558536c1c0",
-      "readme_mtime": "2026-05-19T00:07:04+09:00",
-      "notion_page_id": "35e87c2b-b753-81cf-b5c0-f5f22500eccc",
-      "notion_last_edited_time": "2026-05-19T00:07:04+09:00",
-      "notion_synced_sha256": "a48b5ae916233b3c67ae30e58759aa90da625b788711a092ab4232558536c1c0"
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/autopilot-app": {
+      "sha256": "d5d86c56406fc1228a18aef1d2a4a1e7ceafaa8624151f772f392d89ea2b1ab5",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
     },
     "skills/autopilot-code": {
-      "sha256": "f316877fa9abc8f330c917b6cef2725ff0c4c13dca33bdcda883def1f8ff0fcd",
-      "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "skills/autopilot-code/README.md",
-      "readme_sha256": "618666c9d87366f849fcc834915b43e5778c0fa47349e8bfb09cd440aa4d2835",
-      "readme_mtime": "2026-05-13T08:30:27.288191",
-      "notion_page_id": "32787c2b-b753-81d4-8170-dae1e5074b5c",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "618666c9d87366f849fcc834915b43e5778c0fa47349e8bfb09cd440aa4d2835"
+      "sha256": "0b0d9e651494bed880d70baf5d94cbbd5ba774fa77bebd2136f7e4a1a5a633f8",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
     },
-    "skills/autopilot-refine": {
-      "sha256": "932c59534bcfb57e58e48d256ab97fc120809447085cac313e19d216103fa916",
-      "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/autopilot-refine/README.md",
-      "readme_sha256": "3ee1f1908c01ce891c2db05fc6d6affcf2079be49af706bbff7c78f0d3e400a1",
-      "readme_mtime": "2026-05-19T11:04:15+09:00",
-      "notion_page_id": "35e87c2b-b753-81fa-b020-d6f7c2685aef",
-      "notion_last_edited_time": "2026-05-19T11:04:15+09:00",
-      "notion_synced_sha256": "3ee1f1908c01ce891c2db05fc6d6affcf2079be49af706bbff7c78f0d3e400a1"
-    },
-    "skills/autopilot-research": {
-      "sha256": "fa9bcf68c6595aef9a8bec5f87c61c7b155265402b453afaa5283eeec5709176",
-      "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "skills/autopilot-research/README.md",
-      "readme_sha256": "cedc58e1ccde35938c35dd9171cff75fe9bcec0f15817495adffea5c7a7844d2",
-      "readme_mtime": "2026-05-13T10:47:33+09:00",
-      "notion_page_id": "33d87c2b-b753-818d-8071-d42a0e5876ce",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "859b8d79f516e2920b2aba478e85bf15cace34f130463a26c9619673e6183f5f",
-      "note": "Notion entry is a wiki database, no single page body — stub README only"
-    },
-    "skills/code-execute": {
-      "sha256": "29cc8e46baede85a3ec610a9ef6494b25ed45251efb4c8ec0037d7ca8e191c97",
-      "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/code-execute/README.md",
-      "readme_sha256": "ac8768a5864142d8ccfe0682d802173b49558eb1835d517d5020e2ad0635ffa8",
-      "readme_mtime": "2026-05-13T10:47:33+09:00",
-      "notion_page_id": "34987c2b-b753-813f-be07-dec64db8796e",
-      "notion_last_edited_time": "2026-05-13T10:47:33+09:00",
-      "notion_synced_sha256": "ac8768a5864142d8ccfe0682d802173b49558eb1835d517d5020e2ad0635ffa8"
-    },
-    "skills/code-report": {
-      "sha256": "ec07ebdd7532c5ff6c55bac97b68400c96b52476868974f196792217b9f14ae9",
-      "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/code-report/README.md",
-      "readme_sha256": "4273e964a27bdba70ce8ba2877456cfe09b26cae15db7e4193b9f6e81f316de0",
-      "readme_mtime": "2026-05-12T19:34:20+09:00",
-      "notion_page_id": "34987c2b-b753-81a9-9e7b-d9fb53ac04fb",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "4273e964a27bdba70ce8ba2877456cfe09b26cae15db7e4193b9f6e81f316de0"
-    },
-    "skills/draft-strategy": {
-      "sha256": "8aaf090d69d8b75a9d0d052393d4d0acb58d2fef8e1675a10f12ddd536d20677",
-      "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "skills/draft-strategy/README.md",
-      "readme_sha256": "9e0cdfdd88f70e33524ff020a6aa187f5e32c71f66573a96ba303f693e724d41",
-      "readme_mtime": "2026-05-20T00:40:22+09:00",
-      "notion_page_id": "34987c2b-b753-8158-9391-df16f1b6eb74",
-      "notion_last_edited_time": "2026-05-20T00:40:22+09:00",
-      "notion_synced_sha256": "9e0cdfdd88f70e33524ff020a6aa187f5e32c71f66573a96ba303f693e724d41"
-    },
-    "skills/code-plan": {
-      "sha256": "7969946e7edafb08cd1e0224e1c21fe4a8a6db4f5a7c5d0100bd1621550b9954",
-      "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/code-plan/README.md",
-      "readme_sha256": "bdb44f22f2aa97eb7454823e0dbff3124ecf7b1c2799d1c58fd278f5fae95834",
-      "readme_mtime": "2026-05-12T19:33:14+09:00",
-      "notion_page_id": "34987c2b-b753-81ef-ba0f-e6f1ca33ade0",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "bdb44f22f2aa97eb7454823e0dbff3124ecf7b1c2799d1c58fd278f5fae95834"
-    },
-    "skills/draft-refine": {
-      "sha256": "efd3b03e47c5f65188e7e3ddc1e372a58d11e003041e4e9e0d707e6c4fe392e6",
-      "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "skills/draft-refine/README.md",
-      "readme_sha256": "dd8f06ae1fb58322d1e66a4248db96edfe77af8ab12ab94b1e47d27338d790ba",
-      "readme_mtime": "2026-05-20T00:40:22+09:00",
-      "notion_page_id": "34987c2b-b753-81bf-adc3-c4c26ba6cdb6",
-      "notion_last_edited_time": "2026-05-20T00:40:22+09:00",
-      "notion_synced_sha256": "dd8f06ae1fb58322d1e66a4248db96edfe77af8ab12ab94b1e47d27338d790ba"
-    },
-    "skills/code-refine": {
-      "sha256": "5f1665434b500341ced3983ec2ff41e37e0c68699580d69fc3d4aed4839f2187",
-      "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/code-refine/README.md",
-      "readme_sha256": "176bfea19b981bf6253b863efb9266a836eaef243b53b23baf2af57e16d3f9c9",
-      "readme_mtime": "2026-05-12T19:33:27+09:00",
-      "notion_page_id": "34987c2b-b753-81a5-bc54-e0f02e96b3e1",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "176bfea19b981bf6253b863efb9266a836eaef243b53b23baf2af57e16d3f9c9"
-    },
-    "skills/code-test": {
-      "sha256": "8b939a60328b715a14ca364417193ed7628429c7c931b8c386d58625e1049dfb",
-      "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/code-test/README.md",
-      "readme_sha256": "77ed816b9a962b33e29501d9ad6d46c200163137d56325c6bdfa1d63782f2ac6",
-      "readme_mtime": "2026-05-13T10:47:33+09:00",
-      "notion_page_id": "34987c2b-b753-81b2-bed4-e46395413623",
-      "notion_last_edited_time": "2026-05-13T10:47:33+09:00",
-      "notion_synced_sha256": "77ed816b9a962b33e29501d9ad6d46c200163137d56325c6bdfa1d63782f2ac6"
-    },
-    "skills/sync-skills": {
-      "sha256": "55f1d03a82eccd2cdab6a46fb6da20426a5b3f77afd402fbcfff7c4958e1aa63",
-      "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "skills/sync-skills/README.md",
-      "readme_sha256": "5c410d5eed891ee63f0caa48fa9056d3e7a2002ea577fe7f116a688233cfd7d2",
-      "readme_mtime": "2026-05-13T10:47:33+09:00",
-      "notion_page_id": "35e87c2b-b753-81a0-b0c9-ca3fa3159919",
-      "notion_last_edited_time": "2026-05-13T10:47:33+09:00",
-      "notion_synced_sha256": "5c410d5eed891ee63f0caa48fa9056d3e7a2002ea577fe7f116a688233cfd7d2"
-    },
-    "agents/browser-team": {
-      "sha256": "ef31828c01d15031fa36e0afaba5157a6d0f8d0597040a4bbea7b9c02f0a47f1",
-      "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "agents/_notion_mirror/browser-team.md",
-      "readme_sha256": "4994865c6e6ff52f3ec997cb0f4e686ce4fcca725c40ea68017d4cb22227b0b4",
-      "readme_mtime": "2026-05-12T19:37:51+09:00",
-      "notion_page_id": "34987c2b-b753-8161-97d2-fad5af52dab5",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "4994865c6e6ff52f3ec997cb0f4e686ce4fcca725c40ea68017d4cb22227b0b4"
-    },
-    "agents/codex-review-team": {
-      "sha256": "aecd7bc74310e1cd504a86de9a5ce40b84927409a1afdb5139cb4fa65f5b0ada",
-      "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "agents/_notion_mirror/codex-review-team.md",
-      "readme_sha256": "007f3bf36cadf4e9b2e98e12023130c3aafdc0ff8b248bc1305cb4a7226d9edf",
-      "readme_mtime": "2026-05-13T08:38:25.317932",
-      "notion_page_id": "34987c2b-b753-819a-90fb-db9793ea6fad",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "007f3bf36cadf4e9b2e98e12023130c3aafdc0ff8b248bc1305cb4a7226d9edf"
-    },
-    "agents/dev-team": {
-      "sha256": "7248959c587c17a3d2da8425fa32580ab96134258074a678334c1777f6e0263b",
-      "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "agents/_notion_mirror/dev-team.md",
-      "readme_sha256": "51c7f6a1b36ddec9a558ae76422a4258bf1c24714e0306e2f3196c9fa88f0af1",
-      "readme_mtime": "2026-05-12T19:37:03+09:00",
-      "notion_page_id": "34987c2b-b753-81c9-b030-fc96b9acd99b",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "51c7f6a1b36ddec9a558ae76422a4258bf1c24714e0306e2f3196c9fa88f0af1"
-    },
-    "agents/plan-team": {
-      "sha256": "71908cfe3633c886074d653bf47001e79c1ed70fae38933bd978216c4381f13d",
-      "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "agents/_notion_mirror/plan-team.md",
-      "readme_sha256": "0a04d6fd0a4efff0d747e88d5c090f0c636404fc91f259e97463031d2649b5b1",
-      "readme_mtime": "2026-05-12T19:25:06+09:00",
-      "notion_page_id": "34987c2b-b753-8184-af9f-d750cb3a0833",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "0a04d6fd0a4efff0d747e88d5c090f0c636404fc91f259e97463031d2649b5b1"
-    },
-    "agents/qa-team": {
-      "sha256": "b073612044f58e38f490d4c763f3eb8400902d947caa5e90b2a11571b4183936",
-      "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "agents/_notion_mirror/qa-team.md",
-      "readme_sha256": "f3c7b64ab682bf9fc724d3ab8ad4ea448d7af1c3e7240b52373ab6eeb73683b1",
-      "readme_mtime": "2026-05-13T08:38:26.713983",
-      "notion_page_id": "34987c2b-b753-812f-a0e7-c7671d79d52b",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "f3c7b64ab682bf9fc724d3ab8ad4ea448d7af1c3e7240b52373ab6eeb73683b1"
-    },
-    "agents/research-team": {
-      "sha256": "b48bae3526ce8cfb9cda223bc3e78ed78d56d0264f2f4cd85c607834f3ecc289",
-      "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "agents/_notion_mirror/research-team.md",
-      "readme_sha256": "c6b53d4b0c6708ef5f4375799f0b6616c2d2ff27efacefbcfcf86f118e6087ae",
-      "readme_mtime": "2026-05-13T08:38:28.114033",
-      "notion_page_id": "34987c2b-b753-818a-a2c0-cd5a9a0b3237",
-      "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
-      "notion_synced_sha256": "c6b53d4b0c6708ef5f4375799f0b6616c2d2ff27efacefbcfcf86f118e6087ae"
-    },
-    "skills/notes": {
-      "sha256": "f19ad96e3d8f7f9882a27db1f3d99ccd838e47715d7e183ceee2e2a54e10fc2a",
-      "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/notes/README.md",
-      "readme_sha256": "3ed96fff253ae7a05f92122cdab004ea4a4fcdd69aea57e3da475a1f835c3b35",
-      "readme_mtime": "2026-05-15T10:43:39",
-      "notion_page_id": "36187c2b-b753-81fa-9b4d-d8562fd80500",
-      "notion_last_edited_time": "2026-05-15T10:43:57+09:00",
-      "notion_synced_sha256": "3ed96fff253ae7a05f92122cdab004ea4a4fcdd69aea57e3da475a1f835c3b35"
-    },
-    "agents/editorial-team": {
-      "sha256": "90bc6de8093d70233828dbd75b09f9b602f2bbfd7dad16bda2495fdd8eb2ae0b",
-      "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "agents/_notion_mirror/editorial-team.md",
-      "readme_sha256": "ed815a2a63a015586982adc91690c0d6579945d1fb35cc853085e2cf794d0fe6",
-      "readme_mtime": "2026-05-21T13:55:33+09:00",
-      "notion_page_id": "36787c2b-b753-81e3-a544-fbeddc336ef0",
-      "notion_last_edited_time": "2026-05-21T13:55:33+09:00",
-      "notion_synced_sha256": "ed815a2a63a015586982adc91690c0d6579945d1fb35cc853085e2cf794d0fe6"
+    "skills/autopilot-design": {
+      "sha256": "ad3ed042cb6919e337380ba786b1457b893087d1ba1fa7a1511f370408ad6ce1",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
     },
     "skills/autopilot-draft": {
-      "sha256": "0941518b0168df3c5072d556679d73f2f77f66edee0d8a9982c981437bc54ecc",
-      "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "skills/autopilot-draft/README.md",
-      "readme_sha256": "2a5de0c1f2a628b53c281466232bf9b66aca351d3e9af5d0e8f8f5d34bec2c67",
-      "readme_mtime": "2026-05-19T18:30:00+09:00",
-      "notion_page_id": "33e87c2b-b753-8133-8b82-d75e34bb04c9",
-      "notion_last_edited_time": "2026-05-19T18:30:00+09:00",
-      "notion_synced_sha256": "2a5de0c1f2a628b53c281466232bf9b66aca351d3e9af5d0e8f8f5d34bec2c67"
+      "sha256": "5741c372b6f6edbc326ca76c15bffb9cd65bd83760d0cacf7adba1db58323963",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/autopilot-refine": {
+      "sha256": "769d03bd79eeb0bcb1e5a9423de7e485c30eeb598087de9bdcc665e92a49476e",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/autopilot-research": {
+      "sha256": "feacc75bb9ed2255e2981e2142e3629b69ea5086113c3b4cc472f96a6b47e349",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/code-execute": {
+      "sha256": "a187ace3ea5002258af9fc544cf4be0d40d9a0baa182fe6283536e8d2f225ebc",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/code-plan": {
+      "sha256": "bee214c0ab5da64c107e11d2904b72eec9607fd448137facc8fe6953a2bfaa2d",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/code-refine": {
+      "sha256": "aa3dd74369cc0a3c2352b48121f3ad3ced3b8db67616e4357585e1ddaa85fd95",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/code-report": {
+      "sha256": "5432548b5c1ad409d31abee010fea10b92750f39db92ed4165a7d47ca040fe4e",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/code-test": {
+      "sha256": "f045c17358269a325edd24da74536e9c4d5760c056d8d2e9d34110aa3fdec9c3",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/design-components": {
+      "sha256": "64c81486b79c4749fc9225df11a2672d68bf3e353f44d4961002f59429da52e5",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/design-handoff": {
+      "sha256": "4bac59243c1fbc0c1ec0bc54b93938b90ce4a56a82043e2119c94fddf7a45341",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/design-init": {
+      "sha256": "5afb689d477c92dde000753e129b6f583e2f5ba67cd69aae6f0cf9b8605d68f5",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/design-refs": {
+      "sha256": "10fb46e12c4be16069bde50fedfe7f2ea0be9f531943b39adbf18e7a7a7d2471",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/design-review": {
+      "sha256": "f31ac7c0ccca20a99754cb37a1a096d513315cbac66cbb549e0fa61bc21ec7f5",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/design-tokens": {
+      "sha256": "f5f037164ccfd04f64af764ecf1395eb2b112e1be9e8e37238ac390721c25301",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/draft-refine": {
+      "sha256": "b84049540b2bea109a9284e0d78e09b6586e119eb6e7d36b86b8465827f2cd17",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/draft-strategy": {
+      "sha256": "cd35734242fd55b37062aa042d696150a6b421ae3937a60f3bc4d0d281f4543e",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/notes": {
+      "sha256": "b9c4c908cd436d22c2ebb170d32414f27015b195faa55035d3703a501cc404c1",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "skills/sync-skills": {
+      "sha256": "8ed4f110294ca020612481277088668e3b12e1e4694e14c09894a36f1cb54c4a",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "agents/codex-review-team": {
+      "sha256": "7bcfa63d7db33b4c8fdaf88ab0552ebdf97fb7d8010e798c4f620404aaaabd63",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "agents/design-team": {
+      "sha256": "c814a363c9b4462c5dc53e38d24be49c3b32af9e796cb433cf9c0415e1251371",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "agents/dev-team": {
+      "sha256": "e2819a05f0d5bc2ee93367580c6b29c99d90448fee644d15d1f039dfdf5e380b",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "agents/editorial-team": {
+      "sha256": "582b081a81d8915a11f928a94497a014d92e7d7642cb35a3fdd2777c9cadd175",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "agents/material-team": {
+      "sha256": "610a0d30794b3f68a86ce769b68b03f246802e949d6a31886c193c5eb5961e58",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "agents/plan-team": {
+      "sha256": "7f97b8eb45118897467e65f879ca475e108e87d6bdbe6c6903bcceb4ac0b70dc",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "agents/qa-team": {
+      "sha256": "07bedcfc02b7a516c2882d27db530c35a91c33689374e741c079682d5e99c3da",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
+    },
+    "agents/research-team": {
+      "sha256": "908bc18999ade3723525611eddda1dcedfb4eb091edab65c63c52d659835a48a",
+      "synced_at": "2026-05-25T14:24:05.695731+09:00"
     }
   }
 }
