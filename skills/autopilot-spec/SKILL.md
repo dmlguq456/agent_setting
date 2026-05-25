@@ -359,10 +359,17 @@ inference 명령: <한 줄>
 (통과 → Phase 2 진행 / 실패 → 다른 ref / 그대로 진행 / 중단)
 ```
 
-자동 skip 자리:
-- 사용자 발화 _"ckpt 검증 skip"_ 명시 자리
-- mode `library` / `api` / `cli` 의 _코드만 가져오는 자리_ (ckpt 없는 자리)
-- 사용자 코드베이스에 _이미 동작 확인된_ similar_models 자리 — 내부 ref 가 _이미 실행 검증 마친_ 자리라 재검증 무의미
+**Phase 1.5 는 ML / DL 자리 default 필수** — ckpt 자리는 _사전 검증 무조건_. 학습·재학습 비용 큰 자리라 _ckpt 가 빈 자리에서 동작_ 확인 후 진입.
+
+자동 skip 자리 (좁게):
+
+| 자리 | 사유 |
+|---|---|
+| mode `library` / `api` / `cli` 의 _코드만 가져오는 자리_ | ckpt 없으면 검증 대상 X |
+| 사용자 코드베이스의 similar_models 자리 (이미 동작 확인된 내부 ref) | 재검증 무의미 |
+| Disk / network 한계 자리 — ckpt 가 매우 무거움 (예: 100 GB+, 또는 사용자 환경 disk 부족) | 사용자 발화로 명시 skip 가능 (`"ckpt 너무 무거우니 검증 skip"` / `--no-verify`). 단 _default 는 검증_. ckpt size 가 사용자 환경 한계 초과 인지되면 메인 Claude 가 _skip 권유_ 한 줄 — 사용자 컨펌 |
+
+_가벼운 ckpt_ (수십 MB ~ 수 GB 자리) 는 _사용자 발화 skip 요청 무시_ — 검증 강제. ML 자리에서 빈 자리 baseline 의 _ref ckpt 가 빈 자리에서 안 도는데 fine-tuning 시작_ 자리 사용자 보호 가치 크다.
 
 #### Phase 2: 우리 컨벤션 으로 옮기기 (개발팀 new-lib)
 
