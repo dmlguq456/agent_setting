@@ -39,7 +39,7 @@ flowchart LR
     NT -.->|append 사용자 메모| AU
 ```
 
-6 카테고리 — **A. 사전 조사 & 분석** (`analyze-project` / `autopilot-research`) / **B. 코드 개발 & 디버그** (`autopilot-code`) / **C. 문서 작성** (`autopilot-draft`) / **D. 사후 점검** (`audit`) / **E. 사후 정정** (`autopilot-refine`) / **F. 사용자 프로필** (`analyze-user` / `notes --scope user`, cross-project).
+6 카테고리 — **A. 사전 조사 & 분석** (`analyze-project` / `autopilot-research`) / **B. 코드 영역** (`autopilot-spec` 청사진 + `autopilot-code` 작업) / **C. 문서 작성** (`autopilot-draft`) / **D. 사후 점검** (`audit`) / **E. 사후 정정** (`autopilot-refine`) / **F. 사용자 프로필** (`analyze-user` / `notes --scope user`, cross-project).
 
 F 는 _현 프로젝트 산출물_ 이 아닌 _사용자 cross-project 자료_ 를 만든다 (`~/.claude/user_profile/`). A-E 의 모든 skill 과 sub-agent 가 _작업 시작 자리_ 에서 user_profile 을 Read 해 default 로 따름. 본 폴더는 점선 (implicit reference) 으로 표시.
 
