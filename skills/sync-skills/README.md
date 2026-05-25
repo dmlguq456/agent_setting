@@ -1,55 +1,46 @@
 # sync-skills
 
-> 본 README는 Notion 페이지 [🔄 sync-skills](https://www.notion.so/35e87c2bb75381a0b0c9ca3fa3159919)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 GitHub mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
-Skills + Agents 정의 변경을 감지해 다음을 동기화하는 skill:
-- `~/.claude/README.md` (GitHub mirror)
-- Notion 대문 페이지 (Agents/Skills) 상단 대시보드 (워크플로우 map + cheat-sheet + 통합 가이드라인)
-- 각 skill/agent의 개별 README ↔ Notion 자식 페이지 (양방향)
+Skills + Agents 정의 변경을 감지해 `~/.claude/README.md` (GitHub) 의 대시보드 (워크플로우 map + cheat-sheet + 통합 가이드라인) 를 동기화하는 skill. drift 체크 전용 모드도 지원.
 
-drift 체크 전용 모드도 지원.
+> **Notion 연동 제외 (2026-05-25)**: 본 skill 은 Notion 대문·자식 페이지를 동기화하지 않는다. Notion 작업은 사용자가 `mcp__claude_ai_Notion__*` 도구로 별도 수동 처리 — 지침은 [`~/.claude/notion_guide.md`](../../notion_guide.md).
 
 ## 호출 형식
 ```
-/sync-skills [--check] [--readme-only] [--notion-only] [--force] [--prefer-local] [--prefer-notion] [--auto-fix [--dry-run]]
+/sync-skills [--check] [--force] [--auto-fix [--dry-run]]
 ```
 
 ## Source of Truth
 - **Skills**: `~/.claude/skills/*/SKILL.md` (frontmatter)
 - **Agents**: `~/.claude/agents/*.md` (frontmatter)
-- **개별 README**: `~/.claude/skills/{name}/README.md`, `~/.claude/agents/{name}.README.md`
+- **CONVENTIONS.md**: `~/.claude/CONVENTIONS.md` (QA / model / cross-doc invariants — Step 5b canonical)
 
 ## 출력
-1. **GitHub**: `~/.claude/README.md` (자동 생성, 직접 편집 금지)
-2. **Notion 대문 상단 대시보드**: `Agents/Skills` 페이지 (id: `34987c2b-b753-80d6-8df4-d6ce4d469bff`) — 상단 대시보드 영역 자동 갱신, 하단 `<columns>` 자식 페이지 보존
-3. **개별 README ↔ Notion 자식 페이지**: 양방향 동기화 (last_edited_time 비교, newer가 source, 충돌 시 사용자 확인)
-4. **상태 파일**: `~/.claude/skills/.sync_state.json` (v3 schema)
+1. **GitHub**: `~/.claude/README.md` (자동 생성, 직접 편집 금지 — `§3.(1) 자연어 발화 예시 표 + 그 직전 prose` 만 사람 유지 영역)
+2. **상태 파일**: `~/.claude/skills/.sync_state.json` (v4 schema — Notion 필드 제거)
 
 ## 인자
-- `--check`: drift만 보고하고 종료. 쓰기 작업 X
-- `--readme-only`: README.md + 개별 README만 갱신, Notion은 건드리지 않음
-- `--notion-only`: Notion 대문 + 자식 페이지만 갱신, 로컬 README는 건드리지 않음
-- `--force`: SHA가 같아도 재생성
-- `--prefer-local`: 충돌 시 자동으로 local README가 source (Notion 덮어쓰기)
-- `--prefer-notion`: 충돌 시 자동으로 Notion이 source (local README 덮어쓰기)
-- `--auto-fix`: Step 5b.5에서 발견한 cross-doc invariant drift를 `CONVENTIONS.md` canonical wording으로 자동 교체 (default는 report-only). `--dry-run`과 조합 시 미리보기.
+- `--check`: drift 만 보고하고 종료. 쓰기 작업 X
+- `--force`: SHA 가 같아도 재생성
+- `--auto-fix`: Step 5b 에서 발견한 cross-doc invariant drift 를 `CONVENTIONS.md` canonical wording 으로 자동 교체 (default 는 report-only). `--dry-run` 과 조합 시 미리보기.
 
-기본 (인자 없음): drift 감지 → 변경 있으면 README + Notion 모두 갱신. 충돌은 사용자 확인.
+기본 (인자 없음): drift 감지 → 변경 있으면 README 갱신.
 
 ## 파이프라인 (개요)
-1. Discover + hash (SKILL.md / agent.md + 개별 README)
-2. Read sync state (`.sync_state.json` v3)
+1. Discover + hash (SKILL.md / agent.md)
+2. Read sync state (`.sync_state.json` v4)
 3. Drift report (변경/신규/삭제/동일 4 분류)
 4. Generate dashboard sections (워크플로우 map + Skills/Agents 표)
 5. Write README.md (canonical layout)
-5c. **개별 README ↔ Notion 자식 페이지 양방향 sync** (변경 감지 3-way, 충돌 처리, 신규 마이그레이션)
-6. Update Notion 대문 상단 (update_content)
-7. Update sync state (v3 fields 모두 갱신)
-8. Final report
+   - 5a. 편집팀 검수 (LLM 스러운 어조 회피)
+   - 5b. Cross-doc invariant scan (QA / model 정의 drift)
+6. Update sync state
+7. Final report
 
 ## Hook integration (옵션)
-`~/.claude/settings.json`에 다음 추가하면 세션 종료 시 drift 알림:
+`~/.claude/settings.json` 에 다음 추가하면 세션 종료 시 drift 알림:
 
 ```json
 {
@@ -65,7 +56,7 @@ drift 체크 전용 모드도 지원.
 }
 ```
 
-자동 sync는 권하지 않음 (편집 중간마다 노션이 푸시되면 노이즈) — 명시적 호출 + drift 알림만 권장.
+자동 sync 는 권하지 않음 — 명시적 호출 + drift 알림만 권장.
 
 ---
 *원본: `~/.claude/skills/sync-skills/SKILL.md`*
