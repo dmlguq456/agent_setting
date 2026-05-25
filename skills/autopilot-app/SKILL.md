@@ -1,10 +1,30 @@
 ---
 name: autopilot-app
-description: "Unified app development pipeline — orchestrates app-init → app-spec → autopilot-design → app-build → app-qa → app-ship → app-iterate. For building user-facing web/mobile apps where the user is a general consumer (not a developer). Distinct from autopilot-code (library/research code, user = developer)."
-argument-hint: "<app or feature description> [--from <phase>] [--qa quick|light|standard|thorough] [--user-refine]"
+description: "앱 개발의 _코드 외 결정·셋업 자리 전반_ — PRD (요구사항·시나리오·API Contract·데이터 모델) + 스택 결정 + scaffolding + skeleton 코드 + 보강 setup (ship 첫 setup·env·domain·migration deploy 안내). analyze-project 의 _신규 의도 → 청사진_ 대칭 자리. 코드 작업 자체는 autopilot-code 가 담당 (apps/<name>/ 컨텍스트 자동 감지)."
+argument-hint: "<app description or feature> [--mode init|setup] [--qa quick|light|standard|thorough] [--user-refine]"
 ---
 
-> 산출물 폴더: `.claude_reports/apps/<app-name>/` (CONVENTIONS.md §5 3-tier — T1: root + pipeline_state.yaml / T2: `00_init/`, `01_spec/`, … / T3: `_internal/` per phase).
+> 산출물 폴더: `.claude_reports/apps/<app-name>/` (CONVENTIONS.md §5 3-tier).
+
+## Purpose — _코드 외 결정·셋업_ entry
+
+본 skill 은 _코드 작업이 아닌_ 자리 담당:
+
+- **PRD (요구사항·시나리오·API Contract·데이터 모델·화면 흐름)** — 앱 만의 _앞쪽 정의_ 자리
+- **스택 결정 + 환경 점검 + scaffolding** — `create-next-app` 등
+- **skeleton 코드 생성** — 빈 layout · routing · DB schema 초안 (실제 기능 X)
+- **보강 setup** — ship 첫 setup (Vercel 연결·CI/CD·env 가이드·domain) + 운영 중 가끔 보강 (env 변경·migration deploy)
+
+코드 작업 자체 (기능 구현·리팩터링·디버그) 는 `autopilot-code` 가 담당 — `apps/<name>/` 컨텍스트 자동 감지로 _앱 mode_ 활성화. 본 skill 은 _코드 외 자리_ 만.
+
+## 앱 개발 흐름 안에서 본 skill 의 자리
+
+```
+1. autopilot-app          ← 본 skill. 초기 기반 (PRD + 스택 + skeleton)
+2. autopilot-design       ← 시각 (옵션, UI 있을 시)
+3. autopilot-code         ← 본격 개발 (앱 mode 자동, 반복)
+4. autopilot-app           ← (필요 시) 보강 setup — ship 첫 setup·env·domain
+```
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
@@ -12,227 +32,238 @@ argument-hint: "<app or feature description> [--from <phase>] [--qa quick|light|
 
 ### Trigger 신호 (자연어 발화 예시)
 
+**초기 기반 mode** (신규 앱):
 - "X 앱 만들어줘" / "Y 서비스 만들어줘" / "Z 웹사이트 짜줘"
-- "이 앱에 X 기능 추가" / "사용자가 X 할 수 있는 페이지"
-- 기존 `.claude_reports/apps/<name>/` + 재개 신호 ("이어서 진행", "다음 phase 부터")
+- "이 앱의 spec 정리해줘" / "PRD 부터"
 
-### Default 옵션 권장값 (컨펌 시 메인 Claude 가 제안)
+**보강 setup mode** (이미 있는 앱):
+- "이 앱 배포 셋업해줘" / "Vercel 에 올리자" / "CI/CD 잡아줘"
+- "env 변경·domain 연결·migration 운영 배포"
 
-- `--from`: auto-detect — `pipeline_state.yaml` 발견 시 마지막 성공 phase 다음부터, 부재 시 `init` 부터
+### Default 옵션 권장값
+
+- `--mode`: auto-detect — `apps/<name>/pipeline_state.yaml` 부재 → `init`, 존재 → `setup`
 - `--qa`: `standard` (global §6 high-stakes 신호 시 thorough 자동 상향)
 - `--user-refine`: **off** (사용자 명시 시만 on)
 
 ### Override 1순위 — autopilot 우회
 
-- 작은 작업 (한 파일 수정·rename·cleanup) — `Agent(개발팀)` 직접 호출
-- 디자인만 — `/autopilot-design` 직접 호출
-- 라이브러리·연구코드 — `/autopilot-code` 사용 (autopilot-app 은 사용자 앱 전용)
+- 코드 기능 추가·수정·디버그 — `/autopilot-code` 직접 (앱 mode 자동 활성화)
+- 디자인만 — `/autopilot-design` 직접
+- 작은 작업 (한 파일 수정·rename) — `Agent(개발팀)` 직접
 - `/autopilot-app <args>` slash 직접 입력 — 컨펌 skip
 
 ## Language Rule
-- Think and reason in English internally. Write all user-facing output in Korean.
+- Think in English internally. Write user-facing output in Korean.
 - Code identifiers, file paths, technical terms stay in English.
 
 ## Argument Parsing
 
-### --from (optional, auto-detect default)
-- `init` / `spec` / `design` / `build` / `qa` / `ship` / `iterate`
-- Auto-detect from `pipeline_state.yaml`: 마지막 `done` phase 다음부터
+### --mode (auto-detect default)
+- `init` — 신규 앱. PRD + 스택 + scaffolding + skeleton 코드. `apps/<name>/pipeline_state.yaml` 부재 자리
+- `setup` — 보강. ship 첫 setup / env 변경 / domain 변경 / migration deploy 안내. 이미 `apps/<name>/` 존재 자리
 
-### --qa
-- `quick` (skip Visual QA, 기본 functional 만)
-- `light` (single reviewer)
-- `standard` (default — code-review + test + critic)
-- `thorough` (다축 axis-decomposed review)
+### --qa (review level)
+- `quick` / `light` / `standard` (default) / `thorough` — [CONVENTIONS.md §1](../../CONVENTIONS.md) 의 단일 정의
 
 ### --user-refine
-- On 시: spec phase 끝에서 사용자 메모 받고 refine loop
+- On 시: PRD 작성 후 사용자 메모 받고 refine loop (`_internal/refine_v{N}.md` 백업)
 
-## Pipeline Overview
+## Procedure
+
+### Mode A — `init` (초기 기반)
+
+본 mode 가 _신규 앱_ 의 _앞쪽 정의 + skeleton_ 자리. 다음 5 자리 한 묶음.
+
+#### Step 1: 정보 수집 (read-only, 컨펌 X)
+
+**1-1. App name 추출** — 사용자 발화에서. 모호 시 한 줄 확인.
+
+**1-2. 환경 점검** — `node --version`, `pnpm --version`, `git --version`, (선택) Docker / sqlite3 / gh. 부재 도구 list, 자동 설치 X.
+
+**1-3. 스택 후보 정리** — 사용자 발화·기존 코드·cwd 단서 기반 권장 2-3 안:
+
+| 후보 | 적합 자리 |
+|---|---|
+| Next.js 15 + Tailwind + Prisma + Turso + pnpm | 웹 앱 default |
+| Expo (RN) + Expo Router + tRPC | 모바일 |
+| SvelteKit + Drizzle + SQLite | 가벼운 웹 |
+| Astro + Tailwind | 정적·콘텐츠 |
+
+발화 신호 없으면 Next.js default. 신호 있으면 신호 기준 1순위.
+
+**1-4. 기존 코드 검사** — `package.json` 발견 시 _기존 프로젝트_ (scaffolding skip + 스택 검증). 부재 시 _신규_.
+
+**1-5. autopilot-research 결과 자동 import** — `.claude_reports/research/` 발견 시 reference 앱 패턴·스택 비교 인용 후보로 정리.
+
+#### Step 2: 한 화면 컨펌
 
 ```
-Phase 0: app-init        (cold start — pipeline_state.yaml 부재 시만)
-Phase 1: app-spec        (PRD 작성·refine)
-Phase 2: autopilot-design (UI 있는 경우만 — 자동 위임)
-Phase 3: app-build       (백엔드 + 프론트엔드 구현)
-Phase 4: app-qa          (기능 + 시각 검증)
-Phase 5: app-ship        (배포·CI/CD)
-Phase 6: app-iterate     (피드백 → spec 갱신, loop back to Phase 1)
+=== Phase 0 init 결정 자리 ===
+App name:        <name>
+환경:            Node ✓ / pnpm ✓ / Docker ✗ (필요 시 안내)
+스택 후보:       1. Next.js+Prisma+Turso (default, 웹 앱)
+                 2. Expo+tRPC (모바일 신호 있으면)
+                 3. SvelteKit+Drizzle (가벼운 자리)
+                 → 사용자 발화 분석: "<선택 근거>" → <권장 1안>
+프로젝트 모드:    신규 / 기존 (package.json 발견)
+research 인용:    .claude_reports/research/X 발견 — N 자리 참조
+
+이대로 진행할까요? (진행 / 수정 — 스택·이름 변경 / 중단)
 ```
 
-각 phase 끝에 **[CONFIRM Gate]** — 사용자 응답 받은 후 다음 phase.
+- 진행 → Step 3
+- 수정 → 4 정보 갱신 후 다시
+- 중단 → 멈춤
 
-### CONFIRM Gate 응답 분기 (모든 Gate 공통)
+#### Step 3: 적용 — 한 묶음 실행
 
-Gate 자리에서 사용자 응답을 _4 갈래_ 로 받는다:
+**3-1. 환경 점검 결과** — `00_init/environment_check.md`
 
-| 응답 유형 | 발화 신호 | 메인 Claude 처리 |
+**3-2. 스택 결정 기록** — `00_init/stack_decision.md`
+
+**3-3. scaffolding** (신규만) — `create-next-app` 등 실행
+
+**3-4. CLAUDE.md (프로젝트 루트)** — 없으면 신규 작성
+
+**3-5. pipeline_state.yaml 생성**
+
+**3-6. PRD 작성** — `01_spec/PRD.md` 에 다음 구조:
+
+```markdown
+# <App Name> PRD
+
+## 피처 목록 (P0 / P1 / P2)
+## 사용자 시나리오 (3-5개)
+## 비기능 요구 (성능·보안·접근성·모바일)
+## 데이터 모델 초안 (entity·관계·migration plan)
+## API Contract (백·프론트 공유 — endpoint·body·error·auth)
+## 화면 흐름 (UI 있을 시)
+```
+
+- 발화 모호 시 한 줄 확인 — _Other_ 가능 명시 (예: "주 사용자는 본인 / 가족 / 일반 / 다른 자리 (직접)?")
+- 기획팀 위임 기준 — 피처 ≥5 + 시나리오 ≥5, 비기능 복잡, 데이터 모델 entity ≥4, 사용자 명시. 위임 전 사용자 한 줄 확인
+
+**3-7. skeleton 코드 생성** — PRD 의 데이터 모델 + API Contract 기반:
+- `prisma/schema.prisma` 또는 동등 — entity 정의만 (필드 비어 있음 가능)
+- 빈 page routes — `app/<route>/page.tsx` 가 _Hello world_ 정도
+- 기본 layout
+- 실제 기능 (CRUD logic) 은 **autopilot-code 자리**, 본 skill 안 X
+
+#### Step 4: [CONFIRM Gate 0 — refine 진입 가능]
+
+```
+초기 기반 완성:
+  PRD: ...
+  스택: ...
+  skeleton: ...
+
+(진행 — autopilot-design 또는 autopilot-code / 수정 — PRD refine v2 / 중단)
+```
+
+`--user-refine` on 또는 사용자 _수정_ 발화 시 PRD refine loop (`_internal/refine_v{N}.md`).
+
+### Mode B — `setup` (보강 setup)
+
+이미 `apps/<name>/` 있고 _기능 구현 끝_ 또는 _운영 중_. 다음 자리:
+
+#### Step 1: 현재 상태 점검
+- `pipeline_state.yaml` 의 stack·환경 검증
+- `git remote -v` (GitHub 연결 여부)
+- 기존 `vercel.json`·`.github/workflows/`·`.env.example` 발견 여부
+- `phases.qa` 상태 — `done` 자리만 ship 진행 (`failed` 면 거부)
+- git working tree 검증 — 더러우면 commit 권고 후 중단
+
+#### Step 2: 사용자 발화 분류 — 어떤 setup?
+
+| 발화 신호 | 처리 |
+|---|---|
+| "배포 셋업" / "Vercel 에 올려" | **ship 첫 setup** (provider·CI/CD·env·domain) |
+| "env 변경" / "API 키 갱신" | env 보강 |
+| "도메인 연결" | DNS 안내 |
+| "migration 운영 배포" | DB migration deploy 안내 (destructive 위험 강조) |
+
+#### Step 3: ship 첫 setup (가장 흔함)
+
+**3-1. 호스팅 선정** — 사용자 confirm:
+
+| 스택 | 권장 | 이유 |
 |---|---|---|
-| **진행** | "응" / "ok" / "go" / "다음" / 무응답 30분 (자율 진행) | 다음 phase 로 |
-| **수정 (refine)** | "이 부분만 다시" / "X 추가" / "메모 있어" + 구체 내용 | 현 phase 의 `--user-refine` 모드로 진입 (`_internal/refine_v{N}.md` 백업 후 v2 작성). _phase 자체는 다시 안 함_ |
-| **back-jump (재진입)** | "spec 부터 다시" / "방향 자체가 잘못" / "X phase 로 돌아가" | 아래 _§Mid-cycle Back-jump_ 의 원인 분류 표 → `--from <phase>` 자동 실행 (하위 phase reset + 산출물 백업) |
-| **중단** | "그만" / "cancel" / "취소" | pipeline 멈춤, `pipeline_state.yaml` 의 현 phase 상태 보존 |
+| Next.js | Vercel | 공식, edge runtime, zero-config |
+| Next.js + heavy backend | Fly.io | full Node.js, region |
+| 정적 | Cloudflare Pages | 빠름, free tier |
+| 컨테이너 | Railway | 간편, DB 함께 |
+| Mobile (Expo) | EAS Build | RN 공식 |
 
-발화가 모호한 경우 (예: "이건 좀 그래" / "음...") — 메인 Claude 가 _세 가지 옵션 (refine / back-jump / 진행)_ 한 화면으로 다시 물음. 임의 추측 X.
+**3-2. 환경변수 정리** — `.env.example` 작성 (실제 값 없음, 키만)
 
-> _수정_ 과 _back-jump_ 의 차이: 수정 = 현 phase 안에서 산출물 v2 작성. back-jump = _이전 phase_ 재실행 (의도·요구사항·계약 자체 변경).
+**3-3. CI/CD 셋업** — `.github/workflows/deploy.yml` 생성 (사용자 confirm 후)
 
-## Pipeline Execution
+**3-4. 도메인** (옵션) — DNS 안내. 자동 변경 X.
 
-You (메인 Claude) orchestrate by invoking each skill directly via the Skill tool.
+**3-5. 배포 명령 안내** — `vercel login` / `vercel link` / 환경변수 dashboard 입력 / `vercel deploy --prod`. **사용자 직접 실행** (Claude 자동 실행 X).
 
-### Phase 0: app-init
+**3-6. `05_ship/deploy_record.md` 작성** — provider·CI/CD·env 키 list·첫 배포 기록
 
-If `pipeline_state.yaml` 부재 (신규 앱) OR `--from init` 명시:
+#### Step 4: 기타 보강 setup
 
-Invoke Skill: `app-init` with the app description as args.
+- env 변경 — `.env.example` 업데이트 + dashboard 안내
+- domain — DNS 안내
+- migration deploy — `prisma migrate deploy` 명령 안내 + destructive 위험 표시 + 사용자 직접 실행
 
-결과: `.claude_reports/apps/<app-name>/00_init/` + `pipeline_state.yaml` 생성
+## Forbidden Zones (명시 요청 없이 X)
 
-**[CONFIRM Gate 0]** — "Phase 0 init 완료. 환경·스택 결정 검토 후 spec 으로 진행할까요? (진행 / 수정 / 중단 — 응답 분기 표 참조)"
+- 실제 배포 명령 (`vercel deploy`, `fly deploy` 등) — 안내만
+- 결제 정보·credit card 등록
+- DNS 직접 변경
+- 도메인 구매
+- 환경변수 _실제 값_ 입력 (사용자 dashboard 직접)
+- production DB migration 자동 실행 (destructive 위험)
 
-### Phase 1: app-spec
+## CONFIRM Gate 응답 분기 (모든 Gate 공통)
 
-Invoke Skill: `app-spec` with the task/feature description + `--app <name>` as args.
+| 응답 | 처리 |
+|---|---|
+| **진행** | 다음 단계 또는 종료 |
+| **수정** | 현 단계 refine v2 작성 (`_internal/refine_v{N}.md` 백업) |
+| **back-jump** | (init mode 에서) PRD 수정 후 skeleton 재생성. (setup mode 에서) 단계 재선택 |
+| **중단** | pipeline 멈춤, `pipeline_state.yaml` 상태 보존 |
 
-결과: `.claude_reports/apps/<app-name>/01_spec/PRD.md` + `scenarios.md`
-
-If `--user-refine`: 사용자 메모 받은 후 refine. `_internal/refine_v{N}.md` 에 버전.
-
-**[CONFIRM Gate 1]** — "PRD 작성 완료. design 으로 진행할까요? (진행 / 수정 — refine v2 / 중단)"
-
-### Phase 2: autopilot-design (UI 있는 경우만)
-
-PRD 의 시나리오에 UI 요소가 있는지 확인:
-- 사용자가 _화면_ 으로 상호작용 → autopilot-design 자동 위임
-- CLI tool / pure API → skip
-
-Invoke Skill: `autopilot-design` with the app path as args.
-
-결과: `.claude_reports/apps/<app-name>/02_design/` (디자인 토큰, 컴포넌트 mockup, 시각 결정)
-
-**[CONFIRM Gate 2]** — "디자인 완료. build 로 진행할까요? (진행 / 수정 — design 안 refine / back-jump — spec 으로 / 중단)"
-
-### Phase 3: app-build
-
-Invoke Skill: `app-build` with the app path as args.
-
-내부적으로 개발팀 backend / frontend 모드 병렬 호출.
-
-결과: `.claude_reports/apps/<app-name>/03_build/build_log.md` + `_internal/step_logs/`
-
-**[CONFIRM Gate 3]** — "구현 완료. QA 로 진행할까요? (진행 / 수정 — 구현 보강 / back-jump — spec·design 으로 / 중단)"
-
-### Phase 4: app-qa
-
-Invoke Skill: `app-qa` with the app path as args.
-
-내부: 품질관리팀 code-review + test + (UI 있으면) 디자인팀 critic.
-
-결과: `.claude_reports/apps/<app-name>/04_qa/`
-
-If 🔴 발견:
-- `pipeline_state.yaml` 의 `phases.qa: failed` 기록
-- 사용자에 보고 후 fix plan:
-  - Invoke Skill: `app-build` 다시 (fix scope 명시)
-  - 또는 `Agent(개발팀, mode=<backend|frontend>)` 직접 호출
-
-**[CONFIRM Gate 4]** — "QA 통과. 배포할까요? (진행 / 수정 — 추가 점검 자리 지정 / back-jump — 구현·계약·요구사항·디자인 자리 / 중단)"
-
-### Phase 5: app-ship
-
-Invoke Skill: `app-ship` with the app path as args.
-
-호스팅·CI/CD·환경변수 셋업 _안내_. 실제 배포 명령은 사용자 confirm 후.
-
-결과: `.claude_reports/apps/<app-name>/05_ship/deploy_record.md`
-
-**[CONFIRM Gate 5]** — "배포 완료. 사용 후 피드백 있을 때 iterate phase 호출하세요. (확인 / back-jump — 배포 전 단계 보강 / 중단)"
-
-### Phase 6: app-iterate
-
-사용자가 _실제 사용 후 피드백_ 있을 때:
-
-Invoke Skill: `app-iterate` with feedback + app path as args.
-
-결과: `06_iterate/feedback_log.md` + 다음 사이클 spec 으로 인계 안내.
-
-**[Loop back to Phase 1]** — 새 사이클 시작. `pipeline_state.yaml` 의 `current_cycle` 증가.
-
-## Mid-cycle Back-jump (요구사항·계약 변경 시)
-
-iterate 가 아니라 _같은 사이클 안_ 에서 _이전 phase 로 되돌아가야_ 하는 자리. 흔한 원인:
-
-| 원인 | 어디로 back-jump | 무효화되는 phase |
-|---|---|---|
-| qa 🔴 인데 _요구사항 자체가 잘못_ (PRD 의 시나리오가 현실과 어긋남) | `--from spec` | spec ↓ 하위 (design, build, qa) 모두 |
-| qa 🔴 인데 _API contract 변경 필요_ (백/프론트 양쪽 영향) | `--from spec` | spec ↓ build, qa |
-| qa 🔴 인데 _구현 버그_ (spec 은 OK) | `--from build` (fix scope 만) | build, qa |
-| review 🔴 인데 _디자인 토큰 변경 필요_ (색·간격 시스템 결정 잘못) | `--from design` (autopilot-design `--from tokens`) | design ↓ build, qa |
-| review 🔴 인데 _컴포넌트만 변경_ | `--from design` (autopilot-design `--from components`) | design 의 components ↓ build, qa |
-
-### `--from` 호출 시 자동 무효화 logic
-
-`/autopilot-app --from <phase>` 호출 시 메인 Claude 가 `pipeline_state.yaml` 의 _하위 phase_ 를 `pending` 으로 자동 reset:
-
-```yaml
-# 예: --from spec 호출 시
-phases:
-  init: done       # 그대로
-  spec: pending    # 재실행
-  design: pending  # 하위 — reset
-  build: pending   # 하위 — reset
-  qa: pending      # 하위 — reset
-  ship: pending
-  iterate: pending
-```
-
-reset 전 _확인 한 줄_: "build / qa 결과가 무효화됩니다. 진행할까요?"
-
-### 산출물 보존
-
-reset 된 phase 의 _이전 산출물 폴더 (01_spec/, 03_build/ 등)_ 는 _덮어쓰지 않고_ `_internal/cycle_{N}_attempt_{M}/` 로 백업 후 새로 작성. 사용자가 _이전 attempt 와 비교_ 가능.
+발화가 모호하면 옵션 다시 물음 (임의 추측 X).
 
 ## Pipeline state 관리
 
-`.claude_reports/apps/<app-name>/pipeline_state.yaml`:
+`apps/<app-name>/pipeline_state.yaml`:
 
 ```yaml
 app_name: <name>
-created: <YYYY-MM-DD>
-current_cycle: 1
+created: <date>
 stack:
-  framework: Next.js
-  db: Prisma + Turso
-  ...
+  framework: <chosen>
+  db: <chosen>
 phases:
-  init: done
-  spec: done
-  design: done
-  build: done
-  qa: done
-  ship: pending
-  iterate: pending
+  init: done       # autopilot-app init mode 완료
+  design: pending  # autopilot-design 진행 시 done
+  dev: in_progress # autopilot-code 가 앱 mode 로 누적 — 각 dev 호출이 누적
+  ship_setup: pending  # autopilot-app setup mode 의 ship 첫 setup
 last_updated: <timestamp>
 ```
 
-각 sub-skill 이 자기 phase 완료 시 `phases.<name>: done` 으로 갱신.
+autopilot-code 가 _앱 mode_ 로 호출될 때마다 `phases.dev: in_progress` 갱신 + 자체 dev log 누적 (`apps/<name>/dev_log/` 또는 동등 자리).
 
 ## Return Format
 
-마지막 phase 완료 시:
 ```
-.claude_reports/apps/<app-name>/ -- ✅ Phase {N} ({phase_name}) completed
+.claude_reports/apps/<app-name>/ -- ✅ {mode} completed (PRD / skeleton / ship setup)
 ```
 
-전체 사이클 완료 시:
-```
-.claude_reports/apps/<app-name>/ -- ✅ Cycle {N} completed (ship done)
-```
+다음 단계 안내:
+- init 완료 → "디자인 사이클 (autopilot-design) 또는 첫 기능 구현 (autopilot-code)"
+- setup 완료 → "이후 push 만으로 자동 deploy"
 
 ## Update memory
 
-- 자주 만난 phase 게이트 보강 사항
-- 사용자 선호 (스택, QA 강도, refine 자주 vs 적게)
-- 프로젝트별 특수 흐름 (예: "home-os 는 Phase 2 design skip — 기존 토큰 재사용")
-- design phase 위임 vs skip 판단 기준
+- 사용자가 자주 만나는 phase 게이트 보강
+- 스택 선호·QA 강도 default
+- ship setup 자주 만나는 함정
+- migration deploy 사용자 처리 패턴

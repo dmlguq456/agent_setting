@@ -1,8 +1,10 @@
 ---
 name: app-iterate
-description: Iteration phase — collects user feedback after real usage, classifies into next-spec items / immediate fixes / discarded, and hands off to app-spec for the next cycle.
-argument-hint: "<app name or path> + user feedback (chat 또는 file)"
+description: "[DEPRECATED — autopilot-code 의 _앱 mode_ 자체가 iteration. 별도 phase 의미 약함]. 과거: feedback 수집·분류 (next-spec / immediate fix / discard) → 다음 사이클 spec 인계. 현재: 사용자 발화가 직접 다음 의도. `/autopilot-code` 호출 시 큰 묶음 feedback 자리는 첫 단계 logic 으로 분류·우선순위 자동 처리."
+argument-hint: "<app name or path> + user feedback  # DEPRECATED — /autopilot-code 자연어 호출"
 ---
+
+> **DEPRECATED (2026-05-25)** — autopilot-code 의 앱 mode 자체가 iteration. 본 파일은 _레거시 참조_ 용.
 
 ## Language Rule
 - Korean output.

@@ -1,8 +1,10 @@
 ---
 name: app-qa
-description: App QA phase — functional review (품질관리팀 code-review + test) + visual review (디자인팀 critic, UI 있을 시). Verifies build output against PRD.
-argument-hint: "<app name or path>"
+description: "[DEPRECATED — autopilot-code 의 _앱 mode_ 안 검증 단계가 본 역할 대체. 신규 호출 X]. 과거: App QA phase — 품질관리팀 code-review + test mode + 디자인팀 critic (UI 있을 시). 현재: `/autopilot-code` 호출 자체가 build 후 자동 검증 — code-test (functional) + 품질관리팀 code-review + 디자인팀 critic (UI 변경 자리)."
+argument-hint: "<app name or path>  # DEPRECATED — /autopilot-code 사용"
 ---
+
+> **DEPRECATED (2026-05-25)** — autopilot-code 의 _앱 mode_ 안 검증 단계가 본 역할 대체. 본 파일은 _레거시 참조_ 용.
 
 ## Language Rule
 - Korean output.

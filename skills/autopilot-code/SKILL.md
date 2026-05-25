@@ -1,10 +1,23 @@
 ---
 name: autopilot-code
-description: "Unified code pipeline — dev/debug modes. Orchestrates code-plan → code-refine → code-execute → code-test → code-report with mode-specific behavior."
+description: "_코드 작업 일반_ entry — 라이브러리·연구 코드·앱 모두 커버. 신규·기존 코드 무관 (cwd 자동 감지). dev (기능 추가·신규) / debug (진단·수정) 두 mode. apps/<name>/ 컨텍스트 발견 시 _앱 mode_ 자동 활성화 — 디자인팀 critic + DB migration 안전 + push 자동 deploy 안내. 앱의 PRD·스택·skeleton·ship setup 같은 _코드 외 결정_ 은 autopilot-app 영역."
 argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [--qa quick|light|standard|thorough|adversarial] [--user-refine]"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). plan/ + checklist는 T1 (root). dev_logs/, test_logs/는 T2 (root). reviewer 로그(plan_reviews, dev_reviews, test_reviews)는 모두 `_internal/` 하위.
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). plan/ + checklist는 T1 (root). dev_logs/, test_logs/는 T2 (root). reviewer 로그(plan_reviews, dev_reviews, test_reviews)는 모두 `_internal/` 하위. **앱 mode 자리**: `apps/<name>/dev_log/<date>_<slug>/` 안에 누적 (앱 전체 흐름 한 폴더에).
+
+## Context Auto-Detection (앱 vs 일반 모드)
+
+본 skill 은 호출 자리에서 _cwd / 산출물 폴더_ 검사로 자동 분기:
+
+| 감지 조건 | mode | 추가 logic |
+|---|---|---|
+| `.claude_reports/apps/<name>/pipeline_state.yaml` 존재 OR `package.json` 있고 _UI framework_ (Next.js / Expo / SvelteKit / Astro / Vite + React) 발견 | **앱 mode** | (1) UI 변경 자리 디자인팀 critic 자동 호출 (2) DB migration destructive 자리 명령 안내·자동 실행 X (3) push 후 CI/CD 자동 deploy 인지 (4) 산출물 `apps/<name>/dev_log/` 안 누적 |
+| 그 외 (라이브러리·연구 코드·CLI) | **일반 mode** | 표준 dev/debug 흐름 + `plans/<date>_<name>/` 산출 |
+
+앱 mode 활성화 시 사용자에 명시 보고 — _"앱 mode 활성화 (apps/<name>/ 감지). 디자인 critic + DB 안전 + push 자동 deploy 적용."_
+
+> autopilot-app 과의 경계: PRD·스택·skeleton·ship setup·env·domain·migration 운영 배포 _안내_ 는 **autopilot-app 영역**. 본 skill 은 _코드 변경 자체_ 만 담당.
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 

@@ -1,8 +1,10 @@
 ---
 name: app-ship
-description: App deployment setup — hosting selection (Vercel/Fly/Railway), CI/CD (GitHub Actions), env vars, domain. Sets up infra and *guides* the user to run deploy commands (never auto-executes payment/destructive actions).
-argument-hint: "<app name or path>"
+description: "[DEPRECATED — autopilot-app 의 _setup mode_ 가 본 역할 흡수. 신규 호출 X]. 과거: App deployment setup — hosting (Vercel/Fly/Railway), CI/CD (GitHub Actions), env vars, domain. 현재: `/autopilot-app` 호출 시 setup mode 자동 (apps/<name>/ + pipeline_state.yaml 존재 + 사용자 발화 'ship 셋업'·'배포 셋업' 신호)."
+argument-hint: "<app name or path>  # DEPRECATED — /autopilot-app setup mode 사용"
 ---
+
+> **DEPRECATED (2026-05-25)** — autopilot-app 의 setup mode 가 본 역할 흡수. 본 파일은 _레거시 참조_ 용. 실제 ship setup logic 은 `~/.claude/skills/autopilot-app/SKILL.md` 의 `## Procedure → Mode B — setup` 안.
 
 ## Language Rule
 - Korean output.

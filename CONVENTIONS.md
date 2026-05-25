@@ -288,3 +288,83 @@ fi
 ```
 
 신규 산출물에는 항상 `_internal/` 디렉토리를 생성 (빈 폴더라도) → modern 표시.
+
+---
+
+## §6. Autopilot-* 흐름 매트릭스 (사용자 호출 단위)
+
+> 본 절은 autopilot-* skill 들의 _작업 본질·역할·경계_ 의 단일 source of truth. _대칭 강제 X — 작업 본질에 맞는 분리_ 원칙. 자세한 사용자 향 청사진: [`~/.claude/AUTOPILOT_FLOWS.md`](AUTOPILOT_FLOWS.md).
+
+### §6.1. 3 흐름 매트릭스
+
+|  | 사전 (외부 조사·내부 분석) | 신규 의도·셋업 | 자산 작업 (신규·기존) |
+|---|---|---|---|
+| **연구·라이브러리 코드** | `autopilot-research` (academic / technology) + `analyze-project --mode code` | — (텅 빈 폴더에서 autopilot-code 가 신규도 처리) | **`autopilot-code`** (일반 mode — `plans/<date>_<slug>/`) |
+| **문서 (paper / presentation / 보고서 / proposal / rebuttal)** | `autopilot-research` (academic / market) + `analyze-project --mode paper/doc` | `autopilot-draft` (신규 strategy + draft) | `autopilot-refine` (기존 정정·확장) |
+| **앱 (사용자 대상 소비자 앱)** | `autopilot-research` (technology / market) + `analyze-project --mode code` (이미 있는 앱) | **`autopilot-app`** (PRD + 스택 + scaffolding + skeleton — analyze-project 대칭) | **`autopilot-code`** (앱 mode 자동 — `apps/<name>/dev_log/`) + `autopilot-app --mode setup` (ship 첫·env·domain 보강) |
+| **공통 시각 자산** | — | `autopilot-design` (신규 디자인 사이클) | `autopilot-design` 재호출 (cycle 2+) |
+| **공통 사용자 프로필** | — | `analyze-user --mode init` | `analyze-user --mode update` |
+
+### §6.2. 사용자 호출 단위 흐름
+
+**연구·라이브러리 코드**:
+```
+/autopilot-research "X 분야"          ← (선택) 사전 조사
+/analyze-project --mode code           ← (선택) 기존 코드 청사진
+/autopilot-code "Y 만들기"              ← 작업 entry (반복)
+```
+
+**문서**:
+```
+/autopilot-research "X 분야"          ← (선택) 사전 조사
+/analyze-project --mode paper/doc      ← (선택) 외부 자료 영속화
+/autopilot-draft "X paper / 발표 자료"  ← 신규 entry
+/autopilot-refine "X v2"                ← 정정 entry (반복)
+```
+
+**앱**:
+```
+/autopilot-research "X 도메인 / reference 앱"  ← (선택, 복잡 도메인만)
+/autopilot-app "X 앱"                            ← PRD + 스택 + skeleton
+/autopilot-design --app X                        ← (옵션) 시각 사이클
+/autopilot-code "Y 기능"                          ← 본격 개발 (앱 mode 자동, 반복)
+/autopilot-app                                    ← (가끔) ship 첫 setup·env·domain·migration 보강
+```
+
+### §6.3. _작업 본질에 맞는 분리_ 원칙
+
+대칭 강제 X. 다음 자리는 _본질적_ 으로 다른 패턴:
+
+- **문서** 의 draft vs refine 분리 = _cross-artifact 정정_ (다른 prior 문서 가져와서 인용·정정) 가능 → 분리 자연
+- **코드** 의 신규 vs 기존 = 흐름 동일, _현재 코드 상태_ 만 다름 → 한 skill 통합 자연 (autopilot-code)
+- **앱** 의 _코드 외 결정_ (PRD·스택·skeleton·setup) ≠ _코드 작업_ → autopilot-app + autopilot-code 두 skill 분리. 단 _코드 작업_ 자체는 라이브러리·연구·앱 무관 한 skill (autopilot-code 의 앱 mode 자동 감지)
+
+### §6.4. autopilot-code 의 컨텍스트 자동 감지
+
+| 감지 조건 | mode | 추가 logic |
+|---|---|---|
+| `apps/<name>/pipeline_state.yaml` 존재 OR UI framework (Next.js/Expo/SvelteKit/Astro/Vite+React) 발견 | **앱 mode** | (1) UI 변경 자리 디자인팀 critic (2) DB migration destructive 자리 자동 실행 X (3) push 후 CI/CD 자동 deploy 인지 (4) 산출물 `apps/<name>/dev_log/` 안 |
+| 그 외 (라이브러리·연구·CLI) | **일반 mode** | 표준 dev/debug 흐름 + `plans/<date>_<slug>/` |
+
+### §6.5. 산출물 폴더 컨벤션 정리
+
+| skill | 산출물 폴더 |
+|---|---|
+| `autopilot-research` | `.claude_reports/research/<topic>/` |
+| `analyze-project` | `.claude_reports/analysis_project/{code,paper,doc}/` |
+| `autopilot-app` | `.claude_reports/apps/<name>/` |
+| `autopilot-design` (단독) | `.claude_reports/designs/<name>/` |
+| `autopilot-design` (app 위임) | `.claude_reports/apps/<name>/02_design/` |
+| `autopilot-code` (일반 mode) | `.claude_reports/plans/<date>_<slug>/` |
+| `autopilot-code` (앱 mode) | `.claude_reports/apps/<name>/dev_log/<date>_<slug>/` |
+| `autopilot-draft` | `.claude_reports/documents/<date>_<name>/` |
+| `autopilot-refine` | 대상 artifact 안 v{N+1} 갱신 |
+
+### §6.6. DEPRECATED sub-skill (2026-05-25)
+
+- `app-build` → autopilot-code 의 앱 mode 가 흡수
+- `app-qa` → autopilot-code 앱 mode 안 검증 단계가 흡수
+- `app-ship` → autopilot-app 의 `--mode setup` 이 흡수
+- `app-iterate` → autopilot-code 호출 자체가 iteration
+
+본 4 sub-skill 파일은 _레거시 참조_ 용으로 보존. 신규 호출 자리 X.

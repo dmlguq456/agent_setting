@@ -1,8 +1,10 @@
 ---
 name: app-build
-description: Implementation phase — reads PRD + design tokens, drafts an implementation plan, then dispatches to 개발팀 backend / frontend modes (parallel when independent).
-argument-hint: "<app name or path>"
+description: "[DEPRECATED — autopilot-code 의 _앱 mode_ 가 본 역할 대체. 신규 호출 X. 이미 진행 중인 작업 자리에서만 참고]. 과거: Implementation phase — PRD + design tokens 읽고 implementation plan 작성 후 개발팀 backend/frontend mode 병렬 호출. 현재: 동일 작업이 `/autopilot-code` 호출 시 _앱 컨텍스트 자동 감지_ (apps/<name>/ 발견) 로 처리됨."
+argument-hint: "<app name or path>  # DEPRECATED — /autopilot-code 사용"
 ---
+
+> **DEPRECATED (2026-05-25)** — 본 sub-skill 의 _구현 자리_ 는 **autopilot-code 의 앱 mode** 가 대체. 사용자는 `/autopilot-code "기능 추가"` 자연어 발화로 호출, autopilot-code 가 `apps/<name>/` 컨텍스트 발견 시 자동 활성화. 본 파일은 _레거시 참조_ 용 — 새 호출 X.
 
 ## Language Rule
 - Korean output, English code identifiers.
