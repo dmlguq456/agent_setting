@@ -98,7 +98,7 @@ CLAUDE.md should minimize code content and contain only:
 
 ## Phase 4: Verify Documentation Coverage
 - Check that every code file in models/, utils/, src/ etc. is covered by at least one document.
-- Documentation updates are handled as an explicit step in execute-plan, not by hooks.
+- Documentation updates are handled as an explicit step in code-execute, not by hooks.
 
 ## Phase 5: QA Verification (skipped with `--skip-qa`)
 
@@ -271,7 +271,7 @@ analysis_project/doc/{name}/
 
 `analyze-project`의 산출물은 _영속 자산_으로 후속 autopilot-* skill이 implicit으로 읽음:
 
-- `autopilot-code`는 `analysis_project/code/`를 자동 인지 (init-plan에서 모듈 매핑 참조)
+- `autopilot-code`는 `analysis_project/code/`를 자동 인지 (code-plan에서 모듈 매핑 참조)
 - `autopilot-draft`는 form-first 3-mode (paper / presentation / doc) 에 따라:
   - `paper` → `analysis_project/paper/` (academic body 본문)
   - `presentation` → `analysis_project/paper/` + `analysis_project/doc/{matching}/formats/` (slide template)

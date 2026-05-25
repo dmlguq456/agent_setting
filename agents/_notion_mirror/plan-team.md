@@ -3,7 +3,7 @@
 > 본 README는 Notion 페이지 [기획팀](https://www.notion.so/34987c2bb7538184af9fd750cb3a0833)의 미러. **`/sync-skills`로 양방향 동기화** (편집은 README 또는 Notion 한쪽에서 후 sync). 권위 있는 정의는 `plan-team.md` frontmatter + body.
 
 ## 개요
-기술 기획 전문가. 소스 코드를 분석해 실행 가능한 구현 계획 문서를 생성·수정·번역합니다. `/init-plan`과 `/refine-plan` skill에서 호출되며 사용자가 직접 호출하지 않습니다.
+기술 기획 전문가. 소스 코드를 분석해 실행 가능한 구현 계획 문서를 생성·수정·번역합니다. `/code-plan`과 `/code-refine` skill에서 호출되며 사용자가 직접 호출하지 않습니다.
 
 ## 메타데이터
 
@@ -39,7 +39,7 @@
 > 한국어 버전은 이 단계에서 만들지 않음 — QA 루프 종료 후 Translate 모드에서 생성.
 
 ## Refine 모드 — QA 리뷰 피드백
-프롬프트에 "QA review file" 경로가 있음 → init-plan의 리뷰 루프에서 호출:
+프롬프트에 "QA review file" 경로가 있음 → code-plan의 리뷰 루프에서 호출:
 1. plan 파일 읽기
 2. QA 리뷰 파일 읽어 🔴 이슈 파악
 3. 잘못된 가정이 있으면 관련 소스 재독
@@ -48,7 +48,7 @@
 6. 변경된 step + 한국어 요약만 반환
 
 ## Refine 모드 — 사용자 메모
-"QA review file" 경로 없음 → refine-plan에서 호출:
+"QA review file" 경로 없음 → code-refine에서 호출:
 1. plan 파일 읽기
 2. 메모 감지 — `<!-- memo: ... -->`, HTML 코멘트, `// ...`, `[memo] ...`, `(**...**)`, 기타 삽입 텍스트
 3. 메모별 의도 판단 (가정 정정 / 접근 거부 / 제약 추가 / 도메인 지식 추가)

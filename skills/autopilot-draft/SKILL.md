@@ -98,16 +98,16 @@ mode별 _필수·권장_ 입력:
 - Supported: `quick` / `light` / `standard` / `thorough` (default) / `adversarial`
 - Omitted → `thorough`
 - **Why fact-checker is separate**: quality reviewer 는 narrative/coverage/logic 에 집중, fact-checker 는 citation/venue/year/metric/lineage 만 narrow 하게 ground-truth (cards/PDFs) 와 verbatim 대조 — matching task 라 sonnet 충분
-- **Propagation**: `--qa <level>` 를 init-doc-strategy / refine-doc 에 flag 로 전달
+- **Propagation**: `--qa <level>` 를 draft-strategy / draft-refine 에 flag 로 전달
 - **`quick` interactions**: `--from strategy-refine` 또는 `--from draft-refine` 으로 재개 시 frontmatter `qa_level == quick` 이면 abort ("qa_level=quick 에서는 refine 단계가 skip 됩니다. --qa <level> 을 다른 값으로 명시해 재개하세요.")
 
 **`--user-refine`** (boolean flag — opt-in only)
 
 **Default: false. The orchestrator (메인 Claude) MUST NOT add this flag on its own — it is set only when the user typed `--user-refine` (or an explicit Korean equivalent like "사용자 검토 끼워" / "memo 추가하게 멈춰줘") in the original prompt.** Inferring this flag from generic "신중히 진행해 줘" / "한 번 봐줘" / camera-ready / submission 같은 high-stakes 신호로 자동 추가하는 행동 금지 — 그 경우 사용자가 의도하지 않은 pause 가 걸려 작업이 멈춘다.
 
-When present, pause at refine points so the user can add their own `<!-- memo: ... -->` comments on top of 연구팀's memos before refine-doc runs.
+When present, pause at refine points so the user can add their own `<!-- memo: ... -->` comments on top of 연구팀's memos before draft-refine runs.
 
-Pause behavior: after 연구팀 writes memos at Step 3 (strategy review) or Step 5 (draft review), do NOT invoke refine-doc. Instead:
+Pause behavior: after 연구팀 writes memos at Step 3 (strategy review) or Step 5 (draft review), do NOT invoke draft-refine. Instead:
 1. Update `pipeline_state.yaml` at `{strategy_folder}/` with `user_refine: true`, `paused_at_stage: <strategy-refine|draft-refine>`.
 2. Print to user (Korean) the memo file path and the resume command:
    ```
@@ -121,10 +121,10 @@ If 연구팀 added no memos, the pause is skipped (nothing to refine).
 
 **`--from <stage>`** — resume the pipeline at a specific stage. Stages:
 - `analyze` — Step 1 (Material Analysis)
-- `strategy` — Step 2 (init-doc-strategy)
-- `strategy-refine` — Step 3 wrapper: 연구팀 review + (user memos if `--user-refine`) + refine-doc on the strategy
+- `strategy` — Step 2 (draft-strategy)
+- `strategy-refine` — Step 3 wrapper: 연구팀 review + (user memos if `--user-refine`) + draft-refine on the strategy
 - `draft` — Step 4 (Draft Generation)
-- `draft-refine` — Step 5 wrapper: 연구팀 review + (user memos if `--user-refine`) + refine-doc on the draft
+- `draft-refine` — Step 5 wrapper: 연구팀 review + (user memos if `--user-refine`) + draft-refine on the draft
 - `finalize` — Step 6 (Pipeline Summary)
 
 When resuming with `--from`, the positional argument should be either the artifact directory path or a fuzzy-matchable short name. The orchestrator resolves it via the same fuzzy lookup used by Plan Resolution in autopilot-code: `ls -d .claude_reports/documents/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `mode`, `qa_level`, `discovered_inputs` (list), `user_refine`. CLI flags override state file; missing flags inherit from state.
@@ -319,10 +319,10 @@ Read and catalog all materials from refs folder.
 3. Read PDF files using the Read tool. For large PDFs (>10 pages), read in page ranges.
 4. Present the analysis summary briefly and auto-proceed to Step 2 — no confirmation required.
 
-### Step 2: init-doc-strategy
-Invoke Skill: `init-doc-strategy` with args: `<resolved_mode> --inputs <comma-separated-discovered-paths> --output <artifact-dir> <task description>`.
+### Step 2: draft-strategy
+Invoke Skill: `draft-strategy` with args: `<resolved_mode> --inputs <comma-separated-discovered-paths> --output <artifact-dir> <task description>`.
 
-**Mode 변환** (autopilot-draft 의 form-first 3-mode + doc intent → init-doc-strategy 의 직접 mode 라벨 6종 — 단일 source 는 init-doc-strategy/SKILL.md `## Mode mapping`):
+**Mode 변환** (autopilot-draft 의 form-first 3-mode + doc intent → draft-strategy 의 직접 mode 라벨 6종 — 단일 source 는 draft-strategy/SKILL.md `## Mode mapping`):
 
 | autopilot-draft mode | task description intent 키워드 | `<resolved_mode>` |
 |---|---|---|
@@ -336,7 +336,7 @@ Invoke Skill: `init-doc-strategy` with args: `<resolved_mode> --inputs <comma-se
 
 `<discovered-paths>`는 Pre-flight Step 2 (Input Discovery)가 발견한 `analysis_project/{paper,doc}/...`, `research/{topic}/` 경로 list (콤마 join). 매치 0이면 Pre-flight에서 이미 abort/warn 처리됨. Wait for completion.
 
-**Post-invocation requirement**: After `init-doc-strategy` returns, read the generated `{strategy_folder}/strategy/strategy.md`. **Verify it contains a `## Style Guide` section.** If absent, append the following template at the strategy file's end, then write the same content (translated) to `strategy_ko.md`:
+**Post-invocation requirement**: After `draft-strategy` returns, read the generated `{strategy_folder}/strategy/strategy.md`. **Verify it contains a `## Style Guide` section.** If absent, append the following template at the strategy file's end, then write the same content (translated) to `strategy_ko.md`:
 
     ## Style Guide
 
@@ -382,7 +382,7 @@ Invoke Skill: `init-doc-strategy` with args: `<resolved_mode> --inputs <comma-se
 2. Invoke reviewers based on `--qa` level. **Quality reviewer(s) and fact-checker run in parallel** at standard+:
 
    **`quick`** — Single 연구팀 quality reviewer (sonnet, spot-check only):
-   - One-pass review. Memos may be added but refine-doc is NOT invoked at Step 3 (see step 3 below).
+   - One-pass review. Memos may be added but draft-refine is NOT invoked at Step 3 (see step 3 below).
    - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review.md`
 
    **`light`** — Single 연구팀 quality reviewer (sonnet):
@@ -469,10 +469,10 @@ Invoke Skill: `init-doc-strategy` with args: `<resolved_mode> --inputs <comma-se
    ```
 
 3. If memos were added:
-   - **`qa_level == quick` short-circuit**: do NOT invoke refine-doc. Memos remain in the strategy as audit trail (no edits applied). Log to pipeline_summary Decision Points: `Step 3 | strategy refine skipped (qa=quick) | auto | proceed to Step 4`. Skip to Step 4.
-   - **`--user-refine` pause**: if the flag is set, update `pipeline_state.yaml` (`user_refine: true`, `paused_at_stage: strategy-refine`), print the resume command (`/autopilot-draft --mode {mode} --from strategy-refine {strategy_folder}`), and exit. Do NOT invoke refine-doc.
-   - Otherwise: invoke Skill `refine-doc` with the Korean strategy path as args.
-4. If no memos: Skip to Step 4. (When resumed via `--from strategy-refine`, the orchestrator skips the 연구팀 review and runs refine-doc directly using the pre-existing memos.)
+   - **`qa_level == quick` short-circuit**: do NOT invoke draft-refine. Memos remain in the strategy as audit trail (no edits applied). Log to pipeline_summary Decision Points: `Step 3 | strategy refine skipped (qa=quick) | auto | proceed to Step 4`. Skip to Step 4.
+   - **`--user-refine` pause**: if the flag is set, update `pipeline_state.yaml` (`user_refine: true`, `paused_at_stage: strategy-refine`), print the resume command (`/autopilot-draft --mode {mode} --from strategy-refine {strategy_folder}`), and exit. Do NOT invoke draft-refine.
+   - Otherwise: invoke Skill `draft-refine` with the Korean strategy path as args.
+4. If no memos: Skip to Step 4. (When resumed via `--from strategy-refine`, the orchestrator skips the 연구팀 review and runs draft-refine directly using the pre-existing memos.)
 
 ### Step 4: Draft Generation
 **Applicable modes**: rebuttal, paper, report, proposal, review, presentation. (All 6 modes generate drafts.)
@@ -495,11 +495,11 @@ Draft 생성 전, figure_index.md 또는 figure asset이 있을 수 있는 _세 
    - `.claude_reports/analysis_project/paper/cards/*.md`에서 `**PDF 위치**` 또는 `**arXiv ID**` field grep
    - `.claude_reports/research/*/cards/*.md`에서 동일 field grep
    - 발견된 PDF paths를 input set으로 수집
-2. **PDF input set이 비어 있지 않으면 → 탐색팀 호출**:
+2. **PDF input set이 비어 있지 않으면 → 자료팀 호출**:
    ```
-   Agent(subagent_type="탐색팀",
+   Agent(subagent_type="자료팀",
          description="PDF figure/table extraction for doc",
-         prompt="extract_pdf_figures mode. Input PDFs: {pdf_paths}.
+         prompt="pdf-extract mode. Input PDFs: {pdf_paths}.
                  Output: .claude_reports/analysis_project/paper/figures/ (또는 적합한 공용 위치).
                  figure_index.md 생성 — paper_id × figure path 매핑.
                  본 doc draft에서 자동 embed 용도.
@@ -698,7 +698,7 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
 2. Invoke reviewers based on `--qa` level (same scaling as Step 3). **Quality reviewer(s) and fact-checker run in parallel** at standard+:
 
    **`quick`** — Single 연구팀 quality reviewer (sonnet, spot-check only):
-   - One-pass review. Memos may be added but refine-doc is NOT invoked at Step 5 (see step 3 below).
+   - One-pass review. Memos may be added but draft-refine is NOT invoked at Step 5 (see step 3 below).
    - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review.md`
 
    **`light`** — Single 연구팀 quality reviewer (sonnet):
@@ -785,11 +785,11 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
    ```
 
 3. If memos were added:
-   - **`qa_level == quick` short-circuit**: do NOT invoke refine-doc. Memos remain in the draft as audit trail (no edits applied). Log to pipeline_summary Decision Points: `Step 5 | draft refine skipped (qa=quick) | auto | proceed to Step 6`. Skip to Step 6.
-   - **`--user-refine` pause**: if the flag is set, update `pipeline_state.yaml` (`user_refine: true`, `paused_at_stage: draft-refine`), print the resume command (`/autopilot-draft --mode {mode} --from draft-refine {strategy_folder}`), and exit. Do NOT invoke refine-doc.
-   - Otherwise: invoke Skill `refine-doc` with the Korean draft path as args.
-   - Note: refine-doc handles draft paths (draft/draft.md ↔ draft/draft_ko.md) via auto-detection.
-4. If no memos: Skip to Step 5.5. (When resumed via `--from draft-refine`, run refine-doc directly on the pre-existing memos.)
+   - **`qa_level == quick` short-circuit**: do NOT invoke draft-refine. Memos remain in the draft as audit trail (no edits applied). Log to pipeline_summary Decision Points: `Step 5 | draft refine skipped (qa=quick) | auto | proceed to Step 6`. Skip to Step 6.
+   - **`--user-refine` pause**: if the flag is set, update `pipeline_state.yaml` (`user_refine: true`, `paused_at_stage: draft-refine`), print the resume command (`/autopilot-draft --mode {mode} --from draft-refine {strategy_folder}`), and exit. Do NOT invoke draft-refine.
+   - Otherwise: invoke Skill `draft-refine` with the Korean draft path as args.
+   - Note: draft-refine handles draft paths (draft/draft.md ↔ draft/draft_ko.md) via auto-detection.
+4. If no memos: Skip to Step 5.5. (When resumed via `--from draft-refine`, run draft-refine directly on the pre-existing memos.)
 
 ### Step 5.5: Editorial polish (편집팀 모드 B — conditional)
 
@@ -827,12 +827,12 @@ Agent({
 |---|---|---|---|
 | 0 | Scope Clarification | clarified / skipped | {questions asked or "--no-clarify"} |
 | 1 | Material Analysis | completed | {N} files |
-| 2 | init-doc-strategy | created | {strategy path} |
+| 2 | draft-strategy | created | {strategy path} |
 | 3 | Strategy Review (연구팀) | memos added / no issues | {memo count} |
-| 3b | refine-doc | refined / skipped | |
+| 3b | draft-refine | refined / skipped | |
 | 4 | Draft Generation | created | {draft path} |
 | 5 | Draft Review (연구팀) | memos added / no issues | {memo count} |
-| 5b | refine-doc (draft) | refined / skipped | |
+| 5b | draft-refine (draft) | refined / skipped | |
 | 5.5 | 편집팀 polish (모드 B) | polished / skipped (qa<standard) | |
 
 ## Artifacts
@@ -860,7 +860,7 @@ Then report to the user:
 - The draft is a working first draft for user editing, NOT a final document. Mark uncertain content with `[TODO: ...]`.
 - For `doc` mode + **rebuttal-response 의도**: ensure EVERY reviewer point is addressed — missing a point is a critical error. rebuttal sub-type (meta-only / reviewer-dialogue / response-with-revision) must be derivable from format spec content OR task description by Step 1. Strategy and tone differ across sub-types — if neither source provides it, Step 0 prompt asks the user to declare.
 - For `doc` mode + **peer review 작성 의도**: scores must be justified with concrete evidence; never fabricate scores without backing in the paper text. An auto-discovered format spec in `analysis_project/doc/{matching}/formats/` is mandatory — pre-flight aborts otherwise.
-- For all other modes: format spec is optional but improves quality significantly when supplied. The agent should note the format spec source in the strategy frontmatter so future refine-doc rounds know what to honor.
+- For all other modes: format spec is optional but improves quality significantly when supplied. The agent should note the format spec source in the strategy frontmatter so future draft-refine rounds know what to honor.
 - For presentation mode: never insert real figures/images automatically — describe visuals in the `**시각자료**:` block with concrete-enough wording (e.g., "5-stage timeline 가로 막대, 색상 5개"). PPTX export is NOT performed by this pipeline; the user reads the cheatsheet markdown and creates slides manually in PowerPoint with their lab template.
 - Present material inventory to the user briefly and auto-proceed.
 

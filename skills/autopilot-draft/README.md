@@ -10,13 +10,13 @@ flowchart LR
     A["사용자 쿼리"] -->|<task> + --mode + --qa| B["autopilot-draft (오케스트레이터)"]
     B --> SC["Step 0: Scope Clarification"]
     SC --> C["Step 1: Material Analysis (implicit input discovery)"]
-    C -->|Step 2| D["init-doc-strategy (연구팀 위임)"]
+    C -->|Step 2| D["draft-strategy (연구팀 위임)"]
     D -->|Step 3| E["Strategy Review (연구팀 + fact-checker 병렬)"]
-    E -->|메모 있으면| F["refine-doc (연구팀 위임)"]
+    E -->|메모 있으면| F["draft-refine (연구팀 위임)"]
     F --> G["Step 4: Draft Generation"]
     E -->|메모 없으면| G
     G --> I["Step 5: Draft Review (연구팀 + fact-checker 병렬)"]
-    I -->|메모 있으면| RD["refine-doc (draft)"]
+    I -->|메모 있으면| RD["draft-refine (draft)"]
     I -->|메모 없으면| J["Step 6: Pipeline Summary"]
     RD --> J
 ```
@@ -89,8 +89,8 @@ Quality reviewer + fact-checker가 **parallel**로 동작 (standard+).
 query가 모호하거나 mode multi-match일 때 autopilot이 2-4개 sharp question을 던지고 사용자 답변을 받아 진행. 충분히 구체적인 query는 자동 skip. `--no-clarify`로 강제 skip 가능.
 
 ## 서브스킬 (2개)
-- [init-doc-strategy](init-doc-strategy/README.md)
-- [refine-doc](refine-doc/README.md)
+- [draft-strategy](draft-strategy/README.md)
+- [draft-refine](draft-refine/README.md)
 
 > 서브스킬은 autopilot-draft 내부에서 자동 호출. 직접 사용은 pause 재개 시점에만.
 

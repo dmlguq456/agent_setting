@@ -307,7 +307,7 @@ timestamp: "2026-05-22T15:30:00Z"
 
 | Agent | 작업 시작 시 Read | 이유 |
 |---|---|---|
-| 분석팀 | `01_paper_figure_style.md`, `03_presentation_strategy.md`, `04_analysis_methodology.md` | figure / 슬라이드 자산·데이터 분석 모두 본 사용자 시각·표 표준 따름 |
+| 자료팀 | `01_paper_figure_style.md`, `03_presentation_strategy.md`, `04_analysis_methodology.md` | figure / 슬라이드 자산·데이터 분석 모두 본 사용자 시각·표 표준 따름 |
 | 연구팀 | `02_paper_writing_style.md`, `04_analysis_methodology.md`, `05_domain_expertise.md` | paper 본문 톤 + 검증 방법론 + 도메인 용어 |
 | 편집팀 | `01_*` (figure caption), `02_*` (본문 톤), `03_*` (슬라이드 다듬기), `05_*` (도메인 표현), `06_collaboration_style.md` | 사용자 향 문서 전반 — figure caption / paper / 발표 / 도메인 약자 모두 |
 | 기획팀 | `04_analysis_methodology.md`, `06_collaboration_style.md` | plan 자리 검증 패턴 + 작업 흐름 |

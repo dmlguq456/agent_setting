@@ -15,7 +15,7 @@
 | 모델 | opus |
 | 도구 | Read · Write · Edit · Grep · Glob |
 | memory scope | project |
-| 자동 호출자 | init-doc-strategy · init-plan · autopilot-draft Step 4-KO · autopilot-research Step 4a-KO |
+| 자동 호출자 | draft-strategy · code-plan · autopilot-draft Step 4-KO · autopilot-research Step 4a-KO |
 | 사용자 직접 호출 | "한국어 다듬어줘" / "판교체 정리" / "국문 가독성 점검" / "한국어로 재서술" 같은 표현 |
 
 ## 핵심 지침 (한 줄)

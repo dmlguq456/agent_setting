@@ -44,7 +44,7 @@
    - 네이밍/구조가 논문 용어와 일치?
    - 변경이 논문 가정을 깨뜨릴 수 있는가?
 4. 한국어 plan에 `<!-- memo: ... -->` 삽입
-5. log 경로 지정 시 영구 기록 작성 (메모는 refine-plan 처리 후 휘발)
+5. log 경로 지정 시 영구 기록 작성 (메모는 code-refine 처리 후 휘발)
 6. 요약 반환
 
 ## Role 2: Research Survey — 모드 dispatch

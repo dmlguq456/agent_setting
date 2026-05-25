@@ -14,10 +14,10 @@
 | color | green |
 | memory | project |
 | tools | Glob, Grep, Read, Edit, Write, NotebookEdit, WebFetch, WebSearch |
-| 호출 주체 | execute-plan(Auto), run-test hotfix(Auto), 사용자 직접(Interactive) |
+| 호출 주체 | code-execute(Auto), code-test hotfix(Auto), 사용자 직접(Interactive) |
 
 ## 모드 선택
-- **Auto**: 프롬프트에 "auto mode" 또는 구체적 구현 지시 → execute-plan에서 호출
+- **Auto**: 프롬프트에 "auto mode" 또는 구체적 구현 지시 → code-execute에서 호출
 - **Interactive**: 사용자 직접 호출 또는 탐색적 요청
 
 ## 핵심 규칙 (공통)
@@ -29,7 +29,7 @@
    3. 묵시적 계약 (None, `.shape`, dict key) 확인
 4. **금지 구역**: DB / 배포 / 인증 로직은 명시 요청 없이 건드리지 않음
 
-## Auto 모드 절차 (execute-plan)
+## Auto 모드 절차 (code-execute)
 각 subagent 호출은 정확히 **하나의 plan step** (1-2 파일)만 처리. 여러 step 합치지 않음.
 
 1. 지시 읽기 → 파일 및 변경 식별

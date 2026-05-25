@@ -54,70 +54,70 @@
       "notion_synced_sha256": "859b8d79f516e2920b2aba478e85bf15cace34f130463a26c9619673e6183f5f",
       "note": "Notion entry is a wiki database, no single page body — stub README only"
     },
-    "skills/execute-plan": {
+    "skills/code-execute": {
       "sha256": "29cc8e46baede85a3ec610a9ef6494b25ed45251efb4c8ec0037d7ca8e191c97",
       "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/execute-plan/README.md",
+      "readme_path": "skills/code-execute/README.md",
       "readme_sha256": "ac8768a5864142d8ccfe0682d802173b49558eb1835d517d5020e2ad0635ffa8",
       "readme_mtime": "2026-05-13T10:47:33+09:00",
       "notion_page_id": "34987c2b-b753-813f-be07-dec64db8796e",
       "notion_last_edited_time": "2026-05-13T10:47:33+09:00",
       "notion_synced_sha256": "ac8768a5864142d8ccfe0682d802173b49558eb1835d517d5020e2ad0635ffa8"
     },
-    "skills/final-report": {
+    "skills/code-report": {
       "sha256": "ec07ebdd7532c5ff6c55bac97b68400c96b52476868974f196792217b9f14ae9",
       "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/final-report/README.md",
+      "readme_path": "skills/code-report/README.md",
       "readme_sha256": "4273e964a27bdba70ce8ba2877456cfe09b26cae15db7e4193b9f6e81f316de0",
       "readme_mtime": "2026-05-12T19:34:20+09:00",
       "notion_page_id": "34987c2b-b753-81a9-9e7b-d9fb53ac04fb",
       "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
       "notion_synced_sha256": "4273e964a27bdba70ce8ba2877456cfe09b26cae15db7e4193b9f6e81f316de0"
     },
-    "skills/init-doc-strategy": {
+    "skills/draft-strategy": {
       "sha256": "8aaf090d69d8b75a9d0d052393d4d0acb58d2fef8e1675a10f12ddd536d20677",
       "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "skills/init-doc-strategy/README.md",
+      "readme_path": "skills/draft-strategy/README.md",
       "readme_sha256": "9e0cdfdd88f70e33524ff020a6aa187f5e32c71f66573a96ba303f693e724d41",
       "readme_mtime": "2026-05-20T00:40:22+09:00",
       "notion_page_id": "34987c2b-b753-8158-9391-df16f1b6eb74",
       "notion_last_edited_time": "2026-05-20T00:40:22+09:00",
       "notion_synced_sha256": "9e0cdfdd88f70e33524ff020a6aa187f5e32c71f66573a96ba303f693e724d41"
     },
-    "skills/init-plan": {
+    "skills/code-plan": {
       "sha256": "7969946e7edafb08cd1e0224e1c21fe4a8a6db4f5a7c5d0100bd1621550b9954",
       "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/init-plan/README.md",
+      "readme_path": "skills/code-plan/README.md",
       "readme_sha256": "bdb44f22f2aa97eb7454823e0dbff3124ecf7b1c2799d1c58fd278f5fae95834",
       "readme_mtime": "2026-05-12T19:33:14+09:00",
       "notion_page_id": "34987c2b-b753-81ef-ba0f-e6f1ca33ade0",
       "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
       "notion_synced_sha256": "bdb44f22f2aa97eb7454823e0dbff3124ecf7b1c2799d1c58fd278f5fae95834"
     },
-    "skills/refine-doc": {
+    "skills/draft-refine": {
       "sha256": "efd3b03e47c5f65188e7e3ddc1e372a58d11e003041e4e9e0d707e6c4fe392e6",
       "synced_at": "2026-05-23T10:52:23.624325+09:00",
-      "readme_path": "skills/refine-doc/README.md",
+      "readme_path": "skills/draft-refine/README.md",
       "readme_sha256": "dd8f06ae1fb58322d1e66a4248db96edfe77af8ab12ab94b1e47d27338d790ba",
       "readme_mtime": "2026-05-20T00:40:22+09:00",
       "notion_page_id": "34987c2b-b753-81bf-adc3-c4c26ba6cdb6",
       "notion_last_edited_time": "2026-05-20T00:40:22+09:00",
       "notion_synced_sha256": "dd8f06ae1fb58322d1e66a4248db96edfe77af8ab12ab94b1e47d27338d790ba"
     },
-    "skills/refine-plan": {
+    "skills/code-refine": {
       "sha256": "5f1665434b500341ced3983ec2ff41e37e0c68699580d69fc3d4aed4839f2187",
       "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/refine-plan/README.md",
+      "readme_path": "skills/code-refine/README.md",
       "readme_sha256": "176bfea19b981bf6253b863efb9266a836eaef243b53b23baf2af57e16d3f9c9",
       "readme_mtime": "2026-05-12T19:33:27+09:00",
       "notion_page_id": "34987c2b-b753-81a5-bc54-e0f02e96b3e1",
       "notion_last_edited_time": "2026-05-13T01:35:00+09:00",
       "notion_synced_sha256": "176bfea19b981bf6253b863efb9266a836eaef243b53b23baf2af57e16d3f9c9"
     },
-    "skills/run-test": {
+    "skills/code-test": {
       "sha256": "8b939a60328b715a14ca364417193ed7628429c7c931b8c386d58625e1049dfb",
       "synced_at": "2026-05-21T21:35:06.877198+09:00",
-      "readme_path": "skills/run-test/README.md",
+      "readme_path": "skills/code-test/README.md",
       "readme_sha256": "77ed816b9a962b33e29501d9ad6d46c200163137d56325c6bdfa1d63782f2ac6",
       "readme_mtime": "2026-05-13T10:47:33+09:00",
       "notion_page_id": "34987c2b-b753-81b2-bed4-e46395413623",

@@ -68,7 +68,7 @@ Determine the mode based on the prompt/context:
    ```
 3. **Format output** into the plan review format below.
 
-## Procedure -- When Called from execute-plan
+## Procedure -- When Called from code-execute
 
 1. **Read step log files** to see exact changes.
 2. **Run Codex review** on the changed files.

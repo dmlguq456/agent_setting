@@ -18,7 +18,7 @@
 
 ## Camera-ready / major-revision 한정 — Natural-integration rule for paper-body mutations
 
-(cross-ref: `init-doc-strategy/SKILL.md` paper mode "Natural-integration rule" — single source of truth)
+(cross-ref: `draft-strategy/SKILL.md` paper mode "Natural-integration rule" — single source of truth)
 
 > **reviewer 의견 / rebuttal 자료 → paper-body mutation paste-ready block 으로 옮길 때** mutation 마다 한 질문: _"1~2 문장 in-line rewrite 로 surrounding paragraph 흐름에 자연스럽게 녹일 수 있나?"_
 > - **YES → inline rewrite mutation** — subsection head opening + body paragraph touch-up + Figure cascade reference. 실험 수치는 body / Appendix 에 두고 opening / intro 에는 박지 X
@@ -141,7 +141,7 @@ Pre-flight 표 / 분기점 표로 앞 페이지에 7행 표 박지 않는다. M2
 
 **Why**: 사용자가 preview 로 보면서 paste 작업한다. preview 에서는 frontmatter / blockquote / 메타 표 가 줄글로 깨져 _paste 자리를 찾기 어렵다_. 사용자 영역과 추적 영역이 같은 위계로 섞이면 매번 사용자가 "이게 내가 봐야 할 건가, 에이전트 추적용인가" 분간해야 한다 — 짜증의 직접 원인.
 
-## Figure 자산 게이트 — 분석팀 위임 (2026-05-22 신설)
+## Figure 자산 게이트 — 자료팀 위임 (2026-05-22 신설)
 
 paste-ready cheatsheet 안 `\includegraphics{<path>}` 참조 PDF 가 `<paper_dir>/<path>` 에 없을 때, _자산 누락_ 을 사용자가 paste 단계에서야 발견하지 않도록 cheatsheet 작성 자리에서 미리 처리.
 
@@ -153,15 +153,15 @@ paste-ready cheatsheet 안 `\includegraphics{<path>}` 참조 PDF 가 `<paper_dir
 
 **경로 A — `--figures auto` (default)**
 
-`Agent(분석팀, "<자산 spec>")` 자동 위임. spec 은 cheatsheet 의 figure caption + 주변 본문에서 추출 — 함수 / 축 / curve 목록 / 목표 사이즈 / 학회 기본 스타일. 분석팀이 PDF + 스크립트 + preview PNG 생성 후 entry 의 _알아둘 점_ 자동 갱신 (`figure 자산 생성 완료: <path>, 재현 스크립트 <script path>`).
+`Agent(자료팀, "<자산 spec>")` 자동 위임. spec 은 cheatsheet 의 figure caption + 주변 본문에서 추출 — 함수 / 축 / curve 목록 / 목표 사이즈 / 학회 기본 스타일. 자료팀이 PDF + 스크립트 + preview PNG 생성 후 entry 의 _알아둘 점_ 자동 갱신 (`figure 자산 생성 완료: <path>, 재현 스크립트 <script path>`).
 
 **경로 B — `--figures flag`**
 
-부재 자산만 _알아둘 점_ 에 flag 박고 사용자 직접 처리에 맡김. spec 은 자세하게 (curve 별 함수·축·사이즈 권장 포함). 사용자가 그 spec 으로 직접 만들거나 별도 `Agent(분석팀)` 호출 가능.
+부재 자산만 _알아둘 점_ 에 flag 박고 사용자 직접 처리에 맡김. spec 은 자세하게 (curve 별 함수·축·사이즈 권장 포함). 사용자가 그 spec 으로 직접 만들거나 별도 `Agent(자료팀)` 호출 가능.
 
-**왜 분석팀에 위임하나**: cheatsheet 의 LaTeX 본문은 _paste-ready_ 가 본질이지 _자산 생성_ 책임은 아니다. 분석팀이 학회·논문 기본 스타일 (Times serif / OrRd palette / 6.4×2.8" landscape 등) 의 단일 source 라 figure 들 사이 _스타일 일관성_ 도 한 자리에서 누적된다.
+**왜 자료팀에 위임하나**: cheatsheet 의 LaTeX 본문은 _paste-ready_ 가 본질이지 _자산 생성_ 책임은 아니다. 자료팀이 학회·논문 기본 스타일 (Times serif / OrRd palette / 6.4×2.8" landscape 등) 의 단일 source 라 figure 들 사이 _스타일 일관성_ 도 한 자리에서 누적된다.
 
-**자산 위치 컨벤션** (분석팀 default 와 정합):
+**자산 위치 컨벤션** (자료팀 default 와 정합):
 - PDF: `<paper_dir>/figures/<name>.pdf`
 - 재현 스크립트: `<paper_dir>/figures/plot_<name>.py`
 - preview PNG: `<paper_dir>/figures/<name>_preview.png`

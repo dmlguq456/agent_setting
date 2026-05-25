@@ -10,7 +10,7 @@ Autopilot family — **post-creation iteration pipeline for research and doc art
 - 기본 `--qa quick` (1-pass review, fastest path). escalate to light/standard/thorough/adversarial for multi-round review, fact-check, or external Codex adversarial pass
 - Optional `--memo <file>` falls back to file-memo style for deferred reviews
 
-> code 산출물은 본 skill 대상 아님 — `/refine-plan` 또는 `/autopilot-code` 사용.
+> code 산출물은 본 skill 대상 아님 — `/code-refine` 또는 `/autopilot-code` 사용.
 
 ## 호출 형식
 ```

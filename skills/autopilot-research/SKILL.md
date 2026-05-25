@@ -34,9 +34,9 @@ argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|med
 
 ### Override 1순위 — autopilot 우회
 
-- 단발 paper 1편 fetch / paywall 만 — `Agent(탐색팀)` 직접 호출
-- PDF figure 일괄 추출 — `Agent(탐색팀, mode="extract_pdf_figures")`
-- 인터넷 reference 그림 검색 — `Agent(탐색팀, mode="web_reference")`
+- 단발 paper 1편 fetch / paywall 만 — `Agent(자료팀)` 직접 호출
+- PDF figure 일괄 추출 — `Agent(자료팀, mode="pdf-extract")`
+- 인터넷 reference 그림 검색 — `Agent(자료팀, mode="web-image-search")`
 - 기존 research 폴더에 entry 추가만 — `/autopilot-refine`
 - `/autopilot-research <args>` slash 직접 입력 — 컨펌 skip 하고 즉시 invoke
 
@@ -210,7 +210,7 @@ Agent(subagent_type="연구팀"):
        "arxiv_id": string|null, "oa_url": string|null,
        "openalex_id": string|null, "referenced_works": ["string"]|null,
        "venue": string|null, "venue_tier": int|null (1-4), "raw_type": string|null,
-       "url": string|null (landing page URL from any source — used by 탐색팀 for paywall access)}]
+       "url": string|null (landing page URL from any source — used by 자료팀 for paywall access)}]
    }
 
    ## Google Scholar HTML Parsing Patterns
@@ -271,7 +271,7 @@ Auto-proceed after expansion rounds (no user gate).
 > - `technology`: Phase A (full skim of standards + whitepapers) — 활성. Phase B (reference chaining) — **비활성** (academic citation graph가 의미 약함). Phase C — 활성 (open-source 구현체 탐색)
 > - `market`: Phase A (skim of market reports + news) — 활성. Phase B / C — **비활성**
 
-#### Step 3a: Playwright Pre-Check + 탐색팀 Pre-Fetch
+#### Step 3a: Playwright Pre-Check + 자료팀 Pre-Fetch
 ```
 Bash: python3 -c "from playwright.async_api import async_playwright; print('OK')"
 Bash: ls ~/.cache/ms-playwright/chromium_headless_shell-*/ > /dev/null 2>&1 && echo 'BROWSER_OK'
@@ -280,17 +280,17 @@ Set `playwright_available = true/false`.
 
 If `playwright_available == true`:
   Read `_internal/search_results.json` and identify paywall papers (no arXiv ID AND no oa_url → likely paywall).
-  If paywall papers exist, invoke 탐색팀 to pre-fetch their content:
+  If paywall papers exist, invoke 자료팀 to pre-fetch their content:
   ```
-  Agent(subagent_type="탐색팀"):
-    "Mode: fetch_papers
+  Agent(subagent_type="자료팀"):
+    "Mode: browser-fetch
      URLs: {paywall_url_list}
      Output directory: {artifact_dir}
      Extract full text from each URL. Write to `_internal/browser_extracts/{filename}.txt` (T3 raw metadata).
      Return summary of successes and failures."
   ```
   The extracted texts will be available for 연구팀 to Read during Phase A skimming.
-  If 탐색팀 fails or playwright unavailable: proceed without — 연구팀 will fall through to abstract-only.
+  If 자료팀 fails or playwright unavailable: proceed without — 연구팀 will fall through to abstract-only.
 
 #### Step 3b: Phase A — Parallel Skimming Batches
 Read `_internal/search_results.json`. Classify each paper's access type FIRST:
@@ -311,10 +311,10 @@ Agent(subagent_type="연구팀"):
    Papers: {batch_json}
    Output directory: {artifact_dir}
    Supplementary inputs (if any): `{artifact_dir}/../analysis_project/paper/` (use if exists, otherwise none)
-   Browser extracts: {artifact_dir}/_internal/browser_extracts/ (pre-fetched by 탐색팀, if available)
+   Browser extracts: {artifact_dir}/_internal/browser_extracts/ (pre-fetched by 자료팀, if available)
 
    Per-paper timeout: 60s. Batch budget: 10min. WebFetch 3xx loop / empty response → skip.
-   Paywall / Access priority / browser_extracts handling: per your Role 2b 본문 (paywall fast-detect + 60s timeout + 5-tier access ladder + 탐색팀 분리 원칙) — single source 거기.
+   Paywall / Access priority / browser_extracts handling: per your Role 2b 본문 (paywall fast-detect + 60s timeout + 5-tier access ladder + 자료팀 분리 원칙) — single source 거기.
 
    Follow your Role 2b procedure. Return file paths + Korean summary."
 ```
@@ -375,10 +375,10 @@ Phase A skimming 직후 cards/{paper}.md가 작성되면, _accessible 분류_ pa
 - 대상 = `accessible` 분류 paper (Step 3b 정의: `arxiv_id` OR `oa_url` OR `_internal/browser_extracts/{filename}.txt` 존재)
 - paywall-only paper는 skip (figure도 마찬가지로 접근 불가)
 
-**Procedure** (탐색팀 호출):
+**Procedure** (자료팀 호출):
 ```
-Agent(subagent_type="탐색팀"):
-  Mode: extract_web_figures
+Agent(subagent_type="자료팀"):
+  Mode: web-image-search
   Paper list: [{arxiv_id, paper_id (cards filename without .md), title}, ...]
   Output dir: {artifact_dir}/figures/
   Workflow per paper:
@@ -411,7 +411,7 @@ Agent(subagent_type="탐색팀"):
 
 ### Step 4: Report Generation (direct Agent call + QA loop)
 
-> **분석팀 위임 (옵션)** — 보고서에 _집계 통계 시각화_ 나 _cross-card metric 비교 plot_ 등 _custom 분석 figure_ 가 필요하면 본 Step 안에서 `Agent(분석팀, "<spec>")` 직접 호출 가능. paper figure 직접 추출 (탐색팀 영역) 과 다른 자리 — 분석팀은 _카드 데이터로부터 새 시각화_ 만들 때. 일반 survey 자료 (taxonomy table / lineage ASCII / per-paper card) 는 연구팀 본 자리 처리. (2026-05-22 신설.)
+> **자료팀 위임 (옵션)** — 보고서에 _집계 통계 시각화_ 나 _cross-card metric 비교 plot_ 등 _custom 분석 figure_ 가 필요하면 본 Step 안에서 `Agent(자료팀, "<spec>")` 직접 호출 가능. paper figure 직접 추출 (자료팀 영역) 과 다른 자리 — 자료팀은 _카드 데이터로부터 새 시각화_ 만들 때. 일반 survey 자료 (taxonomy table / lineage ASCII / per-paper card) 는 연구팀 본 자리 처리. (2026-05-22 신설.)
 
 #### Step 4a: Generate Reports
 ```
@@ -555,7 +555,7 @@ Agent(subagent_type="연구팀"):
 
    | Inferred Goal | Recommended next command | Hand-off rationale |
    |---|---|---|
-   | build | `/autopilot-code --mode dev "<task>"` | Code implementation needs init-plan → execute-plan → run-test loop. autopilot-code reads `analysis_project/{code,paper}/` + `research/{topic}/` implicitly. |
+   | build | `/autopilot-code --mode dev "<task>"` | Code implementation needs code-plan → code-execute → code-test loop. autopilot-code reads `analysis_project/{code,paper}/` + `research/{topic}/` implicitly. |
    | seminar | `/autopilot-draft "<task>" --mode presentation` | Slide-by-slide markdown draft (PPTX export is NOT supported — user converts to PPT manually with their lab template). research artifact는 implicit 인지. |
    | write | `/autopilot-draft "<task>" --mode paper` | LaTeX paper draft (Abstract → Conclusion) generation. |
    | research | `/autopilot-draft "<task> grant proposal" --mode doc` (or stay in research-only mode) | doc mode + grant-proposal genre intent — hypothesis + experiment design framing. |
@@ -809,7 +809,7 @@ Record after each gate: `{step | decision | response | action}`. Populate pipeli
 - Context protection: each Agent returns ONLY file paths + 3-5 line summary
 - Context budget: deep 모드에서 오케스트레이터 context가 누적됨 (쿼리 확장 라운드 + 스키밍 배치 + loopback). Agent 결과는 항상 파일로 저장하고 요약만 context에 유지. search_results.json 전체를 context에 올리지 않고 paper count + top-5만 참조.
 - MERGE mode 무결성: 제목 fuzzy matching은 lowercase + 구두점 제거 + a/an/the 제거로 정규화. 같은 논문의 discovery_count는 단조 증가만 허용 (감소 금지).
-- Playwright 고아 프로세스: 탐색팀 호출 전후로 `pkill -f chromium_headless_shell` 실행
+- Playwright 고아 프로세스: 자료팀 호출 전후로 `pkill -f chromium_headless_shell` 실행
 
 ## Task
 $ARGUMENTS

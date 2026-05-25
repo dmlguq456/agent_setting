@@ -34,7 +34,7 @@ SCRIPT="$CLAUDE_PLUGIN_ROOT/scripts/codex-companion.mjs"
 3. 백그라운드 시 `status --json` / `result <job-id> --json`
 4. 출력 포맷으로 재구성
 
-## execute-plan 호출 시
+## code-execute 호출 시
 step log → 변경 파일 → Codex review → 문법/임포트 검증 → 지정 경로에 보고서 → 경로 + 한 줄 verdict만 반환.
 
 ## 출력 포맷 (Code Review)

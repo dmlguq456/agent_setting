@@ -18,7 +18,7 @@ Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag a
 
 본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §6 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude는 사용자가 `.claude_reports/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다 (`--qa thorough` default). **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
 
-**Scope**: `.claude_reports/{documents,research}/*` 엄격 한정. project root의 임의 `.md`/`.txt`나 코드 산출물(`.claude_reports/plans/*`)은 적용 X — 전자는 일반 Edit, 후자는 `/refine-plan` 또는 `/autopilot-code`.
+**Scope**: `.claude_reports/{documents,research}/*` 엄격 한정. project root의 임의 `.md`/`.txt`나 코드 산출물(`.claude_reports/plans/*`)은 적용 X — 전자는 일반 Edit, 후자는 `/code-refine` 또는 `/autopilot-code`.
 
 ### Major vs Minor — 3-criteria 판정
 
@@ -110,8 +110,8 @@ frontmatter `changelog:` 필드 자체가 없는 file은 skip. **이 step은 pip
 ## Scope
 
 - **Targets**: `.claude_reports/research/*` and `.claude_reports/documents/*`
-- **NOT for**: `.claude_reports/plans/*` (code) — use `/refine-plan`, `/execute-plan`, or `/autopilot-code` instead. Code changes need test-based verification, not diff review.
-- Why this skill exists: the existing `refine-doc` / `refine-plan` workflow is file-memo only, which is too heavy for routine prompt-driven edits. `autopilot-refine` is the lightweight default; memo style is reduced to an opt-in fallback.
+- **NOT for**: `.claude_reports/plans/*` (code) — use `/code-refine`, `/code-execute`, or `/autopilot-code` instead. Code changes need test-based verification, not diff review.
+- Why this skill exists: the existing `draft-refine` / `code-refine` workflow is file-memo only, which is too heavy for routine prompt-driven edits. `autopilot-refine` is the lightweight default; memo style is reduced to an opt-in fallback.
 
 ## --qa <level> (default: thorough)
 
@@ -125,7 +125,7 @@ QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../
 | **thorough** (default) | + 2× opus + 2× sonnet quality reviewer (다른 axes) + 1× sonnet fact-checker. round 2. high-stakes refine 용. |
 | **adversarial** | thorough + 1× `Agent(codex-review-team)` (Codex CLI external review). camera-ready / grant / public rebuttal 같은 외부 strong scrutiny 자리. |
 
-Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/refine-doc` 사용).
+Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/draft-refine` 사용).
 
 > The two opt-out flags `--no-fact-check` and `--no-style-audit` are **orthogonal to every `--qa` level** — they skip the corresponding Stage B.5 aspect regardless of qa level. These are the _only_ disable mechanism per `feedback_factcheck_principles.md` Principle 0.
 
@@ -334,7 +334,7 @@ Parse the user's reply, then:
      - Research: e.g. `_internal/versions/v1/01_landscape.md`, `_internal/versions/v1/cards/2024_*.md`
      - Doc: e.g. `_internal/versions/v1/strategy/strategy.md`, `_internal/versions/v1/strategy/strategy_ko.md`, `_internal/versions/v1/draft/draft_ko.md`
      - `mkdir -p` parent dirs as needed.
-   - **Legacy** (artifact has `_v{N}.md` siblings already AND no `_internal/` dir) — preserve existing pattern (refine-doc legacy):
+   - **Legacy** (artifact has `_v{N}.md` siblings already AND no `_internal/` dir) — preserve existing pattern (draft-refine legacy):
      ```
      {file_dir}/{stem}_v{prev}.{ext}
      ```
@@ -406,7 +406,7 @@ Parse the user's reply, then:
 
    **(e) Update in-file `changelog:` frontmatter** — 각 affected file의 YAML frontmatter에 `changelog:` array 필드가 정의돼 있으면, 새 version entry를 array 최상단(newest-first)에 insert. pipeline_summary.md의 메타 history (4(a)-4(d))와 _중복 layer_ 지만, in-file frontmatter는 _파일 자체의 git-tracked history_라 별도 보존 가치 있음 (특히 `git log {file}` + frontmatter scan만으로 해당 파일의 변경 lineage 추적 가능).
 
-   형식 (`refine-doc` 컨벤션 mirror):
+   형식 (`draft-refine` 컨벤션 mirror):
 
    ```yaml
    changelog:
@@ -449,7 +449,7 @@ Parse the user's reply, then:
 ### Stage E — Memo mode (`--memo <file>`)
 
 1. Read the memo file. Detect format:
-   - **Structured** (per-file proposals like refine-doc memo style) → parse directly into Stage B's change list.
+   - **Structured** (per-file proposals like draft-refine memo style) → parse directly into Stage B's change list.
    - **Free-form** (just prose) → treat the body as the prompt, run Stage A-B-C internally.
 2. Proceed to Stage D (with `Mode: Memo` recorded in pipeline_summary.md `## v{N} 변경 사항` section).
 
@@ -495,9 +495,9 @@ Parse the user's reply, then:
 ## When NOT to use
 
 - Single-file typo / cosmetic edit → just `Edit`.
-- Code artifacts → `/refine-plan`, `/execute-plan`, `/autopilot-code`.
+- Code artifacts → `/code-refine`, `/code-execute`, `/autopilot-code`.
 - Whole-axis structural redesign → `/autopilot-research --from analyze` or `/autopilot-draft --from strategy`.
-- Pure deferred review (annotate over hours/days) → this skill's `--memo <file>` form (file-memo). `/refine-doc` 는 autopilot-draft 내부 sub-skill 이라 사용자 직접 호출 X.
+- Pure deferred review (annotate over hours/days) → this skill's `--memo <file>` form (file-memo). `/draft-refine` 는 autopilot-draft 내부 sub-skill 이라 사용자 직접 호출 X.
 
 ## Post-Apply Checklist
 

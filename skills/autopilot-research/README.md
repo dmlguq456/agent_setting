@@ -31,7 +31,7 @@
 ## --depth
 - `shallow`: 상위 10-20 결과만, abstract only
 - `medium` (default): 인용수·venue tier로 우선순위, citation > 10이면 full read
-- `deep`: paywall 페이지까지 탐색팀 위임, reference chaining
+- `deep`: paywall 페이지까지 자료팀 위임, reference chaining
 
 ## --qa
 - `quick` (1-pass 1 라운드)
@@ -49,12 +49,12 @@
 ## 파이프라인 (개요)
 1. **Step 0 Scope Clarification** (모호 query 시 2-4개 질문)
 2. **Step 1 Paper Search** — HF / OpenAlex / arXiv / Google Scholar / Semantic Scholar 6 sources 순차
-3. **Step 2 Paper Analysis** — 인용수·venue tier 기반 reading depth 결정, paywall은 탐색팀 위임
+3. **Step 2 Paper Analysis** — 인용수·venue tier 기반 reading depth 결정, paywall은 자료팀 위임
 4. **Step 3 Report Generation** — mode별 5-9개 markdown 산출 + 06_implementation.md의 Next Pipeline 표로 autopilot-code / autopilot-draft / refine 인계
 
 ## Chaining (implicit)
 - autopilot-research → autopilot-draft: `research/{topic}/`을 prompt 키워드 fuzzy match로 자동 발견
-- autopilot-research → autopilot-code: init-plan이 implicit 인지
+- autopilot-research → autopilot-code: code-plan이 implicit 인지
 
 ## Wiki database 안내
 본 skill의 Notion 페이지는 wiki database 형태 (`🔬 autopilot-research`). 본문은 sub-page들로 구성되며 본 README는 stub. 자세한 sub-page 구조는 Notion에서 직접 참조.

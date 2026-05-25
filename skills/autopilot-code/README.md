@@ -13,28 +13,28 @@
 ### --mode dev — 개발
 ```mermaid
 flowchart TD
-    B["init-plan"] --> C["refine-plan (연구팀 대행)"]
-    C --> D["execute-plan"]
+    B["code-plan"] --> C["code-refine (연구팀 대행)"]
+    C --> D["code-execute"]
     D --> SC{"Status Check"}
-    SC -->|done/partial| E["run-test"]
+    SC -->|done/partial| E["code-test"]
     SC -->|failed| STOP["롤백 + 사용자 보고"]
-    E -->|통과| F["final-report"]
+    E -->|통과| F["code-report"]
     E -->|실패| G["Hotfix"]
     G -->|성공| F
     G -->|실패| C
     F --> I["pipeline_summary"]
 ```
 
-> Hotfix 2회 실패 시: 소스코드 롤백 → 실패 컨텍스트를 `plan_ko.md`에 메모 → refine-plan으로 루프백 (최대 1회). 재시도도 실패하면 롤백 + 사용자 보고.
+> Hotfix 2회 실패 시: 소스코드 롤백 → 실패 컨텍스트를 `plan_ko.md`에 메모 → code-refine으로 루프백 (최대 1회). 재시도도 실패하면 롤백 + 사용자 보고.
 
 ### --mode debug — 디버그
 ```mermaid
 flowchart TD
     A["에러 로그 입력"] --> B[["진단 ↔ 사용자 확인 (원인 합의까지 반복)"]]
-    B --> C["init-plan (최소 수정 계획)"]
-    C --> D["execute-plan"]
-    D --> E["run-test + 원본 에러 재현"]
-    E -->|해결| F["final-report"]
+    B --> C["code-plan (최소 수정 계획)"]
+    C --> D["code-execute"]
+    D --> E["code-test + 원본 에러 재현"]
+    E -->|해결| F["code-report"]
     E -->|미해결| G["롤백 + 사용자 보고"]
 ```
 
@@ -46,24 +46,24 @@ flowchart TD
 |---|---|---|
 | 입력 | 태스크 설명 | 에러 설명 / 로그 |
 | 전처리 | 없음 | 메인이 직접 진단 |
-| refine-plan | 연구팀 대행 리뷰 | 스킵 |
-| run-test 재시도 | hotfix 2회 + retry 1회 | 1회 + 원본 에러 재현 |
+| code-refine | 연구팀 대행 리뷰 | 스킵 |
+| code-test 재시도 | hotfix 2회 + retry 1회 | 1회 + 원본 에러 재현 |
 | 롤백 범위 | 전체 | fix 변경만 |
 | --from 지원 | plan/refine/execute/test/report | 미지원 (항상 진단부터) |
 | --qa adversarial | 지원 | thorough로 다운그레이드 |
 
 ## 서브스킬 상세
-- [init-plan](init-plan/README.md)
-- [refine-plan](refine-plan/README.md)
-- [execute-plan](execute-plan/README.md)
-- [run-test](run-test/README.md)
-- [final-report](final-report/README.md)
+- [code-plan](code-plan/README.md)
+- [code-refine](code-refine/README.md)
+- [code-execute](code-execute/README.md)
+- [code-test](code-test/README.md)
+- [code-report](code-report/README.md)
 
-> **Plan Resolution** (canonical): execute-plan, run-test, final-report, refine-plan 4개 skill이 동일한 검색 알고리즘을 공유.
+> **Plan Resolution** (canonical): code-execute, code-test, code-report, code-refine 4개 skill이 동일한 검색 알고리즘을 공유.
 > 1. `.md` 접미사 → 그대로
 > 2. 디렉토리 경로 → `/plan/plan.md` 추가
 > 3. 퍼지 검색 → `_audit`/`_fix_` 없는 폴더 우선, 복수 시 사용자 확인
-> 4. 스킬별 예외 (run-test: 직접 테스트 fallback / refine-plan: 양어 동시 resolve)
+> 4. 스킬별 예외 (code-test: 직접 테스트 fallback / code-refine: 양어 동시 resolve)
 
 ## QA Scaling
 
@@ -77,8 +77,8 @@ flowchart TD
 > autopilot-code는 fact-checker reviewer 미적용 (doc/research 파이프라인과 달리 cards/PDFs 대조할 ground-truth source가 없으므로 quality reviewer만 운용. adversarial 레벨은 Codex 외부 리뷰로 이를 대체).
 
 **스킬별 예외**:
-- **run-test**: 항상 Thorough (병렬 2팀 강제). `--qa` 플래그도 무시
-- **final-report**: 높은 임계값. Thorough에서도 병렬화 없음
+- **code-test**: 항상 Thorough (병렬 2팀 강제). `--qa` 플래그도 무시
+- **code-report**: 높은 임계값. Thorough에서도 병렬화 없음
 
 ## 핵심 설계 원칙
 1. 에이전트는 프로젝트에 독립적 — 프로젝트 정보는 CLAUDE.md와 에이전트 memory에

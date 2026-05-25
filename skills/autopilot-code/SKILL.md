@@ -1,6 +1,6 @@
 ---
 name: autopilot-code
-description: "Unified code pipeline — dev/debug modes. Orchestrates init-plan → refine-plan → execute-plan → run-test → final-report with mode-specific behavior."
+description: "Unified code pipeline — dev/debug modes. Orchestrates code-plan → code-refine → code-execute → code-test → code-report with mode-specific behavior."
 argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [--qa quick|light|standard|thorough|adversarial] [--user-refine]"
 ---
 
@@ -50,7 +50,7 @@ argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [
 
 ### --from <step> (mode-specific)
 - dev: plan|refine|execute|test|report (5 points)
-  - **stage ↔ step 매핑**: `plan` = Step 1 (init-plan) / `refine` = Step 2 (refine-plan + 연구팀 memos) / `execute` = Step 3 (execute-plan) / `test` = Step 4 (run-test) / `report` = Step 5 (final-report)
+  - **stage ↔ step 매핑**: `plan` = Step 1 (code-plan) / `refine` = Step 2 (code-refine + 연구팀 memos) / `execute` = Step 3 (code-execute) / `test` = Step 4 (code-test) / `report` = Step 5 (code-report)
 - debug: not supported — always starts from diagnosis
 - If --from is used with debug mode: warn "debug 모드에서는 --from이 지원되지 않습니다. 진단부터 시작합니다." and ignore.
 
@@ -64,7 +64,7 @@ QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../
   - debug: `adversarial` 받으면 `thorough` 로 downgrade + warn. default `standard` (빠른 root-cause 우선).
 - 유효하지 않은 값 → `standard` fallback + warn ("유효하지 않은 QA level '{value}'. standard 로 기본 설정합니다.")
 - Auto-detect: omitted 시 각 sub-skill 이 scope 기반 추정
-- **Propagation**: `--qa <level>` 를 init-plan / refine-plan 에 flag 로 전달. execute-plan / run-test / final-report 는 plan frontmatter `qa_level: <level>` 로
+- **Propagation**: `--qa <level>` 를 code-plan / code-refine 에 flag 로 전달. code-execute / code-test / code-report 는 plan frontmatter `qa_level: <level>` 로
 - **Mid-pipeline switching**: Step 2+ 에서 `--qa` 명시 시 plan frontmatter 갱신. 명시 안 하면 frontmatter 값 보존 (없으면 `thorough`)
 - **`quick` interactions**: `--user-refine` silently ignored (refine skip). `--from refine` 으로 재개 시 frontmatter `qa_level == quick` 이면 abort ("qa_level=quick 에서는 refine 단계가 skip 됩니다. --qa <level> 을 다른 값으로 명시해 재개하세요.")
 
@@ -72,13 +72,13 @@ QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../
 
 **Default: false. The orchestrator (메인 Claude) MUST NOT add this flag on its own — it is set only when the user typed `--user-refine` (or an explicit Korean equivalent like "사용자 검토 끼워" / "memo 추가하게 멈춰줘") in the original prompt.** Inferring this flag from generic "신중히 진행해 줘" / "한 번 봐줘" / 길고 복잡한 task 같은 신호로 자동 추가하는 행동 금지 — 그 경우 사용자가 의도하지 않은 pause 가 걸려 작업이 멈춘다.
 
-When present, the orchestrator **pauses** at refine points so the user can add their own `<!-- memo: ... -->` comments on top of 연구팀's memos before refine-plan runs.
+When present, the orchestrator **pauses** at refine points so the user can add their own `<!-- memo: ... -->` comments on top of 연구팀's memos before code-refine runs.
 
 - Applies to: **dev mode only** (Step 2 plan refine, and the failure-loop refine after test failure).
 - Debug mode: 연구팀 review skipped → flag ignored with one-line warning.
 
 **Pause behavior** (dev mode):
-1. After 연구팀 writes memos at Step 2 (or after failure memos are written in the test-failure retry loop), do NOT invoke refine-plan.
+1. After 연구팀 writes memos at Step 2 (or after failure memos are written in the test-failure retry loop), do NOT invoke code-refine.
 2. Update plan frontmatter: `user_refine: true`, `paused_at_stage: refine`.
 3. Print to user (Korean) the memo file path and the resume command:
    ```
@@ -88,7 +88,7 @@ When present, the orchestrator **pauses** at refine points so the user can add t
    ```
 4. Exit. Do NOT write pipeline_summary.md (pipeline is paused, not terminated).
 
-**Resume behavior**: When invoked with `--from refine`, the orchestrator skips Step 1 and goes directly to Step 2's refine-plan invocation, then continues normally.
+**Resume behavior**: When invoked with `--from refine`, the orchestrator skips Step 1 and goes directly to Step 2's code-refine invocation, then continues normally.
 
 **Persistence**: `user_refine: <true|false>` lives in the English plan's YAML frontmatter (same place as `qa_level`). On `--from` resume, if `--user-refine` is not re-specified, preserve the frontmatter value.
 
@@ -104,13 +104,13 @@ The pipeline runs with sane defaults and only pauses on genuinely ambiguous or d
 
 | Decision Point | Default Behavior |
 |---|---|
-| Test failure (after run-test internal hotfix loop) | Auto-retry once (mode dev). |
+| Test failure (after code-test internal hotfix loop) | Auto-retry once (mode dev). |
 | Pipeline-level catastrophic failure (plan status = failed) | Stop and report; no retry. |
 | Final retry failure | Auto-stop, write pipeline_summary(failed), report. |
 | Research team adds many memos | Auto-refine (or pause if `--user-refine` is set). |
-| init-plan: existing plan with status `active` | **Always ask** — no safe default; user must choose resume vs. create new. |
-| init-plan: existing plan with status `done` / `failed` | Auto-create a new plan (note the previous one for reference). |
-| init-plan: existing plan with status `partial` | Auto-create a new plan covering the failed steps (read `failed_steps` from frontmatter). |
+| code-plan: existing plan with status `active` | **Always ask** — no safe default; user must choose resume vs. create new. |
+| code-plan: existing plan with status `done` / `failed` | Auto-create a new plan (note the previous one for reference). |
+| code-plan: existing plan with status `partial` | Auto-create a new plan covering the failed steps (read `failed_steps` from frontmatter). |
 | debug: confirm diagnosis before fix | Auto-proceed unless root cause is ambiguous. |
 | debug: ambiguous root cause (multiple possible) | **Always ask** — list candidates, ask which to investigate first. |
 | debug: fix verification failed | Auto-rollback + report. |
@@ -118,7 +118,7 @@ The pipeline runs with sane defaults and only pauses on genuinely ambiguous or d
 
 **Logging**: When the pipeline pauses (active-plan ambiguity, ambiguous root cause, or `--user-refine`), record the event for the Decision Points table in `pipeline_summary.md`. Auto-decisions are not individually logged.
 
-## Plan Resolution (canonical — keep in sync with execute-plan, run-test, final-report, refine-plan)
+## Plan Resolution (canonical — keep in sync with code-execute, code-test, code-report, code-refine)
 Resolve `$ARG` to a plan file path:
 1. If it ends with `.md` → use as-is
 2. If it's a directory path → append `/plan/plan.md`
@@ -130,17 +130,17 @@ Resolve `$ARG` to a plan file path:
 ## Pipeline: Mode dev
 You (the main Claude) orchestrate by invoking each skill directly via the Skill tool. All tasks go through the full pipeline. The **연구팀** (research-team) agent is invoked only for Step 2 (plan review as user proxy) and Step 6 (meta-report).
 
-> **분석팀 위임 (옵션, 2026-05-22 신설)** — task 가 _결과 시각화·실험 log plot·result table 정리_ 같은 분석 자료를 요구하면 execute-plan / final-report 단계 안에서 `Agent(분석팀, "<spec>")` 직접 호출. _훈련·실험 실행_ 자체는 autopilot-code 본 영역, 결과의 _후처리·시각화_ 만 분석팀 영역. 분석팀이 figure / 스크립트 / 표 한 묶음 생성 후 dev_log 의 해당 step 안에 결과 자산 경로 박음.
+> **자료팀 위임 (옵션, 2026-05-22 신설)** — task 가 _결과 시각화·실험 log plot·result table 정리_ 같은 분석 자료를 요구하면 code-execute / code-report 단계 안에서 `Agent(자료팀, "<spec>")` 직접 호출. _훈련·실험 실행_ 자체는 autopilot-code 본 영역, 결과의 _후처리·시각화_ 만 자료팀 영역. 자료팀이 figure / 스크립트 / 표 한 묶음 생성 후 dev_log 의 해당 step 안에 결과 자산 경로 박음.
 
-### Step 1: init-plan
-Invoke Skill: `init-plan` with the task description as args.
+### Step 1: code-plan
+Invoke Skill: `code-plan` with the task description as args.
 Wait for completion before proceeding.
 
-### Step 2: refine-plan (연구팀 as user proxy)
-**`--qa quick` short-circuit**: if `qa_level == quick`, skip the entire 연구팀 review + refine-plan invocation. Log to pipeline_summary Decision Points: `Step 2 | refine skipped (qa=quick) | auto | proceed to Step 3`. Proceed directly to Step 3.
+### Step 2: code-refine (연구팀 as user proxy)
+**`--qa quick` short-circuit**: if `qa_level == quick`, skip the entire 연구팀 review + code-refine invocation. Log to pipeline_summary Decision Points: `Step 2 | refine skipped (qa=quick) | auto | proceed to Step 3`. Proceed directly to Step 3.
 
 Otherwise:
-1. Resolve plan paths from init-plan output: `en_plan_path`, `ko_plan_path`, `log_dir`.
+1. Resolve plan paths from code-plan output: `en_plan_path`, `ko_plan_path`, `log_dir`.
 2. **Detect task type** before invoking 연구팀 (this hint provides the type-specific lens — see `agents/research-team.md` Role 1 Step 3 table):
    - Read the plan's "## Change Plan" target files. If any target is under `~/.claude/skills/*` / `~/.claude/agents/*` / `~/.claude/README.md` / `~/.claude/skills/.sync_state.json` → `task_type=meta-skill`.
    - If targets are under `~/.claude/settings.json` / `keybindings.json` / hooks → `task_type=infra/config`.
@@ -154,61 +154,61 @@ Otherwise:
      ```
      Invoke 연구팀: "Review this plan as user proxy. **Task type: {task_type}** — apply ALL Role 1 Step 3 axes for this task type (no Focus axis). Korean plan: {ko_plan_path}. English plan: {en_plan_path}. Review log: {log_dir}/_internal/plan_reviews/research_review.md. Weight task-type-specific axes heavily (for meta-skill: family-level naming conflict + cross-skill scope overlap + sync-skills downstream + frontmatter validity)."
      ```
-   - **standard / thorough / adversarial** — **axis-decomposed parallel 연구팀**: dispatch N parallel instances (standard = 1× opus + 2× sonnet, thorough/adversarial = 2× opus + 2× sonnet). 각 invocation 에 `Focus axis: <axis_name>` 포함해 single lens 로 제한. axis list 와 task-type 별 axis 매핑은 `agents/research-team.md` Role 1 _Multi-axis parallel mode_ 표 single source. opus instance 는 _깊이 axis_ (correctness / methodology / domain), sonnet instance 는 _coverage axis_ (completeness / style / cross-ref / test gap). 각 instance 는 `[<axis_name>]` prefix 메모 + separate review log (`{log_dir}/_internal/plan_reviews/research_review_<axis_name>.md`) 작성. 모든 parallel 완료 후 메모 merge + dedup → refine-plan. adversarial 은 추가로 `Agent(codex-review-team)` external review parallel.
+   - **standard / thorough / adversarial** — **axis-decomposed parallel 연구팀**: dispatch N parallel instances (standard = 1× opus + 2× sonnet, thorough/adversarial = 2× opus + 2× sonnet). 각 invocation 에 `Focus axis: <axis_name>` 포함해 single lens 로 제한. axis list 와 task-type 별 axis 매핑은 `agents/research-team.md` Role 1 _Multi-axis parallel mode_ 표 single source. opus instance 는 _깊이 axis_ (correctness / methodology / domain), sonnet instance 는 _coverage axis_ (completeness / style / cross-ref / test gap). 각 instance 는 `[<axis_name>]` prefix 메모 + separate review log (`{log_dir}/_internal/plan_reviews/research_review_<axis_name>.md`) 작성. 모든 parallel 완료 후 메모 merge + dedup → code-refine. adversarial 은 추가로 `Agent(codex-review-team)` external review parallel.
    - **Why decomposition at standard+**: 단일 instance 가 많은 axis 를 다루면 주의가 분산. parallel decomposition 으로 각 instance 가 좁게 집중해 사용자가 직접 잡아낼 만한 자리 (naming conflict / test coverage gap / style drift) 전부 커버.
 3. If memos added:
-   - **`--user-refine` pause**: if the flag is set (CLI or plan frontmatter), update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command, and exit. Do NOT invoke refine-plan.
-   - Otherwise: invoke Skill `refine-plan` with the Korean plan path.
+   - **`--user-refine` pause**: if the flag is set (CLI or plan frontmatter), update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command, and exit. Do NOT invoke code-refine.
+   - Otherwise: invoke Skill `code-refine` with the Korean plan path.
 4. If no memos: skip to Step 3.
 
-### Step 3: execute-plan
-Invoke Skill: `execute-plan` with the plan name/path as args.
+### Step 3: code-execute
+Invoke Skill: `code-execute` with the plan name/path as args.
 Wait for completion before proceeding.
 
 #### Status Check (between Step 3 and Step 4)
-After execute-plan completes, read the English plan's frontmatter `status` field:
+After code-execute completes, read the English plan's frontmatter `status` field:
 - `done` → proceed to Step 4.
 - `partial` → proceed to Step 4 (test what succeeded).
-- `failed` → execute-plan already rolled back source code. **STOP the pipeline.** Write pipeline_summary.md (status: failed) FIRST, then report failure to the user with the checklist summary. Do NOT proceed to run-test or final-report.
+- `failed` → code-execute already rolled back source code. **STOP the pipeline.** Write pipeline_summary.md (status: failed) FIRST, then report failure to the user with the checklist summary. Do NOT proceed to code-test or code-report.
 
-### Step 4: run-test
-Invoke Skill: `run-test` with the plan name/path as args.
+### Step 4: code-test
+Invoke Skill: `code-test` with the plan name/path as args.
 Wait for completion before proceeding.
 
 ## Retry Budget (Total)
-- run-test internal hotfix loop: max 2 attempts per test run
+- code-test internal hotfix loop: max 2 attempts per test run
 - Mode dev retry loop: max 1 pipeline-level retry
-- Total theoretical maximum: 2 (first run-test) + 2 (second run-test after retry) = 4 hotfix attempts
-- At each run-test invocation, the hotfix counter resets.
+- Total theoretical maximum: 2 (first code-test) + 2 (second code-test after retry) = 4 hotfix attempts
+- At each code-test invocation, the hotfix counter resets.
 
 #### Test Failure → Retry Loop (max 1 pipeline-level retry; quick = no retry)
-**`--qa quick` short-circuit**: if `qa_level == quick` and run-test reports failure, do NOT retry. Skip the retry loop below and go directly to Step 5 (final-report) with status reflecting the test failure. Log to pipeline_summary Decision Points: `Step 4 | test failure, no retry (qa=quick) | auto | proceed to final-report`.
+**`--qa quick` short-circuit**: if `qa_level == quick` and code-test reports failure, do NOT retry. Skip the retry loop below and go directly to Step 5 (code-report) with status reflecting the test failure. Log to pipeline_summary Decision Points: `Step 4 | test failure, no retry (qa=quick) | auto | proceed to code-report`.
 
-Otherwise (qa_level != quick), if run-test reports failure (after its internal hotfix loop of 2 attempts), auto-retry once:
+Otherwise (qa_level != quick), if code-test reports failure (after its internal hotfix loop of 2 attempts), auto-retry once:
 
-1. **Collect failure context**: Note the test failure verdict from run-test's return. Failure details are in `test_logs/test_report.md` and `_internal/test_reviews/` — these will be consumed by refine-plan's agent, not by the orchestrator.
+1. **Collect failure context**: Note the test failure verdict from code-test's return. Failure details are in `test_logs/test_report.md` and `_internal/test_reviews/` — these will be consumed by code-refine's agent, not by the orchestrator.
 
 2. **Rollback source code only** (preserve plan/log files):
    - Read Safety commit hash from `plan/checklist.md` header: `Safety commit: {hash}`
    - Run: `git checkout <safety-commit> -- <changed paths>` (NOT `.claude_reports/`)
    - Verify with `git status`
 
-3. **Write failure memos into Korean plan**: Append `<!-- memo: [테스트 실패] run-test 실패. 상세: test_logs/test_report.md, _internal/test_reviews/. 대안 필요. -->` at relevant steps in `plan/plan_ko.md`.
+3. **Write failure memos into Korean plan**: Append `<!-- memo: [테스트 실패] code-test 실패. 상세: test_logs/test_report.md, _internal/test_reviews/. 대안 필요. -->` at relevant steps in `plan/plan_ko.md`.
 
 4. **Reset checklist**: Reset all step marks in `plan/checklist.md` to `[ ]`.
 
 5. **Loop back to Step 2**:
    - **`--user-refine` pause**: if the flag is set, update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command (`/autopilot-code --mode dev --from refine <plan>`), and exit. The user can review the failure memos plus add their own before re-resuming.
-   - Otherwise: invoke Skill `refine-plan` with the plan path (QA review loop runs as usual, max 3 rounds).
+   - Otherwise: invoke Skill `code-refine` with the plan path (QA review loop runs as usual, max 3 rounds).
 
-6. **Re-execute**: Invoke Skill: `execute-plan` with the same plan path.
+6. **Re-execute**: Invoke Skill: `code-execute` with the same plan path.
 
-7. **Re-test**: If plan status is not `failed`, invoke Skill: `run-test`.
-   - **Pass** → continue to Step 5 (final-report).
-   - **Fail again** → rollback, **STOP**. Write pipeline_summary.md (status: failed, note both attempts) FIRST, then report to user. Do NOT proceed to final-report.
+7. **Re-test**: If plan status is not `failed`, invoke Skill: `code-test`.
+   - **Pass** → continue to Step 5 (code-report).
+   - **Fail again** → rollback, **STOP**. Write pipeline_summary.md (status: failed, note both attempts) FIRST, then report to user. Do NOT proceed to code-report.
 
-### Step 5: final-report
-Invoke Skill: `final-report` with the plan name/path as args.
+### Step 5: code-report
+Invoke Skill: `code-report` with the plan name/path as args.
 
 ### Step 6: Pipeline Summary Report
 Write `pipeline_summary.md` per the **Pipeline Summary Template (mode=dev)** (see below).
@@ -240,7 +240,7 @@ Do NOT delegate this step. You (the main Claude) perform the diagnosis directly.
    - If the root cause is **ambiguous** (multiple plausible causes): list the candidates and ask the user which to investigate first before creating the fix plan. This is the only debug-mode pause point.
 
 ### Step 2: Create fix plan
-Invoke Skill: `init-plan` with a fix task description:
+Invoke Skill: `code-plan` with a fix task description:
 ```
 Fix: {root cause summary}
 
@@ -256,17 +256,17 @@ The plan folder will be: `.claude_reports/plans/{YYYY-MM-DD}_fix_{short-error-na
 
 ### Step 3: Review fix plan (QA only, skip research-team)
 - Skip 연구팀 review — debugging fixes should be fast.
-- QA review still runs via init-plan's built-in Post-Plan Review Loop.
+- QA review still runs via code-plan's built-in Post-Plan Review Loop.
 - If QA has 🔴 issues, let the review loop resolve them (max 3 rounds as usual).
 
 ### Step 4: Execute fix
-Invoke Skill: `execute-plan` with the fix plan path.
+Invoke Skill: `code-execute` with the fix plan path.
 - Status check: if `failed`, report to user and stop.
 
 ### Step 5: Verify fix
-Invoke Skill: `run-test` with the fix plan path.
+Invoke Skill: `code-test` with the fix plan path.
 
-**Additional verification**: After run-test passes, reproduce the original error scenario:
+**Additional verification**: After code-test passes, reproduce the original error scenario:
 - If the user provided a specific command that triggered the error, re-run it.
 - If the error was during training, run a short training session (1-2 epochs).
 - If the error was during inference, run an inference test.
@@ -284,7 +284,7 @@ On rollback path:
    - Suggested manual investigation steps
 
 ### Step 6: Report
-Invoke Skill: `final-report` with the fix plan path.
+Invoke Skill: `code-report` with the fix plan path.
 
 **pipeline_summary.md must be written BEFORE reporting to the user, regardless of success/failure path.** This is the first action upon reaching any terminal state (fixed, partial, unresolved, or stop). On failure path (Step 5 rollback), pipeline_summary.md is written as part of that failure path — do NOT skip it.
 
@@ -295,7 +295,7 @@ Report to user: summary + verdict.
 
 **Write `{log_dir}/pipeline_summary.md` as the FIRST action on reaching any terminal state** (success, partial, failed, stop) — before reporting to the user, on all paths.
 
-This is a process log and artifact index — NOT a change analysis (that's final-report's job).
+This is a process log and artifact index — NOT a change analysis (that's code-report's job).
 
 Populate the Decision Points table from in-memory decision records. If none: `| - | No gated decisions triggered | - | - |`.
 
