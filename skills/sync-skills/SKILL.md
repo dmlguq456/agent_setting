@@ -253,6 +253,65 @@ drift 발견 시 Step 7 final report 에 별도 섹션:
 
 > **새 invariant 추가**: CONVENTIONS.md §3 에 한 행 추가하면 sync 시 자동 검사 list 에 포함.
 
+### Step 5c: Cross-doc skill name reference scan (rename drift 차단)
+
+**왜 신설** (2026-05-25): autopilot-app → autopilot-spec rename 자리에서 본 step 부재로 SKILL.md SHA 만 갱신되고 _README mermaid 다이어그램·다른 SKILL.md 의 cross-reference_ 가 그대로 통과. sync 가 _자동 잡았어야_ 자리. 본 step 이 _skill 이름 rename_ + _산출물 폴더 명 변경_ 자리의 drift 자동 검출.
+
+#### 5c-1. Skill / agent name 인벤토리 추출
+
+```bash
+# 현재 진실 (entry point list)
+SKILLS=$(ls -d ~/.claude/skills/*/  | xargs -n1 basename | sort)
+AGENTS=$(ls ~/.claude/agents/*.md   | xargs -n1 basename .md | sort)
+```
+
+DEPRECATED 표지 있는 skill 별도 인지 — description 안 `[DEPRECATED` 또는 본문 첫 줄 `> **DEPRECATED**` 발견 시 _레거시 자료_ 표지로 분류.
+
+#### 5c-2. Cross-doc reference grep
+
+전체 `~/.claude/` 안 `*.md` / `*.json` / `*.yaml` 에서 다음 패턴 grep:
+
+| 패턴 | 검출 |
+|---|---|
+| `autopilot-X` (X = 알파벳·하이픈) | autopilot-* skill name reference |
+| `/autopilot-X` | slash 명령 reference |
+| `\bX-Y\b` (X = app / code / design / draft, Y = init / spec / build / refine / 등) | sub-skill name reference |
+| `Agent\(X팀` 또는 `Agent\(X-team` | agent reference |
+
+각 reference 의 _name 부분_ 추출 후 인벤토리 (5c-1) 와 대조:
+
+| drift 종류 | 보고 |
+|---|---|
+| **폴더 부재 skill name reference** | 🔴 `<file>:<line> — '<missing-name>' reference 발견, skill 폴더 없음. rename 후 정정 누락?` |
+| **DEPRECATED skill 의 _description 안 흡수 자리_ 가 부재 skill 가리킴** | 🔴 `<file> — '<missing-target>' 가리키지만 폴더 없음` |
+| **slash 명령 (`/autopilot-X`) 의 X 가 폴더 부재** | 🔴 `<file>:<line> — /autopilot-<missing> 호출 reference` |
+
+#### 5c-3. README mermaid 노드 ↔ skill list 일관성
+
+`~/.claude/README.md` 안 mermaid 블록 (\`\`\`mermaid ... \`\`\`) 추출 후 노드 정의 (`X["..."]`) 파싱:
+
+- 실제 _entry point_ skill (ceremony 큰 7 개 + analyze-project + audit + notes) 가 _최소 한 다이어그램_ 에 등장하나
+- 부재 entry 발견 시: 🟡 `README mermaid 에 '<missing-skill>' 노드 누락 — 다이어그램 보강 권장`
+
+#### 5c-4. 산출물 폴더 컨벤션 일관성
+
+`CONVENTIONS.md §6.5 산출물 폴더 컨벤션 정리` 표 파싱 → 각 skill 의 _산출물 폴더 명_ 추출 (예: `specs/<name>/`, `documents/<date>_<name>/`).
+
+다른 SKILL.md 본문에서 _다른 skill 의 산출물 폴더 reference_ 추출 (예: autopilot-spec 의 본문이 autopilot-code 의 산출물 폴더 가리킴 자리).
+
+| drift 종류 | 보고 |
+|---|---|
+| **CONVENTIONS 매핑 표와 SKILL.md 산출물 wording 불일치** | 🔴 `skills/<x>/SKILL.md 의 산출물 '<wrong>' — CONVENTIONS §6.5 매핑은 '<correct>'` |
+| **다른 SKILL.md 의 _A skill 산출물 폴더 reference_ 가 매핑 표와 불일치** | 🔴 `skills/<other>/SKILL.md:<line> — '<x>' 산출물을 '<wrong>' 으로 reference (매핑: '<correct>')` |
+
+#### 5c-5. 자동 fix 정책
+
+- **default (report-only)**: drift 보고만, 수정 안 함
+- **`--auto-fix`** flag 시:
+  - 폴더 부재 skill name → _CONVENTIONS.md §6.6 DEPRECATED list_ 의 _이전 → 현재_ 매핑 표 참조해 자동 정정 가능 자리만 wording 교체. 매핑 없으면 사용자 결정.
+  - 산출물 폴더 명 — CONVENTIONS.md §6.5 canonical 로 자동 정정
+- **`--check` 모드**: drift 만 보고하고 종료
+
 ### Step 6: Update sync state
 `~/.claude/skills/.sync_state.json` 을 새 SHA + 시각으로 저장. v4 스키마 필드 모두 갱신:
 
