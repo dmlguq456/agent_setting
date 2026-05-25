@@ -74,6 +74,39 @@ spec 없이 호출된 자리에서도 cwd 단서로 _경량 mode 추정_:
 
 자동 갱신은 _autopilot-spec back-jump_ 통해서만 — 본 skill 안에서 직접 spec 갱신 X (역할 경계 보존).
 
+### 실험 ready 정리 자리 (autopilot-lab 사전 단계)
+
+연구·실험 코드에서 _실험 시작 전 정돈_ 자리. autopilot-lab 진입 전 코드베이스를 _실험 적절한 상태_ 로 정돈하는 사전 작업. 별도 mode 가 _아니라_ dev mode 의 한 갈래로 처리 — 사용자가 _cleanup + refactor + ready 정리_ 같이 자연어로 발화하면 본 skill 이 통합 처리.
+
+#### 자동 input
+
+`.claude_reports/analysis_project/code/` 에 있으면 자동 read:
+- **`cleanup_candidates.md`** — unused / dead branch / 주석 자국 list (제거 후보)
+- **`experiment_readiness.md`** — model 분리·train/eval 분리·seed·config 메커니즘 checklist (정리 후보)
+- **`experiment_conventions.md`** — 사용자 코드베이스의 preferred layer / config / prefix 패턴 (정돈 시 1순위 준수)
+
+#### 발화 trigger 신호
+
+- "실험 ready 상태로 정리" / "lab 시작 전 정돈"
+- "unused 코드 제거" / "main.py 를 train.py / eval.py 분리"
+- "model 폴더 분리" / "config 메커니즘 통일"
+
+본 발화 인지 시 메인 Claude 가 cleanup_candidates / experiment_readiness 를 자동 input 으로 본 skill 호출. code-plan 자리에서 _cleanup + refactor + ready 정돈_ 한 묶음 plan 생성.
+
+#### 자리 흐름
+
+```
+analyze-project --mode code → cleanup_candidates.md / experiment_readiness.md 추출
+   ↓
+autopilot-code "실험 ready 정돈" (본 skill) — cleanup + refactor + ready 한 묶음
+   ↓
+analyze-project --mode code 재실행 (옵션 — readiness 재점검)
+   ↓
+autopilot-lab "X 실험" — Step 0 에서 readiness ✓ 확인 후 진행
+```
+
+본 자리에서 _experiment_conventions.md 의 preferred layer / config / prefix 패턴_ 을 code-plan / code-execute 단계 입력으로 자동 prepend — 정돈 결과가 사용자 코드베이스 컨벤션과 어긋나지 않게.
+
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
 본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §6 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude 가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.

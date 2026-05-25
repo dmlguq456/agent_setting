@@ -13,7 +13,11 @@
 
 ```
 [연구·라이브러리 코드]
-  autopilot-research / analyze-project  →  autopilot-code  (반복)
+  autopilot-research                       ← (선택) 외부 baseline·paper survey
+    → analyze-project --mode code           ← 코드 청사진 + 실험 ready / cleanup / similar / convention 추출
+    → autopilot-code (실험 ready 정돈)       ← cleanup + refactor + train/eval 분리 (사전 필요 자리만)
+    → autopilot-lab (실험 prototype 반복)    ← idea 마다 한 폴더, STORY+RUNLOG 누적
+    → autopilot-code (졸업·라이브러리화)     ← 정련 의도 시 lab 산출물을 라이브러리로 흡수
 
 [문서 (paper / presentation / proposal / rebuttal)]
   autopilot-research / analyze-project  →  autopilot-draft  →  autopilot-refine  (반복)
@@ -30,6 +34,7 @@
 |---|---|---|---|
 | **문서** | research(academic/market) + analyze-project(paper/doc) | autopilot-draft | autopilot-refine |
 | **코드 (모든 자리)** | research(academic/tech) + analyze-project(code) | **autopilot-spec** (mode = app / library / api / cli / research / 복합 / auto) | **autopilot-code** (spec mode 별 분기 자동) |
+| **실험 prototype** (ML / one-shot script) | analyze-project(code) 의 _experiment_conventions / readiness / cleanup / similar_models_ 4 종 자료 | — (사전 spec 없이 빠른 cycle 1순위) | **autopilot-lab** (반복 호출, STORY+RUNLOG 누적; 졸업 자리 autopilot-code) |
 | **공통 시각** | — | autopilot-design (신규 사이클) | autopilot-design 재호출 |
 | **공통 사용자 프로필** | — | analyze-user (init) | analyze-user (update) |
 
@@ -67,19 +72,32 @@ Architecture Diagrams 기본 포함은 app / api mode 의 Component + Deployment
 
 # 2. 기존 코드 청사진 (선택 — 이미 있는 코드 위 작업 시)
 /analyze-project --mode code
+# → analysis_project/code/ 에 모듈 분석 + 실험 자료 4 종 (experiment_conventions / readiness / cleanup_candidates / similar_models)
 
-# 3. (선택) 청사진 — 라이브러리·CLI 공개 또는 연구 재현성 자리
+# 3. (선택) 실험 ready 정돈 — readiness 가 ❌ / ⚠️ 자리 있으면
+/autopilot-code "실험 ready 상태로 정리 — main.py 를 train.py / eval.py 분리 + config 통일"
+# → cleanup_candidates + experiment_readiness 자동 input → 한 묶음 plan
+
+# 4. (선택) 청사진 — 라이브러리·CLI 공개 또는 연구 재현성 자리
 /autopilot-spec --mode library,cli "X — 라이브러리 + CLI"
 /autopilot-spec --mode research,cli "Y — 학회 공개·재현성"
 /autopilot-spec  # 또는 mode 생략 → auto 추론
 
-# 4. 작업 entry (반복 호출)
+# 5. 실험 prototype 반복 (lab)
+/autopilot-lab "lr 1e-3 → 3e-4 비교"
+/autopilot-lab "TF_Restormer 에서 MDTA 빼고 ablation"
+# → experiments/{date}_{slug}/ 안 STORY+spec+scaffold+summary
+# → _RUNLOG.md 한 줄 자동 누적 (직전 실험이 다음 spec 의 input)
+
+# 6. 작업 entry — 코드 정련·기능 추가 (반복 호출)
 /autopilot-code "X 기능 추가"                    # 새 기능 (dev mode)
 /autopilot-code --mode debug "Y 버그·이상 동작"   # 디버그
-/autopilot-code "Z 리팩터링"                     # 리팩터링 (dev mode)
+/autopilot-code "lab 산출물 라이브러리화"          # 졸업 자리
 ```
 
-산출물: spec 있으면 `.claude_reports/specs/<name>/dev_log/<date>_<slug>/`, 없으면 `.claude_reports/plans/<date>_<slug>/` 안 누적.
+산출물:
+- spec 있으면 `.claude_reports/specs/<name>/dev_log/<date>_<slug>/`, 없으면 `.claude_reports/plans/<date>_<slug>/` 안 누적
+- 실험 prototype 은 `.claude_reports/experiments/{date}_{slug}/` (lab) + `.claude_reports/experiments/_RUNLOG.md` (timeline)
 
 ### 2.2. 문서 작업
 

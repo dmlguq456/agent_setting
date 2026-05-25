@@ -43,6 +43,7 @@
 |---|---|---|---|---|---|
 | `autopilot-research` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | 모든 autopilot 통일 |
 | `autopilot-code` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ (dev only; debug 는 thorough 로 downgrade) | **X** (code 는 fact-checker 없음) | |
+| `autopilot-lab` | quick/light/standard/thorough/**adversarial** | `light` | ✓ | **X** (실험 prototype — code 와 동일 — fact-checker 없음) | default 가 light 인 이유: 실험 prototype 빠른 cycle 1순위. 사용자 high-stakes 발화 (논문 결과·외부 공개) 시 standard+ 자동 상향 |
 | `autopilot-draft` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | |
 | `autopilot-refine` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | default 변경 (이전 quick → thorough) |
 | `analyze-user` | **adversarial (고정)** | `adversarial` | ✓ (강제) | standard+ | user profile 정확성 critical — qa 협상 불가, 다른 level 명시해도 adversarial 로 force |
@@ -301,6 +302,7 @@ fi
 |---|---|---|---|
 | **문서** (paper / presentation / 보고서 / proposal / rebuttal) | `autopilot-research` (academic / market) + `analyze-project --mode paper/doc` | `autopilot-draft` (신규 strategy + draft) | `autopilot-refine` (기존 정정·확장) |
 | **코드 (모든 자리 — 라이브러리·연구·앱·CLI·API)** | `autopilot-research` (academic / technology) + `analyze-project --mode code` | **`autopilot-spec`** (mode = app / library / api / cli / research / 복합 / auto) | **`autopilot-code`** (spec mode 별 분기 자동) |
+| **실험 prototype (ML / one-shot script)** | `analyze-project --mode code` 의 4 종 실험 자료 (`experiment_conventions` / `experiment_readiness` / `cleanup_candidates` / `similar_models`) + 직전 실험 `_RUNLOG.md` | — (spec 없이 빠른 cycle 1순위) | **`autopilot-lab`** (반복 호출, STORY+RUNLOG 누적; 졸업 자리 `autopilot-code`) |
 | **공통 시각 자산** | — | `autopilot-design` (신규 디자인 사이클) | `autopilot-design` 재호출 (cycle 2+) |
 | **공통 사용자 프로필** | — | `analyze-user --mode init` | `analyze-user --mode update` |
 
@@ -309,9 +311,11 @@ fi
 **1. 연구·라이브러리 코드 정돈·공개**:
 ```
 /autopilot-research "X 분야"                      ← (선택) 사전 조사
-/analyze-project --mode code                       ← (선택) 기존 코드 청사진
-/autopilot-spec --mode research,cli (또는 auto)    ← 청사진 — entry / configs / 재현 명령 + 명령·옵션
-/autopilot-code "Y 정돈·기능 추가"                  ← spec mode 별 추가 logic (research/cli) — 반복
+/analyze-project --mode code                       ← (선택) 기존 코드 청사진 + 4 종 실험 자료
+/autopilot-code "실험 ready 정리"                  ← (선택) cleanup + train/eval 분리 등 사전 정돈
+/autopilot-spec --mode research,cli (또는 auto)    ← (선택) 청사진 — entry / configs / 재현 명령
+/autopilot-lab "Y 실험"                            ← 실험 prototype 반복 (idea 마다 한 폴더)
+/autopilot-code "Z 정돈·라이브러리화"              ← spec mode 별 추가 logic — lab 졸업·정련 자리
 ```
 
 **2. 문서**:
@@ -386,12 +390,13 @@ PRD 의 textual 자리 (`api_contract.md` / `data_model.md` / `ui_flow.md`) + Ar
 | skill | 산출물 폴더 |
 |---|---|
 | `autopilot-research` | `.claude_reports/research/<topic>/` |
-| `analyze-project` | `.claude_reports/analysis_project/{code,paper,doc}/` |
+| `analyze-project` | `.claude_reports/analysis_project/{code,paper,doc}/` (code mode 자리에 lab 사전 4 종 자료 포함) |
 | `autopilot-spec` | `.claude_reports/specs/<name>/` (mode 무관 한 폴더, 안에 `01_spec/PRD.md` 의 mode 별 섹션) |
 | `autopilot-design` (단독) | `.claude_reports/designs/<name>/` |
 | `autopilot-design` (spec 위임) | `.claude_reports/specs/<name>/02_design/` |
 | `autopilot-code` (spec 있음) | `.claude_reports/specs/<name>/dev_log/<date>_<slug>/` |
 | `autopilot-code` (spec 부재) | `.claude_reports/plans/<date>_<slug>/` |
+| `autopilot-lab` | `.claude_reports/experiments/{date}_{slug}/` + `.claude_reports/experiments/_RUNLOG.md` (timeline) |
 | `autopilot-draft` | `.claude_reports/documents/<date>_<name>/` |
 | `autopilot-refine` | 대상 artifact 안 v{N+1} 갱신 |
 

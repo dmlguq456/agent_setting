@@ -96,6 +96,126 @@ CLAUDE.md should minimize code content and contain only:
 - Execution examples
 - If CLAUDE.md already exists, preserve existing rules and merge new findings
 
+## Phase 3.5: Experiment Conventions, Readiness, Cleanup & Similarity (lab 사전 자료)
+
+본 phase 는 _autopilot-lab 의 Step 0 auto-load_ 가 매번 read 하는 4 종 산출. 한 번 추출하면 영속 — lab 호출 마다 재추출 X. 사용자 코드베이스의 _실험 패턴 source of truth_ 자리.
+
+각 산출은 root `code/` 에 _flat 산출_ (다른 module 분석 파일과 같은 자리). lab 가 매번 본 4 파일을 read 한다.
+
+### 3.5.1. `experiment_conventions.md`
+
+코드베이스의 _실험 패턴 source of truth_. 다음 섹션 자동 추출:
+
+```markdown
+## 모델 폴더 구조
+- 위치: `model/{model_name}/` (실제 자리에서 grep)
+- 묶음 단위: model.py + config.yaml + train.py + ... (한 폴더 안)
+
+## 기존 모델 list
+- <model_1> (한 줄 설명)
+- <model_2> ...
+
+## Config 메커니즘
+- yaml / argparse / hydra 중 하나 (cwd 의 실제 자리)
+- 마이너 변경이 config 로 들어가는 자리
+
+## 튜닝 변형 prefix
+- `_ft01_` · `_ft02_` ... — base 의 fine-tuning 변형 (사용자 코드에서 grep)
+- 새 base = 새 모델 폴더, 변형 = 같은 폴더 안 prefix file
+
+## Preferred layer (이미 사용 중 — autopilot-lab 의 1순위)
+- <model_1>: <layer_list> (model.py 의 import + class 정의 grep)
+- 새 layer 도입은 명시 컨펌 필요
+```
+
+추출 전략 — `model/*/` 폴더 ls + 한 모델 sample read + config 파일 sample read + `_ft` 패턴 grep + import 분석.
+
+### 3.5.2. `experiment_readiness.md`
+
+실험 ready 점검 checklist. 각 항목 ✅ / ⚠️ / ❌ + 미흡 자리는 _autopilot-code 정리 권장_ 한 줄.
+
+| 항목 | 의미 | 점검 |
+|---|---|---|
+| 모델 단위 폴더 분리 | `model/{name}/` 묶음 단위 잡혀 있나 | `ls model/` 결과 |
+| Config 메커니즘 일관성 | yaml/argparse/hydra 한 종 채택 | 코드 내 import grep |
+| train.py / eval.py 분리 | 한 script 에 다 박혀 있지 않나 | 파일 존재 검사 |
+| base 와 변형 구분 | `_ft01_` 같은 prefix 패턴 일관 | 파일명 패턴 |
+| log/ckpt 구조 | `runs/{run-id}/` 같은 누적 자리 잡혔나 | 폴더 / .gitignore |
+| Reproducibility | seed·git hash 기록 자리 | train.py grep |
+
+format:
+```markdown
+## 실험 ready 점검
+
+| 항목 | 상태 | 비고 |
+|---|---|---|
+| 모델 단위 폴더 | ✅ | model/TF_Restormer/, model/SR_CorrNet/ |
+| Config | ⚠️ | yaml + argparse 혼재 |
+| train/eval 분리 | ❌ | main.py 한 파일 |
+| prefix 패턴 | ⚠️ | _ft01_ 한 번 사용, 다른 자리 일관 X |
+| log/ckpt | ✅ | runs/ 자리 잡힘 |
+| Reproducibility | ❌ | seed 자리 없음 |
+
+## 권장
+미흡 자리 (⚠️ / ❌) 정리:
+/autopilot-code "main.py 를 train.py / eval.py 분리 + seed·git hash 기록 + yaml/argparse 정리"
+```
+
+### 3.5.3. `cleanup_candidates.md`
+
+실험 시작 _전_ 손볼 자리 list. autopilot-code 호출 시 input.
+
+| 항목 | 추출 |
+|---|---|
+| unused imports / dead code | static scan (`ruff` / `pyflakes` 가능 시) |
+| commented-out 실험 자국 | `# old:` / `# TODO:` / `# debug:` 패턴 grep |
+| 한 파일에 박힌 변형 다발 | `if config.variant == ...` 식 분기 grep |
+| 사용 안 하는 layer / module | import graph (단순 grep: 정의는 있고 import 없음) |
+| 다 쓴 ablation 자국 | `# ablation1` / `# v1` / `# old version` 주석 영역 |
+
+format:
+```markdown
+## Cleanup 후보
+
+| 파일 | 자리 | 종류 | 추정 |
+|---|---|---|---|
+| model/X.py:42 | `from old_utils import _legacy_func` | unused import | 안전 제거 |
+| model/X.py:120-180 | `if config.variant == "v1":` 분기 | dead branch | v2 만 활성 — v1 제거 가능 |
+| model/old_layer.py | class 정의는 있고 import 없음 | unused module | 파일 통째 삭제 후보 |
+| train.py:80 | `# TODO: try learning rate ablation` | 다 쓴 주석 | 정리 |
+
+## 정리 명령 권장
+/autopilot-code "unused imports / dead branch / 주석 자국 정리"
+```
+
+### 3.5.4. `similar_models.md`
+
+autopilot-lab 의 `--ref` 자동 추천 source. 새 실험 시작 자리에서 _가장 유사한 기존 모델_ 추천.
+
+| 자리 | 추출 |
+|---|---|
+| 모델 별 1 줄 설명 | model.py 의 docstring / `__init__.py` |
+| 사용한 layer set | model.py import + class 정의 |
+| 데이터셋 | config.yaml 의 dataset 자리 |
+| metric | train.py / eval.py 의 metric grep |
+
+format:
+```markdown
+## 모델 간 유사도
+
+| 모델 | 도메인 | 핵심 layer | 데이터셋 | metric | 유사 자리 |
+|---|---|---|---|---|---|
+| TF_Restormer | image / TF | MDTA, GDFN, LayerNorm2d | DIV2K / GoPro | PSNR / SSIM | (자기 자신) |
+| SR_CorrNet | image SR | CorrAttention, ResBlock | DIV2K | PSNR | TF_Restormer 와 LayerNorm2d 공유 |
+
+## 새 실험 자리 추천 logic
+- 새 실험이 _image restoration_ 인지 발화 → TF_Restormer 추천
+- 새 실험이 _correlation 기반_ → SR_CorrNet 추천
+- 데이터셋 / metric 매칭 우선
+```
+
+본 4 파일은 _한 번 추출 후 영속_ — 사용자가 코드베이스 큰 변경 (새 layer 도입·prefix 패턴 변경·새 모델 추가) 시 _re-run analyze-project --mode code_ 로 갱신.
+
 ## Phase 4: Verify Documentation Coverage
 - Check that every code file in models/, utils/, src/ etc. is covered by at least one document.
 - Documentation updates are handled as an explicit step in code-execute, not by hooks.
@@ -242,6 +362,10 @@ Return ONLY paths + Korean summary.
 analysis_project/code/
 ├── 00_overview.md or topic_*.md   [T1] 모듈별 분석
 ├── interface_reference 통합        [T1]
+├── experiment_conventions.md       [T1] lab 사전 자료 — 모델 폴더 / config / prefix / preferred layer
+├── experiment_readiness.md         [T1] lab 사전 자료 — 실험 ready 점검 (model 분리·train/eval 분리·seed 등)
+├── cleanup_candidates.md           [T1] lab 사전 자료 — unused / dead branch / 주석 자국
+├── similar_models.md               [T1] lab 사전 자료 — 모델 간 유사도 (lab --ref 추천 source)
 └── _internal/                      [T3]
     └── reviews/                    QA log
 ```
@@ -271,7 +395,8 @@ analysis_project/doc/{name}/
 
 `analyze-project`의 산출물은 _영속 자산_으로 후속 autopilot-* skill이 implicit으로 읽음:
 
-- `autopilot-code`는 `analysis_project/code/`를 자동 인지 (code-plan에서 모듈 매핑 참조)
+- `autopilot-code`는 `analysis_project/code/`를 자동 인지 (code-plan에서 모듈 매핑 참조). `cleanup_candidates.md` / `experiment_readiness.md` 가 있으면 _실험 ready 정리 자리_ (cleanup + refactor + ready 정돈) input 으로 자동 사용.
+- `autopilot-lab` 은 `analysis_project/code/` 의 _4 종 실험 자료_ (`experiment_conventions.md` / `experiment_readiness.md` / `cleanup_candidates.md` / `similar_models.md`) 를 매번 Step 0 에서 read — 사용자 코드베이스의 layer / prefix / config 패턴 1순위 준수. 자료 부재 시 lab 가 lightweight scan 으로 추출 후 사용자 컨펌 → 본 폴더에 저장.
 - `autopilot-draft`는 form-first 3-mode (paper / presentation / doc) 에 따라:
   - `paper` → `analysis_project/paper/` (academic body 본문)
   - `presentation` → `analysis_project/paper/` + `analysis_project/doc/{matching}/formats/` (slide template)
@@ -303,4 +428,5 @@ cd <project_root>     # 자료를 프로젝트에 가져다 둔 후
 /autopilot-draft "<task>" --mode presentation
 /autopilot-research <topic>
 /autopilot-refine "<prompt>"
+/autopilot-lab "<실험 한 줄>"        # ← code mode 의 4 종 실험 자료 자동 read
 ```

@@ -20,23 +20,27 @@ flowchart LR
     RES["autopilot-research<br/>(academic/tech/market)"]
     SPEC["autopilot-spec<br/>(app/library/api/cli/research)"]
     CODE["autopilot-code<br/>(spec mode 자동 분기)"]
+    LAB["autopilot-lab<br/>(실험 prototype 반복)"]
     DOC["autopilot-draft"]
     DES["autopilot-design<br/>(시각)"]
     REF["autopilot-refine<br/>(doc + research 정정)"]
     AUD["audit<br/>(모든 산출물 점검)"]
     ANA --> SPEC
     ANA --> DOC
+    ANA -->|실험 자료 4 종| LAB
     RES --> SPEC
     RES --> DOC
     RES --> REF
     SPEC --> CODE
     SPEC -.->|app mode 자리| DES
     DES -.->|컴포넌트·토큰| CODE
+    LAB -->|졸업·라이브러리화| CODE
     DOC --> REF
     RES --> AUD
     DOC --> AUD
     CODE --> AUD
     SPEC --> AUD
+    LAB --> AUD
     AUD -.->|auto-fix doc/research| REF
     AUD -.->|auto-fix code| CODE
     AU -.->|user_profile 참조| CODE
@@ -107,7 +111,7 @@ flowchart LR
 
 발화가 들어오면 메인 Claude 는 turn 첫 단계로 _skill 호출 후보 vs 직접 처리_ 를 분기 판단한다 (글로벌 [`CLAUDE.md`](CLAUDE.md) §6 Pre-check). skill 후보면 컨텍스트 (cwd / `.claude_reports/` 산출물 / 발화) 를 읽고 skill + 옵션 + task description 을 조립, **한 줄 요약 + 옵션 펼침 + 선택 근거** 로 컨펌을 묻는다. yes / 수정 ("qa thorough 로", "X 빼고") / cancel. 무응답이면 10-30 분 뒤 추천안으로 자율 진행.
 
-ceremony 가 큰 7 개 (`autopilot-code` / `autopilot-spec` / `autopilot-draft` / `autopilot-design` / `autopilot-research` / `autopilot-refine` / `analyze-user`) 만 컨펌 의무. `audit` / `notes` / `analyze-project` 는 즉시 invoke. 상세 룰은 글로벌 [`CLAUDE.md`](CLAUDE.md) §6.
+ceremony 가 큰 8 개 (`autopilot-code` / `autopilot-spec` / `autopilot-lab` / `autopilot-draft` / `autopilot-design` / `autopilot-research` / `autopilot-refine` / `analyze-user`) 만 컨펌 의무. `audit` / `notes` / `analyze-project` 는 즉시 invoke. 상세 룰은 글로벌 [`CLAUDE.md`](CLAUDE.md) §6.
 
 | 사용자 발화 | 메인 Claude 컨펌 (자연어 요약) |
 |---|---|
@@ -118,6 +122,7 @@ ceremony 가 큰 7 개 (`autopilot-code` / `autopilot-spec` / `autopilot-draft` 
 | "X 기능 새로 만들어줘" | autopilot-code dev 모드 (specs/ 자리면 spec mode 별 분기 — app/library/cli/research 자동) |
 | "할 일 앱 만들고 싶어, PRD 부터" | autopilot-spec app 모드 (PRD + 스택 + scaffolding + skeleton) |
 | "TF-Restormer 학회 공개 코드로 정돈" | autopilot-spec auto → research,cli 추론 (재현 명령 + entry script 청사진) |
+| "lr 1e-3 → 3e-4 비교" / "MDTA 빼고 ablation" / "X 모델 prototype 빨리" | autopilot-lab ml 모드 (직전 RUNLOG + similar_models 자동 참조, qa light) |
 | "Vercel 에 올리자" / "env 변경" | autopilot-spec setup-only 모드 (ship 첫 setup / env / domain / migration deploy 안내) |
 | "이번 발표 자료 만들어줘" | autopilot-draft presentation 모드로 슬라이드 markdown 작성 (qa thorough) |
 | "내 figure 스타일 분석해줘" / "발표 자료들 보고 프로필 갱신" | analyze-user figure (또는 all) — incremental update (qa adversarial 고정) |
@@ -131,6 +136,7 @@ ceremony 가 큰 7 개 (`autopilot-code` / `autopilot-spec` / `autopilot-draft` 
 /analyze-project    [--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]
 /autopilot-code     --mode dev|debug "<task/error>" [--from <step>] [--qa ...] [--user-refine]
 /autopilot-spec     "<task>" [--mode auto|app|library|api|cli|research (콤마로 다중) | setup-only] [--qa ...] [--user-refine]
+/autopilot-lab      "<task>" [--mode ml|script|auto] [--ref <similar-model-path>] [--qa ...] [--from spec|scaffold|run|summary]
 /autopilot-design   "<design task or app path>" [--scope ui|slide|icon|diagram|mixed] [--from <phase>] [--qa quick|standard|thorough]
 /autopilot-draft    --mode paper|presentation|doc "<task>" [--qa ...] [--user-refine] [--from <stage>]
 /autopilot-refine   "<prompt>" [--qa ...] [--review-only | --memo <file>] [--no-fact-check] [--no-style-audit]
@@ -141,7 +147,7 @@ ceremony 가 큰 7 개 (`autopilot-code` / `autopilot-spec` / `autopilot-draft` 
 
 > **autopilot-* 의 3 가지 흐름** (자세한 청사진: [`AUTOPILOT_FLOWS.md`](AUTOPILOT_FLOWS.md))
 >
-> - **연구개발** — `autopilot-research / analyze-project` → (옵션) `autopilot-spec --mode research,cli` → `autopilot-code` (반복)
+> - **연구개발** — `autopilot-research / analyze-project` → (옵션) `autopilot-code "실험 ready 정돈"` → `autopilot-lab` (실험 반복) → `autopilot-code` (졸업·라이브러리화)
 > - **문서작업** — `autopilot-research / analyze-project` → `autopilot-draft` → `autopilot-refine` (반복)
 > - **앱개발** — `autopilot-research / autopilot-spec --mode app` → `autopilot-design` (옵션) → `autopilot-code` (app spec mode 자동, 반복) → `autopilot-spec --mode setup-only` (ship 첫 setup·env·domain)
 > - **라이브러리·CLI 정돈·공개** — `analyze-project` → `autopilot-spec --mode library,cli` (또는 auto) → `autopilot-code` (반복)
@@ -159,6 +165,7 @@ QA 5 단계 (quick / light / standard / thorough / adversarial) 정의는 [`CONV
 | [`autopilot-research`](skills/autopilot-research/SKILL.md) | 분야 조사 — mode 별 보고서 (academic/technology/market) |
 | [`autopilot-code`](skills/autopilot-code/SKILL.md) | 코드 작업 일반 (라이브러리·연구·앱 모두) — dev/debug. `specs/<name>/` 컨텍스트 자동 감지 → spec mode 별 추가 logic (app/library/api/cli/research) |
 | [`autopilot-spec`](skills/autopilot-spec/SKILL.md) | _요구사항·청사진 작성_ 일반화 entry — mode 5종 (app / library / api / cli / research) + 다중 + auto. PRD = textual (api_contract / data_model / ui_flow) + Architecture Diagrams (Component + Deployment, app/api mode). 변경 자리 묶음 갱신. analyze-project 대칭 자리 |
+| [`autopilot-lab`](skills/autopilot-lab/SKILL.md) | _빠른 실험 prototype_ — ML 실험·one-shot script. 4 단계 (spec → scaffold → run → summary). STORY + _RUNLOG.md 누적 (직전 실험이 다음 spec 의 input). analyze-project 의 4 종 실험 자료 자동 read, 코드 수정 4 원칙 prepend. 졸업 자리 autopilot-code |
 | [`autopilot-draft`](skills/autopilot-draft/SKILL.md) | 문서 strategy + draft (paper/presentation/doc, markdown 만) |
 | [`autopilot-design`](skills/autopilot-design/SKILL.md) | 시각 산출물 — UI/UX·슬라이드·다이어그램·아이콘 (init → refs → tokens → components → review → handoff). autopilot-spec 의 디자인 사이클 또는 단독 호출 |
 | [`autopilot-refine`](skills/autopilot-refine/SKILL.md) | doc/research 사후 정정 — major ceremony, prompt + memo 통합 entry |
@@ -217,12 +224,13 @@ QA 5 단계 (quick / light / standard / thorough / adversarial) 정의는 [`CONV
 - **§6 autopilot-\* 호출 Pre-check** — turn 첫 단계 분기 판단 + 옵션 자동 구성 + 자연어 요약 컨펌 + §5 자율 진행 적용
 - **도메인 트리거 표** — Notion 작업 / doc·research major-level 수정 / QA·model invariant 작업 / 세션 시작
 
-ceremony 큰 7 개 (autopilot-* 6 + analyze-user) 의 자연어 trigger 신호 한눈에:
+ceremony 큰 8 개 (autopilot-* 7 + analyze-user) 의 자연어 trigger 신호 한눈에:
 
 | Skill | Trigger 신호 (자연어 발화) | Default 옵션 권장값 |
 |---|---|---|
 | `autopilot-code` | "X 기능 만들어줘" / "X 디버그해봐" / "이 에러 고쳐줘" / 코드 변경 의도. _라이브러리·연구·앱 모두_. `specs/<name>/` 발견 시 spec mode 별 추가 logic 자동 | `--mode dev/debug` 자동 추론 · `--qa thorough` (dev) / `standard` (debug) |
 | `autopilot-spec` | "X 앱 만들어줘" (app) / "라이브러리 정리·공개" (library,cli) / "연구 코드 정돈·재현성" (research,cli) / "Vercel 셋업·env 변경" (setup-only) | `--mode auto` (default — 발화·코드 단서로 자동 추론, 단일·복수) · `--qa standard` |
+| `autopilot-lab` | "lr 비교" / "ablation 돌려" / "X 모델 prototype 빨리" / 실험 의도. similar_models 자동 추천 | `--mode auto` 추론 (ml 우세) · `--qa light` (default — 실험 prototype 빠른 cycle; high-stakes 발화 시 standard+ 자동 상향) |
 | `autopilot-draft` | "발표 자료 만들어줘" / "논문 본문 작성" / "rebuttal 응답 작성" / "보고서 작성" | `--mode paper/presentation/doc` 자동 추론 · `--qa thorough` |
 | `autopilot-design` | "UI mockup 그려줘" / "디자인 토큰 잡아줘" / "슬라이드 비주얼" / "다이어그램 그려줘" / 시각 산출물 의도 | `--scope ui/slide/icon/diagram/mixed` 자동 추론 · `--qa thorough` · autopilot-spec 의 app mode 에서 자동 호출 |
 | `autopilot-research` | "X 분야 조사" / "동향 알려줘" / "literature review" / "표준 비교" | `--mode academic/technology/market` 자동 추론 · `--depth medium` · `--qa thorough` |
