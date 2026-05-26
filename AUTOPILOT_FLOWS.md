@@ -12,12 +12,15 @@
 ### 1.1. 사용자 호출 단위 흐름 — 3 family
 
 ```
-[연구·라이브러리 코드]
+[연구·실험]
   autopilot-research                       ← (선택) 외부 baseline·paper survey
     → analyze-project --mode code           ← 코드 청사진 + 실험 ready / cleanup / similar / convention 추출
-    → autopilot-code (실험 ready 정돈)       ← cleanup + refactor + train/eval 분리 (사전 필요 자리만)
-    → autopilot-lab (실험 prototype 반복)    ← idea 마다 한 폴더, STORY+RUNLOG 누적
-    → autopilot-code (졸업·라이브러리화)     ← 정련 의도 시 lab 산출물을 라이브러리로 흡수
+    → autopilot-spec --mode research,cli    ← 뼈대·skeleton (ref repo 옮김 + Phase 1.5 ckpt 검증)
+    → autopilot-code                        ← layout 위 logic 구현 (baseline 학습 가능 코드 완성)
+    → autopilot-lab                         ← baseline 학습 + variation 실험 반복
+
+[라이브러리·CLI 정돈·공개]  ← 별도 트랙. 연구·실험 의 졸업 자리에서 자연 연결
+  analyze-project → autopilot-spec → autopilot-code (반복)
 
 [문서 (paper / presentation / proposal / rebuttal)]
   autopilot-research / analyze-project  →  autopilot-draft  →  autopilot-refine  (반복)
@@ -87,24 +90,28 @@ Architecture Diagrams 기본 포함은 app / api mode 의 Component + Deployment
 /autopilot-code "실험 ready 상태로 정리 — main.py 를 train.py / eval.py 분리 + config 통일"
 # → cleanup_candidates + experiment_readiness 자동 input → 한 묶음 plan
 
-# 4. (선택) 청사진 — 라이브러리·CLI 공개 또는 연구 재현성 자리
-/autopilot-spec --mode library,cli "X — 라이브러리 + CLI"
+# 4. 청사진 — 뼈대 + skeleton + ref 사전 점검
 /autopilot-spec --mode research,cli "Y — 학회 공개·재현성"
-/autopilot-spec  # 또는 mode 생략 → auto 추론
-# → 중간 컨펌 자리 6-8 회 default (정보 수집 / 한 화면 / PRD 공통+핵심 / Architecture Diagrams / 복합 mode / scaffold ref source / scaffold 결과 / 완성)
-# → 사용자 "쭉 진행" 발화 시 일괄 컨펌 (3-4 회) 자동 축소
-# → scaffold 5종 통일: ref repo 자동 fetch (public git / HF) + Phase 1.5 ckpt 사전 검증 (research mode) + 개발팀 new-lib 으로 우리 컨벤션 옮김
+/autopilot-spec  # mode 생략 → auto 추론
+# → 중간 컨펌 6-8 회 default
+# → scaffold: ref repo 자동 fetch + Phase 1.5 ckpt 사전 검증 + 개발팀 new-lib 으로 우리 컨벤션 옮김 (skeleton 까지)
 
-# 5. 실험 prototype 반복 (lab)
-/autopilot-lab "lr 1e-3 → 3e-4 비교"
-/autopilot-lab "TF_Restormer 에서 MDTA 빼고 ablation"
+# 5. layout 위 logic 구현 (필수 — baseline 학습 가능 코드 완성)
+/autopilot-code "data loader 보강 + loss 자리 정리 + training loop 완성"
+# → spec 의 minimum viable skeleton 위에 실제 logic
+# → ref 가 매우 깔끔한 자리는 minor 자리만 / 사용자 데이터셋 적응 큰 자리는 비중 큼
+
+# 6. 실험 prototype 반복 (lab)
+/autopilot-lab "Conformer ASR Common Voice ko baseline"   # 첫 호출 — baseline 학습
+/autopilot-lab "lr 1e-3 → 3e-4 비교"                     # variation
+/autopilot-lab "MDTA 빼고 ablation"
 # → experiments/{date}_{slug}/ 안 STORY+spec+scaffold+summary
 # → _RUNLOG.md 한 줄 자동 누적 (직전 실험이 다음 spec 의 input)
 
-# 6. 작업 entry — 코드 정련·기능 추가 (반복 호출)
+# 7. 작업 entry — 코드 정련·기능 추가 (반복 호출, 별도 사이클)
 /autopilot-code "X 기능 추가"                    # 새 기능 (dev mode)
 /autopilot-code --mode debug "Y 버그·이상 동작"   # 디버그
-/autopilot-code "lab 산출물 라이브러리화"          # 졸업 자리
+/autopilot-code "lab 산출물 라이브러리화"          # 라이브러리·CLI 트랙으로 졸업
 ```
 
 산출물:

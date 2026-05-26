@@ -311,14 +311,18 @@ fi
 
 ### §6.2. 사용자 호출 단위 흐름 (3 패턴)
 
-**1. 연구·라이브러리 코드 정돈·공개**:
+**1. 연구·실험**:
 ```
 /autopilot-research "X 분야"                      ← (선택) 사전 조사
 /analyze-project --mode code                       ← (선택) 기존 코드 청사진 + 4 종 실험 자료
-/autopilot-code "실험 ready 정리"                  ← (선택) cleanup + train/eval 분리 등 사전 정돈
-/autopilot-spec --mode research,cli (또는 auto)    ← (선택) 청사진 — entry / configs / 재현 명령
-/autopilot-lab "Y 실험"                            ← 실험 prototype 반복 (idea 마다 한 폴더)
-/autopilot-code "Z 정돈·라이브러리화"              ← spec mode 별 추가 logic — lab 졸업·정련 자리
+/autopilot-spec --mode research,cli                ← 뼈대·skeleton + ref repo 옮김 + Phase 1.5 ckpt 검증
+/autopilot-code "data loader / loss / training loop logic 구현"  ← layout 위 logic (baseline 학습 가능 코드 완성) — 필수
+/autopilot-lab "X 실험"                            ← baseline 학습 + variation 실험 반복
+```
+
+**1b. 라이브러리·CLI 정돈·공개** (별도 트랙, 연구·실험 lab 졸업 후 자연 연결):
+```
+/analyze-project → /autopilot-spec --mode library,cli → /autopilot-code (반복)
 ```
 
 **2. 문서**:
