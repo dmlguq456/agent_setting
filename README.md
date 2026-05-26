@@ -23,7 +23,7 @@
 | 트랙 | 단계 순서 (왼쪽 → 오른쪽) | 각 단계가 만드는 것 |
 |---|---|---|
 | **📄 문서 작업** (논문·보고서·발표·rebuttal) | `analyze-project`/`autopilot-research` → `autopilot-draft` → `autopilot-refine` → `autopilot-apply` | 자료 영속화 → markdown 초안·cheatsheet → 정정 (반복) → 실제 `main.tex` 반영 + 컴파일 |
-| **🔬 연구·실험** (ML 실험·연구 코드) | `analyze-project`/`autopilot-research` → `autopilot-spec` → `autopilot-lab` | 자료 → scaffold·baseline → 실험 prototype (반복) |
+| **🔬 연구·실험** (ML 실험·연구 코드) | `analyze-project`/`autopilot-research` → `autopilot-spec` (옵션, ref repo fetch + Phase 1.5 ckpt 검증) → `autopilot-lab` (실험 반복) → `autopilot-code` (졸업·라이브러리화) | 자료 → 청사진·skeleton → 실험 prototype (반복) → 정련된 코드 |
 | **💻 앱 개발** | `autopilot-spec` → `autopilot-design` (옵션) → `autopilot-code` → `autopilot-spec --mode setup-only` | PRD·skeleton → 시각 → 앱 코드 (반복) → 배포 셋업 |
 | **📦 라이브러리·CLI 정돈·공개** | `analyze-project` → `autopilot-spec` → `autopilot-code` | 분석 → 청사진·skeleton → 공개용 코드 (반복) |
 | **🔍 점검·정정** (모든 트랙 공통, 사후) | `audit` (읽기 전용 점검) · `autopilot-refine` (markdown 정정) · `autopilot-apply` (cheatsheet → 실제 소스) | 점검 보고 / 버전 정정 / 소스 적용 |
@@ -37,7 +37,7 @@ flowchart LR
     end
     subgraph EXP["🔬 연구·실험"]
         direction LR
-        e1["analyze-project /<br/>autopilot-research"] --> e2[autopilot-spec] --> e3["autopilot-lab<br/>↻ 반복"]
+        e1["analyze-project /<br/>autopilot-research"] --> e2["autopilot-spec<br/>(옵션)"] --> e3["autopilot-lab<br/>↻ 반복"] --> e4["autopilot-code<br/>(졸업)"]
     end
     subgraph APPDEV["💻 앱 개발"]
         direction LR
@@ -83,7 +83,7 @@ flowchart LR
     RES --> DOC
     RES --> REF
     SPEC --> CODE
-    SPEC -->|research scaffold| LAB
+    SPEC -.->|research scaffold (옵션)| LAB
     SPEC -.->|app mode 자리| DES
     DES -.->|컴포넌트·토큰| CODE
     LAB -->|졸업·라이브러리화| CODE
@@ -211,7 +211,7 @@ ceremony 가 큰 9 개 (`autopilot-code` / `autopilot-spec` / `autopilot-lab` / 
 
 > **autopilot-* 의 3 가지 흐름** (자세한 청사진: [`AUTOPILOT_FLOWS.md`](AUTOPILOT_FLOWS.md))
 >
-> - **연구개발** — `autopilot-research / analyze-project` → `autopilot-spec` (scaffold·baseline) → `autopilot-lab` (실험 반복) → (졸업 시) `autopilot-code` (라이브러리화)
+> - **연구개발** — `autopilot-research / analyze-project` → (옵션) `autopilot-spec --mode research,cli` (skeleton + 외부 ref repo fetch·ckpt 검증) → `autopilot-lab` (실험 반복) → (졸업 시) `autopilot-code` (구현·라이브러리화)
 > - **문서작업** — `autopilot-research / analyze-project` → `autopilot-draft` → `autopilot-refine` (반복) → `autopilot-apply` (cheatsheet → 실제 LaTeX 소스 적용·컴파일)
 > - **앱개발** — `autopilot-research / autopilot-spec --mode app` → `autopilot-design` (옵션) → `autopilot-code` (app spec mode 자동, 반복) → `autopilot-spec --mode setup-only` (ship 첫 setup·env·domain)
 > - **라이브러리·CLI 정돈·공개** — `analyze-project` → `autopilot-spec --mode library,cli` (또는 auto) → `autopilot-code` (반복)
