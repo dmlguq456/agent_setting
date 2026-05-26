@@ -125,7 +125,7 @@ ceremony 큰 skill (`autopilot-code` / `autopilot-draft` / `autopilot-research` 
 
 사용자가 작업 의도를 자연어로 던지면, 메인 Claude 는 응답·tool call 시작 _전_ 에 _이 발화가 어느 skill 호출 후보인지_ 먼저 분기 판단한다. 네 갈래:
 
-1. **ceremony 큰 5 개 매칭** (`autopilot-code` / `autopilot-draft` / `autopilot-research` / `autopilot-refine` / `analyze-user`) → 본 §6 의 컨펌 흐름 진입 (자연어 한 줄 요약 + 옵션 펼침 + 선택 근거 + 응답 흐름)
+1. **ceremony 큰 6 개 매칭** (`autopilot-code` / `autopilot-draft` / `autopilot-research` / `autopilot-refine` / `autopilot-apply` / `analyze-user`) → 본 §6 의 컨펌 흐름 진입 (자연어 한 줄 요약 + 옵션 펼침 + 선택 근거 + 응답 흐름)
 2. **ceremony 작은 3 개 매칭** (`audit` / `notes` / `analyze-project`) → 컨펌 없이 즉시 invoke
 3. **sub-skill 자연어 발화** (`init-plan` / `refine-plan` / `execute-plan` / `run-test` / `final-report` / `init-doc-strategy` / `refine-doc`) → 발화 매칭 대상 아님. autopilot-* orchestrator 가 내부 자동 호출하는 단계라 사용자 직접 호출 의미 약함. 사용자가 _자연어로_ sub-skill 동작을 요청하면 (예: "plan 다시 짜줘" / "테스트 다시 돌려줘") 해당 sub-skill 을 _포함하는_ autopilot-* (autopilot-code / autopilot-draft) 의 `--from <stage>` 재개로 라우팅. sub-skill 단독 invoke 는 사용자가 _slash 명령_ 직접 입력했을 때만 (`/init-plan`, `/run-test` 등 — 의도 명시).
 4. **skill 매칭 없음** → 메인 Claude 직접 처리 (Read / Edit / Bash / 단순 질의응답 / Agent 직접 호출)
@@ -139,7 +139,7 @@ ceremony 큰 skill (`autopilot-code` / `autopilot-draft` / `autopilot-research` 
 
 본 검토는 _명시적 turn 첫 단계_ — 발화 들어오면 _즉시 분기 판단_ 후 그에 맞춰 응답·tool call 시작. "이 요청이 skill 호출인지 / 직접 처리인지" 의 한 줄 자가 점검 후 행동.
 
-**적용 대상** — `autopilot-code` / `autopilot-draft` / `autopilot-research` / `autopilot-refine` / `analyze-user` 5 개. `audit` / `notes` / `analyze-project` 처럼 옵션이 적고 ceremony 작은 갈래는 컨펌 없이 그냥 invoke.
+**적용 대상** — `autopilot-code` / `autopilot-draft` / `autopilot-research` / `autopilot-refine` / `autopilot-apply` / `analyze-user` 6 개. `audit` / `notes` / `analyze-project` 처럼 옵션이 적고 ceremony 작은 갈래는 컨펌 없이 그냥 invoke. (`autopilot-apply` 는 실제 source 파일을 건드리므로 ceremony 큰 갈래 — git branch 위 적용이라도 컨펌 의무.)
 
 **Skip 조건** — 사용자가 `/autopilot-code <args>` 처럼 slash command 를 _직접_ 입력했으면 의도 명시 = 컨펌 skip 하고 그대로 invoke.
 

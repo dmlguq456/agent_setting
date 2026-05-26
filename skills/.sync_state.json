@@ -1,6 +1,6 @@
 {
   "version": 4,
-  "last_readme_sync": "2026-05-26T10:39:32.186849+09:00",
+  "last_readme_sync": "2026-05-26T11:17:59.750328+09:00",
   "items": {
     "skills/analyze-project": {
       "sha256": "0e30477013210c933e6e9aab54a590d3c48136487932750a29d0e3ca33ec5494",
@@ -157,6 +157,10 @@
     "agents/research-team": {
       "sha256": "908bc18999ade3723525611eddda1dcedfb4eb091edab65c63c52d659835a48a",
       "synced_at": "2026-05-26T10:39:32.186849+09:00"
+    },
+    "skills/autopilot-apply": {
+      "sha256": "44e7de349ee43a1edb6f6d515562689331dd361079a1b332d21be695d2ffb077",
+      "synced_at": "2026-05-26T11:17:59.750328+09:00"
     }
   }
 }

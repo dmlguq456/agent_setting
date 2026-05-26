@@ -46,6 +46,7 @@
 | `autopilot-lab` | quick/light/standard/thorough/**adversarial** | `light` | ✓ | **X** (실험 prototype — code 와 동일 — fact-checker 없음) | default 가 light 인 이유: 실험 prototype 빠른 cycle 1순위. 사용자 high-stakes 발화 (논문 결과·외부 공개) 시 standard+ 자동 상향 |
 | `autopilot-draft` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | |
 | `autopilot-refine` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | default 변경 (이전 quick → thorough) |
+| `autopilot-apply` | — (`--qa` 없음) | — | — | **X** | verify = build/compile gate (latexmk) + latexdiff. reviewer QA loop 아님 — `run-test` 의 build 검증과 동류. ground-truth 는 컴파일 결과 |
 | `analyze-user` | **adversarial (고정)** | `adversarial` | ✓ (강제) | standard+ | user profile 정확성 critical — qa 협상 불가, 다른 level 명시해도 adversarial 로 force |
 | `audit` | — | — | — | `--no-fact-check` flag | `--qa` 대신 `--scope` 사용; fact-check 는 Stage B.5 에서 별도 |
 | `init-plan` (sub) | quick/light/standard/thorough/adversarial | auto-detect from scope (plan frontmatter override) | ✓ | X | autopilot-code 내부 |
@@ -401,6 +402,7 @@ PRD 의 textual 자리 (`api_contract.md` / `data_model.md` / `ui_flow.md`) + Ar
 | `autopilot-lab` | `.claude_reports/experiments/{date}_{slug}/` + `.claude_reports/experiments/_RUNLOG.md` (timeline) |
 | `autopilot-draft` | `.claude_reports/documents/<date>_<name>/` |
 | `autopilot-refine` | 대상 artifact 안 v{N+1} 갱신 |
+| `autopilot-apply` | 자체 artifact_dir 없음 — `.claude_reports/` _밖_ 실제 source 편집 (git branch 위) + 로그는 cheatsheet artifact 의 `_internal/apply/` |
 
 ### §6.6. DEPRECATED sub-skill (2026-05-25)
 
