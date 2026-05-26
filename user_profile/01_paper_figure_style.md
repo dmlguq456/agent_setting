@@ -1,296 +1,111 @@
 ---
 aspect: figure
-last_init: 2026-05-26
-version: 2.5
+owner: 사용자
+mode: init
+updated: 2026-05-26
+source: paper PDF 8 / figure_ppt 5 (PNG 54) / code architecture.png 2
+consensus: 3-instance (run A/B/C)
 ---
 
-# Paper / Figure 스타일
+# 01. Paper / Figure 제작 스타일
 
-> 사용자 paper 8 편 (ICML / NeurIPS / ICASSP / Interspeech / T-ASLP / SPL) + figure_ppt 5 + ppt PNG 8 추출 패턴. 분석팀 / 연구팀 / 디자인팀 / 편집팀이 figure / 표 만들 때 default. process 메타 (consensus N/3, source A·B·C 매핑, quarantine 후보) 는 `_internal/aspect_figure_draft.md` 참조. open question 은 `_internal/open_questions.md` 참조.
+> Speech separation·enhancement·restoration 연구자의 figure/diagram 양식. architecture diagram + booktabs 표가 중심이고 line plot·scatter 는 절제적. agent 가 figure/표/슬라이드 비주얼 만들 때 본 파일을 1순위 참조.
 
-## 1. Architecture diagram
+## 1. Architecture diagram (가장 강한 시그니처, 3/3)
 
-### 1.1 Block 모양·outline·arrow
+- block: **rounded rectangle**, 흰 fill + **굵은 colored outline** (fill 아닌 stroke 가 semantic carrier). 상위 컨테이너는 모서리 radius 큼. subtle drop shadow.
+- **역할 색 규약** (NeurIPS SepRe → SPL TF-CorrNet → ICML TF-Restormer → 발표 deck 전부 일치):
+  - 초록 = encoder / separation / analysis 경로 ("Time/Freq. self module")
+  - 주황 = decoder / reconstruction / synthesis 경로 ("Freq. cross-self module")
+  - 회색 = I/O·보조 연산 (STFT/iSTFT, Conv2D, Projection, Split, Filter, LN) — 회색 outline + drop shadow
+  - 빨강 = novelty 강조 (빨강 점선 outline 또는 빨강 텍스트)
+  - 노랑/금색 = zoom-in 한 신규 sub-block (Q/K/V Linear, Freq. projection)
+- 반복 stack: 경로색 **연한 tint 배경 + 회색 점선 컨테이너 + `×B_E`/`×B_D`/`×R` 첨자** (TF_Restormer_ICML_slide-3, TF-CorrNet-v2_slide-08).
+- arrow: 가는 검정 직선 + 작은 채운 화살촉, **직각(orthogonal) 라우팅**. 점선 = 보조/조건 입력 ("Extension query", "key/value", "padding").
+- 연산자 = 원 기호: `⊕` 잔차합, `⊗` masking/gating(옆에 "Swish" 라벨), `~⊕` positional embedding 합성.
+- **cross-attention 은 "key/value" 라벨 화살표**로 encoder→decoder 명시 — trademark (2026_ICML Fig.2, architecture.png).
+- zoom-in: 상위 block 을 **회색 점선 rounded rect** 로 감싸고 점선 leader 로 내부 분해. 확대 안에서도 색 규약 유지 (신규 연산만 색 outline) (2026_ICML Fig.3c, slide-5/6).
+- subfigure: `(a)(b)(c)` 이탤릭 라벨 하단 중앙 + caption 재진술.
 
-- 블록 모양 둥근 모서리 직사각형 (rounded rectangle) 통일. flat 2-D, 3-D shadow / gradient / bevel 전부 X (TF-Restormer Fig.1 / SepReformer.pptx slide-03 / NeXt-TDNN Fig.2 모두 동일 양식).
-- Outline 두께 균일 (≈ 2 pt), hairline·굵은 line 같이 안 씀. 같은 paper 안 모든 block 동일 두께 (TF-Restormer Fig.1 본체·inset 같이 2 pt 균일).
-- Arrow 검정 단색 1 pt + 단순 화살촉, 곡선 X. residual / skip 도 직선 + 우회 break (TF-Restormer Fig.1, IF-CorrNet Fig.2 모두 직선 routing).
-- 분기·합류 자리 `⊕` (add) / `⊗` (concat·multiply) 원 기호. 글자 X (수학 기호 자체).
-- White background 위에 outline 위주, fill 은 강조하려는 묶음만 옅은 tint (1.4 절 참조).
+### 텐서 shape glyph (시그니처, 3/3)
+- block 입출력에 **`ℝ^{F×T×C}` 수식 + bold 변수(X, Z, Y, D_{k,tf})** 항상 annotate. 도식 표기 = 본문 수식 표기 완전 일치.
+- **작은 3D cuboid/slab 다발 pictogram**: 축 라벨 f(주파수)/t(시간)/k(화자) + **빨강 양방향 화살표(↕/↔)로 처리 축** 표시. encoder=초록 줄무늬 / decoder=주황 줄무늬. decoder 는 화자축 k 만큼 겹친 K장 stack.
+- 좌하단 **범례 박스**: "sequence axis" / "processing axis" + 좌표축 아이콘 (SR_CorrNet architecture.png, TF-CorrNet-v2_slide-08, Doc_Thesis_slide-07). slide-2 는 색 점선 화살표 범례로 확장(노랑=self-attn query / 주황=cross-attn query / 노랑점선=mamba input streaming).
+- 의도: dual-path(time vs freq) 모델에서 "어느 축이 sequence·어느 축이 처리 대상"인지 못박기.
 
-### 1.2 묶음·반복·layout
+## 2. Booktabs 표 (정량 비교의 기본, 3/3)
 
-- 큰 묶음 (encoder 전체 / decoder 전체 / 반복 stack) dashed container 로 둘러쌈. 안쪽 fill 옅은 tint (1.4 절).
-- 반복 횟수 `×B_E` / `×B_D` / `×R` 표기는 박스 _외부_ (좌측 또는 우측) italic LaTeX 자리. 박스 안 X.
-- Layout 방향 좌→우 우세 (encoder 왼쪽, decoder 오른쪽, head 위쪽). data flow 가로 진행 default. SepReformer / TF-Restormer / NeXt-TDNN 모두 가로.
-- 위-아래 layout 도 존재 — 입력 아래 (음성·STFT) → 출력 위 (mask·signal·head). IF-CorrNet Fig.2 / Statistical Beamformer Fig.1 자리 vertical.
-- 보조 모듈 (attractor / split / filter / head) 아래쪽 column 또는 위쪽 head 자리 분리 배치.
+- **세로 칸선 없음**, 가로줄만 (`\toprule`/`\midrule`/`cmidrule`/`\bottomrule`).
+- **의미 그룹 다단 헤더**: "Signal fidelity"(PESQ/SDR/LSD/MCD/sBERT) vs "Perceptual quality"(UTMOS/DNSMOS) 식. 단순 나열 회피 (2026_ICML Table 1·2).
+- 열 순서: Method → 비용열(`Param.(M)`/`Size(M)`/`MACs(G/s)`/`MAC(G)`/RTF) → metric 열. 비용열을 성능과 **항상 같은 표에 동반**해 trade-off 논증.
+- **metric 헤더에 ↑/↓ 방향 화살표** 거의 항상 (PESQ↑, LSD↓, EER(%)↓).
+- **Input / Ground Truth 기준 행을 최상단 별도 그룹** (GT 의 SDR 은 `∞`).
+- **dagger `†`/`‡` 각주**로 조건/출처 표기 (`†pretrained code`, `‡원논문 보고치`, dedicated vs universal).
+- 행 그룹 좌측 **세로 회전 라벨** ("mobile"/"base") (NeXt-TDNN Table 2).
+- ablation: 첫 열에 자연어 case 명 ("encoder-only", "w/o MHCA", "w/ MHCA(small)"), **체크마크 √ 열**로 on/off 토글.
 
-### 1.3 역할별 outline 색 (paper figure dictionary)
+### ours 강조 (3/3)
+- **best 수치 = 열별 bold**. 제안 variant 는 **표 하단 그룹**으로 모으고 같은 prefix 묶음 (`TF-Restormer(off)/(off)†/(on)`).
+- **채택 config 행 / 제안 모델 행 = 회색 row shading** (2024_NeurIPS SeparateReconstruct Table 4/5; TF-CorrNet/NeXt-TDNN 계열은 bold-only 로 음영 없이 — _(consensus: 음영은 NeurIPS 계열, bold+위치는 전반)_).
+- 표 안 색 음영·화살표는 절제 — bold+위치 강조 1순위. (메모리의 "rebuttal 표 drop"·"수치 verbatim 제거"와 정합 — [[feedback-paper-body-rewrite-pattern]])
 
-본문 architecture figure 는 grayscale 우세, _강조하려는 묶음만_ 색 outline 으로 표시. PowerPoint slide 자리는 paper 자리보다 fill 더 옅게 (SepReformer.pptx).
+## 3. Curve plot (절제적, _consensus 2/3_ — run B·C 관찰, A 미발견)
 
-| 역할 | 색 | hex 계열 | 자리 anchor |
-|---|---|---|---|
-| Encoder / analysis / 분리 측 | 녹색 outline | `#3F8C5C` 계열 | TF-Restormer Fig.1 encoder 묶음 / SepReformer Encoder |
-| Decoder / reconstruction / synthesis 측 | 짙은 주황 outline | `#D27A4B` 계열 | TF-Restormer Fig.1 decoder 묶음 / SepReformer Reconstruction |
-| Attention 변별점 (MHSA / MHCA) | 노란 (gold) outline | `#D4A52A` 계열 | TF-Restormer Fig.3 attention sub-block |
-| 비교 figure / 변화점 / 신규 module | 빨간 **실선** outline + 빨간 글자 | `#C0392B` | TF-Restormer Fig.3 decoder-only MHCA |
-| 출력 head / 부가 head (DOA·VAD·Loc·Filter) | 파랑 outline | `#3D6AA8` 계열 | NeXt-TDNN head / IF-CorrNet Filter 자리 |
-| 일반 utility (Conv / Linear / LN / FFN) | 회색 fill·검은 글자 또는 회색 outline | `#7F7F7F` 계열 | 모든 paper 본문 architecture |
+- 등장 위치: **분석용 figure·thesis·슬라이드** (paper 본문은 표 위주). loss curve 류는 미관찰.
+- 양식: **마커 달린 실선**(filled circle marker), 2×2 패널, 패널 간 축/스케일 정렬. x="Stage index (b/r)" 또는 "Time frame index", y="PESQ-WB"/"SI-SDR"/"Cosine Similarity".
+- **회색 점선 수평 기준선 + 라벨** ("Noisy" baseline). 범례는 패널 좌상단 박스.
+- 색 4팔레트(주황/노랑/파랑/초록)로 ablation 변형 구분 (TF_Block_Reuse_slide-6: B16R1/B1R16/B8R1/B1R8).
+- spectrogram + curve 를 **같은 x축으로 수직 정렬** (SepReformer_slide-11: Spk1/Spk2 spectrogram 위 + cosine similarity Z1~Z4 4색 곡선 아래).
 
-채도 낮게 잡음. 같은 의미 자리는 paper·figure_ppt 양쪽 일관 유지. 비교 figure 의 _신규 module 만_ 빨강 — paper figure 안 빨강은 변별점 자리 reserved.
+## 4. Scatter (희소, _consensus 2/3_ — run B·C 관찰)
 
-### 1.4 Background tint
+- 2-패널 나란히, 밀도 산점도(점 수만 개), log-log, 단색 그라데이션(파랑=raw/문제 vs 빨강=normalized/개선) (2026_ICML Fig.4).
+- **회색 대각 transition line + 텍스트 주석**, 패널 inset 박스에 핵심 수치("CV = 2.65" / "CV = 0.28").
 
-- Encoder 묶음 옅은 yellow-green tint, decoder 묶음 옅은 주황 tint (TF-Restormer Fig.1 좌·우 panel 색 대비).
-- dashed container 안쪽 fill 자리 사용, 외곽선 색 = container outline 색 약화 버전.
-- PowerPoint slide 자리는 paper 자리보다 fill 더 옅음 (SepReformer.pptx slide-03 대비 paper Fig.1).
-- fill 없는 자리 default = white background + outline 만.
+## 5. Spectrogram 관례
 
-### 1.5 Inset / sub-block 펼침
+- 용도 (3/3): architecture **입출력 anchor**(before/after) — 파이프라인 양끝 (입력 band-limited → 출력 전대역, super-resolution 시각화). SFI-STFT / SFI-iSTFT 라벨 동반.
+- colormap **2종 분업** (_consensus 2/3_ — run B·C 관찰, run A 는 썸네일 colormap 미확정):
+  - architecture anchor = **magma/viridis 계열**(보라→주황→노랑) (slide-2, TF_Block_Reuse_slide-3)
+  - 정량 분석 figure = run 관찰상 **jet 계열**(파랑-초록-노랑-빨강) + dB 컬러바(−60~−120) (Doc_Thesis_slide-04). _descriptive — 새 figure 제작 시엔 perceptually-uniform(viridis/magma) 권장, jet 는 사용자 기존 자료 매칭이 필요할 때만._
+- 축: y="Freq. (kHz)"(0/2/4/6/8), x="Time (s)" 또는 "Time frame index". anchor 썸네일은 축 생략, `T`/`F` 모서리 표기만.
+- 비교 패널 가로 나열 (degraded / mask grayscale 0~1 / restored 3단), b×r spectrogram 격자(stack/repeat 효과).
+- "Real/Imag." vs "Mag./Phase" 두 표현 구분 (위상은 noise 무늬).
 
-- 큰 architecture 옆에 sub-module 내부를 zoom-in 펼치는 inset 박스 흔히 사용 (TF-Restormer Fig.1 의 Fig.3 inset / NeXt-TDNN Fig.2 inset).
-- Inset 외곽선 _점선 박스_ 통일, 본 박스와 _얇은 회색 가이드 라인_ 또는 dashed arrow 로 연결.
-- (a) / (b) / (c) sub-figure label 부여 — `(a) Time self module` / `(b) Freq. self module` / `(c) Freq. cross-self module` 같은 italic 부제, 그림 바로 아래 가운데 정렬.
+## 6. 폰트
 
-### 1.6 텐서 shape annotation
+- block 라벨·표 본문: **sans-serif**(PPT diagram). 수식·변수(`X`, `ℝ^{F×T×C}`, `×B_E`): **LaTeX serif math (Computer Modern)** — bold 변수 + blackboard `ℝ` + 첨자 다용. 표 캡션 "Table N." 이탤릭.
+- paper figure 와 slide figure 가 같은 폰트 룩 (CM serif 통일).
 
-- 박스 사이 화살표 옆 또는 박스 위·아래에 `\mathbb{R}^{F_E \times T \times C_E}` 형태 수학 모드 LaTeX shape 주석을 figure 본체 안 직접 박음.
-- 변수 정의 (`F_E` / `T` / `C_E` / `B_E` / `B_D`) 는 caption 또는 본문에서 따로 정리, figure 본체에는 shape 자체만.
-- shape 표기는 figure 안 본질 정보 — 캡션이 아니라 figure 본체 자리.
+## 7. 색 hex (PNG 시각 추정 — vector source 미확보, "≈" 유지)
 
-### 1.7 캡션 형식
-
-- venue 규약 맞춤 — `Figure N.` (ICML / NeurIPS), `Figure N:` (ICASSP / Interspeech / SPL), `Fig. N:` (SPL 일부).
-- 첫 문장 figure 내용 (어떤 architecture / 어떤 비교) 진술, 둘째 문장 핵심 메시지 한 줄 (왜 중요 / 어떤 발견).
-- (a) / (b) / (c) sub-figure 있으면 캡션 본문 안에서 한 묶음으로 설명, 쉼표로 이어붙이는 NeurIPS-style 도 사용.
-- 캡션 첫 단어 일부를 `\textbf{...}` 로 짧게 bold 처리하는 NeurIPS-style 도 사용.
-
-### 1.8 데이터 흐름 시각화 (작은 색 막대 / 띠)
-
-- architecture 외부에 데이터 텐서 자체를 작은 막대·띠로 그려 stack / split / 시간축 길이 변화 시각화.
-- Encoder feature 녹색 stacked column, decoder padded query 주황 stacked column (TF-Restormer Fig.1 우측 ribbon).
-- 범례에 화살표 종류 / query 방향 명시 — self 양방향 노랑, cross 단방향 빨강, mamba 점선 노랑.
-
-## 2. Curve plot
-
-### 2.1 폰트·축·grid (matplotlib ground truth)
-
-- 폰트 serif (Times-style) 8-10 pt default. matplotlib fallback chain `Times New Roman → Nimbus Roman → Liberation Serif → DejaVu Serif`, STIX math, 본문 10 pt (`plot_robust_loss_family.py` / `plot_slog_gradient_curves.py` 자리 ground truth).
-- PDF 임베드 `pdf.fonttype=42`, `ps.fonttype=42` 강제 (ICML / PMLR 검증, Type 3 금지 규약).
-- Grid 옅은 회색 — `alpha=0.25, linewidth=0.5, which='both'`. 가로·세로 격자 또는 가로만, axis line 검정 얇은 선.
-- y / x 축 범위 항상 명시 (자동 scale X), log-log 자주 사용 — TF-Restormer Fig.4 spectral error scatter 양축 log.
-- tick mark 안쪽 또는 양쪽 방향.
-
-### 2.2 Palette — cool + warm 두 갈래
-
-두 사용 갈래만 default. 그 외 변형 시 명시 의도 필요.
-
-| 갈래 | 사용 자리 | 색 |
+| 역할 | 추정 hex | 비고 |
 |---|---|---|
-| **cool + warm 분리** | baseline (cool) vs ours / variant (warm) 비교 | baseline `#4C72B0` / `#55A868` / `#8172B2`, comparison `#DD8452` / `#B8860B` / `#7F4F24`, **ours `#C44E52`** (빨강, 굵기 2.4) |
-| **sequential coral** | ordered variant (parameter sweep / training step) | `cm.OrRd(np.linspace(0.85, 0.40, n))` — 어두운 색이 큰 값 |
-
-- TF-Restormer Fig.4 — (a) raw error 파랑 vs (b) normalized error 빨강 점 색상 분리 (cool / warm 활용 사례).
-- 3 series 이상 자리 yellow / orange / red / blue / green 계열로 명도 + 색상 같이 분리.
-- ours 라인 thickness `linewidth=2.4`, baseline `1.4`, variant `1.6`. 스타일 — solid (baseline) / dashed / dashdot / dotted (variant) 차등.
-
-### 2.3 Inset / annotation / reference line
-
-- Inset 수치 박스 — `CV = 2.65` / `CV = 0.28` 같은 작은 숫자 박스 panel 안 우상단. `framealpha=0.85, boxstyle='round,pad=0.3'`.
-- Reference line 회색 가로선 (`alpha=0.5, linestyle='--'`) + 라벨 (예: `transition line at unit gradient`).
-- Annotation `ax.annotate(...)` 직접, footnote 우측 하단 `ax.text(0.99, 0.02, ..., fontsize=7.5, alpha=0.8)` 자리.
-- Spectrogram thumbnail 을 line plot 안에 co-locate 하는 자리도 자주 (TF-Restormer Fig.4 (b) 자리).
-
-### 2.4 Legend
-
-- plot 안 inset (우상단 / 우하단), `framealpha=0.92, handlelength=2.4, borderpad=0.4` default.
-- 2 열 (`ncol=2`) 가능, ours label `(ours)` suffix.
-- 작은 폰트 (≈ 7.5-8 pt), 옅은 박스 또는 박스 없음.
-
-### 2.5 크기·aspect
-
-- single column 6.4 × 2.8" landscape default.
-- 2-panel side-by-side 4.5 × 2.8" (per panel).
-- Scatter trade-off — 1:1 aspect, X = MACs (G/s), Y = 성능 metric, bubble size = Params (M), 학습 옵션 표기는 check mark / 원 마커로 분리.
-
-## 3. 표 layout
-
-### 3.1 Column 순서 표준
-
-좌→우 흐름:
-
-```
-Method/Model → Params (M) → MACs (G/s) → Domain (Time/TF) → <Dataset 1 metrics> → <Dataset 2 metrics> → ...
-```
-
-- Params / MACs 항상 _좌측_, dataset 별 metric 묶음은 우측.
-- separation·verification 자리 `RTF` column 을 `MACs` 다음에 추가 (ICASSP2024 / IF-CorrNet Table 2).
-- 큰 table 자리 column 위에 `Signal fidelity` / `Perceptual quality` heading multi-row header 로 묶음 (TF-Restormer Table 2 자리).
-- Ablation 자리 fidelity 1 + perceptual 1 로 추림 (TF-Restormer Table 5).
-
-### 3.2 화살표 (↑ / ↓) 표기
-
-- 모든 metric 옆에 `↑` / `↓` 첨자 — `LSD↓` / `NISQA↑` / `SNR_fw↑` / `PESQ-WB↑`.
-- 사용자 paper 표 전부 일관, 예외 X.
-
-### 3.3 Best / second-best 표기
-
-- Best = **bold** cell, 그룹 (mobile / base / Dedicated / Universal / ours) 안 best 만 bold. 그룹 사이 best 따로.
-- Second-best = _underline_ — StackLess Table 1 자리 명시적. 다른 paper 자리는 underline 사용 X 또는 일관 안 됨.
-- 색 강조 X (heatmap-style table 사용 X).
-
-### 3.4 Footnote (`†` / `‡` / `*`) 표기
-
-- `†` dedicated training / pretrained code 자리 — 예: `†We utilized pretrained models from implementation code from UNIVERSE++`.
-- `‡` reported in original paper 자리 — 예: `‡The results are reported in the original paper`.
-- `*` auxiliary output (inference 불필요) 자리.
-- caption 안 footnote 정의 박음. baseline / proposed 비교 자리는 _공정성 표시_ 의무 — 세팅 불공정 부분 모두 caption footnote 로 명시.
-
-### 3.5 Row 순서
-
-- input / baseline (Noisy / No Processing / Oracle) → prior methods (chronological) → ours (size 순 tiny / small / base / medium / large).
-- ours 묶음은 `\midrule` 로 prior methods 와 분리.
-- 그룹 (Dedicated models / Universal restoration baselines / ours (off / off† / on)) 사이 horizontal rule.
-
-### 3.6 Sub-table caption
-
-- `(a)` / `(b)` / `(c)` / `(d)` 라벨로 dataset 별 묶음 — TF-Restormer Table 4 한정 자리. 다른 paper 자리는 sub-table caption 별도 X.
-
-## 4. Spectrogram
-
-### 4.1 Colormap (magma / inferno 계열)
-
-- 색맵 magma / inferno 계열 (purple / violet hot) — TF-Restormer Fig.1 thumbnail ground truth.
-- low magnitude 짙은 보라·검정, high magnitude 밝은 노랑·주황.
-- viridis / jet / warm yellow → red → green 묘사 모두 부정확. 사용자 paper 자리 viridis 사용 X.
-- 4-panel side-by-side 자리 (P8 IF-CorrNet Fig.3, P6 StackLess Fig.5) 도 같은 magma 계열 통일.
-
-### 4.2 축·label
-
-- y 축 `Frequency (kHz)` (0-8 kHz), x 축 `Time (s)` (0-5 s) 둘 다 명시.
-- 축 label serif font (figure 본체 폰트와 통일).
-- Colorbar thumbnail 자리 자주 생략. full-size 자리 dB scale 명시 또는 생략 둘 다 가능.
-
-### 4.3 STFT window (native rate 별)
-
-- 8 kHz → window 256, 16 kHz → window 512, 48 kHz → window 1024. native rate 별 고정.
-- resample X (native rate 그대로 STFT). cross-rate 비교 자리에도 각 rate 의 native window 유지.
-- 색 축 (`vmin`, `vmax`) 비교 묶음 안 _고정_ — `imshow(..., vmin=GROUP_VMIN, vmax=GROUP_VMAX)`. 강도 차이 시각으로 정직히 비교.
-
-### 4.4 Multi-panel layout
-
-- 가로 row 또는 2 × N grid.
-- StackLess Fig.5 — `b ∈ {4, 8, 12, 16}` 위 row + `r ∈ {4, 8, 12, 16}` 아래 row (4 × 2 = 8 panel grid).
-- IF-CorrNet Fig.3 — 입력 / 출력 / SF-Raw+MF-Filter / SF-Raw+SF-Mask 2 × 2 grid, 부분 zoom box (검정 사각 → 안 큰 zoom panel inset).
-- Condition label (`b=4` / `r=8`) panel 위쪽 표기.
-
-### 4.5 위치 — 두 갈래만
-
-- (a) architecture diagram (Fig.1) 의 입·출력 thumbnail — 작은 크기, colorbar 생략 default.
-- (b) 실험 결과 후반부 full-size 2 × N grid — 큰 크기, colorbar 자리 또는 생략.
-- 독립 figure (예: dataset stats spectrogram) 자리 X. spectrogram 은 architecture 또는 실험 결과 두 갈래로만 등장.
-
-## 5. 도메인별 metric set
-
-도메인 인지 후 metric column 자동 셋팅.
-
-### 5.1 GSR / Universal restoration (UNIVERSE-class, 시그니처)
-
-- _Signal fidelity_ group — PESQ ↑ / SDR ↑ / LSD ↓ / MCD ↓ / sBERT ↑
-- _Perceptual quality_ group — UTMOS ↑ / DNSMOS ↑ / NISQA ↑ (non-intrusive)
-- Bandwidth set — 8→16 / 8→24 / 8→44.1 / 16→48 kHz column pair
-- 보조 — Params (M), MACs (G/s)
-- **두 group 분리 보고 의무**. 한 group 만 보고 평가 X — universal restoration 시그니처.
-
-### 5.2 Speech enhancement / denoising (VoiceBank+DEMAND / DNS)
-
-- DNS — PESQ-WB ↑ / PESQ-NB ↑ / STOI ↑ / SI-SDR ↑
-- VoiceBank+DEMAND — PESQ-WB ↑ / STOI ↑ / SSNR ↑ / CSIG ↑ / CBAK ↑ / COVL ↑
-- 보조 — Params (M), MACs (G/s)
-- universal training 자리는 GSR metric 병행 보고.
-
-### 5.3 Super-resolution / Bandwidth extension (VCTK-SSR)
-
-- LSD ↓ / NISQA ↑
-- Bandwidth pair column — 8→16 / 8→24 / 8→44.1 / 16→48 kHz 각각.
-
-### 5.4 Single-channel separation (SepReformer / SR-CorrNet)
-
-- SI-SNRi (dB) ↑ / SDRi (dB) ↑ 둘 같이 보고.
-- Dataset — WSJ0-{2, 3, 4, 5}mix / WHAM! / WHAMR! / Libri2Mix.
-- 보조 — Params (M), MACs (G/s), RTF.
-
-### 5.5 Multi-channel / CSS (LibriCSS)
-
-- Main — SDRi ↑ / PESQ ↑ / STOI ↑
-- ASR-driven — WER (%) ↓ (utterance-wise / continuous × overlap 0S / 0L / 10 / 20 / 30 / 40)
-- 보조 — Params (M), MACs (G/s)
-
-### 5.6 Speaker verification (NeXt-TDNN)
-
-- EER (%) ↓ / minDCF ↓
-- Dataset — VoxCeleb1-O / E / H
-- 보조 — Params (M), MACs (G/s), RTF.
-
-### 5.7 Dereverberation (IF-CorrNet)
-
-- CD ↓ / SRMR ↑ / LLR ↓ / SNR_fw ↑ / PESQ ↑
-- Dataset — REVERB SimData / RealData × FAR / NEAR.
-
-### 5.8 ASR / Beamforming (Statistical Beamformer)
-
-- WER (%) ↓ 단독.
-- Dataset — CHiME-4 (dt / et / sim / real) / LibriCSS.
-- Batch / Online 분리 보고.
-
-### 5.9 MOS-only on real recordings
-
-- UTMOS ↑ / DNSMOS ↑ / NISQA ↑ (non-intrusive 만, reference 없는 자리).
-- Dataset — VoxCeleb / URGENT 2025 blind / DNS 2020 real / REVERB Challenge real.
-
-## 6. ours 강조
-
-### 6.1 표 안
-
-- ours 행 표 _마지막 묶음_ 자리, ours 변형 (size / on-off / configuration) 모두 같이 나열.
-- metric value bold, baseline 위쪽 묶음.
-- 그룹 사이 `\midrule` 로 분리 — Dedicated models / Universal restoration baselines / TF-Restormer (off / off† / on) 같은 묶음.
-- 별표·박스 거의 X — bold + 마지막 자리 + 모델명 prefix (TF-Restormer / TF-CorrNet / B*R*-SC) 로 충분.
-
-### 6.2 Architecture diagram 안
-
-- ours 모듈 outline 짙은 주황, baseline 비교 자리 회색 outline.
-- 강조 fill 옅은 주황, baseline fill 없음.
-- 비교 figure 변별점 (decoder MHCA, 변형 module) 빨간 **실선** outline + 빨간 글자 (점선 X).
-- paper figure 안 빨강은 신규 module / 변별점 자리에만 — 일반 ours 강조 자리 X (일반 ours 는 주황).
-
-### 6.3 Curve / scatter
-
-- ours warm `#C44E52` (굵기 2.4), baseline cool `#4C72B0` (굵기 1.4), variant `#DD8452` (굵기 1.6).
-- Legend `(ours)` suffix 자리 명시.
-- Scatter 자리 ours marker 큰 원 (`s=80`) + edge 강조, baseline 작은 원 (`s=40`).
-
-### 6.4 Variant naming convention
-
-- `Model (variant_flag)` 형식 — 괄호 안 짧은 키워드 또는 hyperparameter.
-- 예시:
-  - `TF-Restormer (off)` / `(off†)` / `(on)`
-  - `TF-Restormer encoder-only` / `encoder-decoder w/o MHCA` / `(small)`
-  - `w/o F-proj.` / `w/ F-proj. (sep.)` / `(sha.)`
-  - `NeXt-TDNN-l (C=192, B=1)`
-  - `TF-CorrNet (Conformer)`
-- 같은 모델의 여러 변형은 표 행마다 괄호 안 부분만 다름.
-
-### 6.5 Footnote dagger 활용
-
-- `†` 로 구현·환경 차이 부연.
-- 예 — `(off)` 와 `(off†)` 차이는 `†` = dedicated training (universal 안 / 밖 차이).
-- `‡` = reported in original paper, `*` = auxiliary output (inference 불필요).
+| encoder green outline | ≈ `#4E7A3A`~`#5B8C3E` | tint 배경 ≈ `#E8F0DD` |
+| decoder orange outline | ≈ `#D2691E`~`#E0701F` | tint 배경 ≈ `#FBE7DA` |
+| 보조 gray outline | ≈ `#6E6E6E` | 채움 흰색/`#F2F2F2` |
+| novelty red | ≈ `#C0392B`/`#E03030` | 점선·텍스트·처리축 화살표 |
+| accent gold/yellow | ≈ `#D4A017`/`#E0A93B` | zoom sub-block |
+| 화자 4색 팔레트 | 주황 `#C0581E` / 노랑 `#F2C14E` / 초록 `#3E7D44` / 파랑 `#2BA7DF` | TF-CorrNet-v2_slide-01 |
+
+> **재현 원칙**: hex 추정에 의존 말고 ① 역할→색군 매핑 ② bold-only 표 강조 ③ red-dashed/red-text 신규 모듈 — 이 3규칙 우선. 정확 hex 는 원본 pptx eyedropper.
+
+## 재현 체크리스트
+
+1. rounded rect + drop shadow + 위/좌→우 직각 화살표.
+2. encoder 초록 / decoder 주황 / 보조 회색 / 신규 빨강(점선·텍스트)·노랑(zoom).
+3. 반복 stack = 점선 박스 + `×B_*` + 경로색 tint.
+4. cross-attention = "key/value" 라벨 화살표.
+5. block 마다 `ℝ^{...}` 첨자 + 본문 동일 bold 변수.
+6. dual-path = sequence/processing axis 범례 + 3D slab pictogram + 빨강 처리축 화살표.
+7. spectrogram anchor magma / 분석 figure jet+dB, 축 Freq.(kHz)/Time(s).
+8. 표 = booktabs(세로선 X), metric ↑/↓, 의미그룹 다단 헤더, 비용열 동반, Input/GT 상단, proposed 행·best bold, dagger 각주.
+
+## Open Questions
+
+- 표 row 음영: NeurIPS 계열은 회색 음영 사용, TF-CorrNet/NeXt-TDNN 계열은 bold-only — 매체/연도 차이인지 확정 못 함.
+- 모든 hex 는 PNG 육안 추정. source 에 명시 hex 없음.
 
 ## 사용자 수동 메모
 
-> 본 절은 _사용자 영역_. `/notes --scope user <aspect>` 가 append. analyze-user 는 _읽기만_ 하고 손대지 않음.
-
-_(아직 비어 있음 — `/notes --scope user figure add ...` 로 첫 항목 추가)_
+(없음 — `/notes --scope user figure` 로 추가)

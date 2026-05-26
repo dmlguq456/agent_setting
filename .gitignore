@@ -31,13 +31,7 @@ mcp-needs-auth-cache.json
 # Cleanup timestamp (per-machine, ephemeral)
 .last-cleanup
 
-# analyze-user 내부 — 일회성 process trace 또는 대용량 (보존 가치 없음)
-user_profile/_internal/aspect_*_draft.md
-user_profile/_internal/aspect_*_consensus.md
-user_profile/_internal/aspect_runs/
-user_profile/_internal/qa_*.md
-user_profile/_internal/cross_aspect_consistency.md
-user_profile/_internal/pipeline_state.yaml
-user_profile/_internal/converted_pdfs/
-user_profile/_internal/converted_pngs/
-# 보존 (자동 추적): versions/ · pipeline_summary.md · source_index.md · open_questions.md
+# analyze-user 내부 — 전체 로컬 전용 (public repo 미포함).
+# clone 해서 "바로 쓰는" 데는 user_profile/0*.md + README 만 필요 (sub-agent 가 그것만 Read).
+# _internal 은 프로필 제작·갱신용 산출물 (raw 분석 run·개인 원본 PDF·버전 스냅샷·metadata) — 개인정보 다수.
+user_profile/_internal/
