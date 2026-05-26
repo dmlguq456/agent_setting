@@ -489,46 +489,13 @@ Spec 완성:
 
 `--user-refine` on 또는 사용자 _수정_ 발화 시 PRD refine loop.
 
-## Mode B — `setup-only` (app mode 한정 보강)
+## 배포 셋업 자리 — autopilot-ship 으로 분리 (2026-05-26)
 
-이미 `specs/<name>/` 있고 _ship 첫 setup·env·domain·migration deploy 안내_ 자리:
+이전 `Mode B — setup-only` 자리 (ship 첫 setup·env·domain·migration deploy 안내) 는 **별도 skill [`autopilot-ship`](../autopilot-ship/SKILL.md)** 으로 분리. _작업 본질에 맞는 분리_ 원칙 ([CONVENTIONS §6.3](../../CONVENTIONS.md)) — autopilot-spec 은 _초기 설계 (요구사항·기본 틀·skeleton)_ 자리, autopilot-ship 은 _마지막 배포 자리 + 재호출_ 자리. 사용자 결정 무게도 다름.
 
-### Step 1: 현재 상태 점검
-- `pipeline_state.yaml` 의 stack 검증
-- `git remote -v` (GitHub 연결)
-- 기존 `vercel.json`·`.github/workflows/`·`.env.example` 발견 여부
-- git working tree clean 검증
-
-### Step 2: 사용자 발화 분류
-
-| 신호 | 처리 |
-|---|---|
-| "배포 셋업" / "Vercel" | **ship 첫 setup** |
-| "env 변경" | env 보강 |
-| "도메인" | DNS 안내 |
-| "migration 운영 배포" | DB migration deploy 안내 (destructive 위험) |
-
-### Step 3: ship 첫 setup (가장 흔함)
-
-**3-1. 호스팅 선정** — 사용자 confirm:
-
-| 스택 | 권장 |
-|---|---|
-| Next.js | Vercel |
-| Next.js + heavy backend | Fly.io |
-| 정적 | Cloudflare Pages |
-| 컨테이너 | Railway |
-| Mobile (Expo) | EAS Build |
-
-**3-2. `.env.example`** — 실제 값 없음, 키만
-
-**3-3. CI/CD 셋업** — `.github/workflows/deploy.yml` (사용자 confirm 후)
-
-**3-4. 도메인** (옵션) — DNS 안내
-
-**3-5. 배포 명령 안내** — `vercel login` / `vercel link` / `vercel deploy --prod` — 사용자 직접 실행
-
-**3-6. `05_ship/deploy_record.md` 작성**
+호출 자리:
+- 배포 셋업 / env 변경 / 도메인 / migration → `/autopilot-ship <task>` 직접
+- 또는 자연어 발화 — "배포 셋업" / "Vercel" / "env 변경" / "도메인" — 메인 Claude 가 autopilot-ship 으로 자동 라우팅
 
 ## Forbidden Zones (명시 요청 없이 X)
 

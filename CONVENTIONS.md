@@ -336,10 +336,11 @@ fi
 **3. 앱 (사용자 대상 소비자 앱)**:
 ```
 /autopilot-research "X 도메인 / reference 앱"      ← (선택, 복잡 도메인만)
+/analyze-project --mode code                        ← (선택, 기존 코드 있을 때)
 /autopilot-spec --mode app "X 앱"                  ← PRD + 스택 + scaffolding + skeleton
 /autopilot-design --app X                          ← (옵션) 시각 사이클
 /autopilot-code "Y 기능"                            ← app mode 추가 logic (디자인팀 critic + DB 안전 + push 자동 deploy) — 반복
-/autopilot-spec --mode setup-only                  ← (가끔) ship 첫 setup·env·domain·migration 보강
+/autopilot-ship                                     ← 기능 어느 정도 완성 후 (첫 ship setup·env·domain·migration. 재호출 가능)
 ```
 
 ### §6.3. _작업 본질에 맞는 분리_ 원칙
@@ -440,6 +441,7 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 | `autopilot-research` | `.claude_reports/research/<topic>/` |
 | `analyze-project` | `.claude_reports/analysis_project/{code,paper,doc}/` (code mode 자리에 lab 사전 4 종 자료 포함) |
 | `autopilot-spec` | `.claude_reports/specs/<name>/` (mode 무관 한 폴더, 안에 `01_spec/PRD.md` 의 mode 별 섹션) |
+| `autopilot-ship` | `.claude_reports/specs/<name>/05_ship/deploy_record.md` (app 배포 셋업·env·domain·migration 자료) |
 | `autopilot-design` (단독) | `.claude_reports/designs/<name>/` |
 | `autopilot-design` (spec 위임) | `.claude_reports/specs/<name>/02_design/` |
 | `autopilot-code` (spec 있음) | `.claude_reports/specs/<name>/dev_log/<date>_<slug>/` |
@@ -453,7 +455,7 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 
 - `app-build` → autopilot-code 의 spec-aware mode 가 흡수
 - `app-qa` → autopilot-code spec-aware mode 안 검증 단계가 흡수
-- `app-ship` → `autopilot-spec --mode setup-only` 가 흡수
+- `app-ship` → `autopilot-ship` 별도 skill 로 분리 (2026-05-26 — 이전 `autopilot-spec --mode setup-only` 자리에서 다시 분리. 작업 본질 — 초기 설계 vs 마지막 배포 — 정합)
 - `app-iterate` → autopilot-code 호출 자체가 iteration
 
 `autopilot-app` 자체 (이전 skill name) → `autopilot-spec` 로 일반화 (mode 5종 + 다중 + auto 지원). 산출물 폴더 `apps/<name>/` → `specs/<name>/`.

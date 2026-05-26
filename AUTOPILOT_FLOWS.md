@@ -26,9 +26,11 @@
   autopilot-research / analyze-project  →  autopilot-draft  →  autopilot-refine  (반복)
 
 [앱 (사용자 대상 소비자 앱)]
-  autopilot-research / autopilot-spec    →  autopilot-design (옵션)
-                                        →  autopilot-code  (앱 mode 자동, 반복)
-                                        →  autopilot-spec   (가끔 — ship 첫 setup·env·domain·migration)
+  autopilot-research / analyze-project     ← (선택) 사전 조사·기존 앱 청사진
+    → autopilot-spec --mode app             ← PRD + scaffolding + skeleton
+    → autopilot-design (옵션)                ← UI 사이클
+    → autopilot-code (앱 mode 자동, 반복)    ← 기능 구현
+    → autopilot-ship                         ← (가끔) ship 첫 setup·env·domain·migration
 ```
 
 ### 1.2. 작업 본질 매핑
@@ -172,11 +174,12 @@ Architecture Diagrams 기본 포함은 app / api mode 의 Component + Deployment
 /autopilot-code "카테고리 색 구분 추가"
 /autopilot-code --mode debug "마감일 칸 모바일 터치 어려움"
 
-# 5. 보강 setup (가끔 — 첫 배포·env·domain·migration deploy)
-/autopilot-spec
-# → setup mode 자동 (specs/가사관리/ 발견)
-# → 호스팅 선정 (Vercel/Fly/Railway) + CI/CD 파일 + env 가이드 + (옵션) domain
+# 5. 배포 셋업 (기능 어느 정도 완성 후 — 마지막 자리. 재호출 가능)
+/autopilot-ship
+# → 호스팅 선정 (Vercel/Fly/Railway/Cloudflare/EAS) + CI/CD 파일 + env 가이드 + (옵션) domain
 # → 실제 명령은 사용자 직접 실행 (vercel deploy 등 자동 X)
+# → 산출 specs/가사관리/05_ship/deploy_record.md
+# → 재호출 자리 — env 변경·domain 추가·migration 운영 배포
 ```
 
 산출물: `.claude_reports/specs/<name>/` 한 폴더 안 _전체 흐름 누적_:
