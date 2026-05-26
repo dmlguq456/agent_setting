@@ -122,9 +122,15 @@ vercel deploy --prod
 #### 3-6. `05_ship/deploy_record.md` 작성
 
 ```markdown
+---
+changelog:
+  - date: <YYYY-MM-DD>
+    type: initial
+    notes: "<첫 setup 요약 — 호스팅·CI/CD·env keys·domain>"
+---
+
 # Ship Record — <name>
 
-- Date: <YYYY-MM-DD>
 - 호스팅: <Vercel / Fly / ...>
 - DB host: <Turso / Supabase / Neon / 등>
 - Domain: <(if any) example.com>
@@ -134,15 +140,20 @@ vercel deploy --prod
 
 ## Notes
 <배포 자리 특이사항·외부 service 연결 자리·재호출 시 점검할 자리>
+
+## 변경 이력
+- <YYYY-MM-DD>: initial setup
 ```
 
-### Step 4: 재호출 자리
+### Step 4: 재호출 자리 (단일 파일 누적 — refine v{N+1} 자리 아님)
 
-| 자리 | 처리 |
-|---|---|
-| env 변경 | `.env.example` 보강 + `deploy_record.md` 갱신 + 사용자에 dashboard 안내 |
-| 도메인 추가 | DNS 안내 + `deploy_record.md` Domain 자리 갱신 |
-| migration 운영 배포 | destructive 안내 (`prisma migrate deploy` 같은 명령은 사용자 직접) + rollback 가능 자리 안내 |
+`deploy_record.md` 는 **단일 파일** — 재호출 시 _frontmatter `changelog:` 배열 append_ + _## 변경 이력_ 절 append. _이전 버전 스냅샷 X_ (배포 자료 자리는 _현재 자료_ 가 source of truth, 과거 자리는 git log 가 단일 source).
+
+| 자리 | 처리 | deploy_record.md 갱신 |
+|---|---|---|
+| env 변경 | `.env.example` 보강 + 사용자에 dashboard 안내 | env vars 자리 갱신 + changelog `{type: env, notes: "VAR_X 추가"}` |
+| 도메인 추가 | DNS 안내 | Domain 자리 갱신 + changelog `{type: domain}` |
+| migration 운영 배포 | destructive 안내 (`prisma migrate deploy` 같은 명령은 사용자 직접) + rollback 가능 자리 안내 | Notes 자리에 migration 자국 + changelog `{type: migration}` |
 
 ### Step 5: [CONFIRM Gate]
 

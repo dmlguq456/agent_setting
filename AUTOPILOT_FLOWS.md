@@ -186,17 +186,28 @@ Architecture Diagrams 기본 포함은 app / api mode 의 Component + Deployment
 ```
 specs/가사관리/
 ├── pipeline_state.yaml               ← 현재 상태
-├── 00_init/environment_check.md      ← 환경 점검
+├── 00_init/environment_check.md      ← 환경 점검 (스택 후보 / Node·pnpm 버전)
 ├── 00_init/stack_decision.md         ← 스택 결정 사유
 ├── 01_spec/PRD.md                    ← 피처·시나리오·API Contract·데이터 모델
-├── 02_design/                        ← (옵션) 디자인 자산
+├── 02_design/                        ← (옵션) 디자인 자산 (autopilot-design)
 ├── dev_log/<date>_<slug>/            ← autopilot-code 가 누적
 │   ├── 2026-06-15_add_category/
 │   ├── 2026-06-18_debug_mobile/
 │   └── ...
-├── 05_ship/deploy_record.md          ← ship 첫 setup
+├── 05_ship/deploy_record.md          ← autopilot-ship 의 첫 setup + 재호출 누적
 └── _internal/                        ← 백업·버전·reviewer 로그
 ```
+
+**subfolder 숫자 prefix 컨벤션**:
+- `00_init` — 환경·스택 결정 (autopilot-spec 의 첫 phase)
+- `01_spec` — PRD·청사진 (autopilot-spec 의 핵심)
+- `02_design` — 디자인 자산 (옵션, autopilot-design 위임)
+- `03_*` / `04_*` — _reserve_ (현재 비어 있음. 미래 자리 — _03_data_ 같이 데이터 분석·schema 자료 또는 _04_research_ 같이 본 spec 의 사전 조사 자리 등. 현재 _gap 의도적_)
+- `05_ship` — 배포 자료 (autopilot-ship)
+- `dev_log/<date>_<slug>/` — autopilot-code 의 작업 자료 (날짜별 누적)
+- `_internal/` — T3 audit·raw·versions
+
+03 / 04 자리는 _현재 미사용_, 필요 자리 발견 시 추가. 본 구조는 _app / library / api / cli / research mode 무관_ 일관.
 
 ---
 

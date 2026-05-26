@@ -441,14 +441,15 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 | `autopilot-research` | `.claude_reports/research/<topic>/` |
 | `analyze-project` | `.claude_reports/analysis_project/{code,paper,doc}/` (code mode 자리에 lab 사전 4 종 자료 포함) |
 | `autopilot-spec` | `.claude_reports/specs/<name>/` (mode 무관 한 폴더, 안에 `01_spec/PRD.md` 의 mode 별 섹션) |
-| `autopilot-ship` | `.claude_reports/specs/<name>/05_ship/deploy_record.md` (app 배포 셋업·env·domain·migration 자료) |
+| `autopilot-ship` | `.claude_reports/specs/<name>/05_ship/deploy_record.md` (배포 자료 누적, single source) + 프로젝트 root 의 `vercel.json` / `.github/workflows/deploy.yml` / `.env.example` (CI/CD·env 외부 자료, .claude_reports 밖) |
 | `autopilot-design` (단독) | `.claude_reports/designs/<name>/` |
 | `autopilot-design` (spec 위임) | `.claude_reports/specs/<name>/02_design/` |
 | `autopilot-code` (spec 있음) | `.claude_reports/specs/<name>/dev_log/<date>_<slug>/` |
 | `autopilot-code` (spec 부재) | `.claude_reports/plans/<date>_<slug>/` |
 | `autopilot-lab` | `.claude_reports/experiments/{date}_{slug}/` + `.claude_reports/experiments/_RUNLOG.md` (timeline) |
 | `autopilot-draft` | `.claude_reports/documents/<date>_<name>/` |
-| `autopilot-refine` | 대상 artifact 안 v{N+1} 갱신 |
+| `autopilot-refine` | 대상 artifact 안 v{N+1} 갱신 (`_internal/versions/v{N}/`) |
+| `autopilot-apply` | 대상 artifact 는 `.claude_reports/` 밖 실제 소스 (e.g., `main.tex`). 버전 자리는 git branch + commit (mutation 마다 한 commit) — `_internal/versions/` 자리 X |
 | `autopilot-apply` | 자체 artifact_dir 없음 — `.claude_reports/` _밖_ 실제 source 편집 (git branch 위) + 로그는 cheatsheet artifact 의 `_internal/apply/` |
 
 ### §6.6. DEPRECATED sub-skill (2026-05-25)

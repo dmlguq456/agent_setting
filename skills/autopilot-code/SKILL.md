@@ -6,9 +6,16 @@ argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). plan/ + checklist는 T1 (root). dev_logs/, test_logs/는 T2 (root). reviewer 로그(plan_reviews, dev_reviews, test_reviews)는 모두 `_internal/` 하위. **앱 mode 자리**: `apps/<name>/dev_log/<date>_<slug>/` 안에 누적 (앱 전체 흐름 한 폴더에).
 
-## Context Auto-Detection (spec mode 자동 분기)
+## Context Auto-Detection (spec mode 자동 분기 + 자료 자동 read)
 
-본 skill 은 호출 자리에서 _cwd / 산출물 폴더 / spec 파일_ 검사로 자동 분기:
+본 skill 은 호출 자리에서 _cwd / 산출물 폴더 / spec 파일_ 검사 + 다음 자료 자동 read:
+
+| 자료 | 자리 | 우선순위 |
+|---|---|---|
+| `~/.claude/user_profile/07_coding_convention.md` | 사용자 cross-project 컨벤션 | 2순위 (default·fallback) |
+| `.claude_reports/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 | **1순위** — 코드 수정 4 원칙의 source. 충돌 시 per-project 우선 |
+| `.claude_reports/specs/<name>/01_spec/PRD.md` (있으면) | spec 청사진 | spec mode 별 추가 logic 활성화 |
+| `.claude_reports/analysis_project/code/` 4 종 실험 자료 (`experiment_readiness`·`cleanup_candidates`·`similar_models`) | _실험 ready 정돈_ 자리 input | autopilot-code "실험 ready 정돈" 발화 시 자동 read |
 
 ### 1단계 — spec 존재 여부
 
