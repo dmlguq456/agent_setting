@@ -319,7 +319,7 @@ mode 5종 모두 scaffold 단계 통일 — 빈 자리에서도 _뼈대 + skelet
 | 2 | 외부 — `research/{topic}/code_resources/` (autopilot-research 의 repo 카드) 또는 `07_resources.md` (pre-trained ckpt URL) 또는 사용자 `--ref <url>` 명시 | research 산출. paper 의 official repo / HF transformers / espnet / lightning 등 |
 | 3 | Generic skeleton fallback | 1·2 모두 부재 자리만. 사용자 컨펌 후 진행 |
 
-> **사용자 cross-project 패턴 prepend** — `~/.claude/user_profile/07_coding_convention.md` 의 _model 폴더 / config 메커니즘 / prefix / preferred layer / framework_ 가 _ref source 우선순위와 독립_ 으로 매번 read. Phase 2 (개발팀 new-lib prompt) 에 1순위 source 로 prepend — ref repo 의 코드를 _우리 컨벤션_ 으로 옮기는 자리에서 사용자 일관 패턴 따름.
+> **컨벤션 prepend 우선순위** — `analysis_project/code/experiment_conventions.md` (1순위 — per-project source of truth) + `~/.claude/user_profile/07_coding_convention.md` (2순위 — cross-project default, per-project 부재·빈 자리만 보강) 가 _ref source 우선순위와 독립_ 으로 매번 read. Phase 2 (개발팀 new-lib prompt) 에 prepend — 충돌 자리는 per-project 우선, 본 프로젝트의 실제 컨벤션 침범 X.
 
 ```
 === ref source 결정 ===
@@ -383,15 +383,15 @@ Agent(개발팀, mode="new-lib"):
 
    ## 코드 수정 4 원칙 (필수 준수)
    1. 최소 수정 — ref 의 _필요 자리만_ 복사 후 우리 컨벤션 으로 옮김
-   2. 원래 layer 1순위 — user_profile/07 의 preferred layer (cross-project 1순위) + experiment_conventions.md (per-project 보강) 사용
+   2. 원래 layer 1순위 — experiment_conventions.md 의 preferred layer (per-project 1순위) + user_profile/07 (cross-project default, 보강) 사용. 충돌 자리는 per-project 우선
    3. 마이너 변경 = config — model.py 수정 X
-   4. 변형 prefix — fine-tuning 변형은 user_profile/07 의 prefix 패턴 따름 (예: _ft01_)
+   4. 변형 prefix — fine-tuning 변형은 experiment_conventions.md 의 prefix 패턴 따름 (per-project 부재면 user_profile/07 의 패턴 — 예: _ft01_)
 
-   ## 사용자 cross-project 일관 패턴 (1순위)
-   {user_profile/07 의 model 폴더 / config / prefix / preferred layer / framework 인용}
+   ## 본 프로젝트 컨벤션 (1순위 — source of truth)
+   {analysis_project/code/experiment_conventions.md 의 컨벤션 인용 — 있으면}
 
-   ## 본 프로젝트 특별 자리 (2순위 — 보강만)
-   {analysis_project/code/experiment_conventions.md 의 특별 자리 인용 — 있으면}
+   ## 사용자 cross-project default (2순위 — per-project 부재·빈 자리만 보강)
+   {user_profile/07 의 model 폴더 / config / prefix / preferred layer / framework 인용 — per-project 와 충돌 시 per-project 우선}
 
    ## mode 별 scaffold 산출물
    {mode_specific_outputs}

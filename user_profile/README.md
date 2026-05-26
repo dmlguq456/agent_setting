@@ -36,9 +36,9 @@
 
 예 개발팀 _new-lib_ — autopilot-spec scaffold / autopilot-lab Phase 2 호출 자리:
 ```
-1. ~/.claude/user_profile/07_coding_convention.md Read
-2. 모델 폴더 구조 / config / prefix / preferred layer 1순위 default
-3. analysis_project/code/experiment_conventions.md 가 있으면 _특별 자리_ 만 보강 인용
+1. analysis_project/code/experiment_conventions.md Read (1순위 — per-project source of truth)
+2. ~/.claude/user_profile/07_coding_convention.md Read (2순위 — cross-project default, per-project 부재·빈 자리만 보강)
+3. 충돌 자리는 per-project 우선 — 본 프로젝트의 실제 컨벤션 침범 X
 4. 사용자 발화에 다른 명시 있으면 그 자리만 override
 ```
 

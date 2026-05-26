@@ -104,15 +104,11 @@ CLAUDE.md should minimize code content and contain only:
 
 ### 3.5.1. `experiment_conventions.md`
 
-코드베이스의 _실험 패턴_ — 단 _cross-project 자리는 `~/.claude/user_profile/07_coding_convention.md` 가 1순위 source_. 본 per-project 파일은 _프로젝트 특별 자리만_ 보강:
+본 프로젝트 코드베이스의 _실험 패턴 — source of truth_. **본 프로젝트 컨벤션이 1순위**, `~/.claude/user_profile/07_coding_convention.md` (cross-project default) 는 _per-project 부재·빈 자리만_ 보강하는 2순위 자리. 충돌 자리는 per-project 우선 — 개별 프로젝트의 특수 사정 (외부 ref 기반 / 다른 framework / legacy 코드 / 다른 layer 선호) 침범 X.
 
-- 본 프로젝트만의 _다른 patten_ (예: 일반 model/{name}/ 구조 외 특수 자리 — `legacy/` 폴더 / 다른 framework 자리)
-- 본 프로젝트만의 _신규 layer_ (user_profile/07 의 preferred layer 외)
-- 본 프로젝트만의 _config 메커니즘 변형_ (다른 자리 yaml 이지만 본 프로젝트 hydra 자리)
+autopilot-lab / autopilot-spec / 개발팀 _new-lib_ 는 _본 파일 1순위 + user_profile/07 보강_ 으로 prepend.
 
-user_profile/07 와 _중복되는 자리는 본 파일에서 생략_ — 보강만. autopilot-lab / autopilot-spec / 개발팀 _new-lib_ 는 _user_profile/07 1순위 + 본 파일 보강_ 으로 prepend.
-
-다음 섹션 자동 추출 (per-project 자리만):
+다음 섹션 자동 추출 (본 프로젝트 실제 자리 그대로):
 
 ```markdown
 ## 모델 폴더 구조

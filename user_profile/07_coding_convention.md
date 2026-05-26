@@ -2,6 +2,8 @@
 
 > 사용자의 cross-project 코드 일관 패턴 — model 폴더 / config / prefix / preferred layer / framework / metric / log / seed. `/analyze-user coding_convention` 가 사용자가 명시한 코드 폴더 (cwd 자동 발견 + `--source <path>` 콤마 분리 복수) 스캔으로 추출·갱신. analyze-project doc mode 와 같은 패턴 — 하드코딩 path X, 사용자가 첫 호출 자리에 source 명시. autopilot-lab / autopilot-spec / autopilot-code / 개발팀 _new-lib_ 가 작업 시작 자리에서 default 로 Read.
 >
+> **우선순위**: 본 파일은 _cross-project default · fallback_ 자리. **개별 프로젝트의 컨벤션 (`.claude_reports/analysis_project/code/experiment_conventions.md`) 이 1순위 source of truth** — 본 파일은 per-project 부재·빈 자리만 보강. 충돌 자리는 per-project 우선, 본 파일이 _개별 프로젝트 컨벤션을 침범 X_.
+>
 > 갱신 — `/analyze-user coding_convention` (전체 재추출) / `/notes --scope user coding_convention <text>` (한 줄 메모 append).
 
 ## 모델 폴더 구조

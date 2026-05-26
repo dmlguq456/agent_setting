@@ -99,12 +99,12 @@ argument-hint: "<task description> [--mode ml|script|auto] [--ref <similar-model
 
 | Layer | 자료 | 누적 단위 | 자리 |
 |---|---|---|---|
-| **사용자 일관 패턴 (cross-project)** | `~/.claude/user_profile/07_coding_convention.md` | cross-project | **1순위** — model 폴더 / config / prefix / preferred layer / framework / metric / log·ckpt / seed (코드 수정 4 원칙 source). 부재 시 `/analyze-user coding_convention` 권장 안내 |
+| **실험 컨벤션 (per-project)** | `.claude_reports/analysis_project/code/experiment_conventions.md` | 프로젝트 단위 | **1순위** — 본 프로젝트의 실제 컨벤션이 source of truth. 개별 프로젝트의 특수 사정 (외부 ref 기반 / 다른 framework / legacy 자리) 그대로 우선 |
+| 사용자 일관 패턴 (cross-project) | `~/.claude/user_profile/07_coding_convention.md` | cross-project | **2순위 (default·fallback)** — per-project 부재 또는 _빈 자리_ 만 보강. 사용자 cross-project 의 model 폴더 / config / prefix / preferred layer / framework / metric 누적. 부재 시 `/analyze-user coding_convention` 권장 안내 |
 | 프로젝트 timeline | `.claude_reports/experiments/_RUNLOG.md` 의 최근 5 줄 | 한 실험 = 한 줄 | 직전 실험 컨텍스트 |
 | 직전 실험 상세 | 직전 실험 폴더의 `summary.md` + `STORY.md` | 한 실험 narrative | 결과·다음 후보 인용 |
 | 외부 조사 | `.claude_reports/research/` 최근 산출 (있으면) | topic 별 | motivation 기반 |
 | 코드 청사진 | `.claude_reports/analysis_project/code/` (있으면) | 프로젝트 단위 | baseline 파악 |
-| 실험 컨벤션 (per-project 특별 자리만) | `.claude_reports/analysis_project/code/experiment_conventions.md` | 프로젝트 단위 | 2순위 — user_profile/07 의 _보강_ 자리만 (본 프로젝트 특별 자리 — 신규 layer / 특수 폴더 / config 변형) |
 | **유사 모델** | `.claude_reports/analysis_project/code/similar_models.md` | 프로젝트 단위 | `--ref` 자동 추천 |
 | Cleanup 후보 | `.claude_reports/analysis_project/code/cleanup_candidates.md` (있으면) | 프로젝트 단위 | dead code 자리 회피 |
 | 실험 ready 점검 | `.claude_reports/analysis_project/code/experiment_readiness.md` (있으면) | 프로젝트 단위 | 미흡 시 _autopilot-code 권장_ 한 줄 |
@@ -134,7 +134,7 @@ argument-hint: "<task description> [--mode ml|script|auto] [--ref <similar-model
 
 ## 코드 수정 4 원칙 (sub-agent 호출 자리에 매번 prepend)
 
-`~/.claude/user_profile/07_coding_convention.md` (1순위 — cross-project 사용자 일관 패턴) + `analysis_project/code/experiment_conventions.md` (2순위 — 본 프로젝트 특별 자리만 보강) 의 _preferred layer / config 메커니즘 / prefix 패턴_ 을 source 로 다음 4 원칙을 개발팀 _new-lib_ mode prompt 에 매번 prepend:
+`analysis_project/code/experiment_conventions.md` (**1순위 — per-project 가 source of truth**) + `~/.claude/user_profile/07_coding_convention.md` (2순위 — cross-project default, per-project 부재·빈 자리만 보강) 의 _preferred layer / config 메커니즘 / prefix 패턴_ 을 source 로 다음 4 원칙을 개발팀 _new-lib_ mode prompt 에 매번 prepend. _충돌 자리는 per-project 우선_ — 본 프로젝트의 실제 컨벤션 침범 X.
 
 1. **최소 수정** — 기존 모델 폴더 복사 후 변형 (`--ref` 또는 `similar_models.md` 추천). 새 layer 도입 default X
 2. **원래 layer 1순위** — `experiment_conventions.md` 의 _preferred layer_ list 가 1순위. 새 layer 도입은 _명시 컨펌_ 필요

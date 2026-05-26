@@ -306,7 +306,7 @@ fi
 | **공통 시각 자산** | — | `autopilot-design` (신규 디자인 사이클) | `autopilot-design` 재호출 (cycle 2+) |
 | **공통 사용자 프로필** | — | `analyze-user --mode init` (aspect 7 종 — figure / writing / presentation / analysis / domain / collab / **coding_convention**) | `analyze-user --mode update` |
 
-> **`coding_convention` aspect 의 자리** (2026-05-26): 사용자 cross-project 코드 일관 패턴 (model 폴더 / config / prefix / preferred layer / framework / metric / log·ckpt / seed) 을 `~/.claude/user_profile/07_coding_convention.md` 에 누적. autopilot-lab / autopilot-spec / autopilot-code / 개발팀 _new-lib_ 의 _1순위 source_. `analysis_project/code/experiment_conventions.md` 는 _per-project 특별 자리만_ 보강 (2순위). 사용자 첫 호출 자리에 source 폴더 명시 (cwd 자동 발견 + `--source <path>`) — 하드코딩 path X.
+> **`coding_convention` aspect 의 자리** (2026-05-26): 사용자 cross-project 코드 일관 패턴 (model 폴더 / config / prefix / preferred layer / framework / metric / log·ckpt / seed) 을 `~/.claude/user_profile/07_coding_convention.md` 에 누적. autopilot-lab / autopilot-spec / autopilot-code / 개발팀 _new-lib_ 의 _cross-project default · fallback_ 자리 (2순위). **개별 프로젝트의 `analysis_project/code/experiment_conventions.md` 가 1순위 source of truth** — 충돌 자리는 per-project 우선, user_profile/07 은 _per-project 부재·빈 자리만_ 보강. 사용자 첫 호출 자리에 source 폴더 명시 (cwd 자동 발견 + `--source <path>`) — 하드코딩 path X.
 
 ### §6.2. 사용자 호출 단위 흐름 (3 패턴)
 
