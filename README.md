@@ -33,24 +33,19 @@
 flowchart LR
     subgraph DOC["📄 문서 작업"]
         direction LR
-        d1["analyze-project /<br/>autopilot-research"] --> d2[autopilot-draft] --> d3[autopilot-refine] --> d4[autopilot-apply]
-        d3 -.-> d3
+        d1["analyze-project /<br/>autopilot-research"] --> d2[autopilot-draft] --> d3["autopilot-refine<br/>↻ 반복"] --> d4[autopilot-apply]
     end
     subgraph EXP["🔬 연구·실험"]
         direction LR
-        e1["analyze-project /<br/>autopilot-research"] --> e2[autopilot-spec] --> e3[autopilot-lab]
-        e3 -.-> e3
+        e1["analyze-project /<br/>autopilot-research"] --> e2[autopilot-spec] --> e3["autopilot-lab<br/>↻ 반복"]
     end
     subgraph APPDEV["💻 앱 개발"]
         direction LR
-        a1[autopilot-spec] --> a2["autopilot-design<br/>(옵션)"] --> a3[autopilot-code] --> a4["autopilot-spec<br/>setup-only"]
-        a1 -.-> a1
-        a3 -.-> a3
+        a1["autopilot-spec<br/>↻ refine"] --> a2["autopilot-design<br/>(옵션)"] --> a3["autopilot-code<br/>↻ 반복"] --> a4["autopilot-spec<br/>setup-only"]
     end
     subgraph LIB["📦 라이브러리·CLI"]
         direction LR
-        l1[analyze-project] --> l2[autopilot-spec] --> l3[autopilot-code]
-        l3 -.-> l3
+        l1[analyze-project] --> l2[autopilot-spec] --> l3["autopilot-code<br/>↻ 반복"]
     end
 ```
 
@@ -72,12 +67,12 @@ flowchart LR
         NT["notes --scope user"]
     end
     ANA["analyze-project<br/>(code/paper/doc)"]
-    RES["autopilot-research<br/>(academic/tech/market)"]
-    SPEC["autopilot-spec<br/>(app/library/api/cli/research)"]
-    CODE["autopilot-code<br/>(spec mode 자동 분기)"]
-    LAB["autopilot-lab<br/>(실험 prototype 반복)"]
+    RES["autopilot-research<br/>(academic/tech/market)<br/>↻ 재진입"]
+    SPEC["autopilot-spec<br/>(app/library/api/cli/research)<br/>↻ refine"]
+    CODE["autopilot-code<br/>(spec mode 자동 분기)<br/>↻ 반복"]
+    LAB["autopilot-lab<br/>(실험 prototype)<br/>↻ 반복"]
     DOC["autopilot-draft"]
-    DES["autopilot-design<br/>(시각)"]
+    DES["autopilot-design<br/>(시각)<br/>↻ 확장"]
     REF["autopilot-refine<br/>(doc + research 정정)"]
     APP["autopilot-apply<br/>(cheatsheet → 실제 소스)"]
     AUD["audit<br/>(모든 산출물 점검)"]
@@ -92,11 +87,6 @@ flowchart LR
     SPEC -.->|app mode 자리| DES
     DES -.->|컴포넌트·토큰| CODE
     LAB -->|졸업·라이브러리화| CODE
-    SPEC -.-> SPEC
-    CODE -.-> CODE
-    LAB -.-> LAB
-    RES -.-> RES
-    DES -.-> DES
     DOC --> REF
     DOC -->|cheatsheet| APP
     REF -.->|정정된 cheatsheet| APP
