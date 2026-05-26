@@ -6,8 +6,7 @@
       "Grep",
       "Write",
       "Edit",
-      "Agent",
-      "mcp__claude_ai_Notion__notion-update-page"
+      "Agent"
     ],
     "defaultMode": "auto"
   },
