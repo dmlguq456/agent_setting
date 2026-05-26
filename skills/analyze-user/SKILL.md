@@ -46,16 +46,18 @@ argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover
 
 ### `<aspect>` (REQUIRED)
 
-| aspect | 갱신 파일 | 기본 source |
+| aspect | 갱신 파일 | source (사용자 `--source <path>` 명시 — 하드코딩 X) |
 |---|---|---|
-| `figure` | `01_paper_figure_style.md` | `~/nas/user/Uihyeop/doc/*/latex*/figures/`, `~/nas/user/Uihyeop/doc/*/figure*/` |
-| `writing` | `02_paper_writing_style.md` | `~/nas/user/Uihyeop/doc/*/latex*/main.tex`, arXiv abstract |
-| `presentation` | `03_presentation_strategy.md` | `~/nas/user/Uihyeop/doc/presentation/`, `~/nas/user/Uihyeop/doc/*ppt*/` |
-| `analysis` | `04_analysis_methodology.md` | `~/nas/user/Uihyeop/NN_Zoo/*/analysis/*.py`, paper Method / Experiment 절 |
-| `domain` | `05_domain_expertise.md` | paper 일람 (scholar.google), 사용자 GitHub |
-| `collab` | `06_collaboration_style.md` | `~/.claude/projects/*/memory/*.md` |
-| `coding_convention` | `07_coding_convention.md` | cwd + 1-level subdirs 자동 발견 (`model/`·`train*.py`·`config*.yaml`·`*.ipynb` 패턴) + 사용자 `--source <path>` 명시 (콤마 분리 복수 가능, 다른 코드 repo 추가 source). analyze-project doc mode 와 같은 패턴 — 하드코딩 path X, 사용자가 폴더 명시. |
-| `all` | 7 개 모두 | 위 source 모두 |
+| `figure` | `01_paper_figure_style.md` | 사용자 폴더 명시 — paper PDF 자료 / figure 모음 폴더 / pptx 안 figure 자료 (자동 변환 PNG) |
+| `writing` | `02_paper_writing_style.md` | 사용자 폴더 명시 — paper PDF·docx 자료·LaTeX main.tex·reports (`.docx` / `.hwpx` / `.hwp` 자동 변환) |
+| `presentation` | `03_presentation_strategy.md` | 사용자 폴더 명시 — pptx 자료 (자동 PDF + PNG 변환, 시각 layout fidelity) |
+| `analysis` | `04_analysis_methodology.md` | 사용자 폴더 명시 — 코드 자리 analysis script + paper Method/Experiment 절 |
+| `domain` | `05_domain_expertise.md` | 사용자 폴더 명시 — paper 자료 + 사용자 GitHub URL (옵션) |
+| `collab` | `06_collaboration_style.md` | `~/.claude/projects/*/memory/*.md` (시스템 자료 — 자동) + 사용자 `--source <path>` 추가 (옵션) |
+| `coding_convention` | `07_coding_convention.md` | 사용자 폴더 명시 — 코드 repo 자리 (`model/`·`train*.py`·`config*.yaml`·`*.ipynb` 패턴) |
+| `all` | 7 개 모두 | 사용자 `--source <path>` 한 자리 (또는 복수 콤마 분리) — 안 자료 type 별 aspect 자동 분류 (재귀 자동 발견) |
+
+> **하드코딩 path X — 사용자 자료 명시 default**: 모든 aspect 자리 _기본 source 위치 자체_ 가 _사용자 명시_ 자리. `--source` 명시 없으면 _자료 0 자리_, 사용자 안내 한 줄 — 사용자가 _참고 자료 폴더 path_ 던져주는 자리 ([analyze-project](../analyze-project/SKILL.md) doc mode 와 같은 패턴). collab 자리는 시스템 메모리 자동 (cross-project 메모리 자리 cwd 무관).
 
 ### `--source <path>` (옵션)
 
@@ -99,16 +101,40 @@ Phase 4 의 reviewer 구성은 항상 4 개 parallel (Phase 4 절 참조).
 
 절차:
 
-1. **기본 source 위치 일람** — `<aspect>` 별 기본 source 표 (위) 의 모든 경로 glob.
-2. **`--source` 추가 디렉토리 일람** — 사용자 명시 source 도 같이.
-3. **메모리 자료 일람** (collab / domain aspect 시) — `~/.claude/projects/*/memory/*.md` 전수.
-4. **scholar / arXiv 자료 일람** (writing / domain aspect 시) — 사용자 paper 목록 + abstract.
-5. **자동 변환 (LibreOffice headless)** — Claude 가 직접 read 못하는 자료 (docx / pptx / hwpx / xlsx / doc / ppt) 발견 시:
+1. **사용자 `--source <path>` 일람** — _사용자가 명시한 폴더 path_ (콤마 분리 복수 가능). `--source` 없으면 _자료 0 자리_ + 한 줄 안내: _"참고 자료 폴더 path 자리 `--source` 로 명시 부탁"_.
+2. **재귀 자동 발견** — 사용자 명시 path 안 _모든 subfolder_ 재귀 scan. 자료 type 별 aspect 자동 분류 (`all` 호출 자리 또는 aspect 별 매핑):
+   - `*.pdf` (paper / report) → figure / writing / analysis / domain aspect 자리
+   - `*.pptx` / `*.ppt` → presentation aspect 자리 (자동 PDF + PNG 변환)
+   - `*.docx` / `*.hwpx` / `*.hwp` → writing aspect 자리 (자동 PDF 변환)
+   - `model/` / `*.py` / `*.yaml` / `*.ipynb` / 코드 자료 → coding_convention / analysis aspect 자리
+   - 폴더 안 `figures/` / `figure_ppt/` → figure aspect 자리
+   - 폴더 안 `analysis/` → analysis aspect 자리
+   - `*.mp4` / `*.mov` 등 video 자료 → **skip** (analyze-user 자리 분석 X, 한 줄 보고)
+3. **메모리 자료 일람** (collab / domain aspect 시) — `~/.claude/projects/*/memory/*.md` 전수 (시스템 자료 자동).
+4. **scholar / arXiv 자료 일람** (writing / domain aspect 시) — 사용자 명시 paper 목록 + abstract.
+5. **자동 변환 (LibreOffice headless)** — Claude 가 직접 read 못하는 자료 (docx / pptx / hwpx / xlsx / doc / ppt / hwp) 발견 시:
+
+**LibreOffice 자동 설치 (부재 자리)**:
+
+```bash
+if ! command -v libreoffice &>/dev/null; then
+  echo "LibreOffice 부재 — 자동 설치 시도..."
+  sudo apt install -y libreoffice 2>&1 || {
+    echo "❌ 자동 설치 실패 (sudo 권한 자리 필요)."
+    echo "   사용자가 직접 설치: sudo apt install libreoffice"
+    echo "   또는 사용자 사전 PDF 변환 후 source 자리 재지정 fallback"
+  }
+fi
+```
+
+자동 설치 시도 자리 — _권한 자리_ 또는 _네트워크 자리_ 실패 가능. fallback 안 시 _변환 안 된 자료 skip + 보고_.
 
 | 자료 | 변환 | 저장 자리 |
 |---|---|---|
 | **docx / hwpx / xlsx / doc** (텍스트 위주) | `libreoffice --headless --convert-to pdf` — PDF 한 자리 | `~/.claude/user_profile/_internal/converted_pdfs/<name>.pdf` |
 | **pptx / ppt** (시각 layout 핵심) | PDF + page 별 PNG 두 자리 — PDF 는 텍스트·layout / PNG 는 시각 fidelity (글자 크기·폰트·배치 보존) | `_internal/converted_pdfs/<name>.pdf` + `_internal/converted_pngs/<name>_slide{NN}.png` |
+| **hwp** (legacy) | LibreOffice 변환 _부분적_ — 시도 + 실패 시 사용자 안내 ("hwp 자리 변환 깨짐 — 사용자 직접 PDF 변환 후 재지정") | 성공 자리 PDF / 실패 자리 skip + 보고 |
+| **mp4 / mov / 기타 video** | _skip_ — analyze-user 자리 분석 X | 한 줄 보고 |
 
 변환 명령 자리:
 
@@ -347,12 +373,15 @@ timestamp: "2026-05-22T15:30:00Z"
 
 | Agent | 작업 시작 시 Read | 이유 |
 |---|---|---|
-| 자료팀 | `01_paper_figure_style.md`, `03_presentation_strategy.md`, `04_analysis_methodology.md` | figure / 슬라이드 자산·데이터 분석 모두 본 사용자 시각·표 표준 따름 |
-| 연구팀 | `02_paper_writing_style.md`, `04_analysis_methodology.md`, `05_domain_expertise.md` | paper 본문 톤 + 검증 방법론 + 도메인 용어 |
-| 편집팀 | `01_*` (figure caption), `02_*` (본문 톤), `03_*` (슬라이드 다듬기), `05_*` (도메인 표현), `06_collaboration_style.md` | 사용자 향 문서 전반 — figure caption / paper / 발표 / 도메인 약자 모두 |
-| 기획팀 | `04_analysis_methodology.md`, `06_collaboration_style.md`, `07_coding_convention.md` | plan 자리 검증 패턴 + 작업 흐름 + 코드 컨벤션 (plan 안 코드 자리 정합성) |
-| 개발팀 | `07_coding_convention.md` | model 폴더 · config · prefix · preferred layer · framework — autopilot-spec scaffold / autopilot-lab Phase 2 / autopilot-code new-lib·refactor 호출 자리 default (단, _per-project `analysis_project/code/experiment_conventions.md`_ 가 1순위, 본 파일은 fallback) |
-| 메인 Claude | `06_collaboration_style.md`, `07_coding_convention.md` | 응답 톤·feedback 패턴·작업 흐름 + 코드 컨벤션 (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙 prepend) |
+| 자료팀 | `01_*` · `03_*` · `04_*` · **`05_*`** · **`06_*`** | figure / 슬라이드 / 데이터 분석 시각 + 도메인 용어 (figure caption / 슬라이드 안 약자) + 사용자 응답 톤 (자료 보고 자리) |
+| 디자인팀 | `01_*` · `03_*` · **`05_*`** · **`06_*`** | UI mockup·슬라이드 비주얼·다이어그램 톤 + 도메인 용어 (UI 안 표현) + feedback 패턴 |
+| 연구팀 | **`01_*`** · `02_*` · `04_*` · `05_*` · **`06_*`** | paper figure 인용 자리 양식 (`01`) + 본문 톤 + 검증 방법론 + 도메인 용어 + 작업 흐름 |
+| 편집팀 | `01_*` · `02_*` · `03_*` · **`04_*`** · `05_*` · `06_*` · **`07_*`** | 사용자 향 문서 전반 (전 7 aspect) — figure caption / paper / 발표 / 분석 표현 / 도메인 약자 / 응답 톤 / 코드 관련 문서 |
+| 기획팀 | **`02_*`** · `04_*` · **`05_*`** · `06_*` · `07_*` | plan 자리 작성 톤 (`02`) + 검증 패턴 + 도메인 용어 (plan 안 약자) + 작업 흐름 + 코드 컨벤션 (plan 안 코드 자리 정합성) |
+| 개발팀 | **`04_*`** · **`05_*`** · **`06_*`** · `07_*` | 코드 안 metric·검증 자리 (`04`) + 도메인 약자 (변수명·함수명 자리, `05`) + feedback 패턴 (`06`) + model 폴더·config·prefix·preferred layer (`07`). per-project `experiment_conventions.md` 가 1순위, 본 파일은 fallback |
+| 메인 Claude | **`04_*`** · **`05_*`** · `06_*` · `07_*` | 사용자 분석 자리 응답 (`04`) + 도메인 약자 인지 (사용자 발화 자리, `05`) + 응답 톤·feedback (`06`) + 코드 컨벤션 (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙 prepend, `07`) |
+
+> **적극적 매핑** (2026-05-26): 이전 보수 매핑 자리에서 _agent 별 최소 4-5 aspect_ 참조 자리 적극화. 각 agent 가 _사용자 자리_ 더 적극 반영 — 도메인 용어 / 작업 흐름 / 응답 톤 자리 일관성 보강.
 
 본 참조 패턴은 _agent 정의 본문_ 에 명시되어 있어 agent 가 invoke 될 때 자동.
 
