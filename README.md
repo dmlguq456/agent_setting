@@ -37,7 +37,7 @@ flowchart LR
     end
     subgraph EXP["🔬 연구·실험"]
         direction LR
-        e1["analyze-project /<br/>autopilot-research"] --> e2["autopilot-spec<br/>(옵션)"] --> e3["autopilot-lab<br/>↻ 반복"]
+        e1["analyze-project /<br/>autopilot-research"] --> e2["autopilot-spec<br/>(옵션)<br/>↻ refine"] --> e3["autopilot-lab<br/>↻ 반복"]
     end
     subgraph APPDEV["💻 앱 개발"]
         direction LR
@@ -45,7 +45,7 @@ flowchart LR
     end
     subgraph LIB["📦 라이브러리·CLI"]
         direction LR
-        l1[analyze-project] --> l2[autopilot-spec] --> l3["autopilot-code<br/>↻ 반복"]
+        l1[analyze-project] --> l2["autopilot-spec<br/>↻ refine"] --> l3["autopilot-code<br/>↻ 반복"]
     end
 ```
 
