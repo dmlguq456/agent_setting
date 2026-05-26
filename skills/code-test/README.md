@@ -1,6 +1,6 @@
 # code-test
 
-> 본 README는 Notion 페이지 [🧪 code-test](https://www.notion.so/34987c2bb75381b2bed4e46395413623)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 code-execute 이후 또는 온디맨드로 기능 테스트를 실행해 코드 정확성을 검증하는 skill. **항상 Thorough 모드** (2 병렬 QA 팀 강제), Codex 가용 시 자동 Adversarial로 상향.

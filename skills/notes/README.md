@@ -1,6 +1,6 @@
 # notes
 
-> 본 README는 Notion 페이지 [📝 notes](https://www.notion.so/36187c2bb75381fa9b4dd8562fd80500)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 
@@ -24,7 +24,7 @@
 - (영속 규약 — 예: 노션 정리 위치, 커밋 메시지 언어)
 
 ## External Resources
-- (외부 링크/경로 — 예: 데이터셋, Overleaf, Notion 대시보드)
+- (외부 링크/경로 — 예: 데이터셋, Overleaf)
 
 ## Open Threads
 - [in-progress] (현재 진행 중인 작업)

@@ -1,6 +1,6 @@
 # autopilot-code
 
-> 본 README는 Notion 페이지 [🔧 autopilot-code](https://www.notion.so/32787c2bb75381d48170dae1e5074b5c)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 > **autopilot-code**: dev/debug 2개 모드의 통합 코드 파이프라인. audit 은 별도 `/audit` skill (갈래 D) — autopilot-code 는 dev/debug 만 담당.
 

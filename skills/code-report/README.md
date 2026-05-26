@@ -1,6 +1,6 @@
 # code-report
 
-> 본 README는 Notion 페이지 [📊 code-report](https://www.notion.so/34987c2bb75381a99e7bd9fb53ac04fb)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 plan + dev logs로부터 상세 변경 보고서를 생성하는 skill. **핵심 변경, 원리, 인사이트**에 초점. 향후 참고를 위한 문서.

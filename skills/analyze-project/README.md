@@ -1,6 +1,6 @@
 # analyze-project
 
-> 본 README는 Notion 페이지 [analyze-project](https://www.notion.so/34987c2bb75381f5bdb4e159b63ea72e)의 미러. **`/sync-skills`로 양방향 동기화** (편집은 README 또는 Notion 한쪽에서 후 sync). 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 코드베이스를 분석해 `.claude_reports/analysis_project/{code,paper,doc}/`에 구조화된 문서를 생성하는 skill. autopilot 파이프라인의 **사전 준비 skill**. mode별:

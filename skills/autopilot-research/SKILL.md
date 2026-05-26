@@ -581,7 +581,7 @@ Agent(subagent_type="연구팀"):
 
    **CRITICAL — Output scope strictly limited to the 9 markdown reports** (00_briefing through 08_reading_guide). Specifically for goal=seminar:
    - Produce `06_implementation.md` with chapter outline + cheat sheet + Q&A + deep-dive candidates ONLY.
-   - Do **NOT** produce `seminar_slides.md`, `notion_seminar_slides.md`, slide-by-slide markdown, PPTX, or any other slide-rendering artifact.
+   - Do **NOT** produce `seminar_slides.md`, slide-by-slide markdown, PPTX, or any other slide-rendering artifact.
    - Slide-by-slide draft generation belongs to autopilot-draft presentation mode. Never overstep.
 
    Same restriction applies to other goals: do NOT generate paper drafts, code, PPTX, or any final-form document — only the 9 markdown analysis reports.

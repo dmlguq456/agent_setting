@@ -1,6 +1,6 @@
 # code-refine
 
-> 본 README는 Notion 페이지 [✍️ code-refine](https://www.notion.so/34987c2bb75381a5bc54e0f02e96b3e1)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 사용자 메모/코멘트를 plan에 반영해 업데이트하는 skill (**구현 금지**). 한국어 `plan_ko.md`에 삽입된 메모를 감지하고 영·한 양쪽을 동기화.

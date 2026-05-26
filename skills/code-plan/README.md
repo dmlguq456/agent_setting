@@ -1,6 +1,6 @@
 # code-plan
 
-> 본 README는 Notion 페이지 [📝 code-plan](https://www.notion.so/34987c2bb75381efba0fe6f1ca33ade0)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 실제 코드베이스를 기반으로 상세 구현 계획을 작성하는 skill. 기획팀에 위임하여 영어 `plan.md` 생성 + QA 루프 후 한국어 `plan_ko.md` 전체 번역.

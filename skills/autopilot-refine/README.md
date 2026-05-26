@@ -1,6 +1,6 @@
 # autopilot-refine
 
-> 본 README는 Notion 페이지 [🔁 autopilot-refine](https://www.notion.so/35e87c2bb75381fab020d6f7c2685aef)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 Autopilot family — **post-creation iteration pipeline for research and doc artifacts** (NOT code). 갈래 E (사후 정정). 

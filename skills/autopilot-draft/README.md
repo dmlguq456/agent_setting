@@ -1,6 +1,6 @@
 # autopilot-draft
 
-> 본 README는 Notion 페이지 [📄 autopilot-draft](https://www.notion.so/33e87c2bb75381338b82d75e34bb04c9)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 > **Paper mode camera-ready / major revision 특이 룰** (2026-05-19): reviewer concern → paper-body mutation 변환 시 **natural-integration rule** 적용. Single gating question — *"1-2 sentence inline rewrite로 자연 통합 가능한가?"* YES → M15-style inline rewrite. NO → drop / Appendix defer (rebuttal-format은 본문 mutation 금지). 상세 — `SKILL.md` Mode-Specific Draft Structure `### paper` 끝.
 

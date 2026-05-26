@@ -1,6 +1,6 @@
 # code-execute
 
-> 본 README는 Notion 페이지 [▶️ code-execute](https://www.notion.so/34987c2bb753813fbe07dec64db8796e)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 구현 계획을 progress tracking과 함께 실행하는 skill. dev-team 서브에이전트에 step별 위임, phase마다 품질관리팀 리뷰, Git Safety Checkpoint 설정.

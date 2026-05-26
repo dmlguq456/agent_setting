@@ -63,7 +63,7 @@ argument-hint: "[show] | init | add <category> <text> | resolve <hint> | decide 
 - (영속 규약 — 예: 노션 정리 위치, 커밋 메시지 언어)
 
 ## External Resources
-- (외부 링크/경로 — 예: 데이터셋, Overleaf, Notion 대시보드)
+- (외부 링크/경로 — 예: 데이터셋, Overleaf)
 
 ## Open Threads
 - [in-progress] (현재 진행 중인 작업)
@@ -161,8 +161,8 @@ NOTES.md는 세션 시작 시 항상 읽히는 컨텍스트 파일. **짧고 den
 
 - **한 bullet = 한 줄**. 줄바꿈 금지 (기본). 정 길어지면 최대 2줄.
 - **명사구 / 사실 문장** 위주. 형용사·부사·접속사·존댓말·이유 설명 최소화.
-  - ❌ `노션은 X 페이지 아래에 정리하는 것이 좋습니다. 이유는...`
-  - ✅ `노션 정리 위치: <Notion URL>/TF-Restormer`
+  - ❌ `Overleaf 는 X 폴더 아래 정리하는 게 좋습니다. 이유는...`
+  - ✅ `Overleaf 정리 위치: <Overleaf URL>/TF-Restormer`
 - **핵심 어휘만**. 한국어/영어 혼용 OK, 약어·기호 (`→`, `&`, `vs`) 적극 사용.
 - **카테고리 중복 금지**. 같은 정보는 한 곳에만. (예: 데이터셋 경로는 External Resources만, Conventions에 다시 적지 말 것.)
 - **시간성**:

@@ -10,24 +10,8 @@
       "sha256": "086dd4bc90cd3f7a74bbc4b7edd1f4dd78b70b29b9d1518d6b39acfdfda80fb1",
       "synced_at": "2026-05-26T15:23:11.385289+09:00"
     },
-    "skills/app-build": {
-      "sha256": "04ff5910d813bd56232959f657f52ba2fd6b9a5f12f955c04e9abb8ceeac887e",
-      "synced_at": "2026-05-26T15:23:11.385289+09:00"
-    },
     "skills/app-init": {
       "sha256": "ad42a11fb4a556dc1b7cfe42ea83c1c2b5d8464fbfaa9d052b5c0dbaf40b682c",
-      "synced_at": "2026-05-26T15:23:11.385289+09:00"
-    },
-    "skills/app-iterate": {
-      "sha256": "1ccea3f78b23ae45b1190e59ca348979bf5f40d16958d317ea3a9d4c05b9c46e",
-      "synced_at": "2026-05-26T15:23:11.385289+09:00"
-    },
-    "skills/app-qa": {
-      "sha256": "940dc22e9927332130ccdcf3a9cf7f564f3f496f729e36e4c58d17f0ff3b06e9",
-      "synced_at": "2026-05-26T15:23:11.385289+09:00"
-    },
-    "skills/app-ship": {
-      "sha256": "36182f1e9450a1d194b3b2c8e179fbcf047a6a4b875836abecadeb71fc326a15",
       "synced_at": "2026-05-26T15:23:11.385289+09:00"
     },
     "skills/app-spec": {

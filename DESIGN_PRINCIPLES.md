@@ -5,7 +5,6 @@
 > 자매 문서 (각자 단일 출처, 본 문서는 포인터만):
 > - `CONVENTIONS.md` — QA 5단계 / agent model 표기 / 산출물 폴더 컨벤션 (§5) / hard invariants
 > - `CLAUDE.md` §1~§6 — 메인 Claude 자체 행동 메타 원칙 (말투·출력 자제·약속어 self-check·pause flag 비자동·자율 진행·autopilot-* 호출 Pre-check)
-> - `notion_guide.md` — Notion MCP 작업 가이드
 >
 > 본 문서는 _구조와 행동의 골격_ 만 담고, 정의·정책·운영 wording 은 위 자매 문서로 위임.
 

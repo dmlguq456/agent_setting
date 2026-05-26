@@ -1,6 +1,6 @@
 ---
 name: 편집팀
-description: "사용자가 _직접 읽는_ 산출물의 점검·수정 라우터 (한국어·영문 무관). 모드 3종 — translate (영문↔국문 옮기기) / polish (다듬기 — 판교체·번역체 회피·표기 일관성·가독성) / review (점검만, read-only). autopilot-draft·autopilot-research·autopilot-code code-report·audit 보고서·sync-skills README·draft-strategy·code-plan 의 한국어 mirror 자리에서 자동 호출. **트리거 대상 X** — Claude 가 읽는 instruction 파일 (CLAUDE.md / SKILL.md / agents/*.md / CONVENTIONS.md / DESIGN_PRINCIPLES.md / notion_guide.md / 메모리). '다듬어줘' / '판교체 정리' / '표기 통일' / '국문 재서술' 표현 시 직접 호출. 모드 파일은 ~/.claude/agent-modes/editorial/<mode>.md."
+description: "사용자가 _직접 읽는_ 산출물의 점검·수정 라우터 (한국어·영문 무관). 모드 3종 — translate (영문↔국문 옮기기) / polish (다듬기 — 판교체·번역체 회피·표기 일관성·가독성) / review (점검만, read-only). autopilot-draft·autopilot-research·autopilot-code code-report·audit 보고서·sync-skills README·draft-strategy·code-plan 의 한국어 mirror 자리에서 자동 호출. **트리거 대상 X** — Claude 가 읽는 instruction 파일 (CLAUDE.md / SKILL.md / agents/*.md / CONVENTIONS.md / DESIGN_PRINCIPLES.md / 메모리). '다듬어줘' / '판교체 정리' / '표기 통일' / '국문 재서술' 표현 시 직접 호출. 모드 파일은 ~/.claude/agent-modes/editorial/<mode>.md."
 tools: Read, Write, Edit, Grep, Glob
 model: opus
 color: cyan
@@ -27,7 +27,6 @@ memory: project
 - `~/.claude/skills/*/SKILL.md`
 - `~/.claude/agents/*.md` 및 `~/.claude/agent-modes/**/*.md`
 - `~/.claude/CONVENTIONS.md` · `~/.claude/DESIGN_PRINCIPLES.md`
-- `~/.claude/notion_guide.md`
 - `~/.claude/projects/*/memory/*.md` (자동 메모리)
 - 모든 skill 의 `pipeline_summary.md` · `_internal/` 자료
 

@@ -313,29 +313,12 @@ specs/<name>/
 | 1. PRD (autopilot-spec) | 🔴 큼 | 만들 _것 자체_ 결정 — 빗나가면 build 다 끝나도 _틀린 것_ |
 | 2. 디자인 (autopilot-design) | 🟡 중 | 색·폰트 — 취향. default 무난 |
 | 3. 본격 개발 (autopilot-code) | 🟢 작 | 결과만 확인 |
-| 4. 보강 setup (autopilot-spec `--mode setup`) | 🟡 중 | 호스팅 선택·DNS·env. 자동 X — 사용자 직접 |
+| 4. 보강 setup (autopilot-ship) | 🟡 중 | 호스팅 선택·DNS·env. 자동 X — 사용자 직접 |
 | 5. iteration | 🔴 큼 | 써보고 _다음 의도_ 표현 |
 
 ---
 
-## 6. DEPRECATED — 정리 자리 (2026-05-25)
-
-다음 sub-skill 은 _레거시 참조_ 용으로 파일 보존, 신규 호출 X. 본 흐름 청사진의 _진짜 자리_ 가 어디인지 명확히:
-
-| DEPRECATED | 흡수 자리 |
-|---|---|
-| `app-build` | `autopilot-code` 의 앱 mode |
-| `app-qa` | `autopilot-code` 앱 mode 안 검증 단계 (code-test + 품질관리팀 code-review + 디자인팀 critic) |
-| `app-ship` | `autopilot-spec --mode setup` |
-| `app-iterate` | `autopilot-code` 호출 자체가 iteration |
-
-본 흡수는 _작업 본질에 맞는 분리_ 원칙 적용 결과:
-- 앱 코드 변경 = 일반 코드 변경과 _본질 동일_ → autopilot-code 한 skill 통합
-- _앱 특수성_ (디자인팀 critic / DB 안전 / push 자동 deploy) 는 _컨텍스트 자동 감지_ 로 처리
-
----
-
-## 7. 자주 묻는 자리
+## 6. 자주 묻는 자리
 
 ### Q. 이미 chat 으로 만든 앱이 있다. autopilot-spec 부터 시작?
 
@@ -350,7 +333,7 @@ A. **아니다**. _토큰 (색·폰트·간격)_ 은 안정, _컴포넌트_ 는 
 
 ### Q. ship 은 매번 호출?
 
-A. **아니다**. _첫 setup_ 만 한 번 (`vercel link` / CI/CD 파일 / env). 이후는 _git push → CI/CD 자동 deploy_. autopilot-spec `--mode setup` 은 _가끔 보강_ (env 변경·domain·migration deploy) 자리만.
+A. **아니다**. _첫 setup_ 만 한 번 (`vercel link` / CI/CD 파일 / env). 이후는 _git push → CI/CD 자동 deploy_. `autopilot-ship` 은 _가끔 보강_ (env 변경·domain·migration deploy) 자리만.
 
 ### Q. autopilot-code 가 어떻게 앱 vs 라이브러리 mode 자동 감지?
 
@@ -362,7 +345,7 @@ A. `specs/<name>/01_spec/PRD.md` 의 _API Contract / 데이터 모델 / ui_flow_
 
 ---
 
-## 8. 참고
+## 7. 참고
 
 - 정의 source: [`CONVENTIONS.md §6`](CONVENTIONS.md)
 - skill entry list: [`README.md`](README.md)

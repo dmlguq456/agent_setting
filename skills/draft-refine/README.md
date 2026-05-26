@@ -1,6 +1,6 @@
 # draft-refine
 
-> 본 README는 Notion 페이지 [✏️ draft-refine](https://www.notion.so/34987c2bb75381bfadc3c4c26ba6cdb6)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 > **Paragraph Cohesion Pre-Check (모든 mode, 2026-05-20)**: paste-ready block을 추가·rewrite하는 memo 적용 전 target paragraph **전체 narrative flow** 분석 + 4-step self-check — (1) substance 이미 명시 여부 / (2) paragraph axis 단절 여부 / (3) §-level cross-section redundancy / (4) edit type (응집성 순 EDIT in-line > REPLACE > INSERT > DROP). 기존 mutation이 pre-check 실패 (예: 후행 trailing INSERT가 prior sentence와 substance 중복) → polish 대신 **EDIT/REPLACE/DROP로 재작성**. 상세 — `draft-strategy/SKILL.md` ## Paragraph Cohesion Pre-Check (single source of truth) + `SKILL.md` Other rules.
 

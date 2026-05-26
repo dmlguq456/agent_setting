@@ -94,7 +94,7 @@ export default function TasksPage() {
 
 이 design 을 사용해 build 진행:
 - autopilot-spec 에서 호출됐다면: 자동으로 Phase 3 (build) 로 인계
-- 직접 호출이었다면: `frontend-eng` 또는 `/app-build` 호출 권장
+- 직접 호출이었다면: `/autopilot-code` 호출 권장 (앱 mode 자동 — 디자인 자산 위 컴포넌트 구현)
 
 피드백 있으면:
 - 토큰 변경 → `/design-tokens <design>` 재실행

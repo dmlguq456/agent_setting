@@ -1,6 +1,6 @@
 # draft-strategy
 
-> 본 README는 Notion 페이지 [📄 draft-strategy](https://www.notion.so/34987c2bb75381589391df16f1b6eb74)의 미러. `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 분석된 참고 자료를 기반으로 초기 문서 전략(rebuttal/paper/review/report/proposal/presentation)을 생성하는 skill. 연구팀에 위임 + QA 루프 (quality + fact-checker 병렬) + 한국어 번역.

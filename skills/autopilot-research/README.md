@@ -1,6 +1,6 @@
 # autopilot-research
 
-> 본 README는 Notion 페이지 [🔬 autopilot-research](https://www.notion.so/33d87c2bb753818d8071d42a0e5876ce)의 미러 (Notion은 wiki database 형태라 본문 stub). `/sync-skills`로 양방향 동기화. 권위 있는 동작 명세는 `SKILL.md`.
+> 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
 외부 분야 조사 파이프라인 — 학술/산업/시장 3개 mode별 보고서를 생성합니다. 논문 검색 + 분석 + 코드/모델/데이터셋 자원 발견 + 분야 implementation 가이드를 자동으로 산출.
@@ -57,7 +57,6 @@
 - autopilot-research → autopilot-code: code-plan이 implicit 인지
 
 ## Wiki database 안내
-본 skill의 Notion 페이지는 wiki database 형태 (`🔬 autopilot-research`). 본문은 sub-page들로 구성되며 본 README는 stub. 자세한 sub-page 구조는 Notion에서 직접 참조.
 
 ---
 *원본: `~/.claude/skills/autopilot-research/SKILL.md`*
