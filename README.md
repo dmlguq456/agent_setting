@@ -33,19 +33,19 @@
 flowchart LR
     subgraph DOC["📄 문서 작업"]
         direction LR
-        d1["analyze-project /<br/>autopilot-research"] --> d2[autopilot-draft] --> d3[autopilot-refine] --> d4[autopilot-apply]
+        d1["analyze-project /<br/>autopilot-research"] --> d2[autopilot-draft] --> d3["autopilot-refine<br/>↻"] --> d4[autopilot-apply]
     end
     subgraph EXP["🔬 연구·실험"]
         direction LR
-        e1["analyze-project /<br/>autopilot-research"] --> e2[autopilot-spec] --> e3[autopilot-code] --> e4[autopilot-lab]
+        e1["analyze-project /<br/>autopilot-research"] --> e2["autopilot-spec<br/>↻"] --> e3["autopilot-code<br/>↻"] --> e4["autopilot-lab<br/>↻"]
     end
     subgraph APPDEV["💻 앱 개발"]
         direction LR
-        a1[autopilot-spec] --> a2["autopilot-design<br/>(옵션)"] --> a3[autopilot-code] --> a4["autopilot-spec<br/>setup-only"]
+        a1["autopilot-spec<br/>↻"] --> a2["autopilot-design<br/>(옵션)"] --> a3["autopilot-code<br/>↻"] --> a4["autopilot-spec<br/>setup-only"]
     end
     subgraph LIB["📦 라이브러리·CLI"]
         direction LR
-        l1[analyze-project] --> l2[autopilot-spec] --> l3[autopilot-code]
+        l1[analyze-project] --> l2["autopilot-spec<br/>↻"] --> l3["autopilot-code<br/>↻"]
     end
 ```
 
@@ -67,12 +67,12 @@ flowchart LR
         NT["notes --scope user"]
     end
     ANA["analyze-project<br/>(code/paper/doc)"]
-    RES["autopilot-research<br/>(academic/tech/market)"]
-    SPEC["autopilot-spec<br/>(app/library/api/cli/research)"]
-    CODE["autopilot-code<br/>(spec mode 자동 분기)"]
-    LAB["autopilot-lab<br/>(실험 prototype)"]
+    RES["autopilot-research<br/>(academic/tech/market)<br/>↻"]
+    SPEC["autopilot-spec<br/>(app/library/api/cli/research)<br/>↻"]
+    CODE["autopilot-code<br/>(spec mode 자동 분기)<br/>↻"]
+    LAB["autopilot-lab<br/>(실험 prototype)<br/>↻"]
     DOC["autopilot-draft"]
-    DES["autopilot-design<br/>(시각)"]
+    DES["autopilot-design<br/>(시각)<br/>↻"]
     REF["autopilot-refine<br/>(doc + research 정정)"]
     APP["autopilot-apply<br/>(cheatsheet → 실제 소스)"]
     AUD["audit<br/>(모든 산출물 점검)"]
