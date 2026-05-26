@@ -31,6 +31,6 @@ mcp-needs-auth-cache.json
 # Cleanup timestamp (per-machine, ephemeral)
 .last-cleanup
 
-# analyze-user 변환 자료 (대용량 PDF / PNG, 재생성 가능)
-user_profile/_internal/converted_pdfs/
-user_profile/_internal/converted_pngs/
+# analyze-user 내부 작업 trace 자체 (draft / consensus / qa / runs / versions / converted 자료)
+# — 본인이 운영하는 process artifact, 다음 cycle 자체 자체 갱신 / 재생성 자체 자체
+user_profile/_internal/
