@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 680" width="100%"
+     font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif">
+
+  <!-- ═══════════════════════════════════════════════════════
+       02_call_graph.svg — 전체 호출 그래프 (A→F 6 카테고리)
+       레이아웃: 좌→우 컬럼 배치
+         Col 0 (x≈30):  F. 사용자 프로필
+         Col 1 (x≈180): A. 사전 조사
+         Col 2 (x≈430): B. 코드 영역 (2열 분리)
+         Col 3 (x≈730): C. 문서  /  D. 점검  /  E. 정정
+       ═══════════════════════════════════════════════════════ -->
+
+  <defs>
+    <!-- 실선 화살표 -->
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4a5568"/>
+    </marker>
+    <!-- 점선 화살표 -->
+    <marker id="arr-d" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+    </marker>
+
+    <!-- 섀도 필터 -->
+    <filter id="sh" x="-8%" y="-12%" width="120%" height="130%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2.5" flood-color="#00000018"/>
+    </filter>
+
+    <!-- 그룹 박스 색 -->
+    <!-- A 파랑 zone: #dbeafe bg / #93c5fd border -->
+    <!-- B 초록 zone: #dcfce7 bg / #86efac border -->
+    <!-- C 주황 zone: #fef3c7 bg / #fcd34d border -->
+    <!-- D 회색 zone: #f1f5f9 bg / #cbd5e1 border -->
+    <!-- E 보라 zone: #ede9fe bg / #c4b5fd border -->
+    <!-- F 청록 zone: #cffafe bg / #67e8f9 border -->
+  </defs>
+
+  <!-- ══════════════ 그룹 박스 ══════════════ -->
+
+  <!-- F. 사용자 프로필 (청록) -->
+  <rect x="12" y="260" width="152" height="160" rx="10"
+        fill="#cffafe" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="88" y="280" font-size="10.5" font-weight="700" fill="#0e7490" text-anchor="middle">F. 사용자 프로필</text>
+  <text x="88" y="293" font-size="9" fill="#0e7490" text-anchor="middle">(cross-project)</text>
+
+  <!-- A. 사전 조사 (파랑) -->
+  <rect x="180" y="130" width="200" height="200" rx="10"
+        fill="#dbeafe" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="280" y="152" font-size="10.5" font-weight="700" fill="#1e40af" text-anchor="middle">A. 사전 조사</text>
+
+  <!-- B. 코드 영역 (초록) -->
+  <rect x="400" y="30" width="330" height="480" rx="10"
+        fill="#dcfce7" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="565" y="52" font-size="10.5" font-weight="700" fill="#15803d" text-anchor="middle">B. 코드 영역</text>
+
+  <!-- C. 문서 (주황) -->
+  <rect x="755" y="130" width="182" height="100" rx="10"
+        fill="#fef3c7" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="846" y="152" font-size="10.5" font-weight="700" fill="#92400e" text-anchor="middle">C. 문서</text>
+
+  <!-- D. 점검 (회색) -->
+  <rect x="755" y="260" width="182" height="100" rx="10"
+        fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="846" y="282" font-size="10.5" font-weight="700" fill="#475569" text-anchor="middle">D. 점검</text>
+
+  <!-- E. 정정 (보라) -->
+  <rect x="755" y="390" width="182" height="160" rx="10"
+        fill="#ede9fe" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="846" y="412" font-size="10.5" font-weight="700" fill="#5b21b6" text-anchor="middle">E. 정정</text>
+
+  <!-- ══════════════ 노드 ══════════════
+       색상 코드:
+         파랑 analyze: #1d4ed8 fill / white text
+         초록 code:    #166534 fill / white text
+         주황 draft:   #b45309 fill / white text
+         회색 audit:   #334155 fill / white text
+         보라 refine:  #5b21b6 fill / white text
+         청록 profile: #0e7490 fill / white text
+       ══════════════════════════════════ -->
+
+  <!-- F. analyze-user (AU) -->
+  <g filter="url(#sh)">
+    <rect x="22" y="305" width="133" height="50" rx="7" fill="#0e7490" stroke="#0891b2" stroke-width="1.3"/>
+  </g>
+  <text x="88" y="326" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">analyze-user</text>
+  <text x="88" y="341" font-size="9" fill="#cffafe" text-anchor="middle">(AU)</text>
+
+  <!-- F. notes scope user (NT) -->
+  <g filter="url(#sh)">
+    <rect x="22" y="375" width="133" height="50" rx="7" fill="#0e7490" stroke="#0891b2" stroke-width="1.3"/>
+  </g>
+  <text x="88" y="396" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">notes --scope user</text>
+  <text x="88" y="411" font-size="9" fill="#cffafe" text-anchor="middle">(NT)</text>
+
+  <!-- A. analyze-project (ANA) -->
+  <g filter="url(#sh)">
+    <rect x="192" y="170" width="165" height="50" rx="7" fill="#1d4ed8" stroke="#1e40af" stroke-width="1.3"/>
+  </g>
+  <text x="275" y="191" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">analyze-project</text>
+  <text x="275" y="206" font-size="9" fill="#bfdbfe" text-anchor="middle">(ANA)</text>
+
+  <!-- A. autopilot-research (RES ↻) -->
+  <g filter="url(#sh)">
+    <rect x="192" y="250" width="165" height="50" rx="7" fill="#1d4ed8" stroke="#1e40af" stroke-width="1.3"/>
+  </g>
+  <text x="275" y="271" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">autopilot-research</text>
+  <text x="275" y="286" font-size="9" fill="#bfdbfe" text-anchor="middle">(RES)</text>
+  <circle cx="348" cy="256" r="8" fill="#bfdbfe" stroke="#60a5fa" stroke-width="1"/>
+  <text x="348" y="260" font-size="9" font-weight="700" fill="#1e3a8a" text-anchor="middle">↻</text>
+
+  <!-- B. autopilot-spec (SPEC ↻) -->
+  <g filter="url(#sh)">
+    <rect x="412" y="65" width="140" height="50" rx="7" fill="#166534" stroke="#15803d" stroke-width="1.3"/>
+  </g>
+  <text x="482" y="86" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">autopilot-spec</text>
+  <text x="482" y="101" font-size="9" fill="#bbf7d0" text-anchor="middle">(SPEC)</text>
+  <circle cx="541" cy="71" r="8" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="541" y="75" font-size="9" font-weight="700" fill="#14532d" text-anchor="middle">↻</text>
+
+  <!-- B. autopilot-code (CODE ↻) -->
+  <g filter="url(#sh)">
+    <rect x="578" y="65" width="140" height="50" rx="7" fill="#166534" stroke="#15803d" stroke-width="1.3"/>
+  </g>
+  <text x="648" y="86" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">autopilot-code</text>
+  <text x="648" y="101" font-size="9" fill="#bbf7d0" text-anchor="middle">(CODE)</text>
+  <circle cx="707" cy="71" r="8" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="707" y="75" font-size="9" font-weight="700" fill="#14532d" text-anchor="middle">↻</text>
+
+  <!-- B. autopilot-lab (LAB ↻) -->
+  <g filter="url(#sh)">
+    <rect x="412" y="170" width="140" height="50" rx="7" fill="#166534" stroke="#15803d" stroke-width="1.3"/>
+  </g>
+  <text x="482" y="191" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">autopilot-lab</text>
+  <text x="482" y="206" font-size="9" fill="#bbf7d0" text-anchor="middle">(LAB)</text>
+  <circle cx="541" cy="176" r="8" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="541" y="180" font-size="9" font-weight="700" fill="#14532d" text-anchor="middle">↻</text>
+
+  <!-- B. autopilot-design (DES ↻) -->
+  <g filter="url(#sh)">
+    <rect x="412" y="280" width="140" height="50" rx="7" fill="#166534" stroke="#15803d" stroke-width="1.3"/>
+  </g>
+  <text x="482" y="301" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">autopilot-design</text>
+  <text x="482" y="316" font-size="9" fill="#bbf7d0" text-anchor="middle">(DES)</text>
+  <circle cx="541" cy="286" r="8" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="541" y="290" font-size="9" font-weight="700" fill="#14532d" text-anchor="middle">↻</text>
+
+  <!-- B. autopilot-ship (SHIP ↻) -->
+  <g filter="url(#sh)">
+    <rect x="578" y="390" width="140" height="50" rx="7" fill="#166534" stroke="#15803d" stroke-width="1.3"/>
+  </g>
+  <text x="648" y="411" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">autopilot-ship</text>
+  <text x="648" y="426" font-size="9" fill="#bbf7d0" text-anchor="middle">(SHIP)</text>
+  <circle cx="707" cy="396" r="8" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="707" y="400" font-size="9" font-weight="700" fill="#14532d" text-anchor="middle">↻</text>
+
+  <!-- C. autopilot-draft (DOC) -->
+  <g filter="url(#sh)">
+    <rect x="767" y="165" width="157" height="50" rx="7" fill="#b45309" stroke="#92400e" stroke-width="1.3"/>
+  </g>
+  <text x="845" y="186" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">autopilot-draft</text>
+  <text x="845" y="201" font-size="9" fill="#fef3c7" text-anchor="middle">(DOC)</text>
+
+  <!-- D. audit (AUD) -->
+  <g filter="url(#sh)">
+    <rect x="767" y="295" width="157" height="50" rx="7" fill="#334155" stroke="#475569" stroke-width="1.3"/>
+  </g>
+  <text x="845" y="316" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">audit</text>
+  <text x="845" y="331" font-size="9" fill="#cbd5e1" text-anchor="middle">(AUD)</text>
+
+  <!-- E. autopilot-refine (REF) -->
+  <g filter="url(#sh)">
+    <rect x="767" y="425" width="157" height="50" rx="7" fill="#5b21b6" stroke="#7c3aed" stroke-width="1.3"/>
+  </g>
+  <text x="845" y="446" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">autopilot-refine</text>
+  <text x="845" y="461" font-size="9" fill="#ede9fe" text-anchor="middle">(REF)</text>
+
+  <!-- E. autopilot-apply (APP) -->
+  <g filter="url(#sh)">
+    <rect x="767" y="495" width="157" height="50" rx="7" fill="#5b21b6" stroke="#7c3aed" stroke-width="1.3"/>
+  </g>
+  <text x="845" y="516" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">autopilot-apply</text>
+  <text x="845" y="531" font-size="9" fill="#ede9fe" text-anchor="middle">(APP)</text>
+
+  <!-- ══════════════ 엣지 (실선) ══════════════ -->
+
+  <!-- ANA → SPEC -->
+  <line x1="357" y1="185" x2="410" y2="90" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <!-- ANA → DOC -->
+  <path d="M 357 195 Q 560 195 765 190" fill="none" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <!-- ANA → LAB (라벨: 실험 자료 4종) -->
+  <line x1="357" y1="200" x2="410" y2="195" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="383" y="206" font-size="8" fill="#4a5568" text-anchor="middle">실험 자료</text>
+
+  <!-- RES → SPEC -->
+  <line x1="357" y1="270" x2="410" y2="105" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <!-- RES → DOC -->
+  <path d="M 357 280 Q 560 265 765 195" fill="none" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <!-- RES → REF (실선) -->
+  <path d="M 357 285 Q 620 500 765 450" fill="none" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <!-- SPEC → CODE -->
+  <line x1="553" y1="90" x2="577" y2="90" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <!-- LAB → CODE (졸업·라이브러리화) -->
+  <path d="M 553 195 Q 620 145 648 117" fill="none" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="595" y="155" font-size="8" fill="#4a5568" text-anchor="middle">졸업·</text>
+  <text x="595" y="165" font-size="8" fill="#4a5568" text-anchor="middle">라이브러리화</text>
+
+  <!-- CODE → SHIP (기능 완성 후) -->
+  <line x1="648" y1="117" x2="648" y2="388" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="658" y="260" font-size="8" fill="#4a5568">기능</text>
+  <text x="658" y="271" font-size="8" fill="#4a5568">완성 후</text>
+
+  <!-- DOC → REF -->
+  <line x1="845" y1="217" x2="845" y2="423" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <!-- DOC → APP (cheatsheet) -->
+  <path d="M 924 190 Q 960 190 960 520 Q 960 545 925 545" fill="none" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="965" y="360" font-size="8" fill="#4a5568">cheatsheet</text>
+
+  <!-- AUD エッジ → REF (auto-fix, 점선) -->
+  <path d="M 845 347 L 845 423" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+  <text x="855" y="390" font-size="8" fill="#64748b">auto-fix</text>
+  <text x="855" y="401" font-size="8" fill="#64748b">doc/res</text>
+
+  <!-- ══════════════ 엣지 (점선) ══════════════ -->
+
+  <!-- SPEC ⇢ LAB (research scaffold·옵션) -->
+  <path d="M 482 117 L 482 168" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+  <text x="490" y="148" font-size="8" fill="#64748b">research</text>
+  <text x="490" y="158" font-size="8" fill="#64748b">scaffold</text>
+
+  <!-- SPEC ⇢ DES (app mode) -->
+  <line x1="482" y1="117" x2="482" y2="278" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+  <text x="430" y="200" font-size="8" fill="#64748b">app</text>
+  <text x="430" y="210" font-size="8" fill="#64748b">mode</text>
+
+  <!-- DES ⇢ CODE (컴포넌트·토큰) -->
+  <path d="M 553 305 Q 648 260 648 119" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+  <text x="620" y="225" font-size="8" fill="#64748b">컴포넌트</text>
+  <text x="620" y="235" font-size="8" fill="#64748b">·토큰</text>
+
+  <!-- CODE ⇢ ANA (영향 큰 자리 incremental) -->
+  <path d="M 578 90 Q 360 40 275 168" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+  <text x="390" y="44" font-size="8" fill="#64748b">영향 큰 자리</text>
+  <text x="390" y="54" font-size="8" fill="#64748b">incremental</text>
+
+  <!-- RES → AUD -->
+  <path d="M 357 280 Q 600 420 765 318" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+
+  <!-- DOC → AUD -->
+  <line x1="845" y1="217" x2="845" y2="293" stroke="#4a5568" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <!-- CODE → AUD -->
+  <path d="M 718 90 Q 760 310 767 318" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+
+  <!-- SPEC → AUD -->
+  <path d="M 541 117 Q 700 300 767 318" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+
+  <!-- LAB → AUD -->
+  <path d="M 553 210 Q 700 310 767 320" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+
+  <!-- AUD ⇢ CODE (auto-fix code) -->
+  <path d="M 767 318 Q 720 280 718 117" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+  <text x="720" y="200" font-size="8" fill="#64748b">auto-fix</text>
+  <text x="720" y="210" font-size="8" fill="#64748b">code</text>
+
+  <!-- REF ⇢ APP (점선) -->
+  <line x1="845" y1="477" x2="845" y2="493" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+  <text x="855" y="490" font-size="8" fill="#64748b">정정된</text>
+  <text x="855" y="500" font-size="8" fill="#64748b">cheatsheet</text>
+
+  <!-- AU ⇢ PROD/DOCS/RES (user_profile 참조 — 묶어서 표현) -->
+  <path d="M 22 330 Q -10 200 178 200" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+  <text x="30" y="240" font-size="8" fill="#0e7490">user_profile</text>
+  <text x="30" y="251" font-size="8" fill="#0e7490">참조</text>
+
+  <!-- NT ⇢ AU (append 사용자 메모) -->
+  <line x1="88" y1="375" x2="88" y2="357" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+  <text x="96" y="368" font-size="8" fill="#0e7490">append</text>
+
+  <!-- ══════════════ 범례 ══════════════ -->
+  <g transform="translate(960, 30)">
+    <rect x="0" y="0" width="188" height="220" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.2"/>
+    <text x="94" y="20" font-size="10.5" font-weight="700" fill="#1e293b" text-anchor="middle">범례</text>
+
+    <!-- 실선 -->
+    <line x1="12" y1="40" x2="50" y2="40" stroke="#4a5568" stroke-width="1.8" marker-end="url(#arr)"/>
+    <text x="58" y="44" font-size="9.5" fill="#334155">주 흐름</text>
+
+    <!-- 점선 -->
+    <line x1="12" y1="62" x2="50" y2="62" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+    <text x="58" y="66" font-size="9.5" fill="#334155">옵션 / 참조</text>
+
+    <!-- 색 범례 -->
+    <text x="12" y="90" font-size="9" font-weight="700" fill="#475569">카테고리 색</text>
+
+    <rect x="12" y="98" width="11" height="11" rx="2" fill="#1d4ed8"/>
+    <text x="28" y="108" font-size="9" fill="#334155">사전 조사 (A)</text>
+
+    <rect x="12" y="116" width="11" height="11" rx="2" fill="#166534"/>
+    <text x="28" y="126" font-size="9" fill="#334155">코드 영역 (B)</text>
+
+    <rect x="12" y="134" width="11" height="11" rx="2" fill="#b45309"/>
+    <text x="28" y="144" font-size="9" fill="#334155">문서 (C)</text>
+
+    <rect x="12" y="152" width="11" height="11" rx="2" fill="#334155"/>
+    <text x="28" y="162" font-size="9" fill="#334155">점검 (D)</text>
+
+    <rect x="12" y="170" width="11" height="11" rx="2" fill="#5b21b6"/>
+    <text x="28" y="180" font-size="9" fill="#334155">정정 (E)</text>
+
+    <rect x="12" y="188" width="11" height="11" rx="2" fill="#0e7490"/>
+    <text x="28" y="198" font-size="9" fill="#334155">프로필 (F)</text>
+
+    <circle cx="17" cy="212" r="7" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+    <text x="17" y="216" font-size="8" font-weight="700" fill="#14532d" text-anchor="middle">↻</text>
+    <text x="30" y="216" font-size="9" fill="#334155">반복·재진입</text>
+  </g>
+
+</svg>

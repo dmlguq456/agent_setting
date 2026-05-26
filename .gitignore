@@ -30,3 +30,7 @@ mcp-needs-auth-cache.json
 
 # Cleanup timestamp (per-machine, ephemeral)
 .last-cleanup
+
+# analyze-user 변환 자료 (대용량 PDF / PNG, 재생성 가능)
+user_profile/_internal/converted_pdfs/
+user_profile/_internal/converted_pngs/

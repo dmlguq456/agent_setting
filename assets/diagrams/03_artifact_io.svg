@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 580" width="100%"
+     font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif">
+
+  <!-- ═══════════════════════════════════════════════════════
+       03_artifact_io.svg — 산출물 I/O 그래프
+       per-project(.claude_reports/) vs cross-project(~/.claude/user_profile/)
+       레이아웃 (좌→우):
+         Col 0 x≈30:   IN  (analyze-project, autopilot-research)
+         Col 1 x≈280:  OUT 저장소 (원통형) — 중심 허브
+         Col 2 x≈520:  PROD 그룹 / DOCS / AUD / REF / APP
+         Col 3 x≈800:  EXT (main.tex, 빨강)
+         Side x≈30:    UP 저장소 (원통형, 청록) — 하단 좌
+       ═══════════════════════════════════════════════════════ -->
+
+  <defs>
+    <!-- 실선 화살표 -->
+    <marker id="arr-s" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4a5568"/>
+    </marker>
+    <!-- 점선 화살표 -->
+    <marker id="arr-d2" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+    </marker>
+    <!-- 양방향 왼쪽 화살표 -->
+    <marker id="arr-s-rev" markerWidth="10" markerHeight="7" refX="1" refY="3.5" orient="auto">
+      <polygon points="10 0, 0 3.5, 10 7" fill="#4a5568"/>
+    </marker>
+
+    <!-- 드롭 섀도 -->
+    <filter id="sh3" x="-8%" y="-12%" width="120%" height="130%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2.5" flood-color="#00000018"/>
+    </filter>
+
+    <!-- 원통 상단 타원 클립 -->
+    <clipPath id="cyl-top">
+      <ellipse cx="0" cy="0" rx="70" ry="18"/>
+    </clipPath>
+  </defs>
+
+  <!-- ══════════════ 배경 그룹 박스 ══════════════ -->
+
+  <!-- IN 그룹 (파랑) -->
+  <rect x="14" y="130" width="170" height="160" rx="10"
+        fill="#dbeafe" stroke="#60a5fa" stroke-width="1.4"/>
+  <text x="99" y="152" font-size="10" font-weight="700" fill="#1e40af" text-anchor="middle">자료 수집 (IN)</text>
+
+  <!-- PROD 그룹 (초록) -->
+  <rect x="530" y="30" width="200" height="220" rx="10"
+        fill="#dcfce7" stroke="#4ade80" stroke-width="1.4"/>
+  <text x="630" y="52" font-size="10" font-weight="700" fill="#15803d" text-anchor="middle">코드 영역 (PROD)</text>
+
+  <!-- DOCS 그룹 (주황) -->
+  <rect x="530" y="275" width="200" height="90" rx="10"
+        fill="#fef3c7" stroke="#fbbf24" stroke-width="1.4"/>
+  <text x="630" y="297" font-size="10" font-weight="700" fill="#92400e" text-anchor="middle">문서 (DOCS)</text>
+
+  <!-- UP 저장소 그룹 (청록) -->
+  <rect x="14" y="385" width="220" height="160" rx="10"
+        fill="#cffafe" stroke="#22d3ee" stroke-width="1.4"/>
+  <text x="124" y="407" font-size="10" font-weight="700" fill="#0e7490" text-anchor="middle">사용자 프로필</text>
+  <text x="124" y="419" font-size="9" fill="#0e7490" text-anchor="middle">(cross-project)</text>
+
+  <!-- ══════════════ 저장소 노드 (원통 형태) ══════════════ -->
+
+  <!-- OUT: .claude_reports/ (per-project) — 파란/회색 원통 -->
+  <g filter="url(#sh3)" transform="translate(280, 230)">
+    <!-- 원통 몸통 -->
+    <rect x="-78" y="-50" width="156" height="100" rx="0" fill="#334155"/>
+    <!-- 상단 반타원 (밝게) -->
+    <ellipse cx="0" cy="-50" rx="78" ry="18" fill="#475569"/>
+    <!-- 하단 반타원 (어둡게) -->
+    <ellipse cx="0" cy="50" rx="78" ry="18" fill="#1e293b"/>
+    <!-- 상단 하이라이트 -->
+    <ellipse cx="0" cy="-50" rx="60" ry="10" fill="#64748b" opacity="0.4"/>
+    <!-- 텍스트 -->
+    <text x="0" y="-8" font-size="11" font-weight="700" fill="#f1f5f9" text-anchor="middle">📦 .claude_reports/</text>
+    <text x="0" y="8" font-size="9.5" fill="#cbd5e1" text-anchor="middle">(per-project)</text>
+    <text x="0" y="24" font-size="8.5" fill="#94a3b8" text-anchor="middle">OUT</text>
+  </g>
+
+  <!-- UP: ~/.claude/user_profile/ — 청록 원통 -->
+  <g filter="url(#sh3)" transform="translate(124, 490)">
+    <rect x="-90" y="-35" width="180" height="70" rx="0" fill="#0e7490"/>
+    <ellipse cx="0" cy="-35" rx="90" ry="18" fill="#0891b2"/>
+    <ellipse cx="0" cy="35" rx="90" ry="18" fill="#065f46"/>
+    <ellipse cx="0" cy="-35" rx="70" ry="10" fill="#22d3ee" opacity="0.3"/>
+    <text x="0" y="-4" font-size="10" font-weight="700" fill="#f0fdfa" text-anchor="middle">👤 ~/.claude/user_profile/</text>
+    <text x="0" y="12" font-size="8.5" fill="#a7f3d0" text-anchor="middle">(cross-project) · UP</text>
+  </g>
+
+  <!-- EXT: 실제 소스 main.tex (빨강) -->
+  <g filter="url(#sh3)" transform="translate(880, 310)">
+    <!-- 문서 아이콘 느낌 — 접힌 코너 -->
+    <path d="M -80,-55 L 50,-55 L 80,-25 L 80,55 L -80,55 Z" fill="#dc2626" stroke="#b91c1c" stroke-width="1.5"/>
+    <path d="M 50,-55 L 50,-25 L 80,-25" fill="none" stroke="#b91c1c" stroke-width="1.2"/>
+    <path d="M 50,-55 L 80,-25" fill="#ef4444" stroke="none" opacity="0.5"/>
+    <!-- 텍스트 -->
+    <text x="0" y="-12" font-size="10.5" font-weight="700" fill="#ffffff" text-anchor="middle">📝 실제 소스</text>
+    <text x="0" y="5" font-size="10" font-weight="600" fill="#fecaca" text-anchor="middle">main.tex</text>
+    <text x="0" y="22" font-size="8.5" fill="#fca5a5" text-anchor="middle">(git — .claude_reports/ 밖)</text>
+    <text x="0" y="37" font-size="8.5" fill="#fca5a5" text-anchor="middle">EXT</text>
+  </g>
+
+  <!-- ══════════════ IN 그룹 노드 ══════════════ -->
+
+  <!-- analyze-project (파랑) -->
+  <g filter="url(#sh3)">
+    <rect x="24" y="160" width="150" height="46" rx="7" fill="#1d4ed8" stroke="#1e40af" stroke-width="1.3"/>
+  </g>
+  <text x="99" y="179" font-size="9.5" font-weight="600" fill="#ffffff" text-anchor="middle">analyze-project</text>
+  <text x="99" y="194" font-size="8.5" fill="#bfdbfe" text-anchor="middle">(ANA)</text>
+
+  <!-- autopilot-research (파랑) -->
+  <g filter="url(#sh3)">
+    <rect x="24" y="226" width="150" height="46" rx="7" fill="#1d4ed8" stroke="#1e40af" stroke-width="1.3"/>
+  </g>
+  <text x="99" y="245" font-size="9.5" font-weight="600" fill="#ffffff" text-anchor="middle">autopilot-research</text>
+  <text x="99" y="260" font-size="8.5" fill="#bfdbfe" text-anchor="middle">(RES)</text>
+
+  <!-- ══════════════ PROD 그룹 노드 ══════════════ -->
+
+  <!-- autopilot-spec (초록) -->
+  <g filter="url(#sh3)">
+    <rect x="540" y="62" width="178" height="40" rx="7" fill="#166534" stroke="#15803d" stroke-width="1.3"/>
+  </g>
+  <text x="629" y="78" font-size="9.5" font-weight="600" fill="#ffffff" text-anchor="middle">autopilot-spec</text>
+  <text x="629" y="92" font-size="8.5" fill="#bbf7d0" text-anchor="middle">(SPEC)</text>
+
+  <!-- autopilot-code (초록) -->
+  <g filter="url(#sh3)">
+    <rect x="540" y="118" width="178" height="40" rx="7" fill="#166534" stroke="#15803d" stroke-width="1.3"/>
+  </g>
+  <text x="629" y="134" font-size="9.5" font-weight="600" fill="#ffffff" text-anchor="middle">autopilot-code</text>
+  <text x="629" y="148" font-size="8.5" fill="#bbf7d0" text-anchor="middle">(CODE)</text>
+
+  <!-- autopilot-design (초록) -->
+  <g filter="url(#sh3)">
+    <rect x="540" y="174" width="178" height="40" rx="7" fill="#166534" stroke="#15803d" stroke-width="1.3"/>
+  </g>
+  <text x="629" y="190" font-size="9.5" font-weight="600" fill="#ffffff" text-anchor="middle">autopilot-design</text>
+  <text x="629" y="204" font-size="8.5" fill="#bbf7d0" text-anchor="middle">(DES)</text>
+
+  <!-- ══════════════ DOCS 노드 ══════════════ -->
+
+  <!-- autopilot-draft (주황) -->
+  <g filter="url(#sh3)">
+    <rect x="540" y="305" width="178" height="46" rx="7" fill="#b45309" stroke="#92400e" stroke-width="1.3"/>
+  </g>
+  <text x="629" y="324" font-size="9.5" font-weight="600" fill="#ffffff" text-anchor="middle">autopilot-draft</text>
+  <text x="629" y="339" font-size="8.5" fill="#fef3c7" text-anchor="middle">(DOC)</text>
+
+  <!-- ══════════════ AUD / REF 노드 ══════════════ -->
+
+  <!-- audit (회색) -->
+  <g filter="url(#sh3)">
+    <rect x="540" y="390" width="178" height="46" rx="7" fill="#334155" stroke="#475569" stroke-width="1.3"/>
+  </g>
+  <text x="629" y="409" font-size="9.5" font-weight="600" fill="#ffffff" text-anchor="middle">audit</text>
+  <text x="629" y="424" font-size="8.5" fill="#cbd5e1" text-anchor="middle">(AUD)</text>
+
+  <!-- autopilot-refine (보라) -->
+  <g filter="url(#sh3)">
+    <rect x="540" y="455" width="178" height="46" rx="7" fill="#5b21b6" stroke="#7c3aed" stroke-width="1.3"/>
+  </g>
+  <text x="629" y="474" font-size="9.5" font-weight="600" fill="#ffffff" text-anchor="middle">autopilot-refine</text>
+  <text x="629" y="489" font-size="8.5" fill="#ede9fe" text-anchor="middle">(REF)</text>
+
+  <!-- autopilot-apply (보라) -->
+  <g filter="url(#sh3)">
+    <rect x="540" y="522" width="178" height="46" rx="7" fill="#5b21b6" stroke="#7c3aed" stroke-width="1.3"/>
+  </g>
+  <text x="629" y="541" font-size="9.5" font-weight="600" fill="#ffffff" text-anchor="middle">autopilot-apply</text>
+  <text x="629" y="556" font-size="8.5" fill="#ede9fe" text-anchor="middle">(APP)</text>
+
+  <!-- analyze-user (청록) -->
+  <g filter="url(#sh3)">
+    <rect x="24" y="420" width="150" height="46" rx="7" fill="#0e7490" stroke="#0891b2" stroke-width="1.3"/>
+  </g>
+  <text x="99" y="439" font-size="9.5" font-weight="600" fill="#ffffff" text-anchor="middle">analyze-user</text>
+  <text x="99" y="454" font-size="8.5" fill="#cffafe" text-anchor="middle">(AU)</text>
+
+  <!-- ══════════════ 엣지 (실선) ══════════════ -->
+
+  <!-- IN(ANA) → OUT -->
+  <line x1="175" y1="183" x2="200" y2="215" stroke="#4a5568" stroke-width="1.7" marker-end="url(#arr-s)"/>
+
+  <!-- IN(RES) → OUT -->
+  <line x1="175" y1="249" x2="200" y2="240" stroke="#4a5568" stroke-width="1.7" marker-end="url(#arr-s)"/>
+
+  <!-- PROD → OUT (각 노드에서 → OUT 왼쪽) -->
+  <line x1="540" y1="82" x2="360" y2="205" stroke="#4a5568" stroke-width="1.4" marker-end="url(#arr-s)"/>
+  <line x1="540" y1="138" x2="360" y2="220" stroke="#4a5568" stroke-width="1.4" marker-end="url(#arr-s)"/>
+  <line x1="540" y1="194" x2="360" y2="235" stroke="#4a5568" stroke-width="1.4" marker-end="url(#arr-s)"/>
+
+  <!-- DOCS → OUT -->
+  <line x1="540" y1="328" x2="360" y2="250" stroke="#4a5568" stroke-width="1.4" marker-end="url(#arr-s)"/>
+
+  <!-- OUT → AUD -->
+  <line x1="360" y1="250" x2="538" y2="413" stroke="#4a5568" stroke-width="1.7" marker-end="url(#arr-s)"/>
+
+  <!-- OUT ↔ REF (양방향) -->
+  <line x1="360" y1="255" x2="538" y2="475" stroke="#4a5568" stroke-width="1.7" marker-end="url(#arr-s)" marker-start="url(#arr-s-rev)"/>
+
+  <!-- AU → UP -->
+  <line x1="99" y1="468" x2="99" y2="453" stroke="#4a5568" stroke-width="1.7" marker-end="url(#arr-s)"/>
+
+  <!-- ══════════════ 엣지 (점선) ══════════════ -->
+
+  <!-- OUT ⇢ PROD (implicit input) -->
+  <path d="M 358 200 Q 440 82 538 82" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+  <text x="430" y="98" font-size="8" fill="#64748b" text-anchor="middle">implicit</text>
+  <text x="430" y="108" font-size="8" fill="#64748b" text-anchor="middle">input</text>
+  <path d="M 360 210 Q 440 130 538 135" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+  <path d="M 360 225 Q 440 190 538 192" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+
+  <!-- OUT ⇢ DOCS (implicit input) -->
+  <path d="M 360 245 Q 440 300 538 325" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+
+  <!-- AUD ⇢ CODE (auto-fix code) -->
+  <line x1="629" y1="438" x2="629" y2="453" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+  <!-- AUD ⇢ REF (auto-fix doc/research) -->
+  <line x1="629" y1="438" x2="629" y2="453" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+
+  <!-- AUD ⇢ CODE auto-fix 선 (약간 오른쪽으로 굴려서) -->
+  <path d="M 718 413 Q 750 360 750 160 Q 750 140 720 138" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+  <text x="758" y="280" font-size="8" fill="#64748b">auto-fix</text>
+  <text x="758" y="290" font-size="8" fill="#64748b">code</text>
+
+  <!-- APP ⇢ EXT (cheatsheet → main.tex) -->
+  <path d="M 719 545 Q 800 545 798 310" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+  <text x="806" y="435" font-size="8" fill="#64748b">cheatsheet</text>
+
+  <!-- OUT ⇢ APP (cheatsheet 경유 표시) -->
+  <path d="M 358 255 Q 420 550 538 545" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+  <text x="390" y="520" font-size="8" fill="#64748b">cheatsheet</text>
+
+  <!-- UP ⇢ PROD (default 참조) -->
+  <path d="M 215 490 Q 490 490 490 140 Q 490 82 538 82" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+  <text x="230" y="370" font-size="8" fill="#0e7490">default</text>
+  <text x="230" y="381" font-size="8" fill="#0e7490">참조</text>
+
+  <!-- UP ⇢ DOCS (default 참조) -->
+  <path d="M 215 495 Q 490 495 538 330" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+
+  <!-- UP ⇢ IN (default 참조) -->
+  <path d="M 124 453 Q 124 300 99 273" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+
+  <!-- ══════════════ 강조: EXT 구분선 / 주석 ══════════════ -->
+  <!-- .claude_reports/ 경계 점선 세로선 -->
+  <line x1="800" y1="20" x2="800" y2="560" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="8,4" opacity="0.5"/>
+  <text x="808" y="36" font-size="8.5" fill="#dc2626" opacity="0.8">.claude_reports/ 경계</text>
+
+  <!-- ══════════════ 범례 ══════════════ -->
+  <g transform="translate(14, 14)">
+    <rect x="0" y="0" width="420" height="110" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.2"/>
+    <text x="210" y="20" font-size="10.5" font-weight="700" fill="#1e293b" text-anchor="middle">범례</text>
+
+    <!-- 실선 -->
+    <line x1="12" y1="38" x2="55" y2="38" stroke="#4a5568" stroke-width="1.8" marker-end="url(#arr-s)"/>
+    <text x="62" y="42" font-size="9.5" fill="#334155">주 흐름 (데이터/산출물 이동)</text>
+
+    <!-- 점선 -->
+    <line x1="12" y1="57" x2="55" y2="57" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arr-d2)"/>
+    <text x="62" y="61" font-size="9.5" fill="#334155">옵션 / 묵시적 참조</text>
+
+    <!-- 양방향 -->
+    <line x1="12" y1="76" x2="55" y2="76" stroke="#4a5568" stroke-width="1.8" marker-end="url(#arr-s)" marker-start="url(#arr-s-rev)"/>
+    <text x="62" y="80" font-size="9.5" fill="#334155">양방향 (OUT ↔ REF: 읽고 쓰기)</text>
+
+    <!-- 빨간 경계 -->
+    <line x1="12" y1="95" x2="55" y2="95" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="8,4" opacity="0.7"/>
+    <text x="62" y="99" font-size="9.5" fill="#dc2626">.claude_reports/ 밖 (git 실제 소스)</text>
+  </g>
+
+</svg>

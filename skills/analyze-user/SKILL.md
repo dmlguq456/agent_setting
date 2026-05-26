@@ -29,7 +29,7 @@ argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover
 
 ### Override 1순위 — autopilot 우회
 
-- 짧은 메모 한 줄만 — `/notes --scope user <aspect> add <text>` 직접 호출 (default aspect `collab`). 해당 aspect 파일의 `## 사용자 수동 메모` 절에 append.
+- 짧은 메모 한 줄만 — `/notes --scope user <aspect> add <text>` 직접 호출. 해당 aspect 파일의 `## 사용자 수동 메모` 절에 append.
 - 한 aspect 의 한 자리만 수정 — `~/.claude/user_profile/0X_*.md` 직접 Edit. 단 `## 사용자 수동 메모` 절은 사용자 영역이라 `/notes --scope user <aspect>` 로만 (직접 Edit 피함).
 - `/analyze-user <args>` slash 직접 입력 — 컨펌 skip 즉시 invoke.
 
@@ -53,11 +53,10 @@ argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover
 | `presentation` | `03_presentation_strategy.md` | 사용자 폴더 명시 — pptx 자료 (자동 PDF + PNG 변환, 시각 layout fidelity) |
 | `analysis` | `04_analysis_methodology.md` | 사용자 폴더 명시 — 코드 자리 analysis script + paper Method/Experiment 절 |
 | `domain` | `05_domain_expertise.md` | 사용자 폴더 명시 — paper 자료 + 사용자 GitHub URL (옵션) |
-| `collab` | `06_collaboration_style.md` | `~/.claude/projects/*/memory/*.md` (시스템 자료 — 자동) + 사용자 `--source <path>` 추가 (옵션) |
 | `coding_convention` | `07_coding_convention.md` | 사용자 폴더 명시 — 코드 repo 자리 (`model/`·`train*.py`·`config*.yaml`·`*.ipynb` 패턴) |
 | `all` | 7 개 모두 | 사용자 `--source <path>` 한 자리 (또는 복수 콤마 분리) — 안 자료 type 별 aspect 자동 분류 (재귀 자동 발견) |
 
-> **하드코딩 path X — 사용자 자료 명시 default**: 모든 aspect 자리 _기본 source 위치 자체_ 가 _사용자 명시_ 자리. `--source` 명시 없으면 _자료 0 자리_, 사용자 안내 한 줄 — 사용자가 _참고 자료 폴더 path_ 던져주는 자리 ([analyze-project](../analyze-project/SKILL.md) doc mode 와 같은 패턴). collab 자리는 시스템 메모리 자동 (cross-project 메모리 자리 cwd 무관).
+> **하드코딩 path X — 사용자 자료 명시 default**: 모든 aspect 자리 _기본 source 위치 자체_ 가 _사용자 명시_ 자리. `--source` 명시 없으면 _자료 0 자리_, 사용자 안내 한 줄 — 사용자가 _참고 자료 폴더 path_ 던져주는 자리 ([analyze-project](../analyze-project/SKILL.md) doc mode 와 같은 패턴).
 
 ### `--source <path>` (옵션)
 
@@ -110,7 +109,7 @@ Phase 4 의 reviewer 구성은 항상 4 개 parallel (Phase 4 절 참조).
    - 폴더 안 `figures/` / `figure_ppt/` → figure aspect 자리
    - 폴더 안 `analysis/` → analysis aspect 자리
    - `*.mp4` / `*.mov` 등 video 자료 → **skip** (analyze-user 자리 분석 X, 한 줄 보고)
-3. **메모리 자료 일람** (collab / domain aspect 시) — `~/.claude/projects/*/memory/*.md` 전수 (시스템 자료 자동).
+3. **메모리 자료 일람** (domain aspect 시) — `~/.claude/projects/*/memory/*.md` 전수 (시스템 자료 자동, 도메인 약자 자리 확인).
 4. **scholar / arXiv 자료 일람** (writing / domain aspect 시) — 사용자 명시 paper 목록 + abstract.
 5. **자동 변환 (LibreOffice headless)** — Claude 가 직접 read 못하는 자료 (docx / pptx / hwpx / xlsx / doc / ppt / hwp) 발견 시:
 
@@ -192,7 +191,7 @@ mode=init 통째 교체, mode=update 누적.
 """)
 ```
 
-`writing` / `presentation` / `analysis` / `domain` / `collab` / `coding_convention` 동일 패턴 — _추출 대상_ 만 aspect 별 다름. `all` 호출 시 7 aspect × 3 인스턴스 = 21 호출 병렬 (Claude Code Agent tool 단일 메시지 안 multi-call).
+`writing` / `presentation` / `analysis` / `domain` / `coding_convention` 동일 패턴 — _추출 대상_ 만 aspect 별 다름. `all` 호출 시 6 aspect × 3 인스턴스 = 18 호출 병렬 (Claude Code Agent tool 단일 메시지 안 multi-call).
 
 `coding_convention` 의 _추출 대상_ (figure 예시 자리와 대칭):
 1. model 폴더 구조 (한 모델 = 한 폴더 묶음 단위 / 파일 구성 / naming)
@@ -232,7 +231,7 @@ mode=init 통째 교체, mode=update 누적.
 2. 다음 _cross-aspect 일관성 axis_ 점검:
    - 색 팔레트 — figure / presentation / scatter / spectrogram 의 색 결정이 같은가?
    - 폰트 — figure / presentation / paper 의 폰트 일관성.
-   - 도메인 용어 — writing / domain / collab 의 약자·용어 사용이 일치하는가?
+   - 도메인 용어 — writing / domain 의 약자·용어 사용이 일치하는가?
    - metric set — figure 의 metric column / analysis 의 검증 방법 / **coding_convention 의 metric set** 이 매칭되는가?
    - **도메인 layer** — coding_convention 의 preferred layer 가 domain expertise 의 주력 도메인 자리와 매칭되는가? (예 TF dual-path DNN 자리면 LayerNorm2d / dual-path block 자리)
 3. 모순 발견 시 _source 인용 빈도가 더 많은 쪽_ 우선 (또는 _더 최근 자료_ 우선).
@@ -288,26 +287,40 @@ mode=init 통째 교체, mode=update 누적.
 
 ### Phase 5 — Output Generation
 
-목적: verified draft 를 _최종 user_profile/0X_*.md_ 에 반영.
+목적: verified draft 를 _최종 user_profile/0X_*.md_ 에 반영. agent invoke 시점 부담 줄이면서 _핵심 anchor 는 본문 유지_.
+
+**본문 vs internal 분리** (목표: 각 user_profile/0X_*.md **7-10K tokens**):
+
+| 자리 | 본문 채택 | 본문 외 자리 |
+|---|---|---|
+| high confidence (3/3) | ✅ 채택 | — |
+| medium (2/3) | ✅ 채택, `_(consensus 2/3)_` 메타 | — |
+| quarantine (1/3, drop) | ❌ | `_internal/aspect_{x}_dropped.md` |
+| Open Questions | ❌ | `_internal/open_questions.md` |
+| 분석 source 일람 | ❌ | `_internal/source_index.md` 참조 |
+| 사용자 수동 메모 | ✅ `## 사용자 수동 메모` 절 보존 | — |
+
+**본문 wording 정책** — 불릿 1-3 줄 + 핵심 anchor 유지:
+- _구체 anchor_ — paper Fig.N / hex code / 모델명 / 데이터셋 / 변수명 / 함수명 → **본문 유지**
+- _긴 explanatory prose_ — 풀어쓰기 설명·중복 narrative → **draft 로 이관** (`_internal/aspect_{x}_draft.md` 참조)
+- 예:
+  ```markdown
+  ## 1. Architecture diagram
+  - block: rounded rectangle, outline grayscale (TF-Restormer Fig.1 / TF-CorrNet Fig.2)
+  - 색: encoder 녹색 #3F8C5C / decoder 주황 / ours 강조 빨강 #A0152A
+  - arrow: solid 1.5pt, label 산세리프 8pt
+  ```
+
+5K 이하 무리 — _agent 자체 자체 self-contained_ 자체 자체 _구체 anchor 필요_. 7-10K 가 적정선.
 
 절차:
 
-1. **--user-refine pause** (있으면) — draft + qa review path 안내 후 종료. 사용자가 `<!-- memo: ... -->` 추가 후 `/analyze-user --from output` 재개.
+1. **--user-refine pause** (있으면) — draft + qa review path 안내 후 종료. resume: `/analyze-user --from output`.
 2. **mode 별 처리**:
-   - `init` — 기존 파일 `_internal/versions/v{N}/` 스냅샷 후 통째 교체. **단 `## 사용자 수동 메모` 절은 보존** (사용자 영역).
-   - `update` — 기존 파일 Read + draft 비교 + _누적 / 교체 / 제거_ 자리 결정 + Edit. changelog 한 줄 frontmatter 의 `changelog:` 배열에 추가. **`## 사용자 수동 메모` 절은 손대지 않음**.
-3. **consensus 가중치 표기** — 본문 채택된 패턴 중:
-   - confidence 1.0 (high): 메타데이터 X (조용한 채택)
-   - confidence 0.6 (medium): bullet 끝에 `_(consensus 2/3)_` 또는 `_(QA 승격)_` 메타
-   - quarantine 에서 drop 된 패턴: 본문 X, `_internal/aspect_{aspect}_dropped.md` 에 일람 보존 (다음 update 시 재발견 신호로 사용 가능)
-   - open question 이관: 본문 X, user_profile 파일 끝의 _## Open Questions_ 절 (없으면 신설) 에 추가
-4. **source 인용 일람** — 각 user_profile/0X 파일 끝의 _분석 source 일람_ 절에 이번 사이클의 source 추가 (다음 update 시 _이미 본 자료 vs 새 자료_ 구분 용도).
+   - `init` — `_internal/versions/v{N}/` 스냅샷 후 통째 교체. `## 사용자 수동 메모` 절 보존.
+   - `update` — Edit, `changelog:` frontmatter 한 줄 추가. `## 사용자 수동 메모` 절 손대지 않음.
 
-> **`## 사용자 수동 메모` 절 보호 (책임 분리)** — 각 user_profile/0X_*.md 안 `## 사용자 수동 메모` 절은 _사용자 영역_ — `/notes --scope user <aspect>` 가 append. analyze-user 는 _읽기만_ 하고 _쓰지 않는다_. init 모드의 통째 교체에서도 이 절은 _그대로 옮겨_ 보존. 갱신 사이클이 사용자 수동 메모를 _덮어쓰는 일_ 절대 금지.
-
-산출:
-- `~/.claude/user_profile/0X_*.md` (해당 aspect 갱신됨).
-- Phase 5 verdict — 각 aspect 별 누적·교체·제거 항목 수.
+산출: `~/.claude/user_profile/0X_*.md` (7-10K tokens 목표, 구체 anchor 유지).
 
 ### Phase 6 — Pipeline Summary
 
@@ -373,15 +386,15 @@ timestamp: "2026-05-22T15:30:00Z"
 
 | Agent | 작업 시작 시 Read | 이유 |
 |---|---|---|
-| 자료팀 | `01_*` · `03_*` · `04_*` · **`05_*`** · **`06_*`** | figure / 슬라이드 / 데이터 분석 시각 + 도메인 용어 (figure caption / 슬라이드 안 약자) + 사용자 응답 톤 (자료 보고 자리) |
-| 디자인팀 | `01_*` · `03_*` · **`05_*`** · **`06_*`** | UI mockup·슬라이드 비주얼·다이어그램 톤 + 도메인 용어 (UI 안 표현) + feedback 패턴 |
-| 연구팀 | **`01_*`** · `02_*` · `04_*` · `05_*` · **`06_*`** | paper figure 인용 자리 양식 (`01`) + 본문 톤 + 검증 방법론 + 도메인 용어 + 작업 흐름 |
-| 편집팀 | `01_*` · `02_*` · `03_*` · **`04_*`** · `05_*` · `06_*` · **`07_*`** | 사용자 향 문서 전반 (전 7 aspect) — figure caption / paper / 발표 / 분석 표현 / 도메인 약자 / 응답 톤 / 코드 관련 문서 |
-| 기획팀 | **`02_*`** · `04_*` · **`05_*`** · `06_*` · `07_*` | plan 자리 작성 톤 (`02`) + 검증 패턴 + 도메인 용어 (plan 안 약자) + 작업 흐름 + 코드 컨벤션 (plan 안 코드 자리 정합성) |
-| 개발팀 | **`04_*`** · **`05_*`** · **`06_*`** · `07_*` | 코드 안 metric·검증 자리 (`04`) + 도메인 약자 (변수명·함수명 자리, `05`) + feedback 패턴 (`06`) + model 폴더·config·prefix·preferred layer (`07`). per-project `experiment_conventions.md` 가 1순위, 본 파일은 fallback |
-| 메인 Claude | **`04_*`** · **`05_*`** · `06_*` · `07_*` | 사용자 분석 자리 응답 (`04`) + 도메인 약자 인지 (사용자 발화 자리, `05`) + 응답 톤·feedback (`06`) + 코드 컨벤션 (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙 prepend, `07`) |
+| 자료팀 | `01_*` · `03_*` · `04_*` · **`05_*`** | figure / 슬라이드 / 데이터 분석 시각 + 도메인 약자 (figure caption / 슬라이드 안 약자) |
+| 디자인팀 | `01_*` · `03_*` · **`05_*`** | UI mockup·슬라이드 비주얼·다이어그램 톤 + 도메인 약자 (UI 안 표현) |
+| 연구팀 | **`01_*`** · `02_*` · `04_*` · `05_*` | paper figure 인용 양식 (`01`) + 본문 톤 + 검증 방법론 + 도메인 약자 |
+| 편집팀 | `01_*` · `02_*` · `03_*` · **`04_*`** · `05_*` | 사용자 향 문서 wording (figure caption / paper / 발표 / 분석 표현) + 도메인 약자 |
+| 기획팀 | **`02_*`** · `04_*` · **`05_*`** · `07_*` | plan 작성 톤 (`02`) + 검증 패턴 + 도메인 약자 + 코드 컨벤션 (plan 안 코드 정합성) |
+| 개발팀 | **`04_*`** · **`05_*`** · `07_*` | 코드 안 metric·검증 (`04`) + 도메인 약자 (변수명·함수명, `05`) + model 폴더·config·prefix·preferred layer (`07`). per-project `experiment_conventions.md` 가 1순위, 본 파일은 fallback |
+| 메인 Claude | **`04_*`** · **`05_*`** · `07_*` | 사용자 분석 응답 (`04`) + 도메인 약자 인지 (사용자 발화, `05`) + 코드 컨벤션 (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙 prepend, `07`) |
 
-> **적극적 매핑** (2026-05-26): 이전 보수 매핑 자리에서 _agent 별 최소 4-5 aspect_ 참조 자리 적극화. 각 agent 가 _사용자 자리_ 더 적극 반영 — 도메인 용어 / 작업 흐름 / 응답 톤 자리 일관성 보강.
+> **매트릭스 정리** (2026-05-26): 06 (대화 메타 규칙) 은 _메인 Claude 전용_ 으로 분리 — sub-agent 는 사용자와 직접 대화 X 라 적용 영역 없음 (글로벌 CLAUDE.md + 메모리 always-on 자료와 중복). 07 (코드 컨벤션) 은 _개발팀·기획팀·메인 Claude 만_ — 편집팀 (wording 영역) 은 코드 구조 컨벤션 적용 자리 없어 제외. agent 별 3-5 aspect 참조 default.
 
 본 참조 패턴은 _agent 정의 본문_ 에 명시되어 있어 agent 가 invoke 될 때 자동.
 
@@ -395,7 +408,7 @@ timestamp: "2026-05-22T15:30:00Z"
 | 갱신 | turn-by-turn | cycle-by-cycle |
 | QA gate | X (raw) | O (다중 reviewer — refined) |
 
-본 skill 의 `collab` aspect 가 메모리의 _범용 패턴_ 을 구조화 요약. 메모리는 _raw 누적_, user_profile 은 _verified refined 카탈로그_.
+메모리는 _대화 메타 규칙·feedback 자료_ 의 raw 누적 (글로벌 CLAUDE.md 가 메인 source). user_profile 은 _사용자 산출물 패턴_ (figure / writing / presentation / analysis / domain / coding) 의 verified refined 카탈로그 — 두 자료 영역 분리.
 
 ## 호출 예시
 
@@ -408,11 +421,6 @@ timestamp: "2026-05-22T15:30:00Z"
 /analyze-user all --mode init
 ```
 → 모든 aspect 통째 재셋업 — 첫 셋업 또는 _장기 미갱신_ 시.
-
-```
-/analyze-user collab
-```
-→ 메모리 자료에서 collab aspect 만 갱신.
 
 ```
 /analyze-user --from qa --user-refine
@@ -429,7 +437,6 @@ timestamp: "2026-05-22T15:30:00Z"
 - **첫 셋업** — `/analyze-user all --mode init`. 본 사용자 자료 충분히 누적된 시점 (paper 5 편 이상) 에 한 번.
 - **새 paper / 발표 / 보고서 직후** — 그 자료 추가만 incremental. `/analyze-user <relevant aspect>`.
 - **새 모델 / 새 코드 repo 완성 직후** — `/analyze-user coding_convention --source <new-repo>`. cross-project 코드 패턴 누적.
-- **메모리 누적 자료 한 분기마다** — `/analyze-user collab`.
 - **장기 미갱신 (6 개월+)** 후 — 전체 통째 재검증 `/analyze-user all`.
 
 (매 호출이 _adversarial 4-reviewer parallel_ 이라 _가벼운 호출_ 자체가 없음. 호출 빈도로만 부담 조절.)

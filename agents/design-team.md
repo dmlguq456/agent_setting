@@ -2,7 +2,7 @@
 name: 디자인팀
 description: "시각 산출물 라우터 — maker (UI mockup/디자인 토큰/컴포넌트/다이어그램/슬라이드 비주얼/아이콘/레이아웃 _만들기_) / critic (만들어진 결과물을 사용자 관점으로 비평, read-only). 프론트 UI/UX 외에 발표 슬라이드·논문 figure 보조·블로그 썸네일 등 시각 자산 전반 담당. 모드 파일은 ~/.claude/agent-modes/design/<mode>.md."
 tools: Glob, Grep, Read, Edit, Write, Bash, WebFetch
-model: sonnet
+model: opus
 color: pink
 memory: project
 ---

@@ -11,8 +11,9 @@
 | `03_presentation_strategy.md` | 슬라이드 구성·서사 flow·시각 결정·청중별 변형 | 자료팀 (presentation 자리), 디자인팀, 편집팀 |
 | `04_analysis_methodology.md` | 데이터·실험 결과 분석 접근법·검증 패턴 | 자료팀, 연구팀, 기획팀, **개발팀** (코드 안 metric·검증 자리), 편집팀, **메인 Claude** (사용자 분석 자리 응답) |
 | `05_domain_expertise.md` | 도메인 배경 (speech / TF DNN / signal processing)·용어 선호 | 연구팀, 자료팀, 디자인팀, 편집팀, **기획팀** (plan 안 약자), **개발팀** (변수명·함수명 자리 약자), **메인 Claude** (사용자 발화 자리 약자 인지) |
-| `06_collaboration_style.md` | 작업 흐름·의사결정·feedback 패턴 (메모리 자동 누적 자료의 _구조화 요약_) | **자료팀·디자인팀·연구팀·편집팀·기획팀·개발팀·메인 Claude** (전 agent — 작업 흐름 자료) |
-| `07_coding_convention.md` | 코드 일관 패턴 — model 폴더 구조 / config 메커니즘 / prefix / preferred layer / framework / metric set / log·ckpt / seed·reproducibility / naming | 개발팀 (new-lib·refactor·backend·frontend) · 기획팀 (plan 안 코드) · 편집팀 (code-related doc) · 메인 Claude (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙) |
+| `07_coding_convention.md` | 코드 일관 패턴 — model 폴더 구조 / config 메커니즘 / prefix / preferred layer / framework / metric set / log·ckpt / seed·reproducibility / naming | 개발팀 (new-lib·refactor·backend·frontend) · 기획팀 (plan 안 코드) · 메인 Claude (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙) |
+
+> 06 (대화 메타 규칙) 은 글로벌 `~/.claude/CLAUDE.md` §1~§7 가 단일 source. user_profile 안 별도 카탈로그 X (2026-05-26 완전 제거 — 중복 회피).
 
 ## 갱신 프로토콜
 
@@ -30,22 +31,22 @@
 예 자료팀 — figure 자산 생성 시:
 ```
 1. 01_paper_figure_style.md Read (figure 패턴 default)
-2. 05_domain_expertise.md Read (figure caption 안 도메인 약자 자리)
-3. 06_collaboration_style.md Read (자료 보고 자리 응답 톤)
-4. 사용자 요청에 다른 명시 있으면 그 자리만 override
+2. 03_presentation_strategy.md Read (presentation 자리)
+3. 04_analysis_methodology.md Read (분석 표 metric column)
+4. 05_domain_expertise.md Read (figure caption 안 도메인 약자)
+5. 사용자 요청에 다른 명시 있으면 그 자리만 override
 ```
 
 예 개발팀 _new-lib_ — autopilot-spec scaffold / autopilot-lab Phase 2 호출 자리:
 ```
 1. analysis_project/code/experiment_conventions.md Read (1순위 — per-project source of truth)
 2. ~/.claude/user_profile/07_coding_convention.md Read (2순위 — cross-project default)
-3. 04_analysis_methodology.md Read (코드 안 metric·검증 자리)
-4. 05_domain_expertise.md Read (변수명·함수명 자리 도메인 약자)
-5. 06_collaboration_style.md Read (feedback 패턴)
-6. 충돌 자리는 per-project 우선 — 본 프로젝트의 실제 컨벤션 침범 X
+3. 04_analysis_methodology.md Read (코드 안 metric·검증)
+4. 05_domain_expertise.md Read (변수명·함수명 안 도메인 약자)
+5. 충돌 자리는 per-project 우선 — 본 프로젝트의 실제 컨벤션 침범 X
 ```
 
-> **적극적 매핑** (2026-05-26): 각 agent 가 _최소 4-5 aspect_ 참조. 사용자 자리 더 적극 반영 — 도메인 용어 / 작업 흐름 / 응답 톤 자리 일관성 보강.
+> **매트릭스 정리** (2026-05-26): 06 (대화 메타 규칙) 은 _메인 Claude 전용_ — sub-agent 는 사용자와 직접 대화 X 라 적용 영역 없음. 07 (코드 컨벤션) 은 _개발팀·기획팀·메인 Claude 만_ — 편집팀 (wording 영역) 제외. agent 별 3-5 aspect 참조 default.
 
 ## 다음 cycle 의 누적 자리
 

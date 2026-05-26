@@ -73,6 +73,7 @@
 | `분석팀` (analysis-team) | opus | opus 단일 — 수치·시각 자료 생성 (matplotlib figure 자산 + 데이터 분석 스크립트 + 결과 후처리) |
 | `탐색팀` (browser-team) | sonnet | sonnet 단일 |
 | `개발팀` (dev-team) | sonnet | sonnet 단일 |
+| `디자인팀` (design-team) | opus | opus 단일 — UI mockup / 디자인 토큰 / 슬라이드 비주얼 / figure 보조 자리. 시각·미적 판단 비중이 자료팀·편집팀과 같은 결이라 opus (2026-05-26 sonnet → opus 승격) |
 | `편집팀` (editorial-team) | opus | opus 단일 |
 | `codex-review-team` | opus | **Codex CLI (GPT-5)** — actual review·analysis는 외부 Codex CLI에서; sub-agent 본체(opus)는 호출·결과 한국어 재정리만 담당 |
 
