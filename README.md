@@ -276,13 +276,15 @@ QA 5 단계 (quick / light / standard / thorough / adversarial) 정의는 [`CONV
 
 | Agent | Read 대상 (작업 시작 시) | 이유 |
 |---|---|---|
-| 자료팀 | `01_paper_figure_style.md` · `03_presentation_strategy.md` · `04_analysis_methodology.md` | figure 자산·슬라이드 참고 그림·데이터 분석 시각·표 표준 |
-| 디자인팀 | `01_paper_figure_style.md` · `03_presentation_strategy.md` | UI mockup·슬라이드 비주얼·다이어그램 톤 |
-| 연구팀 | `02_paper_writing_style.md` · `04_analysis_methodology.md` · `05_domain_expertise.md` | paper 본문 톤 · 검증 방법론 · 도메인 용어 |
-| 편집팀 | `01_*` · `02_*` · `03_*` · `05_*` · `06_collaboration_style.md` | figure caption · paper · 슬라이드 다듬기 · 도메인 약자 · 응답 톤 |
-| 기획팀 | `04_analysis_methodology.md` · `06_collaboration_style.md` · `07_coding_convention.md` | plan 검증 패턴 · 작업 흐름 · 코드 컨벤션 (plan 안 코드 자리 정합성) |
-| 개발팀 | `07_coding_convention.md` | model 폴더 · config · prefix · preferred layer · framework — autopilot-spec scaffold / autopilot-lab Phase 2 / autopilot-code refactor·new-lib 호출 자리 default |
-| 메인 Claude | `06_collaboration_style.md` · `07_coding_convention.md` | 응답 톤 · feedback 패턴 · 의사결정 패턴 + 코드 컨벤션 (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙 prepend) |
+| 자료팀 | `01_*` · `03_*` · `04_*` · `05_*` · `06_*` | figure / 슬라이드 / 데이터 분석 시각 + 도메인 용어 (caption / 슬라이드 약자) + 자료 보고 톤 |
+| 디자인팀 | `01_*` · `03_*` · `05_*` · `06_*` | UI mockup · 슬라이드 비주얼 · 다이어그램 톤 + 도메인 용어 (UI 표현) + feedback 패턴 |
+| 연구팀 | `01_*` · `02_*` · `04_*` · `05_*` · `06_*` | paper figure 인용 양식 + 본문 톤 + 검증 방법론 + 도메인 용어 + 작업 흐름 |
+| 편집팀 | `01_*` · `02_*` · `03_*` · `04_*` · `05_*` · `06_*` · `07_*` | 사용자 향 문서 전반 (전 7 aspect) — figure caption · paper · 슬라이드 · 분석 표현 · 도메인 약자 · 응답 톤 · 코드 관련 문서 |
+| 기획팀 | `02_*` · `04_*` · `05_*` · `06_*` · `07_*` | plan 작성 톤 + 검증 + 도메인 용어 + 작업 흐름 + 코드 컨벤션 (plan 안 코드) |
+| 개발팀 | `04_*` · `05_*` · `06_*` · `07_*` | 코드 안 metric·검증 + 변수명·함수명 약자 + feedback + model 폴더·config·prefix·preferred layer (autopilot-spec scaffold / autopilot-lab Phase 2 / autopilot-code) |
+| 메인 Claude | `04_*` · `05_*` · `06_*` · `07_*` | 사용자 분석 자리 응답 + 도메인 약자 인지 + 응답 톤·feedback + 코드 컨벤션 (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙 prepend) |
+
+> **적극적 매핑** (2026-05-26): 각 agent 가 _최소 4-5 aspect_ 참조. 도메인 용어 / 작업 흐름 / 응답 톤 자리 일관성 보강.
 
 본 매트릭스의 single source 는 [`~/.claude/user_profile/README.md`](user_profile/README.md). drift 발견 시 그쪽이 진실.
 
