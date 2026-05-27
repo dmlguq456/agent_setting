@@ -4,7 +4,7 @@
 
 **Claude Code 워크플로우 — skill·agent·운영 규칙을 한 장으로**
 
-[mental model](#-mental-model) · [4 트랙](#-큰-갈래-4-트랙--흐름의-의미) · [Skills](#-skill-카탈로그--의의핵심) · [산출물](#-산출물의-구조적-의미) · [부르는 법](#️-부르는-법) · [Agents](#-agents) · [더 깊이](#-더-깊이)
+[mental model](#-mental-model) · [4 트랙](#-큰-갈래-4-트랙--흐름의-의미) · [Skills](#-skill-카탈로그--의의핵심) · [산출물](#-산출물의-구조적-의미) · [부르는 법](#-부르는-법) · [Agents](#-agents) · [더 깊이](#-더-깊이)
 
 </div>
 
@@ -96,8 +96,17 @@ analyze-project  →  autopilot-spec ↻  →  autopilot-code ↻
 
 산출물은 두 축으로 나뉜다 — _현 프로젝트 자료_ 와 _cross-project 사용자 자료_.
 
-- **per-project — `<proj>/.claude_reports/`** : `analysis_project/{code,paper,doc}/` · `research/{topic}/` · `documents/{date}_{name}/` · `specs/<name>/` (코드 spec 있는 자리는 PRD·dev_log·ship 을 _한 폴더에 누적_) · `plans/{date}_{name}/` (spec 없는 빠른 작업). 후속 skill 이 자동 발견하고, `audit` 은 _읽기만_, `autopilot-refine` 은 _read+write_.
-- **cross-project — `~/.claude/user_profile/`** : `analyze-user` 가 6 aspect 파일을 누적. 모든 트랙·sub-agent 가 작업 시작 자리에서 default 로 Read. 짧은 메모는 `/notes --scope user <aspect>` 가 같은 파일에 append.
+**per-project — `<proj>/.claude_reports/`** — 후속 skill 이 자동 발견. `audit` 은 _읽기만_, `autopilot-refine` 은 _read+write_.
+
+| 폴더 | 무엇이 쌓이나 |
+|---|---|
+| `analysis_project/{code,paper,doc}/` | 사전 분석 |
+| `research/{topic}/` | 분야 조사 |
+| `documents/{date}_{name}/` | 문서 산출물 |
+| `specs/<name>/` | 코드 spec — PRD·dev_log·ship 을 _한 폴더에 누적_ |
+| `plans/{date}_{name}/` | spec 없는 빠른 코드 작업 |
+
+**cross-project — `~/.claude/user_profile/`** — `analyze-user` 가 6 aspect 파일을 누적. 모든 트랙·sub-agent 가 작업 시작 자리에서 default 로 Read. 짧은 메모는 `/notes --scope user <aspect>` 가 같은 파일에 append.
 
 **3-tier 컨벤션** — 한 산출물 폴더 안에서 T1 root (메인 산출물) / T2 named subdir (검토 자료) / T3 `_internal/` (audit·raw·versions) 로 나뉜다. _사용자는 보통 T1 만 보면 된다._ 한 프로젝트의 전체 흐름은 `specs/<name>/` 한 폴더에 모이게 설계됐다 — 두 폴더 다닐 필요 없음.
 
