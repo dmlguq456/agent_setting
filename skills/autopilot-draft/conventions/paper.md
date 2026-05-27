@@ -89,6 +89,25 @@
 - `**변경점**:` 필수 — `기존 표현` → `수정 표현` diff 를 토큰 단위로 콕 집어 명시. 누락·요약 금지, 변경이 여러 곳이면 bullet 하나씩. 기존 자료가 없는 _신규 삽입(INSERT)_ 은 `신규 추가 — {무엇을 어디에}` 로 표기(diff 의 기존 항 없음). _entry 만 읽고도 무엇이 바뀌는지 안다_
 - 순서 고정: **위치 → LaTeX 블록 → 이유 → 변경점** (어디 → paste 대상 → 왜 → 무엇→무엇)
 
+**3.5. Table/Figure — 정체는 _내용·흐름으로 파악_, 번호·중복은 도구로 검증**
+
+표/그림을 지칭·수정하기 전, **그 자산이 무엇을 위한 것인지 본문 흐름으로 먼저 이해한다** — (a) `\label` 이름이 말하는 것, (b) 어느 섹션이 `\ref` 로 참조하는지, (c) 표/그림 _내용_·caption. **float 가 나타난 위치(페이지·섹션)만 보고 정체 추정 절대 금지.** 실제 사고(2026-05-27): cheatsheet 가 `tab:VCTK_ND`(L1247) 를 _float 이 dedicated-model 섹션에 떠 있다는 이유로_ 'dedicated SR 학습' 표로 오독 → 그러나 label 이름(`VCTK_ND`)·L1290 참조 섹션(`Simulation of VCTK Noisy Distorted Input`)·표 내용 셋 중 _하나만_ 읽었어도 **평가셋(VCTK-SSR noisy-distorted) 생성** 표임이 자명. 내용 이해를 건너뛰고 위치 패턴만 매칭해 놓쳤다. → _정체 파악은 도구가 아니라 흐름 읽기_.
+
+_번호_ 도 LaTeX 자동이라 텍스트 카운트 추정 금지 (subtable 4a-d/6a-b·주석 `% \label`·본문/appendix 순서로 어긋남 — `tab:augmentations` 실제 Table 8 을 'Table 5' 로 오기한 사고). **번호·label 중복은 `main.aux`/`main.log` 와 _기계 대조_** (사람이 세지 않음): `\newlabel` 실제 번호 + `multiply defined` 경고 확인. 정리 — **정체는 내용 이해로, 번호·중복은 도구로.**
+
+**3.6. 검토·작성 기본 게이트 — _ceremony 보다 기본이 먼저_ (모든 qa level 필수)**
+
+**(전제) 검토·작성 착수 전 — 논문 전체를 끝까지 읽고 _논리 흐름과 각 표/그림의 역할_ 을 이해한다.** 표/그림의 정체를 틀린다는 것은 _흐름을 숙지하지 않았다_ 는 증거이고, **기본을 이렇게 놓쳤다면 고차원(전략·논리·기여) 검토도 신뢰할 수 없다.** 이해 못 한 섹션은 검토하지 말고 _먼저 읽는다_ — 이건 게이트·도구로 가릴 수 없는 _전제_ 다. ceremony(단계·instance 수)를 늘리기 전에 _내용 숙지_ 가 먼저.
+
+paper mode 의 draft 작성·review 는 _고차원 axis(전략·도메인·스타일·인용)_ 를 보기 **전에** 아래 기본을 빠짐없이 점검한다. 이건 qa level 무관 필수이고, 단순·기계적이라 **sonnet 으로 충분**하다. _파이프라인 단계·instance 수(ceremony)가 아니라 이 기본의 빠짐없음이 검토 품질을 결정_ 한다:
+
+1. **문법 정합성** — 주어-동사 일치, 관사(a/an), 단·복수, 시제, 동사 누락·비문. _문장 단위_ 로 훑는다 (예: `we also reports`, `models that based on`, `these issue`, `quality become`).
+2. **LaTeX 정합성** — `main.log` 의 `multiply defined` label, `\ref`/`\cite` 미정의, Table/Figure 번호(`main.aux` `\newlabel` 대조). 도구로 _기계 검증_.
+3. **자산 정체** — 표/그림이 _무엇을 위한 것인지_ label 이름·`\ref` 참조 섹션·내용으로 파악 (§3.5). float 위치 매칭 금지.
+4. **시각/레이아웃 (own-paper review 한정 — 빌드 1회)** — 빌드를 _한 번_ 떠서(반복 X) 형식 정책 근거로 점검: ① 본문 페이지 한도(ICML 2026 = 본문 9p, refs/Impact/appendix 무제한) — 본문 끝(Conclusion/References 경계) 마지막 줄이 한도+1 페이지로 넘치는지 `pdftotext` 페이지 매핑 ② split footnote(각주가 페이지 경계로 쪼개짐) ③ widow/orphan(섹션 앞 단독 줄) ④ overfull `\hbox`/`\vbox`(>5pt). 2-column 은 `pdftoppm` 으로 경계 페이지 _이미지 렌더해 시각 확인_. **발견은 cheatsheet 에 위치+권장 방법으로 문서화하고, 수정은 사용자 몫** — 자잘한 레이아웃 조정은 사용자가 직접. apply 단계엔 이 시각 게이트를 넣지 않는다(compile gate 만 — 빌드 반복 비용 큼).
+
+> 실제 사고(2026-05-27): (a) thorough 5-axis review 를 거쳤는데도 `tab:abl_disc` 중복 label·`tab:VCTK_ND` 정체 오독·Table 번호 오류를 놓침(기본 게이트 부재). (b) apply compile gate 만 보고 "통과" 보고했으나, 본문 Conclusion 마지막 줄이 9p 를 넘겨 page 10 으로 spill + p3 footnote split 을 _빌드를 안 봐서_ 놓침 → 시각 점검(항목 4) 을 own-paper review 에 추가. **기본·시각 점검이 빠지면 thorough·opus 여도 못 잡는다 — sonnet 이라도 명시하면 잡는다.**
+
 **4. entry 안 절대 박지 않는 것**
 
 - Reviewer 매핑 (`Reviewer: cytr-W3`) → `_internal/draft_meta.md`

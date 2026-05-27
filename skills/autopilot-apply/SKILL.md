@@ -99,7 +99,7 @@ mutation 을 cheatsheet 순서대로 적용. **각 mutation 하나당 git commit
 
 ### Stage C — Verify (compile gate + rendered diff)
 
-1. **Compile gate**: build 재실행. baseline 대비 _새_ 에러 / `undefined reference` 증가분 계산.
+1. **Compile gate**: build 재실행. baseline 대비 _새_ 에러 / `undefined reference` / **`multiply defined` label** 경고 증가분 계산 (경고지만 `multiply defined` 는 `\ref` 가 엉뚱한 대상을 가리키는 실제 버그라 게이트에 포함). 단 _시각 레이아웃_(본문 페이지 한도·footnote split·widow/orphan·overfull) 은 여기서 보지 않는다 — 그건 연구팀 review(autopilot-draft)의 책임이고, 수정은 사용자 몫이다. apply 에 build-반복 시각 게이트를 넣지 않는다(비용).
    - 증가분 0 → 통과.
    - 증가분 > 0 → 원인 mutation 식별 (마지막 commit 부터 이진 탐색 또는 직전 commit revert 후 재컴파일). 해당 commit `git revert` + skip-list 기록. 자동 격리 불가하면 **fail loudly + halt** — branch 는 그대로 두고 사용자에게 보고 (canonical 은 애초에 안 건드렸으므로 안전).
    - PDF 가 아예 안 나오면 halt — 절대 "컴파일 깨진 branch 를 merge 권장" 하지 않는다.

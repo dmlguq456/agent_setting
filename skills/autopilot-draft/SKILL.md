@@ -703,6 +703,8 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
 ### Step 5: Draft Review (연구팀 as QA)
 **Applicable modes**: paper / presentation / doc (all 3 modes that generated drafts).
 
+> **기본 게이트 먼저 (모든 qa level 필수, axis-decomposed 보다 우선)** — paper mode 면 review 착수 전 `conventions/paper.md §3.6` (① 문법 정합성: 주어-동사·관사·복수·시제·비문 _문장 단위_ / ② LaTeX 정합성: `main.log` multiply-defined label·`\ref` 미정의·Table/Fig 번호 `main.aux` 대조 / ③ 자산 정체: 표/그림 역할을 label·`\ref` 흐름·내용으로 파악) 를 **반드시 먼저** 적용한다. 이 기본은 sonnet 으로 충분하며, _ceremony(단계·instance 수)보다 이 기본의 빠짐없음이 검토 품질을 결정_ 한다. 기본 누락은 thorough·opus 여도 못 잡는다.
+
 1. Resolve draft paths:
    - `en_draft_path` = `{strategy_folder}/draft/draft.md`
    - `ko_draft_path` = `{strategy_folder}/draft/draft_ko.md`
