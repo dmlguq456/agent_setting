@@ -2,109 +2,121 @@
 aspect: figure
 owner: 사용자
 mode: init
-updated: 2026-05-26
+updated: 2026-05-27
 source: paper PDF 8 / figure_ppt 5 (PNG 54) / code architecture.png 2
-consensus: 3-instance (run A/B/C)
+consensus: 3-instance (run A/B/C) + reproduction-grade 정밀 관찰 보강
+grade: macro-taste + object-library (원본 개체는 assets/figure/svg/ 복사가 기본; micro 재현 recipe 는 _internal/figure_reproduction_spec.md fallback)
+changelog:
+  - "2026-05-27: 재현 micro spec(구 Part B B1-B11)을 _internal 로 이관, Part B 를 거시 배치 감각+개체 라이브러리로 재구성 (LLM 재현 포기 → 원본 pptx 개체 복사). 265→121 줄."
 ---
 
 # 01. Paper / Figure 제작 스타일
 
-> Speech separation·enhancement·restoration 연구자의 figure/diagram 양식. architecture diagram + booktabs 표가 중심이고 line plot·scatter 는 절제적. agent 가 figure/표/슬라이드 비주얼 만들 때 본 파일을 1순위 참조.
+> Speech separation·enhancement·restoration 연구자의 figure/diagram 양식. architecture diagram + booktabs 표가 중심, line plot·scatter 는 절제적. **Part A** = 무엇을/왜(패턴 카탈로그), **Part B** = 거시 배치 감각 + 원본 개체 라이브러리(`assets/figure/svg/` 복사 source). 디자인팀·자료팀이 figure/표/슬라이드 비주얼 만들 때 1순위 참조 — _다시 그리지 말고 원본 개체를 복사_.
 
-## 1. Architecture diagram (가장 강한 시그니처, 3/3)
+---
 
-- block: **rounded rectangle**, 흰 fill + **굵은 colored outline** (fill 아닌 stroke 가 semantic carrier). 상위 컨테이너는 모서리 radius 큼. subtle drop shadow.
-- **역할 색 규약** (NeurIPS SepRe → SPL TF-CorrNet → ICML TF-Restormer → 발표 deck 전부 일치):
-  - 초록 = encoder / separation / analysis 경로 ("Time/Freq. self module")
-  - 주황 = decoder / reconstruction / synthesis 경로 ("Freq. cross-self module")
-  - 회색 = I/O·보조 연산 (STFT/iSTFT, Conv2D, Projection, Split, Filter, LN) — 회색 outline + drop shadow
-  - 빨강 = novelty 강조 (빨강 점선 outline 또는 빨강 텍스트)
-  - 노랑/금색 = zoom-in 한 신규 sub-block (Q/K/V Linear, Freq. projection)
-- 반복 stack: 경로색 **연한 tint 배경 + 회색 점선 컨테이너 + `×B_E`/`×B_D`/`×R` 첨자** (TF_Restormer_ICML_slide-3, TF-CorrNet-v2_slide-08).
-- arrow: 가는 검정 직선 + 작은 채운 화살촉, **직각(orthogonal) 라우팅**. 점선 = 보조/조건 입력 ("Extension query", "key/value", "padding").
-- 연산자 = 원 기호: `⊕` 잔차합, `⊗` masking/gating(옆에 "Swish" 라벨), `~⊕` positional embedding 합성.
+# Part A — 패턴 카탈로그 (무엇을 / 왜)
+
+## A1. Architecture diagram — 역할 색 규약 (가장 강한 시그니처, 3/3)
+
+NeurIPS SepRe → SPL TF-CorrNet → ICML TF-Restormer → 발표 deck 전부 일치하는 **역할→색** 매핑:
+- 초록 = encoder / separation / analysis 경로 ("Time/Freq. self module")
+- 주황 = decoder / reconstruction / synthesis 경로 ("Freq. cross-self module")
+- 회색 = I/O·보조 연산 (STFT/iSTFT, Conv2D, Projection, Split, Filter, LN)
+- 빨강 = novelty 강조 (빨강 점선 outline 또는 빨강 텍스트)
+- 노랑/금색 = zoom-in 한 신규 sub-block (Q/K/V Linear, Freq. projection)
+
+핵심 device (왜 그리나):
 - **cross-attention 은 "key/value" 라벨 화살표**로 encoder→decoder 명시 — trademark (2026_ICML Fig.2, architecture.png).
-- zoom-in: 상위 block 을 **회색 점선 rounded rect** 로 감싸고 점선 leader 로 내부 분해. 확대 안에서도 색 규약 유지 (신규 연산만 색 outline) (2026_ICML Fig.3c, slide-5/6).
-- subfigure: `(a)(b)(c)` 이탤릭 라벨 하단 중앙 + caption 재진술.
+- **텐서 shape glyph**: 모듈 아래 3D slab + 처리축 빨강 양방향 화살표로 "어느 축이 sequence·어느 축이 처리 대상"인지 못박음 (dual-path time/freq 모델 전용).
+- **zoom-in callout**: 상위 block 을 점선으로 끌어내려 내부 분해, 확대 안에서도 색 규약 유지.
+- 텐서 차원(`ℝ^{F×T×C}`)·반복(`×B_E`)을 figure 안에 직접 annotate, 본문 수식과 동일 bold 변수.
 
-### 텐서 shape glyph (시그니처, 3/3)
-- block 입출력에 **`ℝ^{F×T×C}` 수식 + bold 변수(X, Z, Y, D_{k,tf})** 항상 annotate. 도식 표기 = 본문 수식 표기 완전 일치.
-- **작은 3D cuboid/slab 다발 pictogram**: 축 라벨 f(주파수)/t(시간)/k(화자) + **빨강 양방향 화살표(↕/↔)로 처리 축** 표시. encoder=초록 줄무늬 / decoder=주황 줄무늬. decoder 는 화자축 k 만큼 겹친 K장 stack.
-- 좌하단 **범례 박스**: "sequence axis" / "processing axis" + 좌표축 아이콘 (SR_CorrNet architecture.png, TF-CorrNet-v2_slide-08, Doc_Thesis_slide-07). slide-2 는 색 점선 화살표 범례로 확장(노랑=self-attn query / 주황=cross-attn query / 노랑점선=mamba input streaming).
-- 의도: dual-path(time vs freq) 모델에서 "어느 축이 sequence·어느 축이 처리 대상"인지 못박기.
+> 원본 개체는 **§B0** 라이브러리(`assets/figure/svg/`)에서 복사 / micro 재현 recipe(geometry·connector 수치)는 `_internal/figure_reproduction_spec.md` (fallback).
 
-## 2. Booktabs 표 (정량 비교의 기본, 3/3)
+## A2. Booktabs 표 (정량 비교의 기본, 3/3)
 
 - **세로 칸선 없음**, 가로줄만 (`\toprule`/`\midrule`/`cmidrule`/`\bottomrule`).
-- **의미 그룹 다단 헤더**: "Signal fidelity"(PESQ/SDR/LSD/MCD/sBERT) vs "Perceptual quality"(UTMOS/DNSMOS) 식. 단순 나열 회피 (2026_ICML Table 1·2).
-- 열 순서: Method → 비용열(`Param.(M)`/`Size(M)`/`MACs(G/s)`/`MAC(G)`/RTF) → metric 열. 비용열을 성능과 **항상 같은 표에 동반**해 trade-off 논증.
-- **metric 헤더에 ↑/↓ 방향 화살표** 거의 항상 (PESQ↑, LSD↓, EER(%)↓).
+- **의미 그룹 다단 헤더**: "Signal fidelity"(PESQ/SDR/LSD/MCD/sBERT) vs "Perceptual quality"(UTMOS/DNSMOS) (2026_ICML Table 1·2).
+- 열 순서: Method → 비용열(`Param.(M)`/`Size(M)`/`MACs(G/s)`/`MAC(G)`/RTF) → metric 열. 비용열을 성능과 **항상 같은 표에 동반**.
+- **metric 헤더에 ↑/↓** 거의 항상 (PESQ↑, LSD↓, EER(%)↓).
 - **Input / Ground Truth 기준 행을 최상단 별도 그룹** (GT 의 SDR 은 `∞`).
-- **dagger `†`/`‡` 각주**로 조건/출처 표기 (`†pretrained code`, `‡원논문 보고치`, dedicated vs universal).
+- **dagger `†`/`‡` 각주** (dedicated vs universal, pretrained code, 원논문 보고치).
 - 행 그룹 좌측 **세로 회전 라벨** ("mobile"/"base") (NeXt-TDNN Table 2).
-- ablation: 첫 열에 자연어 case 명 ("encoder-only", "w/o MHCA", "w/ MHCA(small)"), **체크마크 √ 열**로 on/off 토글.
+- ablation: 첫 열 자연어 case 명 ("encoder-only"/"w/o MHCA"/"w/ MHCA(small)"), **체크마크 √ 열**로 on/off.
 
-### ours 강조 (3/3)
-- **best 수치 = 열별 bold**. 제안 variant 는 **표 하단 그룹**으로 모으고 같은 prefix 묶음 (`TF-Restormer(off)/(off)†/(on)`).
-- **채택 config 행 / 제안 모델 행 = 회색 row shading** (2024_NeurIPS SeparateReconstruct Table 4/5; TF-CorrNet/NeXt-TDNN 계열은 bold-only 로 음영 없이 — _(consensus: 음영은 NeurIPS 계열, bold+위치는 전반)_).
-- 표 안 색 음영·화살표는 절제 — bold+위치 강조 1순위. (메모리의 "rebuttal 표 drop"·"수치 verbatim 제거"와 정합 — [[feedback-paper-body-rewrite-pattern]])
+ours 강조: **best 수치 = 열별 bold**, 제안 variant 는 **표 하단 그룹** 같은 prefix 묶음 (`TF-Restormer(off)/(off)†/(on)`). 채택 config·제안 행 회색 음영은 NeurIPS 계열만(SeparateReconstruct Table 4/5), TF-CorrNet/NeXt-TDNN 은 bold-only. 표 안 색 음영·화살표 절제 — bold+위치 1순위 (메모리 "rebuttal 표 drop" 정합 — [[feedback-paper-body-rewrite-pattern]]).
 
-## 3. Curve plot (절제적, _consensus 2/3_ — run B·C 관찰, A 미발견)
+## A3. Curve plot (절제적, _consensus 2/3_ — run B·C 관찰)
 
-- 등장 위치: **분석용 figure·thesis·슬라이드** (paper 본문은 표 위주). loss curve 류는 미관찰.
-- 양식: **마커 달린 실선**(filled circle marker), 2×2 패널, 패널 간 축/스케일 정렬. x="Stage index (b/r)" 또는 "Time frame index", y="PESQ-WB"/"SI-SDR"/"Cosine Similarity".
-- **회색 점선 수평 기준선 + 라벨** ("Noisy" baseline). 범례는 패널 좌상단 박스.
-- 색 4팔레트(주황/노랑/파랑/초록)로 ablation 변형 구분 (TF_Block_Reuse_slide-6: B16R1/B1R16/B8R1/B1R8).
-- spectrogram + curve 를 **같은 x축으로 수직 정렬** (SepReformer_slide-11: Spk1/Spk2 spectrogram 위 + cosine similarity Z1~Z4 4색 곡선 아래).
+- 위치: 분석용 figure·thesis·슬라이드 (paper 본문은 표 위주, loss curve 미관찰).
+- **마커 달린 실선**(filled circle), 2×2 패널, 축/스케일 정렬. x="Stage index (b/r)" 또는 "Time frame index", y="PESQ-WB"/"SI-SDR"/"Cosine Similarity".
+- **회색 점선 수평 기준선 + 라벨** ("Noisy"), 범례 패널 좌상단 박스.
+- 색 4팔레트(주황/노랑/파랑/초록)로 변형 구분 (TF_Block_Reuse_slide-6: B16R1/B1R16/B8R1/B1R8).
+- spectrogram + curve **같은 x축 수직 정렬** (SepReformer_slide-11: Spk1/Spk2 spectrogram + cosine similarity Z1~Z4 4색).
 
-## 4. Scatter (희소, _consensus 2/3_ — run B·C 관찰)
+## A4. Scatter (희소, _consensus 2/3_ — run B·C 관찰)
 
 - 2-패널 나란히, 밀도 산점도(점 수만 개), log-log, 단색 그라데이션(파랑=raw/문제 vs 빨강=normalized/개선) (2026_ICML Fig.4).
 - **회색 대각 transition line + 텍스트 주석**, 패널 inset 박스에 핵심 수치("CV = 2.65" / "CV = 0.28").
 
-## 5. Spectrogram 관례
+## A5. Spectrogram 관례
 
-- 용도 (3/3): architecture **입출력 anchor**(before/after) — 파이프라인 양끝 (입력 band-limited → 출력 전대역, super-resolution 시각화). SFI-STFT / SFI-iSTFT 라벨 동반.
-- colormap **2종 분업** (_consensus 2/3_ — run B·C 관찰, run A 는 썸네일 colormap 미확정):
-  - architecture anchor = **magma/viridis 계열**(보라→주황→노랑) (slide-2, TF_Block_Reuse_slide-3)
-  - 정량 분석 figure = run 관찰상 **jet 계열**(파랑-초록-노랑-빨강) + dB 컬러바(−60~−120) (Doc_Thesis_slide-04). _descriptive — 새 figure 제작 시엔 perceptually-uniform(viridis/magma) 권장, jet 는 사용자 기존 자료 매칭이 필요할 때만._
-- 축: y="Freq. (kHz)"(0/2/4/6/8), x="Time (s)" 또는 "Time frame index". anchor 썸네일은 축 생략, `T`/`F` 모서리 표기만.
-- 비교 패널 가로 나열 (degraded / mask grayscale 0~1 / restored 3단), b×r spectrogram 격자(stack/repeat 효과).
-- "Real/Imag." vs "Mag./Phase" 두 표현 구분 (위상은 noise 무늬).
+- 용도 (3/3): architecture **입출력 anchor**(before/after) — 입력 band-limited → 출력 전대역(super-resolution). SFI-STFT / SFI-iSTFT 라벨 동반.
+- colormap **2종 분업** (_consensus 2/3_): architecture anchor = **magma/viridis**(보라→주황→노랑); 정량 분석 figure = 관찰상 **jet**(파랑-초록-노랑-빨강) + dB 컬러바(−60~−120). _새 figure 는 perceptually-uniform(viridis/magma) 권장, jet 는 기존 자료 매칭 때만._
+- 축: y="Freq. (kHz)"(0/2/4/6/8), x="Time (s)"/"Time frame index". anchor 썸네일은 축 생략 `T`/`F` 모서리만.
+- 비교 패널 가로 나열 (degraded / mask grayscale 0~1 / restored 3단), b×r 격자.
 
-## 6. 폰트
+## A6. 폰트 (개요 — 상세 Part B6)
 
-- block 라벨·표 본문: **sans-serif**(PPT diagram). 수식·변수(`X`, `ℝ^{F×T×C}`, `×B_E`): **LaTeX serif math (Computer Modern)** — bold 변수 + blackboard `ℝ` + 첨자 다용. 표 캡션 "Table N." 이탤릭.
-- paper figure 와 slide figure 가 같은 폰트 룩 (CM serif 통일).
+- 블록 라벨·표 본문 = **sans-serif**. 수식·변수(`X`, `ℝ^{F×T×C}`, `×B_E`) = **LaTeX serif math (CM)**, bold 변수 + blackboard `ℝ`. 표 캡션 "Table N." 이탤릭. paper 는 라벨까지 serif 통일 가능.
 
-## 7. 색 hex (PNG 시각 추정 — vector source 미확보, "≈" 유지)
+## A7. 색 hex (pptx XML 추출 — **exact**, 추정 아님)
 
-| 역할 | 추정 hex | 비고 |
+원본 figure pptx (`TF_Restormer_ICML.pptx` / `TF-CorrNet-v2.pptx`) 의 `srgbClr` 직접 추출값(두 deck 교차 확인). 이전 "≈" 추정값을 대체.
+
+| 역할 | exact hex | 비고 |
 |---|---|---|
-| encoder green outline | ≈ `#4E7A3A`~`#5B8C3E` | tint 배경 ≈ `#E8F0DD` |
-| decoder orange outline | ≈ `#D2691E`~`#E0701F` | tint 배경 ≈ `#FBE7DA` |
-| 보조 gray outline | ≈ `#6E6E6E` | 채움 흰색/`#F2F2F2` |
-| novelty red | ≈ `#C0392B`/`#E03030` | 점선·텍스트·처리축 화살표 |
-| accent gold/yellow | ≈ `#D4A017`/`#E0A93B` | zoom sub-block |
-| 화자 4색 팔레트 | 주황 `#C0581E` / 노랑 `#F2C14E` / 초록 `#3E7D44` / 파랑 `#2BA7DF` | TF-CorrNet-v2_slide-01 |
+| **novelty red** | **`#C00000`** | 두 deck 압도적 빈도 — 정의색 (PowerPoint 표준 dark red) |
+| **decoder orange** | **`#ED7D31`** (밝은) / `#C55A11`·`#A9592D` (짙은) | ED7D31 = Office accent2 |
+| **encoder green** | **`#548235`** / `#587048` (muted) / `#70AD47` (밝은) | 70AD47 = Office accent6 |
+| **accent gold/yellow** (zoom) | **`#FFC000`** | Office accent4 |
+| 보조/aux blue (speaker) | `#00B0F0` (light) / `#4472C4` (accent1) | |
+| 보조 gray | `#A5A5A5` (accent3) | I/O·보조 stroke |
+| 텍스트/fill | `#000000` / `#FFFFFF` | |
 
-> **재현 원칙**: hex 추정에 의존 말고 ① 역할→색군 매핑 ② bold-only 표 강조 ③ red-dashed/red-text 신규 모듈 — 이 3규칙 우선. 정확 hex 는 원본 pptx eyedropper.
+tint halo = 위 base 색의 ~15% 농도(PPT lumMod/lumOff). exact tint 는 **원본 도형 복제**로 그대로 가져오는 게 정확.
 
-## 재현 체크리스트
+> **재현 원칙**: hex 는 이제 exact. 단 ① fill 흰색·stroke 가 carrier ② bold-only 표 강조 ③ red-dashed/red-text 신규 모듈 규칙은 그대로 우선.
 
-1. rounded rect + drop shadow + 위/좌→우 직각 화살표.
-2. encoder 초록 / decoder 주황 / 보조 회색 / 신규 빨강(점선·텍스트)·노랑(zoom).
-3. 반복 stack = 점선 박스 + `×B_*` + 경로색 tint.
-4. cross-attention = "key/value" 라벨 화살표.
-5. block 마다 `ℝ^{...}` 첨자 + 본문 동일 bold 변수.
-6. dual-path = sequence/processing axis 범례 + 3D slab pictogram + 빨강 처리축 화살표.
-7. spectrogram anchor magma / 분석 figure jet+dB, 축 Freq.(kHz)/Time(s).
-8. 표 = booktabs(세로선 X), metric ↑/↓, 의미그룹 다단 헤더, 비용열 동반, Input/GT 상단, proposed 행·best bold, dagger 각주.
+---
+
+# Part B — 거시 배치 감각 + 원본 개체 라이브러리
+
+> **재현(다시 그리기) 포기 — 원본 개체 복사가 기본** (2026-05-27): figure 는 LLM 이 spec 보고 다시 그리지 않는다. `assets/figure/svg/<deck>_slide-N.svg` (pptx 추출, 100% fidelity) 에서 **실제 도형·텍스트 개체를 복사·재배치**한다. 같은 계열 새 figure 는 슬라이드 도형 `cp` 후 라벨·색만 교체가 최정밀. 본 Part 는 _그릴 때의 micro 수치_ 가 아니라 _개체를 어떻게 고르고 배치하나_ 의 거시 취향이다. micro 재현 recipe(geometry H-비율·box/marker/glyph 좌표·단계별 절차·primitives defs)는 pptx 없는 fallback 자리에서만 → **`_internal/figure_reproduction_spec.md`**.
+
+## B0. 원본 개체 라이브러리 (복사 source)
+
+- **`assets/figure/svg/`** — 5 deck 54 슬라이드를 `pdftocairo -svg` 로 추출한 벡터 개체 (도형·텍스트·색 그대로, 임베드 spectrogram 만 raster). 박스·화살표·glyph·라벨을 여기서 복사.
+- canonical 앵커 — `ex1_TF_Restormer_architecture.svg`(top-level) · `svg/TF_Restormer_ICML_slide-1.svg`(unit module) 등.
+- 편집 최정밀 원본 = `figure_ppt/*.pptx` (`/home/nas/user/Uihyeop/ref_user_profile/figure_ppt/`).
+- raster anchor `exN_*.png` (육안 대조용).
+- 신규 다이어그램(pptx 에 없는 워크플로우 등)은 `assets/figure/_primitives.svg` defs 복사 시작.
+
+## B1. 거시 디자인 감각 (개체 선택·배치 원칙 — 신규 작업에 전이)
+
+- **Composition** — top-level = 가로 banner 좌→우, 아래에 한 컨테이너를 점선으로 끌어내린 2단 분해도. unit-module 내부는 아래→위 (top-level 과 90° 직교 — 시그니처). 양끝 spectrogram anchor.
+- **Density** — banner 는 빡빡하게(요소 gap 좁게), 분해도·glyph 띠는 숨통. 헐겁게 퍼지지 않게.
+- **강조·절제** — 강조는 novelty 만(빨강 점선·빨강 텍스트, gold zoom). 나머지는 흰 fill+역할색 stroke 로 차분. 표는 색음영 자제, bold+위치로. 색 남발 X.
+- **위계·시선** — focal point = novelty 모듈. 라벨 크기 위계(컨테이너 제목 > 모듈명 > 차원 첨자 > 범례).
+- **색 의미** — encoder green / decoder orange / aux gray / novelty red / zoom gold (§A7 exact hex). fill 흰색, stroke 가 의미 carrier.
+- **시그니처** (빠지면 "이 사람 figure" 아님) — ① cross-attention "key/value" 라벨 화살표 ② 텐서 glyph(slab 줄무늬=처리축 + 빨강 양방향 화살표) + 좌하단 axis 범례 ③ `ℝ^{...}` 차원 첨자(본문 수식과 동일 bold) ④ magma/viridis spectrogram anchor ⑤ `×B` 점선 stack 컨테이너.
 
 ## Open Questions
 
-- 표 row 음영: NeurIPS 계열은 회색 음영 사용, TF-CorrNet/NeXt-TDNN 계열은 bold-only — 매체/연도 차이인지 확정 못 함.
-- 모든 hex 는 PNG 육안 추정. source 에 명시 hex 없음.
+- 표 row 음영: NeurIPS 계열 회색 음영 vs TF-CorrNet/NeXt-TDNN bold-only — 매체/연도 차이 확정 못 함.
+- 간격 비율·tint opacity 는 육안 근사 — exact 는 원본 pptx 복제. (hex 는 §A7 에서 exact 확보 완료.)
 
 ## 사용자 수동 메모
 
