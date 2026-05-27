@@ -22,7 +22,7 @@ argument-hint: "<design path or app path>"
 
 design phase 의 모든 자산 모음:
 - `02_tokens/tokens.md` + 실제 토큰 파일 경로
-- `03_components/` 컴포넌트 목록
+- `03_components/` 컴포넌트 목록 + **`preview.html` (standalone artifact, 있으면) + 검증 screenshot** — 브라우저로 바로 열어볼 산출물로 handoff 상단에 명시
 - `04_review/critique.md` 의 _accepted issue_ (사용자가 의도적으로 두기로 한 것)
 
 ### Step 2: handoff.md 작성

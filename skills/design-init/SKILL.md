@@ -23,14 +23,18 @@ argument-hint: "<design task description> [--scope ui|slide|icon|diagram|mixed]"
 
 scope 별 필요 도구 다름:
 
-| 도구 | UI | slide | icon | diagram |
+| 도구 | UI/webapp | slide | icon | diagram |
 |---|---|---|---|---|
 | Figma MCP (figma-developer-mcp 등) | 권장 | 옵션 | 옵션 | X |
-| shadcn/ui CLI | 필수 (React 프로젝트) | X | X | X |
-| Tailwind config (tokens.css / tailwind.config.ts) | 필수 | X | X | X |
+| shadcn/ui CLI | 권장 (`--artifact project` 시 필수) | X | X | X |
+| Tailwind config (tokens.css / tailwind.config.ts) | 권장 (`project` 시 필수) | X | X | X |
 | 이미지 생성 MCP (Replicate, BFL 등) | 옵션 | 옵션 | 권장 | X |
-| Playwright / preview_screenshot | 권장 | 옵션 | X | 옵션 |
-| mermaid / excalidraw | X | X | X | 필수 |
+| **Playwright / preview_screenshot** (HTML·React 렌더) | **필수** (시각 검증) | 권장 | X | 옵션 |
+| **SVG 래스터라이저** (sharp / rsvg-convert / cairosvg / inkscape) | 권장 | 옵션 | **필수** | **필수** |
+| **mermaid-cli (`mmdc`)** (mermaid → PNG 렌더) | X | X | X | 권장 (mermaid 쓸 때) |
+| excalidraw | X | X | X | 옵션 |
+
+> **시각 검증 도구는 선택이 아님** — components·review phase 가 _렌더해서 본다_ 를 전제로 한다. scope 에 맞는 렌더 도구 (HTML→Playwright, SVG→래스터라이저, mermaid→mmdc) 중 최소 하나가 없으면 시각 자가검증 루프가 불가하니, 부재 시 우선 설치 안내.
 
 각 도구 확인 명령:
 
@@ -43,6 +47,21 @@ test -f tailwind.config.ts -o -f tailwind.config.js && echo 'tailwind:OK' || ech
 
 # tokens.css
 find . -name "tokens.css" -not -path "./node_modules/*" 2>/dev/null | head -1
+
+# 시각 검증 렌더 도구 (최소 하나 필요)
+node -e "require('sharp')" 2>/dev/null && echo 'sharp:OK' || echo 'sharp:MISSING'
+command -v rsvg-convert >/dev/null && echo 'rsvg:OK'
+command -v mmdc >/dev/null && echo 'mermaid-cli:OK'
+command -v cairosvg inkscape >/dev/null 2>&1 && echo 'svg-alt:OK'
+```
+
+렌더 도구가 모두 부재하면 안내 (시각 자가검증 루프 필수):
+```
+시각 검증 렌더 도구 부재. 하나 설치 필요:
+  SVG/다이어그램  → $ npm i sharp   또는  $ apt install librsvg2-bin
+  mermaid         → $ npm i -g @mermaid-js/mermaid-cli
+  HTML/React      → Playwright preview_screenshot (이미 있으면 OK)
+설치할까요? (components/review phase 가 이 도구로 렌더해서 결과를 눈으로 확인합니다.)
 ```
 
 부재 도구 발견 시:
@@ -88,6 +107,9 @@ environment:
   tailwind: <OK|MISSING|N/A>
   image_gen_mcp: <OK|MISSING|N/A>
   playwright: <OK|MISSING|N/A>
+  svg_renderer: <sharp|rsvg|cairosvg|inkscape|MISSING>   # 시각 검증 필수 (scope=icon/diagram)
+  mermaid_cli: <OK|MISSING|N/A>
+  visual_verify_ready: <true|false>                       # 렌더 도구 최소 하나 확보 여부
 existing_assets:
   tokens_file: <path or null>
   components_dir: <path or null>

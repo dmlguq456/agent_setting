@@ -1,7 +1,7 @@
 ---
 name: autopilot-design
-description: "Unified design pipeline — orchestrates design-init → design-refs → design-tokens → design-components → design-review → design-handoff. For visual artifacts across UI/UX, slides, diagrams, icons, logos. Can be invoked standalone or auto-delegated from autopilot-spec Phase 2. Distinct from autopilot-draft (text-only documents) — autopilot-design handles visual deliverables."
-argument-hint: "<design task or app path> [--scope ui|slide|icon|diagram|mixed] [--from <phase>] [--qa quick|standard|thorough]"
+description: "Unified design pipeline — orchestrates design-init → design-refs → design-tokens → design-components → design-review → design-handoff. For visual artifacts across UI/UX, slides, diagrams, icons, logos. Can be invoked standalone or auto-delegated from autopilot-spec Phase 2. Distinct from autopilot-draft (text-only documents) — autopilot-design handles visual deliverables. **Claude-Design parity**: every visual output is RENDERED and visually self-verified (PNG/screenshot → Read → fix loop), and can be emitted as a self-contained single-file HTML preview artifact viewable in a browser without any project stack."
+argument-hint: "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--qa quick|standard|thorough]"
 ---
 
 > 산출물 폴더:
@@ -40,15 +40,21 @@ argument-hint: "<design task or app path> [--scope ui|slide|icon|diagram|mixed] 
 ## Argument Parsing
 
 ### --scope (auto-detect default)
-- `ui` — 프론트 UI (컴포넌트, 페이지, 레이아웃)
+- `ui` — 프론트 UI 컴포넌트 단위 (버튼·카드·폼 등)
+- `webapp` — _전체 화면·페이지·랜딩_ 합성 (컴포넌트 조합 + 페이지 레이아웃 + 인터랙션 상태). Claude Design 의 "한 장짜리 완성 화면" 자리
 - `slide` — 발표 슬라이드 비주얼
 - `icon` — 아이콘·로고 단일 자산
-- `diagram` — mermaid, excalidraw 아키텍처 도식
+- `diagram` — 아키텍처·flow·관계 도식 (mermaid / 직접 SVG / excalidraw)
 - `mixed` — 위 여러 영역 통합
 
 scope 에 따라 일부 phase auto-skip:
 - `icon`: tokens skip 가능 (단일 자산), components skip
 - `diagram`: tokens·components skip, refs + handoff 중심
+
+### --artifact (산출 형태)
+- `project` (default when a stack exists) — 프로젝트의 `components/ui/` + tokens 파일에 통합 (shadcn/Tailwind/Next 전제)
+- `standalone` (default when no stack, or quick 시각 요청) — **자체 완결 단일 HTML preview** (`preview.html`, inline CSS/JS, 필요 시 CDN React·Tailwind). 프로젝트 없이 브라우저로 바로 열림 = Claude Design artifact 패리티. diagram·slide·icon·webapp 빠른 미리보기에 기본 적합
+- auto-detect: cwd 에 `package.json`/`components.json`/`tailwind.config.*` 있으면 `project`, 없으면 `standalone`
 
 ### --from (auto-detect default)
 - `init` / `refs` / `tokens` / `components` / `review` / `handoff`
@@ -108,6 +114,16 @@ Phase 4: design-review      (비평 — 디자인팀 critic, 6축 점검)
 Phase 5: design-handoff     (코드 위치·import path·재현 가이드)
 ```
 
+## 시각 검증 (전 visual phase 공통 — Claude Design parity, 필수)
+
+components·review phase 는 **렌더해서 본 것** 으로만 완료한다. 좌표·코드·XML valid 는 시각 검증이 아니다 (디자인팀 maker/critic 이 _눈 감고_ 좌표 부르는 실패가 반복됐음).
+
+- **렌더 경로**: HTML/React → Playwright `preview_screenshot` 또는 standalone `preview.html` 를 headless 렌더. SVG/diagram → `sharp`/`rsvg-convert`/`cairosvg` 로 PNG. mermaid → mermaid-cli (`mmdc`) 로 PNG.
+- **루프**: 산출 → 렌더 → **Read 로 이미지 직접 보기** → 자가 비평 (관통·overlap·정렬·위계·잘림) → 수정 → 재렌더. 시각적으로 깨끗할 때까지 (최대 3-5 회전). 큰 화면은 결함 의심 영역 crop 확대.
+- **사용자에 렌더 이미지를 보여준다** — 텍스트 보고만으로 완료 X. live-preview 패리티.
+- 상세 루프는 `agent-modes/design/maker.md` 의 "시각 자가검증 루프" / critic 은 `critic.md` Step 1.
+- 렌더 도구 부재 시 design-init 환경 점검이 설치 안내 (시각 검증에 필수 도구).
+
 각 phase 끝에 **[CONFIRM Gate]** — autopilot-spec 의 4 갈래 응답 (진행 / 수정 / back-jump / 중단) 패턴 그대로. 발화가 모호하면 메인 Claude 가 옵션 다시 물음 (임의 추측 X).
 
 | 응답 | 동작 |
@@ -162,17 +178,20 @@ Invoke Skill: `design-tokens` with the design path as args.
 
 Invoke Skill: `design-components` with the design path as args.
 
-내부: `Agent(디자인팀, mode=maker)` 호출.
+내부: `Agent(디자인팀, mode=maker)` 호출 — maker 는 **시각 자가검증 루프** 를 거쳐 산출 (렌더→Read→수정).
 
 결과:
 - `03_components/` — 컴포넌트 spec / mockup / 실제 코드
 - scope 따라:
   - `ui`: shadcn/ui 컴포넌트 + custom
-  - `slide`: 슬라이드 비주얼 가이드 (마크다운)
+  - `webapp`: 페이지 합성 + 전체 화면 `preview.html` (인터랙션 상태 포함)
+  - `slide`: 슬라이드 비주얼 가이드 (마크다운) + 대표 슬라이드 렌더 이미지
   - `icon`: SVG 또는 이미지
-  - `diagram`: mermaid / excalidraw
+  - `diagram`: mermaid / 직접 SVG / excalidraw + **렌더 PNG**
+- `--artifact standalone` 면 위 산출을 자체 완결 `preview.html` 로도 emit (브라우저 바로 열림)
+- **렌더 이미지 첨부** — 컴포넌트/화면을 렌더해 본 결과를 산출과 함께 제시 (live-preview 패리티)
 
-**[CONFIRM Gate 3]** — "컴포넌트 완료. review 로 진행할까요? (진행 / 수정 — 컴포넌트 보강 / back-jump — tokens / refs 로 / 중단)"
+**[CONFIRM Gate 3]** — "컴포넌트 완료 (렌더 확인함). review 로 진행할까요? (진행 / 수정 — 컴포넌트 보강 / back-jump — tokens / refs 로 / 중단)"
 
 ### Phase 4: design-review
 
@@ -180,7 +199,7 @@ Invoke Skill: `design-components` with the design path as args.
 
 Invoke Skill: `design-review` with the design path as args.
 
-내부: `Agent(디자인팀, mode=critic)` 호출.
+내부: `Agent(디자인팀, mode=critic)` 호출 — critic 은 **렌더된 이미지를 Read 로 직접 보고** 비평 (코드 텍스트 검토 아님).
 
 결과: `04_review/critique.md` — 6축 (위계 / 정렬 / 접근성 / 반응형 / 흐름 / 톤) 별 발견 사항.
 
@@ -206,7 +225,8 @@ Invoke Skill: `design-handoff` with the design path as args.
 
 ```yaml
 design_name: <name>
-scope: ui  # or slide/icon/diagram/mixed
+scope: ui  # or webapp/slide/icon/diagram/mixed
+artifact: standalone  # or project (stack 유무로 auto-detect)
 created: <date>
 phases:
   init: done

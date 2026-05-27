@@ -16,8 +16,8 @@
 
 ## 절차
 
-1. **대상 확인** — 코드 파일 / `preview_screenshot` 결과 / 사용자 제공 이미지
-2. **6축 각자 평가** — 발견 사항을 우선순위로 정리
+1. **대상을 렌더해서 본다 (필수)** — 코드/SVG 를 텍스트로 읽고 비평하지 않는다. PNG/screenshot 으로 렌더 → **Read 로 이미지를 직접 본다** (서브에이전트도 Read 로 이미지 시각 수신 — 실증됨). SVG → `sharp`/`rsvg-convert`, HTML/React → Playwright `preview_screenshot`, mermaid → `mmdc`. 큰 화면은 의심 영역 crop 확대. 렌더 불가 환경이면 그 사실을 명시하고 _본 범위만_ 비평.
+2. **6축 각자 평가** — _보이는 것_ 으로 발견 사항을 우선순위로 정리
 3. **우선순위 (🔴 / 🟡 / 🟢)** 별 정리
 4. **수정 방향만 제안** — 코드 수정은 maker 또는 frontend 에 위임
 

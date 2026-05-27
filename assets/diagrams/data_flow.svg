@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif">
+  <defs>
+    <filter id="dsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="1.5" dy="2.2" stdDeviation="1.5" flood-color="#000" flood-opacity="0.18"/>
+    </filter>
+    <marker id="darr" markerWidth="10" markerHeight="7" refX="8.5" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,3 L0,6 L2.6,3 z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1280" height="720" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="22" font-weight="bold" fill="#1a1a1a">G2 · 데이터 흐름 — 산출물이 어떻게 다음 입력이 되나</text>
+  <text x="40" y="65" font-size="13" fill="#555">[선행 입력] → [산출 = .claude_reports 폴더] → [사후]. 폴더가 곧 다음 skill 의 implicit 입력 (누적 구조)</text>
+
+  <!-- ===== zone tint halo backgrounds (stroke 없음, ~13% tint) ===== -->
+  <g>
+    <rect x="50"  y="84" width="320" height="500" rx="12" fill="#548235" opacity="0.07"/>
+    <rect x="420" y="84" width="450" height="500" rx="12" fill="#ED7D31" opacity="0.07"/>
+    <rect x="920" y="84" width="320" height="500" rx="12" fill="#6E6E6E" opacity="0.07"/>
+  </g>
+
+  <!-- ===== zone headers ===== -->
+  <g text-anchor="middle" font-size="15" font-weight="bold">
+    <rect x="60"  y="88" width="300" height="34" rx="8" fill="#E8F0DD" stroke="#548235" stroke-width="1.0"/>
+    <text x="210" y="111" fill="#3a5c2c">① 선행 입력 (자료 생성)</text>
+    <rect x="430" y="88" width="430" height="34" rx="8" fill="#FBE7DA" stroke="#ED7D31" stroke-width="1.0"/>
+    <text x="645" y="111" fill="#C55A11">② 산출 (orchestrator → 폴더)</text>
+    <rect x="930" y="88" width="300" height="34" rx="8" fill="#F2F2F2" stroke="#6E6E6E" stroke-width="1.0"/>
+    <text x="1080" y="111" fill="#555">③ 사후 (재진입·정정·점검)</text>
+  </g>
+
+  <!-- ===== zone 1 : 선행 입력 ===== -->
+  <g font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="12" text-anchor="middle">
+    <rect x="80" y="150" width="260" height="34" rx="7" fill="#fff" stroke="#548235" stroke-width="1.0" filter="url(#dsh)"/>
+    <text x="210" y="172" fill="#3a5c2c">analyze-project</text>
+    <rect x="80" y="210" width="260" height="34" rx="7" fill="#fff" stroke="#C00000" stroke-width="1.0" stroke-dasharray="4 2.5" filter="url(#dsh)"/>
+    <text x="210" y="232" fill="#3a5c2c">analyze-user</text>
+    <rect x="80" y="270" width="260" height="34" rx="7" fill="#fff" stroke="#C00000" stroke-width="1.0" stroke-dasharray="4 2.5" filter="url(#dsh)"/>
+    <text x="210" y="292" fill="#3a5c2c">autopilot-research</text>
+    <rect x="80" y="330" width="260" height="34" rx="7" fill="#fff" stroke="#70AD47" stroke-width="1.0" filter="url(#dsh)"/>
+    <text x="210" y="352" fill="#5a7d34">autopilot-lab</text>
+  </g>
+  <g font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="10.5" fill="#888" text-anchor="middle">
+    <text x="210" y="198">analysis_project/{code,paper,doc}/</text>
+    <text x="210" y="258">→ user_profile/0X_*.md</text>
+    <text x="210" y="318">research/{topic}/</text>
+    <text x="210" y="378">experiment 폴더</text>
+  </g>
+
+  <!-- ===== zone 2 : orchestrator + folder icons ===== -->
+  <!-- 5 산출 orchestrator each with folder icon below -->
+  <!-- folder icon helper: T1 dark / T2 mid / T3 light mini-stack -->
+  <g font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="12" text-anchor="middle">
+    <!-- draft -->
+    <rect x="450" y="150" width="180" height="32" rx="7" fill="#fff" stroke="#C00000" stroke-width="1.0" stroke-dasharray="4 2.5" filter="url(#dsh)"/>
+    <text x="540" y="171" fill="#C55A11" font-weight="bold">autopilot-draft</text>
+    <!-- code -->
+    <rect x="660" y="150" width="180" height="32" rx="7" fill="#fff" stroke="#C00000" stroke-width="1.0" stroke-dasharray="4 2.5" filter="url(#dsh)"/>
+    <text x="750" y="171" fill="#2f9090" font-weight="bold">autopilot-code</text>
+    <!-- spec -->
+    <rect x="450" y="300" width="180" height="32" rx="7" fill="#fff" stroke="#4472C4" stroke-width="1.0" filter="url(#dsh)"/>
+    <text x="540" y="321" fill="#4472C4">autopilot-spec</text>
+    <!-- design -->
+    <rect x="660" y="300" width="180" height="32" rx="7" fill="#fff" stroke="#c0508f" stroke-width="1.0" filter="url(#dsh)"/>
+    <text x="750" y="321" fill="#c0508f">autopilot-design</text>
+  </g>
+
+  <!-- folder icons (T1/T2/T3 mini stack) under each -->
+  <!-- draft folder -->
+  <g transform="translate(470,196)">
+    <path d="M0,8 L8,8 L12,2 L140,2 L140,56 L0,56 Z" fill="#FBE7DA" stroke="#ED7D31" stroke-width="0.9"/>
+    <rect x="8" y="14" width="124" height="11" fill="#C55A11" opacity="0.85"/>
+    <rect x="8" y="28" width="124" height="11" fill="#ED7D31" opacity="0.50"/>
+    <rect x="8" y="42" width="124" height="11" fill="#ED7D31" opacity="0.22"/>
+    <text x="70" y="73" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="10.5" text-anchor="middle" fill="#C55A11">documents/{date}_{name}/</text>
+  </g>
+  <!-- code folder -->
+  <g transform="translate(680,196)">
+    <path d="M0,8 L8,8 L12,2 L140,2 L140,56 L0,56 Z" fill="#E0F0F0" stroke="#2f9090" stroke-width="0.9"/>
+    <rect x="8" y="14" width="124" height="11" fill="#1f7070" opacity="0.85"/>
+    <rect x="8" y="28" width="124" height="11" fill="#2f9090" opacity="0.50"/>
+    <rect x="8" y="42" width="124" height="11" fill="#2f9090" opacity="0.22"/>
+    <text x="70" y="73" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="10.5" text-anchor="middle" fill="#2f9090">plans/{date}_{name}/</text>
+  </g>
+  <!-- spec folder -->
+  <g transform="translate(470,346)">
+    <path d="M0,8 L8,8 L12,2 L140,2 L140,56 L0,56 Z" fill="#E5ECF6" stroke="#4472C4" stroke-width="0.9"/>
+    <rect x="8" y="14" width="124" height="11" fill="#39568c" opacity="0.85"/>
+    <rect x="8" y="28" width="124" height="11" fill="#4472C4" opacity="0.50"/>
+    <rect x="8" y="42" width="124" height="11" fill="#4472C4" opacity="0.22"/>
+    <text x="70" y="73" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="10.5" text-anchor="middle" fill="#4472C4">specs/{name}/</text>
+  </g>
+  <!-- design folder -->
+  <g transform="translate(680,346)">
+    <path d="M0,8 L8,8 L12,2 L140,2 L140,56 L0,56 Z" fill="#F6E5EF" stroke="#c0508f" stroke-width="0.9"/>
+    <rect x="8" y="14" width="124" height="11" fill="#9a3f72" opacity="0.85"/>
+    <rect x="8" y="28" width="124" height="11" fill="#c0508f" opacity="0.50"/>
+    <rect x="8" y="42" width="124" height="11" fill="#c0508f" opacity="0.22"/>
+    <text x="70" y="73" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="10.5" text-anchor="middle" fill="#c0508f">designs/{name}/</text>
+  </g>
+
+  <!-- ship note -->
+  <text x="645" y="460" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="11" fill="#888" text-anchor="middle">spec → autopilot-ship (deploy_record) · ship 은 안내만</text>
+
+  <!-- T-tier legend (compact, near zone2) -->
+  <g transform="translate(450,490)" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="11">
+    <rect x="0" y="0" width="390" height="60" rx="7" fill="#fafafa" stroke="#ccc" stroke-width="1"/>
+    <text x="14" y="20" font-weight="bold" fill="#333">폴더 3-tier (모든 산출 공통)</text>
+    <rect x="14" y="30" width="22" height="11" fill="#555" opacity="0.85"/><text x="44" y="40" fill="#444">T1 root · 항상 봄</text>
+    <rect x="150" y="30" width="22" height="11" fill="#555" opacity="0.50"/><text x="180" y="40" fill="#444">T2 subdir · 필요 시</text>
+    <rect x="300" y="30" width="22" height="11" fill="#555" opacity="0.22"/><text x="330" y="40" fill="#444">T3 _internal/</text>
+  </g>
+
+  <!-- ===== zone 3 : 사후 ===== -->
+  <g font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="12" text-anchor="middle">
+    <rect x="950" y="150" width="260" height="34" rx="7" fill="#fff" stroke="#C00000" stroke-width="1.0" stroke-dasharray="4 2.5" filter="url(#dsh)"/>
+    <text x="1080" y="172" fill="#8a4fa0" font-weight="bold">autopilot-refine</text>
+    <rect x="950" y="210" width="260" height="34" rx="7" fill="#fff" stroke="#C00000" stroke-width="1.0" stroke-dasharray="4 2.5" filter="url(#dsh)"/>
+    <text x="1080" y="232" fill="#8a4fa0" font-weight="bold">autopilot-apply</text>
+    <rect x="950" y="270" width="260" height="34" rx="7" fill="#fff" stroke="#6E6E6E" stroke-width="1.0" filter="url(#dsh)"/>
+    <text x="1080" y="292" fill="#555">audit</text>
+    <rect x="950" y="330" width="260" height="34" rx="7" fill="#fff" stroke="#6E6E6E" stroke-width="1.0" filter="url(#dsh)"/>
+    <text x="1080" y="352" fill="#555">notes</text>
+  </g>
+  <g font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="10.5" fill="#888" text-anchor="middle">
+    <text x="1080" y="198">대상 in-place + versions/</text>
+    <text x="1080" y="258">→ real source (git branch)</text>
+    <text x="1080" y="318">_internal/audit/</text>
+    <text x="1080" y="378">NOTES.md / user_profile</text>
+  </g>
+
+  <!-- ============ connectors (lane-routed; verified no-cross by render) ============ -->
+  <!-- zone1 → zone2 -->
+  <g stroke="#555" stroke-width="1.0" fill="none">
+    <!-- analyze-project → draft : straight into left edge -->
+    <path d="M340,158 L450,158" marker-end="url(#darr)"/>
+    <!-- research → code : down-the-bottom of draft-folder lane (y287) → col gutter x645 → top gutter y136 → into code top edge (avoids draft box & folders) -->
+    <path d="M340,287 L645,287 L645,136 L750,136 L750,150" marker-end="url(#darr)"/>
+    <!-- research → spec : short branch down into spec left edge -->
+    <path d="M340,287 L360,287 L360,316 L450,316" marker-end="url(#darr)"/>
+  </g>
+  <!-- lab → code graduation : rendered as a text badge (not a cross-zone arrow) to keep zero edge crossings. lab box sits in zone1; its graduation into the code track is annotated here. -->
+  <rect x="80" y="394" width="260" height="26" rx="6" fill="#fff" stroke="#70AD47" stroke-width="0.8" stroke-dasharray="5 3"/>
+  <text x="210" y="411" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="11.5" text-anchor="middle" fill="#5a7d34">lab summary → autopilot-code 졸업 (라이브러리화)</text>
+
+  <!-- zone2 internal: spec → design (Phase 2 UI) -->
+  <path d="M630,316 L660,316" stroke="#555" stroke-width="1.0" fill="none" marker-end="url(#darr)"/>
+
+  <!-- zone2 → zone3 : NO per-folder arrows through the grid (they pierced the folders).
+       Instead one consolidated dashed bus in the right gutter + per-box consumption labels in zone3. -->
+  <g stroke="#999" stroke-width="2" fill="none" stroke-dasharray="4 2.5">
+    <path d="M870,300 L895,300 L895,225 L948,225" marker-end="url(#darr)"/>
+  </g>
+  <text x="884" y="320" font-size="10.5" fill="#888" text-anchor="middle">산출물</text>
+  <text x="884" y="334" font-size="10.5" fill="#888" text-anchor="middle">에 작용</text>
+
+  <!-- ============ bottom: user_profile broadcast band ============ -->
+  <g>
+    <rect x="60" y="600" width="1170" height="86" rx="10" fill="#fbeeee" stroke="#C00000" stroke-width="1.0" stroke-dasharray="2 2"/>
+    <text x="80" y="626" font-size="13" font-weight="bold" fill="#C00000">user_profile broadcast</text>
+    <rect x="80" y="638" width="200" height="34" rx="7" fill="#fff" stroke="#C00000" stroke-width="1.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif"/>
+    <text x="180" y="660" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="12" text-anchor="middle" fill="#C00000">analyze-user</text>
+    <text x="320" y="660" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="12" fill="#C55A11">user_profile/0X_*.md</text>
+    <!-- broadcast dashed arrow to all agents -->
+    <path d="M300,655 L320,655" stroke="#C00000" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#darr)"/>
+    <path d="M560,655 L620,655" stroke="#C00000" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#darr)"/>
+    <text x="640" y="652" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="12" fill="#444">모든 sub-agent 의 default 참조 —</text>
+    <text x="640" y="670" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="12" fill="#444">figure / writing / presentation / coding 양식이 전 트랙에 implicit broadcast</text>
+  </g>
+</svg>

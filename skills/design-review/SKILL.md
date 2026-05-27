@@ -21,18 +21,18 @@ argument-hint: "<design path or app path>"
 
 ## Procedure
 
-### Step 1: 검토 대상 확보
+### Step 1: 검토 대상을 **렌더해서 본다** (필수 — 코드 텍스트 검토 아님)
 
-scope 별:
+critic 은 코드를 읽고 비평하지 않는다. _렌더된 이미지_ 를 Read 로 직접 보고 비평한다 (디자인팀도 Read 로 이미지 시각 수신 — 실증됨).
 
-| scope | 대상 |
+| scope | 렌더 → 본다 |
 |---|---|
-| ui | `03_components/*.tsx` + `preview_screenshot` (dev server 켜져있을 시) |
-| slide | `03_components/slides/*.md` (가이드 평가) |
-| icon | `03_components/icons/*.svg` |
-| diagram | `03_components/diagrams/*` |
+| ui / webapp | `preview.html` 또는 dev server → Playwright `preview_screenshot` → Read. 컴포넌트 + 페이지 전체. 가능하면 mobile/desktop breakpoint 각각 |
+| slide | 슬라이드를 HTML/이미지로 렌더 → Read |
+| icon | SVG → `sharp`/`rsvg-convert` PNG → Read (확대) |
+| diagram | SVG/mermaid → PNG → Read. 관통·overlap·label 겹침 직접 확인 |
 
-preview_screenshot 활용 가능하면 시각 직접 점검.
+렌더 도구·screenshot 불가한 환경이면 그 사실을 critique 에 명시하고 _본 범위만_ 비평 (못 본 것을 본 척 X).
 
 ### Step 2: 디자인팀 critic 호출
 

@@ -37,16 +37,18 @@ You are the **디자인팀 router**. Refer to CLAUDE.md for project-specific sty
 | shadcn/ui CLI | 컴포넌트 install | "shadcn 초기화 필요. `npx shadcn init` 실행하면 됩니다, 진행할까요?" |
 | Tailwind config | 디자인 토큰 single source | "`tokens.css` 또는 `tailwind.config.ts` 부재. 기본 토큰 파일 만들까요?" |
 | 이미지 생성 MCP | 로고·일러스트·썸네일 | "이미지 생성 도구 부재. 외부 도구 사용 또는 placeholder 진행" |
-| Playwright / preview tools | 결과 스크린샷 검증 | "preview_screenshot 활용 가능" |
+| Playwright / preview tools | HTML·React 결과 스크린샷 검증 | "preview_screenshot 활용 가능" |
+| SVG 래스터라이저 (sharp / rsvg-convert / cairosvg / inkscape) | **SVG·다이어그램 시각 자가검증 (PNG 렌더 후 Read)** | "SVG 렌더 도구 부재. `npm i sharp` 또는 `apt install librsvg2-bin` 으로 설치할까요?" — 시각 검증 루프에 필수 |
 
 ## Recommended models per mode
 
-- `maker`: sonnet (대부분)
+- `maker`: **opus** (시각 자가검증 루프 + craft 판단 필요 — 단순 토큰/아이콘 교체 류만 sonnet)
 - `critic`: sonnet (단 nuanced UX 비평 시 opus)
 
 ## Common Rules
 
 - One mode per invocation
+- **시각 자가검증 의무** — 렌더 가능한 산출물 (SVG·HTML·React·다이어그램) 은 산출 전 반드시 PNG/스크린샷으로 렌더해 Read 로 _직접 보고_ 결함을 잡는다. 좌표·XML 유효성 (`valid`/`교차 0`) 만으로 완료 보고 금지. 상세 루프는 `agent-modes/design/maker.md` 의 "시각 자가검증 루프".
 - 디자인 토큰 (tokens.css / tailwind config) 이 single source — 새 컴포넌트 만들기 _전_ 에 토큰부터 확인
 - LaTeX / 코드 / 수식 블록 자체는 손대지 않음 (개발팀 영역)
 - 비평은 거리감 있는 시각 — maker 가 critic 으로 self-review 시도 X (다른 호출에서)
