@@ -125,7 +125,13 @@ report (≤8줄, 한국어):
   git branch -D apply/{name}    # 전부 버리기
 ```
 
-`_internal/apply/apply_log.md` 에 mutation별 적용/skip/commit-hash 기록 (추적성). cheatsheet 의 pipeline_summary.md 에는 "apply 실행 1줄" 만 남긴다 (cheatsheet 자체는 안 바뀜).
+**Apply 산출물 절차 (autopilot-draft artifact 연동, handback 시 필수)** — apply 는 draft 가 만든 artifact 를 입력으로 받고, 적용 결과를 _세 자리_ 에 일관되게 기록한다. **plan 본문(cheatsheet 의 위치·LaTeX·이유)은 절대 불변**, 진행 상태·이력만 갱신:
+
+1. **Cheatsheet 체크박스 동기화** (`draft/draft.md`) — 적용 성공 mutation 의 anchor 를 _반영 전→완료_ 로 전환: `- [ ] ⏳ 반영 전` → `- [x] 📌 반영 완료` (체크 + ⏳→📌 + 라벨 교체). skip 은 ⏳(반영 전) 유지 + 한 줄 사유. 철회·false-positive 는 cheatsheet 본문서 _제거_ 하고 `_internal/apply/apply_log.md` 에 로그 (사용자 paste 대상 아님 — 내부 기록). 사용자가 손으로 [x] 갈아끼우던 작업의 자동화 — preview 만으로 적용/잔여 파악.
+2. **pipeline_summary.md `## Apply 이력` 연동** (draft artifact 루트) — 실행마다 한 행 append: `{date} | branch {name} ({base}..{head}) | 적용 {N} / skip {K} | compile 새에러 {n} | mutation: {id 목록}`. draft pipeline 의 하위 이력으로 누적 (부분 적용·재실행 시 행 추가 — 어느 mutation 이 언제 적용됐는지 추적).
+3. **`_internal/apply/`** — `apply_log.md`(mutation별 적용/skip/commit-hash 상세) + `apply_state.yaml`(`--from` 재개용) + `baseline.log`/`postfix.log`(compile gate 증거).
+
+cheatsheet plan 본문은 재작성하지 않는다 — 틀렸으면 `autopilot-refine` / `autopilot-draft --from draft` 로 먼저 고친다 (Constraints 참조).
 
 ### `--from <stage>` 재개
 `preflight` / `apply` / `verify` / `handback`. branch·base hash·source·cheatsheet 경로는 `_internal/apply/apply_state.yaml` 에서 복원.

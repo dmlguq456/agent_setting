@@ -55,7 +55,7 @@
 
 - **H1 제목 1줄** — 예: `# TF-Restormer Camera-Ready Cheatsheet v3 — Appendix + Conclusion`
 - **한 단락 개요 (2-4문장)** — 본 cheatsheet 가 다루는 범위 / 산출 entries 수 / paste 작업 흐름 한 줄 안내. 추적용 메타 (changelog / mutation 분포 통계) 는 박지 않음 — _문서 정체성_ 만.
-- **Legend blockquote 1줄** — `> **Legend**: 🔴 mandatory · 🟡 high · 🟢 optional · ✅ already applied · audit link inline`
+- **Legend blockquote 1줄** — `> **Legend**: 🔴 mandatory · 🟡 high · 🟢 optional · ⏳ 반영 전 / 📌 반영 완료 · audit link inline`
 
 여기까지가 _문서 첫 화면_ 의 사용자 영역. "사용 방식" / "Strategy details" / "Wording invariants" / "Preserve note" 같은 _추가 안내 blockquote 는 박지 않는다_ — 사이클이 끝나면 의미 없는 메타.
 
@@ -66,22 +66,28 @@
 ```markdown
 ### {ID} {tier 이모지} — {짧은 한 줄 action}
 
-- [ ] 📌📌📌📌📌 **반영 완료** 📌📌📌📌📌
+- [ ] ⏳ 반영 전
 
-**위치**: `\section{...}` 또는 `\label{...}` 또는 `\paragraph{...}` (한 줄, inline code 활용)
+**위치**: `\section{...}` 또는 `\paragraph{...}` (한 줄)
 
-​```latex
-% paste-ready 블록
+**이유**: {왜 이 수정이 필요한지 한 줄}
+
+**변경점**:
+- `기존 표현` → `수정 표현`
+- (변경이 여러 곳이면 하나씩 bullet)
+- (신규 삽입이라 기존 자료가 없으면 `신규 추가 — {무엇을 어디에}`)
+
+```latex
+% paste-ready 수정 후 블록
 ...
-​```
-
-**한 줄 이유** (선택): 왜 이 자리에 이게 필요한지 한 문장. 두 줄 넘어가면 cut.
 ```
 
-- H3 헤더 한 줄 + _바로 아래 task-list 체크박스 한 줄 의무_. cheatsheet 가 사용자의 최종 paste 작업을 위한 자료라, 진행 중에 어디까지 반영했는지 추적할 수 있게 entry 첫 자리에 체크박스 anchor 가 박혀야 함. 형식은 `- [ ] 📌📌📌📌📌 **반영 완료** 📌📌📌📌📌` 한 줄 고정 — `- [ ]` markdown task-list 가 preview 에서 interactive 체크박스로 렌더링, 좌우 📌 다섯 개씩이 시각 anchor (H3 tier 이모지 🔴🟡🟢 와 역할 분리), bold 라벨이 강조. 사용자가 반영 완료한 항목은 직접 `[x]` 로 갈아 끼움.
+- H3 헤더 한 줄 + _바로 아래 task-list 체크박스 한 줄 의무_. cheatsheet 가 사용자의 최종 paste 작업을 위한 자료라, 진행 중에 어디까지 반영했는지 추적할 수 있게 entry 첫 자리에 체크박스 anchor 가 박혀야 함. 형식은 **2-state** (반영 전/완료를 이모지·라벨로 구분) — 반영 전: `- [ ] ⏳ 반영 전` / 반영 완료: `- [x] 📌 반영 완료` — `- [ ]` markdown task-list 가 preview 에서 interactive 체크박스로 렌더링, 앞머리 이모지(⏳ 미반영 / 📌 반영)로 상태를 부드럽게 구분하는 anchor (H3 tier 이모지 🔴🟡🟢 와 역할 분리), bold 라벨이 강조. apply 또는 사용자가 반영하면 `[ ]→[x]` + ⏳→📌 + 라벨(반영 전→반영 완료) 까지 교체한다.
 - `**위치**:` 한 줄 — `**Anchor**` / `**latex anchor**` 같은 영어 라벨 금지, `**위치**:` 통일
-- LaTeX 블록 한 개 (필요 시 함께 paste 할 짧은 블록 하나 더)
-- `**한 줄 이유**` 선택, 두 줄 이내
+- `**이유**:` 필수 — 왜 이 수정이 필요한지 한 줄 (맥락·근거)
+- `**변경점**:` 필수 — `기존 표현` → `수정 표현` diff 를 토큰 단위로 콕 집어 명시. 누락·요약 금지, 변경이 여러 곳이면 bullet 하나씩. 기존 자료가 없는 _신규 삽입(INSERT)_ 은 `신규 추가 — {무엇을 어디에}` 로 표기(diff 의 기존 항 없음). _entry 만 읽고도 무엇이 바뀌는지 안다_
+- LaTeX 블록 한 개 (paste-ready 수정 후; 필요 시 함께 paste 할 짧은 블록 하나 더)
+- 순서 고정: **위치 → 이유 → 변경점 → LaTeX 블록** (어디 → 왜 → 무엇→무엇 → paste 대상)
 
 **4. entry 안 절대 박지 않는 것**
 
@@ -90,6 +96,7 @@
 - Wording invariant 안내 / Style Guide 인용 → 본문 맨 앞에 한 줄 또는 격리 파일
 - Verification gate / column count 안내 → 본문 끝의 _마무리 확인 목록_ 안 한 줄로 통합
 - inline `<!-- memo: [REFINE-R2] F{N} applied: ... -->` 표시 → 본문에 절대 박지 않음. refine 추적은 `pipeline_summary.md` `## 마이너 변경 로그` 안에만.
+- 철회·false-positive·drop 된 mutation → cheatsheet 본문서 _제거_ (취소선으로도 남기지 않음). `_internal/draft_meta.md`(draft 단계) 또는 `_internal/apply/apply_log.md`(apply 단계) 에 _왜 철회_ 한 줄 로그. 본문은 사용자가 paste 할 _활성 수정안_ 만 — 적용 안 할 entry 는 noise.
 
 **5. paste 순서는 본문 끝에 단순 ordered list**
 

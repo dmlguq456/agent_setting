@@ -1,8 +1,18 @@
 ---
 name: autopilot-draft
-description: "Document draft pipeline — analyze → strategy → strategy-refine → draft → draft-refine → finalize. 3 modes by output form: `paper` (LaTeX academic body) / `presentation` (slide-by-slide markdown for PPT) / `doc` (prose for Word/HWP/markdown — reports·proposals·rebuttal responses·peer reviews·tech blogs·memos). Mode is form-first; purpose/genre is conveyed via natural-language task description (no subtype enum). All inputs implicitly discovered from `.claude_reports/{analysis_project,research}/*` — pre-process external materials via `/analyze-project --mode {paper|doc}` first (cwd 자동 발견). Format specs auto-loaded from `analysis_project/doc/{matching}/formats/` — no explicit `--format-ref` flag. Mode-specific conventions live in `## Mode-Specific Conventions` (§Common + §paper / §presentation / §doc). `presentation` produces markdown only (PPTX export NOT supported — use PowerPoint directly)."
+description: "Document draft pipeline — analyze → strategy → strategy-refine → draft → draft-refine → finalize. NOTE: in `paper` mode 'draft' means a **paste-ready cheatsheet draft** — a set of LaTeX paste-ready cards (a mutation/edit plan the user pastes into the canonical main.tex via autopilot-apply), NOT blank-page body writing. 'draft' = the *cheatsheet draft*, regardless of whether the paper is new or already complete. 3 modes by output form: `paper` (LaTeX academic output, always produced as a paste-ready cheatsheet draft that autopilot-apply pastes into main.tex — new-body cheatsheet entries for an initial submission/thesis/book chapter, edit/mutation cheatsheet entries for camera-ready/major-revision of an existing body) / `presentation` (slide-by-slide markdown for PPT) / `doc` (prose for Word/HWP/markdown — reports·proposals·rebuttal responses·peer reviews·tech blogs·memos). Mode is form-first; purpose/genre is conveyed via natural-language task description (no subtype enum). All inputs implicitly discovered from `.claude_reports/{analysis_project,research}/*` — pre-process external materials via `/analyze-project --mode {paper|doc}` first (cwd 자동 발견). Format specs auto-loaded from `analysis_project/doc/{matching}/formats/` — no explicit `--format-ref` flag. Mode-specific conventions live in `## Mode-Specific Conventions` (§Common + §paper / §presentation / §doc). `presentation` produces markdown only (PPTX export NOT supported — use PowerPoint directly)."
 argument-hint: "<task description> [--mode paper|presentation|doc] [--qa quick|light|standard|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 ---
+
+## First Principle — draft 의 산출물은 "최종 문서" 가 아니다
+
+autopilot-draft 의 산출물은 _최종 문서 그 자체_ 가 아니라, 사용자가 canonical source (`main.tex` 등) 에 적용할 **cheatsheet (mutation/edit plan) 의 draft** 다. **모든 mode 공통** — 여기서 'draft' 는 _백지 본문/문서 작성_ 이 아니라 _적용할 수정안(plan)의 초안_ 이다.
+
+- **`autopilot-apply` 가 별도로 존재하는 이유** — cheatsheet 를 실제 소스에 paste·적용·compile 검증한다. draft 가 곧 최종 산출물이라면 apply 는 존재 이유가 없다.
+- **`draft-refine` / `autopilot-refine`** 은 _최종 문서_ 가 아니라 _이 cheatsheet draft_ 를 다듬는다.
+- **code 가족 대응** — draft ≈ `code-plan`(plan 생성), apply ≈ `code-execute`(소스 반영). draft 는 _plan 단계_ 지 실행 단계가 아니다.
+
+> 이 원칙은 2026-05-21 mode 6→3 collapse (`ff0319b`) + conventions 분리 (`04c1b83`) 다이어트 때 표면에서 사라져 반복 오해를 유발했다. 축소·정리 시에도 본 블록은 _표면에 유지_ 한다.
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). reviewer 로그는 `_internal/strategy_reviews/`·`_internal/draft_reviews/`. 버전 스냅샷은 `_internal/versions/v{N}/strategy/`, `v{N}/draft/`.
 
@@ -51,7 +61,9 @@ Parse `$ARGUMENTS` for mode, flags, and task description:
 
 **`--mode` (optional, auto-inferred from query)** — _form-first_. 3 modes by output form:
 
-- `paper` — **LaTeX 학술 본문**. 초기 submission / camera-ready / major revision / thesis / book chapter / LaTeX 기반 paste-ready cheatsheet 모두 포함. 본문 통합·anchor 정책·natural-integration rule 강제.
+- `paper` — **LaTeX 학술 산출물 = paste-ready cheatsheet draft**. 'draft' 는 _백지 본문 작성_ 이 아니라 **cheatsheet (사용자가 LaTeX 에 직접 paste 하는 카드 묶음 = mutation/edit plan) 의 초안**. 논문이 신규든 이미 완성됐든 _경우와 무관하게_ 산출물은 cheatsheet draft 이며, `autopilot-apply` 가 `main.tex` 에 paste·적용한다. 형식 강제는 `conventions/paper.md` 의 _Paste-ready cheatsheet 형식 강제_.
+  - 신규 submission / thesis / book chapter: 새 본문 블록을 cheatsheet entry 로 산출.
+  - **camera-ready / major revision (default)**: 기존 완성 본문에 적용할 수정 cheatsheet entry 로 산출 — 본문 통합·anchor 정책·natural-integration rule 강제.
 - `presentation` — **PPT 용 slide-by-slide markdown**. 학회 발표 / 세미나 / 강의 / cheatsheet variant. PPTX export NOT supported — PowerPoint 수동 변환. 16:9 슬라이드 분량 강제.
 - `doc` — **Word/HWP/markdown prose**. 기술 보고서 / 분기 보고 / mid-report / post-mortem / grant proposal / rebuttal 응답 form / peer review 작성 / tech blog / institutional memo 등. audience-driven 톤·시제·절 구조 가변.
 

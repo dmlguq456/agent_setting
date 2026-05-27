@@ -1,14 +1,14 @@
 {
   "version": 4,
-  "last_readme_sync": "2026-05-26T22:55:26.563811+09:00",
+  "last_readme_sync": "2026-05-27T01:18:47.487161+09:00",
   "items": {
     "skills/analyze-project": {
       "sha256": "761c88e860ac61eac18a69f27413f21e69ec9b9fb745933557e430133d3c5ffd",
       "synced_at": "2026-05-26T22:55:26.563811+09:00"
     },
     "skills/analyze-user": {
-      "sha256": "ed77e5bc8cf00bbfb9a41e7a9ad2c79ac0765158b78ed9c74889dfa97394a4ee",
-      "synced_at": "2026-05-26T22:55:26.563811+09:00"
+      "sha256": "3a63c4026bc80414b005f27a585713a0d8263b77d326e7d633932d78597b81e5",
+      "synced_at": "2026-05-27T01:13:46.960648+09:00"
     },
     "skills/app-init": {
       "sha256": "ad42a11fb4a556dc1b7cfe42ea83c1c2b5d8464fbfaa9d052b5c0dbaf40b682c",
@@ -31,12 +31,12 @@
       "synced_at": "2026-05-26T22:55:26.563811+09:00"
     },
     "skills/autopilot-design": {
-      "sha256": "5bba2a69006d43fe791824a8128d8b3bcd2934ab3a1d926e3390e9b9b657b41e",
-      "synced_at": "2026-05-26T22:55:26.563811+09:00"
+      "sha256": "9e86cad385e504d9c79a9a53305f6f0ab0f2da7a34b9f0216401d60b0e8f100e",
+      "synced_at": "2026-05-27T01:18:47.487161+09:00"
     },
     "skills/autopilot-draft": {
-      "sha256": "5741c372b6f6edbc326ca76c15bffb9cd65bd83760d0cacf7adba1db58323963",
-      "synced_at": "2026-05-26T22:55:26.563811+09:00"
+      "sha256": "7f034a7c43a3b054937a20c01422d3ba3216fdc7a453f2c82489cefe16448d21",
+      "synced_at": "2026-05-27T01:13:46.960648+09:00"
     },
     "skills/autopilot-lab": {
       "sha256": "1b080d49dc343686113318cdd186c84082b8ba2d55417afab8c5a97a81e78fb1",
@@ -79,24 +79,24 @@
       "synced_at": "2026-05-26T22:55:26.563811+09:00"
     },
     "skills/design-components": {
-      "sha256": "6c22d5e3c23b9b81e708e9b55386ec501da275e101969f4e3135e4c18ad14a08",
-      "synced_at": "2026-05-26T22:55:26.563811+09:00"
+      "sha256": "94b57e2a1d74ba28d37f56f1de1351bc4946d0c432c0b785da77cd16fbc51c81",
+      "synced_at": "2026-05-27T01:18:47.487161+09:00"
     },
     "skills/design-handoff": {
-      "sha256": "1e534e5177d7cb2bf75b7cf728e37952d0663313acc1148f92fe0f1549bad8e8",
-      "synced_at": "2026-05-26T22:55:26.563811+09:00"
+      "sha256": "13eaaeb6a0b6d35c73dfad2f138c66f1389d4a2ee71ac273f289c39a4fb1f95f",
+      "synced_at": "2026-05-27T01:18:47.487161+09:00"
     },
     "skills/design-init": {
-      "sha256": "b2d0ce73999a8d382e0907e9e08fc9126da286a8f7ef386cafa7512d90317b7f",
-      "synced_at": "2026-05-26T22:55:26.563811+09:00"
+      "sha256": "a73a9287ae4b66a6a17c3c4d1eaa6321b3ee33f2ee986481d9e94821a174100c",
+      "synced_at": "2026-05-27T01:18:47.487161+09:00"
     },
     "skills/design-refs": {
       "sha256": "b132167f21776754a6fe27eddb08deabb8f31fb38b5bbb917fa3b8732e20c7f5",
       "synced_at": "2026-05-26T22:55:26.563811+09:00"
     },
     "skills/design-review": {
-      "sha256": "f31ac7c0ccca20a99754cb37a1a096d513315cbac66cbb549e0fa61bc21ec7f5",
-      "synced_at": "2026-05-26T22:55:26.563811+09:00"
+      "sha256": "720de5fa41e75c424ac79fe2358892b2c75da535349e8e645d22d26149ddf76d",
+      "synced_at": "2026-05-27T01:18:47.487161+09:00"
     },
     "skills/design-tokens": {
       "sha256": "fbd0c7064a3b434e754c17413704135e20969676cf6c3b8298af94443832aea2",
@@ -123,8 +123,8 @@
       "synced_at": "2026-05-26T22:55:26.563811+09:00"
     },
     "agents/design-team": {
-      "sha256": "ee92131ff888fb56368978105a740a6693eb35aed1dfa4aa9a6698959b559e6f",
-      "synced_at": "2026-05-26T22:55:26.563811+09:00"
+      "sha256": "9870ad4e93962302c7205bffe2aa993aec9c960fd401b02c2da0d7382d831c02",
+      "synced_at": "2026-05-27T01:13:46.960648+09:00"
     },
     "agents/dev-team": {
       "sha256": "e2819a05f0d5bc2ee93367580c6b29c99d90448fee644d15d1f039dfdf5e380b",
