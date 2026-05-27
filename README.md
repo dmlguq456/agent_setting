@@ -24,32 +24,39 @@
 
 ## 🌳 큰 갈래 4 트랙 — 흐름의 의미
 
-작업 종류가 흐름을 정한다. 이름이 문서용인지 코드용인지 헷갈리면 _순서_ 로 보면 분명하다.
+작업 종류가 흐름을 정한다. 이름이 문서용인지 코드용인지 헷갈리면 _순서_ 로 보면 분명하다. (`↻` = 반복 자리)
 
-```mermaid
-flowchart LR
-    subgraph DOC["📄 문서"]
-        direction LR
-        d1["analyze-project /<br/>autopilot-research"] --> d2[autopilot-draft] --> d3["autopilot-refine ↻"] --> d4[autopilot-apply]
-    end
-    subgraph EXP["🔬 연구·실험"]
-        direction LR
-        e1["analyze-project /<br/>autopilot-research"] --> e2["autopilot-spec ↻"] --> e3["autopilot-code ↻"] --> e4["autopilot-lab ↻"]
-    end
-    subgraph APPDEV["💻 앱"]
-        direction LR
-        a1["autopilot-spec ↻"] --> a2["autopilot-design"] --> a3["autopilot-code ↻"] --> a4["autopilot-ship ↻"]
-    end
-    subgraph LIB["📦 라이브러리·CLI"]
-        direction LR
-        l1[analyze-project] --> l2["autopilot-spec ↻"] --> l3["autopilot-code ↻"]
-    end
+### 📄 문서
+
+```text
+analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refine ↻  →  autopilot-apply
 ```
 
-- **📄 문서** — 자료를 영속화한 뒤 _markdown 초안·cheatsheet_ 를 만들고, 정정을 반복한 끝에 실제 `main.tex` 같은 소스에 반영·컴파일한다. draft 산출물은 최종 문서가 아니라 _적용용 plan_ 이고, 실제 소스 반영은 사용자가 직접 하거나 `autopilot-apply` 가 맡는다 (초안 _생산_ 과 소스 _적용_ 의 분리).
-- **🔬 연구·실험** — 자료 → 청사진·skeleton (외부 ref repo fetch·ckpt 사전 검증) → baseline 학습 가능 코드 완성 → variation 실험 반복. `autopilot-lab` 은 실험 단위 폴더를 강제해 _덮어쓰기·휘발_ 을 막고, 직전 실험의 summary 가 다음 실험의 input 이 된다.
-- **💻 앱** — PRD·skeleton → (UI 있으면) 시각 사이클 → 기능 구현 반복 → 마지막에 배포 셋업. `autopilot-ship` 은 _첫 setup_ 자리고 이후 push 가 자동 deploy 하므로 매번 부르지 않는다.
-- **📦 라이브러리·CLI** — 기존 코드를 분석해 공개용 청사진을 잡고 정돈한다. 연구·실험 트랙의 _졸업 자리_ 와 이어진다.
+자료를 영속화한 뒤 _markdown 초안·cheatsheet_ 를 만들고, 정정을 반복한 끝에 실제 `main.tex` 같은 소스에 반영·컴파일한다. draft 산출물은 최종 문서가 아니라 _적용용 plan_ 이고, 실제 소스 반영은 사용자가 직접 하거나 `autopilot-apply` 가 맡는다 (초안 _생산_ 과 소스 _적용_ 의 분리).
+
+### 🔬 연구·실험
+
+```text
+analyze-project / autopilot-research  →  autopilot-spec ↻  →  autopilot-code ↻  →  autopilot-lab ↻
+```
+
+자료 → 청사진·skeleton (외부 ref repo fetch·ckpt 사전 검증) → baseline 학습 가능 코드 완성 → variation 실험 반복. `autopilot-lab` 은 실험 단위 폴더를 강제해 _덮어쓰기·휘발_ 을 막고, 직전 실험의 summary 가 다음 실험의 input 이 된다.
+
+### 💻 앱
+
+```text
+autopilot-spec ↻  →  autopilot-design  →  autopilot-code ↻  →  autopilot-ship ↻
+```
+
+PRD·skeleton → (UI 있으면) 시각 사이클 → 기능 구현 반복 → 마지막에 배포 셋업. `autopilot-ship` 은 _첫 setup_ 자리고 이후 push 가 자동 deploy 하므로 매번 부르지 않는다.
+
+### 📦 라이브러리·CLI
+
+```text
+analyze-project  →  autopilot-spec ↻  →  autopilot-code ↻
+```
+
+기존 코드를 분석해 공개용 청사진을 잡고 정돈한다. 연구·실험 트랙의 _졸업 자리_ 와 이어진다.
 
 > **점검·정정은 모든 트랙 공통, 사후** — `audit` (읽기 전용 점검) · `autopilot-refine` (markdown 정정) · `autopilot-apply` (cheatsheet → 실제 소스).
 > **사용자 프로필은 cross-project** — `analyze-user` · `notes --scope user` 가 `~/.claude/user_profile/` 를 만들고, 모든 트랙이 작업 시작 자리에서 default 로 참조한다.

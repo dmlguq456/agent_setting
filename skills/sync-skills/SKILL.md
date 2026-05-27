@@ -98,33 +98,18 @@ Agents:  변경 0 / 신규 0 / 삭제 0 / 동일 8
 
 > **README 의 독자 = GitHub 사용자뿐** (2026-05-27 재설계). README 는 더 이상 Claude 세션 시작 강제 Read 대상이 아니다 (CLAUDE.md 부트스트랩에서 제거 — skill 카탈로그는 자동 주입, 운영 라우팅은 CLAUDE.md §6, 흐름 청사진은 AUTOPILOT_FLOWS.md on-demand). 따라서 README 는 _의미 지도_ 로만 짠다 — 옵션 spec·trigger 룰·QA 정의·상세 그래프는 _넣지 않고 canonical 에 링크_. 분량은 _순 감소_ 가 목표 (디테일을 다른 파일로 복사 X — 이미 canonical 에 있으면 drop + link).
 
-#### 4a. 워크플로우 다이어그램 — 개념 1 개만
+#### 4a. 워크플로우 흐름 — 트랙별 텍스트 체인 (mermaid 안 씀)
 
-README 에는 _4 트랙 개념 다이어그램_ 1 개만 둔다 (문서 / 연구·실험 / 앱 / 라이브러리·CLI 의 단계 순서). 각 트랙 subgraph 안에 단계 체인 + 반복 자리 `↻` 표시.
+README 는 _4 트랙_ (문서 / 연구·실험 / 앱 / 라이브러리·CLI) 을 _트랙마다 `### 헤딩 → 텍스트 화살표 체인 (```text 코드 블록) → 설명 한 문단`_ 순서로 짝지어 배치한다. **mermaid 안 씀** — GitHub 기본 mermaid 테마가 투박하고, 텍스트 화살표 체인이 어디서나 동일하게 렌더되며 AUTOPILOT_FLOWS.md §1.1 ASCII 방식과 일관. 반복 자리는 `↻`, 단계 구분은 `  →  `.
 
-```mermaid
-flowchart LR
-    subgraph DOC["📄 문서"]
-        direction LR
-        d1["analyze-project /<br/>autopilot-research"] --> d2[autopilot-draft] --> d3["autopilot-refine ↻"] --> d4[autopilot-apply]
-    end
-    subgraph EXP["🔬 연구·실험"]
-        direction LR
-        e1["analyze-project /<br/>autopilot-research"] --> e2["autopilot-spec ↻"] --> e3["autopilot-code ↻"] --> e4["autopilot-lab ↻"]
-    end
-    subgraph APPDEV["💻 앱"]
-        direction LR
-        a1["autopilot-spec ↻"] --> a2["autopilot-design"] --> a3["autopilot-code ↻"] --> a4["autopilot-ship ↻"]
-    end
-    subgraph LIB["📦 라이브러리·CLI"]
-        direction LR
-        l1[analyze-project] --> l2["autopilot-spec ↻"] --> l3["autopilot-code ↻"]
-    end
+예 (문서 트랙):
+```text
+analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refine ↻  →  autopilot-apply
 ```
 
-> 다이어그램 직후 본문은 _트랙별 한 문단 narrative_ (왜 이 순서 / 무엇을 남기나) + 점검·정정·사용자 프로필 한 줄 + 체이닝 청사진 reference (AUTOPILOT_FLOWS.md) + 이름 읽는 법 한 줄.
+> 트랙 4 개 (📄 문서 / 🔬 연구·실험 / 💻 앱 / 📦 라이브러리·CLI) 를 각각 _체인 → 설명_ 순서로. 4 트랙 뒤 본문은 점검·정정·사용자 프로필 한 줄 quote + 체이닝 청사진 reference (AUTOPILOT_FLOWS.md) + 이름 읽는 법 한 줄.
 >
-> **_넣지 않음_ (의도적 drop + link)** — (1) 전체 Skill 호출 그래프 (6 카테고리 의존) → AUTOPILOT_FLOWS §1.1·§3.2 가 텍스트로 대체, (2) 산출물 I/O 그래프 → AUTOPILOT_FLOWS §4 + CONVENTIONS §5 가 대체, (3) Agent 호출 구조 mermaid. 모두 canonical 에 이미 있으므로 _복사하지 말고 drop_.
+> **_넣지 않음_ (의도적 drop + link)** — (1) mermaid 다이어그램 일체 (GitHub 렌더 투박 — 텍스트 체인으로 대체), (2) 전체 Skill 호출 그래프 (6 카테고리 의존) → AUTOPILOT_FLOWS §1.1·§3.2, (3) 산출물 I/O 그래프 → AUTOPILOT_FLOWS §4 + CONVENTIONS §5, (4) Agent 호출 구조. canonical 에 이미 있으므로 _복사하지 말고 drop_.
 
 #### 4b. README 본문 구조 (canonical layout — meaning-first 의미 지도)
 
@@ -132,7 +117,7 @@ flowchart LR
 
 1. **Header** — center div: title + 한 줄 설명 + 섹션 anchor 링크. sync 시각·이력은 git commit log 가 단일 출처.
 2. **🧭 Mental model** — 핵심 한 단락 (자연어로 부르면 메인 Claude 가 컨텍스트 읽어 옵션 조립·컨펌·실행 / 사용자는 운전자) + bullet 3 (autopilot-\* = 추적형 파이프라인 / 직접 처리 = 가벼운 일 / 입력은 `.claude_reports/` 자동 발견·cross-project 별 세션) + _의미 지도_ quote (옵션 spec·trigger·QA 는 SKILL.md·CONVENTIONS·CLAUDE.md 가 단일 출처, 링크만).
-3. **🌳 큰 갈래 4 트랙** — Diagram (위 4a 개념 1 개) + 트랙별 한 문단 narrative (문서 / 연구·실험 / 앱 / 라이브러리·CLI — 왜 이 순서 / 무엇을 남기나) + 점검·정정·사용자 프로필 한 줄 quote + 체이닝 청사진 reference ([`AUTOPILOT_FLOWS.md`](AUTOPILOT_FLOWS.md)) + 이름 읽는 법 한 줄.
+3. **🌳 큰 갈래 4 트랙** — 트랙마다 `### 헤딩 → 텍스트 화살표 체인 (위 4a, mermaid 아님) → 설명 한 문단` 을 순서대로 짝지어 배치 (문서 / 연구·실험 / 앱 / 라이브러리·CLI — 왜 이 순서 / 무엇을 남기나) + 점검·정정·사용자 프로필 한 줄 quote + 체이닝 청사진 reference ([`AUTOPILOT_FLOWS.md`](AUTOPILOT_FLOWS.md)) + 이름 읽는 법 한 줄.
 4. **📋 Skill 카탈로그 — 의의·핵심** — name (SKILL.md 링크) / _의의_ (왜 있나 + 핵심) 2 컬럼 표. _역할 dump·옵션 컬럼 X — 왜 존재하는지 중심_. 표 직후 sub-skill 한 줄 (autopilot 내부 자동 호출) + 세부 옵션은 SKILL.md argument-hint / QA 정의는 CONVENTIONS §1 reference.
 5. **📦 산출물의 구조적 의미** — per-project (`.claude_reports/`) vs cross-project (`user_profile/`) 두 축 bullet + 3-tier T1/T2/T3 _왜 그렇게 나뉘나_ 한 단락 (사용자는 T1 만 / specs/ 한 폴더 누적) + 상세 매핑 reference (CONVENTIONS §5·§6.5, AUTOPILOT_FLOWS §4, CLAUDE.md Drift-Free Essentials).
 6. **🗣️ 부르는 법** — 두 갈래 한 줄 (자연어 / slash 동일 동작):
@@ -281,15 +266,16 @@ AGENTS=$(ls ~/.claude/agents/*.md   | xargs -n1 basename .md | sort)
 | **폴더 부재 skill name reference** | 🔴 `<file>:<line> — '<missing-name>' reference 발견, skill 폴더 없음. rename 후 정정 누락?` |
 | **slash 명령 (`/autopilot-X`) 의 X 가 폴더 부재** | 🔴 `<file>:<line> — /autopilot-<missing> 호출 reference` |
 
-#### 5c-3. README mermaid 노드 ↔ skill list 일관성
+#### 5c-3. README 트랙 체인 ↔ skill list 일관성
 
-README 는 _개념 4 트랙 다이어그램 1 개_ 만 둔다 (4a). 이 다이어그램은 _트랙 체인에 등장하는 skill_ 만 노드로 가짐 — `audit` / `notes` / `analyze-user` 는 _의도적으로 다이어그램 밖_ (사후 점검·메모·cross-project 프로필이라 트랙 체인에 안 들어감, 본문 quote·표가 대신 다룸). 따라서 노드 누락 검사 대상은 _트랙 체인 skill_ 로 한정:
+README 는 mermaid 를 안 쓰고 _4 트랙 텍스트 화살표 체인_ (```text 코드 블록 4 개) 으로 흐름을 보인다 (4a). 체인에 등장하는 skill 만 검사 대상 — `audit` / `notes` / `analyze-user` 는 _의도적으로 체인 밖_ (사후 점검·메모·cross-project 프로필이라 트랙 체인에 안 들어감, 본문 quote 가 대신 다룸).
 
-`~/.claude/README.md` 안 mermaid 블록 (\`\`\`mermaid ... \`\`\`) 추출 후 노드 정의 (`X["..."]`) 파싱:
+`~/.claude/README.md` §3 의 \`\`\`text 코드 블록 4 개 추출 후 `autopilot-X` / `analyze-project` 토큰 파싱:
 
-- _트랙 체인 skill_ (analyze-project · autopilot-research · autopilot-draft · -refine · -apply · -spec · -code · -lab · -design · -ship) 이 다이어그램에 등장하나
-- 부재 시: 🟡 `README 4 트랙 다이어그램에 '<missing-skill>' 노드 누락 — 보강 권장`
-- `audit` / `notes` / `analyze-user` 는 _다이어그램 밖이 정상_ — 누락 보고 X
+- _트랙 체인 skill_ (analyze-project · autopilot-research · autopilot-draft · -refine · -apply · -spec · -code · -lab · -design · -ship) 이 체인에 등장하나
+- 부재 시: 🟡 `README 4 트랙 체인에 '<missing-skill>' 누락 — 보강 권장`
+- `audit` / `notes` / `analyze-user` 는 _체인 밖이 정상_ — 누락 보고 X
+- mermaid 블록 발견 시: 🟡 `README 에 mermaid 잔존 — 텍스트 체인으로 전환 (4a)` (재설계 후 mermaid 안 씀)
 
 #### 5c-4. 산출물 폴더 컨벤션 일관성
 
