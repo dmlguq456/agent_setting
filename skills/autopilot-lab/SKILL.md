@@ -181,7 +181,7 @@ Agent(subagent_type="연구팀"):
    research 산출 (있으면): {research_dir}
 
    점검:
-   - 이전 실험과 _중복_ 자리? (같은 ablation 이미 돌렸는지)
+   - 이전 실험과 _중복_ 자리? (같은 ablation 이미 돌렸는지 — ✅ 완료뿐 아니라 ⏳ 대기 줄도 이미 세팅된 중복 후보)
    - motivation 이 직전 결과 흐름과 정합?
    - ablation grid 가 _하나 변경 변수_ 원칙 따르는지 (controlled experiment)
    - 예상 metric 범위가 직전 baseline 대비 합리적?
@@ -242,6 +242,14 @@ Agent(subagent_type="개발팀", mode="new-lib"):
 변경 자리: <한 줄>
 
 (진행 — run / 수정 — scaffold 다시 / 중단)
+```
+
+**2-4. `_RUNLOG.md` 대기 줄 append** (scaffold 확정 시 — _run 전_ 기록):
+
+컨펌에서 _진행 — run_ 선택 시, `.claude_reports/experiments/_RUNLOG.md` 에 _상태 ⏳ 대기_ 한 줄을 먼저 append (결과 칸 `—`). 실험이 _세팅됐고 실행 대기_ 임이 timeline 에 즉시 보이게 — 긴 cluster queue 중에도 in-flight 실험 추적·중복 세팅 차단 가능. pipeline_state 의 `run: in_progress` 와 짝.
+
+```
+| 2026-05-26 | lr_sweep | TF_Restormer base, lr 1e-3→3e-4 | ⏳ 대기 | — |
 ```
 
 ### Step 3: run + iterate (사용자 직접 또는 테스트팀 smoke)
@@ -321,10 +329,11 @@ ablation:    <표 — 변수 × metric>
 
 - `experiments/{date}_{slug}/summary.md` — 위 한 화면
 - `experiments/{date}_{slug}/STORY.md` — narrative 추가 (motivation·이전 정리·이번 시도·결과·다음 후보 한 단락)
-- `.claude_reports/experiments/_RUNLOG.md` — 한 줄 append:
+- `.claude_reports/experiments/_RUNLOG.md` — 2-4 에서 append 한 _해당 실험 (date+slug) 줄_ 을 찾아 _상태 ✅ 완료 + 결과·다음_ 으로 **갱신** (새 줄 append X — 한 실험 = 한 줄 유지):
   ```
-  | 2026-05-26 | lr_sweep | TF_Restormer base, lr 1e-3→3e-4 | val PSNR 28.4→28.7 (+0.3) | 다음: warmup 1k step 추가 |
+  | 2026-05-26 | lr_sweep | TF_Restormer base, lr 1e-3→3e-4 | ✅ 완료 | val PSNR 28.4→28.7 (+0.3) · 다음: warmup 1k step |
   ```
+  (드물게 2-4 줄이 없으면 — `--from summary` 직접 진입 등 — 새로 append. 중단·실패 자리는 `❌ 중단` 상태로 갱신.)
 
 **4-3. 연구팀 _research-survey_ (옵션, qa standard+ + 사용자 발화 시)**:
 
@@ -347,7 +356,7 @@ Agent(subagent_type="연구팀", mode="research-survey"):
 
 ```
 .claude_reports/experiments/
-├── _RUNLOG.md                      [T1] timeline (한 실험 = 한 줄, 모든 실험 누적)
+├── _RUNLOG.md                      [T1] timeline (한 실험 = 한 줄 — `날짜｜slug｜시도｜상태｜결과·다음`; 상태 ⏳대기→✅완료/❌중단 갱신)
 ├── {date}_{slug}/                  ← 한 실험 = 한 폴더
 │   ├── pipeline_state.yaml         [T1] --from 재개용
 │   ├── STORY.md                    [T1] narrative 누적 (motivation·이전·이번·결과)

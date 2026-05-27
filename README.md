@@ -105,7 +105,7 @@ analyze-project  →  autopilot-spec ↻  →  autopilot-code ↻
 | `documents/{date}_{name}/` | 문서 산출물 |
 | `specs/<name>/` | 코드 spec — PRD·dev_log·ship 을 _한 폴더에 누적_ |
 | `plans/{date}_{name}/` | spec 없는 빠른 코드 작업 |
-| `experiments/{date}_{slug}/` | ML 실험 prototype (`autopilot-lab`) — STORY+summary, `_RUNLOG.md` 가 실험 timeline 누적 |
+| `experiments/{date}_{slug}/` | ML 실험 prototype (`autopilot-lab`) — lab 이 세팅, 사용자가 실행. `_RUNLOG.md` 에 실험당 한 줄 (⏳ 대기 → ✅ 완료 상태) |
 
 **cross-project — `~/.claude/user_profile/`** — `analyze-user` 가 6 aspect 파일을 누적. 모든 트랙·sub-agent 가 작업 시작 자리에서 default 로 Read. 짧은 메모는 `/notes --scope user <aspect>` 가 같은 파일에 append.
 
