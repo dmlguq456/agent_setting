@@ -1,14 +1,14 @@
 {
   "version": 4,
-  "last_readme_sync": "2026-05-27T07:45:54Z",
+  "last_readme_sync": "2026-05-28T00:11:51Z",
   "items": {
     "skills/analyze-project": {
       "sha256": "fe7187a81bffe5eb41f828d8d76b1207a4823ec2e169612fa1f4b437b3f4e296",
       "synced_at": "2026-05-27T07:45:54Z"
     },
     "skills/analyze-user": {
-      "sha256": "3a63c4026bc80414b005f27a585713a0d8263b77d326e7d633932d78597b81e5",
-      "synced_at": "2026-05-27T01:13:46.960648+09:00"
+      "sha256": "1f61262014a1c6057d41e3a0d0479086fbe2bad59ee93a7e38f4fe7f6e94e686",
+      "synced_at": "2026-05-28T00:11:51Z"
     },
     "skills/app-init": {
       "sha256": "ad42a11fb4a556dc1b7cfe42ea83c1c2b5d8464fbfaa9d052b5c0dbaf40b682c",
@@ -23,12 +23,12 @@
       "synced_at": "2026-05-26T22:55:26.563811+09:00"
     },
     "skills/autopilot-apply": {
-      "sha256": "6ff3ad022919af23c123c54547b3924736645a0a3927d08c2f17d71f10d45b8f",
-      "synced_at": "2026-05-27T07:45:54Z"
+      "sha256": "3dcabd2ecb3bc17aad0db89a05bc54cbff20e9b1551318b46ba39602e666105b",
+      "synced_at": "2026-05-28T00:11:51Z"
     },
     "skills/autopilot-code": {
-      "sha256": "a255392f725bfa68570fd3b06b9e80c0d50f8e407d1b2102105fb6f906b483e1",
-      "synced_at": "2026-05-26T22:55:26.563811+09:00"
+      "sha256": "ae7e6985143360b6d029e629037c573fe3e5f4c425c893dc202d849ea41ea1ac",
+      "synced_at": "2026-05-28T00:11:51Z"
     },
     "skills/autopilot-design": {
       "sha256": "9e86cad385e504d9c79a9a53305f6f0ab0f2da7a34b9f0216401d60b0e8f100e",
@@ -39,8 +39,8 @@
       "synced_at": "2026-05-27T07:45:54Z"
     },
     "skills/autopilot-lab": {
-      "sha256": "1b080d49dc343686113318cdd186c84082b8ba2d55417afab8c5a97a81e78fb1",
-      "synced_at": "2026-05-26T22:55:26.563811+09:00"
+      "sha256": "4c78c6fdbd7eacbb603884f246de666767b7de1b5c014ff105de89b69c7a0c20",
+      "synced_at": "2026-05-28T00:11:51Z"
     },
     "skills/autopilot-refine": {
       "sha256": "769d03bd79eeb0bcb1e5a9423de7e485c30eeb598087de9bdcc665e92a49476e",
@@ -115,8 +115,8 @@
       "synced_at": "2026-05-26T22:55:26.563811+09:00"
     },
     "skills/sync-skills": {
-      "sha256": "4d0bb3191e30c890a3b6972be91dc1ff122905c102b401c775513922f8caaa20",
-      "synced_at": "2026-05-26T22:55:26.563811+09:00"
+      "sha256": "089191c9aeda5131a141e9edd6134ca71913dae248cd8d9e907b3e7dd09b07e3",
+      "synced_at": "2026-05-28T00:11:51Z"
     },
     "agents/codex-review-team": {
       "sha256": "7bcfa63d7db33b4c8fdaf88ab0552ebdf97fb7d8010e798c4f620404aaaabd63",
