@@ -175,6 +175,7 @@ QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../
 - **Propagation**: `--qa <level>` 를 code-plan / code-refine 에 flag 로 전달. code-execute / code-test / code-report 는 plan frontmatter `qa_level: <level>` 로
 - **Mid-pipeline switching**: Step 2+ 에서 `--qa` 명시 시 plan frontmatter 갱신. 명시 안 하면 frontmatter 값 보존 (없으면 `thorough`)
 - **`quick` interactions**: `--user-refine` silently ignored (refine skip). `--from refine` 으로 재개 시 frontmatter `qa_level == quick` 이면 abort ("qa_level=quick 에서는 refine 단계가 skip 됩니다. --qa <level> 을 다른 값으로 명시해 재개하세요.")
+- **`quick` = 소규모 잡일 경량 tier**: 데이터 split·포맷 변환·log 파싱·metric 재계산 같은 _로그는 남기되 deep review 불필요_ 한 작업의 자리. plan + execute + **test(forced thorough — 유지)** 는 돌되 plan-review·code-report·test-retry 는 skip. `plans/{date}_{slug}/` 에 plan + pipeline_summary + test 결과가 남아 DB-harvest 가능. _직접 처리(로그 0)_ 와 _dev/debug(full ceremony)_ 사이의 경량 자리. (test gate 는 quick 에서도 살아 있어 sonnet execute 가 무검증 통과하지 않음.)
 
 ### --user-refine (boolean flag — opt-in only)
 

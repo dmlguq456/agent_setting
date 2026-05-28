@@ -42,7 +42,7 @@ analyze-project / autopilot-research  →  autopilot-spec ↻  →  autopilot-co
 
 자료 → 청사진·skeleton (외부 ref repo fetch·ckpt 사전 검증) → baseline 학습 가능 코드 완성 → variation 실험 반복. `autopilot-lab` 은 `setup`(학습 세팅) / `eval`(완료 ckpt 평가·분석) 2 모드로 실험 단위 폴더를 강제해 _덮어쓰기·휘발_ 을 막고, 직전 실험의 summary 가 다음 실험의 input 이 된다 (`--parent` 로 fine-tune·재평가 계보 연결).
 
-> **실험 중 곁가지 잡일은 lab 이 아니다** — 데이터 split·포맷 변환·log 파싱·metric 재계산·통계 같은 _추적 불필요한_ one-shot 은 메인 Claude 직접 또는 `Agent(개발팀)`. lab 은 학습 실험, `autopilot-code` 는 추적 가치 있는 코드 작업.
+> **실험 중 곁가지 잡일은 lab 이 아니다** — 데이터 split·포맷 변환·log 파싱·metric 재계산·통계 같은 소규모 코드는 `autopilot-code --qa quick` (가벼운 plan+execute+test, 로그는 `plans/` 에 남아 DB-harvest 가능). 진짜 throwaway(로그 불필요)만 메인 Claude 직접. lab 은 학습 실험 전용.
 
 ### 💻 앱
 

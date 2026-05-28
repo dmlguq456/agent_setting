@@ -27,7 +27,7 @@ argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [-
 | `analyze-project` | 코드 청사진 추출 | `analysis_project/` |
 | `autopilot-spec` | 비코드 청사진 (PRD·스택·skeleton) | `specs/<name>/` |
 | **`autopilot-lab`** (본 skill) | **빠른 학습 실험 prototype (setup·eval, hands-on)** | **`experiments/`** |
-| `autopilot-code` | brownfield 정련·라이브러리화 (_추적 가치 있는_ 코드 작업) | `plans/` 또는 `specs/<name>/dev_log/` |
+| `autopilot-code` | brownfield 정련·라이브러리화 (full) / `--qa quick`: 소규모 잡일 (가벼움 + 로그) | `plans/` 또는 `specs/<name>/dev_log/` |
 | `autopilot-draft / refine` | 문서 작업 | `documents/` |
 
 ## 흐름 안에서 본 skill 의 자리
@@ -94,7 +94,7 @@ argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [-
 
 ### Override 1순위 — autopilot 우회
 
-- 단발 데이터 정제·변환·script — 추적 불필요면 _메인 Claude 직접 처리_, 조금 큰 one-shot 은 `Agent(개발팀)` 직접 (lab 도 autopilot-code 도 아님). autopilot-code 는 _추적 가치 있는_ 코드 작업만
+- 단발 데이터 정제·변환·script — _로그 남기고 싶으면_ `/autopilot-code --qa quick` (가벼운 plan + execute + test, `plans/` 에 로그). 진짜 throwaway(로그 불필요)만 메인 Claude 직접. lab 모드 아님
 - 단발 plot 만 — `Agent(자료팀, mode="figure-gen")` 직접
 - 정련 / 라이브러리화 / spec 정돈 — `/autopilot-code` 또는 `/autopilot-spec`
 - `/autopilot-lab <args>` slash 직접 입력 — 컨펌 skip
@@ -526,7 +526,7 @@ last_updated: <timestamp>
 - ref/부모 모델 폴더 직접 수정 (variation 만, base 보존)
 - 라이브러리화·module 정련 (autopilot-code 영역)
 - PRD·스택 결정 (autopilot-spec 영역)
-- 단발 데이터 변환·정제 script (메인 Claude 직접 / 개발팀 직접 — lab 모드 아님)
+- 단발 데이터 변환·정제 script (`autopilot-code --qa quick` 또는 메인 Claude 직접 — lab 모드 아님)
 - 실험 자동 실행·학습·평가 (사용자 환경·queue 가변 — 명령만 안내. 가벼운 eval 만 발화 시 테스트팀)
 - ckpt·log destructive 삭제 (`_internal/` 외)
 
