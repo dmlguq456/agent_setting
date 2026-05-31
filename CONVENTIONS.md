@@ -308,7 +308,7 @@ fi
 
 ## §6. Autopilot-* 흐름 매트릭스 (사용자 호출 단위)
 
-> 본 절은 autopilot-* skill 들의 _작업 본질·역할·경계_ 의 단일 source of truth. _대칭 강제 X — 작업 본질에 맞는 분리_ 원칙. 자세한 사용자 향 청사진: [`~/.claude/AUTOPILOT_FLOWS.md`](AUTOPILOT_FLOWS.md).
+> 본 절은 autopilot-* skill 들의 _작업 본질·역할·경계_ 의 단일 source of truth. _대칭 강제 X — 작업 본질에 맞는 분리_ 원칙. 자세한 사용자 향 청사진: [`~/.claude/WORKFLOW.md`](WORKFLOW.md).
 
 ### §6.1. 작업 본질 매트릭스 (대칭 강제 X)
 

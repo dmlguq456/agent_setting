@@ -86,3 +86,16 @@
 | 사전 조사·분석 | `research/<topic>/` · `analysis_project/<mode>/` |
 
 숫자 prefix(00_/01_/02_/05_) 폐지 — `spec/<project>/` 안 평이한 이름·user-facing(위) vs `_internal/`(기계) 2분. spec versioning = doc 트랙 동일 원리 (autopilot-spec refine 이 `_internal/versions/v{N}/prd.md` 자동 snapshot). 상세 = [`CONVENTIONS.md §5·§6.5`](CONVENTIONS.md).
+
+## 7. 사후 수정 라우팅 — spec-backed 프로젝트
+
+초기 빌드 후 수정·기능 요청 (특히 새 세션). cwd 에 `.claude_reports/spec/<project>/` 있으면 ad-hoc 직접 Edit 금지 — **순서 원칙 analyze → spec → dev** 를 지킨다 (CLAUDE.md §9 imperative).
+
+0. **(필요 시) analyze 갱신** — `analysis_project/code/` 가 stale 하거나 낯선 영역이면 `analyze-project --mode code` (incremental) 먼저. _순서상 analyze 가 spec·dev 앞._
+1. **spec 존재 확인** — 없으면 `autopilot-spec` 먼저 유도 (**spec → dev 하드 원칙**; throwaway 1 회성만 예외, 반복 시 spec 승격 권장).
+2. **spec-drift 사전 체크 (code 경유 _전_, 최우선 · 자율)** — `spec/<project>/prd.md` 대조해 _update 여부를 스스로 판단·실행_:
+   - spec-significant (route / schema·entity / UI-flow / 외부 연동 / 마이그레이션) **또는 코드 기존 drift** → **`autopilot-spec` refine 자동 실행** (iterable — `prd.md` 최신화 + `_internal/versions/v{N}/prd.md` 스냅샷). autopilot 정신 — 사용자 gating X, 실행 후 한 줄 보고.
+   - within-spec (구현 디테일) → _"spec 영향 없음"_ 확인.
+3. **`autopilot-code` 경유** (작은 건 `--qa quick`) → `plans/<project>/<date>_<slug>/` 트레일 + §4 spec-sync 자동. trivial (typo·포맷, 2 에서 spec 무관 확정) 만 직접 Edit + 한 줄 로그.
+
+> 핵심: ① 트레일 단절 (작업 항상 `plans/<project>/`) ② spec drift (2 에서 자율 갱신) ③ 새 세션 맹목 (도메인 트리거 cwd 감지) 셋을 닫는다. autopilot-spec·autopilot-code 둘 다 iterable — 사후 수정은 _재호출_ 이지 새 사이클이 아니다.

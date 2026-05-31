@@ -37,7 +37,7 @@
    개발팀 / 품질관리팀 / codex-review-team) — description / tools / model / 호출 패턴
 3. `~/.claude/CLAUDE.md` §6 (autopilot-* 호출 패턴 / Pre-check 발화 분류)
 4. `~/.claude/CONVENTIONS.md` §5 (산출물 폴더 컨벤션 3-tier) + §2 (agent model)
-5. `~/.claude/AUTOPILOT_FLOWS.md` (있으면)
+5. `~/.claude/WORKFLOW.md` (있으면)
 6. `~/.claude/user_profile/01_paper_figure_style.md` (시각 default — 사용자 figure 성향)
 
 **분석 차원** (각 차원의 묶음·관계 정리):
