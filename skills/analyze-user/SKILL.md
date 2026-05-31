@@ -29,8 +29,8 @@ argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover
 
 ### Override 1순위 — autopilot 우회
 
-- 짧은 메모 한 줄만 — `/notes --scope user <aspect> add <text>` 직접 호출. 해당 aspect 파일의 `## 사용자 수동 메모` 절에 append.
-- 한 aspect 의 한 자리만 수정 — `~/.claude/user_profile/0X_*.md` 직접 Edit. 단 `## 사용자 수동 메모` 절은 사용자 영역이라 `/notes --scope user <aspect>` 로만 (직접 Edit 피함).
+- 짧은 메모 한 줄만 — `/memo --scope user <aspect> add <text>` 직접 호출. 해당 aspect 파일의 `## 사용자 수동 메모` 절에 append.
+- 한 aspect 의 한 자리만 수정 — `~/.claude/user_profile/0X_*.md` 직접 Edit. 단 `## 사용자 수동 메모` 절은 사용자 영역이라 `/memo --scope user <aspect>` 로만 (직접 Edit 피함).
 - `/analyze-user <args>` slash 직접 입력 — 컨펌 skip 즉시 invoke.
 
 > 본 섹션은 `/sync-skills` 가 `~/.claude/README.md` 운영 룰 안내로 자동 반영.
@@ -246,7 +246,7 @@ mode=init 통째 교체, mode=update 누적.
    - metric set — figure 의 metric column / analysis 의 검증 방법 / **coding_convention 의 metric set** 이 매칭되는가?
    - **도메인 layer** — coding_convention 의 preferred layer 가 domain expertise 의 주력 도메인 자리와 매칭되는가? (예 TF dual-path DNN 자리면 LayerNorm2d / dual-path block 자리)
 3. 모순 발견 시 _source 인용 빈도가 더 많은 쪽_ 우선 (또는 _더 최근 자료_ 우선).
-4. 모순 자체를 _open question_ 으로 남길지, _즉시 해소_ 할지 결정 — 사용자 명시 패턴 (`/notes --scope user`) 이 있으면 그게 ground truth.
+4. 모순 자체를 _open question_ 으로 남길지, _즉시 해소_ 할지 결정 — 사용자 명시 패턴 (`/memo --scope user`) 이 있으면 그게 ground truth.
 
 산출:
 - `_internal/cross_aspect_consistency.md` — 점검 결과 + 모순 해소 결정.
@@ -435,7 +435,7 @@ timestamp: "2026-05-22T15:30:00Z"
 | | 메모리 (`~/.claude/projects/<cwd>/memory/`) | user_profile (`~/.claude/user_profile/`) |
 |---|---|---|
 | scope | per cwd (project) | cross-project (user) |
-| 누적 | 자동 (대화 중) | 명시 (`/analyze-user` 또는 `/notes --scope user`) |
+| 누적 | 자동 (대화 중) | 명시 (`/analyze-user` 또는 `/memo --scope user`) |
 | 형태 | 짧은 feedback / preference / fact | 구조화 패턴 카탈로그 |
 | 갱신 | turn-by-turn | cycle-by-cycle |
 | QA gate | X (raw) | O (다중 reviewer — refined) |

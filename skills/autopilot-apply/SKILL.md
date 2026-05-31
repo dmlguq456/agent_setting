@@ -66,9 +66,11 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 
 | target | build/compile gate | rendered-diff review | source glob |
 |---|---|---|---|
-| `latex` (구현) | `latexmk -pdf -interaction=nonstopmode` (없으면 `pdflatex` 2-pass + bibtex/biber) | `latexdiff <base> <head>` → 컴파일 (실패 시 `git diff` 텍스트 fallback) | `*.tex` |
+| `latex` (구현) | `latexmk -pdf -interaction=nonstopmode -outdir="$BUILD_OUT"` (없으면 `pdflatex` 2-pass + bibtex/biber, 동일 `-output-directory`) | `latexdiff <base> <head>` → 컴파일 (실패 시 `git diff` 텍스트 fallback) | `*.tex` |
 
 > 전체 프로젝트로 컴파일한다 — `\input` / 별도 `.sty` / `.bib` 포함. main.tex 단독 컴파일은 false fail 위험. latexmk 가 다중 패스(bibtex/biber) 자동 처리하므로 우선.
+>
+> **빌드 출력은 로컬 temp 로 (`$BUILD_OUT`)** — Preflight 에서 run 당 한 번 `BUILD_OUT=$(mktemp -d /tmp/lw-apply.XXXXXX)` 생성하고, 이 skill 의 _모든_ 컴파일(baseline / compile gate / latexdiff)에 `-outdir="$BUILD_OUT"` 를 동일하게 넘긴다. 이유: ① source 가 NAS/네트워크 마운트일 때 빌드 I/O 를 로컬 디스크로 빼 속도 회복 ② 사용자 repo 폴더에 `main.aux`/`.pdf` 등 빌드 산출물을 흩뿌리지 않음(repo 비오염). baseline 과 gate 가 _같은_ outdir 을 써야 에러 증가분 비교가 유효하다. 컴파일 에러 판정은 stdout/log 로 하므로 outdir 위치와 무관. latexdiff 결과 PDF 만 `$BUILD_OUT` 에서 `_internal/apply/latexdiff.pdf` 로 복사.
 
 ## Language Rule
 Reason internally in English. 사용자 향 출력 (chat 요약, diff 안내, report) 은 **한국어**.
@@ -86,7 +88,7 @@ Reason internally in English. 사용자 향 출력 (chat 요약, diff 안내, re
 5. **Isolation 진입**:
    - `--isolation branch` (default): `git checkout -b apply/{cheatsheet-short-name}`. base commit hash 기록.
    - `--isolation worktree`: 별도 worktree 생성 (canonical 체크아웃 물리적 불가침). 대규모·위험 시 권장.
-6. **Baseline compile** (핵심 — 안 하면 compile gate 무의미): 편집 _전_ build 1회. 기존 에러/경고/`undefined reference` 수를 `_internal/apply/baseline.log` 에 기록. _내가 낸 에러_ vs _원래 깨져 있던 것_ 구분의 기준선.
+6. **Baseline compile** (핵심 — 안 하면 compile gate 무의미): 먼저 run 당 로컬 빌드 출력 디렉토리를 한 번 생성 — `BUILD_OUT=$(mktemp -d /tmp/lw-apply.XXXXXX)` (이후 모든 컴파일이 `-outdir="$BUILD_OUT"` 공유). 그 다음 편집 _전_ build 1회. 기존 에러/경고/`undefined reference` 수를 `_internal/apply/baseline.log` 에 기록. _내가 낸 에러_ vs _원래 깨져 있던 것_ 구분의 기준선. (VS Code 의 인터랙티브 빌드와는 _별도_ 의 격리된 출력 — 서로의 aux 를 안 건드린다.)
 
 ### Stage B — Apply (mutation = commit)
 

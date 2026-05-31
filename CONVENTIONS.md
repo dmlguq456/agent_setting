@@ -46,6 +46,7 @@
 | `autopilot-lab` | quick/light/standard/thorough/**adversarial** | `light` | ✓ | **X** (실험 prototype — code 와 동일 — fact-checker 없음) | default 가 light 인 이유: 실험 prototype 빠른 cycle 1순위. 사용자 high-stakes 발화 (논문 결과·외부 공개) 시 standard+ 자동 상향 |
 | `autopilot-draft` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | |
 | `autopilot-refine` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | default 변경 (이전 quick → thorough) |
+| `autopilot-note` | quick/light/standard/thorough/**adversarial** | `light` | ✓ | standard+ | routing skill — default light (routine cron). standard+ 자리는 주말 묶음·노션 migration 검수. fact-check 는 source ↔ 카드 본문 verbatim 대조 |
 | `autopilot-apply` | — (`--qa` 없음) | — | — | **X** | verify = build/compile gate (latexmk) + latexdiff. reviewer QA loop 아님 — `run-test` 의 build 검증과 동류. ground-truth 는 컴파일 결과 |
 | `analyze-user` | **adversarial (고정)** | `adversarial` | ✓ (강제) | standard+ | user profile 정확성 critical — qa 협상 불가, 다른 level 명시해도 adversarial 로 force |
 | `audit` | — | — | — | `--no-fact-check` flag | `--qa` 대신 `--scope` 사용; fact-check 는 Stage B.5 에서 별도 |
@@ -449,6 +450,7 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 | `autopilot-lab` | `.claude_reports/experiments/{date}_{slug}/` + `.claude_reports/experiments/_RUNLOG.md` (timeline) |
 | `autopilot-draft` | `.claude_reports/documents/<date>_<name>/` |
 | `autopilot-refine` | 대상 artifact 안 v{N+1} 갱신 (`_internal/versions/v{N}/`) |
+| `autopilot-note` | `.claude_reports/notes/<date>/` (자체 routing log, T1/T2/T3) + `<target>/cards/**.md` 본문 append (default `~/notes/cards/`) + `<target>/digests/<date>.md` 누적 + `<target>/_triage/{date}_<seq>.md` (사용자 NAS 자리). 본 skill 산출물과 진본 카드 자리 분리 |
 | `autopilot-apply` | 대상 artifact 는 `.claude_reports/` 밖 실제 소스 (e.g., `main.tex`). 버전 자리는 git branch + commit (mutation 마다 한 commit) — `_internal/versions/` 자리 X |
 | `autopilot-apply` | 자체 artifact_dir 없음 — `.claude_reports/` _밖_ 실제 source 편집 (git branch 위) + 로그는 cheatsheet artifact 의 `_internal/apply/` |
 

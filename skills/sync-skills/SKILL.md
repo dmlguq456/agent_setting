@@ -268,13 +268,13 @@ AGENTS=$(ls ~/.claude/agents/*.md   | xargs -n1 basename .md | sort)
 
 #### 5c-3. README 트랙 체인 ↔ skill list 일관성
 
-README 는 mermaid 를 안 쓰고 _4 트랙 텍스트 화살표 체인_ (```text 코드 블록 4 개) 으로 흐름을 보인다 (4a). 체인에 등장하는 skill 만 검사 대상 — `audit` / `notes` / `analyze-user` 는 _의도적으로 체인 밖_ (사후 점검·메모·cross-project 프로필이라 트랙 체인에 안 들어감, 본문 quote 가 대신 다룸).
+README 는 mermaid 를 안 쓰고 _4 트랙 텍스트 화살표 체인_ (```text 코드 블록 4 개) 으로 흐름을 보인다 (4a). 체인에 등장하는 skill 만 검사 대상 — `audit` / `memo` / `analyze-user` 는 _의도적으로 체인 밖_ (사후 점검·메모·cross-project 프로필이라 트랙 체인에 안 들어감, 본문 quote 가 대신 다룸).
 
 `~/.claude/README.md` §3 의 \`\`\`text 코드 블록 4 개 추출 후 `autopilot-X` / `analyze-project` 토큰 파싱:
 
 - _트랙 체인 skill_ (analyze-project · autopilot-research · autopilot-draft · -refine · -apply · -spec · -code · -lab · -design · -ship) 이 체인에 등장하나
 - 부재 시: 🟡 `README 4 트랙 체인에 '<missing-skill>' 누락 — 보강 권장`
-- `audit` / `notes` / `analyze-user` 는 _체인 밖이 정상_ — 누락 보고 X
+- `audit` / `memo` / `analyze-user` 는 _체인 밖이 정상_ — 누락 보고 X
 - mermaid 블록 발견 시: 🟡 `README 에 mermaid 잔존 — 텍스트 체인으로 전환 (4a)` (재설계 후 mermaid 안 씀)
 
 #### 5c-4. 산출물 폴더 컨벤션 일관성
