@@ -1,355 +1,88 @@
-# Autopilot-* 흐름 청사진
+# Autopilot-* 라우팅 맵 (Claude-facing)
 
-> 사용자 향 보고서 — autopilot-* skill 들의 _3 흐름_ (연구개발 / 문서 / 앱) 의 사용자 호출 자리·산출물·서브에이전트 분기 한눈에. _대칭 강제 X — 작업 본질에 맞는 분리_ 원칙.
+> 메인 Claude 가 _작업 발화 → skill·sub-agent 라우팅_ 을 결정할 때 보는 압축 맵. _대칭 강제 X — 작업 본질에 맞는 분리_ 원칙.
 >
-> Source of truth: [`CONVENTIONS.md §6`](CONVENTIONS.md) (정의), [`README.md`](README.md) (entry list).
-> 마지막 정돈: 2026-05-25.
+> 역할 분담: 사용자 향 의미 지도·entry list 는 [`README.md`](README.md). 정의(QA·model·폴더 컨벤션)는 [`CONVENTIONS.md`](CONVENTIONS.md). 본 문서는 _라우팅 표_ 만 — narrative·호출 예시·비개발자 설명은 중복 회피로 제거(필요 시 README).
+> 마지막 정돈: 2026-05-31 (Claude-facing 라우팅 코어로 압축).
 
 ---
 
-## 1. 한 화면 청사진
-
-### 1.1. 사용자 호출 단위 흐름 — 3 family
+## 1. 한 화면 청사진 — 4 트랙
 
 ```
-[연구·실험]
-  autopilot-research                       ← (선택) 외부 baseline·paper survey
-    → analyze-project --mode code           ← 코드 청사진 + 실험 ready / cleanup / similar / convention 추출
-    → autopilot-spec --mode research,cli    ← 뼈대·skeleton (ref repo 옮김 + Phase 1.5 ckpt 검증)
-    → autopilot-code                        ← layout 위 logic 구현 (baseline 학습 가능 코드 완성)
-    → autopilot-lab                         ← baseline 학습 + variation 실험 반복
-
-[라이브러리·CLI 정돈·공개]  ← 별도 트랙. 연구·실험 의 졸업 자리에서 자연 연결
-  analyze-project → autopilot-spec → autopilot-code (반복)
-
-[문서 (paper / presentation / proposal / rebuttal)]
-  autopilot-research / analyze-project  →  autopilot-draft  →  autopilot-refine  (반복)
-
-[앱 (사용자 대상 소비자 앱)]
-  autopilot-research / analyze-project     ← (선택) 사전 조사·기존 앱 청사진
-    → autopilot-spec --mode app             ← PRD + scaffolding + skeleton
-    → autopilot-design (옵션)                ← UI 사이클
-    → autopilot-code (앱 mode 자동, 반복)    ← 기능 구현
-    → autopilot-ship                         ← (가끔) ship 첫 setup·env·domain·migration
+[연구·실험]   research / analyze-project(code) → autopilot-spec ↻ → autopilot-code ↻ → autopilot-lab ↻
+[라이브러리·CLI]  analyze-project → autopilot-spec ↻ → autopilot-code ↻
+[문서]        research / analyze-project(paper·doc) → autopilot-draft → autopilot-refine ↻ → autopilot-apply
+[앱]          autopilot-spec ↻ → autopilot-design → autopilot-code ↻(앱 mode 자동) → autopilot-ship ↻
 ```
 
-### 1.2. 작업 본질 매핑
+`↻` = 반복 자리. 사후 공통: `audit`(읽기 전용 점검) · `autopilot-refine`(markdown 정정). cross-project: `analyze-user` · `memo --scope user`.
 
-| 작업 종류 | 사전 | 신규 의도·청사진 | 자산 작업 (신규·기존) |
+## 2. 작업 본질 매핑 (발화 → skill)
+
+| 작업 종류 | 사전 (조사·분석) | 신규 의도·청사진 | 자산 작업 (신규·기존) |
 |---|---|---|---|
-| **문서** | research(academic/market) + analyze-project(paper/doc) | autopilot-draft | autopilot-refine |
-| **코드 (모든 자리)** | research(academic/tech) + analyze-project(code) | **autopilot-spec** (mode = app / library / api / cli / research / 복합 / auto) | **autopilot-code** (spec mode 별 분기 자동) |
-| **실험 prototype** (ML / one-shot script) | analyze-project(code) 의 _experiment_conventions / readiness / cleanup / similar_models_ 4 종 자료 | — (사전 spec 없이 빠른 cycle 1순위) | **autopilot-lab** (반복 호출, STORY+RUNLOG 누적; 졸업 자리 autopilot-code) |
-| **공통 시각** | — | autopilot-design (신규 사이클) | autopilot-design 재호출 |
-| **공통 사용자 프로필** | — | analyze-user (init) | analyze-user (update) |
+| **문서** (paper / 발표 / 보고서 / proposal / rebuttal) | research(academic·market) + analyze-project(paper·doc) | `autopilot-draft` | `autopilot-refine` |
+| **코드** (라이브러리·연구·앱·CLI·API 모두) | research(academic·tech) + analyze-project(code) | **`autopilot-spec`** (mode app/library/api/cli/research/복합/auto) | **`autopilot-code`** (spec mode 별 분기 자동) |
+| **실험 prototype** (ML / one-shot) | analyze-project(code) 의 4 종 자료(experiment_conventions·readiness·cleanup·similar_models) | — (spec 없이 빠른 cycle) | **`autopilot-lab`** (반복; 졸업 자리 autopilot-code) |
+| **시각 자산** | — | `autopilot-design` (신규 사이클) | `autopilot-design` 재호출 |
+| **사용자 프로필** | — | `analyze-user` init | `analyze-user` update |
 
-### 1.3. autopilot-spec mode 5종
+**직접 처리 경계** — plan/log 안 남는 단발 작업(한 줄 수정·rename·cleanup·단발 리뷰)은 autopilot 우회: `Agent(개발팀)` / 직접 Edit. 추적 필요·산출물 누적 자리만 autopilot. minor vs major 판정은 [`DESIGN_PRINCIPLES.md §4`](DESIGN_PRINCIPLES.md) + 각 skill `--qa quick` tier.
 
-| mode | 자리 | PRD + scaffold 산출물 (mode 5종 통일) |
+## 3. autopilot-spec mode 5종
+
+| mode | 자리 | scaffold (mode 통일: PRD + skeleton) |
 |---|---|---|
-| **app** | 사용자 대상 앱 (Next.js / Expo) | PRD (피처·시나리오·API Contract·data model·ui flow) + Component·Deployment diagram + **scaffold** (create-next-app + skeleton) |
-| **library** | 공개 라이브러리·패키지 (npm·pip·crate) | PRD (공개 API + 사용 예시 + 호환성·versioning + module 구조) + **scaffold** (pyproject.toml / setup.py + 공개 API skeleton, ref repo 의 export 구조) |
-| **api** | 백엔드 API 서비스 (UI 없음) | PRD (endpoint·body·error·auth·rate limiting + 데이터 모델) + Component·Deployment diagram + **scaffold** (FastAPI / Express + router skeleton) |
-| **cli** | 명령줄 도구 | PRD (명령·옵션·서브 명령·input/output·exit code) + **scaffold** (argparse / typer entry + 명령 skeleton) |
-| **research** | 연구·실험 코드 정돈·재현성 | PRD (entry + configs + 재현 명령 + 예상 metric + baseline) + **scaffold** (train.py / eval.py / config.yaml + model skeleton, **Phase 1.5 pretrained ckpt 사전 동작 점검** 포함) |
-| **복합** (예: library,cli) | 한 프로젝트가 여러 측면 | PRD 안 _공통 + mode 별 독립 섹션_ + 두 mode 의 scaffold 모두 |
-| **auto** (default) | mode 자동 추론 (발화·코드 단서) | 추론 결과 사용자 컨펌 후 진행 |
+| **app** | 사용자 앱 (Next.js/Expo) | + Component·Deployment diagram + create-next-app skeleton |
+| **library** | 공개 패키지 (npm·pip·crate) | + pyproject/setup + 공개 API skeleton (ref repo export 구조) |
+| **api** | 백엔드 API (UI 없음) | + Component·Deployment diagram + FastAPI/Express router skeleton |
+| **cli** | 명령줄 도구 | + argparse/typer entry + 명령 skeleton |
+| **research** | 연구·재현성 | + train.py/eval.py/config + model skeleton + **Phase 1.5 ckpt 사전 동작 점검** |
+| **복합 / auto** | 다측면 / 자동 추론 | 공통 + mode 별 독립 섹션 / 추론 후 컨펌 |
 
-**Scaffold 의 ref source 우선순위** — 1) 내부 (`similar_models.md` / `--ref <path>`) → 2) 외부 (`research/{topic}/code_resources/` / `07_resources.md` 의 Quick verify 명령) → 3) generic fallback. ML / DL 자리는 Phase 1.5 _pretrained ckpt 사전 동작 점검_ 자동 (mode `library` / `api` / `cli` 자리는 ckpt 없으면 skip).
+**Scaffold ref 우선순위**: 내부(similar_models·`--ref`) → 외부(research/{topic}/code_resources) → generic. **컨벤션 prepend**: `analysis_project/code/experiment_conventions.md`(1순위) → `user_profile/07_coding_convention.md`(2순위, 충돌 시 per-project 우선).
 
-**컨벤션 prepend 우선순위** — 개발팀 _new-lib_ prompt 에 다음 순서로 prepend (ref source 우선순위와 독립, 매번 read):
+## 4. PRD 묶음 갱신 — spec drift 차단
 
-1. **`analysis_project/code/experiment_conventions.md`** (1순위 — per-project source of truth, 본 프로젝트 실제 컨벤션)
-2. `~/.claude/user_profile/07_coding_convention.md` (2순위 — cross-project default, per-project 부재·빈 자리만 보강)
+코드·의도 변경이 spec 영향 자리면 _영향 받는 모든 자리 한 트랜잭션_ 갱신. 매핑 single source = [`CONVENTIONS.md §6.3a`](CONVENTIONS.md).
 
-충돌 자리는 per-project 우선 — 개별 프로젝트 컨벤션 침범 X. user_profile/07 부재 시 `/analyze-user coding_convention` 한 줄 안내.
+| 변경 | 영향 자리 |
+|---|---|
+| endpoint·body·error | api_contract + Component (+옵션 Sequence) |
+| DB entity·필드 | data_model + Component(backend) (+옵션 ER) |
+| UI flow | ui_flow + Component(frontend) (+옵션 Activity) |
+| 외부 service 통합 | api_contract(auth) + Deployment + deploy_record + .env.example |
+| 스택 교체 | stack_decision + Component + Deployment |
 
-**analysis_project 자동 갱신 (혼합 분기)** — autopilot-code 의 final-report 후 Step 7 에서 변경 영향 검사:
-- _작은 변경_ (한 module 안 / interface_reference) → autopilot-code 가 직접 Edit
-- _큰 변경_ (새 module·모델 폴더 / cleanup / 4 종 실험 자료 영향) → `/analyze-project --mode code --skip-qa` 자동 호출 (incremental — `_last_run.yaml` 기반 변경 자리만 재분석)
+**호출 자리**: autopilot-spec refine(의도 변경) → 영향 list → confirm → 일괄 / autopilot-code 가 spec 영향 감지 → 묶음 plan → confirm → autopilot-spec back-jump. **analysis_project 자동 갱신**: autopilot-code final-report 후 Step 7 — 작은 변경은 직접 Edit, 큰 변경은 `/analyze-project --mode code --skip-qa` incremental 자동.
 
-analyze-project 자체는 incremental default — `--full` 명시 시 전체 재. 사용자 _"분석 update skip"_ 발화 시 Step 7 skip.
+## 5. entry → 서브에이전트 분기 (autopilot-* 내부 라우팅)
 
-### 1.4. PRD 묶음 갱신 (Architecture Diagrams 포함)
-
-PRD 의 textual + diagram 이 _drift 빠지지 않게_ — 변경 자리에서 _영향 받는 모든 자리 한 트랜잭션_ 갱신. 자세한 매핑 — CONVENTIONS §6.3a.
-
-- autopilot-spec refine 자리에서 사용자 의도 변경 시 → 영향 자리 자동 list → confirm → 일괄
-- autopilot-code 가 spec 영향 변경 감지 (endpoint·entity·외부 service·stack 등) → 묶음 갱신 plan → confirm → autopilot-spec back-jump 호출
-
-Architecture Diagrams 기본 포함은 app / api mode 의 Component + Deployment 두 자리만. ER / Sequence / Activity / State 는 _복잡 자리·사용자 명시 요청_ 자리만.
-
----
-
-## 2. 사용자 호출 자리
-
-### 2.1. 연구·라이브러리 코드
-
-```bash
-# 1. 사전 조사 (선택 — 새 분야·외부 baseline 참고할 때만)
-/autopilot-research "X 분야 동향" --mode academic   # 논문 survey
-/autopilot-research "Y 라이브러리 비교"  --mode technology  # 기술·코드 baseline 비교
-
-# 2. 기존 코드 청사진 (선택 — 이미 있는 코드 위 작업 시)
-/analyze-project --mode code
-# → analysis_project/code/ 에 모듈 분석 + 실험 자료 4 종 (experiment_conventions / readiness / cleanup_candidates / similar_models)
-
-# 3. (선택) 실험 ready 정돈 — readiness 가 ❌ / ⚠️ 자리 있으면
-/autopilot-code "실험 ready 상태로 정리 — main.py 를 train.py / eval.py 분리 + config 통일"
-# → cleanup_candidates + experiment_readiness 자동 input → 한 묶음 plan
-
-# 4. 청사진 — 뼈대 + skeleton + ref 사전 점검
-/autopilot-spec --mode research,cli "Y — 학회 공개·재현성"
-/autopilot-spec  # mode 생략 → auto 추론
-# → 중간 컨펌 6-8 회 default
-# → scaffold: ref repo 자동 fetch + Phase 1.5 ckpt 사전 검증 + 개발팀 new-lib 으로 우리 컨벤션 옮김 (skeleton 까지)
-
-# 5. layout 위 logic 구현 (필수 — baseline 학습 가능 코드 완성)
-/autopilot-code "data loader 보강 + loss 자리 정리 + training loop 완성"
-# → spec 의 minimum viable skeleton 위에 실제 logic
-# → ref 가 매우 깔끔한 자리는 minor 자리만 / 사용자 데이터셋 적응 큰 자리는 비중 큼
-
-# 6. 실험 prototype 반복 (lab)
-/autopilot-lab "Conformer ASR Common Voice ko baseline"   # 첫 호출 — baseline 학습
-/autopilot-lab "lr 1e-3 → 3e-4 비교"                     # variation
-/autopilot-lab "MDTA 빼고 ablation"
-# → experiments/{date}_{slug}/ 안 STORY+spec+scaffold+summary
-# → _RUNLOG.md 한 줄 자동 누적 (직전 실험이 다음 spec 의 input)
-
-# 7. 작업 entry — 코드 정련·기능 추가 (반복 호출, 별도 사이클)
-/autopilot-code "X 기능 추가"                    # 새 기능 (dev mode)
-/autopilot-code --mode debug "Y 버그·이상 동작"   # 디버그
-/autopilot-code "lab 산출물 라이브러리화"          # 라이브러리·CLI 트랙으로 졸업
-```
-
-산출물:
-- spec 있으면 `.claude_reports/specs/<name>/dev_log/<date>_<slug>/`, 없으면 `.claude_reports/plans/<date>_<slug>/` 안 누적
-- 실험 prototype 은 `.claude_reports/experiments/{date}_{slug}/` (lab) + `.claude_reports/experiments/_RUNLOG.md` (timeline)
-
-### 2.2. 문서 작업
-
-```bash
-# 1. 사전
-/autopilot-research "X 분야 최근 동향" --mode academic   # paper 사전
-/analyze-project --mode paper                            # 참고 paper PDF 영속화
-/analyze-project --mode doc                              # reviewer comment·format template 등
-
-# 2. 신규 entry
-/autopilot-draft --mode paper "X paper 본문"
-/autopilot-draft --mode presentation "Y 발표 자료"
-/autopilot-draft --mode doc "Z 보고서·rebuttal·proposal"
-
-# 3. 정정 entry (반복)
-/autopilot-refine "X v2 — 검토 의견 반영"
-/autopilot-refine "Y figure 교체" --memo memo.md
-```
-
-산출물: `.claude_reports/documents/<date>_<name>/` 안 누적. refine 은 _대상 artifact 안 v{N+1}_ 갱신.
-
-### 2.3. 앱 개발
-
-```bash
-# 1. 사전 조사 (선택 — 복잡 도메인만)
-/autopilot-research "가사관리 reference 앱" --mode market
-/autopilot-research "Next.js + Prisma 스택" --mode technology
-
-# 2. 초기 기반 (신규 앱)
-/autopilot-spec "할 일 관리 웹 앱"
-# → PRD (피처·시나리오·API Contract·데이터 모델·화면 흐름)
-# → 스택 결정 (Next.js / Expo / SvelteKit / Astro 후보)
-# → scaffolding (npx create-next-app 등)
-# → skeleton 코드 (빈 layout·routing·DB schema 초안)
-
-# 3. 시각 사이클 (옵션 — UI 있는 자리만)
-/autopilot-design --app 가사관리
-
-# 4. 본격 개발 (반복)
-/autopilot-code "task 추가·완료·삭제 기능"
-# → specs/가사관리/ 발견 → 앱 mode 자동 활성화
-# → 디자인팀 critic (UI 변경 자리)
-# → DB migration destructive 자리 안내·자동 실행 X
-# → push → CI/CD 자동 deploy
-# → 산출 specs/가사관리/dev_log/<date>_<slug>/
-
-/autopilot-code "카테고리 색 구분 추가"
-/autopilot-code --mode debug "마감일 칸 모바일 터치 어려움"
-
-# 5. 배포 셋업 (기능 어느 정도 완성 후 — 마지막 자리. 재호출 가능)
-/autopilot-ship
-# → 호스팅 선정 (Vercel/Fly/Railway/Cloudflare/EAS) + CI/CD 파일 + env 가이드 + (옵션) domain
-# → 실제 명령은 사용자 직접 실행 (vercel deploy 등 자동 X)
-# → 산출 specs/가사관리/05_ship/deploy_record.md
-# → 재호출 자리 — env 변경·domain 추가·migration 운영 배포
-```
-
-산출물: `.claude_reports/specs/<name>/` 한 폴더 안 _전체 흐름 누적_:
-```
-specs/가사관리/
-├── pipeline_state.yaml               ← 현재 상태
-├── 00_init/environment_check.md      ← 환경 점검 (스택 후보 / Node·pnpm 버전)
-├── 00_init/stack_decision.md         ← 스택 결정 사유
-├── 01_spec/PRD.md                    ← 피처·시나리오·API Contract·데이터 모델
-├── 02_design/                        ← (옵션) 디자인 자산 (autopilot-design)
-├── dev_log/<date>_<slug>/            ← autopilot-code 가 누적
-│   ├── 2026-06-15_add_category/
-│   ├── 2026-06-18_debug_mobile/
-│   └── ...
-├── 05_ship/deploy_record.md          ← autopilot-ship 의 첫 setup + 재호출 누적
-└── _internal/                        ← 백업·버전·reviewer 로그
-```
-
-**subfolder 숫자 prefix 컨벤션**:
-- `00_init` — 환경·스택 결정 (autopilot-spec 의 첫 phase)
-- `01_spec` — PRD·청사진 (autopilot-spec 의 핵심)
-- `02_design` — 디자인 자산 (옵션, autopilot-design 위임)
-- `03_*` / `04_*` — _reserve_ (현재 비어 있음. 미래 자리 — _03_data_ 같이 데이터 분석·schema 자료 또는 _04_research_ 같이 본 spec 의 사전 조사 자리 등. 현재 _gap 의도적_)
-- `05_ship` — 배포 자료 (autopilot-ship)
-- `dev_log/<date>_<slug>/` — autopilot-code 의 작업 자료 (날짜별 누적)
-- `_internal/` — T3 audit·raw·versions
-
-03 / 04 자리는 _현재 미사용_, 필요 자리 발견 시 추가. 본 구조는 _app / library / api / cli / research mode 무관_ 일관.
-
----
-
-## 3. 사용자 주도성·서브에이전트 분기
-
-### 3.1. 사용자 주도성 — 명시 호출 단위
-
-각 _entry skill_ 이 _자연어 한 줄 발화_ 로 호출되고, 메인 Claude 가 _옵션 자동 구성 + 자연어 요약 컨펌_ 거쳐 invoke. _CONFIRM Gate 4 갈래 응답_ (진행 / 수정 — refine v2 / back-jump — 이전 phase / 중단). 발화 모호 시 옵션 다시 물음 (임의 추측 X).
-
-사용자는 _운전자_ — 발화로 다음 의도 결정. Claude 는 _orchestrator + 보조_.
-
-### 3.2. 서브에이전트 분기 (autopilot-* 내부 라우팅)
-
-각 entry skill 이 _내부에서_ sub-skill / agent 분기 호출. 사용자는 _이름 명시 X_ — entry skill 한 줄만.
+사용자는 entry 한 줄만 — 내부 분기는 자동. (model 표기 = CONVENTIONS §2)
 
 | entry | 내부 분기 |
 |---|---|
-| **autopilot-research** | 연구팀 mode=research-survey (자료 수집·요약) + 자료팀 mode=browser-fetch / pdf-extract / web-image-search (외부 자료) + 연구팀 mode=fact-check (verbatim cards) |
-| **analyze-project** | 단일 skill 안 logic — code/paper/doc mode 별 자체 분석 |
-| **autopilot-spec** | (init mode) 기획팀 (PRD 위임 자리만) + 자료팀 (research 결과 import) | (setup mode) 호스팅 선정 logic + CI/CD 파일 생성 |
-| **autopilot-design** | 디자인팀 mode=maker (컴포넌트·시각 자산) + 디자인팀 mode=critic (비평) + 자료팀 mode=web-image-search (외부 reference) |
-| **autopilot-code** (일반) | 기획팀 (code-plan) + 개발팀 (code-execute) + 품질관리팀 mode=code-review·test (code-test) + 연구팀 mode=plan-review |
-| **autopilot-code** (앱 mode) | 위 + **디자인팀 mode=critic** (UI 변경 자리 자동 호출) + DB migration 안전 logic + push 자동 deploy 인지 |
-| **autopilot-draft** | 자료팀 (figure 자산·data 분석·외부 reference) + 개발팀 (draft writing) + 편집팀 mode=polish (한국어 다듬기) + 연구팀 mode=fact-check (citation·venue·metric) |
-| **autopilot-refine** | 위 autopilot-draft 와 동일 (재활용) + 편집팀 mode=review (read-only 점검) |
-| **analyze-user** | 자료팀 (사용자 산출물 cross-project 수집) + 편집팀 mode=review (메모리 누적 검증) |
+| **autopilot-research** | 연구팀 research-survey + 자료팀 browser-fetch/pdf-extract/web-image-search + 연구팀 fact-check |
+| **analyze-project** | 단일 skill — code/paper/doc mode 자체 분석 |
+| **autopilot-spec** | 기획팀(PRD 위임) + 자료팀(research import) / setup: 호스팅·CI/CD logic |
+| **autopilot-design** | 디자인팀 maker + 디자인팀 critic + 자료팀 web-image-search |
+| **autopilot-code** (일반) | 기획팀(plan) + 개발팀(execute) + 품질관리팀 code-review·test + 연구팀 plan-review |
+| **autopilot-code** (앱 mode) | 위 + **디자인팀 critic**(UI 변경 자리 자동) + DB migration 안전 logic + push 자동 deploy |
+| **autopilot-draft** | 자료팀(figure·data·reference) + 개발팀(writing) + 편집팀 polish + 연구팀 fact-check |
+| **autopilot-refine** | autopilot-draft 와 동일 재활용 + 편집팀 review |
+| **analyze-user** | 자료팀(cross-project 수집) + 편집팀 review |
 
-### 3.3. _운전자가 누구인가_ — 흐름 자체 통제
+**사용자 주도성**: 각 entry = 명시 의도 단위. 메인 Claude 가 옵션 자동 구성 + 자연어 요약 컨펌 → CONFIRM Gate 4 갈래(진행 / 수정-refine v2 / back-jump / 중단). 발화 모호 시 재질문(임의 추측 X). 호출 패턴 상세 = [`CLAUDE.md §6`](CLAUDE.md).
 
-사용자가 운전자 — 매 호출이 _명시 의도 단위_. 내부 sub-skill 들은 _사용자 호출 X_, autopilot-* 가 자동 orchestration. 사용자 호출 entry 9 개 (위 표) 외 다른 호출 자리 _거의 없음_.
+## 6. 산출물 폴더 — 한 프로젝트 = 한 폴더
 
----
-
-## 4. 산출물 폴더 컨벤션
-
-### 4.1. 한 프로젝트 = 한 폴더
-
-| 프로젝트 종류 | 폴더 구조 |
+| 종류 | 폴더 |
 |---|---|
-| 코드 (spec 있음 — app / library / api / cli / research) | `<proj>/.claude_reports/specs/<name>/` 안 _전체 흐름 누적_ (PRD + dev_log + (옵션) 02_design + 05_ship) |
-| 코드 (spec 부재 — 빠른 작업) | `<proj>/.claude_reports/plans/<date>_<slug>/` 별 task 독립 |
-| 문서 | `<proj>/.claude_reports/documents/<date>_<name>/` |
-| 사전 조사 | `<proj>/.claude_reports/research/<topic>/` |
-| 사전 분석 | `<proj>/.claude_reports/analysis_project/<mode>/` |
+| 코드 (spec 있음) | `specs/<name>/` 안 전체 흐름 누적 (01_spec/PRD + dev_log + 옵션 02_design + 05_ship) |
+| 코드 (spec 부재) | `plans/<date>_<slug>/` task 독립 |
+| 실험 prototype | `experiments/{date}_{slug}/` + `experiments/_RUNLOG.md` |
+| 문서 | `documents/<date>_<name>/` |
+| 사전 조사·분석 | `research/<topic>/` · `analysis_project/<mode>/` |
 
-### 4.2. spec 자리의 _한 폴더 누적_ 가치
-
-사용자가 _내 프로젝트의 전체 흐름_ 보려면 `specs/<name>/` 한 폴더만 보면 됨. PRD·(옵션) 디자인·dev_log·(옵션) ship 모두 그 안. 두 폴더 다니지 않음. _app / library / api / cli / research mode 무관_ 일관된 구조.
-
-### 4.3. 산출물 도메인 분화 (앱 자리만)
-
-```
-specs/<name>/
-├── 01_spec/
-│   ├── PRD.md            ← 전체 청사진
-│   ├── api_contract.md   ← 백·프론트 공유
-│   ├── data_model.md     ← DB
-│   └── ui_flow.md        ← 프론트
-├── dev_log/<date>_<slug>/
-│   ├── plan.md
-│   ├── backend/          ← 백 변경
-│   ├── frontend/         ← 프론트 변경
-│   ├── db/               ← migration 기록
-│   └── external/         ← 외부 service·SDK 통합
-└── 05_ship/
-    ├── hosting.md
-    ├── ci_cd.md
-    ├── env_vars.md
-    └── domain.md
-```
-
-사용자가 _백만·프론트만·DB migration 만·외부 service 통합만_ 원하면 sub-folder 하나만 봄.
-
----
-
-## 5. 비개발자용 — 앱 개발 표준 흐름 (참고)
-
-### 5.1. 앱 = 3 부품 + 사이클
-
-```
-[사용자 화면 (프론트엔드)] ←─ API ─→ [서버 로직 (백엔드)] ←─→ [데이터 저장소 (DB)]
-       ↑                                   ↑                            ↑
-   사용자가 보는 것                요청 받아 처리·인증·권한            영구 보관
-   버튼·폼·페이지                     비즈니스 규칙                  user / task / log
-```
-
-| 용어 | 의미 |
-|---|---|
-| **프론트엔드** | 사용자가 _직접 보는_ 화면 |
-| **백엔드** | _서버_ 요청 처리 logic. 사용자는 직접 안 봄 |
-| **DB** | 영구 보관소. 앱 꺼져도 남음 |
-| **API** | 프론트 ↔ 백 _공유 약속_ |
-| **배포** | 인터넷에 올려 사용자가 쓸 수 있게 |
-
-### 5.2. 1 사이클 = MVP 하나
-
-한 번에 _완벽한 앱_ 못 만듦. 작게 (P0 1-3 개) → 써보고 → 부족함 발견 → 다음 사이클. 첫 사이클은 _MVP (Minimal Viable Product)_.
-
-### 5.3. 단계별 사용자 결정 무게
-
-| 단계 | 무게 | 비고 |
-|---|---|---|
-| 1. PRD (autopilot-spec) | 🔴 큼 | 만들 _것 자체_ 결정 — 빗나가면 build 다 끝나도 _틀린 것_ |
-| 2. 디자인 (autopilot-design) | 🟡 중 | 색·폰트 — 취향. default 무난 |
-| 3. 본격 개발 (autopilot-code) | 🟢 작 | 결과만 확인 |
-| 4. 보강 setup (autopilot-ship) | 🟡 중 | 호스팅 선택·DNS·env. 자동 X — 사용자 직접 |
-| 5. iteration | 🔴 큼 | 써보고 _다음 의도_ 표현 |
-
----
-
-## 6. 자주 묻는 자리
-
-### Q. 이미 chat 으로 만든 앱이 있다. autopilot-spec 부터 시작?
-
-A. **부분 가능**. autopilot-spec 의 init mode 는 _신규 cold start_ 기준. 이미 있는 앱은:
-1. `cd 가사관리앱 && /analyze-project --mode code` ← 현재 청사진 영속화
-2. 새 기능 추가 → `/autopilot-code "X 기능"` ← spec mode 별 분기 자동 (specs/ 부재여도 package.json + UI framework 감지로 경량 추론)
-3. PRD 부재면 → `/autopilot-spec --mode init` 으로 _기존 코드 → PRD 역추출_ 시도 (사용자 검토 부담 있음)
-
-### Q. 디자인 사이클은 _초기 한 번_ 만?
-
-A. **아니다**. _토큰 (색·폰트·간격)_ 은 안정, _컴포넌트_ 는 cycle 마다 추가·수정 잦음. autopilot-design 재호출 시 _확장 mode_ — 기존 토큰 보존하며 새 컴포넌트만 추가.
-
-### Q. ship 은 매번 호출?
-
-A. **아니다**. _첫 setup_ 만 한 번 (`vercel link` / CI/CD 파일 / env). 이후는 _git push → CI/CD 자동 deploy_. `autopilot-ship` 은 _가끔 보강_ (env 변경·domain·migration deploy) 자리만.
-
-### Q. autopilot-code 가 어떻게 앱 vs 라이브러리 mode 자동 감지?
-
-A. cwd 검사 — `specs/<name>/pipeline_state.yaml` 또는 `package.json` 의 UI framework (Next.js / Expo / SvelteKit / Astro / Vite+React) 발견 시 _앱 mode_. 그 외 _일반 mode_. 활성화 시 사용자에 명시 보고.
-
-### Q. 백/프론트/DB 가 어떻게 잘 나뉘어 짜였는지 확인?
-
-A. `specs/<name>/01_spec/PRD.md` 의 _API Contract / 데이터 모델 / ui_flow_ 섹션이 _경계_ 명시. `dev_log/<date>_<slug>/{backend, frontend, db, external}/` 폴더 분화 (산출물 도메인 분화). 본 두 자리만 봐도 구조 잡힘.
-
----
-
-## 7. 참고
-
-- 정의 source: [`CONVENTIONS.md §6`](CONVENTIONS.md)
-- skill entry list: [`README.md`](README.md)
-- 자연어 발화 패턴: [`CLAUDE.md`](CLAUDE.md) §6 (autopilot-* 호출 패턴)
-- 작업 본질 매트릭스: 본 문서 §1.2
-
-이후 _사용 중 부딪치는 자리_ 발견되면 본 청사진에 반영 — 추측보다 부딪쳐 본 정정이 정확.
+`specs/<name>/` subfolder prefix: `00_init`(환경·스택) · `01_spec`(PRD·api_contract·data_model·ui_flow) · `02_design`(옵션) · `03/04`(reserve) · `05_ship` · `dev_log/<date>_<slug>/` · `_internal/`(T3). 상세 매핑·T1/T2/T3 = [`CONVENTIONS.md §5·§6.5`](CONVENTIONS.md).
