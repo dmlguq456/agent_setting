@@ -15,7 +15,7 @@
 자연어 한 줄로 부르면 메인 Claude 가 컨텍스트 (cwd / `.claude_reports/` 산출물 / 발화) 를 읽어 **skill + 옵션을 조립하고, 자연어 요약으로 컨펌받은 뒤 실행**한다. 사용자는 _운전자_ — 다음 의도만 말하면 된다.
 
 - **autopilot-\*** = 추적형 파이프라인. plan·log 가 `.claude_reports/` 에 누적돼 흐름이 남는다. 큰 작업·반복 작업용.
-- **직접 처리** = plan/log 안 남는 가벼운 일. 한 번 보고 끝나는 작업은 메인 Claude 가 바로 한다.
+- **직접 처리** = plan/log 안 남는 가벼운 일 (throwaway·순수 typo). 단, `spec/<project>/` 잡힌 프로젝트의 사후 수정은 거의 다 `--qa quick` 파이프로 _산출물 남기며_ 진행한다 (ad-hoc 직접 Edit 금지) — [CLAUDE](CLAUDE.md) §9 · [WORKFLOW](WORKFLOW.md) §7.
 - 입력은 외부 flag 없이 **`.claude_reports/` 영속 산출물에서 자동 발견**. cross-project 는 `cd <other>` 후 별도 세션.
 
 > 본 문서는 _의미 지도_ 다. 옵션 spec·trigger 룰·QA 정의 같은 운영 디테일은 각 SKILL.md 와 [`CONVENTIONS.md`](CONVENTIONS.md) · [`CLAUDE.md`](CLAUDE.md) 가 단일 출처 — 여기서 중복하지 않고 링크한다.
@@ -61,6 +61,7 @@ analyze-project  →  autopilot-spec ↻  →  autopilot-code ↻
 기존 코드를 분석해 공개용 청사진을 잡고 정돈한다. 연구·실험 트랙의 _졸업 자리_ 와 이어진다.
 
 > **점검·정정은 모든 트랙 공통, 사후** — `audit` (읽기 전용 점검) · `autopilot-refine` (markdown 정정) · `autopilot-apply` (cheatsheet → 실제 소스).
+> **코드 트랙 사후 수정** — `spec/<project>/` 잡힌 프로젝트의 수정·기능 요청은 _기존 산출물 파악 → spec-drift 체크 (`autopilot-spec` update) → `autopilot-code`_ 순서 (ad-hoc 직접 Edit 금지, spec→dev 하드 원칙). 상세 → [WORKFLOW](WORKFLOW.md) §7 · [CLAUDE](CLAUDE.md) §9.
 > **사용자 프로필은 cross-project** — `analyze-user` · `memo --scope user` 가 `~/.claude/user_profile/` 를 만들고, 모든 트랙이 작업 시작 자리에서 default 로 참조한다.
 
 체이닝 청사진·서브에이전트 분기·호출 예시는 → [`WORKFLOW.md`](WORKFLOW.md).
@@ -75,7 +76,7 @@ analyze-project  →  autopilot-spec ↻  →  autopilot-code ↻
 |---|---|
 | [`analyze-project`](skills/analyze-project/SKILL.md) | 모든 트랙의 _사전 분석_. code/paper/doc 자료를 `analysis_project/` 에 영속화 — 다운스트림 skill 의 입력 source |
 | [`autopilot-research`](skills/autopilot-research/SKILL.md) | 어느 트랙이든 공통 _분야 조사_. academic/technology/market 3 mode 보고서. 실제 문서·코드 생성은 다운스트림이 담당 |
-| [`autopilot-spec`](skills/autopilot-spec/SKILL.md) | 코드 _청사진 + skeleton_ 일반화 entry (app/library/api/cli/research). 만들 _것 자체_ 를 결정하는 자리라 사용자 결정 비중이 큼 — 중간 컨펌 default |
+| [`autopilot-spec`](skills/autopilot-spec/SKILL.md) | 코드 _청사진 + skeleton_ 일반화 entry (app/library/api/cli/research) + **update 모드** (기존 `prd.md` 갱신 — 모든 spec 변경의 canonical 경로, 버전 snapshot 자동). 만들 _것 자체_ 결정 자리라 사용자 비중 큼 — 중간 컨펌 default |
 | [`autopilot-code`](skills/autopilot-code/SKILL.md) | 코드 _작업_ 일반 (라이브러리·연구·앱 모두). dev/debug. `spec/<name>/` 발견 시 spec mode 별 분기 자동. `--qa quick` = 소규모 잡일 경량 tier (로그 남김) |
 | [`autopilot-lab`](skills/autopilot-lab/SKILL.md) | _빠른 실험 prototype_. 무거운 학습은 사용자가 실행, lab 은 `setup`(학습 세팅) / `eval`(평가·분석) 로 앞뒤를 도움. `--parent` 계보로 fine-tune·재평가, `_RUNLOG`(⏳→✅) 누적. 졸업은 autopilot-code |
 | [`autopilot-design`](skills/autopilot-design/SKILL.md) | _시각_ 산출물 (UI·슬라이드·다이어그램·아이콘). 모든 결과를 렌더해 눈으로 검증 (Claude-Design 패리티), standalone `preview.html` 가능 |
