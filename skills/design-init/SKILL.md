@@ -29,7 +29,7 @@ scope 별 필요 도구 다름:
 | shadcn/ui CLI | 권장 (`--artifact project` 시 필수) | X | X | X |
 | Tailwind config (tokens.css / tailwind.config.ts) | 권장 (`project` 시 필수) | X | X | X |
 | 이미지 생성 MCP (Replicate, BFL 등) | 옵션 | 옵션 | 권장 | X |
-| **Playwright / preview_screenshot** (HTML·React 렌더) | **필수** (시각 검증) | 권장 | X | 옵션 |
+| **Playwright / preview_screenshot** (HTML·React 렌더) | **필수** (시각 검증) | **필수** (전 슬라이드 렌더) | X | 옵션 |
 | **SVG 래스터라이저** (sharp / rsvg-convert / cairosvg / inkscape) | 권장 | 옵션 | **필수** | **필수** |
 | **mermaid-cli (`mmdc`)** (mermaid → PNG 렌더) | X | X | X | 권장 (mermaid 쓸 때) |
 | excalidraw | X | X | X | 옵션 |

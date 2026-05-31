@@ -51,13 +51,18 @@ Agent(디자인팀, mode=maker):
 
 ```
 Agent(디자인팀, mode=maker):
-  "발표 슬라이드 비주얼 가이드.
+  "발표 슬라이드 비주얼.
    각 슬라이드:
      - 레이아웃 (text-left, image-right 등)
-     - 색 사용 가이드 (brand-500 강조, neutral 본문)
+     - 색 사용 (brand-500 강조, neutral 본문)
      - 타이포 hierarchy (h1 / body / caption)
      - 강조 패턴 (bold / highlight / accent stripe)
-   산출 위치: 03_components/slides/slide_<N>.md (마크다운 가이드)"
+   각 슬라이드를 실제 HTML section (inline CSS, reveal/section 스타일) 으로 렌더 가능하게 작성 —
+   **모든 슬라이드가 렌더 대상** (마크다운 가이드만으로 끝내지 않음).
+   산출 위치:
+     - 03_components/slides/slide_<N>.md (마크다운 가이드, 의도 기록용)
+     - 03_components/slides/slide_<N>.html (렌더 가능한 단일 section)
+   산출 후 Step 4 의 시각 자가검증 루프로 **전 슬라이드** 렌더 → Read → 수정."
 ```
 
 #### scope=icon
@@ -108,7 +113,7 @@ scope 별 렌더 경로:
 | scope | 렌더 → 본다 |
 |---|---|
 | `ui` / `webapp` | `preview.html` 또는 dev server 를 Playwright `preview_screenshot` → Read. 컴포넌트 단품 + **페이지 합성 전체 화면** 둘 다 |
-| `slide` | 대표 슬라이드 1-2 장을 HTML/이미지로 렌더 → Read (가이드만으로 끝내지 않음) |
+| `slide` | **모든 슬라이드** 를 HTML/이미지로 렌더 → Read (가이드 markdown 만으로 끝내지 않음). 장수가 많으면 전 슬라이드를 contact-sheet montage 한 장으로 합쳐 한 번의 Read pass 로 봐도 되나, _un-rendered 가이드로 남는 슬라이드 없음_ |
 | `icon` | SVG → `sharp`/`rsvg-convert` PNG → Read (작은 자산은 확대 렌더) |
 | `diagram` | SVG → PNG / mermaid → `mmdc` PNG → Read. 관통·overlap·label 겹침 확인, 의심 영역 crop 확대 |
 
@@ -116,9 +121,10 @@ scope 별 렌더 경로:
 
 ### Step 4b: standalone preview artifact (`--artifact standalone` 또는 stack 부재 시)
 
-프로젝트 stack 없이도 브라우저로 바로 열리는 **자체 완결 단일 파일** 산출:
-- `03_components/preview.html` — inline `<style>` + (필요 시) CDN Tailwind/React (`https://cdn.tailwindcss.com`, esm.sh) + 모든 컴포넌트·페이지를 한 파일에. 외부 빌드 의존 0.
-- diagram/icon 은 SVG 를 inline 한 `preview.html` 또는 SVG 자체.
+프로젝트 stack 없이도 브라우저로 바로 열리는 **자체 완결 단일 파일** 산출 (scope 별 1개 보장):
+- `ui` / `webapp` → `03_components/preview.html` — inline `<style>` + (필요 시) CDN Tailwind/React (`https://cdn.tailwindcss.com`, esm.sh) + 모든 컴포넌트·페이지를 한 파일에. 외부 빌드 의존 0.
+- `slide` → `03_components/slides/slides.html` — **단일 self-contained 덱**. 한 슬라이드 = 한 `<section>` (inline CSS, reveal/section 스타일), 모든 슬라이드를 한 파일에. 프로젝트 stack 불필요, 브라우저로 바로 열림.
+- `icon` / `diagram` → `03_components/preview.html` — 모든 SVG 를 inline 한 라벨링 grid (icon gallery / diagram + legend). ui/webapp 단일 파일 경로와 일관 (SVG 파일 자체만 흩뿌리지 않음).
 - 이 파일을 렌더·screenshot 해 검증하고 사용자에 경로 + 이미지 제시 = Claude Design artifact 패리티.
 
 ### Step 4c: 완성도 체크 (polish — generic flowchart/와이어프레임 탈피)

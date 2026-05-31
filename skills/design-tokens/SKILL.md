@@ -100,7 +100,18 @@ shadcn default 보다 살짝 작게 — 사용자 선호 (memory 참조 시).
 - `--duration-base`: 250ms
 ```
 
-### Step 3: 실제 토큰 파일 작성
+### Step 3: specimen 시각 자가검증 (필수 — 토큰을 component 가 소비하기 _전_)
+
+토큰은 그 자체로 시각 시스템 (palette / type / spacing) 이라, 값만 정하고 넘기지 않는다. **렌더해서 본 것** 으로만 완료.
+
+`02_tokens/specimen.html` — 자체 완결 단일 파일 (inline `<style>`, 외부 빌드 의존 0):
+- **color swatch** — 각 색 칩에 hex 표기 + 주요 foreground/background 쌍의 **WCAG contrast ratio** 명시 (본문 ≥4.5:1, large ≥3:1 통과 여부 라벨)
+- **type scale 전체** — xs~2xl 까지 실제 글자로 렌더 (line-height 포함)
+- **spacing / radius / shadow ruler** — 각 단계를 시각 막대·박스로
+
+루프: specimen.html 렌더 (Playwright `preview_screenshot`) → **Read 로 이미지 직접 보기** → 대비·조화 자가 비평 (대비 미달 쌍 / 색 충돌 / scale 점프 불균일) → 토큰 조정 → 재렌더. 깨끗할 때까지. **이 검증을 통과해야 component 가 토큰을 소비**.
+
+### Step 4: 실제 토큰 파일 작성
 
 #### Option A: tokens.css (CSS variables)
 
@@ -148,20 +159,21 @@ export default config
 
 스택에 따라 둘 중 하나 또는 둘 다.
 
-### Step 4: 기존 토큰 호환
+### Step 5: 기존 토큰 호환
 
 기존 `tokens.css` 또는 `tailwind.config.ts` 있으면:
 - 기존 백업: `_internal/tokens_backup_<date>.css`
 - 새 토큰 추가 (기존 키 보존)
 - 충돌 시 사용자 confirm
 
-### Step 5: design_state.yaml 업데이트
+### Step 6: design_state.yaml 업데이트
 
-`phases.tokens: done` + `tokens_path: <실제 파일 경로>`.
+`phases.tokens: done` + `tokens_path: <실제 파일 경로>` + `specimen: 02_tokens/specimen.html` + `tokens_verified_visually: true`.
 
 ## Output
 
 - `02_tokens/tokens.md` — 결정 사유 + 토큰 값
+- `02_tokens/specimen.html` — swatch·type·spacing 시각 검증 산출 (렌더 → Read 자가검증 완료)
 - 프로젝트 루트의 `tokens.css` 또는 `tailwind.config.ts` (사용자 confirm 후 작성·확장)
 - `_internal/tokens_backup_<date>.css` (기존 덮어쓰기 시)
 

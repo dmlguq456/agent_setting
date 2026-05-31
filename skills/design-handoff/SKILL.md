@@ -22,7 +22,7 @@ argument-hint: "<design path or app path>"
 
 design phase 의 모든 자산 모음:
 - `02_tokens/tokens.md` + 실제 토큰 파일 경로
-- `03_components/` 컴포넌트 목록 + **`preview.html` (standalone artifact, 있으면) + 검증 screenshot** — 브라우저로 바로 열어볼 산출물로 handoff 상단에 명시
+- `03_components/` 컴포넌트 목록 + **standalone preview (필수) + 검증 screenshot** — scope 별 단일 self-contained 파일이 보장됨 (`ui`/`webapp`/`icon`/`diagram` → `03_components/preview.html`, `slide` → `03_components/slides/slides.html`). 브라우저로 바로 열어볼 산출물로 handoff **상단에 필수 명시**. _유일한 예외_: paper architecture figure (디자인팀이 생성하지 않고 사용자 pptx 인계 — render/standalone 대상 아님)
 - `04_review/critique.md` 의 _accepted issue_ (사용자가 의도적으로 두기로 한 것)
 
 ### Step 2: handoff.md 작성
@@ -35,6 +35,18 @@ design phase 의 모든 자산 모음:
 **완성**: <date>
 **Scope**: <ui|slide|icon|diagram|mixed>
 **Cycle**: <N>
+
+---
+
+## Preview (브라우저로 바로 열기)
+
+> **필수 산출물** — paper architecture figure scope 외 모든 scope 에 보장됨.
+
+| 파일 | 위치 | 검증 screenshot |
+|---|---|---|
+| `preview.html` (또는 slide 면 `slides.html`) | `03_components/preview.html` / `03_components/slides/slides.html` | `<렌더 검증 png 경로>` |
+
+프로젝트 stack 없이 브라우저로 바로 열림 = Claude Design artifact 패리티. 시각 자가검증 (렌더 → Read) 통과한 산출물.
 
 ---
 

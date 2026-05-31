@@ -177,6 +177,7 @@ Invoke Skill: `design-tokens` with the design path as args.
 
 결과:
 - `02_tokens/tokens.md` — 디자인 결정 사유
+- `02_tokens/specimen.html` — palette/type/spacing specimen. **렌더 → Read 자가검증 필수** (대비·조화 확인 후에야 토큰을 component 가 소비). 토큰도 시각 시스템이라 값만 정하고 넘기지 않음
 - `02_tokens/tokens.css` 또는 `tailwind.config.ts` — 실제 토큰 파일
 
 기존 토큰 파일 발견 시 _확장_ (덮어쓰기 X).
@@ -194,7 +195,7 @@ Invoke Skill: `design-components` with the design path as args.
 - scope 따라:
   - `ui`: shadcn/ui 컴포넌트 + custom
   - `webapp`: 페이지 합성 + 전체 화면 `preview.html` (인터랙션 상태 포함)
-  - `slide`: 슬라이드 비주얼 가이드 (마크다운) + 대표 슬라이드 렌더 이미지
+  - `slide`: 슬라이드 비주얼 가이드 (마크다운) + **전 슬라이드 렌더** (장수 많으면 contact-sheet montage 한 장) + self-contained `slides.html` (한 슬라이드=한 section)
   - `icon`: SVG 또는 이미지
   - `diagram`: mermaid / 직접 SVG / excalidraw + **렌더 PNG**
 - `--artifact standalone` 면 위 산출을 자체 완결 `preview.html` 로도 emit (브라우저 바로 열림)
