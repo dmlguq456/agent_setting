@@ -16,7 +16,7 @@
 
 | 모드 | 무엇이 막히나 |
 |---|---|
-| **📌 tracked** (기본) | 추적 산출물(`spec/`·`plans/`·`documents/`·`experiments/`·`user_profile/0*.md`) 직접 Edit/Write → **차단(exit 2)**, 소유 스킬 경유. `spec/` 있는 프로젝트는 _순서 체인_ 도 강제 — 코드 편집은 `plans/` plan 존재가 전제, 신규 spec·문서 작성은 research/analyze 가 전제 |
+| **📌 tracked** (기본) | **① 산출물 추적** (모든 `.claude_reports` 프로젝트) — `spec/`(prd·stack·ship 등 canonical)·`plans/`·`documents/`·`experiments/`·`user_profile/0*.md` 직접 Edit/Write → **차단(exit 2)**, 소유 스킬 경유. 신규 _작성_ 도 의존 산출물 전제 (신규 spec·문서 ← research/analyze · 신규 plan ← spec). **② 소스 코드 순서 게이트** (`spec/` 있는 프로젝트만) — 코드 편집은 `plans/` plan 존재가 전제 (spec 없는 repo 는 자유) |
 | **⚡ untracked** | 차단 전부 해제 — 탐색·일회성 ad-hoc·설정 손보기. `/track` 로 토글, **세션별**(한 레포에 여러 세션 띄워도 격리, 세션 끝나면 무효) |
 
 - **`/track`** — 현재 프로젝트 모드를 토글 (세션별 flag `.claude_reports/.untracked.<session_id>` on/off — 동시 세션 격리, 세션 끝나면 무효).
