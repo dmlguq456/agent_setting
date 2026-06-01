@@ -25,12 +25,10 @@
 research / analyze-project (산출물) → autopilot-spec (spec/) → autopilot-code (plans/)
 ```
 
-- **spec 없이 코드 작업 X** — 코드 요청인데 `spec/` 없으면 `autopilot-spec` 먼저 (throwaway 1 회성만 예외, 반복되면 spec 승격).
-- **사전 산출물 없이 spec X** — spec 만들 근거(`research/` 또는 `analysis_project/`)가 없으면 `autopilot-research`/`analyze-project` 먼저. 낯선 영역·신규 의도일수록 강제.
-- 문서 트랙도 동형: `research/analyze-project → autopilot-draft → autopilot-refine`.
-- **harness 강제 (opt-in)**: `.claude_reports/.pipeline` 마커를 둔 프로젝트에선 이 순서 체인을 `hooks/artifact-guard.sh` 가 _기계 차단_ — 소스 코드 편집은 `spec/` + `plans/` plan 존재가 전제, 신규 spec 작성은 research/analyze 존재가 전제, plan 작성은 spec 존재가 전제. 작은 코드 변경도 `autopilot-code --qa quick` 으로 경량 plan 트레일을 남기면 통과. 마커 없는 프로젝트(`~/.claude` 등)는 코드 편집 advisory(비차단). `⚡untracked`(`/track`)는 전부 우회.
+- 코드엔 `spec/` 가, spec 엔 `research/`·`analysis_project/` 가 먼저 있어야 한다 (throwaway 1 회성만 예외, 반복 시 승격). 문서 트랙 동형: `research/analyze-project → autopilot-draft → autopilot-refine`.
+- **harness (opt-in)**: `.claude_reports/.pipeline` 마커 둔 프로젝트는 `artifact-guard.sh` 가 체인을 차단 — 코드 편집은 `spec/`+`plans/` plan, 신규 spec 은 research/analyze 가 전제. 작은 변경도 `autopilot-code --qa quick` 트레일로 통과. 마커 없으면 비차단. `/track`(⚡untracked) 우회.
 
-**(0b) 동일 스킬 수정 = 버전 트래킹 (불변식, 아래 harness 가 강제).** 각 산출물은 _그것을 만든 스킬로만_ 수정한다. 직접 Edit 차단·예외(`.untracked`)는 instruction 이 아니라 hook 이 보장 → 아래 주석:
+**(0b) 동일 스킬 수정 = 버전 트래킹 (불변식).** 각 산출물은 _그것을 만든 스킬로만_ 수정:
 
 | 산출물 | 유일 수정 경로 | 버전 자리 |
 |---|---|---|
@@ -40,7 +38,7 @@ research / analyze-project (산출물) → autopilot-spec (spec/) → autopilot-
 | `experiments/*` 실험 | `autopilot-lab` | `_RUNLOG.md` timeline |
 | `user_profile/*` 프로필 | `analyze-user` / `memo --scope user` | `_internal/versions/` |
 
-> **hook 이 강제 (instruction 아님)**: `hooks/artifact-guard.sh` 가 위 표의 추적 산출물 직접 Edit/Write 를 **차단(exit 2)** → 소유 스킬 경유. 비가드: `_internal/`·`pipeline_state.yaml`·`research/`·`analysis_project/`. **⚡untracked**(`.claude_reports/.untracked` touch 또는 `/track`, 끌 때까지 유지) = 우회·snapshot 없음 — 스킬로 산출물 쓰기 직전에도 이 flag 가 필요(ceremony). statusline 📌/⚡ 표시.
+> **harness**: `hooks/artifact-guard.sh` 가 위 표의 추적 산출물 직접 Edit/Write 를 **차단(exit 2)** → 소유 스킬 경유. 비가드: `_internal/`·`pipeline_state.yaml`·`research/`·`analysis_project/`. **⚡untracked**(`.claude_reports/.untracked` touch 또는 `/track`, 끌 때까지 유지) = 우회·snapshot 없음 — 스킬로 산출물 쓰기 직전에도 flag 필요(ceremony). statusline 📌/⚡ 표시.
 
 **(A) spec-backed 프로젝트 — 파이프 우선.** cwd/상위에 `spec/pipeline_state.yaml` 있으면(새 세션 포함) ad-hoc 직접 진단+Edit 로 끝내지 않는다. **순서·절차 = `WORKFLOW.md` §7** (기존 산출물 파악 → spec-drift 체크 → `autopilot-code --qa quick`; spec-guard-hook 이 감지 시 SessionStart 주입). 강제: 산출물 직접 Edit = hook 차단(§0(0b)) / 소스 코드 = `.pipeline` opt-in 프로젝트만 차단(§0(0)).
 
