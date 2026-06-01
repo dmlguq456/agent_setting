@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: Visual review (디자인팀 critic mode) — 6-axis critique covering hierarchy, alignment, accessibility, responsiveness, UX flow, tone consistency. Read-only — no auto-fix.
+description: Visual review — two gates. (1) verifier (디자인팀 verifier mode, separate context, Design MCP) screens for breakage — console errors, layout collapse, intent mismatch — and must pass before critique. (2) critic (디자인팀 critic mode) gives a 6-axis quality critique (hierarchy, alignment, accessibility, responsiveness, UX flow, tone). Both render via the Design MCP and view the image. Read-only — no auto-fix.
 argument-hint: "<design path or app path>"
 ---
 
@@ -21,20 +21,36 @@ argument-hint: "<design path or app path>"
 
 ## Procedure
 
-### Step 1: 검토 대상을 **렌더해서 본다** (필수 — 코드 텍스트 검토 아님)
+review 는 **두 게이트**다 — verifier 가 _깨졌는가_ (콘솔·레이아웃·의도) 를 먼저 걸러내고, critic 이 _얼마나 좋은가_ (6축 품질) 를 본다.
 
-critic 은 코드를 읽고 비평하지 않는다. _렌더된 이미지_ 를 Read 로 직접 보고 비평한다 (디자인팀도 Read 로 이미지 시각 수신 — 실증됨).
+### Step 1: verifier 게이트 (독립 검수 — `Agent(디자인팀, mode=verifier)`)
+
+별도 컨텍스트에서 산출물을 기계적으로 점검 (만든 사람 관대함 제거):
+
+```
+Agent(디자인팀, mode=verifier):
+  "검수 대상: 03_components/preview.html (또는 slides.html)
+   풀 스윕 — Design MCP 로 preview → getConsoleLogs → screenshot → view_image.
+   콘솔 에러 / 레이아웃 붕괴(관통·overlap·잘림·빈 영역) / brief 의도 불일치 / a11y 하드 실패만.
+   verdict: done | needs_work + issues[]."
+```
+
+`needs_work` 면 — `design_state.yaml` `phases.review: failed`, 사용자 보고 후 **critic 까지 가지 않고** components phase 재호출 권장 (깨진 화면을 미감 비평해봐야 무의미).
+
+### Step 2: 검토 대상을 **렌더해서 본다** (critic 입력 — 코드 텍스트 검토 아님)
+
+critic 은 코드를 읽고 비평하지 않는다. **Design MCP** 로 렌더한 _이미지_ 를 직접 본다: `mcp__design__preview` → `screenshot` → `view_image`. 반응형은 `preview` viewport 를 바꿔 mobile/desktop 각각.
 
 | scope | 렌더 → 본다 |
 |---|---|
-| ui / webapp | `preview.html` 또는 dev server → Playwright `preview_screenshot` → Read. 컴포넌트 + 페이지 전체. 가능하면 mobile/desktop breakpoint 각각 |
-| slide | 슬라이드를 HTML/이미지로 렌더 → Read |
-| icon | SVG → `sharp`/`rsvg-convert` PNG → Read (확대) |
-| diagram | SVG/mermaid → PNG → Read. 관통·overlap·label 겹침 직접 확인 |
+| ui / webapp | `preview.html` → preview/screenshot/view_image. 컴포넌트 + 페이지 전체. mobile/desktop viewport 각각 |
+| slide | `slides.html` (deck_stage) → `screenshot({ steps })` 전 슬라이드 |
+| icon | SVG → `sharp`/`rsvg-convert` PNG → view_image (확대) |
+| diagram | SVG/mermaid → PNG → view_image. 관통·overlap·label 겹침 확인 |
 
-렌더 도구·screenshot 불가한 환경이면 그 사실을 critique 에 명시하고 _본 범위만_ 비평 (못 본 것을 본 척 X).
+렌더 불가 환경이면 그 사실을 critique 에 명시하고 _본 범위만_ 비평 (못 본 것을 본 척 X).
 
-### Step 2: 디자인팀 critic 호출
+### Step 3: 디자인팀 critic 호출
 
 ```
 Agent(디자인팀, mode=critic):
@@ -55,7 +71,7 @@ Agent(디자인팀, mode=critic):
    우선순위 (🔴/🟡/🟢) 별 정리, 5-7개 핵심 발견만, 칭찬할 부분 별도"
 ```
 
-### Step 3: critique 검증
+### Step 4: critique 검증
 
 🔴 발견 시 사용자에 보고:
 - 어떤 axis 에서 문제
@@ -66,15 +82,16 @@ Agent(디자인팀, mode=critic):
 
 🟢 만 — 통과.
 
-### Step 4: design_state.yaml 업데이트
+### Step 5: design_state.yaml 업데이트
 
-- `🔴 0`: `phases.review: done`
-- `🔴 ≥ 1`: `phases.review: failed`
+- verifier `needs_work` OR critic `🔴 ≥ 1`: `phases.review: failed`
+- verifier `done` AND critic `🔴 0`: `phases.review: done` (+ `verifier: passed`)
 
 ## Output
 
-- `04_review/critique.md` — 6축 별 발견 사항
-- `04_review/summary.md` — 종합 판정 + 다음 액션
+- `04_review/verifier.md` — verifier 판정 (verdict + issues, 콘솔·레이아웃·의도)
+- `04_review/critique.md` — critic 6축 별 발견 사항
+- `04_review/summary.md` — 종합 판정 (verifier + critic) + 다음 액션
 
 ## Return Format
 

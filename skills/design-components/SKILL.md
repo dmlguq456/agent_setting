@@ -18,10 +18,13 @@ argument-hint: "<design path or app path>"
 
 ## Procedure
 
-### Step 1: brief + tokens Read
+### Step 1: brief + tokens + scaffold Read
 
 - `01_refs/brief.md` — 의도·톤
 - `02_tokens/tokens.md` — 디자인 토큰 (단일 source)
+- **scaffold 매칭** — 바퀴 재발명 금지. `~/.claude/scaffolds/` 에서 골라 design 폴더로 복사 후 채운다:
+  - `slide` → `deck_stage/deck_stage.html` (자동 스케일·키보드 내비·PDF). **덱은 손으로 만들지 말 것.**
+  - variant 요청 → `tweaks_panel/` (파일 늘리지 말고 트윅). 목업 → `device_frames/`. 옵션 비교 → `design_canvas/`. 이미지 자리 → `image_slot/`.
 
 ### Step 2: scope 별 dispatch
 
@@ -57,12 +60,13 @@ Agent(디자인팀, mode=maker):
      - 색 사용 (brand-500 강조, neutral 본문)
      - 타이포 hierarchy (h1 / body / caption)
      - 강조 패턴 (bold / highlight / accent stripe)
-   각 슬라이드를 실제 HTML section (inline CSS, reveal/section 스타일) 으로 렌더 가능하게 작성 —
-   **모든 슬라이드가 렌더 대상** (마크다운 가이드만으로 끝내지 않음).
+   **`deck_stage` scaffold 를 베이스로** — `~/.claude/scaffolds/deck_stage/deck_stage.html` 복사 →
+   각 슬라이드를 `<section class=\"slide\">` 로 채운다 (자동 스케일·키보드 내비·PDF·스피커노트 슬롯 내장).
+   본문 ≥ 24px (1920×1080 기준). **모든 슬라이드가 렌더 대상** (마크다운 가이드만으로 끝내지 않음).
    산출 위치:
      - 03_components/slides/slide_<N>.md (마크다운 가이드, 의도 기록용)
-     - 03_components/slides/slide_<N>.html (렌더 가능한 단일 section)
-   산출 후 Step 4 의 시각 자가검증 루프로 **전 슬라이드** 렌더 → Read → 수정."
+     - 03_components/slides/slides.html (deck_stage 기반 단일 self-contained 덱)
+   산출 후 Step 4 의 시각 자가검증 루프로 **전 슬라이드** 렌더 → view_image → 수정."
 ```
 
 #### scope=icon
@@ -106,18 +110,18 @@ pnpm dlx shadcn@latest add button card dialog
 
 ### Step 4: 시각 자가검증 (필수 — "valid/코드 작성됨" 으로 끝내지 말 것)
 
-maker 가 산출 직후 **반드시 렌더해서 본다**. 좌표·코드만으로 완료 보고 금지. 상세 루프는 `agent-modes/design/maker.md` "시각 자가검증 루프".
+maker 가 산출 직후 **반드시 렌더해서 본다** (Design MCP 경유). 좌표·코드만으로 완료 보고 금지. 상세 루프는 `agent-modes/design/maker.md` + `_design_rules.md` "시각 자가검증 루프".
 
-scope 별 렌더 경로:
+공통 흐름: `mcp__design__preview({ path })` → `mcp__design__getConsoleLogs()` (에러 먼저) → `mcp__design__screenshot({ savePath, steps })` → `mcp__design__view_image({ path })`. scope 별:
 
 | scope | 렌더 → 본다 |
 |---|---|
-| `ui` / `webapp` | `preview.html` 또는 dev server 를 Playwright `preview_screenshot` → Read. 컴포넌트 단품 + **페이지 합성 전체 화면** 둘 다 |
-| `slide` | **모든 슬라이드** 를 HTML/이미지로 렌더 → Read (가이드 markdown 만으로 끝내지 않음). 장수가 많으면 전 슬라이드를 contact-sheet montage 한 장으로 합쳐 한 번의 Read pass 로 봐도 되나, _un-rendered 가이드로 남는 슬라이드 없음_ |
-| `icon` | SVG → `sharp`/`rsvg-convert` PNG → Read (작은 자산은 확대 렌더) |
-| `diagram` | SVG → PNG / mermaid → `mmdc` PNG → Read. 관통·overlap·label 겹침 확인, 의심 영역 crop 확대 |
+| `ui` / `webapp` | `preview.html` 을 `preview` → screenshot → view_image. 컴포넌트 단품 + **페이지 합성 전체 화면** 둘 다. hover/active/empty/loading 은 `steps[]` 로. 반응형은 `preview` viewport 변경 |
+| `slide` | `slides.html` (deck_stage) 을 `preview` → `screenshot({ steps })` 로 **전 슬라이드** 캡처 (각 step: 다음 슬라이드로 이동) → view_image. _un-rendered 가이드로 남는 슬라이드 없음_ |
+| `icon` | SVG → `sharp`/`rsvg-convert` PNG → view_image (작은 자산은 `clip`/density 확대). 또는 preview.html gallery 로 |
+| `diagram` | SVG → PNG / mermaid → `mmdc` PNG → view_image. 관통·overlap·label 겹침 확인, 의심 영역 `clip` crop 확대 |
 
-루프: 렌더 → Read → 자가 비평 (관통·overlap·정렬·위계·잘림·색 역할) → 수정 → 재렌더. 시각적으로 깨끗할 때까지 (최대 3-5 회전). **렌더 이미지를 사용자에 제시** (live-preview 패리티).
+루프: 렌더 → view_image → 자가 비평 (관통·overlap·정렬·위계·잘림·색 역할) → 수정 → 재렌더. 시각적으로 깨끗할 때까지 (최대 3-5 회전). **렌더 이미지를 사용자에 제시** (live-preview 패리티). _Design MCP 미부착 세션_ (막 등록함) 이면 `sharp`/`rsvg`/`mmdc` 정적 렌더로 fallback.
 
 ### Step 4b: standalone preview artifact (`--artifact standalone` 또는 stack 부재 시)
 

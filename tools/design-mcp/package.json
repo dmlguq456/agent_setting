@@ -1,0 +1,20 @@
+{
+  "name": "design-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Design MCP server — Playwright-wrapped visual feedback loop for Claude Code design work (preview/screenshot/console/eval_js/view_image/image_metadata).",
+  "bin": {
+    "design-mcp": "server.js"
+  },
+  "scripts": {
+    "smoke": "node smoke-test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "playwright": "^1.49.0",
+    "pptxgenjs": "^3.12.0",
+    "sharp": "^0.33.5",
+    "zod": "^3.23.8"
+  }
+}

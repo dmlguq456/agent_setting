@@ -1,6 +1,6 @@
 ---
 name: autopilot-design
-description: "Unified design pipeline — orchestrates design-init → design-refs → design-tokens → design-components → design-review → design-handoff. For visual artifacts across UI/UX, slides, diagrams, icons, logos. Can be invoked standalone or auto-delegated from autopilot-spec Phase 2. Distinct from autopilot-draft (text-only documents) — autopilot-design handles visual deliverables. **Claude-Design parity**: every visual output is RENDERED and visually self-verified (PNG/screenshot → Read → fix loop), and can be emitted as a self-contained single-file HTML preview artifact viewable in a browser without any project stack."
+description: "Unified design pipeline — orchestrates design-init → design-refs → design-tokens → design-components → design-review → design-handoff. For visual artifacts across UI/UX, slides, diagrams, icons, logos. Can be invoked standalone or auto-delegated from autopilot-spec Phase 2. Distinct from autopilot-draft (text-only documents) — autopilot-design handles visual deliverables. **Claude-Design parity via a design harness** (claude-design-harness-spec.md): a Design MCP server (~/.claude/tools/design-mcp — preview/screenshot/console/eval_js/view_image) renders every output so it is visually self-verified (render → view_image → fix loop); a separate-context verifier subagent gates console/layout breakage; shared design rules (slop avoidance, scale, HTML conventions) and reusable scaffolds (deck_stage, tweaks_panel, device_frames) standardize craft; converters export PDF/PPTX/single-HTML bundle; a post-write hook auto-checks console on design HTML saves. Outputs can be a self-contained single-file HTML preview viewable without any project stack."
 argument-hint: "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--qa quick|standard|thorough]"
 ---
 
@@ -123,15 +123,30 @@ Phase 5: design-handoff     (코드 위치·import path·재현 가이드)
 
 본 정책은 **paper architecture figure 한정**. 다른 scope (ui · webapp · slide HTML · icon · mermaid/excalidraw diagram) 는 LLM 손그림으로 충분 → 아래 시각 검증 루프로 완결.
 
+## 하네스 (claude-design-harness-spec.md 기반 구성)
+
+본 pipeline 은 _"자기가 만든 결과물을 픽셀로 보고 고치는 피드백 루프"_ 를 본체로 한다. 구성 요소·위치:
+
+| # | 컴포넌트 | 위치 | 역할 |
+|---|---|---|---|
+| ① | **Design MCP Server** | `~/.claude/tools/design-mcp/` (`mcp__design__*`) | preview·screenshot·getConsoleLogs·eval_js·view_image·image_metadata. 시각 피드백 루프의 본체 |
+| ② | **Verifier subagent** | `Agent(디자인팀, mode=verifier)` | 별도 컨텍스트 독립 검수 — 콘솔·레이아웃·의도 _깨짐_ 게이트 |
+| ③ | **디자인 규칙** | `agent-modes/design/_design_rules.md` | 슬롭 회피·비주얼 기본값·스케일·HTML 규약·변형 처리 (프롬프트) |
+| ④ | **Scaffolds** | `~/.claude/scaffolds/` | deck_stage·tweaks_panel·device_frames·design_canvas·image_slot |
+| ⑤ | **Converters** | `~/.claude/tools/design-mcp/convert.mjs` | PDF · 단일 HTML 번들 · PPTX |
+| ⑥ | **Post-write hook** | `~/.claude/hooks/design-postwrite.sh` | design HTML 저장 시 콘솔 자동 체크 (`DESIGN_POSTWRITE_HOOK=0` 으로 opt-out) |
+
+design-init 이 ① 를 자가 프로비저닝 (설치·등록·스모크). 부재로 멈추지 않는다 (스펙 §0.5).
+
 ## 시각 검증 (전 visual phase 공통 — Claude Design parity, 필수)
 
-components·review phase 는 **렌더해서 본 것** 으로만 완료한다. 좌표·코드·XML valid 는 시각 검증이 아니다 (디자인팀 maker/critic 이 _눈 감고_ 좌표 부르는 실패가 반복됐음).
+components·tokens·review phase 는 **Design MCP 로 렌더해서 본 것** 으로만 완료한다. 좌표·코드·XML valid 는 시각 검증이 아니다 (maker/critic 이 _눈 감고_ 좌표 부르는 실패가 반복됐음).
 
-- **렌더 경로**: HTML/React → Playwright `preview_screenshot` 또는 standalone `preview.html` 를 headless 렌더. SVG/diagram → `sharp`/`rsvg-convert`/`cairosvg` 로 PNG. mermaid → mermaid-cli (`mmdc`) 로 PNG.
-- **루프**: 산출 → 렌더 → **Read 로 이미지 직접 보기** → 자가 비평 (관통·overlap·정렬·위계·잘림) → 수정 → 재렌더. 시각적으로 깨끗할 때까지 (최대 3-5 회전). 큰 화면은 결함 의심 영역 crop 확대.
+- **렌더 경로**: HTML/React → `mcp__design__preview` → `getConsoleLogs` → `screenshot` → `view_image`. SVG/diagram 단품 → `sharp`/`rsvg-convert`/`mmdc` PNG → `view_image` (브라우저 불필요).
+- **루프**: 산출 → 렌더 → **이미지 직접 보기** → 자가 비평 (관통·overlap·정렬·위계·잘림) → 수정 → 재렌더. 시각적으로 깨끗할 때까지 (최대 3-5 회전). 큰 화면은 `clip` crop 확대. 대비·box 의심은 `eval_js` 로 수치 확인.
 - **사용자에 렌더 이미지를 보여준다** — 텍스트 보고만으로 완료 X. live-preview 패리티.
-- 상세 루프는 `agent-modes/design/maker.md` 의 "시각 자가검증 루프" / critic 은 `critic.md` Step 1.
-- 렌더 도구 부재 시 design-init 환경 점검이 설치 안내 (시각 검증에 필수 도구).
+- 상세 루프는 `_design_rules.md` §시각 자가검증 루프 (maker/critic/verifier 공유).
+- **Design MCP 미부착 세션** (막 등록한 직후) 이면 `sharp`/`rsvg`/`mmdc` 정적 렌더로 fallback, 다음 세션부터 `mcp__design__*` 사용.
 
 각 phase 끝에 **[CONFIRM Gate]** — autopilot-spec 의 4 갈래 응답 (진행 / 수정 / back-jump / 중단) 패턴 그대로. 발화가 모호하면 메인 Claude 가 옵션 다시 물음 (임의 추측 X).
 
@@ -152,9 +167,11 @@ If `design_state.yaml` 부재 OR `--from init` 명시:
 
 Invoke Skill: `design-init` with the design task as args.
 
+design-init 이 **Design MCP (①) 를 자가 프로비저닝** — 설치(`npm install`)·등록(`claude mcp add design --scope user`)·스모크(`npm run smoke`). 부재 도구는 깔고 진행 (스펙 §0.5), OS 전역 설치만 한 줄 알림.
+
 결과: `00_init/environment_check.md` + `design_state.yaml` 생성
 
-**[CONFIRM Gate 0]** — "환경 점검 완료. refs 로 진행할까요? (진행 / 수정 / 중단)"
+**[CONFIRM Gate 0]** — "환경 점검 + Design MCP 프로비저닝 완료. refs 로 진행할까요? (진행 / 수정 / 중단)"
 
 ### Phase 1: design-refs
 
@@ -209,13 +226,13 @@ Invoke Skill: `design-components` with the design path as args.
 
 Invoke Skill: `design-review` with the design path as args.
 
-내부: `Agent(디자인팀, mode=critic)` 호출 — critic 은 **렌더된 이미지를 Read 로 직접 보고** 비평 (코드 텍스트 검토 아님).
+내부 **두 게이트**: ① `Agent(디자인팀, mode=verifier)` — 별도 컨텍스트에서 Design MCP 로 _깨졌는가_ (콘솔 에러·레이아웃 붕괴·의도 불일치) 기계 판정. ② `Agent(디자인팀, mode=critic)` — 렌더 이미지를 직접 보고 6축 _품질_ 비평.
 
-결과: `04_review/critique.md` — 6축 (위계 / 정렬 / 접근성 / 반응형 / 흐름 / 톤) 별 발견 사항.
+결과: `04_review/verifier.md` (verdict + issues) + `04_review/critique.md` (6축).
 
-🔴 발견 시:
+🔴 / verifier `needs_work` 발견 시:
 - `design_state.yaml` 의 `phases.review: failed`
-- 사용자에 보고 후 components phase 재호출 권장
+- 사용자에 보고 후 components phase 재호출 권장 (깨짐은 critic 전에 verifier 가 차단)
 
 **[CONFIRM Gate 4]** — "review 통과. handoff 로 진행할까요? (진행 / 수정 — 비평 반영 / back-jump — tokens·components / 중단)"
 
@@ -225,6 +242,7 @@ Invoke Skill: `design-handoff` with the design path as args.
 
 결과:
 - `05_handoff/handoff.md` — 사용된 컴포넌트·토큰 위치, frontend 개발자가 import 할 path, 재현 가이드
+- `05_handoff/exports/` — 요청·scope 적합 시 converters (⑤) 산출: PDF / 단일 HTML 번들 / PPTX (`convert.mjs`)
 - autopilot-spec 에서 위임된 경우: 호출자에 결과 path 반환
 
 **[Final Confirm]** — "디자인 사이클 완료. (확인 / back-jump — 어느 phase 든 / 중단)"

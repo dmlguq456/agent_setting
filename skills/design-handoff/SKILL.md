@@ -25,6 +25,19 @@ design phase 의 모든 자산 모음:
 - `03_components/` 컴포넌트 목록 + **standalone preview (필수) + 검증 screenshot** — scope 별 단일 self-contained 파일이 보장됨 (`ui`/`webapp`/`icon`/`diagram` → `03_components/preview.html`, `slide` → `03_components/slides/slides.html`). 브라우저로 바로 열어볼 산출물로 handoff **상단에 필수 명시**. _유일한 예외_: paper architecture figure (디자인팀이 생성하지 않고 사용자 pptx 인계 — render/standalone 대상 아님)
 - `04_review/critique.md` 의 _accepted issue_ (사용자가 의도적으로 두기로 한 것)
 
+### Step 1.5: Output exports (converters, 요청·scope 적합 시)
+
+브라우저 미리보기 외 배포 포맷이 필요하면 `~/.claude/tools/design-mcp/convert.mjs` 로 생성 (별도 도구 불필요 — Playwright/pptxgenjs 내장):
+
+```bash
+node ~/.claude/tools/design-mcp/convert.mjs pdf    <preview/slides>.html [out.pdf]     # 인쇄·배포 (덱: 1슬라이드=1페이지)
+node ~/.claude/tools/design-mcp/convert.mjs bundle <preview>.html        [out.html]    # 모든 에셋 inline → 오프라인 단일 파일
+node ~/.claude/tools/design-mcp/convert.mjs pptx   <slides>.html         [out.pptx]    # slide scope — 슬라이드별 full-bleed PNG + 스피커노트
+```
+
+- `slide` scope → PDF + PPTX 기본 제안. `webapp`/`ui` → bundle (오프라인 공유). `icon`/`diagram` → 보통 PNG/SVG 그대로.
+- 생성물은 `05_handoff/exports/` 에 두고 handoff.md 에 경로 명시.
+
 ### Step 2: handoff.md 작성
 
 `05_handoff/handoff.md`:
@@ -46,7 +59,15 @@ design phase 의 모든 자산 모음:
 |---|---|---|
 | `preview.html` (또는 slide 면 `slides.html`) | `03_components/preview.html` / `03_components/slides/slides.html` | `<렌더 검증 png 경로>` |
 
-프로젝트 stack 없이 브라우저로 바로 열림 = Claude Design artifact 패리티. 시각 자가검증 (렌더 → Read) 통과한 산출물.
+프로젝트 stack 없이 브라우저로 바로 열림 = Claude Design artifact 패리티. 시각 자가검증 (Design MCP 렌더 → view_image) + verifier 게이트 통과한 산출물.
+
+## Exports (배포 포맷, 있으면)
+
+| 포맷 | 파일 | 생성 |
+|---|---|---|
+| PDF | `05_handoff/exports/<name>.pdf` | `convert.mjs pdf` (덱: 1슬라이드=1페이지) |
+| PPTX | `05_handoff/exports/<name>.pptx` | `convert.mjs pptx` (slide scope) |
+| 단일 HTML 번들 | `05_handoff/exports/<name>.bundle.html` | `convert.mjs bundle` (오프라인) |
 
 ---
 

@@ -1,14 +1,14 @@
 {
   "version": 4,
-  "last_readme_sync": "2026-06-01T10:14:39Z",
+  "last_readme_sync": "2026-06-01T15:57:07Z",
   "items": {
     "agents/codex-review-team": {
       "sha256": "7bcfa63d7db33b4c8fdaf88ab0552ebdf97fb7d8010e798c4f620404aaaabd63",
       "synced_at": "2026-06-01T10:14:39Z"
     },
     "agents/design-team": {
-      "sha256": "aaa364ec0122ca56811f67bdb3cc6fc42256336226e2fbf2b67e4bd433c3586a",
-      "synced_at": "2026-06-01T10:14:39Z"
+      "sha256": "3cf69e344de6d750b9c1d669652c59d32b3aa2af136d61d658ca32d2b75e3f8d",
+      "synced_at": "2026-06-01T15:57:07Z"
     },
     "agents/dev-team": {
       "sha256": "bda9d29b3e2d4438f4263b8c5d5ca2a06d92f30cd3f7d9c9d638894e178b2c1b",
@@ -63,8 +63,8 @@
       "synced_at": "2026-06-01T10:14:39Z"
     },
     "skills/autopilot-design": {
-      "sha256": "53674acdf78055110be8ef121c608bcdf8b72d4df2ed7e3b3bdaec6462092ed3",
-      "synced_at": "2026-06-01T10:14:39Z"
+      "sha256": "621625a60a41d326267e78e0fc8f017805666d71bad34cd12ebf3bddd878ac1b",
+      "synced_at": "2026-06-01T15:57:07Z"
     },
     "skills/autopilot-draft": {
       "sha256": "4c7f6926137d097ff1a372d646502ae2e84b5a92304d1caae20965dbbf5dc67e",
@@ -115,28 +115,28 @@
       "synced_at": "2026-06-01T10:14:39Z"
     },
     "skills/design-components": {
-      "sha256": "0562105c2391ce613604bf90be61bf08046457d4e592260f3a5729b037863e84",
-      "synced_at": "2026-06-01T10:14:39Z"
+      "sha256": "b1da9792006a195cfda5814e11bdc90c777621e3de7a2710aac9e0c892c215b4",
+      "synced_at": "2026-06-01T15:57:07Z"
     },
     "skills/design-handoff": {
-      "sha256": "d66ae1d0b3b6c48b3ae12baf942fcb49f9c5dc8a5e460556c5ee8b3020418dfe",
-      "synced_at": "2026-06-01T10:14:39Z"
+      "sha256": "e6402fca7ec89a59c9452c49ce5a11d1985c8c252cffeb827b82e7dff4057ac9",
+      "synced_at": "2026-06-01T15:57:07Z"
     },
     "skills/design-init": {
-      "sha256": "5644b4ded36c1eb5f9e0c1ed79313744fa0e28b873660e1748c5a9f91de072d2",
-      "synced_at": "2026-06-01T10:14:39Z"
+      "sha256": "9fa5057b7d71364cf5227580650ad2db4c5daaf55d78b649e64b2eca87de7f56",
+      "synced_at": "2026-06-01T15:57:07Z"
     },
     "skills/design-refs": {
-      "sha256": "858c8394b066f3af9e335d042b4d1b128d160dd9e0daee30cd0b2991ba6bc733",
-      "synced_at": "2026-06-01T10:14:39Z"
+      "sha256": "66305596f1a9f6f0e2402302d01cae9d3efda8f41e27f9d792223287c2f16fea",
+      "synced_at": "2026-06-01T15:57:07Z"
     },
     "skills/design-review": {
-      "sha256": "720de5fa41e75c424ac79fe2358892b2c75da535349e8e645d22d26149ddf76d",
-      "synced_at": "2026-06-01T10:14:39Z"
+      "sha256": "c864acd3dd272db6a5f5a8329143107f14e2e35a0cc10cdbdf6d13fbd04921b6",
+      "synced_at": "2026-06-01T15:57:07Z"
     },
     "skills/design-tokens": {
-      "sha256": "c5693a6531744660c95a289bb4cb4f3feb6db6c7d5a7bcaf2840dc81df72f129",
-      "synced_at": "2026-06-01T10:14:39Z"
+      "sha256": "b1c0a9f705de224eef2498a8338965daa6a8d259fe6ce530da716a6f579e7743",
+      "synced_at": "2026-06-01T15:57:07Z"
     },
     "skills/draft-refine": {
       "sha256": "b84049540b2bea109a9284e0d78e09b6586e119eb6e7d36b86b8465827f2cd17",
@@ -151,8 +151,8 @@
       "synced_at": "2026-06-01T10:14:39Z"
     },
     "skills/sync-skills": {
-      "sha256": "936fcde5ce93bd0c9c7e31129e898eb53f1fe3395979bba9d1da1f947b957673",
-      "synced_at": "2026-06-01T10:14:39Z"
+      "sha256": "f113700dd36647e8e6ec81081764c5ff80803d443f6e603291345839f38587e3",
+      "synced_at": "2026-06-01T15:57:07Z"
     }
   }
 }
