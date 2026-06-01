@@ -1,4 +1,106 @@
 {
+  "agentPushNotifEnabled": true,
+  "effortLevel": "high",
+  "enabledPlugins": {
+    "codex@openai-codex": true,
+    "cwm@cwm": true
+  },
+  "extraKnownMarketplaces": {
+    "cwm": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/HSUNEH/dev_sys_template.git"
+      }
+    },
+    "openai-codex": {
+      "source": {
+        "repo": "openai/codex-plugin-cc",
+        "source": "github"
+      }
+    }
+  },
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "command": "bash '/home/Uihyeop/.claude/hooks/herdr-agent-state.sh' blocked",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "bash '/home/Uihyeop/.claude/hooks/herdr-agent-state.sh' working",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "bash '/home/Uihyeop/.claude/hooks/herdr-agent-state.sh' release",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/utilities/spec-guard-hook.sh\"",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash '/home/Uihyeop/.claude/hooks/herdr-agent-state.sh' idle",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "bash '/home/Uihyeop/.claude/hooks/herdr-agent-state.sh' idle",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "bash '/home/Uihyeop/.claude/hooks/herdr-agent-state.sh' working",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Read",
@@ -10,42 +112,10 @@
     ],
     "defaultMode": "auto"
   },
-  "statusLine": {
-    "type": "command",
-    "command": "node /home/Uihyeop/.claude/plugins/cache/cwm/cwm/2.0.0/hud/cwm-hud.mjs"
-  },
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/utilities/spec-guard-hook.sh\""
-          }
-        ]
-      }
-    ]
-  },
-  "enabledPlugins": {
-    "cwm@cwm": true,
-    "codex@openai-codex": true
-  },
-  "extraKnownMarketplaces": {
-    "cwm": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/HSUNEH/dev_sys_template.git"
-      }
-    },
-    "openai-codex": {
-      "source": {
-        "source": "github",
-        "repo": "openai/codex-plugin-cc"
-      }
-    }
-  },
-  "effortLevel": "high",
+  "skipAutoPermissionPrompt": true,
   "skipDangerousModePermissionPrompt": true,
-  "agentPushNotifEnabled": true,
-  "skipAutoPermissionPrompt": true
+  "statusLine": {
+    "command": "node /home/Uihyeop/.claude/plugins/cache/cwm/cwm/2.0.0/hud/cwm-hud.mjs",
+    "type": "command"
+  }
 }
