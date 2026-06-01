@@ -28,16 +28,16 @@ dir=$(basename "$S_CWD")
 branch=""
 command -v git >/dev/null 2>&1 && branch=$(git -C "$S_CWD" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
 
-# spec-gate 상태 (artifact-guard harness): 🔒locked(차단 중) ↔ 🔓open(편집 허용)
+# artifact-guard 상태: 📌tracked(pipeline 강제) ↔ ✏️untracked(ad-hoc 직접편집)
 gate=""; gate_open=0
 d="$S_CWD"
 for _ in $(seq 1 40); do
   if [ -f "$d/.claude_reports/spec/pipeline_state.yaml" ] || ls "$d"/.claude_reports/spec/*/pipeline_state.yaml >/dev/null 2>&1; then
-    if [ -f "$d/.claude_reports/.pipeline_active" ]; then
-      mod=$(stat -c %Y "$d/.claude_reports/.pipeline_active" 2>/dev/null || echo 0)
+    if [ -f "$d/.claude_reports/.untracked" ]; then
+      mod=$(stat -c %Y "$d/.claude_reports/.untracked" 2>/dev/null || echo 0)
       [ $(( $(date +%s) - mod )) -lt 3600 ] && gate_open=1
     fi
-    [ "$gate_open" = "1" ] && gate="🔓direct" || gate="🔒pipeline"
+    [ "$gate_open" = "1" ] && gate="⚡untracked(ad-hoc)" || gate="📌tracked(pipeline)"
     break
   fi
   [ "$d" = "/" ] && break

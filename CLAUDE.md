@@ -39,7 +39,7 @@ research / analyze-project (산출물) → autopilot-spec (spec/) → autopilot-
 | `experiments/*` 실험 | `autopilot-lab` | `_RUNLOG.md` timeline |
 | `user_profile/*` 프로필 | `analyze-user` / `memo --scope user` | `_internal/versions/` |
 
-> **harness 강제 (advisory 아님)**: `hooks/artifact-guard.sh` (PreToolUse Edit|Write) 가 `spec/` canonical 파일(prd.md·stack.md·ship.md·api_contract·data_model·ui_flow, flat+monorepo)의 ad-hoc Edit 을 **실제 차단(exit 2)**. 산출물-편집 스킬(autopilot-spec update 등) 호출 _직전_ `.claude_reports/.pipeline_active` 를 `touch` (TTL 60분) → 통과 + 이전 버전 자동 snapshot. 순수 typo·일회성 직접 수정도 같은 touch 로 override. sentinel 안 만들고 직접 Edit 하면 막힌다 = 강제가 작동하는 것.
+> **harness 강제 (advisory 아님)**: `hooks/artifact-guard.sh` (PreToolUse Edit|Write) 가 두 모드를 기계로 가른다. **📌tracked(pipeline, 기본)** — `spec/` canonical 파일(prd.md·stack.md·ship.md·api_contract·data_model·ui_flow, flat+monorepo)의 직접 Edit 을 **차단(exit 2)** → autopilot-spec update 경유(자체 버전관리). **⚡untracked(ad-hoc)** — `.claude_reports/.untracked` 를 `touch` (TTL 60분) 하면 직접 편집 허용·**snapshot 안 함**(명시적 비추적). 산출물-편집 스킬 호출 직전 또는 추적 불필요한 일회성 수정 시 touch. touch 없이 직접 Edit 하면 막힌다 = 강제가 작동하는 것. statusline 의 📌/⚡ 가 이 상태를 비춘다.
 
 **(A) spec-backed 프로젝트 — 파이프 우선.** cwd 또는 상위에 `.claude_reports/spec/pipeline_state.yaml` 이 있으면 (새 세션 포함), 수정·기능 요청을 _ad-hoc 직접 진단 + Edit 으로 끝내지 않는다._
 1. **기존 산출물 파악** (손대기 전) — `spec/prd.md` · `pipeline_state.yaml` · 최근 `plans/*`.
