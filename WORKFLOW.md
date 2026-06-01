@@ -21,7 +21,7 @@
 - **spec 없이 코드 X**: 코드 요청인데 `spec/` 없으면 autopilot-spec 먼저 (throwaway 1 회성만 예외, 반복 시 spec 승격).
 - **사전 산출물 없이 spec X**: spec 근거(`research/` 또는 `analysis_project/`) 없으면 autopilot-research/analyze-project 먼저. 낯선 영역·신규 의도일수록 강제.
 
-**(b) 동일 스킬 수정 = 버전 트래킹** — 각 산출물은 _그것을 만든 스킬로만_ 수정(ad-hoc Edit 금지, 순수 typo·1 줄만 예외), 매 수정 버전 snapshot:
+**(b) 동일 스킬 수정 = 버전 트래킹** (`hooks/artifact-guard.sh` 가 기계 강제 — 추적 산출물 직접 Edit 차단, `.untracked` touch 로만 해제). 각 산출물은 _그것을 만든 스킬로만_ 수정:
 
 | 산출물 | 유일 수정 경로 | 버전 자리 |
 |---|---|---|
@@ -125,6 +125,6 @@
 3. **spec-drift 사전 체크 (code 경유 _전_, 최우선)** — `spec/prd.md` 대조:
    - spec-significant (route / schema·entity / UI-flow / 외부 연동 / 마이그레이션) **또는 코드 기존 drift** → **`autopilot-spec` update 모드** (prd.md 최신화 + `_internal/versions/v{N}/prd.md` 스냅샷). drift 가 _명확_ 하면 자율 진행 후 한 줄 보고, **_애매_ 하면 사용자에 확인.**
    - within-spec (구현 디테일) → _"spec 영향 없음"_ 확인.
-4. **`autopilot-code` 경유** — 작은 자연어 요청도 `--qa quick` (모든 모드 공통 경량 tier) 로 산출물 남기며 진행 → `plans/<date>_<slug>/`. ad-hoc 직접 Edit 은 _순수 typo·1 줄 포맷_ 정도만.
+4. **`autopilot-code` 경유** — 작은 자연어 요청도 `--qa quick` (모든 모드 공통 경량 tier) 로 산출물 남기며 진행 → `plans/<date>_<slug>/` (산출물 직접 Edit 차단은 artifact-guard hook 이 강제 — §0(b)).
 
 > 핵심: ① 트레일 단절 (거의 모든 요청 quick-pipe → `plans/`) ② spec drift (spec 변경은 항상 autopilot-spec update + versioning) ③ 새 세션 맹목 (진입 시 기존 산출물 파악 1 순위 + 도메인 트리거) 셋을 닫는다. autopilot-spec·autopilot-code 둘 다 iterable — 사후 수정은 _재호출_ 이지 새 사이클이 아니다.

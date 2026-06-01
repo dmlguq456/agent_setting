@@ -47,7 +47,7 @@ read -r -d '' ctx <<'EOF' || true
 
 ■ 동일 스킬 수정 = 버전 트래킹: 산출물은 그것을 만든 스킬로만 수정한다.
   spec→autopilot-spec update / plans→autopilot-code / documents→autopilot-draft·refine / experiments→autopilot-lab.
-  ad-hoc 직접 Edit = 순수 typo·1 줄 포맷만. 매 수정 _internal/versions/v{N}/ snapshot.
+  추적 산출물 직접 Edit 은 artifact-guard hook 이 차단(exit 2). 예외 = .untracked touch(또는 /track) → 그 세션만 직접 편집(snapshot 없음).
 EOF
 
 # ---- (2) spec-backed 면 §7 디테일 추가 ----
