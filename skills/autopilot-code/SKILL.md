@@ -15,6 +15,7 @@ argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [
 | `~/.claude/user_profile/07_coding_convention.md` | 사용자 cross-project 컨벤션 | 2순위 (default·fallback) |
 | `.claude_reports/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 | **1순위** — 코드 수정 4 원칙의 source. 충돌 시 per-project 우선 |
 | `.claude_reports/spec/<name>/prd.md` (있으면) | spec 청사진 | spec mode 별 추가 logic 활성화 |
+| `.claude_reports/spec/<name>/design/05_handoff/handoff.md` + `design/02_tokens/tokens.md` + `design/design_state.yaml` (app mode·design 산출 있으면) | 디자인 토큰·컴포넌트 인계 + 토큰 버전 | **app mode 1순위** — UI 구현은 이 토큰(`tokens_path`)·컴포넌트 위에서. 디자인팀 critic 의 _비교 기준_ 도 이 handoff. design 없으면 skip |
 | `.claude_reports/analysis_project/code/` 4 종 실험 자료 (`experiment_readiness`·`cleanup_candidates`·`similar_models`) | _실험 ready 정돈_ 자리 input | autopilot-code "실험 ready 정돈" 발화 시 자동 read |
 
 ### 1단계 — spec 존재 여부
@@ -41,6 +42,25 @@ spec 의 `mode` 배열 (단일 또는 복수) 에 따라 자동 활성화:
 | **research** | (1) entry point (train·eval) 변경 자리 _재현 명령_ 갱신 권장 (2) configs 변경 자리 spec 동기화 (3) 예상 metric 검증 가능 자리 자동 |
 
 복수 mode 시 _해당하는 logic 모두_ 활성화.
+
+### 진입 시 spec/design 갱신 역방향 체크 (코드 작업 _시작 전_)
+
+spec·design 산출물이 _직전 코드 작업 사이클 이후_ 갱신됐는지 먼저 확인 — 갱신분을 못 보고 stale 한 토큰·계약 위에 작업하는 것 차단 (코드→spec 감지의 대칭):
+
+| 비교 | 판정 |
+|---|---|
+| `spec/<name>/pipeline_state.yaml` 의 `last_updated` vs 최근 `plans/<name>/<date>_*/` 작업 날짜 | prd 가 더 최신 → 갱신된 `prd.md` re-read 후 작업 |
+| `design/design_state.yaml` 의 `tokens_version`·`tokens_updated` vs 코드가 반영한 토큰 버전 (직전 plan log 기록) | 토큰이 더 최신 → 최신 `tokens.md`·`tokens.css` re-read, `design_summary.md` 의 변경 entry 확인 |
+
+갱신 감지 시 사용자에 알림 후 진행:
+```
+=== spec/design 갱신 감지 (역방향 drift) ===
+spec/<name> 이 직전 작업(plans/<name>/2026-05-20_*) 이후 갱신됨:
+  - tokens v2 → v3 (2026-06-01, design_summary.md: brand-500 #F97316→#EA580C "대비 강화")
+  - prd.md (2026-05-30)
+갱신분 반영해 진행합니다. (무시하려면 알려주세요)
+```
+app mode 에서 `design_summary.md` 의 최근 토큰 변경이 코드에 미반영이면 _묶음 반영 plan_ 제시 (아래 "Spec 영향 변경 감지" 와 대칭 — 둘이 합쳐 spec↔code 양방향 drift 를 닫음). 현재 작업이 반영한 토큰 버전은 plan/dev_logs 에 기록해 다음 사이클의 anchor 로 남긴다.
 
 ### 경량 추론 (spec 부재 시)
 

@@ -57,6 +57,8 @@ design phase 의 모든 자산 모음:
 | `tokens.css` | `<project>/styles/tokens.css` | `@import` in `app/globals.css` |
 | `tailwind.config.ts` | `<project>/tailwind.config.ts` | 자동 적용 |
 
+**토큰 버전**: `v{N}` (`design_state.yaml` 의 `tokens_version`, `<date>` 갱신) — autopilot-code 가 _역방향 drift 체크_ 시 이 버전을 코드 반영분과 대조. 변경 이력은 `design_summary.md`.
+
 핵심 토큰:
 - Brand color: `--color-brand-500` (#F97316)
 - Sans font: Inter

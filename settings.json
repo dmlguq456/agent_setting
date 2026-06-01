@@ -14,6 +14,18 @@
     "type": "command",
     "command": "node /home/Uihyeop/.claude/plugins/cache/cwm/cwm/2.0.0/hud/cwm-hud.mjs"
   },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/utilities/spec-guard-hook.sh\""
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
     "cwm@cwm": true,
     "codex@openai-codex": true

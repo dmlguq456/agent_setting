@@ -91,6 +91,8 @@
 
 초기 빌드 후 수정·기능 요청 (특히 새 세션). cwd 에 `.claude_reports/spec/<project>/` 있으면 ad-hoc 직접 Edit 금지 — **순서 원칙 (기존 산출물 파악) → analyze → spec → dev** 를 지킨다 (CLAUDE.md §9 imperative).
 
+> **강제 장치 (수동 기억 의존 제거)**: `settings.json` 의 SessionStart hook (`utilities/spec-guard-hook.sh`) 이 새 세션마다 cwd 의 `spec/*/pipeline_state.yaml` 을 스캔해, 감지되면 본 §7 라우팅을 `additionalContext` 로 강제 주입한다. spec-backed cwd 에서 세션을 열면 _이 절을 안 읽고 바로 Edit 하는 경로_ 자체가 막힌다 — hook reminder 가 뜨면 우선 본 §7 을 따른다. (일반 cwd 엔 무음.)
+
 0. **기존 `.claude_reports/` 산출물 파악 (1 순위, 특히 새 세션)** — 손대기 전 `spec/<project>/prd.md` · `pipeline_state.yaml` · 최근 `plans/<project>/*` 를 _필요에 따라_ 먼저 읽어 프로젝트 상태·진행 자리를 잡는다. 맥락 모른 채 작업 X.
 1. **(필요 시) analyze 갱신** — `analysis_project/code/` 가 stale 하거나 낯선 영역이면 `analyze-project --mode code` (incremental) 먼저.
 2. **spec 존재 확인** — 없으면 `autopilot-spec` 먼저 유도 (**spec → dev 하드 원칙**; throwaway 1 회성만 예외, 반복 시 spec 승격 권장).

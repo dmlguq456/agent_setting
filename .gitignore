@@ -31,6 +31,11 @@ mcp-needs-auth-cache.json
 # Cleanup timestamp (per-machine, ephemeral)
 .last-cleanup
 
+# CLI auto-update result + sync log + usage stats (per-machine, ephemeral — churn noise)
+.last-update-result.json
+.sync.log
+stats-cache.json
+
 # analyze-user 내부 — 전체 로컬 전용 (public repo 미포함).
 # clone 해서 "바로 쓰는" 데는 user_profile/0*.md + README 만 필요 (sub-agent 가 그것만 Read).
 # _internal 은 프로필 제작·갱신용 산출물 (raw 분석 run·개인 원본 PDF·버전 스냅샷·metadata) — 개인정보 다수.

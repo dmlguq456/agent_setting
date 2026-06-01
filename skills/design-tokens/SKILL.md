@@ -1,6 +1,6 @@
 ---
 name: design-tokens
-description: Design tokens decision — color palette, typography scale, spacing scale, radius, shadow, motion. Writes tokens.css / tailwind.config.ts. Extends existing tokens (never silently overwrites).
+description: Design tokens decision — color palette, typography scale, spacing scale, radius, shadow, motion. Writes tokens.css / tailwind.config.ts. Extends existing tokens (never silently overwrites). Versions every change — snapshots prior tokens to _internal/versions/v{N}/ + logs reason to design_summary.md (mirrors spec versioning), so later token edits stay traceable.
 argument-hint: "<design path or app path>"
 ---
 
@@ -159,23 +159,30 @@ export default config
 
 스택에 따라 둘 중 하나 또는 둘 다.
 
-### Step 5: 기존 토큰 호환
+### Step 5: 기존 토큰 호환 + 버전 스냅샷 (spec versioning 미러)
 
-기존 `tokens.css` 또는 `tailwind.config.ts` 있으면:
-- 기존 백업: `_internal/tokens_backup_<date>.css`
-- 새 토큰 추가 (기존 키 보존)
-- 충돌 시 사용자 confirm
+토큰 변경 추적은 spec 의 `_internal/versions/v{N}/` 원리를 그대로 미러한다 — _왜 바뀌었는지_ 가 남아야 함. 기존 `tokens.css`/`tailwind.config.ts` 또는 `02_tokens/tokens.md` 발견 시 **덮어쓰기·확장 _전_**:
+
+1. 직전 `02_tokens/tokens.md` + 실제 토큰 파일(`tokens.css`/`tailwind.config.ts`)을 `_internal/versions/v{N}/` 로 자동 snapshot (N = `_internal/versions/` 의 기존 최대 +1).
+2. 새 토큰 추가 (확장 mode — 기존 키 보존) 또는 신규 작성 (재설계 mode — 명시 요청 시).
+3. 변경 narrative 를 `design_summary.md` 에 통합 기록 — _바뀐 토큰 / old→new 값 / 사유 / 날짜_. design cycle 의 **단일 변경 이력 source** (spec 의 `pipeline_summary.md` 미러). 별도 CHANGELOG 두지 않음.
+4. 충돌 시 사용자 confirm.
+
+> **minor/major 판정** (DESIGN_PRINCIPLES §4 동일 원리): minor (1~2 토큰 미세조정) → snapshot 생략 + `design_summary.md` minor-log 만. major (palette/scale 재설계·신규 axis) → `v{N}` snapshot. 누적 minor 5+ 시 `/audit` alert.
 
 ### Step 6: design_state.yaml 업데이트
 
-`phases.tokens: done` + `tokens_path: <실제 파일 경로>` + `specimen: 02_tokens/specimen.html` + `tokens_verified_visually: true`.
+`phases.tokens: done` + `tokens_path: <실제 파일 경로>` + `tokens_version: v{N}` (현재 토큰 버전) + `tokens_updated: <date>` + `specimen: 02_tokens/specimen.html` + `tokens_verified_visually: true`.
+
+> `tokens_version` / `tokens_updated` 는 autopilot-code 의 _역방향 drift 체크_ 가 읽는 필드 — 토큰이 직전 코드 작업 이후 갱신됐는지 판정하는 anchor.
 
 ## Output
 
 - `02_tokens/tokens.md` — 결정 사유 + 토큰 값
 - `02_tokens/specimen.html` — swatch·type·spacing 시각 검증 산출 (렌더 → Read 자가검증 완료)
 - 프로젝트 루트의 `tokens.css` 또는 `tailwind.config.ts` (사용자 confirm 후 작성·확장)
-- `_internal/tokens_backup_<date>.css` (기존 덮어쓰기 시)
+- `_internal/versions/v{N}/` — 직전 토큰 snapshot (major 변경 시; `tokens.md` + 토큰 파일)
+- `design_summary.md` — 토큰 변경 이력 narrative (단일 변경 이력 source; spec `pipeline_summary.md` 미러)
 
 ## Return Format
 
