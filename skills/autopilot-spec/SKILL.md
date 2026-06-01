@@ -166,7 +166,7 @@ phases (재진입 시): spec=done, scaffolding=done, dev=in_progress
 
 ### update mode — 기존 spec 갱신의 canonical 경로 (first-class)
 
-본 skill 은 _초기 생성_ 뿐 아니라 _기존 spec 의 update·iteration_ 을 동급 일급 capability 로 담당. **모든 spec 변경 (`prd.md` 갱신) 은 반드시 본 skill 의 update mode 를 거친다** — 사용자 직접 요청이든, autopilot-code 에서 감지된 drift 든, CLAUDE.md §9 사후 수정 흐름이든 무관. `prd.md` 는 _ad-hoc hand-edit 금지_ — update mode 를 거쳐야 버전 snapshot 이 자동 적용되어 drift·휘발 차단.
+본 skill 은 _초기 생성_ 뿐 아니라 _기존 spec 의 update·iteration_ 을 동급 일급 capability 로 담당. **모든 spec 변경 (`prd.md` 갱신) 은 반드시 본 skill 의 update mode 를 거친다** — 사용자 직접 요청이든, autopilot-code 에서 감지된 drift 든, CLAUDE.md §0 사후 수정 흐름이든 무관. `prd.md` 는 _ad-hoc hand-edit 금지_ — update mode 를 거쳐야 버전 snapshot 이 자동 적용되어 drift·휘발 차단.
 
 update mode 가 하는 일 (3 가지, 한 트랜잭션):
 
@@ -176,7 +176,7 @@ update mode 가 하는 일 (3 가지, 한 트랜잭션):
 
 > update mode 는 _별도 mode 라벨_ 이 아니라 **재진입 시 자동 활성** — `pipeline_state.yaml` 존재 자리 (위 Context Auto-Detection) 면 본 경로. mode 5종 (app/library/api/cli/research) 은 _spec 의 종류_, update 는 _기존 spec 갱신 동작_ — 직교. 따라서 update 자리에서도 해당 spec 의 원래 mode 섹션을 그대로 갱신한다.
 
-**사후 수정 (CLAUDE.md §9 / WORKFLOW §7) drift → 본 경로 라우팅**:
+**사후 수정 (CLAUDE.md §0 / WORKFLOW §7) drift → 본 경로 라우팅**:
 
 - autopilot-code 작업 중 spec 영향 변경 (새 endpoint / schema·data-model / entity 의미 / ui-flow / 마이그레이션 / 외부 연동) 감지 시 → autopilot-code 가 update mode back-jump 호출.
 - **drift 가 CLEAR** (변경 의도·범위 명확) → 자율 진행 + 한 줄 보고.

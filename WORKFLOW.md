@@ -89,13 +89,9 @@
 
 ## 7. 사후 수정 라우팅 — spec-backed 프로젝트
 
-초기 빌드 후 수정·기능 요청 (특히 새 세션). cwd 에 `.claude_reports/spec/<project>/` 있으면 ad-hoc 직접 Edit 금지 — **순서 원칙 (기존 산출물 파악) → analyze → spec → dev** 를 지킨다 (CLAUDE.md §9 imperative).
+초기 빌드 후 수정·기능 요청 (특히 새 세션). cwd 에 `.claude_reports/spec/<project>/` 있으면 ad-hoc 직접 Edit 금지 — **순서 원칙 (기존 산출물 파악) → analyze → spec → dev** 를 지킨다 (CLAUDE.md §0 imperative).
 
-> **강제 장치 (수동 기억 의존 제거) — 2겹**: `settings.json` 에 hook 2 개 등록. cwd 및 _상위_ 에서 `spec/*/pipeline_state.yaml` 을 탐색(서브디렉토리에서 열어도 잡음).
-> - **SessionStart** (`utilities/spec-guard-hook.sh`, soft) — spec-backed 감지 시 본 §7 라우팅을 `additionalContext` 로 주입 (reminder).
-> - **PreToolUse** (`utilities/spec-gate-hook.py`, hard) — spec-backed 프로젝트에서 `.claude_reports/` _밖_ 소스의 Edit/Write 를, 오늘자 active plan 도 없이(=파이프 미경유) 하려 하면 `permissionDecision: ask` 로 가로챔. 통과 조건: 일반 cwd / 타겟이 `.claude_reports/` 내부 / 오늘자 plan 존재. **gate `ask` 가 뜨면 — 순수 typo 면 승인, 기능·구조 변경이면 거부하고 본 §7 파이프로 전환.**
->
-> 즉 reminder 가 advisory 라 무시될 여지를 PreToolUse gate 가 닫는다 — spec-backed 에서 _파이프 안 거친 소스 Edit_ 은 실제로 멈춘다. (일반 cwd 엔 둘 다 무음.)
+> **salience 보강 (강제 아님)**: 본 §7 의 단일 진실 출처는 글로벌 [`CLAUDE.md`](CLAUDE.md) **§0 최상단 규칙** (spec-backed cwd → 파이프 우선). 더해 `settings.json` 의 SessionStart hook (`utilities/spec-guard-hook.sh`) 이 cwd 및 _상위_ 에서 `spec/*/pipeline_state.yaml` 을 탐색(서브디렉토리에서 열어도 잡음)해, 감지 시 본 §7 라우팅을 `additionalContext` 로 주입한다 (reminder — advisory, 일반 cwd 엔 무음). _하드 게이트(PreToolUse)는 의도적으로 쓰지 않음_ — 규칙 + 리마인더로 충분, 정당한 수정까지 막는 노이즈 회피.
 
 0. **기존 `.claude_reports/` 산출물 파악 (1 순위, 특히 새 세션)** — 손대기 전 `spec/<project>/prd.md` · `pipeline_state.yaml` · 최근 `plans/<project>/*` 를 _필요에 따라_ 먼저 읽어 프로젝트 상태·진행 자리를 잡는다. 맥락 모른 채 작업 X.
 1. **(필요 시) analyze 갱신** — `analysis_project/code/` 가 stale 하거나 낯선 영역이면 `analyze-project --mode code` (incremental) 먼저.

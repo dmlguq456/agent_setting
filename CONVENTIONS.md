@@ -24,7 +24,7 @@
 
 ² 다중 reviewer 는 _다른 axes_ 분담: opus 행은 도메인 expertise / methodology / completeness / safety 같은 깊이 필요 axis, sonnet 행은 coverage·typo·표기 일관성·structure 같은 surface scan axis. 각 skill SKILL.md 가 자기 axis 분담 명시.
 
-> **`quick` 는 모든 autopilot mode 공통의 경량 tier**: 작은 자연어 요청·tweak 도 ad-hoc 직접 Edit 으로 끝내지 않고 quick 으로 돌려 plan·log·snapshot artifact 를 남긴다 (1 라운드 강제 / refine 단계 skip). CLAUDE.md §9 (작업은 해당 autopilot-* 경유로 산출물 기록) 의 비용 거의 0 인 경로 — 누적 drift 를 막는다.
+> **`quick` 는 모든 autopilot mode 공통의 경량 tier**: 작은 자연어 요청·tweak 도 ad-hoc 직접 Edit 으로 끝내지 않고 quick 으로 돌려 plan·log·snapshot artifact 를 남긴다 (1 라운드 강제 / refine 단계 skip). CLAUDE.md §0 (작업은 해당 autopilot-* 경유로 산출물 기록) 의 비용 거의 0 인 경로 — 누적 drift 를 막는다.
 
 ### §1.2. Codex availability 정책 (adversarial 전용)
 
