@@ -123,7 +123,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
 6. **📦 산출물의 구조적 의미** — per-project (`.claude_reports/`) vs cross-project (`user_profile/`) 두 축. per-project 는 _폴더 / 무엇이 쌓이나_ 작은 표 (analysis_project·research·documents·spec·plans·experiments), cross-project 는 한 단락 + 3-tier T1/T2/T3 _왜 그렇게 나뉘나_ 한 단락 (사용자는 T1 만 / spec/ 한 폴더 누적) + 상세 매핑 reference (CONVENTIONS §5·§6.5, WORKFLOW §4, CLAUDE.md Drift-Free Essentials).
 7. **🗣️ 부르는 법** — 두 갈래 한 줄 (자연어 / slash 동일 동작):
    - `### (1) 자연어 발화` — prose (옵션 자동 구성 + 자연어 요약 컨펌 + yes/수정/cancel/자율 진행 + ceremony 큰 10 (autopilot-\* 9 + analyze-user) vs 작은 3 컨펌 의무) + [`CLAUDE.md`](CLAUDE.md) §0 reference + **자연어 발화 예시 표** (_사람 유지 영역_)
-   - `### (2) slash 직접 입력` — prose (의도 명시 = 즉시 invoke) + slash 예시 code block (_축약 5 줄_: autopilot-code / autopilot-draft / autopilot-refine / audit / **track**(📌↔⚡ 토글) — argument-hint 에서 자동 생성, 전체 syntax dump X) + 전체 옵션은 SKILL.md reference.
+   - `### (2) slash 직접 입력` — prose (의도 명시 = 즉시 invoke) + slash 예시 code block (_축약 6 줄_: autopilot-code / autopilot-draft / autopilot-refine / audit / **track**(📌↔⚡ 토글) / **pipeline**(순서 강제 opt-in 토글) — argument-hint 에서 자동 생성, 전체 syntax dump X) + 전체 옵션은 SKILL.md reference.
 8. **🤝 Agents** — name (agent .md 링크) / 모델 / _의의_ 표 (_자동 호출자·역할 dump X_) + 직접 호출 안내 한 단락 + user_profile 참조 매트릭스는 [`user_profile/README.md`](user_profile/README.md) reference (README 에 매트릭스 표 _넣지 않음_).
 9. **📚 더 깊이 + 🔁 동기화** — canonical 문서 reference index 표 (CLAUDE.md / CONVENTIONS / WORKFLOW / DESIGN_PRINCIPLES / user_profile/README + **harness 행**: `hooks/`·`utilities/`·`statusline.sh`) + `/sync-skills` 두 명령 + GitHub 링크.
 
@@ -155,7 +155,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
 | §4 4 트랙 | Diagram (개념 1 개) + 트랙별 narrative + 점검·정정·프로필 quote + WORKFLOW reference 자동 갱신 |
 | §5 Skill 카탈로그 | name / _의의_ 자동 추출. 옵션·역할 dump 컬럼 X. 새 skill 추가·삭제 자동 반영 |
 | §6 산출물 구조 | 두 축 bullet + 3-tier _왜_ 한 단락 + CONVENTIONS·WORKFLOW reference 자동 갱신 |
-| **§7 부르는 법** | **§7.(1) 자연어 발화 예시 표 + 그 직전 prose 는 사람 유지 영역 — 현행 wording 그대로 보존 (SHA 비교 skip).** 단 _섹션 헤딩 자체_ 누락 시 placeholder 헤딩 + 한 줄만 삽입. §7.(2) slash 예시 code block 은 argument-hint 에서 _축약 5 줄_(+`track`) 자동 생성 + ceremony 큰 10 (autopilot-\* 9 + analyze-user) vs 작은 3 컨펌 의무·CLAUDE.md §0 reference 자동 갱신 |
+| **§7 부르는 법** | **§7.(1) 자연어 발화 예시 표 + 그 직전 prose 는 사람 유지 영역 — 현행 wording 그대로 보존 (SHA 비교 skip).** 단 _섹션 헤딩 자체_ 누락 시 placeholder 헤딩 + 한 줄만 삽입. §7.(2) slash 예시 code block 은 argument-hint 에서 _축약 6 줄_(+`track`·`pipeline`) 자동 생성 + ceremony 큰 10 (autopilot-\* 9 + analyze-user) vs 작은 3 컨펌 의무·CLAUDE.md §0 reference 자동 갱신 |
 | §8 Agents 표 | name / 모델 / _의의_ 자동 추출. 자동 호출자 컬럼 X. user_profile 매트릭스는 표 대신 user_profile/README reference |
 | §9 더 깊이 + 동기화 | canonical reference index 표(+harness 행) + 두 명령 + GitHub 링크 고정 wording |
 

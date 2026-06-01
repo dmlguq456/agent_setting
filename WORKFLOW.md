@@ -20,7 +20,7 @@
 
 - **spec 없이 코드 X**: 코드 요청인데 `spec/` 없으면 autopilot-spec 먼저 (throwaway 1 회성만 예외, 반복 시 spec 승격).
 - **사전 산출물 없이 spec X**: spec 근거(`research/` 또는 `analysis_project/`) 없으면 autopilot-research/analyze-project 먼저. 낯선 영역·신규 의도일수록 강제.
-- **harness 강제 (opt-in `.claude_reports/.pipeline`)**: 마커 둔 프로젝트는 `artifact-guard.sh` 가 체인을 기계 차단 — 코드 편집 = `spec/`+`plans/` plan 전제, spec 작성 = research/analyze 전제. 작은 변경도 `autopilot-code --qa quick` 트레일로 통과. 마커 無 = advisory. `/track` 우회.
+- **harness 강제 (opt-in, `/pipeline` 로 켬)**: `.claude_reports/.pipeline` 마커 둔 프로젝트는 `artifact-guard.sh` 가 체인을 기계 차단 — 코드 편집 = `spec/`+`plans/` plan 전제, spec 작성 = research/analyze 전제. 작은 변경도 `autopilot-code --qa quick` 트레일로 통과. 마커 無 = advisory. `/track` 우회.
 
 **(b) 동일 스킬 수정 = 버전 트래킹** (`hooks/artifact-guard.sh` 가 기계 강제 — 추적 산출물 직접 Edit 차단, `.untracked` touch 로만 해제). 각 산출물은 _그것을 만든 스킬로만_ 수정:
 
