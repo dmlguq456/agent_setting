@@ -16,13 +16,13 @@
 
 | 모드 | 무엇이 막히나 |
 |---|---|
-| **📌 tracked** (기본) | 추적 산출물(`spec/`·`plans/`·`documents/`·`experiments/`·`user_profile/0*.md`) 직접 Edit/Write → **차단(exit 2)**, 소유 스킬 경유. opt-in 프로젝트(`.claude_reports/.pipeline`)는 _순서 체인_ 도 강제 — 코드 편집은 `spec/`+`plans/` plan 존재가 전제, 신규 spec 은 research/analyze 가 전제 |
+| **📌 tracked** (기본) | 추적 산출물(`spec/`·`plans/`·`documents/`·`experiments/`·`user_profile/0*.md`) 직접 Edit/Write → **차단(exit 2)**, 소유 스킬 경유. `spec/` 있는 프로젝트는 _순서 체인_ 도 강제 — 코드 편집은 `plans/` plan 존재가 전제, 신규 spec 은 research/analyze 가 전제 |
 | **⚡ untracked** | 차단 전부 해제 — 탐색·일회성 ad-hoc·설정 손보기. `/track` 로 토글, 다시 끌 때까지 유지 |
 
 - **`/track`** — 현재 프로젝트 모드를 토글 (`.claude_reports/.untracked` on/off).
 - **statusline** 이 모드(📌/⚡) · git 브랜치 · context 사용량 막대를 표시 → 한눈에.
 - 막히면? 차단 메시지가 _어느 스킬로 가야 하는지_ 알려준다. 정식 작업은 그 스킬(예 `autopilot-code --qa quick` — 작은 변경도 경량 트레일), 진짜 일회성이면 `/track`.
-- **opt-in** — 코드 편집 차단은 `/pipeline` 로 켠 프로젝트만 (블랭킷이면 설정 repo 까지 막혀서 per-project 토글). `.claude_reports/.pipeline` 마커 on/off.
+- **자동 scope** — 코드 편집 차단은 `spec/` 가 있는 프로젝트에만 (spec 없는 설정·일반 repo 는 자유). 켜고 끄는 토글 없이 spec 유무로 결정.
 
 > 산출물은 소유 스킬로만 바뀌어 버전·트레일이 끊기지 않고, 순서(research→spec→plan→code)가 지켜진다.
 
@@ -166,7 +166,6 @@ analyze-project  →  autopilot-spec ↻  →  autopilot-code ↻
 /autopilot-refine "<prompt>" [--qa ...] [--memo <file>]
 /audit            <artifact> [--scope ...]
 /track            현재 프로젝트 📌tracked ↔ ⚡untracked 토글 (harness 차단 on/off)
-/pipeline         현재 프로젝트 순서 강제(spec→plan→code) opt-in 토글
 ```
 
 전체 옵션 조합·default·QA 의미는 각 SKILL.md `argument-hint` / `## Usage`.

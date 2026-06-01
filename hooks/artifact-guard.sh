@@ -5,12 +5,11 @@
 # 강제 2종 (tracked 모드):
 #   (1) 산출물 추적 [모든 .claude_reports 프로젝트] — spec/ canonical·plans/·documents/·
 #       experiments/·user_profile/0*.md 직접 Edit 차단(exit 2) → 소유 스킬 경유.
-#   (2) 순서 체인 [opt-in: .claude_reports/.pipeline 마커 둔 프로젝트만] — 의존 산출물 없이
-#       다음 단계 진입 차단:
-#         · 소스 코드 Edit/Write → spec/ 존재 + plans/ 에 plan 존재 필요.
+#   (2) 순서 체인 [spec/ 있는 프로젝트 자동] — 의존 산출물 없이 다음 단계 진입 차단:
+#         · 소스 코드 Edit/Write → spec/ + plans/ plan 존재 필요 (spec 없는 프로젝트는 자유).
 #         · 신규 spec 작성       → research/ 또는 analysis_project/ 필요.
 #         · 신규 plan 작성        → spec/ 필요.
-#       (마커 없는 프로젝트는 코드 편집 자유 — ~/.claude 설정 repo 등 footgun 회피.)
+#       spec 유무로 자동 scope — ~/.claude 설정 repo(spec 없음) 등 footgun 회피.
 # 단일 출처: CLAUDE.md §0 / WORKFLOW.md §0.
 set -euo pipefail
 
@@ -65,12 +64,10 @@ case "$fp" in
   */.claude/user_profile/0*.md)    block "tracked 산출물 직접 편집 차단 (user_profile: $base)" "→ analyze-user / memo --scope user" ;;
 esac
 
-# ---- (2) 순서 체인: 소스 코드 (opt-in 프로젝트만) ----
+# ---- (2) 순서 체인: 소스 코드 — spec 관리 프로젝트면 자동 강제 ----
 case "$fp" in
   "$cr"/*) exit 0 ;;          # .claude_reports 내부 비추적 파일(research 등) → 통과
 esac
-[ -f "$cr/.pipeline" ] || exit 0   # opt-in 안 한 프로젝트 → 코드 편집 자유
-
-has_spec || block "코드 작업 전 spec 필요 (이 프로젝트는 .pipeline opt-in)" "→ autopilot-spec (그 전 research/analyze 필요)"
+has_spec || exit 0           # spec 없는 프로젝트(설정 repo·일반 repo) → 코드 편집 자유
 has_plan || block "코드 작업 전 plan 필요 — 모든 코드 변경은 plans/ 트레일을 남긴다" "→ autopilot-code --qa quick (작은 변경도 경량 plan 트레일)"
 exit 0
