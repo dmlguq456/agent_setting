@@ -37,7 +37,7 @@ for _ in $(seq 1 40); do
       mod=$(stat -c %Y "$d/.claude_reports/.pipeline_active" 2>/dev/null || echo 0)
       [ $(( $(date +%s) - mod )) -lt 3600 ] && gate_open=1
     fi
-    [ "$gate_open" = "1" ] && gate="🔓ad-hoc" || gate="🔒strict"
+    [ "$gate_open" = "1" ] && gate="🔓직접" || gate="🔒절차"
     break
   fi
   [ "$d" = "/" ] && break
@@ -85,7 +85,7 @@ if [ "${ctx_pct:-(-1)}" -ge 0 ] 2>/dev/null; then
   bar=""
   i=0; while [ "$i" -lt "$filled" ]; do bar="${bar}█"; i=$((i+1)); done
   while [ "$i" -lt "$segs" ]; do bar="${bar}░"; i=$((i+1)); done
-  out="${out} ${DIM}context${RST} ${cc}${bar} ${ctx_pct}%${RST}"
+  out="${out} ${DIM}🧠 context${RST} ${cc}${bar} ${ctx_pct}%${RST}"
 fi
 out="${out} ${DIM}${S_MODEL}${RST}"
 printf '%s' "$out"
