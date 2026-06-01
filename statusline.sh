@@ -37,7 +37,7 @@ for _ in $(seq 1 40); do
       mod=$(stat -c %Y "$d/.claude_reports/.pipeline_active" 2>/dev/null || echo 0)
       [ $(( $(date +%s) - mod )) -lt 3600 ] && gate_open=1
     fi
-    [ "$gate_open" = "1" ] && gate="🔓직접" || gate="🔒절차"
+    [ "$gate_open" = "1" ] && gate="🔓direct" || gate="🔒pipeline"
     break
   fi
   [ "$d" = "/" ] && break
