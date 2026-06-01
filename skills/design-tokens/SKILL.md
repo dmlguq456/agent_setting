@@ -159,9 +159,9 @@ export default config
 
 스택에 따라 둘 중 하나 또는 둘 다.
 
-### Step 5: 기존 토큰 호환 + 버전 스냅샷 (spec versioning 미러)
+### Step 5: 기존 토큰 호환 + 버전 스냅샷
 
-토큰 변경 추적은 spec 의 `_internal/versions/v{N}/` 원리를 그대로 미러한다 — _왜 바뀌었는지_ 가 남아야 함. 기존 `tokens.css`/`tailwind.config.ts` 또는 `02_tokens/tokens.md` 발견 시 **덮어쓰기·확장 _전_**:
+토큰 변경은 spec 의 `_internal/versions/v{N}/` 와 같은 방식으로 추적한다. 기존 `tokens.css`/`tailwind.config.ts` 또는 `02_tokens/tokens.md` 발견 시 **덮어쓰기·확장 _전_**:
 
 1. 직전 `02_tokens/tokens.md` + 실제 토큰 파일(`tokens.css`/`tailwind.config.ts`)을 `_internal/versions/v{N}/` 로 자동 snapshot (N = `_internal/versions/` 의 기존 최대 +1).
 2. 새 토큰 추가 (확장 mode — 기존 키 보존) 또는 신규 작성 (재설계 mode — 명시 요청 시).

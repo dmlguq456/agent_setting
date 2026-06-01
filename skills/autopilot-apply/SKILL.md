@@ -21,7 +21,7 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §6 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상 (ceremony 큰 갈래 — 실제 사용자 source 파일을 건드리므로). 메인 Claude 가 아래 trigger 를 인지하면 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
+본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상 (ceremony 큰 갈래 — 실제 사용자 source 파일을 건드리므로). 메인 Claude 가 아래 trigger 를 인지하면 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
 
 ### Trigger 신호 (자연어 발화 예시)
 - "cheatsheet 를 main.tex 에 적용해줘" / "mutation 직접 붙여줘" / "paste 대신 클로드가 적용해"
@@ -82,7 +82,7 @@ Reason internally in English. 사용자 향 출력 (chat 요약, diff 안내, re
 ### Stage A — Preflight (적용 전 ceremony)
 
 1. **Cheatsheet 식별**: prompt 키워드로 `ls -d .claude_reports/documents/*<kw>*` fuzzy match → cheatsheet 파일 (`draft/draft.md` 또는 `draft/draft_ko.md`). 다수/0건 처리는 autopilot-refine Artifact Resolution 과 동일.
-2. **Source 식별**: `--source` 명시값 우선. 없으면 cheatsheet 의 _최종 verification 체크리스트_ / WHERE anchor 에서 `*.tex` 경로 grep 추론. 못 찾으면 사용자에게 질문 (글로벌 §5 적용 — ScheduleWakeup 10분, 답 없으면 가장 그럴듯한 단일 `main.tex` 로 진행).
+2. **Source 식별**: `--source` 명시값 우선. 없으면 cheatsheet 의 _최종 verification 체크리스트_ / WHERE anchor 에서 `*.tex` 경로 grep 추론. 못 찾으면 사용자에게 질문 (글로벌 §2 적용 — ScheduleWakeup 10분, 답 없으면 가장 그럴듯한 단일 `main.tex` 로 진행).
 3. **Precondition gate** (위 Preconditions 1-4) 강제. 실패 시 abort.
 4. **Mutation 파싱**: cheatsheet 에서 M-label 단위로 추출 — 각 mutation = `(M-id, where_anchor, classification, old_or_locator, new_block, reason)`. classification 은 cheatsheet 의 Tier (🔴/🟡/🟢) 또는 MECH/SEM/STRUCT 로 매핑.
 5. **Isolation 진입**:

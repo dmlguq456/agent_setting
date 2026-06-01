@@ -10,7 +10,7 @@ argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §6 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude 가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
+본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude 가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
 
 ### Trigger 신호 (자연어 발화 예시)
 
@@ -25,7 +25,7 @@ argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover
 - `<aspect>`: 발화로 추론 — "figure" / "스타일" → `figure`, "발표" → `presentation`, "작성 톤" → `writing`, "코딩 컨벤션" / "model 폴더" / "layer" → `coding_convention`, 명확히 안 보이면 `all`.
 - `--mode`: 기본 `update`. 사용자가 "다시 처음부터" / "init" 신호 주면 `init`.
 - `--from`: 자동 추론 (`pipeline_state.yaml` 발견 시 마지막 성공 phase 다음부터).
-- `--user-refine`: **off** (글로벌 §4 — 명시 신호 있을 때만 켬).
+- `--user-refine`: **off** (글로벌 §2 — 명시 신호 있을 때만 켬).
 
 ### Override 1순위 — autopilot 우회
 

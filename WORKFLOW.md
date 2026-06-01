@@ -73,7 +73,7 @@
 | **autopilot-refine** | autopilot-draft 와 동일 재활용 + 편집팀 review |
 | **analyze-user** | 자료팀(cross-project 수집) + 편집팀 review |
 
-**사용자 주도성**: 각 entry = 명시 의도 단위. 메인 Claude 가 옵션 자동 구성 + 자연어 요약 컨펌 → CONFIRM Gate 4 갈래(진행 / 수정-refine v2 / back-jump / 중단). 발화 모호 시 재질문(임의 추측 X). 호출 패턴 상세 = [`CLAUDE.md §6`](CLAUDE.md).
+**사용자 주도성**: 각 entry = 명시 의도 단위. 메인 Claude 가 옵션 자동 구성 + 자연어 요약 컨펌 → CONFIRM Gate 4 갈래(진행 / 수정-refine v2 / back-jump / 중단). 발화 모호 시 재질문(임의 추측 X). 호출 패턴 상세 = [`CLAUDE.md §0`](CLAUDE.md).
 
 ## 6. 산출물 폴더 — 코드 = `spec/` + `plans/` 형제 2-bucket
 
@@ -91,7 +91,7 @@
 
 초기 빌드 후 수정·기능 요청 (특히 새 세션). cwd 에 `.claude_reports/spec/<project>/` 있으면 ad-hoc 직접 Edit 금지 — **순서 원칙 (기존 산출물 파악) → analyze → spec → dev** 를 지킨다 (CLAUDE.md §0 imperative).
 
-> **salience 보강 (강제 아님)**: 본 §7 의 단일 진실 출처는 글로벌 [`CLAUDE.md`](CLAUDE.md) **§0 최상단 규칙** (spec-backed cwd → 파이프 우선). 더해 `settings.json` 의 SessionStart hook (`utilities/spec-guard-hook.sh`) 이 cwd 및 _상위_ 에서 `spec/*/pipeline_state.yaml` 을 탐색(서브디렉토리에서 열어도 잡음)해, 감지 시 본 §7 라우팅을 `additionalContext` 로 주입한다 (reminder — advisory, 일반 cwd 엔 무음). _하드 게이트(PreToolUse)는 의도적으로 쓰지 않음_ — 규칙 + 리마인더로 충분, 정당한 수정까지 막는 노이즈 회피.
+> 본 §7 의 단일 출처는 글로벌 [`CLAUDE.md`](CLAUDE.md) §0. `settings.json` 의 SessionStart hook (`utilities/spec-guard-hook.sh`) 이 cwd·상위의 `spec/*/pipeline_state.yaml` 을 감지하면 본 §7 을 `additionalContext` 로 주입한다.
 
 0. **기존 `.claude_reports/` 산출물 파악 (1 순위, 특히 새 세션)** — 손대기 전 `spec/<project>/prd.md` · `pipeline_state.yaml` · 최근 `plans/<project>/*` 를 _필요에 따라_ 먼저 읽어 프로젝트 상태·진행 자리를 잡는다. 맥락 모른 채 작업 X.
 1. **(필요 시) analyze 갱신** — `analysis_project/code/` 가 stale 하거나 낯선 영역이면 `analyze-project --mode code` (incremental) 먼저.

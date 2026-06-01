@@ -8,7 +8,7 @@ argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|med
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §6 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude 가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
+본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude 가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
 
 ### Trigger 신호 (자연어 발화 예시)
 
@@ -200,7 +200,7 @@ artifact_dir: <abs path>
 
 **Output**: 사용자 답변을 통합한 refined query를 Step 2로 전달 + `pipeline_state.yaml`의 `clarified_intent` 필드에 한 줄 요약 기록.
 
-**§5 자율 진행**: 질문 던질 때 글로벌 [CLAUDE.md](../../CLAUDE.md) §5 적용 — ScheduleWakeup 15-20분 동시 호출, 답 없으면 mode 추론 결과 + depth medium + 가장 좁은 범위 default 로 자율 진행.
+**§5 자율 진행**: 질문 던질 때 글로벌 [CLAUDE.md](../../CLAUDE.md) §2 적용 — ScheduleWakeup 15-20분 동시 호출, 답 없으면 mode 추론 결과 + depth medium + 가장 좁은 범위 default 로 자율 진행.
 
 ### Step 2: Source Search (direct Agent call) — mode-aware
 

@@ -35,7 +35,7 @@
    산출물 위치)
 2. `~/.claude/agents/*.md` (8 자료 — 자료팀 / 디자인팀 / 연구팀 / 편집팀 / 기획팀 /
    개발팀 / 품질관리팀 / codex-review-team) — description / tools / model / 호출 패턴
-3. `~/.claude/CLAUDE.md` §6 (autopilot-* 호출 패턴 / Pre-check 발화 분류)
+3. `~/.claude/CLAUDE.md` §0 (autopilot-* 호출 패턴 / Pre-check 발화 분류)
 4. `~/.claude/CONVENTIONS.md` §5 (산출물 폴더 컨벤션 3-tier) + §2 (agent model)
 5. `~/.claude/WORKFLOW.md` (있으면)
 6. `~/.claude/user_profile/01_paper_figure_style.md` (시각 default — 사용자 figure 성향)

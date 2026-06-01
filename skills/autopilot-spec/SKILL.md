@@ -38,7 +38,7 @@ argument-hint: "<task description> [--mode auto|app|library|api|cli|research|upd
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §6 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상.
+본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상.
 
 ### Trigger 신호 (자연어 발화 예시)
 

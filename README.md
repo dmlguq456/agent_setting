@@ -124,7 +124,7 @@ analyze-project  →  autopilot-spec ↻  →  autopilot-code ↻
 
 ### (1) 자연어 발화
 
-메인 Claude 가 옵션을 자동 구성하고 **한 줄 요약 + 옵션 펼침 + 선택 근거** 로 컨펌을 묻는다. yes / 수정 ("qa thorough 로", "X 빼고") / cancel. 무응답이면 추천안으로 자율 진행. ceremony 큰 10 개 (autopilot-\* 9 + analyze-user) 만 컨펌 의무, `audit`/`memo`/`analyze-project` 는 즉시 invoke. 상세 룰은 → [`CLAUDE.md`](CLAUDE.md) §6.
+메인 Claude 가 옵션을 자동 구성하고 **한 줄 요약 + 옵션 펼침 + 선택 근거** 로 컨펌을 묻는다. yes / 수정 ("qa thorough 로", "X 빼고") / cancel. 무응답이면 추천안으로 자율 진행. ceremony 큰 10 개 (autopilot-\* 9 + analyze-user) 만 컨펌 의무, `audit`/`memo`/`analyze-project` 는 즉시 invoke. 상세 룰은 → [`CLAUDE.md`](CLAUDE.md) §0.
 
 | 사용자 발화 | 메인 Claude 컨펌 (자연어 요약) |
 |---|---|

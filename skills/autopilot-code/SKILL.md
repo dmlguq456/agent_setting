@@ -60,7 +60,7 @@ spec/<name> 이 직전 작업(plans/<name>/2026-05-20_*) 이후 갱신됨:
   - prd.md (2026-05-30)
 갱신분 반영해 진행합니다. (무시하려면 알려주세요)
 ```
-app mode 에서 `design_summary.md` 의 최근 토큰 변경이 코드에 미반영이면 _묶음 반영 plan_ 제시 (아래 "Spec 영향 변경 감지" 와 대칭 — 둘이 합쳐 spec↔code 양방향 drift 를 닫음). 현재 작업이 반영한 토큰 버전은 plan/dev_logs 에 기록해 다음 사이클의 anchor 로 남긴다.
+app mode 에서 `design_summary.md` 의 최근 토큰 변경이 코드에 미반영이면 _묶음 반영 plan_ 제시 (아래 "Spec 영향 변경 감지" 의 역방향). 현재 작업이 반영한 토큰 버전은 plan/dev_logs 에 기록해 다음 사이클의 anchor 로 남긴다.
 
 ### 경량 추론 (spec 부재 시)
 
@@ -138,7 +138,7 @@ autopilot-lab "X 실험" — Step 0 에서 readiness ✓ 확인 후 진행
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §6 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude 가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
+본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude 가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
 
 ### Trigger 신호 (자연어 발화 예시)
 
@@ -157,7 +157,7 @@ autopilot-lab "X 실험" — Step 0 에서 readiness ✓ 확인 후 진행
 - `--mode`: 발화 신호로 dev/debug 자동 추론. cwd 가 plan 폴더 + 최근 dev_logs/ 있으면 dev 우세, 에러 로그·traceback 있으면 debug 우세.
 - `--qa`: dev=thorough, debug=standard (default — global §6 high-stakes 신호 시 adversarial 자동 상향)
 - `--from`: 자동 추론 (`pipeline_state.yaml` 발견 시 마지막 성공 stage 다음부터)
-- `--user-refine`: **off** (글로벌 §4 — "사용자 검토 끼워" / "memo 추가하게 멈춰줘" 같은 명시 신호 있을 때만 켬)
+- `--user-refine`: **off** (글로벌 §2 — "사용자 검토 끼워" / "memo 추가하게 멈춰줘" 같은 명시 신호 있을 때만 켬)
 
 ### Override 1순위 — autopilot 우회
 

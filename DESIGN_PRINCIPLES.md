@@ -4,7 +4,7 @@
 >
 > 자매 문서 (각자 단일 출처, 본 문서는 포인터만):
 > - `CONVENTIONS.md` — QA 5단계 / agent model 표기 / 산출물 폴더 컨벤션 (§5) / hard invariants
-> - `CLAUDE.md` §1~§6 — 메인 Claude 자체 행동 메타 원칙 (말투·출력 자제·약속어 self-check·pause flag 비자동·자율 진행·autopilot-* 호출 Pre-check)
+> - `CLAUDE.md` §0~§3 — 작업 라우팅 (spec-first 파이프 + autopilot-* 호출 Pre-check) + 메인 Claude 행동 메타 원칙 (응답 규율·pause/자율·후속 단계)
 >
 > 본 문서는 _구조와 행동의 골격_ 만 담고, 정의·정책·운영 wording 은 위 자매 문서로 위임.
 
@@ -113,7 +113,7 @@ QA loop 는 _skill 안에서 닫힌 loop_ 으로 돌고, orchestrator 는 verdic
 - 판교체 회피 — 한국어 산출물에서 영어 어휘를 한국어 어순에 그냥 박지 않는다. 도메인 영어와 정착 외래어만 영어로, 나머지는 한국어로. 매핑 표 — `agents/editorial-team.md`
 - 적용 범위 — 사용자가 직접 보는 _모든_ .md 산출물 (doc 한정 X). autopilot-code 의 final-report, audit 보고서, autopilot-refine 결과, pipeline_summary 등
 
-**메인 Claude 응답 자체** 의 메타 원칙은 별개 layer — CLAUDE.md §1~§6 single source (§1 판교체 회피 · §2 출력 자제 · §3 동사 약속어 self-check · §4 pause flag 비자동 · §5 질문 후 자율 진행 · §6 autopilot-* 호출 Pre-check + 컨펌 패턴).
+**메인 Claude 응답 자체** 의 메타 원칙은 별개 layer — CLAUDE.md §0~§3 single source (§0 작업 라우팅: spec-first 파이프 + autopilot-* 호출 Pre-check·컨펌 · §1 응답 규율: 판교체 회피·출력 자제·동사 약속어 self-check · §2 pause flag 비자동·자율 진행 · §3 후속 단계 자동).
 
 **Why**: 산출물 품질만 좋고 응답 / 가독성이 부자연스러우면 사용자 짜증이 누적. 편집팀이 _마지막 한 번_ 의 다듬기를 책임지고, CLAUDE.md 응답 원칙이 _매 turn_ 의 메타 self-check.
 

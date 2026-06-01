@@ -1,6 +1,6 @@
 # Skill / Agent / Workflow 시각화 가이드
 
-> 1차 자료 직접 read 후 가공 (2026-05-26). 분석 대상 — `~/.claude/skills/*/SKILL.md` (29), `~/.claude/agents/*.md` (8), `CLAUDE.md` §6, `CONVENTIONS.md` §1.4·§2·§5.4, `README.md` mermaid (참고만), `user_profile/README.md`.
+> 1차 자료 직접 read 후 가공 (2026-05-26). 분석 대상 — `~/.claude/skills/*/SKILL.md` (29), `~/.claude/agents/*.md` (8), `CLAUDE.md` §0, `CONVENTIONS.md` §1.4·§2·§5.4, `README.md` mermaid (참고만), `user_profile/README.md`.
 >
 > 본 문서는 디자인팀이 추가 질문 없이 SVG 를 그릴 수준의 _구체 가이드_ 다. §1~§6 은 정리된 사실, §7 은 시각화 설계.
 
@@ -99,7 +99,7 @@ autopilot-lab ───┘    autopilot-{design, ship}          audit / notes
 
 ## §3. 자연어 발화 → invoke 분류 (4 갈래)
 
-`CLAUDE.md` §6 Pre-check 발화 분류. 메인 Claude 가 turn 첫 단계에 분류.
+`CLAUDE.md` §0 Pre-check 발화 분류. 메인 Claude 가 turn 첫 단계에 분류.
 
 | 갈래 | 구성원 | 동작 |
 |---|---|---|
@@ -298,6 +298,6 @@ autopilot-lab ───┘    autopilot-{design, ship}          audit / notes
 ## §8. 자료 무결성 메모 (디자인팀 참고)
 
 - **README 의 기존 mermaid 3장 (트랙/호출/I-O)** — 본 가이드 D1/D2/D3 과 대응하나, 본 가이드는 agent 매트릭스 (D4) 를 독립 장으로 추가하고, 트랙을 9개로 명시 (README 는 4 subgraph 로 묶음). 더 세분.
-- **autopilot-spec/lab/design/ship** 은 CLAUDE.md §6 의 _명시 6 ceremony_ 리스트엔 없지만 ceremony 큰 본질 — D1 에서 같은 군에 두되, 명시 6개 (code/draft/research/refine/apply/analyze-user) 를 _굵게_, 나머지를 _보통_ 두께로 구분.
+- **autopilot-spec/lab/design/ship** 은 CLAUDE.md §0 의 _명시 6 ceremony_ 리스트엔 없지만 ceremony 큰 본질 — D1 에서 같은 군에 두되, 명시 6개 (code/draft/research/refine/apply/analyze-user) 를 _굵게_, 나머지를 _보통_ 두께로 구분.
 - **codex-review-team** model 은 `opus` 단독 표기 시 drift (실제 Codex GPT-5) — D2/D4 에서 "Codex GPT-5 + opus orchestrator" 병기.
 - `user_profile/01_paper_figure_style.md` 가 실제로 생성되면 §7.0 default 를 그 파일 값으로 교체할 것 (현재는 README 기반 + 지시문 default).

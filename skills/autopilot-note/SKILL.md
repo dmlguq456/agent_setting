@@ -19,7 +19,7 @@ worklog-board 앱 (`~/worklog-board/`) 은 _카드를 보여주는 UI_, 본 skil
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §6 의 _ceremony 작은_ 자리 — 컨펌 없이 즉시 invoke. 메인 Claude 가 사용자 발화에 _"산출물 정리" / "오늘 누적" / "다이제스트" / "triage 확인" / "어제부터 변화 카드에 반영"_ 같은 표현 등장 시 자동 호출.
+본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 의 _ceremony 작은_ 자리 — 컨펌 없이 즉시 invoke. 메인 Claude 가 사용자 발화에 _"산출물 정리" / "오늘 누적" / "다이제스트" / "triage 확인" / "어제부터 변화 카드에 반영"_ 같은 표현 등장 시 자동 호출.
 
 **운영 자리**:
 - **Cron** (사용자 자리) — 매일 새벽 05:00 KST 사용자 crontab 또는 worklog-board server-side scheduler 가 호출. _SKILL 안에 cron 명세 X_ — 본 SKILL 은 _idempotent 호출 가능_ 만 보장.

@@ -96,7 +96,7 @@ Agents:  변경 0 / 신규 0 / 삭제 0 / 동일 8
 
 ### Step 4: Generate dashboard sections
 
-> **README 의 독자 = GitHub 사용자뿐** (2026-05-27 재설계). README 는 더 이상 Claude 세션 시작 강제 Read 대상이 아니다 (CLAUDE.md 부트스트랩에서 제거 — skill 카탈로그는 자동 주입, 운영 라우팅은 CLAUDE.md §6, 흐름 청사진은 WORKFLOW.md on-demand). 따라서 README 는 _의미 지도_ 로만 짠다 — 옵션 spec·trigger 룰·QA 정의·상세 그래프는 _넣지 않고 canonical 에 링크_. 분량은 _순 감소_ 가 목표 (디테일을 다른 파일로 복사 X — 이미 canonical 에 있으면 drop + link).
+> **README 의 독자 = GitHub 사용자뿐** (2026-05-27 재설계). README 는 더 이상 Claude 세션 시작 강제 Read 대상이 아니다 (CLAUDE.md 부트스트랩에서 제거 — skill 카탈로그는 자동 주입, 운영 라우팅은 CLAUDE.md §0, 흐름 청사진은 WORKFLOW.md on-demand). 따라서 README 는 _의미 지도_ 로만 짠다 — 옵션 spec·trigger 룰·QA 정의·상세 그래프는 _넣지 않고 canonical 에 링크_. 분량은 _순 감소_ 가 목표 (디테일을 다른 파일로 복사 X — 이미 canonical 에 있으면 drop + link).
 
 #### 4a. 워크플로우 흐름 — 트랙별 텍스트 체인 (mermaid 안 씀)
 
@@ -121,19 +121,19 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
 4. **📋 Skill 카탈로그 — 의의·핵심** — name (SKILL.md 링크) / _의의_ (왜 있나 + 핵심) 2 컬럼 표. _역할 dump·옵션 컬럼 X — 왜 존재하는지 중심_. 표 직후 sub-skill 한 줄 (autopilot 내부 자동 호출) + 세부 옵션은 SKILL.md argument-hint / QA 정의는 CONVENTIONS §1 reference.
 5. **📦 산출물의 구조적 의미** — per-project (`.claude_reports/`) vs cross-project (`user_profile/`) 두 축. per-project 는 _폴더 / 무엇이 쌓이나_ 작은 표 (analysis_project·research·documents·spec·plans·experiments), cross-project 는 한 단락 + 3-tier T1/T2/T3 _왜 그렇게 나뉘나_ 한 단락 (사용자는 T1 만 / spec/ 한 폴더 누적) + 상세 매핑 reference (CONVENTIONS §5·§6.5, WORKFLOW §4, CLAUDE.md Drift-Free Essentials).
 6. **🗣️ 부르는 법** — 두 갈래 한 줄 (자연어 / slash 동일 동작):
-   - `### (1) 자연어 발화` — prose (옵션 자동 구성 + 자연어 요약 컨펌 + yes/수정/cancel/자율 진행 + ceremony 큰 10 (autopilot-\* 9 + analyze-user) vs 작은 3 컨펌 의무) + [`CLAUDE.md`](CLAUDE.md) §6 reference + **자연어 발화 예시 표** (_사람 유지 영역_)
+   - `### (1) 자연어 발화` — prose (옵션 자동 구성 + 자연어 요약 컨펌 + yes/수정/cancel/자율 진행 + ceremony 큰 10 (autopilot-\* 9 + analyze-user) vs 작은 3 컨펌 의무) + [`CLAUDE.md`](CLAUDE.md) §0 reference + **자연어 발화 예시 표** (_사람 유지 영역_)
    - `### (2) slash 직접 입력` — prose (의도 명시 = 즉시 invoke) + slash 예시 code block (_축약 4 줄_: autopilot-code / autopilot-draft / autopilot-refine / audit — argument-hint 에서 자동 생성, 전체 syntax dump X) + 전체 옵션은 SKILL.md reference.
 7. **🤝 Agents** — name (agent .md 링크) / 모델 / _의의_ 표 (_자동 호출자·역할 dump X_) + 직접 호출 안내 한 단락 + user_profile 참조 매트릭스는 [`user_profile/README.md`](user_profile/README.md) reference (README 에 매트릭스 표 _넣지 않음_).
 8. **📚 더 깊이 + 🔁 동기화** — canonical 문서 reference index 표 (CLAUDE.md / CONVENTIONS / WORKFLOW / DESIGN_PRINCIPLES / user_profile/README) + `/sync-skills` 두 명령 + GitHub 링크.
 
 원칙:
 - prose 최소화, 표·bullet 우선. 단 §6.(1) _자연어 발화 예시 표_ 는 핵심 anchor 라 단단히 유지.
-- 같은 정보 반복 X — 옵션 spec 은 SKILL.md, autopilot 호출 룰은 CLAUDE.md §6, QA 정의·폴더 컨벤션은 CONVENTIONS, 체이닝 청사진은 WORKFLOW 가 각각 source. README 는 _의미만_ 들고 나머지는 링크.
+- 같은 정보 반복 X — 옵션 spec 은 SKILL.md, autopilot 호출 룰은 CLAUDE.md §0, QA 정의·폴더 컨벤션은 CONVENTIONS, 체이닝 청사진은 WORKFLOW 가 각각 source. README 는 _의미만_ 들고 나머지는 링크.
 - _넣지 않음_ 항목 (의도적 drop + link, 복사 X):
   - 전체 Skill 호출 그래프 mermaid (6 카테고리) → WORKFLOW
   - 산출물 I/O 그래프 mermaid → WORKFLOW §4 + CONVENTIONS §5
   - Agent 호출 구조 mermaid
-  - 운영 룰 trigger 표 (skill 별 4컬럼 dump) → CLAUDE.md §6 + 각 SKILL.md
+  - 운영 룰 trigger 표 (skill 별 4컬럼 dump) → CLAUDE.md §0 + 각 SKILL.md
   - user_profile 참조 매트릭스 → user_profile/README.md
   - slash 전체 syntax block → 축약 4 줄 + SKILL.md
   - Skills 표의 옵션 컬럼
@@ -153,7 +153,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
 | §3 4 트랙 | Diagram (개념 1 개) + 트랙별 narrative + 점검·정정·프로필 quote + WORKFLOW reference 자동 갱신 |
 | §4 Skill 카탈로그 | name / _의의_ 자동 추출. 옵션·역할 dump 컬럼 X. 새 skill 추가·삭제 자동 반영 |
 | §5 산출물 구조 | 두 축 bullet + 3-tier _왜_ 한 단락 + CONVENTIONS·WORKFLOW reference 자동 갱신 |
-| **§6 부르는 법** | **§6.(1) 자연어 발화 예시 표 + 그 직전 prose 는 사람 유지 영역 — 현행 wording 그대로 보존 (SHA 비교 skip).** 단 _섹션 헤딩 자체_ 누락 시 placeholder 헤딩 + 한 줄만 삽입. §6.(2) slash 예시 code block 은 argument-hint 에서 _축약 4 줄_ 자동 생성 + ceremony 큰 10 (autopilot-\* 9 + analyze-user) vs 작은 3 컨펌 의무·CLAUDE.md §6 reference 자동 갱신 |
+| **§6 부르는 법** | **§6.(1) 자연어 발화 예시 표 + 그 직전 prose 는 사람 유지 영역 — 현행 wording 그대로 보존 (SHA 비교 skip).** 단 _섹션 헤딩 자체_ 누락 시 placeholder 헤딩 + 한 줄만 삽입. §6.(2) slash 예시 code block 은 argument-hint 에서 _축약 4 줄_ 자동 생성 + ceremony 큰 10 (autopilot-\* 9 + analyze-user) vs 작은 3 컨펌 의무·CLAUDE.md §0 reference 자동 갱신 |
 | §7 Agents 표 | name / 모델 / _의의_ 자동 추출. 자동 호출자 컬럼 X. user_profile 매트릭스는 표 대신 user_profile/README reference |
 | §8 더 깊이 + 동기화 | canonical reference index 표 + 두 명령 + GitHub 링크 고정 wording |
 
@@ -178,7 +178,7 @@ Step 5 에서 README 본문 wording 을 자동 생성·갱신한 자리 (§1 Hea
 
 ### Step 5b: Cross-doc invariant scan (QA 정의 & family-wide 규칙)
 
-> 각 SKILL.md `## Default Invocation Rule` 은 _그 SKILL.md 안에서만_ 의미를 가지고 README 에 모으지 않음 (README §6 운영 룰은 _글로벌 CLAUDE.md §6 가리킴 한 단락_). autopilot-* 4 개 SKILL.md 의 trigger 신호·default 옵션·override 는 글로벌 §6 의 일반 패턴 + 각 SKILL.md 의 skill-specific 정보로 분리.
+> 각 SKILL.md `## Default Invocation Rule` 은 _그 SKILL.md 안에서만_ 의미를 가지고 README 에 모으지 않음 (README §6 운영 룰은 _글로벌 CLAUDE.md §0 가리킴 한 단락_). autopilot-* 4 개 SKILL.md 의 trigger 신호·default 옵션·override 는 글로벌 §0 의 일반 패턴 + 각 SKILL.md 의 skill-specific 정보로 분리.
 
 QA level / model 표기 / family-wide invariant 은 **`~/.claude/CONVENTIONS.md`** 가 단일 source of truth. 각 SKILL.md / README / `agents/*.md` 의 QA 표 wording 은 본 문서와 의미상 일치해야 함.
 
