@@ -150,7 +150,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
 | 섹션 | 처리 |
 |---|---|
 | §1 Header | center div 표지 / anchor 링크(첫 anchor=§2 모드) 자동 갱신 |
-| **§2 작동 방식 (harness)** | 두 모드 표 + `/track`·statusline·opt-in 한 줄 + 한 줄 quote 자동 갱신. 단일 출처 = `hooks/artifact-guard.sh`·`utilities/spec-guard-hook.sh`·`statusline.sh`·CLAUDE.md §0 (hook 동작/§0 변경 시 반영) |
+| **§2 작동 방식 (harness)** | 두 모드 표 + `/track`·statusline·auto-scope(spec 유무) 한 줄 + 한 줄 quote 자동 갱신. 단일 출처 = `hooks/artifact-guard.sh`·`utilities/spec-guard-hook.sh`·`statusline.sh`·CLAUDE.md §0 (hook 동작/§0 변경 시 반영) |
 | §3 Mental model | 핵심 한 단락 + bullet 3 + _의미 지도_ quote 자동 갱신 (고정 메시지: 자연어 호출·운전자·canonical 링크) |
 | §4 4 트랙 | Diagram (개념 1 개) + 트랙별 narrative + 점검·정정·프로필 quote + WORKFLOW reference 자동 갱신 |
 | §5 Skill 카탈로그 | name / _의의_ 자동 추출. 옵션·역할 dump 컬럼 X. 새 skill 추가·삭제 자동 반영 |
