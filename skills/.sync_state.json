@@ -1,6 +1,6 @@
 {
   "version": 4,
-  "last_readme_sync": "2026-06-02T01:21:58Z",
+  "last_readme_sync": "2026-06-02T01:37:15Z",
   "items": {
     "agents/codex-review-team": {
       "sha256": "7bcfa63d7db33b4c8fdaf88ab0552ebdf97fb7d8010e798c4f620404aaaabd63",
@@ -151,8 +151,8 @@
       "synced_at": "2026-06-02T01:22:13Z"
     },
     "skills/post-it": {
-      "sha256": "8682d51938e2b36c0c79c1c6d538a82ee8aec54c77ce77a7cb5ac79fc421d060",
-      "synced_at": "2026-06-02T01:21:58Z"
+      "sha256": "a13f8abbea16033f683afbeef2b802f38435a70e774434343e0487ef816ea8b8",
+      "synced_at": "2026-06-02T01:37:15Z"
     }
   }
 }
