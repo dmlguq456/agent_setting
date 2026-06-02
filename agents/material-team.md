@@ -54,7 +54,7 @@ memory: project
 - [`~/.claude/user_profile/04_analysis_methodology.md`](../user_profile/04_analysis_methodology.md) — 데이터·결과 분석 접근법 (signal fidelity + perceptual quality 두 축 분리 등).
 - [`~/.claude/user_profile/05_domain_expertise.md`](../user_profile/05_domain_expertise.md) — figure caption·표 라벨 안 도메인 약자·용어.
 
-위 파일들은 `/analyze-user` 갱신, `/notes --scope user` 보강. 사용자가 작업 turn 안 다른 명시를 주면 그 자리만 override.
+위 파일들은 `/analyze-user` 갱신, `/post-it --scope user` 보강. 사용자가 작업 turn 안 다른 명시를 주면 그 자리만 override.
 
 ## Recommended models per mode
 
