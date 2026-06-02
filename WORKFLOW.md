@@ -9,6 +9,8 @@
 
 ## 0. 불변식 — 단일 라우터 + 하드 순서 게이트 (우회 불가)
 
+> **본 문서 = 📌tracked 모드 계약.** tracked 프로젝트(`.claude_reports`/`spec` 보유)에서 _반드시 지킬 것_ 의 단일 출처. untracked(`/track`)면 면제. `workflow-guard-hook` 이 tracked 감지 시 SessionStart 에 본 §0/§7 을 주입하고 UserPromptSubmit 마다 thin reminder 로 상기시킨다 (규칙 자체는 여기 한 곳).
+
 본 문서가 **모든 작업 흐름의 단일 라우터**. 모든 발화는 §2 작업-본질 매핑을 먼저 거치고, 직접 처리·플러그인(codex)·빌트인 스킬도 WORKFLOW 가 배치하는 자리에서만 쓴다.
 
 **(a) 하드 순서 게이트** — 산출물은 한 방향으로만, 앞 단계 산출물 없이 다음 단계 진입 금지:
@@ -118,7 +120,7 @@
 
 초기 빌드 후 수정·기능 요청 (특히 새 세션). cwd 에 `.claude_reports/spec/` 있으면 ad-hoc 직접 Edit 금지 — **순서 원칙 (기존 산출물 파악) → analyze → spec → dev** 를 지킨다 (CLAUDE.md §0 imperative).
 
-> 본 §7 의 단일 출처는 글로벌 [`CLAUDE.md`](CLAUDE.md) §0. `settings.json` 의 SessionStart hook (`utilities/spec-guard-hook.sh`) 이 cwd·상위의 `spec/pipeline_state.yaml` (모노레포는 `spec/*/`) 을 감지하면 본 §7 을 `additionalContext` 로 주입한다.
+> `utilities/workflow-guard-hook.sh` 가 cwd·상위의 `spec/pipeline_state.yaml` (모노레포는 `spec/*/`) 을 감지하면 SessionStart 에 본 §7 을 `additionalContext` 로 주입하고, UserPromptSubmit 마다 thin reminder(skill 경유)를 띄운다. 규칙 본문의 단일 출처는 본 §0/§7 (CLAUDE.md §0 은 항상-참 호출패턴 + 본 문서 포인터).
 
 0. **기존 `.claude_reports/` 산출물 파악 (1 순위, 특히 새 세션)** — 손대기 전 `spec/prd.md` · `pipeline_state.yaml` · 최근 `plans/*` 를 _필요에 따라_ 먼저 읽어 프로젝트 상태·진행 자리를 잡는다. 맥락 모른 채 작업 X.
 1. **(필요 시) analyze 갱신** — `analysis_project/code/` 가 stale 하거나 낯선 영역이면 `analyze-project --mode code` (incremental) 먼저.

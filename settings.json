@@ -75,7 +75,7 @@
       {
         "hooks": [
           {
-            "command": "bash \"$HOME/.claude/utilities/spec-guard-hook.sh\"",
+            "command": "bash \"$HOME/.claude/utilities/workflow-guard-hook.sh\"",
             "type": "command"
           }
         ]
@@ -113,6 +113,15 @@
           }
         ],
         "matcher": "*"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/utilities/workflow-guard-hook.sh\"",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
       }
     ]
   },

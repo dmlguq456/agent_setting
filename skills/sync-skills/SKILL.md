@@ -116,7 +116,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
 `~/.claude/README.md` 가 본 sync 의 단일 진실 출처 (reference layout). sync 시 다음 순서로 9 섹션을 채운다:
 
 1. **Header** — center div: title + 한 줄 설명 + 섹션 anchor 링크 (첫 anchor = §2 모드). sync 시각·이력은 git commit log 가 단일 출처.
-2. **🚦 작동 방식 — 📌tracked ↔ ⚡untracked** (_최상단 토대 섹션_) — 산출물 수정·작업 순서를 `PreToolUse` hook 이 강제. 두 모드 표 (**📌tracked** = 추적 산출물 직접 Edit/Write 차단(exit 2) + `spec/` 있는 프로젝트는 순서 체인(코드←plan, spec←research/analyze)도 강제 / **⚡untracked** = 전부 우회·`/track` 토글, 세션별 flag(동시 세션 격리)) + `/track`·statusline(📌/⚡·git·context 막대)·auto-scope(spec 유무) 한 줄씩 + 한 줄 quote(소유 스킬로만 수정·순서 유지). 단일 출처 = `hooks/artifact-guard.sh`·`utilities/spec-guard-hook.sh`·`statusline.sh`·CLAUDE.md §0.
+2. **🚦 작동 방식 — 📌tracked ↔ ⚡untracked** (_최상단 토대 섹션_) — 산출물 수정·작업 순서를 `PreToolUse` hook 이 강제. 두 모드 표 (**📌tracked** = 추적 산출물 직접 Edit/Write 차단(exit 2) + `spec/` 있는 프로젝트는 순서 체인(코드←plan, spec←research/analyze)도 강제 / **⚡untracked** = 전부 우회·`/track` 토글, 세션별 flag(동시 세션 격리)) + `/track`·statusline(📌/⚡·git·context 막대)·auto-scope(spec 유무) 한 줄씩 + 한 줄 quote(소유 스킬로만 수정·순서 유지). 단일 출처 = `hooks/artifact-guard.sh`·`utilities/workflow-guard-hook.sh`·`statusline.sh`·CLAUDE.md §0.
 3. **🧭 Mental model** — 핵심 한 단락 (자연어로 부르면 메인 Claude 가 컨텍스트 읽어 옵션 조립·컨펌·실행 / 사용자는 운전자) + bullet 3 (autopilot-\* = 추적형 파이프라인 / 직접 처리 = 가벼운 일·단 산출물 직접 Edit 은 📌tracked hook 차단 / 입력은 `.claude_reports/` 자동 발견·cross-project 별 세션) + _의미 지도_ quote (옵션 spec·trigger·QA 는 SKILL.md·CONVENTIONS·CLAUDE.md 가 단일 출처, 링크만).
 4. **🌳 큰 갈래 4 트랙** — 트랙마다 `### 헤딩 → 텍스트 화살표 체인 (위 4a, mermaid 아님) → 설명 한 문단` 을 순서대로 짝지어 배치 (문서 / 연구·실험 / 앱 / 라이브러리·CLI — 왜 이 순서 / 무엇을 남기나) + 점검·정정·사용자 프로필 한 줄 quote + 체이닝 청사진 reference ([`WORKFLOW.md`](WORKFLOW.md)) + 이름 읽는 법 한 줄.
 5. **📋 Skill 카탈로그 — 의의·핵심** — name (SKILL.md 링크) / _의의_ (왜 있나 + 핵심) 2 컬럼 표. _역할 dump·옵션 컬럼 X — 왜 존재하는지 중심_. 표 직후 sub-skill 한 줄 (autopilot 내부 자동 호출) + 세부 옵션은 SKILL.md argument-hint / QA 정의는 CONVENTIONS §1 reference.
@@ -150,7 +150,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
 | 섹션 | 처리 |
 |---|---|
 | §1 Header | center div 표지 / anchor 링크(첫 anchor=§2 모드) 자동 갱신 |
-| **§2 작동 방식 (harness)** | 두 모드 표 + `/track`·statusline·auto-scope(spec 유무) 한 줄 + 한 줄 quote 자동 갱신. 단일 출처 = `hooks/artifact-guard.sh`·`utilities/spec-guard-hook.sh`·`statusline.sh`·CLAUDE.md §0 (hook 동작/§0 변경 시 반영) |
+| **§2 작동 방식 (harness)** | 두 모드 표 + `/track`·statusline·auto-scope(spec 유무) 한 줄 + 한 줄 quote 자동 갱신. 단일 출처 = `hooks/artifact-guard.sh`·`utilities/workflow-guard-hook.sh`·`statusline.sh`·CLAUDE.md §0 (hook 동작/§0 변경 시 반영) |
 | §3 Mental model | 핵심 한 단락 + bullet 3 + _의미 지도_ quote 자동 갱신 (고정 메시지: 자연어 호출·운전자·canonical 링크) |
 | §4 4 트랙 | Diagram (개념 1 개) + 트랙별 narrative + 점검·정정·프로필 quote + WORKFLOW reference 자동 갱신 |
 | §5 Skill 카탈로그 | name / _의의_ 자동 추출. 옵션·역할 dump 컬럼 X. 새 skill 추가·삭제 자동 반영 |
