@@ -12,19 +12,25 @@
 
 ## 🚦 작동 방식 — 📌 tracked ↔ ⚡ untracked
 
-산출물 수정과 작업 순서를 `PreToolUse` hook (`hooks/artifact-guard.sh`) 이 강제한다. 두 모드로 작동한다:
+**이 세팅 전체의 전제다.** 산출물은 _그것을 만든 스킬로만_ 고쳐 버전·이력을 남기고, 작업은 _research → spec → plan → code_ 순서로 흐른다. 이 규율은 기억이나 습관이 아니라 `PreToolUse` hook(`hooks/artifact-guard.sh`)이 **기본값 📌 tracked 로 강제**한다. 잊어도, 세션이 바뀌어도 무너지지 않는다.
 
-| 모드 | 무엇이 막히나 |
-|---|---|
-| **📌 tracked** (기본) | **① 산출물 추적** (모든 `.claude_reports` 프로젝트) — `spec/`(prd·stack·ship 등 canonical)·`plans/`·`documents/`·`experiments/`·`user_profile/0*.md` 직접 Edit/Write → **차단(exit 2)**, 소유 스킬 경유. 신규 _작성_ 도 의존 산출물 전제 (신규 spec·문서 ← research/analyze · 신규 plan ← spec). **② 소스 코드 순서 게이트** (`spec/` 있는 프로젝트만) — 코드 편집은 `plans/` plan 존재가 전제 (spec 없는 repo 는 자유) |
-| **⚡ untracked** | 차단 전부 해제 — 탐색·일회성 ad-hoc·설정 손보기. `/track` 로 토글, **세션별**(한 레포에 여러 세션 띄워도 격리, 세션 끝나면 무효) |
+**차단은 벽이 아니라 이정표다.** tracked 산출물을 직접 고치려 하면 막는 동시에 _어느 스킬로 가야 하는지_ 를 일러준다(올바른 파이프로 라우팅). `/track`(⚡ untracked)은 이 강제를 통째로 끄는 **예외 탈출구** — 진짜 일회성·탐색·설정 손보기일 때만 쓴다.
 
-- **`/track`** — 현재 프로젝트 모드를 토글 (세션별 flag `.claude_reports/.untracked.<session_id>` on/off — 동시 세션 격리, 세션 끝나면 무효).
-- **statusline** 이 모드(📌/⚡) · git 브랜치 · context 사용량 막대를 표시 → 한눈에.
-- 막히면? 차단 메시지가 _어느 스킬로 가야 하는지_ 알려준다. 정식 작업은 그 스킬(예 `autopilot-code --qa quick` — 작은 변경도 경량 트레일), 진짜 일회성이면 `/track`.
-- **자동 scope** — 코드 편집 차단은 `spec/` 가 있는 프로젝트에만 (spec 없는 설정·일반 repo 는 자유). 켜고 끄는 토글 없이 spec 유무로 결정.
+| | 📌 tracked (기본·전제) | ⚡ untracked (예외) |
+|---|---|---|
+| **강제** | ON — 잘못된 직접 편집을 막고 올바른 스킬로 보냄 | OFF — 전부 우회 |
+| **쓰는 때** | 평소 모든 작업 | 진짜 throwaway·탐색·설정 손보기 |
+| **전환** | (기본값) | `/track` 토글 — 세션별 flag(동시 세션 격리, 세션 끝나면 무효) |
 
-> 산출물은 소유 스킬로만 바뀌어 버전·트레일이 끊기지 않고, 순서(research→spec→plan→code)가 지켜진다.
+tracked 가 강제하는 두 갈래 (둘 다 _자동 scope_ — 해당 없는 repo 엔 관여하지 않는다):
+
+- **① 산출물 추적** — `.claude_reports`(또는 `user_profile`)를 둔 프로젝트에서 `spec/`(prd·stack·ship 등 canonical)·`plans/`·`documents/`·`experiments/`·`user_profile/0*.md` 를 직접 Edit/Write 하면 **차단 + 권고**(소유 스킬 경유). 신규 _작성_ 도 앞 단계가 전제 — 신규 spec·문서 ← research/analyze, 신규 plan ← spec.
+- **② 소스 코드 순서 게이트** — `spec/` 를 둔 프로젝트에서만, 코드 편집은 `plans/` plan 이 있어야 통과한다. **spec 없는 repo 의 소스 코드는 자유** — spec 생성을 "이 프로젝트는 파이프라인을 쓴다"는 opt-in 신호로 보기 때문이다(설정·일반 repo 에서 코드 한 줄 고치려 매번 spec 부터 만드는 footgun 회피).
+
+- **막히면** 권고가 가리키는 스킬로 간다 (예 `autopilot-code --qa quick` — 작은 변경도 경량 plan 트레일을 남긴다). 정말 일회성이면 `/track`.
+- **statusline** 이 현재 모드(📌/⚡)·git·context 사용량을 매 프롬프트에 띄운다 — _지금 어느 모드인지_ 놓치지 않는다.
+
+> 기본이 tracked 인 게 핵심이다. 안전망은 켜져 있을 때만 안전망이다 — untracked 가 기본이면 잊은 순간을 잡지 못해 이력·순서가 조용히 무너진다.
 
 ---
 
