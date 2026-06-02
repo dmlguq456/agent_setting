@@ -9,7 +9,7 @@
 > - 📦 라이브러리·CLI: `analyze-project` → `autopilot-spec`↻ → `autopilot-code`↻
 > - 사후 공통: `audit` (점검)·`autopilot-refine` (정정) / cross-project: `analyze-user`·`post-it --scope user`
 >
-> **라우팅 결정 시 `~/.claude/WORKFLOW.md` (라우팅 코어) 를 Read 한다** (on-demand) — 위 skeleton 이 트랙 지도, WORKFLOW 는 작업 본질 매핑·spec mode·entry→서브에이전트 분기·폴더 맵·§7 사후 수정까지의 라우팅 표. 매 프롬프트 `workflow-guard-hook` 모드 신호(📌tracked → WORKFLOW 따름 / ⚡untracked → 면제)가 _읽을지의 anchor_ — tracked 라우팅 자리(특히 spec 프로젝트 사후 수정)에서 필요해서 Read. eager 세션 전체 로드 X. `~/.claude/README.md` 는 GitHub 사용자용 — Read 대상 아님.
+> **라우팅 결정 시 `~/.claude/WORKFLOW.md` (라우팅 코어) 를 Read 한다** (on-demand) — 위 skeleton 이 트랙 지도, WORKFLOW 는 작업 본질 매핑·spec mode·entry→서브에이전트 분기·폴더 맵·§7 사후 수정까지의 라우팅 표. `workflow-guard-hook` 모드 신호(📌tracked → WORKFLOW 따름 / ⚡untracked → 면제)가 _읽을지의 anchor_ — 이 신호는 **_첫 프롬프트부터_ 매 프롬프트 뜨므로 세션 시작 작업부터 적용**된다. tracked 라우팅 자리(특히 spec 프로젝트 사후 수정)에서 필요해서 Read. eager 세션 전체 로드 X. `~/.claude/README.md` 는 GitHub 사용자용 — Read 대상 아님.
 
 ---
 

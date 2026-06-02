@@ -59,6 +59,7 @@ if [ "$EVENT" = "UserPromptSubmit" ]; then
   [ -z "$cr_root" ] && exit 0
   # 모드를 _양쪽 다 명시_ — Claude 가 "WORKFLOW 를 지킬지" 를 매 프롬프트 positive 하게 결정.
   if [ "$untracked" = "1" ]; then
+    touch "$flag" 2>/dev/null || true   # heartbeat — 활성 세션이면 mtime 갱신 → GC 가 _비활성_ 만 지움 (장기 세션 안전)
     emit UserPromptSubmit <<'EOF'
 🧭 ⚡untracked — WORKFLOW 면제. 산출물·소스 코드 직접 편집 자유 (추적·trail 없음). 정식 파이프로 돌리려면 /track.
 EOF
@@ -73,9 +74,10 @@ EOF
 fi
 
 # ============================================================
-# SessionStart (default) — 잔여 ⚡untracked flag GC 만 (>1일).
+# SessionStart (default) — 1일+ _비활성_ ⚡untracked flag GC.
+# flag mtime = heartbeat: 활성 세션은 UserPromptSubmit 마다 touch 로 갱신 → 1일 넘게 켜둔
+# 장기 세션의 flag 는 안 지워짐. mtime +1440 = "마지막 활동 1일 전" = 크래시·종료된 세션 잔재.
 # WORKFLOW.md·post-it 읽기는 _지침_ (CLAUDE.md 부트스트랩 + 도메인 트리거) 이 담당 — hook 주입 X.
-# (지침 = 이식 가능·균일·서브에이전트까지 도달; hook 은 instruction 이 못 하는 것만.)
 # ============================================================
 if [ -n "$cr_root" ]; then
   find "$cr_root/.claude_reports" -maxdepth 1 -name '.untracked.*' -mmin +1440 -delete 2>/dev/null || true
