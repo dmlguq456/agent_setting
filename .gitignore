@@ -47,3 +47,4 @@ user_profile/_internal/
 # pptx(ref_user_profile/figure_ppt/)에서 pdftocairo 로 언제든 재생성. clone 엔 불필요.
 user_profile/assets/
 .cwm_removal_backup/
+.cache/

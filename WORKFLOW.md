@@ -24,7 +24,7 @@
 - **사전 산출물 없이 spec X**: spec 근거(`research/` 또는 `analysis_project/`) 없으면 autopilot-research/analyze-project 먼저. 낯선 영역·신규 의도일수록 강제.
 - **harness 강제**: `artifact-guard.sh` 는 _신규 산출물 생성 순서_ 만 기계 차단 — 신규 spec ← research/analyze, 신규 plan ← spec, 신규 문서 ← research/analyze. 기존 편집·소스 코드는 비차단 (convention + workflow-guard-hook 라우팅 reminder). `/track` 우회.
 
-**(b) 동일 스킬 수정 = 버전 트래킹** (`hooks/artifact-guard.sh` 가 기계 강제 — 추적 산출물 직접 Edit 차단, `.untracked` touch 로만 해제). 각 산출물은 _그것을 만든 스킬로만_ 수정:
+**(b) 동일 스킬 수정 = 버전 트래킹** (convention — `hooks/artifact-guard.sh` 는 _신규 산출물 생성 순서_ 만 기계 강제하고 기존 산출물 _편집_ 은 막지 않는다; 소유 스킬 경유는 `workflow-guard-hook` 라우팅 reminder + 관행. `/track` ⚡untracked 면제). 각 산출물은 _그것을 만든 스킬로만_ 수정:
 
 | 산출물 | 유일 수정 경로 | 버전 자리 |
 |---|---|---|
