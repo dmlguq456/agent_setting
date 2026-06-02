@@ -46,7 +46,7 @@ research / analyze-project (산출물) → autopilot-spec (spec/) → autopilot-
 - **발화 분류** (turn 첫 단계): ceremony 큰 6 (`autopilot-code/draft/research/refine/apply` + `analyze-user`) → 컨펌 흐름 / 작은 3 (`audit`/`post-it`/`analyze-project`) → 즉시 invoke / sub-skill 자연어 → autopilot-* `--from <stage>` 재개 / 매칭 없음 → 직접 처리. 판단: 추적 필요 + 산출물 누적 → autopilot, 짧은 단발 → 직접.
 - **Skip**: `/autopilot-code <args>` 같이 slash 직접 입력 = 컨펌 skip.
 - **High-stakes → qa 상향**: _신중히 / 꼼꼼히 / camera-ready / submission·PR open 직전_ → adversarial 자동. `analyze-user` 는 항상 adversarial 고정.
-- **무응답**: §2 자율 진행 적용 — 컨펌 시 `ScheduleWakeup` 10-30 분, 답 없으면 추천대로 invoke + "N 분 안 답 없으면 자율 진행" 한 줄.
+- **무응답**: §2 대로 추천안 자율 진행.
 
 ### §1. 응답 규율 — 말투·간결·약속
 
@@ -58,12 +58,9 @@ research / analyze-project (산출물) → autopilot-spec (spec/) → autopilot-
 ### §2. Pause·자율 진행
 
 - **Pause flag 비자동**: `autopilot-*` 의 `--user-refine` 같은 pause 옵션은 사용자 명시 신호 (`--user-refine` / `사용자 검토 끼워` / `memo 추가하게 멈춰줘`) 있을 때만. _신중히 / camera-ready_ 같은 high-stakes 신호 자체로 추가 X.
-- **답 없으면 자율 진행**: 질문 뒤 답 없으면 추천 방향 진행.
-  - **A. ScheduleWakeup 자동 깨움** (선택): 거는 자리 = ceremony 큰 컨펌·장시간 대기·일회성 큰 결정 / 안 거는 자리 = 작은 yes-no·자율 sequence 중간·짜증 신호. timeout 10–30 분. 깨움 시 직전 메시지가 알람 후 도착했는지 점검, stale 이면 skip + 한 줄 보고.
-  - **B. 다음 메시지 시점** (fallback): 다음 메시지가 답 아니면 즉시 진행. 같은 질문 두 번 금지. 진행 시 "X 추천 방향으로 진행" 한 줄.
-  - skill 내부 ask 자리 (analyze-project mode / autopilot-draft Step 0 등) 도 자동 적용.
+- **답 없으면 자율 진행**: 추천 방향으로 진행 (같은 질문 두 번 X, 진행 시 한 줄 보고). 긴 대기·큰 결정만 `ScheduleWakeup` 10–30 분. skill 내부 ask 자리도 동일.
 - **Context nudge (post-it)**: context ~50%+·wind-down 발화·작업 한 덩어리 완료 시 `/post-it handoff` 를 _먼저 제안_. handoff 는 sweep 을 **자동 포함** — _확실한_ 졸업·stale 만 자동 prune(애매하면 keep), 한 줄 보고. **사용자는 post-it 을 읽지 않으므로** 줄 단위 검토 강요 X — 짧은 요약 보여주고 _저장 여부_ 만 confirm (자동 기록 X). 세션 단절 방지. 상세는 `post-it` SKILL.
-- **동기화 후 실행 (방향·설계 결정)**: 방향·설계·아키텍처가 걸린 _비자명_ 작업은 사용자와 충분히 논의해 _생각이 동기화된 뒤_ 수행한다. 반쯤 이해한 방향으로 성급히 구현 X — 모호하면 한 줄 요약·선택지로 _의도부터 맞춘다_. (작은 follow-up·명시 `X 해라` 는 §3 대로 자동 진행; 본 규칙은 _큰 방향 결정_ 자리.)
+- **동기화 후 실행**: 방향·설계가 걸린 비자명 작업은 사용자와 충분히 논의해 _생각이 동기화된 뒤_ 수행. 동기화되면 중간 컨펌 없이 진행한다 (upfront 합의 우선). 모호하면 의도부터 맞춘다.
 
 ### §3. 요청 흐름 안 후속 단계 자동 진행
 
