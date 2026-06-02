@@ -43,6 +43,24 @@ spec 의 `mode` 배열 (단일 또는 복수) 에 따라 자동 활성화:
 
 복수 mode 시 _해당하는 logic 모두_ 활성화.
 
+### Pre-flight (필수 Step 0): spec-significance 트리아지 — 코드 손대기 _전_, verdict 보고 강제
+
+spec/ 존재 시, _어떤_ 코드 요청이든 plan 전에 **이 pre-flight 게이트를 먼저 통과하고 한 줄 verdict 를 반드시 출력**한다. WORKFLOW §7-3 의 spec-drift 사전 체크를 _메인 Claude 의 라우팅 판단_ (잘 건너뜀) 이 아니라 _본 skill 의 강제 첫 단계_ 로 내재화 — "그냥 code 로 진입" 으로 스킵 못 하게.
+
+1. 요청 + `spec/prd.md` (+ 해당 시 `api_contract.md`·`data_model.md`·`ui_flow.md`) 대조.
+2. 분류:
+   - **spec-significant** — route 추가/변경 · schema·entity 필드 · UI-flow · 외부 service 통합 · stack·migration · 기존 코드가 이미 spec 과 drift. → **`autopilot-spec` update 먼저** (prd.md 최신화 + `_internal/versions/v{N}/` 스냅샷) → _갱신된 spec_ 에 맞춰 코드 진행. drift 명확하면 자율 진행 + 한 줄 보고, **_애매하면 사용자 확인_**.
+   - **within-spec** — 구현 디테일 (버그 수정·리팩터·내부 로직). → 그대로 코드 진행.
+3. **verdict 한 줄 필수** (plan/dev_logs 에도 기록 — 이 줄 없이 코드 plan 진입 X):
+   ```
+   spec-significance: within-spec (구현 디테일 — spec 영향 없음)
+   ```
+   ```
+   spec-significance: SPEC-SIGNIFICANT (data_model: Task.category) → autopilot-spec update 먼저
+   ```
+
+> 이 Step 0 (요청이 spec 을 바꾸나) → 아래 _역방향 drift 체크_ (spec 이 코드보다 최신인가) → 작업 중 _Spec 영향 변경 감지_ (코드가 spec 을 건드렸나) 셋이 spec↔code 동기화를 앞·뒤 양방향으로 닫는다.
+
 ### 진입 시 spec/design 갱신 역방향 체크 (코드 작업 _시작 전_)
 
 spec·design 산출물이 _직전 코드 작업 사이클 이후_ 갱신됐는지 먼저 확인 — 갱신분을 못 보고 stale 한 토큰·계약 위에 작업하는 것 차단 (코드→spec 감지의 대칭):
