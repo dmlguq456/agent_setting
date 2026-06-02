@@ -18,14 +18,16 @@
 
 | | 📌 tracked (기본·전제) | ⚡ untracked (예외) |
 |---|---|---|
-| **강제** | ON — 잘못된 직접 편집을 막고 올바른 스킬로 보냄 | OFF — 전부 우회 |
+| **강제** | ON — 생성 순서·코드←plan 게이트 (편집은 convention) | OFF — 전부 우회 |
 | **쓰는 때** | 평소 모든 작업 | 진짜 throwaway·탐색·설정 손보기 |
 | **전환** | (기본값) | `/track` 토글 — 세션별 flag(동시 세션 격리, 세션 끝나면 무효) |
 
-tracked 가 강제하는 두 갈래 (둘 다 _자동 scope_ — 해당 없는 repo 엔 관여하지 않는다):
+tracked 가 hard 강제하는 건 **_생성 순서_ 두 갈래** (둘 다 _자동 scope_ — 해당 없는 repo 엔 관여 안 함):
 
-- **① 산출물 추적** — `.claude_reports`(또는 `user_profile`)를 둔 프로젝트에서 `spec/`(prd·stack·ship 등 canonical)·`plans/`·`documents/`·`experiments/`·`user_profile/0*.md` 를 직접 Edit/Write 하면 **차단 + 권고**(소유 스킬 경유). 신규 _작성_ 도 앞 단계가 전제 — 신규 spec·문서 ← research/analyze, 신규 plan ← spec.
-- **② 소스 코드 순서 게이트** — `spec/` 를 둔 프로젝트에서만, 코드 편집은 `plans/` plan 이 있어야 통과한다. **spec 없는 repo 의 소스 코드는 자유** — spec 생성을 "이 프로젝트는 파이프라인을 쓴다"는 opt-in 신호로 보기 때문이다(설정·일반 repo 에서 코드 한 줄 고치려 매번 spec 부터 만드는 footgun 회피).
+- **① 생성 순서** — `.claude_reports` 를 둔 프로젝트에서 _신규_ 산출물은 앞 단계가 있어야 만든다: 신규 `spec` ← research/analyze · 신규 `plan` ← spec · 신규 `documents` ← research/analyze. 어기면 **차단 + 권고**.
+- **② 소스 코드 게이트** — `spec/` 를 둔 프로젝트에서만, 코드 편집은 `plans/` plan 이 있어야 통과. **spec 없는 repo 의 코드는 자유** (opt-in — 설정·일반 repo footgun 회피).
+
+> **기존 산출물의 _편집_ 은 hook 이 막지 않는다** — "산출물은 소유 스킬로만 수정(버전관리)"은 _convention_ 이다 (agent 지시 + 스킬 자체 버전관리). hook 은 소유 스킬과 직접편집을 구분 못 하고, 편집까지 막으면 정작 `autopilot-spec update` 같은 정당 경로가 막혀 더 거친 우회를 부른다. harness 는 shell 쥔 agent 앞에선 _벽이 아니라 forcing-function_ — 사고·망각 방지가 목표. (user_profile·post-it.md 도 convention/자유.)
 
 - **막히면** 권고가 가리키는 스킬로 간다 (예 `autopilot-code --qa quick` — 작은 변경도 경량 plan 트레일을 남긴다). 정말 일회성이면 `/track`.
 - **statusline** 이 현재 모드(📌/⚡)·git·context 사용량을 매 프롬프트에 띄운다 — _지금 어느 모드인지_ 놓치지 않는다.
