@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# workflow-guard-hook — WORKFLOW.md (tracked-mode 계약) 를 컨텍스트로 전달.
-#   SessionStart    : 라우팅 코어 전체 주입 (+ spec-backed 면 §7 디테일).
+# workflow-guard-hook — 모드 신호 + flag GC. (WORKFLOW·post-it 읽기는 _지침_ 이 담당, hook 주입 X.)
 #   UserPromptSubmit: 매 프롬프트 _모드 신호_ (cr_root 프로젝트) — 📌tracked(WORKFLOW 따름·skill 경유)
-#                     vs ⚡untracked(면제·자유). Claude 가 "WORKFLOW 지킬지" 를 positive 하게 인지.
-# 규칙의 단일 출처 = WORKFLOW.md §0/§7 (본 hook 은 _전달_ 만; UserPromptSubmit 은 재서술 없이 상기만).
+#                     vs ⚡untracked(면제·자유). instruction 이 못 보는 _런타임 flag 상태_ 를 Claude 에 전달.
+#   SessionStart    : 잔여 ⚡untracked flag GC 만.
+# WORKFLOW.md(라우팅 계약)·post-it(세션 연속성) 은 CLAUDE.md 부트스트랩+도메인 트리거 _지침_ 으로 Read.
 # 등록: ~/.claude/settings.json 의 hooks.SessionStart + hooks.UserPromptSubmit.
 set -euo pipefail
 
@@ -73,43 +73,11 @@ EOF
 fi
 
 # ============================================================
-# SessionStart (default) — 라우팅 코어 전체 주입
+# SessionStart (default) — 잔여 ⚡untracked flag GC 만 (>1일).
+# WORKFLOW.md·post-it 읽기는 _지침_ (CLAUDE.md 부트스트랩 + 도메인 트리거) 이 담당 — hook 주입 X.
+# (지침 = 이식 가능·균일·서브에이전트까지 도달; hook 은 instruction 이 못 하는 것만.)
 # ============================================================
-# 스케일·잔여 ⚡untracked flag GC (>1일) — 세션 시작에 1회.
 if [ -n "$cr_root" ]; then
   find "$cr_root/.claude_reports" -maxdepth 1 -name '.untracked.*' -mmin +1440 -delete 2>/dev/null || true
 fi
-
-[ "$is_project" = "0" ] && exit 0       # scratch/home dir → 조용히 종료
-
-read -r -d '' ctx <<'EOF' || true
-🧭 WORKFLOW 단일 라우터 — 작업 흐름 불변식 (~/.claude/WORKFLOW.md §0 = tracked 모드 계약)
-
-모든 작업 발화는 WORKFLOW §2 작업-본질 매핑을 먼저 거친다. 직접 처리·codex 플러그인·빌트인 스킬도 WORKFLOW 가 배치하는 자리에서만 쓴다.
-
-■ 하드 순서 게이트 (앞 단계 산출물 없이 다음 단계 진입 금지):
-  [코드]  research / analyze-project(code) → autopilot-spec (spec/) → autopilot-code (plans/)
-  [문서]  research / analyze-project(paper·doc) → autopilot-draft → autopilot-refine
-  · spec 없이 코드 작업 X — 코드 요청인데 spec/ 없으면 autopilot-spec 먼저.
-  · 사전 산출물 없이 spec X — research/ 또는 analysis_project/ 없으면 그것 먼저.
-  · throwaway 1 회성만 예외 (반복되면 spec 승격).
-
-■ 동일 스킬 수정 = 버전 트래킹 (convention): 산출물은 그것을 만든 스킬로만 수정한다.
-  spec→autopilot-spec update / plans→autopilot-code / documents→autopilot-draft·refine / experiments→autopilot-lab.
-  artifact-guard hook 은 _생성 순서_ 만 하드 차단(신규 산출물 ← 앞 단계, 코드 ← plan); 기존 산출물 _편집_ 은 convention. ⚡untracked(/track) = 전부 우회.
-EOF
-
-if [ -n "$spec_root" ]; then
-  proj=$(basename "$spec_root")
-  read -r -d '' spec_ctx <<EOF || true
-
-⚠️ SPEC-BACKED 프로젝트 감지 — ${proj}/.claude_reports/spec/ → WORKFLOW §7 (사후 수정 라우팅) 필수:
-0. 손대기 전 기존 산출물 파악 — spec/prd.md · pipeline_state.yaml · 최근 plans/* 를 먼저 읽어 상태 파악.
-1. (필요 시) analyze 갱신 — analysis_project/code/ stale·낯선 영역이면 analyze-project --mode code 먼저.
-2. spec-drift 사전 체크 (code 경유 _전_) — prd.md 대조. spec-significant(route/schema/UI-flow/외부연동/마이그레이션) 또는 기존 drift → autopilot-spec update (prd + _internal/versions/v{N}/ snapshot). 명확하면 자율 진행, 애매하면 사용자 확인. (autopilot-code pre-flight Step 0 으로도 강제.)
-3. autopilot-code 경유 — 작은 자연어 요청도 --qa quick 으로 plans/<date>_<slug>/ 에 산출물 남김.
-EOF
-  ctx="${ctx}${spec_ctx}"
-fi
-
-printf '%s' "$ctx" | emit SessionStart
+exit 0

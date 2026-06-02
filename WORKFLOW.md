@@ -9,7 +9,7 @@
 
 ## 0. 불변식 — 단일 라우터 + 하드 순서 게이트 (우회 불가)
 
-> **본 문서 = 📌tracked 모드 계약.** tracked 프로젝트(`.claude_reports`/`spec` 보유)에서 _반드시 지킬 것_ 의 단일 출처. untracked(`/track`)면 면제. `workflow-guard-hook` 이 SessionStart 에 본 §0/§7 을 주입하고, 매 프롬프트(UserPromptSubmit) 모드 신호 — 📌tracked(WORKFLOW 따름) / ⚡untracked(면제) — 를 띄워 Claude 가 준수 여부를 매번 인지한다 (규칙 자체는 여기 한 곳).
+> **본 문서 = 📌tracked 모드 계약.** tracked 프로젝트(`.claude_reports`/`spec` 보유)에서 _반드시 지킬 것_ 의 단일 출처. untracked(`/track`)면 면제. **읽는 방식 = 지침 기반 on-demand**: 매 프롬프트 `workflow-guard-hook` 모드 신호(📌 따름 / ⚡ 면제)가 anchor 이고, tracked 라우팅이 필요한 자리에서 본 문서를 Read 한다 (hook 주입·eager 로드 아님 — user_profile 과 같은 lazy·이식 가능 패턴). hook 은 instruction 이 못 보는 _런타임 모드_ 만 전달.
 
 본 문서가 **모든 작업 흐름의 단일 라우터**. 모든 발화는 §2 작업-본질 매핑을 먼저 거치고, 직접 처리·플러그인(codex)·빌트인 스킬도 WORKFLOW 가 배치하는 자리에서만 쓴다.
 
@@ -120,7 +120,7 @@
 
 초기 빌드 후 수정·기능 요청 (특히 새 세션). cwd 에 `.claude_reports/spec/` 있으면 ad-hoc 직접 Edit 금지 — **순서 원칙 (기존 산출물 파악) → analyze → spec → dev** 를 지킨다 (CLAUDE.md §0 imperative).
 
-> `utilities/workflow-guard-hook.sh` 가 cwd·상위의 `spec/pipeline_state.yaml` (모노레포는 `spec/*/`) 을 감지하면 SessionStart 에 본 §7 을 `additionalContext` 로 주입하고, 매 프롬프트에 모드 신호(📌tracked 따름 / ⚡untracked 면제)를 띄운다. 규칙 본문의 단일 출처는 본 §0/§7 (CLAUDE.md §0 은 항상-참 호출패턴 + 본 문서 포인터).
+> 본 §7 은 _지침_ 으로 적재된다 — CLAUDE.md 부트스트랩이 세션 시작에 WORKFLOW.md 를 Read (spec-backed 사후 수정은 §0(A) 도메인 트리거가 가리킴). `workflow-guard-hook` 은 매 프롬프트에 모드 신호(📌tracked 따름 / ⚡untracked 면제)만 띄운다(런타임 flag 상태). 규칙 본문의 단일 출처는 본 §0/§7.
 
 0. **기존 `.claude_reports/` 산출물 파악 (1 순위, 특히 새 세션)** — 손대기 전 `spec/prd.md` · `pipeline_state.yaml` · 최근 `plans/*` 를 _필요에 따라_ 먼저 읽어 프로젝트 상태·진행 자리를 잡는다. 맥락 모른 채 작업 X.
 1. **(필요 시) analyze 갱신** — `analysis_project/code/` 가 stale 하거나 낯선 영역이면 `analyze-project --mode code` (incremental) 먼저.

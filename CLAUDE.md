@@ -9,7 +9,7 @@
 > - 📦 라이브러리·CLI: `analyze-project` → `autopilot-spec`↻ → `autopilot-code`↻
 > - 사후 공통: `audit` (점검)·`autopilot-refine` (정정) / cross-project: `analyze-user`·`post-it --scope user`
 >
-> **세션 시작 시 `~/.claude/WORKFLOW.md` (라우팅 코어, ~90 줄) 를 Read 한다** — 위 skeleton 은 트랙 지도, WORKFLOW 는 작업 본질 매핑·spec mode·entry→서브에이전트 분기·폴더 맵까지의 라우팅 표. 라우팅 결정 (특히 _기존 spec 프로젝트의 사후 수정_ 자리) 전 손에 있어야 함. `~/.claude/README.md` 는 GitHub 사용자용 문서 — 세션 시작 강제 Read 대상 아님.
+> **라우팅 결정 시 `~/.claude/WORKFLOW.md` (라우팅 코어) 를 Read 한다** (on-demand) — 위 skeleton 이 트랙 지도, WORKFLOW 는 작업 본질 매핑·spec mode·entry→서브에이전트 분기·폴더 맵·§7 사후 수정까지의 라우팅 표. 매 프롬프트 `workflow-guard-hook` 모드 신호(📌tracked → WORKFLOW 따름 / ⚡untracked → 면제)가 _읽을지의 anchor_ — tracked 라우팅 자리(특히 spec 프로젝트 사후 수정)에서 필요해서 Read. eager 세션 전체 로드 X. `~/.claude/README.md` 는 GitHub 사용자용 — Read 대상 아님.
 
 ---
 
@@ -40,7 +40,7 @@ research / analyze-project (산출물) → autopilot-spec (spec/) → autopilot-
 
 > **harness**: `hooks/artifact-guard.sh` 는 _신규 산출물 생성 순서_ 만 hard 강제 (신규 spec←research, 신규 plan←spec, 신규 문서←research). **기존 산출물 _편집_ · 소스 코드는 차단 안 함** — "소유 스킬로 수정"은 convention (hook 이 소유 스킬과 직접편집을 구분 못 함). 비가드: `_internal/`·`pipeline_state.yaml`·`research/`·`analysis_project/`·`post-it.md`·`user_profile/`. **⚡untracked**(`/track`) = 생성 순서까지 _전부_ 우회 — 사용자 결정·throwaway 전용. **Claude 는 우회용 untracked 를 자기 판단으로 켜지 않는다** (막히면 전제 산출물 생성 또는 보고). statusline 📌/⚡.
 
-**(A) spec-backed 프로젝트 — 파이프 우선.** cwd/상위에 `spec/pipeline_state.yaml` 있으면(새 세션 포함) ad-hoc 직접 진단+Edit 로 끝내지 않는다. **순서·절차 = `WORKFLOW.md` §7** (기존 산출물 파악 → spec-drift 체크 → `autopilot-code --qa quick`; `workflow-guard-hook` 이 SessionStart 주입 + 매 프롬프트 모드 신호 📌따름/⚡면제). 강제: 신규 산출물 _생성 순서_ 만 hook (§0(0)); 기존 편집·소스 코드는 convention + 라우팅 reminder.
+**(A) spec-backed 프로젝트 — 파이프 우선.** cwd/상위에 `spec/pipeline_state.yaml` 있으면(새 세션 포함) ad-hoc 직접 진단+Edit 로 끝내지 않는다. **순서·절차 = `WORKFLOW.md` §7** (기존 산출물 파악 → spec-drift 체크 → `autopilot-code --qa quick`; §7 은 지침으로 on-demand Read, `workflow-guard-hook` 매 프롬프트 모드 신호 📌따름/⚡면제 가 anchor). 강제: 신규 산출물 _생성 순서_ 만 hook (§0(0)); 기존 편집·소스 코드는 convention.
 
 **(B) autopilot-* 호출 패턴 — 옵션 자동 구성 + 컨펌.** 자연어 한 줄로 부르면 컨텍스트 (cwd / `.claude_reports/` / 발화) 보고 옵션 조합 → 한 번 컨펌 (자연어 한 줄 요약 + 옵션 + 근거) → invoke.
 - **발화 분류** (turn 첫 단계): ceremony 큰 6 (`autopilot-code/draft/research/refine/apply` + `analyze-user`) → 컨펌 흐름 / 작은 3 (`audit`/`post-it`/`analyze-project`) → 즉시 invoke / sub-skill 자연어 → autopilot-* `--from <stage>` 재개 / 매칭 없음 → 직접 처리. 판단: 추적 필요 + 산출물 누적 → autopilot, 짧은 단발 → 직접.
