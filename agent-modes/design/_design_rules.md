@@ -28,7 +28,7 @@
 
 ## 슬롭 회피 (그대로 지킬 것)
 
-- **금지**: 공격적 그라데이션 배경 / 둥근 모서리+좌측 액센트 보더 컨테이너 / 이모지 남발(브랜드 아니면) / 과용 폰트(Inter·Roboto·Arial·Fraunces 의 무지성 사용).
+- **금지 (AI slop blocklist — 공개 DESIGN.md 그대로)**: 흰 배경 위 purple gradient / 공격적 그라데이션 배경 / 둥근 모서리+좌측 액센트 보더 컨테이너 / _균일한_ rounded corner 도배 / _과도한_ centered layout / evenly-distributed timid(겁먹은 균등 채도) 팔레트 / 이모지 남발(브랜드 아니면) / 무지성 default 폰트 (**Inter · Roboto · Arial · Open Sans · Lato · system-ui** + 남용된 Fraunces).
 - 더미·플레이스홀더 콘텐츠로 공간 채우지 않기 — 모든 요소는 존재 이유가 있어야.
 - 불필요한 숫자·통계·아이콘(데이터 슬롭) 금지. 미니멀 지향.
 - 이미지를 SVG 손그림으로 위조하지 말 것 — 줄무늬 placeholder + 모노스페이스 설명("product shot")으로 자리만.
@@ -41,6 +41,28 @@
 - 전경/배경: 톤(웜/쿨/뉴트럴) 하나. 흰/검정은 subtle 하게(채도 ≤ 0.02).
 - 액센트: 0–2 개, `oklch` 로. 같은 chroma·lightness, hue 만 다르게.
 - 색은 브랜드·디자인 시스템에서. 부족하면 `oklch` 로 조화롭게 확장.
+
+## conceptual altitude — 4 dimension (Claude Design 공개 frontend-design skill 흡수)
+
+> 핵심 철학: **low-level hex 가 아니라 _올바른 conceptual altitude_ 의 targeted language** 로 디자인을 지시한다. "균형 잡힌 모던" 같은 generic default 는 명시적으로 _금지_ — 모델은 그쪽으로 수렴한다.
+
+빌드 전 4축을 _말로 선언_ (없으면 사용자에 질문):
+1. **Typography** — 폰트는 _altitude 리스트_ 에서 (generic 회피):
+   - code/tech: JetBrains Mono · Fira Code · Space Grotesk
+   - editorial: Playfair Display · Crimson Pro · Fraunces
+   - startup/brand: Clash Display · Satoshi · Cabinet Grotesk
+   - **페어링 = high contrast** (display+mono, serif+geometric sans). **weight 극단** (100/200 vs 800/900, 어중간 400/500 회피). **size jump 3x+** (위계 또렷이).
+   - **anti-convergence**: Space Grotesk 처럼 _대체 default_ 로도 수렴하니 그것마저 의식적으로 피한다.
+2. **Color & Theme** — 톤 하나 + oklch 액센트 (위 비주얼 기본값). timid 균등 팔레트 금지.
+3. **Motion** — 의미 있는 전환만 (등장·강조·상태변화). 장식적 애니메이션 남발 금지. 고정 캔버스는 scale 레터박싱.
+4. **Backgrounds / Spatial composition** — 평면 단색이 default 보다 낫다 (그라데이션 슬롭 회피). 여백·grid 로 위계, 균등 분산 회피.
+
+inspiration 참조 전략: 막연하면 _IDE 테마 / 문화적 미감 / 특정 브랜드_ 를 anchor 로 지정해 generic 탈출.
+
+## 스택·번들 parity (Claude Design / artifacts 흡수)
+
+- **default 스택**: React 18 + Tailwind + shadcn/ui + Radix + Recharts(차트) + Lucide(아이콘) + Three.js(3D) + Motion(React 애니메이션). webapp/component 산출 시 이 셋을 1순위 보장 (artifact 가 보장하는 라이브러리 셋과 parity).
+- **단일파일 번들**: 멀티파일로 개발(Vite+TS+Tailwind)하되 최종은 _self-contained 단일 `bundle.html`_ 로 inline (Parcel + html-inline). 참조 구현 = 공개 `anthropics/skills` 의 `web-artifacts-builder` (init/bundle 2 스크립트). 우리 standalone preview.html 목표와 동일 — 프로젝트 스택 없이 열림.
 
 ## 스케일 / 단위
 
