@@ -215,7 +215,7 @@ QA level / model 표기 / family-wide invariant 은 **`~/.claude/CONVENTIONS.md`
 
 | Invariant | 검사 패턴 | drift 시 보고 |
 |---|---|---|
-| **adversarial = thorough + Codex** | `adversarial.*standard.*Codex` 또는 `adversarial.*=.*standard` | 🔴 `잘못된 정의: adversarial 은 thorough + Codex 이지 standard + Codex 가 아님` |
+| **adversarial = thorough + Codex** (+ research/doc 트랙은 claim-verify) | `adversarial.*standard.*Codex` 또는 `adversarial.*=.*standard` | 🔴 `잘못된 정의: adversarial base 는 thorough + Codex (standard 아님). research/doc 트랙은 + 연구팀 claim-verify` |
 | **autopilot-code 는 fact-checker 없음** | autopilot-code/SKILL.md or autopilot-code/README.md 에서 `fact-checker` 언급 (단, "doc/research 에만" 이라는 negative 안내는 OK) | 🔴 `code 파이프라인은 fact-checker 미적용` |
 | **autopilot-* + analyze-user adversarial 지원** | autopilot-code / autopilot-draft / autopilot-research / autopilot-refine / analyze-user 의 argument-hint 에 `adversarial` 누락 | 🔴 `2026-05-22 통일 — analyze-user 는 adversarial 고정, 나머지 4 개는 default thorough + adversarial 지원` |
 | **quick 은 refine skip + 1라운드 강제 종료** | quick 정의에서 위 둘 중 하나 누락 | 🟡 `quick 정의 incomplete` |

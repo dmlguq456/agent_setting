@@ -18,7 +18,7 @@
 | **light** | 2× sonnet (다른 axes²) | skip | skip | 1 | 사소 작업 — refine 단계 skip |
 | **standard** | 1× opus + 2× sonnet (다른 axes²) | 1× sonnet | skip | 1 | 간단 작업 — refine 단계 가능 |
 | **thorough** | 2× opus + 2× sonnet (다른 axes²) | 1× sonnet | skip | 2 | **default** — refine 단계 가능 |
-| **adversarial** | 2× opus + 2× sonnet (다른 axes²) | 1× sonnet | 1× `Agent(codex-review-team)` — Codex CLI (GPT-5) external review | 2 + Codex 1 | high-stakes — _모든 autopilot-* 4 개 지원_ |
+| **adversarial** | 2× opus + 2× sonnet (다른 axes²) | 1× sonnet | 1× `Agent(codex-review-team)` — Codex CLI (GPT-5) external review | 2 + Codex 1 | high-stakes. **research/doc 트랙은 + `Agent(연구팀 claim-verify)`** (적대적 외부 진위 — N-vote default-refute, WebSearch 모순 탐색; fact-check 와 보완층). code 트랙은 외부 claim 없어 미적용 |
 
 ¹ Fact-checker 는 _doc/research/refine 파이프라인_ 에만 적용. autopilot-code 계열 (init-plan / refine-plan / execute-plan / run-test) 은 fact-checker 없음 — ground-truth 가 코드 자신이라 verbatim 대조 무용.
 
@@ -43,7 +43,7 @@
 
 | Skill | Supported levels | Default | Adversarial | Fact-checker | 비고 |
 |---|---|---|---|---|---|
-| `autopilot-research` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | 모든 autopilot 통일 |
+| `autopilot-research` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | adversarial = thorough + Codex + **claim-verify**(Step 4b 적대적 외부 진위). doc 트랙(draft/refine)도 adversarial 시 claim-verify 적용 후보 |
 | `autopilot-code` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ (dev only; debug 는 thorough 로 downgrade) | **X** (code 는 fact-checker 없음) | |
 | `autopilot-lab` | quick/light/standard/thorough/**adversarial** | `light` | ✓ | **X** (실험 prototype — code 와 동일 — fact-checker 없음) | default 가 light 인 이유: 실험 prototype 빠른 cycle 1순위. 사용자 high-stakes 발화 (논문 결과·외부 공개) 시 standard+ 자동 상향 |
 | `autopilot-draft` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | |
@@ -85,7 +85,7 @@
 ## §3. Hard Cross-Doc Invariants (sync-skills `--check`가 자동 검사)
 
 1. 각 SKILL.md / README 에서 §1.1 5단계 정의의 **Quality reviewer / Fact-checker / Codex 컬럼 wording**은 본 문서와 의미 일치 (사소한 표현 차이는 허용, 의미가 다르면 drift).
-2. **adversarial** 정의는 반드시 `thorough + 1× codex-review-team`. 자주 잘못 적힌 패턴: `standard + Codex` — _틀림_.
+2. **adversarial** 정의는 반드시 `thorough + 1× codex-review-team` (+ research/doc 트랙은 `1× 연구팀 claim-verify`). 자주 잘못 적힌 패턴: `standard + Codex` — _틀림_ (base 는 thorough).
 3. autopilot-code의 QA 표에 fact-checker가 적힌 곳이 있으면 drift (code는 fact-checker 없음).
 4. `--no-fact-check` / `--no-style-audit`는 autopilot-refine / audit 외 다른 skill에 노출되면 안 됨.
 5. `codex-review-team`의 model 표기가 `opus` 단독이면 drift — 실제 review는 Codex CLI (GPT-5). §2 매트릭스에 따라 "Codex CLI (GPT-5) + opus orchestrator" 같이 분리 표기.

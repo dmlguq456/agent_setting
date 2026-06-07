@@ -101,6 +101,7 @@ Read and extract structured information from papers.
 
 **Per-paper card** (write to `{output_dir}/cards/{year}_{first_author}_{arxiv_id_or_hash}.md`):
 - **Venue**: 정식 출처 (학회/저널명 + Tier 1-4 등급). arXiv 프리프린트인 경우 "arXiv preprint" 표기 + 정식 출판 여부 확인
+- **Source quality**: `primary`(peer-reviewed 학회·저널) / `preprint`(arXiv 미출판) / `secondary`(survey·blog 정리) / `unreliable`(검증 안 됨). claim-verify 의 _source-quality × claim 강도_ 판정 입력 (강한 주장엔 primary 필요). venue Tier 와 별개 축 — Tier=명성, quality=검증 강도.
 - Reading recommendation grade
 - Methodology (2-3 lines)
 - Performance metrics (key results)

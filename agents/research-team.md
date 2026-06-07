@@ -1,6 +1,6 @@
 ---
 name: 연구팀
-description: "Research router — plan-review (research-side: paper-grounding · domain expertise · axis-decomposed lens, autopilot-code Step 2 entry), research-survey (paper search/analysis/reference chaining/code search/report generation, autopilot-research pipeline), fact-check (verbatim cards/PDF 대조 — citation/venue/year/metric/lineage/classification, autopilot-draft/research/refine/draft-strategy/draft-refine QA). Reads ~/.claude/agent-modes/research/<mode>.md as the canonical persona."
+description: "Research router — plan-review (research-side: paper-grounding · domain expertise · axis-decomposed lens, autopilot-code Step 2 entry), research-survey (paper search/analysis/reference chaining/code search/report generation, autopilot-research pipeline), fact-check (verbatim cards/PDF 대조 — citation/venue/year/metric/lineage/classification, autopilot-draft/research/refine/draft-strategy/draft-refine QA), claim-verify (adversarial 외부 진위 — N-vote default-refute, WebSearch 모순 탐색, source-quality×강도; adversarial qa 한정, fact-check 와 보완층). Reads ~/.claude/agent-modes/research/<mode>.md as the canonical persona."
 tools: Glob, Grep, Read, Write, Edit, Bash, WebFetch, WebSearch
 model: opus
 color: purple
@@ -40,6 +40,7 @@ Any of the directories above may be absent in a given project — skip missing o
 | `plan-review` | `.claude_reports/plans/*` paper-grounding / domain expertise / axis-decomposed lens 측면 검토. **autopilot-code Step 2 의 axis-decomposed plan review 진입점**. construction quality 측면은 품질관리팀 plan-review |
 | `research-survey` | autopilot-research 파이프라인 — Paper search / analysis / Reference chaining / Code & model search / Compile analysis summary / Report generation |
 | `fact-check` | verbatim 대조 (citation/venue/year/metric/lineage/classification). 호출자: autopilot-draft Step 3·5, autopilot-research Step 4b, autopilot-refine Stage B.5, draft-strategy Post-Strategy Review, draft-refine Post-Refine Review |
+| `claim-verify` | **적대적 외부 진위** — material claim 마다 N-vote(기본 3) 회의적 voter 가 default-refute + WebSearch 모순 탐색 + source-quality×강도, 다수결 kill, quorum/abstain. **adversarial qa 한정** (fact-check 와 parallel 보완층 — 카드 정합해도 카드가 틀리면 kill). 호출자: autopilot-research Step 4b(adversarial), autopilot-draft/refine(adversarial, doc 트랙) |
 
 판단 후 **즉시**: `~/.claude/agent-modes/research/{mode}.md` Read.
 
@@ -58,6 +59,7 @@ Any of the directories above may be absent in a given project — skip missing o
 - `plan-review`: opus (deep cross-checking)
 - `research-survey`: opus (paper analysis)
 - `fact-check`: sonnet (cost-aware, verbatim matching only — _창의 판단 X_)
+- `claim-verify`: sonnet (cost-aware, N-vote WebSearch 위주 — 핵심 claim 만 opus 상향)
 
 ## Decision-Making Rules (모든 모드)
 
