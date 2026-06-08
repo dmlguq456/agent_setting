@@ -98,8 +98,8 @@
 | **analyze-project** | 단일 skill — code/paper/doc mode 자체 분석 |
 | **autopilot-spec** | 기획팀(PRD 위임) + 자료팀(research import) / setup: 호스팅·CI/CD logic |
 | **autopilot-design** | 디자인팀 maker + 디자인팀 critic + 자료팀 web-image-search |
-| **autopilot-code** (일반) | 기획팀(plan) + 개발팀(execute) + 품질관리팀 code-review·test + 연구팀 plan-review |
-| **autopilot-code** (앱 mode) | 위 + **디자인팀 critic**(UI 변경 자리 자동) + DB migration 안전 logic + push 자동 deploy |
+| **autopilot-code** (일반) | 기획팀(plan) + 개발팀(execute) + 품질관리팀 code-review·test + **task-aware plan-review** (UI/visual → 디자인팀 critic / research·code → 연구팀) |
+| **autopilot-code** (앱 mode) | 위 + **디자인팀 critic 2자리** (plan 단계 _plan-review_ + render 후 결과 critic) + DB migration 안전 logic + push 자동 deploy |
 | **autopilot-draft** | 자료팀(figure·data·reference) + 개발팀(writing) + 편집팀 polish + 연구팀 fact-check |
 | **autopilot-refine** | autopilot-draft 와 동일 재활용 + 편집팀 review |
 | **analyze-user** | 자료팀(cross-project 수집) + 편집팀 review |

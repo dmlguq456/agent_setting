@@ -279,7 +279,7 @@ Resolve `$ARG` to a plan file path:
    - **No match** → report error
 
 ## Pipeline: Mode dev
-You (the main Claude) orchestrate by invoking each skill directly via the Skill tool. All tasks go through the full pipeline. The **연구팀** (research-team) agent is invoked only for Step 2 (plan review as user proxy) and Step 6 (meta-report).
+You (the main Claude) orchestrate by invoking each skill directly via the Skill tool. All tasks go through the full pipeline. Step 2 (plan review as user proxy) uses a **task-aware expert** — UI/visual → `디자인팀`, 그 외 → `연구팀`; Step 6 (meta-report) = 연구팀.
 
 > **자료팀 위임 (옵션, 2026-05-22 신설)** — task 가 _결과 시각화·실험 log plot·result table 정리_ 같은 분석 자료를 요구하면 code-execute / code-report 단계 안에서 `Agent(자료팀, "<spec>")` 직접 호출. _훈련·실험 실행_ 자체는 autopilot-code 본 영역, 결과의 _후처리·시각화_ 만 자료팀 영역. 자료팀이 figure / 스크립트 / 표 한 묶음 생성 후 dev_logs/ 의 해당 step 안에 결과 자산 경로 박음.
 
@@ -287,8 +287,8 @@ You (the main Claude) orchestrate by invoking each skill directly via the Skill 
 Invoke Skill: `code-plan` with the task description as args.
 Wait for completion before proceeding.
 
-### Step 2: code-refine (연구팀 as user proxy)
-**`--qa quick` short-circuit**: if `qa_level == quick`, skip the entire 연구팀 review + code-refine invocation. Log to pipeline_summary Decision Points: `Step 2 | refine skipped (qa=quick) | auto | proceed to Step 3`. Proceed directly to Step 3.
+### Step 2: code-refine (plan-review proxy — task-aware: 연구팀 / UI는 디자인팀)
+**`--qa quick` short-circuit**: if `qa_level == quick`, skip the entire plan-review + code-refine invocation. Log to pipeline_summary Decision Points: `Step 2 | refine skipped (qa=quick) | auto | proceed to Step 3`. Proceed directly to Step 3.
 
 Otherwise:
 1. Resolve plan paths from code-plan output: `en_plan_path`, `ko_plan_path`, `log_dir`.
@@ -298,7 +298,10 @@ Otherwise:
    - If targets are project source code (`.py`, `.cpp`, etc.) → `task_type=paper-driven code`.
    - If targets are under `.claude_reports/documents/*` → `task_type=paper-driven doc`.
    - If targets are under `.claude_reports/research/*` → `task_type=research artifact`.
+   - If targets are **UI/visual** (`*.css` / `globals.css` / `styles/` / 앱 컴포넌트 `*.tsx`·`*.jsx` 의 _시각·레이아웃·디자인 토큰_ 변경) → `task_type=ui/visual`.
    - Mixed → `task_type=mixed`.
+
+   > **plan-review proxy = task-aware (DESIGN_PRINCIPLES §9).** `task_type=ui/visual` 이면 아래 연구팀 호출을 **`Agent(디자인팀)` plan-review** 로 _대체_ — plan + 디자인 계약(`spec/design/05_handoff/handoff.md`·토큰)을 읽고 _계획된 접근_ 을 6축(위계·정렬·a11y·반응형·UX·톤) + **토큰 계약 준수** + slop 으로 리뷰 (render 전이라 _no-render plan-review_ 모드; 정의 = `agent-modes/design/critic.md`). 메모는 동일하게 `_internal/plan_reviews/design_review.md` → code-refine. UI 가 paper-driven 로직과 섞인 `mixed` 면 디자인팀 + 연구팀 둘 다 parallel. 그 외 task_type 은 연구팀(아래).
 
    **By `qa_level`** (reviewer 수·model 매트릭스는 [CONVENTIONS.md §1.1](../../CONVENTIONS.md#11-5단계-공통-정의) 단일 source — 본 sub-skill 은 그 spec 을 instance·axis 분담으로 풀어씀):
    - **quick / light** — 1× / 2× sonnet single pass, all task-type axes 단일 prompt 로:
