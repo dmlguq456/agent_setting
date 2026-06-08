@@ -23,15 +23,10 @@ if command -v git >/dev/null 2>&1 && git -C "$PWD" rev-parse --is-inside-work-tr
   is_project=1
 fi
 
-# cwd 에서 위로 올라가며 .claude_reports/ 와 spec-backed 루트 탐색.
-d="$PWD"; cr_root=""; spec_root=""
+# cwd 에서 위로 올라가며 .claude_reports/ 루트 탐색.
+d="$PWD"; cr_root=""
 for _ in $(seq 1 40); do
-  [ -z "$cr_root" ] && [ -d "$d/.claude_reports" ] && cr_root="$d"
-  if [ -z "$spec_root" ]; then
-    if [ -f "$d/.claude_reports/spec/pipeline_state.yaml" ] || ls "$d"/.claude_reports/spec/*/pipeline_state.yaml >/dev/null 2>&1; then
-      spec_root="$d"
-    fi
-  fi
+  [ -d "$d/.claude_reports" ] && { cr_root="$d"; break; }
   { [ "$d" = "/" ] || [ "$d" = "$HOME" ]; } && break
   d=$(dirname "$d")
 done
@@ -64,13 +59,8 @@ if [ "$EVENT" = "UserPromptSubmit" ]; then
 🧭 ⚡untracked — WORKFLOW 면제, 직접 편집 자유 · 파이프 복귀 /track
 EOF
   else
-    spec_tail=""
-    [ -n "$spec_root" ] && spec_tail=" · spec-backed: spec 먼저(drift)"
-    # 트랙 인지: 문서·실험 repo 면 정당한 직접편집 경로(refine minor / lab quick) 한 구절 — 과잉 압박 완화.
-    direct_tail=""
-    { [ -d "$cr_root/.claude_reports/documents" ] || [ -d "$cr_root/.claude_reports/experiments" ]; } && direct_tail=" · 문서·실험 minor/quick 직접 OK"
-    emit UserPromptSubmit <<EOF
-🧭 📌tracked — 작업은 autopilot-* 경유(직접편집 X), 산출물은 소유 스킬로, 단발만 직접 · WORKFLOW §0/§7${spec_tail}${direct_tail}
+    emit UserPromptSubmit <<'EOF'
+🧭 📌tracked — 작업은 autopilot-* 경유(산출물=소유 스킬, 단발·문서minor·실험quick만 직접) · WORKFLOW §0/§7
 EOF
   fi
   exit 0
