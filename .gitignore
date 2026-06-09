@@ -4,6 +4,7 @@
 # Session data (per-machine, ephemeral)
 history.jsonl
 sessions/
+.spec-grounding/
 session-env/
 shell-snapshots/
 paste-cache/
