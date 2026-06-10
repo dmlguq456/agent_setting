@@ -311,6 +311,46 @@ fi
 
 ---
 
+## §5.8. Pipeline Lock — 공유 `.claude_reports` 다중 worktree 가드 (canonical)
+
+**왜**: 여러 git worktree 가 _하나의 canonical `.claude_reports` 를 symlink 공유_ 할 때(릴리즈 브랜치 클린 유지 위해 산출물은 gitignore), 두 worktree 가 동시에 `spec/` 공유 단일파일(`prd.md`·`pipeline_state.yaml`·`pipeline_summary.md`)을 쓰면 lost-update. `plans/<cycle>/` 는 사이클별 폴더라 경로 분리 → 비경합(lock 불필요).
+
+- **lock 파일**: `.claude_reports/.pipeline-lock` (공유 트리에 위치 → 모든 worktree 가시). transient — `.claude_reports/` 자체가 gitignore 라 추적 안 됨.
+- **보호 범위**: `spec/prd.md`·`spec/pipeline_state.yaml`·`spec/pipeline_summary.md` _쓰기_ 구간만. 읽기·plans 쓰기는 비-lock.
+- **stale 무시(override)**: 기록 `at` 이 30 분 초과 OR 기록 worktree == 현재 worktree(재진입/잔존 락) → 통과.
+
+**acquire** — 쓰기 진입 _직전_ (autopilot-spec 의 Step 3 / update mode, autopilot-code 의 pipeline_state·summary 쓰기 / spec-drift update):
+
+```bash
+LOCK=.claude_reports/.pipeline-lock; NOW=$(date +%s); WT=$(pwd -P)
+if [ -f "$LOCK" ]; then
+  LAT=$(sed -n 's/^at=//p' "$LOCK"); LWT=$(sed -n 's/^worktree=//p' "$LOCK"); LBR=$(sed -n 's/^branch=//p' "$LOCK")
+  if [ "$LWT" != "$WT" ] && [ $((NOW-${LAT:-0})) -lt 1800 ]; then
+    echo "BLOCKED: '$LBR' ($LWT) 이 $((NOW-LAT))s 전부터 spec 편집 중 — 대기 또는 죽은 락이면 rm $LOCK"; exit 3
+  fi   # same-worktree 또는 stale(>30m) → override 통과
+fi
+printf 'worktree=%s\nbranch=%s\nskill=%s\nat=%s\nat_iso=%s\npid=%s\n' \
+  "$WT" "$(git branch --show-current 2>/dev/null)" "${SKILL:-autopilot}" "$NOW" "$(date -Iseconds)" "$$" > "$LOCK"
+```
+
+`exit 3`(BLOCKED) → 쓰기 _중단_ 하고 "다른 worktree 가 spec 편집 중" 사용자 보고 + 대기/override 판단 요청.
+
+**release** — 파이프 정상 종료 _및_ 중단·에러 시 모두:
+
+```bash
+rm -f .claude_reports/.pipeline-lock
+```
+
+**detect-only** — "지금 spec 수정 중인가?" 단순 조회(메인 Claude 가 spec 손대기 전 확인):
+
+```bash
+[ -f .claude_reports/.pipeline-lock ] && cat .claude_reports/.pipeline-lock || echo "활성 편집 없음"
+```
+
+> 비-worktree(단일 체크아웃) 환경에선 lock 이 항상 same-worktree → 즉시 override, 무해. symlink 공유 worktree 에서만 실질 가드로 작동.
+
+---
+
 ## §6. Autopilot-* 흐름 매트릭스 (사용자 호출 단위)
 
 > 본 절은 autopilot-* skill 들의 _작업 본질·역할·경계_ 의 단일 source of truth. _대칭 강제 X — 작업 본질에 맞는 분리_ 원칙. 자세한 사용자 향 청사진: [`~/.claude/WORKFLOW.md`](WORKFLOW.md).

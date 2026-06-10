@@ -365,6 +365,8 @@ Otherwise (qa_level != quick), if code-test reports failure (after its internal 
 Invoke Skill: `code-report` with the plan name/path as args.
 
 ### Step 6: Pipeline Summary Report
+> **동시성 가드 (공유 `.claude_reports`)**: `pipeline_summary.md`·`pipeline_state.yaml` 등 `spec/` 공유 단일파일 쓰기 _직전_ **CONVENTIONS.md §5.8** `.pipeline-lock` 획득, 쓰기 직후 해제(짧게 보유). spec-drift 로 prd.md 갱신(§ "Spec 영향 변경 감지" → autopilot-spec update) 시도 lock 경유(해당 skill 이 자체 획득). `plans/<cycle>/` 쓰기는 경로 분리라 비-lock. BLOCKED(`exit 3`) 면 쓰기 멈추고 사용자 보고.
+
 Write `pipeline_summary.md` per the **Pipeline Summary Template (mode=dev)** (see below).
 Then report to the user: pipeline_summary.md path + 2-3 line verdict.
 
