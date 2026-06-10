@@ -27,7 +27,8 @@ Before any code changes, ensure the working tree is clean and up-to-date:
    - If pull fails due to merge conflicts: abort the pull (`git merge --abort`), warn the user, and stop. Do NOT proceed with execution.
 2. Run `git status` to check for uncommitted changes.
 3. If there are uncommitted changes:
-   - Run `git add -A && git commit` with a commit message that accurately describes the current uncommitted changes (analyze the diff to write a meaningful message).
+   - **먼저 merge/rebase 진행 중인지 확인** — `git rev-parse -q --verify MERGE_HEAD` 성공 또는 `$(git rev-parse --git-dir)/rebase-merge`·`rebase-apply` 존재 시: `git add -A && git commit` 을 **하지 않는다** (반쯤 머지된 트리를 restore point 로 굳히는 사고). STOP 하고 사용자에 보고 (resume·직접 진입으로 step 0 게이트를 건너뛴 자리의 in-place 자기방어).
+   - 진행 중인 머지가 없을 때만: `git add -A && git commit` with a commit message that accurately describes the current uncommitted changes (analyze the diff to write a meaningful message).
    - This commit serves as a restore point if rollback fails later.
 4. Record the current commit hash: `git rev-parse HEAD` → save as `$SAFETY_COMMIT`.
    - `$SAFETY_COMMIT` is persisted into the checklist header during Initialization.
