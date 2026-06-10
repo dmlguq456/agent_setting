@@ -351,6 +351,32 @@ rm -f .claude_reports/.pipeline-lock
 
 > 비-worktree(단일 체크아웃) 환경에선 lock 이 항상 same-worktree → 즉시 override, 무해. symlink 공유 worktree 에서만 실질 가드로 작동.
 
+### §5.9. Git working-state preflight (worktree·merge 가드, canonical)
+
+**왜**: §5.8 lock 은 `.claude_reports` _산출물_ 동시쓰기만 막는다. 정작 _실제 `.git` 워킹트리_ — merge/rebase 진행 중인지, dirty 한지, detached HEAD 인지, 같은 브랜치가 다른 worktree 에 잡혀 있는지 — 는 안 본다. 여러 worktree·브랜치로 작업하다 merge 가 끼면 이 자리를 놓쳐 (반쯤 머지된 트리 위에 commit / detached HEAD 에 commit 유실 / 다른 worktree 가 머지로 바꿔놓은 파일 위에 작업) 사고. 코드 손대는 skill(autopilot-code 가 canonical 소비자)은 **코드 편집 _전_ 1회 + 각 commit/write-back _직전_ 재확인**(= 주기적 체크) 한다.
+
+```bash
+# git-state preflight — 코드 편집 전 + 매 commit 직전. STOP 이면 편집·commit 멈추고 사용자 보고
+GD=$(git rev-parse --git-dir 2>/dev/null) || { echo "OK non-git"; return 0 2>/dev/null||exit 0; }
+op=; [ -f "$GD/MERGE_HEAD" ] && op=merge
+{ [ -d "$GD/rebase-merge" ] || [ -d "$GD/rebase-apply" ]; } && op=rebase
+[ -f "$GD/CHERRY_PICK_HEAD" ] && op=cherry-pick
+br=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo DETACHED)
+head=$(git rev-parse --short HEAD 2>/dev/null)
+ahead_behind=$(git rev-list --left-right --count @{u}...HEAD 2>/dev/null)  # "behind  ahead"
+# 같은 브랜치를 잡고 있는 다른 worktree
+elsewhere=$(git worktree list --porcelain 2>/dev/null | awk -v b="$br" '/^worktree /{w=$2} /^branch /{if($2=="refs/heads/"b && w!=ENVIRON["PWD"]) print w}')
+if [ -n "$op" ];        then echo "STOP: $op 진행 중 — 해결(또는 --abort) 뒤 진행"; fi
+if [ "$br" = DETACHED ];then echo "STOP: detached HEAD($head) — commit 유실 위험, 브랜치 체크아웃 먼저"; fi
+[ -n "$elsewhere" ] && echo "WARN: 브랜치 '$br' 가 다른 worktree($elsewhere)에도 체크아웃됨"
+[ "${ahead_behind%%	*}" -gt 0 ] 2>/dev/null && echo "WARN: upstream 이 ${ahead_behind%%	*} 커밋 앞섬(머지/리베이스 발생) — 통합 후 진행 권장"
+echo "state: branch=$br head=$head dirty=$(git status --porcelain 2>/dev/null|wc -l|tr -d ' ')"
+```
+
+- **STOP** (merge/rebase/cherry-pick 진행 중 · detached HEAD) → 편집·commit 멈추고 사용자 보고 + 처리 요청. 자동으로 `--abort`·강제 체크아웃 하지 않는다.
+- **WARN** (다른 worktree 동일 브랜치 · upstream 앞섬 · 진입 시 세션 무관 dirty) → 한 줄 알림 후 진행 판단.
+- **periodic 재확인**: 진입 시 `head` 를 기억 → 각 commit 직전 재실행해 `head` 가 바뀌었거나(아래서 머지·리베이스됨) 새 `MERGE_HEAD` 가 생겼으면 STOP. 비-worktree·비-git 자리에선 전부 `OK`/무해 통과.
+
 ---
 
 ## §6. Autopilot-* 흐름 매트릭스 (사용자 호출 단위)

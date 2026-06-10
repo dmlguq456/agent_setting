@@ -43,9 +43,11 @@ spec 의 `mode` 배열 (단일 또는 복수) 에 따라 자동 활성화:
 
 복수 mode 시 _해당하는 logic 모두_ 활성화.
 
-### Pre-flight (필수 Step 0): spec-significance 트리아지 — 코드 손대기 _전_, verdict 보고 강제
+### Pre-flight (필수 Step 0): git-state + spec-significance — 코드 손대기 _전_, verdict 보고 강제
 
-spec/ 존재 시, _어떤_ 코드 요청이든 plan 전에 **이 pre-flight 게이트를 먼저 통과하고 한 줄 verdict 를 반드시 출력**한다. WORKFLOW §7-3 의 spec-drift 사전 체크를 _메인 Claude 의 라우팅 판단_ (잘 건너뜀) 이 아니라 _본 skill 의 강제 첫 단계_ 로 내재화 — "그냥 code 로 진입" 으로 스킵 못 하게.
+**0a. git working-state 게이트 ([CONVENTIONS.md §5.9](../../CONVENTIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical))** — spec 트리아지 _전_, 코드 편집 _전_ 실행. merge/rebase/cherry-pick 진행 중·detached HEAD = **STOP**(사용자 보고, 자동 abort 금지), 다른 worktree 동일 브랜치·upstream 앞섬·세션 무관 dirty = **WARN**. 진입 시 `HEAD` 기억 → **각 commit/write-back 직전 재실행**(주기적 체크)해 HEAD 가 바뀌었거나 새 `MERGE_HEAD` 생겼으면 STOP. 여러 worktree·브랜치+merge 자리에서 §5.8 산출물 lock 이 못 잡는 _실제 repo 상태_ 를 닫는 가드. 비-git·단일 체크아웃은 무해 통과.
+
+**0b. spec-significance 트리아지** — spec/ 존재 시, _어떤_ 코드 요청이든 plan 전에 **이 게이트를 먼저 통과하고 한 줄 verdict 를 반드시 출력**한다. WORKFLOW §7-3 의 spec-drift 사전 체크를 _메인 Claude 의 라우팅 판단_ (잘 건너뜀) 이 아니라 _본 skill 의 강제 첫 단계_ 로 내재화 — "그냥 code 로 진입" 으로 스킵 못 하게.
 
 1. 요청 + `spec/prd.md` (+ 해당 시 `api_contract.md`·`data_model.md`·`ui_flow.md`) 대조.
 2. 분류:
