@@ -137,7 +137,7 @@ for line in sys.stdin:
     seen.setdefault(key, lbl)
 out = list(seen.values())[:2]
 if len(seen) > 2: out.append(f"+{len(seen)-2}")
-print(" │ ".join(out))
+print("  \033[1;37m┃\033[0m  ".join(out))
 ' 2>/dev/null || true)
 
 # 당직 보고 미처리 nudge (✅ 처리됨·"이상 없음" heartbeat 는 표시 안 함)
