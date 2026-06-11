@@ -95,9 +95,31 @@ if [ -n "$branch" ]; then
   segs_arr+=("$bseg")
 else segs_arr+=("${DIM}⎇ no-git${RST}"); fi
 
-# 도는 headless 파이프·루프 라벨 ("N shells" 배지의 중간 단계 — 무엇이 도는지 한 단어)
-jobs_lbl=$(ps -eo args 2>/dev/null | grep -oE '/autopilot-[a-z-]+|loops/(oncall|note|study|drill)' \
-  | sed 's@/autopilot-@@; s@loops/@@' | sort -u | head -3 | paste -sd'·' - || true)
+# 도는 headless 파이프·루프 상세 ("N shells" 배지의 중간 단계 — 무엇이·얼마나·뭘 하는지)
+jobs_lbl=$(ps -eo etime=,args= 2>/dev/null | python3 -c '
+import sys, re
+seen = {}
+for line in sys.stdin:
+    line = line.rstrip("\n")
+    if not line: continue
+    etime, _, args = line.lstrip().partition(" ")
+    m = re.search(r"/autopilot-([a-z-]+)", args)
+    if m and "claude" in args:
+        key = m.group(1)
+        mode = re.search(r"--mode (\w+)", args); qa = re.search(r"--qa (\w+)", args)
+        tail = args[m.end():]
+        desc = re.sub(r"--\w+ \S+", "", tail).strip()[:26]
+        opts = "·".join(x.group(1) for x in (mode, qa) if x)
+        lbl = key + (f"({opts})" if opts else "") + f" {etime.strip()}" + (f" {desc}…" if desc else "")
+    else:
+        l = re.search(r"loops/(oncall|note|study|drill)", args)
+        if not l: continue
+        key = l.group(1); lbl = f"{key} {etime.strip()}"
+    seen.setdefault(key, lbl)
+out = list(seen.values())[:2]
+if len(seen) > 2: out.append(f"+{len(seen)-2}")
+print(" │ ".join(out))
+' 2>/dev/null || true)
 
 # 당직 보고 미처리 nudge (✅ 처리됨·"이상 없음" heartbeat 는 표시 안 함)
 latest_oncall=$(ls -t /home/nas/user/Uihyeop/notes/oncall/*.md 2>/dev/null | head -1 || true)
