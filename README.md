@@ -111,9 +111,9 @@ analyze-project  →  autopilot-spec ↻  →  autopilot-code ↻
 | [`autopilot-refine`](skills/autopilot-refine/SKILL.md) | doc/research markdown _사후 정정_. prompt + memo 통합 entry, 버전·이력 자동 관리 |
 | [`audit`](skills/audit/SKILL.md) | 산출물 _읽기 전용_ multi-aspect 점검 + 기본 auto-fix dispatch. refine 이 _수정 흐름_ 이면 audit 은 _점검 흐름_ |
 | [`analyze-user`](skills/analyze-user/SKILL.md) | cross-project 사용자 산출물 분석 → `user_profile/` 갱신. 모든 sub-agent 의 default 자료라 QA adversarial 고정 |
-| [`autopilot-note`](skills/autopilot-note/SKILL.md) | 산출물·git log 변화를 주기적·on-demand 로 worklog 카드(task/project/tech)에 routing. 일일 digest 누적, idempotent (cron 친화 `--qa light`) |
+| [`autopilot-note`](skills/autopilot-note/SKILL.md) | 산출물·git log 변화를 L2 노트로 만들어 L1 worklog 카드에 routing (2-Layer — 연결은 제안만, 확정은 `/triage` 사용자 몫). 일일 digest 누적, idempotent (cron 친화 `--qa light`) |
 | [`post-it`](skills/post-it/SKILL.md) | 사용자 통제 _임시 포스트잇_ 메모. `--scope project`(cwd post-it.md) / `--scope user`(user_profile aspect). `sweep`=산출물 졸업·stale prune · `promote`=user 메모 구조화 졸업 — 영구 누적 X |
-| [`sync-skills`](skills/sync-skills/SKILL.md) | 본 README 를 SKILL.md·agent 정의로부터 재생성·동기화 |
+| [`sync-skills`](skills/sync-skills/SKILL.md) | 본 README 를 SKILL.md·agent 정의로부터 재생성·동기화 + cross-doc invariant·이름 drift 검사 + 에이전트 매뉴얼 동기 검토 제안 |
 
 > sub-skill 은 autopilot 내부 자동 호출 (사용자가 직접 안 부름): code 가족 (`code-plan`/`-refine`/`-execute`/`-test`/`-report`) · draft 가족 (`draft-strategy`/`-refine`) · design 가족 (`design-init`/`-refs`/`-tokens`/`-components`/`-review`/`-handoff`). (spec 은 `autopilot-spec` 본문이 mode 무관 직접 처리 — 별도 sub-skill 없음.)
 
