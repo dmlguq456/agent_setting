@@ -112,8 +112,8 @@ QA 5 단계 정의 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1
 
 | Level | Behavior |
 |---|---|
-| **quick** | Routing 분류 + Stage C dry-summary + 자동 apply. _매일 cron_ 기본 자리. reviewer round 0. |
-| **light** (default) | + 1× sonnet reviewer single axis (linking precision — card_id/backbone/task 매달림 정합). _주중 묶음 정리_. |
+| **quick** | Routing 분류 + Stage C dry-summary + 자동 apply. _대량 backfill·1회성 경량_ 자리. reviewer round 0, polish 없음. |
+| **light** (default) | + 1× sonnet reviewer single axis (linking precision — card_id/backbone/task 매달림 정합) + **편집팀 polish batch 1회** (Stage D.5). _매일 cron 기본_. |
 | **standard** | + 1× opus + 2× sonnet reviewer (linking precision / note 노트화 narrative / 카탈로그 emerge·triage 제안 quality) + 1× sonnet fact-checker (source ↔ 노트 verbatim 대조). round 1. _주말 묶음 정리_. |
 | **thorough** | + 2× opus + 2× sonnet + 1× sonnet fact-checker. round 2. _월간 cleanup_ / _노션 migration 검수_. |
 | **adversarial** | thorough + 1× `Agent(codex-review-team)` Codex CLI external review. _Phase 3 노션 migration 1차 검수_ 같은 high-stakes 자리. |
@@ -165,6 +165,7 @@ opt-out flag — `--no-fact-check` 만 (standard+ 자리에서).
 #### 2차 — fuzzy 키워드 매칭
 - 산출물 키워드 → `<target>/cards/**.md` 중 `kind: project`/`kind: task` 의 `title` / 본문 heading fuzzy 매칭.
 - confidence ⟨2026-06-10⟩: **≥0.7** → `card_id` set + `routing_confidence` 기록(높음). **0.4-0.7** → `card_id` set + `routing_confidence` 기록(중). **<0.4** → 3차. **무인 cron 은 confidence 무관 `routing_status: inbox`** (위 banner) — confidence 는 정렬·하이라이트용 emit 일 뿐 자동 confirmed 아님. `routing_reason`·`matched_signals` 도 같이 기록(아침 교정 단서).
+- **다중 카드 제안 ⟨2026-06-11, worklog-board prd v32⟩**: 연결 제안은 **주(primary) 1 + 보조(secondary) 0~N**. 최고 confidence 매칭 = `card_id`(주, 기존 의미 불변). 그 외 유의미 매칭(예: 같은 산출물이 여러 과제·할일에 걸침)은 `secondary_card_ids: [<id>, …]` 로 frontmatter 에 복수 emit — DB 적재 시 `l2.note_cards` M:N 으로 들어가고 `/triage` 검토함 에디터에서 사용자가 추가·삭제. 보조는 제안일 뿐 보고·홈 위젯·다이제스트의 단일 기준은 여전히 주 카드.
 
 #### 3차 — ambient
 - 어디에도 안 맞음 → `card_id: null` + `routing_status: inbox` + `routing_confidence: <낮음>`. 사후 사용자 promote. (이전 `kind: misc` 의 Layer 2 대응.)
@@ -233,7 +234,7 @@ reviewer issue flag 시 — `_internal/reviews/round_{N}.md` 기록 + report sur
 ### Stage D — Apply
 1. **L2 note 생성 (#1·#2·#3·#5)**:
    - `<target>/_layer2/notes/<id>.md` 생성. `id` = `note-{YYYYMMDD}-{source-path 해시 6자}` (idempotency).
-   - frontmatter = card_id / backbone_ids / task_ids / paper_id / intent / work_status / routing_status / **routing_confidence / routing_reason / matched_signals / run_id / run_at** ⟨2026-06-10⟩ / created_at / source. (무인 cron 은 routing_status = `inbox` 고정.)
+   - frontmatter = card_id / **secondary_card_ids** ⟨2026-06-11 v32 — 보조 카드 복수 제안⟩ / backbone_ids / task_ids / paper_id / intent / work_status / routing_status / **routing_confidence / routing_reason / matched_signals / run_id / run_at** ⟨2026-06-10⟩ / created_at / source. (무인 cron 은 routing_status = `inbox` 고정.)
    - 본문 = source 핵심을 _읽기 편하게 노트화_ (한국어 — 결과·결정·metric·다음 단계 + `[[연결]]`).
 2. **L2 카탈로그 emerge (#3)**:
    - 참조 backbone/task/paper slug 가 `<target>/_layer2/{backbones,tasks,papers}/` 에 없으면 entry 생성 (각 README frontmatter spec). 로그에 emerge 기록.
@@ -241,6 +242,19 @@ reviewer issue flag 시 — `_internal/reviews/round_{N}.md` 기록 + report sur
    - `<target>/_triage/{date}_<seq>.md` — 제안 카드 frontmatter (`kind: project` 또는 `task` + slug 후보) + 본문 outline + confirm/reject 표시 + 근거 source link. worklog-board `/triage` UI watch.
 4. **idempotency check** — note `id` 또는 frontmatter `source` 마커가 이미 있으면 _갱신 또는 skip_ (재실행 안전). 같은 source → 같은 note (중복 X).
 5. **L1 카드 불변** — `<target>/cards/**.md` 는 read-only. 신규는 `_triage/` 제안만.
+6. **manifest 유지 ⟨2026-06-11, prd v33 — 일회성 아님⟩**: run 마다 backbone 카탈로그를 스캔해
+   - **본문 빈 + 누적 노트 ≥3** 인 backbone → 쌓인 노트들을 근거로 **정의·쓰임새 초안을 자동 작성** (`manifest_status: draft` frontmatter). 빈자리 채움이라 사용자 콘텐츠 훼손 없음 — emerge 로 새로 생긴 backbone 도 노트가 차면 자동 충족.
+   - **본문이 이미 있는** backbone (특히 `manifest_status: confirmed`) → 직접 수정 금지. 갱신할 내용이 생기면(새 파생·용도 변화) 검토함 제안으로 staging.
+   - **계보(파생 사슬)는 항상 사용자 확정 영역** — 초안엔 "계보 후보" 로만 제시, 단정 서술 금지.
+
+### Stage D.5 — 편집팀 polish (light+, batch 1회)
+
+노트 본문은 _사용자가 직접 읽는_ 산출물 — 글로벌 편집팀 트리거 대상. 이번 run 에서 **생성·갱신된 노트 본문 + (Stage E 후) digest** 를 `Agent(편집팀)` _다듬기 모드_ 한 번에 batch 위임:
+
+- 대상: 한국어 wording 만 (번역체·판교체·풀어쓰기 과잉 정리, 개조식 톤 통일)
+- **불변**: frontmatter 전체 · `[[링크]]`·slug · 수치·metric·코드 식별자 · 구조(헤딩·표)
+- 호출 1회로 묶음 처리 (노트당 개별 호출 금지 — 비용). 노트 0건 run 은 skip.
+- quick 에선 생략 (경량 tier). reviewer (C.5) 와 역할 구분 — reviewer 는 _정합·정확_, 편집팀은 _읽기 품질_.
 
 ### Stage E — Digest 생성 (run 기반 리뷰 그룹 ⟨2026-06-10, prd §13.C ③⟩)
 다이제스트는 _카운트 요약_ 이 아니라 **밤 실행(run) 단위 리뷰 그룹** — 홈/`/triage` 의 아침 리뷰 진입점. `run_id` 헤더 + "검토 필요(inbox)" 를 _맨 위_ 에 둔다.
