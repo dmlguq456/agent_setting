@@ -54,3 +54,5 @@ loops/golden/results/
 loops/golden/metrics.csv
 .statusline-last.json
 .dispatch/
+.claude_reports/.pipeline-lock
+.claude_reports/.untracked*

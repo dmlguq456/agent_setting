@@ -10,7 +10,7 @@
    - agent engineering 실무 패턴 신간 (harness·context·loop engineering, 멀티에이전트, eval)
    - 커뮤니티에서 자리 잡는 컨벤션 (헛소문·과장 글은 출처 품질로 거름)
 3. **현 세팅 대조**: `~/.claude/CLAUDE.md`·`CONVENTIONS.md`(특히 §5.8~5.10)·`loops/README.md`·`hooks/` 목록을 Read 하고, 조사 결과와 비교 — 우리가 이미 하는 것 / 빠진 것 / 더 잘하는 것 구분.
-4. **내부 위생 (가볍게)**: `loops/golden/metrics.csv` 의 g0_overhead in_tok 추세 (세팅 세금 증감) + 지침 문서 간 모순·비대 후보 1~2건만.
+4. **내부 위생 (가볍게)**: `loops/golden/metrics.csv` 의 g0_overhead in_tok 추세 (세팅 세금 증감) + 지침 문서 간 모순·비대 후보 1~2건 + **의도 불명 지침** (왜·날짜·계기 주석 없는 규칙 — CONVENTIONS §3.6 위반) 후보 1~2건.
 
 ## 제안서 — `/home/nas/user/Uihyeop/notes/study/<날짜 YYYY-MM-DD>.md`
 
