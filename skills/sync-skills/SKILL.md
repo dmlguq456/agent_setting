@@ -125,7 +125,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
    - `### (1) 자연어 발화` — prose (옵션 자동 구성 + 자연어 요약 컨펌 + yes/수정/cancel/자율 진행 + ceremony 큰 (autopilot-\* 전체 + analyze-user) vs 작은 3 컨펌 의무) + [`CLAUDE.md`](CLAUDE.md) §0 reference + **자연어 발화 예시 표** (_사람 유지 영역_)
    - `### (2) slash 직접 입력` — prose (의도 명시 = 즉시 invoke) + slash 예시 code block (_축약 5 줄_: autopilot-code / autopilot-draft / autopilot-refine / audit / **track**(📌↔⚡ 토글) — argument-hint 에서 자동 생성, 전체 syntax dump X) + 전체 옵션은 SKILL.md reference.
 8. **🤝 Agents** — name (agent .md 링크) / 모델 / _의의_ 표 (_자동 호출자·역할 dump X_) + 직접 호출 안내 한 단락 + user_profile 참조 매트릭스는 [`user_profile/README.md`](user_profile/README.md) reference (README 에 매트릭스 표 _넣지 않음_).
-9. **📚 더 깊이 + 🔁 동기화** — canonical 문서 reference index 표 (CLAUDE.md / CONVENTIONS / WORKFLOW / DESIGN_PRINCIPLES / user_profile/README + **harness 행**: `hooks/`·`utilities/`·`statusline.sh` + **loops 행**: `loops/README.md` — 당직 scout·일지 note·모의훈련 golden 호칭 병기) + `/sync-skills` 두 명령 + GitHub 링크.
+9. **📚 더 깊이 + 🔁 동기화** — canonical 문서 reference index 표 (CLAUDE.md / CONVENTIONS / WORKFLOW / DESIGN_PRINCIPLES / user_profile/README + **harness 행**: `hooks/`·`utilities/`·`statusline.sh` + **loops 행**: `loops/README.md` — 당직 duty·일지 note·모의훈련 golden 호칭 병기) + `/sync-skills` 두 명령 + GitHub 링크.
 10. **🗺️ 전체 디렉토리 맵** (🔁 동기화 직전 배치) — `~/.claude/` 트리 + 항목별 한 줄 의미 (```text 블록). sync 시 실제 `ls` 와 대조해 신규·삭제 디렉토리 반영. harness 런타임 자동 생성 폴더(backups·cache·sessions 등)는 마지막 한 묶음. 루프 호칭은 `loops/README.md` 가 단일 출처.
 
 원칙:
