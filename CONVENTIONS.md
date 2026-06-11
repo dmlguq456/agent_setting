@@ -380,7 +380,7 @@ echo "state: branch=$br head=$head base=$def dirty=$(git status --porcelain 2>/d
 
 - **STOP** (merge/rebase/cherry-pick 진행 중 · detached HEAD) → 편집·commit 멈추고 사용자 보고 + 처리 요청. 자동으로 `--abort`·강제 체크아웃 하지 않는다. **harness**: merge/rebase/cherry-pick 중 편집은 `hooks/git-state-guard.sh` 가 PreToolUse(Edit|Write) 에서 hard deny — ceremony 비경유 직접 편집 경로까지 커버 (golden g2 가 잡은 구멍, 2026-06-11). 탈출구 `$GITDIR/CLAUDE_MERGE_EDIT_OK` 는 _사용자가 충돌 해결을 명시 요청한 경우만_ — Claude 자가 판단 생성 금지 (artifact-guard untracked 와 동일 convention).
 - **WARN** (다른 worktree 동일 브랜치 · upstream 앞섬 · 진입 시 세션 무관 dirty) → 한 줄 알림 후 진행 판단.
-- **DONE-BRANCH (브랜치 수명)** — worktree 에서 판 브랜치가 base 에 머지되면 그 브랜치는 _끝난 것_. ahead 0 인데 그 위에 새 작업을 쌓으면 이미 머지된 죽은 브랜치에 commit 하는 꼴. **새 작업 cycle 진입 시 ahead 0 (+ base 아님 + 이번 작업용 브랜치가 아님) 이면 base 최신에서 새 브랜치를 판다** — `git fetch origin && git switch -c <slug> origin/$def` (worktree 안전 — base 를 체크아웃하지 않아 main worktree 와 충돌 없음). 이미 이번 작업용으로 갓 판 빈 브랜치면 그대로 사용.
+- **DONE-BRANCH (브랜치 수명)** — worktree 에서 판 브랜치가 base 에 머지되면 그 브랜치는 _끝난 것_. ahead 0 인데 그 위에 새 작업을 쌓으면 이미 머지된 죽은 브랜치에 commit 하는 꼴. **새 작업 cycle 진입 시 ahead 0 (+ base 아님 + 이번 작업용 브랜치가 아님) 이면 base 최신에서 새 브랜치를 판다** — `git fetch origin && git switch -c <slug> origin/$def` (worktree 안전 — base 를 체크아웃하지 않아 main worktree 와 충돌 없음). 이미 이번 작업용으로 갓 판 빈 브랜치면 그대로 사용. **직접 편집(비-ceremony)도 동일** — 죽은 브랜치 워킹트리에 미커밋 변경을 띄워두는 것 자체가 부유물 (golden g1, 2026-06-11: 죽은 브랜치 인지하고도 그 자리서 편집).
 - **periodic 재확인**: 진입 시 `head` 를 기억 → 각 commit 직전 재실행해 `head` 가 바뀌었거나(아래서 머지·리베이스됨) 새 `MERGE_HEAD` 가 생겼으면 STOP. 비-worktree·비-git 자리에선 전부 `OK`/무해 통과.
 
 ### §5.10. 작업 격리·병렬 디스패치 (worktree 정책, canonical)
