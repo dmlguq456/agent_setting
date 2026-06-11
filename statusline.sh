@@ -147,7 +147,7 @@ for line in sys.stdin:
             parts.append(f"\033[{QAC.get(q,'33')}m{q}{R}")
         opts = f"{D}\u00b7{R}".join(parts)
         head = paint(key, key) + (f"{D}({R}{opts}{D}){R}" if opts else "")
-        lbl = head + f" {D}\u23f3{mins(etime)}{R}"  # desc \uc0dd\ub7b5 \u2014 \ud55c \uc904 \uc138\uadf8\uba3c\ud2b8 \ud3ed \ubcf4\ud638 + \ube44ASCII \ud504\ub86c\ud504\ud2b8 \uaf2c\ub9ac \ub178\uc774\uc988 (2026-06-11)
+        lbl = head + f" {D}\u23f3{mins(etime)}{R}" + (f" {desc}" if desc else "")
     else:
         l = re.search(r"loops/(oncall|note|study|drill)", args)
         if not l: continue
@@ -167,8 +167,6 @@ if [ -n "$gate" ]; then
   [ "$gate_open" = "1" ] && gc="$YEL" || gc="$GRN"
   segs_arr+=("${gc}${gate}${RST}")
 fi
-# running job 세그먼트는 앞쪽 배치 — 끝에 두면 좁은 터미널에서 잘림 (2026-06-11 실측)
-[ -n "${jobs_lbl:-}" ] && segs_arr+=("${GRN}>_${RST} ${jobs_lbl}")
 if [ "${S_CTX}" -ge 0 ] 2>/dev/null; then
   cc=$(pcol "$S_CTX")
   segs=10; filled=$(( (S_CTX * segs + 50) / 100 )); [ "$filled" -gt "$segs" ] && filled=$segs
@@ -188,6 +186,8 @@ u=""
 # join with 세로선 파티션
 out=""; sep=" ${DIM}│${RST} "
 for s in "${segs_arr[@]}"; do [ -z "$out" ] && out="$s" || out="${out}${sep}${s}"; done
+[ -n "${jobs_lbl:-}" ] && out="${out}
+${GRN}>_${RST}${DIM} running:${RST} ${jobs_lbl}"
 printf '%s' "$out" > "$HOME/.claude/.statusline-last-out.txt" 2>/dev/null || true  # 디버그 — 실제 렌더 시점 출력 사본
 printf '%s\n' "$out"
 exit 0  # 마지막 && list 가 비어있는 jobs_lbl 로 exit 1 → statusline 미표시 (2026-06-11 점검에서 발견)
