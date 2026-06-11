@@ -98,6 +98,8 @@ else segs_arr+=("${DIM}⎇ no-git${RST}"); fi
 # 도는 headless 파이프·루프 상세 ("N shells" 배지의 중간 단계 — 무엇이·얼마나·뭘 하는지)
 jobs_lbl=$(ps -eo etime=,args= 2>/dev/null | python3 -c '
 import sys, re
+C = {"draft":"35","apply":"35","refine":"33","code":"32","spec":"36","research":"34","lab":"96","design":"95","ship":"32","note":"37","oncall":"37","study":"37","drill":"37"}
+def paint(key, s): return f"\033[{C.get(key,'33')}m{s}\033[0m"
 def mins(et):
     et = et.strip(); d = 0
     if "-" in et: d, et = et.split("-", 1)
@@ -123,7 +125,7 @@ for line in sys.stdin:
         l = re.search(r"loops/(oncall|note|study|drill)", args)
         if not l: continue
         key = l.group(1); lbl = f"{key} ⏳{mins(etime)}"
-    seen.setdefault(key, lbl)
+    seen.setdefault(key, paint(key, lbl))
 out = list(seen.values())[:2]
 if len(seen) > 2: out.append(f"+{len(seen)-2}")
 print(" │ ".join(out))
@@ -158,4 +160,4 @@ u=""
 out=""; sep=" ${DIM}│${RST} "
 for s in "${segs_arr[@]}"; do [ -z "$out" ] && out="$s" || out="${out}${sep}${s}"; done
 printf '%s' "$out"
-[ -n "${jobs_lbl:-}" ] && printf '\n%s' "${DIM}⚙ running:${RST} ${YEL}${jobs_lbl}${RST}"
+[ -n "${jobs_lbl:-}" ] && printf '\n%s' "${DIM}⚙ running:${RST} ${jobs_lbl}"
