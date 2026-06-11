@@ -118,11 +118,11 @@ for line in sys.stdin:
         full = re.sub(r"--\w+ \S+", "", tail).strip()
         desc = full[:14] + ("…" if len(full) > 14 else "")
         opts = "·".join(x.group(1) for x in (mode, qa) if x)
-        lbl = key + (f"({opts})" if opts else "") + f" ⏱{mins(etime)}" + (f" {desc}" if desc else "")
+        lbl = key + (f"({opts})" if opts else "") + f" ⏳{mins(etime)}" + (f" {desc}" if desc else "")
     else:
         l = re.search(r"loops/(oncall|note|study|drill)", args)
         if not l: continue
-        key = l.group(1); lbl = f"{key} ⏱{mins(etime)}"
+        key = l.group(1); lbl = f"{key} ⏳{mins(etime)}"
     seen.setdefault(key, lbl)
 out = list(seen.values())[:2]
 if len(seen) > 2: out.append(f"+{len(seen)-2}")
