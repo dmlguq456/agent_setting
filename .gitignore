@@ -52,3 +52,4 @@ user_profile/assets/
 loops/*.log
 loops/golden/results/
 loops/golden/metrics.csv
+.statusline-last.json

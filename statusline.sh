@@ -6,6 +6,7 @@
 # context     = stdin 의 context_window.current_usage / window (model id 에 1m 있으면 1M, 아니면 200k).
 set -euo pipefail
 input=$(cat)
+printf '%s' "$input" > "$HOME/.claude/.statusline-last.json" 2>/dev/null || true  # 디버그·필드 탐사용 (최신 입력 1건)
 
 eval "$(printf '%s' "$input" | python3 -c '
 import sys, json, shlex
@@ -20,6 +21,14 @@ rl = d.get("rate_limits") or {}
 def rlpct(k):
     v = (rl.get(k) or {}).get("used_percentage")
     return str(int(v)) if isinstance(v, (int, float)) else ""
+import time
+def rlrem(k):
+    rs = (rl.get(k) or {}).get("resets_at")
+    if not isinstance(rs, (int, float)): return ""
+    s = int(rs - time.time())
+    if s <= 0: return ""
+    dd, r = divmod(s, 86400); hh, r = divmod(r, 3600); mm = r // 60
+    return f"{dd}d{hh}h" if dd else (f"{hh}h{mm:02d}m" if hh else f"{mm}m")
 cw = (d.get("context_window") or {}).get("current_usage") or {}
 ctok = cw.get("input_tokens", 0) + cw.get("cache_creation_input_tokens", 0) + cw.get("cache_read_input_tokens", 0)
 win = 1_000_000 if "1m" in mid else 200_000
@@ -29,9 +38,11 @@ print("S_MODEL=" + shlex.quote(model))
 print("S_SID=" + shlex.quote(sid))
 print("S_5H=" + shlex.quote(rlpct("five_hour")))
 print("S_7D=" + shlex.quote(rlpct("seven_day")))
+print("S_5H_RST=" + shlex.quote(rlrem("five_hour")))
+print("S_7D_RST=" + shlex.quote(rlrem("seven_day")))
 print("S_CTX=" + shlex.quote(str(cpct)))
 ' 2>/dev/null)"
-: "${S_CWD:=$PWD}" "${S_MODEL:=?}" "${S_SID:=}" "${S_5H:=}" "${S_7D:=}" "${S_CTX:=-1}"
+: "${S_CWD:=$PWD}" "${S_MODEL:=?}" "${S_SID:=}" "${S_5H:=}" "${S_7D:=}" "${S_5H_RST:=}" "${S_7D_RST:=}" "${S_CTX:=-1}"
 
 dir=$(basename "$S_CWD")
 
@@ -73,13 +84,12 @@ if [ "${S_CTX}" -ge 0 ] 2>/dev/null; then
   segs_arr+=("${DIM}🧠${RST} ${cc}${bar} ${S_CTX}%${RST}")
 fi
 
-# 모델 + 5h/7d 사용량 (stdin rate_limits = /usage 공식 값, 분모 추측 없음)
-model_seg="${DIM}${S_MODEL}${RST}"
+# 모델 │ 5h/7d 사용량+리셋 잔여시간 (stdin rate_limits = /usage 공식 값, 분모 추측 없음)
+segs_arr+=("🤖 ${DIM}${S_MODEL}${RST}")
 u=""
-[ -n "$S_5H" ] && u="${u} ${DIM}5h${RST} $(pcol "$S_5H")${S_5H}%${RST}"
-[ -n "$S_7D" ] && u="${u} ${DIM}7d${RST} $(pcol "$S_7D")${S_7D}%${RST}"
-[ -n "$u" ] && model_seg="${model_seg} ${u}"
-segs_arr+=("$model_seg")
+[ -n "$S_5H" ] && { u="${u} ${DIM}5h${RST} $(pcol "$S_5H")${S_5H}%${RST}"; [ -n "$S_5H_RST" ] && u="${u}${DIM}(↻${S_5H_RST})${RST}"; }
+[ -n "$S_7D" ] && { u="${u} ${DIM}7d${RST} $(pcol "$S_7D")${S_7D}%${RST}"; [ -n "$S_7D_RST" ] && u="${u}${DIM}(↻${S_7D_RST})${RST}"; }
+[ -n "$u" ] && segs_arr+=("${u# }")
 
 # join with 세로선 파티션
 out=""; sep=" ${DIM}│${RST} "
