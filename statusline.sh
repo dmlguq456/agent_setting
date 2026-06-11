@@ -119,7 +119,10 @@ for line in sys.stdin:
         tail = args[m.end():]
         full = re.sub(r"--\w+ \S+", "", tail).strip()
         desc = full[:14] + ("…" if len(full) > 14 else "")
-        opts = "·".join(x.group(1) for x in (mode, qa) if x)
+        QA = {"quick":"Q","light":"L","standard":"S","thorough":"T","adversarial":"A"}
+        parts = [mode.group(1)] if mode else []
+        if qa: parts.append(QA.get(qa.group(1), qa.group(1)))
+        opts = "·".join(parts)
         lbl = key + (f"({opts})" if opts else "") + f" ⏳{mins(etime)}" + (f" {desc}" if desc else "")
     else:
         l = re.search(r"loops/(oncall|note|study|drill)", args)
