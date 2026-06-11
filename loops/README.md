@@ -42,7 +42,7 @@
 | **목표 루프 (goal loop)** | 목표 달성까지 반복 | 검증이 기계적인 첫 실전 자리 (테스트 전부 초록·ablation 표 빈칸 0 등). 부품: 기계적 목표 정의(루프가 수정 불가) + 회차별 새 세션·상태 파일 + 검증 게이트 + 무진전 N회 시 사람 호출 + 회차 상한 |
 | 학습 모니터 | 상태 | 다음 autopilot-lab setup 때 실물(log 포맷·ckpt 경로)에 맞춰 |
 | code discovery (깨진 테스트·TODO 스캔 → 수정 제안) | 시간 | oncall 운영 안정 후 |
-| worklog-board job 카드 (디스패치 현황 UI — `.dispatch/jobs.log` 를 board 가 read) | — | worklog-board repo 의 spec update, 별도 세션 (데이터 쪽은 §5.10 등록부 + 당직 7호로 가동 중) |
+| worklog-board 운영 패널 3종 — ①결재함(triage 확장: 당직 보고 미처리·연수 제안 채택) ②운영 현황 스트립(당직·drill 성적·디스패치 job·연수 D-day) ③매뉴얼 탭(`notes/manual/`) | — | worklog-board repo 의 spec update, 별도 세션. 데이터는 전부 기존 산출물(`notes/oncall`·`notes/study`·`drill/results`·`.dispatch/jobs.log`) — board 는 read+view 만 |
 | drill FAIL 자동 진단 (run.sh 에 진단·수정안 초안 단계) | 사건 | baseline run 완료 후 부착 |
 
 ## 케이스 승격 (오답노트 → drill)
