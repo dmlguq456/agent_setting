@@ -166,6 +166,8 @@ if [ -n "$gate" ]; then
   [ "$gate_open" = "1" ] && gc="$YEL" || gc="$GRN"
   segs_arr+=("${gc}${gate}${RST}")
 fi
+# running job 세그먼트는 앞쪽 배치 — 끝에 두면 좁은 터미널에서 잘림 (2026-06-11 실측)
+[ -n "${jobs_lbl:-}" ] && segs_arr+=("${GRN}>_${RST} ${jobs_lbl}")
 if [ "${S_CTX}" -ge 0 ] 2>/dev/null; then
   cc=$(pcol "$S_CTX")
   segs=10; filled=$(( (S_CTX * segs + 50) / 100 )); [ "$filled" -gt "$segs" ] && filled=$segs
@@ -182,11 +184,9 @@ u=""
 [ -n "$S_7D" ] && { u="${u} ${DIM}7d${RST} $(pcol "$S_7D")${S_7D}%${RST}"; [ -n "$S_7D_RST" ] && u="${u}${DIM}(↻${S_7D_RST})${RST}"; }
 [ -n "$u" ] && segs_arr+=("${u# }")
 
-# running job 은 첫 줄 세그먼트로 — 두 번째 줄은 이 환경(CC 2.1.173)에서 렌더 안 됨 실측 (2026-06-11)
-[ -n "${jobs_lbl:-}" ] && segs_arr+=("${GRN}>_${RST} ${jobs_lbl}")
-
 # join with 세로선 파티션
 out=""; sep=" ${DIM}│${RST} "
 for s in "${segs_arr[@]}"; do [ -z "$out" ] && out="$s" || out="${out}${sep}${s}"; done
+printf '%s' "$out" > "$HOME/.claude/.statusline-last-out.txt" 2>/dev/null || true  # 디버그 — 실제 렌더 시점 출력 사본
 printf '%s\n' "$out"
 exit 0  # 마지막 && list 가 비어있는 jobs_lbl 로 exit 1 → statusline 미표시 (2026-06-11 점검에서 발견)
