@@ -397,7 +397,9 @@ echo "state: branch=$br head=$head base=$def dirty=$(git status --porcelain 2>/d
 
 **디스패치 규칙**:
 1. **파일 겹침 triage**: 새 요청이 진행 중 job 과 같은 파일을 건드릴 것으로 추정되면 병렬 금지 — 그 job 뒤에 큐잉 (같은 브랜치에 이어서). 안 겹치면 병렬.
-2. **실행**: worktree 생성 (`git worktree add <path> -b <slug> origin/<base>`, base 선정은 §5.9) → 팀 에이전트를 `run_in_background` 로 분사, prompt 에 작업 루트 경로 명시. 검증도 main 이 같은 경로로 QA 팀을 spawn (maker/verifier 분리 유지).
+2. **실행** — worktree 생성 (`git worktree add <path> -b <slug> origin/<base>`, base 선정은 §5.9) 후 두 모드:
+   - **경량 (팀 위임)**: 팀 에이전트를 `run_in_background` 분사, prompt 에 작업 루트 명시. 검증도 main 이 같은 경로로 QA 팀 spawn. 작은 단위·빠른 회전용.
+   - **풀 ceremony (headless 분사)**: worktree 안에서 `claude -p "/autopilot-code --qa quick ..."` background — headless 는 _완전한 메인_ 이라 Agent 툴 보유 → 팀 분업·hook·plan 산출물까지 파이프 전부 정상 (Agent 툴의 중첩 1단 제한은 _툴 계층_ 한정, 프로세스 분사는 무관 — 2026-06-11 실증). 주의: ① `--allowedTools` 사전 개방 (중간 질문 불가) ② 비용 = 세팅 세금 ~40k/대 (golden g0 실측) ③ **분사는 main 전용, 깊이 1** — headless 가 또 headless 분사 금지 (폭주 방지).
 3. **merge = Claude 선별 책임** (2026-06-11 사용자 위임 — `user_profile/07_coding_convention.md` 수동 메모가 source): 사용자 직접 리뷰 없이 main 이 선별 머지한다. **머지 시점 게이트** — (a) 사용자 머지 신호("합쳐"/"머지해") 또는 (b) 병렬 디스패치로 분사한 background job 수확 자리에서만. **자기 turn 의 본작업 브랜치를 같은 turn 에 self-merge 금지** — 브랜치 + 한 줄 보고로 turn 을 끝내고 main ref 는 불변 (§3 후속 단계 자동 진행에 merge-to-main 은 포함되지 않음). 머지 후에도 작업 브랜치는 같은 turn 에 삭제하지 않는다 (롤백 지점). 절차 — `git diff main...<branch>` 로 _실내용_ 확인 → 이미 main 에 진전됐거나 회귀·중복이면 머지 안 함 → 충돌은 양쪽 의도를 해석해 해결 (한쪽 자동 채택·`--force` 금지) → _애매하거나 확정본을 되돌리는 자리면 멈추고 질문_ → 빌드 검증 후 커밋. "전부 합쳐" = 전량 머지가 아니라 선별 머지.
 4. **공유 산출물**: `.claude_reports` 공유 단일파일 쓰기는 §5.8 lock 경유. `plans/<slug>/` 는 경로 분리라 비경합.
 5. **컨텍스트**: job 조정 기록 누적으로 main 컨텍스트 압박 시 post-it handoff 제안 (글로벌 §2).
