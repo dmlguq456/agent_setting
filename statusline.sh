@@ -3,7 +3,7 @@
 # 표시: 디렉토리 │ git 브랜치 │ spec-gate │ context │ 모델 + 5h/7d 사용량 (세로선 파티션).
 # 입력: stdin JSON (Claude Code statusLine schema). 출력: 한 줄.
 # 5h/7d 사용량 = stdin 의 rate_limits.{five_hour,seven_day}.used_percentage — /usage 와 동일한 공식 값.
-# context     = stdin 의 context_window.current_usage / window (model id 에 1m 있으면 1M, 아니면 200k).
+# context     = stdin 의 context_window.used_percentage (공식 값) — 부재 시 current_usage/context_window_size, 최후 fallback 만 id "1m" 추측.
 set -euo pipefail
 input=$(cat)
 printf '%s' "$input" > "$HOME/.claude/.statusline-last.json" 2>/dev/null || true  # 디버그·필드 탐사용 (최신 입력 1건)
@@ -29,10 +29,13 @@ def rlrem(k):
     if s <= 0: return ""
     dd, r = divmod(s, 86400); hh, r = divmod(r, 3600); mm = r // 60
     return f"{dd}d{hh}h" if dd else (f"{hh}h{mm:02d}m" if hh else f"{mm}m")
-cw = (d.get("context_window") or {}).get("current_usage") or {}
+cwin = d.get("context_window") or {}
+cw = cwin.get("current_usage") or {}
 ctok = cw.get("input_tokens", 0) + cw.get("cache_creation_input_tokens", 0) + cw.get("cache_read_input_tokens", 0)
-win = 1_000_000 if "1m" in mid else 200_000
-cpct = min(99, round(100 * ctok / win)) if ctok else -1
+# used_percentage/context_window_size 가 stdin 공식 값 — id 의 "1m" 추측은 fallback 만 (Fable 5 1M 을 200k 로 나눠 42% 오표시한 건, 2026-06-11)
+up = cwin.get("used_percentage")
+win = cwin.get("context_window_size") or (1_000_000 if "1m" in mid else 200_000)
+cpct = min(99, round(up)) if isinstance(up, (int, float)) else (min(99, round(100 * ctok / win)) if ctok else -1)
 print("S_CWD=" + shlex.quote(cwd))
 print("S_MODEL=" + shlex.quote(model))
 print("S_SID=" + shlex.quote(sid))
@@ -180,3 +183,4 @@ out=""; sep=" ${DIM}│${RST} "
 for s in "${segs_arr[@]}"; do [ -z "$out" ] && out="$s" || out="${out}${sep}${s}"; done
 printf '%s' "$out"
 [ -n "${jobs_lbl:-}" ] && printf '\n%s' "${GRN}>_${RST}${DIM} running:${RST} ${jobs_lbl}"
+exit 0  # 마지막 && list 가 비어있는 jobs_lbl 로 exit 1 → statusline 미표시 (2026-06-11 점검에서 발견)
