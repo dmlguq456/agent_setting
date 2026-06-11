@@ -96,8 +96,13 @@ if [ -n "$branch" ]; then
 else segs_arr+=("${DIM}⎇ no-git${RST}"); fi
 
 # 도는 headless 파이프·루프 상세 ("N shells" 배지의 중간 단계 — 무엇이·얼마나·뭘 하는지)
-jobs_lbl=$(ps -eo etime=,args= 2>/dev/null | python3 -c '
-import sys, re
+jobs_lbl=$(ps -eo pid=,etime=,args= 2>/dev/null | python3 -c '
+import sys, re, os
+CWD = sys.argv[1] if len(sys.argv) > 1 else ""
+def related(jcwd):
+    # 프로젝트 파이프는 같은 디렉토리 트리의 세션에만 표시 (전사 루프는 무조건)
+    if not CWD or not jcwd: return True
+    return jcwd == CWD or jcwd.startswith(CWD + "/") or CWD.startswith(jcwd + "/")
 C = {"draft":"35","apply":"35","refine":"33","code":"32","spec":"36","research":"34","lab":"96","design":"95","ship":"32","note":"37","oncall":"37","study":"37","drill":"37"}
 def paint(key, s): return f"\033[{C.get(key,'33')}m{s}\033[0m"
 def mins(et):
@@ -111,9 +116,14 @@ seen = {}
 for line in sys.stdin:
     line = line.rstrip("\n")
     if not line: continue
-    etime, _, args = line.lstrip().partition(" ")
+    fields = line.lstrip().split(None, 2)
+    if len(fields) < 3: continue
+    pid, etime, args = fields
     m = re.search(r"/autopilot-([a-z-]+)", args)
     if m and "claude" in args:
+        try: jcwd = os.readlink(f"/proc/{pid}/cwd")
+        except Exception: jcwd = ""
+        if not related(jcwd): continue
         key = m.group(1)
         mode = re.search(r"--mode (\w+)", args); qa = re.search(r"--qa (\w+)", args)
         tail = args[m.end():]
@@ -127,18 +137,18 @@ for line in sys.stdin:
         if qa:
             q = QA.get(qa.group(1), qa.group(1))
             parts.append(f"\033[{QAC.get(q,'33')}m{q}{R}")
-        opts = f"{D}·{R}".join(parts)
+        opts = f"{D}\u00b7{R}".join(parts)
         head = paint(key, key) + (f"{D}({R}{opts}{D}){R}" if opts else "")
-        lbl = head + f" {D}⏳{mins(etime)}{R}" + (f" {desc}" if desc else "")
+        lbl = head + f" {D}\u23f3{mins(etime)}{R}" + (f" {desc}" if desc else "")
     else:
         l = re.search(r"loops/(oncall|note|study|drill)", args)
         if not l: continue
-        key = l.group(1); lbl = paint(key, key) + f" \033[2m⏳{mins(etime)}\033[0m"
+        key = l.group(1); lbl = paint(key, key) + f" \033[2m\u23f3{mins(etime)}\033[0m"
     seen.setdefault(key, lbl)
 out = list(seen.values())[:2]
 if len(seen) > 2: out.append(f"+{len(seen)-2}")
 print(" \033[1;37m/\033[0m ".join(out))
-' 2>/dev/null || true)
+' "$S_CWD" 2>/dev/null || true)
 
 # 당직 보고 미처리 nudge (✅ 처리됨·"이상 없음" heartbeat 는 표시 안 함)
 latest_oncall=$(ls -t /home/nas/user/Uihyeop/notes/oncall/*.md 2>/dev/null | head -1 || true)
