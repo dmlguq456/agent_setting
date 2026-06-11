@@ -95,6 +95,11 @@ if [ -n "$branch" ]; then
   segs_arr+=("$bseg")
 else segs_arr+=("${DIM}⎇ no-git${RST}"); fi
 
+# 도는 headless 파이프·루프 라벨 ("N shells" 배지의 중간 단계 — 무엇이 도는지 한 단어)
+jobs_lbl=$(ps -eo args 2>/dev/null | grep -oE '/autopilot-[a-z-]+|loops/(oncall|note|study|drill)' \
+  | sed 's@/autopilot-@@; s@loops/@@' | sort -u | head -3 | paste -sd'·' - || true)
+[ -n "$jobs_lbl" ] && segs_arr+=("${DIM}⚙${RST} ${YEL}${jobs_lbl}${RST}")
+
 # 당직 보고 미처리 nudge (✅ 처리됨·"이상 없음" heartbeat 는 표시 안 함)
 latest_oncall=$(ls -t /home/nas/user/Uihyeop/notes/oncall/*.md 2>/dev/null | head -1 || true)
 if [ -n "$latest_oncall" ] && ! grep -qE '✅|이상 없음' "$latest_oncall" 2>/dev/null; then
