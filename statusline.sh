@@ -91,7 +91,7 @@ if [ -n "$branch" ]; then
   [ -n "$gflag" ] && bseg="${bseg} ${RED}${gflag}${RST}"
   # 병렬 작업장 카운터 — 이 repo 에 연결된 추가 worktree 수 (§5.10 디스패치·잔존 감지)
   wt=$(git -C "$S_CWD" worktree list --porcelain 2>/dev/null | grep -c '^worktree ' || true)
-  [ "${wt:-1}" -gt 1 ] 2>/dev/null && bseg="${bseg} ${YEL}🚧$((wt-1))${RST}"
+  [ "${wt:-1}" -gt 1 ] 2>/dev/null && bseg="${bseg} ${YEL}🚧 $((wt-1))${RST}"
   segs_arr+=("$bseg")
 else segs_arr+=("${DIM}⎇ no-git${RST}"); fi
 
