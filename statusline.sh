@@ -120,11 +120,16 @@ for line in sys.stdin:
         full = re.sub(r"--\w+ \S+", "", tail).strip()
         desc = " ".join(full.split()[:2])
         QA = {"quick":"qck","light":"lgt","standard":"std","thorough":"thr","adversarial":"adv"}
-        parts = [mode.group(1)] if mode else []
-        if qa: parts.append(QA.get(qa.group(1), qa.group(1)))
-        opts = "·".join(parts)
-        head = key + (f"({opts})" if opts else "")
-        lbl = paint(key, head) + f" \033[2m⏳{mins(etime)}\033[0m" + (f" {desc}" if desc else "")
+        QAC = {"qck":"2","lgt":"32","std":"33","thr":"35","adv":"31"}
+        D = "\033[2m"; R = "\033[0m"
+        parts = []
+        if mode: parts.append(f"\033[36m{mode.group(1)}{R}")
+        if qa:
+            q = QA.get(qa.group(1), qa.group(1))
+            parts.append(f"\033[{QAC.get(q,'33')}m{q}{R}")
+        opts = f"{D}·{R}".join(parts)
+        head = paint(key, key) + (f"{D}({R}{opts}{D}){R}" if opts else "")
+        lbl = head + f" {D}⏳{mins(etime)}{R}" + (f" {desc}" if desc else "")
     else:
         l = re.search(r"loops/(oncall|note|study|drill)", args)
         if not l: continue
