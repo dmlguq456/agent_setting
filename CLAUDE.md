@@ -48,7 +48,7 @@ research / analyze-project (산출물) → autopilot-spec (spec/) → autopilot-
 - **High-stakes → qa 상향**: _신중히 / 꼼꼼히 / camera-ready / submission·PR open 직전_ → adversarial 자동. `analyze-user` 는 항상 adversarial 고정.
 - **무응답**: §2 대로 추천안 자율 진행.
 
-**(C) 작업 격리·병렬 디스패치 (`CONVENTIONS.md` §5.10).** 코드 본작업은 worktree+작업 브랜치에서 — **기능 추가·모듈 신설·다파일 변경은 규모 판단 없이 무조건 브랜치, 애매해도 브랜치 쪽** (golden g3 재발 방지). main 트리 직접은 typo·1줄급 자잘한 단발만. 작업 진행 중 새 독립 요청 → 파일 겹침 triage 후 새 worktree 로 background 병렬 분사 (겹치면 큐잉). 오케스트레이션은 항상 main (서브에이전트 중첩 1단 한계), merge 는 Claude 선별 책임 (§5.10 — diff 실내용 확인·회귀/중복 제외·충돌 양쪽 의도 해석·애매하면 질문·빌드 검증). **편집 전 git 상태**: merge/rebase 진행 중·detached HEAD = STOP+보고 — 직접 편집 경로 포함, `git-state-guard` hook 강제 (§5.9). **머지 완료된(ahead 0) 죽은 브랜치 위에선 직접 편집도 금지** — 새 브랜치 먼저 (§5.9 DONE-BRANCH).
+**(C) 작업 격리·병렬 디스패치 (`CONVENTIONS.md` §5.10).** 코드 본작업은 worktree+작업 브랜치에서 — **기능 추가·모듈 신설·다파일 변경은 규모 판단 없이 무조건 브랜치, 애매해도 브랜치 쪽** (golden g3 재발 방지). main 트리 직접은 typo·1줄급 자잘한 단발만. 작업 진행 중 새 독립 요청 → 파일 겹침 triage 후 새 worktree 로 background 병렬 분사 (겹치면 큐잉). 오케스트레이션은 항상 main (서브에이전트 중첩 1단 한계), merge 는 Claude 선별 책임이되 _사용자 머지 신호·병렬 job 수확 자리 한정_ — 본작업은 브랜치에 남기고 main 불변으로 turn 종료, 같은 turn self-merge·브랜치 삭제 금지 (§5.10 — diff 실내용 확인·회귀/중복 제외·충돌 양쪽 의도 해석·애매하면 질문·빌드 검증). **편집 전 git 상태**: merge/rebase 진행 중·detached HEAD = STOP+보고 — 직접 편집 경로 포함, `git-state-guard` hook 강제 (§5.9). **머지 완료된(ahead 0) 죽은 브랜치 위에선 직접 편집도 금지** — 새 브랜치 먼저 (§5.9 DONE-BRANCH).
 
 ### §1. 응답 규율 — 말투·간결·약속
 
