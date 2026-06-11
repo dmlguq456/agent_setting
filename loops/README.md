@@ -24,11 +24,13 @@
 
 ## 현역
 
+> 호칭 = 회사 직무 비유 (팀 agents = 근무시간의 부서, loops = 퇴근 후 야간 업무). 파일명은 ASCII 유지 — `당직(scout)` 처럼 병기.
+
 | 루프 | 형 | 트리거 | 대상 | 하는 일 | 산출 | 사용자 접점 |
 |---|---|---|---|---|---|---|
-| **scout** (경비원) | 시간 | cron 05:37 | 작업장 (repo·산출물·실험·golden 미실행) | 이상 **발견·보고만** | `notes/scout/<date>.md` | 아침 "scout 처리해줘" |
-| **note** (사서) | 시간 | cron 05:03 | 전날 산출물 내용 | worklog-board L2 **노트화·라우팅** (idempotent) | `notes/_layer2/notes/` + digest | worklog-board `/triage` |
-| **golden** (감사관) | 사건 | 지침 수정 후 `golden/run.sh` | Claude 행동 (지침 준수) | fixture 무대에서 headless **시험·채점** | `golden/results/<일시>/` | FAIL 시 수정안 승인 |
+| **당직** (`scout`) | 시간 | cron 05:37 | 작업장 (repo·산출물·실험·루프 생존·모의훈련 미실행) | 야간 순찰 — 이상 **발견·보고만** | `notes/scout/<date>.md` (당직 보고서) | 아침 "당직 보고 처리해줘" |
+| **서무** (`note`) | 시간 | cron 05:03 | 전날 산출물 내용 | worklog-board L2 **노트화·라우팅** (idempotent) | `notes/_layer2/notes/` + digest | worklog-board `/triage` |
+| **모의훈련** (`golden/`) | 사건 | 지침 수정 후 `golden/run.sh` | Claude 행동 (지침 준수) | fixture 가상 상황에서 headless **시험·채점** | `golden/results/<일시>/` | FAIL 시 수정안 승인 |
 
 새벽 시간표: 05:03 note → 05:37 scout (충돌 방지 간격).
 
