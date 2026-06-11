@@ -10,11 +10,15 @@ RESULTS="$GOLD/results/$STAMP"
 mkdir -p "$RESULTS"
 
 cases=("$@")
-[ ${#cases[@]} -eq 0 ] && cases=($(ls "$GOLD/cases"))
+if [ ${#cases[@]} -eq 0 ]; then
+  cases=($(ls "$GOLD/cases"))
+  for g in $(ls "$GOLD/cases_growing" 2>/dev/null); do cases+=("growing:$g"); done
+fi
 
 declare -A verdicts metrics
 for c in "${cases[@]}"; do
-  CASE_DIR="$GOLD/cases/$c"
+  grow=""
+  case "$c" in growing:*) grow="(g)"; CASE_DIR="$GOLD/cases_growing/${c#growing:}" ;; *) CASE_DIR="$GOLD/cases/$c"; [ -d "$CASE_DIR" ] || CASE_DIR="$GOLD/cases_growing/$c" ;; esac
   [ -d "$CASE_DIR" ] || { echo "SKIP $c (없음)"; continue; }
   MAX_TURNS=""; TIMEOUT=1800
   [ -f "$CASE_DIR/config" ] && . "$CASE_DIR/config"
@@ -43,9 +47,9 @@ PYEOF
 )
 
   if out=$(bash "$CASE_DIR/assert.sh" "$WORK" "$T" 2>&1); then
-    verdicts[$c]="PASS"
+    verdicts[$c]="PASS$grow"
   else
-    verdicts[$c]="FAIL"
+    verdicts[$c]="FAIL$grow"
   fi
   echo "$out" | tee "$RESULTS/$c.assert.txt"
   echo "  → ${verdicts[$c]} (claude exit $rc, ${metrics[$c]})"
