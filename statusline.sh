@@ -96,8 +96,8 @@ if [ -n "$branch" ]; then
 else segs_arr+=("${DIM}⎇ no-git${RST}"); fi
 
 # 당직 보고 미처리 nudge (✅ 처리됨·"이상 없음" heartbeat 는 표시 안 함)
-latest_duty=$(ls -t /home/nas/user/Uihyeop/notes/duty/*.md 2>/dev/null | head -1 || true)
-if [ -n "$latest_duty" ] && ! grep -qE '✅|이상 없음' "$latest_duty" 2>/dev/null; then
+latest_oncall=$(ls -t /home/nas/user/Uihyeop/notes/oncall/*.md 2>/dev/null | head -1 || true)
+if [ -n "$latest_oncall" ] && ! grep -qE '✅|이상 없음' "$latest_oncall" 2>/dev/null; then
   segs_arr+=("${YEL}📋당직${RST}")
 fi
 if [ -n "$gate" ]; then

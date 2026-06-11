@@ -14,7 +14,7 @@
 |---|---|---|---|
 | L1 에이전트 루프 | 초 | LLM→도구→반복 (벤더 영역) | Claude Code 자체 — 소비만 |
 | L2 과제 루프 | 분 | 한 작업 안 생성↔검증 (maker/verifier·QA 라운드) | skills/agents (기존) |
-| L3 작업 루프 | 시간~일 | 세션 밖 발견·분사·기록 (cron+headless) | **본 폴더** — duty·note |
+| L3 작업 루프 | 시간~일 | 세션 밖 발견·분사·기록 (cron+headless) | **본 폴더** — oncall·note |
 | L4 메타 루프 | 주 | 시스템 자체 시험·개선 | **본 폴더** — golden (+후보 setting-audit) |
 
 공통 규약:
@@ -24,16 +24,16 @@
 
 ## 현역
 
-> 파일명은 ASCII 유지, 표기는 `당직(duty)` 처럼 병기.
+> 파일명은 ASCII 유지, 표기는 `당직(oncall)` 처럼 병기.
 
 | 루프 | 형 | 트리거 | 대상 | 하는 일 | 산출 | 사용자 접점 |
 |---|---|---|---|---|---|---|
-| **당직** (`duty`) | 시간 | cron 05:37 | 작업장 (repo·산출물·실험·루프 생존·모의훈련 미실행) | 야간 순찰 — 이상 **발견·보고만** | `notes/duty/<date>.md` (당직 보고서) | 아침 "당직 보고 처리해줘" |
+| **당직** (`oncall`) | 시간 | cron 05:37 | 작업장 (repo·산출물·실험·루프 생존·모의훈련 미실행) | 야간 순찰 — 이상 **발견·보고만** | `notes/oncall/<date>.md` (당직 보고서) | 아침 "당직 보고 처리해줘" |
 | **일지** (`note`) | 시간 | cron 05:03 | 전날 산출물 내용 | worklog-board L2 **노트화·라우팅** (idempotent) | `notes/_layer2/notes/` + digest | worklog-board `/triage` |
 | **모의훈련** (`golden/`) | 사건 | 지침 수정 후 `golden/run.sh` | Claude 행동 (지침 준수) | fixture 가상 상황에서 headless **시험·채점** | `golden/results/<일시>/` | FAIL 시 수정안 승인 |
 | **연수** (`study`) | 시간 | cron 일요일 06:17 | 외부 동향 × 현 세팅 | agent engineering 신간·Claude Code 변경 조사 → 세팅 대조 → **개선 제안서만** (+ g0 세금 추세) | `notes/study/<date>.md` | 제안 채택 서명 → 적용 → 모의훈련 |
 
-새벽 시간표: 05:03 note → 05:37 duty (충돌 방지 간격).
+새벽 시간표: 05:03 note → 05:37 oncall (충돌 방지 간격).
 
 ## 후보 (backlog)
 
@@ -41,7 +41,7 @@
 |---|---|---|
 | **목표 루프 (goal loop)** | 목표 달성까지 반복 | 검증이 기계적인 첫 실전 자리 (테스트 전부 초록·ablation 표 빈칸 0 등). 부품: 기계적 목표 정의(루프가 수정 불가) + 회차별 새 세션·상태 파일 + 검증 게이트 + 무진전 N회 시 사람 호출 + 회차 상한 |
 | 학습 모니터 | 상태 | 다음 autopilot-lab setup 때 실물(log 포맷·ckpt 경로)에 맞춰 |
-| code discovery (깨진 테스트·TODO 스캔 → 수정 제안) | 시간 | duty 운영 안정 후 |
+| code discovery (깨진 테스트·TODO 스캔 → 수정 제안) | 시간 | oncall 운영 안정 후 |
 | worklog-board job 카드 (디스패치 현황 UI — `.dispatch/jobs.log` 를 board 가 read) | — | worklog-board repo 의 spec update, 별도 세션 (데이터 쪽은 §5.10 등록부 + 당직 7호로 가동 중) |
 | golden FAIL 자동 진단 (run.sh 에 진단·수정안 초안 단계) | 사건 | baseline run 완료 후 부착 |
 

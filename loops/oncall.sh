@@ -1,15 +1,15 @@
 #!/bin/bash
 # 야간 정찰 루프 — crontab 에서 호출 (37 5 * * *)
-# read-only 점검 + notes/duty/ 보고 1개. 수정·커밋 없음.
+# read-only 점검 + notes/oncall/ 보고 1개. 수정·커밋 없음.
 set -u
 LOOP_DIR="$HOME/.claude/loops"
-LOG="$LOOP_DIR/duty.log"
-mkdir -p /home/nas/user/Uihyeop/notes/duty
+LOG="$LOOP_DIR/oncall.log"
+mkdir -p /home/nas/user/Uihyeop/notes/oncall
 
 {
-  echo "=== duty run $(date -Iseconds) ==="
+  echo "=== oncall run $(date -Iseconds) ==="
   cd /home/nas/user/Uihyeop || exit 1
-  timeout 900 "$HOME/.local/bin/claude" -p "$(cat "$LOOP_DIR/duty.md")" \
+  timeout 900 "$HOME/.local/bin/claude" -p "$(cat "$LOOP_DIR/oncall.md")" \
     --model sonnet \
     --allowedTools "Bash,Read,Glob,Grep,Write" \
     2>&1
