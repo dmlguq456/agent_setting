@@ -33,6 +33,8 @@ Determine test targets from the prompt:
 - **handle**: repo `.claude/skills/` 의 `verifier-*`(증거-캡처 프로토콜)·`run-*`(빌드·실행 primitive) 먼저 확인. 없으면 README/Makefile/package.json 콜드스타트(~15min timebox).
 - **verdict**: PASS(증거 캡처) / FAIL(관찰된 잘못된 동작 = finding) / **SKIP(런타임 surface 없음** — docs·타입선언·동작 없는 build config; 테스트로 빈자리 채우지 않음) / BLOCKED(정확히 어디서 막혔는지 + 콜드스타트 메모).
 - **호출 자리**: autopilot-ship 배포 전 동작 확인 / autopilot-code 기능 변경의 functional 확인 (단순 ML 학습 코드는 Level 1-5 로 충분; 앱·CLI·API·라이브러리 변경에 5b 적용).
+- **후보 집합 완전성** (2026-06-12 — picker 가 spec 의 task+project 중 project 만 노출한 채 7팀 검증 통과한 구멍): 목록·드롭다운·옵션 류는 "뜨고 동작하나"만이 아니라 **후보 집합이 ground truth(spec 정의 × 실데이터 분포) 대비 완전한가**를 대조한다 — 전체 모수에서 kind/타입별 표본이 후보에 나타나는지.
+- **입력 모달리티 충실도** (2026-06-12 — 드롭다운 스크롤을 키보드로만 실측해 휠 미동작을 놓친 구멍): 스크롤·드래그류 검증은 사용자의 실제 입력 경로(마우스 휠·트랙패드·터치)로 구동한다. 키보드 우회 경로만으로 PASS 금지 — playwright 는 `mouse.wheel` 사용.
 
 ### Test Mode Rules
 
