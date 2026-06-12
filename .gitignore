@@ -53,6 +53,7 @@ loops/*.log
 loops/drill/results/
 loops/drill/metrics.csv
 .statusline-last.json
+.statusline-last-out.txt
 .dispatch/
 .claude_reports/.pipeline-lock
 .claude_reports/.untracked*

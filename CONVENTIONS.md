@@ -406,6 +406,10 @@ echo "state: branch=$br head=$head base=$def dirty=$(git status --porcelain 2>/d
 4. **공유 산출물**: `.claude_reports` 공유 단일파일 쓰기는 §5.8 lock 경유. `plans/<slug>/` 는 경로 분리라 비경합.
 5. **컨텍스트**: job 조정 기록 누적으로 main 컨텍스트 압박 시 post-it handoff 제안 (글로벌 §2).
 
+### §5.11. 지침 repo (`~/.claude`) 커밋·push 정책
+
+지침·규칙·hook·statusline 등 `~/.claude` 파일 수정은 **검증 직후 같은 turn 에 commit + push** — 사용자 별도 신호 불필요 (2026-06-12 사용자 ratify "규칙은 바로 그냥 push 하면 되겠네"). 작업 repo 의 push 는 별개 — deploy 게이트(사용자 신호) 유지.
+
 ---
 
 ## §6. Autopilot-* 흐름 매트릭스 (사용자 호출 단위)
