@@ -10,6 +10,7 @@
 
 | 버전 | 일시 | 핵심 변경 |
 |---|---|---|
+| v3_1 | 2026-06-12 | (minor) §4.2 autopilot-note task-first 반영 (prd v41·v43) |
 | **v3** | 2026-06-11 | **4.2 autopilot-note 최신 반영 — secondary_card_ids(v32)·manifest 유지(v33)·Stage D.5 편집팀 polish 보강** |
 | v2 | 2026-06-11 | draft review memo 8건 반영 (draft-refine) + 편집팀 polish 11건 |
 | v1 | 2026-06-11 | autopilot-draft 초기 생성 (549줄) |
