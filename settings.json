@@ -156,7 +156,7 @@
   "statusLine": {
     "type": "command",
     "command": "bash $HOME/.claude/statusline.sh",
-    "refreshInterval": 30
+    "refreshInterval": 60
   },
   "enabledPlugins": {
     "codex@openai-codex": true
