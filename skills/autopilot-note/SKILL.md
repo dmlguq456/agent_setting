@@ -164,12 +164,13 @@ opt-out flag — `--no-fact-check` 만 (standard+ 자리에서).
 
 #### 2차 — fuzzy 키워드 매칭
 - 산출물 키워드 → `<target>/cards/**.md` 중 `kind: project`/`kind: task` 의 `title` / 본문 heading fuzzy 매칭.
+- **task 우선 ⟨2026-06-12 prd v43⟩**: `card_id` 연결의 1급 대상은 **task 카드** — `kind: task` 후보를 먼저 매칭하고, `kind: project` 직접 연결은 _task 후보 부재 시 보조 fallback_ (프로젝트는 보통 그 task 의 `project` 필드에서 파생 표시되므로 직접 연결은 프로젝트 전반급 산출물에 한정). 매칭할 task 가 없으면 (project 로 끌어붙이기보다) 3차 ambient → routing #4 의 **신규 task 제안**으로 흐른다. 보조(`secondary_card_ids`)도 같은 축 — task 우선.
 - confidence ⟨2026-06-10⟩: **≥0.7** → `card_id` set + `routing_confidence` 기록(높음). **0.4-0.7** → `card_id` set + `routing_confidence` 기록(중). **<0.4** → 3차. **무인 cron 은 confidence 무관 `routing_status: inbox`** (위 banner) — confidence 는 정렬·하이라이트용 emit 일 뿐 자동 confirmed 아님. `routing_reason`·`matched_signals` 도 같이 기록(아침 교정 단서).
 - **다중 카드 제안 ⟨2026-06-11, worklog-board prd v32⟩**: 연결 제안은 **주(primary) 1 + 보조(secondary) 0~N**. 최고 confidence 매칭 = `card_id`(주, 기존 의미 불변). 그 외 유의미 매칭(예: 같은 산출물이 여러 과제·할일에 걸침)은 `secondary_card_ids: [<id>, …]` 로 frontmatter 에 복수 emit — DB 적재 시 `l2.note_cards` M:N 으로 들어가고 `/triage` 검토함 에디터에서 사용자가 추가·삭제. 보조는 제안일 뿐 보고·홈 위젯·다이제스트의 단일 기준은 여전히 주 카드.
 
 #### 3차 — ambient
 - 어디에도 안 맞음 → `card_id: null` + `routing_status: inbox` + `routing_confidence: <낮음>`. 사후 사용자 promote. (이전 `kind: misc` 의 Layer 2 대응.)
-- 매칭 카드가 _없지만 새 과제·작업 단위_ 로 보이면 → 별도로 **신규 L1 카드 triage 제안** (routing #4).
+- 매칭 카드가 _없지만 새 과제·작업 단위_ 로 보이면 → 별도로 **신규 L1 카드 triage 제안** (routing #4). ⟨2026-06-12 prd v41⟩ 제안 기본 단위는 **task 카드** (`type: new-card` + `payload`{…·`source_note_ids: [<note id>, …]`}) — _이 산출물을 담을 카드를 사용자가 아직 못 만든_ 자리라 자연 단위가 task(작업)이지 project 가 아니다. 승인 1번 = 카드 생성 + source 노트 연결. project 제안은 보조 — _여러 task 제안이 같은 미존재 project 맥락을 가리킬 때만_ 'project + task 세트' 제안(보수적). 기존 `proposal_type: new_l1_card`(project) 포맷은 세트의 project 절반으로 하위호환.
 
 ### backbone_ids / task_ids / paper_id (→ Layer 2) 결정
 - 산출물 본문의 _architecture·기법 키워드_ (SR-CorrNet / TF-Restormer / attention / separation / enhancement …) → `<target>/_layer2/backbones/` · `tasks/` slug 매칭.
