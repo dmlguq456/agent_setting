@@ -159,12 +159,12 @@ opt-out flag — `--no-fact-check` 만 (standard+ 자리에서).
 ### card_id (→ Layer 1) 결정 — 3 갈래
 
 #### 1차 — 결정론적 frontmatter
-- autopilot-code / autopilot-lab 산출물의 `pipeline_state.yaml` 의 `task_card` / `project` 명시 자리 → 그 카드 stem.
-- 산출물 frontmatter `project: <name>` 명시 → `<target>/cards/` 에서 title 매칭 카드 stem.
+- autopilot-code / autopilot-lab 산출물의 `pipeline_state.yaml` 의 `task_card` 명시 자리 → 그 **task 카드** stem.
+- 산출물 frontmatter `project: <name>` 명시 → 그 project 의 **task 카드**로 해소(`<target>/cards/` 에서 `kind: task` + `project` 매칭). ⟨v44⟩ **project 카드 자체는 `card_id` 대상 아님** — 매칭 task 없으면 신규 task 제안(routing #4)으로(project 직접 연결 금지, project 는 task.`project` 파생 표시).
 
 #### 2차 — fuzzy 키워드 매칭
-- 산출물 키워드 → `<target>/cards/**.md` 중 `kind: project`/`kind: task` 의 `title` / 본문 heading fuzzy 매칭.
-- **task 우선 ⟨2026-06-12 prd v43⟩**: `card_id` 연결의 1급 대상은 **task 카드** — `kind: task` 후보를 먼저 매칭하고, `kind: project` 직접 연결은 _task 후보 부재 시 보조 fallback_ (프로젝트는 보통 그 task 의 `project` 필드에서 파생 표시되므로 직접 연결은 프로젝트 전반급 산출물에 한정). 매칭할 task 가 없으면 (project 로 끌어붙이기보다) 3차 ambient → routing #4 의 **신규 task 제안**으로 흐른다. 보조(`secondary_card_ids`)도 같은 축 — task 우선.
+- 산출물 키워드 → `<target>/cards/**.md` 중 **`kind: task`** 의 `title` / 본문 heading fuzzy 매칭.
+- **task only ⟨2026-06-12 prd v44⟩** (불변식 — 사용자 verbatim: _"무조건 연결되는 task가 있어야 한다. 없으면 생성 제안. 노션이면 그냥 동명의 task 카드라도."_): `card_id` 연결의 대상은 **항상 task 카드** — `kind: project` 직접 매칭은 **금지**(project 는 연결 대상이 아니라 그 task 의 `project` 필드에서 파생 표시되는 라벨일 뿐). **매칭할 task 가 없으면 project 로 끌어붙이지 말고** 3차 ambient → routing #4 의 **신규 task 제안**으로 흐른다. 노션 등에서 자연스러운 task 단위가 모호하면 **노트 제목과 동명의 task 카드**라도 제안(동명 허용). 보조(`secondary_card_ids`)도 같은 축 — **task only**(project 보조 연결 금지). (v43 의 "task 우선 + project 보조 fallback" 은 본 v44 에서 폐기 — project 는 후보가 아예 아니다.)
 - confidence ⟨2026-06-10⟩: **≥0.7** → `card_id` set + `routing_confidence` 기록(높음). **0.4-0.7** → `card_id` set + `routing_confidence` 기록(중). **<0.4** → 3차. **무인 cron 은 confidence 무관 `routing_status: inbox`** (위 banner) — confidence 는 정렬·하이라이트용 emit 일 뿐 자동 confirmed 아님. `routing_reason`·`matched_signals` 도 같이 기록(아침 교정 단서).
 - **다중 카드 제안 ⟨2026-06-11, worklog-board prd v32⟩**: 연결 제안은 **주(primary) 1 + 보조(secondary) 0~N**. 최고 confidence 매칭 = `card_id`(주, 기존 의미 불변). 그 외 유의미 매칭(예: 같은 산출물이 여러 과제·할일에 걸침)은 `secondary_card_ids: [<id>, …]` 로 frontmatter 에 복수 emit — DB 적재 시 `l2.note_cards` M:N 으로 들어가고 `/triage` 검토함 에디터에서 사용자가 추가·삭제. 보조는 제안일 뿐 보고·홈 위젯·다이제스트의 단일 기준은 여전히 주 카드.
 
@@ -189,7 +189,7 @@ opt-out flag — `--no-fact-check` 만 (standard+ 자리에서).
 | **1** | L2 note row 생성 | 모든 trackable 산출물 | `_layer2/notes/<id>.md` 생성 (노트화 본문 + frontmatter) | **자동** |
 | **2** | note `card_id` → L1 카드 연결 | 1차/2차 매칭 | frontmatter `card_id` set + `routing_status: inbox`(제안) + `routing_confidence`/`routing_reason` ⟨2026-06-10⟩ | **자동(제안)** |
 | **3** | note `backbone_ids`/`task_ids` → L2 카탈로그 연결 (+emerge) | architecture·task 키워드 매칭 / emerge 단서 | frontmatter id list set + 없으면 카탈로그 entry 생성 | **자동 (카탈로그 emerge 포함)** |
-| **4** | 신규 L1 카드 _제안_ | 매칭 카드 없고 새 과제·작업 단위 | `_triage/{date}_<seq>.md` 제안 (project/task) | **triage** (자동생성 X — L1 사용자 소유) |
+| **4** | 신규 L1 카드 _제안_ | 매칭 task 없고 새 작업 단위 | `_triage/{date}_<seq>.md` 제안 — ⟨v41/v44⟩ **기본 = task 카드**(`new-card` + `source_note_ids`), project 는 보수적 세트 제안 한정 | **triage** (자동생성 X — L1 사용자 소유) |
 | **5** | ambient note | 위 어디에도 확신 없음 | `card_id: null` + `routing_status: inbox` | **자동 (ambient)** |
 
 **L2 적재·연결은 자동 _제안_ (#1·#2·#3·#5 — 무인 cron 은 전부 `routing_status: inbox`), L1 신설만 triage (#4)** ⟨2026-06-10⟩ — 에이전트는 _제안_, 확정(`confirmed`)은 worklog-board `/triage` 노트 라우팅에서 사용자 컨펌. 신규 L1 카드 confirm 도 `/triage` UI 가 watcher.
