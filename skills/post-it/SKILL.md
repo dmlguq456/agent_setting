@@ -106,7 +106,7 @@ post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + 
 - (다음 세션에 알아야 할 현재 진행 상황·다음 할 일·주의사항)
 ```
 
-> **aging stamp**: Open Threads 는 `[in-progress YYYY-MM-DD]` / `[blocked YYYY-MM-DD]` 처럼 날짜를 단다 (추가·갱신 시점). `sweep` 가 오래 방치된 thread 를 이 날짜로 감지. 구버전 `[in-progress]`(날짜 없음) 도 호환 — sweep 가 만나면 날짜 보강 제안.
+> **aging stamp + 시간 tier**: time-sensitive 항목(Open Threads `[in-progress/blocked YYYY-MM-DD]`, Decisions `YYYY-MM-DD:`)은 날짜를 단다 (추가·갱신 시점). `sweep` 가 이 날짜로 시간 tier(active < 30d / stale 후보 ≥30d / archive ≥90d — Curator 벤치마킹, sweep 절 참조)를 판정. 구버전 `[in-progress]`(날짜 없음)도 호환 — sweep 가 만나면 날짜 보강 제안. convention/resource 는 _시간으로 늙지 않는다_ (졸업으로만 떼냄) — 스탬프 불요.
 
 ## Sub-Actions
 
@@ -144,8 +144,11 @@ post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + 
 2. 현 산출물과 대조: `.claude_reports/plans/*/`·`documents/*/`·`spec/`·`experiments/*/` + `git log --oneline -30` + 관련 코드·문서.
 3. 각 bullet 분류:
    - **graduated** — 내용이 산출물에 영구 반영됨 (decision 이 plan 에, convention 이 CLAUDE.md/code 에, resource 가 spec/stack 에) → 제거 후보 (+ 어디로 갔는지 한 줄 pointer).
-   - **stale** — `[in-progress YYYY-MM-DD]` 가 충분히 오래됨(기본 기준: 최근 git 활동·날짜로 판단해 ~2주+ 방치 또는 완료 정황) / 이미 실행된 Next Session Hint → 제거(resolve) 후보.
-   - **live** — post-it 에만 있고 유효 → 유지.
+   - **stale** — 시간 기반 lifecycle tier (Hermes Curator active→stale→archive 벤치마킹, T3). 대상 = 날짜를 가진 time-sensitive 항목(`Open Threads` 의 `[in-progress/blocked YYYY-MM-DD]`, `Decisions` 의 `YYYY-MM-DD:`, 실행 정황 있는 `Next Session Hints`):
+     - **active** (< 30d 또는 최근 git 활동과 연결) → 유지.
+     - **stale 후보** (≥ ~30d 미갱신, git 활동과 단절) → 제거(resolve) 후보로 분류. (기존 ~2주 기준의 명시화 — 2주는 _주의_, 30d는 _제거 후보_.)
+     - **archive 대상** (≥ ~90d 미갱신, 또는 완료 정황 확실) → 자동 자리는 drop(한 줄 보고). 사용자가 보존 원하면 `_internal/post-it-archive.md` 로 이동(삭제 아닌 flagging) — 단 graduated 내용은 이미 산출물에 있으므로 archive 불요(drop).
+   - **live** — post-it 에만 있고 유효(시간 무관 — convention/resource 는 _졸업_ 으로 떼지 시간으로 떼지 않는다) → 유지.
 4. 분류 결과를 **graduated / stale / keep 3 묶음으로 preview** → 사용자가 제거할 항목 confirm (전체·선택).
 5. 확정분 제거 + `Last Updated` 갱신.
 - `--no-confirm` 시 graduated+stale 자동 제거 (정황 확실할 때만 — 추정 섞이면 위험).

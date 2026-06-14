@@ -17,6 +17,7 @@
 7. **연수 루프 생존**: `~/.claude/loops/study.log` 의 마지막 `=== study run` 시각이 8일 이상 과거 → "연수 루프 고장 의심" 표시 (주 1회 일요일 주기).
 8. **디스패치 job 현황** (`~/.claude/.dispatch/jobs.log` — CONVENTIONS §5.10 등록부): `open` 항목 전부 보고에 나열 (현황 가시화). 그중 — (a) worktree 경로가 소멸했거나 24시간+ 경과 → **고아 의심**, (b) worktree 는 있는데 최근 24시간 커밋·`.claude_reports/plans/*/dev_logs` 변경 둘 다 없음 → **무진전 의심**. 둘 다 보고만 — 프로세스 kill·worktree 정리는 사용자 결정.
 9. **메모리 승격 후보 (self-review nudge)** — Hermes periodic self-review 벤치마킹 이식(T4). 전날(`git log --since="36 hours ago"` 기준) `~/.claude` 및 작업 repo 의 커밋 메시지·산출물 변경에서, _재사용 절차·사용자 선호·교정(correction)·컨벤션·교훈_ 으로 보이는데 auto-memory(`~/.claude/projects/<encoded-cwd>/memory/`)·post-it(`<cwd>/.claude_reports/post-it.md`) 어디에도 반영 안 된 것 → "메모리 승격 후보" 로 **가장 명확한 1~2개만** 목록. 판단 기준 = 메모리 승격 휴리스틱([CONVENTIONS §7](../CONVENTIONS.md) canonical): preferences·conventions·corrections·lessons = 승격 / trivial·재발견가능·git 이력에 이미 있는 것·ephemera = skip. **저장하지 않는다 — 후보 제시만**(저장은 사용자 흐름 안 `/post-it` 또는 메모리). 노이즈 방지: 확실한 것 없으면 이 항목 통째로 생략(빈칸 > 잘못 채우기). 행동양식 변경 후보는 메모리 아니라 원칙 문서 자리이므로 제외.
+10. **post-it stale 후보 (시간 lifecycle 플래깅)** — Hermes Curator 벤치마킹 이식(T3). 작업장 repo 의 `.claude_reports/post-it.md` 들에서, time-sensitive 항목(`[in-progress/blocked YYYY-MM-DD]`·`Decisions YYYY-MM-DD:`)의 날짜가 **≥30d 미갱신이고 최근 git 활동과 단절**된 것 → "post-it stale 후보" 로 repo·항목·경과일 보고. ≥90d 는 "archive 대상" 표기. **제거하지 않는다 — 플래깅만**(sweep 은 사용자 흐름 또는 handoff 자리에서). 확실한 것 없으면 항목 생략. (post-it 정리 규칙 = [post-it SKILL](../skills/post-it/SKILL.md) sweep 절.)
 
 ## drill 승격 후보 태깅 (2026-06-11, P7 반자동화)
 
@@ -25,5 +26,5 @@
 ## 보고
 
 - `/home/nas/user/Uihyeop/notes/oncall/<오늘 날짜 YYYY-MM-DD>.md` 에 간결한 한국어 보고 작성 — 항목당 1~2줄, repo 경로·브랜치 명시, 권장 조치 한 줄.
-- **발견 0 이어도 파일은 반드시 남긴다** — `# 야간 정찰 — <날짜>\n이상 없음 (점검 9항목 전부 통과)` 한 줄. 파일 자체가 heartbeat — 아침에 파일이 없으면 "이상 없음"이 아니라 **루프 고장**(cron·인증·timeout)을 뜻한다.
+- **발견 0 이어도 파일은 반드시 남긴다** — `# 야간 정찰 — <날짜>\n이상 없음 (점검 10항목 전부 통과)` 한 줄. 파일 자체가 heartbeat — 아침에 파일이 없으면 "이상 없음"이 아니라 **루프 고장**(cron·인증·timeout)을 뜻한다.
 - 보고는 사실만 — 추정 수치·과장 금지 (빈칸 > 잘못 채우기).
