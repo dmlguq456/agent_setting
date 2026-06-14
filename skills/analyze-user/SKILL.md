@@ -82,7 +82,7 @@ Phase 4 의 reviewer 구성은 항상 4 개 parallel (Phase 4 절 참조).
 
 - `discover` — Phase 1 부터
 - `analyze` — Phase 2 부터
-- `verify` — Phase 3 부터
+- `verify` — Phase 3 부터 (Phase 3.5 prior-version 변증법 대조 포함, update mode)
 - `qa` — Phase 4 부터
 - `output` — Phase 5 부터
 - `repro` — Phase 5b 부터 (figure aspect repro gate)
@@ -251,6 +251,29 @@ mode=init 통째 교체, mode=update 누적.
 - `_internal/cross_aspect_consistency.md` — 점검 결과 + 모순 해소 결정.
 - Phase 3 verdict — N 자리 모순 발견, M 자리 해소, K 자리 open question 남김.
 
+### Phase 3.5 — Prior-version 변증법 대조 (dialectic reconciliation, `--mode update` 한정)
+
+> Hermes Honcho 의 _dialectic user modeling_ 벤치마킹 이식(T6, 2026-06-15). Phase 3 이 _aspect 사이_ 일관성을 본다면, 본 phase 는 _이번 추출(antithesis) vs 직전 프로필(thesis)_ 을 변증법적으로 대조해 _synthesis_ 를 만든다. user_profile 은 누적 자료라 "최신이 옳다"는 단순 덮어쓰기가 사용자 모델을 _퇴행_ 시킬 수 있다 — 모델이 _왜_ 바뀌었는지 추론해야 한다. `--mode init` 은 직전 버전이 없으므로 skip.
+
+절차:
+
+1. 각 aspect 의 _직전_ `user_profile/0X_*.md` (있으면 `_internal/versions/` 최신 snapshot) 를 Read — 이번 draft 와 항목별 대조.
+2. 각 패턴을 4 분류:
+   - **confirm** — 직전과 일치 (강화, confidence 유지/상향).
+   - **refine** — 직전을 _구체화·정밀화_ (모순 아님, 결대로 발전).
+   - **contradict** — 직전과 _충돌_. 여기서 빈도·최신 자동승자 금지 — 아래 3 의 추론을 거친다.
+   - **new** — 직전에 없던 신규 패턴 (confidence 는 Phase 2 consensus 따름).
+3. **contradict 합치기 (synthesis)** — 단순 "최근 우선" 대신 _왜 달라졌나_ 를 셋 중 하나로 판정하고 근거 1줄:
+   - (a) **사용자 진화** — 실제 선호·방식이 바뀜 (최근 source 가 일관되게 신호) → 갱신 + 변경 이력 1줄.
+   - (b) **직전이 과잉일반화** — 직전이 적은 표본의 잘못된 일반화 → 정정 + 직전 오류 명시.
+   - (c) **맥락 의존** — 둘 다 맞고 _조건이 다름_ (예: 학회별·도메인별) → 덮어쓰지 말고 _조건부 분기_ 로 양립 기술.
+4. 사용자 명시 패턴 (`/post-it --scope user` 의 `## 사용자 수동 메모`) 은 모든 추론에 우선하는 ground truth — contradict 시 사용자 메모 채택.
+
+산출:
+- `_internal/prior_reconciliation.md` — 패턴별 confirm/refine/contradict/new 분류 표 + contradict 의 synthesis 판정(a/b/c)·근거.
+- contradict 합치기 결과를 aspect draft 에 반영 (변경 이력은 각 파일 `changelog:` frontmatter 에 한 줄).
+- Phase 3.5 verdict — confirm/refine/contradict/new 개수 + 진화(a)/정정(b)/분기(c) 내역.
+
 ### Phase 4 — Multi-agent QA Verification (adversarial 고정, 4 parallel reviewer)
 
 목적: 추출된 패턴이 _실제 source 와 일치_ 하는지, _사실 오류·과잉 일반화·bias·missing aspect_ 없는지 검증. 사용자 프로필은 propagating 자료라 _4 개 reviewer 모두 항상_ 병렬.
@@ -293,7 +316,7 @@ mode=init 통째 교체, mode=update 누적.
 - Phase 4 verdict:
   - 🔴 N · 🟡 M · 🟢 K finding 누적.
   - Consensus 변화 — _승격_ (0.3 → 0.6) N 건 · _drop_ M 건 · _open question 이관_ K 건.
-- 🔴 finding 1 개 이상 → Phase 2-3 으로 _자동 retry_ (max 2 회). 2 회 모두 실패 시 _pipeline failed_ 보고.
+- 🔴 finding 1 개 이상 → Phase 2–3.5 로 _자동 retry_ (max 2 회). 2 회 모두 실패 시 _pipeline failed_ 보고.
 
 ### Phase 5 — Output Generation
 
