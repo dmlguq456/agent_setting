@@ -600,3 +600,16 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 
 oncall self-review nudge(`loops/oncall.md` item 9) 등 _자동_ 자리는 승격 후보 **제시까지** — 실제 write 는 사용자 흐름 안에서(`/post-it` 또는 메모리 저장 발화). 루프 출구는 제안까지, 결정은 사용자([loops/README](loops/README.md) 공통 규약).
 
+### §7.4. Recall — on-demand 회상 (canonical, T1 / Hermes session_search 벤치마킹)
+
+세션 시작 시 자동 주입되는 `MEMORY.md` 인덱스는 _요약_ 만 본다. 인덱스에 안 잡히는 _과거 메모리 본문_ 이 필요한 자리(과거 결정·교정·컨벤션을 _다시 떠올려야_ 할 때)는 읽기 전용 helper 로 능동 검색한다. **읽기 전용 = 정보 제공일 뿐 — recall 자체는 결정·write 아님(무해, §7.3 게이트와 독립).**
+
+| helper | 용도 | 비고 |
+|---|---|---|
+| `tools/memory/recall.sh "<query>" [--all]` | 현 cwd(default) 또는 전 cwd(`--all`) 메모리 키워드 검색 (rg, grep fallback) | per-cwd 격리 = 기본 현 cwd. cross-cwd 는 `--all` 명시 시만 |
+| `tools/memory/index-check.sh [dir] [--fix]` | `MEMORY.md` 인덱스 drift 점검 (누락·고아). `--fix` = 누락 포인터 _append-only_ | 기존 큐레이션 줄 보존. 인덱스 얇은 cwd 보강용 |
+
+**언제 recall 하나** — 작업이 _이 프로젝트의 과거 비자명 결정/선호/교정_ 에 닿는데 주입된 인덱스로 안 풀릴 때 (예: "전에 이 모듈 왜 이렇게 정했더라", 같은 실수 반복 회피). 매 턴 습관적 호출 X — 필요 자리에서만(token 절약). 결과는 _현재 코드_ 로 교차검증(메모리는 작성 시점 진실, stale 가능 — 글로벌 메모리 규율과 동일).
+
+> per-cwd 격리는 유지된다 — `--all` 은 명시 요청 자리(cross-project 회상)에서만. 인덱스 mass `--fix` 는 live 사용자 데이터(`projects/` gitignored)라 _사용자 흐름_ 에서 실행(자동 자리에선 누락 _보고_ 까지 = oncall 후속 후보).
+
