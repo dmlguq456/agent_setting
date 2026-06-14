@@ -1,0 +1,8 @@
+pipeline: autopilot-research
+query: "Nous Research Hermes Agent — 심층 기술 해부 + Claude Code 세팅 벤치마킹 갭 분석"
+mode: technology
+depth: deep
+qa_level: adversarial
+clarified_intent: "self-improving 에이전트 Hermes Agent의 loop engineering·장기기억 설계를 1차 소스로 해부하고, 우리 Claude Code 세팅(loops·3층 메모리·autopilot 파이프·hooks)에 이식 가능한 개선안 도출"
+last_completed_stage: report
+artifact_dir: /home/Uihyeop/.claude/.claude_reports/research/hermes-agent
