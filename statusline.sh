@@ -120,6 +120,32 @@ def mins(et):
     while len(parts) < 3: parts.insert(0, 0)
     tot = int(d) * 1440 + parts[0] * 60 + parts[1]
     return f"{tot//60}h{tot%60:02d}m" if tot >= 60 else f"{tot}m"
+def has_entries(p):
+    try: return any(True for _ in os.scandir(p))
+    except Exception: return False
+def live_stage(jcwd, slug, fb):
+    # worktree slug → plans/*_<slug>/ 산출물로 실제 파이프 단계 유도 (argv 라벨이 정적 → 실시간 반영). fb = argv 추정 단계.
+    if not jcwd or not slug: return fb
+    base = jcwd + "/.claude_reports/plans"
+    try: cand = sorted(d for d in os.listdir(base) if d.endswith("_" + slug))
+    except Exception: cand = []
+    if not cand: return fb   # plan 폴더 전(=spec/init 단계) → argv 추정 유지
+    pd = base + "/" + cand[-1]
+    if os.path.exists(pd + "/pipeline_summary.md"): return "done"
+    if has_entries(pd + "/test_logs"): return "test"
+    if has_entries(pd + "/dev_logs"): return "exec"
+    try:   # dev_logs 쓰기 전 early-execute: checklist 체크 진행 = exec
+        with open(pd + "/plan/checklist.md") as _f:
+            if "[x]" in _f.read().lower(): return "exec"
+    except Exception: pass
+    try:   # 워크트리 소스 dirty = execute 중 (디자인팀 직접편집 등 dev_logs 미경유 흐름)
+        import subprocess
+        if subprocess.run(["git", "-C", jcwd, "status", "--porcelain", "--untracked-files=no"],
+                          capture_output=True, text=True, timeout=2).stdout.strip():
+            return "exec"
+    except Exception: pass
+    if os.path.exists(pd + "/plan/plan.md"): return "plan"
+    return "plan"
 seen = {}
 for line in sys.stdin:
     line = line.rstrip("\n")
@@ -127,32 +153,30 @@ for line in sys.stdin:
     fields = line.lstrip().split(None, 2)
     if len(fields) < 3: continue
     pid, etime, args = fields
-    m = re.search(r"/autopilot-([a-z-]+)", args)
-    if m and "claude" in args:
+    ms = re.findall(r"/autopilot-([a-z-]+)", args)
+    if ms and "claude" in args:
         try: jcwd = os.readlink(f"/proc/{pid}/cwd")
         except Exception: jcwd = ""
         if not related(jcwd): continue
-        key = m.group(1)
-        mode = re.search(r"--mode (\w+)", args); qa = re.search(r"--qa (\w+)", args)
+        if os.path.basename(args.split(None, 1)[0]) in ("zsh", "bash", "sh", "dash"): continue  # 런처 셸 wrapper 제외 — 실 claude 프로세스만
+        key = ms[-1]
+        modes = re.findall(r"--mode (\w+)", args); md = modes[-1] if modes else None
+        qas = re.findall(r"--qa (\w+)", args); qv = qas[-1] if qas else None
         # 제목 = worktree/디렉토리 슬러그 우선 (프롬프트 어절 추출은 한국어 프롬프트에서 노이즈 — 2026-06-11)
         slug = os.path.basename(jcwd.rstrip("/")) if jcwd else ""
-        if slug and slug != os.path.basename(CWD.rstrip("/")):
-            desc = slug
-        else:
-            tail = args[m.end():]
-            full = re.sub(r"--\w+ \S+", "", tail).strip()
-            cand = " ".join(full.split()[:2])
-            desc = cand if re.fullmatch(r"[ -~]+", cand or " ") else ""
+        desc = slug if (slug and slug != os.path.basename(CWD.rstrip("/"))) else ""
+        stage = live_stage(jcwd, slug, key)
         QA = {"quick":"qck","light":"lgt","standard":"std","thorough":"thr","adversarial":"adv"}
         QAC = {"qck":"2","lgt":"32","std":"33","thr":"35","adv":"31"}
         D = "\033[2m"; R = "\033[0m"
         parts = []
-        if mode: parts.append(f"\033[36m{mode.group(1)}{R}")
-        if qa:
-            q = QA.get(qa.group(1), qa.group(1))
+        if md: parts.append(f"\033[36m{md}{R}")
+        if qv:
+            q = QA.get(qv, qv)
             parts.append(f"\033[{QAC.get(q,'33')}m{q}{R}")
         opts = f"{D}\u00b7{R}".join(parts)
-        head = paint(key, key) + (f"{D}({R}{opts}{D}){R}" if opts else "")
+        label = f"{key}▸{stage}" if stage != key else key
+        head = paint(key, label) + (f"{D}({R}{opts}{D}){R}" if opts else "")
         lbl = head + f" {D}\u23f3{mins(etime)}{R}" + (f" {desc}" if desc else "")
         dkey = f"{key}:{slug}"  # \uc2ac\ub7ec\uadf8 \ub2e8\uc704 \u2014 \uac19\uc740 \ud30c\uc774\ud504 N\uac1c \ubcd1\ub82c \ubd84\uc0ac\uac00 \ud55c \ud56d\ubaa9\uc73c\ub85c \ubb49\uac1c\uc9c0\uc9c0 \uc54a\uac8c (2026-06-11)
     else:
