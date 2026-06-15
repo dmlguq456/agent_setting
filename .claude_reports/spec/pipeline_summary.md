@@ -31,5 +31,16 @@
 - 근거(검증): `settings.json` SessionStart=`mem.py inject --hook`·SessionEnd=`mem.py sync` 확인, 이번 세션 상단 inject 블록 실측.
 - 스코프 한정: D1~D4·D6·D7·통합모델·데이터모델 불변.
 
+### v2 → v3 (2026-06-15, update mode — Hermes DB화 강화, snapshot `_internal/versions/v2/`)
+사용자 방향 전환 (4턴 설계 동기화 후 lock): "sqlite 기반 DB화 + 메모리 git 이력 제거 + 별도 저장소". Hermes `state.db`(로컬 SQLite WAL) 정렬.
+- **D1 반전 (SoT 전환)**: markdown 원본(추적) → **로컬 SQLite `memory.db`(WAL)가 SoT**. git 은 `dump.jsonl`(레코드당 1줄·id 정렬, deterministic 텍스트) mirror 만 추적, 바이너리 `.db`·`.index.db`·WAL 은 gitignore. 복원 = 덤프 replay. FTS5 색인은 파생물 아니라 DB 본체 내장으로 승격.
+  - 근거(사용자 합의): 자주 갱신되는 DB 를 git 바이너리로 올리면 delta 안 먹고 bloat. 텍스트 덤프는 변경 줄만 diff + audit 가시성은 덤. 사람이 메모리를 routine 으로 읽을 필요는 없음(읽기=inject/recall).
+- **D9 신규 (저장소 분리)**: `~/.claude/memory/` 를 전용 private repo(`claude-memory`)로. config repo(`claude_setting`)는 `git filter-repo --path memory/ --invert-paths` 로 전체 이력 제거 + force-push (git bundle 백업 선행), 이후 `memory/` gitignore. 중첩 ignore-repo (submodule 미사용).
+- **통합 강화 (D-7)**: user_profile + post-it + **Claude 내장 auto-memory** 를 한 DB 로. tier/scope/type 컬럼으로 주입 행동 구분 유지 (Hermes MEMORY/USER/state 분리를 한 DB 컬럼으로 표현 → 더 통합적).
+- **D3 정련**: user_profile raw=레코드 흡수, 구조화 aspect 문서는 DB→generated view (`mem export --profile`) — sub-agent 경로 Read 보존, 순수 DB 배선 대공사 회피.
+- **API/CLI 추가**: `mem export`(dump/profile)·`mem import`(replay)·`mem migrate` 에 md-file source 추가. 데이터모델을 SQLite DDL + jsonl 덤프 스키마로 재기술.
+- **non-goal 보강**: Turso/libSQL 원격 동기화 명시 비목표 (단일 사용자·외부 의존 0 근거).
+- 스코프: D2(위치↔스코프 분리)·D4(자동write)·D5(lifecycle)·D6(inject/sync hook)·D8(보안)·통합모델 골격 불변.
+
 ## Next
-지침 정합·mem.py 견고성·README → autopilot-code --mode dev (본 spec 따라)
+DB-backed 재구현 → autopilot-code --mode dev (본 v3 spec 따라). 순서: 스키마·store → 이주(md SoT 포함) → export/import → recall → lifecycle → hook → post-it alias → 저장소 분리(인프라).

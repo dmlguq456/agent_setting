@@ -3,17 +3,20 @@ created: 2026-06-15
 mode: [library, cli]
 scope_note: "통합 기억 시스템 — post-it(단기)·auto-memory(장기)·user_profile(전역) 1 store + tier 모델. Hermes 적극 결합 + 중복 cut."
 phases:
-  spec: done               # 통합 PRD 확정 (D-1~4 lock)
+  spec: done               # v3 PRD 확정 (D-1~7 lock — DB화·저장소분리·통합강화)
   scaffolding: pending
-  dev: in_progress         # autopilot-code 구현 착수
-last_updated: 2026-06-15  # v2 update: D5/mermaid/D-4 drift 정정 (자체 하네스 inject/sync), snapshot v1
+  dev: in_progress         # autopilot-code 재구현 착수 (DB-backed)
+last_updated: 2026-06-15  # v3 update: D1 반전(SoT=SQLite), 저장소 분리(claude-memory repo), 통합 강화. snapshot v2
 inputs:
   - .claude_reports/research/hermes-agent/
   - VISION.md
   - CONVENTIONS.md#7
   - skills/post-it/ + tools/memory/ + user_profile/
-open_decisions:
-  - D-open-1: 삭제 정책 (working 자동만료 / durable gc 플래깅 추천)
-  - D-open-2: post-it 스킬 운명 (mem alias 유지 추천)
-  - D-open-3: user_profile 통합 깊이 (raw만 store, aspect는 view 추천)
-  - D-open-4: projection 갱신 시점 (세션 시작 hook 추천)
+decisions_locked:
+  - D-1: 삭제 정책 — working 자동만료/졸업, durable gc 플래깅
+  - D-2: post-it 스킬 — mem alias 유지 (deprecate 아님)
+  - D-3: user_profile — raw=레코드, aspect=DB→generated view
+  - D-4: 주입·회수 — SessionStart inject + SessionEnd sync
+  - D-5: SoT = 로컬 SQLite memory.db (git=dump.jsonl 텍스트 mirror, .db 비추적)
+  - D-6: 저장소 분리 — claude-memory private repo, config repo memory/ 이력 filter-repo 제거
+  - D-7: 통합 깊이 — user_profile+post-it+auto-memory 한 DB (tier/scope/type 컬럼 구분 유지)
