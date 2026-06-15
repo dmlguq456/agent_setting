@@ -1,6 +1,6 @@
 {
   "version": 4,
-  "last_readme_sync": "2026-06-15T01:08:24.861694+09:00",
+  "last_readme_sync": "2026-06-15T13:02:28.050257+09:00",
   "items": {
     "agents/codex-review-team": {
       "sha256": "391aa001e718a9deb336cc05f107e9e35112673a6a8b494b9fbba41fed640dea",
@@ -63,8 +63,8 @@
       "synced_at": "2026-06-08T00:00:00Z"
     },
     "skills/autopilot-lab": {
-      "sha256": "cfe36a5e800dd549fc93f5c4bfb6442f8bd807ecc4c37412f5e211a1ab5c06fd",
-      "synced_at": "2026-06-11T11:20:48.981871+09:00"
+      "sha256": "3b351ff701811ff04501430c1199b0156ad5c7ec70cd28ebb27fcf42810468e5",
+      "synced_at": "2026-06-15T13:02:28.050257+09:00"
     },
     "skills/autopilot-note": {
       "sha256": "d637d105ad093fa238f0408d50d534f49767c1c0b5fa9ed889278956825627ca",

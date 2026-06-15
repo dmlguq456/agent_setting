@@ -1,7 +1,7 @@
 ---
 name: autopilot-lab
-description: "_빠른 실험 prototype_ entry — 무거운 학습은 사용자가 돌리고, lab 은 그 앞뒤를 돕는다. 2 모드: **setup** (학습 실험 세팅 — spec → scaffold → 실행 명령 안내) / **eval** (학습 완료 ckpt 평가·분석 — metric·ablation·paper 비교·plot). 확장 케이스(기존 세팅에 새 데이터로 재평가·추가 fine-tuning)는 `--parent <slug>` 계보로 흡수 — 새 모드 없음 (fine-tune=setup --parent 로 새 config 갈래, 재평가=eval --parent). experiment 단위 폴더 강제 + STORY narrative + _RUNLOG timeline (⏳대기→✅완료 상태 + 부모 링크) 누적 → 덮어쓰기·휘발·즉흥 차단. analyze-project 의 experiment_conventions.md / similar_models.md 자동 read — 사용자 코드베이스 layer·prefix·config 패턴 1순위. 정련·라이브러리화 졸업은 autopilot-code."
-argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--qa quick|light|standard|thorough|adversarial] [--from spec|scaffold|run|eval|summary]"
+description: "_빠른 실험 prototype_ entry — 무거운 학습은 사용자가 돌리고, lab 은 그 앞뒤를 돕는다. 2 모드: **setup** (학습 실험 세팅 — spec → scaffold → 실행 명령 안내) / **eval** (학습 완료 ckpt 평가·분석 — metric·ablation·paper 비교·plot·(옵션) 정식 보고서 [prose→autopilot-draft / 음성·미디어는 재생 HTML]). 확장 케이스(기존 세팅에 새 데이터로 재평가·추가 fine-tuning)는 `--parent <slug>` 계보로 흡수 — 새 모드 없음 (fine-tune=setup --parent 로 새 config 갈래, 재평가=eval --parent). experiment 단위 폴더 강제 + STORY narrative + _RUNLOG timeline (⏳대기→✅완료 상태 + 부모 링크) 누적 → 덮어쓰기·휘발·즉흥 차단. analyze-project 의 experiment_conventions.md / similar_models.md 자동 read — 사용자 코드베이스 layer·prefix·config 패턴 1순위. 정련·라이브러리화 졸업은 autopilot-code."
+argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--qa quick|light|standard|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
 ---
 
 > 산출물 폴더: `.claude_reports/experiments/` ([CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier). _RUNLOG timeline 한 자리 + experiment 단위 폴더 누적.
@@ -45,6 +45,28 @@ argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [-
 졸업:    autopilot-code (라이브러리화·논문 코드 정리)
 ```
 
+## Git 워크플로우 — 별도 worktree+실험 브랜치 (원칙, canonical)
+
+**lab 은 main 이 아니라 _전용 worktree + 실험 브랜치_ 에서 진행한다.** 실험 시작 자리(setup, 또는 부모 없는 첫 eval)에서 main 워킹트리를 직접 건드리지 않고, [CONVENTIONS §5.10](../../CONVENTIONS.md) 명명 규칙대로 형제 worktree `<repo>-wt/<exp-slug>` 를 파고 그 안 실험 브랜치(`exp/<slug>` 또는 기존 feature 브랜치)에서 작업한다. 이미 해당 worktree·브랜치가 있으면 재사용.
+
+### autopilot-code 의 worktree 와 결정적 차이
+
+| | autopilot-code worktree | **autopilot-lab worktree+브랜치** |
+|---|---|---|
+| 성격 | **머지 전제 _임시_ 분사** — 격리해 작업 후 main 으로 merge, 브랜치는 수확 뒤 disposable | **머지 안 하는 _별도 작업 라인_** — 실험은 그 자체로 main 에 통째 들어가지 않는다 |
+| main 청결 보장 | merge 후 브랜치 정리 | **"안 merge" 로 보장** (gitignore 아님) |
+| 산출물 | 코드 변경 → main 의 일부가 됨 | 실험 config·scaffold·로그 → **브랜치에 남고 main 엔 안 감** |
+| 수명 | 작업 1건 = 브랜치 1개, 짧게 | 실험 라인이 길게 유지 (계보 `--parent` 누적) |
+
+### 따름 규칙
+
+1. **실험 config 는 gitignore 하지 말고 _브랜치에 커밋_** — `_ft*`·`_tune_*`·`exp_*` 등 실험 config 는 그 브랜치에서 tracked. 어떤 config 가 어떤 결과를 냈는지 git 으로 재현 가능하게. (main 의 `.gitignore` 는 이들을 계속 ignore — main 청결은 _안 merge_ 가 보장.)
+2. **무거운 산출물(ckpt·log·`.claude_reports/`)은 브랜치에서도 gitignore 유지** — 재현 기록은 `.claude_reports/experiments/{slug}/` (영속) + 커밋된 config 가 함께 담당.
+3. **main 으로 가는 건 _졸업_ 뿐** — (a) 재사용 코드(seam·모듈)는 `autopilot-code` 로 main 졸업, (b) 이긴 config 는 영구 파일명으로 rename 해 졸업. 실험 브랜치 자체를 main 에 통째 merge 하지 않는다.
+4. **브랜치는 실험 라인의 작업 공간** — archive 가 아니다. `.claude_reports/experiments/` + 커밋된 config 가 archive 라 브랜치는 졸업 후 정리 가능.
+
+> 오케스트레이션(컨펌·분사·수확)은 main 세션, 실제 편집·학습 세팅은 worktree 안에서 (§5.10 중첩 1단 한계 동일 적용).
+
 ## 모드 — 한 실험의 lifecycle
 
 한 실험의 전체 흐름 = **setup (lab)** → [사용자가 학습 실행] → **eval (lab)**. 두 번의 lab 호출이 _대기·완료_ 2-beat 로 `_RUNLOG` 한 줄을 채운다.
@@ -52,7 +74,7 @@ argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [-
 | 모드 | 자리 | 하는 일 | 산출물 / 상태 |
 |---|---|---|---|
 | **setup** | 학습 _전_ | spec(뭘 학습·ablation) → scaffold(ref 또는 부모 ckpt 에서 train/eval/config) → 실행 명령 안내 | scaffold 코드 + `_RUNLOG` ⏳ 대기 |
-| **eval** | 학습 _후_ | eval spec(ckpt·데이터·metric) → eval 실행 안내 → 분석(metric·ablation·paper 비교·plot) → summary | summary + `_RUNLOG` ✅ 완료 |
+| **eval** | 학습 _후_ | eval spec(ckpt·데이터·metric) → eval 실행 안내 → 분석(metric·ablation·paper 비교·plot) → summary → (옵션) 정식 보고서 | summary + `_RUNLOG` ✅ 완료 + (옵션) report |
 
 ### 확장 — `--parent <slug>` 계보 (새 모드 없이 흡수)
 
@@ -185,6 +207,8 @@ argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [-
 ## ━━━ setup 모드 ━━━ (학습 전 세팅)
 
 ### S1: spec (1 화면)
+
+**S1-0. worktree+실험 브랜치 확보** ([§Git 워크플로우](#git-워크플로우--별도-worktree실험-브랜치-원칙-canonical)) — main 에서 작업 시작 금지. 실험 slug 의 worktree `<repo>-wt/<slug>` 가 없으면 판다 (`git worktree add <repo>-wt/<slug> -b exp/<slug> <base>`, 기존 브랜치면 `-b` 생략). 이미 있으면 재사용. 이후 모든 편집·scaffold·config 커밋은 그 worktree 안에서. main 워킹트리는 조정만.
 
 **S1-1. Step 0 컨텍스트 자동 read** — 위 자료. 사용자 보고는 _한 줄 요약_ ("직전 실험: lr_1e-3 (val PSNR 28.4), 컨벤션 ready ✓, 유사 모델: TF_Restormer"). `--parent` 면 부모 결과·config 도 한 줄 인용.
 
@@ -432,6 +456,15 @@ Agent(subagent_type="연구팀", mode="research-survey"):
 
    Return: 비교 표 + 한국어 한 단락 요약 (summary.md 에 ## 기존 paper 와의 비교 섹션 추가)."
 ```
+
+**E3-5. 정식 보고서 (옵션 — 공유·의사결정용. `--report` / "보고서 써줘"·"공유용" 발화 / high-stakes(논문·외부 공개))**:
+
+`summary.md` 는 _1 화면 실험 기록_ (계보·다음 후보). 그걸 넘어 _공유·의사결정용 정식 문서_ 가 필요하면 본 단계에서 산출. 두 형태 — 실험 성격으로 분기:
+
+- **prose 보고서** (일반 실험) → `autopilot-draft --mode doc` 핸드오프. 입력 = `experiments/{date}_{slug}/{summary.md, STORY.md, figures/}` + runs metrics. 산출은 `documents/{date}_{slug}/` (draft 컨벤션·리뷰·다듬기). eval 은 _요청·핸드오프_ 만 — prose 생성은 draft 가 담당(machinery 중복 방지).
+- **재생 HTML 보고서** (음성·오디오·미디어 실험 — 청취·스펙트로그램·시각 비교가 본질) → `자료팀 figure-gen` 으로 분리음/스펙트로그램 세그먼트 + 임베드 `<audio>`/`<img>` **단일 HTML** 생성 (`experiments/{date}_{slug}/report/report.html`). _markdown `<audio>` 는 VS Code 프리뷰가 차단_ → **audio 도메인은 HTML 기본**. 긴 오디오는 _N분 단위 세그먼트 페이지_ 분할. 필요시 `python -m http.server --bind 0.0.0.0 <port>` 로컬 서빙 + 접속 URL 안내.
+
+기본은 _off_ — `summary.md` 가 default 산출. 보고서는 사용자 신호(`--report` / "정식 보고서" / "공유용") 또는 high-stakes 일 때만. 둘 다 필요하면 prose + HTML 병행(prose 가 HTML 비교본을 상대링크).
 
 **E3-4. 저장 — 세 파일 갱신**:
 

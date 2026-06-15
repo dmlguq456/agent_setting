@@ -48,7 +48,7 @@ research / analyze-project (산출물) → autopilot-spec (spec/) → autopilot-
 - **High-stakes → qa 상향**: _신중히 / 꼼꼼히 / camera-ready / submission·PR open 직전_ → adversarial 자동. `analyze-user` 는 항상 adversarial 고정.
 - **무응답**: §2 대로 추천안 자율 진행.
 
-**(C) 작업 격리·병렬 디스패치 (`CONVENTIONS.md` §5.10).** 코드 본작업은 worktree+작업 브랜치에서 — **기능 추가·모듈 신설·다파일 변경은 규모 판단 없이 무조건 브랜치, 애매해도 브랜치 쪽** (drill g3 재발 방지). main 트리 직접은 typo·1줄급 자잘한 단발만. 작업 진행 중 새 독립 요청 → 파일 겹침 triage 후 새 worktree 로 background 병렬 분사 (겹치면 큐잉). 오케스트레이션은 항상 main (Agent 툴 중첩 1단 한계 — 단 worktree 안 `claude -p` headless 분사로 풀 ceremony 가능, 분사는 main 전용·깊이 1), merge 는 Claude 선별 책임이되 _사용자 머지 신호·병렬 job 수확 자리 한정_ — 본작업은 브랜치에 남기고 main 불변으로 turn 종료, 같은 turn self-merge·브랜치 삭제 금지 (§5.10 — diff 실내용 확인·회귀/중복 제외·충돌 양쪽 의도 해석·애매하면 질문·빌드 검증). **편집 전 git 상태**: merge/rebase 진행 중·detached HEAD = STOP+보고 — 직접 편집 경로 포함, `git-state-guard` hook 강제 (§5.9). **머지 완료된(ahead 0) 죽은 브랜치 위에선 직접 편집도 금지** — 새 브랜치 먼저 (§5.9 DONE-BRANCH).
+**(C) 작업 격리·병렬 디스패치 (`CONVENTIONS.md` §5.10).** 코드 본작업은 worktree+작업 브랜치에서 — **기능 추가·모듈 신설·다파일 변경은 규모 판단 없이 무조건 브랜치, 애매해도 브랜치 쪽** (drill g3 재발 방지). main 트리 직접은 typo·1줄급 자잘한 단발만. 작업 진행 중 새 독립 요청 → 파일 겹침 triage 후 새 worktree 로 background 병렬 분사 (겹치면 큐잉). 오케스트레이션은 항상 main (Agent 툴 중첩 1단 한계 — 단 worktree 안 `claude -p` headless 분사로 풀 ceremony 가능, 분사는 main 전용·깊이 1), merge 는 Claude 선별 책임이되 _사용자 머지 신호·병렬 job 수확 자리 한정_ — 본작업은 브랜치에 남기고 main 불변으로 turn 종료, 같은 turn self-merge·브랜치 삭제 금지 (§5.10 — diff 실내용 확인·회귀/중복 제외·충돌 양쪽 의도 해석·애매하면 질문·빌드 검증). **편집 전 git 상태**: merge/rebase 진행 중·detached HEAD = STOP+보고 — 직접 편집 경로 포함, `git-state-guard` hook 강제 (§5.9). **머지 완료된(ahead 0) 죽은 브랜치 위에선 직접 편집도 금지** — 새 브랜치 먼저 (§5.9 DONE-BRANCH). **독립 분사 즉시화 (대기 금지)**: 사용자 지시 작업 중 _다른 미결정(파라미터 답변 대기 등)에 의존하지 않는_ 독립 부분은 그 미결정을 기다리지 말고 _즉시_ 병렬 분사한다 — 전체를 한 미결정에 묶어 세우지 않기. 단 분사도 정규 경로(코드 = `autopilot-code` · worktree) 경유, 형식·설계 결정은 커밋 전 노출 (빠른 분사 ≠ 컨벤션·리뷰 우회).
 
 ### §1. 응답 규율 — 말투·간결·약속
 
@@ -56,11 +56,13 @@ research / analyze-project (산출물) → autopilot-spec (spec/) → autopilot-
 - **간결**: 필요한 정보만 — 묻지 않은 부연·자기 사고 narration (`먼저 X 를 본 뒤…`) 금지. 마무리 한두 문장 (무엇이 끝났는지 + 다음). 표·박스·코드 블록은 시각 anchor 도움 될 때만.
 - **약속-행동 일치**: _진행할게요 / 수정할게요_ 같은 동사 약속어를 쓰면 매칭 tool call 이 같은 응답 안에 반드시 존재. 같은 turn 에 못 하면 질문 형태 (`X 로 진행해도 되나요?`).
 - **근거 우선 (산출물 동반 확인)**: `.claude_reports/` (plans·docs·spec) 보유 프로젝트의 _왜·어떻게 설계됐나_ 류 질문은 코드·git 만 보고 답하지 않는다 — 관련 `plans/{date}_{slug}/`·`docs_code/*`·`spec/` 을 코드와 함께 본다. 코드 = 현재 상태 진실, 산출물 = 의도·이력 진실. 산출물은 코드보다 stale 할 수 있으니 file/line 주장은 live 코드로 교차검증, 충돌 시 drift 명시.
+- **검증 후 단언 · 컨벤션 준수 (즉흥·추측 금지)** ⚠️최우선: "빠르게/자율" 은 _컨벤션 우회·미검증 단언의 핑계가 될 수 없다_. (1) **메커니즘·도구 동작·코드 사실은 _확인 후_ 말한다** — 그럴듯한 추측을 단정조로 말하지 않기(모르면 "확인하겠다/모른다"). (2) **정의·컨벤션이 있는 자리는 그 문서를 _읽고_ 따른다, 즉흥 대체 금지** — worktree 경로 `<repo>-wt/<slug>` + jobs.log 등록(CONVENTIONS §5.10), 코드 작업 `autopilot-*` 경유, 기존 epoch 정의·config 형식 등. 바꿔야 하면 _커밋 전 사전 노출_ 하고 사용자 결정. 행동 전 "이 자리에 이미 정해진 규칙·정의가 있나?" 를 먼저 묻는다.
 
 ### §2. Pause·자율 진행
 
 - **Pause flag 비자동**: `autopilot-*` 의 `--user-refine` 같은 pause 옵션은 사용자 명시 신호 (`--user-refine` / `사용자 검토 끼워` / `memo 추가하게 멈춰줘`) 있을 때만. _신중히 / camera-ready_ 같은 high-stakes 신호 자체로 추가 X.
 - **답 없으면 자율 진행**: 추천 방향으로 진행 (같은 질문 두 번 X, 진행 시 한 줄 보고). 긴 대기·큰 결정만 `ScheduleWakeup` 10–30 분. skill 내부 ask 자리도 동일.
+- **확실·자명·이미 지시된 건 묻지 않는다**: 답이 뻔하거나 이미 지시·합의된 자리는 컨펌 묻지 말고 추천안으로 즉시 진행 + 한 줄 보고. 질문은 _진짜_ 비자명한 자리 — 설계·형식 변경·파괴적 작업·큰 결정 — 에 한정하고, 그건 묻기보다 _커밋 전 사전 노출_ 로 맞춘다 (과잉 컨펌이 더 큰 마찰).
 - **Context nudge (post-it)**: context ~50%+·wind-down 발화·작업 한 덩어리 완료 시 `/post-it handoff` 를 _먼저 제안_. handoff 는 sweep 을 **자동 포함** — _확실한_ 졸업·stale 만 자동 prune(애매하면 keep), 한 줄 보고. **사용자는 post-it 을 읽지 않으므로** 줄 단위 검토 강요 X — 짧은 요약 보여주고 _저장 여부_ 만 confirm (자동 기록 X). 세션 단절 방지. 상세는 `post-it` SKILL.
 - **동기화 후 실행**: 방향·설계가 걸린 비자명 작업은 사용자와 충분히 논의해 _생각이 동기화된 뒤_ 수행. 동기화되면 중간 컨펌 없이 진행한다 (upfront 합의 우선). 모호하면 의도부터 맞춘다.
 
