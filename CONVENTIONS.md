@@ -606,10 +606,12 @@ oncall self-review nudge(`loops/oncall.md` item 9) 등 _자동_ 자리는 승격
 
 | helper | 용도 | 비고 |
 |---|---|---|
-| `tools/memory/recall.sh "<query>" [--all]` | 현 cwd(default) 또는 전 cwd(`--all`) 메모리 키워드 검색 (rg, grep fallback) | per-cwd 격리 = 기본 현 cwd. cross-cwd 는 `--all` 명시 시만 |
+| `tools/memory/recall.sh "<query>" [--all] [--sessions]` | 정제 메모리 검색(기본) — 현 cwd / `--all`=전 cwd. `--sessions` = raw 세션 transcript(`*.jsonl`)까지 (매치 주변 context 추출) | per-cwd 격리 = 기본 현 cwd. cross-cwd·raw 는 명시 플래그 시만. rg(PCRE2), grep fallback |
 | `tools/memory/index-check.sh [dir] [--fix]` | `MEMORY.md` 인덱스 drift 점검 (누락·고아). `--fix` = 누락 포인터 _append-only_ | 기존 큐레이션 줄 보존. 인덱스 얇은 cwd 보강용 |
 
-**언제 recall 하나** — 작업이 _이 프로젝트의 과거 비자명 결정/선호/교정_ 에 닿는데 주입된 인덱스로 안 풀릴 때 (예: "전에 이 모듈 왜 이렇게 정했더라", 같은 실수 반복 회피). 매 턴 습관적 호출 X — 필요 자리에서만(token 절약). 결과는 _현재 코드_ 로 교차검증(메모리는 작성 시점 진실, stale 가능 — 글로벌 메모리 규율과 동일).
+**두 검색면 (Hermes session_search 의 두 절반)**: (1) _정제 메모리_(`memory/*.md`, 기본) = 신호 깨끗, 먼저 본다. (2) _raw 세션_(`*.jsonl`, `--sessions`) = 메모리로 정제 안 된 과거 대화까지, 노이즈 크니 메모리로 안 나올 때만 보조로. Hermes 는 FTS5 DB 색인이지만 우리는 ripgrep 즉석 검색(외부 의존·유지 DB 0 — 우리 규모에 충분, 폭증 시 같은 인터페이스로 FTS5 교체).
+
+**언제 recall 하나** — 작업이 _이 프로젝트의 과거 비자명 결정/선호/교정_ 에 닿는데 주입된 인덱스로 안 풀릴 때 (예: "전에 이 모듈 왜 이렇게 정했더라", 같은 실수 반복 회피). 메모리 먼저 → 안 나오면 `--sessions`. 매 턴 습관적 호출 X — 필요 자리에서만(token 절약). 결과는 _현재 코드_ 로 교차검증(메모리는 작성 시점 진실, stale 가능 — 글로벌 메모리 규율과 동일).
 
 > per-cwd 격리는 유지된다 — `--all` 은 명시 요청 자리(cross-project 회상)에서만. 인덱스 mass `--fix` 는 live 사용자 데이터(`projects/` gitignored)라 _사용자 흐름_ 에서 실행(자동 자리에선 누락 _보고_ 까지 = oncall 후속 후보).
 
