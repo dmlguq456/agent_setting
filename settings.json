@@ -98,6 +98,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.claude/tools/memory/mem.py\" sync",
+            "timeout": 120
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -116,6 +126,15 @@
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/herdr-agent-state.sh\" idle",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.claude/tools/memory/mem.py\" inject --hook",
+            "timeout": 20
           }
         ]
       }

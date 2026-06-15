@@ -440,6 +440,62 @@ def register_postit(path):
     print(f"[register] {p}")
 
 
+def _first_line(body):
+    for l in body.splitlines():
+        s = l.strip()
+        if s and not s.startswith("---") and not s.startswith("#"):
+            return s
+    return body.strip()[:160]
+
+
+def inject(max_working=40, max_durable=40, hook=False):
+    """SessionStart 주입용 — 통합 store 에서 현 cwd 단기(working) + 장기 프로젝트(durable)
+    + 사용자 특성(profile/global) 을 한 블록으로 stdout. store 가 _세션 주입의 source_ (자체 하네스).
+    hook=True 면 Claude Code SessionStart additionalContext JSON 으로 감싸 주입 보장."""
+    def emit(block):
+        if hook:
+            import json as _j
+            print(_j.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart",
+                                                   "additionalContext": block}}, ensure_ascii=False))
+        else:
+            print(block)
+    if not STORE.exists():
+        return
+    encc = enc_cwd(Path.cwd())
+    work, dur, prof = [], [], []
+    for meta, body in iter_records():
+        tier, scope, typ, cwd = (meta.get("tier"), meta.get("scope"),
+                                 meta.get("type"), meta.get("cwd_origin"))
+        if typ == "profile":
+            prof.append((meta, body))
+        elif tier == "working" and cwd == encc:
+            work.append((meta, body))
+        elif tier == "durable" and scope == "project" and cwd == encc:
+            dur.append((meta, body))
+    if not (work or dur or prof):
+        return
+    out = ["# 🧠 통합 기억 (mem store — 세션 시작 주입)", ""]
+    if work:
+        out.append("## 단기 작업기억 (working — 이 프로젝트, 자동 만료)")
+        for m, b in sorted(work, key=lambda x: x[0].get("updated", ""), reverse=True)[:max_working]:
+            out.append(f"- {_first_line(b)[:180]}")
+        out.append("")
+    if dur:
+        out.append("## 장기 — 이 프로젝트 (durable)")
+        for m, b in dur[:max_durable]:
+            out.append(f"- [{m.get('type')}] {_first_line(b)[:160]}")
+        out.append("")
+    if prof:
+        out.append("## 장기 — 사용자 특성 (user profile)")
+        for m, b in prof:
+            aspect = next((l.split(":",1)[1].strip() for l in b.splitlines()
+                           if l.startswith("aspect:")), m["id"])
+            out.append(f"- {aspect}: {_first_line(b)[:140]}")
+        out.append("")
+    out.append("> 상세 회상: `bash ~/.claude/tools/memory/recall.sh \"<query>\"` (store+세션 전체 FTS)")
+    emit("\n".join(out))
+
+
 def sync():
     """하네스가 projects/<cwd>/memory/ 에 쓴 auto-memory 를 store 로 멱등 mirror + 색인 재생성.
     하네스가 메모리 write 를 소유하므로 store 는 source 가 아니라 _포터블 추적 mirror_ — 주기 sync(oncall/note)로 최신 유지."""
@@ -470,6 +526,8 @@ def main():
     lc = sub.add_parser("lifecycle", help="working 만료·졸업 / durable dup"); lc.add_argument("--apply", action="store_true")
     sub.add_parser("stats", help="store 통계")
     sub.add_parser("sync", help="projects→store 멱등 mirror + 색인 (oncall/note 주기 호출)")
+    ij = sub.add_parser("inject", help="SessionStart 주입 블록 출력 (단기+장기+사용자특성)")
+    ij.add_argument("--hook", action="store_true", help="SessionStart additionalContext JSON 으로 출력")
     rp = sub.add_parser("register-postit", help="post-it.md 경로 레지스트리 등록"); rp.add_argument("path")
     args = ap.parse_args()
 
@@ -494,6 +552,8 @@ def main():
         stats()
     elif args.cmd == "sync":
         sync()
+    elif args.cmd == "inject":
+        inject(hook=args.hook)
     elif args.cmd == "register-postit":
         register_postit(args.path)
 
