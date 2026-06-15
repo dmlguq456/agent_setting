@@ -1,6 +1,7 @@
 # 03 — 장기기억(long-term memory) 심층
 
 > 근거: `cards/axis3_memory.md` (1차 = hermes-agent docs·`hermes_state.py` source + plastic-labs/honcho). 핵심 보고서.
+> **⚠️ 실소스 검증 보강 → [`08_source_grounded.md`](08_source_grounded.md)** (NousResearch/hermes-agent@29c6985 실코드 대조). 본 03 의 일부 claim 은 08 에서 [CORRECTED] — 예: `nudge_interval`=10턴 확정 · `schema_version` 11→16 · 이중 FTS 는 '결합'이 아니라 CJK 3-way 상호배타 라우팅 · WAL TRUNCATE · Curator 는 skill 전용 · promote/skip 은 양쪽 다 프로즈(코드 게이트 아님). 충돌 시 **08 이 우선**(실소스 근거).
 
 ---
 
