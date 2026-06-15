@@ -63,12 +63,14 @@ research / analyze-project (산출물) → autopilot-spec (spec/) → autopilot-
 - **Pause flag 비자동**: `autopilot-*` 의 `--user-refine` 같은 pause 옵션은 사용자 명시 신호 (`--user-refine` / `사용자 검토 끼워` / `memo 추가하게 멈춰줘`) 있을 때만. _신중히 / camera-ready_ 같은 high-stakes 신호 자체로 추가 X.
 - **답 없으면 자율 진행**: 추천 방향으로 진행 (같은 질문 두 번 X, 진행 시 한 줄 보고). 긴 대기·큰 결정만 `ScheduleWakeup` 10–30 분. skill 내부 ask 자리도 동일.
 - **확실·자명·이미 지시된 건 묻지 않는다**: 답이 뻔하거나 이미 지시·합의된 자리는 컨펌 묻지 말고 추천안으로 즉시 진행 + 한 줄 보고. 질문은 _진짜_ 비자명한 자리 — 설계·형식 변경·파괴적 작업·큰 결정 — 에 한정하고, 그건 묻기보다 _커밋 전 사전 노출_ 로 맞춘다 (과잉 컨펌이 더 큰 마찰).
-- **Context nudge (post-it)**: context ~50%+·wind-down 발화·작업 한 덩어리 완료 시 `/post-it handoff` 를 _먼저 제안_. handoff 는 sweep 을 **자동 포함** — _확실한_ 졸업·stale 만 자동 prune(애매하면 keep), 한 줄 보고. **사용자는 post-it 을 읽지 않으므로** 줄 단위 검토 강요 X — 짧은 요약 보여주고 _저장 여부_ 만 confirm (자동 기록 X). 세션 단절 방지. 상세는 `post-it` SKILL.
+- **Context nudge → working 기억 자동 기록 (post-it 역할)**: context ~50%+·wind-down 발화·작업 한 덩어리 완료 시, 세션의 working 맥락(진행중·결정·다음 hint)을 **store working tier 에 자동 기록** (통합 기억 §7 _자동 write_ 불변식 — 기억 저장은 자동, confirm 없음). 자동 기록 후 _한 줄 보고_. confirm 은 _prune/삭제_ 같은 비가역 자리만 (저장 자체는 confirm X). 사용자는 post-it/working 을 들여다보지 않는다 (fire-and-forget, Claude 세션-간 연속성 면). 세션 단절 방지. 상세는 `post-it` SKILL + CONVENTIONS §7.
 - **동기화 후 실행**: 방향·설계가 걸린 비자명 작업은 사용자와 충분히 논의해 _생각이 동기화된 뒤_ 수행. 동기화되면 중간 컨펌 없이 진행한다 (upfront 합의 우선). 모호하면 의도부터 맞춘다.
 
 ### §3. 요청 흐름 안 후속 단계 자동 진행
 
 _"X 해라"_ 명시 흐름 안 commit / git add / push / 메모리 저장 / 파일 정리 같은 후속 단계 매번 컨펌 묻기 금지. 자동 진행 후 한 줄 결과 보고. 별도 컨펌 자리 — (a) 새 디자인 결정 / 큰 layout 변화 (b) 파괴 작업 (git reset --hard / force push) (c) 다른 시스템 손대기. _"다음 단계 진행할까요?"_ 같은 닫기 wording 금지.
+
+**대응 동기화는 변경의 일부다 (별도 컨펌 X).** 어떤 변경을 가했으면, 그에 _대응되는_ 산출물·기록·문서·커밋 갱신(예: config 바꿈 → 그 config 를 서술한 spec/STORY/RUNLOG·주석·커밋 메시지 동기화)은 _묻지 말고 그 변경의 일부로 자동 수행_ + 한 줄 보고. "이것도 고칠까요?"·"기록도 갱신할까요?"·"재커밋할까요?" 는 금지 — 변경했으면 그 변경이 참조되는 모든 자리는 자동으로 따라간다. **물을 거면 변경을 _가하기 전_ 에 물어라** (사후에 따라오는 기계적 정합 작업을 컨펌 대상으로 만들지 않기). 진짜 컨펌 자리는 위 (a)~(c) 와 _비자명한 설계·방향 분기_ 뿐 (§2).
 
 ---
 

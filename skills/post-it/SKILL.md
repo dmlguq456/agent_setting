@@ -29,13 +29,13 @@ argument-hint: "[show] | init | add <category> <text> | resolve <hint> | decide 
 
 ## Proactive nudge (context-aware — 메인 Claude 가 먼저 제안)
 
-post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + _사용자가 놓친 것을 상기_(nudge). 수동 통제이되(자동 기록 X), 세션 단절을 막기 위해 메인 Claude 는 다음 신호에서 **먼저 제안**한다:
+post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + _사용자가 놓친 것을 상기_(nudge). **working 기억 저장은 _자동_** (통합 기억 §7 자동 write 불변식 — confirm 없음), 세션 단절을 막기 위해 메인 Claude 는 다음 신호에서 working 맥락을 **자동 기록(store working tier)** 한다:
 
-- **context 사용량 ~50%+** — statusline context 막대·긴 대화·compaction 임박. → "지금 `/post-it handoff` 해둘까요?"
-- **wind-down 발화** — "오늘 여기까지" / "내일 이어서" / `/clear` 직전 류.
-- **작업 한 덩어리 완료** — "이거 `/post-it add thread` 로 남길까요?"
+- **context 사용량 ~50%+** — statusline context 막대·긴 대화·compaction 임박. → working 맥락 자동 기록 + 한 줄 보고.
+- **wind-down 발화** — "오늘 여기까지" / "내일 이어서" / `/clear` 직전 류. → 세션 working 맥락(진행중·결정·다음 hint) 자동 handoff 기록.
+- **작업 한 덩어리 완료** — 재사용 가치 있는 thread/decision 자동 `mem note`.
 
-> **자동 제안의 confirm 모델 (사용자는 post-it 을 안 본다)**: 자동 handoff 는 sweep 을 _자동 포함_ — 확실한 졸업·stale 만 자동 prune (애매하면 keep), 결과는 _한 줄 보고_. 사용자에겐 **짧은 요약(무엇을 정리했고 다음 세션 hints 가 무엇인지)** 만 보여주고 _저장 여부_ 만 confirm 받는다. 파일을 줄 단위로 검토시키지 않는다 (그건 사용자가 `/post-it sweep` 를 직접 칠 때만).
+> **자동 기록 모델 (사용자는 post-it 을 안 본다)**: working 맥락은 _자동 기록_ (저장 confirm 없음 — §7 기억 저장 자동). 자동 handoff 는 sweep 을 _자동 포함_ — 확실한 졸업·stale 만 자동 prune (애매하면 keep), 결과는 _한 줄 보고_. **confirm 은 _prune/삭제_ 같은 비가역 자리만** (저장 자체는 자동). 줄 단위 검토는 사용자가 `/post-it sweep` 를 직접 칠 때만.
 
 > 이 nudge 의 _트리거 규칙_ 은 항상 로드되는 글로벌 CLAUDE.md §2 에도 한 줄 있다 (SKILL.md 는 호출 시만 로드되므로, 자발적 제안은 CLAUDE.md 가 발화시킴). hard backstop 으로 PreCompact hook 을 둘 수 있으나(옵션, 미설정 시 nudge 만), hook 은 셸 스크립트라 _고정 리마인드_ 만 — 똑똑한 요약 handoff 는 대화 안의 Claude 만 가능.
 
