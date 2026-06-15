@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""Unified Memory System — `mem`  (Hermes 메모리 벤치마킹의 store/write 층 구현)
+"""Unified Memory System — `mem`  (DB-as-SoT 재구현)
 
-하나의 포터블 store(`~/.claude/memory/`, git추적 markdown 원본) + 파생 SQLite FTS5 색인 +
-하네스 주입 projection. 모든 기억을 tier(working/durable) × scope(project/global) × type 로 통합.
-spec: ~/.claude/.claude_reports/spec/prd.md (Unified Memory System).
+SQLite `memory.db` (WAL) 가 진실원천(SoT). 기존 markdown-SoT 를 완전 대체.
+텍스트 덤프 mirror (`dump.jsonl`) = git 추적 대상. FTS5 (unicode61 + trigram CJK) 내장.
+spec: ~/.claude/.claude_reports/spec/prd.md (Unified Memory System v3).
 
 설계 불변식:
-  - markdown 원본이 진실(SoT). 색인·projection 은 언제든 재생성 가능한 부산물.
-  - 기억 저장 = 자동(품질필터만, 사람 승인 게이트 없음). 세팅·원칙 변경은 본 모듈 영역 아님.
-  - 외부 의존 0 (stdlib: sqlite3/argparse/...). rg 있으면 회상 가속.
+  - SQLite DB 가 진실원천. dump.jsonl 은 결정론적 텍스트 mirror.
+  - 기억 저장 = 자동(품질필터만, 사람 승인 게이트 없음).
+  - 외부 의존 0 (stdlib: sqlite3/argparse/json/hashlib/...). rg 있으면 회상 가속.
 """
-import argparse, datetime, hashlib, os, re, sqlite3, subprocess, sys
+import argparse, datetime, hashlib, json, os, re, sqlite3, subprocess, sys
 from pathlib import Path
 
 HOME = Path.home()
 STORE = Path(os.environ.get("MEM_STORE", HOME / ".claude" / "memory"))
-INDEX = STORE / ".index.db"
+DB = STORE / "memory.db"
+DUMP = STORE / "dump.jsonl"
 PROJECTS = Path(os.environ.get("MEM_PROJECTS", HOME / ".claude" / "projects"))
 USER_PROFILE = Path(os.environ.get("MEM_PROFILE", HOME / ".claude" / "user_profile"))
 
@@ -25,7 +26,11 @@ WORKING_TTL_DAYS = 21
 FM_ORDER = ["id", "tier", "scope", "type", "cwd_origin", "created", "updated",
             "expires", "source", "tags", "links"]
 
-# injection / secret 가드 (자동 write 라 필수 — 데이터로만 취급, 실행 지시 해석 금지)
+# 12 컬럼 정규 순서 (export/import round-trip 결정성 기반)
+RECORD_COLS = ("id", "tier", "scope", "type", "cwd_origin", "created", "updated",
+               "expires", "source", "tags", "links", "body")
+
+# injection / secret 가드
 INJECTION_PAT = re.compile(
     r"(ignore (all |the )?previous|disregard (all|previous)|you must now|"
     r"system prompt|<\|.*?\|>|act as (an? )?(admin|root)|override (the )?instruction)", re.I)
@@ -33,7 +38,12 @@ SECRET_PAT = re.compile(
     r"(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|"
     r"(api[_-]?key|secret|token|password)\s*[:=]\s*[A-Za-z0-9_\-]{12,})", re.I)
 
+# 모듈 레벨 FTS / trigram 가용성 캐시 (get_con() 최초 호출 시 설정)
+_FTS_OK = None     # FTS5 unicode61 가용 여부
+_TRIG_OK = None    # trigram 토크나이저 가용 여부
 
+
+# ---------- 순수 헬퍼 ----------
 def today():
     return datetime.date.today().isoformat()
 
@@ -52,7 +62,7 @@ def norm_body(body):
     return re.sub(r"[\s\W_]+", " ", body.lower()).strip()
 
 
-# ---------- frontmatter ----------
+# ---------- frontmatter (migration source 읽기 / projection 출력 용) ----------
 def parse_record(text):
     if not text.startswith("---"):
         return {}, text
@@ -89,24 +99,144 @@ def serialize_record(meta, body):
     return "\n".join(lines)
 
 
-def record_path(meta):
-    return STORE / meta["tier"] / meta["scope"] / f"{meta['id']}.md"
-
-
-def iter_records():
-    for p in STORE.rglob("*.md"):
-        if p.name == "MEMORY.md":
+# ---------- migration source 파일 읽기 (구 SoT md 파일 → iter) ----------
+def iter_md_files(root, exclude=()):
+    """migration source 용 md 파일 이터레이터. DB-SoT 코드에서는 사용 안 함."""
+    exclude_set = set(exclude)
+    for p in Path(root).rglob("*.md"):
+        if p.name in exclude_set:
+            continue
+        if "_projection" in p.parts:
             continue
         try:
             meta, body = parse_record(p.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if meta.get("id"):
-            meta["_path"] = p
-            yield meta, body
+        meta["_path"] = p  # migration 전용 — DB-path 코드에서는 없음
+        yield meta, body
 
 
-# ---------- write (gate · dedup · injection) ----------
+# ---------- DB 연결 · 스키마 ----------
+def _fts_available(con):
+    try:
+        con.execute("CREATE VIRTUAL TABLE temp.t USING fts5(x)")
+        con.execute("DROP TABLE temp.t")
+        return True
+    except sqlite3.OperationalError:
+        return False
+
+
+def _ensure_schema(con):
+    global _FTS_OK, _TRIG_OK
+    con.execute("""CREATE TABLE IF NOT EXISTS records(
+        id          TEXT PRIMARY KEY,
+        tier        TEXT NOT NULL,
+        scope       TEXT NOT NULL,
+        type        TEXT NOT NULL,
+        cwd_origin  TEXT,
+        created     TEXT,
+        updated     TEXT,
+        expires     TEXT,
+        source      TEXT,
+        tags        TEXT,
+        links       TEXT,
+        body        TEXT NOT NULL
+    )""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_records_scope ON records(scope, cwd_origin, tier)")
+
+    fts = _fts_available(con)
+    _FTS_OK = fts
+    if fts:
+        con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS records_fts USING fts5("
+                    "id UNINDEXED, body, tokenize='unicode61')")
+        # trigram 보조 테이블 (CJK substring 매칭)
+        # MEM_NO_TRIGRAM 테스트 훅: 설정 시 강제 unavailable
+        if os.environ.get("MEM_NO_TRIGRAM"):
+            _TRIG_OK = False
+        else:
+            try:
+                con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS records_trig USING fts5("
+                            "id UNINDEXED, body, tokenize='trigram')")
+                _TRIG_OK = True
+            except sqlite3.OperationalError:
+                _TRIG_OK = False
+    else:
+        _TRIG_OK = False
+
+
+def get_con():
+    """DB 접속 단일 진입점. schema 보장 후 반환."""
+    STORE.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(DB)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA synchronous=NORMAL")
+    con.execute("PRAGMA foreign_keys=ON")
+    _ensure_schema(con)
+    return con
+
+
+# ---------- DB 행 ↔ meta 변환 ----------
+def _row_to_meta(row):
+    """sqlite3 row tuple → (meta_dict, body). tags/links JSON 디코드."""
+    d = dict(zip(RECORD_COLS, row))
+    body = d.pop("body")
+    # tags / links: 항상 list
+    for k in ("tags", "links"):
+        v = d.get(k)
+        if v is None:
+            d[k] = []
+        else:
+            try:
+                d[k] = json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                d[k] = []
+    return d, body
+
+
+def _meta_to_params(meta, body):
+    """meta dict + body → 12-tuple for INSERT.
+    None → NULL passthrough 규칙: expires/source/cwd_origin 은 None → SQL NULL (절대 "" 다운그레이드 X).
+    tags/links: 항상 list → JSON 텍스트 (None 이면 []).
+    """
+    tags = meta.get("tags") or []
+    links = meta.get("links") or []
+    return (
+        meta["id"],
+        meta["tier"],
+        meta["scope"],
+        meta["type"],
+        meta.get("cwd_origin"),    # None → SQL NULL
+        meta.get("created"),
+        meta.get("updated"),
+        meta.get("expires"),       # None → SQL NULL
+        meta.get("source"),        # None → SQL NULL
+        json.dumps(tags, ensure_ascii=False),
+        json.dumps(links, ensure_ascii=False),
+        body,
+    )
+
+
+def db_iter_records(con=None, where=None, params=()):
+    """DB-SoT 핵심 읽기 프리미티브.
+    con=None 이면 get_con() 자체 개통; con 전달 시 재사용(새 연결 X).
+    """
+    own_con = False
+    if con is None:
+        con = get_con()
+        own_con = True
+    sql = f"SELECT {', '.join(RECORD_COLS)} FROM records"
+    if where:
+        sql += f" WHERE {where}"
+    try:
+        rows = con.execute(sql, params).fetchall()
+    finally:
+        if own_con:
+            con.close()
+    for row in rows:
+        yield _row_to_meta(row)
+
+
+# ---------- write gate · dedup ----------
 def quality_ok(body):
     b = body.strip()
     if len(b) < 15:
@@ -126,18 +256,19 @@ def sanitize(body):
     return masked, flags
 
 
-def find_dup(tier, scope, body):
+def find_dup(tier, scope, body, con=None):
+    """dedup 검사. con 전달 시 재사용(write_record 내 단일 트랜잭션 유지)."""
     nb = norm_body(body)
     h = hashlib.sha256(nb.encode()).hexdigest()[:16]
-    for meta, b in iter_records():
-        if meta.get("tier") == tier and meta.get("scope") == scope:
-            if hashlib.sha256(norm_body(b).encode()).hexdigest()[:16] == h:
-                return meta["id"]
+    for meta, b in db_iter_records(con, "tier=? AND scope=?", (tier, scope)):
+        if hashlib.sha256(norm_body(b).encode()).hexdigest()[:16] == h:
+            return meta["id"]
     return None
 
 
 def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=None,
                  source=None, quiet=False):
+    """DB write 프리미티브. one write = one connection = one transaction."""
     assert tier in TIERS and scope in SCOPES
     ok, why = quality_ok(body)
     if not ok:
@@ -145,136 +276,193 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             print(f"[skip] {why}")
         return None
     body, flags = sanitize(body)
-    dup = find_dup(tier, scope, body)
-    if dup:
-        if not quiet:
-            print(f"[dedup] 기존 레코드와 동일 → {dup}")
-        return dup
-    if cwd_origin is None:
-        cwd_origin = enc_cwd(Path.cwd()) if scope == "project" else "global"
-    base = slugify(f"{rtype} {body}")
-    sid = f"{rtype}_{base}_{hashlib.sha256((body+today()).encode()).hexdigest()[:6]}"
-    meta = {"id": sid, "tier": tier, "scope": scope, "type": rtype,
+
+    # 단일 연결로 dedup + INSERT + FTS mirror 를 하나의 트랜잭션으로
+    con = get_con()
+    try:
+        dup = find_dup(tier, scope, body, con=con)
+        if dup:
+            if not quiet:
+                print(f"[dedup] 기존 레코드와 동일 → {dup}")
+            return dup
+        if cwd_origin is None:
+            cwd_origin = enc_cwd(Path.cwd()) if scope == "project" else "global"
+        base = slugify(f"{rtype} {body}")
+        # FIX 1: tier/scope/cwd_origin 을 해시 seed 에 포함해 namespace 충돌 방지
+        # (동일 body+type 이라도 tier/scope 가 다르면 다른 id → INSERT OR REPLACE 가 앞 행 파괴하지 않음)
+        seed = f"{tier}|{scope}|{cwd_origin}|{body}|{today()}"
+        sid = f"{rtype}_{base}_{hashlib.sha256(seed.encode()).hexdigest()[:6]}"
+        meta = {
+            "id": sid, "tier": tier, "scope": scope, "type": rtype,
             "cwd_origin": cwd_origin, "created": today(), "updated": today(),
-            "tags": tags or [], "links": links or []}
-    if tier == "working":
-        meta["expires"] = (datetime.date.today() +
-                           datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
-    if source:
-        meta["source"] = source
-    p = record_path(meta)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(serialize_record(meta, body), encoding="utf-8")
-    if not quiet:
-        fl = f"  ({'·'.join(flags)})" if flags else ""
-        print(f"[write] {tier}/{scope}/{rtype} → {sid}{fl}")
-    return sid
+            "tags": tags or [], "links": links or [],
+            "expires": None, "source": source,
+        }
+        if tier == "working":
+            meta["expires"] = (datetime.date.today() +
+                               datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
+
+        con.execute(
+            f"INSERT OR REPLACE INTO records VALUES({','.join(['?']*12)})",
+            _meta_to_params(meta, body)
+        )
+        # FTS mirror: replace 시 중복 행 방지 → DELETE 후 INSERT
+        if _FTS_OK:
+            con.execute("DELETE FROM records_fts WHERE id=?", (sid,))
+            con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (sid, body))
+        if _TRIG_OK:
+            con.execute("DELETE FROM records_trig WHERE id=?", (sid,))
+            con.execute("INSERT INTO records_trig(id, body) VALUES(?,?)", (sid, body))
+        con.commit()
+        if not quiet:
+            fl = f"  ({'·'.join(flags)})" if flags else ""
+            print(f"[write] {tier}/{scope}/{rtype} → {sid}{fl}")
+        return sid
+    finally:
+        con.close()
 
 
-# ---------- SQLite FTS5 index ----------
-def _fts_available(con):
-    try:
-        con.execute("CREATE VIRTUAL TABLE temp.t USING fts5(x)")
-        con.execute("DROP TABLE temp.t")
-        return True
-    except sqlite3.OperationalError:
-        return False
-
-
+# ---------- index ----------
 def index_build(rebuild=False):
-    if rebuild and INDEX.exists():
-        try:
-            INDEX.unlink()
-        except OSError as e:
-            sys.stderr.write(f"[index] unlink 실패(계속): {e}\n")
-    STORE.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(INDEX)
+    """FTS 가상테이블을 records 테이블에서 재구축. 별도 .index.db 없음(DB 내장)."""
+    global _FTS_OK, _TRIG_OK
+    con = get_con()
     try:
-        fts = _fts_available(con)
-        con.execute("DROP TABLE IF EXISTS records")
-        con.execute("""CREATE TABLE records(id TEXT PRIMARY KEY, tier TEXT, scope TEXT,
-                       type TEXT, cwd_origin TEXT, created TEXT, updated TEXT,
-                       expires TEXT, path TEXT, body TEXT)""")
-        if fts:
+        if rebuild:
             con.execute("DROP TABLE IF EXISTS records_fts")
-            con.execute("CREATE VIRTUAL TABLE records_fts USING fts5("
-                        "id UNINDEXED, body, tokenize='unicode61')")
+            if _TRIG_OK is not False:  # 있을 수 있으면 시도
+                try:
+                    con.execute("DROP TABLE IF EXISTS records_trig")
+                except Exception:
+                    pass
+            # 재생성
+            _ensure_schema(con)
+        # records 에서 FTS 재채우기
         n = 0
-        for meta, body in iter_records():
-            con.execute("INSERT OR REPLACE INTO records VALUES(?,?,?,?,?,?,?,?,?,?)",
-                        (meta["id"], meta.get("tier"), meta.get("scope"), meta.get("type"),
-                         meta.get("cwd_origin"), meta.get("created"), meta.get("updated"),
-                         meta.get("expires"), str(meta["_path"]), body))
-            if fts:
-                con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (meta["id"], body))
-            n += 1
+        if _FTS_OK:
+            con.execute("DELETE FROM records_fts")
+            if _TRIG_OK:
+                con.execute("DELETE FROM records_trig")
+            rows = con.execute("SELECT id, body FROM records").fetchall()
+            for rid, body in rows:
+                con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (rid, body))
+                if _TRIG_OK:
+                    con.execute("INSERT INTO records_trig(id, body) VALUES(?,?)", (rid, body))
+                n += 1
+        else:
+            n = con.execute("SELECT COUNT(*) FROM records").fetchone()[0]
         con.commit()
     finally:
         con.close()
-    print(f"[index] {n} records → {INDEX}  (FTS5={'on' if fts else 'off, LIKE fallback'})")
+    print(f"[index] {n} records  (FTS5={'on' if _FTS_OK else 'off, LIKE fallback'})")
     return n
 
 
 # ---------- recall ----------
+def _has_cjk(s):
+    return bool(re.search(r"[　-鿿가-힯]", s))
+
+
 def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
     print(f"# recall: \"{query}\"  [tier={tier or '*'} scope={scope or '*'} "
           f"cwd={'현재' if cwd else '전체'}]")
     hits = []
-    if INDEX.exists():
-        con = sqlite3.connect(INDEX)
+    if not DB.exists():
+        print("(store 없음 — mem index 또는 mem sync 먼저)")
+        if sessions:
+            print(f"\n# raw 세션 transcript: \"{query}\"  (미정제)")
+            _recall_sessions(query, cwd)
+        return hits
+
+    con = get_con()
+    try:
+        encc = enc_cwd(Path.cwd()) if cwd else None
+
+        # WHERE 절 구성
+        def build_where(base_cond=None):
+            conds, p = [], []
+            if base_cond:
+                conds.append(base_cond[0]); p.extend(base_cond[1])
+            if tier:
+                conds.append("r.tier=?"); p.append(tier)
+            if scope:
+                conds.append("r.scope=?"); p.append(scope)
+            if encc:
+                conds.append("(r.scope='global' OR r.cwd_origin=?)"); p.append(encc)
+            return (" AND ".join(conds) if conds else "1"), p
+
         has_fts = con.execute(
             "SELECT name FROM sqlite_master WHERE name='records_fts'").fetchone()
-        try:
-            if has_fts:
-                rows = con.execute(
-                    "SELECT r.id,r.tier,r.scope,r.type,r.path,snippet(records_fts,1,'»','«','…',12) "
-                    "FROM records_fts f JOIN records r ON r.id=f.id "
-                    "WHERE records_fts MATCH ? ORDER BY rank LIMIT ?",
-                    (query, limit * 3)).fetchall()
-            else:
-                rows = con.execute(
-                    "SELECT id,tier,scope,type,path,substr(body,1,160) FROM records "
-                    "WHERE body LIKE ? LIMIT ?", (f"%{query}%", limit * 3)).fetchall()
-        except sqlite3.OperationalError:
-            rows = con.execute(
-                "SELECT id,tier,scope,type,path,substr(body,1,160) FROM records "
-                "WHERE body LIKE ? LIMIT ?", (f"%{query}%", limit * 3)).fetchall()
-        con.close()
-        for rid, rt, rs, rtype, path, snip in rows:
-            if tier and rt != tier:
-                continue
-            if scope and rs != scope:
-                continue
-            if cwd and rs == "project" and Path(path).parts[-2] != "project":
-                pass  # cwd filter via record meta below
-            hits.append((rt, rs, rtype, path, snip.replace("\n", " ")))
-    else:
-        for meta, body in iter_records():
-            if query.lower() not in body.lower():
-                continue
-            if tier and meta.get("tier") != tier:
-                continue
-            if scope and meta.get("scope") != scope:
-                continue
-            hits.append((meta.get("tier"), meta.get("scope"), meta.get("type"),
-                         str(meta["_path"]), body[:160].replace("\n", " ")))
-    # cwd filter (project scope → cwd_origin must match)
-    if cwd:
-        encc = enc_cwd(Path.cwd())
-        kept = []
-        for h in hits:
+
+        def _fts_literal(q):
+            """FTS5 연산자(NEAR/*/:/"등) 가 query 에 포함돼도 리터럴 phrase 로 처리.
+            FIX 4: raw query 를 MATCH 에 그대로 넘기면 FTS5 query 문법이 적용돼 무음 오검색 발생."""
+            return '"' + q.replace('"', '""') + '"'
+
+        if has_fts:
             try:
-                m, _ = parse_record(Path(h[3]).read_text(encoding="utf-8"))
-            except Exception:
-                continue  # 삭제/깨진 파일 hit — skip
-            if m.get("scope") == "global" or m.get("cwd_origin") == encc:
-                kept.append(h)
-        hits = kept
-    hits = hits[:limit]
+                where, params = build_where(("records_fts MATCH ?", [_fts_literal(query)]))
+                sql = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
+                       f"snippet(records_fts,1,'»','«','…',12) "
+                       f"FROM records_fts f JOIN records r ON r.id=f.id "
+                       f"WHERE {where} ORDER BY bm25(records_fts) LIMIT ?")
+                rows = con.execute(sql, params + [limit * 3]).fetchall()
+                seen_ids = {r[0] for r in rows}
+
+                # CJK boost via trigram
+                if _has_cjk(query) and _TRIG_OK:
+                    has_trig = con.execute(
+                        "SELECT name FROM sqlite_master WHERE name='records_trig'").fetchone()
+                    if has_trig:
+                        try:
+                            where2, params2 = build_where(("records_trig MATCH ?", [_fts_literal(query)]))
+                            sql2 = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
+                                    f"snippet(records_trig,1,'»','«','…',12) "
+                                    f"FROM records_trig t JOIN records r ON r.id=t.id "
+                                    f"WHERE {where2} ORDER BY bm25(records_trig) LIMIT ?")
+                            trig_rows = con.execute(sql2, params2 + [limit * 3]).fetchall()
+                            for tr in trig_rows:
+                                if tr[0] not in seen_ids:
+                                    rows.append(tr)
+                                    seen_ids.add(tr[0])
+                        except sqlite3.OperationalError:
+                            pass
+                elif _has_cjk(query) and not _TRIG_OK:
+                    # trigram 불가 → LIKE fallback for CJK
+                    where_l, params_l = build_where()
+                    where_l = (where_l + " AND r.body LIKE ?") if where_l != "1" else "r.body LIKE ?"
+                    sql_l = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
+                             f"substr(r.body,1,160) FROM records r "
+                             f"WHERE {where_l} LIMIT ?")
+                    like_rows = con.execute(sql_l, params_l + [f"%{query}%", limit * 3]).fetchall()
+                    for lr in like_rows:
+                        if lr[0] not in seen_ids:
+                            rows.append(lr)
+                            seen_ids.add(lr[0])
+            except sqlite3.OperationalError:
+                # FTS MATCH 실패 시 LIKE fallback
+                where_l, params_l = build_where()
+                where_l = (where_l + " AND r.body LIKE ?") if where_l != "1" else "r.body LIKE ?"
+                sql_l = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
+                         f"substr(r.body,1,160) FROM records r WHERE {where_l} LIMIT ?")
+                rows = con.execute(sql_l, params_l + [f"%{query}%", limit * 3]).fetchall()
+        else:
+            # FTS 없음 → LIKE
+            where_l, params_l = build_where()
+            where_l = (where_l + " AND r.body LIKE ?") if where_l != "1" else "r.body LIKE ?"
+            sql_l = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
+                     f"substr(r.body,1,160) FROM records r WHERE {where_l} LIMIT ?")
+            rows = con.execute(sql_l, params_l + [f"%{query}%", limit * 3]).fetchall()
+    finally:
+        con.close()
+
+    for rid, rt, rs, rtype, cwd_orig, snip in rows[:limit]:
+        hits.append((rt, rs, rtype, rid, snip.replace("\n", " ")))
+
     if not hits:
         print("(store 매칭 없음)")
-    for rt, rs, rtype, path, snip in hits:
-        print(f"  [{rt}/{rs}/{rtype}] {Path(path).name}: {snip}")
+    for rt, rs, rtype, rid, snip in hits:
+        print(f"  [{rt}/{rs}/{rtype}] {rid}: {snip}")
     if sessions:
         print(f"\n# raw 세션 transcript: \"{query}\"  (미정제)")
         _recall_sessions(query, cwd)
@@ -296,11 +484,163 @@ def _recall_sessions(query, cwd):
     print("\n".join(out) if out else "(세션 매칭 없음)")
 
 
+# ---------- export / import ----------
+def export_dump(target_path=None):
+    """DB → dump.jsonl (git mirror). 결정론적: id 정렬 + sort_keys + 12 컬럼 전부."""
+    dest = Path(target_path) if target_path else DUMP
+    con = get_con()
+    try:
+        sql = f"SELECT {', '.join(RECORD_COLS)} FROM records ORDER BY id"
+        rows = con.execute(sql).fetchall()
+    finally:
+        con.close()
+
+    tmp = dest.with_suffix(".jsonl.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        for row in rows:
+            rec = {}
+            for k, v in zip(RECORD_COLS, row):
+                if k in ("tags", "links"):
+                    rec[k] = json.loads(v) if v else []
+                else:
+                    rec[k] = v  # None → JSON null (sort_keys 출력에서도 null)
+            f.write(json.dumps(rec, sort_keys=True, ensure_ascii=False) + "\n")
+    os.replace(tmp, dest)
+    print(f"[export] {len(rows)} records → {dest.name}")
+    return len(rows)
+
+
+def import_dump(path):
+    """dump.jsonl → DB 완전 복원 (exact restore).
+    FIX 2: 기존 records 를 먼저 DELETE 한 뒤 dump 를 replay → dump 상태와 1:1 일치.
+    stale 행(덤프에 없는 행) 자동 소거. NULL round-trip: JSON null → Python None → SQL NULL.
+    FTS 재구축도 같은 connection 안에서 수행(nested 2nd connection DDL 충돌 제거).
+    """
+    global _FTS_OK, _TRIG_OK
+    path = Path(path)
+    con = get_con()
+    n = 0
+    try:
+        # exact restore: 기존 records + FTS mirror 를 완전히 비우고 replay
+        con.execute("DELETE FROM records")
+        if _FTS_OK:
+            con.execute("DELETE FROM records_fts")
+        if _TRIG_OK:
+            try:
+                con.execute("DELETE FROM records_trig")
+            except Exception:
+                pass
+
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                rec = json.loads(line)
+                # body 꺼내기
+                body = rec.get("body", "")
+                meta = {k: rec.get(k) for k in RECORD_COLS if k != "body"}
+                # tags/links: JSON null → [] 로 보정 (list 보장)
+                for k in ("tags", "links"):
+                    if meta[k] is None:
+                        meta[k] = []
+                con.execute(
+                    f"INSERT OR REPLACE INTO records VALUES({','.join(['?']*12)})",
+                    _meta_to_params(meta, body)
+                )
+                rid = meta.get("id", "")
+                if _FTS_OK:
+                    con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (rid, body))
+                if _TRIG_OK:
+                    try:
+                        con.execute("INSERT INTO records_trig(id, body) VALUES(?,?)", (rid, body))
+                    except Exception:
+                        pass
+                n += 1
+        con.commit()
+    finally:
+        con.close()
+    print(f"[import] {n} records ← {Path(path).name}")
+    return n
+
+
+# ---------- 공유 aspect 추출 규칙 (export_profile + inject 공용) ----------
+def _derive_aspect(meta, body):
+    """profile 레코드에서 aspect 이름 추출.
+    우선순위: source=user-profile:<stem> → <stem>
+              body의 aspect: 마커 → 그 값
+              마지막 수단: meta["id"]
+    해석 불가 → None (호출자가 [skip] 처리).
+    """
+    src = meta.get("source") or ""
+    if src.startswith("user-profile:"):
+        stem = src[len("user-profile:"):]
+        if stem:
+            return stem
+    # body aspect: 마커
+    for line in body.splitlines():
+        if line.startswith("aspect:"):
+            val = line.split(":", 1)[1].strip()
+            if val:
+                return val
+    return None  # 해석 불가
+
+
+def export_profile(apply=False):
+    """profile 레코드 → user_profile/*.md 생성.
+    기본 dry-run (print 만). apply=True 이고 MEM_PROFILE 오버라이드 시만 실제 파일 write.
+
+    IMPORTANT: --apply 없이는 디스크에 아무것도 쓰지 않습니다.
+    """
+    con = get_con()
+    try:
+        records = list(db_iter_records(con, "type='profile'"))
+    finally:
+        con.close()
+
+    written, skipped = 0, 0
+    for meta, body in records:
+        aspect = _derive_aspect(meta, body)
+        if aspect is None:
+            print(f"[skip] aspect unknown: {meta['id']}")
+            skipped += 1
+            continue
+        dest = USER_PROFILE / f"{aspect}.md"
+        first_line = body.splitlines()[0][:80] if body.splitlines() else ""
+        if not apply:
+            print(f"[dry-run] → {dest}  ({first_line})")
+        else:
+            # FIX 3: MEM_PROFILE 환경변수 미설정 시 실 ~/.claude/user_profile 보호
+            if "MEM_PROFILE" not in os.environ:
+                print("[abort] export --target profile --apply 는 MEM_PROFILE 명시 설정 필요 (실 ~/.claude/user_profile 보호)")
+                return
+            USER_PROFILE.mkdir(parents=True, exist_ok=True)
+            dest.write_text(body, encoding="utf-8")
+            print(f"[profile] → {dest}")
+            written += 1
+    if not apply:
+        print(f"[dry-run] {len(records)-skipped}개 예정 · skip {skipped}  (--apply 없으면 미기록)")
+    else:
+        print(f"[profile] {written}개 생성 · skip {skipped}")
+
+
 # ---------- migrate ----------
 def migrate(apply=False):
     print(f"# migrate  ({'APPLY' if apply else 'dry-run'})")
     created, skipped = 0, 0
-    existing_src = {m.get("source") for m, _ in iter_records() if m.get("source")}
+
+    # 멱등성 키: DB에 이미 있는 source 값
+    if DB.exists():
+        con = get_con()
+        try:
+            rows = con.execute(
+                "SELECT DISTINCT source FROM records WHERE source IS NOT NULL").fetchall()
+            existing_src = {r[0] for r in rows}
+        finally:
+            con.close()
+    else:
+        existing_src = set()
+
     # 1) auto-memory: projects/<cwd>/memory/*.md
     try:
         for mp in PROJECTS.glob("*/memory/*.md"):
@@ -324,13 +664,11 @@ def migrate(apply=False):
                 continue
     except Exception as e:
         sys.stderr.write(f"[migrate] auto-memory source 실패(계속): {e}\n")
-    # 2) post-it: 얕은 find(maxdepth 5)로 전 프로젝트 post-it.md 발견 → working records.
-    #    표준 5섹션은 type 매핑, 미지정 섹션(worklog-board 의 ★현재상태·🔴결재대기 등)은 generic 'note' 로 보존.
+
+    # 2) post-it: 레지스트리 + 현 cwd
     POST_SECT = {"Open Threads": "thread", "Decisions": "decision",
                  "Next Session Hints": "hint", "Conventions": "convention",
                  "External Resources": "reference"}
-    # post-it 발견 = 레지스트리(~/.claude/memory/.postit-roots, 경로 목록) + 현 cwd.
-    #    NAS(네트워크 FS) 재귀 find 는 느리고 불안정(timeout 빈번) → 직접 stat 만. /post-it 가 생성 시 등록.
     try:
         postits = set()
         reg = STORE / ".postit-roots"
@@ -368,8 +706,8 @@ def migrate(apply=False):
                 continue
     except Exception as e:
         sys.stderr.write(f"[migrate] post-it source 실패(계속): {e}\n")
-    # 3) user_profile/*.md → durable/global mirror (파일은 source 로 제자리 유지 — 경로참조·analyze-user).
-    #    각 aspect 문서 = 1 레코드(type=profile, body=전문). store sync 가 갱신. auto-memory 와 동형 mirror.
+
+    # 3) user_profile/*.md → durable/global/profile
     try:
         if USER_PROFILE.exists():
             for up in sorted(USER_PROFILE.glob("*.md")):
@@ -390,6 +728,39 @@ def migrate(apply=False):
                     continue
     except Exception as e:
         sys.stderr.write(f"[migrate] user_profile source 실패(계속): {e}\n")
+
+    # 4) 구 markdown SoT: STORE/**/*.md (iter_md_files)
+    try:
+        for meta, body in iter_md_files(STORE, exclude={"MEMORY.md", "README.md"}):
+            p = meta.get("_path", Path(""))
+            # memory.db / dump.jsonl 등 비md 는 glob 에서 제외됨. _projection 디렉토리도 제외됨.
+            rel = str(p.relative_to(STORE)) if p and STORE in p.parents else str(p)
+            src = f"md-file:{rel}"
+            if src in existing_src:
+                skipped += 1
+                continue
+            try:
+                if meta.get("id"):
+                    # 구 SoT 레코드 — tier/scope/type/cwd_origin 보존
+                    rid_tier = meta.get("tier", "durable")
+                    rid_scope = meta.get("scope", "project")
+                    rid_type = meta.get("type", "project")
+                    rid_cwd = meta.get("cwd_origin")
+                    if apply:
+                        write_record(rid_tier, rid_scope, rid_type, body,
+                                     cwd_origin=rid_cwd, source=src, quiet=True)
+                else:
+                    # frontmatter 없는 md → durable/project note
+                    if apply:
+                        write_record("durable", "project", "project", body,
+                                     source=src, quiet=True)
+                created += 1
+            except Exception as e:
+                sys.stderr.write(f"[migrate] skip md-file {rel}: {e}\n")
+                continue
+    except Exception as e:
+        sys.stderr.write(f"[migrate] md-file source 실패(계속): {e}\n")
+
     print(f"  → {'생성' if apply else '생성 예정'} {created} · 기존 skip {skipped}")
     return created
 
@@ -397,32 +768,42 @@ def migrate(apply=False):
 # ---------- lifecycle ----------
 def lifecycle(apply=False):
     print(f"# lifecycle  ({'APPLY' if apply else 'report'})")
-    expired, grad, dups = [], [], []
-    seen = {}
-    for meta, body in iter_records():
-        if meta.get("tier") == "working" and meta.get("expires"):
-            if meta["expires"] < today():
-                expired.append(meta)
-        key = (meta.get("tier"), meta.get("scope"), norm_body(body)[:80])
-        seen.setdefault(key, []).append(meta["id"])
-    for key, ids in seen.items():
-        if len(ids) > 1:
-            dups.append(ids)
-    # working 만료 → 자동 삭제(단기·D-1) ; durable dup → 플래깅(gc 수동)
-    for m in expired:
-        print(f"  [expire] {m['id']} (expires {m['expires']})")
+    con = get_con()
+    try:
+        # 만료된 working 레코드
+        expired_rows = list(db_iter_records(
+            con, "tier='working' AND expires IS NOT NULL AND expires < ?", (today(),)))
+        # durable near-dup 플래깅
+        seen = {}
+        for meta, body in db_iter_records(con):
+            key = (meta.get("tier"), meta.get("scope"), norm_body(body)[:80])
+            seen.setdefault(key, []).append(meta["id"])
+        dups = [ids for ids in seen.values() if len(ids) > 1]
+
+        for meta, body in expired_rows:
+            print(f"  [expire] {meta['id']} (expires {meta.get('expires')})")
+            if apply:
+                try:
+                    con.execute("DELETE FROM records WHERE id=?", (meta["id"],))
+                    if _FTS_OK:
+                        con.execute("DELETE FROM records_fts WHERE id=?", (meta["id"],))
+                    if _TRIG_OK:
+                        con.execute("DELETE FROM records_trig WHERE id=?", (meta["id"],))
+                except Exception as e:
+                    sys.stderr.write(f"[lifecycle] 삭제 실패(계속): {meta['id']}: {e}\n")
         if apply:
-            try:
-                Path(m["_path"]).unlink(missing_ok=True)
-            except Exception as e:
-                sys.stderr.write(f"[lifecycle] unlink 실패(계속): {m['id']}: {e}\n")
-    for ids in dups:
-        print(f"  [dup-flag] {ids}  (consolidate 후보 — 자동삭제 X)")
-    print(f"  → 만료 {len(expired)}{'(삭제)' if apply else ''} · dup-flag {len(dups)}")
-    return expired, dups
+            con.commit()
+
+        for ids in dups:
+            print(f"  [dup-flag] {ids}  (consolidate 후보 — 자동삭제 X)")
+
+        print(f"  → 만료 {len(expired_rows)}{'(삭제)' if apply else ''} · dup-flag {len(dups)}")
+    finally:
+        con.close()
+    return [m for m, _ in expired_rows], dups
 
 
-# ---------- projection (store → harness 주입 위치) ----------
+# ---------- projection ----------
 def project(cwd=None):
     cwd = Path(cwd) if cwd else Path.cwd()
     encc = enc_cwd(cwd)
@@ -433,37 +814,43 @@ def project(cwd=None):
     for old in proj.glob("*.md"):
         old.unlink()
     idx, n = ["# MEMORY.md — projection (store 생성, 직접 편집 금지)", ""], 0
-    for meta, body in iter_records():
-        if meta.get("scope") == "global" or meta.get("cwd_origin") == encc:
-            (proj / f"{meta['id']}.md").write_text(
-                serialize_record(meta, body), encoding="utf-8")
-            idx.append(f"- [{meta['id']}](_projection/{meta['id']}.md) "
-                       f"[{meta.get('tier')}/{meta.get('type')}]")
-            n += 1
+    for meta, body in db_iter_records(
+            None, "(scope='global' OR cwd_origin=?)", (encc,)):
+        (proj / f"{meta['id']}.md").write_text(
+            serialize_record(meta, body), encoding="utf-8")
+        idx.append(f"- [{meta['id']}](_projection/{meta['id']}.md) "
+                   f"[{meta.get('tier')}/{meta.get('type')}]")
+        n += 1
     (dest / "MEMORY.md").write_text("\n".join(idx) + "\n", encoding="utf-8")
     print(f"[project] {n} records → {dest}")
     return n
 
 
 def stats():
-    from collections import Counter
-    c = Counter()
-    for meta, _ in iter_records():
-        c[(meta.get("tier"), meta.get("scope"))] += 1
     print("# store stats")
+    if not DB.exists():
+        print(f"  (DB 없음: {DB})")
+        return
+    con = get_con()
+    try:
+        rows = con.execute(
+            "SELECT tier, scope, COUNT(*) FROM records GROUP BY tier, scope").fetchall()
+    finally:
+        con.close()
     total = 0
-    for (t, s), n in sorted(c.items()):
+    for t, s, n in sorted(rows):
         print(f"  {t}/{s}: {n}")
         total += n
-    print(f"  total: {total}  ({STORE})")
+    print(f"  total: {total}  ({STORE}/memory.db)")
 
 
 def register_postit(path):
-    """post-it.md 경로를 레지스트리에 등록 (NAS 스캔 회피 — /post-it 생성 시·시드 호출)."""
+    """post-it.md 경로를 레지스트리에 등록."""
     STORE.mkdir(parents=True, exist_ok=True)
     reg = STORE / ".postit-roots"
     p = str(Path(path).resolve())
-    existing = set(reg.read_text(encoding="utf-8").splitlines()) if reg.exists() else set()
+    # FIX 5: strip 후 비교 — trailing newline·CRLF·빈 줄 혼입 시 중복 등록 방지
+    existing = {l.strip() for l in reg.read_text(encoding="utf-8").splitlines() if l.strip()} if reg.exists() else set()
     if p in existing:
         print(f"[register] 이미 등록: {p}")
         return
@@ -476,6 +863,7 @@ def register_postit(path):
     print(f"[register] {p}")
 
 
+# ---------- inject ----------
 def _first_line(body):
     for l in body.splitlines():
         s = l.strip()
@@ -485,31 +873,32 @@ def _first_line(body):
 
 
 def inject(max_working=40, max_durable=40, hook=False):
-    """SessionStart 주입용 — 통합 store 에서 현 cwd 단기(working) + 장기 프로젝트(durable)
-    + 사용자 특성(profile/global) 을 한 블록으로 stdout. store 가 _세션 주입의 source_ (자체 하네스).
-    hook=True 면 Claude Code SessionStart additionalContext JSON 으로 감싸 주입 보장."""
+    """SessionStart 주입용 — DB 에서 working(cwd) + durable/project(cwd) + profile(global) 블록.
+    hook=True 면 settings.json SessionStart additionalContext JSON 으로 감싼다.
+    """
     def emit(block):
         if hook:
-            import json as _j
-            print(_j.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart",
-                                                   "additionalContext": block}}, ensure_ascii=False))
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart",
+                                                     "additionalContext": block}},
+                              ensure_ascii=False))
         else:
             print(block)
-    if not STORE.exists():
+
+    if not DB.exists():
         return
-    encc = enc_cwd(Path.cwd())
-    work, dur, prof = [], [], []
-    for meta, body in iter_records():
-        tier, scope, typ, cwd = (meta.get("tier"), meta.get("scope"),
-                                 meta.get("type"), meta.get("cwd_origin"))
-        if typ == "profile":
-            prof.append((meta, body))
-        elif tier == "working" and cwd == encc:
-            work.append((meta, body))
-        elif tier == "durable" and scope == "project" and cwd == encc:
-            dur.append((meta, body))
+
+    con = get_con()
+    try:
+        encc = enc_cwd(Path.cwd())
+        prof = list(db_iter_records(con, "type='profile'"))
+        work = list(db_iter_records(con, "tier='working' AND cwd_origin=?", (encc,)))
+        dur  = list(db_iter_records(con, "tier='durable' AND scope='project' AND cwd_origin=?", (encc,)))
+    finally:
+        con.close()
+
     if not (work or dur or prof):
         return
+
     out = ["# 🧠 통합 기억 (mem store — 세션 시작 주입)", ""]
     if work:
         out.append("## 단기 작업기억 (working — 이 프로젝트, 자동 만료)")
@@ -524,17 +913,19 @@ def inject(max_working=40, max_durable=40, hook=False):
     if prof:
         out.append("## 장기 — 사용자 특성 (user profile)")
         for m, b in prof:
-            aspect = next((l.split(":",1)[1].strip() for l in b.splitlines()
-                           if l.startswith("aspect:")), m["id"])
+            # 공유 aspect 추출 규칙 (export_profile 과 동일)
+            aspect = _derive_aspect(m, b)
+            if aspect is None:
+                aspect = m["id"]  # 최후 수단
             out.append(f"- {aspect}: {_first_line(b)[:140]}")
         out.append("")
     out.append("> 상세 회상: `bash ~/.claude/tools/memory/recall.sh \"<query>\"` (store+세션 전체 FTS)")
     emit("\n".join(out))
 
 
+# ---------- sync ----------
 def sync():
-    """하네스가 projects/<cwd>/memory/ 에 쓴 auto-memory 를 store 로 멱등 mirror + 색인 재생성.
-    하네스가 메모리 write 를 소유하므로 store 는 source 가 아니라 _포터블 추적 mirror_ — 주기 sync(oncall/note)로 최신 유지."""
+    """SessionEnd: auto-memory → DB migrate + FTS 재구축 + dump.jsonl 재export."""
     print("# sync (projects → store mirror)")
     n = 0
     try:
@@ -545,6 +936,10 @@ def sync():
         index_build(rebuild=True)
     except Exception as e:
         sys.stderr.write(f"[sync] index 실패: {e}\n")
+    try:
+        export_dump()
+    except Exception as e:
+        sys.stderr.write(f"[sync] export 실패(계속): {e}\n")
     return n
 
 
@@ -552,32 +947,66 @@ def sync():
 def main():
     ap = argparse.ArgumentParser(prog="mem", description="Unified Memory System")
     sub = ap.add_subparsers(dest="cmd", required=True)
+
     a = sub.add_parser("add", help="수동 기록")
-    a.add_argument("tier", choices=TIERS); a.add_argument("type")
-    a.add_argument("body"); a.add_argument("--scope", choices=SCOPES, default="project")
-    a.add_argument("--tags", default=""); a.add_argument("--cwd-origin")
+    a.add_argument("tier", choices=TIERS)
+    a.add_argument("type")
+    a.add_argument("body")
+    a.add_argument("--scope", choices=SCOPES, default="project")
+    a.add_argument("--tags", default="")
+    a.add_argument("--links", default="")
+    a.add_argument("--cwd-origin")
+    a.add_argument("--source", default=None)
+
     n = sub.add_parser("note", help="working tier 단축 기록")
-    n.add_argument("body"); n.add_argument("--type", default="thread")
+    n.add_argument("body")
+    n.add_argument("--type", default="thread")
+
     r = sub.add_parser("recall", help="회상")
-    r.add_argument("query"); r.add_argument("--tier", choices=TIERS)
+    r.add_argument("query")
+    r.add_argument("--tier", choices=TIERS)
     r.add_argument("--scope", choices=SCOPES)
     r.add_argument("--all", action="store_true", help="전 cwd (default: 현 cwd)")
     r.add_argument("--sessions", action="store_true")
-    ix = sub.add_parser("index", help="FTS5 색인"); ix.add_argument("--rebuild", action="store_true")
-    pj = sub.add_parser("project", help="주입 projection"); pj.add_argument("--cwd")
-    mg = sub.add_parser("migrate", help="post-it+auto-memory 이주"); mg.add_argument("--apply", action="store_true")
-    lc = sub.add_parser("lifecycle", help="working 만료·졸업 / durable dup"); lc.add_argument("--apply", action="store_true")
+
+    ix = sub.add_parser("index", help="FTS5 색인")
+    ix.add_argument("--rebuild", action="store_true")
+
+    pj = sub.add_parser("project", help="주입 projection")
+    pj.add_argument("--cwd")
+
+    mg = sub.add_parser("migrate", help="post-it+auto-memory+md파일 이주")
+    mg.add_argument("--apply", action="store_true")
+
+    lc = sub.add_parser("lifecycle", help="working 만료·졸업 / durable dup")
+    lc.add_argument("--apply", action="store_true")
+
     sub.add_parser("stats", help="store 통계")
-    sub.add_parser("sync", help="projects→store 멱등 mirror + 색인 (oncall/note 주기 호출)")
-    ij = sub.add_parser("inject", help="SessionStart 주입 블록 출력 (단기+장기+사용자특성)")
-    ij.add_argument("--hook", action="store_true", help="SessionStart additionalContext JSON 으로 출력")
-    rp = sub.add_parser("register-postit", help="post-it.md 경로 레지스트리 등록"); rp.add_argument("path")
+    sub.add_parser("sync", help="projects→store 멱등 mirror + 색인 + dump (SessionEnd)")
+
+    ij = sub.add_parser("inject", help="SessionStart 주입 블록")
+    ij.add_argument("--hook", action="store_true", help="SessionStart additionalContext JSON")
+
+    rp = sub.add_parser("register-postit", help="post-it.md 경로 레지스트리 등록")
+    rp.add_argument("path")
+
+    ex = sub.add_parser("export", help="DB → dump.jsonl 또는 profile md")
+    ex.add_argument("--target", choices=["dump", "profile"], default="dump")
+    ex.add_argument("--apply", action="store_true", help="profile 실제 파일 write (기본 dry-run)")
+
+    im = sub.add_parser("import", help="dump.jsonl → DB 복원")
+    im.add_argument("path")
+
     args = ap.parse_args()
 
     if args.cmd == "add":
-        write_record(args.tier, args.scope, args.type, args.body,
-                     cwd_origin=args.cwd_origin,
-                     tags=[t for t in args.tags.split(",") if t])
+        write_record(
+            args.tier, args.scope, args.type, args.body,
+            cwd_origin=args.cwd_origin,
+            tags=[t for t in args.tags.split(",") if t],
+            links=[l for l in args.links.split(",") if l],
+            source=args.source,
+        )
     elif args.cmd == "note":
         write_record("working", "project", args.type, args.body)
     elif args.cmd == "recall":
@@ -599,6 +1028,13 @@ def main():
         inject(hook=args.hook)
     elif args.cmd == "register-postit":
         register_postit(args.path)
+    elif args.cmd == "export":
+        if args.target == "dump":
+            export_dump()
+        else:
+            export_profile(apply=args.apply)
+    elif args.cmd == "import":
+        import_dump(args.path)
 
 
 if __name__ == "__main__":
