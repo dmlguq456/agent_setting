@@ -573,9 +573,27 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 | `autopilot-apply` | 대상 artifact 는 `.claude_reports/` 밖 실제 소스 (e.g., `main.tex`). 버전 자리는 git branch + commit (mutation 마다 한 commit) — `_internal/versions/` 자리 X |
 | `autopilot-apply` | 자체 artifact_dir 없음 — `.claude_reports/` _밖_ 실제 source 편집 (git branch 위) + 로그는 cheatsheet artifact 의 `_internal/apply/` |
 
-## §7. Memory write 휴리스틱 (canonical)
+## §7. 통합 기억 시스템 (canonical)
 
-> auto-memory 의 *하네스 write 면* (`~/.claude/projects/<encoded-cwd>/memory/*.md`) — _무엇을 저장/생략하고 어떻게 쓰는지_ 단일 출처. 하네스가 이 경로에 쓰고, SessionEnd `mem sync` 가 store(`~/.claude/memory/` tier×scope) durable 로 mirror 한다(store 가 단일소스). Hermes Agent 의 `write_approval` 게이트·promote/skip 휴리스틱을 벤치마킹해 이식(T5, 2026-06-15). **행동양식·운영규율은 메모리가 아니다** — 원칙 문서(CLAUDE.md/CONVENTIONS/WORKFLOW/SKILL) 또는 cross-project `user_profile/`. 프로젝트 진행 맥락·handoff 는 `post-it`.
+> 흩어졌던 3개 기억면(post-it 단기 · auto-memory 장기 · user_profile 전역)을 **하나의 포터블 store** 로 통합 — Hermes Agent 메모리 벤치마킹(2026-06-15). spec = `.claude_reports/spec/prd.md`, 구현 = `tools/memory/mem.py`. 본 §7 이 단일 출처. **행동양식·운영규율은 메모리가 아니다** — 원칙 문서(CLAUDE.md/CONVENTIONS/WORKFLOW/SKILL). 
+
+### §7.0. store 아키텍처 (개요)
+
+- **store** = `~/.claude/memory/` (git추적 markdown 원본 = 단일소스·포터블) + `.index.db`(SQLite FTS5, 파생·gitignore). 레코드 = `tier`(working 단기 / durable 장기) × `scope`(project / global) × `type`.
+- **3 면 → store mirror** (각 면은 live 역할 유지, store 가 canonical 가시 소스):
+
+  | 면 (live 역할) | store tier/scope | 동기화 |
+  |---|---|---|
+  | `post-it.md` (사람 편집 단기 면) | working/project | `/post-it` → SessionEnd `mem sync` |
+  | `projects/<cwd>/memory/` (하네스 auto-write inbox) | durable/project | 하네스 write → SessionEnd `mem sync` |
+  | `user_profile/*.md` (cross-project 프로필 source·경로참조) | durable/global (type=profile) | `analyze-user` → `mem sync` |
+
+- **자체 하네스 (store 가 세션 주입의 source)**: SessionStart hook `mem inject --hook` → store 의 현 cwd working+durable + global profile 을 `additionalContext` 로 주입. SessionEnd hook `mem sync` → 하네스 write 회수 + 색인 재생성. (단일 출처 = `settings.json` hooks.)
+- **회상**: `tools/memory/recall.sh` = `mem recall` thin wrapper — store FTS5 + `--sessions`(raw 대화 jsonl) + `--all`(전 scope). 트리거 = CLAUDE.md §도메인 + §7.4.
+- **CLI**: `mem {add, note, recall, index, sync, inject, migrate, lifecycle, project, stats, register-postit}`.
+- **불변식**: 기억 저장 = 자동(품질필터만 — §7.1·§7.2, 사람 승인 게이트 없음). 삭제(gc)·세팅변경은 사람 게이트. lifecycle = working 시간만료 / durable consolidate(§7.3 lifecycle).
+
+> 위 intro 의 _write 면_ 세부 (무엇을 저장/생략하고 어떻게 쓰는지) 는 §7.1–§7.2, recall 은 §7.4. Hermes `write_approval` 게이트·promote/skip·session_search 벤치마킹(T5/T1).
 
 ### §7.1. Promote (저장) vs Skip (생략)
 
