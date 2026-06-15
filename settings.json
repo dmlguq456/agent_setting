@@ -170,6 +170,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/mem-turn-nudge.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ]
   },
