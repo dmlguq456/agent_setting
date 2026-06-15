@@ -23,8 +23,9 @@ plugins/
 # Project-scoped memory (per-project, not shared)
 projects/
 
-# Unified memory store: markdown 원본은 추적(포터블), 파생 색인만 제외
+# Unified memory store: markdown 원본은 추적(포터블), 파생물만 제외
 memory/.index.db
+memory/.postit-roots
 
 # NFS temp files
 .nfs*

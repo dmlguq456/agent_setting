@@ -17,6 +17,7 @@ HOME = Path.home()
 STORE = Path(os.environ.get("MEM_STORE", HOME / ".claude" / "memory"))
 INDEX = STORE / ".index.db"
 PROJECTS = Path(os.environ.get("MEM_PROJECTS", HOME / ".claude" / "projects"))
+USER_PROFILE = Path(os.environ.get("MEM_PROFILE", HOME / ".claude" / "user_profile"))
 
 TIERS = ("working", "durable")
 SCOPES = ("project", "global")
@@ -263,9 +264,11 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
         hits = kept
     hits = hits[:limit]
     if not hits:
-        print("(매칭 없음)")
+        print("(store 매칭 없음)")
     for rt, rs, rtype, path, snip in hits:
         print(f"  [{rt}/{rs}/{rtype}] {Path(path).name}: {snip}")
+    if scope in (None, "global"):
+        _recall_profile(query)        # user_profile 제자리 유지 — 통합 recall 면에 포함
     if sessions:
         print(f"\n# raw 세션 transcript: \"{query}\"  (미정제)")
         _recall_sessions(query, cwd)
@@ -285,6 +288,23 @@ def _recall_sessions(query, cwd):
         cmd = ["grep", "-i", "-rn", "--include=*.jsonl", query, str(base)]
     out = subprocess.run(cmd, capture_output=True, text=True).stdout.splitlines()[:30]
     print("\n".join(out) if out else "(세션 매칭 없음)")
+
+
+def _recall_profile(query):
+    """user_profile/*.md (제자리 유지·경로참조) 를 통합 recall 면에 포함."""
+    if not USER_PROFILE.exists():
+        return
+    hits = []
+    for p in sorted(USER_PROFILE.glob("*.md")):
+        if p.name == "README.md":
+            continue
+        for i, line in enumerate(p.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
+            if query.lower() in line.lower() and line.strip():
+                hits.append(f"  [profile/{p.stem}] :{i}: {line.strip()[:160]}")
+                break  # 파일당 첫 매치만 (요약)
+    if hits:
+        print("\n# user_profile (cross-project 프로필):")
+        print("\n".join(hits[:8]))
 
 
 # ---------- migrate ----------
@@ -308,22 +328,32 @@ def migrate(apply=False):
             write_record("durable", scope, rtype, body, cwd_origin=cwd_origin,
                          source=src, quiet=True)
         created += 1
-    # 2) post-it: 현 cwd 의 .claude_reports/post-it.md → working records.
-    #    (post-it 은 per-cwd 라 NAS 전체 스캔 대신 _현 cwd 에서_ 이주 — 빠르고 정확. 다른 cwd 는 거기서 migrate)
+    # 2) post-it: 얕은 find(maxdepth 5)로 전 프로젝트 post-it.md 발견 → working records.
+    #    표준 5섹션은 type 매핑, 미지정 섹션(worklog-board 의 ★현재상태·🔴결재대기 등)은 generic 'note' 로 보존.
     POST_SECT = {"Open Threads": "thread", "Decisions": "decision",
                  "Next Session Hints": "hint", "Conventions": "convention",
                  "External Resources": "reference"}
+    # post-it 발견 = 레지스트리(~/.claude/memory/.postit-roots, 경로 목록) + 현 cwd.
+    #    NAS(네트워크 FS) 재귀 find 는 느리고 불안정(timeout 빈번) → 직접 stat 만. /post-it 가 생성 시 등록.
+    postits = set()
+    reg = STORE / ".postit-roots"
+    if reg.exists():
+        for line in reg.read_text(encoding="utf-8").splitlines():
+            p = Path(line.strip())
+            if p.name == "post-it.md" and p.exists():
+                postits.add(p)
     cwd_pi = Path.cwd() / ".claude_reports" / "post-it.md"
-    postits = [cwd_pi] if cwd_pi.exists() else []
-    if not postits:
-        print("  (현 cwd 에 post-it.md 없음 — auto-memory 만 이주. 다른 cwd 의 post-it 은 그 cwd 에서 migrate)")
+    if cwd_pi.exists():
+        postits.add(cwd_pi)
+    postits = sorted(postits)
+    print(f"  post-it 발견: {len(postits)}개 (registry+cwd)")
     for pi in postits:
         cwd_origin = enc_cwd(pi.parent.parent)
-        cur = None
+        cur = "note"
         for line in pi.read_text(encoding="utf-8", errors="ignore").splitlines():
             m = re.match(r"##\s+(.*)", line)
             if m:
-                cur = POST_SECT.get(m.group(1).strip())
+                cur = POST_SECT.get(m.group(1).strip(), "note")
                 continue
             b = re.match(r"\s*[-*]\s+(.*)", line)
             if cur and b and len(b.group(1).strip()) > 14:
@@ -400,6 +430,29 @@ def stats():
     print(f"  total: {total}  ({STORE})")
 
 
+def register_postit(path):
+    """post-it.md 경로를 레지스트리에 등록 (NAS 스캔 회피 — /post-it 생성 시·시드 호출)."""
+    STORE.mkdir(parents=True, exist_ok=True)
+    reg = STORE / ".postit-roots"
+    p = str(Path(path).resolve())
+    existing = set(reg.read_text(encoding="utf-8").splitlines()) if reg.exists() else set()
+    if p in existing:
+        print(f"[register] 이미 등록: {p}")
+        return
+    with reg.open("a", encoding="utf-8") as f:
+        f.write(p + "\n")
+    print(f"[register] {p}")
+
+
+def sync():
+    """하네스가 projects/<cwd>/memory/ 에 쓴 auto-memory 를 store 로 멱등 mirror + 색인 재생성.
+    하네스가 메모리 write 를 소유하므로 store 는 source 가 아니라 _포터블 추적 mirror_ — 주기 sync(oncall/note)로 최신 유지."""
+    print("# sync (projects → store mirror)")
+    n = migrate(apply=True)
+    index_build(rebuild=True)
+    return n
+
+
 # ---------- CLI ----------
 def main():
     ap = argparse.ArgumentParser(prog="mem", description="Unified Memory System")
@@ -420,6 +473,8 @@ def main():
     mg = sub.add_parser("migrate", help="post-it+auto-memory 이주"); mg.add_argument("--apply", action="store_true")
     lc = sub.add_parser("lifecycle", help="working 만료·졸업 / durable dup"); lc.add_argument("--apply", action="store_true")
     sub.add_parser("stats", help="store 통계")
+    sub.add_parser("sync", help="projects→store 멱등 mirror + 색인 (oncall/note 주기 호출)")
+    rp = sub.add_parser("register-postit", help="post-it.md 경로 레지스트리 등록"); rp.add_argument("path")
     args = ap.parse_args()
 
     if args.cmd == "add":
@@ -441,6 +496,10 @@ def main():
         lifecycle(apply=args.apply)
     elif args.cmd == "stats":
         stats()
+    elif args.cmd == "sync":
+        sync()
+    elif args.cmd == "register-postit":
+        register_postit(args.path)
 
 
 if __name__ == "__main__":
