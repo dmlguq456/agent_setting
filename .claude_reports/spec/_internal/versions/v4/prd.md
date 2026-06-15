@@ -1,6 +1,6 @@
 # Unified Memory System — PRD
 
-> mode: **library + cli** · 작성 2026-06-15 · v3(DB화·저장소분리) · v4(결정론-우선 원칙·Hermes port) · **v5 개정 2026-06-15** (Option 2 — user_profile·post-it 파일 메커니즘 제거, DB 단일 store, sub-agent DB 직접 읽기)
+> mode: **library + cli** · 작성 2026-06-15 · v3(DB화·저장소분리) · **v4 개정 2026-06-15** (profile 완전통합 + Hermes 잔여 port + 결정론-우선 원칙)
 > 입력: `research/hermes-agent/{03_memory_system,04_benchmark_gap,07_security,08_source_grounded}.md` · 기존 `tools/memory/*` · `skills/{post-it,analyze-user}/` · `user_profile/`
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
@@ -44,30 +44,17 @@
 ## 3. 잘라낸 것 (v3 완료)
 markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내장 FTS5 · post-it 파일/파싱 → working 레코드 · 3중 분산 위치 → 1 store. (✅ 200 레코드 무손실 이주 완료.)
 
-## 4. Cluster A — 파일 메커니즘 제거, DB 단일 store 완성 (v5, Option 2)
+## 4. Cluster A — profile **완전** 통합 (v4 신규, D-3/D-7 격상)
 
-> **v4(Option 1) → v5(Option 2) 전환** (사용자 결정 2026-06-15): v4는 "md를 DB→generated view로 유지(sub-agent 경로 Read 보존)"였으나, 사용자 = *"그냥 sub-agent도 DB 읽게 하면 됨"* + *"user_profile·post-it 별도 파일이 왜 있냐 — 그냥 다 DB"*. → **별도 파일 메커니즘 자체를 제거**, DB가 **유일 SoT·유일 읽기 소스**. ("대공사 OK, 보수적 X" 원칙대로 — Option 1의 유일 근거였던 'agent rewire 회피'를 사용자가 명시 waive.)
+> **현 상태 정직 명시**: profile은 지금 *recall/inject 표면*만 통합됨. sub-agent가 읽는 권위 소스는 여전히 `user_profile/*.md` 원본(de facto SoT)이고 `memory.db`는 후행 mirror — **절반짜리 통합**. (사용자 지적 2026-06-15 "별론데".)
 
-### 4.1 user_profile 파일 제거 (sub-agent가 DB 직접 읽기)
-- DB `type=profile` 레코드가 **유일 SoT**. `user_profile/` 디렉토리 **제거**.
-- **sub-agent가 DB를 직접 읽는다**: 에이전트 정의(`agents/*.md`·`agent-modes/*.md`) + CLAUDE.md 도메인 트리거의 `Read ~/.claude/user_profile/0X.md` → **`mem profile <aspect>`** (DB가 결정론적으로 그 aspect body 반환)로 교체.
-- `analyze-user`는 **DB에 authoring** (aspect별 분석을 DB 레코드로 종단 write). curated·adversarial QA 그대로 — 저장 위치만 DB. (Option 1의 A2 projection wiring 불필요 — 파일이 없으니 동기 로직 자체 소멸, §0.5 단순화.)
-- 매트릭스(어느 agent가 어느 aspect 필요)는 *문서*로 유지, 소스는 DB.
-- 사람 열람은 on-demand `mem export --target profile`(gitignored 캐시), **SoT 아님**.
+**목표**: DB가 profile의 진짜 SoT, md는 DB→generated view. sub-agent 경로 Read(매트릭스 = `user_profile/README.md` per-agent 매핑)는 **보존** — md가 view라 안 깨짐.
 
-### 4.2 post-it 파일 제거
-- 내용은 이미 DB working tier(127 레코드 이주 완료). 세션 주입은 이미 `mem inject`가 DB working에서 수행 → **post-it.md는 이중 redundant**(내용도 DB, 주입도 DB).
-- post-it.md 파일(레지스트리 4개) **제거**, CLAUDE.md "세션 시작 post-it.md Read" 도메인 트리거 **제거**(mem inject가 대체).
-- `/post-it`은 **DB에 쓰는 thin alias 유지**(D-2 근육기억) — project scope→`working/project`, user scope→`durable/global` profile-인접. `register-postit`·`.postit-roots` 레지스트리는 폐기(파일 없음).
-
-### 4.3 결과 — 파일 메커니즘 0
-| | 읽기 | 쓰기 |
-|---|---|---|
-| 세션 주입 | `mem inject` (DB working+durable+profile) | — |
-| sub-agent | `mem profile`/`mem recall` (DB 직접) | — |
-| 사람·하네스 | (on-demand `mem export`) | analyze-user·`/post-it`·auto-memory → **전부 DB** |
-
-`user_profile/`·`post-it.md` 별도 파일 없음. §0.5 결정론-우선과 정합 — 파일↔DB 동기 로직이 통째로 사라져 단순화·드리프트 0. **트레이드오프**: profile cold-start corpus의 deliberate seed는 여전히 사람(§Non-goals — 정체성 모델). steady-state drift 자동화는 Cluster B 연계.
+- **A1 — DB가 SoT**: `memory.db` type=profile 레코드가 권위 소스. body = aspect 문서 전문.
+- **A2 — DB→md projection wiring** (결정론, §0.5): `mem export --target profile`을 **SessionEnd `mem sync` + analyze-user 종료에 자동 연결**해 `user_profile/0X_*.md`를 faithful view로 재생성. body round-trip byte-identical 이미 검증(v3). 파일명은 source stem(`user-profile:07_coding_convention`)에서 결정론적으로 도출 → 매트릭스 경로 불변.
+- **A3 — analyze-user를 DB-first로**: aspect 문서를 DB 레코드로 쓰고 거기서 md export (현재는 md 쓰고 DB가 mirror — 거꾸로). analyze-user의 _aspect별 분석_ 산출을 DB write로 종단.
+- **A4 — 편집 경로 단일화 (edit-via-DB)**: `/post-it --scope user`도 DB 경유. 사람 직접 md 편집은 다음 export가 덮으므로 **DB가 단일 편집 경로**. (md 직접편집 방지 가드 — 결정론: export가 view를 권위화.)
+- **트레이드오프(명시)**: profile 편집이 전부 DB 경유가 됨. cold-start corpus 수집은 여전히 사람(§Non-goals 인접 — 정체성 모델의 deliberate seed). steady-state drift 자동화는 Cluster B와 연계.
 
 ## 5. Cluster B — Hermes 잔여 port (v4 신규, 08_source_grounded 검증 근거)
 
@@ -84,7 +71,7 @@ mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(
 ```
 
 ## [cli] `mem` 명령
-v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 body를 결정론적으로 출력 — sub-agent·CLAUDE.md 트리거의 user_profile 파일 Read 대체). `export --target profile`은 on-demand 사람 열람 캐시용으로만(SoT 아님, sync/analyze-user 자동 wiring 불필요 — 파일 없음). `register-postit`·`.postit-roots`는 **폐기**(post-it.md 파일 제거). B2 turn-counter는 hook+state.
+v3 그대로 (add/note/recall/index/inject/sync/export/import/migrate/lifecycle/project/stats/register-postit). v4에서 export의 profile target이 sync/analyze-user에 wiring (A2), B2용 turn-counter는 hook+state.
 
 ## 데이터 모델
 v3 그대로 (`records` 12컬럼 + `records_fts` FTS5 + trigram 보조 + `idx_records_scope`; `dump.jsonl` 결정론적 export). profile = type=profile 레코드(body=aspect 전문), source=`user-profile:<stem>` (A2 파일명 도출 근거).
@@ -98,16 +85,10 @@ v3 그대로 (`records` 12컬럼 + `records_fts` FTS5 + trigram 보조 + `idx_re
 - v3: D-1~D-7 (삭제정책·post-it alias·user_profile view·hook·SoT=SQLite·저장소분리·통합깊이).
 - **v4 신규**:
   - **D-8 (결정론 우선)**: 결정론·SW 가능 요소는 코드로 대체, agent 판단 최소화 (§0.5, cross-cutting).
-  - **D-9 (파일 메커니즘 제거, Option 2)**: user_profile/·post-it.md 별도 파일 제거, DB가 유일 SoT·유일 읽기 소스. sub-agent는 `mem profile`/`mem recall`로 DB 직접 읽기. analyze-user·/post-it DB authoring. (§4)
+  - **D-9 (profile 완전통합)**: DB=profile SoT, md=generated view, analyze-user/post-it DB-first (§4).
   - **D-10 (Hermes 잔여 port)**: session_search 자율호출 + turn-counter 자기회고, 둘 다 결정론-우선 (§5).
 
-## Next (구현 순서 — autopilot-code, 본 v5 입력)
-1. **Cluster A (파일 메커니즘 제거, Option 2)** 먼저 — 사용자 지적 incoherence 해소:
-   - mem.py에 `mem profile <aspect>` 추가 (DB→aspect body 출력).
-   - sub-agent 정의(`agents/*.md`·`agent-modes/*.md`) + CLAUDE.md 도메인 트리거: `Read user_profile/0X.md` → `mem profile 0X` 교체.
-   - analyze-user를 DB authoring으로 (aspect→DB 레코드).
-   - `/post-it` 스킬 DB 경유로 rewire (register-postit·.postit-roots 폐기).
-   - 파일 제거: `user_profile/`(7 aspect + README) + post-it.md 4개 (내용 DB 확인 후) + CLAUDE.md post-it.md 세션-read 트리거 제거.
-   - 매트릭스(user_profile/README.md per-agent 매핑)는 문서로 보존(소스는 DB).
+## Next (구현 순서 — autopilot-code, 본 v4 입력)
+1. **Cluster A (profile 완전통합)** 먼저 — 사용자 지적 incoherence 해소. `mem export --profile` wiring(A2) → analyze-user DB-first(A3) → post-it/edit 경로 단일화(A4).
 2. **Cluster B (Hermes port)** — B2(turn-counter hook, 결정론) → B1(session_search 자율호출 강화).
-3. **구현 hygiene** (spec 외): sync-skills/drill 회귀 · stale 매뉴얼 draft 정정 · research 03↔08 cross-ref. (DESIGN_PRINCIPLES §0.5 ✅ 완료.)
+3. **구현 hygiene** (spec 외): sync-skills/drill 회귀 · stale 매뉴얼 draft 정정 · research 03↔08 cross-ref · DESIGN_PRINCIPLES.md에 §0.5 결정론-우선 격상.

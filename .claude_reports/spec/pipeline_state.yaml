@@ -6,7 +6,7 @@ phases:
   spec: done               # v3 PRD 확정 (D-1~7 lock — DB화·저장소분리·통합강화)
   scaffolding: pending
   dev: in_progress         # v3 완료(DB화·분리). v4 신규 = Cluster A(profile 완전통합)+B(Hermes port) 구현 대기
-last_updated: 2026-06-15  # v4: profile 완전통합(A)·Hermes 잔여port(B)·결정론우선 원칙(D-8). snapshot v3 (v3=DB화·분리)
+last_updated: 2026-06-15  # v5: Option 2 — user_profile·post-it 파일 제거, DB 단일 store, sub-agent DB 직접 읽기. snapshot v4
 inputs:
   - .claude_reports/research/hermes-agent/
   - VISION.md
@@ -21,5 +21,5 @@ decisions_locked:
   - D-6: 저장소 분리 — claude-memory private repo, config repo memory/ 이력 filter-repo 제거
   - D-7: 통합 깊이 — user_profile+post-it+auto-memory 한 DB (tier/scope/type 컬럼 구분 유지)
   - D-8: 결정론 우선 (deterministic-first) — SW 가능 요소는 코드(hook/script/gate/DB)로, agent 판단 최소화 (cross-cutting, DESIGN_PRINCIPLES 격상)
-  - D-9: profile 완전통합 — DB=profile SoT, md=generated view, analyze-user/post-it DB-first (Cluster A)
+  - D-9: 파일 메커니즘 제거(Option 2) — user_profile/·post-it.md 파일 제거, DB 유일 SoT, sub-agent는 mem profile/recall로 DB 직접 읽기 (Cluster A)
   - D-10: Hermes 잔여 port — session_search 자율호출 + turn-counter 자기회고, 둘 다 결정론-우선 (Cluster B)
