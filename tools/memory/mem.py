@@ -267,8 +267,6 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
         print("(store 매칭 없음)")
     for rt, rs, rtype, path, snip in hits:
         print(f"  [{rt}/{rs}/{rtype}] {Path(path).name}: {snip}")
-    if scope in (None, "global"):
-        _recall_profile(query)        # user_profile 제자리 유지 — 통합 recall 면에 포함
     if sessions:
         print(f"\n# raw 세션 transcript: \"{query}\"  (미정제)")
         _recall_sessions(query, cwd)
@@ -288,23 +286,6 @@ def _recall_sessions(query, cwd):
         cmd = ["grep", "-i", "-rn", "--include=*.jsonl", query, str(base)]
     out = subprocess.run(cmd, capture_output=True, text=True).stdout.splitlines()[:30]
     print("\n".join(out) if out else "(세션 매칭 없음)")
-
-
-def _recall_profile(query):
-    """user_profile/*.md (제자리 유지·경로참조) 를 통합 recall 면에 포함."""
-    if not USER_PROFILE.exists():
-        return
-    hits = []
-    for p in sorted(USER_PROFILE.glob("*.md")):
-        if p.name == "README.md":
-            continue
-        for i, line in enumerate(p.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
-            if query.lower() in line.lower() and line.strip():
-                hits.append(f"  [profile/{p.stem}] :{i}: {line.strip()[:160]}")
-                break  # 파일당 첫 매치만 (요약)
-    if hits:
-        print("\n# user_profile (cross-project 프로필):")
-        print("\n".join(hits[:8]))
 
 
 # ---------- migrate ----------
@@ -365,6 +346,21 @@ def migrate(apply=False):
                     write_record("working", "project", cur, b.group(1).strip(),
                                  cwd_origin=cwd_origin, source=src, quiet=True)
                 created += 1
+    # 3) user_profile/*.md → durable/global mirror (파일은 source 로 제자리 유지 — 경로참조·analyze-user).
+    #    각 aspect 문서 = 1 레코드(type=profile, body=전문). store sync 가 갱신. auto-memory 와 동형 mirror.
+    if USER_PROFILE.exists():
+        for up in sorted(USER_PROFILE.glob("*.md")):
+            if up.name == "README.md":
+                continue
+            src = f"user-profile:{up.stem}"
+            if src in existing_src:
+                skipped += 1
+                continue
+            if apply:
+                write_record("durable", "global", "profile",
+                             up.read_text(encoding="utf-8", errors="ignore"),
+                             cwd_origin="global", source=src, quiet=True)
+            created += 1
     print(f"  → {'생성' if apply else '생성 예정'} {created} · 기존 skip {skipped}")
     return created
 
