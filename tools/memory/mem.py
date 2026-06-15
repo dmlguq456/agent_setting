@@ -624,6 +624,143 @@ def export_profile(apply=False):
         print(f"[profile] {written}개 생성 · skip {skipped}")
 
 
+# ---------- profile (read-only) ----------
+def profile(aspect, list_mode=False):
+    """DB type=profile 레코드의 aspect body 를 stdout 으로 출력.
+
+    READ-ONLY INVARIANT: 이 함수는 zero RECORD writes (write_record 호출 없음 / con.commit 없음).
+    get_con() 의 schema-ensure (CREATE TABLE/INDEX IF NOT EXISTS) 는 멱등 실행되어 데이터를 변경하지 않는다.
+
+    aspect 해석 우선순위 (first-match wins):
+      (a) 완전 stem 일치  (b) 숫자 prefix 2자리 일치  (c) alias (collision-checked)
+    ambiguous alias 는 stderr + sys.exit(2). no-match 도 stderr + sys.exit(2).
+    """
+    # rowid 를 명시적으로 읽어야 한다 — db_iter_records 는 RECORD_COLS 만 SELECT 하므로
+    # rowid 가 포함되지 않음. 별도 쿼리로 (rowid, meta, body) 를 취득한다.
+    cols = ", ".join(RECORD_COLS)
+    con = get_con()
+    try:
+        rows_raw = con.execute(
+            f"SELECT rowid, {cols} FROM records WHERE type='profile'"
+        ).fetchall()
+    finally:
+        con.close()
+
+    # (rowid, meta, body) 튜플 리스트로 변환
+    rows = []
+    for r in rows_raw:
+        rowid = r[0]
+        meta, body = _row_to_meta(r[1:])   # r[1:] 이 RECORD_COLS 순 tuple
+        rows.append((rowid, meta, body))
+
+    # 결정론적 newest-wins tie-break: created DESC, rowid DESC (단조 삽입 순)
+    # — db_iter_records 에 ORDER BY 없음 (line 227), VACUUM 후 row 순서 보장 안됨.
+    # — id 는 body-slug+hash 라 lexical 정렬 시 stale body 가 이길 수 있음 (🟡-A).
+    # — rowid 는 단조증가 INSERT 순서이므로 same-day 업데이트도 정확히 최신을 선택.
+    rows.sort(key=lambda r: (r[1].get("created", ""), r[0]), reverse=True)
+
+    # stem → (meta, body) 사전: setdefault 로 최신(첫 번째) 행만 등록
+    lookup = {}
+    for rowid, meta, body in rows:
+        stem = _derive_aspect(meta, body)
+        if stem is None:
+            continue
+        lookup.setdefault(stem, (meta, body))
+
+    stems = sorted(lookup.keys())
+
+    # ── alias 맵 빌드 (deterministic, DB 기반 — 하드코딩 금지) ──────────────────
+    # 각 stem 의 suffix = 숫자 prefix 제거 후 나머지 토큰들
+    # (e.g. "01_paper_figure_style" → ["paper","figure","style"])
+    # primary alias = suffix 토큰 중 전체 7 stem 의 토큰 multiset 에서 유일한 첫 토큰.
+    # alias→[stems] 맵: full_suffix + 각 개별 토큰 모두 후보로 등록.
+    # 해석: "ambiguous aliases error out, unambiguous ones resolve"
+    # (충돌 없음을 보장하는 게 아니라, 충돌 시 오류 처리)
+
+    def _suffix_tokens(stem):
+        """'07_coding_convention' → ['coding','convention']"""
+        s = re.sub(r"^\d+_", "", stem)
+        return s.split("_") if s else []
+
+    # 전체 토큰 multiset: 각 토큰이 몇 개의 stem 에 나타나는지
+    token_to_stems = {}
+    for stem in stems:
+        for tok in _suffix_tokens(stem):
+            token_to_stems.setdefault(tok, [])
+            if stem not in token_to_stems[tok]:
+                token_to_stems[tok].append(stem)
+    # full suffix 도 후보 (e.g. "coding_convention")
+    for stem in stems:
+        suf = re.sub(r"^\d+_", "", stem)
+        if suf:
+            token_to_stems.setdefault(suf, [])
+            if stem not in token_to_stems[suf]:
+                token_to_stems[suf].append(stem)
+
+    # primary alias per stem: suffix 토큰 왼쪽부터 순회, 첫 유일 토큰
+    stem_to_alias = {}
+    for stem in stems:
+        for tok in _suffix_tokens(stem):
+            if len(token_to_stems.get(tok, [])) == 1:
+                stem_to_alias[stem] = tok
+                break
+
+    # ── --list 모드 ────────────────────────────────────────────────────────────
+    if list_mode:
+        for stem in stems:
+            alias_label = stem_to_alias.get(stem, "-")
+            _, body = lookup[stem]
+            print(f"{stem}  [{alias_label}]  {len(body)} chars")
+        sys.exit(0)
+
+    # ── aspect 없이 --list 도 없으면 오류 ──────────────────────────────────────
+    if aspect is None:
+        sys.stderr.write("가용 aspect 목록:\n")
+        for stem in stems:
+            alias_label = stem_to_alias.get(stem, "-")
+            sys.stderr.write(f"  {stem}  [{alias_label}]\n")
+        sys.exit(2)
+
+    # ── aspect 해석: (a) exact stem  (b) numeric prefix  (c) alias ────────────
+    resolved = None
+
+    # (a) 완전 stem 일치
+    if aspect in lookup:
+        resolved = aspect
+
+    # (b) 숫자 prefix 2자리 일치 (e.g. "07" → "07_coding_convention")
+    if resolved is None and re.fullmatch(r"\d{2}", aspect):
+        for stem in stems:
+            if stem.startswith(aspect + "_") or stem == aspect:
+                resolved = stem
+                break
+
+    # (c) alias 일치 (collision-checked convenience path)
+    if resolved is None:
+        candidates = token_to_stems.get(aspect, [])
+        if len(candidates) == 1:
+            resolved = candidates[0]
+        elif len(candidates) > 1:
+            sys.stderr.write(
+                f"[profile] 모호한 alias '{aspect}' — 후보 stems:\n"
+            )
+            for c in sorted(candidates):
+                sys.stderr.write(f"  {c}\n")
+            sys.exit(2)
+
+    # ── 매칭 없음 ──────────────────────────────────────────────────────────────
+    if resolved is None:
+        sys.stderr.write(f"[profile] aspect '{aspect}' 를 찾을 수 없습니다. 가용 목록:\n")
+        for stem in stems:
+            alias_label = stem_to_alias.get(stem, "-")
+            sys.stderr.write(f"  {stem}  [{alias_label}]\n")
+        sys.exit(2)
+
+    _, body = lookup[resolved]
+    print(body)
+    sys.exit(0)
+
+
 # ---------- migrate ----------
 def migrate(apply=False):
     print(f"# migrate  ({'APPLY' if apply else 'dry-run'})")
@@ -890,11 +1027,34 @@ def inject(max_working=40, max_durable=40, hook=False):
     con = get_con()
     try:
         encc = enc_cwd(Path.cwd())
-        prof = list(db_iter_records(con, "type='profile'"))
+        # profile: rowid 를 명시적으로 SELECT — db_iter_records 는 RECORD_COLS 만 반환해 rowid 미포함.
+        # profile() 의 newest-wins 로직과 동일하게 per-stem dedup 적용 (read-side coherence).
+        cols = ", ".join(RECORD_COLS)
+        prof_raw = con.execute(
+            f"SELECT rowid, {cols} FROM records WHERE type='profile'"
+        ).fetchall()
         work = list(db_iter_records(con, "tier='working' AND cwd_origin=?", (encc,)))
         dur  = list(db_iter_records(con, "tier='durable' AND scope='project' AND cwd_origin=?", (encc,)))
     finally:
         con.close()
+
+    # profile newest-wins dedup: (rowid, meta, body) 로 변환 후 created DESC, rowid DESC 정렬,
+    # stem → first-seen(newest) 기록. profile() 과 동일 로직 — 두 read path 가 같은 body 를 쓰도록.
+    prof_rows = []
+    for r in prof_raw:
+        rowid = r[0]
+        meta, body = _row_to_meta(r[1:])
+        prof_rows.append((rowid, meta, body))
+    prof_rows.sort(key=lambda r: (r[1].get("created", ""), r[0]), reverse=True)
+    prof_lookup = {}  # stem → (meta, body) newest-only
+    for rowid, meta, body in prof_rows:
+        stem = _derive_aspect(meta, body)
+        if stem is None:
+            # aspect 해석 불가 레코드: 기존 동작 그대로 포함 (id 를 aspect 로)
+            prof_lookup.setdefault(meta["id"], (meta, body))
+        else:
+            prof_lookup.setdefault(stem, (meta, body))
+    prof = list(prof_lookup.items())  # [(aspect_key, (meta, body))]
 
     if not (work or dur or prof):
         return
@@ -912,12 +1072,8 @@ def inject(max_working=40, max_durable=40, hook=False):
         out.append("")
     if prof:
         out.append("## 장기 — 사용자 특성 (user profile)")
-        for m, b in prof:
-            # 공유 aspect 추출 규칙 (export_profile 과 동일)
-            aspect = _derive_aspect(m, b)
-            if aspect is None:
-                aspect = m["id"]  # 최후 수단
-            out.append(f"- {aspect}: {_first_line(b)[:140]}")
+        for aspect_key, (m, b) in prof:
+            out.append(f"- {aspect_key}: {_first_line(b)[:140]}")
         out.append("")
     out.append("> 상세 회상: `bash ~/.claude/tools/memory/recall.sh \"<query>\"` (store+세션 전체 FTS)")
     emit("\n".join(out))
@@ -997,6 +1153,10 @@ def main():
     im = sub.add_parser("import", help="dump.jsonl → DB 복원")
     im.add_argument("path")
 
+    pf = sub.add_parser("profile", help="DB type=profile 레코드의 aspect body 출력 (read-only)")
+    pf.add_argument("aspect", nargs="?", help="stem '07_coding_convention' / 숫자 '07' / alias 'coding'")
+    pf.add_argument("--list", action="store_true", help="가용 aspect 목록 (stem + 라벨 + body 길이); aspect 인자 무시 — 전체 목록 출력")
+
     args = ap.parse_args()
 
     if args.cmd == "add":
@@ -1035,6 +1195,8 @@ def main():
             export_profile(apply=args.apply)
     elif args.cmd == "import":
         import_dump(args.path)
+    elif args.cmd == "profile":
+        profile(args.aspect, list_mode=args.list)
 
 
 if __name__ == "__main__":

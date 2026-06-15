@@ -1,0 +1,3 @@
+- [mem.py write-path gap](mem-py-write-path.md) — write_record dedups but is not a source-keyed upsert; analyze-user/post-it updates duplicate
+- [Unified Memory v5 Cluster A](memory-v5-cluster-a.md) — DB-as-SoT migration: user_profile/post-it files removed, mem profile is read source
+- [Cluster A rewire scope](cluster-a-rewire-scope.md) — rewire/grep must reach CONVENTIONS/WORKFLOW/README, not just agents/skills; post-it↔analyze-user manual-memo contract

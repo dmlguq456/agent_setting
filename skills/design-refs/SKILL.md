@@ -53,7 +53,7 @@ Agent(자료팀, mode=web-image-search):
 
 ### Step 4: 사용자 paper figure 자료 (옵션, 음성 AI 관련 디자인 시)
 
-`~/.claude/user_profile/01_paper_figure_style.md` 와 `03_presentation_strategy.md` Read — 사용자 시각 시그니처 확인.
+`python3 ~/.claude/tools/memory/mem.py profile 01_paper_figure_style` + `python3 ~/.claude/tools/memory/mem.py profile 03_presentation_strategy` 실행 — 사용자 시각 시그니처 확인.
 
 ### Step 5: 브리프 작성
 

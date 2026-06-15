@@ -402,7 +402,7 @@ echo "state: branch=$br head=$head base=$def dirty=$(git status --porcelain 2>/d
    - **경량 (팀 위임)**: 팀 에이전트를 `run_in_background` 분사, prompt 에 작업 루트 명시. 검증도 main 이 같은 경로로 QA 팀 spawn. 작은 단위·빠른 회전용.
    - **풀 ceremony (headless 분사)**: worktree 안에서 `claude -p "/autopilot-code --qa quick ..."` background — headless 는 _완전한 메인_ 이라 Agent 툴 보유 → 팀 분업·hook·plan 산출물까지 파이프 전부 정상 (Agent 툴의 중첩 1단 제한은 _툴 계층_ 한정, 프로세스 분사는 무관 — 2026-06-11 실증). 주의: ① `--allowedTools` 사전 개방 (중간 질문 불가) ② 비용 = 세팅 세금 ~40k/대 (drill g0 실측) ③ **분사는 main 전용, 깊이 1** — headless 가 또 headless 분사 금지 (폭주 방지) ④ **동시 분사 기본 상한 3대** (사용량 보호 — 초과는 사용자 명시 시만) ⑤ **분사 프롬프트의 skill 호출은 옵션 풀 명시** — `/autopilot-code --mode dev --qa quick` 식으로 `--mode`·`--qa` 를 명령행에 적는다. statusline 의 `>_ running` 표시가 ps 명령행 파싱이라 명시된 옵션만 보인다 (2026-06-11 — mode 미표시 자리에서 발견) ⑥ **headless 메인 model 은 `--model opus` 고정** — 미지정 시 메인 세션의 모델(fable 등 상위 tier)을 상속해 사용량을 태운다. 분사 메인은 orchestration 중심이라 opus 로 충분, 팀 agent 는 각자 frontmatter model 을 따른다 (2026-06-12 — fable 상속 실측 후 사용자 지시).
    - **job 레지스트리 (분사 시 의무)**: 분사 직전 `~/.claude/.dispatch/jobs.log` 에 한 줄 append — `<ISO시각>\topen\t<repo>\t<worktree경로>\t<slug>\t<파이프>`. 수확·정리 시 해당 줄의 `open` 을 `done` 으로. 세션이 죽어도 등록부가 남아 당직 7호가 고아 job (open 인데 24h+ 경과 또는 worktree 소멸·유휴) 을 감시한다.
-3. **merge = Claude 선별 책임** (2026-06-11 사용자 위임 — `user_profile/07_coding_convention.md` 수동 메모가 source): 사용자 직접 리뷰 없이 main 이 선별 머지한다. **머지 시점 게이트** — (a) 사용자 머지 신호("합쳐"/"머지해") 또는 (b) 병렬 디스패치로 분사한 background job 수확 자리에서만. **자기 turn 의 본작업 브랜치를 같은 turn 에 self-merge 금지** — 브랜치 + 한 줄 보고로 turn 을 끝내고 main ref 는 불변 (§3 후속 단계 자동 진행에 merge-to-main 은 포함되지 않음). 머지 후에도 작업 브랜치는 같은 turn 에 삭제하지 않는다 (롤백 지점). **worktree 디렉토리는 별개** — 수확(머지+통합 빌드 검증) 완료된 worktree 는 다음 자연 휴지(다음 수확 자리·세션 마무리)에 디렉토리만 제거한다 (브랜치 ref 유지, `git worktree remove` 전 자체 dev 서버 등 고아 프로세스 종료 확인 — NFS lock 잔존 방지. 2026-06-12 worktree 9개 적체에서 사용자 지적). 절차 — `git diff main...<branch>` 로 _실내용_ 확인 → 이미 main 에 진전됐거나 회귀·중복이면 머지 안 함 → 충돌은 양쪽 의도를 해석해 해결 (한쪽 자동 채택·`--force` 금지) → _애매하거나 확정본을 되돌리는 자리면 멈추고 질문_ → 빌드 검증 후 커밋. "전부 합쳐" = 전량 머지가 아니라 선별 머지.
+3. **merge = Claude 선별 책임** (2026-06-11 사용자 위임 — 수동 메모 (DB profile record `07_coding_convention`)가 source): 사용자 직접 리뷰 없이 main 이 선별 머지한다. **머지 시점 게이트** — (a) 사용자 머지 신호("합쳐"/"머지해") 또는 (b) 병렬 디스패치로 분사한 background job 수확 자리에서만. **자기 turn 의 본작업 브랜치를 같은 turn 에 self-merge 금지** — 브랜치 + 한 줄 보고로 turn 을 끝내고 main ref 는 불변 (§3 후속 단계 자동 진행에 merge-to-main 은 포함되지 않음). 머지 후에도 작업 브랜치는 같은 turn 에 삭제하지 않는다 (롤백 지점). **worktree 디렉토리는 별개** — 수확(머지+통합 빌드 검증) 완료된 worktree 는 다음 자연 휴지(다음 수확 자리·세션 마무리)에 디렉토리만 제거한다 (브랜치 ref 유지, `git worktree remove` 전 자체 dev 서버 등 고아 프로세스 종료 확인 — NFS lock 잔존 방지. 2026-06-12 worktree 9개 적체에서 사용자 지적). 절차 — `git diff main...<branch>` 로 _실내용_ 확인 → 이미 main 에 진전됐거나 회귀·중복이면 머지 안 함 → 충돌은 양쪽 의도를 해석해 해결 (한쪽 자동 채택·`--force` 금지) → _애매하거나 확정본을 되돌리는 자리면 멈추고 질문_ → 빌드 검증 후 커밋. "전부 합쳐" = 전량 머지가 아니라 선별 머지.
 4. **공유 산출물**: `.claude_reports` 공유 단일파일 쓰기는 §5.8 lock 경유. `plans/<slug>/` 는 경로 분리라 비경합.
 5. **컨텍스트**: job 조정 기록 누적으로 main 컨텍스트 압박 시 post-it handoff 제안 (글로벌 §2).
 
@@ -426,7 +426,7 @@ echo "state: branch=$br head=$head base=$def dirty=$(git status --porcelain 2>/d
 | **공통 시각 자산** | — | `autopilot-design` (신규 디자인 사이클) | `autopilot-design` 재호출 (cycle 2+) |
 | **공통 사용자 프로필** | — | `analyze-user --mode init` (aspect 7 종 — figure / writing / presentation / analysis / domain / collab / **coding_convention**) | `analyze-user --mode update` |
 
-> **`coding_convention` aspect 의 자리** (2026-05-26): 사용자 cross-project 코드 일관 패턴 (model 폴더 / config / prefix / preferred layer / framework / metric / log·ckpt / seed) 을 `~/.claude/user_profile/07_coding_convention.md` 에 누적. autopilot-lab / autopilot-spec / autopilot-code / 개발팀 _new-lib_ 의 _cross-project default · fallback_ 자리 (2순위). **개별 프로젝트의 `analysis_project/code/experiment_conventions.md` 가 1순위 source of truth** — 충돌 자리는 per-project 우선, user_profile/07 은 _per-project 부재·빈 자리만_ 보강. 사용자 첫 호출 자리에 source 폴더 명시 (cwd 자동 발견 + `--source <path>`) — 하드코딩 path X.
+> **`coding_convention` aspect 의 자리** (2026-05-26): 사용자 cross-project 코드 일관 패턴 (model 폴더 / config / prefix / preferred layer / framework / metric / log·ckpt / seed) 을 `mem profile 07_coding_convention` 에 누적. autopilot-lab / autopilot-spec / autopilot-code / 개발팀 _new-lib_ 의 _cross-project default · fallback_ 자리 (2순위). **개별 프로젝트의 `analysis_project/code/experiment_conventions.md` 가 1순위 source of truth** — 충돌 자리는 per-project 우선, `mem profile 07` 은 _per-project 부재·빈 자리만_ 보강. 사용자 첫 호출 자리에 source 폴더 명시 (cwd 자동 발견 + `--source <path>`) — 하드코딩 path X.
 
 ### §6.2. 사용자 호출 단위 흐름 (3 패턴)
 
@@ -580,17 +580,17 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 ### §7.0. store 아키텍처 (개요)
 
 - **store** = `~/.claude/memory/memory.db` (SQLite WAL = 진실원천 SoT, FTS5 내장) + `dump.jsonl`(결정론적 텍스트 mirror, git추적). **전용 private repo `claude-memory`** 로 분리 — config repo(`claude_setting`)에선 `memory/` gitignore. 레코드 = `tier`(working 단기 / durable 장기) × `scope`(project / global) × `type`. (2026-06-15 DB-as-SoT 전환 — 구 markdown 원본 SoT + `.index.db` 파생색인 모델 대체. 복원 = `mem import dump.jsonl`.)
-- **3 면 → store mirror** (각 면은 live 역할 유지, store 가 canonical 가시 소스):
+- **store tier × scope** (DB 가 단일 SoT — 파일 면은 on-demand 뷰):
 
-  | 면 (live 역할) | store tier/scope | 동기화 |
+  | 채널 | store tier/scope | 동기화 |
   |---|---|---|
-  | `post-it.md` (사람 편집 단기 면) | working/project | `/post-it` → SessionEnd `mem sync` |
+  | `post-it` (DB working tier alias — `/post-it` 스킬이 author) | working/project | `/post-it` → `mem note`/`mem add` → SessionEnd `mem sync` |
   | `projects/<cwd>/memory/` (하네스 auto-write inbox) | durable/project | 하네스 write → SessionEnd `mem sync` |
-  | `user_profile/*.md` (cross-project 프로필 source·경로참조) | durable/global (type=profile) | `analyze-user` → `mem sync` |
+  | DB `type=profile` 레코드 (cross-project 프로필 SoT) | durable/global (type=profile) | `analyze-user` → `mem add` → `mem sync`; `user_profile/*.md` = on-demand `mem export` 사람 열람 캐시 (SoT 아님) |
 
 - **자체 하네스 (store 가 세션 주입의 source)**: SessionStart hook `mem inject --hook` → store 의 현 cwd working+durable + global profile 을 `additionalContext` 로 주입. SessionEnd hook `mem sync` → 하네스 write 회수 + 색인 재생성. (단일 출처 = `settings.json` hooks.)
 - **회상**: `tools/memory/recall.sh` = `mem recall` thin wrapper — store FTS5 + `--sessions`(raw 대화 jsonl) + `--all`(전 scope). 트리거 = CLAUDE.md §도메인 + §7.4.
-- **CLI**: `mem {add, note, recall, index, sync, inject, export, import, migrate, lifecycle, project, stats, register-postit}`. (`export --target dump|profile` = DB→git mirror / user_profile view, `import <dump.jsonl>` = 복원.)
+- **CLI**: `mem {add, note, recall, index, sync, inject, export, import, migrate, lifecycle, project, stats, profile, register-postit}`. (`profile <stem>` = DB type=profile 레코드 body 출력 — read-only; `export --target dump|profile` = DB→git mirror / on-demand 사람 열람 캐시 (SoT 아님); `import <dump.jsonl>` = 복원; `register-postit` = deprecated/legacy-migration-only, skills 에서 더 이상 호출 안 함.)
 - **불변식**: 기억 저장 = 자동(품질필터만 — §7.1·§7.2, 사람 승인 게이트 없음). 삭제(gc)·세팅변경은 사람 게이트. lifecycle = working 시간만료 / durable consolidate(§7.3 lifecycle).
 
 > 위 intro 의 _write 면_ 세부 (무엇을 저장/생략하고 어떻게 쓰는지) 는 §7.1–§7.2, recall 은 §7.4. Hermes `write_approval` 게이트·promote/skip·session_search 벤치마킹(T5/T1).

@@ -45,10 +45,10 @@ You are the **디자인팀 router**. Refer to CLAUDE.md for project-specific sty
 
 ## 사용자 특성 참조 (cross-project, 자동 로드)
 
-본 라우터는 작업 시작 자리에서 다음 파일을 Read 하고 _default_ 로 따른다 (사용자가 그 turn 에 다른 명시를 주면 그 자리만 override):
-- `~/.claude/user_profile/01_paper_figure_style.md` — palette·폰트·사이즈·visual 시그니처.
-- `~/.claude/user_profile/03_presentation_strategy.md` — 슬라이드 구성·서사 flow·시각 결정 (slide 자리).
-- `~/.claude/user_profile/05_domain_expertise.md` — caption·라벨 안 도메인 약자·용어.
+본 라우터는 작업 시작 자리에서 다음 명령을 실행하고 그 body 를 _default_ 로 따른다 (사용자가 그 turn 에 다른 명시를 주면 그 자리만 override):
+- `mem profile 01_paper_figure_style` (`python3 ~/.claude/tools/memory/mem.py profile 01_paper_figure_style`) — palette·폰트·사이즈·visual 시그니처; 실행해 그 body 를 default 로 따른다 (사용자가 turn 안 다른 명시 주면 override).
+- `mem profile 03_presentation_strategy` (`python3 ~/.claude/tools/memory/mem.py profile 03_presentation_strategy`) — 슬라이드 구성·서사 flow·시각 결정 (slide 자리); 실행해 그 body 를 default 로 따른다 (사용자가 turn 안 다른 명시 주면 override).
+- `mem profile 05_domain_expertise` (`python3 ~/.claude/tools/memory/mem.py profile 05_domain_expertise`) — caption·라벨 안 도메인 약자·용어; 실행해 그 body 를 default 로 따른다 (사용자가 turn 안 다른 명시 주면 override).
 
 갱신: `/analyze-user` 또는 `/post-it --scope user`.
 

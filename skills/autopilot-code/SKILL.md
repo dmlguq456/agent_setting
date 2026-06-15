@@ -12,7 +12,7 @@ argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [
 
 | 자료 | 자리 | 우선순위 |
 |---|---|---|
-| `~/.claude/user_profile/07_coding_convention.md` | 사용자 cross-project 컨벤션 | 2순위 (default·fallback) |
+| `mem profile 07_coding_convention` (`python3 ~/.claude/tools/memory/mem.py profile 07_coding_convention`) | 사용자 cross-project 컨벤션 | 2순위 (default·fallback) |
 | `.claude_reports/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 | **1순위** — 코드 수정 4 원칙의 source. 충돌 시 per-project 우선 |
 | `.claude_reports/spec/prd.md` (있으면) | spec 청사진 | spec mode 별 추가 logic 활성화 |
 | `.claude_reports/spec/design/05_handoff/handoff.md` + `design/02_tokens/tokens.md` + `design/design_state.yaml` (app mode·design 산출 있으면) | 디자인 토큰·컴포넌트 인계 + 토큰 버전 | **app mode 1순위** — UI 구현은 이 토큰(`tokens_path`)·컴포넌트 위에서. 디자인팀 critic 의 _비교 기준_ 도 이 handoff. design 없으면 skip |

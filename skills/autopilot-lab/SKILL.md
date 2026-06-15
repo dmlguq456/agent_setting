@@ -156,7 +156,7 @@ argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [-
 | Layer | 자료 | 누적 단위 | 자리 |
 |---|---|---|---|
 | **실험 컨벤션 (per-project)** | `.claude_reports/analysis_project/code/experiment_conventions.md` | 프로젝트 단위 | **1순위** — 본 프로젝트의 실제 컨벤션이 source of truth. 개별 프로젝트의 특수 사정(외부 ref 기반 / 다른 framework / legacy 자리) 그대로 우선 |
-| 사용자 일관 패턴 (cross-project) | `~/.claude/user_profile/07_coding_convention.md` | cross-project | **2순위 (default·fallback)** — per-project 부재 또는 _빈 자리_ 만 보강. 부재 시 `/analyze-user coding_convention` 권장 안내 |
+| 사용자 일관 패턴 (cross-project) | `mem profile 07_coding_convention` (`python3 ~/.claude/tools/memory/mem.py profile 07_coding_convention`) | cross-project | **2순위 (default·fallback)** — per-project 부재 또는 _빈 자리_ 만 보강. 부재 시 `/analyze-user coding_convention` 권장 안내 |
 | 프로젝트 timeline | `.claude_reports/experiments/_RUNLOG.md` 의 최근 5 줄 | 한 실험 = 한 줄 | 직전 실험 컨텍스트 + ⏳ 대기/✅ 완료 상태 |
 | 직전 실험 상세 | 직전 실험 폴더의 `summary.md` + `STORY.md` | 한 실험 narrative | 결과·다음 후보 인용 |
 | **부모 실험** (`--parent` 자리) | 부모 폴더의 `summary.md` / `STORY.md` / `config` / ckpt path | 한 실험 | fine-tune base 또는 재평가 대상 |
@@ -191,7 +191,7 @@ argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [-
 
 ## 코드 수정 4 원칙 (sub-agent 호출 자리에 매번 prepend)
 
-`analysis_project/code/experiment_conventions.md` (**1순위 — per-project 가 source of truth**) + `~/.claude/user_profile/07_coding_convention.md` (2순위 — cross-project default, per-project 부재·빈 자리만 보강) 의 _preferred layer / config 메커니즘 / prefix 패턴_ 을 source 로 다음 4 원칙을 개발팀 _new-lib_ mode prompt 에 매번 prepend. _충돌 자리는 per-project 우선_ — 본 프로젝트의 실제 컨벤션 침범 X.
+`analysis_project/code/experiment_conventions.md` (**1순위 — per-project 가 source of truth**) + `mem profile 07_coding_convention` (2순위 — cross-project default, per-project 부재·빈 자리만 보강) 의 _preferred layer / config 메커니즘 / prefix 패턴_ 을 source 로 다음 4 원칙을 개발팀 _new-lib_ mode prompt 에 매번 prepend. _충돌 자리는 per-project 우선_ — 본 프로젝트의 실제 컨벤션 침범 X.
 
 1. **최소 수정** — 기존 모델 폴더 복사 후 변형 (`--ref` 또는 `similar_models.md` 추천). 새 layer 도입 default X
 2. **원래 layer 1순위** — `experiment_conventions.md` 의 _preferred layer_ list 가 1순위. 새 layer 도입은 _명시 컨펌_ 필요

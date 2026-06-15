@@ -32,7 +32,7 @@
 | `plans/` 코드 | autopilot-code | `plans/<date>_<slug>/` |
 | `documents/` 문서 | autopilot-draft/refine | `_internal/versions/v{N}/` |
 | `experiments/` 실험 | autopilot-lab | `_RUNLOG.md` |
-| `user_profile/` 프로필 | analyze-user / post-it --scope user | `_internal/versions/` |
+| DB `type=profile` 레코드 | analyze-user / post-it --scope user | 레코드 body 내 changelog |
 
 > 단일 출처 = 글로벌 `CLAUDE.md` §0. 본 §0 은 그 라우팅 불변식의 WORKFLOW 측 거울. 위반 신호: ad-hoc Edit 으로 산출물 직접 수정 / 게이트 건너뛰고 코드부터 / 산출물 만든 스킬 외 경로로 수정.
 
@@ -70,7 +70,7 @@
 | **research** | 연구·재현성 | + train.py/eval.py/config + model skeleton + **Phase 1.5 ckpt 사전 동작 점검** |
 | **복합 / auto** | 다측면 / 자동 추론 | 공통 + mode 별 독립 섹션 / 추론 후 컨펌 |
 
-**Scaffold ref 우선순위**: 내부(similar_models·`--ref`) → 외부(research/{topic}/code_resources) → generic. **컨벤션 prepend**: `analysis_project/code/experiment_conventions.md`(1순위) → `user_profile/07_coding_convention.md`(2순위, 충돌 시 per-project 우선).
+**Scaffold ref 우선순위**: 내부(similar_models·`--ref`) → 외부(research/{topic}/code_resources) → generic. **컨벤션 prepend**: `analysis_project/code/experiment_conventions.md`(1순위) → `mem profile 07_coding_convention`(2순위, 충돌 시 per-project 우선).
 
 ## 4. PRD 묶음 갱신 — spec drift 차단
 

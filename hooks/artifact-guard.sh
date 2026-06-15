@@ -7,7 +7,7 @@
 #   · 신규 spec(prd/stack/ship/api_contract/data_model/ui_flow) ← research/ 또는 analysis_project/
 #   · 신규 plan ← spec/
 #   · 신규 documents ← research/ 또는 analysis_project/
-# 비차단 (convention): 기존 산출물 _편집_ · 소스 코드 · experiments/ · user_profile/0*.md.
+# 비차단 (convention): 기존 산출물 _편집_ · 소스 코드 · experiments/ · user_profile/ (README·assets·_internal).
 #   소유 스킬 경유·코드의 autopilot-code 유도는 workflow-guard-hook 라우팅 리마인더 + convention.
 # 단일 출처: WORKFLOW.md §0 (tracked 계약).
 set -euo pipefail

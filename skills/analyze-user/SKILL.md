@@ -1,12 +1,12 @@
 ---
 name: analyze-user
-description: "사용자의 cross-project 산출물 (paper / presentation / report / code / memory) 을 다단계로 스캔·분석해 `~/.claude/user_profile/*.md` 의 _범용 작업 성향_ 을 누적·갱신. autopilot-* 와 동급 ceremony — 사용자 프로필은 _한 번 만들어지면 모든 sub-agent 가 default 로 따르는 자료_ 라 작은 오류도 propagating. 따라서 source discovery → aspect 별 분석 → cross-aspect 일관성 검증 → 다중 QA gate (adversarial 고정) → 산출 → pipeline summary 6 phase. QA level 은 _항상 adversarial_ — 사용자 협상 불가."
+description: "사용자의 cross-project 산출물 (paper / presentation / report / code / memory) 을 다단계로 스캔·분석해 DB `type=profile` 레코드 (`mem profile <stem>`) 의 _범용 작업 성향_ 을 누적·갱신. autopilot-* 와 동급 ceremony — 사용자 프로필은 _한 번 만들어지면 모든 sub-agent 가 default 로 따르는 자료_ 라 작은 오류도 propagating. 따라서 source discovery → aspect 별 분석 → cross-aspect 일관성 검증 → 다중 QA gate (adversarial 고정) → 산출 → pipeline summary 6 phase. QA level 은 _항상 adversarial_ — 사용자 협상 불가."
 argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]"
 ---
 
-> **산출물 위치**: `~/.claude/user_profile/`. 단일 source `01_paper_figure_style.md` ~ `07_coding_convention.md` + `_internal/` (source index / qa reviews / pipeline state). `.claude_reports/` 가 아니므로 [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 의 _3-tier_ 가 _직접 적용_ 되진 않음 — 다만 main outputs / internal logs 의 _2-tier 분리_ 정신은 따른다.
+> **산출물 위치**: DB `type=profile` 레코드 (읽기: `python3 ~/.claude/tools/memory/mem.py profile <stem>` / `mem profile <stem>`). stem 목록: `01_paper_figure_style` ~ `07_coding_convention` (7 개). `_internal/` 은 source index / qa reviews / pipeline state 용 _일시 스크래치_ 디렉터리 — SoT 아님 (SoT 는 DB). `.claude_reports/` 가 아니므로 [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 의 _3-tier_ 가 _직접 적용_ 되진 않음 — 다만 main outputs / internal logs 의 _2-tier 분리_ 정신은 따른다.
 
-> **Workspace assumption**: 본 skill 은 _cross-project_ 작업 — 현 cwd 와 무관하게 사용자의 _과거 모든 산출물_ 을 스캔. 입력 source 는 기본 위치 (`~/nas/user/Uihyeop/doc/` / `~/nas/user/Uihyeop/NN_Zoo/` / `~/.claude/projects/*/memory/`) + `--source <path>` 추가. 산출은 항상 `~/.claude/user_profile/` 영속.
+> **Workspace assumption**: 본 skill 은 _cross-project_ 작업 — 현 cwd 와 무관하게 사용자의 _과거 모든 산출물_ 을 스캔. 입력 source 는 기본 위치 (`~/nas/user/Uihyeop/doc/` / `~/nas/user/Uihyeop/NN_Zoo/` / `~/.claude/projects/*/memory/`) + `--source <path>` 추가. 산출은 항상 DB `type=profile` 레코드로 영속 (파일 Write X).
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
@@ -29,15 +29,15 @@ argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover
 
 ### Override 1순위 — autopilot 우회
 
-- 짧은 메모 한 줄만 — `/post-it --scope user <aspect> add <text>` 직접 호출. 해당 aspect 파일의 `## 사용자 수동 메모` 절에 append.
-- 한 aspect 의 한 자리만 수정 — `~/.claude/user_profile/0X_*.md` 직접 Edit. 단 `## 사용자 수동 메모` 절은 사용자 영역이라 `/post-it --scope user <aspect>` 로만 (직접 Edit 피함).
+- 짧은 메모 한 줄만 — `/post-it --scope user <aspect> add <text>` 직접 호출. 해당 aspect 의 profile 레코드 body 안 `## 사용자 수동 메모` 절에 splice (DB write).
+- 한 aspect 의 한 자리만 수정 — `/post-it --scope user <aspect>` 를 통해 DB 레코드 body 갱신. 파일 직접 Edit 아님 (SoT 는 DB). `## 사용자 수동 메모` 절은 사용자 영역이므로 `/post-it --scope user <aspect>` 경유.
 - `/analyze-user <args>` slash 직접 입력 — 컨펌 skip 즉시 invoke.
 
 > 본 섹션은 `/sync-skills` 가 `~/.claude/README.md` 운영 룰 안내로 자동 반영.
 
 ## Language Rule
 
-- All user-facing output and 산출물 (`user_profile/*.md`) 본문 in 자연스러운 **한국어** (번역체 회피).
+- All user-facing output and 산출물 (DB profile 레코드 body) 본문 in 자연스러운 **한국어** (번역체 회피).
 - 코드·파일 경로·식별자·도메인 표현은 영어 그대로.
 - 어미 톤 — chat 응답은 대화체, user_profile 본문은 _평어 단정형_ (보고서 톤 — `~다 / ~이다`).
 
@@ -45,15 +45,15 @@ argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover
 
 ### `<aspect>` (REQUIRED)
 
-| aspect | 갱신 파일 | source (사용자 `--source <path>` 명시 — 하드코딩 X) |
+| aspect | 갱신 대상 (profile 레코드) | source (사용자 `--source <path>` 명시 — 하드코딩 X) |
 |---|---|---|
-| `figure` | `01_paper_figure_style.md` | 사용자 폴더 명시 — paper PDF 자료 / figure 모음 폴더 / pptx 안 figure 자료 (자동 변환 PNG) |
-| `writing` | `02_paper_writing_style.md` | 사용자 폴더 명시 — paper PDF·docx 자료·LaTeX main.tex·reports (`.docx` / `.hwpx` / `.hwp` 자동 변환) |
-| `presentation` | `03_presentation_strategy.md` | 사용자 폴더 명시 — pptx 자료 (자동 PDF + PNG 변환, 시각 layout fidelity) |
-| `analysis` | `04_analysis_methodology.md` | 사용자 폴더 명시 — 코드 자리 analysis script + paper Method/Experiment 절 |
-| `domain` | `05_domain_expertise.md` | 사용자 폴더 명시 — paper 자료 + 사용자 GitHub URL (옵션) |
-| `coding_convention` | `07_coding_convention.md` | 사용자 폴더 명시 — 코드 repo 자리 (`model/`·`train*.py`·`config*.yaml`·`*.ipynb` 패턴) |
-| `all` | 7 개 모두 | 사용자 `--source <path>` 한 자리 (또는 복수 콤마 분리) — 안 자료 type 별 aspect 자동 분류 (재귀 자동 발견) |
+| `figure` | `mem profile 01_paper_figure_style` | 사용자 폴더 명시 — paper PDF 자료 / figure 모음 폴더 / pptx 안 figure 자료 (자동 변환 PNG) |
+| `writing` | `mem profile 02_paper_writing_style` | 사용자 폴더 명시 — paper PDF·docx 자료·LaTeX main.tex·reports (`.docx` / `.hwpx` / `.hwp` 자동 변환) |
+| `presentation` | `mem profile 03_presentation_strategy` | 사용자 폴더 명시 — pptx 자료 (자동 PDF + PNG 변환, 시각 layout fidelity) |
+| `analysis` | `mem profile 04_analysis_methodology` | 사용자 폴더 명시 — 코드 자리 analysis script + paper Method/Experiment 절 |
+| `domain` | `mem profile 05_domain_expertise` | 사용자 폴더 명시 — paper 자료 + 사용자 GitHub URL (옵션) |
+| `coding_convention` | `mem profile 07_coding_convention` | 사용자 폴더 명시 — 코드 repo 자리 (`model/`·`train*.py`·`config*.yaml`·`*.ipynb` 패턴) |
+| `all` | 7 개 모두 (각 stem 별 DB 레코드) | 사용자 `--source <path>` 한 자리 (또는 복수 콤마 분리) — 안 자료 type 별 aspect 자동 분류 (재귀 자동 발견) |
 
 > **하드코딩 path X — 사용자 자료 명시 default**: 모든 aspect 자리 _기본 source 위치 자체_ 가 _사용자 명시_ 자리. `--source` 명시 없으면 _자료 0 자리_, 사용자 안내 한 줄 — 사용자가 _참고 자료 폴더 path_ 던져주는 자리 ([analyze-project](../analyze-project/SKILL.md) doc mode 와 같은 패턴).
 
@@ -63,8 +63,8 @@ argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover
 
 ### `--mode init|update` (옵션, default `update`)
 
-- `init` — 처음 셋업. 기존 파일 통째 교체 (`_internal/versions/` 안에 옛 버전 스냅샷 보존).
-- `update` (default) — incremental. 새 자료 발견 시 기존 내용에 누적·갱신. 변경 항목은 _누적 vs 교체 vs 제거_ 셋 중 명시.
+- `init` — 처음 셋업. 기존 레코드 body 를 `_internal/versions/` 에 스냅샷 후 새 body 로 DB write (파일 통째 교체 X — DB record 교체).
+- `update` (default) — incremental. 새 자료 발견 시 기존 레코드 body(`mem profile <stem>` 읽기) 에 누적·갱신. 변경 항목은 _누적 vs 교체 vs 제거_ 셋 중 명시.
 
 ### QA 강도 — _adversarial 고정_ (사용자 협상 불가)
 
@@ -168,7 +168,7 @@ pdftoppm -png -r 150 _internal/converted_pdfs/<file>.pdf _internal/converted_png
 Agent(연구팀, prompt="""
 사용자 산출물 분석 — aspect: figure (인스턴스 {A|B|C})
 Source index: ~/.claude/user_profile/_internal/source_index.md
-기존 user_profile/01_paper_figure_style.md (update 모드): {기존 내용}
+기존 profile 레코드 (mem profile 01_paper_figure_style): {기존 내용}
 
 자료 read 자리:
 - 원본 read 가능 자료 (PDF / PNG / md / py 등) — 직접 Read
@@ -233,7 +233,7 @@ mode=init 통째 교체, mode=update 누적.
 
 ### Phase 3 — Cross-reference Validation
 
-목적: aspect 사이 _일관성_ 점검. 예 `01_figure_style.md` 의 _ours 색_ 이 `03_presentation_strategy.md` 의 _슬라이드 강조 색_ 과 어긋나면 어느 쪽이 맞는지 결정.
+목적: aspect 사이 _일관성_ 점검. 예 `01_paper_figure_style` (`mem profile 01_paper_figure_style`) 의 _ours 색_ 이 `03_presentation_strategy` 의 _슬라이드 강조 색_ 과 어긋나면 어느 쪽이 맞는지 결정.
 
 절차:
 
@@ -257,7 +257,7 @@ mode=init 통째 교체, mode=update 누적.
 
 절차:
 
-1. 각 aspect 의 _직전_ `user_profile/0X_*.md` (있으면 `_internal/versions/` 최신 snapshot) 를 Read — 이번 draft 와 항목별 대조.
+1. 각 aspect 의 _직전_ profile 레코드 (`mem profile <stem>`) 대조 (있으면 `_internal/versions/` 최신 snapshot 도 참조) — 이번 draft 와 항목별 대조.
 2. 각 패턴을 4 분류:
    - **confirm** — 직전과 일치 (강화, confidence 유지/상향).
    - **refine** — 직전을 _구체화·정밀화_ (모순 아님, 결대로 발전).
@@ -320,9 +320,9 @@ mode=init 통째 교체, mode=update 누적.
 
 ### Phase 5 — Output Generation
 
-목적: verified draft 를 _최종 user_profile/0X_*.md_ 에 반영. agent invoke 시점 부담 줄이면서 _핵심 anchor 는 본문 유지_.
+목적: verified draft 를 _DB `type=profile` 레코드_ 에 write. agent invoke 시점 부담 줄이면서 _핵심 anchor 는 본문 유지_.
 
-**본문 vs internal 분리** (목표: 각 user_profile/0X_*.md **7-10K tokens**. `01_paper_figure_style.md` 은 _거시 취향 중심_ 으로 재정의(2026-05-27) — Part A(무엇을/왜 + composition·강조·위계·색의미·시그니처) + §B0(원본 개체 라이브러리 `assets/figure/svg/` 포인터). 무거운 Part B 재현 recipe·geometry 수치는 _최소화_(디자인팀이 개체를 복사하지 재현 X — fallback 자리에서만). 기존 Part B 가 비대하면 다음 update 에서 거시 취향으로 trim):
+**본문 vs internal 분리** (목표: 각 profile 레코드 body **7-10K tokens**. `01_paper_figure_style` 레코드는 _거시 취향 중심_ 으로 재정의(2026-05-27) — Part A(무엇을/왜 + composition·강조·위계·색의미·시그니처) + §B0(원본 개체 라이브러리 `assets/figure/svg/` 포인터). 무거운 Part B 재현 recipe·geometry 수치는 _최소화_(디자인팀이 개체를 복사하지 재현 X — fallback 자리에서만). 기존 Part B 가 비대하면 다음 update 에서 거시 취향으로 trim):
 
 | 자리 | 본문 채택 | 본문 외 자리 |
 |---|---|---|
@@ -349,11 +349,14 @@ mode=init 통째 교체, mode=update 누적.
 절차:
 
 1. **--user-refine pause** (있으면) — draft + qa review path 안내 후 종료. resume: `/analyze-user --from output`.
-2. **mode 별 처리**:
-   - `init` — `_internal/versions/v{N}/` 스냅샷 후 통째 교체. `## 사용자 수동 메모` 절 보존.
-   - `update` — Edit, `changelog:` frontmatter 한 줄 추가. `## 사용자 수동 메모` 절 손대지 않음.
+2. **mode 별 처리 (DB record write)**:
+   - `init` — 새 body 작성. 기존 레코드가 있으면 먼저 `python3 ~/.claude/tools/memory/mem.py profile <stem>` 으로 현재 body 를 읽어 `## 사용자 수동 메모` 절을 추출·보존 후 새 body 에 포함. `_internal/versions/v{N}/` 에 이전 body 텍스트 스냅샷 보존(convention). 이후 `python3 ~/.claude/tools/memory/mem.py add durable profile <body> --scope global --source user-profile:<stem>` 으로 DB write.
+   - `update` — 반드시 **`python3 ~/.claude/tools/memory/mem.py profile <stem>`** (rowid-DESC newest-wins tie-break 적용 읽기) 로 현재 body 를 읽는다 — raw `db_iter_records` 직접 쿼리 X (stem-dup 발생 시 stale body 를 읽어 `/post-it promote` 로 splice 된 `## 사용자 수동 메모` 를 orphan 시킬 수 있음). 읽은 body 에 새 분석 내용을 splice — `## 사용자 수동 메모` 절은 그대로 유지. body 안에 changelog 절 한 줄 추가 (`## Changelog` 내 `{date}: {변경 요약}`). 전체 새 body 를 `python3 ~/.claude/tools/memory/mem.py add durable profile <whole-new-body> --scope global --source user-profile:<stem>` 으로 DB write (파일 Edit X).
+   - **Known limitation (write-path gap)**: `mem add` 의 `write_record` 는 source-keyed upsert 가 아님 — body 가 달라지면 기존 `source=user-profile:<stem>` 레코드를 교체하지 않고 새 id 를 mint 해 중복 행이 생긴다. `mem profile <stem>` 은 rowid-DESC newest-wins 로 최신 body 를 반환하므로 _읽기_ 는 정확하나, 이전 버전 행이 잔류해 `mem lifecycle` dup-flag 대상이 된다. source-keyed upsert 구현은 이 작업 범위 밖 — 후속 작업으로 플래그.
+   - **수동 메모 two-writer contract**: `## 사용자 수동 메모` 절은 analyze-user(`update`) 와 `/post-it promote --scope user` 두 곳이 같은 source `user-profile:<stem>` 레코드에 write. 반드시 `mem profile <stem>` tie-broken 읽기로 현재 body 를 확인 후 splice — 다른 경로(raw query) 사용 시 stale dup 에서 splice 해 promoted memo 를 orphan 시킴.
+3. **per-stem 사후 검증 (source-blind dedup caveat)**: 각 stem write 직후 `python3 ~/.claude/tools/memory/mem.py profile <stem>` 로 read-back 해 반환 body 가 방금 쓴 body 와 일치하는지 확인. 불일치 → `find_dup` 의 source-blind dedup 으로 다른 stem 의 기존 레코드와 병합된 것 — 큰 소리로 fail (stem body 충돌, 수동 확인 요).
 
-산출: `~/.claude/user_profile/0X_*.md` (7-10K tokens 목표, 구체 anchor 유지).
+산출: DB `type=profile` 레코드 (stem 별, `source=user-profile:<stem>`, 7-10K tokens 목표, 구체 anchor 유지). 파일 Write X.
 
 ### Phase 5b — pptx 개체 추출 (**figure aspect 전용**, 사용자 참조용 자료 라이브러리 산출)
 
@@ -386,7 +389,7 @@ mode=init 통째 교체, mode=update 누적.
 **Consensus distribution**: confidence 1.0 = {n_high} · 0.6 = {n_medium} · 0.3 (quarantine) = {n_low}
 **Quarantine outcome (Phase 4 QA)**: 승격 {n_up} · drop {n_drop} · open question {n_oq}
 **QA findings**: 🔴 {n_red} 🟡 {n_yellow} 🟢 {n_green}  (resolved {res})
-**Affected files**: {list of user_profile/0X_*.md 갱신된 자리}
+**Affected records**: {갱신된 profile 레코드 source list (user-profile:<stem> 형식)}
 **Retry count**: {0 / 1 / 2 if any}
 **Figure repro gap** (figure aspect 시): {axis별 수렴 — 색/geometry/glyph/connector/폰트, loop N회, 잔차 = 원본복제-only / open question}
 **Total time**: ~{minutes}
@@ -434,19 +437,19 @@ timestamp: "2026-05-22T15:30:00Z"
 
 재개 시 CLI flag override 우선. `--from <stage>` 명시되면 그 phase 부터.
 
-## sub-agent 참조 패턴 (작업 시작 자리에서 Read)
+## sub-agent 참조 패턴 (작업 시작 자리에서 실행)
 
-각 agent 가 user_profile 의 어떤 파일을 Read 해야 하는지. 본 매트릭스는 [`~/.claude/user_profile/README.md`](../../user_profile/README.md) 와 동일 — drift 발견 시 README 가 single source.
+각 agent 가 어떤 aspect 를 참조해야 하는지. **읽기 소스 = DB (`mem profile <stem>`)**; 본 매트릭스는 _어느 agent 가 어느 aspect 를 참조하는지의 매핑 문서_ — aspect 본문 SoT 는 DB. 본 매트릭스는 [`~/.claude/user_profile/README.md`](../../user_profile/README.md) 와 동일 — drift 발견 시 README 가 single source.
 
-| Agent | 작업 시작 시 Read | 이유 |
+| Agent | 작업 시작 시 `mem profile <stem>` 실행 | 이유 |
 |---|---|---|
-| 자료팀 | `01_*` · `03_*` · `04_*` · **`05_*`** | figure / 슬라이드 / 데이터 분석 시각 + 도메인 약자 (figure caption / 슬라이드 안 약자) |
-| 디자인팀 | `01_*` · `03_*` · **`05_*`** | UI mockup·슬라이드 비주얼·다이어그램 톤 + 도메인 약자 (UI 안 표현) |
-| 연구팀 | **`01_*`** · `02_*` · `04_*` · `05_*` | paper figure 인용 양식 (`01`) + 본문 톤 + 검증 방법론 + 도메인 약자 |
-| 편집팀 | `01_*` · `02_*` · `03_*` · **`04_*`** · `05_*` | 사용자 향 문서 wording (figure caption / paper / 발표 / 분석 표현) + 도메인 약자 |
-| 기획팀 | **`02_*`** · `04_*` · **`05_*`** · `07_*` | plan 작성 톤 (`02`) + 검증 패턴 + 도메인 약자 + 코드 컨벤션 (plan 안 코드 정합성) |
-| 개발팀 | **`04_*`** · **`05_*`** · `07_*` | 코드 안 metric·검증 (`04`) + 도메인 약자 (변수명·함수명, `05`) + model 폴더·config·prefix·preferred layer (`07`). per-project `experiment_conventions.md` 가 1순위, 본 파일은 fallback |
-| 메인 Claude | **`04_*`** · **`05_*`** · `07_*` | 사용자 분석 응답 (`04`) + 도메인 약자 인지 (사용자 발화, `05`) + 코드 컨벤션 (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙 prepend, `07`) |
+| 자료팀 | `01_paper_figure_style` · `03_presentation_strategy` · `04_analysis_methodology` · **`05_domain_expertise`** | figure / 슬라이드 / 데이터 분석 시각 + 도메인 약자 (figure caption / 슬라이드 안 약자) |
+| 디자인팀 | `01_paper_figure_style` · `03_presentation_strategy` · **`05_domain_expertise`** | UI mockup·슬라이드 비주얼·다이어그램 톤 + 도메인 약자 (UI 안 표현) |
+| 연구팀 | **`01_paper_figure_style`** · `02_paper_writing_style` · `04_analysis_methodology` · `05_domain_expertise` | paper figure 인용 양식 (`01`) + 본문 톤 + 검증 방법론 + 도메인 약자 |
+| 편집팀 | `01_paper_figure_style` · `02_paper_writing_style` · `03_presentation_strategy` · **`04_analysis_methodology`** · `05_domain_expertise` | 사용자 향 문서 wording (figure caption / paper / 발표 / 분석 표현) + 도메인 약자 |
+| 기획팀 | **`02_paper_writing_style`** · `04_analysis_methodology` · **`05_domain_expertise`** · `07_coding_convention` | plan 작성 톤 (`02`) + 검증 패턴 + 도메인 약자 + 코드 컨벤션 (plan 안 코드 정합성) |
+| 개발팀 | **`04_analysis_methodology`** · **`05_domain_expertise`** · `07_coding_convention` | 코드 안 metric·검증 (`04`) + 도메인 약자 (변수명·함수명, `05`) + model 폴더·config·prefix·preferred layer (`07`). per-project `experiment_conventions.md` 가 1순위, 본 레코드는 fallback |
+| 메인 Claude | **`04_analysis_methodology`** · **`05_domain_expertise`** · `07_coding_convention` | 사용자 분석 응답 (`04`) + 도메인 약자 인지 (사용자 발화, `05`) + 코드 컨벤션 (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙 prepend, `07`) |
 
 > **매트릭스 정리** (2026-05-26): 06 (대화 메타 규칙) 은 _메인 Claude 전용_ 으로 분리 — sub-agent 는 사용자와 직접 대화 X 라 적용 영역 없음 (글로벌 CLAUDE.md + 메모리 always-on 자료와 중복). 07 (코드 컨벤션) 은 _개발팀·기획팀·메인 Claude 만_ — 편집팀 (wording 영역) 은 코드 구조 컨벤션 적용 자리 없어 제외. agent 별 3-5 aspect 참조 default.
 
@@ -454,7 +457,7 @@ timestamp: "2026-05-22T15:30:00Z"
 
 ## 메모리와의 관계
 
-| | 메모리 (`~/.claude/projects/<cwd>/memory/`) | user_profile (`~/.claude/user_profile/`) |
+| | 메모리 (`~/.claude/projects/<cwd>/memory/`) | user profile (DB `type=profile` 레코드, `mem profile <stem>`) |
 |---|---|---|
 | scope | per cwd (project) | cross-project (user) |
 | 누적 | 자동 (대화 중) | 명시 (`/analyze-user` 또는 `/post-it --scope user`) |
@@ -462,7 +465,7 @@ timestamp: "2026-05-22T15:30:00Z"
 | 갱신 | turn-by-turn | cycle-by-cycle |
 | QA gate | X (raw) | O (다중 reviewer — refined) |
 
-메모리는 _대화 메타 규칙·feedback 자료_ 의 raw 누적 (글로벌 CLAUDE.md 가 메인 source). user_profile 은 _사용자 산출물 패턴_ (figure / writing / presentation / analysis / domain / coding) 의 verified refined 카탈로그 — 두 자료 영역 분리.
+메모리는 _대화 메타 규칙·feedback 자료_ 의 raw 누적 (글로벌 CLAUDE.md 가 메인 source). user profile DB 레코드 는 _사용자 산출물 패턴_ (figure / writing / presentation / analysis / domain / coding) 의 verified refined 카탈로그 — 두 자료 영역 분리.
 
 ## 호출 예시
 

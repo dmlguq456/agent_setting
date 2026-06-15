@@ -151,10 +151,10 @@ per-project 메모는 두 layer 분리.
 
 | Layer | 위치 | 갱신 주체 | 용도 |
 |---|---|---|---|
-| **사용자 통제** | `<cwd>/.claude_reports/post-it.md` (1 파일 5 카테고리; legacy `memo.md` fallback) — store working tier 사람-편집 면 | `/post-it` 명령으로만 (Claude 자동 X) → SessionEnd `mem sync` 로 store working mirror | conventions / external resources / open threads / decisions / next session hints |
+| **사용자 통제** | DB working tier — `/post-it` 스킬이 `mem note`/`mem add` 로 author; 5 카테고리(conventions·external resources·open threads·decisions·next session hints)는 `type` taxonomy 로 유지 (파일 face 아님) | `/post-it` 명령으로만 (Claude 자동 X) → `mem note`/`mem add` → SessionEnd `mem sync` | conventions / external resources / open threads / decisions / next session hints |
 | **하네스 자동** | `~/.claude/projects/*/memory/` (하네스 auto-write 면) → SessionEnd `mem sync` → store(`~/.claude/memory/` tier×scope) durable mirror | 하네스 자동 write + `mem sync` | 재사용 절차·교정·컨벤션·교훈 자동 학습. store 가 세션 주입 source(`mem inject --hook`) |
 
-세션 시작 시 CLAUDE.md 도메인 트리거 표가 `cwd/.claude_reports/post-it.md` 자동 Read.
+세션 주입은 `mem inject --hook` 가 DB working tier 에서 수행 (CLAUDE.md post-it.md 도메인 트리거는 v5 에서 제거됨, Step 2.15).
 
 **Why**: 자동 메모리가 모든 feedback 을 누적하면 사용자가 _명시적으로 박아두고 싶은_ 정보 (코딩 컨벤션 · 외부 자원 link · 미해결 thread) 가 noise 에 묻혀 보인다. layer 분리 후 우선순위 명확.
 

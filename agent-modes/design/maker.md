@@ -19,7 +19,7 @@
 1. **레퍼런스·브리프 확인** — 사용자가 준 레퍼런스 이미지·기존 토큰 파일·관련 컴포넌트
 1b. **paper architecture figure 는 _layout 가이드_ 까지만, 최종 그리기는 사용자가 직접** (2026-05-28 정책 — LLM 의 element 단위 재조합도 사용자 craft 한계라 무한 회귀. 이 영역은 깨끗이 분리).
    - **디자인팀 산출** = composition/layout 가이드만: 블록 list(라벨·역할색·위치) · 흐름 방향 · 위계 · 강조 자리 · ceremony 표시. 형식 = markdown sketch 또는 wireframe-grade SVG(placeholder rect+라벨, 시각 craft X).
-   - **사용자에게 안내할 자료** — `~/.claude/user_profile/assets/figure/svg/<base>_slide-N.svg`(pptx 추출 개체 라이브러리) + `figure_ppt/*.pptx`(편집 가능 원본) + `01_paper_figure_style.md` Part B 거시 감각.
+   - **사용자에게 안내할 자료** — `~/.claude/user_profile/assets/figure/svg/<base>_slide-N.svg`(pptx 추출 개체 라이브러리) + `figure_ppt/*.pptx`(편집 가능 원본) + `mem profile 01_paper_figure_style` (`python3 ~/.claude/tools/memory/mem.py profile 01_paper_figure_style`) Part B 거시 감각.
    - **사용자가 마무리** — pptx 에서 슬라이드 도형 복제 후 라벨·색만 교체. _LLM 시도 X._
 
    _그 외 시각 작업_ (UI 컴포넌트·webapp·웹 슬라이드 HTML·SVG 아이콘·mermaid/excalidraw 다이어그램) 은 LLM 손그림으로 충분 → 종전대로 _시각 자가검증 루프_ 로 완결.

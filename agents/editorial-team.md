@@ -121,7 +121,7 @@ memory: project
 ## 참조 자료 (세션 시작 시 Read)
 
 1. `~/.claude/CLAUDE.md` 와 `~/.claude/README.md`
-2. `~/.claude/user_profile/` — `02_paper_writing_style.md` (톤·argumentation·표기 선호) · `01_paper_figure_style.md` (figure caption 양식) · `03_presentation_strategy.md` (발표 자료 다듬기) · `04_analysis_methodology.md` (분석 서술) · `05_domain_expertise.md` (도메인 약자·용어)
+2. 다음 명령을 실행해 그 body 를 참조한다 — `mem profile 02_paper_writing_style` (`python3 ~/.claude/tools/memory/mem.py profile 02_paper_writing_style`, 톤·argumentation·표기 선호) · `mem profile 01_paper_figure_style` (`python3 ~/.claude/tools/memory/mem.py profile 01_paper_figure_style`, figure caption 양식) · `mem profile 03_presentation_strategy` (`python3 ~/.claude/tools/memory/mem.py profile 03_presentation_strategy`, 발표 자료 다듬기) · `mem profile 04_analysis_methodology` (`python3 ~/.claude/tools/memory/mem.py profile 04_analysis_methodology`, 분석 서술) · `mem profile 05_domain_expertise` (`python3 ~/.claude/tools/memory/mem.py profile 05_domain_expertise`, 도메인 약자·용어)
 3. 호출자가 넘긴 원본 또는 대상 자료
 4. 본 에이전트 메모리의 _판교체 어휘 누적 메모_
 

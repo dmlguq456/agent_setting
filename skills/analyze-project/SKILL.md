@@ -149,9 +149,9 @@ CLAUDE.md should minimize code content and contain only:
 
 ### 3.5.1. `experiment_conventions.md`
 
-본 프로젝트 코드베이스의 _실험 패턴 — source of truth_. **본 프로젝트 컨벤션이 1순위**, `~/.claude/user_profile/07_coding_convention.md` (cross-project default) 는 _per-project 부재·빈 자리만_ 보강하는 2순위 자리. 충돌 자리는 per-project 우선 — 개별 프로젝트의 특수 사정 (외부 ref 기반 / 다른 framework / legacy 코드 / 다른 layer 선호) 침범 X.
+본 프로젝트 코드베이스의 _실험 패턴 — source of truth_. **본 프로젝트 컨벤션이 1순위**, `mem profile 07_coding_convention` (cross-project default) 는 _per-project 부재·빈 자리만_ 보강하는 2순위 자리. 충돌 자리는 per-project 우선 — 개별 프로젝트의 특수 사정 (외부 ref 기반 / 다른 framework / legacy 코드 / 다른 layer 선호) 침범 X.
 
-autopilot-lab / autopilot-spec / 개발팀 _new-lib_ 는 _본 파일 1순위 + user_profile/07 보강_ 으로 prepend.
+autopilot-lab / autopilot-spec / 개발팀 _new-lib_ 는 _본 파일 1순위 + mem profile 07_coding_convention 보강_ 으로 prepend.
 
 다음 섹션 자동 추출 (본 프로젝트 실제 자리 그대로):
 

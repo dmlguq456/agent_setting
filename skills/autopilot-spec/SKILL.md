@@ -122,8 +122,8 @@ argument-hint: "<task description> [--mode auto|app|library|api|cli|research|upd
 
 | 자료 | 자리 | 우선순위 |
 |---|---|---|
-| `~/.claude/user_profile/07_coding_convention.md` | 사용자 cross-project 컨벤션 (model 폴더 / config / prefix / preferred layer / framework) | 2순위 (cross-project default·fallback) |
-| `.claude_reports/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 (본 프로젝트 실제 자리) | **1순위** (충돌 시 per-project 우선, user_profile/07 은 빈 자리 보강) |
+| `mem profile 07_coding_convention` (`python3 ~/.claude/tools/memory/mem.py profile 07_coding_convention`) | 사용자 cross-project 컨벤션 (model 폴더 / config / prefix / preferred layer / framework) | 2순위 (cross-project default·fallback) |
+| `.claude_reports/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 (본 프로젝트 실제 자리) | **1순위** (충돌 시 per-project 우선, mem profile 07 은 빈 자리 보강) |
 | `.claude_reports/analysis_project/code/similar_models.md` | 본 프로젝트 모델 간 유사도 | scaffold Phase 0 의 ref 1순위 후보 |
 | `.claude_reports/research/<topic>/` | 외부 ref repo 카드 + 07_resources 의 Quick verify | scaffold Phase 0 의 ref 2순위 + Phase 1.5 검증 source |
 
@@ -400,7 +400,7 @@ mode 5종 모두 scaffold 단계 통일 — 빈 자리에서도 _뼈대 + skelet
 | 2 | 외부 — `research/{topic}/code_resources/` (autopilot-research 의 repo 카드) 또는 `07_resources.md` (pre-trained ckpt URL) 또는 사용자 `--ref <url>` 명시 | research 산출. paper 의 official repo / HF transformers / espnet / lightning 등 |
 | 3 | Generic skeleton fallback | 1·2 모두 부재 자리만. 사용자 컨펌 후 진행 |
 
-> **컨벤션 prepend 우선순위** — `analysis_project/code/experiment_conventions.md` (1순위 — per-project source of truth) + `~/.claude/user_profile/07_coding_convention.md` (2순위 — cross-project default, per-project 부재·빈 자리만 보강) 가 _ref source 우선순위와 독립_ 으로 매번 read. Phase 2 (개발팀 new-lib prompt) 에 prepend — 충돌 자리는 per-project 우선, 본 프로젝트의 실제 컨벤션 침범 X.
+> **컨벤션 prepend 우선순위** — `analysis_project/code/experiment_conventions.md` (1순위 — per-project source of truth) + `mem profile 07_coding_convention` (`python3 ~/.claude/tools/memory/mem.py profile 07_coding_convention`) (2순위 — cross-project default, per-project 부재·빈 자리만 보강) 가 _ref source 우선순위와 독립_ 으로 매번 실행해 그 body 를 따름. Phase 2 (개발팀 new-lib prompt) 에 prepend — 충돌 자리는 per-project 우선, 본 프로젝트의 실제 컨벤션 침범 X.
 
 ```
 === ref source 결정 ===
@@ -464,15 +464,15 @@ Agent(개발팀, mode="new-lib"):
 
    ## 코드 수정 4 원칙 (필수 준수)
    1. 최소 수정 — ref 의 _필요 자리만_ 복사 후 우리 컨벤션 으로 옮김
-   2. 원래 layer 1순위 — experiment_conventions.md 의 preferred layer (per-project 1순위) + user_profile/07 (cross-project default, 보강) 사용. 충돌 자리는 per-project 우선
+   2. 원래 layer 1순위 — experiment_conventions.md 의 preferred layer (per-project 1순위) + mem profile 07_coding_convention (cross-project default, 보강) 사용. 충돌 자리는 per-project 우선
    3. 마이너 변경 = config — model.py 수정 X
-   4. 변형 prefix — fine-tuning 변형은 experiment_conventions.md 의 prefix 패턴 따름 (per-project 부재면 user_profile/07 의 패턴 — 예: _ft01_)
+   4. 변형 prefix — fine-tuning 변형은 experiment_conventions.md 의 prefix 패턴 따름 (per-project 부재면 mem profile 07_coding_convention 의 패턴 — 예: _ft01_)
 
    ## 본 프로젝트 컨벤션 (1순위 — source of truth)
    {analysis_project/code/experiment_conventions.md 의 컨벤션 인용 — 있으면}
 
    ## 사용자 cross-project default (2순위 — per-project 부재·빈 자리만 보강)
-   {user_profile/07 의 model 폴더 / config / prefix / preferred layer / framework 인용 — per-project 와 충돌 시 per-project 우선}
+   {mem profile 07_coding_convention 의 model 폴더 / config / prefix / preferred layer / framework 인용 — per-project 와 충돌 시 per-project 우선}
 
    ## mode 별 scaffold 산출물
    {mode_specific_outputs}

@@ -24,10 +24,10 @@ You are a technical planning specialist. Your role is to analyze source code and
 
 ## 사용자 특성 참조 (cross-project, 자동 로드)
 
-본 라우터는 plan 작성 시작 자리에서 다음 파일을 Read 하고 _default_ 로 따른다 (per-project 컨벤션이 있으면 그쪽 1순위, 충돌 자리 per-project 우선):
-- `~/.claude/user_profile/07_coding_convention.md` — plan 안 코드 구조·prefix·layer·naming 컨벤션.
-- `~/.claude/user_profile/05_domain_expertise.md` — plan 안 도메인 약자·용어.
-- `~/.claude/user_profile/02_paper_writing_style.md` — plan 작성 톤.
+본 라우터는 plan 작성 시작 자리에서 다음 명령을 실행하고 그 body 를 _default_ 로 따른다 (per-project 컨벤션이 있으면 그쪽 1순위, 충돌 자리 per-project 우선):
+- `mem profile 07_coding_convention` (`python3 ~/.claude/tools/memory/mem.py profile 07_coding_convention`) — plan 안 코드 구조·prefix·layer·naming 컨벤션; 실행해 그 body 를 default 로 따른다 (사용자가 turn 안 다른 명시 주면 override).
+- `mem profile 05_domain_expertise` (`python3 ~/.claude/tools/memory/mem.py profile 05_domain_expertise`) — plan 안 도메인 약자·용어; 실행해 그 body 를 default 로 따른다 (사용자가 turn 안 다른 명시 주면 override).
+- `mem profile 02_paper_writing_style` (`python3 ~/.claude/tools/memory/mem.py profile 02_paper_writing_style`) — plan 작성 톤; 실행해 그 body 를 default 로 따른다 (사용자가 turn 안 다른 명시 주면 override).
 
 갱신: `/analyze-user` 또는 `/post-it --scope user`.
 
