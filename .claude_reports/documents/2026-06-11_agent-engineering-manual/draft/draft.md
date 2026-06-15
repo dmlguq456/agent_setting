@@ -421,10 +421,10 @@ harness 만능론을 스스로 제한하는 논의다. 1.2 의 self-aware caveat
 
 | 루프 | 형 | 트리거 | 하는 일 | 산출 |
 |---|---|---|---|---|
-| 당직(oncall) | 시간 | cron 05:37 | 야간 순찰 — 작업장 이상 발견·보고만 | `notes/oncall/<date>.md` |
-| 일지(note) | 시간 | cron 05:03 | 전날 산출물 worklog-board L2 노트화·라우팅 (idempotent) | `notes/_layer2/notes/` + digest |
-| 모의훈련(drill) | 사건 | 지침 수정 후 `drill/run.sh` | fixture 가상 상황 headless 시험·채점 | `drill/results/<일시>/` |
-| 연수(study) | 시간 | cron 일요일 06:17 | 외부 동향 × 현 세팅 → 개선 제안서만 (+ g0 세금 추세) | `notes/study/<date>.md` |
+| 당직(oncall) | 시간 | cron 05:37 | 야간 순찰 — 이상 발견·보고만 (+ 메모리 승격 후보·post-it stale 플래깅 nudge) | `notes/oncall/<date>.md` |
+| 일지(note) | 시간 | cron 05:03 | 전날 산출물 worklog-board L2 노트화·라우팅 (idempotent) + 야간 `mem sync`(기억 store mirror) | `notes/_layer2/notes/` + digest |
+| 모의훈련(drill) | 사건 | 지침 수정 후 `drill/run.sh` | fixture 가상 상황 headless 시험·채점 + FAIL 진단·수정안 초안 + 세션 detritus 자동청소 | `drill/results/<일시>/` (+ `<case>.diagnosis.md`) |
+| 연수(study) | 시간 | cron 일요일 06:17 | 외부 동향 × 현 세팅 → 개선 제안서만 (🔴 우선순위는 자동 초안 동반) (+ g0 세금 추세) | `notes/study/<date>.md` |
 
 새벽 시간표는 05:03 일지(note) → 05:37 당직(oncall) 으로 충돌 방지 간격을 둔다.
 
@@ -444,8 +444,9 @@ harness 만능론을 스스로 제한하는 논의다. 1.2 의 self-aware caveat
 | `git-state-guard.sh` | PreToolUse(Edit/Write/MultiEdit/NotebookEdit) | merge/rebase/cherry-pick 중 편집 hard deny (drill g2, 2026-06-11) | P9 |
 | `design-postwrite.sh` | PostToolUse(Edit/Write/MultiEdit) | DESIGN HTML 저장 시 headless 렌더 + console error alert | (디자인 트랙) |
 | `herdr-agent-state.sh` | (herdr 설치) | 외부 integration 관리 | (외부) |
+| SessionStart / SessionEnd (settings.json inline) | 세션 시작 / 종료 | `mem inject --hook`(통합 store → 세션 주입 source) / `mem sync`(세션 write 회수 + 색인) — 통합 기억 자체 하네스 | P10 / §7 |
 
-hooks 는 세션 _안_ 의 부품(툴 호출 순간 강제)이고 loops 는 세션 _무관_ 실행이라는 점에서 역할이 갈린다 (`loops/README.md` 모두 첫 줄). hook 4종(artifact-guard·spec-skill-gate·spec-read-marker·git-state-guard)이 P1/P2/P9 의 하드 강제 층을 이룬다.
+hooks 는 세션 _안_ 의 부품(툴 호출 순간 강제)이고 loops 는 세션 _무관_ 실행이라는 점에서 역할이 갈린다 (`loops/README.md` 모두 첫 줄). hook 4종(artifact-guard·spec-skill-gate·spec-read-marker·git-state-guard)이 P1/P2/P9 의 하드 강제 층을 이룬다. **통합 기억 hook 2종(SessionStart `mem inject` / SessionEnd `mem sync`, settings.json inline)** 은 store 를 세션 주입의 source 로 만드는 자체 메모리 하네스다 (P7 harness × P10 memory, §2.7).
 
 ## 2.6 컨텍스트 절약 규율 (P11)
 
