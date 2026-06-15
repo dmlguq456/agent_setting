@@ -42,5 +42,12 @@
 - **non-goal 보강**: Turso/libSQL 원격 동기화 명시 비목표 (단일 사용자·외부 의존 0 근거).
 - 스코프: D2(위치↔스코프 분리)·D4(자동write)·D5(lifecycle)·D6(inject/sync hook)·D8(보안)·통합모델 골격 불변.
 
+### v3 → v4 (2026-06-15, update mode — profile 완전통합 + Hermes 잔여port + 결정론우선, snapshot `_internal/versions/v3/`)
+v3 구현(DB화·이주·저장소분리) 완료 후, 사용자 지적("profile은 절반만 통합 — sub-agent는 여전히 md 원본을 권위로 읽음, 별론데")과 핵심 원칙("결정론·SW 가능한 건 코드로 → agent 생각 최소화") 반영.
+- **§0.5 결정론-우선 (D-8, cross-cutting)**: SW 가능 요소는 hook/script/gate/DB로 대체, agent judgment는 fallback. DESIGN_PRINCIPLES 격상 예정.
+- **Cluster A (D-9) profile 완전통합**: DB=profile SoT / `mem export --profile`을 sync·analyze-user에 wiring해 md를 generated view로(A2) / analyze-user DB-first(A3) / post-it·편집 DB 경유(A4). sub-agent 경로 Read는 보존(md=view, 파일명 결정론 도출).
+- **Cluster B (D-10) Hermes 잔여port** (08_source_grounded 검증): B1 session_search 자율 turn-호출 강화 / B2 turn-counter 자기회고(UserPromptSubmit hook 결정론 카운터, nudge_interval=10 등가). 08 결론 = FTS5 cross-session 갭 닫힘, 남은 진짜 port 이 둘뿐.
+- 유지: D1~D9 골격·데이터모델.
+
 ## Next
-DB-backed 재구현 → autopilot-code --mode dev (본 v3 spec 따라). 순서: 스키마·store → 이주(md SoT 포함) → export/import → recall → lifecycle → hook → post-it alias → 저장소 분리(인프라).
+v4 구현 → autopilot-code --mode dev (본 v4 spec). 순서: Cluster A(profile 완전통합) → Cluster B(turn-counter→session_search) → hygiene(sync-skills/drill·stale draft·03↔08 cross-ref·DESIGN_PRINCIPLES 격상).

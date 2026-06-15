@@ -22,6 +22,20 @@
 
 ---
 
+## §0.5 결정론 우선 — deterministic-first (cross-cutting, §0 다음 상위)
+
+> 2026-06-15 사용자 핵심 원칙. §1 의 _Orchestrator = deterministic state machine_ 을 **전 스킬·하네스의 보편 tenet 으로 격상**.
+
+**결정론적·소프트웨어로 처리 가능한 요소는 가능한 한 코드(hook·script·gate·DB 제약)로 대체해, 에이전트가 _생각_ 할 영역을 최소화한다.** 그래야 에이전트가 진짜 판단이 필요한 자리에 집중해 더 똑똑·신뢰성 있게 동작한다.
+
+- **왜**: 매 agent 판단은 비결정·실수 가능·토큰 비용. 결정론 기계화는 무료·정확·재현가능. (또 §0 과 정합 — hook/script/gate 는 모델 전환에도 살아남는 substrate, agent 판단은 모델 능력에 종속.)
+- **적용 규칙**: 새 기능·정책 설계 시 _"이걸 코드로 강제·자동화할 수 있나?"_ 를 **먼저** 묻는다. 가능하면 instruction(에이전트 판단)이 아니라 메커니즘(hook/script/gate/DB)으로. **agent judgment 는 결정론이 불가능한 의미·창의 판단의 _fallback_.**
+- **발현 예**: orchestrator state machine(§1) · artifact-guard·git-state·pipeline-lock hook · 메모리 write 게이트·dedup·만료·turn-counter nudge · QA gate 통과기준. ↔ anti-pattern: "에이전트가 매번 알아서 판단" 으로 떠넘기기 (재현 불가·드리프트).
+
+> 구조 결정이 본 §0.5 와 충돌하면 (§0 다음으로) **이 원칙을 우선** 적용한다 — 단 결정론화가 *과한 경직*을 낳는 자리(진짜 의미 판단)는 예외.
+
+---
+
 ## 1. 3-Tier Role Separation
 
 | Tier | Role | 예 | Anti-pattern |

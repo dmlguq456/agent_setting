@@ -5,8 +5,8 @@ scope_note: "통합 기억 시스템 — post-it(단기)·auto-memory(장기)·u
 phases:
   spec: done               # v3 PRD 확정 (D-1~7 lock — DB화·저장소분리·통합강화)
   scaffolding: pending
-  dev: done                # DB-backed 재구현·200레코드 이주·저장소 분리 완료 (claude-memory private repo, config repo memory/ 이력 filter-repo 제거+force-push)
-last_updated: 2026-06-15  # v3 update: D1 반전(SoT=SQLite), 저장소 분리(claude-memory repo), 통합 강화. snapshot v2
+  dev: in_progress         # v3 완료(DB화·분리). v4 신규 = Cluster A(profile 완전통합)+B(Hermes port) 구현 대기
+last_updated: 2026-06-15  # v4: profile 완전통합(A)·Hermes 잔여port(B)·결정론우선 원칙(D-8). snapshot v3 (v3=DB화·분리)
 inputs:
   - .claude_reports/research/hermes-agent/
   - VISION.md
@@ -20,3 +20,6 @@ decisions_locked:
   - D-5: SoT = 로컬 SQLite memory.db (git=dump.jsonl 텍스트 mirror, .db 비추적)
   - D-6: 저장소 분리 — claude-memory private repo, config repo memory/ 이력 filter-repo 제거
   - D-7: 통합 깊이 — user_profile+post-it+auto-memory 한 DB (tier/scope/type 컬럼 구분 유지)
+  - D-8: 결정론 우선 (deterministic-first) — SW 가능 요소는 코드(hook/script/gate/DB)로, agent 판단 최소화 (cross-cutting, DESIGN_PRINCIPLES 격상)
+  - D-9: profile 완전통합 — DB=profile SoT, md=generated view, analyze-user/post-it DB-first (Cluster A)
+  - D-10: Hermes 잔여 port — session_search 자율호출 + turn-counter 자기회고, 둘 다 결정론-우선 (Cluster B)
