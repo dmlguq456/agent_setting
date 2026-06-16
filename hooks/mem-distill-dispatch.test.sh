@@ -1,23 +1,19 @@
 #!/usr/bin/env bash
-# Standalone test for mem-distill-dispatch.sh (spec v7 §5.5 D-12/D-13/D-14).
+# Standalone test for mem-distill-dispatch.sh (spec v8 §5.5 D-12/D-13/D-14).
 # Fully isolated via MEM_STORE + MEM_PROJECTS temp dirs — never touches real ~/.claude/memory.
 # Real `claude` spawn is ALWAYS avoided via a PATH-injected `claude` stub (sentinel / argv-capture).
 # Covers Phase-3 Verification ②③④⑥ from plan: 2026-06-16_distiller-v7-hardening/plan/plan.md
 #
-# ⚠️ ⑤ (live D-14 permission probe) is OUT OF SCOPE here (this file = stubs only, never real claude).
-#    ⑤ WAS run live on 2026-06-16 (claude 2.1.178 / sonnet-4-6) — see test_logs/perm_probe_5*.log:
-#        - python3 <mem.py> ...   → ALLOWED ✅ (mem.py runs, record written)   [allowedTools pattern OK]
-#        - touch / non-mem.py     → NOT executed ✅ under default mode (prompt→headless hang→no run)
-#                                    ⇒ arbitrary bash physically blocked = D-14 goal MET.
-#        - model id sonnet-4-6    → valid ✅
-#        - ⚠️ --permission-mode dontAsk / bypassPermissions = allow-all (touch RAN) → FORBIDDEN.
-#          Keep default (unset). The pattern 'Bash(python3 *mem.py*:*)' is the merge-gate, CONFIRMED.
+# ⚠️ ⑤ (live D-14 no-tools acceptance probe) is OUT OF SCOPE here (this file = stubs only, never real claude).
+#    ⑤ merge-gate is now the no-tools acceptance (separate live script, `--disallowedTools` probe) that
+#    verifies date>>file is blocked in the REAL operating settings.json env (blanket Bash allow + skipAutoPermissionPrompt
+#    + skipDangerousModePermissionPrompt + defaultMode:auto all live) — disallow>allow precedence proved in-env.
+#    allowlist probe approach (v7) is deprecated — v7 --allowedTools was empirically inert.
+#    Stub tests (a)/(b) below cover JSON-lines parsing and injection-in-body at unit level;
+#    live acceptance gate (Verification ①) is out of scope here (stubs only, never real claude).
 #    DEFERRED (before flipping MEM_DISTILL_ENABLE=1 — D5 hard gate): R1 env-inheritance, ghost-marker,
 #    R7 (mem sync double-absorb / herdr state pollution) one-time live checks; plus optional clean-deny
-#    improvement (non-mem.py currently hangs→zombie until stale-lock GC 60min; acceptEdits/auto modes
-#    unverified, or wrap claude in `timeout N`). HARD RULE: ENABLE=1 FORBIDDEN until the deferred
-#    live checks pass. D-14 security (arbitrary-exec block) already holds under default; the deferred
-#    items are robustness/efficiency, not the security gate.
+#    improvement. HARD RULE: ENABLE=1 FORBIDDEN until the deferred live checks pass.
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -35,7 +31,10 @@ bad() { FAIL=$((FAIL+1)); printf '  ❌ %s\n' "$1"; }
 STORE="$(mktemp -d)"; PROJ="$(mktemp -d)"
 STUBBIN="$(mktemp -d)"      # sentinel stub (touch CLAUDE_CALLED iff claude invoked)
 STUBCAP="$(mktemp -d)"      # argv-capture stub (echoes argv to ARGV file)
-trap 'rm -rf "$STORE" "$PROJ" "$STUBBIN" "$STUBCAP"' EXIT
+# 단일 EXIT trap + 누적 cleanup 배열: bash 의 trap EXIT 는 append 아니라 replace 이므로,
+# 신규 테스트(a/M3/M4/b)는 새 trap 을 선언하는 대신 CLEANUP 에 경로를 append 한다 (누수 방지).
+CLEANUP=("$STORE" "$PROJ" "$STUBBIN" "$STUBCAP")
+trap 'rm -rf "${CLEANUP[@]}"; rm -f "${SENTINEL_B:-}"' EXIT
 export MEM_STORE="$STORE" MEM_PROJECTS="$PROJ"
 
 # RP-M4 decision: stubs kept INLINE (not extracted to hooks/test-helpers/dispatch-stub.sh).
@@ -80,12 +79,12 @@ echo "{\"session_id\":\"$SID2\",\"cwd\":\"/tmp\"}" \
 [ -d "$STORE/.distill-lock-$SID2" ] \
   && ok "②a stdin-JSON: lock dir = \$STORE/.distill-lock-$SID2 (MEM_STORE 기반 materialize)" \
   || bad "②a stdin-JSON: lock dir 미생성"
-# marker: dispatch 는 marker 를 advance 하지 않음(detached child 분사 책임) — 경로 규칙이 STORE
-# 기반으로 materialize 되는지만 직접 확인(mem.py --advance 로 생성 → STORE 하위 존재). fallback 없이
-# 명시적: lock-dir 동기 단언이 이미 "dispatch 도달 + spawn 진입"을 증명하므로 marker 는 경로 규칙만.
+# marker: v8 에서 dispatch 의 detached child 가 --advance 를 실행한다. 테스트의 수동 --advance 는
+# child 와 idempotent (같은 sid → 같은 last uuid), stub-less ② 경로의 marker materialize 결정성을
+# 위해 유지한다. 경로 규칙이 STORE 기반으로 materialize 되는지만 직접 확인(명시적).
 python3 "$MEM" distill "$SID2" --advance >/dev/null 2>&1
 [ -f "$STORE/.distill-state-$SID2" ] \
-  && ok "②a stdin-JSON: marker path = \$STORE/.distill-state-$SID2 materialize (advance via mem.py; dispatch 아님)" \
+  && ok "②a stdin-JSON: marker path = \$STORE/.distill-state-$SID2 materialize (child advances; manual --advance idempotent)" \
   || bad "②a stdin-JSON: marker 경로 불일치"
 # ②a 정리 (lock — child trap 과 무관하게 동기 제거)
 rmdir "$STORE/.distill-lock-$SID2" 2>/dev/null || true
@@ -166,9 +165,9 @@ printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"x"}' "
   || bad "④ turn-nudge: 재귀가드 실패 (sentinel PRESENT)"
 
 # ============================================================
-# ⑥ argv capture — 모델 sonnet + no --dangerously-skip-permissions + mem.py-only allowedTools
+# ⑥ argv capture — 모델 sonnet + no --dangerously-skip-permissions + disallowedTools
 # ============================================================
-echo "== ⑥ argv capture — --model claude-sonnet-4-6 · no --dangerously-skip-permissions · mem.py-only allowedTools =="
+echo "== ⑥ argv capture — --model claude-sonnet-4-6 · no --dangerously-skip-permissions · --disallowedTools =="
 SID6="dispatchsid6"
 mkfix "$SID6"
 rm -f "$STUBCAP/ARGV"
@@ -182,11 +181,217 @@ printf '%s\n' "$argv" | grep -qx -- "--model" && printf '%s\n' "$argv" | grep -q
 printf '%s\n' "$argv" | grep -qx -- "--dangerously-skip-permissions" \
   && bad "⑥ argv: --dangerously-skip-permissions 가 존재함 (D-14 위반)" \
   || ok "⑥ argv: --dangerously-skip-permissions 부재 (D-14)"
-# 패턴값은 glob/괄호 메타문자 포함 → -F(fixed-string)로 정확 매치 (basic-regex 해석 회피)
-printf '%s\n' "$argv" | grep -qx -- "--allowedTools" && printf '%s\n' "$argv" | grep -Fxq -- "Bash(python3 *mem.py*:*)" \
-  && ok "⑥ argv: --allowedTools 'Bash(python3 *mem.py*:*)' 포함 (mem.py-only)" \
-  || bad "⑥ argv: mem.py-only allowedTools 패턴 부재: [$argv]"
+# v8: --disallowedTools 존재 단언
+printf '%s\n' "$argv" | grep -qx -- "--disallowedTools" \
+  && ok "⑥ argv: --disallowedTools 포함" \
+  || bad "⑥ argv: --disallowedTools 부재 (v8 보안 미적용): [$argv]"
+# --disallowedTools 다음 줄(space-joined 단일 인자)에 각 도구 포함 — S5 (list truncation 회귀 anchor)
+# 값은 multi-token 단일 인자라 -x 아닌 substring 매치 (grep -q)
+disallow_val="$(printf '%s\n' "$argv" | grep -A1 -x -- "--disallowedTools" | tail -n1 || true)"
+printf '%s' "$disallow_val" | grep -q "Bash" \
+  && ok "⑥ disallow 값: Bash 포함" \
+  || bad "⑥ disallow 값: Bash 부재: [$disallow_val]"
+printf '%s' "$disallow_val" | grep -q "Read" \
+  && ok "⑥ disallow 값: Read 포함" \
+  || bad "⑥ disallow 값: Read 부재: [$disallow_val]"
+printf '%s' "$disallow_val" | grep -q "Write" \
+  && ok "⑥ disallow 값: Write 포함" \
+  || bad "⑥ disallow 값: Write 부재: [$disallow_val]"
+printf '%s' "$disallow_val" | grep -q "Edit" \
+  && ok "⑥ disallow 값: Edit 포함" \
+  || bad "⑥ disallow 값: Edit 부재: [$disallow_val]"
+printf '%s' "$disallow_val" | grep -q "Agent" \
+  && ok "⑥ disallow 값: Agent 포함" \
+  || bad "⑥ disallow 값: Agent 부재: [$disallow_val]"
 rmdir "$STORE/.distill-lock-$SID6" 2>/dev/null || true
+
+# ============================================================
+# test (a) — JSON-lines 파싱 (stub): 유효 2줄 + malformed 5줄 → row count == 2
+# ============================================================
+echo "== test(a): JSON-lines 파싱 — 유효 2줄 + malformed 5줄 → isolated DB row count == 2 =="
+SIDa="dispatchsida"
+STOREa="$(mktemp -d)"; PROJa="$(mktemp -d)"
+STUBa="$(mktemp -d)"
+CLEANUP+=("$STOREa" "$PROJa" "$STUBa")
+
+# fixture (isolated)
+enc_a="$PROJa/-home-fake-$SIDa"; mkdir -p "$enc_a"
+cat > "$enc_a/$SIDa.jsonl" <<JSONL
+{"type":"user","message":{"role":"user","content":"test (a) prompt"},"uuid":"${SIDa}u1","timestamp":"t1","isSidechain":false}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"test (a) reply text"}]},"uuid":"${SIDa}a1","timestamp":"t2","isSidechain":false}
+JSONL
+
+# stub 이 PROMPT argv 무관하게 고정 JSON-lines 출력 (printf/heredoc — 셸 확장 없이 literal)
+# 유효 2줄: body ≥15자, tier/type/body 모두 있음
+# malformed 5줄: (1) non-JSON garbage, (2) body 누락, (3) type 누락, (4) bad tier, (5) body 2001자
+LONG_BODY="$(python3 -c "print('x' * 2001)")"
+cat > "$STUBa/claude" <<STUBEOF
+#!/bin/sh
+printf '%s\n' '{"tier":"durable","type":"lesson","body":"this is a valid durable lesson record"}' \
+              '{"tier":"working","type":"thread","body":"this is a valid working thread item"}' \
+              'not-json-garbage-line' \
+              '{"tier":"durable","type":"lesson"}' \
+              '{"tier":"durable","body":"missing type field here okay"}' \
+              '{"tier":"baz","type":"lesson","body":"bad tier value test record"}' \
+              "{\"tier\":\"durable\",\"type\":\"lesson\",\"body\":\"$LONG_BODY\"}"
+STUBEOF
+chmod +x "$STUBa/claude"
+
+MEM_STORE="$STOREa" MEM_PROJECTS="$PROJa" MEM_DISTILL_ENABLE=1 PATH="$STUBa:$PATH" \
+  bash "$DISPATCH" distill "$SIDa" "/tmp"
+
+# 폴링: detached child 가 mem add 완료할 때까지 row-count ≥ 1 또는 최대 5초 대기 (M5)
+# 유효 2줄 → row count == 2 기대, 하지만 quality_ok(≥15자) 이미 충족
+for _ in $(seq 1 50); do
+  cnt_a="$(MEM_STORE="$STOREa" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
+  [ "${cnt_a:-0}" -ge 1 ] 2>/dev/null && break
+  sleep 0.1
+done
+cnt_a="$(MEM_STORE="$STOREa" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
+[ "${cnt_a:-0}" = "2" ] \
+  && ok "test(a): row count == 2 (유효 2줄만 저장, malformed 5줄 skip)" \
+  || bad "test(a): row count = ${cnt_a:-0}, 기대 2 (유효 2줄 저장 실패 or malformed 포함)"
+rmdir "$STOREa/.distill-lock-$SIDa" 2>/dev/null || true
+
+# ============================================================
+# test (M3) — code-fence 출력 → 레코드 정상 파싱
+# ============================================================
+echo "== test(M3): code-fence 감싼 출력 → 내부 유효 줄만 레코드 생성 =="
+SIDm3="dispatchsidm3"
+STOREm3="$(mktemp -d)"; PROJm3="$(mktemp -d)"
+STUBm3="$(mktemp -d)"
+CLEANUP+=("$STOREm3" "$PROJm3" "$STUBm3")
+
+enc_m3="$PROJm3/-home-fake-$SIDm3"; mkdir -p "$enc_m3"
+cat > "$enc_m3/$SIDm3.jsonl" <<JSONL
+{"type":"user","message":{"role":"user","content":"test M3 prompt"},"uuid":"${SIDm3}u1","timestamp":"t1","isSidechain":false}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"test M3 reply content"}]},"uuid":"${SIDm3}a1","timestamp":"t2","isSidechain":false}
+JSONL
+
+# stub: ```json 펜스로 감싼 유효 JSON 2줄 출력 (첫줄 ```json, 닫는 ```)
+cat > "$STUBm3/claude" <<'STUBEOF'
+#!/bin/sh
+printf '%s\n' '```json' \
+              '{"tier":"durable","type":"lesson","body":"fenced valid durable lesson record"}' \
+              '{"tier":"working","type":"thread","body":"fenced valid working thread record"}' \
+              '```'
+STUBEOF
+chmod +x "$STUBm3/claude"
+
+MEM_STORE="$STOREm3" MEM_PROJECTS="$PROJm3" MEM_DISTILL_ENABLE=1 PATH="$STUBm3:$PATH" \
+  bash "$DISPATCH" distill "$SIDm3" "/tmp"
+
+# 폴링: row count ≥ 1 대기 (내부 유효 2줄 기대)
+for _ in $(seq 1 50); do
+  cnt_m3="$(MEM_STORE="$STOREm3" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
+  [ "${cnt_m3:-0}" -ge 1 ] 2>/dev/null && break
+  sleep 0.1
+done
+cnt_m3="$(MEM_STORE="$STOREm3" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
+[ "${cnt_m3:-0}" = "2" ] \
+  && ok "test(M3): code-fence 감싼 출력 → 내부 유효 2줄 레코드 생성 (fence skip 정상)" \
+  || bad "test(M3): row count = ${cnt_m3:-0}, 기대 2 (fence skip 실패 또는 bare json.loads 회귀)"
+rmdir "$STOREm3/.distill-lock-$SIDm3" 2>/dev/null || true
+
+# ============================================================
+# test (M4) — 빈 출력 → 0 레코드 + marker 값 전진
+# ============================================================
+echo "== test(M4): 빈 stdout → 0 레코드, marker = fixture 마지막 uuid =="
+SIDm4="dispatchsidm4"
+STOREm4="$(mktemp -d)"; PROJm4="$(mktemp -d)"
+STUBm4="$(mktemp -d)"
+CLEANUP+=("$STOREm4" "$PROJm4" "$STUBm4")
+
+enc_m4="$PROJm4/-home-fake-$SIDm4"; mkdir -p "$enc_m4"
+# mkfix 가 쓰는 마지막 uuid = ${SIDm4}a1
+cat > "$enc_m4/$SIDm4.jsonl" <<JSONL
+{"type":"user","message":{"role":"user","content":"test M4 prompt"},"uuid":"${SIDm4}u1","timestamp":"t1","isSidechain":false}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"test M4 reply"}]},"uuid":"${SIDm4}a1","timestamp":"t2","isSidechain":false}
+JSONL
+LAST_UUID_M4="${SIDm4}a1"
+
+# stub: 빈 stdout (0줄)
+printf '#!/bin/sh\n# empty output\n' > "$STUBm4/claude"
+chmod +x "$STUBm4/claude"
+
+MEM_STORE="$STOREm4" MEM_PROJECTS="$PROJm4" MEM_DISTILL_ENABLE=1 PATH="$STUBm4:$PATH" \
+  bash "$DISPATCH" distill "$SIDm4" "/tmp"
+
+# 폴링: marker state file 출현 또는 lock 소멸까지 bounded wait (최대 5초)
+for _ in $(seq 1 50); do
+  if [ -f "$STOREm4/.distill-state-$SIDm4" ]; then break; fi
+  if [ ! -d "$STOREm4/.distill-lock-$SIDm4" ]; then
+    # lock 이 사라졌으면 child 완료 — 한 번 더 대기 후 break
+    sleep 0.2; break
+  fi
+  sleep 0.1
+done
+
+cnt_m4="$(MEM_STORE="$STOREm4" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
+[ "${cnt_m4:-0}" = "0" ] \
+  && ok "test(M4): 빈 출력 → row count == 0" \
+  || bad "test(M4): row count = ${cnt_m4:-0}, 기대 0"
+
+# marker 값 단언: state file 이 fixture 의 마지막 uuid 와 일치해야 함 (v8 신규 계약)
+marker_val="$(cat "$STOREm4/.distill-state-$SIDm4" 2>/dev/null || true)"
+[ "$marker_val" = "$LAST_UUID_M4" ] \
+  && ok "test(M4): marker 값 = $LAST_UUID_M4 (빈 출력에도 advance 완료)" \
+  || bad "test(M4): marker 값 = '${marker_val}', 기대 '$LAST_UUID_M4' (advance 미실행 또는 값 불일치)"
+rmdir "$STOREm4/.distill-lock-$SIDm4" 2>/dev/null || true
+
+# ============================================================
+# test (b) — injection-in-body: body 에 셸 주입 payload → 레코드 저장, sentinel 미생성
+# ============================================================
+echo "== test(b): injection-in-body → record stored (row-count), sentinel NOT created (D-14) =="
+SIDb="dispatchsidb"
+STOREb="$(mktemp -d)"; PROJb="$(mktemp -d)"
+STUBb="$(mktemp -d)"
+SENTINEL_B="/tmp/cc-v8-inject-$$-$RANDOM"
+CLEANUP+=("$STOREb" "$PROJb" "$STUBb")  # SENTINEL_B 는 위 단일 trap 의 rm -f 가 커버
+
+enc_b="$PROJb/-home-fake-$SIDb"; mkdir -p "$enc_b"
+cat > "$enc_b/$SIDb.jsonl" <<JSONL
+{"type":"user","message":{"role":"user","content":"test (b) injection prompt"},"uuid":"${SIDb}u1","timestamp":"t1","isSidechain":false}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"test (b) injection reply"}]},"uuid":"${SIDb}a1","timestamp":"t2","isSidechain":false}
+JSONL
+
+# stub: body 에 셸 주입 payload 포함 — body ≥15자(quality_ok 통과), IF body 가 sh -c/eval 됐다면 sentinel 생성
+# SENTINEL_B 는 아직 미생성 상태 (사전 생성 안 함).
+# python -c 로 JSON 직렬화: 셸 이스케이프 중첩 없이 body 안 특수문자를 안전하게 인코딩.
+cat > "$STUBb/claude" <<STUBEOF
+#!/bin/sh
+python3 -c "
+import json
+payload = {'tier': 'durable', 'type': 'lesson',
+           'body': 'normal text \"; touch $SENTINEL_B ; echo \"'}
+print(json.dumps(payload))
+"
+STUBEOF
+chmod +x "$STUBb/claude"
+
+MEM_STORE="$STOREb" MEM_PROJECTS="$PROJb" MEM_DISTILL_ENABLE=1 PATH="$STUBb:$PATH" \
+  bash "$DISPATCH" distill "$SIDb" "/tmp"
+
+# 폴링: row count ≥ 1 (레코드 저장 완료 대기) 또는 lock 소멸 대기 — M5 row-count 폴링
+for _ in $(seq 1 50); do
+  cnt_b="$(MEM_STORE="$STOREb" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
+  [ "${cnt_b:-0}" -ge 1 ] 2>/dev/null && break
+  # lock 소멸이면 child 완료 (0-record 경로 포함)
+  if [ ! -d "$STOREb/.distill-lock-$SIDb" ]; then sleep 0.2; break; fi
+  sleep 0.1
+done
+
+cnt_b="$(MEM_STORE="$STOREb" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
+# S6 단언 (1): 레코드 저장됨 — DB row-count == 1 (INJECTION_PAT 플래그 여부 무관, row-count 가 stable signal)
+[ "${cnt_b:-0}" = "1" ] \
+  && ok "test(b): injection body → 레코드 저장됨 (row count == 1, body-token match 아님)" \
+  || bad "test(b): row count = ${cnt_b:-0}, 기대 1 (injection body 저장 실패)"
+# S6 단언 (2): sentinel 미생성 — body 가 sh -c/eval 된 적 없음 (D-14 핵심 단언)
+[ ! -f "$SENTINEL_B" ] \
+  && ok "test(b): sentinel 미생성 — injection body 셸 미실행 (D-14 단위 단언 PASS)" \
+  || bad "test(b): sentinel 파일 존재! body 가 셸 실행됨 (D-14 위반 — CRITICAL)"
+rm -f "$SENTINEL_B" 2>/dev/null || true
+rmdir "$STOREb/.distill-lock-$SIDb" 2>/dev/null || true
 
 echo
 echo "RESULT: PASS=$PASS FAIL=$FAIL"
