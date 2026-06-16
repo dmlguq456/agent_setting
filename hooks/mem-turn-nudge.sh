@@ -42,6 +42,9 @@ if [ "$counter" -ge "$N" ]; then fire=1; counter=0; fi
 mkdir -p "$STORE" 2>/dev/null || true
 printf '%s\n%s\n' "$counter" "$db_mtime" > "$STATE" 2>/dev/null || true
 
+# 오래된 세션 state GC (3일+ 비활성 — workflow-guard .untracked GC 패턴 동형, 2026-06-16). 무해 무시.
+find "$STORE" -maxdepth 1 -name '.turn-state-*' -mmin +4320 -delete 2>/dev/null || true
+
 if [ "$fire" = "1" ]; then
   MEM_MSG="🧠 turn-counter($N턴 기억 기록 없음) — 지금까지의 작업 맥락·결정·교훈 중 재사용 가치 있는 것을 \`mem note\`/\`mem add\` 로 promote 회고하세요 (없으면 무시). 기록하면 카운터 자동 리셋." \
   python3 -c 'import json,os; print(json.dumps({"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":os.environ["MEM_MSG"]}}, ensure_ascii=False))'
