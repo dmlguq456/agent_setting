@@ -1,6 +1,6 @@
 # Unified Memory System — PRD
 
-> mode: **library + cli** · 작성 2026-06-15 · v3(DB화·저장소분리) · v4(결정론-우선 원칙·Hermes port) · v5(Option 2 — user_profile·post-it 파일 메커니즘 제거, DB 단일 store, sub-agent DB 직접 읽기) · v6(Cluster C — 세션 자동 distillation: orchestration raw log → tier 메모리, "기억해둬" 수동 의존 제거) · v7(D-13 외부 분사화 + distiller sonnet + D-14 권한 하드닝 시도) · v8(D-14 권한 allowlist 무력 → no-tools+스크립트 실행 재설계) · **v9 2026-06-17** (Cluster D — 결정론-first lifecycle 정비: add=외부 offload·delete=메인 원칙, recall 자동주입 hook, consolidation/prune 후보 메인 노출)
+> mode: **library + cli** · 작성 2026-06-15 · v3(DB화·저장소분리) · v4(결정론-우선 원칙·Hermes port) · v5(Option 2 — user_profile·post-it 파일 메커니즘 제거, DB 단일 store, sub-agent DB 직접 읽기) · v6(Cluster C — 세션 자동 distillation: orchestration raw log → tier 메모리, "기억해둬" 수동 의존 제거) · v7(D-13 외부 분사화 + distiller sonnet + D-14 권한 하드닝 시도) · **v8 정정 2026-06-16** (D-14 권한 allowlist 무력 실측 → no-tools+스크립트 실행으로 재설계: LLM 판단·코드 실행)
 > 입력: `research/hermes-agent/{03_memory_system,04_benchmark_gap,07_security,08_source_grounded}.md` · 기존 `tools/memory/*` · `skills/{post-it,analyze-user}/` · `user_profile/`
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
@@ -116,22 +116,6 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - 신규 테이블 **없음** — distill 결과는 기존 `records`(working/durable)로 흡수. raw 대화는 jsonl(하네스 native)에 남고 DB로 복제 안 함(D-11 source는 read-only adapter). dump.jsonl·claude-memory 동기 대상은 기존 records 그대로(원문 대화 비포함 — 프라이버시·용량).
 - 신규 상태 파일: **단일 공유 increment marker**(세션별, `memory/.distill-state-<sid>` 류 — turn-state 패턴 동형) + 세션당 distiller lock(`.distill-lock-<sid>`, mkdir-atomic 동시 1개). 둘 다 루트 `/memory/` gitignore 가 커버 — 별도 gitignore 파일 불필요(구현 D1; 루트 ignore 가 `memory/` 전체를 무시하므로 lock·state 가 git 에 침투 못 함). 두 트리거(①·②) 양쪽이 같은 marker 를 읽고 전진시킴.
 
-## 5.6 Cluster D — 결정론-first lifecycle 정비 (v9, 사용자 확정 2026-06-17)
-
-> **원칙 정립 (사용자, 2026-06-17)**: 판단 본체(salience 등)는 결정론화 _불가_ — 핵심은 "누가 판단하나". **추가(가역·저위험) 판단 → 외부 싼 에이전트 offload OK / 삭제·정리(비가역·data-loss) 판단 → 메인 클로드 직접.** 결정론 scaffold(트리거·탐지·실행·보안)가 판단을 감싸 신뢰성·재현성을 주되, 판단은 가장 싼 자리에 배치. §0.5 의 정확한 형태. Hermes 도 consolidation 은 메인이 함(capacity-error 강제 트리거) — 같은 자리, 트리거만 다름.
-
-### 5.6.1 D-15 — recall 자동 사전주입 hook (B1 완성)
-- 현 B1 = instruction(메인이 "회상 신호어 보면 `mem recall`" 을 매번 _판단_). → **UserPromptSubmit hook 으로 결정론화**: 신호어(지난번·예전에·전에·그때·저번에·아까 등) regex 감지 → `mem recall` 실행 → 결과를 additionalContext 로 주입. 메인의 "recall 할까" 단계 제거 → *이미 회상된 맥락 위에서 본 생각만*. additive·read-only 라 hook 적합. 가드: distiller 세션(`MEM_DISTILL=1`) skip, 신호어 없으면 no-op(토큰 절약), recall 결과 비면 주입 안 함.
-
-### 5.6.2 D-16 — lifecycle 탐지 → 메인 노출 (consolidation/prune 후보)
-- 현 `lifecycle` 의 durable near-dup `[dup-flag]` 가 SessionEnd `mem sync` 출력으로 흘러 *아무도 안 봐서* 死. → **`mem inject`(세션 시작)에 "정리 후보" 섹션으로 노출** — 메인이 보고 직접 consolidate/prune/graduate (실행=메인, 원칙대로). 탐지(결정론)와 실행(메인 판단) 분리.
-- 노출 대상: durable near-dup 그룹 + (옵션) durable soft-ceiling 초과·usage(Hermes e-4 차용 — capacity 가시화) + 만료 임박 working.
-
-### 5.6.3 D-17 — working TTL = backstop, 삭제 권한 = 메인
-- **distiller(외부) = add-only 확정** (prune/delete 안 붙임 — v8 현 구현 ratify). working prune/graduate·durable consolidation = **메인 직접**(D-16 노출 받아 in-context 실행).
-- **working TTL(21일) = deterministic backstop** 유지 — 메인이 검토 못 하고 방치된 working 만 시간 정리(안전망). 1차=메인 검토(노출 기반), 2차=TTL. (spec §1 "자동만료/졸업" 중 _졸업_ 은 메인이 D-16 노출 받아 수행 — 그간 미구현분 충원.)
-- Hermes 대비: Hermes 는 시간 prune 없음(capacity-only), 우리는 TTL backstop + 메인검토 hybrid.
-
 ## [library] 공개 API (v3 + v4 추가)
 ```
 mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(dump|profile) / mem_import / mem_migrate / mem_lifecycle / mem_project
@@ -165,11 +149,6 @@ v3 그대로 (`records` 12컬럼 + `records_fts` FTS5 + trigram 보조 + `idx_re
   - **D-14 (distiller 권한 하드닝)**: distiller 권한을 `mem.py` 명령만으로 제한 시도 → **v8 에서 무력 실측·폐기**(아래).
 - **v8 정정 (D-14 재설계 — 라이브 검증 발견)**:
   - **D-14 (no-tools + 스크립트 실행)**: v7 의 `--allowedTools` mem.py-제한이 settings.json blanket `Bash` allow + additive 의미로 **무력**(임의 명령 실행 실측). → distiller LLM 에서 도구를 _전부 제거_(`--disallowedTools`), 구조화 출력(JSON-lines)만 받아 **dispatch 스크립트가 검증 후 `mem add` 직접 실행**. LLM 판단·코드 실행(§0.5). injection 이 속여도 명령 실행 물리 불가. acceptance gate = `date>>file` 류 실측 차단.
-- **v9 신규 (Cluster D — 결정론-first lifecycle, §5.6)**:
-  - **원칙**: 추가(가역) 판단 → 외부 에이전트 offload / 삭제·정리(비가역) 판단 → 메인 직접. (Hermes 도 consolidation=메인.)
-  - **D-15 (recall 자동주입 hook)**: B1 instruction → UserPromptSubmit hook(신호어 regex → `mem recall` → additionalContext 주입). 메인의 "recall 할까" 판단 제거.
-  - **D-16 (정리 후보 메인 노출)**: lifecycle 의 durable near-dup(+옵션 capacity·만료임박 working)를 `mem inject` 에 노출 → 메인이 consolidate/prune/graduate. 死 dup-flag 부활.
-  - **D-17 (TTL backstop·삭제=메인)**: distiller add-only 확정. working prune/graduate·durable consolidation=메인. TTL=deterministic 안전망(2차).
 
 ## Next (구현 순서 — autopilot-code, 본 v5 입력)
 1. **Cluster A (파일 메커니즘 제거, Option 2)** 먼저 — 사용자 지적 incoherence 해소:
@@ -184,8 +163,4 @@ v3 그대로 (`records` 12컬럼 + `records_fts` FTS5 + trigram 보조 + `idx_re
 4. **Cluster C (세션 자동 distillation)** — autopilot-code --mode dev, worktree 브랜치:
    - ✅ **v6 구현·머지 완료** (main `e491241`): `ingest_session(source)` + jsonl adapter (D-11) / 공유 marker 헬퍼 / `mem distill <sid>` / SessionEnd distiller + 재귀가드 (D-12) / turn-nudge 확장 (D-13). 테스트 distill 36 + turn-nudge 11.
    - ✅ **v7 구현·머지 완료** (main `fab5b46`): ① turn-nudge → detached distiller 분사(D-13 외부화) ② D-12·D-13 통일 dispatch·세션 lock ③ 모델 sonnet ④ 재귀가드 turn-counter 확장. 테스트 distill 37+turn-nudge 12+dispatch 17.
-   - ✅ **v8 구현·머지·ENABLE 완료** (main `cd9f220`): D-14 no-tools(`--disallowedTools`)+스크립트 mem add 재설계. acceptance(control 생성 vs disallow 차단)·env-상속·ghost-marker·e2e(84줄→6레코드) 검증 후 `MEM_DISTILL_ENABLE=1` 켜짐(신규세션부터 가동).
-5. **Cluster D (결정론-first lifecycle 정비, v9 신규)** — autopilot-code --mode dev, worktree:
-   - **D-15**: `hooks/mem-recall-inject.sh` 신설 + settings.json UserPromptSubmit 배선 — 신호어 regex → `mem recall` → additionalContext 주입(MEM_DISTILL=1 skip, 신호어 없으면/결과 비면 no-op).
-   - **D-16**: `mem inject` 에 "정리 후보" 섹션 — lifecycle 의 durable near-dup(+옵션 capacity·만료임박 working) 노출. `mem lifecycle` 의 dup 탐지 재사용(read-only projection).
-   - **D-17**: distiller add-only 유지(무변경). CONVENTIONS §7 + CLAUDE.md §2 에 "add=외부·삭제=메인, working 졸업=메인, TTL=backstop" 명문화.
+   - **v8 fix (보안 — 라이브 검증 발견)**: v7 의 D-14 `--allowedTools` mem.py-제한이 무력(settings.json blanket Bash allow) 실측 → distiller 를 **no-tools(`--disallowedTools`) + JSON-lines 출력 → 스크립트가 검증 후 mem add 실행** 으로 재설계. acceptance = `date>>file` 류 임의명령 실측 차단. 통과 시 `MEM_DISTILL_ENABLE=1` enable. (enable 전 검증 ✅: env-상속 재귀가드·ghost-marker·hang-free.)
