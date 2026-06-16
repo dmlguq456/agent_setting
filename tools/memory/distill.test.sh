@@ -94,9 +94,9 @@ rm -rf "$STUBBIN"
 echo "== Verification ④ turn-nudge 11종 regression =="
 nudge_out="$(bash "$ROOT/hooks/mem-turn-nudge.test.sh" 2>&1)" || true
 echo "$nudge_out" | tail -3
-echo "$nudge_out" | grep -q "RESULT: PASS=11 FAIL=0" \
-  && ok "mem-turn-nudge.test.sh → PASS=11 FAIL=0" \
-  || bad "turn-nudge regression not 11/0: $(echo "$nudge_out" | grep RESULT)"
+echo "$nudge_out" | grep -q "RESULT: PASS=12 FAIL=0" \
+  && ok "mem-turn-nudge.test.sh → PASS=12 FAIL=0" \
+  || bad "turn-nudge regression not 12/0: $(echo "$nudge_out" | grep RESULT)"
 
 
 # ============================================================
@@ -123,9 +123,12 @@ JSONL
 
 rm -f "$TMPSTUB/CLAUDE_CALLED"
 # positive control: ENABLE=1, MEM_DISTILL 미설정, non-empty delta → dispatch 는 분사 경로 진입.
-# dispatch.sh 는 $HOME/.claude/tools/memory/mem.py (배포 버전) 를 하드코딩 사용하므로
-# sentinel 도달 대신 "delta 비-빈 + dispatch exit 0" 로 분사 경로 진입을 간접 검증한다.
+# v7 lock(Step 1.3): 분사 직전 `mkdir "$STORE/.distill-lock-$SID"` 를 spawn(&) *동기* 경로에서
+# 하므로(claude 분사 전), dispatch 반환 시점에 lock dir 이 이미 존재한다. detached child sentinel
+# (race) 대신 이 동기 lock 으로 분사 경로 진입을 단언 — RP-M1/RP-M2 동기 신호 패턴. dispatch.sh 가
+# $HOME/.claude/.../mem.py 를 하드코딩하더라도 lock 은 MEM_STORE 격리 자리에 materialize 된다.
 delta_a="$(python3 "$MEM" distill "$SID_A")"
+LOCK_A="$STORE/.distill-lock-$SID_A"
 rc_apos=0
 echo "{\"session_id\":\"$SID_A\",\"cwd\":\"/tmp\"}" \
   | MEM_DISTILL_ENABLE=1 PATH="$TMPSTUB/bin:$PATH" bash "$ROOT/hooks/mem-distill-dispatch.sh" || rc_apos=$?
@@ -135,16 +138,28 @@ echo "{\"session_id\":\"$SID_A\",\"cwd\":\"/tmp\"}" \
 [ "$rc_apos" = "0" ] \
   && ok "A-pos: ENABLE=1 + non-empty delta + MEM_DISTILL 미설정 → dispatch exit 0 (분사 경로 통과)" \
   || bad "A-pos: dispatch 가 non-zero exit: $rc_apos"
+# lock cleanup + acquire 단언 (RP-M2): rmdir 성공(rc 0) = "lock 이 실제 acquire 됐다" positive +
+# detached child trap rmdir 가 아직 안 돌았어도 order-dependency 오염을 여기서 제거.
+rmdir "$LOCK_A" 2>/dev/null
+[ "$?" = "0" ] \
+  && ok "A-pos: lock dir 실제 acquire 됨 (rmdir rc 0 — v7 lock 경로 진입 positive)" \
+  || bad "A-pos: lock dir 미생성 — v7 lock acquire 경로 미진입"
 
-rm -f "$TMPSTUB/CLAUDE_CALLED"
-# negative: MEM_DISTILL=1 (재귀가드) → 즉시 exit 0, sentinel ABSENT
+# negative: MEM_DISTILL=1 (재귀가드) → 즉시 exit 0, sentinel ABSENT.
+# A-neg 격리 (🔴-1): A-pos 의 detached `setsid claude &` 자식이 A-pos sentinel 을 async touch 할 수
+# 있어, 공유 sentinel 이면 A-neg 의 rm 뒤 부활→FAIL(race). A-neg 전용 stub/sentinel 로 격리 —
+# A-pos 의 lingering child 가 A-neg sentinel 을 절대 건드릴 수 없게.
+STUB_NEG="$(mktemp -d)"
+printf '#!/bin/sh\ntouch "%s/CLAUDE_CALLED_neg"\n' "$STUB_NEG" > "$STUB_NEG/claude"
+chmod +x "$STUB_NEG/claude"
 rc_a=0
 echo "{\"session_id\":\"$SID_A\",\"cwd\":\"/tmp\"}" \
-  | MEM_DISTILL=1 MEM_DISTILL_ENABLE=1 PATH="$TMPSTUB/bin:$PATH" bash "$ROOT/hooks/mem-distill-dispatch.sh" || rc_a=$?
+  | MEM_DISTILL=1 MEM_DISTILL_ENABLE=1 PATH="$STUB_NEG:$PATH" bash "$ROOT/hooks/mem-distill-dispatch.sh" || rc_a=$?
 [ "$rc_a" = "0" ] && ok "A-neg: 재귀가드 → exit 0" || bad "A-neg: 재귀가드 exit code: $rc_a"
-[ ! -e "$TMPSTUB/CLAUDE_CALLED" ] \
-  && ok "A-neg: MEM_DISTILL=1 → sentinel ABSENT (재귀가드 분사 차단)" \
+[ ! -e "$STUB_NEG/CLAUDE_CALLED_neg" ] \
+  && ok "A-neg: MEM_DISTILL=1 → sentinel ABSENT (재귀가드 분사 차단, 격리 sentinel)" \
   || bad "A-neg: sentinel PRESENT — 재귀가드 실패"
+rm -rf "$STUB_NEG"
 
 # ---- B. opt-in 게이트 (MEM_DISTILL_ENABLE 미설정 → no-op) ----
 echo "== B. opt-in 게이트 — MEM_DISTILL_ENABLE 미설정 → no-op =="

@@ -109,7 +109,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 
 ### 5.5.5 데이터 모델 영향
 - 신규 테이블 **없음** — distill 결과는 기존 `records`(working/durable)로 흡수. raw 대화는 jsonl(하네스 native)에 남고 DB로 복제 안 함(D-11 source는 read-only adapter). dump.jsonl·claude-memory 동기 대상은 기존 records 그대로(원문 대화 비포함 — 프라이버시·용량).
-- 신규 상태 파일: **단일 공유 increment marker**(세션별, `memory/.distill-state-<sid>` 류 — turn-state 패턴 동형, gitignore) + 세션당 distiller lock(`.distill-lock-<sid>`, 동시 1개). 두 트리거(①·②) 양쪽이 같은 marker 를 읽고 전진시킴.
+- 신규 상태 파일: **단일 공유 increment marker**(세션별, `memory/.distill-state-<sid>` 류 — turn-state 패턴 동형) + 세션당 distiller lock(`.distill-lock-<sid>`, mkdir-atomic 동시 1개). 둘 다 루트 `/memory/` gitignore 가 커버 — 별도 gitignore 파일 불필요(구현 D1; 루트 ignore 가 `memory/` 전체를 무시하므로 lock·state 가 git 에 침투 못 함). 두 트리거(①·②) 양쪽이 같은 marker 를 읽고 전진시킴.
 
 ## [library] 공개 API (v3 + v4 추가)
 ```

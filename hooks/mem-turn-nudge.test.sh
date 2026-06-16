@@ -22,13 +22,49 @@ N=3; SID="testsid"
 # seed a memory.db with a stable mtime (simulates an already-populated store)
 : > "$TMP/memory.db"; touch -d '2026-06-16 00:00:00' "$TMP/memory.db"
 
-echo "== T1: turns 1..N-1 silent, turn N emits nudge =="
+echo "== T1: turns 1..N-1 silent, turn N silent no-op (v7 외부화 — ENABLE unset 시 메인 주입 0) =="
 out1="$(run UserPromptSubmit 'hello one')"
 out2="$(run UserPromptSubmit 'hello two')"
 [ -z "$out1$out2" ] && ok "turns 1..N-1 ($((N-1))) silent" || bad "turns 1..N-1 should be silent, got: $out1$out2"
 out3="$(run UserPromptSubmit 'hello three')"
-echo "$out3" | grep -q '"hookSpecificOutput"' && echo "$out3" | grep -q "turn-counter" && ok "turn N emits nudge" || bad "turn N should emit nudge, got: $out3"
-echo "$out3" | grep -q "${N}턴" && ok "nudge text interpolates actual N (=$N)" || bad "nudge should mention N=$N, got: $out3"
+# v7 (spec §5.5.3 D-13): N턴 fire 시 메인 컨텍스트 주입 0. ENABLE unset(테스트 기본)이면 sibling
+# dispatch 가 opt-in 게이트로 no-op → turn-nudge stdout 은 완전 빈 문자열(silent no-op). 구 v6 의
+# "turn N emits nudge"(hookSpecificOutput + N턴 보간) 단언은 외부화로 제거됨.
+[ -z "$out3" ] && ok "turn N → silent no-op (ENABLE unset, 메인 주입 0)" || bad "turn N should be silent no-op, got: $out3"
+
+echo "== T1b: ENABLE=1 + non-empty delta → fire 시 sibling dispatch 도달 (lock-dir 동기 단언, RP-M1) =="
+# v7 외부화 계약: ENABLE=1 이면 N턴 fire 가 self-location 으로 sibling dispatch 를 argument 모드
+# 로 실제 호출한다. dispatch 는 `mkdir "$STORE/.distill-lock-$SID"` 를 spawn(&) *동기* 경로에서
+# 하므로(claude 분사 전), fork 반환 시점에 lock dir 이 이미 존재 — detached-child sentinel race
+# 회피(동기 신호로 단언). claude stub 을 PATH 주입해 실 claude 분사 방지.
+SIDE="enablesid"                 # default 아닌 실제 SID (turn-nudge default-SID skip 회피)
+PROJ_E="$(mktemp -d)"
+STORE_E="$(mktemp -d)"
+STUB_E="$(mktemp -d)"
+printf '#!/bin/sh\nexit 0\n' > "$STUB_E/claude"; chmod +x "$STUB_E/claude"
+# fixture jsonl: marker 미설정(전체 yield) → delta non-empty (distill.test.sh A-pos 방식 차용)
+ENC_E="$PROJ_E/-home-fake-enable"; mkdir -p "$ENC_E"
+cat > "$ENC_E/$SIDE.jsonl" <<'JSONL'
+{"type":"user","message":{"role":"user","content":"enable case prompt EPSILON"},"uuid":"e1","timestamp":"te1","isSidechain":false}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"enable case reply ZETA"}]},"uuid":"e2","timestamp":"te2","isSidechain":false}
+JSONL
+# N턴 발사 (마지막 턴에서 fire → dispatch 호출). 카운터/state 는 STORE_E 격리.
+last_out=""
+for i in $(seq 1 "$N"); do
+  last_out="$(printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"p%s"}' "$SIDE" "$i" \
+    | MEM_STORE="$STORE_E" MEM_PROJECTS="$PROJ_E" MEM_NUDGE_INTERVAL="$N" MEM_DISTILL_ENABLE=1 \
+      PATH="$STUB_E:$PATH" bash "$HOOK")"
+done
+[ -z "$last_out" ] \
+  && ok "T1b: ENABLE=1 fire 도 메인 주입 0 (turn-nudge stdout 빈 문자열)" \
+  || bad "T1b: ENABLE=1 fire stdout 비어야 함, got: $last_out"
+# dispatch 가 spawn 동기 경로에서 lock dir 을 만들었으면 = turn-nudge 가 sibling dispatch 를
+# argument 모드로 실제 호출 + dispatch 가 spawn 경로 진입했다는 증거 (delta non-empty 경유).
+[ -d "$STORE_E/.distill-lock-$SIDE" ] \
+  && ok "T1b: lock dir 존재 → sibling dispatch argument 모드 도달 + spawn 경로 진입" \
+  || bad "T1b: lock dir 부재 — dispatch 미도달 또는 spawn 경로 미진입"
+rmdir "$STORE_E/.distill-lock-$SIDE" 2>/dev/null || true   # detached child trap rmdir 와 race 무해
+rm -rf "$PROJ_E" "$STORE_E" "$STUB_E"
 
 echo "== T2: counter resets after firing (turn N+1 silent) =="
 out4="$(run UserPromptSubmit 'hello four')"

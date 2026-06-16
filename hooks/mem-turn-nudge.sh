@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 # mem-turn-nudge — 결정론 turn-counter 자기회고 (DESIGN_PRINCIPLES §0.5, spec v5 Cluster B/B2).
 #   Hermes nudge_interval(=10, turn_context.py:191-215) 등가물의 우리 hook 모델.
-#   UserPromptSubmit 마다 세션별 카운터++; N턴 도달 시 promote 회고 nudge(additionalContext) 주입 후 리셋.
+#   UserPromptSubmit 마다 세션별 카운터++; N턴 도달 시 메인 주입 0 — 대신 sibling dispatch(argument 모드)로
+#   외부 detached distiller 분사(MEM_DISTILL_ENABLE 시; off=완전 no-op). 카운터는 리셋 (v7 외부화, spec §5.5.3 D-13).
 #   memory.db write 감지(mtime 증가) 시 카운터 리셋 — Hermes turns_since_memory=0 등가 (write 하면 회고 불필요).
 #   "언제 회고할지" 를 에이전트 판단이 아니라 결정론 카운터로 (§0.5). 등록: settings.json hooks.UserPromptSubmit.
 set -euo pipefail
+
+# 재귀가드 (불변식, spec v7 §5.5): distiller 세션이면 turn-counter 도 분사하지 않음.
+# distiller 의 `claude -p` UserPromptSubmit 가 재-dispatch 하는 것을 차단. stdin parse 전에 둔다.
+# drain: 가드 발동 시 미소비 stdin 으로 인한 pipefail-유발 SIGPIPE/비0 exit 회피 (정상 경로는
+# 아래 input=$(cat ...) 가 stdin 을 소비하므로 drain 불필요).
+[ "${MEM_DISTILL:-}" = "1" ] && { cat >/dev/null 2>&1; exit 0; }
 
 input=$(cat 2>/dev/null || true)
 eval "$(printf '%s' "$input" | python3 -c '
@@ -45,8 +52,16 @@ printf '%s\n%s\n' "$counter" "$db_mtime" > "$STATE" 2>/dev/null || true
 # 오래된 세션 state GC (3일+ 비활성 — workflow-guard .untracked GC 패턴 동형, 2026-06-16). 무해 무시.
 find "$STORE" -maxdepth 1 -name '.turn-state-*' -mmin +4320 -delete 2>/dev/null || true
 
-if [ "$fire" = "1" ]; then
-  MEM_MSG="🧠 turn-counter($N턴) — 공유 marker 이후 새 맥락만 증분 정리: 재사용 가치 있는 요약을 \`mem add\`/\`note\` 로 추가 + 이미 해결된 working 항목은 \`mem recall\` 로 id 확인 후 \`mem delete <id>\`, 처리 후 \`mem distill $SID --advance\` 로 marker 전진 (정리할 새 맥락 없으면 무시)." \
-  python3 -c 'import json,os; print(json.dumps({"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":os.environ["MEM_MSG"]}}, ensure_ascii=False))'
+# fire 액션 (D6 self-location): N턴 도달 시 메인 컨텍스트 주입 0 — 대신 sibling dispatch 를
+# argument 모드로 호출해 외부 detached distiller 분사. self-location 으로 sibling 을 찾으므로
+# worktree turn-nudge→worktree dispatch / live→live 가 자연 해소 (하드코딩 $HOME/.claude/hooks/ X).
+# dispatch 자체 opt-in 게이트가 ENABLE off 시 no-op 으로 만듦 (게이트 단일 자리). |출력 redirect +
+# || true 로 fail-safe exit 0 보장 — 메인 컨텍스트 주입 0.
+# default-SID skip (QA-②): SID 비었거나 "default"(broken-stdin) 면 dispatch 호출 skip — 여러
+# SID-less 세션이 한 marker/lock(.distill-state-default 등)을 공유 오염하는 surface 차단. fire
+# 카운터 리셋·state persist 는 위에서 이미 진행됐으니 그대로 (skip 은 dispatch 호출만).
+if [ "$fire" = "1" ] && [ -n "$SID" ] && [ "$SID" != "default" ]; then
+  HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+  bash "$HOOK_DIR/mem-distill-dispatch.sh" distill "$SID" "$PWD" </dev/null >/dev/null 2>&1 || true
 fi
 exit 0
