@@ -1,0 +1,3 @@
+[submodule "worklog-board"]
+	path = worklog-board
+	url = git@github.com:dmlguq456/agent-note.git
