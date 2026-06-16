@@ -129,7 +129,23 @@ def live_stage(jcwd, slug, fb):
     base = jcwd + "/.claude_reports/plans"
     try: cand = sorted(d for d in os.listdir(base) if d.endswith("_" + slug))
     except Exception: cand = []
-    if not cand: return fb   # plan 폴더 전(=spec/init 단계) → argv 추정 유지
+    if not cand:
+        # slug 불일치 폴백 — 헤드리스 autopilot-code 가 plan 폴더를 _task 기반_ slug 로 만들면
+        # (예: worktree=detail-perf / plan=…_detail-modal-perf) 정확 매칭이 실패해 stage 가 안 뜬다.
+        # 워크트리 slug 와 하이픈 토큰 겹침이 최대인 plan 폴더로 폴백(겹침 0 이면 argv 추정 유지).
+        stoks = set(t for t in slug.split("-") if t)
+        try: dirs = [d for d in os.listdir(base) if not d.startswith(".") and os.path.isdir(base + "/" + d)]
+        except Exception: dirs = []
+        best, bestn, bestm = None, 0, -1.0
+        for d in dirs:
+            dslug = d.split("_", 1)[-1] if "_" in d else d
+            n = len(stoks & set(t for t in dslug.split("-") if t))
+            try: m = os.path.getmtime(base + "/" + d)
+            except Exception: m = 0.0
+            if n > bestn or (n == bestn and n > 0 and m > bestm):
+                best, bestn, bestm = d, n, m
+        if not best or bestn == 0: return fb   # plan 폴더 전 or 무관 → argv 추정 유지
+        cand = [best]
     pd = base + "/" + cand[-1]
     if os.path.exists(pd + "/pipeline_summary.md"): return "done"
     if has_entries(pd + "/test_logs"): return "test"
