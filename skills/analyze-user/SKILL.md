@@ -53,7 +53,7 @@ argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover
 | `analysis` | `mem profile 04_analysis_methodology` | 사용자 폴더 명시 — 코드 자리 analysis script + paper Method/Experiment 절 |
 | `domain` | `mem profile 05_domain_expertise` | 사용자 폴더 명시 — paper 자료 + 사용자 GitHub URL (옵션) |
 | `coding_convention` | `mem profile 07_coding_convention` | 사용자 폴더 명시 — 코드 repo 자리 (`model/`·`train*.py`·`config*.yaml`·`*.ipynb` 패턴) |
-| `all` | 7 개 모두 (각 stem 별 DB 레코드) | 사용자 `--source <path>` 한 자리 (또는 복수 콤마 분리) — 안 자료 type 별 aspect 자동 분류 (재귀 자동 발견) |
+| `all` | 6 aspect (01·02·03·04·05·07, 각 stem 별 DB 레코드) | 사용자 `--source <path>` 한 자리 (또는 복수 콤마 분리) — 안 자료 type 별 aspect 자동 분류 (재귀 자동 발견) |
 
 > **하드코딩 path X — 사용자 자료 명시 default**: 모든 aspect 자리 _기본 source 위치 자체_ 가 _사용자 명시_ 자리. `--source` 명시 없으면 _자료 0 자리_, 사용자 안내 한 줄 — 사용자가 _참고 자료 폴더 path_ 던져주는 자리 ([analyze-project](../analyze-project/SKILL.md) doc mode 와 같은 패턴).
 
@@ -352,7 +352,7 @@ mode=init 통째 교체, mode=update 누적.
 2. **mode 별 처리 (DB record write)**:
    - `init` — 새 body 작성. 기존 레코드가 있으면 먼저 `python3 ~/.claude/tools/memory/mem.py profile <stem>` 으로 현재 body 를 읽어 `## 사용자 수동 메모` 절을 추출·보존 후 새 body 에 포함. `_internal/versions/v{N}/` 에 이전 body 텍스트 스냅샷 보존(convention). 이후 `python3 ~/.claude/tools/memory/mem.py add durable profile <body> --scope global --source user-profile:<stem>` 으로 DB write.
    - `update` — 반드시 **`python3 ~/.claude/tools/memory/mem.py profile <stem>`** (rowid-DESC newest-wins tie-break 적용 읽기) 로 현재 body 를 읽는다 — raw `db_iter_records` 직접 쿼리 X (stem-dup 발생 시 stale body 를 읽어 `/post-it promote` 로 splice 된 `## 사용자 수동 메모` 를 orphan 시킬 수 있음). 읽은 body 에 새 분석 내용을 splice — `## 사용자 수동 메모` 절은 그대로 유지. body 안에 changelog 절 한 줄 추가 (`## Changelog` 내 `{date}: {변경 요약}`). 전체 새 body 를 `python3 ~/.claude/tools/memory/mem.py add durable profile <whole-new-body> --scope global --source user-profile:<stem>` 으로 DB write (파일 Edit X).
-   - **Known limitation (write-path gap)**: `mem add` 의 `write_record` 는 source-keyed upsert 가 아님 — body 가 달라지면 기존 `source=user-profile:<stem>` 레코드를 교체하지 않고 새 id 를 mint 해 중복 행이 생긴다. `mem profile <stem>` 은 rowid-DESC newest-wins 로 최신 body 를 반환하므로 _읽기_ 는 정확하나, 이전 버전 행이 잔류해 `mem lifecycle` dup-flag 대상이 된다. source-keyed upsert 구현은 이 작업 범위 밖 — 후속 작업으로 플래그.
+   - **Write-path (source-keyed UPSERT)**: `mem add` 의 `write_record` 는 `(tier, scope, source)` 키로 in-place UPDATE — 같은 `source=user-profile:<stem>` 레코드를 body 변경 시 교체 (id 보존, dup row 없음). `mem profile <stem>` 읽기와 결합해 read·write 양쪽 결정론.
    - **수동 메모 two-writer contract**: `## 사용자 수동 메모` 절은 analyze-user(`update`) 와 `/post-it promote --scope user` 두 곳이 같은 source `user-profile:<stem>` 레코드에 write. 반드시 `mem profile <stem>` tie-broken 읽기로 현재 body 를 확인 후 splice — 다른 경로(raw query) 사용 시 stale dup 에서 splice 해 promoted memo 를 orphan 시킴.
 3. **per-stem 사후 검증 (source-blind dedup caveat)**: 각 stem write 직후 `python3 ~/.claude/tools/memory/mem.py profile <stem>` 로 read-back 해 반환 body 가 방금 쓴 body 와 일치하는지 확인. 불일치 → `find_dup` 의 source-blind dedup 으로 다른 stem 의 기존 레코드와 병합된 것 — 큰 소리로 fail (stem body 충돌, 수동 확인 요).
 
@@ -451,7 +451,7 @@ timestamp: "2026-05-22T15:30:00Z"
 | 개발팀 | **`04_analysis_methodology`** · **`05_domain_expertise`** · `07_coding_convention` | 코드 안 metric·검증 (`04`) + 도메인 약자 (변수명·함수명, `05`) + model 폴더·config·prefix·preferred layer (`07`). per-project `experiment_conventions.md` 가 1순위, 본 레코드는 fallback |
 | 메인 Claude | **`04_analysis_methodology`** · **`05_domain_expertise`** · `07_coding_convention` | 사용자 분석 응답 (`04`) + 도메인 약자 인지 (사용자 발화, `05`) + 코드 컨벤션 (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙 prepend, `07`) |
 
-> **매트릭스 정리** (2026-05-26): 06 (대화 메타 규칙) 은 _메인 Claude 전용_ 으로 분리 — sub-agent 는 사용자와 직접 대화 X 라 적용 영역 없음 (글로벌 CLAUDE.md + 메모리 always-on 자료와 중복). 07 (코드 컨벤션) 은 _개발팀·기획팀·메인 Claude 만_ — 편집팀 (wording 영역) 은 코드 구조 컨벤션 적용 자리 없어 제외. agent 별 3-5 aspect 참조 default.
+> **매트릭스 정리** (2026-05-26): 06 (대화 메타 규칙) 은 _메인 Claude 전용_ 으로 분리 — sub-agent 는 사용자와 직접 대화 X 라 적용 영역 없음 (글로벌 CLAUDE.md + 메모리 always-on 자료와 중복). 07 (코드 컨벤션) 은 _개발팀·기획팀·메인 Claude 만_ — 편집팀 (wording 영역) 은 코드 구조 컨벤션 적용 자리 없어 제외. agent 별 3-5 aspect 참조 default. 06 profile 레코드 자체는 `/post-it --scope user` default collab 저장처로 유지 (제거된 것은 _이 agent 참조 매트릭스 등록_ 뿐).
 
 본 참조 패턴은 _agent 정의 본문_ 에 명시되어 있어 agent 가 invoke 될 때 자동.
 

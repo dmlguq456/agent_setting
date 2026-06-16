@@ -71,8 +71,8 @@ memory: project
 
 - LaTeX 명령, 변수 이름, 파일 경로, BibTeX 키
 - 논문 제목, 저자 이름, 학회·저널 이름 (`NeurIPS 2026`, `ICASSP 2025`, `Interspeech`, `T-ASLP`)
-- 한 번 정의한 약자 (`xSFI`, `SFI-STFT`, `TF-Restormer`, `MHCA`, `OOD`)
-- 모델·데이터셋·지표 이름 (`UTMOS`, `NISQA`, `VCTK+DEMAND`, `s-log`, `Mamba`)
+- 한 번 정의한 약자 (예: 모델·기법·평가 약자 — 정본은 `mem profile 05_domain_expertise`)
+- 모델·데이터셋·지표 이름 (정본은 `mem profile 05_domain_expertise` 약자사전)
 - 도메인 학술 어휘 (`attention`, `transformer`, `cross-attention`, `dual-path` — 한국어 직역이 더 어색해지는 단어)
 - 코드 식별자, 함수명, 클래스명
 
@@ -123,12 +123,12 @@ memory: project
 1. `~/.claude/CLAUDE.md` 와 `~/.claude/README.md`
 2. 다음 명령을 실행해 그 body 를 참조한다 — `mem profile 02_paper_writing_style` (`python3 ~/.claude/tools/memory/mem.py profile 02_paper_writing_style`, 톤·argumentation·표기 선호) · `mem profile 01_paper_figure_style` (`python3 ~/.claude/tools/memory/mem.py profile 01_paper_figure_style`, figure caption 양식) · `mem profile 03_presentation_strategy` (`python3 ~/.claude/tools/memory/mem.py profile 03_presentation_strategy`, 발표 자료 다듬기) · `mem profile 04_analysis_methodology` (`python3 ~/.claude/tools/memory/mem.py profile 04_analysis_methodology`, 분석 서술) · `mem profile 05_domain_expertise` (`python3 ~/.claude/tools/memory/mem.py profile 05_domain_expertise`, 도메인 약자·용어)
 3. 호출자가 넘긴 원본 또는 대상 자료
-4. 본 에이전트 메모리의 _판교체 어휘 누적 메모_
+4. `mem profile 02_paper_writing_style` 의 `## 사용자 수동 메모` 블록 (누적된 판교체 어휘·표기 교정 — `python3 ~/.claude/tools/memory/mem.py profile 02_paper_writing_style`)
 
 ## 작업 종료 조건 (모든 모드 공통)
 
 1. 산출물 자체가 원본을 보지 않고도 한 호흡에 자연스럽게 읽힌다.
-2. 작업 중 새로 본 어색한 표현이 있었다면 메모리의 _판교체 어휘 누적 메모_ 에 한 줄 더한다.
+2. 작업 중 새로 본 어색한 표현이 있었다면 그 한 줄을 _호출자에게 돌려주는 요약에 포함_ 한다 — 호출자(메인 Claude)가 `/post-it --scope user 02_paper_writing_style "<한 줄>"` 로 profile 02 의 `## 사용자 수동 메모` 블록에 read-modify-write splice 한다. (⚠️ raw `mem add ... --source user-profile:02_paper_writing_style` 에 _부분 텍스트_ 를 직접 넘기지 말 것 — source-keyed UPSERT 가 profile body _전체_ 를 그 한 줄로 덮어써 누적 메모가 소실된다. 편집팀은 Bash 미보유라 직접 write 도 불가 — 누적은 호출자 경유.)
 3. 호출자에게는 파일 경로 + 한국어 요약 3-5 줄 + 의도적으로 한 표기 결정 한두 개만 돌려준다. 본문 자체는 돌려주지 않는다.
 
 ## Recommended models per mode

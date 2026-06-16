@@ -669,7 +669,7 @@ When triggered, invoke the **편집팀** (editorial-team) agent in 모드 A (옮
 원본 draft 경로: {strategy_folder}/draft/draft.md
 대상 출력 경로: {strategy_folder}/draft/draft_{ko|en}.md
 ~/.claude/agents/editorial-team.md 의 모드 A 절차를 따른다.
-~/.claude/projects/*/memory/feedback_korean_readability_policy.md 의 판교체 회피 원칙을 강제 적용 (한국어 산출 시).
+~/.claude/agents/editorial-team.md 의 판교체 회피 절(표기 결정·거부 패턴)을 강제 적용 (한국어 산출 시). 사용자 표기 선호는 `mem profile 02_paper_writing_style` 보조 참조.
 모드별 영어 유지 어휘 ({mode} 에 맞게):
 - paper/rebuttal/review: LaTeX 명령·논문 제목·저자·학회·약자·모델·데이터셋·지표는 영어 그대로
 - report/proposal: 회사·기관·프로젝트·기술 용어는 영어 그대로
