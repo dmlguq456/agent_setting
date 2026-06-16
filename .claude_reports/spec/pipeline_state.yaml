@@ -6,7 +6,7 @@ phases:
   spec: done               # v3 PRD 확정 (D-1~7 lock — DB화·저장소분리·통합강화)
   scaffolding: pending
   dev: in_progress         # v3 완료(DB화·분리). v4 신규 = Cluster A(profile 완전통합)+B(Hermes port) 구현 대기
-last_updated: 2026-06-15  # v5: Option 2 — user_profile·post-it 파일 제거, DB 단일 store, sub-agent DB 직접 읽기. snapshot v4
+last_updated: 2026-06-16  # v6: Cluster C — 세션 자동 distillation(orchestration raw log → tier 메모리). snapshot v5
 inputs:
   - .claude_reports/research/hermes-agent/
   - VISION.md
@@ -23,3 +23,6 @@ decisions_locked:
   - D-8: 결정론 우선 (deterministic-first) — SW 가능 요소는 코드(hook/script/gate/DB)로, agent 판단 최소화 (cross-cutting, DESIGN_PRINCIPLES 격상)
   - D-9: 파일 메커니즘 제거(Option 2) — user_profile/·post-it.md 파일 제거, DB 유일 SoT, sub-agent는 mem profile/recall로 DB 직접 읽기 (Cluster A)
   - D-10: Hermes 잔여 port — session_search 자율호출 + turn-counter 자기회고, 둘 다 결정론-우선 (Cluster B)
+  - D-11: harness-agnostic 세션 source 추상화 — ingest_session(source), 현재 Claude Code jsonl adapter 1개, 미래 하네스는 adapter 추가 (Cluster C)
+  - D-12: SessionEnd distiller — detached claude -p로 세션 jsonl → working/durable distill, 재귀가드 MEM_DISTILL=1, 증분 marker (Cluster C)
+  - D-13: in-session 증분 consolidation — turn-nudge 확장, 메인 에이전트가 delta만 정리(요약 추가/해결분 prune), low-load (Cluster C)

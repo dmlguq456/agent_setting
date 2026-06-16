@@ -1,6 +1,6 @@
 # Unified Memory System — PRD
 
-> mode: **library + cli** · 작성 2026-06-15 · v3(DB화·저장소분리) · v4(결정론-우선 원칙·Hermes port) · v5(Option 2 — user_profile·post-it 파일 메커니즘 제거, DB 단일 store, sub-agent DB 직접 읽기) · **v6 개정 2026-06-16** (Cluster C — 세션 자동 distillation: orchestration raw log → tier 메모리, "기억해둬" 수동 의존 제거)
+> mode: **library + cli** · 작성 2026-06-15 · v3(DB화·저장소분리) · v4(결정론-우선 원칙·Hermes port) · **v5 개정 2026-06-15** (Option 2 — user_profile·post-it 파일 메커니즘 제거, DB 단일 store, sub-agent DB 직접 읽기)
 > 입력: `research/hermes-agent/{03_memory_system,04_benchmark_gap,07_security,08_source_grounded}.md` · 기존 `tools/memory/*` · `skills/{post-it,analyze-user}/` · `user_profile/`
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
@@ -77,34 +77,6 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - **B2 — 자동 turn-counter 자기회고** (결정론 핵심 발현): Hermes `nudge_interval=10`턴(turn_context.py:191-215, memory write 시 카운터 리셋 → background review fork)의 우리식 등가물. **우리 모델 = `UserPromptSubmit` hook에 결정론적 turn 카운터** — N프롬프트마다 promote/회고 nudge 자동 발사, memory write 시 리셋. 현 event기반 context-nudge(CLAUDE.md §2 context50%/wind-down)를 **turn기반 결정론 트리거로 보강·통합**. "언제 회고할지"를 에이전트 판단에서 hook 카운터로 이전(§0.5).
 - 둘 다 Claude Code hook/CLI 모델 제약 반영 (Hermes의 agent-runtime hook과 다름 — 우리는 SessionStart/SessionEnd/UserPromptSubmit hook + Bash CLI).
 
-## 5.5 Cluster C — 세션 자동 distillation (v6 신규, 사용자 확정 2026-06-16)
-
-> **문제 (사용자 지적)**: 세션 끝낼 때마다 "기억해둬"를 _수동_ 으로 말하는 게 번거롭다 — 자동화하고 싶다. 현 시스템 분석: ① 세션 raw 대화 로그는 하네스가 `projects/<enc_cwd>/*.jsonl`에 _이미 기계적으로 저장_ (우리 세팅 아님, Claude Code 기능). ② 서브에이전트 작업은 `.claude_reports/{plans,documents,...}` _산출물_ 로 이미 요약·정리됨 → 그걸 읽으면 됨. ③ **자동 회수가 비어있는 유일한 자리 = 메인 에이전트의 _orchestration raw log_** — 현재 turn-nudge(B2)+§2가 "타이밍"만 자동이고 _쓰기는 에이전트 행동_ 이라, 마지막 저장 이후 구간이 cold-close 시 유실. SessionEnd는 shell `mem sync`라 대화를 못 읽어 회고 불가.
-
-핵심 = **raw 아카이브(전부 verbatim 색인→검색)가 아니라 distillation**. 세션 대화를 에이전트가 읽어 tier 메모리(working/durable)로 _정리_ 하는 자동 장치. (raw FTS 아카이브는 §5 B1이 지목한 검색 갭이나, durability는 jsonl이 이미 해결하고 현 규모에서 grep 회상으로 충분 → 본 cluster 범위 제외, recall --sessions는 grep 유지.)
-
-**통일 메커니즘 — 단일 공유 increment marker (불변식)**: 두 발동 조건(① 프롬프트 N개 누적 → 메인 in-session 정리 / ② 세션 종료 → detached distiller)은 _같은 증분 연산_ 을 cadence만 달리해 돌린다. 둘이 **세션별 _하나의_ marker(마지막 처리 uuid/seq)를 공유** — 어느 쪽이 발동하든 "marker 이후 새로 생긴 메시지"만 처리하고 marker 를 끝까지 전진. → 이중 처리·구간 누락 0, "계속 일관성 있게 새 증분만 처리". 세션 중엔 메인이 대부분 흡수(②는 잔여 tail sweep), 메인 부재 시(cold-close)도 ②가 marker 이후를 마감.
-
-### 5.5.1 D-11 — Harness-agnostic 세션 source 추상화
-- 세션 raw log 흡수를 **pluggable source** 로 추상화: `ingest_session(source)` — source가 정규화된 (role, ts, text, uuid, is_sidechain) 메시지 스트림을 내놓음.
-- **현재 adapter 1개 = Claude Code jsonl** (`projects/<enc_cwd>/<uuid>.jsonl`). 미래에 Claude를 못 쓰는 하네스로 가면 _그 하네스용 adapter만 추가_ → distiller·tier 로직은 불변.
-- 다른 하네스 adapter는 **지금 구현 안 함**(YAGNI) — source 인터페이스 자리만 비워 둠. "멀리 봐서 하네스에 안 묶이게"의 구조적 대비.
-
-### 5.5.2 D-12 — SessionEnd distiller (detached, 최종 sweep)
-- SessionEnd hook이 **detached `claude -p` 분사**(§5.10 headless 패턴)로 방금 끝난 세션 jsonl을 읽어 salient(결정·교훈·미해결·컨벤션)를 working/durable tier로 `mem add` distill. 세션 닫힘을 블록하지 않음(fire-and-forget).
-- **재귀 가드 (불변식)**: distiller 분사 세션은 `MEM_DISTILL=1` 환경에서 돌고, SessionEnd hook은 이 플래그면 _또 분사하지 않음_ → 무한 재귀 차단.
-- **증분 스코프**: 위 _공유 marker 이후 구간_ 만 읽음(전체 재요약 비용 회피) — D-13 in-session 정리가 이미 흡수한 앞부분은 건너뛰고 잔여 tail 만 마감.
-- tier 분류 = 기존 정의 재사용 (working=진행중·미해결·hint, durable=결정·교훈·컨벤션·사실, §1).
-
-### 5.5.3 D-13 — In-session 증분 consolidation (메인 에이전트, 저-load)
-- turn-nudge hook(B2) 확장: N턴마다 **메인 에이전트가 직접** delta만 정리 — 메인은 이미 context를 들고 있어 delta 요약이 detached 분사 재-read보다 _훨씬 쌈_ (load 최소 원칙).
-- **증분만**: 위 _공유 marker 이후_ _새 맥락 요약 추가_ + _이미 해결된 working 항목 prune(삭제)_, 처리 후 marker 전진. 매회 처리량이 delta로 한정돼 순간 load 적음.
-- SessionEnd distiller(D-12)와 상보: 세션 중엔 메인이 증분 정리(대부분 이미 반영) → SessionEnd엔 detached가 잔여 sweep(메인 없으니). cold-close 유실 구멍이 닫힘.
-
-### 5.5.4 데이터 모델 영향
-- 신규 테이블 **없음** — distill 결과는 기존 `records`(working/durable)로 흡수. raw 대화는 jsonl(하네스 native)에 남고 DB로 복제 안 함(D-11 source는 read-only adapter). dump.jsonl·claude-memory 동기 대상은 기존 records 그대로(원문 대화 비포함 — 프라이버시·용량).
-- 신규 상태 파일: **단일 공유 increment marker**(세션별, `memory/.distill-state-<sid>` 류 — turn-state 패턴 동형, gitignore). in-session(D-13)·SessionEnd(D-12) 양쪽이 같은 파일을 읽고 전진시킴.
-
 ## [library] 공개 API (v3 + v4 추가)
 ```
 mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(dump|profile) / mem_import / mem_migrate / mem_lifecycle / mem_project
@@ -128,10 +100,6 @@ v3 그대로 (`records` 12컬럼 + `records_fts` FTS5 + trigram 보조 + `idx_re
   - **D-8 (결정론 우선)**: 결정론·SW 가능 요소는 코드로 대체, agent 판단 최소화 (§0.5, cross-cutting).
   - **D-9 (파일 메커니즘 제거, Option 2)**: user_profile/·post-it.md 별도 파일 제거, DB가 유일 SoT·유일 읽기 소스. sub-agent는 `mem profile`/`mem recall`로 DB 직접 읽기. analyze-user·/post-it DB authoring. (§4)
   - **D-10 (Hermes 잔여 port)**: session_search 자율호출 + turn-counter 자기회고, 둘 다 결정론-우선 (§5).
-- **v6 신규 (Cluster C — 세션 자동 distillation, §5.5)**:
-  - **D-11 (harness-agnostic source)**: 세션 raw log 흡수를 pluggable `ingest_session(source)`로 추상화. 현재 adapter = Claude Code jsonl 1개, 미래 하네스는 adapter만 추가 (지금 미구현·자리만).
-  - **D-12 (SessionEnd distiller)**: SessionEnd hook이 detached `claude -p`로 세션 jsonl 읽어 working/durable로 distill. 재귀 가드 `MEM_DISTILL=1`. 증분 marker 스코프.
-  - **D-13 (in-session 증분 consolidation)**: turn-nudge 확장 — 메인 에이전트가 N턴마다 delta만 정리(요약 추가 / 해결분 prune), low-load. D-12와 상보(cold-close 구멍 차단).
 
 ## Next (구현 순서 — autopilot-code, 본 v5 입력)
 1. **Cluster A (파일 메커니즘 제거, Option 2)** 먼저 — 사용자 지적 incoherence 해소:
@@ -143,9 +111,3 @@ v3 그대로 (`records` 12컬럼 + `records_fts` FTS5 + trigram 보조 + `idx_re
    - 매트릭스(user_profile/README.md per-agent 매핑)는 문서로 보존(소스는 DB).
 2. **Cluster B (Hermes port)** — B2(turn-counter hook, 결정론) → B1(session_search 자율호출 강화).
 3. **구현 hygiene** (spec 외): sync-skills/drill 회귀 · stale 매뉴얼 draft 정정 · research 03↔08 cross-ref. (DESIGN_PRINCIPLES §0.5 ✅ 완료.)
-4. **Cluster C (세션 자동 distillation, v6 신규)** — autopilot-code --mode dev, worktree 브랜치:
-   - `mem ingest_session(source)` source 추상화 + Claude Code jsonl adapter (D-11).
-   - 단일 공유 increment marker(`memory/.distill-state-<sid>`) read/advance 헬퍼 — in-session·SessionEnd 양쪽 공유.
-   - `mem distill <sid>` — 세션 jsonl 중 _marker 이후_ → salient → working/durable mem add + marker 전진 (에이전트 호출용 entry; SessionEnd distiller 분사가 이걸 `claude -p`로 구동).
-   - SessionEnd hook 배선 + 재귀 가드 `MEM_DISTILL=1` (D-12).
-   - turn-nudge 확장 — in-session 증분 consolidation 지시(marker 이후 delta: 요약 추가/해결분 prune, marker 전진) (D-13).
