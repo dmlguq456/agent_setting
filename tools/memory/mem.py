@@ -1073,6 +1073,20 @@ def migrate(apply=False):
 
 
 # ---------- lifecycle ----------
+def near_dup_groups(con, where=None, params=()):
+    """전체(또는 필터된) 레코드를 단일 패스로 순회해 near-dup 그룹을 반환.
+
+    key = (tier, scope, norm_body(body)[:80])
+    Returns: list of id-lists (각 그룹 len > 1).
+    where/params 는 db_iter_records 에 그대로 전달 — None 이면 전체 레코드.
+    """
+    seen = {}
+    for meta, body in db_iter_records(con, where, params):
+        key = (meta.get("tier"), meta.get("scope"), norm_body(body)[:80])
+        seen.setdefault(key, []).append(meta["id"])
+    return [ids for ids in seen.values() if len(ids) > 1]
+
+
 def lifecycle(apply=False):
     print(f"# lifecycle  ({'APPLY' if apply else 'report'})")
     con = get_con()
@@ -1081,11 +1095,7 @@ def lifecycle(apply=False):
         expired_rows = list(db_iter_records(
             con, "tier='working' AND expires IS NOT NULL AND expires < ?", (today(),)))
         # durable near-dup 플래깅
-        seen = {}
-        for meta, body in db_iter_records(con):
-            key = (meta.get("tier"), meta.get("scope"), norm_body(body)[:80])
-            seen.setdefault(key, []).append(meta["id"])
-        dups = [ids for ids in seen.values() if len(ids) > 1]
+        dups = near_dup_groups(con)
 
         for meta, body in expired_rows:
             print(f"  [expire] {meta['id']} (expires {meta.get('expires')})")
@@ -1196,6 +1206,65 @@ def register_postit(path):
     print(f"[register] {p}")
 
 
+# ---------- inject helpers ----------
+def inject_cleanup_candidates(con, encc, max_groups=5, soft_ceiling=80):
+    """D-16: 이미 열린 con 을 재사용해 정리 후보 라인 목록을 반환 (read-only, 삭제/플래그 없음).
+
+    반환값: list of str (섹션 헤더 제외, 빈 목록이면 []).
+    세 종류의 신호를 surfacing:
+      1. durable near-dup 그룹 (cwd-scoped) — 단일 패스로 그룹+발췌 동시 수집
+      2. durable 용량 초과 (strict > soft_ceiling)
+      3. 만료 임박 working 레코드 (expires <= today+3d, 미래 한정)
+    """
+    lines = []
+
+    # ── 1. durable near-dup groups (project-scoped), 단일 패스 ──────────────────
+    # scope = inject() 본문 'dur' 섹션과 동일하게 project-scoped (tier='durable' AND
+    # scope='project' AND cwd_origin) — 메인이 화면에서 보는 durable 목록과 정리후보 카운트가
+    # 어긋나지 않게(global profile 은 analyze-user 관할, ad-hoc prune 대상 아님). blueprint
+    # "현 cwd scope durable near-dup" 충실 — global 은 cross-project 라 cwd scope 아님.
+    dup_where = "tier='durable' AND scope='project' AND cwd_origin=?"
+    dup_params = (encc,)
+    seen = {}
+    excerpts = {}  # id → _first_line(body)[:80]  (단일 패스, re-query 금지)
+    for meta, body in db_iter_records(con, dup_where, dup_params):
+        mid = meta["id"]
+        key = (meta.get("tier"), meta.get("scope"), norm_body(body)[:80])
+        seen.setdefault(key, []).append(mid)
+        if mid not in excerpts:
+            excerpts[mid] = _first_line(body)[:80]
+    dup_groups = [ids for ids in seen.values() if len(ids) > 1]
+    for ids in dup_groups[:max_groups]:
+        snip = excerpts.get(ids[0], "")
+        lines.append(f"- near-dup {ids}: {snip}")
+
+    # ── 2. durable 용량 선 (strict >) — 본문 durable 섹션과 동일 scope (project) ──
+    count_row = con.execute(
+        "SELECT COUNT(*) FROM records "
+        "WHERE tier='durable' AND scope='project' AND cwd_origin=?",
+        (encc,)
+    ).fetchone()
+    dur_count = count_row[0] if count_row else 0
+    if dur_count > soft_ceiling:
+        lines.append(f"- durable {dur_count} > soft-ceiling {soft_ceiling} — consolidate 고려")
+
+    # ── 3. 만료 임박 working (0 < 잔여일 <= 3) ──────────────────────────────────
+    # expires 는 ISO 날짜 문자열. today() 이하는 이미 만료 — 여기선 오늘 이후+3일 이내만.
+    today_str = today()
+    deadline = (datetime.date.today() + datetime.timedelta(days=3)).isoformat()
+    soon_row = con.execute(
+        "SELECT COUNT(*) FROM records "
+        "WHERE tier='working' AND cwd_origin=? "
+        "AND expires IS NOT NULL AND expires > ? AND expires <= ?",
+        (encc, today_str, deadline)
+    ).fetchone()
+    soon_count = soon_row[0] if soon_row else 0
+    if soon_count > 0:
+        lines.append(f"- 만료 임박 working {soon_count}건 — 졸업/연장 검토")
+
+    return lines
+
+
 # ---------- inject ----------
 def _first_line(body):
     for l in body.splitlines():
@@ -1235,6 +1304,8 @@ def inject(max_working=40, max_durable=40, hook=False):
         dur  = list(db_iter_records(
             con, "tier='durable' AND scope='project' AND cwd_origin=? AND (expires IS NULL OR expires >= ?)",
             (encc, today())))
+        # D-16: con 이 열린 상태에서 정리 후보 수집 (R1 — finally close 전에 실행)
+        cleanup_lines = inject_cleanup_candidates(con, encc)
     finally:
         con.close()
 
@@ -1274,6 +1345,11 @@ def inject(max_working=40, max_durable=40, hook=False):
         out.append("## 장기 — 사용자 특성 (user profile)")
         for aspect_key, (m, b) in prof:
             out.append(f"- {aspect_key}: {_first_line(b)[:140]}")
+        out.append("")
+    # D-16: 정리 후보 섹션 (비어있으면 아무것도 추가 안 함)
+    if cleanup_lines:
+        out.append("## 🧹 정리 후보 (메인 직접 consolidate/prune/graduate — D-16)")
+        out.extend(cleanup_lines)
         out.append("")
     out.append("> 상세 회상: `bash ~/.claude/tools/memory/recall.sh \"<query>\"` (store+세션 전체 FTS)")
     emit("\n".join(out))

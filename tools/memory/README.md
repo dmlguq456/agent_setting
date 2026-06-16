@@ -36,7 +36,7 @@ env override (테스트용): `MEM_STORE` · `MEM_PROJECTS` · `MEM_PROFILE` · `
 - `MEM_STORE` → `memory.db` 경로와 `dump.jsonl` 경로 모두 이 디렉터리 하위로 파생됨.
 - `MEM_PROFILE` → `export --target profile` 의 출력 디렉터리. 테스트 시 `/tmp/...` 로 지정해 실 `user_profile/` 보호.
 - `MEM_DISTILL_ENABLE` → **distiller opt-in 게이트**. `1` 일 때만 `mem-distill-dispatch.sh` 가 실제 분사. 미설정(기본)이면 hook 은 no-op — settings.json 배선은 돼 있어도 _켜야_ 동작. 이유: 매 세션 종료·N턴마다 background LLM 자동 실행(비용·동작 인지) + distiller 가 대화 본문(외부 입력일 수 있음)을 권한 모드로 읽는 신뢰경계 확장 → 사용자가 검토 후 명시 활성화. (v7: 켜기 전 라이브 검증 필수 — ⑤ 권한패턴·env 상속·ghost-marker·모델 id probe; `--permission-mode` 미확정/⑤ 미통과면 금지.)
-- `MEM_DISTILL` → `1` 이면 `mem-distill-dispatch.sh`·`mem-turn-nudge.sh` 두 hook 의 재귀가드가 즉시 exit(distiller 세션의 SessionEnd·UserPromptSubmit 가 다시 분사를 트리거하지 않도록 차단 — v7 양 트리거 가드).
+- `MEM_DISTILL` → `1` 이면 `mem-distill-dispatch.sh`·`mem-turn-nudge.sh`·`mem-recall-inject.sh` 세 hook 의 재귀가드가 즉시 exit(distiller 세션의 SessionEnd·UserPromptSubmit 가 다시 분사를 트리거하지 않도록 차단 — v8 세 트리거 가드).
 - `MEM_DISTILL_MODEL` → distiller 분사 모델 지정 (default: `claude-sonnet-4-6`).
 
 ## 자동 write 불변식
