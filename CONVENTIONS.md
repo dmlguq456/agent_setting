@@ -117,7 +117,7 @@
 - `.claude_reports/`는 _현재 작업 디렉토리_에 생성·읽기·쓰기
 - analyze-project는 현재 dir의 파일을 읽음 (code/paper/doc 모드)
 - autopilot-code는 현재 dir에서 코드 변경
-- autopilot-{doc,research,refine}는 `.claude_reports/` 하위 영속 산출물을 input으로 implicit 인지 (cross-project 작업은 `cd <other>` 후 별도 세션)
+- autopilot-{draft,research,refine}는 `.claude_reports/` 하위 영속 산출물을 input으로 implicit 인지 (cross-project 작업은 `cd <other>` 후 별도 세션)
 
 > **gitignore 전제 (불변식)**: skill 산출물 폴더 `.claude_reports/`는 _프로젝트 repo 에 커밋하지 않는다_ — Claude 작업 산출물(plan·log·snapshot·reviews·lock)이지 소스가 아니다. 새 프로젝트에서 처음 산출물을 만들 때(또는 `git`-tracked repo 에서 처음 호출될 때) `.claude_reports/`가 `.gitignore`에 없으면 한 줄(`.claude_reports/`) 추가한다 (이미 있거나 git repo 가 아니면 skip). §5.8 의 worktree symlink 가드·`.pipeline-lock` transient 처리도 이 gitignore 전제 위에서 성립. **예외 — `~/.claude` (스킬셋 repo 자신, 2026-06-11 사용자 결정)**: 이 repo 는 `.claude_reports` 를 _커밋한다_ — 세팅 개선의 research·audit·plan 이력이 곧 repo 의 자산 (transient `.pipeline-lock`·`.untracked*` 만 ignore). 스킬셋 본작업도 파이프 경유로 `plans/` 사이클을 남기는 정식 프로젝트로 다룬다.
 
@@ -612,7 +612,7 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 
 - 저장 전 기존 메모리 확인 — 같은 사실을 이미 다루는 파일이 있으면 _새 파일 만들지 말고 그 파일 갱신_(replace). 한 사실 = 한 파일(near-duplicate 거부).
 - 틀렸다고 판명된 메모리는 즉시 삭제(remove) — 누적 stale 금지.
-- 관련 메모리는 본문에서 `[[name]]` 로 링크. 저장 후 `MEMORY.md` 인덱스에 한 줄 포인터.
+- 관련 메모리는 본문에서 `[[name]]` 로 링크 (DB `links` 컬럼에 저장). DB INSERT 시 FTS5 가상테이블이 자동 색인 — 별도 `MEMORY.md` 인덱스 포인터 write 없음 (MEMORY.md 는 legacy projection 뷰).
 - Hermes 처럼 _capacity 압박 시 consolidation_ 을 원칙으로 — cwd 메모리가 비대해지면 통합·압축(별 파일 난립 대신).
 
 ### §7.3. 자율 자리는 _제안만_ (불변식)
@@ -621,7 +621,7 @@ oncall self-review nudge(`loops/oncall.md` item 9) 등 _자동_ 자리는 승격
 
 ### §7.4. Recall — on-demand 회상 (canonical, T1 / Hermes session_search 벤치마킹)
 
-세션 시작 시 자동 주입되는 `MEMORY.md` 인덱스는 _요약_ 만 본다. 인덱스에 안 잡히는 _과거 메모리 본문_ 이 필요한 자리(과거 결정·교정·컨벤션을 _다시 떠올려야_ 할 때)는 읽기 전용 helper 로 능동 검색한다. **읽기 전용 = 정보 제공일 뿐 — recall 자체는 결정·write 아님(무해, §7.3 게이트와 독립).**
+세션 시작 시 자동 주입되는 것은 `mem inject` 의 DB 요약 블록 (working+durable+profile) — _요약_ 만 본다 (`MEMORY.md` 는 legacy projection 뷰, 주입원 아님). 요약 블록에 안 잡히는 _과거 메모리 본문_ 이 필요한 자리(과거 결정·교정·컨벤션을 _다시 떠올려야_ 할 때)는 읽기 전용 helper 로 능동 검색한다. **읽기 전용 = 정보 제공일 뿐 — recall 자체는 결정·write 아님(무해, §7.3 게이트와 독립).**
 
 | helper | 용도 | 비고 |
 |---|---|---|

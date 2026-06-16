@@ -21,7 +21,7 @@ Hermes 메모리 벤치마킹의 store/write 층. spec: [`.claude_reports/spec/p
 | `note "<body>"` | working tier 단축 기록 |
 | `recall "<q>" [--tier] [--scope] [--all] [--sessions]` | 회상 (FTS5 bm25 + trigram CJK, LIKE fallback, +raw 세션) |
 | `index [--rebuild]` | DB 내장 FTS5 가상테이블 재구축 (`memory.db` 안에서 — 별도 파일 없음) |
-| `export [--target dump\|profile] [--apply]` | DB → `dump.jsonl` (git mirror, default) 또는 `user_profile/0X_*.md` (generated view). `--target profile` 은 default dry-run — 실제 write는 `--apply` 필요 |
+| `export [--target dump\|profile] [--apply]` | DB → `dump.jsonl` (git mirror, default) 또는 `user_profile/0X_*.md` (on-demand 사람 열람 캐시, SoT 아님). `--target profile` 은 default dry-run — 실제 write는 `--apply` 필요 |
 | `import <dump.jsonl>` | 덤프 → DB **완전 복원** (기존 records 전체 삭제 후 dump replay = exact mirror 재현, additive merge 아님). 복원 후 FTS 재구축 동일 connection 에서 수행 |
 | `project [--cwd]` | 보조 projection 생성 (세션 주입은 `inject` 담당) |
 | `migrate [--apply]` | auto-memory(전 cwd) + post-it + **구 markdown SoT 파일** → DB (멱등, default dry-run) |
@@ -29,7 +29,7 @@ Hermes 메모리 벤치마킹의 store/write 층. spec: [`.claude_reports/spec/p
 | `stats` | store 통계 (`records` 테이블 GROUP BY) |
 | `inject [--hook]` | SessionStart 주입 — DB(durable+working+profile)→context 직접 주입. `--hook` 시 `additionalContext` JSON 출력 |
 | `sync` | SessionEnd 회수 — `projects/<cwd>/memory/` auto-memory → DB durable 흡수 + FTS5 재구축 + `dump.jsonl` 재export |
-| `register-postit <path>` | post-it.md 절대 경로를 레지스트리(`~/.claude/memory/.postit-roots`)에 등록 (store sync 가 직접 stat — NAS 재귀 스캔 회피) |
+| `register-postit <path>` | **deprecated (legacy-migration-only)** — `.postit-roots` 레지스트리 등록. skills 에서 더 이상 호출 안 함 (post-it 은 DB working 레코드 직접 write). |
 
 env override (테스트용): `MEM_STORE` · `MEM_PROJECTS` · `MEM_PROFILE`.
 - `MEM_STORE` → `memory.db` 경로와 `dump.jsonl` 경로 모두 이 디렉터리 하위로 파생됨.
@@ -43,7 +43,7 @@ env override (테스트용): `MEM_STORE` · `MEM_PROJECTS` · `MEM_PROFILE`.
 - **git mirror**: `dump.jsonl` — id 정렬, `sort_keys=True`, 레코드당 1줄, NULL은 JSON `null`로 표기(키 누락·빈문자열 금지). 복원: `mem import dump.jsonl`.
 - **하네스 wired**: SessionStart `mem inject --hook` (settings.json, timeout 20) + SessionEnd `mem sync` (timeout 120) 연결 완료. `sync`는 흡수 + FTS 재구축 + `dump.jsonl` 재export 3단계 수행.
 - **recall.sh**: `mem recall` thin wrapper (store FTS5 bm25 + trigram CJK + LIKE fallback). 파일 불변.
-- **register-postit 운영 중**: 레지스트리(`~/.claude/memory/.postit-roots`) 기반 store sync.
-- ⏳ **live 적용**: `migrate --apply`로 기존 markdown SoT + auto-memory + post-it → DB (추가형, 기존 `projects/*/memory/` 안 지움).
+- **register-postit deprecated**: legacy-migration-only. 현 post-it 경로는 DB working 레코드 직접 write (`mem note`/`mem add`) — `.postit-roots` 레지스트리·`migrate` post-it 소스는 구 markdown 이관 전용.
+- ✅ **live 적용 완료**: `migrate --apply` 로 기존 markdown SoT + auto-memory + post-it → DB 이관 완료. DB-as-SoT 전환 끝 (구 `projects/*/memory/` 는 보존, 추가형).
 
 `index-check.sh` 는 *legacy `projects/*/memory/` 의 MEMORY.md 텍스트 인덱스 점검 전용*으로 잔존 — store FTS5 색인은 `mem index` 가 관할(`memory.db` 내장)하므로 별개 대상.

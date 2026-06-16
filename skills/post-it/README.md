@@ -41,7 +41,7 @@
 |---|---|---|
 | `/post-it` (또는 `show`) | DB working 레코드 preview (`mem recall --tier working`); 없으면 `add` 안내 | — |
 | `/post-it add <category> <text>` | `mem note "<text>" --type <type>` write. category ∈ {convention, resource, thread, decision} (alias conv/res/th/dec). thread→`[in-progress YYYY-MM-DD]`, decision→`YYYY-MM-DD:` 자동 | **즉시** (`--confirm`) |
-| `/post-it resolve <hint>` | thread 레코드 fuzzy 매칭 + advisory 처리 (`mem delete` 미구현 — `mem lifecycle` 만료에 의존; 결정론적 삭제는 follow-up 대상) | preview→confirm (`--no-confirm`) |
+| `/post-it resolve <hint>` | thread 레코드 fuzzy 매칭 + `mem delete <id>` 결정론적 삭제 | preview→confirm (`--no-confirm`) |
 | `/post-it decide <text>` | `mem note "<YYYY-MM-DD: text>" --type decision` write | **즉시** (`--confirm`) |
 | `/post-it sweep` | 산출물(`plans`·`documents`·`spec`·git)과 working 레코드 대조 → graduated·stale flag/만료 | 수동 호출 preview→confirm / 자동(nudge) 확실분 자동+한 줄 보고 |
 | `/post-it promote [--scope user <aspect>]` | profile 레코드 `## 사용자 수동 메모` 항목을 구조화 절로 졸업 (read-modify-write: `mem profile` → splice → `mem add ... --source user-profile:<stem>`) | preview→confirm |

@@ -256,6 +256,17 @@ def sanitize(body):
     return masked, flags
 
 
+def find_by_source(tier, scope, rtype, source, con):
+    """source-keyed lookup — (tier, scope, type, source) 동일 레코드 id 반환 (없으면 None).
+    type 도 매칭 — 같은 source 가 다른 type 행을 cross-overwrite 하는 것 방지 (source↔type 1:1 컨벤션 강제)."""
+    if not source:
+        return None
+    row = con.execute(
+        "SELECT id FROM records WHERE tier=? AND scope=? AND type=? AND source=? "
+        "ORDER BY rowid DESC LIMIT 1", (tier, scope, rtype, source)).fetchone()
+    return row[0] if row else None
+
+
 def find_dup(tier, scope, body, con=None):
     """dedup 검사. con 전달 시 재사용(write_record 내 단일 트랜잭션 유지)."""
     nb = norm_body(body)
@@ -280,6 +291,33 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
     # 단일 연결로 dedup + INSERT + FTS mirror 를 하나의 트랜잭션으로
     con = get_con()
     try:
+        # source-keyed UPSERT: 동일 (tier, scope, type, source) 면 in-place UPDATE (id 보존)
+        existing = find_by_source(tier, scope, rtype, source, con)
+        if existing:
+            # NOTE(🟡-2): in-place UPDATE 는 기존 행의 cwd_origin/created/type/source 를 보존 —
+            # cwd_origin 재계산 주입하지 않음 (UPDATE SET 목록에서 의도적으로 제외).
+            # NOTE(expires): UPSERT 는 tier 기준 expires 갱신 — working 은 today+TTL 로 수명 연장,
+            # 그 외(durable 등)는 None. source-keyed durable(profile)은 모델상 expires=None 이라 NULL 유지
+            # (기존 non-null durable expires 보존은 의도적으로 안 함 — 현 모델에 해당 케이스 없음).
+            new_expires = None
+            if tier == "working":
+                new_expires = (datetime.date.today() +
+                               datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
+            con.execute(
+                "UPDATE records SET body=?, updated=?, expires=?, tags=?, links=? WHERE id=?",
+                (body, today(), new_expires,
+                 json.dumps(tags or [], ensure_ascii=False),
+                 json.dumps(links or [], ensure_ascii=False), existing))
+            if _FTS_OK:
+                con.execute("DELETE FROM records_fts WHERE id=?", (existing,))
+                con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (existing, body))
+            if _TRIG_OK:
+                con.execute("DELETE FROM records_trig WHERE id=?", (existing,))
+                con.execute("INSERT INTO records_trig(id, body) VALUES(?,?)", (existing, body))
+            con.commit()
+            if not quiet:
+                print(f"[upsert] {tier}/{scope} source={source} → {existing}")
+            return existing
         dup = find_dup(tier, scope, body, con=con)
         if dup:
             if not quiet:
@@ -940,6 +978,32 @@ def lifecycle(apply=False):
     return [m for m, _ in expired_rows], dups
 
 
+# ---------- delete ----------
+def delete_record(rid, quiet=False):
+    """단건 결정론 삭제 — records + FTS + trig 3-table DELETE (lifecycle 만료 로직 재사용)."""
+    con = get_con()
+    try:
+        row = con.execute("SELECT id FROM records WHERE id=?", (rid,)).fetchone()
+        if not row:
+            if not quiet:
+                print(f"[delete] id 없음: {rid}")
+            return False
+        con.execute("DELETE FROM records WHERE id=?", (rid,))
+        if _FTS_OK:
+            con.execute("DELETE FROM records_fts WHERE id=?", (rid,))
+        if _TRIG_OK:
+            try:
+                con.execute("DELETE FROM records_trig WHERE id=?", (rid,))
+            except Exception as e:
+                sys.stderr.write(f"[delete] trig 미러 삭제 실패(계속): {rid}: {e}\n")
+        con.commit()
+        if not quiet:
+            print(f"[delete] {rid}")
+        return True
+    finally:
+        con.close()
+
+
 # ---------- projection ----------
 def project(cwd=None):
     cwd = Path(cwd) if cwd else Path.cwd()
@@ -1033,8 +1097,12 @@ def inject(max_working=40, max_durable=40, hook=False):
         prof_raw = con.execute(
             f"SELECT rowid, {cols} FROM records WHERE type='profile'"
         ).fetchall()
-        work = list(db_iter_records(con, "tier='working' AND cwd_origin=?", (encc,)))
-        dur  = list(db_iter_records(con, "tier='durable' AND scope='project' AND cwd_origin=?", (encc,)))
+        work = list(db_iter_records(
+            con, "tier='working' AND cwd_origin=? AND (expires IS NULL OR expires >= ?)",
+            (encc, today())))
+        dur  = list(db_iter_records(
+            con, "tier='durable' AND scope='project' AND cwd_origin=? AND (expires IS NULL OR expires >= ?)",
+            (encc, today())))
     finally:
         con.close()
 
@@ -1089,6 +1157,10 @@ def sync():
     except Exception as e:
         sys.stderr.write(f"[sync] migrate 실패(계속): {e}\n")
     try:
+        lifecycle(apply=True)
+    except Exception as e:
+        sys.stderr.write(f"[sync] lifecycle 실패(계속): {e}\n")
+    try:
         index_build(rebuild=True)
     except Exception as e:
         sys.stderr.write(f"[sync] index 실패: {e}\n")
@@ -1137,6 +1209,9 @@ def main():
     lc = sub.add_parser("lifecycle", help="working 만료·졸업 / durable dup")
     lc.add_argument("--apply", action="store_true")
 
+    dl = sub.add_parser("delete", help="단건 결정론 삭제 (records+FTS 3-table)")
+    dl.add_argument("id")
+
     sub.add_parser("stats", help="store 통계")
     sub.add_parser("sync", help="projects→store 멱등 mirror + 색인 + dump (SessionEnd)")
 
@@ -1180,6 +1255,8 @@ def main():
         migrate(apply=args.apply)
     elif args.cmd == "lifecycle":
         lifecycle(apply=args.apply)
+    elif args.cmd == "delete":
+        delete_record(args.id)
     elif args.cmd == "stats":
         stats()
     elif args.cmd == "sync":

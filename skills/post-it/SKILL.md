@@ -81,7 +81,7 @@ post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + 
 
 - **project scope**: `python3 ~/.claude/tools/memory/mem.py note "<text>" --type <type>` 으로 working 레코드 write (단축형 권장). 전체형 필요 시: `mem add working <type> "<body>" --scope project` — `<type>` 자리엔 `thread`/`decision`/`convention`/`reference`/`hint` 중 하나. 세션 주입은 `python3 ~/.claude/tools/memory/mem.py inject --hook` 가 DB working 에서 수행 (파일 read 없음).
 - **user scope**: `python3 ~/.claude/tools/memory/mem.py add durable profile <body> --scope global --source user-profile:<stem>` 로 profile 레코드에 merge write. 적재는 sub-agent 가 `python3 ~/.claude/tools/memory/mem.py profile <stem>` 실행 시.
-- **갱신**: 항상 `/post-it` 명령으로만. Claude 가 자동으로 쓰지 않는다.
+- **갱신**: `/post-it` 명령 또는 §Proactive 자동 기록 (CLAUDE.md §2 / CONVENTIONS §7 자동 write 불변식 — 저장은 자동, 비가역 prune/삭제만 confirm).
 
 ## 5 카테고리 — type taxonomy (레코드 type 으로 사용)
 
@@ -112,8 +112,7 @@ post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + 
 ### `/post-it resolve <hint>`
 - working 레코드 중 `type=thread` 인 것에서 `<hint>` fuzzy 매칭 레코드를 찾는다.
 - **default: preview → confirm** (1개 매칭 → 확인 / 여러 매칭 → 번호 선택 / 0개 → 중단).
-- `mem delete <id>` CLI 가 현재 없으므로, `resolve` 는 _advisory_ 동작 — "이 thread 는 완료됨" 으로 표시하고 `WORKING_TTL_DAYS` 내 `mem lifecycle` 에 의해 자동 만료되도록 안내한다. **`mem delete <id>` CLI 가 있으면 resolve 를 결정론적으로 구현 가능** (현재 범위 밖 — follow-up 대상).
-- `--no-confirm` 시 가장 유사한 1개에 즉시 advisory 처리.
+- `mem delete <id>` 로 결정론적 삭제 — `resolve` 는 매칭 thread 레코드를 `mem delete` 로 즉시 제거 (`--no-confirm` 시 가장 유사한 1개 즉시 삭제). default 는 preview → confirm.
 
 ### `/post-it decide <text>`
 - `python3 ~/.claude/tools/memory/mem.py note "<YYYY-MM-DD: text>" --type decision` 실행. 원문 → **즉시 적용**. `--confirm` 으로 검토.
@@ -156,7 +155,7 @@ post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + 
    - (3) `python3 ~/.claude/tools/memory/mem.py add durable profile "<whole-new-body>" --scope global --source user-profile:<stem>` 으로 전체 body write (SAME source = analyze-user 와 같은 logical record; 이전 working 레코드는 만료).
 4. _대량·정식 재구조화_ 가 필요하면 promote 대신 `/analyze-user` 를 권한다 (promote 는 가벼운 1-2 항목 졸업용).
 
-> **두 writer 계약**: `/post-it promote --scope user` 와 `analyze-user update` 는 모두 `source user-profile:<stem>` 으로 write — ONE logical record. analyze-user 의 "read existing body" 는 반드시 `mem profile <stem>` (tie-broken) 으로 읽어야 한다 (raw `db_iter_records` 로 읽으면 stale dup 에서 splice 될 위험). R1 주의: `write_record` 는 source-keyed upsert 가 아니므로 body 변경 시 새 id 를 mint하고 이전 row 가 남는다 — `mem lifecycle` dup-flag 가 처리, 한편 `mem profile` 의 rowid-DESC tie-break 로 read-side 는 항상 newest body 반환.
+> **두 writer 계약**: `/post-it promote --scope user` 와 `analyze-user update` 는 모두 `source user-profile:<stem>` 으로 write — ONE logical record. analyze-user 의 "read existing body" 는 반드시 `mem profile <stem>` (tie-broken) 으로 읽어야 한다 (raw `db_iter_records` 로 읽으면 stale dup 에서 splice 될 위험). `write_record` 는 `(tier, scope, source)` source-keyed UPSERT — 같은 `source=user-profile:<stem>` 면 body 변경 시 기존 레코드를 in-place UPDATE (id 보존), dup row 없음. 두 writer 가 ONE record 로 결정론화.
 
 ### `/post-it handoff [--no-confirm]`
 **세션 인계 — sweep 먼저, 그 다음 hints 생성** (Claude 가 내용 생성).

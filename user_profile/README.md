@@ -15,7 +15,7 @@
 | `05_domain_expertise` | 도메인 배경 (speech / TF DNN / signal processing)·용어 선호 | 연구팀, 자료팀, 디자인팀, 편집팀, **기획팀** (plan 안 약자), **개발팀** (변수명·함수명 자리 약자), **메인 Claude** (사용자 발화 자리 약자 인지) |
 | `07_coding_convention` | 코드 일관 패턴 — model 폴더 구조 / config 메커니즘 / prefix / preferred layer / framework / metric set / log·ckpt / seed·reproducibility / naming | 개발팀 (new-lib·refactor·backend·frontend) · 기획팀 (plan 안 코드) · 메인 Claude (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙) |
 
-> 06 (대화 메타 규칙) 은 글로벌 `~/.claude/CLAUDE.md` §1~§7 가 단일 source. user_profile 안 별도 카탈로그 X (2026-05-26 완전 제거 — 중복 회피).
+> 06 (대화 메타 규칙) 은 글로벌 `~/.claude/CLAUDE.md` §1~§7 가 단일 source. user_profile 매트릭스(이 표)에서는 제외 — 06 은 _메인 Claude 전용_ (sub-agent 는 사용자와 직접 대화 X). 단 `/post-it --scope user` 의 default collab 저장처로 `06_collaboration_style` profile 레코드는 유지된다 (post-it/SKILL.md:65). "완전 제거"는 _이 매트릭스 카탈로그 한정_.
 
 ## 갱신 프로토콜
 
