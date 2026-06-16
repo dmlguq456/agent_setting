@@ -71,3 +71,7 @@ __pycache__/
 
 # 분사 headless가 worktree에 남기는 nested agent-memory cruft 차단
 /.claude/
+
+# worklog-board (agent-note) — submodule 일시 제거(2026-06-16), standalone repo 로 운영
+/worklog-board/
+/worklog-board-wt/
