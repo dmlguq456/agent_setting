@@ -33,6 +33,9 @@ RECORD_COLS = ("id", "tier", "scope", "type", "cwd_origin", "created", "updated"
                "expires", "source", "tags", "links", "body", "strength", "last_accessed",
                "injection_flag")
 
+# dump 자동 commit 메시지 prefix — 사용자 관행 `chore: dump —` 계열 / `auto-sync` 라벨로 수동과 구분
+AUTO_DUMP_MSG_PREFIX = "chore: dump — auto-sync"
+
 # injection / secret 가드
 INJECTION_PAT = re.compile(
     r"(ignore (all |the )?previous|disregard (all|previous)|you must now|"
@@ -63,6 +66,55 @@ def _git_out(args, cwd):
         return r.stdout.strip() if r.returncode == 0 else ""
     except Exception:
         return ""
+
+
+def _git_rc(args, cwd):
+    """git 명령 returncode (예외/실패 → 비0, 절대 raise X). _git_out 의 returncode 짝."""
+    try:
+        r = subprocess.run(["git"] + args, cwd=str(cwd),
+                           capture_output=True, text=True, timeout=5)
+        return r.returncode
+    except Exception:
+        return 1
+
+
+def _head_unpushed(repo):
+    """HEAD 가 미푸시면 True (amend 안전). upstream 없으면 로컬-only → True.
+    upstream 있고 HEAD ahead(@{u}..HEAD count > 0)면 미푸시 True, ==0(푸시됨)이면 False.
+    모든 git 호출 never-raise (_git_rc/_git_out)."""
+    if _git_rc(["rev-parse", "@{u}"], repo) != 0:
+        return True   # upstream 없음 → 로컬-only auto-commit, amend 허용
+    cnt = _git_out(["rev-list", "@{u}..HEAD", "--count"], repo).strip()
+    return cnt not in ("", "0")   # ahead>0 = 미푸시 → amend 허용
+
+
+def _commit_dump():
+    """sync 후 DUMP 가 속한 git repo(claude-memory)에 자동 commit (default ON, MEM_DUMP_COMMIT=0 면 skip).
+    메시지는 사용자 관행 `chore: dump —` prefix 에 `auto-sync` 라벨 (수동/자동 구분).
+    직전 HEAD 가 _미푸시_ auto-sync 커밋이면 --amend 로 rolling 단일 커밋 (log 폭증 차단).
+    수동 커밋·푸시된 커밋은 절대 amend X (prefix 체크 + 미푸시 체크 두 가드).
+    push 는 default off (MEM_DUMP_PUSH=1). git repo 아니거나 staged 변경 없으면 무해 no-op.
+    절대 raise X (sync 비치명). dump.jsonl 단일 파일만 stage — 다른 dirty/untracked 비오염."""
+    if os.environ.get("MEM_DUMP_COMMIT") == "0":
+        return  # escape hatch: 자동 commit 끄기
+    repo = DUMP.parent  # STORE; dump.jsonl lives in the claude-memory repo working tree
+    if not _git_out(["rev-parse", "--is-inside-work-tree"], repo):
+        return  # 비 git repo → no-op
+    # dump.jsonl 단일 파일만 stage (memory.db·.bak·다른 파일은 절대 건드리지 않음)
+    _git_out(["add", "--", DUMP.name], repo)
+    # staged 변경 없으면 commit skip: diff --cached --quiet rc 0 = no staged change
+    if _git_rc(["diff", "--cached", "--quiet", "--", DUMP.name], repo) == 0:
+        return  # nothing staged → no commit
+    msg = f"{AUTO_DUMP_MSG_PREFIX} ({datetime.datetime.now().isoformat(timespec='seconds')})"
+    # amend-squash 판정: 직전 HEAD 가 (1) auto-sync 커밋이고 (2) 아직 미푸시면 amend
+    head_msg = _git_out(["log", "-1", "--format=%s"], repo)   # 빈 문자열 = 커밋 없는 fresh repo
+    is_auto = head_msg.startswith(AUTO_DUMP_MSG_PREFIX)
+    if is_auto and _head_unpushed(repo):
+        _git_out(["commit", "--amend", "-m", msg, "--", DUMP.name], repo)   # rolling 단일 커밋
+    else:
+        _git_out(["commit", "-m", msg, "--", DUMP.name], repo)              # 새 커밋
+    if os.environ.get("MEM_DUMP_PUSH") == "1":
+        _git_out(["push"], repo)
 
 
 def _norm_remote(url):
@@ -585,11 +637,15 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             if tier == "working":
                 new_expires = (datetime.date.today() +
                                datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
+            # Step 4.3: injection_flag 도 body 교체와 함께 재계산·갱신
+            new_inj_flag = 1 if "injection-pattern" in flags else 0
             con.execute(
-                "UPDATE records SET body=?, updated=?, expires=?, tags=?, links=? WHERE id=?",
+                "UPDATE records SET body=?, updated=?, expires=?, tags=?, links=?,"
+                " injection_flag=? WHERE id=?",
                 (body, today(), new_expires,
                  json.dumps(tags or [], ensure_ascii=False),
-                 json.dumps(links or [], ensure_ascii=False), existing))
+                 json.dumps(links or [], ensure_ascii=False),
+                 new_inj_flag, existing))
             if _FTS_OK:
                 con.execute("DELETE FROM records_fts WHERE id=?", (existing,))
                 con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (existing, body))
@@ -618,6 +674,8 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             "tags": tags or [], "links": links or [],
             "expires": None, "source": source,
             "strength": 1, "last_accessed": today(),
+            # Step 4.3: sanitize() 결과 flags 를 DB 에 영속
+            "injection_flag": 1 if "injection-pattern" in flags else 0,
         }
         if tier == "working":
             meta["expires"] = (datetime.date.today() +
@@ -756,6 +814,11 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
                 conds.append("r.scope=?"); p.append(scope)
             if encc:
                 conds.append("(r.scope='global' OR r.cwd_origin=?)"); p.append(encc)
+            # Step 4.3 데이터펜스: injection-flagged 레코드를 recall 에서 제외.
+            # FTS/trigram/CJK-LIKE/OpError-LIKE/no-FTS-LIKE 5경로 전부 build_where 경유 → 자동 상속.
+            # profile(type=profile)은 WHERE 에서 제외하지 않음 — build_where 는 recall/inject 용이며
+            # inject() profile 읽기는 독립 쿼리 사용 (T1 신뢰, 마스킹 X).
+            conds.append("(r.injection_flag=0 OR r.injection_flag IS NULL)")
             return (" AND ".join(conds) if conds else "1"), p
 
         has_fts = con.execute(
@@ -998,7 +1061,7 @@ def distill(sid, advance=False):
 
 # ---------- export / import ----------
 def export_dump(target_path=None):
-    """DB → dump.jsonl (git mirror). 결정론적: id 정렬 + sort_keys + 14 컬럼 전부."""
+    """DB → dump.jsonl (git mirror). 결정론적: id 정렬 + sort_keys + 15 컬럼 전부."""
     dest = Path(target_path) if target_path else DUMP
     con = get_con()
     try:
@@ -1033,11 +1096,15 @@ def import_dump(path):
     con = get_con()
     n = 0
     try:
-        # exact restore: 기존 records + FTS mirror 를 완전히 비우고 replay
+        # exact restore: 기존 records + FTS mirror 를 완전히 비우고 replay.
+        # Step 4.2: DELETE 게이팅을 _FTS_OK/_TRIG_OK 모듈캐시 대신 sqlite_master ground-truth 로 변경.
+        # 모듈캐시는 현 연결 시작 시점에 결정되지만, MEM_NO_TRIGRAM 토글·fts5 가용성 변동으로
+        # 두 번째 import 시 캐시가 첫 번째와 달라지면 trig ghost 가 남는다.
+        # sqlite_master 는 실제 테이블 존재 여부이므로 캐시 불일치와 무관하게 정확하다.
         con.execute("DELETE FROM records")
-        if _FTS_OK:
+        if con.execute("SELECT name FROM sqlite_master WHERE name='records_fts'").fetchone():
             con.execute("DELETE FROM records_fts")
-        if _TRIG_OK:
+        if con.execute("SELECT name FROM sqlite_master WHERE name='records_trig'").fetchone():
             try:
                 con.execute("DELETE FROM records_trig")
             except Exception:
@@ -1531,6 +1598,9 @@ def stats():
     try:
         rows = con.execute(
             "SELECT tier, scope, COUNT(*) FROM records GROUP BY tier, scope").fetchall()
+        # Step 4.3b: injection-flagged 카운트 (N>0 일 때만 출력 — 클린한 경우 노이즈 없음)
+        flagged_n = con.execute(
+            "SELECT COUNT(*) FROM records WHERE injection_flag=1").fetchone()[0]
     finally:
         con.close()
     total = 0
@@ -1538,6 +1608,8 @@ def stats():
         print(f"  {t}/{s}: {n}")
         total += n
     print(f"  total: {total}  ({STORE}/memory.db)")
+    if flagged_n > 0:
+        print(f"  injection-flagged: {flagged_n}  (recall/inject 제외됨 — 오탐이면 확인)")
 
 
 def orphans():
@@ -1682,14 +1754,25 @@ def inject(max_working=40, max_durable=40, hook=False):
         prof_raw = con.execute(
             f"SELECT rowid, {cols} FROM records WHERE type='profile'"
         ).fetchall()
+        # Step 4.3 inject 마스킹: injection-flagged 레코드를 주입 블록에서 제외.
+        # profile 읽기(위 prof_raw)는 type='profile' T1 신뢰 — 마스킹 X.
         work = list(db_iter_records(
-            con, "tier='working' AND cwd_origin=? AND (expires IS NULL OR expires >= ?)",
+            con, "tier='working' AND cwd_origin=? AND (expires IS NULL OR expires >= ?)"
+                 " AND (injection_flag=0 OR injection_flag IS NULL)",
             (encc, today())))
         dur  = list(db_iter_records(
-            con, "tier='durable' AND scope='project' AND cwd_origin=? AND (expires IS NULL OR expires >= ?)",
+            con, "tier='durable' AND scope='project' AND cwd_origin=? AND (expires IS NULL OR expires >= ?)"
+                 " AND (injection_flag=0 OR injection_flag IS NULL)",
             (encc, today())))
         # D-16: con 이 열린 상태에서 정리 후보 수집 (R1 — finally close 전에 실행)
         cleanup_lines = inject_cleanup_candidates(con, encc)
+        # Step 4.3b: injection-flagged working+durable 레코드 카운트 수집 (cwd scope, con 재사용)
+        flagged_cnt = con.execute(
+            "SELECT COUNT(*) FROM records "
+            "WHERE (tier='working' OR (tier='durable' AND scope='project'))"
+            " AND cwd_origin=? AND injection_flag=1",
+            (encc,)
+        ).fetchone()[0]
     finally:
         con.close()
 
@@ -1735,6 +1818,10 @@ def inject(max_working=40, max_durable=40, hook=False):
         out.append("## 🧹 정리 후보 (메인 직접 consolidate/prune/graduate — D-16)")
         out.extend(cleanup_lines)
         out.append("")
+    # Step 4.3b: injection-flagged 레코드 존재 알림 (본문 비노출, 카운트+안내만 — 마스킹 유지하되 가시성 확보)
+    if flagged_cnt > 0:
+        out.append(f"⚠️ injection-flagged {flagged_cnt}건 (recall/inject 제외됨 — 오탐이면 확인)")
+        out.append("")
     out.append("> 상세 회상: `bash ~/.claude/tools/memory/recall.sh \"<query>\"` (store+세션 전체 FTS)")
     emit("\n".join(out))
 
@@ -1760,6 +1847,10 @@ def sync():
         export_dump()
     except Exception as e:
         sys.stderr.write(f"[sync] export 실패(계속): {e}\n")
+    try:
+        _commit_dump()
+    except Exception as e:
+        sys.stderr.write(f"[sync] dump commit 실패(계속): {e}\n")
     return n
 
 
