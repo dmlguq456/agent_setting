@@ -24,12 +24,13 @@ USER_PROFILE = Path(os.environ.get("MEM_PROFILE", HOME / ".claude" / "user_profi
 TIERS = ("working", "durable")
 SCOPES = ("project", "global")
 WORKING_TTL_DAYS = 21
+SCHEMA_VERSION = 3  # v1 기준 / v2 strength+last_accessed / v3 cwd_origin remap
 FM_ORDER = ["id", "tier", "scope", "type", "cwd_origin", "created", "updated",
-            "expires", "source", "tags", "links"]
+            "expires", "source", "tags", "links", "strength", "last_accessed"]
 
-# 12 컬럼 정규 순서 (export/import round-trip 결정성 기반)
+# 14 컬럼 정규 순서 (export/import round-trip 결정성 기반)
 RECORD_COLS = ("id", "tier", "scope", "type", "cwd_origin", "created", "updated",
-               "expires", "source", "tags", "links", "body")
+               "expires", "source", "tags", "links", "body", "strength", "last_accessed")
 
 # injection / secret 가드
 INJECTION_PAT = re.compile(
@@ -51,6 +52,138 @@ def today():
 
 def enc_cwd(path):
     return re.sub(r"[/._]", "-", str(path))
+
+
+def _git_out(args, cwd):
+    """git 명령 stdout.strip() (returncode 0). 모든 예외/실패 → "" (절대 raise X)."""
+    try:
+        r = subprocess.run(["git"] + args, cwd=str(cwd),
+                           capture_output=True, text=True, timeout=5)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def _norm_remote(url):
+    """remote URL → 'host/org/repo' (scp git@host:org/repo & https 정규화, 끝 .git strip)."""
+    u = url.strip()
+    if not u:
+        return ""
+    # scp-like: git@host:org/repo(.git)
+    m = re.match(r"^[\w.+-]+@([\w.-]+):(.+)$", u)
+    if m:
+        host, path = m.group(1), m.group(2)
+    else:
+        # https://host/org/repo(.git) or ssh://host/org/repo
+        m2 = re.match(r"^[a-zA-Z]+://(?:[^@/]+@)?([\w.-]+)(?::\d+)?/(.+)$", u)
+        if m2:
+            host, path = m2.group(1), m2.group(2)
+        else:
+            return ""  # 해석 불가 → 빈 문자열 (호출자가 다음 단계로)
+    path = re.sub(r"\.git$", "", path).strip("/")
+    return f"{host}/{path}" if path else ""
+
+
+def _seed_marker(marker):
+    """무remote git repo root 에 .claude-project-id 16hex write (실패 비치명, None 반환).
+    또한 best-effort 로 <root>/.git/info/exclude 에 .claude-project-id 를 추가해
+    추적 .gitignore 를 건드리지 않고 git status 에서 가려둔다 (per-repo, non-tracked)."""
+    try:
+        val = os.urandom(8).hex()  # 16 hex chars
+        marker.write_text(val + "\n", encoding="utf-8")
+    except Exception:
+        return None
+    # best-effort: keep the marker out of `git status` via per-repo exclude (not tracked .gitignore)
+    try:
+        excl = marker.parent / ".git" / "info" / "exclude"
+        if excl.parent.is_dir():
+            cur = excl.read_text(encoding="utf-8") if excl.exists() else ""
+            if ".claude-project-id" not in cur:
+                with excl.open("a", encoding="utf-8") as f:
+                    f.write(("" if cur.endswith("\n") or cur == "" else "\n")
+                            + ".claude-project-id\n")
+                sys.stderr.write(
+                    f"[project_key] seeded .claude-project-id at {marker.parent} "
+                    f"(+ .git/info/exclude)\n")
+    except Exception:
+        pass  # exclude 실패는 무해 — 사용자가 git status 에서 파일을 볼 뿐
+    return val
+
+
+def project_key(cwd=None, seed=False):
+    """cwd 의 안정적 프로젝트 키. 해석 순서:
+    ① git remote origin → 'git:'+_norm_remote
+    ② git-common-dir 캐노니컬 root → 마커 / 'root:'+enc_cwd(root)
+    ③ (무remote) .claude-project-id 마커 → 'id:'+값 (seed=True 면 생성)
+    ④ enc_cwd(cwd) (prefix 없이 — 기존 호환 fallback)
+    절대 raise 안 함."""
+    cwd = Path(cwd) if cwd else Path.cwd()
+    # ① remote
+    remote = _git_out(["remote", "get-url", "origin"], cwd)
+    nk = _norm_remote(remote) if remote else ""
+    if nk:
+        return "git:" + nk
+    # ② git-common-dir → canonical root (worktree → main)
+    common = _git_out(["rev-parse", "--git-common-dir"], cwd)
+    root = None
+    if common:
+        cp = Path(common)
+        if not cp.is_absolute():
+            cp = (cwd / cp).resolve()
+        # common dir == '<root>/.git' → parent is root; else (bare/custom) use cwd
+        root = cp.parent if cp.name == ".git" else cwd
+    # ③ marker on root (no-remote git case)
+    if root is not None:
+        marker = root / ".claude-project-id"
+        if marker.exists():
+            try:
+                val = marker.read_text(encoding="utf-8").strip()
+                if val:
+                    return "id:" + val
+            except Exception:
+                pass
+        if seed:
+            val = _seed_marker(marker)
+            if val:
+                return "id:" + val
+        return "root:" + enc_cwd(root)
+    # ④ fallback (no git): bare enc_cwd, no prefix — 기존 cwd_origin 호환
+    return enc_cwd(cwd)
+
+
+def _decode_enc_cwd(enc):
+    """enc_cwd 값을 실재 절대경로로 복원 (못 풀면 None).
+    역추론 대신, '/' 부터 실재 디렉토리 자식 이름을 enc_cwd 인코딩해 남은 토큰열과
+    매칭하며 하강 — 실재 디렉토리명이 ground truth 라 '-'/'.'/'_' 가 자동 해소되고
+    검색이 파일시스템에 의해 hard-prune 된다(exponential 없음)."""
+    if not enc or not enc.startswith("-"):
+        return None
+    def walk(cur, rem, depth):
+        if depth > 64:               # 안전망: symlink loop 등 비정상 입력 차단
+            return None
+        if rem == "":
+            return cur if cur.is_dir() else None
+        if not rem.startswith("-"):   # 항상 '-'(=구분자)로 시작해야 함
+            return None
+        body = rem[1:]
+        if body == "":
+            return cur if cur.is_dir() else None
+        try:
+            children = sorted(p.name for p in cur.iterdir())
+        except Exception:
+            return None
+        for name in children:
+            e = re.sub(r"[/._]", "-", name)   # 단일 컴포넌트의 enc (leading '-' 없음)
+            if body == e:
+                cand = cur / name
+                if cand.is_dir():
+                    return cand
+            elif body.startswith(e + "-"):
+                r = walk(cur / name, body[len(e):], depth + 1)  # 남은 rem 은 '-'로 시작
+                if r is not None:
+                    return r
+        return None
+    return walk(Path("/"), enc, 0)
 
 
 def slugify(text, n=4):
@@ -106,7 +239,7 @@ def serialize_record(meta, body):
     lines = ["---"]
     for k in FM_ORDER:
         if k not in meta or meta[k] is None:
-            if k in ("expires", "source", "tags", "links"):
+            if k in ("expires", "source", "tags", "links", "strength", "last_accessed"):
                 continue
         v = meta.get(k)
         if isinstance(v, list):
@@ -159,7 +292,9 @@ def _ensure_schema(con):
         source      TEXT,
         tags        TEXT,
         links       TEXT,
-        body        TEXT NOT NULL
+        body        TEXT NOT NULL,
+        strength    INTEGER DEFAULT 1,
+        last_accessed TEXT
     )""")
     con.execute("CREATE INDEX IF NOT EXISTS idx_records_scope ON records(scope, cwd_origin, tier)")
 
@@ -183,8 +318,102 @@ def _ensure_schema(con):
         _TRIG_OK = False
 
 
+def _migrate_v2(con):
+    """strength + last_accessed 컬럼 백필 (additive-only, 이중 적용 무해)."""
+    cols = {r[1] for r in con.execute("PRAGMA table_info(records)")}
+    if "strength" not in cols:
+        con.execute("ALTER TABLE records ADD COLUMN strength INTEGER DEFAULT 1")
+    if "last_accessed" not in cols:
+        con.execute("ALTER TABLE records ADD COLUMN last_accessed TEXT")
+    con.execute("UPDATE records SET strength=1 WHERE strength IS NULL")
+    con.execute("UPDATE records SET last_accessed=COALESCE(updated,created) "
+                "WHERE last_accessed IS NULL")
+
+
+def _migrate_v3_prepare(con):
+    """remap 계획 사전계산 (read-only, lock 없음). git subprocess·iterdir 는 여기서만.
+    반환: {"remap": {old: new, ...}, "orphans": [keys...]}."""
+    rows = con.execute(
+        "SELECT DISTINCT cwd_origin FROM records "
+        "WHERE scope='project' AND cwd_origin IS NOT NULL "
+        "AND cwd_origin != 'global'").fetchall()
+    remap, orphans = {}, []
+    for (c,) in rows:
+        if not c or c.startswith(("git:", "id:", "root:")):
+            continue  # already a project_key (idempotent re-run)
+        d = _decode_enc_cwd(c)
+        if d is not None and d.is_dir():
+            nk = project_key(d, seed=False)   # git subprocess — lock NOT held here
+            if nk != c:
+                remap[c] = nk
+        else:
+            orphans.append(c)  # 보존: cwd_origin 불변 (DELETE 절대 X)
+    orphan_recs = 0
+    if orphans:
+        orphan_recs = con.execute(
+            "SELECT COUNT(*) FROM records WHERE cwd_origin IN (%s)" %
+            ",".join("?" * len(orphans)), orphans).fetchone()[0]
+    sys.stderr.write(
+        f"[migrate v3] plan: remap {len(remap)} keys · "
+        f"orphan keys {len(orphans)} ({orphan_recs} records, 보존)\n")
+    return {"remap": remap, "orphans": orphans}
+
+
+def _migrate_v3_apply(con, plan):
+    """pure SQL cwd_origin remap (BEGIN IMMEDIATE 안에서만 호출 — subprocess/iterdir 금지)."""
+    if not plan:               # plan may be None when cur>=3 (v3 already applied)
+        return
+    total = 0
+    for old, new in plan["remap"].items():
+        if new != old:
+            total += con.execute(
+                "UPDATE records SET cwd_origin=? WHERE cwd_origin=?",
+                (new, old)).rowcount
+    sys.stderr.write(f"[migrate v3] applied: remapped {total} records\n")
+
+
+def _run_migrations(con):
+    """PRAGMA user_version 기반 스키마 마이그레이션 프레임.
+    NOTE: migrate() 함수(legacy md→DB 이주)와는 별개 — 이 함수는 스키마-버전 전용.
+    두 단계: lock-free PREPARE (백업 + v3 git/fs 사전계산) → locked APPLY (pure SQL 전용).
+    """
+    cur = con.execute("PRAGMA user_version").fetchone()[0]
+    if cur >= SCHEMA_VERSION:
+        return                       # idempotent no-op
+    has_records = con.execute("SELECT 1 FROM records LIMIT 1").fetchone() is not None
+    # --- BACKUP (lock-free; source MUST be clean — see invariant below) ---
+    if has_records:
+        con.commit()                 # ensure no open write txn before backup
+        assert not con.in_transaction  # backup hangs forever on a mid-txn source
+        bak = STORE / f"memory.db.pre-migrate-v{cur}.bak"
+        try:
+            dest = sqlite3.connect(str(bak))
+            with dest:
+                con.backup(dest)
+            dest.close()
+        except Exception as e:
+            sys.stderr.write(f"[migrate] backup 실패(비치명): {e}\n")
+    # --- PRECOMPUTE (lock-free, read-only): v3 needs git/filesystem — do it OUTSIDE the lock ---
+    v3_plan = _migrate_v3_prepare(con) if cur < 3 else None
+    # --- APPLY (locked, pure SQL only — no subprocess inside) ---
+    con.commit()                     # 무조건: fresh/populated 양 분기 모두 clean 상태로 lock 진입
+    con.execute("BEGIN IMMEDIATE")
+    try:
+        cur2 = con.execute("PRAGMA user_version").fetchone()[0]  # re-read under lock
+        if cur2 >= SCHEMA_VERSION:
+            con.execute("ROLLBACK"); return   # another process already migrated
+        if cur2 < 2:
+            _migrate_v2(con)
+        if cur2 < 3:
+            _migrate_v3_apply(con, v3_plan)
+        con.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        con.execute("COMMIT")
+    except Exception:
+        con.execute("ROLLBACK"); raise
+
+
 def get_con():
-    """DB 접속 단일 진입점. schema 보장 후 반환."""
+    """DB 접속 단일 진입점. schema 보장 + migration 후 반환."""
     STORE.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB)
     con.execute("PRAGMA journal_mode=WAL")
@@ -194,6 +423,7 @@ def get_con():
     # write 할 수 있어(WAL 도 writer 2개는 충돌) "database is locked" 즉시 실패를 5s 재시도로 완화.
     con.execute("PRAGMA busy_timeout=5000")
     _ensure_schema(con)
+    _run_migrations(con)
     return con
 
 
@@ -216,9 +446,11 @@ def _row_to_meta(row):
 
 
 def _meta_to_params(meta, body):
-    """meta dict + body → 12-tuple for INSERT.
+    """meta dict + body → 14-tuple for INSERT (RECORD_COLS 순).
     None → NULL passthrough 규칙: expires/source/cwd_origin 은 None → SQL NULL (절대 "" 다운그레이드 X).
     tags/links: 항상 list → JSON 텍스트 (None 이면 []).
+    strength: None 또는 0 → 1 로 coerce (DEFAULT 의미론; Phase α 에서 strength=0 케이스 없음).
+    last_accessed: None → SQL NULL (migration/import 에서 COALESCE 백필 예정).
     """
     tags = meta.get("tags") or []
     links = meta.get("links") or []
@@ -235,6 +467,8 @@ def _meta_to_params(meta, body):
         json.dumps(tags, ensure_ascii=False),
         json.dumps(links, ensure_ascii=False),
         body,
+        meta.get("strength", 1) or 1,    # None/0 → 1 default
+        meta.get("last_accessed"),       # None → SQL NULL (back-filled by migration/import)
     )
 
 
@@ -346,7 +580,7 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
                 print(f"[dedup] 기존 레코드와 동일 → {dup}")
             return dup
         if cwd_origin is None:
-            cwd_origin = enc_cwd(Path.cwd()) if scope == "project" else "global"
+            cwd_origin = project_key(Path.cwd(), seed=True) if scope == "project" else "global"
         base = slugify(f"{rtype} {body}")
         # FIX 1: tier/scope/cwd_origin 을 해시 seed 에 포함해 namespace 충돌 방지
         # (동일 body+type 이라도 tier/scope 가 다르면 다른 id → INSERT OR REPLACE 가 앞 행 파괴하지 않음)
@@ -357,13 +591,14 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             "cwd_origin": cwd_origin, "created": today(), "updated": today(),
             "tags": tags or [], "links": links or [],
             "expires": None, "source": source,
+            "strength": 1, "last_accessed": today(),
         }
         if tier == "working":
             meta["expires"] = (datetime.date.today() +
                                datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
 
         con.execute(
-            f"INSERT OR REPLACE INTO records VALUES({','.join(['?']*12)})",
+            f"INSERT OR REPLACE INTO records VALUES({','.join(['?']*len(RECORD_COLS))})",
             _meta_to_params(meta, body)
         )
         # FTS mirror: replace 시 중복 행 방지 → DELETE 후 INSERT
@@ -436,7 +671,7 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
 
     con = get_con()
     try:
-        encc = enc_cwd(Path.cwd()) if cwd else None
+        encc = project_key(Path.cwd()) if cwd else None
 
         # WHERE 절 구성
         def build_where(base_cond=None):
@@ -656,7 +891,7 @@ def distill(sid, advance=False):
 
 # ---------- export / import ----------
 def export_dump(target_path=None):
-    """DB → dump.jsonl (git mirror). 결정론적: id 정렬 + sort_keys + 12 컬럼 전부."""
+    """DB → dump.jsonl (git mirror). 결정론적: id 정렬 + sort_keys + 14 컬럼 전부."""
     dest = Path(target_path) if target_path else DUMP
     con = get_con()
     try:
@@ -714,8 +949,13 @@ def import_dump(path):
                 for k in ("tags", "links"):
                     if meta[k] is None:
                         meta[k] = []
+                # old-dump back-compat: strength/last_accessed 없으면 기본값 채우기
+                if meta.get("strength") is None:
+                    meta["strength"] = 1
+                if meta.get("last_accessed") is None:
+                    meta["last_accessed"] = rec.get("updated") or rec.get("created")
                 con.execute(
-                    f"INSERT OR REPLACE INTO records VALUES({','.join(['?']*12)})",
+                    f"INSERT OR REPLACE INTO records VALUES({','.join(['?']*len(RECORD_COLS))})",
                     _meta_to_params(meta, body)
                 )
                 rid = meta.get("id", "")
@@ -1149,7 +1389,8 @@ def delete_record(rid, quiet=False):
 # ---------- projection ----------
 def project(cwd=None):
     cwd = Path(cwd) if cwd else Path.cwd()
-    encc = enc_cwd(cwd)
+    encc = enc_cwd(cwd)                      # dest dir (harness convention — unchanged)
+    pkey = project_key(cwd)                  # filter key (E-3)
     dest = PROJECTS / encc / "memory"
     dest.mkdir(parents=True, exist_ok=True)
     proj = dest / "_projection"
@@ -1158,7 +1399,7 @@ def project(cwd=None):
         old.unlink()
     idx, n = ["# MEMORY.md — projection (store 생성, 직접 편집 금지)", ""], 0
     for meta, body in db_iter_records(
-            None, "(scope='global' OR cwd_origin=?)", (encc,)):
+            None, "(scope='global' OR cwd_origin=?)", (pkey,)):
         (proj / f"{meta['id']}.md").write_text(
             serialize_record(meta, body), encoding="utf-8")
         idx.append(f"- [{meta['id']}](_projection/{meta['id']}.md) "
@@ -1185,6 +1426,37 @@ def stats():
         print(f"  {t}/{s}: {n}")
         total += n
     print(f"  total: {total}  ({STORE}/memory.db)")
+
+
+def orphans():
+    """현 live 프로젝트로 해석 안 되는 cwd_origin + 레코드 수 (read-only, 삭제/플래그 X).
+    NOTE: get_con() 경유로 첫 호출 시 migration gate 가 실행됨 (orphans() 자체는 read-only).
+    git:/id:/root: 키는 역방향 경로 복원 불가 → 보수적으로 건너뜀(live-unknown 취급).
+    """
+    print("# orphan cwd_origin (read-only)")
+    if not DB.exists():
+        print(f"  (DB 없음: {DB})")
+        return
+    con = get_con()
+    try:
+        rows = con.execute(
+            "SELECT cwd_origin, COUNT(*) FROM records "
+            "WHERE scope='project' AND cwd_origin IS NOT NULL "
+            "AND cwd_origin != 'global' GROUP BY cwd_origin").fetchall()
+    finally:
+        con.close()
+    total = 0
+    for c, n in sorted(rows):
+        d = _decode_enc_cwd(c) if not c.startswith(("git:", "id:", "root:")) else None
+        live = (d is not None and d.is_dir())
+        # git:/id:/root: keys: live iff a current project resolves to the same key
+        if c.startswith(("git:", "id:", "root:")):
+            # best-effort: cannot reverse a remote/marker key to a path → treat as live-unknown
+            continue
+        if not live:
+            print(f"  [orphan] {c}: {n} records")
+            total += n
+    print(f"  → orphan records: {total}")
 
 
 def register_postit(path):
@@ -1291,7 +1563,7 @@ def inject(max_working=40, max_durable=40, hook=False):
 
     con = get_con()
     try:
-        encc = enc_cwd(Path.cwd())
+        encc = project_key(Path.cwd())
         # profile: rowid 를 명시적으로 SELECT — db_iter_records 는 RECORD_COLS 만 반환해 rowid 미포함.
         # profile() 의 newest-wins 로직과 동일하게 per-stem dedup 적용 (read-side coherence).
         cols = ", ".join(RECORD_COLS)
@@ -1444,6 +1716,8 @@ def main():
     ds.add_argument("sid")
     ds.add_argument("--advance", action="store_true", help="처리 후 marker 를 마지막 메시지 uuid 로 전진")
 
+    sub.add_parser("orphans", help="해석 안 되는 cwd_origin 조회 (read-only)")
+
     args = ap.parse_args()
 
     if args.cmd == "add":
@@ -1488,6 +1762,8 @@ def main():
         profile(args.aspect, list_mode=args.list)
     elif args.cmd == "distill":
         distill(args.sid, advance=args.advance)
+    elif args.cmd == "orphans":
+        orphans()
 
 
 if __name__ == "__main__":
