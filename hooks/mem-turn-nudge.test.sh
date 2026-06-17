@@ -70,13 +70,15 @@ echo "== T2: counter resets after firing (turn N+1 silent) =="
 out4="$(run UserPromptSubmit 'hello four')"
 [ -z "$out4" ] && ok "turn N+1 silent (counter reset after fire)" || bad "turn N+1 should be silent, got: $out4"
 
-echo "== T3: memory write (db mtime bump) resets counter + silent =="
-run UserPromptSubmit 'hello five' >/dev/null    # counter -> 2 (T2 turn4 reset to 1, here ->2)
-touch -d '2026-06-16 12:00:00' "$TMP/memory.db"  # simulate a memory write (later mtime)
-outw="$(run UserPromptSubmit 'hello six')"
-[ -z "$outw" ] && ok "write detected → counter reset, silent" || bad "post-write turn should be silent, got: $outw"
-saved_cnt="$(sed -n '1p' "$TMP/.turn-state-$SID")"
-[ "$saved_cnt" = "1" ] && ok "post-write counter restarted at 1" || bad "post-write counter should be 1, got: $saved_cnt"
+echo "== T3: memory write 는 카운터를 리셋하지 않는다 (Cluster E — 카운터는 distiller fire 때만 리셋) =="
+# fresh SID + 높은 interval → fire 간섭 배제, "write-reset 여부"만 격리 검증
+SID3="writenoreset"
+r3() { printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"x"}' "$SID3" | MEM_STORE="$TMP" MEM_NUDGE_INTERVAL=100 bash "$HOOK" >/dev/null 2>&1; }
+r3                                                # counter -> 1
+touch -d '2026-06-16 12:00:00' "$TMP/memory.db"   # 메인의 명시적 mem add(사용자 "기억해") 등 임의 memory write 시뮬
+r3                                                # counter -> 2 (write 무관)
+c3="$(sed -n '1p' "$TMP/.turn-state-$SID3")"
+[ "$c3" = "2" ] && ok "memory write 가 카운터 리셋 안 함 (1→2) — '기억해' add 가 distiller 억제하던 버그 fix" || bad "write 는 리셋하면 안 됨; 기대 2, got: $c3"
 
 echo "== T4: no phantom write on first turn (fresh session) =="
 SID2="freshsid"

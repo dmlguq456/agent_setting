@@ -29,25 +29,21 @@ STORE="${MEM_STORE:-$HOME/.claude/memory}"
 DB="$STORE/memory.db"
 STATE="$STORE/.turn-state-$SID"
 
-db_mtime=0; [ -f "$DB" ] && db_mtime=$(stat -c %Y "$DB" 2>/dev/null || echo 0)
-
-counter=0; last_mtime=0
-if [ -f "$STATE" ]; then
-  counter=$(sed -n '1p' "$STATE" 2>/dev/null || echo 0)
-  last_mtime=$(sed -n '2p' "$STATE" 2>/dev/null || echo 0)
-fi
+counter=0
+if [ -f "$STATE" ]; then counter=$(sed -n '1p' "$STATE" 2>/dev/null || echo 0); fi
 case "$counter" in (*[!0-9]*|"") counter=0 ;; esac
-case "$last_mtime" in (*[!0-9]*|"") last_mtime=0 ;; esac
 
-# memory write 발생(mtime 증가) → 카운터 리셋 (회고 불필요)
-if [ "$db_mtime" -gt "$last_mtime" ]; then counter=0; fi
+# 카운터는 distiller 가 _분사될 때만_ 리셋된다(아래 fire). 카운터가 재는 건 "distiller 분사 이후 경과 턴"
+# = 세션 delta 누적량이다. 메인의 명시적 mem add(사용자 "기억해") 같은 임의 memory write 는 fact 한 건을
+# 저장할 뿐 세션을 distill 한 게 아니므로(공유 marker 도 안 움직임) 카운터에 영향을 주지 않는다.
+# (메인이 저장한 fact 도 세션 transcript 에 남아 distiller 가 분사 시 함께 캡처한다.)
 counter=$((counter + 1))
 
 fire=0
 if [ "$counter" -ge "$N" ]; then fire=1; counter=0; fi
 
 mkdir -p "$STORE" 2>/dev/null || true
-printf '%s\n%s\n' "$counter" "$db_mtime" > "$STATE" 2>/dev/null || true
+printf '%s\n' "$counter" > "$STATE" 2>/dev/null || true
 
 # 오래된 세션 state GC (3일+ 비활성 — workflow-guard .untracked GC 패턴 동형, 2026-06-16). 무해 무시.
 find "$STORE" -maxdepth 1 -name '.turn-state-*' -mmin +4320 -delete 2>/dev/null || true
