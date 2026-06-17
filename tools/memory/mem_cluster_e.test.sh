@@ -654,9 +654,9 @@ python3 "$MEM" index --rebuild >/dev/null 2>&1
 inject_cleanup_7=$(cd "$WT_7" && python3 "$MEM" inject 2>/dev/null)
 # cleanup section should surface (near-dup records exist scoped to PKEY_7)
 # inject uses project_key(cwd) as encc — from WT_7, that should == PKEY_7
-echo "$inject_cleanup_7" | grep -q "정리 후보" \
+echo "$inject_cleanup_7" | grep -q "정리 신호" \
   && ok "⑦: inject_cleanup_candidates surfaces near-dup from worktree cwd (project_key coherence)" \
-  || bad "⑦: 정리 후보 not found from worktree (cleanup path not exercised)"
+  || bad "⑦: 정리 신호 not found from worktree (cleanup path not exercised)"
 
 rm -rf "$REPO_7" "$WT_7" "$STORE_7" "$PROJ_7"
 

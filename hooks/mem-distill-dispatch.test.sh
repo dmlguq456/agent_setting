@@ -22,6 +22,8 @@ TURNNUDGE="$ROOT/hooks/mem-turn-nudge.sh"
 MEM="$ROOT/tools/memory/mem.py"
 [ -f "$DISPATCH" ] || { echo "FAIL: dispatch hook not found at $DISPATCH"; exit 1; }
 [ -f "$TURNNUDGE" ] || { echo "FAIL: turn-nudge hook not found at $TURNNUDGE"; exit 1; }
+# dispatch 가 *이 worktree* 의 mem.py 를 쓰도록 강제 (라이브 ~/.claude 는 pre-γ — curate-snapshot/prune 부재).
+export MEM_PY="$MEM"
 
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); printf '  ✅ %s\n' "$1"; }
@@ -392,6 +394,131 @@ cnt_b="$(MEM_STORE="$STOREb" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+tot
   || bad "test(b): sentinel 파일 존재! body 가 셸 실행됨 (D-14 위반 — CRITICAL)"
 rm -f "$SENTINEL_B" 2>/dev/null || true
 rmdir "$STOREb/.distill-lock-$SIDb" 2>/dev/null || true
+
+# ============================================================
+# γ (Phase E-γ, D-18) — 2-mode model branch · opus no-tools · opt-in no-op · action parser · S2b membership
+# ============================================================
+
+# ⑧ mode→model. ⑥ above is the ARGUMENT-mode(sonnet) regression anchor (DO NOT remove): it passes
+#   post-γ regardless of the SessionEnd change, so this ⑧ is the REQUIRED SessionEnd(opus) pair (CP1/BR-1).
+echo "== ⑧ mode→model: SessionEnd(stdin-JSON)=opus + ① opus no-tools (양 브랜치) =="
+SID8="dispatchsidg8"
+mkfix "$SID8"
+rm -f "$STUBCAP/ARGV"
+printf '{"session_id":"%s","cwd":"/tmp"}' "$SID8" \
+  | MEM_DISTILL_ENABLE=1 PATH="$STUBCAP:$PATH" bash "$DISPATCH"
+for _ in $(seq 1 50); do [ -s "$STUBCAP/ARGV" ] && break; sleep 0.1; done
+argv8="$(cat "$STUBCAP/ARGV" 2>/dev/null || true)"
+printf '%s\n' "$argv8" | grep -qx -- "claude-opus-4-8" \
+  && ok "⑧ SessionEnd(stdin-JSON) → --model claude-opus-4-8 (argument 모드 sonnet = ⑥ anchor)" \
+  || bad "⑧ SessionEnd model != opus: [$argv8]"
+printf '%s\n' "$argv8" | grep -qx -- "--disallowedTools" \
+  && ok "① opus(SessionEnd) path: --disallowedTools 포함 (no-tools 양 브랜치)" \
+  || bad "① opus path: --disallowedTools 부재: [$argv8]"
+printf '%s\n' "$argv8" | grep -qx -- "--dangerously-skip-permissions" \
+  && bad "① opus path: --dangerously-skip-permissions 존재 (D-14 위반)" \
+  || ok "① opus path: --dangerously-skip-permissions 부재 (D-14)"
+rmdir "$STORE/.distill-lock-$SID8" 2>/dev/null || true; rm -f "$STORE/.distill-snapids-$SID8" 2>/dev/null || true
+
+# opt-in no-op (Sec-🟡-8): ENABLE unset → SessionEnd 경로 완전 no-op (claude 분사 X, curate-snapshot X)
+# fresh stub dir (공유 STUBBIN 의 prior CLAUDE_CALLED 누적·detached race 회피 — 결정성).
+echo "== opt-in: MEM_DISTILL_ENABLE unset → SessionEnd no-op =="
+SID9="dispatchsidg9"
+mkfix "$SID9"
+STUBOPT="$(mktemp -d)"; CLEANUP+=("$STUBOPT")
+printf '#!/bin/sh\ntouch "%s/CLAUDE_CALLED"\n' "$STUBOPT" > "$STUBOPT/claude"; chmod +x "$STUBOPT/claude"
+# env -u: 앰비언트 세션이 MEM_DISTILL_ENABLE=1 을 export 했어도(프로덕션 상태) 이 케이스는 unset 강제.
+printf '{"session_id":"%s","cwd":"/tmp"}' "$SID9" | env -u MEM_DISTILL_ENABLE PATH="$STUBOPT:$PATH" bash "$DISPATCH" || true
+sleep 0.3
+[ ! -f "$STUBOPT/CLAUDE_CALLED" ] \
+  && ok "opt-in: ENABLE unset → claude 미분사 (SessionEnd no-op)" || bad "opt-in: ENABLE unset 인데 claude 분사됨"
+[ ! -f "$STORE/.distill-snapids-$SID9" ] \
+  && ok "opt-in: ENABLE unset → snapids 미생성 (curate-snapshot 미실행)" || bad "opt-in: snapids 생성됨"
+
+# ④ action-JSON body injection (curate add) → 셸 payload 미실행 + 레코드 저장 (argv-only)
+echo "== ④ action-JSON body injection (curate add) → 셸 미실행 + 레코드 저장 =="
+SIDg4="dispatchsidg4"
+STOREg4="$(mktemp -d)"; PROJg4="$(mktemp -d)"; STUBg4="$(mktemp -d)"
+CLEANUP+=("$STOREg4" "$PROJg4" "$STUBg4")
+SENTINEL_G4="$STOREg4/SENTINEL_G4"
+enc_g4="$PROJg4/-home-fake-$SIDg4"; mkdir -p "$enc_g4"
+cat > "$enc_g4/$SIDg4.jsonl" <<JSONL
+{"type":"user","message":{"role":"user","content":"g4 prompt"},"uuid":"${SIDg4}u1","timestamp":"t1","isSidechain":false}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"g4 reply"}]},"uuid":"${SIDg4}a1","timestamp":"t2","isSidechain":false}
+JSONL
+# stub: action JSON add with shell payload in body (python -c → 안전한 JSON 직렬화, 셸 이스케이프 중첩 회피)
+cat > "$STUBg4/claude" <<STUBEOF
+#!/bin/sh
+python3 -c "
+import json
+print(json.dumps({'action':'add','tier':'durable','type':'lesson',
+                  'body':'normal text \"; touch $SENTINEL_G4 ; echo \"'}))
+"
+STUBEOF
+chmod +x "$STUBg4/claude"
+printf '{"session_id":"%s","cwd":"/tmp"}' "$SIDg4" \
+  | MEM_STORE="$STOREg4" MEM_PROJECTS="$PROJg4" MEM_DISTILL_ENABLE=1 PATH="$STUBg4:$PATH" bash "$DISPATCH"
+for _ in $(seq 1 50); do
+  cntg4="$(MEM_STORE="$STOREg4" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
+  [ "${cntg4:-0}" -ge 1 ] 2>/dev/null && break
+  [ ! -d "$STOREg4/.distill-lock-$SIDg4" ] && { sleep 0.2; break; }
+  sleep 0.1
+done
+cntg4="$(MEM_STORE="$STOREg4" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
+[ "${cntg4:-0}" = "1" ] && ok "④ curate add (action JSON) → 레코드 저장 (row==1)" || bad "④ curate add row=${cntg4:-0} (기대 1)"
+[ ! -f "$SENTINEL_G4" ] && ok "④ sentinel 미생성 — action body 셸 미실행 (argv-only)" || bad "④ sentinel 생성! body 셸 실행됨 (CRITICAL)"
+rmdir "$STOREg4/.distill-lock-$SIDg4" 2>/dev/null || true
+
+# INJ-2: prune injection id → 셸 미실행 + prune 실제 시도(nonexistent 거부, false-green 아님)
+echo "== INJ-2 prune injection id → 셸 미실행 + prune 시도(거부) =="
+STOREi2="$(mktemp -d)"; CLEANUP+=("$STOREi2")
+SENTINEL_I2="$STOREi2/SENTINEL_I2"
+out_i2="$(MEM_STORE="$STOREi2" python3 "$MEM" prune "x\"; touch $SENTINEL_I2; echo \"" 2>&1)"; rc=$?
+[ ! -f "$SENTINEL_I2" ] && ok "INJ-2: sentinel 미생성 — prune id argv-only (셸 미실행)" || bad "INJ-2: sentinel 생성! prune id 셸 실행됨 (CRITICAL)"
+{ [ "$rc" = 1 ] && printf '%s' "$out_i2" | grep -q "거부"; } \
+  && ok "INJ-2: prune 실제 시도됨 — 전체 문자열 1개 id argv 로 게이트 거부(false-green 아님)" \
+  || bad "INJ-2: prune 거부 미발생 (rc=$rc out=[$out_i2])"
+
+# action routing + S2b membership: in-snapshot prune 실행 / non-snapshot prune skip
+echo "== action routing + S2b membership: in-snapshot prune 실행 · non-snapshot skip =="
+SIDg5="dispatchsidg5"
+STOREg5="$(mktemp -d)"; PROJg5="$(mktemp -d)"; STUBg5="$(mktemp -d)"
+CLEANUP+=("$STOREg5" "$PROJg5" "$STUBg5")
+enc_g5="$PROJg5/-home-fake-$SIDg5"; mkdir -p "$enc_g5"
+cat > "$enc_g5/$SIDg5.jsonl" <<JSONL
+{"type":"user","message":{"role":"user","content":"g5 prompt"},"uuid":"${SIDg5}u1","timestamp":"t1","isSidechain":false}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"g5 reply"}]},"uuid":"${SIDg5}a1","timestamp":"t2","isSidechain":false}
+JSONL
+# seed a durable in /tmp's project (curate-snapshot for cwd=/tmp 이 포함 → membership 허용)
+( cd /tmp && MEM_STORE="$STOREg5" python3 "$MEM" add durable lesson \
+    "membership routing target durable body content here" >/dev/null 2>&1 )
+RID5="$(python3 - "$STOREg5/memory.db" <<'PY'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+r = c.execute("SELECT id FROM records WHERE tier='durable'").fetchone()
+print(r[0] if r else "")
+PY
+)"
+cat > "$STUBg5/claude" <<STUBEOF
+#!/bin/sh
+printf '%s\n' '{"action":"prune","id":"$RID5"}' '{"action":"prune","id":"ghost_not_in_snapshot_xyz"}'
+STUBEOF
+chmod +x "$STUBg5/claude"
+printf '{"session_id":"%s","cwd":"/tmp"}' "$SIDg5" \
+  | MEM_STORE="$STOREg5" MEM_PROJECTS="$PROJg5" MEM_DISTILL_ENABLE=1 PATH="$STUBg5:$PATH" bash "$DISPATCH"
+for _ in $(seq 1 50); do [ ! -d "$STOREg5/.distill-lock-$SIDg5" ] && break; sleep 0.1; done
+sleep 0.2
+gone5="$(python3 - "$STOREg5/memory.db" "$RID5" <<'PY'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+print(c.execute("SELECT COUNT(*) FROM records WHERE id=?", (sys.argv[2],)).fetchone()[0])
+PY
+)"
+[ -n "$RID5" ] && [ "$gone5" = 0 ] \
+  && ok "routing: in-snapshot prune action 실행됨 (RID 삭제)" || bad "routing: in-snapshot prune 미실행 (RID5=[$RID5] gone=$gone5)"
+[ -f "$STOREg5/deleted-records.jsonl" ] && grep -q "$RID5" "$STOREg5/deleted-records.jsonl" \
+  && ok "routing: prune graveyard 기록됨 (S2b in-snapshot 경로)" || bad "routing: graveyard 미기록"
+rmdir "$STOREg5/.distill-lock-$SIDg5" 2>/dev/null || true
 
 echo
 echo "RESULT: PASS=$PASS FAIL=$FAIL"

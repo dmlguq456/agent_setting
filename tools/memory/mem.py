@@ -658,8 +658,22 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             return existing
         dup = find_dup(tier, scope, body, con=con)
         if dup:
+            # E-1 (γ): dedup = 버리기 아니라 reinforce — 재출현=중요도(Hebbian). strength++ +
+            # last_accessed 갱신. working 은 expires 도 today+TTL 로 연장(F1 — UPSERT 경로 :637-639
+            # 정합; reinforced=중요인데 원 TTL 로 만료되는 비일관 방지).
+            if tier == "working":
+                new_exp = (datetime.date.today() +
+                           datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
+                con.execute(
+                    "UPDATE records SET strength=COALESCE(strength,1)+1, last_accessed=?,"
+                    " expires=? WHERE id=?", (today(), new_exp, dup))
+            else:
+                con.execute(
+                    "UPDATE records SET strength=COALESCE(strength,1)+1, last_accessed=?"
+                    " WHERE id=?", (today(), dup))
+            con.commit()
             if not quiet:
-                print(f"[dedup] 기존 레코드와 동일 → {dup}")
+                print(f"[reinforce] 기존 레코드 재출현 → {dup} strength++")
             return dup
         if cwd_origin is None:
             cwd_origin = project_key(Path.cwd(), seed=True) if scope == "project" else "global"
@@ -921,8 +935,27 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
     rows_final = [e[3] for e in ranked]
 
     # 8-tuple unpack → 5-tuple hits (strength/score 는 정렬 전용, 사용자 노출 X)
+    hit_ids = []
     for rid, rt, rs, rtype, cwd_orig, snip, _strength, _score in rows_final[:limit]:
         hits.append((rt, rs, rtype, rid, snip.replace("\n", " ")))
+        hit_ids.append(rid)
+
+    # γ E-1: recall hit = access → last_accessed 갱신 (cold-decay 신호). fail-OPEN(S3) —
+    # 절대 read 경로를 깨면 안 됨. con2=get_con()(busy_timeout 상속, C-cross). IN-clause 는
+    # ?-placeholder 정확 구성(C2 — 리스트를 단일 ? 에 bind 금지, id f-string 금지).
+    if hit_ids:
+        con2 = None
+        try:
+            ph = ",".join("?" for _ in hit_ids)
+            con2 = get_con()
+            con2.execute(f"UPDATE records SET last_accessed=? WHERE id IN ({ph})",
+                         [today(), *hit_ids])
+            con2.commit()
+        except Exception:
+            pass
+        finally:
+            if con2 is not None:
+                con2.close()   # 예외 흡수 시에도 연결 누수 방지 (SessionEnd lock 경합 경로)
 
     if not hits:
         print("(store 매칭 없음)")
@@ -1540,8 +1573,27 @@ def lifecycle(apply=False):
 
 
 # ---------- delete ----------
+def _delete_rows(con, rid):
+    """3-table DELETE (records + records_fts + records_trig) on an OPEN connection.
+    자체 연결·자체 commit 없음 — 호출자가 트랜잭션 관리 (C3 atomicity: merge/prune 가 단일
+    terminal commit 으로 묶어 mid-loop 부분삭제 방지). 기존 delete_record 가드를 그대로 보존:
+    FTS/trig 는 _FTS_OK/_TRIG_OK 게이트, trig DELETE 는 try/except→stderr-continue
+    (_TRIG_OK 가 MEM_NO_TRIGRAM 토글로 stale-True 면 raise — import_dump:1100 ghost 시나리오)."""
+    con.execute("DELETE FROM records WHERE id=?", (rid,))
+    if _FTS_OK:
+        con.execute("DELETE FROM records_fts WHERE id=?", (rid,))
+    if _TRIG_OK:
+        try:
+            con.execute("DELETE FROM records_trig WHERE id=?", (rid,))
+        except Exception as e:
+            sys.stderr.write(f"[delete] trig 미러 삭제 실패(계속): {rid}: {e}\n")
+
+
 def delete_record(rid, quiet=False):
-    """단건 결정론 삭제 — records + FTS + trig 3-table DELETE (lifecycle 만료 로직 재사용)."""
+    """단건 결정론 삭제 — records + FTS + trig 3-table DELETE.
+    공개 동작 보존: 자체 연결 open + 자체 commit. 3-table 로직은 _delete_rows 단일화.
+    NOTE: 이 경로는 사용자-개시(LLM 미개입) — graveyard 없이 즉시 삭제 (γ curator prune/merge 와
+    달리 fail-closed graveyard 게이트를 두지 않음. 사용자가 명시 삭제를 택한 자리)."""
     con = get_con()
     try:
         row = con.execute("SELECT id FROM records WHERE id=?", (rid,)).fetchone()
@@ -1549,20 +1601,268 @@ def delete_record(rid, quiet=False):
             if not quiet:
                 print(f"[delete] id 없음: {rid}")
             return False
-        con.execute("DELETE FROM records WHERE id=?", (rid,))
-        if _FTS_OK:
-            con.execute("DELETE FROM records_fts WHERE id=?", (rid,))
-        if _TRIG_OK:
-            try:
-                con.execute("DELETE FROM records_trig WHERE id=?", (rid,))
-            except Exception as e:
-                sys.stderr.write(f"[delete] trig 미러 삭제 실패(계속): {rid}: {e}\n")
+        _delete_rows(con, rid)
         con.commit()
         if not quiet:
             print(f"[delete] {rid}")
         return True
     finally:
         con.close()
+
+
+# ---------- Cluster E γ (D-18): graveyard + 화이트리스트 게이트 + curator 서브커맨드 ----------
+GRAVEYARD = STORE / "deleted-records.jsonl"
+
+
+def _graveyard_append(con, rid):
+    """삭제 전 레코드 전문(15-col, export_dump 동형 sort_keys JSON)을 graveyard 에 append.
+    반환 bool — write+flush+fsync 전부 성공해야 True. S1 fail-closed: curator prune/merge 는
+    False 면 삭제 중단(영구소실 방지). 절대 raise 안 함 (caller 가 abort 판단). 사용자-개시
+    delete_record 는 graveyard 안 거침 (best-effort 정책은 LLM 미개입 경로 전용)."""
+    row = con.execute(
+        f"SELECT {', '.join(RECORD_COLS)} FROM records WHERE id=?", (rid,)).fetchone()
+    if row is None:
+        return False
+    rec = {}
+    for k, v in zip(RECORD_COLS, row):
+        if k in ("tags", "links"):
+            rec[k] = json.loads(v) if v else []
+        else:
+            rec[k] = v   # None → JSON null (export_dump 동형)
+    line = json.dumps(rec, sort_keys=True, ensure_ascii=False)
+    try:
+        GRAVEYARD.parent.mkdir(parents=True, exist_ok=True)
+        # "a" = O_APPEND (POSIX PIPE_BUF 이하 단일 write atomic). 한 번의 write 로 line+\n.
+        with GRAVEYARD.open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
+            f.flush()
+            os.fsync(f.fileno())   # 버퍼만 차고 디스크 미도달인 false-success 차단
+        return True
+    except OSError as e:
+        sys.stderr.write(f"[graveyard] append 실패(삭제 중단 신호): {rid}: {e}\n")
+        return False
+
+
+def _in_current_project(con, rid):
+    """화이트리스트 게이트 — reinforce/merge/prune/graduate 대상이 현 프로젝트 소속인지.
+    반환 (ok: bool, reason: str). profile/global/다른프로젝트/존재안함 모두 거부.
+    reattribute 는 이 게이트를 쓰지 않음 (역게이트, reattribute() 참조)."""
+    row = con.execute(
+        "SELECT tier, scope, type, cwd_origin FROM records WHERE id=?", (rid,)).fetchone()
+    if row is None:
+        return False, "nonexistent"
+    _tier, scope, rtype, cwd_origin = row
+    if rtype == "profile":
+        return False, "profile-protected"
+    if scope == "global":
+        return False, "global-protected"
+    if cwd_origin == project_key(Path.cwd()):
+        return True, ""
+    return False, "other-project"
+
+
+def reinforce(rid):
+    """E-1: 기존 레코드 strength++ + last_accessed 갱신 (재출현=중요도)."""
+    con = get_con()
+    try:
+        ok, reason = _in_current_project(con, rid)
+        if not ok:
+            print(f"[reinforce] 거부 ({reason}): {rid}")
+            return False
+        con.execute(
+            "UPDATE records SET strength=COALESCE(strength,1)+1, last_accessed=? WHERE id=?",
+            (today(), rid))
+        con.commit()
+        n = con.execute("SELECT strength FROM records WHERE id=?", (rid,)).fetchone()[0]
+        print(f"[reinforce] {rid} strength→{n}")
+        return True
+    finally:
+        con.close()
+
+
+def prune(rid):
+    """삭제 — graveyard 백업 성공 후에만 (S1 fail-closed). 화이트리스트 게이트."""
+    con = get_con()
+    try:
+        ok, reason = _in_current_project(con, rid)
+        if not ok:
+            print(f"[prune] 거부 ({reason}): {rid}")
+            return False
+        if not _graveyard_append(con, rid):
+            print(f"[prune] graveyard 실패 — 삭제 중단: {rid}")
+            return False
+        _delete_rows(con, rid)
+        con.commit()                 # 단일 terminal commit (예외 시 미커밋→close 에서 롤백)
+        print(f"[prune] {rid} (graveyarded)")
+        return True
+    finally:
+        con.close()
+
+
+def merge(canonical, ids):
+    """near-dup 병합 — strength 합산을 canonical 에, 나머지는 graveyard 후 삭제.
+    원자적: 모든 id 게이트 통과 + 모든 non-canonical graveyard 성공 전엔 어떤 삭제도 안 함."""
+    ids = list(dict.fromkeys(ids))            # C1: order-preserving dedup
+    if canonical not in ids or len(ids) < 2:
+        print(f"[merge] 거부 (canonical∉ids 또는 ids<2): {canonical} {ids}")
+        return False
+    non_canonical = [i for i in ids if i != canonical]   # canonical 절대 미포함
+    con = get_con()
+    try:
+        # gate EVERY id BEFORE any mutation (per-id gate-then-delete 금지 — 부분파괴 방지)
+        for i in ids:
+            ok, reason = _in_current_project(con, i)
+            if not ok:
+                print(f"[merge] 거부 ({reason}): {i} — 전체 merge 취소 (삭제 0, graveyard 0)")
+                return False
+        # strength 합산 (각 id 1회) — dedup 된 ids 기준이라 canonical 중복 입력도 double-count 안 됨
+        total = 0
+        for i in ids:
+            total += con.execute(
+                "SELECT COALESCE(strength,1) FROM records WHERE id=?", (i,)).fetchone()[0]
+        # S1 fail-closed: 모든 non-canonical graveyard 성공 검증 후에만 삭제 진입
+        for i in non_canonical:
+            if not _graveyard_append(con, i):
+                print(f"[merge] graveyard 실패 — 전체 merge 중단 (삭제 0): {i}")
+                return False
+        con.execute("UPDATE records SET strength=?, last_accessed=? WHERE id=?",
+                    (total, today(), canonical))
+        for i in non_canonical:
+            _delete_rows(con, i)
+        con.commit()                 # 단일 terminal commit (원자성)
+        print(f"[merge] {canonical} ← {non_canonical} strength→{total}")
+        return True
+    finally:
+        con.close()
+
+
+def graduate(rid, to="durable"):
+    """E-6: working→durable 승격. working 아니면 거부. 화이트리스트 게이트."""
+    con = get_con()
+    try:
+        ok, reason = _in_current_project(con, rid)
+        if not ok:
+            print(f"[graduate] 거부 ({reason}): {rid}")
+            return False
+        tier = con.execute("SELECT tier FROM records WHERE id=?", (rid,)).fetchone()[0]
+        if tier != "working":
+            print(f"[graduate] 거부 (working 아님, tier={tier}): {rid}")
+            return False
+        con.execute(
+            "UPDATE records SET tier='durable', scope='project', expires=NULL, "
+            "updated=?, last_accessed=? WHERE id=?", (today(), today(), rid))
+        con.commit()
+        print(f"[graduate] {rid} working→durable")
+        return True
+    finally:
+        con.close()
+
+
+def reattribute(rid):
+    """고아(어떤 live 프로젝트로도 해석 안 되는 cwd_origin) 레코드를 현 프로젝트로 재귀속.
+    비파괴 (cwd_origin 만 변경). 표준 게이트 대신 역게이트(anti-theft): cwd_origin 이 live
+    프로젝트로 해석되면 거부 — 남의 프로젝트 레코드 탈취 방지. 실행시점 liveness 재확인."""
+    con = get_con()
+    try:
+        row = con.execute(
+            "SELECT scope, type, cwd_origin FROM records WHERE id=?", (rid,)).fetchone()
+        if row is None:
+            print(f"[reattribute] 거부 (nonexistent): {rid}")
+            return False
+        scope, rtype, cwd_origin = row
+        if rtype == "profile" or scope != "project":
+            print(f"[reattribute] 거부 (profile/non-project scope={scope}): {rid}")
+            return False
+        pkey = project_key(Path.cwd(), seed=True)
+        if cwd_origin == pkey:
+            print(f"[reattribute] 거부 (이미 현 프로젝트): {rid}")
+            return False
+        # 역게이트: bare enc_cwd('-' 시작) 이면서 live dir 로 해석 안 되는 것만 고아로 인정.
+        # git:/id:/root: 또는 malformed(non-'-') = live-unknown → 거부 (탈취 불가).
+        if not (cwd_origin or "").startswith("-"):
+            print(f"[reattribute] 거부 (bare enc_cwd 아님 — live-unknown): {rid}")
+            return False
+        d = _decode_enc_cwd(cwd_origin)
+        if d is not None and d.is_dir():
+            print(f"[reattribute] 거부 (live 프로젝트 소속): {rid}")
+            return False
+        con.execute("UPDATE records SET cwd_origin=? WHERE id=?", (pkey, rid))
+        con.commit()
+        print(f"[reattribute] {rid} {cwd_origin}→{pkey}")
+        return True
+    finally:
+        con.close()
+
+
+def _snap_label(body):
+    """S2a: snapshot body 라벨 구조적 무력화 — control/newline 전부 공백, ≤120.
+    주입 레코드가 DATA 블록 안에서 가짜 === END === / 섹션 경계를 위조하지 못하게."""
+    return re.sub(r"[\x00-\x1f\x7f]", " ", _first_line(body))[:120]
+
+
+def curate_snapshot():
+    """세션끝 opus 큐레이터 입력 (read-only) — 현 프로젝트 durable/working snapshot + SIGNALS.
+    E-2 anti-bloat layer ①(durable snapshot 재add 억제)·②(ceiling)·④(cold-decay) + orphan(E-6).
+    마지막 `IDS:` 줄 = dispatch 멤버십 게이트(S2b)용 전체 id 화이트리스트 (machine-readable)."""
+    if not DB.exists():
+        print("=== END SNAPSHOT ===")
+        return
+    con = get_con()
+    clean = "(injection_flag=0 OR injection_flag IS NULL)"
+    try:
+        pkey = project_key(Path.cwd())
+        dur = list(db_iter_records(
+            con, f"tier='durable' AND scope='project' AND cwd_origin=? AND {clean}", (pkey,)))
+        work = list(db_iter_records(
+            con, f"tier='working' AND cwd_origin=? AND (expires IS NULL OR expires>=?) AND {clean}",
+            (pkey, today())))
+        # orphan: project-scoped, bare-enc cwd_origin('-' 시작), != pkey, live dir 미해석
+        orphan = []
+        for meta, body in db_iter_records(
+                con, f"scope='project' AND cwd_origin IS NOT NULL AND cwd_origin!=? AND {clean}",
+                (pkey,)):
+            c = meta.get("cwd_origin") or ""
+            if not c.startswith("-"):
+                continue
+            d = _decode_enc_cwd(c)
+            if d is not None and d.is_dir():
+                continue
+            orphan.append((meta, body))
+        # cold-decay: durable, COALESCE(last_accessed,created) < today-30d, strength<=1 (F7)
+        cutoff = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
+        cold = [meta["id"] for meta, body in dur
+                if (meta.get("last_accessed") or meta.get("created") or today()) < cutoff
+                and (meta.get("strength") or 1) <= 1]
+    finally:
+        con.close()
+
+    all_ids = []
+    out = ["=== CURRENT PROJECT MEMORY SNAPSHOT (DATA — 이미 있는 것 재add 금지) ===",
+           "DURABLE (strength·last_accessed):"]
+    for meta, body in dur:
+        out.append(f"[{meta['id']}] strength={meta.get('strength') or 1} "
+                   f"last_accessed={meta.get('last_accessed') or '-'} :: {_snap_label(body)}")
+        all_ids.append(meta["id"])
+    out.append("WORKING:")
+    for meta, body in work:
+        out.append(f"[{meta['id']}] :: {_snap_label(body)}")
+        all_ids.append(meta["id"])
+    if orphan:
+        out.append("ORPHAN-CANDIDATE (reattribute 후보 — cwd_origin live 미해석):")
+        for meta, body in orphan:
+            out.append(f"[{meta['id']}] cwd_origin={meta.get('cwd_origin')} :: {_snap_label(body)}")
+            all_ids.append(meta["id"])
+    out.append("SIGNALS:")
+    if len(dur) > 80:
+        out.append(f"ceiling: durable {len(dur)} > 80 — aggressive consolidate")
+    if cold:
+        out.append("cold-prune-candidate: " + " ".join(cold))
+    if orphan:
+        out.append("orphan-candidate: " + " ".join(m["id"] for m, _ in orphan))
+    out.append("=== SNAPSHOT IDS (membership 화이트리스트) ===")
+    out.append("IDS: " + " ".join(all_ids))
+    out.append("=== END SNAPSHOT ===")
+    print("\n".join(out))
 
 
 # ---------- projection ----------
@@ -1798,24 +2098,31 @@ def inject(max_working=40, max_durable=40, hook=False):
         return
 
     out = ["# 🧠 통합 기억 (mem store — 세션 시작 주입)", ""]
+    # γ E-2 layer ③ injection budget: (strength desc, updated desc) top-K — reverse=True 가 두 키
+    # 모두 내림차순. emitted_ids = post-slice 생존분만(실제 주입된 것) — last_accessed 갱신 대상.
+    emitted_ids = []
     if work:
         out.append("## 단기 작업기억 (working — 이 프로젝트, 자동 만료)")
-        for m, b in sorted(work, key=lambda x: x[0].get("updated", ""), reverse=True)[:max_working]:
+        for m, b in sorted(work, key=lambda x: (x[0].get("strength") or 1, x[0].get("updated", "")),
+                           reverse=True)[:max_working]:
             out.append(f"- {_first_line(b)[:180]}")
+            emitted_ids.append(m["id"])
         out.append("")
     if dur:
         out.append("## 장기 — 이 프로젝트 (durable)")
-        for m, b in sorted(dur, key=lambda x: x[0].get("updated", ""), reverse=True)[:max_durable]:
+        for m, b in sorted(dur, key=lambda x: (x[0].get("strength") or 1, x[0].get("updated", "")),
+                           reverse=True)[:max_durable]:
             out.append(f"- [{m.get('type')}] {_first_line(b)[:160]}")
+            emitted_ids.append(m["id"])
         out.append("")
     if prof:
         out.append("## 장기 — 사용자 특성 (user profile)")
         for aspect_key, (m, b) in prof:
             out.append(f"- {aspect_key}: {_first_line(b)[:140]}")
         out.append("")
-    # D-16: 정리 후보 섹션 (비어있으면 아무것도 추가 안 함)
+    # D-18: 정리 신호 섹션 — 세션끝 opus 큐레이터가 처리 (메인 housekeeping 0). informational only.
     if cleanup_lines:
-        out.append("## 🧹 정리 후보 (메인 직접 consolidate/prune/graduate — D-16)")
+        out.append("## 🧹 정리 신호 (세션끝 opus 큐레이터가 처리 — D-18, 메인 조치 불요)")
         out.extend(cleanup_lines)
         out.append("")
     # Step 4.3b: injection-flagged 레코드 존재 알림 (본문 비노출, 카운트+안내만 — 마스킹 유지하되 가시성 확보)
@@ -1823,6 +2130,24 @@ def inject(max_working=40, max_durable=40, hook=False):
         out.append(f"⚠️ injection-flagged {flagged_cnt}건 (recall/inject 제외됨 — 오탐이면 확인)")
         out.append("")
     out.append("> 상세 회상: `bash ~/.claude/tools/memory/recall.sh \"<query>\"` (store+세션 전체 FTS)")
+
+    # γ E-1: 주입된 working+durable/project id 의 last_accessed 갱신 (cold-decay 신호). profile 은
+    # 제외(global·T1 신뢰). fail-OPEN(S3) — SessionStart hook 이라 실패해도 절대 부트스트랩 안 깸.
+    # con2=get_con()(busy_timeout 상속, C-cross). IN-clause ?-placeholder 정확 구성(C2).
+    if emitted_ids:
+        con2 = None
+        try:
+            ph = ",".join("?" for _ in emitted_ids)
+            con2 = get_con()
+            con2.execute(f"UPDATE records SET last_accessed=? WHERE id IN ({ph})",
+                         [today(), *emitted_ids])
+            con2.commit()
+        except Exception:
+            pass
+        finally:
+            if con2 is not None:
+                con2.close()   # 예외 흡수 시에도 연결 누수 방지 (SessionEnd lock 경합 경로)
+
     emit("\n".join(out))
 
 
@@ -1895,6 +2220,27 @@ def main():
     dl = sub.add_parser("delete", help="단건 결정론 삭제 (records+FTS 3-table)")
     dl.add_argument("id")
 
+    # ---- Cluster E γ curator 서브커맨드 (화이트리스트 게이트 내장; dispatch 가 argv 로 호출) ----
+    rf = sub.add_parser("reinforce", help="strength++ + last_accessed (화이트리스트 게이트)")
+    rf.add_argument("id")
+
+    pr = sub.add_parser("prune", help="삭제 (graveyard 백업 성공 후, 화이트리스트 게이트)")
+    pr.add_argument("id")
+
+    mge = sub.add_parser("merge", help="near-dup 병합 (strength 합산, canonical 외 graveyard+삭제)")
+    mge.add_argument("--canonical", required=True)
+    mge.add_argument("ids", nargs="+")
+
+    gr = sub.add_parser("graduate", help="working→durable 승격 (화이트리스트 게이트)")
+    gr.add_argument("id")
+    gr.add_argument("--to", choices=["durable"], default="durable")
+
+    ra = sub.add_parser("reattribute", help="고아 레코드를 현 프로젝트로 재귀속 (비파괴, 역게이트)")
+    ra.add_argument("id")
+
+    sub.add_parser("curate-snapshot",
+                   help="현 프로젝트 durable/working snapshot + SIGNALS (read-only, opus 입력)")
+
     sub.add_parser("stats", help="store 통계")
     sub.add_parser("sync", help="projects→store 멱등 mirror + 색인 + dump (SessionEnd)")
 
@@ -1946,6 +2292,21 @@ def main():
         lifecycle(apply=args.apply)
     elif args.cmd == "delete":
         delete_record(args.id)
+    elif args.cmd == "reinforce":
+        sys.exit(0 if reinforce(args.id) else 1)
+    elif args.cmd == "prune":
+        sys.exit(0 if prune(args.id) else 1)
+    elif args.cmd == "merge":
+        if args.canonical not in args.ids or len(args.ids) < 2:
+            print("[merge] 인자 오류: canonical 은 ids 에 포함되어야 하고 ids>=2 필요")
+            sys.exit(1)
+        sys.exit(0 if merge(args.canonical, args.ids) else 1)
+    elif args.cmd == "graduate":
+        sys.exit(0 if graduate(args.id, to=args.to) else 1)
+    elif args.cmd == "reattribute":
+        sys.exit(0 if reattribute(args.id) else 1)
+    elif args.cmd == "curate-snapshot":
+        curate_snapshot()
     elif args.cmd == "stats":
         stats()
     elif args.cmd == "sync":

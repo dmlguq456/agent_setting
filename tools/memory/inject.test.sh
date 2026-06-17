@@ -9,16 +9,16 @@
 #       mem-turn-nudge.test.sh prints "RESULT: PASS=12 FAIL=0". Do NOT touch those files.
 #
 # QA cases:
-#   T1   near-dup seed → inject output contains 정리 후보 section with both ids
+#   T1   near-dup seed → inject output contains 정리 신호 section with both ids
 #   T2   read-only proof: pre/post durable id-set identical after inject
 #   T3   lifecycle() equivalence: dup-flag group count == near_dup_groups count (mandatory)
-#   T4   no near-dups → inject does NOT contain 정리 후보
+#   T4   no near-dups → inject does NOT contain 정리 신호
 #   T5   cap: > max_groups near-dup groups → at most 5 near-dup lines in section
 #   T6   capacity line: durable > soft_ceiling(80) → line present;  == 80 → absent
 #   T7   expiring-soon working: today+2d → line present;  today+10d → absent
 #   T8   regression: working/durable/profile blocks still present (QA ③)
 #   T9   empty store → inject emits nothing
-#   T10  inject --hook with cleanup section → valid JSON + additionalContext contains 정리 후보
+#   T10  inject --hook with cleanup section → valid JSON + additionalContext contains 정리 신호
 #   T11  scope coherence: global durable near-dups excluded (project-scoped, matches inject body)
 set -u
 
@@ -49,8 +49,8 @@ NDP_PREFIX="this is a sufficiently long durable memory body that shares the same
 NDP_BODY1="${NDP_PREFIX}AAAA tail one"
 NDP_BODY2="${NDP_PREFIX}BBBB tail two"
 
-# ── T1: near-dup seed → inject output contains 정리 후보 section ────────────────────────────────
-echo "== T1: near-dup → 정리 후보 section present =="
+# ── T1: near-dup seed → inject output contains 정리 신호 section ────────────────────────────────
+echo "== T1: near-dup → 정리 신호 section present =="
 
 STORE_T1="$(mktemp -d)"; export MEM_STORE="$STORE_T1"
 python3 "$MEM" add durable thread "$NDP_BODY1" >/dev/null 2>&1
@@ -59,9 +59,9 @@ python3 "$MEM" index --rebuild >/dev/null 2>&1
 
 inject_out_t1="$(python3 "$MEM" inject 2>/dev/null)"
 
-echo "$inject_out_t1" | grep -q "정리 후보" \
-  && ok "T1: 정리 후보 section present in inject output" \
-  || bad "T1: 정리 후보 section missing (output: $inject_out_t1)"
+echo "$inject_out_t1" | grep -q "정리 신호" \
+  && ok "T1: 정리 신호 section present in inject output" \
+  || bad "T1: 정리 신호 section missing (output: $inject_out_t1)"
 
 # Both ids should appear (extract ids from the records)
 ids_t1="$(python3 -c "
@@ -77,7 +77,7 @@ id1="$(echo "$ids_t1" | awk '{print $1}')"
 id2="$(echo "$ids_t1" | awk '{print $2}')"
 
 if [ -n "$id1" ] && echo "$inject_out_t1" | grep -q "near-dup"; then
-  ok "T1: near-dup line present in 정리 후보"
+  ok "T1: near-dup line present in 정리 신호"
 else
   bad "T1: near-dup line missing (ids=$ids_t1)"
 fi
@@ -148,8 +148,8 @@ print(len(dups))
 
 rm -rf "$STORE_T3"
 
-# ── T4: no near-dups → inject does NOT contain 정리 후보 ────────────────────────────────────────
-echo "== T4: no near-dups → 정리 후보 absent =="
+# ── T4: no near-dups → inject does NOT contain 정리 신호 ────────────────────────────────────────
+echo "== T4: no near-dups → 정리 신호 absent =="
 
 STORE_T4="$(mktemp -d)"; export MEM_STORE="$STORE_T4"
 # Seed two distinct durable records with completely different bodies (no near-dup)
@@ -159,9 +159,9 @@ python3 "$MEM" index --rebuild >/dev/null 2>&1
 
 inject_out_t4="$(python3 "$MEM" inject 2>/dev/null)"
 
-echo "$inject_out_t4" | grep -q "정리 후보" \
-  && bad "T4: 정리 후보 section present when no near-dups (output: $inject_out_t4)" \
-  || ok "T4: 정리 후보 section absent (correct — no near-dups)"
+echo "$inject_out_t4" | grep -q "정리 신호" \
+  && bad "T4: 정리 신호 section present when no near-dups (output: $inject_out_t4)" \
+  || ok "T4: 정리 신호 section absent (correct — no near-dups)"
 
 rm -rf "$STORE_T4"
 
@@ -311,8 +311,8 @@ inject_out_t9="$(python3 "$MEM" inject 2>/dev/null)"
 
 rm -rf "$STORE_T9"
 
-# ── T10: inject --hook with cleanup section → valid JSON + additionalContext contains 정리 후보 ──
-echo "== T10: inject --hook with near-dup → valid JSON + additionalContext contains 정리 후보 =="
+# ── T10: inject --hook with cleanup section → valid JSON + additionalContext contains 정리 신호 ──
+echo "== T10: inject --hook with near-dup → valid JSON + additionalContext contains 정리 신호 =="
 
 STORE_T10="$(mktemp -d)"; export MEM_STORE="$STORE_T10"
 
@@ -342,13 +342,13 @@ except Exception as e:
   && ok "T10a: inject --hook output is valid hookSpecificOutput/SessionStart JSON" \
   || bad "T10a: inject --hook JSON invalid (content: $(cat "$hook_tmpf"))"
 
-# (b) additionalContext contains 정리 후보 and a near-dup id
+# (b) additionalContext contains 정리 신호 and a near-dup id
 python3 -c '
 import json, sys
 try:
     d = json.load(open(sys.argv[1]))
     ctx = d["hookSpecificOutput"]["additionalContext"]
-    has_section = "정리 후보" in ctx
+    has_section = "정리 신호" in ctx
     has_neardup = "near-dup" in ctx
     if has_section and has_neardup:
         print("content_ok")
@@ -357,17 +357,17 @@ try:
 except Exception as e:
     print(f"error: {e}")
 ' "$hook_tmpf" | grep -q "^content_ok" \
-  && ok "T10b: additionalContext contains 정리 후보 + near-dup line" \
-  || bad "T10b: additionalContext missing 정리 후보 or near-dup (content: $(python3 -c 'import json; d=json.load(open("'"$hook_tmpf"'")); print(d["hookSpecificOutput"]["additionalContext"][:200])' 2>/dev/null))"
+  && ok "T10b: additionalContext contains 정리 신호 + near-dup line" \
+  || bad "T10b: additionalContext missing 정리 신호 or near-dup (content: $(python3 -c 'import json; d=json.load(open("'"$hook_tmpf"'")); print(d["hookSpecificOutput"]["additionalContext"][:200])' 2>/dev/null))"
 
 rm -f "$hook_tmpf"
 rm -rf "$STORE_T10"
 
-# ── T11: scope coherence — global durable near-dups must NOT surface in 정리 후보 ─────────────────
+# ── T11: scope coherence — global durable near-dups must NOT surface in 정리 신호 ─────────────────
 # (cleanup section scope == inject body 'dur' section == tier='durable' AND scope='project'.
 #  global durables are analyze-user's domain, not ad-hoc prune candidates; counting/surfacing them
 #  here would mismatch the visible "장기 — 이 프로젝트 (durable)" list. Codex Y1 regression pin.)
-echo "== T11: global durable near-dups excluded from 정리 후보 (project-scoped) =="
+echo "== T11: global durable near-dups excluded from 정리 신호 (project-scoped) =="
 
 STORE_T11="$(mktemp -d)"; export MEM_STORE="$STORE_T11"
 # 2 GLOBAL near-dups (would group if scope-blind) + 1 distinct PROJECT durable (so dur non-empty → inject emits)
@@ -379,8 +379,8 @@ python3 "$MEM" index --rebuild >/dev/null 2>&1
 inject_out_t11="$(python3 "$MEM" inject 2>/dev/null)"
 
 echo "$inject_out_t11" | grep -q "near-dup" \
-  && bad "T11: global durable near-dup leaked into 정리 후보 (project-scope regression)" \
-  || ok "T11: global durable near-dups excluded from 정리 후보 (project-scoped)"
+  && bad "T11: global durable near-dup leaked into 정리 신호 (project-scope regression)" \
+  || ok "T11: global durable near-dups excluded from 정리 신호 (project-scoped)"
 
 # sanity: inject DID emit (project durable present) — isolation, not total suppression
 echo "$inject_out_t11" | grep -q "장기.*이 프로젝트.*durable" \

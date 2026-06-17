@@ -591,8 +591,8 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 
 - **자체 하네스 (store 가 세션 주입의 source)**: SessionStart hook `mem inject --hook` → store 의 현 cwd working+durable + global profile 을 `additionalContext` 로 주입. SessionEnd hook `mem sync` → 하네스 write 회수 + 색인 재생성. **SessionEnd + turn-counter(UserPromptSubmit N턴) 두 트리거가 공유**하는 `mem-distill-dispatch.sh` → 세션 jsonl 의 공유 marker 이후 구간을 detached `claude -p` distiller(모델 `claude-sonnet-4-6`)로 분사해 working/durable 흡수 자동화(D-12/D-13 통일 worker · 세션당 mkdir lock 동시 1개 · 재귀가드 `MEM_DISTILL=1` 세 hook 다 · distiller LLM 은 도구 0(`--disallowedTools`), JSON-lines 구조화 출력만 내고 dispatch 스크립트가 검증 후 `mem add` 실행(LLM=판단·코드=실행, v8 no-tools — D-14); **단 `MEM_DISTILL_ENABLE=1` opt-in 전엔 no-op** — 매 세션 종료·N턴마다 background LLM 실행 비용 + distiller 가 대화 본문을 권한 모드로 읽는 신뢰경계 확장 때문에 기본 비활성, 사용자가 검토 후 켬). UserPromptSubmit `mem-recall-inject.sh` → 회상 신호어 regex 감지 시 `mem recall` 실행 → `additionalContext` 사전주입(D-15). PreToolUse `builtin-memory-guard.sh` → 내장 file 메모리(`projects/*/memory/`) 직접 Write **hard-block(deny)** → 기억 write 는 `mem` CLI(DB) 단일 경로로 강제. (단일 출처 = `settings.json` hooks.)
 - **회상**: `tools/memory/recall.sh` = `mem recall` thin wrapper — store FTS5 + `--sessions`(raw 대화 jsonl) + `--all`(전 scope). 트리거 = CLAUDE.md §도메인 + §7.4.
-- **CLI**: `mem {add, note, recall, index, sync, inject, export, import, migrate, lifecycle, delete, project, stats, profile, distill, register-postit}`. (`profile <stem>` = DB type=profile 레코드 body 출력 — read-only; `export --target dump|profile` = DB→git mirror / on-demand 사람 열람 캐시 (SoT 아님); `import <dump.jsonl>` = 복원; `delete <id>` = 단건 결정론 삭제(records+FTS5 3-table) — 메인이 D-16 정리후보 노출 받아 직접 prune/graduate 하는 D-17 실행 경로; `register-postit` = deprecated/legacy-migration-only, skills 에서 더 이상 호출 안 함.)
-- **불변식**: 기억 저장 = 자동(품질필터만 — §7.1·§7.2, 사람 승인 게이트 없음). **추가(가역)=외부 distiller/hook 자동 · 삭제·prune·consolidate·graduate(비가역)=메인 직접(D-16 `mem inject` 정리후보 노출 받아 in-context 실행) · working TTL(21일)=deterministic backstop(2차 안전망) · distiller=add-only.** lifecycle = working 시간만료 / durable consolidate(§7.3 lifecycle).
+- **CLI**: `mem {add, note, recall, index, sync, inject, export, import, migrate, lifecycle, delete, project, stats, profile, distill, register-postit}` + **γ 큐레이터 `{curate-snapshot, reinforce, merge, prune, graduate, reattribute}`**. (`profile <stem>` = DB type=profile 레코드 body 출력 — read-only; `export --target dump|profile` = DB→git mirror / on-demand 사람 열람 캐시 (SoT 아님); `import <dump.jsonl>` = 복원; `delete <id>` = 단건 결정론 삭제(records+FTS5 3-table) — **사용자-개시**(LLM 미개입) 즉시삭제 경로; `register-postit` = deprecated/legacy-migration-only, skills 에서 더 이상 호출 안 함.) **γ 큐레이터 서브커맨드**(D-18) — `curate-snapshot`(read-only, opus 입력 DATA: durable/working snapshot+SIGNALS+`IDS:` 멤버십) / `reinforce`(strength++, E-1) / `merge`(strength 합산+canonical 외 graveyard+삭제, 원자적) / `prune`(graveyard 백업 **성공 후** 삭제, S1 fail-closed) / `graduate`(working→durable, E-6) / `reattribute`(고아 재귀속, 역게이트). 전부 화이트리스트 게이트(현 프로젝트만; profile·global·타프로젝트·존재안함 거부). distiller(no-tools)는 action JSON 만, script(shell=False)가 argv 로 호출.
+- **불변식 (D-18 갱신)**: 기억 저장 = 자동(품질필터만 — §7.1·§7.2, 사람 승인 게이트 없음). **추가(가역)=외부 distiller/hook 자동 · 삭제·prune·consolidate·merge·graduate(비가역)=세션끝 opus 큐레이터**(full context 보유, no-tools+action JSON+script 실행; worst=비효율, graveyard+dump 로 복구가능) · **메인 housekeeping 0**(inject 정리신호는 informational — 메인이 직접 정리/prune 하지 않음) · N턴 distiller=sonnet add-only · working TTL(21일)=deterministic backstop(2차 안전망). lifecycle = working 시간만료 / durable consolidate(§7.3 lifecycle). (D-17 "삭제=메인" → D-18 "삭제=세션끝 opus" 이전.)
 
 > 위 intro 의 _write 면_ 세부 (무엇을 저장/생략하고 어떻게 쓰는지) 는 §7.1–§7.2, recall 은 §7.4. Hermes `write_approval` 게이트·promote/skip·session_search 벤치마킹(T5/T1).
 
@@ -636,14 +636,14 @@ oncall self-review nudge(`loops/oncall.md` item 9) 등 _자동_ 자리는 승격
 
 ### §7.5. 결정론 scaffold — 자동 회상 주입(D-15) + 정리후보 노출(D-16)
 
-lifecycle 주변 판단 구조: **감지·탐지=결정론 코드, 삭제·통합 판단=메인 직접.**
+lifecycle 주변 판단 구조: **감지·탐지=결정론 코드, 삭제·통합 판단=세션끝 opus 큐레이터**(D-18 — D-16 의 "메인 직접 실행"을 세션끝 opus 로 위임; 메인 housekeeping 0).
 
 **D-15 `hooks/mem-recall-inject.sh` (UserPromptSubmit, 읽기 전용):**
 - 회상 신호어 regex `지난번|지난번에|예전에|이전에|전에|그때|저번에|아까` 를 프롬프트에서 감지 → `mem recall <prompt>` 실행 → `additionalContext` 사전주입(메인 컨텍스트 도달 전). 메인의 "recall 할까" 판단을 제거 — B1 완성.
 - 신호어 불일치·recall 결과 없음·`MEM_DISTILL=1`(distiller 재귀) 시 no-op. 읽기 전용 = 어떤 write 도 없음.
 - 주입 상한: `MEM_RECALL_LINES`(기본 12)·`MEM_RECALL_CHARS`(기본 2000) env로 제어.
 
-**D-16 `mem inject` 정리후보 섹션 (SessionStart, 읽기 전용 projection):**
-- `mem inject --hook` 기존 블록 이후, 비어 있지 않을 때만 `## 🧹 정리 후보` 섹션 추가: cwd-scoped durable near-dup 그룹(상한 `max_groups=5`) + capacity 초과(`durable > soft_ceiling=80`) + 만료 임박 working(`<= 3일`). 모두 read-only — zero deletes / zero flag writes.
-- 메인은 이 섹션을 보고 _in-context_ 에서 직접 `mem` 명령으로 prune/consolidate/graduate 실행 (비가역 조작은 메인 단독 권한).
+**D-16 `mem inject` 정리신호 섹션 (SessionStart, 읽기 전용 projection — γ/D-18 에서 informational 로 축소):**
+- `mem inject --hook` 기존 블록 이후, 비어 있지 않을 때만 `## 🧹 정리 신호 (세션끝 opus 큐레이터가 처리 — D-18, 메인 조치 불요)` 섹션 추가: cwd-scoped durable near-dup 그룹(상한 `max_groups=5`) + capacity 초과(`durable > soft_ceiling=80`) + 만료 임박 working(`<= 3일`). 모두 read-only — zero deletes / zero flag writes.
+- **γ/D-18**: 이 섹션은 이제 **informational** — 메인은 *조치하지 않는다* (메인 housekeeping 0). 실제 consolidate/prune/merge/graduate 는 **세션끝 opus 큐레이터**가 `curate-snapshot`(durable snapshot+SIGNALS) 을 보고 action JSON 으로 수행하고, `mem-distill-dispatch.sh` 의 script(shell=False)가 화이트리스트 게이트로 검증·실행한다. (D-17 "삭제=메인" → D-18 "삭제=세션끝 opus" 이전; 정당화: opus capable + full context + worst=비효율(손실 아님, graveyard+dump 복구) + prune/merge 화이트리스트·fail-closed graveyard.)
 

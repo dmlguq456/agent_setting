@@ -30,7 +30,15 @@ Hermes 메모리 벤치마킹의 store/write 층. spec: [`.claude_reports/spec/p
 | `inject [--hook]` | SessionStart 주입 — DB(durable+working+profile)→context 직접 주입. `--hook` 시 `additionalContext` JSON 출력 |
 | `sync` | SessionEnd 회수 — `projects/<cwd>/memory/` auto-memory → DB durable 흡수 + FTS5 재구축 + `dump.jsonl` 재export |
 | `distill <sid> [--advance]` | 세션 jsonl 의 공유 marker 이후 정규화 텍스트 출력(+`--advance` 로 marker 전진). SessionEnd distiller(D-12)·in-session consolidation(D-13) 공용 헬퍼 |
+| `curate-snapshot` | **(γ, read-only)** 현 프로젝트 durable/working snapshot + SIGNALS(ceiling/cold-decay/orphan) + `IDS:` 멤버십 줄. 세션끝 opus 큐레이터 입력 DATA (E-2 폭증방지 ①②④). body 라벨은 구조적 무력화(control/newline strip) |
+| `reinforce <id>` | **(γ)** strength++ + last_accessed 갱신 (재출현=중요도, E-1). 화이트리스트 게이트(현 프로젝트만) |
+| `merge --canonical <id> <ids…>` | **(γ)** near-dup 병합 — strength 합산을 canonical 에, 나머지는 graveyard 후 삭제. 모든 id 게이트 통과 + 모든 graveyard 성공 전엔 어떤 삭제도 안 함(원자적) |
+| `prune <id>` | **(γ)** 삭제 — `deleted-records.jsonl` graveyard 백업 **성공 후에만**(S1 fail-closed). 화이트리스트 게이트 |
+| `graduate <id> [--to durable]` | **(γ)** working→durable 승격 (E-6). 화이트리스트 게이트 |
+| `reattribute <id>` | **(γ)** 고아(어떤 live 프로젝트로도 해석 안 되는 cwd_origin) 레코드를 현 프로젝트로 재귀속 (비파괴). 역게이트(live-resolving cwd_origin·git:/id:/root:·self 거부 — 탈취 방지) |
 | `register-postit <path>` | **deprecated (legacy-migration-only)** — `.postit-roots` 레지스트리 등록. skills 에서 더 이상 호출 안 함 (post-it 은 DB working 레코드 직접 write). |
+
+> **γ 큐레이터 보안 불변(D-18)**: 위 5개 변이 서브커맨드(reinforce/merge/prune/graduate/reattribute)는 distiller LLM 이 **직접 실행하지 않는다**. distiller(no-tools)는 action JSON(`{"action":…}`)만 출력하고, `mem-distill-dispatch.sh` 의 inline python(shell=False)이 파싱·shape 검증·멤버십 게이트 후 이 서브커맨드를 **argv 로** 호출한다. 각 서브커맨드는 자체 화이트리스트 게이트로 현 프로젝트 외(profile·global·타 프로젝트·존재안함) 대상을 거부(비0 exit, 삭제 0). prune/merge 는 삭제 전 graveyard 백업.
 
 env override (테스트용): `MEM_STORE` · `MEM_PROJECTS` · `MEM_PROFILE` · `MEM_DISTILL` · `MEM_DISTILL_ENABLE` · `MEM_DISTILL_MODEL`.
 - `MEM_STORE` → `memory.db` 경로와 `dump.jsonl` 경로 모두 이 디렉터리 하위로 파생됨.
