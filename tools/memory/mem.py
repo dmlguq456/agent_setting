@@ -24,13 +24,14 @@ USER_PROFILE = Path(os.environ.get("MEM_PROFILE", HOME / ".claude" / "user_profi
 TIERS = ("working", "durable")
 SCOPES = ("project", "global")
 WORKING_TTL_DAYS = 21
-SCHEMA_VERSION = 3  # v1 기준 / v2 strength+last_accessed / v3 cwd_origin remap
+SCHEMA_VERSION = 4  # v1 기준 / v2 strength+last_accessed / v3 cwd_origin remap / v4 injection_flag
 FM_ORDER = ["id", "tier", "scope", "type", "cwd_origin", "created", "updated",
-            "expires", "source", "tags", "links", "strength", "last_accessed"]
+            "expires", "source", "tags", "links", "strength", "last_accessed", "injection_flag"]
 
-# 14 컬럼 정규 순서 (export/import round-trip 결정성 기반)
+# 15 컬럼 정규 순서 (export/import round-trip 결정성 기반)
 RECORD_COLS = ("id", "tier", "scope", "type", "cwd_origin", "created", "updated",
-               "expires", "source", "tags", "links", "body", "strength", "last_accessed")
+               "expires", "source", "tags", "links", "body", "strength", "last_accessed",
+               "injection_flag")
 
 # injection / secret 가드
 INJECTION_PAT = re.compile(
@@ -238,7 +239,11 @@ def parse_record(text):
 def serialize_record(meta, body):
     lines = ["---"]
     for k in FM_ORDER:
-        if k not in meta or meta[k] is None:
+        # injection_flag: 값이 truthy(=1)이면 md 에 노출 (audit 가시성), falsy(0/None)이면 skip
+        if k == "injection_flag":
+            if not meta.get("injection_flag"):
+                continue
+        elif k not in meta or meta[k] is None:
             if k in ("expires", "source", "tags", "links", "strength", "last_accessed"):
                 continue
         v = meta.get(k)
@@ -294,7 +299,8 @@ def _ensure_schema(con):
         links       TEXT,
         body        TEXT NOT NULL,
         strength    INTEGER DEFAULT 1,
-        last_accessed TEXT
+        last_accessed TEXT,
+        injection_flag INTEGER DEFAULT 0
     )""")
     con.execute("CREATE INDEX IF NOT EXISTS idx_records_scope ON records(scope, cwd_origin, tier)")
 
@@ -372,6 +378,22 @@ def _migrate_v3_apply(con, plan):
     sys.stderr.write(f"[migrate v3] applied: remapped {total} records\n")
 
 
+def _migrate_v4(con):
+    """injection_flag 칼럼 추가 + 기존 body 백필 (additive-only, 이중 적용 무해).
+    _migrate_v2 스타일(additive): PRAGMA table_info 컬럼 존재 체크 → ALTER ADD COLUMN → 백필.
+    INJECTION_PAT.search 는 pure python — git/subprocess 호출 없음 → BEGIN IMMEDIATE 안 safe."""
+    cols = {r[1] for r in con.execute("PRAGMA table_info(records)")}
+    if "injection_flag" not in cols:
+        con.execute("ALTER TABLE records ADD COLUMN injection_flag INTEGER DEFAULT 0")
+    # 백필: 기존 레코드 body 가 INJECTION_PAT 에 매칭되면 flag=1 (IS NULL OR =0 인 행만 대상)
+    for rid, body in con.execute(
+            "SELECT id, body FROM records WHERE injection_flag IS NULL OR injection_flag=0"):
+        if INJECTION_PAT.search(body or ""):
+            con.execute("UPDATE records SET injection_flag=1 WHERE id=?", (rid,))
+    # NULL 이 남은 행은 0 으로 정규화
+    con.execute("UPDATE records SET injection_flag=0 WHERE injection_flag IS NULL")
+
+
 def _run_migrations(con):
     """PRAGMA user_version 기반 스키마 마이그레이션 프레임.
     NOTE: migrate() 함수(legacy md→DB 이주)와는 별개 — 이 함수는 스키마-버전 전용.
@@ -406,6 +428,8 @@ def _run_migrations(con):
             _migrate_v2(con)
         if cur2 < 3:
             _migrate_v3_apply(con, v3_plan)
+        if cur2 < 4:
+            _migrate_v4(con)
         con.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         con.execute("COMMIT")
     except Exception:
@@ -446,11 +470,12 @@ def _row_to_meta(row):
 
 
 def _meta_to_params(meta, body):
-    """meta dict + body → 14-tuple for INSERT (RECORD_COLS 순).
+    """meta dict + body → 15-tuple for INSERT (RECORD_COLS 순).
     None → NULL passthrough 규칙: expires/source/cwd_origin 은 None → SQL NULL (절대 "" 다운그레이드 X).
     tags/links: 항상 list → JSON 텍스트 (None 이면 []).
     strength: None 또는 0 → 1 로 coerce (DEFAULT 의미론; Phase α 에서 strength=0 케이스 없음).
     last_accessed: None → SQL NULL (migration/import 에서 COALESCE 백필 예정).
+    injection_flag: None/absent/0 모두 0 으로 coerce (`or 0` 필수 — old-dump None 흐름 차단).
     """
     tags = meta.get("tags") or []
     links = meta.get("links") or []
@@ -469,6 +494,7 @@ def _meta_to_params(meta, body):
         body,
         meta.get("strength", 1) or 1,    # None/0 → 1 default
         meta.get("last_accessed"),       # None → SQL NULL (back-filled by migration/import)
+        meta.get("injection_flag", 0) or 0,  # None/absent/0 → 0 (old-dump None 도 0 coerce)
     )
 
 
@@ -654,6 +680,52 @@ def index_build(rebuild=False):
 
 
 # ---------- recall ----------
+
+# 회상 신호어 집합 — hooks/mem-recall-inject.sh L45 PAT 와 동일 리터럴 집합 (개념적 단일출처).
+# 추가 시 hook PAT + 여기 + CONVENTIONS §7.5 를 동시 갱신 (Risk 11).
+_RECALL_SIGNAL_WORDS = frozenset({
+    "지난번", "지난번에", "예전에", "이전에", "전에", "그때", "저번에", "아까",
+})
+
+# 한국어 조사 — suffix-strip 대상 (길이 순 내림차순 정렬 → greedy 매칭)
+_KO_PARTICLES = ("에서", "으로", "한테", "부터", "까지", "은", "는", "이", "가",
+                 "을", "를", "에", "와", "과", "도", "만", "의", "로", "께")
+
+
+def _tokenize_query(q: str) -> list:
+    """NL query 를 FTS OR MATCH 토큰 리스트로 분해.
+
+    동작:
+    1. 공백 분할.
+    2. 회상 신호어(_RECALL_SIGNAL_WORDS) 전체 토큰 제거.
+    3. 한국어 조사 suffix-strip: stem 길이 ≥ 2 일 때만 strip.
+    4. 각 생존 토큰을 FTS5-escape: '"tok"' (FTS5 연산자 주입 차단).
+    5. 빈 결과 → [] 반환 (호출자가 _fts_literal phrase fallback).
+
+    trigram MATCH 는 substring 매칭이므로 tokenize 하지 않는다 — 호출자가 직접
+    _fts_literal 를 사용. (unicode61 FTS 전용).
+    """
+    tokens = []
+    seen = set()
+    for tok in q.split():
+        # 회상 신호어 제거
+        if tok in _RECALL_SIGNAL_WORDS:
+            continue
+        # 조사 suffix-strip (stem ≥ 2 가드)
+        for p in _KO_PARTICLES:
+            if tok.endswith(p) and len(tok) - len(p) >= 2:
+                tok = tok[: len(tok) - len(p)]
+                break
+        if not tok:
+            continue
+        # FTS5 per-token quote (연산자 주입 차단)
+        escaped = '"' + tok.replace('"', '""') + '"'
+        if escaped not in seen:
+            seen.add(escaped)
+            tokens.append(escaped)
+    return tokens
+
+
 def _has_cjk(s):
     return bool(re.search(r"[　-鿿가-힯]", s))
 
@@ -694,17 +766,35 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
             FIX 4: raw query 를 MATCH 에 그대로 넘기면 FTS5 query 문법이 적용돼 무음 오검색 발생."""
             return '"' + q.replace('"', '""') + '"'
 
+        # -------------------------------------------------------
+        # 5경로 전부 8-tuple (id, tier, scope, type, cwd_origin, snippet, strength, score) 로 통일.
+        # 버킷: 0=FTS(unicode61 tokenized OR), 1=trigram(raw substring phrase), 2=LIKE(score=0.0).
+        # 최종 정렬: (bucket, score, -strength) — bm25 가 dominator, strength 는 tie-break 전용.
+        # 사용자-가시 출력 불변: hits.append 5-tuple / CLI print 포맷 변경 없음(strength/score 비노출).
+        # -------------------------------------------------------
+        tagged = []  # (bucket, score, -strength, row_8tuple)
+        seen_ids: set = set()
+
         if has_fts:
+            # FTS 경로 (bucket 0) — unicode61 tokenized OR MATCH
+            # _tokenize_query 로 다단어 NL hit 개선; 빈 결과면 단일 phrase fallback.
+            tokens = _tokenize_query(query)
+            match_expr = " OR ".join(tokens) if tokens else _fts_literal(query)
             try:
-                where, params = build_where(("records_fts MATCH ?", [_fts_literal(query)]))
+                where, params = build_where(("records_fts MATCH ?", [match_expr]))
                 sql = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
-                       f"snippet(records_fts,1,'»','«','…',12) "
+                       f"snippet(records_fts,1,'»','«','…',12), "
+                       f"r.strength, bm25(records_fts) AS score "
                        f"FROM records_fts f JOIN records r ON r.id=f.id "
                        f"WHERE {where} ORDER BY bm25(records_fts) LIMIT ?")
-                rows = con.execute(sql, params + [limit * 3]).fetchall()
-                seen_ids = {r[0] for r in rows}
+                fts_rows = con.execute(sql, params + [limit * 3]).fetchall()
+                for row in fts_rows:
+                    rid8 = row[0]
+                    if rid8 not in seen_ids:
+                        seen_ids.add(rid8)
+                        tagged.append((0, row[7], -(row[6] or 1), row))
 
-                # CJK boost via trigram
+                # CJK boost via trigram (bucket 1) — raw substring phrase, tokenize 금지
                 if _has_cjk(query) and _TRIG_OK:
                     has_trig = con.execute(
                         "SELECT name FROM sqlite_master WHERE name='records_trig'").fetchone()
@@ -712,46 +802,63 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
                         try:
                             where2, params2 = build_where(("records_trig MATCH ?", [_fts_literal(query)]))
                             sql2 = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
-                                    f"snippet(records_trig,1,'»','«','…',12) "
+                                    f"snippet(records_trig,1,'»','«','…',12), "
+                                    f"r.strength, bm25(records_trig) AS score "
                                     f"FROM records_trig t JOIN records r ON r.id=t.id "
                                     f"WHERE {where2} ORDER BY bm25(records_trig) LIMIT ?")
                             trig_rows = con.execute(sql2, params2 + [limit * 3]).fetchall()
                             for tr in trig_rows:
                                 if tr[0] not in seen_ids:
-                                    rows.append(tr)
                                     seen_ids.add(tr[0])
+                                    tagged.append((1, tr[7], -(tr[6] or 1), tr))
                         except sqlite3.OperationalError:
                             pass
                 elif _has_cjk(query) and not _TRIG_OK:
-                    # trigram 불가 → LIKE fallback for CJK
+                    # trigram 불가 → LIKE fallback for CJK (bucket 2, score=0.0)
                     where_l, params_l = build_where()
                     where_l = (where_l + " AND r.body LIKE ?") if where_l != "1" else "r.body LIKE ?"
                     sql_l = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
-                             f"substr(r.body,1,160) FROM records r "
-                             f"WHERE {where_l} LIMIT ?")
+                             f"substr(r.body,1,160), r.strength, 0.0 AS score "
+                             f"FROM records r WHERE {where_l} LIMIT ?")
                     like_rows = con.execute(sql_l, params_l + [f"%{query}%", limit * 3]).fetchall()
                     for lr in like_rows:
                         if lr[0] not in seen_ids:
-                            rows.append(lr)
                             seen_ids.add(lr[0])
+                            tagged.append((2, lr[7], -(lr[6] or 1), lr))
             except sqlite3.OperationalError:
-                # FTS MATCH 실패 시 LIKE fallback
+                # FTS MATCH 실패 시 LIKE fallback (bucket 2, score=0.0)
                 where_l, params_l = build_where()
                 where_l = (where_l + " AND r.body LIKE ?") if where_l != "1" else "r.body LIKE ?"
                 sql_l = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
-                         f"substr(r.body,1,160) FROM records r WHERE {where_l} LIMIT ?")
-                rows = con.execute(sql_l, params_l + [f"%{query}%", limit * 3]).fetchall()
+                         f"substr(r.body,1,160), r.strength, 0.0 AS score "
+                         f"FROM records r WHERE {where_l} LIMIT ?")
+                err_rows = con.execute(sql_l, params_l + [f"%{query}%", limit * 3]).fetchall()
+                for er in err_rows:
+                    if er[0] not in seen_ids:
+                        seen_ids.add(er[0])
+                        tagged.append((2, er[7], -(er[6] or 1), er))
         else:
-            # FTS 없음 → LIKE
+            # FTS 없음 → LIKE (bucket 2, score=0.0)
             where_l, params_l = build_where()
             where_l = (where_l + " AND r.body LIKE ?") if where_l != "1" else "r.body LIKE ?"
             sql_l = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
-                     f"substr(r.body,1,160) FROM records r WHERE {where_l} LIMIT ?")
-            rows = con.execute(sql_l, params_l + [f"%{query}%", limit * 3]).fetchall()
+                     f"substr(r.body,1,160), r.strength, 0.0 AS score "
+                     f"FROM records r WHERE {where_l} LIMIT ?")
+            nofts_rows = con.execute(sql_l, params_l + [f"%{query}%", limit * 3]).fetchall()
+            for nr in nofts_rows:
+                if nr[0] not in seen_ids:
+                    seen_ids.add(nr[0])
+                    tagged.append((2, nr[7], -(nr[6] or 1), nr))
     finally:
         con.close()
 
-    for rid, rt, rs, rtype, cwd_orig, snip in rows[:limit]:
+    # 버킷 lexicographic 정렬: (bucket, score, -strength)
+    # bucket 0<1<2, 같은 버킷 안에서 bm25 score 오름차순(작을수록 = 더 관련), tie → 고-strength 우선.
+    ranked = sorted(tagged, key=lambda e: (e[0], e[1], e[2]))
+    rows_final = [e[3] for e in ranked]
+
+    # 8-tuple unpack → 5-tuple hits (strength/score 는 정렬 전용, 사용자 노출 X)
+    for rid, rt, rs, rtype, cwd_orig, snip, _strength, _score in rows_final[:limit]:
         hits.append((rt, rs, rtype, rid, snip.replace("\n", " ")))
 
     if not hits:
@@ -954,6 +1061,11 @@ def import_dump(path):
                     meta["strength"] = 1
                 if meta.get("last_accessed") is None:
                     meta["last_accessed"] = rec.get("updated") or rec.get("created")
+                # old-dump self-heal: dump 에 injection_flag 없으면 body 로 재계산
+                # (default 0 아니라 INJECTION_PAT 재산정 — 포이즌 레코드가 0 으로 묻히지 않도록)
+                # dump 에 flag 값이 이미 있으면 그 값 신뢰 (재계산 X)
+                if meta.get("injection_flag") is None:
+                    meta["injection_flag"] = 1 if INJECTION_PAT.search(body or "") else 0
                 con.execute(
                     f"INSERT OR REPLACE INTO records VALUES({','.join(['?']*len(RECORD_COLS))})",
                     _meta_to_params(meta, body)
