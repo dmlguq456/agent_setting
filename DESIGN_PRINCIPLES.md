@@ -168,7 +168,7 @@ per-project 메모는 두 layer 분리.
 | **자동 학습** | DB working/durable — 외부 distiller 가 세션 delta 를 distill → `mem add` (Cluster C) | **외부 detached distiller** (메인 아님; turn-counter·SessionEnd hook 트리거 — §0.5 판단 외부화) | 재사용 절차·교정·컨벤션·교훈 자동 학습 |
 
 - 내장 file 메모리(`~/.claude/projects/*/memory/`)는 **직접 write hard-block**(`builtin-memory-guard.sh`); `mem sync` 는 다른 세션·하네스의 stray write 만 안전망 흡수. 기억 write 경로 = `mem`(DB) 단일.
-- **삭제·prune·consolidate·graduate(비가역) = 메인 직접** (Cluster D — `mem inject` 정리후보 노출 받아 in-context). working TTL(21일) = deterministic backstop. (원칙: 추가[가역]=외부 자동 / 삭제[비가역]=메인.)
+- **삭제·prune·consolidate·merge·graduate(비가역) = 세션끝 opus 큐레이터** (Cluster E — no-tools + action JSON + script 실행, D-18; 비가역삭제 3중방어). N턴 distiller = sonnet add-only. 메인 housekeeping 0. working TTL(21일) = deterministic backstop. (원칙: 추가[가역]=외부 자동 / 정리·삭제[비가역]=세션끝 opus.)
 - 세션 주입 = `mem inject --hook` (DB working+durable+profile). 상세 SoT = CLAUDE.md §0.5/§2 + CONVENTIONS §7.
 
 **Why**: 자동 메모리가 모든 feedback 을 누적하면 사용자가 _명시적으로 박아두고 싶은_ 정보 (코딩 컨벤션 · 외부 자원 link · 미해결 thread) 가 noise 에 묻혀 보인다. layer 분리 후 우선순위 명확.
