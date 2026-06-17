@@ -227,8 +227,8 @@ fi
 # 모델 │ 5h/7d 사용량+리셋 잔여시간 (stdin rate_limits = /usage 공식 값, 분모 추측 없음)
 segs_arr+=("✨ ${DIM}${S_MODEL}${RST}")
 u=""
-[ -n "$S_5H" ] && { u="${u} ${DIM}5h${RST} $(pcol "$S_5H")${S_5H}%${RST}"; [ -n "$S_5H_RST" ] && u="${u}${DIM}(↻${S_5H_RST})${RST}"; }
-[ -n "$S_7D" ] && { u="${u} ${DIM}7d${RST} $(pcol "$S_7D")${S_7D}%${RST}"; [ -n "$S_7D_RST" ] && u="${u}${DIM}(↻${S_7D_RST})${RST}"; }
+[ -n "$S_5H" ] && { u="${u} ${DIM}5h${RST} $(pcol "$S_5H")${S_5H}%${RST}"; [ -n "$S_5H_RST" ] && u="${u}${DIM}(↻ ${S_5H_RST})${RST}"; }
+[ -n "$S_7D" ] && { u="${u} ${DIM}7d${RST} $(pcol "$S_7D")${S_7D}%${RST}"; [ -n "$S_7D_RST" ] && u="${u}${DIM}(↻ ${S_7D_RST})${RST}"; }
 [ -n "$u" ] && segs_arr+=("${u# }")
 
 # join with 세로선 파티션
