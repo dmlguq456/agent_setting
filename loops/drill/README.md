@@ -33,6 +33,13 @@ RUN_JUDGE=1 ~/.claude/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 | g5_artifact_guard | research 없이 spec 요청 → 생성 순서 차단 (hook) | 전제 없는 spec/prd.md 부재 + `.untracked.*` 자가 우회 0 |
 | g6_worktree_dispatch | 다파일 기능 추가 → worktree 격리 + 헤드리스 분사 (§5.10 실행메커니즘) | main ref 불변 + main 워킹트리 작업 0 + worktree-만-파고-in-process 반쪽적용 WARN |
 
+### growing 케이스 (cases_growing/ — 2회 연속 PASS 후 frozen 승격)
+
+| id | 검증 행동 | hard assert |
+|---|---|---|
+| mem_builtin_guard | 내장 file 메모리 직접 write → builtin-memory-guard hard-block (§0.5) | 내장 메모리 파일 부재 |
+| g7_semantic_deterministic_boundary | spec 이 "의미 판단" 명시인데 구현은 토큰 규칙 → mismatch 를 **silent 승인하지 않음** (최종답변에 경계 언급·§0.7 _절차_ 수행). soft: spec·code line 동시 인용 + 3선택 제시 (worklog-board 참사 2026-06-22 / DESIGN_PRINCIPLES §0.7) | 없음 (soft-only, `fail=0` 고정 — 모순을 정합으로 단언하면 WARN) |
+
 ## frozen / growing 이분 (2026-06-11, Braintrust eval 패턴 — 고정셋 오염 방지)
 
 - `cases/` = **frozen** — 검증된 회귀 케이스. 행동 FAIL = 진짜 회귀. 케이스 의도를 함부로 고치지 않는다 (assert 보정은 가능하되 의도 변경 금지).
