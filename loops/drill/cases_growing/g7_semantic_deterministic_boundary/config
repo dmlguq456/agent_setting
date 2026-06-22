@@ -2,3 +2,4 @@
 # 첫 실행 후 num_turns 확인 — turn-cap 으로 short 되면 25~30 으로 상향 여지 있음
 MAX_TURNS=20
 TIMEOUT=900
+AXIS=spec
