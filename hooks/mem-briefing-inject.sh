@@ -51,14 +51,19 @@ GY="$STORE/deleted-records.jsonl"
 PRUNED=0
 [ -f "$GY" ] && PRUNED="$(grep -c "$TODAY" "$GY" 2>/dev/null || echo 0)"
 
+# 제도화 승격 안건 (D-28): durable 반복 규칙·교훈 — 데스크 cwd(~/.claude) 기준.
+# MEM_PY override = 테스트 격리 (dispatch.sh 동형, production default 불변).
+PROMO="$(cd "$HOME/.claude" 2>/dev/null && python3 "${MEM_PY:-$HOME/.claude/tools/memory/mem.py}" promote-candidates 2>/dev/null || true)"
+
 # additionalContext emit — json.dumps escaping (R4: shell interpolation 금지). never-block(|| true).
-ONCALL_FILE="$ONCALL" PRUNED="$PRUNED" python3 -c '
+ONCALL_FILE="$ONCALL" PRUNED="$PRUNED" PROMO="$PROMO" python3 -c '
 import os, json
 try:
     body = open(os.environ["ONCALL_FILE"], encoding="utf-8").read()
 except Exception:
     body = "(당직 보고 읽기 실패)"
 pruned = os.environ.get("PRUNED", "0").strip()
+promo = os.environ.get("PROMO", "").strip()
 msg = "# \U0001f305 아침 논의 데스크 (오늘 당직 브리핑 — 하루 첫 발화 자동주입)\n\n"
 msg += ("사용자 발화에 답하기 *전에* 먼저 이 브리핑을 요약·제시하고 항목별로 논의·처리하라. "
         "되돌릴 수 있고 명백한 것은 직접 처리 후 보고, 판단이 필요한 것만 사용자와 논의한다 "
@@ -67,6 +72,11 @@ msg += ("사용자 발화에 답하기 *전에* 먼저 이 브리핑을 요약·
 if pruned and pruned != "0":
     msg += f"- 간밤 메모리 정리(prune, graveyard 로 복구가능): {pruned}건\n\n"
 msg += "## 오늘 당직 보고\n" + body
+if promo:
+    msg += ("\n\n## 제도화 승격 안건 (논의 — 어디에 박을지·정말 본질인지)\n"
+            "아래는 메모리에 반복 누적된 규칙·교훈이다. 사용자와 논의해 종착지"
+            "(CLAUDE.md/CONVENTIONS/DESIGN_PRINCIPLES 문서 · hook · drill 케이스)를 정하고, "
+            "반영·drill 검증 후 메모리에서 prune 한다 (D-28).\n" + promo)
 out = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": msg}}
 print(json.dumps(out, ensure_ascii=False))
 ' || true
