@@ -211,6 +211,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/mem-briefing-inject.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ]
   },
