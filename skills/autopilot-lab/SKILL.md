@@ -74,7 +74,7 @@ argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [-
 | 모드 | 자리 | 하는 일 | 산출물 / 상태 |
 |---|---|---|---|
 | **setup** | 학습 _전_ | spec(뭘 학습·ablation) → scaffold(ref 또는 부모 ckpt 에서 train/eval/config) → 실행 명령 안내 | scaffold 코드 + `_RUNLOG` ⏳ 대기 |
-| **eval** | 학습 _후_ | eval spec(ckpt·데이터·metric) → eval 실행 안내 → 분석(metric·ablation·paper 비교·plot) → summary → (옵션) 정식 보고서 | summary + `_RUNLOG` ✅ 완료 + (옵션) report |
+| **eval** | 학습 _후_ | eval spec(ckpt·데이터·metric) → eval 실행 안내 → 분석(metric·ablation·paper 비교·plot) → **REPORT.md**(자체완결 보고서) | `REPORT.md` + summary 1줄 인덱스 + `_RUNLOG` ✅ 완료 |
 
 ### 확장 — `--parent <slug>` 계보 (새 모드 없이 흡수)
 
@@ -417,13 +417,14 @@ Agent(subagent_type="테스트팀"):
 **E3-1. 결과 정리** — 사용자가 "결과 정리해" 발화 또는 메인 Claude 가 eval 종료 보고 인지:
 
 ```
-=== Summary draft ===
+=== REPORT draft (→ REPORT.md 로 저장, E3-4) ===
 실험:        {date}_{slug}
 시도:        <spec 의 이번 시도 한 줄>
 결과:        <metric 표 — best / final / 차이>
 ablation:    <표 — 변수 × metric (sibling 실험 비교)>
 부모 대비:    <parent 있으면 — delta>
 관찰:        <2-3 bullet>
+그림:        <figures/*.png 을 REPORT.md 본문에 ![](figures/..) 로 인라인 임베드 — 경로만 적기 X>
 다음 후보:    <한 줄 — 다음 실험 시드>
 
 이대로 저장? (저장 / 수정 / 중단)
@@ -440,13 +441,16 @@ Agent(subagent_type="자료팀", mode="figure-gen"):
    Output: experiments/{date}_{slug}/figures/{plot_name}.{png,pdf}."
 ```
 
+> **생성한 figure 는 반드시 `REPORT.md` 본문에 markdown 이미지로 인라인 임베드** (`![<caption>](figures/<plot>.png)`) — `figures/` 에 저장만 하고 경로만 적는 것 **X**. REPORT.md 가 _그림 들어간_ 보고서가 되게 (그림 없는 텍스트 보고서 금지). figure 가 STORY 의 결과 서술과 직결되면 STORY.md 에도 임베드.
+> **이미지 vs 오디오 경계 (보고서 형식 선택의 단일 기준)**: markdown 은 이미지를 인라인 렌더하므로 _그림은 항상 md 임베드로 충분_ — **그림만 있으면 HTML 만들지 말 것**. E3-5 의 HTML 은 _오직 오디오/미디어 재생_ 용 (markdown 이 `<audio>` 재생을 막기 때문). 즉 figure→md 인라인(default) / audio→HTML(E3-5).
+
 **E3-3. paper 비교 → 연구팀 _research-survey_ (옵션, qa standard+ + 사용자 발화 시)**:
 
 ```
 "결과를 기존 paper 와 비교해줘" 발화 자리:
 Agent(subagent_type="연구팀", mode="research-survey"):
   "Mode: research-survey (실험 결과 자리).
-   결과: experiments/{date}_{slug}/summary.md
+   결과: experiments/{date}_{slug}/REPORT.md
    사전 자료: .claude_reports/research/ + analysis_project/paper/
 
    비교 axis:
@@ -454,7 +458,7 @@ Agent(subagent_type="연구팀", mode="research-survey"):
    - 본 실험의 변경 자리가 paper 어디 자리와 닿나
    - 본 실험의 관찰이 paper 의 주장·반박과 어떤 자리
 
-   Return: 비교 표 + 한국어 한 단락 요약 (summary.md 에 ## 기존 paper 와의 비교 섹션 추가)."
+   Return: 비교 표 + 한국어 한 단락 요약 (REPORT.md 에 ## 기존 paper 와의 비교 섹션 추가)."
 ```
 
 **E3-5. 정식 보고서 (옵션 — 공유·의사결정용. `--report` / "보고서 써줘"·"공유용" 발화 / high-stakes(논문·외부 공개))**:
@@ -464,12 +468,13 @@ Agent(subagent_type="연구팀", mode="research-survey"):
 - **prose 보고서** (일반 실험) → `autopilot-draft --mode doc` 핸드오프. 입력 = `experiments/{date}_{slug}/{summary.md, STORY.md, figures/}` + runs metrics. 산출은 `documents/{date}_{slug}/` (draft 컨벤션·리뷰·다듬기). eval 은 _요청·핸드오프_ 만 — prose 생성은 draft 가 담당(machinery 중복 방지).
 - **재생 HTML 보고서** (음성·오디오·미디어 실험 — 청취·스펙트로그램·시각 비교가 본질) → `자료팀 figure-gen` 으로 분리음/스펙트로그램 세그먼트 + 임베드 `<audio>`/`<img>` **단일 HTML** 생성 (`experiments/{date}_{slug}/report/report.html`). _markdown `<audio>` 는 VS Code 프리뷰가 차단_ → **audio 도메인은 HTML 기본**. 긴 오디오는 _N분 단위 세그먼트 페이지_ 분할. 필요시 `python -m http.server --bind 0.0.0.0 <port>` 로컬 서빙 + 접속 URL 안내.
 
-기본은 _off_ — `summary.md` 가 default 산출. 보고서는 사용자 신호(`--report` / "정식 보고서" / "공유용") 또는 high-stakes 일 때만. 둘 다 필요하면 prose + HTML 병행(prose 가 HTML 비교본을 상대링크).
+기본 deliverable = `REPORT.md`(E3-4, 자체완결 정식 보고서). 본 E3-5(autopilot-draft prose / 재생 HTML)는 그 위에 _외부 공개·의사결정용 doc-pipeline_ 또는 _오디오/미디어 재생_ 이 필요할 때만 추가. 둘 다 필요하면 prose + HTML 병행(prose 가 HTML 비교본을 상대링크).
 
-**E3-4. 저장 — 세 파일 갱신**:
+**E3-4. 저장 — 산출물 갱신** (최종 deliverable = `REPORT.md`):
 
-- `experiments/{date}_{slug}/summary.md` — 위 한 화면
-- `experiments/{date}_{slug}/STORY.md` — narrative 추가 (motivation·이전/부모 정리·이번 시도·결과·다음 후보 한 단락)
+- `experiments/{date}_{slug}/REPORT.md` — **eval 의 최종 산출물 = 자체완결 정식 보고서.** 구조: _요약(Executive Summary) 맨 위_ → 배경·동기 → 가설 → 방법 → 결과 → 해석 → 결론 → 다음 → 재현. **figure 는 `![](figures/..)` 본문 인라인.** **자체완결 필수** — 실험에서 도입한 조건명·구조명·약자·metric 정의를 _보고서 안에서 풀어_ 대화 맥락 없는 독자도 읽히게(예: "single/multi 같은 게 뭔지 보고서만 봐선 모름"을 차단). 사용자가 볼 것은 흩어두지 말고 _전부 이 한 파일에 통합_ (summary·STORY 요지·metrics·figure 를 여기로).
+- `experiments/{date}_{slug}/summary.md` — RUNLOG/parent auto-read 용 _1줄 인덱스_ (판정 한 줄 + `REPORT.md` 포인터). _사용자 deliverable 아님._
+- `experiments/{date}_{slug}/STORY.md` — narrative 누적 (motivation·이전/부모 정리·이번 시도·결과·다음 후보 한 단락)
 - `.claude_reports/experiments/_RUNLOG.md` — S3-2 에서 append 한 _해당 실험(date+slug) 줄_ 을 찾아 _상태 ✅ 완료 + 결과·다음_ 으로 **갱신** (새 줄 append X — 한 실험 = 한 줄 유지):
   ```
   | 2026-05-26 | lr_sweep | TF_Restormer base, lr 1e-3→3e-4 | ✅ 완료 | val PSNR 28.4→28.7 (+0.3) · 다음: warmup 1k step |
@@ -483,9 +488,10 @@ Agent(subagent_type="연구팀", mode="research-survey"):
 ├── _RUNLOG.md                      [T1] timeline (한 실험 = 한 줄 — `날짜｜slug｜시도(← parent)｜상태｜결과·다음`; 상태 ⏳대기→✅완료/❌중단 갱신)
 ├── {date}_{slug}/                  ← 한 실험 = 한 폴더
 │   ├── pipeline_state.yaml         [T1] --from 재개용 (mode·parent·phases)
+│   ├── REPORT.md                   [T1] **eval 최종 산출물** — 자체완결 정식 보고서(요약 top→배경·방법·결과·해석·결론·재현, figure 인라인)
 │   ├── STORY.md                    [T1] narrative 누적 (motivation·이전/부모·이번·결과)
 │   ├── experiment_spec.md          [T1] 1 화면 spec
-│   ├── summary.md                  [T1] 결과·다음 후보 (eval 산출)
+│   ├── summary.md                  [T1] RUNLOG/parent auto-read 용 1줄 인덱스 (REPORT.md 포인터 — deliverable 아님)
 │   ├── train.py / eval.py / config.yaml  [T1] scaffold (setup 산출)
 │   ├── runs/                       [T2] 각 run 의 결과 (사용자 실행 산출)
 │   │   └── run-001/
@@ -512,8 +518,9 @@ model/
 .claude_reports/experiments/
 ├── _RUNLOG.md
 └── {date}_{slug}/
+    ├── REPORT.md                   ← eval 최종 산출물 (자체완결 보고서)
     ├── experiment_spec.md
-    ├── summary.md
+    ├── summary.md                  ← 1줄 인덱스 (REPORT.md 포인터)
     ├── STORY.md
     ├── runs/                       ← 실험 log·ckpt·metric
     └── _internal/
