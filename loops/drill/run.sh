@@ -2,18 +2,55 @@
 # Drill set runner — 지침 회귀 테스트. 사용: run.sh [case_id ...]
 # 행동 판정(assert) + 컨텍스트 소모 계측(턴·토큰·비용) — g0_overhead 가 세팅 고정 세금 추세.
 set -u
-GOLD="$HOME/.claude/loops/drill"
+GOLD="${DRILL_HOME:-$HOME/.claude/loops/drill}"   # DRILL_HOME override = worktree 테스트 (production default 불변)
 CLAUDE_BIN="$HOME/.local/bin/claude"
 TOOLS="Bash,Read,Write,Edit,Glob,Grep,Skill,Agent,TodoWrite"
 STAMP=$(date +%F_%H%M)
 RESULTS="$GOLD/results/$STAMP"
 mkdir -p "$RESULTS"
 
-cases=("$@")
-if [ ${#cases[@]} -eq 0 ]; then
+# 인자 파싱: --axis <축>(git/spec/memory/routing/artifact/meta) · --sample N(랜덤) · case_id...
+# 기본(인자 0)=전수. 축·샘플·id 혼용 가능 (id 먼저 풀 좁히고 → axis 필터 → sample). 매번 전수
+# 안 돌려도 되게: 지침 변경 축만 --axis, cron 추세는 --sample, 사람 전수는 인자 0.
+AXIS=""; SAMPLE=""; LIST=""; ids=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --axis)   AXIS="${2:-}"; shift 2 ;;
+    --sample) SAMPLE="${2:-}"; shift 2 ;;
+    --list)   LIST=1; shift ;;
+    *)        ids+=("$1"); shift ;;
+  esac
+done
+
+# 풀: id 명시면 그것만, 아니면 전수 후보
+if [ ${#ids[@]} -gt 0 ]; then
+  cases=("${ids[@]}")
+else
   cases=($(ls "$GOLD/cases"))
   for g in $(ls "$GOLD/cases_growing" 2>/dev/null); do cases+=("growing:$g"); done
 fi
+
+# 케이스 → CASE_DIR 해석 (axis 필터·중복 사용)
+_casedir() { case "$1" in growing:*) echo "$GOLD/cases_growing/${1#growing:}" ;; *) [ -d "$GOLD/cases/$1" ] && echo "$GOLD/cases/$1" || echo "$GOLD/cases_growing/$1" ;; esac; }
+
+# --axis 필터: config 의 AXIS= 매칭만
+if [ -n "$AXIS" ]; then
+  filtered=()
+  for c in "${cases[@]}"; do
+    a=""; cf="$(_casedir "$c")/config"; [ -f "$cf" ] && a=$(sed -n 's/^AXIS=//p' "$cf" | tr -d ' "')
+    [ "$a" = "$AXIS" ] && filtered+=("$c")
+  done
+  cases=("${filtered[@]}")
+fi
+
+# --sample N: 풀에서 랜덤 N (주기 점검 — 전수 대신 표본). shuf 로 비결정 샘플.
+if [ -n "$SAMPLE" ] && [ "$SAMPLE" -gt 0 ] 2>/dev/null && [ ${#cases[@]} -gt "$SAMPLE" ]; then
+  mapfile -t cases < <(printf '%s\n' "${cases[@]}" | shuf | head -n "$SAMPLE")
+fi
+
+[ ${#cases[@]} -eq 0 ] && { echo "선택된 케이스 0 (axis='$AXIS' 매칭 없음?)"; exit 0; }
+echo "drill 대상 ${#cases[@]}개${AXIS:+ [axis=$AXIS]}${SAMPLE:+ [sample=$SAMPLE]}: ${cases[*]}"
+[ -n "$LIST" ] && { echo "(--list: 선별만 출력 — 실행 안 함)"; exit 0; }
 
 declare -A verdicts metrics
 for c in "${cases[@]}"; do
