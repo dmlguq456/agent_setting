@@ -6,7 +6,7 @@ phases:
   spec: done               # v3 PRD 확정 (D-1~7 lock — DB화·저장소분리·통합강화)
   scaffolding: pending
   dev: in_progress         # v3 완료(DB화·분리). v4 신규 = Cluster A(profile 완전통합)+B(Hermes port) 구현 대기
-last_updated: 2026-06-17  # v10: Cluster E — 큐레이션 단순화(세션끝 opus 풀 큐레이터)+audit P0 하드닝(strength·project_key·recall·내구성)+E-7 프록시 폐기. snapshot v9
+last_updated: 2026-06-22  # v11: Cluster F — 루프↔메모리 환류(루프 자율성 재정의·아침 논의 데스크·curator 산출물 대조 적극 prune·제도화 승격 채널)+선결 버그 복원력. snapshot v10
 inputs:
   - .claude_reports/research/hermes-agent/
   - VISION.md
@@ -31,3 +31,4 @@ decisions_locked:
   - D-16: 정리 후보 메인 노출 — lifecycle durable near-dup(+옵션 capacity·만료임박 working)를 mem inject 에 노출 → 메인이 consolidate/prune/graduate (Cluster D v9)
   - D-17: add=외부 offload·삭제=메인 원칙 — distiller add-only 확정, working prune/graduate·consolidation=메인, TTL=deterministic backstop(2차) (Cluster D v9) [v10에서 삭제=세션끝 opus로 정정]
   - D-18~D-24: Cluster E(v10) — 세션끝 opus 풀 큐레이터(단순화)·strength reinforcement·폭증방지 4겹·project_key robust(worktree/이동)·recall 엔진(OR+bm25)·내구성(dump commit·user_version·INJECTION persist)·E-7 프록시 폐기(model-agnostic=D-11 adapter)
+  - D-25~D-29: Cluster F(v11) — 루프 자율성 재정의(되돌림가능+명백=무인처리+전수보고)·아침 논의 데스크(cwd==~/.claude 당직후 첫 발화 inject)·curator 산출물 대조 적극 prune(ARTIFACTS 블록+안전 3겹)·제도화 승격 채널(durable 규칙·교훈→문서/hook/drill, 반영후 prune)·루프 복원력(✅ b95b9a9). post-it 재검토 열림(§5.8.6)

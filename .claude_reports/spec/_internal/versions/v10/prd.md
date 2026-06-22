@@ -2,7 +2,6 @@
 
 > mode: **library + cli** · 작성 2026-06-15 · v3(DB화·저장소분리) · v4(결정론-우선 원칙·Hermes port) · v5(Option 2 — user_profile·post-it 파일 메커니즘 제거, DB 단일 store, sub-agent DB 직접 읽기) · v6(Cluster C — 세션 자동 distillation: orchestration raw log → tier 메모리, "기억해둬" 수동 의존 제거) · v7(D-13 외부 분사화 + distiller sonnet + D-14 권한 하드닝 시도) · v8(D-14 권한 allowlist 무력 → no-tools+스크립트 실행 재설계) · v9(Cluster D — 결정론-first lifecycle 정비) · **v10 2026-06-17** (Cluster E — 큐레이션 단순화[세션끝 opus 풀 큐레이터, 메인 housekeeping 0] + audit P0 하드닝[strength·project_key·recall엔진·내구성])
 > 입력: `research/hermes-agent/{03_memory_system,04_benchmark_gap,07_security,08_source_grounded}.md` · 기존 `tools/memory/*` · `skills/{post-it,analyze-user}/` · `user_profile/`
-> · **v11 2026-06-22** (Cluster F — 루프↔메모리 환류: 루프 자율성 재정의·아침 논의 데스크·curator 산출물 대조 적극 prune·메모리 제도화 승격 채널 + 선결 버그 복원력)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -180,45 +179,6 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - records 신규 칼럼: `strength` INTEGER · `last_accessed` TEXT (E-1). `cwd_origin` → project_key 값(E-3, 의미 변경+마이그레이션). **`PRAGMA user_version` 마이그레이션 프레임**(E-5) — 다발 schema 변경의 단일 게이트.
 - 신규 컴포넌트 **없음** (E-7 프록시 폐기). raw 대화는 계속 vendor jsonl(하네스 native)에 — distiller 가 D-11 adapter 로 읽고 distill, DB 복제 X. dump.jsonl·claude-memory 동기엔 distill 결과만(raw 비포함) 유지.
 
-## 5.8 Cluster F — 루프↔메모리 환류 + 적극 정리 (v11, 사용자 확정 2026-06-22)
-
-> **계기**: 메모리에 영구 누적되는 데이터를 주기적으로 ① 세팅·하네스·루프 등 시스템 구조로 *제도화* 하고 ② 불필요분을 *적극 정리* 하는 환류 고리 부재 지적(사용자). 조사 결과 — `graduate` 는 working→durable tier 내부 전환뿐(메모리 *밖* 승격 경로 0), curator 정리는 대화+메모리 snapshot 만 보고 *산출물 미대조*, 연수(study) 루프는 도입 후 한 번도 정상 작동 못 함(2026-06-21 401 즉사·hold). 선결 버그(D-29) → 환류 설계(D-25~28). 결정론-first 정합: 트리거·산출물 캡처·prune 실행·graveyard = 코드, opus 판단 = salience·승격 가치만.
-
-### 5.8.1 D-25 — 루프 자율성 재정의
-- 기존 `loops/README` line 21 "**루프는 일을 하지 않는다** — 삭제·지침 적용은 사용자 결정" 원칙을 **폐기·재정의**. 근거: curator 가 *이미* 무인 prune 중 — 원칙이 이미 반쯤 거짓이었고, 매 건 사용자 사전승인은 비효율(연수·당직 제안이 06-19 이월 누적 실증).
-- **새 원칙**: 루프는 *되돌릴 수 있고 명백한* 일은 **무인 직접 처리**하되 **한 일을 전수 보고**한다. 되돌리기 어렵거나 판단이 필요한 것만 아침 논의로.
-- **전제 가드 2개** (원래 원칙이 막으려던 리스크 — 무인 오판·injection·깜깜이 변경 — 을 대신 차단): (a) **되돌림 보장** — 삭제·변경은 graveyard·git 등 복구 가능 경로로만 (b) **전수 보고** — 무인 처리분은 빠짐없이 아침 브리핑에. = "사전 승인"을 "되돌림 가능 + 사후 통보"로 교체.
-- 동기화 대상: `loops/README`·`DESIGN_PRINCIPLES`·`oncall.md`("보고만" → "처리+보고").
-
-### 5.8.2 D-26 — 아침 논의 데스크
-- **트리거**: `당직 cron(05:37) 이후 AND cwd==~/.claude AND 그날 첫 사용자 발화` → UserPromptSubmit hook 이 '밤 처리 요약 + 논의 안건'을 additionalContext 로 주입. 상태파일(마지막 브리핑 날짜)로 하루 1회.
-- **왜 SessionStart 아니라 '그날 첫 상호작용'**: 세션을 장시간 유지하는 환경이라 SessionStart 가 아침에 안 뜸. '하루 첫 입력'이 견고한 기준.
-- **전용 데스크**: `~/.claude` cwd 세션 = 당직/연수 논의 자리. 다른 프로젝트 cwd 에선 브리핑 안 뜸(작업 방해 차단).
-- 기존 '당직 처리해줘' *발화* 트리거를 이 *자동* 트리거로 승격 — 안 물어도 안건이 안 쌓이고 뜬다.
-
-### 5.8.3 D-27 — curator 산출물 대조 + 적극 prune
-- SessionEnd opus 큐레이터 입력에 `=== ARTIFACTS (DATA) ===` 블록 추가 — git log(머지·완료 커밋)·plans done 여부·spec phase 를 기계 캡처해 주입. 대화에 안 나와도 *산출물 증거*로 "이 working 이 가리키는 작업이 끝났나" 판단.
-- prune 지침 `보수적, 확신 없으면 두세요` → `산출물 증거가 받쳐주면 적극적으로 prune`. 적극성 방향 = "막연히 더"가 아니라 "증거 기반 자신있게".
-- **죽은 working 조기정리**(21일 TTL 안 기다림) + **명백한 durable 정리** 통합 — 둘 다 "산출물에서 끝난 증거 → 삭제".
-- **안전 3겹 유지**: snapshot-id 화이트리스트(대상 제한)·graveyard fail-closed(복구)·DATA 라벨(injection 무력화). graveyard 가 적극화의 안전망.
-- (확인됨) `/clear` 도 SessionEnd reason=`clear` 를 쏘고 우리 hook matcher 가 `*` 라 curator 발동 — 세션 유실 구멍 없음.
-
-### 5.8.4 D-28 — 메모리 제도화 환류 (승격 채널)
-- durable 의 *반복 규칙·교훈*(convention/lesson type, 조사 시 durable 272 중 ~27건)을 **승격 후보**로 추출 → **아침 논의 안건**으로 제시 → 메인 Claude 와 *대화*로 종착지 결정 → 반영 → **drill 검증 통과 후** 메모리에서 prune.
-- **종착지별 분기**: 반복 행동규칙 → CLAUDE.md/CONVENTIONS/DESIGN_PRINCIPLES(문서) / 기계화돼야 할 교훈 → hook·drill 케이스(코드). "메모리→문서"만이 아니라 *옳은 곳*으로.
-- **정리(prune)와 승격(graduate-out) 구분**: 사실·결정·이력은 메모리에 *남는다*(본령). 반복 규칙·원칙만 승격 대상.
-- **prune 순서**: 반영·검증 *후*에만 prune (반영 전 삭제 = 영구 소실, graveyard 만으론 부족). "반영 → drill 통과 → prune".
-- **버튼 아니라 논의**: 승격은 "어디에·어떻게·정말 본질인가"를 따져야 하니 yes/no 결재가 아니라 대화. 정리(D-27)=자동/버튼, 승격(D-28)=논의 — 갈래별 채널 분리.
-
-### 5.8.5 D-29 — 루프 인프라 복원력 (선결 버그, ✅ main `b95b9a9`)
-- ① `loops/lib.sh` PATH 보정 — cron 제한 PATH 가 `/usr/bin/node`(v10) 를 집어 codex hook(.mjs ESM)이 SyntaxError 로 죽던 것 → `~/.local/bin`(v20) 앞세움.
-- ② `run_claude_retry` — 401/5xx/overloaded 일시장애 백오프 재시도(3회), session/usage limit 즉시 ABORT, 실패 마커 기록.
-- ③ oncall 생존체크 — 루프 '실행 시각'만 보던 점검에 exit code·실패마커 추가(2026-06-21 연수 401 즉사를 시각점검이 못 잡은 사고 재발방지).
-
-### 5.8.6 데이터 모델·컴포넌트 영향
-- 신규 테이블·칼럼 **없음**. curator 입력 ARTIFACTS 블록은 dispatch 스크립트가 기계 캡처(코드, §0.5). 신규 상태파일: 아침 브리핑 날짜 마커(`memory/.briefing-<date>` 류) + 승격 후보 추출은 read-only projection. 신규 컴포넌트: `loops/lib.sh`(✅ 머지) + 아침 데스크 UserPromptSubmit hook(D-26).
-- **post-it 역할 재검토(열림)**: distiller 자동화로 `/post-it` 의 '수동 기억' 용도가 distiller 와 상당 부분 겹침(Cluster C 가 "기억해둬 수동 의존 제거"가 목적이었음). distiller 의 *명시 override·핸드오프 채널*로 재포지셔닝하거나 deprecate 검토 — v11 범위 밖, 별도 결정.
-
 ## [library] 공개 API (v3 + v4 추가)
 ```
 mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(dump|profile) / mem_import / mem_migrate / mem_lifecycle / mem_project
@@ -265,12 +225,6 @@ v3 그대로 (`records` 12컬럼 + `records_fts` FTS5 + trigram 보조 + `idx_re
   - **D-22 (recall 엔진)**: 단일 phrase → multi-term OR+bm25+top-K+strength. recall-inject 신호어 strip.
   - **D-23 (내구성)**: dump 자동 commit(삭제 복구 안전망)·import 멱등·user_version 게이트·INJECTION_PAT persist(anti-poisoning).
   - **D-24 (E-7 폐기·model-agnostic=D-11)**: 로깅 프록시 redundant 폐기(하네스는 어차피 로그 남김→adapter 만). + graduate(working→durable) opus 가 수행.
-- **v11 신규 (Cluster F — 루프↔메모리 환류, §5.8)**:
-  - **D-25 (루프 자율성 재정의)**: "루프는 일을 하지 않는다" 폐기 → "되돌림 가능+명백 = 무인 직접 처리+전수 보고 / 그 외 = 아침 논의". 가드: 되돌림 보장(graveyard·git)+전수 보고 = "사전 승인"을 "되돌림 가능+사후 통보"로. loops/README·DESIGN_PRINCIPLES·oncall.md 동기화.
-  - **D-26 (아침 논의 데스크)**: 당직 이후 cwd==~/.claude 그날 첫 발화 → UserPromptSubmit hook 브리핑 주입(밤 처리 요약+논의 안건). SessionStart 아니라 '그날 첫 상호작용'(세션 유지 환경). '당직 처리해줘' 발화 트리거 승격.
-  - **D-27 (curator 산출물 대조 적극 prune)**: SessionEnd opus 입력에 ARTIFACTS(git/plans/spec) DATA 블록 + prune 지침 '적극'. 죽은 working 조기정리(21일 TTL 안 기다림)+명백한 durable 정리. 안전 3겹(snapshot-id 화이트리스트·graveyard·DATA 라벨). /clear 도 SessionEnd 발동(matcher '*') 확인.
-  - **D-28 (제도화 승격 채널)**: durable 반복규칙·교훈 → 아침 논의 안건 → 대화로 종착지(문서/hook/drill) 결정 → 반영 → drill 검증 후 prune. 정리(자동)와 승격(논의) 분리. prune 은 반영·검증 후만(영구소실 방지).
-  - **D-29 (루프 복원력, ✅ main b95b9a9)**: lib.sh PATH 보정(cron v20 node)·run_claude_retry(401/5xx 재시도, session limit ABORT)·oncall exit code 생존체크.
 
 ## Next (구현 순서 — autopilot-code, 본 v5 입력)
 1. **Cluster A (파일 메커니즘 제거, Option 2)** 먼저 — 사용자 지적 incoherence 해소:
@@ -295,9 +249,3 @@ v3 그대로 (`records` 12컬럼 + `records_fts` FTS5 + trigram 보조 + `idx_re
    - **Phase E-β (recall·내구성)**: recall 엔진 교체(multi-term OR+bm25+top-K+strength, 신호어 strip) + dump 자동 commit·import 멱등·INJECTION_PAT persist.
    - **Phase E-γ (큐레이션 단순화)**: 세션끝 distiller opus 풀 큐레이터(action JSON add/reinforce/merge/prune + script 실행) + N턴 sonnet add-only + 폭증 4겹(durable snapshot 주입·ceiling 트리거·budget·cold-decay) + graduate. 메인 housekeeping 0. v8 no-tools 보안 유지·acceptance 재검증.
    - E-7(프록시) 구현 없음 — D-11 adapter 원칙으로 충분.
-7. **Cluster F (루프↔메모리 환류, v11 신규)** — autopilot-code, worktree, phase 분할:
-   - ✅ **선결 버그 D-29 머지 완료** (main `b95b9a9`): `loops/lib.sh` 신규 + study/oncall 수정 (cron node PATH·재시도·생존체크).
-   - **Phase 1 (D-27 curator 산출물 대조)**: `hooks/mem-distill-dispatch.sh` 에 ARTIFACTS(git log·plans done·spec phase) DATA 블록 캡처·주입 + curate 프롬프트 prune 지침 적극화. mem.py 에 산출물 캡처 헬퍼(`curate-artifacts` 류). 안전 3겹 유지·acceptance 재검증.
-   - **Phase 2 (D-26 아침 데스크)**: 신규 `hooks/mem-briefing-inject.sh`(UserPromptSubmit, cwd==~/.claude AND 당직후 그날 첫 발화 게이트 → 밤 처리 요약+논의 안건 inject) + 상태 마커(`.briefing-<date>`) + settings.json 배선. CLAUDE.md '당직 처리' 발화 트리거 → 자동 승격.
-   - **Phase 3 (D-28 승격 채널)**: 승격 후보 추출(durable convention/lesson read-only projection) + 아침 안건 제시 + 종착지 분기(문서/hook/drill) + 반영후 prune 연결(drill 검증 게이트).
-   - **D-25 원칙 문서화**: `loops/README`·`DESIGN_PRINCIPLES`·`oncall.md` "보고만"→"되돌림가능+명백=처리+보고" 동기화. **post-it 역할 재검토(§5.8.6)**: distiller 와 중복 — 별도 결정.

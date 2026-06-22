@@ -89,3 +89,12 @@ Cluster B/C/D 머지·enable 후 사용자 "메모리=가장 중요한 시스템
 
 ## Next
 **Cluster E 구현** → autopilot-code, worktree, **phase 분할**(한 사이클 X — schema·로직 큼): E-α(DB 하드닝: user_version+strength+project_key+마이그레이션) → E-β(recall 엔진+내구성) → E-γ(세션끝 opus 풀 큐레이터+폭증 4겹+graduate, no-tools 보안 재검증). 각 phase 머지 후 회귀. E-7 프록시 구현 없음.
+
+### v10 → v11 (2026-06-22, update mode — Cluster F 추가, snapshot `_internal/versions/v10/`)
+루프↔메모리 환류 + 적극 정리 (§5.8 신설, D-25~29). 계기 = 메모리 누적분의 시스템 구조 제도화·적극 정리 환류 부재 지적(사용자):
+- **D-25** 루프 자율성 재정의 — "루프는 일 안 한다" 폐기 → 되돌림가능+명백=무인 직접처리+전수보고 / 그외=아침 논의. (가드: graveyard·git 복구경로 + 전수 보고)
+- **D-26** 아침 논의 데스크 — cwd==~/.claude 당직후 그날 첫 발화 → UserPromptSubmit hook 브리핑 주입. SessionStart 아니라 '그날 첫 상호작용'(세션 유지 환경).
+- **D-27** curator 산출물 대조 적극 prune — SessionEnd opus 입력에 ARTIFACTS(git/plans/spec) DATA 블록 + prune 적극화. 안전 3겹(화이트리스트·graveyard·DATA). /clear 도 SessionEnd reason=clear 발동(matcher '*') 확인 → 유실 구멍 없음.
+- **D-28** 제도화 승격 채널 — durable 반복규칙·교훈(272 중 ~27건) → 아침 안건 → 종착지(문서/hook/drill) 분기 → 반영·drill 검증 후 prune. 정리(자동)와 승격(논의) 분리.
+- **D-29** ✅ 선결 버그 복원력 (main b95b9a9) — lib.sh PATH(cron v20)·run_claude_retry(일시장애)·oncall exit code 생존체크.
+- post-it 역할 재검토(§5.8.6, 열림): distiller 와 중복 — 별도 결정.
