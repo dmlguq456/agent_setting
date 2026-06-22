@@ -13,6 +13,9 @@ fp=$(printf '%s' "$input" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"
 [ -z "$fp" ] && exit 0
 
 dir=$(dirname "$fp")
+# dirname 이 아직 없으면 존재하는 최근접 조상으로 올라간다 — merge/rebase 중 없는 하위폴더
+# 신규 write 가 git 판정을 건너뛰고 우회하던 구멍을 메움 (codex #7, 2026-06-22).
+while [ ! -d "$dir" ] && [ "$dir" != "/" ] && [ "$dir" != "." ]; do dir=$(dirname "$dir"); done
 [ -d "$dir" ] || exit 0
 gd=$(git -C "$dir" rev-parse --git-dir 2>/dev/null) || exit 0
 case "$gd" in /*) ;; *) gd="$dir/$gd" ;; esac
@@ -21,6 +24,9 @@ op=""
 [ -f "$gd/MERGE_HEAD" ] && op="merge"
 [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] && op="rebase"
 [ -f "$gd/CHERRY_PICK_HEAD" ] && op="cherry-pick"
+# detached HEAD — 브랜치 없이 커밋에 직접 올라탄 상태. CLAUDE.md §0(C)·§5.9 가 STOP+hook
+# 강제로 약속한 자리인데 종전 hook 은 안 막았다 (codex #6, 2026-06-22).
+[ -z "$op" ] && ! git -C "$dir" symbolic-ref --quiet HEAD >/dev/null 2>&1 && op="detached-HEAD"
 [ -z "$op" ] && exit 0
 
 # 명시 요청 탈출구

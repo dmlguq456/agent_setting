@@ -32,6 +32,11 @@ for _ in $(seq 1 40); do
   [ "$d" = "/" ] && break
   d=$(dirname "$d")
 done
+# .claude_reports 디렉토리가 아직 없어도, 경로가 .../.claude_reports/... 면 그 prefix 로 root 유도
+# — 프로젝트 _최초_ 산출물 1건이 순서 게이트를 건너뛰던 구멍을 메움 (codex #8, 2026-06-22).
+if [ -z "$root" ]; then
+  case "$fp" in */.claude_reports/*) root="${fp%%/.claude_reports/*}" ;; esac
+fi
 [ -z "$root" ] && exit 0
 cr="$root/.claude_reports"
 

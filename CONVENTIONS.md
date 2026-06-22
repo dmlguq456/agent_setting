@@ -616,9 +616,9 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 - 관련 메모리는 본문에서 `[[name]]` 로 링크 (DB `links` 컬럼에 저장). DB INSERT 시 FTS5 가상테이블이 자동 색인 — 별도 `MEMORY.md` 인덱스 포인터 write 없음 (MEMORY.md 는 legacy projection 뷰).
 - Hermes 처럼 _capacity 압박 시 consolidation_ 을 원칙으로 — cwd 메모리가 비대해지면 통합·압축(별 파일 난립 대신).
 
-### §7.3. 자율 자리는 _제안만_ (불변식)
+### §7.3. 메모리 _승격_ 제안 한정 (불변식)
 
-oncall self-review nudge(`loops/oncall.md` item 9) 등 _자동_ 자리는 승격 후보 **제시까지** — 실제 write 는 사용자 흐름 안에서(`/post-it` 또는 메모리 저장 발화). 루프 출구는 제안까지, 결정은 사용자([loops/README](loops/README.md) 공통 규약).
+oncall self-review nudge(`loops/oncall.md` item 9) 등 _자동_ 자리의 **메모리 승격(promote)·post-it write** 는 후보 **제시까지** — 실제 승격 write 는 사용자 흐름 안에서(`/post-it` 또는 메모리 저장 발화). ※ 이는 _승격_ 축 한정 — 세션끝 opus 큐레이터의 무인 prune/merge/graduate(§7.0)·루프의 되돌림가능+명백한 무인 정리(D-25, [loops/README](loops/README.md):21 가 "출구는 제안까지" 옛 원칙 폐기)와는 적용 축이 다르다.
 
 ### §7.4. Recall — on-demand 회상 (canonical, T1 / Hermes session_search 벤치마킹)
 
