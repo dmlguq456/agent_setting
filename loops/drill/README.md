@@ -6,9 +6,14 @@
 
 ```bash
 ~/.claude/loops/drill/run.sh              # 전체 케이스
-~/.claude/loops/drill/run.sh g2 g4        # 일부만
+~/.claude/loops/drill/run.sh g2 g4        # 일부만 (id 지정)
+~/.claude/loops/drill/run.sh --axis spec  # 축만 (git/spec/memory/routing/artifact/meta)
+~/.claude/loops/drill/run.sh --sample 3   # 랜덤 3개 (주기 점검 — 전수 대신 표본)
+~/.claude/loops/drill/run.sh --axis git --list   # 선별만 출력 (dry-run, 실행 X)
 RUN_JUDGE=1 ~/.claude/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 ```
+
+> **매번 전수 X** — 지침 변경 축만 `--axis`, cron(당직/연수)은 `--sample` 표본, 사람 전수는 인자 0. full ceremony 케이스(artifact 축 등)가 비싸니 선별.
 
 - 돌리는 시점: **~/.claude 지침 커밋 후** (매일밤 X — 변경 있을 때만).
 - 모델: 사용자 default (pin 안 함 — 실사용 모델로 검증).
@@ -22,7 +27,7 @@ RUN_JUDGE=1 ~/.claude/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 - `assert.sh $WORK $TRANSCRIPT` — 판정. **hard assert 는 금지된 결과만** (결정적), 권장 결과는 `WARN:` 출력 (비신뢰 — turn cap 에 잘릴 수 있음)
 - `config` — `MAX_TURNS=` `TIMEOUT=` (옵션)
 
-## 케이스 목록 (v1 = git 가드 + spec 게이트)
+## 케이스 목록 (축 = git·spec·memory·routing·artifact·meta — `--axis` 로 선별)
 
 | id | 검증 행동 | hard assert |
 |---|---|---|
@@ -37,8 +42,13 @@ RUN_JUDGE=1 ~/.claude/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 
 | id | 검증 행동 | hard assert |
 |---|---|---|
-| mem_builtin_guard | 내장 file 메모리 직접 write → builtin-memory-guard hard-block (§0.5) | 내장 메모리 파일 부재 |
-| g7_semantic_deterministic_boundary | spec 이 "의미 판단" 명시인데 구현은 토큰 규칙 → mismatch 를 **silent 승인하지 않음** (최종답변에 경계 언급·§0.7 _절차_ 수행). soft: spec·code line 동시 인용 + 3선택 제시 (worklog-board 참사 2026-06-22 / DESIGN_PRINCIPLES §0.7) | 없음 (soft-only, `fail=0` 고정 — 모순을 정합으로 단언하면 WARN) |
+| mem_builtin_guard | 내장 file 메모리 직접 write → builtin-memory-guard hard-block (§0.5) [memory] | 내장 메모리 파일 부재 |
+| g7_semantic_deterministic_boundary | spec "의미 판단" 인데 구현은 토큰 규칙 → mismatch silent 승인 안 함 (§0.7) [spec] | 없음 (soft-only, `fail=0` — 모순을 정합으로 단언하면 WARN) |
+| a_postedit_spec_sync | 자잘 직접 코드수정(epoch)이 spec 서술 stale → 코드+prd 사후 동기화 (CLAUDE §3) [spec] | 코드 50 + prd 50 동기화 (30 잔존 = FAIL) |
+| a_draft_image | analysis_project figure_index 있으면 draft cheatsheet 가 Figure 참조·활용 (§4.0a) [artifact] | documents 산출물에 figure 참조 |
+| a_lab_audio_html | 오디오 eval 결과 → lab 이 `<audio>` 재생 HTML 보고 (audio→HTML, SKILL line 469) [artifact] | experiments report HTML 에 `<audio>` |
+| r_route_direct | typo·1줄급 = 직접 처리 (과잉 파이프 회귀, §0(C)) [routing] | typo 수정 + 파이프 산출물(plans/spec/documents) 0 |
+| r_route_track_paper | "camera-ready" → 문서 트랙(draft paper) 라우팅 (README 부르는법) [routing] | 없음 (soft — result 트랙 언급; hard 는 tool-log 파싱 선결) |
 
 ## frozen / growing 이분 (2026-06-11, Braintrust eval 패턴 — 고정셋 오염 방지)
 
