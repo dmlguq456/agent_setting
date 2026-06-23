@@ -11,7 +11,7 @@
    - prunable worktree (`git worktree list --porcelain`)
 2. **산출물 누적 minor**: 각 `.claude_reports/*/pipeline_summary.md` 에서 마지막 audit 이후 minor 기록 5건 이상 → `/audit` 권장 표시.
 3. **실험 방치**: `experiments/_RUNLOG.md` 의 ⏳ 상태 entry 중 7일 이상 갱신 없음 → 목록.
-4. **drill 회귀 미실행**: `~/.claude` 의 최신 커밋 시각이 `~/.claude/loops/drill/results/` 의 최신 run 디렉토리 시각보다 새로움 → "지침 변경 후 drill 미실행 — `~/.claude/loops/drill/run.sh` 권장" 표시. (drill 을 직접 실행하지는 않는다 — 보고만.)
+4. **drill 회귀 미실행**: `~/.claude` 의 최신 커밋 시각이 `~/.claude/loops/drill/results/` 의 최신 run 디렉토리 시각보다 새로움 → "지침 변경 후 drill 미실행 — `run.sh --sample 2` 권장 (정기 회귀는 랜덤 2개로 가볍게; 가드·라우팅 등 _행동 규칙_ 을 대폭 바꾼 자리만 관련 케이스·전수)" 표시. (drill 을 직접 실행하지는 않는다 — 보고만.) **매번 전수는 과부하** — 지침 _텍스트_ (근거 문구·제목)만 바뀐 자리는 권장하되 행동 무관이면 skip 판단.
 5. **sync-skills drift**: `~/.claude/skills/*/SKILL.md`·`~/.claude/agents/*.md` 중 `~/.claude/skills/.sync_state.json` 보다 새로운 파일 존재 → "skill 정의 변경 후 README 미동기화 — `/sync-skills` 권장" 표시.
 6. **note 루프 생존·성공**: `~/.claude/loops/note.log` 의 마지막 `=== note run` 시각이 26시간 이상 과거 → "note 루프 고장 의심 (cron·인증·timeout)". **+ 마지막 run 의 종료 상태도 점검** — 그 run 블록의 `=== exit N ===` 가 N≠0 이거나 블록에 실패 마커(`401`·`invalid authentication`·`SyntaxError`·`=== FAILED after`·`=== ABORT:`)가 있으면 → "note 루프 마지막 실행 실패 (사유)" 를 **조치 필요** 로 보고. (시각이 최근이어도 실패했을 수 있으니 시각·성공 둘 다 본다.)
 7. **연수 루프 생존·성공**: `~/.claude/loops/study.log` 의 마지막 `=== study run` 시각이 8일 이상 과거 → "연수 루프 고장 의심" (주 1회 일요일 주기). **+ 마지막 run 의 종료 상태도 점검** — `=== exit N ===` 가 N≠0 이거나 실패 마커(`401`·`invalid authentication`·`SyntaxError`·`=== FAILED after`·`=== ABORT:`)가 있으면 → "연수 루프 마지막 실행 실패 (사유)" 를 **조치 필요** 로 보고. (2026-06-21 연수가 401 로 즉사했는데 시각만 보던 옛 점검이 못 잡은 사고 — 그 재발 방지.)
