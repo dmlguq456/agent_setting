@@ -124,8 +124,8 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
 7. **🗣️ 부르는 법** — 두 갈래 한 줄 (자연어 / slash 동일 동작):
    - `### (1) 자연어 발화` — prose (옵션 자동 구성 + 자연어 요약 컨펌 + yes/수정/cancel/자율 진행 + ceremony 큰 (autopilot-\* 전체 + analyze-user) vs 작은 3 컨펌 의무) + [`CLAUDE.md`](CLAUDE.md) §0 reference + **자연어 발화 예시 표** (_사람 유지 영역_)
    - `### (2) slash 직접 입력` — prose (의도 명시 = 즉시 invoke) + slash 예시 code block (_축약 5 줄_: autopilot-code / autopilot-draft / autopilot-refine / audit / **track**(📌↔⚡ 토글) — argument-hint 에서 자동 생성, 전체 syntax dump X) + 전체 옵션은 SKILL.md reference.
-8. **🤝 Agents** — name (agent .md 링크) / 모델 / _의의_ 표 (_자동 호출자·역할 dump X_) + 직접 호출 안내 한 단락 + user_profile 참조 매트릭스는 [`user_profile/README.md`](user_profile/README.md) reference (README 에 매트릭스 표 _넣지 않음_).
-9. **📚 더 깊이 + 🔁 동기화** — canonical 문서 reference index 표 (**MANUAL**(앞층 사용자 지도) / CLAUDE.md / WORKFLOW / CONVENTIONS / **OPERATIONS**(git·worktree·dispatch·push §5.8~5.11) / **MEMORY**(통합 기억 §7) / DESIGN_PRINCIPLES / user_profile/README + **harness 행**: `hooks/`(생성순서·git상태·spec게이트·디자인·**메모리 4종**: `builtin-memory-guard`·`mem-recall-inject`·`mem-turn-nudge`·`mem-distill-dispatch`)·`utilities/`·`statusline.sh`·`tools/memory`(통합 기억 store + `mem inject`/`mem sync`, MEMORY §7) + **loops 행**: `loops/README.md` — **현역 루프·호칭은 `loops/README.md` 현역 표가 단일 출처** (cron runner 가 `loops/` 밖[worklog-board cron 등]으로 이동한 현역 루프도 포함 — "`loops/` 파일 부재 = 루프 부재" 아님); §10 파일 트리만 `loops/` 실제 파일을 나열) + `/sync-skills` 두 명령 + GitHub 링크. **[§9 harness 의도]** hooks 카운트 hardcode 금지 — 카테고리 묶음(생성순서·git상태·spec게이트·디자인·메모리 4종)으로 표기. memory hook 4종 병기 필수. **[§9 loops 의도]** 현역 루프 판정은 `loops/README.md` 현역 표 기준(runner 외부 이동 케이스 포함) — `ls loops/` 파일 유무로 현역 여부 판정 금지.
+8. **🤝 Agents** — name (agent .md 링크) / 모델 / _의의_ 표 (_자동 호출자·역할 dump X_) + 직접 호출 안내 한 단락 + 사용자 프로필 참조 매트릭스는 [`MEMORY.md §7.6`](MEMORY.md) reference (대시보드 README 에 매트릭스 표 _넣지 않음_).
+9. **📚 더 깊이 + 🔁 동기화** — canonical 문서 reference index 표 (**MANUAL**(앞층 사용자 지도) / CLAUDE.md / WORKFLOW / CONVENTIONS / **OPERATIONS**(git·worktree·dispatch·push §5.8~5.11) / **MEMORY**(통합 기억 §7 + 프로필 매트릭스 §7.6) / DESIGN_PRINCIPLES + **harness 행**: `hooks/`(생성순서·git상태·spec게이트·디자인·**메모리 4종**: `builtin-memory-guard`·`mem-recall-inject`·`mem-turn-nudge`·`mem-distill-dispatch`)·`utilities/`·`statusline.sh`·`tools/memory`(통합 기억 store + `mem inject`/`mem sync`, MEMORY §7) + **loops 행**: `loops/README.md` — **현역 루프·호칭은 `loops/README.md` 현역 표가 단일 출처** (cron runner 가 `loops/` 밖[worklog-board cron 등]으로 이동한 현역 루프도 포함 — "`loops/` 파일 부재 = 루프 부재" 아님); §10 파일 트리만 `loops/` 실제 파일을 나열) + `/sync-skills` 두 명령 + GitHub 링크. **[§9 harness 의도]** hooks 카운트 hardcode 금지 — 카테고리 묶음(생성순서·git상태·spec게이트·디자인·메모리 4종)으로 표기. memory hook 4종 병기 필수. **[§9 loops 의도]** 현역 루프 판정은 `loops/README.md` 현역 표 기준(runner 외부 이동 케이스 포함) — `ls loops/` 파일 유무로 현역 여부 판정 금지.
 10. **🗺️ 전체 디렉토리 맵** (🔁 동기화 직전 배치) — `~/.claude/` 트리 + 항목별 한 줄 의미 (```text 블록). sync 시 실제 `ls` 와 대조해 신규·삭제 디렉토리 반영 — **hooks·loops·drill cases 에 명시 적용**: 부재 파일(예: `loops/note.sh` — runner 가 worklog-board 로 이동) 줄 제거, drill cases 범위는 실제 `ls cases/` 가 진실. **단 §10 파일 트리에서 runner 가 빠진 것이 곧 루프 사망은 아님 — 현역 루프 목록은 §9 가 `loops/README.md` 현역 표 기준으로 든다.** harness 런타임 자동 생성 폴더(backups·cache·sessions 등)는 마지막 한 묶음. 루프 호칭은 `loops/README.md` 가 단일 출처.
 
 원칙:
@@ -136,7 +136,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
   - 산출물 I/O 그래프 mermaid → WORKFLOW §4 + CONVENTIONS §5
   - Agent 호출 구조 mermaid
   - 운영 룰 trigger 표 (skill 별 4컬럼 dump) → CLAUDE.md §0 + 각 SKILL.md
-  - user_profile 참조 매트릭스 → user_profile/README.md
+  - 사용자 프로필 참조 매트릭스 → MEMORY.md §7.6
   - slash 전체 syntax block → 축약 4 줄 + SKILL.md
   - Skills 표의 옵션 컬럼
 
@@ -157,7 +157,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
 | §5 Skill 카탈로그 | name / _의의_ 자동 추출. 옵션·역할 dump 컬럼 X. 새 skill 추가·삭제 자동 반영 |
 | §6 산출물 구조 | 두 축 bullet + 3-tier _왜_ 한 단락 + CONVENTIONS·WORKFLOW reference 자동 갱신. 통합 기억 store 단락에 (C) distillation 캐비엣(`MEM_DISTILL_ENABLE=1` 조건부) + (D) 결정론-first lifecycle(추가=외부/삭제=메인) 1~2문장 포함. 디테일은 MEMORY §7 링크, 복사 X |
 | **§7 부르는 법** | **§7.(1) 자연어 발화 예시 표 + 그 직전 prose 는 사람 유지 영역 — 현행 wording 그대로 보존 (SHA 비교 skip).** 단 _섹션 헤딩 자체_ 누락 시 placeholder 헤딩 + 한 줄만 삽입. §7.(2) slash 예시 code block 은 argument-hint 에서 _축약 5 줄_(+`track`) 자동 생성 + ceremony 큰 (autopilot-\* 전체 + analyze-user) vs 작은 3 컨펌 의무·CLAUDE.md §0 reference 자동 갱신 |
-| §8 Agents 표 | name / 모델 / _의의_ 자동 추출. 자동 호출자 컬럼 X. user_profile 매트릭스는 표 대신 user_profile/README reference |
+| §8 Agents 표 | name / 모델 / _의의_ 자동 추출. 자동 호출자 컬럼 X. 사용자 프로필 매트릭스는 표 대신 MEMORY §7.6 reference |
 | §9 더 깊이 + 동기화 | canonical reference index 표(+harness 행 — hooks 카테고리 묶음·memory 4종 병기·카운트 hardcode 금지) + loops 행(실제 `ls loops/` 현존 루프만·루프 호칭은 loops/README.md 단일 출처) + 두 명령 + GitHub 링크 |
 
 **sync 시각·이력은 README 본문에 쓰지 않음** (git commit log 가 단일 출처).

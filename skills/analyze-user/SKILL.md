@@ -439,7 +439,7 @@ timestamp: "2026-05-22T15:30:00Z"
 
 ## sub-agent 참조 패턴 (작업 시작 자리에서 실행)
 
-각 agent 가 어떤 aspect 를 참조해야 하는지. **읽기 소스 = DB (`mem profile <stem>`)**; 본 매트릭스는 _어느 agent 가 어느 aspect 를 참조하는지의 매핑 문서_ — aspect 본문 SoT 는 DB. 본 매트릭스는 [`~/.claude/user_profile/README.md`](../../user_profile/README.md) 와 동일 — drift 발견 시 README 가 single source.
+각 agent 가 어떤 aspect 를 참조해야 하는지. **읽기 소스 = DB (`mem profile <stem>`)**; 본 매트릭스는 _어느 agent 가 어느 aspect 를 참조하는지의 매핑 문서_ — aspect 본문 SoT 는 DB. 본 매트릭스의 single source = [`MEMORY.md §7.6`](../../MEMORY.md) (aspect-중심 표) — 본 표는 그 agent-중심 동형 뷰; drift 발견 시 MEMORY §7.6 가 진실.
 
 | Agent | 작업 시작 시 `mem profile <stem>` 실행 | 이유 |
 |---|---|---|

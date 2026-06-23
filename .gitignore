@@ -46,7 +46,7 @@ stats-cache.json
 SKILL_AUDIT_*.md
 
 # analyze-user 내부 — 전체 로컬 전용 (public repo 미포함).
-# clone 해서 "바로 쓰는" 데는 DB store (memory.db / dump.jsonl) + user_profile/README 만 필요. (구 `user_profile/0*.md` 파일은 DB `type=profile` 레코드로 이관됨 — sub-agent 는 `mem profile <stem>` 로 Read.)
+# clone 해서 "바로 쓰는" 데는 DB store (memory.db / dump.jsonl) 만 필요. (구 `user_profile/0*.md`·`README` 는 DB `type=profile` 레코드·`MEMORY.md §7.6` 매트릭스로 이전 — sub-agent 는 `mem profile <stem>` 로 Read.)
 # _internal 은 프로필 제작·갱신용 산출물 (raw 분석 run·개인 원본 PDF·버전 스냅샷·metadata) — 개인정보 다수.
 user_profile/_internal/
 # assets 는 사용자 실제 연구 figure (pptx 추출 SVG 54장·원본 anchor PNG·primitives, ~42M, 일부 미공개) — 로컬 전용.
