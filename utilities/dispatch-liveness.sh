@@ -5,7 +5,7 @@
 #   신호 = 세션 transcript(`projects/<enc-cwd>/*.jsonl`) mtime — hang/death 하면 transcript 가 멈춘다
 #   (pgrep 경로매칭은 흔한 path 가 무관 프로세스에 걸려 false-alive → 불채택).
 #   사용: 분사 후 대기 자리에서 실행. SUSPECT/DEAD 면 transcript·dispatch 로그 진단 → 수확/재분사 (대기 X).
-#   CONVENTIONS §5.10 분사 가드. exit 3 = stealth-death 의심 1+.
+#   OPERATIONS §5.10 분사 가드. exit 3 = stealth-death 의심 1+.
 set -uo pipefail
 JOBS="${1:-$HOME/.claude/.dispatch/jobs.log}"
 STALE_MIN="${DISPATCH_STALE_MIN:-15}"   # transcript 가 N분+ 멈췄으면 hang/death 의심

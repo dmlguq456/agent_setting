@@ -38,7 +38,7 @@ EVENT="${EVENT:-}"; SID="${SID:-default}"; PROMPT="${PROMPT:-}"
 
 [ "$EVENT" = "UserPromptSubmit" ] || exit 0
 
-# 신호어 regex (D-15 canonical PAT — CONVENTIONS §7.5 + 테스트 픽스처와 동일 출처):
+# 신호어 regex (D-15 canonical PAT — MEMORY §7.5 + 테스트 픽스처와 동일 출처):
 # 순수 리터럴 alternation (no \b / char-ranges — 로케일 해저드 회피).
 # 주의: bare top-level [[ =~ ]] 는 set -e 하에서 no-match 시 스크립트를 exit 1 로 종료함.
 # 아래 '|| exit 0' 가드 형식으로 no-match 를 clean no-op 으로 처리한다.

@@ -54,7 +54,7 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 ## Preconditions (Stage A 에서 강제 — 하나라도 실패 시 abort)
 
 1. **git 추적**: `--source` 가 가리키는 파일이 git repo 안에 있어야 한다. 아니면 abort: "autopilot-apply 는 git 추적 전제 — `git init` + 첫 commit 후 재시도."
-2. **git working-state** ([CONVENTIONS.md §5.9](../../CONVENTIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical)): source 파일에 커밋 안 된 사용자 편집(dirty)이 있거나, **merge/rebase/cherry-pick 진행 중·detached HEAD** 면 abort + "먼저 commit/stash 하거나 진행 중 머지를 해결하세요." (진행 중 작업·반쯤 머지된 트리 클로버 방지)
+2. **git working-state** ([OPERATIONS.md §5.9](../../OPERATIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical)): source 파일에 커밋 안 된 사용자 편집(dirty)이 있거나, **merge/rebase/cherry-pick 진행 중·detached HEAD** 면 abort + "먼저 commit/stash 하거나 진행 중 머지를 해결하세요." (진행 중 작업·반쯤 머지된 트리 클로버 방지)
 3. **cheatsheet 존재**: fuzzy match 로 1건 식별. 다수면 list, 0건이면 안내.
 4. **build 도구 가용** (`--target latex`): `latexmk` 또는 `pdflatex` 존재 확인. latexdiff 는 _권장_ (없으면 git diff fallback, abort 아님).
 
@@ -86,7 +86,7 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 3. **Precondition gate** (위 Preconditions 1-4) 강제. 실패 시 abort.
 4. **Mutation 파싱**: cheatsheet 에서 M-label 단위로 추출 — 각 mutation = `(M-id, where_anchor, classification, old_or_locator, new_block, reason)`. classification 은 cheatsheet 의 Tier (🔴/🟡/🟢) 또는 MECH/SEM/STRUCT 로 매핑.
 5. **Isolation 진입**:
-   - **base 선정 ([§5.9](../../CONVENTIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical) DONE-BRANCH)**: 현재 브랜치가 base 에 이미 머지된 끝난 브랜치(ahead 0)거나 upstream 이 앞서면, apply 브랜치를 _현재 HEAD_ 가 아니라 _base 최신_ 에서 딴다 — `git fetch origin && git switch -c apply/{cheatsheet-short-name} origin/<base>`. (죽은/stale 브랜치 base 위에 cheatsheet 적용 방지.) 현재 브랜치가 최신 base 면 아래 default 그대로.
+   - **base 선정 ([§5.9](../../OPERATIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical) DONE-BRANCH)**: 현재 브랜치가 base 에 이미 머지된 끝난 브랜치(ahead 0)거나 upstream 이 앞서면, apply 브랜치를 _현재 HEAD_ 가 아니라 _base 최신_ 에서 딴다 — `git fetch origin && git switch -c apply/{cheatsheet-short-name} origin/<base>`. (죽은/stale 브랜치 base 위에 cheatsheet 적용 방지.) 현재 브랜치가 최신 base 면 아래 default 그대로.
    - `--isolation branch` (default): `git checkout -b apply/{cheatsheet-short-name}`. base commit hash 기록.
    - `--isolation worktree`: 별도 worktree 생성 (canonical 체크아웃 물리적 불가침). 대규모·위험 시 권장.
 6. **Baseline compile** (핵심 — 안 하면 compile gate 무의미): 먼저 run 당 로컬 빌드 출력 디렉토리를 한 번 생성 — `BUILD_OUT=$(mktemp -d /tmp/lw-apply.XXXXXX)` (이후 모든 컴파일이 `-outdir="$BUILD_OUT"` 공유). 그 다음 편집 _전_ build 1회. 기존 에러/경고/`undefined reference` 수를 `_internal/apply/baseline.log` 에 기록. _내가 낸 에러_ vs _원래 깨져 있던 것_ 구분의 기준선. (VS Code 의 인터랙티브 빌드와는 _별도_ 의 격리된 출력 — 서로의 aux 를 안 건드린다.)

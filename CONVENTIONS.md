@@ -120,7 +120,7 @@
 - autopilot-code는 현재 dir에서 코드 변경
 - autopilot-{draft,research,refine}는 `.claude_reports/` 하위 영속 산출물을 input으로 implicit 인지 (cross-project 작업은 `cd <other>` 후 별도 세션)
 
-> **gitignore 전제 (불변식)**: skill 산출물 폴더 `.claude_reports/`는 _프로젝트 repo 에 커밋하지 않는다_ — Claude 작업 산출물(plan·log·snapshot·reviews·lock)이지 소스가 아니다. 새 프로젝트에서 처음 산출물을 만들 때(또는 `git`-tracked repo 에서 처음 호출될 때) `.claude_reports/`가 `.gitignore`에 없으면 한 줄(`.claude_reports/`) 추가한다 (이미 있거나 git repo 가 아니면 skip). §5.8 의 worktree symlink 가드·`.pipeline-lock` transient 처리도 이 gitignore 전제 위에서 성립. **예외 — `~/.claude` (스킬셋 repo 자신, 2026-06-11 사용자 결정)**: 이 repo 는 `.claude_reports` 를 _커밋한다_ — 세팅 개선의 research·audit·plan 이력이 곧 repo 의 자산 (transient `.pipeline-lock`·`.untracked*` 만 ignore). 스킬셋 본작업도 파이프 경유로 `plans/` 사이클을 남기는 정식 프로젝트로 다룬다.
+> **gitignore 전제 (불변식)**: skill 산출물 폴더 `.claude_reports/`는 _프로젝트 repo 에 커밋하지 않는다_ — Claude 작업 산출물(plan·log·snapshot·reviews·lock)이지 소스가 아니다. 새 프로젝트에서 처음 산출물을 만들 때(또는 `git`-tracked repo 에서 처음 호출될 때) `.claude_reports/`가 `.gitignore`에 없으면 한 줄(`.claude_reports/`) 추가한다 (이미 있거나 git repo 가 아니면 skip). OPERATIONS §5.8 의 worktree symlink 가드·`.pipeline-lock` transient 처리도 이 gitignore 전제 위에서 성립. **예외 — `~/.claude` (스킬셋 repo 자신, 2026-06-11 사용자 결정)**: 이 repo 는 `.claude_reports` 를 _커밋한다_ — 세팅 개선의 research·audit·plan 이력이 곧 repo 의 자산 (transient `.pipeline-lock`·`.untracked*` 만 ignore). 스킬셋 본작업도 파이프 경유로 `plans/` 사이클을 남기는 정식 프로젝트로 다룬다.
 
 모든 입력은 _프로젝트 컨텍스트 내부의 영속 산출물_ (`.claude_reports/analysis_project/*`, `.claude_reports/research/{topic}/`)에서 옴. 외부 폴더를 직접 가리키는 flag는 family 에 없음. 외부 raw 자료가 있으면 먼저 `analyze-project --mode {paper|doc}`로 영속 산출물화.
 
@@ -315,104 +315,9 @@ fi
 
 ---
 
-## §5.8. Pipeline Lock — 공유 `.claude_reports` 다중 worktree 가드 (canonical)
+## §5.8~§5.11 → OPERATIONS.md
 
-**왜**: 여러 git worktree 가 _하나의 canonical `.claude_reports` 를 symlink 공유_ 할 때(릴리즈 브랜치 클린 유지 위해 산출물은 gitignore), 두 worktree 가 동시에 `spec/` 공유 단일파일(`prd.md`·`pipeline_state.yaml`·`pipeline_summary.md`)을 쓰면 lost-update. `plans/<cycle>/` 는 사이클별 폴더라 경로 분리 → 비경합(lock 불필요).
-
-- **lock 파일**: `.claude_reports/.pipeline-lock` (공유 트리에 위치 → 모든 worktree 가시). transient — `.claude_reports/` 자체가 gitignore 라 추적 안 됨.
-- **보호 범위**: `spec/prd.md`·`spec/pipeline_state.yaml`·`spec/pipeline_summary.md` _쓰기_ 구간만. 읽기·plans 쓰기는 비-lock.
-- **stale 무시(override)**: 기록 `at` 이 30 분 초과 OR 기록 worktree == 현재 worktree(재진입/잔존 락) → 통과.
-
-**acquire** — 쓰기 진입 _직전_ (autopilot-spec 의 Step 3 / update mode, autopilot-code 의 pipeline_state·summary 쓰기 / spec-drift update):
-
-```bash
-LOCK=.claude_reports/.pipeline-lock; NOW=$(date +%s); WT=$(pwd -P)
-if [ -f "$LOCK" ]; then
-  LAT=$(sed -n 's/^at=//p' "$LOCK"); LWT=$(sed -n 's/^worktree=//p' "$LOCK"); LBR=$(sed -n 's/^branch=//p' "$LOCK")
-  if [ "$LWT" != "$WT" ] && [ $((NOW-${LAT:-0})) -lt 1800 ]; then
-    echo "BLOCKED: '$LBR' ($LWT) 이 $((NOW-LAT))s 전부터 spec 편집 중 — 대기 또는 죽은 락이면 rm $LOCK"; exit 3
-  fi   # same-worktree 또는 stale(>30m) → override 통과
-fi
-printf 'worktree=%s\nbranch=%s\nskill=%s\nat=%s\nat_iso=%s\npid=%s\n' \
-  "$WT" "$(git branch --show-current 2>/dev/null)" "${SKILL:-autopilot}" "$NOW" "$(date -Iseconds)" "$$" > "$LOCK"
-```
-
-`exit 3`(BLOCKED) → 쓰기 _중단_ 하고 "다른 worktree 가 spec 편집 중" 사용자 보고 + 대기/override 판단 요청.
-
-**release** — 파이프 정상 종료 _및_ 중단·에러 시 모두:
-
-```bash
-rm -f .claude_reports/.pipeline-lock
-```
-
-**detect-only** — "지금 spec 수정 중인가?" 단순 조회(메인 Claude 가 spec 손대기 전 확인):
-
-```bash
-[ -f .claude_reports/.pipeline-lock ] && cat .claude_reports/.pipeline-lock || echo "활성 편집 없음"
-```
-
-> 비-worktree(단일 체크아웃) 환경에선 lock 이 항상 same-worktree → 즉시 override, 무해. symlink 공유 worktree 에서만 실질 가드로 작동.
-
-### §5.9. Git working-state preflight (worktree·merge 가드, canonical)
-
-**왜**: §5.8 lock 은 `.claude_reports` _산출물_ 동시쓰기만 막는다. 정작 _실제 `.git` 워킹트리_ — merge/rebase 진행 중인지, dirty 한지, detached HEAD 인지, 같은 브랜치가 다른 worktree 에 잡혀 있는지 — 는 안 본다. 여러 worktree·브랜치로 작업하다 merge 가 끼면 이 자리를 놓쳐 (반쯤 머지된 트리 위에 commit / detached HEAD 에 commit 유실 / 다른 worktree 가 머지로 바꿔놓은 파일 위에 작업) 사고. 코드 손대는 skill(autopilot-code 가 canonical 소비자)은 **코드 편집 _전_ 1회 + 각 commit/write-back _직전_ 재확인**(= 주기적 체크) 한다.
-
-```bash
-# git-state preflight — 코드 편집 전 + 매 commit 직전. STOP 이면 편집·commit 멈추고 사용자 보고
-GD=$(git rev-parse --git-dir 2>/dev/null) || { echo "OK non-git"; return 0 2>/dev/null||exit 0; }
-op=; [ -f "$GD/MERGE_HEAD" ] && op=merge
-{ [ -d "$GD/rebase-merge" ] || [ -d "$GD/rebase-apply" ]; } && op=rebase
-[ -f "$GD/CHERRY_PICK_HEAD" ] && op=cherry-pick
-br=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo DETACHED)
-head=$(git rev-parse --short HEAD 2>/dev/null)
-ahead_behind=$(git rev-list --left-right --count @{u}...HEAD 2>/dev/null)  # "behind  ahead"
-# 같은 브랜치를 잡고 있는 다른 worktree
-elsewhere=$(git worktree list --porcelain 2>/dev/null | awk -v b="$br" '/^worktree /{w=$2} /^branch /{if($2=="refs/heads/"b && w!=ENVIRON["PWD"]) print w}')
-# 브랜치 수명 — 현재 브랜치가 base(기본 브랜치)에 이미 다 반영됐나 (= 끝난 브랜치)
-def=$(git symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@'); def=${def:-main}
-git fetch -q origin "$def" 2>/dev/null
-merged_in=$( [ "$br" != DETACHED ] && [ "$br" != "$def" ] && [ "$(git rev-list --count origin/$def..HEAD 2>/dev/null)" = 0 ] && echo yes )
-if [ -n "$op" ];        then echo "STOP: $op 진행 중 — 해결(또는 --abort) 뒤 진행"; fi
-if [ "$br" = DETACHED ];then echo "STOP: detached HEAD($head) — commit 유실 위험, 브랜치 체크아웃 먼저"; fi
-[ -n "$elsewhere" ] && echo "WARN: 브랜치 '$br' 가 다른 worktree($elsewhere)에도 체크아웃됨"
-[ "${ahead_behind%%	*}" -gt 0 ] 2>/dev/null && echo "WARN: upstream 이 ${ahead_behind%%	*} 커밋 앞섬(머지/리베이스 발생) — 통합 후 진행 권장"
-[ -n "$merged_in" ] && echo "DONE-BRANCH: '$br' 가 origin/$def 에 ahead 0 (머지 완료/끝난 브랜치) — 새 작업은 base 최신에서 새 브랜치로: git switch -c <new-slug> origin/$def"
-echo "state: branch=$br head=$head base=$def dirty=$(git status --porcelain 2>/dev/null|wc -l|tr -d ' ')"
-```
-
-- **STOP** (merge/rebase/cherry-pick 진행 중 · detached HEAD) → 편집·commit 멈추고 사용자 보고 + 처리 요청. 자동으로 `--abort`·강제 체크아웃 하지 않는다. **harness**: merge/rebase/cherry-pick 중 편집은 `hooks/git-state-guard.sh` 가 PreToolUse(Edit|Write) 에서 hard deny — ceremony 비경유 직접 편집 경로까지 커버 (drill g2 가 잡은 구멍, 2026-06-11). 탈출구 `$GITDIR/CLAUDE_MERGE_EDIT_OK` 는 _사용자가 충돌 해결을 명시 요청한 경우만_ — Claude 자가 판단 생성 금지 (artifact-guard untracked 와 동일 convention).
-- **WARN** (다른 worktree 동일 브랜치 · upstream 앞섬 · 진입 시 세션 무관 dirty) → 한 줄 알림 후 진행 판단.
-- **DONE-BRANCH (브랜치 수명)** — worktree 에서 판 브랜치가 base 에 머지되면 그 브랜치는 _끝난 것_. ahead 0 인데 그 위에 새 작업을 쌓으면 이미 머지된 죽은 브랜치에 commit 하는 꼴. **새 작업 cycle 진입 시 ahead 0 (+ base 아님 + 이번 작업용 브랜치가 아님) 이면 base 최신에서 새 브랜치를 판다** — `git fetch origin && git switch -c <slug> origin/$def` (worktree 안전 — base 를 체크아웃하지 않아 main worktree 와 충돌 없음). 이미 이번 작업용으로 갓 판 빈 브랜치면 그대로 사용. **직접 편집(비-ceremony)도 동일** — 죽은 브랜치 워킹트리에 미커밋 변경을 띄워두는 것 자체가 부유물 (drill g1, 2026-06-11: 죽은 브랜치 인지하고도 그 자리서 편집).
-- **periodic 재확인**: 진입 시 `head` 를 기억 → 각 commit 직전 재실행해 `head` 가 바뀌었거나(아래서 머지·리베이스됨) 새 `MERGE_HEAD` 가 생겼으면 STOP. 비-worktree·비-git 자리에선 전부 `OK`/무해 통과.
-
-### §5.10. 작업 격리·병렬 디스패치 (worktree 정책, canonical)
-
-**왜**: 사용자가 요구사항을 연속으로 던질 때 main 세션이 한 건씩 직렬 처리하면 느리다. 실작업(편집·테스트·QA)은 worktree 로 격리해 background 병렬, 조정(triage·분사·보고)만 main 이 맡는다. **확정 제약 (스모크 테스트 2026-06-11)**: 서브에이전트에는 Agent 툴이 노출되지 않는다 — **중첩 1단 한계**. 따라서 오케스트레이션은 항상 main 전담이고, 팀 에이전트는 prompt 에 명시된 worktree 경로에서만 일한다 (Skill·Bash·Edit 는 서브에이전트에서 정상).
-
-**규모 분기** (요청 진입 시 main 이 판정):
-
-| 규모 | 처리 |
-|---|---|
-| 자잘한 단발 (typo·1줄·quick 급 소규모) | main 워킹트리에서 바로 (현행) |
-| 본작업 (qa standard 이상 · plan 추적 대상) | **worktree + 작업 브랜치** — base 최신에서 plan slug 브랜치 (§5.9 DONE-BRANCH 연계), mutation 커밋 누적 |
-| 병렬 요청 (작업 진행 중 새 독립 요청) | 즉시 새 worktree 로 분사 (아래 규칙) — 앞 job 완료를 기다리지 않는다 |
-
-**디스패치 규칙**:
-1. **파일 겹침 triage**: 새 요청이 진행 중 job 과 같은 파일을 건드릴 것으로 추정되면 병렬 금지 — 그 job 뒤에 큐잉 (같은 브랜치에 이어서). 안 겹치면 병렬.
-2. **실행** — worktree 생성 (`git worktree add <path> -b <slug> origin/<base>`, base 선정은 §5.9) 후 두 모드. **`<path>` 명명 규칙 (canonical, 2026-06-12 사용자 확정)**: 형제 디렉토리 `<repo>-wt/<slug>` 로 판다 (예: repo 가 `…/Foo` 면 worktree 는 `…/Foo-wt/<slug>`). statusline 의 `related()` job 필터가 이 `<repo>-wt/` 형식을 형제 worktree 로 인식해 `>_ running` 에 표시한다 — `_worktrees/` 등 다른 접미사는 인식 못 해 분사 job 이 statusline 에서 누락된다. 따라서 `<repo>_worktrees/` 같은 변형 금지, **`-wt/` 단일 표준**.
-   - **경량 (팀 위임)**: 팀 에이전트를 `run_in_background` 분사, prompt 에 작업 루트 명시. 검증도 main 이 같은 경로로 QA 팀 spawn. 작은 단위·빠른 회전용.
-   - **풀 ceremony (headless 분사)**: worktree 안에서 `claude -p "/autopilot-code --qa quick ..."` background — headless 는 _완전한 메인_ 이라 Agent 툴 보유 → 팀 분업·hook·plan 산출물까지 파이프 전부 정상 (Agent 툴의 중첩 1단 제한은 _툴 계층_ 한정, 프로세스 분사는 무관 — 2026-06-11 실증). 주의: ① `--allowedTools` 사전 개방 (중간 질문 불가) ② 비용 = 세팅 세금 ~40k/대 (drill g0 실측) ③ **분사는 main 전용, 깊이 1** — headless 가 또 headless 분사 금지 (폭주 방지) ④ **동시 분사 기본 상한 5대** (사용량 보호 — 초과는 사용자 명시 시만; 3→5 2026-06-22 사용자) ⑤ **분사 프롬프트의 skill 호출은 옵션 풀 명시** — `/autopilot-code --mode dev --qa quick` 식으로 `--mode`·`--qa` 를 명령행에 적는다. statusline 의 `>_ running` 표시가 ps 명령행 파싱이라 명시된 옵션만 보인다 (2026-06-11 — mode 미표시 자리에서 발견) ⑥ **headless 메인 model 은 `--model opus` 고정** — 미지정 시 메인 세션의 모델(fable 등 상위 tier)을 상속해 사용량을 태운다. 분사 메인은 orchestration 중심이라 opus 로 충분, 팀 agent 는 각자 frontmatter model 을 따른다 (2026-06-12 — fable 상속 실측 후 사용자 지시).
-   - **job 레지스트리 (분사 시 의무)**: 분사 직전 `~/.claude/.dispatch/jobs.log` 에 한 줄 append — `<ISO시각>\topen\t<repo>\t<worktree경로>\t<slug>\t<파이프>`. 수확·정리 시 해당 줄의 `open` 을 `done` 으로. 세션이 죽어도 등록부가 남아 당직 7호가 고아 job (open 인데 24h+ 경과 또는 worktree 소멸·유휴) 을 감시한다.
-   - **stealth-death 가드 (분사 후 대기 자리 — 필수, §0.5 결정론)**: ⚠️ hung/crash 한 headless `claude -p` 는 _exit 를 안 해 완료 알림이 영영 안 온다_ → 완료 알림만 믿고 무한 대기하면 silent 하게 시간을 날린다 (2026-06-16 5h 사고). **분사한 background 작업을 기다리는 자리에선 완료 알림에만 의존하지 말고 liveness 를 능동 점검한다**: `bash ~/.claude/utilities/dispatch-liveness.sh` (jobs.log 의 open job 별 세션 transcript mtime 판정 — `ALIVE`(N분 내 갱신) / `SUSPECT`(N분+ 정지 = hang/death 의심) / `DEAD`(transcript 부재), exit 3 = 의심 1+). SUSPECT/DEAD 면 알림 기다리지 말고 transcript tail·dispatch 로그로 진단 → 수확 또는 재분사. 신호 = transcript mtime (pgrep 경로매칭은 흔한 path 가 무관 프로세스에 걸려 false-alive). Workflow 등 harness-native 분사는 알림이 신뢰되지만, `claude -p` 헤드리스는 본 가드 적용. "vigilant 하게 기억" 이 아니라 _스크립트로_ 점검 (§0.5).
-3. **merge = Claude 선별 책임** (2026-06-11 사용자 위임 — 수동 메모 (DB profile record `07_coding_convention`)가 source): 사용자 직접 리뷰 없이 main 이 선별 머지한다. **머지 시점 게이트** — (a) 사용자 머지 신호("합쳐"/"머지해") 또는 (b) 병렬 디스패치로 분사한 background job 수확 자리에서만. **자기 turn 의 본작업 브랜치를 같은 turn 에 self-merge 금지** — 브랜치 + 한 줄 보고로 turn 을 끝내고 main ref 는 불변 (§3 후속 단계 자동 진행에 merge-to-main 은 포함되지 않음). 머지 후에도 작업 브랜치는 같은 turn 에 삭제하지 않는다 (롤백 지점). **worktree 디렉토리는 별개** — 수확(머지+통합 빌드 검증) 완료된 worktree 는 다음 자연 휴지(다음 수확 자리·세션 마무리)에 디렉토리만 제거한다 (브랜치 ref 유지, `git worktree remove` 전 자체 dev 서버 등 고아 프로세스 종료 확인 — NFS lock 잔존 방지. 2026-06-12 worktree 9개 적체에서 사용자 지적). 절차 — `git diff main...<branch>` 로 _실내용_ 확인 → 이미 main 에 진전됐거나 회귀·중복이면 머지 안 함 → 충돌은 양쪽 의도를 해석해 해결 (한쪽 자동 채택·`--force` 금지) → _애매하거나 확정본을 되돌리는 자리면 멈추고 질문_ → 빌드 검증 후 커밋. "전부 합쳐" = 전량 머지가 아니라 선별 머지.
-4. **공유 산출물**: `.claude_reports` 공유 단일파일 쓰기는 §5.8 lock 경유. `plans/<slug>/` 는 경로 분리라 비경합.
-5. **컨텍스트**: job 조정 기록 누적으로 main 컨텍스트 압박 시 post-it handoff 제안 (글로벌 §2).
-
-### §5.11. 지침 repo (`~/.claude`) 커밋·push 정책
-
-지침·규칙·hook·statusline 등 `~/.claude` 파일 수정은 **검증 직후 같은 turn 에 commit + push** — 사용자 별도 신호 불필요 (2026-06-12 사용자 ratify "규칙은 바로 그냥 push 하면 되겠네"). 작업 repo 의 push 는 별개 — deploy 게이트(사용자 신호) 유지.
-
----
+> **이동(2026-06-23)**: Pipeline Lock(§5.8)·Git preflight(§5.9)·worktree dispatch(§5.10)·`~/.claude` push(§5.11) → **[`OPERATIONS.md`](OPERATIONS.md)**. § 번호·anchor 보존(`OPERATIONS.md#59-…`). git 운영 단일 출처.
 
 ## §6. Autopilot-* 흐름 매트릭스 (사용자 호출 단위)
 
@@ -575,76 +480,6 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 | `autopilot-apply` | 대상 artifact 는 `.claude_reports/` 밖 실제 소스 (e.g., `main.tex`). 버전 자리는 git branch + commit (mutation 마다 한 commit) — `_internal/versions/` 자리 X |
 | `autopilot-apply` | 자체 artifact_dir 없음 — `.claude_reports/` _밖_ 실제 source 편집 (git branch 위) + 로그는 cheatsheet artifact 의 `_internal/apply/` |
 
-## §7. 통합 기억 시스템 (canonical)
+## §7 → MEMORY.md
 
-> 흩어졌던 3개 기억면(post-it 단기 · auto-memory 장기 · user_profile 전역)을 **하나의 포터블 store** 로 통합 — Hermes Agent 메모리 벤치마킹(2026-06-15). spec = `.claude_reports/spec/prd.md`, 구현 = `tools/memory/mem.py`. 본 §7 이 단일 출처. **행동양식·운영규율은 메모리가 아니다** — 원칙 문서(CLAUDE.md/CONVENTIONS/WORKFLOW/SKILL). 
-
-### §7.0. store 아키텍처 (개요)
-
-- **store** = `~/.claude/memory/memory.db` (SQLite WAL = 진실원천 SoT, FTS5 내장) + `dump.jsonl`(결정론적 텍스트 mirror, git추적). **전용 private repo `claude-memory`** 로 분리 — config repo(`claude_setting`)에선 `memory/` gitignore. 레코드 = `tier`(working 단기 / durable 장기) × `scope`(project / global) × `type`. (2026-06-15 DB-as-SoT 전환 — 구 markdown 원본 SoT + `.index.db` 파생색인 모델 대체. 복원 = `mem import dump.jsonl`.)
-- **store tier × scope** (DB 가 단일 SoT — 파일 면은 on-demand 뷰):
-
-  | 채널 | store tier/scope | 동기화 |
-  |---|---|---|
-  | `post-it` (DB working tier alias — `/post-it` 스킬이 author) | working/project | `/post-it` → `mem note`/`mem add` → SessionEnd `mem sync` |
-  | `projects/<cwd>/memory/` (내장 file 메모리 — 직접 write 는 `builtin-memory-guard.sh` hard-block) | durable/project | 다른 세션·하네스의 _stray_ write 만 SessionEnd `mem sync` 안전망 흡수 (주 durable 학습은 외부 distiller `mem add` — Cluster C) |
-  | DB `type=profile` 레코드 (cross-project 프로필 SoT) | durable/global (type=profile) | `analyze-user` → `mem add` → `mem sync`; `user_profile/*.md` = on-demand `mem export` 사람 열람 캐시 (SoT 아님) |
-
-- **자체 하네스 (store 가 세션 주입의 source)**: SessionStart hook `mem inject --hook` → store 의 현 cwd working+durable + global profile 을 `additionalContext` 로 주입. SessionEnd hook `mem sync` → 하네스 write 회수 + 색인 재생성. **SessionEnd + turn-counter(UserPromptSubmit N턴) 두 트리거가 공유**하는 `mem-distill-dispatch.sh` → 세션 jsonl 의 공유 marker 이후 구간을 detached `claude -p` distiller(모델 `claude-sonnet-4-6`)로 분사해 working/durable 흡수 자동화(D-12/D-13 통일 worker · 세션당 mkdir lock 동시 1개 · 재귀가드 `MEM_DISTILL=1` 세 hook 다 · distiller LLM 은 도구 0(`--disallowedTools`), JSON-lines 구조화 출력만 내고 dispatch 스크립트가 검증 후 `mem add` 실행(LLM=판단·코드=실행, v8 no-tools — D-14); **단 `MEM_DISTILL_ENABLE=1` opt-in 전엔 no-op** — 매 세션 종료·N턴마다 background LLM 실행 비용 + distiller 가 대화 본문을 권한 모드로 읽는 신뢰경계 확장 때문에 기본 비활성, 사용자가 검토 후 켬). UserPromptSubmit `mem-recall-inject.sh` → 회상 신호어 regex 감지 시 `mem recall` 실행 → `additionalContext` 사전주입(D-15). PreToolUse `builtin-memory-guard.sh` → 내장 file 메모리(`projects/*/memory/`) 직접 Write **hard-block(deny)** → 기억 write 는 `mem` CLI(DB) 단일 경로로 강제. (단일 출처 = `settings.json` hooks.)
-- **회상**: `tools/memory/recall.sh` = `mem recall` thin wrapper — store FTS5 + `--sessions`(raw 대화 jsonl) + `--all`(전 scope). 트리거 = CLAUDE.md §도메인 + §7.4.
-- **CLI**: `mem {add, note, recall, index, sync, inject, export, import, migrate, lifecycle, delete, project, stats, profile, distill, register-postit}` + **γ 큐레이터 `{curate-snapshot, reinforce, merge, prune, graduate, reattribute}`**. (`profile <stem>` = DB type=profile 레코드 body 출력 — read-only; `export --target dump|profile` = DB→git mirror / on-demand 사람 열람 캐시 (SoT 아님); `import <dump.jsonl>` = 복원; `delete <id>` = 단건 결정론 삭제(records+FTS5 3-table) — **사용자-개시**(LLM 미개입) 즉시삭제 경로; `register-postit` = deprecated/legacy-migration-only, skills 에서 더 이상 호출 안 함.) **γ 큐레이터 서브커맨드**(D-18) — `curate-snapshot`(read-only, opus 입력 DATA: durable/working snapshot+SIGNALS+`IDS:` 멤버십) / `reinforce`(strength++, E-1) / `merge`(strength 합산+canonical 외 graveyard+삭제, 원자적) / `prune`(graveyard 백업 **성공 후** 삭제, S1 fail-closed) / `graduate`(working→durable, E-6) / `reattribute`(고아 재귀속, 역게이트). 전부 화이트리스트 게이트(현 프로젝트만; profile·global·타프로젝트·존재안함 거부). distiller(no-tools)는 action JSON 만, script(shell=False)가 argv 로 호출.
-- **불변식 (D-18 갱신)**: 기억 저장 = 자동(품질필터만 — §7.1·§7.2, 사람 승인 게이트 없음). **추가(가역)=외부 distiller/hook 자동 · 삭제·prune·consolidate·merge·graduate(비가역)=세션끝 opus 큐레이터**(full context 보유, no-tools+action JSON+script 실행; worst=비효율, graveyard+dump 로 복구가능) · **메인 housekeeping 0**(inject 정리신호는 informational — 메인이 직접 정리/prune 하지 않음) · N턴 distiller=sonnet add-only · working TTL(21일)=deterministic backstop(2차 안전망). lifecycle = working 시간만료 / durable consolidate(§7.3 lifecycle). (D-17 "삭제=메인" → D-18 "삭제=세션끝 opus" 이전.)
-
-> 위 intro 의 _write 면_ 세부 (무엇을 저장/생략하고 어떻게 쓰는지) 는 §7.1–§7.2, recall 은 §7.4. Hermes `write_approval` 게이트·promote/skip·session_search 벤치마킹(T5/T1).
-
-### §7.1. Promote (저장) vs Skip (생략)
-
-| 저장한다 (promote) | 생략한다 (skip) |
-|---|---|
-| **preferences** — 사용자 선호·작업 방식 (비자명) | **재발견 가능** — 코드·git 이력·CLAUDE.md 에 이미 있는 것 |
-| **conventions** — 코드에 안 드러나는 프로젝트 규약 | **trivial / ephemera** — 이 대화에서만 의미 있는 것 |
-| **corrections** — 사용자 교정 (같은 실수 반복 방지) | **행동양식 변경** — → 원칙 문서 자리 (메모리 X) |
-| **lessons** — 비자명 결정의 _이유·맥락_ | **진행 맥락·handoff** — → `post-it` 자리 |
-| **references** — 외부 자원 포인터(URL·티켓·대시보드) | **stale 확정** — 틀린 것으로 판명 → 저장 말고 기존 것 삭제 |
-
-판단 한 줄: _"다음 세션의 다른 나에게 이게 비자명하게 유용한가, 그리고 코드/이력에서 다시 못 찾는가?"_ 둘 다 yes 면 promote.
-
-### §7.2. Write 연산 (add / replace / remove) + dedup
-
-- 저장 전 기존 메모리 확인 — 같은 사실을 이미 다루는 파일이 있으면 _새 파일 만들지 말고 그 파일 갱신_(replace). 한 사실 = 한 파일(near-duplicate 거부).
-- 틀렸다고 판명된 메모리는 즉시 삭제(remove) — 누적 stale 금지.
-- 관련 메모리는 본문에서 `[[name]]` 로 링크 (DB `links` 컬럼에 저장). DB INSERT 시 FTS5 가상테이블이 자동 색인 — 별도 `MEMORY.md` 인덱스 포인터 write 없음 (MEMORY.md 는 legacy projection 뷰).
-- Hermes 처럼 _capacity 압박 시 consolidation_ 을 원칙으로 — cwd 메모리가 비대해지면 통합·압축(별 파일 난립 대신).
-
-### §7.3. 메모리 _승격_ 제안 한정 (불변식)
-
-oncall self-review nudge(`loops/oncall.md` item 9) 등 _자동_ 자리의 **메모리 승격(promote)·post-it write** 는 후보 **제시까지** — 실제 승격 write 는 사용자 흐름 안에서(`/post-it` 또는 메모리 저장 발화). ※ 이는 _승격_ 축 한정 — 세션끝 opus 큐레이터의 무인 prune/merge/graduate(§7.0)·루프의 되돌림가능+명백한 무인 정리(D-25, [loops/README](loops/README.md):21 가 "출구는 제안까지" 옛 원칙 폐기)와는 적용 축이 다르다.
-
-### §7.4. Recall — on-demand 회상 (canonical, T1 / Hermes session_search 벤치마킹)
-
-세션 시작 시 자동 주입되는 것은 `mem inject` 의 DB 요약 블록 (working+durable+profile) — _요약_ 만 본다 (`MEMORY.md` 는 legacy projection 뷰, 주입원 아님). 요약 블록에 안 잡히는 _과거 메모리 본문_ 이 필요한 자리(과거 결정·교정·컨벤션을 _다시 떠올려야_ 할 때)는 읽기 전용 helper 로 능동 검색한다. **읽기 전용 = 정보 제공일 뿐 — recall 자체는 결정·write 아님(무해, §7.3 게이트와 독립).**
-
-| helper | 용도 | 비고 |
-|---|---|---|
-| `tools/memory/recall.sh "<query>" [--all] [--sessions]` | `mem recall` thin wrapper — store FTS5 색인(bm25 랭킹) 검색, 색인 없으면 LIKE/rg fallback. 현 cwd / `--all`=전 cwd. `--sessions` = raw 세션 transcript(`*.jsonl`)까지 | per-cwd 격리 = 기본 현 cwd. cross-cwd·raw 는 명시 플래그 시만. |
-| `tools/memory/index-check.sh [dir] [--fix]` | *legacy* `projects/<cwd>/memory/` 의 `MEMORY.md` *텍스트 인덱스* drift 점검 전용 (누락·고아). `--fix` = 누락 포인터 _append-only_ | store FTS5 색인(`memory.db` 내장)은 `mem index` 관할 — 별개 대상. 기존 큐레이션 줄 보존 |
-
-**두 검색면 (Hermes session_search 의 두 절반)**: (1) _정제 메모리_(store durable+working, 기본) = `mem recall` 이 SQLite FTS5(bm25 랭킹)로 검색, 색인 없으면 LIKE/rg fallback. Hermes 와 동형으로 수렴. (2) _raw 세션_(`*.jsonl`, `--sessions`) = 메모리로 정제 안 된 과거 대화까지, 노이즈 크니 정제 메모리로 안 나올 때만 보조로.
-
-**언제 recall 하나** — 작업이 _이 프로젝트의 과거 비자명 결정/선호/교정_ 에 닿는데 주입된 인덱스로 안 풀릴 때 (예: "전에 이 모듈 왜 이렇게 정했더라", 같은 실수 반복 회피). 메모리 먼저 → 안 나오면 `--sessions`. 매 턴 습관적 호출 X — 필요 자리에서만(token 절약). 결과는 _현재 코드_ 로 교차검증(메모리는 작성 시점 진실, stale 가능 — 글로벌 메모리 규율과 동일). **단 회상 신호어 자동주입(D-15 `mem-recall-inject.sh` hook)은 별개** — hook 이 신호어 감지 시 결정론적으로 사전주입(메인의 'recall 할까' 판단 제거). 본 절의 '필요 자리에서만'은 hook 범위 밖의 _추가 능동 회상_(`--all`·`--sessions` 등)에 적용.
-
-> per-cwd 격리는 유지된다 — `--all` 은 명시 요청 자리(cross-project 회상)에서만. 인덱스 mass `--fix` 는 live 사용자 데이터(`projects/` gitignored)라 _사용자 흐름_ 에서 실행(자동 자리에선 누락 _보고_ 까지 = oncall 후속 후보).
-
-### §7.5. 결정론 scaffold — 자동 회상 주입(D-15) + 정리후보 노출(D-16)
-
-lifecycle 주변 판단 구조: **감지·탐지=결정론 코드, 삭제·통합 판단=세션끝 opus 큐레이터**(D-18 — D-16 의 "메인 직접 실행"을 세션끝 opus 로 위임; 메인 housekeeping 0).
-
-**D-15 `hooks/mem-recall-inject.sh` (UserPromptSubmit, 읽기 전용):**
-- 회상 신호어 regex `지난번|지난번에|예전에|이전에|전에|그때|저번에|아까` 를 프롬프트에서 감지 → `mem recall <prompt>` 실행 → `additionalContext` 사전주입(메인 컨텍스트 도달 전). 메인의 "recall 할까" 판단을 제거 — B1 완성.
-- 신호어 불일치·recall 결과 없음·`MEM_DISTILL=1`(distiller 재귀) 시 no-op. 읽기 전용 = 어떤 write 도 없음.
-- 주입 상한: `MEM_RECALL_LINES`(기본 12)·`MEM_RECALL_CHARS`(기본 2000) env로 제어.
-
-**D-16 `mem inject` 정리신호 섹션 (SessionStart, 읽기 전용 projection — γ/D-18 에서 informational 로 축소):**
-- `mem inject --hook` 기존 블록 이후, 비어 있지 않을 때만 `## 🧹 정리 신호 (세션끝 opus 큐레이터가 처리 — D-18, 메인 조치 불요)` 섹션 추가: cwd-scoped durable near-dup 그룹(상한 `max_groups=5`) + capacity 초과(`durable > soft_ceiling=80`) + 만료 임박 working(`<= 3일`). 모두 read-only — zero deletes / zero flag writes.
-- **γ/D-18**: 이 섹션은 이제 **informational** — 메인은 *조치하지 않는다* (메인 housekeeping 0). 실제 consolidate/prune/merge/graduate 는 **세션끝 opus 큐레이터**가 `curate-snapshot`(durable snapshot+SIGNALS) 을 보고 action JSON 으로 수행하고, `mem-distill-dispatch.sh` 의 script(shell=False)가 화이트리스트 게이트로 검증·실행한다. (D-17 "삭제=메인" → D-18 "삭제=세션끝 opus" 이전; 정당화: opus capable + full context + worst=비효율(손실 아님, graveyard+dump 복구) + prune/merge 화이트리스트·fail-closed graveyard.)
-
+> **이동(2026-06-23)**: 통합 기억(§7.0~§7.5) → **[`MEMORY.md`](MEMORY.md)**. § 번호 보존. 메모리 단일 출처.

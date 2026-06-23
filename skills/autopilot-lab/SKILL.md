@@ -47,7 +47,7 @@ argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [-
 
 ## Git 워크플로우 — 별도 worktree+실험 브랜치 (원칙, canonical)
 
-**lab 은 main 이 아니라 _전용 worktree + 실험 브랜치_ 에서 진행한다.** 실험 시작 자리(setup, 또는 부모 없는 첫 eval)에서 main 워킹트리를 직접 건드리지 않고, [CONVENTIONS §5.10](../../CONVENTIONS.md) 명명 규칙대로 형제 worktree `<repo>-wt/<exp-slug>` 를 파고 그 안 실험 브랜치(`exp/<slug>` 또는 기존 feature 브랜치)에서 작업한다. 이미 해당 worktree·브랜치가 있으면 재사용.
+**lab 은 main 이 아니라 _전용 worktree + 실험 브랜치_ 에서 진행한다.** 실험 시작 자리(setup, 또는 부모 없는 첫 eval)에서 main 워킹트리를 직접 건드리지 않고, [OPERATIONS §5.10](../../OPERATIONS.md) 명명 규칙대로 형제 worktree `<repo>-wt/<exp-slug>` 를 파고 그 안 실험 브랜치(`exp/<slug>` 또는 기존 feature 브랜치)에서 작업한다. 이미 해당 worktree·브랜치가 있으면 재사용.
 
 ### autopilot-code 의 worktree 와 결정적 차이
 

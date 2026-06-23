@@ -22,7 +22,7 @@ Resolve `$ARG` to a plan file path:
 
 ## Git Safety Checkpoint
 Before any code changes, ensure the working tree is clean and up-to-date:
-0. **git working-state 게이트** ([CONVENTIONS.md §5.9](../../CONVENTIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical)) — 체크포인트 생성 _전_, 그리고 **각 success commit 직전** 재실행. merge/rebase/cherry-pick 진행 중·detached HEAD = STOP(사용자 보고, 자동 abort 안 함); 다른 worktree 동일 브랜치·upstream 앞섬·진입 시 dirty = WARN. 진입 시 `HEAD` 기억 → commit 직전 HEAD 가 바뀌었거나 새 `MERGE_HEAD` 생겼으면(밑에서 머지됨) STOP. worktree 여러 개로 작업하다 merge 끼는 자리를 닫는다.
+0. **git working-state 게이트** ([OPERATIONS.md §5.9](../../OPERATIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical)) — 체크포인트 생성 _전_, 그리고 **각 success commit 직전** 재실행. merge/rebase/cherry-pick 진행 중·detached HEAD = STOP(사용자 보고, 자동 abort 안 함); 다른 worktree 동일 브랜치·upstream 앞섬·진입 시 dirty = WARN. 진입 시 `HEAD` 기억 → commit 직전 HEAD 가 바뀌었거나 새 `MERGE_HEAD` 생겼으면(밑에서 머지됨) STOP. worktree 여러 개로 작업하다 merge 끼는 자리를 닫는다.
 1. Run `git fetch && git pull` to sync with the remote.
    - If pull fails due to merge conflicts: abort the pull (`git merge --abort`), warn the user, and stop. Do NOT proceed with execution.
 2. Run `git status` to check for uncommitted changes.

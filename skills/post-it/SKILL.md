@@ -80,7 +80,7 @@ post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + 
 
 - **project scope**: `python3 ~/.claude/tools/memory/mem.py note "<text>" --type <type>` 으로 working 레코드 write (단축형 권장). 전체형 필요 시: `mem add working <type> "<body>" --scope project` — `<type>` 자리엔 `thread`/`decision`/`convention`/`reference`/`hint` 중 하나. 세션 주입은 `python3 ~/.claude/tools/memory/mem.py inject --hook` 가 DB working 에서 수행 (파일 read 없음).
 - **user scope**: `python3 ~/.claude/tools/memory/mem.py add durable profile <body> --scope global --source user-profile:<stem>` 로 profile 레코드에 merge write. 적재는 sub-agent 가 `python3 ~/.claude/tools/memory/mem.py profile <stem>` 실행 시.
-- **갱신**: `/post-it` 명령 또는 §Proactive 자동 기록 (CLAUDE.md §2 / CONVENTIONS §7 자동 write 불변식 — 저장은 자동, 비가역 prune/삭제만 confirm).
+- **갱신**: `/post-it` 명령 또는 §Proactive 자동 기록 (CLAUDE.md §2 / MEMORY §7 자동 write 불변식 — 저장은 자동, 비가역 prune/삭제만 confirm).
 
 ## 5 카테고리 — type taxonomy (레코드 type 으로 사용)
 

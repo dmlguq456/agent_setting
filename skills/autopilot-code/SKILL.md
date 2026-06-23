@@ -45,11 +45,11 @@ spec 의 `mode` 배열 (단일 또는 복수) 에 따라 자동 활성화:
 
 ### Pre-flight (필수 Step 0): git-state + spec-significance — 코드 손대기 _전_, verdict 보고 강제
 
-**0a. git working-state 게이트 ([CONVENTIONS.md §5.9](../../CONVENTIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical))** — spec 트리아지 _전_, 코드 편집 _전_ 실행. merge/rebase/cherry-pick 진행 중·detached HEAD = **STOP**(사용자 보고, 자동 abort 금지), 다른 worktree 동일 브랜치·upstream 앞섬·세션 무관 dirty = **WARN**. 진입 시 `HEAD` 기억 → **각 commit/write-back 직전 재실행**(주기적 체크)해 HEAD 가 바뀌었거나 새 `MERGE_HEAD` 생겼으면 STOP. 여러 worktree·브랜치+merge 자리에서 §5.8 산출물 lock 이 못 잡는 _실제 repo 상태_ 를 닫는 가드. 비-git·단일 체크아웃은 무해 통과.
+**0a. git working-state 게이트 ([OPERATIONS.md §5.9](../../OPERATIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical))** — spec 트리아지 _전_, 코드 편집 _전_ 실행. merge/rebase/cherry-pick 진행 중·detached HEAD = **STOP**(사용자 보고, 자동 abort 금지), 다른 worktree 동일 브랜치·upstream 앞섬·세션 무관 dirty = **WARN**. 진입 시 `HEAD` 기억 → **각 commit/write-back 직전 재실행**(주기적 체크)해 HEAD 가 바뀌었거나 새 `MERGE_HEAD` 생겼으면 STOP. 여러 worktree·브랜치+merge 자리에서 §5.8 산출물 lock 이 못 잡는 _실제 repo 상태_ 를 닫는 가드. 비-git·단일 체크아웃은 무해 통과.
 
 > **DONE-BRANCH → 새 브랜치 (이 cycle 이 새 작업일 때)**: §5.9 게이트가 `DONE-BRANCH`(현재 브랜치가 base 에 ahead 0 = 머지 완료된 끝난 브랜치) 를 내면, 이 plan 의 slug(`plans/<date>_<slug>/` 와 동일)로 **base 최신에서 새 브랜치를 판 뒤** 코드 작업 진행 — `git fetch origin && git switch -c <slug> origin/<base>` (worktree 안전: base 를 체크아웃 안 해 main worktree 와 비충돌). 현재 브랜치가 이미 이번 작업용 빈 브랜치면 그대로 사용. 죽은(머지된) 브랜치 위에 새 작업을 쌓지 않게 하는 자리 — worktree+merge 워크플로우의 핵심 누락. 한 줄 보고 후 진행.
 
-> **규모 분기 ([CONVENTIONS.md §5.10](../../CONVENTIONS.md#510-작업-격리병렬-디스패치-worktree-정책-canonical))**: 두 축으로 게이트 — 어느 하나라도 본작업이면 worktree.
+> **규모 분기 ([OPERATIONS.md §5.10](../../OPERATIONS.md#510-작업-격리병렬-디스패치-worktree-정책-canonical))**: 두 축으로 게이트 — 어느 하나라도 본작업이면 worktree.
 > - **변경 종류 (qa 레벨 무관, [CLAUDE.md §0(C)](../../CLAUDE.md)·drill g3)**: 기능 추가·모듈 신설·다파일 변경은 **규모·qa 판단 없이 무조건 worktree+작업 브랜치**. main 트리 직접은 typo·1줄급 자잘한 단발만 (qa quick 이어도 다파일이면 worktree — "quick 이니 main" 우회 금지).
 > - **실행 메커니즘 (반쪽 적용 금지 — drill 신설 자리)**: worktree 를 _파 두기만_ 하고 main 에서 autopilot-code 를 in-process(Skill)로 돌리지 않는다. worktree 확보 _즉시_ 그 안으로 **`claude -p` 헤드리스 분사 (§5.10 풀 ceremony) — plan 호출부터 report 까지 통째로 한 세션**. main 은 _정찰(분사 대상 결정)·분사·수확_ 만 (§5.10:389 "조정만 main"). 파이프 스테이지(code-plan·refine·execute)를 main 과 헤드리스로 **쪼개면 헤드리스가 상태 재발굴 + 연속성 상실 = worst of both** — 금지. 단 가벼운 정찰(파일 나열·diff 범위)로 _무엇을 분사할지 결정_ 하는 건 main 정상.
 >
@@ -375,7 +375,7 @@ Otherwise (qa_level != quick), if code-test reports failure (after its internal 
 Invoke Skill: `code-report` with the plan name/path as args.
 
 ### Step 6: Pipeline Summary Report
-> **동시성 가드 (공유 `.claude_reports`)**: `pipeline_summary.md`·`pipeline_state.yaml` 등 `spec/` 공유 단일파일 쓰기 _직전_ **CONVENTIONS.md §5.8** `.pipeline-lock` 획득, 쓰기 직후 해제(짧게 보유). spec-drift 로 prd.md 갱신(§ "Spec 영향 변경 감지" → autopilot-spec update) 시도 lock 경유(해당 skill 이 자체 획득). `plans/<cycle>/` 쓰기는 경로 분리라 비-lock. BLOCKED(`exit 3`) 면 쓰기 멈추고 사용자 보고.
+> **동시성 가드 (공유 `.claude_reports`)**: `pipeline_summary.md`·`pipeline_state.yaml` 등 `spec/` 공유 단일파일 쓰기 _직전_ **OPERATIONS.md §5.8** `.pipeline-lock` 획득, 쓰기 직후 해제(짧게 보유). spec-drift 로 prd.md 갱신(§ "Spec 영향 변경 감지" → autopilot-spec update) 시도 lock 경유(해당 skill 이 자체 획득). `plans/<cycle>/` 쓰기는 경로 분리라 비-lock. BLOCKED(`exit 3`) 면 쓰기 멈추고 사용자 보고.
 
 Write `pipeline_summary.md` per the **Pipeline Summary Template (mode=dev)** (see below).
 Then report to the user: pipeline_summary.md path + 2-3 line verdict.

@@ -754,7 +754,7 @@ def index_build(rebuild=False):
 # ---------- recall ----------
 
 # 회상 신호어 집합 — hooks/mem-recall-inject.sh L45 PAT 와 동일 리터럴 집합 (개념적 단일출처).
-# 추가 시 hook PAT + 여기 + CONVENTIONS §7.5 를 동시 갱신 (Risk 11).
+# 추가 시 hook PAT + 여기 + MEMORY §7.5 를 동시 갱신 (Risk 11).
 _RECALL_SIGNAL_WORDS = frozenset({
     "지난번", "지난번에", "예전에", "이전에", "전에", "그때", "저번에", "아까",
 })
