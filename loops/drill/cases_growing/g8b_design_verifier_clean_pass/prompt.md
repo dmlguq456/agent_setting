@@ -1,0 +1,1 @@
+이 디자인 산출물(preview.html)을 verifier 로 검수하고, 판정(verdict + breakage + 실패 항목 reason)을 repo 루트 verifier_out.md 에 기록해줘 — 콘솔·레이아웃 깨짐 점검.
