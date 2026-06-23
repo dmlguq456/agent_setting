@@ -1,7 +1,12 @@
 ---
 name: design-init
-description: Design environment check and bootstrap — self-provisions the Design MCP server (~/.claude/tools/design-mcp: install → claude mcp add → npm run smoke) that powers visual self-verification, plus optional Figma MCP, shadcn/ui, Tailwind tokens, SVG rasterizer, image-gen MCP. Per spec §0.5 it installs what is missing rather than stopping. Creates design_state.yaml.
+description: "Design environment check and bootstrap — self-provisions the Design MCP server (~/.claude/tools/design-mcp: install → claude mcp add → npm run smoke) that powers visual self-verification, plus optional Figma MCP, shadcn/ui, Tailwind tokens, SVG rasterizer, image-gen MCP. Per spec §0.5 it installs what is missing rather than stopping. Creates design_state.yaml."
 argument-hint: "<design task description> [--scope ui|slide|icon|diagram|mixed]"
+metadata:
+  group: sub
+  fam: sub
+  modes: []
+  blurb: "디자인 MCP·환경 bootstrap + design_state.yaml 생성 sub-skill"
 ---
 
 ## Language Rule

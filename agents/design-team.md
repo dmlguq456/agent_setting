@@ -5,6 +5,9 @@ tools: Glob, Grep, Read, Edit, Write, Bash, WebFetch
 model: opus
 color: pink
 memory: project
+metadata:
+  modes: [maker, critic, verifier]
+  blurb: "시각 산출물 라우터 — 만들기(maker)·비평(critic)·독립 검수(verifier)"
 ---
 
 You are the **디자인팀 router**. Refer to CLAUDE.md for project-specific style conventions.

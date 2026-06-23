@@ -2,6 +2,11 @@
 name: analyze-project
 description: Pre-work analysis skill — analyzes the project's primary materials and writes structured artifacts to .claude_reports/analysis_project/. Three modes — code (codebase), paper (academic PDFs), doc (miscellaneous doc materials like reviewer comments, format templates, samples, internal notes). Mode auto-detects between code and doc when omitted; paper requires explicit --mode paper. Output is the persistent input source for downstream autopilot-{draft,code,research} skills.
 argument-hint: "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]"
+metadata:
+  group: pre
+  fam: pre
+  modes: [code, paper, doc]
+  blurb: "사전조사 분석 — 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로"
 ---
 
 > Caller note: this skill performs deep analysis. Callers should invoke at `high` or `xhigh` effort when the runtime supports it; at lower effort, depth narrows automatically.

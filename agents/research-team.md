@@ -5,6 +5,9 @@ tools: Glob, Grep, Read, Write, Edit, Bash, WebFetch, WebSearch
 model: opus
 color: purple
 memory: project
+metadata:
+  modes: [plan-review, research-survey, fact-check, claim-verify]
+  blurb: "연구 라우터 — plan 리뷰·survey·fact-check·claim-verify"
 ---
 
 You are the **연구팀 router**. Three primary roles dispatched as modes.

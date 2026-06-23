@@ -1,0 +1,631 @@
+{
+  "generated_from": "~/.claude harness definitions (skills/*/SKILL.md, agents/*.md, loops/README.md, settings.json)",
+  "skills": [
+    {
+      "slug": "skill__analyze-project",
+      "name": "analyze-project",
+      "group": "pre",
+      "fam": "pre",
+      "modes": [
+        "code",
+        "paper",
+        "doc"
+      ],
+      "blurb": "사전조사 분석 — 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로",
+      "argument_hint": "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]"
+    },
+    {
+      "slug": "skill__analyze-user",
+      "name": "analyze-user",
+      "group": "pre",
+      "fam": "pre",
+      "modes": [
+        "init",
+        "update"
+      ],
+      "blurb": "cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출",
+      "argument_hint": "<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]"
+    },
+    {
+      "slug": "skill__audit",
+      "name": "audit",
+      "group": "ops",
+      "fam": "ops",
+      "modes": [],
+      "blurb": "산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고",
+      "argument_hint": "<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]"
+    },
+    {
+      "slug": "skill__autopilot-apply",
+      "name": "autopilot-apply",
+      "group": "entry",
+      "fam": "doc",
+      "modes": [],
+      "blurb": "cheatsheet 초안을 canonical main.tex 에 paste·반영하는 적용 entry",
+      "argument_hint": "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]"
+    },
+    {
+      "slug": "skill__autopilot-code",
+      "name": "autopilot-code",
+      "group": "entry",
+      "fam": "code",
+      "modes": [
+        "dev",
+        "debug",
+        "audit"
+      ],
+      "blurb": "코드 작업 일반 entry — 라이브러리·연구·앱 모두 커버, spec 컨텍스트 자동 감지",
+      "argument_hint": "--mode dev|debug <task/plan/error description> [--from <step>] [--qa quick|light|standard|thorough|adversarial] [--user-refine]"
+    },
+    {
+      "slug": "skill__autopilot-design",
+      "name": "autopilot-design",
+      "group": "entry",
+      "fam": "design",
+      "modes": [],
+      "blurb": "시각 산출물 디자인 파이프 entry — 토큰·컴포넌트·레퍼런스·핸드오프 통합",
+      "argument_hint": "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--qa quick|standard|thorough]"
+    },
+    {
+      "slug": "skill__autopilot-draft",
+      "name": "autopilot-draft",
+      "group": "entry",
+      "fam": "doc",
+      "modes": [
+        "paper",
+        "presentation",
+        "doc"
+      ],
+      "blurb": "문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태",
+      "argument_hint": "<task description> [--mode paper|presentation|doc] [--qa quick|light|standard|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
+    },
+    {
+      "slug": "skill__autopilot-lab",
+      "name": "autopilot-lab",
+      "group": "entry",
+      "fam": "code",
+      "modes": [
+        "setup",
+        "eval"
+      ],
+      "blurb": "빠른 실험 prototype entry — 학습 세팅(setup)과 ckpt 평가(eval) 앞뒤를 돕는다",
+      "argument_hint": "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--qa quick|light|standard|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
+    },
+    {
+      "slug": "skill__autopilot-note",
+      "name": "autopilot-note",
+      "group": "entry",
+      "fam": "ops",
+      "modes": [],
+      "blurb": "산출물 라우팅 파이프 entry — 2-Layer 노트화·digest·triage 제안",
+      "argument_hint": "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--qa quick|light|standard|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>] [--no-fact-check]"
+    },
+    {
+      "slug": "skill__autopilot-refine",
+      "name": "autopilot-refine",
+      "group": "entry",
+      "fam": "doc",
+      "modes": [],
+      "blurb": "기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존",
+      "argument_hint": "\"<prompt>\" [--qa quick|light|standard|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
+    },
+    {
+      "slug": "skill__autopilot-research",
+      "name": "autopilot-research",
+      "group": "entry",
+      "fam": "pre",
+      "modes": [
+        "academic",
+        "technology",
+        "market"
+      ],
+      "blurb": "세 family 공통 사전조사 — 논문·기술·시장 survey 후 다운스트림으로 분기하는 entry",
+      "argument_hint": "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--qa quick|light|standard|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]"
+    },
+    {
+      "slug": "skill__autopilot-ship",
+      "name": "autopilot-ship",
+      "group": "entry",
+      "fam": "app",
+      "modes": [],
+      "blurb": "앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트",
+      "argument_hint": "<task description (선택)> [--qa quick|light|standard|thorough]"
+    },
+    {
+      "slug": "skill__autopilot-spec",
+      "name": "autopilot-spec",
+      "group": "entry",
+      "fam": "code",
+      "modes": [
+        "app",
+        "library",
+        "api",
+        "cli",
+        "research",
+        "update"
+      ],
+      "blurb": "요구사항·청사진 작성·갱신 entry — prd.md 단일 출처, 모든 spec 변경의 canonical 경로",
+      "argument_hint": "<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--qa quick|light|standard|thorough] [--user-refine]"
+    },
+    {
+      "slug": "skill__code-execute",
+      "name": "code-execute",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "plan 단계별 구현 실행 — 개발팀 디스패치 sub-skill",
+      "argument_hint": "<plan name or path>"
+    },
+    {
+      "slug": "skill__code-plan",
+      "name": "code-plan",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "코드 분석 후 상세 구현 plan 작성 — 기획팀 경유 sub-skill",
+      "argument_hint": "<task description> [--qa quick|light|standard|thorough|adversarial]"
+    },
+    {
+      "slug": "skill__code-refine",
+      "name": "code-refine",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "사용자 메모·QA 피드백 반영해 기존 plan 정정 — sub-skill",
+      "argument_hint": "<plan name or path> [--qa quick|light|standard|thorough|adversarial]"
+    },
+    {
+      "slug": "skill__code-report",
+      "name": "code-report",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "코드 작업 사이클 결과 요약·보고 sub-skill",
+      "argument_hint": "<plan name or path>"
+    },
+    {
+      "slug": "skill__code-test",
+      "name": "code-test",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "구현 결과 단계별 검증 — 품질관리팀 test 모드 sub-skill",
+      "argument_hint": "<plan name, path, or test scope>"
+    },
+    {
+      "slug": "skill__design-components",
+      "name": "design-components",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "UI 컴포넌트 mockup·구현 sub-skill",
+      "argument_hint": "<design path or app path>"
+    },
+    {
+      "slug": "skill__design-handoff",
+      "name": "design-handoff",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "디자인 → 개발 핸드오프 자산·스펙 정리 sub-skill",
+      "argument_hint": "<design path or app path>"
+    },
+    {
+      "slug": "skill__design-init",
+      "name": "design-init",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "디자인 MCP·환경 bootstrap + design_state.yaml 생성 sub-skill",
+      "argument_hint": "<design task description> [--scope ui|slide|icon|diagram|mixed]"
+    },
+    {
+      "slug": "skill__design-refs",
+      "name": "design-refs",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "레퍼런스 시각 자료 수집·정리 sub-skill",
+      "argument_hint": "<design task> [--design <path>] [--refs <image paths>] [--no-web]"
+    },
+    {
+      "slug": "skill__design-review",
+      "name": "design-review",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "디자인 결과물 6축 비평·토큰 계약 점검 sub-skill",
+      "argument_hint": "<design path or app path>"
+    },
+    {
+      "slug": "skill__design-tokens",
+      "name": "design-tokens",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "디자인 토큰(색·타이포·간격) 정의·생성 sub-skill",
+      "argument_hint": "<design path or app path>"
+    },
+    {
+      "slug": "skill__draft-refine",
+      "name": "draft-refine",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [],
+      "blurb": "초안 정련·다듬기 sub-skill — 편집팀 검수 경유",
+      "argument_hint": "<strategy or draft name or path> [--qa quick|light|standard|thorough|adversarial]"
+    },
+    {
+      "slug": "skill__draft-strategy",
+      "name": "draft-strategy",
+      "group": "sub",
+      "fam": "sub",
+      "modes": [
+        "rebuttal",
+        "paper",
+        "review",
+        "report",
+        "proposal",
+        "presentation"
+      ],
+      "blurb": "문서 전략 초안 작성 — 6 모드(rebuttal·paper·review·report·proposal·presentation) sub-skill",
+      "argument_hint": "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--qa quick|light|standard|thorough|adversarial] <task description>"
+    },
+    {
+      "slug": "skill__post-it",
+      "name": "post-it",
+      "group": "ops",
+      "fam": "ops",
+      "modes": [],
+      "blurb": "프로젝트·cross-project 기록·handoff — 세션 간 연속성 working 메모",
+      "argument_hint": "[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]"
+    },
+    {
+      "slug": "skill__sync-skills",
+      "name": "sync-skills",
+      "group": "ops",
+      "fam": "ops",
+      "modes": [],
+      "blurb": "skills·agents 정의 변경 감지 후 README 대시보드·manifest 동기화",
+      "argument_hint": "[--check] [--force] [--auto-fix [--dry-run]]"
+    }
+  ],
+  "agents": [
+    {
+      "slug": "agent__codex-review-team",
+      "name": "codex-review-team",
+      "model": "opus",
+      "modes": [
+        "review",
+        "adversarial-review",
+        "task"
+      ],
+      "blurb": "Codex CLI 위임 코드 리뷰 — review·adversarial-review·task 를 QA 포맷으로"
+    },
+    {
+      "slug": "agent__design-team",
+      "name": "디자인팀",
+      "model": "opus",
+      "modes": [
+        "maker",
+        "critic",
+        "verifier"
+      ],
+      "blurb": "시각 산출물 라우터 — 만들기(maker)·비평(critic)·독립 검수(verifier)"
+    },
+    {
+      "slug": "agent__dev-team",
+      "name": "개발팀",
+      "model": "sonnet",
+      "modes": [
+        "backend",
+        "frontend",
+        "refactor",
+        "new-lib"
+      ],
+      "blurb": "코드 작업 라우터 — backend·frontend·refactor·new-lib 페르소나 분기"
+    },
+    {
+      "slug": "agent__editorial-team",
+      "name": "편집팀",
+      "model": "opus",
+      "modes": [
+        "translate",
+        "polish",
+        "review"
+      ],
+      "blurb": "사용자가 직접 읽는 산출물 점검·수정 — 번역·다듬기·검토"
+    },
+    {
+      "slug": "agent__material-team",
+      "name": "자료팀",
+      "model": "opus",
+      "modes": [
+        "browser-fetch",
+        "pdf-extract",
+        "web-image-search",
+        "figure-gen",
+        "data-script"
+      ],
+      "blurb": "자료 수집·시각·분석 라우터 — fetch·PDF·이미지검색·figure·데이터스크립트"
+    },
+    {
+      "slug": "agent__plan-team",
+      "name": "기획팀",
+      "model": "opus",
+      "modes": [],
+      "blurb": "소스 코드 분석 후 구현 plan 작성·정련 — code-plan·code-refine 경유"
+    },
+    {
+      "slug": "agent__qa-team",
+      "name": "품질관리팀",
+      "model": "opus",
+      "modes": [
+        "code-review",
+        "plan-review",
+        "test",
+        "ml-debug",
+        "data-curate",
+        "security-review"
+      ],
+      "blurb": "QA 라우터 — 코드·plan 리뷰·test·ML 디버그·데이터 정제·보안 검토"
+    },
+    {
+      "slug": "agent__research-team",
+      "name": "연구팀",
+      "model": "opus",
+      "modes": [
+        "plan-review",
+        "research-survey",
+        "fact-check",
+        "claim-verify"
+      ],
+      "blurb": "연구 라우터 — plan 리뷰·survey·fact-check·claim-verify"
+    }
+  ],
+  "hooks": [
+    {
+      "slug": "hook__herdr-agent-state__PermissionRequest",
+      "name": "herdr-agent-state blocked",
+      "mono": "herdr-agent-state",
+      "event": "PermissionRequest",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__design-postwrite__PostToolUse",
+      "name": "design-postwrite",
+      "mono": "design-postwrite",
+      "event": "PostToolUse",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__spec-read-marker__PostToolUse",
+      "name": "spec-read-marker",
+      "mono": "spec-read-marker",
+      "event": "PostToolUse",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__artifact-guard__PreToolUse",
+      "name": "artifact-guard",
+      "mono": "artifact-guard",
+      "event": "PreToolUse",
+      "hard_block": true
+    },
+    {
+      "slug": "hook__builtin-memory-guard__PreToolUse",
+      "name": "builtin-memory-guard",
+      "mono": "builtin-memory-guard",
+      "event": "PreToolUse",
+      "hard_block": true
+    },
+    {
+      "slug": "hook__git-state-guard__PreToolUse",
+      "name": "git-state-guard",
+      "mono": "git-state-guard",
+      "event": "PreToolUse",
+      "hard_block": true
+    },
+    {
+      "slug": "hook__herdr-agent-state__PreToolUse",
+      "name": "herdr-agent-state working",
+      "mono": "herdr-agent-state",
+      "event": "PreToolUse",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__spec-skill-gate__PreToolUse",
+      "name": "spec-skill-gate",
+      "mono": "spec-skill-gate",
+      "event": "PreToolUse",
+      "hard_block": true
+    },
+    {
+      "slug": "hook__herdr-agent-state__SessionEnd",
+      "name": "herdr-agent-state release",
+      "mono": "herdr-agent-state",
+      "event": "SessionEnd",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__mem-distill-dispatch__SessionEnd",
+      "name": "mem-distill-dispatch",
+      "mono": "mem-distill-dispatch",
+      "event": "SessionEnd",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__mem.py__SessionEnd",
+      "name": "mem.py sync",
+      "mono": "mem.py",
+      "event": "SessionEnd",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__herdr-agent-state__SessionStart",
+      "name": "herdr-agent-state idle",
+      "mono": "herdr-agent-state",
+      "event": "SessionStart",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__mem.py__SessionStart",
+      "name": "mem.py inject",
+      "mono": "mem.py",
+      "event": "SessionStart",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__workflow-guard-hook__SessionStart",
+      "name": "workflow-guard-hook",
+      "mono": "workflow-guard-hook",
+      "event": "SessionStart",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__herdr-agent-state__Stop",
+      "name": "herdr-agent-state idle",
+      "mono": "herdr-agent-state",
+      "event": "Stop",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__herdr-agent-state__UserPromptSubmit",
+      "name": "herdr-agent-state working",
+      "mono": "herdr-agent-state",
+      "event": "UserPromptSubmit",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__mem-briefing-inject__UserPromptSubmit",
+      "name": "mem-briefing-inject",
+      "mono": "mem-briefing-inject",
+      "event": "UserPromptSubmit",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__mem-recall-inject__UserPromptSubmit",
+      "name": "mem-recall-inject",
+      "mono": "mem-recall-inject",
+      "event": "UserPromptSubmit",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__mem-turn-nudge__UserPromptSubmit",
+      "name": "mem-turn-nudge",
+      "mono": "mem-turn-nudge",
+      "event": "UserPromptSubmit",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__workflow-guard-hook__UserPromptSubmit",
+      "name": "workflow-guard-hook",
+      "mono": "workflow-guard-hook",
+      "event": "UserPromptSubmit",
+      "hard_block": false
+    }
+  ],
+  "loops": [
+    {
+      "slug": "loop__drill",
+      "name": "모의훈련",
+      "mono": "drill",
+      "type": "event",
+      "schedule": "지침 _행동규칙_ 수정 후 `drill/run.sh` (정기 회귀 `--sample 2` 랜덤 2개 · 가드/라우팅 대폭 변경 시만 관련 케이스·전수 — 매번 전수는 과부하)",
+      "blurb": "fixture 가상 상황에서 headless **시험·채점** + FAIL 시 **진단·수정안 초안** 자동 작성(적용 X)",
+      "output_path": "`drill/results/<일시>/` (+ `<case>.diagnosis.md`)",
+      "layer": "L4"
+    },
+    {
+      "slug": "loop__note",
+      "name": "일지",
+      "mono": "note",
+      "type": "time",
+      "schedule": "cron 05:03",
+      "blurb": "worklog-board L2 **노트화·라우팅** (idempotent)",
+      "output_path": "`notes/_layer2/notes/` + digest",
+      "layer": "L3"
+    },
+    {
+      "slug": "loop__oncall",
+      "name": "당직",
+      "mono": "oncall",
+      "type": "time",
+      "schedule": "cron 05:37",
+      "blurb": "야간 순찰 — 이상 **발견·보고만**",
+      "output_path": "`notes/oncall/<date>.md` (당직 보고서)",
+      "layer": "L3"
+    },
+    {
+      "slug": "loop__study",
+      "name": "연수",
+      "mono": "study",
+      "type": "time",
+      "schedule": "cron 일요일 06:17",
+      "blurb": "agent engineering 신간·Claude Code 변경 조사 → 세팅 대조 → **개선 제안서만** (🔴 한정 **자동 초안** 동반) (+ g0 세금 추세)",
+      "output_path": "`notes/study/<date>.md`",
+      "layer": "L4"
+    }
+  ],
+  "tracks": [
+    {
+      "id": "research-lab",
+      "label": "연구·실험",
+      "color_token": "--cat-1",
+      "steps": [
+        "skill__analyze-project",
+        "skill__autopilot-research",
+        "skill__autopilot-spec",
+        "skill__autopilot-code",
+        "skill__autopilot-lab"
+      ],
+      "gates": [
+        "artifact-guard:after-research",
+        "artifact-guard:after-spec"
+      ]
+    },
+    {
+      "id": "library",
+      "label": "라이브러리·CLI",
+      "color_token": "--cat-5",
+      "steps": [
+        "skill__analyze-project",
+        "skill__autopilot-spec",
+        "skill__autopilot-code"
+      ],
+      "gates": [
+        "artifact-guard:after-analyze",
+        "artifact-guard:after-spec"
+      ]
+    },
+    {
+      "id": "document",
+      "label": "문서",
+      "color_token": "--cat-2",
+      "steps": [
+        "skill__analyze-project",
+        "skill__autopilot-research",
+        "skill__autopilot-draft",
+        "skill__autopilot-refine",
+        "skill__autopilot-apply"
+      ],
+      "gates": [
+        "artifact-guard:after-research"
+      ]
+    },
+    {
+      "id": "app",
+      "label": "앱",
+      "color_token": "--cat-3",
+      "steps": [
+        "skill__autopilot-spec",
+        "skill__autopilot-design",
+        "skill__autopilot-code",
+        "skill__autopilot-ship"
+      ],
+      "gates": [
+        "artifact-guard:after-spec"
+      ]
+    }
+  ]
+}

@@ -5,6 +5,9 @@ tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch
 model: opus
 color: yellow
 memory: project
+metadata:
+  modes: [browser-fetch, pdf-extract, web-image-search, figure-gen, data-script]
+  blurb: "자료 수집·시각·분석 라우터 — fetch·PDF·이미지검색·figure·데이터스크립트"
 ---
 
 # 자료팀 라우터

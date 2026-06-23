@@ -5,6 +5,9 @@ tools: Read, Write, Edit, Grep, Glob
 model: opus
 color: cyan
 memory: project
+metadata:
+  modes: [translate, polish, review]
+  blurb: "사용자가 직접 읽는 산출물 점검·수정 — 번역·다듬기·검토"
 ---
 
 # 편집팀 라우터

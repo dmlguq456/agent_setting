@@ -2,6 +2,11 @@
 name: design-tokens
 description: Design tokens decision — color palette, typography scale, spacing scale, radius, shadow, motion. Writes tokens.css / tailwind.config.ts. Extends existing tokens (never silently overwrites). Versions every change — snapshots prior tokens to _internal/versions/v{N}/ + logs reason to design_summary.md (mirrors spec versioning), so later token edits stay traceable.
 argument-hint: "<design path or app path>"
+metadata:
+  group: sub
+  fam: sub
+  modes: []
+  blurb: "디자인 토큰(색·타이포·간격) 정의·생성 sub-skill"
 ---
 
 ## Language Rule

@@ -2,6 +2,11 @@
 name: autopilot-apply
 description: "Autopilot family — the document-side _apply + verify_ arm. Takes a draft-produced cheatsheet (a mutation/edit plan) and applies it to a real working source file _outside_ `.claude_reports/` (e.g. the user's `main.tex`), under git, with a build/compile verify gate. This is the missing counterpart to autopilot-draft: draft _produces_ the cheatsheet (plan), autopilot-apply _executes_ it on the canonical source and _verifies_ it compiles — mirroring code-execute + code-test on the code side. Default target `latex` (latexmk compile gate + latexdiff rendered-diff review). Never touches the canonical source directly: applies on a git branch (or worktree), each mutation = one commit, hands back via `git merge`. Cheatsheet auto-discovered from `.claude_reports/documents/*/draft/`. NOT for `.claude_reports/` markdown artifacts (use autopilot-refine) or codebases (use autopilot-code)."
 argument-hint: "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]"
+metadata:
+  group: entry
+  fam: doc
+  modes: []
+  blurb: "cheatsheet 초안을 canonical main.tex 에 paste·반영하는 적용 entry"
 ---
 
 > **산출물 폴더 컨벤션**: 본 skill 은 _.claude_reports/ 밖의 실제 작업 파일_ 을 편집한다 (예외적). 자기 로그·스냅샷은 cheatsheet artifact 의 `_internal/apply/` 하위에 둔다 ([CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) T3).

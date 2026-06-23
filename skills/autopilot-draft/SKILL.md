@@ -2,6 +2,11 @@
 name: autopilot-draft
 description: "Document draft pipeline — analyze → strategy → strategy-refine → draft → draft-refine → finalize. NOTE: in `paper` mode 'draft' means a **paste-ready cheatsheet draft** — a set of LaTeX paste-ready cards (a mutation/edit plan the user pastes into the canonical main.tex via autopilot-apply), NOT blank-page body writing. 'draft' = the *cheatsheet draft*, regardless of whether the paper is new or already complete. 3 modes by output form: `paper` (LaTeX academic output, always produced as a paste-ready cheatsheet draft that autopilot-apply pastes into main.tex — new-body cheatsheet entries for an initial submission/thesis/book chapter, edit/mutation cheatsheet entries for camera-ready/major-revision of an existing body) / `presentation` (slide-by-slide markdown for PPT) / `doc` (prose for Word/HWP/markdown — reports·proposals·rebuttal responses·peer reviews·tech blogs·memos). Mode is form-first; purpose/genre is conveyed via natural-language task description (no subtype enum). All inputs implicitly discovered from `.claude_reports/{analysis_project,research}/*` — pre-process external materials via `/analyze-project --mode {paper|doc}` first (cwd 자동 발견). Format specs auto-loaded from `analysis_project/doc/{matching}/formats/` — no explicit `--format-ref` flag. Mode-specific conventions live in `## Mode-Specific Conventions` (§Common + §paper / §presentation / §doc). `presentation` produces markdown only (PPTX export NOT supported — use PowerPoint directly)."
 argument-hint: "<task description> [--mode paper|presentation|doc] [--qa quick|light|standard|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
+metadata:
+  group: entry
+  fam: doc
+  modes: [paper, presentation, doc]
+  blurb: "문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태"
 ---
 
 ## First Principle — draft 의 산출물은 "최종 문서" 가 아니다

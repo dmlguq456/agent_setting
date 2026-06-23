@@ -2,6 +2,11 @@
 name: code-execute
 description: Execute an implementation plan with progress tracking
 argument-hint: "<plan name or path>"
+metadata:
+  group: sub
+  fam: sub
+  modes: []
+  blurb: "plan 단계별 구현 실행 — 개발팀 디스패치 sub-skill"
 ---
 
 ## Plan Resolution (canonical — keep in sync with code-execute, code-test, code-report, code-refine, autopilot-code)

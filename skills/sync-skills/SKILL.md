@@ -2,6 +2,11 @@
 name: sync-skills
 description: "Skills + Agents 정의 변경을 감지해 ~/.claude/README.md (GitHub) 의 대시보드 (워크플로우 map + cheat-sheet + 통합 가이드라인) 를 동기화한다. drift 체크 전용 모드도 지원."
 argument-hint: "[--check] [--force] [--auto-fix [--dry-run]]"
+metadata:
+  group: ops
+  fam: ops
+  modes: []
+  blurb: "skills·agents 정의 변경 감지 후 README 대시보드·manifest 동기화"
 ---
 
 ## Language Rule
@@ -36,7 +41,7 @@ argument-hint: "[--check] [--force] [--auto-fix [--dry-run]]"
 2. **상태 파일**: `~/.claude/skills/.sync_state.json` — 각 입력 파일의 SHA-256, README sync 시각
 
 ## Argument Parsing
-- `--check`: drift 만 보고하고 종료. 쓰기 작업 X.
+- `--check`: drift 만 보고하고 종료. 쓰기 작업 X. (manifest drift 도 함께 검사 — `python3 tools/build-manifest.py --check`; 비-0 exit = `manifest.json` 이 현행 정의와 어긋남. Step 3 drift report / Step 7 final report 에 노출.)
 - `--force`: SHA 가 같아도 재생성 (포맷 일괄 적용·서식 수정에 사용).
 - `--auto-fix`: Step 5b 에서 발견한 cross-doc invariant drift 를 `CONVENTIONS.md` canonical wording 으로 자동 교체 (default 는 report-only). `--dry-run` 과 조합 시 미리보기.
 
@@ -125,7 +130,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
    - `### (1) 자연어 발화` — prose (옵션 자동 구성 + 자연어 요약 컨펌 + yes/수정/cancel/자율 진행 + ceremony 큰 (autopilot-\* 전체 + analyze-user) vs 작은 3 컨펌 의무) + [`CLAUDE.md`](CLAUDE.md) §0 reference + **자연어 발화 예시 표** (_사람 유지 영역_)
    - `### (2) slash 직접 입력` — prose (의도 명시 = 즉시 invoke) + slash 예시 code block (_축약 5 줄_: autopilot-code / autopilot-draft / autopilot-refine / audit / **track**(📌↔⚡ 토글) — argument-hint 에서 자동 생성, 전체 syntax dump X) + 전체 옵션은 SKILL.md reference.
 8. **🤝 Agents** — name (agent .md 링크) / 모델 / _의의_ 표 (_자동 호출자·역할 dump X_) + 직접 호출 안내 한 단락 + 사용자 프로필 참조 매트릭스는 [`MEMORY.md §7.6`](MEMORY.md) reference (대시보드 README 에 매트릭스 표 _넣지 않음_).
-9. **📚 더 깊이 + 🔁 동기화** — canonical 문서 reference index 표 (**MANUAL**(앞층 사용자 지도) / CLAUDE.md / WORKFLOW / CONVENTIONS / **OPERATIONS**(git·worktree·dispatch·push §5.8~5.11) / **MEMORY**(통합 기억 §7 + 프로필 매트릭스 §7.6) / DESIGN_PRINCIPLES + **harness 행**: `hooks/`(생성순서·git상태·spec게이트·디자인·**메모리 4종**: `builtin-memory-guard`·`mem-recall-inject`·`mem-turn-nudge`·`mem-distill-dispatch`)·`utilities/`·`statusline.sh`·`tools/memory`(통합 기억 store + `mem inject`/`mem sync`, MEMORY §7) + **loops 행**: `loops/README.md` — **현역 루프·호칭은 `loops/README.md` 현역 표가 단일 출처** (cron runner 가 `loops/` 밖[worklog-board cron 등]으로 이동한 현역 루프도 포함 — "`loops/` 파일 부재 = 루프 부재" 아님); §10 파일 트리만 `loops/` 실제 파일을 나열) + `/sync-skills` 두 명령 + GitHub 링크. **[§9 harness 의도]** hooks 카운트 hardcode 금지 — 카테고리 묶음(생성순서·git상태·spec게이트·디자인·메모리 4종)으로 표기. memory hook 4종 병기 필수. **[§9 loops 의도]** 현역 루프 판정은 `loops/README.md` 현역 표 기준(runner 외부 이동 케이스 포함) — `ls loops/` 파일 유무로 현역 여부 판정 금지.
+9. **📚 더 깊이 + 🔁 동기화** — canonical 문서 reference index 표 (**MANUAL**(앞층 사용자 지도) / CLAUDE.md / WORKFLOW / CONVENTIONS / **OPERATIONS**(git·worktree·dispatch·push §5.8~5.11) / **MEMORY**(통합 기억 §7 + 프로필 매트릭스 §7.6) / DESIGN_PRINCIPLES + **harness 행**: `hooks/`(생성순서·git상태·spec게이트·디자인·**메모리 4종**: `builtin-memory-guard`·`mem-recall-inject`·`mem-turn-nudge`·`mem-distill-dispatch`)·`utilities/`·`statusline.sh`·`tools/memory`(통합 기억 store + `mem inject`/`mem sync`, MEMORY §7)·`tools/build-manifest.py`(정의 → 루트 `manifest.json` 단일계약 기계 전사, Step 6b) + **loops 행**: `loops/README.md` — **현역 루프·호칭은 `loops/README.md` 현역 표가 단일 출처** (cron runner 가 `loops/` 밖[worklog-board cron 등]으로 이동한 현역 루프도 포함 — "`loops/` 파일 부재 = 루프 부재" 아님); §10 파일 트리만 `loops/` 실제 파일을 나열) + `/sync-skills` 두 명령 + GitHub 링크. **[§9 harness 의도]** hooks 카운트 hardcode 금지 — 카테고리 묶음(생성순서·git상태·spec게이트·디자인·메모리 4종)으로 표기. memory hook 4종 병기 필수. **[§9 loops 의도]** 현역 루프 판정은 `loops/README.md` 현역 표 기준(runner 외부 이동 케이스 포함) — `ls loops/` 파일 유무로 현역 여부 판정 금지.
 10. **🗺️ 전체 디렉토리 맵** (🔁 동기화 직전 배치) — `~/.claude/` 트리 + 항목별 한 줄 의미 (```text 블록). sync 시 실제 `ls` 와 대조해 신규·삭제 디렉토리 반영 — **hooks·loops·drill cases 에 명시 적용**: 부재 파일(예: `loops/note.sh` — runner 가 worklog-board 로 이동) 줄 제거, drill cases 범위는 실제 `ls cases/` 가 진실. **단 §10 파일 트리에서 runner 가 빠진 것이 곧 루프 사망은 아님 — 현역 루프 목록은 §9 가 `loops/README.md` 현역 표 기준으로 든다.** harness 런타임 자동 생성 폴더(backups·cache·sessions 등)는 마지막 한 묶음. 루프 호칭은 `loops/README.md` 가 단일 출처.
 
 원칙:
@@ -313,15 +318,30 @@ README 는 mermaid 를 안 쓰고 _4 트랙 텍스트 화살표 체인_ (```text
 - SKILL.md / agent.md: `sha256`, `synced_at`
 - 전역: `last_readme_sync`
 
+### Step 6b: Emit manifest.json
+
+정의(skills/agents/loops/settings)를 긁어 단일 계약 `~/.claude/manifest.json` (repo 루트, README 와 동일 계층) 을 재방출한다. **manifest 는 정의에서 deterministic 파생** — 손으로 편집하지 않고 빌드 스크립트가 유일한 전사 경로다 (정의=SoT, manifest=방출물).
+
+```bash
+python3 tools/build-manifest.py          # manifest.json 재생성 (멱등 — 정의 안 바뀌면 byte-identical)
+# --check 모드:
+python3 tools/build-manifest.py --check  # 빌드 결과를 기존 manifest.json 과 비교, 어긋나면 exit 1
+```
+
+- 빌드 스크립트가 긁는 것: skills frontmatter `metadata:{group,fam,modes,blurb}` + `argument-hint` + agents `metadata:{modes,blurb}`·`model` + `loops/README.md` 현역 표 + `settings.json` hooks (read-only) + 문서화된 4-track 상수.
+- `--check` 모드 (위 Argument Parsing) 에서는 `build-manifest.py --check` 로 manifest drift 도 감지해 Step 3 drift report / Step 7 final report 에 노출 (비-0 exit = 정의 변경 후 manifest 재방출 누락).
+- 소비자(worklog-board)는 이 manifest **한 계약만** 소비한다 — 내부 정의를 직접 뒤지지 않는다 (경계 분리).
+
 ### Step 7: Final report
 ```
 ✅ Sync 완료
 ─────────────────────────────────────
 SKILL.md/agent.md 변경: 3 (autopilot-code, autopilot-draft, code-plan)
 README.md 갱신: ~/.claude/README.md
+manifest.json 재방출: ~/.claude/manifest.json (Step 6b)
 
 다음에 PR/푸시:
-  cd ~/.claude && git add README.md skills/ agents/
+  cd ~/.claude && git add README.md manifest.json tools/build-manifest.py skills/ agents/
   git commit -m "skills+agents: <변경 요약>"
   git push
 ```

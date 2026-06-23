@@ -2,6 +2,11 @@
 name: draft-refine
 description: Reflect user memos/review feedback in a document strategy or draft. Snapshots prior version under `_internal/versions/v{N}/` (modern; per CONVENTIONS.md §5) or `_v{N}.md` siblings (legacy). Auto-managed `changelog:` array inside YAML frontmatter (NOT a top-of-file HTML comment — that breaks markdown preview when frontmatter is also present). Mandatory ref-grounding per memo (re-read source; override memo if it conflicts with source).
 argument-hint: "<strategy or draft name or path> [--qa quick|light|standard|thorough|adversarial]"
+metadata:
+  group: sub
+  fam: sub
+  modes: []
+  blurb: "초안 정련·다듬기 sub-skill — 편집팀 검수 경유"
 ---
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 review 로그를 `_internal/strategy_reviews/` 또는 `_internal/draft_reviews/`에 기록. 버전 스냅샷은 modern artifact면 `_internal/versions/v{N}/`, legacy artifact면 `_v{N}.md` 형제 (자동 감지).

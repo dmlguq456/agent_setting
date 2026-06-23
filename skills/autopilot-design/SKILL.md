@@ -2,6 +2,11 @@
 name: autopilot-design
 description: "Unified design pipeline — orchestrates design-init → design-refs → design-tokens → design-components → design-review → design-handoff. For visual artifacts across UI/UX, slides, diagrams, icons, logos. Can be invoked standalone or auto-delegated from autopilot-spec Phase 2. Distinct from autopilot-draft (text-only documents) — autopilot-design handles visual deliverables. **Claude-Design parity via a design harness** (claude-design-harness-spec.md): a Design MCP server (~/.claude/tools/design-mcp — preview/screenshot/console/eval_js/view_image) renders every output so it is visually self-verified (render → view_image → fix loop); a separate-context verifier subagent gates console/layout breakage; shared design rules (slop avoidance, scale, HTML conventions) and reusable scaffolds (deck_stage, tweaks_panel, device_frames) standardize craft; converters export PDF/PPTX/single-HTML bundle; a post-write hook auto-checks console on design HTML saves. Outputs can be a self-contained single-file HTML preview viewable without any project stack."
 argument-hint: "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--qa quick|standard|thorough]"
+metadata:
+  group: entry
+  fam: design
+  modes: []
+  blurb: "시각 산출물 디자인 파이프 entry — 토큰·컴포넌트·레퍼런스·핸드오프 통합"
 ---
 
 > 산출물 폴더:

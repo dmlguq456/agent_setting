@@ -2,6 +2,11 @@
 name: code-test
 description: Run functional tests after code-execute or on demand to verify code correctness
 argument-hint: "<plan name, path, or test scope>"
+metadata:
+  group: sub
+  fam: sub
+  modes: []
+  blurb: "구현 결과 단계별 검증 — 품질관리팀 test 모드 sub-skill"
 ---
 
 ## Plan Resolution (canonical — keep in sync with code-execute, code-test, code-report, code-refine, autopilot-code)

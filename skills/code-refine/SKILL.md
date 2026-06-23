@@ -2,6 +2,11 @@
 name: code-refine
 description: Reflect user memos/comments in a plan and update it (do NOT implement)
 argument-hint: "<plan name or path> [--qa quick|light|standard|thorough|adversarial]"
+metadata:
+  group: sub
+  fam: sub
+  modes: []
+  blurb: "사용자 메모·QA 피드백 반영해 기존 plan 정정 — sub-skill"
 ---
 
 ## Plan Resolution (canonical — keep in sync with code-execute, code-test, code-report, code-refine, autopilot-code)

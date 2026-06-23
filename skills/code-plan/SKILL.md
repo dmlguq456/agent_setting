@@ -2,6 +2,11 @@
 name: code-plan
 description: Create a detailed implementation plan based on actual codebase
 argument-hint: "<task description> [--qa quick|light|standard|thorough|adversarial]"
+metadata:
+  group: sub
+  fam: sub
+  modes: []
+  blurb: "코드 분석 후 상세 구현 plan 작성 — 기획팀 경유 sub-skill"
 ---
 
 > Caller note: planning benefits from `high` or `xhigh` effort; lower effort may miss call sites in cross-file analysis.
