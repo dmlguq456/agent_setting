@@ -108,6 +108,8 @@ scope 에 따라 일부 phase auto-skip:
 
 신규 vs 재호출 분류는 _명시 옵션 없이도_ 동작 — 발화 + cwd 자동 판단. 사용자가 명시적 `--from <phase>` 입력하면 그대로.
 
+> **Intake 게이트**: 비주얼 방향성·톤·타깃 디바이스·디자인시스템 유무·브랜드 제약·산출형태가 미명세면 [CONVENTIONS.md §6.6](../../CONVENTIONS.md#66-autopilot-intake-gate) 1라운드 질문 먼저 (질문 뱅크는 _design_rules.md 비주얼 기본값·conceptual altitude 재사용). Phase 0 design-init 앞. 명시·재개(--from) 시 skip (별도 flag 불요).
+
 ## Pipeline Overview
 
 ```
@@ -135,7 +137,7 @@ Phase 5: design-handoff     (코드 위치·import path·재현 가이드)
 | # | 컴포넌트 | 위치 | 역할 |
 |---|---|---|---|
 | ① | **Design MCP Server** | `~/.claude/tools/design-mcp/` (`mcp__design__*`) | preview·screenshot·getConsoleLogs·eval_js·view_image·image_metadata. 시각 피드백 루프의 본체 |
-| ② | **Verifier subagent** | `Agent(디자인팀, mode=verifier)` | 별도 컨텍스트 독립 검수 — 콘솔·레이아웃·의도 _깨짐_ 게이트 |
+| ② | **Verifier subagent** | `Agent(디자인팀, mode=verifier)` | 별도 컨텍스트 독립 검수 — 2-layer 깨짐 게이트 + vision passrate (Layer-1: 콘솔·레이아웃·토큰 0-tolerance; Layer-2: 시각 일관성 passrate) |
 | ③ | **디자인 규칙** | `agent-modes/design/_design_rules.md` | 슬롭 회피·비주얼 기본값·스케일·HTML 규약·변형 처리 (프롬프트) |
 | ④ | **Scaffolds** | `~/.claude/scaffolds/` | deck_stage·tweaks_panel·device_frames·design_canvas·image_slot |
 | ⑤ | **Converters** | `~/.claude/tools/design-mcp/convert.mjs` | PDF · 단일 HTML 번들 · PPTX |
@@ -231,9 +233,9 @@ Invoke Skill: `design-components` with the design path as args.
 
 Invoke Skill: `design-review` with the design path as args.
 
-내부 **두 게이트**: ① `Agent(디자인팀, mode=verifier)` — 별도 컨텍스트에서 Design MCP 로 _깨졌는가_ (콘솔 에러·레이아웃 붕괴·의도 불일치) 기계 판정. ② `Agent(디자인팀, mode=critic)` — 렌더 이미지를 직접 보고 6축 _품질_ 비평.
+내부 **두 게이트**: ① `Agent(디자인팀, mode=verifier)` — 별도 컨텍스트에서 TWO-LAYER 루브릭으로 기계 판정 (Layer-1: 콘솔 에러·레이아웃 붕괴·토큰계약 0-tolerance; Layer-2: vision passrate). ② `Agent(디자인팀, mode=critic)` — 렌더 이미지를 직접 보고 6축 _품질_ 비평.
 
-결과: `04_review/verifier.md` (verdict + issues) + `04_review/critique.md` (6축).
+결과: `04_review/verifier.md` (verdict + breakage/vision_passrate/status + 실패 항목 reason) + `04_review/critique.md` (6축).
 
 🔴 / verifier `needs_work` 발견 시:
 - `design_state.yaml` 의 `phases.review: failed`

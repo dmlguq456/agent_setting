@@ -186,6 +186,8 @@ artifact_dir: <abs path>
 - `mkdir -p {artifact_dir}` (only AFTER validation)
 
 ### Step 1.5: Scope Clarification (사전 조율) — skipped if `--no-clarify` or `--from`
+> 이 Step 1.5 는 [CONVENTIONS.md §6.6](../../CONVENTIONS.md#66-autopilot-intake-gate) Autopilot Intake Gate 의 연구 트랙 인스턴스 — 4속성 공유, 질문 뱅크는 §6.6 연구 행.
+
 **Purpose**: 모호한 query는 mode 선택과 검색 폭을 잘못 잡아 9/7/5개 보고서 출력이 무용지물이 됨. 모호 detection 시 사용자에게 2-4 sharp question을 던진다.
 
 **Trigger conditions** (any one matches → run):

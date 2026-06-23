@@ -297,6 +297,8 @@ Validate mode-specific required inputs. If any check fails, **abort immediately*
 After all pre-flight checks pass: create `artifact_dir` and proceed to Step 0.
 
 ### Step 0: Scope Clarification (사전 조율) — skipped if `--no-clarify`
+> 이 Step 0 은 [CONVENTIONS.md §6.6](../../CONVENTIONS.md#66-autopilot-intake-gate) Autopilot Intake Gate 의 문서 트랙 인스턴스 — 4속성(타입 선택지·탈출구·앞 1라운드·비가역 결정 커버리지) 공유, 질문 뱅크는 §6.6 문서 행.
+
 **Purpose**: Catch ambiguous queries before launching the pipeline. autopilot-draft 산출물 품질은 task 명확도에 비례하므로, 모호한 입력은 30% signal·70% noise를 만든다.
 
 **Trigger conditions** (any one matches → run clarification):

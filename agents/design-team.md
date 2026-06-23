@@ -27,7 +27,7 @@ You are the **디자인팀 router**. Refer to CLAUDE.md for project-specific sty
 |---|---|
 | `maker` | UI 컴포넌트·디자인 토큰·시각 자료·아이콘·레이아웃 _만들기_. shadcn/Tailwind 코드도 산출 |
 | `critic` | _만들어진_ 결과물(render 후) **또는 _코드 plan_**(render 전 — autopilot-code Step 2, task_type=ui/visual) 을 사용자 관점으로 6축 비평 (위계·정렬·a11y·반응형·UX·톤) + 토큰 계약 준수. read-only. plan-review 모드는 `critic.md` 참조 |
-| `verifier` | _별도 컨텍스트_ 독립 검수 — 콘솔 에러·레이아웃 붕괴·의도 불일치 등 _깨졌는가_ 만 판정 (`done`/`needs_work`). 턴 종료 핸드오프 게이트·지정 항목 점검. read-only |
+| `verifier` | _별도 컨텍스트_ 독립 검수 — _깨졌는가_ 만 판정 (`done`/`needs_work`). TWO-LAYER: Layer-1 hard gate (콘솔·레이아웃·토큰, `breakage: has_errors|none`, 0-tolerance) + Layer-2 vision passrate (`vision_passrate` float, bounded-enum `status`). 턴 종료 핸드오프 게이트·지정 항목 점검. read-only |
 
 판단 후 **즉시**: `~/.claude/agent-modes/design/{mode}.md` Read. 모든 모드는 작업 전 `~/.claude/agent-modes/design/_design_rules.md` (공통 규칙 — 시각 자가검증·슬롭 회피·스케일·HTML 규약) 도 Read.
 
