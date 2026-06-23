@@ -11,6 +11,8 @@ metadata:
 
 > 산출물 폴더: `.claude_reports/spec/` (CONVENTIONS.md §5.4.3 3-tier). 숫자 prefix 없는 평이한 이름 — `prd.md` (T1, 항상 최신) · `stack.md` · `design/` · `ship.md` · `pipeline_state.yaml` · `_internal/`.
 
+> **Intake 게이트**: 진입 직후 입력이 비가역 결정 커버리지(스택·인증·DB·배포타깃·핵심 entity 등)에 미달이면 [CONVENTIONS.md §6.6](../../CONVENTIONS.md#66-autopilot-intake-gate) 의 1라운드 구조화 질문 먼저 (AskUserQuestion, 항상 탈출구). slash 직접 args 충분·이미 명시·throwaway(/track)·재개(--from) 시 skip (별도 flag 불요).
+
 ## Purpose — _요구사항·청사진 작성_ entry
 
 본 skill 은 _코드 작업이 아닌_ 자리 담당. _무엇을 만들지·어떻게 정돈할지·공개 자리 어떤 API_ 같은 _spec 청사진_ 결정:

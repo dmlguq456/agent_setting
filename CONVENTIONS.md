@@ -480,6 +480,87 @@ analyze-project 자체는 `_last_run.yaml` 기반 **incremental update** default
 | `autopilot-apply` | 대상 artifact 는 `.claude_reports/` 밖 실제 소스 (e.g., `main.tex`). 버전 자리는 git branch + commit (mutation 마다 한 commit) — `_internal/versions/` 자리 X |
 | `autopilot-apply` | 자체 artifact_dir 없음 — `.claude_reports/` _밖_ 실제 source 편집 (git branch 위) + 로그는 cheatsheet artifact 의 `_internal/apply/` |
 
+### §6.6. Autopilot Intake Gate
+<!-- M2 §4.3 intake 게이트, 2026-06-23 — 디자인 스튜디오 핸드오프 -->
+
+(입력 부족 시 구조화 질문 먼저)
+
+autopilot-* 진입 직후, 비가역 결정 커버리지가 미달이면 **1라운드 구조화 질문(AskUserQuestion)을 먼저** 던진다. draft 트랙의 Step 0 · research 트랙의 Step 1.5가 이 패턴의 기존 track-specific 인스턴스이며, spec/code/design 트랙은 본 섹션을 통해 동일 패턴을 새로 채택한다.
+
+#### 4 속성 (모든 트랙 공통)
+
+1. **타입 선택지 제공** — 질문마다 열거된 선택지(enumerated options)를 제시. 사용자가 특정 값을 고르도록 구조화.
+2. **항상 탈출구** — 모든 질문에 Other(자유 입력) 또는 skip(기본값으로 진행) 옵션을 포함. 강제 응답 없음.
+3. **앞 1라운드만** — 진입 직후 한 번. 이후 재질문 없음.
+4. **비가역 결정 커버리지만** — 나중에 바꾸기 비싼 결정(스택·API surface·배포 대상·톤·브랜드)에 한정. 구현 디테일·가역 선택은 포함 X.
+
+#### AskUserQuestion 사용 형식
+
+```
+AskUserQuestion(questions=[{
+  "question": "<질문 텍스트>",
+  "header": "<항목 레이블>",
+  "multiSelect": false,
+  "options": [
+    {"label": "...", "description": "..."},
+    ...
+  ]
+}])
+# 탈출구: 사용자는 Other(자유 입력) 또는 skip(기본값으로 진행) 선택 가능 — 항상 1라운드만.
+```
+
+> **§0.5 정렬**: "입력 충분 vs 부족" 판단은 LLM 의미 판단(semantic judgment) — 토큰·키워드 규칙으로 기계 게이트 불가. 따라서 본 게이트는 AskUserQuestion _instruction_ 게이트로 발동 (LLM 이 판단, 발동은 구조화) — hard hook 아님. (DESIGN_PRINCIPLES §0.5 line 35 exception 참조.)
+
+**구체적 예시 (design 트랙)**:
+
+```
+AskUserQuestion(questions=[{
+  "question": "비주얼 방향성·톤은?",
+  "header": "Visual tone",
+  "multiSelect": false,
+  "options": [
+    {"label": "Warm",    "description": "따뜻한 색·둥근 모서리"},
+    {"label": "Cool",    "description": "차분한 블루·그레이 계열"},
+    {"label": "Neutral", "description": "무채색 중심, 톤 최소"}
+  ]
+}])
+# 탈출구: 사용자는 Other(자유 입력) 또는 skip(기본값으로 진행) 선택 가능 — 항상 1라운드만.
+```
+
+#### 트랙별 질문 뱅크 (비가역 결정 상위 5개)
+
+| 트랙 | 비가역 결정 top-5 |
+|---|---|
+| **문서 (draft)** | 청중 · 분량/페이지 제한 · 산출 형태(논문/슬라이드/산문) · 톤(defensive vs concessive / formal vs casual) · 마감·제약 |
+| **연구 (research)** | 조사 깊이(shallow/medium/deep) · 인용/연도 커트오프 · 분야 경계(예: speech-only vs audio-general) · 비교 축 우선순위(perf/cost/license) · 결정 목적(survey vs invest vs competitive-intel) |
+| **앱 (spec app)** | 스택 · 인증 모델 · DB/영속성 · 배포 타깃 · 핵심 entity |
+| **라이브러리·CLI (spec library/cli)** | 공개 API surface(exports) · versioning/semver 정책 · 명령·옵션 형태(cli) · 타깃 런타임/패키지 매니저 · 호환성 제약 |
+| **디자인 (design)** | 비주얼 방향성·톤(warm/cool/neutral) · 타깃 디바이스 · 디자인 시스템 유무 · 브랜드 제약 · 산출 형태(standalone HTML vs project) |
+
+> **코드(code/dev) 트랙 — spec 행 차용**: code(dev) 트랙에는 별도 질문 뱅크 행이 없다. spec 분기를 따른다 — app 프로젝트 → 앱 행, library/cli 프로젝트 → 라이브러리·CLI 행. 코드 세션은 이 매핑으로 어떤 질문 뱅크를 쓸지 판단.
+
+#### 게이트 발동 조건 및 skip 조건
+
+**발동**: 진입 직후, 입력이 비가역 결정 커버리지에 미달이면 1라운드 구조화 질문.
+
+**Skip (4가지 — 별도 flag 없이 자동)**:
+1. slash 직접 args로 충분히 명시됨
+2. 사용자가 이미 해당 결정을 발화에서 명시
+3. throwaway / untracked (`/track` 설정 시)
+4. 재개 (`--from <stage>` — `pipeline_state.yaml`에 이미 캡처됨)
+
+> **`--no-clarify` flag는 draft/research 전용**: spec/code/design 트랙에는 `--no-clarify` flag가 없다(확인됨). 위 4가지 skip 조건으로 flag 없이 자동 처리 — 존재하지 않는 flag를 찾지 않도록 주의.
+
+#### §2 자율 진행 (응답 없을 때)
+
+질문 발동 시 [CLAUDE.md](../../CLAUDE.md) §2 동일 — ScheduleWakeup 15-20분 동시 호출, 응답 없으면 추천 기본값으로 자율 진행(한 줄 보고).
+
+#### 기존 track 인스턴스와의 관계
+
+- **draft 트랙**: `autopilot-draft` Step 0 (Scope Clarification) — 본 게이트의 문서 트랙 인스턴스. `--no-clarify` flag로 skip 가능.
+- **research 트랙**: `autopilot-research` Step 1.5 (Scope Clarification) — 본 게이트의 연구 트랙 인스턴스. `--no-clarify` flag로 skip 가능.
+- **spec/code/design 트랙**: 본 섹션을 기준으로 신규 채택. flag 없이 위 4가지 skip 조건 적용.
+
 ## §7 → MEMORY.md
 
 > **이동(2026-06-23)**: 통합 기억(§7.0~§7.5) → **[`MEMORY.md`](MEMORY.md)**. § 번호 보존. 메모리 단일 출처.

@@ -108,6 +108,8 @@ scope 에 따라 일부 phase auto-skip:
 
 신규 vs 재호출 분류는 _명시 옵션 없이도_ 동작 — 발화 + cwd 자동 판단. 사용자가 명시적 `--from <phase>` 입력하면 그대로.
 
+> **Intake 게이트**: 비주얼 방향성·톤·타깃 디바이스·디자인시스템 유무·브랜드 제약·산출형태가 미명세면 [CONVENTIONS.md §6.6](../../CONVENTIONS.md#66-autopilot-intake-gate) 1라운드 질문 먼저 (질문 뱅크는 _design_rules.md 비주얼 기본값·conceptual altitude 재사용). Phase 0 design-init 앞. 명시·재개(--from) 시 skip (별도 flag 불요).
+
 ## Pipeline Overview
 
 ```
