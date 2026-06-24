@@ -138,6 +138,7 @@ def live_stage(jcwd, slug, fb):
         except Exception: dirs = []
         best, bestn, bestm = None, 0, -1.0
         for d in dirs:
+            if os.path.exists(base + "/" + d + "/pipeline_summary.md"): continue   # 완료(done) 폴더는 폴백 후보 제외 — 새 worktree slug 가 옛 done 폴더와 generic 토큰 1개만 겹쳐 "done"으로 오인되는 것 방지(정확 매칭 경로는 보존)
             dslug = d.split("_", 1)[-1] if "_" in d else d
             n = len(stoks & set(t for t in dslug.split("-") if t))
             try: m = os.path.getmtime(base + "/" + d)
