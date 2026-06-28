@@ -37,7 +37,7 @@ flowchart LR
 | `--no-clarify` | Step 0 Scope Clarification 강제 skip |
 | `--from <stage>` | pause/실패 후 특정 단계 재개 (analyze / strategy / strategy-refine / draft / draft-refine / finalize) |
 
-> **`--refs` flag 없음**: 입력은 `.claude_reports/{analysis_project,research}/*`에서 implicit 자동 발견. 사전에 `/analyze-project --mode {paper|doc}` 또는 `/autopilot-research`로 materialize.
+> **`--refs` flag 없음**: 입력은 `<artifact-root>/{analysis_project,research}/*`에서 implicit 자동 발견. 사전에 `/analyze-project --mode {paper|doc}` 또는 `/autopilot-research`로 materialize.
 > **`--format-ref` flag 없음**: format spec(venue/journal/lab 가이드라인)은 `analysis_project/doc/{matching}/formats/`에서 자동 발견. `/analyze-project --mode doc <folder>` 사전 처리.
 
 ## 6개 모드
@@ -96,7 +96,7 @@ query가 모호하거나 mode multi-match일 때 autopilot이 2-4개 sharp quest
 
 ## 산출물 구조
 ```
-.claude_reports/documents/{YYYY-MM-DD}_{short-name}/
+<artifact-root>/documents/{YYYY-MM-DD}_{short-name}/
 ├─ pipeline_summary.md       (T1)
 ├─ draft/                    (T1)
 │  ├─ draft.md

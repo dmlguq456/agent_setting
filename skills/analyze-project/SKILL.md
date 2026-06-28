@@ -1,6 +1,6 @@
 ---
 name: analyze-project
-description: Pre-work analysis skill — analyzes the project's primary materials and writes structured artifacts to .claude_reports/analysis_project/. Three modes — code (codebase), paper (academic PDFs), doc (miscellaneous doc materials like reviewer comments, format templates, samples, internal notes). Mode auto-detects between code and doc when omitted; paper requires explicit --mode paper. Output is the persistent input source for downstream autopilot-{draft,code,research} skills.
+description: Pre-work analysis skill — analyzes the project's primary materials and writes structured artifacts to <artifact-root>/analysis_project/. Three modes — code (codebase), paper (academic PDFs), doc (miscellaneous doc materials like reviewer comments, format templates, samples, internal notes). Mode auto-detects between code and doc when omitted; paper requires explicit --mode paper. Output is the persistent input source for downstream autopilot-{draft,code,research} skills.
 argument-hint: "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]"
 metadata:
   group: pre
@@ -11,9 +11,10 @@ metadata:
 
 > Caller note: this skill performs deep analysis. Callers should invoke at `high` or `xhigh` effort when the runtime supports it; at lower effort, depth narrows automatically.
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier T1/T2/T3). 본 skill의 산출물은 `.claude_reports/analysis_project/{code,paper,doc}/` 하위. 각 mode의 main outputs는 root, raw scan log/QA reviews는 `_internal/`.
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier T1/T2/T3). 본 skill의 산출물은 `<artifact-root>/analysis_project/{code,paper,doc}/` 하위. 각 mode의 main outputs는 root, raw scan log/QA reviews는 `_internal/`.
 
-> **Workspace assumption**: Claude는 프로젝트 루트에서 실행됨. `.claude_reports/`는 현재 dir에 생성. 본 skill의 input scope (코드 / PDFs / doc materials)도 현재 dir 또는 그 하위 폴더 기준.
+> **Workspace assumption**: Claude는 프로젝트 루트에서 실행됨. `<artifact-root>/`는 현재 dir에 생성. 본 skill의 input scope (코드 / PDFs / doc materials)도 현재 dir 또는 그 하위 폴더 기준.
+> `<artifact-root>` 해석: `.agent_reports` 우선, 없으면 legacy `.claude_reports`. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d "$REPORTS_DIR" ] || REPORTS_DIR=.claude_reports` 로 치환한다.
 
 ## Language Rule
 - Write documentation files in English (code/paper modes) or Korean+English mixed (doc mode).
@@ -52,9 +53,9 @@ Inspect current directory:
 
 | Mode | Output | Scoping |
 |---|---|---|
-| code | `.claude_reports/analysis_project/code/` | flat (project-level, accumulates over time) |
-| paper | `.claude_reports/analysis_project/paper/` | flat (project's paper collection accumulates) |
-| doc | `.claude_reports/analysis_project/doc/{name}/` | per-task subdir |
+| code | `<artifact-root>/analysis_project/code/` | flat (project-level, accumulates over time) |
+| paper | `<artifact-root>/analysis_project/paper/` | flat (project's paper collection accumulates) |
+| doc | `<artifact-root>/analysis_project/doc/{name}/` | per-task subdir |
 
 `{name}` for doc mode: derived from input folder basename (positional arg) or cwd basename (default — when positional 생략, 즉 자동 발견 모드). 예: `--mode doc` (positional 없이) within `/.../tf_restormer/` cwd → `analysis_project/doc/tf_restormer/`. 명시 override: `--mode doc tf_restormer_patent` → `analysis_project/doc/tf_restormer_patent/`.
 
@@ -66,7 +67,7 @@ Analyzes the codebase and produces module-level documentation.
 
 ## Phase 0: Incremental vs Full 분기 (자동)
 
-호출 자리에서 `.claude_reports/analysis_project/code/_last_run.yaml` 검사:
+호출 자리에서 `<artifact-root>/analysis_project/code/_last_run.yaml` 검사:
 
 | 감지 | 처리 |
 |---|---|
@@ -122,7 +123,7 @@ Read in-scope code and identify:
 - Design intent and core algorithms
 
 ## Phase 2: Documentation
-Write analysis results as topic-separated md files in `.claude_reports/analysis_project/code/`.
+Write analysis results as topic-separated md files in `<artifact-root>/analysis_project/code/`.
 - Split by role, not one monolithic file
 - Focus on code-level details (not usage guides)
 - Write in English
@@ -140,7 +141,7 @@ Write analysis results as topic-separated md files in `.claude_reports/analysis_
 
 ## Phase 3: CLAUDE.md
 CLAUDE.md should minimize code content and contain only:
-- `.claude_reports/analysis_project/code/` document list with coverage table
+- `<artifact-root>/analysis_project/code/` document list with coverage table
 - Behavioral guidelines (coding rules, restrictions, commit rules)
 - Project structure overview (tree)
 - Execution examples
@@ -281,7 +282,7 @@ After documentation is written, invoke 품질관리팀 in code review mode to cr
 - **Scope**: Documentation files updated in the current run only.
 - **Minimum verification**: At least 2 Interface Reference entries per file — check signature, file path, and line number against actual source.
 - **Model**: Light QA using sonnet — documentation is not as critical as code changes.
-- Reviews logged to `.claude_reports/analysis_project/code/_internal/reviews/`.
+- Reviews logged to `<artifact-root>/analysis_project/code/_internal/reviews/`.
 
 ---
 
@@ -303,8 +304,8 @@ Date: {YYYY-MM-DD}
 
 ## Inputs
 - Reference PDFs: search current dir + common subfolders (e.g., `papers/`, `refs/`, `pdfs/`) for `*.pdf`. If `<scope>` arg is provided as a folder path or keyword, use that. Otherwise auto-discover by scanning project root + 1-level subfolders.
-- Existing paper docs: .claude_reports/analysis_project/paper/*.md
-- Existing code docs: .claude_reports/analysis_project/code/*.md (for paper-code mapping)
+- Existing paper docs: <artifact-root>/analysis_project/paper/*.md
+- Existing code docs: <artifact-root>/analysis_project/code/*.md (for paper-code mapping)
 - Source code: project root source dirs (`models/`, `src/`, `lib/`, etc.) for verifying paper-code alignment
 
 ## Procedure
@@ -330,7 +331,7 @@ Check what already exists and what needs updating.
 Read analysis_project/code/ and relevant source files to verify paper-code alignment.
 
 ### 4. Generate/Update individual paper summaries
-For each paper, create or update its summary file in `.claude_reports/analysis_project/paper/` (agent decides filenames).
+For each paper, create or update its summary file in `<artifact-root>/analysis_project/paper/` (agent decides filenames).
 Each file should contain: paper title/venue/year, core contribution, architecture overview, key design decisions and why, important equations, ablation results that constrain design, paper-to-code mapping.
 
 ### 5. Generate/Update 00_overview_and_constraints.md
@@ -396,7 +397,7 @@ Delegate to 연구팀:
 
 ```
 Analyze doc-creation materials in this folder: {input_folder}
-Output: .claude_reports/analysis_project/doc/{name}/
+Output: <artifact-root>/analysis_project/doc/{name}/
 
 For each file in input folder, classify and produce structured analysis:
 
@@ -418,7 +419,7 @@ Return ONLY paths + Korean summary.
 ## Phase 3: Verify
 - Confirm all input files are classified (none silently dropped).
 - If classification was ambiguous, prompt user to confirm or override.
-- Logged to `.claude_reports/analysis_project/doc/{name}/_internal/`.
+- Logged to `<artifact-root>/analysis_project/doc/{name}/_internal/`.
 
 ---
 
@@ -473,7 +474,7 @@ analysis_project/doc/{name}/
     - report · proposal · generic prose intent → `analysis_project/doc/{matching}/formats/` (optional)
 - `autopilot-research`는 자체 외부 검색 위주이지만, 보유 자료가 있으면 `analysis_project/paper/` 인지 가능
 
-모든 입력은 `analysis_project/*` 또는 `research/*` 같은 `.claude_reports/` 하위 영속 산출물에서 자동 발견. family 전체가 외부 폴더를 직접 가리키는 flag 없음.
+모든 입력은 `analysis_project/*` 또는 `research/*` 같은 `<artifact-root>/` 하위 영속 산출물에서 자동 발견. family 전체가 외부 폴더를 직접 가리키는 flag 없음.
 
 ## Typical workflow
 

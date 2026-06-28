@@ -1,5 +1,5 @@
 {
-  "generated_from": "~/.claude harness definitions (skills/*/SKILL.md, agents/*.md, loops/README.md, settings.json)",
+  "generated_from": "agent harness definitions (skills/*/SKILL.md, agents/*.md, loops/README.md, Claude adapter settings.json)",
   "skills": [
     {
       "slug": "skill__analyze-project",

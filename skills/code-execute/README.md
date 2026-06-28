@@ -26,7 +26,7 @@
 
 ## 초기화
 - plan 파일 읽기
-- **로그 디렉토리 = plan/plan.md의 조부모** (예: `.claude_reports/plans/2026-03-18_refactor/`)
+- **로그 디렉토리 = plan/plan.md의 조부모** (예: `<artifact-root>/plans/2026-03-18_refactor/`)
 - **기존 로그 디렉토리 확인**:
   - `checklist.md`에 `[x]`/`[FAIL]`/`[SKIP-DEP]` 있음 → **resume**: Safety commit 업데이트, 완료 step skip, 첫 `[ ]`부터
   - 그 외 → 신규 실행

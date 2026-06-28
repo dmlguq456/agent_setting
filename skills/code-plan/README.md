@@ -16,7 +16,7 @@
 - 사용자 출력은 자연스러운 한국어 (번역체 회피)
 
 ## Pre-Check — 기존 plan 상태 게이팅
-`--autonomy` 플래그 파싱 후 `.claude_reports/plans/` 유사 plan 존재 확인:
+`--autonomy` 플래그 파싱 후 `<artifact-root>/plans/` 유사 plan 존재 확인:
 
 | 기존 상태 | 처리 |
 |---|---|
@@ -29,7 +29,7 @@
 Plan mode. Create a new implementation plan.
 
 Task: {$ARGUMENTS}
-Save English plan to: .claude_reports/plans/{YYYY-MM-DD}_{short-task-name}/plan/plan.md
+Save English plan to: <artifact-root>/plans/{YYYY-MM-DD}_{short-task-name}/plan/plan.md
 Date: {YYYY-MM-DD}
 {If done/failed/partial plan exists: "Reference previous plan: [path], status: [status]"}
 {If partial: "Failed steps from previous execution: [list]"}

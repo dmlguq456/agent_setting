@@ -6,7 +6,7 @@
 ## Procedure — Test Mode (graduated verification)
 
 Determine test targets from the prompt:
-- If a **plan file path** is provided (`.claude_reports/plans/*.md`):
+- If a **plan file path** is provided (`<artifact-root>/plans/*.md`):
   1. Read the plan file and extract the **Verification** section.
   2. Read the corresponding log directory's `checklist.md` to identify changed source files.
   3. Use both to build the test targets.

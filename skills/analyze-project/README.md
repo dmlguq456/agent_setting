@@ -3,7 +3,7 @@
 > 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
-코드베이스를 분석해 `.claude_reports/analysis_project/{code,paper,doc}/`에 구조화된 문서를 생성하는 skill. autopilot 파이프라인의 **사전 준비 skill**. mode별:
+코드베이스를 분석해 `<artifact-root>/analysis_project/{code,paper,doc}/`에 구조화된 문서를 생성하는 skill. autopilot 파이프라인의 **사전 준비 skill**. mode별:
 - `--mode code` — 코드베이스 모듈 매핑·interface
 - `--mode paper` — 논문 PDFs cards + overview
 - `--mode doc` — reviewer comments / format templates / past samples 분류
@@ -18,7 +18,7 @@
 - 플래그 제거 후 남은 텍스트는 target directory / scope
 
 ## 언어 규칙
-- `.claude_reports/analysis_project/` 산출 문서는 **영어**
+- `<artifact-root>/analysis_project/` 산출 문서는 **영어**
 - 사용자 설명은 자연스러운 한국어 (번역체 회피)
 
 ## Phase 1: Codebase Analysis (code mode)
@@ -34,7 +34,7 @@
 - 설계 의도 및 핵심 알고리즘
 
 ## Phase 2: Documentation
-`.claude_reports/analysis_project/code/` 아래 topic별 md 파일로 분리:
+`<artifact-root>/analysis_project/code/` 아래 topic별 md 파일로 분리:
 - role 기준 분할 (monolithic 금지)
 - code-level 상세 집중
 - 영어
@@ -64,10 +64,10 @@
 - **QA 모델**: Light QA (sonnet)
 
 ## paper mode
-보유 논문 PDFs를 읽어 `.claude_reports/analysis_project/paper/`에 논문별 cards + `00_overview_and_constraints.md` 생성. 연구팀에 위임. autopilot-draft·autopilot-code·autopilot-research가 implicit input source로 활용.
+보유 논문 PDFs를 읽어 `<artifact-root>/analysis_project/paper/`에 논문별 cards + `00_overview_and_constraints.md` 생성. 연구팀에 위임. autopilot-draft·autopilot-code·autopilot-research가 implicit input source로 활용.
 
 ## doc mode
-reviewer comments / format templates / past samples / mixed doc 자료를 `.claude_reports/analysis_project/doc/{name}/` 하위에 분류 (reviewers/, formats/, samples/, misc/). autopilot-draft의 format spec auto-discovery source.
+reviewer comments / format templates / past samples / mixed doc 자료를 `<artifact-root>/analysis_project/doc/{name}/` 하위에 분류 (reviewers/, formats/, samples/, misc/). autopilot-draft의 format spec auto-discovery source.
 
 ---
 *원본: `~/.claude/skills/analyze-project/SKILL.md`*

@@ -16,7 +16,7 @@ metadata:
 Parse `$ARGUMENTS`:
 - **mode**: first word — `rebuttal | paper | review | report | proposal | presentation`
 - **--inputs <comma-separated-paths>**: comma-joined list of pre-discovered input paths (from autopilot-draft Pre-flight Step 2 Input Discovery — typically `analysis_project/{paper,doc}/...` and/or `research/{topic}/`). Each path is an artifact directory containing pre-analyzed materials.
-- **--output <dir>**: artifact output directory (`.claude_reports/documents/{date}_{name}/`)
+- **--output <dir>**: artifact output directory (`<artifact-root>/documents/{date}_{name}/`)
 - **--qa <level>**: `quick | light | standard | thorough | adversarial` — overrides auto-detect (autopilot-draft propagates this). 단일 source: [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical)
 - Remaining text: task description / context
 
@@ -356,7 +356,7 @@ After the 연구팀 agent returns:
    For every domain claim in the strategy (citation / model name / venue / year /
    metric / dataset / lineage / classification), open the corresponding ground-truth
    source and verbatim compare:
-   - Paper analyses: `.claude_reports/analysis_project/paper/*.md` (if exists — single source of truth, produced by `/analyze-project --mode paper`)
+   - Paper analyses: `<artifact-root>/analysis_project/paper/*.md` (if exists — single source of truth, produced by `/analyze-project --mode paper`)
    - Original PDFs: only if listed in `--inputs` AND paper analyses lack the specific fact
    - Reviewer comments (rebuttal mode): {analysis_dir}/reviewer_analysis.md
 

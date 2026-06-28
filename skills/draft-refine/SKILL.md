@@ -22,7 +22,7 @@ Resolve `$ARGUMENTS` to document file paths. Detect whether this is a **strategy
 **Resolution rules** — always resolve BOTH English and Korean files:
 1. If it ends with `.md` → use as-is; derive the other file by path swap (`draft.md` ↔ `draft_ko.md`, or `strategy.md` ↔ `strategy_ko.md`)
 2. If it's a directory path → append `/strategy/strategy.md` (English) and `/strategy/strategy_ko.md` (Korean)
-3. Otherwise, fuzzy search: `ls -d .claude_reports/documents/*$ARGUMENTS* 2>/dev/null`
+3. Otherwise, fuzzy search: `ls -d <artifact-root>/documents/*$ARGUMENTS* 2>/dev/null`
    - **1 match** → use `{match}/strategy/strategy.md` and `{match}/strategy/strategy_ko.md`
    - **Multiple matches** → ask user
    - **No match** → report error
@@ -81,7 +81,7 @@ Read the Korean {doc_type} and find all user memos. Memos can appear in any of t
 
 For EACH memo found, before applying any change:
 1. **Identify the relevant source(s)** the memo pertains to:
-   - Paper analyses (`.claude_reports/analysis_project/paper/*.md`) — for citation, venue, score, NFE, RTF, dataset facts (single source of truth, produced by `/analyze-project --mode paper`)
+   - Paper analyses (`<artifact-root>/analysis_project/paper/*.md`) — for citation, venue, score, NFE, RTF, dataset facts (single source of truth, produced by `/analyze-project --mode paper`)
    - Strategy document (`{artifact_root}/strategy/strategy.md`) — for narrative arc, slide outline alignment
    - Analysis files (`{artifact_root}/analysis/*.md`) — for audience, key messages, visual strategy
    - Original PDFs (in user's source folder if available) — only for nuanced claims requiring re-reading; paper analyses are preferred
@@ -226,7 +226,7 @@ Auto-detect from sections changed. Two reviewer roles run **in parallel** at Sta
 
 ## Post-Refine Review Loop (max 2 rounds; quick = 1 round)
 After 연구팀 returns:
-1. **Resolve log dir**: artifact root (e.g., `.claude_reports/documents/2026-03-25_foo/`).
+1. **Resolve log dir**: artifact root (e.g., `<artifact-root>/documents/2026-03-25_foo/`).
    - For strategy refinement: `mkdir -p {log_dir}/_internal/strategy_reviews`
    - For draft refinement: `mkdir -p {log_dir}/_internal/draft_reviews`
 2. **Invoke quality + fact-check reviewers in parallel** (single message with multiple Agent calls per QA Scaling above):
@@ -248,7 +248,7 @@ After 연구팀 returns:
    For every domain claim in the changed sections (model name / venue / year /
    metric / lineage / classification), open the corresponding ground-truth source
    and verbatim compare against the deliverable:
-   - Paper analyses: `.claude_reports/analysis_project/paper/*.md` (single source of truth, produced by `/analyze-project --mode paper`)
+   - Paper analyses: `<artifact-root>/analysis_project/paper/*.md` (single source of truth, produced by `/analyze-project --mode paper`)
    - Original PDFs: only if paper analyses lack the specific fact
    - Strategy/analysis: {artifact_root}/strategy|analysis/
 

@@ -13,7 +13,7 @@ metadata:
 Resolve `$ARG` to a plan file path:
 1. If it ends with `.md` → use as-is
 2. If it's a directory path → append `/plan/plan.md`
-3. Otherwise, fuzzy search: `ls -d .claude_reports/plans/*/*$ARG* 2>/dev/null`
+3. Otherwise, fuzzy search: `ls -d <artifact-root>/plans/*/*$ARG* 2>/dev/null`
    - **1 match** → use `{match}/plan/plan.md`
    - **Multiple matches** → prefer folder without `_audit`/`_fix_` suffix; if still multiple, ask user
    - **No match** → report error
@@ -41,7 +41,7 @@ Before any code changes, ensure the working tree is clean and up-to-date:
 ## Initialization
 - Read the plan file at $ARG.
 - The log directory is the task root folder (two levels up from `plan/plan.md`).
-  - Example: `.claude_reports/plans/2026-03-18_refactor_engine/plan/plan.md` → log dir is `.claude_reports/plans/2026-03-18_refactor_engine/`
+  - Example: `<artifact-root>/plans/2026-03-18_refactor_engine/plan/plan.md` → log dir is `<artifact-root>/plans/2026-03-18_refactor_engine/`
 - **Check for existing log directory** at `{log_dir}`:
   - If `{log_dir}/plan/checklist.md` already exists with `[x]`/`[FAIL]`/`[SKIP-DEP]` marks: this is a **resume**. Read the checklist, update the `Safety commit:` line with the current `$SAFETY_COMMIT`, and skip all completed steps. Continue from the first `[ ]` step.
   - Otherwise: this is a **fresh execution**. Proceed to create the log directory and checklist.
@@ -117,7 +117,7 @@ Adversarial mode — runs all Thorough agents PLUS an additional `codex-review-t
 
 - For plans ≤3 steps, skip phase grouping — invoke reviewer once after all steps complete.
 - **On Total Failure** (ALL steps `[FAIL]`/`[SKIP-DEP]` after Plan Status Update): **auto-rollback to safety commit** (no user gating).
-  Read `$SAFETY_COMMIT` → `git diff --name-only $SAFETY_COMMIT HEAD -- ':!.claude_reports'` → `git checkout $SAFETY_COMMIT -- <changed files>` (preserves `.claude_reports/`). Verify with `git status`. Note in Final Report.
+  Read `$SAFETY_COMMIT` → `git diff --name-only $SAFETY_COMMIT HEAD -- ':!<artifact-root>'` → `git checkout $SAFETY_COMMIT -- <changed files>` (preserves `<artifact-root>/`). Verify with `git status`. Note in Final Report.
 
 ## Safety Rules (CRITICAL)
 - CRITICAL: Before changing any function signature (args, return type, dict keys, tensor shapes): (1) grep all call sites, (2) update every caller, (3) check implicit contracts (None checks, `.shape` assumptions, dict key access).

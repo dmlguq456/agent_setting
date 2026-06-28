@@ -9,7 +9,8 @@ metadata:
   blurb: "요구사항·청사진 작성·갱신 entry — prd.md 단일 출처, 모든 spec 변경의 canonical 경로"
 ---
 
-> 산출물 폴더: `.claude_reports/spec/` (CONVENTIONS.md §5.4.3 3-tier). 숫자 prefix 없는 평이한 이름 — `prd.md` (T1, 항상 최신) · `stack.md` · `design/` · `ship.md` · `pipeline_state.yaml` · `_internal/`.
+> 산출물 폴더: `<artifact-root>/spec/` (CONVENTIONS.md §5.4.3 3-tier). 숫자 prefix 없는 평이한 이름 — `prd.md` (T1, 항상 최신) · `stack.md` · `design/` · `ship.md` · `pipeline_state.yaml` · `_internal/`.
+> `<artifact-root>` 해석: `.agent_reports` 우선, 없으면 legacy `.claude_reports`. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d "$REPORTS_DIR" ] || REPORTS_DIR=.claude_reports` 로 치환한다.
 
 > **Intake 게이트**: 진입 직후 입력이 비가역 결정 커버리지(스택·인증·DB·배포타깃·핵심 entity 등)에 미달이면 [CONVENTIONS.md §6.6](../../CONVENTIONS.md#66-autopilot-intake-gate) 의 1라운드 구조화 질문 먼저 (AskUserQuestion, 항상 탈출구). slash 직접 args 충분·이미 명시·throwaway(/track)·재개(--from) 시 skip (별도 flag 불요).
 
@@ -130,18 +131,18 @@ metadata:
 | 자료 | 자리 | 우선순위 |
 |---|---|---|
 | `mem profile 07_coding_convention` (`python3 ~/.claude/tools/memory/mem.py profile 07_coding_convention`) | 사용자 cross-project 컨벤션 (model 폴더 / config / prefix / preferred layer / framework) | 2순위 (cross-project default·fallback) |
-| `.claude_reports/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 (본 프로젝트 실제 자리) | **1순위** (충돌 시 per-project 우선, mem profile 07 은 빈 자리 보강) |
-| `.claude_reports/analysis_project/code/similar_models.md` | 본 프로젝트 모델 간 유사도 | scaffold Phase 0 의 ref 1순위 후보 |
-| `.claude_reports/research/<topic>/` | 외부 ref repo 카드 + 07_resources 의 Quick verify | scaffold Phase 0 의 ref 2순위 + Phase 1.5 검증 source |
+| `<artifact-root>/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 (본 프로젝트 실제 자리) | **1순위** (충돌 시 per-project 우선, mem profile 07 은 빈 자리 보강) |
+| `<artifact-root>/analysis_project/code/similar_models.md` | 본 프로젝트 모델 간 유사도 | scaffold Phase 0 의 ref 1순위 후보 |
+| `<artifact-root>/research/<topic>/` | 외부 ref repo 카드 + 07_resources 의 Quick verify | scaffold Phase 0 의 ref 2순위 + Phase 1.5 검증 source |
 
 ### 1단계 — pipeline_state.yaml 자동 검사
 
 | 감지 조건 | 처리 |
 |---|---|
-| `.claude_reports/spec/pipeline_state.yaml` 부재 | **신규** — Step 1 부터 처음. 산출 `spec/` 신설 |
-| `.claude_reports/spec/pipeline_state.yaml` 존재 | **재진입** — `phases:` 상태 read + 발화 의도 분류 후 해당 step 부터 refine v{N+1} |
+| `<artifact-root>/spec/pipeline_state.yaml` 부재 | **신규** — Step 1 부터 처음. 산출 `spec/` 신설 |
+| `<artifact-root>/spec/pipeline_state.yaml` 존재 | **재진입** — `phases:` 상태 read + 발화 의도 분류 후 해당 step 부터 refine v{N+1} |
 
-spec 대상 = cwd 의 `.claude_reports/spec/` (1 repo = 1 spec). 모노레포 예외 (`spec/<component>/` 여럿) 면 발화·cwd 로 대상 component 식별.
+spec 대상 = cwd 의 `<artifact-root>/spec/` (1 repo = 1 spec). 모노레포 예외 (`spec/<component>/` 여럿) 면 발화·cwd 로 대상 component 식별.
 
 ### 2단계 — 발화 → step 자동 분류 (재진입 자리)
 
@@ -203,7 +204,7 @@ update mode 가 하는 일 (3 가지, 한 트랜잭션):
 
 > **본 skill 의 default — 중간 컨펌 다회**: spec 자체가 _사용자 의도 결정 자리_ 라 _전반적 상호작용_ 이 본질. Step 1 / 2 / 3a / 3b / 3c / 4a / 4b / 5 자리에 사용자 검토 자리 (총 6-8 자리). 사용자 _빠른 진행_ 발화 ("쭉 진행" / "ok 다 진행" / "다 알아서") 시 _일괄 컨펌_ 으로 자동 축소 (3a-3c 한 묶음 / 4a-4b 한 묶음 → 실제 컨펌 3-4 자리).
 
-> **동시성 가드 (공유 `.claude_reports`)**: 쓰기 단계(Step 3 / update mode 의 `prd.md`·`pipeline_state.yaml`·`pipeline_summary.md` 쓰기) 진입 _직전_ `.pipeline-lock` 획득, 파이프 정상·중단 양쪽에서 해제 — 프로토콜·snippet 은 **OPERATIONS.md §5.8**. acquire 가 BLOCKED(`exit 3`, 다른 worktree 가 spec 편집 중) 면 쓰기 멈추고 사용자에 보고 후 대기/override 판단. 본 skill 이 _spec 편집 중_ 임을 가리키는 단일 신호이기도 하다(다른 worktree 의 detect-only 조회 대상).
+> **동시성 가드 (공유 `<artifact-root>`)**: 쓰기 단계(Step 3 / update mode 의 `prd.md`·`pipeline_state.yaml`·`pipeline_summary.md` 쓰기) 진입 _직전_ `.pipeline-lock` 획득, 파이프 정상·중단 양쪽에서 해제 — 프로토콜·snippet 은 **OPERATIONS.md §5.8**. acquire 가 BLOCKED(`exit 3`, 다른 worktree 가 spec 편집 중) 면 쓰기 멈추고 사용자에 보고 후 대기/override 판단. 본 skill 이 _spec 편집 중_ 임을 가리키는 단일 신호이기도 하다(다른 worktree 의 detect-only 조회 대상).
 
 ### Step 1: 정보 수집 + 중간 컨펌
 
@@ -211,9 +212,9 @@ update mode 가 하는 일 (3 가지, 한 트랜잭션):
 
 **1-2. mode 자동 추론** — 위 단서 표 적용.
 
-**1-3. 기존 자산 분석** — `analyze-project` 산출물 (`.claude_reports/analysis_project/code/`) 발견 시 자동 인용. 부재 시 cwd 코드 직접 검사. `similar_models.md` / `experiment_conventions.md` 가 있으면 scaffold Phase 0 의 ref source 후보로 기록.
+**1-3. 기존 자산 분석** — `analyze-project` 산출물 (`<artifact-root>/analysis_project/code/`) 발견 시 자동 인용. 부재 시 cwd 코드 직접 검사. `similar_models.md` / `experiment_conventions.md` 가 있으면 scaffold Phase 0 의 ref source 후보로 기록.
 
-**1-4. autopilot-research 결과 자동 import** — `.claude_reports/research/` 발견 시 reference 패턴·외부 baseline 인용. `code_resources/` (외부 ref repo) + `07_resources.md` (pre-trained ckpt) 가 scaffold Phase 0 의 외부 ref source 후보.
+**1-4. autopilot-research 결과 자동 import** — `<artifact-root>/research/` 발견 시 reference 패턴·외부 baseline 인용. `code_resources/` (외부 ref repo) + `07_resources.md` (pre-trained ckpt) 가 scaffold Phase 0 의 외부 ref source 후보.
 
 **1-5. (app mode 만) 환경·스택 후보 정리** — Node / pnpm / Docker 확인, 스택 후보 2-3 안.
 
@@ -602,7 +603,7 @@ autopilot-code 의 작업 산출물은 형제 bucket `plans/<date>_<slug>/` 에 
 ## Return Format
 
 ```
-.claude_reports/spec/ -- ✅ spec completed (mode: <list>)
+<artifact-root>/spec/ -- ✅ spec completed (mode: <list>)
 ```
 
 다음 단계 안내:

@@ -9,7 +9,8 @@ metadata:
   blurb: "코드 작업 일반 entry — 라이브러리·연구·앱 모두 커버, spec 컨텍스트 자동 감지"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 코드 작업 산출물은 spec 유무와 무관하게 **항상** `.claude_reports/plans/<date>_<slug>/` (청사진은 `spec/`, 작업은 `plans/` — 1 repo = 1 spec, 형제 bucket; [CONVENTIONS §5.4.3](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). plan/ + checklist는 T1 (root). dev_logs/, test_logs/는 T2 (root). reviewer 로그(plan_reviews, dev_reviews, test_reviews)는 모두 `_internal/` 하위. (모노레포 예외만 `spec/<component>/`·`plans/<component>/`.)
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 코드 작업 산출물은 spec 유무와 무관하게 **항상** `<artifact-root>/plans/<date>_<slug>/` (청사진은 `spec/`, 작업은 `plans/` — 1 repo = 1 spec, 형제 bucket; [CONVENTIONS §5.4.3](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). plan/ + checklist는 T1 (root). dev_logs/, test_logs/는 T2 (root). reviewer 로그(plan_reviews, dev_reviews, test_reviews)는 모두 `_internal/` 하위. (모노레포 예외만 `spec/<component>/`·`plans/<component>/`.)
+> `<artifact-root>` 해석: `.agent_reports` 우선, 없으면 legacy `.claude_reports`. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d "$REPORTS_DIR" ] || REPORTS_DIR=.claude_reports` 로 치환한다.
 
 ## Context Auto-Detection (spec mode 자동 분기 + 자료 자동 read)
 
@@ -18,16 +19,16 @@ metadata:
 | 자료 | 자리 | 우선순위 |
 |---|---|---|
 | `mem profile 07_coding_convention` (`python3 ~/.claude/tools/memory/mem.py profile 07_coding_convention`) | 사용자 cross-project 컨벤션 | 2순위 (default·fallback) |
-| `.claude_reports/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 | **1순위** — 코드 수정 4 원칙의 source. 충돌 시 per-project 우선 |
-| `.claude_reports/spec/prd.md` (있으면) | spec 청사진 | spec mode 별 추가 logic 활성화 |
-| `.claude_reports/spec/design/05_handoff/handoff.md` + `design/02_tokens/tokens.md` + `design/design_state.yaml` (app mode·design 산출 있으면) | 디자인 토큰·컴포넌트 인계 + 토큰 버전 | **app mode 1순위** — UI 구현은 이 토큰(`tokens_path`)·컴포넌트 위에서. 디자인팀 critic 의 _비교 기준_ 도 이 handoff. design 없으면 skip |
-| `.claude_reports/analysis_project/code/` 4 종 실험 자료 (`experiment_readiness`·`cleanup_candidates`·`similar_models`) | _실험 ready 정돈_ 자리 input | autopilot-code "실험 ready 정돈" 발화 시 자동 read |
+| `<artifact-root>/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 | **1순위** — 코드 수정 4 원칙의 source. 충돌 시 per-project 우선 |
+| `<artifact-root>/spec/prd.md` (있으면) | spec 청사진 | spec mode 별 추가 logic 활성화 |
+| `<artifact-root>/spec/design/05_handoff/handoff.md` + `design/02_tokens/tokens.md` + `design/design_state.yaml` (app mode·design 산출 있으면) | 디자인 토큰·컴포넌트 인계 + 토큰 버전 | **app mode 1순위** — UI 구현은 이 토큰(`tokens_path`)·컴포넌트 위에서. 디자인팀 critic 의 _비교 기준_ 도 이 handoff. design 없으면 skip |
+| `<artifact-root>/analysis_project/code/` 4 종 실험 자료 (`experiment_readiness`·`cleanup_candidates`·`similar_models`) | _실험 ready 정돈_ 자리 input | autopilot-code "실험 ready 정돈" 발화 시 자동 read |
 
 ### 1단계 — spec 존재 여부
 
 | 감지 조건 | 처리 |
 |---|---|
-| `.claude_reports/spec/pipeline_state.yaml` 존재 | spec 자동 Read + 그 안 `mode` 배열 따라 _추가 logic_ 활성화 |
+| `<artifact-root>/spec/pipeline_state.yaml` 존재 | spec 자동 Read + 그 안 `mode` 배열 따라 _추가 logic_ 활성화 |
 | 부재 (spec 없이 호출) | 일반 mode — 표준 dev/debug. cwd 단서 (`package.json` framework·`argparse` 등) 만 보고 _경량 추론_ |
 
 > **산출 경로는 spec 유무와 무관하게 항상 `plans/<date>_<slug>/`.** spec 의 `pipeline_state.yaml` 감지는 _spec mode 별 추가 logic_ (app/library/api/cli/research) 을 활성화할 뿐, OUTPUT PATH 를 가르지 않음.
@@ -144,7 +145,7 @@ spec 없이 호출된 자리에서도 cwd 단서로 _경량 mode 추정_:
 
 #### 자동 input
 
-`.claude_reports/analysis_project/code/` 에 있으면 자동 read:
+`<artifact-root>/analysis_project/code/` 에 있으면 자동 read:
 - **`cleanup_candidates.md`** — unused / dead branch / 주석 자국 list (제거 후보)
 - **`experiment_readiness.md`** — model 분리·train/eval 분리·seed·config 메커니즘 checklist (정리 후보)
 - **`experiment_conventions.md`** — 사용자 코드베이스의 preferred layer / config / prefix 패턴 (정돈 시 1순위 준수)
@@ -290,7 +291,7 @@ The pipeline runs with sane defaults and only pauses on genuinely ambiguous or d
 Resolve `$ARG` to a plan file path:
 1. If it ends with `.md` → use as-is
 2. If it's a directory path → append `/plan/plan.md`
-3. Otherwise, fuzzy search (project-keyed — search across all projects): `ls -d .claude_reports/plans/*/*$ARG* 2>/dev/null`
+3. Otherwise, fuzzy search (project-keyed — search across all projects): `ls -d <artifact-root>/plans/*/*$ARG* 2>/dev/null`
    - **1 match** → use `{match}/plan/plan.md`
    - **Multiple matches** → prefer folder without `_audit`/`_fix_` suffix; if still multiple, ask user
    - **No match** → report error
@@ -313,8 +314,8 @@ Otherwise:
    - Read the plan's "## Change Plan" target files. If any target is under `~/.claude/skills/*` / `~/.claude/agents/*` / `~/.claude/README.md` / `~/.claude/skills/.sync_state.json` → `task_type=meta-skill`.
    - If targets are under `~/.claude/settings.json` / `keybindings.json` / hooks → `task_type=infra/config`.
    - If targets are project source code (`.py`, `.cpp`, etc.) → `task_type=paper-driven code`.
-   - If targets are under `.claude_reports/documents/*` → `task_type=paper-driven doc`.
-   - If targets are under `.claude_reports/research/*` → `task_type=research artifact`.
+   - If targets are under `<artifact-root>/documents/*` → `task_type=paper-driven doc`.
+   - If targets are under `<artifact-root>/research/*` → `task_type=research artifact`.
    - If targets are **UI/visual** (`*.css` / `globals.css` / `styles/` / 앱 컴포넌트 `*.tsx`·`*.jsx` 의 _시각·레이아웃·디자인 토큰_ 변경) → `task_type=ui/visual`.
    - Mixed → `task_type=mixed`.
 
@@ -361,7 +362,7 @@ Otherwise (qa_level != quick), if code-test reports failure (after its internal 
 
 2. **Rollback source code only** (preserve plan/log files):
    - Read Safety commit hash from `plan/checklist.md` header: `Safety commit: {hash}`
-   - Run: `git checkout <safety-commit> -- <changed paths>` (NOT `.claude_reports/`)
+   - Run: `git checkout <safety-commit> -- <changed paths>` (NOT `<artifact-root>/`)
    - Verify with `git status`
 
 3. **Write failure memos into Korean plan**: Append `<!-- memo: [테스트 실패] code-test 실패. 상세: test_logs/test_report.md, _internal/test_reviews/. 대안 필요. -->` at relevant steps in `plan/plan_ko.md`.
@@ -382,14 +383,14 @@ Otherwise (qa_level != quick), if code-test reports failure (after its internal 
 Invoke Skill: `code-report` with the plan name/path as args.
 
 ### Step 6: Pipeline Summary Report
-> **동시성 가드 (공유 `.claude_reports`)**: `pipeline_summary.md`·`pipeline_state.yaml` 등 `spec/` 공유 단일파일 쓰기 _직전_ **OPERATIONS.md §5.8** `.pipeline-lock` 획득, 쓰기 직후 해제(짧게 보유). spec-drift 로 prd.md 갱신(§ "Spec 영향 변경 감지" → autopilot-spec update) 시도 lock 경유(해당 skill 이 자체 획득). `plans/<cycle>/` 쓰기는 경로 분리라 비-lock. BLOCKED(`exit 3`) 면 쓰기 멈추고 사용자 보고.
+> **동시성 가드 (공유 `<artifact-root>`)**: `pipeline_summary.md`·`pipeline_state.yaml` 등 `spec/` 공유 단일파일 쓰기 _직전_ **OPERATIONS.md §5.8** `.pipeline-lock` 획득, 쓰기 직후 해제(짧게 보유). spec-drift 로 prd.md 갱신(§ "Spec 영향 변경 감지" → autopilot-spec update) 시도 lock 경유(해당 skill 이 자체 획득). `plans/<cycle>/` 쓰기는 경로 분리라 비-lock. BLOCKED(`exit 3`) 면 쓰기 멈추고 사용자 보고.
 
 Write `pipeline_summary.md` per the **Pipeline Summary Template (mode=dev)** (see below).
 Then report to the user: pipeline_summary.md path + 2-3 line verdict.
 
 ### Step 7: analysis_project/code/ 영향 자리 자동 update (혼합 분기)
 
-코드 변경 후 `.claude_reports/analysis_project/code/` 자료가 _drift_ 빠지지 않게 — autopilot-code 가 _final-report 직후_ 영향 범위 검사 + 분기.
+코드 변경 후 `<artifact-root>/analysis_project/code/` 자료가 _drift_ 빠지지 않게 — autopilot-code 가 _final-report 직후_ 영향 범위 검사 + 분기.
 
 #### 7-1. 영향 범위 검사
 
@@ -472,7 +473,7 @@ Proposed fix: {fix approach}
 Scope: Minimal — fix the root cause only. Do not refactor or improve surrounding code.
 ```
 
-The plan folder will be: `.claude_reports/plans/{YYYY-MM-DD}_fix_{short-error-name}/`
+The plan folder will be: `<artifact-root>/plans/{YYYY-MM-DD}_fix_{short-error-name}/`
 
 ### Step 3: Review fix plan (QA only, skip research-team)
 - Skip 연구팀 review — debugging fixes should be fast.
@@ -515,7 +516,7 @@ Report to user: summary + verdict.
 
 _코드베이스/앱 "전수 자체점검 + 자율 수정"_ 자리. 발화 예: "전수 점검해서 더 효율적·효과적인 동작/UI 까지 컨펌없이 고쳐", "병렬 검토 많이 돌려". dev=새 기능 / debug=에러 진단 과 구분 — audit = _있는 것 전반을 훑어 개선_.
 
-> **audit mode vs 빌트인 `audit` 스킬**: 본 mode = _소스 코드·UI·동작_ 점검+수정. 빌트인 `audit` 스킬 = `.claude_reports/{plans,documents,research}` _산출물_ 린트 (대상 다름). 앱 점검은 본 mode.
+> **audit mode vs 빌트인 `audit` 스킬**: 본 mode = _소스 코드·UI·동작_ 점검+수정. 빌트인 `audit` 스킬 = `<artifact-root>/{plans,documents,research}` _산출물_ 린트 (대상 다름). 앱 점검은 본 mode.
 
 오케스트레이션은 main, 리뷰·수정은 fan-out. 산출물 `plans/<date>_audit/` (findings·triage·fixes·flagged).
 
@@ -530,7 +531,7 @@ _코드베이스/앱 "전수 자체점검 + 자율 수정"_ 자리. 발화 예: 
 - **flagged** — `risk med/high` (동작 변경·구조·스키마·데이터·판단 필요) → 자동수정 말고 보고.
 
 ### Step 3: Fix (autofix 클러스터)
-**⚠️ worktree 는 _현재 main(HEAD)_ 에서 판다** — `git worktree add <repo>-wt/audit-<key> -b <branch> main`. **`Workflow` 의 `isolation:'worktree'` 를 자율수정 fan-out 에 쓰지 말 것** (실측 2026-06-15: isolation worktree 가 32커밋 뒤 stale base 로 잡혀 머지 시 그간 작업을 revert — 5000줄+ 삭제 diff. review/triage 는 isolation 무방, _수정_ 만 명시 current-main worktree 로). 심링크(node_modules·.cache·.claude_reports·.env.local) 후 클러스터별 헤드리스 `claude -p "/autopilot-code …"` 분사(또는 팀 위임).
+**⚠️ worktree 는 _현재 main(HEAD)_ 에서 판다** — `git worktree add <repo>-wt/audit-<key> -b <branch> main`. **`Workflow` 의 `isolation:'worktree'` 를 자율수정 fan-out 에 쓰지 말 것** (실측 2026-06-15: isolation worktree 가 32커밋 뒤 stale base 로 잡혀 머지 시 그간 작업을 revert — 5000줄+ 삭제 diff. review/triage 는 isolation 무방, _수정_ 만 명시 current-main worktree 로). 심링크(node_modules·.cache·<artifact-root>·.env.local) 후 클러스터별 헤드리스 `claude -p "/autopilot-code …"` 분사(또는 팀 위임).
 - 각 fixer: 그 클러스터만 적용 (scope creep 금지·토큰 계약 준수) → **검증: `tsc --noEmit` 0 + full `next build`(DB 있어야 page-data 통과 → `.cache` 심링크 필수) + UI 변경은 디자인팀 verifier 실화면(light/dark/mobile390)** → 커밋. merge 안 함.
 
 ### Step 4: Harvest + Report

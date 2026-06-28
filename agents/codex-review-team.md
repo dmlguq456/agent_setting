@@ -59,7 +59,7 @@ Determine the mode based on the prompt/context:
 
 ## Procedure -- Plan Review Mode
 
-1. **Read the plan file.** Read the specified plan or latest under `.claude_reports/plans/`.
+1. **Read the plan file.** Read the specified plan or latest under `<artifact-root>/plans/`.
 2. **Delegate to Codex task.** Pass full plan content — not a summary:
    ```bash
    PLAN_FILE="<path>"

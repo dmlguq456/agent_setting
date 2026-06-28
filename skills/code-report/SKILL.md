@@ -13,7 +13,7 @@ metadata:
 Resolve `$ARG` to a plan file path:
 1. If it ends with `.md` → use as-is
 2. If it's a directory path → append `/plan/plan.md`
-3. Otherwise, fuzzy search: `ls -d .claude_reports/plans/*$ARG* 2>/dev/null`
+3. Otherwise, fuzzy search: `ls -d <artifact-root>/plans/*$ARG* 2>/dev/null`
    - **1 match** → use `{match}/plan/plan.md`
    - **Multiple matches** → prefer folder without `_audit`/`_fix_` suffix; if still multiple, ask user
    - **No match** → report error
@@ -58,7 +58,7 @@ Follow these instructions:
 2. Read the checklist (plan/checklist.md) to identify which steps succeeded, failed, or were skipped.
 3. Read all step log files (dev_logs/step_*.md) to extract every code change (old → new) with its Decision rationale, files modified, and what each change accomplished.
 4. Read QA review files (`_internal/dev_reviews/phase_*.md`) to extract issues found and how they were resolved.
-5. **Documentation Update**: Update `.claude_reports/analysis_project/code/` for successfully completed steps only (produced/maintained by `/analyze-project --mode code`). Topic-based file mapping is project-specific — pick the existing topic doc that best matches each changed file. Common patterns:
+5. **Documentation Update**: Update `<artifact-root>/analysis_project/code/` for successfully completed steps only (produced/maintained by `/analyze-project --mode code`). Topic-based file mapping is project-specific — pick the existing topic doc that best matches each changed file. Common patterns:
    - Model / module files → `model_modules.md` (or matching topic doc)
    - Network / backbone files → `network_modules.md`
    - Loss / objective files → `loss_functions.md`
@@ -70,7 +70,7 @@ Follow these instructions:
    - Project structure, doc table, file renames → `CLAUDE.md`
    Update Interface Reference tables (signatures, callers, line numbers). Skip if no steps succeeded. If the project does not yet have an `analysis_project/code/` directory, skip this step and recommend the user run `/analyze-project --mode code` once to bootstrap the topic docs.
    **Verification**: Verify every class/function line number in the Interface Reference table against the **post-edit** source (use Grep or a fresh Read of the file *after* your own Step 5 edits complete). Line numbers from pre-edit reads, the plan, or dev logs may be stale.
-6. **Confirm doc changes are real**: After step 5, run `git diff --stat -- .claude_reports/analysis_project/code/ CLAUDE.md` to confirm that documentation files were actually modified. If the diff is empty but you expected changes, something went wrong — re-read and re-edit the files. Report a doc update only after `git diff` confirms it.
+6. **Confirm doc changes are real**: After step 5, run `git diff --stat -- <artifact-root>/analysis_project/code/ CLAUDE.md` to confirm that documentation files were actually modified. If the diff is empty but you expected changes, something went wrong — re-read and re-edit the files. Report a doc update only after `git diff` confirms it.
 7. **Read pipeline_summary.md** (log_directory/pipeline_summary.md) if it exists. Extract the Decision Points table for section 4.5. If the file does not exist or the table is empty, write "자율 판단 이벤트 없음 (클린 실행)" for section 4.5.
 8. Synthesize the information into a report. Do NOT just list changes — explain the reasoning and connect them to the bigger picture.
 

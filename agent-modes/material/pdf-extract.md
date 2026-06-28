@@ -40,7 +40,7 @@ You extract figures/tables from PDFs using **pymupdf (fitz) caption-aware bbox c
 
 ## Cross-skill Reuse
 
-Figures extracted here during autopilot-research are persisted at `research/{topic}/figures/` and indexed in `cards/{paper}.md` (예: `**Figures**: ../figures/{paper_id}_fig1.png`). Subsequent skills (autopilot-draft, refine) discover these implicitly via `.claude_reports/research/{topic}/` reading.
+Figures extracted here during autopilot-research are persisted at `research/{topic}/figures/` and indexed in `cards/{paper}.md` (예: `**Figures**: ../figures/{paper_id}_fig1.png`). Subsequent skills (autopilot-draft, refine) discover these implicitly via `<artifact-root>/research/{topic}/` reading.
 
 ## Return Format (CRITICAL)
 ```

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Build manifest.json from the ~/.claude harness definitions (mechanical transcription).
+"""Build manifest.json from the agent harness definitions (mechanical transcription).
 
 SoT = the definitions themselves:
   - skills/*/SKILL.md   frontmatter  (name, argument-hint, metadata:{group,fam,modes,blurb})
   - agents/*.md         frontmatter  (name, model, metadata:{modes,blurb})
   - loops/README.md     "현역" table  + LOOP_LAYER constant
-  - settings.json       hooks registration (read-only)
+  - settings.json       Claude Code adapter hook registration (read-only)
   - TRACKS              documented constant (below), validated against discovered skills
 
 manifest.json is a PURE derivation — never hand-edit it. Edit the definitions, then
@@ -45,8 +45,8 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # tools
 MANIFEST_PATH = os.path.join(REPO_ROOT, "manifest.json")
 
 # Fixed provenance string — NO date/timestamp (idempotency invariant).
-GENERATED_FROM = ("~/.claude harness definitions "
-                  "(skills/*/SKILL.md, agents/*.md, loops/README.md, settings.json)")
+GENERATED_FROM = ("agent harness definitions "
+                  "(skills/*/SKILL.md, agents/*.md, loops/README.md, Claude adapter settings.json)")
 
 # hard_block allowlist = PreToolUse guards only (consumer attempt1 §2.4 / settings.json
 # PreToolUse). herdr-agent-state is also registered on PreToolUse but is a state-marker,

@@ -15,7 +15,7 @@ metadata:
 ## Design Resolution
 
 1. `--design <path>` 있으면 그것
-2. 없으면 `.claude_reports/designs/` 또는 `.claude_reports/spec/*/design/` 안 최신 `design_state.yaml`
+2. 없으면 `<artifact-root>/designs/` 또는 `<artifact-root>/spec/*/design/` 안 최신 `design_state.yaml`
 3. 부재 → "먼저 `/design-init` 실행 필요"
 
 ## Procedure

@@ -13,12 +13,12 @@ metadata:
 Resolve `$ARG` to a plan file path:
 1. If it ends with `.md` → use as-is
 2. If it's a directory path → append `/plan/plan.md`
-3. Otherwise, fuzzy search: `ls -d .claude_reports/plans/*$ARG* 2>/dev/null`
+3. Otherwise, fuzzy search: `ls -d <artifact-root>/plans/*$ARG* 2>/dev/null`
    - **1 match** → use `{match}/plan/plan.md`
    - **Multiple matches** → prefer folder without `_audit`/`_fix_` suffix; if still multiple, ask user
    - **No match** → fallback: treat argument as a file/directory path for direct testing
 
-Example: `/code-test inference-refactor` → `.claude_reports/plans/2026-03-18_inference-refactor/plan/plan.md`
+Example: `/code-test inference-refactor` → `<artifact-root>/plans/2026-03-18_inference-refactor/plan/plan.md`
 
 ## Language Rule
 - All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft).
@@ -130,8 +130,8 @@ After the 품질관리팀 (test 모드) agent returns:
 
 ## Log Directory Resolution
 - If $ARG points to a plan file: log directory is the task root (grandparent of `plan/plan.md`).
-  Example: `.claude_reports/plans/2026-03-18_refactor/plan/plan.md` → `.claude_reports/plans/2026-03-18_refactor/`
-- If no plan file: use `.claude_reports/tests/` with a date-stamped subdirectory.
+  Example: `<artifact-root>/plans/2026-03-18_refactor/plan/plan.md` → `<artifact-root>/plans/2026-03-18_refactor/`
+- If no plan file: use `<artifact-root>/tests/` with a date-stamped subdirectory.
 
 ## Task
 Test: $ARG

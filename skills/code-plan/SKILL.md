@@ -15,7 +15,7 @@ metadata:
 - All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft).
 
 ## Pre-Check
-Check if a similar plan already exists in `.claude_reports/plans/`. Behavior depends on plan status:
+Check if a similar plan already exists in `<artifact-root>/plans/`. Behavior depends on plan status:
 
 - `active`: Always ask the user — "기존에 진행 중인 plan이 있습니다. 이어서 진행할까요, 새로 만들까요?" Do NOT proceed until confirmed.
 - `done`/`failed`: Note it for reference and auto-proceed with new plan creation (no prompt).
@@ -30,7 +30,7 @@ Invoke the **plan-team** (기획팀) agent as a subagent with the following prom
 Plan mode. Create a new implementation plan.
 
 Task: {$ARGUMENTS}
-Save English plan to: .claude_reports/plans/{YYYY-MM-DD}_{short-task-name}/plan/plan.md
+Save English plan to: <artifact-root>/plans/{YYYY-MM-DD}_{short-task-name}/plan/plan.md
 Date: {YYYY-MM-DD}
 {If a done/failed/partial plan exists: "Reference previous plan: [path], status: [status]"}
 {If partial: "Failed steps from previous execution: [list from plan frontmatter failed_steps]"}
@@ -56,7 +56,7 @@ If `$ARGUMENTS` contains `--qa quick|light|standard|thorough|adversarial`, use t
 
 ## Post-Plan Review Loop (max 3 revision rounds; quick = 1 round)
 
-The log directory is the task root folder (parent of `plan/`). Example: `.claude_reports/plans/2026-03-18_task/plan/plan.md` → log dir is `.claude_reports/plans/2026-03-18_task/`. Run `mkdir -p {log_dir}/_internal/plan_reviews` before invoking QA.
+The log directory is the task root folder (parent of `plan/`). Example: `<artifact-root>/plans/2026-03-18_task/plan/plan.md` → log dir is `<artifact-root>/plans/2026-03-18_task/`. Run `mkdir -p {log_dir}/_internal/plan_reviews` before invoking QA.
 
 **Round counting:** Initialize `round = 0`. A round = one plan-team fix → QA review cycle; all parallel Thorough agents count as one round. Increment `round` only when QA is re-invoked after a revision. "max 3 rounds" means 기획팀 is invoked at most 3 times to fix issues. **`quick` mode**: max rounds = 1 — after the single review pass, exit regardless of 🔴 (record residuals as 미해결 이슈 and skip the fix-round).
 

@@ -117,6 +117,7 @@
 **모든 skill은 에이전트가 _프로젝트 루트에서 실행됨_을 전제로 함**:
 - `.agent_reports/`는 새 표준 artifact root 로 _현재 작업 디렉토리_에 생성·읽기·쓰기
 - `.claude_reports/`는 기존 프로젝트를 위한 legacy alias 로 읽기·쓰기 호환
+- 문서 표기 `<artifact-root>` 는 런타임에서 `.agent_reports` 를 우선 사용하고, 없으면 `.claude_reports` 를 fallback 으로 사용한다는 뜻이다. 쉘 예시는 실행 전 `REPORTS_DIR=.agent_reports; [ -d "$REPORTS_DIR" ] || REPORTS_DIR=.claude_reports` 로 치환한다.
 - analyze-project는 현재 dir의 파일을 읽음 (code/paper/doc 모드)
 - autopilot-code는 현재 dir에서 코드 변경
 - autopilot-{draft,research,refine}는 artifact root 하위 영속 산출물을 input으로 implicit 인지 (cross-project 작업은 `cd <other>` 후 별도 세션)

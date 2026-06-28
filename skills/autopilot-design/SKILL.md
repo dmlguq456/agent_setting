@@ -10,8 +10,8 @@ metadata:
 ---
 
 > 산출물 폴더:
-> - 사용자 직접 호출: `.claude_reports/designs/<name>/`
-> - autopilot-spec 에서 위임: `.claude_reports/spec/design/`
+> - 사용자 직접 호출: `<artifact-root>/designs/<name>/`
+> - autopilot-spec 에서 위임: `<artifact-root>/spec/design/`
 >
 > CONVENTIONS.md §5 3-tier — T1: root + design_state.yaml / T2: `00_init/`, `01_refs/`, … / T3: `_internal/` per phase.
 
@@ -78,7 +78,7 @@ scope 에 따라 일부 phase auto-skip:
 
 | 감지 조건 | 처리 |
 |---|---|
-| `.claude_reports/designs/<name>/design_state.yaml` 또는 `.claude_reports/spec/design/design_state.yaml` 부재 | **신규 cycle** — Phase 0 (design-init) 부터 처음 |
+| `<artifact-root>/designs/<name>/design_state.yaml` 또는 `<artifact-root>/spec/design/design_state.yaml` 부재 | **신규 cycle** — Phase 0 (design-init) 부터 처음 |
 | 위 path 존재 | **재호출** — `phases:` read + 발화 의도 분류 후 해당 phase 부터. _토큰 보존 + 새 컴포넌트만 확장_ 자리 자연 |
 
 `<name>` 추출 — 발화·cwd. autopilot-spec 의 app mode 자리면 `spec/design/` 우선.
@@ -276,7 +276,7 @@ last_updated: <timestamp>
 ## Auto-delegation from autopilot-spec
 
 autopilot-spec Phase 2 가 `Invoke Skill: autopilot-design --app <name>` 호출 시:
-- 산출물 위치를 `.claude_reports/spec/design/` 로 자동 설정
+- 산출물 위치를 `<artifact-root>/spec/design/` 로 자동 설정
 - `--qa` 옵션은 autopilot-spec 의 그것 상속
 - 완료 후 `phases.design: done` 을 autopilot-spec 의 `pipeline_state.yaml` 에 갱신
 

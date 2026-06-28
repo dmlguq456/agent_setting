@@ -21,7 +21,7 @@
 | market | 시장 분석 / 경쟁자 조사 / 채택 사례 | `research/{topic}/` — 5개 markdown |
 
 ## 산출물 위치
-`.claude_reports/research/{topic}/` 하위.
+`<artifact-root>/research/{topic}/` 하위.
 
 3-tier 컨벤션:
 - **T1** (root): `00_briefing.md`, `01_core_papers.md`, ..., `06_reading_guide.md` (mode에 따라 5-9개)

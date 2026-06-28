@@ -13,7 +13,7 @@ metadata:
 Resolve `$ARGUMENTS` to plan file paths. Always resolve BOTH `plan.md` and `plan_ko.md`:
 1. If it ends with `.md` → use as-is; derive the other file by path swap (`plan.md` ↔ `plan_ko.md`)
 2. If it's a directory path → append `/plan/plan.md` (English) and `/plan/plan_ko.md` (Korean)
-3. Otherwise, fuzzy search: `ls -d .claude_reports/plans/*$ARGUMENTS* 2>/dev/null`
+3. Otherwise, fuzzy search: `ls -d <artifact-root>/plans/*$ARGUMENTS* 2>/dev/null`
    - **1 match** → use `{match}/plan/plan.md` and `{match}/plan/plan_ko.md`
    - **Multiple matches** → prefer folder without `_audit`/`_fix_` suffix; if still multiple, ask user
    - **No match** → report error

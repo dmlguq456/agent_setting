@@ -1,6 +1,6 @@
 ---
 name: autopilot-apply
-description: "Autopilot family — the document-side _apply + verify_ arm. Takes a draft-produced cheatsheet (a mutation/edit plan) and applies it to a real working source file _outside_ `.claude_reports/` (e.g. the user's `main.tex`), under git, with a build/compile verify gate. This is the missing counterpart to autopilot-draft: draft _produces_ the cheatsheet (plan), autopilot-apply _executes_ it on the canonical source and _verifies_ it compiles — mirroring code-execute + code-test on the code side. Default target `latex` (latexmk compile gate + latexdiff rendered-diff review). Never touches the canonical source directly: applies on a git branch (or worktree), each mutation = one commit, hands back via `git merge`. Cheatsheet auto-discovered from `.claude_reports/documents/*/draft/`. NOT for `.claude_reports/` markdown artifacts (use autopilot-refine) or codebases (use autopilot-code)."
+description: "Autopilot family — the document-side _apply + verify_ arm. Takes a draft-produced cheatsheet (a mutation/edit plan) and applies it to a real working source file _outside_ `<artifact-root>/` (e.g. the user's `main.tex`), under git, with a build/compile verify gate. This is the missing counterpart to autopilot-draft: draft _produces_ the cheatsheet (plan), autopilot-apply _executes_ it on the canonical source and _verifies_ it compiles — mirroring code-execute + code-test on the code side. Default target `latex` (latexmk compile gate + latexdiff rendered-diff review). Never touches the canonical source directly: applies on a git branch (or worktree), each mutation = one commit, hands back via `git merge`. Cheatsheet auto-discovered from `<artifact-root>/documents/*/draft/`. NOT for `<artifact-root>/` markdown artifacts (use autopilot-refine) or codebases (use autopilot-code)."
 argument-hint: "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]"
 metadata:
   group: entry
@@ -9,7 +9,7 @@ metadata:
   blurb: "cheatsheet 초안을 canonical main.tex 에 paste·반영하는 적용 entry"
 ---
 
-> **산출물 폴더 컨벤션**: 본 skill 은 _.claude_reports/ 밖의 실제 작업 파일_ 을 편집한다 (예외적). 자기 로그·스냅샷은 cheatsheet artifact 의 `_internal/apply/` 하위에 둔다 ([CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) T3).
+> **산출물 폴더 컨벤션**: 본 skill 은 _<artifact-root>/ 밖의 실제 작업 파일_ 을 편집한다 (예외적). 자기 로그·스냅샷은 cheatsheet artifact 의 `_internal/apply/` 하위에 둔다 ([CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) T3).
 
 ## Position in autopilot family
 
@@ -37,11 +37,11 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 - `--target`: `latex` (현재 유일 구현)
 - `--isolation`: `branch` (default — git 분기. 대규모/위험하면 `worktree` 제안)
 - `--source`: cheatsheet 의 verification 섹션에서 자동 추론, 못 찾으면 컨펌 자리에서 질문
-- cheatsheet: prompt 키워드로 `.claude_reports/documents/*` fuzzy match (autopilot-refine 와 동일 방식)
+- cheatsheet: prompt 키워드로 `<artifact-root>/documents/*` fuzzy match (autopilot-refine 와 동일 방식)
 
 ### Override 1순위 — autopilot 우회
 - cheatsheet 자체를 _고치는_ 일 (적용 아님) → `/autopilot-refine` 또는 `/autopilot-draft --from draft`
-- `.claude_reports/` 안 markdown 산출물 수정 → `/autopilot-refine`
+- `<artifact-root>/` 안 markdown 산출물 수정 → `/autopilot-refine`
 - 코드베이스 변경 → `/autopilot-code`
 - `/autopilot-apply <args>` slash 직접 입력 → 컨펌 skip, 즉시 invoke
 
@@ -49,11 +49,11 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 
 ## Scope
 
-- **Targets**: `.claude_reports/` _밖_ 의 실제 작업 source (현재 `--target latex` → `*.tex`). git 으로 추적되는 프로젝트 전제.
-- **Source of changes**: `.claude_reports/documents/*/draft/draft*.md` 의 cheatsheet (autopilot-draft paper mode 산출물). 새 plan 을 만들지 않는다.
+- **Targets**: `<artifact-root>/` _밖_ 의 실제 작업 source (현재 `--target latex` → `*.tex`). git 으로 추적되는 프로젝트 전제.
+- **Source of changes**: `<artifact-root>/documents/*/draft/draft*.md` 의 cheatsheet (autopilot-draft paper mode 산출물). 새 plan 을 만들지 않는다.
 - **NOT for**:
-  - `.claude_reports/{research,documents}/*` markdown 산출물 → `/autopilot-refine`
-  - `.claude_reports/plans/*` / 코드베이스 → `/autopilot-code`
+  - `<artifact-root>/{research,documents}/*` markdown 산출물 → `/autopilot-refine`
+  - `<artifact-root>/plans/*` / 코드베이스 → `/autopilot-code`
   - cheatsheet 가 아직 없을 때 → 먼저 `/autopilot-draft --mode paper`
 
 ## Preconditions (Stage A 에서 강제 — 하나라도 실패 시 abort)
@@ -86,7 +86,7 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 
 ### Stage A — Preflight (적용 전 ceremony)
 
-1. **Cheatsheet 식별**: prompt 키워드로 `ls -d .claude_reports/documents/*<kw>*` fuzzy match → cheatsheet 파일 (`draft/draft.md` 또는 `draft/draft_ko.md`). 다수/0건 처리는 autopilot-refine Artifact Resolution 과 동일.
+1. **Cheatsheet 식별**: prompt 키워드로 `ls -d <artifact-root>/documents/*<kw>*` fuzzy match → cheatsheet 파일 (`draft/draft.md` 또는 `draft/draft_ko.md`). 다수/0건 처리는 autopilot-refine Artifact Resolution 과 동일.
 2. **Source 식별**: `--source` 명시값 우선. 없으면 cheatsheet 의 _최종 verification 체크리스트_ / WHERE anchor 에서 `*.tex` 경로 grep 추론. 못 찾으면 사용자에게 질문 (글로벌 §2 적용 — ScheduleWakeup 10분, 답 없으면 가장 그럴듯한 단일 `main.tex` 로 진행).
 3. **Precondition gate** (위 Preconditions 1-4) 강제. 실패 시 abort.
 4. **Mutation 파싱**: cheatsheet 에서 M-label 단위로 추출 — 각 mutation = `(M-id, where_anchor, classification, old_or_locator, new_block, reason)`. classification 은 cheatsheet 의 Tier (🔴/🟡/🟢) 또는 MECH/SEM/STRUCT 로 매핑.
@@ -185,6 +185,6 @@ last_completed_stage: verify
 
 ## When NOT to use
 - cheatsheet 자체를 수정 → `/autopilot-refine` / `/autopilot-draft --from draft`
-- `.claude_reports/` markdown 산출물 편집 → `/autopilot-refine`
+- `<artifact-root>/` markdown 산출물 편집 → `/autopilot-refine`
 - 코드베이스 변경 → `/autopilot-code`
 - cheatsheet 가 아직 없음 → `/autopilot-draft --mode paper` 먼저

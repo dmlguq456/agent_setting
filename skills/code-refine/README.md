@@ -14,7 +14,7 @@
 `$ARGUMENTS`를 `plan.md`와 `plan_ko.md` 양쪽으로 resolve:
 1. `.md` 접미사 → 그대로; 반대편은 경로 swap (`plan.md` ↔ `plan_ko.md`)
 2. 디렉토리 → `/plan/plan.md` + `/plan/plan_ko.md` 추가
-3. 퍼지 검색 → `ls -d .claude_reports/plans/*$ARGUMENTS*`:
+3. 퍼지 검색 → `ls -d <artifact-root>/plans/*$ARGUMENTS*`:
    - 1건 → `{match}/plan/plan.md` + `plan_ko.md`
    - 다건 → `_audit`/`_fix_` 없는 폴더 우선, 여전히 복수면 사용자 확인
    - 없음 → 에러

@@ -50,13 +50,15 @@ metadata:
 ## Language Rule
 - When explaining something to the user, write in Korean.
 
+> `<artifact-root>` 해석: `.agent_reports` 우선, 없으면 legacy `.claude_reports`. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d "$REPORTS_DIR" ] || REPORTS_DIR=.claude_reports` 로 치환한다.
+
 ## Argument Parsing
 Parse `$ARGUMENTS` for optional flags:
 
 - **query**: research topic, paper title, arXiv ID, or PDF path (remaining text after flags)
 - **--mode**: `academic` (default) | `technology` | `market` — investigation type (see Modes below)
 - **--depth**: `shallow` | `medium` (default) | `deep`
-- (no `--refs` flag — local reference materials should be pre-processed via `/analyze-project --mode paper` first → output goes to `.claude_reports/analysis_project/paper/` which autopilot-research auto-detects)
+- (no `--refs` flag — local reference materials should be pre-processed via `/analyze-project --mode paper` first → output goes to `<artifact-root>/analysis_project/paper/` which autopilot-research auto-detects)
 - **--qa**: `quick` | `light` | `standard` | `thorough` (default) | `adversarial` — QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical) 단일 source. `quick` 은 1라운드 강제 종료 + refine skip + fact-checker 비활성. `standard`+ 는 fact-checker (sonnet, parallel) 가 cards verbatim 대조 (citation/venue/year/metric). `adversarial` 은 thorough + Codex external review + **claim-verify** (적대적 외부 진위 — 카드 정합해도 외부 모순 시 kill; camera-ready / public report 같은 외부 strong scrutiny 자리).
 - **--from**: `search` | `analyze` | `report` — resume the pipeline at a specific stage (see Resume below)
 - **--no-clarify**: skip Step 0 Scope Clarification (force-run with current query as-is)
@@ -122,8 +124,8 @@ The pipeline auto-proceeds with sane defaults. There is no autonomy-level dial. 
 
 | 감지 조건 | 처리 |
 |---|---|
-| `.claude_reports/research/<topic>/pipeline_state.yaml` 부재 (또는 fuzzy match 0) | **신규** — Step 1 (Input Parsing) 부터 처음 |
-| `.claude_reports/research/<topic>/pipeline_state.yaml` 존재 (fuzzy match 1+) | **재진입** — `last_completed_stage:` read + 발화 의도 분류 후 해당 stage 부터 |
+| `<artifact-root>/research/<topic>/pipeline_state.yaml` 부재 (또는 fuzzy match 0) | **신규** — Step 1 (Input Parsing) 부터 처음 |
+| `<artifact-root>/research/<topic>/pipeline_state.yaml` 존재 (fuzzy match 1+) | **재진입** — `last_completed_stage:` read + 발화 의도 분류 후 해당 stage 부터 |
 
 `<topic>` 추출 — 발화 키워드 fuzzy match (예: `"speech enhancement 분야 재조사"` → topic=speech-enhancement). 다중 매치 시 사용자 컨펌.
 
@@ -158,7 +160,7 @@ topic: <name>
 - `analyze` — Step 3 (Phase A skimming + B chaining + C code search + analysis_summary)
 - `report` — Step 4 (Report Generation + QA loop)
 
-When `--from` is used, the positional argument should be either the artifact directory path or a fuzzy-matchable topic name. The orchestrator resolves it via `ls -d .claude_reports/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `query`, `mode`, `depth`, `qa_level`, `clarified_intent`. CLI flags override stored values. Step 0 Scope Clarification is always skipped on resume (already captured in first run).
+When `--from` is used, the positional argument should be either the artifact directory path or a fuzzy-matchable topic name. The orchestrator resolves it via `ls -d <artifact-root>/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `query`, `mode`, `depth`, `qa_level`, `clarified_intent`. CLI flags override stored values. Step 0 Scope Clarification is always skipped on resume (already captured in first run).
 
 ### pipeline_state.yaml
 
@@ -180,9 +182,9 @@ artifact_dir: <abs path>
 ### Step 1: Input Parsing & Validation
 - Detect query type: keyword, paper title, arXiv ID, PDF path, folder path
 - Resolve `--mode`: explicit flag value, or infer from query keywords (academic / technology / market — see Modes section). Notify user of inferred mode in one line. Multi-match → defer resolution to Step 1.5 Scope Clarification.
-- Auto-detect supplementary input: if `.claude_reports/analysis_project/paper/` exists in current dir, include as supplementary input for chaining. If user explicitly requested "use my local PDFs" but no `analysis_project/paper/` → suggest running `/analyze-project --mode paper` first.
+- Auto-detect supplementary input: if `<artifact-root>/analysis_project/paper/` exists in current dir, include as supplementary input for chaining. If user explicitly requested "use my local PDFs" but no `analysis_project/paper/` → suggest running `/analyze-project --mode paper` first.
 - Construct topic name (sanitize: lowercase, hyphens, max 30 chars)
-- Set artifact_dir: `.claude_reports/research/{topic}/`
+- Set artifact_dir: `<artifact-root>/research/{topic}/`
 - `mkdir -p {artifact_dir}` (only AFTER validation)
 
 ### Step 1.5: Scope Clarification (사전 조율) — skipped if `--no-clarify` or `--from`

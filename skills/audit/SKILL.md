@@ -1,6 +1,6 @@
 ---
 name: audit
-description: "Read-only multi-aspect audit / lint for `.claude_reports/{plans,research,documents}/*` artifacts. Single global entry — auto-detects artifact type from path prefix (plans=code; research=field-survey; documents=doc deliverable). Per-type lint aspects: doc → facts / style / structure / cross-ref / coverage; research → cards 정합성 / Tier consistency / coverage / cross-card; plans → test results / lint / code review / TODO·미구현. Default `--scope auto` — artifact 특성 기반 자동 선택; 사용자 명시는 1순위 override. Report-only — never modifies the artifact. Complementary to autopilot-refine: refine = edit flow, audit = inspect flow."
+description: "Read-only multi-aspect audit / lint for `<artifact-root>/{plans,research,documents}/*` artifacts. Single global entry — auto-detects artifact type from path prefix (plans=code; research=field-survey; documents=doc deliverable). Per-type lint aspects: doc → facts / style / structure / cross-ref / coverage; research → cards 정합성 / Tier consistency / coverage / cross-card; plans → test results / lint / code review / TODO·미구현. Default `--scope auto` — artifact 특성 기반 자동 선택; 사용자 명시는 1순위 override. Report-only — never modifies the artifact. Complementary to autopilot-refine: refine = edit flow, audit = inspect flow."
 argument-hint: "<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]"
 metadata:
   group: ops
@@ -10,6 +10,7 @@ metadata:
 ---
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 입력 artifact를 _수정하지 않음_ — 점검 보고서만 생성. 보고서는 `{artifact_dir}/_internal/audit/audit_{YYYY-MM-DDTHHMM}.md`에 기록.
+> `<artifact-root>` 해석: `.agent_reports` 우선, 없으면 legacy `.claude_reports`. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d "$REPORTS_DIR" ] || REPORTS_DIR=.claude_reports` 로 치환한다.
 
 ## Position in autopilot family
 
@@ -60,8 +61,8 @@ All user-facing output (chat report, audit log) in natural **Korean** (no transl
     /audit <artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--no-fact-check]
 
 - `<artifact_path>` (REQUIRED): one of
-  - Absolute path to a `.claude_reports/{plans,research,documents}/*` directory
-  - Fuzzy short name (e.g., `se-seminar-tfrestormer`) — resolved via `ls -d .claude_reports/{plans,research,documents}/*$ARG* 2>/dev/null`. 1 match → use; multiple → ask user (글로벌 [CLAUDE.md](../../CLAUDE.md) §2 적용 — ScheduleWakeup 10분; 답 없으면 가장 최근 수정 artifact); 0 → error.
+  - Absolute path to a `<artifact-root>/{plans,research,documents}/*` directory
+  - Fuzzy short name (e.g., `se-seminar-tfrestormer`) — resolved via `ls -d <artifact-root>/{plans,research,documents}/*$ARG* 2>/dev/null`. 1 match → use; multiple → ask user (글로벌 [CLAUDE.md](../../CLAUDE.md) §2 적용 — ScheduleWakeup 10분; 답 없으면 가장 최근 수정 artifact); 0 → error.
 - `--scope` (default `auto`): which aspect set to check. **사용자 명시는 1순위 (override)**. 명시 없으면 audit이 artifact 특성 (mode / refine 횟수 / status / 구조)을 보고 _스스로 적절한 aspect set 선택_. 명시 값은 `facts | style | structure | cross-ref | coverage | all` 중 하나로 type-specific aspect group에 매핑 (Stage B 표 참조).
 - `--read-only` (default for plans): if specified for `plans` type, skip any aspect that requires _executing_ tests / lints — only static inspection (file diff, TODO grep, code review heuristics). For `research` / `documents` types, `--read-only` is implicit and the flag is a no-op (warn: "audit는 research/documents에 대해 항상 read-only").
 - `--report-only`: skip the auto-fix chain (Stage E). With this flag, `/audit` produces the report and stops — same as previous default behavior. Use when you want only inspection without follow-up edits.
@@ -73,10 +74,10 @@ All user-facing output (chat report, audit log) in natural **Korean** (no transl
 
 1. Resolve `<artifact_path>` to an absolute directory path.
 2. Inspect path prefix:
-   - `.claude_reports/plans/*` → **plans** type (autopilot-code dev/debug plan)
-   - `.claude_reports/research/*` → **research** type (field survey)
-   - `.claude_reports/documents/*` → **documents** type (doc strategy + draft)
-   - Other → error: "audit은 .claude_reports/{plans,research,documents}/* 산출물 전용. resolved path: {path}"
+   - `<artifact-root>/plans/*` → **plans** type (autopilot-code dev/debug plan)
+   - `<artifact-root>/research/*` → **research** type (field survey)
+   - `<artifact-root>/documents/*` → **documents** type (doc strategy + draft)
+   - Other → error: "audit은 <artifact-root>/{plans,research,documents}/* 산출물 전용. resolved path: {path}"
 3. Print one-line to user (Korean): `Type 인식: {type} — {artifact short name}`.
 
 ### Stage B — Determine effective scope
@@ -190,7 +191,7 @@ For each remaining aspect in scope, run the lint and collect issues. _Each issue
 **Cards source resolution (shared by `facts` / `coverage`, same rule as Phase 1 Step 1.1 case (c))**:
 1. **case (c) — explicit `cards_source` override**: if `pipeline_summary.md` frontmatter or `strategy.md` body has a `cards_source: <path>` key, use _that path_ as the primary lookup root (single research topic).
 2. **case (b) — self-contained `{artifact_dir}/cards/`**: if exists, include in the lookup set.
-3. **Default — cross-research grep** (`.claude_reports/research/*/cards/*.md`): only when both above are absent. Emit a one-line chat warn: `⚠ cards_source key absent — grepping all research topics. Generic acronyms (STFT/RNN, etc.) may false-positive. Recommend adding \`cards_source: <path>\` to strategy.md frontmatter.`
+3. **Default — cross-research grep** (`<artifact-root>/research/*/cards/*.md`): only when both above are absent. Emit a one-line chat warn: `⚠ cards_source key absent — grepping all research topics. Generic acronyms (STFT/RNN, etc.) may false-positive. Recommend adding \`cards_source: <path>\` to strategy.md frontmatter.`
 4. **case (a) — no cards anywhere**: skip the facts / coverage aspects and emit an informational line (`ℹ facts/coverage skipped — no cards source available`). style / structure / cross-ref still run.
 
 This shared resolution ensures the Phase 1 detector and the Phase 3 audit use the _same_ source-of-truth rule — preventing false-positive floods and yielding consistent verdicts.
@@ -227,7 +228,7 @@ This shared resolution ensures the Phase 1 detector and the Phase 3 audit use th
 - **lint** (`--read-only` skips _executing_ lint; we _read existing_ lint output from `dev_logs/` if present): missing lint output → 🟡; existing lint report with errors → 🔴.
 - **code review**: read `_internal/dev_reviews/` and `_internal/plan_reviews/` for 🔴 issues. Unresolved 🔴 → 🔴. 🟡 issues → 🟡.
 - **TODO·미구현**: grep code in `plan/checklist.md` for `[ ]` unchecked steps, plus any source-file TODO/FIXME/XXX comments referenced from the plan. Unchecked critical step → 🔴. Source TODO → 🟡.
-- **semantic-deterministic consistency** (worklog-board 참사, 2026-06-22 — DESIGN_PRINCIPLES §0.7): spec 의 _의미 판단_ 언급을 구현이 capture 했나. spec 본문 (`.claude_reports/spec/prd.md` 또는 plan 이 참조하는 spec) 에서 의미 판단 구간 grep (의미/판단/적절/맥락/contextual/semantic) → 대응 구현(plan 의 target 코드)이 그 의미를 토큰 매칭·규칙 스크립트로 떨궜는지 확인. **매핑**: spec 섹션 제목·모듈명 ↔ plan 의 target file 목록 (checklist.md 또는 plan 본문이 참조하는 코드 경로) 으로 연결. mismatch → 🔴, **issue 의 `message`/`suggested fix` 본문에 "spec {prd.md:N} 의 의미요구 ↔ code {src.py:M} 의 토큰규칙" 쌍을 _문장으로_ 명시** (live issue shape 의 `file:line` 은 단수라 거기 두 쪽을 못 담음 — 인과 쌍은 message 문장으로 담는다) + §0.7 의 3선택을 suggested fix 로 제시. **매핑 불명확 시 🔴 대신 🟡 (점검 불가 표시)** — 매핑 없이 grep 만으로는 false-negative/false-positive 위험. dual-perspective P2 의 issue shape `(aspect, file, line_range, severity, message, suggested fix)` 그대로 재사용 (새 framework X — shape 불변).
+- **semantic-deterministic consistency** (worklog-board 참사, 2026-06-22 — DESIGN_PRINCIPLES §0.7): spec 의 _의미 판단_ 언급을 구현이 capture 했나. spec 본문 (`<artifact-root>/spec/prd.md` 또는 plan 이 참조하는 spec) 에서 의미 판단 구간 grep (의미/판단/적절/맥락/contextual/semantic) → 대응 구현(plan 의 target 코드)이 그 의미를 토큰 매칭·규칙 스크립트로 떨궜는지 확인. **매핑**: spec 섹션 제목·모듈명 ↔ plan 의 target file 목록 (checklist.md 또는 plan 본문이 참조하는 코드 경로) 으로 연결. mismatch → 🔴, **issue 의 `message`/`suggested fix` 본문에 "spec {prd.md:N} 의 의미요구 ↔ code {src.py:M} 의 토큰규칙" 쌍을 _문장으로_ 명시** (live issue shape 의 `file:line` 은 단수라 거기 두 쪽을 못 담음 — 인과 쌍은 message 문장으로 담는다) + §0.7 의 3선택을 suggested fix 로 제시. **매핑 불명확 시 🔴 대신 🟡 (점검 불가 표시)** — 매핑 없이 grep 만으로는 false-negative/false-positive 위험. dual-perspective P2 의 issue shape `(aspect, file, line_range, severity, message, suggested fix)` 그대로 재사용 (새 framework X — shape 불변).
 
 ### Stage D — Report
 
@@ -360,7 +361,7 @@ After Stage D's report write + chat output, **automatically trigger a fix flow**
 ## Constraints
 
 - **Audit pass is read-only** — Stage A-D never modify the audited artifact (the audit log is written under `_internal/audit/`). Stage E _dispatches a separate skill_ (`autopilot-code` or `autopilot-refine`) which then makes edits per its own confirmation flow. With `--report-only`, Stage E is skipped entirely.
-- **No web fetch** — all lookups are local (`.claude_reports/*` files only). Cards grep, Style Guide read, regex scan. Cost is small.
+- **No web fetch** — all lookups are local (`<artifact-root>/*` files only). Cards grep, Style Guide read, regex scan. Cost is small.
 - **No agent invocation** — `/audit` is a single-Claude task. No 연구팀 / 품질관리팀 subagent calls. (Future enhancement may add `--qa` levels with agent-backed lint; out of scope for v1.)
 - **Type-specific aspects** — research aspects do not run on documents artifacts and vice versa. `--scope cross-ref` on plans warns and skips.
 - **Suggestion only (Stage A-D)** — every 🔴 / 🟡 finding may include a "Suggested fix" line. Stage E dispatches these suggestions to the appropriate skill, which follows its own protocol (autopilot-refine: default 자동 apply + STRUCT halt + 사후 git diff 검토; autopilot-code: phase QA gates + safety commit + final report).

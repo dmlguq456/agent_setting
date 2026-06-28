@@ -7,7 +7,7 @@
 
 ## Procedure
 
-1. **Read the plan file.** Read the latest file under `.claude_reports/plans/` or the specified file.
+1. **Read the plan file.** Read the latest file under `<artifact-root>/plans/` or the specified file.
 2. **Verify against actual code.** For each step, read the target files/functions/classes to check whether the plan's assumptions match reality.
 3. **Check the following:**
    - Do the files/functions/variables referenced in the plan actually exist?

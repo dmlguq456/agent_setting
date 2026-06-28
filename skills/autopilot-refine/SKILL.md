@@ -1,6 +1,6 @@
 ---
 name: autopilot-refine
-description: "Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: target artifact identified via prompt fuzzy match against `.claude_reports/{research,documents}/*`, then auto-discovers the artifact's file structure, plans edits, shows a diff preview in chat, and on user confirm applies edits with versioning + integrated history logging in `pipeline_summary.md` (single source of truth — no separate CHANGELOG). Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough/adversarial for multi-round review, fact-check, or external Codex adversarial pass. Optional `--memo <file>` falls back to file-memo style for deferred reviews."
+description: "Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: target artifact identified via prompt fuzzy match against `<artifact-root>/{research,documents}/*`, then auto-discovers the artifact's file structure, plans edits, shows a diff preview in chat, and on user confirm applies edits with versioning + integrated history logging in `pipeline_summary.md` (single source of truth — no separate CHANGELOG). Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough/adversarial for multi-round review, fact-check, or external Codex adversarial pass. Optional `--memo <file>` falls back to file-memo style for deferred reviews."
 argument-hint: "\"<prompt>\" [--qa quick|light|standard|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
 metadata:
   group: entry
@@ -21,9 +21,9 @@ Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag a
 
 ## Default Invocation Rule (메인 Claude 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude는 사용자가 `.claude_reports/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다 (`--qa thorough` default). **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
+본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude는 사용자가 `<artifact-root>/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다 (`--qa thorough` default). **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
 
-**Scope**: `.claude_reports/{documents,research}/*` 엄격 한정. project root의 임의 `.md`/`.txt`나 코드 산출물(`.claude_reports/plans/*`)은 적용 X — 전자는 일반 Edit, 후자는 `/code-refine` 또는 `/autopilot-code`.
+**Scope**: `<artifact-root>/{documents,research}/*` 엄격 한정. project root의 임의 `.md`/`.txt`나 코드 산출물(`<artifact-root>/plans/*`)은 적용 X — 전자는 일반 Edit, 후자는 `/code-refine` 또는 `/autopilot-code`.
 
 ### Major vs Minor — 3-criteria 판정
 
@@ -114,8 +114,8 @@ frontmatter `changelog:` 필드 자체가 없는 file은 skip. **이 step은 pip
 
 ## Scope
 
-- **Targets**: `.claude_reports/research/*` and `.claude_reports/documents/*`
-- **NOT for**: `.claude_reports/plans/*` (code) — use `/code-refine`, `/code-execute`, or `/autopilot-code` instead. Code changes need test-based verification, not diff review.
+- **Targets**: `<artifact-root>/research/*` and `<artifact-root>/documents/*`
+- **NOT for**: `<artifact-root>/plans/*` (code) — use `/code-refine`, `/code-execute`, or `/autopilot-code` instead. Code changes need test-based verification, not diff review.
 - Why this skill exists: the existing `draft-refine` / `code-refine` workflow is file-memo only, which is too heavy for routine prompt-driven edits. `autopilot-refine` is the lightweight default; memo style is reduced to an opt-in fallback.
 
 ## --qa <level> (default: thorough)
@@ -145,7 +145,7 @@ Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/draft-
 | `autopilot-refine "<prompt>" --review-only` | Investigate + diff preview. No edits, no version, no log. _점검만_ 원할 때. |
 | `autopilot-refine --memo <file> "<prompt or artifact hint>"` | Read memo file as proposal source. Default 동작과 동일 (자동 apply). `--confirm` 추가 가능. |
 
-> **Target artifact identification**: prompt에 포함된 키워드로 `.claude_reports/{research,documents}/*` fuzzy match. 매치 1 → 사용. 다수 → 사용자에게 list 보여주고 선택 요청. 0 → "어느 산출물? prompt에 명시 부탁" 안내.
+> **Target artifact identification**: prompt에 포함된 키워드로 `<artifact-root>/{research,documents}/*` fuzzy match. 매치 1 → 사용. 다수 → 사용자에게 list 보여주고 선택 요청. 0 → "어느 산출물? prompt에 명시 부탁" 안내.
 
 > **Default = 자동 apply 근거**: family 다른 멤버(`autopilot-research/code/doc`)는 모두 confirm 없이 pipeline 끝까지 실행 — autopilot 정신. refine만 default가 confirm이면 이름과 mismatch. Safety net: (a) `_internal/versions/v{prev}/` 스냅샷, (b) `pipeline_summary.md` 통합 history, (c) `git diff` 즉시 검토, (d) Stage B.5 `⚠ Unverified/Style` marker가 본문에 박혀 사후 git diff에서 식별 가능, (e) audit auto-fix chain dispatch와 정합.
 
@@ -162,7 +162,7 @@ Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/draft-
 Extract candidate keywords from the `<prompt>` (skip stop words; pick noun-ish tokens like artifact names, topic names, dates). Run fuzzy match:
 
 ```bash
-ls -d .claude_reports/research/*<keyword>* .claude_reports/documents/*<keyword>* 2>/dev/null
+ls -d <artifact-root>/research/*<keyword>* <artifact-root>/documents/*<keyword>* 2>/dev/null
 ```
 
 - **1 match** → use as artifact root. Detect type by path prefix.
@@ -170,13 +170,15 @@ ls -d .claude_reports/research/*<keyword>* .claude_reports/documents/*<keyword>*
 - **0 matches** → ask user to clarify the artifact name in the prompt (e.g., "어느 산출물에 대한 작업인가요? prompt에 식별자(`speech-enhancement-trends`, `2026-05-06_se-seminar-tfrestormer` 같은) 포함 부탁"). 글로벌 [CLAUDE.md](../../CLAUDE.md) §2 적용 — ScheduleWakeup 10분 동시 호출, 답 없으면 가장 최근 수정된 artifact 로 자율 진행.
 
 Detect type by path prefix:
-- `.claude_reports/research/*` → **research** type
-- `.claude_reports/documents/*` → **doc** type
+- `<artifact-root>/research/*` → **research** type
+- `<artifact-root>/documents/*` → **doc** type
 - 그 외 (e.g., user typed an absolute path that's not a research/documents artifact) → error: "autopilot-refine은 research/documents 산출물 전용".
 
 ## Language Rule
 
 All user-facing output (chat diffs, pipeline_summary entries, reports) in natural **Korean** (no translationese — write Korean natively, don't translate from an English draft).
+
+> `<artifact-root>` 해석: `.agent_reports` 우선, 없으면 legacy `.claude_reports`. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d "$REPORTS_DIR" ] || REPORTS_DIR=.claude_reports` 로 치환한다.
 
 ---
 
@@ -229,8 +231,8 @@ For each detected claim, look up ground truth. **Lookup source resolution (in pr
 1. **case (c) — explicit `cards_source` override**: if the artifact's `pipeline_summary.md` frontmatter or `strategy.md` body contains a `cards_source: <path>` key, use _that path_ as the primary lookup root (resolved relative to cwd or absolute).
 2. **case (b) — self-contained `cards/` inside the artifact**: if `{artifact_dir}/cards/*.md` exists (rare; some doc artifacts are self-contained), include it in the lookup set.
 3. **Default**:
-   - **Research artifacts** (`.claude_reports/research/{topic}/cards/*.md`): grep the artifact's own `cards/` dir.
-   - **Doc artifacts** (`.claude_reports/documents/*/`): grep ALL `.claude_reports/research/*/cards/*.md` files (cross-research lookup) — doc artifacts may reference cards from any research topic. Match by filename token AND by H1 / `## 메타` `**Venue**`/`**arXiv ID**` fields.
+   - **Research artifacts** (`<artifact-root>/research/{topic}/cards/*.md`): grep the artifact's own `cards/` dir.
+   - **Doc artifacts** (`<artifact-root>/documents/*/`): grep ALL `<artifact-root>/research/*/cards/*.md` files (cross-research lookup) — doc artifacts may reference cards from any research topic. Match by filename token AND by H1 / `## 메타` `**Venue**`/`**arXiv ID**` fields.
 4. **case (a) — no cards source available**: if after resolving all the above the candidate file set is _empty_ (0 cards found in any of the above locations; e.g., autopilot-refine invoked from a workspace that has no research artifacts), the detector **skips the factual-claim aspect entirely** (style lint still runs). Stage C diff preview emits one informational line at the top: `ℹ Stage B.5: no cards source available in this workspace — fact-check skipped`. No `⚠ Unverified` markers are emitted. This prevents false-positive marker flooding in non-research workspaces.
 
 For each claim (when cards are available), classify the lookup result per the _single-source classification table_ — **`agents/research-team.md` _Fact-checker subrole_ 절** 의 8-row 표 (cards-verbatim / cards-name-only / external-marker / external-reverified / conflict / no-match / ambiguous / circular-ref). Stage B.5 본문은 orchestrator-side detector 이므로 _emit wording_ 만 본 절에 명시 (classification 정의 자체는 agent 본문이 single source — 향후 변경 시 agent 본문 한 곳만 갱신):
@@ -462,7 +464,7 @@ Parse the user's reply, then:
 
 ## Constraints
 
-- **빈칸 > 잘못 채우기** — when Stage B.5 flags an `⚠ Unverified` claim and no ground-truth source confirms it within the artifact's `cards/` (or cross-research `.claude_reports/research/*/cards/`), prefer to leave the claim **blank or marked `[?]`** in the new_text rather than filling it from inference. Applies even if the prompt seems to require the claim — emit the marker and let the user decide. Cost of a `[?]` placeholder is small; cost of a hallucinated venue/year/task is high (drift compounds over 20+ refine cycles).
+- **빈칸 > 잘못 채우기** — when Stage B.5 flags an `⚠ Unverified` claim and no ground-truth source confirms it within the artifact's `cards/` (or cross-research `<artifact-root>/research/*/cards/`), prefer to leave the claim **blank or marked `[?]`** in the new_text rather than filling it from inference. Applies even if the prompt seems to require the claim — emit the marker and let the user decide. Cost of a `[?]` placeholder is small; cost of a hallucinated venue/year/task is high (drift compounds over 20+ refine cycles).
 - **No silent additions** — Stage D applies only what was shown in Stage C diff (or auto-mode summary). If a new issue is discovered during apply, abort that single edit and note it in the v{N} 변경 사항 section's `Skipped` list, but do NOT propose new edits beyond the original list.
 - **Versioning is mandatory** when applying — every apply increments version + creates snapshot. Only `--review-only` skips this (because it doesn't apply).
 - **Cards = primary source for research** — for taxonomy/definition/coverage prompts, always re-read `cards/*.md` and cite in reasoning.

@@ -73,7 +73,7 @@ ANY agent의 이슈 처리 필수.
 
 ## 로그 디렉토리 규칙
 - plan 파일: 로그 dir = task root (plan/plan.md의 조부모)
-- plan 없음: `.claude_reports/tests/` + 날짜 스탬프 서브디렉토리
+- plan 없음: `<artifact-root>/tests/` + 날짜 스탬프 서브디렉토리
 
 ---
 *원본: `~/.claude/skills/code-test/SKILL.md`*

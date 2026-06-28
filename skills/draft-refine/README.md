@@ -36,7 +36,7 @@ flowchart TD
 ## 2. Mandatory Ref-Grounding (핵심)
 각 메모마다 *적용 전에* 필수:
 1. 메모가 가리키는 source 식별:
-   - Paper analyses (`.claude_reports/analysis_project/paper/*.md`) — citation / venue / score / dataset 사실 (single source of truth)
+   - Paper analyses (`<artifact-root>/analysis_project/paper/*.md`) — citation / venue / score / dataset 사실 (single source of truth)
    - Strategy document — narrative arc / outline 정합성
    - Analysis files — audience / key messages / visual strategy
    - Original PDFs — paper 본문 재독이 필요한 nuanced 주장 (paper analyses 부족 시만)

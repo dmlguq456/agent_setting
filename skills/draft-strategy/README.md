@@ -19,7 +19,7 @@
 ### 인자
 - **mode**: 첫 단어 — `rebuttal | paper | review | report | proposal | presentation` (6개)
 - **--inputs**: Input Discovery 결과 path list (콤마 구분). autopilot-draft Pre-flight Step 2에서 결정.
-- **--output**: artifact 디렉토리 (`.claude_reports/documents/{date}_{name}/`)
+- **--output**: artifact 디렉토리 (`<artifact-root>/documents/{date}_{name}/`)
 - 남은 텍스트: task description
 
 > survey 모드는 autopilot-research로 분리됨 (`/autopilot-research <주제> --mode academic|technology|market`).

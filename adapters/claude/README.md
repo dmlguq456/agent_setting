@@ -1,0 +1,34 @@
+# Claude Code Adapter
+
+This adapter maps the common agent harness onto Claude Code.
+
+## Entry Points
+
+| Surface | File |
+|---|---|
+| Session bootstrap | `CLAUDE.md` |
+| Runtime settings | `settings.json` |
+| Slash commands | `commands/` |
+| Capabilities | `skills/*/SKILL.md` |
+| Role profiles | `agents/*.md` |
+| Hook scripts | `hooks/`, `utilities/` |
+| Status line | `statusline.sh` |
+
+## Runtime Mapping
+
+| Core Concept | Claude Code Implementation |
+|---|---|
+| capability | Skill |
+| role profile | Agent |
+| adapter bootstrap | `CLAUDE.md` |
+| artifact root | `.agent_reports`, fallback `.claude_reports` |
+| tracked/untracked signal | `workflow-guard-hook.sh` + `statusline.sh` |
+| artifact-order gate | `hooks/artifact-guard.sh` |
+| spec read gate | `hooks/spec-skill-gate.sh` + `hooks/spec-read-marker.sh` |
+| git safety gate | `hooks/git-state-guard.sh` |
+| memory write guard | `hooks/builtin-memory-guard.sh` |
+
+## Compatibility
+
+Claude Code projects created before the neutral artifact root use `.claude_reports/`. This adapter recognizes both names. New projects should use `.agent_reports/`; existing projects can migrate later or keep the legacy directory indefinitely.
+

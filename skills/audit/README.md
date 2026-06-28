@@ -3,7 +3,7 @@
 > 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
-Read-only multi-aspect audit / lint for `.claude_reports/{plans,research,documents}/*` artifacts. Single global entry — auto-detects artifact type from path prefix (plans=code; research=field-survey; documents=doc deliverable).
+Read-only multi-aspect audit / lint for `<artifact-root>/{plans,research,documents}/*` artifacts. Single global entry — auto-detects artifact type from path prefix (plans=code; research=field-survey; documents=doc deliverable).
 
 Type별 lint aspects:
 - **doc** → facts / style / structure / cross-ref / coverage
@@ -28,7 +28,7 @@ doc / research artifact는 추가로 **dual-perspective** 점검:
 /audit <artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]
 ```
 
-- `<artifact_path>` — `.claude_reports/{documents,research,plans}/{name}` 또는 fuzzy match 가능한 단축명
+- `<artifact_path>` — `<artifact-root>/{documents,research,plans}/{name}` 또는 fuzzy match 가능한 단축명
 - `--scope`: 강조할 측면 (override 1순위). 미명시 시 `auto` — artifact 특성(mode / refine 횟수 / status)을 보고 적절한 aspect 자동 선택
 - `--read-only` (code plan 한정): 테스트 실행 없이 정적 lint만
 - `--report-only`: 점검만, auto-fix dispatch 없이

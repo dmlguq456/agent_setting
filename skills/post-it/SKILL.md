@@ -129,7 +129,7 @@ post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + 
 
 **project scope (default)**:
 1. `python3 ~/.claude/tools/memory/mem.py recall "" --tier working --scope project` 로 현 cwd working 레코드 전체 조회.
-2. 현 산출물과 대조: `.claude_reports/plans/*/`·`documents/*/`·`spec/`·`experiments/*/` + `git log --oneline -30` + 관련 코드·문서.
+2. 현 산출물과 대조: `<artifact-root>/plans/*/`·`documents/*/`·`spec/`·`experiments/*/` + `git log --oneline -30` + 관련 코드·문서.
 3. 각 레코드 분류:
    - **graduated** — 내용이 산출물에 영구 반영됨 → 만료 후보 (+ 어디로 갔는지 한 줄 pointer).
    - **stale** — 시간 기반 lifecycle tier. 대상 = `type=thread/decision/hint` (time-sensitive):

@@ -9,7 +9,7 @@ metadata:
   blurb: "앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트"
 ---
 
-> 산출물 폴더: `.claude_reports/spec/ship.md` 안 누적 ([CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier).
+> 산출물 폴더: `<artifact-root>/spec/ship.md` 안 누적 ([CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier).
 
 ## Purpose — _앱 배포 셋업_ entry
 
@@ -54,7 +54,7 @@ metadata:
 
 ## Context Auto-Detection
 
-호출 자리에서 `.claude_reports/spec/pipeline_state.yaml` 자동 검사:
+호출 자리에서 `<artifact-root>/spec/pipeline_state.yaml` 자동 검사:
 
 | 감지 | 처리 |
 |---|---|
