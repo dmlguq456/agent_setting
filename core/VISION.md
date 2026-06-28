@@ -36,7 +36,7 @@ Hermes Agent 벤치마킹 결론: 우리와 Hermes 는 self-improving agent 의 
 
 | Phase | 목표 | 산출 형태 | 게이트 |
 |---|---|---|---|
-| **P0 — 현 세팅 강화** (진행 중) | Hermes 갭 이식(T1~T6): 자동 recall·자기개선 초안·lifecycle·multi-pass | `~/.claude` 내부 (지침·loops·skills) | drill 회귀 통과 |
+| **P0 — 현 세팅 강화** (진행 중) | Hermes 갭 이식(T1~T6): 자동 recall·자기개선 초안·lifecycle·multi-pass | `<agent-home>` 내부 (지침·loops·skills) | drill 회귀 통과 |
 | **P1 — 패키징/플러그인화** | 흩어진 부품을 *설치 가능한 단위*로 — 표준 plugin 매니페스트·의존 선언·설정 스캐폴드 | Claude Code plugin (marketplace 배포 가능 형태) | 보안 체크리스트 + 재현 설치 검증 |
 | **P2 — 설치 프로그램** | 비전문가도 설치만으로 전체 세팅을 부팅 — installer + 격리 실행 환경 + 안전 기본값 | 독립 설치본 | containment 검증 + 외부 보안 검토 |
 

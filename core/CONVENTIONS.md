@@ -2,7 +2,7 @@
 
 > 본 문서는 autopilot family 전체에 적용되는 _운영 규칙·정의_의 **단일 source of truth**. `DESIGN_PRINCIPLES.md`가 _architectural design_(orchestrator/skill/agent 분리, interface contract 등)을 다룬다면, 본 문서는 _operational conventions_(QA level 정의, model-role 표기, family-wide flag 정책 등)을 다룬다.
 >
-> **자동 로드 메커니즘**: `CLAUDE.md`의 "Source of Truth"에 본 파일이 등재되어 세션 시작 시 README 부트스트랩을 통해 인지. QA·model-role·family-wide flag 관련 작업 시 메인 에이전트가 본 파일을 직접 read해 정의를 가져옴.
+> **자동 로드 메커니즘**: runtime adapter bootstrap 의 "Source of Truth"에 본 파일이 등재되어 세션 시작 또는 관련 작업 시 인지. QA·model-role·family-wide flag 관련 작업 시 메인 에이전트가 본 파일을 직접 read해 정의를 가져옴. Claude Code adapter 의 구현 파일은 `adapters/claude/CLAUDE.md`.
 >
 > **자동 propagation**: `/sync-skills`의 Step 5b.5가 본 문서를 canonical로 cross-doc grep해 drift 보고. `--auto-fix` flag로 자동 propagation 수행 (default는 report-only).
 
@@ -143,7 +143,7 @@
 - autopilot-code는 현재 dir에서 코드 변경
 - autopilot-{draft,research,refine}는 artifact root 하위 영속 산출물을 input으로 implicit 인지 (cross-project 작업은 `cd <other>` 후 별도 세션)
 
-> **gitignore 전제 (불변식)**: skill 산출물 폴더 `.agent_reports/`는 _프로젝트 repo 에 커밋하지 않는다_ — 에이전트 작업 산출물(plan·log·snapshot·reviews·lock)이지 소스가 아니다. 새 프로젝트에서 처음 산출물을 만들 때(또는 `git`-tracked repo 에서 처음 호출될 때) `.agent_reports/`가 `.gitignore`에 없으면 한 줄(`.agent_reports/`) 추가한다 (이미 있거나 git repo 가 아니면 skip). legacy 프로젝트는 `.claude_reports/`를 같은 규칙으로 취급한다. OPERATIONS §5.8 의 worktree symlink 가드·`.pipeline-lock` transient 처리도 이 gitignore 전제 위에서 성립. **예외 — `~/.claude` (스킬셋 repo 자신, 2026-06-11 사용자 결정)**: 이 repo 는 기존 `.claude_reports` 를 _커밋한다_ — 세팅 개선의 research·audit·plan 이력이 곧 repo 의 자산 (transient `.pipeline-lock`·`.untracked*` 만 ignore). 스킬셋 본작업도 파이프 경유로 `plans/` 사이클을 남기는 정식 프로젝트로 다룬다.
+> **gitignore 전제 (불변식)**: skill 산출물 폴더 `.agent_reports/`는 _프로젝트 repo 에 커밋하지 않는다_ — 에이전트 작업 산출물(plan·log·snapshot·reviews·lock)이지 소스가 아니다. 새 프로젝트에서 처음 산출물을 만들 때(또는 `git`-tracked repo 에서 처음 호출될 때) `.agent_reports/`가 `.gitignore`에 없으면 한 줄(`.agent_reports/`) 추가한다 (이미 있거나 git repo 가 아니면 skip). legacy 프로젝트는 `.claude_reports/`를 같은 규칙으로 취급한다. OPERATIONS §5.8 의 worktree symlink 가드·`.pipeline-lock` transient 처리도 이 gitignore 전제 위에서 성립. **예외 — `<agent-home>` (하네스 repo 자신, 2026-06-11 사용자 결정)**: 이 repo 는 기존 `.claude_reports` 를 _커밋한다_ — 세팅 개선의 research·audit·plan 이력이 곧 repo 의 자산 (transient `.pipeline-lock`·`.untracked*` 만 ignore). 스킬셋 본작업도 파이프 경유로 `plans/` 사이클을 남기는 정식 프로젝트로 다룬다.
 
 모든 입력은 _프로젝트 컨텍스트 내부의 영속 산출물_ (`<artifact-root>/analysis_project/*`, `<artifact-root>/research/{topic}/`)에서 옴. 외부 폴더를 직접 가리키는 flag는 family 에 없음. 외부 raw 자료가 있으면 먼저 `analyze-project --mode {paper|doc}`로 영속 산출물화.
 
@@ -340,11 +340,11 @@ fi
 
 ## §5.8~§5.11 → OPERATIONS.md
 
-> **이동(2026-06-23)**: Pipeline Lock(§5.8)·Git preflight(§5.9)·worktree dispatch(§5.10)·`~/.claude` push(§5.11) → **[`OPERATIONS.md`](OPERATIONS.md)**. § 번호·anchor 보존(`OPERATIONS.md#59-…`). git 운영 단일 출처.
+> **이동(2026-06-23)**: Pipeline Lock(§5.8)·Git preflight(§5.9)·worktree dispatch(§5.10)·`<agent-home>` push(§5.11) → **[`OPERATIONS.md`](OPERATIONS.md)**. § 번호·anchor 보존(`OPERATIONS.md#59-…`). git 운영 단일 출처.
 
 ## §6. Autopilot-* 흐름 매트릭스 (사용자 호출 단위)
 
-> 본 절은 autopilot-* skill 들의 _작업 본질·역할·경계_ 의 단일 source of truth. _대칭 강제 X — 작업 본질에 맞는 분리_ 원칙. 자세한 사용자 향 청사진: [`~/.claude/WORKFLOW.md`](WORKFLOW.md).
+> 본 절은 autopilot-* skill 들의 _작업 본질·역할·경계_ 의 단일 source of truth. _대칭 강제 X — 작업 본질에 맞는 분리_ 원칙. 자세한 사용자 향 청사진: [`WORKFLOW.md`](WORKFLOW.md).
 
 ### §6.1. 작업 본질 매트릭스 (대칭 강제 X)
 
@@ -576,7 +576,7 @@ AskUserQuestion(questions=[{
 
 #### §2 자율 진행 (응답 없을 때)
 
-질문 발동 시 [CLAUDE.md](../../CLAUDE.md) §2 동일 — ScheduleWakeup 15-20분 동시 호출, 응답 없으면 추천 기본값으로 자율 진행(한 줄 보고).
+질문 발동 시 runtime adapter bootstrap 의 pause/autonomy rule 동일(Claude adapter: [`adapters/claude/CLAUDE.md`](../adapters/claude/CLAUDE.md) §2) — ScheduleWakeup 15-20분 동시 호출, 응답 없으면 추천 기본값으로 자율 진행(한 줄 보고).
 
 #### 기존 track 인스턴스와의 관계
 

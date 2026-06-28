@@ -33,7 +33,7 @@
 | `experiments/` 실험 | autopilot-lab | `_RUNLOG.md` |
 | DB `type=profile` 레코드 | analyze-user / post-it --scope user | 레코드 body 내 changelog |
 
-> 단일 출처 = 본 `WORKFLOW.md` + runtime adapter bootstrap. Claude Code 에서는 `CLAUDE.md` §0 이 이 라우팅 불변식을 세션 부트스트랩으로 싣는다. 위반 신호: ad-hoc Edit 으로 산출물 직접 수정 / 게이트 건너뛰고 코드부터 / 산출물 만든 스킬 외 경로로 수정.
+> 단일 출처 = 본 `WORKFLOW.md` + runtime adapter bootstrap. Claude Code adapter 에서는 `adapters/claude/CLAUDE.md` §0 이 이 라우팅 불변식을 세션 부트스트랩으로 싣는다. 위반 신호: ad-hoc Edit 으로 산출물 직접 수정 / 게이트 건너뛰고 코드부터 / 산출물 만든 스킬 외 경로로 수정.
 
 ## 1. 한 화면 청사진 — 4 트랙
 
@@ -103,7 +103,7 @@
 | **autopilot-refine** | autopilot-draft 와 동일 재활용 + 편집팀 review |
 | **analyze-user** | 자료팀(cross-project 수집) + 편집팀 review |
 
-**사용자 주도성**: 각 entry = 명시 의도 단위. 메인 에이전트가 옵션 자동 구성 + 자연어 요약 컨펌 → CONFIRM Gate 4 갈래(진행 / 수정-refine v2 / back-jump / 중단). 발화 모호 시 재질문(임의 추측 X). 호출 패턴 상세 = runtime adapter bootstrap (Claude Code: [`CLAUDE.md §0`](CLAUDE.md)).
+**사용자 주도성**: 각 entry = 명시 의도 단위. 메인 에이전트가 옵션 자동 구성 + 자연어 요약 컨펌 → CONFIRM Gate 4 갈래(진행 / 수정-refine v2 / back-jump / 중단). 발화 모호 시 재질문(임의 추측 X). 호출 패턴 상세 = runtime adapter bootstrap (Claude Code: [`adapters/claude/CLAUDE.md §0`](../adapters/claude/CLAUDE.md)).
 
 ## 6. 산출물 폴더 — 코드 = `spec/` + `plans/` 형제 2-bucket
 
@@ -121,7 +121,7 @@
 
 초기 빌드 후 수정·기능 요청 (특히 새 세션). cwd 에 artifact root 의 `spec/` 이 있으면 ad-hoc 직접 Edit 금지 — **순서 원칙 (기존 산출물 파악) → analyze → spec → dev** 를 지킨다 (adapter bootstrap imperative).
 
-> 본 §7 은 _지침_ 으로 적재된다 — adapter bootstrap 이 세션 시작 또는 해당 도메인 트리거에서 WORKFLOW.md 를 Read 한다. Claude Code 에서는 `CLAUDE.md` §0(A)가 spec-backed 사후 수정 트리거를 가리킨다. `workflow-guard-hook` 은 매 프롬프트에 모드 신호(📌tracked 따름 / ⚡untracked 면제)만 띄운다(런타임 flag 상태). 규칙 본문의 단일 출처는 본 §0/§7.
+> 본 §7 은 _지침_ 으로 적재된다 — adapter bootstrap 이 세션 시작 또는 해당 도메인 트리거에서 WORKFLOW.md 를 Read 한다. Claude Code adapter 에서는 `adapters/claude/CLAUDE.md` §0(A)가 spec-backed 사후 수정 트리거를 가리킨다. `workflow-guard-hook` 은 매 프롬프트에 모드 신호(📌tracked 따름 / ⚡untracked 면제)만 띄운다(런타임 flag 상태). 규칙 본문의 단일 출처는 본 §0/§7.
 
 0. **기존 artifact root (`.agent_reports/`, legacy `.claude_reports/`) 산출물 파악 (1 순위, 특히 새 세션)** — 손대기 전 `spec/prd.md` · `pipeline_state.yaml` · 최근 `plans/*` 를 먼저 읽어 프로젝트 상태·진행 자리를 잡는다. 맥락 모른 채 작업 X. **spec-backed cwd 에선 `prd.md` Read 가 _필수 게이트_** — `spec-skill-gate` hook 이 이번 세션 prd.md 미Read(또는 Read 후 prd 갱신) 시 `autopilot-code`/`autopilot-spec` 호출을 hard DENY 한다 (선택 아님; settings.json 등록, [README](README.md) 'hard 차단 셋' 중 하나).
 1. **(필요 시) analyze 갱신** — `analysis_project/code/` 가 stale 하거나 낯선 영역이면 `analyze-project --mode code` (incremental) 먼저.

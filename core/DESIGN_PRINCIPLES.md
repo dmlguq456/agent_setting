@@ -1,10 +1,10 @@
 # Autopilot Design Principles
 
-> `~/.claude/` 의 _아키텍처 헌법_ — autopilot family 가 어떻게 분리되고 어떻게 협력하는지의 single source.
+> `<agent-home>/core/` 의 _아키텍처 헌법_ — autopilot family 가 어떻게 분리되고 어떻게 협력하는지의 single source.
 >
 > 자매 문서 (각자 단일 출처, 본 문서는 포인터만):
 > - `CONVENTIONS.md` — QA 5단계 / agent model 표기 / 산출물 폴더 컨벤션 (§5) / hard invariants
-> - runtime adapter bootstrap (Claude Code: `CLAUDE.md` §0~§3) — 작업 라우팅 (spec-first 파이프 + autopilot-* 호출 Pre-check) + 메인 에이전트 행동 메타 원칙 (응답 규율·pause/자율·후속 단계)
+> - runtime adapter bootstrap (Claude Code: `adapters/claude/CLAUDE.md` §0~§3) — 작업 라우팅 (spec-first 파이프 + autopilot-* 호출 Pre-check) + 메인 에이전트 행동 메타 원칙 (응답 규율·pause/자율·후속 단계)
 >
 > 본 문서는 _구조와 행동의 골격_ 만 담고, 정의·정책·운영 wording 은 위 자매 문서로 위임.
 
@@ -12,7 +12,7 @@
 
 ## §0. 존재의의 — model-agnostic skeleton (다른 모든 절보다 상위)
 
-이 레포(`~/.claude/`)의 근본 목적은 **특정 LLM 에 종속되지 않는, 어떤 모델로 갈아타도 동작하는 작업 substrate(skeleton)** 다. _"평생 Claude 만 쓴다는 보장은 없다."_ 모든 스킬·에이전트·하네스는 _프롬프트 + 로컬 도구 + 인코딩된 판단 규칙 + scaffold_ 로 구성돼, 모델을 갈아끼워도 그 골격 위에서 동작한다.
+이 레포(`<agent-home>`)의 근본 목적은 **특정 LLM 에 종속되지 않는, 어떤 모델로 갈아타도 동작하는 작업 substrate(skeleton)** 다. _"평생 Claude 만 쓴다는 보장은 없다."_ 모든 스킬·에이전트·하네스는 _프롬프트 + 로컬 도구 + 인코딩된 판단 규칙 + scaffold_ 로 구성돼, 모델을 갈아끼워도 그 골격 위에서 동작한다.
 
 - **가치 판단 규칙 (불변)**: 어떤 능력이 특정 벤더 내장(Claude Design · deep-research 등)으로 _지금 더 잘_ 되더라도, **그것을 이유로 우리 온프레미스 구현을 빼지 않는다.** 벤더 advantage 는 그 벤더에 묶여 있어 모델 전환 시 증발하지만, 우리 스킬은 살아남는다.
 - **평가 기준의 전환**: 산출물·스킬을 _"현재 Claude 대비 우열"_ 로 재지 않는다. 기준은 _"다른 LLM(GPT·Gemini·로컬)이 몰아도 그럭저럭 동작하는가"_. 따라서 **_실사용 빈도 0 도 제거 근거가 아니다_** — 일부는 daily tool 이 아니라 _모델 전환 대비 보험·substrate_ 다.
@@ -119,7 +119,7 @@ family 의 모든 멤버는 confirm 없이 pipeline 을 끝까지 돌린다. 사
 
 **Why**: 사용자가 _명시 요청_ 을 했는데 메인 에이전트가 _신중을 위해_ 라며 confirm 단계를 추가하면 작업이 한 turn 지연되고 "이미 했어?" 같은 follow-up 으로 갈등이 누적. high-stakes 일수록 사용자가 _직접_ pause 를 거는 게 자연스럽다.
 
-**강제 위치**: CLAUDE.md 응답 원칙 §2 (Pause·자율 진행) + 각 SKILL.md `--user-refine` 절 default false.
+**강제 위치**: runtime adapter bootstrap 의 응답 원칙(Pause·자율 진행; Claude adapter: `adapters/claude/CLAUDE.md` §2) + 각 SKILL.md `--user-refine` 절 default false.
 
 ---
 
@@ -156,7 +156,7 @@ Artifact 폴더 안의 _가시성 분리_. 상세는 CONVENTIONS.md §5 single s
 
 누적 minor 5건 도달 시 `/audit` chat alert → audit 이 dual-perspective (vs last major + vs universal principles) batch 점검.
 
-상세 — `autopilot-refine/SKILL.md` Default Invocation Rule + CLAUDE.md 도메인 트리거 표 row 2.
+상세 — `autopilot-refine/SKILL.md` Default Invocation Rule + runtime adapter bootstrap 의 도메인 트리거 표(Claude adapter: `adapters/claude/CLAUDE.md`).
 
 ---
 
@@ -180,9 +180,9 @@ QA loop 는 _skill 안에서 닫힌 loop_ 으로 돌고, orchestrator 는 verdic
 - 판교체 회피 — 한국어 산출물에서 영어 어휘를 한국어 어순에 그냥 박지 않는다. 도메인 영어와 정착 외래어만 영어로, 나머지는 한국어로. 매핑 표 — `agents/editorial-team.md`
 - 적용 범위 — 사용자가 직접 보는 _모든_ .md 산출물 (doc 한정 X). autopilot-code 의 final-report, audit 보고서, autopilot-refine 결과, pipeline_summary 등
 
-**메인 에이전트 응답 자체** 의 메타 원칙은 별개 layer — runtime adapter bootstrap 이 single source (Claude Code: `CLAUDE.md` §0~§3; §0 작업 라우팅: spec-first 파이프 + autopilot-* 호출 Pre-check·컨펌 · §1 응답 규율: 판교체 회피·출력 자제·동사 약속어 self-check · §2 pause flag 비자동·자율 진행 · §3 후속 단계 자동).
+**메인 에이전트 응답 자체** 의 메타 원칙은 별개 layer — runtime adapter bootstrap 이 single source (Claude Code: `adapters/claude/CLAUDE.md` §0~§3; §0 작업 라우팅: spec-first 파이프 + autopilot-* 호출 Pre-check·컨펌 · §1 응답 규율: 판교체 회피·출력 자제·동사 약속어 self-check · §2 pause flag 비자동·자율 진행 · §3 후속 단계 자동).
 
-**Why**: 산출물 품질만 좋고 응답 / 가독성이 부자연스러우면 사용자 짜증이 누적. 편집팀이 _마지막 한 번_ 의 다듬기를 책임지고, CLAUDE.md 응답 원칙이 _매 turn_ 의 메타 self-check.
+**Why**: 산출물 품질만 좋고 응답 / 가독성이 부자연스러우면 사용자 짜증이 누적. 편집팀이 _마지막 한 번_ 의 다듬기를 책임지고, runtime adapter bootstrap 의 응답 원칙이 _매 turn_ 의 메타 self-check.
 
 ---
 

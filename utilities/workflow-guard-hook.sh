@@ -3,7 +3,7 @@
 #   UserPromptSubmit: 매 프롬프트 _모드 신호_ (cr_root 프로젝트) — 📌tracked(WORKFLOW 따름·skill 경유)
 #                     vs ⚡untracked(면제·자유). instruction 이 못 보는 _런타임 flag 상태_ 를 Claude 에 전달.
 #   SessionStart    : 잔여 ⚡untracked flag GC 만.
-# WORKFLOW.md(라우팅 계약)·post-it(세션 연속성) 은 CLAUDE.md 부트스트랩+도메인 트리거 _지침_ 으로 Read.
+# WORKFLOW.md(라우팅 계약)·post-it(세션 연속성) 은 runtime adapter bootstrap+도메인 트리거 _지침_ 으로 Read.
 # 등록: ~/.claude/settings.json 의 hooks.SessionStart + hooks.UserPromptSubmit.
 set -euo pipefail
 
@@ -71,7 +71,7 @@ fi
 # SessionStart (default) — 3일+ _비활성_ ⚡untracked flag GC.
 # flag mtime = heartbeat: 활성 세션은 UserPromptSubmit 마다 touch 로 갱신 → 3일 넘게 켜둔
 # 장기 세션의 flag 는 안 지워짐. mtime +4320 = "마지막 활동 3일 전" = 크래시·종료된 세션 잔재.
-# WORKFLOW.md·post-it 읽기는 _지침_ (CLAUDE.md 부트스트랩 + 도메인 트리거) 이 담당 — hook 주입 X.
+# WORKFLOW.md·post-it 읽기는 _지침_ (runtime adapter bootstrap + 도메인 트리거) 이 담당 — hook 주입 X.
 # ============================================================
 if [ -n "$cr_root" ]; then
   find "$cr_root/$reports_dir" -maxdepth 1 -name '.untracked.*' -mmin +4320 -delete 2>/dev/null || true

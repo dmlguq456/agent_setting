@@ -9,9 +9,9 @@
    - 현재 주 runtime adapter 관련 공식 changelog·engineering 글 (Claude Code adapter 사용 중이면 Anthropic/Claude Code 자료 포함)
    - agent engineering 실무 패턴 신간 (harness·context·loop engineering, 멀티에이전트, eval)
    - 커뮤니티에서 자리 잡는 컨벤션 (헛소문·과장 글은 출처 품질로 거름)
-3. **현 세팅 대조**: `<agent-home>/CORE.md`·runtime adapter bootstrap(현재 Claude Code: `CLAUDE.md`)·`CONVENTIONS.md`(특히 §5.8~5.10)·`loops/README.md`·`hooks/` 목록을 Read 하고, 조사 결과와 비교 — 우리가 이미 하는 것 / 빠진 것 / 더 잘하는 것 구분.
+3. **현 세팅 대조**: `<agent-home>/core/CORE.md`·runtime adapter bootstrap(현재 Claude Code: `adapters/claude/CLAUDE.md`)·`core/CONVENTIONS.md`(특히 §5.8~5.10)·`loops/README.md`·`hooks/` 목록을 Read 하고, 조사 결과와 비교 — 우리가 이미 하는 것 / 빠진 것 / 더 잘하는 것 구분.
 4. **내부 위생 (가볍게)**: `loops/drill/metrics.csv` 의 g0_overhead in_tok 추세 (세팅 세금 증감) + 지침 문서 간 모순·비대 후보 1~2건 + **의도 불명 지침** (왜·날짜·계기 주석 없는 규칙 — CONVENTIONS §3.6 위반) 후보 1~2건. **상한 경보**: g0 in_tok 45k 초과 시 ⚠️ 다이어트 권고 (2026-06-11 기준선 ~40k; context 파일 과다는 성능 역효과 — 매뉴얼 1부 Tension ④ 반례 데이터).
-5. **주간 사용 결산 (재무)**: `loops/*.log` 의 지난 7일 run 횟수·소요시간, `loops/drill/metrics.csv` cost 합산, `~/.claude/.dispatch/jobs.log` 의 주간 job 수 — 표 한 개로. 이상 급증(전주 대비 2배+)만 ⚠️ 플래그. 절대액 평가는 하지 않는다 (구독 사용량이라 — 추세·쏠림만).
+5. **주간 사용 결산 (재무)**: `loops/*.log` 의 지난 7일 run 횟수·소요시간, `loops/drill/metrics.csv` cost 합산, `<agent-home>/.dispatch/jobs.log` 의 주간 job 수 — 표 한 개로. 이상 급증(전주 대비 2배+)만 ⚠️ 플래그. 절대액 평가는 하지 않는다 (구독 사용량이라 — 추세·쏠림만).
 
 ## 제안서 — `/home/nas/user/Uihyeop/notes/study/<날짜 YYYY-MM-DD>.md`
 
