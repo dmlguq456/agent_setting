@@ -17,16 +17,17 @@ print("SID="+shlex.quote(d.get("session_id","") or ""))
 ' 2>/dev/null || true)"
 EVENT="${EVENT:-}"; SID="${SID:-}"
 
-# ---- 프로젝트 cwd 판정 (git work tree 또는 .claude_reports/ 보유) ----
+# ---- 프로젝트 cwd 판정 (git work tree 또는 artifact root 보유) ----
 is_project=0
 if command -v git >/dev/null 2>&1 && git -C "$PWD" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   is_project=1
 fi
 
-# cwd 에서 위로 올라가며 .claude_reports/ 루트 탐색.
-d="$PWD"; cr_root=""
+# cwd 에서 위로 올라가며 .agent_reports/ 또는 legacy .claude_reports/ 루트 탐색.
+d="$PWD"; cr_root=""; reports_dir=""
 for _ in $(seq 1 40); do
-  [ -d "$d/.claude_reports" ] && { cr_root="$d"; break; }
+  [ -d "$d/.agent_reports" ] && { cr_root="$d"; reports_dir=".agent_reports"; break; }
+  [ -d "$d/.claude_reports" ] && { cr_root="$d"; reports_dir=".claude_reports"; break; }
   { [ "$d" = "/" ] || [ "$d" = "$HOME" ]; } && break
   d=$(dirname "$d")
 done
@@ -35,7 +36,7 @@ done
 # ⚡untracked 세션별 flag 판정.
 untracked=0
 if [ -n "$cr_root" ]; then
-  flag="$cr_root/.claude_reports/.untracked"; [ -n "$SID" ] && flag="$flag.$SID"
+  flag="$cr_root/$reports_dir/.untracked"; [ -n "$SID" ] && flag="$flag.$SID"
   [ -f "$flag" ] && untracked=1
 fi
 
@@ -50,7 +51,7 @@ emit() {  # $1 = hookEventName, stdin = ctx 본문
 # UserPromptSubmit — 매 프롬프트 thin reminder (tracked 일 때만)
 # ============================================================
 if [ "$EVENT" = "UserPromptSubmit" ]; then
-  # .claude_reports 없음 → tracked/untracked 토글 자체가 무관 → 침묵.
+  # artifact root 없음 → tracked/untracked 토글 자체가 무관 → 침묵.
   [ -z "$cr_root" ] && exit 0
   # 모드를 _양쪽 다 명시_ — Claude 가 "WORKFLOW 를 지킬지" 를 매 프롬프트 positive 하게 결정.
   if [ "$untracked" = "1" ]; then
@@ -73,6 +74,6 @@ fi
 # WORKFLOW.md·post-it 읽기는 _지침_ (CLAUDE.md 부트스트랩 + 도메인 트리거) 이 담당 — hook 주입 X.
 # ============================================================
 if [ -n "$cr_root" ]; then
-  find "$cr_root/.claude_reports" -maxdepth 1 -name '.untracked.*' -mmin +4320 -delete 2>/dev/null || true
+  find "$cr_root/$reports_dir" -maxdepth 1 -name '.untracked.*' -mmin +4320 -delete 2>/dev/null || true
 fi
 exit 0

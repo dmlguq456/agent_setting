@@ -19,6 +19,7 @@ dir=$PWD
 prd=""
 root=""
 for _ in 0 1 2 3; do
+  if [ -f "$dir/.agent_reports/spec/prd.md" ]; then prd="$dir/.agent_reports/spec/prd.md"; root="$dir"; break; fi
   if [ -f "$dir/.claude_reports/spec/prd.md" ]; then prd="$dir/.claude_reports/spec/prd.md"; root="$dir"; break; fi
   parent=$(dirname "$dir")
   [ "$parent" = "$dir" ] && break

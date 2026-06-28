@@ -2,18 +2,19 @@
 
 > CONVENTIONS.md 에서 분리(2026-06-23, 앞/뒤 2층 재편). git 운영(lock·preflight·worktree dispatch·`~/.claude` push)은 산출물 컨벤션과 결이 달라 별도 파일로. **§ 번호·heading 보존** — SKILL.md·drill·hook 이 `OPERATIONS.md#59-…` 등 anchor 로 인용. git 운영 단일 출처.
 
-## §5.8. Pipeline Lock — 공유 `.claude_reports` 다중 worktree 가드 (canonical)
+## §5.8. Pipeline Lock — 공유 artifact root 다중 worktree 가드 (canonical)
 
-**왜**: 여러 git worktree 가 _하나의 canonical `.claude_reports` 를 symlink 공유_ 할 때(릴리즈 브랜치 클린 유지 위해 산출물은 gitignore), 두 worktree 가 동시에 `spec/` 공유 단일파일(`prd.md`·`pipeline_state.yaml`·`pipeline_summary.md`)을 쓰면 lost-update. `plans/<cycle>/` 는 사이클별 폴더라 경로 분리 → 비경합(lock 불필요).
+**왜**: 여러 git worktree 가 _하나의 canonical artifact root_ (`.agent_reports`, legacy `.claude_reports`) 를 symlink 공유할 때(릴리즈 브랜치 클린 유지 위해 산출물은 gitignore), 두 worktree 가 동시에 `spec/` 공유 단일파일(`prd.md`·`pipeline_state.yaml`·`pipeline_summary.md`)을 쓰면 lost-update. `plans/<cycle>/` 는 사이클별 폴더라 경로 분리 → 비경합(lock 불필요).
 
-- **lock 파일**: `.claude_reports/.pipeline-lock` (공유 트리에 위치 → 모든 worktree 가시). transient — `.claude_reports/` 자체가 gitignore 라 추적 안 됨.
+- **lock 파일**: `<artifact-root>/.pipeline-lock` (공유 트리에 위치 → 모든 worktree 가시). transient — artifact root 자체가 gitignore 라 추적 안 됨.
 - **보호 범위**: `spec/prd.md`·`spec/pipeline_state.yaml`·`spec/pipeline_summary.md` _쓰기_ 구간만. 읽기·plans 쓰기는 비-lock.
 - **stale 무시(override)**: 기록 `at` 이 30 분 초과 OR 기록 worktree == 현재 worktree(재진입/잔존 락) → 통과.
 
 **acquire** — 쓰기 진입 _직전_ (autopilot-spec 의 Step 3 / update mode, autopilot-code 의 pipeline_state·summary 쓰기 / spec-drift update):
 
 ```bash
-LOCK=.claude_reports/.pipeline-lock; NOW=$(date +%s); WT=$(pwd -P)
+REPORTS_DIR=.agent_reports; [ -d "$REPORTS_DIR" ] || REPORTS_DIR=.claude_reports
+LOCK="$REPORTS_DIR/.pipeline-lock"; NOW=$(date +%s); WT=$(pwd -P)
 if [ -f "$LOCK" ]; then
   LAT=$(sed -n 's/^at=//p' "$LOCK"); LWT=$(sed -n 's/^worktree=//p' "$LOCK"); LBR=$(sed -n 's/^branch=//p' "$LOCK")
   if [ "$LWT" != "$WT" ] && [ $((NOW-${LAT:-0})) -lt 1800 ]; then
@@ -29,20 +30,22 @@ printf 'worktree=%s\nbranch=%s\nskill=%s\nat=%s\nat_iso=%s\npid=%s\n' \
 **release** — 파이프 정상 종료 _및_ 중단·에러 시 모두:
 
 ```bash
-rm -f .claude_reports/.pipeline-lock
+REPORTS_DIR=.agent_reports; [ -d "$REPORTS_DIR" ] || REPORTS_DIR=.claude_reports
+rm -f "$REPORTS_DIR/.pipeline-lock"
 ```
 
 **detect-only** — "지금 spec 수정 중인가?" 단순 조회(메인 Claude 가 spec 손대기 전 확인):
 
 ```bash
-[ -f .claude_reports/.pipeline-lock ] && cat .claude_reports/.pipeline-lock || echo "활성 편집 없음"
+REPORTS_DIR=.agent_reports; [ -d "$REPORTS_DIR" ] || REPORTS_DIR=.claude_reports
+[ -f "$REPORTS_DIR/.pipeline-lock" ] && cat "$REPORTS_DIR/.pipeline-lock" || echo "활성 편집 없음"
 ```
 
 > 비-worktree(단일 체크아웃) 환경에선 lock 이 항상 same-worktree → 즉시 override, 무해. symlink 공유 worktree 에서만 실질 가드로 작동.
 
 ### §5.9. Git working-state preflight (worktree·merge 가드, canonical)
 
-**왜**: §5.8 lock 은 `.claude_reports` _산출물_ 동시쓰기만 막는다. 정작 _실제 `.git` 워킹트리_ — merge/rebase 진행 중인지, dirty 한지, detached HEAD 인지, 같은 브랜치가 다른 worktree 에 잡혀 있는지 — 는 안 본다. 여러 worktree·브랜치로 작업하다 merge 가 끼면 이 자리를 놓쳐 (반쯤 머지된 트리 위에 commit / detached HEAD 에 commit 유실 / 다른 worktree 가 머지로 바꿔놓은 파일 위에 작업) 사고. 코드 손대는 skill(autopilot-code 가 canonical 소비자)은 **코드 편집 _전_ 1회 + 각 commit/write-back _직전_ 재확인**(= 주기적 체크) 한다.
+**왜**: §5.8 lock 은 artifact root _산출물_ 동시쓰기만 막는다. 정작 _실제 `.git` 워킹트리_ — merge/rebase 진행 중인지, dirty 한지, detached HEAD 인지, 같은 브랜치가 다른 worktree 에 잡혀 있는지 — 는 안 본다. 여러 worktree·브랜치로 작업하다 merge 가 끼면 이 자리를 놓쳐 (반쯤 머지된 트리 위에 commit / detached HEAD 에 commit 유실 / 다른 worktree 가 머지로 바꿔놓은 파일 위에 작업) 사고. 코드 손대는 skill(autopilot-code 가 canonical 소비자)은 **코드 편집 _전_ 1회 + 각 commit/write-back _직전_ 재확인**(= 주기적 체크) 한다.
 
 ```bash
 # git-state preflight — 코드 편집 전 + 매 commit 직전. STOP 이면 편집·commit 멈추고 사용자 보고
@@ -92,7 +95,7 @@ echo "state: branch=$br head=$head base=$def dirty=$(git status --porcelain 2>/d
    - **job 레지스트리 (분사 시 의무)**: 분사 직전 `~/.claude/.dispatch/jobs.log` 에 한 줄 append — `<ISO시각>\topen\t<repo>\t<worktree경로>\t<slug>\t<파이프>`. 수확·정리 시 해당 줄의 `open` 을 `done` 으로. 세션이 죽어도 등록부가 남아 당직 7호가 고아 job (open 인데 24h+ 경과 또는 worktree 소멸·유휴) 을 감시한다.
    - **stealth-death 가드 (분사 후 대기 자리 — 필수, §0.5 결정론)**: ⚠️ hung/crash 한 headless `claude -p` 는 _exit 를 안 해 완료 알림이 영영 안 온다_ → 완료 알림만 믿고 무한 대기하면 silent 하게 시간을 날린다 (2026-06-16 5h 사고). **분사한 background 작업을 기다리는 자리에선 완료 알림에만 의존하지 말고 liveness 를 능동 점검한다**: `bash ~/.claude/utilities/dispatch-liveness.sh` (jobs.log 의 open job 별 세션 transcript mtime 판정 — `ALIVE`(N분 내 갱신) / `SUSPECT`(N분+ 정지 = hang/death 의심) / `DEAD`(transcript 부재), exit 3 = 의심 1+). SUSPECT/DEAD 면 알림 기다리지 말고 transcript tail·dispatch 로그로 진단 → 수확 또는 재분사. 신호 = transcript mtime (pgrep 경로매칭은 흔한 path 가 무관 프로세스에 걸려 false-alive). Workflow 등 harness-native 분사는 알림이 신뢰되지만, `claude -p` 헤드리스는 본 가드 적용. "vigilant 하게 기억" 이 아니라 _스크립트로_ 점검 (§0.5).
 3. **merge = Claude 선별 책임** (2026-06-11 사용자 위임 — 수동 메모 (DB profile record `07_coding_convention`)가 source): 사용자 직접 리뷰 없이 main 이 선별 머지한다. **머지 시점 게이트** — (a) 사용자 머지 신호("합쳐"/"머지해") 또는 (b) 병렬 디스패치로 분사한 background job 수확 자리에서만. **자기 turn 의 본작업 브랜치를 같은 turn 에 self-merge 금지** — 브랜치 + 한 줄 보고로 turn 을 끝내고 main ref 는 불변 (§3 후속 단계 자동 진행에 merge-to-main 은 포함되지 않음). 머지 후에도 작업 브랜치는 같은 turn 에 삭제하지 않는다 (롤백 지점). **worktree 디렉토리는 별개** — 수확(머지+통합 빌드 검증) 완료된 worktree 는 다음 자연 휴지(다음 수확 자리·세션 마무리)에 디렉토리만 제거한다 (브랜치 ref 유지, `git worktree remove` 전 자체 dev 서버 등 고아 프로세스 종료 확인 — NFS lock 잔존 방지. 2026-06-12 worktree 9개 적체에서 사용자 지적). 절차 — `git diff main...<branch>` 로 _실내용_ 확인 → 이미 main 에 진전됐거나 회귀·중복이면 머지 안 함 → 충돌은 양쪽 의도를 해석해 해결 (한쪽 자동 채택·`--force` 금지) → _애매하거나 확정본을 되돌리는 자리면 멈추고 질문_ → 빌드 검증 후 커밋. "전부 합쳐" = 전량 머지가 아니라 선별 머지.
-4. **공유 산출물**: `.claude_reports` 공유 단일파일 쓰기는 §5.8 lock 경유. `plans/<slug>/` 는 경로 분리라 비경합.
+4. **공유 산출물**: artifact root 공유 단일파일 쓰기는 §5.8 lock 경유. `plans/<slug>/` 는 경로 분리라 비경합.
 5. **컨텍스트**: job 조정 기록 누적으로 main 컨텍스트 압박 시 post-it handoff 제안 (글로벌 §2).
 
 ### §5.11. 지침 repo (`~/.claude`) 커밋·push 정책
@@ -100,4 +103,3 @@ echo "state: branch=$br head=$head base=$def dirty=$(git status --porcelain 2>/d
 지침·규칙·hook·statusline 등 `~/.claude` 파일 수정은 **검증 직후 같은 turn 에 commit + push** — 사용자 별도 신호 불필요 (2026-06-12 사용자 ratify "규칙은 바로 그냥 push 하면 되겠네"). 작업 repo 의 push 는 별개 — deploy 게이트(사용자 신호) 유지.
 
 ---
-

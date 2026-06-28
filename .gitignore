@@ -60,6 +60,8 @@ loops/drill/metrics.csv
 .statusline-last.json
 .statusline-last-out.txt
 .dispatch/
+.agent_reports/.pipeline-lock
+.agent_reports/.untracked*
 .claude_reports/.pipeline-lock
 .claude_reports/.untracked*
 

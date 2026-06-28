@@ -4,7 +4,7 @@
 
 ## 0. 30초 지도
 
-이 세팅은 _프롬프트와 로컬 도구로 재구성한 에이전트 하네스_ 다. 자연어로 부르면 메인 Claude 가 컨텍스트(`cwd`·`.claude_reports/`·발화)를 읽어 알맞은 **skill 파이프라인**을 고른다. 산출물은 `.claude_reports/` 에 쌓이고, **hook** 이 순서·안전을 결정론으로 강제하며, 세션 밖에선 **loop** 가 점검·정리한다. 사용자는 _운전자_ — 자연어로 부르고 방향을 정한다.
+이 세팅은 _프롬프트와 로컬 도구로 재구성한 에이전트 하네스_ 다. 자연어로 부르면 메인 에이전트가 컨텍스트(`cwd`·artifact root·발화)를 읽어 알맞은 **capability 파이프라인**을 고른다. 산출물은 새 표준 `.agent_reports/` 에 쌓이고, 기존 `.claude_reports/` 도 legacy alias 로 읽는다. **hook** 이 순서·안전을 결정론으로 강제하며, 세션 밖에선 **loop** 가 점검·정리한다. 사용자는 _운전자_ — 자연어로 부르고 방향을 정한다.
 
 네 축으로 읽는다:
 
@@ -32,7 +32,7 @@
 
 각 단계는 _자연어 한 줄_ 로 부른다(예: "이 결과로 보고서 만들어줘" → `autopilot-draft`). 메인이 cwd·발화를 보고 옵션을 조립해 한 번 컨펌 뒤 실행한다. `↻` = 검토·정정 반복(refine·code·lab 등).
 
-- **산출물**: 각 파이프는 `.claude_reports/<영역>/` 에 쌓인다 — `research/`·`analysis_project/`·`documents/`·`spec/`·`plans/`·`experiments/`. 코드는 `spec/`(청사진, 항상 최신) + `plans/<date>_<slug>/`(작업 사이클) 두 갈래.
+- **산출물**: 각 파이프는 artifact root(`.agent_reports/`, legacy `.claude_reports/`)의 `<영역>/` 에 쌓인다 — `research/`·`analysis_project/`·`documents/`·`spec/`·`plans/`·`experiments/`. 코드는 `spec/`(청사진, 항상 최신) + `plans/<date>_<slug>/`(작업 사이클) 두 갈래.
 - **사후 수정**: spec-backed 프로젝트는 즉석 직접 편집이 아니라 _기존 산출물 파악 → spec-drift 체크 → autopilot-code_ 경로를 탄다.
 - **모드 신호**: 매 프롬프트 statusline 에 📌tracked(파이프 경유) / ⚡untracked(`/track`, 직접 편집 자유)가 뜬다.
 
@@ -49,7 +49,7 @@
 skills/ (28)  ──호출──►  agents/ (8)        ◄── 팀별 모드(agent-modes/)
    │  파이프라인          기획·개발·품질·연구·자료·디자인·편집·codex
    ▼
-.claude_reports/  ◄──강제── hooks/ (생성순서·git상태·spec게이트·메모리가드)
+.agent_reports/   ◄──강제── hooks/ (생성순서·git상태·spec게이트·메모리가드)
    산출물                         │
    │                              ▼
    └──────────────────►  memory/ (mem.py DB store)  ◄── 세션 주입/회수

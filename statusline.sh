@@ -73,8 +73,10 @@ fi
 gate=""; gate_open=0
 d="$S_CWD"
 for _ in $(seq 1 40); do
-  if [ -d "$d/.claude_reports" ]; then
-    if [ -n "$S_SID" ]; then [ -f "$d/.claude_reports/.untracked.$S_SID" ] && gate_open=1; else [ -f "$d/.claude_reports/.untracked" ] && gate_open=1; fi
+  reports_dir=""
+  if [ -d "$d/.agent_reports" ]; then reports_dir=".agent_reports"; elif [ -d "$d/.claude_reports" ]; then reports_dir=".claude_reports"; fi
+  if [ -n "$reports_dir" ]; then
+    if [ -n "$S_SID" ]; then [ -f "$d/$reports_dir/.untracked.$S_SID" ] && gate_open=1; else [ -f "$d/$reports_dir/.untracked" ] && gate_open=1; fi
     [ "$gate_open" = "1" ] && gate="⚡untracked(ad-hoc)" || gate="📌tracked(pipeline)"
     break
   fi
@@ -126,7 +128,8 @@ def has_entries(p):
 def live_stage(jcwd, slug, fb):
     # worktree slug → plans/*_<slug>/ 산출물로 실제 파이프 단계 유도 (argv 라벨이 정적 → 실시간 반영). fb = argv 추정 단계.
     if not jcwd or not slug: return fb
-    base = jcwd + "/.claude_reports/plans"
+    ar = ".agent_reports" if os.path.isdir(jcwd + "/.agent_reports") else ".claude_reports"
+    base = jcwd + "/" + ar + "/plans"
     try: cand = sorted(d for d in os.listdir(base) if d.endswith("_" + slug))
     except Exception: cand = []
     if not cand:

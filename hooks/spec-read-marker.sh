@@ -8,6 +8,7 @@ input=$(cat 2>/dev/null)
 
 fp=$(printf '%s' "$input" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//; s/"$//')
 case "$fp" in
+  */.agent_reports/spec/prd.md) ;;
   */.claude_reports/spec/prd.md) ;;
   *) exit 0 ;;
 esac

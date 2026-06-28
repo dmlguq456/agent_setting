@@ -1,6 +1,6 @@
-# Autopilot-* 라우팅 맵 (Claude-facing)
+# Autopilot-* 라우팅 맵 (agent-facing core)
 
-> 메인 Claude 가 _작업 발화 → skill·sub-agent 라우팅_ 을 결정할 때 보는 압축 맵. _대칭 강제 X — 작업 본질에 맞는 분리_ 원칙.
+> 메인 에이전트가 _작업 발화 → capability·role 라우팅_ 을 결정할 때 보는 압축 맵. Claude Code 에서는 capability=skill, role=agent 로 어댑팅된다. _대칭 강제 X — 작업 본질에 맞는 분리_ 원칙.
 >
 > 역할 분담: 사용자 향 의미 지도·entry list 는 [`README.md`](README.md). 정의(QA·model·폴더 컨벤션)는 [`CONVENTIONS.md`](CONVENTIONS.md). 본 문서는 _라우팅 표_ 만 — narrative·호출 예시·비개발자 설명은 중복 회피로 제거(필요 시 README).
 
@@ -8,7 +8,7 @@
 
 ## 0. 불변식 — 단일 라우터 + 하드 순서 게이트 (우회 불가)
 
-> **본 문서 = 📌tracked 모드 계약.** tracked 프로젝트(`.claude_reports`/`spec` 보유)에서 _반드시 지킬 것_ 의 단일 출처. untracked(`/track`)면 면제. **읽는 방식 = 지침 기반 on-demand**: 매 프롬프트 `workflow-guard-hook` 모드 신호(📌 따름 / ⚡ 면제)가 anchor 이고, tracked 라우팅이 필요한 자리에서 본 문서를 Read 한다 (hook 주입·eager 로드 아님 — user_profile 과 같은 lazy·이식 가능 패턴). hook 은 instruction 이 못 보는 _런타임 모드_ 만 전달.
+> **본 문서 = 📌tracked 모드 계약.** tracked 프로젝트(`.agent_reports`/`spec` 보유, legacy `.claude_reports` 호환)에서 _반드시 지킬 것_ 의 단일 출처. untracked(`/track`)면 면제. **읽는 방식 = 지침 기반 on-demand**: 매 프롬프트 `workflow-guard-hook` 모드 신호(📌 따름 / ⚡ 면제)가 anchor 이고, tracked 라우팅이 필요한 자리에서 본 문서를 Read 한다 (hook 주입·eager 로드 아님 — user_profile 과 같은 lazy·이식 가능 패턴). hook 은 instruction 이 못 보는 _런타임 모드_ 만 전달.
 
 본 문서가 **모든 작업 흐름의 단일 라우터**. 모든 발화는 §2 작업-본질 매핑을 먼저 거치고, 직접 처리·플러그인(codex)·빌트인 스킬도 WORKFLOW 가 배치하는 자리에서만 쓴다.
 
@@ -119,11 +119,11 @@
 
 ## 7. 사후 수정 라우팅 — spec-backed 프로젝트
 
-초기 빌드 후 수정·기능 요청 (특히 새 세션). cwd 에 `.claude_reports/spec/` 있으면 ad-hoc 직접 Edit 금지 — **순서 원칙 (기존 산출물 파악) → analyze → spec → dev** 를 지킨다 (CLAUDE.md §0 imperative).
+초기 빌드 후 수정·기능 요청 (특히 새 세션). cwd 에 artifact root 의 `spec/` 이 있으면 ad-hoc 직접 Edit 금지 — **순서 원칙 (기존 산출물 파악) → analyze → spec → dev** 를 지킨다 (CLAUDE.md §0 imperative).
 
 > 본 §7 은 _지침_ 으로 적재된다 — CLAUDE.md 부트스트랩이 세션 시작에 WORKFLOW.md 를 Read (spec-backed 사후 수정은 §0(A) 도메인 트리거가 가리킴). `workflow-guard-hook` 은 매 프롬프트에 모드 신호(📌tracked 따름 / ⚡untracked 면제)만 띄운다(런타임 flag 상태). 규칙 본문의 단일 출처는 본 §0/§7.
 
-0. **기존 `.claude_reports/` 산출물 파악 (1 순위, 특히 새 세션)** — 손대기 전 `spec/prd.md` · `pipeline_state.yaml` · 최근 `plans/*` 를 먼저 읽어 프로젝트 상태·진행 자리를 잡는다. 맥락 모른 채 작업 X. **spec-backed cwd 에선 `prd.md` Read 가 _필수 게이트_** — `spec-skill-gate` hook 이 이번 세션 prd.md 미Read(또는 Read 후 prd 갱신) 시 `autopilot-code`/`autopilot-spec` 호출을 hard DENY 한다 (선택 아님; settings.json 등록, [README](README.md) 'hard 차단 셋' 중 하나).
+0. **기존 artifact root (`.agent_reports/`, legacy `.claude_reports/`) 산출물 파악 (1 순위, 특히 새 세션)** — 손대기 전 `spec/prd.md` · `pipeline_state.yaml` · 최근 `plans/*` 를 먼저 읽어 프로젝트 상태·진행 자리를 잡는다. 맥락 모른 채 작업 X. **spec-backed cwd 에선 `prd.md` Read 가 _필수 게이트_** — `spec-skill-gate` hook 이 이번 세션 prd.md 미Read(또는 Read 후 prd 갱신) 시 `autopilot-code`/`autopilot-spec` 호출을 hard DENY 한다 (선택 아님; settings.json 등록, [README](README.md) 'hard 차단 셋' 중 하나).
 1. **(필요 시) analyze 갱신** — `analysis_project/code/` 가 stale 하거나 낯선 영역이면 `analyze-project --mode code` (incremental) 먼저.
 2. **spec 존재 확인** — 없으면 `autopilot-spec` 먼저 유도 (**spec → dev 하드 원칙**; throwaway 1 회성만 예외, 반복 시 spec 승격 권장).
 3. **spec-drift 사전 체크 (code 경유 _전_, 최우선)** — `spec/prd.md` 대조:

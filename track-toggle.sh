@@ -5,16 +5,17 @@
 # /track slash command 에서 호출. 단독 실행도 가능.
 set -euo pipefail
 
-d="$PWD"; root=""
+d="$PWD"; root=""; reports_dir=""
 for _ in $(seq 1 40); do
-  [ -d "$d/.claude_reports" ] && { root="$d"; break; }
+  [ -d "$d/.agent_reports" ] && { root="$d"; reports_dir=".agent_reports"; break; }
+  [ -d "$d/.claude_reports" ] && { root="$d"; reports_dir=".claude_reports"; break; }
   [ "$d" = "/" ] && break
   d=$(dirname "$d")
 done
-[ -z "$root" ] && { echo "⚠️  상위 트리에 .claude_reports 가 없어요 — 토글 대상 프로젝트가 아닙니다."; exit 0; }
+[ -z "$root" ] && { echo "⚠️  상위 트리에 .agent_reports/.claude_reports 가 없어요 — 토글 대상 프로젝트가 아닙니다."; exit 0; }
 
 sid="${CLAUDE_CODE_SESSION_ID:-}"
-[ -n "$sid" ] && f="$root/.claude_reports/.untracked.$sid" || f="$root/.claude_reports/.untracked"
+[ -n "$sid" ] && f="$root/$reports_dir/.untracked.$sid" || f="$root/$reports_dir/.untracked"
 if [ -f "$f" ]; then
   rm -f "$f"
   echo "📌 tracked 모드 — 이 세션, 산출물 직접 편집 차단·코드는 spec+plan 전제."

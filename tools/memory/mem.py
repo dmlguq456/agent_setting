@@ -3,7 +3,7 @@
 
 SQLite `memory.db` (WAL) 가 진실원천(SoT). 기존 markdown-SoT 를 완전 대체.
 텍스트 덤프 mirror (`dump.jsonl`) = git 추적 대상. FTS5 (unicode61 + trigram CJK) 내장.
-spec: ~/.claude/.claude_reports/spec/prd.md (Unified Memory System v3).
+spec: ~/.claude/.agent_reports/spec/prd.md (legacy: .claude_reports/spec/prd.md).
 
 설계 불변식:
   - SQLite DB 가 진실원천. dump.jsonl 은 결정론적 텍스트 mirror.
@@ -32,6 +32,14 @@ FM_ORDER = ["id", "tier", "scope", "type", "cwd_origin", "created", "updated",
 RECORD_COLS = ("id", "tier", "scope", "type", "cwd_origin", "created", "updated",
                "expires", "source", "tags", "links", "body", "strength", "last_accessed",
                "injection_flag")
+
+
+def artifact_root(cwd: Path) -> Path:
+    """Return the project artifact root, preferring the neutral name."""
+    agent = cwd / ".agent_reports"
+    if agent.exists():
+        return agent
+    return cwd / ".claude_reports"
 
 # dump 자동 commit 메시지 prefix — 사용자 관행 `chore: dump —` 계열 / `auto-sync` 라벨로 수동과 구분
 AUTO_DUMP_MSG_PREFIX = "chore: dump — auto-sync"
@@ -1436,7 +1444,7 @@ def migrate(apply=False):
                 p = Path(line.strip())
                 if p.name == "post-it.md" and p.exists():
                     postits.add(p)
-        cwd_pi = Path.cwd() / ".claude_reports" / "post-it.md"
+        cwd_pi = artifact_root(Path.cwd()) / "post-it.md"
         if cwd_pi.exists():
             postits.add(cwd_pi)
         postits = sorted(postits)
@@ -1890,7 +1898,8 @@ def curate_artifacts():
     if nm:
         out.append("미머지 브랜치 (아직 진행중일 수 있음):")
         out.append(nm)
-    plans = cwd / ".claude_reports" / "plans"
+    ar = artifact_root(cwd)
+    plans = ar / "plans"
     if plans.is_dir():
         rows = []
         for p in sorted(plans.iterdir(), reverse=True):
@@ -1904,7 +1913,7 @@ def curate_artifacts():
         if rows:
             out.append("PLANS (작업 사이클 — dev_logs 있으면 착수/완료):")
             out.extend(rows)
-    ps = cwd / ".claude_reports" / "spec" / "pipeline_state.yaml"
+    ps = ar / "spec" / "pipeline_state.yaml"
     if ps.is_file():
         try:
             txt = ps.read_text(encoding="utf-8")

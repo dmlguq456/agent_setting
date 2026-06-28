@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# PreToolUse(Edit|Write|MultiEdit) — .claude_reports 산출물의 _생성 순서_ 만 강제.
-# 모드: 📌tracked(기본) ↔ ⚡untracked(.claude_reports/.untracked.<session_id> 존재 시 → 전부 우회).
+# PreToolUse(Edit|Write|MultiEdit) — artifact root 산출물의 _생성 순서_ 만 강제.
+# 표준 artifact root 는 .agent_reports, .claude_reports 는 legacy alias.
+# 모드: 📌tracked(기본) ↔ ⚡untracked(<artifact-root>/.untracked.<session_id> 존재 시 → 전부 우회).
 #       /track 토글, SessionStart 가 stale flag GC.
 #
 # 강제 (tracked): 신규 산출물은 앞 단계 산출물이 있어야 _만들_ 수 있다 (없으면 exit 2):
@@ -25,20 +26,28 @@ fp="${FP:-}"; sid="${SID:-}"
 [ -z "$fp" ] && exit 0
 case "$fp" in */_internal/*) exit 0 ;; esac   # 기계관리 스냅샷 → 통과
 
-# ---- 프로젝트 루트 (.claude_reports 보유) ----
+# ---- 프로젝트 루트 (artifact root 보유) ----
 d=$(dirname "$fp"); root=""
 for _ in $(seq 1 40); do
+  [ -d "$d/.agent_reports" ] && { root="$d"; break; }
   [ -d "$d/.claude_reports" ] && { root="$d"; break; }
   [ "$d" = "/" ] && break
   d=$(dirname "$d")
 done
-# .claude_reports 디렉토리가 아직 없어도, 경로가 .../.claude_reports/... 면 그 prefix 로 root 유도
+# artifact root 디렉토리가 아직 없어도, 경로가 .../.agent_reports/... 또는 .../.claude_reports/... 면 그 prefix 로 root 유도
 # — 프로젝트 _최초_ 산출물 1건이 순서 게이트를 건너뛰던 구멍을 메움 (codex #8, 2026-06-22).
 if [ -z "$root" ]; then
-  case "$fp" in */.claude_reports/*) root="${fp%%/.claude_reports/*}" ;; esac
+  case "$fp" in
+    */.agent_reports/*) root="${fp%%/.agent_reports/*}" ;;
+    */.claude_reports/*) root="${fp%%/.claude_reports/*}" ;;
+  esac
 fi
 [ -z "$root" ] && exit 0
-cr="$root/.claude_reports"
+case "$fp" in
+  */.agent_reports/*) cr="$root/.agent_reports" ;;
+  */.claude_reports/*) cr="$root/.claude_reports" ;;
+  *) [ -d "$root/.agent_reports" ] && cr="$root/.agent_reports" || cr="$root/.claude_reports" ;;
+esac
 
 # ---- ⚡untracked 우회 (세션별 flag .untracked.<session_id> — 동시 세션 격리) ----
 flagbase="$cr/.untracked"; [ -d "$cr" ] || flagbase="$root/.untracked"
@@ -57,14 +66,14 @@ base=$(basename "$fp")
 # 직접편집을 구분 못 하고, 막으면 정당한 autopilot-spec update 도 막혀 세션째 untrack 유발).
 # 막는 건 _순서 위반_ 뿐: 앞 단계 없이 다음 산출물을 새로 만드는 것.
 case "$fp" in
-  */.claude_reports/spec/*)
+  */.agent_reports/spec/*|*/.claude_reports/spec/*)
     case "$base" in
       prd.md|stack.md|stack_decision.md|ship.md|api_contract.md|data_model.md|ui_flow.md)
         [ -f "$fp" ] || has_research || block "신규 spec 작성 전 research/analyze 필요 ($base)" "→ autopilot-research / analyze-project 먼저" ;;
     esac ;;
-  */.claude_reports/plans/*)
+  */.agent_reports/plans/*|*/.claude_reports/plans/*)
     [ -f "$fp" ] || has_spec || block "신규 plan 작성 전 spec 필요" "→ autopilot-spec 먼저" ;;
-  */.claude_reports/documents/*)
+  */.agent_reports/documents/*|*/.claude_reports/documents/*)
     [ -f "$fp" ] || has_research || block "신규 문서 작성 전 research/analyze 필요 ($base)" "→ autopilot-research / analyze-project 먼저" ;;
 esac
 
