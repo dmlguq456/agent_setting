@@ -1,8 +1,8 @@
 # Conventions — Family-Wide Operational Rules
 
-> 본 문서는 autopilot family 전체에 적용되는 _운영 규칙·정의_의 **단일 source of truth**. `DESIGN_PRINCIPLES.md`가 _architectural design_(orchestrator/skill/agent 분리, interface contract 등)을 다룬다면, 본 문서는 _operational conventions_(QA level 정의, model 표기, family-wide flag 정책 등)을 다룬다.
+> 본 문서는 autopilot family 전체에 적용되는 _운영 규칙·정의_의 **단일 source of truth**. `DESIGN_PRINCIPLES.md`가 _architectural design_(orchestrator/skill/agent 분리, interface contract 등)을 다룬다면, 본 문서는 _operational conventions_(QA level 정의, model-role 표기, family-wide flag 정책 등)을 다룬다.
 >
-> **자동 로드 메커니즘**: `CLAUDE.md`의 "Source of Truth"에 본 파일이 등재되어 세션 시작 시 README 부트스트랩을 통해 인지. QA·model·family-wide flag 관련 작업 시 메인 에이전트가 본 파일을 직접 read해 정의를 가져옴.
+> **자동 로드 메커니즘**: `CLAUDE.md`의 "Source of Truth"에 본 파일이 등재되어 세션 시작 시 README 부트스트랩을 통해 인지. QA·model-role·family-wide flag 관련 작업 시 메인 에이전트가 본 파일을 직접 read해 정의를 가져옴.
 >
 > **자동 propagation**: `/sync-skills`의 Step 5b.5가 본 문서를 canonical로 cross-doc grep해 drift 보고. `--auto-fix` flag로 자동 propagation 수행 (default는 report-only).
 
@@ -12,25 +12,26 @@
 
 ### §1.1. 5단계 공통 정의
 
-| Level | Quality reviewer (parallel) | Fact-checker¹ (parallel) | Codex (parallel) | Max round | 비고 |
+| Level | Quality reviewer (parallel) | Fact-checker¹ (parallel) | External adversary (parallel) | Max round | 비고 |
 |---|---|---|---|---|---|
-| **quick** | 1× sonnet | skip | skip | 1 (강제) | refine 단계 skip / 1라운드 강제 종료 / 🔴 잔존 시 `unresolved.md` 에 기록만 |
-| **light** | 2× sonnet (다른 axes²) | skip | skip | 1 | 사소 작업 — refine 단계 skip |
-| **standard** | 1× opus + 2× sonnet (다른 axes²) | 1× sonnet | skip | 1 | 간단 작업 — refine 단계 가능 |
-| **thorough** | 2× opus + 2× sonnet (다른 axes²) | 1× sonnet | skip | 2 | **default** — refine 단계 가능 |
-| **adversarial** | 2× opus + 2× sonnet (다른 axes²) | 1× sonnet | 1× `Agent(codex-review-team)` — Codex CLI (GPT-5) external review | 2 + Codex 1 | high-stakes. **research/doc 트랙은 + `Agent(연구팀 claim-verify)`** (적대적 외부 진위 — N-vote default-refute, WebSearch 모순 탐색; fact-check 와 보완층). code 트랙은 외부 claim 없어 미적용 |
+| **quick** | 1× fast reviewer | skip | skip | 1 (강제) | refine 단계 skip / 1라운드 강제 종료 / 🔴 잔존 시 `unresolved.md` 에 기록만 |
+| **light** | 2× fast reviewers (다른 axes²) | skip | skip | 1 | 사소 작업 — refine 단계 skip |
+| **standard** | 1× deep reviewer + 2× fast reviewers (다른 axes²) | 1× fast fact-checker | skip | 1 | 간단 작업 — refine 단계 가능 |
+| **thorough** | 2× deep reviewers + 2× fast reviewers (다른 axes²) | 1× fast fact-checker | skip | 2 | **default** — refine 단계 가능 |
+| **adversarial** | 2× deep reviewers + 2× fast reviewers (다른 axes²) | 1× fast fact-checker | 1× external adversary (`codex-review-team` in current adapters) | 2 + external 1 | high-stakes. **research/doc 트랙은 + `Agent(연구팀 claim-verify)`** (적대적 외부 진위 — N-vote default-refute, WebSearch 모순 탐색; fact-check 와 보완층). code 트랙은 외부 claim 없어 미적용 |
 
 ¹ Fact-checker 는 _doc/research/refine 파이프라인_ 에만 적용. autopilot-code 계열 (init-plan / refine-plan / execute-plan / run-test) 은 fact-checker 없음 — ground-truth 가 코드 자신이라 verbatim 대조 무용.
 
-² 다중 reviewer 는 _다른 axes_ 분담: opus 행은 도메인 expertise / methodology / completeness / safety 같은 깊이 필요 axis, sonnet 행은 coverage·typo·표기 일관성·structure 같은 surface scan axis. 각 skill SKILL.md 가 자기 axis 분담 명시.
+² 다중 reviewer 는 _다른 axes_ 분담: deep reviewer 는 도메인 expertise / methodology / completeness / safety 같은 고추론 axis, fast reviewer 는 coverage·typo·표기 일관성·structure·verbatim matching 같은 비용 효율 axis. 각 skill SKILL.md 가 자기 axis 분담 명시.
 
 > **`quick` 는 모든 autopilot mode 공통의 경량 tier**: 작은 자연어 요청·tweak 도 quick 으로 돌려 plan·log·snapshot artifact 를 남긴다 (1 라운드 강제 / refine 단계 skip). runtime adapter bootstrap 이 강제하는 "작업은 해당 autopilot-* 경유로 산출물 기록" 원칙의 비용 거의 0 인 경로 — 누적 drift 를 막는다.
 
-### §1.2. Codex availability 정책 (adversarial 전용)
+### §1.2. External adversary availability 정책 (adversarial 전용)
 
-- Adversarial 선택 전 `codex --version 2>/dev/null` 실행
+- 현재 구현: `codex-review-team` → Codex CLI (GPT-5) external review
+- Adversarial 선택 전 adapter 가 external adversary availability 를 확인한다. Claude Code adapter 는 `codex --version 2>/dev/null` 를 사용한다.
 - 실패 시: `--qa adversarial` _명시_ 호출 → fail loudly / auto-detect로 adversarial 선택 → Thorough로 silent fallback
-- Codex agent는 `adversarial-review --wait --scope auto` 실행 → `_internal/{stage}_reviews/round_{N}_codex.md` 작성
+- external adversary 는 `adversarial-review --wait --scope auto` 실행 → `_internal/{stage}_reviews/round_{N}_external.md` 또는 adapter-specific legacy path (`round_{N}_codex.md`) 작성
 
 ### §1.3. opt-out flags (orthogonal)
 
@@ -43,7 +44,7 @@
 
 | Skill | Supported levels | Default | Adversarial | Fact-checker | 비고 |
 |---|---|---|---|---|---|
-| `autopilot-research` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | adversarial = thorough + Codex + **claim-verify**(Step 4b 적대적 외부 진위). doc 트랙(draft/refine)도 adversarial 시 claim-verify 적용 후보 |
+| `autopilot-research` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | adversarial = thorough + external adversary + **claim-verify**(Step 4b 적대적 외부 진위). doc 트랙(draft/refine)도 adversarial 시 claim-verify 적용 후보 |
 | `autopilot-code` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ (dev only; debug 는 thorough 로 downgrade) | **X** (code 는 fact-checker 없음) | |
 | `autopilot-lab` | quick/light/standard/thorough/**adversarial** | `light` | ✓ | **X** (실험 prototype — code 와 동일 — fact-checker 없음) | default 가 light 인 이유: 실험 prototype 빠른 cycle 1순위. 사용자 high-stakes 발화 (논문 결과·외부 공개) 시 standard+ 자동 상향 |
 | `autopilot-draft` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | |
@@ -56,8 +57,8 @@
 | `init-plan` (sub) | quick/light/standard/thorough/adversarial | auto-detect from scope (plan frontmatter override) | ✓ | X | autopilot-code 내부 |
 | `refine-plan` (sub) | quick/light/standard/thorough/adversarial | inherit from plan frontmatter | ✓ | X | autopilot-code 내부 |
 | `execute-plan` (sub) | inherit | inherit | inherit | X | autopilot-code 내부 |
-| `run-test` (sub) | **forced thorough** (`--qa` 무시) | thorough | auto-upgrade if Codex available | X | 항상 2팀 병렬, Codex 가용 시 자동 상향 |
-| `final-report` (sub) | sonnet 1× (level-independent) | — | — | — | 모든 level 에서 writer 는 항상 sonnet |
+| `run-test` (sub) | **forced thorough** (`--qa` 무시) | thorough | auto-upgrade if external adversary available | X | 항상 2팀 병렬, external adversary 가용 시 자동 상향 |
+| `final-report` (sub) | 1× fast writer (level-independent) | — | — | — | 모든 level 에서 writer 는 항상 fast writer |
 | `init-doc-strategy` (sub) | quick/light/standard/thorough/adversarial | inherit from autopilot-draft | ✓ | standard+ | autopilot-draft 내부 |
 | `refine-doc` (sub) | quick/light/standard/thorough/adversarial | inherit | ✓ | standard+ | autopilot-draft 내부 |
 
@@ -65,30 +66,50 @@
 
 ---
 
-## §2. Agent Model 표기 (canonical)
+## §2. Model Role 표기 (canonical)
 
-각 agent의 frontmatter `model:` 필드는 _sub-agent runtime_ model. 실제 작업 시 가변 또는 외부 LLM 호출이 있는 경우 본문·매트릭스에 명시.
+공통 계약은 concrete model name 이 아니라 _model role_ 을 쓴다. `opus` / `sonnet` / `gpt-*` 같은 이름은 adapter 구현값이다. 새 cross-tool 문서·skill·README 는 아래 role 을 먼저 쓰고, Claude Code 재현값은 `adapters/claude/README.md` 에서 mapping 한다.
 
-| Agent | frontmatter `model:` | 실제 작동 |
+### §2.1. Portable model roles
+
+| Role | 의미 | 대표 용도 |
 |---|---|---|
-| `기획팀` (plan-team) | opus | opus 단일 |
-| `품질관리팀` (qa-team) | opus | **가변** — review 모드: Light=1× sonnet / Standard=1× opus / Thorough=doc·research·refine 갈래 2× opus parallel · code 갈래 (init-plan/refine-plan/execute-plan) 1× opus + 1× sonnet parallel (completeness reviewer 가 비교적 mechanical 매칭이라 sonnet 가 cost-efficient — code 의 ground-truth 가 코드 자신이므로 verbatim 비교 비중이 큼). test 모드 (run-test): Agent A=sonnet coverage + Agent B=opus accuracy (2026-05-22 테스트팀 흡수) · security-review 모드: opus (취약점 추론·exploit 경로) |
-| `연구팀` (research-team) | opus | **가변** — default opus (Plan Review·domain reviewer); fact-checker subrole·light QA는 sonnet (cost-aware verbatim matching) |
-| `자료팀` (material-team) | opus | opus 단일 — 자료 수집·시각·분석 (browser-fetch / pdf-extract / web-image-search / figure-gen / data-script). 2026-05-25 분석팀 + 탐색팀 통합 |
-| `개발팀` (dev-team) | sonnet | sonnet 단일 |
-| `디자인팀` (design-team) | opus | opus 단일 — UI mockup / 디자인 토큰 / 슬라이드 비주얼 / figure 보조 자리. 시각·미적 판단 비중이 자료팀·편집팀과 같은 결이라 opus (2026-05-26 sonnet → opus 승격) |
-| `편집팀` (editorial-team) | opus | opus 단일 |
-| `codex-review-team` | opus | **Codex CLI (GPT-5)** — actual review·analysis는 외부 Codex CLI에서; sub-agent 본체(opus)는 호출·결과 한국어 재정리만 담당 |
+| `fast reviewer` | 낮은 비용·낮은 지연으로 넓게 훑는 reviewer. 정답지가 있거나 surface/coverage/format/verbatim matching 비중이 큰 축 | quick/light QA, style/coverage/cross-ref, fact-check narrow matching |
+| `deep reviewer` | 높은 추론력·도메인 판단·방법론 검토가 필요한 reviewer | standard+ 핵심 quality review, methodology/domain/safety/security, architecture risk |
+| `fast fact-checker` | 창의적 판단을 억제하고 source artifact 와 claim 을 좁게 대조하는 fast role | citation/venue/year/metric/lineage/table value 검증 |
+| `fast writer` | 이미 검증된 artifact 를 사용자-facing summary 로 조립하는 저비용 writer | final report, short synthesis |
+| `deep maker` | 생성 자체가 미학·전략·도메인 판단을 요구하는 role | plan, research synthesis, visual design, editorial rewrite |
+| `external adversary` | 같은 런타임과 다른 독립 engine 으로 hostile review 를 수행하는 role | `--qa adversarial` 추가 검토 |
+| `orchestrator` | 호출·도구 실행·결과 병합·한국어 재정리 담당. 실제 판단 role 과 분리 가능 | wrapper agent, headless dispatch, external adversary adapter |
+
+### §2.2. Adapter mapping requirement
+
+각 adapter 는 위 role 을 자기 런타임의 concrete model / tool / prompt profile 로 매핑해야 한다. 매핑은 “기존 품질 재현”의 계약이다. Claude Code adapter 는 기존 운용을 그대로 보존하기 위해 `fast reviewer/fact-checker/writer = sonnet`, `deep reviewer/maker = opus`, `external adversary = Codex CLI (GPT-5)`, `external adversary orchestrator = sonnet` 으로 둔다.
+
+### §2.3. Role profile operation matrix
+
+각 agent의 frontmatter `model:` 필드는 _adapter-specific sub-agent runtime hint_ 이다. 공통 의미는 아래 `Portable role` 열이 canonical 이며, frontmatter 값은 Claude Code adapter 의 현재 재현값이다.
+
+| Agent | Portable role | Claude adapter frontmatter | 실제 작동 |
+|---|---|---|---|
+| `기획팀` (plan-team) | deep maker | opus | deep maker 단일 |
+| `품질관리팀` (qa-team) | variable reviewer | opus | **가변** — review 모드: Light=1× fast reviewer / Standard=1× deep reviewer / Thorough=doc·research·refine 갈래 2× deep reviewers parallel · code 갈래 (init-plan/refine-plan/execute-plan) 1× deep reviewer + 1× fast reviewer parallel (completeness reviewer 는 mechanical 매칭 비중이 커 fast role 이 cost-efficient). test 모드 (run-test): Agent A=fast coverage + Agent B=deep accuracy (2026-05-22 테스트팀 흡수) · security-review 모드: deep reviewer |
+| `연구팀` (research-team) | variable research reviewer | opus | **가변** — default deep maker/reviewer (Plan Review·domain reviewer); fact-checker subrole·light QA는 fast fact-checker/reviewer |
+| `자료팀` (material-team) | deep maker default, fast tool worker subroles | opus | 자료 수집·시각·분석. browser-fetch/pdf-extract/web-image-search 는 fast tool worker, figure-gen/data-script 는 deep maker |
+| `개발팀` (dev-team) | fast implementer default | sonnet | fast implementer 단일. 복잡한 API·라이브러리 설계는 deep maker 로 상향 가능 |
+| `디자인팀` (design-team) | deep maker with fast verifier | opus | maker=deep maker, critic=fast/deep reviewer by nuance, verifier=fast reviewer |
+| `편집팀` (editorial-team) | deep maker/editor with fast reviewer subrole | opus | translate/polish 는 deep editor, review 는 fast reviewer |
+| `codex-review-team` | external adversary orchestrator | sonnet | **Codex CLI (GPT-5)** — actual review·analysis는 external adversary engine 이 수행; sub-agent 본체는 호출·결과 한국어 재정리만 담당 |
 
 ---
 
 ## §3. Hard Cross-Doc Invariants (sync-skills `--check`가 자동 검사)
 
-1. 각 SKILL.md / README 에서 §1.1 5단계 정의의 **Quality reviewer / Fact-checker / Codex 컬럼 wording**은 본 문서와 의미 일치 (사소한 표현 차이는 허용, 의미가 다르면 drift).
-2. **adversarial** 정의는 반드시 `thorough + 1× codex-review-team` (+ research/doc 트랙은 `1× 연구팀 claim-verify`). 자주 잘못 적힌 패턴: `standard + Codex` — _틀림_ (base 는 thorough).
+1. 각 SKILL.md / README 에서 §1.1 5단계 정의의 **Quality reviewer / Fact-checker / External adversary 컬럼 wording**은 본 문서와 의미 일치 (사소한 표현 차이는 허용, 의미가 다르면 drift).
+2. **adversarial** 정의는 반드시 `thorough + 1× external adversary` (+ research/doc 트랙은 `1× 연구팀 claim-verify`). 현재 Claude Code adapter 구현명은 `codex-review-team`. 자주 잘못 적힌 패턴: `standard + external/Codex` — _틀림_ (base 는 thorough).
 3. autopilot-code의 QA 표에 fact-checker가 적힌 곳이 있으면 drift (code는 fact-checker 없음).
 4. `--no-fact-check` / `--no-style-audit`는 autopilot-refine / audit 외 다른 skill에 노출되면 안 됨.
-5. `codex-review-team`의 model 표기가 `opus` 단독이면 drift — 실제 review는 Codex CLI (GPT-5). §2 매트릭스에 따라 "Codex CLI (GPT-5) + opus orchestrator" 같이 분리 표기.
+5. `codex-review-team`의 model 표기가 `opus` 단독이면 drift — 실제 review는 external adversary engine(Codex CLI GPT-5), wrapper 는 orchestrator role. §2 매트릭스에 따라 "external adversary + fast orchestrator" 같이 분리 표기.
 6. **의도 동반 (2026-06-11)**: 지침·규칙·hook 의 신설/강화에는 _왜(계기 사건 + 날짜)_ 를 인라인 주석 또는 commit message 에 남긴다 — 예: "(drill g2 가 잡은 구멍, 2026-06-11)". 의도 없는 규칙은 시간이 지나면 정리도 못 하고 의심도 못 하는 짐 — 연수 루프가 _의도 불명 지침_ 을 정리 후보로 보고한다. 의도의 최상위 보존 형태는 drill 케이스 (실행 가능한 의도 — 오답노트 승격 채널).
 7. **의미↔규칙 경계 (2026-06-22, worklog-board 참사)**: 의미 판단을 규칙·토큰 매칭 스크립트로 내리지 말 것 — spec 이 "의미 판단"을 명시하면 구현이 그 의미를 capture 했는지 검증한다 (상세·검증 절차·3선택 = DESIGN_PRINCIPLES §0.7).
 

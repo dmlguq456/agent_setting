@@ -6,8 +6,8 @@
 
 | Layer | Owns | Portable? |
 |---|---|---|
-| Core | workflow, artifact layout, memory lifecycle, QA tiers, safety invariants | yes |
-| Adapter | tool bootstrap, hook schema, slash commands, status UI, permission model | no |
+| Core | workflow, artifact layout, memory lifecycle, QA tiers, model roles, safety invariants | yes |
+| Adapter | tool bootstrap, hook schema, slash commands, status UI, permission model, concrete model mapping | no |
 | Local runtime | credentials, session state, caches, daemon logs | no |
 
 `CLAUDE.md` is the Claude Code adapter entry file. Runtime-specific adapter notes live under `adapters/`; future adapters should keep their own bootstrap instructions there and point back to this core contract.
@@ -84,6 +84,7 @@ Each adapter should provide:
 
 - a bootstrap file that loads this core contract;
 - a way to expose capabilities (`skills/`) and role profiles (`agents/`);
+- a concrete mapping from portable model roles (`fast reviewer`, `deep reviewer`, `external adversary`, etc.) to runtime-specific models, tools, or prompt profiles;
 - hooks or checks for artifact order, git safety, and memory writes;
 - a status/reminder surface for tracked vs untracked mode;
 - compatibility with both `.agent_reports/` and `.claude_reports/` until legacy projects are migrated.
@@ -98,4 +99,5 @@ Use neutral names for new cross-tool concepts:
 | artifact root | `.claude_reports` as a generic term |
 | capability | Claude-only Skill semantics |
 | role profile | Claude-only Agent semantics |
+| model role | `opus` / `sonnet` / vendor model names as portable semantics |
 | adapter | tool-specific bootstrap |

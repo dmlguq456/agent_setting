@@ -34,6 +34,19 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 | git safety gate | `hooks/git-state-guard.sh` is the portable check; Codex must also honor sandbox and approval state |
 | memory store | `tools/memory/mem.py` is runtime-neutral; hook automation is adapter-specific |
 
+## Model Role Mapping
+
+Codex adapter 는 `CONVENTIONS.md §2` 의 portable role 을 Codex 런타임에서 동등한 capability tier 로 매핑해야 한다. 현재 adapter 는 experimental 이므로 concrete default 를 고정하지 않는다.
+
+| Portable role | Codex adapter expectation |
+|---|---|
+| `fast reviewer` / `fast fact-checker` / `fast writer` | 낮은 비용·낮은 지연의 모델 또는 낮은 reasoning effort profile. surface, coverage, format, verbatim matching 중심 |
+| `deep reviewer` / `deep maker` | 높은 reasoning effort 또는 더 강한 모델. methodology, domain, architecture, safety 판단 중심 |
+| `external adversary` | 가능하면 primary Codex session 과 다른 모델·설정·프로세스. 없으면 explicit unavailable 로 보고하고 thorough 로 fallback |
+| `orchestrator` | 도구 호출·artifact merge·한국어 정리 담당. 실제 판단 role 과 분리 가능 |
+
+Codex 쪽 wrapper 를 만들 때는 `AGENT_MODEL_FAST`, `AGENT_MODEL_DEEP`, `AGENT_MODEL_EXTERNAL` 같은 환경변수나 설정 파일로 이 mapping 을 드러내야 한다. 공통 skill 은 concrete model name 을 요구하지 않고 role 의미만 요구한다.
+
 ## Compatibility
 
 Codex should create new project artifacts under `.agent_reports/`. Use `utilities/artifact-root.sh` or the equivalent rule: prefer `.agent_reports`; use `.claude_reports` only if it already exists and `.agent_reports` does not.

@@ -17,7 +17,7 @@ metadata:
 
 **Source of Truth**:
 - `<agent-home>/skills/*/SKILL.md` + `<agent-home>/agents/*.md` — 각 skill·agent 의 frontmatter + 본문
-- **`<agent-home>/CONVENTIONS.md`** — family-wide 운영 규칙의 단일 source (QA 5단계 정의 / agent model 표기 / cross-doc invariants). 본 skill 의 Step 5b 가 본 문서를 canonical 로 cross-doc grep 해 drift 보고·자동 fix.
+- **`<agent-home>/CONVENTIONS.md`** — family-wide 운영 규칙의 단일 source (QA 5단계 정의 / model role 표기 / cross-doc invariants). 본 skill 의 Step 5b 가 본 문서를 canonical 로 cross-doc grep 해 drift 보고·자동 fix.
 
 **파생 산출물**: GitHub `<agent-home>/README.md`
 
@@ -189,18 +189,18 @@ Step 5 에서 README 본문 wording 을 자동 생성·갱신한 자리 (§1 Hea
 
 > 각 SKILL.md `## Default Invocation Rule` 은 _그 SKILL.md 안에서만_ 의미를 가지고 README 에 모으지 않음 (README §6 운영 룰은 _runtime adapter bootstrap 을 가리킴 한 단락_). autopilot-* SKILL.md 의 trigger 신호·default 옵션·override 는 adapter 의 일반 패턴 + 각 SKILL.md 의 skill-specific 정보로 분리.
 
-QA level / model 표기 / family-wide invariant 은 **`<agent-home>/CONVENTIONS.md`** 가 단일 source of truth. 각 SKILL.md / README / `agents/*.md` 의 QA 표 wording 은 본 문서와 의미상 일치해야 함.
+QA level / model role 표기 / family-wide invariant 은 **`<agent-home>/CONVENTIONS.md`** 가 단일 source of truth. 각 SKILL.md / README / `agents/*.md` 의 QA 표 wording 은 본 문서와 의미상 일치해야 함. Concrete model name 은 adapter 문서에서만 canonical 이며, 공통 문서에서는 role 의미와 분리한다.
 
 #### 5b-1. Canonical 정의 로드
 
 ```bash
 # Read CONVENTIONS.md fully; then parse:
 #   §1.1 5단계 공통 정의 표 → QA wording (canonical)
-#   §2 Agent Model 표기 → agent model 정의
+#   §2 Model Role 표기 → portable model role 정의 + adapter mapping requirement
 #   §3 Hard Cross-Doc Invariants → invariant rule list
 ```
 
-이로부터 5단계 정의 (quick/light/standard/thorough/adversarial) 의 _구성_ 을 추출 (Quality reviewer / Fact-checker / Codex 컬럼 wording).
+이로부터 5단계 정의 (quick/light/standard/thorough/adversarial) 의 _구성_ 을 추출 (Quality reviewer / Fact-checker / External adversary 컬럼 wording).
 
 #### 5b-2. 모든 .md 파일에서 QA wording 추출
 
@@ -214,7 +214,7 @@ QA level / model 표기 / family-wide invariant 은 **`<agent-home>/CONVENTIONS.
 - `adversarial` 정의 문장 (예: `adversarial = ...`, `Adversarial | ...`, `adversarial.*Codex`)
 - `quick`/`light`/`standard`/`thorough` 정의 표 행
 - "fact-checker" 적용 여부
-- model 표기 (`opus`, `sonnet`, 가변 표기)
+- model role 표기 (`fast reviewer`, `deep reviewer`, `external adversary`, 가변 표기). `opus` / `sonnet` 같은 concrete name 은 Claude adapter mapping 또는 agent frontmatter 설명일 때만 허용
 
 #### 5b-3. Invariance 검사 (drift 보고)
 
@@ -222,7 +222,7 @@ QA level / model 표기 / family-wide invariant 은 **`<agent-home>/CONVENTIONS.
 
 | Invariant | 검사 패턴 | drift 시 보고 |
 |---|---|---|
-| **adversarial = thorough + Codex** (+ research/doc 트랙은 claim-verify) | `adversarial.*standard.*Codex` 또는 `adversarial.*=.*standard` | 🔴 `잘못된 정의: adversarial base 는 thorough + Codex (standard 아님). research/doc 트랙은 + 연구팀 claim-verify` |
+| **adversarial = thorough + external adversary** (+ research/doc 트랙은 claim-verify) | `adversarial.*standard.*(Codex|external)` 또는 `adversarial.*=.*standard` | 🔴 `잘못된 정의: adversarial base 는 thorough + external adversary (standard 아님). research/doc 트랙은 + 연구팀 claim-verify` |
 | **autopilot-code 는 fact-checker 없음** | autopilot-code/SKILL.md or autopilot-code/README.md 에서 `fact-checker` 언급 (단, "doc/research 에만" 이라는 negative 안내는 OK) | 🔴 `code 파이프라인은 fact-checker 미적용` |
 | **autopilot-* + analyze-user adversarial 지원** | autopilot-code / autopilot-draft / autopilot-research / autopilot-refine / analyze-user 의 argument-hint 에 `adversarial` 누락 | 🔴 `2026-05-22 통일 — analyze-user 는 adversarial 고정, 나머지 4 개는 default thorough + adversarial 지원` |
 | **quick 은 refine skip + 1라운드 강제 종료** | quick 정의에서 위 둘 중 하나 누락 | 🟡 `quick 정의 incomplete` |
@@ -233,7 +233,7 @@ QA level / model 표기 / family-wide invariant 은 **`<agent-home>/CONVENTIONS.
 drift 발견 시 Step 7 final report 에 별도 섹션:
 ```
 [QA invariant drift]
-🔴 skills/autopilot-refine/SKILL.md:46 — adversarial 정의가 'standard + Codex'로 잘못 적힘 (canonical: 'thorough + Codex')
+🔴 skills/autopilot-refine/SKILL.md:46 — adversarial 정의가 'standard + external'로 잘못 적힘 (canonical: 'thorough + external adversary')
 🟡 skills/autopilot-research/SKILL.md:632 — quick 정의에 'refine skip' 명시 누락
 ```
 
