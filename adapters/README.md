@@ -1,6 +1,6 @@
 # Adapters
 
-Adapters map the model-agnostic core contract in `CORE.md` onto a concrete agent runtime.
+Adapters map the model-agnostic core contract in `../core/CORE.md` onto a concrete agent runtime.
 
 An adapter owns runtime-specific details:
 
@@ -36,5 +36,5 @@ Whole-directory symlinks (`$HOME/.claude -> $HOME/agent_setting`) are discourage
 
 | Adapter | Status | Entry |
 |---|---|---|
-| Claude Code | primary | `adapters/claude/README.md` + root `CLAUDE.md` |
+| Claude Code | primary | `adapters/claude/README.md` + `adapters/claude/CLAUDE.md` |
 | Codex | experimental | `adapters/codex/README.md` |

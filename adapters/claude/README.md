@@ -6,7 +6,7 @@ This adapter maps the common agent harness onto Claude Code.
 
 | Surface | File |
 |---|---|
-| Session bootstrap | `CLAUDE.md` |
+| Session bootstrap | `adapters/claude/CLAUDE.md` |
 | Runtime settings | `settings.json` |
 | Slash commands | `commands/` |
 | Capabilities | `skills/*/SKILL.md` |
@@ -20,7 +20,7 @@ This adapter maps the common agent harness onto Claude Code.
 |---|---|
 | capability | Skill |
 | role profile | Agent |
-| adapter bootstrap | `CLAUDE.md` |
+| adapter bootstrap | `adapters/claude/CLAUDE.md` |
 | agent home | `$HOME/.claude` by default; overridable with `AGENT_HOME` or `CLAUDE_HOME` |
 | artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
 | tracked/untracked signal | `workflow-guard-hook.sh` + `statusline.sh` |
@@ -41,7 +41,11 @@ $HOME/.claude/              # Claude Code runtime home
 Claude Code should see the same files it expects today, but they should be symlinked or generated from the neutral repo where practical:
 
 ```text
-$HOME/.claude/CLAUDE.md      -> $HOME/agent_setting/CLAUDE.md
+$HOME/.claude/CLAUDE.md      -> $HOME/agent_setting/adapters/claude/CLAUDE.md
+$HOME/.claude/core           -> $HOME/agent_setting/core
+$HOME/.claude/CORE.md        -> $HOME/agent_setting/CORE.md
+$HOME/.claude/WORKFLOW.md    -> $HOME/agent_setting/WORKFLOW.md
+$HOME/.claude/CONVENTIONS.md -> $HOME/agent_setting/CONVENTIONS.md
 $HOME/.claude/skills         -> $HOME/agent_setting/skills
 $HOME/.claude/agents         -> $HOME/agent_setting/agents
 $HOME/.claude/agent-modes    -> $HOME/agent_setting/agent-modes
@@ -57,7 +61,7 @@ Keep Claude-owned mutable state in `$HOME/.claude`: credentials, sessions, proje
 
 ## Model Role Mapping
 
-Claude Code adapter 는 기존 운용 품질을 보존하기 위해 `CONVENTIONS.md §2` 의 portable role 을 아래처럼 concrete model 로 매핑한다. 공통 문서에는 role name 을 쓰고, Claude Code 전용 frontmatter / Agent 호출에서만 concrete name 을 쓴다.
+Claude Code adapter 는 기존 운용 품질을 보존하기 위해 `core/CONVENTIONS.md §2` 의 portable role 을 아래처럼 concrete model 로 매핑한다. 공통 문서에는 role name 을 쓰고, Claude Code 전용 frontmatter / Agent 호출에서만 concrete name 을 쓴다.
 
 | Portable role | Claude Code mapping | 기존 재현 의미 |
 |---|---|---|

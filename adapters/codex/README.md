@@ -10,11 +10,11 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 
 | Surface | File |
 |---|---|
-| Core contract | `CORE.md` |
-| Workflow routing | `WORKFLOW.md` |
-| Shared conventions | `CONVENTIONS.md` |
-| Git and dispatch operations | `OPERATIONS.md` |
-| Memory contract | `MEMORY.md` |
+| Core contract | `core/CORE.md` |
+| Workflow routing | `core/WORKFLOW.md` |
+| Shared conventions | `core/CONVENTIONS.md` |
+| Git and dispatch operations | `core/OPERATIONS.md` |
+| Memory contract | `core/MEMORY.md` |
 | Capabilities | `skills/*/SKILL.md` |
 | Role profiles | `agents/*.md` |
 | Hook and guard scripts | `hooks/`, `utilities/` |
@@ -25,7 +25,7 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 |---|---|
 | capability | Read and follow the relevant `skills/*/SKILL.md`; no native slash registry is assumed |
 | role profile | Use `agents/*.md` and `agent-modes/` as delegation prompts or review personas |
-| adapter bootstrap | Load `CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
+| adapter bootstrap | Load `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
 | agent home | Set `AGENT_HOME` to the installed harness directory |
 | artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
 | tracked/untracked signal | `track-toggle.sh` and `utilities/workflow-guard-hook.sh` semantics; no automatic prompt hook unless wrapped |
@@ -53,7 +53,7 @@ Further Codex-specific files can be added under `adapters/codex/` and symlinked 
 
 ## Model Role Mapping
 
-Codex adapter 는 `CONVENTIONS.md §2` 의 portable role 을 Codex 런타임에서 동등한 capability tier 로 매핑해야 한다. 현재 adapter 는 experimental 이므로 concrete default 를 고정하지 않는다.
+Codex adapter 는 `core/CONVENTIONS.md §2` 의 portable role 을 Codex 런타임에서 동등한 capability tier 로 매핑해야 한다. 현재 adapter 는 experimental 이므로 concrete default 를 고정하지 않는다.
 
 | Portable role | Codex adapter expectation |
 |---|---|

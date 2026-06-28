@@ -36,7 +36,7 @@
 - **사후 수정**: spec-backed 프로젝트는 즉석 직접 편집이 아니라 _기존 산출물 파악 → spec-drift 체크 → autopilot-code_ 경로를 탄다.
 - **모드 신호**: 매 프롬프트 statusline 에 📌tracked(파이프 경유) / ⚡untracked(`/track`, 직접 편집 자유)가 뜬다.
 
-→ 라우팅 정밀 규칙·발화 매핑·spec mode·서브에이전트 분기: [`WORKFLOW.md`](WORKFLOW.md) · 호출 패턴·응답 규율: runtime adapter bootstrap (현재 Claude Code: [`CLAUDE.md`](CLAUDE.md) §0)
+→ 라우팅 정밀 규칙·발화 매핑·spec mode·서브에이전트 분기: [`core/WORKFLOW.md`](core/WORKFLOW.md) · 호출 패턴·응답 규율: runtime adapter bootstrap (현재 Claude Code: [`adapters/claude/CLAUDE.md`](adapters/claude/CLAUDE.md) §0)
 
 ---
 
@@ -63,7 +63,7 @@ skills/ (28)  ──호출──►  agents/ (8)        ◄── 팀별 모드(
 - **memory** = 단기(working)·장기(durable)·프로필을 하나의 DB(`memory.db`)로 묶어 세션 시작에 주입하고 종료에 회수한다.
 - **loops** = 부사(언제·얼마나·끝났는지). 세션 밖 cron·headless 로 돈다.
 
-→ skill 카탈로그·agent 표·디렉토리 맵: [`README.md`](README.md) · 산출물 컨벤션: [`CONVENTIONS.md`](CONVENTIONS.md) §5
+→ skill 카탈로그·agent 표·디렉토리 맵: [`README.md`](README.md) · 산출물 컨벤션: [`core/CONVENTIONS.md`](core/CONVENTIONS.md) §5
 
 ---
 
@@ -99,7 +99,7 @@ skills/ (28)  ──호출──►  agents/ (8)        ◄── 팀별 모드(
 | **메모리 2-layer + 결정론 lifecycle** | DESIGN §7 / MEMORY §7 | `mem.py` DB + 메모리 hook 4종 |
 | **회귀 자가 시험** | loops §L4 | `loops/drill/` (행동 assert + 토큰 계측) |
 
-→ 아키텍처 원칙 전문: [`DESIGN_PRINCIPLES.md`](DESIGN_PRINCIPLES.md)
+→ 아키텍처 원칙 전문: [`core/DESIGN_PRINCIPLES.md`](core/DESIGN_PRINCIPLES.md)
 
 ---
 
@@ -107,14 +107,14 @@ skills/ (28)  ──호출──►  agents/ (8)        ◄── 팀별 모드(
 
 | 문서 | 역할 |
 |---|---|
-| [`CORE.md`](CORE.md) · [`adapters/`](adapters/README.md) | 공통 하네스 계약 + 런타임별 adapter 경계 |
+| [`core/CORE.md`](core/CORE.md) · [`adapters/`](adapters/README.md) | 공통 하네스 계약 + 런타임별 adapter 경계 |
 | [`INSTALL_LAYOUT.md`](INSTALL_LAYOUT.md) | neutral repo + runtime home symlink projection 절차 |
-| [`CLAUDE.md`](CLAUDE.md) | 현재 Claude Code adapter 부트스트랩 + 응답 규율 + 라우팅 §0 |
-| [`WORKFLOW.md`](WORKFLOW.md) | 발화→skill 라우팅 코어 |
-| [`CONVENTIONS.md`](CONVENTIONS.md) | QA·산출물 3-tier 등 family 운영 규칙 |
-| [`OPERATIONS.md`](OPERATIONS.md) | git·worktree·dispatch·push 운영 (§5.8~5.11) |
-| [`MEMORY.md`](MEMORY.md) | 통합 기억 시스템 (§7) |
-| [`DESIGN_PRINCIPLES.md`](DESIGN_PRINCIPLES.md) | 아키텍처·행동 원칙 |
+| [`adapters/claude/CLAUDE.md`](adapters/claude/CLAUDE.md) | 현재 Claude Code adapter 부트스트랩 + 응답 규율 + 라우팅 §0 |
+| [`core/WORKFLOW.md`](core/WORKFLOW.md) | 발화→skill 라우팅 코어 |
+| [`core/CONVENTIONS.md`](core/CONVENTIONS.md) | QA·산출물 3-tier 등 family 운영 규칙 |
+| [`core/OPERATIONS.md`](core/OPERATIONS.md) | git·worktree·dispatch·push 운영 (§5.8~5.11) |
+| [`core/MEMORY.md`](core/MEMORY.md) | 통합 기억 시스템 (§7) |
+| [`core/DESIGN_PRINCIPLES.md`](core/DESIGN_PRINCIPLES.md) | 아키텍처·행동 원칙 |
 | [`README.md`](README.md) | GitHub 외부용 의미 지도 |
 | [`loops/README.md`](loops/README.md) | 상시 루프 카탈로그 |
 
