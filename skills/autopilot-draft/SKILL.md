@@ -112,11 +112,11 @@ mode별 _필수·권장_ 입력:
 > - `{discovered_inputs}` — Pre-flight Step 2 (Input Discovery)에서 결정된 input path list. Agent prompt 구성 시 orchestrator가 newline-join 형식으로 expand (`Discovered inputs:\n  - <path1>\n  - <path2>\n  ...`). sub-skill 호출 시에는 `--inputs <comma-separated paths>` 인수로 전달.
 > - 단일 ground-truth 경로는 `analysis_project/paper/*.md` (analyze-project --mode paper 산출물).
 
-**`--qa <level>`** — QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
+**`--qa <level>`** — QA 5 단계 정의 + model role·round 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
 
 - Supported: `quick` / `light` / `standard` / `thorough` (default) / `adversarial`
 - Omitted → `thorough`
-- **Why fact-checker is separate**: quality reviewer 는 narrative/coverage/logic 에 집중, fact-checker 는 citation/venue/year/metric/lineage 만 narrow 하게 ground-truth (cards/PDFs) 와 verbatim 대조 — matching task 라 sonnet 충분
+- **Why fact-checker is separate**: quality reviewer 는 narrative/coverage/logic 에 집중, fact-checker 는 citation/venue/year/metric/lineage 만 narrow 하게 ground-truth (cards/PDFs) 와 verbatim 대조 — matching task 라 fast fact-checker role 로 충분 (Claude adapter: sonnet)
 - **Propagation**: `--qa <level>` 를 draft-strategy / draft-refine 에 flag 로 전달
 - **`quick` interactions**: `--from strategy-refine` 또는 `--from draft-refine` 으로 재개 시 frontmatter `qa_level == quick` 이면 abort ("qa_level=quick 에서는 refine 단계가 skip 됩니다. --qa <level> 을 다른 값으로 명시해 재개하세요.")
 
@@ -395,28 +395,28 @@ Invoke Skill: `draft-strategy` with args: `<resolved_mode> --inputs <comma-separ
 
 2. Invoke reviewers based on `--qa` level. **Quality reviewer(s) and fact-checker run in parallel** at standard+:
 
-   **`quick`** — Single 연구팀 quality reviewer (sonnet, spot-check only):
+   **`quick`** — Single 연구팀 quality reviewer (fast reviewer, spot-check only):
    - One-pass review. Memos may be added but draft-refine is NOT invoked at Step 3 (see step 3 below).
    - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review.md`
 
-   **`light`** — Single 연구팀 quality reviewer (sonnet):
+   **`light`** — Single 연구팀 quality reviewer (fast reviewer):
    - One-pass review focusing on critical issues only.
    - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review.md`
 
-   **`standard`** — 1× 연구팀 quality reviewer (opus) + 1× 연구팀 fact-checker (sonnet, parallel):
+   **`standard`** — 1× 연구팀 quality reviewer (deep reviewer) + 1× 연구팀 fact-checker (fast fact-checker, parallel):
    - Quality review log: `{strategy_folder}/_internal/strategy_reviews/research_review_quality.md`
    - Fact-check log: `{strategy_folder}/_internal/strategy_reviews/research_review_factcheck.md`
 
    **`thorough`** (default) — **axis-decomposed parallel 연구팀** (모든 audit-aligned axes를 각각 별도 instance가 검토) + 1× 연구팀 fact-checker:
-   - **Axis A — Domain quality** (opus): refs/reviewer comments 대조, 학술 venue 컨벤션 (NeurIPS / ICML / ICASSP / Interspeech / T-ASLP — paper modes), industry standards (report/proposal/presentation), 완전성 / cohesion.
+   - **Axis A — Domain quality** (deep reviewer): refs/reviewer comments 대조, 학술 venue 컨벤션 (NeurIPS / ICML / ICASSP / Interspeech / T-ASLP — paper modes), industry standards (report/proposal/presentation), 완전성 / cohesion.
      - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review_domain.md`
-   - **Axis B — Methodology** (opus): 논리 일관성, 주장 설득력, 실험 설계, adversarial reviewer 약점.
+   - **Axis B — Methodology** (deep reviewer): 논리 일관성, 주장 설득력, 실험 설계, adversarial reviewer 약점.
      - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review_methodology.md`
-   - **Axis C — Style Guide** (sonnet): `## Style Guide` section 존재 + citation/figure-caption/bullet-depth/speaker-note 양식 일관성.
+   - **Axis C — Style Guide** (fast reviewer): `## Style Guide` section 존재 + citation/figure-caption/bullet-depth/speaker-note 양식 일관성.
      - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review_style.md`
-   - **Axis D — Cross-ref + Coverage** (sonnet): `cards/{file}.md` 인용 target 존재 + analysis/refs에 있으나 strategy에 인용 안 된 _orphan card_ 식별 (omission detection — UniSE-class 누락 방지).
+   - **Axis D — Cross-ref + Coverage** (fast reviewer): `cards/{file}.md` 인용 target 존재 + analysis/refs에 있으나 strategy에 인용 안 된 _orphan card_ 식별 (omission detection — UniSE-class 누락 방지).
      - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review_coverage.md`
-   - **Fact-checker** (sonnet): citation/venue/year/metric/lineage verbatim 대조 (cards/PDFs).
+   - **Fact-checker** (fast fact-checker): citation/venue/year/metric/lineage verbatim 대조 (cards/PDFs).
      - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review_factcheck.md`
    - 모든 reviewer가 `<!-- memo: ... -->` 코멘트를 KO strategy에 작성. 각자 `[axis name]` prefix 명시 (예: `[STYLE]`, `[COVERAGE]`).
    - 5 instance 완료 후 메모 merge + 중복 제거.
@@ -447,7 +447,7 @@ Invoke Skill: `draft-strategy` with args: `<resolved_mode> --inputs <comma-separ
    Return a summary of memos added (or "no issues found").
    ```
 
-   **Fact-checker prompt** (sonnet, parallel — standard/thorough only):
+   **Fact-checker prompt** (fast fact-checker, parallel — standard/thorough only):
    ```
    You are a fact-check focused reviewer — NOT narrative quality.
    Mode: {mode} | KO strategy: {ko_strategy_path} | Discovered inputs: {discovered_inputs} | Log: {fact_log_path}
@@ -460,7 +460,7 @@ Invoke Skill: `draft-strategy` with args: `<resolved_mode> --inputs <comma-separ
    - Reviewer comments (rebuttal mode): {strategy_folder}/analysis/reviewer_analysis.md
 
    Do NOT comment on completeness, narrative arc, or strategic soundness — that's the quality reviewer's job.
-   Stay narrowly on fact verification. Cost-aware mode (sonnet): table-only output. Limit to ~30 most material claims.
+   Stay narrowly on fact verification. Fast fact-checker mode: table-only output. Limit to ~30 most material claims.
 
    **CRITICAL — verification rules** (memory `feedback_factcheck_external_reverify.md`):
    - **name-only match ≠ ✅**. If the card contains the model/author name but the _specific venue / year / metric_ is NOT verbatim in the card, classify as 🟡 cards-name-only, NOT ✅. Use the `Source type` column.
@@ -705,7 +705,7 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
 ### Step 5: Draft Review (연구팀 as QA)
 **Applicable modes**: paper / presentation / doc (all 3 modes that generated drafts).
 
-> **기본 게이트 먼저 (모든 qa level 필수, axis-decomposed 보다 우선)** — paper mode 면 review 착수 전 `conventions/paper.md §3.6` (① 문법 정합성: 주어-동사·관사·복수·시제·비문 _문장 단위_ / ② LaTeX 정합성: `main.log` multiply-defined label·`\ref` 미정의·Table/Fig 번호 `main.aux` 대조 / ③ 자산 정체: 표/그림 역할을 label·`\ref` 흐름·내용으로 파악) 를 **반드시 먼저** 적용한다. 이 기본은 sonnet 으로 충분하며, _ceremony(단계·instance 수)보다 이 기본의 빠짐없음이 검토 품질을 결정_ 한다. 기본 누락은 thorough·opus 여도 못 잡는다.
+> **기본 게이트 먼저 (모든 qa level 필수, axis-decomposed 보다 우선)** — paper mode 면 review 착수 전 `conventions/paper.md §3.6` (① 문법 정합성: 주어-동사·관사·복수·시제·비문 _문장 단위_ / ② LaTeX 정합성: `main.log` multiply-defined label·`\ref` 미정의·Table/Fig 번호 `main.aux` 대조 / ③ 자산 정체: 표/그림 역할을 label·`\ref` 흐름·내용으로 파악) 를 **반드시 먼저** 적용한다. 이 기본은 fast reviewer 로 충분하며, _ceremony(단계·instance 수)보다 이 기본의 빠짐없음이 검토 품질을 결정_ 한다. 기본 누락은 thorough·deep reviewer 여도 못 잡는다.
 
 1. Resolve draft paths:
    - `en_draft_path` = `{strategy_folder}/draft/draft.md`
@@ -713,28 +713,28 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
 
 2. Invoke reviewers based on `--qa` level (same scaling as Step 3). **Quality reviewer(s) and fact-checker run in parallel** at standard+:
 
-   **`quick`** — Single 연구팀 quality reviewer (sonnet, spot-check only):
+   **`quick`** — Single 연구팀 quality reviewer (fast reviewer, spot-check only):
    - One-pass review. Memos may be added but draft-refine is NOT invoked at Step 5 (see step 3 below).
    - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review.md`
 
-   **`light`** — Single 연구팀 quality reviewer (sonnet):
+   **`light`** — Single 연구팀 quality reviewer (fast reviewer):
    - One-pass review focusing on critical issues only.
    - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review.md`
 
-   **`standard`** — 1× 연구팀 quality reviewer (opus) + 1× 연구팀 fact-checker (sonnet, parallel):
+   **`standard`** — 1× 연구팀 quality reviewer (deep reviewer) + 1× 연구팀 fact-checker (fast fact-checker, parallel):
    - Quality review log: `{strategy_folder}/_internal/draft_reviews/draft_review_quality.md`
    - Fact-check log: `{strategy_folder}/_internal/draft_reviews/draft_review_factcheck.md`
 
    **`thorough`** — **axis-decomposed parallel 연구팀** (audit-aligned axes 각각 별도 instance) + 1× 연구팀 fact-checker:
-   - **Axis A — Content / Strategy coverage** (opus): strategy 본문이 draft에 모두 반영됐는지, factual coherence, rebuttal mode면 모든 reviewer point에 응답 있는지.
+   - **Axis A — Content / Strategy coverage** (deep reviewer): strategy 본문이 draft에 모두 반영됐는지, factual coherence, rebuttal mode면 모든 reviewer point에 응답 있는지.
      - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review_content.md`
-   - **Axis B — Writing quality** (opus): 논리 flow, 완전성, 약한 주장 / [TODO] 잔존 등.
+   - **Axis B — Writing quality** (deep reviewer): 논리 flow, 완전성, 약한 주장 / [TODO] 잔존 등.
      - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review_quality.md`
-   - **Axis C — Style Guide compliance** (sonnet): strategy의 `## Style Guide` rule을 draft가 _모든_ citation / figure caption / bullet depth / speaker note에서 따랐는지. 일관성 일탈 (`IS 2024` vs `Interspeech 2024` 혼용 같은 것) 식별.
+   - **Axis C — Style Guide compliance** (fast reviewer): strategy의 `## Style Guide` rule을 draft가 _모든_ citation / figure caption / bullet depth / speaker note에서 따랐는지. 일관성 일탈 (`IS 2024` vs `Interspeech 2024` 혼용 같은 것) 식별.
      - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review_style.md`
-   - **Axis D — Cross-ref + Coverage** (sonnet): draft 안 `cards/{file}.md` link target 존재 + analysis/refs에 있으나 draft에 인용 안 된 orphan card 식별 (omission detection — UniSE-class 누락 방지).
+   - **Axis D — Cross-ref + Coverage** (fast reviewer): draft 안 `cards/{file}.md` link target 존재 + analysis/refs에 있으나 draft에 인용 안 된 orphan card 식별 (omission detection — UniSE-class 누락 방지).
      - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review_coverage.md`
-   - **Fact-checker** (sonnet): citation/venue/year/metric/lineage verbatim 대조 (cards/PDFs).
+   - **Fact-checker** (fast fact-checker): citation/venue/year/metric/lineage verbatim 대조 (cards/PDFs).
      - Review log: `{strategy_folder}/_internal/draft_reviews/draft_review_factcheck.md`
    - 모든 reviewer가 KO draft에 `<!-- memo: ... -->` 작성. 각자 `[axis name]` prefix 명시 (예: `[STYLE]`, `[COVERAGE]`, `[FACT]`).
    - 5 instance 완료 후 메모 merge + 중복 제거.
@@ -765,7 +765,7 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
    Return a summary of memos added (or "no issues found").
    ```
 
-   **Fact-checker prompt** (sonnet, parallel — standard/thorough only):
+   **Fact-checker prompt** (fast fact-checker, parallel — standard/thorough only):
    ```
    You are a fact-check focused reviewer — NOT narrative quality.
    Mode: {mode} | KO draft: {ko_draft_path} | Discovered inputs: {discovered_inputs} | Log: {fact_log_path}
@@ -778,7 +778,7 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
    - Strategy: {en_strategy_path} — **DO NOT use as primary source**. Strategy must itself be verified against paper analyses. Using strategy as ground truth = circular reference (forbidden).
 
    Do NOT comment on writing quality, narrative arc, or strategy coverage — that's the quality reviewer's job.
-   Stay narrowly on fact verification. Cost-aware mode (sonnet): table-only output. Limit to ~30 most material claims.
+   Stay narrowly on fact verification. Fast fact-checker mode: table-only output. Limit to ~30 most material claims.
 
    **CRITICAL — verification rules** (memory `feedback_factcheck_external_reverify.md`):
    - **name-only match ≠ ✅**. If the card contains the model/author name but the _specific venue / year / metric_ is NOT verbatim in the card, classify as 🟡 cards-name-only. Do NOT classify ✅ on name-only basis.

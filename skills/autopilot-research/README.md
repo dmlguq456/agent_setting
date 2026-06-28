@@ -35,11 +35,12 @@
 
 ## --qa
 - `quick` (1-pass 1 라운드)
-- `light` (sonnet single-pass)
-- `standard` (opus + fact-checker parallel)
-- `thorough` (2× opus + fact-checker)
+- `light` (fast reviewer single-pass)
+- `standard` (deep reviewer + fast fact-checker parallel)
+- `thorough` (2× deep reviewers + fast fact-checker)
+- `adversarial` (thorough + external adversary + claim-verify)
 
-> autopilot-research는 `adversarial` 미지원 (thorough까지만).
+> concrete model mapping 은 runtime adapter 책임. Claude adapter 는 fast=sonnet, deep=opus, external adversary=Codex CLI 로 재현한다.
 
 ## --from
 - `search`: Step 1 (paper search) — 검색·필터링·tier 분류

@@ -46,10 +46,10 @@ Return which steps were changed and a brief summary.
 
 | Level | 조건 | 행동 |
 |---|---|---|
-| Light | ≤3 steps 변경, 기계적 | 1× 품질관리팀 (sonnet) |
-| Standard | 4-10 steps 변경, 로직 변경 | 1× 품질관리팀 (opus) |
+| Light | ≤3 steps 변경, 기계적 | 1× fast reviewer |
+| Standard | 4-10 steps 변경, 로직 변경 | 1× deep reviewer |
 | Thorough | >10 steps 변경, 아키텍처 | 2× 병렬 (A correctness / B completeness) |
-| Adversarial | Cross-variant + Codex 가용 | Thorough + 1× codex-review-team |
+| Adversarial | Cross-variant + external adversary 가용 | Thorough + 1× external adversary |
 
 ### Thorough — 병렬 2팀
 - Agent A: **correctness** — 수정된 step이 올바른 파일/함수 참조? 의존성 업데이트?

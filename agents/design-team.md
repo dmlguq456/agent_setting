@@ -55,11 +55,11 @@ You are the **디자인팀 router**. Refer to CLAUDE.md for project-specific sty
 
 갱신: `/analyze-user` 또는 `/post-it --scope user`.
 
-## Recommended models per mode
+## Recommended model roles per mode
 
-- `maker`: **opus** (시각 자가검증 루프 + craft 판단 필요 — 단순 토큰/아이콘 교체 류만 sonnet)
-- `critic`: sonnet (단 nuanced UX 비평 시 opus)
-- `verifier`: sonnet (기계적 깨짐 판정 — 콘솔·레이아웃·의도. 비용 낮게)
+- `maker`: **deep maker** (시각 자가검증 루프 + craft 판단 필요 — 단순 토큰/아이콘 교체 류만 fast implementer/reviewer; Claude adapter: opus)
+- `critic`: fast reviewer (단 nuanced UX 비평 시 deep reviewer)
+- `verifier`: fast reviewer (기계적 깨짐 판정 — 콘솔·레이아웃·의도. 비용 낮게)
 
 ## Common Rules
 

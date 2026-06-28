@@ -16,15 +16,15 @@ plan + dev logs로부터 상세 변경 보고서를 생성하는 skill. **핵심
 3. 퍼지 검색 → `_audit`/`_fix_` 없는 폴더 우선
 
 ## Model & QA Policy
-**Writer: 항상 sonnet**. 최종 보고서는 이전 파이프라인 단계(plan reviews, code reviews, test reviews)에서 이미 검증된 아티팩트의 합성. 보고서 자체에 QA/리뷰 패스는 불필요 — 부정확성(라인 번호 drift, 낡은 follow-up)은 사용자가 읽으면서 교정 가능하며 커밋된 코드에 영향 없음.
+**Writer: 항상 fast writer** (Claude adapter: sonnet). 최종 보고서는 이전 파이프라인 단계(plan reviews, code reviews, test reviews)에서 이미 검증된 아티팩트의 합성. 보고서 자체에 QA/리뷰 패스는 불필요 — 부정확성(라인 번호 drift, 낡은 follow-up)은 사용자가 읽으면서 교정 가능하며 커밋된 코드에 영향 없음.
 
 | Level | 조건 | 행동 |
 |---|---|---|
-| 전체 | 모든 level | 1× 품질관리팀 (`model: "sonnet"`)이 보고서 작성 |
+| 전체 | 모든 level | 1× fast writer가 보고서 작성 (Claude adapter: 품질관리팀 `model: "sonnet"`) |
 
-`qa_level`은 **프롬프트 컨텍스트용**으로만 사용, 모델/리뷰에 영향 없음. Codex review 없음. 병렬 writer 없음. 리뷰 루프 없음.
+`qa_level`은 **프롬프트 컨텍스트용**으로만 사용, model role/리뷰에 영향 없음. external adversary review 없음. 병렬 writer 없음. 리뷰 루프 없음.
 
-## 위임 — 품질관리팀 (sonnet)
+## 위임 — 품질관리팀 (fast writer)
 인풋: plan + log directory (plan/, dev_logs/, dev_reviews/, plan_reviews/, test_logs/, test_reviews/) + Korean plan.
 
 절차:

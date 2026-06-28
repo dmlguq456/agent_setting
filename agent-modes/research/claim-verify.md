@@ -60,9 +60,9 @@
 
 둘은 parallel 보완 — fact-check ✅ 라도 claim-verify 가 kill 할 수 있다 (카드 정합하나 카드가 틀림).
 
-## Recommended model
+## Recommended model role
 
-- voter: sonnet (cost-aware, WebSearch 위주) — N-vote 라 비용 누적. 핵심 claim 만 opus 상향 가능.
+- voter: fast fact-checker/reviewer (Claude adapter: sonnet) — N-vote 라 비용 누적. 핵심 claim 만 deep reviewer 로 상향 가능.
 
 ## Return Format (CRITICAL)
 Every response to a skill invocation MUST be exactly one line:

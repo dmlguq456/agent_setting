@@ -7,7 +7,7 @@ Autopilot family — **post-creation iteration pipeline for research and doc art
 
 - **Prompt-driven**: target artifact는 prompt 키워드 fuzzy match against `<artifact-root>/{research,documents}/*`로 자동 식별
 - artifact의 file structure 자동 발견 → plans edits → diff preview → 사용자 confirm → 적용 + 버전 스냅샷 + integrated history 누적 (`pipeline_summary.md` — 단일 source of truth, 별도 CHANGELOG 없음)
-- 기본 `--qa quick` (1-pass review, fastest path). escalate to light/standard/thorough/adversarial for multi-round review, fact-check, or external Codex adversarial pass
+- 기본 `--qa quick` (1-pass review, fastest path). escalate to light/standard/thorough/adversarial for multi-round review, fact-check, or external adversary pass
 - Optional `--memo <file>` falls back to file-memo style for deferred reviews
 
 > code 산출물은 본 skill 대상 아님 — `/code-refine` 또는 `/autopilot-code` 사용.
@@ -49,10 +49,10 @@ Autopilot family — **post-creation iteration pipeline for research and doc art
 | Level | 처리 |
 |---|---|
 | quick (default) | 1-pass quality review, refine 자동 적용. fact-checker / style-audit skip |
-| light | quality reviewer 1× (sonnet) |
-| standard | quality reviewer (opus) + fact-checker (sonnet, parallel) |
+| light | quality reviewer 1× (fast reviewer) |
+| standard | quality reviewer (deep reviewer) + fact-checker (fast fact-checker, parallel) |
 | thorough | quality reviewer 2× parallel + fact-checker |
-| adversarial | thorough (2× opus + fact-checker) + Codex 외부 리뷰 (camera-ready·grant 등) |
+| adversarial | thorough (2× deep reviewers + fact-checker) + external adversary 리뷰 (camera-ready·grant 등) |
 
 ## 버전 + 이력
 - **Major 적용 시**: `_internal/versions/v{N+1}/` 스냅샷 + `pipeline_summary.md` 통합 history 누적. Stage D는 활성 `## 마이너 변경 로그` 섹션을 _verbatim_ 으로 새 major의 `## v{N+1} 변경 사항` 안 `### 누적 마이너 변경 사항 (v{N}_1 → v{N}_M)` sub-block 으로 migrate + 활성 로그 섹션 clear. **추가로 각 affected file의 frontmatter `changelog:` array에 v{N+1} entry insert** (in-file git-tracked lineage 보존).

@@ -118,17 +118,17 @@ QA 5 단계 정의 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1
 | Level | Behavior |
 |---|---|
 | **quick** | Routing 분류 + Stage C dry-summary + 자동 apply. _대량 backfill·1회성 경량_ 자리. reviewer round 0, polish 없음. |
-| **light** (default) | + 1× sonnet reviewer single axis (linking precision — card_id/backbone/task 매달림 정합) + **편집팀 polish batch 1회** (Stage D.5). _매일 cron 기본_. |
-| **standard** | + 1× opus + 2× sonnet reviewer (linking precision / note 노트화 narrative / 카탈로그 emerge·triage 제안 quality) + 1× sonnet fact-checker (source ↔ 노트 verbatim 대조). round 1. _주말 묶음 정리_. |
-| **thorough** | + 2× opus + 2× sonnet + 1× sonnet fact-checker. round 2. _월간 cleanup_ / _노션 migration 검수_. |
-| **adversarial** | thorough + 1× `Agent(codex-review-team)` Codex CLI external review. _Phase 3 노션 migration 1차 검수_ 같은 high-stakes 자리. |
+| **light** (default) | + 1× fast reviewer single axis (linking precision — card_id/backbone/task 매달림 정합) + **편집팀 polish batch 1회** (Stage D.5). _매일 cron 기본_. |
+| **standard** | + 1× deep reviewer + 2× fast reviewers (linking precision / note 노트화 narrative / 카탈로그 emerge·triage 제안 quality) + 1× fast fact-checker (source ↔ 노트 verbatim 대조). round 1. _주말 묶음 정리_. |
+| **thorough** | + 2× deep reviewers + 2× fast reviewers + 1× fast fact-checker. round 2. _월간 cleanup_ / _노션 migration 검수_. |
+| **adversarial** | thorough + 1× external adversary (`codex-review-team` in Claude adapter). _Phase 3 노션 migration 1차 검수_ 같은 high-stakes 자리. |
 
 opt-out flag — `--no-fact-check` 만 (standard+ 자리에서).
 
 **reviewer axis 분담**:
-- _linking precision_ (opus) — note `card_id`/`backbone_ids`/`task_ids` 가 올바른 L1 카드·L2 카탈로그 가리키나, 잘못된 매달림 catch
-- _note narrative_ (sonnet) — 노트화 본문이 _source 핵심 (결과·결정·metric) 을 읽기 편하게 요약_ + markdown 정합
-- _emerge·triage quality_ (sonnet) — 신설 카탈로그 entry·신규 L1 카드 제안의 _frontmatter 완성도 + 근거_
+- _linking precision_ (deep reviewer) — note `card_id`/`backbone_ids`/`task_ids` 가 올바른 L1 카드·L2 카탈로그 가리키나, 잘못된 매달림 catch
+- _note narrative_ (fast reviewer) — 노트화 본문이 _source 핵심 (결과·결정·metric) 을 읽기 편하게 요약_ + markdown 정합
+- _emerge·triage quality_ (fast reviewer) — 신설 카탈로그 entry·신규 L1 카드 제안의 _frontmatter 완성도 + 근거_
 
 ## Mode Forms
 

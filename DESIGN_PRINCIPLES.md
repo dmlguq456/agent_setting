@@ -174,7 +174,7 @@ QA loop 는 _skill 안에서 닫힌 loop_ 으로 돌고, orchestrator 는 verdic
 
 ## 6. Output Surface — 사용자 향 산출물의 일관성
 
-사용자가 직접 보는 markdown 산출물은 _내용 정확성_ 만 아니라 _읽기 호흡_ 까지 책임진다. 전담 부서 — **편집팀** (editorial-team, opus).
+사용자가 직접 보는 markdown 산출물은 _내용 정확성_ 만 아니라 _읽기 호흡_ 까지 책임진다. 전담 부서 — **편집팀** (editorial-team, deep editor; Claude adapter: opus).
 
 - 모드 3종: A 옮기기 (영문 ↔ 국문) / B 다듬기 (언어 무관, 판교체 + 영문 어색한 표현 모두) / C 점검만
 - 판교체 회피 — 한국어 산출물에서 영어 어휘를 한국어 어순에 그냥 박지 않는다. 도메인 영어와 정착 외래어만 영어로, 나머지는 한국어로. 매핑 표 — `agents/editorial-team.md`
@@ -196,7 +196,7 @@ per-project 메모는 두 layer 분리.
 | **자동 학습** | DB working/durable — 외부 distiller 가 세션 delta 를 distill → `mem add` (Cluster C) | **외부 detached distiller** (메인 아님; turn-counter·SessionEnd hook 트리거 — §0.5 판단 외부화) | 재사용 절차·교정·컨벤션·교훈 자동 학습 |
 
 - 내장 file 메모리(`<agent-home>/projects/*/memory/`)는 **직접 write hard-block**(`builtin-memory-guard.sh`); `mem sync` 는 다른 세션·하네스의 stray write 만 안전망 흡수. 기억 write 경로 = `mem`(DB) 단일.
-- **삭제·prune·consolidate·merge·graduate(비가역) = 세션끝 opus 큐레이터** (Cluster E — no-tools + action JSON + script 실행, D-18; 비가역삭제 3중방어). N턴 distiller = sonnet add-only. 메인 housekeeping 0. working TTL(21일) = deterministic backstop. (원칙: 추가[가역]=외부 자동 / 정리·삭제[비가역]=세션끝 opus.)
+- **삭제·prune·consolidate·merge·graduate(비가역) = 세션끝 deep curator** (Cluster E — no-tools + action JSON + script 실행, D-18; Claude adapter: opus; 비가역삭제 3중방어). N턴 distiller = fast add-only worker (Claude adapter: sonnet). 메인 housekeeping 0. working TTL(21일) = deterministic backstop. (원칙: 추가[가역]=외부 자동 / 정리·삭제[비가역]=세션끝 deep curator.)
 - 세션 주입 = `mem inject --hook` (DB working+durable+profile). 상세 SoT = runtime adapter bootstrap + MEMORY §7.
 
 **Why**: 자동 메모리가 모든 feedback 을 누적하면 사용자가 _명시적으로 박아두고 싶은_ 정보 (코딩 컨벤션 · 외부 자원 link · 미해결 thread) 가 noise 에 묻혀 보인다. layer 분리 후 우선순위 명확.

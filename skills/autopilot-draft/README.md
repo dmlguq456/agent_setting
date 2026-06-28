@@ -32,7 +32,7 @@ flowchart LR
 |---|---|
 | `<task description>` | 첫 positional arg — 작업의 목표·의도·범위·청중 한 줄 |
 | `--mode` | 6개 모드 중 하나. 생략 시 task description에서 자동 추론 |
-| `--qa` | quick / light / standard / thorough (default) — fact-checker는 standard+에서 parallel sonnet으로 추가 |
+| `--qa` | quick / light / standard / thorough (default) — fact-checker는 standard+에서 fast fact-checker로 parallel 추가 |
 | `--user-refine` | 연구팀 메모 직후 pause. 사용자가 직접 `<!-- memo: ... -->` 추가 후 `--from <stage>` 재개 |
 | `--no-clarify` | Step 0 Scope Clarification 강제 skip |
 | `--from <stage>` | pause/실패 후 특정 단계 재개 (analyze / strategy / strategy-refine / draft / draft-refine / finalize) |
@@ -76,12 +76,12 @@ Quality reviewer + fact-checker가 **parallel**로 동작 (standard+).
 
 | Level | Quality reviewer | Fact-checker (parallel) |
 |---|---|---|
-| quick | 1× (sonnet), 1-pass, refine entire skip | skip |
-| light | 1× 연구팀 (sonnet) | skip |
-| standard | 1× 연구팀 (opus) | 1× 연구팀 fact-check (sonnet) |
-| thorough (default) | 2× 연구팀 (opus) — Domain Expert + Methodology / Content Expert + Quality | 1× 연구팀 fact-check (sonnet) |
+| quick | 1× fast reviewer, 1-pass, refine entire skip | skip |
+| light | 1× fast reviewer | skip |
+| standard | 1× deep reviewer | 1× fast fact-checker |
+| thorough (default) | 2× deep reviewers — Domain Expert + Methodology / Content Expert + Quality | 1× fast fact-checker |
 
-**Fact-checker**는 `analysis_project/paper/*.md` verbatim 대조로 venue/year/metric/citation을 narrow하게 검증. _창의적 판단이 아닌 매칭 작업_이라 sonnet으로 충분.
+**Fact-checker**는 `analysis_project/paper/*.md` verbatim 대조로 venue/year/metric/citation을 narrow하게 검증. _창의적 판단이 아닌 매칭 작업_이라 fast fact-checker 로 충분.
 
 > Strategy review (Step 3) + Draft review (Step 5) 두 곳에서 동일 패턴.
 

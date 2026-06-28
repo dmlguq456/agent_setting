@@ -3,7 +3,7 @@
 > 본 README 는 `SKILL.md` 의 GitHub 표시용 mirror. 권위 있는 동작 명세는 `SKILL.md`.
 
 ## 개요
-code-execute 이후 또는 온디맨드로 기능 테스트를 실행해 코드 정확성을 검증하는 skill. **항상 Thorough 모드** (2 병렬 QA 팀 강제), Codex 가용 시 자동 Adversarial로 상향.
+code-execute 이후 또는 온디맨드로 기능 테스트를 실행해 코드 정확성을 검증하는 skill. **항상 Thorough 모드** (2 병렬 QA 팀 강제), external adversary 가용 시 자동 Adversarial로 상향.
 
 ## 호출 형식
 ```
@@ -33,19 +33,19 @@ Format:
 **Verdict:** PASS / FAIL — [reason]
 ```
 
-## QA 요구 (Thorough 강제, Codex 가용 시 Adversarial)
+## QA 요구 (Thorough 강제, external adversary 가용 시 Adversarial)
 **`qa_level` 플래그 적용 안 됨** — 테스트 엄격도는 협상 불가.
 
-**Adversarial 자동 상향**: QA launch 전 `codex --version 2>/dev/null` 실행. Codex 가용 시 자동 상향. 없으면 Thorough.
+**Adversarial 자동 상향**: QA launch 전 adapter 가용성 체크 실행(Claude adapter: `codex --version 2>/dev/null`). external adversary 가용 시 자동 상향. 없으면 Thorough.
 
-**항상 2 QA agents 병렬 (opus)**:
-- Agent A (**coverage**): 모든 변경 파일 테스트됐나? 미테스트 코드 경로/엣지 케이스? 실데이터 사용? before/after 비교?
+**항상 2 QA agents 병렬**:
+- Agent A (**coverage**, fast reviewer): 모든 변경 파일 테스트됐나? 미테스트 코드 경로/엣지 케이스? 실데이터 사용? before/after 비교?
   - `test_reviews/test_review_coverage.md`
-- Agent B (**accuracy**): 실패 진단이 올바른가(pre-existing 오진 아님)? 올바른 engine_mode? 명령이 변경 경로와 일치? 부정 테스트 존재?
+- Agent B (**accuracy**, deep reviewer): 실패 진단이 올바른가(pre-existing 오진 아님)? 올바른 engine_mode? 명령이 변경 경로와 일치? 부정 테스트 존재?
   - `test_reviews/test_review_accuracy.md`
 
 **Adversarial 추가**:
-- Agent C (Codex): `codex-review-team` (`adversarial-review --wait --scope auto`) → `test_review_codex.md`
+- Agent C (external adversary): Claude adapter 는 `codex-review-team` (`adversarial-review --wait --scope auto`) 사용
 
 ANY agent의 이슈 처리 필수.
 

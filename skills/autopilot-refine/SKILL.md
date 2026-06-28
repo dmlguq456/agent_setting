@@ -1,6 +1,6 @@
 ---
 name: autopilot-refine
-description: "Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: target artifact identified via prompt fuzzy match against `<artifact-root>/{research,documents}/*`, then auto-discovers the artifact's file structure, plans edits, shows a diff preview in chat, and on user confirm applies edits with versioning + integrated history logging in `pipeline_summary.md` (single source of truth — no separate CHANGELOG). Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough/adversarial for multi-round review, fact-check, or external Codex adversarial pass. Optional `--memo <file>` falls back to file-memo style for deferred reviews."
+description: "Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: target artifact identified via prompt fuzzy match against `<artifact-root>/{research,documents}/*`, then auto-discovers the artifact's file structure, plans edits, shows a diff preview in chat, and on user confirm applies edits with versioning + integrated history logging in `pipeline_summary.md` (single source of truth — no separate CHANGELOG). Default `--qa quick` (1-pass review, fastest path); escalate to light/standard/thorough/adversarial for multi-round review, fact-check, or external adversary pass. Optional `--memo <file>` falls back to file-memo style for deferred reviews."
 argument-hint: "\"<prompt>\" [--qa quick|light|standard|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
 metadata:
   group: entry
@@ -125,16 +125,16 @@ QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../
 | Level | Behavior on proposed diff |
 |---|---|
 | **quick** | Investigate → Stage B.5 (factual + style auto-detector, always on) → diff preview → apply. No internal review loop. Stage B.5 는 cards-grep + regex 만. |
-| **light** | + 2× sonnet quality reviewer (다른 axes) single pass. obvious regression catch. |
-| **standard** | + 1× opus + 2× sonnet quality reviewer (다른 axes) + 1× sonnet fact-checker (parallel, in-artifact ground truth verbatim 대조 — research: `cards/*.md`; doc: `analysis/*.md` + 기존 strategy/draft). round 1. |
-| **thorough** (default) | + 2× opus + 2× sonnet quality reviewer (다른 axes) + 1× sonnet fact-checker. round 2. high-stakes refine 용. |
-| **adversarial** | thorough + 1× `Agent(codex-review-team)` (Codex CLI external review). camera-ready / grant / public rebuttal 같은 외부 strong scrutiny 자리. |
+| **light** | + 2× fast reviewers (다른 axes) single pass. obvious regression catch. |
+| **standard** | + 1× deep reviewer + 2× fast reviewers (다른 axes) + 1× fast fact-checker (parallel, in-artifact ground truth verbatim 대조 — research: `cards/*.md`; doc: `analysis/*.md` + 기존 strategy/draft). round 1. |
+| **thorough** (default) | + 2× deep reviewers + 2× fast reviewers (다른 axes) + 1× fast fact-checker. round 2. high-stakes refine 용. |
+| **adversarial** | thorough + 1× external adversary (`codex-review-team` in Claude adapter). camera-ready / grant / public rebuttal 같은 외부 strong scrutiny 자리. |
 
 Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/draft-refine` 사용).
 
 > The two opt-out flags `--no-fact-check` and `--no-style-audit` are **orthogonal to every `--qa` level** — they skip the corresponding Stage B.5 aspect regardless of qa level. These are the _only_ disable mechanism per `feedback_factcheck_principles.md` Principle 0.
 
-> **`adversarial` propagation**: at this tier, after the thorough reviewers return, spawn `Agent(codex-review-team)` with (a) the proposed diff, (b) the artifact's intent (from `pipeline_summary.md`), and (c) the source ground-truth (research: `cards/*.md`; doc: `analysis/*.md` + existing strategy/draft). Surface Codex findings alongside internal reviewer findings before the user-confirm step. If Codex flags a blocking issue, mark it in the diff preview as `⚠ Codex: <issue>` so the user can decide whether to apply, revise, or abort.
+> **`adversarial` propagation**: at this tier, after the thorough reviewers return, spawn external adversary (`Agent(codex-review-team)` in Claude adapter) with (a) the proposed diff, (b) the artifact's intent (from `pipeline_summary.md`), and (c) the source ground-truth (research: `cards/*.md`; doc: `analysis/*.md` + existing strategy/draft). Surface external findings alongside internal reviewer findings before the user-confirm step. If the external adversary flags a blocking issue, mark it in the diff preview as `⚠ External: <issue>` so the user can decide whether to apply, revise, or abort.
 
 ## Mode Forms (orthogonal to --qa)
 

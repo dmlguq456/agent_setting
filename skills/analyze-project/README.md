@@ -61,7 +61,7 @@
 품질관리팀을 code review 모드로 호출하여 Interface Reference 엔트리를 실제 소스와 대조.
 - **범위**: 현재 run에서 업데이트된 문서 파일만
 - **최소 검증**: 파일당 최소 2개 엔트리 — 시그니처, 파일 경로, 라인 번호 대조
-- **QA 모델**: Light QA (sonnet)
+- **QA model role**: Light QA (fast reviewer; Claude adapter: sonnet)
 
 ## paper mode
 보유 논문 PDFs를 읽어 `<artifact-root>/analysis_project/paper/`에 논문별 cards + `00_overview_and_constraints.md` 생성. 연구팀에 위임. autopilot-draft·autopilot-code·autopilot-research가 implicit input source로 활용.

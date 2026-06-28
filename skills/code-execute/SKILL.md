@@ -79,17 +79,17 @@ Before any code changes, ensure the working tree is clean and up-to-date:
 
 | Level | Auto-detect condition | Action |
 |---|---|---|
-| **Quick** | (manual via `--qa quick` only — inherited from autopilot-code) | 1× 품질관리팀 (`model: "sonnet"`), single pass; major 🔴 issues are logged but the pipeline does NOT branch to rollback retry — issues propagate to `pipeline_summary.md` Decision Points instead |
-| **Light** | ≤3 units, mechanical, single-variant | 1× 품질관리팀 (`model: "sonnet"`) |
-| **Standard** | 4–10 units, logic changes, single module | 1× 품질관리팀 (default opus) |
-| **Thorough** | >10 units, cross-module/variant, architectural | 2–3× 품질관리팀 in parallel: A=correctness (opus), B=consistency (sonnet), C=safety (opus, >20 files) |
-| **Adversarial** | Cross-variant (SE+SS+CSS), shared modules (utils/, network.py), or >20 files with architectural impact — **AND Codex available** | Thorough-level 품질관리팀 + 1× codex-review-team (`adversarial-review`) in parallel |
+| **Quick** | (manual via `--qa quick` only — inherited from autopilot-code) | 1× fast reviewer (Claude adapter: 품질관리팀 `model: "sonnet"`), single pass; major 🔴 issues are logged but the pipeline does NOT branch to rollback retry — issues propagate to `pipeline_summary.md` Decision Points instead |
+| **Light** | ≤3 units, mechanical, single-variant | 1× fast reviewer |
+| **Standard** | 4–10 units, logic changes, single module | 1× deep reviewer |
+| **Thorough** | >10 units, cross-module/variant, architectural | 2–3× reviewers in parallel: A=correctness (deep), B=consistency (fast), C=safety (deep, >20 files) |
+| **Adversarial** | Cross-variant (SE+SS+CSS), shared modules (utils/, network.py), or >20 files with architectural impact — **AND external adversary available** | Thorough-level 품질관리팀 + 1× external adversary (`codex-review-team` in Claude adapter) in parallel |
 
-Thorough mode — A: bugs/logic/signature mismatches (opus); B: naming/conventions/dead code (sonnet); C: tensor shapes/None edge cases (opus). Each writes to `_internal/dev_reviews/phase_{NN}_{focus}.md`. All 🔴 from ANY agent must be addressed.
+Thorough mode — A: bugs/logic/signature mismatches (deep); B: naming/conventions/dead code (fast); C: tensor shapes/None edge cases (deep). Each writes to `_internal/dev_reviews/phase_{NN}_{focus}.md`. All 🔴 from ANY agent must be addressed.
 
-Adversarial mode — runs all Thorough agents PLUS an additional `codex-review-team` agent in the same parallel batch. The Codex agent runs `adversarial-review --wait --scope auto` and writes to `_internal/dev_reviews/phase_{NN}_codex.md`. All 🔴 from ANY agent (including Codex) must be addressed.
+Adversarial mode — runs all Thorough agents PLUS an additional external adversary in the same parallel batch. Claude adapter uses `codex-review-team`, which runs `adversarial-review --wait --scope auto` and writes adapter-specific external review logs. All 🔴 from ANY agent must be addressed.
 
-**Codex availability check**: Before selecting Adversarial, run `codex --version` (suppress stderr). If the command fails or Codex is not authenticated, fall back to Thorough silently. This check is skipped if `--qa adversarial` is explicitly specified (fail loudly instead).
+**External adversary availability check**: Before selecting Adversarial, run the adapter availability check (Claude adapter: `codex --version`, suppress stderr). If unavailable, fall back to Thorough silently. This check is skipped if `--qa adversarial` is explicitly specified (fail loudly instead).
 
 ## Change Log & Phase Review
 - Each 개발팀 subagent writes its own step log file in `{log_dir}/dev_logs/`.
@@ -98,10 +98,10 @@ Adversarial mode — runs all Thorough agents PLUS an additional `codex-review-t
 - **When a phase completes**:
   1. **Assess QA level** from the phase's change scope (files changed, nature of changes) per the QA Scaling table above.
   2. Invoke 품질관리팀 accordingly:
-     - **Light/Standard**: 1 agent. Prompt must include: the step log file names for THIS phase (in dev_logs/), the log directory path, the list of changed source files, and the review output file name. For Light mode, explicitly pass `model: 'sonnet'` when invoking 품질관리팀.
+     - **Light/Standard**: 1 agent. Prompt must include: the step log file names for THIS phase (in dev_logs/), the log directory path, the list of changed source files, and the review output file name. For Light mode, use fast reviewer (Claude adapter: pass `model: 'sonnet'` when invoking 품질관리팀).
      - Example: "Review this phase in code review mode. Log dir: [path]. Step logs for this phase: [file list]. Changed source files: [file list]. Write review results to: [path]/_internal/dev_reviews/phase_01.md. Return the file path and a one-line verdict only."
-     - **Thorough**: 2-3 agents in parallel (single message, multiple Agent tool calls). Same base prompt, each with a different focus suffix and output file name. Pass `model: 'sonnet'` for the B (consistency) agent; A (correctness) and C (safety) use default opus.
-     - **Adversarial**: same as Thorough, plus 1× `codex-review-team` agent in the same parallel batch. Codex prompt: "Run adversarial-review on the current changes. Write results to: {log_dir}/_internal/dev_reviews/phase_{NN}_codex.md. Return the file path and a one-line verdict."
+     - **Thorough**: 2-3 agents in parallel (single message, multiple Agent tool calls). Same base prompt, each with a different focus suffix and output file name. Use fast reviewer for the B (consistency) agent and deep reviewer for A (correctness) and C (safety).
+     - **Adversarial**: same as Thorough, plus 1× external adversary (`codex-review-team` in Claude adapter) in the same parallel batch. External prompt: "Run adversarial-review on the current changes. Write results to: {log_dir}/_internal/dev_reviews/phase_{NN}_external.md (or adapter legacy path). Return the file path and a one-line verdict."
      - `mkdir -p {log_dir}/_internal/dev_reviews` before first invocation.
      - The 품질관리팀 reads step logs (including Decision fields) and source files directly, then writes the review report to the specified file.
   2. **Read the review file** (skill-level read — permitted per DESIGN_PRINCIPLES 3.3) to determine next action:

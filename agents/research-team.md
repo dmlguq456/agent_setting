@@ -56,12 +56,12 @@ Any of the directories above may be absent in a given project — skip missing o
 
 갱신: `/analyze-user` 또는 `/post-it --scope user`.
 
-## Recommended models per mode
+## Recommended model roles per mode
 
-- `plan-review`: opus (deep cross-checking)
-- `research-survey`: opus (paper analysis)
-- `fact-check`: sonnet (cost-aware, verbatim matching only — _창의 판단 X_)
-- `claim-verify`: sonnet (cost-aware, N-vote WebSearch 위주 — 핵심 claim 만 opus 상향)
+- `plan-review`: deep reviewer (deep cross-checking; Claude adapter: opus)
+- `research-survey`: deep maker/reviewer (paper analysis; Claude adapter: opus)
+- `fact-check`: fast fact-checker (cost-aware, verbatim matching only — _창의 판단 X_; Claude adapter: sonnet)
+- `claim-verify`: fast fact-checker/reviewer (cost-aware, N-vote WebSearch 위주 — 핵심 claim 만 deep reviewer 로 상향)
 
 ## Decision-Making Rules (모든 모드)
 

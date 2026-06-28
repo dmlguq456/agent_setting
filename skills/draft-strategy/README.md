@@ -61,9 +61,9 @@ Quality reviewer + fact-checker가 **parallel**로 동작 (standard+).
 
 | Level | 조건 | Quality reviewer | Fact-checker (parallel) |
 |---|---|---|---|
-| Light | review/presentation 또는 ≤3 inputs | 1× 품질관리팀 (sonnet) | skip |
-| Standard | paper/report/proposal 또는 rebuttal ≤3 reviewers | 1× (opus) | 1× fact-check (sonnet) |
-| Thorough | rebuttal ≥4 reviewers 또는 ≥10 inputs | 2× 병렬 (opus) | 1× fact-check (sonnet) |
+| Light | review/presentation 또는 ≤3 inputs | 1× fast reviewer | skip |
+| Standard | paper/report/proposal 또는 rebuttal ≤3 reviewers | 1× deep reviewer | 1× fast fact-checker |
+| Thorough | rebuttal ≥4 reviewers 또는 ≥10 inputs | 2× deep reviewers 병렬 | 1× fast fact-checker |
 
 **Fact-checker**는 `analysis_project/paper/*.md` verbatim 대조로 venue/year/metric/citation을 narrow하게 검증. quality reviewer는 narrative arc / cohesion / 모든 reviewer point 응답 여부에 집중.
 

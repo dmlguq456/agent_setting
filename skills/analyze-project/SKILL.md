@@ -281,7 +281,7 @@ After documentation is written, invoke 품질관리팀 in code review mode to cr
 
 - **Scope**: Documentation files updated in the current run only.
 - **Minimum verification**: At least 2 Interface Reference entries per file — check signature, file path, and line number against actual source.
-- **Model**: Light QA using sonnet — documentation is not as critical as code changes.
+- **Model role**: Light QA using fast reviewer (Claude adapter: sonnet) — documentation is not as critical as code changes.
 - Reviews logged to `<artifact-root>/analysis_project/code/_internal/reviews/`.
 
 ---

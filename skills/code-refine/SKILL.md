@@ -53,15 +53,15 @@ Otherwise, auto-detect from the refinement scope:
 
 | Level | Auto-detect condition | Action |
 |---|---|---|
-| **Quick** | (manual via `--qa quick` only — autopilot skips refine entirely in quick mode, so this only matters on direct invocation) | 1× 품질관리팀 (`model: "sonnet"`), single pass, **max 1 round** (no fix-round on 🔴 — record as 미해결 이슈 and exit) |
-| **Light** | ≤3 steps changed, mechanical | 1× 품질관리팀 (`model: "sonnet"`) |
-| **Standard** | 4-10 steps changed, logic changes | 1× 품질관리팀 (default opus) |
-| **Thorough** | >10 steps changed, architectural | 2× 품질관리팀 in parallel: A correctness (opus), B completeness (sonnet) |
-| **Adversarial** | Cross-variant (SE+SS+CSS), shared modules (utils/, network.py), or >20 steps changed — **AND Codex available** | Thorough-level 품질관리팀 (A/B) + 1× codex-review-team (`adversarial-review`) in parallel; Codex writes `refine_round_{N}_codex.md` |
+| **Quick** | (manual via `--qa quick` only — autopilot skips refine entirely in quick mode, so this only matters on direct invocation) | 1× fast reviewer (Claude adapter: 품질관리팀 `model: "sonnet"`), single pass, **max 1 round** (no fix-round on 🔴 — record as 미해결 이슈 and exit) |
+| **Light** | ≤3 steps changed, mechanical | 1× fast reviewer |
+| **Standard** | 4-10 steps changed, logic changes | 1× deep reviewer |
+| **Thorough** | >10 steps changed, architectural | 2× reviewers in parallel: A correctness (deep), B completeness (fast) |
+| **Adversarial** | Cross-variant (SE+SS+CSS), shared modules (utils/, network.py), or >20 steps changed — **AND external adversary available** | Thorough-level 품질관리팀 (A/B) + 1× external adversary (`codex-review-team` in Claude adapter) in parallel |
 
 > See `--qa` flag for manual override. When `qa_level` is set in plan frontmatter, it overrides auto-detect.
 
-**Codex availability check**: Before selecting Adversarial, run `codex --version` (suppress stderr). If the command fails or Codex is not authenticated, fall back to Thorough silently. This check is skipped if `--qa adversarial` is explicitly specified (fail loudly instead).
+**External adversary availability check**: Before selecting Adversarial, run the adapter availability check (Claude adapter: `codex --version`, suppress stderr). If unavailable, fall back to Thorough silently. This check is skipped if `--qa adversarial` is explicitly specified (fail loudly instead).
 
 **Thorough mode** — launch 2 QA agents in parallel:
 - Agent A: "Focus on **correctness**: Do the revised steps reference correct files/functions? Are dependencies updated?"
@@ -72,8 +72,8 @@ Otherwise, auto-detect from the refinement scope:
 Log dir = task root folder (parent of `plan/`). Run `mkdir -p {log_dir}/_internal/plan_reviews` before invoking QA.
 
 After 기획팀 returns, assess QA level (changed step count, nature) per the table above, then:
-- **Light/Standard**: 1 agent — "Review changed steps. Plan: [path], Changed: [list]. Write to: {log_dir}/_internal/plan_reviews/refine_round_{N}.md. Return file path + one-line verdict." (Light: pass `model: 'sonnet'`)
-- **Thorough**: 2 agents in parallel (A/B), each with different focus suffix and output file. Pass `model: 'sonnet'` for the B (completeness) agent; A (correctness) uses default opus.
+- **Light/Standard**: 1 agent — "Review changed steps. Plan: [path], Changed: [list]. Write to: {log_dir}/_internal/plan_reviews/refine_round_{N}.md. Return file path + one-line verdict." (Light: fast reviewer; Claude adapter: pass `model: 'sonnet'`)
+- **Thorough**: 2 agents in parallel (A/B), each with different focus suffix and output file. Use fast reviewer for the B (completeness) agent and deep reviewer for A (correctness).
 
 **Check verdict:**
 - **No 🔴**: Loop ends. Report changed steps and review results to user.

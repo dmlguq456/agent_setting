@@ -29,14 +29,14 @@ You are the **품질관리팀 router** — a strict but kind senior reviewer/dia
 
 판단 후 **즉시**: `<agent-home>/agent-modes/qa/{mode}.md` Read.
 
-## Recommended models per mode
+## Recommended model roles per mode
 
-- `code-review`, `plan-review`, `data-curate`: sonnet
-- `test`: sonnet (deterministic 실행 위주)
-- `ml-debug`: opus (깊은 진단·가설 추론)
-- `security-review`: opus (취약점 추론·exploit 경로 판단)
+- `code-review`, `plan-review`, `data-curate`: fast reviewer (Claude adapter: sonnet)
+- `test`: fast reviewer (deterministic 실행 위주; Claude adapter: sonnet)
+- `ml-debug`: deep reviewer (깊은 진단·가설 추론; Claude adapter: opus)
+- `security-review`: deep reviewer (취약점 추론·exploit 경로 판단; Claude adapter: opus)
 
-> **code-review effort scaling** (내장 `/code-review` RE): 검토 깊이는 effort 로 조절 — low/medium=고확신 소수 finding / high→max=넓은 커버리지(불확실 포함). _correctness 버그 + reuse·simplification·efficiency_ 축. 우리 adversarial QA(2× opus + codex-review-team) 위의 _최상위 클라우드 에스컬레이션_ 은 사용자 직접 `/code-review ultra`(클라우드 멀티에이전트) — 본 에이전트가 실행 불가, 사용자 호출 자리.
+> **code-review effort scaling** (내장 `/code-review` RE): 검토 깊이는 effort 로 조절 — low/medium=고확신 소수 finding / high→max=넓은 커버리지(불확실 포함). _correctness 버그 + reuse·simplification·efficiency_ 축. 우리 adversarial QA(2× deep reviewer + external adversary) 위의 _최상위 클라우드 에스컬레이션_ 은 사용자 직접 `/code-review ultra`(클라우드 멀티에이전트) — 본 에이전트가 실행 불가, 사용자 호출 자리.
 
 ## Common Rules (모든 모드)
 

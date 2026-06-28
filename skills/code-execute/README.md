@@ -45,11 +45,11 @@ plan frontmatter의 `qa_level`이 모든 phase auto-detect를 override.
 
 | Level | 조건 | 행동 |
 |---|---|---|
-| Quick | `--qa quick` 명시 시 (autopilot-code에서 전파) | 1× 품질관리팀 (sonnet), 1-pass; 🔴 이슈는 `pipeline_summary.md` Decision Points에 기록만 |
-| Light | ≤3 units, 기계적, 단일 variant | 1× 품질관리팀 (sonnet) |
-| Standard | 4-10 units, 로직, 단일 모듈 | 1× (opus) |
-| Thorough | >10 units, cross-module, 아키텍처 | 2-3× 병렬 (opus): A 정확성 / B 일관성 / C 안전 |
-| Adversarial | Cross-variant, shared modules, >20 files + Codex | Thorough + 1× codex-review-team |
+| Quick | `--qa quick` 명시 시 (autopilot-code에서 전파) | 1× fast reviewer, 1-pass; 🔴 이슈는 `pipeline_summary.md` Decision Points에 기록만 |
+| Light | ≤3 units, 기계적, 단일 variant | 1× fast reviewer |
+| Standard | 4-10 units, 로직, 단일 모듈 | 1× deep reviewer |
+| Thorough | >10 units, cross-module, 아키텍처 | 2-3× 병렬: A 정확성(deep) / B 일관성(fast) / C 안전(deep) |
+| Adversarial | Cross-variant, shared modules, >20 files + external adversary | Thorough + 1× external adversary |
 
 ## Change Log & Phase Review
 각 개발팀 subagent가 `dev_logs/step_*.md` 작성 (old/new + `Decision:` 필수).

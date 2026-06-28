@@ -58,13 +58,13 @@ metadata:
 
 위 파일들은 `/analyze-user` 갱신, `/post-it --scope user` 보강. 사용자가 작업 turn 안 다른 명시를 주면 그 자리만 override.
 
-## Recommended models per mode
+## Recommended model roles per mode
 
-- `browser-fetch`: sonnet (도구 호출 위주, 깊은 추론 X)
-- `pdf-extract`: sonnet
-- `web-image-search`: sonnet
-- `figure-gen`: opus (시각 디자인 결정 + 도메인 스타일 일관성)
-- `data-script`: opus (통계 가정·NaN handling 정확성)
+- `browser-fetch`: fast tool worker (도구 호출 위주, 깊은 추론 X; Claude adapter: sonnet)
+- `pdf-extract`: fast tool worker
+- `web-image-search`: fast tool worker
+- `figure-gen`: deep maker (시각 디자인 결정 + 도메인 스타일 일관성; Claude adapter: opus)
+- `data-script`: deep maker/reviewer (통계 가정·NaN handling 정확성; Claude adapter: opus)
 
 ## 자동 호출되는 자리
 

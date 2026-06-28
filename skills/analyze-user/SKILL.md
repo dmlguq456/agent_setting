@@ -283,7 +283,7 @@ mode=init 통째 교체, mode=update 누적.
 
 목적: 추출된 패턴이 _실제 source 와 일치_ 하는지, _사실 오류·과잉 일반화·bias·missing aspect_ 없는지 검증. 사용자 프로필은 propagating 자료라 _4 개 reviewer 모두 항상_ 병렬.
 
-- **Agent A — source coverage** (sonnet, `_internal/qa_coverage.md`):
+- **Agent A — source coverage** (fast reviewer; Claude adapter: sonnet; `_internal/qa_coverage.md`):
   ```
   사용자 프로필 draft 와 source index 대조.
   각 추출된 패턴이 _하나 이상의 source 인용_ 을 갖는가?
@@ -291,7 +291,7 @@ mode=init 통째 교체, mode=update 누적.
   누락된 source 또는 인용 없는 패턴은 🔴 finding.
   ```
 
-- **Agent B — pattern accuracy + low-confidence verification** (opus, `_internal/qa_accuracy.md`):
+- **Agent B — pattern accuracy + low-confidence verification** (deep reviewer; Claude adapter: opus; `_internal/qa_accuracy.md`):
   ```
   draft 의 각 패턴을 source 자료와 직접 대조.
   색 hex code · 폰트 이름 · figsize · paper title / venue / 연도 등 verbatim 정확성.
@@ -303,21 +303,21 @@ mode=init 통째 교체, mode=update 누적.
   - 한 인스턴스만 봤지만 source 가 _희소_ (예 단 한 paper 에서만 등장) 한 자리면 → 0.3 그대로 _open question_ 으로 이관 권장.
   ```
 
-- **Agent C — factcheck** (sonnet, `_internal/qa_factcheck.md`):
+- **Agent C — factcheck** (fast fact-checker; Claude adapter: sonnet; `_internal/qa_factcheck.md`):
   ```
   paper 인용 verbatim 점검 — 제목 / 학회 / 연도 / 인용수 / DOI / arXiv ID.
   metric 수치 인용 점검 — paper / abstract 에서 직접 대조.
   ```
 
-- **Agent D — Codex external review** (codex-review-team, `_internal/qa_codex.md`):
+- **Agent D — external adversary review** (`codex-review-team` in Claude adapter, `_internal/qa_external.md` or legacy `_internal/qa_codex.md`):
   ```
   외부 hostile reader 관점 review — 사용자 프로필이 _과잉 일반화_ · _bias_ · _missing aspect_ 가 있는가?
   ```
 
-> Codex 가용 안 한 환경이면 Agent D 만 skip + 한 줄 경고. A·B·C 는 반드시 실행.
+> external adversary 가용 안 한 환경이면 Agent D 만 skip + 한 줄 경고. A·B·C 는 반드시 실행.
 
 산출:
-- `_internal/qa_{coverage,accuracy,factcheck,codex}.md` (4 개)
+- `_internal/qa_{coverage,accuracy,factcheck,external}.md` (4 개; Claude adapter legacy path may use `qa_codex.md`)
 - Phase 4 verdict:
   - 🔴 N · 🟡 M · 🟢 K finding 누적.
   - Consensus 변화 — _승격_ (0.3 → 0.6) N 건 · _drop_ M 건 · _open question 이관_ K 건.

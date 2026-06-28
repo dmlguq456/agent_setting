@@ -62,26 +62,26 @@ Format:
 **Verdict:** PASS / FAIL — [reason]
 ```
 
-## QA Requirements (Mandatory Thorough, Adversarial if Codex available)
+## QA Requirements (Mandatory Thorough, Adversarial if external adversary available)
 **code-test always uses at minimum Thorough mode (2 parallel QA agents).** Testing rigor is fixed independent of `qa_level` — code-test always enforces at least Thorough.
 
-**Adversarial auto-escalation**: Before launching QA, run `codex --version 2>/dev/null`. If Codex is available and authenticated, automatically escalate to Adversarial mode (add Codex agent to the parallel batch). If Codex is unavailable, proceed with Thorough.
+**Adversarial auto-escalation**: Before launching QA, run the adapter availability check (Claude adapter: `codex --version 2>/dev/null`). If the external adversary is available, automatically escalate to Adversarial mode (add external adversary to the parallel batch). If unavailable, proceed with Thorough.
 
-**Always launch 2 QA agents in parallel** (Agent A with `model: 'sonnet'` for the coverage checklist; Agent B with default opus for accuracy diagnosis):
-- Agent A (sonnet): "Focus on **coverage**: Were ALL changed files tested? Are any untested code paths or edge cases? Did tests use real data where available? Are behavioral changes compared before/after?"
-- Agent B (opus): "Focus on **accuracy**: Are failures correctly diagnosed (not misdiagnosed as pre-existing)? Were correct engine_modes used? Do commands match changed code paths? Are negative tests present?"
+**Always launch 2 QA agents in parallel** (Agent A = fast reviewer for the coverage checklist; Agent B = deep reviewer for accuracy diagnosis):
+- Agent A (fast reviewer; Claude adapter: `model: 'sonnet'`): "Focus on **coverage**: Were ALL changed files tested? Are any untested code paths or edge cases? Did tests use real data where available? Are behavioral changes compared before/after?"
+- Agent B (deep reviewer): "Focus on **accuracy**: Are failures correctly diagnosed (not misdiagnosed as pre-existing)? Were correct engine_modes used? Do commands match changed code paths? Are negative tests present?"
 - Each writes to: `_internal/test_reviews/test_review_coverage.md`, `_internal/test_reviews/test_review_accuracy.md`.
 
-**Adversarial (when Codex available):**
-- Agent C (Codex): 1× codex-review-team (`adversarial-review --wait --scope auto`). Writes to `_internal/test_reviews/test_review_codex.md`.
+**Adversarial (when external adversary available):**
+- Agent C (external adversary): 1× `codex-review-team` in Claude adapter (`adversarial-review --wait --scope auto`). Writes to adapter-specific external review log.
 - Launched in the same parallel batch as Agent A and B.
 
-All issues from ANY agent (including Codex) must be addressed before proceeding.
+All issues from ANY agent (including external adversary) must be addressed before proceeding.
 
 ## Post-Test: QA Review
 After the 품질관리팀 (test 모드) agent returns:
 1. **Read the test log** (skill-level read — permitted per DESIGN_PRINCIPLES 3.3) (`{log_dir}/test_logs/test_report.md`).
-2. **Invoke 2× 품질관리팀 in parallel** (Agent A with `model: 'sonnet'`, Agent B with default opus):
+2. **Invoke 2× 품질관리팀 in parallel** (Agent A fast reviewer, Agent B deep reviewer):
 
    - **Agent A prompt (coverage)**:
    ```

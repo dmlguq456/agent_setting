@@ -211,7 +211,7 @@ QA level / model role 표기 / family-wide invariant 은 **`<agent-home>/CONVENT
 - `<agent-home>/README.md`
 
 각 파일에서 다음 패턴 grep:
-- `adversarial` 정의 문장 (예: `adversarial = ...`, `Adversarial | ...`, `adversarial.*Codex`)
+- `adversarial` 정의 문장 (예: `adversarial = ...`, `Adversarial | ...`, `adversarial.*(external|Codex)`)
 - `quick`/`light`/`standard`/`thorough` 정의 표 행
 - "fact-checker" 적용 여부
 - model role 표기 (`fast reviewer`, `deep reviewer`, `external adversary`, 가변 표기). `opus` / `sonnet` 같은 concrete name 은 Claude adapter mapping 또는 agent frontmatter 설명일 때만 허용

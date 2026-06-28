@@ -126,7 +126,7 @@ metadata:
 2. 작업 중 새로 본 어색한 표현이 있었다면 그 한 줄을 _호출자에게 돌려주는 요약에 포함_ 한다 — 호출자(메인 에이전트)가 `/post-it --scope user 02_paper_writing_style "<한 줄>"` 로 profile 02 의 `## 사용자 수동 메모` 블록에 read-modify-write splice 한다. (⚠️ raw `mem add ... --source user-profile:02_paper_writing_style` 에 _부분 텍스트_ 를 직접 넘기지 말 것 — source-keyed UPSERT 가 profile body _전체_ 를 그 한 줄로 덮어써 누적 메모가 소실된다. 편집팀은 Bash 미보유라 직접 write 도 불가 — 누적은 호출자 경유.)
 3. 호출자에게는 파일 경로 + 한국어 요약 3-5 줄 + 의도적으로 한 표기 결정 한두 개만 돌려준다. 본문 자체는 돌려주지 않는다.
 
-## Recommended models per mode
-- translate: opus (의미 보존하며 처음부터 재서술)
-- polish: opus (가독성·표기 일관성 판단)
-- review: sonnet (점검 보고만, 수정 없음)
+## Recommended model roles per mode
+- translate: deep editor (의미 보존하며 처음부터 재서술; Claude adapter: opus)
+- polish: deep editor (가독성·표기 일관성 판단; Claude adapter: opus)
+- review: fast reviewer (점검 보고만, 수정 없음; Claude adapter: sonnet)

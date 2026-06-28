@@ -216,13 +216,13 @@ Auto-detect from sections changed. Two reviewer roles run **in parallel** at Sta
 
 | Level | Condition | Quality reviewer | Fact-checker (parallel) | Max rounds |
 |---|---|---|---|---|
-| **Quick** | (manual via `--qa quick` only — autopilot skips refine entirely in quick mode) | 1× 품질관리팀 (`model: "sonnet"`), spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
-| **Light** | ≤3 sections | 1× 품질관리팀 (`model: "sonnet"`) | _skip_ (quality reviewer covers basic spot-checks) | 2 |
-| **Standard** | 4+ sections | 1× 품질관리팀 (default opus) | **1× 연구팀 fact-checker (`model: "sonnet"`)** | 2 |
-| **Thorough** | Major overhaul or new evidence | 2× 품질관리팀 in parallel (opus) | **1× 연구팀 fact-checker (`model: "sonnet"`)** | 2 |
-| **Adversarial** | external-review-imminent (camera-ready / submission), or manual via `--qa adversarial` | 2× 품질관리팀 in parallel (opus) + 1× `Agent(codex-review-team)` (Codex CLI external review) | **1× 연구팀 fact-checker (`model: "sonnet"`)** | 2 + Codex 1 |
+| **Quick** | (manual via `--qa quick` only — autopilot skips refine entirely in quick mode) | 1× fast reviewer, spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
+| **Light** | ≤3 sections | 1× fast reviewer | _skip_ (quality reviewer covers basic spot-checks) | 2 |
+| **Standard** | 4+ sections | 1× deep reviewer | **1× fast fact-checker** | 2 |
+| **Thorough** | Major overhaul or new evidence | 2× deep reviewers in parallel | **1× fast fact-checker** | 2 |
+| **Adversarial** | external-review-imminent (camera-ready / submission), or manual via `--qa adversarial` | 2× deep reviewers in parallel + 1× external adversary (`codex-review-team` in Claude adapter) | **1× fast fact-checker** | 2 + external 1 |
 
-**Why Sonnet for fact-checker**: card verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 Sonnet으로 충분하고, 비용 효율적이다.
+**Why fast fact-checker**: card verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 fast role 로 충분하고, 비용 효율적이다.
 
 ## Post-Refine Review Loop (max 2 rounds; quick = 1 round)
 After 연구팀 returns:
@@ -231,7 +231,7 @@ After 연구팀 returns:
    - For draft refinement: `mkdir -p {log_dir}/_internal/draft_reviews`
 2. **Invoke quality + fact-check reviewers in parallel** (single message with multiple Agent calls per QA Scaling above):
 
-   **Quality reviewer prompt** (opus or sonnet per level):
+   **Quality reviewer prompt** (deep or fast reviewer per level):
    ```
    Review changed sections — _quality / cohesion / audience fit_ focus.
    {Doc type}: [path]. Changed: [list]. For rebuttals, verify all reviewer points still addressed.
@@ -240,7 +240,7 @@ After 연구팀 returns:
    Return ONLY path + one-line verdict.
    ```
 
-   **Fact-checker prompt** (sonnet, parallel — Standard/Thorough only):
+   **Fact-checker prompt** (fast fact-checker, parallel — Standard/Thorough only):
    ```
    You are a fact-check focused reviewer — NOT narrative quality.
    {Doc type}: [path]. Changed sections: [list].
@@ -258,7 +258,7 @@ After 연구팀 returns:
    Do NOT comment on writing quality, narrative arc, or audience appropriateness
    — that's the quality reviewer's job. Stay narrowly on fact verification.
 
-   Cost-aware mode (sonnet): table-only output, no extended discussion. Limit to
+   Fast fact-checker mode: table-only output, no extended discussion. Limit to
    ~30 most material claims if changed sections exceed 10.
 
    Write to: {log_dir}/{review_subdir}/refine_round_{N}_factcheck.md.

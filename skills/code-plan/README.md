@@ -41,12 +41,12 @@ Date: {YYYY-MM-DD}
 
 | Level | 조건 | 행동 |
 |---|---|---|
-| Light | ≤3 steps, 기계적, 단일 variant | 1× 품질관리팀 (sonnet) |
-| Standard | 4-10 steps, 로직 변경, 단일 모듈 | 1× 품질관리팀 (opus, 기본) |
-| Thorough | >10 steps, cross-module/variant, 아키텍처 | 2-3× 품질관리팀 병렬 (opus): A 정합성 / B 완전성 / C 리스크 |
-| Adversarial | Cross-variant + Codex 가용 | Thorough + 1× codex-review-team 병렬 |
+| Light | ≤3 steps, 기계적, 단일 variant | 1× fast reviewer |
+| Standard | 4-10 steps, 로직 변경, 단일 모듈 | 1× deep reviewer |
+| Thorough | >10 steps, cross-module/variant, 아키텍처 | 2-3× reviewers 병렬: A 정합성(deep) / B 완전성(fast) / C 리스크(deep) |
+| Adversarial | Cross-variant + external adversary 가용 | Thorough + 1× external adversary 병렬 |
 
-**Codex 가용성 체크**: Adversarial 선택 전 `codex --version` 실행. 실패 시 Thorough로 silent fallback (`--qa adversarial` 명시는 fail loudly).
+**External adversary 가용성 체크**: Adversarial 선택 전 adapter 가용성 체크 실행(Claude adapter: `codex --version`). 실패 시 Thorough로 silent fallback (`--qa adversarial` 명시는 fail loudly).
 
 ## Post-Plan Review Loop (최대 3 리비전 라운드)
 로그 디렉토리 = task root (plan/의 부모). `mkdir -p {log_dir}/plan_reviews` 먼저.
@@ -57,7 +57,7 @@ Date: {YYYY-MM-DD}
 
 절차:
 1. QA level 평가
-2. 품질관리팀 호출 (Light: sonnet / Thorough: 2-3 병렬 + 다른 focus)
+2. 품질관리팀 호출 (Light: fast reviewer / Thorough: 2-3 병렬 + 다른 focus)
 3. verdict 확인:
    - 🔴 없음 → Korean Version Generation
    - 🔴 있음 → 기획팀 refine → QA 재호출. `round >= 3`까지 반복

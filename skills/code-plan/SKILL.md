@@ -46,13 +46,13 @@ If `$ARGUMENTS` contains `--qa quick|light|standard|thorough|adversarial`, use t
 
 | Level | Auto-detect condition | Action |
 |---|---|---|
-| **Quick** | (manual only — never auto-selected) | 1× 품질관리팀 (`model: "sonnet"`), single pass, **max 1 review round** (no iteration even if 🔴 found — 🔴 are recorded as 미해결 이슈 and loop exits) |
-| **Light** | ≤3 steps, mechanical, single-variant | 1× 품질관리팀 (`model: "sonnet"`) |
-| **Standard** | 4-10 steps, logic changes, single module | 1× 품질관리팀 (default opus) |
-| **Thorough** | >10 steps, cross-module/variant, architectural | 2-3× 품질관리팀 in parallel: Agent A correctness (opus), B completeness (sonnet), C risk (opus, optional, >15 steps); each writes `round_{N}_{focus}.md`; all 🔴 issues must be resolved |
-| **Adversarial** | Cross-variant (SE+SS+CSS), shared modules (utils/, network.py), or >20 steps with architectural impact — **AND Codex available** | Thorough-level 품질관리팀 + 1× codex-review-team (`adversarial-review`) in parallel; Codex writes `round_{N}_codex.md`; all 🔴 from ANY agent (including Codex) must be resolved |
+| **Quick** | (manual only — never auto-selected) | 1× fast reviewer (Claude adapter: 품질관리팀 `model: "sonnet"`), single pass, **max 1 review round** (no iteration even if 🔴 found — 🔴 are recorded as 미해결 이슈 and loop exits) |
+| **Light** | ≤3 steps, mechanical, single-variant | 1× fast reviewer |
+| **Standard** | 4-10 steps, logic changes, single module | 1× deep reviewer |
+| **Thorough** | >10 steps, cross-module/variant, architectural | 2-3× reviewers in parallel: Agent A correctness (deep), B completeness (fast), C risk (deep, optional, >15 steps); each writes `round_{N}_{focus}.md`; all 🔴 issues must be resolved |
+| **Adversarial** | Cross-variant (SE+SS+CSS), shared modules (utils/, network.py), or >20 steps with architectural impact — **AND external adversary available** | Thorough-level 품질관리팀 + 1× external adversary (`codex-review-team` in Claude adapter) in parallel; external review writes adapter-specific review log; all 🔴 from ANY agent must be resolved |
 
-**Codex availability check**: Before selecting Adversarial, run `codex --version` (suppress stderr). If the command fails or Codex is not authenticated, fall back to Thorough silently. This check is skipped if `--qa adversarial` is explicitly specified (fail loudly instead).
+**External adversary availability check**: Before selecting Adversarial, run the adapter availability check (Claude adapter: `codex --version`, suppress stderr). If unavailable, fall back to Thorough silently. This check is skipped if `--qa adversarial` is explicitly specified (fail loudly instead).
 
 ## Post-Plan Review Loop (max 3 revision rounds; quick = 1 round)
 
@@ -65,7 +65,7 @@ The log directory is the task root folder (parent of `plan/`). Example: `<artifa
 After the 기획팀 agent returns:
 1. **Assess QA level** from plan scope per the QA Scaling table above.
 2. **Invoke 품질관리팀:** Prompt: "Review this plan in plan review mode for feasibility. Plan file: [plan_path]. Write review results to: [log_dir]/_internal/plan_reviews/round_{N}.md. Return ONLY the file path and a one-line verdict."
-   - Light: pass `model: 'sonnet'`. Thorough: 2-3 parallel agents with focus suffix and separate output files; pass `model: 'sonnet'` for the B (completeness) agent, default opus for A (correctness) and C (risk). Do NOT read the review file unless relaying verdict to user.
+   - Light: use fast reviewer (Claude adapter: pass `model: 'sonnet'`). Thorough: 2-3 parallel agents with focus suffix and separate output files; use fast reviewer for the B (completeness) agent and deep reviewer for A (correctness) and C (risk). Do NOT read the review file unless relaying verdict to user.
 3. **Check one-line verdict:**
    - **No 🔴**: Loop ends → proceed to Korean Version Generation.
    - **🔴 found AND qa_level == quick**: Loop ends (no fix-round). Invoke 기획팀: "Refine mode. Add 🔴 issues from {log_dir}/_internal/plan_reviews/round_1.md to the plan's 리스크 section under ## 미해결 이슈. Return brief Korean summary." Then proceed to Korean Version Generation.

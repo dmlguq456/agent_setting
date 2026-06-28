@@ -23,19 +23,19 @@ Resolve `$ARG` to a plan file path:
 
 ## Model & QA Policy
 
-**Writer: always sonnet.** The final report is a synthesis over artifacts that were already verified by prior pipeline stages (plan reviews in code-plan/code-refine, code reviews in code-execute phase gates, test reviews in code-test). The code-report content itself does NOT require a QA/review pass — inaccuracies (line-number drift, outdated follow-ups) are user-facing and can be corrected on read, without affecting the committed code. Spending opus/codex budget here is wasted.
+**Writer: always fast writer.** The final report is a synthesis over artifacts that were already verified by prior pipeline stages (plan reviews in code-plan/code-refine, code reviews in code-execute phase gates, test reviews in code-test). The code-report content itself does NOT require a QA/review pass — inaccuracies (line-number drift, outdated follow-ups) are user-facing and can be corrected on read, without affecting the committed code. Spending deep reviewer / external adversary budget here is wasted. Claude adapter maps fast writer to sonnet.
 
 | Level | Auto-detect condition | Action |
 |---|---|---|
-| **Light** | ≤5 steps, single variant | 1× 품질관리팀 (`model: "sonnet"`) writes the report |
-| **Standard** | 6-15 steps, moderate scope | 1× 품질관리팀 (`model: "sonnet"`) writes the report |
-| **Thorough** | >15 steps, cross-variant, or architectural | 1× 품질관리팀 (`model: "sonnet"`) writes the report |
-| **Adversarial** | Cross-variant / shared modules / >20 steps | 1× 품질관리팀 (`model: "sonnet"`) writes the report |
+| **Light** | ≤5 steps, single variant | 1× fast writer writes the report |
+| **Standard** | 6-15 steps, moderate scope | 1× fast writer writes the report |
+| **Thorough** | >15 steps, cross-variant, or architectural | 1× fast writer writes the report |
+| **Adversarial** | Cross-variant / shared modules / >20 steps | 1× fast writer writes the report |
 
-QA level from plan frontmatter `qa_level` or `--qa` flag still flows in (for context logging), but in code-report it affects **only the prompt's context**, not the model or any post-write review. No codex review of the report. No parallel writers. No review loop.
+QA level from plan frontmatter `qa_level` or `--qa` flag still flows in (for context logging), but in code-report it affects **only the prompt's context**, not the model role or any post-write review. No external adversary review of the report. No parallel writers. No review loop.
 
 ## Delegate to 품질관리팀
-Invoke the **qa-team** (품질관리팀) agent with `model: "sonnet"` (all levels) as a subagent with the following prompt:
+Invoke the **qa-team** (품질관리팀) agent as fast writer (Claude adapter: `model: "sonnet"`, all levels) as a subagent with the following prompt:
 
 ```
 Generate a final change report.
@@ -137,7 +137,7 @@ After the 품질관리팀 agent returns:
 
 4. **The report gets reconciliation (step 2) only — no separate QA pass.** Inaccuracies are user-facing and can be corrected on read. The reconciliation step (2) is the lightweight safety net.
 
-Rationale: the main Claude's memory is the richest orchestration-time record, and the report is the fact-checked persistent artifact. A cheap cross-check between the two gives the user a summary that benefits from both sources — without paying for a full QA/codex pass on the report itself.
+Rationale: the main orchestrator's memory is the richest orchestration-time record, and the report is the fact-checked persistent artifact. A cheap cross-check between the two gives the user a summary that benefits from both sources — without paying for a full QA/external-adversary pass on the report itself.
 
 ## Task
 Generate report for: $ARG

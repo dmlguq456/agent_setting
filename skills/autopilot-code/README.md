@@ -69,12 +69,12 @@ flowchart TD
 
 | Level | 조건 | 품질관리팀 구성 |
 |---|---|---|
-| Light | ≤3 files, 기계적 변경 | 1팀 (Sonnet) |
-| Standard | 4-10 files, 단일 모듈 범위 | 1팀 (Opus, 기본값) |
-| Thorough | >10 files, cross-variant, 아키텍처 | 2-3팀 병렬 (Opus) |
-| Adversarial | cross-variant + Codex 가용 (**dev 모드 전용**) | Thorough + Codex adversarial-review |
+| Light | ≤3 files, 기계적 변경 | 1팀 (fast reviewer) |
+| Standard | 4-10 files, 단일 모듈 범위 | 1팀 (deep reviewer) |
+| Thorough | >10 files, cross-variant, 아키텍처 | 2-3팀 병렬 (deep/fast axis 분담) |
+| Adversarial | cross-variant + external adversary 가용 (**dev 모드 전용**) | Thorough + external adversary review |
 
-> autopilot-code는 fact-checker reviewer 미적용 (doc/research 파이프라인과 달리 cards/PDFs 대조할 ground-truth source가 없으므로 quality reviewer만 운용. adversarial 레벨은 Codex 외부 리뷰로 이를 대체).
+> autopilot-code는 fact-checker reviewer 미적용 (doc/research 파이프라인과 달리 cards/PDFs 대조할 ground-truth source가 없으므로 quality reviewer만 운용. adversarial 레벨은 external adversary 리뷰로 이를 대체).
 
 **스킬별 예외**:
 - **code-test**: 항상 Thorough (병렬 2팀 강제). `--qa` 플래그도 무시
