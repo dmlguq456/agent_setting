@@ -15,7 +15,7 @@ metadata:
 
 **핵심 비유 — 임시 포스트잇.** post-it 은 _영구 기록이 아니다_. 영구 진실은 산출물(`plans/`·`documents/`·`spec/`·code·git) 과 구조화 프로필(DB `type=profile` 레코드) 에 있다. post-it 은 그 사이를 잇는 _휘발성 작업면_ — 지금 떠올려야 할 것만 짧게 붙여두고, 산출물로 졸업하면 떼어낸다.
 
-> **불변식 — 사용자는 post-it 을 들여다보지 않는다 (fire-and-forget).** post-it 은 _Claude 의 세션-간 연속성 작업면_ 이지 사용자 읽기용 문서가 아니다. 따라서 (1) lean 유지·졸업 prune 는 **Claude 책임** — 사용자에게 레코드를 줄 단위로 검토시키지 않는다. (2) 자동 nudge 자리의 sweep 은 _확실한_ 졸업·stale 만 **자동 제거 + 한 줄 보고** (애매하면 keep). (3) 사용자에겐 _짧은 요약_ 만 주고, 액션 _저장 여부_ 만 confirm 받는다. 줄 단위 preview 는 사용자가 `/post-it sweep` 를 직접 칠 때만.
+> **불변식 — 사용자는 post-it 을 들여다보지 않는다 (fire-and-forget).** post-it 은 _에이전트의 세션-간 연속성 작업면_ 이지 사용자 읽기용 문서가 아니다. 따라서 (1) lean 유지·졸업 prune 는 **에이전트 책임** — 사용자에게 레코드를 줄 단위로 검토시키지 않는다. (2) 자동 nudge 자리의 sweep 은 _확실한_ 졸업·stale 만 **자동 제거 + 한 줄 보고** (애매하면 keep). (3) 사용자에겐 _짧은 요약_ 만 주고, 액션 _저장 여부_ 만 confirm 받는다. 줄 단위 preview 는 사용자가 `/post-it sweep` 를 직접 칠 때만.
 
 > **통합 기억 store 연동 (2026-06-15, v5).** post-it 은 _프로젝트 단위 working tier_ 로서 통합 store([tools/memory](../../tools/memory/README.md)) DB(`memory.db`, SQLite WAL) 에 저장된다 — `mem note`/`mem add` 로 working 레코드 write, `mem recall` 로 검색, working lifecycle(만료·졸업)은 `mem lifecycle` 이 관할. 세션 주입은 `python3 ~/.claude/tools/memory/mem.py inject --hook` 가 DB working tier 에서 수행. sweep 의 시간 lifecycle 은 `mem lifecycle` 과 동류(시간 기반 working lifecycle)이되 임계값·동작이 다름 — post-it 은 ≥30d stale·≥90d archive 를 _플래깅_(사람-점검), store 는 `WORKING_TTL_DAYS`(현재 21d)로 _자동 만료_.
 ## Lifecycle (post-it 원칙 — 모든 엔트리는 졸업하거나 만료한다)
@@ -31,9 +31,9 @@ metadata:
 - _졸업 자체_ (내용을 산출물에 반영) 는 소유 스킬이 한다 (autopilot-code 가 plan 에, autopilot-spec 이 spec 에, analyze-user 가 프로필에). post-it 의 `sweep`/`promote` 는 _졸업한 working 레코드를 만료시키는_ 역할.
 - 세션 연속성(handoff)과 lean 유지(sweep)는 한 쌍 — 인계 전에 졸업·stale 을 떼어야 다음 세션이 _현재 유효한 것만_ 받는다. `handoff` 가 sweep 을 먼저 제안하는 이유.
 
-## Proactive nudge (context-aware — 메인 Claude 가 먼저 제안)
+## Proactive nudge (context-aware — 메인 에이전트가 먼저 제안)
 
-post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + _사용자가 놓친 것을 상기_(nudge). **working 기억 저장은 _자동_** (통합 기억 §7 자동 write 불변식 — confirm 없음), 세션 단절을 막기 위해 메인 Claude 는 다음 신호에서 working 맥락을 **자동 기록(store working tier)** 한다:
+post-it 의 목적 = 에이전트가 _사용자 흐름을 이어가고_(연속성) + _사용자가 놓친 것을 상기_(nudge). **working 기억 저장은 _자동_** (통합 기억 §7 자동 write 불변식 — confirm 없음), 세션 단절을 막기 위해 메인 에이전트 는 다음 신호에서 working 맥락을 **자동 기록(store working tier)** 한다:
 
 - **context 사용량 ~50%+** — statusline context 막대·긴 대화·compaction 임박. → working 맥락 자동 기록 + 한 줄 보고.
 - **wind-down 발화** — "오늘 여기까지" / "내일 이어서" / `/clear` 직전 류. → 세션 working 맥락(진행중·결정·다음 hint) 자동 handoff 기록.
@@ -41,7 +41,7 @@ post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + 
 
 > **자동 기록 모델 (사용자는 post-it 을 안 본다)**: working 맥락은 _자동 기록_ (저장 confirm 없음 — §7 기억 저장 자동). 자동 handoff 는 sweep 을 _자동 포함_ — 확실한 졸업·stale 만 자동 prune (애매하면 keep), 결과는 _한 줄 보고_. **confirm 은 _prune/삭제_ 같은 비가역 자리만** (저장 자체는 자동). 줄 단위 검토는 사용자가 `/post-it sweep` 를 직접 칠 때만.
 
-> 이 nudge 의 _트리거 규칙_ 은 항상 로드되는 글로벌 CLAUDE.md §2 에도 한 줄 있다 (SKILL.md 는 호출 시만 로드되므로, 자발적 제안은 CLAUDE.md 가 발화시킴). hard backstop 으로 PreCompact hook 을 둘 수 있으나(옵션, 미설정 시 nudge 만), hook 은 셸 스크립트라 _고정 리마인드_ 만 — 똑똑한 요약 handoff 는 대화 안의 Claude 만 가능.
+> 이 nudge 의 _트리거 규칙_ 은 runtime adapter bootstrap 에도 한 줄 있다 (SKILL.md 는 호출 시만 로드되므로, 자발적 제안은 adapter bootstrap 이 발화시킴). hard backstop 으로 PreCompact hook 을 둘 수 있으나(옵션, 미설정 시 nudge 만), hook 은 셸 스크립트라 _고정 리마인드_ 만 — 똑똑한 요약 handoff 는 대화 안의 에이전트만 가능.
 
 ## Scope — project vs user
 
@@ -79,13 +79,13 @@ post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + 
 - 그 외 모든 절 — _analyze-user 영역_. 사용자가 직접 편집하면 다음 update 에 덮어쓰일 수 있음 (record body 의 `changelog:` 에 남기면 보존).
 - **두 writer 공유 contract**: `/post-it promote --scope user` 와 `analyze-user update` 는 모두 같은 source(`user-profile:<stem>`) 의 profile 레코드에 write한다 — ONE logical record, two writers. Step 4.1 아래 `promote` 동작 명세 참조.
 
-> **artifact-guard 주의**: project post-it (DB working 레코드) 도, user scope (profile 레코드) 도 **직접 편집 자유** — 둘 다 artifact-guard 비가드 (convention only, CLAUDE.md §0(0b)). 즉 `--scope user` 쓰기에 ceremony 불필요. 단 promote 처럼 _analyze-user 영역 절_ 을 건드릴 땐 preview→confirm 으로 사용자 확인 (계약 보존).
+> **artifact-guard 주의**: project post-it (DB working 레코드) 도, user scope (profile 레코드) 도 **직접 편집 자유** — 둘 다 artifact-guard 비가드 (convention only, adapter bootstrap). 즉 `--scope user` 쓰기에 ceremony 불필요. 단 promote 처럼 _analyze-user 영역 절_ 을 건드릴 땐 preview→confirm 으로 사용자 확인 (계약 보존).
 
 ## DB working tier & 자동 로드
 
 - **project scope**: `python3 ~/.claude/tools/memory/mem.py note "<text>" --type <type>` 으로 working 레코드 write (단축형 권장). 전체형 필요 시: `mem add working <type> "<body>" --scope project` — `<type>` 자리엔 `thread`/`decision`/`convention`/`reference`/`hint` 중 하나. 세션 주입은 `python3 ~/.claude/tools/memory/mem.py inject --hook` 가 DB working 에서 수행 (파일 read 없음).
 - **user scope**: `python3 ~/.claude/tools/memory/mem.py add durable profile <body> --scope global --source user-profile:<stem>` 로 profile 레코드에 merge write. 적재는 sub-agent 가 `python3 ~/.claude/tools/memory/mem.py profile <stem>` 실행 시.
-- **갱신**: `/post-it` 명령 또는 §Proactive 자동 기록 (CLAUDE.md §2 / MEMORY §7 자동 write 불변식 — 저장은 자동, 비가역 prune/삭제만 confirm).
+- **갱신**: `/post-it` 명령 또는 §Proactive 자동 기록 (adapter pause/autonomy rule / MEMORY §7 자동 write 불변식 — 저장은 자동, 비가역 prune/삭제만 confirm).
 
 ## 5 카테고리 — type taxonomy (레코드 type 으로 사용)
 
@@ -162,7 +162,7 @@ post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + 
 > **두 writer 계약**: `/post-it promote --scope user` 와 `analyze-user update` 는 모두 `source user-profile:<stem>` 으로 write — ONE logical record. analyze-user 의 "read existing body" 는 반드시 `mem profile <stem>` (tie-broken) 으로 읽어야 한다 (raw `db_iter_records` 로 읽으면 stale dup 에서 splice 될 위험). `write_record` 는 `(tier, scope, source)` source-keyed UPSERT — 같은 `source=user-profile:<stem>` 면 body 변경 시 기존 레코드를 in-place UPDATE (id 보존), dup row 없음. 두 writer 가 ONE record 로 결정론화.
 
 ### `/post-it handoff [--no-confirm]`
-**세션 인계 — sweep 먼저, 그 다음 hints 생성** (Claude 가 내용 생성).
+**세션 인계 — sweep 먼저, 그 다음 hints 생성** (에이전트가 내용 생성).
 
 1. **sweep 자동 포함** — `sweep` 로직을 돌려 _확실한_ graduated·stale 을 자동 prune (애매하면 keep). 한 줄 보고 ("졸업 N·stale M 정리").
 2. **hints 생성** — 현 세션 conversation 을 review 해 다음 세션에 알아야 할 5-10 bullet 요약:
@@ -184,7 +184,7 @@ post-it 의 목적 = Claude 가 _사용자 흐름을 이어가고_(연속성) + 
 | `promote` | preview → confirm (Claude 제안 + 구조화 절 편집) | (없음 — 항상 confirm) |
 | `handoff` (자동 nudge) | sweep 자동 포함 → 짧은 요약 보여주고 _저장 여부_ confirm | `--no-confirm` |
 
-원칙: **사용자가 직접 적은 텍스트는 즉시, Claude 가 만들거나 매칭하는 경우는 검토.** 단 _사용자는 post-it 을 안 본다_ — 자동 자리의 prune 은 _확실한 것만_ 자동 적용 + 한 줄 보고 (애매하면 keep), 사용자에겐 액션 단위 confirm 만.
+원칙: **사용자가 직접 적은 텍스트는 즉시, 에이전트가 만들거나 매칭하는 경우는 검토.** 단 _사용자는 post-it 을 안 본다_ — 자동 자리의 prune 은 _확실한 것만_ 자동 적용 + 한 줄 보고 (애매하면 keep), 사용자에겐 액션 단위 confirm 만.
 
 ## What this skill is NOT
 

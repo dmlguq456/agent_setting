@@ -177,7 +177,7 @@ Step 5 에서 README 본문 wording 을 자동 생성·갱신한 자리 (§1 Hea
 - 풀어쓰기 과잉 정리 (한 줄 표현 가능한 자리)
 - 모범생·친절 안내체 ("~가 평등하게 있습니다" / "어느 쪽을 써도 ~합니다") 회피
 - 간결·단정 한국어 (`~다` / `~이다` 어미)
-- 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §1 한국어 가독성 정책 + 도메인 트리거 표 _사용자 영역 메타 문서 작성·수정_ 행 준수
+- adapter response policy(Claude Code: [`CLAUDE.md`](../../CLAUDE.md) §1) + 도메인 트리거 표 _사용자 영역 메타 문서 작성·수정_ 행 준수
 - 표·코드 블록·heading 구조·mermaid·링크는 그대로 유지 (의미·구조 변경 X, 어조만)
 
 **Skip 조건** — `--check` 는 drift 보고만이라 Step 5 자체가 안 돌아 검수 무관. `--force` / default 는 검수 포함.

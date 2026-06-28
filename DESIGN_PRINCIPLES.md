@@ -4,7 +4,7 @@
 >
 > 자매 문서 (각자 단일 출처, 본 문서는 포인터만):
 > - `CONVENTIONS.md` — QA 5단계 / agent model 표기 / 산출물 폴더 컨벤션 (§5) / hard invariants
-> - `CLAUDE.md` §0~§3 — 작업 라우팅 (spec-first 파이프 + autopilot-* 호출 Pre-check) + 메인 Claude 행동 메타 원칙 (응답 규율·pause/자율·후속 단계)
+> - runtime adapter bootstrap (Claude Code: `CLAUDE.md` §0~§3) — 작업 라우팅 (spec-first 파이프 + autopilot-* 호출 Pre-check) + 메인 에이전트 행동 메타 원칙 (응답 규율·pause/자율·후속 단계)
 >
 > 본 문서는 _구조와 행동의 골격_ 만 담고, 정의·정책·운영 wording 은 위 자매 문서로 위임.
 
@@ -117,7 +117,7 @@ family 의 모든 멤버는 confirm 없이 pipeline 을 끝까지 돌린다. 사
 - `--qa thorough` / `--qa adversarial` 같은 비싼 옵션도 명시했을 때만. default 는 skill 별 권장값 — CONVENTIONS.md §1.4 매트릭스.
 - 실패 시 fail loudly + `pipeline_summary.md` 미해결 기록. 다음 호출에서 `--from <stage>` 재개.
 
-**Why**: 사용자가 _명시 요청_ 을 했는데 메인 Claude 가 _신중을 위해_ 라며 confirm 단계를 추가하면 작업이 한 turn 지연되고 "이미 했어?" 같은 follow-up 으로 갈등이 누적. high-stakes 일수록 사용자가 _직접_ pause 를 거는 게 자연스럽다.
+**Why**: 사용자가 _명시 요청_ 을 했는데 메인 에이전트가 _신중을 위해_ 라며 confirm 단계를 추가하면 작업이 한 turn 지연되고 "이미 했어?" 같은 follow-up 으로 갈등이 누적. high-stakes 일수록 사용자가 _직접_ pause 를 거는 게 자연스럽다.
 
 **강제 위치**: CLAUDE.md 응답 원칙 §2 (Pause·자율 진행) + 각 SKILL.md `--user-refine` 절 default false.
 
@@ -180,7 +180,7 @@ QA loop 는 _skill 안에서 닫힌 loop_ 으로 돌고, orchestrator 는 verdic
 - 판교체 회피 — 한국어 산출물에서 영어 어휘를 한국어 어순에 그냥 박지 않는다. 도메인 영어와 정착 외래어만 영어로, 나머지는 한국어로. 매핑 표 — `agents/editorial-team.md`
 - 적용 범위 — 사용자가 직접 보는 _모든_ .md 산출물 (doc 한정 X). autopilot-code 의 final-report, audit 보고서, autopilot-refine 결과, pipeline_summary 등
 
-**메인 Claude 응답 자체** 의 메타 원칙은 별개 layer — CLAUDE.md §0~§3 single source (§0 작업 라우팅: spec-first 파이프 + autopilot-* 호출 Pre-check·컨펌 · §1 응답 규율: 판교체 회피·출력 자제·동사 약속어 self-check · §2 pause flag 비자동·자율 진행 · §3 후속 단계 자동).
+**메인 에이전트 응답 자체** 의 메타 원칙은 별개 layer — runtime adapter bootstrap 이 single source (Claude Code: `CLAUDE.md` §0~§3; §0 작업 라우팅: spec-first 파이프 + autopilot-* 호출 Pre-check·컨펌 · §1 응답 규율: 판교체 회피·출력 자제·동사 약속어 self-check · §2 pause flag 비자동·자율 진행 · §3 후속 단계 자동).
 
 **Why**: 산출물 품질만 좋고 응답 / 가독성이 부자연스러우면 사용자 짜증이 누적. 편집팀이 _마지막 한 번_ 의 다듬기를 책임지고, CLAUDE.md 응답 원칙이 _매 turn_ 의 메타 self-check.
 
@@ -197,7 +197,7 @@ per-project 메모는 두 layer 분리.
 
 - 내장 file 메모리(`~/.claude/projects/*/memory/`)는 **직접 write hard-block**(`builtin-memory-guard.sh`); `mem sync` 는 다른 세션·하네스의 stray write 만 안전망 흡수. 기억 write 경로 = `mem`(DB) 단일.
 - **삭제·prune·consolidate·merge·graduate(비가역) = 세션끝 opus 큐레이터** (Cluster E — no-tools + action JSON + script 실행, D-18; 비가역삭제 3중방어). N턴 distiller = sonnet add-only. 메인 housekeeping 0. working TTL(21일) = deterministic backstop. (원칙: 추가[가역]=외부 자동 / 정리·삭제[비가역]=세션끝 opus.)
-- 세션 주입 = `mem inject --hook` (DB working+durable+profile). 상세 SoT = CLAUDE.md §0.5/§2 + MEMORY §7.
+- 세션 주입 = `mem inject --hook` (DB working+durable+profile). 상세 SoT = runtime adapter bootstrap + MEMORY §7.
 
 **Why**: 자동 메모리가 모든 feedback 을 누적하면 사용자가 _명시적으로 박아두고 싶은_ 정보 (코딩 컨벤션 · 외부 자원 link · 미해결 thread) 가 noise 에 묻혀 보인다. layer 분리 후 우선순위 명확.
 

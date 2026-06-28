@@ -58,12 +58,12 @@ spec 의 `mode` 배열 (단일 또는 복수) 에 따라 자동 활성화:
 > **DONE-BRANCH → 새 브랜치 (이 cycle 이 새 작업일 때)**: §5.9 게이트가 `DONE-BRANCH`(현재 브랜치가 base 에 ahead 0 = 머지 완료된 끝난 브랜치) 를 내면, 이 plan 의 slug(`plans/<date>_<slug>/` 와 동일)로 **base 최신에서 새 브랜치를 판 뒤** 코드 작업 진행 — `git fetch origin && git switch -c <slug> origin/<base>` (worktree 안전: base 를 체크아웃 안 해 main worktree 와 비충돌). 현재 브랜치가 이미 이번 작업용 빈 브랜치면 그대로 사용. 죽은(머지된) 브랜치 위에 새 작업을 쌓지 않게 하는 자리 — worktree+merge 워크플로우의 핵심 누락. 한 줄 보고 후 진행.
 
 > **규모 분기 ([OPERATIONS.md §5.10](../../OPERATIONS.md#510-작업-격리병렬-디스패치-worktree-정책-canonical))**: 두 축으로 게이트 — 어느 하나라도 본작업이면 worktree.
-> - **변경 종류 (qa 레벨 무관, [CLAUDE.md §0(C)](../../CLAUDE.md)·drill g3)**: 기능 추가·모듈 신설·다파일 변경은 **규모·qa 판단 없이 무조건 worktree+작업 브랜치**. main 트리 직접은 typo·1줄급 자잘한 단발만 (qa quick 이어도 다파일이면 worktree — "quick 이니 main" 우회 금지).
+> - **변경 종류 (qa 레벨 무관, adapter worktree policy (Claude Code: [CLAUDE.md §0(C)](../../CLAUDE.md))·drill g3)**: 기능 추가·모듈 신설·다파일 변경은 **규모·qa 판단 없이 무조건 worktree+작업 브랜치**. main 트리 직접은 typo·1줄급 자잘한 단발만 (qa quick 이어도 다파일이면 worktree — "quick 이니 main" 우회 금지).
 > - **실행 메커니즘 (반쪽 적용 금지 — drill 신설 자리)**: worktree 를 _파 두기만_ 하고 main 에서 autopilot-code 를 in-process(Skill)로 돌리지 않는다. worktree 확보 _즉시_ 그 안으로 **`claude -p` 헤드리스 분사 (§5.10 풀 ceremony) — plan 호출부터 report 까지 통째로 한 세션**. main 은 _정찰(분사 대상 결정)·분사·수확_ 만 (§5.10:389 "조정만 main"). 파이프 스테이지(code-plan·refine·execute)를 main 과 헤드리스로 **쪼개면 헤드리스가 상태 재발굴 + 연속성 상실 = worst of both** — 금지. 단 가벼운 정찰(파일 나열·diff 범위)로 _무엇을 분사할지 결정_ 하는 건 main 정상.
 >
 > quick 급 _단발_(typo·1줄)만 현재 트리 직접. 작업 진행 중 새 독립 요청이 오면 §5.10 디스패치 규칙 (파일 겹침 triage → 병렬 worktree 분사 / 겹치면 큐잉, merge 는 사용자).
 
-**0b. spec-significance 트리아지** — spec/ 존재 시, _어떤_ 코드 요청이든 plan 전에 **이 게이트를 먼저 통과하고 한 줄 verdict 를 반드시 출력**한다. WORKFLOW §7-3 의 spec-drift 사전 체크를 _메인 Claude 의 라우팅 판단_ (잘 건너뜀) 이 아니라 _본 skill 의 강제 첫 단계_ 로 내재화 — "그냥 code 로 진입" 으로 스킵 못 하게.
+**0b. spec-significance 트리아지** — spec/ 존재 시, _어떤_ 코드 요청이든 plan 전에 **이 게이트를 먼저 통과하고 한 줄 verdict 를 반드시 출력**한다. WORKFLOW §7-3 의 spec-drift 사전 체크를 _메인 에이전트의 라우팅 판단_ (잘 건너뜀) 이 아니라 _본 skill 의 강제 첫 단계_ 로 내재화 — "그냥 code 로 진입" 으로 스킵 못 하게.
 
 1. 요청 + `spec/prd.md` (+ 해당 시 `api_contract.md`·`data_model.md`·`ui_flow.md`) 대조.
 2. 분류:
@@ -156,7 +156,7 @@ spec 없이 호출된 자리에서도 cwd 단서로 _경량 mode 추정_:
 - "unused 코드 제거" / "main.py 를 train.py / eval.py 분리"
 - "model 폴더 분리" / "config 메커니즘 통일"
 
-본 발화 인지 시 메인 Claude 가 cleanup_candidates / experiment_readiness 를 자동 input 으로 본 skill 호출. code-plan 자리에서 _cleanup + refactor + ready 정돈_ 한 묶음 plan 생성.
+본 발화 인지 시 메인 에이전트가 cleanup_candidates / experiment_readiness 를 자동 input 으로 본 skill 호출. code-plan 자리에서 _cleanup + refactor + ready 정돈_ 한 묶음 plan 생성.
 
 #### 자리 흐름
 
@@ -172,9 +172,9 @@ autopilot-lab "X 실험" — Step 0 에서 readiness ✓ 확인 후 진행
 
 본 자리에서 _experiment_conventions.md 의 preferred layer / config / prefix 패턴_ 을 code-plan / code-execute 단계 입력으로 자동 prepend — 정돈 결과가 사용자 코드베이스 컨벤션과 어긋나지 않게.
 
-## Default Invocation Rule (메인 Claude 자동 라우팅)
+## Default Invocation Rule (메인 에이전트 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude 가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
+본 skill 은 runtime adapter bootstrap 의 "autopilot-* 호출 패턴" 컨펌 의무 적용 대상(Claude Code: [`CLAUDE.md`](../../CLAUDE.md) §0). 메인 에이전트가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
 
 ### Trigger 신호 (자연어 발화 예시)
 
@@ -188,7 +188,7 @@ autopilot-lab "X 실험" — Step 0 에서 readiness ✓ 확인 후 진행
 - 에러 로그 / traceback 첨부
 - 테스트 fail 보고서 첨부
 
-### Default 옵션 권장값 (컨펌 시 메인 Claude 가 제안)
+### Default 옵션 권장값 (컨펌 시 메인 에이전트가 제안)
 
 - `--mode`: 발화 신호로 dev/debug 자동 추론. cwd 가 plan 폴더 + 최근 dev_logs/ 있으면 dev 우세, 에러 로그·traceback 있으면 debug 우세.
 - `--qa`: dev=thorough, debug=standard (default — global §6 high-stakes 신호 시 adversarial 자동 상향)
@@ -240,7 +240,7 @@ QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../
 
 ### --user-refine (boolean flag — opt-in only)
 
-**Default: false. The orchestrator (메인 Claude) MUST NOT add this flag on its own — it is set only when the user typed `--user-refine` (or an explicit Korean equivalent like "사용자 검토 끼워" / "memo 추가하게 멈춰줘") in the original prompt.**
+**Default: false. The orchestrator (메인 에이전트) MUST NOT add this flag on its own — it is set only when the user typed `--user-refine` (or an explicit Korean equivalent like "사용자 검토 끼워" / "memo 추가하게 멈춰줘") in the original prompt.**
 When present, the orchestrator **pauses** at refine points so the user can add their own `<!-- memo: ... -->` comments on top of 연구팀's memos before code-refine runs.
 
 - Applies to: **dev mode only** (Step 2 plan refine, and the failure-loop refine after test failure).

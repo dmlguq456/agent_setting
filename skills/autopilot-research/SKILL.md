@@ -11,9 +11,9 @@ metadata:
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 본 skill의 raw metadata (`search_results.json`, `phase_a_*.json`, `chaining_results.md`, `code_search.md` 등) + reviews는 모두 `_internal/` 하위로 격리. T1/T2 chapter 파일과 `cards/`는 root.
 
-## Default Invocation Rule (메인 Claude 자동 라우팅)
+## Default Invocation Rule (메인 에이전트 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude 가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
+본 skill 은 runtime adapter bootstrap 의 "autopilot-* 호출 패턴" 컨펌 의무 적용 대상(Claude Code: [`CLAUDE.md`](../../CLAUDE.md) §0). 메인 에이전트가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
 
 ### Trigger 신호 (자연어 발화 예시)
 
@@ -30,12 +30,12 @@ metadata:
 - "X 시장 동향" / "Y 경쟁사 분석"
 - "비즈니스 모델 조사"
 
-### Default 옵션 권장값 (컨펌 시 메인 Claude 가 제안)
+### Default 옵션 권장값 (컨펌 시 메인 에이전트가 제안)
 
 - `--mode`: 발화 신호로 academic/technology/market 자동 추론. 명확하지 않으면 academic.
 - `--depth`: medium (default). "빠르게" / "간단히" → shallow, "체계적으로" / "deep dive" → deep.
 - `--qa`: thorough (default — global §6 high-stakes 신호 시 adversarial 자동 상향)
-- `--no-clarify`: off (default — Step 0 Scope Clarification 보존; query 가 모호하면 메인 Claude 가 직접 clarify 후 invoke 가능)
+- `--no-clarify`: off (default — Step 0 Scope Clarification 보존; query 가 모호하면 메인 에이전트가 직접 clarify 후 invoke 가능)
 
 ### Override 1순위 — autopilot 우회
 
@@ -209,7 +209,7 @@ artifact_dir: <abs path>
 
 **Output**: 사용자 답변을 통합한 refined query를 Step 2로 전달 + `pipeline_state.yaml`의 `clarified_intent` 필드에 한 줄 요약 기록.
 
-**§5 자율 진행**: 질문 던질 때 글로벌 [CLAUDE.md](../../CLAUDE.md) §2 적용 — ScheduleWakeup 15-20분 동시 호출, 답 없으면 mode 추론 결과 + depth medium + 가장 좁은 범위 default 로 자율 진행.
+**§5 자율 진행**: 질문 던질 때 adapter pause/autonomy rule 적용(Claude Code: [CLAUDE.md](../../CLAUDE.md) §2) — ScheduleWakeup 15-20분 동시 호출, 답 없으면 mode 추론 결과 + depth medium + 가장 좁은 범위 default 로 자율 진행.
 
 ### Step 2: Source Search (direct Agent call) — mode-aware
 

@@ -8,7 +8,7 @@
 
 **핵심 비유 — 포스트잇.** post-it 은 영구 기록이 아니다. 영구 진실은 산출물(`plans/`·`documents/`·`spec/`·code·git)·구조화 프로필(DB `type=profile` 레코드)에 있고, post-it 은 그 사이를 잇는 휘발성 작업면. 산출물로 _졸업_ 하면 떼어낸다.
 
-> **불변식 — 사용자는 post-it 을 읽지 않는다.** Claude 의 세션-간 연속성 작업면이지 사용자 읽기용 문서가 아니다. lean 유지·prune 은 Claude 책임 (사용자에겐 한 줄 요약만).
+> **불변식 — 사용자는 post-it 을 읽지 않는다.** 에이전트의 세션-간 연속성 작업면이지 사용자 읽기용 문서가 아니다. lean 유지·prune 은 에이전트 책임 (사용자에겐 한 줄 요약만).
 
 ## 생애주기 (모든 엔트리는 졸업하거나 만료)
 
@@ -49,7 +49,7 @@
 
 ## Confirm 원칙
 
-사용자가 직접 적은 텍스트(add/decide)는 즉시; Claude 가 만들거나 매칭·분류·졸업(resolve/sweep/promote/handoff)하는 건 검토. 단 _사용자는 post-it 을 안 보므로_ 자동 nudge 자리의 sweep 은 확실분만 자동 prune + 한 줄 보고 (줄 단위 검토 강요 X).
+사용자가 직접 적은 텍스트(add/decide)는 즉시; 에이전트가 만들거나 매칭·분류·졸업(resolve/sweep/promote/handoff)하는 건 검토. 단 _사용자는 post-it 을 안 보므로_ 자동 nudge 자리의 sweep 은 확실분만 자동 prune + 한 줄 보고 (줄 단위 검토 강요 X).
 
 ## 간결성 원칙 (working 레코드 작성 시 강제)
 

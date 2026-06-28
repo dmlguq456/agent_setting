@@ -155,7 +155,7 @@ components·tokens·review phase 는 **Design MCP 로 렌더해서 본 것** 으
 - 상세 루프는 `_design_rules.md` §시각 자가검증 루프 (maker/critic/verifier 공유).
 - **Design MCP 미부착 세션** (막 등록한 직후) 이면 `sharp`/`rsvg`/`mmdc` 정적 렌더로 fallback, 다음 세션부터 `mcp__design__*` 사용.
 
-각 phase 끝에 **[CONFIRM Gate]** — autopilot-spec 의 4 갈래 응답 (진행 / 수정 / back-jump / 중단) 패턴 그대로. 발화가 모호하면 메인 Claude 가 옵션 다시 물음 (임의 추측 X).
+각 phase 끝에 **[CONFIRM Gate]** — autopilot-spec 의 4 갈래 응답 (진행 / 수정 / back-jump / 중단) 패턴 그대로. 발화가 모호하면 메인 에이전트가 옵션 다시 물음 (임의 추측 X).
 
 | 응답 | 동작 |
 |---|---|
@@ -166,7 +166,7 @@ components·tokens·review phase 는 **Design MCP 로 렌더해서 본 것** 으
 
 ## Pipeline Execution
 
-You (메인 Claude) orchestrate by invoking each skill directly via the Skill tool.
+You (메인 에이전트) orchestrate by invoking each skill directly via the Skill tool.
 
 ### Phase 0: design-init
 

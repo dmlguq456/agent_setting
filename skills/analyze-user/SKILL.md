@@ -13,9 +13,9 @@ metadata:
 
 > **Workspace assumption**: 본 skill 은 _cross-project_ 작업 — 현 cwd 와 무관하게 사용자의 _과거 모든 산출물_ 을 스캔. 입력 source 는 기본 위치 (`~/nas/user/Uihyeop/doc/` / `~/nas/user/Uihyeop/NN_Zoo/` / `~/.claude/projects/*/memory/`) + `--source <path>` 추가. 산출은 항상 DB `type=profile` 레코드로 영속 (파일 Write X).
 
-## Default Invocation Rule (메인 Claude 자동 라우팅)
+## Default Invocation Rule (메인 에이전트 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude 가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
+본 skill 은 runtime adapter bootstrap 의 "autopilot-* 호출 패턴" 컨펌 의무 적용 대상(Claude Code: [`CLAUDE.md`](../../CLAUDE.md) §0). 메인 에이전트가 사용자 발화에서 아래 trigger 신호를 인지하면, 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke.
 
 ### Trigger 신호 (자연어 발화 예시)
 
@@ -25,7 +25,7 @@ metadata:
 - "내 코딩 컨벤션 정리" / "model 폴더 패턴 추출" / "preferred layer 추출"
 - 새 paper / 발표 / 보고서 / 모델 완성 직후 "이번 자료도 프로필에 반영해줘"
 
-### Default 옵션 권장값 (컨펌 시 메인 Claude 가 제안)
+### Default 옵션 권장값 (컨펌 시 메인 에이전트가 제안)
 
 - `<aspect>`: 발화로 추론 — "figure" / "스타일" → `figure`, "발표" → `presentation`, "작성 톤" → `writing`, "코딩 컨벤션" / "model 폴더" / "layer" → `coding_convention`, 명확히 안 보이면 `all`.
 - `--mode`: 기본 `update`. 사용자가 "다시 처음부터" / "init" 신호 주면 `init`.
@@ -95,13 +95,13 @@ Phase 4 의 reviewer 구성은 항상 4 개 parallel (Phase 4 절 참조).
 
 ### `--user-refine` (boolean, opt-in)
 
-분석 산출 _직전 (Phase 5 직전)_ pause. 사용자가 추출된 패턴에 _직접 memo 추가_ 하고 싶을 때. 명시 신호 ("사용자 검토 끼워" / "memo 추가" / `--user-refine`) 있을 때만 켬. 메인 Claude 가 임의 추가 X.
+분석 산출 _직전 (Phase 5 직전)_ pause. 사용자가 추출된 패턴에 _직접 memo 추가_ 하고 싶을 때. 명시 신호 ("사용자 검토 끼워" / "memo 추가" / `--user-refine`) 있을 때만 켬. 메인 에이전트가 임의 추가 X.
 
 ## Pipeline (6 phase)
 
 ### Phase 1 — Source Discovery + 자동 변환 (PDF + PNG 하이브리드)
 
-목적: aspect 별 _모든 expected source_ 를 발견·분류·인덱싱 + Claude 가 직접 read 못하는 자료 (docx / pptx / hwpx) 는 _PDF + PNG_ 자동 변환.
+목적: aspect 별 _모든 expected source_ 를 발견·분류·인덱싱 + 에이전트가 직접 read 못하는 자료 (docx / pptx / hwpx) 는 _PDF + PNG_ 자동 변환.
 
 절차:
 
@@ -116,7 +116,7 @@ Phase 4 의 reviewer 구성은 항상 4 개 parallel (Phase 4 절 참조).
    - `*.mp4` / `*.mov` 등 video 자료 → **skip** (analyze-user 자리 분석 X, 한 줄 보고)
 3. **메모리 자료 일람** (domain aspect 시) — `~/.claude/projects/*/memory/*.md` 전수 (시스템 자료 자동, 도메인 약자 자리 확인).
 4. **scholar / arXiv 자료 일람** (writing / domain aspect 시) — 사용자 명시 paper 목록 + abstract.
-5. **자동 변환 (LibreOffice headless)** — Claude 가 직접 read 못하는 자료 (docx / pptx / hwpx / xlsx / doc / ppt / hwp) 발견 시:
+5. **자동 변환 (LibreOffice headless)** — 에이전트가 직접 read 못하는 자료 (docx / pptx / hwpx / xlsx / doc / ppt / hwp) 발견 시:
 
 **LibreOffice 자동 설치 (부재 자리)**:
 
@@ -454,9 +454,9 @@ timestamp: "2026-05-22T15:30:00Z"
 | 편집팀 | `01_paper_figure_style` · `02_paper_writing_style` · `03_presentation_strategy` · **`04_analysis_methodology`** · `05_domain_expertise` | 사용자 향 문서 wording (figure caption / paper / 발표 / 분석 표현) + 도메인 약자 |
 | 기획팀 | **`02_paper_writing_style`** · `04_analysis_methodology` · **`05_domain_expertise`** · `07_coding_convention` | plan 작성 톤 (`02`) + 검증 패턴 + 도메인 약자 + 코드 컨벤션 (plan 안 코드 정합성) |
 | 개발팀 | **`04_analysis_methodology`** · **`05_domain_expertise`** · `07_coding_convention` | 코드 안 metric·검증 (`04`) + 도메인 약자 (변수명·함수명, `05`) + model 폴더·config·prefix·preferred layer (`07`). per-project `experiment_conventions.md` 가 1순위, 본 레코드는 fallback |
-| 메인 Claude | **`04_analysis_methodology`** · **`05_domain_expertise`** · `07_coding_convention` | 사용자 분석 응답 (`04`) + 도메인 약자 인지 (사용자 발화, `05`) + 코드 컨벤션 (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙 prepend, `07`) |
+| 메인 에이전트 | **`04_analysis_methodology`** · **`05_domain_expertise`** · `07_coding_convention` | 사용자 분석 응답 (`04`) + 도메인 약자 인지 (사용자 발화, `05`) + 코드 컨벤션 (autopilot-lab Step 0 / autopilot-spec Phase 0·2 / autopilot-code 4 원칙 prepend, `07`) |
 
-> **매트릭스 정리** (2026-05-26): 06 (대화 메타 규칙) 은 _메인 Claude 전용_ 으로 분리 — sub-agent 는 사용자와 직접 대화 X 라 적용 영역 없음 (글로벌 CLAUDE.md + 메모리 always-on 자료와 중복). 07 (코드 컨벤션) 은 _개발팀·기획팀·메인 Claude 만_ — 편집팀 (wording 영역) 은 코드 구조 컨벤션 적용 자리 없어 제외. agent 별 3-5 aspect 참조 default. 06 profile 레코드 자체는 `/post-it --scope user` default collab 저장처로 유지 (제거된 것은 _이 agent 참조 매트릭스 등록_ 뿐).
+> **매트릭스 정리** (2026-05-26): 06 (대화 메타 규칙) 은 _메인 에이전트 전용_ 으로 분리 — sub-agent 는 사용자와 직접 대화 X 라 적용 영역 없음 (글로벌 CLAUDE.md + 메모리 always-on 자료와 중복). 07 (코드 컨벤션) 은 _개발팀·기획팀·메인 에이전트만_ — 편집팀 (wording 영역) 은 코드 구조 컨벤션 적용 자리 없어 제외. agent 별 3-5 aspect 참조 default. 06 profile 레코드 자체는 `/post-it --scope user` default collab 저장처로 유지 (제거된 것은 _이 agent 참조 매트릭스 등록_ 뿐).
 
 본 참조 패턴은 _agent 정의 본문_ 에 명시되어 있어 agent 가 invoke 될 때 자동.
 

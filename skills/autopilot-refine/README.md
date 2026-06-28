@@ -18,7 +18,7 @@ Autopilot family — **post-creation iteration pipeline for research and doc art
 ```
 
 ## Default Invocation Rule (자동 호출 트리거)
-**메인 Claude가 slash command 명시 없이 자동 invoke되는 조건은 _major-level 변경_으로만 narrowing.** `<artifact-root>/{documents,research}/*` 하위 artifact에 대한 prompt가 다음 3-criteria 중 하나에 해당할 때 `autopilot-refine "<prompt>" --qa quick`을 자동 호출:
+**메인 에이전트가 slash command 명시 없이 자동 invoke되는 조건은 _major-level 변경_으로만 narrowing.** `<artifact-root>/{documents,research}/*` 하위 artifact에 대한 prompt가 다음 3-criteria 중 하나에 해당할 때 `autopilot-refine "<prompt>" --qa quick`을 자동 호출:
 
 1. **사용자 명시**: "major" / "v{N+1}" / "/autopilot-refine" / "전면 재작성" / "phase 재시작"
 2. **구조적 대규모 변경**: ≥200 줄 영향 / 전체 section rewrite / mutation tier 재분류 batch
@@ -56,7 +56,7 @@ Autopilot family — **post-creation iteration pipeline for research and doc art
 
 ## 버전 + 이력
 - **Major 적용 시**: `_internal/versions/v{N+1}/` 스냅샷 + `pipeline_summary.md` 통합 history 누적. Stage D는 활성 `## 마이너 변경 로그` 섹션을 _verbatim_ 으로 새 major의 `## v{N+1} 변경 사항` 안 `### 누적 마이너 변경 사항 (v{N}_1 → v{N}_M)` sub-block 으로 migrate + 활성 로그 섹션 clear. **추가로 각 affected file의 frontmatter `changelog:` array에 v{N+1} entry insert** (in-file git-tracked lineage 보존).
-- **Minor 적용 시**: snapshot X — Claude가 직접 Edit + `pipeline_summary.md` `## 마이너 변경 로그` 섹션에 상세 entry. **추가로 각 affected file의 frontmatter `changelog:` array에 v{N}_M entry 1줄 insert**. last major snapshot이 audit baseline.
+- **Minor 적용 시**: snapshot X — 에이전트가 직접 Edit + `pipeline_summary.md` `## 마이너 변경 로그` 섹션에 상세 entry. **추가로 각 affected file의 frontmatter `changelog:` array에 v{N}_M entry 1줄 insert**. last major snapshot이 audit baseline.
 
 ---
 *원본: `~/.claude/skills/autopilot-refine/SKILL.md`*

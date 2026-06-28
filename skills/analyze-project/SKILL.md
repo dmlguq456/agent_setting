@@ -45,7 +45,7 @@ Inspect current directory:
 | `src/`, `lib/`, `models/`, `.git`, `package.json`, `pyproject.toml`, OR `*.py`/`*.ts`/`*.go`/`*.rs` files at root | **code** |
 | Many `*.pdf` / `*.docx` / `*.md` files; no source dirs; no build manifests | **doc** |
 | Both indicators present | **code** (default — user can override with `--mode doc`) |
-| Neither / unclear | ask user: "code, paper, doc 중 어느 mode인가요?" — 글로벌 [CLAUDE.md](../../CLAUDE.md) §2 적용 (ScheduleWakeup 10-15분 동시 호출; 답 없으면 cwd 신호 강한 쪽으로 자율 진행) |
+| Neither / unclear | ask user: "code, paper, doc 중 어느 mode인가요?" — adapter pause/autonomy rule 적용(Claude Code: [CLAUDE.md](../../CLAUDE.md) §2) (ScheduleWakeup 10-15분 동시 호출; 답 없으면 cwd 신호 강한 쪽으로 자율 진행) |
 
 > **`paper` mode is never auto-selected** — paper analysis requires explicit `--mode paper` because PDF presence alone is ambiguous (could be reviewer comments, templates, etc. for doc mode). The boundary between paper and doc is genuinely fuzzy in the wild.
 

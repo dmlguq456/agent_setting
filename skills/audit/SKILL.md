@@ -62,7 +62,7 @@ All user-facing output (chat report, audit log) in natural **Korean** (no transl
 
 - `<artifact_path>` (REQUIRED): one of
   - Absolute path to a `<artifact-root>/{plans,research,documents}/*` directory
-  - Fuzzy short name (e.g., `se-seminar-tfrestormer`) — resolved via `ls -d <artifact-root>/{plans,research,documents}/*$ARG* 2>/dev/null`. 1 match → use; multiple → ask user (글로벌 [CLAUDE.md](../../CLAUDE.md) §2 적용 — ScheduleWakeup 10분; 답 없으면 가장 최근 수정 artifact); 0 → error.
+  - Fuzzy short name (e.g., `se-seminar-tfrestormer`) — resolved via `ls -d <artifact-root>/{plans,research,documents}/*$ARG* 2>/dev/null`. 1 match → use; multiple → ask user (adapter pause/autonomy rule 적용(Claude Code: [CLAUDE.md](../../CLAUDE.md) §2) — ScheduleWakeup 10분; 답 없으면 가장 최근 수정 artifact); 0 → error.
 - `--scope` (default `auto`): which aspect set to check. **사용자 명시는 1순위 (override)**. 명시 없으면 audit이 artifact 특성 (mode / refine 횟수 / status / 구조)을 보고 _스스로 적절한 aspect set 선택_. 명시 값은 `facts | style | structure | cross-ref | coverage | all` 중 하나로 type-specific aspect group에 매핑 (Stage B 표 참조).
 - `--read-only` (default for plans): if specified for `plans` type, skip any aspect that requires _executing_ tests / lints — only static inspection (file diff, TODO grep, code review heuristics). For `research` / `documents` types, `--read-only` is implicit and the flag is a no-op (warn: "audit는 research/documents에 대해 항상 read-only").
 - `--report-only`: skip the auto-fix chain (Stage E). With this flag, `/audit` produces the report and stops — same as previous default behavior. Use when you want only inspection without follow-up edits.

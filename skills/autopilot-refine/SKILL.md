@@ -19,9 +19,9 @@ metadata:
 
 Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag as the rest of the family. Default `thorough` (2026-05-22 통일 — 모든 autopilot-* default thorough). routine·scoped edits 자리는 `--qa light` / `quick` 명시.
 
-## Default Invocation Rule (메인 Claude 자동 라우팅)
+## Default Invocation Rule (메인 에이전트 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상. 메인 Claude는 사용자가 `<artifact-root>/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다 (`--qa thorough` default). **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
+본 skill 은 runtime adapter bootstrap 의 "autopilot-* 호출 패턴" 컨펌 의무 적용 대상(Claude Code: [`CLAUDE.md`](../../CLAUDE.md) §0). 메인 에이전트는 사용자가 `<artifact-root>/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다 (`--qa thorough` default). **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
 
 **Scope**: `<artifact-root>/{documents,research}/*` 엄격 한정. project root의 임의 `.md`/`.txt`나 코드 산출물(`<artifact-root>/plans/*`)은 적용 X — 전자는 일반 Edit, 후자는 `/code-refine` 또는 `/autopilot-code`.
 
@@ -167,7 +167,7 @@ ls -d <artifact-root>/research/*<keyword>* <artifact-root>/documents/*<keyword>*
 
 - **1 match** → use as artifact root. Detect type by path prefix.
 - **Multiple matches** → list candidates to user, ask which.
-- **0 matches** → ask user to clarify the artifact name in the prompt (e.g., "어느 산출물에 대한 작업인가요? prompt에 식별자(`speech-enhancement-trends`, `2026-05-06_se-seminar-tfrestormer` 같은) 포함 부탁"). 글로벌 [CLAUDE.md](../../CLAUDE.md) §2 적용 — ScheduleWakeup 10분 동시 호출, 답 없으면 가장 최근 수정된 artifact 로 자율 진행.
+- **0 matches** → ask user to clarify the artifact name in the prompt (e.g., "어느 산출물에 대한 작업인가요? prompt에 식별자(`speech-enhancement-trends`, `2026-05-06_se-seminar-tfrestormer` 같은) 포함 부탁"). adapter pause/autonomy rule 적용(Claude Code: [CLAUDE.md](../../CLAUDE.md) §2) — ScheduleWakeup 10분 동시 호출, 답 없으면 가장 최근 수정된 artifact 로 자율 진행.
 
 Detect type by path prefix:
 - `<artifact-root>/research/*` → **research** type
@@ -320,7 +320,7 @@ Prompt: "{prompt verbatim, ≤200자 trim}"
   - "edit 4: <new>" → 4번 텍스트 교체 후 적용
   - "no" / "stop" → 중단
 ```
-End turn. Wait for user reply. 글로벌 [CLAUDE.md](../../CLAUDE.md) §2 적용 — ScheduleWakeup 15분 동시 호출, 답 없으면 "yes / all" 추천 방향 (default auto-apply 패턴) 으로 자율 진행.
+End turn. Wait for user reply. adapter pause/autonomy rule 적용(Claude Code: [CLAUDE.md](../../CLAUDE.md) §2) — ScheduleWakeup 15분 동시 호출, 답 없으면 "yes / all" 추천 방향 (default auto-apply 패턴) 으로 자율 진행.
 
 **`--review-only` mode**: print Stage C output, then end. No Stage D.
 

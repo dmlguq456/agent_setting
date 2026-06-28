@@ -94,9 +94,9 @@ metadata:
 
 > **script(단발 데이터 변환·정제) 는 lab 모드 아님** — one-shot 유틸은 `Agent(개발팀)` 직접 또는 `/autopilot-code`. lab 은 _학습 실험_ 에 집중.
 
-## Default Invocation Rule (메인 Claude 자동 라우팅)
+## Default Invocation Rule (메인 에이전트 자동 라우팅)
 
-본 skill 은 글로벌 [`CLAUDE.md`](../../CLAUDE.md) §0 "autopilot-* 호출 패턴" 의 _컨펌 의무_ 적용 대상.
+본 skill 은 runtime adapter bootstrap 의 "autopilot-* 호출 패턴" 컨펌 의무 적용 대상(Claude Code: [`CLAUDE.md`](../../CLAUDE.md) §0).
 
 ### Trigger 신호 (자연어 발화 예시)
 
@@ -121,7 +121,7 @@ metadata:
 
 ### Override 1순위 — autopilot 우회
 
-- 단발 데이터 정제·변환·script — _로그 남기고 싶으면_ `/autopilot-code --qa quick` (가벼운 plan + execute + test, `plans/` 에 로그). 진짜 throwaway(로그 불필요)만 메인 Claude 직접. lab 모드 아님
+- 단발 데이터 정제·변환·script — _로그 남기고 싶으면_ `/autopilot-code --qa quick` (가벼운 plan + execute + test, `plans/` 에 로그). 진짜 throwaway(로그 불필요)만 메인 에이전트 직접. lab 모드 아님
 - 단발 plot 만 — `Agent(자료팀, mode="figure-gen")` 직접
 - 정련 / 라이브러리화 / spec 정돈 — `/autopilot-code` 또는 `/autopilot-spec`
 - `/autopilot-lab <args>` slash 직접 입력 — 컨펌 skip
@@ -147,7 +147,7 @@ metadata:
 
 ### --qa
 - `quick` / `light` (default) / `standard` / `thorough` / `adversarial` — [CONVENTIONS.md §1](../../CONVENTIONS.md)
-- 본 skill default 가 `light` 인 이유: 실험 prototype 은 _빠른 cycle_ 이 1순위. high-stakes 신호(논문 결과·외부 공개) 시 사용자가 standard+ 명시 또는 메인 Claude 자동 상향.
+- 본 skill default 가 `light` 인 이유: 실험 prototype 은 _빠른 cycle_ 이 1순위. high-stakes 신호(논문 결과·외부 공개) 시 사용자가 standard+ 명시 또는 메인 에이전트 자동 상향.
 
 ### --from
 - setup 모드: `spec` / `scaffold` / `run` — 단계 재개
@@ -495,7 +495,7 @@ Agent(subagent_type="테스트팀"):
 
 ### E3: 분석 + summary + `_RUNLOG` ✅
 
-**E3-1. 결과 정리** — 사용자가 "결과 정리해" 발화 또는 메인 Claude 가 eval 종료 보고 인지:
+**E3-1. 결과 정리** — 사용자가 "결과 정리해" 발화 또는 메인 에이전트가 eval 종료 보고 인지:
 
 ```
 === REPORT draft (→ REPORT.md 로 저장, E3-4) ===
@@ -655,7 +655,7 @@ last_updated: <timestamp>
 - ref/부모 모델 폴더 직접 수정 (variation 만, base 보존)
 - 라이브러리화·module 정련 (autopilot-code 영역)
 - PRD·스택 결정 (autopilot-spec 영역)
-- 단발 데이터 변환·정제 script (`autopilot-code --qa quick` 또는 메인 Claude 직접 — lab 모드 아님)
+- 단발 데이터 변환·정제 script (`autopilot-code --qa quick` 또는 메인 에이전트 직접 — lab 모드 아님)
 - 실험 자동 실행·학습·평가 (사용자 환경·queue 가변 — 명령만 안내. 가벼운 eval 만 발화 시 테스트팀)
 - ckpt·log destructive 삭제 (`_internal/` 외)
 

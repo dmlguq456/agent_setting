@@ -20,7 +20,7 @@
 
 ## 절차 (claim 당)
 
-각 claim 에 대해 N=3 voter 를 독립 수행 (메인 Claude 가 parallel dispatch). voter 마다:
+각 claim 에 대해 N=3 voter 를 독립 수행 (메인 에이전트가 parallel dispatch). voter 마다:
 
 1. **quote 지지 점검** — claim 이 인용/카드 quote 로 실제 지지되나, overreach/misread 인가?
 2. **모순 탐색 (WebSearch)** — 신뢰 소스가 이 주장을 반박/강하게 한정하나? 반례·negative result·후속 반증 논문 검색.
