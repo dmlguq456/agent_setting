@@ -294,7 +294,7 @@
     {
       "slug": "agent__codex-review-team",
       "name": "codex-review-team",
-      "model": "opus",
+      "model": "sonnet",
       "modes": [
         "review",
         "adversarial-review",
