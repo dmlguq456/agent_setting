@@ -18,4 +18,4 @@ The core owns workflow meaning, artifact layout, memory lifecycle, and safety in
 | Adapter | Status | Entry |
 |---|---|---|
 | Claude Code | primary | `adapters/claude/README.md` + root `CLAUDE.md` |
-
+| Codex | experimental | `adapters/codex/README.md` |

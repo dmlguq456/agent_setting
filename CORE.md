@@ -10,7 +10,7 @@
 | Adapter | tool bootstrap, hook schema, slash commands, status UI, permission model | no |
 | Local runtime | credentials, session state, caches, daemon logs | no |
 
-`CLAUDE.md` is the Claude Code adapter. Future adapters should keep their runtime-specific instructions in their own entry file and point back to this core contract.
+`CLAUDE.md` is the Claude Code adapter entry file. Runtime-specific adapter notes live under `adapters/`; future adapters should keep their own bootstrap instructions there and point back to this core contract.
 
 ## 2. Artifact Root
 
