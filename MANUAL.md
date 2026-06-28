@@ -19,7 +19,7 @@
 
 ## ① 작업 워크플로우 — 발화에서 산출물까지
 
-자연어로 부르면 메인 Claude 가 옵션을 조립·컨펌하고 파이프라인을 실행한다. **하드 순서 게이트**(우회 불가): `research/analyze → spec → code`(문서는 `research/analyze → draft → refine → apply`) — 앞 단계 산출물 없이는 다음 단계로 못 간다(`hooks/artifact-guard.sh` 강제).
+자연어로 부르면 메인 에이전트가 옵션을 조립·컨펌하고 파이프라인을 실행한다. **하드 순서 게이트**(우회 불가): `research/analyze → spec → code`(문서는 `research/analyze → draft → refine → apply`) — 앞 단계 산출물 없이는 다음 단계로 못 간다(`hooks/artifact-guard.sh` 강제).
 
 **4 트랙** (작업 본질에 맞춰 고른다):
 
@@ -44,7 +44,7 @@
 
 ```
 자연어 발화
-   │  (메인 Claude 가 라우팅)
+   │  (메인 에이전트가 라우팅)
    ▼
 skills/ (28)  ──호출──►  agents/ (8)        ◄── 팀별 모드(agent-modes/)
    │  파이프라인          기획·개발·품질·연구·자료·디자인·편집·codex
