@@ -5,8 +5,9 @@
 # 5h/7d 사용량 = stdin 의 rate_limits.{five_hour,seven_day}.used_percentage — /usage 와 동일한 공식 값.
 # context     = stdin 의 context_window.used_percentage (공식 값) — 부재 시 current_usage/context_window_size, 최후 fallback 만 id "1m" 추측.
 set -euo pipefail
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
 input=$(cat)
-printf '%s' "$input" > "$HOME/.claude/.statusline-last.json" 2>/dev/null || true  # 디버그·필드 탐사용 (최신 입력 1건)
+printf '%s' "$input" > "$AGENT_HOME/.statusline-last.json" 2>/dev/null || true  # 디버그·필드 탐사용 (최신 입력 1건)
 
 eval "$(printf '%s' "$input" | python3 -c '
 import sys, json, shlex
@@ -240,6 +241,6 @@ out=""; sep=" ${DIM}│${RST} "
 for s in "${segs_arr[@]}"; do [ -z "$out" ] && out="$s" || out="${out}${sep}${s}"; done
 [ -n "${jobs_lbl:-}" ] && out="${out}
 ${GRN}>_${RST}${DIM} running:${RST} ${jobs_lbl}"
-printf '%s' "$out" > "$HOME/.claude/.statusline-last-out.txt" 2>/dev/null || true  # 디버그 — 실제 렌더 시점 출력 사본
+printf '%s' "$out" > "$AGENT_HOME/.statusline-last-out.txt" 2>/dev/null || true  # 디버그 — 실제 렌더 시점 출력 사본
 printf '%s\n' "$out"
 exit 0  # 마지막 && list 가 비어있는 jobs_lbl 로 exit 1 → statusline 미표시 (2026-06-11 점검에서 발견)

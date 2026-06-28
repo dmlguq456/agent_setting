@@ -19,6 +19,7 @@
 #   등록: settings.json hooks.UserPromptSubmit 4번째 항목 (no-matcher, timeout 10).
 #         mem-recall-inject.sh 가 세 번째 MEM_DISTILL=1 재귀가드 honor 훅.
 set -euo pipefail
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
 
 # 재귀가드 (불변식): distiller 세션이면 trigger X, stdin drain 후 즉시 exit 0.
 # drain: 미소비 stdin 으로 인한 pipefail-유발 SIGPIPE/비0 exit 회피
@@ -46,7 +47,7 @@ PAT='지난번|지난번에|예전에|이전에|전에|그때|저번에|아까'
 [[ "${PROMPT:-}" =~ $PAT ]] || exit 0
 
 # 신호어 감지 — mem recall 실행 (deployed path, mem.py L426-529 recall(), read-only)
-recall_out=$(python3 "$HOME/.claude/tools/memory/mem.py" recall "$PROMPT" 2>/dev/null || true)
+recall_out=$(python3 "$AGENT_HOME/tools/memory/mem.py" recall "$PROMPT" 2>/dev/null || true)
 
 # 결과 cap (context blowup 방지) — env-overridable
 # 줄 수만 shell(head -n)로 cap. 글자 수 cap 은 아래 python emit 에서 문자 슬라이스로 —

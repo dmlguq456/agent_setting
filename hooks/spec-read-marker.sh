@@ -5,6 +5,7 @@
 
 input=$(cat 2>/dev/null)
 [ -z "$input" ] && exit 0
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
 
 fp=$(printf '%s' "$input" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//; s/"$//')
 case "$fp" in
@@ -21,6 +22,6 @@ root=$(dirname "$(dirname "$(dirname "$fp")")")
 key=$(printf '%s' "$root" | sed 's#[/ ]#_#g')
 mtime=$(stat -c %Y "$fp" 2>/dev/null || echo 0)
 
-mkdir -p "$HOME/.claude/.spec-grounding"
-printf '%s\n' "$mtime" > "$HOME/.claude/.spec-grounding/${sid}__${key}"
+mkdir -p "$AGENT_HOME/.spec-grounding"
+printf '%s\n' "$mtime" > "$AGENT_HOME/.spec-grounding/${sid}__${key}"
 exit 0

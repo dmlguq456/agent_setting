@@ -13,7 +13,7 @@ fp=$(printf '%s' "$input" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"
 case "$fp" in
   */projects/*/memory/*.md)
     printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' \
-      "내장 file 메모리(projects/<cwd>/memory/*.md) 직접 write 금지 — 통합 메모리는 memory.db(단일 SoT). 기억은 mem CLI 경유: python3 ~/.claude/tools/memory/mem.py add <tier> <type> \"<body>\" 또는 note \"<body>\", 사용자 통제 메모는 /post-it. (CLAUDE.md 메모리 정책 · MEMORY §7)"
+      "내장 file 메모리(projects/<cwd>/memory/*.md) 직접 write 금지 — 통합 메모리는 memory.db(단일 SoT). 기억은 mem CLI 경유: python3 <agent-home>/tools/memory/mem.py add <tier> <type> \"<body>\" 또는 note \"<body>\", 사용자 통제 메모는 /post-it. (어댑터 메모리 정책 · MEMORY §7)"
     exit 0 ;;
 esac
 exit 0

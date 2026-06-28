@@ -8,13 +8,13 @@ Hermes 메모리 벤치마킹의 store/write 층. spec: `<artifact-root>/spec/pr
 ## 구조
 | 층 | 위치 | git | 역할 |
 |---|---|---|---|
-| **원본(SoT)** | `~/.claude/memory/memory.db` (SQLite WAL) | **gitignore** (바이너리) | write의 진실원천. `records` 테이블 + FTS5 가상테이블(unicode61 + trigram CJK) 내장 |
-| **git mirror** | `~/.claude/memory/dump.jsonl` (레코드당 1줄, id 정렬) | **tracked** (전용 repo) | DB→deterministic 텍스트 export. 변경 줄만 diff. 복원 source (`mem import`) |
-| **하네스 projection** | `~/.claude/projects/<cwd>/memory/` | gitignore | 보조 — 하네스가 auto-memory 쓰는 자리 → `mem sync` 로 DB durable 흡수. `mem project` 는 보조 projection 생성 |
+| **원본(SoT)** | `<agent-home>/memory/memory.db` (SQLite WAL) | **gitignore** (바이너리) | write의 진실원천. `records` 테이블 + FTS5 가상테이블(unicode61 + trigram CJK) 내장 |
+| **git mirror** | `<agent-home>/memory/dump.jsonl` (레코드당 1줄, id 정렬) | **tracked** (전용 repo) | DB→deterministic 텍스트 export. 변경 줄만 diff. 복원 source (`mem import`) |
+| **하네스 projection** | `<agent-home>/projects/<cwd>/memory/` | gitignore | 보조 — 하네스가 auto-memory 쓰는 자리 → `mem sync` 로 DB durable 흡수. `mem project` 는 보조 projection 생성 |
 
 레코드 = `tier`(working/durable) × `scope`(project/global) × `type`. 단기=working(자동 만료/졸업), 장기=durable(영구+consolidate). FTS5는 `.index.db` 파생 파일이 아니라 `memory.db` 본체 안에 내장.
 
-## 명령 (`python3 ~/.claude/tools/memory/mem.py <cmd>`)
+## 명령 (`python3 <agent-home>/tools/memory/mem.py <cmd>`)
 | 명령 | 동작 |
 |---|---|
 | `add <tier> <type> "<body>" [--scope] [--tags] [--links] [--source]` | 수동 기록 (품질게이트·dedup·injection 통과분 → DB INSERT) |

@@ -49,6 +49,7 @@
 #   등록: settings.json hooks.SessionEnd (stdin-JSON 모드). turn-counter 는 mem-turn-nudge.sh 가
 #   argument 모드로 내부 호출 — 배선 불변.
 set -euo pipefail
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
 
 # 재귀가드 (불변식): distiller 세션이면 또 분사하지 않음
 [ "${MEM_DISTILL:-}" = "1" ] && exit 0
@@ -56,9 +57,9 @@ set -euo pipefail
 # opt-in 게이트: 명시 활성화 전엔 no-op (위 헤더 R1 참조 — 사용자가 검토 후 켠다)
 [ "${MEM_DISTILL_ENABLE:-}" = "1" ] || exit 0
 
-STORE="${MEM_STORE:-$HOME/.claude/memory}"
+STORE="${MEM_STORE:-$AGENT_HOME/memory}"
 # MEM_PY override = 테스트 전용 (worktree mem.py 를 가리키게). 미설정 시 라이브 경로(프로덕션 불변).
-MEM="${MEM_PY:-$HOME/.claude/tools/memory/mem.py}"
+MEM="${MEM_PY:-$AGENT_HOME/tools/memory/mem.py}"
 mkdir -p "$STORE" 2>/dev/null || true
 
 # 진입부 stale GC: lock + $OUT 캡처파일 모두 쓸어냄 (SIGKILL-orphan 커버, N=60min).

@@ -14,6 +14,7 @@
 #   Read-only: notes·graveyard 읽기만. additionalContext 만 emit (never-block 불변식).
 #   등록: settings.json hooks.UserPromptSubmit.
 set -euo pipefail
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
 
 # 재귀가드: distiller 세션이면 trigger X, stdin drain 후 즉시 exit 0.
 [ "${MEM_DISTILL:-}" = "1" ] && { cat >/dev/null 2>&1; exit 0; }
@@ -29,13 +30,13 @@ print("CWD="+shlex.quote(d.get("cwd","") or ""))
 EVENT="${EVENT:-}"; CWD="${CWD:-}"
 
 [ "$EVENT" = "UserPromptSubmit" ] || exit 0
-# 전용 데스크 게이트 — ~/.claude 메인 트리 세션만 (worktree ~/.claude-wt/* · 타 프로젝트 제외)
-[ "$CWD" = "$HOME/.claude" ] || exit 0
+# 전용 데스크 게이트 — agent home 메인 트리 세션만 (worktree 제외, 타 프로젝트 보호)
+[ "$CWD" = "$AGENT_HOME" ] || exit 0
 
 TODAY="$(date +%F)"
 # MEM_BRIEFING_ONCALL override = 테스트 격리 전용 (production default 불변 — dispatch.sh MEM_PY 동형).
 ONCALL="${MEM_BRIEFING_ONCALL:-/home/nas/user/Uihyeop/notes/oncall/$TODAY.md}"
-STORE="${MEM_STORE:-$HOME/.claude/memory}"
+STORE="${MEM_STORE:-$AGENT_HOME/memory}"
 STATE="$STORE/.briefing-$TODAY"
 
 [ -f "$ONCALL" ] || exit 0      # 오늘 당직 보고 없음(cron 전·루프 고장) → skip
@@ -53,7 +54,7 @@ PRUNED=0
 
 # 제도화 승격 안건 (D-28): durable 반복 규칙·교훈 — 데스크 cwd(~/.claude) 기준.
 # MEM_PY override = 테스트 격리 (dispatch.sh 동형, production default 불변).
-PROMO="$(cd "$HOME/.claude" 2>/dev/null && python3 "${MEM_PY:-$HOME/.claude/tools/memory/mem.py}" promote-candidates 2>/dev/null || true)"
+PROMO="$(cd "$AGENT_HOME" 2>/dev/null && python3 "${MEM_PY:-$AGENT_HOME/tools/memory/mem.py}" promote-candidates 2>/dev/null || true)"
 
 # additionalContext emit — json.dumps escaping (R4: shell interpolation 금지). never-block(|| true).
 ONCALL_FILE="$ONCALL" PRUNED="$PRUNED" PROMO="$PROMO" python3 -c '

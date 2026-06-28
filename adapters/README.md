@@ -13,6 +13,8 @@ An adapter owns runtime-specific details:
 
 The core owns workflow meaning, artifact layout, memory lifecycle, and safety invariants. New adapters should not redefine those concepts; they should document how their runtime implements them.
 
+Path convention: portable docs use `<agent-home>`. Shell code should resolve it with `utilities/agent-home.sh` or the same rule: `AGENT_HOME`, then an adapter compatibility variable such as `CLAUDE_HOME`, then the adapter default.
+
 ## Current Adapters
 
 | Adapter | Status | Entry |

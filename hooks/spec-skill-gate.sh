@@ -7,6 +7,7 @@
 
 input=$(cat 2>/dev/null)
 [ -z "$input" ] && exit 0
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
 
 skill=$(printf '%s' "$input" | grep -o '"skill"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"skill"[[:space:]]*:[[:space:]]*"//; s/"$//')
 case "$skill" in
@@ -30,7 +31,7 @@ done
 sid=$(printf '%s' "$input" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"session_id"[[:space:]]*:[[:space:]]*"//; s/"$//')
 [ -z "$sid" ] && sid="nosession"
 key=$(printf '%s' "$root" | sed 's#[/ ]#_#g')
-marker="$HOME/.claude/.spec-grounding/${sid}__${key}"
+marker="$AGENT_HOME/.spec-grounding/${sid}__${key}"
 cur=$(stat -c %Y "$prd" 2>/dev/null || echo 0)
 
 deny() {

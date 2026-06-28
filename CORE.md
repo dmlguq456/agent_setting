@@ -12,7 +12,25 @@
 
 `CLAUDE.md` is the Claude Code adapter entry file. Runtime-specific adapter notes live under `adapters/`; future adapters should keep their own bootstrap instructions there and point back to this core contract.
 
-## 2. Artifact Root
+## 2. Agent Home
+
+The canonical neutral name for the installed harness directory is:
+
+```text
+<agent-home>
+```
+
+Runtime code should resolve it in this order:
+
+1. `AGENT_HOME`
+2. adapter-specific compatibility variables such as `CLAUDE_HOME`
+3. the adapter's default install path, currently `$HOME/.claude` for the Claude Code adapter
+
+Use `utilities/agent-home.sh` in shell code when a concrete path is needed.
+
+`~/.claude` remains the current Claude Code adapter's default installation path. New cross-tool documentation should prefer `<agent-home>` unless it is intentionally describing the Claude adapter.
+
+## 3. Artifact Root
 
 The canonical project artifact directory is:
 
@@ -39,7 +57,7 @@ The artifact root contains durable, project-scoped work products:
 | `documents/` | document drafts and refinement artifacts |
 | `experiments/` | experiment setup, evaluation, and run logs |
 
-## 3. Workflow Invariants
+## 4. Workflow Invariants
 
 Artifacts move forward in one direction:
 
@@ -60,7 +78,7 @@ Each artifact should be changed through the capability that owns it:
 | `experiments/` | lab capability |
 | user profile records | analyze-user / post-it capability |
 
-## 4. Adapter Responsibilities
+## 5. Adapter Responsibilities
 
 Each adapter should provide:
 
@@ -70,7 +88,7 @@ Each adapter should provide:
 - a status/reminder surface for tracked vs untracked mode;
 - compatibility with both `.agent_reports/` and `.claude_reports/` until legacy projects are migrated.
 
-## 5. Naming Policy
+## 6. Naming Policy
 
 Use neutral names for new cross-tool concepts:
 

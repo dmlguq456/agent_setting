@@ -26,6 +26,7 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 | capability | Read and follow the relevant `skills/*/SKILL.md`; no native slash registry is assumed |
 | role profile | Use `agents/*.md` and `agent-modes/` as delegation prompts or review personas |
 | adapter bootstrap | Load `CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
+| agent home | Set `AGENT_HOME` to the installed harness directory |
 | artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
 | tracked/untracked signal | `track-toggle.sh` and `utilities/workflow-guard-hook.sh` semantics; no automatic prompt hook unless wrapped |
 | artifact-order gate | `hooks/artifact-guard.sh` can be run as a pre-write check by wrappers or manually |
@@ -36,6 +37,8 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 ## Compatibility
 
 Codex should create new project artifacts under `.agent_reports/`. Use `utilities/artifact-root.sh` or the equivalent rule: prefer `.agent_reports`; use `.claude_reports` only if it already exists and `.agent_reports` does not.
+
+Codex should resolve harness-home paths through `AGENT_HOME` or `utilities/agent-home.sh`. `CLAUDE_HOME` is accepted only as a Claude adapter compatibility alias.
 
 Claude Code-specific files remain valid as implementation references, not as Codex bootstrap files:
 

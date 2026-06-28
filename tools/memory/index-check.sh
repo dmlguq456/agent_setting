@@ -11,7 +11,8 @@
 #   index-check.sh <memory_dir>    # 특정 메모리 dir 점검
 #   index-check.sh [dir] --fix     # 누락 포인터 append (additive)
 set -u
-ROOT="$HOME/.claude/projects"
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
+ROOT="$AGENT_HOME/projects"
 DIR=""; FIX=0
 for a in "$@"; do
   case "$a" in --fix) FIX=1;; -h|--help) echo "usage: index-check.sh [memory_dir] [--fix]"; exit 2;; *) DIR="$a";; esac

@@ -7,9 +7,10 @@
 #   사용: 분사 후 대기 자리에서 실행. SUSPECT/DEAD 면 transcript·dispatch 로그 진단 → 수확/재분사 (대기 X).
 #   OPERATIONS §5.10 분사 가드. exit 3 = stealth-death 의심 1+.
 set -uo pipefail
-JOBS="${1:-$HOME/.claude/.dispatch/jobs.log}"
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
+JOBS="${1:-$AGENT_HOME/.dispatch/jobs.log}"
 STALE_MIN="${DISPATCH_STALE_MIN:-15}"   # transcript 가 N분+ 멈췄으면 hang/death 의심
-PROJ="$HOME/.claude/projects"
+PROJ="$AGENT_HOME/projects"
 [ -f "$JOBS" ] || { echo "(jobs.log 없음: $JOBS)"; exit 0; }
 
 now=$(date +%s); alive=0; suspect=0; open_n=0

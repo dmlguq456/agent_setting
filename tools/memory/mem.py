@@ -3,7 +3,7 @@
 
 SQLite `memory.db` (WAL) 가 진실원천(SoT). 기존 markdown-SoT 를 완전 대체.
 텍스트 덤프 mirror (`dump.jsonl`) = git 추적 대상. FTS5 (unicode61 + trigram CJK) 내장.
-spec: ~/.claude/.agent_reports/spec/prd.md (legacy: .claude_reports/spec/prd.md).
+spec: <agent-home>/.agent_reports/spec/prd.md (legacy: .claude_reports/spec/prd.md).
 
 설계 불변식:
   - SQLite DB 가 진실원천. dump.jsonl 은 결정론적 텍스트 mirror.
@@ -15,11 +15,12 @@ from collections import namedtuple
 from pathlib import Path
 
 HOME = Path.home()
-STORE = Path(os.environ.get("MEM_STORE", HOME / ".claude" / "memory"))
+AGENT_HOME = Path(os.environ.get("AGENT_HOME") or os.environ.get("CLAUDE_HOME") or HOME / ".claude")
+STORE = Path(os.environ.get("MEM_STORE", AGENT_HOME / "memory"))
 DB = STORE / "memory.db"
 DUMP = STORE / "dump.jsonl"
-PROJECTS = Path(os.environ.get("MEM_PROJECTS", HOME / ".claude" / "projects"))
-USER_PROFILE = Path(os.environ.get("MEM_PROFILE", HOME / ".claude" / "user_profile"))
+PROJECTS = Path(os.environ.get("MEM_PROJECTS", AGENT_HOME / "projects"))
+USER_PROFILE = Path(os.environ.get("MEM_PROFILE", AGENT_HOME / "user_profile"))
 
 TIERS = ("working", "durable")
 SCOPES = ("project", "global")
@@ -2224,7 +2225,7 @@ def inject(max_working=40, max_durable=40, hook=False):
     if flagged_cnt > 0:
         out.append(f"⚠️ injection-flagged {flagged_cnt}건 (recall/inject 제외됨 — 오탐이면 확인)")
         out.append("")
-    out.append("> 상세 회상: `bash ~/.claude/tools/memory/recall.sh \"<query>\"` (store+세션 전체 FTS)")
+    out.append("> 상세 회상: `bash <agent-home>/tools/memory/recall.sh \"<query>\"` (store+세션 전체 FTS)")
 
     # γ E-1: 주입된 working+durable/project id 의 last_accessed 갱신 (cold-decay 신호). profile 은
     # 제외(global·T1 신뢰). fail-OPEN(S3) — SessionStart hook 이라 실패해도 절대 부트스트랩 안 깸.

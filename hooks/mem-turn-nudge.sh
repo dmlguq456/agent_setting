@@ -6,6 +6,7 @@
 #   memory.db write 감지(mtime 증가) 시 카운터 리셋 — Hermes turns_since_memory=0 등가 (write 하면 회고 불필요).
 #   "언제 회고할지" 를 에이전트 판단이 아니라 결정론 카운터로 (§0.5). 등록: settings.json hooks.UserPromptSubmit.
 set -euo pipefail
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
 
 # 재귀가드 (불변식, spec v7 §5.5): distiller 세션이면 turn-counter 도 분사하지 않음.
 # distiller 의 `claude -p` UserPromptSubmit 가 재-dispatch 하는 것을 차단. stdin parse 전에 둔다.
@@ -25,7 +26,7 @@ EVENT="${EVENT:-}"; SID="${SID:-default}"
 [ "$EVENT" = "UserPromptSubmit" ] || exit 0
 
 N="${MEM_NUDGE_INTERVAL:-10}"
-STORE="${MEM_STORE:-$HOME/.claude/memory}"
+STORE="${MEM_STORE:-$AGENT_HOME/memory}"
 DB="$STORE/memory.db"
 STATE="$STORE/.turn-state-$SID"
 

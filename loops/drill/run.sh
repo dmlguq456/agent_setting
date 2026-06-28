@@ -2,7 +2,8 @@
 # Drill set runner — 지침 회귀 테스트. 사용: run.sh [case_id ...]
 # 행동 판정(assert) + 컨텍스트 소모 계측(턴·토큰·비용) — g0_overhead 가 세팅 고정 세금 추세.
 set -u
-GOLD="${DRILL_HOME:-$HOME/.claude/loops/drill}"   # DRILL_HOME override = worktree 테스트 (production default 불변)
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
+GOLD="${DRILL_HOME:-$AGENT_HOME/loops/drill}"   # DRILL_HOME override = worktree 테스트 (production default 불변)
 CLAUDE_BIN="$HOME/.local/bin/claude"
 TOOLS="Bash,Read,Write,Edit,Glob,Grep,Skill,Agent,TodoWrite"
 STAMP=$(date +%F_%H%M)
@@ -128,5 +129,5 @@ fi
 # --- 정리: 헤드리스 케이스가 남긴 세션 detritus 제거 (projects/ 레지스트리·세션목록 오염 방지) ---
 # 각 case 의 claude -p 는 cwd=/tmp/drill-* 라 projects/-tmp-drill-*-repo 세션이 등록됨 → run 후 청소.
 rm -rf /tmp/drill-* 2>/dev/null || true
-rm -rf "$HOME/.claude/projects/"*tmp-drill*-repo 2>/dev/null || true
+rm -rf "$AGENT_HOME/projects/"*tmp-drill*-repo 2>/dev/null || true
 echo "cleanup: drill tmp + 세션 detritus 제거"

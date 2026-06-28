@@ -1,7 +1,8 @@
 #!/bin/bash
 # 연수 루프 — 주 1회 (crontab: 17 6 * * 0) 외부 동향 × 현 세팅 대조 → 개선 제안서.
 set -u
-LOOP_DIR="$HOME/.claude/loops"
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
+LOOP_DIR="$AGENT_HOME/loops"
 LOG="$LOOP_DIR/study.log"
 source "$LOOP_DIR/lib.sh"   # PATH 보정(①) + run_claude_retry(②)
 # --- 일시 hold 가드 (토큰 절약, .hold 파일에 만료일 YYYY-MM-DD, 그날까지 skip 후 자동 재개) ---
