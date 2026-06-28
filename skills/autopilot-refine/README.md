@@ -59,4 +59,4 @@ Autopilot family — **post-creation iteration pipeline for research and doc art
 - **Minor 적용 시**: snapshot X — 에이전트가 직접 Edit + `pipeline_summary.md` `## 마이너 변경 로그` 섹션에 상세 entry. **추가로 각 affected file의 frontmatter `changelog:` array에 v{N}_M entry 1줄 insert**. last major snapshot이 audit baseline.
 
 ---
-*원본: `~/.claude/skills/autopilot-refine/SKILL.md`*
+*원본: `<agent-home>/skills/autopilot-refine/SKILL.md`*

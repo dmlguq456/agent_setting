@@ -76,4 +76,4 @@ Code identifiers stay in English. Return ONLY the file path.
 사용자에게 영·한 plan 경로, 요약, QA verdict 보고.
 
 ---
-*원본: `~/.claude/skills/code-plan/SKILL.md`*
+*원본: `<agent-home>/skills/code-plan/SKILL.md`*

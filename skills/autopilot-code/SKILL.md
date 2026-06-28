@@ -18,7 +18,7 @@ metadata:
 
 | 자료 | 자리 | 우선순위 |
 |---|---|---|
-| `mem profile 07_coding_convention` (`python3 ~/.claude/tools/memory/mem.py profile 07_coding_convention`) | 사용자 cross-project 컨벤션 | 2순위 (default·fallback) |
+| `mem profile 07_coding_convention` (`python3 <agent-home>/tools/memory/mem.py profile 07_coding_convention`) | 사용자 cross-project 컨벤션 | 2순위 (default·fallback) |
 | `<artifact-root>/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 | **1순위** — 코드 수정 4 원칙의 source. 충돌 시 per-project 우선 |
 | `<artifact-root>/spec/prd.md` (있으면) | spec 청사진 | spec mode 별 추가 logic 활성화 |
 | `<artifact-root>/spec/design/05_handoff/handoff.md` + `design/02_tokens/tokens.md` + `design/design_state.yaml` (app mode·design 산출 있으면) | 디자인 토큰·컴포넌트 인계 + 토큰 버전 | **app mode 1순위** — UI 구현은 이 토큰(`tokens_path`)·컴포넌트 위에서. 디자인팀 critic 의 _비교 기준_ 도 이 handoff. design 없으면 skip |
@@ -201,7 +201,7 @@ autopilot-lab "X 실험" — Step 0 에서 readiness ✓ 확인 후 진행
 - 단발성 코드 리뷰 — `Agent(품질관리팀)` 직접 호출
 - `/autopilot-code <args>` slash 직접 입력 — 컨펌 skip 하고 즉시 invoke
 
-> 본 섹션은 `/sync-skills` 가 `~/.claude/README.md` 운영 룰 안내로 자동 반영.
+> 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰 안내로 자동 반영.
 
 ## Language Rule
 - When explaining something to the user, write in Korean.
@@ -311,7 +311,7 @@ Wait for completion before proceeding.
 Otherwise:
 1. Resolve plan paths from code-plan output: `en_plan_path`, `ko_plan_path`, `log_dir`.
 2. **Detect task type** before invoking 연구팀 (this hint provides the type-specific lens — see `agents/research-team.md` Role 1 Step 3 table):
-   - Read the plan's "## Change Plan" target files. If any target is under `~/.claude/skills/*` / `~/.claude/agents/*` / `~/.claude/README.md` / `~/.claude/skills/.sync_state.json` → `task_type=meta-skill`.
+   - Read the plan's "## Change Plan" target files. If any target is under `<agent-home>/skills/*` / `<agent-home>/agents/*` / `<agent-home>/README.md` / `<agent-home>/skills/.sync_state.json` → `task_type=meta-skill`.
    - If targets are under `~/.claude/settings.json` / `keybindings.json` / hooks → `task_type=infra/config`.
    - If targets are project source code (`.py`, `.cpp`, etc.) → `task_type=paper-driven code`.
    - If targets are under `<artifact-root>/documents/*` → `task_type=paper-driven doc`.

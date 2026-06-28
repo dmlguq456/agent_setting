@@ -45,7 +45,7 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 - 코드베이스 변경 → `/autopilot-code`
 - `/autopilot-apply <args>` slash 직접 입력 → 컨펌 skip, 즉시 invoke
 
-> 본 섹션은 `/sync-skills` 가 `~/.claude/README.md` 운영 룰로 자동 반영.
+> 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰로 자동 반영.
 
 ## Scope
 

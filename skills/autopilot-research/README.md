@@ -59,4 +59,4 @@
 ## Wiki database 안내
 
 ---
-*원본: `~/.claude/skills/autopilot-research/SKILL.md`*
+*원본: `<agent-home>/skills/autopilot-research/SKILL.md`*

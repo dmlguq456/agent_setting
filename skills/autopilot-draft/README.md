@@ -134,4 +134,4 @@ flowchart LR
 학술/산업/시장 조사가 필요하면 autopilot-research를 먼저 돌리면 그 산출물(`research/{topic}/`)을 autopilot-draft이 implicit 자동 발견.
 
 ---
-*원본: `~/.claude/skills/autopilot-draft/SKILL.md`*
+*원본: `<agent-home>/skills/autopilot-draft/SKILL.md`*

@@ -121,4 +121,4 @@ flowchart LR
 `draft-strategy`는 v1 (initial)만 만들고, 모든 후속 수정은 `draft-refine`이 담당.
 
 ---
-*원본: `~/.claude/skills/draft-refine/SKILL.md`*
+*원본: `<agent-home>/skills/draft-refine/SKILL.md`*

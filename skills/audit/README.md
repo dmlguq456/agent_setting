@@ -45,4 +45,4 @@ doc / research artifact는 추가로 **dual-perspective** 점검:
 보고서는 artifact root의 `_internal/audit/{YYYY-MM-DD}_{aspect}.md`에 누적.
 
 ---
-*원본: `~/.claude/skills/audit/SKILL.md`*
+*원본: `<agent-home>/skills/audit/SKILL.md`*

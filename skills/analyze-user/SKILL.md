@@ -9,9 +9,9 @@ metadata:
   blurb: "cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출"
 ---
 
-> **산출물 위치**: DB `type=profile` 레코드 (읽기: `python3 ~/.claude/tools/memory/mem.py profile <stem>` / `mem profile <stem>`). stem 목록: `01_paper_figure_style` ~ `07_coding_convention` (7 개). `_internal/` 은 source index / qa reviews / pipeline state 용 _일시 스크래치_ 디렉터리 — SoT 아님 (SoT 는 DB). `<artifact-root>/` 가 아니므로 [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 의 _3-tier_ 가 _직접 적용_ 되진 않음 — 다만 main outputs / internal logs 의 _2-tier 분리_ 정신은 따른다.
+> **산출물 위치**: DB `type=profile` 레코드 (읽기: `python3 <agent-home>/tools/memory/mem.py profile <stem>` / `mem profile <stem>`). stem 목록: `01_paper_figure_style` ~ `07_coding_convention` (7 개). `_internal/` 은 source index / qa reviews / pipeline state 용 _일시 스크래치_ 디렉터리 — SoT 아님 (SoT 는 DB). `<artifact-root>/` 가 아니므로 [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 의 _3-tier_ 가 _직접 적용_ 되진 않음 — 다만 main outputs / internal logs 의 _2-tier 분리_ 정신은 따른다.
 
-> **Workspace assumption**: 본 skill 은 _cross-project_ 작업 — 현 cwd 와 무관하게 사용자의 _과거 모든 산출물_ 을 스캔. 입력 source 는 기본 위치 (`~/nas/user/Uihyeop/doc/` / `~/nas/user/Uihyeop/NN_Zoo/` / `~/.claude/projects/*/memory/`) + `--source <path>` 추가. 산출은 항상 DB `type=profile` 레코드로 영속 (파일 Write X).
+> **Workspace assumption**: 본 skill 은 _cross-project_ 작업 — 현 cwd 와 무관하게 사용자의 _과거 모든 산출물_ 을 스캔. 입력 source 는 기본 위치 (`~/nas/user/Uihyeop/doc/` / `~/nas/user/Uihyeop/NN_Zoo/` / `<agent-home>/projects/*/memory/`) + `--source <path>` 추가. 산출은 항상 DB `type=profile` 레코드로 영속 (파일 Write X).
 
 ## Default Invocation Rule (메인 에이전트 자동 라우팅)
 
@@ -38,7 +38,7 @@ metadata:
 - 한 aspect 의 한 자리만 수정 — `/post-it --scope user <aspect>` 를 통해 DB 레코드 body 갱신. 파일 직접 Edit 아님 (SoT 는 DB). `## 사용자 수동 메모` 절은 사용자 영역이므로 `/post-it --scope user <aspect>` 경유.
 - `/analyze-user <args>` slash 직접 입력 — 컨펌 skip 즉시 invoke.
 
-> 본 섹션은 `/sync-skills` 가 `~/.claude/README.md` 운영 룰 안내로 자동 반영.
+> 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰 안내로 자동 반영.
 
 ## Language Rule
 
@@ -114,7 +114,7 @@ Phase 4 의 reviewer 구성은 항상 4 개 parallel (Phase 4 절 참조).
    - 폴더 안 `figures/` / `figure_ppt/` → figure aspect 자리
    - 폴더 안 `analysis/` → analysis aspect 자리
    - `*.mp4` / `*.mov` 등 video 자료 → **skip** (analyze-user 자리 분석 X, 한 줄 보고)
-3. **메모리 자료 일람** (domain aspect 시) — `~/.claude/projects/*/memory/*.md` 전수 (시스템 자료 자동, 도메인 약자 자리 확인).
+3. **메모리 자료 일람** (domain aspect 시) — `<agent-home>/projects/*/memory/*.md` 전수 (시스템 자료 자동, 도메인 약자 자리 확인).
 4. **scholar / arXiv 자료 일람** (writing / domain aspect 시) — 사용자 명시 paper 목록 + abstract.
 5. **자동 변환 (LibreOffice headless)** — 에이전트가 직접 read 못하는 자료 (docx / pptx / hwpx / xlsx / doc / ppt / hwp) 발견 시:
 
@@ -135,7 +135,7 @@ fi
 
 | 자료 | 변환 | 저장 자리 |
 |---|---|---|
-| **docx / hwpx / xlsx / doc** (텍스트 위주) | `libreoffice --headless --convert-to pdf` — PDF 한 자리 | `~/.claude/user_profile/_internal/converted_pdfs/<name>.pdf` |
+| **docx / hwpx / xlsx / doc** (텍스트 위주) | `libreoffice --headless --convert-to pdf` — PDF 한 자리 | `<agent-home>/user_profile/_internal/converted_pdfs/<name>.pdf` |
 | **pptx / ppt** (시각 layout 핵심) | PDF + page 별 PNG 두 자리 — PDF 는 텍스트·layout / PNG 는 시각 fidelity (글자 크기·폰트·배치 보존) | `_internal/converted_pdfs/<name>.pdf` + `_internal/converted_pngs/<name>_slide{NN}.png` |
 | **hwp** (legacy) | LibreOffice 변환 _부분적_ — 시도 + 실패 시 사용자 안내 ("hwp 자리 변환 깨짐 — 사용자 직접 PDF 변환 후 재지정") | 성공 자리 PDF / 실패 자리 skip + 보고 |
 | **mp4 / mov / 기타 video** | _skip_ — analyze-user 자리 분석 X | 한 줄 보고 |
@@ -157,7 +157,7 @@ pdftoppm -png -r 150 _internal/converted_pdfs/<file>.pdf _internal/converted_png
 7. **`_internal/source_index.md` 작성** — 위 일람 통째.
 
 산출:
-- `~/.claude/user_profile/_internal/source_index.md` (또는 갱신)
+- `<agent-home>/user_profile/_internal/source_index.md` (또는 갱신)
 - `_internal/converted_pdfs/*.pdf` + `_internal/converted_pngs/*_slide{NN}.png` (자동 변환 결과)
 - Phase 1 verdict 한 줄 (총 source N 건 발견, 어느 aspect 에 몇 건씩, 자동 변환 M 건).
 
@@ -172,7 +172,7 @@ pdftoppm -png -r 150 _internal/converted_pdfs/<file>.pdf _internal/converted_png
 ```
 Agent(연구팀, prompt="""
 사용자 산출물 분석 — aspect: figure (인스턴스 {A|B|C})
-Source index: ~/.claude/user_profile/_internal/source_index.md
+Source index: <agent-home>/user_profile/_internal/source_index.md
 기존 profile 레코드 (mem profile 01_paper_figure_style): {기존 내용}
 
 자료 read 자리:
@@ -202,7 +202,7 @@ Source index: ~/.claude/user_profile/_internal/source_index.md
 다른 인스턴스의 결과를 보지 않고 _독립_ 으로 추출.
 mode=init 통째 교체, mode=update 누적.
 
-산출: ~/.claude/user_profile/_internal/aspect_{aspect}_run_{A|B|C}.md
+산출: <agent-home>/user_profile/_internal/aspect_{aspect}_run_{A|B|C}.md
 """)
 ```
 
@@ -355,11 +355,11 @@ mode=init 통째 교체, mode=update 누적.
 
 1. **--user-refine pause** (있으면) — draft + qa review path 안내 후 종료. resume: `/analyze-user --from output`.
 2. **mode 별 처리 (DB record write)**:
-   - `init` — 새 body 작성. 기존 레코드가 있으면 먼저 `python3 ~/.claude/tools/memory/mem.py profile <stem>` 으로 현재 body 를 읽어 `## 사용자 수동 메모` 절을 추출·보존 후 새 body 에 포함. `_internal/versions/v{N}/` 에 이전 body 텍스트 스냅샷 보존(convention). 이후 `python3 ~/.claude/tools/memory/mem.py add durable profile <body> --scope global --source user-profile:<stem>` 으로 DB write.
-   - `update` — 반드시 **`python3 ~/.claude/tools/memory/mem.py profile <stem>`** (rowid-DESC newest-wins tie-break 적용 읽기) 로 현재 body 를 읽는다 — raw `db_iter_records` 직접 쿼리 X (stem-dup 발생 시 stale body 를 읽어 `/post-it promote` 로 splice 된 `## 사용자 수동 메모` 를 orphan 시킬 수 있음). 읽은 body 에 새 분석 내용을 splice — `## 사용자 수동 메모` 절은 그대로 유지. body 안에 changelog 절 한 줄 추가 (`## Changelog` 내 `{date}: {변경 요약}`). 전체 새 body 를 `python3 ~/.claude/tools/memory/mem.py add durable profile <whole-new-body> --scope global --source user-profile:<stem>` 으로 DB write (파일 Edit X).
+   - `init` — 새 body 작성. 기존 레코드가 있으면 먼저 `python3 <agent-home>/tools/memory/mem.py profile <stem>` 으로 현재 body 를 읽어 `## 사용자 수동 메모` 절을 추출·보존 후 새 body 에 포함. `_internal/versions/v{N}/` 에 이전 body 텍스트 스냅샷 보존(convention). 이후 `python3 <agent-home>/tools/memory/mem.py add durable profile <body> --scope global --source user-profile:<stem>` 으로 DB write.
+   - `update` — 반드시 **`python3 <agent-home>/tools/memory/mem.py profile <stem>`** (rowid-DESC newest-wins tie-break 적용 읽기) 로 현재 body 를 읽는다 — raw `db_iter_records` 직접 쿼리 X (stem-dup 발생 시 stale body 를 읽어 `/post-it promote` 로 splice 된 `## 사용자 수동 메모` 를 orphan 시킬 수 있음). 읽은 body 에 새 분석 내용을 splice — `## 사용자 수동 메모` 절은 그대로 유지. body 안에 changelog 절 한 줄 추가 (`## Changelog` 내 `{date}: {변경 요약}`). 전체 새 body 를 `python3 <agent-home>/tools/memory/mem.py add durable profile <whole-new-body> --scope global --source user-profile:<stem>` 으로 DB write (파일 Edit X).
    - **Write-path (source-keyed UPSERT)**: `mem add` 의 `write_record` 는 `(tier, scope, source)` 키로 in-place UPDATE — 같은 `source=user-profile:<stem>` 레코드를 body 변경 시 교체 (id 보존, dup row 없음). `mem profile <stem>` 읽기와 결합해 read·write 양쪽 결정론.
    - **수동 메모 two-writer contract**: `## 사용자 수동 메모` 절은 analyze-user(`update`) 와 `/post-it promote --scope user` 두 곳이 같은 source `user-profile:<stem>` 레코드에 write. 반드시 `mem profile <stem>` tie-broken 읽기로 현재 body 를 확인 후 splice — 다른 경로(raw query) 사용 시 stale dup 에서 splice 해 promoted memo 를 orphan 시킴.
-3. **per-stem 사후 검증 (source-blind dedup caveat)**: 각 stem write 직후 `python3 ~/.claude/tools/memory/mem.py profile <stem>` 로 read-back 해 반환 body 가 방금 쓴 body 와 일치하는지 확인. 불일치 → `find_dup` 의 source-blind dedup 으로 다른 stem 의 기존 레코드와 병합된 것 — 큰 소리로 fail (stem body 충돌, 수동 확인 요).
+3. **per-stem 사후 검증 (source-blind dedup caveat)**: 각 stem write 직후 `python3 <agent-home>/tools/memory/mem.py profile <stem>` 로 read-back 해 반환 body 가 방금 쓴 body 와 일치하는지 확인. 불일치 → `find_dup` 의 source-blind dedup 으로 다른 stem 의 기존 레코드와 병합된 것 — 큰 소리로 fail (stem body 충돌, 수동 확인 요).
 
 산출: DB `type=profile` 레코드 (stem 별, `source=user-profile:<stem>`, 7-10K tokens 목표, 구체 anchor 유지). 파일 Write X.
 
@@ -371,7 +371,7 @@ mode=init 통째 교체, mode=update 누적.
 
 절차:
 
-1. **pptx → SVG 슬라이드 추출**: `figure_ppt/*.pptx` (또는 변환된 `_internal/converted_pdfs/<base>.pdf`) 의 전 슬라이드를 `pdftocairo -svg -f N -l N <pdf> out.svg` 로 추출 (도형·텍스트 벡터, 임베드 spectrogram 은 raster). 산출 `~/.claude/user_profile/assets/figure/svg/<base>_slide-N.svg`. (LibreOffice `--convert-to svg` 도 가능하나 multi-slide 는 pdftocairo per-page 가 안정.)
+1. **pptx → SVG 슬라이드 추출**: `figure_ppt/*.pptx` (또는 변환된 `_internal/converted_pdfs/<base>.pdf`) 의 전 슬라이드를 `pdftocairo -svg -f N -l N <pdf> out.svg` 로 추출 (도형·텍스트 벡터, 임베드 spectrogram 은 raster). 산출 `<agent-home>/user_profile/assets/figure/svg/<base>_slide-N.svg`. (LibreOffice `--convert-to svg` 도 가능하나 multi-slide 는 pdftocairo per-page 가 안정.)
 2. **canonical 앵커 복사** (옵션) — 대표 슬라이드(top-level pipeline 등)를 `assets/figure/ex1_*.svg` 류로 복사해 `01 §B0` 에서 참조하기 쉽게.
 3. **`01 §B0` 참조 갱신** — figure 참조를 raster PNG → 추출 SVG 링크로 (clone 가능 형태).
 
@@ -384,7 +384,7 @@ mode=init 통째 교체, mode=update 누적.
 
 ### Phase 6 — Pipeline Summary
 
-`~/.claude/user_profile/_internal/pipeline_summary.md` (단일 파일, append 누적):
+`<agent-home>/user_profile/_internal/pipeline_summary.md` (단일 파일, append 누적):
 
 ```markdown
 ## {YYYY-MM-DD} — {aspect} {mode}
@@ -462,7 +462,7 @@ timestamp: "2026-05-22T15:30:00Z"
 
 ## 메모리와의 관계
 
-| | 메모리 (`~/.claude/projects/<cwd>/memory/`) | user profile (DB `type=profile` 레코드, `mem profile <stem>`) |
+| | 메모리 (`<agent-home>/projects/<cwd>/memory/`) | user profile (DB `type=profile` 레코드, `mem profile <stem>`) |
 |---|---|---|
 | scope | per cwd (project) | cross-project (user) |
 | 누적 | 자동 (대화 중) | 명시 (`/analyze-user` 또는 `/post-it --scope user`) |

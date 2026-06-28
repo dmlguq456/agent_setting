@@ -195,7 +195,7 @@ per-project 메모는 두 layer 분리.
 | **사용자 수동** | DB working tier — `/post-it` 가 `mem note`/`mem add` 로 author; 5 카테고리(conventions·external resources·open threads·decisions·next session hints)는 `type` taxonomy 로 유지 | `/post-it` (사용자 명시) | 사용자가 박아두려는 conventions / resources / threads / decisions / hints |
 | **자동 학습** | DB working/durable — 외부 distiller 가 세션 delta 를 distill → `mem add` (Cluster C) | **외부 detached distiller** (메인 아님; turn-counter·SessionEnd hook 트리거 — §0.5 판단 외부화) | 재사용 절차·교정·컨벤션·교훈 자동 학습 |
 
-- 내장 file 메모리(`~/.claude/projects/*/memory/`)는 **직접 write hard-block**(`builtin-memory-guard.sh`); `mem sync` 는 다른 세션·하네스의 stray write 만 안전망 흡수. 기억 write 경로 = `mem`(DB) 단일.
+- 내장 file 메모리(`<agent-home>/projects/*/memory/`)는 **직접 write hard-block**(`builtin-memory-guard.sh`); `mem sync` 는 다른 세션·하네스의 stray write 만 안전망 흡수. 기억 write 경로 = `mem`(DB) 단일.
 - **삭제·prune·consolidate·merge·graduate(비가역) = 세션끝 opus 큐레이터** (Cluster E — no-tools + action JSON + script 실행, D-18; 비가역삭제 3중방어). N턴 distiller = sonnet add-only. 메인 housekeeping 0. working TTL(21일) = deterministic backstop. (원칙: 추가[가역]=외부 자동 / 정리·삭제[비가역]=세션끝 opus.)
 - 세션 주입 = `mem inject --hook` (DB working+durable+profile). 상세 SoT = runtime adapter bootstrap + MEMORY §7.
 

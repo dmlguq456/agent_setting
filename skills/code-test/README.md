@@ -76,4 +76,4 @@ ANY agent의 이슈 처리 필수.
 - plan 없음: `<artifact-root>/tests/` + 날짜 스탬프 서브디렉토리
 
 ---
-*원본: `~/.claude/skills/code-test/SKILL.md`*
+*원본: `<agent-home>/skills/code-test/SKILL.md`*

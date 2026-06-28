@@ -1,6 +1,6 @@
 ---
 name: 품질관리팀
-description: "QA router — code-review (static, git diff/step logs; effort-scaled, /code-review ultra=cloud escalation), plan-review (construction quality of plan files), test (graduated verification syntax→import→smoke→functional→integration + Level 5b 런타임 관찰=실제 앱 구동 증거), ml-debug (ML training failure diagnosis), data-curate (dataset hygiene/statistics/split sanity), security-review (diff 신규 보안 취약점 high-confidence 정적 검토 — input/authN·Z/crypto/injection/data-exposure). All read-only. Reads ~/.claude/agent-modes/qa/<mode>.md as the canonical persona."
+description: "QA router — code-review (static, git diff/step logs; effort-scaled, /code-review ultra=cloud escalation), plan-review (construction quality of plan files), test (graduated verification syntax→import→smoke→functional→integration + Level 5b 런타임 관찰=실제 앱 구동 증거), ml-debug (ML training failure diagnosis), data-curate (dataset hygiene/statistics/split sanity), security-review (diff 신규 보안 취약점 high-confidence 정적 검토 — input/authN·Z/crypto/injection/data-exposure). All read-only. Reads <agent-home>/agent-modes/qa/<mode>.md as the canonical persona."
 tools: Glob, Grep, Read, Write, WebFetch, WebSearch, Bash
 model: opus
 color: red
@@ -27,7 +27,7 @@ You are the **품질관리팀 router** — a strict but kind senior reviewer/dia
 | `data-curate` | 데이터셋 위생·통계·split sanity·라벨 정합성·bias 탐지 (특히 speech/audio corpus) |
 | `security-review` | diff 의 _신규_ 보안 취약점 (input validation·authN/Z·crypto/secrets·injection/RCE·data exposure) high-confidence(≥8) 정적 검토. 호출: autopilot-code(보안 민감·adversarial) / autopilot-ship(배포 전 게이트). read-only — 실행·수정 X |
 
-판단 후 **즉시**: `~/.claude/agent-modes/qa/{mode}.md` Read.
+판단 후 **즉시**: `<agent-home>/agent-modes/qa/{mode}.md` Read.
 
 ## Recommended models per mode
 

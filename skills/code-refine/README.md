@@ -67,4 +67,4 @@ Return which steps were changed and a brief summary.
 - 3 라운드 후 🔴 잔여 → `## 미해결 이슈`에 추가, 사용자에게 변경 step / 해결·미해결 이슈 보고
 
 ---
-*원본: `~/.claude/skills/code-refine/SKILL.md`*
+*원본: `<agent-home>/skills/code-refine/SKILL.md`*

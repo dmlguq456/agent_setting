@@ -161,7 +161,7 @@ metadata:
 | Layer | 자료 | 누적 단위 | 자리 |
 |---|---|---|---|
 | **실험 컨벤션 (per-project)** | `<artifact-root>/analysis_project/code/experiment_conventions.md` | 프로젝트 단위 | **1순위** — 본 프로젝트의 실제 컨벤션이 source of truth. 개별 프로젝트의 특수 사정(외부 ref 기반 / 다른 framework / legacy 자리) 그대로 우선 |
-| 사용자 일관 패턴 (cross-project) | `mem profile 07_coding_convention` (`python3 ~/.claude/tools/memory/mem.py profile 07_coding_convention`) | cross-project | **2순위 (default·fallback)** — per-project 부재 또는 _빈 자리_ 만 보강. 부재 시 `/analyze-user coding_convention` 권장 안내 |
+| 사용자 일관 패턴 (cross-project) | `mem profile 07_coding_convention` (`python3 <agent-home>/tools/memory/mem.py profile 07_coding_convention`) | cross-project | **2순위 (default·fallback)** — per-project 부재 또는 _빈 자리_ 만 보강. 부재 시 `/analyze-user coding_convention` 권장 안내 |
 | 프로젝트 timeline | `<artifact-root>/experiments/_RUNLOG.md` 의 최근 5 줄 | 한 실험 = 한 줄 | 직전 실험 컨텍스트 + ⏳ 대기/✅ 완료 상태 |
 | 직전 실험 상세 | 직전 실험 폴더의 `summary.md` + `STORY.md` | 한 실험 narrative | 결과·다음 후보 인용 |
 | **부모 실험** (`--parent` 자리) | 부모 폴더의 `summary.md` / `STORY.md` / `config` / ckpt path | 한 실험 | fine-tune base 또는 재평가 대상 |

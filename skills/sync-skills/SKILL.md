@@ -1,6 +1,6 @@
 ---
 name: sync-skills
-description: "Skills + Agents 정의 변경을 감지해 ~/.claude/README.md (GitHub) 의 대시보드 (워크플로우 map + cheat-sheet + 통합 가이드라인) 를 동기화한다. drift 체크 전용 모드도 지원."
+description: "Skills + Agents 정의 변경을 감지해 <agent-home>/README.md (GitHub) 의 대시보드 (워크플로우 map + cheat-sheet + 통합 가이드라인) 를 동기화한다. drift 체크 전용 모드도 지원."
 argument-hint: "[--check] [--force] [--auto-fix [--dry-run]]"
 metadata:
   group: ops
@@ -16,10 +16,10 @@ metadata:
 스킬·에이전트를 수정한 후 매번 GitHub README 에 일관된 정보가 반영되어 있는지 확인하는 도구.
 
 **Source of Truth**:
-- `~/.claude/skills/*/SKILL.md` + `~/.claude/agents/*.md` — 각 skill·agent 의 frontmatter + 본문
-- **`~/.claude/CONVENTIONS.md`** — family-wide 운영 규칙의 단일 source (QA 5단계 정의 / agent model 표기 / cross-doc invariants). 본 skill 의 Step 5b 가 본 문서를 canonical 로 cross-doc grep 해 drift 보고·자동 fix.
+- `<agent-home>/skills/*/SKILL.md` + `<agent-home>/agents/*.md` — 각 skill·agent 의 frontmatter + 본문
+- **`<agent-home>/CONVENTIONS.md`** — family-wide 운영 규칙의 단일 source (QA 5단계 정의 / agent model 표기 / cross-doc invariants). 본 skill 의 Step 5b 가 본 문서를 canonical 로 cross-doc grep 해 drift 보고·자동 fix.
 
-**파생 산출물**: GitHub `~/.claude/README.md`
+**파생 산출물**: GitHub `<agent-home>/README.md`
 
 본 skill 은 Source of Truth 로부터 README 를 재생성한다. 사용자가 파생물을 직접 편집해서는 안 된다 (자동 생성 표지 있음).
 
@@ -27,18 +27,18 @@ metadata:
 ## Targets
 
 ### 입력
-- **Skills**: `~/.claude/skills/*/SKILL.md`
-- **Agents**: `~/.claude/agents/*.md`
+- **Skills**: `<agent-home>/skills/*/SKILL.md`
+- **Agents**: `<agent-home>/agents/*.md`
 
-자동 발견: `ls ~/.claude/skills/*/SKILL.md ~/.claude/agents/*.md`. 실제 sync 시점에 발견된 파일 list 가 진실. 본 SKILL.md 본문에는 카운트·명단 hardcode 안 함 — drift 의 자기참조 source 가 됨.
+자동 발견: `ls <agent-home>/skills/*/SKILL.md <agent-home>/agents/*.md`. 실제 sync 시점에 발견된 파일 list 가 진실. 본 SKILL.md 본문에는 카운트·명단 hardcode 안 함 — drift 의 자기참조 source 가 됨.
 
 각 파일에서 추출:
 - frontmatter `name`, `description`, `argument-hint` (skills only), `tools`, `model`
 - argument-hint 파싱 → 옵션 값 (예: `--mode dev|debug`, `--from analyze|strategy|...`)
 
 ### 출력
-1. **GitHub**: `~/.claude/README.md` (repo: `git@github.com:dmlguq456/claude_setting.git`, root: `~/.claude/`)
-2. **상태 파일**: `~/.claude/skills/.sync_state.json` — 각 입력 파일의 SHA-256, README sync 시각
+1. **GitHub**: `<agent-home>/README.md` (repo: `git@github.com:dmlguq456/claude_setting.git`, root: `~/.claude/`)
+2. **상태 파일**: `<agent-home>/skills/.sync_state.json` — 각 입력 파일의 SHA-256, README sync 시각
 
 ## Argument Parsing
 - `--check`: drift 만 보고하고 종료. 쓰기 작업 X. (manifest drift 도 함께 검사 — `python3 tools/build-manifest.py --check`; 비-0 exit = `manifest.json` 이 현행 정의와 어긋남. Step 3 drift report / Step 7 final report 에 노출.)
@@ -51,14 +51,15 @@ metadata:
 
 ### Step 1: Discover + hash
 ```bash
-ls ~/.claude/skills/*/SKILL.md ~/.claude/agents/*.md
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
+ls "$AGENT_HOME"/skills/*/SKILL.md "$AGENT_HOME"/agents/*.md
 ```
 각 파일:
 - SHA-256 (`shasum -a 256 <file> | awk '{print $1}'`)
 - frontmatter 파싱 (간단한 YAML 파서: 첫 `---` ~ 두 번째 `---`)
 
 ### Step 2: Read sync state
-`~/.claude/skills/.sync_state.json` 로드. 없으면 빈 dict.
+`<agent-home>/skills/.sync_state.json` 로드. 없으면 빈 dict.
 
 스키마 (v4):
 ```json
@@ -118,14 +119,14 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
 
 #### 4b. README 본문 구조 (canonical layout — meaning-first 의미 지도)
 
-`~/.claude/README.md` 가 본 sync 의 단일 진실 출처 (reference layout). sync 시 다음 순서로 9 섹션을 채운다:
+`<agent-home>/README.md` 가 본 sync 의 단일 진실 출처 (reference layout). sync 시 다음 순서로 9 섹션을 채운다:
 
 1. **Header** — center div: title + 한 줄 설명 + 섹션 anchor 링크 (첫 anchor = §2 모드). sync 시각·이력은 git commit log 가 단일 출처. **존재의의 blockquote(🧬 model-agnostic skeleton + DESIGN_PRINCIPLES §0 링크) 는 사람 유지 영역 — 현행 보존, 덮어쓰지 않음.**
 2. **🚦 작동 방식 — 📌tracked ↔ ⚡untracked** (_최상단 토대 섹션_) — hook 이 _신규 산출물 생성 순서_ 만 강제(신규 spec←research, plan←spec, 문서←research); 기존 편집·소스 코드는 convention. 두 모드 표 (**📌tracked** = 생성 순서 차단 + 매 프롬프트 모드 신호(WORKFLOW 따름) / **⚡untracked** = 전부 우회·면제 신호·`/track`) + statusline(📌/⚡·git·context) 한 줄 + 한 줄 quote(편집은 소유 스킬 권장·convention). 단일 출처 = `hooks/artifact-guard.sh`·`utilities/workflow-guard-hook.sh`·`statusline.sh`·WORKFLOW.md §0(tracked 계약). **[§2 의도]** §2 도입 1문장에 "결정론적으로 가능한 건 코드(hook/script/gate/DB)가 강제 — 에이전트 판단은 진짜 비결정 자리에만"을 노출. 단일 출처 링크 = [`DESIGN_PRINCIPLES.md §0.5`](DESIGN_PRINCIPLES.md). callout 1문장 보강 수준, 큰 블록 신설 X.
 3. **🧭 Mental model** — 핵심 한 단락 (자연어로 부르면 메인 에이전트가 컨텍스트 읽어 옵션 조립·컨펌·실행 / 사용자는 운전자) + bullet 3 (autopilot-\* = 추적형 파이프라인 / 직접 처리 = 가벼운 일·단 산출물 직접 Edit 은 📌tracked hook 차단 / 입력은 `<artifact-root>/` 자동 발견·cross-project 별 세션) + _의미 지도_ quote (옵션 spec·trigger·QA 는 SKILL.md·CONVENTIONS·runtime adapter 가 단일 출처, 링크만). **[§3 의도]** bullet 에 "코드 본작업은 작업 브랜치(worktree 격리) · 기억 추가=외부 자동/삭제=메인" 한 줄 추가. 디테일은 복사하지 말고 [`CONVENTIONS.md §7`](CONVENTIONS.md)·[`DESIGN_PRINCIPLES.md §7`](DESIGN_PRINCIPLES.md) 링크만.
 4. **🌳 큰 갈래 4 트랙** — 트랙마다 `### 헤딩 → 텍스트 화살표 체인 (위 4a, mermaid 아님) → 설명 한 문단` 을 순서대로 짝지어 배치 (문서 / 연구·실험 / 앱 / 라이브러리·CLI — 왜 이 순서 / 무엇을 남기나) + 점검·정정·사용자 프로필 한 줄 quote + 체이닝 청사진 reference ([`WORKFLOW.md`](WORKFLOW.md)) + 이름 읽는 법 한 줄.
 5. **📋 Skill 카탈로그 — 의의·핵심** — name (SKILL.md 링크) / _의의_ (왜 있나 + 핵심) 2 컬럼 표. _역할 dump·옵션 컬럼 X — 왜 존재하는지 중심_. 표 직후 sub-skill 한 줄 (autopilot 내부 자동 호출) + 세부 옵션은 SKILL.md argument-hint / QA 정의는 CONVENTIONS §1 reference. **[§5 의도]** 표 도입 1~2문장 = "무엇을 부르면 무엇이 되나(자연어 발화→동작) = 사용자 API 표면" framing. 큰 재편 X, §7 부르는 법과 중복 금지 — 표 도입부 문장 수준.
-6. **📦 산출물의 구조적 의미** — per-project (`<artifact-root>/`) vs cross-project (`user_profile/`) 두 축. per-project 는 _폴더 / 무엇이 쌓이나_ 작은 표 (analysis_project·research·documents·spec·plans·experiments), cross-project 는 한 단락 + 3-tier T1/T2/T3 _왜 그렇게 나뉘나_ 한 단락 (사용자는 T1 만 / spec/ 한 폴더 누적) + 상세 매핑 reference (CONVENTIONS §5·§6.5, WORKFLOW §4, CLAUDE.md Drift-Free Essentials). **+ 통합 기억 store 단락** (`~/.claude/memory/` — DB SQLite `memory.db` 단일 SoT, `dump.jsonl` 텍스트 mirror, SessionStart `mem inject` 주입 / SessionEnd `mem sync` 회수). **[§6 통합 기억 의도 — Cluster B/C/D 반영]** 단락에 아래를 1~2문장으로 추가(디테일은 [`CONVENTIONS.md §7`](CONVENTIONS.md) 링크, 복사 X): (C) 세션 자동 distillation — 외부 detached distiller 가 세션 delta를 distill→`mem add`. 트리거=turn-counter hook(N턴) + SessionEnd 공유 marker. distiller=도구0(`--disallowedTools`)이라 판단만, dispatch 스크립트가 JSON-lines 검증 후 `mem add` 실행(판단↔실행 분리, §0.5). **distiller 분사는 `MEM_DISTILL_ENABLE=1` 일 때만(off=완전 no-op); 현재 enable 됨** — 상시 동작 기정사실로 단정하지 않도록 캐비엣 동반. (D) 결정론-first lifecycle — recall 자동주입 hook(신호어 regex→`additionalContext`), 정리후보 `mem inject` 노출(메인이 in-context consolidate/prune/graduate). **추가(가역)=외부 offload / 삭제(비가역)=메인 직접** 원칙.
+6. **📦 산출물의 구조적 의미** — per-project (`<artifact-root>/`) vs cross-project (`user_profile/`) 두 축. per-project 는 _폴더 / 무엇이 쌓이나_ 작은 표 (analysis_project·research·documents·spec·plans·experiments), cross-project 는 한 단락 + 3-tier T1/T2/T3 _왜 그렇게 나뉘나_ 한 단락 (사용자는 T1 만 / spec/ 한 폴더 누적) + 상세 매핑 reference (CONVENTIONS §5·§6.5, WORKFLOW §4, CLAUDE.md Drift-Free Essentials). **+ 통합 기억 store 단락** (`<agent-home>/memory/` — DB SQLite `memory.db` 단일 SoT, `dump.jsonl` 텍스트 mirror, SessionStart `mem inject` 주입 / SessionEnd `mem sync` 회수). **[§6 통합 기억 의도 — Cluster B/C/D 반영]** 단락에 아래를 1~2문장으로 추가(디테일은 [`CONVENTIONS.md §7`](CONVENTIONS.md) 링크, 복사 X): (C) 세션 자동 distillation — 외부 detached distiller 가 세션 delta를 distill→`mem add`. 트리거=turn-counter hook(N턴) + SessionEnd 공유 marker. distiller=도구0(`--disallowedTools`)이라 판단만, dispatch 스크립트가 JSON-lines 검증 후 `mem add` 실행(판단↔실행 분리, §0.5). **distiller 분사는 `MEM_DISTILL_ENABLE=1` 일 때만(off=완전 no-op); 현재 enable 됨** — 상시 동작 기정사실로 단정하지 않도록 캐비엣 동반. (D) 결정론-first lifecycle — recall 자동주입 hook(신호어 regex→`additionalContext`), 정리후보 `mem inject` 노출(메인이 in-context consolidate/prune/graduate). **추가(가역)=외부 offload / 삭제(비가역)=메인 직접** 원칙.
 7. **🗣️ 부르는 법** — 두 갈래 한 줄 (자연어 / slash 동일 동작):
    - `### (1) 자연어 발화` — prose (옵션 자동 구성 + 자연어 요약 컨펌 + yes/수정/cancel/자율 진행 + ceremony 큰 (autopilot-\* 전체 + analyze-user) vs 작은 3 컨펌 의무) + [`CLAUDE.md`](CLAUDE.md) §0 reference + **자연어 발화 예시 표** (_사람 유지 영역_)
    - `### (2) slash 직접 입력` — prose (의도 명시 = 즉시 invoke) + slash 예시 code block (_축약 5 줄_: autopilot-code / autopilot-draft / autopilot-refine / audit / **track**(📌↔⚡ 토글) — argument-hint 에서 자동 생성, 전체 syntax dump X) + 전체 옵션은 SKILL.md reference.
@@ -151,7 +152,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
 
 ### Step 5: Write README.md
 
-`~/.claude/README.md` 를 4b 의 layout 그대로 작성. 단 _섹션별 자동 갱신 정책_ 이 다름:
+`<agent-home>/README.md` 를 4b 의 layout 그대로 작성. 단 _섹션별 자동 갱신 정책_ 이 다름:
 
 | 섹션 | 처리 |
 |---|---|
@@ -188,7 +189,7 @@ Step 5 에서 README 본문 wording 을 자동 생성·갱신한 자리 (§1 Hea
 
 > 각 SKILL.md `## Default Invocation Rule` 은 _그 SKILL.md 안에서만_ 의미를 가지고 README 에 모으지 않음 (README §6 운영 룰은 _runtime adapter bootstrap 을 가리킴 한 단락_). autopilot-* SKILL.md 의 trigger 신호·default 옵션·override 는 adapter 의 일반 패턴 + 각 SKILL.md 의 skill-specific 정보로 분리.
 
-QA level / model 표기 / family-wide invariant 은 **`~/.claude/CONVENTIONS.md`** 가 단일 source of truth. 각 SKILL.md / README / `agents/*.md` 의 QA 표 wording 은 본 문서와 의미상 일치해야 함.
+QA level / model 표기 / family-wide invariant 은 **`<agent-home>/CONVENTIONS.md`** 가 단일 source of truth. 각 SKILL.md / README / `agents/*.md` 의 QA 표 wording 은 본 문서와 의미상 일치해야 함.
 
 #### 5b-1. Canonical 정의 로드
 
@@ -204,10 +205,10 @@ QA level / model 표기 / family-wide invariant 은 **`~/.claude/CONVENTIONS.md`
 #### 5b-2. 모든 .md 파일에서 QA wording 추출
 
 대상 파일:
-- `~/.claude/skills/*/SKILL.md`
-- `~/.claude/skills/*/README.md`
-- `~/.claude/agents/*.md`
-- `~/.claude/README.md`
+- `<agent-home>/skills/*/SKILL.md`
+- `<agent-home>/skills/*/README.md`
+- `<agent-home>/agents/*.md`
+- `<agent-home>/README.md`
 
 각 파일에서 다음 패턴 grep:
 - `adversarial` 정의 문장 (예: `adversarial = ...`, `Adversarial | ...`, `adversarial.*Codex`)
@@ -252,8 +253,9 @@ drift 발견 시 Step 7 final report 에 별도 섹션:
 
 ```bash
 # 현재 진실 (entry point list)
-SKILLS=$(ls -d ~/.claude/skills/*/  | xargs -n1 basename | sort)
-AGENTS=$(ls ~/.claude/agents/*.md   | xargs -n1 basename .md | sort)
+AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
+SKILLS=$(ls -d "$AGENT_HOME"/skills/*/  | xargs -n1 basename | sort)
+AGENTS=$(ls "$AGENT_HOME"/agents/*.md   | xargs -n1 basename .md | sort)
 ```
 
 #### 5c-2. Cross-doc reference grep
@@ -278,7 +280,7 @@ AGENTS=$(ls ~/.claude/agents/*.md   | xargs -n1 basename .md | sort)
 
 README 는 mermaid 를 안 쓰고 _4 트랙 텍스트 화살표 체인_ (```text 코드 블록 4 개) 으로 흐름을 보인다 (4a). 체인에 등장하는 skill 만 검사 대상 — `audit` / `post-it` / `analyze-user` 는 _의도적으로 체인 밖_ (사후 점검·메모·cross-project 프로필이라 트랙 체인에 안 들어감, 본문 quote 가 대신 다룸).
 
-`~/.claude/README.md` §4 의 \`\`\`text 코드 블록 4 개 추출 후 `autopilot-X` / `analyze-project` 토큰 파싱:
+`<agent-home>/README.md` §4 의 \`\`\`text 코드 블록 4 개 추출 후 `autopilot-X` / `analyze-project` 토큰 파싱:
 
 - _트랙 체인 skill_ (analyze-project · autopilot-research · autopilot-draft · -refine · -apply · -spec · -code · -lab · -design · -ship) 이 체인에 등장하나
 - 부재 시: 🟡 `README 4 트랙 체인에 '<missing-skill>' 누락 — 보강 권장`
@@ -313,7 +315,7 @@ README 는 mermaid 를 안 쓰고 _4 트랙 텍스트 화살표 체인_ (```text
 - `--check` 모드 포함 모든 모드에서 _보고만_ — refine 실행 자체는 사용자 컨펌 후 (ceremony 분류상 자동 invoke 아님).
 
 ### Step 6: Update sync state
-`~/.claude/skills/.sync_state.json` 을 새 SHA + 시각으로 저장. v4 스키마 필드 모두 갱신:
+`<agent-home>/skills/.sync_state.json` 을 새 SHA + 시각으로 저장. v4 스키마 필드 모두 갱신:
 
 - SKILL.md / agent.md: `sha256`, `synced_at`
 - 전역: `last_readme_sync`
@@ -337,7 +339,7 @@ python3 tools/build-manifest.py --check  # 빌드 결과를 기존 manifest.json
 ✅ Sync 완료
 ─────────────────────────────────────
 SKILL.md/agent.md 변경: 3 (autopilot-code, autopilot-draft, code-plan)
-README.md 갱신: ~/.claude/README.md
+README.md 갱신: <agent-home>/README.md
 manifest.json 재방출: ~/.claude/manifest.json (Step 6b)
 
 다음에 PR/푸시:
@@ -356,7 +358,7 @@ manifest.json 재방출: ~/.claude/manifest.json (Step 6b)
       "matcher": "",
       "hooks": [{
         "type": "command",
-        "command": "find ~/.claude/skills ~/.claude/agents -name '*.md' -newer ~/.claude/skills/.sync_state.json 2>/dev/null | head -1 | grep -q . && echo '[sync-skills] drift detected — run /sync-skills' || true"
+        "command": "AGENT_HOME=\"${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}\"; find \"$AGENT_HOME/skills\" \"$AGENT_HOME/agents\" -name '*.md' -newer \"$AGENT_HOME/skills/.sync_state.json\" 2>/dev/null | head -1 | grep -q . && echo '[sync-skills] drift detected — run /sync-skills' || true"
       }]
     }]
   }

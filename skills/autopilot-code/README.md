@@ -95,4 +95,4 @@ flowchart TD
 12. 역할 밖 위임 금지 — 에이전트의 Mode Selection에 정의되지 않은 작업은 핸들러 추가 후 위임
 
 ---
-*원본: `~/.claude/skills/autopilot-code/SKILL.md`*
+*원본: `<agent-home>/skills/autopilot-code/SKILL.md`*

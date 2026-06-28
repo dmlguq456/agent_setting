@@ -85,4 +85,4 @@ plan frontmatter의 `qa_level`이 모든 phase auto-detect를 override.
 - 모두 `[FAIL]`/`[SKIP-DEP]` → `status: failed`
 
 ---
-*원본: `~/.claude/skills/code-execute/SKILL.md`*
+*원본: `<agent-home>/skills/code-execute/SKILL.md`*

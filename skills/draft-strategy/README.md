@@ -82,4 +82,4 @@ Quality reviewer + fact-checker가 **parallel**로 동작 (standard+).
 연구팀 Translate 모드 최종 호출. 전체 번역 (요약 X). Code identifiers·paper titles·technical terms는 영어.
 
 ---
-*원본: `~/.claude/skills/draft-strategy/SKILL.md`*
+*원본: `<agent-home>/skills/draft-strategy/SKILL.md`*

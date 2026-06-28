@@ -76,4 +76,4 @@ plan + dev logs로부터 상세 변경 보고서를 생성하는 skill. **핵심
 4. **보고서에 추가 QA 실행 금지**. reconciliation이 경량 safety net.
 
 ---
-*원본: `~/.claude/skills/code-report/SKILL.md`*
+*원본: `<agent-home>/skills/code-report/SKILL.md`*

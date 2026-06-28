@@ -130,7 +130,7 @@ metadata:
 
 | 자료 | 자리 | 우선순위 |
 |---|---|---|
-| `mem profile 07_coding_convention` (`python3 ~/.claude/tools/memory/mem.py profile 07_coding_convention`) | 사용자 cross-project 컨벤션 (model 폴더 / config / prefix / preferred layer / framework) | 2순위 (cross-project default·fallback) |
+| `mem profile 07_coding_convention` (`python3 <agent-home>/tools/memory/mem.py profile 07_coding_convention`) | 사용자 cross-project 컨벤션 (model 폴더 / config / prefix / preferred layer / framework) | 2순위 (cross-project default·fallback) |
 | `<artifact-root>/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 (본 프로젝트 실제 자리) | **1순위** (충돌 시 per-project 우선, mem profile 07 은 빈 자리 보강) |
 | `<artifact-root>/analysis_project/code/similar_models.md` | 본 프로젝트 모델 간 유사도 | scaffold Phase 0 의 ref 1순위 후보 |
 | `<artifact-root>/research/<topic>/` | 외부 ref repo 카드 + 07_resources 의 Quick verify | scaffold Phase 0 의 ref 2순위 + Phase 1.5 검증 source |
@@ -425,7 +425,7 @@ mode 5종 모두 scaffold 단계 통일 — 빈 자리에서도 _뼈대 + skelet
 | 2 | 외부 — `research/{topic}/code_resources/` (autopilot-research 의 repo 카드) 또는 `07_resources.md` (pre-trained ckpt URL) 또는 사용자 `--ref <url>` 명시 | research 산출. paper 의 official repo / HF transformers / espnet / lightning 등 |
 | 3 | Generic skeleton fallback | 1·2 모두 부재 자리만. 사용자 컨펌 후 진행 |
 
-> **컨벤션 prepend 우선순위** — `analysis_project/code/experiment_conventions.md` (1순위 — per-project source of truth) + `mem profile 07_coding_convention` (`python3 ~/.claude/tools/memory/mem.py profile 07_coding_convention`) (2순위 — cross-project default, per-project 부재·빈 자리만 보강) 가 _ref source 우선순위와 독립_ 으로 매번 실행해 그 body 를 따름. Phase 2 (개발팀 new-lib prompt) 에 prepend — 충돌 자리는 per-project 우선, 본 프로젝트의 실제 컨벤션 침범 X.
+> **컨벤션 prepend 우선순위** — `analysis_project/code/experiment_conventions.md` (1순위 — per-project source of truth) + `mem profile 07_coding_convention` (`python3 <agent-home>/tools/memory/mem.py profile 07_coding_convention`) (2순위 — cross-project default, per-project 부재·빈 자리만 보강) 가 _ref source 우선순위와 독립_ 으로 매번 실행해 그 body 를 따름. Phase 2 (개발팀 new-lib prompt) 에 prepend — 충돌 자리는 per-project 우선, 본 프로젝트의 실제 컨벤션 침범 X.
 
 ```
 === ref source 결정 ===

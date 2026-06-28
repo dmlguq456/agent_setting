@@ -110,7 +110,7 @@ frontmatter `changelog:` 필드 자체가 없는 file은 skip. **이 step은 pip
 
 대부분 일상 변경은 entry-level minor — 매 minor마다 refine flow (QA agent invocation + snapshot + version bump)를 묶는 건 cost 대비 가치 낮음. 단 **추적성은 유지**: 모든 minor가 `pipeline_summary.md` minor log에 trigger / files / audit-flag / reversibility까지 기록되므로 last major 이후 변경 이력은 _완전히_ 보존된다. 누적된 minor가 일정 임계치를 넘으면 audit이 **dual-perspective** (vs last major snapshot diff + vs universal principles)로 batch 점검 → fix chain dispatch. major는 _진짜 ceremony 시점_ (외부 검토 직전·구조 재설계·cycle 재진입)에만 refine flow의 ceremony cost를 발생시킨다.
 
-> 본 섹션은 `/sync-skills`가 `~/.claude/README.md`의 "운영 룰" 섹션으로 자동 반영한다.
+> 본 섹션은 `/sync-skills`가 `<agent-home>/README.md`의 "운영 룰" 섹션으로 자동 반영한다.
 
 ## Scope
 

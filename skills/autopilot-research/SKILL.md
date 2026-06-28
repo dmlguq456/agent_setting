@@ -45,7 +45,7 @@ metadata:
 - 기존 research 폴더에 entry 추가만 — `/autopilot-refine`
 - `/autopilot-research <args>` slash 직접 입력 — 컨펌 skip 하고 즉시 invoke
 
-> 본 섹션은 `/sync-skills` 가 `~/.claude/README.md` 운영 룰 안내로 자동 반영.
+> 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰 안내로 자동 반영.
 
 ## Language Rule
 - When explaining something to the user, write in Korean.
@@ -732,7 +732,7 @@ Agent(subagent_type="연구팀"):
 대상 디렉토리: {artifact_dir}/
 대상 파일: 연구팀이 작성한 mode-specific report 세트 전체 (academic 9 개, technology 7 개, market 5 개)
 
-~/.claude/agents/editorial-team.md 의 모드 B 절차를 적용한다.
+<agent-home>/agents/editorial-team.md 의 모드 B 절차를 적용한다.
 판교체·번역체 회피 + 표기 일관성 (한 문서 안 같은 개념은 같은 표기) + 줄바꿈·bullet·공백 호흡.
 영어로 그대로 둘 어휘: 논문 제목·저자·학회·약자·모델·데이터셋·지표 등 도메인 용어. 그 외 일반 표현은 한국어로.
 파일 간 표기 일관성도 강제 — 첫 파일에서 결정한 표기를 이후 파일에도 동일 적용.

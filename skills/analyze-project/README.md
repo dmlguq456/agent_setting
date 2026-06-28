@@ -70,4 +70,4 @@
 reviewer comments / format templates / past samples / mixed doc 자료를 `<artifact-root>/analysis_project/doc/{name}/` 하위에 분류 (reviewers/, formats/, samples/, misc/). autopilot-draft의 format spec auto-discovery source.
 
 ---
-*원본: `~/.claude/skills/analyze-project/SKILL.md`*
+*원본: `<agent-home>/skills/analyze-project/SKILL.md`*
