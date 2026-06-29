@@ -386,6 +386,13 @@ check_codex_native_skill_projection() {
       fail_msg "$skill must use Codex Skill frontmatter only, without adapter metadata"
     fi
   done
+  for skill in adapters/codex/skills/*/SKILL.md; do
+    [ -f "$skill" ] || continue
+    slug=$(basename "$(dirname "$skill")")
+    if [ ! -f "capabilities/$slug.md" ]; then
+      fail_msg "$skill has no matching portable capability source"
+    fi
+  done
 
   bad=$(rg -n 'adapters/claude|claude_setting|claude_realization' adapters/codex/skills adapters/codex/plugins/agent-harness-codex/skills adapters/codex/bin/capability-map.sh 2>/dev/null || true)
   if [ -n "$bad" ]; then
@@ -440,6 +447,13 @@ check_codex_native_plugin_projection() {
   if [ ! -f "$plugin_root/skills/autopilot-code/SKILL.md" ]; then
     fail_msg "Codex native plugin must include generated capability skills"
   fi
+  for skill in "$plugin_root"/skills/*/SKILL.md; do
+    [ -f "$skill" ] || continue
+    slug=$(basename "$(dirname "$skill")")
+    if [ ! -f "capabilities/$slug.md" ]; then
+      fail_msg "$skill has no matching portable capability source"
+    fi
+  done
   if ! grep -Fq '"name": "agent-harness-codex"' "$plugin_manifest" \
     || ! grep -Fq '"skills": "./skills/"' "$plugin_manifest"; then
     fail_msg "$plugin_manifest must define the agent-harness-codex plugin and plugin-local skills path"
@@ -709,6 +723,13 @@ check_opencode_native_skill_projection() {
       fail_msg "$skill must instruct OpenCode to report named tool contracts"
     fi
   done
+  for skill in adapters/opencode/skills/*/SKILL.md; do
+    [ -f "$skill" ] || continue
+    slug=$(basename "$(dirname "$skill")")
+    if [ ! -f "capabilities/$slug.md" ]; then
+      fail_msg "$skill has no matching portable capability source"
+    fi
+  done
 
   bad=$(rg -n 'adapters/claude|claude_setting|claude_realization' adapters/opencode/skills adapters/opencode/bin/capability-map.sh 2>/dev/null || true)
   if [ -n "$bad" ]; then
@@ -743,6 +764,14 @@ check_opencode_native_agent_projection() {
     if ! grep -Fq "not a Claude Agent copy" "$agent"; then
       fail_msg "$agent must state that it is not a Claude Agent copy"
     fi
+  done
+  for dir in adapters/opencode/agents/*; do
+    [ -d "$dir" ] || continue
+    profile=$(basename "$dir")
+    case " plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary " in
+      *" $profile "*) ;;
+      *) fail_msg "$dir is not an approved OpenCode native agent projection" ;;
+    esac
   done
 
   bad=$(rg -n 'adapters/claude|claude_setting' adapters/opencode/agents 2>/dev/null || true)
@@ -790,6 +819,13 @@ check_opencode_native_command_projection() {
     fi
     if ! grep -Fq 'named `tool_contract`' "$command"; then
       fail_msg "$command must instruct OpenCode to report named tool contracts"
+    fi
+  done
+  for command in adapters/opencode/commands/*.md; do
+    [ -f "$command" ] || continue
+    slug=$(basename "$command" .md)
+    if [ ! -f "capabilities/$slug.md" ]; then
+      fail_msg "$command has no matching portable capability source"
     fi
   done
 
