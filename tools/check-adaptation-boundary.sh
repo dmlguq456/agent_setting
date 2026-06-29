@@ -1250,6 +1250,14 @@ check_capability_catalog() {
     if ! grep -Fq "| \`$slug\` |" capabilities/README.md; then
       fail_msg "capabilities/README.md is missing skill capability: $slug"
     fi
+    if ! grep -Fq "adapters/codex/skills/$slug/SKILL.md" capabilities/README.md \
+      || ! grep -Fq "adapters/codex/plugins/agent-harness-codex/skills/$slug/SKILL.md" capabilities/README.md; then
+      fail_msg "capabilities/README.md must document Codex native projections for $slug"
+    fi
+    if ! grep -Fq "adapters/opencode/skills/$slug/SKILL.md" capabilities/README.md \
+      || ! grep -Fq "adapters/opencode/commands/$slug.md" capabilities/README.md; then
+      fail_msg "capabilities/README.md must document OpenCode native projections for $slug"
+    fi
     if [ ! -f "capabilities/$slug.md" ]; then
       fail_msg "capabilities/$slug.md is missing portable capability spec"
       continue
