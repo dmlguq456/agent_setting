@@ -29,7 +29,7 @@ Runtime-specific details stay out of portable capability meaning:
 - Claude Skill frontmatter and folder layout;
 - slash command names;
 - Claude hook names, `ScheduleWakeup`, statusline, or MCP registration details;
-- concrete model names such as `sonnet` or `opus`;
+- concrete model names;
 - CLI-specific external reviewer commands.
 
 ## Catalog

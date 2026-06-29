@@ -7,7 +7,7 @@
 # Portable CLI:
 #   workflow-guard-hook.sh --event prompt [--cwd <dir>] [--session <id>] [--format text|claude-json]
 #   workflow-guard-hook.sh --event start  [--cwd <dir>] [--session <id>] [--format text|claude-json]
-# 등록: ~/.claude/settings.json 의 hooks.SessionStart + hooks.UserPromptSubmit.
+# 등록: adapter-native hook/preflight surface 의 session-start + prompt-submit equivalent.
 set -euo pipefail
 
 usage() {

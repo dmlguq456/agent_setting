@@ -1313,9 +1313,9 @@ def export_profile(apply=False):
         if not apply:
             print(f"[dry-run] → {dest}  ({first_line})")
         else:
-            # FIX 3: MEM_PROFILE 환경변수 미설정 시 실 ~/.claude/user_profile 보호
+            # FIX 3: MEM_PROFILE 환경변수 미설정 시 실 runtime profile 보호
             if "MEM_PROFILE" not in os.environ:
-                print("[abort] export --target profile --apply 는 MEM_PROFILE 명시 설정 필요 (실 ~/.claude/user_profile 보호)")
+                print("[abort] export --target profile --apply 는 MEM_PROFILE 명시 설정 필요 (실 runtime profile 보호)")
                 return
             USER_PROFILE.mkdir(parents=True, exist_ok=True)
             dest.write_text(body, encoding="utf-8")
@@ -1882,7 +1882,7 @@ def _snap_label(body):
 
 
 def curate_snapshot():
-    """세션끝 opus 큐레이터 입력 (read-only) — 현 프로젝트 durable/working snapshot + SIGNALS.
+    """세션끝 deep curator 입력 (read-only) — 현 프로젝트 durable/working snapshot + SIGNALS.
     E-2 anti-bloat layer ①(durable snapshot 재add 억제)·②(ceiling)·④(cold-decay) + orphan(E-6).
     마지막 `IDS:` 줄 = dispatch 멤버십 게이트(S2b)용 전체 id 화이트리스트 (machine-readable)."""
     if not DB.exists():
@@ -1947,7 +1947,7 @@ def curate_snapshot():
 
 
 def curate_artifacts():
-    """세션끝 opus 큐레이터 입력 (read-only) — 현 프로젝트 산출물 상태(git·plans·spec).
+    """세션끝 deep curator 입력 (read-only) — 현 프로젝트 산출물 상태(git·plans·spec).
     D-27(Cluster F): working/durable 이 가리키는 작업이 산출물에서 *끝났는지* 대조해 적극 prune
     근거를 준다. DB 무관(메모리 안 건드림)·어떤 lock 도 안 잡음 — git/파일 read-only 만."""
     import subprocess
@@ -2285,9 +2285,9 @@ def inject(max_working=40, max_durable=40, hook=False):
         for aspect_key, (m, b) in prof:
             out.append(f"- {aspect_key}: {_first_line(b)[:140]}")
         out.append("")
-    # D-18: 정리 신호 섹션 — 세션끝 opus 큐레이터가 처리 (메인 housekeeping 0). informational only.
+    # D-18: 정리 신호 섹션 — 세션끝 deep curator 가 처리 (메인 housekeeping 0). informational only.
     if cleanup_lines:
-        out.append("## 🧹 정리 신호 (세션끝 opus 큐레이터가 처리 — D-18, 메인 조치 불요)")
+        out.append("## 🧹 정리 신호 (세션끝 deep curator 가 처리 — D-18, 메인 조치 불요)")
         out.extend(cleanup_lines)
         out.append("")
     # Step 4.3b: injection-flagged 레코드 존재 알림 (본문 비노출, 카운트+안내만 — 마스킹 유지하되 가시성 확보)
@@ -2404,9 +2404,9 @@ def main():
     ra.add_argument("id")
 
     sub.add_parser("curate-snapshot",
-                   help="현 프로젝트 durable/working snapshot + SIGNALS (read-only, opus 입력)")
+                   help="현 프로젝트 durable/working snapshot + SIGNALS (read-only, deep curator 입력)")
     sub.add_parser("curate-artifacts",
-                   help="현 프로젝트 산출물 상태 git·plans·spec (read-only, opus 입력 D-27)")
+                   help="현 프로젝트 산출물 상태 git·plans·spec (read-only, deep curator 입력 D-27)")
     sub.add_parser("promote-candidates",
                    help="durable convention/lesson 제도화 승격 후보 (read-only, 아침 데스크 안건 D-28)")
 

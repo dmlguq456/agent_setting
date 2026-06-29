@@ -47,7 +47,7 @@ into a portable agent setting plus runtime adapters.
 
 1. **Role vocabulary first**: replace portable docs' concrete model names with
    `fast reviewer`, `deep reviewer`, `external adversary`, and related roles.
-   Adapter docs own `sonnet`, `opus`, `gpt-*`, and CLI-specific choices.
+   Adapter docs own concrete model names and CLI-specific choices.
 2. **Capability specs second**: keep portable capability meaning in
    `capabilities/`; keep Claude Skill syntax in generated or maintained
    `adapters/claude/skills/<name>/SKILL.md` files. Codex must pass through
