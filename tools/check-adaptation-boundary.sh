@@ -209,6 +209,10 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/AGENTS.md must document the Codex workflow toggle wrapper"
   fi
 
+  if ! grep -Fq 'named `tool_contract`' adapters/codex/AGENTS.md; then
+    fail_msg "adapters/codex/AGENTS.md must document named mode tool contracts"
+  fi
+
   if ! grep -Fq 'visual-harness)' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must expose the Codex visual harness tool-contract"
   fi
@@ -481,6 +485,10 @@ check_opencode_bin_wrappers() {
 
   if ! grep -Fq 'preflight.sh track' adapters/opencode/AGENTS.md; then
     fail_msg "adapters/opencode/AGENTS.md must document the OpenCode workflow toggle wrapper"
+  fi
+
+  if ! grep -Fq 'named `tool_contract`' adapters/opencode/AGENTS.md; then
+    fail_msg "adapters/opencode/AGENTS.md must document named mode tool contracts"
   fi
 
   if ! grep -Fq 'visual-harness)' adapters/opencode/bin/preflight.sh; then
