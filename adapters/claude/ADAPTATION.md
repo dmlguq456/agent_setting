@@ -24,7 +24,7 @@ portable sources:
 
 | Surface | Current projection | Why passthrough is allowed for now | Required split |
 |---|---|---|---|
-| Skills | `claude_setting/skills -> ../skills` | Existing files are Claude Skill format and preserve old behavior | Extract portable capability specs, then generate or maintain `adapters/claude/skills` |
+| Skills | `claude_setting/skills -> ../skills` | Existing files are Claude Skill format and preserve old behavior | Grow `capabilities/` into per-capability specs, then generate or maintain `adapters/claude/skills` |
 | Agent modes | `claude_setting/agent-modes -> ../agent-modes` | Mode docs are prompt fragments used by current agents | Classify as portable role modes or Claude-native mode prompts |
 | Hooks | `claude_setting/hooks -> ../hooks` | Shell scripts are wired by Claude settings and preserve old behavior | Split portable invariant scripts from Claude hook-payload wrappers |
 | Utilities | `claude_setting/utilities -> ../utilities` | Mostly runtime-neutral helper scripts | Move Claude-only helpers to adapter if found |
@@ -36,6 +36,10 @@ shape.
 Agent files have completed the first split: portable role meaning is summarized
 in `roles/README.md`, while Claude Agent frontmatter, tool lists, and concrete
 model mapping live in `adapters/claude/agents/`.
+
+Capability files have started the same split: portable capability meaning is
+summarized in `capabilities/README.md`, while current Claude Skill mechanics
+remain in `skills/*/SKILL.md` as compatibility passthrough.
 
 ## Model Mapping
 

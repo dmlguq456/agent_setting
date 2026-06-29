@@ -11,6 +11,7 @@ Claude-specific assumptions into the common core.
 | Session bootstrap | `adapters/codex/AGENTS.md` | `codex_setting/AGENTS.md` |
 | Adapter guide | `adapters/codex/README.md` | `codex_setting/README.md` |
 | Common contract | `core/` | `codex_setting/core` |
+| Capability catalog | `capabilities/` | `codex_setting/capabilities` |
 | Shared helper tools | `tools/`, `utilities/` | projected selectively |
 
 ## Explicit Non-Support
@@ -21,6 +22,7 @@ Codex must not consume these Claude-native files as native configuration:
 |---|---|
 | `adapters/claude/settings.json` | Not consumable; Codex needs wrapper/preflight equivalents |
 | `adapters/claude/commands/` | Not consumable; Codex commands must be expressed as AGENTS instructions or wrapper commands |
+| `skills/*/SKILL.md` | Compatibility reference only; Codex should start from `capabilities/README.md` |
 | `adapters/claude/statusline.sh` | Not consumable; input schema is Claude statusline JSON |
 | `adapters/claude/track-toggle.sh` | Semantics reusable, implementation depends on Claude session id fallback |
 | `adapters/claude/CLAUDE.md` | Reference only; not bootstrap |
@@ -37,7 +39,7 @@ Codex must not consume these Claude-native files as native configuration:
 | memory inject/recall | Use `tools/memory/mem.py` directly; session log ingestion needs a Codex session adapter |
 | memory distill | Disabled until a Codex session source and no-tools distiller contract are implemented |
 | role profiles | Read `roles/README.md`, then translate roles to Codex model/reasoning-effort settings |
-| capabilities | Read portable capability semantics; do not assume Claude Skill invocation |
+| capabilities | Read `capabilities/README.md`; do not assume Claude Skill invocation |
 
 ## Model Mapping
 
@@ -57,6 +59,6 @@ unavailable role explicitly.
 ## Current Projection Boundary
 
 `codex_setting/` should remain minimal until adapted surfaces exist. It may expose
-`AGENTS.md`, `README.md`, `core/`, `tools/`, and `utilities/`, but must not expose
-Claude-native `settings.json`, `commands/`, or `statusline.sh` as if Codex could
-consume them.
+`AGENTS.md`, `README.md`, `core/`, `capabilities/`, `tools/`, and `utilities/`,
+but must not expose Claude-native `settings.json`, `commands/`, `skills/`, or
+`statusline.sh` as if Codex could consume them.

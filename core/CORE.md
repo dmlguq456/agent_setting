@@ -104,7 +104,7 @@ Each artifact should be changed through the capability that owns it:
 Each adapter should provide:
 
 - a bootstrap file that loads this core contract;
-- a way to expose capabilities (`skills/`) and portable role profiles (`roles/`);
+- a way to expose portable capabilities (`capabilities/`) and portable role profiles (`roles/`);
 - a concrete mapping from portable model roles (`fast reviewer`, `deep reviewer`, `external adversary`, etc.) to runtime-specific models, tools, or prompt profiles;
 - a projection from the neutral `<agent-home>` repository into the runtime home using symlinks, generated files, or runtime-native registration;
 - hooks or checks for artifact order, git safety, and memory writes;

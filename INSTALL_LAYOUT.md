@@ -35,6 +35,7 @@ export AGENT_HOME="$HOME/agent_setting"
 ln -sfn "$AGENT_HOME" "$HOME/.codex/agent-harness"
 ln -sfn "$AGENT_HOME/codex_setting/AGENTS.md" "$HOME/.codex/AGENTS.md"
 ln -sfn "$AGENT_HOME/codex_setting/README.md" "$HOME/.codex/agent-harness-readme.md"
+ln -sfn "$AGENT_HOME/codex_setting/capabilities" "$HOME/.codex/agent-capabilities"
 ```
 
 Future Codex-specific bootstrap files should live under `adapters/codex/` and be symlinked or generated into `codex_setting/` without moving Codex credentials, logs, sessions, or SQLite state into the repo.

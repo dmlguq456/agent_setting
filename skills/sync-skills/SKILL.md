@@ -16,7 +16,7 @@ metadata:
 스킬·에이전트를 수정한 후 매번 GitHub README 에 일관된 정보가 반영되어 있는지 확인하는 도구.
 
 **Source of Truth**:
-- `<agent-home>/skills/*/SKILL.md` + `<agent-home>/roles/README.md` + `<agent-home>/adapters/claude/agents/*.md` — 각 skill·role·Claude agent 의 frontmatter/본문
+- `<agent-home>/capabilities/README.md` + `<agent-home>/skills/*/SKILL.md` + `<agent-home>/roles/README.md` + `<agent-home>/adapters/claude/agents/*.md` — 각 capability·skill·role·Claude agent 의 frontmatter/본문
 - **`<agent-home>/core/CONVENTIONS.md`** — family-wide 운영 규칙의 단일 source (QA 5단계 정의 / model role 표기 / cross-doc invariants). 본 skill 의 Step 5b 가 본 문서를 canonical 로 cross-doc grep 해 drift 보고·자동 fix.
 
 **파생 산출물**: GitHub `<agent-home>/README.md`
@@ -28,10 +28,11 @@ metadata:
 
 ### 입력
 - **Skills**: `<agent-home>/skills/*/SKILL.md`
+- **Capabilities**: `<agent-home>/capabilities/README.md`
 - **Roles**: `<agent-home>/roles/README.md`
 - **Claude Agents**: `<agent-home>/adapters/claude/agents/*.md`
 
-자동 발견: `ls <agent-home>/skills/*/SKILL.md <agent-home>/adapters/claude/agents/*.md`. 실제 sync 시점에 발견된 파일 list 가 진실. Portable role 의미는 `roles/README.md`, Claude native frontmatter 는 `adapters/claude/agents/*.md` 가 source. 본 SKILL.md 본문에는 카운트·명단 hardcode 안 함 — drift 의 자기참조 source 가 됨.
+자동 발견: `ls <agent-home>/skills/*/SKILL.md <agent-home>/adapters/claude/agents/*.md`. 실제 sync 시점에 발견된 파일 list 가 진실. Portable capability 의미는 `capabilities/README.md`, portable role 의미는 `roles/README.md`, Claude native frontmatter 는 `skills/*/SKILL.md` 와 `adapters/claude/agents/*.md` 가 source. 본 SKILL.md 본문에는 카운트·명단 hardcode 안 함 — drift 의 자기참조 source 가 됨.
 
 각 파일에서 추출:
 - frontmatter `name`, `description`, `argument-hint` (skills only), `tools`, `model`
@@ -132,7 +133,7 @@ analyze-project / autopilot-research  →  autopilot-draft  →  autopilot-refin
    - `### (1) 자연어 발화` — prose (옵션 자동 구성 + 자연어 요약 컨펌 + yes/수정/cancel/자율 진행 + ceremony 큰 (autopilot-\* 전체 + analyze-user) vs 작은 3 컨펌 의무) + [`adapters/claude/CLAUDE.md`](adapters/claude/CLAUDE.md) §0 reference + **자연어 발화 예시 표** (_사람 유지 영역_)
    - `### (2) slash 직접 입력` — prose (의도 명시 = 즉시 invoke) + slash 예시 code block (_축약 5 줄_: autopilot-code / autopilot-draft / autopilot-refine / audit / **track**(📌↔⚡ 토글) — argument-hint 에서 자동 생성, 전체 syntax dump X) + 전체 옵션은 SKILL.md reference.
 8. **🤝 Agents** — name (agent .md 링크) / model role / _의의_ 표 (_자동 호출자·역할 dump X_) + 직접 호출 안내 한 단락 + 사용자 프로필 참조 매트릭스는 [`core/MEMORY.md §7.6`](core/MEMORY.md) reference (대시보드 README 에 매트릭스 표 _넣지 않음_).
-9. **📚 더 깊이 + 🔁 동기화** — canonical 문서 reference index 표 (**MANUAL**(앞층 사용자 지도) / **CORE+adapters** / **INSTALL_LAYOUT**(neutral repo + runtime home projection) / **adapters/claude/CLAUDE.md** / **adapters/codex/AGENTS.md** / **core/WORKFLOW.md** / **core/CONVENTIONS.md** / **core/OPERATIONS.md**(git·worktree·dispatch·push §5.8~5.11) / **core/MEMORY.md**(통합 기억 §7 + 프로필 매트릭스 §7.6) / **core/DESIGN_PRINCIPLES.md** + **harness 행**: `hooks/`(생성순서·git상태·spec게이트·디자인·**메모리 4종**: `builtin-memory-guard`·`mem-recall-inject`·`mem-turn-nudge`·`mem-distill-dispatch`)·`utilities/`·`adapters/claude/statusline.sh`·`tools/memory`(통합 기억 store + `mem inject`/`mem sync`, MEMORY §7)·`tools/build-manifest.py`(정의 → 루트 `manifest.json` 단일계약 기계 전사, Step 6b) · `tools/check-adaptation-boundary.sh`(adapter/projection 경계 검증) + **loops 행**: `loops/README.md` — **현역 루프·호칭은 `loops/README.md` 현역 표가 단일 출처** (cron runner 가 `loops/` 밖[worklog-board cron 등]으로 이동한 현역 루프도 포함 — "`loops/` 파일 부재 = 루프 부재" 아님); §10 파일 트리만 `loops/` 실제 파일을 나열) + `/sync-skills` 두 명령 + GitHub 링크. **[§9 harness 의도]** hooks 카운트 hardcode 금지 — 카테고리 묶음(생성순서·git상태·spec게이트·디자인·메모리 4종)으로 표기. memory hook 4종 병기 필수. **[§9 loops 의도]** 현역 루프 판정은 `loops/README.md` 현역 표 기준(runner 외부 이동 케이스 포함) — `ls loops/` 파일 유무로 현역 여부 판정 금지.
+9. **📚 더 깊이 + 🔁 동기화** — canonical 문서 reference index 표 (**MANUAL**(앞층 사용자 지도) / **CORE+adapters** / **capabilities+roles** / **INSTALL_LAYOUT**(neutral repo + runtime home projection) / **adapters/claude/CLAUDE.md** / **adapters/codex/AGENTS.md** / **core/WORKFLOW.md** / **core/CONVENTIONS.md** / **core/OPERATIONS.md**(git·worktree·dispatch·push §5.8~5.11) / **core/MEMORY.md**(통합 기억 §7 + 프로필 매트릭스 §7.6) / **core/DESIGN_PRINCIPLES.md** + **harness 행**: `hooks/`(생성순서·git상태·spec게이트·디자인·**메모리 4종**: `builtin-memory-guard`·`mem-recall-inject`·`mem-turn-nudge`·`mem-distill-dispatch`)·`utilities/`·`adapters/claude/statusline.sh`·`tools/memory`(통합 기억 store + `mem inject`/`mem sync`, MEMORY §7)·`tools/build-manifest.py`(정의 → 루트 `manifest.json` 단일계약 기계 전사, Step 6b) · `tools/check-adaptation-boundary.sh`(adapter/projection 경계 검증) + **loops 행**: `loops/README.md` — **현역 루프·호칭은 `loops/README.md` 현역 표가 단일 출처** (cron runner 가 `loops/` 밖[worklog-board cron 등]으로 이동한 현역 루프도 포함 — "`loops/` 파일 부재 = 루프 부재" 아님); §10 파일 트리만 `loops/` 실제 파일을 나열) + `/sync-skills` 두 명령 + GitHub 링크. **[§9 harness 의도]** hooks 카운트 hardcode 금지 — 카테고리 묶음(생성순서·git상태·spec게이트·디자인·메모리 4종)으로 표기. memory hook 4종 병기 필수. **[§9 loops 의도]** 현역 루프 판정은 `loops/README.md` 현역 표 기준(runner 외부 이동 케이스 포함) — `ls loops/` 파일 유무로 현역 여부 판정 금지.
 10. **🗺️ 전체 디렉토리 맵** (🔁 동기화 직전 배치) — `<agent-home>/` 트리 + 항목별 한 줄 의미 (```text 블록). tier1 공통 문서는 `core/` 아래를 canonical 로, adapter bootstrap 은 `adapters/<adapter>/` 아래를 canonical 로 표시한다. 루트에 tier1 compatibility symlink 를 나열하지 않는다. runtime home projection 은 `INSTALL_LAYOUT.md` / adapter README 에서만 설명한다. sync 시 실제 `ls` 와 대조해 신규·삭제 디렉토리 반영 — **hooks·loops·drill cases 에 명시 적용**: 부재 파일(예: `loops/note.sh` — runner 가 worklog-board 로 이동) 줄 제거, drill cases 범위는 실제 `ls cases/` 가 진실. **단 §10 파일 트리에서 runner 가 빠진 것이 곧 루프 사망은 아님 — 현역 루프 목록은 §9 가 `loops/README.md` 현역 표 기준으로 든다.** harness 런타임 자동 생성 폴더(backups·cache·sessions 등)는 마지막 한 묶음. 루프 호칭은 `loops/README.md` 가 단일 출처.
 
 원칙:
@@ -208,6 +209,7 @@ QA level / model role 표기 / family-wide invariant 은 **`<agent-home>/core/CO
 대상 파일:
 - `<agent-home>/skills/*/SKILL.md`
 - `<agent-home>/skills/*/README.md`
+- `<agent-home>/capabilities/README.md`
 - `<agent-home>/roles/README.md`
 - `<agent-home>/adapters/claude/agents/*.md`
 - `<agent-home>/README.md`

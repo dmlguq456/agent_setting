@@ -34,10 +34,34 @@ check_codex_forbidden_entries() {
   done
 }
 
+check_required_projection_entries() {
+  for p in AGENTS.md README.md core capabilities tools utilities; do
+    if [ ! -L "codex_setting/$p" ]; then
+      fail_msg "codex_setting/$p must be a symlink projection entry"
+    fi
+  done
+}
+
 check_removed_root_surfaces() {
   if [ -e agents ] || [ -L agents ]; then
     fail_msg "root agents/ exists; Claude-native agents must live under adapters/claude/agents and portable meaning under roles/"
   fi
+}
+
+check_capability_catalog() {
+  if [ ! -f capabilities/README.md ]; then
+    fail_msg "capabilities/README.md is missing"
+    return
+  fi
+
+  for d in skills/*; do
+    [ -d "$d" ] || continue
+    [ -f "$d/SKILL.md" ] || continue
+    slug=${d#skills/}
+    if ! grep -Fq "| \`$slug\` |" capabilities/README.md; then
+      fail_msg "capabilities/README.md is missing skill capability: $slug"
+    fi
+  done
 }
 
 check_legacy_root_links() {
@@ -74,7 +98,9 @@ warn_concrete_runtime_terms() {
 check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_codex_forbidden_entries
+check_required_projection_entries
 check_removed_root_surfaces
+check_capability_catalog
 check_legacy_root_links
 warn_concrete_runtime_terms
 

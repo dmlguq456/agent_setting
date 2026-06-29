@@ -16,7 +16,7 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 | Shared conventions | `core/CONVENTIONS.md` |
 | Git and dispatch operations | `core/OPERATIONS.md` |
 | Memory contract | `core/MEMORY.md` |
-| Capabilities | `skills/*/SKILL.md` |
+| Capabilities | `capabilities/README.md` |
 | Role profiles | `roles/README.md` |
 | Hook and guard scripts | `hooks/`, `utilities/` |
 
@@ -24,7 +24,7 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 
 | Core Concept | Codex Implementation |
 |---|---|
-| capability | Read and follow the relevant `skills/*/SKILL.md`; no native slash registry is assumed |
+| capability | Read `capabilities/README.md` for meaning; use `skills/*/SKILL.md` only as Claude compatibility detail until Codex-native capability instructions exist |
 | role profile | Use `roles/README.md` for meaning; use `agent-modes/` or Claude agent files only as compatibility references until Codex-native role prompts exist |
 | adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
 | agent home | Set `AGENT_HOME` to the installed harness directory |
@@ -76,6 +76,7 @@ Claude Code-specific files remain valid as implementation references, not as Cod
 - `CLAUDE.md` contains Claude Code routing and response rules.
 - `adapters/claude/settings.json` registers Claude Code hooks and permissions.
 - `adapters/claude/commands/` defines Claude Code slash commands.
+- `skills/*/SKILL.md` is still Claude Skill format; start from `capabilities/README.md` for portable meaning.
 - `adapters/claude/statusline.sh` targets Claude Code's statusline contract.
 
 When porting a behavior, copy the underlying invariant from `CORE.md`, `WORKFLOW.md`, `CONVENTIONS.md`, or `OPERATIONS.md`; then map it to Codex's tool, approval, and session model.

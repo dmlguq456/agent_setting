@@ -23,7 +23,8 @@ into a portable agent setting plus runtime adapters.
 | Codex bootstrap | `adapters/codex/AGENTS.md` | adapter-native | Expand only with behavior that Codex can actually perform. |
 | Claude settings/hooks registration | `adapters/claude/settings.json` | adapter-native | Codex must get wrapper/preflight equivalents, not this JSON. |
 | Slash commands | `adapters/claude/commands/` | adapter-native | Future runtimes need native command wrappers or instruction entries. |
-| Skills | `skills/*/SKILL.md` | compat-passthrough, needs-split | Extract `capabilities/<name>.md` portable specs, then generate/maintain `adapters/claude/skills/<name>/SKILL.md`. |
+| Portable capability catalog | `capabilities/README.md` | portable | Grow into per-capability specs when adapter parity work needs finer granularity. |
+| Claude skills | `skills/*/SKILL.md` | compat-passthrough, needs-split | Preserve current Claude Skill behavior until generated/maintained `adapters/claude/skills/<name>/SKILL.md` exists. |
 | Portable role catalog | `roles/README.md` | portable | Grow into per-role specs when adapter parity work needs finer granularity. |
 | Claude agents | `adapters/claude/agents/*.md` | adapter-native | Preserve Claude Agent frontmatter/model/tool schema while realizing `roles/README.md`. |
 | Hooks | `hooks/*.sh` | mixed | Split invariant checks from runtime hook payload wrappers. |
@@ -36,9 +37,10 @@ into a portable agent setting plus runtime adapters.
 1. **Role vocabulary first**: replace portable docs' concrete model names with
    `fast reviewer`, `deep reviewer`, `external adversary`, and related roles.
    Adapter docs own `sonnet`, `opus`, `gpt-*`, and CLI-specific choices.
-2. **Capability specs second**: for each `skills/*/SKILL.md`, create or extract
-   a portable capability contract before moving Claude Skill syntax under the
-   Claude adapter.
+2. **Capability specs second**: keep portable capability meaning in
+   `capabilities/`; keep Claude Skill syntax in compatibility passthrough until
+   adapter-native skill files are generated or maintained under the Claude
+   adapter.
 3. **Agent profiles third**: keep portable role meaning in `roles/`; keep
    concrete frontmatter/model/tool mapping in adapter-native agent files.
 4. **Hook payloads fourth**: keep invariant scripts portable, but isolate

@@ -216,6 +216,7 @@ autopilot-\* 가 내부에서 자동 라우팅하는 전문 팀. Portable 의미
 | [`core/MEMORY.md`](core/MEMORY.md) | 통합 기억 단일 출처 — store 아키텍처 · promote/skip · lifecycle · recall · 프로필 aspect↔agent 매트릭스(§7) |
 | [`core/ADAPTATION.md`](core/ADAPTATION.md) | portable source / adapter source / projection / compatibility passthrough 경계 계약 |
 | [`core/ADAPTATION_INVENTORY.md`](core/ADAPTATION_INVENTORY.md) | 현재 표면별 portable / adapter-native / compat-passthrough 상태와 migration 순서 |
+| [`capabilities/`](capabilities/README.md) · [`roles/`](roles/README.md) | runtime-neutral capability / role 의미 계층 |
 | [`core/DESIGN_PRINCIPLES.md`](core/DESIGN_PRINCIPLES.md) | autopilot 아키텍처 설계 원칙 |
 | [`core/CORE.md`](core/CORE.md) · [`adapters/`](adapters/README.md) | 모델·도구 중립 코어 계약과 런타임별 어댑터 경계 (Claude Code primary, Codex experimental) |
 | [`INSTALL_LAYOUT.md`](INSTALL_LAYOUT.md) | neutral repo(`~/agent_setting`) + runtime home(`~/.claude`, `~/.codex`) symlink projection 절차 |
@@ -244,9 +245,10 @@ autopilot-\* 가 내부에서 자동 라우팅하는 전문 팀. Portable 의미
 ├── adapters/
 │   ├── claude/             Claude Code adapter — CLAUDE.md · agents · settings/keybindings · commands · statusline · runtime mapping
 │   └── codex/              Codex adapter — AGENTS.md + experimental mapping
+├── capabilities/           portable capability catalog — runtime-neutral 작업 의미
 ├── roles/                  portable role profiles — runtime-neutral delegation semantics
 ├── claude_setting/          GitHub-tracked Claude Code projection — symlink mirror for ~/.claude harness-owned files
-├── codex_setting/           GitHub-tracked Codex projection — minimal adapted bootstrap + shared core/tools
+├── codex_setting/           GitHub-tracked Codex projection — minimal adapted bootstrap + shared core/capabilities/tools
 │
 ├── skills/                 작업 매뉴얼 28 — 폴더당 SKILL.md (단일 출처)
 │   ├── [entry 파이프]      autopilot-research(분야조사) · -spec(청사진·skeleton) · -code(코드 작업)
