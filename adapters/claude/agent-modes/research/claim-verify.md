@@ -62,7 +62,7 @@
 
 ## Recommended model role
 
-- voter: fast fact-checker/reviewer (Claude adapter: sonnet) — N-vote 라 비용 누적. 핵심 claim 만 deep reviewer 로 상향 가능.
+- voter: fast fact-checker/reviewer role — adapter mapping 이 concrete runtime model/profile 로 해석한다. N-vote 라 비용 누적. 핵심 claim 만 deep reviewer 로 상향 가능.
 
 ## Return Format (CRITICAL)
 Every response to a skill invocation MUST be exactly one line:

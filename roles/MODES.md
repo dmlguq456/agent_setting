@@ -20,7 +20,7 @@ for behavior preservation. Not every fragment is purely portable.
 | `dev` | `backend`, `frontend`, `new-lib`, `refactor` | `portable-persona` | Keep shared unless runtime-specific tool schemas are added. |
 | `editorial` | `translate`, `polish`, `review` | `portable-persona` | Keep shared; adapter only maps invocation and edit tools. |
 | `qa` | `code-review`, `data-curate`, `ml-debug`, `plan-review`, `security-review`, `test` | mixed | `security-review` and `test` include Claude-derived `/security-review`, `/verify`, `/run` notes; split those notes when Codex-native verification exists. |
-| `research` | `plan-review`, `research-survey`, `fact-check`, `claim-verify` | mixed | `claim-verify` includes Claude deep-research provenance; `plan-review` includes old `~/.claude` topology examples. General review semantics are portable. |
+| `research` | `plan-review`, `research-survey`, `fact-check`, `claim-verify` | mixed | `claim-verify` includes Claude deep-research provenance; topology and model role references should stay adapter-neutral. General review semantics are portable. |
 | `material` | `browser-fetch`, `data-script`, `figure-gen`, `pdf-extract`, `web-image-search` | `portable-with-tool-contract` | Requires adapter-provided browser/pdf/script/web fetch tools plus memory wrapper or `<agent-home>` memory CLI resolution. |
 | `design` | `_design_rules`, `maker`, `critic`, `verifier` | `adapter-coupled` | Design MCP tool names, `~/.claude/scaffolds`, and Claude Design provenance need adapter-specific implementation notes. |
 
