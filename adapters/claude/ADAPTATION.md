@@ -33,7 +33,7 @@ portable sources:
 |---|---|---|---|
 | Skills | `claude_setting/skills -> ../adapters/claude/skills` | Adapter-owned concrete Claude Skill files preserve old behavior while portable specs grow under `capabilities/` | Continue splitting semantics into `capabilities/<name>.md`; keep Claude frontmatter and runtime wording here |
 | Agent modes | `claude_setting/agent-modes -> ../adapters/claude/agent-modes` | Adapter-owned concrete mode projection files preserve current Claude behavior while `roles/MODES.md` classifies portability | Continue splitting adapter-coupled mode semantics into runtime-neutral fragments or adapter-native notes as non-Claude adapters implement equivalents |
-| Hooks | `claude_setting/hooks -> ../adapters/claude/hooks` | Shell scripts are wired by Claude settings and preserve old behavior through adapter-owned symlinks; `core/HOOKS.md` names the invariant layer | Replace hook symlink passthroughs with Claude payload wrappers as portable invariant scripts are split out |
+| Hooks | `claude_setting/hooks -> ../adapters/claude/hooks` | Adapter-owned concrete hook projection files preserve current Claude behavior; `core/HOOKS.md` names the invariant layer | Continue splitting Claude payload handling from portable invariant checks as non-Claude adapters implement equivalents |
 | Utilities | `claude_setting/utilities -> ../adapters/claude/utilities` | Mostly runtime-neutral helper scripts, projected through adapter-owned symlinks | Move Claude-only helpers to adapter-native files if found |
 | Tools | `claude_setting/tools -> ../adapters/claude/tools` | CLI tools are mostly runtime-neutral; some memory/session assumptions remain, projected through adapter-owned symlinks | Isolate Claude session adapters under adapter or tool plugin |
 | Loops | `claude_setting/loops -> ../adapters/claude/loops` | Existing drill/oncall/study loop helpers remain available through adapter-owned symlinks | Split runtime-coupled loop invocation if non-Claude adapters need native loop runners |
@@ -59,9 +59,11 @@ family entries are adapter-owned files copied from the current `roles/modes/`
 content. This preserves old Claude behavior while `roles/MODES.md` continues to
 classify which fragments are portable, tool-contract-bound, or adapter-coupled.
 
-Hook scripts also pass through `adapters/claude/hooks/`. This keeps the existing
-Claude `settings.json` commands stable while making the adapter boundary explicit
-for future split work.
+Hook scripts now follow the same concrete projection pattern:
+`claude_setting/hooks` points at `adapters/claude/hooks/`, whose files are
+adapter-owned copies of the current shared `hooks/` scripts. This keeps the
+existing Claude `settings.json` commands stable while `core/HOOKS.md` continues
+to define the portable invariant layer and future adapter wrapper split.
 
 Tools, utilities, loops, and scaffolds use the same adapter-owned passthrough
 pattern. Shared source remains in the common directories, but runtime projection

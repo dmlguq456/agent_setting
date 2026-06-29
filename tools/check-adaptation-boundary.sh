@@ -131,13 +131,12 @@ check_claude_hook_projection() {
   for f in hooks/*; do
     [ -f "$f" ] || continue
     name=${f#hooks/}
-    if [ ! -L "adapters/claude/hooks/$name" ]; then
-      fail_msg "adapters/claude/hooks/$name must be a symlink passthrough"
+    if [ ! -f "adapters/claude/hooks/$name" ]; then
+      fail_msg "adapters/claude/hooks/$name is missing"
       continue
     fi
-    hook_target=$(readlink "adapters/claude/hooks/$name")
-    if [ "$hook_target" != "../../../hooks/$name" ]; then
-      fail_msg "adapters/claude/hooks/$name points to $hook_target; expected ../../../hooks/$name"
+    if [ -L "adapters/claude/hooks/$name" ]; then
+      fail_msg "adapters/claude/hooks/$name must be a concrete adapter-owned hook projection"
     fi
   done
 }

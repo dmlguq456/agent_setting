@@ -31,7 +31,7 @@ into a portable agent setting plus runtime adapters.
 | Claude agents | `adapters/claude/agents/*.md` | adapter-native | Preserve Claude Agent frontmatter/model/tool schema while realizing `roles/README.md`. |
 | Agent modes | `adapters/claude/agent-modes/*/*.md`, shared `roles/modes/*.md` | adapter-native projection, mixed content | Concrete Claude mode files preserve current behavior while `roles/MODES.md` classifies portability; split adapter-coupled design/verification/tool notes when Codex-native modes exist. |
 | Hook invariant catalog | `core/HOOKS.md` | portable | Names hook-level invariants and classifies current scripts. |
-| Hook scripts | `adapters/claude/hooks/* -> ../../../hooks/*`, shared `hooks/*.sh` | mixed | Preserve Claude hook behavior through adapter-owned passthroughs while splitting invariant checks from runtime hook payload wrappers. |
+| Hook scripts | `adapters/claude/hooks/*.sh`, shared `hooks/*.sh` | adapter-native projection, mixed content | Concrete Claude hook files preserve current behavior while splitting invariant checks from runtime hook payload wrappers. |
 | Memory distiller | `hooks/mem-distill-dispatch.sh`, `tools/memory/` | mixed | Keep DB/CLI portable; move session log reader and model invocation to adapters. |
 | Design MCP | `tools/design-mcp/`, design skills | mixed | Keep render/check semantics portable; move Claude MCP registration paths to adapter docs. |
 | Shared tools/utilities/loops/scaffolds | `adapters/claude/{tools,utilities,loops,scaffolds}/* -> ../../../{tools,utilities,loops,scaffolds}/*` | compat-passthrough | Preserve Claude runtime paths through adapter-owned passthroughs while individual files are classified. |

@@ -36,7 +36,9 @@ Adapters may reuse scripts directly only when they can supply the expected input
 payload and consume the expected output decision. Otherwise, the invariant must
 be wrapped or reimplemented behind an adapter-native event bridge.
 
-Current Claude Code registration lives in `adapters/claude/settings.json`.
+Current Claude Code registration lives in `adapters/claude/settings.json` and
+executes concrete hook projection files under `adapters/claude/hooks/` via the
+runtime projection `claude_setting/hooks`.
 Codex must not consume that JSON as configuration. It can run
 `adapters/codex/bin/preflight.sh write <file> [session-id]` before edits
 (git state, artifact order, and native memory-file write checks),
