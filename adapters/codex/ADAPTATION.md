@@ -15,6 +15,23 @@ Use Codex-native surfaces first for model/session/context/status, approvals,
 sandboxing, skills/plugins, and built-in slash commands. Add adapter wrappers
 only for harness-specific signals that Codex does not provide directly.
 
+## External Reference Lessons
+
+GSD Core (`https://github.com/open-gsd/gsd-core`) is a useful cross-runtime
+installer reference pattern, not a source to copy. The relevant lesson is the
+seam:
+
+- keep the workflow/capability meaning canonical;
+- describe each runtime's artifact layout and config surface as data;
+- convert canonical files into runtime-native artifacts;
+- prove the runtime discovers those artifacts;
+- fail closed when a runtime feature is undocumented or missing.
+
+For this adapter, that means Codex support should not be measured by whether
+Claude files are visible under `codex_setting/`. It should be measured by
+whether Codex has a native entrypoint or an explicit wrapper for the portable
+invariant.
+
 ## Native Codex Surfaces
 
 | Codex runtime surface | Adapter source | Projection |
@@ -25,6 +42,27 @@ only for harness-specific signals that Codex does not provide directly.
 | Capability catalog | `capabilities/` | `codex_setting/capabilities` |
 | Preflight wrappers | `adapters/codex/bin/` | `codex_setting/bin` |
 | Shared helper tools | `tools/`, `utilities/` | projected selectively |
+
+## Native Skill And Plugin Surface Debt
+
+Current Codex support is instruction-first: load `AGENTS.md`, read
+`capabilities/`, and run `preflight.sh capability-info`. That is not the same as
+a discoverable Codex-native skill/plugin surface.
+
+Before adding Codex-native skills or plugins:
+
+1. Use `capabilities/<name>.md` and `roles/` as source, not
+   `skills/<name>/SKILL.md` or `adapters/claude/skills/`.
+2. Generate or maintain concrete adapter-owned output under an explicit Codex
+   adapter path, for example `adapters/codex/skills/<name>/SKILL.md`.
+3. Keep Codex frontmatter, invocation syntax, sandbox/approval assumptions, and
+   plugin metadata in the Codex adapter.
+4. Add a guard that proves every generated Codex skill maps to a portable
+   capability and that no Claude-native Skill file is exposed as Codex-native.
+5. Verify discoverability using the Codex runtime contract, not byte parity with
+   Claude files.
+
+Until that exists, Codex capability support remains wrapper/instruction based.
 
 ## Explicit Non-Support
 

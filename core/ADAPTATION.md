@@ -30,6 +30,32 @@ An adapter must not claim support for a surface unless it provides one of:
 Plain symlinks are acceptable only as a projection mechanism. They are not proof
 that adaptation is complete.
 
+## 2.1 Runtime Distribution Seam
+
+Installing or exposing the harness in a runtime is its own adaptation seam. A
+runtime surface is supported only when the adapter can name the runtime-native
+entrypoint and prove that the runtime will discover it.
+
+Use this order when adding a runtime surface:
+
+1. Define the portable invariant in `core/`, `capabilities/`, or `roles/`.
+2. Describe the runtime surface as data: kind, destination, invocation syntax,
+   conversion rule, hook/config surface, and unsupported fallback.
+3. Generate or maintain adapter-owned concrete output from the portable source.
+4. Verify runtime discoverability or explicitly mark the surface unsupported.
+
+An adapter must fail closed for unknown or undocumented runtime features. Do not
+assume a Claude Code surface exists elsewhere because the purpose is similar.
+For example, a runtime with native status, command, skill, hook, or plugin
+support should use that native surface first; harness-specific gaps should be
+bridged by adapter wrappers.
+
+External reference: GSD Core
+(`https://github.com/open-gsd/gsd-core`) uses the same seam shape: canonical
+workflow files are transformed into runtime-specific artifacts, while Claude
+plugin manifests and Codex skills are concrete runtime projections rather than
+portable source. This repo should follow the pattern, not the exact file layout.
+
 ## 3. Portable Role Model
 
 Portable docs use role names, not vendor model names:

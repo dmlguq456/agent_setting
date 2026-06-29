@@ -24,6 +24,7 @@ into a portable agent setting plus runtime adapters.
 | Claude runtime workers | `adapters/claude/bin/*.sh` | adapter-native | Own concrete Claude CLI worker invocations used by shared dispatchers. |
 | Codex bootstrap | `adapters/codex/AGENTS.md` | adapter-native | Expand only with behavior that Codex can actually perform. |
 | Codex preflight wrappers | `adapters/codex/bin/preflight.sh`, `role-map.sh`, `capability-map.sh`, `mode-map.sh`, `distill-worker.sh` | adapter-native | Executable Codex bridge for hook invariants, portable role mapping, capability realization, mode support classification, and distill proposals. |
+| Codex native skill/plugin surface | not yet materialized | needs-split | If Codex needs discoverable `$...` entrypoints, generate adapter-owned `adapters/codex/skills/*/SKILL.md` or a Codex plugin surface from `capabilities/` and `roles/`; do not reuse Claude Skill files as Codex-native output. |
 | Claude settings/hooks registration | `adapters/claude/settings.json` | adapter-native | Codex must get wrapper/preflight equivalents, not this JSON. |
 | Slash commands | `adapters/claude/commands/` | adapter-native | Future runtimes need native command wrappers or instruction entries. |
 | Portable capability catalog | `capabilities/README.md`, `capabilities/*.md` | portable | Per-capability specs define runtime-neutral contracts; Codex resolves entries through `adapters/codex/bin/capability-map.sh`. |
@@ -71,6 +72,9 @@ A surface is not considered adapted until all of the following are true:
 - The Claude adapter still exposes the old runtime path and behavior.
 - The Codex adapter either exposes an equivalent behavior or explicitly marks
   the behavior unsupported with fallback instructions.
+- Runtime-facing surfaces are verified at the level the runtime actually
+  discovers: a file being present is insufficient when the runtime expects a
+  native skill, command, hook, plugin manifest, TOML entry, or built-in surface.
 - Concrete model/runtime names appear only in adapter-native files, tests, or
   legacy compatibility notes.
 - `claude_setting/` and `codex_setting/` remain projections, not independent

@@ -11,6 +11,12 @@ native features first, including built-in slash commands and `/statusline`; add
 adapter wrappers only for harness-specific signals that Codex does not already
 surface.
 
+The GSD Core installer/plugin design is a useful comparison point: it converts
+canonical workflow files into runtime-native artifacts and tests whether the
+runtime discovers them. For this adapter, the same principle means a future
+Codex skill/plugin surface must be adapter-owned output derived from
+`capabilities/` and `roles/`, not a projection of Claude Skill files.
+
 ## Entry Points
 
 | Surface | File |
@@ -32,6 +38,7 @@ surface.
 | Core Concept | Codex Implementation |
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/codex/bin/preflight.sh capability-info <capability>` to confirm Codex realization; use `skills/*/SKILL.md` only as Claude compatibility detail until Codex-native capability instructions exist |
+| native skill/plugin surface | Not materialized yet; if added, generate or maintain `adapters/codex/skills/*/SKILL.md` or plugin metadata from portable capability/role sources and verify Codex discoverability |
 | role profile | Use `roles/README.md` for meaning; use `roles/modes/` or Claude agent files only as compatibility references until Codex-native role prompts exist |
 | role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes are reference-only |
 | adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
