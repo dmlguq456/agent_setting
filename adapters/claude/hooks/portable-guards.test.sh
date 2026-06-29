@@ -548,6 +548,47 @@ if command -v opencode >/dev/null 2>&1; then
 else
   ok "opencode native command runtime discovery skipped (opencode not installed)"
 fi
+if command -v opencode >/dev/null 2>&1; then
+  mkdir -p "$TMP/opencode_plugin_project/.opencode/plugins" "$TMP/opencode_plugin_home/.config" "$TMP/opencode_plugin_home/.local/share"
+  ln -s "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js" "$TMP/opencode_plugin_project/.opencode/plugins/agent-harness-guards.js"
+  if (
+    cd "$TMP/opencode_plugin_project" || exit 1
+    HOME="$TMP/opencode_plugin_home" XDG_CONFIG_HOME="$TMP/opencode_plugin_home/.config" XDG_DATA_HOME="$TMP/opencode_plugin_home/.local/share" \
+      opencode debug config >/tmp/opencode_plugin.out 2>/tmp/opencode_plugin.err
+  ) && grep -q 'agent-harness-guards.js' /tmp/opencode_plugin.out \
+    && ! grep -q 'adapters/claude/hooks' /tmp/opencode_plugin.out; then
+    ok "opencode native plugin projection is discoverable without Claude hooks"
+  else
+    bad "opencode native plugin projection should be discoverable without Claude hooks"
+  fi
+else
+  ok "opencode native plugin runtime discovery skipped (opencode not installed)"
+fi
+if node --input-type=module >/tmp/opencode_plugin_hook.out 2>/tmp/opencode_plugin_hook.err <<EOF
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
+await plugin["tool.execute.before"]({ tool: { name: "write" }, sessionID: "testsid" }, { args: { filePath: "$TMP/repo/f" } })
+EOF
+then
+  ok "opencode native plugin write hook bridges to preflight"
+else
+  bad "opencode native plugin write hook should bridge to preflight"
+fi
+if node --input-type=module >/tmp/opencode_plugin_hook_block.out 2>/tmp/opencode_plugin_hook_block.err <<EOF
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+const plugin = await AgentHarnessGuards({ directory: "$TMP/runtime", worktree: "$TMP/runtime" })
+try {
+  await plugin["tool.execute.before"]({ tool: { name: "write" }, sessionID: "testsid" }, { args: { filePath: "$TMP/runtime/projects/abc/memory/MEMORY.md" } })
+  process.exit(1)
+} catch (error) {
+  if (!String(error.message || error).includes("memory")) process.exit(1)
+}
+EOF
+then
+  ok "opencode native plugin write hook blocks guarded writes"
+else
+  bad "opencode native plugin write hook should block guarded writes"
+fi
 
 echo "== opencode capability mapping =="
 if "$OPENCODE" capability-info autopilot-code >/tmp/opencode_cap.out 2>/tmp/opencode_cap.err \

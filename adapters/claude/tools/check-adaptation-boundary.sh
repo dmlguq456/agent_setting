@@ -77,7 +77,7 @@ check_codex_projection_targets() {
 }
 
 check_opencode_required_projection_entries() {
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands opencode-plugins; do
     if [ ! -L "opencode_setting/$p" ]; then
       fail_msg "opencode_setting/$p must be a symlink projection entry"
     fi
@@ -96,6 +96,7 @@ check_opencode_projection_targets() {
   check_link_target opencode_setting/opencode-skills ../adapters/opencode/skills
   check_link_target opencode_setting/opencode-agents ../adapters/opencode/agents
   check_link_target opencode_setting/opencode-commands ../adapters/opencode/commands
+  check_link_target opencode_setting/opencode-plugins ../adapters/opencode/plugins
 }
 
 check_claude_projection_targets() {
@@ -159,7 +160,7 @@ check_install_layout_codex_projection() {
 check_install_layout_opencode_projection() {
   [ -f INSTALL_LAYOUT.md ] || { fail_msg "INSTALL_LAYOUT.md is missing"; return; }
 
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands opencode-plugins; do
     if ! grep -Fq "\$AGENT_HOME/opencode_setting/$p" INSTALL_LAYOUT.md; then
       fail_msg "INSTALL_LAYOUT.md must include OpenCode projection install step for opencode_setting/$p"
     fi
@@ -610,6 +611,30 @@ check_opencode_native_command_projection() {
   done
 }
 
+check_opencode_native_plugin_projection() {
+  plugin="adapters/opencode/plugins/agent-harness-guards.js"
+  if [ ! -f "$plugin" ]; then
+    fail_msg "$plugin is missing"
+    return
+  fi
+  if [ -L "$plugin" ]; then
+    fail_msg "$plugin must be a concrete adapter-owned OpenCode plugin"
+  fi
+  if ! node --check "$plugin" >/tmp/opencode-plugin-check.out 2>/tmp/opencode-plugin-check.err; then
+    fail_msg "$plugin must parse as JavaScript"
+    cat /tmp/opencode-plugin-check.err
+  fi
+  if ! grep -Fq '"tool.execute.before"' "$plugin"; then
+    fail_msg "$plugin must use OpenCode tool.execute.before hook"
+  fi
+  if ! grep -Fq 'adapters", "opencode", "bin", "preflight.sh' "$plugin"; then
+    fail_msg "$plugin must bridge to the OpenCode preflight wrapper"
+  fi
+  if grep -Eq 'adapters/claude|claude_setting|settings\.json|statusline\.sh' "$plugin"; then
+    fail_msg "$plugin must not reference Claude-native surfaces"
+  fi
+}
+
 check_claude_skill_projection() {
   if [ ! -L claude_setting/skills ]; then
     fail_msg "claude_setting/skills must project adapters/claude/skills"
@@ -974,6 +999,7 @@ check_opencode_tool_projection
 check_opencode_native_skill_projection
 check_opencode_native_agent_projection
 check_opencode_native_command_projection
+check_opencode_native_plugin_projection
 check_codex_utility_projection
 check_opencode_utility_projection
 check_claude_bin_wrappers

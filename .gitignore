@@ -23,6 +23,8 @@ plugins/
 !adapters/codex/plugins/**
 !adapters/codex/.agents/
 !adapters/codex/.agents/**
+!adapters/opencode/plugins/
+!adapters/opencode/plugins/**
 
 # Project-scoped memory (per-project, not shared)
 projects/

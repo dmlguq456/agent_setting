@@ -39,7 +39,7 @@ documentation.
 | Skills (`.opencode/skill/<name>/SKILL.md` or `.opencode/skills/<name>/SKILL.md`) | yes | `adapters/opencode/skills/<name>/SKILL.md` generated from `capabilities/` |
 | External skill autoload (`~/.claude/skills/<name>/SKILL.md`, `~/.agents/skills/<name>/SKILL.md`) | yes (compat) | not relied on; adapter must generate its own skills, not depend on Claude skill autoload |
 | Agents (`.opencode/agent/<name>.md` or `.opencode/agents/<name>.md`) | yes | `adapters/opencode/agents/<name>/<name>.md` generated from `roles/README.md` |
-| Plugin hooks (JS/TS: `tool.execute.before`, `tool.execute.after`, `event`, `config`, `chat.message`, `command.execute.before`, `permission.ask`, `shell.env`, ...) | yes | not yet materialized; future adapter-owned plugin for harness guards |
+| Plugin hooks (JS/TS: `tool.execute.before`, `tool.execute.after`, `event`, `config`, `chat.message`, `command.execute.before`, `permission.ask`, `shell.env`, ...) | yes | `adapters/opencode/plugins/agent-harness-guards.js` bridges write/edit/patch tool execution to shared guard preflight |
 | Permission model (`permission` config: `allow`/`ask`/`deny` per tool, per-agent override) | yes | adapter documents recommended permission rules; not a harness guard replacement |
 | MCP servers (`mcp` config: local/remote) | yes | adapter documents design MCP registration when a visual harness is added |
 | Model selection (`model`, `small_model`, per-agent `model`, `variant`) | yes | `adapters/opencode/bin/role-map.sh` resolves portable roles to model/variant |
@@ -80,28 +80,26 @@ guidance for them, but must provide or map an adapter visual harness before
 claiming full support. `capability-info` reports `status=tool-contract` for
 those entries.
 
-## Native Plugin Hook Surface Debt
+## Native Plugin Hook Surface
 
-OpenCode exposes JS/TS plugin hooks that could enforce harness guards
-(`tool.execute.before` for artifact order, git state, memory write). This
-adapter does not materialize a plugin yet. Current support runs the same
-shell preflight wrappers as the Codex adapter, called explicitly by the agent
-or by `AGENTS.md` instructions.
+OpenCode exposes JS/TS plugin hooks that can enforce part of the harness guard
+contract. This adapter materializes a concrete OpenCode plugin at
+`adapters/opencode/plugins/agent-harness-guards.js`. It uses
+`tool.execute.before` to detect write/edit/patch targets and calls
+`adapters/opencode/bin/preflight.sh write <file> <session-id>`, which runs the
+portable artifact-order, git-state, and memory-write guards.
 
-Before adding an OpenCode plugin for harness guards:
+When changing the plugin:
 
-1. Implement the plugin in TypeScript under `adapters/opencode/plugin/` or as
-   a configured `plugin:` entry.
-2. Bridge `tool.execute.before` to the shared shell guards
-   (`hooks/artifact-guard.sh`, `hooks/git-state-guard.sh`,
-   `hooks/builtin-memory-guard.sh`) via a small shell invocation from the
-   plugin.
-3. Prove the plugin is discovered by OpenCode (`opencode debug config` or a
-   TUI startup check).
-4. Keep the shell preflight wrappers as the fallback path so the adapter
-   remains usable without the plugin.
+1. Keep it under `adapters/opencode/plugins/` as adapter-owned JS/TS.
+2. Bridge to `adapters/opencode/bin/preflight.sh`, not to Claude hook files.
+3. Prove discovery with `opencode debug config`.
+4. Keep shell preflight wrappers as fallback so the adapter remains usable
+   when plugins are disabled.
 
-Until the plugin exists, harness guards are instruction-only preflight.
+The first plugin pass covers write guard enforcement. Session-start, prompt,
+recall, and distillation signals still use explicit preflight wrappers until
+their OpenCode hook contracts are fully mapped.
 
 ## Explicit Non-Support
 
@@ -187,7 +185,8 @@ any unavailable role explicitly.
 
 `opencode_setting/` should remain minimal and explicit. It may expose
 `AGENTS.md`, `README.md`, `core/`, `capabilities/`, `roles/`, `bin/`,
-`opencode-skills`, `opencode-agents`, `opencode-commands`, selected tools, and selected utilities, but must not expose Claude-native
+`opencode-skills`, `opencode-agents`, `opencode-commands`, `opencode-plugins`,
+selected tools, and selected utilities, but must not expose Claude-native
 `settings.json`, `commands/`, `skills/`, `statusline.sh`, or `hooks/` as if
 OpenCode could consume them.
 

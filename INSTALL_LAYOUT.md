@@ -120,6 +120,8 @@ for f in "$AGENT_HOME/opencode_setting/opencode-commands"/*.md; do
   [ -f "$f" ] || continue
   ln -sfn "$f" "$HOME/.config/opencode/command/$(basename "$f")"
 done
+mkdir -p "$HOME/.config/opencode/plugins"
+ln -sfn "$AGENT_HOME/opencode_setting/opencode-plugins/agent-harness-guards.js" "$HOME/.config/opencode/plugins/agent-harness-guards.js"
 ```
 
 Do not symlink Claude-native surfaces such as `settings.json`, `commands/`,
@@ -128,7 +130,8 @@ OpenCode has native `.opencode/skill/`, `.opencode/command/`, `.opencode/agent/`
 and JS/TS plugin hook surfaces. OpenCode-native Skill and Agent projections
 must come from `opencode_setting/opencode-skills` and
 `opencode_setting/opencode-agents`; OpenCode-native commands must come from
-`opencode_setting/opencode-commands`. Future OpenCode-specific bootstrap files
+`opencode_setting/opencode-commands`; OpenCode-native guard plugins must come
+from `opencode_setting/opencode-plugins`. Future OpenCode-specific bootstrap files
 should live under `adapters/opencode/` and be symlinked or generated into
 `opencode_setting/` without moving OpenCode credentials, DB state, logs,
 sessions, or snapshots into the repo.

@@ -22,8 +22,9 @@ Native Skill projection is materialized under `adapters/opencode/skills/` from
 portable `capabilities/*.md`. Native Agent projection is materialized under
 `adapters/opencode/agents/` from `roles/README.md`. Native Command projection
 is materialized under `adapters/opencode/commands/` from `capabilities/`.
-Plugin hooks remain future work. Capability support still uses explicit `preflight.sh`
-wrappers for guards and tool-contract reporting.
+Native guard plugin projection is materialized under `adapters/opencode/plugins/`.
+Capability support still keeps explicit `preflight.sh` wrappers as fallback for
+guards and tool-contract reporting.
 
 ## Entry Points
 
@@ -40,6 +41,7 @@ wrappers for guards and tool-contract reporting.
 | Native skills | `adapters/opencode/skills/` |
 | Native agents | `adapters/opencode/agents/` |
 | Native commands | `adapters/opencode/commands/` |
+| Native guard plugin | `adapters/opencode/plugins/agent-harness-guards.js` |
 | Capabilities | `capabilities/README.md` |
 | Role profiles | `roles/README.md` |
 | Hook and guard scripts | `hooks/`, `utilities/` |
@@ -52,7 +54,7 @@ wrappers for guards and tool-contract reporting.
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/opencode/bin/preflight.sh capability-info <capability>` to confirm OpenCode realization; use `adapters/opencode/skills/<capability>/SKILL.md` as OpenCode-native guidance |
 | native skill/command/agent surface | Skills are materialized under `adapters/opencode/skills/`; agents are materialized under `adapters/opencode/agents/`; commands are materialized under `adapters/opencode/commands/`. Future output must be generated from portable capability/role sources and verified with OpenCode discoverability (`opencode debug skill`, `opencode debug agent`, `opencode debug config`) |
-| native plugin hook surface | Not materialized yet; OpenCode has JS/TS plugin hooks (`tool.execute.before`, etc). If added, bridge to shared shell guards and keep preflight as fallback |
+| native plugin hook surface | `adapters/opencode/plugins/agent-harness-guards.js` uses `tool.execute.before` to bridge write/edit/patch targets to `adapters/opencode/bin/preflight.sh write`; explicit preflight remains fallback |
 | role profile | Use `roles/README.md` for meaning; use `roles/modes/` or Claude agent files only as compatibility references until OpenCode-native role prompts exist |
 | role mode | Run `adapters/opencode/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes are reference-only |
 | adapter bootstrap | Add `adapters/opencode/AGENTS.md` to the `instructions` array in `opencode.json`/`opencode.jsonc`; then load `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
@@ -149,6 +151,28 @@ Expose them to OpenCode by symlinking each generated `*.md` file into
 `$HOME/.config/opencode/command/` or a project `.opencode/command/` directory,
 using `opencode_setting/opencode-commands` as the projection source. Do not
 expose `adapters/claude/commands/` as OpenCode-native commands.
+
+## Native Guard Plugin Projection
+
+`adapters/opencode/plugins/agent-harness-guards.js` contains an OpenCode-native
+JS plugin that runs the adapter preflight guard before write/edit/patch tool
+execution:
+
+```bash
+node --check adapters/opencode/plugins/agent-harness-guards.js
+```
+
+Expose it to OpenCode by symlinking the generated projection into a project or
+global plugin directory:
+
+```bash
+mkdir -p .opencode/plugins
+ln -sfn "$AGENT_HOME/opencode_setting/opencode-plugins/agent-harness-guards.js" .opencode/plugins/agent-harness-guards.js
+```
+
+The plugin bridges to `adapters/opencode/bin/preflight.sh write`; it does not
+copy or invoke Claude hook files. Keep explicit `preflight.sh` calls as the
+fallback path for runtimes or invocations where plugins are disabled.
 
 ## Runtime Home Projection
 
