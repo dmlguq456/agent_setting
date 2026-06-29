@@ -37,17 +37,16 @@ if [ -f "$ROOT/capabilities/$cap.md" ]; then
 else
   portable_source="capabilities/README.md"
 fi
-claude_realization="adapters/claude/skills/$cap/SKILL.md"
 compat_reference="skills/$cap/SKILL.md"
 status="instruction-only"
 realization="portable-instructions"
 tool_contract=""
-note="Codex has no native skill/plugin realization for this capability yet; read the portable catalog and task-relevant docs, then use preflight guards. Claude Skill frontmatter is reference only."
+note="Codex has no native skill/plugin realization for this capability yet; read the portable catalog and task-relevant docs, then use preflight guards. Legacy Claude compatibility references are not native input."
 native_skill_path="adapters/codex/skills/$cap/SKILL.md"
 if [ -f "$ROOT/$native_skill_path" ]; then
   native_skill=1
   realization="codex-native-skill"
-  note="Codex has an adapter-owned native Skill projection generated from the portable capability spec. Use it with explicit preflight guards; Claude Skill frontmatter is reference only."
+  note="Codex has an adapter-owned native Skill projection generated from the portable capability spec. Use it with explicit preflight guards; legacy Claude compatibility references are not native input."
 else
   native_skill=0
   native_skill_path=""
@@ -58,10 +57,10 @@ case "$cap" in
     status="tool-contract"
     tool_contract="visual-harness"
     if [ "$native_skill" -eq 1 ]; then
-      note="Codex has a native Skill projection for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; Claude Design MCP files are reference only."
+      note="Codex has a native Skill projection for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; Claude visual harness files are reference only."
     else
       realization="portable-instructions"
-      note="Codex must provide an adapter visual harness equivalent before claiming full design capability support; Claude Design MCP files are reference only."
+      note="Codex must provide an adapter visual harness equivalent before claiming full design capability support; Claude visual harness files are reference only."
     fi
     ;;
 esac
@@ -74,12 +73,6 @@ if [ -n "$native_skill_path" ]; then
 fi
 printf 'realization=%s\n' "$realization"
 printf 'portable_source=%s\n' "$portable_source"
-
-if [ -f "$ROOT/$claude_realization" ]; then
-  printf 'claude_realization=%s\n' "$claude_realization"
-else
-  printf 'claude_realization=\n'
-fi
 
 if [ -f "$ROOT/$compat_reference" ]; then
   printf 'compat_reference=%s\n' "$compat_reference"

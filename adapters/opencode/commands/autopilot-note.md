@@ -16,5 +16,5 @@ This is adapter-owned output generated from `capabilities/autopilot-note.md`, no
 5. If the command receives arguments, map them to the portable argument shape:
    `[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--qa quick|light|standard|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>] [--no-fact-check]`.
 
-Do not use `adapters/claude/commands/` or Claude slash-command files as
+Do not use Claude adapter command files or Claude slash-command files as
 OpenCode-native command source.

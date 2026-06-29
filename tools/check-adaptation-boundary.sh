@@ -371,9 +371,19 @@ check_codex_native_skill_projection() {
       fail_msg "$skill must use Codex Skill frontmatter only, without adapter metadata"
     fi
   done
+
+  bad=$(rg -n 'adapters/claude|claude_setting|claude_realization' adapters/codex/skills adapters/codex/plugins/agent-harness-codex/skills adapters/codex/bin/capability-map.sh 2>/dev/null || true)
+  if [ -n "$bad" ]; then
+    fail_msg "Codex native capability surfaces must not expose Claude adapter paths:"
+    printf '%s\n' "$bad"
+  fi
 }
 
 check_codex_native_plugin_projection() {
+  plugin_root="adapters/codex/plugins/agent-harness-codex"
+  plugin_manifest="$plugin_root/.codex-plugin/plugin.json"
+  marketplace="adapters/codex/.agents/plugins/marketplace.json"
+
   if [ ! -x adapters/codex/bin/sync-native-plugin.py ]; then
     fail_msg "adapters/codex/bin/sync-native-plugin.py must be executable"
     return
@@ -384,14 +394,31 @@ check_codex_native_plugin_projection() {
     cat /tmp/codex-sync-plugin.err
   fi
 
-  if [ ! -f adapters/codex/plugins/agent-harness-codex/.codex-plugin/plugin.json ]; then
+  if [ ! -d "$plugin_root" ] || [ -L "$plugin_root" ]; then
+    fail_msg "$plugin_root must be a concrete adapter-owned Codex plugin directory"
+  fi
+  plugin_links=$(find "$plugin_root" -type l -print 2>/dev/null || true)
+  if [ -n "$plugin_links" ]; then
+    fail_msg "$plugin_root must not contain symlinked plugin files:"
+    printf '%s\n' "$plugin_links"
+  fi
+
+  if [ ! -f "$plugin_manifest" ]; then
     fail_msg "Codex native plugin manifest is missing"
   fi
-  if [ ! -f adapters/codex/.agents/plugins/marketplace.json ]; then
+  if [ ! -f "$marketplace" ]; then
     fail_msg "Codex native plugin marketplace is missing"
   fi
-  if [ ! -f adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md ]; then
+  if [ ! -f "$plugin_root/skills/autopilot-code/SKILL.md" ]; then
     fail_msg "Codex native plugin must include generated capability skills"
+  fi
+  if ! grep -Fq '"name": "agent-harness-codex"' "$plugin_manifest" \
+    || ! grep -Fq '"skills": "./skills/"' "$plugin_manifest"; then
+    fail_msg "$plugin_manifest must define the agent-harness-codex plugin and plugin-local skills path"
+  fi
+  if ! grep -Fq '"name": "agent-harness"' "$marketplace" \
+    || ! grep -Fq '"path": "./plugins/agent-harness-codex"' "$marketplace"; then
+    fail_msg "$marketplace must expose agent-harness-codex through the repo-local plugin path"
   fi
 
   if ! grep -Fq "Custom prompts are deprecated" adapters/codex/README.md; then
@@ -654,6 +681,12 @@ check_opencode_native_skill_projection() {
       fail_msg "$skill must instruct OpenCode to report named tool contracts"
     fi
   done
+
+  bad=$(rg -n 'adapters/claude|claude_setting|claude_realization' adapters/opencode/skills adapters/opencode/bin/capability-map.sh 2>/dev/null || true)
+  if [ -n "$bad" ]; then
+    fail_msg "OpenCode native skill surfaces must not expose Claude adapter paths:"
+    printf '%s\n' "$bad"
+  fi
 }
 
 check_opencode_native_agent_projection() {
@@ -683,6 +716,12 @@ check_opencode_native_agent_projection() {
       fail_msg "$agent must state that it is not a Claude Agent copy"
     fi
   done
+
+  bad=$(rg -n 'adapters/claude|claude_setting' adapters/opencode/agents 2>/dev/null || true)
+  if [ -n "$bad" ]; then
+    fail_msg "OpenCode native agent surfaces must not expose Claude adapter paths:"
+    printf '%s\n' "$bad"
+  fi
 
   if ! grep -Fq 'adapters/opencode/agents/<role>/<role>.md' adapters/opencode/README.md; then
     fail_msg "adapters/opencode/README.md must map role profiles to OpenCode-native agent projections"
@@ -725,6 +764,12 @@ check_opencode_native_command_projection() {
       fail_msg "$command must instruct OpenCode to report named tool contracts"
     fi
   done
+
+  bad=$(rg -n 'adapters/claude|claude_setting' adapters/opencode/commands 2>/dev/null || true)
+  if [ -n "$bad" ]; then
+    fail_msg "OpenCode native command surfaces must not expose Claude adapter paths:"
+    printf '%s\n' "$bad"
+  fi
 }
 
 check_opencode_native_plugin_projection() {

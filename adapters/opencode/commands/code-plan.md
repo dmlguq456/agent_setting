@@ -16,5 +16,5 @@ This is adapter-owned output generated from `capabilities/code-plan.md`, not a C
 5. If the command receives arguments, map them to the portable argument shape:
    `<task description> [--qa quick|light|standard|thorough|adversarial]`.
 
-Do not use `adapters/claude/commands/` or Claude slash-command files as
+Do not use Claude adapter command files or Claude slash-command files as
 OpenCode-native command source.

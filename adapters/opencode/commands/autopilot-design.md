@@ -16,5 +16,5 @@ This is adapter-owned output generated from `capabilities/autopilot-design.md`, 
 5. If the command receives arguments, map them to the portable argument shape:
    `<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--qa quick|standard|thorough]`.
 
-Do not use `adapters/claude/commands/` or Claude slash-command files as
+Do not use Claude adapter command files or Claude slash-command files as
 OpenCode-native command source.

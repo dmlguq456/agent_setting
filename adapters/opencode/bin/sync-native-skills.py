@@ -86,9 +86,8 @@ capability contract. It is adapter-owned output, not a Claude Skill copy.
 - After actually reading a spec PRD: `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]`
 - For workflow state: `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]`
 
-Do not use `skills/{identifier}/SKILL.md` or
-`adapters/claude/skills/{identifier}/SKILL.md` as OpenCode-native source. Those
-files are Claude compatibility/reference surfaces.
+Do not use legacy compatibility Skill files or Claude adapter Skill files as
+OpenCode-native source. Those files are compatibility/reference surfaces only.
 """
     return identifier, body
 

@@ -16,5 +16,5 @@ This is adapter-owned output generated from `capabilities/autopilot-apply.md`, n
 5. If the command receives arguments, map them to the portable argument shape:
    `\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]`.
 
-Do not use `adapters/claude/commands/` or Claude slash-command files as
+Do not use Claude adapter command files or Claude slash-command files as
 OpenCode-native command source.

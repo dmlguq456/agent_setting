@@ -16,5 +16,5 @@ This is adapter-owned output generated from `capabilities/design-components.md`,
 5. If the command receives arguments, map them to the portable argument shape:
    `<design path or app path>`.
 
-Do not use `adapters/claude/commands/` or Claude slash-command files as
+Do not use Claude adapter command files or Claude slash-command files as
 OpenCode-native command source.

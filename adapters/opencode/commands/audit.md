@@ -16,5 +16,5 @@ This is adapter-owned output generated from `capabilities/audit.md`, not a Claud
 5. If the command receives arguments, map them to the portable argument shape:
    `<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]`.
 
-Do not use `adapters/claude/commands/` or Claude slash-command files as
+Do not use Claude adapter command files or Claude slash-command files as
 OpenCode-native command source.

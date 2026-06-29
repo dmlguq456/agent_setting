@@ -37,20 +37,19 @@ if [ -f "$ROOT/capabilities/$cap.md" ]; then
 else
   portable_source="capabilities/README.md"
 fi
-claude_realization="adapters/claude/skills/$cap/SKILL.md"
 compat_reference="skills/$cap/SKILL.md"
 native_skill_path="adapters/opencode/skills/$cap/SKILL.md"
 status="instruction-only"
 realization="opencode-native-skill"
 tool_contract=""
-note="OpenCode has an adapter-owned native Skill projection generated from the portable capability spec. Use it with explicit preflight guards; Claude Skill frontmatter is reference only."
+note="OpenCode has an adapter-owned native Skill projection generated from the portable capability spec. Use it with explicit preflight guards; legacy Claude compatibility references are not native input."
 
 case "$cap" in
   autopilot-design|design-*)
     status="tool-contract"
     realization="opencode-native-skill"
     tool_contract="visual-harness"
-    note="OpenCode has a native Skill projection for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; Claude Design MCP files are reference only."
+    note="OpenCode has a native Skill projection for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; Claude visual harness files are reference only."
     ;;
 esac
 
@@ -66,12 +65,6 @@ else
 fi
 printf 'realization=%s\n' "$realization"
 printf 'portable_source=%s\n' "$portable_source"
-
-if [ -f "$ROOT/$claude_realization" ]; then
-  printf 'claude_realization=%s\n' "$claude_realization"
-else
-  printf 'claude_realization=\n'
-fi
 
 if [ -f "$ROOT/$compat_reference" ]; then
   printf 'compat_reference=%s\n' "$compat_reference"

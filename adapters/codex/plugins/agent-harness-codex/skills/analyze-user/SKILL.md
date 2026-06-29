@@ -37,6 +37,5 @@ contract. It is adapter-owned output, not a Claude Skill copy.
 - After actually reading a spec PRD: `adapters/codex/bin/preflight.sh read <prd.md> [session-id]`
 - For workflow state: `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`
 
-Do not use `skills/analyze-user/SKILL.md` or
-`adapters/claude/skills/analyze-user/SKILL.md` as Codex-native source. Those
-files are Claude compatibility/reference surfaces.
+Do not use legacy compatibility Skill files or Claude adapter Skill files as
+Codex-native source. Those files are compatibility/reference surfaces only.
