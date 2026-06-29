@@ -81,6 +81,23 @@ check_codex_capability_map() {
   done
 }
 
+check_codex_mode_map() {
+  mapper=adapters/codex/bin/mode-map.sh
+  if [ ! -x "$mapper" ]; then
+    fail_msg "$mapper is missing or not executable"
+    return
+  fi
+
+  for f in agent-modes/*/*.md; do
+    [ -f "$f" ] || continue
+    rel=${f#agent-modes/}
+    rel=${rel%.md}
+    if ! "$mapper" "$rel" >/dev/null 2>&1; then
+      fail_msg "Codex mode map cannot resolve agent mode: $rel"
+    fi
+  done
+}
+
 check_hook_catalog() {
   if [ ! -f core/HOOKS.md ]; then
     fail_msg "core/HOOKS.md is missing"
@@ -136,6 +153,7 @@ check_required_projection_entries
 check_removed_root_surfaces
 check_capability_catalog
 check_codex_capability_map
+check_codex_mode_map
 check_hook_catalog
 check_legacy_root_links
 warn_concrete_runtime_terms

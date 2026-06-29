@@ -184,6 +184,20 @@ if "$CODEX" capability-info autopilot-code >/tmp/cap.out 2>/tmp/cap.err \
 else
   bad "codex capability wrapper should report instruction-only realization"
 fi
+if "$CODEX" mode-info dev/backend >/tmp/mode.out 2>/tmp/mode.err \
+  && grep -q '^status=portable$' /tmp/mode.out \
+  && grep -q '^realization=portable-persona$' /tmp/mode.out; then
+  ok "codex mode wrapper maps portable mode"
+else
+  bad "codex mode wrapper should map portable mode"
+fi
+if "$CODEX" mode-info design/maker >/tmp/mode.out 2>/tmp/mode.err \
+  && grep -q '^status=unsupported$' /tmp/mode.out \
+  && grep -q '^realization=adapter-coupled$' /tmp/mode.out; then
+  ok "codex mode wrapper marks adapter-coupled design mode unsupported"
+else
+  bad "codex mode wrapper should mark adapter-coupled design mode unsupported"
+fi
 mkdir -p "$TMP/codex_sessions/2026/06/29"
 cat > "$TMP/codex_sessions/2026/06/29/rollout-2026-06-29T00-00-00-codexsid.jsonl" <<'EOF'
 {"timestamp":"2026-06-29T00:00:00.000Z","type":"event_msg","payload":{"type":"user_message","message":"hello"}}
