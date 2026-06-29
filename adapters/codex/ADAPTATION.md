@@ -44,6 +44,7 @@ Codex must not consume these Claude-native files as native configuration:
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |
 | oncall briefing | Run `adapters/codex/bin/preflight.sh briefing [cwd]` before prompt handling on the dedicated agent desk |
 | memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`; opt-in proposal generation exists via `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]`; automatic memory mutation remains disabled until Codex has an accepted no-tools/action contract |
+| worklog state signal | Run `adapters/codex/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before Codex updates notes or diagnoses board state |
 | role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role>` to resolve Codex model/reasoning-effort settings |
 | role modes | Read `roles/MODES.md`, then run `adapters/codex/bin/preflight.sh mode-info <family/mode>`; treat adapter-coupled modes as unsupported unless wrappers exist |
 | hook invariants | Read `core/HOOKS.md`; run explicit preflight wrappers until Codex-native hook events exist |
@@ -87,3 +88,14 @@ separates the pipeline:
 4. The proposal is not applied to memory automatically. A future acceptance gate
    must prove tool-free execution or provide a native no-tools flag before this
    adapter may match Claude's automatic distillation behavior.
+
+## Worklog Boundary
+
+Codex must treat `<agent-notes-root>` as mutable continuity state, not as harness
+source. Before changing notes/routing state, run normal `write` preflight for the
+target file and inspect `preflight.sh worklog` output. Codex may read/write
+notes-root files only when the task is explicitly about notes, triage, feedback,
+or worklog routing. The board app/runtime should stay outside `<agent-home>` by
+default. If `<agent-home>/worklog-board*` exists, treat it as gitignored local
+fallback only. Codex must not commit worklog-board DBs, caches, `.env*`, build
+output, dispatch logs, or worktrees into this repo.

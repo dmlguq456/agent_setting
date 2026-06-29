@@ -78,6 +78,39 @@ The artifact root contains durable, project-scoped work products:
 | `documents/` | document drafts and refinement artifacts |
 | `experiments/` | experiment setup, evaluation, and run logs |
 
+## 3.1. Agent Notes And Worklog Board
+
+The canonical neutral name for the cross-project continuity board data root is:
+
+```text
+<agent-notes-root>
+```
+
+It is not the project artifact root and not the unified memory store. It is a
+mutable operator-facing state layer used to carry agent work across projects and
+sessions:
+
+| Folder | Meaning | Commit policy |
+|---|---|---|
+| `cards/` | Layer 1 user-owned task/project cards | user data; never commit to the harness repo |
+| `_layer2/` | Layer 2 agent-owned notes, catalogs, and source-to-card routing rows | mutable board data; never commit to the harness repo |
+| `_triage/`, `_feedback/`, `_change_review/` | approval, feedback, and change-review queues | runtime/user state; never commit to the harness repo |
+| `digests/`, `oncall/`, `study/`, `manual/` | daily summaries, operator reports, study proposals, and board manual content | state/docs for the notes root; never commit to the harness repo unless intentionally mirrored in a separate notes repo |
+
+The neutral name for the UI/application that reads and updates this state is:
+
+```text
+<worklog-board-app>
+```
+
+The app should live outside `<agent-home>` as its own repository or local
+runtime workspace. Its source, build output, local DBs, caches, `.env*`,
+dispatch logs, and worktrees are not part of this harness repository unless a
+future migration explicitly promotes a runtime-neutral board component into
+`tools/` or another portable source directory. If `worklog-board/` or
+`worklog-board-wt/` exists under `<agent-home>`, treat it as ignored local state
+or a legacy accident, not portable harness source.
+
 ## 4. Workflow Invariants
 
 Artifacts move forward in one direction:
@@ -109,7 +142,9 @@ Each adapter should provide:
 - a projection from the neutral `<agent-home>` repository into the runtime home using symlinks, generated files, or runtime-native registration;
 - hooks or checks for artifact order, git safety, and memory writes;
 - a status/reminder surface for tracked vs untracked mode;
-- compatibility with both `.agent_reports/` and `.claude_reports/` until legacy projects are migrated.
+- compatibility with both `.agent_reports/` and `.claude_reports/` until legacy projects are migrated;
+- a documented realization of `<agent-notes-root>` and `<worklog-board-app>` if
+  that runtime reads or updates cross-project worklog state.
 
 ## 6. Naming Policy
 

@@ -26,6 +26,16 @@ done
 
 Keep these local to `$HOME/.claude`: `.credentials.json`, `.dispatch/`, `cache/`, `daemon/`, `history.jsonl`, `ide/`, `projects/`, `sessions/`, `session-env/`, `shell-snapshots/`, runtime logs, and other runtime-generated state.
 
+Keep `worklog-board/` and `worklog-board-wt/` outside `$AGENT_HOME` by default,
+for example under `$AGENT_STATE_HOME` or an adapter runtime home. Existing
+`$HOME/.claude/worklog-board*` directories are legacy local worklog app
+workspaces, not harness projection targets. Do not move their data during
+harness installation. If `worklog-board*` appears under `$AGENT_HOME`, the root
+`.gitignore` keeps it out of git as a fallback only; do not treat it as source.
+The notes data root is `<agent-notes-root>` (current local default:
+`/home/nas/user/Uihyeop/notes/`), which is mutable continuity state and should
+not be committed to this repo.
+
 ## Codex Projection
 
 Codex does not currently consume the full harness natively. Keep `$HOME/.codex` runtime-owned and expose a stable pointer:

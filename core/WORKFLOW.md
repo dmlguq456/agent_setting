@@ -117,6 +117,23 @@
 
 숫자 prefix(00_/01_/02_/05_) 폐지 — `spec/` 안 평이한 이름·user-facing(위) vs `_internal/`(기계) 2분. spec versioning = doc 트랙 동일 원리 (autopilot-spec refine 이 `_internal/versions/v{N}/prd.md` 자동 snapshot). 상세 = [`CONVENTIONS.md §5·§6.5`](CONVENTIONS.md).
 
+## 6.1. Cross-Project Continuity Layer — `<agent-notes-root>`
+
+`<agent-notes-root>` 는 프로젝트별 `<artifact-root>` 와 다른 계층이다. artifact root 는 한 프로젝트 안의 research/spec/plans/documents/experiments 를 담고, notes root 는 여러 프로젝트 산출물을 읽어 L1/L2 상태판으로 연결한다.
+
+| 계층 | 주인 | 예시 | 변경 경로 |
+|---|---|---|---|
+| `<artifact-root>/notes/<date>/` | autopilot-note | 이번 실행의 scan/routing log, reviewer log | capability 산출물 — artifact root 규칙 |
+| `<agent-notes-root>/_layer2/notes/` | agent | 산출물 1개를 읽기 좋은 note row 로 노트화 | `autopilot-note` 또는 board-approved migration |
+| `<agent-notes-root>/_layer2/{backbones,tasks,papers}/` | agent | 재사용 축/과제/논문 카탈로그 | `autopilot-note` emerge 또는 board-approved edit |
+| `<agent-notes-root>/cards/` | user | L1 task/project 카드 | worklog-board UI 또는 사용자 직접 편집 |
+| `<agent-notes-root>/_triage`, `_feedback`, `_change_review` | user+agent queue | 신규 카드 제안, 사용자 피드백, 코드 변경 검토 | worklog-board UI + `autopilot-note --feedback` |
+| `<agent-notes-root>/digests`, `oncall`, `study`, `manual` | loop/operator docs | 일지, 당직 보고, 연수 제안, 매뉴얼 | loop 또는 board UI |
+
+**판정**: `_layer2/`, `_triage/`, `_feedback/`, `_change_review/`, local board DB 는 mutable runtime/user state 이다. 하네스 repo 에 커밋하지 않는다. 별도 notes repo 로 versioning 할 수는 있지만, 그 경우도 하네스 core/adapters 와 독립된 데이터 repo 로 취급한다.
+
+`<worklog-board-app>` 는 이 notes root 를 보여주고 승인/검토를 처리하는 구현체다. canonical 위치는 `<agent-home>` 바깥의 state/app workspace 여야 한다. 앱 코드 변경은 그 앱 repo 의 `autopilot-code` 대상이며, 하네스 migration 은 board data 를 이동/삭제하지 않는다. `<agent-home>/worklog-board*` 가 있더라도 gitignored local fallback 으로만 보고 portable source 로 승격하지 않는다.
+
 ## 7. 사후 수정 라우팅 — spec-backed 프로젝트
 
 초기 빌드 후 수정·기능 요청 (특히 새 세션). cwd 에 artifact root 의 `spec/` 이 있으면 ad-hoc 직접 Edit 금지 — **순서 원칙 (기존 산출물 파악) → analyze → spec → dev** 를 지킨다 (adapter bootstrap imperative).

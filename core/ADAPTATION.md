@@ -15,6 +15,8 @@ Every file in this repo must fall into one category.
 | Adapter projection | Versioned mirror that exposes adapter source under runtime-expected names. | `claude_setting/`, `codex_setting/` | Symlink or generated output only; no independent semantics |
 | Compatibility passthrough | Legacy file still consumed directly by a runtime before a true portable/adapted split exists. | Current `skills/`, many `hooks/` | Allowed only with an explicit debt note in the adapter |
 | Runtime state | Tool-owned mutable local state. | `~/.claude/projects`, credentials, session logs, caches, DB files | Never committed to this repo |
+| Continuity state | Cross-project agent worklog/notes data that survives sessions but is not harness source. | `<agent-notes-root>/cards`, `_layer2`, `_triage`, `digests`, `oncall`, `study` | Never committed to this repo; may be versioned in a separate notes/data repo |
+| Local board app state | Worklog-board local app workspace, generated output, DB/cache, dispatch logs, and worktrees. | `$AGENT_STATE_HOME/worklog-board`, `<worklog-board-app>/.cache`, `.next`, `.dispatch`, `.env*`, `node_modules`, `<worklog-board-app>-wt/` | Keep outside `<agent-home>` by default; never committed to this repo |
 
 ## 2. Adapter Rule
 
@@ -84,6 +86,7 @@ Portable hook semantics are named by invariant:
 | memory write guard | Runtime-native memory files must not bypass the unified memory store |
 | workflow signal | Surface tracked/untracked mode to the active agent |
 | memory recall/inject/distill | Inject relevant memory and optionally distill session deltas |
+| worklog state signal | Surface the configured notes root and board app status without moving or mutating data |
 
 Adapters decide whether each invariant is enforced by native hook, wrapper,
 manual preflight, or unsupported fallback.

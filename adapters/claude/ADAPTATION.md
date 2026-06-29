@@ -24,6 +24,29 @@ runtime-specific files out of the common root.
 
 `~/.claude/*` should point at `claude_setting/*`, not directly at common files.
 
+## Worklog And Agent Notes Realization
+
+Claude Code currently realizes the portable continuity layer through local paths:
+
+| Portable name | Current Claude realization | Classification |
+|---|---|---|
+| `<agent-notes-root>` | `/home/nas/user/Uihyeop/notes/` | mutable continuity state |
+| `<worklog-board-app>` | `$AGENT_STATE_HOME/worklog-board/` or legacy `/home/Uihyeop/.claude/worklog-board/` | external/local app workspace |
+| `<worklog-board-app>-wt/` | `$AGENT_STATE_HOME/worklog-board-wt/` or legacy `/home/Uihyeop/.claude/worklog-board-wt/` | app worktrees |
+
+The Claude adapter preserves existing behavior: `autopilot-note` writes Layer 2
+notes, triage proposals, digests, and feedback/change-review queue entries under
+the notes root; the worklog-board app reads that state and owns UI approval
+flows. The adapter must not move or delete existing data during harness
+migration.
+
+Keep these out of the harness repo: notes data, worklog local DB/cache, `.env*`,
+`.next`, `node_modules`, `.dispatch`, app runtime logs, and worktrees.
+`<agent-home>/worklog-board*` remains gitignored only as a fallback for
+accidental or legacy local placement. If the board app source is later made
+portable, promote it as a separate app/tool with its own repo or explicit source
+directory rather than treating the current local workspace as adapter source.
+
 ## Compatibility Passthrough
 
 These surfaces are still consumed by Claude Code directly, but are not yet clean
