@@ -166,6 +166,12 @@ check_install_layout_opencode_projection() {
       fail_msg "INSTALL_LAYOUT.md must include OpenCode projection install step for opencode_setting/$p"
     fi
   done
+
+  if ! grep -Fq 'OPENCODE_CONFIG_CONTENT=' INSTALL_LAYOUT.md \
+    || ! grep -Fq 'opencode_setting/opencode-skills' INSTALL_LAYOUT.md \
+    || ! grep -Fq 'OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1' INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate OpenCode skills through adapter-owned paths with Claude compat autoload disabled"
+  fi
 }
 
 check_codex_bin_wrappers() {

@@ -180,7 +180,9 @@ HOME="$tmp_opencode_home" XDG_CONFIG_HOME="$tmp_opencode_home/.config" XDG_DATA_
 HOME="$tmp_opencode_home" XDG_CONFIG_HOME="$tmp_opencode_home/.config" XDG_DATA_HOME="$tmp_opencode_home/.local/share" opencode debug config --pure >/tmp/opencode-command.json
 ! rg '/.claude/' /tmp/opencode-agent.json
 ! rg '/.claude/' /tmp/opencode-command.json
-OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 opencode debug skill --pure >/tmp/opencode-skills.json
+OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 \
+OPENCODE_CONFIG_CONTENT="{\"skills\":{\"paths\":[\"$PWD/opencode_setting/opencode-skills\"]}}" \
+  opencode debug skill --pure >/tmp/opencode-skills.json
 ! rg '"location": ".*/\.claude/skills' /tmp/opencode-skills.json
 ```
 

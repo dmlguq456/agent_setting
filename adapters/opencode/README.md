@@ -262,7 +262,9 @@ OpenCode bootstrap files:
 For native OpenCode surface checks, disable the Claude compatibility autoload:
 
 ```bash
-OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 opencode debug skill --pure
+OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 \
+OPENCODE_CONFIG_CONTENT='{"skills":{"paths":["/path/to/agent_setting/opencode_setting/opencode-skills"]}}' \
+  opencode debug skill --pure
 ```
 
 When porting a behavior, copy the underlying invariant from `CORE.md`,
