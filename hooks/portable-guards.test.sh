@@ -300,6 +300,22 @@ if command -v codex >/dev/null 2>&1; then
 else
   ok "codex native skill runtime discovery skipped (codex not installed)"
 fi
+if command -v codex >/dev/null 2>&1; then
+  mkdir -p "$TMP/codex_plugin_home"
+  if CODEX_HOME="$TMP/codex_plugin_home" codex plugin marketplace add "$ROOT/codex_setting/codex-plugin-marketplace" --json >/tmp/codex_plugin_marketplace.out 2>/tmp/codex_plugin_marketplace.err \
+    && CODEX_HOME="$TMP/codex_plugin_home" codex plugin list --available --json >/tmp/codex_plugin_list.out 2>/tmp/codex_plugin_list.err \
+    && grep -q '"pluginId": "agent-harness-codex@agent-harness"' /tmp/codex_plugin_list.out \
+    && CODEX_HOME="$TMP/codex_plugin_home" codex plugin add agent-harness-codex@agent-harness --json >/tmp/codex_plugin_add.out 2>/tmp/codex_plugin_add.err \
+    && CODEX_HOME="$TMP/codex_plugin_home" codex debug prompt-input 'autopilot-code' >/tmp/codex_plugin_prompt.out 2>/tmp/codex_plugin_prompt.err \
+    && grep -q -- '- agent-harness-codex:autopilot-code:' /tmp/codex_plugin_prompt.out \
+    && ! grep -q 'adapters/claude/skills' /tmp/codex_plugin_prompt.out; then
+    ok "codex native plugin projection is installable and discovers generated skills"
+  else
+    bad "codex native plugin projection should be installable and discover generated skills"
+  fi
+else
+  ok "codex native plugin runtime discovery skipped (codex not installed)"
+fi
 if "$CODEX" mode-info dev/backend >/tmp/mode.out 2>/tmp/mode.err \
   && grep -q '^status=portable$' /tmp/mode.out \
   && grep -q '^realization=portable-persona$' /tmp/mode.out; then

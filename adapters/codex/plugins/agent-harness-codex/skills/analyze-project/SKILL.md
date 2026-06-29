@@ -1,0 +1,42 @@
+---
+name: analyze-project
+description: "Use when the user requests analyze-project: 사전 분석. 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로 만든다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+---
+
+# analyze-project
+
+This is a Codex-native Skill projection generated from the portable capability
+contract. It is adapter-owned output, not a Claude Skill copy.
+
+## Source
+
+- Portable source: `capabilities/analyze-project.md`
+- Runtime check: `adapters/codex/bin/preflight.sh capability-info analyze-project`
+- Bootstrap: `adapters/codex/AGENTS.md`
+
+## Use
+
+1. Read `capabilities/analyze-project.md` for the runtime-neutral contract.
+2. Run `adapters/codex/bin/preflight.sh capability-info analyze-project`.
+3. Obey the reported status:
+   - `instruction-only`: use this Skill as Codex guidance plus explicit preflight guards.
+   - `tool-contract`: report the missing tool contract before claiming full support.
+   - `unsupported`: stop or use the documented fallback.
+
+## Shape
+
+- Identifier: `analyze-project`
+- Supported modes: `code, paper, doc`
+- Argument shape: `[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]`
+- Portable meaning: 사전 분석. 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로 만든다.
+
+## Required Guards
+
+- Before edits: `adapters/codex/bin/preflight.sh write <file> [session-id]`
+- Before spec-changing work: `adapters/codex/bin/preflight.sh capability analyze-project [cwd] [session-id]`
+- After actually reading a spec PRD: `adapters/codex/bin/preflight.sh read <prd.md> [session-id]`
+- For workflow state: `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`
+
+Do not use `skills/analyze-project/SKILL.md` or
+`adapters/claude/skills/analyze-project/SKILL.md` as Codex-native source. Those
+files are Claude compatibility/reference surfaces.

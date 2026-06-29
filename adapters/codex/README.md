@@ -12,8 +12,10 @@ adapter wrappers only for harness-specific signals that Codex does not already
 surface.
 
 Codex native Skill projection is materialized under `adapters/codex/skills/`
-from `capabilities/`. Plugin and command-like surfaces remain future work; do
-not project Claude Skill, command, hook, or statusline files into Codex.
+from `capabilities/`. A Codex plugin projection is materialized under
+`adapters/codex/plugins/agent-harness-codex` and exposed through the repo-local
+marketplace at `adapters/codex/.agents/plugins/marketplace.json`. Do not
+project Claude Skill, command, hook, or statusline files into Codex.
 
 ## Entry Points
 
@@ -32,6 +34,7 @@ not project Claude Skill, command, hook, or statusline files into Codex.
 | Role mode inventory | `roles/MODES.md` |
 | Hook and guard scripts | `hooks/`, `utilities/` |
 | Native skills | `adapters/codex/skills/` |
+| Native plugin | `adapters/codex/plugins/agent-harness-codex` |
 | Selected tool projection | `adapters/codex/tools/` |
 | Selected utility projection | `adapters/codex/utilities/` |
 
@@ -40,7 +43,7 @@ not project Claude Skill, command, hook, or statusline files into Codex.
 | Core Concept | Codex Implementation |
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/codex/bin/preflight.sh capability-info <capability>` to confirm Codex realization; use `adapters/codex/skills/<capability>/SKILL.md` as Codex-native guidance |
-| native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; plugin and command-like surfaces are not materialized yet. Future output must be generated from portable capability/role sources and verified with Codex discoverability (`codex debug prompt-input`) |
+| native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Future command-like output must be generated from portable capability/role sources and verified with Codex discoverability (`codex debug prompt-input`) |
 | role profile | Use `roles/README.md` for meaning; use `roles/modes/` or Claude agent files only as compatibility references until Codex-native role prompts exist |
 | role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes are reference-only |
 | adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
@@ -106,6 +109,26 @@ Expose them to Codex by symlinking each generated skill directory into
 `$CODEX_HOME/skills/`, using `codex_setting/codex-skills` as the projection
 source. Do not expose root `skills/` or `adapters/claude/skills/` as Codex
 native skills.
+
+## Native Plugin Projection
+
+`adapters/codex/plugins/agent-harness-codex` contains an installable Codex
+plugin generated from the same Codex-native Skill projection:
+
+```bash
+adapters/codex/bin/sync-native-plugin.py --check
+```
+
+Expose the repo-local marketplace through `codex_setting/codex-plugin-marketplace`:
+
+```bash
+codex plugin marketplace add "$AGENT_HOME/codex_setting/codex-plugin-marketplace"
+codex plugin add agent-harness-codex@agent-harness
+```
+
+The plugin copies generated Codex Skill files into plugin-local `skills/` so
+Codex discovers them as `agent-harness-codex:<capability>`. Do not build the
+plugin from Claude Skill files.
 
 ## Runtime Home Projection
 

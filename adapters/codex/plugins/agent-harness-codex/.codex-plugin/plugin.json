@@ -1,0 +1,23 @@
+{
+  "name": "agent-harness-codex",
+  "version": "0.1.0",
+  "description": "Codex-native plugin projection for the portable agent harness.",
+  "author": {
+    "name": "agent_setting"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agent Harness Codex",
+    "shortDescription": "Portable agent harness capabilities for Codex.",
+    "longDescription": "Adapter-owned Codex plugin projection generated from portable agent_setting capability contracts. Claude-native files are reference only.",
+    "developerName": "agent_setting",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use the portable agent harness in Codex."
+    ]
+  }
+}

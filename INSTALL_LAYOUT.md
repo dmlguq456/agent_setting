@@ -50,6 +50,7 @@ ln -sfn "$AGENT_HOME/codex_setting/bin" "$HOME/.codex/agent-bin"
 ln -sfn "$AGENT_HOME/codex_setting/tools" "$HOME/.codex/agent-tools"
 ln -sfn "$AGENT_HOME/codex_setting/utilities" "$HOME/.codex/agent-utilities"
 ln -sfn "$AGENT_HOME/codex_setting/codex-skills" "$HOME/.codex/agent-skills"
+ln -sfn "$AGENT_HOME/codex_setting/codex-plugin-marketplace" "$HOME/.codex/agent-plugin-marketplace"
 mkdir -p "$HOME/.codex/skills"
 for d in "$AGENT_HOME/codex_setting/codex-skills"/*; do
   [ -d "$d" ] || continue
@@ -60,10 +61,11 @@ done
 Do not symlink Claude-native surfaces such as `settings.json`, `commands/`,
 root `skills/`, `statusline.sh`, or `hooks/` into `$HOME/.codex`. Codex-native
 Skill projections must come from `codex_setting/codex-skills`, which is
-generated from `capabilities/`. Future Codex-specific bootstrap files should
-live under `adapters/codex/` and be symlinked or generated into
-`codex_setting/` without moving Codex credentials, logs, sessions, or SQLite
-state into the repo.
+generated from `capabilities/`. Codex-native plugin installation must use
+`codex_setting/codex-plugin-marketplace`, which points at the adapter-owned
+repo-local marketplace. Future Codex-specific bootstrap files should live under
+`adapters/codex/` and be symlinked or generated into `codex_setting/` without
+moving Codex credentials, logs, sessions, or SQLite state into the repo.
 
 ## OpenCode Projection
 
@@ -147,12 +149,18 @@ python3 -m py_compile tools/build-manifest.py tools/memory/mem.py
 sh utilities/agent-home.sh
 tools/check-adaptation-boundary.sh
 adapters/codex/bin/sync-native-skills.py --check
+adapters/codex/bin/sync-native-plugin.py --check
 codex_setting/bin/preflight.sh capability-info autopilot-code
 tmp_codex_home=$(mktemp -d)
 mkdir -p "$tmp_codex_home/skills"
 for d in "$PWD/codex_setting/codex-skills"/*; do ln -s "$d" "$tmp_codex_home/skills/$(basename "$d")"; done
 CODEX_HOME="$tmp_codex_home" codex debug prompt-input autopilot-code >/tmp/codex-skills.json
 ! rg '/.claude/skills' /tmp/codex-skills.json
+tmp_codex_plugin_home=$(mktemp -d)
+CODEX_HOME="$tmp_codex_plugin_home" codex plugin marketplace add "$PWD/codex_setting/codex-plugin-marketplace" --json >/tmp/codex-plugin-marketplace.json
+CODEX_HOME="$tmp_codex_plugin_home" codex plugin add agent-harness-codex@agent-harness --json >/tmp/codex-plugin-add.json
+CODEX_HOME="$tmp_codex_plugin_home" codex debug prompt-input autopilot-code >/tmp/codex-plugin-skills.json
+! rg 'adapters/claude/skills' /tmp/codex-plugin-skills.json
 opencode_setting/bin/preflight.sh capability-info autopilot-code
 adapters/opencode/bin/sync-native-skills.py --check
 adapters/opencode/bin/sync-native-agents.py --check

@@ -40,7 +40,7 @@ check_codex_forbidden_entries() {
 }
 
 check_codex_native_surface_debt() {
-  for p in adapters/codex/plugins adapters/codex/.codex-plugin codex_setting/plugins codex_setting/.codex-plugin; do
+  for p in adapters/codex/.codex-plugin codex_setting/plugins codex_setting/.codex-plugin; do
     if [ -e "$p" ] || [ -L "$p" ]; then
       fail_msg "$p exists; Codex native plugin surface is not materialized yet and must be added with discoverability guards"
     fi
@@ -56,7 +56,7 @@ check_opencode_forbidden_entries() {
 }
 
 check_required_projection_entries() {
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-plugin-marketplace; do
     if [ ! -L "codex_setting/$p" ]; then
       fail_msg "codex_setting/$p must be a symlink projection entry"
     fi
@@ -73,6 +73,7 @@ check_codex_projection_targets() {
   check_link_target codex_setting/tools ../adapters/codex/tools
   check_link_target codex_setting/utilities ../adapters/codex/utilities
   check_link_target codex_setting/codex-skills ../adapters/codex/skills
+  check_link_target codex_setting/codex-plugin-marketplace ../adapters/codex
 }
 
 check_opencode_required_projection_entries() {
@@ -142,7 +143,7 @@ check_link_target() {
 check_install_layout_codex_projection() {
   [ -f INSTALL_LAYOUT.md ] || { fail_msg "INSTALL_LAYOUT.md is missing"; return; }
 
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-plugin-marketplace; do
     if ! grep -Fq "\$AGENT_HOME/codex_setting/$p" INSTALL_LAYOUT.md; then
       fail_msg "INSTALL_LAYOUT.md must include Codex projection install step for codex_setting/$p"
     fi
@@ -176,7 +177,7 @@ check_codex_bin_wrappers() {
     fail_msg "codex_setting/bin points to $target; expected ../adapters/codex/bin"
   fi
 
-  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh; do
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh sync-native-plugin.py; do
     if [ ! -x "adapters/codex/bin/$p" ]; then
       fail_msg "adapters/codex/bin/$p is missing or not executable"
     fi
@@ -328,6 +329,28 @@ check_codex_native_skill_projection() {
       fail_msg "$skill must use Codex Skill frontmatter only, without adapter metadata"
     fi
   done
+}
+
+check_codex_native_plugin_projection() {
+  if [ ! -x adapters/codex/bin/sync-native-plugin.py ]; then
+    fail_msg "adapters/codex/bin/sync-native-plugin.py must be executable"
+    return
+  fi
+
+  if ! adapters/codex/bin/sync-native-plugin.py --check >/tmp/codex-sync-plugin.out 2>/tmp/codex-sync-plugin.err; then
+    fail_msg "Codex native plugin projection is stale; run adapters/codex/bin/sync-native-plugin.py"
+    cat /tmp/codex-sync-plugin.err
+  fi
+
+  if [ ! -f adapters/codex/plugins/agent-harness-codex/.codex-plugin/plugin.json ]; then
+    fail_msg "Codex native plugin manifest is missing"
+  fi
+  if [ ! -f adapters/codex/.agents/plugins/marketplace.json ]; then
+    fail_msg "Codex native plugin marketplace is missing"
+  fi
+  if [ ! -f adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md ]; then
+    fail_msg "Codex native plugin must include generated capability skills"
+  fi
 }
 
 check_portable_agent_home_resolution() {
@@ -945,6 +968,7 @@ check_codex_bin_wrappers
 check_opencode_bin_wrappers
 check_codex_tool_projection
 check_codex_native_skill_projection
+check_codex_native_plugin_projection
 check_portable_agent_home_resolution
 check_opencode_tool_projection
 check_opencode_native_skill_projection

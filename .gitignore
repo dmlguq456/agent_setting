@@ -19,6 +19,10 @@ todos/
 tasks/
 plans/
 plugins/
+!adapters/codex/plugins/
+!adapters/codex/plugins/**
+!adapters/codex/.agents/
+!adapters/codex/.agents/**
 
 # Project-scoped memory (per-project, not shared)
 projects/

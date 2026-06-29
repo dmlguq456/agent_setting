@@ -43,15 +43,23 @@ invariant.
 | Role catalog | `roles/` | `codex_setting/roles` |
 | Preflight wrappers | `adapters/codex/bin/` | `codex_setting/bin` |
 | Skills | `adapters/codex/skills/<name>/SKILL.md` generated from `capabilities/` | `codex_setting/codex-skills` |
+| Plugin marketplace | `adapters/codex/.agents/plugins/marketplace.json` plus `adapters/codex/plugins/agent-harness-codex` | `codex_setting/codex-plugin-marketplace` |
 | Shared helper tools | selected `tools/`, selected `utilities/` | `codex_setting/tools`, `codex_setting/utilities` |
 | Selected tools | `adapters/codex/tools/` adapter launchers plus selected portable tool projections | `codex_setting/tools` |
 | Selected utilities | `adapters/codex/utilities/` adapter wrappers plus selected portable utility projections | `codex_setting/utilities` |
 
 ## Native Skill And Plugin Surface
 
-Current Codex support is instruction-first: load `AGENTS.md`, read
-`capabilities/`, run `preflight.sh capability-info`, and use generated
-Codex-native Skill projections as guidance. Plugin surfaces remain future work.
+Current Codex support includes generated native Skill projections:
+`adapters/codex/skills/<name>/SKILL.md` is generated from
+`capabilities/<name>.md` by `adapters/codex/bin/sync-native-skills.py` and
+projected as `codex_setting/codex-skills`.
+
+The same generated skills are also packaged into the adapter-owned Codex plugin
+`adapters/codex/plugins/agent-harness-codex`, with repo-local marketplace
+metadata under `adapters/codex/.agents/plugins/marketplace.json`. This makes
+the harness discoverable through Codex's native plugin installer without
+exposing Claude Skill files.
 
 Before adding or changing Codex-native skills or plugins:
 
@@ -71,10 +79,9 @@ guidance for them, but must provide or map an adapter visual harness before
 claiming full support. `capability-info` reports `status=tool-contract` for
 those entries.
 
-The boundary guard verifies generated Codex Skill projections with
-`adapters/codex/bin/sync-native-skills.py --check`. It still fails if a Codex
-plugin directory or plugin manifest appears before this section is updated with
-a discoverability test.
+The boundary guard checks that generated Codex skills and the generated Codex
+plugin remain in sync, and that neither surface is built from Claude Skill
+files.
 
 ## Explicit Non-Support
 
@@ -153,7 +160,7 @@ unavailable role explicitly.
 
 `codex_setting/` should remain minimal and explicit. It may expose `AGENTS.md`,
 `README.md`, `core/`, `capabilities/`, `roles/`, `bin/`, `codex-skills`,
-selected tools, and selected utilities, but must not expose Claude-native
+`codex-plugin-marketplace`, selected tools, and selected utilities, but must not expose Claude-native
 `settings.json`, `commands/`, root `skills/`, or `statusline.sh` as if Codex
 could consume them.
 
