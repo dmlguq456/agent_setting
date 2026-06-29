@@ -77,7 +77,12 @@ Add the adapter bootstrap to the `instructions` array in your
   "$schema": "https://opencode.ai/config.json",
   "instructions": [
     "$HOME/agent_setting/opencode_setting/AGENTS.md"
-  ]
+  ],
+  "skills": {
+    "paths": [
+      "$HOME/agent_setting/opencode_setting/opencode-skills"
+    ]
+  }
 }
 ```
 
@@ -92,6 +97,7 @@ ln -sfn "$AGENT_HOME/opencode_setting/roles" "$HOME/.config/opencode/agent-roles
 ln -sfn "$AGENT_HOME/opencode_setting/bin" "$HOME/.config/opencode/agent-bin"
 ln -sfn "$AGENT_HOME/opencode_setting/tools" "$HOME/.config/opencode/agent-tools"
 ln -sfn "$AGENT_HOME/opencode_setting/utilities" "$HOME/.config/opencode/agent-utilities"
+ln -sfn "$AGENT_HOME/opencode_setting/opencode-skills" "$HOME/.config/opencode/agent-skills"
 ```
 
 Do not symlink Claude-native surfaces such as `settings.json`, `commands/`,
@@ -119,6 +125,7 @@ sh utilities/agent-home.sh
 tools/check-adaptation-boundary.sh
 codex_setting/bin/preflight.sh capability-info autopilot-code
 opencode_setting/bin/preflight.sh capability-info autopilot-code
+adapters/opencode/bin/sync-native-skills.py --check
 OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 opencode debug skill --pure >/tmp/opencode-skills.json
 ! rg '"location": ".*/\.claude/skills' /tmp/opencode-skills.json
 ```

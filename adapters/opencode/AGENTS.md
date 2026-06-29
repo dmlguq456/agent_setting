@@ -19,7 +19,8 @@ adapter bootstrap, not the portable source of truth. Load it through the
 - Use `.agent_reports/` for new artifacts. Read legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not.
 - Use portable model roles from `core/CONVENTIONS.md`; do not treat Claude model names such as `sonnet` or `opus` as portable semantics.
 - Before treating a capability as supported, run `adapters/opencode/bin/preflight.sh capability-info <capability>` and follow the reported OpenCode realization.
-- Treat future OpenCode-native skills, commands, agents, and plugins as generated adapter output from `capabilities/` and `roles/`; do not load Claude Skill, command, or agent files as native OpenCode surfaces.
+- Treat OpenCode-native skills under `adapters/opencode/skills/` as generated adapter output from `capabilities/`; do not load Claude Skill, command, or agent files as native OpenCode surfaces.
+- Treat future OpenCode-native commands, agents, and plugins as generated adapter output from `capabilities/` and `roles/`.
 - When validating OpenCode-native discoverability, run with `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1` so OpenCode's `~/.claude/skills/` compatibility autoload cannot mask missing adapter-owned output.
 - Before using a `roles/modes/` fragment, run `adapters/opencode/bin/preflight.sh mode-info <family/mode>` and obey portable/tool-contract/unsupported status.
 - Run deterministic guard scripts directly when the OpenCode runtime cannot attach equivalent hooks. OpenCode has JS/TS plugin hooks but this adapter does not materialize a guard plugin yet; use explicit preflight wrappers.

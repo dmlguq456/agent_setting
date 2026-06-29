@@ -481,8 +481,9 @@ echo "== opencode capability mapping =="
 if "$OPENCODE" capability-info autopilot-code >/tmp/opencode_cap.out 2>/tmp/opencode_cap.err \
   && grep -q '^capability=autopilot-code$' /tmp/opencode_cap.out \
   && grep -q '^adapter=opencode$' /tmp/opencode_cap.out \
-  && grep -q '^native_skill=0$' /tmp/opencode_cap.out \
-  && grep -q '^realization=portable-instructions$' /tmp/opencode_cap.out \
+  && grep -q '^native_skill=1$' /tmp/opencode_cap.out \
+  && grep -q '^native_skill_path=adapters/opencode/skills/autopilot-code/SKILL.md$' /tmp/opencode_cap.out \
+  && grep -q '^realization=opencode-native-skill$' /tmp/opencode_cap.out \
   && grep -q '^status=instruction-only$' /tmp/opencode_cap.out; then
   ok "opencode capability wrapper reports instruction-only realization"
 else
@@ -490,11 +491,27 @@ else
 fi
 if "$OPENCODE" capability-info design-review >/tmp/opencode_cap.out 2>/tmp/opencode_cap.err \
   && grep -q '^capability=design-review$' /tmp/opencode_cap.out \
+  && grep -q '^native_skill=1$' /tmp/opencode_cap.out \
+  && grep -q '^realization=opencode-native-skill$' /tmp/opencode_cap.out \
   && grep -q '^status=tool-contract$' /tmp/opencode_cap.out \
   && grep -q '^tool_contract=visual-harness$' /tmp/opencode_cap.out; then
   ok "opencode design capability reports visual harness contract"
 else
   bad "opencode design capability should report visual harness contract"
+fi
+if command -v opencode >/dev/null 2>&1; then
+  if OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 \
+    OPENCODE_CONFIG_CONTENT="{\"skills\":{\"paths\":[\"$ROOT/opencode_setting/opencode-skills\"]}}" \
+    opencode debug skill --pure >/tmp/opencode_skills.out 2>/tmp/opencode_skills.err \
+    && grep -q '"name": "autopilot-code"' /tmp/opencode_skills.out \
+    && grep -q "$ROOT/opencode_setting/opencode-skills/autopilot-code/SKILL.md" /tmp/opencode_skills.out \
+    && ! grep -q '"location": ".*/\\.claude/skills' /tmp/opencode_skills.out; then
+    ok "opencode native skill projection is discoverable without Claude compat autoload"
+  else
+    bad "opencode native skill projection should be discoverable without Claude compat autoload"
+  fi
+else
+  ok "opencode native skill runtime discovery skipped (opencode not installed)"
 fi
 
 echo "== opencode mode mapping =="

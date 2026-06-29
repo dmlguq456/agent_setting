@@ -75,7 +75,7 @@ check_codex_projection_targets() {
 }
 
 check_opencode_required_projection_entries() {
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills; do
     if [ ! -L "opencode_setting/$p" ]; then
       fail_msg "opencode_setting/$p must be a symlink projection entry"
     fi
@@ -91,6 +91,7 @@ check_opencode_projection_targets() {
   check_link_target opencode_setting/bin ../adapters/opencode/bin
   check_link_target opencode_setting/tools ../adapters/opencode/tools
   check_link_target opencode_setting/utilities ../adapters/opencode/utilities
+  check_link_target opencode_setting/opencode-skills ../adapters/opencode/skills
 }
 
 check_claude_projection_targets() {
@@ -154,7 +155,7 @@ check_install_layout_codex_projection() {
 check_install_layout_opencode_projection() {
   [ -f INSTALL_LAYOUT.md ] || { fail_msg "INSTALL_LAYOUT.md is missing"; return; }
 
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills; do
     if ! grep -Fq "\$AGENT_HOME/opencode_setting/$p" INSTALL_LAYOUT.md; then
       fail_msg "INSTALL_LAYOUT.md must include OpenCode projection install step for opencode_setting/$p"
     fi
@@ -451,6 +452,38 @@ check_opencode_tool_projection() {
   for p in build-manifest.py check-adaptation-boundary.sh design-mcp web-bundle; do
     if [ -e "adapters/opencode/tools/$p" ] || [ -L "adapters/opencode/tools/$p" ]; then
       fail_msg "adapters/opencode/tools/$p must not be projected until OpenCode support is documented"
+    fi
+  done
+}
+
+check_opencode_native_skill_projection() {
+  if [ ! -x adapters/opencode/bin/sync-native-skills.py ]; then
+    fail_msg "adapters/opencode/bin/sync-native-skills.py must be executable"
+    return
+  fi
+
+  if ! adapters/opencode/bin/sync-native-skills.py --check >/tmp/opencode-sync-skills.out 2>/tmp/opencode-sync-skills.err; then
+    fail_msg "OpenCode native skill projections are stale; run adapters/opencode/bin/sync-native-skills.py"
+    cat /tmp/opencode-sync-skills.err
+  fi
+
+  for f in capabilities/*.md; do
+    [ -f "$f" ] || continue
+    [ "$(basename "$f")" = "README.md" ] && continue
+    slug=$(basename "$f" .md)
+    skill="adapters/opencode/skills/$slug/SKILL.md"
+    if [ ! -f "$skill" ]; then
+      fail_msg "$skill is missing"
+      continue
+    fi
+    if ! grep -Fq "capabilities/$slug.md" "$skill"; then
+      fail_msg "$skill must reference capabilities/$slug.md as portable source"
+    fi
+    if ! grep -Fq "adapters/opencode/bin/preflight.sh capability-info $slug" "$skill"; then
+      fail_msg "$skill must reference the OpenCode capability-info wrapper"
+    fi
+    if ! grep -Fq "not a Claude Skill copy" "$skill"; then
+      fail_msg "$skill must state that it is not a Claude Skill copy"
     fi
   done
 }
@@ -814,6 +847,7 @@ check_opencode_bin_wrappers
 check_codex_tool_projection
 check_portable_agent_home_resolution
 check_opencode_tool_projection
+check_opencode_native_skill_projection
 check_codex_utility_projection
 check_opencode_utility_projection
 check_claude_bin_wrappers
