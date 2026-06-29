@@ -18,7 +18,7 @@
 | **light** | 2× fast reviewers (다른 axes²) | skip | skip | 1 | 사소 작업 — refine 단계 skip |
 | **standard** | 1× deep reviewer + 2× fast reviewers (다른 axes²) | 1× fast fact-checker | skip | 1 | 간단 작업 — refine 단계 가능 |
 | **thorough** | 2× deep reviewers + 2× fast reviewers (다른 axes²) | 1× fast fact-checker | skip | 2 | **default** — refine 단계 가능 |
-| **adversarial** | 2× deep reviewers + 2× fast reviewers (다른 axes²) | 1× fast fact-checker | 1× external adversary (`codex-review-team` in current adapters) | 2 + external 1 | high-stakes. **research/doc 트랙은 + `Agent(연구팀 claim-verify)`** (적대적 외부 진위 — N-vote default-refute, WebSearch 모순 탐색; fact-check 와 보완층). code 트랙은 외부 claim 없어 미적용 |
+| **adversarial** | 2× deep reviewers + 2× fast reviewers (다른 axes²) | 1× fast fact-checker | 1× external adversary | 2 + external 1 | high-stakes. **research/doc 트랙은 + `Agent(연구팀 claim-verify)`** (적대적 외부 진위 — N-vote default-refute, WebSearch 모순 탐색; fact-check 와 보완층). code 트랙은 외부 claim 없어 미적용 |
 
 ¹ Fact-checker 는 _doc/research/refine 파이프라인_ 에만 적용. autopilot-code 계열 (init-plan / refine-plan / execute-plan / run-test) 은 fact-checker 없음 — ground-truth 가 코드 자신이라 verbatim 대조 무용.
 
@@ -106,7 +106,7 @@
 ## §3. Hard Cross-Doc Invariants (sync-skills `--check`가 자동 검사)
 
 1. 각 SKILL.md / README 에서 §1.1 5단계 정의의 **Quality reviewer / Fact-checker / External adversary 컬럼 wording**은 본 문서와 의미 일치 (사소한 표현 차이는 허용, 의미가 다르면 drift).
-2. **adversarial** 정의는 반드시 `thorough + 1× external adversary` (+ research/doc 트랙은 `1× 연구팀 claim-verify`). 현재 Claude Code adapter 구현명은 `codex-review-team`. 자주 잘못 적힌 패턴: `standard + external/Codex` — _틀림_ (base 는 thorough).
+2. **adversarial** 정의는 반드시 `thorough + 1× external adversary` (+ research/doc 트랙은 `1× 연구팀 claim-verify`). Adapter 구현명은 portable 의미가 아니며 adapter 문서가 소유한다. 자주 잘못 적힌 패턴: `standard + external/Codex` — _틀림_ (base 는 thorough).
 3. autopilot-code의 QA 표에 fact-checker가 적힌 곳이 있으면 drift (code는 fact-checker 없음).
 4. `--no-fact-check` / `--no-style-audit`는 autopilot-refine / audit 외 다른 skill에 노출되면 안 됨.
 5. external adversary wrapper 를 실제 reviewer role 단독으로 표기하면 drift — 실제 review 는 external adversary engine, wrapper 는 orchestrator role. §2 매트릭스에 따라 "external adversary + fast orchestrator" 같이 분리 표기.

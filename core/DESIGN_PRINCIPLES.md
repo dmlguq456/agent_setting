@@ -83,7 +83,7 @@
 |------|------|-----|--------------|
 | **Orchestrator** | Deterministic state machine. 라우팅·gate·verdict 만, content 안 봄. | `autopilot-code` / `autopilot-draft` / `autopilot-research` / `autopilot-refine` 의 SKILL.md 본체 | Orchestrator 가 file content 읽기·요약·판단 |
 | **Skill** | Expert capability module. WHAT + verification loop 정의. | `init-plan` · `execute-plan` · `run-test` · `init-doc-strategy` · `refine-doc` 등 | Skill 안에 orchestration 로직 (다른 skill 호출 chain, QA budget) |
-| **Agent** | Persona with tools. Skill 안에서 실제 작업 수행. | `기획팀` · `품질관리팀` · `연구팀` · `편집팀` · `자료팀` · `개발팀` · `디자인팀` · `codex-review-team` | Agent 가 verbose 결과를 orchestrator 로 반환 |
+| **Agent** | Persona with tools. Skill 안에서 실제 작업 수행. | `기획팀` · `품질관리팀` · `연구팀` · `편집팀` · `자료팀` · `개발팀` · `디자인팀` · `external-adversary` | Agent 가 verbose 결과를 orchestrator 로 반환 |
 
 > **이름 충돌 주의**: 본 절의 _3-Tier_ 는 _역할 분리_. §4 의 _3-tier T1/T2/T3_ 는 _산출물 가시성 분리_. 같은 숫자지만 다른 layer.
 

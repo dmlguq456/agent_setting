@@ -197,7 +197,7 @@ autopilot-\* 가 내부에서 자동 라우팅하는 전문 팀. Portable 의미
 | [자료팀](roles/README.md) | deep maker + fast tool worker | 자료 수집·시각·분석 — browser-fetch/pdf-extract/web-image-search/figure-gen/data-script |
 | [디자인팀](roles/README.md) | deep maker + fast verifier | 시각 산출물 — maker (제작) / critic (6축 품질 비평 + 토큰 계약 준수 — 렌더 후 결과 또는 렌더 전 UI plan-review) / verifier (독립 컨텍스트 깨짐 게이트). 모두 Design MCP 렌더 |
 | [편집팀](roles/README.md) | deep editor + fast reviewer | 사용자 향 문서 — translate/polish/review |
-| [external-adversary](roles/README.md) | external adversary + orchestrator | 외부 hostile reader 관점 review (Claude adapter: codex-review-team) |
+| [external-adversary](roles/README.md) | external adversary + orchestrator | 외부 hostile reader 관점 review. Adapter 구현명은 adapter 문서가 소유 |
 
 **직접 호출** — 추적 안 남아도 되는 단발 작업은 `Agent(개발팀)` / `Agent(연구팀)` 등으로 autopilot 우회. plan/log 가 필요하면 autopilot 으로. 각 agent 의 (`mem profile <stem>`) aspect 매트릭스는 → [`core/MEMORY.md §7.6`](core/MEMORY.md) (single source).
 
