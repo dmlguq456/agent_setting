@@ -66,6 +66,27 @@ check_codex_projection_targets() {
   check_link_target codex_setting/utilities ../adapters/codex/utilities
 }
 
+check_claude_projection_targets() {
+  check_link_target claude_setting/CLAUDE.md ../adapters/claude/CLAUDE.md
+  check_link_target claude_setting/README.md ../README.md
+  check_link_target claude_setting/core ../core
+  check_link_target claude_setting/settings.json ../adapters/claude/settings.json
+  check_link_target claude_setting/keybindings.json ../adapters/claude/keybindings.json
+  check_link_target claude_setting/commands ../adapters/claude/commands
+  check_link_target claude_setting/skills ../adapters/claude/skills
+  check_link_target claude_setting/agents ../adapters/claude/agents
+  check_link_target claude_setting/agent-modes ../adapters/claude/agent-modes
+  check_link_target claude_setting/hooks ../adapters/claude/hooks
+  check_link_target claude_setting/utilities ../adapters/claude/utilities
+  check_link_target claude_setting/tools ../adapters/claude/tools
+  check_link_target claude_setting/scaffolds ../adapters/claude/scaffolds
+  check_link_target claude_setting/loops ../adapters/claude/loops
+  check_link_target claude_setting/manifest.json ../manifest.json
+  check_link_target claude_setting/statusline.sh ../adapters/claude/statusline.sh
+  check_link_target claude_setting/track-toggle.sh ../adapters/claude/track-toggle.sh
+  check_link_target claude_setting/bin ../adapters/claude/bin
+}
+
 check_link_target() {
   path=$1
   expected=$2
@@ -523,6 +544,7 @@ check_codex_forbidden_entries
 check_codex_native_surface_debt
 check_required_projection_entries
 check_codex_projection_targets
+check_claude_projection_targets
 check_install_layout_codex_projection
 check_codex_bin_wrappers
 check_codex_tool_projection
