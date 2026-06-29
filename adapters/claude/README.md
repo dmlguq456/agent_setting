@@ -8,7 +8,7 @@ This adapter maps the common agent harness onto Claude Code.
 |---|---|
 | Session bootstrap | `adapters/claude/CLAUDE.md` |
 | Runtime settings | `settings.json` |
-| Slash commands | `commands/` |
+| Slash commands | `adapters/claude/commands/` |
 | Capabilities | `skills/*/SKILL.md` |
 | Role profiles | `agents/*.md` |
 | Hook scripts | `hooks/`, `utilities/` |
@@ -35,24 +35,25 @@ Target layout:
 
 ```text
 $HOME/agent_setting/        # neutral repo
+$HOME/agent_setting/claude_setting/ # versioned Claude projection
 $HOME/.claude/              # Claude Code runtime home
 ```
 
-Claude Code should see the same files it expects today, but they should be symlinked or generated from the neutral repo where practical:
+Claude Code should see the same files it expects today, but they should be symlinked from the versioned Claude projection where practical:
 
 ```text
-$HOME/.claude/CLAUDE.md      -> $HOME/agent_setting/adapters/claude/CLAUDE.md
-$HOME/.claude/README.md      -> $HOME/agent_setting/README.md
-$HOME/.claude/core           -> $HOME/agent_setting/core
-$HOME/.claude/skills         -> $HOME/agent_setting/skills
-$HOME/.claude/agents         -> $HOME/agent_setting/agents
-$HOME/.claude/agent-modes    -> $HOME/agent_setting/agent-modes
-$HOME/.claude/hooks          -> $HOME/agent_setting/hooks
-$HOME/.claude/utilities      -> $HOME/agent_setting/utilities
-$HOME/.claude/tools          -> $HOME/agent_setting/tools
-$HOME/.claude/commands       -> $HOME/agent_setting/commands
-$HOME/.claude/statusline.sh  -> $HOME/agent_setting/statusline.sh
-$HOME/.claude/track-toggle.sh -> $HOME/agent_setting/track-toggle.sh
+$HOME/.claude/CLAUDE.md      -> $HOME/agent_setting/claude_setting/CLAUDE.md
+$HOME/.claude/README.md      -> $HOME/agent_setting/claude_setting/README.md
+$HOME/.claude/core           -> $HOME/agent_setting/claude_setting/core
+$HOME/.claude/skills         -> $HOME/agent_setting/claude_setting/skills
+$HOME/.claude/agents         -> $HOME/agent_setting/claude_setting/agents
+$HOME/.claude/agent-modes    -> $HOME/agent_setting/claude_setting/agent-modes
+$HOME/.claude/hooks          -> $HOME/agent_setting/claude_setting/hooks
+$HOME/.claude/utilities      -> $HOME/agent_setting/claude_setting/utilities
+$HOME/.claude/tools          -> $HOME/agent_setting/claude_setting/tools
+$HOME/.claude/commands       -> $HOME/agent_setting/claude_setting/commands
+$HOME/.claude/statusline.sh  -> $HOME/agent_setting/claude_setting/statusline.sh
+$HOME/.claude/track-toggle.sh -> $HOME/agent_setting/claude_setting/track-toggle.sh
 ```
 
 Keep Claude-owned mutable state in `$HOME/.claude`: credentials, sessions, projects, history, shell snapshots, cache, daemon logs, and local DBs. Do not move those into the neutral repo.

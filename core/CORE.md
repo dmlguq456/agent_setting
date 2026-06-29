@@ -42,11 +42,11 @@ Runtime homes should be adapter projections, not the source repository. Keep cre
 Example projection:
 
 ```text
-$HOME/.claude/CLAUDE.md      -> $HOME/agent_setting/adapters/claude/CLAUDE.md
-$HOME/.claude/core           -> $HOME/agent_setting/core
-$HOME/.claude/skills         -> $HOME/agent_setting/skills
-$HOME/.claude/agents         -> $HOME/agent_setting/agents
-$HOME/.claude/hooks          -> $HOME/agent_setting/hooks
+$HOME/.claude/CLAUDE.md      -> $HOME/agent_setting/claude_setting/CLAUDE.md
+$HOME/.claude/core           -> $HOME/agent_setting/claude_setting/core
+$HOME/.claude/skills         -> $HOME/agent_setting/claude_setting/skills
+$HOME/.claude/agents         -> $HOME/agent_setting/claude_setting/agents
+$HOME/.claude/hooks          -> $HOME/agent_setting/claude_setting/hooks
 ```
 
 `~/.claude` remains the current Claude Code adapter's legacy installation path during migration. New cross-tool documentation should prefer `<agent-home>` unless it is intentionally describing the Claude adapter runtime home.

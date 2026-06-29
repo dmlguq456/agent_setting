@@ -32,7 +32,7 @@ Claude Code files are implementation references, not Codex bootstrap files:
 
 - `adapters/claude/CLAUDE.md`
 - `settings.json`
-- `commands/`
+- `adapters/claude/commands/`
 - `statusline.sh`
 
 When porting behavior, copy the invariant from `core/` first, then map it to Codex tools, approval behavior, and session lifecycle.

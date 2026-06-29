@@ -75,7 +75,7 @@ Claude Code-specific files remain valid as implementation references, not as Cod
 
 - `CLAUDE.md` contains Claude Code routing and response rules.
 - `settings.json` registers Claude Code hooks and permissions.
-- `commands/` defines Claude Code slash commands.
+- `adapters/claude/commands/` defines Claude Code slash commands.
 - `statusline.sh` targets Claude Code's statusline contract.
 
 When porting a behavior, copy the underlying invariant from `CORE.md`, `WORKFLOW.md`, `CONVENTIONS.md`, or `OPERATIONS.md`; then map it to Codex's tool, approval, and session model.

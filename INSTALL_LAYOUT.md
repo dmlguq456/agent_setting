@@ -5,7 +5,7 @@ This harness is runtime-neutral. The git repository should live outside vendor r
 ## Target Layout
 
 ```text
-$HOME/agent_setting/        # canonical git repo: common core + adapters
+$HOME/agent_setting/        # canonical git repo: common core + adapters + projections
 $HOME/.claude/              # Claude Code runtime home
 $HOME/.codex/               # Codex runtime home
 ```
@@ -14,26 +14,14 @@ Do not make `$HOME/.claude` or `$HOME/.codex` the canonical repo. Those director
 
 ## Claude Code Projection
 
-Claude Code expects files under `$HOME/.claude`. Keep runtime-owned files there, and symlink harness-owned files to the neutral repo:
+Claude Code expects files under `$HOME/.claude`. Keep runtime-owned files there, and symlink harness-owned files from the versioned Claude projection:
 
 ```bash
 export AGENT_HOME="$HOME/agent_setting"
 
-ln -sfn "$AGENT_HOME/adapters/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
-ln -sfn "$AGENT_HOME/README.md" "$HOME/.claude/README.md"
-ln -sfn "$AGENT_HOME/core" "$HOME/.claude/core"
-ln -sfn "$AGENT_HOME/settings.json" "$HOME/.claude/settings.json"
-ln -sfn "$AGENT_HOME/keybindings.json" "$HOME/.claude/keybindings.json"
-ln -sfn "$AGENT_HOME/commands" "$HOME/.claude/commands"
-ln -sfn "$AGENT_HOME/skills" "$HOME/.claude/skills"
-ln -sfn "$AGENT_HOME/agents" "$HOME/.claude/agents"
-ln -sfn "$AGENT_HOME/agent-modes" "$HOME/.claude/agent-modes"
-ln -sfn "$AGENT_HOME/hooks" "$HOME/.claude/hooks"
-ln -sfn "$AGENT_HOME/utilities" "$HOME/.claude/utilities"
-ln -sfn "$AGENT_HOME/tools" "$HOME/.claude/tools"
-ln -sfn "$AGENT_HOME/scaffolds" "$HOME/.claude/scaffolds"
-ln -sfn "$AGENT_HOME/statusline.sh" "$HOME/.claude/statusline.sh"
-ln -sfn "$AGENT_HOME/track-toggle.sh" "$HOME/.claude/track-toggle.sh"
+for p in CLAUDE.md README.md core settings.json keybindings.json commands skills agents agent-modes hooks utilities tools scaffolds loops manifest.json statusline.sh track-toggle.sh; do
+  ln -sfn "$AGENT_HOME/claude_setting/$p" "$HOME/.claude/$p"
+done
 ```
 
 Keep these local to `$HOME/.claude`: `.credentials.json`, `.dispatch/`, `cache/`, `daemon/`, `history.jsonl`, `ide/`, `projects/`, `sessions/`, `session-env/`, `shell-snapshots/`, runtime logs, and other runtime-generated state.
