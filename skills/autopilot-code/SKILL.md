@@ -9,7 +9,7 @@ metadata:
   blurb: "코드 작업 일반 entry — 라이브러리·연구·앱 모두 커버, spec 컨텍스트 자동 감지"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 코드 작업 산출물은 spec 유무와 무관하게 **항상** `<artifact-root>/plans/<date>_<slug>/` (청사진은 `spec/`, 작업은 `plans/` — 1 repo = 1 spec, 형제 bucket; [CONVENTIONS §5.4.3](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). plan/ + checklist는 T1 (root). dev_logs/, test_logs/는 T2 (root). reviewer 로그(plan_reviews, dev_reviews, test_reviews)는 모두 `_internal/` 하위. (모노레포 예외만 `spec/<component>/`·`plans/<component>/`.)
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 코드 작업 산출물은 spec 유무와 무관하게 **항상** `<artifact-root>/plans/<date>_<slug>/` (청사진은 `spec/`, 작업은 `plans/` — 1 repo = 1 spec, 형제 bucket; [CONVENTIONS §5.4.3](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). plan/ + checklist는 T1 (root). dev_logs/, test_logs/는 T2 (root). reviewer 로그(plan_reviews, dev_reviews, test_reviews)는 모두 `_internal/` 하위. (모노레포 예외만 `spec/<component>/`·`plans/<component>/`.)
 > `<artifact-root>` 해석: `.agent_reports` 우선, legacy `.claude_reports` 는 이미 존재하고 `.agent_reports` 가 없을 때만 사용. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports` 로 치환한다.
 
 ## Context Auto-Detection (spec mode 자동 분기 + 자료 자동 read)
@@ -51,13 +51,13 @@ spec 의 `mode` 배열 (단일 또는 복수) 에 따라 자동 활성화:
 
 ### Pre-flight (필수 Step 0): git-state + spec-significance — 코드 손대기 _전_, verdict 보고 강제
 
-> **Intake 게이트** (dev mode, 새·미명세 작업만): 입력이 비가역 결정 커버리지에 미달이면 [CONVENTIONS.md §6.6](../../CONVENTIONS.md#66-autopilot-intake-gate) 1라운드 질문 먼저. 질문 뱅크는 spec 분기 따름(app→앱 행, library/cli→라이브러리·CLI 행 — code 트랙 자체 행 없음). debug·기존 spec 따라가는 자리·재개(--from)는 skip (이미 명시됨, 별도 flag 불요).
+> **Intake 게이트** (dev mode, 새·미명세 작업만): 입력이 비가역 결정 커버리지에 미달이면 [CONVENTIONS.md §6.6](../../core/CONVENTIONS.md#66-autopilot-intake-gate) 1라운드 질문 먼저. 질문 뱅크는 spec 분기 따름(app→앱 행, library/cli→라이브러리·CLI 행 — code 트랙 자체 행 없음). debug·기존 spec 따라가는 자리·재개(--from)는 skip (이미 명시됨, 별도 flag 불요).
 
-**0a. git working-state 게이트 ([OPERATIONS.md §5.9](../../OPERATIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical))** — spec 트리아지 _전_, 코드 편집 _전_ 실행. merge/rebase/cherry-pick 진행 중·detached HEAD = **STOP**(사용자 보고, 자동 abort 금지), 다른 worktree 동일 브랜치·upstream 앞섬·세션 무관 dirty = **WARN**. 진입 시 `HEAD` 기억 → **각 commit/write-back 직전 재실행**(주기적 체크)해 HEAD 가 바뀌었거나 새 `MERGE_HEAD` 생겼으면 STOP. 여러 worktree·브랜치+merge 자리에서 §5.8 산출물 lock 이 못 잡는 _실제 repo 상태_ 를 닫는 가드. 비-git·단일 체크아웃은 무해 통과.
+**0a. git working-state 게이트 ([OPERATIONS.md §5.9](../../core/OPERATIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical))** — spec 트리아지 _전_, 코드 편집 _전_ 실행. merge/rebase/cherry-pick 진행 중·detached HEAD = **STOP**(사용자 보고, 자동 abort 금지), 다른 worktree 동일 브랜치·upstream 앞섬·세션 무관 dirty = **WARN**. 진입 시 `HEAD` 기억 → **각 commit/write-back 직전 재실행**(주기적 체크)해 HEAD 가 바뀌었거나 새 `MERGE_HEAD` 생겼으면 STOP. 여러 worktree·브랜치+merge 자리에서 §5.8 산출물 lock 이 못 잡는 _실제 repo 상태_ 를 닫는 가드. 비-git·단일 체크아웃은 무해 통과.
 
 > **DONE-BRANCH → 새 브랜치 (이 cycle 이 새 작업일 때)**: §5.9 게이트가 `DONE-BRANCH`(현재 브랜치가 base 에 ahead 0 = 머지 완료된 끝난 브랜치) 를 내면, 이 plan 의 slug(`plans/<date>_<slug>/` 와 동일)로 **base 최신에서 새 브랜치를 판 뒤** 코드 작업 진행 — `git fetch origin && git switch -c <slug> origin/<base>` (worktree 안전: base 를 체크아웃 안 해 main worktree 와 비충돌). 현재 브랜치가 이미 이번 작업용 빈 브랜치면 그대로 사용. 죽은(머지된) 브랜치 위에 새 작업을 쌓지 않게 하는 자리 — worktree+merge 워크플로우의 핵심 누락. 한 줄 보고 후 진행.
 
-> **규모 분기 ([OPERATIONS.md §5.10](../../OPERATIONS.md#510-작업-격리병렬-디스패치-worktree-정책-canonical))**: 두 축으로 게이트 — 어느 하나라도 본작업이면 worktree.
+> **규모 분기 ([OPERATIONS.md §5.10](../../core/OPERATIONS.md#510-작업-격리병렬-디스패치-worktree-정책-canonical))**: 두 축으로 게이트 — 어느 하나라도 본작업이면 worktree.
 > - **변경 종류 (qa 레벨 무관, adapter worktree policy (Claude Code: [CLAUDE.md §0(C)](../../CLAUDE.md))·drill g3)**: 기능 추가·모듈 신설·다파일 변경은 **규모·qa 판단 없이 무조건 worktree+작업 브랜치**. main 트리 직접은 typo·1줄급 자잘한 단발만 (qa quick 이어도 다파일이면 worktree — "quick 이니 main" 우회 금지).
 > - **실행 메커니즘 (반쪽 적용 금지 — drill 신설 자리)**: worktree 를 _파 두기만_ 하고 main 에서 autopilot-code 를 in-process(Skill)로 돌리지 않는다. worktree 확보 _즉시_ 그 안으로 **`claude -p` 헤드리스 분사 (§5.10 풀 ceremony) — plan 호출부터 report 까지 통째로 한 세션**. main 은 _정찰(분사 대상 결정)·분사·수확_ 만 (§5.10:389 "조정만 main"). 파이프 스테이지(code-plan·refine·execute)를 main 과 헤드리스로 **쪼개면 헤드리스가 상태 재발굴 + 연속성 상실 = worst of both** — 금지. 단 가벼운 정찰(파일 나열·diff 범위)로 _무엇을 분사할지 결정_ 하는 건 main 정상.
 >
@@ -223,7 +223,7 @@ autopilot-lab "X 실험" — Step 0 에서 readiness ✓ 확인 후 진행
 
 ### --qa <level>
 
-QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
+QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
 
 - Supported: `quick` / `light` / `standard` / `thorough` (default) / `adversarial`
 - **security-review (code 트랙의 보안 축 — fact-check 부재 대체)**: auth / crypto·secrets / external input / api_contract / deserialization 을 건드리는 변경이 `adversarial` 이면 `Agent(품질관리팀 security-review)` 를 code QA 에 parallel 추가 — diff 의 _신규_ high-confidence(≥8) 취약점만. (내장 `/security-review` 온프레미스 — `agent-modes/qa/security-review.md`.)
@@ -321,7 +321,7 @@ Otherwise:
 
    > **plan-review proxy = task-aware (DESIGN_PRINCIPLES §9).** `task_type=ui/visual` 이면 아래 연구팀 호출을 **`Agent(디자인팀)` plan-review** 로 _대체_ — plan + 디자인 계약(`spec/design/05_handoff/handoff.md`·토큰)을 읽고 _계획된 접근_ 을 6축(위계·정렬·a11y·반응형·UX·톤) + **토큰 계약 준수** + slop 으로 리뷰 (render 전이라 _no-render plan-review_ 모드; 정의 = `agent-modes/design/critic.md`). 메모는 동일하게 `_internal/plan_reviews/design_review.md` → code-refine. UI 가 paper-driven 로직과 섞인 `mixed` 면 디자인팀 + 연구팀 둘 다 parallel. 그 외 task_type 은 연구팀(아래).
 
-   **By `qa_level`** (reviewer 수·model 매트릭스는 [CONVENTIONS.md §1.1](../../CONVENTIONS.md#11-5단계-공통-정의) 단일 source — 본 sub-skill 은 그 spec 을 instance·axis 분담으로 풀어씀):
+   **By `qa_level`** (reviewer 수·model 매트릭스는 [CONVENTIONS.md §1.1](../../core/CONVENTIONS.md#11-5단계-공통-정의) 단일 source — 본 sub-skill 은 그 spec 을 instance·axis 분담으로 풀어씀):
    - **quick / light** — 1× / 2× fast reviewer single pass, all task-type axes 단일 prompt 로:
      ```
      Invoke 연구팀: "Review this plan as user proxy. **Task type: {task_type}** — apply ALL Role 1 Step 3 axes for this task type (no Focus axis). Korean plan: {ko_plan_path}. English plan: {en_plan_path}. Review log: {log_dir}/_internal/plan_reviews/research_review.md. Weight task-type-specific axes heavily (for meta-skill: family-level naming conflict + cross-skill scope overlap + sync-skills downstream + frontmatter validity)."

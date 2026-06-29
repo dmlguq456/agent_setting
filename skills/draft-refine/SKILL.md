@@ -9,7 +9,7 @@ metadata:
   blurb: "초안 정련·다듬기 sub-skill — 편집팀 검수 경유"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 review 로그를 `_internal/strategy_reviews/` 또는 `_internal/draft_reviews/`에 기록. 버전 스냅샷은 modern artifact면 `_internal/versions/v{N}/`, legacy artifact면 `_v{N}.md` 형제 (자동 감지).
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 review 로그를 `_internal/strategy_reviews/` 또는 `_internal/draft_reviews/`에 기록. 버전 스냅샷은 modern artifact면 `_internal/versions/v{N}/`, legacy artifact면 `_v{N}.md` 형제 (자동 감지).
 
 ## Document Resolution
 Resolve `$ARGUMENTS` to document file paths. Detect whether this is a **strategy** or **draft** refinement:
@@ -32,7 +32,7 @@ Resolve `$ARGUMENTS` to document file paths. Detect whether this is a **strategy
 
 ## Pre-Refine: Versioning Setup
 
-Before invoking 연구팀, the orchestrator establishes versioning. Snapshots go to `{artifact_root}/_internal/versions/v{N}/<relative-path>` (per [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). The legacy `_v{N}.md` sibling pattern is **deprecated** for new artifacts.
+Before invoking 연구팀, the orchestrator establishes versioning. Snapshots go to `{artifact_root}/_internal/versions/v{N}/<relative-path>` (per [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). The legacy `_v{N}.md` sibling pattern is **deprecated** for new artifacts.
 
 1. **Determine next version number**:
    - **Modern** (`{artifact_root}/_internal/` exists): scan `_internal/versions/` for `v{N}` subdirs. Find max N. If none → `next_version = 2`.

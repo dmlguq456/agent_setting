@@ -17,7 +17,7 @@ Parse `$ARGUMENTS`:
 - **mode**: first word — `rebuttal | paper | review | report | proposal | presentation`
 - **--inputs <comma-separated-paths>**: comma-joined list of pre-discovered input paths (from autopilot-draft Pre-flight Step 2 Input Discovery — typically `analysis_project/{paper,doc}/...` and/or `research/{topic}/`). Each path is an artifact directory containing pre-analyzed materials.
 - **--output <dir>**: artifact output directory (`<artifact-root>/documents/{date}_{name}/`)
-- **--qa <level>**: `quick | light | standard | thorough | adversarial` — overrides auto-detect (autopilot-draft propagates this). 단일 source: [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical)
+- **--qa <level>**: `quick | light | standard | thorough | adversarial` — overrides auto-detect (autopilot-draft propagates this). 단일 source: [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical)
 - Remaining text: task description / context
 
 ## Pre-Check

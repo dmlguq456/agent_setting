@@ -9,11 +9,11 @@ metadata:
   blurb: "앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트"
 ---
 
-> 산출물 폴더: `<artifact-root>/spec/ship.md` 안 누적 ([CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier).
+> 산출물 폴더: `<artifact-root>/spec/ship.md` 안 누적 ([CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier).
 
 ## Purpose — _앱 배포 셋업_ entry
 
-본 skill 은 _작업 본질에 맞는 분리_ 원칙 ([CONVENTIONS §6.3](../../CONVENTIONS.md)) 자리:
+본 skill 은 _작업 본질에 맞는 분리_ 원칙 ([CONVENTIONS §6.3](../../core/CONVENTIONS.md)) 자리:
 
 | 자리 | autopilot-spec | autopilot-code | **autopilot-ship** |
 |---|---|---|---|

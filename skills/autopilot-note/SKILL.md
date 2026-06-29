@@ -9,7 +9,7 @@ metadata:
   blurb: "산출물 라우팅 파이프 entry — 2-Layer 노트화·digest·triage 제안"
 ---
 
-> 산출물 폴더 컨벤션: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). Artifact: `<artifact-root>/notes/{date}/` — routing log + digest staging + reviewer logs. 진본 노트는 `<target>/_layer2/notes/<id>.md` (Layer 2), 진본 카드는 `<target>/cards/**.md` (Layer 1) — 둘 다 본 skill 산출물 (`<artifact-root>/notes/`) 과 _분리_. default `<target>` = `/home/nas/user/Uihyeop/notes/` (worklog-board 의 `CARDS_DIR` 부모).
+> 산출물 폴더 컨벤션: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). Artifact: `<artifact-root>/notes/{date}/` — routing log + digest staging + reviewer logs. 진본 노트는 `<target>/_layer2/notes/<id>.md` (Layer 2), 진본 카드는 `<target>/cards/**.md` (Layer 1) — 둘 다 본 skill 산출물 (`<artifact-root>/notes/`) 과 _분리_. default `<target>` = `/home/nas/user/Uihyeop/notes/` (worklog-board 의 `CARDS_DIR` 부모).
 
 ## 2-Layer 모델 (worklog-board PRD §2 — 본 skill 의 동작 전제)
 
@@ -113,7 +113,7 @@ Phase 2 까지 source 1-6 활성, source 7 (노션) 은 _Phase 3 활성_ — `--
 
 ## --qa <level> (default: light)
 
-QA 5 단계 정의 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
+QA 5 단계 정의 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
 
 | Level | Behavior |
 |---|---|

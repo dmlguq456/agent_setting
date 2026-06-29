@@ -9,7 +9,7 @@ metadata:
   blurb: "세 family 공통 사전조사 — 논문·기술·시장 survey 후 다운스트림으로 분기하는 entry"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 본 skill의 raw metadata (`search_results.json`, `phase_a_*.json`, `chaining_results.md`, `code_search.md` 등) + reviews는 모두 `_internal/` 하위로 격리. T1/T2 chapter 파일과 `cards/`는 root.
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 본 skill의 raw metadata (`search_results.json`, `phase_a_*.json`, `chaining_results.md`, `code_search.md` 등) + reviews는 모두 `_internal/` 하위로 격리. T1/T2 chapter 파일과 `cards/`는 root.
 
 ## Default Invocation Rule (메인 에이전트 자동 라우팅)
 
@@ -59,7 +59,7 @@ Parse `$ARGUMENTS` for optional flags:
 - **--mode**: `academic` (default) | `technology` | `market` — investigation type (see Modes below)
 - **--depth**: `shallow` | `medium` (default) | `deep`
 - (no `--refs` flag — local reference materials should be pre-processed via `/analyze-project --mode paper` first → output goes to `<artifact-root>/analysis_project/paper/` which autopilot-research auto-detects)
-- **--qa**: `quick` | `light` | `standard` | `thorough` (default) | `adversarial` — QA 5 단계 정의 + model role·round 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical) 단일 source. `quick` 은 1라운드 강제 종료 + refine skip + fact-checker 비활성. `standard`+ 는 fast fact-checker 가 cards verbatim 대조 (citation/venue/year/metric). `adversarial` 은 thorough + external adversary + **claim-verify** (적대적 외부 진위 — 카드 정합해도 외부 모순 시 kill; camera-ready / public report 같은 외부 strong scrutiny 자리).
+- **--qa**: `quick` | `light` | `standard` | `thorough` (default) | `adversarial` — QA 5 단계 정의 + model role·round 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. `quick` 은 1라운드 강제 종료 + refine skip + fact-checker 비활성. `standard`+ 는 fast fact-checker 가 cards verbatim 대조 (citation/venue/year/metric). `adversarial` 은 thorough + external adversary + **claim-verify** (적대적 외부 진위 — 카드 정합해도 외부 모순 시 kill; camera-ready / public report 같은 외부 strong scrutiny 자리).
 - **--from**: `search` | `analyze` | `report` — resume the pipeline at a specific stage (see Resume below)
 - **--no-clarify**: skip Step 0 Scope Clarification (force-run with current query as-is)
 - **--no-figures**: skip Step 3.5 Web Figure Extraction (figure 자동 추출 단계 건너뜀; cards 본문은 그대로 생성, 단 `**Figures**:` 줄만 누락)
@@ -188,7 +188,7 @@ artifact_dir: <abs path>
 - `mkdir -p {artifact_dir}` (only AFTER validation)
 
 ### Step 1.5: Scope Clarification (사전 조율) — skipped if `--no-clarify` or `--from`
-> 이 Step 1.5 는 [CONVENTIONS.md §6.6](../../CONVENTIONS.md#66-autopilot-intake-gate) Autopilot Intake Gate 의 연구 트랙 인스턴스 — 4속성 공유, 질문 뱅크는 §6.6 연구 행.
+> 이 Step 1.5 는 [CONVENTIONS.md §6.6](../../core/CONVENTIONS.md#66-autopilot-intake-gate) Autopilot Intake Gate 의 연구 트랙 인스턴스 — 4속성 공유, 질문 뱅크는 §6.6 연구 행.
 
 **Purpose**: 모호한 query는 mode 선택과 검색 폭을 잘못 잡아 9/7/5개 보고서 출력이 무용지물이 됨. 모호 detection 시 사용자에게 2-4 sharp question을 던진다.
 
@@ -744,7 +744,7 @@ Agent(subagent_type="연구팀"):
 > 연구팀이 자연 산출 언어 (한국어) 로 직접 작성하고, 편집팀이 _수정만_ — 두 번 쓰는 노동 회피.
 
 #### Step 4b: QA Loop (max 2 rounds; quick = 1 round; adversarial = 2 + external 1)
-QA level: `--qa` flag if provided, else default `thorough` (모든 autopilot-* 통일 — [CONVENTIONS.md §1.4](../../CONVENTIONS.md#14-skill별-사용-매트릭스)).
+QA level: `--qa` flag if provided, else default `thorough` (모든 autopilot-* 통일 — [CONVENTIONS.md §1.4](../../core/CONVENTIONS.md#14-skill별-사용-매트릭스)).
 
 **Two reviewer roles run in parallel** at standard+ (**three at adversarial** — + claim-verify):
 - **Quality reviewer(s)**: coverage / no-fabrication / progressive disclosure / actionable roadmap

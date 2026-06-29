@@ -9,7 +9,7 @@ metadata:
   blurb: "기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
 
 ## Position in autopilot family
 
@@ -120,7 +120,7 @@ frontmatter `changelog:` 필드 자체가 없는 file은 skip. **이 step은 pip
 
 ## --qa <level> (default: thorough)
 
-QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용 (proposed diff 에 pre-apply review):
+QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용 (proposed diff 에 pre-apply review):
 
 | Level | Behavior on proposed diff |
 |---|---|

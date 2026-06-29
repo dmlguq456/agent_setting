@@ -12,7 +12,7 @@ metadata:
 > 산출물 폴더: `<artifact-root>/spec/` (CONVENTIONS.md §5.4.3 3-tier). 숫자 prefix 없는 평이한 이름 — `prd.md` (T1, 항상 최신) · `stack.md` · `design/` · `ship.md` · `pipeline_state.yaml` · `_internal/`.
 > `<artifact-root>` 해석: `.agent_reports` 우선, legacy `.claude_reports` 는 이미 존재하고 `.agent_reports` 가 없을 때만 사용. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports` 로 치환한다.
 
-> **Intake 게이트**: 진입 직후 입력이 비가역 결정 커버리지(스택·인증·DB·배포타깃·핵심 entity 등)에 미달이면 [CONVENTIONS.md §6.6](../../CONVENTIONS.md#66-autopilot-intake-gate) 의 1라운드 구조화 질문 먼저 (AskUserQuestion, 항상 탈출구). slash 직접 args 충분·이미 명시·throwaway(/track)·재개(--from) 시 skip (별도 flag 불요).
+> **Intake 게이트**: 진입 직후 입력이 비가역 결정 커버리지(스택·인증·DB·배포타깃·핵심 entity 등)에 미달이면 [CONVENTIONS.md §6.6](../../core/CONVENTIONS.md#66-autopilot-intake-gate) 의 1라운드 구조화 질문 먼저 (AskUserQuestion, 항상 탈출구). slash 직접 args 충분·이미 명시·throwaway(/track)·재개(--from) 시 skip (별도 flag 불요).
 
 ## Purpose — _요구사항·청사진 작성_ entry
 
@@ -93,7 +93,7 @@ metadata:
 | `app,library` 등 콤마 | 복수 mode — 한 PRD 안 mode 별 독립 섹션 |
 
 ### --qa
-- `quick` / `light` / `standard` (default) / `thorough` — [CONVENTIONS.md §1](../../CONVENTIONS.md)
+- `quick` / `light` / `standard` (default) / `thorough` — [CONVENTIONS.md §1](../../core/CONVENTIONS.md)
 - `quick` 는 작은 spec tweak·update mode 자리 권장 — refine 단계 skip / 1 라운드 강제. ad-hoc 직접 Edit 대신 quick 으로 돌려 snapshot·log artifact 를 남긴다.
 
 ### --user-refine
@@ -179,7 +179,7 @@ phases (재진입 시): spec=done, scaffolding=done, dev=in_progress
 update mode 가 하는 일 (3 가지, 한 트랜잭션):
 
 1. `spec/prd.md` (항상 최신 T1 파일) 를 새 내용으로 갱신.
-2. **덮어쓰기 _전_ 에** 직전 `prd.md` 를 `spec/_internal/versions/v{N}/prd.md` 로 자동 snapshot (autopilot-refine 의 doc versioning 미러 — [CONVENTIONS §5.4.3](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). 역할 주체만 autopilot-spec, 대상이 spec.
+2. **덮어쓰기 _전_ 에** 직전 `prd.md` 를 `spec/_internal/versions/v{N}/prd.md` 로 자동 snapshot (autopilot-refine 의 doc versioning 미러 — [CONVENTIONS §5.4.3](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). 역할 주체만 autopilot-spec, 대상이 spec.
 3. 변경 narrative 를 `pipeline_summary.md` 에 통합 기록. 영향 받는 인접 파일 (`data_model.md` / `api_contract.md` / `ui_flow.md` / `stack.md`) + Architecture Diagrams 는 위 _Step 3.5 묶음 갱신 logic_ 으로 한 트랜잭션 동기화.
 
 > update mode 는 _별도 mode 라벨_ 이 아니라 **재진입 시 자동 활성** — `pipeline_state.yaml` 존재 자리 (위 Context Auto-Detection) 면 본 경로. mode 5종 (app/library/api/cli/research) 은 _spec 의 종류_, update 는 _기존 spec 갱신 동작_ — 직교. 따라서 update 자리에서도 해당 spec 의 원래 mode 섹션을 그대로 갱신한다.
@@ -194,7 +194,7 @@ update mode 가 하는 일 (3 가지, 한 트랜잭션):
 
 ### refine v{N+1} 버전 관리 (doc 트랙과 동일 원리)
 
-위 update mode 의 버전 메커니즘. Spec versioning 은 doc 트랙 ([CONVENTIONS §5.4.3](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) — autopilot-refine 이 doc artifact 에 쓰는 `_internal/versions/v{N}/` 메커니즘 재사용). `prd.md` 가 _항상 최신_ (T1) — 사용자는 최신만 봄.
+위 update mode 의 버전 메커니즘. Spec versioning 은 doc 트랙 ([CONVENTIONS §5.4.3](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) — autopilot-refine 이 doc artifact 에 쓰는 `_internal/versions/v{N}/` 메커니즘 재사용). `prd.md` 가 _항상 최신_ (T1) — 사용자는 최신만 봄.
 
 - **major 변경 / refine (v{N+1})** — 새 내용으로 `prd.md` 를 덮어쓰기 _전_ 에 직전 `prd.md` 를 `spec/_internal/versions/v{N}/prd.md` 로 자동 snapshot 후 덮어씀 (autopilot-refine 이 doc 에 쓰는 것과 같은 메커니즘 — 역할 주체만 autopilot-spec, 대상이 spec). 변경 narrative 는 `pipeline_summary.md` 에 통합 기록.
 - **minor 편집** — 직접 Edit + `pipeline_summary.md` minor-log (snapshot 없음). 누적 5 → `/audit` chat alert.
@@ -551,7 +551,7 @@ Spec 완성:
 
 ## 배포 셋업 자리 — autopilot-ship
 
-배포 셋업 (ship 첫 setup·env·domain·migration deploy) 은 별도 skill [`autopilot-ship`](../autopilot-ship/SKILL.md) 담당. _작업 본질에 맞는 분리_ ([CONVENTIONS §6.3](../../CONVENTIONS.md)) — autopilot-spec 은 _초기 설계 (요구사항·기본 틀·skeleton)_, autopilot-ship 은 _마지막 배포 + 재호출_ 자리.
+배포 셋업 (ship 첫 setup·env·domain·migration deploy) 은 별도 skill [`autopilot-ship`](../autopilot-ship/SKILL.md) 담당. _작업 본질에 맞는 분리_ ([CONVENTIONS §6.3](../../core/CONVENTIONS.md)) — autopilot-spec 은 _초기 설계 (요구사항·기본 틀·skeleton)_, autopilot-ship 은 _마지막 배포 + 재호출_ 자리.
 
 호출 자리:
 - 배포 셋업 / env 변경 / 도메인 / migration → `/autopilot-ship <task>` 직접

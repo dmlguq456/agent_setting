@@ -9,7 +9,7 @@ metadata:
   blurb: "cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출"
 ---
 
-> **산출물 위치**: DB `type=profile` 레코드 (읽기: `python3 <agent-home>/tools/memory/mem.py profile <stem>` / `mem profile <stem>`). stem 목록: `01_paper_figure_style` ~ `07_coding_convention` (7 개). `_internal/` 은 source index / qa reviews / pipeline state 용 _일시 스크래치_ 디렉터리 — SoT 아님 (SoT 는 DB). `<artifact-root>/` 가 아니므로 [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 의 _3-tier_ 가 _직접 적용_ 되진 않음 — 다만 main outputs / internal logs 의 _2-tier 분리_ 정신은 따른다.
+> **산출물 위치**: DB `type=profile` 레코드 (읽기: `python3 <agent-home>/tools/memory/mem.py profile <stem>` / `mem profile <stem>`). stem 목록: `01_paper_figure_style` ~ `07_coding_convention` (7 개). `_internal/` 은 source index / qa reviews / pipeline state 용 _일시 스크래치_ 디렉터리 — SoT 아님 (SoT 는 DB). `<artifact-root>/` 가 아니므로 [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 의 _3-tier_ 가 _직접 적용_ 되진 않음 — 다만 main outputs / internal logs 의 _2-tier 분리_ 정신은 따른다.
 
 > **Workspace assumption**: 본 skill 은 _cross-project_ 작업 — 현 cwd 와 무관하게 사용자의 _과거 모든 산출물_ 을 스캔. 입력 source 는 기본 위치 (`~/nas/user/Uihyeop/doc/` / `~/nas/user/Uihyeop/NN_Zoo/` / `<agent-home>/projects/*/memory/`) + `--source <path>` 추가. 산출은 항상 DB `type=profile` 레코드로 영속 (파일 Write X).
 
@@ -444,7 +444,7 @@ timestamp: "2026-05-22T15:30:00Z"
 
 ## sub-agent 참조 패턴 (작업 시작 자리에서 실행)
 
-각 agent 가 어떤 aspect 를 참조해야 하는지. **읽기 소스 = DB (`mem profile <stem>`)**; 본 매트릭스는 _어느 agent 가 어느 aspect 를 참조하는지의 매핑 문서_ — aspect 본문 SoT 는 DB. 본 매트릭스의 single source = [`MEMORY.md §7.6`](../../MEMORY.md) (aspect-중심 표) — 본 표는 그 agent-중심 동형 뷰; drift 발견 시 MEMORY §7.6 가 진실.
+각 agent 가 어떤 aspect 를 참조해야 하는지. **읽기 소스 = DB (`mem profile <stem>`)**; 본 매트릭스는 _어느 agent 가 어느 aspect 를 참조하는지의 매핑 문서_ — aspect 본문 SoT 는 DB. 본 매트릭스의 single source = [`MEMORY.md §7.6`](../../core/MEMORY.md) (aspect-중심 표) — 본 표는 그 agent-중심 동형 뷰; drift 발견 시 MEMORY §7.6 가 진실.
 
 | Agent | 작업 시작 시 `mem profile <stem>` 실행 | 이유 |
 |---|---|---|

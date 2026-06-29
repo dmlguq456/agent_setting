@@ -9,7 +9,7 @@ metadata:
   blurb: "산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 입력 artifact를 _수정하지 않음_ — 점검 보고서만 생성. 보고서는 `{artifact_dir}/_internal/audit/audit_{YYYY-MM-DDTHHMM}.md`에 기록.
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 입력 artifact를 _수정하지 않음_ — 점검 보고서만 생성. 보고서는 `{artifact_dir}/_internal/audit/audit_{YYYY-MM-DDTHHMM}.md`에 기록.
 > `<artifact-root>` 해석: `.agent_reports` 우선, legacy `.claude_reports` 는 이미 존재하고 `.agent_reports` 가 없을 때만 사용. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports` 로 치환한다.
 
 ## Position in autopilot family
@@ -205,7 +205,7 @@ This shared resolution ensures the Phase 1 detector and the Phase 3 audit use th
   - **circular-ref 🔴** — claim is supported _only_ by strategy↔draft mutual agreement (e.g., draft Slide N cites venue X, only source is strategy §10 mapping table). This is an architecture violation: both must trace back to cards. Emit 🔴 + recommend `/autopilot-refine` to trace and verify externally
   - **ambiguous 🟡** — multiple candidate cards, no single best match
 - **style**: read `## Style Guide` section in `strategy.md` if present. For every citation / figure caption / bullet depth / speaker note in draft + strategy body, compare against Style Guide rules. Deviation → 🟡. If `## Style Guide` absent → 🔴 single issue (`Style Guide section missing — autopilot-draft strategy should always have one. Run /autopilot-refine "<artifact> Style Guide section 추가".`).
-- **structure**: check artifact directory matches the [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier convention. T1 should have `pipeline_summary.md`, `draft/`, `strategy/`. T3 should be `_internal/`. Extraneous files at root → 🟡. Missing required → 🔴.
+- **structure**: check artifact directory matches the [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier convention. T1 should have `pipeline_summary.md`, `draft/`, `strategy/`. T3 should be `_internal/`. Extraneous files at root → 🟡. Missing required → 🔴.
 - **cross-ref**: scan draft for inline citations referencing cards (`cards/{file}.md`) and verify the target exists. Broken link → 🔴. Cards referenced but not in `## References` (if present) → 🟡.
 - **coverage** (NEW, omission detection): determine the _candidate cards set_ S per the cards source resolution above. Extract the _actually cited cards set_ T from draft + strategy body using the **v1 high-precision citation-detection token set** (false-positive minimized):
   - **Token 1 — card filename token**: the short identifier in `{year}_{firstauthor}_{arxivid}_{shortname}.md` filenames (e.g., `TasNet`, `FRCRN`, `MP-SENet`). A grep hit on any of these tokens in draft/strategy body marks the card as cited.

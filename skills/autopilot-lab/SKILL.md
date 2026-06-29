@@ -9,7 +9,7 @@ metadata:
   blurb: "빠른 실험 prototype entry — 학습 세팅(setup)과 ckpt 평가(eval) 앞뒤를 돕는다"
 ---
 
-> 산출물 폴더: `<artifact-root>/experiments/` ([CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier). _RUNLOG timeline 한 자리 + experiment 단위 폴더 누적.
+> 산출물 폴더: `<artifact-root>/experiments/` ([CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier). _RUNLOG timeline 한 자리 + experiment 단위 폴더 누적.
 
 ## Purpose — _빠른 실험 prototype_ entry
 
@@ -52,7 +52,7 @@ metadata:
 
 ## Git 워크플로우 — 별도 worktree+실험 브랜치 (원칙, canonical)
 
-**lab 은 main 이 아니라 _전용 worktree + 실험 브랜치_ 에서 진행한다.** 실험 시작 자리(setup, 또는 부모 없는 첫 eval)에서 main 워킹트리를 직접 건드리지 않고, [OPERATIONS §5.10](../../OPERATIONS.md) 명명 규칙대로 형제 worktree `<repo>-wt/<exp-slug>` 를 파고 그 안 실험 브랜치(`exp/<slug>` 또는 기존 feature 브랜치)에서 작업한다. 이미 해당 worktree·브랜치가 있으면 재사용.
+**lab 은 main 이 아니라 _전용 worktree + 실험 브랜치_ 에서 진행한다.** 실험 시작 자리(setup, 또는 부모 없는 첫 eval)에서 main 워킹트리를 직접 건드리지 않고, [OPERATIONS §5.10](../../core/OPERATIONS.md) 명명 규칙대로 형제 worktree `<repo>-wt/<exp-slug>` 를 파고 그 안 실험 브랜치(`exp/<slug>` 또는 기존 feature 브랜치)에서 작업한다. 이미 해당 worktree·브랜치가 있으면 재사용.
 
 ### autopilot-code 의 worktree 와 결정적 차이
 
@@ -146,7 +146,7 @@ metadata:
 참고 코드 path 명시 (예: `model/TF_Restormer`). 미명시 시 `similar_models.md` 자동 추천. setup `--parent` 자리는 무시 (부모 ckpt 우선).
 
 ### --qa
-- `quick` / `light` (default) / `standard` / `thorough` / `adversarial` — [CONVENTIONS.md §1](../../CONVENTIONS.md)
+- `quick` / `light` (default) / `standard` / `thorough` / `adversarial` — [CONVENTIONS.md §1](../../core/CONVENTIONS.md)
 - 본 skill default 가 `light` 인 이유: 실험 prototype 은 _빠른 cycle_ 이 1순위. high-stakes 신호(논문 결과·외부 공개) 시 사용자가 standard+ 명시 또는 메인 에이전트 자동 상향.
 
 ### --from

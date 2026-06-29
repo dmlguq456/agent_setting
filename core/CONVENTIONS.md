@@ -313,7 +313,7 @@ scoping 비대칭 의도:
   - 나쁨: "review log → `{artifact_dir}/strategy_reviews/round_{N}_quality.md`" (절대 경로 hardcode → drift 위험)
 - 본 절 참조 한 줄 포함:
   ```markdown
-  > 산출물 폴더 컨벤션: [CONVENTIONS.md §5](../../CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier)
+  > 산출물 폴더 컨벤션: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier)
   ```
 
 ### §5.7. Backward compat detection (구현 가이드)

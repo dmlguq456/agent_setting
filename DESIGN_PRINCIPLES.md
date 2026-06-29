@@ -1,1 +1,0 @@
-core/DESIGN_PRINCIPLES.md
