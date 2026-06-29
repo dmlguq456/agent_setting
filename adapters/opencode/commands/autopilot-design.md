@@ -3,7 +3,7 @@ description: "Run the portable autopilot-design capability through the OpenCode 
 ---
 
 Use the OpenCode adapter realization of portable capability `autopilot-design`.
-This is adapter-owned output generated from `capabilities/autopilot-design.md`, not a Claude command copy.
+This is adapter-owned output generated from `capabilities/autopilot-design.md`, not a runtime-specific command copy.
 
 1. Read `capabilities/autopilot-design.md` for the runtime-neutral contract.
 2. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-design` and

@@ -3,7 +3,7 @@ description: "Run the portable analyze-project capability through the OpenCode a
 ---
 
 Use the OpenCode adapter realization of portable capability `analyze-project`.
-This is adapter-owned output generated from `capabilities/analyze-project.md`, not a Claude command copy.
+This is adapter-owned output generated from `capabilities/analyze-project.md`, not a runtime-specific command copy.
 
 1. Read `capabilities/analyze-project.md` for the runtime-neutral contract.
 2. Run `adapters/opencode/bin/preflight.sh capability-info analyze-project` and

@@ -6,7 +6,7 @@ description: "Use when the user requests autopilot-research: 공통 사전조사
 # autopilot-research
 
 This is a Codex-native Skill projection generated from the portable capability
-contract. It is adapter-owned output, not a Claude Skill copy.
+contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Source
 

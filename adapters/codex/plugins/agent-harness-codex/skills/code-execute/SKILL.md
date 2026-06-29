@@ -6,7 +6,7 @@ description: "Use when the user requests code-execute: plan 단계별 구현 실
 # code-execute
 
 This is a Codex-native Skill projection generated from the portable capability
-contract. It is adapter-owned output, not a Claude Skill copy.
+contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Source
 

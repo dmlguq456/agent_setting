@@ -3,7 +3,7 @@ description: "Run the portable analyze-user capability through the OpenCode adap
 ---
 
 Use the OpenCode adapter realization of portable capability `analyze-user`.
-This is adapter-owned output generated from `capabilities/analyze-user.md`, not a Claude command copy.
+This is adapter-owned output generated from `capabilities/analyze-user.md`, not a runtime-specific command copy.
 
 1. Read `capabilities/analyze-user.md` for the runtime-neutral contract.
 2. Run `adapters/opencode/bin/preflight.sh capability-info analyze-user` and

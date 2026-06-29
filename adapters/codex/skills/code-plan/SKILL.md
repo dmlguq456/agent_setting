@@ -6,7 +6,7 @@ description: "Use when the user requests code-plan: 코드 분석 후 상세 구
 # code-plan
 
 This is a Codex-native Skill projection generated from the portable capability
-contract. It is adapter-owned output, not a Claude Skill copy.
+contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Source
 

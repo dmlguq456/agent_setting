@@ -6,7 +6,7 @@ description: "Use when the user requests design-handoff: 디자인 결과를 개
 # design-handoff
 
 This is a Codex-native Skill projection generated from the portable capability
-contract. It is adapter-owned output, not a Claude Skill copy.
+contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Source
 

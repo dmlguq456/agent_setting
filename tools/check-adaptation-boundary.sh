@@ -379,8 +379,8 @@ check_codex_native_skill_projection() {
     if ! grep -Fq "adapters/codex/bin/preflight.sh capability-info $slug" "$skill"; then
       fail_msg "$skill must reference the Codex capability-info wrapper"
     fi
-    if ! grep -Fq "not a Claude Skill copy" "$skill"; then
-      fail_msg "$skill must state that it is not a Claude Skill copy"
+    if ! grep -Fq "not a legacy compatibility Skill copy" "$skill"; then
+      fail_msg "$skill must state that it is not a legacy compatibility Skill copy"
     fi
     if ! grep -Fq 'named `tool_contract`' "$skill"; then
       fail_msg "$skill must instruct Codex to report named tool contracts"
@@ -722,8 +722,8 @@ check_opencode_native_skill_projection() {
     if ! grep -Fq "adapters/opencode/bin/preflight.sh capability-info $slug" "$skill"; then
       fail_msg "$skill must reference the OpenCode capability-info wrapper"
     fi
-    if ! grep -Fq "not a Claude Skill copy" "$skill"; then
-      fail_msg "$skill must state that it is not a Claude Skill copy"
+    if ! grep -Fq "not a legacy compatibility Skill copy" "$skill"; then
+      fail_msg "$skill must state that it is not a legacy compatibility Skill copy"
     fi
     if ! grep -Fq 'named `tool_contract`' "$skill"; then
       fail_msg "$skill must instruct OpenCode to report named tool contracts"
@@ -767,8 +767,8 @@ check_opencode_native_agent_projection() {
     if ! grep -Fq "adapters/opencode/bin/preflight.sh role" "$agent"; then
       fail_msg "$agent must reference the OpenCode role mapper"
     fi
-    if ! grep -Fq "not a Claude Agent copy" "$agent"; then
-      fail_msg "$agent must state that it is not a Claude Agent copy"
+    if ! grep -Fq "not a non-OpenCode Agent copy" "$agent"; then
+      fail_msg "$agent must state that it is not a non-OpenCode Agent copy"
     fi
   done
   for dir in adapters/opencode/agents/*; do
@@ -820,8 +820,8 @@ check_opencode_native_command_projection() {
     if ! grep -Fq "adapters/opencode/bin/preflight.sh capability-info $slug" "$command"; then
       fail_msg "$command must reference the OpenCode capability-info wrapper"
     fi
-    if ! grep -Fq "not a Claude command copy" "$command"; then
-      fail_msg "$command must state that it is not a Claude command copy"
+    if ! grep -Fq "not a runtime-specific command copy" "$command"; then
+      fail_msg "$command must state that it is not a runtime-specific command copy"
     fi
     if ! grep -Fq 'named `tool_contract`' "$command"; then
       fail_msg "$command must instruct OpenCode to report named tool contracts"

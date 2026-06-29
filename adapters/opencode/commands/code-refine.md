@@ -3,7 +3,7 @@ description: "Run the portable code-refine capability through the OpenCode adapt
 ---
 
 Use the OpenCode adapter realization of portable capability `code-refine`.
-This is adapter-owned output generated from `capabilities/code-refine.md`, not a Claude command copy.
+This is adapter-owned output generated from `capabilities/code-refine.md`, not a runtime-specific command copy.
 
 1. Read `capabilities/code-refine.md` for the runtime-neutral contract.
 2. Run `adapters/opencode/bin/preflight.sh capability-info code-refine` and

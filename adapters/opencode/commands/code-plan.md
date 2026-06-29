@@ -3,7 +3,7 @@ description: "Run the portable code-plan capability through the OpenCode adapter
 ---
 
 Use the OpenCode adapter realization of portable capability `code-plan`.
-This is adapter-owned output generated from `capabilities/code-plan.md`, not a Claude command copy.
+This is adapter-owned output generated from `capabilities/code-plan.md`, not a runtime-specific command copy.
 
 1. Read `capabilities/code-plan.md` for the runtime-neutral contract.
 2. Run `adapters/opencode/bin/preflight.sh capability-info code-plan` and

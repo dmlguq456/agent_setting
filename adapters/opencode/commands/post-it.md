@@ -3,7 +3,7 @@ description: "Run the portable post-it capability through the OpenCode adapter. 
 ---
 
 Use the OpenCode adapter realization of portable capability `post-it`.
-This is adapter-owned output generated from `capabilities/post-it.md`, not a Claude command copy.
+This is adapter-owned output generated from `capabilities/post-it.md`, not a runtime-specific command copy.
 
 1. Read `capabilities/post-it.md` for the runtime-neutral contract.
 2. Run `adapters/opencode/bin/preflight.sh capability-info post-it` and

@@ -3,7 +3,7 @@ description: "Run the portable audit capability through the OpenCode adapter. Me
 ---
 
 Use the OpenCode adapter realization of portable capability `audit`.
-This is adapter-owned output generated from `capabilities/audit.md`, not a Claude command copy.
+This is adapter-owned output generated from `capabilities/audit.md`, not a runtime-specific command copy.
 
 1. Read `capabilities/audit.md` for the runtime-neutral contract.
 2. Run `adapters/opencode/bin/preflight.sh capability-info audit` and

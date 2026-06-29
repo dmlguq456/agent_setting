@@ -3,7 +3,7 @@ description: "Run the portable sync-skills capability through the OpenCode adapt
 ---
 
 Use the OpenCode adapter realization of portable capability `sync-skills`.
-This is adapter-owned output generated from `capabilities/sync-skills.md`, not a Claude command copy.
+This is adapter-owned output generated from `capabilities/sync-skills.md`, not a runtime-specific command copy.
 
 1. Read `capabilities/sync-skills.md` for the runtime-neutral contract.
 2. Run `adapters/opencode/bin/preflight.sh capability-info sync-skills` and

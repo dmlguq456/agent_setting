@@ -3,7 +3,7 @@ description: "Run the portable draft-refine capability through the OpenCode adap
 ---
 
 Use the OpenCode adapter realization of portable capability `draft-refine`.
-This is adapter-owned output generated from `capabilities/draft-refine.md`, not a Claude command copy.
+This is adapter-owned output generated from `capabilities/draft-refine.md`, not a runtime-specific command copy.
 
 1. Read `capabilities/draft-refine.md` for the runtime-neutral contract.
 2. Run `adapters/opencode/bin/preflight.sh capability-info draft-refine` and

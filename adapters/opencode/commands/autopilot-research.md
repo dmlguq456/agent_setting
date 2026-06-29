@@ -3,7 +3,7 @@ description: "Run the portable autopilot-research capability through the OpenCod
 ---
 
 Use the OpenCode adapter realization of portable capability `autopilot-research`.
-This is adapter-owned output generated from `capabilities/autopilot-research.md`, not a Claude command copy.
+This is adapter-owned output generated from `capabilities/autopilot-research.md`, not a runtime-specific command copy.
 
 1. Read `capabilities/autopilot-research.md` for the runtime-neutral contract.
 2. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-research` and

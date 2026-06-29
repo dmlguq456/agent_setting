@@ -3,7 +3,7 @@ description: "Run the portable autopilot-lab capability through the OpenCode ada
 ---
 
 Use the OpenCode adapter realization of portable capability `autopilot-lab`.
-This is adapter-owned output generated from `capabilities/autopilot-lab.md`, not a Claude command copy.
+This is adapter-owned output generated from `capabilities/autopilot-lab.md`, not a runtime-specific command copy.
 
 1. Read `capabilities/autopilot-lab.md` for the runtime-neutral contract.
 2. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-lab` and

@@ -3,7 +3,7 @@ description: "OpenCode-native agent for portable role profile external-adversary
 ---
 
 You are the OpenCode-native realization of the portable `external-adversary` role
-profile. This is adapter-owned output generated from `roles/README.md`, not a Claude Agent copy.
+profile. This is adapter-owned output generated from `roles/README.md`, not a non-OpenCode Agent copy.
 
 ## Source
 

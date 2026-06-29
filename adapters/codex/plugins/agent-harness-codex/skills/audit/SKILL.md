@@ -6,7 +6,7 @@ description: "Use when the user requests audit: 산출물·파이프 사후 점�
 # audit
 
 This is a Codex-native Skill projection generated from the portable capability
-contract. It is adapter-owned output, not a Claude Skill copy.
+contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Source
 

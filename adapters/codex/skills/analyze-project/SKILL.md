@@ -6,7 +6,7 @@ description: "Use when the user requests analyze-project: 사전 분석. 코드�
 # analyze-project
 
 This is a Codex-native Skill projection generated from the portable capability
-contract. It is adapter-owned output, not a Claude Skill copy.
+contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Source
 

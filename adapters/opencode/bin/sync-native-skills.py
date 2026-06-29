@@ -55,7 +55,7 @@ metadata:
 # {identifier}
 
 This is an OpenCode-native Skill projection generated from the portable
-capability contract. It is adapter-owned output, not a Claude Skill copy.
+capability contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Source
 
