@@ -4,27 +4,87 @@
 #                     vs ⚡untracked(면제·자유). instruction 이 못 보는 _런타임 flag 상태_ 를 Claude 에 전달.
 #   SessionStart    : 잔여 ⚡untracked flag GC 만.
 # WORKFLOW.md(라우팅 계약)·post-it(세션 연속성) 은 runtime adapter bootstrap+도메인 트리거 _지침_ 으로 Read.
+# Portable CLI:
+#   workflow-guard-hook.sh --event prompt [--cwd <dir>] [--session <id>] [--format text|claude-json]
+#   workflow-guard-hook.sh --event start  [--cwd <dir>] [--session <id>] [--format text|claude-json]
 # 등록: ~/.claude/settings.json 의 hooks.SessionStart + hooks.UserPromptSubmit.
 set -euo pipefail
 
-input=$(cat 2>/dev/null || true)
-eval "$(printf '%s' "$input" | python3 -c '
+usage() {
+  cat <<'EOF'
+usage: workflow-guard-hook.sh --event prompt|start [--cwd <dir>] [--session <id>] [--format text|claude-json]
+
+Without arguments, reads Claude hook JSON from stdin and emits Claude hook JSON.
+EOF
+}
+
+EVENT=""
+SID=""
+MODE="hook"
+FORMAT="claude-json"
+CWD="$PWD"
+
+if [ "$#" -gt 0 ]; then
+  MODE="cli"
+  FORMAT="text"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --event)
+        [ "$#" -ge 2 ] || { echo "workflow-guard-hook: --event requires a value" >&2; exit 64; }
+        case "$2" in
+          prompt|UserPromptSubmit) EVENT="UserPromptSubmit" ;;
+          start|SessionStart) EVENT="SessionStart" ;;
+          *) echo "workflow-guard-hook: unknown event: $2" >&2; exit 64 ;;
+        esac
+        shift 2
+        ;;
+      --cwd)
+        [ "$#" -ge 2 ] || { echo "workflow-guard-hook: --cwd requires a dir" >&2; exit 64; }
+        CWD=$2
+        shift 2
+        ;;
+      --session)
+        [ "$#" -ge 2 ] || { echo "workflow-guard-hook: --session requires an id" >&2; exit 64; }
+        SID=$2
+        shift 2
+        ;;
+      --format)
+        [ "$#" -ge 2 ] || { echo "workflow-guard-hook: --format requires a value" >&2; exit 64; }
+        case "$2" in text|claude-json) FORMAT=$2 ;; *) echo "workflow-guard-hook: unknown format: $2" >&2; exit 64 ;; esac
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "workflow-guard-hook: unknown argument: $1" >&2
+        usage >&2
+        exit 64
+        ;;
+    esac
+  done
+  [ -n "$EVENT" ] || { echo "workflow-guard-hook: --event is required" >&2; exit 64; }
+else
+  input=$(cat 2>/dev/null || true)
+  eval "$(printf '%s' "$input" | python3 -c '
 import json, sys, shlex
 try: d = json.load(sys.stdin)
 except Exception: d = {}
 print("EVENT="+shlex.quote(d.get("hook_event_name","") or ""))
 print("SID="+shlex.quote(d.get("session_id","") or ""))
 ' 2>/dev/null || true)"
-EVENT="${EVENT:-}"; SID="${SID:-}"
+  EVENT="${EVENT:-}"; SID="${SID:-}"
+fi
 
 # ---- 프로젝트 cwd 판정 (git work tree 또는 artifact root 보유) ----
 is_project=0
-if command -v git >/dev/null 2>&1 && git -C "$PWD" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+if command -v git >/dev/null 2>&1 && git -C "$CWD" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   is_project=1
 fi
 
 # cwd 에서 위로 올라가며 .agent_reports/ 또는 legacy .claude_reports/ 루트 탐색.
-d="$PWD"; cr_root=""; reports_dir=""
+d="$CWD"; cr_root=""; reports_dir=""
 for _ in $(seq 1 40); do
   [ -d "$d/.agent_reports" ] && { cr_root="$d"; reports_dir=".agent_reports"; break; }
   [ -d "$d/.claude_reports" ] && { cr_root="$d"; reports_dir=".claude_reports"; break; }
@@ -43,6 +103,10 @@ fi
 emit() {  # $1 = hookEventName, stdin = ctx 본문
   local ctx j
   ctx=$(cat)
+  if [ "$FORMAT" = "text" ]; then
+    printf '%s\n' "$ctx"
+    return 0
+  fi
   j=$(printf '%s' "$ctx" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
   printf '{"hookSpecificOutput":{"hookEventName":"%s","additionalContext":%s}}\n' "$1" "$j"
 }

@@ -8,6 +8,7 @@ MEM="$ROOT/hooks/builtin-memory-guard.sh"
 CODEX="$ROOT/adapters/codex/bin/preflight.sh"
 MARK="$ROOT/hooks/spec-read-marker.sh"
 SPEC="$ROOT/hooks/spec-skill-gate.sh"
+FLOW="$ROOT/utilities/workflow-guard-hook.sh"
 
 PASS=0
 FAIL=0
@@ -105,6 +106,22 @@ if "$CODEX" read "$TMP/specproj/.agent_reports/spec/prd.md" testsid >/tmp/codex.
   ok "codex read+capability wrapper passes spec gate"
 else
   bad "codex read+capability wrapper should pass spec gate"
+fi
+
+echo "== workflow signal CLI =="
+mkdir -p "$TMP/flowproj/.agent_reports"
+if "$FLOW" --event prompt --cwd "$TMP/flowproj" --session testsid --format text >/tmp/flow.out 2>/tmp/flow.err \
+  && grep -q 'tracked' /tmp/flow.out; then
+  ok "workflow signal emits tracked text"
+else
+  bad "workflow signal should emit tracked text"
+fi
+touch "$TMP/flowproj/.agent_reports/.untracked.testsid"
+if "$CODEX" mode "$TMP/flowproj" testsid >/tmp/flow.out 2>/tmp/flow.err \
+  && grep -q 'untracked' /tmp/flow.out; then
+  ok "codex mode wrapper emits untracked text"
+else
+  bad "codex mode wrapper should emit untracked text"
 fi
 
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"

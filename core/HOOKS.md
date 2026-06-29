@@ -23,7 +23,7 @@ checks to their own event model.
 | spec read gate | `hooks/spec-skill-gate.sh`, `hooks/spec-read-marker.sh` | `portable-check` | Spec-changing capability calls in spec-backed projects require a current `prd.md` read marker. | Run `hooks/spec-read-marker.sh --file <prd.md> [--session <id>]` after actual reads, then `hooks/spec-skill-gate.sh --skill <capability> [--cwd <dir>] [--session <id>]` before spec/code capabilities. |
 | memory write guard | `hooks/builtin-memory-guard.sh` | `portable-check` | Runtime-native file memory must not bypass the unified DB memory store. | Run `hooks/builtin-memory-guard.sh --file <path>` before writes, or remove the native memory feature. |
 | design post-write verification | `hooks/design-postwrite.sh` | `adapter-coupled-automation` | Saved design HTML should get deterministic console verification. | Provide an equivalent browser/console checker or report unsupported. |
-| workflow tracked signal | `utilities/workflow-guard-hook.sh` | `adapter-payload-wrapper` | Surface tracked/untracked mode and clean stale flags. | Attach to session/prompt start or expose an explicit wrapper reminder. |
+| workflow tracked signal | `utilities/workflow-guard-hook.sh` | `portable-check` | Surface tracked/untracked mode and clean stale flags. | Run `utilities/workflow-guard-hook.sh --event prompt [--cwd <dir>] [--session <id>] [--format text]` before prompt handling, and `--event start` for stale flag GC. |
 | memory injection | `tools/memory/mem.py inject --hook` | `adapter-payload-wrapper` | Inject relevant DB memory at session start. | Map the injection output to the runtime's context mechanism. |
 | memory recall injection | `hooks/mem-recall-inject.sh` | `adapter-coupled-automation` | Recall signal words trigger DB recall and context injection. | Provide prompt-submit event payload and context injection support. |
 | memory distillation trigger | `hooks/mem-turn-nudge.sh`, `hooks/mem-distill-dispatch.sh` | `adapter-coupled-automation` | Periodically distill session deltas into DB memory through a no-tools worker. | Provide session transcript source, detached worker invocation, and no-tools/action contract. |
@@ -42,4 +42,6 @@ Codex must not consume that JSON as configuration. It can run
 (git state, artifact order, and native memory-file write checks),
 `adapters/codex/bin/preflight.sh read <prd.md> [session-id]` after actual spec
 reads, and `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]`
-before spec-changing capability work.
+before spec-changing capability work. It can also run
+`adapters/codex/bin/preflight.sh mode [cwd] [session-id]` to surface tracked
+or untracked workflow state as plain text.

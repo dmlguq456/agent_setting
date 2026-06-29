@@ -9,6 +9,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh read <file> [session-id]
        preflight.sh capability <name> [cwd] [session-id]
        preflight.sh skill <name> [cwd] [session-id]
+       preflight.sh mode [cwd] [session-id]
 
 Runs portable checks that Codex can call without consuming Claude hook JSON or
 settings.json.
@@ -37,6 +38,11 @@ case "$cmd" in
     cwd=${3:-$PWD}
     sid=${4:-codex}
     "$ROOT/hooks/spec-skill-gate.sh" --skill "$name" --cwd "$cwd" --session "$sid"
+    ;;
+  mode)
+    cwd=${2:-$PWD}
+    sid=${3:-codex}
+    "$ROOT/utilities/workflow-guard-hook.sh" --event prompt --cwd "$cwd" --session "$sid" --format text
     ;;
   -h|--help|"")
     usage
