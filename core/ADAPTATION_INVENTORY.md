@@ -61,11 +61,12 @@ into a portable agent setting plus runtime adapters.
    Adapter docs own concrete model names and CLI-specific choices.
 2. **Capability specs second**: keep portable capability meaning in
    `capabilities/`; keep Claude Skill syntax in generated or maintained
-   `adapters/claude/skills/<name>/SKILL.md` files. Codex must pass through
-   `capability-map.sh`, not `skills/*/SKILL.md`.
+   `adapters/claude/skills/<name>/SKILL.md` files. Codex and OpenCode must pass
+   through `capability-map.sh`, not `skills/*/SKILL.md`.
 3. **Agent profiles third**: keep portable role meaning in `roles/`; keep
    concrete frontmatter/model/tool mapping in adapter-native agent files. Codex
-   must pass through `role-map.sh` and `mode-map.sh` for runtime decisions.
+   and OpenCode must pass through `role-map.sh` and `mode-map.sh` for runtime
+   decisions.
 4. **Hook payloads fourth**: keep invariant semantics in `core/HOOKS.md`, then
    isolate Claude event JSON, statusline JSON, ScheduleWakeup, and MCP
    registration behind adapter-native wrappers.

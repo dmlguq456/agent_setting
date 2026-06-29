@@ -4,9 +4,9 @@ This directory describes runtime-neutral delegation roles. It is not a native
 agent registry for any one tool.
 
 Claude Code realizes these profiles as native Agent files under
-`adapters/claude/agents/`. Codex and future runtimes should read this directory
-for role meaning, then map each role to their own model, tool, and delegation
-mechanism.
+`adapters/claude/agents/`. Codex and OpenCode read this directory for role
+meaning, then map each role to their own model, tool, and delegation mechanism
+through adapter-owned wrappers or native agent surfaces.
 
 ## Role Catalog
 
