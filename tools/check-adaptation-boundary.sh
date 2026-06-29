@@ -184,6 +184,9 @@ check_capability_catalog() {
     if ! grep -Fq "| \`$slug\` |" capabilities/README.md; then
       fail_msg "capabilities/README.md is missing skill capability: $slug"
     fi
+    if [ ! -f "capabilities/$slug.md" ]; then
+      fail_msg "capabilities/$slug.md is missing portable capability spec"
+    fi
   done
 }
 

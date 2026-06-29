@@ -27,7 +27,11 @@ if ! grep -Fq "| \`$cap\` |" "$CATALOG"; then
   exit 64
 fi
 
-portable_source="capabilities/README.md"
+if [ -f "$ROOT/capabilities/$cap.md" ]; then
+  portable_source="capabilities/$cap.md"
+else
+  portable_source="capabilities/README.md"
+fi
 claude_reference="skills/$cap/SKILL.md"
 
 printf 'capability=%s\n' "$cap"
