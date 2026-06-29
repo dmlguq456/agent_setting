@@ -119,7 +119,17 @@ check_codex_tool_projection() {
     fail_msg "codex_setting/tools points to $target; expected ../adapters/codex/tools"
   fi
 
-  for p in mem.py apply-distill-actions.py recall.sh; do
+  for p in mem.py recall.sh; do
+    if [ ! -x "adapters/codex/tools/memory/$p" ]; then
+      fail_msg "adapters/codex/tools/memory/$p must be an executable Codex-owned memory launcher"
+    elif [ -L "adapters/codex/tools/memory/$p" ]; then
+      fail_msg "adapters/codex/tools/memory/$p must be concrete, not a symlink to the shared Claude-compatible fallback"
+    elif grep -q '\.claude\|CLAUDE_HOME' "adapters/codex/tools/memory/$p"; then
+      fail_msg "adapters/codex/tools/memory/$p must not fall back to Claude runtime home"
+    fi
+  done
+
+  for p in apply-distill-actions.py; do
     if [ ! -L "adapters/codex/tools/memory/$p" ]; then
       fail_msg "adapters/codex/tools/memory/$p must be a selective portable memory tool projection"
       continue

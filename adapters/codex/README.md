@@ -68,9 +68,9 @@ Codex skill/plugin surface must be adapter-owned output derived from
 full shared `tools/` directory. The adapter currently exposes only memory tools
 that Codex wrappers use directly:
 
-- `memory/mem.py`
+- `memory/mem.py` (Codex-owned launcher for the shared memory CLI)
 - `memory/apply-distill-actions.py`
-- `memory/recall.sh`
+- `memory/recall.sh` (Codex-owned launcher for recall)
 
 Harness development tools and Claude-coupled helper surfaces such as
 `build-manifest.py`, `design-mcp`, and `web-bundle` stay out of the Codex

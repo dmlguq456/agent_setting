@@ -148,9 +148,9 @@ and selected utilities, but must not expose Claude-native `settings.json`,
 `codex_setting/tools` points at `adapters/codex/tools/`, not the entire shared
 `tools/` directory. The current allowlist is:
 
-- `memory/mem.py`
+- `memory/mem.py` (Codex-owned launcher for the shared memory CLI)
 - `memory/apply-distill-actions.py`
-- `memory/recall.sh`
+- `memory/recall.sh` (Codex-owned launcher for recall)
 
 Do not project `build-manifest.py`: it is a harness development tool that reads
 Claude adapter skills, agents, and settings. Do not project `design-mcp` or
