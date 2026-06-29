@@ -372,7 +372,7 @@ warn_concrete_runtime_terms() {
 
   if [ "$count" != "0" ]; then
     say "WARN: $count concrete Claude/model references remain in portable areas."
-    say "      This is allowed only where documented as adapter mapping or compat-passthrough."
+    say "      This is allowed only where documented as adapter mapping, compat-reference, or compat-passthrough."
   fi
 }
 

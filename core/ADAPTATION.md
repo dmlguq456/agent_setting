@@ -13,7 +13,8 @@ Every file in this repo must fall into one category.
 | Portable source | Runtime-neutral semantics. Describes what must happen, not how a vendor runtime invokes it. | `core/`, portable parts of `tools/`, portable guard algorithms | May be symlinked into adapters if the runtime can read plain files |
 | Adapter source | Runtime-specific representation of portable semantics. | `adapters/claude/CLAUDE.md`, `adapters/claude/settings.json`, `adapters/claude/commands/` | Projected into that runtime home |
 | Adapter projection | Versioned mirror that exposes adapter source under runtime-expected names. | `claude_setting/`, `codex_setting/` | Symlink or generated output only; no independent semantics |
-| Compatibility passthrough | Legacy file still consumed directly by a runtime before a true portable/adapted split exists. | Current `skills/`, many `hooks/` | Allowed only with an explicit debt note in the adapter |
+| Compatibility reference | Historical source kept for parity/drift checks after an adapter-owned realization exists. | `skills/` byte-equivalent to `adapters/claude/skills/` except sync state | Not projected as portable source; guarded against drift |
+| Compatibility passthrough | Legacy file still consumed directly by a runtime before a true portable/adapted split exists. | Mixed shared hooks or utilities not yet split into invariant + adapter wrapper | Allowed only with an explicit debt note in the adapter |
 | Runtime state | Tool-owned mutable local state. | `<runtime-home>/projects`, credentials, session logs, caches, DB files | Never committed to this repo |
 | Continuity state | Cross-project agent worklog/notes data that survives sessions but is not harness source. | `<agent-notes-root>/cards`, `_layer2`, `_triage`, `digests`, `oncall`, `study` | Never committed to this repo; may be versioned in a separate notes/data repo |
 | Local board app state | Worklog-board local app workspace, generated output, DB/cache, dispatch logs, and worktrees. | `<worklog-board-app>/.cache`, `.next`, `.dispatch`, `.env*`, `node_modules`, `<worklog-board-app>-wt/` | Never committed to this repo |
@@ -24,7 +25,7 @@ An adapter must not claim support for a surface unless it provides one of:
 
 1. A native adapter file.
 2. A generated file with a documented source.
-3. An explicit compatibility passthrough entry and the reason passthrough is safe.
+3. An explicit compatibility reference or passthrough entry and the reason it is safe.
 
 Plain symlinks are acceptable only as a projection mechanism. They are not proof
 that adaptation is complete.

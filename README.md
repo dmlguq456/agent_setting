@@ -216,7 +216,7 @@ autopilot-\* 가 내부에서 자동 라우팅하는 전문 팀. Portable 의미
 | [`core/MEMORY.md`](core/MEMORY.md) | 통합 기억 단일 출처 — store 아키텍처 · promote/skip · lifecycle · recall · 프로필 aspect↔agent 매트릭스(§7) |
 | [`core/HOOKS.md`](core/HOOKS.md) | portable hook invariant catalog — artifact/git/spec/memory/design hook 의미와 adapter 요구 |
 | [`core/ADAPTATION.md`](core/ADAPTATION.md) | portable source / adapter source / projection / compatibility passthrough 경계 계약 |
-| [`core/ADAPTATION_INVENTORY.md`](core/ADAPTATION_INVENTORY.md) | 현재 표면별 portable / adapter-native / compat-passthrough 상태와 migration 순서 |
+| [`core/ADAPTATION_INVENTORY.md`](core/ADAPTATION_INVENTORY.md) | 현재 표면별 portable / adapter-native / compat-reference / compat-passthrough 상태와 migration 순서 |
 | [`capabilities/`](capabilities/README.md) · [`roles/`](roles/README.md) | runtime-neutral capability / role 의미 계층 (`roles/MODES.md` = mode portability inventory) |
 | [`core/DESIGN_PRINCIPLES.md`](core/DESIGN_PRINCIPLES.md) | autopilot 아키텍처 설계 원칙 |
 | [`core/CORE.md`](core/CORE.md) · [`adapters/`](adapters/README.md) | 모델·도구 중립 코어 계약과 런타임별 어댑터 경계 (Claude Code primary, Codex experimental) |

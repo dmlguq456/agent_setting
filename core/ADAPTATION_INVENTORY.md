@@ -10,6 +10,7 @@ into a portable agent setting plus runtime adapters.
 | `portable` | Can be consumed by multiple runtimes as-is. |
 | `adapter-native` | Belongs to one runtime adapter. |
 | `projection` | Versioned mirror into a runtime home; symlink/generated only. |
+| `compat-reference` | Historical copy retained only for parity/drift checks after adapter-native realization exists. |
 | `compat-passthrough` | Still shared because Claude Code currently consumes it directly. |
 | `needs-split` | Must be separated into portable source plus adapter-native realization. |
 
@@ -26,7 +27,7 @@ into a portable agent setting plus runtime adapters.
 | Claude settings/hooks registration | `adapters/claude/settings.json` | adapter-native | Codex must get wrapper/preflight equivalents, not this JSON. |
 | Slash commands | `adapters/claude/commands/` | adapter-native | Future runtimes need native command wrappers or instruction entries. |
 | Portable capability catalog | `capabilities/README.md`, `capabilities/*.md` | portable | Per-capability specs define runtime-neutral contracts; Codex resolves entries through `adapters/codex/bin/capability-map.sh`. |
-| Claude skills | `adapters/claude/skills/*/SKILL.md` | adapter-native projection, compat-content | Concrete Claude Skill files preserve current Claude behavior while portable contracts grow under `capabilities/`. |
+| Claude skills | `adapters/claude/skills/*/SKILL.md` | adapter-native projection, compat-content | Concrete Claude Skill files preserve current Claude behavior while portable contracts grow under `capabilities/`. Root `skills/` is a parity-guarded compat-reference, not a runtime projection. |
 | Portable role catalog | `roles/README.md` | portable | Grow into per-role specs when adapter parity work needs finer granularity; Codex currently resolves concrete runtime settings through `adapters/codex/bin/role-map.sh`. |
 | Role mode inventory | `roles/MODES.md` | portable | Classifies shared `roles/modes/` prompt fragments by portability; Codex currently enforces the classification through `adapters/codex/bin/mode-map.sh`. |
 | Claude agents | `adapters/claude/agents/*.md` | adapter-native | Preserve Claude Agent frontmatter/model/tool schema while realizing `roles/README.md`. |
