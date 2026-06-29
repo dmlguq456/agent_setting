@@ -24,12 +24,34 @@ runtime-specific files out of the common root.
 
 `~/.claude/*` should point at `claude_setting/*`, not directly at common files.
 
-## Compatibility Passthrough
+## Worklog And Agent Notes Realization
 
-These surfaces are still consumed by Claude Code directly, but are not yet clean
-portable sources:
+Claude Code currently realizes the portable continuity layer through local paths:
 
-| Surface | Current projection | Why passthrough is allowed for now | Required split |
+| Portable name | Current Claude realization | Classification |
+|---|---|---|
+| `<agent-notes-root>` | `/home/nas/user/Uihyeop/notes/` | mutable continuity state |
+| `<worklog-board-app>` | `/home/Uihyeop/.claude/worklog-board/` | external/local app workspace |
+| `<worklog-board-app>-wt/` | `/home/Uihyeop/.claude/worklog-board-wt/` | app worktrees |
+
+The Claude adapter preserves existing behavior: `autopilot-note` writes Layer 2
+notes, triage proposals, digests, and feedback/change-review queue entries under
+the notes root; the worklog-board app reads that state and owns UI approval
+flows. The adapter must not move or delete existing data during harness
+migration.
+
+Keep these out of the harness repo: notes data, worklog local DB/cache, `.env*`,
+`.next`, `node_modules`, `.dispatch`, app runtime logs, and worktrees. If the
+board app source is later made portable, promote it as a separate app/tool with
+its own repo or explicit source directory rather than treating the current
+`~/.claude` workspace as adapter source.
+
+## Compatibility Realizations
+
+These surfaces are still consumed by Claude Code directly, but their runtime
+paths now point at adapter-owned realization files instead of the common root:
+
+| Surface | Current projection | Why compatibility realization is allowed for now | Required split |
 |---|---|---|---|
 | Skills | `claude_setting/skills -> ../adapters/claude/skills` | Adapter-owned concrete Claude Skill files preserve old behavior while portable specs grow under `capabilities/` | Continue splitting semantics into `capabilities/<name>.md`; keep Claude frontmatter and runtime wording here |
 | Agent modes | `claude_setting/agent-modes -> ../adapters/claude/agent-modes` | Adapter-owned concrete mode projection files preserve current Claude behavior while `roles/MODES.md` classifies portability | Continue splitting adapter-coupled mode semantics into runtime-neutral fragments or adapter-native notes as non-Claude adapters implement equivalents |

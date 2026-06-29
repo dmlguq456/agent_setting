@@ -160,6 +160,20 @@ if "$CODEX" briefing "$TMP/flowproj" >/tmp/brief.out 2>/tmp/brief.err; then
 else
   bad "codex briefing wrapper should exit cleanly"
 fi
+mkdir -p "$TMP/notes/cards" "$TMP/notes/_layer2/notes" "$TMP/board/.cache" "$TMP/board-wt"
+printf 'card\n' > "$TMP/notes/cards/demo.md"
+printf 'note\n' > "$TMP/notes/_layer2/notes/demo.md"
+if AGENT_NOTES_ROOT="$TMP/notes" WORKLOG_BOARD_APP="$TMP/board" WORKLOG_BOARD_WT="$TMP/board-wt" \
+  "$CODEX" worklog "$TMP/flowproj" >/tmp/worklog.out 2>/tmp/worklog.err \
+  && grep -q "^agent-notes-root=$TMP/notes$" /tmp/worklog.out \
+  && grep -q "^worklog-board-app=$TMP/board$" /tmp/worklog.out \
+  && grep -q '^notes.cards.files=1$' /tmp/worklog.out \
+  && grep -q '^notes._layer2/notes.files=1$' /tmp/worklog.out \
+  && grep -q '^note=read-only inventory;' /tmp/worklog.out; then
+  ok "codex worklog wrapper reports read-only state"
+else
+  bad "codex worklog wrapper should report read-only state"
+fi
 if AGENT_MODEL_FAST=fast-model AGENT_REASONING_FAST=low "$CODEX" role fast reviewer >/tmp/role.out 2>/tmp/role.err \
   && grep -q '^family=fast$' /tmp/role.out \
   && grep -q '^model=fast-model$' /tmp/role.out \

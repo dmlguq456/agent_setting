@@ -26,6 +26,12 @@ done
 
 Keep these local to `$HOME/.claude`: `.credentials.json`, `.dispatch/`, `cache/`, `daemon/`, `history.jsonl`, `ide/`, `projects/`, `sessions/`, `session-env/`, `shell-snapshots/`, runtime logs, and other runtime-generated state.
 
+If present, existing `worklog-board/` and `worklog-board-wt/` directories under
+`$HOME/.claude` are local worklog app workspaces, not harness projection
+targets. Do not move their data during harness installation. Their notes data
+root is `<agent-notes-root>`, which is mutable continuity state and should not
+be committed to this repo. Adapter docs own concrete local path realizations.
+
 ## Codex Projection
 
 Codex does not currently consume the full harness natively. Keep `$HOME/.codex` runtime-owned and expose a stable pointer:

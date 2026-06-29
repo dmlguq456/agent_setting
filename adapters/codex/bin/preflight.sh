@@ -13,6 +13,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh memory [cwd]
        preflight.sh recall <prompt> [cwd]
        preflight.sh briefing [cwd]
+       preflight.sh worklog [cwd]
        preflight.sh design <file>
        preflight.sh distill-delta <session-id>
        preflight.sh distill-propose <session-id> [cwd]
@@ -66,6 +67,14 @@ case "$cmd" in
   briefing)
     cwd=${2:-$PWD}
     AGENT_HOME="${AGENT_HOME:-$ROOT}" bash "$ROOT/hooks/mem-briefing-inject.sh" --cwd "$cwd" --format text
+    ;;
+  worklog)
+    cwd=${2:-$PWD}
+    AGENT_HOME="${AGENT_HOME:-$ROOT}" \
+      AGENT_NOTES_ROOT="${AGENT_NOTES_ROOT:-${WORKLOG_NOTES_ROOT:-/home/nas/user/Uihyeop/notes}}" \
+      WORKLOG_BOARD_APP="${WORKLOG_BOARD_APP:-/home/Uihyeop/.claude/worklog-board}" \
+      WORKLOG_BOARD_WT="${WORKLOG_BOARD_WT:-/home/Uihyeop/.claude/worklog-board-wt}" \
+      "$ROOT/utilities/agent-worklog-state.sh" "$cwd"
     ;;
   design)
     [ "$#" -ge 2 ] || { echo "codex preflight: design requires a file path" >&2; exit 64; }
