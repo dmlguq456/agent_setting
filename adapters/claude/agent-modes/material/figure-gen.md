@@ -36,7 +36,7 @@ Spectrogram 생성 시 _샘플링 속도 별 window 크기_ 와 _색 축 (caxis 
 
 위 원칙은 _자료 자체의 정직함_ 보장 — resample 로 sample rate 차이를 가린다거나, 자동 color range 로 그룹 안 강도 비교를 부정확하게 만들지 않음. 사용자가 figure 만들 때 명시적으로 다른 설정을 요청한 경우만 예외.
 
-비교 묶음 layout (panel 배치·라벨 패턴) 은 사용자 특성 자료 (`mem profile 01_paper_figure_style` — `python3 ~/.claude/tools/memory/mem.py profile 01_paper_figure_style`) 참조; 실행해 그 body 를 default 로 따른다 (사용자가 turn 안 다른 명시 주면 override).
+비교 묶음 layout (panel 배치·라벨 패턴) 은 사용자 특성 자료 (`mem profile 01_paper_figure_style` — adapter memory wrapper 또는 `python3 <agent-home>/tools/memory/mem.py profile 01_paper_figure_style`) 참조; 실행해 그 body 를 default 로 따른다 (사용자가 turn 안 다른 명시 주면 override).
 
 ## 출력 컨벤션
 
