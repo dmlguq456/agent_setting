@@ -41,11 +41,11 @@ into a portable agent setting plus runtime adapters.
 | Worklog status helper | `utilities/agent-worklog-state.sh`, Codex `preflight.sh worklog` | portable helper + adapter wrapper | Read-only inventory of configured notes root and board app; no data migration or mutation. |
 | Design MCP | `tools/design-mcp/`, design skills | mixed | Keep render/check semantics portable; move Claude MCP registration paths to adapter docs. |
 | Utility scripts | `adapters/claude/utilities/*`, shared `utilities/*` | adapter-native projection, mixed content | Concrete Claude utility files preserve current behavior while runtime-neutral helper behavior remains available from the shared utility layer. |
-| Codex utilities | `adapters/codex/utilities/*` | adapter-native selective projection | Only symlink portable utility files Codex actually uses; do not expose Claude session helpers such as `dispatch-liveness.sh` through `codex_setting/`. |
+| Codex utilities | `adapters/codex/utilities/*` | adapter-native selective projection | Use Codex-owned wrappers where shared helpers have Claude fallback behavior; symlink only portable utility files Codex actually uses. Do not expose Claude session helpers such as `dispatch-liveness.sh` through `codex_setting/`. |
 | Scaffold assets | `adapters/claude/scaffolds/*`, shared `scaffolds/*` | adapter-native projection, mixed content | Concrete Claude scaffold files preserve current behavior while portable template intent remains available from the shared scaffold layer. |
 | Loop helpers | `adapters/claude/loops/*`, shared `loops/*` | adapter-native projection, mixed content | Concrete Claude loop files preserve current drill/oncall/study behavior while runtime-coupled loop invocation remains classified for future adapters. |
 | Tool helpers | `adapters/claude/tools/*`, shared `tools/*` | adapter-native projection, mixed content | Concrete Claude tool files preserve current helper behavior while memory/session/runtime-specific assumptions are split behind adapter or tool plugin boundaries. |
-| Codex tools | `adapters/codex/tools/*` | adapter-native selective projection | Only symlink portable memory tools Codex wrappers use; do not expose `build-manifest.py`, `design-mcp`, or `web-bundle` through `codex_setting/`. |
+| Codex tools | `adapters/codex/tools/*` | adapter-native selective projection | Use Codex-owned launchers for memory tools that need Codex home resolution; symlink only portable leaf tools with no runtime-home fallback. Do not expose `build-manifest.py`, `design-mcp`, or `web-bundle` through `codex_setting/`. |
 | Projection directories | `claude_setting/`, `codex_setting/` | projection | Must contain only symlinks or generated adapter output. |
 
 ## Migration Order

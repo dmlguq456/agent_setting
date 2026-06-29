@@ -42,7 +42,7 @@ invariant.
 | Capability catalog | `capabilities/` | `codex_setting/capabilities` |
 | Preflight wrappers | `adapters/codex/bin/` | `codex_setting/bin` |
 | Shared helper tools | selected `tools/`, selected `utilities/` | `codex_setting/tools`, `codex_setting/utilities` |
-| Selected tools | `adapters/codex/tools/` symlinks to portable tool files | `codex_setting/tools` |
+| Selected tools | `adapters/codex/tools/` adapter launchers plus selected portable tool projections | `codex_setting/tools` |
 | Selected utilities | `adapters/codex/utilities/` adapter wrappers plus selected portable utility projections | `codex_setting/utilities` |
 
 ## Native Skill And Plugin Surface Debt
