@@ -45,6 +45,7 @@ def render(profile: str, portable_role: str, responsibility: str) -> str:
     )
     return f"""---
 description: "{description}"
+mode: subagent
 ---
 
 You are the OpenCode-native realization of the portable `{profile}` role

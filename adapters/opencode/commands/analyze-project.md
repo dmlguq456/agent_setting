@@ -16,5 +16,7 @@ This is adapter-owned output generated from `capabilities/analyze-project.md`, n
 5. If the command receives arguments, map them to the portable argument shape:
    `[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]`.
 
+User arguments from OpenCode: `$ARGUMENTS`
+
 Do not use non-OpenCode command files or runtime-specific slash-command files
 as OpenCode-native command source.

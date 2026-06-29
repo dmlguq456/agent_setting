@@ -16,5 +16,7 @@ This is adapter-owned output generated from `capabilities/post-it.md`, not a run
 5. If the command receives arguments, map them to the portable argument shape:
    `[show]|add <category> <text>|resolve <hint>|decide <text>|handoff [--no-confirm]|sweep [--no-confirm]|promote [<hint>] [--scope project|user [<aspect>]]`.
 
+User arguments from OpenCode: `$ARGUMENTS`
+
 Do not use non-OpenCode command files or runtime-specific slash-command files
 as OpenCode-native command source.

@@ -38,7 +38,7 @@ documentation.
 | Commands (`.opencode/command/<name>.md` or `.opencode/commands/<name>.md`) | yes | `adapters/opencode/commands/<name>.md` generated from `capabilities/` |
 | Skills (`.opencode/skill/<name>/SKILL.md` or `.opencode/skills/<name>/SKILL.md`) | yes | `adapters/opencode/skills/<name>/SKILL.md` generated from `capabilities/` |
 | External skill autoload (`~/.claude/skills/<name>/SKILL.md`, `~/.agents/skills/<name>/SKILL.md`) | yes (compat) | not relied on; adapter must generate its own skills, not depend on Claude skill autoload |
-| Agents (`.opencode/agent/<name>.md` or `.opencode/agents/<name>.md`) | yes | `adapters/opencode/agents/<name>/<name>.md` generated from `roles/README.md` |
+| Agents (`.opencode/agent/<name>.md` or `.opencode/agents/<name>.md`) | yes | `adapters/opencode/agents/<name>/<name>.md` generated from `roles/README.md` with `mode: subagent` |
 | Plugin hooks (JS/TS: `tool.execute.before`, `tool.execute.after`, `event`, `config`, `chat.message`, `command.execute.before`, `permission.ask`, `shell.env`, ...) | yes | `adapters/opencode/plugins/agent-harness-guards.js` bridges write/edit/patch tool execution to shared guard preflight |
 | Permission model (`permission` config: `allow`/`ask`/`deny` per tool, per-agent override) | yes | adapter documents recommended permission rules; not a harness guard replacement |
 | MCP servers (`mcp` config: local/remote) | yes | adapter documents design MCP registration when a visual harness is added |
@@ -62,10 +62,10 @@ Before adding or changing OpenCode-native skills, commands, or agents:
    `skills/<name>/SKILL.md` or `adapters/claude/skills/`.
 2. Generate or maintain concrete adapter-owned output under an explicit
    OpenCode adapter path, for example `adapters/opencode/skills/<name>/SKILL.md`,
-   `adapters/opencode/command/<name>.md`, or `adapters/opencode/agents/<name>/<name>.md`.
+   `adapters/opencode/commands/<name>.md`, or `adapters/opencode/agents/<name>/<name>.md`.
 3. Keep OpenCode frontmatter (`name`, `description`, `mode`, `model`,
-   `permission`, `variant`), invocation syntax, and permission assumptions in
-   the OpenCode adapter.
+   `permission`, `variant`), command argument passthrough (`$ARGUMENTS`), and
+   permission assumptions in the OpenCode adapter.
 4. Add a guard that proves every generated OpenCode skill/command/agent maps
    to a portable capability or role and that no Claude-native file is exposed
    as OpenCode-native.

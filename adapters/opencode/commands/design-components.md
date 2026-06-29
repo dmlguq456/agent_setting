@@ -16,5 +16,7 @@ This is adapter-owned output generated from `capabilities/design-components.md`,
 5. If the command receives arguments, map them to the portable argument shape:
    `<design path or app path>`.
 
+User arguments from OpenCode: `$ARGUMENTS`
+
 Do not use non-OpenCode command files or runtime-specific slash-command files
 as OpenCode-native command source.

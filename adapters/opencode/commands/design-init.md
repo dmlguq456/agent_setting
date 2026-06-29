@@ -16,5 +16,7 @@ This is adapter-owned output generated from `capabilities/design-init.md`, not a
 5. If the command receives arguments, map them to the portable argument shape:
    `<design task description> [--scope ui|slide|icon|diagram|mixed]`.
 
+User arguments from OpenCode: `$ARGUMENTS`
+
 Do not use non-OpenCode command files or runtime-specific slash-command files
 as OpenCode-native command source.

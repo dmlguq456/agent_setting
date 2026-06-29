@@ -16,5 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-design.md`, 
 5. If the command receives arguments, map them to the portable argument shape:
    `<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--qa quick|standard|thorough]`.
 
+User arguments from OpenCode: `$ARGUMENTS`
+
 Do not use non-OpenCode command files or runtime-specific slash-command files
 as OpenCode-native command source.

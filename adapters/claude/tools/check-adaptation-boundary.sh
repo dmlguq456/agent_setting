@@ -793,6 +793,9 @@ check_opencode_native_agent_projection() {
     if ! grep -Fq "adapters/opencode/bin/preflight.sh role" "$agent"; then
       fail_msg "$agent must reference the OpenCode role mapper"
     fi
+    if ! grep -Fq "mode: subagent" "$agent"; then
+      fail_msg "$agent must declare OpenCode-native subagent mode"
+    fi
     if ! grep -Fq "not a non-OpenCode Agent copy" "$agent"; then
       fail_msg "$agent must state that it is not a non-OpenCode Agent copy"
     fi
@@ -848,6 +851,9 @@ check_opencode_native_command_projection() {
     fi
     if ! grep -Fq "not a runtime-specific command copy" "$command"; then
       fail_msg "$command must state that it is not a runtime-specific command copy"
+    fi
+    if ! grep -Fq '$ARGUMENTS' "$command"; then
+      fail_msg "$command must pass OpenCode command arguments through $ARGUMENTS"
     fi
     if ! grep -Fq 'named `tool_contract`' "$command"; then
       fail_msg "$command must instruct OpenCode to report named tool contracts"

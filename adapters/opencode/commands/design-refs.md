@@ -16,5 +16,7 @@ This is adapter-owned output generated from `capabilities/design-refs.md`, not a
 5. If the command receives arguments, map them to the portable argument shape:
    `<design task> [--design <path>] [--refs <image paths>] [--no-web]`.
 
+User arguments from OpenCode: `$ARGUMENTS`
+
 Do not use non-OpenCode command files or runtime-specific slash-command files
 as OpenCode-native command source.

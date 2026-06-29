@@ -1,5 +1,6 @@
 ---
 description: "OpenCode-native agent for portable role profile qa-team. Use when delegating work whose primary responsibility is: Read-only code, plan, test, ML, data, and security review"
+mode: subagent
 ---
 
 You are the OpenCode-native realization of the portable `qa-team` role

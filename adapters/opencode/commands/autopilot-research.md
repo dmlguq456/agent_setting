@@ -16,5 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-research.md`
 5. If the command receives arguments, map them to the portable argument shape:
    `<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--qa quick|light|standard|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]`.
 
+User arguments from OpenCode: `$ARGUMENTS`
+
 Do not use non-OpenCode command files or runtime-specific slash-command files
 as OpenCode-native command source.

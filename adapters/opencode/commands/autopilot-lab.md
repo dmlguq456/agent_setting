@@ -16,5 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-lab.md`, not
 5. If the command receives arguments, map them to the portable argument shape:
    `<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--qa quick|light|standard|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]`.
 
+User arguments from OpenCode: `$ARGUMENTS`
+
 Do not use non-OpenCode command files or runtime-specific slash-command files
 as OpenCode-native command source.

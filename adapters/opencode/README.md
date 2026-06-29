@@ -128,7 +128,9 @@ Claude compatibility references.
 ## Native Agent Projection
 
 `adapters/opencode/agents/` contains OpenCode-native Agent projections
-generated from portable role profiles in `roles/README.md`:
+generated from portable role profiles in `roles/README.md`. They declare
+`mode: subagent` and defer concrete model/variant selection to
+`adapters/opencode/bin/preflight.sh role <portable-role>`:
 
 ```bash
 adapters/opencode/bin/sync-native-agents.py --check
@@ -142,7 +144,9 @@ using `opencode_setting/opencode-agents` as the projection source. Do not expose
 ## Native Command Projection
 
 `adapters/opencode/commands/` contains OpenCode-native command projections
-generated from portable `capabilities/*.md` specs:
+generated from portable `capabilities/*.md` specs. Each command includes
+OpenCode's `$ARGUMENTS` placeholder so runtime command arguments are visible to
+the portable capability contract:
 
 ```bash
 adapters/opencode/bin/sync-native-commands.py --check
