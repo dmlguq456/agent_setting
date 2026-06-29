@@ -2,7 +2,7 @@
 """Build manifest.json from the agent harness definitions (mechanical transcription).
 
 SoT = the definitions themselves:
-  - skills/*/SKILL.md   frontmatter  (name, argument-hint, metadata:{group,fam,modes,blurb})
+  - adapters/claude/skills/*/SKILL.md   frontmatter  (name, argument-hint, metadata:{group,fam,modes,blurb})
   - adapters/claude/agents/*.md  frontmatter  (name, model, metadata:{modes,blurb})
   - loops/README.md     "현역" table  + LOOP_LAYER constant
   - adapters/claude/settings.json  Claude Code adapter hook registration (read-only)
@@ -46,7 +46,7 @@ MANIFEST_PATH = os.path.join(REPO_ROOT, "manifest.json")
 
 # Fixed provenance string — NO date/timestamp (idempotency invariant).
 GENERATED_FROM = ("agent harness definitions "
-                  "(skills/*/SKILL.md, adapters/claude/agents/*.md, loops/README.md, Claude adapter settings.json)")
+                  "(adapters/claude/skills/*/SKILL.md, adapters/claude/agents/*.md, loops/README.md, Claude adapter settings.json)")
 
 # hard_block allowlist = PreToolUse guards only (consumer attempt1 §2.4 / Claude adapter settings.json
 # PreToolUse). herdr-agent-state is also registered on PreToolUse but is a state-marker,
@@ -151,7 +151,7 @@ def parse_frontmatter(path):
 # ---------------------------------------------------------------------------
 def build_skills():
     rows = []
-    for path in sorted(glob.glob(os.path.join(REPO_ROOT, "skills", "*", "SKILL.md"))):
+    for path in sorted(glob.glob(os.path.join(REPO_ROOT, "adapters", "claude", "skills", "*", "SKILL.md"))):
         d = os.path.basename(os.path.dirname(path))
         fm = parse_frontmatter(path)
         md = fm["metadata"]
