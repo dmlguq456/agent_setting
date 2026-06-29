@@ -217,29 +217,29 @@ check_claude_loop_projection() {
   done
 }
 
-check_claude_passthrough_projection() {
-  for surface in tools; do
-    if [ ! -L "claude_setting/$surface" ]; then
-      fail_msg "claude_setting/$surface must project adapters/claude/$surface"
+check_claude_tool_projection() {
+  if [ ! -L claude_setting/tools ]; then
+    fail_msg "claude_setting/tools must project adapters/claude/tools"
+    return
+  fi
+
+  target=$(readlink claude_setting/tools)
+  if [ "$target" != "../adapters/claude/tools" ]; then
+    fail_msg "claude_setting/tools points to $target; expected ../adapters/claude/tools"
+  fi
+
+  for p in $(find tools -mindepth 1 ! -path '*/__pycache__' ! -path '*/__pycache__/*' -print); do
+    rel=${p#tools/}
+    adapter_p=adapters/claude/tools/$rel
+    if [ -L "$adapter_p" ]; then
+      fail_msg "$adapter_p must be a concrete adapter-owned tool projection"
       continue
     fi
-
-    target=$(readlink "claude_setting/$surface")
-    if [ "$target" != "../adapters/claude/$surface" ]; then
-      fail_msg "claude_setting/$surface points to $target; expected ../adapters/claude/$surface"
+    if [ -d "$p" ]; then
+      [ -d "$adapter_p" ] || fail_msg "$adapter_p is missing"
+    elif [ -f "$p" ]; then
+      [ -f "$adapter_p" ] || fail_msg "$adapter_p is missing"
     fi
-
-    for p in $(find "$surface" -mindepth 1 -maxdepth 1 ! -name __pycache__ ! -name '.*' -print); do
-      name=${p#"$surface"/}
-      if [ ! -L "adapters/claude/$surface/$name" ]; then
-        fail_msg "adapters/claude/$surface/$name must be a symlink passthrough"
-        continue
-      fi
-      passthrough_target=$(readlink "adapters/claude/$surface/$name")
-      if [ "$passthrough_target" != "../../../$surface/$name" ]; then
-        fail_msg "adapters/claude/$surface/$name points to $passthrough_target; expected ../../../$surface/$name"
-      fi
-    done
   done
 }
 
@@ -364,7 +364,7 @@ check_claude_hook_projection
 check_claude_utility_projection
 check_claude_scaffold_projection
 check_claude_loop_projection
-check_claude_passthrough_projection
+check_claude_tool_projection
 check_removed_root_surfaces
 check_capability_catalog
 check_codex_capability_map
