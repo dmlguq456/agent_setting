@@ -37,4 +37,4 @@ Whole-directory symlinks (`$HOME/.claude -> $HOME/agent_setting`) are discourage
 | Adapter | Status | Entry |
 |---|---|---|
 | Claude Code | primary | `adapters/claude/README.md` + `adapters/claude/CLAUDE.md` |
-| Codex | experimental | `adapters/codex/README.md` |
+| Codex | experimental | `adapters/codex/README.md` + `adapters/codex/AGENTS.md` |

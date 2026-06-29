@@ -110,6 +110,7 @@ skills/ (28)  ──호출──►  agents/ (8)        ◄── 팀별 모드(
 | [`core/CORE.md`](core/CORE.md) · [`adapters/`](adapters/README.md) | 공통 하네스 계약 + 런타임별 adapter 경계 |
 | [`INSTALL_LAYOUT.md`](INSTALL_LAYOUT.md) | neutral repo + runtime home symlink projection 절차 |
 | [`adapters/claude/CLAUDE.md`](adapters/claude/CLAUDE.md) | 현재 Claude Code adapter 부트스트랩 + 응답 규율 + 라우팅 §0 |
+| [`adapters/codex/AGENTS.md`](adapters/codex/AGENTS.md) | Codex adapter 부트스트랩 + core 문서 로드 순서 |
 | [`core/WORKFLOW.md`](core/WORKFLOW.md) | 발화→skill 라우팅 코어 |
 | [`core/CONVENTIONS.md`](core/CONVENTIONS.md) | QA·산출물 3-tier 등 family 운영 규칙 |
 | [`core/OPERATIONS.md`](core/OPERATIONS.md) | git·worktree·dispatch·push 운영 (§5.8~5.11) |

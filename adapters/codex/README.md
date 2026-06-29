@@ -4,12 +4,13 @@ This adapter maps the common agent harness onto Codex-style sessions.
 
 ## Status
 
-Experimental. The portable contract is usable, but Codex does not consume Claude Code's `settings.json`, slash command registry, or hook event schema directly. Until a dedicated Codex bootstrap/wrapper exists, use the common files explicitly and run guard scripts as deterministic checks where needed.
+Experimental. The portable contract is usable, but Codex does not consume Claude Code's `settings.json`, slash command registry, or hook event schema directly. `adapters/codex/AGENTS.md` is the current Codex-style bootstrap, and wrappers should still run guard scripts as deterministic checks where native hooks are unavailable.
 
 ## Entry Points
 
 | Surface | File |
 |---|---|
+| Adapter bootstrap | `adapters/codex/AGENTS.md` |
 | Core contract | `core/CORE.md` |
 | Workflow routing | `core/WORKFLOW.md` |
 | Shared conventions | `core/CONVENTIONS.md` |
@@ -25,7 +26,7 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 |---|---|
 | capability | Read and follow the relevant `skills/*/SKILL.md`; no native slash registry is assumed |
 | role profile | Use `agents/*.md` and `agent-modes/` as delegation prompts or review personas |
-| adapter bootstrap | Load `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
+| adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
 | agent home | Set `AGENT_HOME` to the installed harness directory |
 | artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
 | tracked/untracked signal | `track-toggle.sh` and `utilities/workflow-guard-hook.sh` semantics; no automatic prompt hook unless wrapped |
