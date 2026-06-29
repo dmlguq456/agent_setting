@@ -55,6 +55,30 @@ check_required_projection_entries() {
   done
 }
 
+check_codex_projection_targets() {
+  check_link_target codex_setting/AGENTS.md ../adapters/codex/AGENTS.md
+  check_link_target codex_setting/README.md ../adapters/codex/README.md
+  check_link_target codex_setting/core ../core
+  check_link_target codex_setting/capabilities ../capabilities
+  check_link_target codex_setting/roles ../roles
+  check_link_target codex_setting/bin ../adapters/codex/bin
+  check_link_target codex_setting/tools ../adapters/codex/tools
+  check_link_target codex_setting/utilities ../adapters/codex/utilities
+}
+
+check_link_target() {
+  path=$1
+  expected=$2
+  if [ ! -L "$path" ]; then
+    fail_msg "$path must be a symlink to $expected"
+    return
+  fi
+  target=$(readlink "$path")
+  if [ "$target" != "$expected" ]; then
+    fail_msg "$path points to $target; expected $expected"
+  fi
+}
+
 check_install_layout_codex_projection() {
   [ -f INSTALL_LAYOUT.md ] || { fail_msg "INSTALL_LAYOUT.md is missing"; return; }
 
@@ -498,6 +522,7 @@ check_projection_symlinks codex_setting
 check_codex_forbidden_entries
 check_codex_native_surface_debt
 check_required_projection_entries
+check_codex_projection_targets
 check_install_layout_codex_projection
 check_codex_bin_wrappers
 check_codex_tool_projection
