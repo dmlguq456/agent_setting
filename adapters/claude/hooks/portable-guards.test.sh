@@ -139,12 +139,25 @@ if "$FLOW" --event prompt --cwd "$TMP/flowproj" --session testsid --format text 
 else
   bad "workflow signal should emit tracked text"
 fi
-touch "$TMP/flowproj/.agent_reports/.untracked.testsid"
+if "$CODEX" track "$TMP/flowproj" testsid >/tmp/track.out 2>/tmp/track.err \
+  && grep -q 'untracked mode' /tmp/track.out \
+  && [ -f "$TMP/flowproj/.agent_reports/.untracked.testsid" ]; then
+  ok "codex track wrapper enables untracked mode"
+else
+  bad "codex track wrapper should enable untracked mode"
+fi
 if "$CODEX" mode "$TMP/flowproj" testsid >/tmp/flow.out 2>/tmp/flow.err \
   && grep -q 'untracked' /tmp/flow.out; then
   ok "codex mode wrapper emits untracked text"
 else
   bad "codex mode wrapper should emit untracked text"
+fi
+if "$CODEX" track "$TMP/flowproj" testsid >/tmp/track.out 2>/tmp/track.err \
+  && grep -q 'tracked mode' /tmp/track.out \
+  && [ ! -f "$TMP/flowproj/.agent_reports/.untracked.testsid" ]; then
+  ok "codex track wrapper restores tracked mode"
+else
+  bad "codex track wrapper should restore tracked mode"
 fi
 if "$CODEX" memory "$TMP/flowproj" >/tmp/mem_inject.out 2>/tmp/mem_inject.err; then
   ok "codex memory wrapper exits cleanly"

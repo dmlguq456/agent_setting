@@ -103,6 +103,7 @@ Harness-specific status signals still need Codex-native realization:
 | Harness signal | Codex direction |
 |---|---|
 | tracked/untracked workflow state | explicit `preflight.sh mode` until a native prompt/session surface exists |
+| tracked/untracked toggle | explicit `preflight.sh track`; do not expose Claude `/track` command files |
 | artifact root detection | `preflight.sh write` and shared artifact-root helper |
 | headless/autopilot/background jobs | redesign against Codex thread/subagent/session model before adding UI |
 | sibling `-wt/<slug>` dispatch detection | preserve the worktree naming invariant; choose a Codex-native display surface later |
@@ -120,6 +121,7 @@ Harness-specific status signals still need Codex-native realization:
 | design post-write verification | Run `adapters/codex/bin/preflight.sh design <file>` after design HTML writes |
 | spec read gate | Run `adapters/codex/bin/preflight.sh read <prd.md> [session-id]` after actual reads and `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
 | workflow signal | Run `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` as explicit prompt/session reminder; no statusline assumption |
+| workflow toggle | Run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly requests tracked/untracked mode switching |
 | memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text session-start memory injection |
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |
 | oncall briefing | Run `adapters/codex/bin/preflight.sh briefing [cwd]` before prompt handling on the dedicated agent desk |

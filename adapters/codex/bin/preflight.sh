@@ -15,6 +15,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh capability <name> [cwd] [session-id]
        preflight.sh skill <name> [cwd] [session-id]
        preflight.sh mode [cwd] [session-id]
+       preflight.sh track [cwd] [session-id]
        preflight.sh memory [cwd]
        preflight.sh recall <prompt> [cwd]
        preflight.sh briefing [cwd]
@@ -58,6 +59,11 @@ case "$cmd" in
     cwd=${2:-$PWD}
     sid=${3:-codex}
     "$ROOT/utilities/workflow-guard-hook.sh" --event prompt --cwd "$cwd" --session "$sid" --format text
+    ;;
+  track)
+    cwd=${2:-$PWD}
+    sid=${3:-codex}
+    "$ROOT/utilities/workflow-toggle.sh" --cwd "$cwd" --session "$sid"
     ;;
   memory)
     cwd=${2:-$PWD}

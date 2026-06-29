@@ -140,6 +140,10 @@ check_codex_bin_wrappers() {
       fail_msg "adapters/codex/bin/$p is missing or not executable"
     fi
   done
+
+  if ! grep -Fq 'preflight.sh track' adapters/codex/AGENTS.md; then
+    fail_msg "adapters/codex/AGENTS.md must document the Codex workflow toggle wrapper"
+  fi
 }
 
 check_codex_utility_projection() {
@@ -355,6 +359,10 @@ check_claude_utility_projection() {
       fail_msg "adapters/claude/utilities/$name must be a concrete adapter-owned utility projection"
     fi
   done
+
+  if [ ! -x adapters/claude/utilities/workflow-toggle.sh ]; then
+    fail_msg "adapters/claude/utilities/workflow-toggle.sh must be an executable concrete workflow toggle helper"
+  fi
 }
 
 check_claude_scaffold_projection() {

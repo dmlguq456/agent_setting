@@ -24,7 +24,7 @@
 |---|---|---|
 | **생성 순서** | 신규 산출물 ← 앞 단계 (hook 차단) | 전부 우회 |
 | **모드 신호** | Adapter status/reminder surface 가 📌 WORKFLOW 따름을 표시 | Adapter status/reminder surface 가 ⚡ 면제를 표시 |
-| **전환** | (기본값) | Adapter toggle surface (Claude: `/track`, Codex: preflight/wrapper 계약) |
+| **전환** | (기본값) | Adapter toggle surface (Claude: `/track`, Codex: `preflight.sh track`) |
 
 **hook 이 hard 차단하는 건 셋** — _신규 산출물 생성 순서_ · _git 위험 상태의 편집_ · _spec 라우팅 계약 게이트_:
 
@@ -177,7 +177,7 @@ analyze-project  →  autopilot-spec ↻  →  autopilot-code ↻
 /autopilot-draft  --mode paper|presentation|doc "<task>" [--qa ...]
 /autopilot-refine "<prompt>" [--qa ...] [--memo <file>]
 /audit            <artifact> [--scope ...]
-/track            현재 프로젝트 📌tracked ↔ ⚡untracked 토글 (Claude adapter; 다른 adapter 는 동등한 wrapper/config 사용)
+/track            현재 프로젝트 📌tracked ↔ ⚡untracked 토글 (Claude adapter; Codex 는 `preflight.sh track`)
 ```
 
 전체 옵션 조합·default·QA 의미는 adapter-native Skill 파일(Claude: `adapters/claude/skills/*/SKILL.md`)의 `argument-hint` / `## Usage`.

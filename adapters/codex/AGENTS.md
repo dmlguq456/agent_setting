@@ -24,6 +24,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - After design HTML writes, run `adapters/codex/bin/preflight.sh design <file>`.
 - After actually reading `<artifact-root>/spec/prd.md`, run `adapters/codex/bin/preflight.sh read <prd.md> [session-id]`; before spec-changing capability work, run `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]`.
 - Use `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` to surface tracked/untracked workflow state when Codex has no automatic prompt hook.
+- Use `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly wants to toggle the tracked/untracked workflow escape hatch.
 - Use `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text memory injection when Codex has no automatic session-start hook.
 - Use `adapters/codex/bin/preflight.sh recall "<prompt>" [cwd]` before answering prompts with recall signal words when Codex has no automatic prompt hook.
 - Use `adapters/codex/bin/preflight.sh briefing [cwd]` on the dedicated agent desk when Codex has no automatic prompt hook.

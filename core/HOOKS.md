@@ -24,6 +24,7 @@ checks to their own event model.
 | memory write guard | `hooks/builtin-memory-guard.sh` | `portable-check` | Runtime-native file memory must not bypass the unified DB memory store. | Run `hooks/builtin-memory-guard.sh --file <path>` before writes, or remove the native memory feature. |
 | design post-write verification | `hooks/design-postwrite.sh` | `portable-check` | Saved design HTML should get deterministic console verification. | Run `hooks/design-postwrite.sh --file <path>` after design HTML writes, or attach it to a post-write event. |
 | workflow tracked signal | `utilities/workflow-guard-hook.sh` | `portable-check` | Surface tracked/untracked mode and clean stale flags. | Run `utilities/workflow-guard-hook.sh --event prompt [--cwd <dir>] [--session <id>] [--format text]` before prompt handling, and `--event start` for stale flag GC. |
+| workflow mode toggle | `utilities/workflow-toggle.sh` | `portable-check` | Toggle or set the session-scoped `.untracked[.<session>]` escape-hatch flag under the artifact root. | Expose an adapter-native toggle surface; Codex uses `adapters/codex/bin/preflight.sh track [cwd] [session-id]`, Claude uses `/track`. |
 | memory injection | `tools/memory/mem.py inject` | `portable-check` | Inject relevant DB memory at session start. | Run `tools/memory/mem.py inject` for text output, or `tools/memory/mem.py inject --hook` when the runtime accepts Claude-style `additionalContext`. |
 | memory recall injection | `hooks/mem-recall-inject.sh` | `portable-check` | Recall signal words trigger DB recall and context injection. | Run `hooks/mem-recall-inject.sh --prompt <text> [--cwd <dir>] [--format text]` before prompt handling, or attach it to a prompt-submit event. |
 | memory distillation trigger | `hooks/mem-turn-nudge.sh`, `hooks/mem-distill-dispatch.sh` | `adapter-coupled-automation` | Periodically distill session deltas into DB memory through a no-tools worker. The shared dispatcher uses `MEM_DISTILL_WORKER=<executable>` with `<mode> <model> <prompt-file>` arguments. | Provide session transcript source (`mem.py distill --source <adapter>`), detached worker invocation, and no-tools/action contract before automatic memory mutation. |
@@ -47,8 +48,10 @@ Codex must not consume that JSON as configuration. It can run
 reads, and `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]`
 before spec-changing capability work. It can also run
 `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` to surface tracked
-or untracked workflow state as plain text, and
-`adapters/codex/bin/preflight.sh memory [cwd]` for plain-text memory injection.
+or untracked workflow state as plain text. Use `adapters/codex/bin/preflight.sh
+track [cwd] [session-id]` to toggle the same session-scoped workflow bypass flag
+without relying on a Claude slash command. Use `adapters/codex/bin/preflight.sh
+memory [cwd]` for plain-text memory injection.
 Use `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` to run the same
 recall-signal injection logic without Claude hook JSON.
 Use `adapters/codex/bin/preflight.sh briefing [cwd]` to surface the same
