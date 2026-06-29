@@ -1,0 +1,1 @@
+../../../hooks/mem-briefing-inject.sh

@@ -1,0 +1,1 @@
+../../../hooks/artifact-guard.sh

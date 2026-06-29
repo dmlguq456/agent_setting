@@ -1,0 +1,1 @@
+../../../hooks/spec-read-marker.sh

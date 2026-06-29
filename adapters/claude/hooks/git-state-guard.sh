@@ -1,0 +1,1 @@
+../../../hooks/git-state-guard.sh

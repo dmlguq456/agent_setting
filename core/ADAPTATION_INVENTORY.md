@@ -31,7 +31,7 @@ into a portable agent setting plus runtime adapters.
 | Claude agents | `adapters/claude/agents/*.md` | adapter-native | Preserve Claude Agent frontmatter/model/tool schema while realizing `roles/README.md`. |
 | Agent modes | `adapters/claude/agent-modes/* -> ../../../agent-modes/*`, shared `agent-modes/*.md` | mixed | Keep portable persona fragments shared through adapter-owned passthroughs; split adapter-coupled design/verification/tool notes when Codex-native modes exist. |
 | Hook invariant catalog | `core/HOOKS.md` | portable | Names hook-level invariants and classifies current scripts. |
-| Hook scripts | `hooks/*.sh` | mixed | Split invariant checks from runtime hook payload wrappers. |
+| Hook scripts | `adapters/claude/hooks/* -> ../../../hooks/*`, shared `hooks/*.sh` | mixed | Preserve Claude hook behavior through adapter-owned passthroughs while splitting invariant checks from runtime hook payload wrappers. |
 | Memory distiller | `hooks/mem-distill-dispatch.sh`, `tools/memory/` | mixed | Keep DB/CLI portable; move session log reader and model invocation to adapters. |
 | Design MCP | `tools/design-mcp/`, design skills | mixed | Keep render/check semantics portable; move Claude MCP registration paths to adapter docs. |
 | Projection directories | `claude_setting/`, `codex_setting/` | projection | Must contain only symlinks or generated adapter output. |

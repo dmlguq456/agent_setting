@@ -111,6 +111,31 @@ check_claude_mode_projection() {
   done
 }
 
+check_claude_hook_projection() {
+  if [ ! -L claude_setting/hooks ]; then
+    fail_msg "claude_setting/hooks must project adapters/claude/hooks"
+    return
+  fi
+
+  target=$(readlink claude_setting/hooks)
+  if [ "$target" != "../adapters/claude/hooks" ]; then
+    fail_msg "claude_setting/hooks points to $target; expected ../adapters/claude/hooks"
+  fi
+
+  for f in hooks/*; do
+    [ -f "$f" ] || continue
+    name=${f#hooks/}
+    if [ ! -L "adapters/claude/hooks/$name" ]; then
+      fail_msg "adapters/claude/hooks/$name must be a symlink passthrough"
+      continue
+    fi
+    hook_target=$(readlink "adapters/claude/hooks/$name")
+    if [ "$hook_target" != "../../../hooks/$name" ]; then
+      fail_msg "adapters/claude/hooks/$name points to $hook_target; expected ../../../hooks/$name"
+    fi
+  done
+}
+
 check_removed_root_surfaces() {
   if [ -e agents ] || [ -L agents ]; then
     fail_msg "root agents/ exists; Claude-native agents must live under adapters/claude/agents and portable meaning under roles/"
@@ -222,6 +247,7 @@ check_required_projection_entries
 check_codex_bin_wrappers
 check_claude_skill_projection
 check_claude_mode_projection
+check_claude_hook_projection
 check_removed_root_surfaces
 check_capability_catalog
 check_codex_capability_map
