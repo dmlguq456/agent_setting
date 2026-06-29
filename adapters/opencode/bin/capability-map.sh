@@ -42,7 +42,7 @@ native_skill_path="adapters/opencode/skills/$cap/SKILL.md"
 status="instruction-only"
 realization="opencode-native-skill"
 tool_contract=""
-note="OpenCode has an adapter-owned native Skill projection generated from the portable capability spec. Use it with explicit preflight guards; legacy Claude compatibility references are not native input."
+note="OpenCode has an adapter-owned native Skill projection generated from the portable capability spec. Use it with explicit preflight guards; legacy compatibility references are not native input."
 
 case "$cap" in
   autopilot-design|design-*)

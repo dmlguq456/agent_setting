@@ -41,12 +41,12 @@ compat_reference="skills/$cap/SKILL.md"
 status="instruction-only"
 realization="portable-instructions"
 tool_contract=""
-note="Codex has no native skill/plugin realization for this capability yet; read the portable catalog and task-relevant docs, then use preflight guards. Legacy Claude compatibility references are not native input."
+note="Codex has no native skill/plugin realization for this capability yet; read the portable catalog and task-relevant docs, then use preflight guards. Legacy compatibility references are not native input."
 native_skill_path="adapters/codex/skills/$cap/SKILL.md"
 if [ -f "$ROOT/$native_skill_path" ]; then
   native_skill=1
   realization="codex-native-skill"
-  note="Codex has an adapter-owned native Skill projection generated from the portable capability spec. Use it with explicit preflight guards; legacy Claude compatibility references are not native input."
+  note="Codex has an adapter-owned native Skill projection generated from the portable capability spec. Use it with explicit preflight guards; legacy compatibility references are not native input."
 else
   native_skill=0
   native_skill_path=""

@@ -16,5 +16,5 @@ This is adapter-owned output generated from `capabilities/sync-skills.md`, not a
 5. If the command receives arguments, map them to the portable argument shape:
    `[--check] [--force] [--auto-fix [--dry-run]]`.
 
-Do not use Claude adapter command files or Claude slash-command files as
-OpenCode-native command source.
+Do not use non-OpenCode command files or runtime-specific slash-command files
+as OpenCode-native command source.

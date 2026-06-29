@@ -16,5 +16,5 @@ This is adapter-owned output generated from `capabilities/draft-refine.md`, not 
 5. If the command receives arguments, map them to the portable argument shape:
    `<strategy or draft name or path> [--qa quick|light|standard|thorough|adversarial]`.
 
-Do not use Claude adapter command files or Claude slash-command files as
-OpenCode-native command source.
+Do not use non-OpenCode command files or runtime-specific slash-command files
+as OpenCode-native command source.

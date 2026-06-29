@@ -31,6 +31,21 @@ check_projection_symlinks() {
   fi
 }
 
+check_projection_entry_allowlist() {
+  dir=$1
+  shift
+  allowed=" $* "
+  [ -d "$dir" ] || return
+
+  entries=$(find "$dir" -mindepth 1 -maxdepth 1 -exec basename {} \; 2>/dev/null || true)
+  for entry in $entries; do
+    case "$allowed" in
+      *" $entry "*) ;;
+      *) fail_msg "$dir/$entry is not an approved projection entry" ;;
+    esac
+  done
+}
+
 check_codex_forbidden_entries() {
   for p in CLAUDE.md settings.json keybindings.json commands statusline.sh track-toggle.sh skills agents agent-modes hooks; do
     if [ -e "codex_setting/$p" ] || [ -L "codex_setting/$p" ]; then
@@ -1149,6 +1164,9 @@ warn_concrete_runtime_terms() {
 check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_projection_symlinks opencode_setting
+check_projection_entry_allowlist claude_setting CLAUDE.md README.md agent-modes agents bin commands core hooks keybindings.json loops manifest.json scaffolds settings.json skills statusline.sh tools track-toggle.sh utilities
+check_projection_entry_allowlist codex_setting AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-plugin-marketplace codex-hooks
+check_projection_entry_allowlist opencode_setting AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands opencode-plugins
 check_codex_forbidden_entries
 check_codex_native_surface_debt
 check_required_projection_entries

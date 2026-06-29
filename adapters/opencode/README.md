@@ -72,7 +72,7 @@ guards and tool-contract reporting.
 | memory injection | `tools/memory/mem.py inject` is runtime-neutral; run `adapters/opencode/bin/preflight.sh memory [cwd]` when no automatic session-start hook is attached |
 | memory recall injection | `hooks/mem-recall-inject.sh` is runtime-neutral for prompt text; run `adapters/opencode/bin/preflight.sh recall <prompt> [cwd]` when no automatic prompt hook is attached |
 | oncall briefing injection | `hooks/mem-briefing-inject.sh` is runtime-neutral for cwd/text output; run `adapters/opencode/bin/preflight.sh briefing [cwd]` when no automatic prompt hook is attached |
-| capability mapping | `adapters/opencode/bin/preflight.sh capability-info <capability>` reports OpenCode's instruction-only or tool-contract realization and the Claude compatibility reference, if one exists |
+| capability mapping | `adapters/opencode/bin/preflight.sh capability-info <capability>` reports OpenCode's instruction-only or tool-contract realization and the legacy compatibility reference, if one exists |
 | model role mapping | `adapters/opencode/bin/preflight.sh role <portable-role>` resolves portable model roles through OpenCode adapter environment variables |
 | mode mapping | `adapters/opencode/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for OpenCode; tool-contract modes include a named `tool_contract` field |
 | memory distill delta | Supported through `tools/memory/mem.py --source opencode`, backed by `opencode export <session-id>` |

@@ -73,8 +73,8 @@ profile. This is adapter-owned output generated from `roles/README.md`, not a Cl
    applying a mode persona.
 4. Run normal harness guards through `adapters/opencode/bin/preflight.sh`.
 
-Do not use Claude adapter Agent files as OpenCode-native source. Claude Agent
-files are compatibility/reference surfaces only.
+Do not use non-OpenCode Agent files as OpenCode-native source. Runtime-specific
+Agent files are compatibility/reference surfaces only.
 """
 
 
