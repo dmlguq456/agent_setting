@@ -1,0 +1,18 @@
+---
+description: "Run the portable code-test capability through the OpenCode adapter. Meaning: 구현 결과를 단계별로 검증하고 evidence를 기록한다."
+---
+
+Use the OpenCode adapter realization of portable capability `code-test`.
+This is adapter-owned output generated from `capabilities/code-test.md`, not a Claude command copy.
+
+1. Read `capabilities/code-test.md` for the runtime-neutral contract.
+2. Run `adapters/opencode/bin/preflight.sh capability-info code-test` and
+   obey `instruction-only`, `tool-contract`, or `unsupported` status.
+3. Before edits, run `adapters/opencode/bin/preflight.sh write <file> [session-id]`.
+4. Before spec-changing work, run
+   `adapters/opencode/bin/preflight.sh capability code-test [cwd] [session-id]`.
+5. If the command receives arguments, map them to the portable argument shape:
+   `<plan name, path, or test scope>`.
+
+Do not use `adapters/claude/commands/` or Claude slash-command files as
+OpenCode-native command source.

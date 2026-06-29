@@ -35,7 +35,7 @@ documentation.
 | Project config (`opencode.json` / `opencode.jsonc` / `.opencode/opencode.json`) | yes | user-owned; adapter documents the `instructions` entry that loads `AGENTS.md` |
 | Global config (`~/.config/opencode/opencode.json`) | yes | user-owned; adapter documents projection entries |
 | Instruction files (`instructions` array in config) | yes | `adapters/opencode/AGENTS.md` projected through `opencode_setting/AGENTS.md` |
-| Commands (`.opencode/command/<name>.md` or `.opencode/commands/<name>.md`) | yes | not yet materialized; future adapter-owned output from `capabilities/` |
+| Commands (`.opencode/command/<name>.md` or `.opencode/commands/<name>.md`) | yes | `adapters/opencode/commands/<name>.md` generated from `capabilities/` |
 | Skills (`.opencode/skill/<name>/SKILL.md` or `.opencode/skills/<name>/SKILL.md`) | yes | `adapters/opencode/skills/<name>/SKILL.md` generated from `capabilities/` |
 | External skill autoload (`~/.claude/skills/<name>/SKILL.md`, `~/.agents/skills/<name>/SKILL.md`) | yes (compat) | not relied on; adapter must generate its own skills, not depend on Claude skill autoload |
 | Agents (`.opencode/agent/<name>.md` or `.opencode/agents/<name>.md`) | yes | `adapters/opencode/agents/<name>/<name>.md` generated from `roles/README.md` |
@@ -52,8 +52,9 @@ documentation.
 
 OpenCode has native skill, command, and agent surfaces. This adapter now
 materializes native Skills from `capabilities/*.md` and native Agents from
-`roles/README.md`; command surfaces remain future work. Current support still
-runs through explicit preflight wrappers for guard and tool-contract reporting.
+`roles/README.md`, plus native Commands from `capabilities/*.md`. Current
+support still runs through explicit preflight wrappers for guard and
+tool-contract reporting.
 
 Before adding or changing OpenCode-native skills, commands, or agents:
 
@@ -186,7 +187,7 @@ any unavailable role explicitly.
 
 `opencode_setting/` should remain minimal and explicit. It may expose
 `AGENTS.md`, `README.md`, `core/`, `capabilities/`, `roles/`, `bin/`,
-`opencode-skills`, `opencode-agents`, selected tools, and selected utilities, but must not expose Claude-native
+`opencode-skills`, `opencode-agents`, `opencode-commands`, selected tools, and selected utilities, but must not expose Claude-native
 `settings.json`, `commands/`, `skills/`, `statusline.sh`, or `hooks/` as if
 OpenCode could consume them.
 

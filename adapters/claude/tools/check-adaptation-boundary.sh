@@ -76,7 +76,7 @@ check_codex_projection_targets() {
 }
 
 check_opencode_required_projection_entries() {
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands; do
     if [ ! -L "opencode_setting/$p" ]; then
       fail_msg "opencode_setting/$p must be a symlink projection entry"
     fi
@@ -94,6 +94,7 @@ check_opencode_projection_targets() {
   check_link_target opencode_setting/utilities ../adapters/opencode/utilities
   check_link_target opencode_setting/opencode-skills ../adapters/opencode/skills
   check_link_target opencode_setting/opencode-agents ../adapters/opencode/agents
+  check_link_target opencode_setting/opencode-commands ../adapters/opencode/commands
 }
 
 check_claude_projection_targets() {
@@ -157,7 +158,7 @@ check_install_layout_codex_projection() {
 check_install_layout_opencode_projection() {
   [ -f INSTALL_LAYOUT.md ] || { fail_msg "INSTALL_LAYOUT.md is missing"; return; }
 
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands; do
     if ! grep -Fq "\$AGENT_HOME/opencode_setting/$p" INSTALL_LAYOUT.md; then
       fail_msg "INSTALL_LAYOUT.md must include OpenCode projection install step for opencode_setting/$p"
     fi
@@ -374,7 +375,7 @@ check_opencode_bin_wrappers() {
     fail_msg "opencode_setting/bin points to $target; expected ../adapters/opencode/bin"
   fi
 
-  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh sync-native-agents.py; do
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh sync-native-agents.py sync-native-commands.py; do
     if [ ! -x "adapters/opencode/bin/$p" ]; then
       fail_msg "adapters/opencode/bin/$p is missing or not executable"
     fi
@@ -550,6 +551,38 @@ check_opencode_native_agent_projection() {
     fi
     if ! grep -Fq "not a Claude Agent copy" "$agent"; then
       fail_msg "$agent must state that it is not a Claude Agent copy"
+    fi
+  done
+}
+
+check_opencode_native_command_projection() {
+  if [ ! -x adapters/opencode/bin/sync-native-commands.py ]; then
+    fail_msg "adapters/opencode/bin/sync-native-commands.py must be executable"
+    return
+  fi
+
+  if ! adapters/opencode/bin/sync-native-commands.py --check >/tmp/opencode-sync-commands.out 2>/tmp/opencode-sync-commands.err; then
+    fail_msg "OpenCode native command projections are stale; run adapters/opencode/bin/sync-native-commands.py"
+    cat /tmp/opencode-sync-commands.err
+  fi
+
+  for f in capabilities/*.md; do
+    [ -f "$f" ] || continue
+    [ "$(basename "$f")" = "README.md" ] && continue
+    slug=$(basename "$f" .md)
+    command="adapters/opencode/commands/$slug.md"
+    if [ ! -f "$command" ]; then
+      fail_msg "$command is missing"
+      continue
+    fi
+    if ! grep -Fq "capabilities/$slug.md" "$command"; then
+      fail_msg "$command must reference capabilities/$slug.md as portable source"
+    fi
+    if ! grep -Fq "adapters/opencode/bin/preflight.sh capability-info $slug" "$command"; then
+      fail_msg "$command must reference the OpenCode capability-info wrapper"
+    fi
+    if ! grep -Fq "not a Claude command copy" "$command"; then
+      fail_msg "$command must state that it is not a Claude command copy"
     fi
   done
 }
@@ -916,6 +949,7 @@ check_portable_agent_home_resolution
 check_opencode_tool_projection
 check_opencode_native_skill_projection
 check_opencode_native_agent_projection
+check_opencode_native_command_projection
 check_codex_utility_projection
 check_opencode_utility_projection
 check_claude_bin_wrappers

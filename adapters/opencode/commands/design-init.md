@@ -1,0 +1,18 @@
+---
+description: "Run the portable design-init capability through the OpenCode adapter. Meaning: 디자인 환경과 state를 bootstrap한다."
+---
+
+Use the OpenCode adapter realization of portable capability `design-init`.
+This is adapter-owned output generated from `capabilities/design-init.md`, not a Claude command copy.
+
+1. Read `capabilities/design-init.md` for the runtime-neutral contract.
+2. Run `adapters/opencode/bin/preflight.sh capability-info design-init` and
+   obey `instruction-only`, `tool-contract`, or `unsupported` status.
+3. Before edits, run `adapters/opencode/bin/preflight.sh write <file> [session-id]`.
+4. Before spec-changing work, run
+   `adapters/opencode/bin/preflight.sh capability design-init [cwd] [session-id]`.
+5. If the command receives arguments, map them to the portable argument shape:
+   `<design task description> [--scope ui|slide|icon|diagram|mixed]`.
+
+Do not use `adapters/claude/commands/` or Claude slash-command files as
+OpenCode-native command source.

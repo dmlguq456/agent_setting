@@ -514,6 +514,24 @@ if command -v opencode >/dev/null 2>&1; then
 else
   ok "opencode native agent runtime discovery skipped (opencode not installed)"
 fi
+if command -v opencode >/dev/null 2>&1; then
+  mkdir -p "$TMP/opencode_command_home/.config/opencode/command" "$TMP/opencode_command_home/.local/share"
+  for f in "$ROOT"/opencode_setting/opencode-commands/*.md; do
+    [ -f "$f" ] || continue
+    ln -s "$f" "$TMP/opencode_command_home/.config/opencode/command/$(basename "$f")"
+  done
+  if HOME="$TMP/opencode_command_home" XDG_CONFIG_HOME="$TMP/opencode_command_home/.config" XDG_DATA_HOME="$TMP/opencode_command_home/.local/share" \
+    opencode debug config --pure >/tmp/opencode_command.out 2>/tmp/opencode_command.err \
+    && grep -q '"autopilot-code": {' /tmp/opencode_command.out \
+    && grep -q '"description": "Run the portable autopilot-code capability through the OpenCode adapter' /tmp/opencode_command.out \
+    && ! grep -q '/.claude/' /tmp/opencode_command.out; then
+    ok "opencode native command projection is discoverable without Claude paths"
+  else
+    bad "opencode native command projection should be discoverable without Claude paths"
+  fi
+else
+  ok "opencode native command runtime discovery skipped (opencode not installed)"
+fi
 
 echo "== opencode capability mapping =="
 if "$OPENCODE" capability-info autopilot-code >/tmp/opencode_cap.out 2>/tmp/opencode_cap.err \

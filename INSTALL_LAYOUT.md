@@ -107,10 +107,16 @@ ln -sfn "$AGENT_HOME/opencode_setting/tools" "$HOME/.config/opencode/agent-tools
 ln -sfn "$AGENT_HOME/opencode_setting/utilities" "$HOME/.config/opencode/agent-utilities"
 ln -sfn "$AGENT_HOME/opencode_setting/opencode-skills" "$HOME/.config/opencode/agent-skills"
 ln -sfn "$AGENT_HOME/opencode_setting/opencode-agents" "$HOME/.config/opencode/agent-agents"
+ln -sfn "$AGENT_HOME/opencode_setting/opencode-commands" "$HOME/.config/opencode/agent-commands"
 mkdir -p "$HOME/.config/opencode/agent"
 for f in "$AGENT_HOME/opencode_setting/opencode-agents"/*/*.md; do
   [ -f "$f" ] || continue
   ln -sfn "$f" "$HOME/.config/opencode/agent/$(basename "$f")"
+done
+mkdir -p "$HOME/.config/opencode/command"
+for f in "$AGENT_HOME/opencode_setting/opencode-commands"/*.md; do
+  [ -f "$f" ] || continue
+  ln -sfn "$f" "$HOME/.config/opencode/command/$(basename "$f")"
 done
 ```
 
@@ -119,7 +125,8 @@ Do not symlink Claude-native surfaces such as `settings.json`, `commands/`,
 OpenCode has native `.opencode/skill/`, `.opencode/command/`, `.opencode/agent/`,
 and JS/TS plugin hook surfaces. OpenCode-native Skill and Agent projections
 must come from `opencode_setting/opencode-skills` and
-`opencode_setting/opencode-agents`; future OpenCode-specific bootstrap files
+`opencode_setting/opencode-agents`; OpenCode-native commands must come from
+`opencode_setting/opencode-commands`. Future OpenCode-specific bootstrap files
 should live under `adapters/opencode/` and be symlinked or generated into
 `opencode_setting/` without moving OpenCode credentials, DB state, logs,
 sessions, or snapshots into the repo.
@@ -149,11 +156,15 @@ CODEX_HOME="$tmp_codex_home" codex debug prompt-input autopilot-code >/tmp/codex
 opencode_setting/bin/preflight.sh capability-info autopilot-code
 adapters/opencode/bin/sync-native-skills.py --check
 adapters/opencode/bin/sync-native-agents.py --check
+adapters/opencode/bin/sync-native-commands.py --check
 tmp_opencode_home=$(mktemp -d)
-mkdir -p "$tmp_opencode_home/.config/opencode/agent" "$tmp_opencode_home/.local/share"
+mkdir -p "$tmp_opencode_home/.config/opencode/agent" "$tmp_opencode_home/.config/opencode/command" "$tmp_opencode_home/.local/share"
 for f in "$PWD/opencode_setting/opencode-agents"/*/*.md; do ln -s "$f" "$tmp_opencode_home/.config/opencode/agent/$(basename "$f")"; done
+for f in "$PWD/opencode_setting/opencode-commands"/*.md; do ln -s "$f" "$tmp_opencode_home/.config/opencode/command/$(basename "$f")"; done
 HOME="$tmp_opencode_home" XDG_CONFIG_HOME="$tmp_opencode_home/.config" XDG_DATA_HOME="$tmp_opencode_home/.local/share" opencode debug agent plan-team --pure >/tmp/opencode-agent.json
+HOME="$tmp_opencode_home" XDG_CONFIG_HOME="$tmp_opencode_home/.config" XDG_DATA_HOME="$tmp_opencode_home/.local/share" opencode debug config --pure >/tmp/opencode-command.json
 ! rg '/.claude/' /tmp/opencode-agent.json
+! rg '/.claude/' /tmp/opencode-command.json
 OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 opencode debug skill --pure >/tmp/opencode-skills.json
 ! rg '"location": ".*/\.claude/skills' /tmp/opencode-skills.json
 ```

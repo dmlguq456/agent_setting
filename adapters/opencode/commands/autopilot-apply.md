@@ -1,0 +1,18 @@
+---
+description: "Run the portable autopilot-apply capability through the OpenCode adapter. Meaning: cheatsheet 초안을 실제 source artifact에 적용하고 검증한다."
+---
+
+Use the OpenCode adapter realization of portable capability `autopilot-apply`.
+This is adapter-owned output generated from `capabilities/autopilot-apply.md`, not a Claude command copy.
+
+1. Read `capabilities/autopilot-apply.md` for the runtime-neutral contract.
+2. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-apply` and
+   obey `instruction-only`, `tool-contract`, or `unsupported` status.
+3. Before edits, run `adapters/opencode/bin/preflight.sh write <file> [session-id]`.
+4. Before spec-changing work, run
+   `adapters/opencode/bin/preflight.sh capability autopilot-apply [cwd] [session-id]`.
+5. If the command receives arguments, map them to the portable argument shape:
+   `\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]`.
+
+Do not use `adapters/claude/commands/` or Claude slash-command files as
+OpenCode-native command source.

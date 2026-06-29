@@ -1,0 +1,18 @@
+---
+description: "Run the portable sync-skills capability through the OpenCode adapter. Meaning: 정의 변경을 읽어 README/manifest/cross-doc invariant drift를 점검·동기화한다."
+---
+
+Use the OpenCode adapter realization of portable capability `sync-skills`.
+This is adapter-owned output generated from `capabilities/sync-skills.md`, not a Claude command copy.
+
+1. Read `capabilities/sync-skills.md` for the runtime-neutral contract.
+2. Run `adapters/opencode/bin/preflight.sh capability-info sync-skills` and
+   obey `instruction-only`, `tool-contract`, or `unsupported` status.
+3. Before edits, run `adapters/opencode/bin/preflight.sh write <file> [session-id]`.
+4. Before spec-changing work, run
+   `adapters/opencode/bin/preflight.sh capability sync-skills [cwd] [session-id]`.
+5. If the command receives arguments, map them to the portable argument shape:
+   `[--check] [--force] [--auto-fix [--dry-run]]`.
+
+Do not use `adapters/claude/commands/` or Claude slash-command files as
+OpenCode-native command source.
