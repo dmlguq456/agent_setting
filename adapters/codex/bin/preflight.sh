@@ -107,7 +107,7 @@ tool_contract=visual-harness
 runtime_surface=not-materialized
 fallback=preflight.sh design <file>
 portable_source=capabilities/autopilot-design.md
-note=Codex design capabilities have native Skill guidance, but no adapter-owned render/screenshot/image-inspection harness yet. Do not project Claude Design MCP files into Codex.
+note=Codex design capabilities have native Skill guidance, but no adapter-owned render/screenshot/image-inspection harness yet. Do not project legacy design MCP files into Codex.
 EOF
     exit 69
     ;;

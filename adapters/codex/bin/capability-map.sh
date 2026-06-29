@@ -57,10 +57,10 @@ case "$cap" in
     status="tool-contract"
     tool_contract="visual-harness"
     if [ "$native_skill" -eq 1 ]; then
-      note="Codex has a native Skill projection for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; Claude visual harness files are reference only."
+      note="Codex has a native Skill projection for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
     else
       realization="portable-instructions"
-      note="Codex must provide an adapter visual harness equivalent before claiming full design capability support; Claude visual harness files are reference only."
+      note="Codex must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
     fi
     ;;
 esac

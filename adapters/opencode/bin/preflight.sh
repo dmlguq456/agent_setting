@@ -109,7 +109,7 @@ tool_contract=visual-harness
 runtime_surface=not-materialized
 fallback=preflight.sh design <file>
 portable_source=capabilities/autopilot-design.md
-note=OpenCode design capabilities have native Skill/Command guidance, but no adapter-owned render/screenshot/image-inspection harness yet. Do not project Claude Design MCP files into OpenCode.
+note=OpenCode design capabilities have native Skill/Command guidance, but no adapter-owned render/screenshot/image-inspection harness yet. Do not project legacy design MCP files into OpenCode.
 EOF
     exit 69
     ;;
