@@ -14,7 +14,7 @@ Skills + Agents 정의 변경을 감지해 `<agent-home>/README.md` (GitHub) 의
 ## Source of Truth
 - **Skills**: `<agent-home>/skills/*/SKILL.md` (frontmatter)
 - **Agents**: `<agent-home>/agents/*.md` (frontmatter)
-- **CONVENTIONS.md**: `<agent-home>/CONVENTIONS.md` (QA / model / cross-doc invariants — Step 5b canonical)
+- **CONVENTIONS.md**: `<agent-home>/core/CONVENTIONS.md` (QA / model / cross-doc invariants — Step 5b canonical)
 
 ## 출력
 1. **GitHub**: `<agent-home>/README.md` (자동 생성, 직접 편집 금지 — `§3.(1) 자연어 발화 예시 표 + 그 직전 prose` 만 사람 유지 영역)
@@ -39,7 +39,7 @@ Skills + Agents 정의 변경을 감지해 `<agent-home>/README.md` (GitHub) 의
 7. Final report
 
 ## Hook integration (옵션)
-`~/.claude/settings.json` 에 다음 추가하면 세션 종료 시 drift 알림:
+Claude Code adapter 의 `settings.json` 에 다음 추가하면 세션 종료 시 drift 알림:
 
 ```json
 {

@@ -2,9 +2,11 @@
 # Drill set runner — 지침 회귀 테스트. 사용: run.sh [case_id ...]
 # 행동 판정(assert) + 컨텍스트 소모 계측(턴·토큰·비용) — g0_overhead 가 세팅 고정 세금 추세.
 set -u
-AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+DEFAULT_AGENT_HOME=$(sh "$SCRIPT_DIR/../../utilities/agent-home.sh" 2>/dev/null || printf '%s\n' "${CLAUDE_HOME:-$HOME/.claude}")
+AGENT_HOME="${AGENT_HOME:-$DEFAULT_AGENT_HOME}"
 GOLD="${DRILL_HOME:-$AGENT_HOME/loops/drill}"   # DRILL_HOME override = worktree 테스트 (production default 불변)
-CLAUDE_BIN="$HOME/.local/bin/claude"
+CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 TOOLS="Bash,Read,Write,Edit,Glob,Grep,Skill,Agent,TodoWrite"
 STAMP=$(date +%F_%H%M)
 RESULTS="$GOLD/results/$STAMP"

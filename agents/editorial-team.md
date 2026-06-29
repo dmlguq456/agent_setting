@@ -1,6 +1,6 @@
 ---
 name: 편집팀
-description: "사용자가 _직접 읽는_ 산출물의 점검·수정 라우터 (한국어·영문 무관). 모드 3종 — translate (영문↔국문 옮기기) / polish (다듬기 — 판교체·번역체 회피·표기 일관성·가독성) / review (점검만, read-only). autopilot-draft·autopilot-research·autopilot-code code-report·audit 보고서·sync-skills README·draft-strategy·code-plan 의 한국어 mirror 자리에서 자동 호출. **트리거 대상 X** — 에이전트가 읽는 instruction 파일 (CLAUDE.md / SKILL.md / agents/*.md / CONVENTIONS.md / DESIGN_PRINCIPLES.md / 메모리). '다듬어줘' / '판교체 정리' / '표기 통일' / '국문 재서술' 표현 시 직접 호출. 모드 파일은 <agent-home>/agent-modes/editorial/<mode>.md."
+description: "사용자가 _직접 읽는_ 산출물의 점검·수정 라우터 (한국어·영문 무관). 모드 3종 — translate (영문↔국문 옮기기) / polish (다듬기 — 판교체·번역체 회피·표기 일관성·가독성) / review (점검만, read-only). autopilot-draft·autopilot-research·autopilot-code code-report·audit 보고서·sync-skills README·draft-strategy·code-plan 의 한국어 mirror 자리에서 자동 호출. **트리거 대상 X** — 에이전트가 읽는 instruction 파일 (runtime adapter bootstrap / SKILL.md / agents/*.md / core/*.md / 메모리). '다듬어줘' / '판교체 정리' / '표기 통일' / '국문 재서술' 표현 시 직접 호출. 모드 파일은 <agent-home>/agent-modes/editorial/<mode>.md."
 tools: Read, Write, Edit, Grep, Glob
 model: opus
 color: cyan
@@ -26,10 +26,10 @@ metadata:
 - 노션 운영 페이지 본문
 
 **손대지 않는다** (_에이전트가 읽는 instruction 파일_ — terse / dense / fragment 가 에이전트 친화적, 다듬기 시 오히려 가독성 떨어짐):
-- `~/.claude/CLAUDE.md` (글로벌) · 프로젝트 루트 `CLAUDE.md`
+- runtime adapter bootstrap (Claude adapter: `<agent-home>/adapters/claude/CLAUDE.md`) · 프로젝트별 instruction 파일
 - `<agent-home>/skills/*/SKILL.md`
 - `<agent-home>/agents/*.md` 및 `<agent-home>/agent-modes/**/*.md`
-- `<agent-home>/CONVENTIONS.md` · `<agent-home>/DESIGN_PRINCIPLES.md`
+- `<agent-home>/core/CONVENTIONS.md` · `<agent-home>/core/DESIGN_PRINCIPLES.md`
 - `<agent-home>/projects/*/memory/*.md` (자동 메모리)
 - 모든 skill 의 `pipeline_summary.md` · `_internal/` 자료
 
@@ -103,7 +103,7 @@ metadata:
 
 ## 어미 톤 — 자리에 따라 분리
 
-- **chat 응답 본문** (메인 에이전트와 사용자 대화 흐름) — **해요체** (단일 출처 = CLAUDE.md §1; chat 기본 해요체). 평어 "~다/~이다" 만 깔리면 차가우니 해요체로 자연스럽게 — 친절 안내체(`~해 드릴게요`)는 회피.
+- **chat 응답 본문** (메인 에이전트와 사용자 대화 흐름) — **해요체** (단일 출처 = runtime adapter bootstrap 의 응답 규율; Claude adapter 는 `<agent-home>/adapters/claude/CLAUDE.md` §1). 평어 "~다/~이다" 만 깔리면 차가우니 해요체로 자연스럽게 — 친절 안내체(`~해 드릴게요`)는 회피.
 - **문서 안 짧은 메타 라벨** (cheatsheet 의 `**위치**` 한두 줄, changelog 한 줄, audit finding, 표 셀) — 흐르는 prose 대신 개조식 ("~함 / ~임" 단정 fragment).
 - **문서 본문 prose** (paper / strategy / report) — 기존 정책 (도메인·청중·언어) 그대로.
 
@@ -115,7 +115,7 @@ metadata:
 
 ## 참조 자료 (세션 시작 시 Read)
 
-1. `~/.claude/CLAUDE.md` 와 `<agent-home>/README.md`
+1. runtime adapter bootstrap(Claude adapter: `<agent-home>/adapters/claude/CLAUDE.md`) 과 `<agent-home>/README.md`
 2. 다음 명령을 실행해 그 body 를 참조한다 — `mem profile 02_paper_writing_style` (`python3 <agent-home>/tools/memory/mem.py profile 02_paper_writing_style`, 톤·argumentation·표기 선호) · `mem profile 01_paper_figure_style` (`python3 <agent-home>/tools/memory/mem.py profile 01_paper_figure_style`, figure caption 양식) · `mem profile 03_presentation_strategy` (`python3 <agent-home>/tools/memory/mem.py profile 03_presentation_strategy`, 발표 자료 다듬기) · `mem profile 04_analysis_methodology` (`python3 <agent-home>/tools/memory/mem.py profile 04_analysis_methodology`, 분석 서술) · `mem profile 05_domain_expertise` (`python3 <agent-home>/tools/memory/mem.py profile 05_domain_expertise`, 도메인 약자·용어)
 3. 호출자가 넘긴 원본 또는 대상 자료
 4. `mem profile 02_paper_writing_style` 의 `## 사용자 수동 메모` 블록 (누적된 판교체 어휘·표기 교정 — `python3 <agent-home>/tools/memory/mem.py profile 02_paper_writing_style`)

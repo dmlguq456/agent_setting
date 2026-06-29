@@ -17,7 +17,7 @@ metadata:
 
 **Source of Truth**:
 - `<agent-home>/skills/*/SKILL.md` + `<agent-home>/agents/*.md` — 각 skill·agent 의 frontmatter + 본문
-- **`<agent-home>/CONVENTIONS.md`** — family-wide 운영 규칙의 단일 source (QA 5단계 정의 / model role 표기 / cross-doc invariants). 본 skill 의 Step 5b 가 본 문서를 canonical 로 cross-doc grep 해 drift 보고·자동 fix.
+- **`<agent-home>/core/CONVENTIONS.md`** — family-wide 운영 규칙의 단일 source (QA 5단계 정의 / model role 표기 / cross-doc invariants). 본 skill 의 Step 5b 가 본 문서를 canonical 로 cross-doc grep 해 drift 보고·자동 fix.
 
 **파생 산출물**: GitHub `<agent-home>/README.md`
 
@@ -178,7 +178,7 @@ Step 5 에서 README 본문 wording 을 자동 생성·갱신한 자리 (§1 Hea
 - 풀어쓰기 과잉 정리 (한 줄 표현 가능한 자리)
 - 모범생·친절 안내체 ("~가 평등하게 있습니다" / "어느 쪽을 써도 ~합니다") 회피
 - 간결·단정 한국어 (`~다` / `~이다` 어미)
-- adapter response policy(Claude Code: [`CLAUDE.md`](../../CLAUDE.md) §1) + 도메인 트리거 표 _사용자 영역 메타 문서 작성·수정_ 행 준수
+- adapter response policy(Claude Code: [`adapters/claude/CLAUDE.md`](../../adapters/claude/CLAUDE.md) §1) + 도메인 트리거 표 _사용자 영역 메타 문서 작성·수정_ 행 준수
 - 표·코드 블록·heading 구조·mermaid·링크는 그대로 유지 (의미·구조 변경 X, 어조만)
 
 **Skip 조건** — `--check` 는 drift 보고만이라 Step 5 자체가 안 돌아 검수 무관. `--force` / default 는 검수 포함.
@@ -189,12 +189,12 @@ Step 5 에서 README 본문 wording 을 자동 생성·갱신한 자리 (§1 Hea
 
 > 각 SKILL.md `## Default Invocation Rule` 은 _그 SKILL.md 안에서만_ 의미를 가지고 README 에 모으지 않음 (README §6 운영 룰은 _runtime adapter bootstrap 을 가리킴 한 단락_). autopilot-* SKILL.md 의 trigger 신호·default 옵션·override 는 adapter 의 일반 패턴 + 각 SKILL.md 의 skill-specific 정보로 분리.
 
-QA level / model role 표기 / family-wide invariant 은 **`<agent-home>/CONVENTIONS.md`** 가 단일 source of truth. 각 SKILL.md / README / `agents/*.md` 의 QA 표 wording 은 본 문서와 의미상 일치해야 함. Concrete model name 은 adapter 문서에서만 canonical 이며, 공통 문서에서는 role 의미와 분리한다.
+QA level / model role 표기 / family-wide invariant 은 **`<agent-home>/core/CONVENTIONS.md`** 가 단일 source of truth. 각 SKILL.md / README / `agents/*.md` 의 QA 표 wording 은 본 문서와 의미상 일치해야 함. Concrete model name 은 adapter 문서에서만 canonical 이며, 공통 문서에서는 role 의미와 분리한다.
 
 #### 5b-1. Canonical 정의 로드
 
 ```bash
-# Read CONVENTIONS.md fully; then parse:
+# Read core/CONVENTIONS.md fully; then parse:
 #   §1.1 5단계 공통 정의 표 → QA wording (canonical)
 #   §2 Model Role 표기 → portable model role 정의 + adapter mapping requirement
 #   §3 Hard Cross-Doc Invariants → invariant rule list
@@ -310,7 +310,7 @@ README 는 mermaid 를 안 쓰고 _4 트랙 텍스트 화살표 체인_ (```text
 
 **왜 신설** (2026-06-11): 이 설정 repo 의 artifact root(`<agent-home>/.agent_reports/`, legacy `<agent-home>/.claude_reports/`) 아래 `documents/{date}_agent-engineering-manual/draft/draft.md` 는 업계 원칙 ↔ 우리 세팅을 _라이브 파일 anchor_ 로 매핑한 참조서 (autopilot-draft 산출물). skills/agents/지침이 바뀌면 매뉴얼 2부(세팅 매핑)·anchor 가 조용히 stale 해지는데 이를 잡는 자리가 없었다. sync 가 drift 를 보는 자리에서 매뉴얼 검토를 **항상** 같이 본다.
 
-- Step 3 의 변경(신규·변경·삭제) ≥ 1 이면 final report 에 매뉴얼 검토 항목을 항상 포함 — 변경된 skill/agent 명단을 들어 `/autopilot-refine` (대상: agent-engineering-manual draft) 검토 제안. 변경 0 이어도 매뉴얼이 last sync 이후 갱신 안 됐고 지침 파일(CLAUDE.md / WORKFLOW / CONVENTIONS)이 바뀌었으면 동일 제안.
+- Step 3 의 변경(신규·변경·삭제) ≥ 1 이면 final report 에 매뉴얼 검토 항목을 항상 포함 — 변경된 skill/agent 명단을 들어 `/autopilot-refine` (대상: agent-engineering-manual draft) 검토 제안. 변경 0 이어도 매뉴얼이 last sync 이후 갱신 안 됐고 지침 파일(runtime adapter bootstrap / core/WORKFLOW / core/CONVENTIONS)이 바뀌었으면 동일 제안.
 - 매뉴얼은 autopilot-draft 산출물 — **직접 Edit 금지**, 수정은 소유 스킬 `autopilot-refine` 경유 (버전 snapshot·changelog 보존).
 - `--check` 모드 포함 모든 모드에서 _보고만_ — refine 실행 자체는 사용자 컨펌 후 (ceremony 분류상 자동 invoke 아님).
 
