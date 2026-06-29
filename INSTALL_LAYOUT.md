@@ -50,6 +50,7 @@ ln -sfn "$AGENT_HOME/codex_setting/bin" "$HOME/.codex/agent-bin"
 ln -sfn "$AGENT_HOME/codex_setting/tools" "$HOME/.codex/agent-tools"
 ln -sfn "$AGENT_HOME/codex_setting/utilities" "$HOME/.codex/agent-utilities"
 ln -sfn "$AGENT_HOME/codex_setting/codex-skills" "$HOME/.codex/agent-skills"
+ln -sfn "$AGENT_HOME/codex_setting/codex-agents" "$HOME/.codex/agent-agents"
 ln -sfn "$AGENT_HOME/codex_setting/codex-plugin-marketplace" "$HOME/.codex/agent-plugin-marketplace"
 ln -sfn "$AGENT_HOME/codex_setting/codex-hooks" "$HOME/.codex/agent-hooks"
 ln -sfn "$AGENT_HOME/codex_setting/codex-hooks/hooks.json" "$HOME/.codex/hooks.json"
@@ -58,12 +59,19 @@ for d in "$AGENT_HOME/codex_setting/codex-skills"/*; do
   [ -d "$d" ] || continue
   ln -sfn "$d" "$HOME/.codex/skills/$(basename "$d")"
 done
+mkdir -p "$HOME/.codex/agents"
+for f in "$AGENT_HOME/codex_setting/codex-agents"/*.toml; do
+  [ -f "$f" ] || continue
+  ln -sfn "$f" "$HOME/.codex/agents/$(basename "$f")"
+done
 ```
 
 Do not symlink Claude-native surfaces such as `settings.json`, `commands/`,
-root `skills/`, `statusline.sh`, or `hooks/` into `$HOME/.codex`. Codex-native
+root `skills/`, root `agents/`, `statusline.sh`, or `hooks/` into `$HOME/.codex`. Codex-native
 Skill projections must come from `codex_setting/codex-skills`, which is
-generated from `capabilities/`. Codex-native plugin installation must use
+generated from `capabilities/`. Codex-native custom Agent projections must come
+from `codex_setting/codex-agents`, which is generated from `roles/`.
+Codex-native plugin installation must use
 `codex_setting/codex-plugin-marketplace`, which points at the adapter-owned
 repo-local marketplace. Codex-native hook configuration must come from
 `codex_setting/codex-hooks`, which points at adapter-owned hook bridges.
@@ -156,6 +164,7 @@ python3 -m py_compile tools/build-manifest.py tools/memory/mem.py
 sh utilities/agent-home.sh
 tools/check-adaptation-boundary.sh
 adapters/codex/bin/sync-native-skills.py --check
+adapters/codex/bin/sync-native-agents.py --check
 adapters/codex/bin/sync-native-plugin.py --check
 codex_setting/bin/preflight.sh capability-info autopilot-code
 tmp_codex_home=$(mktemp -d)
@@ -168,6 +177,11 @@ CODEX_HOME="$tmp_codex_plugin_home" codex plugin marketplace add "$PWD/codex_set
 CODEX_HOME="$tmp_codex_plugin_home" codex plugin add agent-harness-codex@agent-harness --json >/tmp/codex-plugin-add.json
 CODEX_HOME="$tmp_codex_plugin_home" codex debug prompt-input autopilot-code >/tmp/codex-plugin-skills.json
 ! rg 'adapters/claude/skills' /tmp/codex-plugin-skills.json
+tmp_codex_agent_home=$(mktemp -d)
+mkdir -p "$tmp_codex_agent_home/agents"
+for f in "$PWD/codex_setting/codex-agents"/*.toml; do ln -s "$f" "$tmp_codex_agent_home/agents/$(basename "$f")"; done
+CODEX_HOME="$tmp_codex_agent_home" codex exec --help >/tmp/codex-agent-smoke.txt
+! rg 'adapters/claude/agents' "$tmp_codex_agent_home/agents"
 opencode_setting/bin/preflight.sh capability-info autopilot-code
 adapters/opencode/bin/sync-native-skills.py --check
 adapters/opencode/bin/sync-native-agents.py --check

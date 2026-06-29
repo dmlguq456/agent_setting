@@ -43,6 +43,7 @@ invariant.
 | Role catalog | `roles/` | `codex_setting/roles` |
 | Preflight wrappers | `adapters/codex/bin/` | `codex_setting/bin` |
 | Skills | `adapters/codex/skills/<name>/SKILL.md` generated from `capabilities/` | `codex_setting/codex-skills` |
+| Custom agents | `adapters/codex/agents/<role>.toml` generated from `roles/README.md` | `codex_setting/codex-agents` |
 | Plugin marketplace | `adapters/codex/.agents/plugins/marketplace.json` plus `adapters/codex/plugins/agent-harness-codex` | `codex_setting/codex-plugin-marketplace` |
 | Hook bridge | `adapters/codex/hooks/hooks.json`, `adapters/codex/hooks/pretooluse-write-guard.py`, `adapters/codex/hooks/posttooluse-design-check.py` | `codex_setting/codex-hooks` |
 | Shared helper tools | selected `tools/`, selected `utilities/` | `codex_setting/tools`, `codex_setting/utilities` |
@@ -88,6 +89,20 @@ The boundary guard checks that generated Codex skills and the generated Codex
 plugin remain in sync, and that neither surface is built from Claude Skill
 files.
 
+## Native Custom Agent Surface
+
+Codex supports custom subagents through TOML files under `$CODEX_HOME/agents/`
+or project `.codex/agents/`. This adapter materializes those role profiles as
+`adapters/codex/agents/<role>.toml`, generated from `roles/README.md` by
+`adapters/codex/bin/sync-native-agents.py` and projected as
+`codex_setting/codex-agents`.
+
+Each file defines Codex's required custom agent fields (`name`, `description`,
+and `developer_instructions`) while leaving concrete model and reasoning
+choices to `adapters/codex/bin/preflight.sh role <portable-role>` and the
+runtime's parent session/config inheritance. Do not project Claude Agent files
+or OpenCode Agent files into Codex.
+
 ## Native Hook Surface
 
 Codex supports lifecycle hooks through `hooks.json` and inline config. This
@@ -116,7 +131,7 @@ Codex must not consume these Claude-native files as native configuration:
 | `adapters/claude/statusline.sh` | Not consumable; input schema is Claude statusline JSON |
 | `adapters/claude/track-toggle.sh` | Do not consume; portable semantics live in `utilities/workflow-toggle.sh`, and Codex exposes them through `preflight.sh track` |
 | `adapters/claude/CLAUDE.md` | Reference only; not bootstrap |
-| `adapters/claude/agents/*.md` | Reference only; Codex should start from `roles/README.md` |
+| `adapters/claude/agents/*.md` | Reference only; Codex custom agents are generated from `roles/README.md` |
 | `roles/modes/design/*` | Compatibility reference only until Codex has an equivalent visual/browser verification harness |
 
 ## Status Surface Boundary
@@ -181,7 +196,7 @@ unavailable role explicitly.
 
 `codex_setting/` should remain minimal and explicit. It may expose `AGENTS.md`,
 `README.md`, `core/`, `capabilities/`, `roles/`, `bin/`, `codex-skills`,
-`codex-plugin-marketplace`, selected tools, and selected utilities, but must not expose Claude-native
+`codex-agents`, `codex-plugin-marketplace`, selected tools, and selected utilities, but must not expose Claude-native
 `settings.json`, `commands/`, root `skills/`, `hooks/`, or `statusline.sh` as if Codex
 could consume them.
 

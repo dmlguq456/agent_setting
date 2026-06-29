@@ -331,6 +331,36 @@ if command -v codex >/dev/null 2>&1; then
 else
   ok "codex native plugin runtime discovery skipped (codex not installed)"
 fi
+mkdir -p "$TMP/codex_agent_home/agents"
+for f in "$ROOT"/codex_setting/codex-agents/*.toml; do
+  [ -f "$f" ] || continue
+  ln -s "$f" "$TMP/codex_agent_home/agents/$(basename "$f")"
+done
+if python3 - "$TMP/codex_agent_home/agents" >/tmp/codex_agents.out 2>/tmp/codex_agents.err <<'PY'
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+agents = sorted(root.glob("*.toml"))
+if len(agents) != 8:
+    raise SystemExit(f"expected 8 Codex agents, got {len(agents)}")
+for agent in agents:
+    body = agent.read_text(encoding="utf-8")
+    for key in ("name", "description"):
+        if not re.search(rf'^{key} = "[^"]+"$', body, re.MULTILINE):
+            raise SystemExit(f"{agent.name}: missing {key}")
+    if not re.search(r'^developer_instructions = """\n.+\n"""$', body, re.MULTILINE | re.DOTALL):
+        raise SystemExit(f"{agent.name}: missing developer_instructions")
+    forbidden = ("adapters/claude/agents", "claude_setting", "adapters/opencode", "opencode_setting")
+    if any(item in body for item in forbidden):
+        raise SystemExit(f"{agent.name}: leaked non-Codex adapter path")
+PY
+then
+  ok "codex native agent projection has valid custom agent TOML without Claude paths"
+else
+  bad "codex native agent projection should have valid custom agent TOML without Claude paths"
+fi
 mkdir -p "$TMP/codex_hook_home/.codex"
 ln -s "$ROOT" "$TMP/codex_hook_home/.codex/agent-harness"
 ln -s "$ROOT/codex_setting/codex-hooks/hooks.json" "$TMP/codex_hook_home/.codex/hooks.json"

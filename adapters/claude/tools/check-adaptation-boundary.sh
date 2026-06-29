@@ -55,14 +55,14 @@ check_codex_forbidden_entries() {
 }
 
 check_codex_native_surface_debt() {
-  for p in adapters/codex/.codex-plugin codex_setting/plugins codex_setting/.codex-plugin adapters/codex/prompts codex_setting/prompts adapters/codex/agents codex_setting/codex-agents; do
+  for p in adapters/codex/.codex-plugin codex_setting/plugins codex_setting/.codex-plugin adapters/codex/prompts codex_setting/prompts; do
     if [ -e "$p" ] || [ -L "$p" ]; then
       fail_msg "$p exists; Codex must not expose unsupported native surfaces outside documented adapter-owned projections"
     fi
   done
 
-  if ! grep -Fq 'Codex has no adapter-owned native agent projection yet' adapters/codex/README.md; then
-    fail_msg "adapters/codex/README.md must document that role profiles are role-map only until a Codex-native agent surface exists"
+  if grep -Fq 'Codex has no adapter-owned native agent projection yet' adapters/codex/README.md; then
+    fail_msg "adapters/codex/README.md must not describe Codex-native agents as future-only"
   fi
 }
 
@@ -75,7 +75,7 @@ check_opencode_forbidden_entries() {
 }
 
 check_required_projection_entries() {
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-plugin-marketplace codex-hooks; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-plugin-marketplace codex-hooks codex-agents; do
     if [ ! -L "codex_setting/$p" ]; then
       fail_msg "codex_setting/$p must be a symlink projection entry"
     fi
@@ -94,6 +94,7 @@ check_codex_projection_targets() {
   check_link_target codex_setting/codex-skills ../adapters/codex/skills
   check_link_target codex_setting/codex-plugin-marketplace ../adapters/codex
   check_link_target codex_setting/codex-hooks ../adapters/codex/hooks
+  check_link_target codex_setting/codex-agents ../adapters/codex/agents
 }
 
 check_opencode_required_projection_entries() {
@@ -179,13 +180,13 @@ check_link_target() {
 check_install_layout_codex_projection() {
   [ -f INSTALL_LAYOUT.md ] || { fail_msg "INSTALL_LAYOUT.md is missing"; return; }
 
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-plugin-marketplace codex-hooks; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-plugin-marketplace codex-hooks codex-agents; do
     if ! grep -Fq "\$AGENT_HOME/codex_setting/$p" INSTALL_LAYOUT.md; then
       fail_msg "INSTALL_LAYOUT.md must include Codex projection install step for codex_setting/$p"
     fi
   done
 
-  for p in settings.json commands skills statusline.sh hooks; do
+  for p in settings.json commands skills agents statusline.sh hooks; do
     if ! grep -Fq "$p" INSTALL_LAYOUT.md; then
       fail_msg "INSTALL_LAYOUT.md must explicitly keep Claude-native $p out of Codex runtime projection"
     fi
@@ -224,7 +225,7 @@ check_codex_bin_wrappers() {
     fail_msg "codex_setting/bin points to $target; expected ../adapters/codex/bin"
   fi
 
-  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh sync-native-plugin.py; do
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh sync-native-plugin.py sync-native-agents.py; do
     if [ ! -x "adapters/codex/bin/$p" ]; then
       fail_msg "adapters/codex/bin/$p is missing or not executable"
     fi
@@ -484,6 +485,73 @@ check_codex_native_plugin_projection() {
 
   if ! grep -Fq "Custom prompts are deprecated" adapters/codex/README.md; then
     fail_msg "adapters/codex/README.md must document why command-like entries use skills/plugins instead of custom prompts"
+  fi
+}
+
+check_codex_native_agent_projection() {
+  if [ ! -x adapters/codex/bin/sync-native-agents.py ]; then
+    fail_msg "adapters/codex/bin/sync-native-agents.py must be executable"
+    return
+  fi
+
+  if ! adapters/codex/bin/sync-native-agents.py --check >/tmp/codex-sync-agents.out 2>/tmp/codex-sync-agents.err; then
+    fail_msg "Codex native agent projections are stale; run adapters/codex/bin/sync-native-agents.py"
+    cat /tmp/codex-sync-agents.err
+  fi
+
+  for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
+    agent="adapters/codex/agents/$profile.toml"
+    if [ ! -f "$agent" ]; then
+      fail_msg "$agent is missing"
+      continue
+    fi
+    if [ -L "$agent" ]; then
+      fail_msg "$agent must be a concrete adapter-owned Codex custom agent"
+    fi
+    if ! python3 - "$agent" >/tmp/codex-agent-toml.out 2>/tmp/codex-agent-toml.err <<'PY'
+import re
+import sys
+from pathlib import Path
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+for key in ("name", "description"):
+    if not re.search(rf'^{key} = "[^"]+"$', text, re.MULTILINE):
+        raise SystemExit(f"missing required Codex custom agent field: {key}")
+if not re.search(r'^developer_instructions = """\n.+\n"""$', text, re.MULTILINE | re.DOTALL):
+    raise SystemExit("missing required Codex custom agent field: developer_instructions")
+PY
+    then
+      fail_msg "$agent must be valid Codex custom agent TOML"
+      cat /tmp/codex-agent-toml.err
+    fi
+    if ! grep -Fq "roles/README.md" "$agent"; then
+      fail_msg "$agent must reference roles/README.md as portable source"
+    fi
+    if ! grep -Fq "adapters/codex/bin/preflight.sh role" "$agent"; then
+      fail_msg "$agent must reference the Codex role mapper"
+    fi
+    mapped_role=$(sed -n 's/^Codex role-map input: `\(.*\)`$/\1/p' "$agent" | head -n 1)
+    if [ -z "$mapped_role" ] || ! adapters/codex/bin/role-map.sh "$mapped_role" >/tmp/codex-agent-role.out 2>/tmp/codex-agent-role.err; then
+      fail_msg "$agent must include a Codex role-map input that resolves through adapters/codex/bin/role-map.sh"
+      cat /tmp/codex-agent-role.err
+    fi
+    if ! grep -Fq "not a legacy compatibility Agent copy" "$agent"; then
+      fail_msg "$agent must state that it is not a legacy compatibility Agent copy"
+    fi
+  done
+  for agent in adapters/codex/agents/*.toml; do
+    [ -f "$agent" ] || continue
+    profile=$(basename "$agent" .toml)
+    case " plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary " in
+      *" $profile "*) ;;
+      *) fail_msg "$agent is not an approved Codex native agent projection" ;;
+    esac
+  done
+
+  bad=$(rg -n 'adapters/claude|claude_setting|adapters/opencode|opencode_setting' adapters/codex/agents 2>/dev/null || true)
+  if [ -n "$bad" ]; then
+    fail_msg "Codex native agent surfaces must not expose non-Codex adapter paths:"
+    printf '%s\n' "$bad"
   fi
 }
 
@@ -1276,7 +1344,7 @@ check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_projection_symlinks opencode_setting
 check_projection_entry_allowlist claude_setting CLAUDE.md README.md agent-modes agents bin commands core hooks keybindings.json loops manifest.json scaffolds settings.json skills statusline.sh tools track-toggle.sh utilities
-check_projection_entry_allowlist codex_setting AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-plugin-marketplace codex-hooks
+check_projection_entry_allowlist codex_setting AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-plugin-marketplace codex-hooks codex-agents
 check_projection_entry_allowlist opencode_setting AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands opencode-plugins
 check_codex_forbidden_entries
 check_codex_native_surface_debt
@@ -1295,6 +1363,7 @@ check_opencode_bin_wrappers
 check_codex_tool_projection
 check_codex_native_skill_projection
 check_codex_native_plugin_projection
+check_codex_native_agent_projection
 check_codex_native_hook_projection
 check_portable_agent_home_resolution
 check_opencode_tool_projection
