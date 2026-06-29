@@ -6,6 +6,7 @@ ART="$ROOT/hooks/artifact-guard.sh"
 GIT="$ROOT/hooks/git-state-guard.sh"
 MEM="$ROOT/hooks/builtin-memory-guard.sh"
 CODEX="$ROOT/adapters/codex/bin/preflight.sh"
+CODEX_DISTILL="$ROOT/adapters/codex/bin/distill-worker.sh"
 DESIGN="$ROOT/hooks/design-postwrite.sh"
 MARK="$ROOT/hooks/spec-read-marker.sh"
 SPEC="$ROOT/hooks/spec-skill-gate.sh"
@@ -172,6 +173,40 @@ if CODEX_SESSIONS="$TMP/codex_sessions" python3 "$ROOT/tools/memory/mem.py" dist
   ok "codex session source distills transcript"
 else
   bad "codex session source should distill transcript"
+fi
+if "$CODEX_DISTILL" codexsid "$TMP/flowproj" >/tmp/codex_distill.out 2>/tmp/codex_distill.err \
+  && [ ! -s /tmp/codex_distill.out ]; then
+  ok "codex distill worker is disabled by default"
+else
+  bad "codex distill worker should no-op unless enabled"
+fi
+mkdir -p "$TMP/stubbin"
+cat > "$TMP/stubbin/codex" <<'EOF'
+#!/usr/bin/env sh
+printf '%s\n' "$@" > "$CODEX_STUB_ARGV"
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--output-last-message" ]; then
+    shift
+    printf '{"action":"add","tier":"working","type":"context","body":"stub"}\n' > "$1"
+  fi
+  shift || break
+done
+exit 0
+EOF
+chmod +x "$TMP/stubbin/codex"
+if CODEX_DISTILL_ENABLE=1 CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/store" \
+  PATH="$TMP/stubbin:$PATH" CODEX_STUB_ARGV="$TMP/codex_argv" \
+  "$CODEX" distill-propose codexsid "$TMP/flowproj" >/tmp/codex_distill.out 2>/tmp/codex_distill.err \
+  && grep -q -- '--sandbox' "$TMP/codex_argv" \
+  && grep -q -- 'read-only' "$TMP/codex_argv" \
+  && grep -q -- '--ask-for-approval' "$TMP/codex_argv" \
+  && grep -q -- 'never' "$TMP/codex_argv" \
+  && grep -q -- '--ephemeral' "$TMP/codex_argv" \
+  && grep -q -- '--ignore-rules' "$TMP/codex_argv" \
+  && grep -q '"action":"add"' /tmp/codex_distill.out; then
+  ok "codex distill proposal uses constrained exec"
+else
+  bad "codex distill proposal should use constrained exec"
 fi
 
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"

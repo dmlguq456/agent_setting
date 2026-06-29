@@ -43,7 +43,7 @@ Codex must not consume these Claude-native files as native configuration:
 | memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text session-start memory injection |
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |
 | oncall briefing | Run `adapters/codex/bin/preflight.sh briefing [cwd]` before prompt handling on the dedicated agent desk |
-| memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`; automatic no-tools worker remains disabled until Codex has a headless worker contract |
+| memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`; opt-in proposal generation exists via `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]`; automatic memory mutation remains disabled until Codex has an accepted no-tools/action contract |
 | role profiles | Read `roles/README.md`, then translate roles to Codex model/reasoning-effort settings |
 | role modes | Read `roles/MODES.md`; treat adapter-coupled modes as unsupported unless wrappers exist |
 | hook invariants | Read `core/HOOKS.md`; run explicit preflight wrappers until Codex-native hook events exist |
@@ -70,3 +70,18 @@ unavailable role explicitly.
 `AGENTS.md`, `README.md`, `core/`, `capabilities/`, `bin/`, `tools/`, and
 `utilities/`, but must not expose Claude-native `settings.json`, `commands/`,
 `skills/`, or `statusline.sh` as if Codex could consume them.
+
+## Distillation Boundary
+
+Claude's adapter can run a detached `claude -p` worker with tool use denied by
+runtime flags. Current Codex CLI inspection shows sandbox and approval controls,
+but no explicit equivalent to a no-tools worker flag. The Codex adapter therefore
+separates the pipeline:
+
+1. `distill-delta` reads Codex JSONL session logs and emits transcript delta text.
+2. `distill-propose` is disabled by default. With `CODEX_DISTILL_ENABLE=1`, it
+   invokes `codex exec --sandbox read-only --ask-for-approval never --ephemeral
+   --ignore-rules` and writes a JSON-lines proposal.
+3. The proposal is not applied to memory automatically. A future acceptance gate
+   must prove tool-free execution or provide a native no-tools flag before this
+   adapter may match Claude's automatic distillation behavior.

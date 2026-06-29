@@ -26,7 +26,7 @@ checks to their own event model.
 | workflow tracked signal | `utilities/workflow-guard-hook.sh` | `portable-check` | Surface tracked/untracked mode and clean stale flags. | Run `utilities/workflow-guard-hook.sh --event prompt [--cwd <dir>] [--session <id>] [--format text]` before prompt handling, and `--event start` for stale flag GC. |
 | memory injection | `tools/memory/mem.py inject` | `portable-check` | Inject relevant DB memory at session start. | Run `tools/memory/mem.py inject` for text output, or `tools/memory/mem.py inject --hook` when the runtime accepts Claude-style `additionalContext`. |
 | memory recall injection | `hooks/mem-recall-inject.sh` | `portable-check` | Recall signal words trigger DB recall and context injection. | Run `hooks/mem-recall-inject.sh --prompt <text> [--cwd <dir>] [--format text]` before prompt handling, or attach it to a prompt-submit event. |
-| memory distillation trigger | `hooks/mem-turn-nudge.sh`, `hooks/mem-distill-dispatch.sh` | `adapter-coupled-automation` | Periodically distill session deltas into DB memory through a no-tools worker. | Provide session transcript source (`mem.py distill --source <adapter>`), detached worker invocation, and no-tools/action contract. |
+| memory distillation trigger | `hooks/mem-turn-nudge.sh`, `hooks/mem-distill-dispatch.sh` | `adapter-coupled-automation` | Periodically distill session deltas into DB memory through a no-tools worker. | Provide session transcript source (`mem.py distill --source <adapter>`), detached worker invocation, and no-tools/action contract before automatic memory mutation. |
 | oncall briefing injection | `hooks/mem-briefing-inject.sh` | `portable-check` | On the dedicated agent desk, inject daily oncall report once per day. | Run `hooks/mem-briefing-inject.sh --cwd <dir> [--format text]` before prompt handling, or attach it to a prompt-submit event. |
 | Herdr state integration | `hooks/herdr-agent-state.sh` | `external-integration` | Publish working/idle/blocked/release state to Herdr. | Optional external integration; not a core invariant. |
 
@@ -52,3 +52,8 @@ Use `adapters/codex/bin/preflight.sh briefing [cwd]` to surface the same
 daily oncall briefing without Claude hook JSON.
 Use `adapters/codex/bin/preflight.sh design <file>` after design HTML writes
 to run the same console verification without Claude hook JSON.
+Use `adapters/codex/bin/preflight.sh distill-delta <session-id>` for Codex
+transcript extraction. `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh
+distill-propose <session-id> [cwd]` can generate a constrained proposal, but it
+must not be treated as equivalent to Claude's automatic no-tools memory worker
+until the Codex adapter has an accepted no-tools/action contract.

@@ -15,6 +15,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh briefing [cwd]
        preflight.sh design <file>
        preflight.sh distill-delta <session-id>
+       preflight.sh distill-propose <session-id> [cwd]
 
 Runs portable checks that Codex can call without consuming Claude hook JSON or
 settings.json.
@@ -72,6 +73,12 @@ case "$cmd" in
     [ "$#" -ge 2 ] || { echo "codex preflight: distill-delta requires a session id" >&2; exit 64; }
     sid=$2
     AGENT_HOME="${AGENT_HOME:-$ROOT}" python3 "$ROOT/tools/memory/mem.py" distill "$sid" --source codex
+    ;;
+  distill-propose)
+    [ "$#" -ge 2 ] || { echo "codex preflight: distill-propose requires a session id" >&2; exit 64; }
+    sid=$2
+    cwd=${3:-$PWD}
+    "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd"
     ;;
   -h|--help|"")
     usage
