@@ -36,7 +36,8 @@ into a portable agent setting plus runtime adapters.
 | Design MCP | `tools/design-mcp/`, design skills | mixed | Keep render/check semantics portable; move Claude MCP registration paths to adapter docs. |
 | Utility scripts | `adapters/claude/utilities/*`, shared `utilities/*` | adapter-native projection, mixed content | Concrete Claude utility files preserve current behavior while runtime-neutral helper behavior remains available from the shared utility layer. |
 | Scaffold assets | `adapters/claude/scaffolds/*`, shared `scaffolds/*` | adapter-native projection, mixed content | Concrete Claude scaffold files preserve current behavior while portable template intent remains available from the shared scaffold layer. |
-| Shared tools/loops | `adapters/claude/{tools,loops}/* -> ../../../{tools,loops}/*` | compat-passthrough | Preserve Claude runtime paths through adapter-owned passthroughs while individual files are classified. |
+| Loop helpers | `adapters/claude/loops/*`, shared `loops/*` | adapter-native projection, mixed content | Concrete Claude loop files preserve current drill/oncall/study behavior while runtime-coupled loop invocation remains classified for future adapters. |
+| Shared tools | `adapters/claude/tools/* -> ../../../tools/*` | compat-passthrough | Preserve Claude runtime paths through adapter-owned passthroughs while individual files are classified. |
 | Projection directories | `claude_setting/`, `codex_setting/` | projection | Must contain only symlinks or generated adapter output. |
 
 ## Migration Order

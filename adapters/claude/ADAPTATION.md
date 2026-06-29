@@ -36,7 +36,7 @@ portable sources:
 | Hooks | `claude_setting/hooks -> ../adapters/claude/hooks` | Adapter-owned concrete hook projection files preserve current Claude behavior; `core/HOOKS.md` names the invariant layer | Continue splitting Claude payload handling from portable invariant checks as non-Claude adapters implement equivalents |
 | Utilities | `claude_setting/utilities -> ../adapters/claude/utilities` | Adapter-owned concrete utility projection files preserve current Claude behavior while helper semantics remain shared | Move Claude-only helper behavior to adapter-native files when found; keep runtime-neutral contracts in the common utility docs or scripts |
 | Tools | `claude_setting/tools -> ../adapters/claude/tools` | CLI tools are mostly runtime-neutral; some memory/session assumptions remain, projected through adapter-owned symlinks | Isolate Claude session adapters under adapter or tool plugin |
-| Loops | `claude_setting/loops -> ../adapters/claude/loops` | Existing drill/oncall/study loop helpers remain available through adapter-owned symlinks | Split runtime-coupled loop invocation if non-Claude adapters need native loop runners |
+| Loops | `claude_setting/loops -> ../adapters/claude/loops` | Adapter-owned concrete loop files preserve current Claude drill/oncall/study behavior | Split runtime-coupled loop invocation if non-Claude adapters need native loop runners |
 | Scaffolds | `claude_setting/scaffolds -> ../adapters/claude/scaffolds` | Adapter-owned concrete scaffold files preserve current Claude design/template behavior | Move Claude-only scaffold assumptions into adapter-native files when found; keep portable scaffold intent in common docs |
 
 Compatibility passthrough is a temporary migration state, not the final adapter
@@ -77,8 +77,14 @@ are adapter-owned copies of the current shared `scaffolds/` assets. This keeps
 Claude-facing scaffold paths stable while future edits can split portable
 template intent from runtime-specific integration.
 
-Tools and loops still use the adapter-owned passthrough pattern. Shared source
-remains in the common directories, but runtime projection no longer points from
+Loop helpers now follow the same concrete projection pattern:
+`claude_setting/loops` points at `adapters/claude/loops/`, whose files are
+adapter-owned copies of the current shared `loops/` helpers. This keeps current
+Claude loop entry points available without treating the common root as the
+runtime projection.
+
+Tools still use the adapter-owned passthrough pattern. Shared source remains in
+the common directory, but runtime projection no longer points from
 `claude_setting/` directly at the common root.
 
 ## Model Mapping
