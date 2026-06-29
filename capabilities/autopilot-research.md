@@ -20,11 +20,33 @@ Adapters may expose this capability through native commands, skill files, prompt
 
 ## Artifact Ownership
 
-Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not. Capability-specific output placement follows `core/CONVENTIONS.md` section 5 until this spec is expanded with a stricter per-capability artifact map.
+Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not.
+
+Research work writes to `<artifact-root>/research/<topic>/`.
+
+Required public artifacts:
+
+- `pipeline_state.yaml`: query, mode, depth, QA level, resume stage, and artifact path;
+- `pipeline_summary.md`: source coverage, findings, QA result, and downstream recommendations;
+- report chapters at the research root, named by mode;
+- `cards/` for paper/project/company/source cards when the mode produces cards;
+- `analysis_summary.md` when the analyze stage produces cross-source synthesis.
+
+Internal artifacts belong under `_internal/`, including raw search metadata, source JSON, browser extracts, reference-chaining logs, code search notes, review records, and retry scratch files.
 
 ## Role Requirements
 
 Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concrete model names, subagent frontmatter, and runtime-specific tool lists belong in adapter files.
+
+Minimum role mapping:
+
+- source search and retrieval: research/material role;
+- analysis and synthesis: research role;
+- fact/citation verification: QA or research-review role;
+- editorial cleanup of final chapters: editorial role when available;
+- downstream handoff: planning role for spec/code/draft routing.
+
+QA level controls search breadth, fact-check depth, independent verification, and whether adversarial claim verification is required; it does not name a model.
 
 ## Guard Requirements
 
@@ -35,6 +57,45 @@ Adapters must preserve the portable invariants relevant to this capability:
 - enforce artifact ordering before new durable artifacts;
 - enforce spec-read gating when this capability changes spec-backed code or specs;
 - use DB memory paths, not runtime-native memory files.
+
+Additional research-entry gates:
+
+- ask one scope-clarification round when the query is too broad, too short, or matches multiple modes, unless `--no-clarify` or resume mode is active;
+- keep raw source metadata in `_internal/`; public reports should cite or summarize, not expose noisy scrape output;
+- stop with a failed `pipeline_summary.md` when search returns no useful sources;
+- for `standard` and above, verify card-level facts such as title, venue, year, citation, metric, and quoted claims against sources;
+- for `adversarial`, run an independent contradiction/claim check before finalizing public-facing reports;
+- do not create code, specs, apps, or prose deliverables directly; hand off to downstream capabilities after field intelligence is complete.
+
+## Portable Procedure
+
+1. Parse query, mode, depth, QA level, optional `--from`, and skip flags.
+2. Resolve or create `<artifact-root>/research/<topic>/`; if resuming, read `pipeline_state.yaml`.
+3. Infer mode when omitted and ask scope clarification when required.
+4. Build search queries, including 2-3 synonym or alternate-phrase expansions.
+5. Search mode-appropriate sources and write raw metadata under `_internal/`.
+6. Analyze results into cards, chaining/code/source summaries, and `analysis_summary.md` as applicable.
+7. Generate mode-specific report chapters.
+8. Run QA verification according to level.
+9. Update `pipeline_state.yaml` after each completed stage and finish with `pipeline_summary.md`.
+
+## Mode-Specific Semantics
+
+| Mode | Search/source emphasis | Public report set |
+|---|---|---|
+| `academic` | Papers, citation graphs, datasets, baselines, implementations, model resources. | briefing, landscape, core papers, baselines, technical deep dive, datasets, implementation, resources, reading guide. |
+| `technology` | Standards, vendor docs, technical whitepapers, OSS implementations, deployment constraints. | briefing, landscape, standards/specs, vendor comparison, technical deep dive, deployment, implementation, resources. |
+| `market` | Analyst/news/company/investor sources, product positioning, adoption and business signals. | briefing, market overview, key players, trends, opportunities. |
+
+Mode inference should report its basis. If multiple modes match, resolve via clarification unless the user explicitly supplied `--mode`.
+
+## Downstream Handoff
+
+Field intelligence ends with recommendations for downstream work:
+
+- `academic`: hand off to `autopilot-draft` for papers/presentations or `autopilot-code` for baseline implementation;
+- `technology`: hand off to `autopilot-spec` for stack/reference decisions or `autopilot-code` for implementation on a selected baseline;
+- `market`: hand off to `autopilot-draft` for business/report writing or `autopilot-spec` for reference-app/UX decisions.
 
 ## Adapter Realization
 
