@@ -23,6 +23,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Run deterministic guard scripts directly when the Codex runtime cannot attach equivalent hooks.
 - Before edits, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.
 - After design HTML writes, run `adapters/codex/bin/preflight.sh design <file>`.
+- Before claiming full design/autopilot-design support, run `adapters/codex/bin/preflight.sh visual-harness`; exit 69 means the required Codex-native render/screenshot/image-inspection harness is still a tool-contract.
 - After actually reading `<artifact-root>/spec/prd.md`, run `adapters/codex/bin/preflight.sh read <prd.md> [session-id]`; before spec-changing capability work, run `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]`.
 - Use `adapters/codex/bin/preflight.sh start [cwd] [session-id]` at session start when Codex has no automatic session-start hook, so stale workflow bypass flags are cleaned.
 - Use `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` to surface tracked/untracked workflow state when Codex has no automatic prompt hook.

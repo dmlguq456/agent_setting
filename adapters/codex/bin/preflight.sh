@@ -22,6 +22,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh briefing [cwd]
        preflight.sh worklog [cwd]
        preflight.sh design <file>
+       preflight.sh visual-harness
        preflight.sh distill-delta <session-id>
        preflight.sh distill-propose <session-id> [cwd]
        preflight.sh role <portable-role>
@@ -97,6 +98,18 @@ case "$cmd" in
     [ "$#" -ge 2 ] || { echo "codex preflight: design requires a file path" >&2; exit 64; }
     file=$2
     AGENT_HOME="$ROOT" bash "$ROOT/hooks/design-postwrite.sh" --file "$file"
+    ;;
+  visual-harness)
+    cat <<'EOF'
+adapter=codex
+status=tool-contract
+tool_contract=visual-harness
+runtime_surface=not-materialized
+fallback=preflight.sh design <file>
+portable_source=capabilities/autopilot-design.md
+note=Codex design capabilities have native Skill guidance, but no adapter-owned render/screenshot/image-inspection harness yet. Do not project Claude Design MCP files into Codex.
+EOF
+    exit 69
     ;;
   distill-delta)
     [ "$#" -ge 2 ] || { echo "codex preflight: distill-delta requires a session id" >&2; exit 64; }

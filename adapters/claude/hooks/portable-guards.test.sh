@@ -283,10 +283,25 @@ if "$CODEX" capability-info design-review >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^native_skill=1$' /tmp/cap.out \
   && grep -q '^realization=codex-native-skill$' /tmp/cap.out \
   && grep -q '^status=tool-contract$' /tmp/cap.out \
-  && grep -q '^tool_contract=visual-harness$' /tmp/cap.out; then
+  && grep -q '^tool_contract=visual-harness$' /tmp/cap.out \
+  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh visual-harness$' /tmp/cap.out; then
   ok "codex design capability reports visual harness contract"
 else
   bad "codex design capability should report visual harness contract"
+fi
+if "$CODEX" visual-harness >/tmp/codex_visual.out 2>/tmp/codex_visual.err; then
+  bad "codex visual harness should report tool-contract not succeed silently"
+else
+  rc=$?
+  if [ "$rc" -eq 69 ] \
+    && grep -q '^adapter=codex$' /tmp/codex_visual.out \
+    && grep -q '^status=tool-contract$' /tmp/codex_visual.out \
+    && grep -q '^tool_contract=visual-harness$' /tmp/codex_visual.out \
+    && ! grep -q 'adapters/claude\|claude_setting\|settings.json\|statusline.sh' /tmp/codex_visual.out; then
+    ok "codex visual harness reports adapter-native tool-contract"
+  else
+    bad "codex visual harness should report adapter-native tool-contract"
+  fi
 fi
 if command -v codex >/dev/null 2>&1; then
   mkdir -p "$TMP/codex_home/skills"
@@ -648,10 +663,25 @@ if "$OPENCODE" capability-info design-review >/tmp/opencode_cap.out 2>/tmp/openc
   && grep -q '^native_skill=1$' /tmp/opencode_cap.out \
   && grep -q '^realization=opencode-native-skill$' /tmp/opencode_cap.out \
   && grep -q '^status=tool-contract$' /tmp/opencode_cap.out \
-  && grep -q '^tool_contract=visual-harness$' /tmp/opencode_cap.out; then
+  && grep -q '^tool_contract=visual-harness$' /tmp/opencode_cap.out \
+  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness$' /tmp/opencode_cap.out; then
   ok "opencode design capability reports visual harness contract"
 else
   bad "opencode design capability should report visual harness contract"
+fi
+if "$OPENCODE" visual-harness >/tmp/opencode_visual.out 2>/tmp/opencode_visual.err; then
+  bad "opencode visual harness should report tool-contract not succeed silently"
+else
+  rc=$?
+  if [ "$rc" -eq 69 ] \
+    && grep -q '^adapter=opencode$' /tmp/opencode_visual.out \
+    && grep -q '^status=tool-contract$' /tmp/opencode_visual.out \
+    && grep -q '^tool_contract=visual-harness$' /tmp/opencode_visual.out \
+    && ! grep -q 'adapters/claude\|claude_setting\|settings.json\|statusline.sh' /tmp/opencode_visual.out; then
+    ok "opencode visual harness reports adapter-native tool-contract"
+  else
+    bad "opencode visual harness should report adapter-native tool-contract"
+  fi
 fi
 if command -v opencode >/dev/null 2>&1; then
   if OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 \

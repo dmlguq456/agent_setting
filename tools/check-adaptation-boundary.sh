@@ -208,6 +208,14 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'preflight.sh track' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex workflow toggle wrapper"
   fi
+
+  if ! grep -Fq 'visual-harness)' adapters/codex/bin/preflight.sh; then
+    fail_msg "adapters/codex/bin/preflight.sh must expose the Codex visual harness tool-contract"
+  fi
+
+  if ! grep -Fq 'preflight.sh visual-harness' adapters/codex/AGENTS.md; then
+    fail_msg "adapters/codex/AGENTS.md must document the Codex visual harness tool-contract"
+  fi
 }
 
 check_codex_utility_projection() {
@@ -462,6 +470,14 @@ check_opencode_bin_wrappers() {
 
   if ! grep -Fq 'preflight.sh track' adapters/opencode/AGENTS.md; then
     fail_msg "adapters/opencode/AGENTS.md must document the OpenCode workflow toggle wrapper"
+  fi
+
+  if ! grep -Fq 'visual-harness)' adapters/opencode/bin/preflight.sh; then
+    fail_msg "adapters/opencode/bin/preflight.sh must expose the OpenCode visual harness tool-contract"
+  fi
+
+  if ! grep -Fq 'preflight.sh visual-harness' adapters/opencode/AGENTS.md; then
+    fail_msg "adapters/opencode/AGENTS.md must document the OpenCode visual harness tool-contract"
   fi
 }
 

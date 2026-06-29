@@ -26,6 +26,7 @@ adapter bootstrap, not the portable source of truth. Load it through the
 - Run deterministic guard scripts directly when the OpenCode runtime cannot attach equivalent hooks. The adapter provides a JS plugin guard for write/edit/patch tools; use explicit preflight wrappers when that plugin is not installed or trusted.
 - Before edits, run `adapters/opencode/bin/preflight.sh write <file> [session-id]`.
 - After design HTML writes, run `adapters/opencode/bin/preflight.sh design <file>`.
+- Before claiming full design/autopilot-design support, run `adapters/opencode/bin/preflight.sh visual-harness`; exit 69 means the required OpenCode-native render/screenshot/image-inspection harness is still a tool-contract.
 - After actually reading `<artifact-root>/spec/prd.md`, run `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]`; before spec-changing capability work, run `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]`.
 - Use `adapters/opencode/bin/preflight.sh start [cwd] [session-id]` when no automatic session-start hook is attached, so stale untracked flags are GC'd.
 - Use `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]` to surface tracked/untracked workflow state when OpenCode has no automatic prompt hook.
