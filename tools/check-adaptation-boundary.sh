@@ -136,6 +136,32 @@ check_claude_hook_projection() {
   done
 }
 
+check_claude_passthrough_projection() {
+  for surface in tools utilities loops scaffolds; do
+    if [ ! -L "claude_setting/$surface" ]; then
+      fail_msg "claude_setting/$surface must project adapters/claude/$surface"
+      continue
+    fi
+
+    target=$(readlink "claude_setting/$surface")
+    if [ "$target" != "../adapters/claude/$surface" ]; then
+      fail_msg "claude_setting/$surface points to $target; expected ../adapters/claude/$surface"
+    fi
+
+    for p in $(find "$surface" -mindepth 1 -maxdepth 1 ! -name __pycache__ -print); do
+      name=${p#"$surface"/}
+      if [ ! -L "adapters/claude/$surface/$name" ]; then
+        fail_msg "adapters/claude/$surface/$name must be a symlink passthrough"
+        continue
+      fi
+      passthrough_target=$(readlink "adapters/claude/$surface/$name")
+      if [ "$passthrough_target" != "../../../$surface/$name" ]; then
+        fail_msg "adapters/claude/$surface/$name points to $passthrough_target; expected ../../../$surface/$name"
+      fi
+    done
+  done
+}
+
 check_removed_root_surfaces() {
   if [ -e agents ] || [ -L agents ]; then
     fail_msg "root agents/ exists; Claude-native agents must live under adapters/claude/agents and portable meaning under roles/"
@@ -248,6 +274,7 @@ check_codex_bin_wrappers
 check_claude_skill_projection
 check_claude_mode_projection
 check_claude_hook_projection
+check_claude_passthrough_projection
 check_removed_root_surfaces
 check_capability_catalog
 check_codex_capability_map

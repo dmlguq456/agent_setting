@@ -15,6 +15,10 @@ runtime-specific files out of the common root.
 | Skills | `adapters/claude/skills/` | `claude_setting/skills` |
 | Agent modes | `adapters/claude/agent-modes/` | `claude_setting/agent-modes` |
 | Hooks | `adapters/claude/hooks/` | `claude_setting/hooks` |
+| Tools | `adapters/claude/tools/` | `claude_setting/tools` |
+| Utilities | `adapters/claude/utilities/` | `claude_setting/utilities` |
+| Loops | `adapters/claude/loops/` | `claude_setting/loops` |
+| Scaffolds | `adapters/claude/scaffolds/` | `claude_setting/scaffolds` |
 | Statusline | `adapters/claude/statusline.sh` | `claude_setting/statusline.sh` |
 | `/track` implementation | `adapters/claude/track-toggle.sh` | `claude_setting/track-toggle.sh` |
 
@@ -30,8 +34,10 @@ portable sources:
 | Skills | `claude_setting/skills -> ../adapters/claude/skills` | Existing files are Claude Skill format and preserve old behavior through adapter-owned symlinks | Grow `capabilities/` into per-capability specs, then replace symlink passthroughs with generated or maintained `adapters/claude/skills/<name>/SKILL.md` |
 | Agent modes | `claude_setting/agent-modes -> ../adapters/claude/agent-modes` | Mode docs are prompt fragments used by current agents; `roles/MODES.md` classifies portability | Replace family symlink passthroughs with adapter-native mode files as non-Claude adapters implement equivalents |
 | Hooks | `claude_setting/hooks -> ../adapters/claude/hooks` | Shell scripts are wired by Claude settings and preserve old behavior through adapter-owned symlinks; `core/HOOKS.md` names the invariant layer | Replace hook symlink passthroughs with Claude payload wrappers as portable invariant scripts are split out |
-| Utilities | `claude_setting/utilities -> ../utilities` | Mostly runtime-neutral helper scripts | Move Claude-only helpers to adapter if found |
-| Tools | `claude_setting/tools -> ../tools` | CLI tools are mostly runtime-neutral; some memory/session assumptions remain | Isolate Claude session adapters under adapter or tool plugin |
+| Utilities | `claude_setting/utilities -> ../adapters/claude/utilities` | Mostly runtime-neutral helper scripts, projected through adapter-owned symlinks | Move Claude-only helpers to adapter-native files if found |
+| Tools | `claude_setting/tools -> ../adapters/claude/tools` | CLI tools are mostly runtime-neutral; some memory/session assumptions remain, projected through adapter-owned symlinks | Isolate Claude session adapters under adapter or tool plugin |
+| Loops | `claude_setting/loops -> ../adapters/claude/loops` | Existing drill/oncall/study loop helpers remain available through adapter-owned symlinks | Split runtime-coupled loop invocation if non-Claude adapters need native loop runners |
+| Scaffolds | `claude_setting/scaffolds -> ../adapters/claude/scaffolds` | Existing scaffold assets remain available through adapter-owned symlinks | Move Claude-only scaffold assumptions into adapter-native files if found |
 
 Compatibility passthrough is a temporary migration state, not the final adapter
 shape.
@@ -55,6 +61,10 @@ Claude behavior while allowing adapter-native replacements family by family.
 Hook scripts also pass through `adapters/claude/hooks/`. This keeps the existing
 Claude `settings.json` commands stable while making the adapter boundary explicit
 for future split work.
+
+Tools, utilities, loops, and scaffolds use the same adapter-owned passthrough
+pattern. Shared source remains in the common directories, but runtime projection
+no longer points from `claude_setting/` directly at the common root.
 
 ## Model Mapping
 
