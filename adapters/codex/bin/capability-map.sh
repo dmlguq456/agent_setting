@@ -32,7 +32,8 @@ if [ -f "$ROOT/capabilities/$cap.md" ]; then
 else
   portable_source="capabilities/README.md"
 fi
-claude_reference="skills/$cap/SKILL.md"
+claude_realization="adapters/claude/skills/$cap/SKILL.md"
+compat_reference="skills/$cap/SKILL.md"
 
 printf 'capability=%s\n' "$cap"
 printf 'adapter=codex\n'
@@ -40,8 +41,14 @@ printf 'native_skill=0\n'
 printf 'realization=portable-instructions\n'
 printf 'portable_source=%s\n' "$portable_source"
 
-if [ -f "$ROOT/$claude_reference" ]; then
-  printf 'compat_reference=%s\n' "$claude_reference"
+if [ -f "$ROOT/$claude_realization" ]; then
+  printf 'claude_realization=%s\n' "$claude_realization"
+else
+  printf 'claude_realization=\n'
+fi
+
+if [ -f "$ROOT/$compat_reference" ]; then
+  printf 'compat_reference=%s\n' "$compat_reference"
 else
   printf 'compat_reference=\n'
 fi
