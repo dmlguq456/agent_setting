@@ -53,6 +53,7 @@ last_out=""
 for i in $(seq 1 "$N"); do
   last_out="$(printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"p%s"}' "$SIDE" "$i" \
     | MEM_STORE="$STORE_E" MEM_PROJECTS="$PROJ_E" MEM_NUDGE_INTERVAL="$N" MEM_DISTILL_ENABLE=1 \
+      MEM_DISTILL_WORKER=claude \
       PATH="$STUB_E:$PATH" bash "$HOOK")"
 done
 [ -z "$last_out" ] \

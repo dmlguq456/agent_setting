@@ -1,7 +1,12 @@
 #!/usr/bin/env sh
 set -eu
 
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if command -v git >/dev/null 2>&1 && ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null); then
+  :
+else
+  ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+fi
 cd "$ROOT"
 
 fail=0
@@ -60,6 +65,22 @@ check_codex_bin_wrappers() {
   done
 }
 
+check_claude_bin_wrappers() {
+  if [ ! -L claude_setting/bin ]; then
+    fail_msg "claude_setting/bin must project adapters/claude/bin"
+    return
+  fi
+
+  target=$(readlink claude_setting/bin)
+  if [ "$target" != "../adapters/claude/bin" ]; then
+    fail_msg "claude_setting/bin points to $target; expected ../adapters/claude/bin"
+  fi
+
+  if [ ! -x adapters/claude/bin/mem-distill-worker.sh ]; then
+    fail_msg "adapters/claude/bin/mem-distill-worker.sh is missing or not executable"
+  fi
+}
+
 check_claude_skill_projection() {
   if [ ! -L claude_setting/skills ]; then
     fail_msg "claude_setting/skills must project adapters/claude/skills"
@@ -83,6 +104,12 @@ check_claude_skill_projection() {
       fail_msg "adapters/claude/skills/$slug/SKILL.md is missing"
     fi
   done
+
+  diff_out=$(diff -qr --exclude=.sync_state.json skills adapters/claude/skills 2>/dev/null || true)
+  if [ -n "$diff_out" ]; then
+    fail_msg "skills/ compatibility refs must stay byte-equivalent to adapters/claude/skills/ except .sync_state.json:"
+    printf '%s\n' "$diff_out"
+  fi
 }
 
 check_claude_mode_projection() {
@@ -344,12 +371,13 @@ warn_concrete_runtime_terms() {
   command -v rg >/dev/null 2>&1 || return 0
 
   count=$(rg -n 'sonnet|opus|haiku|claude -p|~/.claude|Claude adapter:' \
-    core skills tools utilities hooks \
+    core tools utilities hooks \
+    --glob '!tools/check-adaptation-boundary.sh' \
     --glob '!hooks/*.test.sh' 2>/dev/null | wc -l | tr -d ' ')
 
   if [ "$count" != "0" ]; then
-    say "WARN: $count concrete Claude/model references remain in portable or compatibility areas."
-    say "      This is allowed only where documented as adapter mapping or compat-passthrough."
+    say "WARN: $count concrete Claude/model references remain in portable areas."
+    say "      This is allowed only where documented as adapter mapping, compat-reference, or compat-passthrough."
   fi
 }
 
@@ -358,6 +386,7 @@ check_projection_symlinks codex_setting
 check_codex_forbidden_entries
 check_required_projection_entries
 check_codex_bin_wrappers
+check_claude_bin_wrappers
 check_claude_skill_projection
 check_claude_mode_projection
 check_claude_hook_projection

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Standalone test for mem-distill-dispatch.sh (spec v8 §5.5 D-12/D-13/D-14).
 # Fully isolated via MEM_STORE + MEM_PROJECTS temp dirs — never touches real ~/.claude/memory.
-# Real `claude` spawn is ALWAYS avoided via a PATH-injected `claude` stub (sentinel / argv-capture).
+# Real worker spawn is ALWAYS avoided via MEM_DISTILL_WORKER=claude plus a PATH-injected stub.
 # Covers Phase-3 Verification ②③④⑥ from plan: 2026-06-16_distiller-v7-hardening/plan/plan.md
 #
 # ⚠️ ⑤ (live D-14 no-tools acceptance probe) is OUT OF SCOPE here (this file = stubs only, never real claude).
@@ -24,6 +24,7 @@ MEM="$ROOT/tools/memory/mem.py"
 [ -f "$TURNNUDGE" ] || { echo "FAIL: turn-nudge hook not found at $TURNNUDGE"; exit 1; }
 # dispatch 가 *이 worktree* 의 mem.py 를 쓰도록 강제 (라이브 ~/.claude 는 pre-γ — curate-snapshot/prune 부재).
 export MEM_PY="$MEM"
+export MEM_DISTILL_WORKER=claude
 
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); printf '  ✅ %s\n' "$1"; }
@@ -44,11 +45,11 @@ export MEM_STORE="$STORE" MEM_PROJECTS="$PROJ"
 # per-stub temp dirs + sentinel/argv variants, distill.test.sh shares one TMPSTUB), so a shared
 # source would add coupling for negligible LOC savings. Extraction cost > benefit here.
 
-# sentinel stub: marks invocation (used by ②③④ to detect spawn/no-spawn)
+# sentinel worker stub: marks invocation (used by ②③④ to detect spawn/no-spawn)
 printf '#!/bin/sh\ntouch "%s/CLAUDE_CALLED"\n' "$STUBBIN" > "$STUBBIN/claude"
 chmod +x "$STUBBIN/claude"
 
-# argv-capture stub: appends its full argv (one per line) to ARGV (used by ⑥)
+# argv-capture worker stub: appends its full argv (one per line) to ARGV (used by ⑥)
 printf '#!/bin/sh\nfor a in "$@"; do printf "%%s\\n" "$a"; done >> "%s/ARGV"\n' "$STUBCAP" > "$STUBCAP/claude"
 chmod +x "$STUBCAP/claude"
 
@@ -167,9 +168,9 @@ printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"x"}' "
   || bad "④ turn-nudge: 재귀가드 실패 (sentinel PRESENT)"
 
 # ============================================================
-# ⑥ argv capture — 모델 sonnet + no --dangerously-skip-permissions + disallowedTools
+# ⑥ worker argv capture — mode + model + prompt-file
 # ============================================================
-echo "== ⑥ argv capture — --model claude-sonnet-4-6 · no --dangerously-skip-permissions · --disallowedTools =="
+echo "== ⑥ worker argv capture — increment · fast-distiller · prompt-file =="
 SID6="dispatchsid6"
 mkfix "$SID6"
 rm -f "$STUBCAP/ARGV"
@@ -177,34 +178,16 @@ MEM_DISTILL_ENABLE=1 PATH="$STUBCAP:$PATH" bash "$DISPATCH" distill "$SID6" "/tm
 # detached child(setsid)의 argv write 가 도달할 시간 — 폴링 (최대 ~5s, CI/부하 환경 마진)
 for _ in $(seq 1 50); do [ -s "$STUBCAP/ARGV" ] && break; sleep 0.1; done
 argv="$(cat "$STUBCAP/ARGV" 2>/dev/null || true)"
-printf '%s\n' "$argv" | grep -qx -- "--model" && printf '%s\n' "$argv" | grep -qx -- "claude-sonnet-4-6" \
-  && ok "⑥ argv: --model claude-sonnet-4-6 포함" \
-  || bad "⑥ argv: --model claude-sonnet-4-6 부재: [$argv]"
-printf '%s\n' "$argv" | grep -qx -- "--dangerously-skip-permissions" \
-  && bad "⑥ argv: --dangerously-skip-permissions 가 존재함 (D-14 위반)" \
-  || ok "⑥ argv: --dangerously-skip-permissions 부재 (D-14)"
-# v8: --disallowedTools 존재 단언
-printf '%s\n' "$argv" | grep -qx -- "--disallowedTools" \
-  && ok "⑥ argv: --disallowedTools 포함" \
-  || bad "⑥ argv: --disallowedTools 부재 (v8 보안 미적용): [$argv]"
-# --disallowedTools 다음 줄(space-joined 단일 인자)에 각 도구 포함 — S5 (list truncation 회귀 anchor)
-# 값은 multi-token 단일 인자라 -x 아닌 substring 매치 (grep -q)
-disallow_val="$(printf '%s\n' "$argv" | grep -A1 -x -- "--disallowedTools" | tail -n1 || true)"
-printf '%s' "$disallow_val" | grep -q "Bash" \
-  && ok "⑥ disallow 값: Bash 포함" \
-  || bad "⑥ disallow 값: Bash 부재: [$disallow_val]"
-printf '%s' "$disallow_val" | grep -q "Read" \
-  && ok "⑥ disallow 값: Read 포함" \
-  || bad "⑥ disallow 값: Read 부재: [$disallow_val]"
-printf '%s' "$disallow_val" | grep -q "Write" \
-  && ok "⑥ disallow 값: Write 포함" \
-  || bad "⑥ disallow 값: Write 부재: [$disallow_val]"
-printf '%s' "$disallow_val" | grep -q "Edit" \
-  && ok "⑥ disallow 값: Edit 포함" \
-  || bad "⑥ disallow 값: Edit 부재: [$disallow_val]"
-printf '%s' "$disallow_val" | grep -q "Agent" \
-  && ok "⑥ disallow 값: Agent 포함" \
-  || bad "⑥ disallow 값: Agent 부재: [$disallow_val]"
+printf '%s\n' "$argv" | grep -qx -- "increment" \
+  && ok "⑥ argv: mode increment 포함" \
+  || bad "⑥ argv: mode increment 부재: [$argv]"
+printf '%s\n' "$argv" | grep -qx -- "fast-distiller" \
+  && ok "⑥ argv: model role fast-distiller 포함" \
+  || bad "⑥ argv: model role fast-distiller 부재: [$argv]"
+prompt_arg="$(printf '%s\n' "$argv" | tail -n1)"
+[ -n "$prompt_arg" ] && printf '%s' "$prompt_arg" | grep -q '\.distill-prompt-' \
+  && ok "⑥ argv: prompt-file 경로 전달됨" \
+  || bad "⑥ argv: prompt-file 경로 이상: [$prompt_arg]"
 rmdir "$STORE/.distill-lock-$SID6" 2>/dev/null || true
 
 # ============================================================
@@ -399,9 +382,9 @@ rmdir "$STOREb/.distill-lock-$SIDb" 2>/dev/null || true
 # γ (Phase E-γ, D-18) — 2-mode model branch · opus no-tools · opt-in no-op · action parser · S2b membership
 # ============================================================
 
-# ⑧ mode→model. ⑥ above is the ARGUMENT-mode(sonnet) regression anchor (DO NOT remove): it passes
+# ⑧ mode→model. ⑥ above is the ARGUMENT-mode(fast distiller) regression anchor (DO NOT remove): it passes
 #   post-γ regardless of the SessionEnd change, so this ⑧ is the REQUIRED SessionEnd(opus) pair (CP1/BR-1).
-echo "== ⑧ mode→model: SessionEnd(stdin-JSON)=opus + ① opus no-tools (양 브랜치) =="
+echo "== ⑧ mode→model: SessionEnd(stdin-JSON)=deep curator model =="
 SID8="dispatchsidg8"
 mkfix "$SID8"
 rm -f "$STUBCAP/ARGV"
@@ -409,15 +392,12 @@ printf '{"session_id":"%s","cwd":"/tmp"}' "$SID8" \
   | MEM_DISTILL_ENABLE=1 PATH="$STUBCAP:$PATH" bash "$DISPATCH"
 for _ in $(seq 1 50); do [ -s "$STUBCAP/ARGV" ] && break; sleep 0.1; done
 argv8="$(cat "$STUBCAP/ARGV" 2>/dev/null || true)"
-printf '%s\n' "$argv8" | grep -qx -- "claude-opus-4-8" \
-  && ok "⑧ SessionEnd(stdin-JSON) → --model claude-opus-4-8 (argument 모드 sonnet = ⑥ anchor)" \
-  || bad "⑧ SessionEnd model != opus: [$argv8]"
-printf '%s\n' "$argv8" | grep -qx -- "--disallowedTools" \
-  && ok "① opus(SessionEnd) path: --disallowedTools 포함 (no-tools 양 브랜치)" \
-  || bad "① opus path: --disallowedTools 부재: [$argv8]"
-printf '%s\n' "$argv8" | grep -qx -- "--dangerously-skip-permissions" \
-  && bad "① opus path: --dangerously-skip-permissions 존재 (D-14 위반)" \
-  || ok "① opus path: --dangerously-skip-permissions 부재 (D-14)"
+printf '%s\n' "$argv8" | grep -qx -- "deep-curator" \
+  && ok "⑧ SessionEnd(stdin-JSON) → model role deep-curator (argument 모드 fast role = ⑥ anchor)" \
+  || bad "⑧ SessionEnd model role != deep-curator: [$argv8]"
+printf '%s\n' "$argv8" | grep -qx -- "curate" \
+  && ok "⑧ SessionEnd(stdin-JSON) → mode curate" \
+  || bad "⑧ SessionEnd mode != curate: [$argv8]"
 rmdir "$STORE/.distill-lock-$SID8" 2>/dev/null || true; rm -f "$STORE/.distill-snapids-$SID8" 2>/dev/null || true
 
 # opt-in no-op (Sec-🟡-8): ENABLE unset → SessionEnd 경로 완전 no-op (claude 분사 X, curate-snapshot X)

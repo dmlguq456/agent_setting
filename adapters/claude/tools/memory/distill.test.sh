@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated test for `mem distill` + session distill adapter/ingest/marker (Cluster C, D-11~13).
-# Fully isolated via MEM_STORE + MEM_PROJECTS temp dirs — never touches real ~/.claude/memory.
+# Fully isolated via MEM_STORE + MEM_PROJECTS temp dirs — never touches real runtime memory.
 # All mem calls go through `python3 tools/memory/mem.py` subprocess (env evaluated at module load).
 # Verification ①~⑤ from plan: 2026-06-16_memory-cluster-c-distill/plan/plan.md
 set -u
@@ -108,6 +108,7 @@ TMPSTUB="$(mktemp -d)"  # trap 은 파일 상단에 등록돼 있음; 여기서 
 mkdir -p "$TMPSTUB/bin"
 printf '#!/bin/sh\ntouch "%s/CLAUDE_CALLED"\n' "$TMPSTUB" > "$TMPSTUB/bin/claude"
 chmod +x "$TMPSTUB/bin/claude"
+export MEM_DISTILL_WORKER=claude
 
 # ---- A. 재귀가드 positive control + negative (③ 보완) ----
 echo "== A. 재귀가드 — positive control + negative =="
