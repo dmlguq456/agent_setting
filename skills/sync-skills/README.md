@@ -17,6 +17,7 @@ Skills + Agents 정의 변경을 감지해 `<agent-home>/README.md` (GitHub) 의
 - **Skill compatibility refs**: `<agent-home>/skills/*/SKILL.md` (parity/drift check only)
 - **Roles**: `<agent-home>/roles/README.md`
 - **Role modes**: `<agent-home>/roles/MODES.md`
+- **Runtime adapters**: `<agent-home>/adapters/{claude,codex,opencode}/`
 - **Claude Agents**: `<agent-home>/adapters/claude/agents/*.md` (frontmatter)
 - **CONVENTIONS.md**: `<agent-home>/core/CONVENTIONS.md` (QA / model / cross-doc invariants — Step 5b canonical)
 
