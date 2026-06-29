@@ -409,6 +409,19 @@ check_codex_native_plugin_projection() {
     cat /tmp/codex-sync-plugin.err
   fi
 
+  plugin_entries=$(find adapters/codex/plugins -mindepth 1 -maxdepth 1 -exec basename {} \; 2>/dev/null || true)
+  for entry in $plugin_entries; do
+    if [ "$entry" != "agent-harness-codex" ]; then
+      fail_msg "adapters/codex/plugins/$entry is not an approved Codex plugin projection"
+    fi
+  done
+  marketplace_entries=$(find adapters/codex/.agents/plugins -mindepth 1 -maxdepth 1 -exec basename {} \; 2>/dev/null || true)
+  for entry in $marketplace_entries; do
+    if [ "$entry" != "marketplace.json" ]; then
+      fail_msg "adapters/codex/.agents/plugins/$entry is not an approved Codex marketplace projection"
+    fi
+  done
+
   if [ ! -d "$plugin_root" ] || [ -L "$plugin_root" ]; then
     fail_msg "$plugin_root must be a concrete adapter-owned Codex plugin directory"
   fi
@@ -789,6 +802,13 @@ check_opencode_native_command_projection() {
 
 check_opencode_native_plugin_projection() {
   plugin="adapters/opencode/plugins/agent-harness-guards.js"
+  plugin_entries=$(find adapters/opencode/plugins -mindepth 1 -maxdepth 1 -exec basename {} \; 2>/dev/null || true)
+  for entry in $plugin_entries; do
+    if [ "$entry" != "agent-harness-guards.js" ]; then
+      fail_msg "adapters/opencode/plugins/$entry is not an approved OpenCode plugin projection"
+    fi
+  done
+
   if [ ! -f "$plugin" ]; then
     fail_msg "$plugin is missing"
     return
