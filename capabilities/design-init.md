@@ -14,7 +14,7 @@ This is the portable capability contract for `design-init`. It defines runtime-n
 
 ## Invocation Semantics
 
-Design environment check and bootstrap — self-provisions the Design MCP server (~/.claude/tools/design-mcp: install → claude mcp add → npm run smoke) that powers visual self-verification, plus optional Figma MCP, shadcn/ui, Tailwind tokens, SVG rasterizer, image-gen MCP. Per spec §0.5 it installs what is missing rather than stopping. Creates design_state.yaml.
+Design environment check and bootstrap — self-provisions the runtime design harness that powers visual self-verification, plus optional Figma MCP, shadcn/ui, Tailwind tokens, SVG rasterizer, and image-generation integration where supported. Adapter-native files own concrete MCP registration commands and runtime paths. Per spec §0.5 it installs what is missing rather than stopping. Creates design_state.yaml.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 

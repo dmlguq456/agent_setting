@@ -46,6 +46,20 @@ board app source is later made portable, promote it as a separate app/tool with
 its own repo or explicit source directory rather than treating the current
 `~/.claude` workspace as adapter source.
 
+## Design Harness Realization
+
+Claude Code realizes the portable design harness through the projected
+`claude_setting/tools/design-mcp` tree and Claude MCP registration:
+
+```sh
+claude mcp add design --scope user -- node ~/.claude/tools/design-mcp/server.js
+cd ~/.claude/tools/design-mcp && npm run smoke
+```
+
+Portable capability specs refer to this as the runtime design harness. The
+Claude adapter owns the concrete MCP command, `~/.claude/tools/design-mcp`
+runtime path, and any Claude-specific preview/screenshot/console wiring.
+
 ## Compatibility Realizations
 
 These surfaces are still consumed by Claude Code directly, but their runtime
