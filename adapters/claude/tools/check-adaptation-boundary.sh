@@ -416,6 +416,11 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"design"' "$post_bridge"; then
     fail_msg "$post_bridge must call the Codex design preflight"
   fi
+  if ! grep -Fq 'PreToolUse' adapters/codex/README.md \
+    || ! grep -Fq 'PostToolUse' adapters/codex/README.md \
+    || ! grep -Fq 'preflight.sh design' adapters/codex/README.md; then
+    fail_msg "adapters/codex/README.md must document the Codex native hook bridges"
+  fi
   if grep -Eq 'adapters/claude|claude_setting|settings\.json|statusline\.sh' "$hook_json" "$pre_bridge" "$post_bridge"; then
     fail_msg "Codex hook projection must not reference Claude-native surfaces"
   fi
