@@ -45,7 +45,7 @@ documentation.
 | Model selection (`model`, `small_model`, per-agent `model`, `variant`) | yes | `adapters/opencode/bin/role-map.sh` resolves portable roles to model/variant |
 | Statusline / footer | no user shell surface | TUI footer is native; harness status signals stay instruction-only/preflight |
 | Shell hooks (Claude-style `settings.json` hook events) | no | harness guards run as explicit preflight wrappers |
-| Session transcript | SQLite at `~/.local/share/opencode/opencode.db`, `opencode export <sid>` | distill source reader not yet implemented (tool-contract) |
+| Session transcript | SQLite at `~/.local/share/opencode/opencode.db`, `opencode export <sid>` | `distill-delta` uses the shared OpenCode export source reader |
 | No-tools worker flag | not confirmed | `opencode run --agent <restricted-agent>` with deny permissions is a candidate but not yet verified; distill auto-apply stays disabled |
 
 ## Native Skill, Command, And Agent Surface Debt
@@ -152,7 +152,7 @@ Harness-specific status signals need OpenCode-native realization:
 | memory inject | Run `adapters/opencode/bin/preflight.sh memory [cwd]` for plain-text session-start memory injection |
 | memory recall | Run `adapters/opencode/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |
 | oncall briefing | Run `adapters/opencode/bin/preflight.sh briefing [cwd]` before prompt handling on the dedicated agent desk |
-| memory distill | Transcript delta extraction requires an OpenCode session source reader (SQLite or `opencode export`) that is not yet implemented in the shared memory CLI; automatic memory mutation remains disabled until an OpenCode no-tools worker contract is verified |
+| memory distill | Transcript delta extraction uses `opencode export` through the shared memory CLI; automatic memory mutation remains disabled until an OpenCode no-tools worker contract is verified |
 | worklog state signal | Run `adapters/opencode/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before OpenCode updates notes or diagnoses board state |
 | role profiles | Read `roles/README.md`, then run `adapters/opencode/bin/preflight.sh role <portable-role>` to resolve OpenCode model/variant settings |
 | role modes | Read `roles/MODES.md`, then run `adapters/opencode/bin/preflight.sh mode-info <family/mode>`; treat adapter-coupled modes as unsupported unless wrappers exist |
@@ -224,20 +224,18 @@ per-agent permission model, but no explicit confirmed equivalent to a no-tools
 worker flag. The OpenCode adapter therefore separates the pipeline and keeps
 it disabled by default:
 
-1. `distill-delta` is a tool-contract: the shared memory CLI does not yet have
-   an OpenCode session source reader. An `OpenCodeDbSource` or
-   `OpenCodeExportSource` implementing the `.messages()` interface
-   (`Msg(role, ts, text, uuid, is_sidechain)`) is required before delta
-   extraction works.
-2. `distill-propose` is disabled by default. Even after a source reader exists,
-   it must not auto-apply memory mutations until an OpenCode no-tools worker
+1. `distill-delta` is supported through the shared memory CLI's
+   `OpenCodeExportSource`, which normalizes `opencode export <session-id>` JSON
+   into the `.messages()` interface (`Msg(role, ts, text, uuid, is_sidechain)`).
+2. `distill-propose` is disabled by default. It must not auto-apply memory
+   mutations until an OpenCode no-tools worker
    contract is verified (candidate: `opencode run --agent <restricted-agent>`
    with deny permissions, or a future plugin-mediated worker).
 3. The proposal, when implemented, would be parsed by the shared
    `tools/memory/apply-distill-actions.py` applier only when
    `OPENCODE_DISTILL_APPLY=1` is explicitly set.
-4. Automatic distillation stays disabled until both a source reader and a
-   no-tools worker contract are proven.
+4. Automatic distillation stays disabled until a no-tools worker contract is
+   proven.
 
 ## Worklog Boundary
 

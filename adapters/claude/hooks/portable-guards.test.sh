@@ -666,18 +666,32 @@ else
   bad "opencode mode wrapper should mark adapter-coupled design mode unsupported"
 fi
 
-echo "== opencode distill tool-contract =="
+echo "== opencode distill source =="
+cat > "$TMP/opencode-export.json" <<'EOF'
+{"messages":[
+  {"id":"ou1","role":"user","time":"2026-06-29T00:00:00.000Z","content":[{"type":"text","text":"open hello"}]},
+  {"id":"oa1","role":"assistant","time":"2026-06-29T00:00:01.000Z","content":[{"type":"text","text":"open world"}]},
+  {"id":"ot1","type":"tool_call","name":"bash","time":"2026-06-29T00:00:02.000Z"}
+]}
+EOF
+if OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" "$OPENCODE" distill-delta opencodesid >/tmp/opencode_delta.out 2>/tmp/opencode_delta.err \
+  && grep -q '^\[user\] open hello' /tmp/opencode_delta.out \
+  && grep -q '^\[assistant\] open world' /tmp/opencode_delta.out \
+  && grep -q '^\[assistant\] \[tool:bash\]' /tmp/opencode_delta.out; then
+  ok "opencode export source distills transcript"
+else
+  bad "opencode export source should distill transcript"
+fi
 if "$OPENCODE_DISTILL" opencodesid "$TMP/flowproj" >/tmp/opencode_distill.out 2>/tmp/opencode_distill.err \
   && [ ! -s /tmp/opencode_distill.out ]; then
-  bad "opencode distill worker should report tool-contract not succeed silently"
+  ok "opencode distill worker is disabled by default"
 else
-  [ "$?" -eq 69 ] && ok "opencode distill worker exits 69 for tool-contract" || bad "opencode distill worker wrong exit"
+  bad "opencode distill worker should no-op unless enabled"
 fi
-if "$OPENCODE" distill-delta opencodesid >/tmp/opencode_delta.out 2>/tmp/opencode_delta.err \
-  && [ ! -s /tmp/opencode_delta.out ]; then
-  bad "opencode distill-delta should report tool-contract not succeed silently"
+if OPENCODE_DISTILL_ENABLE=1 "$OPENCODE" distill-propose opencodesid "$TMP/flowproj" >/tmp/opencode_distill.out 2>/tmp/opencode_distill.err; then
+  bad "opencode distill proposal should report tool-contract while worker contract is unverified"
 else
-  [ "$?" -eq 69 ] && ok "opencode distill-delta exits 69 for tool-contract" || bad "opencode distill-delta wrong exit"
+  [ "$?" -eq 69 ] && ok "opencode distill proposal exits 69 for worker tool-contract" || bad "opencode distill proposal wrong exit"
 fi
 
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"

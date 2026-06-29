@@ -74,8 +74,8 @@ guards and tool-contract reporting.
 | capability mapping | `adapters/opencode/bin/preflight.sh capability-info <capability>` reports OpenCode's instruction-only or tool-contract realization and the Claude compatibility reference, if one exists |
 | model role mapping | `adapters/opencode/bin/preflight.sh role <portable-role>` resolves portable model roles through OpenCode adapter environment variables |
 | mode mapping | `adapters/opencode/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for OpenCode |
-| memory distill delta | Tool-contract: OpenCode session source reader not yet implemented in the shared memory CLI |
-| memory distill proposal | Disabled by default; requires both a session source reader and a verified no-tools worker contract before it can be enabled |
+| memory distill delta | Supported through `tools/memory/mem.py --source opencode`, backed by `opencode export <session-id>` |
+| memory distill proposal | Disabled by default; requires a verified OpenCode no-tools worker contract before it can be enabled |
 | memory store | `tools/memory/mem.py` is runtime-neutral; detached distillation worker execution remains adapter-specific |
 | permission model | OpenCode native `permission` config (`allow`/`ask`/`deny` per tool, per-agent override); adapter documents recommended rules, not a harness guard replacement |
 | statusline | OpenCode TUI footer is native; no user shell statusline surface in config schema; harness status signals stay instruction-only/preflight |

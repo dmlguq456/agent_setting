@@ -29,9 +29,9 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh mode-info <family/mode>
 
 Runs portable checks that OpenCode can call without consuming Claude hook JSON,
-settings.json, or statusline.sh. OpenCode has native JS/TS plugin hooks but
-this adapter does not materialize a guard plugin yet; use these wrappers as
-explicit preflight checks.
+settings.json, or statusline.sh. The adapter also provides an OpenCode JS
+plugin guard for write/edit/patch tools; use these wrappers as explicit
+preflight checks when that plugin is not installed or trusted.
 EOF
 }
 
@@ -103,10 +103,7 @@ case "$cmd" in
   distill-delta)
     [ "$#" -ge 2 ] || { echo "opencode preflight: distill-delta requires a session id" >&2; exit 64; }
     sid=$2
-    echo "opencode preflight: distill-delta is a tool-contract: OpenCode session source reader not yet implemented" >&2
-    echo "opencode preflight: OpenCode stores sessions in SQLite (~/.local/share/opencode/opencode.db);" >&2
-    echo "opencode preflight: an OpenCodeDbSource or OpenCodeExportSource implementing .messages() is required" >&2
-    exit 69
+    AGENT_HOME="${AGENT_HOME:-$ROOT}" python3 "$ROOT/tools/memory/mem.py" distill "$sid" --source opencode
     ;;
   distill-propose)
     [ "$#" -ge 2 ] || { echo "opencode preflight: distill-propose requires a session id" >&2; exit 64; }

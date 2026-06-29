@@ -32,6 +32,7 @@ DB = STORE / "memory.db"
 DUMP = STORE / "dump.jsonl"
 PROJECTS = Path(os.environ.get("MEM_PROJECTS", AGENT_HOME / "projects"))
 CODEX_SESSIONS = Path(os.environ.get("CODEX_SESSIONS", HOME / ".codex" / "sessions"))
+OPENCODE_EXPORT_FILE = os.environ.get("OPENCODE_EXPORT_FILE")
 USER_PROFILE = Path(os.environ.get("MEM_PROFILE", AGENT_HOME / "user_profile"))
 
 TIERS = ("working", "durable")
@@ -1141,6 +1142,126 @@ class CodexJsonlSource:
                     yield Msg("assistant", ts, f"[tool:{name}]", uuid, False)
 
 
+def _opencode_first_str(d, *keys):
+    for key in keys:
+        value = d.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _opencode_role(d):
+    role = _opencode_first_str(d, "role", "author")
+    if role in ("user", "assistant", "system"):
+        return role
+    for key in ("message", "session_message", "data"):
+        value = d.get(key)
+        if isinstance(value, dict):
+            role = _opencode_role(value)
+            if role:
+                return role
+    return None
+
+
+def _opencode_tool_name(d):
+    typ = str(d.get("type") or d.get("kind") or d.get("partType") or "").lower()
+    name = _opencode_first_str(d, "name", "tool", "toolName", "tool_name")
+    tool = d.get("tool")
+    if isinstance(tool, dict):
+        name = name or _opencode_first_str(tool, "name", "id")
+    if name and ("tool" in typ or "call" in typ or "execute" in typ):
+        return name
+    return None
+
+
+def _opencode_text(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts = [_opencode_text(item) for item in value]
+        return "\n".join(p for p in parts if p)
+    if not isinstance(value, dict):
+        return ""
+    if _opencode_tool_name(value):
+        return ""
+    for key in ("text", "content", "message", "body", "value"):
+        item = value.get(key)
+        text = _opencode_text(item)
+        if text:
+            return text
+    return ""
+
+
+def _opencode_items(payload):
+    if isinstance(payload, list):
+        for item in payload:
+            yield from _opencode_items(item)
+        return
+    if not isinstance(payload, dict):
+        return
+    typ = str(payload.get("type") or payload.get("kind") or "").lower()
+    if _opencode_role(payload) or _opencode_tool_name(payload) or typ in ("message", "tool_call", "tool"):
+        yield payload
+        return
+    for key in ("messages", "events", "transcript", "items", "entries", "parts", "data"):
+        if key in payload:
+            yield from _opencode_items(payload[key])
+
+
+class OpenCodeExportSource:
+    """OpenCode adapter: `opencode export <sid>` JSON → 정규화 Msg 스트림."""
+
+    def __init__(self, sid, export_file=None):
+        self.sid = sid
+        self.export_file = export_file or OPENCODE_EXPORT_FILE
+
+    def load(self):
+        if self.export_file:
+            try:
+                return json.loads(Path(self.export_file).read_text(encoding="utf-8"))
+            except Exception as e:
+                sys.stderr.write(f"[distill] opencode export file read failed: {e}\n")
+                return None
+        try:
+            r = subprocess.run(["opencode", "export", self.sid],
+                               capture_output=True, text=True, timeout=20)
+        except Exception as e:
+            sys.stderr.write(f"[distill] opencode export failed: {e}\n")
+            return None
+        if r.returncode != 0:
+            err = r.stderr.strip()
+            if err:
+                sys.stderr.write(f"[distill] opencode export failed: {err}\n")
+            return None
+        try:
+            return json.loads(r.stdout)
+        except Exception as e:
+            sys.stderr.write(f"[distill] opencode export JSON parse failed: {e}\n")
+            return None
+
+    def messages(self):
+        payload = self.load()
+        if payload is None:
+            return
+        for i, item in enumerate(_opencode_items(payload), 1):
+            ts = _opencode_first_str(item, "time", "timestamp", "created", "createdAt", "created_at")
+            uuid = _opencode_first_str(item, "id", "messageID", "message_id", "partID", "part_id")
+            if uuid is None:
+                uuid = f"opencode:{self.sid}:{i}"
+
+            tool_name = _opencode_tool_name(item)
+            if tool_name:
+                yield Msg("assistant", ts, f"[tool:{tool_name}]", uuid, False)
+                continue
+
+            role = _opencode_role(item)
+            if role not in ("user", "assistant", "system"):
+                continue
+            text = _opencode_text(item)
+            if text:
+                yield Msg(role, ts, text, uuid, False)
+
+
 # 다른 하네스용 adapter 는 같은 .messages() 인터페이스
 # (role,ts,text,uuid,is_sidechain Msg yield)만 구현하면 ingest_session·distill 불변.
 
@@ -1164,6 +1285,8 @@ def distill(sid, advance=False, source_name="claude"):
     sidechain·빈-text 는 출력 제외하되 last_uuid(marker 전진)는 전 구간 끝까지."""
     if source_name == "codex":
         source = CodexJsonlSource(sid)
+    elif source_name == "opencode":
+        source = OpenCodeExportSource(sid)
     else:
         source = ClaudeCodeJsonlSource(sid)
     last_uuid = None
@@ -2443,7 +2566,7 @@ def main():
 
     ds = sub.add_parser("distill", help="세션 jsonl 의 marker 이후 정규화 텍스트 출력(+--advance 로 marker 전진)")
     ds.add_argument("sid")
-    ds.add_argument("--source", choices=["claude", "codex"], default=os.environ.get("MEM_SESSION_SOURCE", "claude"),
+    ds.add_argument("--source", choices=["claude", "codex", "opencode"], default=os.environ.get("MEM_SESSION_SOURCE", "claude"),
                     help="session transcript adapter source")
     ds.add_argument("--advance", action="store_true", help="처리 후 marker 를 마지막 메시지 uuid 로 전진")
 

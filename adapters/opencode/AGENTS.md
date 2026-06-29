@@ -20,10 +20,10 @@ adapter bootstrap, not the portable source of truth. Load it through the
 - Use portable model roles from `core/CONVENTIONS.md`; do not treat Claude model names such as `sonnet` or `opus` as portable semantics.
 - Before treating a capability as supported, run `adapters/opencode/bin/preflight.sh capability-info <capability>` and follow the reported OpenCode realization.
 - Treat OpenCode-native skills under `adapters/opencode/skills/` as generated adapter output from `capabilities/`; do not load Claude Skill, command, or agent files as native OpenCode surfaces.
-- Treat future OpenCode-native commands, agents, and plugins as generated adapter output from `capabilities/` and `roles/`.
+- Treat OpenCode-native commands, agents, skills, and plugins as adapter-owned output from `capabilities/`, `roles/`, and portable hook invariants.
 - When validating OpenCode-native discoverability, run with `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1` so OpenCode's `~/.claude/skills/` compatibility autoload cannot mask missing adapter-owned output.
 - Before using a `roles/modes/` fragment, run `adapters/opencode/bin/preflight.sh mode-info <family/mode>` and obey portable/tool-contract/unsupported status.
-- Run deterministic guard scripts directly when the OpenCode runtime cannot attach equivalent hooks. OpenCode has JS/TS plugin hooks but this adapter does not materialize a guard plugin yet; use explicit preflight wrappers.
+- Run deterministic guard scripts directly when the OpenCode runtime cannot attach equivalent hooks. The adapter provides a JS plugin guard for write/edit/patch tools; use explicit preflight wrappers when that plugin is not installed or trusted.
 - Before edits, run `adapters/opencode/bin/preflight.sh write <file> [session-id]`.
 - After design HTML writes, run `adapters/opencode/bin/preflight.sh design <file>`.
 - After actually reading `<artifact-root>/spec/prd.md`, run `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]`; before spec-changing capability work, run `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]`.
@@ -34,7 +34,7 @@ adapter bootstrap, not the portable source of truth. Load it through the
 - Use `adapters/opencode/bin/preflight.sh recall "<prompt>" [cwd]` before answering prompts with recall signal words when OpenCode has no automatic prompt hook.
 - Use `adapters/opencode/bin/preflight.sh briefing [cwd]` on the dedicated agent desk when OpenCode has no automatic prompt hook.
 - Use `adapters/opencode/bin/preflight.sh worklog [cwd]` before worklog-board or agent-notes work to inspect configured notes/app paths without mutating data.
-- Do not auto-apply memory distillation until an OpenCode session source reader and a no-tools worker contract are verified. `preflight.sh distill-delta` and `distill-propose` report the current tool-contract status.
+- Use `adapters/opencode/bin/preflight.sh distill-delta <session-id>` to read transcript deltas through `opencode export`. Do not auto-apply memory distillation until an OpenCode no-tools worker contract is verified; `distill-propose` is disabled by default and reports that remaining tool-contract when explicitly enabled.
 - Treat `opencode_setting/tools` as a selective memory-tool projection. Do not assume every shared tool is OpenCode-supported.
 - Treat `opencode_setting/utilities` as a selective utility projection. Do not assume every shared utility is OpenCode-supported.
 - Keep OpenCode-owned credentials, sessions, DB state, logs, caches, and local databases outside the harness repo.
