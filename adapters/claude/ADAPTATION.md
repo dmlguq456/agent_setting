@@ -55,7 +55,7 @@ changing `claude_setting/skills`.
 
 Mode files follow the same adapter-owned passthrough pattern:
 `claude_setting/agent-modes` points at `adapters/claude/agent-modes/`, whose
-current family entries symlink to shared `agent-modes/`. This preserves old
+current family entries symlink to shared `roles/modes/`. This preserves old
 Claude behavior while allowing adapter-native replacements family by family.
 
 Hook scripts also pass through `adapters/claude/hooks/`. This keeps the existing

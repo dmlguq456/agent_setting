@@ -20,7 +20,7 @@ esac
 
 family=${mode%%/*}
 name=${mode#*/}
-source="agent-modes/$family/$name.md"
+source="roles/modes/$family/$name.md"
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
 if [ ! -f "$ROOT/$source" ]; then

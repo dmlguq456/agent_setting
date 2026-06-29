@@ -28,7 +28,7 @@ Codex must not consume these Claude-native files as native configuration:
 | `adapters/claude/track-toggle.sh` | Semantics reusable, implementation depends on Claude session id fallback |
 | `adapters/claude/CLAUDE.md` | Reference only; not bootstrap |
 | `adapters/claude/agents/*.md` | Reference only; Codex should start from `roles/README.md` |
-| `agent-modes/design/*` | Compatibility reference only until Codex has an equivalent visual/browser verification harness |
+| `roles/modes/design/*` | Compatibility reference only until Codex has an equivalent visual/browser verification harness |
 
 ## Required Codex Mappings
 

@@ -97,16 +97,16 @@ check_claude_mode_projection() {
     fail_msg "claude_setting/agent-modes points to $target; expected ../adapters/claude/agent-modes"
   fi
 
-  for d in agent-modes/*; do
+  for d in roles/modes/*; do
     [ -d "$d" ] || continue
-    family=${d#agent-modes/}
+    family=${d#roles/modes/}
     if [ ! -L "adapters/claude/agent-modes/$family" ]; then
       fail_msg "adapters/claude/agent-modes/$family must be a symlink passthrough"
       continue
     fi
     mode_target=$(readlink "adapters/claude/agent-modes/$family")
-    if [ "$mode_target" != "../../../agent-modes/$family" ]; then
-      fail_msg "adapters/claude/agent-modes/$family points to $mode_target; expected ../../../agent-modes/$family"
+    if [ "$mode_target" != "../../../roles/modes/$family" ]; then
+      fail_msg "adapters/claude/agent-modes/$family points to $mode_target; expected ../../../roles/modes/$family"
     fi
   done
 }
@@ -148,7 +148,7 @@ check_claude_passthrough_projection() {
       fail_msg "claude_setting/$surface points to $target; expected ../adapters/claude/$surface"
     fi
 
-    for p in $(find "$surface" -mindepth 1 -maxdepth 1 ! -name __pycache__ -print); do
+    for p in $(find "$surface" -mindepth 1 -maxdepth 1 ! -name __pycache__ ! -name '.*' -print); do
       name=${p#"$surface"/}
       if [ ! -L "adapters/claude/$surface/$name" ]; then
         fail_msg "adapters/claude/$surface/$name must be a symlink passthrough"
@@ -165,6 +165,9 @@ check_claude_passthrough_projection() {
 check_removed_root_surfaces() {
   if [ -e agents ] || [ -L agents ]; then
     fail_msg "root agents/ exists; Claude-native agents must live under adapters/claude/agents and portable meaning under roles/"
+  fi
+  if [ -e agent-modes ] || [ -L agent-modes ]; then
+    fail_msg "root agent-modes/ exists; portable mode fragments must live under roles/modes and runtime projection under adapters/*/agent-modes"
   fi
 }
 
@@ -208,9 +211,9 @@ check_codex_mode_map() {
     return
   fi
 
-  for f in agent-modes/*/*.md; do
+  for f in roles/modes/*/*.md; do
     [ -f "$f" ] || continue
-    rel=${f#agent-modes/}
+    rel=${f#roles/modes/}
     rel=${rel%.md}
     if ! "$mapper" "$rel" >/dev/null 2>&1; then
       fail_msg "Codex mode map cannot resolve agent mode: $rel"

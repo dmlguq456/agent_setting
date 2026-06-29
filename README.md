@@ -266,7 +266,7 @@ autopilot-\* 가 내부에서 자동 라우팅하는 전문 팀. Portable 의미
 │
 ├── adapters/claude/agents/ Claude-native Agent files — model frontmatter + Claude tool schema
 │
-├── agent-modes/            팀별 모드 페르소나 .md (dev / qa / research / editorial / design / material)
+├── roles/modes/            팀별 모드 페르소나 .md (dev / qa / research / editorial / design / material)
 ├── hooks/                  툴 호출 순간 강제되는 가드
 │   ├── artifact-guard      신규 산출물 생성 순서 (spec←research·plan←spec·문서←research)
 │   ├── git-state-guard     merge/rebase 중 편집 hard deny (drill g2 가 잡은 구멍)

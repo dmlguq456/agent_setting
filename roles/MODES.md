@@ -1,6 +1,6 @@
 # Role Mode Inventory
 
-`agent-modes/` contains mode-level persona and procedure fragments used by role
+`roles/modes/` contains mode-level persona and procedure fragments used by role
 profiles. It is currently shared with the Claude adapter, but not every file is
 purely portable.
 
@@ -25,7 +25,7 @@ purely portable.
 
 ## Adapter Rule
 
-Adapters may read `agent-modes/` as compatibility references. They must not
+Adapters may read `roles/modes/` as compatibility references. They must not
 claim a mode is natively supported unless they provide:
 
 - equivalent tools or documented fallbacks;

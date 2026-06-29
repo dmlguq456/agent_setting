@@ -115,7 +115,7 @@ pnpm dlx shadcn@latest add button card dialog
 
 ### Step 4: 시각 자가검증 (필수 — 렌더해서 본 것으로만 완료)
 
-maker 가 산출 직후 **반드시 렌더해서 본다** (Design MCP 경유). 좌표·코드만으로 완료 보고 금지. 상세 루프는 `agent-modes/design/maker.md` + `_design_rules.md` "시각 자가검증 루프".
+maker 가 산출 직후 **반드시 렌더해서 본다** (Design MCP 경유). 좌표·코드만으로 완료 보고 금지. 상세 루프는 `roles/modes/design/maker.md` + `_design_rules.md` "시각 자가검증 루프".
 
 공통 흐름: `mcp__design__preview({ path })` → `mcp__design__getConsoleLogs()` (에러 먼저) → `mcp__design__screenshot({ savePath, steps })` → `mcp__design__view_image({ path })`. scope 별:
 

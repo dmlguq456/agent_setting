@@ -27,7 +27,7 @@ An adapter that supports role delegation must document:
 
 - how a role is invoked;
 - what tools are available to that role;
-- how mode personas under `agent-modes/` are loaded or approximated;
+- how mode personas under `roles/modes/` are loaded or approximated;
 - which concrete model or reasoning profile maps to the portable model role;
 - where role output is written when a skill requires durable review logs;
 - what happens when a role is unavailable.

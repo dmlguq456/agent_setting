@@ -24,5 +24,5 @@ Design MCP visual loop.
 ## 규약
 
 - 모든 scaffold 는 외부 빌드 의존 0 (브라우저로 바로 열림) — standalone artifact 패리티.
-- 본문 ≥ 24px(덱) / 히트타깃 ≥ 44px(모바일) 등 스케일 규칙은 `~/.claude/agent-modes/design/_design_rules.md`.
+- 본문 ≥ 24px(덱) / 히트타깃 ≥ 44px(모바일) 등 스케일 규칙은 `roles/modes/design/_design_rules.md`.
 - 모두 렌더 검증 완료 (deck_stage·tweaks_panel·device_frames·image_slot·design_canvas, 콘솔 에러 0).
