@@ -21,12 +21,13 @@ into a portable agent setting plus runtime adapters.
 | Adapter boundary | `core/ADAPTATION.md`, `adapters/*/ADAPTATION.md` | portable / adapter-native | Single source for what symlink means and what still needs adaptation. |
 | Claude bootstrap | `adapters/claude/CLAUDE.md` | adapter-native | Keep Claude Code response, routing, hook, statusline, and command rules here. |
 | Codex bootstrap | `adapters/codex/AGENTS.md` | adapter-native | Expand only with behavior that Codex can actually perform. |
+| Codex preflight wrappers | `adapters/codex/bin/preflight.sh`, `role-map.sh`, `capability-map.sh`, `mode-map.sh`, `distill-worker.sh` | adapter-native | Executable Codex bridge for hook invariants, portable role mapping, capability realization, mode support classification, and distill proposals. |
 | Claude settings/hooks registration | `adapters/claude/settings.json` | adapter-native | Codex must get wrapper/preflight equivalents, not this JSON. |
 | Slash commands | `adapters/claude/commands/` | adapter-native | Future runtimes need native command wrappers or instruction entries. |
-| Portable capability catalog | `capabilities/README.md` | portable | Grow into per-capability specs when adapter parity work needs finer granularity. |
+| Portable capability catalog | `capabilities/README.md` | portable | Grow into per-capability specs when adapter parity work needs finer granularity; Codex currently resolves entries through `adapters/codex/bin/capability-map.sh`. |
 | Claude skills | `skills/*/SKILL.md` | compat-passthrough, needs-split | Preserve current Claude Skill behavior until generated/maintained `adapters/claude/skills/<name>/SKILL.md` exists. |
-| Portable role catalog | `roles/README.md` | portable | Grow into per-role specs when adapter parity work needs finer granularity. |
-| Role mode inventory | `roles/MODES.md` | portable | Classifies shared `agent-modes/` prompt fragments by portability. |
+| Portable role catalog | `roles/README.md` | portable | Grow into per-role specs when adapter parity work needs finer granularity; Codex currently resolves concrete runtime settings through `adapters/codex/bin/role-map.sh`. |
+| Role mode inventory | `roles/MODES.md` | portable | Classifies shared `agent-modes/` prompt fragments by portability; Codex currently enforces the classification through `adapters/codex/bin/mode-map.sh`. |
 | Claude agents | `adapters/claude/agents/*.md` | adapter-native | Preserve Claude Agent frontmatter/model/tool schema while realizing `roles/README.md`. |
 | Agent modes | `agent-modes/*.md` | mixed | Keep portable persona fragments shared; split adapter-coupled design/verification/tool notes when Codex-native modes exist. |
 | Hook invariant catalog | `core/HOOKS.md` | portable | Names hook-level invariants and classifies current scripts. |
@@ -43,9 +44,10 @@ into a portable agent setting plus runtime adapters.
 2. **Capability specs second**: keep portable capability meaning in
    `capabilities/`; keep Claude Skill syntax in compatibility passthrough until
    adapter-native skill files are generated or maintained under the Claude
-   adapter.
+   adapter. Codex must pass through `capability-map.sh`, not `skills/*/SKILL.md`.
 3. **Agent profiles third**: keep portable role meaning in `roles/`; keep
-   concrete frontmatter/model/tool mapping in adapter-native agent files.
+   concrete frontmatter/model/tool mapping in adapter-native agent files. Codex
+   must pass through `role-map.sh` and `mode-map.sh` for runtime decisions.
 4. **Hook payloads fourth**: keep invariant semantics in `core/HOOKS.md`, then
    isolate Claude event JSON, statusline JSON, ScheduleWakeup, and MCP
    registration behind adapter-native wrappers.

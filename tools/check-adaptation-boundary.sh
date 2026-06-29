@@ -42,6 +42,24 @@ check_required_projection_entries() {
   done
 }
 
+check_codex_bin_wrappers() {
+  if [ ! -L codex_setting/bin ]; then
+    fail_msg "codex_setting/bin must project adapters/codex/bin"
+    return
+  fi
+
+  target=$(readlink codex_setting/bin)
+  if [ "$target" != "../adapters/codex/bin" ]; then
+    fail_msg "codex_setting/bin points to $target; expected ../adapters/codex/bin"
+  fi
+
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh; do
+    if [ ! -x "adapters/codex/bin/$p" ]; then
+      fail_msg "adapters/codex/bin/$p is missing or not executable"
+    fi
+  done
+}
+
 check_removed_root_surfaces() {
   if [ -e agents ] || [ -L agents ]; then
     fail_msg "root agents/ exists; Claude-native agents must live under adapters/claude/agents and portable meaning under roles/"
@@ -150,6 +168,7 @@ check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_codex_forbidden_entries
 check_required_projection_entries
+check_codex_bin_wrappers
 check_removed_root_surfaces
 check_capability_catalog
 check_codex_capability_map
