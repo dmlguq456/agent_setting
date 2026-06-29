@@ -1,8 +1,8 @@
 # design-mcp
 
-Playwright-wrapped MCP server that gives a Claude Code agent the **visual feedback loop**
+Playwright-wrapped MCP server that gives an agent the **visual feedback loop**
 at the heart of design work: render a page → see it → read console errors → query the DOM.
-Implements component ① of `claude-design-harness-spec.md` ("전체 하네스의 절반").
+Implements the runtime design harness loop used by design capabilities.
 
 ## Tools
 
@@ -15,13 +15,11 @@ Implements component ① of `claude-design-harness-spec.md` ("전체 하네스�
 | `view_image({ path, maxSize? })` | Load an image as a vision input (downscaled to ≤1000px long edge). |
 | `image_metadata({ path })` | Dimensions / format / alpha / animation without sending pixels. |
 
-## Registration
+## Registration Boundary
 
-Registered at **user scope** so every project shares it:
-
-```bash
-claude mcp add design --scope user -- node ~/.claude/tools/design-mcp/server.js
-```
+This package is portable tool source. Runtime-specific registration belongs in
+adapter docs. The Claude Code realization is documented in
+`adapters/claude/ADAPTATION.md`.
 
 The static server roots at the launch cwd (the project). Override with `DESIGN_ROOT=/abs/path`.
 Browsers resolve from the default Playwright cache (`~/.cache/ms-playwright`).
@@ -29,7 +27,7 @@ Browsers resolve from the default Playwright cache (`~/.cache/ms-playwright`).
 ## Smoke test
 
 ```bash
-cd ~/.claude/tools/design-mcp && npm run smoke
+npm run smoke
 ```
 
 Validates §2.5 of the spec: preview→screenshot→view_image round-trip, console-error capture,

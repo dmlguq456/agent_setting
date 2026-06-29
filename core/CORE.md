@@ -39,17 +39,19 @@ $HOME/.codex/               # Codex runtime home, mostly runtime-owned
 
 Runtime homes should be adapter projections, not the source repository. Keep credentials, sessions, logs, SQLite state, caches, and other runtime-owned files in the runtime home. Expose the harness into each runtime home with symlinks or adapter-owned bootstrap files.
 
-Example projection:
+Projection example:
 
 ```text
-$HOME/.claude/CLAUDE.md      -> $HOME/agent_setting/claude_setting/CLAUDE.md
-$HOME/.claude/core           -> $HOME/agent_setting/claude_setting/core
-$HOME/.claude/skills         -> $HOME/agent_setting/claude_setting/skills
-$HOME/.claude/agents         -> $HOME/agent_setting/claude_setting/agents
-$HOME/.claude/hooks          -> $HOME/agent_setting/claude_setting/hooks
+<runtime-home>/<adapter-bootstrap> -> <agent-home>/<adapter-projection>/<adapter-bootstrap>
+<runtime-home>/core                -> <agent-home>/<adapter-projection>/core
+<runtime-home>/<capability-surface> -> <agent-home>/<adapter-projection>/<capability-surface>
+<runtime-home>/<role-surface>      -> <agent-home>/<adapter-projection>/<role-surface>
+<runtime-home>/<hook-surface>      -> <agent-home>/<adapter-projection>/<hook-surface>
 ```
 
-`~/.claude` remains the current Claude Code adapter's legacy installation path during migration. New cross-tool documentation should prefer `<agent-home>` unless it is intentionally describing the Claude adapter runtime home.
+Legacy runtime homes remain adapter-owned compatibility paths during migration.
+New cross-tool documentation should prefer `<agent-home>` and `<runtime-home>`
+unless it is intentionally describing a specific adapter runtime home.
 
 ## 3. Artifact Root
 
@@ -154,5 +156,5 @@ Use neutral names for new cross-tool concepts:
 | artifact root | `.claude_reports` as a generic term |
 | capability | Claude-only Skill semantics |
 | role profile | Claude-only Agent semantics |
-| model role | `opus` / `sonnet` / vendor model names as portable semantics |
+| model role | vendor model names as portable semantics |
 | adapter | tool-specific bootstrap |

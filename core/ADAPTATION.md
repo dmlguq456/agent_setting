@@ -14,7 +14,7 @@ Every file in this repo must fall into one category.
 | Adapter source | Runtime-specific representation of portable semantics. | `adapters/claude/CLAUDE.md`, `adapters/claude/settings.json`, `adapters/claude/commands/` | Projected into that runtime home |
 | Adapter projection | Versioned mirror that exposes adapter source under runtime-expected names. | `claude_setting/`, `codex_setting/` | Symlink or generated output only; no independent semantics |
 | Compatibility passthrough | Legacy file still consumed directly by a runtime before a true portable/adapted split exists. | Current `skills/`, many `hooks/` | Allowed only with an explicit debt note in the adapter |
-| Runtime state | Tool-owned mutable local state. | `~/.claude/projects`, credentials, session logs, caches, DB files | Never committed to this repo |
+| Runtime state | Tool-owned mutable local state. | `<runtime-home>/projects`, credentials, session logs, caches, DB files | Never committed to this repo |
 | Continuity state | Cross-project agent worklog/notes data that survives sessions but is not harness source. | `<agent-notes-root>/cards`, `_layer2`, `_triage`, `digests`, `oncall`, `study` | Never committed to this repo; may be versioned in a separate notes/data repo |
 | Local board app state | Worklog-board local app workspace, generated output, DB/cache, dispatch logs, and worktrees. | `<worklog-board-app>/.cache`, `.next`, `.dispatch`, `.env*`, `node_modules`, `<worklog-board-app>-wt/` | Never committed to this repo |
 
@@ -45,8 +45,7 @@ Portable docs use role names, not vendor model names:
 | `orchestrator` | Tooling, merge, dispatch, and report assembly; should not be the sole judge |
 
 Adapters map these roles to concrete models, reasoning profiles, or tools.
-Concrete model names such as `sonnet`, `opus`, or `gpt-*` belong in adapter
-documents or generated native files.
+Concrete model names belong in adapter documents or generated native files.
 
 ## 4. Capability Model
 
@@ -93,14 +92,13 @@ manual preflight, or unsupported fallback.
 
 ## 6. Projection Invariant
 
-Runtime homes keep their expected names:
+Runtime homes keep their expected names. Common docs describe this generically;
+adapter docs own the concrete runtime-home paths and bootstrap filenames:
 
 ```text
-~/.claude/CLAUDE.md
-~/.claude/settings.json
-~/.claude/commands/
-
-~/.codex/AGENTS.md
+<runtime-home>/<adapter-bootstrap>
+<runtime-home>/<runtime-settings>
+<runtime-home>/<runtime-command-or-skill-surface>/
 ```
 
 Those paths may symlink into versioned projection directories such as

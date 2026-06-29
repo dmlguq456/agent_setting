@@ -85,7 +85,7 @@ async function doPptx() {
   const { chromium } = await import("playwright");
   let pptxgen;
   try { pptxgen = (await import("pptxgenjs")).default; }
-  catch { console.error("pptxgenjs missing. Run: (cd ~/.claude/tools/design-mcp && npm i pptxgenjs)"); process.exit(2); }
+  catch { console.error("pptxgenjs missing. Run npm i pptxgenjs in this design-mcp package."); process.exit(2); }
 
   const b = await chromium.launch();
   const p = await b.newPage();
