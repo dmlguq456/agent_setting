@@ -212,7 +212,7 @@ Where `{doc_type}` is either "strategy" or "draft" based on auto-detection.
 ## QA Scaling
 Auto-detect from sections changed. Two reviewer roles run **in parallel** at Standard+:
 - **Quality reviewer** (품질관리팀): narrative arc / cohesion / audience fit / strategy alignment
-- **Fact-checker** (연구팀 subrole): cards/PDFs verbatim 대조, venue/year/metric/lineage/classification 검증. classification 8-row table 의 canonical 정의는 [`research-team.md`](../../agents/research-team.md) L258-300 single source.
+- **Fact-checker** (연구팀 subrole): cards/PDFs verbatim 대조, venue/year/metric/lineage/classification 검증. classification 8-row table 의 canonical 정의는 [`research-team.md`](../../adapters/claude/agents/research-team.md) L258-300 single source.
 
 | Level | Condition | Quality reviewer | Fact-checker (parallel) | Max rounds |
 |---|---|---|---|---|

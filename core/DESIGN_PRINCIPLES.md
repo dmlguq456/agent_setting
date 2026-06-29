@@ -177,7 +177,7 @@ QA loop 는 _skill 안에서 닫힌 loop_ 으로 돌고, orchestrator 는 verdic
 사용자가 직접 보는 markdown 산출물은 _내용 정확성_ 만 아니라 _읽기 호흡_ 까지 책임진다. 전담 부서 — **편집팀** (editorial-team, deep editor; Claude adapter: opus).
 
 - 모드 3종: A 옮기기 (영문 ↔ 국문) / B 다듬기 (언어 무관, 판교체 + 영문 어색한 표현 모두) / C 점검만
-- 판교체 회피 — 한국어 산출물에서 영어 어휘를 한국어 어순에 그냥 박지 않는다. 도메인 영어와 정착 외래어만 영어로, 나머지는 한국어로. 매핑 표 — `agents/editorial-team.md`
+- 판교체 회피 — 한국어 산출물에서 영어 어휘를 한국어 어순에 그냥 박지 않는다. 도메인 영어와 정착 외래어만 영어로, 나머지는 한국어로. 매핑 표 — `adapters/claude/agents/editorial-team.md`
 - 적용 범위 — 사용자가 직접 보는 _모든_ .md 산출물 (doc 한정 X). autopilot-code 의 final-report, audit 보고서, autopilot-refine 결과, pipeline_summary 등
 
 **메인 에이전트 응답 자체** 의 메타 원칙은 별개 layer — runtime adapter bootstrap 이 single source (Claude Code: `adapters/claude/CLAUDE.md` §0~§3; §0 작업 라우팅: spec-first 파이프 + autopilot-* 호출 Pre-check·컨펌 · §1 응답 규율: 판교체 회피·출력 자제·동사 약속어 self-check · §2 pause flag 비자동·자율 진행 · §3 후속 단계 자동).

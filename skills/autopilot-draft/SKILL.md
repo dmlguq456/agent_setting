@@ -426,7 +426,7 @@ Invoke Skill: `draft-strategy` with args: `<resolved_mode> --inputs <comma-separ
    **Quality reviewer prompt** (light/standard/thorough A & B):
    ```
    Review this document strategy as the user's domain expert proxy.
-   **Task type: paper-driven doc** (mode: {mode}) — apply Role 1 Step 3 axes from agents/research-team.md, with audit-aspect alignment.
+   **Task type: paper-driven doc** (mode: {mode}) — apply Role 1 Step 3 axes from adapters/claude/agents/research-team.md, with audit-aspect alignment.
 
    Mode: {mode} | KO strategy: {ko_strategy_path} | EN strategy: {en_strategy_path}
    Analysis: {strategy_folder}/analysis/ | Discovered inputs: {discovered_inputs} | Log: {review_log_path}
@@ -670,8 +670,8 @@ When triggered, invoke the **편집팀** (editorial-team) agent in 모드 A (옮
 모드 A — {원본 언어}에서 {대상 언어}로 옮기기.
 원본 draft 경로: {strategy_folder}/draft/draft.md
 대상 출력 경로: {strategy_folder}/draft/draft_{ko|en}.md
-<agent-home>/agents/editorial-team.md 의 모드 A 절차를 따른다.
-<agent-home>/agents/editorial-team.md 의 판교체 회피 절(표기 결정·거부 패턴)을 강제 적용 (한국어 산출 시). 사용자 표기 선호는 `mem profile 02_paper_writing_style` 보조 참조.
+<agent-home>/adapters/claude/agents/editorial-team.md 의 모드 A 절차를 따른다.
+<agent-home>/adapters/claude/agents/editorial-team.md 의 판교체 회피 절(표기 결정·거부 패턴)을 강제 적용 (한국어 산출 시). 사용자 표기 선호는 `mem profile 02_paper_writing_style` 보조 참조.
 모드별 영어 유지 어휘 ({mode} 에 맞게):
 - paper/rebuttal/review: LaTeX 명령·논문 제목·저자·학회·약자·모델·데이터셋·지표는 영어 그대로
 - report/proposal: 회사·기관·프로젝트·기술 용어는 영어 그대로
@@ -744,7 +744,7 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
    **Quality reviewer prompt** (light/standard에서 단일 instance가 모든 axes 다룰 때):
    ```
    Review this document draft as the user's domain expert proxy.
-   **Task type: paper-driven doc** (mode: {mode}) — apply Role 1 Step 3 axes from agents/research-team.md, audit-aspect aligned.
+   **Task type: paper-driven doc** (mode: {mode}) — apply Role 1 Step 3 axes from adapters/claude/agents/research-team.md, audit-aspect aligned.
 
    Mode: {mode} | KO draft: {ko_draft_path} | EN draft: {en_draft_path}
    Strategy: {en_strategy_path} | Analysis: {strategy_folder}/analysis/ | Discovered inputs: {discovered_inputs}
@@ -811,7 +811,7 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
 
 draft 본문이 사용자가 직접 검토 / paste 작업하는 산출물 — final 단계 직전에 _마지막 1회_ 편집팀 다듬기. 
 
-호출 조건 (single source — `agents/editorial-team.md` 모드 B 호출 조건):
+호출 조건 (single source — `adapters/claude/agents/editorial-team.md` 모드 B 호출 조건):
 - `qa_level` 가 **standard / thorough / adversarial** 일 때만 호출. `quick` / `light` 는 skip.
 - skip 시 곧장 Step 6 (pipeline_summary) 진행.
 

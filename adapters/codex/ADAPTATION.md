@@ -24,6 +24,7 @@ Codex must not consume these Claude-native files as native configuration:
 | `adapters/claude/statusline.sh` | Not consumable; input schema is Claude statusline JSON |
 | `adapters/claude/track-toggle.sh` | Semantics reusable, implementation depends on Claude session id fallback |
 | `adapters/claude/CLAUDE.md` | Reference only; not bootstrap |
+| `adapters/claude/agents/*.md` | Reference only; Codex should start from `roles/README.md` |
 
 ## Required Codex Mappings
 
@@ -35,7 +36,7 @@ Codex must not consume these Claude-native files as native configuration:
 | workflow signal | Provide explicit session reminder or wrapper output; no statusline assumption |
 | memory inject/recall | Use `tools/memory/mem.py` directly; session log ingestion needs a Codex session adapter |
 | memory distill | Disabled until a Codex session source and no-tools distiller contract are implemented |
-| role profiles | Translate portable roles to Codex model/reasoning-effort settings |
+| role profiles | Read `roles/README.md`, then translate roles to Codex model/reasoning-effort settings |
 | capabilities | Read portable capability semantics; do not assume Claude Skill invocation |
 
 ## Model Mapping
@@ -59,4 +60,3 @@ unavailable role explicitly.
 `AGENTS.md`, `README.md`, `core/`, `tools/`, and `utilities/`, but must not expose
 Claude-native `settings.json`, `commands/`, or `statusline.sh` as if Codex could
 consume them.
-

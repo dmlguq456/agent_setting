@@ -13,7 +13,8 @@ Skills + Agents 정의 변경을 감지해 `<agent-home>/README.md` (GitHub) 의
 
 ## Source of Truth
 - **Skills**: `<agent-home>/skills/*/SKILL.md` (frontmatter)
-- **Agents**: `<agent-home>/agents/*.md` (frontmatter)
+- **Roles**: `<agent-home>/roles/README.md`
+- **Claude Agents**: `<agent-home>/adapters/claude/agents/*.md` (frontmatter)
 - **CONVENTIONS.md**: `<agent-home>/core/CONVENTIONS.md` (QA / model / cross-doc invariants — Step 5b canonical)
 
 ## 출력
@@ -48,7 +49,7 @@ Claude Code adapter 의 `settings.json` 에 다음 추가하면 세션 종료 �
       "matcher": "",
       "hooks": [{
         "type": "command",
-        "command": "find <agent-home>/skills <agent-home>/agents -name '*.md' -newer <agent-home>/skills/.sync_state.json 2>/dev/null | head -1 | grep -q . && echo '[sync-skills] drift detected — run /sync-skills' || true"
+        "command": "find <agent-home>/skills <agent-home>/adapters/claude/agents -name '*.md' -newer <agent-home>/skills/.sync_state.json 2>/dev/null | head -1 | grep -q . && echo '[sync-skills] drift detected — run /sync-skills' || true"
       }]
     }]
   }

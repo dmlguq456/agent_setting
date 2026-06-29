@@ -28,7 +28,7 @@ metadata:
 **손대지 않는다** (_에이전트가 읽는 instruction 파일_ — terse / dense / fragment 가 에이전트 친화적, 다듬기 시 오히려 가독성 떨어짐):
 - runtime adapter bootstrap (Claude adapter: `<agent-home>/adapters/claude/CLAUDE.md`) · 프로젝트별 instruction 파일
 - `<agent-home>/skills/*/SKILL.md`
-- `<agent-home>/agents/*.md` 및 `<agent-home>/agent-modes/**/*.md`
+- `~/.claude/agents/*.md` 및 `<agent-home>/agent-modes/**/*.md`
 - `<agent-home>/core/CONVENTIONS.md` · `<agent-home>/core/DESIGN_PRINCIPLES.md`
 - `<agent-home>/projects/*/memory/*.md` (자동 메모리)
 - 모든 skill 의 `pipeline_summary.md` · `_internal/` 자료

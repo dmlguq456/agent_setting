@@ -34,18 +34,24 @@ check_codex_forbidden_entries() {
   done
 }
 
+check_removed_root_surfaces() {
+  if [ -e agents ] || [ -L agents ]; then
+    fail_msg "root agents/ exists; Claude-native agents must live under adapters/claude/agents and portable meaning under roles/"
+  fi
+}
+
 check_legacy_root_links() {
   command -v rg >/dev/null 2>&1 || return 0
 
   legacy_skill_links=$(rg -n '\]\(\.\./\.\./(CLAUDE|MEMORY|CORE|WORKFLOW|CONVENTIONS|OPERATIONS|DESIGN_PRINCIPLES|VISION)\.md\)' \
-    skills agents adapters README.md MANUAL.md INSTALL_LAYOUT.md 2>/dev/null || true)
+    skills adapters README.md MANUAL.md INSTALL_LAYOUT.md 2>/dev/null || true)
   if [ -n "$legacy_skill_links" ]; then
     fail_msg "legacy ../../ tier1 markdown links remain:"
     printf '%s\n' "$legacy_skill_links"
   fi
 
   legacy_root_links=$(rg -n '\]\((CLAUDE|MEMORY|CORE|WORKFLOW|CONVENTIONS|OPERATIONS|DESIGN_PRINCIPLES|VISION)\.md\)' \
-    README.md MANUAL.md INSTALL_LAYOUT.md adapters skills agents 2>/dev/null || true)
+    README.md MANUAL.md INSTALL_LAYOUT.md adapters skills 2>/dev/null || true)
   if [ -n "$legacy_root_links" ]; then
     fail_msg "legacy root tier1 markdown links remain outside core/:"
     printf '%s\n' "$legacy_root_links"
@@ -68,6 +74,7 @@ warn_concrete_runtime_terms() {
 check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_codex_forbidden_entries
+check_removed_root_surfaces
 check_legacy_root_links
 warn_concrete_runtime_terms
 

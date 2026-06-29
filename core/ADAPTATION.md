@@ -13,7 +13,7 @@ Every file in this repo must fall into one category.
 | Portable source | Runtime-neutral semantics. Describes what must happen, not how a vendor runtime invokes it. | `core/`, portable parts of `tools/`, portable guard algorithms | May be symlinked into adapters if the runtime can read plain files |
 | Adapter source | Runtime-specific representation of portable semantics. | `adapters/claude/CLAUDE.md`, `adapters/claude/settings.json`, `adapters/claude/commands/` | Projected into that runtime home |
 | Adapter projection | Versioned mirror that exposes adapter source under runtime-expected names. | `claude_setting/`, `codex_setting/` | Symlink or generated output only; no independent semantics |
-| Compatibility passthrough | Legacy file still consumed directly by a runtime before a true portable/adapted split exists. | Current `skills/`, `agents/`, many `hooks/` | Allowed only with an explicit debt note in the adapter |
+| Compatibility passthrough | Legacy file still consumed directly by a runtime before a true portable/adapted split exists. | Current `skills/`, many `hooks/` | Allowed only with an explicit debt note in the adapter |
 | Runtime state | Tool-owned mutable local state. | `~/.claude/projects`, credentials, session logs, caches, DB files | Never committed to this repo |
 
 ## 2. Adapter Rule
@@ -102,4 +102,3 @@ Those paths may symlink into versioned projection directories such as
 `claude_setting/` or `codex_setting/`. The projection directory must make it
 clear whether each entry is native adapter output, portable passthrough, or
 compatibility debt.
-

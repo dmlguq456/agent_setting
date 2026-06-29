@@ -319,7 +319,7 @@ The agent writes the strategy file directly; the orchestrator only receives path
 ## QA Scaling
 Auto-detect from strategy scope. Two reviewer roles run **in parallel** at Standard+:
 - **Quality reviewer** (품질관리팀): completeness / logical soundness / venue norms / reviewer-coverage (rebuttal)
-- **Fact-checker** (연구팀 subrole): in-artifact materials verbatim 대조 (`analysis_project/paper/cards/*.md`, `analysis_project/doc/*/...`, `research/{topic}/cards/*.md`), citation/venue/metric/year 검증. classification 8-row table 의 canonical 정의는 [`research-team.md`](../../agents/research-team.md) L258-300 single source.
+- **Fact-checker** (연구팀 subrole): in-artifact materials verbatim 대조 (`analysis_project/paper/cards/*.md`, `analysis_project/doc/*/...`, `research/{topic}/cards/*.md`), citation/venue/metric/year 검증. classification 8-row table 의 canonical 정의는 [`research-team.md`](../../adapters/claude/agents/research-team.md) L258-300 single source.
 
 | Level | Condition | Quality reviewer | Fact-checker (parallel) | Max rounds |
 |---|---|---|---|---|
@@ -390,8 +390,8 @@ After the 연구팀 agent returns:
 모드 A — {원본 언어}에서 {대상 언어}로 옮기기.
 원본 strategy 경로: {strategy_path}
 대상 출력 경로: {same directory}/strategy_{ko|en}.md
-<agent-home>/agents/editorial-team.md 의 모드 A 절차를 따른다.
-<agent-home>/agents/editorial-team.md 의 판교체 회피 절을 강제 적용 (한국어 산출 시). 사용자 표기 선호는 `mem profile 02_paper_writing_style` 보조 참조.
+<agent-home>/adapters/claude/agents/editorial-team.md 의 모드 A 절차를 따른다.
+<agent-home>/adapters/claude/agents/editorial-team.md 의 판교체 회피 절을 강제 적용 (한국어 산출 시). 사용자 표기 선호는 `mem profile 02_paper_writing_style` 보조 참조.
 LaTeX 명령·논문 제목·학회 이름·약자·모델 이름·데이터셋·지표는 원본 언어 그대로, 그 외 일반 표현은 대상 언어로.
 완료 시 파일 경로 + 한국어 요약 3-5 줄 + 의도적으로 한 표기 결정 한두 개만 돌려준다.
 ```

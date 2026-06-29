@@ -114,7 +114,7 @@ After the 품질관리팀 agent returns:
 
 2.5. **Invoke 편집팀 with mode B** (polish, in-place — 사용자 영역 한국어 가독성):
 
-   호출 조건 (single source — `agents/editorial-team.md` 모드 B 호출 조건):
+   호출 조건 (single source — `adapters/claude/agents/editorial-team.md` 모드 B 호출 조건):
    - plan frontmatter `qa_level` 가 **standard / thorough / adversarial** 중 하나일 때만 호출. `quick` / `light` 는 _fastest path_ 의도라 skip.
    - skip 시 곧장 step 3 (relay) 진행.
 

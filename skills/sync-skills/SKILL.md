@@ -16,7 +16,7 @@ metadata:
 스킬·에이전트를 수정한 후 매번 GitHub README 에 일관된 정보가 반영되어 있는지 확인하는 도구.
 
 **Source of Truth**:
-- `<agent-home>/skills/*/SKILL.md` + `<agent-home>/agents/*.md` — 각 skill·agent 의 frontmatter + 본문
+- `<agent-home>/skills/*/SKILL.md` + `<agent-home>/roles/README.md` + `<agent-home>/adapters/claude/agents/*.md` — 각 skill·role·Claude agent 의 frontmatter/본문
 - **`<agent-home>/core/CONVENTIONS.md`** — family-wide 운영 규칙의 단일 source (QA 5단계 정의 / model role 표기 / cross-doc invariants). 본 skill 의 Step 5b 가 본 문서를 canonical 로 cross-doc grep 해 drift 보고·자동 fix.
 
 **파생 산출물**: GitHub `<agent-home>/README.md`
@@ -28,9 +28,10 @@ metadata:
 
 ### 입력
 - **Skills**: `<agent-home>/skills/*/SKILL.md`
-- **Agents**: `<agent-home>/agents/*.md`
+- **Roles**: `<agent-home>/roles/README.md`
+- **Claude Agents**: `<agent-home>/adapters/claude/agents/*.md`
 
-자동 발견: `ls <agent-home>/skills/*/SKILL.md <agent-home>/agents/*.md`. 실제 sync 시점에 발견된 파일 list 가 진실. 본 SKILL.md 본문에는 카운트·명단 hardcode 안 함 — drift 의 자기참조 source 가 됨.
+자동 발견: `ls <agent-home>/skills/*/SKILL.md <agent-home>/adapters/claude/agents/*.md`. 실제 sync 시점에 발견된 파일 list 가 진실. Portable role 의미는 `roles/README.md`, Claude native frontmatter 는 `adapters/claude/agents/*.md` 가 source. 본 SKILL.md 본문에는 카운트·명단 hardcode 안 함 — drift 의 자기참조 source 가 됨.
 
 각 파일에서 추출:
 - frontmatter `name`, `description`, `argument-hint` (skills only), `tools`, `model`
@@ -52,7 +53,7 @@ metadata:
 ### Step 1: Discover + hash
 ```bash
 AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
-ls "$AGENT_HOME"/skills/*/SKILL.md "$AGENT_HOME"/agents/*.md
+ls "$AGENT_HOME"/skills/*/SKILL.md "$AGENT_HOME"/adapters/claude/agents/*.md
 ```
 각 파일:
 - SHA-256 (`shasum -a 256 <file> | awk '{print $1}'`)
@@ -71,7 +72,7 @@ ls "$AGENT_HOME"/skills/*/SKILL.md "$AGENT_HOME"/agents/*.md
       "sha256": "...",
       "synced_at": "ISO8601"
     },
-    "agents/research-team": {
+    "adapters/claude/agents/research-team": {
       "sha256": "...",
       "synced_at": "ISO8601"
     }
@@ -189,7 +190,7 @@ Step 5 에서 README 본문 wording 을 자동 생성·갱신한 자리 (§1 Hea
 
 > 각 SKILL.md `## Default Invocation Rule` 은 _그 SKILL.md 안에서만_ 의미를 가지고 README 에 모으지 않음 (README §6 운영 룰은 _runtime adapter bootstrap 을 가리킴 한 단락_). autopilot-* SKILL.md 의 trigger 신호·default 옵션·override 는 adapter 의 일반 패턴 + 각 SKILL.md 의 skill-specific 정보로 분리.
 
-QA level / model role 표기 / family-wide invariant 은 **`<agent-home>/core/CONVENTIONS.md`** 가 단일 source of truth. 각 SKILL.md / README / `agents/*.md` 의 QA 표 wording 은 본 문서와 의미상 일치해야 함. Concrete model name 은 adapter 문서에서만 canonical 이며, 공통 문서에서는 role 의미와 분리한다.
+QA level / model role 표기 / family-wide invariant 은 **`<agent-home>/core/CONVENTIONS.md`** 가 단일 source of truth. 각 SKILL.md / README / `roles/README.md` / `adapters/claude/agents/*.md` 의 QA 표 wording 은 본 문서와 의미상 일치해야 함. Concrete model name 은 adapter 문서에서만 canonical 이며, 공통 문서에서는 role 의미와 분리한다.
 
 #### 5b-1. Canonical 정의 로드
 
@@ -207,7 +208,8 @@ QA level / model role 표기 / family-wide invariant 은 **`<agent-home>/core/CO
 대상 파일:
 - `<agent-home>/skills/*/SKILL.md`
 - `<agent-home>/skills/*/README.md`
-- `<agent-home>/agents/*.md`
+- `<agent-home>/roles/README.md`
+- `<agent-home>/adapters/claude/agents/*.md`
 - `<agent-home>/README.md`
 
 각 파일에서 다음 패턴 grep:
@@ -255,7 +257,7 @@ drift 발견 시 Step 7 final report 에 별도 섹션:
 # 현재 진실 (entry point list)
 AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
 SKILLS=$(ls -d "$AGENT_HOME"/skills/*/  | xargs -n1 basename | sort)
-AGENTS=$(ls "$AGENT_HOME"/agents/*.md   | xargs -n1 basename .md | sort)
+AGENTS=$(ls "$AGENT_HOME"/adapters/claude/agents/*.md   | xargs -n1 basename .md | sort)
 ```
 
 #### 5c-2. Cross-doc reference grep
@@ -322,7 +324,7 @@ README 는 mermaid 를 안 쓰고 _4 트랙 텍스트 화살표 체인_ (```text
 
 ### Step 6b: Emit manifest.json
 
-정의(skills/agents/loops/settings)를 긁어 단일 계약 `<agent-home>/manifest.json` (repo 루트, README 와 동일 계층) 을 재방출한다. **manifest 는 정의에서 deterministic 파생** — 손으로 편집하지 않고 빌드 스크립트가 유일한 전사 경로다 (정의=SoT, manifest=방출물).
+정의(skills/roles/Claude agents/loops/settings)를 긁어 단일 계약 `<agent-home>/manifest.json` (repo 루트, README 와 동일 계층) 을 재방출한다. **manifest 는 정의에서 deterministic 파생** — 손으로 편집하지 않고 빌드 스크립트가 유일한 전사 경로다 (정의=SoT, manifest=방출물).
 
 ```bash
 python3 tools/build-manifest.py          # manifest.json 재생성 (멱등 — 정의 안 바뀌면 byte-identical)
@@ -343,7 +345,7 @@ README.md 갱신: <agent-home>/README.md
 manifest.json 재방출: <agent-home>/manifest.json (Step 6b)
 
 다음에 PR/푸시:
-  cd <agent-home> && git add README.md manifest.json tools/build-manifest.py skills/ agents/
+  cd <agent-home> && git add README.md manifest.json tools/build-manifest.py skills/ roles/ adapters/claude/agents/
   git commit -m "skills+agents: <변경 요약>"
   git push
 ```

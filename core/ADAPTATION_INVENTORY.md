@@ -24,7 +24,8 @@ into a portable agent setting plus runtime adapters.
 | Claude settings/hooks registration | `adapters/claude/settings.json` | adapter-native | Codex must get wrapper/preflight equivalents, not this JSON. |
 | Slash commands | `adapters/claude/commands/` | adapter-native | Future runtimes need native command wrappers or instruction entries. |
 | Skills | `skills/*/SKILL.md` | compat-passthrough, needs-split | Extract `capabilities/<name>.md` portable specs, then generate/maintain `adapters/claude/skills/<name>/SKILL.md`. |
-| Agents | `agents/*.md` | compat-passthrough, needs-split | Extract portable role profiles, then map model frontmatter per adapter. |
+| Portable role catalog | `roles/README.md` | portable | Grow into per-role specs when adapter parity work needs finer granularity. |
+| Claude agents | `adapters/claude/agents/*.md` | adapter-native | Preserve Claude Agent frontmatter/model/tool schema while realizing `roles/README.md`. |
 | Hooks | `hooks/*.sh` | mixed | Split invariant checks from runtime hook payload wrappers. |
 | Memory distiller | `hooks/mem-distill-dispatch.sh`, `tools/memory/` | mixed | Keep DB/CLI portable; move session log reader and model invocation to adapters. |
 | Design MCP | `tools/design-mcp/`, design skills | mixed | Keep render/check semantics portable; move Claude MCP registration paths to adapter docs. |
@@ -38,8 +39,8 @@ into a portable agent setting plus runtime adapters.
 2. **Capability specs second**: for each `skills/*/SKILL.md`, create or extract
    a portable capability contract before moving Claude Skill syntax under the
    Claude adapter.
-3. **Agent profiles third**: split each `agents/*.md` into a portable profile
-   plus adapter-native frontmatter/model mapping.
+3. **Agent profiles third**: keep portable role meaning in `roles/`; keep
+   concrete frontmatter/model/tool mapping in adapter-native agent files.
 4. **Hook payloads fourth**: keep invariant scripts portable, but isolate
    Claude event JSON, statusline JSON, ScheduleWakeup, and MCP registration.
 5. **Projection last**: after a surface has an adapter-native realization,

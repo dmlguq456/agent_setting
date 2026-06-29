@@ -9,7 +9,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 3. For QA levels, model roles, artifact layout, and cross-doc invariants, read `core/CONVENTIONS.md`.
 4. For git/worktree/dispatch rules, read `core/OPERATIONS.md`.
 5. For memory behavior, read `core/MEMORY.md`.
-6. For task-specific behavior, read the relevant `skills/*/SKILL.md` and `agents/*.md`.
+6. For task-specific behavior, read the relevant `skills/*/SKILL.md` and `roles/README.md`. Use Claude agent files only as compatibility references.
 
 ## Runtime Mapping
 

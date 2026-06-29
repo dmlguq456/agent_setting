@@ -10,7 +10,7 @@ This adapter maps the common agent harness onto Claude Code.
 | Runtime settings | `adapters/claude/settings.json` |
 | Slash commands | `adapters/claude/commands/` |
 | Capabilities | `skills/*/SKILL.md` |
-| Role profiles | `agents/*.md` |
+| Role profiles | `adapters/claude/agents/*.md` |
 | Hook scripts | `hooks/`, `utilities/` |
 | Status line | `adapters/claude/statusline.sh` |
 

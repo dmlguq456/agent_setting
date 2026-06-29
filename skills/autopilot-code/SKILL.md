@@ -310,8 +310,8 @@ Wait for completion before proceeding.
 
 Otherwise:
 1. Resolve plan paths from code-plan output: `en_plan_path`, `ko_plan_path`, `log_dir`.
-2. **Detect task type** before invoking 연구팀 (this hint provides the type-specific lens — see `agents/research-team.md` Role 1 Step 3 table):
-   - Read the plan's "## Change Plan" target files. If any target is under `<agent-home>/skills/*` / `<agent-home>/agents/*` / `<agent-home>/README.md` / `<agent-home>/skills/.sync_state.json` → `task_type=meta-skill`.
+2. **Detect task type** before invoking 연구팀 (this hint provides the type-specific lens — see `adapters/claude/agents/research-team.md` Role 1 Step 3 table):
+   - Read the plan's "## Change Plan" target files. If any target is under `<agent-home>/skills/*` / `<agent-home>/adapters/claude/agents/*` / `<agent-home>/README.md` / `<agent-home>/skills/.sync_state.json` → `task_type=meta-skill`.
    - If targets are under `~/.claude/settings.json` / `keybindings.json` / hooks → `task_type=infra/config`.
    - If targets are project source code (`.py`, `.cpp`, etc.) → `task_type=paper-driven code`.
    - If targets are under `<artifact-root>/documents/*` → `task_type=paper-driven doc`.
@@ -326,7 +326,7 @@ Otherwise:
      ```
      Invoke 연구팀: "Review this plan as user proxy. **Task type: {task_type}** — apply ALL Role 1 Step 3 axes for this task type (no Focus axis). Korean plan: {ko_plan_path}. English plan: {en_plan_path}. Review log: {log_dir}/_internal/plan_reviews/research_review.md. Weight task-type-specific axes heavily (for meta-skill: family-level naming conflict + cross-skill scope overlap + sync-skills downstream + frontmatter validity)."
      ```
-   - **standard / thorough / adversarial** — **axis-decomposed parallel 연구팀**: dispatch N parallel instances (standard = 1× deep reviewer + 2× fast reviewers, thorough/adversarial = 2× deep reviewers + 2× fast reviewers). 각 invocation 에 `Focus axis: <axis_name>` 포함해 single lens 로 제한. axis list 와 task-type 별 axis 매핑은 `agents/research-team.md` Role 1 _Multi-axis parallel mode_ 표 single source. deep reviewer instance 는 _깊이 axis_ (correctness / methodology / domain), fast reviewer instance 는 _coverage axis_ (completeness / style / cross-ref / test gap). 각 instance 는 `[<axis_name>]` prefix 메모 + separate review log (`{log_dir}/_internal/plan_reviews/research_review_<axis_name>.md`) 작성. 모든 parallel 완료 후 메모 merge + dedup → code-refine. adversarial 은 추가로 `Agent(codex-review-team)` external adversary review parallel.
+   - **standard / thorough / adversarial** — **axis-decomposed parallel 연구팀**: dispatch N parallel instances (standard = 1× deep reviewer + 2× fast reviewers, thorough/adversarial = 2× deep reviewers + 2× fast reviewers). 각 invocation 에 `Focus axis: <axis_name>` 포함해 single lens 로 제한. axis list 와 task-type 별 axis 매핑은 `adapters/claude/agents/research-team.md` Role 1 _Multi-axis parallel mode_ 표 single source. deep reviewer instance 는 _깊이 axis_ (correctness / methodology / domain), fast reviewer instance 는 _coverage axis_ (completeness / style / cross-ref / test gap). 각 instance 는 `[<axis_name>]` prefix 메모 + separate review log (`{log_dir}/_internal/plan_reviews/research_review_<axis_name>.md`) 작성. 모든 parallel 완료 후 메모 merge + dedup → code-refine. adversarial 은 추가로 `Agent(codex-review-team)` external adversary review parallel.
    - **Why decomposition at standard+**: 단일 instance 가 많은 axis 를 다루면 주의가 분산. parallel decomposition 으로 각 instance 가 좁게 집중해 사용자가 직접 잡아낼 만한 자리 (naming conflict / test coverage gap / style drift) 전부 커버.
 3. If memos added:
    - **`--user-refine` pause**: if the flag is set (CLI or plan frontmatter), update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command, and exit. Do NOT invoke code-refine.

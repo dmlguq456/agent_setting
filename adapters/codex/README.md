@@ -17,7 +17,7 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 | Git and dispatch operations | `core/OPERATIONS.md` |
 | Memory contract | `core/MEMORY.md` |
 | Capabilities | `skills/*/SKILL.md` |
-| Role profiles | `agents/*.md` |
+| Role profiles | `roles/README.md` |
 | Hook and guard scripts | `hooks/`, `utilities/` |
 
 ## Runtime Mapping
@@ -25,7 +25,7 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 | Core Concept | Codex Implementation |
 |---|---|
 | capability | Read and follow the relevant `skills/*/SKILL.md`; no native slash registry is assumed |
-| role profile | Use `agents/*.md` and `agent-modes/` as delegation prompts or review personas |
+| role profile | Use `roles/README.md` for meaning; use `agent-modes/` or Claude agent files only as compatibility references until Codex-native role prompts exist |
 | adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
 | agent home | Set `AGENT_HOME` to the installed harness directory |
 | artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
