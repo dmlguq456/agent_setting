@@ -721,6 +721,10 @@ check_opencode_native_plugin_projection() {
   if ! grep -Fq 'runPreflight("design"' "$plugin"; then
     fail_msg "$plugin must bridge design HTML writes to the OpenCode design preflight"
   fi
+  if ! grep -Fq 'tool.execute.after' adapters/opencode/README.md \
+    || ! grep -Fq 'preflight.sh design' adapters/opencode/README.md; then
+    fail_msg "adapters/opencode/README.md must document the OpenCode design post-write plugin bridge"
+  fi
   if grep -Eq 'adapters/claude|claude_setting|settings\.json|statusline\.sh' "$plugin"; then
     fail_msg "$plugin must not reference Claude-native surfaces"
   fi

@@ -156,8 +156,10 @@ expose `adapters/claude/commands/` as OpenCode-native commands.
 ## Native Guard Plugin Projection
 
 `adapters/opencode/plugins/agent-harness-guards.js` contains an OpenCode-native
-JS plugin that runs the adapter preflight guard before write/edit/patch tool
-execution:
+JS plugin that runs adapter preflight guards around write/edit/patch tool
+execution. `tool.execute.before` delegates write safety checks to
+`preflight.sh write`; `tool.execute.after` delegates design HTML saves to
+`preflight.sh design`:
 
 ```bash
 node --check adapters/opencode/plugins/agent-harness-guards.js
@@ -171,9 +173,9 @@ mkdir -p .opencode/plugins
 ln -sfn "$AGENT_HOME/opencode_setting/opencode-plugins/agent-harness-guards.js" .opencode/plugins/agent-harness-guards.js
 ```
 
-The plugin bridges to `adapters/opencode/bin/preflight.sh write`; it does not
-copy or invoke Claude hook files. Keep explicit `preflight.sh` calls as the
-fallback path for runtimes or invocations where plugins are disabled.
+The plugin bridges to `adapters/opencode/bin/preflight.sh`; it does not copy or
+invoke Claude hook files. Keep explicit `preflight.sh` calls as the fallback
+path for runtimes or invocations where plugins are disabled.
 
 ## Runtime Home Projection
 
