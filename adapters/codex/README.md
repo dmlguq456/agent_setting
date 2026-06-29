@@ -65,7 +65,7 @@ project Claude Skill, command, hook, or statusline files into Codex.
 | oncall briefing injection | `hooks/mem-briefing-inject.sh` is runtime-neutral for cwd/text output; run `adapters/codex/bin/preflight.sh briefing [cwd]` when no automatic prompt hook is attached |
 | capability mapping | `adapters/codex/bin/preflight.sh capability-info <capability>` reports Codex's instruction-only or tool-contract realization and the Claude compatibility reference, if one exists |
 | model role mapping | `adapters/codex/bin/preflight.sh role <portable-role>` resolves portable model roles through Codex adapter environment variables |
-| mode mapping | `adapters/codex/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for Codex |
+| mode mapping | `adapters/codex/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for Codex; tool-contract modes include a named `tool_contract` field |
 | memory distill delta | Codex session transcript extraction is available through `adapters/codex/bin/preflight.sh distill-delta <session-id>` |
 | memory distill proposal | `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]` runs a constrained Codex exec proposal worker; it mutates memory only with explicit `CODEX_DISTILL_APPLY=1` |
 | memory store | `tools/memory/mem.py` is runtime-neutral; detached distillation worker execution remains adapter-specific |

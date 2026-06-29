@@ -158,7 +158,7 @@ Harness-specific status signals need OpenCode-native realization:
 | memory distill | Transcript delta extraction uses `opencode export` through the shared memory CLI; automatic memory mutation remains disabled until an OpenCode no-tools worker contract is verified |
 | worklog state signal | Run `adapters/opencode/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before OpenCode updates notes or diagnoses board state |
 | role profiles | Read `roles/README.md`, then run `adapters/opencode/bin/preflight.sh role <portable-role>` to resolve OpenCode model/variant settings |
-| role modes | Read `roles/MODES.md`, then run `adapters/opencode/bin/preflight.sh mode-info <family/mode>`; treat adapter-coupled modes as unsupported unless wrappers exist |
+| role modes | Read `roles/MODES.md`, then run `adapters/opencode/bin/preflight.sh mode-info <family/mode>`; treat adapter-coupled modes as unsupported unless wrappers exist, and satisfy any named `tool_contract` before claiming tool-contract modes |
 | hook invariants | Read `core/HOOKS.md`; OpenCode plugin hooks cover write/edit/patch guards and design HTML post-write checks, while explicit preflight wrappers remain fallback for disabled/untrusted plugins and events not yet covered |
 | capabilities | Read `capabilities/README.md`, then run `adapters/opencode/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 

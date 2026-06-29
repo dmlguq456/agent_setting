@@ -381,6 +381,21 @@ if "$CODEX" mode-info design/maker >/tmp/mode.out 2>/tmp/mode.err \
 else
   bad "codex mode wrapper should mark adapter-coupled design mode unsupported"
 fi
+if "$CODEX" mode-info material/browser-fetch >/tmp/mode.out 2>/tmp/mode.err \
+  && grep -q '^status=tool-contract$' /tmp/mode.out \
+  && grep -q '^realization=portable-with-tool-contract$' /tmp/mode.out \
+  && grep -q '^tool_contract=browser-fetch$' /tmp/mode.out; then
+  ok "codex mode wrapper reports named material tool contract"
+else
+  bad "codex mode wrapper should report named material tool contract"
+fi
+if "$CODEX" mode-info research/claim-verify >/tmp/mode.out 2>/tmp/mode.err \
+  && grep -q '^status=tool-contract$' /tmp/mode.out \
+  && grep -q '^tool_contract=external-claim-verification$' /tmp/mode.out; then
+  ok "codex mode wrapper reports named claim verification contract"
+else
+  bad "codex mode wrapper should report named claim verification contract"
+fi
 mkdir -p "$TMP/codex_sessions/2026/06/29"
 cat > "$TMP/codex_sessions/2026/06/29/rollout-2026-06-29T00-00-00-codexsid.jsonl" <<'EOF'
 {"timestamp":"2026-06-29T00:00:00.000Z","type":"event_msg","payload":{"type":"user_message","message":"hello"}}
@@ -736,6 +751,21 @@ if "$OPENCODE" mode-info design/maker >/tmp/opencode_mode.out 2>/tmp/opencode_mo
   ok "opencode mode wrapper marks adapter-coupled design mode unsupported"
 else
   bad "opencode mode wrapper should mark adapter-coupled design mode unsupported"
+fi
+if "$OPENCODE" mode-info material/browser-fetch >/tmp/opencode_mode.out 2>/tmp/opencode_mode.err \
+  && grep -q '^status=tool-contract$' /tmp/opencode_mode.out \
+  && grep -q '^realization=portable-with-tool-contract$' /tmp/opencode_mode.out \
+  && grep -q '^tool_contract=browser-fetch$' /tmp/opencode_mode.out; then
+  ok "opencode mode wrapper reports named material tool contract"
+else
+  bad "opencode mode wrapper should report named material tool contract"
+fi
+if "$OPENCODE" mode-info research/claim-verify >/tmp/opencode_mode.out 2>/tmp/opencode_mode.err \
+  && grep -q '^status=tool-contract$' /tmp/opencode_mode.out \
+  && grep -q '^tool_contract=external-claim-verification$' /tmp/opencode_mode.out; then
+  ok "opencode mode wrapper reports named claim verification contract"
+else
+  bad "opencode mode wrapper should report named claim verification contract"
 fi
 
 echo "== opencode distill source =="
