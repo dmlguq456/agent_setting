@@ -61,6 +61,10 @@ metadata under `adapters/codex/.agents/plugins/marketplace.json`. This makes
 the harness discoverable through Codex's native plugin installer without
 exposing Claude Skill files.
 
+Codex custom prompts are deprecated. Command-like harness entries are therefore
+realized through native Skills and the installable plugin, not through
+`prompts/` files or Claude slash-command projections.
+
 Before adding or changing Codex-native skills or plugins:
 
 1. Use `capabilities/<name>.md` and `roles/` as source, not

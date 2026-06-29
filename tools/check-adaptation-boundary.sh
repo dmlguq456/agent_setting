@@ -40,9 +40,9 @@ check_codex_forbidden_entries() {
 }
 
 check_codex_native_surface_debt() {
-  for p in adapters/codex/.codex-plugin codex_setting/plugins codex_setting/.codex-plugin; do
+  for p in adapters/codex/.codex-plugin codex_setting/plugins codex_setting/.codex-plugin adapters/codex/prompts codex_setting/prompts; do
     if [ -e "$p" ] || [ -L "$p" ]; then
-      fail_msg "$p exists; Codex native plugin surface is not materialized yet and must be added with discoverability guards"
+      fail_msg "$p exists; Codex must not expose deprecated prompt/plugin passthrough surfaces outside adapter-owned projections"
     fi
   done
 }
@@ -351,6 +351,10 @@ check_codex_native_plugin_projection() {
   fi
   if [ ! -f adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md ]; then
     fail_msg "Codex native plugin must include generated capability skills"
+  fi
+
+  if ! grep -Fq "Custom prompts are deprecated" adapters/codex/README.md; then
+    fail_msg "adapters/codex/README.md must document why command-like entries use skills/plugins instead of custom prompts"
   fi
 }
 

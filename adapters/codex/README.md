@@ -43,7 +43,7 @@ project Claude Skill, command, hook, or statusline files into Codex.
 | Core Concept | Codex Implementation |
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/codex/bin/preflight.sh capability-info <capability>` to confirm Codex realization; use `adapters/codex/skills/<capability>/SKILL.md` as Codex-native guidance |
-| native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Future command-like output must be generated from portable capability/role sources and verified with Codex discoverability (`codex debug prompt-input`) |
+| native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Command-like capability entrypoints use these native Skills/plugin surfaces and are verified with Codex discoverability (`codex debug prompt-input`) |
 | role profile | Use `roles/README.md` for meaning; use `roles/modes/` or Claude agent files only as compatibility references until Codex-native role prompts exist |
 | role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes are reference-only |
 | adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
@@ -129,6 +129,13 @@ codex plugin add agent-harness-codex@agent-harness
 The plugin copies generated Codex Skill files into plugin-local `skills/` so
 Codex discovers them as `agent-harness-codex:<capability>`. Do not build the
 plugin from Claude Skill files.
+
+## Command-Like Entries
+
+Custom prompts are deprecated in Codex. Do not generate a `prompts/` projection
+or copy Claude slash-command files into Codex. Reusable command-like capability
+entrypoints are represented by Codex-native Skills and the installable
+`agent-harness-codex` plugin.
 
 ## Runtime Home Projection
 
