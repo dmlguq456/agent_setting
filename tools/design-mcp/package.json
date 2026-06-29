@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Design MCP server — Playwright-wrapped visual feedback loop for Claude Code design work (preview/screenshot/console/eval_js/view_image/image_metadata).",
+  "description": "Design MCP server — Playwright-wrapped visual feedback loop for agent design work (preview/screenshot/console/eval_js/view_image/image_metadata).",
   "bin": {
     "design-mcp": "server.js"
   },

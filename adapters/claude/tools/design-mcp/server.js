@@ -2,7 +2,7 @@
 /**
  * Design MCP Server
  * -----------------
- * Wraps Playwright (headless Chromium) so a Claude Code agent can RENDER a page,
+ * Wraps Playwright (headless Chromium) so an agent can RENDER a page,
  * SEE it (screenshot → view_image), read CONSOLE errors, and QUERY the DOM (eval_js).
  * This is the "visual feedback loop" that turns a coding agent into a design agent.
  *

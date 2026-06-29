@@ -1,6 +1,6 @@
 # web-bundle — production급 단일 HTML 번들 레시피
 
-> **무엇**: 멀티파일로 _제대로 빌드_(Vite + TS + Tailwind + shadcn/ui)한 webapp/ui 를 **self-contained 단일 `index.html`** 로 inline. Claude Design 의 공개 `web-artifacts-builder`(anthropics/skills) 온프레미스 재구현.
+> **무엇**: 멀티파일로 _제대로 빌드_(Vite + TS + Tailwind + shadcn/ui)한 webapp/ui 를 **self-contained 단일 `index.html`** 로 inline. 공개 `web-artifacts-builder` 계열 레시피의 온프레미스 재구현.
 > **왜 별도 경로**: 디자인팀에는 이미 단일파일 산출 2 경로가 있다 — (a) `design-components` Step 4b 의 **CDN standalone**(`https://cdn.tailwindcss.com` + esm.sh, 0-build, _dev-grade_), (b) `convert.mjs bundle`(기존 HTML 의 에셋 inline). 본 레시피는 _세 번째_ — **production-grade 빌드**(실제 Tailwind purge + 진짜 shadcn 컴포넌트 + Radix, CDN 의존 0). 진지한 앱 UI·배포 후보 산출에만.
 
 ## 언제 무엇
@@ -46,4 +46,4 @@ export default defineConfig({ plugins: [react(), viteSingleFile()], build: { css
 
 ## 검증 (필수 — `_design_rules.md` 시각 자가검증 루프)
 
-번들 후 **반드시** Design MCP 로 `preview(dist/index.html)` → `getConsoleLogs`(에러 0) → `screenshot` → `view_image`. 빌드가 통과해도 _렌더가 깨질 수 있다_ — 본 것으로만 완료.
+번들 후 **반드시** adapter visual harness 로 `preview(dist/index.html)` → `getConsoleLogs`(에러 0) → `screenshot` → `view_image` 또는 동등 검증을 실행한다. 빌드가 통과해도 _렌더가 깨질 수 있다_ — 본 것으로만 완료.
