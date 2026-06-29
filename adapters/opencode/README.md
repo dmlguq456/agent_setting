@@ -187,6 +187,12 @@ OpenCode bootstrap files:
   on it.
 - `adapters/claude/statusline.sh` targets Claude Code's statusline contract.
 
+For native OpenCode surface checks, disable the Claude compatibility autoload:
+
+```bash
+OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 opencode debug skill --pure
+```
+
 When porting a behavior, copy the underlying invariant from `CORE.md`,
 `WORKFLOW.md`, `CONVENTIONS.md`, or `OPERATIONS.md`; then map it to OpenCode's
 tool, permission, agent, and session model.

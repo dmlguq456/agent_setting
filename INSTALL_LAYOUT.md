@@ -119,6 +119,8 @@ sh utilities/agent-home.sh
 tools/check-adaptation-boundary.sh
 codex_setting/bin/preflight.sh capability-info autopilot-code
 opencode_setting/bin/preflight.sh capability-info autopilot-code
+OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 opencode debug skill --pure >/tmp/opencode-skills.json
+! rg '"location": ".*/\.claude/skills' /tmp/opencode-skills.json
 ```
 
 Do not run drill automatically during migration; it invokes headless runtime sessions and can spend tokens. Run a targeted drill only after the symlink projection is confirmed.

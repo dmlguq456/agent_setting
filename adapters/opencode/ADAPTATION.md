@@ -70,7 +70,9 @@ Before adding OpenCode-native skills, commands, or agents:
    as OpenCode-native.
 5. Verify discoverability using the OpenCode runtime contract (`opencode debug
    skill`, `opencode debug agent`, or TUI invocation), not byte parity with
-   Claude files.
+   Claude files. Use `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1` during this check
+   so OpenCode's `~/.claude/skills/` compatibility autoload cannot produce a
+   false pass.
 
 Until that exists, OpenCode capability support remains wrapper/instruction
 based. Design capabilities are a tool-contract exception: OpenCode must
