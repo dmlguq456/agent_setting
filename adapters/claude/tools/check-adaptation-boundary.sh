@@ -1008,6 +1008,23 @@ check_claude_utility_projection() {
   fi
 }
 
+check_claude_boundary_guard_projection() {
+  adapter_guard=adapters/claude/tools/check-adaptation-boundary.sh
+  root_guard=tools/check-adaptation-boundary.sh
+
+  if [ ! -x "$adapter_guard" ]; then
+    fail_msg "$adapter_guard must be an executable concrete boundary guard projection"
+    return
+  fi
+  if [ -L "$adapter_guard" ]; then
+    fail_msg "$adapter_guard must be concrete, not a symlink passthrough"
+    return
+  fi
+  if ! cmp -s "$root_guard" "$adapter_guard"; then
+    fail_msg "$adapter_guard must stay byte-equivalent to $root_guard"
+  fi
+}
+
 check_claude_scaffold_projection() {
   if [ ! -L claude_setting/scaffolds ]; then
     fail_msg "claude_setting/scaffolds must project adapters/claude/scaffolds"
@@ -1268,6 +1285,7 @@ check_claude_skill_projection
 check_claude_mode_projection
 check_claude_hook_projection
 check_claude_utility_projection
+check_claude_boundary_guard_projection
 check_claude_scaffold_projection
 check_claude_loop_projection
 check_claude_tool_projection
