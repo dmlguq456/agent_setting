@@ -1,8 +1,9 @@
 # Role Mode Inventory
 
 `roles/modes/` contains mode-level persona and procedure fragments used by role
-profiles. It is currently shared with the Claude adapter, but not every file is
-purely portable.
+profiles. Claude Code consumes concrete projection files under
+`adapters/claude/agent-modes/`, currently kept byte-identical to these fragments
+for behavior preservation. Not every fragment is purely portable.
 
 ## Status Classes
 
@@ -25,8 +26,10 @@ purely portable.
 
 ## Adapter Rule
 
-Adapters may read `roles/modes/` as compatibility references. They must not
-claim a mode is natively supported unless they provide:
+Adapters may read `roles/modes/` as portability references. Runtime consumption
+should go through adapter-owned realizations such as
+`adapters/claude/agent-modes/`. An adapter must not claim a mode is natively
+supported unless it provides:
 
 - equivalent tools or documented fallbacks;
 - runtime-neutral `<agent-home>` path resolution;

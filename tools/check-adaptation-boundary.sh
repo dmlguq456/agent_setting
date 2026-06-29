@@ -99,14 +99,21 @@ check_claude_mode_projection() {
   for d in roles/modes/*; do
     [ -d "$d" ] || continue
     family=${d#roles/modes/}
-    if [ ! -L "adapters/claude/agent-modes/$family" ]; then
-      fail_msg "adapters/claude/agent-modes/$family must be a symlink passthrough"
+    if [ ! -d "adapters/claude/agent-modes/$family" ]; then
+      fail_msg "adapters/claude/agent-modes/$family must be an adapter-owned mode directory"
       continue
     fi
-    mode_target=$(readlink "adapters/claude/agent-modes/$family")
-    if [ "$mode_target" != "../../../roles/modes/$family" ]; then
-      fail_msg "adapters/claude/agent-modes/$family points to $mode_target; expected ../../../roles/modes/$family"
+    if [ -L "adapters/claude/agent-modes/$family" ]; then
+      fail_msg "adapters/claude/agent-modes/$family must be a concrete adapter-owned mode projection"
+      continue
     fi
+    for f in "$d"/*.md; do
+      [ -f "$f" ] || continue
+      name=${f#"$d"/}
+      if [ ! -f "adapters/claude/agent-modes/$family/$name" ]; then
+        fail_msg "adapters/claude/agent-modes/$family/$name is missing"
+      fi
+    done
   done
 }
 

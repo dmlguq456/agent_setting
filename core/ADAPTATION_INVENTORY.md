@@ -29,7 +29,7 @@ into a portable agent setting plus runtime adapters.
 | Portable role catalog | `roles/README.md` | portable | Grow into per-role specs when adapter parity work needs finer granularity; Codex currently resolves concrete runtime settings through `adapters/codex/bin/role-map.sh`. |
 | Role mode inventory | `roles/MODES.md` | portable | Classifies shared `roles/modes/` prompt fragments by portability; Codex currently enforces the classification through `adapters/codex/bin/mode-map.sh`. |
 | Claude agents | `adapters/claude/agents/*.md` | adapter-native | Preserve Claude Agent frontmatter/model/tool schema while realizing `roles/README.md`. |
-| Agent modes | `adapters/claude/agent-modes/* -> ../../../roles/modes/*`, shared `roles/modes/*.md` | mixed | Keep portable persona fragments shared through adapter-owned passthroughs; split adapter-coupled design/verification/tool notes when Codex-native modes exist. |
+| Agent modes | `adapters/claude/agent-modes/*/*.md`, shared `roles/modes/*.md` | adapter-native projection, mixed content | Concrete Claude mode files preserve current behavior while `roles/MODES.md` classifies portability; split adapter-coupled design/verification/tool notes when Codex-native modes exist. |
 | Hook invariant catalog | `core/HOOKS.md` | portable | Names hook-level invariants and classifies current scripts. |
 | Hook scripts | `adapters/claude/hooks/* -> ../../../hooks/*`, shared `hooks/*.sh` | mixed | Preserve Claude hook behavior through adapter-owned passthroughs while splitting invariant checks from runtime hook payload wrappers. |
 | Memory distiller | `hooks/mem-distill-dispatch.sh`, `tools/memory/` | mixed | Keep DB/CLI portable; move session log reader and model invocation to adapters. |
