@@ -129,6 +129,21 @@ check_claude_adapter_concrete_surfaces() {
   fi
 }
 
+check_non_claude_adapter_symlink_boundaries() {
+  for adapter in codex opencode; do
+    links=$(find "adapters/$adapter" -type l -print 2>/dev/null || true)
+    [ -n "$links" ] || continue
+    for link in $links; do
+      target=$(readlink "$link")
+      case "$target" in
+        *adapters/claude*|*claude_setting*|*"/skills"*|*"/commands"*|*"/hooks"*)
+          fail_msg "$link points to $target; $adapter adapter symlinks must not target Claude-native or compat surfaces"
+          ;;
+      esac
+    done
+  done
+}
+
 check_link_target() {
   path=$1
   expected=$2
@@ -1087,6 +1102,7 @@ check_opencode_required_projection_entries
 check_opencode_projection_targets
 check_claude_projection_targets
 check_claude_adapter_concrete_surfaces
+check_non_claude_adapter_symlink_boundaries
 check_install_layout_codex_projection
 check_install_layout_opencode_projection
 check_codex_bin_wrappers
