@@ -219,7 +219,7 @@ per-project 메모는 두 layer 분리.
 
 - **토큰은 _단일 계약_ — design 소유, code import.** 디자인 토큰(색·타이포·spacing·radius·shadow)은 _하나의 파일_ 에만 산다 = **앱이 실제로 import 하는 파일**(예: `app/globals.css` 의 `@theme`, 또는 `styles/tokens.css`). autopilot-design 이 그 파일을 _결정·편집_ 하고, autopilot-code 는 _참조·사용만_ 한다. **`designs/` 에 토큰 _사본_ 을 두지 않는다** (복제 = drift·화석의 근원). `designs/`(또는 `spec/design/`) 는 _refs·mockup·결정 근거·specimen_ 만 — spec/prd 가 "왜"를 담듯.
 - **code 는 토큰을 재정의·즉흥변경하지 않는다.** 컴포넌트는 design 계약의 토큰을 _쓰기만_ (인라인 hex·px 흩뿌리기 금지). 토큰을 바꿔야 하면 design 으로 돌아간다.
-- **빌트앱도 design-first** — mockup 이 아니라 **실제 돌아가는 앱 화면을 렌더(Design MCP)** 해서 시각 결정. 그래야 롱테일("쓰다 보니 거슬림")도 design 이 리드한다.
+- **빌트앱도 design-first** — mockup 이 아니라 **실제 돌아가는 앱 화면을 adapter visual harness 로 렌더** 해서 시각 결정. 그래야 롱테일("쓰다 보니 거슬림")도 design 이 리드한다.
 - **경계 (substantial vs trivial)**: 방향·토큰·새 화면 레이아웃·구조 변경 = _substantial_ → **design-first** (실제 앱 렌더 → 결정 → 토큰 계약 갱신), code 적용. 한 요소 색 한 끗 같은 _trivial tweak_ 만 code 직접 허용.
 
 **Why**: design 결정이 code 로 새면 (a) 토큰이 코드에 흩어져 시각 일관성이 무너지고 (b) `designs/` 가 화석이 되며 (c) 디자인 이력의 단일 출처가 사라진다. 토큰을 _design 소유 단일 계약_ 으로 두면 design 이 진짜 spec 역할을 하고, 복제·drift 가 원천 소멸한다. (2026-06-08 worklog-board: `designs/02_tokens/tokens.css`(7KB·06-01 화석) vs `app/globals.css`(50KB·06-08) 복제·drift 진단에서 도출.)

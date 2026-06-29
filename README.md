@@ -107,7 +107,7 @@ analyze-project  →  autopilot-spec ↻  →  autopilot-code ↻
 | [`autopilot-spec`](capabilities/autopilot-spec.md) | 코드 _청사진 + skeleton_ 일반화 entry (app/library/api/cli/research) + **update 모드** (기존 `prd.md` 갱신 — 모든 spec 변경의 canonical 경로, 버전 snapshot 자동). 만들 _것 자체_ 결정 자리라 사용자 비중 큼 — 중간 컨펌 default |
 | [`autopilot-code`](capabilities/autopilot-code.md) | 코드 _작업_ 일반 (라이브러리·연구·앱 모두). dev/debug. `spec/` 발견 시 spec mode 별 분기 자동. `--qa quick` = 소규모 잡일 경량 tier (로그 남김) |
 | [`autopilot-lab`](capabilities/autopilot-lab.md) | _빠른 실험 prototype_. 무거운 학습은 사용자가 실행, lab 은 `setup`(학습 세팅) / `eval`(평가·분석·`--report` 시 정식 보고서[prose→draft / 음성·미디어는 재생 HTML]) 로 앞뒤를 도움. `--parent` 계보로 fine-tune·재평가, `_RUNLOG`(⏳→✅) 누적. 졸업은 autopilot-code |
-| [`autopilot-design`](capabilities/autopilot-design.md) | _시각_ 산출물 (UI·슬라이드·다이어그램·아이콘). Design MCP(`<agent-home>/tools/design-mcp`, Claude adapter 가 runtime home 에 projection)로 렌더→view_image→수정 루프 + verifier 게이트(콘솔·레이아웃) — adapter 구현 패리티. scaffold(deck_stage 등)·converters(PDF/PPTX/번들)·standalone `preview.html` |
+| [`autopilot-design`](capabilities/autopilot-design.md) | _시각_ 산출물 (UI·슬라이드·다이어그램·아이콘). Adapter-provided visual harness 로 렌더→image inspection→수정 루프 + verifier 게이트(콘솔·레이아웃)를 재현한다. Claude adapter 는 Design MCP(`<agent-home>/tools/design-mcp`)로 구현하고, Codex 는 `capability-info`가 `tool-contract=visual-harness`로 보고한다. scaffold(deck_stage 등)·converters(PDF/PPTX/번들)·standalone `preview.html` |
 | [`autopilot-ship`](capabilities/autopilot-ship.md) | 앱 _배포 셋업_ 안내 (호스팅·CI/CD·env·domain). 실제 배포 명령은 사용자 직접. 첫 setup·재호출 자리 |
 | [`autopilot-draft`](capabilities/autopilot-draft.md) | 문서 _초안_ (paper/presentation/doc, markdown). 산출물은 최종 문서가 아니라 _적용용 cheatsheet(plan)_ |
 | [`autopilot-apply`](capabilities/autopilot-apply.md) | cheatsheet 를 artifact root _밖_ 실제 소스 (`main.tex`) 에 git 위로 적용 + 컴파일 검증. draft 의 apply 팔 (현재 LaTeX 한정) |
@@ -195,7 +195,7 @@ autopilot-\* 가 내부에서 자동 라우팅하는 전문 팀. Portable 의미
 | [품질관리팀](roles/README.md) | variable reviewer | QA — code-review/plan-review/test(+5b 런타임 관찰)/ml-debug/data-curate/security-review (read-only) |
 | [연구팀](roles/README.md) | variable research reviewer | plan-review(paper-grounding)/research-survey/fact-check/claim-verify(adversarial 외부 진위) |
 | [자료팀](roles/README.md) | deep maker + fast tool worker | 자료 수집·시각·분석 — browser-fetch/pdf-extract/web-image-search/figure-gen/data-script |
-| [디자인팀](roles/README.md) | deep maker + fast verifier | 시각 산출물 — maker (제작) / critic (6축 품질 비평 + 토큰 계약 준수 — 렌더 후 결과 또는 렌더 전 UI plan-review) / verifier (독립 컨텍스트 깨짐 게이트). 모두 Design MCP 렌더 |
+| [디자인팀](roles/README.md) | deep maker + fast verifier | 시각 산출물 — maker (제작) / critic (6축 품질 비평 + 토큰 계약 준수 — 렌더 후 결과 또는 렌더 전 UI plan-review) / verifier (독립 컨텍스트 깨짐 게이트). Adapter visual harness 로 렌더 |
 | [편집팀](roles/README.md) | deep editor + fast reviewer | 사용자 향 문서 — translate/polish/review |
 | [external-adversary](roles/README.md) | external adversary + orchestrator | 외부 hostile reader 관점 review. Adapter 구현명은 adapter 문서가 소유 |
 
@@ -221,7 +221,7 @@ autopilot-\* 가 내부에서 자동 라우팅하는 전문 팀. Portable 의미
 | [`core/DESIGN_PRINCIPLES.md`](core/DESIGN_PRINCIPLES.md) | autopilot 아키텍처 설계 원칙 |
 | [`core/CORE.md`](core/CORE.md) · [`adapters/`](adapters/README.md) | 모델·도구 중립 코어 계약과 런타임별 어댑터 경계 (Claude Code primary, Codex experimental) |
 | [`INSTALL_LAYOUT.md`](INSTALL_LAYOUT.md) | neutral repo(`~/agent_setting`) + runtime home(`~/.claude`, `~/.codex`) symlink projection 절차 |
-| `hooks/` · `utilities/` · `tools/` · `scaffolds/` · `adapters/claude/statusline.sh` | **harness** — `artifact-guard.sh`(산출물·순서 강제) · `git-state-guard.sh`(merge/rebase 중 편집 차단) · `workflow-guard-hook.sh`(매 프롬프트 모드 신호 📌따름/⚡면제 + flag GC; WORKFLOW·post-it 읽기는 지침) · `design-postwrite.sh`(design HTML 저장 시 콘솔 자동 체크) · `spec-skill-gate`/`spec-read-marker`(spec 라우팅 게이트) · `tools/check-adaptation-boundary.sh`(adapter/projection 경계 검증) · `tools/design-mcp`(시각 검증 MCP) · `tools/memory/mem.py`(통합 기억 store·CLI, [MEMORY §7](core/MEMORY.md)) + SessionStart `mem inject`/SessionEnd `mem sync` + **메모리 hook 4종**(`builtin-memory-guard`·`mem-recall-inject`·`mem-turn-nudge`·`mem-distill-dispatch` — 내장메모리 차단·회상 자동주입·distiller 트리거·dispatch, [MEMORY §7](core/MEMORY.md)) · `scaffolds/`(deck_stage 등 디자인 scaffold) · Claude statusline(📌/⚡·context 막대) · `/track` 토글. [📌/⚡ 모드](#-작동-방식--tracked--untracked) |
+| `hooks/` · `utilities/` · `tools/` · `scaffolds/` · `adapters/claude/statusline.sh` | **harness** — `artifact-guard.sh`(산출물·순서 강제) · `git-state-guard.sh`(merge/rebase 중 편집 차단) · `workflow-guard-hook.sh`(매 프롬프트 모드 신호 📌따름/⚡면제 + flag GC; WORKFLOW·post-it 읽기는 지침) · `design-postwrite.sh`(design HTML 저장 시 콘솔 자동 체크) · `spec-skill-gate`/`spec-read-marker`(spec 라우팅 게이트) · `tools/check-adaptation-boundary.sh`(adapter/projection 경계 검증) · adapter visual harness(Claude 구현: `tools/design-mcp`) · `tools/memory/mem.py`(통합 기억 store·CLI, [MEMORY §7](core/MEMORY.md)) + SessionStart `mem inject`/SessionEnd `mem sync` + **메모리 hook 4종**(`builtin-memory-guard`·`mem-recall-inject`·`mem-turn-nudge`·`mem-distill-dispatch` — 내장메모리 차단·회상 자동주입·distiller 트리거·dispatch, [MEMORY §7](core/MEMORY.md)) · `scaffolds/`(deck_stage 등 디자인 scaffold) · Claude statusline(📌/⚡·context 막대) · `/track` 토글. [📌/⚡ 모드](#-작동-방식--tracked--untracked) |
 | [`loops/README.md`](loops/README.md) | **상시 루프** (세션 밖 cron·headless) — **당직**(`oncall`, 시간형 05:37 순찰·보고) · **일지**(`note`, 시간형 05:03 산출물→worklog-board L2 노트화 — cron runner 는 worklog-board) · **연수**(`study`, 시간형 일요일 06:17 외부 동향→제안) · **모의훈련**(`drill/`, 사건형 — 지침 수정 후 행동 회귀 시험) · 후보 backlog. 모두 보고·제안에서 멈춘다 (merge 만 메인 에이전트 선별 책임 — OPERATIONS §5.10) |
 
 ---
@@ -288,7 +288,7 @@ autopilot-\* 가 내부에서 자동 라우팅하는 전문 팀. Portable 의미
 ├── .agent_reports/         스킬셋 자기개선 산출물 — 표준 artifact root, 이 repo 만 예외로 커밋 (research·audit·plans 이력 = 자산, §5.1 예외)
 ├── user_profile/           cross-project 사용자 성향 6 aspect (figure·writing·발표·분석·도메인·코딩) — 통합 store 에 profile tier 로 mirror
 ├── memory/                 통합 기억 store → 전용 private memory repo (memory.db SoT + dump.jsonl mirror, gitignore) — 세션 주입 source (§7)
-├── tools/                  자체 도구 — design-mcp (시각 자가검증 MCP) · memory (통합 기억 mem CLI) · web-bundle
+├── tools/                  자체 도구 — design-mcp (Claude visual harness 구현) · memory (통합 기억 mem CLI) · web-bundle
 ├── scaffolds/              디자인 재사용 골격 (deck_stage 등)
 ├── utilities/              보조 스크립트 (workflow-guard-hook · extract_web_figures)
 │

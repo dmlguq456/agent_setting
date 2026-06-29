@@ -39,10 +39,10 @@ else
 fi
 claude_realization="adapters/claude/skills/$cap/SKILL.md"
 compat_reference="skills/$cap/SKILL.md"
-status="available-manual"
+status="instruction-only"
 realization="portable-instructions"
 tool_contract=""
-note="Codex must read the portable catalog and task-relevant docs; Claude Skill frontmatter is reference only."
+note="Codex has no native skill/plugin realization for this capability yet; read the portable catalog and task-relevant docs, then use preflight guards. Claude Skill frontmatter is reference only."
 
 case "$cap" in
   autopilot-design|design-*)

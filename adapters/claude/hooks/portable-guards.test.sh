@@ -192,7 +192,8 @@ if "$CODEX" capability-info autopilot-code >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^capability=autopilot-code$' /tmp/cap.out \
   && grep -q '^adapter=codex$' /tmp/cap.out \
   && grep -q '^native_skill=0$' /tmp/cap.out \
-  && grep -q '^realization=portable-instructions$' /tmp/cap.out; then
+  && grep -q '^realization=portable-instructions$' /tmp/cap.out \
+  && grep -q '^status=instruction-only$' /tmp/cap.out; then
   ok "codex capability wrapper reports instruction-only realization"
 else
   bad "codex capability wrapper should report instruction-only realization"
