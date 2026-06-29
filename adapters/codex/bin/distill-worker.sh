@@ -92,4 +92,9 @@ else
     - < "$prompt_file" >/dev/null
 fi
 
+if [ "${CODEX_DISTILL_APPLY:-}" = "1" ] && [ -f "$out_file" ]; then
+  AGENT_HOME="${AGENT_HOME:-$ROOT}" python3 "$ROOT/tools/memory/apply-distill-actions.py" \
+    "$out_file" "$ROOT/tools/memory/mem.py" --mode increment
+fi
+
 [ -f "$out_file" ] && cat "$out_file"

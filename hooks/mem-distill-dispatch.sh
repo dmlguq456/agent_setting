@@ -50,6 +50,8 @@
 #   argument 모드로 내부 호출 — 배선 불변.
 set -euo pipefail
 AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
+HOOK_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+APPLIER="${MEM_APPLIER:-$HOOK_DIR/../tools/memory/apply-distill-actions.py}"
 
 # 재귀가드 (불변식): distiller 세션이면 또 분사하지 않음
 [ "${MEM_DISTILL:-}" = "1" ] && exit 0
@@ -213,99 +215,13 @@ fi
     --disallowedTools "$DISALLOW" \
     > "$OUT" 2>/dev/null </dev/null || true
 
-  # action JSON 파싱·검증·실행 루프 (python inline, shell=False).
-  # S4: $OUT·$MEM·$MODE·$SNAPIDS_FILE 경로는 argv(신뢰됨)로 전달; 파일 content 는 open() 으로만 읽음.
-  #   untrusted 내용(distiller stdout)을 python 소스에 string-substitute 절대 금지. body/id/ids/canonical
-  #   은 전부 argv element 로만 mem.py 에 전달 — sh -c/eval 경유 금지. mem.py 가 화이트리스트 게이트로 검증·실행.
+  # action JSON 파싱·검증·실행 루프 (shell=False, argv-only).
+  # S4: untrusted distiller stdout 은 파일로만 전달하고, body/id/ids/canonical 은 applier 가
+  # argv element 로 mem.py 에 넘긴다. sh -c/eval 경유 금지. Codex adapter 도 같은 applier 를 쓴다.
   # S2b: curate 모드는 SNAPIDS_FILE(opus 가 본 snapshot id 집합)으로 id-action 을 멤버십 제한.
-  # M1: python inline 은 반드시 sys.exit(0) — 파스/검증 실패는 skip-and-continue, 비0 전파 금지.
-  python3 - "$OUT" "$MEM" "$MODE" "$SNAPIDS_FILE" <<'PYEOF' || true
-import sys, json, subprocess
-
-out_path = sys.argv[1]
-mem_path = sys.argv[2]
-mode = sys.argv[3] if len(sys.argv) > 3 else "increment"
-snapids_path = sys.argv[4] if len(sys.argv) > 4 else ""
-
-# S2b 멤버십 화이트리스트: curate 모드에서 opus 가 *본 snapshot* 의 id 만 id-action 대상 가능.
-snap_ids = set()
-if snapids_path:
-    try:
-        with open(snapids_path, encoding="utf-8") as f:
-            snap_ids = set(f.read().split())
-    except OSError:
-        snap_ids = set()
-
-def member(rid):
-    # curate 모드만 멤버십 강제(snapshot 비거나 캡처 실패 시 = fail-closed, id-action 전부 skip).
-    # increment 모드는 add-only 라 id-action 자체가 없음 → 무조건 True.
-    return (mode != "curate") or (rid in snap_ids)
-
-try:
-    fh = open(out_path, "r", encoding="utf-8", errors="replace")
-    lines = fh.readlines()
-    fh.close()
-except OSError:
-    lines = []
-
-for raw in lines:
-    line = raw.strip()
-    # M3: 빈 줄·코드펜스 마커 줄 skip (```json ... ``` 감싸도 내부 JSON 정상 파싱).
-    if not line or line.startswith("```"):
-        continue
-    try:
-        rec = json.loads(line)
-    except Exception:
-        sys.stderr.write(f"[distill-parse] skip malformed: {line[:120]!r}\n")
-        continue
-    if not isinstance(rec, dict):
-        sys.stderr.write("[distill-parse] skip non-object\n")
-        continue
-    # action 결정: 없으면 legacy {tier,type,body} = add (sonnet add-only 하위호환).
-    action = rec.get("action")
-    if action is None and rec.get("tier") and rec.get("type") and isinstance(rec.get("body"), str):
-        action = "add"
-
-    if action == "add":
-        tier = rec.get("tier"); rtype = rec.get("type"); body = rec.get("body")
-        if tier not in ("working", "durable"):
-            sys.stderr.write(f"[distill-parse] skip bad tier: {tier!r}\n"); continue
-        if not isinstance(rtype, str) or not rtype:
-            sys.stderr.write("[distill-parse] skip missing/empty type\n"); continue
-        if not isinstance(body, str) or not body:
-            sys.stderr.write("[distill-parse] skip missing/empty body\n"); continue
-        if len(body) > 2000:
-            sys.stderr.write(f"[distill-parse] skip body too long ({len(body)})\n"); continue
-        subprocess.run(["python3", mem_path, "add", tier, rtype, body])
-
-    elif action in ("reinforce", "prune", "graduate", "reattribute"):
-        rid = rec.get("id")
-        if not isinstance(rid, str) or not rid:
-            sys.stderr.write(f"[distill-parse] skip {action}: missing id\n"); continue
-        if not member(rid):
-            sys.stderr.write(f"[distill-parse] skip non-snapshot id ({action}): {rid!r}\n"); continue
-        if action == "graduate":
-            subprocess.run(["python3", mem_path, "graduate", rid, "--to", "durable"])
-        else:
-            subprocess.run(["python3", mem_path, action, rid])
-
-    elif action == "merge":
-        ids = rec.get("ids"); canonical = rec.get("canonical")
-        if (not isinstance(ids, list) or len(ids) < 2
-                or not all(isinstance(i, str) and i for i in ids)):
-            sys.stderr.write("[distill-parse] skip merge: bad ids\n"); continue
-        if not isinstance(canonical, str) or canonical not in ids:
-            sys.stderr.write("[distill-parse] skip merge: bad canonical\n"); continue
-        if not all(member(i) for i in ids):
-            sys.stderr.write("[distill-parse] skip merge: non-snapshot id\n"); continue
-        subprocess.run(["python3", mem_path, "merge", "--canonical", canonical, *ids])
-
-    else:
-        sys.stderr.write(f"[distill-parse] skip unknown action: {action!r}\n")
-        continue
-
-sys.exit(0)
-PYEOF
+  # M1: applier 는 skip-and-continue 계약이며 실패가 distill marker advance 를 막지 않는다.
+  python3 "$APPLIER" \
+    "$OUT" "$MEM" --mode "$MODE" --snapshot-ids "$SNAPIDS_FILE" || true
 
   # delta window 마감: 레코드 0건이어도 무조건 advance (M1 과 합쳐 항상 이 줄에 도달).
   python3 "$MEM" distill "$SID" --source "${MEM_SESSION_SOURCE:-claude}" --advance >/dev/null 2>&1 || true

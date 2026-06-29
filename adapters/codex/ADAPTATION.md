@@ -82,6 +82,8 @@ separates the pipeline:
 2. `distill-propose` is disabled by default. With `CODEX_DISTILL_ENABLE=1`, it
    invokes `codex exec --sandbox read-only --ask-for-approval never --ephemeral
    --ignore-rules` and writes a JSON-lines proposal.
-3. The proposal is not applied to memory automatically. A future acceptance gate
+3. The proposal is parsed by the shared `tools/memory/apply-distill-actions.py`
+   applier only when `CODEX_DISTILL_APPLY=1` is explicitly set.
+4. The proposal is not applied to memory automatically. A future acceptance gate
    must prove tool-free execution or provide a native no-tools flag before this
    adapter may match Claude's automatic distillation behavior.

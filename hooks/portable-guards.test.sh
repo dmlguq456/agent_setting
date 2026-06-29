@@ -187,7 +187,7 @@ printf '%s\n' "$@" > "$CODEX_STUB_ARGV"
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "--output-last-message" ]; then
     shift
-    printf '{"action":"add","tier":"working","type":"context","body":"stub"}\n' > "$1"
+    printf '{"action":"add","tier":"working","type":"context","body":"stub codex distill memory record"}\n' > "$1"
   fi
   shift || break
 done
@@ -207,6 +207,15 @@ if CODEX_DISTILL_ENABLE=1 CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/s
   ok "codex distill proposal uses constrained exec"
 else
   bad "codex distill proposal should use constrained exec"
+fi
+if CODEX_DISTILL_ENABLE=1 CODEX_DISTILL_APPLY=1 CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/store_apply" \
+  PATH="$TMP/stubbin:$PATH" CODEX_STUB_ARGV="$TMP/codex_argv_apply" \
+  "$CODEX" distill-propose codexsid "$TMP/flowproj" >/tmp/codex_distill_apply.out 2>/tmp/codex_distill_apply.err \
+  && MEM_STORE="$TMP/store_apply" python3 "$ROOT/tools/memory/mem.py" stats >/tmp/codex_stats.out 2>/tmp/codex_stats.err \
+  && grep -q 'total: 1' /tmp/codex_stats.out; then
+  ok "codex distill proposal can explicitly apply through shared applier"
+else
+  bad "codex distill explicit apply should create one memory record"
 fi
 
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"

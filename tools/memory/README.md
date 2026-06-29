@@ -38,7 +38,7 @@ Hermes 메모리 벤치마킹의 store/write 층. spec: `<artifact-root>/spec/pr
 | `reattribute <id>` | **(γ)** 고아(어떤 live 프로젝트로도 해석 안 되는 cwd_origin) 레코드를 현 프로젝트로 재귀속 (비파괴). 역게이트(live-resolving cwd_origin·git:/id:/root:·self 거부 — 탈취 방지) |
 | `register-postit <path>` | **deprecated (legacy-migration-only)** — `.postit-roots` 레지스트리 등록. skills 에서 더 이상 호출 안 함 (post-it 은 DB working 레코드 직접 write). |
 
-> **γ 큐레이터 보안 불변(D-18)**: 위 5개 변이 서브커맨드(reinforce/merge/prune/graduate/reattribute)는 distiller LLM 이 **직접 실행하지 않는다**. distiller(no-tools)는 action JSON(`{"action":…}`)만 출력하고, `mem-distill-dispatch.sh` 의 inline python(shell=False)이 파싱·shape 검증·멤버십 게이트 후 이 서브커맨드를 **argv 로** 호출한다. 각 서브커맨드는 자체 화이트리스트 게이트로 현 프로젝트 외(profile·global·타 프로젝트·존재안함) 대상을 거부(비0 exit, 삭제 0). prune/merge 는 삭제 전 graveyard 백업.
+> **γ 큐레이터 보안 불변(D-18)**: 위 5개 변이 서브커맨드(reinforce/merge/prune/graduate/reattribute)는 distiller LLM 이 **직접 실행하지 않는다**. distiller(no-tools)는 action JSON(`{"action":…}`)만 출력하고, `tools/memory/apply-distill-actions.py` 가 파싱·shape 검증·멤버십 게이트 후 이 서브커맨드를 **argv 로** 호출한다. 각 서브커맨드는 자체 화이트리스트 게이트로 현 프로젝트 외(profile·global·타 프로젝트·존재안함) 대상을 거부(비0 exit, 삭제 0). prune/merge 는 삭제 전 graveyard 백업.
 
 env override (테스트용): `MEM_STORE` · `MEM_PROJECTS` · `MEM_PROFILE` · `MEM_DISTILL` · `MEM_DISTILL_ENABLE` · `MEM_DISTILL_MODEL`.
 - `MEM_STORE` → `memory.db` 경로와 `dump.jsonl` 경로 모두 이 디렉터리 하위로 파생됨.
