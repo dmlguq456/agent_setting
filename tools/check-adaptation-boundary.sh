@@ -206,6 +206,11 @@ check_install_layout_opencode_projection() {
     || ! grep -Fq 'OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate OpenCode skills through adapter-owned paths with Claude compat autoload disabled"
   fi
+  if ! grep -Fq 'opencode_setting/opencode-plugins/agent-harness-guards.js' INSTALL_LAYOUT.md \
+    || ! grep -Fq 'opencode debug config >/tmp/opencode-plugin.json' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg 'agent-harness-guards.js' /tmp/opencode-plugin.json" INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate the OpenCode native plugin projection"
+  fi
 }
 
 check_codex_bin_wrappers() {
