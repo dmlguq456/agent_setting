@@ -26,7 +26,7 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 
 | Core Concept | Codex Implementation |
 |---|---|
-| capability | Read `capabilities/README.md` for meaning; use `skills/*/SKILL.md` only as Claude compatibility detail until Codex-native capability instructions exist |
+| capability | Read `capabilities/README.md` for meaning; run `adapters/codex/bin/preflight.sh capability-info <capability>` to confirm Codex realization; use `skills/*/SKILL.md` only as Claude compatibility detail until Codex-native capability instructions exist |
 | role profile | Use `roles/README.md` for meaning; use `agent-modes/` or Claude agent files only as compatibility references until Codex-native role prompts exist |
 | adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
 | agent home | Set `AGENT_HOME` to the installed harness directory |
@@ -40,6 +40,7 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 | memory injection | `tools/memory/mem.py inject` is runtime-neutral; run `adapters/codex/bin/preflight.sh memory [cwd]` when no automatic session-start hook is attached |
 | memory recall injection | `hooks/mem-recall-inject.sh` is runtime-neutral for prompt text; run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` when no automatic prompt hook is attached |
 | oncall briefing injection | `hooks/mem-briefing-inject.sh` is runtime-neutral for cwd/text output; run `adapters/codex/bin/preflight.sh briefing [cwd]` when no automatic prompt hook is attached |
+| capability mapping | `adapters/codex/bin/preflight.sh capability-info <capability>` reports Codex's instruction-only realization and the Claude compatibility reference, if one exists |
 | model role mapping | `adapters/codex/bin/preflight.sh role <portable-role>` resolves portable model roles through Codex adapter environment variables |
 | memory distill delta | Codex session transcript extraction is available through `adapters/codex/bin/preflight.sh distill-delta <session-id>` |
 | memory distill proposal | `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]` runs a constrained Codex exec proposal worker; it mutates memory only with explicit `CODEX_DISTILL_APPLY=1` |

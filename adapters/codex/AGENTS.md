@@ -16,6 +16,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Treat `AGENT_HOME` as the installed harness root.
 - Use `.agent_reports/` for new artifacts. Read legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not.
 - Use portable model roles from `core/CONVENTIONS.md`; do not treat Claude model names such as `sonnet` or `opus` as portable semantics.
+- Before treating a capability as supported, run `adapters/codex/bin/preflight.sh capability-info <capability>` and follow the reported Codex realization.
 - Run deterministic guard scripts directly when the Codex runtime cannot attach equivalent hooks.
 - Before edits, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.
 - After design HTML writes, run `adapters/codex/bin/preflight.sh design <file>`.

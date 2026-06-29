@@ -47,7 +47,7 @@ Codex must not consume these Claude-native files as native configuration:
 | role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role>` to resolve Codex model/reasoning-effort settings |
 | role modes | Read `roles/MODES.md`; treat adapter-coupled modes as unsupported unless wrappers exist |
 | hook invariants | Read `core/HOOKS.md`; run explicit preflight wrappers until Codex-native hook events exist |
-| capabilities | Read `capabilities/README.md`; do not assume Claude Skill invocation |
+| capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 
 ## Model Mapping
 

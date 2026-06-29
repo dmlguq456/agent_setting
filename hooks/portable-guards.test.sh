@@ -175,6 +175,15 @@ if "$CODEX" role external adversary >/tmp/role.out 2>/tmp/role.err \
 else
   bad "codex role wrapper should mark external adversary unavailable by default"
 fi
+if "$CODEX" capability-info autopilot-code >/tmp/cap.out 2>/tmp/cap.err \
+  && grep -q '^capability=autopilot-code$' /tmp/cap.out \
+  && grep -q '^adapter=codex$' /tmp/cap.out \
+  && grep -q '^native_skill=0$' /tmp/cap.out \
+  && grep -q '^realization=portable-instructions$' /tmp/cap.out; then
+  ok "codex capability wrapper reports instruction-only realization"
+else
+  bad "codex capability wrapper should report instruction-only realization"
+fi
 mkdir -p "$TMP/codex_sessions/2026/06/29"
 cat > "$TMP/codex_sessions/2026/06/29/rollout-2026-06-29T00-00-00-codexsid.jsonl" <<'EOF'
 {"timestamp":"2026-06-29T00:00:00.000Z","type":"event_msg","payload":{"type":"user_message","message":"hello"}}

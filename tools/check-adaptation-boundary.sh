@@ -64,6 +64,23 @@ check_capability_catalog() {
   done
 }
 
+check_codex_capability_map() {
+  mapper=adapters/codex/bin/capability-map.sh
+  if [ ! -x "$mapper" ]; then
+    fail_msg "$mapper is missing or not executable"
+    return
+  fi
+
+  for d in skills/*; do
+    [ -d "$d" ] || continue
+    [ -f "$d/SKILL.md" ] || continue
+    slug=${d#skills/}
+    if ! "$mapper" "$slug" >/dev/null 2>&1; then
+      fail_msg "Codex capability map cannot resolve skill capability: $slug"
+    fi
+  done
+}
+
 check_hook_catalog() {
   if [ ! -f core/HOOKS.md ]; then
     fail_msg "core/HOOKS.md is missing"
@@ -118,6 +135,7 @@ check_codex_forbidden_entries
 check_required_projection_entries
 check_removed_root_surfaces
 check_capability_catalog
+check_codex_capability_map
 check_hook_catalog
 check_legacy_root_links
 warn_concrete_runtime_terms
