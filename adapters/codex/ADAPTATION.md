@@ -41,6 +41,7 @@ Codex must not consume these Claude-native files as native configuration:
 | memory distill | Disabled until a Codex session source and no-tools distiller contract are implemented |
 | role profiles | Read `roles/README.md`, then translate roles to Codex model/reasoning-effort settings |
 | role modes | Read `roles/MODES.md`; treat adapter-coupled modes as unsupported unless wrappers exist |
+| hook invariants | Read `core/HOOKS.md`; run explicit preflight wrappers until Codex-native hook events exist |
 | capabilities | Read `capabilities/README.md`; do not assume Claude Skill invocation |
 
 ## Model Mapping

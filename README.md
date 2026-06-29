@@ -214,6 +214,7 @@ autopilot-\* 가 내부에서 자동 라우팅하는 전문 팀. Portable 의미
 | [`core/CONVENTIONS.md`](core/CONVENTIONS.md) | QA 5단계 정의 · model role · 산출물 3-tier 컨벤션 · cross-doc invariants §1~§6 (family-wide 단일 출처) |
 | [`core/OPERATIONS.md`](core/OPERATIONS.md) | git 운영 단일 출처 — Pipeline Lock(§5.8) · git preflight(§5.9) · worktree dispatch(§5.10) · `<agent-home>` repo push(§5.11) |
 | [`core/MEMORY.md`](core/MEMORY.md) | 통합 기억 단일 출처 — store 아키텍처 · promote/skip · lifecycle · recall · 프로필 aspect↔agent 매트릭스(§7) |
+| [`core/HOOKS.md`](core/HOOKS.md) | portable hook invariant catalog — artifact/git/spec/memory/design hook 의미와 adapter 요구 |
 | [`core/ADAPTATION.md`](core/ADAPTATION.md) | portable source / adapter source / projection / compatibility passthrough 경계 계약 |
 | [`core/ADAPTATION_INVENTORY.md`](core/ADAPTATION_INVENTORY.md) | 현재 표면별 portable / adapter-native / compat-passthrough 상태와 migration 순서 |
 | [`capabilities/`](capabilities/README.md) · [`roles/`](roles/README.md) | runtime-neutral capability / role 의미 계층 (`roles/MODES.md` = mode portability inventory) |
@@ -240,6 +241,7 @@ autopilot-\* 가 내부에서 자동 라우팅하는 전문 팀. Portable 의미
 │   ├── CONVENTIONS.md      QA 5단계·model role·산출물 3-tier·cross-doc invariants
 │   ├── OPERATIONS.md       git 운영 단일 출처 — Pipeline Lock·git preflight·worktree dispatch·push
 │   ├── MEMORY.md           통합 기억 단일 출처 — store·promote/skip·lifecycle·recall
+│   ├── HOOKS.md            portable hook invariant catalog
 │   └── DESIGN_PRINCIPLES.md autopilot 아키텍처 철학
 │
 ├── adapters/

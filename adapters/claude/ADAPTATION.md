@@ -26,7 +26,7 @@ portable sources:
 |---|---|---|---|
 | Skills | `claude_setting/skills -> ../skills` | Existing files are Claude Skill format and preserve old behavior | Grow `capabilities/` into per-capability specs, then generate or maintain `adapters/claude/skills` |
 | Agent modes | `claude_setting/agent-modes -> ../agent-modes` | Mode docs are prompt fragments used by current agents; `roles/MODES.md` classifies portability | Split adapter-coupled design/verification/tool notes when non-Claude adapters implement them |
-| Hooks | `claude_setting/hooks -> ../hooks` | Shell scripts are wired by Claude settings and preserve old behavior | Split portable invariant scripts from Claude hook-payload wrappers |
+| Hooks | `claude_setting/hooks -> ../hooks` | Shell scripts are wired by Claude settings and preserve old behavior; `core/HOOKS.md` names the invariant layer | Split portable invariant scripts from Claude hook-payload wrappers |
 | Utilities | `claude_setting/utilities -> ../utilities` | Mostly runtime-neutral helper scripts | Move Claude-only helpers to adapter if found |
 | Tools | `claude_setting/tools -> ../tools` | CLI tools are mostly runtime-neutral; some memory/session assumptions remain | Isolate Claude session adapters under adapter or tool plugin |
 

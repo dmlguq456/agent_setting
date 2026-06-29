@@ -64,6 +64,23 @@ check_capability_catalog() {
   done
 }
 
+check_hook_catalog() {
+  if [ ! -f core/HOOKS.md ]; then
+    fail_msg "core/HOOKS.md is missing"
+    return
+  fi
+
+  for f in hooks/*.sh; do
+    [ -f "$f" ] || continue
+    case "$f" in
+      *.test.sh) continue ;;
+    esac
+    if ! grep -Fq "\`$f\`" core/HOOKS.md; then
+      fail_msg "core/HOOKS.md is missing hook script: $f"
+    fi
+  done
+}
+
 check_legacy_root_links() {
   command -v rg >/dev/null 2>&1 || return 0
 
@@ -101,6 +118,7 @@ check_codex_forbidden_entries
 check_required_projection_entries
 check_removed_root_surfaces
 check_capability_catalog
+check_hook_catalog
 check_legacy_root_links
 warn_concrete_runtime_terms
 

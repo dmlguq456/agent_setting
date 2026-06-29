@@ -29,7 +29,8 @@ into a portable agent setting plus runtime adapters.
 | Role mode inventory | `roles/MODES.md` | portable | Classifies shared `agent-modes/` prompt fragments by portability. |
 | Claude agents | `adapters/claude/agents/*.md` | adapter-native | Preserve Claude Agent frontmatter/model/tool schema while realizing `roles/README.md`. |
 | Agent modes | `agent-modes/*.md` | mixed | Keep portable persona fragments shared; split adapter-coupled design/verification/tool notes when Codex-native modes exist. |
-| Hooks | `hooks/*.sh` | mixed | Split invariant checks from runtime hook payload wrappers. |
+| Hook invariant catalog | `core/HOOKS.md` | portable | Names hook-level invariants and classifies current scripts. |
+| Hook scripts | `hooks/*.sh` | mixed | Split invariant checks from runtime hook payload wrappers. |
 | Memory distiller | `hooks/mem-distill-dispatch.sh`, `tools/memory/` | mixed | Keep DB/CLI portable; move session log reader and model invocation to adapters. |
 | Design MCP | `tools/design-mcp/`, design skills | mixed | Keep render/check semantics portable; move Claude MCP registration paths to adapter docs. |
 | Projection directories | `claude_setting/`, `codex_setting/` | projection | Must contain only symlinks or generated adapter output. |
@@ -45,8 +46,9 @@ into a portable agent setting plus runtime adapters.
    adapter.
 3. **Agent profiles third**: keep portable role meaning in `roles/`; keep
    concrete frontmatter/model/tool mapping in adapter-native agent files.
-4. **Hook payloads fourth**: keep invariant scripts portable, but isolate
-   Claude event JSON, statusline JSON, ScheduleWakeup, and MCP registration.
+4. **Hook payloads fourth**: keep invariant semantics in `core/HOOKS.md`, then
+   isolate Claude event JSON, statusline JSON, ScheduleWakeup, and MCP
+   registration behind adapter-native wrappers.
 5. **Projection last**: after a surface has an adapter-native realization,
    update `claude_setting/` or `codex_setting/` to point at that adapter output.
 

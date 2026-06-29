@@ -16,6 +16,7 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 | Shared conventions | `core/CONVENTIONS.md` |
 | Git and dispatch operations | `core/OPERATIONS.md` |
 | Memory contract | `core/MEMORY.md` |
+| Hook invariants | `core/HOOKS.md` |
 | Capabilities | `capabilities/README.md` |
 | Role profiles | `roles/README.md` |
 | Hook and guard scripts | `hooks/`, `utilities/` |
@@ -30,9 +31,9 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 | agent home | Set `AGENT_HOME` to the installed harness directory |
 | artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
 | tracked/untracked signal | `/track` semantics and `utilities/workflow-guard-hook.sh`; no automatic prompt hook unless wrapped |
-| artifact-order gate | `hooks/artifact-guard.sh` can be run as a pre-write check by wrappers or manually |
-| spec read gate | `hooks/spec-skill-gate.sh` / `hooks/spec-read-marker.sh` semantics apply when the runtime can emit equivalent events |
-| git safety gate | `hooks/git-state-guard.sh` is the portable check; Codex must also honor sandbox and approval state |
+| artifact-order gate | `core/HOOKS.md` defines the invariant; current `hooks/artifact-guard.sh` can be run through a wrapper that supplies file path/session id |
+| spec read gate | `core/HOOKS.md` defines marker/check semantics; current scripts require event bridging |
+| git safety gate | `core/HOOKS.md` defines the invariant; current `hooks/git-state-guard.sh` can be run before edits with target path |
 | memory store | `tools/memory/mem.py` is runtime-neutral; hook automation is adapter-specific |
 
 ## Runtime Home Projection
