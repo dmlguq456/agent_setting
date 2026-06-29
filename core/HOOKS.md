@@ -25,7 +25,7 @@ checks to their own event model.
 | design post-write verification | `hooks/design-postwrite.sh` | `adapter-coupled-automation` | Saved design HTML should get deterministic console verification. | Provide an equivalent browser/console checker or report unsupported. |
 | workflow tracked signal | `utilities/workflow-guard-hook.sh` | `portable-check` | Surface tracked/untracked mode and clean stale flags. | Run `utilities/workflow-guard-hook.sh --event prompt [--cwd <dir>] [--session <id>] [--format text]` before prompt handling, and `--event start` for stale flag GC. |
 | memory injection | `tools/memory/mem.py inject` | `portable-check` | Inject relevant DB memory at session start. | Run `tools/memory/mem.py inject` for text output, or `tools/memory/mem.py inject --hook` when the runtime accepts Claude-style `additionalContext`. |
-| memory recall injection | `hooks/mem-recall-inject.sh` | `adapter-coupled-automation` | Recall signal words trigger DB recall and context injection. | Provide prompt-submit event payload and context injection support. |
+| memory recall injection | `hooks/mem-recall-inject.sh` | `portable-check` | Recall signal words trigger DB recall and context injection. | Run `hooks/mem-recall-inject.sh --prompt <text> [--cwd <dir>] [--format text]` before prompt handling, or attach it to a prompt-submit event. |
 | memory distillation trigger | `hooks/mem-turn-nudge.sh`, `hooks/mem-distill-dispatch.sh` | `adapter-coupled-automation` | Periodically distill session deltas into DB memory through a no-tools worker. | Provide session transcript source, detached worker invocation, and no-tools/action contract. |
 | oncall briefing injection | `hooks/mem-briefing-inject.sh` | `adapter-coupled-automation` | On the dedicated agent desk, inject daily oncall report once per day. | Provide cwd/session prompt event and context injection, or mark unsupported. |
 | Herdr state integration | `hooks/herdr-agent-state.sh` | `external-integration` | Publish working/idle/blocked/release state to Herdr. | Optional external integration; not a core invariant. |
@@ -46,3 +46,5 @@ before spec-changing capability work. It can also run
 `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` to surface tracked
 or untracked workflow state as plain text, and
 `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text memory injection.
+Use `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` to run the same
+recall-signal injection logic without Claude hook JSON.

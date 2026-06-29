@@ -40,7 +40,7 @@ Codex must not consume these Claude-native files as native configuration:
 | spec read gate | Run `adapters/codex/bin/preflight.sh read <prd.md> [session-id]` after actual reads and `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
 | workflow signal | Run `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` as explicit prompt/session reminder; no statusline assumption |
 | memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text session-start memory injection |
-| memory recall | Use `tools/memory/mem.py recall` directly; prompt-submit auto-injection needs a Codex session adapter |
+| memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |
 | memory distill | Disabled until a Codex session source and no-tools distiller contract are implemented |
 | role profiles | Read `roles/README.md`, then translate roles to Codex model/reasoning-effort settings |
 | role modes | Read `roles/MODES.md`; treat adapter-coupled modes as unsupported unless wrappers exist |

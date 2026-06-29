@@ -9,6 +9,7 @@ CODEX="$ROOT/adapters/codex/bin/preflight.sh"
 MARK="$ROOT/hooks/spec-read-marker.sh"
 SPEC="$ROOT/hooks/spec-skill-gate.sh"
 FLOW="$ROOT/utilities/workflow-guard-hook.sh"
+RECALL="$ROOT/hooks/mem-recall-inject.sh"
 
 PASS=0
 FAIL=0
@@ -127,6 +128,17 @@ if "$CODEX" memory "$TMP/flowproj" >/tmp/mem_inject.out 2>/tmp/mem_inject.err; t
   ok "codex memory wrapper exits cleanly"
 else
   bad "codex memory wrapper should exit cleanly"
+fi
+if "$RECALL" --prompt "일반 질문" --cwd "$TMP/flowproj" --format text >/tmp/recall.out 2>/tmp/recall.err \
+  && [ ! -s /tmp/recall.out ]; then
+  ok "recall wrapper no-ops without signal word"
+else
+  bad "recall wrapper should no-op without signal word"
+fi
+if "$CODEX" recall "전에 결정한 내용 뭐였지" "$TMP/flowproj" >/tmp/recall.out 2>/tmp/recall.err; then
+  ok "codex recall wrapper exits cleanly"
+else
+  bad "codex recall wrapper should exit cleanly"
 fi
 
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"

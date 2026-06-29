@@ -11,6 +11,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh skill <name> [cwd] [session-id]
        preflight.sh mode [cwd] [session-id]
        preflight.sh memory [cwd]
+       preflight.sh recall <prompt> [cwd]
 
 Runs portable checks that Codex can call without consuming Claude hook JSON or
 settings.json.
@@ -48,6 +49,12 @@ case "$cmd" in
   memory)
     cwd=${2:-$PWD}
     (cd "$cwd" && AGENT_HOME="${AGENT_HOME:-$ROOT}" python3 "$ROOT/tools/memory/mem.py" inject)
+    ;;
+  recall)
+    [ "$#" -ge 2 ] || { echo "codex preflight: recall requires prompt text" >&2; exit 64; }
+    prompt=$2
+    cwd=${3:-$PWD}
+    AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/hooks/mem-recall-inject.sh" --prompt "$prompt" --cwd "$cwd" --format text
     ;;
   -h|--help|"")
     usage
