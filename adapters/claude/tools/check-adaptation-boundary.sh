@@ -1218,6 +1218,25 @@ check_removed_root_surfaces() {
   fi
 }
 
+check_role_catalog() {
+  if [ ! -f roles/README.md ]; then
+    fail_msg "roles/README.md is missing"
+    return
+  fi
+
+  for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
+    if ! grep -Fq "| \`$profile\` |" roles/README.md; then
+      fail_msg "roles/README.md is missing role profile: $profile"
+    fi
+    if ! grep -Fq "adapters/codex/agents/$profile.toml" roles/README.md; then
+      fail_msg "roles/README.md must document Codex native agent projection for $profile"
+    fi
+    if ! grep -Fq "adapters/opencode/agents/$profile/$profile.md" roles/README.md; then
+      fail_msg "roles/README.md must document OpenCode native agent projection for $profile"
+    fi
+  done
+}
+
 check_capability_catalog() {
   if [ ! -f capabilities/README.md ]; then
     fail_msg "capabilities/README.md is missing"
@@ -1412,6 +1431,7 @@ check_claude_scaffold_projection
 check_claude_loop_projection
 check_claude_tool_projection
 check_removed_root_surfaces
+check_role_catalog
 check_capability_catalog
 check_codex_capability_map
 check_opencode_capability_map
