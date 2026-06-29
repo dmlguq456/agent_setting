@@ -19,9 +19,10 @@ permission config, and plugin hooks; add adapter wrappers only for
 harness-specific signals that OpenCode does not already surface.
 
 Native Skill projection is materialized under `adapters/opencode/skills/` from
-portable `capabilities/*.md`. Native commands, agents, and plugin hooks remain
-future work. Capability support still uses explicit `preflight.sh` wrappers for
-guards and tool-contract reporting.
+portable `capabilities/*.md`. Native Agent projection is materialized under
+`adapters/opencode/agents/` from `roles/README.md`. Native commands and plugin
+hooks remain future work. Capability support still uses explicit `preflight.sh`
+wrappers for guards and tool-contract reporting.
 
 ## Entry Points
 
@@ -36,6 +37,7 @@ guards and tool-contract reporting.
 | Hook invariants | `core/HOOKS.md` |
 | Preflight wrappers | `adapters/opencode/bin/` |
 | Native skills | `adapters/opencode/skills/` |
+| Native agents | `adapters/opencode/agents/` |
 | Capabilities | `capabilities/README.md` |
 | Role profiles | `roles/README.md` |
 | Hook and guard scripts | `hooks/`, `utilities/` |
@@ -47,7 +49,7 @@ guards and tool-contract reporting.
 | Core Concept | OpenCode Implementation |
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/opencode/bin/preflight.sh capability-info <capability>` to confirm OpenCode realization; use `adapters/opencode/skills/<capability>/SKILL.md` as OpenCode-native guidance |
-| native skill/command/agent surface | Skills are materialized under `adapters/opencode/skills/`; commands and agents are not materialized yet. Future output must be generated from portable capability/role sources and verified with OpenCode discoverability (`opencode debug skill`, `opencode debug agent`) |
+| native skill/command/agent surface | Skills are materialized under `adapters/opencode/skills/`; agents are materialized under `adapters/opencode/agents/`; commands are not materialized yet. Future output must be generated from portable capability/role sources and verified with OpenCode discoverability (`opencode debug skill`, `opencode debug agent`) |
 | native plugin hook surface | Not materialized yet; OpenCode has JS/TS plugin hooks (`tool.execute.before`, etc). If added, bridge to shared shell guards and keep preflight as fallback |
 | role profile | Use `roles/README.md` for meaning; use `roles/modes/` or Claude agent files only as compatibility references until OpenCode-native role prompts exist |
 | role mode | Run `adapters/opencode/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes are reference-only |
@@ -117,6 +119,20 @@ adapters/opencode/bin/sync-native-skills.py --check
 Expose them to OpenCode through `opencode_setting/opencode-skills`, not through
 a `skills/` projection. The plain `skills/` name is reserved for historical
 Claude compatibility references.
+
+## Native Agent Projection
+
+`adapters/opencode/agents/` contains OpenCode-native Agent projections
+generated from portable role profiles in `roles/README.md`:
+
+```bash
+adapters/opencode/bin/sync-native-agents.py --check
+```
+
+Expose them to OpenCode by symlinking each generated `*.md` file into
+`$HOME/.config/opencode/agent/` or a project `.opencode/agent/` directory,
+using `opencode_setting/opencode-agents` as the projection source. Do not expose
+`adapters/claude/agents/` as OpenCode-native agents.
 
 ## Runtime Home Projection
 

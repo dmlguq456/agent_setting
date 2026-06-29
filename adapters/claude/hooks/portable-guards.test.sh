@@ -496,6 +496,24 @@ if "$OPENCODE" role fast reviewer >/tmp/opencode_role.out 2>/tmp/opencode_role.e
 else
   bad "opencode role wrapper should report opencode-default when unconfigured"
 fi
+if command -v opencode >/dev/null 2>&1; then
+  mkdir -p "$TMP/opencode_home/.config/opencode/agent" "$TMP/opencode_home/.local/share"
+  for f in "$ROOT"/opencode_setting/opencode-agents/*/*.md; do
+    [ -f "$f" ] || continue
+    ln -s "$f" "$TMP/opencode_home/.config/opencode/agent/$(basename "$f")"
+  done
+  if HOME="$TMP/opencode_home" XDG_CONFIG_HOME="$TMP/opencode_home/.config" XDG_DATA_HOME="$TMP/opencode_home/.local/share" \
+    opencode debug agent plan-team --pure >/tmp/opencode_agent.out 2>/tmp/opencode_agent.err \
+    && grep -q '"description": "OpenCode-native agent for portable role profile plan-team' /tmp/opencode_agent.out \
+    && grep -q 'roles/README.md' /tmp/opencode_agent.out \
+    && ! grep -q '/.claude/' /tmp/opencode_agent.out; then
+    ok "opencode native agent projection is discoverable without Claude paths"
+  else
+    bad "opencode native agent projection should be discoverable without Claude paths"
+  fi
+else
+  ok "opencode native agent runtime discovery skipped (opencode not installed)"
+fi
 
 echo "== opencode capability mapping =="
 if "$OPENCODE" capability-info autopilot-code >/tmp/opencode_cap.out 2>/tmp/opencode_cap.err \

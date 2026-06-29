@@ -38,7 +38,7 @@ documentation.
 | Commands (`.opencode/command/<name>.md` or `.opencode/commands/<name>.md`) | yes | not yet materialized; future adapter-owned output from `capabilities/` |
 | Skills (`.opencode/skill/<name>/SKILL.md` or `.opencode/skills/<name>/SKILL.md`) | yes | `adapters/opencode/skills/<name>/SKILL.md` generated from `capabilities/` |
 | External skill autoload (`~/.claude/skills/<name>/SKILL.md`, `~/.agents/skills/<name>/SKILL.md`) | yes (compat) | not relied on; adapter must generate its own skills, not depend on Claude skill autoload |
-| Agents (`.opencode/agent/<name>.md` or `.opencode/agents/<name>.md`) | yes | not yet materialized; future adapter-owned output from `roles/` |
+| Agents (`.opencode/agent/<name>.md` or `.opencode/agents/<name>.md`) | yes | `adapters/opencode/agents/<name>/<name>.md` generated from `roles/README.md` |
 | Plugin hooks (JS/TS: `tool.execute.before`, `tool.execute.after`, `event`, `config`, `chat.message`, `command.execute.before`, `permission.ask`, `shell.env`, ...) | yes | not yet materialized; future adapter-owned plugin for harness guards |
 | Permission model (`permission` config: `allow`/`ask`/`deny` per tool, per-agent override) | yes | adapter documents recommended permission rules; not a harness guard replacement |
 | MCP servers (`mcp` config: local/remote) | yes | adapter documents design MCP registration when a visual harness is added |
@@ -51,9 +51,9 @@ documentation.
 ## Native Skill, Command, And Agent Surface Debt
 
 OpenCode has native skill, command, and agent surfaces. This adapter now
-materializes native Skills from `capabilities/*.md`; command and agent surfaces
-remain future work. Current support still runs through explicit preflight
-wrappers for guard and tool-contract reporting.
+materializes native Skills from `capabilities/*.md` and native Agents from
+`roles/README.md`; command surfaces remain future work. Current support still
+runs through explicit preflight wrappers for guard and tool-contract reporting.
 
 Before adding or changing OpenCode-native skills, commands, or agents:
 
@@ -61,7 +61,7 @@ Before adding or changing OpenCode-native skills, commands, or agents:
    `skills/<name>/SKILL.md` or `adapters/claude/skills/`.
 2. Generate or maintain concrete adapter-owned output under an explicit
    OpenCode adapter path, for example `adapters/opencode/skills/<name>/SKILL.md`,
-   `adapters/opencode/command/<name>.md`, or `adapters/opencode/agent/<name>.md`.
+   `adapters/opencode/command/<name>.md`, or `adapters/opencode/agents/<name>/<name>.md`.
 3. Keep OpenCode frontmatter (`name`, `description`, `mode`, `model`,
    `permission`, `variant`), invocation syntax, and permission assumptions in
    the OpenCode adapter.
@@ -185,8 +185,8 @@ any unavailable role explicitly.
 ## Current Projection Boundary
 
 `opencode_setting/` should remain minimal and explicit. It may expose
-`AGENTS.md`, `README.md`, `core/`, `capabilities/`, `bin/`,
-`opencode-skills`, selected tools, and selected utilities, but must not expose Claude-native
+`AGENTS.md`, `README.md`, `core/`, `capabilities/`, `roles/`, `bin/`,
+`opencode-skills`, `opencode-agents`, selected tools, and selected utilities, but must not expose Claude-native
 `settings.json`, `commands/`, `skills/`, `statusline.sh`, or `hooks/` as if
 OpenCode could consume them.
 
