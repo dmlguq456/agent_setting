@@ -11,7 +11,8 @@
 #   index-check.sh <memory_dir>    # 특정 메모리 dir 점검
 #   index-check.sh [dir] --fix     # 누락 포인터 append (additive)
 set -u
-AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/../../utilities/agent-home.sh")}"
 ROOT="$AGENT_HOME/projects"
 DIR=""; FIX=0
 for a in "$@"; do

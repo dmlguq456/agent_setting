@@ -254,6 +254,24 @@ check_codex_tool_projection() {
   done
 }
 
+check_portable_agent_home_resolution() {
+  command -v rg >/dev/null 2>&1 || return 0
+
+  bad=$(rg -n 'AGENT_HOME=.*CLAUDE_HOME.*HOME/\.claude|os\.environ\.get\("AGENT_HOME"\).*os\.environ\.get\("CLAUDE_HOME"\).*HOME / "\.claude"' \
+    tools/memory utilities/dispatch-liveness.sh \
+    --glob '!*.test.sh' 2>/dev/null || true)
+  if [ -n "$bad" ]; then
+    fail_msg "portable tools must use neutral agent-home resolution before legacy Claude fallback:"
+    printf '%s\n' "$bad"
+  fi
+
+  for p in tools/memory/mem.py adapters/claude/tools/memory/mem.py; do
+    if ! grep -Fq 'HOME / "agent_setting"' "$p"; then
+      fail_msg "$p must prefer neutral ~/agent_setting before legacy runtime home"
+    fi
+  done
+}
+
 check_claude_bin_wrappers() {
   if [ ! -L claude_setting/bin ]; then
     fail_msg "claude_setting/bin must project adapters/claude/bin"
@@ -587,6 +605,7 @@ check_claude_adapter_concrete_surfaces
 check_install_layout_codex_projection
 check_codex_bin_wrappers
 check_codex_tool_projection
+check_portable_agent_home_resolution
 check_codex_utility_projection
 check_claude_bin_wrappers
 check_claude_skill_projection

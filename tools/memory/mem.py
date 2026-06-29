@@ -15,7 +15,18 @@ from collections import namedtuple
 from pathlib import Path
 
 HOME = Path.home()
-AGENT_HOME = Path(os.environ.get("AGENT_HOME") or os.environ.get("CLAUDE_HOME") or HOME / ".claude")
+def default_agent_home() -> Path:
+    if os.environ.get("AGENT_HOME"):
+        return Path(os.environ["AGENT_HOME"])
+    if os.environ.get("CLAUDE_HOME"):
+        return Path(os.environ["CLAUDE_HOME"])
+    neutral = HOME / "agent_setting"
+    if neutral.exists():
+        return neutral
+    return HOME / ".claude"
+
+
+AGENT_HOME = default_agent_home()
 STORE = Path(os.environ.get("MEM_STORE", AGENT_HOME / "memory"))
 DB = STORE / "memory.db"
 DUMP = STORE / "dump.jsonl"
