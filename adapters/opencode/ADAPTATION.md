@@ -164,7 +164,8 @@ Harness-specific status signals need OpenCode-native realization:
 
 ## Model Mapping
 
-OpenCode should expose concrete choices through environment or config:
+OpenCode exposes concrete choices through environment or config and resolves
+them with `adapters/opencode/bin/preflight.sh role <portable-role>`:
 
 ```text
 AGENT_MODEL_FAST
@@ -181,8 +182,9 @@ agents for reasoning profile selection. There is no numeric reasoning-effort
 config field; the adapter maps portable reasoning intent to `variant` and
 agent selection.
 
-Until those are implemented, OpenCode uses the portable role names and reports
-any unavailable role explicitly.
+When no concrete model is configured, the adapter reports `opencode-default`
+and `runtime-default`. `external adversary` remains unavailable unless
+`AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured.
 
 ## Current Projection Boundary
 

@@ -179,18 +179,24 @@ Harness-specific status signals still need Codex-native realization:
 
 ## Model Mapping
 
-Codex should expose concrete choices through environment or config:
+Codex exposes concrete choices through environment or config and resolves them
+with `adapters/codex/bin/preflight.sh role <portable-role>`:
 
 ```text
 AGENT_MODEL_FAST
 AGENT_MODEL_DEEP
 AGENT_MODEL_EXTERNAL
+AGENT_MODEL_ORCHESTRATOR
 AGENT_REASONING_FAST
 AGENT_REASONING_DEEP
+AGENT_REASONING_EXTERNAL
+AGENT_REASONING_ORCHESTRATOR
+AGENT_EXTERNAL_CMD
 ```
 
-Until those are implemented, Codex uses the portable role names and reports any
-unavailable role explicitly.
+When no concrete model is configured, the adapter reports `codex-default` and
+`runtime-default`. `external adversary` remains unavailable unless
+`AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured.
 
 ## Current Projection Boundary
 
