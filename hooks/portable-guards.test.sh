@@ -6,6 +6,7 @@ ART="$ROOT/hooks/artifact-guard.sh"
 GIT="$ROOT/hooks/git-state-guard.sh"
 MEM="$ROOT/hooks/builtin-memory-guard.sh"
 CODEX="$ROOT/adapters/codex/bin/preflight.sh"
+DESIGN="$ROOT/hooks/design-postwrite.sh"
 MARK="$ROOT/hooks/spec-read-marker.sh"
 SPEC="$ROOT/hooks/spec-skill-gate.sh"
 FLOW="$ROOT/utilities/workflow-guard-hook.sh"
@@ -75,6 +76,12 @@ if "$CODEX" write "$TMP/runtime/projects/abc/memory/MEMORY.md" testsid >/tmp/cod
   bad "codex preflight should block memory file write"
 else
   [ "$?" -eq 2 ] && ok "codex preflight blocks memory file write" || bad "codex preflight memory wrong exit"
+fi
+if AGENT_HOME="$ROOT" bash "$DESIGN" --file "$TMP/not-design.txt" >/tmp/design.out 2>/tmp/design.err \
+  && "$CODEX" design "$TMP/not-design.txt" >/tmp/design.out 2>/tmp/design.err; then
+  ok "design postwrite wrappers no-op on non-html"
+else
+  bad "design postwrite wrappers should no-op on non-html"
 fi
 
 echo "== spec read gate CLI =="

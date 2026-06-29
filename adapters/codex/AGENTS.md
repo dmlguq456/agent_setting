@@ -18,6 +18,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Use portable model roles from `core/CONVENTIONS.md`; do not treat Claude model names such as `sonnet` or `opus` as portable semantics.
 - Run deterministic guard scripts directly when the Codex runtime cannot attach equivalent hooks.
 - Before edits, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.
+- After design HTML writes, run `adapters/codex/bin/preflight.sh design <file>`.
 - After actually reading `<artifact-root>/spec/prd.md`, run `adapters/codex/bin/preflight.sh read <prd.md> [session-id]`; before spec-changing capability work, run `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]`.
 - Use `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` to surface tracked/untracked workflow state when Codex has no automatic prompt hook.
 - Use `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text memory injection when Codex has no automatic session-start hook.

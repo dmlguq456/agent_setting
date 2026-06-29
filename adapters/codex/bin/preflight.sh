@@ -13,6 +13,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh memory [cwd]
        preflight.sh recall <prompt> [cwd]
        preflight.sh briefing [cwd]
+       preflight.sh design <file>
 
 Runs portable checks that Codex can call without consuming Claude hook JSON or
 settings.json.
@@ -60,6 +61,11 @@ case "$cmd" in
   briefing)
     cwd=${2:-$PWD}
     AGENT_HOME="${AGENT_HOME:-$ROOT}" bash "$ROOT/hooks/mem-briefing-inject.sh" --cwd "$cwd" --format text
+    ;;
+  design)
+    [ "$#" -ge 2 ] || { echo "codex preflight: design requires a file path" >&2; exit 64; }
+    file=$2
+    AGENT_HOME="$ROOT" bash "$ROOT/hooks/design-postwrite.sh" --file "$file"
     ;;
   -h|--help|"")
     usage
