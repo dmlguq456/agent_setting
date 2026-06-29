@@ -65,6 +65,41 @@ check_codex_bin_wrappers() {
   done
 }
 
+check_codex_utility_projection() {
+  if [ ! -L codex_setting/utilities ]; then
+    fail_msg "codex_setting/utilities must project adapters/codex/utilities"
+    return
+  fi
+
+  target=$(readlink codex_setting/utilities)
+  if [ "$target" != "../adapters/codex/utilities" ]; then
+    fail_msg "codex_setting/utilities points to $target; expected ../adapters/codex/utilities"
+  fi
+
+  for p in agent-home.sh artifact-root.sh agent-worklog-state.sh workflow-guard-hook.sh; do
+    if [ ! -L "adapters/codex/utilities/$p" ]; then
+      fail_msg "adapters/codex/utilities/$p must be a selective portable utility projection"
+      continue
+    fi
+    link=$(readlink "adapters/codex/utilities/$p")
+    if [ "$link" != "../../../utilities/$p" ]; then
+      fail_msg "adapters/codex/utilities/$p points to $link; expected ../../../utilities/$p"
+    fi
+  done
+
+  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name workflow-guard-hook.sh \) -print 2>/dev/null || true)
+  if [ -n "$extra" ]; then
+    fail_msg "adapters/codex/utilities contains unapproved entries:"
+    printf '%s\n' "$extra"
+  fi
+
+  for p in dispatch-liveness.sh extract_web_figures.py; do
+    if [ -e "adapters/codex/utilities/$p" ] || [ -L "adapters/codex/utilities/$p" ]; then
+      fail_msg "adapters/codex/utilities/$p must not be projected until Codex support is documented"
+    fi
+  done
+}
+
 check_claude_bin_wrappers() {
   if [ ! -L claude_setting/bin ]; then
     fail_msg "claude_setting/bin must project adapters/claude/bin"
@@ -386,6 +421,7 @@ check_projection_symlinks codex_setting
 check_codex_forbidden_entries
 check_required_projection_entries
 check_codex_bin_wrappers
+check_codex_utility_projection
 check_claude_bin_wrappers
 check_claude_skill_projection
 check_claude_mode_projection

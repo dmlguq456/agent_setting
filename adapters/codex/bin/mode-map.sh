@@ -22,7 +22,12 @@ family=${mode%%/*}
 name=${mode#*/}
 source="roles/modes/$family/$name.md"
 
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if command -v git >/dev/null 2>&1 && ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null); then
+  :
+else
+  ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
+fi
 if [ ! -f "$ROOT/$source" ]; then
   echo "codex mode-map: unknown mode: $mode" >&2
   exit 64

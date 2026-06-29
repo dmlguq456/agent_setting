@@ -32,6 +32,7 @@ Codex skill/plugin surface must be adapter-owned output derived from
 | Capabilities | `capabilities/README.md` |
 | Role profiles | `roles/README.md` |
 | Hook and guard scripts | `hooks/`, `utilities/` |
+| Selected utility projection | `adapters/codex/utilities/` |
 
 ## Runtime Mapping
 
@@ -59,6 +60,20 @@ Codex skill/plugin surface must be adapter-owned output derived from
 | memory distill delta | Codex session transcript extraction is available through `adapters/codex/bin/preflight.sh distill-delta <session-id>` |
 | memory distill proposal | `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]` runs a constrained Codex exec proposal worker; it mutates memory only with explicit `CODEX_DISTILL_APPLY=1` |
 | memory store | `tools/memory/mem.py` is runtime-neutral; detached distillation worker execution remains adapter-specific |
+
+## Utility Projection
+
+`codex_setting/utilities` intentionally points at
+`adapters/codex/utilities/`, not the full shared `utilities/` directory. The
+adapter currently exposes only utility files that Codex wrappers or docs use:
+
+- `agent-home.sh`
+- `artifact-root.sh`
+- `agent-worklog-state.sh`
+- `workflow-guard-hook.sh`
+
+Claude-specific helpers such as `dispatch-liveness.sh` stay out of the Codex
+projection until Codex has an equivalent transcript/liveness contract.
 
 ## Runtime Home Projection
 

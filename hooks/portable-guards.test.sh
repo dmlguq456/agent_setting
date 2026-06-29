@@ -6,6 +6,7 @@ ART="$ROOT/hooks/artifact-guard.sh"
 GIT="$ROOT/hooks/git-state-guard.sh"
 MEM="$ROOT/hooks/builtin-memory-guard.sh"
 CODEX="$ROOT/adapters/codex/bin/preflight.sh"
+CODEX_PROJECTION="$ROOT/codex_setting/bin/preflight.sh"
 CODEX_DISTILL="$ROOT/adapters/codex/bin/distill-worker.sh"
 DESIGN="$ROOT/hooks/design-postwrite.sh"
 MARK="$ROOT/hooks/spec-read-marker.sh"
@@ -83,6 +84,13 @@ if AGENT_HOME="$ROOT" bash "$DESIGN" --file "$TMP/not-design.txt" >/tmp/design.o
   ok "design postwrite wrappers no-op on non-html"
 else
   bad "design postwrite wrappers should no-op on non-html"
+fi
+if "$CODEX_PROJECTION" capability-info audit >/tmp/codex_projection.out 2>/tmp/codex_projection.err \
+  && grep -q '^capability=audit$' /tmp/codex_projection.out \
+  && grep -q '^adapter=codex$' /tmp/codex_projection.out; then
+  ok "codex projection preflight resolves harness root"
+else
+  bad "codex projection preflight should resolve harness root"
 fi
 
 echo "== spec read gate CLI =="

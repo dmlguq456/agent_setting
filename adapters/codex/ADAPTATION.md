@@ -41,7 +41,8 @@ invariant.
 | Common contract | `core/` | `codex_setting/core` |
 | Capability catalog | `capabilities/` | `codex_setting/capabilities` |
 | Preflight wrappers | `adapters/codex/bin/` | `codex_setting/bin` |
-| Shared helper tools | `tools/`, `utilities/` | projected selectively |
+| Shared helper tools | `tools/`, selected `utilities/` | `codex_setting/tools`, `codex_setting/utilities` |
+| Selected utilities | `adapters/codex/utilities/` symlinks to portable utility files | `codex_setting/utilities` |
 
 ## Native Skill And Plugin Surface Debt
 
@@ -136,9 +137,22 @@ unavailable role explicitly.
 ## Current Projection Boundary
 
 `codex_setting/` should remain minimal until adapted surfaces exist. It may expose
-`AGENTS.md`, `README.md`, `core/`, `capabilities/`, `bin/`, `tools/`, and
-`utilities/`, but must not expose Claude-native `settings.json`, `commands/`,
-`skills/`, or `statusline.sh` as if Codex could consume them.
+`AGENTS.md`, `README.md`, `core/`, `capabilities/`, `bin/`, `tools/`, and a
+selected utility projection, but must not expose Claude-native `settings.json`,
+`commands/`, `skills/`, or `statusline.sh` as if Codex could consume them.
+
+`codex_setting/utilities` points at `adapters/codex/utilities/`, not the entire
+shared `utilities/` directory. The current allowlist is:
+
+- `agent-home.sh`
+- `artifact-root.sh`
+- `agent-worklog-state.sh`
+- `workflow-guard-hook.sh`
+
+Do not project `dispatch-liveness.sh` until Codex has a documented transcript
+liveness surface equivalent to Claude session transcript mtimes. Do not project
+material/design helpers such as `extract_web_figures.py` until a Codex
+capability uses them directly.
 
 ## Distillation Boundary
 
