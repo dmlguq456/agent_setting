@@ -191,6 +191,12 @@ check_install_layout_codex_projection() {
       fail_msg "INSTALL_LAYOUT.md must explicitly keep Claude-native $p out of Codex runtime projection"
     fi
   done
+
+  if ! grep -Fq '.codex/agents/' INSTALL_LAYOUT.md \
+    || ! grep -Fq 'developer_instructions = """' INSTALL_LAYOUT.md \
+    || ! grep -Fq "Path(sys.argv[1]).glob(\"*.toml\")" INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must document and validate Codex native custom agent projection"
+  fi
 }
 
 check_install_layout_opencode_projection() {

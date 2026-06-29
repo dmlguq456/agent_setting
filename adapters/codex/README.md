@@ -145,11 +145,13 @@ adapters/codex/bin/sync-native-agents.py --check
 ```
 
 Expose them to Codex by symlinking each generated `*.toml` file into
-`$CODEX_HOME/agents/`, using `codex_setting/codex-agents` as the projection
-source. The TOML files define the required Codex custom agent fields
-(`name`, `description`, and `developer_instructions`) and defer concrete model
-or reasoning selection to `adapters/codex/bin/preflight.sh role <portable-role>`.
-Do not expose `adapters/claude/agents/` as Codex-native agents.
+`$CODEX_HOME/agents/` for a user/global install, or into project
+`.codex/agents/` for a project-scoped install, using
+`codex_setting/codex-agents` as the projection source. The TOML files define
+the required Codex custom agent fields (`name`, `description`, and
+`developer_instructions`) and defer concrete model or reasoning selection to
+`adapters/codex/bin/preflight.sh role <portable-role>`. Do not expose
+`adapters/claude/agents/` as Codex-native agents.
 
 ## Command-Like Entries
 

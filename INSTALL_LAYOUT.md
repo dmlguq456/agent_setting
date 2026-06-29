@@ -66,6 +66,9 @@ for f in "$AGENT_HOME/codex_setting/codex-agents"/*.toml; do
 done
 ```
 
+For a project-scoped install, symlink the same generated TOML files into the
+project's `.codex/agents/` directory instead of `$HOME/.codex/agents/`.
+
 Do not symlink Claude-native surfaces such as `settings.json`, `commands/`,
 root `skills/`, root `agents/`, `statusline.sh`, or `hooks/` into `$HOME/.codex`. Codex-native
 Skill projections must come from `codex_setting/codex-skills`, which is
@@ -180,7 +183,19 @@ CODEX_HOME="$tmp_codex_plugin_home" codex debug prompt-input autopilot-code >/tm
 tmp_codex_agent_home=$(mktemp -d)
 mkdir -p "$tmp_codex_agent_home/agents"
 for f in "$PWD/codex_setting/codex-agents"/*.toml; do ln -s "$f" "$tmp_codex_agent_home/agents/$(basename "$f")"; done
-CODEX_HOME="$tmp_codex_agent_home" codex exec --help >/tmp/codex-agent-smoke.txt
+python3 - "$tmp_codex_agent_home/agents" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+agents = sorted(Path(sys.argv[1]).glob("*.toml"))
+assert len(agents) == 8, agents
+for agent in agents:
+    body = agent.read_text(encoding="utf-8")
+    assert re.search(r'^name = "[^"]+"$', body, re.MULTILINE), agent
+    assert re.search(r'^description = "[^"]+"$', body, re.MULTILINE), agent
+    assert re.search(r'^developer_instructions = """\n.+\n"""$', body, re.MULTILINE | re.DOTALL), agent
+PY
 ! rg 'adapters/claude/agents' "$tmp_codex_agent_home/agents"
 opencode_setting/bin/preflight.sh capability-info autopilot-code
 adapters/opencode/bin/sync-native-skills.py --check
