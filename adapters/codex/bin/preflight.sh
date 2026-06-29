@@ -14,6 +14,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh recall <prompt> [cwd]
        preflight.sh briefing [cwd]
        preflight.sh design <file>
+       preflight.sh distill-delta <session-id>
 
 Runs portable checks that Codex can call without consuming Claude hook JSON or
 settings.json.
@@ -66,6 +67,11 @@ case "$cmd" in
     [ "$#" -ge 2 ] || { echo "codex preflight: design requires a file path" >&2; exit 64; }
     file=$2
     AGENT_HOME="$ROOT" bash "$ROOT/hooks/design-postwrite.sh" --file "$file"
+    ;;
+  distill-delta)
+    [ "$#" -ge 2 ] || { echo "codex preflight: distill-delta requires a session id" >&2; exit 64; }
+    sid=$2
+    AGENT_HOME="${AGENT_HOME:-$ROOT}" python3 "$ROOT/tools/memory/mem.py" distill "$sid" --source codex
     ;;
   -h|--help|"")
     usage

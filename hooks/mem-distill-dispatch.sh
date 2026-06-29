@@ -94,7 +94,7 @@ command -v claude >/dev/null 2>&1 || exit 0
 # 빈 delta(처리할 신규 구간 없음) 면 분사 안 함 — 불필요한 claude spawn·트리거 지연 회피.
 # 계약: `mem distill` 출력이 whitespace-only 면 여기서 exit 0 (분사 skip, lock 안 잡음). distill()
 # 은 처리할 구간이 없으면 완전 빈 문자열을 내므로(trailing \n 도 없음) 이 판정이 정확하다.
-delta=$(python3 "$MEM" distill "$SID" 2>/dev/null || true)
+delta=$(python3 "$MEM" distill "$SID" --source "${MEM_SESSION_SOURCE:-claude}" 2>/dev/null || true)
 [ -n "${delta//[[:space:]]/}" ] || exit 0
 
 # 세션당 lock (D3): delta 확인 후 — 실제 분사 직전에만 acquire (lock-hold window 최소화).
@@ -308,6 +308,6 @@ sys.exit(0)
 PYEOF
 
   # delta window 마감: 레코드 0건이어도 무조건 advance (M1 과 합쳐 항상 이 줄에 도달).
-  python3 "$MEM" distill "$SID" --advance >/dev/null 2>&1 || true
+  python3 "$MEM" distill "$SID" --source "${MEM_SESSION_SOURCE:-claude}" --advance >/dev/null 2>&1 || true
 ) &
 exit 0

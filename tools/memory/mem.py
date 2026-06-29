@@ -20,6 +20,7 @@ STORE = Path(os.environ.get("MEM_STORE", AGENT_HOME / "memory"))
 DB = STORE / "memory.db"
 DUMP = STORE / "dump.jsonl"
 PROJECTS = Path(os.environ.get("MEM_PROJECTS", AGENT_HOME / "projects"))
+CODEX_SESSIONS = Path(os.environ.get("CODEX_SESSIONS", HOME / ".codex" / "sessions"))
 USER_PROFILE = Path(os.environ.get("MEM_PROFILE", AGENT_HOME / "user_profile"))
 
 TIERS = ("working", "durable")
@@ -1064,7 +1065,72 @@ class ClaudeCodeJsonlSource:
                           d.get("uuid"), d.get("isSidechain", False))
 
 
-# YAGNI: 다른 하네스용 adapter 는 같은 .messages() 인터페이스
+def _content_text(content):
+    if isinstance(content, str):
+        return content
+    parts = []
+    if isinstance(content, list):
+        for item in content:
+            if isinstance(item, dict):
+                if item.get("type") in ("output_text", "input_text", "text"):
+                    parts.append(item.get("text", ""))
+    return "\n".join(p for p in parts if p)
+
+
+class CodexJsonlSource:
+    """Codex adapter: ~/.codex/sessions/**/rollout-*<sid>.jsonl → 정규화 Msg 스트림."""
+
+    def __init__(self, sid, sessions=None):
+        self.sid = sid
+        self.sessions = sessions or CODEX_SESSIONS
+
+    def locate(self):
+        matches = sorted(self.sessions.glob(f"**/*{self.sid}*.jsonl"))
+        return matches[-1] if matches else None
+
+    def messages(self):
+        path = self.locate()
+        if path is None:
+            return
+        with path.open(encoding="utf-8") as f:
+            for i, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except Exception:
+                    continue
+                payload = d.get("payload") or {}
+                wrapper_type = d.get("type")
+                ptype = payload.get("type")
+                ts = d.get("timestamp")
+                uuid = payload.get("id") or payload.get("call_id") or f"{ts}:{i}"
+
+                if wrapper_type == "event_msg" and ptype == "user_message":
+                    text = payload.get("message", "")
+                    if text:
+                        yield Msg("user", ts, text, uuid, False)
+                    continue
+
+                if wrapper_type == "response_item" and ptype == "message":
+                    role = payload.get("role")
+                    # Codex also stores user turns as response_item/message, but
+                    # event_msg/user_message is the cleaner user source and avoids
+                    # duplicate distill deltas.
+                    if role != "assistant":
+                        continue
+                    text = _content_text(payload.get("content"))
+                    if text:
+                        yield Msg(role, ts, text, uuid, False)
+                    continue
+
+                if wrapper_type == "response_item" and ptype in ("function_call", "custom_tool_call"):
+                    name = payload.get("name") or "tool"
+                    yield Msg("assistant", ts, f"[tool:{name}]", uuid, False)
+
+
+# 다른 하네스용 adapter 는 같은 .messages() 인터페이스
 # (role,ts,text,uuid,is_sidechain Msg yield)만 구현하면 ingest_session·distill 불변.
 
 
@@ -1082,10 +1148,13 @@ def ingest_session(source):
         yield msg
 
 
-def distill(sid, advance=False):
+def distill(sid, advance=False, source_name="claude"):
     """marker 이후 메시지를 정규화 텍스트로 stdout. --advance 면 marker 전진.
     sidechain·빈-text 는 출력 제외하되 last_uuid(marker 전진)는 전 구간 끝까지."""
-    source = ClaudeCodeJsonlSource(sid)
+    if source_name == "codex":
+        source = CodexJsonlSource(sid)
+    else:
+        source = ClaudeCodeJsonlSource(sid)
     last_uuid = None
     out = []
     for msg in ingest_session(source):
@@ -2363,6 +2432,8 @@ def main():
 
     ds = sub.add_parser("distill", help="세션 jsonl 의 marker 이후 정규화 텍스트 출력(+--advance 로 marker 전진)")
     ds.add_argument("sid")
+    ds.add_argument("--source", choices=["claude", "codex"], default=os.environ.get("MEM_SESSION_SOURCE", "claude"),
+                    help="session transcript adapter source")
     ds.add_argument("--advance", action="store_true", help="처리 후 marker 를 마지막 메시지 uuid 로 전진")
 
     sub.add_parser("orphans", help="해석 안 되는 cwd_origin 조회 (read-only)")
@@ -2429,7 +2500,7 @@ def main():
     elif args.cmd == "profile":
         profile(args.aspect, list_mode=args.list)
     elif args.cmd == "distill":
-        distill(args.sid, advance=args.advance)
+        distill(args.sid, advance=args.advance, source_name=args.source)
     elif args.cmd == "orphans":
         orphans()
 

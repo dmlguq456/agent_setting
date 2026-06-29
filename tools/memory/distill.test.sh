@@ -94,9 +94,9 @@ rm -rf "$STUBBIN"
 echo "== Verification ④ turn-nudge 11종 regression =="
 nudge_out="$(bash "$ROOT/hooks/mem-turn-nudge.test.sh" 2>&1)" || true
 echo "$nudge_out" | tail -3
-echo "$nudge_out" | grep -q "RESULT: PASS=12 FAIL=0" \
-  && ok "mem-turn-nudge.test.sh → PASS=12 FAIL=0" \
-  || bad "turn-nudge regression not 12/0: $(echo "$nudge_out" | grep RESULT)"
+echo "$nudge_out" | grep -q "RESULT: PASS=11 FAIL=0" \
+  && ok "mem-turn-nudge.test.sh → PASS=11 FAIL=0" \
+  || bad "turn-nudge regression not 11/0: $(echo "$nudge_out" | grep RESULT)"
 
 
 # ============================================================

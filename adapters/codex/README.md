@@ -40,7 +40,8 @@ Experimental. The portable contract is usable, but Codex does not consume Claude
 | memory injection | `tools/memory/mem.py inject` is runtime-neutral; run `adapters/codex/bin/preflight.sh memory [cwd]` when no automatic session-start hook is attached |
 | memory recall injection | `hooks/mem-recall-inject.sh` is runtime-neutral for prompt text; run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` when no automatic prompt hook is attached |
 | oncall briefing injection | `hooks/mem-briefing-inject.sh` is runtime-neutral for cwd/text output; run `adapters/codex/bin/preflight.sh briefing [cwd]` when no automatic prompt hook is attached |
-| memory store | `tools/memory/mem.py` is runtime-neutral; session log ingestion/distillation remains adapter-specific |
+| memory distill delta | Codex session transcript extraction is available through `adapters/codex/bin/preflight.sh distill-delta <session-id>`; automatic no-tools worker execution is still adapter-specific |
+| memory store | `tools/memory/mem.py` is runtime-neutral; detached distillation worker execution remains adapter-specific |
 
 ## Runtime Home Projection
 

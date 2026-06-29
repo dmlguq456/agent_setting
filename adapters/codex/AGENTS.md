@@ -24,6 +24,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Use `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text memory injection when Codex has no automatic session-start hook.
 - Use `adapters/codex/bin/preflight.sh recall "<prompt>" [cwd]` before answering prompts with recall signal words when Codex has no automatic prompt hook.
 - Use `adapters/codex/bin/preflight.sh briefing [cwd]` on the dedicated agent desk when Codex has no automatic prompt hook.
+- Use `adapters/codex/bin/preflight.sh distill-delta <session-id>` only to inspect Codex transcript deltas; do not auto-run memory distillation until a Codex no-tools worker contract exists.
 - Keep Codex-owned credentials, sessions, logs, caches, and local databases outside the harness repo.
 
 ## Response Policy

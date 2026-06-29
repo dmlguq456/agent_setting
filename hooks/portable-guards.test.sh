@@ -159,6 +159,20 @@ if "$CODEX" briefing "$TMP/flowproj" >/tmp/brief.out 2>/tmp/brief.err; then
 else
   bad "codex briefing wrapper should exit cleanly"
 fi
+mkdir -p "$TMP/codex_sessions/2026/06/29"
+cat > "$TMP/codex_sessions/2026/06/29/rollout-2026-06-29T00-00-00-codexsid.jsonl" <<'EOF'
+{"timestamp":"2026-06-29T00:00:00.000Z","type":"event_msg","payload":{"type":"user_message","message":"hello"}}
+{"timestamp":"2026-06-29T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"world"}]}}
+{"timestamp":"2026-06-29T00:00:02.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call_1"}}
+EOF
+if CODEX_SESSIONS="$TMP/codex_sessions" python3 "$ROOT/tools/memory/mem.py" distill codexsid --source codex >/tmp/codex_delta.out 2>/tmp/codex_delta.err \
+  && grep -q '^\[user\] hello' /tmp/codex_delta.out \
+  && grep -q '^\[assistant\] world' /tmp/codex_delta.out \
+  && grep -q '^\[assistant\] \[tool:exec_command\]' /tmp/codex_delta.out; then
+  ok "codex session source distills transcript"
+else
+  bad "codex session source should distill transcript"
+fi
 
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

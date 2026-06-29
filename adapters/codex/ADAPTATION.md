@@ -43,7 +43,7 @@ Codex must not consume these Claude-native files as native configuration:
 | memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text session-start memory injection |
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |
 | oncall briefing | Run `adapters/codex/bin/preflight.sh briefing [cwd]` before prompt handling on the dedicated agent desk |
-| memory distill | Disabled until a Codex session source and no-tools distiller contract are implemented |
+| memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`; automatic no-tools worker remains disabled until Codex has a headless worker contract |
 | role profiles | Read `roles/README.md`, then translate roles to Codex model/reasoning-effort settings |
 | role modes | Read `roles/MODES.md`; treat adapter-coupled modes as unsupported unless wrappers exist |
 | hook invariants | Read `core/HOOKS.md`; run explicit preflight wrappers until Codex-native hook events exist |
