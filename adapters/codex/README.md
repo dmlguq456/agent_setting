@@ -32,6 +32,7 @@ Codex skill/plugin surface must be adapter-owned output derived from
 | Capabilities | `capabilities/README.md` |
 | Role profiles | `roles/README.md` |
 | Hook and guard scripts | `hooks/`, `utilities/` |
+| Selected tool projection | `adapters/codex/tools/` |
 | Selected utility projection | `adapters/codex/utilities/` |
 
 ## Runtime Mapping
@@ -60,6 +61,20 @@ Codex skill/plugin surface must be adapter-owned output derived from
 | memory distill delta | Codex session transcript extraction is available through `adapters/codex/bin/preflight.sh distill-delta <session-id>` |
 | memory distill proposal | `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]` runs a constrained Codex exec proposal worker; it mutates memory only with explicit `CODEX_DISTILL_APPLY=1` |
 | memory store | `tools/memory/mem.py` is runtime-neutral; detached distillation worker execution remains adapter-specific |
+
+## Tool Projection
+
+`codex_setting/tools` intentionally points at `adapters/codex/tools/`, not the
+full shared `tools/` directory. The adapter currently exposes only memory tools
+that Codex wrappers use directly:
+
+- `memory/mem.py`
+- `memory/apply-distill-actions.py`
+- `memory/recall.sh`
+
+Harness development tools and Claude-coupled helper surfaces such as
+`build-manifest.py`, `design-mcp`, and `web-bundle` stay out of the Codex
+projection until Codex has a documented runtime realization for them.
 
 ## Utility Projection
 

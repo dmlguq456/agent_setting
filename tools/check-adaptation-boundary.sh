@@ -100,6 +100,41 @@ check_codex_utility_projection() {
   done
 }
 
+check_codex_tool_projection() {
+  if [ ! -L codex_setting/tools ]; then
+    fail_msg "codex_setting/tools must project adapters/codex/tools"
+    return
+  fi
+
+  target=$(readlink codex_setting/tools)
+  if [ "$target" != "../adapters/codex/tools" ]; then
+    fail_msg "codex_setting/tools points to $target; expected ../adapters/codex/tools"
+  fi
+
+  for p in mem.py apply-distill-actions.py recall.sh; do
+    if [ ! -L "adapters/codex/tools/memory/$p" ]; then
+      fail_msg "adapters/codex/tools/memory/$p must be a selective portable memory tool projection"
+      continue
+    fi
+    link=$(readlink "adapters/codex/tools/memory/$p")
+    if [ "$link" != "../../../../tools/memory/$p" ]; then
+      fail_msg "adapters/codex/tools/memory/$p points to $link; expected ../../../../tools/memory/$p"
+    fi
+  done
+
+  extra=$(find adapters/codex/tools -mindepth 1 ! \( -path adapters/codex/tools/memory -o -path adapters/codex/tools/memory/mem.py -o -path adapters/codex/tools/memory/apply-distill-actions.py -o -path adapters/codex/tools/memory/recall.sh \) -print 2>/dev/null || true)
+  if [ -n "$extra" ]; then
+    fail_msg "adapters/codex/tools contains unapproved entries:"
+    printf '%s\n' "$extra"
+  fi
+
+  for p in build-manifest.py check-adaptation-boundary.sh design-mcp web-bundle; do
+    if [ -e "adapters/codex/tools/$p" ] || [ -L "adapters/codex/tools/$p" ]; then
+      fail_msg "adapters/codex/tools/$p must not be projected until Codex support is documented"
+    fi
+  done
+}
+
 check_claude_bin_wrappers() {
   if [ ! -L claude_setting/bin ]; then
     fail_msg "claude_setting/bin must project adapters/claude/bin"
@@ -421,6 +456,7 @@ check_projection_symlinks codex_setting
 check_codex_forbidden_entries
 check_required_projection_entries
 check_codex_bin_wrappers
+check_codex_tool_projection
 check_codex_utility_projection
 check_claude_bin_wrappers
 check_claude_skill_projection

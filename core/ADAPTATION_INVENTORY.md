@@ -45,6 +45,7 @@ into a portable agent setting plus runtime adapters.
 | Scaffold assets | `adapters/claude/scaffolds/*`, shared `scaffolds/*` | adapter-native projection, mixed content | Concrete Claude scaffold files preserve current behavior while portable template intent remains available from the shared scaffold layer. |
 | Loop helpers | `adapters/claude/loops/*`, shared `loops/*` | adapter-native projection, mixed content | Concrete Claude loop files preserve current drill/oncall/study behavior while runtime-coupled loop invocation remains classified for future adapters. |
 | Tool helpers | `adapters/claude/tools/*`, shared `tools/*` | adapter-native projection, mixed content | Concrete Claude tool files preserve current helper behavior while memory/session/runtime-specific assumptions are split behind adapter or tool plugin boundaries. |
+| Codex tools | `adapters/codex/tools/*` | adapter-native selective projection | Only symlink portable memory tools Codex wrappers use; do not expose `build-manifest.py`, `design-mcp`, or `web-bundle` through `codex_setting/`. |
 | Projection directories | `claude_setting/`, `codex_setting/` | projection | Must contain only symlinks or generated adapter output. |
 
 ## Migration Order

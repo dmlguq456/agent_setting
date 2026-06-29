@@ -29,6 +29,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Use `adapters/codex/bin/preflight.sh briefing [cwd]` on the dedicated agent desk when Codex has no automatic prompt hook.
 - Use `adapters/codex/bin/preflight.sh worklog [cwd]` before worklog-board or agent-notes work to inspect configured notes/app paths without mutating data.
 - Use `adapters/codex/bin/preflight.sh distill-delta <session-id>` to inspect Codex transcript deltas. Use `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]` only for explicit proposal generation; do not auto-apply memory distillation until a Codex no-tools worker contract exists.
+- Treat `codex_setting/tools` as a selective memory-tool projection. Do not assume every shared tool is Codex-supported.
 - Treat `codex_setting/utilities` as a selective utility projection. Do not assume every shared utility is Codex-supported.
 - Keep Codex-owned credentials, sessions, logs, caches, and local databases outside the harness repo.
 

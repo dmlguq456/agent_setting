@@ -41,7 +41,8 @@ invariant.
 | Common contract | `core/` | `codex_setting/core` |
 | Capability catalog | `capabilities/` | `codex_setting/capabilities` |
 | Preflight wrappers | `adapters/codex/bin/` | `codex_setting/bin` |
-| Shared helper tools | `tools/`, selected `utilities/` | `codex_setting/tools`, `codex_setting/utilities` |
+| Shared helper tools | selected `tools/`, selected `utilities/` | `codex_setting/tools`, `codex_setting/utilities` |
+| Selected tools | `adapters/codex/tools/` symlinks to portable tool files | `codex_setting/tools` |
 | Selected utilities | `adapters/codex/utilities/` symlinks to portable utility files | `codex_setting/utilities` |
 
 ## Native Skill And Plugin Surface Debt
@@ -137,9 +138,21 @@ unavailable role explicitly.
 ## Current Projection Boundary
 
 `codex_setting/` should remain minimal until adapted surfaces exist. It may expose
-`AGENTS.md`, `README.md`, `core/`, `capabilities/`, `bin/`, `tools/`, and a
-selected utility projection, but must not expose Claude-native `settings.json`,
+`AGENTS.md`, `README.md`, `core/`, `capabilities/`, `bin/`, selected tools,
+and selected utilities, but must not expose Claude-native `settings.json`,
 `commands/`, `skills/`, or `statusline.sh` as if Codex could consume them.
+
+`codex_setting/tools` points at `adapters/codex/tools/`, not the entire shared
+`tools/` directory. The current allowlist is:
+
+- `memory/mem.py`
+- `memory/apply-distill-actions.py`
+- `memory/recall.sh`
+
+Do not project `build-manifest.py`: it is a harness development tool that reads
+Claude adapter skills, agents, and settings. Do not project `design-mcp` or
+`web-bundle` until Codex has a documented design/tooling realization that uses
+them directly.
 
 `codex_setting/utilities` points at `adapters/codex/utilities/`, not the entire
 shared `utilities/` directory. The current allowlist is:
