@@ -34,7 +34,7 @@ def plugin_json() -> dict:
             "shortDescription": "Portable agent harness capabilities for Codex.",
             "longDescription": (
                 "Adapter-owned Codex plugin projection generated from portable "
-                "agent_setting capability contracts. Claude-native files are reference only."
+                "agent_setting capability contracts. Legacy runtime files are reference only."
             ),
             "developerName": "agent_setting",
             "category": "Developer Tools",

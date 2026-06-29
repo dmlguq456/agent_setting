@@ -461,6 +461,9 @@ check_codex_native_plugin_projection() {
     || ! grep -Fq '"skills": "./skills/"' "$plugin_manifest"; then
     fail_msg "$plugin_manifest must define the agent-harness-codex plugin and plugin-local skills path"
   fi
+  if grep -Eq 'Claude-native|Claude Code|adapters/claude|claude_setting' "$plugin_manifest"; then
+    fail_msg "$plugin_manifest must not expose Claude implementation names in Codex runtime-facing metadata"
+  fi
   if ! grep -Fq '"name": "agent-harness"' "$marketplace" \
     || ! grep -Fq '"path": "./plugins/agent-harness-codex"' "$marketplace"; then
     fail_msg "$marketplace must expose agent-harness-codex through the repo-local plugin path"
