@@ -44,7 +44,7 @@ invariant.
 | Preflight wrappers | `adapters/codex/bin/` | `codex_setting/bin` |
 | Skills | `adapters/codex/skills/<name>/SKILL.md` generated from `capabilities/` | `codex_setting/codex-skills` |
 | Custom agents | `adapters/codex/agents/<role>.toml` generated from `roles/README.md` | `codex_setting/codex-agents` |
-| Plugin marketplace | `adapters/codex/.agents/plugins/marketplace.json` plus `adapters/codex/plugins/agent-harness-codex` | `codex_setting/codex-plugin-marketplace` |
+| Plugin marketplace | `adapters/codex/plugin-marketplace/.agents/plugins/marketplace.json` plus `adapters/codex/plugin-marketplace/plugins/agent-harness-codex` | `codex_setting/codex-plugin-marketplace` |
 | Hook bridge | `adapters/codex/hooks/hooks.json`, `adapters/codex/hooks/pretooluse-write-guard.py`, `adapters/codex/hooks/posttooluse-design-check.py` | `codex_setting/codex-hooks` |
 | Permission/sandbox contract | `adapters/codex/bin/preflight.sh permissions` | `codex_setting/bin/preflight.sh permissions` |
 | MCP contract | `adapters/codex/bin/preflight.sh mcp` | `codex_setting/bin/preflight.sh mcp` |
@@ -61,7 +61,7 @@ projected as `codex_setting/codex-skills`.
 
 The same generated skills are also packaged into the adapter-owned Codex plugin
 `adapters/codex/plugins/agent-harness-codex`, with repo-local marketplace
-metadata under `adapters/codex/.agents/plugins/marketplace.json`. This makes
+metadata projected through `adapters/codex/plugin-marketplace/`. This makes
 the harness discoverable through Codex's native plugin installer without
 exposing Claude Skill files.
 
@@ -271,6 +271,11 @@ When no concrete model is configured, the adapter reports `codex-default` and
 `codex-agents`, `codex-plugin-marketplace`, `codex-hooks`, selected tools, and selected utilities, but must not expose Claude-native
 `settings.json`, `commands/`, root `skills/`, `hooks/`, or `statusline.sh` as if Codex
 could consume them.
+
+`codex_setting/codex-plugin-marketplace` points at the dedicated marketplace
+projection `adapters/codex/plugin-marketplace/`, not at the entire Codex
+adapter. That projection exposes only `.agents/plugins/marketplace.json` and
+`plugins/agent-harness-codex`.
 
 `codex_setting/tools` points at `adapters/codex/tools/`, not the entire shared
 `tools/` directory. The current allowlist is:

@@ -92,7 +92,7 @@ check_codex_projection_targets() {
   check_link_target codex_setting/tools ../adapters/codex/tools
   check_link_target codex_setting/utilities ../adapters/codex/utilities
   check_link_target codex_setting/codex-skills ../adapters/codex/skills
-  check_link_target codex_setting/codex-plugin-marketplace ../adapters/codex
+  check_link_target codex_setting/codex-plugin-marketplace ../adapters/codex/plugin-marketplace
   check_link_target codex_setting/codex-hooks ../adapters/codex/hooks
   check_link_target codex_setting/codex-agents ../adapters/codex/agents
 }
@@ -126,6 +126,38 @@ check_non_claude_projection_runtime_caches() {
   if [ -n "$cache_paths" ]; then
     fail_msg "Codex/OpenCode adapter projections must not expose Python bytecode caches:"
     printf '%s\n' "$cache_paths"
+  fi
+}
+
+check_codex_plugin_marketplace_projection_boundary() {
+  root="adapters/codex/plugin-marketplace"
+  marketplace="$root/.agents/plugins/marketplace.json"
+  plugin_link="$root/plugins/agent-harness-codex"
+
+  if [ ! -d "$root" ]; then
+    fail_msg "$root is missing"
+    return
+  fi
+  entries=$(find "$root" -mindepth 1 -maxdepth 1 -exec basename {} \; 2>/dev/null || true)
+  for entry in $entries; do
+    case "$entry" in
+      .agents|plugins) ;;
+      *) fail_msg "$root/$entry is not an approved Codex plugin marketplace entry" ;;
+    esac
+  done
+  if [ ! -f "$marketplace" ]; then
+    fail_msg "$marketplace is missing"
+  fi
+  if [ ! -L "$plugin_link" ]; then
+    fail_msg "$plugin_link must project the concrete Codex plugin"
+  elif [ "$(readlink "$plugin_link")" != "../../plugins/agent-harness-codex" ]; then
+    fail_msg "$plugin_link points to $(readlink "$plugin_link"); expected ../../plugins/agent-harness-codex"
+  fi
+  if [ -e "$root/ADAPTATION.md" ] || [ -e "$root/bin" ] || [ -e "$root/hooks" ] || [ -e "$root/skills" ]; then
+    fail_msg "$root must expose only the Codex marketplace layout, not the whole adapter"
+  fi
+  if ! grep -Fq '"path": "./plugins/agent-harness-codex"' "$marketplace"; then
+    fail_msg "$marketplace must point at the marketplace-local plugin path"
   fi
 }
 
@@ -792,7 +824,7 @@ check_codex_native_skill_projection() {
 check_codex_native_plugin_projection() {
   plugin_root="adapters/codex/plugins/agent-harness-codex"
   plugin_manifest="$plugin_root/.codex-plugin/plugin.json"
-  marketplace="adapters/codex/.agents/plugins/marketplace.json"
+  marketplace="adapters/codex/plugin-marketplace/.agents/plugins/marketplace.json"
 
   if [ ! -x adapters/codex/bin/sync-native-plugin.py ]; then
     fail_msg "adapters/codex/bin/sync-native-plugin.py must be executable"
@@ -810,12 +842,9 @@ check_codex_native_plugin_projection() {
       fail_msg "adapters/codex/plugins/$entry is not an approved Codex plugin projection"
     fi
   done
-  marketplace_entries=$(find adapters/codex/.agents/plugins -mindepth 1 -maxdepth 1 -exec basename {} \; 2>/dev/null || true)
-  for entry in $marketplace_entries; do
-    if [ "$entry" != "marketplace.json" ]; then
-      fail_msg "adapters/codex/.agents/plugins/$entry is not an approved Codex marketplace projection"
-    fi
-  done
+  if [ -e adapters/codex/.agents ] || [ -L adapters/codex/.agents ]; then
+    fail_msg "adapters/codex/.agents is obsolete; Codex marketplace projection must live under adapters/codex/plugin-marketplace"
+  fi
 
   if [ ! -d "$plugin_root" ] || [ -L "$plugin_root" ]; then
     fail_msg "$plugin_root must be a concrete adapter-owned Codex plugin directory"
@@ -2198,6 +2227,7 @@ check_codex_forbidden_entries
 check_codex_native_surface_debt
 check_required_projection_entries
 check_codex_projection_targets
+check_codex_plugin_marketplace_projection_boundary
 check_opencode_forbidden_entries
 check_opencode_required_projection_entries
 check_opencode_projection_targets

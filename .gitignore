@@ -21,6 +21,8 @@ plans/
 plugins/
 !adapters/codex/plugins/
 !adapters/codex/plugins/**
+!adapters/codex/plugin-marketplace/
+!adapters/codex/plugin-marketplace/**
 !adapters/codex/.agents/
 !adapters/codex/.agents/**
 !adapters/opencode/plugins/

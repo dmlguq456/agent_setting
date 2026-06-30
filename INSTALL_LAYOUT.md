@@ -78,7 +78,8 @@ generated from `capabilities/`. Codex-native custom Agent projections must come
 from `codex_setting/codex-agents`, which is generated from `roles/`.
 Codex-native plugin installation must use
 `codex_setting/codex-plugin-marketplace`, which points at the adapter-owned
-repo-local marketplace. Codex-native hook configuration must come from
+repo-local marketplace projection rather than the whole Codex adapter.
+Codex-native hook configuration must come from
 `codex_setting/codex-hooks`, which points at adapter-owned hook bridges.
 Future Codex-specific bootstrap files should live under
 `adapters/codex/` and be symlinked or generated into `codex_setting/` without

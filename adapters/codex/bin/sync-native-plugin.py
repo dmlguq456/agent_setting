@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -15,7 +16,10 @@ ROOT = Path(__file__).resolve().parents[3]
 ADAPTER = ROOT / "adapters" / "codex"
 PLUGIN_NAME = "agent-harness-codex"
 PLUGIN_ROOT = ADAPTER / "plugins" / PLUGIN_NAME
-MARKETPLACE = ADAPTER / ".agents" / "plugins" / "marketplace.json"
+MARKETPLACE_ROOT = ADAPTER / "plugin-marketplace"
+MARKETPLACE = MARKETPLACE_ROOT / ".agents" / "plugins" / "marketplace.json"
+MARKETPLACE_PLUGIN_LINK = MARKETPLACE_ROOT / "plugins" / PLUGIN_NAME
+MARKETPLACE_PLUGIN_TARGET = Path("../../plugins") / PLUGIN_NAME
 SKILLS = ADAPTER / "skills"
 VALIDATOR = Path.home() / ".codex" / "skills" / ".system" / "plugin-creator" / "scripts" / "validate_plugin.py"
 
@@ -86,6 +90,13 @@ def sync() -> None:
     shutil.copytree(SKILLS, plugin_skills)
 
     write_json(MARKETPLACE, marketplace_json())
+    MARKETPLACE_PLUGIN_LINK.parent.mkdir(parents=True, exist_ok=True)
+    if MARKETPLACE_PLUGIN_LINK.is_symlink() or MARKETPLACE_PLUGIN_LINK.exists():
+        if MARKETPLACE_PLUGIN_LINK.is_dir() and not MARKETPLACE_PLUGIN_LINK.is_symlink():
+            shutil.rmtree(MARKETPLACE_PLUGIN_LINK)
+        else:
+            MARKETPLACE_PLUGIN_LINK.unlink()
+    MARKETPLACE_PLUGIN_LINK.symlink_to(MARKETPLACE_PLUGIN_TARGET)
 
 
 def check_file(path: Path, expected: str, stale: list[str]) -> None:
@@ -101,6 +112,12 @@ def check() -> int:
         stale,
     )
     check_file(MARKETPLACE, json.dumps(marketplace_json(), indent=2) + "\n", stale)
+    if (ADAPTER / ".agents").exists():
+        stale.append(str((ADAPTER / ".agents").relative_to(ROOT)))
+    if not MARKETPLACE_PLUGIN_LINK.is_symlink():
+        stale.append(str(MARKETPLACE_PLUGIN_LINK.relative_to(ROOT)))
+    elif os.readlink(MARKETPLACE_PLUGIN_LINK) != str(MARKETPLACE_PLUGIN_TARGET):
+        stale.append(str(MARKETPLACE_PLUGIN_LINK.relative_to(ROOT)))
 
     for skill in sorted(SKILLS.glob("*/SKILL.md")):
         rel = skill.relative_to(SKILLS)

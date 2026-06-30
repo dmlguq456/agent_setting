@@ -15,7 +15,7 @@ Codex native Skill projection is materialized under `adapters/codex/skills/`
 from `capabilities/`. Codex custom agent projections are materialized under
 `adapters/codex/agents/` from `roles/`. A Codex plugin projection is materialized under
 `adapters/codex/plugins/agent-harness-codex` and exposed through the repo-local
-marketplace at `adapters/codex/.agents/plugins/marketplace.json`. Do not
+marketplace projection at `adapters/codex/plugin-marketplace/`. Do not
 project Claude Skill, Agent, command, hook, or statusline files into Codex.
 
 ## Entry Points
@@ -152,7 +152,9 @@ plugin generated from the same Codex-native Skill projection:
 adapters/codex/bin/sync-native-plugin.py --check
 ```
 
-Expose the repo-local marketplace through `codex_setting/codex-plugin-marketplace`:
+Expose the repo-local marketplace through `codex_setting/codex-plugin-marketplace`.
+That projection is a dedicated marketplace root, not a link to the entire
+Codex adapter:
 
 ```bash
 codex plugin marketplace add "$AGENT_HOME/codex_setting/codex-plugin-marketplace"
