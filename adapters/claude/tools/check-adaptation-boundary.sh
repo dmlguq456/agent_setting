@@ -865,9 +865,9 @@ check_codex_native_skill_projection() {
     fi
   done
 
-  bad=$(rg -n 'adapters/claude|claude_setting|claude_realization' adapters/codex/skills adapters/codex/plugins/agent-harness-codex/skills adapters/codex/bin/capability-map.sh 2>/dev/null || true)
+  bad=$(rg -n 'adapters/claude|claude_setting|claude_realization|statusline\.sh|settings\.json|CLAUDE\.md|(^|[^[:alnum:]_/.-])skills/' adapters/codex/skills adapters/codex/plugins/agent-harness-codex/skills adapters/codex/bin/capability-map.sh 2>/dev/null || true)
   if [ -n "$bad" ]; then
-    fail_msg "Codex native capability surfaces must not expose Claude adapter paths:"
+    fail_msg "Codex native capability surfaces must not expose Claude-native surfaces:"
     printf '%s\n' "$bad"
   fi
 }
@@ -1505,9 +1505,9 @@ check_opencode_native_skill_projection() {
     fi
   done
 
-  bad=$(rg -n 'adapters/claude|claude_setting|claude_realization' adapters/opencode/skills adapters/opencode/bin/capability-map.sh 2>/dev/null || true)
+  bad=$(rg -n 'adapters/claude|claude_setting|claude_realization|statusline\.sh|settings\.json|CLAUDE\.md|(^|[^[:alnum:]_/.-])skills/' adapters/opencode/skills adapters/opencode/bin/capability-map.sh 2>/dev/null || true)
   if [ -n "$bad" ]; then
-    fail_msg "OpenCode native skill surfaces must not expose Claude adapter paths:"
+    fail_msg "OpenCode native skill surfaces must not expose Claude-native surfaces:"
     printf '%s\n' "$bad"
   fi
 }
@@ -1623,9 +1623,9 @@ check_opencode_native_command_projection() {
     fi
   done
 
-  bad=$(rg -n 'adapters/claude|claude_setting' adapters/opencode/commands 2>/dev/null || true)
+  bad=$(rg -n 'adapters/claude|claude_setting|statusline\.sh|settings\.json|CLAUDE\.md|(^|[^[:alnum:]_/.-])skills/' adapters/opencode/commands 2>/dev/null || true)
   if [ -n "$bad" ]; then
-    fail_msg "OpenCode native command surfaces must not expose Claude adapter paths:"
+    fail_msg "OpenCode native command surfaces must not expose Claude-native surfaces:"
     printf '%s\n' "$bad"
   fi
   if ! grep -Fq 'native_command_path=' adapters/opencode/bin/capability-map.sh \
