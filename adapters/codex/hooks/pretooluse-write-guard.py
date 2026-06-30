@@ -37,6 +37,19 @@ def nested_mapping(payload: dict[str, Any], *keys: str) -> dict[str, Any]:
     return {}
 
 
+def nested_string(payload: dict[str, Any], *keys: str) -> str:
+    direct = first_string(payload, *keys)
+    if direct:
+        return direct
+    for key in ("context", "workspace", "session", "payload", "event", "input", "data"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            found = nested_string(value, *keys)
+            if found:
+                return found
+    return ""
+
+
 def tool_name(payload: dict[str, Any]) -> str:
     direct = first_string(payload, "tool_name", "toolName", "matcher")
     if direct:
@@ -57,7 +70,7 @@ def tool_input(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def cwd(payload: dict[str, Any]) -> Path:
-    raw = first_string(payload, "cwd", "working_directory", "workingDirectory")
+    raw = nested_string(payload, "cwd", "working_directory", "workingDirectory")
     if raw:
         return Path(raw)
     return Path.cwd()
@@ -123,7 +136,10 @@ def main() -> int:
     if (name in {"Write", "write", "Edit", "edit", "MultiEdit", "multi_edit", "multiedit"} or is_patch_tool(name)) and not files:
         return hook_block(f"agent harness preflight could not determine target file for Codex tool {name}")
 
-    session_id = first_string(payload, "session_id", "sessionID", "thread_id", "threadID") or "codex-hook"
+    session_id = nested_string(payload, "session_id", "sessionID", "thread_id", "threadID")
+    if not session_id:
+        session_id = first_string(nested_mapping(payload, "session"), "id")
+    session_id = session_id or "codex-hook"
     env = os.environ.copy()
     env.setdefault("AGENT_HOME", str(ROOT))
 

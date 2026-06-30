@@ -31,6 +31,19 @@ def nested_mapping(payload: dict[str, Any], *keys: str) -> dict[str, Any]:
     return {}
 
 
+def nested_string(payload: dict[str, Any], *keys: str) -> str:
+    direct = first_string(payload, *keys)
+    if direct:
+        return direct
+    for key in ("context", "workspace", "session", "payload", "event", "input", "data"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            found = nested_string(value, *keys)
+            if found:
+                return found
+    return ""
+
+
 def tool_name(payload: dict[str, Any]) -> str:
     direct = first_string(payload, "tool_name", "toolName", "matcher")
     if direct:
@@ -51,7 +64,7 @@ def tool_input(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def cwd(payload: dict[str, Any]) -> Path:
-    raw = first_string(payload, "cwd", "working_directory", "workingDirectory")
+    raw = nested_string(payload, "cwd", "working_directory", "workingDirectory")
     return Path(raw) if raw else Path.cwd()
 
 
@@ -84,7 +97,10 @@ def main() -> int:
     if not file:
         return 0
 
-    session_id = first_string(payload, "session_id", "sessionID", "thread_id", "threadID") or "codex-hook"
+    session_id = nested_string(payload, "session_id", "sessionID", "thread_id", "threadID")
+    if not session_id:
+        session_id = first_string(nested_mapping(payload, "session"), "id")
+    session_id = session_id or "codex-hook"
     env = os.environ.copy()
     env.setdefault("AGENT_HOME", str(ROOT))
     result = subprocess.run(

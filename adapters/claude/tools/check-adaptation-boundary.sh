@@ -1286,6 +1286,10 @@ check_codex_native_hook_projection() {
     if ! grep -Fq 'adapters" / "codex" / "bin" / "preflight.sh' "$bridge"; then
       fail_msg "$bridge must call the Codex preflight wrapper"
     fi
+    if ! grep -Fq 'def nested_string' "$bridge" \
+      || ! grep -Fq '"context", "workspace", "session", "payload", "event", "input", "data"' "$bridge"; then
+      fail_msg "$bridge must resolve cwd/session from nested Codex runtime payloads"
+    fi
   done
   for bridge in "$pre_bridge" "$post_bridge" "$read_bridge"; do
     if ! grep -Fq 'raw_tool = payload.get("tool")' "$bridge" \

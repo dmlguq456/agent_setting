@@ -1080,6 +1080,13 @@ if printf '{"tool":{"name":"Read","input":{"path":"%s"}},"session_id":"nestedrea
 else
   bad "codex native read hook should accept nested tool input payloads"
 fi
+if printf '{"tool_name":"Read","tool_input":{"file_path":".agent_reports/spec/prd.md"},"session":{"id":"nestedctxreadsid"},"workspace":{"cwd":"%s"}}\n' "$TMP/repo" \
+  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_read_hook_nested_context.out 2>/tmp/codex_read_hook_nested_context.err \
+  && find "$TMP/codex_marker_home/.spec-grounding" -type f -name 'nestedctxreadsid__*' -print -quit | grep -q .; then
+  ok "codex native read hook resolves nested cwd/session payloads"
+else
+  bad "codex native read hook should resolve nested cwd/session payloads"
+fi
 if printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/MEMORY.md" "$TMP/runtime" \
   | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook_block.out 2>/tmp/codex_hook_block.err \
   && grep -q '"decision": "block"' /tmp/codex_hook_block.out \
@@ -1087,6 +1094,14 @@ if printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"te
   ok "codex native hook projection blocks guarded writes"
 else
   bad "codex native hook projection should block guarded writes"
+fi
+if printf '{"tool_name":"Write","tool_input":{"file_path":"projects/abc/memory/NESTED.md"},"session":{"id":"nestedcontextsid"},"context":{"cwd":"%s"}}\n' "$TMP/runtime" \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_nested_context_block.out 2>/tmp/codex_nested_context_block.err \
+  && grep -q '"decision": "block"' /tmp/codex_nested_context_block.out \
+  && grep -q 'memory' /tmp/codex_nested_context_block.out; then
+  ok "codex native write hook resolves nested cwd/session payloads"
+else
+  bad "codex native write hook should resolve nested cwd/session payloads"
 fi
 if printf '{"tool_name":"MultiEdit","tool_input":{"file_path":"%s","edits":[]},"session_id":"testsid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/MEMORY.md" "$TMP/runtime" \
   | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_multiedit_block.out 2>/tmp/codex_multiedit_block.err \

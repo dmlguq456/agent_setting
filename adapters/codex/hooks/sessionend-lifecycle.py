@@ -31,12 +31,29 @@ def load_payload() -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def nested_string(payload: dict[str, Any], *keys: str) -> str:
+    direct = first_string(payload, *keys)
+    if direct:
+        return direct
+    for key in ("context", "workspace", "session", "payload", "event", "input", "data"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            found = nested_string(value, *keys)
+            if found:
+                return found
+    return ""
+
+
 def cwd(payload: dict[str, Any]) -> str:
-    return first_string(payload, "cwd", "working_directory", "workingDirectory") or os.getcwd()
+    return nested_string(payload, "cwd", "working_directory", "workingDirectory") or os.getcwd()
 
 
 def session_id(payload: dict[str, Any]) -> str:
-    return first_string(payload, "session_id", "sessionID", "thread_id", "threadID") or "codex-hook"
+    sid = nested_string(payload, "session_id", "sessionID", "thread_id", "threadID")
+    session = payload.get("session")
+    if not sid and isinstance(session, dict):
+        sid = first_string(session, "id")
+    return sid or "codex-hook"
 
 
 def run_preflight(*args: str) -> None:

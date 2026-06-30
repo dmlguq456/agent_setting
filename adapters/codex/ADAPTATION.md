@@ -198,9 +198,9 @@ full render/screenshot visual harness.
 
 Codex CLI 0.142.x exposes `codex debug prompt-input`, but not a hook listing or
 hook firing debug surface. Current tests validate `hooks.json` structure and
-execute the concrete bridge scripts with synthetic Codex hook payloads, including
-top-level and nested tool input variants; add a runtime hook discovery test when
-Codex exposes a hook debug surface.
+execute the concrete bridge scripts with synthetic Codex hook payloads,
+including top-level and nested tool input, `cwd`, and session variants; add a
+runtime hook discovery test when Codex exposes a hook debug surface.
 
 ## Explicit Non-Support
 
