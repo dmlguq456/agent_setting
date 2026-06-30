@@ -169,8 +169,8 @@ adapter materializes a Codex-native hook projection under `adapters/codex/hooks/
 Hook commands enter through `run-hook.sh`, which validates `AGENT_HOME` or the
 Codex harness pointer before executing bridge scripts.
 The `SessionStart` bridge calls `adapters/codex/bin/preflight.sh start` and
-`memory` for stale workflow cleanup and memory context. The `SessionEnd` bridge
-calls `session-end` for `mem sync` plus the opt-in distill proposal worker. The
+`memory` for stale workflow cleanup and memory context. The `SessionEnd` and
+`Stop` bridges call `session-end` for `mem sync` plus the opt-in distill proposal worker. The
 `UserPromptSubmit` bridge calls `prompt-signal`, `mode`, `recall`, `briefing`,
 and `turn-nudge` for prompt-time workflow and memory signals, extracting prompt
 text from top-level and nested message/content payloads. The write bridge registers
@@ -272,7 +272,7 @@ Harness-specific status signals still need Codex-native realization:
 | role modes | Read `roles/MODES.md`, then run `adapters/codex/bin/preflight.sh mode-info <family/mode>`; read the reported `native_mode_path`, obey `fallback=reference-only` only for unsupported modes, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
 | mode guides | Use `adapters/codex/modes/<family>/<mode>.md` as the Codex-native realization guide reported by `mode-info`; satisfy named tool contracts or report unavailable before claiming support |
 | design modes | Use `adapters/codex/modes/design/<mode>.md` as the Codex-native realization guide; satisfy `visual-harness` or report unavailable before claiming rendered visual verification |
-| hook invariants | `adapters/codex/hooks/sessionend-lifecycle.py` realizes SessionEnd memory sync/distill hooks; `pretooluse-write-guard.py` realizes write guards through Codex `PreToolUse`; `posttooluse-read-marker.py` records actual spec reads through `PostToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
+| hook invariants | `adapters/codex/hooks/sessionend-lifecycle.py` realizes SessionEnd/Stop memory sync/distill hooks; `pretooluse-write-guard.py` realizes write guards through Codex `PreToolUse`; `posttooluse-read-marker.py` records actual spec reads through `PostToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
 | capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 
 ## Model Mapping

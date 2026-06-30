@@ -985,6 +985,7 @@ ln -s "$ROOT/codex_setting/codex-hooks/hooks.json" "$TMP/codex_hook_home/.codex/
 if python3 -m json.tool "$TMP/codex_hook_home/.codex/hooks.json" >/tmp/codex_hook_json.out 2>/tmp/codex_hook_json.err \
   && grep -q 'sessionstart-lifecycle.py' /tmp/codex_hook_json.out \
   && grep -q 'sessionend-lifecycle.py' /tmp/codex_hook_json.out \
+  && grep -q '"Stop"' /tmp/codex_hook_json.out \
   && grep -q 'userprompt-lifecycle.py' /tmp/codex_hook_json.out \
   && grep -q 'pretooluse-write-guard.py' /tmp/codex_hook_json.out \
   && grep -q 'posttooluse-read-marker.py' /tmp/codex_hook_json.out \
@@ -1040,6 +1041,22 @@ if printf '{"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo" \
   ok "codex native hook projection bridges session end lifecycle"
 else
   bad "codex native hook projection should bridge session end lifecycle"
+fi
+codex_stop_command=$(python3 - "$TMP/codex_hook_home/.codex/hooks.json" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+print(data["hooks"]["Stop"][0]["hooks"][0]["command"])
+PY
+)
+if printf '{"session_id":"stopsid","cwd":"%s"}\n' "$TMP/repo" \
+  | MEM_STORE="$TMP/codex_hook_mem_stop" HOME="$TMP/codex_hook_home" sh -c "$codex_stop_command" >/tmp/codex_stop_hook.out 2>/tmp/codex_stop_hook.err \
+  && grep -q '^# sync (projects' /tmp/codex_stop_hook.out \
+  && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_stop_hook.out /tmp/codex_stop_hook.err; then
+  ok "codex native hook projection aliases Stop to session end lifecycle"
+else
+  bad "codex native hook projection should alias Stop to session end lifecycle"
 fi
 if "$CODEX" track "$TMP/flowproj" promptlifecyclesid >/tmp/codex_prompt_toggle.out 2>/tmp/codex_prompt_toggle.err \
   && printf '{"prompt":"remember this project context","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \

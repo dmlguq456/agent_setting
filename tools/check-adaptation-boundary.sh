@@ -666,7 +666,7 @@ check_codex_bin_wrappers() {
       fail_msg "adapters/codex/hooks/$p is missing or not executable"
     fi
   done
-  for event in SessionStart SessionEnd UserPromptSubmit PreToolUse PostToolUse; do
+  for event in SessionStart SessionEnd Stop UserPromptSubmit PreToolUse PostToolUse; do
     if ! grep -Fq "\"$event\"" adapters/codex/hooks/hooks.json; then
       fail_msg "adapters/codex/hooks/hooks.json must register Codex $event"
     fi
@@ -1266,6 +1266,9 @@ check_codex_native_hook_projection() {
   fi
   if ! grep -Fq '"SessionEnd"' "$hook_json" || ! grep -Fq 'sessionend-lifecycle.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex SessionEnd lifecycle bridge"
+  fi
+  if ! grep -Fq '"Stop"' "$hook_json" || ! grep -Fq 'sessionend-lifecycle.py' "$hook_json"; then
+    fail_msg "$hook_json must register the Codex Stop lifecycle bridge as a session-end alias"
   fi
   if ! grep -Fq '"UserPromptSubmit"' "$hook_json" || ! grep -Fq 'userprompt-lifecycle.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex UserPromptSubmit lifecycle bridge"
