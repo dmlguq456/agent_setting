@@ -114,17 +114,21 @@ when Codex exposes one.
 
 Codex supports lifecycle hooks through `hooks.json` and inline config. This
 adapter materializes a Codex-native hook projection under `adapters/codex/hooks/`.
-The first bridge registers `PreToolUse` for write/edit/patch tools and calls
-`adapters/codex/bin/preflight.sh write <file> <session-id>`, which runs the
-portable artifact-order, git-state, and memory-write guards. The second bridge
-registers `PostToolUse` for the same write/edit/patch surface and calls
+The `SessionStart` bridge calls `adapters/codex/bin/preflight.sh start` and
+`memory` for stale workflow cleanup and memory context. The `UserPromptSubmit`
+bridge calls `mode`, `recall`, and `briefing` for prompt-time workflow and memory
+signals. The write bridge registers `PreToolUse` for write/edit/patch tools and
+calls `adapters/codex/bin/preflight.sh write <file> <session-id>`, which runs
+the portable artifact-order, git-state, and memory-write guards. The design
+bridge registers `PostToolUse` for the same write/edit/patch surface and calls
 `adapters/codex/bin/preflight.sh design <file>` for saved design HTML files.
 
 Do not project Claude `hooks/` or `settings.json` into Codex. Use
 `codex_setting/codex-hooks` as the install source, and keep explicit
 `preflight.sh` calls as fallback where Codex hooks are disabled or untrusted.
-The design hook is a console-check alert path, not a full render/screenshot
-visual harness.
+The lifecycle hooks are informational/context bridges and do not replace
+deterministic write guards. The design hook is a console-check alert path, not a
+full render/screenshot visual harness.
 
 Codex CLI 0.142.x exposes `codex debug prompt-input`, but not a hook listing or
 hook firing debug surface. Current tests validate `hooks.json` structure and

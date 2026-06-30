@@ -23,18 +23,15 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Expose the installable Codex plugin through `codex_setting/codex-plugin-marketplace`, not by copying Claude Skill or command files.
 - Treat command-like capability entrypoints as Codex-native Skills/plugin output, not deprecated custom prompt files or Claude slash commands.
 - Before using a `roles/modes/` fragment, run `adapters/codex/bin/preflight.sh mode-info <family/mode>` and obey portable/tool-contract/unsupported status plus any named `tool_contract`, `tool_contract_check`, `runtime_surface`, and `fallback`.
-- Run deterministic guard scripts directly when the Codex runtime cannot attach equivalent hooks.
+- Run deterministic guard scripts directly when Codex hooks are unavailable or untrusted.
 - Expose Codex hook bridges through `codex_setting/codex-hooks`; do not project Claude `settings.json` or hook payloads.
 - Before edits, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.
 - After design HTML writes, run `adapters/codex/bin/preflight.sh design <file>`.
 - Before claiming full design/autopilot-design support, run `adapters/codex/bin/preflight.sh visual-harness`; exit 69 means the required Codex-native render/screenshot/image-inspection harness is still a tool-contract.
 - After actually reading `<artifact-root>/spec/prd.md`, run `adapters/codex/bin/preflight.sh read <prd.md> [session-id]`; before spec-changing capability work, run `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]`.
-- Use `adapters/codex/bin/preflight.sh start [cwd] [session-id]` at session start when Codex has no automatic session-start hook, so stale workflow bypass flags are cleaned.
-- Use `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` to surface tracked/untracked workflow state when Codex has no automatic prompt hook.
+- Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]` and `adapters/codex/bin/preflight.sh memory [cwd]`; run them manually when hooks are unavailable.
+- Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`, `adapters/codex/bin/preflight.sh recall "<prompt>" [cwd]`, and `adapters/codex/bin/preflight.sh briefing [cwd]`; run them manually when hooks are unavailable.
 - Use `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly wants to toggle the tracked/untracked workflow escape hatch.
-- Use `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text memory injection when Codex has no automatic session-start hook.
-- Use `adapters/codex/bin/preflight.sh recall "<prompt>" [cwd]` before answering prompts with recall signal words when Codex has no automatic prompt hook.
-- Use `adapters/codex/bin/preflight.sh briefing [cwd]` on the dedicated agent desk when Codex has no automatic prompt hook.
 - Use `adapters/codex/bin/preflight.sh worklog [cwd]` before worklog-board or agent-notes work to inspect configured notes/app paths without mutating data.
 - Use `adapters/codex/bin/preflight.sh distill-delta <session-id>` to inspect Codex transcript deltas. Use `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]` only for explicit proposal generation; do not auto-apply memory distillation until a Codex no-tools worker contract exists.
 - Treat `codex_setting/tools` as a selective memory-tool projection. Do not assume every shared tool is Codex-supported.

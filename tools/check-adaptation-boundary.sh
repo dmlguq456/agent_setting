@@ -206,6 +206,8 @@ check_install_layout_codex_projection() {
   fi
   if ! grep -Fq 'tmp_codex_hook_home=' INSTALL_LAYOUT.md \
     || ! grep -Fq 'codex_setting/codex-hooks/hooks.json' INSTALL_LAYOUT.md \
+    || ! grep -Fq '"SessionStart"' INSTALL_LAYOUT.md \
+    || ! grep -Fq '"UserPromptSubmit"' INSTALL_LAYOUT.md \
     || ! grep -Fq '"PreToolUse"' INSTALL_LAYOUT.md \
     || ! grep -Fq '"PostToolUse"' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg 'adapters/claude/hooks|statusline.sh|settings.json'" INSTALL_LAYOUT.md; then
@@ -321,6 +323,23 @@ check_codex_bin_wrappers() {
 
   if ! grep -Fq 'codex_setting/codex-hooks' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex native hook projection"
+  fi
+  for p in sessionstart-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py; do
+    if [ ! -x "adapters/codex/hooks/$p" ]; then
+      fail_msg "adapters/codex/hooks/$p is missing or not executable"
+    fi
+  done
+  for event in SessionStart UserPromptSubmit PreToolUse PostToolUse; do
+    if ! grep -Fq "\"$event\"" adapters/codex/hooks/hooks.json; then
+      fail_msg "adapters/codex/hooks/hooks.json must register Codex $event"
+    fi
+  done
+  if ! grep -Fq 'run_preflight("start"' adapters/codex/hooks/sessionstart-lifecycle.py \
+    || ! grep -Fq 'run_preflight("memory"' adapters/codex/hooks/sessionstart-lifecycle.py \
+    || ! grep -Fq 'run_preflight("mode"' adapters/codex/hooks/userprompt-lifecycle.py \
+    || ! grep -Fq 'run_preflight("recall"' adapters/codex/hooks/userprompt-lifecycle.py \
+    || ! grep -Fq 'run_preflight("briefing"' adapters/codex/hooks/userprompt-lifecycle.py; then
+    fail_msg "Codex lifecycle hook bridges must route through preflight.sh lifecycle commands"
   fi
 
   if ! grep -Fq 'named `tool_contract`, `tool_contract_check`, `runtime_surface`, and `fallback`' adapters/codex/AGENTS.md; then

@@ -206,9 +206,13 @@ from pathlib import Path
 hook_json = Path(sys.argv[1])
 data = json.loads(hook_json.read_text(encoding="utf-8"))
 hooks = data.get("hooks", {})
+assert "SessionStart" in hooks, hooks
+assert "UserPromptSubmit" in hooks, hooks
 assert "PreToolUse" in hooks, hooks
 assert "PostToolUse" in hooks, hooks
 body = hook_json.read_text(encoding="utf-8")
+assert "sessionstart-lifecycle.py" in body, hook_json
+assert "userprompt-lifecycle.py" in body, hook_json
 assert "pretooluse-write-guard.py" in body, hook_json
 assert "posttooluse-design-check.py" in body, hook_json
 PY

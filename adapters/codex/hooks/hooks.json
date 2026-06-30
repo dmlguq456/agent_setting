@@ -1,5 +1,29 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.codex/agent-harness/adapters/codex/hooks/sessionstart-lifecycle.py\"",
+            "timeout": 30,
+            "statusMessage": "Preparing agent harness lifecycle context"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py\"",
+            "timeout": 30,
+            "statusMessage": "Checking agent harness prompt signals"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Write|Edit|apply_patch",
