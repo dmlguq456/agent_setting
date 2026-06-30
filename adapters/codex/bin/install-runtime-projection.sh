@@ -3,9 +3,9 @@
 # default $HOME/.codex) to the portable harness projection under
 # codex_setting/. Idempotent: re-running only refreshes harness-owned symlinks.
 #
-# It NEVER touches Codex-owned credentials, sessions, history, logs, caches, or
-# local databases. It only creates/refreshes the harness `agent-*` pointers,
-# `hooks.json`, and per-skill / per-agent symlinks. A pre-existing real
+# It NEVER touches Codex-owned credentials, sessions, history, logs, caches,
+# config.toml, or local databases. It only creates/refreshes the harness
+# `agent-*` pointers, `hooks.json`, and per-skill / per-agent symlinks. A pre-existing real
 # `hooks.json` is backed up once to `hooks.json.pre-harness` before it is
 # replaced by the projection symlink.
 #
@@ -83,6 +83,7 @@ link "$S/codex-modes"                    "$CODEX_HOME/agent-modes"
 link "$S/codex-agents"                   "$CODEX_HOME/agent-agents"
 link "$S/codex-plugin-marketplace"       "$CODEX_HOME/agent-plugin-marketplace"
 link "$S/codex-hooks"                    "$CODEX_HOME/agent-hooks"
+link "$S/codex-config"                   "$CODEX_HOME/agent-config"
 link "$S/codex-hooks/hooks.json"         "$CODEX_HOME/hooks.json"
 
 # Native Codex skill discovery: one symlink per generated skill directory.

@@ -1,0 +1,13 @@
+# Codex-owned TUI preference fragment.
+#
+# `/statusline` persists these values in $CODEX_HOME/config.toml under [tui].
+# Keep config.toml runtime-owned because it also stores local project trust,
+# hook trust hashes, plugin state, model defaults, credentials pointers, and
+# other user/session state.
+#
+# Apply this fragment with `adapters/codex/bin/preflight.sh tui-config`, or
+# merge the two keys manually if you do not want a script to edit config.toml.
+
+[tui]
+status_line = ["project-name", "git-branch", "context-used", "current-dir", "model-with-reasoning", "five-hour-limit", "weekly-limit"]
+status_line_use_colors = true

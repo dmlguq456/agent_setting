@@ -4,7 +4,8 @@
 # machine-readable `check=<name>:ok|failed|skipped` lines plus a final
 # `status=ok|failed`. Hard checks (symlink wiring, linked skills/agents) drive
 # status; bootstrap/plugin checks are soft (skipped when codex is unavailable,
-# the plugin reports install commands when missing).
+# the plugin reports install commands when missing). config.toml stays
+# runtime-owned, so only the harness config fragment pointer is checked.
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -44,6 +45,7 @@ expect_link "$CODEX_HOME/agent-skills"             "$S/codex-skills"            
 expect_link "$CODEX_HOME/agent-agents"             "$S/codex-agents"              agent-agents
 expect_link "$CODEX_HOME/agent-modes"              "$S/codex-modes"               agent-modes
 expect_link "$CODEX_HOME/agent-hooks"              "$S/codex-hooks"               agent-hooks
+expect_link "$CODEX_HOME/agent-config"             "$S/codex-config"              agent-config
 expect_link "$CODEX_HOME/agent-plugin-marketplace" "$S/codex-plugin-marketplace" agent-plugin-marketplace
 
 # hooks.json: harness projection symlink, or a real file with matching content.

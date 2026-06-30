@@ -65,6 +65,7 @@ ln -sfn "$AGENT_HOME/codex_setting/codex-modes" "$HOME/.codex/agent-modes"
 ln -sfn "$AGENT_HOME/codex_setting/codex-agents" "$HOME/.codex/agent-agents"
 ln -sfn "$AGENT_HOME/codex_setting/codex-plugin-marketplace" "$HOME/.codex/agent-plugin-marketplace"
 ln -sfn "$AGENT_HOME/codex_setting/codex-hooks" "$HOME/.codex/agent-hooks"
+ln -sfn "$AGENT_HOME/codex_setting/codex-config" "$HOME/.codex/agent-config"
 ln -sfn "$AGENT_HOME/codex_setting/codex-hooks/hooks.json" "$HOME/.codex/hooks.json"
 mkdir -p "$HOME/.codex/skills"
 for d in "$AGENT_HOME/codex_setting/codex-skills"/*; do
@@ -93,6 +94,13 @@ Codex-native plugin installation must use
 repo-local marketplace projection rather than the whole Codex adapter.
 Codex-native hook configuration must come from
 `codex_setting/codex-hooks`, which points at adapter-owned hook bridges.
+Codex `/statusline` writes user TUI preferences into runtime-owned
+`$HOME/.codex/config.toml`; do not project that full file. The harness records
+only the recommended footer fragment at
+`codex_setting/codex-config/tui-statusline.toml`, exposed through the
+read-only `$HOME/.codex/agent-config` pointer. To apply that fragment to
+`config.toml`, run `codex_setting/bin/preflight.sh tui-config`; it updates only
+`[tui].status_line` and `[tui].status_line_use_colors`.
 Future Codex-specific bootstrap files should live under
 `adapters/codex/` and be symlinked or generated into `codex_setting/` without
 moving Codex credentials, logs, sessions, or SQLite state into the repo.

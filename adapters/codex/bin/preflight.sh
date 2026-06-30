@@ -34,6 +34,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh briefing [cwd]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
+       preflight.sh tui-config
        preflight.sh headless [--check] <worktree>
        preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh liveness [jobs.log]
@@ -56,7 +57,8 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh role <portable-role>
        preflight.sh capability-info <capability>
        preflight.sh mode-info <family/mode>
-       preflight.sh doctor
+       preflight.sh runtime-projection
+       preflight.sh doctor [--runtime]
 
 Runs portable checks that Codex can call without consuming Claude hook JSON or
 settings.json.
@@ -93,6 +95,19 @@ doctor_boundary() {
 }
 
 doctor() {
+  runtime_check=0
+  case "${1:-}" in
+    "")
+      ;;
+    --runtime)
+      runtime_check=1
+      ;;
+    *)
+      echo "codex preflight: unknown doctor option: $1" >&2
+      exit 64
+      ;;
+  esac
+
   rc=0
   printf 'adapter=codex\n'
   printf 'runtime_surface=adapter-readiness-doctor\n'
@@ -116,6 +131,12 @@ doctor() {
     "$ROOT/adapters/codex/hooks/posttooluse-design-check.py" \
     "$ROOT/adapters/codex/hooks/posttooluse-read-marker.py" || rc=1
   doctor_check adaptation-boundary doctor_boundary || rc=1
+  if [ "$runtime_check" -eq 1 ]; then
+    doctor_check runtime-projection "$ROOT/adapters/codex/bin/check-runtime-projection.sh" || rc=1
+  else
+    printf 'check=runtime-projection:skipped\n'
+    printf 'runtime_projection_hint=adapters/codex/bin/preflight.sh doctor --runtime\n'
+  fi
 
   if [ "$rc" -eq 0 ]; then
     printf 'status=ok\n'
@@ -168,7 +189,12 @@ codex_runtime_projection_check() {
 cmd=${1:-}
 case "$cmd" in
   doctor)
-    doctor
+    [ "$#" -le 2 ] || { echo "codex preflight: doctor accepts at most one option" >&2; exit 64; }
+    doctor "${2:-}"
+    ;;
+  runtime-projection)
+    [ "$#" -eq 1 ] || { echo "codex preflight: runtime-projection accepts no arguments" >&2; exit 64; }
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/check-runtime-projection.sh"
     ;;
   write)
     [ "$#" -ge 2 ] || { echo "codex preflight: write requires a file path" >&2; exit 64; }
@@ -284,6 +310,10 @@ guard_contract=preflight-write-hooks-and-explicit-tool-contracts
 fallback=configure-codex-approval-sandbox-and-run-preflight-guards
 note=Do not port Claude allowedTools into Codex; use Codex approval/sandbox settings plus adapter preflight guards.
 EOF
+    ;;
+  tui-config)
+    [ "$#" -eq 1 ] || { echo "codex preflight: tui-config accepts no arguments" >&2; exit 64; }
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/apply-tui-config.sh"
     ;;
   headless)
     shift
@@ -414,6 +444,10 @@ status=partial-native-parity
 statusline_surface=codex-native-footer-config
 statusline_command=/statusline
 statusline_custom_dynamic_fields=unsupported
+statusline_config_surface=$CODEX_HOME/config.toml
+statusline_fragment=codex_setting/codex-config/tui-statusline.toml
+recommended_status_line=project-name,git-branch,context-used,current-dir,model-with-reasoning,five-hour-limit,weekly-limit
+recommended_status_line_use_colors=true
 title_surface=codex-native-title-config
 title_command=/title
 hook_status_messages=available-after-hook-trust

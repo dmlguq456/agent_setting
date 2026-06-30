@@ -471,6 +471,7 @@ if "$CODEX" ui-info >/tmp/codex_ui.out 2>/tmp/codex_ui.err \
   && grep -q '^runtime_surface=codex-native-ui-boundary$' /tmp/codex_ui.out \
   && grep -q '^statusline_surface=codex-native-footer-config$' /tmp/codex_ui.out \
   && grep -q '^statusline_custom_dynamic_fields=unsupported$' /tmp/codex_ui.out \
+  && grep -q '^statusline_fragment=codex_setting/codex-config/tui-statusline.toml$' /tmp/codex_ui.out \
   && grep -q '^harness_status_surface=adapter-owned-preflight-status$' /tmp/codex_ui.out \
   && grep -q '^autopilot_entrypoints=codex-native-skills-plugin$' /tmp/codex_ui.out \
   && grep -q '^autopilot_auto_routing=instruction-guided-not-claude-slash-router$' /tmp/codex_ui.out \
@@ -478,6 +479,35 @@ if "$CODEX" ui-info >/tmp/codex_ui.out 2>/tmp/codex_ui.err \
   ok "codex ui-info reports native UI and parity boundaries"
 else
   bad "codex ui-info should report native UI and parity boundaries"
+fi
+TUIHOME="$TMP/codex-tui-home"
+rm -rf "$TUIHOME"; mkdir -p "$TUIHOME"
+cat > "$TUIHOME/config.toml" <<'EOF'
+model = "keep-me"
+
+[tui]
+status_line = ["old"]
+
+[hooks.state]
+"example" = "keep"
+EOF
+if AGENT_HOME="$ROOT" CODEX_HOME="$TUIHOME" "$CODEX" tui-config >/tmp/codex_tui.out 2>/tmp/codex_tui.err \
+  && grep -q '^status=ok$' /tmp/codex_tui.out \
+  && grep -q '^changed=yes$' /tmp/codex_tui.out \
+  && grep -Fq 'status_line = ["project-name", "git-branch", "context-used", "current-dir", "model-with-reasoning", "five-hour-limit", "weekly-limit"]' "$TUIHOME/config.toml" \
+  && grep -Fq 'status_line_use_colors = true' "$TUIHOME/config.toml" \
+  && grep -Fq 'model = "keep-me"' "$TUIHOME/config.toml" \
+  && grep -Fq '[hooks.state]' "$TUIHOME/config.toml" \
+  && [ -f "$TUIHOME/config.toml.pre-harness-tui" ]; then
+  ok "codex tui-config applies only harness statusline keys"
+else
+  bad "codex tui-config should apply only harness statusline keys"
+fi
+if AGENT_HOME="$ROOT" CODEX_HOME="$TUIHOME" "$CODEX" tui-config >/tmp/codex_tui2.out 2>/tmp/codex_tui2.err \
+  && grep -q '^changed=no$' /tmp/codex_tui2.out; then
+  ok "codex tui-config is idempotent"
+else
+  bad "codex tui-config should be idempotent"
 fi
 if "$CODEX" loop-info oncall >/tmp/codex_loop_oncall.out 2>/tmp/codex_loop_oncall.err \
   && grep -q '^adapter=codex$' /tmp/codex_loop_oncall.out \
@@ -1211,6 +1241,7 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-run
   && grep -q '^status=ok' /tmp/codex_rp1.out \
   && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/tmp/codex_rp2.out 2>/tmp/codex_rp2.err \
   && grep -q '^check=agent-harness:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=agent-config:ok' /tmp/codex_rp2.out \
   && grep -q '^check=hooks-json:ok' /tmp/codex_rp2.out \
   && grep -q '^check=skills-linked:ok' /tmp/codex_rp2.out \
   && grep -q '^check=agents-linked:ok' /tmp/codex_rp2.out \
@@ -1218,6 +1249,20 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-run
   ok "codex install-runtime-projection wires the home and the checker passes"
 else
   bad "codex install-runtime-projection + checker should wire and validate the runtime home"
+fi
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$CODEX" runtime-projection >/tmp/codex_rp3.out 2>/tmp/codex_rp3.err \
+  && grep -q '^check=agent-config:ok' /tmp/codex_rp3.out \
+  && grep -q '^status=ok' /tmp/codex_rp3.out; then
+  ok "codex preflight runtime-projection validates installed runtime wiring"
+else
+  bad "codex preflight runtime-projection should validate installed runtime wiring"
+fi
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$CODEX" doctor --runtime >/tmp/codex_doctor_runtime.out 2>/tmp/codex_doctor_runtime.err \
+  && grep -q '^check=runtime-projection:ok' /tmp/codex_doctor_runtime.out \
+  && grep -q '^status=ok' /tmp/codex_doctor_runtime.out; then
+  ok "codex doctor --runtime includes runtime projection validation"
+else
+  bad "codex doctor --runtime should include runtime projection validation"
 fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >/dev/null 2>&1 \
   && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/dev/null 2>&1; then

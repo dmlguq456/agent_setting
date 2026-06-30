@@ -89,7 +89,7 @@ check_opencode_forbidden_entries() {
 }
 
 check_required_projection_entries() {
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-agents; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents; do
     if [ ! -L "codex_setting/$p" ]; then
       fail_msg "codex_setting/$p must be a symlink projection entry"
     fi
@@ -109,6 +109,7 @@ check_codex_projection_targets() {
   check_link_target codex_setting/codex-modes ../adapters/codex/modes
   check_link_target codex_setting/codex-plugin-marketplace ../adapters/codex/plugin-marketplace
   check_link_target codex_setting/codex-hooks ../adapters/codex/hooks
+  check_link_target codex_setting/codex-config ../adapters/codex/config
   check_link_target codex_setting/codex-agents ../adapters/codex/agents
 }
 
@@ -258,7 +259,7 @@ check_link_target() {
 check_install_layout_codex_projection() {
   [ -f INSTALL_LAYOUT.md ] || { fail_msg "INSTALL_LAYOUT.md is missing"; return; }
 
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-agents; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents; do
     if ! grep -Fq "\$AGENT_HOME/codex_setting/$p" INSTALL_LAYOUT.md; then
       fail_msg "INSTALL_LAYOUT.md must include Codex projection install step for codex_setting/$p"
     fi
@@ -611,7 +612,7 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/AGENTS.md must document the Codex workflow toggle wrapper"
   fi
 
-  for p in 'preflight.sh start' 'preflight.sh session-end' 'preflight.sh mode' 'preflight.sh turn-nudge' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh ui-info' 'preflight.sh loop-info' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
+  for p in 'preflight.sh start' 'preflight.sh session-end' 'preflight.sh mode' 'preflight.sh turn-nudge' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh ui-info' 'preflight.sh tui-config' 'preflight.sh loop-info' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
     if ! grep -Fq "$p" adapters/codex/AGENTS.md; then
       fail_msg "adapters/codex/AGENTS.md must document manual Codex lifecycle wrapper $p"
     fi
@@ -2175,8 +2176,24 @@ check_adaptation_inventory_native_surfaces() {
   done
   if ! grep -Fq 'install-runtime-projection.sh' adapters/codex/README.md \
     || ! grep -Fq 'check-runtime-projection.sh' adapters/codex/README.md \
-    || ! grep -Fq 'install-runtime-projection.sh' adapters/codex/AGENTS.md; then
+    || ! grep -Fq 'install-runtime-projection.sh' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'preflight.sh doctor --runtime' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'check=runtime-projection:skipped' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/README.md and adapters/codex/AGENTS.md must document the Codex runtime projection installer/checker"
+  fi
+  if [ ! -x adapters/codex/bin/apply-tui-config.sh ] \
+    || [ ! -f adapters/codex/config/tui-statusline.toml ] \
+    || ! grep -Fq 'status_line = ["project-name", "git-branch", "context-used", "current-dir", "model-with-reasoning", "five-hour-limit", "weekly-limit"]' adapters/codex/config/tui-statusline.toml \
+    || ! grep -Fq 'status_line_use_colors = true' adapters/codex/config/tui-statusline.toml \
+    || ! grep -Fq 'codex_setting/codex-config/tui-statusline.toml' adapters/codex/README.md \
+    || ! grep -Fq 'codex_setting/codex-config/tui-statusline.toml' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'preflight.sh tui-config' adapters/codex/README.md \
+    || ! grep -Fq 'preflight.sh tui-config' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'preflight.sh tui-config' core/ADAPTATION_INVENTORY.md \
+    || ! grep -Fq 'statusline_fragment=codex_setting/codex-config/tui-statusline.toml' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'managed_keys=status_line,status_line_use_colors' adapters/codex/bin/apply-tui-config.sh \
+    || ! grep -Fq 'Do not project or commit the full `$CODEX_HOME/config.toml`' core/ADAPTATION_INVENTORY.md; then
+    fail_msg "Codex statusline config must be captured as an adapter-owned fragment, not full runtime config.toml"
   fi
   if grep -Fq 'core settings.json keybindings.json commands' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must not symlink runtime-owned settings.json/keybindings.json into the Claude home; Claude Code rewrites them in place and clobbers the symlink"
@@ -2572,7 +2589,7 @@ check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_projection_symlinks opencode_setting
 check_projection_entry_allowlist claude_setting CLAUDE.md README.md agent-modes agents bin commands core hooks keybindings.json loops manifest.json scaffolds settings.json skills statusline.sh tools track-toggle.sh utilities
-check_projection_entry_allowlist codex_setting AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-agents
+check_projection_entry_allowlist codex_setting AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents
 check_projection_entry_allowlist opencode_setting AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands opencode-plugins
 check_codex_forbidden_entries
 check_codex_native_surface_debt
