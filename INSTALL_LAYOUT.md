@@ -172,6 +172,13 @@ adapters/codex/bin/sync-native-skills.py --check
 adapters/codex/bin/sync-native-agents.py --check
 adapters/codex/bin/sync-native-plugin.py --check
 codex_setting/bin/preflight.sh capability-info autopilot-code
+tmp_codex_bootstrap_home=$(mktemp -d)
+ln -s "$PWD/codex_setting/AGENTS.md" "$tmp_codex_bootstrap_home/AGENTS.md"
+CODEX_HOME="$tmp_codex_bootstrap_home" codex debug prompt-input 'bootstrap check' >/tmp/codex-bootstrap.json
+rg 'AGENTS.md — Codex Adapter Bootstrap' /tmp/codex-bootstrap.json
+rg 'adapters/codex/bin/preflight.sh capability-info' /tmp/codex-bootstrap.json
+rg 'codex_setting/codex-hooks' /tmp/codex-bootstrap.json
+! rg 'adapters/claude/CLAUDE.md.*portable bootstrap' /tmp/codex-bootstrap.json
 tmp_codex_home=$(mktemp -d)
 mkdir -p "$tmp_codex_home/skills"
 for d in "$PWD/codex_setting/codex-skills"/*; do ln -s "$d" "$tmp_codex_home/skills/$(basename "$d")"; done

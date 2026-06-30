@@ -307,6 +307,21 @@ else
   fi
 fi
 if command -v codex >/dev/null 2>&1; then
+  mkdir -p "$TMP/codex_bootstrap_home"
+  ln -s "$ROOT/codex_setting/AGENTS.md" "$TMP/codex_bootstrap_home/AGENTS.md"
+  if CODEX_HOME="$TMP/codex_bootstrap_home" codex debug prompt-input 'bootstrap check' >/tmp/codex_bootstrap.out 2>/tmp/codex_bootstrap.err \
+    && grep -q 'AGENTS.md — Codex Adapter Bootstrap' /tmp/codex_bootstrap.out \
+    && grep -q 'adapters/codex/bin/preflight.sh capability-info' /tmp/codex_bootstrap.out \
+    && grep -q 'codex_setting/codex-hooks' /tmp/codex_bootstrap.out \
+    && ! grep -q 'adapters/claude/CLAUDE.md.*portable bootstrap' /tmp/codex_bootstrap.out; then
+    ok "codex bootstrap projection is discoverable without Claude bootstrap"
+  else
+    bad "codex bootstrap projection should be discoverable without Claude bootstrap"
+  fi
+else
+  ok "codex bootstrap runtime discovery skipped (codex not installed)"
+fi
+if command -v codex >/dev/null 2>&1; then
   mkdir -p "$TMP/codex_home/skills"
   for d in "$ROOT"/codex_setting/codex-skills/*; do
     [ -d "$d" ] || continue
