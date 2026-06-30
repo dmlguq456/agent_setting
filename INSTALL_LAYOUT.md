@@ -217,6 +217,9 @@ rg '^action=proposal-report-only$' /tmp/codex-loop-study.txt
 rg '^fallback=read-source-and-draft-proposal-in-main-session$' /tmp/codex-loop-study.txt
 codex_setting/bin/preflight.sh loop-info note >/tmp/codex-loop-note.txt
 rg '^status=unsupported$' /tmp/codex-loop-note.txt
+rg '^related_capability=autopilot-note$' /tmp/codex-loop-note.txt
+rg '^native_capability_surface=codex-native-skill-plugin$' /tmp/codex-loop-note.txt
+rg '^scheduler_surface=external-worklog-board$' /tmp/codex-loop-note.txt
 rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/codex-loop-note.txt
 if codex_setting/bin/preflight.sh distill-propose install-check "$PWD" >/tmp/codex-distill-propose.txt; then false; else test "$?" -eq 69; fi
 rg '^status=tool-contract$' /tmp/codex-distill-propose.txt
@@ -354,6 +357,9 @@ rg '^action=proposal-report-only$' /tmp/opencode-loop-study.txt
 rg '^fallback=read-source-and-draft-proposal-in-main-session$' /tmp/opencode-loop-study.txt
 opencode_setting/bin/preflight.sh loop-info note >/tmp/opencode-loop-note.txt
 rg '^status=unsupported$' /tmp/opencode-loop-note.txt
+rg '^related_capability=autopilot-note$' /tmp/opencode-loop-note.txt
+rg '^native_capability_surface=opencode-native-skill-command$' /tmp/opencode-loop-note.txt
+rg '^scheduler_surface=external-worklog-board$' /tmp/opencode-loop-note.txt
 rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/opencode-loop-note.txt
 if opencode_setting/bin/preflight.sh distill-propose install-check "$PWD" >/tmp/opencode-distill-propose.txt; then false; else test "$?" -eq 69; fi
 rg '^status=tool-contract$' /tmp/opencode-distill-propose.txt

@@ -737,6 +737,9 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'source=loops/study.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'source=loops/drill/README.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'auto_run=unsupported' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'related_capability=autopilot-note' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'native_capability_surface=codex-native-skill-plugin' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'scheduler_surface=external-worklog-board' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'fallback=worklog-board-or-manual-post-it-flow' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must expose Codex loop-info contracts without running loop scripts"
   fi
@@ -1482,6 +1485,9 @@ check_opencode_bin_wrappers() {
     || ! grep -Fq 'source=loops/study.md' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'source=loops/drill/README.md' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'auto_run=unsupported' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'related_capability=autopilot-note' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'native_capability_surface=opencode-native-skill-command' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'scheduler_surface=external-worklog-board' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'fallback=worklog-board-or-manual-post-it-flow' adapters/opencode/bin/preflight.sh; then
     fail_msg "adapters/opencode/bin/preflight.sh must expose OpenCode loop-info contracts without running loop scripts"
   fi

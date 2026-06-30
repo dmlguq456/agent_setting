@@ -447,9 +447,13 @@ source=loops/README.md
 status=unsupported
 runtime_surface=missing-native-loop
 trigger=external-scheduler
+related_capability=autopilot-note
+capability_check=adapters/codex/bin/preflight.sh capability-info autopilot-note
+native_capability_surface=codex-native-skill-plugin
+scheduler_surface=external-worklog-board
 action=not-implemented-in-repo
 fallback=worklog-board-or-manual-post-it-flow
-note=The loop catalog names note, but this repo has no loops/note implementation for Codex to realize.
+note=Codex has an on-demand autopilot-note capability projection, but this repo has no Codex-native scheduled note loop runner.
 EOF
         ;;
       *)
