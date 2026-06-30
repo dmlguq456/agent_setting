@@ -358,6 +358,14 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
 else
   bad "codex headless wrapper should report dispatch contract"
 fi
+if grep -q 'adapters/codex/bin/preflight.sh liveness \[jobs.log\]' "$ROOT/core/OPERATIONS.md" \
+  && grep -q 'adapters/opencode/bin/preflight.sh liveness \[jobs.log\]' "$ROOT/core/OPERATIONS.md" \
+  && grep -q 'adapter liveness wrapper' "$ROOT/core/OPERATIONS.md" \
+  && ! grep -q '능동 점검한다\\*\\*: `bash <agent-home>/utilities/dispatch-liveness.sh`' "$ROOT/core/OPERATIONS.md"; then
+  ok "portable operations routes headless liveness through adapter wrappers"
+else
+  bad "portable operations should route headless liveness through adapter wrappers"
+fi
 if "$CODEX" headless --check "$TMP/missing-worktree" >/tmp/codex_headless_missing.out 2>/tmp/codex_headless_missing.err; then
   bad "codex headless wrapper should fail missing worktree"
 else

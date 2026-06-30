@@ -2454,6 +2454,14 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'unsupported/manual-contract' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must describe Codex/OpenCode loop-info native support/fallback contracts"
   fi
+  if ! grep -Fq 'adapters/codex/bin/preflight.sh liveness [jobs.log]' core/OPERATIONS.md \
+    || ! grep -Fq 'adapters/opencode/bin/preflight.sh liveness [jobs.log]' core/OPERATIONS.md \
+    || ! grep -Fq 'adapter liveness wrapper' core/OPERATIONS.md; then
+    fail_msg "core/OPERATIONS.md must describe adapter-native liveness wrappers, not only the shared Claude-compatible dispatch-liveness helper"
+  fi
+  if grep -Fq '능동 점검한다**: `bash <agent-home>/utilities/dispatch-liveness.sh`' core/OPERATIONS.md; then
+    fail_msg "core/OPERATIONS.md must not direct every runtime to the shared dispatch-liveness.sh path"
+  fi
   if ! grep -Fq 'Codex and OpenCode expose `preflight.sh distill-propose` as a no-tools worker tool-contract by default' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'Codex exits 69 until `CODEX_DISTILL_ENABLE=1`' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'OpenCode exits 69 until a native no-tools worker contract is verified' core/ADAPTATION_INVENTORY.md; then
