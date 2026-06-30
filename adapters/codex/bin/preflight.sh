@@ -60,8 +60,8 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh role <portable-role>
        preflight.sh capability-info <capability>
        preflight.sh mode-info <family/mode>
-       preflight.sh runtime-projection
-       preflight.sh doctor [--runtime]
+       preflight.sh runtime-projection [--require-hook-trust]
+       preflight.sh doctor [--runtime|--runtime-strict]
 
 Runs portable checks that Codex can call without consuming Claude hook JSON or
 settings.json.
@@ -99,11 +99,16 @@ doctor_boundary() {
 
 doctor() {
   runtime_check=0
+  require_hook_trust=0
   case "${1:-}" in
     "")
       ;;
     --runtime)
       runtime_check=1
+      ;;
+    --runtime-strict)
+      runtime_check=1
+      require_hook_trust=1
       ;;
     *)
       echo "codex preflight: unknown doctor option: $1" >&2
@@ -136,7 +141,11 @@ doctor() {
     "$ROOT/adapters/codex/hooks/posttooluse-read-marker.py" || rc=1
   doctor_check adaptation-boundary doctor_boundary || rc=1
   if [ "$runtime_check" -eq 1 ]; then
-    doctor_check runtime-projection "$ROOT/adapters/codex/bin/check-runtime-projection.sh" || rc=1
+    if [ "$require_hook_trust" -eq 1 ]; then
+      doctor_check runtime-projection env CODEX_REQUIRE_HOOK_TRUST=1 "$ROOT/adapters/codex/bin/check-runtime-projection.sh" || rc=1
+    else
+      doctor_check runtime-projection "$ROOT/adapters/codex/bin/check-runtime-projection.sh" || rc=1
+    fi
   else
     printf 'check=runtime-projection:skipped\n'
     printf 'runtime_projection_hint=adapters/codex/bin/preflight.sh doctor --runtime\n'
@@ -169,8 +178,20 @@ case "$cmd" in
     doctor "${2:-}"
     ;;
   runtime-projection)
-    [ "$#" -eq 1 ] || { echo "codex preflight: runtime-projection accepts no arguments" >&2; exit 64; }
-    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/check-runtime-projection.sh"
+    case "${2:-}" in
+      "")
+        [ "$#" -eq 1 ] || { echo "codex preflight: runtime-projection accepts at most one option" >&2; exit 64; }
+        AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/check-runtime-projection.sh"
+        ;;
+      --require-hook-trust)
+        [ "$#" -eq 2 ] || { echo "codex preflight: runtime-projection accepts at most one option" >&2; exit 64; }
+        AGENT_HOME="$AGENT_ROOT" CODEX_REQUIRE_HOOK_TRUST=1 "$ROOT/adapters/codex/bin/check-runtime-projection.sh"
+        ;;
+      *)
+        echo "codex preflight: unknown runtime-projection option: $2" >&2
+        exit 64
+        ;;
+    esac
     ;;
   write)
     [ "$#" -ge 2 ] || { echo "codex preflight: write requires a file path" >&2; exit 64; }

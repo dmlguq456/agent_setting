@@ -1643,17 +1643,33 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=
 else
   bad "codex runtime-projection should require distinct Stop hook trust"
 fi
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection --require-hook-trust >/tmp/codex_rp_strict_missing.out 2>/tmp/codex_rp_strict_missing.err; then
+  bad "codex strict runtime-projection should fail when hook trust is missing"
+else
+  grep -q '^check=hook-trust:review-needed missing=stop$' /tmp/codex_rp_strict_missing.out && ok "codex strict runtime-projection requires complete hook trust" || bad "codex strict runtime-projection missing trust output wrong"
+fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_REQUIRE_HOOK_TRUST=1 CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection >/tmp/codex_rp_trust.out 2>/tmp/codex_rp_trust.err; then
   bad "codex runtime-projection should fail when hook trust is required but missing"
 else
   grep -q '^check=hook-trust:review-needed' /tmp/codex_rp_trust.out && ok "codex runtime-projection can require hook trust" || bad "codex runtime-projection required hook trust output wrong"
 fi
+cat >> "$RPHOME/config.toml" <<EOF
+[hooks.state."$RPHOME/hooks.json:stop:0:0"]
+trusted_hash = "sha256:test"
+EOF
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime >/tmp/codex_doctor_runtime.out 2>/tmp/codex_doctor_runtime.err \
   && grep -q '^check=runtime-projection:ok' /tmp/codex_doctor_runtime.out \
   && grep -q '^status=ok' /tmp/codex_doctor_runtime.out; then
   ok "codex doctor --runtime includes runtime projection validation"
 else
   bad "codex doctor --runtime should include runtime projection validation"
+fi
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime-strict >/tmp/codex_doctor_runtime_strict.out 2>/tmp/codex_doctor_runtime_strict.err \
+  && grep -q '^check=runtime-projection:ok' /tmp/codex_doctor_runtime_strict.out \
+  && grep -q '^status=ok' /tmp/codex_doctor_runtime_strict.out; then
+  ok "codex doctor --runtime-strict requires and accepts complete hook trust"
+else
+  bad "codex doctor --runtime-strict should require and accept complete hook trust"
 fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >/dev/null 2>&1 \
   && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/dev/null 2>&1; then

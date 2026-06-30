@@ -215,8 +215,9 @@ Do not project Claude `hooks/` or `settings.json` into Codex. Use
 `preflight.sh` calls as fallback where Codex hooks are disabled or untrusted.
 `adapters/codex/bin/check-runtime-projection.sh` reports `check=hook-trust:ok`
 or `check=hook-trust:review-needed`; run `/hooks` in Codex after hook definition
-changes, and set `CODEX_REQUIRE_HOOK_TRUST=1` when hook trust must fail runtime
-checks.
+changes. Use `adapters/codex/bin/preflight.sh runtime-projection --require-hook-trust`
+or `adapters/codex/bin/preflight.sh doctor --runtime-strict` when hook trust must
+fail runtime checks.
 The lifecycle hooks are informational/context bridges and do not replace
 deterministic write guards. The design hook is a console-check alert path, not a
 full render/screenshot visual harness.

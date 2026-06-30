@@ -2415,6 +2415,10 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'check-runtime-projection.sh' adapters/codex/README.md \
     || ! grep -Fq 'install-runtime-projection.sh' adapters/codex/AGENTS.md \
     || ! grep -Fq 'preflight.sh doctor --runtime' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'preflight.sh doctor [--runtime|--runtime-strict]' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'runtime-projection [--require-hook-trust]' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq -- '--runtime-strict' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq -- '--require-hook-trust' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'check=runtime-projection:skipped' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'session_start session_end stop user_prompt_submit permission_request pre_tool_use post_tool_use' adapters/codex/bin/check-runtime-projection.sh \
@@ -2433,6 +2437,8 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'codex-cli-timeout' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY=1' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/README.md \
+    || ! grep -Fq 'doctor --runtime-strict' adapters/codex/README.md \
+    || ! grep -Fq 'runtime-projection --require-hook-trust' adapters/codex/AGENTS.md \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/ADAPTATION.md; then
     fail_msg "adapters/codex/README.md and adapters/codex/AGENTS.md must document the Codex runtime projection installer/checker"
   fi
