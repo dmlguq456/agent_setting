@@ -71,6 +71,12 @@ def role_rows(text: str) -> list[tuple[str, str, str]]:
 def render(profile: str, portable_role: str, responsibility: str) -> str:
     role_note = clean_role_note(portable_role)
     mapped_role = mapper_role(profile, role_note)
+    read_only = profile in {"qa-team", "external-adversary"}
+    tool_lines = ["  task: false"]
+    permission_lines = ["  task: deny"]
+    if read_only:
+        tool_lines.extend(["  edit: false", "  write: false"])
+        permission_lines.append("  edit: deny")
     description = compact(
         f"OpenCode-native agent for portable role profile {profile}. "
         f"Use when delegating work whose primary responsibility is: {responsibility}"
@@ -78,6 +84,10 @@ def render(profile: str, portable_role: str, responsibility: str) -> str:
     return f"""---
 description: "{description}"
 mode: subagent
+tools:
+{chr(10).join(tool_lines)}
+permission:
+{chr(10).join(permission_lines)}
 ---
 
 You are the OpenCode-native realization of the portable `{profile}` role

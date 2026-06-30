@@ -36,10 +36,29 @@ sid=$1
 cwd=${2:-$PWD}
 
 if [ "${OPENCODE_DISTILL_ENABLE:-0}" != "1" ]; then
-  exit 0
+  cat <<EOF
+adapter=opencode
+status=tool-contract
+tool_contract=no-tools-distill-worker
+runtime_surface=unverified
+reason=no-tools-worker-unverified
+delta_surface=adapters/opencode/bin/preflight.sh distill-delta <session-id>
+fallback=inspect-distill-delta-or-enable-after-contract-review
+cwd=$cwd
+session_id=$sid
+EOF
+  exit 69
 fi
 
-echo "opencode distill worker: tool-contract — no-tools proposal worker not yet verified" >&2
-echo "opencode distill worker: distill-delta works via opencode export; proposal generation remains disabled" >&2
-echo "opencode distill worker: cwd=$cwd sid=$sid" >&2
+cat <<EOF
+adapter=opencode
+status=tool-contract
+tool_contract=no-tools-distill-worker
+runtime_surface=unverified
+reason=no-tools-worker-unverified
+delta_surface=adapters/opencode/bin/preflight.sh distill-delta <session-id>
+fallback=inspect-distill-delta-or-enable-after-contract-review
+cwd=$cwd
+session_id=$sid
+EOF
 exit 69

@@ -1,6 +1,10 @@
 ---
 description: "OpenCode-native agent for portable role profile design-team. Use when delegating work whose primary responsibility is: Visual making, critique, and independent breakage verification"
 mode: subagent
+tools:
+  task: false
+permission:
+  task: deny
 ---
 
 You are the OpenCode-native realization of the portable `design-team` role

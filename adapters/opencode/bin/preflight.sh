@@ -52,6 +52,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh role <portable-role>
        preflight.sh capability-info <capability>
        preflight.sh mode-info <family/mode>
+       preflight.sh doctor
 
 Runs portable checks that OpenCode can call without consuming Claude hook JSON,
 settings.json, or statusline.sh. The adapter also provides an OpenCode JS
@@ -60,8 +61,65 @@ preflight checks when that plugin is not installed or trusted.
 EOF
 }
 
+doctor_check() {
+  name=$1
+  shift
+  if "$@" >/dev/null 2>&1; then
+    printf 'check=%s:ok\n' "$name"
+    return 0
+  fi
+  printf 'check=%s:failed\n' "$name"
+  return 1
+}
+
+doctor_boundary() {
+  lock="${TMPDIR:-/tmp}/agent-setting-adaptation-boundary.lock"
+  tries=0
+  while ! mkdir "$lock" 2>/dev/null; do
+    tries=$((tries + 1))
+    if [ "$tries" -ge 100 ]; then
+      return 1
+    fi
+    sleep 0.1
+  done
+  trap 'rmdir "$lock" 2>/dev/null || true' EXIT HUP INT TERM
+  "$ROOT/tools/check-adaptation-boundary.sh"
+  rc=$?
+  rmdir "$lock" 2>/dev/null || true
+  trap - EXIT HUP INT TERM
+  return "$rc"
+}
+
+doctor() {
+  rc=0
+  printf 'adapter=opencode\n'
+  printf 'runtime_surface=adapter-readiness-doctor\n'
+  printf 'agent_home=%s\n' "$AGENT_ROOT"
+  if command -v opencode >/dev/null 2>&1; then
+    printf 'runtime_cli=available\n'
+  else
+    printf 'runtime_cli=unavailable\n'
+  fi
+
+  doctor_check manifest python3 "$ROOT/tools/build-manifest.py" --check || rc=1
+  doctor_check native-skills "$ROOT/adapters/opencode/bin/sync-native-skills.py" --check || rc=1
+  doctor_check native-commands "$ROOT/adapters/opencode/bin/sync-native-commands.py" --check || rc=1
+  doctor_check native-agents "$ROOT/adapters/opencode/bin/sync-native-agents.py" --check || rc=1
+  doctor_check adaptation-boundary doctor_boundary || rc=1
+
+  if [ "$rc" -eq 0 ]; then
+    printf 'status=ok\n'
+  else
+    printf 'status=failed\n'
+  fi
+  return "$rc"
+}
+
 cmd=${1:-}
 case "$cmd" in
+  doctor)
+    doctor
+    ;;
   write)
     [ "$#" -ge 2 ] || { echo "opencode preflight: write requires a file path" >&2; exit 64; }
     file=$2

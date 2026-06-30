@@ -1,6 +1,10 @@
 ---
 description: "OpenCode-native agent for portable role profile plan-team. Use when delegating work whose primary responsibility is: Read source and artifacts, produce or refine implementation plans"
 mode: subagent
+tools:
+  task: false
+permission:
+  task: deny
 ---
 
 You are the OpenCode-native realization of the portable `plan-team` role

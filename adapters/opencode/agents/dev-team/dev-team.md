@@ -1,6 +1,10 @@
 ---
 description: "OpenCode-native agent for portable role profile dev-team. Use when delegating work whose primary responsibility is: Implement backend/frontend/refactor/new-lib work through mode personas"
 mode: subagent
+tools:
+  task: false
+permission:
+  task: deny
 ---
 
 You are the OpenCode-native realization of the portable `dev-team` role

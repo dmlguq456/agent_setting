@@ -39,7 +39,7 @@ function patchFiles(ctx, patch) {
 }
 
 function targetFiles(ctx, tool, args) {
-  const name = tool.name || ""
+  const name = typeof tool === "string" ? tool : tool?.name || ""
   if (name === "write" || name === "edit") {
     return [normalizeFile(ctx, args.filePath || args.path || args.file)].filter(Boolean)
   }
@@ -116,7 +116,7 @@ export const AgentHarnessGuards = async (ctx) => ({
     }
   },
   "tool.execute.after": async (input, output) => {
-    const files = targetFiles(ctx, input.tool || {}, output.args || {})
+    const files = targetFiles(ctx, input.tool || {}, input.args || output.args || {})
     for (const file of files) {
       if (isDesignHtml(file)) runPreflight("design", [file])
     }

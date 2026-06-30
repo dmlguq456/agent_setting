@@ -1333,6 +1333,26 @@ if command -v opencode >/dev/null 2>&1; then
   else
     bad "opencode native agent projection should be discoverable without Claude paths"
   fi
+  if HOME="$TMP/opencode_home" XDG_CONFIG_HOME="$TMP/opencode_home/.config" XDG_DATA_HOME="$TMP/opencode_home/.local/share" \
+    opencode debug agent qa-team --pure >/tmp/opencode_agent_qa.out 2>/tmp/opencode_agent_qa.err \
+    && python3 - /tmp/opencode_agent_qa.out <<'PY'
+import json
+import sys
+
+agent = json.load(open(sys.argv[1], encoding="utf-8"))
+tools = agent.get("tools", {})
+rules = {(r.get("permission"), r.get("action")) for r in agent.get("permission", [])}
+assert tools.get("edit") is False, tools
+assert tools.get("write") is False, tools
+assert tools.get("task") is False, tools
+assert ("edit", "deny") in rules, rules
+assert ("task", "deny") in rules, rules
+PY
+  then
+    ok "opencode qa agent projection enforces read-only and depth-one tools"
+  else
+    bad "opencode qa agent projection should disable edit/write/task"
+  fi
 else
   ok "opencode native agent runtime discovery skipped (opencode not installed)"
 fi
@@ -1373,7 +1393,7 @@ fi
 if node --input-type=module >/tmp/opencode_plugin_hook.out 2>/tmp/opencode_plugin_hook.err <<EOF
 import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
-await plugin["tool.execute.before"]({ tool: { name: "write" }, sessionID: "testsid" }, { args: { filePath: "$TMP/repo/f" } })
+await plugin["tool.execute.before"]({ tool: "write", sessionID: "testsid" }, { args: { filePath: "$TMP/repo/f" } })
 EOF
 then
   ok "opencode native plugin write hook bridges to preflight"
@@ -1390,7 +1410,7 @@ if node --input-type=module >/tmp/opencode_plugin_invalid_home.out 2>/tmp/openco
 process.env.AGENT_HOME = "$TMP/fake_agent_home"
 const mod = await import("$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js")
 const plugin = await mod.AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
-await plugin["tool.execute.before"]({ tool: { name: "write" }, sessionID: "testsid" }, { args: { filePath: "$TMP/repo/f" } })
+await plugin["tool.execute.before"]({ tool: "write", sessionID: "testsid" }, { args: { filePath: "$TMP/repo/f" } })
 EOF
 then
   ok "opencode native plugin ignores invalid AGENT_HOME"
@@ -1403,7 +1423,7 @@ if node --input-type=module >/tmp/opencode_plugin_copy.out 2>/tmp/opencode_plugi
 process.env.AGENT_HOME = "$ROOT"
 const mod = await import("$TMP/opencode_copied_plugin/agent-harness-guards.js")
 const plugin = await mod.AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
-await plugin["tool.execute.before"]({ tool: { name: "write" }, sessionID: "testsid" }, { args: { filePath: "$TMP/repo/f" } })
+await plugin["tool.execute.before"]({ tool: "write", sessionID: "testsid" }, { args: { filePath: "$TMP/repo/f" } })
 EOF
 then
   ok "opencode native plugin copy resolves harness through AGENT_HOME"
@@ -1428,7 +1448,7 @@ if node --input-type=module >/tmp/opencode_plugin_hook_block.out 2>/tmp/opencode
 import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/runtime", worktree: "$TMP/runtime" })
 try {
-  await plugin["tool.execute.before"]({ tool: { name: "write" }, sessionID: "testsid" }, { args: { filePath: "$TMP/runtime/projects/abc/memory/MEMORY.md" } })
+  await plugin["tool.execute.before"]({ tool: "write", sessionID: "testsid" }, { args: { filePath: "$TMP/runtime/projects/abc/memory/MEMORY.md" } })
   process.exit(1)
 } catch (error) {
   if (!String(error.message || error).includes("memory")) process.exit(1)
@@ -1442,7 +1462,7 @@ fi
 if DESIGN_POSTWRITE_HOOK=0 node --input-type=module >/tmp/opencode_plugin_design_hook.out 2>/tmp/opencode_plugin_design_hook.err <<EOF
 import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
-await plugin["tool.execute.after"]({ tool: { name: "write" }, sessionID: "testsid" }, { args: { filePath: "$TMP/repo/spec/design/preview.html" } })
+await plugin["tool.execute.after"]({ tool: "write", sessionID: "testsid", args: { filePath: "$TMP/repo/spec/design/preview.html" } }, {})
 EOF
 then
   ok "opencode native plugin design after hook bridges to preflight"
@@ -1824,11 +1844,16 @@ if OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" "$OPENCODE" distill-delta op
 else
   bad "opencode export source should distill transcript"
 fi
-if "$OPENCODE_DISTILL" opencodesid "$TMP/flowproj" >/tmp/opencode_distill.out 2>/tmp/opencode_distill.err \
-  && [ ! -s /tmp/opencode_distill.out ]; then
-  ok "opencode distill worker is disabled by default"
+if "$OPENCODE_DISTILL" opencodesid "$TMP/flowproj" >/tmp/opencode_distill.out 2>/tmp/opencode_distill.err; then
+  bad "opencode distill worker should report tool-contract until worker contract is verified"
 else
-  bad "opencode distill worker should no-op unless enabled"
+  if [ "$?" -eq 69 ] \
+    && grep -q '^status=tool-contract$' /tmp/opencode_distill.out \
+    && grep -q '^reason=no-tools-worker-unverified$' /tmp/opencode_distill.out; then
+    ok "opencode distill worker reports tool-contract by default"
+  else
+    bad "opencode distill worker should exit 69 with tool-contract by default"
+  fi
 fi
 if OPENCODE_DISTILL_ENABLE=1 "$OPENCODE" distill-propose opencodesid "$TMP/flowproj" >/tmp/opencode_distill.out 2>/tmp/opencode_distill.err; then
   bad "opencode distill proposal should report tool-contract while worker contract is unverified"
