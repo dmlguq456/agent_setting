@@ -198,8 +198,19 @@ case "$cmd" in
   session-end)
     cwd=${2:-$PWD}
     sid=${3:-codex}
+    # Recursion guard: skip the whole session-end pipeline when invoked from
+    # within a distiller (the codex exec worker exports MEM_DISTILL=1).
+    [ "${MEM_DISTILL:-}" = "1" ] && exit 0
     (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/mem.py" sync)
-    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd"
+    # Automatic session-end distillation is enabled: the codex exec read-only
+    # sandbox was verified tool-free (adapters/codex/ADAPTATION.md Distillation
+    # Boundary), so default the worker to apply mode. Opt out with
+    # CODEX_DISTILL_ENABLE=0.
+    AGENT_HOME="$AGENT_ROOT" \
+      CODEX_DISTILL_ENABLE="${CODEX_DISTILL_ENABLE:-1}" \
+      CODEX_DISTILL_APPLY="${CODEX_DISTILL_APPLY:-1}" \
+      CODEX_DISTILL_CONTRACT_ACCEPTED="${CODEX_DISTILL_CONTRACT_ACCEPTED:-1}" \
+      "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd"
     ;;
   mode)
     cwd=${2:-$PWD}
@@ -225,7 +236,11 @@ case "$cmd" in
     counter=$((counter + 1))
     if [ "$counter" -ge "$interval" ]; then
       counter=0
-      AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd" >/dev/null 2>/dev/null || true
+      AGENT_HOME="$AGENT_ROOT" \
+        CODEX_DISTILL_ENABLE="${CODEX_DISTILL_ENABLE:-1}" \
+        CODEX_DISTILL_APPLY="${CODEX_DISTILL_APPLY:-1}" \
+        CODEX_DISTILL_CONTRACT_ACCEPTED="${CODEX_DISTILL_CONTRACT_ACCEPTED:-1}" \
+        "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd" >/dev/null 2>/dev/null || true
     fi
     printf '%s\n' "$counter" > "$state" 2>/dev/null || true
     find "$store" -maxdepth 1 -name '.codex-turn-state-*' -mmin +4320 -delete 2>/dev/null || true

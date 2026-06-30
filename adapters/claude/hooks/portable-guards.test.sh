@@ -1149,6 +1149,24 @@ if CODEX_DISTILL_ENABLE=1 CODEX_DISTILL_APPLY=1 CODEX_DISTILL_CONTRACT_ACCEPTED=
 else
   bad "codex distill explicit apply should require and obey accepted contract"
 fi
+# session-end auto-distillation is enabled by default after the tool-free proof
+if CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/store_session_end" \
+  PATH="$TMP/stubbin:$PATH" CODEX_STUB_ARGV="$TMP/codex_argv_se" \
+  "$CODEX" session-end "$TMP/flowproj" codexsid >/tmp/codex_se.out 2>/tmp/codex_se.err \
+  && MEM_STORE="$TMP/store_session_end" python3 "$ROOT/tools/memory/mem.py" stats 2>/dev/null | grep -q 'total: 1'; then
+  ok "codex session-end auto-distills and applies by default"
+else
+  bad "codex session-end should auto-distill and apply by default"
+fi
+# recursion guard: MEM_DISTILL=1 makes the whole session-end pipeline a no-op
+if MEM_DISTILL=1 CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/store_session_end_guard" \
+  PATH="$TMP/stubbin:$PATH" CODEX_STUB_ARGV="$TMP/codex_argv_se_guard" \
+  "$CODEX" session-end "$TMP/flowproj" codexsid >/tmp/codex_se_guard.out 2>/tmp/codex_se_guard.err \
+  && ! { MEM_STORE="$TMP/store_session_end_guard" python3 "$ROOT/tools/memory/mem.py" stats 2>/dev/null | grep -q 'total: 1'; }; then
+  ok "codex session-end no-ops under MEM_DISTILL=1 recursion guard"
+else
+  bad "codex session-end must no-op under MEM_DISTILL=1 recursion guard"
+fi
 
 echo "== opencode preflight wrapper =="
 git -C "$TMP/repo" switch -q -c opencode-work

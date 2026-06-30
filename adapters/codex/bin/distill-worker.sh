@@ -42,6 +42,13 @@ fi
 sid=$1
 cwd=${2:-$PWD}
 
+# Recursion guard: a distillation worker must never spawn another distillation.
+# If we are already inside a distiller context, no-op. The codex exec call below
+# exports MEM_DISTILL=1, so any lifecycle hook it triggers re-enters here (and
+# the session-end preflight) with the flag set and exits immediately. Mirrors the
+# portable mem-distill-dispatch.sh MEM_DISTILL guard (spec R1).
+[ "${MEM_DISTILL:-}" = "1" ] && exit 0
+
 if [ "${CODEX_DISTILL_ENABLE:-}" != "1" ]; then
   exit 0
 fi
@@ -90,7 +97,7 @@ DELTA
 EOF
 
 if [ -n "${CODEX_DISTILL_MODEL:-}" ]; then
-  codex exec \
+  MEM_DISTILL=1 codex exec \
     --cd "$cwd" \
     --sandbox read-only \
     --ephemeral \
@@ -100,7 +107,7 @@ if [ -n "${CODEX_DISTILL_MODEL:-}" ]; then
     -m "$CODEX_DISTILL_MODEL" \
     - < "$prompt_file" >/dev/null
 else
-  codex exec \
+  MEM_DISTILL=1 codex exec \
     --cd "$cwd" \
     --sandbox read-only \
     --ephemeral \
