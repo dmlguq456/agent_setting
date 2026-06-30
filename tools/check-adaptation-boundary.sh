@@ -292,9 +292,15 @@ check_install_layout_codex_projection() {
   if ! grep -Fq 'tmp_codex_hook_home=' INSTALL_LAYOUT.md \
     || ! grep -Fq 'codex_setting/codex-hooks/hooks.json' INSTALL_LAYOUT.md \
     || ! grep -Fq '"SessionStart"' INSTALL_LAYOUT.md \
+    || ! grep -Fq '"SessionEnd"' INSTALL_LAYOUT.md \
+    || ! grep -Fq '"Stop"' INSTALL_LAYOUT.md \
     || ! grep -Fq '"UserPromptSubmit"' INSTALL_LAYOUT.md \
+    || ! grep -Fq '"PermissionRequest"' INSTALL_LAYOUT.md \
     || ! grep -Fq '"PreToolUse"' INSTALL_LAYOUT.md \
     || ! grep -Fq '"PostToolUse"' INSTALL_LAYOUT.md \
+    || ! grep -Fq 'sessionend-lifecycle.py' INSTALL_LAYOUT.md \
+    || ! grep -Fq 'permissionrequest-lifecycle.py' INSTALL_LAYOUT.md \
+    || ! grep -Fq 'posttooluse-read-marker.py' INSTALL_LAYOUT.md \
     || ! grep -Fq '! rg "$non_claude_runtime_re" "$tmp_codex_hook_home/hooks.json"' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate Codex native hook projection installation"
   fi
@@ -572,8 +578,8 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'harvest_check=adapters/codex/bin/preflight.sh harvest' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'dispatch_prompt_contract=codex-harness-autopilot-prompt' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'dispatch_input_validation=capability-info,mode-info,qa-level' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'reason=codex-native-modes-missing' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq '$codex_home/agent-modes/dev/backend.md' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'check-runtime-projection.sh' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY=1' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'claude_headless=unsupported' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must report the Codex headless dispatch contract without Claude headless assumptions"
   fi
@@ -688,6 +694,9 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'runtime_surface=codex-userprompt-hook-signal' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'hook_scope=runtime-hook' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'routing_contract=core/WORKFLOW.md' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'routing_action=read-workflow-and-select-codex-skill' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'capability_entrypoints=codex-native-skills-plugin' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'enforced_hooks=pretool-write-guards,posttool-spec-read-marker,posttool-design-check,session-memory,turn-nudge' adapters/codex/bin/preflight.sh; then
     fail_msg "Codex UserPromptSubmit hook must expose a structured workflow/autopilot signal"
   fi
@@ -2249,10 +2258,16 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'preflight.sh doctor --runtime' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'check=runtime-projection:skipped' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/bin/check-runtime-projection.sh \
+    || ! grep -Fq 'session_start session_end stop user_prompt_submit permission_request pre_tool_use post_tool_use' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'CODEX_REQUIRE_HOOK_TRUST=1' adapters/codex/bin/check-runtime-projection.sh \
+    || ! grep -Fq 'CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY=1' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/README.md \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/ADAPTATION.md; then
     fail_msg "adapters/codex/README.md and adapters/codex/AGENTS.md must document the Codex runtime projection installer/checker"
+  fi
+  if ! grep -Fq 'permissionrequest-lifecycle.py' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'check-runtime-projection.sh' adapters/codex/bin/preflight.sh; then
+    fail_msg "Codex preflight doctor/headless checks must syntax-check all hook bridges and reuse runtime projection validation"
   fi
   if [ ! -x adapters/codex/bin/apply-tui-config.sh ] \
     || [ ! -f adapters/codex/config/tui-statusline.toml ] \

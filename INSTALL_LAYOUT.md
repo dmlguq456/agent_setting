@@ -305,13 +305,19 @@ hook_json = Path(sys.argv[1])
 data = json.loads(hook_json.read_text(encoding="utf-8"))
 hooks = data.get("hooks", {})
 assert "SessionStart" in hooks, hooks
+assert "SessionEnd" in hooks, hooks
+assert "Stop" in hooks, hooks
 assert "UserPromptSubmit" in hooks, hooks
+assert "PermissionRequest" in hooks, hooks
 assert "PreToolUse" in hooks, hooks
 assert "PostToolUse" in hooks, hooks
 body = hook_json.read_text(encoding="utf-8")
 assert "sessionstart-lifecycle.py" in body, hook_json
+assert "sessionend-lifecycle.py" in body, hook_json
 assert "userprompt-lifecycle.py" in body, hook_json
+assert "permissionrequest-lifecycle.py" in body, hook_json
 assert "pretooluse-write-guard.py" in body, hook_json
+assert "posttooluse-read-marker.py" in body, hook_json
 assert "posttooluse-design-check.py" in body, hook_json
 PY
 ! rg "$non_claude_runtime_re" "$tmp_codex_hook_home/hooks.json"

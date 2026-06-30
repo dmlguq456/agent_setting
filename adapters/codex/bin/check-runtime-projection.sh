@@ -59,14 +59,11 @@ hook_trust_check() {
     return 0
   fi
   missing=""
-  for event in session_start user_prompt_submit permission_request pre_tool_use post_tool_use; do
+  for event in session_start session_end stop user_prompt_submit permission_request pre_tool_use post_tool_use; do
     if ! grep -Fq "$hook_file:$event:" "$cfg"; then
       missing="$missing $event"
     fi
   done
-  if ! grep -Eq "$hook_file:(session_end|stop):" "$cfg"; then
-    missing="$missing session_end"
-  fi
   if [ -n "$missing" ]; then
     printf 'check=hook-trust:review-needed missing=%s\n' "$(printf '%s' "$missing" | sed 's/^ //')"
     printf 'hook_trust_hint=run /hooks in Codex CLI and trust changed agent harness hooks\n'
@@ -112,8 +109,12 @@ else
   fails=$((fails + 1))
 fi
 
-# Bootstrap discovery (soft): requires the codex CLI.
-if command -v codex >/dev/null 2>&1; then
+# Bootstrap discovery (soft): requires the codex CLI. Headless preflight may
+# intentionally skip this when `codex` is stubbed for launch testing.
+if [ "${CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY:-0}" = "1" ]; then
+  printf 'check=bootstrap:skipped reason=codex-cli-discovery-skipped\n'
+  printf 'check=plugin:skipped reason=codex-cli-discovery-skipped\n'
+elif command -v codex >/dev/null 2>&1; then
   if CODEX_HOME="$CODEX_HOME" codex debug prompt-input 'agent harness runtime projection check' 2>/dev/null \
       | grep -q 'AGENTS.md — Codex Adapter Bootstrap'; then
     printf 'check=bootstrap:ok\n'

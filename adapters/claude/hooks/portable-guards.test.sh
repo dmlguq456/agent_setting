@@ -143,6 +143,18 @@ if "$CODEX" read "$TMP/specproj/.agent_reports/spec/prd.md" testsid >/tmp/codex.
 else
   bad "codex read+capability wrapper should pass spec gate"
 fi
+if "$CODEX" capability nope-capability "$TMP/specproj" testsid >/tmp/codex_bad_capability_gate.out 2>/tmp/codex_bad_capability_gate.err; then
+  bad "codex capability wrapper should reject unknown capabilities"
+else
+  rc=$?
+  if [ "$rc" -eq 64 ] \
+    && grep -q '^check=failed$' /tmp/codex_bad_capability_gate.out \
+    && grep -q '^reason=unknown-capability$' /tmp/codex_bad_capability_gate.out; then
+    ok "codex capability wrapper rejects unknown capabilities"
+  else
+    bad "codex capability wrapper unknown capability output wrong"
+  fi
+fi
 
 echo "== workflow signal CLI =="
 mkdir -p "$TMP/flowproj/.agent_reports"
@@ -299,6 +311,16 @@ if "$CODEX" status "$TMP/donebranch" testsid >/tmp/codex_done.out 2>/tmp/codex_d
 else
   bad "codex status should flag a merged dead branch"
 fi
+if "$CODEX" prompt-signal "$TMP/flowproj" testsid >/tmp/codex_prompt_signal_tracked.out 2>/tmp/codex_prompt_signal_tracked.err \
+  && grep -q '^workflow_state=tracked$' /tmp/codex_prompt_signal_tracked.out \
+  && grep -q '^autopilot_route=autopilot-required-for-spec-and-nontrivial-work$' /tmp/codex_prompt_signal_tracked.out \
+  && grep -q '^routing_contract=core/WORKFLOW.md$' /tmp/codex_prompt_signal_tracked.out \
+  && grep -q '^routing_action=read-workflow-and-select-codex-skill$' /tmp/codex_prompt_signal_tracked.out \
+  && grep -q '^capability_entrypoints=codex-native-skills-plugin$' /tmp/codex_prompt_signal_tracked.out; then
+  ok "codex prompt signal carries tracked autopilot routing contract"
+else
+  bad "codex prompt signal should carry tracked autopilot routing contract"
+fi
 if "$CODEX" permissions >/tmp/codex_permissions.out 2>/tmp/codex_permissions.err \
   && grep -q '^adapter=codex$' /tmp/codex_permissions.out \
   && grep -q '^runtime_surface=codex-native-approval-sandbox$' /tmp/codex_permissions.out \
@@ -335,15 +357,10 @@ else
     bad "codex headless wrapper should report missing worktree"
   fi
 fi
-mkdir -p "$TMP/codex_headless_home/skills" "$TMP/codex_headless_home/agents" "$TMP/codex_headless_home/agent-modes/dev"
-ln -s "$ROOT" "$TMP/codex_headless_home/agent-harness"
-ln -s "$ROOT/codex_setting/AGENTS.md" "$TMP/codex_headless_home/AGENTS.md"
-ln -s "$ROOT/codex_setting/codex-hooks/hooks.json" "$TMP/codex_headless_home/hooks.json"
-ln -s "$ROOT/codex_setting/codex-skills/autopilot-code" "$TMP/codex_headless_home/skills/autopilot-code"
-ln -s "$ROOT/codex_setting/codex-agents/qa-team.toml" "$TMP/codex_headless_home/agents/qa-team.toml"
-ln -s "$ROOT/codex_setting/codex-modes/dev/backend.md" "$TMP/codex_headless_home/agent-modes/dev/backend.md"
-if CODEX_HOME="$TMP/codex_headless_home" "$CODEX" headless --check "$TMP/repo" >/tmp/codex_headless_check.out 2>/tmp/codex_headless_check.err \
+if AGENT_HOME="$ROOT" CODEX_HOME="$TMP/codex_headless_home" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >/tmp/codex_headless_install.out 2>/tmp/codex_headless_install.err \
+  && CODEX_HOME="$TMP/codex_headless_home" "$CODEX" headless --check "$TMP/repo" >/tmp/codex_headless_check.out 2>/tmp/codex_headless_check.err \
   && grep -q '^runtime_projection=ok$' /tmp/codex_headless_check.out \
+  && grep -q '^check=hook-trust:review-needed' /tmp/codex_headless_check.out \
   && grep -q '^check=ok$' /tmp/codex_headless_check.out; then
   ok "codex headless check validates runtime projection"
 else
@@ -1066,6 +1083,7 @@ if "$CODEX" track "$TMP/flowproj" promptlifecyclesid >/tmp/codex_prompt_toggle.o
   && grep -q '^hook_scope=runtime-hook$' /tmp/codex_prompt_hook.out \
   && grep -q '^workflow_state=untracked$' /tmp/codex_prompt_hook.out \
   && grep -q '^autopilot_route=optional-direct-work-allowed$' /tmp/codex_prompt_hook.out \
+  && grep -q '^routing_contract=untracked-direct-work$' /tmp/codex_prompt_hook.out \
   && grep -q 'untracked' /tmp/codex_prompt_hook.out \
   && grep -q '^0$' "$TMP/codex_hook_mem/.codex-turn-state-promptlifecyclesid" \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_prompt_hook.out /tmp/codex_prompt_hook.err; then
@@ -1438,6 +1456,28 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$CODEX" runtime-projection >/tmp/cod
   ok "codex preflight runtime-projection validates installed runtime wiring"
 else
   bad "codex preflight runtime-projection should validate installed runtime wiring"
+fi
+cat > "$RPHOME/config.toml" <<EOF
+[hooks.state]
+[hooks.state."$RPHOME/hooks.json:session_start:0:0"]
+trusted_hash = "sha256:test"
+[hooks.state."$RPHOME/hooks.json:session_end:0:0"]
+trusted_hash = "sha256:test"
+[hooks.state."$RPHOME/hooks.json:user_prompt_submit:0:0"]
+trusted_hash = "sha256:test"
+[hooks.state."$RPHOME/hooks.json:permission_request:0:0"]
+trusted_hash = "sha256:test"
+[hooks.state."$RPHOME/hooks.json:pre_tool_use:0:0"]
+trusted_hash = "sha256:test"
+[hooks.state."$RPHOME/hooks.json:post_tool_use:0:0"]
+trusted_hash = "sha256:test"
+EOF
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$CODEX" runtime-projection >/tmp/codex_rp_stop_trust.out 2>/tmp/codex_rp_stop_trust.err \
+  && grep -q '^check=hook-trust:review-needed missing=stop$' /tmp/codex_rp_stop_trust.out \
+  && grep -q '^status=ok' /tmp/codex_rp_stop_trust.out; then
+  ok "codex runtime-projection requires distinct Stop hook trust"
+else
+  bad "codex runtime-projection should require distinct Stop hook trust"
 fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_REQUIRE_HOOK_TRUST=1 "$CODEX" runtime-projection >/tmp/codex_rp_trust.out 2>/tmp/codex_rp_trust.err; then
   bad "codex runtime-projection should fail when hook trust is required but missing"

@@ -128,6 +128,7 @@ doctor() {
     "$ROOT/adapters/codex/hooks/sessionstart-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/sessionend-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/userprompt-lifecycle.py" \
+    "$ROOT/adapters/codex/hooks/permissionrequest-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/pretooluse-write-guard.py" \
     "$ROOT/adapters/codex/hooks/posttooluse-design-check.py" \
     "$ROOT/adapters/codex/hooks/posttooluse-read-marker.py" || rc=1
@@ -153,36 +154,8 @@ codex_runtime_projection_check() {
     printf 'check=failed\nreason=codex-home-unset\n'
     return 69
   fi
-  harness="$codex_home/agent-harness"
-  if [ ! -f "$harness/core/CORE.md" ]; then
-    printf 'check=failed\nreason=codex-agent-harness-missing\ncodex_home=%s\nexpected=%s\n' "$codex_home" "$harness"
-    return 69
-  fi
-  if [ ! -f "$codex_home/AGENTS.md" ]; then
-    printf 'check=failed\nreason=codex-bootstrap-missing\ncodex_home=%s\nexpected=%s\n' "$codex_home" "$codex_home/AGENTS.md"
-    return 69
-  fi
-  if [ ! -f "$codex_home/hooks.json" ]; then
-    printf 'check=failed\nreason=codex-hooks-missing\ncodex_home=%s\nexpected=%s\n' "$codex_home" "$codex_home/hooks.json"
-    return 69
-  fi
-  if [ ! -f "$codex_home/skills/autopilot-code/SKILL.md" ]; then
-    printf 'check=failed\nreason=codex-native-skills-missing\ncodex_home=%s\nexpected=%s\n' "$codex_home" "$codex_home/skills/autopilot-code/SKILL.md"
-    return 69
-  fi
-  if [ ! -f "$codex_home/agents/qa-team.toml" ]; then
-    printf 'check=failed\nreason=codex-native-agents-missing\ncodex_home=%s\nexpected=%s\n' "$codex_home" "$codex_home/agents/qa-team.toml"
-    return 69
-  fi
-  if [ ! -f "$codex_home/agent-modes/dev/backend.md" ]; then
-    printf 'check=failed\nreason=codex-native-modes-missing\ncodex_home=%s\nexpected=%s\n' "$codex_home" "$codex_home/agent-modes/dev/backend.md"
-    return 69
-  fi
-  if rg -q 'adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|track-toggle\.sh|agent-modes|allowedTools|/\.claude/' \
-    "$codex_home/hooks.json" "$codex_home/skills/autopilot-code/SKILL.md" "$codex_home/agents/qa-team.toml" "$codex_home/agent-modes/dev/backend.md" 2>/dev/null; then
-    printf 'check=failed\nreason=codex-runtime-projection-exposes-claude-surface\ncodex_home=%s\n' "$codex_home"
-    return 69
-  fi
+  AGENT_HOME="$AGENT_ROOT" CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY=1 \
+    "$ROOT/adapters/codex/bin/check-runtime-projection.sh" || return $?
   printf 'runtime_projection=ok\ncodex_home=%s\n' "$codex_home"
   return 0
 }
@@ -216,6 +189,10 @@ case "$cmd" in
     name=$2
     cwd=${3:-$PWD}
     sid=${4:-codex}
+    if ! "$ROOT/adapters/codex/bin/capability-map.sh" "$name" >/dev/null 2>/dev/null; then
+      printf 'check=failed\nreason=unknown-capability\ncapability=%s\n' "$name"
+      exit 64
+    fi
     "$ROOT/hooks/spec-skill-gate.sh" --skill "$name" --cwd "$cwd" --session "$sid"
     ;;
   start)
@@ -263,8 +240,12 @@ case "$cmd" in
     printf 'headless_open_jobs=%s\n' "${headless_open_jobs:-0}"
     if [ "${workflow_state:-tracked}" = "untracked" ]; then
       printf 'autopilot_route=optional-direct-work-allowed\n'
+      printf 'routing_contract=untracked-direct-work\n'
     else
       printf 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work\n'
+      printf 'routing_contract=core/WORKFLOW.md\n'
+      printf 'routing_action=read-workflow-and-select-codex-skill\n'
+      printf 'capability_entrypoints=codex-native-skills-plugin\n'
     fi
     printf 'enforced_hooks=pretool-write-guards,posttool-spec-read-marker,posttool-design-check,session-memory,turn-nudge\n'
     ;;

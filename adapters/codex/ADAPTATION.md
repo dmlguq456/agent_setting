@@ -172,7 +172,10 @@ The `SessionStart` bridge calls `adapters/codex/bin/preflight.sh start` and
 `memory` for stale workflow cleanup and memory context. The `SessionEnd` and
 `Stop` bridges call `session-end` for `mem sync` plus the opt-in distill proposal worker. The
 `UserPromptSubmit` bridge calls `prompt-signal`, `mode`, `recall`, `briefing`,
-and `turn-nudge` for prompt-time workflow and memory signals, extracting prompt
+and `turn-nudge` for prompt-time workflow and memory signals. The structured
+`prompt-signal` output reports `routing_contract=core/WORKFLOW.md`,
+`routing_action=read-workflow-and-select-codex-skill`, and
+`capability_entrypoints=codex-native-skills-plugin` for tracked work, extracting prompt
 text from top-level and nested message/content payloads. The `PermissionRequest`
 bridge calls `status` to surface read-only harness context while Codex owns
 approval and sandbox decisions. The write bridge registers
