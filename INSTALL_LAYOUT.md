@@ -184,6 +184,8 @@ rg '^claude_settings_mcp=unsupported$' /tmp/codex-mcp.txt
 codex_setting/bin/preflight.sh headless >/tmp/codex-headless.txt
 rg '^runtime_surface=codex-exec-headless$' /tmp/codex-headless.txt
 rg '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex-headless.txt
+codex_setting/bin/preflight.sh dispatch --dry-run --worktree "$PWD" --slug install-check --capability audit --mode qa/plan-review --qa quick >/tmp/codex-dispatch.txt
+rg '^registered=0$' /tmp/codex-dispatch.txt
 codex_setting/bin/preflight.sh liveness "$AGENT_HOME/.dispatch/jobs.log" >/tmp/codex-liveness.txt
 codex_setting/bin/preflight.sh mode-info dev/backend >/tmp/codex-mode.txt
 rg '^adapter=codex$' /tmp/codex-mode.txt
@@ -297,6 +299,8 @@ rg '^claude_settings_mcp=unsupported$' /tmp/opencode-mcp.txt
 opencode_setting/bin/preflight.sh headless >/tmp/opencode-headless.txt
 rg '^runtime_surface=opencode-run-headless$' /tmp/opencode-headless.txt
 rg '^liveness_surface=opencode-sqlite-session-mtime$' /tmp/opencode-headless.txt
+opencode_setting/bin/preflight.sh dispatch --dry-run --worktree "$PWD" --slug install-check --capability audit --mode qa/plan-review --qa quick >/tmp/opencode-dispatch.txt
+rg '^registered=0$' /tmp/opencode-dispatch.txt
 opencode_setting/bin/preflight.sh liveness "$AGENT_HOME/.dispatch/jobs.log" >/tmp/opencode-liveness.txt
 opencode_setting/bin/preflight.sh mode-info dev/backend >/tmp/opencode-mode.txt
 rg '^adapter=opencode$' /tmp/opencode-mode.txt

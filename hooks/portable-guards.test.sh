@@ -293,6 +293,26 @@ else
     bad "codex headless wrapper should report missing worktree"
   fi
 fi
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-dispatch.log" >/tmp/codex_dispatch.out 2>/tmp/codex_dispatch.err \
+  && grep -q '^adapter=codex$' /tmp/codex_dispatch.out \
+  && grep -q '^status=dry-run$' /tmp/codex_dispatch.out \
+  && grep -q '^registered=0$' /tmp/codex_dispatch.out \
+  && grep -q '^started=0$' /tmp/codex_dispatch.out \
+  && grep -q '^command=codex exec ' /tmp/codex_dispatch.out \
+  && [ ! -e "$TMP/codex-dispatch.log" ]; then
+  ok "codex dispatch wrapper dry-runs headless command without registry write"
+else
+  bad "codex dispatch wrapper should dry-run headless command without registry write"
+fi
+if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-dispatch.log" >/tmp/codex_dispatch.out 2>/tmp/codex_dispatch.err \
+  && grep -q '^status=register$' /tmp/codex_dispatch.out \
+  && grep -q '^registered=1$' /tmp/codex_dispatch.out \
+  && grep -q '^started=0$' /tmp/codex_dispatch.out \
+  && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard' "$TMP/codex-dispatch.log"; then
+  ok "codex dispatch wrapper registers open headless job"
+else
+  bad "codex dispatch wrapper should register open headless job"
+fi
 mkdir -p "$TMP/codex-live-sessions/2026/06/30"
 cat > "$TMP/codex-live-sessions/2026/06/30/rollout-live-codex.jsonl" <<EOF
 {"timestamp":"2026-06-30T00:00:00.000Z","type":"session_meta","payload":{"id":"live-codex","cwd":"$TMP/flowproj"}}
@@ -1012,6 +1032,26 @@ else
   else
     bad "opencode headless wrapper should report missing worktree"
   fi
+fi
+if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/opencode-dispatch.log" >/tmp/opencode_dispatch.out 2>/tmp/opencode_dispatch.err \
+  && grep -q '^adapter=opencode$' /tmp/opencode_dispatch.out \
+  && grep -q '^status=dry-run$' /tmp/opencode_dispatch.out \
+  && grep -q '^registered=0$' /tmp/opencode_dispatch.out \
+  && grep -q '^started=0$' /tmp/opencode_dispatch.out \
+  && grep -q '^command=opencode run ' /tmp/opencode_dispatch.out \
+  && [ ! -e "$TMP/opencode-dispatch.log" ]; then
+  ok "opencode dispatch wrapper dry-runs headless command without registry write"
+else
+  bad "opencode dispatch wrapper should dry-run headless command without registry write"
+fi
+if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/opencode-dispatch.log" >/tmp/opencode_dispatch.out 2>/tmp/opencode_dispatch.err \
+  && grep -q '^status=register$' /tmp/opencode_dispatch.out \
+  && grep -q '^registered=1$' /tmp/opencode_dispatch.out \
+  && grep -q '^started=0$' /tmp/opencode_dispatch.out \
+  && grep -q $'open\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard' "$TMP/opencode-dispatch.log"; then
+  ok "opencode dispatch wrapper registers open headless job"
+else
+  bad "opencode dispatch wrapper should register open headless job"
 fi
 OPENCODE_DB="$TMP/opencode.db" python3 - <<EOF
 import sqlite3, time

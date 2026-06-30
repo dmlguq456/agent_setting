@@ -23,6 +23,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
        preflight.sh headless [--check] <worktree>
+       preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh liveness [jobs.log]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
@@ -178,6 +179,10 @@ EOF
   liveness)
     jobs=${2:-"${AGENT_HOME:-$ROOT}/.dispatch/jobs.log"}
     AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$jobs"
+    ;;
+  dispatch)
+    shift
+    AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/adapters/codex/bin/dispatch-headless.py" "$@"
     ;;
   mcp)
     shift
