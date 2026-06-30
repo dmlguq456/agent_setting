@@ -208,6 +208,12 @@ codex_setting/bin/preflight.sh status "$PWD" install-check >/tmp/codex-status.tx
 rg '^adapter=codex$' /tmp/codex-status.txt
 rg '^runtime_surface=adapter-owned-harness-status$' /tmp/codex-status.txt
 test -x codex_setting/utilities/harness-status.sh
+codex_setting/bin/preflight.sh loop-info drill >/tmp/codex-loop-drill.txt
+rg '^status=manual-contract$' /tmp/codex-loop-drill.txt
+rg '^auto_run=unsupported$' /tmp/codex-loop-drill.txt
+codex_setting/bin/preflight.sh loop-info note >/tmp/codex-loop-note.txt
+rg '^status=unsupported$' /tmp/codex-loop-note.txt
+rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/codex-loop-note.txt
 codex_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/codex-browser-fetch-mode.txt
 rg '^tool_contract=browser-fetch$' /tmp/codex-browser-fetch-mode.txt
 rg '^runtime_surface=adapter-owned-browser-fetch$' /tmp/codex-browser-fetch-mode.txt
@@ -331,6 +337,12 @@ opencode_setting/bin/preflight.sh status "$PWD" install-check >/tmp/opencode-sta
 rg '^adapter=opencode$' /tmp/opencode-status.txt
 rg '^runtime_surface=adapter-owned-harness-status$' /tmp/opencode-status.txt
 test -x opencode_setting/utilities/harness-status.sh
+opencode_setting/bin/preflight.sh loop-info drill >/tmp/opencode-loop-drill.txt
+rg '^status=manual-contract$' /tmp/opencode-loop-drill.txt
+rg '^auto_run=unsupported$' /tmp/opencode-loop-drill.txt
+opencode_setting/bin/preflight.sh loop-info note >/tmp/opencode-loop-note.txt
+rg '^status=unsupported$' /tmp/opencode-loop-note.txt
+rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/opencode-loop-note.txt
 opencode_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/opencode-browser-fetch-mode.txt
 rg '^tool_contract=browser-fetch$' /tmp/opencode-browser-fetch-mode.txt
 rg '^runtime_surface=adapter-owned-browser-fetch$' /tmp/opencode-browser-fetch-mode.txt

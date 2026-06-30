@@ -325,6 +325,14 @@ check_install_layout_codex_projection() {
     || ! grep -Fq 'test -x codex_setting/tools/design/visual-harness.sh' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate Codex visual harness projection"
   fi
+  if ! grep -Fq 'codex_setting/bin/preflight.sh loop-info drill >/tmp/codex-loop-drill.txt' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^status=manual-contract$' /tmp/codex-loop-drill.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^auto_run=unsupported$' /tmp/codex-loop-drill.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq 'codex_setting/bin/preflight.sh loop-info note >/tmp/codex-loop-note.txt' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^status=unsupported$' /tmp/codex-loop-note.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/codex-loop-note.txt" INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate Codex loop-info manual/unsupported contracts"
+  fi
   if ! grep -Fq 'codex_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/codex-browser-fetch-mode.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^tool_contract=browser-fetch$' /tmp/codex-browser-fetch-mode.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^runtime_surface=adapter-owned-browser-fetch$' /tmp/codex-browser-fetch-mode.txt" INSTALL_LAYOUT.md \
@@ -428,6 +436,14 @@ check_install_layout_opencode_projection() {
     || ! grep -Fq "rg '^runtime_surface=adapter-owned-visual-harness$' /tmp/opencode-visual-contract.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq 'test -x opencode_setting/tools/design/visual-harness.sh' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate OpenCode visual harness projection"
+  fi
+  if ! grep -Fq 'opencode_setting/bin/preflight.sh loop-info drill >/tmp/opencode-loop-drill.txt' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^status=manual-contract$' /tmp/opencode-loop-drill.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^auto_run=unsupported$' /tmp/opencode-loop-drill.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq 'opencode_setting/bin/preflight.sh loop-info note >/tmp/opencode-loop-note.txt' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^status=unsupported$' /tmp/opencode-loop-note.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/opencode-loop-note.txt" INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate OpenCode loop-info manual/unsupported contracts"
   fi
   if ! grep -Fq 'opencode_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/opencode-browser-fetch-mode.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^tool_contract=browser-fetch$' /tmp/opencode-browser-fetch-mode.txt" INSTALL_LAYOUT.md \
@@ -2095,6 +2111,11 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'OpenCode native command surface' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'Claude slash commands' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must distinguish Claude slash commands, Codex command-like Skills/plugins, and OpenCode commands"
+  fi
+  if ! grep -Fq 'Codex/OpenCode `preflight.sh loop-info`' core/ADAPTATION_INVENTORY.md \
+    || ! grep -Fq 'without executing Claude-coupled loop scripts' core/ADAPTATION_INVENTORY.md \
+    || ! grep -Fq 'unsupported/manual-contract' core/ADAPTATION_INVENTORY.md; then
+    fail_msg "core/ADAPTATION_INVENTORY.md must describe Codex/OpenCode loop-info native support/fallback contracts"
   fi
 }
 
