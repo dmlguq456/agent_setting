@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -161,7 +162,17 @@ def validate_dispatch_inputs(args: argparse.Namespace) -> int:
     rc = validate_preflight("capability", "capability-info", args.capability, "invalid-dispatch-capability")
     if rc != 0:
         return rc
-    return validate_preflight("mode", "mode-info", args.mode, "invalid-dispatch-mode")
+    rc = validate_preflight("mode", "mode-info", args.mode, "invalid-dispatch-mode")
+    if rc != 0:
+        return rc
+    if args.qa not in QA_LEVELS:
+        return fail(
+            "invalid-dispatch-qa",
+            64,
+            qa=args.qa,
+            allowed_qa="quick,light,standard,thorough,adversarial",
+        )
+    return 0
 
 
 def main(argv: list[str]) -> int:

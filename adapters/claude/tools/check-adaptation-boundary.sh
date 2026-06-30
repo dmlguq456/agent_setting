@@ -571,7 +571,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'harvest_check=adapters/codex/bin/preflight.sh harvest' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'dispatch_prompt_contract=codex-harness-autopilot-prompt' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'dispatch_input_validation=capability-info,mode-info' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'dispatch_input_validation=capability-info,mode-info,qa-level' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'reason=codex-native-modes-missing' adapters/codex/bin/preflight.sh \
     || ! grep -Fq '$codex_home/agent-modes/dev/backend.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'claude_headless=unsupported' adapters/codex/bin/preflight.sh; then
@@ -580,6 +580,8 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'validate_dispatch_inputs' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'invalid-dispatch-capability' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'invalid-dispatch-mode' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'invalid-dispatch-qa' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'quick,light,standard,thorough,adversarial' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'Read adapters/codex/AGENTS.md first' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'preflight.sh prompt-signal . codex-headless' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'preflight.sh capability-info {args.capability}' adapters/codex/bin/dispatch-headless.py \
@@ -592,8 +594,8 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'native Skills, native Agents, and native Modes' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'Codex harness prompt' adapters/codex/README.md \
     || ! grep -Fq 'Codex harness prompt' adapters/codex/ADAPTATION.md \
-    || ! grep -Fq 'validates `capability-info` and `mode-info` before writing `.dispatch/jobs.log`' adapters/codex/README.md \
-    || ! grep -Fq 'validates `capability-info` and `mode-info` before writing `.dispatch/jobs.log`' adapters/codex/ADAPTATION.md; then
+    || ! grep -Fq 'validates `capability-info`, `mode-info`, and the portable QA level before writing `.dispatch/jobs.log`' adapters/codex/README.md \
+    || ! grep -Fq 'validates `capability-info`, `mode-info`, and the portable QA level before writing `.dispatch/jobs.log`' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex headless docs must include native mode projection in runtime projection checks"
   fi
 
