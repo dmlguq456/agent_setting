@@ -211,6 +211,10 @@ test -x codex_setting/utilities/harness-status.sh
 codex_setting/bin/preflight.sh loop-info drill >/tmp/codex-loop-drill.txt
 rg '^status=manual-contract$' /tmp/codex-loop-drill.txt
 rg '^auto_run=unsupported$' /tmp/codex-loop-drill.txt
+codex_setting/bin/preflight.sh loop-info study >/tmp/codex-loop-study.txt
+rg '^status=manual-contract$' /tmp/codex-loop-study.txt
+rg '^action=proposal-report-only$' /tmp/codex-loop-study.txt
+rg '^fallback=read-source-and-draft-proposal-in-main-session$' /tmp/codex-loop-study.txt
 codex_setting/bin/preflight.sh loop-info note >/tmp/codex-loop-note.txt
 rg '^status=unsupported$' /tmp/codex-loop-note.txt
 rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/codex-loop-note.txt
@@ -344,6 +348,10 @@ test -x opencode_setting/utilities/harness-status.sh
 opencode_setting/bin/preflight.sh loop-info drill >/tmp/opencode-loop-drill.txt
 rg '^status=manual-contract$' /tmp/opencode-loop-drill.txt
 rg '^auto_run=unsupported$' /tmp/opencode-loop-drill.txt
+opencode_setting/bin/preflight.sh loop-info study >/tmp/opencode-loop-study.txt
+rg '^status=manual-contract$' /tmp/opencode-loop-study.txt
+rg '^action=proposal-report-only$' /tmp/opencode-loop-study.txt
+rg '^fallback=read-source-and-draft-proposal-in-main-session$' /tmp/opencode-loop-study.txt
 opencode_setting/bin/preflight.sh loop-info note >/tmp/opencode-loop-note.txt
 rg '^status=unsupported$' /tmp/opencode-loop-note.txt
 rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/opencode-loop-note.txt

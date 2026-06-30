@@ -328,6 +328,9 @@ check_install_layout_codex_projection() {
   if ! grep -Fq 'codex_setting/bin/preflight.sh loop-info drill >/tmp/codex-loop-drill.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^status=manual-contract$' /tmp/codex-loop-drill.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^auto_run=unsupported$' /tmp/codex-loop-drill.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq 'codex_setting/bin/preflight.sh loop-info study >/tmp/codex-loop-study.txt' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^action=proposal-report-only$' /tmp/codex-loop-study.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^fallback=read-source-and-draft-proposal-in-main-session$' /tmp/codex-loop-study.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq 'codex_setting/bin/preflight.sh loop-info note >/tmp/codex-loop-note.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^status=unsupported$' /tmp/codex-loop-note.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/codex-loop-note.txt" INSTALL_LAYOUT.md; then
@@ -446,6 +449,9 @@ check_install_layout_opencode_projection() {
   if ! grep -Fq 'opencode_setting/bin/preflight.sh loop-info drill >/tmp/opencode-loop-drill.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^status=manual-contract$' /tmp/opencode-loop-drill.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^auto_run=unsupported$' /tmp/opencode-loop-drill.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq 'opencode_setting/bin/preflight.sh loop-info study >/tmp/opencode-loop-study.txt' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^action=proposal-report-only$' /tmp/opencode-loop-study.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^fallback=read-source-and-draft-proposal-in-main-session$' /tmp/opencode-loop-study.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq 'opencode_setting/bin/preflight.sh loop-info note >/tmp/opencode-loop-note.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^status=unsupported$' /tmp/opencode-loop-note.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/opencode-loop-note.txt" INSTALL_LAYOUT.md; then

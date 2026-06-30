@@ -467,6 +467,15 @@ if "$CODEX" loop-info drill >/tmp/codex_loop_drill.out 2>/tmp/codex_loop_drill.e
 else
   bad "codex loop wrapper should prevent automatic drill execution"
 fi
+if "$CODEX" loop-info study >/tmp/codex_loop_study.out 2>/tmp/codex_loop_study.err \
+  && grep -q '^source=loops/study.md$' /tmp/codex_loop_study.out \
+  && grep -q '^status=manual-contract$' /tmp/codex_loop_study.out \
+  && grep -q '^action=proposal-report-only$' /tmp/codex_loop_study.out \
+  && grep -q '^fallback=read-source-and-draft-proposal-in-main-session$' /tmp/codex_loop_study.out; then
+  ok "codex loop wrapper reports study proposal contract"
+else
+  bad "codex loop wrapper should report study proposal contract"
+fi
 if "$CODEX" loop-info note >/tmp/codex_loop_note.out 2>/tmp/codex_loop_note.err \
   && grep -q '^loop=note$' /tmp/codex_loop_note.out \
   && grep -q '^status=unsupported$' /tmp/codex_loop_note.out \
@@ -1505,6 +1514,15 @@ if "$OPENCODE" loop-info drill >/tmp/opencode_loop_drill.out 2>/tmp/opencode_loo
   ok "opencode loop wrapper prevents automatic drill execution"
 else
   bad "opencode loop wrapper should prevent automatic drill execution"
+fi
+if "$OPENCODE" loop-info study >/tmp/opencode_loop_study.out 2>/tmp/opencode_loop_study.err \
+  && grep -q '^source=loops/study.md$' /tmp/opencode_loop_study.out \
+  && grep -q '^status=manual-contract$' /tmp/opencode_loop_study.out \
+  && grep -q '^action=proposal-report-only$' /tmp/opencode_loop_study.out \
+  && grep -q '^fallback=read-source-and-draft-proposal-in-main-session$' /tmp/opencode_loop_study.out; then
+  ok "opencode loop wrapper reports study proposal contract"
+else
+  bad "opencode loop wrapper should report study proposal contract"
 fi
 if "$OPENCODE" loop-info note >/tmp/opencode_loop_note.out 2>/tmp/opencode_loop_note.err \
   && grep -q '^loop=note$' /tmp/opencode_loop_note.out \
