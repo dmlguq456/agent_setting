@@ -220,6 +220,15 @@ check_install_layout_opencode_projection() {
     || ! grep -Fq 'OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate OpenCode skills through adapter-owned paths with Claude compat autoload disabled"
   fi
+  if ! grep -Fq 'tmp_opencode_bootstrap_home=' INSTALL_LAYOUT.md \
+    || ! grep -Fq 'OPENCODE_CONFIG_CONTENT="{\"instructions\"' INSTALL_LAYOUT.md \
+    || ! grep -Fq '$PWD/opencode_setting/AGENTS.md' INSTALL_LAYOUT.md \
+    || ! grep -Fq 'opencode debug config --pure >/tmp/opencode-bootstrap.json' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg 'opencode_setting/AGENTS.md' /tmp/opencode-bootstrap.json" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg 'opencode_setting/opencode-skills' /tmp/opencode-bootstrap.json" INSTALL_LAYOUT.md \
+    || ! grep -Fq "! rg '/.claude/' /tmp/opencode-bootstrap.json" INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate OpenCode bootstrap instructions and skill path config"
+  fi
   if ! grep -Fq 'opencode_setting/opencode-plugins/agent-harness-guards.js' INSTALL_LAYOUT.md \
     || ! grep -Fq 'opencode debug config >/tmp/opencode-plugin.json' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg 'agent-harness-guards.js' /tmp/opencode-plugin.json" INSTALL_LAYOUT.md; then

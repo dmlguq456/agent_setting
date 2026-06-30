@@ -221,6 +221,16 @@ opencode_setting/bin/preflight.sh capability-info autopilot-code
 adapters/opencode/bin/sync-native-skills.py --check
 adapters/opencode/bin/sync-native-agents.py --check
 adapters/opencode/bin/sync-native-commands.py --check
+tmp_opencode_bootstrap_home=$(mktemp -d)
+mkdir -p "$tmp_opencode_bootstrap_home/.config/opencode" "$tmp_opencode_bootstrap_home/.local/share"
+OPENCODE_CONFIG_CONTENT="{\"instructions\":[\"$PWD/opencode_setting/AGENTS.md\"],\"skills\":{\"paths\":[\"$PWD/opencode_setting/opencode-skills\"]}}" \
+  HOME="$tmp_opencode_bootstrap_home" \
+  XDG_CONFIG_HOME="$tmp_opencode_bootstrap_home/.config" \
+  XDG_DATA_HOME="$tmp_opencode_bootstrap_home/.local/share" \
+  opencode debug config --pure >/tmp/opencode-bootstrap.json
+rg 'opencode_setting/AGENTS.md' /tmp/opencode-bootstrap.json
+rg 'opencode_setting/opencode-skills' /tmp/opencode-bootstrap.json
+! rg '/.claude/' /tmp/opencode-bootstrap.json
 tmp_opencode_home=$(mktemp -d)
 mkdir -p "$tmp_opencode_home/.config/opencode/agent" "$tmp_opencode_home/.config/opencode/command" "$tmp_opencode_home/.local/share"
 for f in "$PWD/opencode_setting/opencode-agents"/*/*.md; do ln -s "$f" "$tmp_opencode_home/.config/opencode/agent/$(basename "$f")"; done
