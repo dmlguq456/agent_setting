@@ -2161,6 +2161,13 @@ check_adaptation_inventory_native_surfaces() {
   if ! grep -Fq 'PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile tools/build-manifest.py tools/memory/mem.py' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md py_compile validation must avoid writing __pycache__"
   fi
+  if grep -Fq 'core settings.json keybindings.json commands' INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must not symlink runtime-owned settings.json/keybindings.json into the Claude home; Claude Code rewrites them in place and clobbers the symlink"
+  fi
+  if ! grep -Fq 'for p in settings.json keybindings.json; do' INSTALL_LAYOUT.md \
+    || ! grep -Fq 'cp "$AGENT_HOME/claude_setting/$p" "$HOME/.claude/$p"' INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must copy (not symlink) runtime-owned settings.json/keybindings.json into the Claude home so Claude Code settings writes do not pollute the repo"
+  fi
   if ! grep -Fq 'Codex/OpenCode `preflight.sh loop-info`' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'without executing Claude-coupled loop scripts' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'unsupported/manual-contract' core/ADAPTATION_INVENTORY.md; then

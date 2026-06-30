@@ -21,8 +21,17 @@ Claude Code expects files under `$HOME/.claude`. Keep runtime-owned files there,
 ```bash
 export AGENT_HOME="$HOME/agent_setting"
 
-for p in CLAUDE.md README.md core settings.json keybindings.json commands skills agents agent-modes hooks utilities tools scaffolds loops manifest.json statusline.sh track-toggle.sh; do
+# Harness-owned, read-only at runtime: symlink so repo edits flow through.
+for p in CLAUDE.md README.md core commands skills agents agent-modes hooks utilities tools scaffolds loops manifest.json statusline.sh track-toggle.sh; do
   ln -sfn "$AGENT_HOME/claude_setting/$p" "$HOME/.claude/$p"
+done
+
+# Runtime-owned: Claude Code rewrites these in place (/model, /config, in-app
+# keybinding edits). An atomic settings write replaces a symlink with a regular
+# file, so a linked settings.json silently diverges from — and pollutes — the
+# repo. Copy once and let the runtime own them; never re-link.
+for p in settings.json keybindings.json; do
+  [ -e "$HOME/.claude/$p" ] || cp "$AGENT_HOME/claude_setting/$p" "$HOME/.claude/$p"
 done
 ```
 
