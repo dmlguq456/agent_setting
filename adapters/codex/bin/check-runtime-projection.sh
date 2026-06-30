@@ -66,19 +66,37 @@ hook_trust_check() {
     [ "${CODEX_REQUIRE_HOOK_TRUST:-0}" = "1" ] && return 1
     return 0
   fi
+  has_trust() {
+    grep -Fq "$hook_file:$1:" "$cfg"
+  }
+  session_end_stop_alias() {
+    [ -f "$hook_file" ] \
+      && grep -Fq '"SessionEnd"' "$hook_file" \
+      && grep -Fq '"Stop"' "$hook_file" \
+      && [ "$(grep -Fc 'sessionend-lifecycle.py' "$hook_file")" -ge 2 ] \
+      && has_trust stop
+  }
   missing=""
-  for event in session_start session_end stop user_prompt_submit permission_request pre_tool_use post_tool_use; do
-    if ! grep -Fq "$hook_file:$event:" "$cfg"; then
+  alias_note=""
+  for event in session_start stop user_prompt_submit permission_request pre_tool_use post_tool_use; do
+    if ! has_trust "$event"; then
       missing="$missing $event"
     fi
   done
+  if has_trust session_end; then
+    :
+  elif session_end_stop_alias; then
+    alias_note=" session_end=stop-alias"
+  else
+    missing="$missing session_end"
+  fi
   if [ -n "$missing" ]; then
     printf 'check=hook-trust:review-needed missing=%s\n' "$(printf '%s' "$missing" | sed 's/^ //')"
     printf 'hook_trust_hint=run /hooks in Codex CLI and trust changed agent harness hooks\n'
     [ "${CODEX_REQUIRE_HOOK_TRUST:-0}" = "1" ] && return 1
     return 0
   fi
-  printf 'check=hook-trust:ok\n'
+  printf 'check=hook-trust:ok%s\n' "$alias_note"
   return 0
 }
 

@@ -1675,10 +1675,28 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_REQUIRE_HOOK_TRUST=1 CODEX_RUNT
 else
   grep -q '^check=hook-trust:review-needed' /tmp/codex_rp_trust.out && ok "codex runtime-projection can require hook trust" || bad "codex runtime-projection required hook trust output wrong"
 fi
-cat >> "$RPHOME/config.toml" <<EOF
+cat > "$RPHOME/config.toml" <<EOF
+[hooks.state]
+[hooks.state."$RPHOME/hooks.json:session_start:0:0"]
+trusted_hash = "sha256:test"
+[hooks.state."$RPHOME/hooks.json:user_prompt_submit:0:0"]
+trusted_hash = "sha256:test"
+[hooks.state."$RPHOME/hooks.json:permission_request:0:0"]
+trusted_hash = "sha256:test"
+[hooks.state."$RPHOME/hooks.json:pre_tool_use:0:0"]
+trusted_hash = "sha256:test"
+[hooks.state."$RPHOME/hooks.json:post_tool_use:0:0"]
+trusted_hash = "sha256:test"
 [hooks.state."$RPHOME/hooks.json:stop:0:0"]
 trusted_hash = "sha256:test"
 EOF
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection --require-hook-trust >/tmp/codex_rp_stop_alias.out 2>/tmp/codex_rp_stop_alias.err \
+  && grep -q '^check=hook-trust:ok session_end=stop-alias$' /tmp/codex_rp_stop_alias.out \
+  && grep -q '^status=ok' /tmp/codex_rp_stop_alias.out; then
+  ok "codex runtime-projection accepts Stop trust as SessionEnd alias"
+else
+  bad "codex runtime-projection should accept Stop trust as SessionEnd alias"
+fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime >/tmp/codex_doctor_runtime.out 2>/tmp/codex_doctor_runtime.err \
   && grep -q '^check=runtime-projection:ok' /tmp/codex_doctor_runtime.out \
   && grep -q '^status=ok' /tmp/codex_doctor_runtime.out; then
