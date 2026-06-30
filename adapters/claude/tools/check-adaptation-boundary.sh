@@ -708,6 +708,10 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'shell-read-write-unsupported-use-explicit-preflight' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex adapter must document and report the shell/exec read-write hook boundary with explicit preflight fallback"
   fi
+  if ! grep -Fq '*) fp="$PWD/$fp" ;;' hooks/spec-read-marker.sh \
+    || ! grep -Fq 'codex read wrapper resolves relative prd paths for spec gate' hooks/portable-guards.test.sh; then
+    fail_msg "spec-read-marker.sh and portable guards must prove explicit preflight read accepts relative prd paths"
+  fi
   for p in sessionstart-lifecycle.py sessionend-lifecycle.py userprompt-lifecycle.py permissionrequest-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
     if [ ! -x "adapters/codex/hooks/$p" ]; then
       fail_msg "adapters/codex/hooks/$p is missing or not executable"

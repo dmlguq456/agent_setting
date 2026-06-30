@@ -20,6 +20,11 @@ mark_read() {
   sid=$2
 
   case "$fp" in
+    /*) ;;
+    *) fp="$PWD/$fp" ;;
+  esac
+
+  case "$fp" in
     */.agent_reports/spec/prd.md) ;;
     */.claude_reports/spec/prd.md) ;;
     *) return 0 ;;

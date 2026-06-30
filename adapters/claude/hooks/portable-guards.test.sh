@@ -143,6 +143,12 @@ if "$CODEX" read "$TMP/specproj/.agent_reports/spec/prd.md" testsid >/tmp/codex.
 else
   bad "codex read+capability wrapper should pass spec gate"
 fi
+if (cd "$TMP/specproj" && "$CODEX" read .agent_reports/spec/prd.md relsid >/tmp/codex_relative_read.out 2>/tmp/codex_relative_read.err) \
+  && "$CODEX" capability autopilot-code "$TMP/specproj" relsid >/tmp/codex_relative_capability.out 2>/tmp/codex_relative_capability.err; then
+  ok "codex read wrapper resolves relative prd paths for spec gate"
+else
+  bad "codex read wrapper should resolve relative prd paths for spec gate"
+fi
 if "$CODEX" route autopilot-code "$TMP/specproj" testsid >/tmp/codex_route.out 2>/tmp/codex_route.err \
   && grep -q '^runtime_surface=codex-userprompt-hook-signal$' /tmp/codex_route.out \
   && grep -q '^capability=autopilot-code$' /tmp/codex_route.out \
