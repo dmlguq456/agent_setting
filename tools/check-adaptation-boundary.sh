@@ -281,6 +281,7 @@ check_install_layout_codex_projection() {
   fi
   if ! grep -Fq 'codex_setting/bin/preflight.sh role fast reviewer >/tmp/codex-role.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^adapter=codex$' /tmp/codex-role.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^source=roles/README.md$' /tmp/codex-role.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^family=fast$' /tmp/codex-role.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq 'codex_setting/bin/preflight.sh mode-info dev/backend >/tmp/codex-mode.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^adapter=codex$' /tmp/codex-mode.txt" INSTALL_LAYOUT.md \
@@ -370,6 +371,7 @@ check_install_layout_opencode_projection() {
   fi
   if ! grep -Fq 'opencode_setting/bin/preflight.sh role fast reviewer >/tmp/opencode-role.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^adapter=opencode$' /tmp/opencode-role.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^source=roles/README.md$' /tmp/opencode-role.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^family=fast$' /tmp/opencode-role.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq 'opencode_setting/bin/preflight.sh mode-info dev/backend >/tmp/opencode-mode.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^adapter=opencode$' /tmp/opencode-mode.txt" INSTALL_LAYOUT.md \

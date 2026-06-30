@@ -175,6 +175,7 @@ adapters/codex/bin/sync-native-plugin.py --check
 codex_setting/bin/preflight.sh capability-info autopilot-code
 codex_setting/bin/preflight.sh role fast reviewer >/tmp/codex-role.txt
 rg '^adapter=codex$' /tmp/codex-role.txt
+rg '^source=roles/README.md$' /tmp/codex-role.txt
 rg '^family=fast$' /tmp/codex-role.txt
 codex_setting/bin/preflight.sh permissions >/tmp/codex-permissions.txt
 rg '^runtime_surface=codex-native-approval-sandbox$' /tmp/codex-permissions.txt
@@ -292,6 +293,7 @@ adapters/opencode/bin/sync-native-commands.py --check
 tmp_opencode_bootstrap_home=$(mktemp -d)
 opencode_setting/bin/preflight.sh role fast reviewer >/tmp/opencode-role.txt
 rg '^adapter=opencode$' /tmp/opencode-role.txt
+rg '^source=roles/README.md$' /tmp/opencode-role.txt
 rg '^family=fast$' /tmp/opencode-role.txt
 opencode_setting/bin/preflight.sh permissions >/tmp/opencode-permissions.txt
 rg '^runtime_surface=opencode-native-permission-config$' /tmp/opencode-permissions.txt
