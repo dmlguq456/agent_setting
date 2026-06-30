@@ -6,7 +6,11 @@ import { existsSync } from "node:fs"
 const pluginDir = path.dirname(fileURLToPath(import.meta.url))
 const pluginRoot = path.resolve(pluginDir, "../../..")
 const envRoot = process.env.AGENT_HOME ? path.resolve(process.env.AGENT_HOME) : ""
-const root = envRoot && existsSync(path.join(envRoot, "adapters", "opencode", "bin", "preflight.sh")) ? envRoot : pluginRoot
+const isHarnessRoot = (candidate) =>
+  candidate &&
+  existsSync(path.join(candidate, "core", "CORE.md")) &&
+  existsSync(path.join(candidate, "adapters", "opencode", "bin", "preflight.sh"))
+const root = isHarnessRoot(envRoot) ? envRoot : pluginRoot
 const preflight = path.join(root, "adapters", "opencode", "bin", "preflight.sh")
 const designPattern = /(designs?\/|\/design\/|spec\/design|preview\.html$|slides?\.html$|03_components|scaffolds\/)/
 const seenLifecycle = new Set()
@@ -52,7 +56,7 @@ function isDesignHtml(file) {
 function runPreflight(command, args) {
   const result = spawnSync(preflight, [command, ...args], {
     cwd: root,
-    env: { ...process.env, AGENT_HOME: process.env.AGENT_HOME || root },
+    env: { ...process.env, AGENT_HOME: root },
     encoding: "utf8",
   })
 
@@ -65,7 +69,7 @@ function runPreflight(command, args) {
 function collectPreflight(command, args) {
   const result = spawnSync(preflight, [command, ...args], {
     cwd: root,
-    env: { ...process.env, AGENT_HOME: process.env.AGENT_HOME || root },
+    env: { ...process.env, AGENT_HOME: root },
     encoding: "utf8",
   })
 

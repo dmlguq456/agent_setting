@@ -1555,6 +1555,12 @@ check_opencode_native_plugin_projection() {
   if ! grep -Fq 'process.env.AGENT_HOME' "$plugin"; then
     fail_msg "$plugin must prefer AGENT_HOME for harness root resolution"
   fi
+  if ! grep -Fq 'isHarnessRoot' "$plugin" \
+    || ! grep -Fq '"core", "CORE.md"' "$plugin" \
+    || ! grep -Fq 'AGENT_HOME: root' "$plugin" \
+    || grep -Fq 'AGENT_HOME: process.env.AGENT_HOME || root' "$plugin"; then
+    fail_msg "$plugin must validate AGENT_HOME and pass the selected harness root to preflight"
+  fi
   for p in 'collectPreflight("start"' 'collectPreflight("memory"' 'collectPreflight("mode"' 'collectPreflight("recall"' 'collectPreflight("briefing"'; do
     if ! grep -Fq "$p" "$plugin"; then
       fail_msg "$plugin must bridge OpenCode lifecycle context through $p"

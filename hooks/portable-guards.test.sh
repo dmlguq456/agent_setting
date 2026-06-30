@@ -1328,6 +1328,23 @@ then
 else
   bad "opencode native plugin write hook should bridge to preflight"
 fi
+mkdir -p "$TMP/fake_agent_home/adapters/opencode/bin"
+cat > "$TMP/fake_agent_home/adapters/opencode/bin/preflight.sh" <<'EOF'
+#!/usr/bin/env sh
+exit 77
+EOF
+chmod +x "$TMP/fake_agent_home/adapters/opencode/bin/preflight.sh"
+if node --input-type=module >/tmp/opencode_plugin_invalid_home.out 2>/tmp/opencode_plugin_invalid_home.err <<EOF
+process.env.AGENT_HOME = "$TMP/fake_agent_home"
+const mod = await import("$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js")
+const plugin = await mod.AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
+await plugin["tool.execute.before"]({ tool: { name: "write" }, sessionID: "testsid" }, { args: { filePath: "$TMP/repo/f" } })
+EOF
+then
+  ok "opencode native plugin ignores invalid AGENT_HOME"
+else
+  bad "opencode native plugin should validate AGENT_HOME"
+fi
 mkdir -p "$TMP/opencode_copied_plugin"
 cp "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js" "$TMP/opencode_copied_plugin/agent-harness-guards.js"
 if node --input-type=module >/tmp/opencode_plugin_copy.out 2>/tmp/opencode_plugin_copy.err <<EOF
