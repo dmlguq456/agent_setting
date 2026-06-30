@@ -313,12 +313,13 @@ else
     bad "codex headless wrapper should report missing worktree"
   fi
 fi
-mkdir -p "$TMP/codex_headless_home/skills" "$TMP/codex_headless_home/agents"
+mkdir -p "$TMP/codex_headless_home/skills" "$TMP/codex_headless_home/agents" "$TMP/codex_headless_home/agent-modes/dev"
 ln -s "$ROOT" "$TMP/codex_headless_home/agent-harness"
 ln -s "$ROOT/codex_setting/AGENTS.md" "$TMP/codex_headless_home/AGENTS.md"
 ln -s "$ROOT/codex_setting/codex-hooks/hooks.json" "$TMP/codex_headless_home/hooks.json"
 ln -s "$ROOT/codex_setting/codex-skills/autopilot-code" "$TMP/codex_headless_home/skills/autopilot-code"
 ln -s "$ROOT/codex_setting/codex-agents/qa-team.toml" "$TMP/codex_headless_home/agents/qa-team.toml"
+ln -s "$ROOT/codex_setting/codex-modes/dev/backend.md" "$TMP/codex_headless_home/agent-modes/dev/backend.md"
 if CODEX_HOME="$TMP/codex_headless_home" "$CODEX" headless --check "$TMP/repo" >/tmp/codex_headless_check.out 2>/tmp/codex_headless_check.err \
   && grep -q '^runtime_projection=ok$' /tmp/codex_headless_check.out \
   && grep -q '^check=ok$' /tmp/codex_headless_check.out; then

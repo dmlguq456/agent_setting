@@ -528,6 +528,8 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'liveness_surface=codex-session-jsonl-mtime' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'harvest_check=adapters/codex/bin/preflight.sh harvest' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'reason=codex-native-modes-missing' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq '$codex_home/agent-modes/dev/backend.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'claude_headless=unsupported' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must report the Codex headless dispatch contract without Claude headless assumptions"
   fi

@@ -150,8 +150,12 @@ codex_runtime_projection_check() {
     printf 'check=failed\nreason=codex-native-agents-missing\ncodex_home=%s\nexpected=%s\n' "$codex_home" "$codex_home/agents/qa-team.toml"
     return 69
   fi
+  if [ ! -f "$codex_home/agent-modes/dev/backend.md" ]; then
+    printf 'check=failed\nreason=codex-native-modes-missing\ncodex_home=%s\nexpected=%s\n' "$codex_home" "$codex_home/agent-modes/dev/backend.md"
+    return 69
+  fi
   if rg -q 'adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|track-toggle\.sh|agent-modes|allowedTools|/\.claude/' \
-    "$codex_home/hooks.json" "$codex_home/skills/autopilot-code/SKILL.md" "$codex_home/agents/qa-team.toml" 2>/dev/null; then
+    "$codex_home/hooks.json" "$codex_home/skills/autopilot-code/SKILL.md" "$codex_home/agents/qa-team.toml" "$codex_home/agent-modes/dev/backend.md" 2>/dev/null; then
     printf 'check=failed\nreason=codex-runtime-projection-exposes-claude-surface\ncodex_home=%s\n' "$codex_home"
     return 69
   fi
