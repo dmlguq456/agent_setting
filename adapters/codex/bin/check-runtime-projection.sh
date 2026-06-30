@@ -41,7 +41,13 @@ expect_link() {  # <linkpath> <expected-target> <checkname>
 
 expect_link "$CODEX_HOME/agent-harness"            "$AGENT_HOME"                  agent-harness
 expect_link "$CODEX_HOME/AGENTS.md"                "$S/AGENTS.md"                 agents-md
+expect_link "$CODEX_HOME/agent-harness-readme.md"  "$S/README.md"                 agent-harness-readme
 expect_link "$CODEX_HOME/agent-core"               "$S/core"                      agent-core
+expect_link "$CODEX_HOME/agent-capabilities"       "$S/capabilities"              agent-capabilities
+expect_link "$CODEX_HOME/agent-roles"              "$S/roles"                     agent-roles
+expect_link "$CODEX_HOME/agent-bin"                "$S/bin"                       agent-bin
+expect_link "$CODEX_HOME/agent-tools"              "$S/tools"                     agent-tools
+expect_link "$CODEX_HOME/agent-utilities"          "$S/utilities"                 agent-utilities
 expect_link "$CODEX_HOME/agent-scaffolds"          "$S/scaffolds"                 agent-scaffolds
 expect_link "$CODEX_HOME/agent-skills"             "$S/codex-skills"              agent-skills
 expect_link "$CODEX_HOME/agent-agents"             "$S/codex-agents"              agent-agents

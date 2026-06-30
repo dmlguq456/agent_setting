@@ -1580,6 +1580,12 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-run
   && grep -q '^status=ok' /tmp/codex_rp1.out \
   && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/tmp/codex_rp2.out 2>/tmp/codex_rp2.err \
   && grep -q '^check=agent-harness:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=agent-harness-readme:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=agent-capabilities:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=agent-roles:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=agent-bin:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=agent-tools:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=agent-utilities:ok' /tmp/codex_rp2.out \
   && grep -q '^check=agent-config:ok' /tmp/codex_rp2.out \
   && grep -q '^check=agent-scaffolds:ok' /tmp/codex_rp2.out \
   && grep -q '^check=hook-trust:review-needed' /tmp/codex_rp2.out \
@@ -1592,6 +1598,8 @@ else
   bad "codex install-runtime-projection + checker should wire and validate the runtime home"
 fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$CODEX" runtime-projection >/tmp/codex_rp3.out 2>/tmp/codex_rp3.err \
+  && grep -q '^check=agent-capabilities:ok' /tmp/codex_rp3.out \
+  && grep -q '^check=agent-tools:ok' /tmp/codex_rp3.out \
   && grep -q '^check=agent-config:ok' /tmp/codex_rp3.out \
   && grep -q '^status=ok' /tmp/codex_rp3.out; then
   ok "codex preflight runtime-projection validates installed runtime wiring"
