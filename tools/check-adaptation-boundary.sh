@@ -589,10 +589,8 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'invalid-dispatch-qa' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'quick,light,standard,thorough,adversarial' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'Read adapters/codex/AGENTS.md first' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh prompt-signal . codex-headless' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh capability-info {args.capability}' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh route {args.capability} . codex-headless' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'preflight.sh mode-info {args.mode}' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh capability {args.capability} . codex-headless' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'Do not use adapters/claude' adapters/codex/bin/dispatch-headless.py; then
     fail_msg "adapters/codex/bin/dispatch-headless.py must validate dispatch inputs and wrap worker prompts with Codex harness bootstrap/preflight gates"
   fi
@@ -1012,6 +1010,9 @@ check_codex_native_skill_projection() {
     if ! grep -Fq 'preflight.sh prompt-signal [cwd] [session-id]' "$skill" \
       || ! grep -Fq 'preflight.sh mode [cwd] [session-id]' "$skill"; then
       fail_msg "$skill must include both Codex prompt-signal and mode workflow guards"
+    fi
+    if ! grep -Fq "adapters/codex/bin/preflight.sh route $slug [cwd] [session-id]" "$skill"; then
+      fail_msg "$skill must include the Codex route wrapper"
     fi
     if ! grep -Fq '## Projected Portable Details' "$skill" \
       || ! grep -Fq '## Artifact Ownership' "$skill" \

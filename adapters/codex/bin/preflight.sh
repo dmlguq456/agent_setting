@@ -22,6 +22,7 @@ usage() {
   cat <<'EOF'
 usage: preflight.sh write <file> [session-id]
        preflight.sh read <file> [session-id]
+       preflight.sh route <capability> [cwd] [session-id]
        preflight.sh capability <name> [cwd] [session-id]
        preflight.sh skill <name> [cwd] [session-id]
        preflight.sh start [cwd] [session-id]
@@ -183,6 +184,16 @@ case "$cmd" in
     file=$2
     sid=${3:-codex}
     "$ROOT/hooks/spec-read-marker.sh" --file "$file" --session "$sid"
+    ;;
+  route)
+    [ "$#" -ge 2 ] || { echo "codex preflight: route requires a capability name" >&2; exit 64; }
+    name=$2
+    cwd=${3:-$PWD}
+    sid=${4:-codex}
+    "$0" prompt-signal "$cwd" "$sid"
+    "$0" mode "$cwd" "$sid"
+    "$0" capability-info "$name"
+    "$0" capability "$name" "$cwd" "$sid"
     ;;
   capability|skill)
     [ "$#" -ge 2 ] || { echo "codex preflight: $cmd requires a capability name" >&2; exit 64; }

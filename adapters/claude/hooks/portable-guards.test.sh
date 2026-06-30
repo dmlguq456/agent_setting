@@ -143,6 +143,14 @@ if "$CODEX" read "$TMP/specproj/.agent_reports/spec/prd.md" testsid >/tmp/codex.
 else
   bad "codex read+capability wrapper should pass spec gate"
 fi
+if "$CODEX" route autopilot-code "$TMP/specproj" testsid >/tmp/codex_route.out 2>/tmp/codex_route.err \
+  && grep -q '^runtime_surface=codex-userprompt-hook-signal$' /tmp/codex_route.out \
+  && grep -q '^capability=autopilot-code$' /tmp/codex_route.out \
+  && grep -q '^compat_reference=not-projected$' /tmp/codex_route.out; then
+  ok "codex route wrapper combines prompt signal, capability-info, and spec gate"
+else
+  bad "codex route wrapper should combine prompt signal, capability-info, and spec gate"
+fi
 if "$CODEX" capability nope-capability "$TMP/specproj" testsid >/tmp/codex_bad_capability_gate.out 2>/tmp/codex_bad_capability_gate.err; then
   bad "codex capability wrapper should reject unknown capabilities"
 else
@@ -445,9 +453,8 @@ if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_S
   && grep -q '^started=1$' /tmp/codex_dispatch_start.out \
   && [ -f "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" ] \
   && grep -q 'Read adapters/codex/AGENTS.md first' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh capability-info autopilot-code' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'preflight.sh route autopilot-code . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'preflight.sh mode-info dev/backend' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh capability autopilot-code . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'Do not use adapters/claude' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'nested work' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt"; then
   for _ in $(seq 1 20); do

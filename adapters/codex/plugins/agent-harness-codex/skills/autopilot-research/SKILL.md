@@ -113,6 +113,7 @@ Mode inference should report its basis. If multiple modes match, resolve via cla
 ## Required Guards
 
 - Before edits: `adapters/codex/bin/preflight.sh write <file> [session-id]`
+- Before capability routing/spec-changing work: `adapters/codex/bin/preflight.sh route autopilot-research [cwd] [session-id]`
 - Before spec-changing work: `adapters/codex/bin/preflight.sh capability autopilot-research [cwd] [session-id]`
 - After actually reading a spec PRD: `adapters/codex/bin/preflight.sh read <prd.md> [session-id]`
 - For workflow state: `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` and `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`
