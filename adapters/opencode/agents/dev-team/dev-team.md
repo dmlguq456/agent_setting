@@ -10,20 +10,21 @@ profile. This is adapter-owned output generated from `roles/README.md`, not a no
 
 - Portable source: `roles/README.md`
 - Mode inventory: `roles/MODES.md`
-- Runtime role mapper: `adapters/opencode/bin/preflight.sh role <portable-role>`
+- Runtime role mapper: `adapters/opencode/bin/preflight.sh role fast implementer`
 - Runtime mode mapper: `adapters/opencode/bin/preflight.sh mode-info <family/mode>`
 - Bootstrap: `adapters/opencode/AGENTS.md`
 
 ## Role Contract
 
 - Role profile: `dev-team`
-- Portable model role: ``fast implementer` by default`
+- Portable model role note: `fast implementer by default`
+- OpenCode role-map input: `fast implementer`
 - Primary responsibility: Implement backend/frontend/refactor/new-lib work through mode personas
 
 ## Use
 
 1. Read `roles/README.md` and the task-relevant entry in `roles/MODES.md`.
-2. Use `adapters/opencode/bin/preflight.sh role <portable-role>` for concrete
+2. Use `adapters/opencode/bin/preflight.sh role fast implementer` for concrete
    model/variant availability before assuming a model tier.
 3. Use `adapters/opencode/bin/preflight.sh mode-info <family/mode>` before
    applying a mode persona.

@@ -81,6 +81,7 @@ case "$family" in
 esac
 
 printf 'role=%s\n' "$canonical"
+printf 'adapter=codex\n'
 printf 'family=%s\n' "$family"
 printf 'model=%s\n' "$model"
 printf 'reasoning=%s\n' "$reasoning"

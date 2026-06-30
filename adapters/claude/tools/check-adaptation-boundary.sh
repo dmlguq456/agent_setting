@@ -276,6 +276,10 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/bin/preflight.sh must adapt artifact guard toggle text"
   fi
 
+  if ! grep -Fq 'adapter=codex' adapters/codex/bin/role-map.sh; then
+    fail_msg "adapters/codex/bin/role-map.sh must report its adapter for machine-readable role mappings"
+  fi
+
   if ! grep -Fq 'preflight.sh start' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex workflow start cleanup wrapper"
   fi
@@ -731,6 +735,10 @@ check_opencode_bin_wrappers() {
     fail_msg "adapters/opencode/bin/preflight.sh must adapt artifact guard toggle text"
   fi
 
+  if ! grep -Fq 'adapter=opencode' adapters/opencode/bin/role-map.sh; then
+    fail_msg "adapters/opencode/bin/role-map.sh must report its adapter for machine-readable role mappings"
+  fi
+
   if ! grep -Fq 'preflight.sh start' adapters/opencode/AGENTS.md; then
     fail_msg "adapters/opencode/AGENTS.md must document the OpenCode workflow start cleanup wrapper"
   fi
@@ -933,6 +941,14 @@ check_opencode_native_agent_projection() {
     fi
     if ! grep -Fq "adapters/opencode/bin/preflight.sh role" "$agent"; then
       fail_msg "$agent must reference the OpenCode role mapper"
+    fi
+    mapped_role=$(sed -n 's/^- OpenCode role-map input: `\(.*\)`$/\1/p' "$agent" | head -n 1)
+    if [ -z "$mapped_role" ] || ! adapters/opencode/bin/role-map.sh "$mapped_role" >/tmp/opencode-agent-role.out 2>/tmp/opencode-agent-role.err; then
+      fail_msg "$agent must include an OpenCode role-map input that resolves through adapters/opencode/bin/role-map.sh"
+      cat /tmp/opencode-agent-role.err
+    fi
+    if grep -Fq '<portable-role>' "$agent"; then
+      fail_msg "$agent must not leave placeholder OpenCode role-map input"
     fi
     if ! grep -Fq "mode: subagent" "$agent"; then
       fail_msg "$agent must declare OpenCode-native subagent mode"

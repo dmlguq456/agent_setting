@@ -249,6 +249,7 @@ else
 fi
 if AGENT_MODEL_FAST=fast-model AGENT_REASONING_FAST=low "$CODEX" role fast reviewer >/tmp/role.out 2>/tmp/role.err \
   && grep -q '^family=fast$' /tmp/role.out \
+  && grep -q '^adapter=codex$' /tmp/role.out \
   && grep -q '^model=fast-model$' /tmp/role.out \
   && grep -q '^reasoning=low$' /tmp/role.out; then
   ok "codex role wrapper maps fast portable role"
@@ -619,6 +620,7 @@ fi
 echo "== opencode role mapping =="
 if AGENT_MODEL_FAST=fast-model AGENT_VARIANT_FAST=low "$OPENCODE" role fast reviewer >/tmp/opencode_role.out 2>/tmp/opencode_role.err \
   && grep -q '^family=fast$' /tmp/opencode_role.out \
+  && grep -q '^adapter=opencode$' /tmp/opencode_role.out \
   && grep -q '^model=fast-model$' /tmp/opencode_role.out \
   && grep -q '^variant=low$' /tmp/opencode_role.out; then
   ok "opencode role wrapper maps fast portable role"

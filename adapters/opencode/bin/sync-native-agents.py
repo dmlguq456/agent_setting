@@ -25,6 +25,36 @@ def strip_code(text: str) -> str:
     return text
 
 
+def clean_role_note(text: str) -> str:
+    return re.sub(r"`([^`]*)`", r"\1", text.strip())
+
+
+def mapper_role(profile: str, role_note: str) -> str:
+    note = clean_role_note(role_note).lower()
+    if "external adversary" in note:
+        return "external adversary"
+    if "fast implementer" in note:
+        return "fast implementer"
+    if "fast reviewer" in note:
+        return "fast reviewer"
+    if "fast fact" in note:
+        return "fast fact checker"
+    if "fast tool worker" in note:
+        return "fast tool worker"
+    if "deep reviewer" in note:
+        return "deep reviewer"
+    if "deep editor" in note:
+        return "deep editor"
+    if "deep maker" in note:
+        return "deep maker"
+    profile_defaults = {
+        "qa-team": "fast reviewer",
+        "research-team": "deep reviewer",
+        "editorial-team": "deep editor",
+    }
+    return profile_defaults.get(profile, "fast reviewer")
+
+
 def role_rows(text: str) -> list[tuple[str, str, str]]:
     rows: list[tuple[str, str, str]] = []
     for raw in text.splitlines():
@@ -39,6 +69,8 @@ def role_rows(text: str) -> list[tuple[str, str, str]]:
 
 
 def render(profile: str, portable_role: str, responsibility: str) -> str:
+    role_note = clean_role_note(portable_role)
+    mapped_role = mapper_role(profile, role_note)
     description = compact(
         f"OpenCode-native agent for portable role profile {profile}. "
         f"Use when delegating work whose primary responsibility is: {responsibility}"
@@ -55,20 +87,21 @@ profile. This is adapter-owned output generated from `roles/README.md`, not a no
 
 - Portable source: `roles/README.md`
 - Mode inventory: `roles/MODES.md`
-- Runtime role mapper: `adapters/opencode/bin/preflight.sh role <portable-role>`
+- Runtime role mapper: `adapters/opencode/bin/preflight.sh role {mapped_role}`
 - Runtime mode mapper: `adapters/opencode/bin/preflight.sh mode-info <family/mode>`
 - Bootstrap: `adapters/opencode/AGENTS.md`
 
 ## Role Contract
 
 - Role profile: `{profile}`
-- Portable model role: `{portable_role}`
+- Portable model role note: `{role_note}`
+- OpenCode role-map input: `{mapped_role}`
 - Primary responsibility: {responsibility}
 
 ## Use
 
 1. Read `roles/README.md` and the task-relevant entry in `roles/MODES.md`.
-2. Use `adapters/opencode/bin/preflight.sh role <portable-role>` for concrete
+2. Use `adapters/opencode/bin/preflight.sh role {mapped_role}` for concrete
    model/variant availability before assuming a model tier.
 3. Use `adapters/opencode/bin/preflight.sh mode-info <family/mode>` before
    applying a mode persona.

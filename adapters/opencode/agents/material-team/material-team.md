@@ -10,20 +10,21 @@ profile. This is adapter-owned output generated from `roles/README.md`, not a no
 
 - Portable source: `roles/README.md`
 - Mode inventory: `roles/MODES.md`
-- Runtime role mapper: `adapters/opencode/bin/preflight.sh role <portable-role>`
+- Runtime role mapper: `adapters/opencode/bin/preflight.sh role fast tool worker`
 - Runtime mode mapper: `adapters/opencode/bin/preflight.sh mode-info <family/mode>`
 - Bootstrap: `adapters/opencode/AGENTS.md`
 
 ## Role Contract
 
 - Role profile: `material-team`
-- Portable model role: ``deep maker` plus fast tool worker`
+- Portable model role note: `deep maker plus fast tool worker`
+- OpenCode role-map input: `fast tool worker`
 - Primary responsibility: Fetch, extract, visualize, and analyze supporting materials
 
 ## Use
 
 1. Read `roles/README.md` and the task-relevant entry in `roles/MODES.md`.
-2. Use `adapters/opencode/bin/preflight.sh role <portable-role>` for concrete
+2. Use `adapters/opencode/bin/preflight.sh role fast tool worker` for concrete
    model/variant availability before assuming a model tier.
 3. Use `adapters/opencode/bin/preflight.sh mode-info <family/mode>` before
    applying a mode persona.
