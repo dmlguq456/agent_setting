@@ -49,8 +49,9 @@ reads, and `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]
 before spec-changing capability work. It can also run
 `adapters/codex/bin/preflight.sh start [cwd] [session-id]` at session start for
 stale workflow bypass flag cleanup, and
+`adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` plus
 `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` to surface tracked
-or untracked workflow state as plain text. Use `adapters/codex/bin/preflight.sh
+or untracked workflow state through the Codex `UserPromptSubmit` hook. Use `adapters/codex/bin/preflight.sh
 track [cwd] [session-id]` to toggle the same session-scoped workflow bypass flag
 without relying on a Claude slash command. Use `adapters/codex/bin/preflight.sh
 memory [cwd]` for plain-text memory injection.
