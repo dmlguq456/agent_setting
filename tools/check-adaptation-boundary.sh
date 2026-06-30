@@ -570,13 +570,24 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'liveness_surface=codex-session-jsonl-mtime' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'harvest_check=adapters/codex/bin/preflight.sh harvest' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'dispatch_prompt_contract=codex-harness-autopilot-prompt' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'reason=codex-native-modes-missing' adapters/codex/bin/preflight.sh \
     || ! grep -Fq '$codex_home/agent-modes/dev/backend.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'claude_headless=unsupported' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must report the Codex headless dispatch contract without Claude headless assumptions"
   fi
+  if ! grep -Fq 'Read adapters/codex/AGENTS.md first' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh prompt-signal . codex-headless' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh capability-info {args.capability}' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh mode-info {args.mode}' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh capability {args.capability} . codex-headless' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'Do not use adapters/claude' adapters/codex/bin/dispatch-headless.py; then
+    fail_msg "adapters/codex/bin/dispatch-headless.py must wrap worker prompts with Codex harness bootstrap and preflight gates"
+  fi
   if ! grep -Fq 'native Skills, native Agents, and native Modes' adapters/codex/README.md \
-    || ! grep -Fq 'native Skills, native Agents, and native Modes' adapters/codex/ADAPTATION.md; then
+    || ! grep -Fq 'native Skills, native Agents, and native Modes' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'Codex harness prompt' adapters/codex/README.md \
+    || ! grep -Fq 'Codex harness prompt' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex headless docs must include native mode projection in runtime projection checks"
   fi
 

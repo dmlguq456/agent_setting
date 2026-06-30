@@ -317,6 +317,7 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^claude_headless=unsupported$' /tmp/codex_headless.out \
   && grep -q '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex_headless.out \
   && grep -q '^liveness_check=adapters/codex/bin/preflight.sh liveness \[jobs.log\]$' /tmp/codex_headless.out \
+  && grep -q '^dispatch_prompt_contract=codex-harness-autopilot-prompt$' /tmp/codex_headless.out \
   && grep -q '^constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required$' /tmp/codex_headless.out; then
   ok "codex headless wrapper reports dispatch contract"
 else
@@ -384,7 +385,13 @@ if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_S
   "$CODEX" dispatch --start --worktree "$TMP/repo" --slug nested/codex-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "nested work" --jobs "$TMP/codex-start.log" --log-dir "$TMP/codex-logs" >/tmp/codex_dispatch_start.out 2>/tmp/codex_dispatch_start.err \
   && grep -q '^status=start$' /tmp/codex_dispatch_start.out \
   && grep -q '^started=1$' /tmp/codex_dispatch_start.out \
-  && [ -f "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" ]; then
+  && [ -f "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" ] \
+  && grep -q 'Read adapters/codex/AGENTS.md first' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'preflight.sh capability-info autopilot-code' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'preflight.sh mode-info dev/backend' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'preflight.sh capability autopilot-code . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'Do not use adapters/claude' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'nested work' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt"; then
   for _ in $(seq 1 20); do
     [ -f "$TMP/codex-start.argv" ] && break
     sleep 0.1

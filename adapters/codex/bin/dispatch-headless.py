@@ -43,7 +43,7 @@ def fail(reason: str, code: int, **fields: str) -> int:
     return code
 
 
-def prompt(args: argparse.Namespace) -> tuple[str, str]:
+def task_prompt(args: argparse.Namespace) -> tuple[str, str]:
     if args.prompt_file and args.prompt_text:
         raise ValueError("--prompt-file and --prompt-text are mutually exclusive")
     if args.prompt_file:
@@ -56,6 +56,35 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"capability={args.capability}\nmode={args.mode}\nqa={args.qa}\n"
         f"worktree={args.worktree}\n",
         "generated",
+    )
+
+
+def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
+    task, source = task_prompt(args)
+    return (
+        "You are a Codex headless worker launched by the portable agent harness.\n"
+        "Follow the Codex adapter contract before doing task work.\n\n"
+        "Required bootstrap:\n"
+        "- Read adapters/codex/AGENTS.md first.\n"
+        "- Run adapters/codex/bin/preflight.sh prompt-signal . codex-headless.\n"
+        "- Run adapters/codex/bin/preflight.sh mode . codex-headless.\n"
+        f"- Run adapters/codex/bin/preflight.sh capability-info {args.capability}.\n"
+        f"- Read adapters/codex/skills/{args.capability}/SKILL.md when present.\n"
+        f"- Run adapters/codex/bin/preflight.sh mode-info {args.mode} and read the reported native_mode_path when present.\n"
+        f"- Before spec-changing work, run adapters/codex/bin/preflight.sh capability {args.capability} . codex-headless.\n"
+        "- If you actually read .agent_reports/spec/prd.md or legacy .claude_reports/spec/prd.md, run adapters/codex/bin/preflight.sh read <prd.md> codex-headless after the read.\n"
+        "- Before edits, run adapters/codex/bin/preflight.sh write <file> codex-headless.\n"
+        "- Do not use adapters/claude, claude_setting, Claude slash commands, or Claude hook/statusline files as Codex-native input.\n\n"
+        "Dispatch metadata:\n"
+        f"- capability: {args.capability}\n"
+        f"- mode: {args.mode}\n"
+        f"- qa: {args.qa}\n"
+        f"- worktree: {args.worktree}\n\n"
+        "User task:\n"
+        f"{task.rstrip()}\n\n"
+        "Return a concise Korean report with changed files, verification commands, artifact paths, and any blocked/unsupported Codex tool contracts. "
+        "Leave merge and worktree cleanup to the main orchestrator.\n",
+        source,
     )
 
 
@@ -127,7 +156,7 @@ def main(argv: list[str]) -> int:
     agent_home = resolve_agent_home()
     jobs = Path(args.jobs) if args.jobs else agent_home / ".dispatch" / "jobs.log"
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
-    prompt_text, prompt_source = prompt(args)
+    prompt_text, prompt_source = dispatch_prompt(args)
     prompt_path = log_dir / f"{args.slug}.codex.prompt.txt"
     log_path = log_dir / f"{args.slug}.codex.jsonl"
     command = shell_command(args, prompt_path, log_path)

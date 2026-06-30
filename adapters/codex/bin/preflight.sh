@@ -376,6 +376,7 @@ job_registry=<agent-home>/.dispatch/jobs.log
 liveness_surface=codex-session-jsonl-mtime
 liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]
 harvest_check=adapters/codex/bin/preflight.sh harvest [--jobs jobs.log] [--slug slug] [--mark-done]
+dispatch_prompt_contract=codex-harness-autopilot-prompt
 constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required
 claude_headless=unsupported
 fallback=manual-main-session-or-report-unavailable
