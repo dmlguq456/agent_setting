@@ -15,6 +15,7 @@ if [ -z "$AGENT_HOME" ] || [ ! -f "$AGENT_HOME/core/CORE.md" ]; then
   AGENT_HOME=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
 fi
 CODEX_HOME=${CODEX_HOME:-$HOME/.codex}
+CLI_TIMEOUT=${CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT:-15}
 S="$AGENT_HOME/codex_setting"
 
 case "${1:-}" in
@@ -95,24 +96,51 @@ else
   fails=$((fails + 1))
 fi
 
-# Native skill links: at least one and matching the projected skill count.
+# Native skill links: every projected skill must be linked to the matching
+# adapter-owned directory. A count-only check can miss stale or wrong targets.
 projected_skills=$(find -L "$S/codex-skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 linked_skills=$(find "$CODEX_HOME/skills" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
 printf 'skills_projected=%s skills_linked=%s\n' "$projected_skills" "$linked_skills"
-if [ "$linked_skills" -ge "$projected_skills" ] && [ "$projected_skills" -gt 0 ]; then
+skill_link_fails=0
+for d in "$S/codex-skills"/*; do
+  [ -d "$d" ] || continue
+  name=$(basename "$d")
+  linkpath="$CODEX_HOME/skills/$name"
+  if [ -L "$linkpath" ] && [ -n "$(real "$linkpath")" ] && [ "$(real "$linkpath")" = "$(real "$d")" ]; then
+    printf 'check=skill-link:%s:ok\n' "$name"
+  else
+    printf 'check=skill-link:%s:failed reason=expected-symlink-to:%s\n' "$name" "$d"
+    skill_link_fails=$((skill_link_fails + 1))
+  fi
+done
+if [ "$skill_link_fails" -eq 0 ] && [ "$projected_skills" -gt 0 ]; then
   printf 'check=skills-linked:ok\n'
 else
-  printf 'check=skills-linked:failed reason=harness-skills-not-linked\n'
+  printf 'check=skills-linked:failed reason=harness-skills-not-linked-or-miswired\n'
   fails=$((fails + 1))
 fi
 
+# Native agent links: every projected custom-agent TOML must be linked to the
+# matching adapter-owned file.
 projected_agents=$(find -L "$S/codex-agents" -mindepth 1 -maxdepth 1 -type f -name '*.toml' 2>/dev/null | wc -l | tr -d ' ')
 linked_agents=$(find "$CODEX_HOME/agents" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
 printf 'agents_projected=%s agents_linked=%s\n' "$projected_agents" "$linked_agents"
-if [ "$linked_agents" -ge "$projected_agents" ] && [ "$projected_agents" -gt 0 ]; then
+agent_link_fails=0
+for f in "$S/codex-agents"/*.toml; do
+  [ -f "$f" ] || continue
+  name=$(basename "$f")
+  linkpath="$CODEX_HOME/agents/$name"
+  if [ -L "$linkpath" ] && [ -n "$(real "$linkpath")" ] && [ "$(real "$linkpath")" = "$(real "$f")" ]; then
+    printf 'check=agent-link:%s:ok\n' "$name"
+  else
+    printf 'check=agent-link:%s:failed reason=expected-symlink-to:%s\n' "$name" "$f"
+    agent_link_fails=$((agent_link_fails + 1))
+  fi
+done
+if [ "$agent_link_fails" -eq 0 ] && [ "$projected_agents" -gt 0 ]; then
   printf 'check=agents-linked:ok\n'
 else
-  printf 'check=agents-linked:failed reason=harness-agents-not-linked\n'
+  printf 'check=agents-linked:failed reason=harness-agents-not-linked-or-miswired\n'
   fails=$((fails + 1))
 fi
 
@@ -122,21 +150,44 @@ if [ "${CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY:-0}" = "1" ]; then
   printf 'check=bootstrap:skipped reason=codex-cli-discovery-skipped\n'
   printf 'check=plugin:skipped reason=codex-cli-discovery-skipped\n'
 elif command -v codex >/dev/null 2>&1; then
-  if CODEX_HOME="$CODEX_HOME" codex debug prompt-input 'agent harness runtime projection check' 2>/dev/null \
-      | grep -q 'AGENTS.md — Codex Adapter Bootstrap'; then
-    printf 'check=bootstrap:ok\n'
+  bootstrap_out=""
+  if bootstrap_out=$(CODEX_HOME="$CODEX_HOME" timeout "$CLI_TIMEOUT" codex debug prompt-input 'agent harness runtime projection check' 2>/dev/null); then
+    if printf '%s\n' "$bootstrap_out" | grep -q 'AGENTS.md — Codex Adapter Bootstrap'; then
+      printf 'check=bootstrap:ok\n'
+    else
+      printf 'check=bootstrap:failed reason=harness-bootstrap-not-loaded\n'
+      fails=$((fails + 1))
+    fi
   else
-    printf 'check=bootstrap:failed reason=harness-bootstrap-not-loaded\n'
-    fails=$((fails + 1))
+    rc=$?
+    if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+      printf 'check=bootstrap:skipped reason=codex-cli-timeout timeout=%s\n' "$CLI_TIMEOUT"
+    else
+      printf 'check=bootstrap:failed reason=codex-debug-failed exit=%s\n' "$rc"
+      fails=$((fails + 1))
+    fi
   fi
   # Plugin presence (soft): report install commands when missing.
-  if CODEX_HOME="$CODEX_HOME" codex plugin list --json 2>/dev/null | grep -q 'agent-harness-codex'; then
-    printf 'check=plugin:ok\n'
+  plugin_out=""
+  if plugin_out=$(CODEX_HOME="$CODEX_HOME" timeout "$CLI_TIMEOUT" codex plugin list --json 2>/dev/null); then
+    if printf '%s\n' "$plugin_out" | grep -q 'agent-harness-codex'; then
+      printf 'check=plugin:ok\n'
+    else
+      printf 'check=plugin:missing\n'
+      printf 'plugin_install_1=codex plugin marketplace add %s/codex-plugin-marketplace\n' "$S"
+      printf 'plugin_install_2=codex plugin add agent-harness-codex@agent-harness\n'
+      printf 'plugin_hint=run install-runtime-projection.sh --install-plugin\n'
+    fi
   else
-    printf 'check=plugin:missing\n'
-    printf 'plugin_install_1=codex plugin marketplace add %s/codex-plugin-marketplace\n' "$S"
-    printf 'plugin_install_2=codex plugin add agent-harness-codex@agent-harness\n'
-    printf 'plugin_hint=run install-runtime-projection.sh --install-plugin\n'
+    rc=$?
+    if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+      printf 'check=plugin:skipped reason=codex-cli-timeout timeout=%s\n' "$CLI_TIMEOUT"
+    else
+      printf 'check=plugin:missing reason=codex-plugin-list-failed exit=%s\n' "$rc"
+      printf 'plugin_install_1=codex plugin marketplace add %s/codex-plugin-marketplace\n' "$S"
+      printf 'plugin_install_2=codex plugin add agent-harness-codex@agent-harness\n'
+      printf 'plugin_hint=run install-runtime-projection.sh --install-plugin\n'
+    fi
   fi
 else
   printf 'check=bootstrap:skipped reason=codex-command-not-found\n'

@@ -2425,6 +2425,12 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'agent-bin' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'agent-tools' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'agent-utilities' adapters/codex/bin/check-runtime-projection.sh \
+    || ! grep -Fq 'check=skill-link:%s:ok' adapters/codex/bin/check-runtime-projection.sh \
+    || ! grep -Fq 'check=agent-link:%s:ok' adapters/codex/bin/check-runtime-projection.sh \
+    || ! grep -Fq 'harness-skills-not-linked-or-miswired' adapters/codex/bin/check-runtime-projection.sh \
+    || ! grep -Fq 'harness-agents-not-linked-or-miswired' adapters/codex/bin/check-runtime-projection.sh \
+    || ! grep -Fq 'CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT' adapters/codex/bin/check-runtime-projection.sh \
+    || ! grep -Fq 'codex-cli-timeout' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY=1' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/README.md \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/ADAPTATION.md; then
