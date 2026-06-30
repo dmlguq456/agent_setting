@@ -55,6 +55,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
 | workflow start cleanup | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]`; run it manually when hooks are unavailable |
 | tracked/untracked signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`; run it manually when hooks are unavailable |
+| harness status snapshot | Run `adapters/codex/bin/preflight.sh status [cwd] [session-id]` for read-only workflow, artifact, notes, worktree, and git-risk signals. This does not replace Codex `/statusline` for model/context/token/session fields |
 | tracked/untracked toggle | Portable `utilities/workflow-toggle.sh`; run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only on explicit user request |
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/codex/bin/preflight.sh write <file> [session-id]` before writes |
 | material browser fetch | Tool-contract check: `adapters/codex/bin/preflight.sh browser-fetch --check <url>` verifies rendered browser access through the adapter-owned Playwright launcher before using `roles/modes/material/browser-fetch.md`. Exit 69 means the local browser stack is unavailable |
@@ -113,6 +114,7 @@ adapter currently exposes only utility files that Codex wrappers or docs use:
 - `agent-home.sh` (Codex-owned wrapper; no Claude runtime-home fallback)
 - `artifact-root.sh`
 - `agent-worklog-state.sh`
+- `harness-status.sh`
 - `workflow-guard-hook.sh`
 - `workflow-toggle.sh`
 

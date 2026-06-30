@@ -178,6 +178,10 @@ rg '^family=fast$' /tmp/codex-role.txt
 codex_setting/bin/preflight.sh mode-info dev/backend >/tmp/codex-mode.txt
 rg '^adapter=codex$' /tmp/codex-mode.txt
 rg '^status=portable$' /tmp/codex-mode.txt
+codex_setting/bin/preflight.sh status "$PWD" install-check >/tmp/codex-status.txt
+rg '^adapter=codex$' /tmp/codex-status.txt
+rg '^runtime_surface=adapter-owned-harness-status$' /tmp/codex-status.txt
+test -x codex_setting/utilities/harness-status.sh
 codex_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/codex-browser-fetch-mode.txt
 rg '^tool_contract=browser-fetch$' /tmp/codex-browser-fetch-mode.txt
 rg '^runtime_surface=adapter-owned-browser-fetch$' /tmp/codex-browser-fetch-mode.txt
@@ -277,6 +281,10 @@ rg '^family=fast$' /tmp/opencode-role.txt
 opencode_setting/bin/preflight.sh mode-info dev/backend >/tmp/opencode-mode.txt
 rg '^adapter=opencode$' /tmp/opencode-mode.txt
 rg '^status=portable$' /tmp/opencode-mode.txt
+opencode_setting/bin/preflight.sh status "$PWD" install-check >/tmp/opencode-status.txt
+rg '^adapter=opencode$' /tmp/opencode-status.txt
+rg '^runtime_surface=adapter-owned-harness-status$' /tmp/opencode-status.txt
+test -x opencode_setting/utilities/harness-status.sh
 opencode_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/opencode-browser-fetch-mode.txt
 rg '^tool_contract=browser-fetch$' /tmp/opencode-browser-fetch-mode.txt
 rg '^runtime_surface=adapter-owned-browser-fetch$' /tmp/opencode-browser-fetch-mode.txt

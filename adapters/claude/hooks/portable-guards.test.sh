@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if command -v git >/dev/null 2>&1 && ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)"; then
-  :
-else
-  ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-fi
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 ART="$ROOT/hooks/artifact-guard.sh"
 GIT="$ROOT/hooks/git-state-guard.sh"
 MEM="$ROOT/hooks/builtin-memory-guard.sh"
@@ -251,6 +246,19 @@ if env -u AGENT_NOTES_ROOT -u WORKLOG_NOTES_ROOT -u WORKLOG_BOARD_APP -u WORKLOG
   ok "codex worklog wrapper has no Claude runtime defaults"
 else
   bad "codex worklog wrapper should not default to Claude runtime paths"
+fi
+if AGENT_NOTES_ROOT="$TMP/notes" WORKLOG_BOARD_APP="$TMP/board" WORKLOG_BOARD_WT="$TMP/board-wt" \
+  "$CODEX" status "$TMP/flowproj" testsid >/tmp/codex_status.out 2>/tmp/codex_status.err \
+  && grep -q '^adapter=codex$' /tmp/codex_status.out \
+  && grep -q '^runtime_surface=adapter-owned-harness-status$' /tmp/codex_status.out \
+  && grep -q '^artifact_root_exists=1$' /tmp/codex_status.out \
+  && grep -q '^workflow_state=tracked$' /tmp/codex_status.out \
+  && grep -q '^git_repo=0$' /tmp/codex_status.out \
+  && grep -q "^agent_notes_root=$TMP/notes$" /tmp/codex_status.out \
+  && grep -q '^note=read-only snapshot;' /tmp/codex_status.out; then
+  ok "codex status wrapper reports harness snapshot"
+else
+  bad "codex status wrapper should report harness snapshot"
 fi
 if AGENT_MODEL_FAST=fast-model AGENT_REASONING_FAST=low "$CODEX" role fast reviewer >/tmp/role.out 2>/tmp/role.err \
   && grep -q '^family=fast$' /tmp/role.out \
@@ -883,6 +891,19 @@ if env -u AGENT_NOTES_ROOT -u WORKLOG_NOTES_ROOT -u WORKLOG_BOARD_APP -u WORKLOG
   ok "opencode worklog wrapper has no Claude runtime defaults"
 else
   bad "opencode worklog wrapper should not default to Claude runtime paths"
+fi
+if AGENT_NOTES_ROOT="$TMP/notes" WORKLOG_BOARD_APP="$TMP/board" WORKLOG_BOARD_WT="$TMP/board-wt" \
+  "$OPENCODE" status "$TMP/flowproj" opencodesid >/tmp/opencode_status.out 2>/tmp/opencode_status.err \
+  && grep -q '^adapter=opencode$' /tmp/opencode_status.out \
+  && grep -q '^runtime_surface=adapter-owned-harness-status$' /tmp/opencode_status.out \
+  && grep -q '^artifact_root_exists=1$' /tmp/opencode_status.out \
+  && grep -q '^workflow_state=tracked$' /tmp/opencode_status.out \
+  && grep -q '^git_repo=0$' /tmp/opencode_status.out \
+  && grep -q "^agent_notes_root=$TMP/notes$" /tmp/opencode_status.out \
+  && grep -q '^note=read-only snapshot;' /tmp/opencode_status.out; then
+  ok "opencode status wrapper reports harness snapshot"
+else
+  bad "opencode status wrapper should report harness snapshot"
 fi
 
 echo "== opencode role mapping =="

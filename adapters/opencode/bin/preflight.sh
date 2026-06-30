@@ -20,6 +20,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh memory [cwd]
        preflight.sh recall <prompt> [cwd]
        preflight.sh briefing [cwd]
+       preflight.sh status [cwd] [session-id]
        preflight.sh worklog [cwd]
        preflight.sh claim-verify [--check] <claim> [--out <file>]
        preflight.sh browser-fetch [--check] <url> [--out <dir>]
@@ -94,6 +95,11 @@ case "$cmd" in
   briefing)
     cwd=${2:-$PWD}
     AGENT_HOME="${AGENT_HOME:-$ROOT}" bash "$ROOT/hooks/mem-briefing-inject.sh" --cwd "$cwd" --format text
+    ;;
+  status)
+    cwd=${2:-$PWD}
+    sid=${3:-opencode}
+    AGENT_ADAPTER=opencode "$ROOT/utilities/harness-status.sh" "$cwd" "$sid"
     ;;
   worklog)
     cwd=${2:-$PWD}

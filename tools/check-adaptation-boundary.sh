@@ -539,7 +539,7 @@ check_codex_utility_projection() {
     fail_msg "adapters/codex/utilities/agent-home.sh must not fall back to Claude runtime home"
   fi
 
-  for p in artifact-root.sh agent-worklog-state.sh workflow-guard-hook.sh workflow-toggle.sh; do
+  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh; do
     if [ ! -L "adapters/codex/utilities/$p" ]; then
       fail_msg "adapters/codex/utilities/$p must be a selective portable utility projection"
       continue
@@ -550,7 +550,7 @@ check_codex_utility_projection() {
     fi
   done
 
-  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh \) -print 2>/dev/null || true)
+  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/codex/utilities contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -1106,7 +1106,7 @@ check_opencode_utility_projection() {
     fail_msg "adapters/opencode/utilities/agent-home.sh must not fall back to Claude runtime home"
   fi
 
-  for p in artifact-root.sh agent-worklog-state.sh workflow-guard-hook.sh workflow-toggle.sh; do
+  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh; do
     if [ ! -L "adapters/opencode/utilities/$p" ]; then
       fail_msg "adapters/opencode/utilities/$p must be a selective portable utility projection"
       continue
@@ -1117,7 +1117,7 @@ check_opencode_utility_projection() {
     fi
   done
 
-  extra=$(find adapters/opencode/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh \) -print 2>/dev/null || true)
+  extra=$(find adapters/opencode/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/opencode/utilities contains unapproved entries:"
     printf '%s\n' "$extra"

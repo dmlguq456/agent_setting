@@ -180,6 +180,7 @@ Harness-specific status signals need OpenCode-native realization:
 | Harness signal | OpenCode direction |
 |---|---|
 | tracked/untracked workflow state | explicit `preflight.sh mode` until a native prompt/session surface or plugin exists |
+| workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; keep OpenCode native UI/config for model/context/session fields |
 | tracked/untracked workflow toggle | explicit `preflight.sh track`; do not expose Claude `/track` command files |
 | artifact root detection | `preflight.sh write` and shared artifact-root helper |
 | headless/autopilot/background jobs | `opencode run` headless mode exists; full autopilot dispatch redesign against OpenCode session/agent model before adding UI |
@@ -272,6 +273,7 @@ entire shared `utilities/` directory. The current allowlist is:
 - `agent-home.sh` (OpenCode-owned wrapper; no Claude runtime-home fallback)
 - `artifact-root.sh`
 - `agent-worklog-state.sh`
+- `harness-status.sh`
 - `workflow-guard-hook.sh`
 - `workflow-toggle.sh`
 

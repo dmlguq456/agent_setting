@@ -207,6 +207,7 @@ Harness-specific status signals still need Codex-native realization:
 |---|---|
 | stale workflow bypass flag cleanup | explicit `preflight.sh start` until a native session-start surface exists |
 | tracked/untracked workflow state | explicit `preflight.sh mode` until a native prompt/session surface exists |
+| workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; keep Codex `/statusline` for native model/context/token/session fields |
 | tracked/untracked toggle | explicit `preflight.sh track`; do not expose Claude `/track` command files |
 | artifact root detection | `preflight.sh write` and shared artifact-root helper |
 | headless/autopilot/background jobs | redesign against Codex thread/subagent/session model before adding UI |
@@ -293,6 +294,7 @@ shared `utilities/` directory. The current allowlist is:
 - `agent-home.sh` (Codex-owned wrapper; no Claude runtime-home fallback)
 - `artifact-root.sh`
 - `agent-worklog-state.sh`
+- `harness-status.sh`
 - `workflow-guard-hook.sh`
 - `workflow-toggle.sh`
 
