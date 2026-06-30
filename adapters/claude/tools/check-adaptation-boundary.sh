@@ -2158,8 +2158,9 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'adapters/codex/plugin-marketplace/.agents/plugins/marketplace.json' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must point Codex plugin marketplace inventory at adapters/codex/plugin-marketplace, not obsolete adapters/codex/.agents"
   fi
-  if ! grep -Fq 'PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile tools/build-manifest.py tools/memory/mem.py' INSTALL_LAYOUT.md; then
-    fail_msg "INSTALL_LAYOUT.md py_compile validation must avoid writing __pycache__"
+  if grep -Fq 'python3 -m py_compile tools/build-manifest.py' INSTALL_LAYOUT.md \
+    || ! grep -Fq '[compile(open(f, encoding=' INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must syntax-check build-manifest/mem via in-memory compile; py_compile writes __pycache__ even under PYTHONDONTWRITEBYTECODE"
   fi
   if grep -Fq 'core settings.json keybindings.json commands' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must not symlink runtime-owned settings.json/keybindings.json into the Claude home; Claude Code rewrites them in place and clobbers the symlink"

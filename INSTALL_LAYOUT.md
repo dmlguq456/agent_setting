@@ -179,7 +179,7 @@ sessions, or snapshots into the repo.
 cd "$HOME/agent_setting"
 non_claude_runtime_re='adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|track-toggle\.sh|agent-modes|allowedTools|/\.claude/'
 python3 tools/build-manifest.py --check
-PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile tools/build-manifest.py tools/memory/mem.py
+python3 -c "import sys; [compile(open(f, encoding='utf-8').read(), f, 'exec') for f in sys.argv[1:]]" tools/build-manifest.py tools/memory/mem.py
 sh utilities/agent-home.sh
 tools/check-adaptation-boundary.sh
 adapters/codex/bin/sync-native-skills.py --check
