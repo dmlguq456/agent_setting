@@ -89,6 +89,11 @@ Codex-owned executable tool-contract surface:
 `adapters/codex/bin/preflight.sh data-script --check <script.py>` verifies
 generated Python analysis scripts through `adapters/codex/tools/material/`.
 
+`roles/modes/qa/test.md` has a Codex-owned executable tool-contract surface:
+`adapters/codex/bin/preflight.sh verification-runner --check -- <command>`
+checks explicit verification commands and the same wrapper can execute them
+with a bounded timeout.
+
 The boundary guard checks that generated Codex skills and the generated Codex
 plugin remain in sync, and that neither surface is built from Claude Skill
 files.
@@ -233,6 +238,7 @@ could consume them.
 - `memory/apply-distill-actions.py`
 - `memory/recall.sh` (Codex-owned launcher for recall)
 - `material/data-script.sh` (Codex-owned launcher for Python data-analysis scripts)
+- `qa/verification-runner.sh` (Codex-owned launcher for explicit verification commands)
 - `design/visual-harness.sh` (Codex-owned launcher for render/screenshot/console checks)
 
 Do not project `build-manifest.py`: it is a harness development tool that reads

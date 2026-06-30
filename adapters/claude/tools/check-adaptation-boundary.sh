@@ -233,6 +233,12 @@ check_install_layout_codex_projection() {
     || ! grep -Fq 'test -x codex_setting/tools/material/data-script.sh' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate Codex material data-script projection"
   fi
+  if ! grep -Fq 'codex_setting/bin/preflight.sh mode-info qa/test >/tmp/codex-test-mode.txt' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^tool_contract=verification-runner$' /tmp/codex-test-mode.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^runtime_surface=adapter-owned-verification-runner$' /tmp/codex-test-mode.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq 'test -x codex_setting/tools/qa/verification-runner.sh' INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate Codex QA verification runner projection"
+  fi
 }
 
 check_install_layout_opencode_projection() {
@@ -282,6 +288,12 @@ check_install_layout_opencode_projection() {
     || ! grep -Fq "rg '^runtime_surface=adapter-owned-data-script$' /tmp/opencode-data-script-mode.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq 'test -x opencode_setting/tools/material/data-script.sh' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate OpenCode material data-script projection"
+  fi
+  if ! grep -Fq 'opencode_setting/bin/preflight.sh mode-info qa/test >/tmp/opencode-test-mode.txt' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^tool_contract=verification-runner$' /tmp/opencode-test-mode.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^runtime_surface=adapter-owned-verification-runner$' /tmp/opencode-test-mode.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq 'test -x opencode_setting/tools/qa/verification-runner.sh' INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate OpenCode QA verification runner projection"
   fi
 }
 
@@ -376,6 +388,9 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'data-script)' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must expose the Codex material data-script tool-contract"
   fi
+  if ! grep -Fq 'verification-runner)' adapters/codex/bin/preflight.sh; then
+    fail_msg "adapters/codex/bin/preflight.sh must expose the Codex QA verification-runner tool-contract"
+  fi
   if ! grep -Fq 'runtime_surface=adapter-owned-visual-harness' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'fallback=preflight.sh visual-harness <file.html>' adapters/codex/bin/capability-map.sh; then
     fail_msg "adapters/codex/bin/capability-map.sh must report visual harness runtime surface and fallback"
@@ -389,6 +404,9 @@ check_codex_bin_wrappers() {
   fi
   if ! grep -Fq 'preflight.sh data-script --check <script.py>' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex material data-script tool-contract"
+  fi
+  if ! grep -Fq 'preflight.sh verification-runner --timeout <seconds> -- <command>' adapters/codex/AGENTS.md; then
+    fail_msg "adapters/codex/AGENTS.md must document the Codex QA verification-runner tool-contract"
   fi
   if ! grep -Fq 'tool_contract_check' adapters/codex/README.md \
     || ! grep -Fq 'fallback=reference-only' adapters/codex/README.md \
@@ -503,7 +521,15 @@ check_codex_tool_projection() {
     fail_msg "adapters/codex/tools/material/data-script.sh must not reference Claude-native surfaces"
   fi
 
-  extra=$(find adapters/codex/tools -mindepth 1 ! \( -path adapters/codex/tools/memory -o -path adapters/codex/tools/memory/mem.py -o -path adapters/codex/tools/memory/apply-distill-actions.py -o -path adapters/codex/tools/memory/recall.sh -o -path adapters/codex/tools/design -o -path adapters/codex/tools/design/visual-harness.sh -o -path adapters/codex/tools/material -o -path adapters/codex/tools/material/data-script.sh \) -print 2>/dev/null || true)
+  if [ ! -x adapters/codex/tools/qa/verification-runner.sh ]; then
+    fail_msg "adapters/codex/tools/qa/verification-runner.sh must be an executable Codex-owned QA launcher"
+  elif [ -L adapters/codex/tools/qa/verification-runner.sh ]; then
+    fail_msg "adapters/codex/tools/qa/verification-runner.sh must be concrete, not a symlink"
+  elif grep -q 'adapters/claude\|claude_setting\|CLAUDE_HOME' adapters/codex/tools/qa/verification-runner.sh; then
+    fail_msg "adapters/codex/tools/qa/verification-runner.sh must not reference Claude-native surfaces"
+  fi
+
+  extra=$(find adapters/codex/tools -mindepth 1 ! \( -path adapters/codex/tools/memory -o -path adapters/codex/tools/memory/mem.py -o -path adapters/codex/tools/memory/apply-distill-actions.py -o -path adapters/codex/tools/memory/recall.sh -o -path adapters/codex/tools/design -o -path adapters/codex/tools/design/visual-harness.sh -o -path adapters/codex/tools/material -o -path adapters/codex/tools/material/data-script.sh -o -path adapters/codex/tools/qa -o -path adapters/codex/tools/qa/verification-runner.sh \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/codex/tools contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -873,6 +899,9 @@ check_opencode_bin_wrappers() {
   if ! grep -Fq 'data-script)' adapters/opencode/bin/preflight.sh; then
     fail_msg "adapters/opencode/bin/preflight.sh must expose the OpenCode material data-script tool-contract"
   fi
+  if ! grep -Fq 'verification-runner)' adapters/opencode/bin/preflight.sh; then
+    fail_msg "adapters/opencode/bin/preflight.sh must expose the OpenCode QA verification-runner tool-contract"
+  fi
   if ! grep -Fq 'runtime_surface=adapter-owned-visual-harness' adapters/opencode/bin/capability-map.sh \
     || ! grep -Fq 'fallback=preflight.sh visual-harness <file.html>' adapters/opencode/bin/capability-map.sh; then
     fail_msg "adapters/opencode/bin/capability-map.sh must report visual harness runtime surface and fallback"
@@ -886,6 +915,9 @@ check_opencode_bin_wrappers() {
   fi
   if ! grep -Fq 'preflight.sh data-script --check <script.py>' adapters/opencode/AGENTS.md; then
     fail_msg "adapters/opencode/AGENTS.md must document the OpenCode material data-script tool-contract"
+  fi
+  if ! grep -Fq 'preflight.sh verification-runner --timeout <seconds> -- <command>' adapters/opencode/AGENTS.md; then
+    fail_msg "adapters/opencode/AGENTS.md must document the OpenCode QA verification-runner tool-contract"
   fi
   if ! grep -Fq 'tool_contract_check' adapters/opencode/README.md \
     || ! grep -Fq 'fallback=reference-only' adapters/opencode/README.md \
@@ -986,7 +1018,15 @@ check_opencode_tool_projection() {
     fail_msg "adapters/opencode/tools/material/data-script.sh must not reference Claude-native surfaces"
   fi
 
-  extra=$(find adapters/opencode/tools -mindepth 1 ! \( -path adapters/opencode/tools/memory -o -path adapters/opencode/tools/memory/mem.py -o -path adapters/opencode/tools/memory/apply-distill-actions.py -o -path adapters/opencode/tools/memory/recall.sh -o -path adapters/opencode/tools/design -o -path adapters/opencode/tools/design/visual-harness.sh -o -path adapters/opencode/tools/material -o -path adapters/opencode/tools/material/data-script.sh \) -print 2>/dev/null || true)
+  if [ ! -x adapters/opencode/tools/qa/verification-runner.sh ]; then
+    fail_msg "adapters/opencode/tools/qa/verification-runner.sh must be an executable OpenCode-owned QA launcher"
+  elif [ -L adapters/opencode/tools/qa/verification-runner.sh ]; then
+    fail_msg "adapters/opencode/tools/qa/verification-runner.sh must be concrete, not a symlink"
+  elif grep -q 'adapters/claude\|claude_setting\|CLAUDE_HOME' adapters/opencode/tools/qa/verification-runner.sh; then
+    fail_msg "adapters/opencode/tools/qa/verification-runner.sh must not reference Claude-native surfaces"
+  fi
+
+  extra=$(find adapters/opencode/tools -mindepth 1 ! \( -path adapters/opencode/tools/memory -o -path adapters/opencode/tools/memory/mem.py -o -path adapters/opencode/tools/memory/apply-distill-actions.py -o -path adapters/opencode/tools/memory/recall.sh -o -path adapters/opencode/tools/design -o -path adapters/opencode/tools/design/visual-harness.sh -o -path adapters/opencode/tools/material -o -path adapters/opencode/tools/material/data-script.sh -o -path adapters/opencode/tools/qa -o -path adapters/opencode/tools/qa/verification-runner.sh \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/opencode/tools contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -1598,6 +1638,12 @@ check_codex_mode_map() {
             fail_msg "Codex mode map must report data-script contract metadata for $rel"
           fi
         fi
+        if [ "$rel" = "qa/test" ]; then
+          if ! grep -Fq 'tool_contract_check=adapters/codex/bin/preflight.sh verification-runner --check -- <command>' "$out" \
+            || ! grep -Fq 'runtime_surface=adapter-owned-verification-runner' "$out"; then
+            fail_msg "Codex mode map must report verification-runner contract metadata for $rel"
+          fi
+        fi
         ;;
       *)
         if ! grep -Fq 'status=portable' "$out" || ! grep -Fq 'realization=portable-persona' "$out"; then
@@ -1672,6 +1718,12 @@ check_opencode_mode_map() {
           if ! grep -Fq 'tool_contract_check=adapters/opencode/bin/preflight.sh data-script --check <script.py>' "$out" \
             || ! grep -Fq 'runtime_surface=adapter-owned-data-script' "$out"; then
             fail_msg "OpenCode mode map must report data-script contract metadata for $rel"
+          fi
+        fi
+        if [ "$rel" = "qa/test" ]; then
+          if ! grep -Fq 'tool_contract_check=adapters/opencode/bin/preflight.sh verification-runner --check -- <command>' "$out" \
+            || ! grep -Fq 'runtime_surface=adapter-owned-verification-runner' "$out"; then
+            fail_msg "OpenCode mode map must report verification-runner contract metadata for $rel"
           fi
         fi
         ;;

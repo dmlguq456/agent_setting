@@ -344,6 +344,26 @@ if "$CODEX" data-script --check "$TMP/codex-data-script.py" >/tmp/codex_data_scr
 else
   bad "codex data-script wrapper should check Python analysis scripts"
 fi
+if "$CODEX" verification-runner --check -- python3 >/tmp/codex_verify_check.out 2>/tmp/codex_verify_check.err \
+  && grep -q '^adapter=codex$' /tmp/codex_verify_check.out \
+  && grep -q '^tool_contract=verification-runner$' /tmp/codex_verify_check.out \
+  && grep -q '^runtime_surface=adapter-owned-verification-runner$' /tmp/codex_verify_check.out \
+  && grep -q '^check=command-available$' /tmp/codex_verify_check.out \
+  && grep -q '^status=ok$' /tmp/codex_verify_check.out; then
+  ok "codex verification runner checks explicit commands"
+else
+  bad "codex verification runner should check explicit commands"
+fi
+if "$CODEX" verification-runner --timeout 5 -- python3 -c 'print("verify-ok")' >/tmp/codex_verify_run.out 2>/tmp/codex_verify_run.err \
+  && grep -q '^adapter=codex$' /tmp/codex_verify_run.out \
+  && grep -q '^runtime_surface=adapter-owned-verification-runner$' /tmp/codex_verify_run.out \
+  && grep -q '^status=ok$' /tmp/codex_verify_run.out \
+  && grep -q '^exit_code=0$' /tmp/codex_verify_run.out \
+  && grep -q 'verify-ok' /tmp/codex_verify_run.out; then
+  ok "codex verification runner executes explicit commands"
+else
+  bad "codex verification runner should execute explicit commands"
+fi
 if command -v codex >/dev/null 2>&1; then
   mkdir -p "$TMP/codex_bootstrap_home"
   ln -s "$ROOT/codex_setting/AGENTS.md" "$TMP/codex_bootstrap_home/AGENTS.md"
@@ -499,6 +519,17 @@ if "$CODEX" mode-info material/data-script >/tmp/mode.out 2>/tmp/mode.err \
   ok "codex mode wrapper reports material data-script contract surface"
 else
   bad "codex mode wrapper should report material data-script contract surface"
+fi
+if "$CODEX" mode-info qa/test >/tmp/mode.out 2>/tmp/mode.err \
+  && grep -q '^status=tool-contract$' /tmp/mode.out \
+  && grep -q '^realization=portable-with-tool-contract$' /tmp/mode.out \
+  && grep -q '^tool_contract=verification-runner$' /tmp/mode.out \
+  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh verification-runner --check -- <command>$' /tmp/mode.out \
+  && grep -q '^runtime_surface=adapter-owned-verification-runner$' /tmp/mode.out \
+  && grep -q '^fallback=satisfy-tool-contract-or-report-unavailable$' /tmp/mode.out; then
+  ok "codex mode wrapper reports qa test verification runner surface"
+else
+  bad "codex mode wrapper should report qa test verification runner surface"
 fi
 if "$CODEX" mode-info material/browser-fetch >/tmp/mode.out 2>/tmp/mode.err \
   && grep -q '^status=tool-contract$' /tmp/mode.out \
@@ -938,6 +969,26 @@ if "$OPENCODE" data-script --check "$TMP/opencode-data-script.py" >/tmp/opencode
 else
   bad "opencode data-script wrapper should check Python analysis scripts"
 fi
+if "$OPENCODE" verification-runner --check -- python3 >/tmp/opencode_verify_check.out 2>/tmp/opencode_verify_check.err \
+  && grep -q '^adapter=opencode$' /tmp/opencode_verify_check.out \
+  && grep -q '^tool_contract=verification-runner$' /tmp/opencode_verify_check.out \
+  && grep -q '^runtime_surface=adapter-owned-verification-runner$' /tmp/opencode_verify_check.out \
+  && grep -q '^check=command-available$' /tmp/opencode_verify_check.out \
+  && grep -q '^status=ok$' /tmp/opencode_verify_check.out; then
+  ok "opencode verification runner checks explicit commands"
+else
+  bad "opencode verification runner should check explicit commands"
+fi
+if "$OPENCODE" verification-runner --timeout 5 -- python3 -c 'print("verify-ok")' >/tmp/opencode_verify_run.out 2>/tmp/opencode_verify_run.err \
+  && grep -q '^adapter=opencode$' /tmp/opencode_verify_run.out \
+  && grep -q '^runtime_surface=adapter-owned-verification-runner$' /tmp/opencode_verify_run.out \
+  && grep -q '^status=ok$' /tmp/opencode_verify_run.out \
+  && grep -q '^exit_code=0$' /tmp/opencode_verify_run.out \
+  && grep -q 'verify-ok' /tmp/opencode_verify_run.out; then
+  ok "opencode verification runner executes explicit commands"
+else
+  bad "opencode verification runner should execute explicit commands"
+fi
 if command -v opencode >/dev/null 2>&1; then
   if OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 \
     OPENCODE_CONFIG_CONTENT="{\"skills\":{\"paths\":[\"$ROOT/opencode_setting/opencode-skills\"]}}" \
@@ -985,6 +1036,17 @@ if "$OPENCODE" mode-info material/data-script >/tmp/opencode_mode.out 2>/tmp/ope
   ok "opencode mode wrapper reports material data-script contract surface"
 else
   bad "opencode mode wrapper should report material data-script contract surface"
+fi
+if "$OPENCODE" mode-info qa/test >/tmp/opencode_mode.out 2>/tmp/opencode_mode.err \
+  && grep -q '^status=tool-contract$' /tmp/opencode_mode.out \
+  && grep -q '^realization=portable-with-tool-contract$' /tmp/opencode_mode.out \
+  && grep -q '^tool_contract=verification-runner$' /tmp/opencode_mode.out \
+  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh verification-runner --check -- <command>$' /tmp/opencode_mode.out \
+  && grep -q '^runtime_surface=adapter-owned-verification-runner$' /tmp/opencode_mode.out \
+  && grep -q '^fallback=satisfy-tool-contract-or-report-unavailable$' /tmp/opencode_mode.out; then
+  ok "opencode mode wrapper reports qa test verification runner surface"
+else
+  bad "opencode mode wrapper should report qa test verification runner surface"
 fi
 if "$OPENCODE" mode-info material/browser-fetch >/tmp/opencode_mode.out 2>/tmp/opencode_mode.err \
   && grep -q '^status=tool-contract$' /tmp/opencode_mode.out \

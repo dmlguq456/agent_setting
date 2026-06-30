@@ -84,6 +84,12 @@ OpenCode-owned executable tool-contract surface:
 `adapters/opencode/bin/preflight.sh data-script --check <script.py>` verifies
 generated Python analysis scripts through `adapters/opencode/tools/material/`.
 
+`roles/modes/qa/test.md` has an OpenCode-owned executable tool-contract
+surface:
+`adapters/opencode/bin/preflight.sh verification-runner --check -- <command>`
+checks explicit verification commands and the same wrapper can execute them
+with a bounded timeout.
+
 ## Native Plugin Hook Surface
 
 OpenCode exposes JS/TS plugin hooks that can enforce part of the harness guard
@@ -210,6 +216,7 @@ shared `tools/` directory. The current allowlist is:
 - `memory/apply-distill-actions.py`
 - `memory/recall.sh` (OpenCode-owned launcher for recall)
 - `material/data-script.sh` (OpenCode-owned launcher for Python data-analysis scripts)
+- `qa/verification-runner.sh` (OpenCode-owned launcher for explicit verification commands)
 - `design/visual-harness.sh` (OpenCode-owned launcher for render/screenshot/console checks)
 
 Do not project `build-manifest.py`: it is a harness development tool that reads

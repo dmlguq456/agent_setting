@@ -87,9 +87,17 @@ case "$family" in
         fallback="satisfy-tool-contract-or-report-unavailable"
         case "$name" in
           security-review) tool_contract=security-review ;;
-          test) tool_contract=verification-runner ;;
+          test)
+            tool_contract=verification-runner
+            tool_contract_check="adapters/codex/bin/preflight.sh verification-runner --check -- <command>"
+            runtime_surface=adapter-owned-verification-runner
+            ;;
         esac
-        requirement="replace Claude-derived verify/security-review notes with Codex-native commands"
+        if [ "$name" = "test" ]; then
+          requirement="run explicit verification commands through the adapter-owned verification runner, or report unavailable"
+        else
+          requirement="replace Claude-derived security-review notes with Codex-native commands"
+        fi
         ;;
       *)
         status=portable

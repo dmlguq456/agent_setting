@@ -27,6 +27,7 @@ adapter bootstrap, not the portable source of truth. Load it through the
 - Run deterministic guard scripts directly when OpenCode plugins are unavailable or untrusted. The adapter provides a JS plugin for prompt lifecycle context, write/edit/patch guards, and design post-write checks; use explicit preflight wrappers when that plugin is not installed or trusted.
 - Before edits, run `adapters/opencode/bin/preflight.sh write <file> [session-id]`.
 - For `material/data-script` outputs, run `adapters/opencode/bin/preflight.sh data-script --check <script.py>` before treating the generated analysis script as satisfying the mode tool contract.
+- For `qa/test` verification commands, run `adapters/opencode/bin/preflight.sh verification-runner --timeout <seconds> -- <command> [args...]` and report the captured exit status.
 - After design HTML writes, run `adapters/opencode/bin/preflight.sh design <file>`.
 - Before claiming full design/autopilot-design support, run `adapters/opencode/bin/preflight.sh visual-harness <file.html>` and inspect the reported screenshot. Exit 69 means the local Playwright-backed checker is unavailable.
 - After actually reading `<artifact-root>/spec/prd.md`, run `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]`; before spec-changing capability work, run `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]`.

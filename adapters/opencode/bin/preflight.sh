@@ -22,6 +22,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh briefing [cwd]
        preflight.sh worklog [cwd]
        preflight.sh data-script [--check] <script.py> [-- args...]
+       preflight.sh verification-runner [--check] [--timeout seconds] -- <command> [args...]
        preflight.sh design <file>
        preflight.sh visual-harness [file.html]
        preflight.sh distill-delta <session-id>
@@ -100,6 +101,10 @@ case "$cmd" in
   data-script)
     shift
     "$ROOT/adapters/opencode/tools/material/data-script.sh" "$@"
+    ;;
+  verification-runner)
+    shift
+    "$ROOT/adapters/opencode/tools/qa/verification-runner.sh" "$@"
     ;;
   design)
     [ "$#" -ge 2 ] || { echo "opencode preflight: design requires a file path" >&2; exit 64; }

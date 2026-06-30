@@ -27,6 +27,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Expose Codex hook bridges through `codex_setting/codex-hooks`; do not project Claude `settings.json` or hook payloads.
 - Before edits, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.
 - For `material/data-script` outputs, run `adapters/codex/bin/preflight.sh data-script --check <script.py>` before treating the generated analysis script as satisfying the mode tool contract.
+- For `qa/test` verification commands, run `adapters/codex/bin/preflight.sh verification-runner --timeout <seconds> -- <command> [args...]` and report the captured exit status.
 - After design HTML writes, run `adapters/codex/bin/preflight.sh design <file>`.
 - Before claiming full design/autopilot-design support, run `adapters/codex/bin/preflight.sh visual-harness <file.html>` and inspect the reported screenshot. Exit 69 means the local Playwright-backed checker is unavailable.
 - After actually reading `<artifact-root>/spec/prd.md`, run `adapters/codex/bin/preflight.sh read <prd.md> [session-id]`; before spec-changing capability work, run `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]`.
