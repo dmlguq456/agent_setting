@@ -200,6 +200,27 @@ case "$cmd" in
     "$ROOT/hooks/git-state-guard.sh" --file "$file"
     ARTIFACT_GUARD_TOGGLE_LABEL="preflight.sh track" "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/builtin-memory-guard.sh" --file "$file"
+    # Spec read gate, fitted to Codex's interception point. Claude hard-denies the
+    # ungrounded autopilot-code/spec *Skill* (PreToolUse[Skill]); Codex has no
+    # skill-invocation event (skills are implicitly selected), so the equivalent
+    # hard gate is applied where Codex *can* intercept — the write of a
+    # spec-changing artifact (plans/* or a spec blueprint). Same portable invariant
+    # (no spec-changing work without a current prd.md read marker), same shared
+    # gate script, same per-cwd marker written by posttooluse-read-marker. Editing
+    # an existing artifact while ungrounded is denied; creating the first prd.md is
+    # not (no prd.md yet → not spec-backed → gate passes, artifact-order still runs).
+    case "$file" in
+      */.agent_reports/plans/*|*/.claude_reports/plans/*)
+        "$ROOT/hooks/spec-skill-gate.sh" --skill autopilot-code --cwd "$(dirname "$file")" --session "$sid" ;;
+      */.agent_reports/spec/prd.md|*/.claude_reports/spec/prd.md|\
+      */.agent_reports/spec/stack.md|*/.claude_reports/spec/stack.md|\
+      */.agent_reports/spec/stack_decision.md|*/.claude_reports/spec/stack_decision.md|\
+      */.agent_reports/spec/ship.md|*/.claude_reports/spec/ship.md|\
+      */.agent_reports/spec/api_contract.md|*/.claude_reports/spec/api_contract.md|\
+      */.agent_reports/spec/data_model.md|*/.claude_reports/spec/data_model.md|\
+      */.agent_reports/spec/ui_flow.md|*/.claude_reports/spec/ui_flow.md)
+        "$ROOT/hooks/spec-skill-gate.sh" --skill autopilot-spec --cwd "$(dirname "$file")" --session "$sid" ;;
+    esac
     ;;
   read)
     [ "$#" -ge 2 ] || { echo "codex preflight: read requires a file path" >&2; exit 64; }
