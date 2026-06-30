@@ -66,8 +66,11 @@ to run the same console verification without Claude hook JSON.
 Use `adapters/codex/bin/preflight.sh distill-delta <session-id>` for Codex
 transcript extraction. `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh
 distill-propose <session-id> [cwd]` can generate a constrained proposal, but it
-must not be treated as equivalent to Claude's automatic no-tools memory worker
-until the Codex adapter has an accepted no-tools/action contract.
+is a manual preview surface and does not auto-apply unless the apply and
+contract-accepted env gates are explicit. Codex adapter-owned `session-end` and
+`turn-nudge` paths are the verified automatic realization: after the documented
+read-only `codex exec` tool-free proof, they default to automatic apply and opt
+out with `CODEX_DISTILL_ENABLE=0`.
 Use `adapters/opencode/bin/preflight.sh distill-delta <session-id>` for
 OpenCode transcript extraction through `opencode export`. OpenCode
 `distill-propose` remains disabled by default until a no-tools/action contract

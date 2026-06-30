@@ -324,7 +324,8 @@ if "$CODEX" prompt-signal "$TMP/flowproj" testsid >/tmp/codex_prompt_signal_trac
   && grep -q '^autopilot_route=autopilot-required-for-spec-and-nontrivial-work$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^routing_contract=core/WORKFLOW.md$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^routing_action=read-workflow-and-select-codex-skill$' /tmp/codex_prompt_signal_tracked.out \
-  && grep -q '^capability_entrypoints=codex-native-skills-plugin$' /tmp/codex_prompt_signal_tracked.out; then
+  && grep -q '^capability_entrypoints=codex-native-skills-plugin$' /tmp/codex_prompt_signal_tracked.out \
+  && grep -q '^hook_boundary=shell-read-write-unsupported-use-explicit-preflight$' /tmp/codex_prompt_signal_tracked.out; then
   ok "codex prompt signal carries tracked autopilot routing contract"
 else
   bad "codex prompt signal should carry tracked autopilot routing contract"
@@ -334,7 +335,9 @@ if "$CODEX" permissions >/tmp/codex_permissions.out 2>/tmp/codex_permissions.err
   && grep -q '^runtime_surface=codex-native-approval-sandbox$' /tmp/codex_permissions.out \
   && grep -q '^permission_model=approval-policy+sandbox$' /tmp/codex_permissions.out \
   && grep -q '^claude_allowed_tools=unsupported$' /tmp/codex_permissions.out \
-  && grep -q '^guard_contract=preflight-write-hooks-and-explicit-tool-contracts$' /tmp/codex_permissions.out; then
+  && grep -q '^guard_contract=preflight-write-hooks-and-explicit-tool-contracts$' /tmp/codex_permissions.out \
+  && grep -q '^structured_write_hooks=Write,Edit,MultiEdit,apply_patch,functions.apply_patch$' /tmp/codex_permissions.out \
+  && grep -q '^shell_read_write_hooks=unsupported$' /tmp/codex_permissions.out; then
   ok "codex permissions wrapper reports native approval/sandbox contract"
 else
   bad "codex permissions wrapper should report native approval/sandbox contract"
@@ -1035,6 +1038,13 @@ if python3 -m json.tool "$TMP/codex_hook_home/.codex/hooks.json" >/tmp/codex_hoo
 else
   bad "codex native hook projection should bridge clean writes to preflight"
 fi
+if printf '{"tool_name":"Bash","tool_input":{"command":"printf x > %s"},"session_id":"shellwritesid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/SHELL.md" "$TMP/runtime" \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_write_hook.out 2>/tmp/codex_shell_write_hook.err \
+  && [ ! -s /tmp/codex_shell_write_hook.out ]; then
+  ok "codex native hook projection documents shell write boundary as explicit preflight"
+else
+  bad "codex native hook projection should not pretend to guard shell write targets"
+fi
 if printf '{"tool":"Write","input":{"path":"%s"},"session_id":"nestedpayloadsid","cwd":"%s"}\n' "$TMP/repo/nested-f" "$TMP/repo" \
   | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook_nested.out 2>/tmp/codex_hook_nested.err \
   && [ ! -s /tmp/codex_hook_nested.out ]; then
@@ -1136,6 +1146,13 @@ if printf '{"tool_name":"Read","tool_input":{"file_path":"%s"},"session_id":"tes
   ok "codex native hook projection records spec read markers"
 else
   bad "codex native hook projection should record spec read markers"
+fi
+if printf '{"tool_name":"Bash","tool_input":{"command":"cat .agent_reports/spec/prd.md"},"session_id":"shellreadsid","cwd":"%s"}\n' "$TMP/repo" \
+  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_shell_read_hook.out 2>/tmp/codex_shell_read_hook.err \
+  && ! find "$TMP/codex_marker_home/.spec-grounding" -type f -name 'shellreadsid__*' -print -quit | grep -q .; then
+  ok "codex native read hook documents shell read boundary as explicit preflight"
+else
+  bad "codex native read hook should not pretend to mark shell reads"
 fi
 if printf '{"tool":{"name":"Read","input":{"path":"%s"}},"session_id":"nestedreadsid","cwd":"%s"}\n' "$TMP/repo/.agent_reports/spec/prd.md" "$TMP/repo" \
   | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_read_hook_nested.out 2>/tmp/codex_read_hook_nested.err \

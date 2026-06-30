@@ -5,7 +5,13 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 if command -v git >/dev/null 2>&1 && ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null); then
   :
 else
-  ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+  ROOT=$SCRIPT_DIR
+  while [ "$ROOT" != "/" ] && [ ! -f "$ROOT/core/CORE.md" ]; do
+    ROOT=$(CDPATH= cd -- "$ROOT/.." && pwd)
+  done
+  if [ ! -f "$ROOT/core/CORE.md" ]; then
+    ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+  fi
 fi
 cd "$ROOT"
 
@@ -665,6 +671,15 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'codex_setting/codex-hooks' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex native hook projection"
   fi
+
+  if ! grep -Fq 'hook_boundary=shell-read-write-unsupported-use-explicit-preflight' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'shell_read_write_hooks=unsupported' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'structured_write_hooks=Write,Edit,MultiEdit,apply_patch,functions.apply_patch' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'Shell/Bash/`functions.exec_command` reads and writes are outside current Codex file-target hook coverage' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'Shell/Bash/`functions.exec_command` reads and writes are target-ambiguous and unsupported by file-level hooks' adapters/codex/README.md \
+    || ! grep -Fq 'shell-read-write-unsupported-use-explicit-preflight' adapters/codex/ADAPTATION.md; then
+    fail_msg "Codex adapter must document and report the shell/exec read-write hook boundary with explicit preflight fallback"
+  fi
   for p in sessionstart-lifecycle.py sessionend-lifecycle.py userprompt-lifecycle.py permissionrequest-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
     if [ ! -x "adapters/codex/hooks/$p" ]; then
       fail_msg "adapters/codex/hooks/$p is missing or not executable"
@@ -695,7 +710,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'routing_contract=core/WORKFLOW.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'routing_action=read-workflow-and-select-codex-skill' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'capability_entrypoints=codex-native-skills-plugin' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'enforced_hooks=pretool-write-guards,posttool-spec-read-marker,posttool-design-check,session-memory,turn-nudge' adapters/codex/bin/preflight.sh; then
+    || ! grep -Fq 'enforced_hooks=structured-write-guards,posttool-spec-read-marker,posttool-design-check,session-memory,turn-nudge' adapters/codex/bin/preflight.sh; then
     fail_msg "Codex UserPromptSubmit hook must expose a structured workflow/autopilot signal"
   fi
 
@@ -2319,6 +2334,13 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'Codex exits 69 until `CODEX_DISTILL_ENABLE=1`' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'OpenCode exits 69 until a native no-tools worker contract is verified' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must describe adapter distill-propose tool-contract boundaries"
+  fi
+  if ! grep -Fq 'adapter-owned SessionEnd/UserPromptSubmit realization 은 기본 ON 으로 승격할 수 있으며 명시적 opt-out env 를 제공해야 한다' core/MEMORY.md \
+    || ! grep -Fq 'Codex adapter-owned `session-end` and' core/HOOKS.md \
+    || ! grep -Fq 'read-only `codex exec` tool-free proof' core/HOOKS.md \
+    || ! grep -Fq 'verified automatic distill worker' adapters/codex/ADAPTATION.md \
+    || grep -Fq 'opt-in distill proposal worker' adapters/codex/ADAPTATION.md; then
+    fail_msg "core memory/hooks docs and Codex adaptation docs must distinguish user-facing distill-propose preview from verified automatic lifecycle distillation"
   fi
   if ! grep -Fq 'Codex, leave `/statusline`' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq '`/title` as native built-in item configuration surfaces' core/ADAPTATION_INVENTORY.md \

@@ -23,7 +23,9 @@ usage() {
 usage: distill-worker.sh <session-id> [cwd]
 
 Builds a Codex transcript distillation proposal with a constrained Codex exec
-worker. The worker is opt-in and does not mutate memory by itself.
+worker. Direct user-facing proposal runs are opt-in and do not mutate memory by
+themselves; adapter-owned session-end/turn-nudge dispatch may pass the verified
+enable/apply/contract gates explicitly.
 
 Set CODEX_DISTILL_ENABLE=1 to run it.
 Set CODEX_DISTILL_CONTRACT_ACCEPTED=1 only after the Codex no-tools/action

@@ -258,7 +258,9 @@ case "$cmd" in
       printf 'routing_action=read-workflow-and-select-codex-skill\n'
       printf 'capability_entrypoints=codex-native-skills-plugin\n'
     fi
-    printf 'enforced_hooks=pretool-write-guards,posttool-spec-read-marker,posttool-design-check,session-memory,turn-nudge\n'
+    printf 'enforced_hooks=structured-write-guards,posttool-spec-read-marker,posttool-design-check,session-memory,turn-nudge\n'
+    printf 'hook_boundary=shell-read-write-unsupported-use-explicit-preflight\n'
+    printf 'shell_fallback=run-preflight-write-read-design-manually\n'
     ;;
   turn-nudge)
     cwd=${2:-$PWD}
@@ -323,6 +325,9 @@ sandbox_surface=codex --sandbox <read-only|workspace-write|danger-full-access>
 config_surface=$CODEX_HOME/config.toml
 claude_allowed_tools=unsupported
 guard_contract=preflight-write-hooks-and-explicit-tool-contracts
+structured_write_hooks=Write,Edit,MultiEdit,apply_patch,functions.apply_patch
+shell_read_write_hooks=unsupported
+shell_fallback=run-preflight-write-read-design-manually
 fallback=configure-codex-approval-sandbox-and-run-preflight-guards
 note=Do not port Claude allowedTools into Codex; use Codex approval/sandbox settings plus adapter preflight guards.
 EOF
