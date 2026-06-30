@@ -22,7 +22,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Expose Codex custom agents through `codex_setting/codex-agents`.
 - Expose the installable Codex plugin through `codex_setting/codex-plugin-marketplace`, not by copying Claude Skill or command files.
 - Treat command-like capability entrypoints as Codex-native Skills/plugin output, not deprecated custom prompt files or Claude slash commands.
-- Before using a `roles/modes/` fragment, run `adapters/codex/bin/preflight.sh mode-info <family/mode>` and obey portable/tool-contract/unsupported status plus any named `tool_contract`.
+- Before using a `roles/modes/` fragment, run `adapters/codex/bin/preflight.sh mode-info <family/mode>` and obey portable/tool-contract/unsupported status plus any named `tool_contract`, `tool_contract_check`, `runtime_surface`, and `fallback`.
 - Run deterministic guard scripts directly when the Codex runtime cannot attach equivalent hooks.
 - Expose Codex hook bridges through `codex_setting/codex-hooks`; do not project Claude `settings.json` or hook payloads.
 - Before edits, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.

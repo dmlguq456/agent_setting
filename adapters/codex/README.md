@@ -49,7 +49,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Command-like capability entrypoints use these native Skills/plugin surfaces and are verified with Codex discoverability (`codex debug prompt-input`) |
 | native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `PreToolUse` write guards and `PostToolUse` design HTML checks; explicit preflight remains fallback |
 | role profile | Use `roles/README.md` for meaning; Codex custom agents are materialized under `adapters/codex/agents/*.toml` and still call `adapters/codex/bin/preflight.sh role <portable-role>` for concrete model/reasoning mapping |
-| role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes are reference-only |
+| role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no Codex-native runtime surface exists |
 | adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
 | agent home | Set `AGENT_HOME` to the installed harness directory |
 | artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
@@ -67,7 +67,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | oncall briefing injection | `hooks/mem-briefing-inject.sh` is runtime-neutral for cwd/text output; run `adapters/codex/bin/preflight.sh briefing [cwd]` when no automatic prompt hook is attached |
 | capability mapping | `adapters/codex/bin/preflight.sh capability-info <capability>` reports Codex's native Skill/plugin realization, instruction-only or tool-contract status, and the legacy compatibility reference, if one exists |
 | model role mapping | `adapters/codex/bin/preflight.sh role <portable-role>` resolves portable model roles through Codex adapter environment variables |
-| mode mapping | `adapters/codex/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for Codex; tool-contract modes include a named `tool_contract` field |
+| mode mapping | `adapters/codex/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for Codex; tool-contract and unsupported adapter-coupled modes include machine-readable `tool_contract`, optional `tool_contract_check`, `runtime_surface`, and `fallback` fields |
 | memory distill delta | Codex session transcript extraction is available through `adapters/codex/bin/preflight.sh distill-delta <session-id>` |
 | memory distill proposal | `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]` runs a constrained Codex exec proposal worker; it mutates memory only with explicit `CODEX_DISTILL_APPLY=1` |
 | memory store | `tools/memory/mem.py` is runtime-neutral; detached distillation worker execution remains adapter-specific |

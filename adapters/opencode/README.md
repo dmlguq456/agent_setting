@@ -56,7 +56,7 @@ guards and tool-contract reporting.
 | native skill/command/agent surface | Skills are materialized under `adapters/opencode/skills/`; agents are materialized under `adapters/opencode/agents/`; commands are materialized under `adapters/opencode/commands/`. Future output must be generated from portable capability/role sources and verified with OpenCode discoverability (`opencode debug skill`, `opencode debug agent`, `opencode debug config`) |
 | native plugin hook surface | `adapters/opencode/plugins/agent-harness-guards.js` uses `tool.execute.before` to bridge write/edit/patch targets to `adapters/opencode/bin/preflight.sh write`, and `tool.execute.after` to bridge design HTML saves to `preflight.sh design`; explicit preflight remains fallback |
 | role profile | Use `roles/README.md` for meaning; use `adapters/opencode/agents/<role>/<role>.md` as OpenCode-native role guidance, and use Claude agent files only as compatibility references |
-| role mode | Run `adapters/opencode/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes are reference-only |
+| role mode | Run `adapters/opencode/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no OpenCode-native runtime surface exists |
 | adapter bootstrap | Add `adapters/opencode/AGENTS.md` to the `instructions` array in `opencode.json`/`opencode.jsonc`; then load `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
 | agent home | Set `AGENT_HOME` to the installed harness directory |
 | artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
@@ -74,7 +74,7 @@ guards and tool-contract reporting.
 | oncall briefing injection | `hooks/mem-briefing-inject.sh` is runtime-neutral for cwd/text output; run `adapters/opencode/bin/preflight.sh briefing [cwd]` when no automatic prompt hook is attached |
 | capability mapping | `adapters/opencode/bin/preflight.sh capability-info <capability>` reports OpenCode's native Skill/command realization, instruction-only or tool-contract status, and the legacy compatibility reference, if one exists |
 | model role mapping | `adapters/opencode/bin/preflight.sh role <portable-role>` resolves portable model roles through OpenCode adapter environment variables |
-| mode mapping | `adapters/opencode/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for OpenCode; tool-contract modes include a named `tool_contract` field |
+| mode mapping | `adapters/opencode/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for OpenCode; tool-contract and unsupported adapter-coupled modes include machine-readable `tool_contract`, optional `tool_contract_check`, `runtime_surface`, and `fallback` fields |
 | memory distill delta | Supported through `tools/memory/mem.py --source opencode`, backed by `opencode export <session-id>` |
 | memory distill proposal | Disabled by default; requires a verified OpenCode no-tools worker contract before it can be enabled |
 | memory store | `tools/memory/mem.py` is runtime-neutral; detached distillation worker execution remains adapter-specific |

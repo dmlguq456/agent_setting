@@ -323,8 +323,8 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/AGENTS.md must document the Codex native hook projection"
   fi
 
-  if ! grep -Fq 'named `tool_contract`' adapters/codex/AGENTS.md; then
-    fail_msg "adapters/codex/AGENTS.md must document named mode tool contracts"
+  if ! grep -Fq 'named `tool_contract`, `tool_contract_check`, `runtime_surface`, and `fallback`' adapters/codex/AGENTS.md; then
+    fail_msg "adapters/codex/AGENTS.md must document mode tool contract metadata fields"
   fi
 
   if ! grep -Fq 'visual-harness)' adapters/codex/bin/preflight.sh; then
@@ -340,6 +340,12 @@ check_codex_bin_wrappers() {
 
   if ! grep -Fq 'preflight.sh visual-harness' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex visual harness tool-contract"
+  fi
+  if ! grep -Fq 'tool_contract_check' adapters/codex/README.md \
+    || ! grep -Fq 'fallback=reference-only' adapters/codex/README.md \
+    || ! grep -Fq 'runtime_surface' adapters/codex/README.md \
+    || ! grep -Fq 'tool_contract_check' adapters/codex/ADAPTATION.md; then
+    fail_msg "Codex docs must document mode-info contract metadata fields"
   fi
 
   if grep -Fq 'Codex commands must be expressed as AGENTS instructions or wrapper commands' adapters/codex/ADAPTATION.md; then
@@ -789,8 +795,8 @@ check_opencode_bin_wrappers() {
     fail_msg "adapters/opencode/AGENTS.md must document OpenCode native surface projections"
   fi
 
-  if ! grep -Fq 'named `tool_contract`' adapters/opencode/AGENTS.md; then
-    fail_msg "adapters/opencode/AGENTS.md must document named mode tool contracts"
+  if ! grep -Fq 'named `tool_contract`, `tool_contract_check`, `runtime_surface`, and `fallback`' adapters/opencode/AGENTS.md; then
+    fail_msg "adapters/opencode/AGENTS.md must document mode tool contract metadata fields"
   fi
 
   if ! grep -Fq 'visual-harness)' adapters/opencode/bin/preflight.sh; then
@@ -806,6 +812,12 @@ check_opencode_bin_wrappers() {
 
   if ! grep -Fq 'preflight.sh visual-harness' adapters/opencode/AGENTS.md; then
     fail_msg "adapters/opencode/AGENTS.md must document the OpenCode visual harness tool-contract"
+  fi
+  if ! grep -Fq 'tool_contract_check' adapters/opencode/README.md \
+    || ! grep -Fq 'fallback=reference-only' adapters/opencode/README.md \
+    || ! grep -Fq 'runtime_surface' adapters/opencode/README.md \
+    || ! grep -Fq 'tool_contract_check' adapters/opencode/ADAPTATION.md; then
+    fail_msg "OpenCode docs must document mode-info contract metadata fields"
   fi
 }
 

@@ -37,6 +37,8 @@ supported unless it provides:
 - a clear unsupported report when the mode depends on a missing visual/browser
   or verification harness.
 
-For non-Claude adapters, `mode-info <family/mode>` should report a named
-`tool_contract` for `portable-with-tool-contract` modes so callers can decide
-whether the runtime has an equivalent native surface or must downgrade.
+For non-Claude adapters, `mode-info <family/mode>` should report machine-readable
+`tool_contract`, optional `tool_contract_check`, `runtime_surface`, and
+`fallback` fields for conditional or unsupported modes so callers can decide
+whether the runtime has an equivalent native surface, can run a deterministic
+check, or must downgrade.
