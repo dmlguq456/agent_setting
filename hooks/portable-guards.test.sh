@@ -334,6 +334,7 @@ if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-dispatch --ca
   && grep -q '^registered=0$' /tmp/codex_dispatch.out \
   && grep -q '^started=0$' /tmp/codex_dispatch.out \
   && grep -q '^command=codex exec ' /tmp/codex_dispatch.out \
+  && ! grep -q -- '--ask-for-approval' /tmp/codex_dispatch.out \
   && [ ! -e "$TMP/codex-dispatch.log" ]; then
   ok "codex dispatch wrapper dry-runs headless command without registry write"
 else
