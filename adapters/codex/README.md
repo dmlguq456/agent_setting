@@ -230,8 +230,9 @@ entrypoints are represented by Codex-native Skills and the installable
 `adapters/codex/hooks/` contains a Codex-native `hooks.json`, a validated
 `run-hook.sh` launcher, and concrete adapter-owned hook bridges. The
 `SessionEnd` bridge runs `mem sync` and automatic distillation (on by default;
-opt out with `CODEX_DISTILL_ENABLE=0`). The `UserPromptSubmit` bridge also runs
-the deterministic N-turn distill nudge under the same default. The
+opt out with `CODEX_DISTILL_ENABLE=0`). The `UserPromptSubmit` bridge extracts
+prompt text from top-level and nested message/content payloads for recall, and
+also runs the deterministic N-turn distill nudge under the same default. The
 `PreToolUse` bridge runs before write/edit/multiedit/patch tools, including
 qualified `functions.apply_patch` payloads, and delegates
 artifact-order, git-state, and memory-write checks to

@@ -31,6 +31,22 @@ def nested_mapping(payload: dict[str, Any], *keys: str) -> dict[str, Any]:
     return {}
 
 
+def text_from_value(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "\n".join(part for item in value if (part := text_from_value(item)))
+    if isinstance(value, dict):
+        direct = first_string(value, "prompt", "message", "user_prompt", "userPrompt", "text")
+        if direct:
+            return direct
+        for key in ("content", "messages", "input", "payload", "event", "data"):
+            text = text_from_value(value.get(key))
+            if text:
+                return text
+    return ""
+
+
 def load_payload() -> dict[str, Any]:
     try:
         payload = json.load(sys.stdin)
@@ -48,11 +64,11 @@ def session_id(payload: dict[str, Any]) -> str:
 
 
 def prompt_text(payload: dict[str, Any]) -> str:
-    direct = first_string(payload, "prompt", "message", "user_prompt", "userPrompt", "text")
-    if direct:
-        return direct
-    nested = nested_mapping(payload, "input", "payload", "event")
-    return first_string(nested, "prompt", "message", "user_prompt", "userPrompt", "text")
+    for key in ("prompt", "message", "user_prompt", "userPrompt", "text", "content", "messages", "input", "payload", "event", "data"):
+        text = text_from_value(payload.get(key))
+        if text:
+            return text
+    return ""
 
 
 def run_preflight(*args: str) -> None:

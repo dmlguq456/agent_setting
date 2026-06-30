@@ -681,6 +681,10 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'run_preflight("turn-nudge"' adapters/codex/hooks/userprompt-lifecycle.py; then
     fail_msg "Codex lifecycle hook bridges must route through preflight.sh lifecycle commands"
   fi
+  if ! grep -Fq 'def text_from_value' adapters/codex/hooks/userprompt-lifecycle.py \
+    || ! grep -Fq '"content", "messages", "input", "payload", "event", "data"' adapters/codex/hooks/userprompt-lifecycle.py; then
+    fail_msg "Codex UserPromptSubmit bridge must extract prompt text from nested runtime payloads"
+  fi
   if ! grep -Fq 'runtime_surface=codex-userprompt-hook-signal' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'hook_scope=runtime-hook' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work' adapters/codex/bin/preflight.sh \

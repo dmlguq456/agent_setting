@@ -172,7 +172,8 @@ The `SessionStart` bridge calls `adapters/codex/bin/preflight.sh start` and
 `memory` for stale workflow cleanup and memory context. The `SessionEnd` bridge
 calls `session-end` for `mem sync` plus the opt-in distill proposal worker. The
 `UserPromptSubmit` bridge calls `prompt-signal`, `mode`, `recall`, `briefing`,
-and `turn-nudge` for prompt-time workflow and memory signals. The write bridge registers
+and `turn-nudge` for prompt-time workflow and memory signals, extracting prompt
+text from top-level and nested message/content payloads. The write bridge registers
 `PreToolUse` for write/edit/multiedit/patch tools, including qualified
 `functions.apply_patch` payloads, and calls
 `adapters/codex/bin/preflight.sh write <file> <session-id>`, which runs

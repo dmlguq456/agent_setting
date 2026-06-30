@@ -1055,6 +1055,14 @@ if "$CODEX" track "$TMP/flowproj" promptlifecyclesid >/tmp/codex_prompt_toggle.o
 else
   bad "codex native hook projection should bridge prompt lifecycle"
 fi
+if (cd "$TMP/flowproj" && MEM_STORE="$TMP/codex_hook_mem" python3 "$ROOT/tools/memory/mem.py" add durable thread "지난번 결정론 우선 설계가 핵심이라고 배웠다" >/tmp/codex_nested_prompt_seed.out 2>/tmp/codex_nested_prompt_seed.err) \
+  && printf '{"input":{"messages":[{"role":"user","content":[{"type":"text","text":"지난번 결정론 내용을 다시 확인"}]}]},"session_id":"nestedpromptsid","cwd":"%s"}\n' "$TMP/flowproj" \
+  | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_nested_prompt_hook.out 2>/tmp/codex_nested_prompt_hook.err \
+  && grep -q '우선 설계가 핵심' /tmp/codex_nested_prompt_hook.out; then
+  ok "codex native prompt hook extracts nested message content for recall"
+else
+  bad "codex native prompt hook should extract nested message content for recall"
+fi
 mkdir -p "$TMP/repo/.agent_reports/spec" "$TMP/codex_marker_home"
 printf 'prd\n' > "$TMP/repo/.agent_reports/spec/prd.md"
 if printf '{"tool_name":"Read","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/.agent_reports/spec/prd.md" "$TMP/repo" \
