@@ -191,7 +191,7 @@ Harness-specific status signals need OpenCode-native realization:
 | headless/autopilot/background jobs | `preflight.sh headless` / `dispatch` / `liveness` / `harvest` provide the tool-contract path over `opencode run`; only UI/status surfacing remains future work |
 | sibling `-wt/<slug>` dispatch detection | preserve the worktree naming invariant; choose an OpenCode-native display surface later |
 | pipeline stage nudges | preflight/AGENTS instructions first; UI only when OpenCode exposes a suitable surface |
-| oncall/note/study/drill loop nudges | `preflight.sh briefing` / future loop-specific wrappers |
+| oncall/note/study/drill loop nudges | `preflight.sh briefing` plus `preflight.sh loop-info <loop>` for loop-specific support/fallback status |
 | merge/rebase/merged-branch risk | `preflight.sh write` git safety checks plus any future OpenCode-native warning surface |
 
 ## Required OpenCode Mappings
@@ -209,6 +209,7 @@ Harness-specific status signals need OpenCode-native realization:
 | memory inject | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh memory [cwd]` once per session; run it manually when plugins are unavailable |
 | memory recall | OpenCode plugin `chat.message` captures prompt text and system transform runs `adapters/opencode/bin/preflight.sh recall <prompt> [cwd]`; run it manually when plugins are unavailable |
 | oncall briefing | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh briefing [cwd]`; run it manually when plugins are unavailable |
+| loop guidance | Run `adapters/opencode/bin/preflight.sh loop-info <oncall|note|study|drill>` before following loop guides; OpenCode reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts |
 | memory distill | Transcript delta extraction uses `opencode export` through the shared memory CLI; automatic memory mutation remains disabled until an OpenCode no-tools worker contract is verified |
 | worklog state signal | Run `adapters/opencode/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before OpenCode updates notes or diagnoses board state |
 | role profiles | Read `roles/README.md`, then run `adapters/opencode/bin/preflight.sh role <portable-role>` to resolve OpenCode model/variant settings |

@@ -70,6 +70,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
+       preflight.sh loop-info <oncall|note|study|drill>
        preflight.sh claim-verify [--check] <claim> [--out <file>]
        preflight.sh browser-fetch [--check] <url> [--out <dir>]
        preflight.sh data-script [--check] <script.py> [-- args...]
@@ -378,6 +379,74 @@ EOF
       WORKLOG_BOARD_APP="${WORKLOG_BOARD_APP:-}" \
       WORKLOG_BOARD_WT="${WORKLOG_BOARD_WT:-}" \
       "$ROOT/utilities/agent-worklog-state.sh" "$cwd"
+    ;;
+  loop-info)
+    [ "$#" -eq 2 ] || { echo "opencode preflight: loop-info requires one loop name" >&2; exit 64; }
+    loop=$2
+    case "$loop" in
+      oncall)
+        cat <<'EOF'
+adapter=opencode
+loop=oncall
+source=loops/oncall.md
+status=manual-contract
+runtime_surface=opencode-loop-guidance
+trigger=external-scheduler-or-manual
+action=read-only-report
+output=notes/oncall/<date>.md
+executable_projection=unsupported-runtime-script
+fallback=read-source-and-report-in-main-session
+note=OpenCode may follow the portable oncall guide manually; do not run the Claude-coupled loop script as an OpenCode-native executable.
+EOF
+        ;;
+      study)
+        cat <<'EOF'
+adapter=opencode
+loop=study
+source=loops/study.md
+status=manual-contract
+runtime_surface=opencode-loop-guidance
+trigger=external-scheduler-or-manual
+action=proposal-report-only
+output=notes/study/<date>.md
+executable_projection=unsupported-runtime-script
+fallback=read-source-and-draft-proposal-in-main-session
+note=OpenCode may follow the portable study guide manually; any proposed edits remain proposals until the user accepts them.
+EOF
+        ;;
+      drill)
+        cat <<'EOF'
+adapter=opencode
+loop=drill
+source=loops/drill/README.md
+status=manual-contract
+runtime_surface=opencode-loop-guidance
+trigger=manual-only
+action=report-usefulness-before-running
+auto_run=unsupported
+executable_projection=unsupported-runtime-script
+fallback=report-drill-would-be-useful
+note=Do not run drill automatically from OpenCode; it can launch headless runtime sessions and spend tokens.
+EOF
+        ;;
+      note)
+        cat <<'EOF'
+adapter=opencode
+loop=note
+source=loops/README.md
+status=unsupported
+runtime_surface=missing-native-loop
+trigger=external-scheduler
+action=not-implemented-in-repo
+fallback=worklog-board-or-manual-post-it-flow
+note=The loop catalog names note, but this repo has no loops/note implementation for OpenCode to realize.
+EOF
+        ;;
+      *)
+        echo "opencode preflight: unknown loop: $loop" >&2
+        exit 64
+        ;;
+    esac
     ;;
   claim-verify)
     shift

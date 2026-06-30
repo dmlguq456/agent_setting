@@ -1423,6 +1423,20 @@ check_opencode_bin_wrappers() {
     || ! grep -Fq 'tool_contract_check' adapters/opencode/ADAPTATION.md; then
     fail_msg "OpenCode docs must document mode-info contract metadata fields"
   fi
+
+  if ! grep -Fq 'loop-info)' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'loop-info <oncall|note|study|drill>' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'source=loops/oncall.md' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'source=loops/study.md' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'source=loops/drill/README.md' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'auto_run=unsupported' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'fallback=worklog-board-or-manual-post-it-flow' adapters/opencode/bin/preflight.sh; then
+    fail_msg "adapters/opencode/bin/preflight.sh must expose OpenCode loop-info contracts without running loop scripts"
+  fi
+  if ! grep -Fq 'loop-info <oncall|note|study|drill>' adapters/opencode/README.md \
+    || ! grep -Fq 'preflight.sh loop-info <loop>' adapters/opencode/ADAPTATION.md; then
+    fail_msg "OpenCode docs must document loop-info support/fallback contracts"
+  fi
 }
 
 check_opencode_utility_projection() {

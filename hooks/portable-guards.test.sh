@@ -1472,6 +1472,36 @@ if "$OPENCODE" mcp --check >/tmp/opencode_mcp_check.out 2>/tmp/opencode_mcp_chec
 else
   bad "opencode mcp wrapper should check native MCP CLI"
 fi
+if "$OPENCODE" loop-info oncall >/tmp/opencode_loop_oncall.out 2>/tmp/opencode_loop_oncall.err \
+  && grep -q '^adapter=opencode$' /tmp/opencode_loop_oncall.out \
+  && grep -q '^loop=oncall$' /tmp/opencode_loop_oncall.out \
+  && grep -q '^source=loops/oncall.md$' /tmp/opencode_loop_oncall.out \
+  && grep -q '^status=manual-contract$' /tmp/opencode_loop_oncall.out \
+  && grep -q '^runtime_surface=opencode-loop-guidance$' /tmp/opencode_loop_oncall.out \
+  && grep -q '^executable_projection=unsupported-runtime-script$' /tmp/opencode_loop_oncall.out; then
+  ok "opencode loop wrapper reports oncall manual contract"
+else
+  bad "opencode loop wrapper should report oncall manual contract"
+fi
+if "$OPENCODE" loop-info drill >/tmp/opencode_loop_drill.out 2>/tmp/opencode_loop_drill.err \
+  && grep -q '^source=loops/drill/README.md$' /tmp/opencode_loop_drill.out \
+  && grep -q '^status=manual-contract$' /tmp/opencode_loop_drill.out \
+  && grep -q '^trigger=manual-only$' /tmp/opencode_loop_drill.out \
+  && grep -q '^auto_run=unsupported$' /tmp/opencode_loop_drill.out \
+  && grep -q '^fallback=report-drill-would-be-useful$' /tmp/opencode_loop_drill.out; then
+  ok "opencode loop wrapper prevents automatic drill execution"
+else
+  bad "opencode loop wrapper should prevent automatic drill execution"
+fi
+if "$OPENCODE" loop-info note >/tmp/opencode_loop_note.out 2>/tmp/opencode_loop_note.err \
+  && grep -q '^loop=note$' /tmp/opencode_loop_note.out \
+  && grep -q '^status=unsupported$' /tmp/opencode_loop_note.out \
+  && grep -q '^runtime_surface=missing-native-loop$' /tmp/opencode_loop_note.out \
+  && grep -q '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/opencode_loop_note.out; then
+  ok "opencode loop wrapper marks missing note loop unsupported"
+else
+  bad "opencode loop wrapper should mark missing note loop unsupported"
+fi
 
 echo "== opencode role mapping =="
 if AGENT_MODEL_FAST=fast-model AGENT_VARIANT_FAST=low "$OPENCODE" role fast reviewer >/tmp/opencode_role.out 2>/tmp/opencode_role.err \
