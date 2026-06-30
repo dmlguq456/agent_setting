@@ -197,6 +197,13 @@ check_install_layout_codex_projection() {
     || ! grep -Fq "Path(sys.argv[1]).glob(\"*.toml\")" INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must document and validate Codex native custom agent projection"
   fi
+  if ! grep -Fq 'tmp_codex_hook_home=' INSTALL_LAYOUT.md \
+    || ! grep -Fq 'codex_setting/codex-hooks/hooks.json' INSTALL_LAYOUT.md \
+    || ! grep -Fq '"PreToolUse"' INSTALL_LAYOUT.md \
+    || ! grep -Fq '"PostToolUse"' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg 'adapters/claude/hooks|statusline.sh|settings.json'" INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate Codex native hook projection installation"
+  fi
 }
 
 check_install_layout_opencode_projection() {

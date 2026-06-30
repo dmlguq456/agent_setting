@@ -182,6 +182,24 @@ CODEX_HOME="$tmp_codex_plugin_home" codex plugin marketplace add "$PWD/codex_set
 CODEX_HOME="$tmp_codex_plugin_home" codex plugin add agent-harness-codex@agent-harness --json >/tmp/codex-plugin-add.json
 CODEX_HOME="$tmp_codex_plugin_home" codex debug prompt-input autopilot-code >/tmp/codex-plugin-skills.json
 ! rg 'adapters/claude/skills' /tmp/codex-plugin-skills.json
+tmp_codex_hook_home=$(mktemp -d)
+mkdir -p "$tmp_codex_hook_home"
+ln -s "$PWD/codex_setting/codex-hooks/hooks.json" "$tmp_codex_hook_home/hooks.json"
+python3 - "$tmp_codex_hook_home/hooks.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+hook_json = Path(sys.argv[1])
+data = json.loads(hook_json.read_text(encoding="utf-8"))
+hooks = data.get("hooks", {})
+assert "PreToolUse" in hooks, hooks
+assert "PostToolUse" in hooks, hooks
+body = hook_json.read_text(encoding="utf-8")
+assert "pretooluse-write-guard.py" in body, hook_json
+assert "posttooluse-design-check.py" in body, hook_json
+PY
+! rg 'adapters/claude/hooks|statusline.sh|settings.json' "$tmp_codex_hook_home/hooks.json"
 tmp_codex_agent_home=$(mktemp -d)
 mkdir -p "$tmp_codex_agent_home/agents"
 for f in "$PWD/codex_setting/codex-agents"/*.toml; do ln -s "$f" "$tmp_codex_agent_home/agents/$(basename "$f")"; done
