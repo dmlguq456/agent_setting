@@ -37,7 +37,6 @@ if [ -f "$ROOT/capabilities/$cap.md" ]; then
 else
   portable_source="capabilities/README.md"
 fi
-compat_reference="skills/$cap/SKILL.md"
 native_skill_path="adapters/opencode/skills/$cap/SKILL.md"
 native_command_path="adapters/opencode/commands/$cap.md"
 status="instruction-only"
@@ -99,12 +98,7 @@ if [ "$tool_contract" = "visual-harness" ]; then
 fi
 printf 'realization=%s\n' "$realization"
 printf 'portable_source=%s\n' "$portable_source"
-
-if [ -f "$ROOT/$compat_reference" ]; then
-  printf 'compat_reference=%s\n' "$compat_reference"
-else
-  printf 'compat_reference=\n'
-fi
+printf 'compat_reference=not-projected\n'
 
 printf 'bootstrap=adapters/opencode/AGENTS.md\n'
 printf 'guards=adapters/opencode/bin/preflight.sh\n'

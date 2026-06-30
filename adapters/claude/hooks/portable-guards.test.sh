@@ -432,6 +432,8 @@ if "$CODEX" capability-info autopilot-code >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^native_plugin=1$' /tmp/cap.out \
   && grep -q '^native_plugin_skill_path=adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md$' /tmp/cap.out \
   && grep -q '^realization=codex-native-skill-plugin$' /tmp/cap.out \
+  && grep -q '^compat_reference=not-projected$' /tmp/cap.out \
+  && ! grep -q '^compat_reference=skills/' /tmp/cap.out \
   && grep -q '^status=instruction-only$' /tmp/cap.out; then
   ok "codex capability wrapper reports native skill and plugin realization"
 else
@@ -1428,6 +1430,8 @@ if "$OPENCODE" capability-info autopilot-code >/tmp/opencode_cap.out 2>/tmp/open
   && grep -q '^native_command=1$' /tmp/opencode_cap.out \
   && grep -q '^native_command_path=adapters/opencode/commands/autopilot-code.md$' /tmp/opencode_cap.out \
   && grep -q '^realization=opencode-native-skill-command$' /tmp/opencode_cap.out \
+  && grep -q '^compat_reference=not-projected$' /tmp/opencode_cap.out \
+  && ! grep -q '^compat_reference=skills/' /tmp/opencode_cap.out \
   && grep -q '^status=instruction-only$' /tmp/opencode_cap.out; then
   ok "opencode capability wrapper reports native skill and command realization"
 else

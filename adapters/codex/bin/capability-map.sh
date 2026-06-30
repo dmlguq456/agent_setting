@@ -37,7 +37,6 @@ if [ -f "$ROOT/capabilities/$cap.md" ]; then
 else
   portable_source="capabilities/README.md"
 fi
-compat_reference="skills/$cap/SKILL.md"
 status="instruction-only"
 realization="portable-instructions"
 tool_contract=""
@@ -88,12 +87,7 @@ if [ -n "$native_plugin_skill_path" ]; then
 fi
 printf 'realization=%s\n' "$realization"
 printf 'portable_source=%s\n' "$portable_source"
-
-if [ -f "$ROOT/$compat_reference" ]; then
-  printf 'compat_reference=%s\n' "$compat_reference"
-else
-  printf 'compat_reference=\n'
-fi
+printf 'compat_reference=not-projected\n'
 
 printf 'bootstrap=adapters/codex/AGENTS.md\n'
 printf 'guards=adapters/codex/bin/preflight.sh\n'
