@@ -16,6 +16,9 @@ Builds a Codex transcript distillation proposal with a constrained Codex exec
 worker. The worker is opt-in and does not mutate memory by itself.
 
 Set CODEX_DISTILL_ENABLE=1 to run it.
+Set CODEX_DISTILL_CONTRACT_ACCEPTED=1 only after the Codex no-tools/action
+contract has been accepted. CODEX_DISTILL_APPLY=1 is ignored and exits 69
+until that acceptance gate is set.
 EOF
 }
 
@@ -95,6 +98,13 @@ else
     --ignore-rules \
     --output-last-message "$out_file" \
     - < "$prompt_file" >/dev/null
+fi
+
+if [ "${CODEX_DISTILL_APPLY:-}" = "1" ]; then
+  if [ "${CODEX_DISTILL_CONTRACT_ACCEPTED:-0}" != "1" ]; then
+    echo "codex distill worker: tool-contract — no-tools/action contract not accepted; refusing CODEX_DISTILL_APPLY" >&2
+    exit 69
+  fi
 fi
 
 if [ "${CODEX_DISTILL_APPLY:-}" = "1" ] && [ -f "$out_file" ]; then

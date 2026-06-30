@@ -256,8 +256,9 @@ separates the pipeline:
    invokes `codex exec --sandbox read-only --ask-for-approval never --ephemeral
    --ignore-rules` and writes a JSON-lines proposal.
 3. The proposal is parsed by the shared `tools/memory/apply-distill-actions.py`
-   applier only when `CODEX_DISTILL_APPLY=1` is explicitly set.
-4. The proposal is not applied to memory automatically. A future acceptance gate
+   applier only when both `CODEX_DISTILL_APPLY=1` and
+   `CODEX_DISTILL_CONTRACT_ACCEPTED=1` are explicitly set.
+4. The proposal is not applied to memory automatically. The acceptance gate
    must prove tool-free execution or provide a native no-tools flag before this
    adapter may match Claude's automatic distillation behavior.
 
