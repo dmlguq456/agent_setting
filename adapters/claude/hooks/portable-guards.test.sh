@@ -283,6 +283,22 @@ if AGENT_NOTES_ROOT="$TMP/notes" WORKLOG_BOARD_APP="$TMP/board" WORKLOG_BOARD_WT
 else
   bad "codex status wrapper should report harness snapshot"
 fi
+mkdir -p "$TMP/donebranch"
+git -C "$TMP/donebranch" init -q
+git -C "$TMP/donebranch" config user.email t@t
+git -C "$TMP/donebranch" config user.name t
+git -C "$TMP/donebranch" checkout -q -b main
+echo x > "$TMP/donebranch/f"; git -C "$TMP/donebranch" add f; git -C "$TMP/donebranch" commit -q -m x
+git -C "$TMP/donebranch" checkout -q -b topic
+git -C "$TMP/donebranch" branch -q --set-upstream-to=main topic 2>/dev/null
+if "$CODEX" status "$TMP/donebranch" testsid >/tmp/codex_done.out 2>/tmp/codex_done.err \
+  && grep -q '^git_upstream=main$' /tmp/codex_done.out \
+  && grep -q '^git_ahead=0$' /tmp/codex_done.out \
+  && grep -q '^git_branch_done=1$' /tmp/codex_done.out; then
+  ok "codex status flags a merged dead branch (DONE-BRANCH risk)"
+else
+  bad "codex status should flag a merged dead branch"
+fi
 if "$CODEX" permissions >/tmp/codex_permissions.out 2>/tmp/codex_permissions.err \
   && grep -q '^adapter=codex$' /tmp/codex_permissions.out \
   && grep -q '^runtime_surface=codex-native-approval-sandbox$' /tmp/codex_permissions.out \

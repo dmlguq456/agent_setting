@@ -112,6 +112,33 @@ if [ -n "$project_root" ]; then
     [ -f "$gitdir/CHERRY_PICK_HEAD" ] && git_operation=cherry-pick
   fi
   printf 'git_operation=%s\n' "$git_operation"
+
+  # Upstream divergence + dead-branch risk: a branch with an upstream and zero
+  # commits ahead is fully merged/up-to-date — editing on it directly is the
+  # DONE-BRANCH hazard (branch first). Reported so adapters can warn before edits.
+  upstream=$(git -C "$cwd" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+  if [ -n "$upstream" ]; then
+    printf 'git_upstream=%s\n' "$upstream"
+    counts=$(git -C "$cwd" rev-list --left-right --count "$upstream...HEAD" 2>/dev/null || true)
+    git_behind=$(printf '%s' "$counts" | awk '{print $1+0}')
+    git_ahead=$(printf '%s' "$counts" | awk '{print $2+0}')
+    printf 'git_ahead=%s\n' "${git_ahead:-0}"
+    printf 'git_behind=%s\n' "${git_behind:-0}"
+    # DONE-BRANCH risk: a non-default topic branch fully merged (0 ahead) is dead —
+    # branch first before editing. Default branches up-to-date are not "done".
+    case "$branch" in
+      main|master|develop|trunk|"") is_default_branch=1 ;;
+      *) is_default_branch=0 ;;
+    esac
+    if [ "${git_ahead:-0}" = "0" ] && [ "$git_operation" = "none" ] && [ "$is_default_branch" = "0" ]; then
+      printf 'git_branch_done=1\n'
+    else
+      printf 'git_branch_done=0\n'
+    fi
+  else
+    printf 'git_upstream=none\n'
+    printf 'git_branch_done=0\n'
+  fi
 else
   printf 'git_repo=0\n'
 fi

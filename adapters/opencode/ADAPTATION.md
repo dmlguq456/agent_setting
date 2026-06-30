@@ -192,7 +192,7 @@ Harness-specific status signals need OpenCode-native realization:
 | sibling `-wt/<slug>` dispatch detection | preserve the worktree naming invariant; choose an OpenCode-native display surface later |
 | pipeline stage nudges | preflight/AGENTS instructions first; UI only when OpenCode exposes a suitable surface |
 | oncall/note/study/drill loop nudges | `preflight.sh briefing` plus `preflight.sh loop-info <loop>` for loop-specific support/fallback status |
-| merge/rebase/merged-branch risk | `preflight.sh write` git safety checks plus any future OpenCode-native warning surface |
+| merge/rebase/merged-branch risk | `preflight.sh write` git safety checks; `preflight.sh status` reports `git_operation` (merge/rebase/cherry-pick) and `git_branch_done` (non-default branch fully merged = DONE-BRANCH hazard). A native graphical warning remains optional polish |
 
 ## Required OpenCode Mappings
 
