@@ -37,8 +37,8 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
        preflight.sh tui-config
-       preflight.sh headless [--check] <worktree>
-       preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
+       preflight.sh headless [--check] [--require-hook-trust] <worktree>
+       preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]
        preflight.sh liveness [jobs.log]
        preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
@@ -165,7 +165,7 @@ codex_runtime_projection_check() {
     printf 'check=failed\nreason=codex-home-unset\n'
     return 69
   fi
-  AGENT_HOME="$AGENT_ROOT" CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY=1 \
+  AGENT_HOME="$AGENT_ROOT" CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY=1 CODEX_REQUIRE_HOOK_TRUST="${CODEX_REQUIRE_HOOK_TRUST:-0}" \
     "$ROOT/adapters/codex/bin/check-runtime-projection.sh" || return $?
   printf 'runtime_projection=ok\ncodex_home=%s\n' "$codex_home"
   return 0
@@ -361,11 +361,16 @@ EOF
   headless)
     shift
     check_only=0
+    require_hook_trust=0
     worktree=""
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --check)
           check_only=1
+          shift
+          ;;
+        --require-hook-trust)
+          require_hook_trust=1
           shift
           ;;
         --*)
@@ -389,8 +394,10 @@ runtime_surface=codex-exec-headless
 status=tool-contract
 tool_contract=headless-dispatch
 tool_contract_check=adapters/codex/bin/preflight.sh headless --check <worktree>
+strict_tool_contract_check=adapters/codex/bin/preflight.sh headless --check --require-hook-trust <worktree>
 command_template=codex exec --cd <worktree> --sandbox workspace-write --json -
 runtime_projection_requires=agent-harness,AGENTS.md,hooks.json,native-skills,native-agents,native-modes
+runtime_projection_strict_requires=complete-codex-hook-trust
 job_registry=<agent-home>/.dispatch/jobs.log
 liveness_surface=codex-session-jsonl-mtime
 liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]
@@ -417,7 +424,11 @@ EOF
       printf 'check=failed\nreason=not-a-git-worktree\nworktree=%s\n' "$worktree"
       exit 65
     fi
-    codex_runtime_projection_check
+    if [ "$require_hook_trust" -eq 1 ]; then
+      CODEX_REQUIRE_HOOK_TRUST=1 codex_runtime_projection_check
+    else
+      codex_runtime_projection_check
+    fi
     printf 'check=ok\nworktree=%s\n' "$worktree"
     ;;
   liveness)

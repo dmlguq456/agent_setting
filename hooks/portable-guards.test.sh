@@ -347,7 +347,9 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^adapter=codex$' /tmp/codex_headless.out \
   && grep -q '^runtime_surface=codex-exec-headless$' /tmp/codex_headless.out \
   && grep -q '^tool_contract=headless-dispatch$' /tmp/codex_headless.out \
+  && grep -q '^strict_tool_contract_check=adapters/codex/bin/preflight.sh headless --check --require-hook-trust <worktree>$' /tmp/codex_headless.out \
   && grep -q '^runtime_projection_requires=agent-harness,AGENTS.md,hooks.json,native-skills,native-agents,native-modes$' /tmp/codex_headless.out \
+  && grep -q '^runtime_projection_strict_requires=complete-codex-hook-trust$' /tmp/codex_headless.out \
   && grep -q '^claude_headless=unsupported$' /tmp/codex_headless.out \
   && grep -q '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex_headless.out \
   && grep -q '^liveness_check=adapters/codex/bin/preflight.sh liveness \[jobs.log\]$' /tmp/codex_headless.out \
@@ -385,6 +387,11 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$TMP/codex_headless_home" "$ROOT/adapters/code
   ok "codex headless check validates runtime projection"
 else
   bad "codex headless check should validate runtime projection"
+fi
+if CODEX_HOME="$TMP/codex_headless_home" "$CODEX" headless --check --require-hook-trust "$TMP/repo" >/tmp/codex_headless_strict.out 2>/tmp/codex_headless_strict.err; then
+  bad "codex headless strict check should fail when hook trust is incomplete"
+else
+  grep -q '^check=hook-trust:review-needed' /tmp/codex_headless_strict.out && ok "codex headless strict check requires complete hook trust" || bad "codex headless strict check missing trust output wrong"
 fi
 if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-dispatch.log" >/tmp/codex_dispatch.out 2>/tmp/codex_dispatch.err \
   && grep -q '^adapter=codex$' /tmp/codex_dispatch.out \
@@ -488,6 +495,18 @@ if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_S
   fi
 else
   bad "codex dispatch wrapper should start nested slug after runtime projection check"
+fi
+if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_STUB_ARGV="$TMP/codex-strict-start.argv" \
+  "$CODEX" dispatch --start --require-hook-trust --worktree "$TMP/repo" --slug codex-strict-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "strict work" --jobs "$TMP/codex-strict-start.log" --log-dir "$TMP/codex-strict-logs" >/tmp/codex_dispatch_strict_start.out 2>/tmp/codex_dispatch_strict_start.err; then
+  bad "codex dispatch strict start should fail when hook trust is incomplete"
+else
+  if grep -q '^check=hook-trust:review-needed' /tmp/codex_dispatch_strict_start.out \
+    && [ ! -e "$TMP/codex-strict-start.log" ] \
+    && [ ! -e "$TMP/codex-strict-logs/codex-strict-start.codex.prompt.txt" ]; then
+    ok "codex dispatch strict start fails before registry writes when hook trust is incomplete"
+  else
+    bad "codex dispatch strict start should fail before registry writes"
+  fi
 fi
 if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-dispatch.log" >/tmp/codex_dispatch.out 2>/tmp/codex_dispatch.err \
   && grep -q '^status=register$' /tmp/codex_dispatch.out \

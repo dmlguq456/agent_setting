@@ -33,6 +33,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--log-dir")
     p.add_argument("--sandbox", default="workspace-write")
     p.add_argument("--approval", default="never")
+    p.add_argument("--require-hook-trust", action="store_true")
     return p
 
 
@@ -145,9 +146,13 @@ def resolve_agent_home() -> Path:
     return ROOT
 
 
-def check_runtime_projection(worktree: str) -> int:
+def check_runtime_projection(worktree: str, require_hook_trust: bool) -> int:
+    command = [str(ROOT / "adapters" / "codex" / "bin" / "preflight.sh"), "headless", "--check"]
+    if require_hook_trust:
+        command.append("--require-hook-trust")
+    command.append(worktree)
     result = subprocess.run(
-        [str(ROOT / "adapters" / "codex" / "bin" / "preflight.sh"), "headless", "--check", worktree],
+        command,
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
@@ -212,7 +217,7 @@ def main(argv: list[str]) -> int:
     if args.start and shutil.which("codex") is None:
         return fail("codex-command-unavailable", 69, worktree=args.worktree)
     if args.start:
-        rc = check_runtime_projection(args.worktree)
+        rc = check_runtime_projection(args.worktree, args.require_hook_trust)
         if rc != 0:
             return rc
 
@@ -243,6 +248,7 @@ def main(argv: list[str]) -> int:
     print(f"job_registry={jobs}")
     print(f"registered={1 if action in ('register', 'start') else 0}")
     print(f"started={1 if action == 'start' else 0}")
+    print(f"require_hook_trust={1 if args.require_hook_trust else 0}")
     print(f"prompt_source={prompt_source}")
     print(f"prompt_file={prompt_path}")
     print(f"log_file={log_path}")
