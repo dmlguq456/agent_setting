@@ -95,7 +95,7 @@ check_opencode_forbidden_entries() {
 }
 
 check_required_projection_entries() {
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents; do
     if [ ! -L "codex_setting/$p" ]; then
       fail_msg "codex_setting/$p must be a symlink projection entry"
     fi
@@ -111,6 +111,7 @@ check_codex_projection_targets() {
   check_link_target codex_setting/bin ../adapters/codex/bin
   check_link_target codex_setting/tools ../adapters/codex/tools
   check_link_target codex_setting/utilities ../adapters/codex/utilities
+  check_link_target codex_setting/scaffolds ../adapters/codex/scaffolds
   check_link_target codex_setting/codex-skills ../adapters/codex/skills
   check_link_target codex_setting/codex-modes ../adapters/codex/modes
   check_link_target codex_setting/codex-plugin-marketplace ../adapters/codex/plugin-marketplace
@@ -265,7 +266,7 @@ check_link_target() {
 check_install_layout_codex_projection() {
   [ -f INSTALL_LAYOUT.md ] || { fail_msg "INSTALL_LAYOUT.md is missing"; return; }
 
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents; do
     if ! grep -Fq "\$AGENT_HOME/codex_setting/$p" INSTALL_LAYOUT.md; then
       fail_msg "INSTALL_LAYOUT.md must include Codex projection install step for codex_setting/$p"
     fi
@@ -1032,6 +1033,34 @@ check_codex_tool_projection() {
       fail_msg "adapters/codex/tools/$p must not be projected until Codex support is documented"
     fi
   done
+}
+
+check_codex_scaffold_projection() {
+  if [ ! -L codex_setting/scaffolds ]; then
+    fail_msg "codex_setting/scaffolds must project adapters/codex/scaffolds"
+    return
+  fi
+
+  target=$(readlink codex_setting/scaffolds)
+  if [ "$target" != "../adapters/codex/scaffolds" ]; then
+    fail_msg "codex_setting/scaffolds points to $target; expected ../adapters/codex/scaffolds"
+  fi
+
+  for p in deck_stage/deck_stage.html design_canvas/design_canvas.html device_frames/device_frames.html image_slot/image_slot.html tweaks_panel/tweaks_panel.html; do
+    if [ ! -f "adapters/codex/scaffolds/$p" ]; then
+      fail_msg "adapters/codex/scaffolds/$p must exist as a Codex scaffold projection"
+    elif [ "$p" != "deck_stage/deck_stage.html" ] && ! cmp -s "scaffolds/$p" "adapters/codex/scaffolds/$p"; then
+      fail_msg "adapters/codex/scaffolds/$p must mirror the shared scaffold asset"
+    fi
+  done
+  if ! grep -Fq 'adapter visual harness' adapters/codex/scaffolds/deck_stage/deck_stage.html; then
+    fail_msg "adapters/codex/scaffolds/deck_stage/deck_stage.html must sanitize shared Design MCP wording for Codex"
+  fi
+
+  if rg -n 'adapters/claude|claude_setting|~/.claude|Design MCP|design-mcp' adapters/codex/scaffolds >/tmp/codex-scaffolds-claude.out 2>/dev/null; then
+    fail_msg "Codex scaffold projection must not expose Claude-native runtime paths:"
+    cat /tmp/codex-scaffolds-claude.out
+  fi
 }
 
 check_codex_native_skill_projection() {
@@ -2809,7 +2838,7 @@ check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_projection_symlinks opencode_setting
 check_projection_entry_allowlist claude_setting CLAUDE.md README.md agent-modes agents bin commands core hooks keybindings.json loops manifest.json scaffolds settings.json skills statusline.sh tools track-toggle.sh utilities
-check_projection_entry_allowlist codex_setting AGENTS.md README.md core capabilities roles bin tools utilities codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents
+check_projection_entry_allowlist codex_setting AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents
 check_projection_entry_allowlist opencode_setting AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands opencode-plugins
 check_codex_forbidden_entries
 check_codex_native_surface_debt
@@ -2828,6 +2857,7 @@ check_install_layout_opencode_projection
 check_codex_bin_wrappers
 check_opencode_bin_wrappers
 check_codex_tool_projection
+check_codex_scaffold_projection
 check_codex_native_skill_projection
 check_codex_native_plugin_projection
 check_codex_native_agent_projection

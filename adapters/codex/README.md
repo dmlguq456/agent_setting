@@ -39,6 +39,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | Native mode guides | `adapters/codex/modes/` |
 | Native plugin | `adapters/codex/plugins/agent-harness-codex` |
 | Native hooks | `adapters/codex/hooks/` |
+| Design scaffolds | `adapters/codex/scaffolds/` |
 | Selected tool projection | `adapters/codex/tools/` |
 | Selected utility projection | `adapters/codex/utilities/` |
 
@@ -80,6 +81,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | research claim verify | Tool-contract check: `adapters/codex/bin/preflight.sh claim-verify --check <claim>` verifies that `CODEX_CLAIM_VERIFY_CMD` or `AGENT_CLAIM_VERIFY_CMD` provides an external verification command before using `roles/modes/research/claim-verify.md`. Exit 69 means no provider is configured |
 | design post-write verification | `core/HOOKS.md` defines the invariant; run `adapters/codex/bin/preflight.sh design <file>` after design HTML writes |
 | design visual harness | Tool-contract check: `adapters/codex/bin/preflight.sh visual-harness <file.html>` runs the adapter-owned render/screenshot/console wrapper. Inspect the reported screenshot before claiming visual completion. Do not project Claude Design MCP files into Codex |
+| design scaffold assets | Use `<agent-home>/scaffolds/` for reusable HTML scaffold assets. `codex_setting/scaffolds` points at the Codex-owned projection under `adapters/codex/scaffolds/`, not Claude runtime paths |
 | spec read gate | `core/HOOKS.md` defines marker/check semantics; Codex `PostToolUse` Read hook records actual `spec/prd.md` reads, and `adapters/codex/bin/preflight.sh read <prd.md> [session-id]` remains the explicit fallback. Run `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
 | git safety gate | `core/HOOKS.md` defines the invariant; included in `adapters/codex/bin/preflight.sh write <file> [session-id]` |
 | memory write guard | `core/HOOKS.md` defines the invariant; included in `adapters/codex/bin/preflight.sh write <file> [session-id]` |

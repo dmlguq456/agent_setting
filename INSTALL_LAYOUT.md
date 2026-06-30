@@ -60,6 +60,7 @@ ln -sfn "$AGENT_HOME/codex_setting/roles" "$HOME/.codex/agent-roles"
 ln -sfn "$AGENT_HOME/codex_setting/bin" "$HOME/.codex/agent-bin"
 ln -sfn "$AGENT_HOME/codex_setting/tools" "$HOME/.codex/agent-tools"
 ln -sfn "$AGENT_HOME/codex_setting/utilities" "$HOME/.codex/agent-utilities"
+ln -sfn "$AGENT_HOME/codex_setting/scaffolds" "$HOME/.codex/agent-scaffolds"
 ln -sfn "$AGENT_HOME/codex_setting/codex-skills" "$HOME/.codex/agent-skills"
 ln -sfn "$AGENT_HOME/codex_setting/codex-modes" "$HOME/.codex/agent-modes"
 ln -sfn "$AGENT_HOME/codex_setting/codex-agents" "$HOME/.codex/agent-agents"
@@ -94,6 +95,9 @@ Codex-native plugin installation must use
 repo-local marketplace projection rather than the whole Codex adapter.
 Codex-native hook configuration must come from
 `codex_setting/codex-hooks`, which points at adapter-owned hook bridges.
+Reusable design scaffold assets must come from `codex_setting/scaffolds`,
+which points at the Codex-owned scaffold projection. Do not point Codex at
+Claude Design MCP files or Claude runtime paths.
 Codex `/statusline` writes user TUI preferences into runtime-owned
 `$HOME/.codex/config.toml`; do not project that full file. The harness records
 only the recommended footer fragment at

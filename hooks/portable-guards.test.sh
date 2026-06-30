@@ -1092,6 +1092,17 @@ then
 else
   bad "codex native mode projection should cover portable modes without Claude paths"
 fi
+if [ -L "$ROOT/codex_setting/scaffolds" ] \
+  && [ "$(readlink "$ROOT/codex_setting/scaffolds")" = "../adapters/codex/scaffolds" ] \
+  && [ -f "$ROOT/codex_setting/scaffolds/deck_stage/deck_stage.html" ] \
+  && [ -f "$ROOT/codex_setting/scaffolds/tweaks_panel/tweaks_panel.html" ] \
+  && grep -q 'adapter visual harness' "$ROOT/codex_setting/scaffolds/deck_stage/deck_stage.html" \
+  && cmp -s "$ROOT/scaffolds/tweaks_panel/tweaks_panel.html" "$ROOT/codex_setting/scaffolds/tweaks_panel/tweaks_panel.html" \
+  && ! rg -q 'adapters/claude|claude_setting|~/.claude|Design MCP|design-mcp' "$ROOT/codex_setting/scaffolds"; then
+  ok "codex scaffold projection exposes shared design assets without Claude runtime paths"
+else
+  bad "codex scaffold projection should expose shared design assets without Claude runtime paths"
+fi
 if grep -q 'Test Levels (execute in order, stop on failure)' "$ROOT/codex_setting/codex-modes/qa/test.md" \
   && grep -q 'Level 5b: Behavioral runtime observation' "$ROOT/codex_setting/codex-modes/qa/test.md" \
   && grep -q 'verification-runner' "$ROOT/codex_setting/codex-modes/qa/test.md" \
@@ -1561,6 +1572,7 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-run
   && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/tmp/codex_rp2.out 2>/tmp/codex_rp2.err \
   && grep -q '^check=agent-harness:ok' /tmp/codex_rp2.out \
   && grep -q '^check=agent-config:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=agent-scaffolds:ok' /tmp/codex_rp2.out \
   && grep -q '^check=hook-trust:review-needed' /tmp/codex_rp2.out \
   && grep -q '^check=hooks-json:ok' /tmp/codex_rp2.out \
   && grep -q '^check=skills-linked:ok' /tmp/codex_rp2.out \
