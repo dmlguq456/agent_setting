@@ -66,7 +66,7 @@ guards and tool-contract reporting.
 | tracked/untracked signal | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]`; run it manually when plugins are unavailable |
 | harness status snapshot | Run `adapters/opencode/bin/preflight.sh status [cwd] [session-id]` for read-only workflow, artifact, notes, worktree, and git-risk signals. This does not replace OpenCode native model/context/session UI |
 | tracked/untracked toggle | Portable `utilities/workflow-toggle.sh`; run `adapters/opencode/bin/preflight.sh track [cwd] [session-id]` only on explicit user request |
-| headless dispatch | Tool-contract check: `adapters/opencode/bin/preflight.sh headless --check <worktree>` verifies the worktree and `opencode run` availability. Use `adapters/opencode/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--agent <agent>]` to build the OpenCode command and register open jobs before launch. Use `adapters/opencode/bin/preflight.sh liveness [jobs.log]` while waiting on dispatched work; it matches open jobs to OpenCode SQLite sessions by `session.directory` and latest session/message/part update time |
+| headless dispatch | Tool-contract check: `adapters/opencode/bin/preflight.sh headless --check <worktree>` verifies the worktree and `opencode run` availability. Use `adapters/opencode/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--agent <agent>]` to build the OpenCode command and register open jobs before launch. Use `adapters/opencode/bin/preflight.sh liveness [jobs.log]` while waiting on dispatched work; it matches open jobs to OpenCode SQLite sessions by `session.directory` and latest session/message/part update time. Use `adapters/opencode/bin/preflight.sh harvest --slug <slug> --mark-done` after main-session harvest to mark registry rows done only; it does not merge or clean worktrees |
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/opencode/bin/preflight.sh write <file> [session-id]` before writes |
 | material browser fetch | Tool-contract check: `adapters/opencode/bin/preflight.sh browser-fetch --check <url>` verifies rendered browser access through the adapter-owned Playwright launcher before using `roles/modes/material/browser-fetch.md`. Exit 69 means the local browser stack is unavailable |
 | material data script | Tool-contract check: `adapters/opencode/bin/preflight.sh data-script --check <script.py>` verifies generated Python analysis scripts through the adapter-owned launcher before using `roles/modes/material/data-script.md` |
@@ -135,6 +135,9 @@ Claude-specific helpers such as the shared `dispatch-liveness.sh` stay out of
 the OpenCode projection. OpenCode exposes its adapter-owned liveness command
 through `adapters/opencode/bin/preflight.sh liveness [jobs.log]`, backed by
 `~/.local/share/opencode/opencode.db` session metadata and update times.
+OpenCode also exposes `adapters/opencode/bin/preflight.sh harvest` for
+registry-only status and selected `open` to `done` updates. It intentionally
+does not merge branches or delete worktrees.
 
 ## Native Skill Projection
 

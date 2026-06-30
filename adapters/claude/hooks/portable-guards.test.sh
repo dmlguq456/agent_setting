@@ -313,6 +313,24 @@ if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --c
 else
   bad "codex dispatch wrapper should register open headless job"
 fi
+if "$CODEX" harvest --jobs "$TMP/codex-dispatch.log" --slug codex-dispatch >/tmp/codex_harvest.out 2>/tmp/codex_harvest.err \
+  && grep -q '^adapter=codex$' /tmp/codex_harvest.out \
+  && grep -q '^runtime_surface=codex-dispatch-harvest$' /tmp/codex_harvest.out \
+  && grep -q '^matched=1$' /tmp/codex_harvest.out \
+  && grep -q '^marked_done=0$' /tmp/codex_harvest.out \
+  && grep -q '^job_status=open$' /tmp/codex_harvest.out \
+  && grep -q '^merge_action=unsupported$' /tmp/codex_harvest.out; then
+  ok "codex harvest wrapper reports open registry jobs"
+else
+  bad "codex harvest wrapper should report open registry jobs"
+fi
+if "$CODEX" harvest --jobs "$TMP/codex-dispatch.log" --slug codex-dispatch --mark-done >/tmp/codex_harvest_done.out 2>/tmp/codex_harvest_done.err \
+  && grep -q '^marked_done=1$' /tmp/codex_harvest_done.out \
+  && grep -q $'done\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard' "$TMP/codex-dispatch.log"; then
+  ok "codex harvest wrapper marks selected jobs done"
+else
+  bad "codex harvest wrapper should mark selected jobs done"
+fi
 mkdir -p "$TMP/codex-live-sessions/2026/06/30"
 cat > "$TMP/codex-live-sessions/2026/06/30/rollout-live-codex.jsonl" <<EOF
 {"timestamp":"2026-06-30T00:00:00.000Z","type":"session_meta","payload":{"id":"live-codex","cwd":"$TMP/flowproj"}}
@@ -1052,6 +1070,24 @@ if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-dispat
   ok "opencode dispatch wrapper registers open headless job"
 else
   bad "opencode dispatch wrapper should register open headless job"
+fi
+if "$OPENCODE" harvest --jobs "$TMP/opencode-dispatch.log" --slug opencode-dispatch >/tmp/opencode_harvest.out 2>/tmp/opencode_harvest.err \
+  && grep -q '^adapter=opencode$' /tmp/opencode_harvest.out \
+  && grep -q '^runtime_surface=opencode-dispatch-harvest$' /tmp/opencode_harvest.out \
+  && grep -q '^matched=1$' /tmp/opencode_harvest.out \
+  && grep -q '^marked_done=0$' /tmp/opencode_harvest.out \
+  && grep -q '^job_status=open$' /tmp/opencode_harvest.out \
+  && grep -q '^merge_action=unsupported$' /tmp/opencode_harvest.out; then
+  ok "opencode harvest wrapper reports open registry jobs"
+else
+  bad "opencode harvest wrapper should report open registry jobs"
+fi
+if "$OPENCODE" harvest --jobs "$TMP/opencode-dispatch.log" --slug opencode-dispatch --mark-done >/tmp/opencode_harvest_done.out 2>/tmp/opencode_harvest_done.err \
+  && grep -q '^marked_done=1$' /tmp/opencode_harvest_done.out \
+  && grep -q $'done\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard' "$TMP/opencode-dispatch.log"; then
+  ok "opencode harvest wrapper marks selected jobs done"
+else
+  bad "opencode harvest wrapper should mark selected jobs done"
 fi
 OPENCODE_DB="$TMP/opencode.db" python3 - <<EOF
 import sqlite3, time

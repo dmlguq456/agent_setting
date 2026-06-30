@@ -238,7 +238,7 @@ Harness-specific status signals still need Codex-native realization:
 | role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role>` to resolve Codex model/reasoning-effort settings |
 | permission mapping | Run `adapters/codex/bin/preflight.sh permissions` to inspect the Codex approval/sandbox contract and confirm Claude `allowedTools` is unsupported |
 | MCP mapping | Run `adapters/codex/bin/preflight.sh mcp --check` to inspect Codex's native MCP CLI/config surface; do not copy Claude `settings.json` MCP registrations or project `tools/design-mcp` wholesale |
-| headless dispatch | Run `adapters/codex/bin/preflight.sh headless --check <worktree>` before Codex `exec` dispatch; it checks the worktree and command availability without launching. Use `adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level>` to build the Codex headless command and append `.dispatch/jobs.log` before launch. While waiting on dispatched work, run `adapters/codex/bin/preflight.sh liveness [jobs.log]` to match open jobs to Codex session JSONL files by `cwd` and transcript mtime |
+| headless dispatch | Run `adapters/codex/bin/preflight.sh headless --check <worktree>` before Codex `exec` dispatch; it checks the worktree and command availability without launching. Use `adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level>` to build the Codex headless command and append `.dispatch/jobs.log` before launch. While waiting on dispatched work, run `adapters/codex/bin/preflight.sh liveness [jobs.log]` to match open jobs to Codex session JSONL files by `cwd` and transcript mtime. After main-session harvest, run `adapters/codex/bin/preflight.sh harvest --slug <slug> --mark-done` to mark selected registry rows done; merge and worktree cleanup stay outside the adapter wrapper |
 | role modes | Read `roles/MODES.md`, then run `adapters/codex/bin/preflight.sh mode-info <family/mode>`; treat adapter-coupled modes as unsupported unless wrappers exist, obey `fallback=reference-only`, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
 | hook invariants | `adapters/codex/hooks/pretooluse-write-guard.py` realizes write guards through Codex `PreToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
 | capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
@@ -307,8 +307,10 @@ Do not project the shared `dispatch-liveness.sh`; it assumes Claude
 `projects/<encoded-cwd>/*.jsonl`. Codex uses the adapter-owned
 `adapters/codex/bin/dispatch-liveness.py`, exposed as
 `adapters/codex/bin/preflight.sh liveness [jobs.log]`, and maps open dispatch
-jobs to `~/.codex/sessions/**/*.jsonl` by transcript `cwd`. Do not project
-material/design helpers such as `extract_web_figures.py` until a Codex
+jobs to `~/.codex/sessions/**/*.jsonl` by transcript `cwd`. Codex harvest is
+adapter-owned under `adapters/codex/bin/preflight.sh harvest` and only updates
+the portable jobs registry from `open` to `done`; it never performs merge or
+worktree cleanup. Do not project material/design helpers such as `extract_web_figures.py` until a Codex
 capability uses them directly.
 
 ## Distillation Boundary

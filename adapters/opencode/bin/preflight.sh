@@ -25,6 +25,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh headless [--check] <worktree>
        preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--agent <agent>] [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh liveness [jobs.log]
+       preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
        preflight.sh claim-verify [--check] <claim> [--out <file>]
@@ -156,6 +157,7 @@ command_template=opencode run --dir <worktree> --format json --agent <agent> <pr
 job_registry=<agent-home>/.dispatch/jobs.log
 liveness_surface=opencode-sqlite-session-mtime
 liveness_check=adapters/opencode/bin/preflight.sh liveness [jobs.log]
+harvest_check=adapters/opencode/bin/preflight.sh harvest [--jobs jobs.log] [--slug slug] [--mark-done]
 constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required
 claude_headless=unsupported
 fallback=manual-main-session-or-report-unavailable
@@ -181,6 +183,10 @@ EOF
   liveness)
     jobs=${2:-"${AGENT_HOME:-$ROOT}/.dispatch/jobs.log"}
     AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/adapters/opencode/bin/dispatch-liveness.py" "$jobs"
+    ;;
+  harvest)
+    shift
+    AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/adapters/opencode/bin/dispatch-harvest.py" "$@"
     ;;
   dispatch)
     shift

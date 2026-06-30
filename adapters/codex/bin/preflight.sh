@@ -25,6 +25,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh headless [--check] <worktree>
        preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh liveness [jobs.log]
+       preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
        preflight.sh claim-verify [--check] <claim> [--out <file>]
@@ -154,6 +155,7 @@ command_template=codex exec --cd <worktree> --sandbox workspace-write --ask-for-
 job_registry=<agent-home>/.dispatch/jobs.log
 liveness_surface=codex-session-jsonl-mtime
 liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]
+harvest_check=adapters/codex/bin/preflight.sh harvest [--jobs jobs.log] [--slug slug] [--mark-done]
 constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required
 claude_headless=unsupported
 fallback=manual-main-session-or-report-unavailable
@@ -179,6 +181,10 @@ EOF
   liveness)
     jobs=${2:-"${AGENT_HOME:-$ROOT}/.dispatch/jobs.log"}
     AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$jobs"
+    ;;
+  harvest)
+    shift
+    AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/adapters/codex/bin/dispatch-harvest.py" "$@"
     ;;
   dispatch)
     shift

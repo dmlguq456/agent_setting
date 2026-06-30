@@ -368,7 +368,7 @@ check_codex_bin_wrappers() {
     fail_msg "codex_setting/bin points to $target; expected ../adapters/codex/bin"
   fi
 
-  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh dispatch-headless.py dispatch-liveness.py distill-worker.sh sync-native-skills.py sync-native-plugin.py sync-native-agents.py; do
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh dispatch-headless.py dispatch-liveness.py dispatch-harvest.py distill-worker.sh sync-native-skills.py sync-native-plugin.py sync-native-agents.py; do
     if [ ! -x "adapters/codex/bin/$p" ]; then
       fail_msg "adapters/codex/bin/$p is missing or not executable"
     fi
@@ -390,6 +390,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'preflight.sh dispatch [--dry-run|--register|--start]' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'liveness_surface=codex-session-jsonl-mtime' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'harvest_check=adapters/codex/bin/preflight.sh harvest' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'claude_headless=unsupported' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must report the Codex headless dispatch contract without Claude headless assumptions"
   fi
@@ -980,7 +981,7 @@ check_opencode_bin_wrappers() {
     fail_msg "opencode_setting/bin points to $target; expected ../adapters/opencode/bin"
   fi
 
-  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh dispatch-headless.py dispatch-liveness.py distill-worker.sh sync-native-skills.py sync-native-agents.py sync-native-commands.py; do
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh dispatch-headless.py dispatch-liveness.py dispatch-harvest.py distill-worker.sh sync-native-skills.py sync-native-agents.py sync-native-commands.py; do
     if [ ! -x "adapters/opencode/bin/$p" ]; then
       fail_msg "adapters/opencode/bin/$p is missing or not executable"
     fi
@@ -1002,6 +1003,7 @@ check_opencode_bin_wrappers() {
     || ! grep -Fq 'preflight.sh dispatch [--dry-run|--register|--start]' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'liveness_surface=opencode-sqlite-session-mtime' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'liveness_check=adapters/opencode/bin/preflight.sh liveness [jobs.log]' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'harvest_check=adapters/opencode/bin/preflight.sh harvest' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'claude_headless=unsupported' adapters/opencode/bin/preflight.sh; then
     fail_msg "adapters/opencode/bin/preflight.sh must report the OpenCode headless dispatch contract without Claude headless assumptions"
   fi

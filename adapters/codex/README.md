@@ -59,7 +59,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | tracked/untracked signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`; run it manually when hooks are unavailable |
 | harness status snapshot | Run `adapters/codex/bin/preflight.sh status [cwd] [session-id]` for read-only workflow, artifact, notes, worktree, and git-risk signals. This does not replace Codex `/statusline` for model/context/token/session fields |
 | tracked/untracked toggle | Portable `utilities/workflow-toggle.sh`; run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only on explicit user request |
-| headless dispatch | Tool-contract check: `adapters/codex/bin/preflight.sh headless --check <worktree>` verifies the worktree and `codex exec` availability. Use `adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level>` to build the Codex command and register open jobs before launch. Use `adapters/codex/bin/preflight.sh liveness [jobs.log]` while waiting on dispatched work; it matches open jobs to Codex session JSONL files by `cwd` and transcript mtime |
+| headless dispatch | Tool-contract check: `adapters/codex/bin/preflight.sh headless --check <worktree>` verifies the worktree and `codex exec` availability. Use `adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level>` to build the Codex command and register open jobs before launch. Use `adapters/codex/bin/preflight.sh liveness [jobs.log]` while waiting on dispatched work; it matches open jobs to Codex session JSONL files by `cwd` and transcript mtime. Use `adapters/codex/bin/preflight.sh harvest --slug <slug> --mark-done` after main-session harvest to mark registry rows done only; it does not merge or clean worktrees |
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/codex/bin/preflight.sh write <file> [session-id]` before writes |
 | material browser fetch | Tool-contract check: `adapters/codex/bin/preflight.sh browser-fetch --check <url>` verifies rendered browser access through the adapter-owned Playwright launcher before using `roles/modes/material/browser-fetch.md`. Exit 69 means the local browser stack is unavailable |
 | material data script | Tool-contract check: `adapters/codex/bin/preflight.sh data-script --check <script.py>` verifies generated Python analysis scripts through the adapter-owned launcher before using `roles/modes/material/data-script.md` |
@@ -125,6 +125,9 @@ Claude-specific helpers such as the shared `dispatch-liveness.sh` stay out of
 the Codex projection. Codex exposes its adapter-owned liveness command through
 `adapters/codex/bin/preflight.sh liveness [jobs.log]`, backed by
 `~/.codex/sessions/**/*.jsonl` metadata and mtime.
+Codex also exposes `adapters/codex/bin/preflight.sh harvest` for registry-only
+status and selected `open` to `done` updates. It intentionally does not merge
+branches or delete worktrees.
 
 ## Native Skill Projection
 
