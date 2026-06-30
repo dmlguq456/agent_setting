@@ -310,7 +310,7 @@ EOF
     [ "$#" -ge 2 ] || { echo "opencode preflight: distill-propose requires a session id" >&2; exit 64; }
     sid=$2
     cwd=${3:-$PWD}
-    "$ROOT/adapters/opencode/bin/distill-worker.sh" "$sid" "$cwd"
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/opencode/bin/distill-worker.sh" "$sid" "$cwd"
     ;;
   role)
     [ "$#" -ge 2 ] || { echo "opencode preflight: role requires a portable role" >&2; exit 64; }

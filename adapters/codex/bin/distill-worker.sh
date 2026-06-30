@@ -8,6 +8,16 @@ else
   ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
 fi
 
+agent_home() {
+  if [ -n "${AGENT_HOME:-}" ] && [ -f "$AGENT_HOME/core/CORE.md" ]; then
+    printf '%s\n' "$AGENT_HOME"
+  else
+    printf '%s\n' "$ROOT"
+  fi
+}
+
+AGENT_ROOT=$(agent_home)
+
 usage() {
   cat <<'EOF'
 usage: distill-worker.sh <session-id> [cwd]
@@ -42,7 +52,7 @@ if ! command -v codex >/dev/null 2>&1; then
 fi
 
 delta=$(
-  AGENT_HOME="${AGENT_HOME:-$ROOT}" \
+  AGENT_HOME="$AGENT_ROOT" \
   python3 "$ROOT/tools/memory/mem.py" distill "$sid" --source codex 2>/dev/null || true
 )
 
@@ -50,7 +60,7 @@ if [ -z "$(printf '%s' "$delta" | tr -d '[:space:]')" ]; then
   exit 0
 fi
 
-store=${MEM_STORE:-$ROOT/memory}
+store=${MEM_STORE:-$AGENT_ROOT/memory}
 mkdir -p "$store"
 prompt_file="$store/.codex-distill-prompt-$sid"
 out_file="$store/.codex-distill-out-$sid"
@@ -108,7 +118,7 @@ if [ "${CODEX_DISTILL_APPLY:-}" = "1" ]; then
 fi
 
 if [ "${CODEX_DISTILL_APPLY:-}" = "1" ] && [ -f "$out_file" ]; then
-  AGENT_HOME="${AGENT_HOME:-$ROOT}" python3 "$ROOT/tools/memory/apply-distill-actions.py" \
+  AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/apply-distill-actions.py" \
     "$out_file" "$ROOT/tools/memory/mem.py" --mode increment
 fi
 

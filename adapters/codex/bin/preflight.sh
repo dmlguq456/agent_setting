@@ -308,7 +308,7 @@ EOF
     [ "$#" -ge 2 ] || { echo "codex preflight: distill-propose requires a session id" >&2; exit 64; }
     sid=$2
     cwd=${3:-$PWD}
-    "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd"
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd"
     ;;
   role)
     [ "$#" -ge 2 ] || { echo "codex preflight: role requires a portable role" >&2; exit 64; }
