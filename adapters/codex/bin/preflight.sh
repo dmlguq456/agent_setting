@@ -107,7 +107,8 @@ doctor() {
     "$ROOT/adapters/codex/hooks/sessionstart-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/userprompt-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/pretooluse-write-guard.py" \
-    "$ROOT/adapters/codex/hooks/posttooluse-design-check.py" || rc=1
+    "$ROOT/adapters/codex/hooks/posttooluse-design-check.py" \
+    "$ROOT/adapters/codex/hooks/posttooluse-read-marker.py" || rc=1
   doctor_check adaptation-boundary doctor_boundary || rc=1
 
   if [ "$rc" -eq 0 ]; then

@@ -572,7 +572,7 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'codex_setting/codex-hooks' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex native hook projection"
   fi
-  for p in sessionstart-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py; do
+  for p in sessionstart-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
     if [ ! -x "adapters/codex/hooks/$p" ]; then
       fail_msg "adapters/codex/hooks/$p is missing or not executable"
     fi
@@ -1059,13 +1059,14 @@ check_codex_native_hook_projection() {
   prompt_bridge="$hook_dir/userprompt-lifecycle.py"
   pre_bridge="$hook_dir/pretooluse-write-guard.py"
   post_bridge="$hook_dir/posttooluse-design-check.py"
+  read_bridge="$hook_dir/posttooluse-read-marker.py"
   launcher="$hook_dir/run-hook.sh"
 
   if [ ! -f "$hook_json" ]; then
     fail_msg "$hook_json is missing"
     return
   fi
-  for bridge in "$session_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$launcher"; do
+  for bridge in "$session_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$read_bridge" "$launcher"; do
     if [ ! -x "$bridge" ]; then
       fail_msg "$bridge must be executable"
     fi
@@ -1077,7 +1078,7 @@ check_codex_native_hook_projection() {
     fail_msg "$hook_json must be valid JSON"
     cat /tmp/codex-hooks-json.err
   fi
-  for script in sessionstart-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py; do
+  for script in sessionstart-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
     if ! grep -Fq "run-hook.sh\\\" $script" "$hook_json"; then
       fail_msg "$hook_json must register $script through the Codex hook launcher"
     fi
@@ -1098,13 +1099,19 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"PostToolUse"' "$hook_json" || ! grep -Fq 'posttooluse-design-check.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex PostToolUse design check"
   fi
-  for bridge in "$session_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge"; do
+  if ! grep -Fq '"PostToolUse"' "$hook_json" || ! grep -Fq 'posttooluse-read-marker.py' "$hook_json"; then
+    fail_msg "$hook_json must register the Codex PostToolUse read marker"
+  fi
+  for bridge in "$session_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$read_bridge"; do
     if ! grep -Fq 'adapters" / "codex" / "bin" / "preflight.sh' "$bridge"; then
       fail_msg "$bridge must call the Codex preflight wrapper"
     fi
   done
   if ! grep -Fq '"design"' "$post_bridge"; then
     fail_msg "$post_bridge must call the Codex design preflight"
+  fi
+  if ! grep -Fq '"read"' "$read_bridge"; then
+    fail_msg "$read_bridge must call the Codex read preflight"
   fi
   if ! grep -Fq 'PreToolUse' adapters/codex/README.md \
     || ! grep -Fq 'PostToolUse' adapters/codex/README.md \

@@ -172,9 +172,12 @@ The `SessionStart` bridge calls `adapters/codex/bin/preflight.sh start` and
 bridge calls `mode`, `recall`, and `briefing` for prompt-time workflow and memory
 signals. The write bridge registers `PreToolUse` for write/edit/patch tools and
 calls `adapters/codex/bin/preflight.sh write <file> <session-id>`, which runs
-the portable artifact-order, git-state, and memory-write guards. The design
-bridge registers `PostToolUse` for the same write/edit/patch surface and calls
-`adapters/codex/bin/preflight.sh design <file>` for saved design HTML files.
+the portable artifact-order, git-state, and memory-write guards. The read bridge
+registers `PostToolUse` for `Read` and calls `adapters/codex/bin/preflight.sh
+read <file> <session-id>` so actual `spec/prd.md` reads satisfy spec-backed
+capability gates. The design bridge registers `PostToolUse` for the same
+write/edit/patch surface and calls `adapters/codex/bin/preflight.sh design
+<file>` for saved design HTML files.
 
 Do not project Claude `hooks/` or `settings.json` into Codex. Use
 `codex_setting/codex-hooks` as the install source, and keep explicit
@@ -247,7 +250,7 @@ Harness-specific status signals still need Codex-native realization:
 | MCP mapping | Run `adapters/codex/bin/preflight.sh mcp --check` to inspect Codex's native MCP CLI/config surface; do not copy Claude `settings.json` MCP registrations or project `tools/design-mcp` wholesale |
 | headless dispatch | Run `adapters/codex/bin/preflight.sh headless --check <worktree>` before Codex `exec` dispatch; it checks the worktree, command availability, and installed Codex runtime projection (`agent-harness`, bootstrap, hooks, native Skills, and native Agents) without launching. Use `adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level>` to build the Codex headless command and append `.dispatch/jobs.log` before launch; `--start` reruns the same projection check before launching. While waiting on dispatched work, run `adapters/codex/bin/preflight.sh liveness [jobs.log]` to match open jobs to Codex session JSONL files by `cwd` and transcript mtime. After main-session harvest, run `adapters/codex/bin/preflight.sh harvest --slug <slug> --mark-done` to mark selected registry rows done; merge and worktree cleanup stay outside the adapter wrapper |
 | role modes | Read `roles/MODES.md`, then run `adapters/codex/bin/preflight.sh mode-info <family/mode>`; treat adapter-coupled modes as unsupported unless wrappers exist, obey `fallback=reference-only`, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
-| hook invariants | `adapters/codex/hooks/pretooluse-write-guard.py` realizes write guards through Codex `PreToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
+| hook invariants | `adapters/codex/hooks/pretooluse-write-guard.py` realizes write guards through Codex `PreToolUse`; `posttooluse-read-marker.py` records actual spec reads through `PostToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
 | capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 
 ## Model Mapping

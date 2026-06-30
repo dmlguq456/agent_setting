@@ -47,7 +47,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/codex/bin/preflight.sh capability-info <capability>` to confirm Codex realization; use `adapters/codex/skills/<capability>/SKILL.md` as Codex-native guidance |
 | native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Command-like capability entrypoints use these native Skills/plugin surfaces and are verified with Codex discoverability (`codex debug prompt-input`) |
-| native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, `UserPromptSubmit` prompt signals, `PreToolUse` write guards, and `PostToolUse` design HTML checks; explicit preflight remains fallback |
+| native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, `UserPromptSubmit` prompt signals, `PreToolUse` write guards, `PostToolUse` spec read markers, and `PostToolUse` design HTML checks; explicit preflight remains fallback |
 | role profile | Use `roles/README.md` for meaning; Codex custom agents are materialized under `adapters/codex/agents/*.toml` and still call `adapters/codex/bin/preflight.sh role <portable-role>` for concrete model/reasoning mapping |
 | role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no Codex-native runtime surface exists |
 | adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
@@ -72,7 +72,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | research claim verify | Tool-contract check: `adapters/codex/bin/preflight.sh claim-verify --check <claim>` verifies that `CODEX_CLAIM_VERIFY_CMD` or `AGENT_CLAIM_VERIFY_CMD` provides an external verification command before using `roles/modes/research/claim-verify.md`. Exit 69 means no provider is configured |
 | design post-write verification | `core/HOOKS.md` defines the invariant; run `adapters/codex/bin/preflight.sh design <file>` after design HTML writes |
 | design visual harness | Tool-contract check: `adapters/codex/bin/preflight.sh visual-harness <file.html>` runs the adapter-owned render/screenshot/console wrapper. Inspect the reported screenshot before claiming visual completion. Do not project Claude Design MCP files into Codex |
-| spec read gate | `core/HOOKS.md` defines marker/check semantics; run `adapters/codex/bin/preflight.sh read <prd.md> [session-id]` after actual reads and `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
+| spec read gate | `core/HOOKS.md` defines marker/check semantics; Codex `PostToolUse` Read hook records actual `spec/prd.md` reads, and `adapters/codex/bin/preflight.sh read <prd.md> [session-id]` remains the explicit fallback. Run `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
 | git safety gate | `core/HOOKS.md` defines the invariant; included in `adapters/codex/bin/preflight.sh write <file> [session-id]` |
 | memory write guard | `core/HOOKS.md` defines the invariant; included in `adapters/codex/bin/preflight.sh write <file> [session-id]` |
 | memory injection | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh memory [cwd]`; run it manually when hooks are unavailable |
@@ -204,9 +204,10 @@ entrypoints are represented by Codex-native Skills and the installable
 `run-hook.sh` launcher, and concrete adapter-owned hook bridges. The
 `PreToolUse` bridge runs before write/edit/patch tools and delegates
 artifact-order, git-state, and memory-write checks to
-`adapters/codex/bin/preflight.sh write`. The `PostToolUse` bridge runs after
-write/edit/patch tools and delegates design HTML saves to
-`adapters/codex/bin/preflight.sh design`.
+`adapters/codex/bin/preflight.sh write`. The `PostToolUse` Read bridge records
+actual `spec/prd.md` reads through `adapters/codex/bin/preflight.sh read`. The
+`PostToolUse` design bridge runs after write/edit/patch tools and delegates
+design HTML saves to `adapters/codex/bin/preflight.sh design`.
 
 Expose it through `codex_setting/codex-hooks`, not through a plain `hooks/`
 projection:
@@ -216,9 +217,9 @@ ln -sfn "$AGENT_HOME/codex_setting/codex-hooks/hooks.json" "$HOME/.codex/hooks.j
 ```
 
 The pre-write bridge accepts Codex hook stdin JSON and returns a
-`decision=block` hook result when the shared guard fails. The design bridge is a
-post-write alert path only. Neither bridge consumes Claude `settings.json` or
-Claude hook payloads.
+`decision=block` hook result when the shared guard fails. The read bridge is a
+marker path only, and the design bridge is a post-write alert path only.
+Neither bridge consumes Claude `settings.json` or Claude hook payloads.
 
 ## Runtime Home Projection
 

@@ -39,6 +39,17 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" posttooluse-read-marker.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "timeout": 30,
+            "statusMessage": "Marking spec reads for agent harness gates"
+          }
+        ]
+      },
+      {
         "matcher": "Write|Edit|apply_patch",
         "hooks": [
           {

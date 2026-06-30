@@ -18,6 +18,38 @@ agent_home() {
 
 AGENT_ROOT=$(agent_home)
 
+opencode_config_content_has_opencode_skills() {
+  content=$1
+  if [ -z "$content" ]; then
+    return 1
+  fi
+  if printf '%s' "$content" | rg -q 'opencode-skills'; then
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    return 1
+  fi
+  if printf '%s' "$content" | python3 -c 'import json, sys
+def _has_opencode_skills(value):
+    if isinstance(value, str):
+        return "opencode-skills" in value
+    if isinstance(value, list):
+        return any(_has_opencode_skills(item) for item in value)
+    if isinstance(value, dict):
+        return any(_has_opencode_skills(value[k]) for k in value)
+    return False
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+
+sys.exit(0 if _has_opencode_skills(data) else 1)' ; then
+    return 0
+  fi
+  return 1
+}
+
 usage() {
   cat <<'EOF'
 usage: preflight.sh write <file> [session-id]
@@ -139,7 +171,7 @@ opencode_runtime_projection_check() {
     printf 'check=failed\nreason=opencode-native-plugin-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$opencode_home/plugins/agent-harness-guards.js"
     return 69
   fi
-  if [ ! -d "$opencode_home/agent-skills" ] && ! printf '%s' "${OPENCODE_CONFIG_CONTENT:-}" | rg -q 'opencode-skills'; then
+  if [ ! -d "$opencode_home/agent-skills" ] && ! opencode_config_content_has_opencode_skills "${OPENCODE_CONFIG_CONTENT:-}"; then
     printf 'check=failed\nreason=opencode-native-skills-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$opencode_home/agent-skills"
     return 69
   fi

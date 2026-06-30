@@ -30,6 +30,7 @@ canonical=$role
 available=1
 status=default
 reason=""
+external_cmd_bin=""
 
 case "$role" in
   "fast reviewer"|"fast fact checker"|"fast fact-checker"|"fast writer"|"fast implementer"|"fast tool worker")
@@ -44,10 +45,13 @@ case "$role" in
       available=0
       status=unavailable
       reason="set AGENT_MODEL_EXTERNAL or AGENT_EXTERNAL_CMD for an independent external adversary"
-    elif [ -n "${AGENT_EXTERNAL_CMD:-}" ] && ! command -v "$AGENT_EXTERNAL_CMD" >/dev/null 2>&1; then
-      available=0
-      status=unavailable
-      reason="AGENT_EXTERNAL_CMD not found: $AGENT_EXTERNAL_CMD"
+    elif [ -n "${AGENT_EXTERNAL_CMD:-}" ]; then
+      external_cmd_bin=${AGENT_EXTERNAL_CMD%% *}
+      if ! command -v "$external_cmd_bin" >/dev/null 2>&1; then
+        available=0
+        status=unavailable
+        reason="AGENT_EXTERNAL_CMD not found: $external_cmd_bin"
+      fi
     fi
     ;;
   "orchestrator"|"external adversary orchestrator")
@@ -91,4 +95,5 @@ printf 'model=%s\n' "$model"
 printf 'variant=%s\n' "$variant"
 printf 'available=%s\n' "$available"
 printf 'status=%s\n' "$status"
+[ -z "$external_cmd_bin" ] || printf 'external_command=%s\n' "$AGENT_EXTERNAL_CMD"
 [ -z "$reason" ] || printf 'reason=%s\n' "$reason"

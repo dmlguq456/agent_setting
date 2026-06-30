@@ -454,12 +454,50 @@ if AGENT_MODEL_FAST=fast-model AGENT_REASONING_FAST=low "$CODEX" role fast revie
 else
   bad "codex role wrapper should map fast portable role"
 fi
+if AGENT_MODEL_ORCHESTRATOR=orchestrator-model AGENT_REASONING_ORCHESTRATOR=medium "$CODEX" role external adversary orchestrator >/tmp/role.out 2>/tmp/role.err \
+  && grep -q '^family=orchestrator$' /tmp/role.out \
+  && grep -q '^adapter=codex$' /tmp/role.out \
+  && grep -q '^model=orchestrator-model$' /tmp/role.out \
+  && grep -q '^reasoning=medium$' /tmp/role.out \
+  && grep -q '^available=1$' /tmp/role.out \
+  && grep -q '^status=configured$' /tmp/role.out; then
+  ok "codex role wrapper maps external adversary orchestrator role"
+else
+  bad "codex role wrapper should map external adversary orchestrator role"
+fi
 if "$CODEX" role external adversary >/tmp/role.out 2>/tmp/role.err \
   && grep -q '^available=0$' /tmp/role.out \
   && grep -q '^status=unavailable$' /tmp/role.out; then
   ok "codex role wrapper marks external adversary unavailable by default"
 else
   bad "codex role wrapper should mark external adversary unavailable by default"
+fi
+if AGENT_MODEL_EXTERNAL=external-model AGENT_REASONING_EXTERNAL=high "$CODEX" role external adversary >/tmp/role.out 2>/tmp/role.err \
+  && grep -q '^family=external$' /tmp/role.out \
+  && grep -q '^available=1$' /tmp/role.out \
+  && grep -q '^status=configured$' /tmp/role.out \
+  && grep -q '^model=external-model$' /tmp/role.out \
+  && grep -q '^reasoning=high$' /tmp/role.out; then
+  ok "codex role wrapper maps configured external adversary model"
+else
+  bad "codex role wrapper should map configured external adversary model"
+fi
+if AGENT_EXTERNAL_CMD="sh -c" "$CODEX" role external adversary >/tmp/role.out 2>/tmp/role.err \
+  && grep -q '^available=1$' /tmp/role.out \
+  && grep -q '^status=configured$' /tmp/role.out \
+  && grep -q '^model=external-command$' /tmp/role.out \
+  && grep -q '^external_command=sh -c$' /tmp/role.out; then
+  ok "codex role wrapper accepts external adversary command with args"
+else
+  bad "codex role wrapper should accept external adversary command with args"
+fi
+if AGENT_EXTERNAL_CMD="missing-external-adversary-command --review" "$CODEX" role external adversary >/tmp/role.out 2>/tmp/role.err \
+  && grep -q '^available=0$' /tmp/role.out \
+  && grep -q '^status=unavailable$' /tmp/role.out \
+  && grep -q '^reason=AGENT_EXTERNAL_CMD not found: missing-external-adversary-command$' /tmp/role.out; then
+  ok "codex role wrapper reports missing external adversary command"
+else
+  bad "codex role wrapper should report missing external adversary command"
 fi
 if "$CODEX" capability-info autopilot-code >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^capability=autopilot-code$' /tmp/cap.out \
@@ -758,6 +796,7 @@ if python3 -m json.tool "$TMP/codex_hook_home/.codex/hooks.json" >/tmp/codex_hoo
   && grep -q 'sessionstart-lifecycle.py' /tmp/codex_hook_json.out \
   && grep -q 'userprompt-lifecycle.py' /tmp/codex_hook_json.out \
   && grep -q 'pretooluse-write-guard.py' /tmp/codex_hook_json.out \
+  && grep -q 'posttooluse-read-marker.py' /tmp/codex_hook_json.out \
   && grep -q 'posttooluse-design-check.py' /tmp/codex_hook_json.out \
   && printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/f" "$TMP/repo" \
     | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook.out 2>/tmp/codex_hook.err \
@@ -803,6 +842,16 @@ if "$CODEX" track "$TMP/flowproj" promptlifecyclesid >/tmp/codex_prompt_toggle.o
   ok "codex native hook projection bridges prompt lifecycle"
 else
   bad "codex native hook projection should bridge prompt lifecycle"
+fi
+mkdir -p "$TMP/repo/.agent_reports/spec" "$TMP/codex_marker_home"
+printf 'prd\n' > "$TMP/repo/.agent_reports/spec/prd.md"
+if printf '{"tool_name":"Read","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/.agent_reports/spec/prd.md" "$TMP/repo" \
+  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_read_hook.out 2>/tmp/codex_read_hook.err \
+  && find "$TMP/codex_marker_home/.spec-grounding" -type f -name 'testsid__*' -print -quit | grep -q . \
+  && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_read_hook.out /tmp/codex_read_hook.err; then
+  ok "codex native hook projection records spec read markers"
+else
+  bad "codex native hook projection should record spec read markers"
 fi
 if printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/MEMORY.md" "$TMP/runtime" \
   | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook_block.out 2>/tmp/codex_hook_block.err \
@@ -1197,6 +1246,22 @@ if HOME="$TMP/opencode_headless_home" XDG_CONFIG_HOME="$TMP/opencode_headless_ho
 else
   bad "opencode headless check should validate runtime projection"
 fi
+mkdir -p "$TMP/opencode_headless_config_home/.config/opencode/agent" \
+  "$TMP/opencode_headless_config_home/.config/opencode/command" \
+  "$TMP/opencode_headless_config_home/.config/opencode/plugins"
+ln -s "$ROOT" "$TMP/opencode_headless_config_home/.config/opencode/agent-harness"
+ln -s "$ROOT/opencode_setting/opencode-agents/qa-team/qa-team.md" "$TMP/opencode_headless_config_home/.config/opencode/agent/qa-team.md"
+ln -s "$ROOT/opencode_setting/opencode-commands/autopilot-code.md" "$TMP/opencode_headless_config_home/.config/opencode/command/autopilot-code.md"
+ln -s "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js" "$TMP/opencode_headless_config_home/.config/opencode/plugins/agent-harness-guards.js"
+if OPENCODE_CONFIG_CONTENT='{"skills":{"paths":["/tmp/opencode-\u0073kills"]}}' \
+  HOME="$TMP/opencode_headless_config_home" XDG_CONFIG_HOME="$TMP/opencode_headless_config_home/.config" \
+  "$OPENCODE" headless --check "$TMP/repo" >/tmp/opencode_headless_config_check.out 2>/tmp/opencode_headless_config_check.err \
+  && grep -q '^runtime_projection=ok$' /tmp/opencode_headless_config_check.out \
+  && grep -q '^check=ok$' /tmp/opencode_headless_config_check.out; then
+  ok "opencode headless check accepts JSON-configured native skills path"
+else
+  bad "opencode headless check should accept JSON-configured native skills path"
+fi
 if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/opencode-dispatch.log" >/tmp/opencode_dispatch.out 2>/tmp/opencode_dispatch.err \
   && grep -q '^adapter=opencode$' /tmp/opencode_dispatch.out \
   && grep -q '^status=dry-run$' /tmp/opencode_dispatch.out \
@@ -1342,12 +1407,50 @@ if AGENT_MODEL_FAST=fast-model AGENT_VARIANT_FAST=low "$OPENCODE" role fast revi
 else
   bad "opencode role wrapper should map fast portable role"
 fi
+if AGENT_MODEL_ORCHESTRATOR=provider/orchestrator-model AGENT_VARIANT_ORCHESTRATOR=medium "$OPENCODE" role external adversary orchestrator >/tmp/opencode_role.out 2>/tmp/opencode_role.err \
+  && grep -q '^family=orchestrator$' /tmp/opencode_role.out \
+  && grep -q '^adapter=opencode$' /tmp/opencode_role.out \
+  && grep -q '^model=provider/orchestrator-model$' /tmp/opencode_role.out \
+  && grep -q '^variant=medium$' /tmp/opencode_role.out \
+  && grep -q '^available=1$' /tmp/opencode_role.out \
+  && grep -q '^status=configured$' /tmp/opencode_role.out; then
+  ok "opencode role wrapper maps external adversary orchestrator role"
+else
+  bad "opencode role wrapper should map external adversary orchestrator role"
+fi
 if "$OPENCODE" role external adversary >/tmp/opencode_role.out 2>/tmp/opencode_role.err \
   && grep -q '^available=0$' /tmp/opencode_role.out \
   && grep -q '^status=unavailable$' /tmp/opencode_role.out; then
   ok "opencode role wrapper marks external adversary unavailable by default"
 else
   bad "opencode role wrapper should mark external adversary unavailable by default"
+fi
+if AGENT_MODEL_EXTERNAL=provider/external-model AGENT_VARIANT_EXTERNAL=high "$OPENCODE" role external adversary >/tmp/opencode_role.out 2>/tmp/opencode_role.err \
+  && grep -q '^family=external$' /tmp/opencode_role.out \
+  && grep -q '^available=1$' /tmp/opencode_role.out \
+  && grep -q '^status=configured$' /tmp/opencode_role.out \
+  && grep -q '^model=provider/external-model$' /tmp/opencode_role.out \
+  && grep -q '^variant=high$' /tmp/opencode_role.out; then
+  ok "opencode role wrapper maps configured external adversary model"
+else
+  bad "opencode role wrapper should map configured external adversary model"
+fi
+if AGENT_EXTERNAL_CMD="sh -c" "$OPENCODE" role external adversary >/tmp/opencode_role.out 2>/tmp/opencode_role.err \
+  && grep -q '^available=1$' /tmp/opencode_role.out \
+  && grep -q '^status=configured$' /tmp/opencode_role.out \
+  && grep -q '^model=external-command$' /tmp/opencode_role.out \
+  && grep -q '^external_command=sh -c$' /tmp/opencode_role.out; then
+  ok "opencode role wrapper accepts external adversary command with args"
+else
+  bad "opencode role wrapper should accept external adversary command with args"
+fi
+if AGENT_EXTERNAL_CMD="missing-external-adversary-command --review" "$OPENCODE" role external adversary >/tmp/opencode_role.out 2>/tmp/opencode_role.err \
+  && grep -q '^available=0$' /tmp/opencode_role.out \
+  && grep -q '^status=unavailable$' /tmp/opencode_role.out \
+  && grep -q '^reason=AGENT_EXTERNAL_CMD not found: missing-external-adversary-command$' /tmp/opencode_role.out; then
+  ok "opencode role wrapper reports missing external adversary command"
+else
+  bad "opencode role wrapper should report missing external adversary command"
 fi
 if "$OPENCODE" role fast reviewer >/tmp/opencode_role.out 2>/tmp/opencode_role.err \
   && grep -q '^model=opencode-default$' /tmp/opencode_role.out \
