@@ -628,6 +628,21 @@ else
   bad "opencode role wrapper should report opencode-default when unconfigured"
 fi
 if command -v opencode >/dev/null 2>&1; then
+  mkdir -p "$TMP/opencode_bootstrap_home/.config/opencode" "$TMP/opencode_bootstrap_home/.local/share"
+  if OPENCODE_CONFIG_CONTENT="{\"instructions\":[\"$ROOT/opencode_setting/AGENTS.md\"],\"skills\":{\"paths\":[\"$ROOT/opencode_setting/opencode-skills\"]}}" \
+    HOME="$TMP/opencode_bootstrap_home" XDG_CONFIG_HOME="$TMP/opencode_bootstrap_home/.config" XDG_DATA_HOME="$TMP/opencode_bootstrap_home/.local/share" \
+    opencode debug config --pure >/tmp/opencode_bootstrap.out 2>/tmp/opencode_bootstrap.err \
+    && grep -q "$ROOT/opencode_setting/AGENTS.md" /tmp/opencode_bootstrap.out \
+    && grep -q "$ROOT/opencode_setting/opencode-skills" /tmp/opencode_bootstrap.out \
+    && ! grep -q '/.claude/' /tmp/opencode_bootstrap.out; then
+    ok "opencode bootstrap config projects instructions and skills without Claude paths"
+  else
+    bad "opencode bootstrap config should project instructions and skills without Claude paths"
+  fi
+else
+  ok "opencode bootstrap config runtime discovery skipped (opencode not installed)"
+fi
+if command -v opencode >/dev/null 2>&1; then
   mkdir -p "$TMP/opencode_home/.config/opencode/agent" "$TMP/opencode_home/.local/share"
   for f in "$ROOT"/opencode_setting/opencode-agents/*/*.md; do
     [ -f "$f" ] || continue
