@@ -758,6 +758,23 @@ if "$OPENCODE" capability-info autopilot-code >/tmp/opencode_cap.out 2>/tmp/open
 else
   bad "opencode capability wrapper should report native skill and command realization"
 fi
+tmp_map_root="$TMP/opencode_map_root"
+mkdir -p "$tmp_map_root/adapters/opencode/bin" "$tmp_map_root/capabilities"
+cp "$ROOT/adapters/opencode/bin/capability-map.sh" "$tmp_map_root/adapters/opencode/bin/capability-map.sh"
+cat >"$tmp_map_root/capabilities/README.md" <<'EOF'
+| Capability | Meaning |
+|---|---|
+| `autopilot-code` | test |
+EOF
+if "$tmp_map_root/adapters/opencode/bin/capability-map.sh" autopilot-code >/tmp/opencode_cap_missing.out 2>/tmp/opencode_cap_missing.err \
+  && grep -q '^native_skill=0$' /tmp/opencode_cap_missing.out \
+  && grep -q '^native_command=0$' /tmp/opencode_cap_missing.out \
+  && grep -q '^realization=portable-instructions$' /tmp/opencode_cap_missing.out \
+  && grep -q '^note=OpenCode has no native Skill/command realization' /tmp/opencode_cap_missing.out; then
+  ok "opencode capability wrapper downgrades note when native projections are missing"
+else
+  bad "opencode capability wrapper should not claim missing native projections"
+fi
 if "$OPENCODE" capability-info design-review >/tmp/opencode_cap.out 2>/tmp/opencode_cap.err \
   && grep -q '^capability=design-review$' /tmp/opencode_cap.out \
   && grep -q '^native_skill=1$' /tmp/opencode_cap.out \

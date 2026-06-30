@@ -279,6 +279,11 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'adapter=codex' adapters/codex/bin/role-map.sh; then
     fail_msg "adapters/codex/bin/role-map.sh must report its adapter for machine-readable role mappings"
   fi
+  for var in AGENT_MODEL_FAST AGENT_MODEL_DEEP AGENT_MODEL_EXTERNAL AGENT_MODEL_ORCHESTRATOR AGENT_REASONING_FAST AGENT_REASONING_DEEP AGENT_REASONING_EXTERNAL AGENT_REASONING_ORCHESTRATOR AGENT_EXTERNAL_CMD; do
+    if ! grep -Fq "$var" adapters/codex/README.md || ! grep -Fq "$var" adapters/codex/ADAPTATION.md; then
+      fail_msg "Codex role mapping docs must expose $var"
+    fi
+  done
 
   if ! grep -Fq 'preflight.sh start' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex workflow start cleanup wrapper"
@@ -738,6 +743,11 @@ check_opencode_bin_wrappers() {
   if ! grep -Fq 'adapter=opencode' adapters/opencode/bin/role-map.sh; then
     fail_msg "adapters/opencode/bin/role-map.sh must report its adapter for machine-readable role mappings"
   fi
+  for var in AGENT_MODEL_FAST AGENT_MODEL_DEEP AGENT_MODEL_EXTERNAL AGENT_MODEL_ORCHESTRATOR AGENT_VARIANT_FAST AGENT_VARIANT_DEEP AGENT_VARIANT_EXTERNAL AGENT_VARIANT_ORCHESTRATOR AGENT_EXTERNAL_CMD; do
+    if ! grep -Fq "$var" adapters/opencode/README.md || ! grep -Fq "$var" adapters/opencode/ADAPTATION.md; then
+      fail_msg "OpenCode role mapping docs must expose $var"
+    fi
+  done
 
   if ! grep -Fq 'preflight.sh start' adapters/opencode/AGENTS.md; then
     fail_msg "adapters/opencode/AGENTS.md must document the OpenCode workflow start cleanup wrapper"

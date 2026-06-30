@@ -254,6 +254,7 @@ else
 fi
 if AGENT_MODEL_FAST=fast-model AGENT_REASONING_FAST=low "$CODEX" role fast reviewer >/tmp/role.out 2>/tmp/role.err \
   && grep -q '^family=fast$' /tmp/role.out \
+  && grep -q '^adapter=codex$' /tmp/role.out \
   && grep -q '^model=fast-model$' /tmp/role.out \
   && grep -q '^reasoning=low$' /tmp/role.out; then
   ok "codex role wrapper maps fast portable role"
@@ -624,6 +625,7 @@ fi
 echo "== opencode role mapping =="
 if AGENT_MODEL_FAST=fast-model AGENT_VARIANT_FAST=low "$OPENCODE" role fast reviewer >/tmp/opencode_role.out 2>/tmp/opencode_role.err \
   && grep -q '^family=fast$' /tmp/opencode_role.out \
+  && grep -q '^adapter=opencode$' /tmp/opencode_role.out \
   && grep -q '^model=fast-model$' /tmp/opencode_role.out \
   && grep -q '^variant=low$' /tmp/opencode_role.out; then
   ok "opencode role wrapper maps fast portable role"
@@ -761,6 +763,23 @@ if "$OPENCODE" capability-info autopilot-code >/tmp/opencode_cap.out 2>/tmp/open
 else
   bad "opencode capability wrapper should report native skill and command realization"
 fi
+tmp_map_root="$TMP/opencode_map_root"
+mkdir -p "$tmp_map_root/adapters/opencode/bin" "$tmp_map_root/capabilities"
+cp "$ROOT/adapters/opencode/bin/capability-map.sh" "$tmp_map_root/adapters/opencode/bin/capability-map.sh"
+cat >"$tmp_map_root/capabilities/README.md" <<'EOF'
+| Capability | Meaning |
+|---|---|
+| `autopilot-code` | test |
+EOF
+if "$tmp_map_root/adapters/opencode/bin/capability-map.sh" autopilot-code >/tmp/opencode_cap_missing.out 2>/tmp/opencode_cap_missing.err \
+  && grep -q '^native_skill=0$' /tmp/opencode_cap_missing.out \
+  && grep -q '^native_command=0$' /tmp/opencode_cap_missing.out \
+  && grep -q '^realization=portable-instructions$' /tmp/opencode_cap_missing.out \
+  && grep -q '^note=OpenCode has no native Skill/command realization' /tmp/opencode_cap_missing.out; then
+  ok "opencode capability wrapper downgrades note when native projections are missing"
+else
+  bad "opencode capability wrapper should not claim missing native projections"
+fi
 if "$OPENCODE" capability-info design-review >/tmp/opencode_cap.out 2>/tmp/opencode_cap.err \
   && grep -q '^capability=design-review$' /tmp/opencode_cap.out \
   && grep -q '^native_skill=1$' /tmp/opencode_cap.out \
@@ -768,7 +787,9 @@ if "$OPENCODE" capability-info design-review >/tmp/opencode_cap.out 2>/tmp/openc
   && grep -q '^realization=opencode-native-skill-command$' /tmp/opencode_cap.out \
   && grep -q '^status=tool-contract$' /tmp/opencode_cap.out \
   && grep -q '^tool_contract=visual-harness$' /tmp/opencode_cap.out \
-  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness$' /tmp/opencode_cap.out; then
+  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness$' /tmp/opencode_cap.out \
+  && grep -q '^runtime_surface=not-materialized$' /tmp/opencode_cap.out \
+  && grep -q '^fallback=preflight.sh design <file>$' /tmp/opencode_cap.out; then
   ok "opencode design capability reports visual harness contract"
 else
   bad "opencode design capability should report visual harness contract"

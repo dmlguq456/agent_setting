@@ -232,9 +232,11 @@ reasoning-effort config field.
 | `orchestrator` | 도구 호출·artifact merge·한국어 정리 담당. 실제 판단 role 과 분리 가능 |
 
 OpenCode wrapper 는 `AGENT_MODEL_FAST`, `AGENT_MODEL_DEEP`,
-`AGENT_MODEL_EXTERNAL`, `AGENT_VARIANT_FAST`, `AGENT_VARIANT_DEEP` 같은
-환경변수로 이 mapping 을 드러낸다. 공통 skill 은 concrete model name 을
-요구하지 않고 role 의미만 요구한다.
+`AGENT_MODEL_EXTERNAL`, `AGENT_MODEL_ORCHESTRATOR`,
+`AGENT_VARIANT_FAST`, `AGENT_VARIANT_DEEP`,
+`AGENT_VARIANT_EXTERNAL`, `AGENT_VARIANT_ORCHESTRATOR` 같은 환경변수로
+이 mapping 을 드러낸다. 공통 skill 은 concrete model name 을 요구하지
+않고 role 의미만 요구한다.
 
 `adapters/opencode/bin/preflight.sh role <portable-role>` is the executable
 mapping surface. When no concrete model is configured it reports

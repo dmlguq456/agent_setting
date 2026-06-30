@@ -41,39 +41,61 @@ compat_reference="skills/$cap/SKILL.md"
 native_skill_path="adapters/opencode/skills/$cap/SKILL.md"
 native_command_path="adapters/opencode/commands/$cap.md"
 status="instruction-only"
-realization="opencode-native-skill-command"
+realization="portable-instructions"
 tool_contract=""
-note="OpenCode has adapter-owned native Skill and command projections generated from the portable capability spec. Use them with explicit preflight guards; legacy compatibility references are not native input."
+note="OpenCode has no native Skill/command realization for this capability yet; read the portable catalog and task-relevant docs, then use preflight guards. Legacy compatibility references are not native input."
 
 case "$cap" in
   autopilot-design|design-*)
     status="tool-contract"
-    realization="opencode-native-skill-command"
     tool_contract="visual-harness"
-    note="OpenCode has native Skill and command projections for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
     ;;
 esac
 
 printf 'capability=%s\n' "$cap"
 printf 'adapter=opencode\n'
 if [ -f "$ROOT/$native_skill_path" ]; then
+  native_skill=1
   printf 'native_skill=1\n'
   printf 'native_skill_path=%s\n' "$native_skill_path"
+  realization="opencode-native-skill"
+  note="OpenCode has an adapter-owned native Skill projection generated from the portable capability spec. Use it with explicit preflight guards; legacy compatibility references are not native input."
 else
+  native_skill=0
   printf 'native_skill=0\n'
   printf 'native_skill_path=\n'
-  realization="portable-instructions"
 fi
 if [ -f "$ROOT/$native_command_path" ]; then
+  native_command=1
   printf 'native_command=1\n'
   printf 'native_command_path=%s\n' "$native_command_path"
-elif [ "$realization" = "opencode-native-skill-command" ]; then
-  printf 'native_command=0\n'
-  printf 'native_command_path=\n'
-  realization="opencode-native-skill"
+  if [ "$native_skill" -eq 1 ]; then
+    realization="opencode-native-skill-command"
+    note="OpenCode has adapter-owned native Skill and command projections generated from the portable capability spec. Use them with explicit preflight guards; legacy compatibility references are not native input."
+  else
+    realization="opencode-native-command"
+    note="OpenCode has an adapter-owned native command projection generated from the portable capability spec. Use it with explicit preflight guards; legacy compatibility references are not native input."
+  fi
 else
+  native_command=0
   printf 'native_command=0\n'
   printf 'native_command_path=\n'
+fi
+if [ "$tool_contract" = "visual-harness" ]; then
+  case "$realization" in
+    opencode-native-skill-command)
+      note="OpenCode has native Skill and command projections for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
+      ;;
+    opencode-native-skill)
+      note="OpenCode has a native Skill projection for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
+      ;;
+    opencode-native-command)
+      note="OpenCode has a native command projection for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
+      ;;
+    *)
+      note="OpenCode must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
+      ;;
+  esac
 fi
 printf 'realization=%s\n' "$realization"
 printf 'portable_source=%s\n' "$portable_source"
