@@ -664,7 +664,11 @@ else
 fi
 if command -v codex >/dev/null 2>&1; then
   mkdir -p "$TMP/codex_plugin_home"
-  if CODEX_HOME="$TMP/codex_plugin_home" codex plugin marketplace add "$ROOT/codex_setting/codex-plugin-marketplace" --json >/tmp/codex_plugin_marketplace.out 2>/tmp/codex_plugin_marketplace.err \
+  if [ -f "$ROOT/codex_setting/codex-plugin-marketplace/.agents/plugins/marketplace.json" ] \
+    && [ -L "$ROOT/codex_setting/codex-plugin-marketplace/plugins/agent-harness-codex" ] \
+    && [ ! -e "$ROOT/codex_setting/codex-plugin-marketplace/bin" ] \
+    && [ ! -e "$ROOT/codex_setting/codex-plugin-marketplace/hooks" ] \
+    && CODEX_HOME="$TMP/codex_plugin_home" codex plugin marketplace add "$ROOT/codex_setting/codex-plugin-marketplace" --json >/tmp/codex_plugin_marketplace.out 2>/tmp/codex_plugin_marketplace.err \
     && CODEX_HOME="$TMP/codex_plugin_home" codex plugin list --available --json >/tmp/codex_plugin_list.out 2>/tmp/codex_plugin_list.err \
     && grep -q '"pluginId": "agent-harness-codex@agent-harness"' /tmp/codex_plugin_list.out \
     && CODEX_HOME="$TMP/codex_plugin_home" codex plugin add agent-harness-codex@agent-harness --json >/tmp/codex_plugin_add.out 2>/tmp/codex_plugin_add.err \
