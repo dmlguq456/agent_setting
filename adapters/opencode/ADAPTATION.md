@@ -113,6 +113,13 @@ configured.
 OpenCode. It is consumed with OpenCode file and git diff tools and does not
 project or invoke Claude's `/security-review` slash command.
 
+`roles/modes/research/claim-verify.md` has an OpenCode-owned executable
+tool-contract surface:
+`adapters/opencode/bin/preflight.sh claim-verify --check <claim>` verifies a
+configured external verification provider command through
+`adapters/opencode/tools/research/` and reports exit 69 when no provider is
+configured.
+
 `roles/modes/qa/test.md` has an OpenCode-owned executable tool-contract
 surface:
 `adapters/opencode/bin/preflight.sh verification-runner --check -- <command>`
@@ -250,6 +257,7 @@ shared `tools/` directory. The current allowlist is:
 - `material/pdf-extract.sh` (OpenCode-owned launcher for local PDF text extraction)
 - `material/web-image-search.sh` (OpenCode-owned launcher for configured image search providers)
 - `qa/verification-runner.sh` (OpenCode-owned launcher for explicit verification commands)
+- `research/claim-verify.sh` (OpenCode-owned launcher for configured external claim verification providers)
 - `design/visual-harness.sh` (OpenCode-owned launcher for render/screenshot/console checks)
 
 Do not project `build-manifest.py`: it is a harness development tool that reads

@@ -21,6 +21,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh recall <prompt> [cwd]
        preflight.sh briefing [cwd]
        preflight.sh worklog [cwd]
+       preflight.sh claim-verify [--check] <claim> [--out <file>]
        preflight.sh browser-fetch [--check] <url> [--out <dir>]
        preflight.sh data-script [--check] <script.py> [-- args...]
        preflight.sh figure-gen [--check] <script.py> [-- args...]
@@ -101,6 +102,10 @@ case "$cmd" in
       WORKLOG_BOARD_APP="${WORKLOG_BOARD_APP:-}" \
       WORKLOG_BOARD_WT="${WORKLOG_BOARD_WT:-}" \
       "$ROOT/utilities/agent-worklog-state.sh" "$cwd"
+    ;;
+  claim-verify)
+    shift
+    "$ROOT/adapters/opencode/tools/research/claim-verify.sh" "$@"
     ;;
   browser-fetch)
     shift

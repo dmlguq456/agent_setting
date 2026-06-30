@@ -40,6 +40,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`, `adapters/codex/bin/preflight.sh recall "<prompt>" [cwd]`, and `adapters/codex/bin/preflight.sh briefing [cwd]`; run them manually when hooks are unavailable.
 - Use `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly wants to toggle the tracked/untracked workflow escape hatch.
 - Use `adapters/codex/bin/preflight.sh worklog [cwd]` before worklog-board or agent-notes work to inspect configured notes/app paths without mutating data.
+- For `research/claim-verify`, run `adapters/codex/bin/preflight.sh claim-verify --check <claim>` before treating adversarial external verification as satisfying the mode tool contract. Exit 69 means no external verification provider is configured.
 - Use `adapters/codex/bin/preflight.sh distill-delta <session-id>` to inspect Codex transcript deltas. Use `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]` only for explicit proposal generation; do not auto-apply memory distillation until a Codex no-tools worker contract exists.
 - Treat `codex_setting/tools` as a selective memory/material/QA/design tool projection. Do not assume every shared tool is Codex-supported.
 - Treat `codex_setting/utilities` as a selective utility projection. Do not assume every shared utility is Codex-supported.

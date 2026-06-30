@@ -133,7 +133,9 @@ case "$family" in
         realization=portable-with-tool-contract
         fallback="satisfy-tool-contract-or-report-unavailable"
         tool_contract=external-claim-verification
-        requirement="provide WebSearch/WebFetch or cite unavailable external verification"
+        tool_contract_check="adapters/codex/bin/preflight.sh claim-verify --check <claim>"
+        runtime_surface=adapter-owned-claim-verify
+        requirement="run the adapter-owned external claim verification launcher with a configured provider, or report unavailable"
         ;;
       *)
         status=portable

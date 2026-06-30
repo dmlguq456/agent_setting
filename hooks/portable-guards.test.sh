@@ -344,6 +344,27 @@ if "$CODEX" data-script --check "$TMP/codex-data-script.py" >/tmp/codex_data_scr
 else
   bad "codex data-script wrapper should check Python analysis scripts"
 fi
+if "$CODEX" claim-verify >/tmp/codex_claim_verify.out 2>/tmp/codex_claim_verify.err \
+  && grep -q '^adapter=codex$' /tmp/codex_claim_verify.out \
+  && grep -q '^tool_contract=external-claim-verification$' /tmp/codex_claim_verify.out \
+  && grep -q '^runtime_surface=adapter-owned-claim-verify$' /tmp/codex_claim_verify.out \
+  && grep -q '^status=tool-contract$' /tmp/codex_claim_verify.out; then
+  ok "codex claim-verify wrapper reports tool contract"
+else
+  bad "codex claim-verify wrapper should report tool contract"
+fi
+if "$CODEX" claim-verify --check "model X is state of the art" >/tmp/codex_claim_unavailable.out 2>/tmp/codex_claim_unavailable.err; then
+  bad "codex claim-verify wrapper should report unavailable provider by default"
+else
+  rc=$?
+  if [ "$rc" -eq 69 ] \
+    && grep -q '^adapter=codex$' /tmp/codex_claim_unavailable.out \
+    && grep -q '^reason=claim-verify-provider-unavailable$' /tmp/codex_claim_unavailable.out; then
+    ok "codex claim-verify wrapper reports unavailable provider"
+  else
+    bad "codex claim-verify wrapper should report unavailable provider"
+  fi
+fi
 if "$CODEX" figure-gen >/tmp/codex_figure_gen.out 2>/tmp/codex_figure_gen.err \
   && grep -q '^adapter=codex$' /tmp/codex_figure_gen.out \
   && grep -q '^tool_contract=figure-gen$' /tmp/codex_figure_gen.out \
@@ -670,7 +691,9 @@ else
 fi
 if "$CODEX" mode-info research/claim-verify >/tmp/mode.out 2>/tmp/mode.err \
   && grep -q '^status=tool-contract$' /tmp/mode.out \
-  && grep -q '^tool_contract=external-claim-verification$' /tmp/mode.out; then
+  && grep -q '^tool_contract=external-claim-verification$' /tmp/mode.out \
+  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh claim-verify --check <claim>$' /tmp/mode.out \
+  && grep -q '^runtime_surface=adapter-owned-claim-verify$' /tmp/mode.out; then
   ok "codex mode wrapper reports named claim verification contract"
 else
   bad "codex mode wrapper should report named claim verification contract"
@@ -1097,6 +1120,27 @@ if "$OPENCODE" data-script --check "$TMP/opencode-data-script.py" >/tmp/opencode
 else
   bad "opencode data-script wrapper should check Python analysis scripts"
 fi
+if "$OPENCODE" claim-verify >/tmp/opencode_claim_verify.out 2>/tmp/opencode_claim_verify.err \
+  && grep -q '^adapter=opencode$' /tmp/opencode_claim_verify.out \
+  && grep -q '^tool_contract=external-claim-verification$' /tmp/opencode_claim_verify.out \
+  && grep -q '^runtime_surface=adapter-owned-claim-verify$' /tmp/opencode_claim_verify.out \
+  && grep -q '^status=tool-contract$' /tmp/opencode_claim_verify.out; then
+  ok "opencode claim-verify wrapper reports tool contract"
+else
+  bad "opencode claim-verify wrapper should report tool contract"
+fi
+if "$OPENCODE" claim-verify --check "model X is state of the art" >/tmp/opencode_claim_unavailable.out 2>/tmp/opencode_claim_unavailable.err; then
+  bad "opencode claim-verify wrapper should report unavailable provider by default"
+else
+  rc=$?
+  if [ "$rc" -eq 69 ] \
+    && grep -q '^adapter=opencode$' /tmp/opencode_claim_unavailable.out \
+    && grep -q '^reason=claim-verify-provider-unavailable$' /tmp/opencode_claim_unavailable.out; then
+    ok "opencode claim-verify wrapper reports unavailable provider"
+  else
+    bad "opencode claim-verify wrapper should report unavailable provider"
+  fi
+fi
 if "$OPENCODE" figure-gen >/tmp/opencode_figure_gen.out 2>/tmp/opencode_figure_gen.err \
   && grep -q '^adapter=opencode$' /tmp/opencode_figure_gen.out \
   && grep -q '^tool_contract=figure-gen$' /tmp/opencode_figure_gen.out \
@@ -1315,7 +1359,9 @@ else
 fi
 if "$OPENCODE" mode-info research/claim-verify >/tmp/opencode_mode.out 2>/tmp/opencode_mode.err \
   && grep -q '^status=tool-contract$' /tmp/opencode_mode.out \
-  && grep -q '^tool_contract=external-claim-verification$' /tmp/opencode_mode.out; then
+  && grep -q '^tool_contract=external-claim-verification$' /tmp/opencode_mode.out \
+  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh claim-verify --check <claim>$' /tmp/opencode_mode.out \
+  && grep -q '^runtime_surface=adapter-owned-claim-verify$' /tmp/opencode_mode.out; then
   ok "opencode mode wrapper reports named claim verification contract"
 else
   bad "opencode mode wrapper should report named claim verification contract"

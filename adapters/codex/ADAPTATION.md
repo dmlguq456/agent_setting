@@ -117,6 +117,13 @@ and reports exit 69 when no provider is configured.
 Codex. It is consumed with Codex file and git diff tools and does not project
 or invoke Claude's `/security-review` slash command.
 
+`roles/modes/research/claim-verify.md` has a Codex-owned executable
+tool-contract surface:
+`adapters/codex/bin/preflight.sh claim-verify --check <claim>` verifies a
+configured external verification provider command through
+`adapters/codex/tools/research/` and reports exit 69 when no provider is
+configured.
+
 `roles/modes/qa/test.md` has a Codex-owned executable tool-contract surface:
 `adapters/codex/bin/preflight.sh verification-runner --check -- <command>`
 checks explicit verification commands and the same wrapper can execute them
@@ -271,6 +278,7 @@ could consume them.
 - `material/pdf-extract.sh` (Codex-owned launcher for local PDF text extraction)
 - `material/web-image-search.sh` (Codex-owned launcher for configured image search providers)
 - `qa/verification-runner.sh` (Codex-owned launcher for explicit verification commands)
+- `research/claim-verify.sh` (Codex-owned launcher for configured external claim verification providers)
 - `design/visual-harness.sh` (Codex-owned launcher for render/screenshot/console checks)
 
 Do not project `build-manifest.py`: it is a harness development tool that reads

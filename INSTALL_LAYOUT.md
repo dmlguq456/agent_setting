@@ -202,6 +202,10 @@ codex_setting/bin/preflight.sh mode-info qa/test >/tmp/codex-test-mode.txt
 rg '^tool_contract=verification-runner$' /tmp/codex-test-mode.txt
 rg '^runtime_surface=adapter-owned-verification-runner$' /tmp/codex-test-mode.txt
 test -x codex_setting/tools/qa/verification-runner.sh
+codex_setting/bin/preflight.sh mode-info research/claim-verify >/tmp/codex-claim-verify-mode.txt
+rg '^tool_contract=external-claim-verification$' /tmp/codex-claim-verify-mode.txt
+rg '^runtime_surface=adapter-owned-claim-verify$' /tmp/codex-claim-verify-mode.txt
+test -x codex_setting/tools/research/claim-verify.sh
 codex_setting/bin/preflight.sh visual-harness >/tmp/codex-visual-contract.txt
 rg '^adapter=codex$' /tmp/codex-visual-contract.txt
 rg '^runtime_surface=adapter-owned-visual-harness$' /tmp/codex-visual-contract.txt
@@ -297,6 +301,10 @@ opencode_setting/bin/preflight.sh mode-info qa/test >/tmp/opencode-test-mode.txt
 rg '^tool_contract=verification-runner$' /tmp/opencode-test-mode.txt
 rg '^runtime_surface=adapter-owned-verification-runner$' /tmp/opencode-test-mode.txt
 test -x opencode_setting/tools/qa/verification-runner.sh
+opencode_setting/bin/preflight.sh mode-info research/claim-verify >/tmp/opencode-claim-verify-mode.txt
+rg '^tool_contract=external-claim-verification$' /tmp/opencode-claim-verify-mode.txt
+rg '^runtime_surface=adapter-owned-claim-verify$' /tmp/opencode-claim-verify-mode.txt
+test -x opencode_setting/tools/research/claim-verify.sh
 opencode_setting/bin/preflight.sh visual-harness >/tmp/opencode-visual-contract.txt
 rg '^adapter=opencode$' /tmp/opencode-visual-contract.txt
 rg '^runtime_surface=adapter-owned-visual-harness$' /tmp/opencode-visual-contract.txt

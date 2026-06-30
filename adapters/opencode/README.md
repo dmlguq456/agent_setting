@@ -71,6 +71,7 @@ guards and tool-contract reporting.
 | material web image search | Tool-contract check: `adapters/opencode/bin/preflight.sh web-image-search --check <query>` verifies that `OPENCODE_WEB_IMAGE_SEARCH_CMD` or `AGENT_WEB_IMAGE_SEARCH_CMD` provides a local image-search command before using `roles/modes/material/web-image-search.md`. Exit 69 means no provider is configured |
 | QA security review | Portable read-only persona: `roles/modes/qa/security-review.md` is consumed with OpenCode file and git diff tools. Do not project or invoke Claude `/security-review` |
 | QA verification runner | Tool-contract check: `adapters/opencode/bin/preflight.sh verification-runner --check -- <command>` verifies explicit QA/test commands through the adapter-owned runner before using `roles/modes/qa/test.md` |
+| research claim verify | Tool-contract check: `adapters/opencode/bin/preflight.sh claim-verify --check <claim>` verifies that `OPENCODE_CLAIM_VERIFY_CMD` or `AGENT_CLAIM_VERIFY_CMD` provides an external verification command before using `roles/modes/research/claim-verify.md`. Exit 69 means no provider is configured |
 | design post-write verification | `core/HOOKS.md` defines the invariant; run `adapters/opencode/bin/preflight.sh design <file>` after design HTML writes |
 | design visual harness | Tool-contract check: `adapters/opencode/bin/preflight.sh visual-harness <file.html>` runs the adapter-owned render/screenshot/console wrapper. Inspect the reported screenshot before claiming visual completion. Do not project Claude Design MCP files into OpenCode |
 | spec read gate | `core/HOOKS.md` defines marker/check semantics; run `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]` after actual reads and `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
@@ -103,6 +104,7 @@ tools that OpenCode wrappers use directly:
 - `material/pdf-extract.sh` (OpenCode-owned launcher for local PDF text extraction)
 - `material/web-image-search.sh` (OpenCode-owned launcher for configured image search providers)
 - `qa/verification-runner.sh` (OpenCode-owned launcher for explicit verification commands)
+- `research/claim-verify.sh` (OpenCode-owned launcher for configured external claim verification providers)
 - `design/visual-harness.sh` (OpenCode-owned launcher for render/screenshot/console checks)
 
 Harness development tools and Claude-coupled helper surfaces such as
