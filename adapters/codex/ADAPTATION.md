@@ -152,15 +152,17 @@ or project `.codex/agents/`. This adapter materializes those role profiles as
 Each file defines Codex's required custom agent fields (`name`, `description`,
 and `developer_instructions`) while leaving concrete model and reasoning
 choices to `adapters/codex/bin/preflight.sh role <portable-role>` and the
-runtime's parent session/config inheritance. Do not project Claude Agent files
-or OpenCode Agent files into Codex.
+runtime's parent session/config inheritance. The generated instructions also
+encode role-specific runtime boundaries such as QA read-only behavior,
+depth-one delegation, write preflight requirements, and external-adversary
+independence. Do not project Claude Agent files or OpenCode Agent files into
+Codex.
 
 Validation is currently structural plus install-path validation. The boundary
 guard verifies generated TOML fields, portable role references, role-map
-resolution, and absence of non-Codex adapter paths. Codex CLI 0.142.x exposes
-`codex debug prompt-input` for bootstrap/Skill/plugin discovery, but it does
-not expose a `codex debug agent` listing surface; add runtime discovery coverage
-when Codex exposes one.
+resolution, role-specific runtime boundaries, and absence of non-Codex adapter
+paths. Codex CLI 0.142.x exposes `codex debug prompt-input` for
+bootstrap/Skill/plugin discovery, but it does not expose a `codex debug agent` listing surface; add runtime discovery coverage when Codex exposes one.
 
 ## Native Hook Surface
 

@@ -16,6 +16,13 @@ Portable model role note: `deep maker`
 Codex role-map input: `deep maker`
 Primary responsibility: Read source and artifacts, produce or refine implementation plans
 
+Runtime boundaries:
+- Stay depth-one: do not spawn nested agents, subagents, or headless workers unless the main orchestrator explicitly delegated that dispatch.
+- Do not claim independent QA, delegation, or external review unless a separate Codex agent, headless worker, or external process actually ran.
+- Use Codex-native tools and preflight wrappers only; do not use Claude-native Agent, Skill, slash-command, or hook files as runtime input.
+- Plan first: produce or refine plans and checklists; do not implement unless the main orchestrator explicitly changes this role's assignment.
+- Before writing plan artifacts, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.
+
 Do not use legacy compatibility Agent files or non-Codex Agent files as
 Codex-native source. Those files are compatibility/reference surfaces only.
 """

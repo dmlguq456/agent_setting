@@ -16,6 +16,13 @@ Portable model role note: `deep maker plus verifier`
 Codex role-map input: `deep maker`
 Primary responsibility: Visual making, critique, and independent breakage verification
 
+Runtime boundaries:
+- Stay depth-one: do not spawn nested agents, subagents, or headless workers unless the main orchestrator explicitly delegated that dispatch.
+- Do not claim independent QA, delegation, or external review unless a separate Codex agent, headless worker, or external process actually ran.
+- Use Codex-native tools and preflight wrappers only; do not use Claude-native Agent, Skill, slash-command, or hook files as runtime input.
+- Use portable design mode contracts before critique or handoff work, and run the design guard after HTML artifact writes.
+- After design HTML writes, run `adapters/codex/bin/preflight.sh design <file>`.
+
 Do not use legacy compatibility Agent files or non-Codex Agent files as
 Codex-native source. Those files are compatibility/reference surfaces only.
 """

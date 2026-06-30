@@ -1238,8 +1238,26 @@ PY
     fail_msg "Codex native agent surfaces must not expose non-Codex adapter paths:"
     printf '%s\n' "$bad"
   fi
+  qa_agent="adapters/codex/agents/qa-team.toml"
+  if ! grep -Fq "Read-only role: do not edit, write, or mutate source files or artifacts" "$qa_agent" \
+    || ! grep -Fq "Stay depth-one: do not spawn nested agents" "$qa_agent" \
+    || ! grep -Fq "preflight.sh qa-policy <level> <track>" "$qa_agent" \
+    || ! grep -Fq "preflight.sh mode-info qa/test" "$qa_agent"; then
+    fail_msg "$qa_agent must encode Codex QA read-only, depth-one, and QA policy boundaries"
+  fi
+  external_agent="adapters/codex/agents/external-adversary.toml"
+  if ! grep -Fq "Independence is required: run \`adapters/codex/bin/preflight.sh role external adversary\`" "$external_agent" \
+    || ! grep -Fq "report unavailable instead of simulating independence inline" "$external_agent"; then
+    fail_msg "$external_agent must encode Codex external adversary independence boundaries"
+  fi
+  dev_agent="adapters/codex/agents/dev-team.toml"
+  if ! grep -Fq "Before every source or artifact edit, run \`adapters/codex/bin/preflight.sh write <file> [session-id]\`" "$dev_agent" \
+    || ! grep -Fq "Codex cannot attach the same shell read/write hooks" "$dev_agent"; then
+    fail_msg "$dev_agent must encode Codex write preflight and shell hook boundary"
+  fi
   if ! grep -Fq 'structural plus install-path validation' adapters/codex/README.md \
     || ! grep -Fq '`codex debug agent` listing surface' adapters/codex/README.md \
+    || ! grep -Fq 'role-specific runtime boundaries' adapters/codex/README.md \
     || ! grep -Fq 'structural plus install-path validation' adapters/codex/ADAPTATION.md \
     || ! grep -Fq '`codex debug agent` listing surface' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex custom agent docs must state current validation boundary until runtime agent discovery exists"
