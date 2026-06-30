@@ -344,6 +344,27 @@ if "$CODEX" data-script --check "$TMP/codex-data-script.py" >/tmp/codex_data_scr
 else
   bad "codex data-script wrapper should check Python analysis scripts"
 fi
+if "$CODEX" browser-fetch >/tmp/codex_browser_fetch.out 2>/tmp/codex_browser_fetch.err \
+  && grep -q '^adapter=codex$' /tmp/codex_browser_fetch.out \
+  && grep -q '^tool_contract=browser-fetch$' /tmp/codex_browser_fetch.out \
+  && grep -q '^runtime_surface=adapter-owned-browser-fetch$' /tmp/codex_browser_fetch.out \
+  && grep -q '^status=tool-contract$' /tmp/codex_browser_fetch.out; then
+  ok "codex browser-fetch wrapper reports tool contract"
+else
+  bad "codex browser-fetch wrapper should report tool contract"
+fi
+if "$CODEX" browser-fetch --check not-a-url >/tmp/codex_browser_bad_url.out 2>/tmp/codex_browser_bad_url.err; then
+  bad "codex browser-fetch wrapper should fail bad URL"
+else
+  rc=$?
+  if [ "$rc" -eq 65 ] \
+    && grep -q '^adapter=codex$' /tmp/codex_browser_bad_url.out \
+    && grep -q '^reason=bad-url$' /tmp/codex_browser_bad_url.out; then
+    ok "codex browser-fetch wrapper reports bad URL"
+  else
+    bad "codex browser-fetch wrapper should report bad URL"
+  fi
+fi
 if "$CODEX" pdf-extract >/tmp/codex_pdf_extract.out 2>/tmp/codex_pdf_extract.err \
   && grep -q '^adapter=codex$' /tmp/codex_pdf_extract.out \
   && grep -q '^tool_contract=pdf-extract$' /tmp/codex_pdf_extract.out \
@@ -567,10 +588,12 @@ if "$CODEX" mode-info material/browser-fetch >/tmp/mode.out 2>/tmp/mode.err \
   && grep -q '^status=tool-contract$' /tmp/mode.out \
   && grep -q '^realization=portable-with-tool-contract$' /tmp/mode.out \
   && grep -q '^tool_contract=browser-fetch$' /tmp/mode.out \
+  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh browser-fetch --check <url>$' /tmp/mode.out \
+  && grep -q '^runtime_surface=adapter-owned-browser-fetch$' /tmp/mode.out \
   && grep -q '^fallback=satisfy-tool-contract-or-report-unavailable$' /tmp/mode.out; then
-  ok "codex mode wrapper reports named material tool contract"
+  ok "codex mode wrapper reports material browser-fetch contract surface"
 else
-  bad "codex mode wrapper should report named material tool contract"
+  bad "codex mode wrapper should report material browser-fetch contract surface"
 fi
 if "$CODEX" mode-info research/claim-verify >/tmp/mode.out 2>/tmp/mode.err \
   && grep -q '^status=tool-contract$' /tmp/mode.out \
@@ -1001,6 +1024,27 @@ if "$OPENCODE" data-script --check "$TMP/opencode-data-script.py" >/tmp/opencode
 else
   bad "opencode data-script wrapper should check Python analysis scripts"
 fi
+if "$OPENCODE" browser-fetch >/tmp/opencode_browser_fetch.out 2>/tmp/opencode_browser_fetch.err \
+  && grep -q '^adapter=opencode$' /tmp/opencode_browser_fetch.out \
+  && grep -q '^tool_contract=browser-fetch$' /tmp/opencode_browser_fetch.out \
+  && grep -q '^runtime_surface=adapter-owned-browser-fetch$' /tmp/opencode_browser_fetch.out \
+  && grep -q '^status=tool-contract$' /tmp/opencode_browser_fetch.out; then
+  ok "opencode browser-fetch wrapper reports tool contract"
+else
+  bad "opencode browser-fetch wrapper should report tool contract"
+fi
+if "$OPENCODE" browser-fetch --check not-a-url >/tmp/opencode_browser_bad_url.out 2>/tmp/opencode_browser_bad_url.err; then
+  bad "opencode browser-fetch wrapper should fail bad URL"
+else
+  rc=$?
+  if [ "$rc" -eq 65 ] \
+    && grep -q '^adapter=opencode$' /tmp/opencode_browser_bad_url.out \
+    && grep -q '^reason=bad-url$' /tmp/opencode_browser_bad_url.out; then
+    ok "opencode browser-fetch wrapper reports bad URL"
+  else
+    bad "opencode browser-fetch wrapper should report bad URL"
+  fi
+fi
 if "$OPENCODE" pdf-extract >/tmp/opencode_pdf_extract.out 2>/tmp/opencode_pdf_extract.err \
   && grep -q '^adapter=opencode$' /tmp/opencode_pdf_extract.out \
   && grep -q '^tool_contract=pdf-extract$' /tmp/opencode_pdf_extract.out \
@@ -1116,10 +1160,12 @@ if "$OPENCODE" mode-info material/browser-fetch >/tmp/opencode_mode.out 2>/tmp/o
   && grep -q '^status=tool-contract$' /tmp/opencode_mode.out \
   && grep -q '^realization=portable-with-tool-contract$' /tmp/opencode_mode.out \
   && grep -q '^tool_contract=browser-fetch$' /tmp/opencode_mode.out \
+  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh browser-fetch --check <url>$' /tmp/opencode_mode.out \
+  && grep -q '^runtime_surface=adapter-owned-browser-fetch$' /tmp/opencode_mode.out \
   && grep -q '^fallback=satisfy-tool-contract-or-report-unavailable$' /tmp/opencode_mode.out; then
-  ok "opencode mode wrapper reports named material tool contract"
+  ok "opencode mode wrapper reports material browser-fetch contract surface"
 else
-  bad "opencode mode wrapper should report named material tool contract"
+  bad "opencode mode wrapper should report material browser-fetch contract surface"
 fi
 if "$OPENCODE" mode-info research/claim-verify >/tmp/opencode_mode.out 2>/tmp/opencode_mode.err \
   && grep -q '^status=tool-contract$' /tmp/opencode_mode.out \

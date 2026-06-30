@@ -178,6 +178,10 @@ rg '^family=fast$' /tmp/codex-role.txt
 codex_setting/bin/preflight.sh mode-info dev/backend >/tmp/codex-mode.txt
 rg '^adapter=codex$' /tmp/codex-mode.txt
 rg '^status=portable$' /tmp/codex-mode.txt
+codex_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/codex-browser-fetch-mode.txt
+rg '^tool_contract=browser-fetch$' /tmp/codex-browser-fetch-mode.txt
+rg '^runtime_surface=adapter-owned-browser-fetch$' /tmp/codex-browser-fetch-mode.txt
+test -x codex_setting/tools/material/browser-fetch.sh
 codex_setting/bin/preflight.sh mode-info material/data-script >/tmp/codex-data-script-mode.txt
 rg '^tool_contract=data-script$' /tmp/codex-data-script-mode.txt
 rg '^runtime_surface=adapter-owned-data-script$' /tmp/codex-data-script-mode.txt
@@ -261,6 +265,10 @@ rg '^family=fast$' /tmp/opencode-role.txt
 opencode_setting/bin/preflight.sh mode-info dev/backend >/tmp/opencode-mode.txt
 rg '^adapter=opencode$' /tmp/opencode-mode.txt
 rg '^status=portable$' /tmp/opencode-mode.txt
+opencode_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/opencode-browser-fetch-mode.txt
+rg '^tool_contract=browser-fetch$' /tmp/opencode-browser-fetch-mode.txt
+rg '^runtime_surface=adapter-owned-browser-fetch$' /tmp/opencode-browser-fetch-mode.txt
+test -x opencode_setting/tools/material/browser-fetch.sh
 opencode_setting/bin/preflight.sh mode-info material/data-script >/tmp/opencode-data-script-mode.txt
 rg '^tool_contract=data-script$' /tmp/opencode-data-script-mode.txt
 rg '^runtime_surface=adapter-owned-data-script$' /tmp/opencode-data-script-mode.txt

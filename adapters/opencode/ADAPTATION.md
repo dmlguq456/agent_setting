@@ -79,6 +79,12 @@ Design capabilities are a tool-contract exception: OpenCode has native Skill
 guidance for them, but must run the adapter visual harness before claiming full
 support. `capability-info` reports `status=tool-contract` for those entries.
 
+`roles/modes/material/browser-fetch.md` has an OpenCode-owned executable
+tool-contract surface:
+`adapters/opencode/bin/preflight.sh browser-fetch --check <url>` verifies
+rendered browser access through `adapters/opencode/tools/material/` and reports
+exit 69 when the local Playwright browser stack is unavailable.
+
 `roles/modes/material/data-script.md` is the first material mode with an
 OpenCode-owned executable tool-contract surface:
 `adapters/opencode/bin/preflight.sh data-script --check <script.py>` verifies
@@ -221,6 +227,7 @@ shared `tools/` directory. The current allowlist is:
 - `memory/mem.py` (OpenCode-owned launcher for the shared memory CLI)
 - `memory/apply-distill-actions.py`
 - `memory/recall.sh` (OpenCode-owned launcher for recall)
+- `material/browser-fetch.sh` (OpenCode-owned launcher for rendered web page extraction)
 - `material/data-script.sh` (OpenCode-owned launcher for Python data-analysis scripts)
 - `material/pdf-extract.sh` (OpenCode-owned launcher for local PDF text extraction)
 - `qa/verification-runner.sh` (OpenCode-owned launcher for explicit verification commands)

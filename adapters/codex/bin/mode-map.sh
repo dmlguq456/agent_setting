@@ -53,7 +53,11 @@ case "$family" in
     realization=portable-with-tool-contract
     fallback="satisfy-tool-contract-or-report-unavailable"
     case "$name" in
-      browser-fetch) tool_contract=browser-fetch ;;
+      browser-fetch)
+        tool_contract=browser-fetch
+        tool_contract_check="adapters/codex/bin/preflight.sh browser-fetch --check <url>"
+        runtime_surface=adapter-owned-browser-fetch
+        ;;
       data-script)
         tool_contract=data-script
         tool_contract_check="adapters/codex/bin/preflight.sh data-script --check <script.py>"
@@ -68,7 +72,9 @@ case "$family" in
       web-image-search) tool_contract=web-image-search ;;
       *) tool_contract=material-tooling ;;
     esac
-    if [ "$name" = "data-script" ]; then
+    if [ "$name" = "browser-fetch" ]; then
+      requirement="run the adapter-owned Playwright browser-fetch launcher for rendered web inputs, or report unavailable"
+    elif [ "$name" = "data-script" ]; then
       requirement="run the adapter-owned Python data-script launcher for generated analysis scripts, or report unavailable"
     elif [ "$name" = "pdf-extract" ]; then
       requirement="run the adapter-owned PDF extraction launcher for PDF inputs, or report unavailable"

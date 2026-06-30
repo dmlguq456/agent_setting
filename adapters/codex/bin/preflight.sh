@@ -21,6 +21,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh recall <prompt> [cwd]
        preflight.sh briefing [cwd]
        preflight.sh worklog [cwd]
+       preflight.sh browser-fetch [--check] <url> [--out <dir>]
        preflight.sh data-script [--check] <script.py> [-- args...]
        preflight.sh pdf-extract [--check] <file.pdf> [--out <file.txt>]
        preflight.sh verification-runner [--check] [--timeout seconds] -- <command> [args...]
@@ -96,6 +97,10 @@ case "$cmd" in
       WORKLOG_BOARD_APP="${WORKLOG_BOARD_APP:-}" \
       WORKLOG_BOARD_WT="${WORKLOG_BOARD_WT:-}" \
       "$ROOT/utilities/agent-worklog-state.sh" "$cwd"
+    ;;
+  browser-fetch)
+    shift
+    "$ROOT/adapters/codex/tools/material/browser-fetch.sh" "$@"
     ;;
   data-script)
     shift
