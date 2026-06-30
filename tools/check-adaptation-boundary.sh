@@ -977,6 +977,10 @@ check_codex_native_skill_projection() {
       || ! grep -Fq 'reported `fallback`' "$skill"; then
       fail_msg "$skill must instruct Codex to obey capability-info tool contract metadata"
     fi
+    if ! grep -Fq 'preflight.sh prompt-signal [cwd] [session-id]' "$skill" \
+      || ! grep -Fq 'preflight.sh mode [cwd] [session-id]' "$skill"; then
+      fail_msg "$skill must include both Codex prompt-signal and mode workflow guards"
+    fi
     if grep -Fq "metadata:" "$skill"; then
       fail_msg "$skill must use Codex Skill frontmatter only, without adapter metadata"
     fi
