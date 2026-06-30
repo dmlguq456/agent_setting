@@ -28,38 +28,72 @@ available=1
 status=default
 reason=""
 external_cmd_bin=""
+role_set=""
 
 case "$role" in
-  "fast reviewer"|"fast fact checker"|"fast fact-checker"|"fast writer"|"fast implementer"|"fast tool worker")
-    family=fast
+  "variable reviewer")
+    family=role-set
+    role_set="fast reviewer,deep reviewer,external adversary"
     ;;
-  "deep reviewer"|"deep maker"|"deep editor")
-    family=deep
+  "variable research reviewer")
+    family=role-set
+    role_set="fast fact checker,deep reviewer,external adversary"
     ;;
-  "external adversary")
-    family=external
-    if [ -z "${AGENT_MODEL_EXTERNAL:-}" ] && [ -z "${AGENT_EXTERNAL_CMD:-}" ]; then
-      available=0
-      status=unavailable
-      reason="set AGENT_MODEL_EXTERNAL or AGENT_EXTERNAL_CMD for an independent external adversary"
-    elif [ -n "${AGENT_EXTERNAL_CMD:-}" ]; then
-      external_cmd_bin=${AGENT_EXTERNAL_CMD%% *}
-      if ! command -v "$external_cmd_bin" >/dev/null 2>&1; then
-        available=0
-        status=unavailable
-        reason="AGENT_EXTERNAL_CMD not found: $external_cmd_bin"
-      fi
-    fi
+  "fast implementer by default")
+    family=role-set
+    role_set="fast implementer"
     ;;
-  "orchestrator"|"external adversary orchestrator")
-    family=orchestrator
+  "deep maker plus fast tool worker")
+    family=role-set
+    role_set="deep maker,fast tool worker"
     ;;
-  *)
-    echo "codex role-map: unknown portable role: $raw" >&2
-    usage >&2
-    exit 64
+  "deep maker plus verifier")
+    family=role-set
+    role_set="deep maker,fast reviewer"
+    ;;
+  "deep maker / fast reviewer by mode")
+    family=role-set
+    role_set="deep maker,fast reviewer"
+    ;;
+  "external adversary plus orchestrator")
+    family=role-set
+    role_set="external adversary,orchestrator"
     ;;
 esac
+
+if [ -z "$role_set" ]; then
+  case "$role" in
+    "fast reviewer"|"fast fact checker"|"fast fact-checker"|"fast writer"|"fast implementer"|"fast tool worker")
+      family=fast
+      ;;
+    "deep reviewer"|"deep maker"|"deep editor")
+      family=deep
+      ;;
+    "external adversary")
+      family=external
+      if [ -z "${AGENT_MODEL_EXTERNAL:-}" ] && [ -z "${AGENT_EXTERNAL_CMD:-}" ]; then
+        available=0
+        status=unavailable
+        reason="set AGENT_MODEL_EXTERNAL or AGENT_EXTERNAL_CMD for an independent external adversary"
+      elif [ -n "${AGENT_EXTERNAL_CMD:-}" ]; then
+        external_cmd_bin=${AGENT_EXTERNAL_CMD%% *}
+        if ! command -v "$external_cmd_bin" >/dev/null 2>&1; then
+          available=0
+          status=unavailable
+          reason="AGENT_EXTERNAL_CMD not found: $external_cmd_bin"
+        fi
+      fi
+      ;;
+    "orchestrator"|"external adversary orchestrator")
+      family=orchestrator
+      ;;
+    *)
+      echo "codex role-map: unknown portable role: $raw" >&2
+      usage >&2
+      exit 64
+      ;;
+  esac
+fi
 
 case "$family" in
   fast)
@@ -82,12 +116,20 @@ case "$family" in
     reasoning=${AGENT_REASONING_ORCHESTRATOR:-${AGENT_REASONING_FAST:-runtime-default}}
     [ "$model" = "codex-default" ] && status=default || status=configured
     ;;
+  role-set)
+    model=role-set
+    reasoning=select-by-mode
+    status=role-set
+    ;;
 esac
 
 printf 'role=%s\n' "$canonical"
 printf 'adapter=codex\n'
 printf 'source=roles/README.md\n'
 printf 'family=%s\n' "$family"
+if [ -n "$role_set" ]; then
+  printf 'role_set=%s\n' "$role_set"
+fi
 printf 'model=%s\n' "$model"
 printf 'reasoning=%s\n' "$reasoning"
 printf 'available=%s\n' "$available"

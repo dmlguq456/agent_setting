@@ -55,6 +55,25 @@ def mapper_role(profile: str, role_note: str) -> str:
     return profile_defaults.get(profile, "fast reviewer")
 
 
+def mapper_roles(profile: str, role_note: str) -> list[str]:
+    note = clean_role_note(role_note).lower()
+    if "external adversary plus orchestrator" in note:
+        return ["external adversary", "orchestrator"]
+    if "deep maker plus fast tool worker" in note:
+        return ["deep maker", "fast tool worker"]
+    if "deep maker plus verifier" in note:
+        return ["deep maker", "fast reviewer"]
+    if "deep maker / fast reviewer by mode" in note:
+        return ["deep maker", "fast reviewer"]
+    if "variable research reviewer" in note:
+        return ["fast fact checker", "deep reviewer", "external adversary"]
+    if "variable reviewer" in note:
+        return ["fast reviewer", "deep reviewer", "external adversary"]
+    if "fast implementer by default" in note:
+        return ["fast implementer"]
+    return [mapper_role(profile, role_note)]
+
+
 def role_rows(text: str) -> list[tuple[str, str, str]]:
     rows: list[tuple[str, str, str]] = []
     for raw in text.splitlines():
@@ -129,6 +148,8 @@ def boundary_section(profile: str) -> str:
 def render(profile: str, portable_role: str, responsibility: str) -> str:
     role_note = clean_role_note(portable_role)
     mapped_role = mapper_role(profile, role_note)
+    mapped_roles = mapper_roles(profile, role_note)
+    role_set = ", ".join(mapped_roles)
     description = compact(
         f"Codex-native custom agent for portable role profile {profile}. "
         f"Use when delegating work whose primary responsibility is: {responsibility}"
@@ -140,12 +161,14 @@ Source order:
 1. Read `roles/README.md` for the portable role contract.
 2. Read `roles/MODES.md` and task-relevant `roles/modes/` fragments.
 3. Run `adapters/codex/bin/preflight.sh role {mapped_role}` before assuming a concrete model or reasoning tier.
-4. Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before applying a mode persona.
-5. Run normal harness guards through `adapters/codex/bin/preflight.sh`.
+4. For mixed or variable role profiles, use the Codex role-map inputs listed below and select the concrete role by mode/QA policy.
+5. Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before applying a mode persona.
+6. Run normal harness guards through `adapters/codex/bin/preflight.sh`.
 
 Role profile: `{profile}`
 Portable model role note: `{role_note}`
 Codex role-map input: `{mapped_role}`
+Codex role-map inputs: `{role_set}`
 Primary responsibility: {responsibility}
 
 {boundary_section(profile)}

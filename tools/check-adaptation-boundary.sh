@@ -635,6 +635,15 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'source=roles/README.md' adapters/codex/bin/role-map.sh; then
     fail_msg "adapters/codex/bin/role-map.sh must report roles/README.md as the portable source"
   fi
+  if ! adapters/codex/bin/role-map.sh variable reviewer >/tmp/codex-role-set.out 2>/tmp/codex-role-set.err \
+    || ! grep -Fq 'family=role-set' /tmp/codex-role-set.out \
+    || ! grep -Fq 'role_set=fast reviewer,deep reviewer,external adversary' /tmp/codex-role-set.out; then
+    fail_msg "adapters/codex/bin/role-map.sh must report mixed reviewer role sets"
+  fi
+  if ! adapters/codex/bin/role-map.sh 'deep maker plus fast tool worker' >/tmp/codex-role-set-material.out 2>/tmp/codex-role-set-material.err \
+    || ! grep -Fq 'role_set=deep maker,fast tool worker' /tmp/codex-role-set-material.out; then
+    fail_msg "adapters/codex/bin/role-map.sh must report mixed maker/tool-worker role sets"
+  fi
   for var in AGENT_MODEL_FAST AGENT_MODEL_DEEP AGENT_MODEL_EXTERNAL AGENT_MODEL_ORCHESTRATOR AGENT_REASONING_FAST AGENT_REASONING_DEEP AGENT_REASONING_EXTERNAL AGENT_REASONING_ORCHESTRATOR AGENT_EXTERNAL_CMD; do
     if ! grep -Fq "$var" adapters/codex/README.md || ! grep -Fq "$var" adapters/codex/ADAPTATION.md; then
       fail_msg "Codex role mapping docs must expose $var"
@@ -1268,6 +1277,12 @@ PY
   if ! grep -Fq "Before every source or artifact edit, run \`adapters/codex/bin/preflight.sh write <file> [session-id]\`" "$dev_agent" \
     || ! grep -Fq "Codex cannot attach the same shell read/write hooks" "$dev_agent"; then
     fail_msg "$dev_agent must encode Codex write preflight and shell hook boundary"
+  fi
+  if ! grep -Fq 'Codex role-map inputs: `fast reviewer, deep reviewer, external adversary`' "$qa_agent" \
+    || ! grep -Fq 'Codex role-map inputs: `fast fact checker, deep reviewer, external adversary`' adapters/codex/agents/research-team.toml \
+    || ! grep -Fq 'Codex role-map inputs: `deep maker, fast tool worker`' adapters/codex/agents/material-team.toml \
+    || ! grep -Fq 'Codex role-map inputs: `deep maker, fast reviewer`' adapters/codex/agents/editorial-team.toml; then
+    fail_msg "Codex native agent projections must preserve mixed/variable role-map input sets"
   fi
   if ! grep -Fq 'structural plus install-path validation' adapters/codex/README.md \
     || ! grep -Fq '`codex debug agent` listing surface' adapters/codex/README.md \

@@ -159,8 +159,10 @@ choices to `adapters/codex/bin/preflight.sh role <portable-role>` and the
 runtime's parent session/config inheritance. The generated instructions also
 encode role-specific runtime boundaries such as QA read-only behavior,
 depth-one delegation, write preflight requirements, and external-adversary
-independence. Do not project Claude Agent files or OpenCode Agent files into
-Codex.
+independence. Mixed or variable role profiles include `Codex role-map inputs`
+so the concrete role can be selected by mode and QA policy instead of
+flattening the profile to one model role. Do not project Claude Agent files or
+OpenCode Agent files into Codex.
 
 Validation is currently structural plus install-path validation. The boundary
 guard verifies generated TOML fields, portable role references, role-map

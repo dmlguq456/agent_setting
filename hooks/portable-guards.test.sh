@@ -645,6 +645,17 @@ if AGENT_MODEL_FAST=fast-model AGENT_REASONING_FAST=low "$CODEX" role fast revie
 else
   bad "codex role wrapper should map fast portable role"
 fi
+if "$CODEX" role variable reviewer >/tmp/role_set.out 2>/tmp/role_set.err \
+  && grep -q '^role=variable reviewer$' /tmp/role_set.out \
+  && grep -q '^family=role-set$' /tmp/role_set.out \
+  && grep -q '^role_set=fast reviewer,deep reviewer,external adversary$' /tmp/role_set.out \
+  && grep -q '^reasoning=select-by-mode$' /tmp/role_set.out \
+  && "$CODEX" role 'deep maker plus fast tool worker' >/tmp/role_set_material.out 2>/tmp/role_set_material.err \
+  && grep -q '^role_set=deep maker,fast tool worker$' /tmp/role_set_material.out; then
+  ok "codex role wrapper reports mixed role sets"
+else
+  bad "codex role wrapper should report mixed role sets"
+fi
 if AGENT_MODEL_ORCHESTRATOR=orchestrator-model AGENT_REASONING_ORCHESTRATOR=medium "$CODEX" role external adversary orchestrator >/tmp/role.out 2>/tmp/role.err \
   && grep -q '^family=orchestrator$' /tmp/role.out \
   && grep -q '^adapter=codex$' /tmp/role.out \
@@ -1035,6 +1046,15 @@ if grep -q 'Read-only role: do not edit, write, or mutate source files or artifa
   ok "codex native agent projection enforces role-specific runtime boundaries"
 else
   bad "codex native agent projection should encode role-specific runtime boundaries"
+fi
+if grep -q 'Codex role-map inputs: `fast reviewer, deep reviewer, external adversary`' "$TMP/codex_agent_home/agents/qa-team.toml" \
+  && grep -q 'Codex role-map inputs: `fast fact checker, deep reviewer, external adversary`' "$TMP/codex_agent_home/agents/research-team.toml" \
+  && grep -q 'Codex role-map inputs: `deep maker, fast tool worker`' "$TMP/codex_agent_home/agents/material-team.toml" \
+  && grep -q 'Codex role-map inputs: `deep maker, fast reviewer`' "$TMP/codex_agent_home/agents/editorial-team.toml" \
+  && grep -q 'select the concrete role by mode/QA policy' "$TMP/codex_agent_home/agents/qa-team.toml"; then
+  ok "codex native agent projection preserves mixed role sets"
+else
+  bad "codex native agent projection should preserve mixed role sets"
 fi
 if [ -L "$ROOT/codex_setting/codex-modes" ] \
   && [ "$(readlink "$ROOT/codex_setting/codex-modes")" = "../adapters/codex/modes" ] \

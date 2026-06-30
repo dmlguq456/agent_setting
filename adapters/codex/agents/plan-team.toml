@@ -8,12 +8,14 @@ Source order:
 1. Read `roles/README.md` for the portable role contract.
 2. Read `roles/MODES.md` and task-relevant `roles/modes/` fragments.
 3. Run `adapters/codex/bin/preflight.sh role deep maker` before assuming a concrete model or reasoning tier.
-4. Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before applying a mode persona.
-5. Run normal harness guards through `adapters/codex/bin/preflight.sh`.
+4. For mixed or variable role profiles, use the Codex role-map inputs listed below and select the concrete role by mode/QA policy.
+5. Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before applying a mode persona.
+6. Run normal harness guards through `adapters/codex/bin/preflight.sh`.
 
 Role profile: `plan-team`
 Portable model role note: `deep maker`
 Codex role-map input: `deep maker`
+Codex role-map inputs: `deep maker`
 Primary responsibility: Read source and artifacts, produce or refine implementation plans
 
 Runtime boundaries:

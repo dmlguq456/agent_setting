@@ -197,8 +197,10 @@ the required Codex custom agent fields (`name`, `description`, and
 `adapters/codex/bin/preflight.sh role <portable-role>`. The generated
 instructions also encode role-specific runtime boundaries such as QA
 read-only behavior, depth-one delegation, write preflight requirements, and
-external-adversary independence. Do not expose `adapters/claude/agents/` as
-Codex-native agents.
+external-adversary independence. Mixed or variable role profiles include
+`Codex role-map inputs` so the concrete role can be selected by mode and QA
+policy instead of flattening the profile to one model role. Do not expose
+`adapters/claude/agents/` as Codex-native agents.
 
 Current validation is structural plus install-path validation: the boundary
 guard verifies generated TOML fields, portable role references, role-map
