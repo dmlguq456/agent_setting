@@ -48,7 +48,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/codex/bin/preflight.sh capability-info <capability>` to confirm Codex realization; use `adapters/codex/skills/<capability>/SKILL.md` as Codex-native guidance |
 | native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Command-like capability entrypoints use these native Skills/plugin surfaces and are verified with Codex discoverability (`codex debug prompt-input`) |
-| native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, `SessionEnd`/`Stop` memory sync/distill, `UserPromptSubmit` prompt signals and turn nudges, `PreToolUse` write guards, `PostToolUse` spec read markers, and `PostToolUse` design HTML checks; explicit preflight remains fallback |
+| native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, `SessionEnd`/`Stop` memory sync/distill, `UserPromptSubmit` prompt signals and turn nudges, `PermissionRequest` harness status snapshots, `PreToolUse` write guards, `PostToolUse` spec read markers, and `PostToolUse` design HTML checks; explicit preflight remains fallback |
 | role profile | Use `roles/README.md` for meaning; Codex custom agents are materialized under `adapters/codex/agents/*.toml` and still call `adapters/codex/bin/preflight.sh role <portable-role>` for concrete model/reasoning mapping |
 | role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; use the reported `native_mode_path` under `adapters/codex/modes/`; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no Codex-native runtime surface exists |
 | native mode surface | Mode guides are generated under `adapters/codex/modes/` from `roles/modes/`; design modes additionally require the Codex visual-harness tool contract before claiming rendered visual completion |
@@ -233,6 +233,8 @@ entrypoints are represented by Codex-native Skills and the installable
 default; opt out with `CODEX_DISTILL_ENABLE=0`). The `UserPromptSubmit` bridge extracts
 prompt text from top-level and nested message/content payloads for recall, and
 also runs the deterministic N-turn distill nudge under the same default. The
+`PermissionRequest` bridge reports the read-only harness status snapshot while
+Codex owns approval and sandbox decisions. The
 `PreToolUse` bridge runs before write/edit/multiedit/patch tools, including
 qualified `functions.apply_patch` payloads, and delegates
 artifact-order, git-state, and memory-write checks to

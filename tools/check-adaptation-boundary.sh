@@ -661,12 +661,12 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'codex_setting/codex-hooks' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex native hook projection"
   fi
-  for p in sessionstart-lifecycle.py sessionend-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
+  for p in sessionstart-lifecycle.py sessionend-lifecycle.py userprompt-lifecycle.py permissionrequest-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
     if [ ! -x "adapters/codex/hooks/$p" ]; then
       fail_msg "adapters/codex/hooks/$p is missing or not executable"
     fi
   done
-  for event in SessionStart SessionEnd Stop UserPromptSubmit PreToolUse PostToolUse; do
+  for event in SessionStart SessionEnd Stop UserPromptSubmit PermissionRequest PreToolUse PostToolUse; do
     if ! grep -Fq "\"$event\"" adapters/codex/hooks/hooks.json; then
       fail_msg "adapters/codex/hooks/hooks.json must register Codex $event"
     fi
@@ -1231,6 +1231,7 @@ check_codex_native_hook_projection() {
   session_bridge="$hook_dir/sessionstart-lifecycle.py"
   sessionend_bridge="$hook_dir/sessionend-lifecycle.py"
   prompt_bridge="$hook_dir/userprompt-lifecycle.py"
+  permission_bridge="$hook_dir/permissionrequest-lifecycle.py"
   pre_bridge="$hook_dir/pretooluse-write-guard.py"
   post_bridge="$hook_dir/posttooluse-design-check.py"
   read_bridge="$hook_dir/posttooluse-read-marker.py"
@@ -1240,7 +1241,7 @@ check_codex_native_hook_projection() {
     fail_msg "$hook_json is missing"
     return
   fi
-  for bridge in "$session_bridge" "$sessionend_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$read_bridge" "$launcher"; do
+  for bridge in "$session_bridge" "$sessionend_bridge" "$prompt_bridge" "$permission_bridge" "$pre_bridge" "$post_bridge" "$read_bridge" "$launcher"; do
     if [ ! -x "$bridge" ]; then
       fail_msg "$bridge must be executable"
     fi
@@ -1252,7 +1253,7 @@ check_codex_native_hook_projection() {
     fail_msg "$hook_json must be valid JSON"
     cat /tmp/codex-hooks-json.err
   fi
-  for script in sessionstart-lifecycle.py sessionend-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
+  for script in sessionstart-lifecycle.py sessionend-lifecycle.py userprompt-lifecycle.py permissionrequest-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
     if ! grep -Fq "run-hook.sh\\\" $script" "$hook_json"; then
       fail_msg "$hook_json must register $script through the Codex hook launcher"
     fi
@@ -1273,6 +1274,9 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"UserPromptSubmit"' "$hook_json" || ! grep -Fq 'userprompt-lifecycle.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex UserPromptSubmit lifecycle bridge"
   fi
+  if ! grep -Fq '"PermissionRequest"' "$hook_json" || ! grep -Fq 'permissionrequest-lifecycle.py' "$hook_json"; then
+    fail_msg "$hook_json must register the Codex PermissionRequest lifecycle bridge"
+  fi
   if ! grep -Fq '"PreToolUse"' "$hook_json" || ! grep -Fq 'pretooluse-write-guard.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex PreToolUse write guard"
   fi
@@ -1285,7 +1289,7 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"PostToolUse"' "$hook_json" || ! grep -Fq 'posttooluse-read-marker.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex PostToolUse read marker"
   fi
-  for bridge in "$session_bridge" "$sessionend_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$read_bridge"; do
+  for bridge in "$session_bridge" "$sessionend_bridge" "$prompt_bridge" "$permission_bridge" "$pre_bridge" "$post_bridge" "$read_bridge"; do
     if ! grep -Fq 'adapters" / "codex" / "bin" / "preflight.sh' "$bridge"; then
       fail_msg "$bridge must call the Codex preflight wrapper"
     fi
@@ -1320,6 +1324,9 @@ check_codex_native_hook_projection() {
   fi
   if ! grep -Fq '"session-end"' "$sessionend_bridge"; then
     fail_msg "$sessionend_bridge must call the Codex session-end preflight"
+  fi
+  if ! grep -Fq '"status"' "$permission_bridge"; then
+    fail_msg "$permission_bridge must call the Codex status preflight"
   fi
   if ! grep -Fq 'PreToolUse' adapters/codex/README.md \
     || ! grep -Fq 'PostToolUse' adapters/codex/README.md \

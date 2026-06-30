@@ -59,7 +59,7 @@ hook_trust_check() {
     return 0
   fi
   missing=""
-  for event in session_start user_prompt_submit pre_tool_use post_tool_use; do
+  for event in session_start user_prompt_submit permission_request pre_tool_use post_tool_use; do
     if ! grep -Fq "$hook_file:$event:" "$cfg"; then
       missing="$missing $event"
     fi

@@ -987,6 +987,7 @@ if python3 -m json.tool "$TMP/codex_hook_home/.codex/hooks.json" >/tmp/codex_hoo
   && grep -q 'sessionend-lifecycle.py' /tmp/codex_hook_json.out \
   && grep -q '"Stop"' /tmp/codex_hook_json.out \
   && grep -q 'userprompt-lifecycle.py' /tmp/codex_hook_json.out \
+  && grep -q 'permissionrequest-lifecycle.py' /tmp/codex_hook_json.out \
   && grep -q 'pretooluse-write-guard.py' /tmp/codex_hook_json.out \
   && grep -q 'posttooluse-read-marker.py' /tmp/codex_hook_json.out \
   && grep -q 'posttooluse-design-check.py' /tmp/codex_hook_json.out \
@@ -1071,6 +1072,15 @@ if "$CODEX" track "$TMP/flowproj" promptlifecyclesid >/tmp/codex_prompt_toggle.o
   ok "codex native hook projection bridges prompt lifecycle"
 else
   bad "codex native hook projection should bridge prompt lifecycle"
+fi
+if printf '{"context":{"cwd":"%s","session_id":"permissionsid"}}\n' "$TMP/flowproj" \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/permissionrequest-lifecycle.py" >/tmp/codex_permission_hook.out 2>/tmp/codex_permission_hook.err \
+  && grep -q '^runtime_surface=adapter-owned-harness-status$' /tmp/codex_permission_hook.out \
+  && grep -q "^cwd=$TMP/flowproj$" /tmp/codex_permission_hook.out \
+  && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_permission_hook.out /tmp/codex_permission_hook.err; then
+  ok "codex native hook projection bridges permission requests to harness status"
+else
+  bad "codex native hook projection should bridge permission requests to harness status"
 fi
 if (cd "$TMP/flowproj" && MEM_STORE="$TMP/codex_hook_mem" python3 "$ROOT/tools/memory/mem.py" add durable thread "지난번 결정론 우선 설계가 핵심이라고 배웠다" >/tmp/codex_nested_prompt_seed.out 2>/tmp/codex_nested_prompt_seed.err) \
   && printf '{"input":{"messages":[{"role":"user","content":[{"type":"text","text":"지난번 결정론 내용을 다시 확인"}]}]},"session_id":"nestedpromptsid","cwd":"%s"}\n' "$TMP/flowproj" \
