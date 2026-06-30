@@ -153,7 +153,8 @@ tool_contract=headless-dispatch
 tool_contract_check=adapters/opencode/bin/preflight.sh headless --check <worktree>
 command_template=opencode run --dir <worktree> --format json --agent <agent> <prompt>
 job_registry=<agent-home>/.dispatch/jobs.log
-liveness_surface=unsupported-until-opencode-transcript-mtime-mapping
+liveness_surface=opencode-sqlite-session-mtime
+liveness_check=adapters/opencode/bin/preflight.sh liveness [jobs.log]
 constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required
 claude_headless=unsupported
 fallback=manual-main-session-or-report-unavailable
@@ -177,15 +178,8 @@ EOF
     printf 'check=ok\nworktree=%s\n' "$worktree"
     ;;
   liveness)
-    cat <<'EOF'
-adapter=opencode
-runtime_surface=opencode-run-headless
-status=unsupported
-liveness_surface=unsupported-until-opencode-transcript-mtime-mapping
-reason=opencode-export-and-db-state-do-not-yet-provide-accepted-live-transcript-mtime-contract
-fallback=manual-main-session-or-report-unavailable
-EOF
-    exit 69
+    jobs=${2:-"${AGENT_HOME:-$ROOT}/.dispatch/jobs.log"}
+    AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/adapters/opencode/bin/dispatch-liveness.py" "$jobs"
     ;;
   mcp)
     shift

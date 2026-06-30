@@ -210,7 +210,7 @@ Harness-specific status signals need OpenCode-native realization:
 | role profiles | Read `roles/README.md`, then run `adapters/opencode/bin/preflight.sh role <portable-role>` to resolve OpenCode model/variant settings |
 | permission mapping | Run `adapters/opencode/bin/preflight.sh permissions` to inspect the OpenCode native permission contract and confirm Claude `allowedTools` is unsupported |
 | MCP mapping | Run `adapters/opencode/bin/preflight.sh mcp --check` to inspect OpenCode's native MCP CLI/config surface; do not copy Claude `settings.json` MCP registrations or project `tools/design-mcp` wholesale |
-| headless dispatch | Run `adapters/opencode/bin/preflight.sh headless --check <worktree>` before OpenCode `run` dispatch; it checks the worktree and command availability without launching, and reports transcript liveness as unsupported until OpenCode transcript mtime mapping is added |
+| headless dispatch | Run `adapters/opencode/bin/preflight.sh headless --check <worktree>` before OpenCode `run` dispatch; it checks the worktree and command availability without launching. While waiting on dispatched work, run `adapters/opencode/bin/preflight.sh liveness [jobs.log]` to match open jobs to OpenCode SQLite sessions by `session.directory` and latest session/message/part update time |
 | role modes | Read `roles/MODES.md`, then run `adapters/opencode/bin/preflight.sh mode-info <family/mode>`; treat adapter-coupled modes as unsupported unless wrappers exist, obey `fallback=reference-only`, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
 | hook invariants | Read `core/HOOKS.md`; OpenCode plugin hooks cover prompt lifecycle context, write/edit/patch guards, and design HTML post-write checks, while explicit preflight wrappers remain fallback for disabled/untrusted plugins and events not yet covered |
 | capabilities | Read `capabilities/README.md`, then run `adapters/opencode/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
@@ -281,10 +281,13 @@ entire shared `utilities/` directory. The current allowlist is:
 - `workflow-guard-hook.sh`
 - `workflow-toggle.sh`
 
-Do not project `dispatch-liveness.sh` until OpenCode has a documented
-transcript liveness surface equivalent to Claude session transcript mtimes. Do
-not project material/design helpers such as `extract_web_figures.py` until an
-OpenCode capability uses them directly.
+Do not project the shared `dispatch-liveness.sh`; it assumes Claude
+`projects/<encoded-cwd>/*.jsonl`. OpenCode uses the adapter-owned
+`adapters/opencode/bin/dispatch-liveness.py`, exposed as
+`adapters/opencode/bin/preflight.sh liveness [jobs.log]`, and maps open
+dispatch jobs to `~/.local/share/opencode/opencode.db` sessions by
+`session.directory`. Do not project material/design helpers such as
+`extract_web_figures.py` until an OpenCode capability uses them directly.
 
 ## Distillation Boundary
 

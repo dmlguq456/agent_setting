@@ -979,7 +979,7 @@ check_opencode_bin_wrappers() {
     fail_msg "opencode_setting/bin points to $target; expected ../adapters/opencode/bin"
   fi
 
-  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh sync-native-skills.py sync-native-agents.py sync-native-commands.py; do
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh dispatch-liveness.py distill-worker.sh sync-native-skills.py sync-native-agents.py sync-native-commands.py; do
     if [ ! -x "adapters/opencode/bin/$p" ]; then
       fail_msg "adapters/opencode/bin/$p is missing or not executable"
     fi
@@ -998,7 +998,8 @@ check_opencode_bin_wrappers() {
     fail_msg "adapters/opencode/bin/preflight.sh must report the OpenCode MCP contract without Claude settings MCP projection"
   fi
   if ! grep -Fq 'runtime_surface=opencode-run-headless' adapters/opencode/bin/preflight.sh \
-    || ! grep -Fq 'liveness_surface=unsupported-until-opencode-transcript-mtime-mapping' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'liveness_surface=opencode-sqlite-session-mtime' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'liveness_check=adapters/opencode/bin/preflight.sh liveness [jobs.log]' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'claude_headless=unsupported' adapters/opencode/bin/preflight.sh; then
     fail_msg "adapters/opencode/bin/preflight.sh must report the OpenCode headless dispatch contract without Claude headless assumptions"
   fi

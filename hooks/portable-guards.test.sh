@@ -995,7 +995,8 @@ if "$OPENCODE" headless >/tmp/opencode_headless.out 2>/tmp/opencode_headless.err
   && grep -q '^runtime_surface=opencode-run-headless$' /tmp/opencode_headless.out \
   && grep -q '^tool_contract=headless-dispatch$' /tmp/opencode_headless.out \
   && grep -q '^claude_headless=unsupported$' /tmp/opencode_headless.out \
-  && grep -q '^liveness_surface=unsupported-until-opencode-transcript-mtime-mapping$' /tmp/opencode_headless.out \
+  && grep -q '^liveness_surface=opencode-sqlite-session-mtime$' /tmp/opencode_headless.out \
+  && grep -q '^liveness_check=adapters/opencode/bin/preflight.sh liveness \[jobs.log\]$' /tmp/opencode_headless.out \
   && grep -q '^constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required$' /tmp/opencode_headless.out; then
   ok "opencode headless wrapper reports dispatch contract"
 else
@@ -1012,17 +1013,40 @@ else
     bad "opencode headless wrapper should report missing worktree"
   fi
 fi
-if "$OPENCODE" liveness "$TMP/codex-jobs.log" >/tmp/opencode_liveness.out 2>/tmp/opencode_liveness.err; then
-  bad "opencode liveness wrapper should report unsupported"
+OPENCODE_DB="$TMP/opencode.db" python3 - <<EOF
+import sqlite3, time
+con = sqlite3.connect("$TMP/opencode.db")
+now = int(time.time() * 1000)
+con.executescript("""
+CREATE TABLE session (id text PRIMARY KEY, project_id text NOT NULL, workspace_id text, parent_id text, slug text NOT NULL, directory text NOT NULL, path text, title text NOT NULL, version text NOT NULL, share_url text, summary_additions integer, summary_deletions integer, summary_files integer, summary_diffs text, metadata text, cost real DEFAULT 0 NOT NULL, tokens_input integer DEFAULT 0 NOT NULL, tokens_output integer DEFAULT 0 NOT NULL, tokens_reasoning integer DEFAULT 0 NOT NULL, tokens_cache_read integer DEFAULT 0 NOT NULL, tokens_cache_write integer DEFAULT 0 NOT NULL, revert text, permission text, agent text, model text, time_created integer NOT NULL, time_updated integer NOT NULL, time_compacting integer, time_archived integer);
+CREATE TABLE message (id text PRIMARY KEY, session_id text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL);
+CREATE TABLE part (id text PRIMARY KEY, message_id text NOT NULL, session_id text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL);
+CREATE TABLE session_message (id text PRIMARY KEY, session_id text NOT NULL, type text NOT NULL, seq integer NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL);
+CREATE TABLE session_input (id text PRIMARY KEY, session_id text NOT NULL, prompt text NOT NULL, delivery text NOT NULL, admitted_seq integer NOT NULL, promoted_seq integer, time_created integer NOT NULL);
+""")
+con.execute("INSERT INTO session (id, project_id, workspace_id, parent_id, slug, directory, path, title, version, time_created, time_updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ("ses_live", "proj", None, None, "live-open", "$TMP/flowproj", "", "title", "1", now - 1000, now - 1000))
+con.execute("INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)", ("msg_live", "ses_live", now - 900, now - 800, "{}"))
+con.commit()
+EOF
+printf '2026-06-30T00:00:00Z\topen\t%s\t%s\tlive-opencode\t-\n' "$TMP/repo" "$TMP/flowproj" > "$TMP/opencode-jobs.log"
+if OPENCODE_DB="$TMP/opencode.db" DISPATCH_STALE_MIN=60 "$OPENCODE" liveness "$TMP/opencode-jobs.log" >/tmp/opencode_liveness.out 2>/tmp/opencode_liveness.err \
+  && grep -q '^ALIVE    live-opencode ' /tmp/opencode_liveness.out \
+  && grep -q '^open 1 ; alive 1 ; suspect/dead 0$' /tmp/opencode_liveness.out; then
+  ok "opencode liveness wrapper matches worktree to session DB"
+else
+  bad "opencode liveness wrapper should match worktree to session DB"
+fi
+printf '2026-06-30T00:00:00Z\topen\t%s\t%s\tdead-opencode\t-\n' "$TMP/repo" "$TMP/missing-opencode-wt" > "$TMP/opencode-dead-jobs.log"
+if OPENCODE_DB="$TMP/opencode.db" "$OPENCODE" liveness "$TMP/opencode-dead-jobs.log" >/tmp/opencode_liveness_dead.out 2>/tmp/opencode_liveness_dead.err; then
+  bad "opencode liveness wrapper should fail dead jobs"
 else
   rc=$?
-  if [ "$rc" -eq 69 ] \
-    && grep -q '^adapter=opencode$' /tmp/opencode_liveness.out \
-    && grep -q '^status=unsupported$' /tmp/opencode_liveness.out \
-    && grep -q '^liveness_surface=unsupported-until-opencode-transcript-mtime-mapping$' /tmp/opencode_liveness.out; then
-    ok "opencode liveness wrapper reports unsupported transcript contract"
+  if [ "$rc" -eq 3 ] \
+    && grep -q '^DEAD     dead-opencode ' /tmp/opencode_liveness_dead.out \
+    && grep -q '^open 1 ; alive 0 ; suspect/dead 1$' /tmp/opencode_liveness_dead.out; then
+    ok "opencode liveness wrapper reports dead jobs"
   else
-    bad "opencode liveness wrapper should report unsupported transcript contract"
+    bad "opencode liveness wrapper should report dead jobs"
   fi
 fi
 if "$OPENCODE" mcp >/tmp/opencode_mcp.out 2>/tmp/opencode_mcp.err \

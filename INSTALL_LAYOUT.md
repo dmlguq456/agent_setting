@@ -296,7 +296,8 @@ rg '^runtime_surface=opencode-native-mcp$' /tmp/opencode-mcp.txt
 rg '^claude_settings_mcp=unsupported$' /tmp/opencode-mcp.txt
 opencode_setting/bin/preflight.sh headless >/tmp/opencode-headless.txt
 rg '^runtime_surface=opencode-run-headless$' /tmp/opencode-headless.txt
-rg '^liveness_surface=unsupported-until-opencode-transcript-mtime-mapping$' /tmp/opencode-headless.txt
+rg '^liveness_surface=opencode-sqlite-session-mtime$' /tmp/opencode-headless.txt
+opencode_setting/bin/preflight.sh liveness "$AGENT_HOME/.dispatch/jobs.log" >/tmp/opencode-liveness.txt
 opencode_setting/bin/preflight.sh mode-info dev/backend >/tmp/opencode-mode.txt
 rg '^adapter=opencode$' /tmp/opencode-mode.txt
 rg '^status=portable$' /tmp/opencode-mode.txt
