@@ -232,11 +232,13 @@ entrypoints are represented by Codex-native Skills and the installable
 `SessionEnd` bridge runs `mem sync` and automatic distillation (on by default;
 opt out with `CODEX_DISTILL_ENABLE=0`). The `UserPromptSubmit` bridge also runs
 the deterministic N-turn distill nudge under the same default. The
-`PreToolUse` bridge runs before write/edit/multiedit/patch tools and delegates
+`PreToolUse` bridge runs before write/edit/multiedit/patch tools, including
+qualified `functions.apply_patch` payloads, and delegates
 artifact-order, git-state, and memory-write checks to
 `adapters/codex/bin/preflight.sh write`. The `PostToolUse` Read bridge records
 actual `spec/prd.md` reads through `adapters/codex/bin/preflight.sh read`. The
-`PostToolUse` design bridge runs after write/edit/multiedit/patch tools and delegates
+`PostToolUse` design bridge runs after write/edit/multiedit/patch tools,
+including qualified `functions.apply_patch` payloads, and delegates
 design HTML saves to `adapters/codex/bin/preflight.sh design`.
 
 Expose it through `codex_setting/codex-hooks`, not through a plain `hooks/`

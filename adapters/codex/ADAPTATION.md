@@ -173,13 +173,15 @@ The `SessionStart` bridge calls `adapters/codex/bin/preflight.sh start` and
 calls `session-end` for `mem sync` plus the opt-in distill proposal worker. The
 `UserPromptSubmit` bridge calls `prompt-signal`, `mode`, `recall`, `briefing`,
 and `turn-nudge` for prompt-time workflow and memory signals. The write bridge registers
-`PreToolUse` for write/edit/multiedit/patch tools and calls
+`PreToolUse` for write/edit/multiedit/patch tools, including qualified
+`functions.apply_patch` payloads, and calls
 `adapters/codex/bin/preflight.sh write <file> <session-id>`, which runs
 the portable artifact-order, git-state, and memory-write guards. The read bridge
 registers `PostToolUse` for `Read` and calls `adapters/codex/bin/preflight.sh
 read <file> <session-id>` so actual `spec/prd.md` reads satisfy spec-backed
 capability gates. The design bridge registers `PostToolUse` for the same
-write/edit/multiedit/patch surface and calls `adapters/codex/bin/preflight.sh design
+write/edit/multiedit/patch surface, including qualified `functions.apply_patch`
+payloads, and calls `adapters/codex/bin/preflight.sh design
 <file>` for saved design HTML files.
 
 Do not project Claude `hooks/` or `settings.json` into Codex. Use

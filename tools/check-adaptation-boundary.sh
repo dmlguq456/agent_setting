@@ -1269,8 +1269,8 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"PreToolUse"' "$hook_json" || ! grep -Fq 'pretooluse-write-guard.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex PreToolUse write guard"
   fi
-  if ! grep -Fq 'Write|Edit|MultiEdit|apply_patch' "$hook_json"; then
-    fail_msg "$hook_json must attach Codex write hooks to Write/Edit/MultiEdit/apply_patch"
+  if ! grep -Fq 'Write|Edit|MultiEdit|apply_patch|functions\\.apply_patch' "$hook_json"; then
+    fail_msg "$hook_json must attach Codex write hooks to Write/Edit/MultiEdit/apply_patch/functions.apply_patch"
   fi
   if ! grep -Fq '"PostToolUse"' "$hook_json" || ! grep -Fq 'posttooluse-design-check.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex PostToolUse design check"
@@ -1292,6 +1292,14 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"MultiEdit", "multi_edit", "multiedit"' "$pre_bridge" \
     || ! grep -Fq '"MultiEdit", "multi_edit", "multiedit"' "$post_bridge"; then
     fail_msg "Codex write/design hook bridges must treat MultiEdit as a guarded write surface"
+  fi
+  if ! grep -Fq 'def is_patch_tool' "$pre_bridge" \
+    || ! grep -Fq 'functions.apply_patch' "$pre_bridge" \
+    || ! grep -Fq 'payload, "patch", "patchText", "patch_text", "input", "text"' "$pre_bridge" \
+    || ! grep -Fq 'def is_patch_tool' "$post_bridge" \
+    || ! grep -Fq 'functions.apply_patch' "$post_bridge" \
+    || ! grep -Fq 'payload, "patch", "patchText", "patch_text", "input", "text"' "$post_bridge"; then
+    fail_msg "Codex patch hook bridges must parse qualified apply_patch names and top-level patch text"
   fi
   if ! grep -Fq '"design"' "$post_bridge"; then
     fail_msg "$post_bridge must call the Codex design preflight"

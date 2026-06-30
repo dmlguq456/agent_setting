@@ -79,6 +79,16 @@ def patch_files(base: Path, text: str) -> list[str]:
     return files
 
 
+def is_patch_tool(name: str) -> bool:
+    return name in {"apply_patch", "ApplyPatch", "patch", "functions.apply_patch"} or name.endswith(".apply_patch")
+
+
+def patch_text(payload: dict[str, Any], args: dict[str, Any]) -> str:
+    return first_string(args, "patch", "patchText", "patch_text", "input") or first_string(
+        payload, "patch", "patchText", "patch_text", "input", "text"
+    )
+
+
 def target_files(payload: dict[str, Any]) -> list[str]:
     name = tool_name(payload)
     args = tool_input(payload)
@@ -88,9 +98,8 @@ def target_files(payload: dict[str, Any]) -> list[str]:
         file = normalize(base, first_string(args, "file_path", "filePath", "path", "file"))
         return [file] if file else []
 
-    if name in {"apply_patch", "ApplyPatch", "patch"}:
-        patch = first_string(args, "patch", "patchText", "patch_text", "input")
-        return patch_files(base, patch)
+    if is_patch_tool(name):
+        return patch_files(base, patch_text(payload, args))
 
     return []
 
