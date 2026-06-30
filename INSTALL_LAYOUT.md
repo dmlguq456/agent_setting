@@ -214,6 +214,10 @@ rg '^auto_run=unsupported$' /tmp/codex-loop-drill.txt
 codex_setting/bin/preflight.sh loop-info note >/tmp/codex-loop-note.txt
 rg '^status=unsupported$' /tmp/codex-loop-note.txt
 rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/codex-loop-note.txt
+if codex_setting/bin/preflight.sh distill-propose install-check "$PWD" >/tmp/codex-distill-propose.txt; then false; else test "$?" -eq 69; fi
+rg '^status=tool-contract$' /tmp/codex-distill-propose.txt
+rg '^reason=distill-proposal-disabled$' /tmp/codex-distill-propose.txt
+rg '^enable=CODEX_DISTILL_ENABLE=1$' /tmp/codex-distill-propose.txt
 codex_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/codex-browser-fetch-mode.txt
 rg '^tool_contract=browser-fetch$' /tmp/codex-browser-fetch-mode.txt
 rg '^runtime_surface=adapter-owned-browser-fetch$' /tmp/codex-browser-fetch-mode.txt
@@ -343,6 +347,10 @@ rg '^auto_run=unsupported$' /tmp/opencode-loop-drill.txt
 opencode_setting/bin/preflight.sh loop-info note >/tmp/opencode-loop-note.txt
 rg '^status=unsupported$' /tmp/opencode-loop-note.txt
 rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/opencode-loop-note.txt
+if opencode_setting/bin/preflight.sh distill-propose install-check "$PWD" >/tmp/opencode-distill-propose.txt; then false; else test "$?" -eq 69; fi
+rg '^status=tool-contract$' /tmp/opencode-distill-propose.txt
+rg '^reason=no-tools-worker-unverified$' /tmp/opencode-distill-propose.txt
+rg '^tool_contract=no-tools-distill-worker$' /tmp/opencode-distill-propose.txt
 opencode_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/opencode-browser-fetch-mode.txt
 rg '^tool_contract=browser-fetch$' /tmp/opencode-browser-fetch-mode.txt
 rg '^runtime_surface=adapter-owned-browser-fetch$' /tmp/opencode-browser-fetch-mode.txt

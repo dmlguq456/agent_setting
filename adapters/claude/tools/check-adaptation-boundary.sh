@@ -333,6 +333,12 @@ check_install_layout_codex_projection() {
     || ! grep -Fq "rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/codex-loop-note.txt" INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate Codex loop-info manual/unsupported contracts"
   fi
+  if ! grep -Fq 'codex_setting/bin/preflight.sh distill-propose install-check "$PWD" >/tmp/codex-distill-propose.txt' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^status=tool-contract$' /tmp/codex-distill-propose.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^reason=distill-proposal-disabled$' /tmp/codex-distill-propose.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^enable=CODEX_DISTILL_ENABLE=1$' /tmp/codex-distill-propose.txt" INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate Codex distill-propose disabled tool-contract"
+  fi
   if ! grep -Fq 'codex_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/codex-browser-fetch-mode.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^tool_contract=browser-fetch$' /tmp/codex-browser-fetch-mode.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^runtime_surface=adapter-owned-browser-fetch$' /tmp/codex-browser-fetch-mode.txt" INSTALL_LAYOUT.md \
@@ -444,6 +450,12 @@ check_install_layout_opencode_projection() {
     || ! grep -Fq "rg '^status=unsupported$' /tmp/opencode-loop-note.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/opencode-loop-note.txt" INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate OpenCode loop-info manual/unsupported contracts"
+  fi
+  if ! grep -Fq 'opencode_setting/bin/preflight.sh distill-propose install-check "$PWD" >/tmp/opencode-distill-propose.txt' INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^status=tool-contract$' /tmp/opencode-distill-propose.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^reason=no-tools-worker-unverified$' /tmp/opencode-distill-propose.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^tool_contract=no-tools-distill-worker$' /tmp/opencode-distill-propose.txt" INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate OpenCode distill-propose no-tools worker tool-contract"
   fi
   if ! grep -Fq 'opencode_setting/bin/preflight.sh mode-info material/browser-fetch >/tmp/opencode-browser-fetch-mode.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^tool_contract=browser-fetch$' /tmp/opencode-browser-fetch-mode.txt" INSTALL_LAYOUT.md \
@@ -2134,6 +2146,11 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'without executing Claude-coupled loop scripts' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'unsupported/manual-contract' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must describe Codex/OpenCode loop-info native support/fallback contracts"
+  fi
+  if ! grep -Fq 'Codex and OpenCode expose `preflight.sh distill-propose` as a no-tools worker tool-contract by default' core/ADAPTATION_INVENTORY.md \
+    || ! grep -Fq 'Codex exits 69 until `CODEX_DISTILL_ENABLE=1`' core/ADAPTATION_INVENTORY.md \
+    || ! grep -Fq 'OpenCode exits 69 until a native no-tools worker contract is verified' core/ADAPTATION_INVENTORY.md; then
+    fail_msg "core/ADAPTATION_INVENTORY.md must describe adapter distill-propose tool-contract boundaries"
   fi
   if ! grep -Fq 'Codex, leave `/statusline` as the native footer configuration surface' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'use `preflight.sh status` only for harness-specific signals' core/ADAPTATION_INVENTORY.md; then
