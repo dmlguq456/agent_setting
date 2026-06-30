@@ -1336,6 +1336,60 @@ if "$OPENCODE" read "$TMP/specproj/.agent_reports/spec/prd.md" opencodesid >/tmp
 else
   bad "opencode read+capability wrapper should pass spec gate"
 fi
+# ungrounded spec-governed capability is hard-denied (fresh session, no prd read)
+if "$OPENCODE" capability autopilot-code "$TMP/specproj" opencode-ungrounded >/tmp/opencode.out 2>/tmp/opencode.err; then
+  bad "opencode capability should deny autopilot-code without prd read"
+else
+  [ "$?" -eq 2 ] && ok "opencode capability denies spec capability without prd read" \
+    || bad "opencode capability wrong exit without prd read"
+fi
+# non-spec-governed capability passes even ungrounded
+if "$OPENCODE" capability autopilot-research "$TMP/specproj" opencode-ungrounded >/tmp/opencode.out 2>/tmp/opencode.err; then
+  ok "opencode capability allows non-spec-governed capability ungrounded"
+else
+  bad "opencode capability should allow non-spec-governed capability ungrounded"
+fi
+
+echo "== opencode plugin spec-gate bridge =="
+# Verify the JS plugin handlers (not just the preflight CLI) wire the gate:
+# command.execute.before throws (= blocks command) when ungrounded, and
+# tool.execute.after on a prd.md read drops the grounding marker so it then passes.
+PLUGIN="$ROOT/adapters/opencode/plugins/agent-harness-guards.js"
+BRIDGEPROJ="$TMP/bridgeproj"
+mkdir -p "$BRIDGEPROJ/.agent_reports/spec"
+printf 'prd\n' > "$BRIDGEPROJ/.agent_reports/spec/prd.md"
+cat > "$TMP/bridge.mjs" <<MJS
+import { AgentHarnessGuards } from 'file://$PLUGIN'
+const SPEC = "$BRIDGEPROJ"
+const PRD = SPEC + "/.agent_reports/spec/prd.md"
+const SID = "bridge-grounded", SID2 = "bridge-nonspec"
+const hooks = await AgentHarnessGuards({ directory: SPEC })
+async function throws(fn){ try { await fn(); return false } catch { return true } }
+const denied = await throws(() => hooks["command.execute.before"]({command:"autopilot-code",sessionID:SID,arguments:""},{parts:[]}))
+await hooks["tool.execute.after"]({tool:"read",sessionID:SID,callID:"1",args:{filePath:PRD}},{title:"",output:"",metadata:{}})
+const passed = !(await throws(() => hooks["command.execute.before"]({command:"autopilot-code",sessionID:SID,arguments:""},{parts:[]})))
+const nonspec = !(await throws(() => hooks["command.execute.before"]({command:"autopilot-research",sessionID:SID2,arguments:""},{parts:[]})))
+process.stdout.write(JSON.stringify({denied,passed,nonspec}))
+MJS
+if command -v node >/dev/null 2>&1; then
+  if node "$TMP/bridge.mjs" >/tmp/opencode_bridge.out 2>/tmp/opencode_bridge.err; then
+    grep -q '"denied":true' /tmp/opencode_bridge.out \
+      && ok "opencode plugin command.execute.before blocks ungrounded spec capability" \
+      || bad "opencode plugin should block ungrounded spec capability"
+    grep -q '"passed":true' /tmp/opencode_bridge.out \
+      && ok "opencode plugin tool.execute.after marks prd read so gate passes" \
+      || bad "opencode plugin read marker should let gate pass"
+    grep -q '"nonspec":true' /tmp/opencode_bridge.out \
+      && ok "opencode plugin command.execute.before ignores non-spec capability" \
+      || bad "opencode plugin should ignore non-spec capability"
+  else
+    bad "opencode plugin bridge harness failed to run"
+  fi
+  # marker lands under the resolved harness root (.spec-grounding is gitignored); clean test sids
+  rm -f "$ROOT/.spec-grounding/"*bridge-grounded* 2>/dev/null || true
+else
+  printf '  --  skip opencode plugin bridge (node unavailable)\n'
+fi
 
 echo "== opencode workflow signal CLI =="
 oldflag="$TMP/flowproj/.agent_reports/.untracked.oldopen"

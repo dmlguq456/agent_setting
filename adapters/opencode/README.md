@@ -54,7 +54,7 @@ guards and tool-contract reporting.
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/opencode/bin/preflight.sh capability-info <capability>` to confirm OpenCode realization; use `adapters/opencode/skills/<capability>/SKILL.md` as OpenCode-native guidance |
 | native skill/command/agent surface | Skills are materialized under `adapters/opencode/skills/`; agents are materialized under `adapters/opencode/agents/`; commands are materialized under `adapters/opencode/commands/`. Future output must be generated from portable capability/role sources and verified with OpenCode discoverability (`opencode debug skill`, `opencode debug agent`, `opencode debug config`) |
-| native plugin hook surface | `adapters/opencode/plugins/agent-harness-guards.js` uses `chat.message` and `experimental.chat.system.transform` for prompt lifecycle context, `tool.execute.before` to bridge write/edit/patch targets to `adapters/opencode/bin/preflight.sh write`, and `tool.execute.after` to bridge design HTML saves to `preflight.sh design`; explicit preflight remains fallback |
+| native plugin hook surface | `adapters/opencode/plugins/agent-harness-guards.js` uses `chat.message` and `experimental.chat.system.transform` for prompt lifecycle context, `tool.execute.before` to bridge write/edit/patch targets to `adapters/opencode/bin/preflight.sh write`, `command.execute.before` to bridge `autopilot-code`/`autopilot-spec` to `preflight.sh capability` (spec read gate, throws to abort), and `tool.execute.after` to bridge `prd.md` reads to `preflight.sh read` (grounding marker) and design HTML saves to `preflight.sh design`; explicit preflight remains fallback |
 | role profile | Use `roles/README.md` for meaning; use `adapters/opencode/agents/<role>/<role>.md` as OpenCode-native role guidance, and use Claude agent files only as compatibility references |
 | role mode | Run `adapters/opencode/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no OpenCode-native runtime surface exists |
 | adapter bootstrap | Add `adapters/opencode/AGENTS.md` to the `instructions` array in `opencode.json`/`opencode.jsonc`; then load `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
@@ -79,7 +79,7 @@ guards and tool-contract reporting.
 | research claim verify | Tool-contract check: `adapters/opencode/bin/preflight.sh claim-verify --check <claim>` verifies that `OPENCODE_CLAIM_VERIFY_CMD` or `AGENT_CLAIM_VERIFY_CMD` provides an external verification command before using `roles/modes/research/claim-verify.md`. Exit 69 means no provider is configured |
 | design post-write verification | `core/HOOKS.md` defines the invariant; run `adapters/opencode/bin/preflight.sh design <file>` after design HTML writes |
 | design visual harness | Tool-contract check: `adapters/opencode/bin/preflight.sh visual-harness <file.html>` runs the adapter-owned render/screenshot/console wrapper. Inspect the reported screenshot before claiming visual completion. Do not project Claude Design MCP files into OpenCode |
-| spec read gate | `core/HOOKS.md` defines marker/check semantics; run `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]` after actual reads and `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
+| spec read gate | `core/HOOKS.md` defines marker/check semantics; the plugin enforces it automatically (`command.execute.before` → `preflight.sh capability` throws to abort ungrounded `autopilot-code`/`autopilot-spec`; `tool.execute.after` on a `prd.md` read → `preflight.sh read` marker). Run both manually (`preflight.sh read <prd.md>` after reads, `preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities) when plugins are unavailable |
 | git safety gate | `core/HOOKS.md` defines the invariant; included in `adapters/opencode/bin/preflight.sh write <file> [session-id]` |
 | memory write guard | `core/HOOKS.md` defines the invariant; included in `adapters/opencode/bin/preflight.sh write <file> [session-id]` |
 | memory injection | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh memory [cwd]` once per session; run it manually when plugins are unavailable |
@@ -189,10 +189,13 @@ expose `adapters/claude/commands/` as OpenCode-native commands.
 ## Native Guard Plugin Projection
 
 `adapters/opencode/plugins/agent-harness-guards.js` contains an OpenCode-native
-JS plugin that runs adapter preflight guards around write/edit/patch tool
-execution. `tool.execute.before` delegates write safety checks to
-`preflight.sh write`; `tool.execute.after` delegates design HTML saves to
-`preflight.sh design`:
+JS plugin that runs adapter preflight guards around tool and command execution.
+`tool.execute.before` delegates write safety checks to `preflight.sh write`;
+`command.execute.before` enforces the spec read gate for `autopilot-code` /
+`autopilot-spec` via `preflight.sh capability` (throwing to abort an ungrounded
+command); `tool.execute.after` drops the spec read marker via `preflight.sh
+read` on a `prd.md` read and delegates design HTML saves to `preflight.sh
+design`:
 
 ```bash
 node --check adapters/opencode/plugins/agent-harness-guards.js

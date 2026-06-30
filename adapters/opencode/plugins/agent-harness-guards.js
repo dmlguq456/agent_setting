@@ -13,6 +13,9 @@ const isHarnessRoot = (candidate) =>
 const root = isHarnessRoot(envRoot) ? envRoot : pluginRoot
 const preflight = path.join(root, "adapters", "opencode", "bin", "preflight.sh")
 const designPattern = /(designs?\/|\/design\/|spec\/design|preview\.html$|slides?\.html$|03_components|scaffolds\/)/
+// Capabilities that mutate the spec blueprint — must pass the prd.md read gate in a
+// spec-backed cwd. Mirrors Claude's PreToolUse[Skill] spec-skill-gate scope.
+const specGovernedCapabilities = new Set(["autopilot-code", "autopilot-spec"])
 const seenLifecycle = new Set()
 const promptBySession = new Map()
 
@@ -109,6 +112,16 @@ export const AgentHarnessGuards = async (ctx) => ({
     if (prompt) appendContext(output, collectPreflight("recall", [prompt, cwd]))
     appendContext(output, collectPreflight("briefing", [cwd]))
   },
+  "command.execute.before": async (input, output) => {
+    // Spec read gate — deny autopilot-code/spec in a spec-backed cwd until prd.md
+    // was actually read this session. Mirrors Claude's PreToolUse[Skill] hard deny:
+    // preflight `capability` exits 2 when ungrounded, and runPreflight throws to
+    // abort the command before its prompt is expanded.
+    const name = (input.command || "").replace(/^\//, "")
+    if (specGovernedCapabilities.has(name)) {
+      runPreflight("capability", [name, baseDir(ctx), input.sessionID || "opencode-plugin"])
+    }
+  },
   "tool.execute.before": async (input, output) => {
     const files = targetFiles(ctx, input.tool || {}, output.args || {})
     for (const file of files) {
@@ -116,9 +129,18 @@ export const AgentHarnessGuards = async (ctx) => ({
     }
   },
   "tool.execute.after": async (input, output) => {
-    const files = targetFiles(ctx, input.tool || {}, input.args || output.args || {})
+    const args = input.args || output.args || {}
+    const files = targetFiles(ctx, input.tool || {}, args)
     for (const file of files) {
       if (isDesignHtml(file)) runPreflight("design", [file])
+    }
+    // Spec read-grounding marker — record an actual prd.md read so the capability
+    // gate above can pass. Mirrors Claude's PostToolUse[Read] spec-read-marker.
+    // Non-blocking: a marker failure must never abort a successful read.
+    const toolName = typeof input.tool === "string" ? input.tool : input.tool?.name || ""
+    if (toolName === "read") {
+      const readFile = normalizeFile(ctx, args.filePath || args.path || args.file)
+      if (readFile) collectPreflight("read", [readFile, input.sessionID || "opencode-plugin"])
     }
   },
 })
