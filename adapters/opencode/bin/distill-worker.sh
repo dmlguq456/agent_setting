@@ -23,15 +23,22 @@ no-tools worker contract is verified. Candidate: `opencode run --agent
 <restricted-agent>` with deny permissions, or a future plugin-mediated worker.
 Set OPENCODE_DISTILL_ENABLE=1 only when testing that contract.
 
-Verification finding (vs codex's OS-level read-only sandbox): `opencode run
---agent <agent>` with `tools:` off / `permission: deny` does block writes, but
-the boundary is framework-soft (the model declines, or repeatedly retries the
-denied tool) rather than an OS-enforced read-only filesystem. Under an
-adversarial "use any tool to write" prompt the run can retry-loop and hang
-instead of failing fast, which would stall an automatic session-end dispatch.
-This is below the codex bar for the D-14 trust boundary, so OpenCode auto-distill
-stays disabled; the preferred enablement path is a plugin-mediated worker that
-hard-strips tool execution, not `opencode run --agent`.
+Verification finding (vs codex's OS-level read-only sandbox):
+- Dispatch side IS available: the OpenCode SDK exposes a `session.idle` event,
+  so the plugin (adapters/opencode/plugins/agent-harness-guards.js, today only
+  hooking chat.message/tool.execute) could hook it to call a new preflight
+  `session-end` subcommand, mirroring codex.
+- Worker side is the blocker: `opencode run --agent <restricted>` is unreliable.
+  `permission: deny` does hard-block writes (forced-write probes never wrote),
+  but restricted tool-disable configs (e.g. `tools: { bash/task/patch: false }`)
+  hang the run even on a benign JSON-only prompt; an adversarial prompt retries a
+  denied tool and hangs too. A hang stalls/timeouts the session-end dispatch.
+So OpenCode auto-distill stays disabled. Enabling it is a scoped follow-up:
+(1) a plugin-mediated worker that hard-strips tool execution without the run
+--agent hang, (2) a JSON-Lines extractor over `opencode run --format json`
+events, (3) a preflight `session-end` subcommand with enable + recursion guards,
+(4) a `session.idle` plugin hook. Set OPENCODE_DISTILL_ENABLE=1 only when that
+contract is built and verified.
 EOF
 }
 
