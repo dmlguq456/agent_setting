@@ -312,6 +312,14 @@ if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-dispatch --ca
 else
   bad "codex dispatch wrapper should dry-run headless command without registry write"
 fi
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-default-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" >/tmp/codex_dispatch_default.out 2>/tmp/codex_dispatch_default.err \
+  && grep -Fxq "job_registry=$ROOT/.dispatch/jobs.log" /tmp/codex_dispatch_default.out \
+  && grep -Fxq "prompt_file=$ROOT/.dispatch/logs/codex-default-home.codex.prompt.txt" /tmp/codex_dispatch_default.out \
+  && [ ! -e "$AGENT_HOME/.dispatch/jobs.log" ]; then
+  ok "codex dispatch wrapper defaults to validated harness root"
+else
+  bad "codex dispatch wrapper should not trust invalid AGENT_HOME for default registry"
+fi
 if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-dispatch.log" >/tmp/codex_dispatch.out 2>/tmp/codex_dispatch.err \
   && grep -q '^status=register$' /tmp/codex_dispatch.out \
   && grep -q '^registered=1$' /tmp/codex_dispatch.out \
@@ -1092,6 +1100,14 @@ if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-dispatc
   ok "opencode dispatch wrapper dry-runs headless command without registry write"
 else
   bad "opencode dispatch wrapper should dry-run headless command without registry write"
+fi
+if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-default-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" >/tmp/opencode_dispatch_default.out 2>/tmp/opencode_dispatch_default.err \
+  && grep -Fxq "job_registry=$ROOT/.dispatch/jobs.log" /tmp/opencode_dispatch_default.out \
+  && grep -Fxq "prompt_file=$ROOT/.dispatch/logs/opencode-default-home.opencode.prompt.txt" /tmp/opencode_dispatch_default.out \
+  && [ ! -e "$AGENT_HOME/.dispatch/jobs.log" ]; then
+  ok "opencode dispatch wrapper defaults to validated harness root"
+else
+  bad "opencode dispatch wrapper should not trust invalid AGENT_HOME for default registry"
 fi
 if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/opencode-dispatch.log" >/tmp/opencode_dispatch.out 2>/tmp/opencode_dispatch.err \
   && grep -q '^status=register$' /tmp/opencode_dispatch.out \

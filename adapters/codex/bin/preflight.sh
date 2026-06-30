@@ -8,6 +8,16 @@ else
   ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
 fi
 
+agent_home() {
+  if [ -n "${AGENT_HOME:-}" ] && [ -f "$AGENT_HOME/core/CORE.md" ]; then
+    printf '%s\n' "$AGENT_HOME"
+  else
+    printf '%s\n' "$ROOT"
+  fi
+}
+
+AGENT_ROOT=$(agent_home)
+
 usage() {
   cat <<'EOF'
 usage: preflight.sh write <file> [session-id]
@@ -88,17 +98,17 @@ case "$cmd" in
     ;;
   memory)
     cwd=${2:-$PWD}
-    (cd "$cwd" && AGENT_HOME="${AGENT_HOME:-$ROOT}" python3 "$ROOT/tools/memory/mem.py" inject)
+    (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/mem.py" inject)
     ;;
   recall)
     [ "$#" -ge 2 ] || { echo "codex preflight: recall requires prompt text" >&2; exit 64; }
     prompt=$2
     cwd=${3:-$PWD}
-    AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/hooks/mem-recall-inject.sh" --prompt "$prompt" --cwd "$cwd" --format text
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/hooks/mem-recall-inject.sh" --prompt "$prompt" --cwd "$cwd" --format text
     ;;
   briefing)
     cwd=${2:-$PWD}
-    AGENT_HOME="${AGENT_HOME:-$ROOT}" bash "$ROOT/hooks/mem-briefing-inject.sh" --cwd "$cwd" --format text
+    AGENT_HOME="$AGENT_ROOT" bash "$ROOT/hooks/mem-briefing-inject.sh" --cwd "$cwd" --format text
     ;;
   status)
     cwd=${2:-$PWD}
@@ -179,16 +189,16 @@ EOF
     printf 'check=ok\nworktree=%s\n' "$worktree"
     ;;
   liveness)
-    jobs=${2:-"${AGENT_HOME:-$ROOT}/.dispatch/jobs.log"}
-    AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$jobs"
+    jobs=${2:-"$AGENT_ROOT/.dispatch/jobs.log"}
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$jobs"
     ;;
   harvest)
     shift
-    AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/adapters/codex/bin/dispatch-harvest.py" "$@"
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/dispatch-harvest.py" "$@"
     ;;
   dispatch)
     shift
-    AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/adapters/codex/bin/dispatch-headless.py" "$@"
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/dispatch-headless.py" "$@"
     ;;
   mcp)
     shift
@@ -233,7 +243,7 @@ EOF
     ;;
   worklog)
     cwd=${2:-$PWD}
-    AGENT_HOME="${AGENT_HOME:-$ROOT}" \
+    AGENT_HOME="$AGENT_ROOT" \
       AGENT_NOTES_ROOT="${AGENT_NOTES_ROOT:-${WORKLOG_NOTES_ROOT:-}}" \
       WORKLOG_BOARD_APP="${WORKLOG_BOARD_APP:-}" \
       WORKLOG_BOARD_WT="${WORKLOG_BOARD_WT:-}" \
@@ -270,7 +280,7 @@ EOF
   design)
     [ "$#" -ge 2 ] || { echo "codex preflight: design requires a file path" >&2; exit 64; }
     file=$2
-    AGENT_HOME="$ROOT" bash "$ROOT/hooks/design-postwrite.sh" --file "$file"
+    AGENT_HOME="$AGENT_ROOT" bash "$ROOT/hooks/design-postwrite.sh" --file "$file"
     ;;
   visual-harness)
     if [ "$#" -ge 2 ]; then
@@ -292,7 +302,7 @@ EOF
   distill-delta)
     [ "$#" -ge 2 ] || { echo "codex preflight: distill-delta requires a session id" >&2; exit 64; }
     sid=$2
-    AGENT_HOME="${AGENT_HOME:-$ROOT}" python3 "$ROOT/tools/memory/mem.py" distill "$sid" --source codex
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/mem.py" distill "$sid" --source codex
     ;;
   distill-propose)
     [ "$#" -ge 2 ] || { echo "codex preflight: distill-propose requires a session id" >&2; exit 64; }
