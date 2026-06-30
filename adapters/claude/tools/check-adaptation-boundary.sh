@@ -530,6 +530,12 @@ check_codex_bin_wrappers() {
     || grep -Fq 'AGENT_HOME="${AGENT_HOME:-$ROOT}"' adapters/codex/bin/distill-worker.sh; then
     fail_msg "adapters/codex/bin/distill-worker.sh must validate AGENT_HOME before using it as the harness root"
   fi
+  if ! grep -Fq 'reason=distill-proposal-disabled' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'tool_contract=no-tools-distill-worker' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'enable=CODEX_DISTILL_ENABLE=1' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'CODEX_DISTILL_APPLY=1+CODEX_DISTILL_CONTRACT_ACCEPTED=1' adapters/codex/bin/preflight.sh; then
+    fail_msg "adapters/codex/bin/preflight.sh must report disabled distill-propose as an explicit no-tools worker tool-contract"
+  fi
   if ! grep -Fq 'runtime_surface=codex-native-approval-sandbox' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'claude_allowed_tools=unsupported' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must report the Codex permission/sandbox contract without Claude allowedTools"

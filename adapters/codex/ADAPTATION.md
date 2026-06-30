@@ -247,7 +247,7 @@ Harness-specific status signals still need Codex-native realization:
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |
 | oncall briefing | Run `adapters/codex/bin/preflight.sh briefing [cwd]` before prompt handling on the dedicated agent desk |
 | loop guidance | Run `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill>` before following loop guides; Codex reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts |
-| memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`; opt-in proposal generation exists via `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]`; automatic memory mutation remains disabled until Codex has an accepted no-tools/action contract |
+| memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`; `distill-propose` reports `status=tool-contract` and exits 69 until `CODEX_DISTILL_ENABLE=1` is explicit. Enabled proposal generation uses a constrained Codex exec worker; automatic memory mutation remains disabled until Codex has an accepted no-tools/action contract |
 | worklog state signal | Run `adapters/codex/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before Codex updates notes or diagnoses board state |
 | role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role>` to resolve Codex model/reasoning-effort settings |
 | permission mapping | Run `adapters/codex/bin/preflight.sh permissions` to inspect the Codex approval/sandbox contract and confirm Claude `allowedTools` is unsupported |
@@ -342,8 +342,9 @@ but no explicit equivalent to a no-tools worker flag. The Codex adapter therefor
 separates the pipeline:
 
 1. `distill-delta` reads Codex JSONL session logs and emits transcript delta text.
-2. `distill-propose` is disabled by default. With `CODEX_DISTILL_ENABLE=1`, it
-   invokes `codex exec --sandbox read-only --ask-for-approval never --ephemeral
+2. User-facing `preflight.sh distill-propose` reports `status=tool-contract`
+   and exits 69 while disabled. With `CODEX_DISTILL_ENABLE=1`, it invokes
+   `codex exec --sandbox read-only --ask-for-approval never --ephemeral
    --ignore-rules` and writes a JSON-lines proposal.
 3. The proposal is parsed by the shared `tools/memory/apply-distill-actions.py`
    applier only when both `CODEX_DISTILL_APPLY=1` and

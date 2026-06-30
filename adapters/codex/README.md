@@ -87,7 +87,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | model role mapping | `adapters/codex/bin/preflight.sh role <portable-role>` resolves portable model roles through Codex adapter environment variables |
 | mode mapping | `adapters/codex/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for Codex; tool-contract and unsupported adapter-coupled modes include machine-readable `tool_contract`, optional `tool_contract_check`, `runtime_surface`, and `fallback` fields |
 | memory distill delta | Codex session transcript extraction is available through `adapters/codex/bin/preflight.sh distill-delta <session-id>` |
-| memory distill proposal | `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]` runs a constrained Codex exec proposal worker; it mutates memory only when both `CODEX_DISTILL_APPLY=1` and `CODEX_DISTILL_CONTRACT_ACCEPTED=1` are explicit |
+| memory distill proposal | `adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]` reports `status=tool-contract` and exits 69 until `CODEX_DISTILL_ENABLE=1` is explicit. Enabled runs use a constrained Codex exec proposal worker; memory mutates only when both `CODEX_DISTILL_APPLY=1` and `CODEX_DISTILL_CONTRACT_ACCEPTED=1` are explicit |
 | memory store | `tools/memory/mem.py` is runtime-neutral; detached distillation worker execution remains adapter-specific |
 
 ## Tool Projection

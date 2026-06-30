@@ -517,6 +517,22 @@ EOF
     [ "$#" -ge 2 ] || { echo "codex preflight: distill-propose requires a session id" >&2; exit 64; }
     sid=$2
     cwd=${3:-$PWD}
+    if [ "${CODEX_DISTILL_ENABLE:-0}" != "1" ]; then
+      cat <<EOF
+adapter=codex
+status=tool-contract
+tool_contract=no-tools-distill-worker
+runtime_surface=codex-exec-constrained-proposal
+reason=distill-proposal-disabled
+delta_surface=adapters/codex/bin/preflight.sh distill-delta <session-id>
+enable=CODEX_DISTILL_ENABLE=1
+apply_gate=CODEX_DISTILL_APPLY=1+CODEX_DISTILL_CONTRACT_ACCEPTED=1
+fallback=inspect-distill-delta-or-enable-after-contract-review
+cwd=$cwd
+session_id=$sid
+EOF
+      exit 69
+    fi
     AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd"
     ;;
   role)

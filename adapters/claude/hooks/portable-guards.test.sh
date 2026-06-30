@@ -1081,6 +1081,18 @@ if "$CODEX_DISTILL" codexsid "$TMP/flowproj" >/tmp/codex_distill.out 2>/tmp/code
 else
   bad "codex distill worker should no-op unless enabled"
 fi
+if "$CODEX" distill-propose codexsid "$TMP/flowproj" >/tmp/codex_distill.out 2>/tmp/codex_distill.err; then
+  bad "codex distill-propose should report tool-contract until explicitly enabled"
+else
+  if [ "$?" -eq 69 ] \
+    && grep -q '^status=tool-contract$' /tmp/codex_distill.out \
+    && grep -q '^reason=distill-proposal-disabled$' /tmp/codex_distill.out \
+    && grep -q '^enable=CODEX_DISTILL_ENABLE=1$' /tmp/codex_distill.out; then
+    ok "codex distill-propose reports disabled tool-contract by default"
+  else
+    bad "codex distill-propose should exit 69 with disabled tool-contract"
+  fi
+fi
 mkdir -p "$TMP/stubbin"
 cat > "$TMP/stubbin/codex" <<'EOF'
 #!/usr/bin/env sh
