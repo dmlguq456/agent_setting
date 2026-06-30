@@ -696,6 +696,21 @@ if python3 -m json.tool "$TMP/codex_hook_home/.codex/hooks.json" >/tmp/codex_hoo
 else
   bad "codex native hook projection should bridge clean writes to preflight"
 fi
+codex_hook_command=$(python3 - "$TMP/codex_hook_home/.codex/hooks.json" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+print(data["hooks"]["PreToolUse"][0]["hooks"][0]["command"])
+PY
+)
+if printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/f" "$TMP/repo" \
+  | AGENT_HOME="$ROOT" HOME="$TMP/no-codex-home" sh -c "$codex_hook_command" >/tmp/codex_hook_agent_home.out 2>/tmp/codex_hook_agent_home.err \
+  && [ ! -s /tmp/codex_hook_agent_home.out ]; then
+  ok "codex hook command resolves harness through AGENT_HOME"
+else
+  bad "codex hook command should resolve harness through AGENT_HOME"
+fi
 if printf '{"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo" \
   | MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionstart-lifecycle.py" >/tmp/codex_session_hook.out 2>/tmp/codex_session_hook.err \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_session_hook.out /tmp/codex_session_hook.err; then

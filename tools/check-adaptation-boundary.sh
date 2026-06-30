@@ -924,8 +924,8 @@ check_codex_native_hook_projection() {
     cat /tmp/codex-hooks-json.err
   fi
   for script in sessionstart-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py; do
-    if ! grep -Fq "\$HOME/.codex/agent-harness/adapters/codex/hooks/$script" "$hook_json"; then
-      fail_msg "$hook_json must register $script through the installed Codex agent-harness pointer"
+    if ! grep -Fq "\${AGENT_HOME:-\$HOME/.codex/agent-harness}/adapters/codex/hooks/$script" "$hook_json"; then
+      fail_msg "$hook_json must register $script through AGENT_HOME with Codex agent-harness fallback"
     fi
   done
   if ! grep -Fq '"SessionStart"' "$hook_json" || ! grep -Fq 'sessionstart-lifecycle.py' "$hook_json"; then

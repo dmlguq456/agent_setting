@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.codex/agent-harness/adapters/codex/hooks/sessionstart-lifecycle.py\"",
+            "command": "python3 \"${AGENT_HOME:-$HOME/.codex/agent-harness}/adapters/codex/hooks/sessionstart-lifecycle.py\"",
             "timeout": 30,
             "statusMessage": "Preparing agent harness lifecycle context"
           }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py\"",
+            "command": "python3 \"${AGENT_HOME:-$HOME/.codex/agent-harness}/adapters/codex/hooks/userprompt-lifecycle.py\"",
             "timeout": 30,
             "statusMessage": "Checking agent harness prompt signals"
           }
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py\"",
+            "command": "python3 \"${AGENT_HOME:-$HOME/.codex/agent-harness}/adapters/codex/hooks/pretooluse-write-guard.py\"",
             "timeout": 30,
             "statusMessage": "Checking agent harness write guards"
           }
@@ -43,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.codex/agent-harness/adapters/codex/hooks/posttooluse-design-check.py\"",
+            "command": "python3 \"${AGENT_HOME:-$HOME/.codex/agent-harness}/adapters/codex/hooks/posttooluse-design-check.py\"",
             "timeout": 30,
             "statusMessage": "Checking design HTML after write"
           }
