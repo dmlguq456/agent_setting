@@ -138,6 +138,32 @@ def check_runtime_projection(worktree: str) -> int:
     return result.returncode
 
 
+def validate_preflight(kind: str, command: str, value: str, reason: str) -> int:
+    result = subprocess.run(
+        [str(ROOT / "adapters" / "codex" / "bin" / "preflight.sh"), command, value],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode == 0:
+        return 0
+    rc = fail(reason, result.returncode or 64, **{kind: value})
+    if result.stdout:
+        print(result.stdout, end="")
+    if result.stderr:
+        print(result.stderr, end="", file=sys.stderr)
+    return rc
+
+
+def validate_dispatch_inputs(args: argparse.Namespace) -> int:
+    rc = validate_preflight("capability", "capability-info", args.capability, "invalid-dispatch-capability")
+    if rc != 0:
+        return rc
+    return validate_preflight("mode", "mode-info", args.mode, "invalid-dispatch-mode")
+
+
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
     action = "start" if args.start else "register" if args.register else "dry-run"
@@ -146,6 +172,9 @@ def main(argv: list[str]) -> int:
         return fail("worktree-not-found", 66, worktree=args.worktree)
     if subprocess.run(["git", "-C", args.worktree, "rev-parse", "--is-inside-work-tree"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
         return fail("not-a-git-worktree", 65, worktree=args.worktree)
+    rc = validate_dispatch_inputs(args)
+    if rc != 0:
+        return rc
     if args.start and shutil.which("codex") is None:
         return fail("codex-command-unavailable", 69, worktree=args.worktree)
     if args.start:

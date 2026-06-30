@@ -318,6 +318,7 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex_headless.out \
   && grep -q '^liveness_check=adapters/codex/bin/preflight.sh liveness \[jobs.log\]$' /tmp/codex_headless.out \
   && grep -q '^dispatch_prompt_contract=codex-harness-autopilot-prompt$' /tmp/codex_headless.out \
+  && grep -q '^dispatch_input_validation=capability-info,mode-info$' /tmp/codex_headless.out \
   && grep -q '^constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required$' /tmp/codex_headless.out; then
   ok "codex headless wrapper reports dispatch contract"
 else
@@ -359,6 +360,32 @@ if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-dispatch --ca
   ok "codex dispatch wrapper dry-runs headless command without registry write"
 else
   bad "codex dispatch wrapper should dry-run headless command without registry write"
+fi
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-bad-cap --capability nope-capability --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-bad-cap.log" >/tmp/codex_bad_cap.out 2>/tmp/codex_bad_cap.err; then
+  bad "codex dispatch wrapper should fail invalid capability"
+else
+  rc=$?
+  if [ "$rc" -eq 64 ] \
+    && grep -q '^reason=invalid-dispatch-capability$' /tmp/codex_bad_cap.out \
+    && grep -q '^capability=nope-capability$' /tmp/codex_bad_cap.out \
+    && [ ! -e "$TMP/codex-bad-cap.log" ]; then
+    ok "codex dispatch wrapper validates capability before registry write"
+  else
+    bad "codex dispatch wrapper should validate capability before registry write"
+  fi
+fi
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-bad-mode --capability autopilot-code --mode dev/nope --qa standard --prompt-text "do work" --jobs "$TMP/codex-bad-mode.log" >/tmp/codex_bad_mode.out 2>/tmp/codex_bad_mode.err; then
+  bad "codex dispatch wrapper should fail invalid mode"
+else
+  rc=$?
+  if [ "$rc" -eq 64 ] \
+    && grep -q '^reason=invalid-dispatch-mode$' /tmp/codex_bad_mode.out \
+    && grep -q '^mode=dev/nope$' /tmp/codex_bad_mode.out \
+    && [ ! -e "$TMP/codex-bad-mode.log" ]; then
+    ok "codex dispatch wrapper validates mode before registry write"
+  else
+    bad "codex dispatch wrapper should validate mode before registry write"
+  fi
 fi
 if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-default-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" >/tmp/codex_dispatch_default.out 2>/tmp/codex_dispatch_default.err \
   && grep -Fxq "job_registry=$ROOT/.dispatch/jobs.log" /tmp/codex_dispatch_default.out \
