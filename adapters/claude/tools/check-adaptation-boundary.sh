@@ -265,6 +265,9 @@ check_install_layout_codex_projection() {
   if ! grep -Fq 'ln -sfn "$AGENT_HOME" "$HOME/.codex/agent-harness"' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must install the Codex hook command agent-harness pointer"
   fi
+  if ! grep -Fq "non_claude_runtime_re='adapters/claude|claude_setting|settings\\.json|statusline\\.sh|CLAUDE\\.md|track-toggle\\.sh|agent-modes|allowedTools|/\\.claude/'" INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must define a shared non-Claude runtime output deny regex"
+  fi
 
   for p in settings.json commands skills agents statusline.sh hooks; do
     if ! grep -Fq "$p" INSTALL_LAYOUT.md; then
@@ -290,8 +293,13 @@ check_install_layout_codex_projection() {
     || ! grep -Fq '"UserPromptSubmit"' INSTALL_LAYOUT.md \
     || ! grep -Fq '"PreToolUse"' INSTALL_LAYOUT.md \
     || ! grep -Fq '"PostToolUse"' INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg 'adapters/claude/hooks|statusline.sh|settings.json'" INSTALL_LAYOUT.md; then
+    || ! grep -Fq '! rg "$non_claude_runtime_re" "$tmp_codex_hook_home/hooks.json"' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate Codex native hook projection installation"
+  fi
+  if ! grep -Fq '! rg "$non_claude_runtime_re" /tmp/codex-skills.json' INSTALL_LAYOUT.md \
+    || ! grep -Fq '! rg "$non_claude_runtime_re" /tmp/codex-plugin-skills.json' INSTALL_LAYOUT.md \
+    || ! grep -Fq '! rg "$non_claude_runtime_re" "$tmp_codex_agent_home/agents"' INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate Codex runtime projection outputs with the shared non-Claude deny regex"
   fi
   if ! grep -Fq 'codex_setting/bin/preflight.sh capability-info autopilot-code >/tmp/codex-capability.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^native_skill_path=adapters/codex/skills/autopilot-code/SKILL.md$' /tmp/codex-capability.txt" INSTALL_LAYOUT.md \
@@ -386,8 +394,14 @@ check_install_layout_opencode_projection() {
   fi
   if ! grep -Fq 'opencode_setting/opencode-plugins/agent-harness-guards.js' INSTALL_LAYOUT.md \
     || ! grep -Fq 'opencode debug config >/tmp/opencode-plugin.json' INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg 'agent-harness-guards.js' /tmp/opencode-plugin.json" INSTALL_LAYOUT.md; then
+    || ! grep -Fq "rg 'agent-harness-guards.js' /tmp/opencode-plugin.json" INSTALL_LAYOUT.md \
+    || ! grep -Fq '! rg "$non_claude_runtime_re" /tmp/opencode-plugin.json' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate the OpenCode native plugin projection"
+  fi
+  if ! grep -Fq '! rg "$non_claude_runtime_re" /tmp/opencode-agent.json' INSTALL_LAYOUT.md \
+    || ! grep -Fq '! rg "$non_claude_runtime_re" /tmp/opencode-command.json' INSTALL_LAYOUT.md \
+    || ! grep -Fq '! rg "$non_claude_runtime_re" /tmp/opencode-skills.json' INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must validate OpenCode runtime projection outputs with the shared non-Claude deny regex"
   fi
   if ! grep -Fq 'opencode_setting/bin/preflight.sh capability-info autopilot-code >/tmp/opencode-capability.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^native_skill_path=adapters/opencode/skills/autopilot-code/SKILL.md$' /tmp/opencode-capability.txt" INSTALL_LAYOUT.md \

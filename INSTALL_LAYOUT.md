@@ -165,6 +165,7 @@ sessions, or snapshots into the repo.
 
 ```bash
 cd "$HOME/agent_setting"
+non_claude_runtime_re='adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|track-toggle\.sh|agent-modes|allowedTools|/\.claude/'
 python3 tools/build-manifest.py --check
 python3 -m py_compile tools/build-manifest.py tools/memory/mem.py
 sh utilities/agent-home.sh
@@ -244,12 +245,12 @@ tmp_codex_home=$(mktemp -d)
 mkdir -p "$tmp_codex_home/skills"
 for d in "$PWD/codex_setting/codex-skills"/*; do ln -s "$d" "$tmp_codex_home/skills/$(basename "$d")"; done
 CODEX_HOME="$tmp_codex_home" codex debug prompt-input autopilot-code >/tmp/codex-skills.json
-! rg '/.claude/skills' /tmp/codex-skills.json
+! rg "$non_claude_runtime_re" /tmp/codex-skills.json
 tmp_codex_plugin_home=$(mktemp -d)
 CODEX_HOME="$tmp_codex_plugin_home" codex plugin marketplace add "$PWD/codex_setting/codex-plugin-marketplace" --json >/tmp/codex-plugin-marketplace.json
 CODEX_HOME="$tmp_codex_plugin_home" codex plugin add agent-harness-codex@agent-harness --json >/tmp/codex-plugin-add.json
 CODEX_HOME="$tmp_codex_plugin_home" codex debug prompt-input autopilot-code >/tmp/codex-plugin-skills.json
-! rg 'adapters/claude/skills' /tmp/codex-plugin-skills.json
+! rg "$non_claude_runtime_re" /tmp/codex-plugin-skills.json
 tmp_codex_hook_home=$(mktemp -d)
 mkdir -p "$tmp_codex_hook_home"
 ln -s "$PWD/codex_setting/codex-hooks/hooks.json" "$tmp_codex_hook_home/hooks.json"
@@ -271,7 +272,7 @@ assert "userprompt-lifecycle.py" in body, hook_json
 assert "pretooluse-write-guard.py" in body, hook_json
 assert "posttooluse-design-check.py" in body, hook_json
 PY
-! rg 'adapters/claude/hooks|statusline.sh|settings.json' "$tmp_codex_hook_home/hooks.json"
+! rg "$non_claude_runtime_re" "$tmp_codex_hook_home/hooks.json"
 tmp_codex_agent_home=$(mktemp -d)
 mkdir -p "$tmp_codex_agent_home/agents"
 for f in "$PWD/codex_setting/codex-agents"/*.toml; do ln -s "$f" "$tmp_codex_agent_home/agents/$(basename "$f")"; done
@@ -288,7 +289,7 @@ for agent in agents:
     assert re.search(r'^description = "[^"]+"$', body, re.MULTILINE), agent
     assert re.search(r'^developer_instructions = """\n.+\n"""$', body, re.MULTILINE | re.DOTALL), agent
 PY
-! rg 'adapters/claude/agents' "$tmp_codex_agent_home/agents"
+! rg "$non_claude_runtime_re" "$tmp_codex_agent_home/agents"
 opencode_setting/bin/preflight.sh capability-info autopilot-code >/tmp/opencode-capability.txt
 rg '^native_skill_path=adapters/opencode/skills/autopilot-code/SKILL.md$' /tmp/opencode-capability.txt
 rg '^native_command_path=adapters/opencode/commands/autopilot-code.md$' /tmp/opencode-capability.txt
@@ -369,18 +370,18 @@ for f in "$PWD/opencode_setting/opencode-agents"/*/*.md; do ln -s "$f" "$tmp_ope
 for f in "$PWD/opencode_setting/opencode-commands"/*.md; do ln -s "$f" "$tmp_opencode_home/.config/opencode/command/$(basename "$f")"; done
 HOME="$tmp_opencode_home" XDG_CONFIG_HOME="$tmp_opencode_home/.config" XDG_DATA_HOME="$tmp_opencode_home/.local/share" opencode debug agent plan-team --pure >/tmp/opencode-agent.json
 HOME="$tmp_opencode_home" XDG_CONFIG_HOME="$tmp_opencode_home/.config" XDG_DATA_HOME="$tmp_opencode_home/.local/share" opencode debug config --pure >/tmp/opencode-command.json
-! rg '/.claude/' /tmp/opencode-agent.json
-! rg '/.claude/' /tmp/opencode-command.json
+! rg "$non_claude_runtime_re" /tmp/opencode-agent.json
+! rg "$non_claude_runtime_re" /tmp/opencode-command.json
 tmp_opencode_plugin_project=$(mktemp -d)
 mkdir -p "$tmp_opencode_plugin_project/.opencode/plugins"
 ln -s "$PWD/opencode_setting/opencode-plugins/agent-harness-guards.js" "$tmp_opencode_plugin_project/.opencode/plugins/agent-harness-guards.js"
 (cd "$tmp_opencode_plugin_project" && HOME="$tmp_opencode_home" XDG_CONFIG_HOME="$tmp_opencode_home/.config" XDG_DATA_HOME="$tmp_opencode_home/.local/share" opencode debug config >/tmp/opencode-plugin.json)
 rg 'agent-harness-guards.js' /tmp/opencode-plugin.json
-! rg 'adapters/claude/hooks' /tmp/opencode-plugin.json
+! rg "$non_claude_runtime_re" /tmp/opencode-plugin.json
 OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 \
 OPENCODE_CONFIG_CONTENT="{\"skills\":{\"paths\":[\"$PWD/opencode_setting/opencode-skills\"]}}" \
   opencode debug skill --pure >/tmp/opencode-skills.json
-! rg '"location": ".*/\.claude/skills' /tmp/opencode-skills.json
+! rg "$non_claude_runtime_re" /tmp/opencode-skills.json
 ```
 
 Do not run drill automatically during migration; it invokes headless runtime sessions and can spend tokens. Run a targeted drill only after the symlink projection is confirmed.
