@@ -183,7 +183,8 @@ rg '^runtime_surface=codex-native-mcp$' /tmp/codex-mcp.txt
 rg '^claude_settings_mcp=unsupported$' /tmp/codex-mcp.txt
 codex_setting/bin/preflight.sh headless >/tmp/codex-headless.txt
 rg '^runtime_surface=codex-exec-headless$' /tmp/codex-headless.txt
-rg '^liveness_surface=unsupported-until-codex-transcript-mtime-mapping$' /tmp/codex-headless.txt
+rg '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex-headless.txt
+codex_setting/bin/preflight.sh liveness "$AGENT_HOME/.dispatch/jobs.log" >/tmp/codex-liveness.txt
 codex_setting/bin/preflight.sh mode-info dev/backend >/tmp/codex-mode.txt
 rg '^adapter=codex$' /tmp/codex-mode.txt
 rg '^status=portable$' /tmp/codex-mode.txt

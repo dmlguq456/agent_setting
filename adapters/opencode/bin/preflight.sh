@@ -23,6 +23,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
        preflight.sh headless [--check] <worktree>
+       preflight.sh liveness [jobs.log]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
        preflight.sh claim-verify [--check] <claim> [--out <file>]
@@ -174,6 +175,17 @@ EOF
       exit 65
     fi
     printf 'check=ok\nworktree=%s\n' "$worktree"
+    ;;
+  liveness)
+    cat <<'EOF'
+adapter=opencode
+runtime_surface=opencode-run-headless
+status=unsupported
+liveness_surface=unsupported-until-opencode-transcript-mtime-mapping
+reason=opencode-export-and-db-state-do-not-yet-provide-accepted-live-transcript-mtime-contract
+fallback=manual-main-session-or-report-unavailable
+EOF
+    exit 69
     ;;
   mcp)
     shift

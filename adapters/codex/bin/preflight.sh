@@ -23,6 +23,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
        preflight.sh headless [--check] <worktree>
+       preflight.sh liveness [jobs.log]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
        preflight.sh claim-verify [--check] <claim> [--out <file>]
@@ -150,7 +151,8 @@ tool_contract=headless-dispatch
 tool_contract_check=adapters/codex/bin/preflight.sh headless --check <worktree>
 command_template=codex exec --cd <worktree> --sandbox workspace-write --ask-for-approval never --json -
 job_registry=<agent-home>/.dispatch/jobs.log
-liveness_surface=unsupported-until-codex-transcript-mtime-mapping
+liveness_surface=codex-session-jsonl-mtime
+liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]
 constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required
 claude_headless=unsupported
 fallback=manual-main-session-or-report-unavailable
@@ -172,6 +174,10 @@ EOF
       exit 65
     fi
     printf 'check=ok\nworktree=%s\n' "$worktree"
+    ;;
+  liveness)
+    jobs=${2:-"${AGENT_HOME:-$ROOT}/.dispatch/jobs.log"}
+    AGENT_HOME="${AGENT_HOME:-$ROOT}" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$jobs"
     ;;
   mcp)
     shift

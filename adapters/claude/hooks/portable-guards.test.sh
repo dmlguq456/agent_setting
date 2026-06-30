@@ -275,7 +275,8 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^runtime_surface=codex-exec-headless$' /tmp/codex_headless.out \
   && grep -q '^tool_contract=headless-dispatch$' /tmp/codex_headless.out \
   && grep -q '^claude_headless=unsupported$' /tmp/codex_headless.out \
-  && grep -q '^liveness_surface=unsupported-until-codex-transcript-mtime-mapping$' /tmp/codex_headless.out \
+  && grep -q '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex_headless.out \
+  && grep -q '^liveness_check=adapters/codex/bin/preflight.sh liveness \[jobs.log\]$' /tmp/codex_headless.out \
   && grep -q '^constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required$' /tmp/codex_headless.out; then
   ok "codex headless wrapper reports dispatch contract"
 else
@@ -290,6 +291,32 @@ else
     ok "codex headless wrapper reports missing worktree"
   else
     bad "codex headless wrapper should report missing worktree"
+  fi
+fi
+mkdir -p "$TMP/codex-live-sessions/2026/06/30"
+cat > "$TMP/codex-live-sessions/2026/06/30/rollout-live-codex.jsonl" <<EOF
+{"timestamp":"2026-06-30T00:00:00.000Z","type":"session_meta","payload":{"id":"live-codex","cwd":"$TMP/flowproj"}}
+EOF
+touch "$TMP/codex-live-sessions/2026/06/30/rollout-live-codex.jsonl"
+printf '2026-06-30T00:00:00Z\topen\t%s\t%s\tlive-codex\t-\n' "$TMP/repo" "$TMP/flowproj" > "$TMP/codex-jobs.log"
+if CODEX_SESSIONS="$TMP/codex-live-sessions" DISPATCH_STALE_MIN=60 "$CODEX" liveness "$TMP/codex-jobs.log" >/tmp/codex_liveness.out 2>/tmp/codex_liveness.err \
+  && grep -q '^ALIVE    live-codex ' /tmp/codex_liveness.out \
+  && grep -q '^open 1 ; alive 1 ; suspect/dead 0$' /tmp/codex_liveness.out; then
+  ok "codex liveness wrapper matches worktree to session transcript"
+else
+  bad "codex liveness wrapper should match worktree to session transcript"
+fi
+printf '2026-06-30T00:00:00Z\topen\t%s\t%s\tdead-codex\t-\n' "$TMP/repo" "$TMP/missing-live-wt" > "$TMP/codex-dead-jobs.log"
+if CODEX_SESSIONS="$TMP/codex-live-sessions" "$CODEX" liveness "$TMP/codex-dead-jobs.log" >/tmp/codex_liveness_dead.out 2>/tmp/codex_liveness_dead.err; then
+  bad "codex liveness wrapper should fail dead jobs"
+else
+  rc=$?
+  if [ "$rc" -eq 3 ] \
+    && grep -q '^DEAD     dead-codex ' /tmp/codex_liveness_dead.out \
+    && grep -q '^open 1 ; alive 0 ; suspect/dead 1$' /tmp/codex_liveness_dead.out; then
+    ok "codex liveness wrapper reports dead jobs"
+  else
+    bad "codex liveness wrapper should report dead jobs"
   fi
 fi
 if "$CODEX" mcp >/tmp/codex_mcp.out 2>/tmp/codex_mcp.err \
@@ -983,6 +1010,19 @@ else
     ok "opencode headless wrapper reports missing worktree"
   else
     bad "opencode headless wrapper should report missing worktree"
+  fi
+fi
+if "$OPENCODE" liveness "$TMP/codex-jobs.log" >/tmp/opencode_liveness.out 2>/tmp/opencode_liveness.err; then
+  bad "opencode liveness wrapper should report unsupported"
+else
+  rc=$?
+  if [ "$rc" -eq 69 ] \
+    && grep -q '^adapter=opencode$' /tmp/opencode_liveness.out \
+    && grep -q '^status=unsupported$' /tmp/opencode_liveness.out \
+    && grep -q '^liveness_surface=unsupported-until-opencode-transcript-mtime-mapping$' /tmp/opencode_liveness.out; then
+    ok "opencode liveness wrapper reports unsupported transcript contract"
+  else
+    bad "opencode liveness wrapper should report unsupported transcript contract"
   fi
 fi
 if "$OPENCODE" mcp >/tmp/opencode_mcp.out 2>/tmp/opencode_mcp.err \

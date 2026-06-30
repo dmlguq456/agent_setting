@@ -368,7 +368,7 @@ check_codex_bin_wrappers() {
     fail_msg "codex_setting/bin points to $target; expected ../adapters/codex/bin"
   fi
 
-  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh sync-native-skills.py sync-native-plugin.py sync-native-agents.py; do
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh dispatch-liveness.py distill-worker.sh sync-native-skills.py sync-native-plugin.py sync-native-agents.py; do
     if [ ! -x "adapters/codex/bin/$p" ]; then
       fail_msg "adapters/codex/bin/$p is missing or not executable"
     fi
@@ -387,7 +387,8 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/bin/preflight.sh must report the Codex MCP contract without Claude settings MCP projection"
   fi
   if ! grep -Fq 'runtime_surface=codex-exec-headless' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'liveness_surface=unsupported-until-codex-transcript-mtime-mapping' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'liveness_surface=codex-session-jsonl-mtime' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'claude_headless=unsupported' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must report the Codex headless dispatch contract without Claude headless assumptions"
   fi
