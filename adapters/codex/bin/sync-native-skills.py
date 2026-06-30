@@ -48,6 +48,42 @@ def markdown_section(text: str, heading: str) -> str:
     return compact("\n".join(body))
 
 
+def markdown_section_raw(text: str, heading: str) -> str:
+    marker = f"## {heading}"
+    lines = text.splitlines()
+    start = None
+    for index, line in enumerate(lines):
+        if line.strip() == marker:
+            start = index
+            break
+    if start is None:
+        return ""
+    body: list[str] = []
+    for line in lines[start:]:
+        if body and line.startswith("## "):
+            break
+        body.append(line)
+    return "\n".join(body).strip()
+
+
+def portable_sections(source: str) -> str:
+    sections: list[str] = []
+    for heading in (
+        "Artifact Ownership",
+        "Role Requirements",
+        "Guard Requirements",
+        "Portable Procedure",
+        "Routing Boundary",
+        "Mode-Specific Semantics",
+    ):
+        section = markdown_section_raw(source, heading)
+        if section:
+            sections.append(section)
+    if not sections:
+        return ""
+    return "\n\n## Projected Portable Details\n\n" + "\n\n".join(sections) + "\n"
+
+
 def render(capability_file: Path) -> tuple[str, str]:
     slug = capability_file.stem
     source = capability_file.read_text(encoding="utf-8")
@@ -64,6 +100,7 @@ def render(capability_file: Path) -> tuple[str, str]:
 
 - Invocation semantics: {invocation_semantics}
 """
+    projected_details = portable_sections(source)
     meaning_sentence = meaning if meaning.endswith((".", "!", "?")) else f"{meaning}."
     description = compact(
         f"Use when the user requests {identifier}: {meaning_sentence} "
@@ -102,6 +139,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Argument shape: `{argument_shape}`
 - Portable meaning: {meaning}
 {portable_contract}
+{projected_details}
 
 ## Required Guards
 

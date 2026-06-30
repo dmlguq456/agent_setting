@@ -879,6 +879,18 @@ if "$CODEX" verification-runner --timeout 5 -- python3 -c 'print("verify-ok")' >
 else
   bad "codex verification runner should execute explicit commands"
 fi
+if grep -q '## Projected Portable Details' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'spec-significance' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'pipeline_summary.md' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'code-plan' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'code-execute' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'code-test' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'code-report' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'spec-significance' "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md"; then
+  ok "codex native skill projection carries portable autopilot-code procedure"
+else
+  bad "codex native skill projection should carry portable autopilot-code procedure"
+fi
 if command -v codex >/dev/null 2>&1; then
   mkdir -p "$TMP/codex_bootstrap_home"
   ln -s "$ROOT/codex_setting/AGENTS.md" "$TMP/codex_bootstrap_home/AGENTS.md"

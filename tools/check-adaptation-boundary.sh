@@ -1013,10 +1013,24 @@ check_codex_native_skill_projection() {
       || ! grep -Fq 'preflight.sh mode [cwd] [session-id]' "$skill"; then
       fail_msg "$skill must include both Codex prompt-signal and mode workflow guards"
     fi
+    if ! grep -Fq '## Projected Portable Details' "$skill" \
+      || ! grep -Fq '## Artifact Ownership' "$skill" \
+      || ! grep -Fq '## Role Requirements' "$skill" \
+      || ! grep -Fq '## Guard Requirements' "$skill"; then
+      fail_msg "$skill must project portable artifact, role, and guard details"
+    fi
     if grep -Fq "metadata:" "$skill"; then
       fail_msg "$skill must use Codex Skill frontmatter only, without adapter metadata"
     fi
   done
+  if ! grep -Fq 'spec-significance' adapters/codex/skills/autopilot-code/SKILL.md \
+    || ! grep -Fq 'pipeline_summary.md' adapters/codex/skills/autopilot-code/SKILL.md \
+    || ! grep -Fq 'code-plan' adapters/codex/skills/autopilot-code/SKILL.md \
+    || ! grep -Fq 'code-execute' adapters/codex/skills/autopilot-code/SKILL.md \
+    || ! grep -Fq 'code-test' adapters/codex/skills/autopilot-code/SKILL.md \
+    || ! grep -Fq 'code-report' adapters/codex/skills/autopilot-code/SKILL.md; then
+    fail_msg "Codex autopilot-code skill projection must include portable procedure details"
+  fi
   for skill in adapters/codex/skills/*/SKILL.md; do
     [ -f "$skill" ] || continue
     slug=$(basename "$(dirname "$skill")")
@@ -1077,6 +1091,11 @@ check_codex_native_plugin_projection() {
   fi
   if ! grep -Fq "_RUNLOG" "$plugin_root/skills/autopilot-lab/SKILL.md"; then
     fail_msg "Codex native plugin skill projection must preserve the autopilot-lab _RUNLOG invariant"
+  fi
+  if ! grep -Fq 'spec-significance' "$plugin_root/skills/autopilot-code/SKILL.md" \
+    || ! grep -Fq 'pipeline_summary.md' "$plugin_root/skills/autopilot-code/SKILL.md" \
+    || ! grep -Fq 'code-plan' "$plugin_root/skills/autopilot-code/SKILL.md"; then
+    fail_msg "Codex native plugin autopilot-code skill must include portable procedure details"
   fi
   for skill in "$plugin_root"/skills/*/SKILL.md; do
     [ -f "$skill" ] || continue

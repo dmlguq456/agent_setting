@@ -35,6 +35,28 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Invocation semantics: Component / visual asset creation — invokes 디자인팀 maker mode. Produces shadcn/Tailwind components (ui), composed full-screen pages (webapp), slide visual guides (slide), SVG icons (icon), or mermaid/direct-SVG/excalidraw diagrams (diagram). Every output is rendered and visually self-verified (render → Read → fix loop), and can be emitted as a self-contained single-file HTML preview artifact (--artifact standalone). Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
+
+## Projected Portable Details
+
+## Artifact Ownership
+
+Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not. Capability-specific output placement follows `core/CONVENTIONS.md` section 5 until this spec is expanded with a stricter per-capability artifact map.
+
+## Role Requirements
+
+Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concrete model names, subagent frontmatter, and runtime-specific tool lists belong in adapter files.
+
+## Guard Requirements
+
+Adapters must preserve the portable invariants relevant to this capability:
+
+- resolve artifact root through `utilities/artifact-root.sh` or equivalent logic;
+- enforce git/worktree safety before edits;
+- enforce artifact ordering before new durable artifacts;
+- enforce spec-read gating when this capability changes spec-backed code or specs;
+- use DB memory paths, not runtime-native memory files.
+
+
 ## Required Guards
 
 - Before edits: `adapters/codex/bin/preflight.sh write <file> [session-id]`

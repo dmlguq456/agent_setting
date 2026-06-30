@@ -35,6 +35,28 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Invocation semantics: Unified design pipeline — orchestrates design-init → design-refs → design-tokens → design-components → design-review → design-handoff. For visual artifacts across UI/UX, slides, diagrams, icons, logos. Can be invoked standalone or auto-delegated from autopilot-spec Phase 2. Distinct from autopilot-draft (text-only documents) — autopilot-design handles visual deliverables. A runtime design harness must render every output for visual self-verification (preview/screenshot/console/eval_js/view_image where supported), run a separate-context verifier gate for console/layout breakage, apply shared design rules and reusable scaffold assets, and support PDF/PPTX/single-HTML bundle export where available. Outputs can be a self-contained single-file HTML preview viewable without any project stack. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
+
+## Projected Portable Details
+
+## Artifact Ownership
+
+Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not. Capability-specific output placement follows `core/CONVENTIONS.md` section 5 until this spec is expanded with a stricter per-capability artifact map.
+
+## Role Requirements
+
+Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concrete model names, subagent frontmatter, and runtime-specific tool lists belong in adapter files.
+
+## Guard Requirements
+
+Adapters must preserve the portable invariants relevant to this capability:
+
+- resolve artifact root through `utilities/artifact-root.sh` or equivalent logic;
+- enforce git/worktree safety before edits;
+- enforce artifact ordering before new durable artifacts;
+- enforce spec-read gating when this capability changes spec-backed code or specs;
+- use DB memory paths, not runtime-native memory files.
+
+
 ## Required Guards
 
 - Before edits: `adapters/codex/bin/preflight.sh write <file> [session-id]`
