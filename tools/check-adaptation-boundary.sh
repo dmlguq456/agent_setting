@@ -254,7 +254,7 @@ check_codex_bin_wrappers() {
     fail_msg "codex_setting/bin points to $target; expected ../adapters/codex/bin"
   fi
 
-  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh sync-native-plugin.py sync-native-agents.py; do
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh sync-native-skills.py sync-native-plugin.py sync-native-agents.py; do
     if [ ! -x "adapters/codex/bin/$p" ]; then
       fail_msg "adapters/codex/bin/$p is missing or not executable"
     fi
@@ -283,6 +283,12 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'preflight.sh track' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex workflow toggle wrapper"
   fi
+
+  for p in 'preflight.sh start' 'preflight.sh mode' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
+    if ! grep -Fq "$p" adapters/codex/AGENTS.md; then
+      fail_msg "adapters/codex/AGENTS.md must document manual Codex lifecycle wrapper $p"
+    fi
+  done
 
   if ! grep -Fq 'codex_setting/codex-plugin-marketplace' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex native plugin projection"
@@ -319,6 +325,10 @@ check_codex_bin_wrappers() {
   fi
   if ! grep -Fq '`codex-plugin-marketplace`, `codex-hooks`, selected tools' adapters/codex/ADAPTATION.md; then
     fail_msg "adapters/codex/ADAPTATION.md current projection boundary must include codex-hooks"
+  fi
+  if ! grep -Fq 'not a hook listing or' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'runtime hook discovery test' adapters/codex/ADAPTATION.md; then
+    fail_msg "adapters/codex/ADAPTATION.md must document the current Codex hook runtime discovery boundary"
   fi
 }
 

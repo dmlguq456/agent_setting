@@ -126,6 +126,11 @@ Do not project Claude `hooks/` or `settings.json` into Codex. Use
 The design hook is a console-check alert path, not a full render/screenshot
 visual harness.
 
+Codex CLI 0.142.x exposes `codex debug prompt-input`, but not a hook listing or
+hook firing debug surface. Current tests validate `hooks.json` structure and
+execute the concrete bridge scripts with synthetic Codex hook payloads; add a
+runtime hook discovery test when Codex exposes a hook debug surface.
+
 ## Explicit Non-Support
 
 Codex must not consume these Claude-native files as native configuration:
