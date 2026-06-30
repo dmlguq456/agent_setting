@@ -334,6 +334,7 @@ if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-dispatch --ca
   && grep -q '^registered=0$' /tmp/codex_dispatch.out \
   && grep -q '^started=0$' /tmp/codex_dispatch.out \
   && grep -q '^command=codex exec ' /tmp/codex_dispatch.out \
+  && ! grep -q -- '--ask-for-approval' /tmp/codex_dispatch.out \
   && [ ! -e "$TMP/codex-dispatch.log" ]; then
   ok "codex dispatch wrapper dry-runs headless command without registry write"
 else
@@ -1124,10 +1125,10 @@ if CODEX_DISTILL_ENABLE=1 CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/s
   "$CODEX" distill-propose codexsid "$TMP/flowproj" >/tmp/codex_distill.out 2>/tmp/codex_distill.err \
   && grep -q -- '--sandbox' "$TMP/codex_argv" \
   && grep -q -- 'read-only' "$TMP/codex_argv" \
-  && grep -q -- '--ask-for-approval' "$TMP/codex_argv" \
-  && grep -q -- 'never' "$TMP/codex_argv" \
+  && ! grep -q -- '--ask-for-approval' "$TMP/codex_argv" \
   && grep -q -- '--ephemeral' "$TMP/codex_argv" \
   && grep -q -- '--ignore-rules' "$TMP/codex_argv" \
+  && grep -q -- '--skip-git-repo-check' "$TMP/codex_argv" \
   && grep -q '"action":"add"' /tmp/codex_distill.out; then
   ok "codex distill proposal uses constrained exec"
 else
@@ -1148,6 +1149,24 @@ if CODEX_DISTILL_ENABLE=1 CODEX_DISTILL_APPLY=1 CODEX_DISTILL_CONTRACT_ACCEPTED=
   ok "codex distill explicit apply works after accepted contract"
 else
   bad "codex distill explicit apply should require and obey accepted contract"
+fi
+# session-end auto-distillation is enabled by default after the tool-free proof
+if CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/store_session_end" \
+  PATH="$TMP/stubbin:$PATH" CODEX_STUB_ARGV="$TMP/codex_argv_se" \
+  "$CODEX" session-end "$TMP/flowproj" codexsid >/tmp/codex_se.out 2>/tmp/codex_se.err \
+  && MEM_STORE="$TMP/store_session_end" python3 "$ROOT/tools/memory/mem.py" stats 2>/dev/null | grep -q 'total: 1'; then
+  ok "codex session-end auto-distills and applies by default"
+else
+  bad "codex session-end should auto-distill and apply by default"
+fi
+# recursion guard: MEM_DISTILL=1 makes the whole session-end pipeline a no-op
+if MEM_DISTILL=1 CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/store_session_end_guard" \
+  PATH="$TMP/stubbin:$PATH" CODEX_STUB_ARGV="$TMP/codex_argv_se_guard" \
+  "$CODEX" session-end "$TMP/flowproj" codexsid >/tmp/codex_se_guard.out 2>/tmp/codex_se_guard.err \
+  && ! { MEM_STORE="$TMP/store_session_end_guard" python3 "$ROOT/tools/memory/mem.py" stats 2>/dev/null | grep -q 'total: 1'; }; then
+  ok "codex session-end no-ops under MEM_DISTILL=1 recursion guard"
+else
+  bad "codex session-end must no-op under MEM_DISTILL=1 recursion guard"
 fi
 
 echo "== opencode preflight wrapper =="

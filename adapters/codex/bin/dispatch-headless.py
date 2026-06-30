@@ -60,6 +60,9 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
 
 
 def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -> str:
+    # `codex exec` does not accept --ask-for-approval (top-level `codex` flag
+    # only); it runs non-interactively, so the --sandbox policy governs writes.
+    # args.approval is retained for CLI compatibility but not passed through.
     cmd = [
         "codex",
         "exec",
@@ -67,8 +70,6 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         args.worktree,
         "--sandbox",
         args.sandbox,
-        "--ask-for-approval",
-        args.approval,
         "--json",
         "-",
     ]

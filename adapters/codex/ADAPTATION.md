@@ -247,7 +247,7 @@ Harness-specific status signals still need Codex-native realization:
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |
 | oncall briefing | Run `adapters/codex/bin/preflight.sh briefing [cwd]` before prompt handling on the dedicated agent desk |
 | loop guidance | Run `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill>` before following loop guides; Codex reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts. The `note` loop is an external scheduler/worklog-board contract; use the related `autopilot-note` Skill/plugin projection only for on-demand note routing |
-| memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`; `distill-propose` reports `status=tool-contract` and exits 69 until `CODEX_DISTILL_ENABLE=1` is explicit. Enabled proposal generation uses a constrained Codex exec worker; automatic memory mutation remains disabled until Codex has an accepted no-tools/action contract |
+| memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`. The user-facing `distill-propose` stays an explicit opt-in preview (reports `status=tool-contract`, exits 69 until `CODEX_DISTILL_ENABLE=1`). Automatic session-end and turn-nudge distillation is enabled by default: the `codex exec --sandbox read-only` worker is verified tool-free (see Distillation Boundary) and applies through `apply-distill-actions.py`; opt out with `CODEX_DISTILL_ENABLE=0` |
 | worklog state signal | Run `adapters/codex/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before Codex updates notes or diagnoses board state |
 | role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role>` to resolve Codex model/reasoning-effort settings |
 | permission mapping | Run `adapters/codex/bin/preflight.sh permissions` to inspect the Codex approval/sandbox contract and confirm Claude `allowedTools` is unsupported |
@@ -344,14 +344,38 @@ separates the pipeline:
 1. `distill-delta` reads Codex JSONL session logs and emits transcript delta text.
 2. User-facing `preflight.sh distill-propose` reports `status=tool-contract`
    and exits 69 while disabled. With `CODEX_DISTILL_ENABLE=1`, it invokes
-   `codex exec --sandbox read-only --ask-for-approval never --ephemeral
-   --ignore-rules` and writes a JSON-lines proposal.
+   `codex exec --sandbox read-only --ephemeral --ignore-rules
+   --skip-git-repo-check` and writes a JSON-lines proposal. `codex exec` does
+   not accept `--ask-for-approval` (that is a top-level `codex` flag only); the
+   read-only sandbox alone enforces the no-write contract.
 3. The proposal is parsed by the shared `tools/memory/apply-distill-actions.py`
    applier only when both `CODEX_DISTILL_APPLY=1` and
    `CODEX_DISTILL_CONTRACT_ACCEPTED=1` are explicitly set.
-4. The proposal is not applied to memory automatically. The acceptance gate
-   must prove tool-free execution or provide a native no-tools flag before this
-   adapter may match Claude's automatic distillation behavior.
+4. The user-facing `distill-propose` command never applies automatically — it is
+   the manual preview surface. The adapter's own `preflight.sh session-end` and
+   `turn-nudge` dispatch enable the worker by default
+   (`CODEX_DISTILL_ENABLE`/`CODEX_DISTILL_APPLY`/`CODEX_DISTILL_CONTRACT_ACCEPTED`
+   default to `1`, each overridable to `0`), so Codex matches Claude's automatic
+   session-end distillation. Both dispatch sites and the worker carry a
+   `MEM_DISTILL` recursion guard.
+
+Verification (codex-cli 0.142.4):
+- Tool-free: an adversarial write probe under the exact worker flags
+  (`codex exec --sandbox read-only --ephemeral --ignore-rules`) proved tool-free
+  execution. Every model-attempted write — sentinel creation inside and outside
+  the working root, overwriting an existing file, and creating a new file —
+  failed with an OS-level `Read-only file system` error, so no write mechanism
+  (shell command or `apply_patch`) can mutate state.
+- No recursion: an isolated `CODEX_HOME` canary confirmed `codex exec` fires
+  `SessionStart` but not `SessionEnd` hooks, so the worker's exec cannot
+  re-trigger the session-end distill path. The `MEM_DISTILL=1` guard on the exec
+  call plus the `session-end`/worker `MEM_DISTILL` early-exit are defense in depth.
+- End-to-end: the enabled `preflight.sh session-end` against a throwaway store
+  applied exactly one distilled record from a real `codex exec` JSON-lines
+  proposal and terminated cleanly (no fork-bomb).
+
+Automatic session-end and turn-nudge distillation is therefore enabled by
+default; opt out by exporting `CODEX_DISTILL_ENABLE=0`.
 
 ## Worklog Boundary
 
