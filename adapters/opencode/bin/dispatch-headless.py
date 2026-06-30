@@ -58,7 +58,7 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
     )
 
 
-def shell_command(args: argparse.Namespace, prompt_text: str, log_path: Path) -> str:
+def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -> str:
     cmd = [
         "opencode",
         "run",
@@ -68,9 +68,9 @@ def shell_command(args: argparse.Namespace, prompt_text: str, log_path: Path) ->
         "json",
         "--agent",
         args.agent,
-        prompt_text,
     ]
-    return " ".join(shlex.quote(x) for x in cmd) + f" >> {shlex.quote(str(log_path))} 2>&1"
+    prompt_arg = f'"$(cat -- {shlex.quote(str(prompt_path))})"'
+    return " ".join(shlex.quote(x) for x in cmd) + f" {prompt_arg} >> {shlex.quote(str(log_path))} 2>&1"
 
 
 def append_job(jobs: Path, args: argparse.Namespace) -> None:
@@ -106,12 +106,13 @@ def main(argv: list[str]) -> int:
     prompt_text, prompt_source = prompt(args)
     prompt_path = log_dir / f"{args.slug}.opencode.prompt.txt"
     log_path = log_dir / f"{args.slug}.opencode.jsonl"
-    command = shell_command(args, prompt_text, log_path)
+    command = shell_command(args, prompt_path, log_path)
 
     if action in ("register", "start"):
         append_job(jobs, args)
     if action == "start":
-        log_dir.mkdir(parents=True, exist_ok=True)
+        prompt_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         prompt_path.write_text(prompt_text, encoding="utf-8")
         subprocess.Popen(["sh", "-c", command], start_new_session=True)
 

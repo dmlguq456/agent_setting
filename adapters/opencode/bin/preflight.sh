@@ -33,7 +33,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
        preflight.sh headless [--check] <worktree>
-       preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--agent <agent>] [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
+       preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--agent <agent>] [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>] [--log-dir <dir>]
        preflight.sh liveness [jobs.log]
        preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
        preflight.sh mcp [--check]
@@ -163,7 +163,7 @@ runtime_surface=opencode-run-headless
 status=tool-contract
 tool_contract=headless-dispatch
 tool_contract_check=adapters/opencode/bin/preflight.sh headless --check <worktree>
-command_template=opencode run --dir <worktree> --format json --agent <agent> <prompt>
+command_template=opencode run --dir <worktree> --format json --agent <agent> "$(cat -- <prompt-file>)"
 job_registry=<agent-home>/.dispatch/jobs.log
 liveness_surface=opencode-sqlite-session-mtime
 liveness_check=adapters/opencode/bin/preflight.sh liveness [jobs.log]

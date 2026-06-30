@@ -1151,10 +1151,37 @@ if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-dispatc
   && grep -q '^registered=0$' /tmp/opencode_dispatch.out \
   && grep -q '^started=0$' /tmp/opencode_dispatch.out \
   && grep -q '^command=opencode run ' /tmp/opencode_dispatch.out \
+  && grep -q 'opencode-dispatch.opencode.prompt.txt' /tmp/opencode_dispatch.out \
+  && grep -q 'cat -- ' /tmp/opencode_dispatch.out \
+  && ! grep -q 'do work' /tmp/opencode_dispatch.out \
   && [ ! -e "$TMP/opencode-dispatch.log" ]; then
   ok "opencode dispatch wrapper dry-runs headless command without registry write"
 else
   bad "opencode dispatch wrapper should dry-run headless command without registry write"
+fi
+mkdir -p "$TMP/opencode-stubbin"
+cat > "$TMP/opencode-stubbin/opencode" <<'EOF'
+#!/usr/bin/env sh
+printf '%s\n' "$*" > "$OPENCODE_STUB_ARGV"
+EOF
+chmod +x "$TMP/opencode-stubbin/opencode"
+if PATH="$TMP/opencode-stubbin:$PATH" OPENCODE_STUB_ARGV="$TMP/opencode-start.argv" \
+  "$OPENCODE" dispatch --start --worktree "$TMP/repo" --slug nested/opencode-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "nested work" --jobs "$TMP/opencode-start.log" --log-dir "$TMP/opencode-logs" >/tmp/opencode_dispatch_start.out 2>/tmp/opencode_dispatch_start.err \
+  && grep -q '^status=start$' /tmp/opencode_dispatch_start.out \
+  && grep -q '^started=1$' /tmp/opencode_dispatch_start.out \
+  && grep -q 'cat -- ' /tmp/opencode_dispatch_start.out \
+  && [ -f "$TMP/opencode-logs/nested/opencode-start.opencode.prompt.txt" ]; then
+  for _ in $(seq 1 20); do
+    [ -f "$TMP/opencode-start.argv" ] && break
+    sleep 0.1
+  done
+  if grep -q 'nested work' "$TMP/opencode-start.argv" 2>/dev/null; then
+    ok "opencode dispatch wrapper starts nested slug from prompt file"
+  else
+    bad "opencode dispatch wrapper should pass nested prompt content to opencode"
+  fi
+else
+  bad "opencode dispatch wrapper should start nested slug from prompt file"
 fi
 if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-default-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" >/tmp/opencode_dispatch_default.out 2>/tmp/opencode_dispatch_default.err \
   && grep -Fxq "job_registry=$ROOT/.dispatch/jobs.log" /tmp/opencode_dispatch_default.out \
