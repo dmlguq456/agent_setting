@@ -9,7 +9,7 @@ else
   ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../../.." && pwd)
 fi
 
-if [ "${AGENT_HOME:-}" ]; then
+if [ -n "${AGENT_HOME:-}" ] && [ -f "$AGENT_HOME/tools/memory/mem.py" ]; then
   :
 elif [ -f "$ROOT/tools/memory/mem.py" ]; then
   AGENT_HOME=$ROOT
@@ -17,4 +17,10 @@ else
   AGENT_HOME=$("$ROOT/adapters/opencode/utilities/agent-home.sh")
 fi
 export AGENT_HOME
+
+if [ ! -f "$AGENT_HOME/tools/memory/mem.py" ]; then
+  echo "opencode memory launcher: AGENT_HOME does not point to an agent harness: $AGENT_HOME" >&2
+  exit 69
+fi
+
 exec python3 "$AGENT_HOME/tools/memory/mem.py" "$@"

@@ -612,6 +612,9 @@ check_codex_tool_projection() {
       fail_msg "adapters/codex/tools/memory/$p must be concrete, not a symlink to the shared Claude-compatible fallback"
     elif grep -q '\.claude\|CLAUDE_HOME' "adapters/codex/tools/memory/$p"; then
       fail_msg "adapters/codex/tools/memory/$p must not fall back to Claude runtime home"
+    elif ! grep -Fq '[ -f "$AGENT_HOME/tools/memory/mem.py" ]' "adapters/codex/tools/memory/$p" \
+      || grep -Fq 'if [ "${AGENT_HOME:-}" ]; then' "adapters/codex/tools/memory/$p"; then
+      fail_msg "adapters/codex/tools/memory/$p must validate AGENT_HOME before using it as the harness root"
     fi
   done
 
@@ -1217,6 +1220,9 @@ check_opencode_tool_projection() {
       fail_msg "adapters/opencode/tools/memory/$p must be concrete, not a symlink to the shared Claude-compatible fallback"
     elif grep -q '\.claude\|CLAUDE_HOME' "adapters/opencode/tools/memory/$p"; then
       fail_msg "adapters/opencode/tools/memory/$p must not fall back to Claude runtime home"
+    elif ! grep -Fq '[ -f "$AGENT_HOME/tools/memory/mem.py" ]' "adapters/opencode/tools/memory/$p" \
+      || grep -Fq 'if [ "${AGENT_HOME:-}" ]; then' "adapters/opencode/tools/memory/$p"; then
+      fail_msg "adapters/opencode/tools/memory/$p must validate AGENT_HOME before using it as the harness root"
     fi
   done
 

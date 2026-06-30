@@ -209,6 +209,12 @@ if "$CODEX" memory "$TMP/flowproj" >/tmp/mem_inject.out 2>/tmp/mem_inject.err; t
 else
   bad "codex memory wrapper should exit cleanly"
 fi
+if MEM_STORE="$TMP/codex_launcher_store" "$ROOT/adapters/codex/tools/memory/mem.py" stats >/tmp/codex_mem_launcher.out 2>/tmp/codex_mem_launcher.err \
+  && grep -q '^# store stats$' /tmp/codex_mem_launcher.out; then
+  ok "codex memory launcher ignores invalid non-harness AGENT_HOME"
+else
+  bad "codex memory launcher should fall back from invalid AGENT_HOME"
+fi
 if "$RECALL" --prompt "일반 질문" --cwd "$TMP/flowproj" --format text >/tmp/recall.out 2>/tmp/recall.err \
   && [ ! -s /tmp/recall.out ]; then
   ok "recall wrapper no-ops without signal word"
@@ -1017,6 +1023,12 @@ if "$OPENCODE" memory "$TMP/flowproj" >/tmp/opencode_mem.out 2>/tmp/opencode_mem
   ok "opencode memory wrapper exits cleanly"
 else
   bad "opencode memory wrapper should exit cleanly"
+fi
+if MEM_STORE="$TMP/opencode_launcher_store" "$ROOT/adapters/opencode/tools/memory/mem.py" stats >/tmp/opencode_mem_launcher.out 2>/tmp/opencode_mem_launcher.err \
+  && grep -q '^# store stats$' /tmp/opencode_mem_launcher.out; then
+  ok "opencode memory launcher ignores invalid non-harness AGENT_HOME"
+else
+  bad "opencode memory launcher should fall back from invalid AGENT_HOME"
 fi
 if "$OPENCODE" recall "전에 결정한 내용 뭐였지" "$TMP/flowproj" >/tmp/opencode_recall.out 2>/tmp/opencode_recall.err; then
   ok "opencode recall wrapper exits cleanly"
