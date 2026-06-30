@@ -64,7 +64,7 @@ then
 fi
 
 printf 'file=%s\n' "$script"
-if detail=$(python3 -m py_compile "$script" 2>&1); then
+if detail=$(python3 -c "import sys; compile(open(sys.argv[1], encoding='utf-8').read(), sys.argv[1], 'exec')" "$script" 2>&1); then
   printf 'check=python-compile\n'
   printf 'check_matplotlib=available\n'
 else
