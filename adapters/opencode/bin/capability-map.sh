@@ -91,6 +91,8 @@ if [ -n "$tool_contract" ]; then
   printf 'tool_contract=%s\n' "$tool_contract"
   if [ "$tool_contract" = "visual-harness" ]; then
     printf 'tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness\n'
+    printf 'runtime_surface=not-materialized\n'
+    printf 'fallback=preflight.sh design <file>\n'
   fi
 fi
 printf 'note=%s\n' "$note"

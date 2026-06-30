@@ -709,7 +709,7 @@ check_opencode_bin_wrappers() {
     fail_msg "opencode_setting/bin points to $target; expected ../adapters/opencode/bin"
   fi
 
-  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh sync-native-agents.py sync-native-commands.py; do
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh distill-worker.sh sync-native-skills.py sync-native-agents.py sync-native-commands.py; do
     if [ ! -x "adapters/opencode/bin/$p" ]; then
       fail_msg "adapters/opencode/bin/$p is missing or not executable"
     fi
@@ -739,6 +739,12 @@ check_opencode_bin_wrappers() {
     fail_msg "adapters/opencode/AGENTS.md must document the OpenCode workflow toggle wrapper"
   fi
 
+  for p in 'preflight.sh start' 'preflight.sh mode' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
+    if ! grep -Fq "$p" adapters/opencode/AGENTS.md; then
+      fail_msg "adapters/opencode/AGENTS.md must document manual OpenCode lifecycle wrapper $p"
+    fi
+  done
+
   if ! grep -Fq 'opencode_setting/opencode-plugins' adapters/opencode/AGENTS.md; then
     fail_msg "adapters/opencode/AGENTS.md must document the OpenCode native plugin projection"
   fi
@@ -755,6 +761,10 @@ check_opencode_bin_wrappers() {
 
   if ! grep -Fq 'visual-harness)' adapters/opencode/bin/preflight.sh; then
     fail_msg "adapters/opencode/bin/preflight.sh must expose the OpenCode visual harness tool-contract"
+  fi
+  if ! grep -Fq 'runtime_surface=not-materialized' adapters/opencode/bin/capability-map.sh \
+    || ! grep -Fq 'fallback=preflight.sh design <file>' adapters/opencode/bin/capability-map.sh; then
+    fail_msg "adapters/opencode/bin/capability-map.sh must report visual harness runtime surface and fallback"
   fi
   if grep -Eq 'Claude Design MCP|Claude visual harness' adapters/opencode/bin/preflight.sh adapters/opencode/bin/capability-map.sh; then
     fail_msg "OpenCode runtime-facing visual harness output must use legacy/adapter-specific wording, not Claude implementation names"

@@ -36,7 +36,7 @@ adapter bootstrap, not the portable source of truth. Load it through the
 - Use `adapters/opencode/bin/preflight.sh recall "<prompt>" [cwd]` before answering prompts with recall signal words when OpenCode has no automatic prompt hook.
 - Use `adapters/opencode/bin/preflight.sh briefing [cwd]` on the dedicated agent desk when OpenCode has no automatic prompt hook.
 - Use `adapters/opencode/bin/preflight.sh worklog [cwd]` before worklog-board or agent-notes work to inspect configured notes/app paths without mutating data.
-- Use `adapters/opencode/bin/preflight.sh distill-delta <session-id>` to read transcript deltas through `opencode export`. Do not auto-apply memory distillation until an OpenCode no-tools worker contract is verified; `distill-propose` is disabled by default and reports that remaining tool-contract when explicitly enabled.
+- Use `adapters/opencode/bin/preflight.sh distill-delta <session-id>` to read transcript deltas through `opencode export`. Use `adapters/opencode/bin/preflight.sh distill-propose <session-id> [cwd]` only for explicit proposal attempts; it is disabled by default and reports the remaining OpenCode no-tools worker tool-contract instead of auto-applying memory distillation.
 - Treat `opencode_setting/tools` as a selective memory-tool projection. Do not assume every shared tool is OpenCode-supported.
 - Treat `opencode_setting/utilities` as a selective utility projection. Do not assume every shared utility is OpenCode-supported.
 - Keep OpenCode-owned credentials, sessions, DB state, logs, caches, and local databases outside the harness repo.

@@ -763,7 +763,9 @@ if "$OPENCODE" capability-info design-review >/tmp/opencode_cap.out 2>/tmp/openc
   && grep -q '^realization=opencode-native-skill-command$' /tmp/opencode_cap.out \
   && grep -q '^status=tool-contract$' /tmp/opencode_cap.out \
   && grep -q '^tool_contract=visual-harness$' /tmp/opencode_cap.out \
-  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness$' /tmp/opencode_cap.out; then
+  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness$' /tmp/opencode_cap.out \
+  && grep -q '^runtime_surface=not-materialized$' /tmp/opencode_cap.out \
+  && grep -q '^fallback=preflight.sh design <file>$' /tmp/opencode_cap.out; then
   ok "opencode design capability reports visual harness contract"
 else
   bad "opencode design capability should report visual harness contract"
