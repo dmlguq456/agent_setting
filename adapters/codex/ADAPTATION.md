@@ -1,8 +1,9 @@
 # Codex Adaptation
 
-This adapter is not yet behavior-equivalent to the Claude Code adapter.
-It defines the required mapping so Codex support can be built without copying
-Claude-specific assumptions into the common core.
+This adapter is not a Claude Code surface clone. It defines the required mapping
+so Codex can reproduce the portable harness invariants through Codex-native
+surfaces, tool contracts, and explicit fallbacks without copying Claude-specific
+assumptions into the common core.
 
 ## Design Principle
 
@@ -213,12 +214,12 @@ Harness-specific status signals still need Codex-native realization:
 
 | Harness signal | Codex direction |
 |---|---|
-| stale workflow bypass flag cleanup | explicit `preflight.sh start` until a native session-start surface exists |
-| tracked/untracked workflow state | explicit `preflight.sh mode` until a native prompt/session surface exists |
+| stale workflow bypass flag cleanup | Codex `SessionStart` hook bridge runs `preflight.sh start`; explicit preflight remains fallback when hooks are unavailable |
+| tracked/untracked workflow state | Codex `UserPromptSubmit` hook bridge runs `preflight.sh mode`; explicit preflight remains fallback when hooks are unavailable |
 | workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; keep Codex `/statusline` for native model/context/token/session fields |
 | tracked/untracked toggle | explicit `preflight.sh track`; do not expose Claude `/track` command files |
 | artifact root detection | `preflight.sh write` and shared artifact-root helper |
-| headless/autopilot/background jobs | redesign against Codex thread/subagent/session model before adding UI |
+| headless/autopilot/background jobs | `preflight.sh headless` / `dispatch` / `liveness` / `harvest` provide the tool-contract path; only UI/status surfacing remains future work |
 | sibling `-wt/<slug>` dispatch detection | preserve the worktree naming invariant; choose a Codex-native display surface later |
 | pipeline stage nudges | preflight/AGENTS instructions first; UI only when Codex exposes a suitable surface |
 | oncall/note/study/drill loop nudges | `preflight.sh briefing` / future loop-specific wrappers |
@@ -233,8 +234,8 @@ Harness-specific status signals still need Codex-native realization:
 | memory write guard | Run `adapters/codex/bin/preflight.sh write <file> [session-id]` before writes |
 | design post-write verification | Run `adapters/codex/bin/preflight.sh design <file>` after design HTML writes |
 | spec read gate | Run `adapters/codex/bin/preflight.sh read <prd.md> [session-id]` after actual reads and `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
-| workflow start cleanup | Run `adapters/codex/bin/preflight.sh start [cwd] [session-id]` at session start when no automatic hook is attached |
-| workflow signal | Run `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` as explicit prompt/session reminder; no statusline assumption |
+| workflow start cleanup | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]`; run it manually when no automatic hook is attached |
+| workflow signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`; run it manually when no automatic hook is attached |
 | workflow toggle | Run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly requests tracked/untracked mode switching |
 | memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text session-start memory injection |
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |

@@ -20,6 +20,8 @@ fail_msg() {
   fail=1
 }
 
+CLAUDE_NATIVE_SURFACE_PATTERN='adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|track-toggle\.sh|agent-modes|allowedTools|(^|[^[:alnum:]_/.-])skills/|/\.claude/'
+
 check_projection_symlinks() {
   dir=$1
   [ -d "$dir" ] || { fail_msg "$dir is missing"; return; }
@@ -925,6 +927,11 @@ check_codex_native_plugin_projection() {
       fail_msg "$skill has no matching portable capability source"
     fi
   done
+  bad=$(rg -n "$CLAUDE_NATIVE_SURFACE_PATTERN" "$plugin_root" 2>/dev/null || true)
+  if [ -n "$bad" ]; then
+    fail_msg "Codex native plugin projection must not expose Claude-native surfaces:"
+    printf '%s\n' "$bad"
+  fi
   if ! grep -Fq '"name": "agent-harness-codex"' "$plugin_manifest" \
     || ! grep -Fq '"skills": "./skills/"' "$plugin_manifest"; then
     fail_msg "$plugin_manifest must define the agent-harness-codex plugin and plugin-local skills path"
@@ -1006,7 +1013,7 @@ PY
     esac
   done
 
-  bad=$(rg -n 'adapters/claude|claude_setting|adapters/opencode|opencode_setting' adapters/codex/agents 2>/dev/null || true)
+  bad=$(rg -n "adapters/opencode|opencode_setting|$CLAUDE_NATIVE_SURFACE_PATTERN" adapters/codex/agents 2>/dev/null || true)
   if [ -n "$bad" ]; then
     fail_msg "Codex native agent surfaces must not expose non-Codex adapter paths:"
     printf '%s\n' "$bad"
@@ -1078,7 +1085,7 @@ check_codex_native_hook_projection() {
     || ! grep -Fq 'preflight.sh design' adapters/codex/README.md; then
     fail_msg "adapters/codex/README.md must document the Codex native hook bridges"
   fi
-  if grep -Eq 'adapters/claude|claude_setting|settings\.json|statusline\.sh' "$hook_json" "$session_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$launcher"; then
+  if grep -Eq "$CLAUDE_NATIVE_SURFACE_PATTERN" "$hook_json" "$session_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$launcher"; then
     fail_msg "Codex hook projection must not reference Claude-native surfaces"
   fi
 }
@@ -1564,9 +1571,9 @@ check_opencode_native_agent_projection() {
     esac
   done
 
-  bad=$(rg -n 'adapters/claude|claude_setting' adapters/opencode/agents 2>/dev/null || true)
+  bad=$(rg -n "$CLAUDE_NATIVE_SURFACE_PATTERN" adapters/opencode/agents 2>/dev/null || true)
   if [ -n "$bad" ]; then
-    fail_msg "OpenCode native agent surfaces must not expose Claude adapter paths:"
+    fail_msg "OpenCode native agent surfaces must not expose Claude-native surfaces:"
     printf '%s\n' "$bad"
   fi
 
@@ -1699,7 +1706,7 @@ check_opencode_native_plugin_projection() {
     || ! grep -Fq 'preflight.sh design' adapters/opencode/README.md; then
     fail_msg "adapters/opencode/README.md must document the OpenCode lifecycle and design plugin bridges"
   fi
-  if grep -Eq 'adapters/claude|claude_setting|settings\.json|statusline\.sh' "$plugin"; then
+  if grep -Eq "$CLAUDE_NATIVE_SURFACE_PATTERN" "$plugin"; then
     fail_msg "$plugin must not reference Claude-native surfaces"
   fi
 }
