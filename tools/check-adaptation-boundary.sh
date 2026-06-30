@@ -559,7 +559,7 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/AGENTS.md must document the Codex workflow toggle wrapper"
   fi
 
-  for p in 'preflight.sh start' 'preflight.sh mode' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
+  for p in 'preflight.sh start' 'preflight.sh session-end' 'preflight.sh mode' 'preflight.sh turn-nudge' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
     if ! grep -Fq "$p" adapters/codex/AGENTS.md; then
       fail_msg "adapters/codex/AGENTS.md must document manual Codex lifecycle wrapper $p"
     fi
@@ -572,21 +572,23 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'codex_setting/codex-hooks' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex native hook projection"
   fi
-  for p in sessionstart-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
+  for p in sessionstart-lifecycle.py sessionend-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
     if [ ! -x "adapters/codex/hooks/$p" ]; then
       fail_msg "adapters/codex/hooks/$p is missing or not executable"
     fi
   done
-  for event in SessionStart UserPromptSubmit PreToolUse PostToolUse; do
+  for event in SessionStart SessionEnd UserPromptSubmit PreToolUse PostToolUse; do
     if ! grep -Fq "\"$event\"" adapters/codex/hooks/hooks.json; then
       fail_msg "adapters/codex/hooks/hooks.json must register Codex $event"
     fi
   done
   if ! grep -Fq 'run_preflight("start"' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq 'run_preflight("memory"' adapters/codex/hooks/sessionstart-lifecycle.py \
+    || ! grep -Fq 'run_preflight("session-end"' adapters/codex/hooks/sessionend-lifecycle.py \
     || ! grep -Fq 'run_preflight("mode"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'run_preflight("recall"' adapters/codex/hooks/userprompt-lifecycle.py \
-    || ! grep -Fq 'run_preflight("briefing"' adapters/codex/hooks/userprompt-lifecycle.py; then
+    || ! grep -Fq 'run_preflight("briefing"' adapters/codex/hooks/userprompt-lifecycle.py \
+    || ! grep -Fq 'run_preflight("turn-nudge"' adapters/codex/hooks/userprompt-lifecycle.py; then
     fail_msg "Codex lifecycle hook bridges must route through preflight.sh lifecycle commands"
   fi
 
@@ -1056,6 +1058,7 @@ check_codex_native_hook_projection() {
   hook_dir="adapters/codex/hooks"
   hook_json="$hook_dir/hooks.json"
   session_bridge="$hook_dir/sessionstart-lifecycle.py"
+  sessionend_bridge="$hook_dir/sessionend-lifecycle.py"
   prompt_bridge="$hook_dir/userprompt-lifecycle.py"
   pre_bridge="$hook_dir/pretooluse-write-guard.py"
   post_bridge="$hook_dir/posttooluse-design-check.py"
@@ -1066,7 +1069,7 @@ check_codex_native_hook_projection() {
     fail_msg "$hook_json is missing"
     return
   fi
-  for bridge in "$session_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$read_bridge" "$launcher"; do
+  for bridge in "$session_bridge" "$sessionend_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$read_bridge" "$launcher"; do
     if [ ! -x "$bridge" ]; then
       fail_msg "$bridge must be executable"
     fi
@@ -1078,7 +1081,7 @@ check_codex_native_hook_projection() {
     fail_msg "$hook_json must be valid JSON"
     cat /tmp/codex-hooks-json.err
   fi
-  for script in sessionstart-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
+  for script in sessionstart-lifecycle.py sessionend-lifecycle.py userprompt-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
     if ! grep -Fq "run-hook.sh\\\" $script" "$hook_json"; then
       fail_msg "$hook_json must register $script through the Codex hook launcher"
     fi
@@ -1089,6 +1092,9 @@ check_codex_native_hook_projection() {
   fi
   if ! grep -Fq '"SessionStart"' "$hook_json" || ! grep -Fq 'sessionstart-lifecycle.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex SessionStart lifecycle bridge"
+  fi
+  if ! grep -Fq '"SessionEnd"' "$hook_json" || ! grep -Fq 'sessionend-lifecycle.py' "$hook_json"; then
+    fail_msg "$hook_json must register the Codex SessionEnd lifecycle bridge"
   fi
   if ! grep -Fq '"UserPromptSubmit"' "$hook_json" || ! grep -Fq 'userprompt-lifecycle.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex UserPromptSubmit lifecycle bridge"
@@ -1102,7 +1108,7 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"PostToolUse"' "$hook_json" || ! grep -Fq 'posttooluse-read-marker.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex PostToolUse read marker"
   fi
-  for bridge in "$session_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$read_bridge"; do
+  for bridge in "$session_bridge" "$sessionend_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$read_bridge"; do
     if ! grep -Fq 'adapters" / "codex" / "bin" / "preflight.sh' "$bridge"; then
       fail_msg "$bridge must call the Codex preflight wrapper"
     fi
@@ -1113,12 +1119,15 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"read"' "$read_bridge"; then
     fail_msg "$read_bridge must call the Codex read preflight"
   fi
+  if ! grep -Fq '"session-end"' "$sessionend_bridge"; then
+    fail_msg "$sessionend_bridge must call the Codex session-end preflight"
+  fi
   if ! grep -Fq 'PreToolUse' adapters/codex/README.md \
     || ! grep -Fq 'PostToolUse' adapters/codex/README.md \
     || ! grep -Fq 'preflight.sh design' adapters/codex/README.md; then
     fail_msg "adapters/codex/README.md must document the Codex native hook bridges"
   fi
-  if grep -Eq "$CLAUDE_NATIVE_SURFACE_PATTERN" "$hook_json" "$session_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$launcher"; then
+  if grep -Eq "$CLAUDE_NATIVE_SURFACE_PATTERN" "$hook_json" "$session_bridge" "$sessionend_bridge" "$prompt_bridge" "$pre_bridge" "$post_bridge" "$launcher"; then
     fail_msg "Codex hook projection must not reference Claude-native surfaces"
   fi
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Codex UserPromptSubmit bridge for portable prompt lifecycle signals."""
+"""Codex SessionEnd bridge for portable memory lifecycle signals."""
 
 from __future__ import annotations
 
@@ -23,14 +23,6 @@ def first_string(mapping: dict[str, Any], *keys: str) -> str:
     return ""
 
 
-def nested_mapping(payload: dict[str, Any], *keys: str) -> dict[str, Any]:
-    for key in keys:
-        value = payload.get(key)
-        if isinstance(value, dict):
-            return value
-    return {}
-
-
 def load_payload() -> dict[str, Any]:
     try:
         payload = json.load(sys.stdin)
@@ -45,14 +37,6 @@ def cwd(payload: dict[str, Any]) -> str:
 
 def session_id(payload: dict[str, Any]) -> str:
     return first_string(payload, "session_id", "sessionID", "thread_id", "threadID") or "codex-hook"
-
-
-def prompt_text(payload: dict[str, Any]) -> str:
-    direct = first_string(payload, "prompt", "message", "user_prompt", "userPrompt", "text")
-    if direct:
-        return direct
-    nested = nested_mapping(payload, "input", "payload", "event")
-    return first_string(nested, "prompt", "message", "user_prompt", "userPrompt", "text")
 
 
 def run_preflight(*args: str) -> None:
@@ -75,15 +59,7 @@ def run_preflight(*args: str) -> None:
 
 def main() -> int:
     payload = load_payload()
-    current_cwd = cwd(payload)
-    sid = session_id(payload)
-    prompt = prompt_text(payload)
-
-    run_preflight("mode", current_cwd, sid)
-    if prompt:
-        run_preflight("recall", prompt, current_cwd)
-    run_preflight("briefing", current_cwd)
-    run_preflight("turn-nudge", current_cwd, sid)
+    run_preflight("session-end", cwd(payload), session_id(payload))
     return 0
 
 

@@ -794,6 +794,7 @@ ln -s "$ROOT" "$TMP/codex_hook_home/.codex/agent-harness"
 ln -s "$ROOT/codex_setting/codex-hooks/hooks.json" "$TMP/codex_hook_home/.codex/hooks.json"
 if python3 -m json.tool "$TMP/codex_hook_home/.codex/hooks.json" >/tmp/codex_hook_json.out 2>/tmp/codex_hook_json.err \
   && grep -q 'sessionstart-lifecycle.py' /tmp/codex_hook_json.out \
+  && grep -q 'sessionend-lifecycle.py' /tmp/codex_hook_json.out \
   && grep -q 'userprompt-lifecycle.py' /tmp/codex_hook_json.out \
   && grep -q 'pretooluse-write-guard.py' /tmp/codex_hook_json.out \
   && grep -q 'posttooluse-read-marker.py' /tmp/codex_hook_json.out \
@@ -834,10 +835,19 @@ if printf '{"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo" \
 else
   bad "codex native hook projection should bridge session start lifecycle"
 fi
+if printf '{"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo" \
+  | MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionend-lifecycle.py" >/tmp/codex_session_end_hook.out 2>/tmp/codex_session_end_hook.err \
+  && grep -q '^# sync (projects' /tmp/codex_session_end_hook.out \
+  && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_session_end_hook.out /tmp/codex_session_end_hook.err; then
+  ok "codex native hook projection bridges session end lifecycle"
+else
+  bad "codex native hook projection should bridge session end lifecycle"
+fi
 if "$CODEX" track "$TMP/flowproj" promptlifecyclesid >/tmp/codex_prompt_toggle.out 2>/tmp/codex_prompt_toggle.err \
   && printf '{"prompt":"remember this project context","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
-  | MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook.out 2>/tmp/codex_prompt_hook.err \
+  | MEM_NUDGE_INTERVAL=1 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook.out 2>/tmp/codex_prompt_hook.err \
   && grep -q 'untracked' /tmp/codex_prompt_hook.out \
+  && grep -q '^0$' "$TMP/codex_hook_mem/.codex-turn-state-promptlifecyclesid" \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_prompt_hook.out /tmp/codex_prompt_hook.err; then
   ok "codex native hook projection bridges prompt lifecycle"
 else

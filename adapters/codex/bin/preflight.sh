@@ -25,7 +25,9 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh capability <name> [cwd] [session-id]
        preflight.sh skill <name> [cwd] [session-id]
        preflight.sh start [cwd] [session-id]
+       preflight.sh session-end [cwd] [session-id]
        preflight.sh mode [cwd] [session-id]
+       preflight.sh turn-nudge [cwd] [session-id]
        preflight.sh track [cwd] [session-id]
        preflight.sh memory [cwd]
        preflight.sh recall <prompt> [cwd]
@@ -105,6 +107,7 @@ doctor() {
   doctor_check native-agents "$ROOT/adapters/codex/bin/sync-native-agents.py" --check || rc=1
   doctor_check hook-bridges python3 -c 'import pathlib, sys; [compile(pathlib.Path(p).read_text(encoding="utf-8"), p, "exec") for p in sys.argv[1:]]' \
     "$ROOT/adapters/codex/hooks/sessionstart-lifecycle.py" \
+    "$ROOT/adapters/codex/hooks/sessionend-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/userprompt-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/pretooluse-write-guard.py" \
     "$ROOT/adapters/codex/hooks/posttooluse-design-check.py" \
@@ -186,10 +189,40 @@ case "$cmd" in
     sid=${3:-codex}
     "$ROOT/utilities/workflow-guard-hook.sh" --event start --cwd "$cwd" --session "$sid" --format text
     ;;
+  session-end)
+    cwd=${2:-$PWD}
+    sid=${3:-codex}
+    (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/mem.py" sync)
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd"
+    ;;
   mode)
     cwd=${2:-$PWD}
     sid=${3:-codex}
     "$ROOT/utilities/workflow-guard-hook.sh" --event prompt --cwd "$cwd" --session "$sid" --format text --toggle-label "preflight.sh track"
+    ;;
+  turn-nudge)
+    cwd=${2:-$PWD}
+    sid=${3:-codex}
+    [ "${MEM_DISTILL:-}" = "1" ] && exit 0
+    [ -n "$sid" ] && [ "$sid" != "default" ] || exit 0
+    interval=${MEM_NUDGE_INTERVAL:-10}
+    case "$interval" in (*[!0-9]*|"") interval=10 ;; esac
+    [ "$interval" -gt 0 ] || interval=10
+    store=${MEM_STORE:-$AGENT_ROOT/memory}
+    mkdir -p "$store" 2>/dev/null || true
+    state="$store/.codex-turn-state-$sid"
+    counter=0
+    if [ -f "$state" ]; then
+      counter=$(sed -n '1p' "$state" 2>/dev/null || echo 0)
+    fi
+    case "$counter" in (*[!0-9]*|"") counter=0 ;; esac
+    counter=$((counter + 1))
+    if [ "$counter" -ge "$interval" ]; then
+      counter=0
+      AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd" >/dev/null 2>/dev/null || true
+    fi
+    printf '%s\n' "$counter" > "$state" 2>/dev/null || true
+    find "$store" -maxdepth 1 -name '.codex-turn-state-*' -mmin +4320 -delete 2>/dev/null || true
     ;;
   track)
     cwd=${2:-$PWD}

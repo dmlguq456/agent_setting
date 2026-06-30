@@ -47,7 +47,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/codex/bin/preflight.sh capability-info <capability>` to confirm Codex realization; use `adapters/codex/skills/<capability>/SKILL.md` as Codex-native guidance |
 | native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Command-like capability entrypoints use these native Skills/plugin surfaces and are verified with Codex discoverability (`codex debug prompt-input`) |
-| native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, `UserPromptSubmit` prompt signals, `PreToolUse` write guards, `PostToolUse` spec read markers, and `PostToolUse` design HTML checks; explicit preflight remains fallback |
+| native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, `SessionEnd` memory sync/distill, `UserPromptSubmit` prompt signals and turn nudges, `PreToolUse` write guards, `PostToolUse` spec read markers, and `PostToolUse` design HTML checks; explicit preflight remains fallback |
 | role profile | Use `roles/README.md` for meaning; Codex custom agents are materialized under `adapters/codex/agents/*.toml` and still call `adapters/codex/bin/preflight.sh role <portable-role>` for concrete model/reasoning mapping |
 | role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no Codex-native runtime surface exists |
 | adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
@@ -76,6 +76,8 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | git safety gate | `core/HOOKS.md` defines the invariant; included in `adapters/codex/bin/preflight.sh write <file> [session-id]` |
 | memory write guard | `core/HOOKS.md` defines the invariant; included in `adapters/codex/bin/preflight.sh write <file> [session-id]` |
 | memory injection | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh memory [cwd]`; run it manually when hooks are unavailable |
+| memory sync | Codex `SessionEnd` hook bridge runs `adapters/codex/bin/preflight.sh session-end [cwd] [session-id]`, which performs `mem sync` and then invokes the opt-in Codex distill proposal worker |
+| memory turn nudge | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh turn-nudge [cwd] [session-id]`; it is deterministic and only launches distill when the configured interval is reached and `CODEX_DISTILL_ENABLE=1` is set |
 | memory recall injection | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh recall <prompt> [cwd]`; run it manually when hooks are unavailable |
 | oncall briefing injection | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh briefing [cwd]`; run it manually when hooks are unavailable |
 | capability mapping | `adapters/codex/bin/preflight.sh capability-info <capability>` reports Codex's native Skill/plugin realization and instruction-only or tool-contract status; root Skill compatibility references are not projected and report `compat_reference=not-projected` |
@@ -202,6 +204,8 @@ entrypoints are represented by Codex-native Skills and the installable
 
 `adapters/codex/hooks/` contains a Codex-native `hooks.json`, a validated
 `run-hook.sh` launcher, and concrete adapter-owned hook bridges. The
+`SessionEnd` bridge runs `mem sync` and the opt-in distill proposal worker. The
+`UserPromptSubmit` bridge also runs the deterministic N-turn distill nudge. The
 `PreToolUse` bridge runs before write/edit/patch tools and delegates
 artifact-order, git-state, and memory-write checks to
 `adapters/codex/bin/preflight.sh write`. The `PostToolUse` Read bridge records
