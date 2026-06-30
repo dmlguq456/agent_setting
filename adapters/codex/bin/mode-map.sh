@@ -60,12 +60,18 @@ case "$family" in
         runtime_surface=adapter-owned-data-script
         ;;
       figure-gen) tool_contract=figure-gen ;;
-      pdf-extract) tool_contract=pdf-extract ;;
+      pdf-extract)
+        tool_contract=pdf-extract
+        tool_contract_check="adapters/codex/bin/preflight.sh pdf-extract --check <file.pdf>"
+        runtime_surface=adapter-owned-pdf-extract
+        ;;
       web-image-search) tool_contract=web-image-search ;;
       *) tool_contract=material-tooling ;;
     esac
     if [ "$name" = "data-script" ]; then
       requirement="run the adapter-owned Python data-script launcher for generated analysis scripts, or report unavailable"
+    elif [ "$name" = "pdf-extract" ]; then
+      requirement="run the adapter-owned PDF extraction launcher for PDF inputs, or report unavailable"
     else
       requirement="provide the named browser/pdf/script/web tool contract or report unavailable"
     fi

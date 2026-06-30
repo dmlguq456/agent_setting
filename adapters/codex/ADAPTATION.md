@@ -89,6 +89,12 @@ Codex-owned executable tool-contract surface:
 `adapters/codex/bin/preflight.sh data-script --check <script.py>` verifies
 generated Python analysis scripts through `adapters/codex/tools/material/`.
 
+`roles/modes/material/pdf-extract.md` has a Codex-owned executable
+tool-contract surface:
+`adapters/codex/bin/preflight.sh pdf-extract --check <file.pdf>` verifies
+local PDF text extraction through `adapters/codex/tools/material/` and reports
+exit 69 when the local extractor is unavailable.
+
 `roles/modes/qa/test.md` has a Codex-owned executable tool-contract surface:
 `adapters/codex/bin/preflight.sh verification-runner --check -- <command>`
 checks explicit verification commands and the same wrapper can execute them
@@ -238,6 +244,7 @@ could consume them.
 - `memory/apply-distill-actions.py`
 - `memory/recall.sh` (Codex-owned launcher for recall)
 - `material/data-script.sh` (Codex-owned launcher for Python data-analysis scripts)
+- `material/pdf-extract.sh` (Codex-owned launcher for local PDF text extraction)
 - `qa/verification-runner.sh` (Codex-owned launcher for explicit verification commands)
 - `design/visual-harness.sh` (Codex-owned launcher for render/screenshot/console checks)
 

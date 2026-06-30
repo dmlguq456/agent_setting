@@ -344,6 +344,27 @@ if "$CODEX" data-script --check "$TMP/codex-data-script.py" >/tmp/codex_data_scr
 else
   bad "codex data-script wrapper should check Python analysis scripts"
 fi
+if "$CODEX" pdf-extract >/tmp/codex_pdf_extract.out 2>/tmp/codex_pdf_extract.err \
+  && grep -q '^adapter=codex$' /tmp/codex_pdf_extract.out \
+  && grep -q '^tool_contract=pdf-extract$' /tmp/codex_pdf_extract.out \
+  && grep -q '^runtime_surface=adapter-owned-pdf-extract$' /tmp/codex_pdf_extract.out \
+  && grep -q '^status=tool-contract$' /tmp/codex_pdf_extract.out; then
+  ok "codex pdf-extract wrapper reports tool contract"
+else
+  bad "codex pdf-extract wrapper should report tool contract"
+fi
+if "$CODEX" pdf-extract --check "$TMP/missing.pdf" >/tmp/codex_pdf_missing.out 2>/tmp/codex_pdf_missing.err; then
+  bad "codex pdf-extract wrapper should fail missing PDF"
+else
+  rc=$?
+  if [ "$rc" -eq 66 ] \
+    && grep -q '^adapter=codex$' /tmp/codex_pdf_missing.out \
+    && grep -q '^reason=file-not-found$' /tmp/codex_pdf_missing.out; then
+    ok "codex pdf-extract wrapper reports missing PDF"
+  else
+    bad "codex pdf-extract wrapper should report missing PDF"
+  fi
+fi
 if "$CODEX" verification-runner --check -- python3 >/tmp/codex_verify_check.out 2>/tmp/codex_verify_check.err \
   && grep -q '^adapter=codex$' /tmp/codex_verify_check.out \
   && grep -q '^tool_contract=verification-runner$' /tmp/codex_verify_check.out \
@@ -519,6 +540,17 @@ if "$CODEX" mode-info material/data-script >/tmp/mode.out 2>/tmp/mode.err \
   ok "codex mode wrapper reports material data-script contract surface"
 else
   bad "codex mode wrapper should report material data-script contract surface"
+fi
+if "$CODEX" mode-info material/pdf-extract >/tmp/mode.out 2>/tmp/mode.err \
+  && grep -q '^status=tool-contract$' /tmp/mode.out \
+  && grep -q '^realization=portable-with-tool-contract$' /tmp/mode.out \
+  && grep -q '^tool_contract=pdf-extract$' /tmp/mode.out \
+  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh pdf-extract --check <file.pdf>$' /tmp/mode.out \
+  && grep -q '^runtime_surface=adapter-owned-pdf-extract$' /tmp/mode.out \
+  && grep -q '^fallback=satisfy-tool-contract-or-report-unavailable$' /tmp/mode.out; then
+  ok "codex mode wrapper reports material pdf-extract contract surface"
+else
+  bad "codex mode wrapper should report material pdf-extract contract surface"
 fi
 if "$CODEX" mode-info qa/test >/tmp/mode.out 2>/tmp/mode.err \
   && grep -q '^status=tool-contract$' /tmp/mode.out \
@@ -969,6 +1001,27 @@ if "$OPENCODE" data-script --check "$TMP/opencode-data-script.py" >/tmp/opencode
 else
   bad "opencode data-script wrapper should check Python analysis scripts"
 fi
+if "$OPENCODE" pdf-extract >/tmp/opencode_pdf_extract.out 2>/tmp/opencode_pdf_extract.err \
+  && grep -q '^adapter=opencode$' /tmp/opencode_pdf_extract.out \
+  && grep -q '^tool_contract=pdf-extract$' /tmp/opencode_pdf_extract.out \
+  && grep -q '^runtime_surface=adapter-owned-pdf-extract$' /tmp/opencode_pdf_extract.out \
+  && grep -q '^status=tool-contract$' /tmp/opencode_pdf_extract.out; then
+  ok "opencode pdf-extract wrapper reports tool contract"
+else
+  bad "opencode pdf-extract wrapper should report tool contract"
+fi
+if "$OPENCODE" pdf-extract --check "$TMP/missing.pdf" >/tmp/opencode_pdf_missing.out 2>/tmp/opencode_pdf_missing.err; then
+  bad "opencode pdf-extract wrapper should fail missing PDF"
+else
+  rc=$?
+  if [ "$rc" -eq 66 ] \
+    && grep -q '^adapter=opencode$' /tmp/opencode_pdf_missing.out \
+    && grep -q '^reason=file-not-found$' /tmp/opencode_pdf_missing.out; then
+    ok "opencode pdf-extract wrapper reports missing PDF"
+  else
+    bad "opencode pdf-extract wrapper should report missing PDF"
+  fi
+fi
 if "$OPENCODE" verification-runner --check -- python3 >/tmp/opencode_verify_check.out 2>/tmp/opencode_verify_check.err \
   && grep -q '^adapter=opencode$' /tmp/opencode_verify_check.out \
   && grep -q '^tool_contract=verification-runner$' /tmp/opencode_verify_check.out \
@@ -1036,6 +1089,17 @@ if "$OPENCODE" mode-info material/data-script >/tmp/opencode_mode.out 2>/tmp/ope
   ok "opencode mode wrapper reports material data-script contract surface"
 else
   bad "opencode mode wrapper should report material data-script contract surface"
+fi
+if "$OPENCODE" mode-info material/pdf-extract >/tmp/opencode_mode.out 2>/tmp/opencode_mode.err \
+  && grep -q '^status=tool-contract$' /tmp/opencode_mode.out \
+  && grep -q '^realization=portable-with-tool-contract$' /tmp/opencode_mode.out \
+  && grep -q '^tool_contract=pdf-extract$' /tmp/opencode_mode.out \
+  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh pdf-extract --check <file.pdf>$' /tmp/opencode_mode.out \
+  && grep -q '^runtime_surface=adapter-owned-pdf-extract$' /tmp/opencode_mode.out \
+  && grep -q '^fallback=satisfy-tool-contract-or-report-unavailable$' /tmp/opencode_mode.out; then
+  ok "opencode mode wrapper reports material pdf-extract contract surface"
+else
+  bad "opencode mode wrapper should report material pdf-extract contract surface"
 fi
 if "$OPENCODE" mode-info qa/test >/tmp/opencode_mode.out 2>/tmp/opencode_mode.err \
   && grep -q '^status=tool-contract$' /tmp/opencode_mode.out \

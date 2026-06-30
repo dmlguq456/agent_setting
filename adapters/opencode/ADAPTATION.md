@@ -84,6 +84,12 @@ OpenCode-owned executable tool-contract surface:
 `adapters/opencode/bin/preflight.sh data-script --check <script.py>` verifies
 generated Python analysis scripts through `adapters/opencode/tools/material/`.
 
+`roles/modes/material/pdf-extract.md` has an OpenCode-owned executable
+tool-contract surface:
+`adapters/opencode/bin/preflight.sh pdf-extract --check <file.pdf>` verifies
+local PDF text extraction through `adapters/opencode/tools/material/` and
+reports exit 69 when the local extractor is unavailable.
+
 `roles/modes/qa/test.md` has an OpenCode-owned executable tool-contract
 surface:
 `adapters/opencode/bin/preflight.sh verification-runner --check -- <command>`
@@ -216,6 +222,7 @@ shared `tools/` directory. The current allowlist is:
 - `memory/apply-distill-actions.py`
 - `memory/recall.sh` (OpenCode-owned launcher for recall)
 - `material/data-script.sh` (OpenCode-owned launcher for Python data-analysis scripts)
+- `material/pdf-extract.sh` (OpenCode-owned launcher for local PDF text extraction)
 - `qa/verification-runner.sh` (OpenCode-owned launcher for explicit verification commands)
 - `design/visual-harness.sh` (OpenCode-owned launcher for render/screenshot/console checks)
 
