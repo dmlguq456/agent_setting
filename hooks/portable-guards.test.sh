@@ -267,9 +267,12 @@ if env -u AGENT_NOTES_ROOT -u WORKLOG_NOTES_ROOT -u WORKLOG_BOARD_APP -u WORKLOG
 else
   bad "codex worklog wrapper should not default to Claude runtime paths"
 fi
-if AGENT_NOTES_ROOT="$TMP/notes" WORKLOG_BOARD_APP="$TMP/board" WORKLOG_BOARD_WT="$TMP/board-wt" \
+printf 'T\topen\t/r\t/r-wt/a\tjob-a\tcap\nT\tdone\t/r\t/r-wt/b\tjob-b\tcap\n' > "$TMP/status_jobs.log"
+if AGENT_NOTES_ROOT="$TMP/notes" WORKLOG_BOARD_APP="$TMP/board" WORKLOG_BOARD_WT="$TMP/board-wt" AGENT_DISPATCH_JOBS="$TMP/status_jobs.log" \
   "$CODEX" status "$TMP/flowproj" testsid >/tmp/codex_status.out 2>/tmp/codex_status.err \
   && grep -q '^adapter=codex$' /tmp/codex_status.out \
+  && grep -q '^headless_open_jobs=1$' /tmp/codex_status.out \
+  && grep -q '^headless_open_slugs=job-a$' /tmp/codex_status.out \
   && grep -q '^runtime_surface=adapter-owned-harness-status$' /tmp/codex_status.out \
   && grep -q '^artifact_root_exists=1$' /tmp/codex_status.out \
   && grep -q '^workflow_state=tracked$' /tmp/codex_status.out \

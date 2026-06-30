@@ -188,7 +188,7 @@ Harness-specific status signals need OpenCode-native realization:
 | workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; keep OpenCode native UI/config for model/context/session fields |
 | tracked/untracked workflow toggle | explicit `preflight.sh track`; do not expose Claude `/track` command files |
 | artifact root detection | `preflight.sh write` and shared artifact-root helper |
-| headless/autopilot/background jobs | `preflight.sh headless` / `dispatch` / `liveness` / `harvest` provide the tool-contract path over `opencode run`; only UI/status surfacing remains future work |
+| headless/autopilot/background jobs | `preflight.sh headless` / `dispatch` / `liveness` / `harvest` provide the tool-contract path over `opencode run`; `preflight.sh status` surfaces in-flight jobs as `headless_open_jobs` / `headless_open_slugs` from the dispatch registry. A native graphical display remains optional polish |
 | sibling `-wt/<slug>` dispatch detection | preserve the worktree naming invariant; choose an OpenCode-native display surface later |
 | pipeline stage nudges | preflight/AGENTS instructions first; UI only when OpenCode exposes a suitable surface |
 | oncall/note/study/drill loop nudges | `preflight.sh briefing` plus `preflight.sh loop-info <loop>` for loop-specific support/fallback status |

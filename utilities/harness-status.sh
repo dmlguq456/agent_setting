@@ -155,4 +155,25 @@ else
   printf 'worklog_board_wt_exists=0\n'
 fi
 
+# Open headless dispatch jobs (portable .dispatch/jobs.log registry; tab fields:
+# ts, state, repo, worktree, slug, pipe). Surfaces in-flight background work that
+# native status footers do not cover. Override the registry path with
+# AGENT_DISPATCH_JOBS.
+self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+status_home=${AGENT_HOME:-}
+if [ -z "$status_home" ] || [ ! -f "$status_home/core/CORE.md" ]; then
+  status_home=$(CDPATH= cd -- "$self_dir/.." && pwd)
+fi
+jobs_log=${AGENT_DISPATCH_JOBS:-$status_home/.dispatch/jobs.log}
+headless_open=0
+headless_slugs=""
+if [ -f "$jobs_log" ]; then
+  headless_open=$(awk -F '\t' 'NF==6 && $2=="open"{c++} END{print c+0}' "$jobs_log")
+  headless_slugs=$(awk -F '\t' 'NF==6 && $2=="open"{printf "%s%s", sep, $5; sep=","}' "$jobs_log")
+fi
+printf 'headless_open_jobs=%s\n' "$headless_open"
+if [ -n "$headless_slugs" ]; then
+  printf 'headless_open_slugs=%s\n' "$headless_slugs"
+fi
+
 printf 'note=read-only snapshot; runtime-native status UI remains authoritative for model/context/token/session fields\n'
