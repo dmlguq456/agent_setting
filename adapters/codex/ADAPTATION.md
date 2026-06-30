@@ -95,6 +95,12 @@ Codex-owned executable tool-contract surface:
 `adapters/codex/bin/preflight.sh data-script --check <script.py>` verifies
 generated Python analysis scripts through `adapters/codex/tools/material/`.
 
+`roles/modes/material/figure-gen.md` has a Codex-owned executable tool-contract
+surface:
+`adapters/codex/bin/preflight.sh figure-gen --check <script.py>` verifies
+generated matplotlib/seaborn figure scripts through
+`adapters/codex/tools/material/`.
+
 `roles/modes/material/pdf-extract.md` has a Codex-owned executable
 tool-contract surface:
 `adapters/codex/bin/preflight.sh pdf-extract --check <file.pdf>` verifies
@@ -261,6 +267,7 @@ could consume them.
 - `memory/recall.sh` (Codex-owned launcher for recall)
 - `material/browser-fetch.sh` (Codex-owned launcher for rendered web page extraction)
 - `material/data-script.sh` (Codex-owned launcher for Python data-analysis scripts)
+- `material/figure-gen.sh` (Codex-owned launcher for generated matplotlib figure scripts)
 - `material/pdf-extract.sh` (Codex-owned launcher for local PDF text extraction)
 - `material/web-image-search.sh` (Codex-owned launcher for configured image search providers)
 - `qa/verification-runner.sh` (Codex-owned launcher for explicit verification commands)

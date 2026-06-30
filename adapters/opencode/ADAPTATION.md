@@ -90,6 +90,12 @@ OpenCode-owned executable tool-contract surface:
 `adapters/opencode/bin/preflight.sh data-script --check <script.py>` verifies
 generated Python analysis scripts through `adapters/opencode/tools/material/`.
 
+`roles/modes/material/figure-gen.md` has an OpenCode-owned executable
+tool-contract surface:
+`adapters/opencode/bin/preflight.sh figure-gen --check <script.py>` verifies
+generated matplotlib/seaborn figure scripts through
+`adapters/opencode/tools/material/`.
+
 `roles/modes/material/pdf-extract.md` has an OpenCode-owned executable
 tool-contract surface:
 `adapters/opencode/bin/preflight.sh pdf-extract --check <file.pdf>` verifies
@@ -240,6 +246,7 @@ shared `tools/` directory. The current allowlist is:
 - `memory/recall.sh` (OpenCode-owned launcher for recall)
 - `material/browser-fetch.sh` (OpenCode-owned launcher for rendered web page extraction)
 - `material/data-script.sh` (OpenCode-owned launcher for Python data-analysis scripts)
+- `material/figure-gen.sh` (OpenCode-owned launcher for generated matplotlib figure scripts)
 - `material/pdf-extract.sh` (OpenCode-owned launcher for local PDF text extraction)
 - `material/web-image-search.sh` (OpenCode-owned launcher for configured image search providers)
 - `qa/verification-runner.sh` (OpenCode-owned launcher for explicit verification commands)

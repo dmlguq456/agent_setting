@@ -66,6 +66,7 @@ guards and tool-contract reporting.
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/opencode/bin/preflight.sh write <file> [session-id]` before writes |
 | material browser fetch | Tool-contract check: `adapters/opencode/bin/preflight.sh browser-fetch --check <url>` verifies rendered browser access through the adapter-owned Playwright launcher before using `roles/modes/material/browser-fetch.md`. Exit 69 means the local browser stack is unavailable |
 | material data script | Tool-contract check: `adapters/opencode/bin/preflight.sh data-script --check <script.py>` verifies generated Python analysis scripts through the adapter-owned launcher before using `roles/modes/material/data-script.md` |
+| material figure generation | Tool-contract check: `adapters/opencode/bin/preflight.sh figure-gen --check <script.py>` verifies generated matplotlib/seaborn figure scripts through the adapter-owned launcher before using `roles/modes/material/figure-gen.md` |
 | material PDF extract | Tool-contract check: `adapters/opencode/bin/preflight.sh pdf-extract --check <file.pdf>` verifies local PDF text extraction through the adapter-owned launcher before using `roles/modes/material/pdf-extract.md`. Exit 69 means the local extractor is unavailable |
 | material web image search | Tool-contract check: `adapters/opencode/bin/preflight.sh web-image-search --check <query>` verifies that `OPENCODE_WEB_IMAGE_SEARCH_CMD` or `AGENT_WEB_IMAGE_SEARCH_CMD` provides a local image-search command before using `roles/modes/material/web-image-search.md`. Exit 69 means no provider is configured |
 | QA security review | Portable read-only persona: `roles/modes/qa/security-review.md` is consumed with OpenCode file and git diff tools. Do not project or invoke Claude `/security-review` |
@@ -98,6 +99,7 @@ tools that OpenCode wrappers use directly:
 - `memory/recall.sh` (OpenCode-owned launcher for recall)
 - `material/browser-fetch.sh` (OpenCode-owned launcher for rendered web page extraction)
 - `material/data-script.sh` (OpenCode-owned launcher for Python data-analysis scripts)
+- `material/figure-gen.sh` (OpenCode-owned launcher for generated matplotlib figure scripts)
 - `material/pdf-extract.sh` (OpenCode-owned launcher for local PDF text extraction)
 - `material/web-image-search.sh` (OpenCode-owned launcher for configured image search providers)
 - `qa/verification-runner.sh` (OpenCode-owned launcher for explicit verification commands)

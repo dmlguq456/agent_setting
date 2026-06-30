@@ -186,6 +186,10 @@ codex_setting/bin/preflight.sh mode-info material/data-script >/tmp/codex-data-s
 rg '^tool_contract=data-script$' /tmp/codex-data-script-mode.txt
 rg '^runtime_surface=adapter-owned-data-script$' /tmp/codex-data-script-mode.txt
 test -x codex_setting/tools/material/data-script.sh
+codex_setting/bin/preflight.sh mode-info material/figure-gen >/tmp/codex-figure-gen-mode.txt
+rg '^tool_contract=figure-gen$' /tmp/codex-figure-gen-mode.txt
+rg '^runtime_surface=adapter-owned-figure-gen$' /tmp/codex-figure-gen-mode.txt
+test -x codex_setting/tools/material/figure-gen.sh
 codex_setting/bin/preflight.sh mode-info material/pdf-extract >/tmp/codex-pdf-extract-mode.txt
 rg '^tool_contract=pdf-extract$' /tmp/codex-pdf-extract-mode.txt
 rg '^runtime_surface=adapter-owned-pdf-extract$' /tmp/codex-pdf-extract-mode.txt
@@ -277,6 +281,10 @@ opencode_setting/bin/preflight.sh mode-info material/data-script >/tmp/opencode-
 rg '^tool_contract=data-script$' /tmp/opencode-data-script-mode.txt
 rg '^runtime_surface=adapter-owned-data-script$' /tmp/opencode-data-script-mode.txt
 test -x opencode_setting/tools/material/data-script.sh
+opencode_setting/bin/preflight.sh mode-info material/figure-gen >/tmp/opencode-figure-gen-mode.txt
+rg '^tool_contract=figure-gen$' /tmp/opencode-figure-gen-mode.txt
+rg '^runtime_surface=adapter-owned-figure-gen$' /tmp/opencode-figure-gen-mode.txt
+test -x opencode_setting/tools/material/figure-gen.sh
 opencode_setting/bin/preflight.sh mode-info material/pdf-extract >/tmp/opencode-pdf-extract-mode.txt
 rg '^tool_contract=pdf-extract$' /tmp/opencode-pdf-extract-mode.txt
 rg '^runtime_surface=adapter-owned-pdf-extract$' /tmp/opencode-pdf-extract-mode.txt

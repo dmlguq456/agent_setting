@@ -349,6 +349,27 @@ if "$CODEX" data-script --check "$TMP/codex-data-script.py" >/tmp/codex_data_scr
 else
   bad "codex data-script wrapper should check Python analysis scripts"
 fi
+if "$CODEX" figure-gen >/tmp/codex_figure_gen.out 2>/tmp/codex_figure_gen.err \
+  && grep -q '^adapter=codex$' /tmp/codex_figure_gen.out \
+  && grep -q '^tool_contract=figure-gen$' /tmp/codex_figure_gen.out \
+  && grep -q '^runtime_surface=adapter-owned-figure-gen$' /tmp/codex_figure_gen.out \
+  && grep -q '^status=tool-contract$' /tmp/codex_figure_gen.out; then
+  ok "codex figure-gen wrapper reports tool contract"
+else
+  bad "codex figure-gen wrapper should report tool contract"
+fi
+if "$CODEX" figure-gen --check "$TMP/missing-figure.py" >/tmp/codex_figure_missing.out 2>/tmp/codex_figure_missing.err; then
+  bad "codex figure-gen wrapper should fail missing script"
+else
+  rc=$?
+  if [ "$rc" -eq 66 ] \
+    && grep -q '^adapter=codex$' /tmp/codex_figure_missing.out \
+    && grep -q '^reason=file-not-found$' /tmp/codex_figure_missing.out; then
+    ok "codex figure-gen wrapper reports missing script"
+  else
+    bad "codex figure-gen wrapper should report missing script"
+  fi
+fi
 if "$CODEX" browser-fetch >/tmp/codex_browser_fetch.out 2>/tmp/codex_browser_fetch.err \
   && grep -q '^adapter=codex$' /tmp/codex_browser_fetch.out \
   && grep -q '^tool_contract=browser-fetch$' /tmp/codex_browser_fetch.out \
@@ -596,6 +617,17 @@ if "$CODEX" mode-info material/data-script >/tmp/mode.out 2>/tmp/mode.err \
   ok "codex mode wrapper reports material data-script contract surface"
 else
   bad "codex mode wrapper should report material data-script contract surface"
+fi
+if "$CODEX" mode-info material/figure-gen >/tmp/mode.out 2>/tmp/mode.err \
+  && grep -q '^status=tool-contract$' /tmp/mode.out \
+  && grep -q '^realization=portable-with-tool-contract$' /tmp/mode.out \
+  && grep -q '^tool_contract=figure-gen$' /tmp/mode.out \
+  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh figure-gen --check <script.py>$' /tmp/mode.out \
+  && grep -q '^runtime_surface=adapter-owned-figure-gen$' /tmp/mode.out \
+  && grep -q '^fallback=satisfy-tool-contract-or-report-unavailable$' /tmp/mode.out; then
+  ok "codex mode wrapper reports material figure-gen contract surface"
+else
+  bad "codex mode wrapper should report material figure-gen contract surface"
 fi
 if "$CODEX" mode-info material/pdf-extract >/tmp/mode.out 2>/tmp/mode.err \
   && grep -q '^status=tool-contract$' /tmp/mode.out \
@@ -1070,6 +1102,27 @@ if "$OPENCODE" data-script --check "$TMP/opencode-data-script.py" >/tmp/opencode
 else
   bad "opencode data-script wrapper should check Python analysis scripts"
 fi
+if "$OPENCODE" figure-gen >/tmp/opencode_figure_gen.out 2>/tmp/opencode_figure_gen.err \
+  && grep -q '^adapter=opencode$' /tmp/opencode_figure_gen.out \
+  && grep -q '^tool_contract=figure-gen$' /tmp/opencode_figure_gen.out \
+  && grep -q '^runtime_surface=adapter-owned-figure-gen$' /tmp/opencode_figure_gen.out \
+  && grep -q '^status=tool-contract$' /tmp/opencode_figure_gen.out; then
+  ok "opencode figure-gen wrapper reports tool contract"
+else
+  bad "opencode figure-gen wrapper should report tool contract"
+fi
+if "$OPENCODE" figure-gen --check "$TMP/missing-figure.py" >/tmp/opencode_figure_missing.out 2>/tmp/opencode_figure_missing.err; then
+  bad "opencode figure-gen wrapper should fail missing script"
+else
+  rc=$?
+  if [ "$rc" -eq 66 ] \
+    && grep -q '^adapter=opencode$' /tmp/opencode_figure_missing.out \
+    && grep -q '^reason=file-not-found$' /tmp/opencode_figure_missing.out; then
+    ok "opencode figure-gen wrapper reports missing script"
+  else
+    bad "opencode figure-gen wrapper should report missing script"
+  fi
+fi
 if "$OPENCODE" browser-fetch >/tmp/opencode_browser_fetch.out 2>/tmp/opencode_browser_fetch.err \
   && grep -q '^adapter=opencode$' /tmp/opencode_browser_fetch.out \
   && grep -q '^tool_contract=browser-fetch$' /tmp/opencode_browser_fetch.out \
@@ -1209,6 +1262,17 @@ if "$OPENCODE" mode-info material/data-script >/tmp/opencode_mode.out 2>/tmp/ope
   ok "opencode mode wrapper reports material data-script contract surface"
 else
   bad "opencode mode wrapper should report material data-script contract surface"
+fi
+if "$OPENCODE" mode-info material/figure-gen >/tmp/opencode_mode.out 2>/tmp/opencode_mode.err \
+  && grep -q '^status=tool-contract$' /tmp/opencode_mode.out \
+  && grep -q '^realization=portable-with-tool-contract$' /tmp/opencode_mode.out \
+  && grep -q '^tool_contract=figure-gen$' /tmp/opencode_mode.out \
+  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh figure-gen --check <script.py>$' /tmp/opencode_mode.out \
+  && grep -q '^runtime_surface=adapter-owned-figure-gen$' /tmp/opencode_mode.out \
+  && grep -q '^fallback=satisfy-tool-contract-or-report-unavailable$' /tmp/opencode_mode.out; then
+  ok "opencode mode wrapper reports material figure-gen contract surface"
+else
+  bad "opencode mode wrapper should report material figure-gen contract surface"
 fi
 if "$OPENCODE" mode-info material/pdf-extract >/tmp/opencode_mode.out 2>/tmp/opencode_mode.err \
   && grep -q '^status=tool-contract$' /tmp/opencode_mode.out \

@@ -63,7 +63,11 @@ case "$family" in
         tool_contract_check="adapters/opencode/bin/preflight.sh data-script --check <script.py>"
         runtime_surface=adapter-owned-data-script
         ;;
-      figure-gen) tool_contract=figure-gen ;;
+      figure-gen)
+        tool_contract=figure-gen
+        tool_contract_check="adapters/opencode/bin/preflight.sh figure-gen --check <script.py>"
+        runtime_surface=adapter-owned-figure-gen
+        ;;
       pdf-extract)
         tool_contract=pdf-extract
         tool_contract_check="adapters/opencode/bin/preflight.sh pdf-extract --check <file.pdf>"
@@ -80,6 +84,8 @@ case "$family" in
       requirement="run the adapter-owned Playwright browser-fetch launcher for rendered web inputs, or report unavailable"
     elif [ "$name" = "data-script" ]; then
       requirement="run the adapter-owned Python data-script launcher for generated analysis scripts, or report unavailable"
+    elif [ "$name" = "figure-gen" ]; then
+      requirement="run the adapter-owned matplotlib figure script launcher for generated figure scripts, or report unavailable"
     elif [ "$name" = "pdf-extract" ]; then
       requirement="run the adapter-owned PDF extraction launcher for PDF inputs, or report unavailable"
     elif [ "$name" = "web-image-search" ]; then
