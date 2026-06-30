@@ -78,7 +78,11 @@ Before adding or changing OpenCode-native skills, commands, or agents:
 
 Design capabilities are a tool-contract exception: OpenCode has native Skill
 guidance for them, but must run the adapter visual harness before claiming full
-support. `capability-info` reports `status=tool-contract` for those entries.
+support. `capability-info` reports `status=tool-contract` for those capability
+entries. This does not make `roles/modes/design/*` native OpenCode modes; those
+mode fragments remain `mode-info status=unsupported` / `fallback=reference-only`
+because they are adapter-coupled persona fragments, while the concrete
+capability path is `autopilot-design` plus the visual harness contract.
 
 `roles/modes/material/browser-fetch.md` has an OpenCode-owned executable
 tool-contract surface:
@@ -167,7 +171,7 @@ OpenCode must not consume these Claude-native files as native configuration:
 | `adapters/claude/CLAUDE.md` | Reference only; not bootstrap |
 | `adapters/claude/agents/*.md` | Reference only; OpenCode should start from `roles/README.md`. Claude Agent frontmatter is not OpenCode agent frontmatter. |
 | `adapters/claude/hooks/*.sh` | Reference only; OpenCode has no shell hook event schema. Guards run as explicit preflight. |
-| `roles/modes/design/*` | Compatibility reference only until OpenCode has an equivalent visual/browser verification harness |
+| `roles/modes/design/*` | Reference-only adapter-coupled mode fragments; concrete design work uses `autopilot-design` capability guidance plus `preflight.sh visual-harness` |
 
 ## Status Surface Boundary
 
