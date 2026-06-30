@@ -65,7 +65,7 @@ guards and tool-contract reporting.
 | tracked/untracked toggle | Portable `utilities/workflow-toggle.sh`; run `adapters/opencode/bin/preflight.sh track [cwd] [session-id]` only on explicit user request |
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/opencode/bin/preflight.sh write <file> [session-id]` before writes |
 | design post-write verification | `core/HOOKS.md` defines the invariant; run `adapters/opencode/bin/preflight.sh design <file>` after design HTML writes |
-| design visual harness | Tool-contract: `adapters/opencode/bin/preflight.sh visual-harness` exits 69 until OpenCode has an adapter-owned render/screenshot/image-inspection harness. Do not project Claude Design MCP files into OpenCode |
+| design visual harness | Tool-contract check: `adapters/opencode/bin/preflight.sh visual-harness <file.html>` runs the adapter-owned render/screenshot/console wrapper. Inspect the reported screenshot before claiming visual completion. Do not project Claude Design MCP files into OpenCode |
 | spec read gate | `core/HOOKS.md` defines marker/check semantics; run `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]` after actual reads and `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
 | git safety gate | `core/HOOKS.md` defines the invariant; included in `adapters/opencode/bin/preflight.sh write <file> [session-id]` |
 | memory write guard | `core/HOOKS.md` defines the invariant; included in `adapters/opencode/bin/preflight.sh write <file> [session-id]` |
@@ -90,10 +90,13 @@ memory tools that OpenCode wrappers use directly:
 - `memory/mem.py` (OpenCode-owned launcher for the shared memory CLI)
 - `memory/apply-distill-actions.py`
 - `memory/recall.sh` (OpenCode-owned launcher for recall)
+- `design/visual-harness.sh` (OpenCode-owned launcher for render/screenshot/console checks)
 
 Harness development tools and Claude-coupled helper surfaces such as
-`build-manifest.py`, `design-mcp`, and `web-bundle` stay out of the OpenCode
-projection until OpenCode has a documented runtime realization for them.
+`build-manifest.py` and `web-bundle` stay out of the OpenCode projection until
+OpenCode has a documented runtime realization for them. The shared `design-mcp`
+package is not projected wholesale; OpenCode exposes only the adapter-owned
+visual harness launcher.
 
 ## Utility Projection
 

@@ -288,25 +288,49 @@ if "$CODEX" capability-info design-review >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^realization=codex-native-skill-plugin$' /tmp/cap.out \
   && grep -q '^status=tool-contract$' /tmp/cap.out \
   && grep -q '^tool_contract=visual-harness$' /tmp/cap.out \
-  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh visual-harness$' /tmp/cap.out \
-  && grep -q '^runtime_surface=not-materialized$' /tmp/cap.out \
-  && grep -q '^fallback=preflight.sh design <file>$' /tmp/cap.out; then
+  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh visual-harness <file.html>$' /tmp/cap.out \
+  && grep -q '^runtime_surface=adapter-owned-visual-harness$' /tmp/cap.out \
+  && grep -q '^fallback=preflight.sh visual-harness <file.html>$' /tmp/cap.out; then
   ok "codex design capability reports visual harness contract"
 else
   bad "codex design capability should report visual harness contract"
 fi
 if "$CODEX" visual-harness >/tmp/codex_visual.out 2>/tmp/codex_visual.err; then
-  bad "codex visual harness should report tool-contract not succeed silently"
-else
-  rc=$?
-  if [ "$rc" -eq 69 ] \
-    && grep -q '^adapter=codex$' /tmp/codex_visual.out \
+  if grep -q '^adapter=codex$' /tmp/codex_visual.out \
     && grep -q '^status=tool-contract$' /tmp/codex_visual.out \
     && grep -q '^tool_contract=visual-harness$' /tmp/codex_visual.out \
+    && grep -q '^runtime_surface=adapter-owned-visual-harness$' /tmp/codex_visual.out \
     && ! grep -q 'adapters/claude\|claude_setting\|settings.json\|statusline.sh' /tmp/codex_visual.out; then
     ok "codex visual harness reports adapter-native tool-contract"
   else
     bad "codex visual harness should report adapter-native tool-contract"
+  fi
+else
+  bad "codex visual harness should report adapter-native tool-contract"
+fi
+cat >"$TMP/codex-preview.html" <<'EOF'
+<!doctype html><html><body><h1>Codex visual harness</h1></body></html>
+EOF
+if "$CODEX" visual-harness "$TMP/codex-preview.html" --out "$TMP/codex-visual" >/tmp/codex_visual_file.out 2>/tmp/codex_visual_file.err; then
+  if grep -q '^adapter=codex$' /tmp/codex_visual_file.out \
+    && grep -q '^runtime_surface=adapter-owned-visual-harness$' /tmp/codex_visual_file.out \
+    && grep -q '^status=ok$' /tmp/codex_visual_file.out \
+    && grep -q '^console_errors=0$' /tmp/codex_visual_file.out \
+    && [ -f "$TMP/codex-visual/codex-preview-html.png" ]; then
+    ok "codex visual harness renders HTML when checker dependencies exist"
+  else
+    bad "codex visual harness should render HTML when checker dependencies exist"
+  fi
+else
+  rc=$?
+  if [ "$rc" -eq 69 ] \
+    && grep -q '^adapter=codex$' /tmp/codex_visual_file.out \
+    && grep -q '^runtime_surface=adapter-owned-visual-harness$' /tmp/codex_visual_file.out \
+    && grep -q '^status=tool-contract$' /tmp/codex_visual_file.out \
+    && grep -q '^reason=playwright-unavailable$' /tmp/codex_visual_file.out; then
+    ok "codex visual harness reports unavailable checker dependency"
+  else
+    bad "codex visual harness should render or report unavailable checker dependency"
   fi
 fi
 if command -v codex >/dev/null 2>&1; then
@@ -447,8 +471,8 @@ if "$CODEX" mode-info design/maker >/tmp/mode.out 2>/tmp/mode.err \
   && grep -q '^status=unsupported$' /tmp/mode.out \
   && grep -q '^realization=adapter-coupled$' /tmp/mode.out \
   && grep -q '^tool_contract=visual-harness$' /tmp/mode.out \
-  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh visual-harness$' /tmp/mode.out \
-  && grep -q '^runtime_surface=not-materialized$' /tmp/mode.out \
+  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh visual-harness <file.html>$' /tmp/mode.out \
+  && grep -q '^runtime_surface=adapter-owned-visual-harness$' /tmp/mode.out \
   && grep -q '^fallback=reference-only$' /tmp/mode.out; then
   ok "codex mode wrapper marks adapter-coupled design mode unsupported"
 else
@@ -831,25 +855,49 @@ if "$OPENCODE" capability-info design-review >/tmp/opencode_cap.out 2>/tmp/openc
   && grep -q '^realization=opencode-native-skill-command$' /tmp/opencode_cap.out \
   && grep -q '^status=tool-contract$' /tmp/opencode_cap.out \
   && grep -q '^tool_contract=visual-harness$' /tmp/opencode_cap.out \
-  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness$' /tmp/opencode_cap.out \
-  && grep -q '^runtime_surface=not-materialized$' /tmp/opencode_cap.out \
-  && grep -q '^fallback=preflight.sh design <file>$' /tmp/opencode_cap.out; then
+  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness <file.html>$' /tmp/opencode_cap.out \
+  && grep -q '^runtime_surface=adapter-owned-visual-harness$' /tmp/opencode_cap.out \
+  && grep -q '^fallback=preflight.sh visual-harness <file.html>$' /tmp/opencode_cap.out; then
   ok "opencode design capability reports visual harness contract"
 else
   bad "opencode design capability should report visual harness contract"
 fi
 if "$OPENCODE" visual-harness >/tmp/opencode_visual.out 2>/tmp/opencode_visual.err; then
-  bad "opencode visual harness should report tool-contract not succeed silently"
-else
-  rc=$?
-  if [ "$rc" -eq 69 ] \
-    && grep -q '^adapter=opencode$' /tmp/opencode_visual.out \
+  if grep -q '^adapter=opencode$' /tmp/opencode_visual.out \
     && grep -q '^status=tool-contract$' /tmp/opencode_visual.out \
     && grep -q '^tool_contract=visual-harness$' /tmp/opencode_visual.out \
+    && grep -q '^runtime_surface=adapter-owned-visual-harness$' /tmp/opencode_visual.out \
     && ! grep -q 'adapters/claude\|claude_setting\|settings.json\|statusline.sh' /tmp/opencode_visual.out; then
     ok "opencode visual harness reports adapter-native tool-contract"
   else
     bad "opencode visual harness should report adapter-native tool-contract"
+  fi
+else
+  bad "opencode visual harness should report adapter-native tool-contract"
+fi
+cat >"$TMP/opencode-preview.html" <<'EOF'
+<!doctype html><html><body><h1>OpenCode visual harness</h1></body></html>
+EOF
+if "$OPENCODE" visual-harness "$TMP/opencode-preview.html" --out "$TMP/opencode-visual" >/tmp/opencode_visual_file.out 2>/tmp/opencode_visual_file.err; then
+  if grep -q '^adapter=opencode$' /tmp/opencode_visual_file.out \
+    && grep -q '^runtime_surface=adapter-owned-visual-harness$' /tmp/opencode_visual_file.out \
+    && grep -q '^status=ok$' /tmp/opencode_visual_file.out \
+    && grep -q '^console_errors=0$' /tmp/opencode_visual_file.out \
+    && [ -f "$TMP/opencode-visual/opencode-preview-html.png" ]; then
+    ok "opencode visual harness renders HTML when checker dependencies exist"
+  else
+    bad "opencode visual harness should render HTML when checker dependencies exist"
+  fi
+else
+  rc=$?
+  if [ "$rc" -eq 69 ] \
+    && grep -q '^adapter=opencode$' /tmp/opencode_visual_file.out \
+    && grep -q '^runtime_surface=adapter-owned-visual-harness$' /tmp/opencode_visual_file.out \
+    && grep -q '^status=tool-contract$' /tmp/opencode_visual_file.out \
+    && grep -q '^reason=playwright-unavailable$' /tmp/opencode_visual_file.out; then
+    ok "opencode visual harness reports unavailable checker dependency"
+  else
+    bad "opencode visual harness should render or report unavailable checker dependency"
   fi
 fi
 if command -v opencode >/dev/null 2>&1; then
@@ -882,8 +930,8 @@ if "$OPENCODE" mode-info design/maker >/tmp/opencode_mode.out 2>/tmp/opencode_mo
   && grep -q '^status=unsupported$' /tmp/opencode_mode.out \
   && grep -q '^realization=adapter-coupled$' /tmp/opencode_mode.out \
   && grep -q '^tool_contract=visual-harness$' /tmp/opencode_mode.out \
-  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness$' /tmp/opencode_mode.out \
-  && grep -q '^runtime_surface=not-materialized$' /tmp/opencode_mode.out \
+  && grep -q '^tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness <file.html>$' /tmp/opencode_mode.out \
+  && grep -q '^runtime_surface=adapter-owned-visual-harness$' /tmp/opencode_mode.out \
   && grep -q '^fallback=reference-only$' /tmp/opencode_mode.out; then
   ok "opencode mode wrapper marks adapter-coupled design mode unsupported"
 else

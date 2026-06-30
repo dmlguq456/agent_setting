@@ -66,10 +66,10 @@ case "$family" in
     status=unsupported
     realization=adapter-coupled
     tool_contract=visual-harness
-    tool_contract_check="adapters/opencode/bin/preflight.sh visual-harness"
-    runtime_surface=not-materialized
+    tool_contract_check="adapters/opencode/bin/preflight.sh visual-harness <file.html>"
+    runtime_surface=adapter-owned-visual-harness
     fallback=reference-only
-    requirement="opencode-native visual/browser verification harness required"
+    requirement="adapter-owned visual harness must be run for concrete design outputs; mode fragment remains reference-only"
     ;;
   qa)
     case "$name" in

@@ -205,11 +205,13 @@ shared `tools/` directory. The current allowlist is:
 - `memory/mem.py` (OpenCode-owned launcher for the shared memory CLI)
 - `memory/apply-distill-actions.py`
 - `memory/recall.sh` (OpenCode-owned launcher for recall)
+- `design/visual-harness.sh` (OpenCode-owned launcher for render/screenshot/console checks)
 
 Do not project `build-manifest.py`: it is a harness development tool that reads
-Claude adapter skills, agents, and settings. Do not project `design-mcp` or
-`web-bundle` until OpenCode has a documented design/tooling realization that
-uses them directly.
+Claude adapter skills, agents, and settings. Do not project `web-bundle` until
+OpenCode has a documented design/tooling realization that uses it directly. The
+shared `design-mcp` package is not projected wholesale; OpenCode exposes only
+the adapter-owned visual harness launcher.
 
 `opencode_setting/utilities` points at `adapters/opencode/utilities/`, not the
 entire shared `utilities/` directory. The current allowlist is:

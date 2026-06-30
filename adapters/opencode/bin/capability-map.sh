@@ -84,16 +84,16 @@ fi
 if [ "$tool_contract" = "visual-harness" ]; then
   case "$realization" in
     opencode-native-skill-command)
-      note="OpenCode has native Skill and command projections for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
+      note="OpenCode has native Skill and command projections for guidance and an adapter-owned visual harness contract; run the harness for concrete design outputs before claiming full support."
       ;;
     opencode-native-skill)
-      note="OpenCode has a native Skill projection for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
+      note="OpenCode has a native Skill projection for guidance and an adapter-owned visual harness contract; run the harness for concrete design outputs before claiming full support."
       ;;
     opencode-native-command)
-      note="OpenCode has a native command projection for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
+      note="OpenCode has a native command projection for guidance and an adapter-owned visual harness contract; run the harness for concrete design outputs before claiming full support."
       ;;
     *)
-      note="OpenCode must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
+      note="OpenCode has an adapter-owned visual harness contract; run the harness for concrete design outputs before claiming full support."
       ;;
   esac
 fi
@@ -112,9 +112,9 @@ printf 'status=%s\n' "$status"
 if [ -n "$tool_contract" ]; then
   printf 'tool_contract=%s\n' "$tool_contract"
   if [ "$tool_contract" = "visual-harness" ]; then
-    printf 'tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness\n'
-    printf 'runtime_surface=not-materialized\n'
-    printf 'fallback=preflight.sh design <file>\n'
+    printf 'runtime_surface=adapter-owned-visual-harness\n'
+    printf 'tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness <file.html>\n'
+    printf 'fallback=preflight.sh visual-harness <file.html>\n'
   fi
 fi
 printf 'note=%s\n' "$note"

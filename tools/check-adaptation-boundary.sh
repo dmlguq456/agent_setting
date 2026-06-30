@@ -349,8 +349,8 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'visual-harness)' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must expose the Codex visual harness tool-contract"
   fi
-  if ! grep -Fq 'runtime_surface=not-materialized' adapters/codex/bin/capability-map.sh \
-    || ! grep -Fq 'fallback=preflight.sh design <file>' adapters/codex/bin/capability-map.sh; then
+  if ! grep -Fq 'runtime_surface=adapter-owned-visual-harness' adapters/codex/bin/capability-map.sh \
+    || ! grep -Fq 'fallback=preflight.sh visual-harness <file.html>' adapters/codex/bin/capability-map.sh; then
     fail_msg "adapters/codex/bin/capability-map.sh must report visual harness runtime surface and fallback"
   fi
   if grep -Eq 'Claude Design MCP|Claude visual harness' adapters/codex/bin/preflight.sh adapters/codex/bin/capability-map.sh; then
@@ -457,7 +457,15 @@ check_codex_tool_projection() {
     fi
   done
 
-  extra=$(find adapters/codex/tools -mindepth 1 ! \( -path adapters/codex/tools/memory -o -path adapters/codex/tools/memory/mem.py -o -path adapters/codex/tools/memory/apply-distill-actions.py -o -path adapters/codex/tools/memory/recall.sh \) -print 2>/dev/null || true)
+  if [ ! -x adapters/codex/tools/design/visual-harness.sh ]; then
+    fail_msg "adapters/codex/tools/design/visual-harness.sh must be an executable Codex-owned design launcher"
+  elif [ -L adapters/codex/tools/design/visual-harness.sh ]; then
+    fail_msg "adapters/codex/tools/design/visual-harness.sh must be concrete, not a symlink"
+  elif grep -q 'adapters/claude\|claude_setting\|CLAUDE_HOME' adapters/codex/tools/design/visual-harness.sh; then
+    fail_msg "adapters/codex/tools/design/visual-harness.sh must not reference Claude-native surfaces"
+  fi
+
+  extra=$(find adapters/codex/tools -mindepth 1 ! \( -path adapters/codex/tools/memory -o -path adapters/codex/tools/memory/mem.py -o -path adapters/codex/tools/memory/apply-distill-actions.py -o -path adapters/codex/tools/memory/recall.sh -o -path adapters/codex/tools/design -o -path adapters/codex/tools/design/visual-harness.sh \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/codex/tools contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -824,8 +832,8 @@ check_opencode_bin_wrappers() {
   if ! grep -Fq 'visual-harness)' adapters/opencode/bin/preflight.sh; then
     fail_msg "adapters/opencode/bin/preflight.sh must expose the OpenCode visual harness tool-contract"
   fi
-  if ! grep -Fq 'runtime_surface=not-materialized' adapters/opencode/bin/capability-map.sh \
-    || ! grep -Fq 'fallback=preflight.sh design <file>' adapters/opencode/bin/capability-map.sh; then
+  if ! grep -Fq 'runtime_surface=adapter-owned-visual-harness' adapters/opencode/bin/capability-map.sh \
+    || ! grep -Fq 'fallback=preflight.sh visual-harness <file.html>' adapters/opencode/bin/capability-map.sh; then
     fail_msg "adapters/opencode/bin/capability-map.sh must report visual harness runtime surface and fallback"
   fi
   if grep -Eq 'Claude Design MCP|Claude visual harness' adapters/opencode/bin/preflight.sh adapters/opencode/bin/capability-map.sh; then
@@ -918,7 +926,15 @@ check_opencode_tool_projection() {
     fi
   done
 
-  extra=$(find adapters/opencode/tools -mindepth 1 ! \( -path adapters/opencode/tools/memory -o -path adapters/opencode/tools/memory/mem.py -o -path adapters/opencode/tools/memory/apply-distill-actions.py -o -path adapters/opencode/tools/memory/recall.sh \) -print 2>/dev/null || true)
+  if [ ! -x adapters/opencode/tools/design/visual-harness.sh ]; then
+    fail_msg "adapters/opencode/tools/design/visual-harness.sh must be an executable OpenCode-owned design launcher"
+  elif [ -L adapters/opencode/tools/design/visual-harness.sh ]; then
+    fail_msg "adapters/opencode/tools/design/visual-harness.sh must be concrete, not a symlink"
+  elif grep -q 'adapters/claude\|claude_setting\|CLAUDE_HOME' adapters/opencode/tools/design/visual-harness.sh; then
+    fail_msg "adapters/opencode/tools/design/visual-harness.sh must not reference Claude-native surfaces"
+  fi
+
+  extra=$(find adapters/opencode/tools -mindepth 1 ! \( -path adapters/opencode/tools/memory -o -path adapters/opencode/tools/memory/mem.py -o -path adapters/opencode/tools/memory/apply-distill-actions.py -o -path adapters/opencode/tools/memory/recall.sh -o -path adapters/opencode/tools/design -o -path adapters/opencode/tools/design/visual-harness.sh \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/opencode/tools contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -1508,8 +1524,8 @@ check_codex_mode_map() {
           fail_msg "Codex mode map must mark $rel as unsupported adapter-coupled"
         fi
         if ! grep -Fq 'tool_contract=visual-harness' "$out" \
-          || ! grep -Fq 'tool_contract_check=adapters/codex/bin/preflight.sh visual-harness' "$out" \
-          || ! grep -Fq 'runtime_surface=not-materialized' "$out" \
+          || ! grep -Fq 'tool_contract_check=adapters/codex/bin/preflight.sh visual-harness <file.html>' "$out" \
+          || ! grep -Fq 'runtime_surface=adapter-owned-visual-harness' "$out" \
           || ! grep -Fq 'fallback=reference-only' "$out"; then
           fail_msg "Codex mode map must report visual-harness contract metadata for unsupported design mode $rel"
         fi
@@ -1578,8 +1594,8 @@ check_opencode_mode_map() {
           fail_msg "OpenCode mode map must mark $rel as unsupported adapter-coupled"
         fi
         if ! grep -Fq 'tool_contract=visual-harness' "$out" \
-          || ! grep -Fq 'tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness' "$out" \
-          || ! grep -Fq 'runtime_surface=not-materialized' "$out" \
+          || ! grep -Fq 'tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness <file.html>' "$out" \
+          || ! grep -Fq 'runtime_surface=adapter-owned-visual-harness' "$out" \
           || ! grep -Fq 'fallback=reference-only' "$out"; then
           fail_msg "OpenCode mode map must report visual-harness contract metadata for unsupported design mode $rel"
         fi

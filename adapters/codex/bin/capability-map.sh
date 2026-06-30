@@ -66,12 +66,12 @@ case "$cap" in
     status="tool-contract"
     tool_contract="visual-harness"
     if [ "$native_plugin" -eq 1 ]; then
-      note="Codex has native Skill and plugin projections for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
+      note="Codex has native Skill and plugin projections for guidance and an adapter-owned visual harness contract; run the harness for concrete design outputs before claiming full support."
     elif [ "$native_skill" -eq 1 ]; then
-      note="Codex has a native Skill projection for guidance, but must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
+      note="Codex has a native Skill projection for guidance and an adapter-owned visual harness contract; run the harness for concrete design outputs before claiming full support."
     else
       realization="portable-instructions"
-      note="Codex must provide an adapter visual harness equivalent before claiming full design capability support; legacy visual harness files are reference only."
+      note="Codex has an adapter-owned visual harness contract; run the harness for concrete design outputs before claiming full support."
     fi
     ;;
 esac
@@ -101,9 +101,9 @@ printf 'status=%s\n' "$status"
 if [ -n "$tool_contract" ]; then
   printf 'tool_contract=%s\n' "$tool_contract"
   if [ "$tool_contract" = "visual-harness" ]; then
-    printf 'tool_contract_check=adapters/codex/bin/preflight.sh visual-harness\n'
-    printf 'runtime_surface=not-materialized\n'
-    printf 'fallback=preflight.sh design <file>\n'
+    printf 'runtime_surface=adapter-owned-visual-harness\n'
+    printf 'tool_contract_check=adapters/codex/bin/preflight.sh visual-harness <file.html>\n'
+    printf 'fallback=preflight.sh visual-harness <file.html>\n'
   fi
 fi
 printf 'note=%s\n' "$note"

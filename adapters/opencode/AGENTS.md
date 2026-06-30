@@ -27,7 +27,7 @@ adapter bootstrap, not the portable source of truth. Load it through the
 - Run deterministic guard scripts directly when OpenCode plugins are unavailable or untrusted. The adapter provides a JS plugin for prompt lifecycle context, write/edit/patch guards, and design post-write checks; use explicit preflight wrappers when that plugin is not installed or trusted.
 - Before edits, run `adapters/opencode/bin/preflight.sh write <file> [session-id]`.
 - After design HTML writes, run `adapters/opencode/bin/preflight.sh design <file>`.
-- Before claiming full design/autopilot-design support, run `adapters/opencode/bin/preflight.sh visual-harness`; exit 69 means the required OpenCode-native render/screenshot/image-inspection harness is still a tool-contract.
+- Before claiming full design/autopilot-design support, run `adapters/opencode/bin/preflight.sh visual-harness <file.html>` and inspect the reported screenshot. Exit 69 means the local Playwright-backed checker is unavailable.
 - After actually reading `<artifact-root>/spec/prd.md`, run `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]`; before spec-changing capability work, run `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]`.
 - OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh start [cwd] [session-id]` and `adapters/opencode/bin/preflight.sh memory [cwd]` once per session; run them manually when plugins are unavailable.
 - OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]`, `adapters/opencode/bin/preflight.sh recall "<prompt>" [cwd]`, and `adapters/opencode/bin/preflight.sh briefing [cwd]`; run them manually when plugins are unavailable.

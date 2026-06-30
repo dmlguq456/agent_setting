@@ -27,7 +27,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Expose Codex hook bridges through `codex_setting/codex-hooks`; do not project Claude `settings.json` or hook payloads.
 - Before edits, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.
 - After design HTML writes, run `adapters/codex/bin/preflight.sh design <file>`.
-- Before claiming full design/autopilot-design support, run `adapters/codex/bin/preflight.sh visual-harness`; exit 69 means the required Codex-native render/screenshot/image-inspection harness is still a tool-contract.
+- Before claiming full design/autopilot-design support, run `adapters/codex/bin/preflight.sh visual-harness <file.html>` and inspect the reported screenshot. Exit 69 means the local Playwright-backed checker is unavailable.
 - After actually reading `<artifact-root>/spec/prd.md`, run `adapters/codex/bin/preflight.sh read <prd.md> [session-id]`; before spec-changing capability work, run `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]`.
 - Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]` and `adapters/codex/bin/preflight.sh memory [cwd]`; run them manually when hooks are unavailable.
 - Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`, `adapters/codex/bin/preflight.sh recall "<prompt>" [cwd]`, and `adapters/codex/bin/preflight.sh briefing [cwd]`; run them manually when hooks are unavailable.

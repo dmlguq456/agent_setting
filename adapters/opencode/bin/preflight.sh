@@ -22,7 +22,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh briefing [cwd]
        preflight.sh worklog [cwd]
        preflight.sh design <file>
-       preflight.sh visual-harness
+       preflight.sh visual-harness [file.html]
        preflight.sh distill-delta <session-id>
        preflight.sh distill-propose <session-id> [cwd]
        preflight.sh role <portable-role>
@@ -102,16 +102,21 @@ case "$cmd" in
     AGENT_HOME="$ROOT" bash "$ROOT/hooks/design-postwrite.sh" --file "$file"
     ;;
   visual-harness)
+    if [ "$#" -ge 2 ]; then
+      shift
+      "$ROOT/adapters/opencode/tools/design/visual-harness.sh" "$@"
+      exit $?
+    fi
     cat <<'EOF'
 adapter=opencode
 status=tool-contract
 tool_contract=visual-harness
-runtime_surface=not-materialized
-fallback=preflight.sh design <file>
+runtime_surface=adapter-owned-visual-harness
+tool_contract_check=adapters/opencode/bin/preflight.sh visual-harness <file.html>
+fallback=preflight.sh visual-harness <file.html>
 portable_source=capabilities/autopilot-design.md
-note=OpenCode design capabilities have native Skill/Command guidance, but no adapter-owned render/screenshot/image-inspection harness yet. Do not project legacy design MCP files into OpenCode.
+note=OpenCode design capabilities have native Skill/Command guidance and an adapter-owned render/screenshot/console harness. Run it for every design HTML output, then inspect the screenshot before claiming visual completion.
 EOF
-    exit 69
     ;;
   distill-delta)
     [ "$#" -ge 2 ] || { echo "opencode preflight: distill-delta requires a session id" >&2; exit 64; }
