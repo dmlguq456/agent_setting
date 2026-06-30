@@ -59,6 +59,7 @@ guards and tool-contract reporting.
 | role mode | Run `adapters/opencode/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no OpenCode-native runtime surface exists |
 | adapter bootstrap | Add `adapters/opencode/AGENTS.md` to the `instructions` array in `opencode.json`/`opencode.jsonc`; then load `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
 | agent home | Set `AGENT_HOME` to the installed harness directory |
+| permission model | Run `adapters/opencode/bin/preflight.sh permissions`; use OpenCode native `permission` config and plugin hooks, not Claude `allowedTools` |
 | artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
 | workflow start cleanup | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh start [cwd] [session-id]` once per session; run it manually when plugins are unavailable |
 | tracked/untracked signal | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]`; run it manually when plugins are unavailable |

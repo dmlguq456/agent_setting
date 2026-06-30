@@ -260,6 +260,16 @@ if AGENT_NOTES_ROOT="$TMP/notes" WORKLOG_BOARD_APP="$TMP/board" WORKLOG_BOARD_WT
 else
   bad "codex status wrapper should report harness snapshot"
 fi
+if "$CODEX" permissions >/tmp/codex_permissions.out 2>/tmp/codex_permissions.err \
+  && grep -q '^adapter=codex$' /tmp/codex_permissions.out \
+  && grep -q '^runtime_surface=codex-native-approval-sandbox$' /tmp/codex_permissions.out \
+  && grep -q '^permission_model=approval-policy+sandbox$' /tmp/codex_permissions.out \
+  && grep -q '^claude_allowed_tools=unsupported$' /tmp/codex_permissions.out \
+  && grep -q '^guard_contract=preflight-write-hooks-and-explicit-tool-contracts$' /tmp/codex_permissions.out; then
+  ok "codex permissions wrapper reports native approval/sandbox contract"
+else
+  bad "codex permissions wrapper should report native approval/sandbox contract"
+fi
 if AGENT_MODEL_FAST=fast-model AGENT_REASONING_FAST=low "$CODEX" role fast reviewer >/tmp/role.out 2>/tmp/role.err \
   && grep -q '^family=fast$' /tmp/role.out \
   && grep -q '^adapter=codex$' /tmp/role.out \
@@ -904,6 +914,16 @@ if AGENT_NOTES_ROOT="$TMP/notes" WORKLOG_BOARD_APP="$TMP/board" WORKLOG_BOARD_WT
   ok "opencode status wrapper reports harness snapshot"
 else
   bad "opencode status wrapper should report harness snapshot"
+fi
+if "$OPENCODE" permissions >/tmp/opencode_permissions.out 2>/tmp/opencode_permissions.err \
+  && grep -q '^adapter=opencode$' /tmp/opencode_permissions.out \
+  && grep -q '^runtime_surface=opencode-native-permission-config$' /tmp/opencode_permissions.out \
+  && grep -q '^permission_model=permission-allow-ask-deny$' /tmp/opencode_permissions.out \
+  && grep -q '^claude_allowed_tools=unsupported$' /tmp/opencode_permissions.out \
+  && grep -q '^guard_contract=preflight-write-plugin-and-explicit-tool-contracts$' /tmp/opencode_permissions.out; then
+  ok "opencode permissions wrapper reports native permission contract"
+else
+  bad "opencode permissions wrapper should report native permission contract"
 fi
 
 echo "== opencode role mapping =="

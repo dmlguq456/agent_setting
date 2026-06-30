@@ -41,6 +41,7 @@ documentation.
 | Agents (`.opencode/agent/<name>.md` or `.opencode/agents/<name>.md`) | yes | `adapters/opencode/agents/<name>/<name>.md` generated from `roles/README.md` with `mode: subagent` |
 | Plugin hooks (JS/TS: `tool.execute.before`, `tool.execute.after`, `event`, `config`, `chat.message`, `command.execute.before`, `permission.ask`, `shell.env`, ...) | yes | `adapters/opencode/plugins/agent-harness-guards.js` bridges write/edit/patch tool execution to shared guard preflight |
 | Permission model (`permission` config: `allow`/`ask`/`deny` per tool, per-agent override) | yes | adapter documents recommended permission rules; not a harness guard replacement |
+| Permission contract wrapper | yes | `adapters/opencode/bin/preflight.sh permissions` reports native permission surfaces and rejects Claude `allowedTools` as a portable contract |
 | MCP servers (`mcp` config: local/remote) | yes | adapter documents design MCP registration when a visual harness is added |
 | Model selection (`model`, `small_model`, per-agent `model`, `variant`) | yes | `adapters/opencode/bin/role-map.sh` resolves portable roles to model/variant |
 | Statusline / footer | no user shell surface | TUI footer is native; harness status signals stay instruction-only/preflight |
@@ -207,6 +208,7 @@ Harness-specific status signals need OpenCode-native realization:
 | memory distill | Transcript delta extraction uses `opencode export` through the shared memory CLI; automatic memory mutation remains disabled until an OpenCode no-tools worker contract is verified |
 | worklog state signal | Run `adapters/opencode/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before OpenCode updates notes or diagnoses board state |
 | role profiles | Read `roles/README.md`, then run `adapters/opencode/bin/preflight.sh role <portable-role>` to resolve OpenCode model/variant settings |
+| permission mapping | Run `adapters/opencode/bin/preflight.sh permissions` to inspect the OpenCode native permission contract and confirm Claude `allowedTools` is unsupported |
 | role modes | Read `roles/MODES.md`, then run `adapters/opencode/bin/preflight.sh mode-info <family/mode>`; treat adapter-coupled modes as unsupported unless wrappers exist, obey `fallback=reference-only`, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
 | hook invariants | Read `core/HOOKS.md`; OpenCode plugin hooks cover prompt lifecycle context, write/edit/patch guards, and design HTML post-write checks, while explicit preflight wrappers remain fallback for disabled/untrusted plugins and events not yet covered |
 | capabilities | Read `capabilities/README.md`, then run `adapters/opencode/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |

@@ -175,6 +175,9 @@ codex_setting/bin/preflight.sh capability-info autopilot-code
 codex_setting/bin/preflight.sh role fast reviewer >/tmp/codex-role.txt
 rg '^adapter=codex$' /tmp/codex-role.txt
 rg '^family=fast$' /tmp/codex-role.txt
+codex_setting/bin/preflight.sh permissions >/tmp/codex-permissions.txt
+rg '^runtime_surface=codex-native-approval-sandbox$' /tmp/codex-permissions.txt
+rg '^claude_allowed_tools=unsupported$' /tmp/codex-permissions.txt
 codex_setting/bin/preflight.sh mode-info dev/backend >/tmp/codex-mode.txt
 rg '^adapter=codex$' /tmp/codex-mode.txt
 rg '^status=portable$' /tmp/codex-mode.txt
@@ -278,6 +281,9 @@ tmp_opencode_bootstrap_home=$(mktemp -d)
 opencode_setting/bin/preflight.sh role fast reviewer >/tmp/opencode-role.txt
 rg '^adapter=opencode$' /tmp/opencode-role.txt
 rg '^family=fast$' /tmp/opencode-role.txt
+opencode_setting/bin/preflight.sh permissions >/tmp/opencode-permissions.txt
+rg '^runtime_surface=opencode-native-permission-config$' /tmp/opencode-permissions.txt
+rg '^claude_allowed_tools=unsupported$' /tmp/opencode-permissions.txt
 opencode_setting/bin/preflight.sh mode-info dev/backend >/tmp/opencode-mode.txt
 rg '^adapter=opencode$' /tmp/opencode-mode.txt
 rg '^status=portable$' /tmp/opencode-mode.txt

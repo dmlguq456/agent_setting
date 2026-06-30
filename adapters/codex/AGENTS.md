@@ -25,6 +25,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Before using a `roles/modes/` fragment, run `adapters/codex/bin/preflight.sh mode-info <family/mode>` and obey portable/tool-contract/unsupported status plus any named `tool_contract`, `tool_contract_check`, `runtime_surface`, and `fallback`.
 - Run deterministic guard scripts directly when Codex hooks are unavailable or untrusted.
 - Expose Codex hook bridges through `codex_setting/codex-hooks`; do not project Claude `settings.json` or hook payloads.
+- Use `adapters/codex/bin/preflight.sh permissions` to inspect the Codex approval/sandbox contract; do not port Claude `allowedTools`.
 - Before edits, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.
 - For `material/browser-fetch` URLs, run `adapters/codex/bin/preflight.sh browser-fetch --check <url>` before treating rendered browser access as satisfying the mode tool contract. Exit 69 means the local Playwright browser stack is unavailable.
 - For `material/data-script` outputs, run `adapters/codex/bin/preflight.sh data-script --check <script.py>` before treating the generated analysis script as satisfying the mode tool contract.

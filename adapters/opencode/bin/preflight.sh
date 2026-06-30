@@ -21,6 +21,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh recall <prompt> [cwd]
        preflight.sh briefing [cwd]
        preflight.sh status [cwd] [session-id]
+       preflight.sh permissions
        preflight.sh worklog [cwd]
        preflight.sh claim-verify [--check] <claim> [--out <file>]
        preflight.sh browser-fetch [--check] <url> [--out <dir>]
@@ -100,6 +101,21 @@ case "$cmd" in
     cwd=${2:-$PWD}
     sid=${3:-opencode}
     AGENT_ADAPTER=opencode "$ROOT/utilities/harness-status.sh" "$cwd" "$sid"
+    ;;
+  permissions)
+    cat <<'EOF'
+adapter=opencode
+runtime_surface=opencode-native-permission-config
+status=native-runtime-config
+permission_model=permission-allow-ask-deny
+permission_surface=opencode permission config with allow/ask/deny per tool and per-agent override
+plugin_surface=permission.ask and tool.execute hooks
+config_surface=$HOME/.config/opencode/opencode.json
+claude_allowed_tools=unsupported
+guard_contract=preflight-write-plugin-and-explicit-tool-contracts
+fallback=configure-opencode-permissions-and-run-preflight-guards
+note=Do not port Claude allowedTools into OpenCode; use OpenCode permission config plus adapter preflight/plugin guards.
+EOF
     ;;
   worklog)
     cwd=${2:-$PWD}

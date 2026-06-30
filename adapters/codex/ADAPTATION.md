@@ -46,6 +46,7 @@ invariant.
 | Custom agents | `adapters/codex/agents/<role>.toml` generated from `roles/README.md` | `codex_setting/codex-agents` |
 | Plugin marketplace | `adapters/codex/.agents/plugins/marketplace.json` plus `adapters/codex/plugins/agent-harness-codex` | `codex_setting/codex-plugin-marketplace` |
 | Hook bridge | `adapters/codex/hooks/hooks.json`, `adapters/codex/hooks/pretooluse-write-guard.py`, `adapters/codex/hooks/posttooluse-design-check.py` | `codex_setting/codex-hooks` |
+| Permission/sandbox contract | `adapters/codex/bin/preflight.sh permissions` | `codex_setting/bin/preflight.sh permissions` |
 | Shared helper tools | selected `tools/`, selected `utilities/` | `codex_setting/tools`, `codex_setting/utilities` |
 | Selected tools | `adapters/codex/tools/` adapter launchers plus selected portable tool projections | `codex_setting/tools` |
 | Selected utilities | `adapters/codex/utilities/` adapter wrappers plus selected portable utility projections | `codex_setting/utilities` |
@@ -234,6 +235,7 @@ Harness-specific status signals still need Codex-native realization:
 | memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`; opt-in proposal generation exists via `CODEX_DISTILL_ENABLE=1 adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]`; automatic memory mutation remains disabled until Codex has an accepted no-tools/action contract |
 | worklog state signal | Run `adapters/codex/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before Codex updates notes or diagnoses board state |
 | role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role>` to resolve Codex model/reasoning-effort settings |
+| permission mapping | Run `adapters/codex/bin/preflight.sh permissions` to inspect the Codex approval/sandbox contract and confirm Claude `allowedTools` is unsupported |
 | role modes | Read `roles/MODES.md`, then run `adapters/codex/bin/preflight.sh mode-info <family/mode>`; treat adapter-coupled modes as unsupported unless wrappers exist, obey `fallback=reference-only`, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
 | hook invariants | `adapters/codex/hooks/pretooluse-write-guard.py` realizes write guards through Codex `PreToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
 | capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |

@@ -377,6 +377,10 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'utilities/workflow-toggle.sh' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must realize workflow toggle through utilities/workflow-toggle.sh"
   fi
+  if ! grep -Fq 'runtime_surface=codex-native-approval-sandbox' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'claude_allowed_tools=unsupported' adapters/codex/bin/preflight.sh; then
+    fail_msg "adapters/codex/bin/preflight.sh must report the Codex permission/sandbox contract without Claude allowedTools"
+  fi
 
   if ! grep -Fq -- '--event start' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must expose workflow start cleanup"
@@ -972,6 +976,10 @@ check_opencode_bin_wrappers() {
 
   if ! grep -Fq 'utilities/workflow-toggle.sh' adapters/opencode/bin/preflight.sh; then
     fail_msg "adapters/opencode/bin/preflight.sh must realize workflow toggle through utilities/workflow-toggle.sh"
+  fi
+  if ! grep -Fq 'runtime_surface=opencode-native-permission-config' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'claude_allowed_tools=unsupported' adapters/opencode/bin/preflight.sh; then
+    fail_msg "adapters/opencode/bin/preflight.sh must report the OpenCode permission contract without Claude allowedTools"
   fi
 
   if ! grep -Fq -- '--event start' adapters/opencode/bin/preflight.sh; then

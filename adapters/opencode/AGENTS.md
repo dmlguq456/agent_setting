@@ -25,6 +25,7 @@ adapter bootstrap, not the portable source of truth. Load it through the
 - When validating OpenCode-native discoverability, run with `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1` so OpenCode's `~/.claude/skills/` compatibility autoload cannot mask missing adapter-owned output.
 - Before using a `roles/modes/` fragment, run `adapters/opencode/bin/preflight.sh mode-info <family/mode>` and obey portable/tool-contract/unsupported status plus any named `tool_contract`, `tool_contract_check`, `runtime_surface`, and `fallback`.
 - Run deterministic guard scripts directly when OpenCode plugins are unavailable or untrusted. The adapter provides a JS plugin for prompt lifecycle context, write/edit/patch guards, and design post-write checks; use explicit preflight wrappers when that plugin is not installed or trusted.
+- Use `adapters/opencode/bin/preflight.sh permissions` to inspect the OpenCode native permission contract; do not port Claude `allowedTools`.
 - Before edits, run `adapters/opencode/bin/preflight.sh write <file> [session-id]`.
 - For `material/browser-fetch` URLs, run `adapters/opencode/bin/preflight.sh browser-fetch --check <url>` before treating rendered browser access as satisfying the mode tool contract. Exit 69 means the local Playwright browser stack is unavailable.
 - For `material/data-script` outputs, run `adapters/opencode/bin/preflight.sh data-script --check <script.py>` before treating the generated analysis script as satisfying the mode tool contract.

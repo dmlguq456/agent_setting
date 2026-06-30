@@ -21,6 +21,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh recall <prompt> [cwd]
        preflight.sh briefing [cwd]
        preflight.sh status [cwd] [session-id]
+       preflight.sh permissions
        preflight.sh worklog [cwd]
        preflight.sh claim-verify [--check] <claim> [--out <file>]
        preflight.sh browser-fetch [--check] <url> [--out <dir>]
@@ -98,6 +99,21 @@ case "$cmd" in
     cwd=${2:-$PWD}
     sid=${3:-codex}
     AGENT_ADAPTER=codex "$ROOT/utilities/harness-status.sh" "$cwd" "$sid"
+    ;;
+  permissions)
+    cat <<'EOF'
+adapter=codex
+runtime_surface=codex-native-approval-sandbox
+status=native-runtime-config
+permission_model=approval-policy+sandbox
+approval_surface=codex --ask-for-approval <untrusted|on-request|never>
+sandbox_surface=codex --sandbox <read-only|workspace-write|danger-full-access>
+config_surface=$CODEX_HOME/config.toml
+claude_allowed_tools=unsupported
+guard_contract=preflight-write-hooks-and-explicit-tool-contracts
+fallback=configure-codex-approval-sandbox-and-run-preflight-guards
+note=Do not port Claude allowedTools into Codex; use Codex approval/sandbox settings plus adapter preflight guards.
+EOF
     ;;
   worklog)
     cwd=${2:-$PWD}
