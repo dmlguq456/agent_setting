@@ -61,6 +61,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | tracked/untracked signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`; run it manually when hooks are unavailable |
 | harness status snapshot | Run `adapters/codex/bin/preflight.sh status [cwd] [session-id]` for read-only workflow, artifact, notes, worktree, and git-risk signals. This does not replace Codex `/statusline` for model/context/token/session fields |
 | adapter readiness | Run `adapters/codex/bin/preflight.sh doctor` to check manifest freshness, native skill/plugin/agent/mode projections, hook bridge syntax, and boundary rules in one command |
+| runtime projection install | Run `adapters/codex/bin/install-runtime-projection.sh [--install-plugin]` to wire `$CODEX_HOME` (default `$HOME/.codex`) to the harness projection: `agent-*` pointers, `hooks.json`, and native skill/agent symlinks. Idempotent; never touches Codex credentials, sessions, history, logs, caches, or local databases (a pre-existing real `hooks.json` is backed up to `hooks.json.pre-harness`). Run `adapters/codex/bin/check-runtime-projection.sh` for a read-only `status=ok|failed` validation of the wiring, linked skills/agents, bootstrap discovery, and plugin presence |
 | tracked/untracked toggle | Portable `utilities/workflow-toggle.sh`; run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only on explicit user request |
 | headless dispatch | Tool-contract check: `adapters/codex/bin/preflight.sh headless --check <worktree>` verifies the worktree, `codex exec` availability, and installed Codex runtime projection (`agent-harness`, bootstrap, hooks, native Skills, native Agents, and native Modes). Use `adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level>` to build the Codex command and register open jobs before launch. `--start` reruns the same runtime projection check before launching. Use `adapters/codex/bin/preflight.sh liveness [jobs.log]` while waiting on dispatched work; it matches open jobs to Codex session JSONL files by `cwd` and transcript mtime. Use `adapters/codex/bin/preflight.sh harvest --slug <slug> --mark-done` after main-session harvest to mark registry rows done only; it does not merge or clean worktrees |
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/codex/bin/preflight.sh write <file> [session-id]` before writes |
@@ -78,8 +79,8 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | git safety gate | `core/HOOKS.md` defines the invariant; included in `adapters/codex/bin/preflight.sh write <file> [session-id]` |
 | memory write guard | `core/HOOKS.md` defines the invariant; included in `adapters/codex/bin/preflight.sh write <file> [session-id]` |
 | memory injection | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh memory [cwd]`; run it manually when hooks are unavailable |
-| memory sync | Codex `SessionEnd` hook bridge runs `adapters/codex/bin/preflight.sh session-end [cwd] [session-id]`, which performs `mem sync` and then invokes the opt-in Codex distill proposal worker |
-| memory turn nudge | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh turn-nudge [cwd] [session-id]`; it is deterministic and only launches distill when the configured interval is reached and `CODEX_DISTILL_ENABLE=1` is set |
+| memory sync | Codex `SessionEnd` hook bridge runs `adapters/codex/bin/preflight.sh session-end [cwd] [session-id]`, which performs `mem sync` and then runs automatic distillation by default (the read-only `codex exec` worker is verified tool-free); opt out with `CODEX_DISTILL_ENABLE=0` |
+| memory turn nudge | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh turn-nudge [cwd] [session-id]`; it is deterministic and launches distillation when the configured interval is reached. Automatic distillation is on by default (`CODEX_DISTILL_ENABLE` defaults to `1`); opt out with `CODEX_DISTILL_ENABLE=0` |
 | memory recall injection | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh recall <prompt> [cwd]`; run it manually when hooks are unavailable |
 | oncall briefing injection | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh briefing [cwd]`; run it manually when hooks are unavailable |
 | loop guidance | `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill>` reports whether a loop has a Codex manual contract, unsupported executable projection, or missing native implementation; `note` remains an external scheduler loop while the related `autopilot-note` capability is available on demand through Codex-native Skill/plugin projections |
@@ -225,8 +226,9 @@ entrypoints are represented by Codex-native Skills and the installable
 
 `adapters/codex/hooks/` contains a Codex-native `hooks.json`, a validated
 `run-hook.sh` launcher, and concrete adapter-owned hook bridges. The
-`SessionEnd` bridge runs `mem sync` and the opt-in distill proposal worker. The
-`UserPromptSubmit` bridge also runs the deterministic N-turn distill nudge. The
+`SessionEnd` bridge runs `mem sync` and automatic distillation (on by default;
+opt out with `CODEX_DISTILL_ENABLE=0`). The `UserPromptSubmit` bridge also runs
+the deterministic N-turn distill nudge under the same default. The
 `PreToolUse` bridge runs before write/edit/patch tools and delegates
 artifact-order, git-state, and memory-write checks to
 `adapters/codex/bin/preflight.sh write`. The `PostToolUse` Read bridge records

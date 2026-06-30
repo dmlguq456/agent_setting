@@ -2162,6 +2162,16 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq '[compile(open(f, encoding=' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must syntax-check build-manifest/mem via in-memory compile; py_compile writes __pycache__ even under PYTHONDONTWRITEBYTECODE"
   fi
+  for s in install-runtime-projection.sh check-runtime-projection.sh; do
+    if [ ! -x "adapters/codex/bin/$s" ]; then
+      fail_msg "adapters/codex/bin/$s must exist and be executable (Codex runtime projection installer/checker)"
+    fi
+  done
+  if ! grep -Fq 'install-runtime-projection.sh' adapters/codex/README.md \
+    || ! grep -Fq 'check-runtime-projection.sh' adapters/codex/README.md \
+    || ! grep -Fq 'install-runtime-projection.sh' adapters/codex/AGENTS.md; then
+    fail_msg "adapters/codex/README.md and adapters/codex/AGENTS.md must document the Codex runtime projection installer/checker"
+  fi
   if grep -Fq 'core settings.json keybindings.json commands' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must not symlink runtime-owned settings.json/keybindings.json into the Claude home; Claude Code rewrites them in place and clobbers the symlink"
   fi

@@ -1187,6 +1187,39 @@ if MEM_DISTILL=1 CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/store_sess
 else
   bad "codex session-end must no-op under MEM_DISTILL=1 recursion guard"
 fi
+RPHOME="$TMP/codex-runtime-home"
+rm -rf "$RPHOME"; mkdir -p "$RPHOME"
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/tmp/codex_rp0.out 2>/tmp/codex_rp0.err; then
+  bad "codex check-runtime-projection should fail on an unwired home"
+else
+  grep -q '^status=failed' /tmp/codex_rp0.out && ok "codex check-runtime-projection reports an unwired home as failed" || bad "codex check-runtime-projection unwired output wrong"
+fi
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >/tmp/codex_rp1.out 2>/tmp/codex_rp1.err \
+  && grep -q '^status=ok' /tmp/codex_rp1.out \
+  && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/tmp/codex_rp2.out 2>/tmp/codex_rp2.err \
+  && grep -q '^check=agent-harness:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=hooks-json:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=skills-linked:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=agents-linked:ok' /tmp/codex_rp2.out \
+  && grep -q '^status=ok' /tmp/codex_rp2.out; then
+  ok "codex install-runtime-projection wires the home and the checker passes"
+else
+  bad "codex install-runtime-projection + checker should wire and validate the runtime home"
+fi
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >/dev/null 2>&1 \
+  && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/dev/null 2>&1; then
+  ok "codex install-runtime-projection is idempotent"
+else
+  bad "codex install-runtime-projection should be idempotent"
+fi
+RPHOME2="$TMP/codex-runtime-home2"
+rm -rf "$RPHOME2"; mkdir -p "$RPHOME2"; printf '{"old":1}\n' > "$RPHOME2/hooks.json"
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME2" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >/dev/null 2>&1 \
+  && [ -f "$RPHOME2/hooks.json.pre-harness" ] && [ -L "$RPHOME2/hooks.json" ]; then
+  ok "codex install-runtime-projection backs up a pre-existing hooks.json"
+else
+  bad "codex install-runtime-projection should back up a pre-existing hooks.json"
+fi
 
 echo "== opencode preflight wrapper =="
 git -C "$TMP/repo" switch -q -c opencode-work
