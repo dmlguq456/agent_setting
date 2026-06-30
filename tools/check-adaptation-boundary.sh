@@ -588,6 +588,13 @@ check_codex_bin_wrappers() {
     fi
   done
 
+  if ! grep -Fq 'Keep Codex `/statusline` responsible for model, context, token, limit, and session footer fields.' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'This does not replace Codex `/statusline` for model/context/token/session fields' adapters/codex/README.md \
+    || ! grep -Fq 'Codex has its own `/statusline` configuration for the TUI footer.' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'do not duplicate Codex-native footer' adapters/codex/ADAPTATION.md; then
+    fail_msg "Codex docs must keep /statusline native and reserve preflight.sh status for harness-specific signals"
+  fi
+
   if ! grep -Fq 'codex_setting/codex-plugin-marketplace' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex native plugin projection"
   fi
@@ -2116,6 +2123,10 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'without executing Claude-coupled loop scripts' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'unsupported/manual-contract' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must describe Codex/OpenCode loop-info native support/fallback contracts"
+  fi
+  if ! grep -Fq 'Codex, leave `/statusline` as the native footer configuration surface' core/ADAPTATION_INVENTORY.md \
+    || ! grep -Fq 'use `preflight.sh status` only for harness-specific signals' core/ADAPTATION_INVENTORY.md; then
+    fail_msg "core/ADAPTATION_INVENTORY.md must preserve the Codex /statusline vs harness status split"
   fi
 }
 
