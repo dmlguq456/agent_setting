@@ -40,6 +40,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
+       preflight.sh ui-info
        preflight.sh loop-info <oncall|note|study|drill>
        preflight.sh claim-verify [--check] <claim> [--out <file>]
        preflight.sh browser-fetch [--check] <url> [--out <dir>]
@@ -404,6 +405,26 @@ EOF
       WORKLOG_BOARD_APP="${WORKLOG_BOARD_APP:-}" \
       WORKLOG_BOARD_WT="${WORKLOG_BOARD_WT:-}" \
       "$ROOT/utilities/agent-worklog-state.sh" "$cwd"
+    ;;
+  ui-info)
+    cat <<'EOF'
+adapter=codex
+runtime_surface=codex-native-ui-boundary
+status=partial-native-parity
+statusline_surface=codex-native-footer-config
+statusline_command=/statusline
+statusline_custom_dynamic_fields=unsupported
+title_surface=codex-native-title-config
+title_command=/title
+hook_status_messages=available-after-hook-trust
+harness_status_surface=adapter-owned-preflight-status
+harness_status_command=adapters/codex/bin/preflight.sh status [cwd] [session-id]
+autopilot_entrypoints=codex-native-skills-plugin
+autopilot_auto_routing=instruction-guided-not-claude-slash-router
+subagent_surface=codex-native-subagents
+subagent_auto_spawn=explicit-or-main-dispatched
+note=Codex can configure built-in footer/title items, but it does not expose a Claude-style arbitrary live statusline script surface; use preflight status and hook statusMessage for harness-specific signals.
+EOF
     ;;
   loop-info)
     [ "$#" -eq 2 ] || { echo "codex preflight: loop-info requires one loop name" >&2; exit 64; }

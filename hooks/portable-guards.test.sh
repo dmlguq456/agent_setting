@@ -466,6 +466,19 @@ if "$CODEX" mcp --check >/tmp/codex_mcp_check.out 2>/tmp/codex_mcp_check.err \
 else
   bad "codex mcp wrapper should check native MCP CLI"
 fi
+if "$CODEX" ui-info >/tmp/codex_ui.out 2>/tmp/codex_ui.err \
+  && grep -q '^adapter=codex$' /tmp/codex_ui.out \
+  && grep -q '^runtime_surface=codex-native-ui-boundary$' /tmp/codex_ui.out \
+  && grep -q '^statusline_surface=codex-native-footer-config$' /tmp/codex_ui.out \
+  && grep -q '^statusline_custom_dynamic_fields=unsupported$' /tmp/codex_ui.out \
+  && grep -q '^harness_status_surface=adapter-owned-preflight-status$' /tmp/codex_ui.out \
+  && grep -q '^autopilot_entrypoints=codex-native-skills-plugin$' /tmp/codex_ui.out \
+  && grep -q '^autopilot_auto_routing=instruction-guided-not-claude-slash-router$' /tmp/codex_ui.out \
+  && grep -q '^subagent_auto_spawn=explicit-or-main-dispatched$' /tmp/codex_ui.out; then
+  ok "codex ui-info reports native UI and parity boundaries"
+else
+  bad "codex ui-info should report native UI and parity boundaries"
+fi
 if "$CODEX" loop-info oncall >/tmp/codex_loop_oncall.out 2>/tmp/codex_loop_oncall.err \
   && grep -q '^adapter=codex$' /tmp/codex_loop_oncall.out \
   && grep -q '^loop=oncall$' /tmp/codex_loop_oncall.out \

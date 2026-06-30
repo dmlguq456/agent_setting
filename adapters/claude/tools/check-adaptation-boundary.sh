@@ -611,7 +611,7 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/AGENTS.md must document the Codex workflow toggle wrapper"
   fi
 
-  for p in 'preflight.sh start' 'preflight.sh session-end' 'preflight.sh mode' 'preflight.sh turn-nudge' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh loop-info' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
+  for p in 'preflight.sh start' 'preflight.sh session-end' 'preflight.sh mode' 'preflight.sh turn-nudge' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh ui-info' 'preflight.sh loop-info' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
     if ! grep -Fq "$p" adapters/codex/AGENTS.md; then
       fail_msg "adapters/codex/AGENTS.md must document manual Codex lifecycle wrapper $p"
     fi
@@ -620,6 +620,12 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'Keep Codex `/statusline` responsible for model, context, token, limit, and session footer fields.' adapters/codex/AGENTS.md \
     || ! grep -Fq 'This does not replace Codex `/statusline` for model/context/token/session fields' adapters/codex/README.md \
     || ! grep -Fq 'Codex has its own `/statusline` configuration for the TUI footer.' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'preflight.sh ui-info' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'preflight.sh ui-info' adapters/codex/README.md \
+    || ! grep -Fq 'preflight.sh ui-info' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'statusline_custom_dynamic_fields=unsupported' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'autopilot_auto_routing=instruction-guided-not-claude-slash-router' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'subagent_auto_spawn=explicit-or-main-dispatched' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'do not duplicate Codex-native footer' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex docs must keep /statusline native and reserve preflight.sh status for harness-specific signals"
   fi
@@ -2189,8 +2195,9 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'OpenCode exits 69 until a native no-tools worker contract is verified' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must describe adapter distill-propose tool-contract boundaries"
   fi
-  if ! grep -Fq 'Codex, leave `/statusline` as the native footer configuration surface' core/ADAPTATION_INVENTORY.md \
-    || ! grep -Fq 'use `preflight.sh status` only for harness-specific signals' core/ADAPTATION_INVENTORY.md; then
+  if ! grep -Fq 'Codex, leave `/statusline`' core/ADAPTATION_INVENTORY.md \
+    || ! grep -Fq '`/title` as native built-in item configuration surfaces' core/ADAPTATION_INVENTORY.md \
+    || ! grep -Fq 'preflight.sh ui-info' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must preserve the Codex /statusline vs harness status split"
   fi
 }

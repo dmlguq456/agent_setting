@@ -216,6 +216,13 @@ it with `adapters/claude/statusline.sh`, and do not duplicate Codex-native foote
 items such as model, context, token/usage/limits, git baseline, session, or
 Codex fast-mode state.
 
+Codex UI customization is therefore a partial native parity surface, not a
+Claude statusline clone. `/statusline` and `/title` configure Codex-owned
+built-in item IDs; the adapter reports this boundary through
+`adapters/codex/bin/preflight.sh ui-info`. Harness-specific state remains in
+`preflight.sh status` and hook `statusMessage` output until Codex exposes an
+arbitrary dynamic footer provider.
+
 Harness-specific status signals still need Codex-native realization:
 
 | Harness signal | Codex direction |
@@ -223,6 +230,7 @@ Harness-specific status signals still need Codex-native realization:
 | stale workflow bypass flag cleanup | Codex `SessionStart` hook bridge runs `preflight.sh start`; explicit preflight remains fallback when hooks are unavailable |
 | tracked/untracked workflow state | Codex `UserPromptSubmit` hook bridge runs `preflight.sh mode`; explicit preflight remains fallback when hooks are unavailable |
 | workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; keep Codex `/statusline` for native model/context/token/session fields |
+| UI boundary report | explicit `preflight.sh ui-info`; reports built-in footer/title support, unsupported arbitrary live statusline scripts, Skill/plugin autopilot entrypoints, and explicit/main-dispatched subagent behavior |
 | tracked/untracked toggle | explicit `preflight.sh track`; do not expose Claude `/track` command files |
 | artifact root detection | `preflight.sh write` and shared artifact-root helper |
 | headless/autopilot/background jobs | `preflight.sh headless` / `dispatch` / `liveness` / `harvest` provide the tool-contract path; `preflight.sh status` surfaces in-flight jobs as `headless_open_jobs` / `headless_open_slugs` from the dispatch registry. A Codex-native graphical display remains optional polish |
