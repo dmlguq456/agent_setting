@@ -282,7 +282,9 @@ if "$CODEX" capability-info design-review >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^realization=codex-native-skill-plugin$' /tmp/cap.out \
   && grep -q '^status=tool-contract$' /tmp/cap.out \
   && grep -q '^tool_contract=visual-harness$' /tmp/cap.out \
-  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh visual-harness$' /tmp/cap.out; then
+  && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh visual-harness$' /tmp/cap.out \
+  && grep -q '^runtime_surface=not-materialized$' /tmp/cap.out \
+  && grep -q '^fallback=preflight.sh design <file>$' /tmp/cap.out; then
   ok "codex design capability reports visual harness contract"
 else
   bad "codex design capability should report visual harness contract"

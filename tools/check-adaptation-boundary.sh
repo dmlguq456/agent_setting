@@ -299,6 +299,10 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'visual-harness)' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must expose the Codex visual harness tool-contract"
   fi
+  if ! grep -Fq 'runtime_surface=not-materialized' adapters/codex/bin/capability-map.sh \
+    || ! grep -Fq 'fallback=preflight.sh design <file>' adapters/codex/bin/capability-map.sh; then
+    fail_msg "adapters/codex/bin/capability-map.sh must report visual harness runtime surface and fallback"
+  fi
   if grep -Eq 'Claude Design MCP|Claude visual harness' adapters/codex/bin/preflight.sh adapters/codex/bin/capability-map.sh; then
     fail_msg "Codex runtime-facing visual harness output must use legacy/adapter-specific wording, not Claude implementation names"
   fi
