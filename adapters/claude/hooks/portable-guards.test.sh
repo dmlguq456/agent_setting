@@ -1370,6 +1370,30 @@ if printf '{"tool_name":"MultiEdit","tool_input":{"file_path":"%s","edits":[]},"
 else
   bad "codex native design hook should accept MultiEdit payloads"
 fi
+if printf '{"tool_name":"Bash","tool_input":{"command":"printf %s > spec/design/preview.html"},"session_id":"testsid","cwd":"%s"}\n' "'<!doctype html><title>ok</title>'" "$TMP/repo" \
+  | DESIGN_POSTWRITE_HOOK=0 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-design-check.py" >/tmp/codex_design_hook_shell.out 2>/tmp/codex_design_hook_shell.err \
+  && [ ! -s /tmp/codex_design_hook_shell.out ] \
+  && [ ! -s /tmp/codex_design_hook_shell.err ] \
+  && python3 - "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-design-check.py" "$TMP/repo" <<'PY'
+import sys
+
+path, cwd = sys.argv[1], sys.argv[2]
+ns = {"__name__": "design_hook_test", "__file__": path}
+with open(path, encoding="utf-8") as fh:
+    exec(compile(fh.read(), path, "exec"), ns)
+payload = {
+    "tool_name": "Bash",
+    "tool_input": {"command": "printf '<!doctype html>' > spec/design/preview.html"},
+    "session_id": "testsid",
+    "cwd": cwd,
+}
+assert ns["target_files"](payload) == [f"{cwd}/spec/design/preview.html"]
+PY
+then
+  ok "codex native design hook marks obvious shell design writes"
+else
+  bad "codex native design hook should mark obvious shell design writes"
+fi
 codex_design_patch_payload=$(python3 - "$TMP/repo" <<'PY'
 import json
 import sys

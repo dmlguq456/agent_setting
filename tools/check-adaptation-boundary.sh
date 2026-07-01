@@ -706,6 +706,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'structured_write_hooks=Write,Edit,MultiEdit,apply_patch,functions.apply_patch' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'Shell/Bash/`functions.exec_command` reads and writes have targeted hook coverage' adapters/codex/AGENTS.md \
     || ! grep -Fq 'Shell/Bash/`functions.exec_command` gets targeted detection' adapters/codex/README.md \
+    || ! grep -Fq 'design HTML save paths' adapters/codex/README.md \
     || ! grep -Fq 'shell-read-write-targeted-detection-explicit-preflight-fallback' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex adapter must document and report targeted shell/exec read-write hook coverage with explicit preflight fallback"
   fi
@@ -1485,8 +1486,9 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"PreToolUse"' "$hook_json" || ! grep -Fq 'pretooluse-write-guard.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex PreToolUse write guard"
   fi
-  if ! grep -Fq 'Write|Edit|MultiEdit|apply_patch|functions\\.apply_patch|Bash|Shell|functions\\.exec_command' "$hook_json"; then
-    fail_msg "$hook_json must attach Codex write hooks to structured writes and targeted shell command tools"
+  if ! grep -Fq 'Write|Edit|MultiEdit|apply_patch|functions\\.apply_patch|Bash|Shell|functions\\.exec_command' "$hook_json" \
+    || ! grep -Fq 'Read|Bash|Shell|functions\\.exec_command' "$hook_json"; then
+    fail_msg "$hook_json must attach Codex hooks to structured tools and targeted shell command tools"
   fi
   if ! grep -Fq '"PostToolUse"' "$hook_json" || ! grep -Fq 'posttooluse-design-check.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex PostToolUse design check"
@@ -1523,6 +1525,11 @@ check_codex_native_hook_projection() {
   fi
   if ! grep -Fq '"design"' "$post_bridge"; then
     fail_msg "$post_bridge must call the Codex design preflight"
+  fi
+  if ! grep -Fq 'def is_shell_tool' "$post_bridge" \
+    || ! grep -Fq 'def shell_write_files' "$post_bridge" \
+    || ! grep -Fq 'shell_write_files(base, shell_command(payload, args))' "$post_bridge"; then
+    fail_msg "$post_bridge must route targeted shell HTML write redirects through the design preflight"
   fi
   if ! grep -Fq '"read"' "$read_bridge"; then
     fail_msg "$read_bridge must call the Codex read preflight"

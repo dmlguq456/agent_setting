@@ -86,7 +86,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit|apply_patch|functions\\.apply_patch",
+        "matcher": "Write|Edit|MultiEdit|apply_patch|functions\\.apply_patch|Bash|Shell|functions\\.exec_command",
         "hooks": [
           {
             "type": "command",

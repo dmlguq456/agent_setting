@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -96,10 +97,47 @@ def is_patch_tool(name: str) -> bool:
     return name in {"apply_patch", "ApplyPatch", "patch", "functions.apply_patch"} or name.endswith(".apply_patch")
 
 
+def is_shell_tool(name: str) -> bool:
+    return name in {"Bash", "bash", "Shell", "shell", "exec_command", "functions.exec_command"} or name.endswith(
+        ".exec_command"
+    )
+
+
 def patch_text(payload: dict[str, Any], args: dict[str, Any]) -> str:
     return first_string(args, "patch", "patchText", "patch_text", "input") or first_string(
         payload, "patch", "patchText", "patch_text", "input", "text"
     )
+
+
+def shell_command(payload: dict[str, Any], args: dict[str, Any]) -> str:
+    return first_string(args, "command", "cmd", "script", "input") or first_string(
+        payload, "command", "cmd", "script"
+    )
+
+
+def shell_write_files(base: Path, command: str) -> list[str]:
+    if not command:
+        return []
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return []
+
+    files: list[str] = []
+    redirects = {">", ">>", "1>", "1>>", "2>", "2>>", "&>", "&>>", ">|"}
+    for idx, token in enumerate(tokens):
+        if token in redirects and idx + 1 < len(tokens):
+            file = normalize(base, tokens[idx + 1])
+            if file:
+                files.append(file)
+            continue
+        match = re.match(r"^(?:[0-9]?>|[0-9]?>>|&>|&>>|>\|)(.+)$", token)
+        if match:
+            file = normalize(base, match.group(1))
+            if file:
+                files.append(file)
+
+    return files
 
 
 def target_files(payload: dict[str, Any]) -> list[str]:
@@ -113,6 +151,9 @@ def target_files(payload: dict[str, Any]) -> list[str]:
 
     if is_patch_tool(name):
         return patch_files(base, patch_text(payload, args))
+
+    if is_shell_tool(name):
+        return shell_write_files(base, shell_command(payload, args))
 
     return []
 
