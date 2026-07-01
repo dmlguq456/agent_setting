@@ -31,6 +31,15 @@ def rlrem(k):
     if s <= 0: return ""
     dd, r = divmod(s, 86400); hh, r = divmod(r, 3600); mm = r // 60
     return f"{dd}d{hh}h" if dd else (f"{hh}h{mm:02d}m" if hh else f"{mm}m")
+# model-scoped 사용량 (예: Fable-only 주간 버킷) — rate_limits.model_scoped 배열
+# [{display_name:"Fable", utilization:0..1, resets_at:str}] → "fable:12 other:34" 꼴 (label 소문자 첫 단어)
+ms_parts = []
+for e in (rl.get("model_scoped") or []):
+    if not isinstance(e, dict): continue
+    u = e.get("utilization")
+    if not isinstance(u, (int, float)): continue
+    lbl = (e.get("display_name") or "model").split()[0].lower()
+    ms_parts.append(f"{lbl}:{round(u * 100)}")
 cwin = d.get("context_window") or {}
 cw = cwin.get("current_usage") or {}
 ctok = cw.get("input_tokens", 0) + cw.get("cache_creation_input_tokens", 0) + cw.get("cache_read_input_tokens", 0)
@@ -39,6 +48,7 @@ up = cwin.get("used_percentage")
 win = cwin.get("context_window_size") or (1_000_000 if "1m" in mid else 200_000)
 cpct = min(99, round(up)) if isinstance(up, (int, float)) else (min(99, round(100 * ctok / win)) if ctok else -1)
 print("S_CWD=" + shlex.quote(cwd))
+print("S_MS=" + shlex.quote(" ".join(ms_parts)))
 print("S_MODEL=" + shlex.quote(model))
 print("S_EFFORT=" + shlex.quote(effort))
 print("S_SID=" + shlex.quote(sid))
@@ -48,7 +58,7 @@ print("S_5H_RST=" + shlex.quote(rlrem("five_hour")))
 print("S_7D_RST=" + shlex.quote(rlrem("seven_day")))
 print("S_CTX=" + shlex.quote(str(cpct)))
 ' 2>/dev/null)"
-: "${S_CWD:=$PWD}" "${S_MODEL:=?}" "${S_EFFORT:=}" "${S_SID:=}" "${S_5H:=}" "${S_7D:=}" "${S_5H_RST:=}" "${S_7D_RST:=}" "${S_CTX:=-1}"
+: "${S_CWD:=$PWD}" "${S_MODEL:=?}" "${S_EFFORT:=}" "${S_SID:=}" "${S_5H:=}" "${S_7D:=}" "${S_5H_RST:=}" "${S_7D_RST:=}" "${S_CTX:=-1}" "${S_MS:=}"
 
 # §5 per-session statusline tap (agent-fleet-dashboard) — 멀티세션 대시보드(tools/fleet)가
 # 세션별 telemetry 를 읽게 stdin JSON 을 세션별 파일로도 dump. 단일 .statusline-last.json 은
@@ -268,6 +278,11 @@ segs_arr+=("${CYAN}${S_MODEL}${RST}${eff_disp}")
 u=""
 [ -n "$S_5H" ] && { u="${u} ${DIM}5h${RST} $(pcol "$S_5H")${S_5H}%${RST}"; [ -n "$S_5H_RST" ] && u="${u}${DIM}(↻ ${S_5H_RST})${RST}"; }
 [ -n "$S_7D" ] && { u="${u} ${DIM}7d${RST} $(pcol "$S_7D")${S_7D}%${RST}"; [ -n "$S_7D_RST" ] && u="${u}${DIM}(↻ ${S_7D_RST})${RST}"; }
+# model-scoped 버킷 (예: fable-only 주간 한도) — "fable:12" 쌍들을 5h/7d 와 같은 문법으로
+for ms in $S_MS; do
+  lbl="${ms%%:*}"; pv="${ms##*:}"
+  [ -n "$lbl" ] && [ "$pv" -ge 0 ] 2>/dev/null && u="${u} ${DIM}${lbl}${RST} $(pcol "$pv")${pv}%${RST}"
+done
 [ -n "$u" ] && segs_arr+=("${u# }")
 
 # join with 세로선 파티션

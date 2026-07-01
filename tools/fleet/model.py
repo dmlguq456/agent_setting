@@ -127,6 +127,7 @@ class Session:
     ctx_pct: Optional[int] = None      # context window used %
     rl_5h: Optional[int] = None        # claude five_hour / codex primary  used %
     rl_7d: Optional[int] = None        # claude seven_day / codex secondary used %
+    rl_ms: Optional[list] = None       # model-scoped buckets [[label, pct], ...] e.g. [["fable", 57]]
     cost: Optional[float] = None
     tokens: Optional[int] = None
     status: Optional[str] = None        # raw harness status (claude idle/shell/busy)

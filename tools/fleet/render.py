@@ -559,21 +559,23 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
     # "모든 윈도우가 쭉 붙어있다 → 서로 간격 띄우고 게이지 길게"): long gauges, generous gaps, aligned.
     # rate is account-shared → take the FRESHEST session's value per harness (a stale session's
     # per-file rate is old; e.g. a 16-min-old file showed 7d 100% while the live rate was 15%).
-    _rl = {}   # harness -> (rl_5h, rl_7d, mtime)
+    _rl = {}   # harness -> (rl_5h, rl_7d, rl_ms, mtime)
     for s in sessions:
-        if s.rl_5h is not None or s.rl_7d is not None:
+        if s.rl_5h is not None or s.rl_7d is not None or s.rl_ms:
             cur = _rl.get(s.harness)
-            if cur is None or (s.mtime or 0) > (cur[2] or 0):
-                _rl[s.harness] = (s.rl_5h, s.rl_7d, s.mtime)
+            if cur is None or (s.mtime or 0) > (cur[3] or 0):
+                _rl[s.harness] = (s.rl_5h, s.rl_7d, s.rl_ms, s.mtime)
     if _rl:
         hs = [h for h in ("claude", "codex", "opencode") if h in _rl]
         for idx, h in enumerate(hs):
-            r5, r7, _mt = _rl[h]
+            r5, r7, rms, _mt = _rl[h]
             row = [("usage  " if idx == 0 else "       ", "head"),
                    (_pad(h, 11), "hb_" + h if h in _BADGE_TEXT else "hb_other")]  # bright = account
-            for gi, (lbl, v) in enumerate((("5h ", r5), ("7d ", r7))):
+            # 5h/7d + any model-scoped buckets (e.g. fable-only weekly) in the same gauge grammar
+            gauges = [("5h ", r5), ("7d ", r7)] + [(lbl + " ", v) for lbl, v in (rms or [])]
+            for gi, (lbl, v) in enumerate(gauges):
                 pctstr = ("%d%%" % v) if v is not None else "—"
-                row.append(("     " + lbl if gi else lbl, "dim"))        # wide gap between the 5h/7d windows
+                row.append(("     " + lbl if gi else lbl, "dim"))        # wide gap between windows
                 row += _gauge_segs(v, 16) if v is not None else [("·" * 16, "dim")]
                 row.append((" %4s" % pctstr, _pct_key(v)))
             lines.append(row)

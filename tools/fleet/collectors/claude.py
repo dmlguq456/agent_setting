@@ -75,6 +75,15 @@ def _apply_statusline(sess, d):
         sess.rl_5h = p5
     if p7 is not None:
         sess.rl_7d = p7
+    # model-scoped buckets (e.g. a Fable-only weekly limit): rate_limits.model_scoped =
+    # [{display_name:"Fable", utilization:0..1, resets_at:str}] → [["fable", 57], ...]
+    ms = []
+    for e in (rl.get("model_scoped") or []):
+        if isinstance(e, dict) and isinstance(e.get("utilization"), (int, float)):
+            lbl = (e.get("display_name") or "model").split()[0].lower()
+            ms.append([lbl, round(e["utilization"] * 100)])
+    if ms:
+        sess.rl_ms = ms
     cost = d.get("cost") or {}
     cv = cost.get("total_cost_usd") if isinstance(cost, dict) else None
     if isinstance(cv, (int, float)):

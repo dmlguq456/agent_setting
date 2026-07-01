@@ -14,8 +14,8 @@ def collect(harness_filter=None):
         # --- project 'demo-app' (tracked) ---
         S(harness="claude", pid=90001, cwd="/home/demo/demo-app", session_id="demo-claude-1",
           slug="demo-app-a7", model="Opus 4.8 (1M context)", effort="xhigh",
-          ctx_pct=45, rl_5h=33, rl_7d=12, cost=12.30, elapsed_min=95, status="busy",
-          gate="tracked", branch="main", liveness="working"),
+          ctx_pct=45, rl_5h=33, rl_7d=12, rl_ms=[["fable", 57]], cost=12.30, elapsed_min=95,
+          status="busy", gate="tracked", branch="main", liveness="working"),
         S(harness="codex", pid=90002, cwd="/home/demo/demo-app", session_id="demo-codex-1",
           slug="demo-app", model="gpt-5.5", effort="high",
           ctx_pct=72, rl_5h=94, rl_7d=53, elapsed_min=41,
