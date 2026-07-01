@@ -46,6 +46,14 @@
 
 > _졸업_: `drill FAIL 자동 진단` 은 backlog 졸업 — `run.sh` 에 FAIL→`<case>.diagnosis.md`(진단+수정안 초안, 적용 X) 단계로 부착됨(현역 표 모의훈련 행). `study 🔴 자동 초안`(T2, 2026-06-15) 도 동반 — 둘 다 _초안까지, 적용은 사용자 서명_.
 
+## 루프 러너 — core/adapter 분리 (2026-07-01)
+
+루프의 **케이스(prompt/fixture/assert)는 런타임 중립**, **러너만 어댑터별**이다 — 하네스 전체의 core/adapter 분리를 루프 축에도 적용. `loops/lib-runner.sh` 의 `run_case_on_adapter <adapter> …` 가 `claude`(`claude -p --output-format json`) · `codex`(`codex exec --json`) · `opencode`(`opencode run --format json`) 를 같은 계약(transcript + `turns|in_tok|out_tok|cost`)으로 정규화한다. `drill/run.sh --adapter <a>` (또는 `DRILL_ADAPTER`) 로 선택, 기본 `claude`.
+
+- **케이스 포터블화**: 마커 경로는 `$DRILL_MARKER_HOME/.spec-grounding`(러너가 어댑터 agent-home 으로 export), 산출물은 `.agent_reports`(+legacy `.claude_reports`). g4_spec_gate 가 포터블 기준 케이스. design(g8*)·mem_builtin 은 claude 고유(design-MCP·claude 내장 memory)라 잔존.
+- **behavioral 검증 게이트 (선결)**: codex/opencode 로 케이스를 _실제_ 돌리려면 (1) 해당 어댑터의 runtime projection 설치(bootstrap+hooks/plugin 로드), (2) 마커 등 하네스 상태쓰기가 sandbox 안에 떨어지게 agent-home 배치가 필요. 러너·케이스 배선은 완료, 이 게이트가 다음 단계.
+- 진단·judge 메타 층은 아직 `claude -p` (결과 분석용, 시험 대상 아님).
+
 ## 케이스 승격 (오답노트 → drill)
 
 실사고 발생 → 그 상황을 fixture 로 재현해 `drill/cases/` 추가. 트리거 발화: "이거 drill 케이스로 박아".

@@ -6,8 +6,12 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 DEFAULT_AGENT_HOME=$(sh "$SCRIPT_DIR/../../utilities/agent-home.sh" 2>/dev/null || printf '%s\n' "${CLAUDE_HOME:-$HOME/.claude}")
 AGENT_HOME="${AGENT_HOME:-$DEFAULT_AGENT_HOME}"
 GOLD="${DRILL_HOME:-$AGENT_HOME/loops/drill}"   # DRILL_HOME override = worktree 테스트 (production default 불변)
+# Adapter runner (core/adapter split): the CASES are portable, the RUNNER is
+# adapter-specific. DRILL_ADAPTER / --adapter selects claude|codex|opencode.
+# shellcheck source=../lib-runner.sh
+. "$SCRIPT_DIR/../lib-runner.sh"
+ADAPTER="${DRILL_ADAPTER:-claude}"
 CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
-TOOLS="Bash,Read,Write,Edit,Glob,Grep,Skill,Agent,TodoWrite"
 STAMP=$(date +%F_%H%M)
 RESULTS="$GOLD/results/$STAMP"
 mkdir -p "$RESULTS"
@@ -18,10 +22,11 @@ mkdir -p "$RESULTS"
 AXIS=""; SAMPLE=""; LIST=""; ids=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --axis)   AXIS="${2:-}"; shift 2 ;;
-    --sample) SAMPLE="${2:-}"; shift 2 ;;
-    --list)   LIST=1; shift ;;
-    *)        ids+=("$1"); shift ;;
+    --axis)    AXIS="${2:-}"; shift 2 ;;
+    --sample)  SAMPLE="${2:-}"; shift 2 ;;
+    --adapter) ADAPTER="${2:-claude}"; shift 2 ;;
+    --list)    LIST=1; shift ;;
+    *)         ids+=("$1"); shift ;;
   esac
 done
 
@@ -69,22 +74,15 @@ for c in "${cases[@]}"; do
 
   T="$RESULTS/$c.transcript.txt"
   J="$RESULTS/$c.json"
-  ( cd "$WORK/repo" && timeout "$TIMEOUT" "$CLAUDE_BIN" -p "$(cat "$CASE_DIR/prompt.md")" \
-      --allowedTools "$TOOLS" --output-format json ${MAX_TURNS:+--max-turns "$MAX_TURNS"} ) \
-      > "$J" 2> "$RESULTS/$c.stderr.txt"
+  # Adapter runner: writes $J (raw) + $T (normalized transcript), echoes
+  # turns|in_tok|out_tok|cost. Same contract for claude|codex|opencode.
+  metrics[$c]=$(run_case_on_adapter "$ADAPTER" "$CASE_DIR/prompt.md" "$WORK/repo" "$TIMEOUT" "${MAX_TURNS:-}" "$J" "$T")
   rc=$?
 
-  # JSON → transcript(result 본문) + 계측 (turns|in_tok|out_tok|cost)
-  metrics[$c]=$(python3 - "$J" "$T" <<'PYEOF'
-import json, sys
-try: d = json.load(open(sys.argv[1]))
-except Exception: d = {}
-open(sys.argv[2], 'w').write(d.get('result', '') or '')
-u = d.get('usage', {})
-tin = u.get('input_tokens',0)+u.get('cache_creation_input_tokens',0)+u.get('cache_read_input_tokens',0)
-print(f"{d.get('num_turns','?')}|{tin}|{u.get('output_tokens',0)}|{round(d.get('total_cost_usd') or 0,3)}")
-PYEOF
-)
+  # Spec-grounding marker home for assertions: guards write the marker to the
+  # ADAPTER's resolved agent-home, so cases must read it there, not a literal
+  # claude path. Default to this run's AGENT_HOME.
+  export DRILL_MARKER_HOME="${DRILL_MARKER_HOME:-$AGENT_HOME}"
 
   if out=$(bash "$CASE_DIR/assert.sh" "$WORK" "$T" 2>&1); then
     verdicts[$c]="PASS$grow"
@@ -92,7 +90,7 @@ PYEOF
     verdicts[$c]="FAIL$grow"
   fi
   echo "$out" | tee "$RESULTS/$c.assert.txt"
-  echo "  → ${verdicts[$c]} (claude exit $rc, ${metrics[$c]})"
+  echo "  → ${verdicts[$c]} ($ADAPTER exit $rc, ${metrics[$c]})"
 
   # FAIL 자동 진단 — 원인 추정 + 수정안 초안까지 (적용은 사용자 서명)
   if [[ "${verdicts[$c]}" == FAIL* ]]; then
@@ -128,8 +126,9 @@ if [ "${RUN_JUDGE:-0}" = "1" ]; then
   echo "judge → $RESULTS/judge.md"
 fi
 
-# --- 정리: 헤드리스 케이스가 남긴 세션 detritus 제거 (projects/ 레지스트리·세션목록 오염 방지) ---
-# 각 case 의 claude -p 는 cwd=/tmp/drill-* 라 projects/-tmp-drill-*-repo 세션이 등록됨 → run 후 청소.
+# --- 정리: 헤드리스 케이스가 남긴 세션 detritus 제거 (레지스트리·세션목록 오염 방지) ---
+# 각 case 의 헤드리스 run 은 cwd=/tmp/drill-* 라 세션이 등록됨 → run 후 청소.
 rm -rf /tmp/drill-* 2>/dev/null || true
-rm -rf "$AGENT_HOME/projects/"*tmp-drill*-repo 2>/dev/null || true
-echo "cleanup: drill tmp + 세션 detritus 제거"
+# claude 는 projects/<enc_cwd> 세션 레지스트리를 남긴다 (codex/opencode 는 자체 세션 저장소).
+[ "$ADAPTER" = "claude" ] && rm -rf "$AGENT_HOME/projects/"*tmp-drill*-repo 2>/dev/null || true
+echo "cleanup: drill tmp + 세션 detritus 제거 (adapter=$ADAPTER)"
