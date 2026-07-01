@@ -57,9 +57,13 @@ print("S_CTX=" + shlex.quote(str(cpct)))
 if [ -n "$S_SID" ]; then
   sldir="$AGENT_HOME/.statusline"
   mkdir -p "$sldir" 2>/dev/null || true
-  printf '%s' "$input" > "$sldir/$S_SID.json" 2>/dev/null || true
+  # atomic write (temp + rename) so a concurrent reader (tools/fleet dashboard) never sees a
+  # half-written file → JSON parse fail → telemetry ('$cost' etc.) flickers to '—' for a tick.
+  if printf '%s' "$input" > "$sldir/.$S_SID.json.tmp" 2>/dev/null; then
+    mv -f "$sldir/.$S_SID.json.tmp" "$sldir/$S_SID.json" 2>/dev/null || true
+  fi
   # stale 청소: mtime > 1일 세션 파일 제거(디렉토리 폭증 방지 — 종료된 세션 잔존물). find 없으면 skip.
-  find "$sldir" -maxdepth 1 -name '*.json' -mtime +1 -delete 2>/dev/null || true
+  find "$sldir" -maxdepth 1 \( -name '*.json' -o -name '.*.json.tmp' \) -mtime +1 -delete 2>/dev/null || true
 fi
 
 dir=$(basename "$S_CWD")
