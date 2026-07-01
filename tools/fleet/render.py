@@ -157,18 +157,32 @@ def _dispatch_header(jobs, malformed):
     return [("DISPATCH  ", "head"), ("%d jobs" % len(jobs), None), (tail, "dim")]
 
 
+_SHOW_ALL = False   # --all: include stale/dead sessions in the fleet list (header counts stay full)
+
+
+def set_show_all(v):
+    global _SHOW_ALL
+    _SHOW_ALL = bool(v)
+
+
 def _build_lines(sessions, jobs, section, wide, malformed):
     """Return a flat list of segment-lines for the whole screen (None = blank line)."""
     lines = []
     if section in ("fleet", "both"):
         lines.append(_fleet_header(sessions))
         lines.append(None)
-        for s in _sort_sessions(sessions):
+        # stale/dead are folded away by default (header keeps their count); --all reveals them.
+        shown = sessions if _SHOW_ALL else [s for s in sessions if s.liveness not in ("stale", "dead")]
+        for s in _sort_sessions(shown):
             lines.extend(_session_lines(s, wide))
             if wide:
                 lines.append(None)
         if not sessions:
             lines.append([("  (no active sessions)", "dim")])
+        else:
+            hidden = len(sessions) - len(shown)
+            if hidden:
+                lines.append([("  +%d stale/dead hidden (--all)" % hidden, "dim")])
     if section == "both":
         lines.append(None)
     if section in ("dispatch", "both"):

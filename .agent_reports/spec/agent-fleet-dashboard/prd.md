@@ -61,6 +61,7 @@
 | `--section <fleet\|dispatch\|both>` | `both` | 표시 섹션 선택. |
 | `--harness <list>` | all | 특정 하네스만(예: `claude,codex`). |
 | `--json` | off | curses 대신 수집 결과를 JSON 으로 stdout(파이프·디버그·테스트). |
+| `--all` | off | fleet 리스트에 stale/dead 세션도 표시. **기본은 숨김**(활성 working/idle 만; 헤더 카운트·`+N hidden` 요약은 유지). |
 
 - **Input**: 없음(디스크·프로세스 관찰만). 환경변수 `AGENT_HOME`/`CLAUDE_HOME`(기본 `~/.claude`), `AGENT_DISPATCH_JOBS`(기본 `<AGENT_HOME>/.dispatch/jobs.log`) 존중.
 - **Output**: curses full-screen(기본) / `--once`·`--json` 시 plain stdout.

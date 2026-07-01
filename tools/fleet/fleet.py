@@ -42,6 +42,8 @@ def parse_args(argv):
                    help="comma list to restrict harnesses, e.g. claude,codex")
     p.add_argument("--json", action="store_true",
                    help="emit collected state as JSON to stdout")
+    p.add_argument("--all", dest="show_all", action="store_true",
+                   help="include stale/dead sessions in the fleet list (hidden by default)")
     return p.parse_args(argv)   # argparse exits 2 on bad args (matches PRD §3 exit codes)
 
 
@@ -90,6 +92,7 @@ def main(argv=None):
         sys.stderr.write("render init failed: %s\n" % e)
         return 1
 
+    render.set_show_all(args.show_all)
     if args.once:
         return render.render_once(collect_all, hfilter, args.section)
     return render.run_live(collect_all, hfilter, args.section, args.interval)
