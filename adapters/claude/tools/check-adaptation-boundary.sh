@@ -777,7 +777,6 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'hookSpecificOutput' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq 'run_preflight("session-end"' adapters/codex/hooks/sessionend-lifecycle.py \
     || grep -Fq 'sys.stdout.write(result.stdout)' adapters/codex/hooks/sessionend-lifecycle.py \
-    || grep -Fq 'print("{}")' adapters/codex/hooks/sessionend-lifecycle.py \
     || ! grep -Fq 'run_preflight("status"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'run_preflight("prompt-signal"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'run_preflight("mode"' adapters/codex/hooks/userprompt-lifecycle.py \
@@ -795,7 +794,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'out["hookEventName"]=="SessionStart"' hooks/portable-guards.test.sh \
     || ! grep -Fq 'out["hookEventName"]=="UserPromptSubmit"' hooks/portable-guards.test.sh \
     || ! grep -Fq 'out["hookEventName"]=="PermissionRequest"' hooks/portable-guards.test.sh \
-    || ! grep -Fq 'silent success' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'valid minimal hook JSON' hooks/portable-guards.test.sh \
     || ! grep -Fq 'adapter loop runtime logs are ignored' hooks/portable-guards.test.sh \
     || ! grep -Fq 'adapters/*/loops/*.log' .gitignore \
     || ! grep -Fq 'git_dirty_tracked=' hooks/portable-guards.test.sh \
