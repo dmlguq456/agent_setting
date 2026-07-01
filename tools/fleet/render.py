@@ -319,9 +319,9 @@ def _gate_tag(gate, pipe):
 
 
 def _branch_seg(cwd, branch):
-    """A single dim '⎇ <branch>' cell (git icon — the user reads branch a lot)."""
+    """A single dim branch cell (icon removed per user — plain text, ≥1 trailing space)."""
     br = branch or _git_branch(cwd)
-    return (_pad("⎇ " + (br or "—")[: _BRW - 3], _BRW), "dim")
+    return (_pad((br or "—")[: _BRW - 1], _BRW), "dim")
 
 
 def _me_segs(harness, left, dial, dial_key, width):
@@ -338,21 +338,26 @@ def _me_segs(harness, left, dial, dial_key, width):
     return [(_pad(left[: max(1, width - 1)], width), lkey)]
 
 
-def _stage_segs(key, stage):
-    """Process viz — the pipeline lifecycle as a breadcrumb: each stage a DISTINCT color, the
-    CURRENT stage BOLD/bright (눈에 띄게), the rest the same hue but DIM: `plan › exec › test`.
-    Unknown pipeline/stage → a single lit token (no fabricated track); nothing → dim placeholder."""
+def _stage_segs(key, stage, working=False):
+    """Process viz — the pipeline lifecycle as a breadcrumb: each stage a DISTINCT color, the rest
+    of the sequence the same hue but DIM. The CURRENT stage is bold/bright and, when the job is
+    actively `working`, BLINKS in sync with the working dot (shared `_BLINK_ON`, ~2 Hz) so the eye
+    is drawn to where work is happening right now. Unknown pipeline/stage → a single lit token."""
+    def _cur_key(i):
+        # working → pulse on/off with the dot; idle/other → steady bright
+        if working and not _BLINK_ON:
+            return "stg%d_off" % (i % 5)
+        return "stg%d_on" % (i % 5)
     seq = _PIPE_STAGES.get(key)
     if seq and stage in seq:
         out = []
         for i, st in enumerate(seq):
             if i:
                 out.append((" › ", "dim"))
-            on = (st == stage)
-            out.append((st, "stg%d_%s" % (i % 5, "on" if on else "off")))
+            out.append((st, _cur_key(i) if st == stage else "stg%d_off" % (i % 5)))
         return out
     if stage:
-        return [(stage, "stg0_on")]
+        return [(stage, _cur_key(0))]
     return [("—", "dim")]
 
 
@@ -455,9 +460,9 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     # model slot → the job's OWN main model (harness-tinted dim), same cell a session uses.
     segs += _me_segs(harness, _clean_model(dash(j.model or parent_model)), None, None, _MW)
 
-    # gauge slot → stage breadcrumb (process viz): plan › exec › test, per-stage colors, current bold.
+    # gauge slot → stage breadcrumb (process viz): per-stage colors, current bold + blinks if working.
     segs.append(("  ", None))
-    segs += _stage_segs(key, stage)
+    segs += _stage_segs(key, stage, working=(j.liveness == "working"))
 
     segs.append((_RFLUSH, None))
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
