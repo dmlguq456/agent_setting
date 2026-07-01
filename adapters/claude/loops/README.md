@@ -51,6 +51,7 @@
 루프의 **케이스(prompt/fixture/assert)는 런타임 중립**, **러너만 어댑터별**이다 — 하네스 전체의 core/adapter 분리를 루프 축에도 적용. `loops/lib-runner.sh` 의 `run_case_on_adapter <adapter> …` 가 `claude`(`claude -p --output-format json`) · `codex`(`codex exec --json`) · `opencode`(`opencode run --format json`) 를 같은 계약(transcript + `turns|in_tok|out_tok|cost`)으로 정규화한다. `drill/run.sh --adapter <a>` (또는 `DRILL_ADAPTER`) 로 선택, 기본 `claude`.
 
 - **케이스 포터블화**: 마커 경로는 `$DRILL_MARKER_HOME/.spec-grounding`(러너가 어댑터 agent-home 으로 export), 산출물은 `.agent_reports`(+legacy `.claude_reports`). g4_spec_gate 가 포터블 기준 케이스. design(g8*)·mem_builtin 은 claude 고유(design-MCP·claude 내장 memory)라 잔존.
+- **oncall/study 러너**: `loops/lib.sh` 의 `run_claude_retry` 도 `LOOP_ADAPTER`(claude 기본 · codex · opencode)로 dispatch — codex/opencode 는 자체 sandbox/permission 으로 프롬프트(oncall.md/study.md)를 돌리고 claude 전용 인자(--model/--allowedTools)는 무시. note 는 이미 포터블한 `autopilot-note` capability 라 스케줄 shim 만 남음.
 - **behavioral 검증 게이트 (선결)**: codex/opencode 로 케이스를 _실제_ 돌리려면 (1) 해당 어댑터의 runtime projection 설치(bootstrap+hooks/plugin 로드), (2) 마커 등 하네스 상태쓰기가 sandbox 안에 떨어지게 agent-home 배치가 필요. 러너·케이스 배선은 완료, 이 게이트가 다음 단계.
 - 진단·judge 메타 층은 아직 `claude -p` (결과 분석용, 시험 대상 아님).
 
