@@ -8,7 +8,13 @@
 # 죽었다 (2026-06-21 연수 사고). ~/.local/bin(v20) 을 앞세워 cron 에서도 최신 node 가 잡히게.
 export PATH="$HOME/.local/bin:$PATH"
 
-# --- 버그②: claude -p 일시장애 재시도 래퍼 ---
+# --- 루프 러너: 어댑터 선택 (core/adapter 분리) ---
+# LOOP_ADAPTER 로 oncall/study 를 claude|codex|opencode 로 돌린다. claude 가 기본
+# (기존 동작 보존). codex/opencode 는 자체 sandbox/permission 으로 프롬프트를 실행하며
+# claude 전용 인자(--model/--allowedTools)는 무시한다.
+LOOP_ADAPTER="${LOOP_ADAPTER:-claude}"
+
+# --- 버그②: 일시장애 재시도 래퍼 (어댑터 dispatch) ---
 # 사용:  run_claude_retry <timeout초> <프롬프트파일> [claude 추가인자...]
 #   401·5xx·overloaded·rate-limit = *일시* 장애 → 백오프 후 재시도 (최대 3회).
 #   session/usage limit = 리셋 전엔 안 풀림 → 즉시 ABORT (재시도 무의미).
@@ -22,7 +28,15 @@ run_claude_retry() {
       echo "=== retry $attempt/$max — ${backoff[attempt-1]}s 대기 후 재시도 ==="
       sleep "${backoff[attempt-1]}"
     fi
-    out="$(timeout "$to" "$HOME/.local/bin/claude" -p "$(cat "$pf")" "$@" 2>&1)"
+    case "$LOOP_ADAPTER" in
+      codex)
+        out="$(timeout "$to" "${CODEX_BIN:-codex}" exec --sandbox workspace-write --skip-git-repo-check - < "$pf" 2>&1)" ;;
+      opencode)
+        _ocbin="${OPENCODE_BIN:-opencode}"; command -v "$_ocbin" >/dev/null 2>&1 || _ocbin="$HOME/.opencode/bin/opencode"
+        out="$(timeout "$to" "$_ocbin" run "$(cat "$pf")" 2>&1)" ;;
+      *)
+        out="$(timeout "$to" "$HOME/.local/bin/claude" -p "$(cat "$pf")" "$@" 2>&1)" ;;
+    esac
     rc=$?
     printf '%s\n' "$out"
     # 사용량 제한 — 리셋 전엔 안 풀리므로 재시도하지 않고 명확히 끝낸다
