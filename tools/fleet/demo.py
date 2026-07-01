@@ -34,6 +34,11 @@ def collect(harness_filter=None):
           slug="brave-comet", model="glm-5.2", effort="low",
           ctx_pct=31, cost=0.42, elapsed_min=200,
           gate="untracked", branch="main", liveness="working"),
+        # detached tmux session (no client attached) — idle but backgrounded, shown with ◌ not ○
+        S(harness="claude", pid=90006, cwd="/home/demo/demo-app", session_id="demo-claude-3",
+          slug="demo-app-detach", model="Opus 4.8", effort="high", detached=True,
+          ctx_pct=62, rl_5h=40, rl_7d=22, cost=8.40, elapsed_min=720,
+          gate="tracked", branch="fix/night-run", liveness="idle"),
     ]
     jobs = [
         # nested under the demo-app claude parent (demo-claude-1)
