@@ -44,8 +44,9 @@ print human-readable status for explicit CLI use, but a native runtime hook must
 not forward that text unless the runtime accepts it for that hook event. For
 example, a context hook may emit `hookSpecificOutput.additionalContext` when the
 runtime supports it, while a lifecycle side-effect hook such as a session-end
-sync may need to perform the mutation with empty stdout so the runtime does not
-attempt to parse helper text as hook JSON.
+sync may need to perform the mutation with empty stdout or a minimal structured
+success object so the runtime does not attempt to parse helper text as hook
+JSON.
 
 Current Claude Code registration lives in `adapters/claude/settings.json` and
 executes concrete hook projection files under `adapters/claude/hooks/` via the

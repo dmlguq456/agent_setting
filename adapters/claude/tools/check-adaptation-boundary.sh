@@ -749,7 +749,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'out["hookEventName"]=="SessionStart"' hooks/portable-guards.test.sh \
     || ! grep -Fq 'out["hookEventName"]=="UserPromptSubmit"' hooks/portable-guards.test.sh \
     || ! grep -Fq 'out["hookEventName"]=="PermissionRequest"' hooks/portable-guards.test.sh \
-    || ! grep -Fq 'without invalid stdout' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'valid minimal hook JSON' hooks/portable-guards.test.sh \
     || ! grep -Fq 'adapter loop runtime logs are ignored' hooks/portable-guards.test.sh \
     || ! grep -Fq 'adapters/*/loops/*.log' .gitignore \
     || ! grep -Fq 'hook_event=UserPromptSubmit' hooks/portable-guards.test.sh \

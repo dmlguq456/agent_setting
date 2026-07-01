@@ -75,6 +75,7 @@ def run_preflight(*args: str) -> None:
 def main() -> int:
     payload = load_payload()
     run_preflight("session-end", cwd(payload), session_id(payload))
+    print("{}")
     return 0
 
 

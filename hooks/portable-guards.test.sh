@@ -1258,11 +1258,11 @@ else
 fi
 if printf '{"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo" \
   | MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionend-lifecycle.py" >/tmp/codex_session_end_hook.out 2>/tmp/codex_session_end_hook.err \
-  && [ ! -s /tmp/codex_session_end_hook.out ] \
+  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert isinstance(d, dict); assert not d' /tmp/codex_session_end_hook.out \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_session_end_hook.out /tmp/codex_session_end_hook.err; then
-  ok "codex native hook projection bridges session end lifecycle without invalid stdout"
+  ok "codex native hook projection bridges session end lifecycle with valid minimal hook JSON"
 else
-  bad "codex native hook projection should bridge session end lifecycle without invalid stdout"
+  bad "codex native hook projection should bridge session end lifecycle with valid minimal hook JSON"
 fi
 codex_stop_command=$(python3 - "$TMP/codex_hook_home/.codex/hooks.json" <<'PY'
 import json
@@ -1274,11 +1274,11 @@ PY
 )
 if printf '{"session_id":"stopsid","cwd":"%s"}\n' "$TMP/repo" \
   | MEM_STORE="$TMP/codex_hook_mem_stop" HOME="$TMP/codex_hook_home" sh -c "$codex_stop_command" >/tmp/codex_stop_hook.out 2>/tmp/codex_stop_hook.err \
-  && [ ! -s /tmp/codex_stop_hook.out ] \
+  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert isinstance(d, dict); assert not d' /tmp/codex_stop_hook.out \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_stop_hook.out /tmp/codex_stop_hook.err; then
-  ok "codex native hook projection aliases Stop to session end lifecycle without invalid stdout"
+  ok "codex native hook projection aliases Stop to session end lifecycle with valid minimal hook JSON"
 else
-  bad "codex native hook projection should alias Stop to session end lifecycle without invalid stdout"
+  bad "codex native hook projection should alias Stop to session end lifecycle with valid minimal hook JSON"
 fi
 if git check-ignore -q "$ROOT/adapters/claude/loops/oncall.log"; then
   ok "adapter loop runtime logs are ignored"
