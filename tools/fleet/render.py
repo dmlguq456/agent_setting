@@ -77,10 +77,9 @@ def _init_colors():
             n += 1
         except Exception:
             _COLOR[key] = 0
-    # reverse-video badges: OR the color pair with A_REVERSE (falls back to plain A_REVERSE
-    # if the pair failed to init above).
+    # badges: bold colored TEXT (no reverse-video background block — the filled span read badly)
     for k in ("badge_claude", "badge_codex", "badge_opencode"):
-        _COLOR[k] = _COLOR.get(k, 0) | curses.A_REVERSE
+        _COLOR[k] = _COLOR.get(k, 0) | curses.A_BOLD
     # percentages read at a glance — bold so ctx%/rate% stand out (user: '% 표기가 잘 안보인다')
     for k in ("pct_g", "pct_y", "pct_r", "m_opus", "m_sonnet", "m_haiku", "m_fable", "m_gpt", "m_glm"):
         _COLOR[k] = _COLOR.get(k, 0) | curses.A_BOLD
@@ -152,6 +151,34 @@ def _pad(s, w):
     return s[:w].ljust(w)
 
 
+_BR_TTL = 15.0
+_BR_CACHE = {"ts": 0.0, "map": {}}
+
+
+def _git_branch(cwd):
+    """Current branch for a cwd (⎇ display). None if not a repo. Cached 15s + 2s timeout so the
+    per-tick git calls (one per unique cwd) stay cheap and never block the render."""
+    if not cwd:
+        return None
+    now = time.time()
+    if now - _BR_CACHE["ts"] > _BR_TTL:
+        _BR_CACHE.update(ts=now, map={})
+    cache = _BR_CACHE["map"]
+    if cwd in cache:
+        return cache[cwd]
+    br = None
+    try:
+        import subprocess
+        r = subprocess.run(["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
+                           capture_output=True, text=True, timeout=2)
+        if r.returncode == 0:
+            br = r.stdout.strip() or None
+    except Exception:
+        br = None
+    cache[cwd] = br
+    return br
+
+
 _GATE_TTL = 3.0
 _GATE_CACHE = {"ts": 0.0, "map": {}}
 
@@ -205,33 +232,41 @@ def _session_row(s, narrow, is_parent=False):
     dim_telemetry = live in ("stale", "dead") or s.app_server
     tkey = "dim" if dim_telemetry else None
 
-    # aligned columns (fixed-width pad) — glyph · gate · parent · badge · name · model+effort · ctx · rate · cost · ⏳
+    # aligned columns — leading is ONLY glyph+badge+name (all fixed/ASCII → clean vertical lines).
+    # branch·gate go after the name (padded by display width); parent/markers go to the very end.
     el = fmt_min(s.elapsed_min)
     model = dash(s.model)
     gch, gkey = _glyph(live)
-    gate = _project_gate(s.cwd, s.session_id)                         # per-session spec-gate
-    gate_ch, gate_key = {"tracked": ("📌", "work"), "untracked": ("⚡", "warn")}.get(gate, ("  ", "dim"))
-    parent_ch = _ICON_PARENT if is_parent else "  "
 
     segs = [("  ", None), (gch, gkey), (" ", None),
-            (gate_ch, gate_key), (" ", None),
-            (parent_ch, None), (" ", None),
             (_pad(badge, 10), bkey), (" ", None),
-            (_pad(slug, 18), None),
-            ("  ✨", "dim"),
-            (model, "dim" if dim_telemetry else _model_key(s.model))]
-    used = len(model)
-    if s.effort:
-        eff = " ·" + s.effort
+            (_pad(slug, 18), None)]
+
+    # git branch (⎇) — same info the statusline shows, per session (and per dispatch worktree)
+    br = _git_branch(s.cwd)
+    br_txt = ("⎇ " + br) if br else ""
+    segs += [("  ", None), (br_txt, "warn"), (" " * max(1, 16 - _dw(br_txt)), None)]
+
+    # per-session spec-gate, full label after the name (a tracked repo can host untracked work)
+    gate = _project_gate(s.cwd, s.session_id)
+    gate_full, gate_c = {"tracked": ("📌 tracked(pipeline)", "work"),
+                         "untracked": ("⚡ untracked(ad-hoc)", "warn")}.get(gate, ("", "dim"))
+    segs += [(gate_full, gate_c), (" " * max(1, 21 - _dw(gate_full)), None)]
+
+    # model + effort — fixed width so 🧠 aligns (truncate long names like 'Opus 4.8 (1M context)')
+    MW = 28
+    eff = (" ·" + s.effort) if s.effort else ""
+    mtrunc = model[: max(1, MW - len(eff))]
+    segs += [("✨", "dim"), (mtrunc, "dim" if dim_telemetry else _model_key(s.model))]
+    if eff:
         segs.append((eff, "dim" if dim_telemetry else _EFFORT_KEY.get(s.effort, "dim")))
-        used += len(eff)
-    segs.append((" " * max(1, 22 - used), None))                      # pad model+effort → 🧠 column aligns
+    segs.append((" " * max(0, MW - len(mtrunc) - len(eff)), None))   # exact MW; separator is the ' 🧠' below
 
     ctx_str = dash(s.ctx_pct, lambda v: "%d%%" % v)
     if s.ctx_pct is not None and not dim_telemetry:                  # visual context gauge
-        segs += [("🧠", "dim"), (_bar(s.ctx_pct), _pct_key(s.ctx_pct)), (" %4s" % ctx_str, _pct_key(s.ctx_pct))]
+        segs += [(" 🧠", "dim"), (_bar(s.ctx_pct), _pct_key(s.ctx_pct)), (" %4s" % ctx_str, _pct_key(s.ctx_pct))]
     else:
-        segs += [("🧠", "dim"), ("░░░░░", "dim"), (" %4s" % ctx_str, "dim")]
+        segs += [(" 🧠", "dim"), ("░░░░░", "dim"), (" %4s" % ctx_str, "dim")]
 
     if not narrow:
         r5s = dash(s.rl_5h, lambda v: "%d%%" % v)
@@ -240,6 +275,8 @@ def _session_row(s, narrow, is_parent=False):
                  (" 7d", "dim"), ("%4s" % r7s, "dim" if dim_telemetry else _pct_key(s.rl_7d)),
                  ("  %8s" % dash(s.cost, lambda v: "$%.2f" % v), "dim")]
     segs.append(("  ⏳" + el, "dim"))                                 # liveness shown by leading glyph
+    if is_parent:
+        segs.append(("  🛰️", None))                                  # orchestrator marker at end (no column shift)
     if s.app_server:
         segs.append(("  ⚙app-server", "dim"))
     if s.orphan:
@@ -290,6 +327,9 @@ def _dispatch_row(j, orphan=False, parent_model=None):
     dmodel = j.model or parent_model                 # own model if resolvable, else parent's (same config for now — per-dispatch later)
     if dmodel:
         segs.append(("  ✨", "dim")); segs.append((dmodel, _model_key(dmodel)))
+    br = _git_branch(j.cwd)                           # dispatch worktree branch (wt/branch)
+    if br:
+        segs.append(("  ⎇ " + br, "warn"))
     segs.append(("  ⏳" + el, "dim"))                 # liveness shown by leading glyph now
     if orphan:
         segs.append(("  (orphan)", "dim"))
