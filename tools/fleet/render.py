@@ -247,10 +247,10 @@ def _session_row(s, narrow, is_parent=False):
             (badge, bkey), (" " * max(0, 10 - len(badge)), None), (" ", None),  # bg color on badge TEXT only
             (_pad(slug, 18), None)]
 
-    # git branch (⎇) — same info the statusline shows; '⎇ —' when the cwd is not a git repo
+    # git branch (⎇), narrow column + truncated; '⎇ —' when the cwd is not a git repo
     br = s.branch or _git_branch(s.cwd)
-    br_txt = ("⎇ " + br) if br else "⎇ —"
-    segs += [("  ", None), (br_txt, "warn" if br else "dim"), (" " * max(1, 16 - _dw(br_txt)), None)]
+    br_txt = ("⎇ " + br[:10]) if br else "⎇ —"
+    segs += [("  ", None), (br_txt, "warn" if br else "dim"), (" " * max(1, 13 - _dw(br_txt)), None)]
 
     # per-session spec-gate, full label after the name (a tracked repo can host untracked work)
     gate = s.gate or _project_gate(s.cwd, s.session_id)
