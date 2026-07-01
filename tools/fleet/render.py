@@ -239,7 +239,7 @@ def _session_row(s, narrow, is_parent=False):
     gch, gkey = _glyph(live)
 
     segs = [("  ", None), (gch, gkey), (" ", None),
-            (_pad(badge, 10), bkey), (" ", None),
+            ("▌", bkey), (_pad(badge, 10), bkey), (" ", None),   # harness color block chip + badge text
             (_pad(slug, 18), None)]
 
     # git branch (⎇) — same info the statusline shows, per session (and per dispatch worktree)
@@ -268,12 +268,8 @@ def _session_row(s, narrow, is_parent=False):
     else:
         segs += [(" 🧠", "dim"), ("░░░░░", "dim"), (" %4s" % ctx_str, "dim")]
 
-    if not narrow:
-        r5s = dash(s.rl_5h, lambda v: "%d%%" % v)
-        r7s = dash(s.rl_7d, lambda v: "%d%%" % v)
-        segs += [("  5h", "dim"), ("%4s" % r5s, "dim" if dim_telemetry else _pct_key(s.rl_5h)),
-                 (" 7d", "dim"), ("%4s" % r7s, "dim" if dim_telemetry else _pct_key(s.rl_7d)),
-                 ("  %8s" % dash(s.cost, lambda v: "$%.2f" % v), "dim")]
+    if not narrow:                                                   # rate limit is per-account (top bar), not per row
+        segs.append(("  %8s" % dash(s.cost, lambda v: "$%.2f" % v), "dim"))
     segs.append(("  ⏳" + el, "dim"))                                 # liveness shown by leading glyph
     if is_parent:
         segs.append(("  🛰️", None))                                  # orchestrator marker at end (no column shift)
@@ -403,6 +399,23 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
     order = sorted(groups.keys(), key=lambda name: _group_sort_key(name, groups[name]))
 
     lines = []
+    # account-level usage bar — rate limits are shared per harness/account, so shown ONCE at the top
+    _rl = {}
+    for s in sessions:
+        if s.harness not in _rl and (s.rl_5h is not None or s.rl_7d is not None):
+            _rl[s.harness] = (s.rl_5h, s.rl_7d)
+    if _rl:
+        bar = [("  usage   ", "head")]
+        for h in ("claude", "codex", "opencode"):
+            if h in _rl:
+                r5, r7 = _rl[h]
+                bar += [(_BADGE_TEXT.get(h, h), _BADGE_KEY.get(h, "head")),
+                        (" 5h ", "dim"), (dash(r5, lambda v: "%d%%" % v), _pct_key(r5)),
+                        ("  7d ", "dim"), (dash(r7, lambda v: "%d%%" % v), _pct_key(r7)),
+                        ("      ", None)]
+        lines.append(bar)
+        lines.append(None)
+
     first = True
     for name in order:
         g = groups[name]

@@ -81,7 +81,7 @@ def main(argv=None):
     hfilter = _harness_filter(args.harness)
 
     collector = collect_all
-    if args.demo:
+    if args.demo or os.environ.get("FLEET_DEMO"):   # flag OR env (env works through any launcher/alias)
         if __package__ in (None, ""):
             from fleet import demo
         else:
