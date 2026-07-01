@@ -288,7 +288,7 @@ Harness-specific status signals still need Codex-native realization:
 |---|---|
 | stale workflow bypass flag cleanup | Codex `SessionStart` hook bridge runs `preflight.sh start`; explicit preflight remains fallback when hooks are unavailable |
 | tracked/untracked workflow state | Codex `UserPromptSubmit` hook bridge runs `preflight.sh prompt-signal` and `preflight.sh mode`; explicit preflight remains fallback when hooks are unavailable |
-| workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; keep Codex `/statusline` for native model/context/token/session fields |
+| workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; includes tracked-dirty vs untracked counts and sibling worktree counts; keep Codex `/statusline` for native model/context/token/session fields |
 | UI boundary report | explicit `preflight.sh ui-info`; reports built-in footer/title support, unsupported arbitrary live statusline scripts, Skill/plugin autopilot entrypoints, and explicit/main-dispatched subagent behavior |
 | subagent delegation | explicit `preflight.sh subagent-info --check`; verifies the Codex `multi_agent` runtime feature and projected custom agents before claiming native subagent delegation parity |
 | tracked/untracked toggle | explicit `preflight.sh track`; do not expose Claude `/track` command files |
@@ -297,7 +297,7 @@ Harness-specific status signals still need Codex-native realization:
 | sibling `-wt/<slug>` dispatch detection | preserve the worktree naming invariant; choose a Codex-native display surface later |
 | pipeline stage nudges | preflight/AGENTS instructions first; UI only when Codex exposes a suitable surface |
 | oncall/note/study/drill loop nudges | `preflight.sh briefing` plus `preflight.sh loop-info <loop>` for loop-specific support/fallback status |
-| merge/rebase/merged-branch risk | `preflight.sh write` git safety checks; `preflight.sh status` reports `git_operation` (merge/rebase/cherry-pick) and `git_branch_done` (non-default branch fully merged = DONE-BRANCH hazard). A native graphical warning remains optional polish |
+| merge/rebase/merged-branch risk | `preflight.sh write` git safety checks; `preflight.sh status` reports `git_operation` (merge/rebase/cherry-pick), `git_branch_done` (non-default branch fully merged = DONE-BRANCH hazard), dirty counts, and extra worktree counts. A native graphical warning remains optional polish |
 
 ## Required Codex Mappings
 

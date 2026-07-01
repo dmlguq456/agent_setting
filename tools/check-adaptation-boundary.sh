@@ -708,6 +708,12 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'subagent_feature_check=adapters/codex/bin/preflight.sh subagent-info --check' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'runtime_surface=codex-native-subagents' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'feature_check=codex features list' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'git_dirty_tracked=' utilities/harness-status.sh \
+    || ! grep -Fq 'git_untracked=' utilities/harness-status.sh \
+    || ! grep -Fq 'git_extra_worktrees=' utilities/harness-status.sh \
+    || ! grep -Fq 'codex status distinguishes tracked dirty, untracked files, and sibling worktrees' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'tracked-dirty vs untracked counts' adapters/codex/README.md \
+    || ! grep -Fq 'tracked-dirty vs untracked counts' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'preflight.sh subagent-info --check' adapters/codex/AGENTS.md \
     || ! grep -Fq 'preflight.sh subagent-info --check' adapters/codex/README.md \
     || ! grep -Fq 'preflight.sh subagent-info --check' adapters/codex/ADAPTATION.md \

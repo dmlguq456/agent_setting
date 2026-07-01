@@ -91,10 +91,25 @@ if [ -n "$project_root" ]; then
     printf 'git_branch=DETACHED\n'
     printf 'git_detached=1\n'
   fi
-  if [ -n "$(git -C "$cwd" status --porcelain 2>/dev/null || true)" ]; then
+  porcelain=$(git -C "$cwd" status --porcelain 2>/dev/null || true)
+  git_dirty_tracked=$(printf '%s\n' "$porcelain" | awk 'NF && $1!="??"{c++} END{print c+0}')
+  git_untracked=$(printf '%s\n' "$porcelain" | awk '$1=="??"{c++} END{print c+0}')
+  git_dirty_total=$((git_dirty_tracked + git_untracked))
+  if [ "$git_dirty_total" -gt 0 ]; then
     printf 'git_dirty=1\n'
   else
     printf 'git_dirty=0\n'
+  fi
+  printf 'git_dirty_tracked=%s\n' "$git_dirty_tracked"
+  printf 'git_untracked=%s\n' "$git_untracked"
+  printf 'git_dirty_total=%s\n' "$git_dirty_total"
+
+  worktree_count=$(git -C "$cwd" worktree list --porcelain 2>/dev/null | awk '$1=="worktree"{c++} END{print c+0}')
+  printf 'git_worktree_count=%s\n' "${worktree_count:-0}"
+  if [ "${worktree_count:-0}" -gt 1 ] 2>/dev/null; then
+    printf 'git_extra_worktrees=%s\n' $((worktree_count - 1))
+  else
+    printf 'git_extra_worktrees=0\n'
   fi
 
   gitdir=$(git -C "$cwd" rev-parse --absolute-git-dir 2>/dev/null || git -C "$cwd" rev-parse --git-dir 2>/dev/null || true)

@@ -349,6 +349,28 @@ if "$CODEX" status "$TMP/donebranch" testsid >/tmp/codex_done.out 2>/tmp/codex_d
 else
   bad "codex status should flag a merged dead branch"
 fi
+mkdir -p "$TMP/dirtyrepo"
+git -C "$TMP/dirtyrepo" init -q
+git -C "$TMP/dirtyrepo" config user.email t@t
+git -C "$TMP/dirtyrepo" config user.name t
+git -C "$TMP/dirtyrepo" checkout -q -b main
+echo clean > "$TMP/dirtyrepo/f"
+git -C "$TMP/dirtyrepo" add f
+git -C "$TMP/dirtyrepo" commit -q -m clean
+git -C "$TMP/dirtyrepo" worktree add -q -b wtbranch "$TMP/dirtyrepo-wt/extra"
+echo changed > "$TMP/dirtyrepo/f"
+echo new > "$TMP/dirtyrepo/newfile"
+if "$CODEX" status "$TMP/dirtyrepo" testsid >/tmp/codex_dirty_status.out 2>/tmp/codex_dirty_status.err \
+  && grep -q '^git_dirty=1$' /tmp/codex_dirty_status.out \
+  && grep -q '^git_dirty_tracked=1$' /tmp/codex_dirty_status.out \
+  && grep -q '^git_untracked=1$' /tmp/codex_dirty_status.out \
+  && grep -q '^git_dirty_total=2$' /tmp/codex_dirty_status.out \
+  && grep -q '^git_worktree_count=2$' /tmp/codex_dirty_status.out \
+  && grep -q '^git_extra_worktrees=1$' /tmp/codex_dirty_status.out; then
+  ok "codex status distinguishes tracked dirty, untracked files, and sibling worktrees"
+else
+  bad "codex status should distinguish tracked dirty, untracked files, and sibling worktrees"
+fi
 if "$CODEX" prompt-signal "$TMP/flowproj" testsid >/tmp/codex_prompt_signal_tracked.out 2>/tmp/codex_prompt_signal_tracked.err \
   && grep -q '^workflow_state=tracked$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^autopilot_route=autopilot-required-for-spec-and-nontrivial-work$' /tmp/codex_prompt_signal_tracked.out \
