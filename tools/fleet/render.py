@@ -38,7 +38,9 @@ _BADGE_TEXT = {"claude": "claude", "codex": "codex", "opencode": "opencode"}
 _BADGE_KEY = {"claude": "h_claude", "codex": "h_codex", "opencode": "h_opencode"}
 _LIVE_RANK = {"working": 0, "idle": 1, "blocked": 2, "done": 3, "stale": 4, "dead": 5, "unknown": 6}
 _JOB_LIVE_RANK = {"working": 0, "stale": 1, "dead": 2, "unknown": 3}
-_EFFORT_KEY = {"low": "dim", "medium": "dim", "high": "dim", "xhigh": "dim", "max": "dim"}  # metadata → dim
+# effort intensity ramp — low/medium recede, high normal, xhigh/max stand out (subtle "구분감")
+_LVL_INT = {"low": curses.A_DIM, "medium": curses.A_DIM, "high": 0,
+            "xhigh": curses.A_BOLD, "max": curses.A_BOLD}
 _NARROW_CUTOFF = 70
 _LOOPS_KEYS = ("oncall", "note", "study", "drill")
 
@@ -80,6 +82,17 @@ def _init_colors():
     _COLOR["lvl_g"] = _COLOR.get("green", 0)
     _COLOR["lvl_y"] = _COLOR.get("yellow", 0)
     _COLOR["lvl_r"] = _COLOR.get("red", 0) | curses.A_BOLD
+    # model · effort = harness-tinted, subtle (user 2026-07-01: "은은하게라도 구분감").
+    # model text = harness hue dim; effort = same hue with an intensity ramp (low→dim … max→bold).
+    # capture the PURE hue (before the badge DIM below) so model/effort can vary intensity freely.
+    _hue = {h: _COLOR.get("h_" + h, 0) for h in ("claude", "codex", "opencode")}
+    for h, hue in _hue.items():
+        _COLOR["model_" + h] = hue | curses.A_DIM
+        for lvl, it in _LVL_INT.items():
+            _COLOR["eff_%s_%s" % (h, lvl)] = hue | it
+    _COLOR["model_other"] = curses.A_DIM
+    for lvl, it in _LVL_INT.items():
+        _COLOR["eff_other_" + lvl] = it
     # harness identity = dim colored text (color lives ONLY here for identity)
     for h in ("claude", "codex", "opencode"):
         _COLOR["h_" + h] = _COLOR.get("h_" + h, 0) | curses.A_DIM
@@ -128,8 +141,14 @@ def _pct_key(v):
     return "lvl_r" if v >= 80 else ("lvl_y" if v >= 50 else "lvl_g")
 
 
-def _model_key(name):
-    return "dim"   # model is metadata (design review) — muted, no per-model color
+def _model_key(harness):
+    return "model_" + harness if harness in ("claude", "codex", "opencode") else "model_other"
+
+
+def _eff_key(harness, effort):
+    h = harness if harness in ("claude", "codex", "opencode") else "other"
+    lvl = effort if effort in _LVL_INT else "medium"
+    return "eff_%s_%s" % (h, lvl)
 
 
 def _clean_model(name):
@@ -185,13 +204,14 @@ _GATE_TTL = 3.0
 _GATE_CACHE = {"ts": 0.0, "map": {}}
 
 
-def _project_gate(cwd, sid=None):
-    """spec-gate: 'tracked' / 'untracked' / None (no artifact root). Walks up to the nearest
-    .agent_reports/.claude_reports. untracked if the GLOBAL `.untracked` marker exists, or (when
-    sid given) this session's `.untracked.<sid>` — so tracked mode is per-session, matching the
-    statusline. sid=None → project-level (global marker only). Cached per (cwd,sid) per tick."""
+def _gate_info(cwd, sid=None):
+    """(gate, pipeline) for a cwd — gate ∈ 'tracked'/'untracked'/None, pipeline = spec/ exists.
+    Walks up to the nearest .agent_reports/.claude_reports. untracked if the GLOBAL `.untracked`
+    marker exists, or (sid given) this session's `.untracked.<sid>` — per-session tracked mode,
+    matching the statusline. pipeline = a `spec/pipeline_state.yaml` under that root (§0 gate).
+    Cached per (cwd,sid) per tick."""
     if not cwd:
-        return None
+        return (None, False)
     now = time.time()
     if now - _GATE_CACHE["ts"] > _GATE_TTL:
         _GATE_CACHE.update(ts=now, map={})
@@ -200,30 +220,70 @@ def _project_gate(cwd, sid=None):
     if ck in cache:
         return cache[ck]
     d = cwd
-    result = None
+    result = (None, False)
     for _ in range(40):
         for rd in (".agent_reports", ".claude_reports"):
             base = os.path.join(d, rd)
             if os.path.isdir(base):
                 untracked = os.path.exists(os.path.join(base, ".untracked")) or \
                     bool(sid and os.path.exists(os.path.join(base, ".untracked." + sid)))
-                result = "untracked" if untracked else "tracked"
+                pipe = os.path.exists(os.path.join(base, "spec", "pipeline_state.yaml"))
+                result = ("untracked" if untracked else "tracked", pipe)
                 break
-        if result is not None or d in ("/", ""):
+        if result[0] is not None or d in ("/", ""):
             break
         d = os.path.dirname(d)
     cache[ck] = result
     return result
 
 
+def _project_gate(cwd, sid=None):
+    """spec-gate word only ('tracked'/'untracked'/None) — thin wrapper over _gate_info."""
+    return _gate_info(cwd, sid)[0]
+
+
 # ---------- row builders (return a single segment-line: [(text, color_key), ...]) ----------
-# column layout (design review 2026-07-01): status dot · harness · NAME(focus) · ▾children ·
-# branch · gate · model·effort · ctx-gauge   —— then right-flushed cost · uptime. No cell emoji;
-# the column header row labels each field once, color carries the meaning.
-_COL_HEAD = ("  " + " " + "  "
-             + "harness".ljust(9) + " " + "session".ljust(20) + " " + "".ljust(3) + " "
-             + "branch".ljust(9) + "gate".ljust(9) + "model · effort".ljust(23)
-             + " context")
+# Shared column grid (design pass 2026-07-01) — session & dispatch align on the SAME identity
+# columns so the eye can compare them, and the fields that DIFFER live in different zones:
+#   status · harness · NAME(+gate tag) · ⎇branch · model·effort ·│ STATUS-ZONE │· ⏱ cost·uptime
+# STATUS-ZONE holds the ctx gauge (session) OR the job flow=stage·mode·qa (dispatch) — the two
+# never collide because each row type only ever fills one, and neither sits under branch/gate.
+_HW = 9                       # harness field (incl trailing space)
+_BRANCH_COL = 43              # absolute col where ⎇branch starts (both row types)
+_NW_S = _BRANCH_COL - 13      # session name field  (prefix 4 + harness 9 = 13)
+_NW_D = _BRANCH_COL - 16      # dispatch name field (prefix 7 + harness 9 = 16, deeper indent)
+_BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
+_MW = 22                      # model · effort field
+_CLOCK = "⏱ "                 # elapsed-time marker before uptime (⏱ = 2 cells, see _WIDE)
+
+_COL_HEAD = ("    " + "harness".ljust(_HW) + "session".ljust(_NW_S)
+             + "branch".ljust(_BRW) + "model · effort".ljust(_MW) + " context / job")
+
+
+def _gate_tag(gate, pipe):
+    """(text, color_key) for the dim gate tag shown after a session name, or ('', None)."""
+    word, key = {"tracked": ("tracked", "gate_t"),
+                 "untracked": ("adhoc", "gate_u")}.get(gate, ("", None))
+    if not word:
+        return "", None
+    return " " + word + ("·pipe" if pipe else ""), key
+
+
+def _branch_seg(cwd, branch):
+    """A single dim '⎇ <branch>' cell (git icon — the user reads branch a lot)."""
+    br = branch or _git_branch(cwd)
+    return (_pad("⎇ " + (br or "—")[: _BRW - 3], _BRW), "dim")
+
+
+def _model_segs(harness, model, effort, width):
+    """model (harness-tinted dim) + effort (same hue, intensity ramp) filling exactly `width`."""
+    model = _clean_model(dash(model))
+    efftxt = (" · " + effort) if effort else ""
+    mw = max(1, width - len(efftxt))
+    out = [(_pad(model[:mw], mw), _model_key(harness))]
+    if efftxt:
+        out.append((efftxt, _eff_key(harness, effort)))
+    return out
 
 
 def _session_row(s, narrow, is_parent=False, child_count=0):
@@ -235,75 +295,88 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
     gch, gkey = _glyph(live)
     hn = _BADGE_TEXT.get(s.harness, "?")
     hk = _BADGE_KEY.get(s.harness, "dim")
-    orch = ("▾%d" % child_count) if (is_parent and child_count) else ""
 
-    segs = [("  ", None), (gch, gkey), ("  ", None),
-            (_pad(hn, 9), hk), (" ", None),
-            (_pad(slug, 20), name_key), (" ", None),
-            (_pad(orch, 3), "dim"), (" ", None)]
+    segs = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hk)]
 
-    br = s.branch or _git_branch(s.cwd)
-    segs.append((_pad((br or "—")[:8], 9), "dim"))
-
-    gate = s.gate or _project_gate(s.cwd, s.session_id)
-    gword, gkey2 = {"tracked": ("tracked", "gate_t"), "untracked": ("adhoc", "gate_u")}.get(gate, ("", "dim"))
-    segs.append((_pad(gword, 9), gkey2))
-
-    model = _clean_model(dash(s.model))
-    MW = 22
-    eff = (" · " + s.effort) if s.effort else ""
-    me = (model[: max(1, MW - len(eff))] + eff)
-    segs.append((_pad(me, MW + 1), "dim"))
-
-    if s.ctx_pct is not None and not dim_tel:                        # ctx gauge — a meaningful color
-        segs += [(" ", None), (_bar(s.ctx_pct), _pct_key(s.ctx_pct)), (" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
+    # name zone: slug(focus) + ▾N(dim) + gate tag(dim), padded to the shared branch column.
+    used = 0
+    slug_show = slug[: min(len(slug), _NW_S - 1)]
+    segs.append((slug_show, name_key)); used += len(slug_show)
+    if is_parent and child_count and used + 3 <= _NW_S:
+        t = " ▾%d" % child_count
+        segs.append((t, "dim")); used += len(t)
+    if s.gate:
+        gate, pipe = s.gate, False
     else:
-        segs += [(" ", None), ("░░░░░", "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
+        gate, pipe = _gate_info(s.cwd, s.session_id)
+    gtag, gk = _gate_tag(gate, pipe)
+    if gtag and used + len(gtag) <= _NW_S:
+        segs.append((gtag, gk)); used += len(gtag)
+    if used < _NW_S:
+        segs.append((" " * (_NW_S - used), None))
+
+    segs.append(_branch_seg(s.cwd, s.branch))
+    segs += _model_segs(s.harness, s.model, s.effort, _MW)
+
+    # STATUS-ZONE — ctx gauge (meaningful level color)
+    if s.ctx_pct is not None and not dim_tel:
+        segs += [("  ", None), (_bar(s.ctx_pct), _pct_key(s.ctx_pct)), (" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
+    else:
+        segs += [("  ", None), ("░░░░░", "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
     if s.app_server:
         segs.append(("  app-server", "dim"))
     if s.orphan:
         segs.append(("  worktree-gone", "g_dead"))
 
-    segs.append((_RFLUSH, None))                                     # cost · uptime flush right
+    segs.append((_RFLUSH, None))                                     # cost · ⏱uptime flush right
     if not narrow:
         cost = dash(s.cost, lambda v: "$%.2f" % v)
         ck = "cost_hi" if (isinstance(s.cost, (int, float)) and s.cost > 100) else "dim"
-        segs += [("%9s" % cost, ck), ("  ", None)]
-    segs.append(("%7s" % fmt_min(s.elapsed_min), "dim"))
+        segs += [("%9s" % cost, ck), ("   ", None)]
+    segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(s.elapsed_min), "dim")]
     return segs
 
 
-def _dispatch_row(j, orphan=False, parent_model=None, is_last=True):
-    """A dispatch job nested under its parent session, drawn as a dim tree row:
-    `      ├─ ● harness  name  key▸stage  mode·~qa  model  branch  (orphan)   uptime`
-    tree line (├─ mid / └─ last) carries 'this is a child'; no launch icon. qa '~' = inferred.
+def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True):
+    """A dispatch job nested under its parent session — same identity grid as a session row
+    (harness · name · ⎇branch · model all aligned), but its stage·mode·qa live in the right
+    STATUS-ZONE (where a session shows its ctx gauge), NOT under branch/gate. Tree connector
+    (├─ mid / └─ last) + deeper indent mark it as a child. qa '~' prefix = inferred, not explicit.
     """
     key = j.key or "?"
-    stage = ("▸" + j.stage) if j.stage else ""
+    stage = j.stage or ""
     qa_text = ""
     if j.qa:
         qa_text = ("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa
     name = j.slug or key
-    gch, gkey = _glyph(j.liveness)
+    live = j.liveness
+    harness = j.harness or parent_harness
+    gch, gkey = _glyph(live)
     tree = "└─" if is_last else "├─"
+    nm_key = "name_dim" if live in ("stale", "dead") else "name_idle"
 
-    segs = [("      ", None), (tree + " ", "dim"), (gch, gkey), (" ", None)]
-    if j.harness:
-        segs.append((_pad(_BADGE_TEXT.get(j.harness, "?"), 9), _BADGE_KEY.get(j.harness, "dim")))
-        segs.append((" ", None))
-    segs.append((_pad(name, 18), "name_dim" if j.liveness in ("stale", "dead") else "name_idle"))
-    segs.append((" ", None))
-    segs.append((_pad((key if key != name else "") + stage, 13), "dim"))   # task flow
-    opts = (j.mode or "") + ("·" if (j.mode and qa_text) else "") + qa_text
-    segs.append((_pad(opts, 15), "dim"))
-    dmodel = j.model or parent_model
-    segs.append((_pad(_clean_model(dash(dmodel)), 20), "dim"))
-    br = j.branch or _git_branch(j.cwd)
-    segs.append((_pad((br or "—")[:8], 9), "dim"))
-    if orphan:
-        segs.append(("(orphan)", "gate_u"))
+    segs = [("  ", None), (tree + " ", "dim"), (gch, gkey), (" ", None),   # prefix 7
+            (_pad(_BADGE_TEXT.get(j.harness, "—") if j.harness else "—", _HW),
+             _BADGE_KEY.get(j.harness, "dim"))]
+
+    used = 0
+    nm = name[: _NW_D - 1]
+    segs.append((nm, nm_key)); used += len(nm)
+    if orphan and used + 10 <= _NW_D:
+        segs.append(("  (orphan)", "gate_u")); used += 10
+    if used < _NW_D:
+        segs.append((" " * (_NW_D - used), None))
+
+    segs.append(_branch_seg(j.cwd, j.branch))
+    segs += _model_segs(harness, j.model or parent_model, None, _MW)
+
+    # STATUS-ZONE — job flow (the dispatch analogue of the ctx gauge): stage · mode · qa
+    flow = (key if key != name else "") + ("▸" + stage if stage else "")
+    detail = " · ".join(x for x in (flow, j.mode, qa_text) if x)
+    segs.append(("  " + detail, "dim"))
+
     segs.append((_RFLUSH, None))
-    segs.append(("%7s" % fmt_min(j.elapsed_min), "dim"))
+    segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
     return segs
 
 
@@ -374,9 +447,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
     order = sorted(groups.keys(), key=lambda name: _group_sort_key(name, groups[name]))
 
     lines = []
-    # account-level usage bar — shared per harness/account, shown ONCE; harnesses split by │, mini gauges
+    # account-level usage — shared per harness/account. ONE LINE PER HARNESS (user 2026-07-01:
+    # "모든 윈도우가 쭉 붙어있다 → 서로 간격 띄우고 게이지 길게"): long gauges, generous gaps, aligned.
     # rate is account-shared → take the FRESHEST session's value per harness (a stale session's
-    # per-file rate is old; e.g. a 16-min-old file showed 7d 100% while the live rate was 15%)
+    # per-file rate is old; e.g. a 16-min-old file showed 7d 100% while the live rate was 15%).
     _rl = {}   # harness -> (rl_5h, rl_7d, mtime)
     for s in sessions:
         if s.rl_5h is not None or s.rl_7d is not None:
@@ -384,19 +458,17 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
             if cur is None or (s.mtime or 0) > (cur[2] or 0):
                 _rl[s.harness] = (s.rl_5h, s.rl_7d, s.mtime)
     if _rl:
-        bar = [(" usage   ", "head")]
         hs = [h for h in ("claude", "codex", "opencode") if h in _rl]
-        for i, h in enumerate(hs):
-            if i:
-                bar.append(("        │        ", "dim"))
+        for idx, h in enumerate(hs):
             r5, r7, _mt = _rl[h]
-            bar.append((_pad(h, 10), _BADGE_KEY.get(h, "dim")))
-            for j, (lbl, v) in enumerate((("5h ", r5), ("7d ", r7))):
+            row = [(" usage " if idx == 0 else "       ", "head"),
+                   (_pad(h, 11), _BADGE_KEY.get(h, "dim"))]
+            for gi, (lbl, v) in enumerate((("5h ", r5), ("7d ", r7))):
                 pctstr = ("%d%%" % v) if v is not None else "—"
-                bar += [("        " + lbl if j else lbl, "dim"),       # wide gap between the 5h and 7d gauges
-                        (_bar(v, 8) if v is not None else "········", _pct_key(v)),
+                row += [("     " + lbl if gi else lbl, "dim"),          # wide gap between the 5h/7d windows
+                        (_bar(v, 16) if v is not None else "·" * 16, _pct_key(v)),
                         (" %4s" % pctstr, _pct_key(v))]
-        lines.append(bar)
+            lines.append(row)
         lines.append(None)
         lines.append([(_COL_HEAD, "head")])            # column labels once → no per-cell emoji needed
 
@@ -452,13 +524,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
             head_segs.append(("──", "head"))
         lines.append(head_segs)
 
-        for s in _sort_group_sessions(shown):          # sessions tight (no blank between)
+        for s in _sort_group_sessions(shown):          # sessions tight (tree marks the children)
             kids = _sort_group_jobs(children.get(s.session_id, []))
             lines.append(_session_row(s, narrow, is_parent=bool(kids), child_count=len(kids)))
             for i, cj in enumerate(kids):
-                lines.append(_dispatch_row(cj, orphan=False, parent_model=s.model, is_last=(i == len(kids) - 1)))
-            if kids:
-                lines.append(None)                     # separate a nested (parent+children) block
+                lines.append(_dispatch_row(cj, orphan=False, parent_model=s.model,
+                                           parent_harness=s.harness, is_last=(i == len(kids) - 1)))
         if group_sessions and hidden:
             lines.append([("     +%d stale/companion hidden" % hidden, "dim")])
 
@@ -517,7 +588,7 @@ def _malformed():
 # display-width aware clipping — emoji/CJK render 2 cells but len()==1, so advancing col by
 # len() drew the next segment 1 col early and overwrote the previous field's last char
 # (e.g. the directory name lost a char after the 📁). Count real cells instead.
-_WIDE = set("🧠✨⏳📁🚀🛰📌⚡📋⚙📊🐛📈🔬💻")
+_WIDE = set("🧠✨⏳📁🚀🛰📌⚡📋⚙📊🐛📈🔬💻⏱")
 
 
 def _cw(ch):
