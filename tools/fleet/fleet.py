@@ -86,7 +86,11 @@ def main(argv=None):
             from fleet import demo
         else:
             from . import demo
-        collector = demo.collect
+
+        def collector(harness_filter=None):      # LIVE real data + injected demo fixtures (merged)
+            rs, rj = collect_all(harness_filter=harness_filter)
+            ds, dj = demo.collect(harness_filter=harness_filter)
+            return rs + ds, rj + dj
 
     if args.json:
         sessions, jobs = collector(harness_filter=hfilter)
