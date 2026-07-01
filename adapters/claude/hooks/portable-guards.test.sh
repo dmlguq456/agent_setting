@@ -1081,12 +1081,14 @@ else
   bad "codex verification runner should execute explicit commands"
 fi
 if grep -q '## Projected Portable Details' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'preflight.sh status \[cwd\] \[session-id\]' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
   && grep -q 'spec-significance' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
   && grep -q 'pipeline_summary.md' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
   && grep -q 'code-plan' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
   && grep -q 'code-execute' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
   && grep -q 'code-test' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
   && grep -q 'code-report' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'preflight.sh status \[cwd\] \[session-id\]' "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md" \
   && grep -q 'spec-significance' "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md"; then
   ok "codex native skill projection carries portable autopilot-code procedure"
 else

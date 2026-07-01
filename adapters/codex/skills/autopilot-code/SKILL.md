@@ -116,7 +116,7 @@ When no spec exists, infer mode lightly from project files, report the inference
 - Before capability routing/spec-changing work: `adapters/codex/bin/preflight.sh route autopilot-code [cwd] [session-id]`
 - Before spec-changing work: `adapters/codex/bin/preflight.sh capability autopilot-code [cwd] [session-id]`
 - After actually reading a spec PRD: `adapters/codex/bin/preflight.sh read <prd.md> [session-id]`
-- For workflow state: `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` and `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`
+- For workflow state: `adapters/codex/bin/preflight.sh status [cwd] [session-id]`, `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]`, and `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`
 
 Do not use legacy compatibility Skill files or non-native adapter Skill files
 as Codex-native source. Those files are compatibility/reference surfaces only.
