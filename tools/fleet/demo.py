@@ -46,7 +46,7 @@ def collect(harness_filter=None):
           cwd="/home/demo/demo-app-wt/review", parent_sid="demo-claude-1", is_child=True,
           branch="review", liveness="working"),
         # nested under demo-svc opencode parent
-        J(key="spec", stage="plan", mode="dev", qa="thorough", qa_source="plan", harness="opencode",
+        J(key="spec", stage="design", mode="dev", qa="thorough", qa_source="plan", harness="opencode",
           model="glm-5.2", elapsed_min=5, slug="demo-spec",
           cwd="/home/demo/demo-svc-wt/spec", parent_sid="demo-oc-2", is_child=True,
           branch="spec", liveness="working"),

@@ -93,7 +93,11 @@ def _init_colors():
         _COLOR["model_" + h] = hue | curses.A_DIM
         for lvl, it in _LVL_INT.items():
             _COLOR["eff_%s_%s" % (h, lvl)] = hue | it
+        # heavy identity badge (reverse-video block) — marks a TOP-LEVEL session / account.
+        # A dispatch job keeps the light dim-font harness (h_<h>) instead → weight distinction.
+        _COLOR["badge_" + h] = hue | curses.A_REVERSE
     _COLOR["model_other"] = curses.A_DIM
+    _COLOR["badge_other"] = curses.A_REVERSE
     for lvl, it in _LVL_INT.items():
         _COLOR["eff_other_" + lvl] = it
     # harness identity = dim colored text (color lives ONLY here for identity)
@@ -253,25 +257,40 @@ def _project_gate(cwd, sid=None):
 
 
 # ---------- row builders (return a single segment-line: [(text, color_key), ...]) ----------
-# Shared column grid (design pass 2026-07-01) — session & dispatch align on the SAME identity
-# columns so the eye can compare them, and the fields that DIFFER live in different zones:
-#   status · harness · NAME(+gate tag) · ⎇branch · model·effort ·│ STATUS-ZONE │· ⏱ cost·uptime
-# STATUS-ZONE holds the ctx gauge (session) OR the job flow=stage·mode·qa (dispatch) — the two
-# never collide because each row type only ever fills one, and neither sits under branch/gate.
+# Design pass 2026-07-01 (deep) — a dispatch JOB is a session-analogue, not a lesser row: its
+# fields map onto the SAME columns as a session's, so the whole board reads with one grammar:
+#     column        session            dispatch job
+#     harness       ▐reverse badge▌    dim font       ← weight = main vs spawned
+#     name          bright             dim
+#     model slot    model              process = pipeline·mode   (e.g. code · dev)
+#     effort slot   effort (low→max)   qa (quick→adversarial)    ← both are the "intensity" dial
+#     gauge slot    context % bar      stage breadcrumb (plan › exec › test)  ← "how far along"
+# main↔dispatch weight is carried by the badge (reverse vs dim font), so the identity columns can
+# stay aligned for comparison. Job flow never sits under branch/gate.
 _HW = 9                       # harness field (incl trailing space)
 _BRANCH_COL = 43              # absolute col where ⎇branch starts (both row types)
 _NW_S = _BRANCH_COL - 13      # session name field  (prefix 4 + harness 9 = 13)
 _NW_D = _BRANCH_COL - 17      # dispatch name field (prefix 8 + harness 9 = 17, deeper ↳ indent)
 _BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
-_MW = 24                      # model + effort field
-_EFF_W = 6                    # effort sub-column (right of the model, no dot — a gap separates them)
+_EFF_W = 9                    # effort/qa sub-column (wide enough for qa words: standard/thorough)
+_MW = 16 + _EFF_W             # model+effort (a.k.a. process+qa) field: model/process 16 + dial 9
 _CTX_W = 14                   # context-window gauge width (the metric the user reads most)
 _CLOCK = "⏱ "                 # elapsed-time marker before uptime (⏱ = 2 cells, see _WIDE)
 
+# known pipeline stage sequences → the stage breadcrumb (process viz). Unknown keys/stages fall
+# back to a single lit stage token (never a fabricated track). Keyed by the dispatch `key`.
+_PIPE_STAGES = {
+    "code": ["plan", "exec", "test"],
+    "review": ["plan", "exec", "test"],
+    "spec": ["spec", "design", "dev"],
+    "research": ["search", "analyze", "report"],
+    "draft": ["draft", "refine", "apply"],
+}
+
 # subtle dim glyphs label each column (1 cell each — geometric, not emoji; ⎇ matches the rows)
 _COL_HEAD = ("    " + "harness".ljust(_HW) + "❯ session".ljust(_NW_S)
-             + "⎇ branch".ljust(_BRW) + "◈ model".ljust(_MW - _EFF_W) + "effort".ljust(_EFF_W)
-             + " ▣ context / job")
+             + "⎇ branch".ljust(_BRW) + "◈ model/process".ljust(_MW - _EFF_W)
+             + "effort/qa".ljust(_EFF_W) + " ▣ context / stage")
 
 
 def _gate_word(gate, pipe):
@@ -299,16 +318,35 @@ def _branch_seg(cwd, branch):
     return (_pad("⎇ " + (br or "—")[: _BRW - 3], _BRW), "dim")
 
 
-def _model_segs(harness, model, effort, width):
-    """model (harness-tinted dim) + effort as its OWN aligned sub-column (no ' · ' dot — a plain
-    gap separates them, per the user). effort ramps intensity (low→dim … max→bold). Fills `width`."""
-    model = _clean_model(dash(model))
-    mkey = _model_key(harness)
-    if effort:
-        mw = max(1, width - _EFF_W - 1)
-        return [(_pad(model[:mw], mw + 1), mkey),
-                (_pad(effort, _EFF_W), _eff_key(harness, effort))]
-    return [(_pad(model[: max(1, width - 1)], width), mkey)]
+def _me_segs(harness, left, dial, dial_key, width):
+    """The shared 'model+effort' / 'process+qa' cell: a harness-tinted-dim LEFT label + a RIGHT
+    'intensity dial' sub-column (effort for sessions, qa for jobs), separated by a plain gap (no
+    dot). `dial_key` carries the dial's intensity color. Fills exactly `width`; dial empty → left
+    spans the whole width."""
+    left = left or "—"
+    lkey = _model_key(harness)
+    if dial:
+        lw = max(1, width - _EFF_W - 1)
+        return [(_pad(left[:lw], lw + 1), lkey),
+                (_pad(dial[:_EFF_W], _EFF_W), dial_key)]
+    return [(_pad(left[: max(1, width - 1)], width), lkey)]
+
+
+def _stage_segs(key, stage):
+    """Process viz — the pipeline lifecycle as a breadcrumb with the CURRENT stage lit (job_stage)
+    and the rest dim: `plan › exec › test`. Unknown pipeline/stage → a single lit stage token (no
+    fabricated track); nothing at all → a dim placeholder."""
+    seq = _PIPE_STAGES.get(key)
+    if seq and stage in seq:
+        out = []
+        for i, st in enumerate(seq):
+            if i:
+                out.append((" › ", "dim"))
+            out.append((st, "job_stage" if st == stage else "dim"))
+        return out
+    if stage:
+        return [(stage, "job_stage")]
+    return [("—", "dim")]
 
 
 def _session_row(s, narrow, is_parent=False, child_count=0):
@@ -319,9 +357,17 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
                 else ("name_dim" if dim_tel else "name_idle"))
     gch, gkey = _glyph(live)
     hn = _BADGE_TEXT.get(s.harness, "?")
-    hk = _BADGE_KEY.get(s.harness, "dim")
 
-    segs = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hk)]
+    # heavy reverse-video badge marks a live top-level session (weight vs the dim-font dispatch
+    # rows); muted (stale/dead/app-server) sessions drop to the light dim font so they recede.
+    # Only the WORD gets the badge color — the field padding stays plain (the old "whole field
+    # colored" look the user disliked).
+    segs = [("  ", None), (gch, gkey), (" ", None)]
+    if dim_tel:
+        segs.append((_pad(hn, _HW), _BADGE_KEY.get(s.harness, "dim")))
+    else:
+        segs.append((hn, "badge_" + s.harness if s.harness in _BADGE_TEXT else "badge_other"))
+        segs.append((" " * (_HW - len(hn)), None))
 
     # name zone: slug(focus) + ▾N(dim) + gate tag(dim), padded to the shared branch column.
     used = 0
@@ -341,7 +387,8 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
         segs.append((" " * (_NW_S - used), None))
 
     segs.append(_branch_seg(s.cwd, s.branch))
-    segs += _model_segs(s.harness, s.model, s.effort, _MW)
+    segs += _me_segs(s.harness, _clean_model(dash(s.model)), s.effort,
+                     _eff_key(s.harness, s.effort), _MW)
 
     # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); widened so the context reading is legible
     if s.ctx_pct is not None and not dim_tel:
@@ -363,11 +410,10 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
 
 
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True):
-    """A dispatch job under its parent session. Made deliberately DISTINCT from a session row so
-    the two don't blur: a `↳` spawn marker + deeper indent, and the whole identity (harness/name)
-    rendered dim so it recedes under the bright session names. It still shares the branch/model
-    columns (to compare against the parent), and its job flow lives in the right STATUS-ZONE
-    (where a session shows its ctx gauge) — stage pops, mode dim, qa ramps by rigor. '~' = inferred.
+    """A dispatch job rendered as a session-ANALOGUE (see the grid comment above): it shares the
+    session columns but re-maps them — model slot → process (pipeline·mode), effort slot → qa,
+    ctx gauge → stage breadcrumb. Weight is carried by the LIGHT dim-font harness (vs a session's
+    reverse badge) + a `↳` spawn marker + deeper indent + dim name. qa '~' prefix = inferred.
     """
     key = j.key or "?"
     stage = j.stage or ""
@@ -376,11 +422,11 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     if j.qa:
         qa_text = ("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa
     name = j.slug or key
-    live = j.liveness
     harness = j.harness or parent_harness
-    gch, gkey = _glyph(live)
+    gch, gkey = _glyph(j.liveness)
 
     # prefix 8 → harness at col 8 (deeper than a session's col 4). ↳ = "spawned from the parent".
+    # harness stays LIGHT (dim font, not the session's reverse badge) — that's the weight cue.
     segs = [("    ↳ ", "dim"), (gch, gkey), (" ", None),
             (_pad(_BADGE_TEXT.get(j.harness, "—") if j.harness else "—", _HW),
              _BADGE_KEY.get(j.harness, "dim"))]
@@ -395,22 +441,13 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         segs.append((" " * (_NW_D - used), None))
 
     segs.append(_branch_seg(j.cwd, j.branch))
-    segs += _model_segs(harness, j.model or parent_model, None, _MW)
+    # model slot → process (pipeline · mode); effort slot → qa (rigor ramp). Same cell as a session.
+    proc = key + (" · " + j.mode if j.mode else "")
+    segs += _me_segs(harness, proc, qa_text, "qa_" + qa_base if qa_base in _QA_INT else "dim", _MW)
 
-    # STATUS-ZONE — job flow in aligned sub-columns (tidy across dispatch rows): key▸stage (stage
-    # pops) | mode (dim) | qa (rigor ramp). Spaces separate them, no dots.
-    _FLOW_W, _MODEW = 15, 8
+    # gauge slot → the stage breadcrumb (process viz): plan › exec › test, current lit.
     segs.append(("  ", None))
-    fu = 0
-    if key and key != name:
-        segs.append((key, "dim")); fu += len(key)
-    if stage:
-        segs.append(("▸" + stage, "job_stage")); fu += len(stage) + 1
-    if fu < _FLOW_W:
-        segs.append((" " * (_FLOW_W - fu), None))
-    segs.append((_pad(j.mode or "", _MODEW), "dim"))
-    if qa_text:
-        segs.append((qa_text, "qa_" + qa_base if qa_base in _QA_INT else "dim"))
+    segs += _stage_segs(key, stage)
 
     segs.append((_RFLUSH, None))
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
@@ -499,7 +536,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
         for idx, h in enumerate(hs):
             r5, r7, _mt = _rl[h]
             row = [("◷ usage " if idx == 0 else "        ", "head"),   # ◷ = time-windowed rate
-                   (_pad(h, 11), _BADGE_KEY.get(h, "dim"))]
+                   (h, "badge_" + h if h in _BADGE_TEXT else "badge_other"),  # reverse badge = account
+                   (" " * (11 - len(h)), None)]
             for gi, (lbl, v) in enumerate((("5h ", r5), ("7d ", r7))):
                 pctstr = ("%d%%" % v) if v is not None else "—"
                 row.append(("     " + lbl if gi else lbl, "dim"))        # wide gap between the 5h/7d windows
