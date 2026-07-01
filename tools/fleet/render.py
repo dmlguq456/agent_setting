@@ -69,8 +69,10 @@ def _init_colors():
             n += 1
         except Exception:
             _COLOR[key] = 0
-    # status dots — working blinks (live-LED, user preference)
-    _COLOR["g_work"] = _COLOR.get("green", 0) | curses.A_BOLD | curses.A_BLINK
+    # status dots — working "blinks" via a manual on/off toggle in the loop (A_BLINK is stripped
+    # by tmux/herdr, so we animate it ourselves: g_work bright ↔ g_work_off dim each ~500ms)
+    _COLOR["g_work"] = _COLOR.get("green", 0) | curses.A_BOLD
+    _COLOR["g_work_off"] = _COLOR.get("green", 0) | curses.A_DIM
     _COLOR["g_idle"] = _COLOR.get("yellow", 0)
     _COLOR["g_stale"] = curses.A_DIM
     _COLOR["g_dead"] = _COLOR.get("red", 0) | curses.A_BOLD
@@ -110,8 +112,14 @@ _GLYPH_KEY = {"working": "g_work", "idle": "g_idle", "blocked": "g_idle", "done"
               "stale": "g_stale", "dead": "g_dead", "unknown": "dim"}
 
 
+_BLINK_ON = True     # manual blink phase for the working dot (toggled ~2 Hz in the live loop)
+
+
 def _glyph(state):
-    return _LIVE_GLYPH.get(state, "·"), _GLYPH_KEY.get(state, "dim")
+    key = _GLYPH_KEY.get(state, "dim")
+    if state == "working" and not _BLINK_ON:
+        key = "g_work_off"
+    return _LIVE_GLYPH.get(state, "·"), key
 
 
 def _pct_key(v):
@@ -367,22 +375,27 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
 
     lines = []
     # account-level usage bar — shared per harness/account, shown ONCE; harnesses split by │, mini gauges
-    _rl = {}
+    # rate is account-shared → take the FRESHEST session's value per harness (a stale session's
+    # per-file rate is old; e.g. a 16-min-old file showed 7d 100% while the live rate was 15%)
+    _rl = {}   # harness -> (rl_5h, rl_7d, mtime)
     for s in sessions:
-        if s.harness not in _rl and (s.rl_5h is not None or s.rl_7d is not None):
-            _rl[s.harness] = (s.rl_5h, s.rl_7d)
+        if s.rl_5h is not None or s.rl_7d is not None:
+            cur = _rl.get(s.harness)
+            if cur is None or (s.mtime or 0) > (cur[2] or 0):
+                _rl[s.harness] = (s.rl_5h, s.rl_7d, s.mtime)
     if _rl:
         bar = [(" usage   ", "head")]
         hs = [h for h in ("claude", "codex", "opencode") if h in _rl]
         for i, h in enumerate(hs):
             if i:
-                bar.append(("      │      ", "dim"))
-            r5, r7 = _rl[h]
-            bar.append((_pad(h, 9), _BADGE_KEY.get(h, "dim")))
+                bar.append(("        │        ", "dim"))
+            r5, r7, _mt = _rl[h]
+            bar.append((_pad(h, 10), _BADGE_KEY.get(h, "dim")))
             for j, (lbl, v) in enumerate((("5h ", r5), ("7d ", r7))):
-                bar += [("      " + lbl if j else lbl, "dim"),          # gap between the 5h and 7d gauges
+                pctstr = ("%d%%" % v) if v is not None else "—"
+                bar += [("        " + lbl if j else lbl, "dim"),       # wide gap between the 5h and 7d gauges
                         (_bar(v, 8) if v is not None else "········", _pct_key(v)),
-                        (" %3s" % dash(v, lambda x: "%d%%" % x), _pct_key(v))]
+                        (" %4s" % pctstr, _pct_key(v))]
         lines.append(bar)
         lines.append(None)
         lines.append([(_COL_HEAD, "head")])            # column labels once → no per-cell emoji needed
@@ -626,7 +639,7 @@ def _draw(stdscr, sessions, jobs, section, malformed):
 
 
 def _loop(stdscr, collect_all, hfilter, section, interval):
-    global _OFFSET
+    global _OFFSET, _BLINK_ON
     curses.curs_set(0)
     _init_colors()
     # herdr (HERDR_ENV=1) grabs mouse events itself — enabling curses mouse reporting inside it
@@ -678,7 +691,8 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
             sessions, jobs = collect_all(harness_filter=hfilter)
             malformed = _malformed()
             last = now
-        # redraw every wake (covers KEY_RESIZE and tick) — _draw clamps _OFFSET internally.
+        _BLINK_ON = (int(now * 2) % 2 == 0)     # ~2 Hz working-dot blink (manual — A_BLINK unreliable)
+        # redraw every wake (covers KEY_RESIZE, blink and tick) — _draw clamps _OFFSET internally.
         _draw(stdscr, sessions, jobs, section, malformed)
 
 
