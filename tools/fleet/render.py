@@ -273,9 +273,11 @@ def _session_row(s, narrow, is_parent=False):
     else:
         segs += [(" 🧠", "dim"), ("░░░░░", "dim"), (" %4s" % ctx_str, "dim")]
 
-    if not narrow:                                                   # rate limit is per-account (top bar), not per row
-        segs.append(("  %8s" % dash(s.cost, lambda v: "$%.2f" % v), "dim"))
-    segs.append(("  ⏳" + el, "dim"))                                 # liveness shown by leading glyph
+    segs.append((_RFLUSH, None))                                     # cost · elapsed flush to the right edge
+    if not narrow:
+        segs.append(("%9s" % dash(s.cost, lambda v: "$%.2f" % v), "dim"))
+        segs.append(("   ", None))
+    segs.append(("⏳" + el, "dim"))                                   # liveness shown by leading glyph
     if s.app_server:
         segs.append(("  ⚙app-server", "dim"))
     if s.orphan:
@@ -328,9 +330,10 @@ def _dispatch_row(j, orphan=False, parent_model=None):
         segs.append(("  ✨", "dim")); segs.append((dmodel, _model_key(dmodel)))
     br = j.branch or _git_branch(j.cwd)               # dispatch worktree branch (wt/branch); '—' if none
     segs.append(("  ⎇ " + (br or "—"), "warn" if br else "dim"))
-    segs.append(("  ⏳" + el, "dim"))                 # liveness shown by leading glyph now
     if orphan:
         segs.append(("  (orphan)", "dim"))
+    segs.append((_RFLUSH, None))
+    segs.append(("⏳" + el, "dim"))                   # elapsed flush right (matches session rows)
     return segs
 
 
@@ -468,13 +471,13 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
             head_segs.append(("  ⚡ untracked", "warn"))
         lines.append(head_segs)
 
-        for si, s in enumerate(_sort_group_sessions(shown)):
-            if si:
-                lines.append(None)                  # blank line between sessions (readability — user 2026-07-01)
+        for s in _sort_group_sessions(shown):       # sessions tight (no blank between — sparse read badly)
             has_children = bool(children.get(s.session_id))
             lines.append(_session_row(s, narrow, is_parent=has_children))
             for cj in _sort_group_jobs(children.get(s.session_id, [])):
                 lines.append(_dispatch_row(cj, orphan=False, parent_model=s.model))
+            if has_children:
+                lines.append(None)                  # only separate a nested (parent+children) block
         if group_sessions and hidden:
             lines.append([("  +%d stale/companion hidden" % hidden, "dim")])
 
@@ -510,7 +513,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
 
 # ---------- plain (--once) ----------
 def _plain(segs):
-    return "" if segs is None else "".join(t for t, _ in segs)
+    if segs is None:
+        return ""
+    return "".join("   " if t == _RFLUSH else t for t, _ in segs)   # no true right-align without a width
 
 
 def render_once(collect_all, hfilter, section):
@@ -554,28 +559,45 @@ def _dw(s):
     return sum(_cw(c) for c in s)
 
 
+_RFLUSH = "\x00R\x00"   # sentinel segment: everything after it is flushed to the right edge
+
+
 def _addline(stdscr, row, segs, w):
     if segs is None:
         return
-    col = 0
-    for text, color in segs:
-        if col >= w - 1:
+    right = []
+    left = segs
+    for i, seg in enumerate(segs):
+        if seg[0] == _RFLUSH:
+            left, right = segs[:i], segs[i + 1:]
             break
-        avail = w - 1 - col
-        piece = ""
-        pw = 0
-        for ch in text:                                       # clip by display width, not len
-            cw = _cw(ch)
-            if pw + cw > avail:
+
+    def _draw(seglist, start):
+        col = start
+        for text, color in seglist:
+            if col >= w - 1:
                 break
-            piece += ch
-            pw += cw
-        if piece:
-            try:
-                stdscr.addstr(row, col, piece, _attr(color))
-            except curses.error:
-                pass
-        col += pw
+            avail = w - 1 - col
+            piece = ""
+            pw = 0
+            for ch in text:                                   # clip by display width, not len
+                cw = _cw(ch)
+                if pw + cw > avail:
+                    break
+                piece += ch
+                pw += cw
+            if piece:
+                try:
+                    stdscr.addstr(row, col, piece, _attr(color))
+                except curses.error:
+                    pass
+            col += pw
+        return col
+
+    endcol = _draw(left, 0)
+    if right:
+        rw = sum(_dw(t) for t, _ in right)
+        _draw(right, max(endcol + 2, w - 1 - rw))             # flush right, min 2-col gap after left
 
 
 _OFFSET = 0                 # scroll offset — READ only in _draw (see module docstring)
