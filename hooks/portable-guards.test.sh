@@ -382,6 +382,16 @@ if "$CODEX" prompt-signal "$TMP/flowproj" testsid >/tmp/codex_prompt_signal_trac
 else
   bad "codex prompt signal should carry tracked autopilot routing contract"
 fi
+if "$CODEX" prompt-signal "$TMP/dirtyrepo" testsid >/tmp/codex_prompt_signal_dirty.out 2>/tmp/codex_prompt_signal_dirty.err \
+  && grep -q '^git_dirty_tracked=1$' /tmp/codex_prompt_signal_dirty.out \
+  && grep -q '^git_untracked=1$' /tmp/codex_prompt_signal_dirty.out \
+  && grep -q '^git_extra_worktrees=1$' /tmp/codex_prompt_signal_dirty.out \
+  && "$CODEX" prompt-signal "$TMP/donebranch" testsid >/tmp/codex_prompt_signal_done.out 2>/tmp/codex_prompt_signal_done.err \
+  && grep -q '^git_branch_done=1$' /tmp/codex_prompt_signal_done.out; then
+  ok "codex prompt signal carries git dirty, worktree, and dead-branch risks"
+else
+  bad "codex prompt signal should carry git dirty, worktree, and dead-branch risks"
+fi
 if "$CODEX" permissions >/tmp/codex_permissions.out 2>/tmp/codex_permissions.err \
   && grep -q '^adapter=codex$' /tmp/codex_permissions.out \
   && grep -q '^runtime_surface=codex-native-approval-sandbox$' /tmp/codex_permissions.out \

@@ -711,9 +711,15 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'git_dirty_tracked=' utilities/harness-status.sh \
     || ! grep -Fq 'git_untracked=' utilities/harness-status.sh \
     || ! grep -Fq 'git_extra_worktrees=' utilities/harness-status.sh \
+    || ! grep -Fq 'git_dirty_tracked=$(printf' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'git_branch_done=$(printf' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'codex prompt signal carries git dirty, worktree, and dead-branch risks' hooks/portable-guards.test.sh \
     || ! grep -Fq 'codex status distinguishes tracked dirty, untracked files, and sibling worktrees' hooks/portable-guards.test.sh \
     || ! grep -Fq 'tracked-dirty vs untracked counts' adapters/codex/README.md \
     || ! grep -Fq 'tracked-dirty vs untracked counts' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'git dirty/worktree/dead-branch risks' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'git dirty/worktree/dead-branch risk fields' adapters/codex/README.md \
+    || ! grep -Fq 'git dirty/worktree/dead-branch risk fields' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'preflight.sh subagent-info --check' adapters/codex/AGENTS.md \
     || ! grep -Fq 'preflight.sh subagent-info --check' adapters/codex/README.md \
     || ! grep -Fq 'preflight.sh subagent-info --check' adapters/codex/ADAPTATION.md \

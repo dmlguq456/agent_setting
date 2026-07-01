@@ -285,6 +285,10 @@ case "$cmd" in
     workflow_state=$(printf '%s\n' "$status" | awk -F= '$1=="workflow_state"{print $2; exit}')
     artifact_root_kind=$(printf '%s\n' "$status" | awk -F= '$1=="artifact_root_kind"{print $2; exit}')
     git_operation=$(printf '%s\n' "$status" | awk -F= '$1=="git_operation"{print $2; exit}')
+    git_dirty_tracked=$(printf '%s\n' "$status" | awk -F= '$1=="git_dirty_tracked"{print $2; exit}')
+    git_untracked=$(printf '%s\n' "$status" | awk -F= '$1=="git_untracked"{print $2; exit}')
+    git_extra_worktrees=$(printf '%s\n' "$status" | awk -F= '$1=="git_extra_worktrees"{print $2; exit}')
+    git_branch_done=$(printf '%s\n' "$status" | awk -F= '$1=="git_branch_done"{print $2; exit}')
     headless_open_jobs=$(printf '%s\n' "$status" | awk -F= '$1=="headless_open_jobs"{print $2; exit}')
     printf 'adapter=codex\n'
     printf 'runtime_surface=codex-userprompt-hook-signal\n'
@@ -293,6 +297,10 @@ case "$cmd" in
     printf 'workflow_state=%s\n' "${workflow_state:-unknown}"
     printf 'artifact_root_kind=%s\n' "${artifact_root_kind:-unknown}"
     printf 'git_operation=%s\n' "${git_operation:-unknown}"
+    printf 'git_dirty_tracked=%s\n' "${git_dirty_tracked:-0}"
+    printf 'git_untracked=%s\n' "${git_untracked:-0}"
+    printf 'git_extra_worktrees=%s\n' "${git_extra_worktrees:-0}"
+    printf 'git_branch_done=%s\n' "${git_branch_done:-0}"
     printf 'headless_open_jobs=%s\n' "${headless_open_jobs:-0}"
     if [ "${workflow_state:-tracked}" = "untracked" ]; then
       printf 'autopilot_route=optional-direct-work-allowed\n'
