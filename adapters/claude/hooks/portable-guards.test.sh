@@ -534,6 +534,9 @@ if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_S
   && grep -q '^started=1$' /tmp/codex_dispatch_start.out \
   && [ -f "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" ] \
   && grep -q 'Read adapters/codex/AGENTS.md first' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'preflight.sh status . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'preflight.sh prompt-signal . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'preflight.sh mode . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'preflight.sh route autopilot-code . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'preflight.sh mode-info dev/backend' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'preflight.sh qa-policy standard code' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \

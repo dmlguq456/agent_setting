@@ -602,6 +602,9 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'invalid-dispatch-qa' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'quick,light,standard,thorough,adversarial' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'Read adapters/codex/AGENTS.md first' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh status . codex-headless' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh prompt-signal . codex-headless' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh mode . codex-headless' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'preflight.sh route {args.capability} . codex-headless' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'preflight.sh mode-info {args.mode}' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'preflight.sh qa-policy {args.qa} {track}' adapters/codex/bin/dispatch-headless.py \
