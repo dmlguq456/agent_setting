@@ -78,9 +78,8 @@ def _pid_ttys():
 
 
 def _detached_ttys():
-    """Set of ttys ('pts/N') whose tmux session has NO client attached → the session is detached
-    (backgrounded). session_attached is per-session, so a session viewed in any window counts as
-    attached. Empty set if tmux is absent/unused (detached is then never asserted)."""
+    """Set of ttys ('pts/N') whose tmux session has NO client attached. session_attached is
+    per-session, so a session viewed in any window counts as attached. Empty if tmux absent."""
     try:
         out = subprocess.run(
             ["tmux", "list-panes", "-a", "-F", "#{pane_tty}\t#{session_attached}"],
@@ -93,6 +92,20 @@ def _detached_ttys():
         if len(parts) == 2 and parts[1].strip() == "0":
             det.add(parts[0].replace("/dev/", "", 1))
     return det
+
+
+def _is_detached(tty, app_server, det_ttys):
+    """A session no one is attached to — NOT tmux-specific (user 2026-07-02: sessions can just be
+    run directly). Two general signals:
+      · no controlling terminal (tty '?'/'-') → run in the background / detached from any terminal.
+        (app-server companions ALSO have no tty but are services, not sessions → excluded.)
+      · a tmux pane whose session has 0 attached clients → detached tmux session.
+    A plain foreground terminal session keeps its pts and isn't in the tmux-detached set → attached."""
+    if app_server:
+        return False
+    if not tty or tty in ("?", "-"):
+        return True
+    return tty in det_ttys
 
 
 def scan(harness_filter=None):
@@ -130,7 +143,7 @@ def scan(harness_filter=None):
         # headless dispatch child marker (claude only) — env CLAUDE_CODE_CHILD_SESSION=1.
         # These are surfaced as dispatch rows under their parent, not as top-level sessions.
         is_child = comm == "claude" and read_environ(pid).get("CLAUDE_CODE_CHILD_SESSION") == "1"
-        detached = pid_tty.get(pid) in det_ttys if det_ttys else False
+        detached = _is_detached(pid_tty.get(pid), app_server, det_ttys)
         sessions.append(Session(
             harness=comm,
             pid=pid,
