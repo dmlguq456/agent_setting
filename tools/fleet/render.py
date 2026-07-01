@@ -41,6 +41,9 @@ _JOB_LIVE_RANK = {"working": 0, "stale": 1, "dead": 2, "unknown": 3}
 # effort intensity ramp — low/medium recede, high normal, xhigh/max stand out (subtle "구분감")
 _LVL_INT = {"low": curses.A_DIM, "medium": curses.A_DIM, "high": 0,
             "xhigh": curses.A_BOLD, "max": curses.A_BOLD}
+# qa rigor ramp (a dispatch job's analogue of effort) — quick recedes, adversarial stands out
+_QA_INT = {"quick": curses.A_DIM, "light": curses.A_DIM, "standard": 0,
+           "thorough": curses.A_BOLD, "adversarial": curses.A_BOLD}
 _NARROW_CUTOFF = 70
 _LOOPS_KEYS = ("oncall", "note", "study", "drill")
 
@@ -104,6 +107,10 @@ def _init_colors():
     _COLOR["gate_t"] = _COLOR.get("green", 0) | curses.A_DIM
     _COLOR["gate_u"] = _COLOR.get("yellow", 0) | curses.A_DIM
     _COLOR["cost_hi"] = curses.A_BOLD
+    # dispatch job status-zone: the live stage pops (normal), qa ramps by rigor, mode stays dim
+    _COLOR["job_stage"] = 0
+    for lvl, it in _QA_INT.items():
+        _COLOR["qa_" + lvl] = it
     _COLOR["dim"] = curses.A_DIM
     _COLOR["head"] = curses.A_DIM
     _COLOR["unknown"] = curses.A_DIM
@@ -254,7 +261,7 @@ def _project_gate(cwd, sid=None):
 _HW = 9                       # harness field (incl trailing space)
 _BRANCH_COL = 43              # absolute col where ⎇branch starts (both row types)
 _NW_S = _BRANCH_COL - 13      # session name field  (prefix 4 + harness 9 = 13)
-_NW_D = _BRANCH_COL - 16      # dispatch name field (prefix 7 + harness 9 = 16, deeper indent)
+_NW_D = _BRANCH_COL - 17      # dispatch name field (prefix 8 + harness 9 = 17, deeper ↳ indent)
 _BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
 _MW = 24                      # model + effort field
 _EFF_W = 6                    # effort sub-column (right of the model, no dot — a gap separates them)
@@ -356,13 +363,15 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
 
 
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True):
-    """A dispatch job nested under its parent session — same identity grid as a session row
-    (harness · name · ⎇branch · model all aligned), but its stage·mode·qa live in the right
-    STATUS-ZONE (where a session shows its ctx gauge), NOT under branch/gate. Tree connector
-    (├─ mid / └─ last) + deeper indent mark it as a child. qa '~' prefix = inferred, not explicit.
+    """A dispatch job under its parent session. Made deliberately DISTINCT from a session row so
+    the two don't blur: a `↳` spawn marker + deeper indent, and the whole identity (harness/name)
+    rendered dim so it recedes under the bright session names. It still shares the branch/model
+    columns (to compare against the parent), and its job flow lives in the right STATUS-ZONE
+    (where a session shows its ctx gauge) — stage pops, mode dim, qa ramps by rigor. '~' = inferred.
     """
     key = j.key or "?"
     stage = j.stage or ""
+    qa_base = j.qa or ""
     qa_text = ""
     if j.qa:
         qa_text = ("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa
@@ -370,16 +379,16 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     live = j.liveness
     harness = j.harness or parent_harness
     gch, gkey = _glyph(live)
-    tree = "└─" if is_last else "├─"
-    nm_key = "name_dim" if live in ("stale", "dead") else "name_idle"
 
-    segs = [("  ", None), (tree + " ", "dim"), (gch, gkey), (" ", None),   # prefix 7
+    # prefix 8 → harness at col 8 (deeper than a session's col 4). ↳ = "spawned from the parent".
+    segs = [("    ↳ ", "dim"), (gch, gkey), (" ", None),
             (_pad(_BADGE_TEXT.get(j.harness, "—") if j.harness else "—", _HW),
              _BADGE_KEY.get(j.harness, "dim"))]
 
     used = 0
     nm = name[: _NW_D - 1]
-    segs.append((nm, nm_key)); used += len(nm)
+    segs.append((nm, "name_dim"))               # always dim — a job name never competes with a session
+    used += len(nm)
     if orphan and used + 10 <= _NW_D:
         segs.append(("  (orphan)", "gate_u")); used += 10
     if used < _NW_D:
@@ -388,10 +397,20 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     segs.append(_branch_seg(j.cwd, j.branch))
     segs += _model_segs(harness, j.model or parent_model, None, _MW)
 
-    # STATUS-ZONE — job flow (the dispatch analogue of the ctx gauge): stage · mode · qa
-    flow = (key if key != name else "") + ("▸" + stage if stage else "")
-    detail = " · ".join(x for x in (flow, j.mode, qa_text) if x)
-    segs.append(("  " + detail, "dim"))
+    # STATUS-ZONE — job flow in aligned sub-columns (tidy across dispatch rows): key▸stage (stage
+    # pops) | mode (dim) | qa (rigor ramp). Spaces separate them, no dots.
+    _FLOW_W, _MODEW = 15, 8
+    segs.append(("  ", None))
+    fu = 0
+    if key and key != name:
+        segs.append((key, "dim")); fu += len(key)
+    if stage:
+        segs.append(("▸" + stage, "job_stage")); fu += len(stage) + 1
+    if fu < _FLOW_W:
+        segs.append((" " * (_FLOW_W - fu), None))
+    segs.append((_pad(j.mode or "", _MODEW), "dim"))
+    if qa_text:
+        segs.append((qa_text, "qa_" + qa_base if qa_base in _QA_INT else "dim"))
 
     segs.append((_RFLUSH, None))
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
