@@ -28,6 +28,20 @@ def _read_cwd(pid):
     return target, False
 
 
+def read_environ(pid):
+    """/proc/<pid>/environ → dict[str,str] (or {} on failure). pid: int or str. Read-only, same-user only."""
+    try:
+        raw = open("/proc/%s/environ" % pid, "rb").read()
+    except OSError:
+        return {}
+    env = {}
+    for kv in raw.split(b"\0"):
+        if b"=" in kv:
+            k, v = kv.split(b"=", 1)
+            env[k.decode("utf-8", "replace")] = v.decode("utf-8", "replace")
+    return env
+
+
 def _ps_lines():
     # COLUMNS pinned huge: Claude Code injects terminal width into the statusline env and
     # ps truncates args= to COLUMNS, which would break argv matching downstream

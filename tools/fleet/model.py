@@ -136,9 +136,15 @@ class DispatchJob:
     stage: Optional[str] = None         # plan | exec | test | done (live_stage)
     mode: Optional[str] = None          # --mode value
     qa: Optional[str] = None            # --qa value
+    pid: Optional[int] = None           # dispatch process pid (proc-scanned jobs) — for own model/env lookup
+    model: Optional[str] = None         # dispatch runtime model (own statusline if resolvable; else parent's, filled at render)
     elapsed_min: Optional[int] = None
     slug: str = ""
     cwd: str = ""
+    parent_sid: Optional[str] = None    # spawning parent session id (CLAUDE_CODE_SESSION_ID from environ)
+    is_child: bool = False              # headless child marker (CLAUDE_CODE_CHILD_SESSION=1)
+    harness: Optional[str] = None       # claude | codex | opencode — dispatch runtime (None = unknown / jobs.log-only)
+    qa_source: Optional[str] = None     # provenance of effective qa: argv | jobslog | plan | default
     source: str = "proc"                # proc | jobs
     status: Optional[str] = None        # raw jobs.log status (open/running/...)
     liveness: str = "unknown"

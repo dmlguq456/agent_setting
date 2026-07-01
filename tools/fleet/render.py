@@ -1,11 +1,15 @@
-"""Render layer — curses cwd-project-group TUI (live) + plain snapshot (--once). PRD §4 v2.
+"""Render layer — curses cwd-project-group TUI (live) + plain snapshot (--once). PRD §4 v3.
 
 Both paths build the same flat segment-line list ([(text, color_key), ...] per line, None =
 blank line) via `_build_lines` — the plain renderer joins the text (for piping / smoke tests,
 no ANSI), the curses renderer paints each segment through a scrollable viewport. Missing cells
-render as '—' (never blank). Layout: one group per project (cwd), each holding its sessions
-followed by its dispatch jobs under a dim `dispatch:` sub-label. Responsive: narrow (<~70 cols)
-drops low-priority fields; badge/slug/liveness never drop.
+render as '—' (never blank). Layout: one group per project (cwd); each session (🛰️ command-center
+icon if it spawned children) is followed immediately by its nested `└▸🚀` child dispatch jobs
+(joined via `parent_sid`/`CLAUDE_CODE_SESSION_ID`); jobs with no on-screen parent surface as
+project-level `(orphan)` rows, cron loop jobs surface flat with no orphan marker, and a group
+with no live sessions and no dispatch jobs folds to a single `+N folded` summary (toggle via
+`a`/click, same as `+N hidden`). Responsive: narrow (<~70 cols) drops low-priority fields;
+badge/slug/liveness never drop.
 
 Module-global state invariants (single-process / single-thread only — no concurrent `_draw`):
   - `_OFFSET` (scroll offset) is READ in exactly ONE place: `_draw` (the viewport slice
@@ -22,6 +26,7 @@ Module-global state invariants (single-process / single-thread only — no concu
     stale toggle map never survives to the next click.
 """
 import curses
+import os
 import sys
 import time
 
@@ -34,6 +39,10 @@ _JOB_LIVE_RANK = {"working": 0, "stale": 1, "dead": 2, "unknown": 3}
 _EFFORT_KEY = {"low": "dim", "medium": "ok", "high": "warn", "xhigh": "blocked", "max": "dead"}
 _NARROW_CUTOFF = 70
 _LOOPS_KEYS = ("oncall", "note", "study", "drill")
+# command-center / launch icons (R5) — single source; degrade to ASCII (e.g. "⌘"/"▸") here in
+# ONE place if double-width alignment breaks in a target terminal.
+_ICON_PARENT = "🛰️"   # command-center: a session that spawned ≥1 child dispatch job
+_ICON_CHILD = "🚀"     # launch: a child dispatch job row nested under its parent session
 
 _COLOR = {}   # color_key → curses attr (filled by _init_colors); empty ⇒ plain mode
 
@@ -68,6 +77,10 @@ def _init_colors():
     # if the pair failed to init above).
     for k in ("badge_claude", "badge_codex", "badge_opencode"):
         _COLOR[k] = _COLOR.get(k, 0) | curses.A_REVERSE
+    # percentages read at a glance — bold so ctx%/rate% stand out (user: '% 표기가 잘 안보인다')
+    for k in ("pct_g", "pct_y", "pct_r"):
+        _COLOR[k] = _COLOR.get(k, 0) | curses.A_BOLD
+    _COLOR["model"] = curses.A_BOLD              # model name prominent (user: 모델명 더 눈에 띄게)
     _COLOR["idle"] = curses.A_DIM
     _COLOR["dim"] = curses.A_DIM
     _COLOR["unknown"] = curses.A_DIM
@@ -89,13 +102,14 @@ def _pct_key(v):
 
 
 # ---------- row builders (return a single segment-line: [(text, color_key), ...]) ----------
-def _session_row(s, narrow):
+def _session_row(s, narrow, is_parent=False):
     """Single segment-line per session (PRD §4 v2 — the wide 3-line panel is retired).
 
     Format: `  [Badge] <slug>  ✨<model> ·<effort>  🧠<ctx%>  5h<r>/7d<r>  ⏳<elapsed>  <liveness>`
     app_server codex appends a dim `⚙app-server` marker right after the badge. Dim rule (§6/§7):
     stale/dead/app_server sessions render telemetry segments dim (last-observed, not live) —
-    badge/slug/liveness always keep normal coloring.
+    badge/slug/liveness always keep normal coloring. `is_parent=True` (R5, caller-computed —
+    this row has ≥1 nested child job) prepends the command-center icon after badge/slug.
     """
     badge = _BADGE_TEXT.get(s.harness, "[?]")
     bkey = _BADGE_KEY.get(s.harness, "head")
@@ -109,6 +123,8 @@ def _session_row(s, narrow):
     if s.app_server:
         segs.append((" ⚙app-server", "dim"))
     segs.append((" " + slug, None))
+    if is_parent:
+        segs.append((" " + _ICON_PARENT, None))
 
     model = dash(s.model)
     ctx = dash(s.ctx_pct, lambda v: "%d%%" % v)
@@ -124,12 +140,18 @@ def _session_row(s, narrow):
     show_model = True
 
     if show_model:
-        segs.append(("  ✨" + model, tkey if dim_telemetry else "dim"))
+        segs.append(("  ✨", "dim"))
+        segs.append((model, "dim" if dim_telemetry else "model"))     # bold model name when live
         if s.effort and show_effort:
             segs.append((" ·" + s.effort, "dim" if dim_telemetry else _EFFORT_KEY.get(s.effort, "dim")))
-    segs.append(("  🧠" + ctx, "dim" if dim_telemetry else _pct_key(s.ctx_pct)))
+    segs.append(("  🧠", "dim"))
+    segs.append((ctx, "dim" if dim_telemetry else _pct_key(s.ctx_pct)))  # bold+colored ctx%
     if show_cost_rl:
-        segs.append(("  5h" + r5 + "/7d" + r7, tkey if dim_telemetry else "dim"))
+        if dim_telemetry:
+            segs.append(("  5h" + r5 + "/7d" + r7, "dim"))
+        else:                                                           # rate % bold+colored (was all-dim → invisible)
+            segs.append(("  5h", "dim")); segs.append((r5, _pct_key(s.rl_5h)))
+            segs.append(("/7d", "dim")); segs.append((r7, _pct_key(s.rl_7d)))
         segs.append(("  " + cost, "dim"))
     segs.append(("  ⏳" + el, "dim"))
     segs.append(("  " + live, lkey))
@@ -138,27 +160,50 @@ def _session_row(s, narrow):
     return segs
 
 
-def _dispatch_row(j):
-    """Single segment-line per dispatch job, placed under the group's dim `dispatch:` label.
+def _dispatch_row(j, orphan=False, parent_model=None):
+    """Single segment-line per dispatch job, nested under its parent session (R1) or
+    surfaced as a project-level orphan (`orphan=True`, R2) — same builder, one code path
+    so `--section dispatch` degrade (nesting suppressed, sessions absent) stays flat via
+    this same function.
 
-    Format: `    ▸<key>▸<stage> (<mode>·<qa>)  ⏳<elapsed>  <liveness>  <slug>`
+    Format: `    └▸🚀<key>▸<stage> (<mode>·~<qa>)  ⏳<elapsed>  <liveness>  <slug>  (orphan)`
+    qa is dim + `~`-prefixed when NOT argv-explicit (`j.qa_source` in jobslog/plan/default —
+    i.e. inferred, not user-specified); argv-source qa renders normal, no `~`.
     """
     key = j.key or "?"
     stage = ("▸" + j.stage) if j.stage else ""
-    opts = []
-    if j.mode:
-        opts.append(j.mode)
+    qa_text = None
+    qa_dim = False
     if j.qa:
-        opts.append(j.qa)
-    optstr = (" (" + "·".join(opts) + ")") if opts else ""
+        if j.qa_source in ("jobslog", "plan", "default"):
+            qa_text = "~" + j.qa
+            qa_dim = True
+        else:
+            qa_text = j.qa
     el = fmt_min(j.elapsed_min)
     lkey = _live_key(j.liveness)
-    segs = [("    ▸", "dim"), (key, "head"), (stage, "done")]
-    if optstr:
-        segs.append((optstr, "dim"))
+    segs = [("    └▸" + _ICON_CHILD + " ", "dim")]
+    if j.harness:                                    # cross-harness dispatch → show runtime badge
+        segs.append((_BADGE_TEXT.get(j.harness, "[?]"), _BADGE_KEY.get(j.harness, "head")))
+        segs.append((" ", None))
+    segs += [(key, "head"), (stage, "done")]
+    if j.mode or qa_text:
+        segs.append((" (", "dim"))
+        if j.mode:
+            segs.append((j.mode, None))
+        if j.mode and qa_text:
+            segs.append(("·", "dim"))
+        if qa_text:
+            segs.append((qa_text, "dim" if qa_dim else None))
+        segs.append((")", "dim"))
+    dmodel = j.model or parent_model                 # own model if resolvable, else parent's (same config for now — per-dispatch later)
+    if dmodel:
+        segs.append(("  ✨", "dim")); segs.append((dmodel, "model"))
     segs.append(("  ⏳" + el, "dim"))
     segs.append(("  " + j.liveness, lkey))
     segs.append(("  " + (j.slug or ""), None))
+    if orphan:
+        segs.append(("  (orphan)", "dim"))
     return segs
 
 
@@ -234,14 +279,37 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
         if not group_sessions and not group_jobs:
             continue    # empty-group suppression per --section: no dangling header
 
+        # group fold decision (R4) — computed BEFORE emitting anything for this group.
+        live_sessions = [s for s in group_sessions
+                          if s.liveness not in ("stale", "dead") and not s.app_server]
+        must_show_jobs = bool(group_jobs)   # conservative: any job present blocks the fold
+        fold = (not _SHOW_ALL) and (not live_sessions) and (not must_show_jobs)
+
         if not first:
             lines.append(None)
         first = False
+
+        if fold:
+            lines.append([("━━ 📁 %s  (+%d folded)" % (name, len(group_sessions)), "dim")])
+            continue
 
         shown = (group_sessions if _SHOW_ALL else
                  [s for s in group_sessions
                   if not (s.liveness in ("stale", "dead") or s.app_server)])
         hidden = len(group_sessions) - len(shown)
+        shown_sids = set(s.session_id for s in shown if s.session_id)
+
+        # pre-assemble session -> child-jobs map (R1/R2) before emitting rows.
+        children = {}     # session_id -> [jobs] (nested under an on-screen parent)
+        orphans = []       # project-level fallback (parent dead/off-screen/no-env)
+        loops_jobs = []    # no-parent-is-normal (cron loops) — no orphan marker
+        for j in group_jobs:
+            if j.is_child and j.parent_sid and j.parent_sid in shown_sids:
+                children.setdefault(j.parent_sid, []).append(j)
+            elif j.key in _LOOPS_KEYS:
+                loops_jobs.append(j)
+            else:
+                orphans.append(j)
 
         by_harness = {}
         for s in group_sessions:
@@ -257,17 +325,22 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
         )
         lines.append([(head, "head")])
 
-        for s in _sort_group_sessions(shown):
-            lines.append(_session_row(s, narrow))
+        for si, s in enumerate(_sort_group_sessions(shown)):
+            if si:
+                lines.append(None)                  # blank line between sessions (readability — user 2026-07-01)
+            has_children = bool(children.get(s.session_id))
+            lines.append(_session_row(s, narrow, is_parent=has_children))
+            for cj in _sort_group_jobs(children.get(s.session_id, [])):
+                lines.append(_dispatch_row(cj, orphan=False, parent_model=s.model))
         if group_sessions and hidden:
             lines.append([("  +%d stale/companion hidden" % hidden, "dim")])
-        if show_sessions and not group_sessions and group_jobs:
-            pass  # session-less group with only dispatch — nothing to say here, jobs follow
 
-        if group_jobs:
-            lines.append([("  dispatch:", "dim")])
-            for j in _sort_group_jobs(group_jobs):
-                lines.append(_dispatch_row(j))
+        # orphans: project-level fallback, marker suppressed when nesting is intentionally
+        # off (`--section dispatch` — sessions absent, every job would otherwise "orphan").
+        for oj in _sort_group_jobs(orphans):
+            lines.append(_dispatch_row(oj, orphan=show_sessions))
+        for lj in _sort_group_jobs(loops_jobs):
+            lines.append(_dispatch_row(lj, orphan=False))
 
     if not order:
         lines.append([("  (no active sessions or dispatch jobs)", "dim")])
@@ -344,7 +417,8 @@ def _draw(stdscr, sessions, jobs, section, malformed):
     row = 0
     for segs in visible:
         _addline(stdscr, row, segs, w)
-        if segs is not None and len(segs) == 1 and "hidden" in segs[0][0]:
+        if segs is not None and len(segs) == 1 and (
+                "hidden" in segs[0][0] or "folded" in segs[0][0]):
             _TOGGLE_ROWS[row] = True
         row += 1
 
@@ -369,10 +443,14 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
     global _OFFSET
     curses.curs_set(0)
     _init_colors()
-    try:
-        curses.mousemask(curses.BUTTON1_CLICKED)
-    except Exception:
-        pass
+    # herdr (HERDR_ENV=1) grabs mouse events itself — enabling curses mouse reporting inside it
+    # deadlocks/freezes the pane (user-observed freeze 2026-07-01). Keyboard is the primary path,
+    # so skip mouse under herdr; mouse click-toggle stays available in a plain terminal.
+    if not os.environ.get("HERDR_ENV"):
+        try:
+            curses.mousemask(curses.BUTTON1_CLICKED)
+        except Exception:
+            pass
     stdscr.timeout(200)                     # getch blocks ≤200ms → responsive keys
     sessions, jobs = collect_all(harness_filter=hfilter)
     malformed = _malformed()

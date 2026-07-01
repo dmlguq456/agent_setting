@@ -8,7 +8,10 @@ Fleet sessions resolve to working / idle / stale / dead. `blocked` needs the her
 """
 import os
 
-STALE_MIN = 15
+# Session stale window = 48h. Interactive sessions idle for hours/days are still alive, not
+# stale (15min was far too tight — user 2026-07-01). Dispatch JOBS keep their own tight 15min
+# window in dispatch.py._job_liveness (a headless build silent >15min = genuine hang suspect).
+STALE_MIN = 48 * 60
 
 
 def _alive(pid):
