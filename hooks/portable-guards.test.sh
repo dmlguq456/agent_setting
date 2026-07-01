@@ -149,6 +149,29 @@ if (cd "$TMP/specproj" && "$CODEX" read .agent_reports/spec/prd.md relsid >/tmp/
 else
   bad "codex read wrapper should resolve relative prd paths for spec gate"
 fi
+# Spec read gate fitted to Codex's write interception point (no Skill event):
+# a spec-changing artifact write while ungrounded is hard-denied; ordinary files
+# are not gated; reading prd.md clears the gate.
+mkdir -p "$TMP/cxspec/.agent_reports/spec" "$TMP/cxspec/.agent_reports/research" "$TMP/cxspec/src"
+printf 'prd\n' > "$TMP/cxspec/.agent_reports/spec/prd.md"
+printf 'state: x\n' > "$TMP/cxspec/.agent_reports/spec/pipeline_state.yaml"
+if "$CODEX" write "$TMP/cxspec/.agent_reports/plans/c1/dev.md" cxwsid >/tmp/codex_wg.out 2>/tmp/codex_wg.err; then
+  bad "codex write guard should deny ungrounded spec-changing (plans) write"
+else
+  [ "$?" -eq 2 ] && ok "codex write guard denies ungrounded spec-changing write" \
+    || bad "codex write guard wrong exit on ungrounded spec write"
+fi
+"$CODEX" read "$TMP/cxspec/.agent_reports/spec/prd.md" cxwsid >/dev/null 2>&1
+if "$CODEX" write "$TMP/cxspec/.agent_reports/plans/c1/dev.md" cxwsid >/tmp/codex_wg.out 2>/tmp/codex_wg.err; then
+  ok "codex write guard passes spec-changing write after prd read"
+else
+  bad "codex write guard should pass spec-changing write after prd read"
+fi
+if "$CODEX" write "$TMP/cxspec/src/main.py" cxwsid2 >/tmp/codex_wg.out 2>/tmp/codex_wg.err; then
+  ok "codex write guard does not gate ordinary source files"
+else
+  bad "codex write guard should not gate ordinary source files"
+fi
 if "$CODEX" route autopilot-code "$TMP/specproj" testsid >/tmp/codex_route.out 2>/tmp/codex_route.err \
   && grep -q '^runtime_surface=codex-userprompt-hook-signal$' /tmp/codex_route.out \
   && grep -q '^capability=autopilot-code$' /tmp/codex_route.out \

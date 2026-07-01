@@ -196,10 +196,26 @@ decisions. The write bridge registers
 `PreToolUse` for write/edit/multiedit/patch tools, including qualified
 `functions.apply_patch` payloads, and calls
 `adapters/codex/bin/preflight.sh write <file> <session-id>`, which runs
-the portable artifact-order, git-state, and memory-write guards. The read bridge
+the portable artifact-order, git-state, and memory-write guards, plus the spec
+read gate for spec-changing artifacts (see below). The read bridge
 registers `PostToolUse` for `Read` and calls `adapters/codex/bin/preflight.sh
 read <file> <session-id>` so actual `spec/prd.md` reads satisfy spec-backed
-capability gates. The design bridge registers `PostToolUse` for the same
+capability gates.
+
+Spec read gate — fitted to Codex's interception point. Claude hard-denies an
+ungrounded `autopilot-code`/`autopilot-spec` *Skill* via `PreToolUse[Skill]`.
+Codex has no skill-invocation event (Skills are implicitly selected, and there is
+no slash-command router), so the same portable invariant — no spec-changing work
+without a current `prd.md` read marker — is enforced where Codex *can* intercept:
+the write of a spec-changing artifact. `preflight.sh write` runs the shared
+`spec-skill-gate.sh` against `<artifact-root>/plans/*` (autopilot-code) and the
+`spec/` blueprints (autopilot-spec), using the same per-cwd marker the read
+bridge writes. Creating the first `prd.md` is not gated (no marker target yet —
+artifact-order still applies); editing an existing artifact while ungrounded is
+hard-denied. This is marginally stricter than Claude's skill-entry gate (it also
+covers direct artifact edits), in the safe direction: it never weakens the
+invariant. The headless `dispatch` wrapper additionally applies the gate before
+launch. The design bridge registers `PostToolUse` for the same
 write/edit/multiedit/patch surface, including qualified `functions.apply_patch`
 payloads, and calls `adapters/codex/bin/preflight.sh design
 <file>` for saved design HTML files.
@@ -289,7 +305,7 @@ Harness-specific status signals still need Codex-native realization:
 | git state safety | Run `adapters/codex/bin/preflight.sh write <file> [session-id]` before edits |
 | memory write guard | Run `adapters/codex/bin/preflight.sh write <file> [session-id]` before writes |
 | design post-write verification | Run `adapters/codex/bin/preflight.sh design <file>` after design HTML writes |
-| spec read gate | Run `adapters/codex/bin/preflight.sh read <prd.md> [session-id]` after actual reads and `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
+| spec read gate | Auto-enforced through Codex hooks: `PostToolUse[Read]` records actual `prd.md` reads, and `PreToolUse` write guard hard-denies an ungrounded write to a spec-changing artifact (`plans/*` or a `spec/` blueprint) — Codex's interception equivalent of Claude's `PreToolUse[Skill]` gate (no skill event exists). Manual fallbacks: `preflight.sh read <prd.md>` after reads, `preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
 | workflow start cleanup | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]`; run it manually when no automatic hook is attached |
 | workflow signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` and `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`; run them manually when no automatic hook is attached |
 | workflow toggle | Run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly requests tracked/untracked mode switching |
@@ -306,7 +322,7 @@ Harness-specific status signals still need Codex-native realization:
 | role modes | Read `roles/MODES.md`, then run `adapters/codex/bin/preflight.sh mode-info <family/mode>`; read the reported `native_mode_path`, obey `fallback=reference-only` only for unsupported modes, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
 | mode guides | Use `adapters/codex/modes/<family>/<mode>.md` as the Codex-native realization guide reported by `mode-info`; satisfy named tool contracts or report unavailable before claiming support |
 | design modes | Use `adapters/codex/modes/design/<mode>.md` as the Codex-native realization guide; satisfy `visual-harness` or report unavailable before claiming rendered visual verification |
-| hook invariants | `adapters/codex/hooks/sessionend-lifecycle.py` realizes SessionEnd/Stop memory sync/distill hooks; `permissionrequest-lifecycle.py` realizes approval-blocker context through Codex `PermissionRequest`; `pretooluse-write-guard.py` realizes write guards through Codex `PreToolUse`; `posttooluse-read-marker.py` records actual spec reads through `PostToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
+| hook invariants | `adapters/codex/hooks/sessionend-lifecycle.py` realizes SessionEnd/Stop memory sync/distill hooks; `permissionrequest-lifecycle.py` realizes approval-blocker context through Codex `PermissionRequest`; `pretooluse-write-guard.py` realizes write guards (artifact-order, git-state, memory-write, and the spec read gate for spec-changing artifacts) through Codex `PreToolUse`; `posttooluse-read-marker.py` records actual spec reads through `PostToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
 | capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 
 ## Model Mapping
