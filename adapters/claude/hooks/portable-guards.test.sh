@@ -507,9 +507,12 @@ if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_S
   && grep -q 'preflight.sh qa-policy standard code' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'Autopilot-code execution contract' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'code-plan -> code-execute -> code-test -> code-report' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'role planning, role implementation, role verification, and role report' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'preflight.sh mode-info qa/plan-review' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'preflight.sh mode-info qa/test' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh role fast reviewer' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'preflight.sh role verification' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'preflight.sh role implementation' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'preflight.sh role report' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'pipeline_summary.md' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'Do not claim independent QA delegation' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'Do not use adapters/claude' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
@@ -538,10 +541,13 @@ else
     bad "codex dispatch strict start should fail before registry writes"
   fi
 fi
-if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-dispatch.log" >/tmp/codex_dispatch.out 2>/tmp/codex_dispatch.err \
+if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-dispatch.log" --log-dir "$TMP/codex-register-logs" >/tmp/codex_dispatch.out 2>/tmp/codex_dispatch.err \
   && grep -q '^status=register$' /tmp/codex_dispatch.out \
   && grep -q '^registered=1$' /tmp/codex_dispatch.out \
   && grep -q '^started=0$' /tmp/codex_dispatch.out \
+  && grep -q '^prompt_file=.*/codex-register-logs/codex-dispatch.codex.prompt.txt$' /tmp/codex_dispatch.out \
+  && [ -f "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" ] \
+  && grep -q 'role planning, role implementation, role verification, and role report' "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" \
   && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard' "$TMP/codex-dispatch.log"; then
   ok "codex dispatch wrapper registers open headless job"
 else

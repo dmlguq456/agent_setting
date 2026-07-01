@@ -81,10 +81,11 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
             "- Before code edits, emit a `spec-significance` verdict.\n"
             "- Run the pipeline in order: code-plan -> code-execute -> code-test -> code-report. Use optional code-refine only when user feedback or QA review requires plan correction.\n"
             "- For each sub-step, read the matching adapters/codex/skills/<step>/SKILL.md when present and run adapters/codex/bin/preflight.sh capability-info <step>.\n"
-            "- Planning review: run adapters/codex/bin/preflight.sh mode-info qa/plan-review and adapters/codex/bin/preflight.sh role fast reviewer. For thorough/adversarial QA, also use a deep/external reviewer role when available.\n"
-            "- Implementation: run adapters/codex/bin/preflight.sh role fast implementer and obey the requested development mode.\n"
+            "- Pipeline role profiles: run adapters/codex/bin/preflight.sh role planning, role implementation, role verification, and role report to map stages to Codex-native agents.\n"
+            "- Planning review: run adapters/codex/bin/preflight.sh mode-info qa/plan-review and adapters/codex/bin/preflight.sh role verification. For thorough/adversarial QA, also use a deep/external reviewer role when available.\n"
+            "- Implementation: run adapters/codex/bin/preflight.sh role implementation and obey the requested development mode.\n"
             "- Testing: run adapters/codex/bin/preflight.sh mode-info qa/test, satisfy the reported verification-runner contract, and record evidence under test_logs/.\n"
-            "- Reporting: write or update pipeline_summary.md with changed files, verification commands/results, artifact paths, and unsupported Codex tool contracts.\n"
+            "- Reporting: run adapters/codex/bin/preflight.sh role report, then write or update pipeline_summary.md with changed files, verification commands/results, artifact paths, and unsupported Codex tool contracts.\n"
             "- Do not claim independent QA delegation if no separate Codex agent/headless pass actually ran; report inline fallback explicitly.\n"
         )
     return (
@@ -230,11 +231,11 @@ def main(argv: list[str]) -> int:
     command = shell_command(args, prompt_path, log_path)
 
     if action in ("register", "start"):
-        append_job(jobs, args)
-    if action == "start":
         prompt_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         prompt_path.write_text(prompt_text, encoding="utf-8")
+        append_job(jobs, args)
+    if action == "start":
         subprocess.Popen(["sh", "-c", command], start_new_session=True)
 
     print("adapter=codex")

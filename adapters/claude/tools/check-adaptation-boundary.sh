@@ -607,9 +607,13 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'preflight.sh qa-policy {args.qa} {track}' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'Autopilot-code execution contract' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'code-plan -> code-execute -> code-test -> code-report' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'role planning, role implementation, role verification, and role report' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'preflight.sh mode-info qa/plan-review' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'preflight.sh mode-info qa/test' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh role fast reviewer' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh role verification' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh role implementation' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh role report' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'prompt_path.write_text(prompt_text, encoding="utf-8")' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'pipeline_summary.md' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'Do not claim independent QA delegation' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'Do not use adapters/claude' adapters/codex/bin/dispatch-headless.py; then
