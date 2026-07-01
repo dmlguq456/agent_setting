@@ -289,6 +289,7 @@ Harness-specific status signals still need Codex-native realization:
 | tracked/untracked workflow state | Codex `UserPromptSubmit` hook bridge runs `preflight.sh prompt-signal` and `preflight.sh mode`; explicit preflight remains fallback when hooks are unavailable |
 | workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; keep Codex `/statusline` for native model/context/token/session fields |
 | UI boundary report | explicit `preflight.sh ui-info`; reports built-in footer/title support, unsupported arbitrary live statusline scripts, Skill/plugin autopilot entrypoints, and explicit/main-dispatched subagent behavior |
+| subagent delegation | explicit `preflight.sh subagent-info --check`; verifies the Codex `multi_agent` runtime feature and projected custom agents before claiming native subagent delegation parity |
 | tracked/untracked toggle | explicit `preflight.sh track`; do not expose Claude `/track` command files |
 | artifact root detection | `preflight.sh write` and shared artifact-root helper |
 | headless/autopilot/background jobs | `preflight.sh headless` / `dispatch` / `liveness` / `harvest` provide the tool-contract path; `preflight.sh status` surfaces in-flight jobs as `headless_open_jobs` / `headless_open_slugs` from the dispatch registry. A Codex-native graphical display remains optional polish |

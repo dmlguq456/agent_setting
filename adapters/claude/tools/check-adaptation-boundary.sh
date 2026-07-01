@@ -669,7 +669,7 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/AGENTS.md must document the Codex workflow toggle wrapper"
   fi
 
-  for p in 'preflight.sh start' 'preflight.sh session-end' 'preflight.sh mode' 'preflight.sh prompt-signal' 'preflight.sh turn-nudge' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh ui-info' 'preflight.sh tui-config' 'preflight.sh loop-info' 'preflight.sh qa-policy' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
+  for p in 'preflight.sh start' 'preflight.sh session-end' 'preflight.sh mode' 'preflight.sh prompt-signal' 'preflight.sh turn-nudge' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh ui-info' 'preflight.sh tui-config' 'preflight.sh subagent-info' 'preflight.sh loop-info' 'preflight.sh qa-policy' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
     if ! grep -Fq "$p" adapters/codex/AGENTS.md; then
       fail_msg "adapters/codex/AGENTS.md must document manual Codex lifecycle wrapper $p"
     fi
@@ -684,6 +684,12 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'statusline_custom_dynamic_fields=unsupported' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'autopilot_auto_routing=instruction-guided-not-claude-slash-router' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'subagent_auto_spawn=explicit-or-main-dispatched' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'subagent_feature_check=adapters/codex/bin/preflight.sh subagent-info --check' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'runtime_surface=codex-native-subagents' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'feature_check=codex features list' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'preflight.sh subagent-info --check' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'preflight.sh subagent-info --check' adapters/codex/README.md \
+    || ! grep -Fq 'preflight.sh subagent-info --check' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'do not duplicate Codex-native footer' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex docs must keep /statusline native and reserve preflight.sh status for harness-specific signals"
   fi
@@ -2501,7 +2507,8 @@ check_adaptation_inventory_native_surfaces() {
     fail_msg "adapters/codex/README.md and adapters/codex/AGENTS.md must document the Codex runtime projection installer/checker"
   fi
   if ! grep -Fq 'permissionrequest-lifecycle.py' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'check-runtime-projection.sh' adapters/codex/bin/preflight.sh; then
+    || ! grep -Fq 'check-runtime-projection.sh' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'doctor_check native-subagents "$0" subagent-info --check' adapters/codex/bin/preflight.sh; then
     fail_msg "Codex preflight doctor/headless checks must syntax-check all hook bridges and reuse runtime projection validation"
   fi
   if [ ! -x adapters/codex/bin/apply-tui-config.sh ] \

@@ -37,6 +37,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
        preflight.sh tui-config
+       preflight.sh subagent-info [--check]
        preflight.sh headless [--check] [--require-hook-trust] <worktree>
        preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]
@@ -131,6 +132,7 @@ doctor() {
   doctor_check native-plugin "$ROOT/adapters/codex/bin/sync-native-plugin.py" --check || rc=1
   doctor_check native-agents "$ROOT/adapters/codex/bin/sync-native-agents.py" --check || rc=1
   doctor_check native-modes "$ROOT/adapters/codex/bin/sync-native-modes.py" --check || rc=1
+  doctor_check native-subagents "$0" subagent-info --check || rc=1
   doctor_check hook-bridges python3 -c 'import pathlib, sys; [compile(pathlib.Path(p).read_text(encoding="utf-8"), p, "exec") for p in sys.argv[1:]]' \
     "$ROOT/adapters/codex/hooks/sessionstart-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/sessionend-lifecycle.py" \
@@ -605,8 +607,51 @@ autopilot_entrypoints=codex-native-skills-plugin
 autopilot_auto_routing=instruction-guided-not-claude-slash-router
 subagent_surface=codex-native-subagents
 subagent_auto_spawn=explicit-or-main-dispatched
+subagent_feature_check=adapters/codex/bin/preflight.sh subagent-info --check
 note=Codex can configure built-in footer/title items, but it does not expose a Claude-style arbitrary live statusline script surface; use preflight status and hook statusMessage for harness-specific signals.
 EOF
+    ;;
+  subagent-info)
+    check_only=0
+    case "${2:-}" in
+      "")
+        ;;
+      --check)
+        check_only=1
+        ;;
+      *)
+        echo "codex preflight: subagent-info accepts only --check" >&2
+        exit 64
+        ;;
+    esac
+    cat <<EOF
+adapter=codex
+runtime_surface=codex-native-subagents
+status=native-runtime-config
+feature=multi_agent
+feature_check=codex features list
+native_agents_path=\$CODEX_HOME/agents
+projection=codex_setting/codex-agents
+trigger=explicit-user-request-or-main-dispatch
+auto_spawn=explicit-only
+dispatch_fallback=adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start
+constraints=depth-one,main-orchestrated,approval-and-sandbox-inherited
+claude_subagent_frontmatter=unsupported
+note=Codex subagents are native workflows and do not use Claude Agent files; verify the multi_agent feature and projected custom agents before claiming delegation parity.
+EOF
+    if [ "$check_only" -eq 0 ]; then
+      exit 0
+    fi
+    if ! command -v codex >/dev/null 2>&1; then
+      printf 'check=failed\nreason=codex-command-unavailable\n'
+      exit 69
+    fi
+    if codex features list 2>/dev/null | awk '$1=="multi_agent" && $3=="true" {found=1} END {exit found ? 0 : 1}'; then
+      printf 'check=ok\nfeature=multi_agent\n'
+    else
+      printf 'check=failed\nreason=multi-agent-feature-disabled-or-unavailable\n'
+      exit 69
+    fi
     ;;
   loop-info)
     [ "$#" -eq 2 ] || { echo "codex preflight: loop-info requires one loop name" >&2; exit 64; }

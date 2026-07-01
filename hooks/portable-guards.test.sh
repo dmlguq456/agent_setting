@@ -616,10 +616,27 @@ if "$CODEX" ui-info >/tmp/codex_ui.out 2>/tmp/codex_ui.err \
   && grep -q '^harness_status_surface=adapter-owned-preflight-status$' /tmp/codex_ui.out \
   && grep -q '^autopilot_entrypoints=codex-native-skills-plugin$' /tmp/codex_ui.out \
   && grep -q '^autopilot_auto_routing=instruction-guided-not-claude-slash-router$' /tmp/codex_ui.out \
-  && grep -q '^subagent_auto_spawn=explicit-or-main-dispatched$' /tmp/codex_ui.out; then
+  && grep -q '^subagent_auto_spawn=explicit-or-main-dispatched$' /tmp/codex_ui.out \
+  && grep -q '^subagent_feature_check=adapters/codex/bin/preflight.sh subagent-info --check$' /tmp/codex_ui.out; then
   ok "codex ui-info reports native UI and parity boundaries"
 else
   bad "codex ui-info should report native UI and parity boundaries"
+fi
+if "$CODEX" subagent-info >/tmp/codex_subagent_info.out 2>/tmp/codex_subagent_info.err \
+  && grep -q '^runtime_surface=codex-native-subagents$' /tmp/codex_subagent_info.out \
+  && grep -q '^feature=multi_agent$' /tmp/codex_subagent_info.out \
+  && grep -q '^trigger=explicit-user-request-or-main-dispatch$' /tmp/codex_subagent_info.out \
+  && grep -q '^claude_subagent_frontmatter=unsupported$' /tmp/codex_subagent_info.out; then
+  ok "codex subagent-info reports native subagent contract"
+else
+  bad "codex subagent-info should report native subagent contract"
+fi
+if "$CODEX" subagent-info --check >/tmp/codex_subagent_check.out 2>/tmp/codex_subagent_check.err \
+  && grep -q '^check=ok$' /tmp/codex_subagent_check.out \
+  && grep -q '^feature=multi_agent$' /tmp/codex_subagent_check.out; then
+  ok "codex subagent-info checks native multi-agent feature"
+else
+  bad "codex subagent-info should check native multi-agent feature"
 fi
 TUIHOME="$TMP/codex-tui-home"
 rm -rf "$TUIHOME"; mkdir -p "$TUIHOME"
@@ -1772,6 +1789,7 @@ else
 fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime >/tmp/codex_doctor_runtime.out 2>/tmp/codex_doctor_runtime.err \
   && grep -q '^check=runtime-projection:ok' /tmp/codex_doctor_runtime.out \
+  && grep -q '^check=native-subagents:ok' /tmp/codex_doctor_runtime.out \
   && grep -q '^status=ok' /tmp/codex_doctor_runtime.out; then
   ok "codex doctor --runtime includes runtime projection validation"
 else
@@ -1779,6 +1797,7 @@ else
 fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime-strict >/tmp/codex_doctor_runtime_strict.out 2>/tmp/codex_doctor_runtime_strict.err \
   && grep -q '^check=runtime-projection:ok' /tmp/codex_doctor_runtime_strict.out \
+  && grep -q '^check=native-subagents:ok' /tmp/codex_doctor_runtime_strict.out \
   && grep -q '^status=ok' /tmp/codex_doctor_runtime_strict.out; then
   ok "codex doctor --runtime-strict requires and accepts complete hook trust"
 else
