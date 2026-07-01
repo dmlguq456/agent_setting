@@ -619,7 +619,7 @@ autopilot_auto_routing=instruction-guided-not-claude-slash-router
 subagent_surface=codex-native-subagents
 subagent_auto_spawn=explicit-or-main-dispatched
 subagent_feature_check=adapters/codex/bin/preflight.sh subagent-info --check
-note=Codex can configure built-in footer/title items, but it does not expose a Claude-style arbitrary live statusline script surface; use preflight status and hook statusMessage for harness-specific signals.
+note=Codex can configure built-in footer/title items, but it does not expose a Claude-style arbitrary live statusline script surface; use preflight status for harness-specific signals, and keep hooks silent (no statusMessage labels) to match Claude Code.
 EOF
     ;;
   subagent-info)

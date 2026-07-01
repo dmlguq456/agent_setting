@@ -380,6 +380,8 @@ if "$CODEX" prompt-signal "$TMP/flowproj" testsid >/tmp/codex_prompt_signal_trac
   && grep -q '^routing_contract=core/WORKFLOW.md$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^routing_action=read-workflow-and-select-codex-skill$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^capability_entrypoints=codex-native-skills-plugin$' /tmp/codex_prompt_signal_tracked.out \
+  && grep -q '^hook_event=UserPromptSubmit$' /tmp/codex_prompt_signal_tracked.out \
+  && grep -q '^hook_scope=runtime-hook$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^hook_boundary=shell-read-write-targeted-detection-explicit-preflight-fallback$' /tmp/codex_prompt_signal_tracked.out; then
   ok "codex prompt signal carries tracked autopilot routing contract"
 else
@@ -1394,13 +1396,13 @@ fi
 if "$CODEX" track "$TMP/flowproj" promptlifecyclesid >/tmp/codex_prompt_toggle.out 2>/tmp/codex_prompt_toggle.err \
   && printf '{"prompt":"remember this project context","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
   | MEM_NUDGE_INTERVAL=1 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook.out 2>/tmp/codex_prompt_hook.err \
-  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); out=d["hookSpecificOutput"]; ctx=out["additionalContext"]; assert out["hookEventName"]=="UserPromptSubmit"; assert "git_dirty_tracked=" in ctx; assert "headless_open_jobs=" in ctx; assert "hook_event=UserPromptSubmit" in ctx; assert "hook_scope=runtime-hook" in ctx; assert "workflow_state=untracked" in ctx; assert "autopilot_route=optional-direct-work-allowed" in ctx; assert "routing_contract=untracked-direct-work" in ctx' /tmp/codex_prompt_hook.out \
+  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); out=d["hookSpecificOutput"]; ctx=out["additionalContext"]; assert out["hookEventName"]=="UserPromptSubmit"; assert "untracked" in ctx; assert "autopilot_route=" not in ctx; assert "routing_contract=" not in ctx; assert "git_dirty_tracked=" not in ctx; assert "hook_event=" not in ctx; assert "headless_open_jobs=" not in ctx' /tmp/codex_prompt_hook.out \
   && grep -q 'untracked' /tmp/codex_prompt_hook.out \
   && grep -q '^0$' "$TMP/codex_hook_mem/.codex-turn-state-promptlifecyclesid" \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_prompt_hook.out /tmp/codex_prompt_hook.err; then
-  ok "codex native hook projection bridges prompt lifecycle"
+  ok "codex native hook projection injects only the mode routing anchor per turn (Claude-parity: no per-turn prompt-signal aggregate)"
 else
-  bad "codex native hook projection should bridge prompt lifecycle"
+  bad "codex native hook projection should inject only the mode routing anchor per turn (Claude-parity)"
 fi
 if printf '{"context":{"cwd":"%s","session_id":"permissionsid"}}\n' "$TMP/flowproj" \
   | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/permissionrequest-lifecycle.py" >/tmp/codex_permission_hook.out 2>/tmp/codex_permission_hook.err \
