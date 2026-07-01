@@ -195,8 +195,9 @@ for line in sys.stdin:
         if not related(jcwd): continue
         if os.path.basename(args.split(None, 1)[0]) in ("zsh", "bash", "sh", "dash"): continue  # 런처 셸 wrapper 제외 — 실 claude 프로세스만
         key = ms[-1]
-        modes = re.findall(r"--mode (\w+)", args); md = modes[-1] if modes else None
-        qas = re.findall(r"--qa (\w+)", args); qv = qas[-1] if qas else None
+        # 유효값만 매칭 + 첫 매치(실 플래그는 quoted 프롬프트 텍스트보다 앞) — \w 가 한글까지 잡아 프롬프트 안 "--qa 없으면" 을 qa 로 오인하던 버그 방지
+        modes = re.findall(r"--mode ([a-z][a-z-]*)", args); md = modes[0] if modes else None
+        qas = re.findall(r"--qa (quick|light|standard|thorough|adversarial)\b", args); qv = qas[0] if qas else None
         # 제목 = worktree/디렉토리 슬러그 우선 (프롬프트 어절 추출은 한국어 프롬프트에서 노이즈 — 2026-06-11)
         slug = os.path.basename(jcwd.rstrip("/")) if jcwd else ""
         desc = slug if (slug and slug != os.path.basename(CWD.rstrip("/"))) else ""
