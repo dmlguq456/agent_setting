@@ -34,7 +34,7 @@ def etime_to_min(et):
 
 
 def fmt_min(m):
-    """minutes → '5h20m' / '20m'; None/invalid → '—'."""
+    """minutes → '20m' / '5h20m' / '19d4h' (rolls over to days past 24h); None/invalid → '—'."""
     if m is None:
         return "—"
     try:
@@ -43,7 +43,13 @@ def fmt_min(m):
         return "—"
     if m < 0:
         return "—"
-    return f"{m // 60}h{m % 60:02d}m" if m >= 60 else f"{m}m"
+    if m < 60:
+        return f"{m}m"
+    h, mm = divmod(m, 60)
+    if h < 24:
+        return f"{h}h{mm:02d}m"
+    d, hh = divmod(h, 24)
+    return f"{d}d{hh}h"
 
 
 def dash(v, fmt=None):

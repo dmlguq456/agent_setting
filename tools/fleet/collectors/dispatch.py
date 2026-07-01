@@ -322,6 +322,14 @@ def _scan_jobs_log(path, seen_slugs):
             rows = f.read().splitlines()
     except OSError:
         return jobs, 0
+    # Reconcile each job to its LATEST row before deciding live-ness. Identity key = slug,
+    # NOT the worktree path: a terminal (done/killed/cancelled) row drops the worktree to '-'
+    # after harvest, so a path key would never match the earlier running row and the job would
+    # zombie forever at its running timestamp. A slug appears running→done chronologically
+    # (append order), so last-occurrence wins. (Bug: an `open/running`-first filter let a later
+    # `done` never cancel the running row — 290h phantom jobs. User report 2026-07-01.)
+    latest = {}
+    order = []
     for line in rows:
         if not line.strip():
             continue
@@ -329,9 +337,14 @@ def _scan_jobs_log(path, seen_slugs):
         if len(fields) != 6:
             malformed += 1
             continue
-        ts, status, repo, worktree, slug, pipe = fields
+        slug = fields[4]
+        if slug not in latest:
+            order.append(slug)
+        latest[slug] = fields                 # last occurrence = newest status for this slug
+    for slug in order:
+        ts, status, repo, worktree, _slug, pipe = latest[slug]
         if status not in ("open", "running"):
-            continue
+            continue                          # newest state is terminal (done/killed/…) → not live
         if slug in seen_slugs:
             continue                          # already shown as a live process job
         seen_slugs.add(slug)

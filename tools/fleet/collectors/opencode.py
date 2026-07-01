@@ -55,7 +55,11 @@ def enrich(sess):
         sess.slug = slug
     if model_j:
         try:
-            sess.model = (json.loads(model_j) or {}).get("id") or model_j
+            mj = json.loads(model_j) or {}
+            sess.model = mj.get("id") or model_j
+            # opencode reasoning effort = model JSON 'variant' (e.g. high/low) — user 2026-07-01
+            if mj.get("variant"):
+                sess.effort = mj.get("variant")
         except Exception:
             sess.model = model_j
     if isinstance(cost, (int, float)):
@@ -64,4 +68,5 @@ def enrich(sess):
     sess.tokens = toks or None
     if isinstance(tupd, (int, float)):
         sess.mtime = tupd / 1000.0                  # ms → s
-    # effort / rl_5h / rl_7d / ctx_pct: opencode exposes none → left None ('—')
+    # rl_5h / rl_7d / ctx_pct: opencode has no rate-limit column and no context-window field
+    # (only cumulative token counts) → left None ('—'). effort now sourced from model.variant above.
