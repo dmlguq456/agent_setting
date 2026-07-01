@@ -273,10 +273,12 @@ def _project_gate(cwd, sid=None):
 #     gauge slot    context % bar      stage breadcrumb (plan › exec › test)  ← "how far along"
 # main↔dispatch weight is carried by the badge (reverse vs dim font), so the identity columns can
 # stay aligned for comparison. Job flow never sits under branch/gate.
-_HW = 11                      # harness field — WIDE gap to the name (user: "harness↔session 간격 더 띄워 통일")
+_HW = 11                      # session harness field — WIDE gap to the name (user widened it)
 _BRANCH_COL = 43              # absolute col where branch starts (both row types)
-_NW_S = _BRANCH_COL - 15      # session name field  (prefix 4 + harness 11 = 15)
-_DLEFT = _BRANCH_COL - 4      # dispatch left cluster (prefix 4 = UNIFIED with sessions; tree in the margin)
+_NAME_COL = 15                # absolute col where the NAME starts — SHARED by both row types so
+                              # everything from the name onward aligns (session: prefix 4 + harness
+                              # 11; dispatch: prefix 6 + harness 9 — deeper indent, narrower harness)
+_NW_S = _BRANCH_COL - _NAME_COL   # name field (both row types): col 15 → branch 43 = 28
 _BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
 _EFF_W = 6                    # effort sub-column (session effort: low..max)
 _MW = 16 + _EFF_W             # model + effort field: model 16 + effort 6
@@ -296,7 +298,7 @@ _PIPE_STAGES = {
 # plain-text column labels (icons removed per user — "위에 아이콘들은 전부 빼자")
 _COL_HEAD = ("    " + "harness".ljust(_HW) + "session".ljust(_NW_S)
              + "branch".ljust(_BRW) + "model".ljust(_MW - _EFF_W)
-             + "effort".ljust(_EFF_W) + " context / stage")
+             + "effort".ljust(_EFF_W) + "    context / stage")
 
 
 def _gate_word(gate, pipe):
@@ -398,11 +400,11 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
     segs += _me_segs(s.harness, _clean_model(dash(s.model)), s.effort,
                      _eff_key(s.harness, s.effort), _MW)
 
-    # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); widened so the context reading is legible
+    # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate from effort
     if s.ctx_pct is not None and not dim_tel:
-        segs += [("  ", None)] + _gauge_segs(s.ctx_pct, _CTX_W) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
+        segs += [("    ", None)] + _gauge_segs(s.ctx_pct, _CTX_W) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
     else:
-        segs += [("  ", None), ("─" * _CTX_W, "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
+        segs += [("    ", None), ("─" * _CTX_W, "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
     if s.app_server:
         segs.append(("  app-server", "dim"))
     if s.orphan:
@@ -453,12 +455,13 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
 
-    # prefix 4 = UNIFIED with sessions (harness/name in the SAME columns) — the row type reads from
-    # the TREE connector (├─●/└─●) sitting in the LEFT MARGIN + DIM harness/name (vs bright session).
+    # DIFFERENTIAL indent (harness 2 cols deeper than a session) via a tree connector that branches
+    # off the parent's dot column; the harness field is narrowed by 2 so the NAME still lands at the
+    # shared _NAME_COL — i.e. everything from the name onward aligns with sessions. DIM = spawned.
     conn = "└─" if is_last else "├─"
-    segs = [(conn, "dim"), (gch, gkey), (" ", None),
-            (_pad(hn, _HW), _BADGE_KEY.get(j.harness, "dim"))]
-    avail = _DLEFT - _HW
+    segs = [("  ", None), (conn, "dim"), (gch, gkey), (" ", None),
+            (_pad(hn, _HW - 2), _BADGE_KEY.get(j.harness, "dim"))]
+    avail = _NW_S
     tag_segs, tagw = _mq_tag(j.mode, qa_text, qa_key)
     otag = "  (orphan)" if orphan else ""
     nm = name[: max(3, avail - tagw - len(otag) - 1)]   # -1 → always ≥1 gap before branch
@@ -475,7 +478,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     segs += _me_segs(harness, _clean_model(dash(j.model or parent_model)), None, None, _MW)
 
     # gauge slot → stage breadcrumb (process viz): per-stage colors, current bold + blinks if working.
-    segs.append(("  ", None))
+    segs.append(("    ", None))                       # 4-col gap (reads separate from effort/qa)
     segs += _stage_segs(key, stage, working=(j.liveness == "working"))
 
     segs.append((_RFLUSH, None))
