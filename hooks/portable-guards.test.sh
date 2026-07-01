@@ -719,6 +719,23 @@ if AGENT_MODEL_FAST=fast-model AGENT_REASONING_FAST=low "$CODEX" role fast revie
 else
   bad "codex role wrapper should map fast portable role"
 fi
+if "$CODEX" role planning >/tmp/codex_role_profile.out 2>/tmp/codex_role_profile.err \
+  && grep -q '^family=role-profile$' /tmp/codex_role_profile.out \
+  && grep -q '^role_profile=plan-team$' /tmp/codex_role_profile.out \
+  && grep -q '^pipeline_stage=planning$' /tmp/codex_role_profile.out \
+  && grep -q '^native_agent_path=adapters/codex/agents/plan-team.toml$' /tmp/codex_role_profile.out \
+  && grep -q '^concrete_role_check=preflight.sh role deep maker$' /tmp/codex_role_profile.out \
+  && "$CODEX" role implementation >/tmp/codex_role_impl.out 2>/tmp/codex_role_impl.err \
+  && grep -q '^role_profile=dev-team$' /tmp/codex_role_impl.out \
+  && grep -q '^concrete_role_check=preflight.sh role fast implementer$' /tmp/codex_role_impl.out \
+  && "$CODEX" role verification >/tmp/codex_role_verify.out 2>/tmp/codex_role_verify.err \
+  && grep -q '^role_profile=qa-team$' /tmp/codex_role_verify.out \
+  && "$CODEX" role report >/tmp/codex_role_report.out 2>/tmp/codex_role_report.err \
+  && grep -q '^role_profile=editorial-team$' /tmp/codex_role_report.out; then
+  ok "codex role wrapper maps pipeline stages to native role profiles"
+else
+  bad "codex role wrapper should map pipeline stages to native role profiles"
+fi
 if "$CODEX" role variable reviewer >/tmp/role_set.out 2>/tmp/role_set.err \
   && grep -q '^role=variable reviewer$' /tmp/role_set.out \
   && grep -q '^family=role-set$' /tmp/role_set.out \

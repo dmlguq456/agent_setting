@@ -646,6 +646,23 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'source=roles/README.md' adapters/codex/bin/role-map.sh; then
     fail_msg "adapters/codex/bin/role-map.sh must report roles/README.md as the portable source"
   fi
+  if ! adapters/codex/bin/role-map.sh planning >/tmp/codex-role-profile.out 2>/tmp/codex-role-profile.err \
+    || ! grep -Fq 'family=role-profile' /tmp/codex-role-profile.out \
+    || ! grep -Fq 'role_profile=plan-team' /tmp/codex-role-profile.out \
+    || ! grep -Fq 'pipeline_stage=planning' /tmp/codex-role-profile.out \
+    || ! grep -Fq 'native_agent_path=adapters/codex/agents/plan-team.toml' /tmp/codex-role-profile.out \
+    || ! grep -Fq 'concrete_role_check=preflight.sh role deep maker' /tmp/codex-role-profile.out \
+    || ! adapters/codex/bin/role-map.sh implementation >/tmp/codex-role-implementation.out 2>/tmp/codex-role-implementation.err \
+    || ! grep -Fq 'role_profile=dev-team' /tmp/codex-role-implementation.out \
+    || ! adapters/codex/bin/role-map.sh verification >/tmp/codex-role-verification.out 2>/tmp/codex-role-verification.err \
+    || ! grep -Fq 'role_profile=qa-team' /tmp/codex-role-verification.out \
+    || ! adapters/codex/bin/role-map.sh report >/tmp/codex-role-report.out 2>/tmp/codex-role-report.err \
+    || ! grep -Fq 'role_profile=editorial-team' /tmp/codex-role-report.out \
+    || ! grep -Fq 'role <portable-role|role-profile|pipeline-stage>' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'role <portable-role|role-profile|pipeline-stage>' adapters/codex/README.md \
+    || ! grep -Fq 'role <portable-role|role-profile|pipeline-stage>' adapters/codex/AGENTS.md; then
+    fail_msg "adapters/codex/bin/role-map.sh must map pipeline role aliases to Codex-native role profiles"
+  fi
   if ! adapters/codex/bin/role-map.sh variable reviewer >/tmp/codex-role-set.out 2>/tmp/codex-role-set.err \
     || ! grep -Fq 'family=role-set' /tmp/codex-role-set.out \
     || ! grep -Fq 'role_set=fast reviewer,deep reviewer,external adversary' /tmp/codex-role-set.out; then

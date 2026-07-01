@@ -3,9 +3,9 @@ set -eu
 
 usage() {
   cat <<'EOF'
-usage: role-map.sh <portable-role>
+usage: role-map.sh <portable-role|role-profile|pipeline-stage>
 
-Prints a Codex adapter mapping for a portable model role.
+Prints a Codex adapter mapping for a portable model role or role profile.
 
 Config knobs:
   AGENT_MODEL_FAST / AGENT_REASONING_FAST
@@ -21,6 +21,77 @@ EOF
 
 raw=$*
 role=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr '_-' '  ' | awk '{$1=$1; print}')
+
+profile=""
+pipeline_stage=""
+profile_portable_role=""
+profile_role_input=""
+case "$role" in
+  "planning"|"plan team")
+    profile=plan-team
+    pipeline_stage=planning
+    profile_portable_role="deep maker"
+    profile_role_input="deep maker"
+    ;;
+  "implementation"|"dev team")
+    profile=dev-team
+    pipeline_stage=implementation
+    profile_portable_role="fast implementer by default"
+    profile_role_input="fast implementer"
+    ;;
+  "verification"|"qa team")
+    profile=qa-team
+    pipeline_stage=verification
+    profile_portable_role="variable reviewer"
+    profile_role_input="fast reviewer"
+    ;;
+  "report"|"reporting"|"editorial team")
+    profile=editorial-team
+    pipeline_stage=report
+    profile_portable_role="deep maker / fast reviewer by mode"
+    profile_role_input="fast reviewer"
+    ;;
+  "research team")
+    profile=research-team
+    profile_portable_role="variable research reviewer"
+    profile_role_input="deep reviewer"
+    ;;
+  "material team")
+    profile=material-team
+    profile_portable_role="deep maker plus fast tool worker"
+    profile_role_input="fast tool worker"
+    ;;
+  "design team")
+    profile=design-team
+    profile_portable_role="deep maker plus verifier"
+    profile_role_input="deep maker"
+    ;;
+  "external adversary"|"external adversary team")
+    if [ "$role" = "external adversary team" ]; then
+      profile=external-adversary
+      profile_portable_role="external adversary plus orchestrator"
+      profile_role_input="external adversary"
+    fi
+    ;;
+esac
+
+if [ -n "$profile" ]; then
+  printf 'role=%s\n' "$role"
+  printf 'adapter=codex\n'
+  printf 'source=roles/README.md\n'
+  printf 'family=role-profile\n'
+  printf 'role_profile=%s\n' "$profile"
+  [ -z "$pipeline_stage" ] || printf 'pipeline_stage=%s\n' "$pipeline_stage"
+  printf 'native_agent_path=adapters/codex/agents/%s.toml\n' "$profile"
+  printf 'portable_model_role=%s\n' "$profile_portable_role"
+  printf 'codex_role_map_input=%s\n' "$profile_role_input"
+  printf 'concrete_role_check=preflight.sh role %s\n' "$profile_role_input"
+  printf 'model=role-profile\n'
+  printf 'reasoning=select-via-codex-agent\n'
+  printf 'available=1\n'
+  printf 'status=role-profile\n'
+  exit 0
+fi
 
 family=fast
 canonical=$role

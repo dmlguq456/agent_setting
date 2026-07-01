@@ -51,7 +51,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Command-like capability entrypoints use these native Skills/plugin surfaces and are verified with Codex discoverability (`codex debug prompt-input`) |
 | native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, `SessionEnd`/`Stop` memory sync/distill, `UserPromptSubmit` prompt signals and turn nudges, `PermissionRequest` harness status snapshots, `PreToolUse` write guards, `PostToolUse` spec read markers, and `PostToolUse` design HTML checks; explicit preflight remains fallback |
 | shell I/O hook boundary | Structured write tools (`Write`, `Edit`, `MultiEdit`, `apply_patch`, `functions.apply_patch`) and structured `Read` are guarded. Shell/Bash/`functions.exec_command` gets targeted detection for obvious write redirects, common mutation commands (`tee`, `touch`, `cp`, `mv`, `rm`, `install`, `rsync`), `dd of=...`, `sed -i`, direct `spec/prd.md` reads, and design HTML save paths; target-ambiguous shell I/O still requires explicit `preflight.sh write`, `preflight.sh read`, or `preflight.sh design` before touching guarded paths |
-| role profile | Use `roles/README.md` for meaning; Codex custom agents are materialized under `adapters/codex/agents/*.toml` and still call `adapters/codex/bin/preflight.sh role <portable-role>` for concrete model/reasoning mapping |
+| role profile | Use `roles/README.md` for meaning; Codex custom agents are materialized under `adapters/codex/agents/*.toml`; `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` resolves both concrete model roles and pipeline profiles such as `planning`, `implementation`, `verification`, and `report` |
 | role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; use the reported `native_mode_path` under `adapters/codex/modes/`; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no Codex-native runtime surface exists |
 | native mode surface | Mode guides are generated under `adapters/codex/modes/` from `roles/modes/`; design modes additionally require the Codex visual-harness tool contract before claiming rendered visual completion |
 | adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
@@ -93,7 +93,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | loop guidance | `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill>` reports whether a loop has a Codex manual contract, unsupported executable projection, or missing native implementation; `note` remains an external scheduler loop while the related `autopilot-note` capability is available on demand through Codex-native Skill/plugin projections |
 | capability mapping | `adapters/codex/bin/preflight.sh capability-info <capability>` reports Codex's native Skill/plugin realization and instruction-only or tool-contract status; root Skill compatibility references are not projected and report `compat_reference=not-projected` |
 | autopilot-code pipeline | `capability-info autopilot-code` and `route autopilot-code` additionally report `pipeline_contract=code-plan>code-execute>code-test>code-report`, optional `code-refine`, required plan artifacts, role mapping, and the dispatch fallback |
-| model role mapping | `adapters/codex/bin/preflight.sh role <portable-role>` resolves portable model roles through Codex adapter environment variables |
+| model role mapping | `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` resolves portable model roles through Codex adapter environment variables and maps pipeline/profile aliases to Codex-native custom agents |
 | mode mapping | `adapters/codex/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for Codex; tool-contract and unsupported adapter-coupled modes include machine-readable `tool_contract`, optional `tool_contract_check`, `runtime_surface`, and `fallback` fields |
 | QA policy mapping | `adapters/codex/bin/preflight.sh qa-policy <level> [code|research|doc|general]` maps portable QA levels from `core/CONVENTIONS.md` to Codex reviewer roles, external-adversary requirements, max rounds, and inline fallback reporting |
 | memory distill delta | Codex session transcript extraction is available through `adapters/codex/bin/preflight.sh distill-delta <session-id>` |
@@ -196,7 +196,7 @@ Expose them to Codex by symlinking each generated `*.toml` file into
 `codex_setting/codex-agents` as the projection source. The TOML files define
 the required Codex custom agent fields (`name`, `description`, and
 `developer_instructions`) and defer concrete model or reasoning selection to
-`adapters/codex/bin/preflight.sh role <portable-role>`. The generated
+`adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>`. The generated
 instructions also encode role-specific runtime boundaries such as QA
 read-only behavior, depth-one delegation, write preflight requirements, and
 external-adversary independence. Mixed or variable role profiles include
@@ -318,10 +318,13 @@ Codex 쪽 wrapper 는 `AGENT_MODEL_FAST`, `AGENT_MODEL_DEEP`,
 optional override 다. 공통 skill 은 concrete model name 을 요구하지 않고
 role 의미만 요구한다.
 
-`adapters/codex/bin/preflight.sh role <portable-role>` is the executable mapping
+`adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` is the executable mapping
 surface. When no concrete model is configured it reports `codex-default` and
 `runtime-default`; for `external adversary`, it reports unavailable unless
-`AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured.
+`AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured. Pipeline stages
+such as `planning`, `implementation`, `verification`, and `report` map to the
+Codex-native role profiles `plan-team`, `dev-team`, `qa-team`, and
+`editorial-team`.
 
 ## Compatibility
 

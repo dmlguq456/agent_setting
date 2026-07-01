@@ -58,7 +58,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh visual-harness [file.html]
        preflight.sh distill-delta <session-id>
        preflight.sh distill-propose <session-id> [cwd]
-       preflight.sh role <portable-role>
+       preflight.sh role <portable-role|role-profile|pipeline-stage>
        preflight.sh capability-info <capability>
        preflight.sh mode-info <family/mode>
        preflight.sh runtime-projection [--require-hook-trust]

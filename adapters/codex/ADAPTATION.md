@@ -156,7 +156,7 @@ or project `.codex/agents/`. This adapter materializes those role profiles as
 
 Each file defines Codex's required custom agent fields (`name`, `description`,
 and `developer_instructions`) while leaving concrete model and reasoning
-choices to `adapters/codex/bin/preflight.sh role <portable-role>` and the
+choices to `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` and the
 runtime's parent session/config inheritance. The generated instructions also
 encode role-specific runtime boundaries such as QA read-only behavior,
 depth-one delegation, write preflight requirements, and external-adversary
@@ -317,7 +317,7 @@ Harness-specific status signals still need Codex-native realization:
 | loop guidance | Run `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill>` before following loop guides; Codex reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts. The `note` loop is an external scheduler/worklog-board contract; use the related `autopilot-note` Skill/plugin projection only for on-demand note routing |
 | memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`. The user-facing `distill-propose` stays an explicit opt-in preview (reports `status=tool-contract`, exits 69 until `CODEX_DISTILL_ENABLE=1`). Automatic session-end and turn-nudge distillation is enabled by default: the `codex exec --sandbox read-only` worker is verified tool-free (see Distillation Boundary) and applies through `apply-distill-actions.py`; opt out with `CODEX_DISTILL_ENABLE=0` |
 | worklog state signal | Run `adapters/codex/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before Codex updates notes or diagnoses board state |
-| role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role>` to resolve Codex model/reasoning-effort settings |
+| role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` to resolve Codex model/reasoning-effort settings or pipeline profile aliases to native custom agents |
 | permission mapping | Run `adapters/codex/bin/preflight.sh permissions` to inspect the Codex approval/sandbox contract and confirm Claude `allowedTools` is unsupported |
 | MCP mapping | Run `adapters/codex/bin/preflight.sh mcp --check` to inspect Codex's native MCP CLI/config surface; do not copy Claude `settings.json` MCP registrations or project `tools/design-mcp` wholesale |
 | headless dispatch | Run `adapters/codex/bin/preflight.sh headless --check <worktree>` before Codex `exec` dispatch; it checks the worktree, command availability, and installed Codex runtime projection (`agent-harness`, bootstrap, hooks, native Skills, native Agents, and native Modes) without launching. Add `--require-hook-trust` when dispatch must prove complete Codex hook trust. Use `adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <quick|light|standard|thorough|adversarial>` to build the Codex headless command and append `.dispatch/jobs.log` before launch. The wrapper validates `capability-info`, `mode-info`, and the portable QA level before writing `.dispatch/jobs.log`, then writes a Codex harness prompt that loads `AGENTS.md`, runs `prompt-signal`/`mode`, checks capability/mode realization, applies spec-read/capability/write gates, and bans Claude-native runtime files; `--start` reruns the same projection check before launching, and strict hook trust failure occurs before registry writes. While waiting on dispatched work, run `adapters/codex/bin/preflight.sh liveness [jobs.log]` to match open jobs to Codex session JSONL files by `cwd` and transcript mtime. After main-session harvest, run `adapters/codex/bin/preflight.sh harvest --slug <slug> --mark-done` to mark selected registry rows done; merge and worktree cleanup stay outside the adapter wrapper |
@@ -330,7 +330,7 @@ Harness-specific status signals still need Codex-native realization:
 ## Model Mapping
 
 Codex exposes concrete choices through environment or config and resolves them
-with `adapters/codex/bin/preflight.sh role <portable-role>`:
+with `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>`:
 
 ```text
 AGENT_MODEL_FAST

@@ -16,6 +16,7 @@ This file maps the shared agent harness onto Codex-style sessions. It is an adap
 - Treat `AGENT_HOME` as the installed harness root.
 - Use `.agent_reports/` for new artifacts. Read legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not.
 - Use portable model roles from `core/CONVENTIONS.md`; do not treat Claude model names such as `sonnet` or `opus` as portable semantics.
+- Use `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` to resolve both model roles and pipeline role profiles such as `planning`, `implementation`, `verification`, and `report`.
 - Before treating a capability as supported, run `adapters/codex/bin/preflight.sh capability-info <capability>` and follow the reported Codex realization.
 - Treat Codex-native skills under `adapters/codex/skills/` and the installable plugin under `adapters/codex/plugins/agent-harness-codex/` as generated adapter output from `capabilities/`; do not load Claude Skill files as native Codex skills.
 - Treat Codex custom agents under `adapters/codex/agents/*.toml` as generated adapter output from `roles/`; do not load Claude Agent files as native Codex agents.
