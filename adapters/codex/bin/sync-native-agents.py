@@ -109,7 +109,7 @@ ROLE_BOUNDARIES = {
     ],
     "dev-team": [
         "Before every source or artifact edit, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.",
-        "For shell-based file I/O, use explicit preflight checks because Codex cannot attach the same shell read/write hooks that Claude Code used.",
+        "Shell/Bash file I/O has targeted hook coverage for obvious guarded reads and writes; use explicit `preflight.sh write`, `preflight.sh read`, or `preflight.sh design` for target-ambiguous shell I/O.",
     ],
     "qa-team": [
         "Read-only role: do not edit, write, or mutate source files or artifacts. Report required changes back to the main orchestrator or dev role.",

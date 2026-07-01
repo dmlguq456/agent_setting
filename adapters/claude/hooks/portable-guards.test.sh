@@ -1099,7 +1099,7 @@ if grep -q 'Read-only role: do not edit, write, or mutate source files or artifa
   && grep -q 'preflight.sh qa-policy <level> <track>' "$TMP/codex_agent_home/agents/qa-team.toml" \
   && grep -q 'preflight.sh mode-info qa/test' "$TMP/codex_agent_home/agents/qa-team.toml" \
   && grep -q 'report unavailable instead of simulating independence inline' "$TMP/codex_agent_home/agents/external-adversary.toml" \
-  && grep -q 'Codex cannot attach the same shell read/write hooks' "$TMP/codex_agent_home/agents/dev-team.toml"; then
+  && grep -q 'targeted hook coverage for obvious guarded reads and writes' "$TMP/codex_agent_home/agents/dev-team.toml"; then
   ok "codex native agent projection enforces role-specific runtime boundaries"
 else
   bad "codex native agent projection should encode role-specific runtime boundaries"

@@ -23,7 +23,7 @@ Runtime boundaries:
 - Do not claim independent QA, delegation, or external review unless a separate Codex agent, headless worker, or external process actually ran.
 - Use Codex-native tools and preflight wrappers only; do not use Claude-native Agent, Skill, slash-command, or hook files as runtime input.
 - Before every source or artifact edit, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.
-- For shell-based file I/O, use explicit preflight checks because Codex cannot attach the same shell read/write hooks that Claude Code used.
+- Shell/Bash file I/O has targeted hook coverage for obvious guarded reads and writes; use explicit `preflight.sh write`, `preflight.sh read`, or `preflight.sh design` for target-ambiguous shell I/O.
 
 Do not use legacy compatibility Agent files or non-Codex Agent files as
 Codex-native source. Those files are compatibility/reference surfaces only.

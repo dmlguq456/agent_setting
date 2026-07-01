@@ -1345,7 +1345,7 @@ PY
   fi
   dev_agent="adapters/codex/agents/dev-team.toml"
   if ! grep -Fq "Before every source or artifact edit, run \`adapters/codex/bin/preflight.sh write <file> [session-id]\`" "$dev_agent" \
-    || ! grep -Fq "Codex cannot attach the same shell read/write hooks" "$dev_agent"; then
+    || ! grep -Fq "targeted hook coverage for obvious guarded reads and writes" "$dev_agent"; then
     fail_msg "$dev_agent must encode Codex write preflight and shell hook boundary"
   fi
   if ! grep -Fq 'Codex role-map inputs: `fast reviewer, deep reviewer, external adversary`' "$qa_agent" \
