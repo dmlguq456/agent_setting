@@ -88,12 +88,16 @@ def scan(harness_filter=None):
         # call (see _ps_lines), so args are never truncated and the token stays visible
         # even for long command lines.
         app_server = comm == "codex" and "app-server" in args
+        # headless dispatch child marker (claude only) — env CLAUDE_CODE_CHILD_SESSION=1.
+        # These are surfaced as dispatch rows under their parent, not as top-level sessions.
+        is_child = comm == "claude" and read_environ(pid).get("CLAUDE_CODE_CHILD_SESSION") == "1"
         sessions.append(Session(
             harness=comm,
             pid=pid,
             cwd=cwd,
             orphan=orphan,
             app_server=app_server,
+            is_child=is_child,
             elapsed_min=etime_to_min(etime),
             slug=os.path.basename(cwd.rstrip("/")) if cwd else None,
         ))

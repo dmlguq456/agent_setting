@@ -110,6 +110,7 @@ class Session:
     cwd: str = ""
     orphan: bool = False               # /proc/<pid>/cwd had ' (deleted)' (worktree gone)
     app_server: bool = False           # codex app-server companion (procscan-detected — see collectors/procscan.py)
+    is_child: bool = False             # headless dispatch child (CLAUDE_CODE_CHILD_SESSION=1) — shown as a dispatch row under its parent, not as a top-level session
     elapsed_min: int = 0               # ps etime
     # --- enrichment (None = harness doesn't expose it → render '—') ---
     session_id: Optional[str] = None

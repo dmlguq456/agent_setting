@@ -64,6 +64,9 @@ def _init_colors():
         "badge_opencode": curses.COLOR_GREEN,
         "head": curses.COLOR_CYAN,
         "pct_g": curses.COLOR_GREEN, "pct_y": curses.COLOR_YELLOW, "pct_r": curses.COLOR_RED,
+        # per-model colors so different models are distinguishable at a glance (user 2026-07-01)
+        "m_opus": curses.COLOR_MAGENTA, "m_sonnet": curses.COLOR_CYAN, "m_haiku": curses.COLOR_GREEN,
+        "m_fable": curses.COLOR_YELLOW, "m_gpt": curses.COLOR_BLUE, "m_glm": curses.COLOR_RED,
     }
     n = 1
     for key, fg in spec.items():
@@ -78,9 +81,9 @@ def _init_colors():
     for k in ("badge_claude", "badge_codex", "badge_opencode"):
         _COLOR[k] = _COLOR.get(k, 0) | curses.A_REVERSE
     # percentages read at a glance — bold so ctx%/rate% stand out (user: '% 표기가 잘 안보인다')
-    for k in ("pct_g", "pct_y", "pct_r"):
+    for k in ("pct_g", "pct_y", "pct_r", "m_opus", "m_sonnet", "m_haiku", "m_fable", "m_gpt", "m_glm"):
         _COLOR[k] = _COLOR.get(k, 0) | curses.A_BOLD
-    _COLOR["model"] = curses.A_BOLD              # model name prominent (user: 모델명 더 눈에 띄게)
+    _COLOR["model"] = curses.A_BOLD              # default/unknown model name — bold (user: 모델명 더 눈에 띄게)
     _COLOR["idle"] = curses.A_DIM
     _COLOR["dim"] = curses.A_DIM
     _COLOR["unknown"] = curses.A_DIM
@@ -101,6 +104,21 @@ def _pct_key(v):
     return "pct_r" if v >= 80 else ("pct_y" if v >= 50 else "pct_g")
 
 
+_MODEL_COLORS = (("opus", "m_opus"), ("sonnet", "m_sonnet"), ("haiku", "m_haiku"),
+                 ("fable", "m_fable"), ("gpt", "m_gpt"), ("glm", "m_glm"))
+
+
+def _model_key(name):
+    """Color key by model family substring — different models render in different colors."""
+    if not name:
+        return "model"
+    low = name.lower()
+    for sub, key in _MODEL_COLORS:
+        if sub in low:
+            return key
+    return "model"
+
+
 # ---------- row builders (return a single segment-line: [(text, color_key), ...]) ----------
 def _session_row(s, narrow, is_parent=False):
     """Single segment-line per session (PRD §4 v2 — the wide 3-line panel is retired).
@@ -119,12 +137,14 @@ def _session_row(s, narrow, is_parent=False):
     dim_telemetry = live in ("stale", "dead") or s.app_server
     tkey = "dim" if dim_telemetry else None
 
-    segs = [("  ", None), (badge, bkey)]
+    # icon BEFORE badge — consistent slot with the dispatch row's leading 🚀 (user 2026-07-01)
+    segs = [("  ", None)]
+    if is_parent:
+        segs.append((_ICON_PARENT + " ", None))
+    segs.append((badge, bkey))
     if s.app_server:
         segs.append((" ⚙app-server", "dim"))
     segs.append((" " + slug, None))
-    if is_parent:
-        segs.append((" " + _ICON_PARENT, None))
 
     model = dash(s.model)
     ctx = dash(s.ctx_pct, lambda v: "%d%%" % v)
@@ -141,7 +161,7 @@ def _session_row(s, narrow, is_parent=False):
 
     if show_model:
         segs.append(("  ✨", "dim"))
-        segs.append((model, "dim" if dim_telemetry else "model"))     # bold model name when live
+        segs.append((model, "dim" if dim_telemetry else _model_key(s.model)))   # per-model color when live
         if s.effort and show_effort:
             segs.append((" ·" + s.effort, "dim" if dim_telemetry else _EFFORT_KEY.get(s.effort, "dim")))
     segs.append(("  🧠", "dim"))
@@ -183,8 +203,8 @@ def _dispatch_row(j, orphan=False, parent_model=None):
     el = fmt_min(j.elapsed_min)
     lkey = _live_key(j.liveness)
     segs = [("    └▸" + _ICON_CHILD + " ", "dim")]
-    if j.harness:                                    # cross-harness dispatch → show runtime badge
-        segs.append((_BADGE_TEXT.get(j.harness, "[?]"), _BADGE_KEY.get(j.harness, "head")))
+    if j.harness:                                    # dispatch = headless → weaker: badge dim (no reverse-video)
+        segs.append((_BADGE_TEXT.get(j.harness, "[?]"), "dim"))
         segs.append((" ", None))
     segs += [(key, "head"), (stage, "done")]
     if j.mode or qa_text:
@@ -198,7 +218,7 @@ def _dispatch_row(j, orphan=False, parent_model=None):
         segs.append((")", "dim"))
     dmodel = j.model or parent_model                 # own model if resolvable, else parent's (same config for now — per-dispatch later)
     if dmodel:
-        segs.append(("  ✨", "dim")); segs.append((dmodel, "model"))
+        segs.append(("  ✨", "dim")); segs.append((dmodel, _model_key(dmodel)))
     segs.append(("  ⏳" + el, "dim"))
     segs.append(("  " + j.liveness, lkey))
     segs.append(("  " + (j.slug or ""), None))
@@ -257,6 +277,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
     Same contract consumed by BOTH `render_once` (plain, full output) and `_draw` (viewport
     slices this same list) — `_OFFSET` must never be read here (see module docstring).
     """
+    # headless dispatch children are shown as dispatch rows under their parent — never as
+    # top-level sessions (the same headless process would otherwise double-show as session+job).
+    sessions = [s for s in sessions if not s.is_child]
     groups = {}
     for s in sessions:
         gk = _group_key_session(s)
