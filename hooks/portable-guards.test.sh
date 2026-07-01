@@ -1208,6 +1208,16 @@ if printf '{"tool_name":"Bash","tool_input":{"command":"printf x | tee %s"},"ses
 else
   bad "codex native hook projection should block common shell mutation targets"
 fi
+if printf '{"tool_name":"Bash","tool_input":{"command":"cp %s %s"},"session_id":"shellcpsourcesid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/SOURCE.md" "$TMP/repo/copied-source.md" "$TMP/runtime" \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_cp_source_hook.out 2>/tmp/codex_shell_cp_source_hook.err \
+  && [ ! -s /tmp/codex_shell_cp_source_hook.out ] \
+  && printf '{"tool_name":"Bash","tool_input":{"command":"cp %s %s"},"session_id":"shellcpdestsid","cwd":"%s"}\n' "$TMP/repo/source.md" "$TMP/runtime/projects/abc/memory/COPIED.md" "$TMP/runtime" \
+    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_cp_dest_hook.out 2>/tmp/codex_shell_cp_dest_hook.err \
+  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "memory" in d["reason"].lower() or "기억" in d["reason"]' /tmp/codex_shell_cp_dest_hook.out; then
+  ok "codex native hook projection treats cp destination as the shell write target"
+else
+  bad "codex native hook projection should treat cp destination as the shell write target"
+fi
 if printf '{"tool":"Write","input":{"path":"%s"},"session_id":"nestedpayloadsid","cwd":"%s"}\n' "$TMP/repo/nested-f" "$TMP/repo" \
   | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook_nested.out 2>/tmp/codex_hook_nested.err \
   && [ ! -s /tmp/codex_hook_nested.out ]; then

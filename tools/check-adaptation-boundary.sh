@@ -1535,7 +1535,10 @@ check_codex_native_hook_projection() {
   fi
   if ! grep -Fq 'mutation_commands = {"tee", "touch", "cp", "mv", "rm"}' "$pre_bridge" \
     || ! grep -Fq 'def shell_write_files' "$pre_bridge" \
-    || ! grep -Fq 'codex native hook projection blocks common shell mutation targets' hooks/portable-guards.test.sh; then
+    || ! grep -Fq 'if command_name == "cp"' "$pre_bridge" \
+    || ! grep -Fq 'add_file(operands[-1])' "$pre_bridge" \
+    || ! grep -Fq 'codex native hook projection blocks common shell mutation targets' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'codex native hook projection treats cp destination as the shell write target' hooks/portable-guards.test.sh; then
     fail_msg "$pre_bridge must route common shell mutation command targets through the write preflight"
   fi
   if ! grep -Fq '"read"' "$read_bridge"; then
