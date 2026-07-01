@@ -1,0 +1,13 @@
+project_name: agent-fleet-dashboard
+component: agent-fleet-dashboard        # 별도 컴포넌트 (repo spec/prd.md = Unified Memory System, 무관)
+created: 2026-07-01
+mode: [cli]
+inputs:
+  - research/agent-fleet-dashboard/00_prior_art.md
+  - research/agent-fleet-dashboard/01_tap_mechanics.md
+phases:
+  spec: done            # PRD v1 완성
+  scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
+  design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
+  dev: pending          # autopilot-code 가 누적
+last_updated: 2026-07-01
