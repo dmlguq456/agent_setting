@@ -273,10 +273,10 @@ def _project_gate(cwd, sid=None):
 #     gauge slot    context % bar      stage breadcrumb (plan › exec › test)  ← "how far along"
 # main↔dispatch weight is carried by the badge (reverse vs dim font), so the identity columns can
 # stay aligned for comparison. Job flow never sits under branch/gate.
-_HW = 9                       # harness field (incl trailing space)
-_BRANCH_COL = 43              # absolute col where ⎇branch starts (both row types)
-_NW_S = _BRANCH_COL - 13      # session name field  (prefix 4 + harness 9 = 13)
-_DLEFT = _BRANCH_COL - 6      # dispatch left cluster (prefix 6 = 2-col nested indent): harness name (mode·qa)
+_HW = 11                      # harness field — WIDE gap to the name (user: "harness↔session 간격 더 띄워 통일")
+_BRANCH_COL = 43              # absolute col where branch starts (both row types)
+_NW_S = _BRANCH_COL - 15      # session name field  (prefix 4 + harness 11 = 15)
+_DLEFT = _BRANCH_COL - 4      # dispatch left cluster (prefix 4 = UNIFIED with sessions; tree in the margin)
 _BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
 _EFF_W = 6                    # effort sub-column (session effort: low..max)
 _MW = 16 + _EFF_W             # model + effort field: model 16 + effort 6
@@ -453,9 +453,10 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
 
-    # prefix 6 → harness/name indented 2 cols under the parent (nesting), ↳ in the gutter; branch
-    # onward still aligns with sessions. harness stays DIM (weight cue vs the session's bright one).
-    segs = [("  ↳ ", "dim"), (gch, gkey), (" ", None),
+    # prefix 4 = UNIFIED with sessions (harness/name in the SAME columns) — the row type reads from
+    # the TREE connector (├─●/└─●) sitting in the LEFT MARGIN + DIM harness/name (vs bright session).
+    conn = "└─" if is_last else "├─"
+    segs = [(conn, "dim"), (gch, gkey), (" ", None),
             (_pad(hn, _HW), _BADGE_KEY.get(j.harness, "dim"))]
     avail = _DLEFT - _HW
     tag_segs, tagw = _mq_tag(j.mode, qa_text, qa_key)
