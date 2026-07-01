@@ -4,6 +4,23 @@ This document names the runtime-neutral invariants enforced by hook scripts.
 It is not a hook registration file. Runtime adapters decide how to attach these
 checks to their own event model.
 
+## Verification Layers
+
+Three distinct roles keep this contract honest. Keep the vocabulary separate —
+"guard" is the enforcement mechanism, not its test.
+
+| Layer | Role | Agent in loop? | Where |
+|---|---|---|---|
+| **guard** | Runtime deterministic *enforcement* — hook scripts that block, gate, or inject at the event boundary. | No | The Invariant Catalog below (`hooks/*-guard.sh`, `utilities/*-hook.sh`, adapter hook bridges). |
+| **conformance** | Deterministic *verification* that guards, hook bridges, and adapters honor this contract — exact assertions, no model. Covers the `test` status class plus cross-adapter parity. | No | `hooks/portable-guards.test.sh`, `tools/check-adaptation-boundary.sh` (+ per-adapter mirrors). |
+| **drill** | Behavioral *regression* — whether the agent follows the rules on a live scenario (golden set). Covers only what cannot be made deterministic. | Yes | `loops/drill/`. |
+
+Design bias (deterministic-first, §0.5): push a check *down* this table when you
+can — out of **drill** (agent behavior) into **guard** + **conformance**
+(mechanism + deterministic test). Reserve drill for residue that genuinely needs
+an agent in the loop. A hook's output shape is deterministic, so it belongs in
+conformance, never drill.
+
 ## Status Classes
 
 | Status | Meaning |

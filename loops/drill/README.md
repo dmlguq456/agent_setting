@@ -2,6 +2,8 @@
 
 지침(runtime adapter bootstrap·core conventions·SKILL·hooks)을 고친 뒤, 핵심 행동이 깨지지 않았는지 headless 로 검증한다. 코드의 테스트 스위트를 _지침에_ 적용한 것. 현재 실행 구현은 Claude Code adapter 의 `claude -p` 를 사용한다.
 
+> **검증 3층 (용어 구분)**: **drill** = _에이전트 행동_ 회귀(이 문서 — golden set, 에이전트 in-loop). _결정론_ 검증은 **conformance**(`hooks/portable-guards.test.sh`·`tools/check-adaptation-boundary.sh` — 에이전트 X, 정확 assert), _결정론 강제_ 는 **guard**(hook script). 삼분 정의 = `core/HOOKS.md` §Verification Layers. hook 출력 shape 처럼 _결정론화 가능한_ 것은 drill 이 아니라 conformance 로 잡는다 (§0.5 결정론-우선).
+
 ## 실행
 
 ```bash
