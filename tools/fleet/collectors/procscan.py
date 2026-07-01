@@ -58,12 +58,51 @@ def _ps_lines():
     return out.splitlines()
 
 
+def _pid_ttys():
+    """{pid: 'pts/N'} controlling tty per process (separate cheap ps so the main _ps_lines
+    contract, shared with the dispatch scan, stays untouched). '?' (no tty) is kept as-is."""
+    try:
+        out = subprocess.run(["ps", "-eo", "pid=,tty="],
+                             capture_output=True, text=True, timeout=3).stdout
+    except Exception:
+        return {}
+    m = {}
+    for line in out.splitlines():
+        p = line.split()
+        if len(p) >= 2:
+            try:
+                m[int(p[0])] = p[1]
+            except ValueError:
+                pass
+    return m
+
+
+def _detached_ttys():
+    """Set of ttys ('pts/N') whose tmux session has NO client attached → the session is detached
+    (backgrounded). session_attached is per-session, so a session viewed in any window counts as
+    attached. Empty set if tmux is absent/unused (detached is then never asserted)."""
+    try:
+        out = subprocess.run(
+            ["tmux", "list-panes", "-a", "-F", "#{pane_tty}\t#{session_attached}"],
+            capture_output=True, text=True, timeout=2).stdout
+    except Exception:
+        return set()
+    det = set()
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 2 and parts[1].strip() == "0":
+            det.add(parts[0].replace("/dev/", "", 1))
+    return det
+
+
 def scan(harness_filter=None):
     """Return [Session] for every live harness leaf process.
 
     harness_filter: optional iterable of harness names to keep (e.g. {'claude','codex'}).
     """
     sessions = []
+    pid_tty = _pid_ttys()
+    det_ttys = _detached_ttys()
     for line in _ps_lines():
         line = line.strip()
         if not line:
@@ -91,6 +130,7 @@ def scan(harness_filter=None):
         # headless dispatch child marker (claude only) — env CLAUDE_CODE_CHILD_SESSION=1.
         # These are surfaced as dispatch rows under their parent, not as top-level sessions.
         is_child = comm == "claude" and read_environ(pid).get("CLAUDE_CODE_CHILD_SESSION") == "1"
+        detached = pid_tty.get(pid) in det_ttys if det_ttys else False
         sessions.append(Session(
             harness=comm,
             pid=pid,
@@ -98,6 +138,7 @@ def scan(harness_filter=None):
             orphan=orphan,
             app_server=app_server,
             is_child=is_child,
+            detached=detached,
             elapsed_min=etime_to_min(etime),
             slug=os.path.basename(cwd.rstrip("/")) if cwd else None,
         ))

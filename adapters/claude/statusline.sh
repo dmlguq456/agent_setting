@@ -239,13 +239,14 @@ if [ -n "$gate" ]; then
   [ "$gate_open" = "1" ] && gc="$YEL" || gc="$GRN"
   segs_arr+=("${gc}${gate}${RST}")
 fi
+# context gauge — mid-line ━/─ (fleet design): filled in the level color, empty track dim
 if [ "${S_CTX}" -ge 0 ] 2>/dev/null; then
   cc=$(pcol "$S_CTX")
   segs=10; filled=$(( (S_CTX * segs + 50) / 100 )); [ "$filled" -gt "$segs" ] && filled=$segs
-  bar=""; i=0
-  while [ "$i" -lt "$filled" ]; do bar="${bar}█"; i=$((i+1)); done
-  while [ "$i" -lt "$segs" ]; do bar="${bar}░"; i=$((i+1)); done
-  segs_arr+=("${DIM}🧠${RST} ${cc}${bar} ${S_CTX}%${RST}")
+  fbar=""; i=0
+  while [ "$i" -lt "$filled" ]; do fbar="${fbar}━"; i=$((i+1)); done
+  ebar=""; while [ "$i" -lt "$segs" ]; do ebar="${ebar}─"; i=$((i+1)); done
+  segs_arr+=("${DIM}ctx${RST} ${cc}${fbar}${RST}${DIM}${ebar}${RST} ${cc}${S_CTX}%${RST}")
 fi
 
 # 모델·effort │ 5h/7d 사용량+리셋 잔여시간 (stdin rate_limits = /usage 공식 값, 분모 추측 없음)
@@ -260,9 +261,10 @@ if [ -n "$S_EFFORT" ]; then
     max)    ecol="$RED"; etxt="max" ;;
     *)      ecol="$DIM"; etxt="$S_EFFORT" ;;
   esac
-  eff_disp="${DIM}·${RST}${ecol}${etxt}${RST}"
+  eff_disp=" ${ecol}${etxt}${RST}"
 fi
-segs_arr+=("✨ ${DIM}${S_MODEL}${RST}${eff_disp}")
+# model in the claude harness color (cyan), no longer dim (fleet: model reads bright, dotless effort)
+segs_arr+=("${CYAN}${S_MODEL}${RST}${eff_disp}")
 u=""
 [ -n "$S_5H" ] && { u="${u} ${DIM}5h${RST} $(pcol "$S_5H")${S_5H}%${RST}"; [ -n "$S_5H_RST" ] && u="${u}${DIM}(↻ ${S_5H_RST})${RST}"; }
 [ -n "$S_7D" ] && { u="${u} ${DIM}7d${RST} $(pcol "$S_7D")${S_7D}%${RST}"; [ -n "$S_7D_RST" ] && u="${u}${DIM}(↻ ${S_7D_RST})${RST}"; }

@@ -370,6 +370,8 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
     name_key = ("name_work" if live == "working"
                 else ("name_dim" if dim_tel else "name_idle"))
     gch, gkey = _glyph(live)
+    if s.detached and live not in ("stale", "dead"):
+        gch = "◌"                 # detached (tmux, no client attached): shape=detached, color=liveness
     hn = _BADGE_TEXT.get(s.harness, "?")
 
     # main↔spawned weight = font-color intensity (no bg fill — the reverse badge read as weird):
@@ -659,6 +661,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
     lines.append([
         ("  ", None), ("●", "g_work"), (" working   ", "dim"),
         ("○", "g_idle"), (" idle   ", "dim"),
+        ("◌", "g_idle"), (" detached   ", "dim"),
         ("◦", "g_stale"), (" stale   ", "dim"),
         ("×", "g_dead"), (" dead     ", "dim"),
         ("▾N", "dim"), (" child jobs   ", "dim"),
