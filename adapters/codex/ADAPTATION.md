@@ -183,8 +183,8 @@ context as `hookSpecificOutput.additionalContext`. The `SessionEnd` and
 `Stop` bridges call `session-end` for `mem sync` plus the verified automatic distill worker
 (default on; `CODEX_DISTILL_ENABLE=0` opt-out) while emitting no stdout so Stop hook
 output never violates Codex parsing. The
-`UserPromptSubmit` bridge calls `prompt-signal`, `mode`, `recall`, `briefing`,
-and `turn-nudge` for prompt-time workflow and memory signals, then emits the
+`UserPromptSubmit` bridge calls `status`, `prompt-signal`, `mode`, `recall`,
+`briefing`, and `turn-nudge` for prompt-time workflow and memory signals, then emits the
 collected prompt context as one `hookSpecificOutput.additionalContext`. The structured
 `prompt-signal` output reports `routing_contract=core/WORKFLOW.md`,
 `routing_action=read-workflow-and-select-codex-skill`, and
@@ -287,7 +287,7 @@ Harness-specific status signals still need Codex-native realization:
 | Harness signal | Codex direction |
 |---|---|
 | stale workflow bypass flag cleanup | Codex `SessionStart` hook bridge runs `preflight.sh start`; explicit preflight remains fallback when hooks are unavailable |
-| tracked/untracked workflow state | Codex `UserPromptSubmit` hook bridge runs `preflight.sh prompt-signal` and `preflight.sh mode`; `prompt-signal` also carries git dirty/worktree/dead-branch risk fields from `preflight.sh status`; explicit preflight remains fallback when hooks are unavailable |
+| tracked/untracked workflow state | Codex `UserPromptSubmit` hook bridge runs `preflight.sh status`, `preflight.sh prompt-signal`, and `preflight.sh mode`; `prompt-signal` also carries git dirty/worktree/dead-branch risk fields from `preflight.sh status`; explicit preflight remains fallback when hooks are unavailable |
 | workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; includes tracked-dirty vs untracked counts and sibling worktree counts; keep Codex `/statusline` for native model/context/token/session fields |
 | UI boundary report | explicit `preflight.sh ui-info`; reports built-in footer/title support, unsupported arbitrary live statusline scripts, Skill/plugin autopilot entrypoints, and explicit/main-dispatched subagent behavior |
 | subagent delegation | explicit `preflight.sh subagent-info --check`; verifies the Codex `multi_agent` runtime feature and projected custom agents before claiming native subagent delegation parity |
@@ -309,7 +309,7 @@ Harness-specific status signals still need Codex-native realization:
 | design post-write verification | Run `adapters/codex/bin/preflight.sh design <file>` after design HTML writes |
 | spec read gate | Auto-enforced through Codex hooks: `PostToolUse[Read]` records actual `prd.md` reads, and `PreToolUse` write guard hard-denies an ungrounded write to a spec-changing artifact (`plans/*` or a `spec/` blueprint) — Codex's interception equivalent of Claude's `PreToolUse[Skill]` gate (no skill event exists). Manual fallbacks: `preflight.sh read <prd.md>` after reads, `preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
 | workflow start cleanup | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]`; run it manually when no automatic hook is attached |
-| workflow signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` and `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`; run them manually when no automatic hook is attached |
+| workflow signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh status [cwd] [session-id]`, `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]`, and `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`; run them manually when no automatic hook is attached |
 | workflow toggle | Run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly requests tracked/untracked mode switching |
 | memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text session-start memory injection |
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |

@@ -119,6 +119,7 @@ def main() -> int:
     prompt = prompt_text(payload)
 
     parts = [
+        run_preflight("status", current_cwd, sid),
         run_preflight("prompt-signal", current_cwd, sid),
         run_preflight("mode", current_cwd, sid),
     ]
