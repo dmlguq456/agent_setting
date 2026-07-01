@@ -90,13 +90,13 @@ def _init_colors():
     # capture the PURE hue (before the badge DIM below) so model/effort can vary intensity freely.
     _hue = {h: _COLOR.get("h_" + h, 0) for h in ("claude", "codex", "opencode")}
     for h, hue in _hue.items():
-        _COLOR["model_" + h] = hue | curses.A_DIM
+        _COLOR["model_" + h] = hue          # harness-tinted, NORMAL brightness (was dim → too dark)
         for lvl, it in _LVL_INT.items():
             _COLOR["eff_%s_%s" % (h, lvl)] = hue | it
         # bright harness color = a TOP-LEVEL session / account; a dispatch job keeps the DIM
         # harness (h_<h>) → main↔spawned weight is carried by font-color intensity (no bg fill).
         _COLOR["hb_" + h] = hue
-    _COLOR["model_other"] = curses.A_DIM
+    _COLOR["model_other"] = 0
     _COLOR["hb_other"] = 0
     for lvl, it in _LVL_INT.items():
         _COLOR["eff_other_" + lvl] = it
@@ -276,7 +276,7 @@ def _project_gate(cwd, sid=None):
 _HW = 9                       # harness field (incl trailing space)
 _BRANCH_COL = 43              # absolute col where ⎇branch starts (both row types)
 _NW_S = _BRANCH_COL - 13      # session name field  (prefix 4 + harness 9 = 13)
-_DLEFT = _BRANCH_COL - 8      # dispatch left cluster width (prefix 8 → branch): harness·mode name qa
+_DLEFT = _BRANCH_COL - 4      # dispatch left cluster (prefix 4, aligned with sessions): harness name (mode·qa)
 _BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
 _EFF_W = 6                    # effort sub-column (session effort: low..max)
 _MW = 16 + _EFF_W             # model + effort field: model 16 + effort 6
@@ -417,12 +417,29 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
     return segs
 
 
+def _mq_tag(mode, qa_text, qa_key):
+    """The `(mode · qa)` tag shown after a dispatch name (mode dim, qa in its rigor color, middle
+    dot). Returns (segments, display_width). Empty (mode and qa both absent) → ([], 0)."""
+    if not mode and not qa_text:
+        return [], 0
+    out = [(" (", "dim")]
+    w = 2
+    if mode:
+        out.append((mode, "dim")); w += len(mode)
+    if qa_text:
+        if mode:
+            out.append((" · ", "dim")); w += 3
+        out.append((qa_text, qa_key)); w += len(qa_text)
+    out.append((")", "dim")); w += 1
+    return out, w
+
+
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
-      harness·MODE  |  name QA  |  ⎇branch  |  MODEL (the job's real model)  |  — | stage breadcrumb
-    mode sits right after the harness; qa sits after the name (like a session's gate tag); the
-    model slot shows the job's own main model; the gauge slot is the stage breadcrumb (each stage
-    a distinct color, current one bold). Weight vs a session = dim-font harness + ↳ + dim name.
+      harness  |  name (mode · qa)  |  branch  |  MODEL (the job's real model)  |  stage breadcrumb
+    mode+qa ride together in a `(mode · qa)` tag right after the name; the model slot shows the
+    job's own main model; the gauge slot is the stage breadcrumb (per-stage colors, current bold,
+    blinks while working). Weight vs a session = dim-font harness + ↳ + dim name.
     """
     key = j.key or "?"
     stage = j.stage or ""
@@ -436,25 +453,21 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
 
-    # prefix 8 → col 8. Flowing left cluster (harness·mode  name qa) padded so ⎇branch lands at col
-    # _BRANCH_COL, same as a session. harness stays DIM (weight cue vs the session's bright harness).
-    segs = [("    ↳ ", "dim"), (gch, gkey), (" ", None)]
-    used = 0
-    segs.append((hn, _BADGE_KEY.get(j.harness, "dim"))); used += len(hn)
-    if j.mode:                                    # mode right after the harness
-        segs.append(("·" + j.mode, "dim")); used += 1 + len(j.mode)
-    segs.append(("  ", None)); used += 2
-    # name + qa tag (qa after the name, like a session's gate tag), truncating the name if needed
-    qtag = (" " + qa_text) if qa_text else ""
+    # prefix 4 (↳ replaces the session's 2 leading spaces → harness/name align with sessions, so
+    # the board is one clean grid; row TYPE reads from the ↳ + DIM harness/name, not indentation).
+    segs = [("↳ ", "dim"), (gch, gkey), (" ", None),
+            (_pad(hn, _HW), _BADGE_KEY.get(j.harness, "dim"))]
+    avail = _DLEFT - _HW
+    tag_segs, tagw = _mq_tag(j.mode, qa_text, qa_key)
     otag = "  (orphan)" if orphan else ""
-    nm = name[: max(3, _DLEFT - used - len(qtag) - len(otag))]
-    segs.append((nm, "name_dim")); used += len(nm)
-    if qtag:
-        segs.append((qtag, qa_key)); used += len(qtag)
-    if otag and used + len(otag) <= _DLEFT:
+    nm = name[: max(3, avail - tagw - len(otag) - 1)]   # -1 → always ≥1 gap before branch
+    used = len(nm)
+    segs.append((nm, "name_dim"))
+    segs += tag_segs; used += tagw
+    if otag and used + len(otag) <= avail:
         segs.append((otag, "gate_u")); used += len(otag)
-    if used < _DLEFT:
-        segs.append((" " * (_DLEFT - used), None))
+    if used < avail:
+        segs.append((" " * (avail - used), None))
 
     segs.append(_branch_seg(j.cwd, j.branch))
     # model slot → the job's OWN main model (harness-tinted dim), same cell a session uses.
