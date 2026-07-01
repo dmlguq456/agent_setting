@@ -812,6 +812,7 @@ check_codex_bin_wrappers() {
     fail_msg "Codex UserPromptSubmit bridge must extract prompt text from nested runtime payloads"
   fi
   if ! grep -Fq 'runtime_surface=codex-userprompt-hook-signal' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq '"$0" status "$cwd" "$sid"' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'hook_scope=runtime-hook' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'routing_contract=core/WORKFLOW.md' adapters/codex/bin/preflight.sh \
@@ -819,6 +820,9 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'capability_entrypoints=codex-native-skills-plugin' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'enforced_hooks=structured-write-guards,posttool-spec-read-marker,posttool-design-check,session-memory,turn-nudge' adapters/codex/bin/preflight.sh; then
     fail_msg "Codex UserPromptSubmit hook must expose a structured workflow/autopilot signal"
+  fi
+  if ! grep -Fq 'codex route wrapper combines status, prompt signal, capability-info, and spec gate' hooks/portable-guards.test.sh; then
+    fail_msg "Codex route wrapper tests must prove route includes harness status before capability gates"
   fi
 
   if ! grep -Fq 'named `tool_contract`, `tool_contract_check`, `runtime_surface`, and `fallback`' adapters/codex/AGENTS.md; then

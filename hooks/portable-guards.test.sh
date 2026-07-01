@@ -173,13 +173,16 @@ else
   bad "codex write guard should not gate ordinary source files"
 fi
 if "$CODEX" route autopilot-code "$TMP/specproj" testsid >/tmp/codex_route.out 2>/tmp/codex_route.err \
+  && grep -q '^runtime_surface=adapter-owned-harness-status$' /tmp/codex_route.out \
+  && grep -q '^git_dirty_tracked=' /tmp/codex_route.out \
+  && grep -q '^headless_open_jobs=' /tmp/codex_route.out \
   && grep -q '^runtime_surface=codex-userprompt-hook-signal$' /tmp/codex_route.out \
   && grep -q '^capability=autopilot-code$' /tmp/codex_route.out \
   && grep -q '^compat_reference=not-projected$' /tmp/codex_route.out \
   && grep -q '^pipeline_contract=code-plan>code-execute>code-test>code-report$' /tmp/codex_route.out; then
-  ok "codex route wrapper combines prompt signal, capability-info, and spec gate"
+  ok "codex route wrapper combines status, prompt signal, capability-info, and spec gate"
 else
-  bad "codex route wrapper should combine prompt signal, capability-info, and spec gate"
+  bad "codex route wrapper should combine status, prompt signal, capability-info, and spec gate"
 fi
 if "$CODEX" capability nope-capability "$TMP/specproj" testsid >/tmp/codex_bad_capability_gate.out 2>/tmp/codex_bad_capability_gate.err; then
   bad "codex capability wrapper should reject unknown capabilities"

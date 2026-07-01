@@ -235,6 +235,7 @@ case "$cmd" in
     name=$2
     cwd=${3:-$PWD}
     sid=${4:-codex}
+    "$0" status "$cwd" "$sid"
     "$0" prompt-signal "$cwd" "$sid"
     "$0" mode "$cwd" "$sid"
     "$0" capability-info "$name"
