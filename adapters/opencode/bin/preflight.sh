@@ -221,6 +221,51 @@ case "$cmd" in
     sid=${3:-opencode}
     "$ROOT/utilities/workflow-guard-hook.sh" --event prompt --cwd "$cwd" --session "$sid" --format text --toggle-label "preflight.sh track"
     ;;
+  prompt-signal)
+    cwd=${2:-$PWD}
+    sid=${3:-opencode}
+    status=$(AGENT_ADAPTER=opencode "$ROOT/utilities/harness-status.sh" "$cwd" "$sid")
+    workflow_state=$(printf '%s\n' "$status" | awk -F= '$1=="workflow_state"{print $2; exit}')
+    artifact_root_kind=$(printf '%s\n' "$status" | awk -F= '$1=="artifact_root_kind"{print $2; exit}')
+    git_operation=$(printf '%s\n' "$status" | awk -F= '$1=="git_operation"{print $2; exit}')
+    headless_open_jobs=$(printf '%s\n' "$status" | awk -F= '$1=="headless_open_jobs"{print $2; exit}')
+    printf 'adapter=opencode\n'
+    printf 'runtime_surface=opencode-system-transform-hook-signal\n'
+    printf 'hook_event=experimental.chat.system.transform\n'
+    printf 'hook_scope=runtime-plugin\n'
+    printf 'workflow_state=%s\n' "${workflow_state:-unknown}"
+    printf 'artifact_root_kind=%s\n' "${artifact_root_kind:-unknown}"
+    printf 'git_operation=%s\n' "${git_operation:-unknown}"
+    printf 'headless_open_jobs=%s\n' "${headless_open_jobs:-0}"
+    if [ "${workflow_state:-tracked}" = "untracked" ]; then
+      printf 'autopilot_route=optional-direct-work-allowed\n'
+      printf 'routing_contract=untracked-direct-work\n'
+    else
+      printf 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work\n'
+      printf 'routing_contract=core/WORKFLOW.md\n'
+      printf 'routing_action=read-workflow-and-select-opencode-skill-or-command\n'
+      printf 'capability_entrypoints=opencode-native-skills-commands\n'
+    fi
+    printf 'enforced_hooks=plugin-write-guards,plugin-command-spec-gate,plugin-read-marker,plugin-design-check,session-memory,prompt-recall,session-idle-distill\n'
+    printf 'hook_boundary=plugin-tool-command-event-bridges\n'
+    ;;
+  ui-info)
+    cat <<'EOF'
+adapter=opencode
+runtime_surface=opencode-native-ui-boundary
+status=partial-native-parity
+statusline_surface=opencode-native-tui-footer
+statusline_custom_script=unsupported
+statusline_config_surface=none-in-opencode-config-schema
+harness_status_surface=adapter-owned-preflight-status
+harness_status_command=adapters/opencode/bin/preflight.sh status [cwd] [session-id]
+autopilot_entrypoints=opencode-native-skills-commands
+autopilot_auto_routing=instruction-guided-not-claude-slash-router
+subagent_surface=opencode-native-subagents
+subagent_auto_spawn=explicit-or-main-dispatched
+note=OpenCode exposes a native TUI footer (model/context/tokens/session) but no user-customizable shell statusline script; use preflight status for harness-specific signals.
+EOF
+    ;;
   track)
     cwd=${2:-$PWD}
     sid=${3:-opencode}
