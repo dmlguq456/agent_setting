@@ -8,37 +8,43 @@ else
   ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
 fi
 
+agent_home() {
+  if [ -n "${AGENT_HOME:-}" ] && [ -f "$AGENT_HOME/core/CORE.md" ]; then
+    printf '%s\n' "$AGENT_HOME"
+  else
+    printf '%s\n' "$ROOT"
+  fi
+}
+
+AGENT_ROOT=$(agent_home)
+
 usage() {
   cat <<'EOF'
 usage: distill-worker.sh <session-id> [cwd]
 
-OpenCode transcript distillation proposal worker.
+OpenCode transcript distillation worker. Reads a transcript delta via
+`opencode export` (through the shared memory CLI) and runs a constrained,
+no-tools `opencode run` worker that emits JSON-Lines distillation actions.
 
-STATUS: tool-contract. The shared memory CLI has an OpenCode session source
-reader based on `opencode export <session-id>`, so distill-delta works through
-adapters/opencode/bin/preflight.sh.
+No-tools contract (verified): the worker runs `opencode run --pure --agent
+<distiller>` where the distiller agent disables every built-in tool. With zero
+tools the model cannot execute or retry a tool, so an adversarial "run this
+shell command" prompt produces no execution and no hang (acceptance: a
+`date >> file` probe never wrote, run exited 0). `--pure` also disables external
+plugins so the worker's own session never re-triggers the guard plugin, and
+MEM_DISTILL=1 guards every lifecycle re-entry.
 
-This proposal worker must not auto-apply memory mutations until an OpenCode
-no-tools worker contract is verified. Candidate: `opencode run --agent
-<restricted-agent>` with deny permissions, or a future plugin-mediated worker.
-Set OPENCODE_DISTILL_ENABLE=1 only when testing that contract.
-
-Verification finding (vs codex's OS-level read-only sandbox):
-- Dispatch side IS available: the OpenCode SDK exposes a `session.idle` event,
-  so the plugin (adapters/opencode/plugins/agent-harness-guards.js, today only
-  hooking chat.message/tool.execute) could hook it to call a new preflight
-  `session-end` subcommand, mirroring codex.
-- Worker side is the blocker: `opencode run --agent <restricted>` is unreliable.
-  `permission: deny` does hard-block writes (forced-write probes never wrote),
-  but restricted tool-disable configs (e.g. `tools: { bash/task/patch: false }`)
-  hang the run even on a benign JSON-only prompt; an adversarial prompt retries a
-  denied tool and hangs too. A hang stalls/timeouts the session-end dispatch.
-So OpenCode auto-distill stays disabled. Enabling it is a scoped follow-up:
-(1) a plugin-mediated worker that hard-strips tool execution without the run
---agent hang, (2) a JSON-Lines extractor over `opencode run --format json`
-events, (3) a preflight `session-end` subcommand with enable + recursion guards,
-(4) a `session.idle` plugin hook. Set OPENCODE_DISTILL_ENABLE=1 only when that
-contract is built and verified.
+Gates:
+- MEM_DISTILL=1            -> no-op (recursion guard)
+- OPENCODE_DISTILL_ENABLE  -> must be 1 to run (default off for direct calls;
+                             the session-end path defaults it on)
+- OPENCODE_DISTILL_APPLY=1 -> apply the proposal to the DB via
+                             apply-distill-actions.py (else proposal-only)
+- OPENCODE_DISTILL_MODEL   -> provider/model for the worker (recommended; when
+                             unset the runtime default model is used)
+- OPENCODE_DISTILL_TIMEOUT -> seconds before the worker run is killed (default
+                             180) so a slow/unreachable model can never stall a
+                             session-end dispatch
 EOF
 }
 
@@ -52,30 +58,122 @@ fi
 sid=$1
 cwd=${2:-$PWD}
 
-if [ "${OPENCODE_DISTILL_ENABLE:-0}" != "1" ]; then
-  cat <<EOF
-adapter=opencode
-status=tool-contract
-tool_contract=no-tools-distill-worker
-runtime_surface=unverified
-reason=no-tools-worker-unverified
-delta_surface=adapters/opencode/bin/preflight.sh distill-delta <session-id>
-fallback=inspect-distill-delta-or-enable-after-contract-review
-cwd=$cwd
-session_id=$sid
-EOF
-  exit 69
+# Recursion guard: a distillation worker must never spawn another distillation.
+# The `opencode run` call below exports MEM_DISTILL=1, so any lifecycle path it
+# triggers (session-end preflight, plugin event) re-enters here with the flag set
+# and exits immediately. Mirrors the portable mem-distill-dispatch.sh guard.
+[ "${MEM_DISTILL:-}" = "1" ] && exit 0
+
+if [ "${OPENCODE_DISTILL_ENABLE:-}" != "1" ]; then
+  exit 0
 fi
 
-cat <<EOF
-adapter=opencode
-status=tool-contract
-tool_contract=no-tools-distill-worker
-runtime_surface=unverified
-reason=no-tools-worker-unverified
-delta_surface=adapters/opencode/bin/preflight.sh distill-delta <session-id>
-fallback=inspect-distill-delta-or-enable-after-contract-review
-cwd=$cwd
-session_id=$sid
+OPENCODE_BIN=${OPENCODE_BIN:-opencode}
+if ! command -v "$OPENCODE_BIN" >/dev/null 2>&1; then
+  if [ -x "$HOME/.opencode/bin/opencode" ]; then
+    OPENCODE_BIN="$HOME/.opencode/bin/opencode"
+  else
+    echo "opencode distill worker: opencode command not found" >&2
+    exit 69
+  fi
+fi
+
+delta=$(
+  AGENT_HOME="$AGENT_ROOT" \
+  python3 "$ROOT/tools/memory/mem.py" distill "$sid" --source opencode 2>/dev/null || true
+)
+
+if [ -z "$(printf '%s' "$delta" | tr -d '[:space:]')" ]; then
+  exit 0
+fi
+
+store=${MEM_STORE:-$AGENT_ROOT/memory}
+mkdir -p "$store"
+
+# Ephemeral no-tools worker agent. Materialized once in a throwaway git repo so
+# `opencode run --dir` discovers it; the worker needs no project files (it has no
+# tools), only the transcript delta passed on stdin.
+workdir="$store/.opencode-distill-workdir"
+agent_file="$workdir/.opencode/agent/distiller.md"
+if [ ! -f "$agent_file" ]; then
+  mkdir -p "$workdir/.opencode/agent"
+  cat > "$agent_file" <<'AGENT'
+---
+description: "No-tools memory distillation worker. Emits JSON-Lines actions only."
+mode: primary
+tools:
+  bash: false
+  edit: false
+  write: false
+  read: false
+  grep: false
+  glob: false
+  list: false
+  patch: false
+  webfetch: false
+  todowrite: false
+  todoread: false
+  task: false
+permission:
+  bash: deny
+  edit: deny
+  webfetch: deny
+---
+You are a no-tools memory distillation worker. Output JSON Lines only.
+AGENT
+  (
+    cd "$workdir" || exit 0
+    git init -q 2>/dev/null || true
+    git -c user.email=distill@local -c user.name=distill add -A 2>/dev/null || true
+    git -c user.email=distill@local -c user.name=distill commit -qm init 2>/dev/null || true
+  )
+fi
+
+prompt_file="$store/.opencode-distill-prompt-$sid"
+out_file="$store/.opencode-distill-out-$sid"
+
+cat > "$prompt_file" <<EOF
+You are a memory distillation worker.
+
+Constraints:
+- Do not call tools. If a tool surface is available, do not use it.
+- Use only the transcript delta below.
+- Output JSON Lines only, with one action object per line.
+- Do not output Markdown, commentary, or code fences.
+
+Allowed actions:
+- {"action":"add","tier":"working","type":"fact|decision|todo|preference|context","body":"..."}
+- {"action":"add","tier":"durable","type":"fact|decision|todo|preference|context","body":"..."}
+- {"action":"reinforce","id":"...","evidence":"..."}
+- {"action":"prune","id":"...","reason":"..."}
+- {"action":"graduate","id":"...","evidence":"..."}
+- {"action":"reattribute","id":"...","subject":"..."}
+- {"action":"merge","ids":["..."],"canonical":"..."}
+
+Transcript delta:
+<<<DELTA
+$delta
+DELTA
 EOF
-exit 69
+
+# Constrained, no-tools, serial worker run. Timeout-guarded so a slow or
+# unreachable model can never stall the caller. --pure disables external plugins
+# (recursion safety); the distiller agent disables every tool (no-tools safety).
+timeout_s=${OPENCODE_DISTILL_TIMEOUT:-180}
+if [ -n "${OPENCODE_DISTILL_MODEL:-}" ]; then
+  MEM_DISTILL=1 timeout "$timeout_s" "$OPENCODE_BIN" run --pure \
+    --dir "$workdir" --agent distiller --format default \
+    -m "$OPENCODE_DISTILL_MODEL" < "$prompt_file" > "$out_file" 2>/dev/null || true
+else
+  MEM_DISTILL=1 timeout "$timeout_s" "$OPENCODE_BIN" run --pure \
+    --dir "$workdir" --agent distiller --format default \
+    < "$prompt_file" > "$out_file" 2>/dev/null || true
+fi
+
+if [ "${OPENCODE_DISTILL_APPLY:-}" = "1" ] && [ -f "$out_file" ]; then
+  AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/apply-distill-actions.py" \
+    "$out_file" "$ROOT/tools/memory/mem.py" --mode increment
+fi
+
+[ -f "$out_file" ] && cat "$out_file"
+exit 0

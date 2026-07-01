@@ -511,7 +511,57 @@ EOF
     [ "$#" -ge 2 ] || { echo "opencode preflight: distill-propose requires a session id" >&2; exit 64; }
     sid=$2
     cwd=${3:-$PWD}
+    # The explicit, user-facing proposal stays an opt-in preview (mirrors codex):
+    # the no-tools worker is verified, but you enable the explicit run with
+    # OPENCODE_DISTILL_ENABLE=1. The automatic session-end path defaults it on.
+    if [ "${OPENCODE_DISTILL_ENABLE:-0}" != "1" ]; then
+      cat <<EOF
+adapter=opencode
+status=tool-contract
+tool_contract=no-tools-distill-worker
+runtime_surface=opencode-run-pure-notools-agent
+reason=distill-proposal-disabled
+delta_surface=adapters/opencode/bin/preflight.sh distill-delta <session-id>
+enable=OPENCODE_DISTILL_ENABLE=1
+apply_gate=OPENCODE_DISTILL_APPLY=1
+auto=plugin-session-idle-to-session-end-default-on
+fallback=inspect-distill-delta-or-enable-explicit-proposal
+cwd=$cwd
+session_id=$sid
+EOF
+      exit 69
+    fi
     AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/opencode/bin/distill-worker.sh" "$sid" "$cwd"
+    ;;
+  session-end)
+    cwd=${2:-$PWD}
+    sid=${3:-opencode}
+    # Recursion guard: skip when invoked from within a distiller worker (the
+    # `opencode run` worker exports MEM_DISTILL=1, and a --pure worker would not
+    # load the plugin anyway). Mirrors the codex session-end guard.
+    [ "${MEM_DISTILL:-}" = "1" ] && exit 0
+    # Debounce: the OpenCode plugin fires this on session.idle, which occurs after
+    # every turn. Rate-limit per session so a long TUI session triggers at most
+    # one worker per OPENCODE_DISTILL_MIN_INTERVAL seconds (default 600).
+    store=${MEM_STORE:-$AGENT_ROOT/memory}
+    mkdir -p "$store" 2>/dev/null || true
+    stamp="$store/.opencode-distill-stamp-$sid"
+    interval=${OPENCODE_DISTILL_MIN_INTERVAL:-600}
+    now=$(date +%s 2>/dev/null || echo 0)
+    if [ -f "$stamp" ] && [ "$now" -gt 0 ]; then
+      last=$(cat "$stamp" 2>/dev/null || echo 0)
+      [ "$last" -gt 0 ] && [ "$((now - last))" -lt "$interval" ] && exit 0
+    fi
+    printf '%s\n' "$now" > "$stamp" 2>/dev/null || true
+    # Absorb any stray native writes, then run the auto-distiller. Enabled by
+    # default (parity with the codex/claude session-end distillers); opt out with
+    # OPENCODE_DISTILL_ENABLE=0. The worker is no-tools verified and timeout-
+    # guarded, so a slow/unreachable model can never stall this path.
+    (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/mem.py" sync) 2>/dev/null || true
+    AGENT_HOME="$AGENT_ROOT" \
+      OPENCODE_DISTILL_ENABLE="${OPENCODE_DISTILL_ENABLE:-1}" \
+      OPENCODE_DISTILL_APPLY="${OPENCODE_DISTILL_APPLY:-1}" \
+      "$ROOT/adapters/opencode/bin/distill-worker.sh" "$sid" "$cwd"
     ;;
   role)
     [ "$#" -ge 2 ] || { echo "opencode preflight: role requires a portable role" >&2; exit 64; }

@@ -81,6 +81,8 @@ contract-accepted env gates are explicit. Codex adapter-owned `session-end` and
 read-only `codex exec` tool-free proof, they default to automatic apply and opt
 out with `CODEX_DISTILL_ENABLE=0`.
 Use `adapters/opencode/bin/preflight.sh distill-delta <session-id>` for
-OpenCode transcript extraction through `opencode export`. OpenCode
-`distill-propose` remains disabled by default until a no-tools/action contract
-is verified.
+OpenCode transcript extraction through `opencode export`. OpenCode's no-tools
+worker contract is verified (`opencode run --pure --agent <distiller>` with all
+tools disabled), so `distill-propose` runs the worker and the plugin
+`event`/`session.idle` trigger auto-distills via `preflight.sh session-end`
+(debounced, enabled by default; opt out `OPENCODE_DISTILL_ENABLE=0`).

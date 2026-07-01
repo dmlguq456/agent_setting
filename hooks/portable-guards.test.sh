@@ -1813,6 +1813,60 @@ if "$OPENCODE" read "$TMP/specproj/.agent_reports/spec/prd.md" opencodesid >/tmp
 else
   bad "opencode read+capability wrapper should pass spec gate"
 fi
+# ungrounded spec-governed capability is hard-denied (fresh session, no prd read)
+if "$OPENCODE" capability autopilot-code "$TMP/specproj" opencode-ungrounded >/tmp/opencode.out 2>/tmp/opencode.err; then
+  bad "opencode capability should deny autopilot-code without prd read"
+else
+  [ "$?" -eq 2 ] && ok "opencode capability denies spec capability without prd read" \
+    || bad "opencode capability wrong exit without prd read"
+fi
+# non-spec-governed capability passes even ungrounded
+if "$OPENCODE" capability autopilot-research "$TMP/specproj" opencode-ungrounded >/tmp/opencode.out 2>/tmp/opencode.err; then
+  ok "opencode capability allows non-spec-governed capability ungrounded"
+else
+  bad "opencode capability should allow non-spec-governed capability ungrounded"
+fi
+
+echo "== opencode plugin spec-gate bridge =="
+# Verify the JS plugin handlers (not just the preflight CLI) wire the gate:
+# command.execute.before throws (= blocks command) when ungrounded, and
+# tool.execute.after on a prd.md read drops the grounding marker so it then passes.
+PLUGIN="$ROOT/adapters/opencode/plugins/agent-harness-guards.js"
+BRIDGEPROJ="$TMP/bridgeproj"
+mkdir -p "$BRIDGEPROJ/.agent_reports/spec"
+printf 'prd\n' > "$BRIDGEPROJ/.agent_reports/spec/prd.md"
+cat > "$TMP/bridge.mjs" <<MJS
+import { AgentHarnessGuards } from 'file://$PLUGIN'
+const SPEC = "$BRIDGEPROJ"
+const PRD = SPEC + "/.agent_reports/spec/prd.md"
+const SID = "bridge-grounded", SID2 = "bridge-nonspec"
+const hooks = await AgentHarnessGuards({ directory: SPEC })
+async function throws(fn){ try { await fn(); return false } catch { return true } }
+const denied = await throws(() => hooks["command.execute.before"]({command:"autopilot-code",sessionID:SID,arguments:""},{parts:[]}))
+await hooks["tool.execute.after"]({tool:"read",sessionID:SID,callID:"1",args:{filePath:PRD}},{title:"",output:"",metadata:{}})
+const passed = !(await throws(() => hooks["command.execute.before"]({command:"autopilot-code",sessionID:SID,arguments:""},{parts:[]})))
+const nonspec = !(await throws(() => hooks["command.execute.before"]({command:"autopilot-research",sessionID:SID2,arguments:""},{parts:[]})))
+process.stdout.write(JSON.stringify({denied,passed,nonspec}))
+MJS
+if command -v node >/dev/null 2>&1; then
+  if node "$TMP/bridge.mjs" >/tmp/opencode_bridge.out 2>/tmp/opencode_bridge.err; then
+    grep -q '"denied":true' /tmp/opencode_bridge.out \
+      && ok "opencode plugin command.execute.before blocks ungrounded spec capability" \
+      || bad "opencode plugin should block ungrounded spec capability"
+    grep -q '"passed":true' /tmp/opencode_bridge.out \
+      && ok "opencode plugin tool.execute.after marks prd read so gate passes" \
+      || bad "opencode plugin read marker should let gate pass"
+    grep -q '"nonspec":true' /tmp/opencode_bridge.out \
+      && ok "opencode plugin command.execute.before ignores non-spec capability" \
+      || bad "opencode plugin should ignore non-spec capability"
+  else
+    bad "opencode plugin bridge harness failed to run"
+  fi
+  # marker lands under the resolved harness root (.spec-grounding is gitignored); clean test sids
+  rm -f "$ROOT/.spec-grounding/"*bridge-grounded* 2>/dev/null || true
+else
+  printf '  --  skip opencode plugin bridge (node unavailable)\n'
+fi
 
 echo "== opencode workflow signal CLI =="
 oldflag="$TMP/flowproj/.agent_reports/.untracked.oldopen"
@@ -2760,21 +2814,46 @@ if OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" "$OPENCODE" distill-delta op
 else
   bad "opencode export source should distill transcript"
 fi
+# distill worker: no-tools opencode-run worker is implemented (gap closed). The
+# deterministic guards below avoid a live model call.
+# (1) disabled by default for direct calls → no-op exit 0
 if "$OPENCODE_DISTILL" opencodesid "$TMP/flowproj" >/tmp/opencode_distill.out 2>/tmp/opencode_distill.err; then
-  bad "opencode distill worker should report tool-contract until worker contract is verified"
+  ok "opencode distill worker no-ops when OPENCODE_DISTILL_ENABLE unset"
 else
-  if [ "$?" -eq 69 ] \
-    && grep -q '^status=tool-contract$' /tmp/opencode_distill.out \
-    && grep -q '^reason=no-tools-worker-unverified$' /tmp/opencode_distill.out; then
-    ok "opencode distill worker reports tool-contract by default"
-  else
-    bad "opencode distill worker should exit 69 with tool-contract by default"
-  fi
+  bad "opencode distill worker should no-op (exit 0) when disabled"
 fi
-if OPENCODE_DISTILL_ENABLE=1 "$OPENCODE" distill-propose opencodesid "$TMP/flowproj" >/tmp/opencode_distill.out 2>/tmp/opencode_distill.err; then
-  bad "opencode distill proposal should report tool-contract while worker contract is unverified"
+# (2) recursion guard: MEM_DISTILL=1 → no-op even when enabled
+if MEM_DISTILL=1 OPENCODE_DISTILL_ENABLE=1 "$OPENCODE_DISTILL" opencodesid "$TMP/flowproj" >/tmp/opencode_distill.out 2>/tmp/opencode_distill.err; then
+  ok "opencode distill worker recursion guard no-ops under MEM_DISTILL=1"
 else
-  [ "$?" -eq 69 ] && ok "opencode distill proposal exits 69 for worker tool-contract" || bad "opencode distill proposal wrong exit"
+  bad "opencode distill worker should no-op under MEM_DISTILL=1"
+fi
+# (3) enabled but opencode runtime unavailable → exit 69 (no hang, no model call)
+if HOME="$TMP/no-oc-home" OPENCODE_DISTILL_ENABLE=1 OPENCODE_BIN="$TMP/no-such-opencode" \
+   "$OPENCODE_DISTILL" opencodesid "$TMP/flowproj" >/tmp/opencode_distill.out 2>/tmp/opencode_distill.err; then
+  bad "opencode distill worker should exit 69 when opencode runtime unavailable"
+else
+  [ "$?" -eq 69 ] && ok "opencode distill worker exits 69 when opencode runtime unavailable" \
+    || bad "opencode distill worker wrong exit when runtime unavailable"
+fi
+# session-end: recursion guard writes no stamp under MEM_DISTILL=1
+mkdir -p "$TMP/se-rec"
+if MEM_STORE="$TMP/se-rec" MEM_DISTILL=1 "$OPENCODE" session-end "$TMP/flowproj" se-rec-sid >/dev/null 2>&1 \
+  && [ ! -f "$TMP/se-rec/.opencode-distill-stamp-se-rec-sid" ]; then
+  ok "opencode session-end recursion guard no-ops under MEM_DISTILL=1"
+else
+  bad "opencode session-end should no-op under MEM_DISTILL=1"
+fi
+# session-end: debounces repeated triggers within the min interval
+mkdir -p "$TMP/se-deb"
+OPENCODE_DISTILL_ENABLE=0 MEM_STORE="$TMP/se-deb" "$OPENCODE" session-end "$TMP/flowproj" se-deb-sid >/dev/null 2>&1
+se_stamp=$(cat "$TMP/se-deb/.opencode-distill-stamp-se-deb-sid" 2>/dev/null || echo "")
+OPENCODE_DISTILL_ENABLE=0 MEM_STORE="$TMP/se-deb" "$OPENCODE" session-end "$TMP/flowproj" se-deb-sid >/dev/null 2>&1
+if [ -n "$se_stamp" ] \
+  && [ "$(cat "$TMP/se-deb/.opencode-distill-stamp-se-deb-sid" 2>/dev/null)" = "$se_stamp" ]; then
+  ok "opencode session-end debounces repeated triggers"
+else
+  bad "opencode session-end should debounce repeated triggers"
 fi
 
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"

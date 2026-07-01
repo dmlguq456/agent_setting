@@ -1222,22 +1222,37 @@ class OpenCodeExportSource:
             except Exception as e:
                 sys.stderr.write(f"[distill] opencode export file read failed: {e}\n")
                 return None
+        # `opencode export` truncates its stdout at a pipe-buffer boundary
+        # (~64-80KB) when the consumer is a pipe — it can exit before flushing
+        # the full payload, so a captured pipe yields invalid/half JSON for any
+        # session larger than the buffer. Redirecting to a real file is reliable,
+        # so capture to a temp file and parse that.
+        import tempfile
+        tmp = None
         try:
-            r = subprocess.run(["opencode", "export", self.sid],
-                               capture_output=True, text=True, timeout=20)
+            fd, tmp = tempfile.mkstemp(prefix="opencode-export-", suffix=".json")
+            with os.fdopen(fd, "wb") as fh:
+                r = subprocess.run(["opencode", "export", self.sid],
+                                   stdout=fh, stderr=subprocess.PIPE, timeout=60)
+            if r.returncode != 0:
+                err = (r.stderr or b"").decode("utf-8", "replace").strip()
+                if err:
+                    sys.stderr.write(f"[distill] opencode export failed: {err}\n")
+                return None
+            try:
+                return json.loads(Path(tmp).read_text(encoding="utf-8"))
+            except Exception as e:
+                sys.stderr.write(f"[distill] opencode export JSON parse failed: {e}\n")
+                return None
         except Exception as e:
             sys.stderr.write(f"[distill] opencode export failed: {e}\n")
             return None
-        if r.returncode != 0:
-            err = r.stderr.strip()
-            if err:
-                sys.stderr.write(f"[distill] opencode export failed: {err}\n")
-            return None
-        try:
-            return json.loads(r.stdout)
-        except Exception as e:
-            sys.stderr.write(f"[distill] opencode export JSON parse failed: {e}\n")
-            return None
+        finally:
+            if tmp and os.path.exists(tmp):
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
 
     def messages(self):
         payload = self.load()

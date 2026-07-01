@@ -39,7 +39,7 @@ documentation.
 | Skills (`.opencode/skill/<name>/SKILL.md` or `.opencode/skills/<name>/SKILL.md`) | yes | `adapters/opencode/skills/<name>/SKILL.md` generated from `capabilities/` |
 | External skill autoload (`~/.claude/skills/<name>/SKILL.md`, `~/.agents/skills/<name>/SKILL.md`) | yes (compat) | not relied on; adapter must generate its own skills, not depend on Claude skill autoload |
 | Agents (`.opencode/agent/<name>.md` or `.opencode/agents/<name>.md`) | yes | `adapters/opencode/agents/<name>/<name>.md` generated from `roles/README.md` with `mode: subagent` |
-| Plugin hooks (JS/TS: `tool.execute.before`, `tool.execute.after`, `event`, `config`, `chat.message`, `command.execute.before`, `permission.ask`, `shell.env`, ...) | yes | `adapters/opencode/plugins/agent-harness-guards.js` bridges write/edit/patch tool execution to shared guard preflight |
+| Plugin hooks (JS/TS: `tool.execute.before`, `tool.execute.after`, `event`, `config`, `chat.message`, `command.execute.before`, `permission.ask`, `shell.env`, ...) | yes | `adapters/opencode/plugins/agent-harness-guards.js` bridges write/edit/patch tool execution to the shared write guard, `command.execute.before` to the spec-skill gate, and `read` post-execution to the spec read marker |
 | Permission model (`permission` config: `allow`/`ask`/`deny` per tool, per-agent override) | yes | adapter documents recommended permission rules; not a harness guard replacement |
 | Permission contract wrapper | yes | `adapters/opencode/bin/preflight.sh permissions` reports native permission surfaces and rejects Claude `allowedTools` as a portable contract |
 | MCP servers (`mcp` config: local/remote) | yes | `adapters/opencode/bin/preflight.sh mcp` reports native MCP surfaces and rejects Claude `settings.json` MCP payloads as a portable contract |
@@ -47,7 +47,7 @@ documentation.
 | Statusline / footer | no user shell surface | TUI footer is native; harness status signals stay instruction-only/preflight |
 | Shell hooks (Claude-style `settings.json` hook events) | no | harness guards run as explicit preflight wrappers |
 | Session transcript | SQLite at `~/.local/share/opencode/opencode.db`, `opencode export <sid>` | `distill-delta` uses the shared OpenCode export source reader |
-| No-tools worker flag | not confirmed | `opencode run --agent <restricted-agent>` with deny permissions is a candidate but not yet verified; distill auto-apply stays disabled |
+| No-tools worker flag | yes (verified) | `opencode run --pure --agent <distiller>` with every built-in tool set to `false` — zero tools, so no execution and no tool-retry hang (D-14 acceptance passed); distill auto-apply enabled by default |
 
 ## Native Skill, Command, And Agent Surface Debt
 
@@ -145,6 +145,16 @@ memory-write guards. It also uses `tool.execute.after` to route saved design
 HTML files through `adapters/opencode/bin/preflight.sh design <file>` as a
 post-write console-check alert path.
 
+It also enforces the spec read gate, mirroring Claude's
+`PreToolUse[Skill]` + `PostToolUse[Read]` pair. `command.execute.before` calls
+`adapters/opencode/bin/preflight.sh capability <name> <cwd> <session-id>` for
+`autopilot-code` / `autopilot-spec` and throws (aborting the command before its
+prompt expands) when the cwd is spec-backed and `prd.md` was not actually read
+this session. `tool.execute.after` on a `read` of `.../spec/prd.md` calls
+`adapters/opencode/bin/preflight.sh read <prd.md> <session-id>` to drop the
+grounding marker that lets the gate pass — non-blocking, so a marker failure
+never aborts a successful read.
+
 When changing the plugin:
 
 1. Keep it under `adapters/opencode/plugins/` as adapter-owned JS/TS.
@@ -153,9 +163,79 @@ When changing the plugin:
 4. Keep shell preflight wrappers as fallback so the adapter remains usable
    when plugins are disabled.
 
-The plugin covers prompt lifecycle context, write guard enforcement, and design
-post-write console checks. Distillation still uses explicit preflight wrappers
-until the OpenCode no-tools worker contract is verified.
+The plugin covers prompt lifecycle context, write guard enforcement, spec
+read-gate enforcement, design post-write console checks, and auto-distillation
+(the `event` hook fires `session-end` on `session.idle`). The no-tools worker
+contract is verified, so distillation is enabled by default — see the
+"Auto-Distillation" section.
+
+## Parity Status vs Claude
+
+Goal of this adapter is harness behavior parity on OpenCode. The hard guard
+invariants Claude enforces through `settings.json` hooks are enforced here
+through the plugin and throw to abort, and the prompt/session lifecycle
+injections are auto-applied. The table records the current state.
+
+| Claude `settings.json` hook | OpenCode realization | Parity |
+|---|---|---|
+| `PreToolUse` git-state guard (deny) | plugin `tool.execute.before` → `preflight write` (throws) | full — auto enforced |
+| `PreToolUse` artifact-order guard (deny) | plugin `tool.execute.before` → `preflight write` (throws) | full — auto enforced |
+| `PreToolUse` builtin-memory guard (deny) | plugin `tool.execute.before` → `preflight write` (throws) | full — auto enforced |
+| `PreToolUse[Skill]` spec-skill gate (deny) | plugin `command.execute.before` → `preflight capability` (throws) | full — auto enforced (command path) |
+| `PostToolUse[Read]` spec-read marker | plugin `tool.execute.after` on `read` → `preflight read` | full — auto enforced |
+| `PostToolUse` design post-write | plugin `tool.execute.after` → `preflight design` | full — auto enforced |
+| `SessionStart` workflow signal + memory inject | plugin `experimental.chat.system.transform` → `start` / `memory` | full — auto injected |
+| `UserPromptSubmit` workflow signal / recall / briefing | plugin `experimental.chat.system.transform` → `mode` / `recall` / `briefing` | full — auto injected |
+| `/track` toggle | `preflight track` | full — manual both runtimes |
+| `SessionEnd` + `UserPromptSubmit` auto-distillation | plugin `event` (`session.idle`) → detached `preflight session-end` → no-tools `opencode run` worker | full — auto applied by default (opt out `OPENCODE_DISTILL_ENABLE=0`) |
+
+Auto-distillation, previously the one functional gap, is now closed (see the
+"Auto-Distillation" section below). Two items remain that cannot reach
+byte-for-byte Claude parity; they are OpenCode runtime surface limits, not
+adapter debt:
+
+1. **No persistent statusline.** OpenCode has a native TUI footer (model,
+   context, tokens, session) but no user shell statusline surface. Harness
+   signals (tracked/untracked, git risk, headless jobs) are injected per prompt
+   through the plugin transform instead of shown persistently. Functional, not a
+   persistent display.
+2. **Prompt-lifecycle injection rides an experimental hook.**
+   `experimental.chat.system.transform` is in OpenCode's `experimental.*`
+   namespace; if OpenCode changes it, lifecycle injection breaks and the
+   explicit preflight wrappers (`start` / `memory` / `mode` / `recall` /
+   `briefing`) remain the manual fallback.
+
+### Auto-Distillation
+
+Session auto-distillation reaches behavior parity with the Claude/codex
+session-end distillers. The earlier "worker hangs" finding was a measurement
+artifact: the hangs came from running several `opencode run` invocations
+concurrently (provider/local-server contention) and from a dead free model, not
+from tool-disable. Run serially with a working model, a fully tool-stripped
+agent does not hang.
+
+- **No-tools worker (verified).** `adapters/opencode/bin/distill-worker.sh` runs
+  `opencode run --pure --agent <distiller>` where the distiller agent sets every
+  built-in tool to `false`. With zero tools the model cannot execute or retry a
+  tool: an adversarial "run `date >> file`" prompt produced no file and exited 0
+  (D-14 acceptance). `--pure` also disables external plugins so the worker never
+  re-enters the guard plugin, and `MEM_DISTILL=1` guards every lifecycle
+  re-entry. The whole run is `timeout`-guarded so a slow/unreachable model can
+  never stall the caller.
+- **Trigger.** The plugin `event` hook fires on `session.idle` and detaches
+  `preflight session-end`, which debounces per session
+  (`OPENCODE_DISTILL_MIN_INTERVAL`, default 600s), then runs the worker. Enabled
+  by default (`OPENCODE_DISTILL_ENABLE` defaults to 1 on that path), opt out with
+  `OPENCODE_DISTILL_ENABLE=0`. Set `OPENCODE_DISTILL_MODEL` to a capable model
+  for quality.
+- **Delta extraction fix.** `opencode export` truncates its stdout at a
+  pipe-buffer boundary (~64-80KB) when the consumer is a pipe, so the shared
+  `OpenCodeExportSource` now redirects export to a temp file and parses that —
+  without this, any session larger than the buffer silently distilled to nothing.
+- **Apply.** Worker output is parsed by the shared
+  `tools/memory/apply-distill-actions.py` (skips non-JSON / fenced lines), which
+  argv-calls `mem.py`. End-to-end verified: an isolated run wrote a real record
+  to a test DB.
 
 ## Explicit Non-Support
 
@@ -202,7 +282,7 @@ Harness-specific status signals need OpenCode-native realization:
 | git state safety | Run `adapters/opencode/bin/preflight.sh write <file> [session-id]` before edits |
 | memory write guard | Run `adapters/opencode/bin/preflight.sh write <file> [session-id]` before writes |
 | design post-write verification | Run `adapters/opencode/bin/preflight.sh design <file>` after design HTML writes |
-| spec read gate | Run `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]` after actual reads and `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
+| spec read gate | OpenCode plugin enforces this automatically: `command.execute.before` runs `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]` (throws to abort `autopilot-code`/`autopilot-spec` when ungrounded) and `tool.execute.after` on a `read` of `prd.md` runs `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]`. Run both manually when plugins are unavailable |
 | workflow start cleanup | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh start [cwd] [session-id]` once per session; run it manually when plugins are unavailable |
 | workflow signal | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]`; no statusline assumption |
 | workflow toggle | Run `adapters/opencode/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly requests tracked/untracked mode switching |
@@ -210,14 +290,14 @@ Harness-specific status signals need OpenCode-native realization:
 | memory recall | OpenCode plugin `chat.message` captures prompt text and system transform runs `adapters/opencode/bin/preflight.sh recall <prompt> [cwd]`; run it manually when plugins are unavailable |
 | oncall briefing | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh briefing [cwd]`; run it manually when plugins are unavailable |
 | loop guidance | Run `adapters/opencode/bin/preflight.sh loop-info <oncall|note|study|drill>` before following loop guides; OpenCode reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts. The `note` loop is an external scheduler/worklog-board contract; use the related `autopilot-note` Skill/command projection only for on-demand note routing |
-| memory distill | Transcript delta extraction uses `opencode export` through the shared memory CLI; automatic memory mutation remains disabled until an OpenCode no-tools worker contract is verified |
+| memory distill | The plugin `event` hook auto-distills on `session.idle` via detached `preflight session-end` → no-tools `opencode run` worker (verified); enabled by default, opt out `OPENCODE_DISTILL_ENABLE=0`, set `OPENCODE_DISTILL_MODEL` for quality. Manual: `preflight.sh distill-delta <sid>` extracts the delta, `preflight.sh distill-propose <sid>` runs a proposal |
 | worklog state signal | Run `adapters/opencode/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before OpenCode updates notes or diagnoses board state |
 | role profiles | Read `roles/README.md`, then run `adapters/opencode/bin/preflight.sh role <portable-role>` to resolve OpenCode model/variant settings |
 | permission mapping | Run `adapters/opencode/bin/preflight.sh permissions` to inspect the OpenCode native permission contract and confirm Claude `allowedTools` is unsupported |
 | MCP mapping | Run `adapters/opencode/bin/preflight.sh mcp --check` to inspect OpenCode's native MCP CLI/config surface; do not copy Claude `settings.json` MCP registrations or project `tools/design-mcp` wholesale |
 | headless dispatch | Run `adapters/opencode/bin/preflight.sh headless --check <worktree>` before OpenCode `run` dispatch; it checks the worktree, command availability, and installed OpenCode runtime projection (`agent-harness`, native Skills path, native Agents, native Commands, and guard plugin) without launching. Use `adapters/opencode/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--agent <agent>]` to build the OpenCode headless command and append `.dispatch/jobs.log` before launch; `--start` reruns the same projection check before launching. While waiting on dispatched work, run `adapters/opencode/bin/preflight.sh liveness [jobs.log]` to match open jobs to OpenCode SQLite sessions by `session.directory` and latest session/message/part update time. After main-session harvest, run `adapters/opencode/bin/preflight.sh harvest --slug <slug> --mark-done` to mark selected registry rows done; merge and worktree cleanup stay outside the adapter wrapper |
 | role modes | Read `roles/MODES.md`, then run `adapters/opencode/bin/preflight.sh mode-info <family/mode>`; treat adapter-coupled modes as unsupported unless wrappers exist, obey `fallback=reference-only`, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
-| hook invariants | Read `core/HOOKS.md`; OpenCode plugin hooks cover prompt lifecycle context, write/edit/patch guards, and design HTML post-write checks, while explicit preflight wrappers remain fallback for disabled/untrusted plugins and events not yet covered |
+| hook invariants | Read `core/HOOKS.md`; OpenCode plugin hooks cover prompt lifecycle context, write/edit/patch guards, the spec read gate (command/read), and design HTML post-write checks, while explicit preflight wrappers remain fallback for disabled/untrusted plugins and events not yet covered |
 | capabilities | Read `capabilities/README.md`, then run `adapters/opencode/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 
 ## Model Mapping
@@ -299,24 +379,26 @@ OpenCode capability uses them directly.
 
 ## Distillation Boundary
 
-Claude's adapter can run a detached `claude -p` worker with tool use denied by
-runtime flags. OpenCode has `opencode run` for headless execution and a
-per-agent permission model, but no explicit confirmed equivalent to a no-tools
-worker flag. The OpenCode adapter therefore separates the pipeline and keeps
-it disabled by default:
+Claude's adapter runs a detached `claude -p` worker with tool use denied by
+runtime flags. OpenCode's verified equivalent is `opencode run --pure --agent
+<distiller>` with a fully tool-stripped agent (every built-in tool `false`).
+The pipeline is implemented and enabled by default:
 
 1. `distill-delta` is supported through the shared memory CLI's
    `OpenCodeExportSource`, which normalizes `opencode export <session-id>` JSON
    into the `.messages()` interface (`Msg(role, ts, text, uuid, is_sidechain)`).
-2. `distill-propose` is disabled by default. It must not auto-apply memory
-   mutations until an OpenCode no-tools worker
-   contract is verified (candidate: `opencode run --agent <restricted-agent>`
-   with deny permissions, or a future plugin-mediated worker).
-3. The proposal, when implemented, would be parsed by the shared
-   `tools/memory/apply-distill-actions.py` applier only when
-   `OPENCODE_DISTILL_APPLY=1` is explicitly set.
-4. Automatic distillation stays disabled until a no-tools worker contract is
-   proven.
+   Export is captured to a temp file, not a pipe, because `opencode export`
+   truncates piped stdout at a buffer boundary.
+2. `distill-propose` / the `session-end` path run the no-tools worker
+   (`distill-worker.sh`): `opencode run --pure --agent <distiller>`, timeout-
+   guarded, `MEM_DISTILL=1` recursion guard. The D-14 acceptance (adversarial
+   shell-exec prompt produces no execution, no hang) passed.
+3. Worker output is parsed by the shared
+   `tools/memory/apply-distill-actions.py` applier when `OPENCODE_DISTILL_APPLY=1`
+   (the `session-end` path defaults it on).
+4. Automatic distillation is enabled by default through the plugin
+   `event`/`session.idle` trigger (debounced per session). Opt out with
+   `OPENCODE_DISTILL_ENABLE=0`; set `OPENCODE_DISTILL_MODEL` for quality.
 
 ## Worklog Boundary
 
