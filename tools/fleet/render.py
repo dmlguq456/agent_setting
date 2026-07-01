@@ -305,8 +305,8 @@ def _dispatch_row(j, orphan=False, parent_model=None):
     name = j.slug or key
     gch, gkey = _glyph(j.liveness)                    # leading status glyph, same slot idea as session
     segs = [("    └▸", "dim"), (gch, gkey), (" " + _ICON_CHILD + " ", "dim")]
-    if j.harness:                                    # dispatch = headless → weaker: badge dim (no reverse-video)
-        segs.append((_BADGE_TEXT.get(j.harness, "[?]"), "dim"))
+    if j.harness:                                    # dispatch badge in the harness color too (same as session)
+        segs.append((_BADGE_TEXT.get(j.harness, "[?]"), _BADGE_KEY.get(j.harness, "head")))
     segs.append((" " + name, None))                  # name right after badge — same slot as a session's slug (order consistency)
     if key and key != name:                          # pipe key/stage as detail AFTER the name (loops: key==name → skip)
         segs.append(("  " + key, "head"))
