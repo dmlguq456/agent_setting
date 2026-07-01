@@ -181,8 +181,8 @@ The `SessionStart` bridge calls `adapters/codex/bin/preflight.sh start` and
 `memory` for stale workflow cleanup and memory context, then emits the collected
 context as `hookSpecificOutput.additionalContext`. The `SessionEnd` and
 `Stop` bridges call `session-end` for `mem sync` plus the verified automatic distill worker
-(default on; `CODEX_DISTILL_ENABLE=0` opt-out) while emitting only Codex-valid
-minimal hook JSON (`{}`) so Stop hook output never violates Codex parsing. The
+(default on; `CODEX_DISTILL_ENABLE=0` opt-out) while emitting no stdout so Stop hook
+output never violates Codex parsing. The
 `UserPromptSubmit` bridge calls `prompt-signal`, `mode`, `recall`, `briefing`,
 and `turn-nudge` for prompt-time workflow and memory signals, then emits the
 collected prompt context as one `hookSpecificOutput.additionalContext`. The structured
