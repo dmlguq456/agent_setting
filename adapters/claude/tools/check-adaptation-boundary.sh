@@ -700,13 +700,14 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/AGENTS.md must document the Codex native hook projection"
   fi
 
-  if ! grep -Fq 'hook_boundary=shell-read-write-unsupported-use-explicit-preflight' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'shell_read_write_hooks=unsupported' adapters/codex/bin/preflight.sh \
+  if ! grep -Fq 'hook_boundary=shell-read-write-targeted-detection-explicit-preflight-fallback' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'shell_read_write_hooks=targeted-detection' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'targeted_shell_hooks=Bash,Shell,functions.exec_command' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'structured_write_hooks=Write,Edit,MultiEdit,apply_patch,functions.apply_patch' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'Shell/Bash/`functions.exec_command` reads and writes are outside current Codex file-target hook coverage' adapters/codex/AGENTS.md \
-    || ! grep -Fq 'Shell/Bash/`functions.exec_command` reads and writes are target-ambiguous and unsupported by file-level hooks' adapters/codex/README.md \
-    || ! grep -Fq 'shell-read-write-unsupported-use-explicit-preflight' adapters/codex/ADAPTATION.md; then
-    fail_msg "Codex adapter must document and report the shell/exec read-write hook boundary with explicit preflight fallback"
+    || ! grep -Fq 'Shell/Bash/`functions.exec_command` reads and writes have targeted hook coverage' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'Shell/Bash/`functions.exec_command` gets targeted detection' adapters/codex/README.md \
+    || ! grep -Fq 'shell-read-write-targeted-detection-explicit-preflight-fallback' adapters/codex/ADAPTATION.md; then
+    fail_msg "Codex adapter must document and report targeted shell/exec read-write hook coverage with explicit preflight fallback"
   fi
   if ! grep -Fq '*) fp="$PWD/$fp" ;;' hooks/spec-read-marker.sh \
     || ! grep -Fq 'codex read wrapper resolves relative prd paths for spec gate' hooks/portable-guards.test.sh; then
@@ -1484,8 +1485,8 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"PreToolUse"' "$hook_json" || ! grep -Fq 'pretooluse-write-guard.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex PreToolUse write guard"
   fi
-  if ! grep -Fq 'Write|Edit|MultiEdit|apply_patch|functions\\.apply_patch' "$hook_json"; then
-    fail_msg "$hook_json must attach Codex write hooks to Write/Edit/MultiEdit/apply_patch/functions.apply_patch"
+  if ! grep -Fq 'Write|Edit|MultiEdit|apply_patch|functions\\.apply_patch|Bash|Shell|functions\\.exec_command' "$hook_json"; then
+    fail_msg "$hook_json must attach Codex write hooks to structured writes and targeted shell command tools"
   fi
   if ! grep -Fq '"PostToolUse"' "$hook_json" || ! grep -Fq 'posttooluse-design-check.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex PostToolUse design check"

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -77,12 +78,50 @@ def normalize(base: Path, raw: str) -> str:
     return str(path)
 
 
+def is_shell_tool(name: str) -> bool:
+    return name in {"Bash", "bash", "Shell", "shell", "exec_command", "functions.exec_command"} or name.endswith(
+        ".exec_command"
+    )
+
+
+def shell_command(payload: dict[str, Any], args: dict[str, Any]) -> str:
+    return first_string(args, "command", "cmd", "script", "input") or first_string(
+        payload, "command", "cmd", "script"
+    )
+
+
+def shell_read_target(payload: dict[str, Any], args: dict[str, Any]) -> str:
+    command = shell_command(payload, args)
+    if not command:
+        return ""
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return ""
+
+    read_commands = {"cat", "sed", "awk", "grep", "rg", "head", "tail", "nl", "less", "more"}
+    if not any(Path(token).name in read_commands for token in tokens):
+        return ""
+
+    base = cwd(payload)
+    for token in tokens:
+        if token.startswith("-") or token in {"|", "&&", "||", ";"}:
+            continue
+        if "spec/prd.md" in token or token.endswith(".agent_reports/spec/prd.md") or token.endswith(
+            ".claude_reports/spec/prd.md"
+        ):
+            return normalize(base, token)
+    return ""
+
+
 def read_target(payload: dict[str, Any]) -> str:
     name = tool_name(payload)
-    if name not in {"Read", "read"}:
-        return ""
     args = tool_input(payload)
-    return normalize(cwd(payload), first_string(args, "file_path", "filePath", "path", "file"))
+    if name in {"Read", "read"}:
+        return normalize(cwd(payload), first_string(args, "file_path", "filePath", "path", "file"))
+    if is_shell_tool(name):
+        return shell_read_target(payload, args)
+    return ""
 
 
 def main() -> int:

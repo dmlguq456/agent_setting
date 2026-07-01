@@ -50,7 +50,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | capability | Read `capabilities/README.md` for meaning; run `adapters/codex/bin/preflight.sh capability-info <capability>` to confirm Codex realization; use `adapters/codex/skills/<capability>/SKILL.md` as Codex-native guidance |
 | native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Command-like capability entrypoints use these native Skills/plugin surfaces and are verified with Codex discoverability (`codex debug prompt-input`) |
 | native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, `SessionEnd`/`Stop` memory sync/distill, `UserPromptSubmit` prompt signals and turn nudges, `PermissionRequest` harness status snapshots, `PreToolUse` write guards, `PostToolUse` spec read markers, and `PostToolUse` design HTML checks; explicit preflight remains fallback |
-| shell I/O hook boundary | Structured write tools (`Write`, `Edit`, `MultiEdit`, `apply_patch`, `functions.apply_patch`) and structured `Read` are guarded. Shell/Bash/`functions.exec_command` reads and writes are target-ambiguous and unsupported by file-level hooks, so run explicit `preflight.sh write`, `preflight.sh read`, or `preflight.sh design` before using shell I/O on guarded paths |
+| shell I/O hook boundary | Structured write tools (`Write`, `Edit`, `MultiEdit`, `apply_patch`, `functions.apply_patch`) and structured `Read` are guarded. Shell/Bash/`functions.exec_command` gets targeted detection for obvious write redirects and direct `spec/prd.md` reads; target-ambiguous shell I/O still requires explicit `preflight.sh write`, `preflight.sh read`, or `preflight.sh design` before touching guarded paths |
 | role profile | Use `roles/README.md` for meaning; Codex custom agents are materialized under `adapters/codex/agents/*.toml` and still call `adapters/codex/bin/preflight.sh role <portable-role>` for concrete model/reasoning mapping |
 | role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; use the reported `native_mode_path` under `adapters/codex/modes/`; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no Codex-native runtime surface exists |
 | native mode surface | Mode guides are generated under `adapters/codex/modes/` from `roles/modes/`; design modes additionally require the Codex visual-harness tool contract before claiming rendered visual completion |
@@ -258,10 +258,11 @@ actual `spec/prd.md` reads through `adapters/codex/bin/preflight.sh read`. The
 including qualified `functions.apply_patch` payloads, and delegates
 design HTML saves to `adapters/codex/bin/preflight.sh design`.
 
-Shell/Bash/`functions.exec_command` I/O is outside current file-target hook
-coverage. Treat shell reads/writes to guarded paths as an explicit tool
-contract: run `preflight.sh write`, `preflight.sh read`, or
-`preflight.sh design` manually before the shell command.
+Shell/Bash/`functions.exec_command` I/O has targeted hook coverage for obvious
+write redirects and direct `spec/prd.md` reads. Treat target-ambiguous shell
+reads/writes to guarded paths as an explicit tool contract: run
+`preflight.sh write`, `preflight.sh read`, or `preflight.sh design` manually
+before the shell command.
 
 Expose it through `codex_setting/codex-hooks`, not through a plain `hooks/`
 projection:

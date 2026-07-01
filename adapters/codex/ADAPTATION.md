@@ -204,15 +204,16 @@ write/edit/multiedit/patch surface, including qualified `functions.apply_patch`
 payloads, and calls `adapters/codex/bin/preflight.sh design
 <file>` for saved design HTML files.
 
-Current Codex hook coverage is structured-tool coverage, not arbitrary shell
-I/O coverage. Shell/Bash/`functions.exec_command` reads and writes do not expose
-reliable file targets to the adapter, so they bypass file-level write guards,
-spec-read markers, and design post-write checks unless the agent explicitly
-runs the matching `preflight.sh write`, `preflight.sh read`, or
+Current Codex hook coverage includes structured tools plus targeted shell
+detection, not arbitrary shell I/O coverage. Shell/Bash/`functions.exec_command`
+commands with obvious write redirects and direct `spec/prd.md` reads are routed
+through adapter hooks; target-ambiguous shell reads/writes still require the
+agent to run the matching `preflight.sh write`, `preflight.sh read`, or
 `preflight.sh design` wrapper. `preflight.sh prompt-signal` and
 `preflight.sh permissions` report this as
-`shell-read-write-unsupported-use-explicit-preflight`; do not claim Claude-style
-hard hook parity for shell I/O until Codex provides a target-aware hook surface.
+`shell-read-write-targeted-detection-explicit-preflight-fallback`; do not claim
+Claude-style hard hook parity for ambiguous shell I/O until Codex provides a
+fully target-aware shell hook surface.
 
 Do not project Claude `hooks/` or `settings.json` into Codex. Use
 `codex_setting/codex-hooks` as the install source, and keep explicit
