@@ -131,6 +131,8 @@ class Session:
     status: Optional[str] = None        # raw harness status (claude idle/shell/busy)
     mtime: Optional[float] = None       # newest transcript/db mtime (epoch sec) for liveness
     liveness: str = "unknown"
+    gate: Optional[str] = None          # spec-gate override (tracked/untracked) — demo fixtures; None = compute from cwd
+    branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
 
     def to_dict(self):
         return asdict(self)
@@ -155,6 +157,7 @@ class DispatchJob:
     source: str = "proc"                # proc | jobs
     status: Optional[str] = None        # raw jobs.log status (open/running/...)
     liveness: str = "unknown"
+    branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
 
     def to_dict(self):
         return asdict(self)

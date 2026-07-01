@@ -247,13 +247,13 @@ def _session_row(s, narrow, is_parent=False):
             (badge, bkey), (" " * max(0, 10 - len(badge)), None), (" ", None),  # bg color on badge TEXT only
             (_pad(slug, 18), None)]
 
-    # git branch (⎇) — same info the statusline shows, per session (and per dispatch worktree)
-    br = _git_branch(s.cwd)
-    br_txt = ("⎇ " + br) if br else ""
-    segs += [("  ", None), (br_txt, "warn"), (" " * max(1, 16 - _dw(br_txt)), None)]
+    # git branch (⎇) — same info the statusline shows; '⎇ —' when the cwd is not a git repo
+    br = s.branch or _git_branch(s.cwd)
+    br_txt = ("⎇ " + br) if br else "⎇ —"
+    segs += [("  ", None), (br_txt, "warn" if br else "dim"), (" " * max(1, 16 - _dw(br_txt)), None)]
 
     # per-session spec-gate, full label after the name (a tracked repo can host untracked work)
-    gate = _project_gate(s.cwd, s.session_id)
+    gate = s.gate or _project_gate(s.cwd, s.session_id)
     gate_full, gate_c = {"tracked": ("📌 tracked(pipeline)", "work"),
                          "untracked": ("⚡ untracked(ad-hoc)", "warn")}.get(gate, ("", "dim"))
     segs += [(gate_full, gate_c), (" " * max(1, 21 - _dw(gate_full)), None)]
@@ -326,9 +326,8 @@ def _dispatch_row(j, orphan=False, parent_model=None):
     dmodel = j.model or parent_model                 # own model if resolvable, else parent's (same config for now — per-dispatch later)
     if dmodel:
         segs.append(("  ✨", "dim")); segs.append((dmodel, _model_key(dmodel)))
-    br = _git_branch(j.cwd)                           # dispatch worktree branch (wt/branch)
-    if br:
-        segs.append(("  ⎇ " + br, "warn"))
+    br = j.branch or _git_branch(j.cwd)               # dispatch worktree branch (wt/branch); '—' if none
+    segs.append(("  ⎇ " + (br or "—"), "warn" if br else "dim"))
     segs.append(("  ⏳" + el, "dim"))                 # liveness shown by leading glyph now
     if orphan:
         segs.append(("  (orphan)", "dim"))
