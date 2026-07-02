@@ -125,6 +125,13 @@ def _init_colors():
     # qa rigor ramp (dispatch tag after the name): quick dim … adversarial bold
     for lvl, it in _QA_INT.items():
         _COLOR["qa_" + lvl] = it
+    # effort heat ramp (user 2026-07-02: "effort라고 쓰고 컬러도 입히자") — reasoning heat:
+    # low/medium recede, high = yellow, xhigh = bold yellow, max = bold red (alarm-adjacent).
+    _COLOR["eff_low"] = curses.A_DIM
+    _COLOR["eff_medium"] = _COLOR.get("yellow", 0) | curses.A_DIM
+    _COLOR["eff_high"] = _COLOR.get("yellow", 0)
+    _COLOR["eff_xhigh"] = _COLOR.get("yellow", 0) | curses.A_BOLD
+    _COLOR["eff_max"] = _COLOR.get("red", 0) | curses.A_BOLD
     # stage breadcrumb — each pipeline stage a DISTINCT color (user); the CURRENT stage is BOLD
     # (bright, "눈에 띄는"), past/pending stages the same hue but DIM. Palette cycles by stage index.
     _stage_raw = [_hue.get("opencode", 0), _hue.get("claude", 0), _COLOR.get("green", 0),
@@ -302,6 +309,8 @@ _NAME_COL = 18                # absolute col where the NAME starts — SHARED by
 _NW_S = _BRANCH_COL - _NAME_COL   # name field (both row types): col 18 → branch 46 = 28
 _BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
 _MW = 23                      # model cell: name + FULL effort word ('Opus 4.8 xhigh' — no abbrev)
+_EFW = 7                      # effort subfield ("medium"=6 +1 gap) — FIXED width so every row's
+                              # effort lands in the same column, under its own 'effort' header
 _CTX_W = 16                   # context gauge (kept wide)
 _CLOCK = "⏱ "                 # elapsed-time marker before uptime (⏱ = 2 cells, see _WIDE)
 
@@ -315,9 +324,10 @@ _PIPE_STAGES = {
     "draft": ["draft", "refine", "apply"],
 }
 
-# plain-text column labels (icons removed per user — "위에 아이콘들은 전부 빼자")
+# plain-text column labels (icons removed per user — "위에 아이콘들은 전부 빼자").
+# 'effort' gets its OWN header over the fixed subcolumn inside the model cell (user 2026-07-02).
 _COL_HEAD = ("    " + "harness".ljust(_HW) + "session".ljust(_NW_S)
-             + "branch".ljust(_BRW) + "model".ljust(_MW)
+             + "branch".ljust(_BRW) + "model".ljust(_MW - _EFW) + "effort".ljust(_EFW)
              + "    context / stage")
 
 
@@ -346,17 +356,22 @@ def _branch_seg(cwd, branch, dim=True):
     return (_pad((br or "—")[: _BRW - 1], _BRW), "dim" if dim else "branch_s")
 
 
+def _eff_key(effort, dim):
+    """Effort heat-ramp color key; dispatch rows stay on the dim axis."""
+    if dim:
+        return "dim"
+    return ("eff_" + effort) if effort in ("low", "medium", "high", "xhigh", "max") else "dim"
+
+
 def _model_cell(model, effort, width, dim=False):
-    """The model cell: name in its family color + the FULL effort word ('Opus 4.8 xhigh').
-    Whole cell rides the row's brightness axis — bright on a main session, dim on a dispatch."""
+    """The model cell: name in its family color + the FULL effort word in a fixed subcolumn
+    ('Opus 4.8 | xhigh' aligned across rows, heat-ramp colored — user 2026-07-02). Whole cell
+    rides the row's brightness axis — bright on a main session, dim on a dispatch."""
     name = _clean_model(dash(model)) or "—"
-    sfx = effort or ""
+    sfx = (effort or "")[: _EFW - 1]
     lkey = _model_key(model, dim=dim)
-    skey = "dim" if dim else None
-    if sfx:
-        nw = max(1, width - len(sfx) - 2)
-        return [(_pad(name[:nw], nw + 1), lkey), (_pad(sfx, len(sfx) + 1), skey)]
-    return [(_pad(name[: max(1, width - 1)], width), lkey)]
+    nw = max(1, width - _EFW)
+    return [(_pad(name[: nw - 1], nw), lkey), (_pad(sfx, _EFW), _eff_key(sfx, dim))]
 
 
 def _stage_segs(key, stage, working=False):
@@ -376,6 +391,17 @@ def _stage_segs(key, stage, working=False):
             if i:
                 out.append((" › ", "dim"))
             out.append((st, _cur_key(i) if st == stage else "stg%d_off" % (i % 5)))
+        return out
+    if seq and stage in ("", key, "open", "running"):
+        # pre-plan boot (live_stage fell back to the argv key) / registry-only rows: show the
+        # WHOLE track unlit — the breadcrumb is visible from the first tick and lights up
+        # left→right (plan › exec › test) as plans/ artifacts appear. (user 2026-07-02:
+        # "구체적으로 plan → exec → test 순이 떠야하는건데")
+        out = []
+        for i, st in enumerate(seq):
+            if i:
+                out.append((" › ", "dim"))
+            out.append((st, "stg%d_off" % (i % 5)))
         return out
     if stage:
         return [(stage, _cur_key(0))]
@@ -482,9 +508,20 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     avail = _NW_S
     tag_segs, tagw = _mq_tag(j.mode, qa_text, qa_key)
     otag = "  (orphan)" if orphan else ""
-    nm = name[: max(3, avail - tagw - len(otag) - 1)]   # -1 → always ≥1 gap before branch
-    used = len(nm)
-    segs.append((nm, "name_dim"))
+    budget = max(3, avail - tagw - len(otag) - 1)       # -1 → always ≥1 gap before branch
+    used = 0
+    # capability LEADS the name — `code dispatch-profiles (dev·standard)` (user 2026-07-02:
+    # "code도 앞쪽에 떠야지"). The process kind is the primary identity, the slug secondary;
+    # loops jobs (key == slug) collapse to the single token as before.
+    lead = key if key and key != name else ""
+    if lead:
+        lead = lead[:budget]
+        segs.append((lead, "name_dim")); used = len(lead)
+        if used + 2 <= budget:
+            segs.append((" ", None)); used += 1
+    nm = name[: max(0, budget - used)]
+    if nm:
+        segs.append((nm, "dim" if lead else "name_dim")); used += len(nm)
     segs += tag_segs; used += tagw
     if otag and used + len(otag) <= avail:
         segs.append((otag, "gate_u")); used += len(otag)

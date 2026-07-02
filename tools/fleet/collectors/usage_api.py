@@ -17,8 +17,9 @@ import os
 import time
 import urllib.request
 
-_TTL = 60.0
-_cache = {"ts": 0.0, "data": None}
+_TTL = 180.0              # the oauth endpoint 429s under 60s polling (probed 2026-07-02)
+_STALE_MAX = 900.0        # keep serving last-good through transient failures up to 15min
+_cache = {"ts": 0.0, "ok_ts": 0.0, "data": None}
 
 
 def _home():
@@ -75,9 +76,19 @@ def _fetch():
 
 
 def account_usage():
-    """TTL-cached account usage {rl_5h, rl_7d, rl_ms} for the claude account, or None."""
+    """TTL-cached account usage {rl_5h, rl_7d, rl_ms} for the claude account, or None.
+
+    Serve-stale on failure (2026-07-02, user: Fable 사용량이 떴다 안떴다): a single 3s
+    timeout used to overwrite last-good with None, blanking the per-model buckets for a
+    whole TTL. Now a failed refresh keeps the previous payload up to _STALE_MAX; only a
+    15min-long outage drops to None (honest fallback to the tap values)."""
     now = time.time()
     if now - _cache["ts"] > _TTL:
-        _cache["data"] = _fetch()
-        _cache["ts"] = now              # failures cache too — no retry storm inside the TTL
+        d = _fetch()
+        _cache["ts"] = now              # failures throttle too — no retry storm inside the TTL
+        if d is not None:
+            _cache["data"] = d
+            _cache["ok_ts"] = now
+        elif now - _cache["ok_ts"] > _STALE_MAX:
+            _cache["data"] = None
     return _cache["data"]

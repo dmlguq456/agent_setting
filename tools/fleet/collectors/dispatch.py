@@ -92,11 +92,22 @@ def _enc(path):
     return "".join("-" if ch in "/._" else ch for ch in path)
 
 
-def _claude_job_model(pid_s):
+def _model_display(mid):
+    """'claude-opus-4-8[1m]' → 'Opus 4.8' (family word + short dotted version; date/context
+    suffixes like -20251001 / [1m] dropped)."""
+    parts = mid.split("[", 1)[0].replace("claude-", "").split("-")
+    fam = parts[0].capitalize()
+    ver = ".".join(p for p in parts[1:] if p.isdigit() and len(p) <= 2)
+    return fam + ((" " + ver) if ver else "")
+
+
+def _claude_job_model(pid_s, jcwd=None):
     """A claude dispatch (claude -p) has its own session — resolve its model via
     sessions/<pid>.json → sessionId → .statusline/<sid>.json (same path as claude.py).
-    None if the headless session hasn't emitted a statusline yet (falls back to parent's
-    model at render). Forward-looking: lets per-dispatch model differ from the parent later."""
+    HEADLESS sessions never render a statusline, so fall back to the transcript's own
+    "model" field (assistant entries carry the real model id) — without this a dispatch
+    launched with --model opus showed the PARENT's model (user 2026-07-02: main=Fable /
+    dispatch=Opus 정책을 fleet 으로 검증할 수 있어야 함)."""
     home = _proj_home()
     try:
         with open(os.path.join(home, "sessions", "%s.json" % pid_s)) as f:
@@ -110,7 +121,19 @@ def _claude_job_model(pid_s):
             m = json.load(f).get("model") or {}
         return m.get("display_name") or m.get("id")
     except Exception:
+        pass
+    if not jcwd:
         return None
+    path = os.path.join(home, "projects", _enc(jcwd), sid + ".jsonl")
+    try:
+        sz = os.path.getsize(path)
+        with open(path, "rb") as f:
+            f.seek(max(0, sz - 65536))
+            data = f.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    ids = re.findall(r'"model":"(claude-[a-z0-9.\-]+)', data)
+    return _model_display(ids[-1]) if ids else None
 
 
 def _job_liveness(path, now, stale_min=15):
@@ -289,7 +312,7 @@ def _scan_processes():
                 elapsed_min=etime_to_min(etime), slug=slug, cwd=jcwd,
                 parent_sid=parent_sid, is_child=is_child, qa_source=qsrc, source="proc",
                 harness="claude", pid=int(pid_s) if pid_s.isdigit() else None,
-                model=_claude_job_model(pid_s),
+                model=_claude_job_model(pid_s, jcwd),
             ))
         elif loop:
             key = loop.group(1)
