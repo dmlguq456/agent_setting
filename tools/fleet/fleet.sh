@@ -41,7 +41,8 @@ for a in ${ARGS[@]+"${ARGS[@]}"}; do case "$a" in --once|--json) direct=1 ;; esa
 
 run_direct() { exec "$PY" "$FLEET_PY" "$@"; }
 
-echo "fleet: 스크롤은 키보드(j/k, PgUp/PgDn, g/G)가 기본 — 마우스 +N 클릭 토글은 opt-in(tmux mouse on 필요, 켜면 페인 기본 클릭-선택/복사 대신 가져감)." >&2
+# (구 스크롤/마우스 안내 echo 는 제거 — curses 가 바로 덮어 읽을 수 없었고, 키 안내는
+#  이제 footer 키 바가 상시 표시. 마우스 opt-in 상세는 위 헤더 주석 참조.)
 
 if [ "$direct" = "1" ]; then
   run_direct ${ARGS[@]+"${ARGS[@]}"}
