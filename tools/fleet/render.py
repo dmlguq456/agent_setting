@@ -38,9 +38,9 @@ _BADGE_TEXT = {"claude": "claude code", "codex": "codex", "opencode": "opencode"
 _BADGE_KEY = {"claude": "h_claude", "codex": "h_codex", "opencode": "h_opencode"}
 _LIVE_RANK = {"working": 0, "idle": 1, "blocked": 2, "done": 3, "stale": 4, "dead": 5, "unknown": 6}
 _JOB_LIVE_RANK = {"working": 0, "stale": 1, "dead": 2, "unknown": 3}
-# effort intensity ramp — low/medium recede, high normal, xhigh/max stand out (subtle "구분감")
-_LVL_INT = {"low": curses.A_DIM, "medium": curses.A_DIM, "high": 0,
-            "xhigh": curses.A_BOLD, "max": curses.A_BOLD}
+# effort → 2-char suffix after the model (design review r2: the effort column repeated 'xhigh'
+# everywhere and burned a column; a dim suffix keeps the info without the noise)
+_EFF_ABBR = {"low": "lo", "medium": "md", "high": "hi", "xhigh": "xh", "max": "mx"}
 # qa rigor ramp (a dispatch job's analogue of effort) — quick recedes, adversarial stands out
 _QA_INT = {"quick": curses.A_DIM, "light": curses.A_DIM, "standard": 0,
            "thorough": curses.A_BOLD, "adversarial": curses.A_BOLD}
@@ -85,8 +85,8 @@ def _init_colors():
     _COLOR["lvl_g"] = _COLOR.get("green", 0)
     _COLOR["lvl_y"] = _COLOR.get("yellow", 0)
     _COLOR["lvl_r"] = _COLOR.get("red", 0) | curses.A_BOLD
-    # per-MODEL colors (user 2026-07-02: "모델별로도 컬러를 다르게") — the model column, its effort
-    # dial and usage bucket labels take the model-family color; the harness column keeps its own hue.
+    # per-MODEL colors, QUIET (design r2): family hue kept (user asked for per-model 구분) but
+    # always DIM — color must not compete with the state axis (dots/gauges). 은은한 구분감.
     _hue = {h: _COLOR.get("h_" + h, 0) for h in ("claude", "codex", "opencode")}
     _fam = {"opus": curses.COLOR_CYAN, "sonnet": curses.COLOR_BLUE, "haiku": curses.COLOR_GREEN,
             "fable": curses.COLOR_MAGENTA, "gpt": curses.COLOR_YELLOW}
@@ -98,24 +98,22 @@ def _init_colors():
             n_pair += 1
         except Exception:
             hue = 0
-        _COLOR["fam_" + fam] = hue
-        for lvl, it in _LVL_INT.items():
-            _COLOR["eff_%s_%s" % (fam, lvl)] = hue | it
-    _COLOR["fam_other"] = 0                        # unknown family → default fg (still readable)
+        _COLOR["fam_" + fam] = hue | curses.A_DIM
+    _COLOR["fam_other"] = curses.A_DIM             # unknown family → dim default fg
     for h, hue in _hue.items():
         # bright harness color = a TOP-LEVEL session / account; a dispatch job keeps the DIM
         # harness (h_<h>) → main↔spawned weight is carried by font-color intensity (no bg fill).
         _COLOR["hb_" + h] = hue
     _COLOR["hb_other"] = 0
     _COLOR["grp"] = curses.A_BOLD      # group (directory) name — the ▍-anchored section header
-    for lvl, it in _LVL_INT.items():
-        _COLOR["eff_other_" + lvl] = it
+    _COLOR["grp_live"] = _COLOR.get("green", 0)    # group ▍ marker when the group has work running
     # harness identity = dim colored text (color lives ONLY here for identity)
     for h in ("claude", "codex", "opencode"):
         _COLOR["h_" + h] = _COLOR.get("h_" + h, 0) | curses.A_DIM
-    # session name = the single focal point per row
+    # session name = THE left pillar of every row (design r2): bright bold for any live session —
+    # the eye lands here first; only stale/dead recede. working is distinguished by its dot blink.
     _COLOR["name_work"] = curses.A_BOLD
-    _COLOR["name_idle"] = 0
+    _COLOR["name_idle"] = curses.A_BOLD
     _COLOR["name_dim"] = curses.A_DIM
     # gate words · cost alarm · structure
     _COLOR["gate_t"] = _COLOR.get("green", 0) | curses.A_DIM
@@ -145,9 +143,12 @@ def _live_key(state):
             "dead": "g_dead"}.get(state, "dim")
 
 
-# monochrome status dot (● working / ○ idle / ◦ stale / × dead) — color carries the meaning
+# status dot — SHAPE+SIZE gradient (design r2, a11y): the less active the state, the smaller
+# the glyph. ● working (blinks) · ○ idle · ◍ detached · tiny '·' stale · ✕ dead. Readable
+# without color (◌ vs ◦ were near-identical dim circles before).
 _LIVE_GLYPH = {"working": "●", "idle": "○", "blocked": "◑", "done": "✓",
-               "stale": "◦", "dead": "×", "unknown": "·"}
+               "stale": "·", "dead": "✕", "unknown": "·"}
+_DETACHED_GLYPH = "◍"
 _GLYPH_KEY = {"working": "g_work", "idle": "g_idle", "blocked": "g_idle", "done": "green",
               "stale": "g_stale", "dead": "g_dead", "unknown": "dim"}
 
@@ -185,9 +186,9 @@ def _model_key(model):
     return "fam_" + _model_family(model)
 
 
-def _eff_key(model, effort):
-    lvl = effort if effort in _LVL_INT else "medium"
-    return "eff_%s_%s" % (_model_family(model), lvl)
+def _eff_suffix(effort):
+    """2-char dim suffix for the model cell ('xhigh' → 'xh') — replaces the old effort column."""
+    return _EFF_ABBR.get(effort, effort[:2] if effort else "")
 
 
 def _clean_model(name):
@@ -302,9 +303,8 @@ _NAME_COL = 18                # absolute col where the NAME starts — SHARED by
                               # 14; dispatch: prefix 6 + harness 12 — deeper indent, narrower harness)
 _NW_S = _BRANCH_COL - _NAME_COL   # name field (both row types): col 18 → branch 46 = 28
 _BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
-_EFF_W = 6                    # effort sub-column (session effort: low..max)
-_MW = 16 + _EFF_W             # model + effort field: model 16 + effort 6
-_CTX_W = 14                   # context-window gauge width (the metric the user reads most)
+_MW = 20                      # model cell: name + 2-char effort suffix ('Opus 4.8 xh')
+_CTX_W = 16                   # context gauge — widened with the column freed by the effort field
 _CLOCK = "⏱ "                 # elapsed-time marker before uptime (⏱ = 2 cells, see _WIDE)
 
 # known pipeline stage sequences → the stage breadcrumb (process viz). Unknown keys/stages fall
@@ -319,8 +319,8 @@ _PIPE_STAGES = {
 
 # plain-text column labels (icons removed per user — "위에 아이콘들은 전부 빼자")
 _COL_HEAD = ("    " + "harness".ljust(_HW) + "session".ljust(_NW_S)
-             + "branch".ljust(_BRW) + "model".ljust(_MW - _EFF_W)
-             + "effort".ljust(_EFF_W) + "    context / stage")
+             + "branch".ljust(_BRW) + "model".ljust(_MW)
+             + "    context / stage")
 
 
 def _gate_word(gate, pipe):
@@ -348,19 +348,16 @@ def _branch_seg(cwd, branch):
     return (_pad((br or "—")[: _BRW - 1], _BRW), "dim")
 
 
-def _me_segs(model, left, dial, dial_key, width):
-    """The shared 'model+effort' / 'process+qa' cell: LEFT label in the MODEL-FAMILY color (opus
-    cyan / sonnet blue / haiku green / fable magenta / gpt yellow — per-model 구분) + a RIGHT
-    'intensity dial' sub-column (effort for sessions, qa for jobs), separated by a plain gap (no
-    dot). `dial_key` carries the dial's intensity color. Fills exactly `width`; dial empty → left
-    spans the whole width."""
-    left = left or "—"
+def _model_cell(model, effort, width):
+    """The model cell: name in its QUIET family color (dim hue — per-model 구분 without noise)
+    + a 2-char dim effort suffix ('Opus 4.8 xh'). Fills exactly `width`."""
+    name = _clean_model(dash(model)) or "—"
+    sfx = _eff_suffix(effort)
     lkey = _model_key(model)
-    if dial:
-        lw = max(1, width - _EFF_W - 1)
-        return [(_pad(left[:lw], lw + 1), lkey),
-                (_pad(dial[:_EFF_W], _EFF_W), dial_key)]
-    return [(_pad(left[: max(1, width - 1)], width), lkey)]
+    if sfx:
+        nw = max(1, width - len(sfx) - 2)
+        return [(_pad(name[:nw], nw + 1), lkey), (_pad(sfx, len(sfx) + 1), "dim")]
+    return [(_pad(name[: max(1, width - 1)], width), lkey)]
 
 
 def _stage_segs(key, stage, working=False):
@@ -394,7 +391,7 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
                 else ("name_dim" if dim_tel else "name_idle"))
     gch, gkey = _glyph(live)
     if s.detached and live not in ("stale", "dead"):
-        gch = "◌"                 # detached (tmux, no client attached): shape=detached, color=liveness
+        gch = _DETACHED_GLYPH     # detached (no client attached): shape=detached, color=liveness
     hn = _BADGE_TEXT.get(s.harness, "?")
 
     # main↔spawned weight = font-color intensity (no bg fill — the reverse badge read as weird):
@@ -422,8 +419,7 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
         segs.append((" " * (_NW_S - used), None))
 
     segs.append(_branch_seg(s.cwd, s.branch))
-    segs += _me_segs(s.model, _clean_model(dash(s.model)), s.effort,
-                     _eff_key(s.model, s.effort), _MW)
+    segs += _model_cell(s.model, s.effort, _MW)
 
     # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate from effort
     if s.ctx_pct is not None and not dim_tel:
@@ -497,9 +493,8 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         segs.append((" " * (avail - used), None))
 
     segs.append(_branch_seg(j.cwd, j.branch))
-    # model slot → the job's OWN main model (model-family color), same cell a session uses.
-    dmodel = j.model or parent_model
-    segs += _me_segs(dmodel, _clean_model(dash(dmodel)), None, None, _MW)
+    # model slot → the job's OWN main model (quiet family color), same cell a session uses.
+    segs += _model_cell(j.model or parent_model, None, _MW)
 
     # gauge slot → stage breadcrumb (process viz): per-stage colors, current bold + blinks if working.
     segs.append(("    ", None))                       # 4-col gap (reads separate from effort/qa)
@@ -654,11 +649,21 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
                 (group_jobs[0].cwd if group_jobs else ""))
         ggate, gpipe = _gate_info(gcwd)                # project spec-gate (word after the name)
         gword, gwkey = _gate_word(ggate, gpipe)
-        # ▍-anchored section header (bold name) — no per-group full-width rule (heavy stripes);
-        # the blank line between groups + the bold name carry the separation.
-        head_segs = [("▍ ", "head"), (name, "grp")]
+        # ▍-anchored section header (bold name) — no per-group full-width rule (heavy stripes).
+        # Header carries a dim state ROLL-UP (●N working · ○N idle · ↳N jobs) so group-level
+        # scanning needs no row-reading; ▍ turns green when the group has work running.
+        n_work = sum(1 for s in live_sessions if s.liveness == "working") + \
+                 sum(1 for j in group_jobs if j.liveness == "working")
+        n_idle = sum(1 for s in live_sessions if s.liveness != "working")
+        n_jobs = len(group_jobs)
+        head_segs = [("▍ ", "grp_live" if n_work else "head"), (name, "grp")]
         if gword:
             head_segs += [("  ", None), (gword, gwkey)]
+        roll = "".join((" ●%d" % n_work if n_work else "",
+                        " ○%d" % n_idle if n_idle else "",
+                        " ↳%d" % n_jobs if n_jobs else ""))
+        if roll:
+            head_segs += [("  ", None), (roll.strip(), "dim")]
         lines.append(head_segs)
 
         # rows stay tight (no blank line — that spread them too far apart); the mid-line gauge
@@ -700,9 +705,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
     lines.append([
         ("  ", None), ("●", "g_work"), (" working   ", "dim"),
         ("○", "g_idle"), (" idle   ", "dim"),
-        ("◌", "g_idle"), (" detached   ", "dim"),
-        ("◦", "g_stale"), (" stale   ", "dim"),
-        ("×", "g_dead"), (" dead     ", "dim"),
+        (_DETACHED_GLYPH, "g_idle"), (" detached   ", "dim"),
+        ("·", "g_stale"), (" stale   ", "dim"),
+        ("✕", "g_dead"), (" dead     ", "dim"),
         ("▾N", "dim"), (" child jobs   ", "dim"),
         ("↳", "dim"), (" dispatch", "dim"),
     ])
