@@ -962,10 +962,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         head_segs = [("▍ ", "grp_live" if n_work else "head"), (name, "grp")]
         if gword:
             head_segs += [("  ", None), (gword, gwkey)]
-        # group header rides the SAME tint as the block body (user: 디렉토리 헤더도 블록과 동일
-        # 컬러) — the whole directory is ONE uniform panel; the header line is distinguished by
-        # the ▍ anchor + bold name, not a separate shelf tone. Active groups stay brighter.
-        lines.append([(_TINT_BODY_HOT if n_work else _TINT_BODY, None)] + head_segs)
+        # group header = NO tint (user 2026-07-02 최종: 헤더는 틴트 없이) — the ▍ + bold name
+        # sit on the default bg as a label ABOVE the tinted body block; the panel = body only.
+        lines.append(head_segs)
         _g0 = len(lines)                # group-content start — tinted/railified below
         _rail_key = "grp_live" if n_work else "dim"
         _body_tint = _TINT_BODY_HOT if n_work else _TINT_BODY
