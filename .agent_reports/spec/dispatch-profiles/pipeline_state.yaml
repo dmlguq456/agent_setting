@@ -1,0 +1,28 @@
+project_name: dispatch-profiles
+component: dispatch-profiles      # 별도 컴포넌트 (repo spec/prd.md = Unified Memory System, 무관)
+created: 2026-07-02
+mode: [cli]
+scope_note: "headless 분사별 마스킹 config home(프로필) — 3층 지침(L0 core 불변/L1 main 전용/L2 fragment) + harness×model 특화 + Claude dispatch wrapper 신설. 내용 fork 없는 심링크 부분 투영."
+inputs:
+  - research/cross-platform-agent-setting/00_overview.md   # gsd-core capability 매니페스트·installer 선행 사례
+  - 세션 실측 2026-07-02: CLAUDE_CONFIG_DIR (마커 CLAUDE.md 로드·credentials 심링크 auth·상태 격리 3중 확인)
+  - repo 현황 조사: codex dispatch-headless.py / jobs.log 6필드 스키마 / roles·capabilities·projection 규약
+phases:
+  spec: done              # PRD v1 + plan-review r1 (B1·M1~M4·m1~m4) 반영 완료
+  scaffolding: deferred   # lean — 템플릿·wrapper skeleton 은 autopilot-code 로 이월 (§9 module 구조만 확정)
+  design: n/a             # 터미널 도구 — 시각 UI 없음
+  dev: pending            # autopilot-code 가 누적. v1 범위 = claude+codex (DP-12), opencode P1
+last_updated: 2026-07-02
+decisions_locked:
+  - DP-1: 마스킹 = 심링크 부분 투영, 내용 fork 금지 (조립 bootstrap 만 생성 파일)
+  - DP-2: L0(core+guards) 하드 포함 — 선언 표면에 미노출
+  - DP-3: profiles/ = top-level harness-scoped 선언 (portable 경계 의도된 예외, model_role XOR model)
+  - DP-4: per-dispatch ephemeral home 인스턴스 homes/<slug>.<name>/ (harvest 시 제거)
+  - DP-5: jobs.log pipe += profile= (3 reader 후방호환 검증)
+  - DP-6: Claude dispatch wrapper 신설 (codex 이식 — §5.10 수기 컨벤션 코드화)
+  - DP-7: --profile 생략 = 현행 완전 보존
+  - DP-8: 게이트 = wrapper 단독 소유 (preflight + build-home --check, 실패 exit 3)
+  - DP-9: CLAUDE_CONFIG_DIR 문서 미기재 실측 의존 — drill/oncall 회귀 항목화
+  - DP-10: 층 경계 = 소스 파일 분리 (templates/bootstrap-<harness>.md + fragments concat, CLAUDE.md 파싱 금지)
+  - DP-11: home 인덱스 파일 없음 — jobs.log (slug, profile) 결정론 유도
+  - DP-12: v1 = claude+codex, opencode P1 (XDG 파일 투영 채널 고정, inline 미사용)
