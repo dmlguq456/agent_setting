@@ -85,18 +85,27 @@ def _init_colors():
     _COLOR["lvl_g"] = _COLOR.get("green", 0)
     _COLOR["lvl_y"] = _COLOR.get("yellow", 0)
     _COLOR["lvl_r"] = _COLOR.get("red", 0) | curses.A_BOLD
-    # model · effort = harness-tinted, subtle (user 2026-07-01: "은은하게라도 구분감").
-    # model text = harness hue dim; effort = same hue with an intensity ramp (low→dim … max→bold).
-    # capture the PURE hue (before the badge DIM below) so model/effort can vary intensity freely.
+    # per-MODEL colors (user 2026-07-02: "모델별로도 컬러를 다르게") — the model column, its effort
+    # dial and usage bucket labels take the model-family color; the harness column keeps its own hue.
     _hue = {h: _COLOR.get("h_" + h, 0) for h in ("claude", "codex", "opencode")}
-    for h, hue in _hue.items():
-        _COLOR["model_" + h] = hue          # harness-tinted, NORMAL brightness (was dim → too dark)
+    _fam = {"opus": curses.COLOR_CYAN, "sonnet": curses.COLOR_BLUE, "haiku": curses.COLOR_GREEN,
+            "fable": curses.COLOR_MAGENTA, "gpt": curses.COLOR_YELLOW}
+    n_pair = 10                                     # pairs 1-9 reserved above; families from 10
+    for fam, fg in _fam.items():
+        try:
+            curses.init_pair(n_pair, fg, bg)
+            hue = curses.color_pair(n_pair)
+            n_pair += 1
+        except Exception:
+            hue = 0
+        _COLOR["fam_" + fam] = hue
         for lvl, it in _LVL_INT.items():
-            _COLOR["eff_%s_%s" % (h, lvl)] = hue | it
+            _COLOR["eff_%s_%s" % (fam, lvl)] = hue | it
+    _COLOR["fam_other"] = 0                        # unknown family → default fg (still readable)
+    for h, hue in _hue.items():
         # bright harness color = a TOP-LEVEL session / account; a dispatch job keeps the DIM
         # harness (h_<h>) → main↔spawned weight is carried by font-color intensity (no bg fill).
         _COLOR["hb_" + h] = hue
-    _COLOR["model_other"] = 0
     _COLOR["hb_other"] = 0
     for lvl, it in _LVL_INT.items():
         _COLOR["eff_other_" + lvl] = it
@@ -158,14 +167,26 @@ def _pct_key(v):
     return "lvl_r" if v >= 80 else ("lvl_y" if v >= 50 else "lvl_g")
 
 
-def _model_key(harness):
-    return "model_" + harness if harness in ("claude", "codex", "opencode") else "model_other"
+_FAMILIES = ("opus", "sonnet", "haiku", "fable", "gpt")
 
 
-def _eff_key(harness, effort):
-    h = harness if harness in ("claude", "codex", "opencode") else "other"
+def _model_family(model):
+    """Model-family token from a model/bucket name: 'Opus 4.8'→opus, 'gpt-5.5'→gpt, 'fable'→fable.
+    Unknown (glm/deepseek/…) → 'other' (default fg — distinct from the colored families)."""
+    m = (model or "").lower()
+    for fam in _FAMILIES:
+        if fam in m:
+            return fam
+    return "other"
+
+
+def _model_key(model):
+    return "fam_" + _model_family(model)
+
+
+def _eff_key(model, effort):
     lvl = effort if effort in _LVL_INT else "medium"
-    return "eff_%s_%s" % (h, lvl)
+    return "eff_%s_%s" % (_model_family(model), lvl)
 
 
 def _clean_model(name):
@@ -326,13 +347,14 @@ def _branch_seg(cwd, branch):
     return (_pad((br or "—")[: _BRW - 1], _BRW), "dim")
 
 
-def _me_segs(harness, left, dial, dial_key, width):
-    """The shared 'model+effort' / 'process+qa' cell: a harness-tinted-dim LEFT label + a RIGHT
+def _me_segs(model, left, dial, dial_key, width):
+    """The shared 'model+effort' / 'process+qa' cell: LEFT label in the MODEL-FAMILY color (opus
+    cyan / sonnet blue / haiku green / fable magenta / gpt yellow — per-model 구분) + a RIGHT
     'intensity dial' sub-column (effort for sessions, qa for jobs), separated by a plain gap (no
     dot). `dial_key` carries the dial's intensity color. Fills exactly `width`; dial empty → left
     spans the whole width."""
     left = left or "—"
-    lkey = _model_key(harness)
+    lkey = _model_key(model)
     if dial:
         lw = max(1, width - _EFF_W - 1)
         return [(_pad(left[:lw], lw + 1), lkey),
@@ -399,8 +421,8 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
         segs.append((" " * (_NW_S - used), None))
 
     segs.append(_branch_seg(s.cwd, s.branch))
-    segs += _me_segs(s.harness, _clean_model(dash(s.model)), s.effort,
-                     _eff_key(s.harness, s.effort), _MW)
+    segs += _me_segs(s.model, _clean_model(dash(s.model)), s.effort,
+                     _eff_key(s.model, s.effort), _MW)
 
     # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate from effort
     if s.ctx_pct is not None and not dim_tel:
@@ -452,7 +474,6 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     if j.qa:
         qa_text = ("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa
     name = j.slug or key
-    harness = j.harness or parent_harness
     gch, gkey = _glyph(j.liveness)
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
@@ -476,8 +497,9 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         segs.append((" " * (avail - used), None))
 
     segs.append(_branch_seg(j.cwd, j.branch))
-    # model slot → the job's OWN main model (harness-tinted dim), same cell a session uses.
-    segs += _me_segs(harness, _clean_model(dash(j.model or parent_model)), None, None, _MW)
+    # model slot → the job's OWN main model (model-family color), same cell a session uses.
+    dmodel = j.model or parent_model
+    segs += _me_segs(dmodel, _clean_model(dash(dmodel)), None, None, _MW)
 
     # gauge slot → stage breadcrumb (process viz): per-stage colors, current bold + blinks if working.
     segs.append(("    ", None))                       # 4-col gap (reads separate from effort/qa)
@@ -571,11 +593,14 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
             r5, r7, rms, _mt = _rl[h]
             row = [("usage  " if idx == 0 else "       ", "head"),
                    (_pad(h, 11), "hb_" + h if h in _BADGE_TEXT else "hb_other")]  # bright = account
-            # 5h/7d + any model-scoped buckets (e.g. fable-only weekly) in the same gauge grammar
-            gauges = [("5h ", r5), ("7d ", r7)] + [(lbl + " ", v) for lbl, v in (rms or [])]
-            for gi, (lbl, v) in enumerate(gauges):
+            # 5h/7d + any per-model buckets (e.g. fable-only weekly) in the same gauge grammar;
+            # a bucket label wears its model-family color (fable magenta, opus cyan, …)
+            gauges = [("5h ", r5, "dim"), ("7d ", r7, "dim")] + \
+                     [(lbl + " ", v, _model_key(lbl)) for lbl, v in (rms or [])]
+            for gi, (lbl, v, lkey) in enumerate(gauges):
                 pctstr = ("%d%%" % v) if v is not None else "—"
-                row.append(("     " + lbl if gi else lbl, "dim"))        # wide gap between windows
+                row.append(("     ", None) if gi else ("", None))        # wide gap between windows
+                row.append((lbl, lkey))
                 row += _gauge_segs(v, 16) if v is not None else [("·" * 16, "dim")]
                 row.append((" %4s" % pctstr, _pct_key(v)))
             lines.append(row)

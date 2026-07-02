@@ -75,13 +75,21 @@ def _apply_statusline(sess, d):
         sess.rl_5h = p5
     if p7 is not None:
         sess.rl_7d = p7
-    # model-scoped buckets (e.g. a Fable-only weekly limit): rate_limits.model_scoped =
-    # [{display_name:"Fable", utilization:0..1, resets_at:str}] → [["fable", 57], ...]
+    # per-model buckets → rl_ms [["fable", 57], ...]. Two schema shapes (2.1.198 bundle):
+    #  1. named siblings: seven_day_opus / seven_day_sonnet / seven_day_overage_included
+    #     ("Fable 5 limit" label) / seven_day_oauth_apps — same {used_percentage} shape as 5h/7d
+    #  2. model_scoped array: [{display_name:"Fable", utilization:0..1, resets_at:str}]
     ms = []
+    for k, lbl in (("seven_day_opus", "opus"), ("seven_day_sonnet", "sonnet"),
+                   ("seven_day_overage_included", "fable"), ("seven_day_oauth_apps", "apps")):
+        v = pct(k)
+        if v is not None:
+            ms.append([lbl, v])
     for e in (rl.get("model_scoped") or []):
         if isinstance(e, dict) and isinstance(e.get("utilization"), (int, float)):
             lbl = (e.get("display_name") or "model").split()[0].lower()
-            ms.append([lbl, round(e["utilization"] * 100)])
+            if not any(x[0] == lbl for x in ms):     # named bucket wins over a duplicate scoped row
+                ms.append([lbl, round(e["utilization"] * 100)])
     if ms:
         sess.rl_ms = ms
     cost = d.get("cost") or {}

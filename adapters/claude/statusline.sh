@@ -31,15 +31,22 @@ def rlrem(k):
     if s <= 0: return ""
     dd, r = divmod(s, 86400); hh, r = divmod(r, 3600); mm = r // 60
     return f"{dd}d{hh}h" if dd else (f"{hh}h{mm:02d}m" if hh else f"{mm}m")
-# model-scoped 사용량 (예: Fable-only 주간 버킷) — rate_limits.model_scoped 배열
-# [{display_name:"Fable", utilization:0..1, resets_at:str}] → "fable:12 other:34" 꼴 (label 소문자 첫 단어)
+# per-model 사용량 버킷 → "fable:57 opus:12" 꼴. 두 스키마 모두 수용 (2.1.198 번들 확인):
+#  1. named 형제 키: seven_day_opus/sonnet · seven_day_overage_included("Fable 5 limit") · oauth_apps
+#  2. model_scoped 배열: [{display_name:"Fable", utilization:0..1, resets_at:str}]
 ms_parts = []
+for k, lbl in (("seven_day_opus", "opus"), ("seven_day_sonnet", "sonnet"),
+               ("seven_day_overage_included", "fable"), ("seven_day_oauth_apps", "apps")):
+    v = (rl.get(k) or {}).get("used_percentage")
+    if isinstance(v, (int, float)):
+        ms_parts.append(f"{lbl}:{round(v)}")
 for e in (rl.get("model_scoped") or []):
     if not isinstance(e, dict): continue
     u = e.get("utilization")
     if not isinstance(u, (int, float)): continue
     lbl = (e.get("display_name") or "model").split()[0].lower()
-    ms_parts.append(f"{lbl}:{round(u * 100)}")
+    if not any(p.startswith(lbl + ":") for p in ms_parts):
+        ms_parts.append(f"{lbl}:{round(u * 100)}")
 cwin = d.get("context_window") or {}
 cw = cwin.get("current_usage") or {}
 ctok = cw.get("input_tokens", 0) + cw.get("cache_creation_input_tokens", 0) + cw.get("cache_read_input_tokens", 0)
@@ -256,8 +263,14 @@ if [ "${S_CTX}" -ge 0 ] 2>/dev/null; then
   fbar=""; i=0
   while [ "$i" -lt "$filled" ]; do fbar="${fbar}━"; i=$((i+1)); done
   ebar=""; while [ "$i" -lt "$segs" ]; do ebar="${ebar}─"; i=$((i+1)); done
-  segs_arr+=("${DIM}ctx${RST} ${cc}${fbar}${RST}${DIM}${ebar}${RST} ${cc}${S_CTX}%${RST}")
+  segs_arr+=("${DIM}context${RST} ${cc}${fbar}${RST}${DIM}${ebar}${RST} ${cc}${S_CTX}%${RST}")
 fi
+
+# 모델별 색 (fleet 동일 팔레트): opus=cyan · sonnet=blue · haiku=green · fable=magenta · gpt=yellow
+BLU=$'\033[34m'
+mcol(){ case "$(printf '%s' "$1" | tr 'A-Z' 'a-z')" in
+  *opus*) printf '%s' "$CYAN" ;; *sonnet*) printf '%s' "$BLU" ;; *haiku*) printf '%s' "$GRN" ;;
+  *fable*) printf '%s' "$MAG" ;; *gpt*) printf '%s' "$YEL" ;; *) printf '%s' "$RST" ;; esac; }
 
 # 모델·effort │ 5h/7d 사용량+리셋 잔여시간 (stdin rate_limits = /usage 공식 값, 분모 추측 없음)
 # effort = reasoning effort(low→max) — 모델 옆 강도별 색(dim→적)으로 시각 구분
@@ -273,15 +286,15 @@ if [ -n "$S_EFFORT" ]; then
   esac
   eff_disp=" ${ecol}${etxt}${RST}"
 fi
-# model in the claude harness color (cyan), no longer dim (fleet: model reads bright, dotless effort)
-segs_arr+=("${CYAN}${S_MODEL}${RST}${eff_disp}")
+# model in its model-family color (fleet 동일 — per-model 구분), dotless effort
+segs_arr+=("$(mcol "$S_MODEL")${S_MODEL}${RST}${eff_disp}")
 u=""
 [ -n "$S_5H" ] && { u="${u} ${DIM}5h${RST} $(pcol "$S_5H")${S_5H}%${RST}"; [ -n "$S_5H_RST" ] && u="${u}${DIM}(↻ ${S_5H_RST})${RST}"; }
 [ -n "$S_7D" ] && { u="${u} ${DIM}7d${RST} $(pcol "$S_7D")${S_7D}%${RST}"; [ -n "$S_7D_RST" ] && u="${u}${DIM}(↻ ${S_7D_RST})${RST}"; }
-# model-scoped 버킷 (예: fable-only 주간 한도) — "fable:12" 쌍들을 5h/7d 와 같은 문법으로
+# per-model 버킷 (예: fable-only 주간 한도) — 라벨은 그 모델의 색, 값은 레벨색
 for ms in $S_MS; do
   lbl="${ms%%:*}"; pv="${ms##*:}"
-  [ -n "$lbl" ] && [ "$pv" -ge 0 ] 2>/dev/null && u="${u} ${DIM}${lbl}${RST} $(pcol "$pv")${pv}%${RST}"
+  [ -n "$lbl" ] && [ "$pv" -ge 0 ] 2>/dev/null && u="${u} $(mcol "$lbl")${lbl}${RST} $(pcol "$pv")${pv}%${RST}"
 done
 [ -n "$u" ] && segs_arr+=("${u# }")
 
