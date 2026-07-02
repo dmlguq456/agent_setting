@@ -34,6 +34,24 @@ def collect_all(harness_filter=None, jobs_path=None):
             except Exception:
                 pass  # enrichment failure never removes the backbone row
 
+    # --- account usage via the oauth API (authoritative; taps lag / lack per-model buckets) ---
+    # Overrides every claude session's rate fields with the account-shared values so the render
+    # layer's freshest-pick sees them; on any failure the tap values simply remain (fallback).
+    try:
+        from . import usage_api
+        au = usage_api.account_usage()
+        if au:
+            for s in sessions:
+                if s.harness == "claude" and not s.is_child:
+                    if au["rl_5h"] is not None:
+                        s.rl_5h = au["rl_5h"]
+                    if au["rl_7d"] is not None:
+                        s.rl_7d = au["rl_7d"]
+                    if au["rl_ms"]:
+                        s.rl_ms = au["rl_ms"]
+    except Exception:
+        pass
+
     # --- liveness → 4-state ---
     try:
         from . import liveness
