@@ -40,7 +40,6 @@ _LIVE_RANK = {"working": 0, "idle": 1, "blocked": 2, "done": 3, "stale": 4, "dea
 _JOB_LIVE_RANK = {"working": 0, "stale": 1, "dead": 2, "unknown": 3}
 # effort → 2-char suffix after the model (design review r2: the effort column repeated 'xhigh'
 # everywhere and burned a column; a dim suffix keeps the info without the noise)
-_EFF_ABBR = {"low": "lo", "medium": "md", "high": "hi", "xhigh": "xh", "max": "mx"}
 # qa rigor ramp (a dispatch job's analogue of effort) — quick recedes, adversarial stands out
 _QA_INT = {"quick": curses.A_DIM, "light": curses.A_DIM, "standard": 0,
            "thorough": curses.A_BOLD, "adversarial": curses.A_BOLD}
@@ -85,8 +84,8 @@ def _init_colors():
     _COLOR["lvl_g"] = _COLOR.get("green", 0)
     _COLOR["lvl_y"] = _COLOR.get("yellow", 0)
     _COLOR["lvl_r"] = _COLOR.get("red", 0) | curses.A_BOLD
-    # per-MODEL colors, QUIET (design r2): family hue kept (user asked for per-model 구분) but
-    # always DIM — color must not compete with the state axis (dots/gauges). 은은한 구분감.
+    # per-MODEL family colors, in TWO intensities (2026-07-02: main↔dispatch contrast = whole-row
+    # brightness): fam_* = BRIGHT (main session rows) / famd_* = DIM (dispatch rows recede).
     _hue = {h: _COLOR.get("h_" + h, 0) for h in ("claude", "codex", "opencode")}
     _fam = {"opus": curses.COLOR_CYAN, "sonnet": curses.COLOR_BLUE, "haiku": curses.COLOR_GREEN,
             "fable": curses.COLOR_MAGENTA, "gpt": curses.COLOR_YELLOW}
@@ -98,8 +97,12 @@ def _init_colors():
             n_pair += 1
         except Exception:
             hue = 0
-        _COLOR["fam_" + fam] = hue | curses.A_DIM
-    _COLOR["fam_other"] = curses.A_DIM             # unknown family → dim default fg
+        _COLOR["fam_" + fam] = hue
+        _COLOR["famd_" + fam] = hue | curses.A_DIM
+    _COLOR["fam_other"] = 0                        # unknown family → default fg
+    _COLOR["famd_other"] = curses.A_DIM
+    # branch: normal on main session rows, dim on dispatch rows (same brightness axis)
+    _COLOR["branch_s"] = 0
     for h, hue in _hue.items():
         # bright harness color = a TOP-LEVEL session / account; a dispatch job keeps the DIM
         # harness (h_<h>) → main↔spawned weight is carried by font-color intensity (no bg fill).
@@ -182,13 +185,8 @@ def _model_family(model):
     return "other"
 
 
-def _model_key(model):
-    return "fam_" + _model_family(model)
-
-
-def _eff_suffix(effort):
-    """2-char dim suffix for the model cell ('xhigh' → 'xh') — replaces the old effort column."""
-    return _EFF_ABBR.get(effort, effort[:2] if effort else "")
+def _model_key(model, dim=False):
+    return ("famd_" if dim else "fam_") + _model_family(model)
 
 
 def _clean_model(name):
@@ -303,8 +301,8 @@ _NAME_COL = 18                # absolute col where the NAME starts — SHARED by
                               # 14; dispatch: prefix 6 + harness 12 — deeper indent, narrower harness)
 _NW_S = _BRANCH_COL - _NAME_COL   # name field (both row types): col 18 → branch 46 = 28
 _BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
-_MW = 20                      # model cell: name + 2-char effort suffix ('Opus 4.8 xh')
-_CTX_W = 16                   # context gauge — widened with the column freed by the effort field
+_MW = 23                      # model cell: name + FULL effort word ('Opus 4.8 xhigh' — no abbrev)
+_CTX_W = 16                   # context gauge (kept wide)
 _CLOCK = "⏱ "                 # elapsed-time marker before uptime (⏱ = 2 cells, see _WIDE)
 
 # known pipeline stage sequences → the stage breadcrumb (process viz). Unknown keys/stages fall
@@ -342,21 +340,22 @@ def _gate_tag(gate, pipe):
     return (" " + word, key) if word else ("", None)
 
 
-def _branch_seg(cwd, branch):
-    """A single dim branch cell (icon removed per user — plain text, ≥1 trailing space)."""
+def _branch_seg(cwd, branch, dim=True):
+    """A single branch cell — normal brightness on main session rows, dim on dispatch rows."""
     br = branch or _git_branch(cwd)
-    return (_pad((br or "—")[: _BRW - 1], _BRW), "dim")
+    return (_pad((br or "—")[: _BRW - 1], _BRW), "dim" if dim else "branch_s")
 
 
-def _model_cell(model, effort, width):
-    """The model cell: name in its QUIET family color (dim hue — per-model 구분 without noise)
-    + a 2-char dim effort suffix ('Opus 4.8 xh'). Fills exactly `width`."""
+def _model_cell(model, effort, width, dim=False):
+    """The model cell: name in its family color + the FULL effort word ('Opus 4.8 xhigh').
+    Whole cell rides the row's brightness axis — bright on a main session, dim on a dispatch."""
     name = _clean_model(dash(model)) or "—"
-    sfx = _eff_suffix(effort)
-    lkey = _model_key(model)
+    sfx = effort or ""
+    lkey = _model_key(model, dim=dim)
+    skey = "dim" if dim else None
     if sfx:
         nw = max(1, width - len(sfx) - 2)
-        return [(_pad(name[:nw], nw + 1), lkey), (_pad(sfx, len(sfx) + 1), "dim")]
+        return [(_pad(name[:nw], nw + 1), lkey), (_pad(sfx, len(sfx) + 1), skey)]
     return [(_pad(name[: max(1, width - 1)], width), lkey)]
 
 
@@ -418,8 +417,8 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
     if used < _NW_S:
         segs.append((" " * (_NW_S - used), None))
 
-    segs.append(_branch_seg(s.cwd, s.branch))
-    segs += _model_cell(s.model, s.effort, _MW)
+    segs.append(_branch_seg(s.cwd, s.branch, dim=dim_tel))     # main row = bright branch/model
+    segs += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
 
     # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate from effort
     if s.ctx_pct is not None and not dim_tel:
@@ -492,9 +491,9 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     if used < avail:
         segs.append((" " * (avail - used), None))
 
-    segs.append(_branch_seg(j.cwd, j.branch))
-    # model slot → the job's OWN main model (quiet family color), same cell a session uses.
-    segs += _model_cell(j.model or parent_model, None, _MW)
+    segs.append(_branch_seg(j.cwd, j.branch))                  # dispatch row = everything dim
+    # model slot → the job's OWN main model (dim family color), same cell a session uses.
+    segs += _model_cell(j.model or parent_model, None, _MW, dim=True)
 
     # gauge slot → stage breadcrumb (process viz): per-stage colors, current bold + blinks if working.
     segs.append(("    ", None))                       # 4-col gap (reads separate from effort/qa)
