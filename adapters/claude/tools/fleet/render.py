@@ -152,11 +152,12 @@ def _init_colors():
     _COLOR["eff_xhigh"] = _COLOR.get("yellow", 0) | curses.A_BOLD
     _COLOR["eff_max"] = _COLOR.get("red", 0) | curses.A_BOLD
     # htop chrome (round-4, user: 헤더 행 배경색): the ONE background pair on screen — BLACK on
-    # CYAN full-width bars wrapping the board (column-header bar + footer key bar), htop's own
-    # theme. Structural, one-shot — NOT a per-item classification color, so the fg color-axis
-    # budget ("무지개 노이즈" rule) is untouched. dim is invisible on CYAN → keycaps use BOLD.
+    # WHITE full-width bars wrapping the board (column-header bar + footer key bar). htop's CYAN
+    # read as 촌스러움 (user 2026-07-02) → neutral white, the design round's V3 alternative.
+    # Structural, one-shot — NOT a per-item classification color, so the fg color-axis budget
+    # ("무지개 노이즈" rule) is untouched. dim is invisible on the bar → keycaps use BOLD.
     try:
-        curses.init_pair(15, curses.COLOR_BLACK, curses.COLOR_CYAN)
+        curses.init_pair(15, curses.COLOR_BLACK, curses.COLOR_WHITE)
         _COLOR["hdr_bar"] = curses.color_pair(15)
     except Exception:
         _COLOR["hdr_bar"] = curses.A_REVERSE
