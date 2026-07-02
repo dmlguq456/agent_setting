@@ -228,9 +228,10 @@ def _init_colors():
             # shown to ignore init_color — the green attempt stayed bright, hence the hue move).
             try:
                 if curses.can_change_color():
-                    # ≈ #0f123d — midnight character kept, one step brighter (user 튜닝 이력:
-                    # #005f00 너무 밝음 → 17 → #07081a 너무 어두움 → 이 값)
-                    curses.init_color(17, 60, 70, 240)
+                    # ≈ #0e0f21 — slightly darker, desaturated (user 튜닝 이력: #005f00 너무
+                    # 밝음 → #07081a 너무 어두움 → #0f123d 컬러 과함 → 이 값: 회색에 가까운
+                    # 미드나잇, '컬러감은 죽이고')
+                    curses.init_color(17, 55, 60, 130)
             except Exception:
                 pass
             hues = {"d": -1, "g": curses.COLOR_GREEN, "y": curses.COLOR_YELLOW,
