@@ -160,6 +160,7 @@ class DispatchJob:
     source: str = "proc"                # proc | jobs
     status: Optional[str] = None        # raw jobs.log status (open/running/...)
     liveness: str = "unknown"
+    profile: Optional[str] = None       # dispatch profile name (masked config home) — None = main home
     branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
 
     def to_dict(self):

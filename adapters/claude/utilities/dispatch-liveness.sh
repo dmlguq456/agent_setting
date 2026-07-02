@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# dispatch-liveness — 분사(headless claude -p) job 의 stealth-death 결정론 점검.
+# dispatch-liveness — adapter-specific headless job 의 stealth-death 결정론 점검.
 #   문제: hung/crashed headless 는 exit 안 함 → 완료 알림 안 옴 → 메인 무한 대기 (2026-06-16 5h 사고).
 #   §0.5 결정론-우선: "vigilant 하게 기억" 대신 이 스크립트가 jobs.log 의 open 분사를 판정.
 #   신호 = 세션 transcript(`projects/<enc-cwd>/*.jsonl`) mtime — hang/death 하면 transcript 가 멈춘다
@@ -7,7 +7,8 @@
 #   사용: 분사 후 대기 자리에서 실행. SUSPECT/DEAD 면 transcript·dispatch 로그 진단 → 수확/재분사 (대기 X).
 #   OPERATIONS §5.10 분사 가드. exit 3 = stealth-death 의심 1+.
 set -uo pipefail
-AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/agent-home.sh")}"
 JOBS="${1:-$AGENT_HOME/.dispatch/jobs.log}"
 STALE_MIN="${DISPATCH_STALE_MIN:-15}"   # transcript 가 N분+ 멈췄으면 hang/death 의심
 PROJ="$AGENT_HOME/projects"
@@ -18,7 +19,13 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   [ "${status:-}" = "open" ] || continue
   open_n=$((open_n + 1))
   enc=$(printf '%s' "${wt:-}" | sed 's#[/._]#-#g')
-  dir="$PROJ/$enc"
+  name=""
+  case "$pipe" in *profile=*) name=${pipe##*profile=}; name=${name%%,*};; esac
+  if [ -n "$name" ]; then
+    dir="$AGENT_HOME/.dispatch/homes/${slug}.${name}/projects/$enc"
+  else
+    dir="$PROJ/$enc"
+  fi
   newest=$(ls -t "$dir"/*.jsonl 2>/dev/null | head -1)
   if [ -z "$newest" ]; then
     echo "⚠️ DEAD     ${slug:-?}  — 세션 transcript 없음 ($dir)  [open: $ts]"

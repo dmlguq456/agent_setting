@@ -7,6 +7,7 @@ import argparse
 from contextlib import contextmanager
 import fcntl
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -21,6 +22,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--worktree")
     p.add_argument("--status", choices=("open", "done", "all"), default="open")
     p.add_argument("--mark-done", action="store_true")
+    p.add_argument("--keep-home", action="store_true")
     return p
 
 
@@ -91,6 +93,7 @@ def main(argv: list[str]) -> int:
         original = jobs.read_text(encoding="utf-8").splitlines(keepends=True)
         rewritten: list[str] = []
         matched_jobs: list[list[str]] = []
+        homes_to_clean: list[Path] = []
         matched = 0
         marked_done = 0
         malformed = 0
@@ -106,6 +109,15 @@ def main(argv: list[str]) -> int:
                 matched += 1
                 matched_jobs.append(fields.copy())
                 if args.mark_done and fields[1] == "open":
+                    if not args.keep_home:
+                        slug = fields[4]
+                        profile_name = None
+                        for part in fields[5].split(","):
+                            if part.startswith("profile="):
+                                profile_name = part[len("profile="):]
+                                break
+                        if profile_name:
+                            homes_to_clean.append(resolve_agent_home() / ".dispatch" / "homes" / f"{slug}.{profile_name}")
                     fields[1] = "done"
                     marked_done += 1
                     line = "\t".join(fields) + "\n"
@@ -116,6 +128,10 @@ def main(argv: list[str]) -> int:
                 tmp.writelines(rewritten)
                 tmp_name = tmp.name
             Path(tmp_name).replace(jobs)
+
+        for home in homes_to_clean:
+            if home.exists():
+                shutil.rmtree(home, ignore_errors=True)
 
         emit_header(args, jobs, matched, marked_done, malformed)
         for fields in matched_jobs:

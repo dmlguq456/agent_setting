@@ -1,0 +1,11 @@
+name: lab-runner
+description: "실험 실행 특화 — autopilot-lab 자율 구간 분사용"
+harness: claude
+model_role: fast implementer
+effort: medium
+fragments:
+  - profiles/fragments/lab-runner.md
+expose:
+  skills: [autopilot-lab, analyze-project, post-it]
+  agents: [dev-team, qa-team, material-team]
+  triggers: []

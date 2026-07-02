@@ -495,19 +495,27 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
     return segs
 
 
-def _mq_tag(mode, qa_text, qa_key):
-    """The `(mode · qa)` tag shown after a dispatch name (mode dim, qa in its rigor color, middle
-    dot). Returns (segments, display_width). Empty (mode and qa both absent) → ([], 0)."""
-    if not mode and not qa_text:
+def _mq_tag(mode, qa_text, qa_key, profile=None):
+    """The `(mode · qa · profile)` tag shown after a dispatch name (mode dim, qa in its rigor
+    color, profile dim, middle dot). Returns (segments, display_width). Empty (mode, qa_text
+    and profile all absent) → ([], 0)."""
+    if not mode and not qa_text and not profile:
         return [], 0
     out = [(" (", "dim")]
     w = 2
+    has_prev = False
     if mode:
         out.append((mode, "dim")); w += len(mode)
+        has_prev = True
     if qa_text:
-        if mode:
+        if has_prev:
             out.append(("·", "dim")); w += 1        # flush middle dot (tighter than ' · ')
         out.append((qa_text, qa_key)); w += len(qa_text)
+        has_prev = True
+    if profile:
+        if has_prev:
+            out.append(("·", "dim")); w += 1
+        out.append((profile, "dim")); w += len(profile)
     out.append((")", "dim")); w += 1
     return out, w
 
@@ -536,7 +544,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     segs = [("  ", None), ("↳ ", "dim"), (gch, gkey), (" ", None),
             (_pad(hn, _HW - 2), _BADGE_KEY.get(j.harness, "dim"))]
     avail = _NW_S
-    tag_segs, tagw = _mq_tag(j.mode, qa_text, qa_key)
+    tag_segs, tagw = _mq_tag(j.mode, qa_text, qa_key, profile=j.profile)
     otag = "  (orphan)" if orphan else ""
     nm = name[: max(3, avail - tagw - len(otag) - 1)]   # -1 → always ≥1 gap before branch
     used = len(nm)

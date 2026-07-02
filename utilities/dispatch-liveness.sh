@@ -19,7 +19,13 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   [ "${status:-}" = "open" ] || continue
   open_n=$((open_n + 1))
   enc=$(printf '%s' "${wt:-}" | sed 's#[/._]#-#g')
-  dir="$PROJ/$enc"
+  name=""
+  case "$pipe" in *profile=*) name=${pipe##*profile=}; name=${name%%,*};; esac
+  if [ -n "$name" ]; then
+    dir="$AGENT_HOME/.dispatch/homes/${slug}.${name}/projects/$enc"
+  else
+    dir="$PROJ/$enc"
+  fi
   newest=$(ls -t "$dir"/*.jsonl 2>/dev/null | head -1)
   if [ -z "$newest" ]; then
     echo "⚠️ DEAD     ${slug:-?}  — 세션 transcript 없음 ($dir)  [open: $ts]"

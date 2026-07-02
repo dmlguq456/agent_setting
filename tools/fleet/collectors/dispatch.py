@@ -38,13 +38,15 @@ _SHELLS = ("zsh", "bash", "sh", "dash")
 
 
 def _parse_pipe(pipe):
-    """Parse a jobs.log pipe field, dual-form → (name, mode, qa).
+    """Parse a jobs.log pipe field, dual-form → (name, mode, qa, profile).
 
     OLD form: `autopilot-code:dev(agent-fleet-dashboard)` (name:mode).
-    NEW form: `capability=autopilot-code,mode=dev,qa=quick(round-3 x)` (key=val,... list
-    before the first `(`). Distinguished by whether `=` appears before any `:` in the
-    leading (pre-`(`) segment. name has any `autopilot-` prefix stripped either way.
-    Parse failure → (None, None, None) — caller applies its own name fallback (repo or "job").
+    NEW form: `capability=autopilot-code,mode=dev,qa=quick,profile=lab-runner(round-3 x)`
+    (key=val,... list before the first `(`). Distinguished by whether `=` appears before
+    any `:` in the leading (pre-`(`) segment. name has any `autopilot-` prefix stripped
+    either way. OLD form has no profile k=v, so profile is always None there.
+    Parse failure → (None, None, None, None) — caller applies its own name fallback
+    (repo or "job").
     """
     head = pipe.split("(", 1)[0] if pipe else ""
     eq_pos = head.find("=")
@@ -59,15 +61,15 @@ def _parse_pipe(pipe):
         name = fields.get("capability")
         if name and name.startswith("autopilot-"):
             name = name[len("autopilot-"):]
-        return name, fields.get("mode"), fields.get("qa")
+        return name, fields.get("mode"), fields.get("qa"), fields.get("profile")
     # OLD form: name:mode via _PIPE regex.
     m = _PIPE.match(pipe or "")
     if not m:
-        return None, None, None
+        return None, None, None, None
     name = m.group(1)
     if name and name.startswith("autopilot-"):
         name = name[len("autopilot-"):]
-    return name, m.group(2), None
+    return name, m.group(2), None, None
 
 
 # --- jobs.log path ---
@@ -136,11 +138,21 @@ def _claude_job_model(pid_s, jcwd=None):
     return _model_display(ids[-1]) if ids else None
 
 
-def _job_liveness(path, now, stale_min=15):
-    """working (transcript ≤15min) / stale (hung) / dead (no transcript) / unknown (no path)."""
+def _job_liveness(path, now, stale_min=15, profile=None, slug=None):
+    """working (transcript ≤15min) / stale (hung) / dead (no transcript) / unknown (no path).
+
+    profile-aware (isomorphic to dispatch-liveness.sh, spec §7): when `profile` is set
+    (and `slug` available), the job's transcript is isolated under its masked config home
+    (`.dispatch/homes/<slug>.<profile>/projects/<enc>`) rather than the main home's
+    `projects/<enc>` — resolving against the wrong root would always false-DEAD a profile
+    job. profile None (the pre-existing, profile-less job case) → unchanged path."""
     if not path:
         return "unknown"
-    proj = os.path.join(_proj_home(), "projects", _enc(path))
+    if profile and slug:
+        proj = os.path.join(_proj_home(), ".dispatch", "homes", "%s.%s" % (slug, profile),
+                             "projects", _enc(path))
+    else:
+        proj = os.path.join(_proj_home(), "projects", _enc(path))
     newest = None
     try:
         for n in os.listdir(proj):
@@ -371,7 +383,7 @@ def _scan_jobs_log(path, seen_slugs):
         if slug in seen_slugs:
             continue                          # already shown as a live process job
         seen_slugs.add(slug)
-        pname, pmode, pqa = _parse_pipe(pipe or "")
+        pname, pmode, pqa, pprofile = _parse_pipe(pipe or "")
         if not pname:
             pname = repo or "job"
         # _parse_pipe already strips any `autopilot-` prefix on a successful parse; this
@@ -384,9 +396,31 @@ def _scan_jobs_log(path, seen_slugs):
             key=pname, stage=status, mode=pmode, qa=q,
             elapsed_min=_iso_elapsed_min(ts), slug=slug or worktree or repo,
             cwd=cwd, parent_sid=None, is_child=False, qa_source=qsrc,
-            source="jobs", status=status,
+            source="jobs", status=status, profile=pprofile,
         ))
     return jobs, malformed
+
+
+def _jobs_log_fields(path):
+    """{slug: (mode, profile)} from the latest jobs.log row per slug (last-occurrence-wins,
+    mirrors the reconciliation in _scan_jobs_log). Tolerant: missing file / malformed rows
+    (field count != 6) never raise — worst case an empty or partial map."""
+    fields_by_slug = {}
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            rows = f.read().splitlines()
+    except OSError:
+        return fields_by_slug
+    for line in rows:
+        if not line.strip():
+            continue
+        fields = line.split("\t")
+        if len(fields) != 6:
+            continue
+        slug = fields[4]
+        _pname, pmode, _pqa, pprofile = _parse_pipe(fields[5] or "")
+        fields_by_slug[slug] = (pmode, pprofile)   # last occurrence wins (append order)
+    return fields_by_slug
 
 
 def collect(jobs_path=None, harness_filter=None):
@@ -394,11 +428,24 @@ def collect(jobs_path=None, harness_filter=None):
     is cross-harness by design (jobs, not sessions)."""
     proc_jobs = _scan_processes()
     seen = set(j.slug for j in proc_jobs if j.slug)
-    log_jobs, malformed = _scan_jobs_log(_jobs_path(jobs_path), seen)
+    path = _jobs_path(jobs_path)
+    log_jobs, malformed = _scan_jobs_log(path, seen)
     jobs = proc_jobs + log_jobs
+    # mode+profile backfill for proc jobs whose argv lacked --mode (mode=None is an
+    # opportunistic fix, not spec-mandated; profile=None backfill IS spec §7-mandated —
+    # a proc-scanned profile job has no argv signal for --profile at all).
+    if any(j.mode is None or j.profile is None for j in proc_jobs):
+        log_fields = _jobs_log_fields(path)
+        for j in proc_jobs:
+            if j.slug and (j.mode is None or j.profile is None):
+                lm, lp = log_fields.get(j.slug, (None, None))
+                if j.mode is None:
+                    j.mode = lm
+                if j.profile is None:
+                    j.profile = lp
     now = time.time()
     for j in jobs:
-        j.liveness = _job_liveness(j.cwd, now)
+        j.liveness = _job_liveness(j.cwd, now, profile=j.profile, slug=j.slug)
     # stash malformed count on the module for the render header (optional signal)
     collect.last_malformed = malformed
     return jobs

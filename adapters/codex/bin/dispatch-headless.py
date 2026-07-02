@@ -36,6 +36,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--sandbox", default="workspace-write")
     p.add_argument("--approval", default="never")
     p.add_argument("--require-hook-trust", action="store_true")
+    p.add_argument("--profile")
     return p
 
 
@@ -151,6 +152,8 @@ def jobs_lock(jobs: Path):
 def append_job(jobs: Path, args: argparse.Namespace) -> None:
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
     pipe = f"capability={args.capability},mode={args.mode},qa={args.qa}"
+    if args.profile:
+        pipe += f",profile={args.profile}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     with jobs_lock(jobs):
         with jobs.open("a", encoding="utf-8") as f:
@@ -234,10 +237,41 @@ def main(argv: list[str]) -> int:
         return rc
     if args.start and shutil.which("codex") is None:
         return fail("codex-command-unavailable", 69, worktree=args.worktree)
+    profile_home: Path | None = None
     if args.start:
         rc = check_runtime_projection(args.worktree, args.require_hook_trust)
         if rc != 0:
             return rc
+        if args.profile:
+            home_root = resolve_agent_home() / ".dispatch" / "homes"
+            build_home = resolve_agent_home() / "tools" / "profile" / "build-home.py"
+            check_result = subprocess.run(
+                ["python3", str(build_home), args.profile, "--check"],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            if check_result.returncode != 0:
+                if check_result.stdout:
+                    print(check_result.stdout, end="")
+                if check_result.stderr:
+                    print(check_result.stderr, end="", file=sys.stderr)
+                return fail("invalid-dispatch-profile", 3, profile=args.profile)
+            build_result = subprocess.run(
+                ["python3", str(build_home), args.profile, "--instance", args.slug, "--home-root", str(home_root)],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            if build_result.returncode != 0:
+                if build_result.stdout:
+                    print(build_result.stdout, end="")
+                if build_result.stderr:
+                    print(build_result.stderr, end="", file=sys.stderr)
+                return fail("profile-build-failed", 3, profile=args.profile)
+            profile_home = home_root / f"{args.slug}.{args.profile}"
 
     agent_home = resolve_agent_home()
     jobs = Path(args.jobs) if args.jobs else agent_home / ".dispatch" / "jobs.log"
@@ -253,7 +287,10 @@ def main(argv: list[str]) -> int:
         prompt_path.write_text(prompt_text, encoding="utf-8")
         append_job(jobs, args)
     if action == "start":
-        subprocess.Popen(["sh", "-c", command], start_new_session=True)
+        if profile_home is not None:
+            subprocess.Popen(["sh", "-c", command], start_new_session=True, env={**os.environ, "CODEX_HOME": str(profile_home)})
+        else:
+            subprocess.Popen(["sh", "-c", command], start_new_session=True)
 
     print("adapter=codex")
     print("runtime_surface=codex-exec-headless")
@@ -263,6 +300,7 @@ def main(argv: list[str]) -> int:
     print(f"capability={args.capability}")
     print(f"mode={args.mode}")
     print(f"qa={args.qa}")
+    print(f"profile={args.profile or '-'}")
     print(f"job_registry={jobs}")
     print(f"registry_lock={jobs}.lock")
     print(f"registered={1 if action in ('register', 'start') else 0}")
