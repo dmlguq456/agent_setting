@@ -28,6 +28,7 @@ Module-global state invariants (single-process / single-thread only — no concu
 import curses
 import glob
 import os
+import re
 import sys
 import time
 
@@ -162,6 +163,16 @@ def _init_colors():
     except Exception:
         _COLOR["hdr_bar"] = curses.A_REVERSE
     _COLOR["hdr_key"] = _COLOR["hdr_bar"] | curses.A_BOLD
+    # bar BLANKS are drawn as white-fg █ blocks on the DEFAULT bg (pair 16), not as bg-colored
+    # spaces: ncurses collapses blank runs into ECH/EL erase sequences, and on terminals without
+    # working BCE the erased cells come out BLACK — the bar broke between words and after the
+    # text (user 2026-07-02: "헤더 안이어지는데" ×2). A block glyph is a real character, so it is
+    # physically written every time and looks identical to a white background cell.
+    try:
+        curses.init_pair(16, curses.COLOR_WHITE, bg)
+        _COLOR["hdr_blk"] = curses.color_pair(16)
+    except Exception:
+        _COLOR["hdr_blk"] = 0
     # stage breadcrumb — each pipeline stage a DISTINCT color (user); the CURRENT stage is BOLD
     # (bright, "눈에 띄는"), past/pending stages the same hue but DIM. Palette cycles by stage index.
     _stage_raw = [_hue.get("opencode", 0), _hue.get("claude", 0), _COLOR.get("green", 0),
@@ -486,11 +497,8 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
     if s.orphan:
         segs.append(("  worktree-gone", "g_dead"))
 
-    segs.append((_RFLUSH, None))                                     # cost · ⏱uptime flush right
-    if not narrow:
-        cost = dash(s.cost, lambda v: "$%.2f" % v)
-        ck = "cost_hi" if (isinstance(s.cost, (int, float)) and s.cost > 100) else "dim"
-        segs += [("%9s" % cost, ck), ("   ", None)]
+    segs.append((_RFLUSH, None))                                     # ⏱uptime flush right
+    # (cost 표시는 제거 — user 2026-07-02: 금액 관련은 안 떠도 됨)
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(s.elapsed_min), "dim")]
     return segs
 
@@ -611,11 +619,7 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False):
     else:
         l2 += [("[", "dim"), ("·" * 12, "dim"),
                (" %3s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim"), ("]", "dim")]
-    l2.append((_RFLUSH, None))
-    cost = dash(s.cost, lambda v: "$%.2f" % v)
-    ck = "cost_hi" if (isinstance(s.cost, (int, float)) and s.cost > 100) else "dim"
-    l2 += [("%9s" % cost, ck), ("   ", None),
-           (_CLOCK, "dim"), ("%6s" % fmt_min(s.elapsed_min), "dim")]
+    l2 += [(_RFLUSH, None), (_CLOCK, "dim"), ("%6s" % fmt_min(s.elapsed_min), "dim")]
     if _split:
         return l1, l2, br_seg
     return l1, l2
@@ -797,7 +801,6 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     n_id = sum(1 for s in _real if s.liveness == "idle")
     n_dt = sum(1 for s in _real if s.detached and s.liveness not in ("stale", "dead"))
     jw = sum(1 for j in jobs if j.liveness == "working")
-    tot_cost = sum(s.cost for s in _real if isinstance(s.cost, (int, float)))
     pulse = [("fleet  ", "head"),
              ("● %d" % n_wk, "g_work"), (" working   ", "dim"),
              ("○ %d" % n_id, "g_idle"), (" idle   ", "dim")]
@@ -805,10 +808,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         pulse += [(_DETACHED_GLYPH + " %d" % n_dt, "g_idle"), (" detached   ", "dim")]
     if jobs:
         pulse += [("↳ %d" % len(jobs), "dim"),
-                  (" job%s (%d working)   " % ("s" if len(jobs) != 1 else "", jw), "dim")]
-    if tot_cost:
-        pulse += [("Σ $%.0f" % tot_cost, "cost_hi" if tot_cost > 500 else "dim")]
-    lines.append(pulse)
+                  (" job%s (%d working)" % ("s" if len(jobs) != 1 else "", jw), "dim")]
+    lines.append(pulse)                 # (Σ cost 롤업 제거 — user: 금액 관련 표시 삭제)
 
     # alert strip — CONDITIONAL (zero lines when healthy): compaction-imminent contexts and
     # stalled dispatches (the stealth-death guard §5.10, surfaced on the board instead of only
@@ -1071,23 +1072,33 @@ def _addline(stdscr, row, segs, w):
             col += pw
         return col
 
-    endcol = _draw(left, 0)
-    # htop bar lines (first segment keyed hdr_bar) paint their background to the TRUE full width
-    # (lim=w — the default w-1 text clip left a bare notch column at the right edge, visible as
-    # a black gap on the white bar; user 2026-07-02: "헤더 안이어지는데"). The bottom-right cell
-    # write raises curses.error and is swallowed — the footer bar loses only that one corner.
+    # htop bar lines (first segment keyed hdr_bar): every BLANK cell is converted to a white-fg
+    # █ block (hdr_blk) so the band is physically drawn — bg-colored spaces get collapsed by
+    # ncurses into ECH/EL erases, which render BLACK on terminals without working BCE (the bar
+    # broke between words / after the text; user 2026-07-02 ×2). Painted to the TRUE full width
+    # (lim=w); the bottom-right corner write raises curses.error and is swallowed.
     bar = bool(segs) and segs[0][1] == "hdr_bar"
+    if bar:
+        def _solid(seglist):
+            out = []
+            for t, k in seglist:
+                for part in re.findall(r" +|[^ ]+", t):
+                    out.append(("█" * len(part), "hdr_blk") if part[0] == " " else (part, k))
+            return out
+        left, right = _solid(left), _solid(right)
+
+    endcol = _draw(left, 0)
     if fillch is not None:              # right may be EMPTY (a bare full-width rule line) — the
         rw = sum(_dw(t) for t, _ in right)   # fill itself must still draw (bug: divider invisible)
         rcol = max(endcol + (0 if fillch == "─" else 2), (w if bar else w - 1) - rw)
         if fillch == "─" and rcol > endcol:
             _draw([("─" * (rcol - endcol), "head")], endcol)  # fill the gap to make a full-width rule
         elif bar and rcol > endcol:
-            _draw([(" " * (rcol - endcol), "hdr_bar")], endcol, lim=w)
+            _draw([("█" * (rcol - endcol), "hdr_blk")], endcol, lim=w)
         if right:
             _draw(right, rcol, lim=w if bar else None)
     elif bar and endcol < w:
-        _draw([(" " * (w - endcol), "hdr_bar")], endcol, lim=w)
+        _draw([("█" * (w - endcol), "hdr_blk")], endcol, lim=w)
 
 
 _OFFSET = 0                 # scroll offset — READ only in _draw (see module docstring)
