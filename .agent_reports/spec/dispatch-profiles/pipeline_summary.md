@@ -13,3 +13,7 @@
 **QA**: 품질관리팀 plan-review r1 — blocker 1 (bootstrap 조립 규칙 미정의) / major 4 (portable 경계 위반·opencode 채널 미정·home 수명주기·index.tsv 동시성) / minor 4. 전건 반영 — 핵심 재설계: 층 경계=소스 파일 분리(DP-10), per-dispatch ephemeral home(DP-4), index 파일 제거→결정론 유도(DP-11), v1=claude+codex(DP-12). 리뷰 원문+반영 내역 = `_internal/plan_review_r1.md`. 후방호환 주장(DP-5·7)은 리뷰가 3 reader 실코드 대조로 확인.
 
 **다음**: autopilot-code 로 구현 (plans/ 사이클) — worktree 분사. 우선순위: templates+build-home.py → claude dispatch-headless.py → codex --profile → liveness/fleet 연동. §8 하이브리드 라우팅 문서 갱신은 별도 사이클.
+
+## 2026-07-02 · dev v1 완료 (autopilot-code, worktree 분사 → merge 76e4ae2)
+
+Opus headless 분사(`feat/dispatch-profiles`)가 spec DP-1~12 대로 구현, main auto-merge (충돌 0, 의미 정합 검증 + narrow/stack profile 태그 parity 후속 1건 e1d4c10). 산출: `profiles/`(카탈로그+템플릿 2+예시 lab-runner) · `tools/profile/build-home.py`(341줄, --instance/--check) · `adapters/claude/bin/dispatch-headless.py`(신설 258줄) · codex `--profile`/harvest `--keep-home` · liveness/fleet profile-aware. 게이트: boundary(root+mirror)·portable-guards 267/0·manifest·build-home smoke(인스턴스 생성→L0 하드포함 확인→--check ok) 전부 통과. plans = `plans/2026-07-02_dispatch-profiles/` (worktree 에서 보존 복사). 브랜치·worktree 즉시 정리, jobs.log done. 잔여: opencode attach (P1) · WORKFLOW/OPERATIONS §8 하이브리드 라우팅 문서 (별도 사이클) · DP-9 drill 회귀 항목 등재.
