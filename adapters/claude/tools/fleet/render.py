@@ -899,8 +899,16 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     # with its bar, not a rule. One blank line above it (user 2026-07-02: header 위에 한칸) so
     # the top intel zone and the bar don't touch. Narrow mode's 2-line cards have no single
     # column mapping → the bar degrades to a zone label + current-mode hint.
+    # With tints available the bar rides the SAME grey family as the panels (cap tone — user:
+    # 헤더도 블록이랑 동일한 컬러); 8-color fallback keeps the WHITE frame bar.
     lines.append(None)
-    if layout != "wide":
+    if _TINT_OK:
+        if layout != "wide":
+            lines.append([(_TINT_CAP, None), ("  SESSIONS", "grp"), (_RFLUSH, None),
+                          ("%s · press w to cycle  " % layout, "dim")])
+        else:
+            lines.append([(_TINT_CAP, None), (_COL_HEAD, None)])
+    elif layout != "wide":
         lines.append([("  SESSIONS", "hdr_bar"), (_RFLUSH, None),
                       ("%s · press w to cycle  " % layout, "hdr_bar")])
     else:
