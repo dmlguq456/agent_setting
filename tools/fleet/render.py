@@ -803,12 +803,13 @@ def _addline(stdscr, row, segs, w):
         return col
 
     endcol = _draw(left, 0)
-    if right:
-        rw = sum(_dw(t) for t, _ in right)
+    if fillch is not None:              # right may be EMPTY (a bare full-width rule line) — the
+        rw = sum(_dw(t) for t, _ in right)   # fill itself must still draw (bug: divider invisible)
         rcol = max(endcol + (0 if fillch == "─" else 2), w - 1 - rw)
         if fillch == "─" and rcol > endcol:
             _draw([("─" * (rcol - endcol), "head")], endcol)  # fill the gap to make a full-width rule
-        _draw(right, rcol)
+        if right:
+            _draw(right, rcol)
 
 
 _OFFSET = 0                 # scroll offset — READ only in _draw (see module docstring)
