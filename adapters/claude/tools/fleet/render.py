@@ -187,13 +187,7 @@ def _init_colors():
     # qa rigor ramp (dispatch tag after the name): quick dim … adversarial bold
     for lvl, it in _QA_INT.items():
         _COLOR["qa_" + lvl] = it
-    # effort heat ramp (user 2026-07-02: "effort라고 쓰고 컬러도 입히자") — reasoning heat:
-    # low/medium recede, high = yellow, xhigh = bold yellow, max = bold red (alarm-adjacent).
-    _COLOR["eff_low"] = curses.A_DIM
-    _COLOR["eff_medium"] = _COLOR.get("yellow", 0) | curses.A_DIM
-    _COLOR["eff_high"] = _COLOR.get("yellow", 0)
-    _COLOR["eff_xhigh"] = _COLOR.get("yellow", 0) | curses.A_BOLD
-    _COLOR["eff_max"] = _COLOR.get("red", 0) | curses.A_BOLD
+    # (effort heat ramp retired 2026-07-02 — user: effort 폰트는 기본색으로)
     # htop chrome (round-4, user: 헤더 행 배경색): the ONE background pair on screen — BLACK on
     # WHITE full-width bars wrapping the board (column-header bar + footer key bar). htop's CYAN
     # read as 촌스러움 (user 2026-07-02) → neutral white, the design round's V3 alternative.
@@ -472,10 +466,9 @@ def _branch_seg(cwd, branch, dim=True):
 
 
 def _eff_key(effort, dim):
-    """Effort heat-ramp color key; dispatch rows stay on the dim axis."""
-    if dim:
-        return "dim"
-    return ("eff_" + effort) if effort in ("low", "medium", "high", "xhigh", "max") else "dim"
+    """Effort = plain default fg (user 2026-07-02: 기본색으로) — heat ramp retired; only the
+    row's brightness axis applies (dim on dispatch/stale rows)."""
+    return "dim" if dim else None
 
 
 def _model_cell(model, effort, width, dim=False):
