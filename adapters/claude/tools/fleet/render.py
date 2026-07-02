@@ -911,7 +911,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     # column header = PLAIN dim labels, no bar/tint at all (user 2026-07-02: 전체 헤더는 컬러
     # 빼자) — the tinted panels below carry the block language; the header just names columns.
     lines.append(None)
-    _sh = " " * _INSET if _TINT_OK else ""   # shift matches the inset panels' content columns
+    _sh = " " * (_INSET + _PAD_IN) if _TINT_OK else ""   # shift matches panel content columns
     if layout != "wide":
         lines.append([(_sh + "  SESSIONS", "head"), (_RFLUSH, None),
                       ("%s · press w to cycle  " % layout, "head")])
@@ -975,7 +975,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         # group header = NO tint (user 2026-07-02 최종: 헤더는 틴트 없이) — the ▍ + bold name
         # sit on the default bg as a label ABOVE the tinted body block; the panel = body only.
         # +2 shift keeps the label on the panel's (inset) left edge.
-        lines.append(([(" " * _INSET, None)] if _TINT_OK else []) + head_segs)
+        lines.append(([(" " * (_INSET + _PAD_IN), None)] if _TINT_OK else []) + head_segs)
         _g0 = len(lines)                # group-content start — tinted/railified below
         _rail_key = "grp_live" if n_work else "dim"
         _body_tint = _TINT_BODY_HOT if n_work else _TINT_BODY
@@ -1034,7 +1034,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         names = " · ".join(n for n, _c in folded_groups)
         total = sum(c for _n, c in folded_groups)
         lines.append(None)
-        lines.append(([(" " * _INSET, None)] if _TINT_OK else []) + [("▍ ", "dim"),
+        lines.append(([(" " * (_INSET + _PAD_IN), None)] if _TINT_OK else []) + [("▍ ", "dim"),
                       ("inactive  +%d folded   " % total, "dim"),
                       (names[:90] + ("…" if len(names) > 90 else ""), "dim")])
 
@@ -1124,7 +1124,8 @@ def _dw(s):
 
 # fill sentinels (3-char \x00<fill>\x00): everything after is right-aligned to the edge; the gap
 # is filled with <fill> — space for _RFLUSH (invisible), ─ for _HFILL (a full-width rule).
-_INSET = 3                  # panel outer margin (cols) — user 2026-07-02: "1칸정도 더"
+_INSET = 2                  # panel outer margin (cols) — 바깥 여백은 이대로 (user)
+_PAD_IN = 2                 # EXTRA inner padding: tint edge ↔ content (user: 여백을 늘리자)
 _RFLUSH = "\x00 \x00"
 _HFILL = "\x00─\x00"
 
@@ -1160,6 +1161,8 @@ def _addline(stdscr, row, segs, w):
     # imperceptible; the margin must move the content). Band starts at col 2; the row's own
     # leading blanks become inner padding, so text sits at col 4+ while cols 0-1 stay default.
     start_col = _INSET if tint is not None else 0
+    if tint is not None:
+        segs = [(" " * _PAD_IN, None)] + list(segs)   # inner-left padding inside the band
     fillch = None
     left, right = segs, []
     for i, (t, _c) in enumerate(segs):
@@ -1200,7 +1203,7 @@ def _addline(stdscr, row, segs, w):
     fill_key = "hdr_bar" if bar else None      # tint rows fill with the default-hue tint pair
     if fillch is not None:              # right may be EMPTY (a bare full-width rule line) — the
         rw = sum(_dw(t) for t, _ in right)   # fill itself must still draw (bug: divider invisible)
-        rpad = 2 if tint is not None else 0      # right-flushed text sits 2 in from the band edge
+        rpad = (2 + _PAD_IN) if tint is not None else 0   # right-flushed text sits in from the band edge
         rcol = max(endcol + (0 if fillch == "─" else 2), (band_lim if band else w - 1) - rw - rpad)
         if fillch == "─" and rcol > endcol:
             _draw([("─" * (rcol - endcol), "head")], endcol)  # fill the gap to make a full-width rule
