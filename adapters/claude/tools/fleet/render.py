@@ -67,6 +67,48 @@ def _layout_mode(w):
     return "wide"
 
 _COLOR = {}   # color_key → curses attr (filled by _init_colors); empty ⇒ plain mode
+_TINT_OK = False   # 256-color tint pairs initialized (round-5 panels); False ⇒ rail+gap fallback
+_TINT_PAIR = {}    # (tint_char, hue_char) → curses attr — the (fg, tint_bg) composed pairs
+
+# fg color_key → (hue, attr) decomposition (spec §5.2) — the basis for composing (fg, tint_bg)
+# pairs. hue: d=default g=green y=yellow r=red c=cyan m=magenta l=blue. Keys absent here render
+# as default-hue plain text under tint (safe degradation).
+_A_B, _A_D = curses.A_BOLD, curses.A_DIM
+_HUE_OF = {
+    None: ("d", 0), "dim": ("d", _A_D), "head": ("d", _A_D), "unknown": ("d", _A_D),
+    "name_work": ("d", _A_B), "name_idle": ("d", _A_B), "name_dim": ("d", _A_D),
+    "grp": ("d", _A_B), "branch_s": ("d", 0), "cost_hi": ("d", _A_B),
+    "qa_quick": ("d", _A_D), "qa_light": ("d", _A_D), "qa_standard": ("d", 0),
+    "qa_thorough": ("d", _A_B), "qa_adversarial": ("d", _A_B),
+    "g_work": ("g", _A_B), "g_work_off": ("g", _A_D), "g_idle": ("y", 0),
+    "g_stale": ("d", _A_D), "g_dead": ("r", _A_B),
+    "lvl_g": ("g", 0), "lvl_y": ("y", 0), "lvl_r": ("r", _A_B),
+    "grp_live": ("g", 0), "gate_t": ("g", _A_D), "gate_u": ("y", _A_D),
+    "eff_low": ("d", _A_D), "eff_medium": ("y", _A_D), "eff_high": ("y", 0),
+    "eff_xhigh": ("y", _A_B), "eff_max": ("r", _A_B),
+    "h_claude": ("c", _A_D), "h_codex": ("m", _A_D), "h_opencode": ("l", _A_D),
+    "hb_claude": ("c", 0), "hb_codex": ("m", 0), "hb_opencode": ("l", 0), "hb_other": ("d", 0),
+    "fam_opus": ("c", 0), "fam_sonnet": ("l", 0), "fam_haiku": ("g", 0),
+    "fam_fable": ("m", 0), "fam_gpt": ("y", 0), "fam_other": ("d", 0),
+    "famd_opus": ("c", _A_D), "famd_sonnet": ("l", _A_D), "famd_haiku": ("g", _A_D),
+    "famd_fable": ("m", _A_D), "famd_gpt": ("y", _A_D), "famd_other": ("d", _A_D),
+    # stage palette indices 0-4 = blue·cyan·green·yellow·magenta (see _stage_raw)
+    "stg0_on": ("l", _A_B), "stg1_on": ("c", _A_B), "stg2_on": ("g", _A_B),
+    "stg3_on": ("y", _A_B), "stg4_on": ("m", _A_B),
+    "stg0_off": ("l", _A_D), "stg1_off": ("c", _A_D), "stg2_off": ("g", _A_D),
+    "stg3_off": ("y", _A_D), "stg4_off": ("m", _A_D),
+}
+
+
+def _key_attr(key, tint=None):
+    """Attr for a color_key, composed with the row's tint background when active (spec §5.3)."""
+    if tint is None or not _TINT_OK:
+        return _COLOR.get(key, 0)
+    hue, attr = _HUE_OF.get(key, ("d", 0))
+    pair = _TINT_PAIR.get((tint, hue))
+    if pair is None:
+        return _COLOR.get(key, 0)
+    return pair | attr
 
 
 # ---------- color ----------
@@ -173,6 +215,27 @@ def _init_colors():
         _COLOR["hdr_blk"] = curses.color_pair(16)
     except Exception:
         _COLOR["hdr_blk"] = 0
+    # round-5 panel tints (herdr 식 은은한 배경, 256-color only): (7 hue × tint level) pairs so
+    # text keeps its fg INSIDE a tinted band. Greyscale-only backgrounds — no new fg axis.
+    # Failure of any init → _TINT_OK False → rail+gap fallback (spec §4, zero regression).
+    global _TINT_OK
+    _TINT_OK = False
+    _TINT_PAIR.clear()
+    try:
+        if curses.COLORS >= 256:
+            hues = {"d": -1, "g": curses.COLOR_GREEN, "y": curses.COLOR_YELLOW,
+                    "r": curses.COLOR_RED, "c": curses.COLOR_CYAN,
+                    "m": curses.COLOR_MAGENTA, "l": curses.COLOR_BLUE}
+            n_pair = 20
+            for tch, lvl in _TINT_LVL.items():
+                for hch, fg in hues.items():
+                    curses.init_pair(n_pair, fg, lvl)
+                    _TINT_PAIR[(tch, hch)] = curses.color_pair(n_pair)
+                    n_pair += 1
+            _TINT_OK = True
+    except Exception:
+        _TINT_OK = False
+        _TINT_PAIR.clear()
     # stage breadcrumb — each pipeline stage a DISTINCT color (user); the CURRENT stage is BOLD
     # (bright, "눈에 띄는"), past/pending stages the same hue but DIM. Palette cycles by stage index.
     _stage_raw = [_hue.get("opencode", 0), _hue.get("claude", 0), _COLOR.get("green", 0),
@@ -769,7 +832,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                    (_pad(hn, 14), "hb_" + h if h in _BADGE_TEXT else "hb_other")]  # bright = account
             if h not in _rl:
                 row.append(("no usage api — plan quota is console-only", "dim"))
-                lines.append(row)
+                lines.append([(_TINT_INTEL, None)] + row)
                 continue
             r5, r7, rms, _mt, rrs = _rl[h]
             # 5h/7d + per-model buckets — ALL labels dim (a colored 'fable' read like a harness).
@@ -793,7 +856,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                 row.append(("]", "dim"))
                 if rs and rs > now_ts:
                     row.append((" ↻ " + fmt_min(int((rs - now_ts) / 60)), "dim"))
-            lines.append(row)
+            lines.append([(_TINT_INTEL, None)] + row)
     # fleet pulse — htop's "Tasks: N, M running" analogue: whole-board census + live spend Σ
     # (round-4b, user: "일단 띄우고 필요없으면 쳐내지뭐"). Counts skip app-server companions.
     _real = [s for s in sessions if not s.app_server]
@@ -809,7 +872,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     if jobs:
         pulse += [("↳ %d" % len(jobs), "dim"),
                   (" job%s (%d working)" % ("s" if len(jobs) != 1 else "", jw), "dim")]
-    lines.append(pulse)                 # (Σ cost 롤업 제거 — user: 금액 관련 표시 삭제)
+    lines.append([(_TINT_INTEL, None)] + pulse)   # (Σ cost 롤업 제거 — user: 금액 표시 삭제)
 
     # alert strip — CONDITIONAL (zero lines when healthy): compaction-imminent contexts and
     # stalled dispatches (the stealth-death guard §5.10, surfaced on the board instead of only
@@ -825,7 +888,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         elif j.liveness == "dead":
             alerts.append(("job dead %s" % (j.slug or j.key), "lvl_r"))
     if alerts:
-        arow = [("alert  ", "head")]
+        arow = [(_TINT_INTEL, None), ("alert  ", "head")]
         for ai, (txt, akey) in enumerate(alerts[:6]):
             if ai:
                 arow.append(("   ", None))
@@ -897,9 +960,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         head_segs = [("▍ ", "grp_live" if n_work else "head"), (name, "grp")]
         if gword:
             head_segs += [("  ", None), (gword, gwkey)]
-        lines.append(head_segs)
-        _g0 = len(lines)                # group-content start — railified below (block feel)
+        # cap shelf tint (round-5) — the group's title bar; ACTIVE groups get the brighter
+        # variant (user: 활성 디렉토리 틴트를 더 눈에 띄게).
+        lines.append([(_TINT_CAP_HOT if n_work else _TINT_CAP, None)] + head_segs)
+        _g0 = len(lines)                # group-content start — tinted/railified below
         _rail_key = "grp_live" if n_work else "dim"
+        _body_tint = _TINT_BODY_HOT if n_work else _TINT_BODY
 
         # rows stay tight (no blank line — that spread them too far apart); the mid-line gauge
         # glyph (━/─) is what keeps the stacked context bars from merging into a solid wall.
@@ -932,14 +998,16 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             else:
                 lines.append(_dispatch_row(lj, orphan=False))
 
-        # group left rail (user 2026-07-02: 디렉토리별 구분감) — the header's ▍ continues down
-        # every row of the group as the SAME ▍ glyph (a thinner ▏ read as disconnected from the
-        # header block — user: 헤더가 안 이어짐), green while the group is working. The group
-        # reads as one BLOCK without per-group full-width rules (rejected) or more bg bars.
+        # group BODY (round-5): every row of the group rides the body tint — the whole directory
+        # is one solid panel, brighter when active (user: 디렉토리 블록 전체에 틴트, 헤더만 X).
+        # Fallback (_TINT_OK False → 8-color): the previous ▍ rail marks the block instead.
         for _i in range(_g0, len(lines)):
             ln = lines[_i]
-            if ln and not _is_fill(ln[0][0]) and ln[0][1] in (None, "dim") \
-                    and ln[0][0].startswith(" "):
+            if not ln or _is_fill(ln[0][0]):
+                continue
+            if _TINT_OK:
+                lines[_i] = [(_body_tint, None)] + ln
+            elif ln[0][1] in (None, "dim") and ln[0][0].startswith(" "):
                 lines[_i] = [("▍", _rail_key), (ln[0][0][1:], ln[0][1])] + ln[1:]
 
     # dormant dirs — one aggregated line, clearly set apart from the active board (blank + dim).
@@ -978,7 +1046,15 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
 def _plain(segs):
     if segs is None:
         return ""
-    return "".join(("─────" if t == _HFILL else "   ") if _is_fill(t) else t for t, _ in segs)
+    out = []
+    for t, _ in segs:
+        if _is_fill(t):
+            if t[1] in _TINT_CHARS:
+                continue                       # tint sentinel — background only, no text
+            out.append("─────" if t == _HFILL else "   ")
+        else:
+            out.append(t)
+    return "".join(out)
 
 
 def render_once(collect_all, hfilter, section):
@@ -1033,6 +1109,16 @@ def _dw(s):
 _RFLUSH = "\x00 \x00"
 _HFILL = "\x00─\x00"
 
+# row-tint sentinels (round-5 — herdr-style panel tints): a LEADING sentinel marks the whole
+# row's background level. b/c = group body/cap · B/C = the ACTIVE-group variants (brighter,
+# user 2026-07-02: 활성 디렉토리 틴트를 더 눈에 띄게) · i = intel zone (usage/pulse/alert).
+_TINT_BODY, _TINT_CAP = "\x00b\x00", "\x00c\x00"
+_TINT_BODY_HOT, _TINT_CAP_HOT = "\x00B\x00", "\x00C\x00"
+_TINT_INTEL = "\x00i\x00"
+_TINT_CHARS = {"b", "c", "B", "C", "i"}
+# 256-color greyscale levels per sentinel char (spec §1.2 + active variants)
+_TINT_LVL = {"b": 235, "c": 238, "B": 237, "C": 241, "i": 235}
+
 
 def _is_fill(t):
     return len(t) == 3 and t[0] == "\x00" and t[2] == "\x00"
@@ -1041,6 +1127,12 @@ def _is_fill(t):
 def _addline(stdscr, row, segs, w):
     if segs is None:
         return
+    # leading row-tint sentinel (round-5 panels) — strip it FIRST so the fill scan below never
+    # mistakes it for a fill sentinel; it sets the whole row's background level.
+    tint = None
+    if segs and _is_fill(segs[0][0]) and segs[0][0][1] in _TINT_CHARS:
+        tint = segs[0][0][1] if _TINT_OK else None
+        segs = segs[1:]
     fillch = None
     left, right = segs, []
     for i, (t, _c) in enumerate(segs):
@@ -1066,26 +1158,28 @@ def _addline(stdscr, row, segs, w):
                 pw += cw
             if piece:
                 try:
-                    stdscr.addstr(row, col, piece, _attr(color))
+                    stdscr.addstr(row, col, piece, _key_attr(color, tint))
                 except curses.error:
                     pass
             col += pw
         return col
 
     endcol = _draw(left, 0)
-    # htop bar lines (first segment keyed hdr_bar) paint their background to the full width.
+    # band lines (htop WHITE bars + round-5 tint panels) paint their background to full width.
     bar = bool(segs) and segs[0][1] == "hdr_bar"
+    band = bar or tint is not None
+    fill_key = "hdr_bar" if bar else None      # tint rows fill with the default-hue tint pair
     if fillch is not None:              # right may be EMPTY (a bare full-width rule line) — the
         rw = sum(_dw(t) for t, _ in right)   # fill itself must still draw (bug: divider invisible)
-        rcol = max(endcol + (0 if fillch == "─" else 2), (w if bar else w - 1) - rw)
+        rcol = max(endcol + (0 if fillch == "─" else 2), (w if band else w - 1) - rw)
         if fillch == "─" and rcol > endcol:
             _draw([("─" * (rcol - endcol), "head")], endcol)  # fill the gap to make a full-width rule
-        elif bar and rcol > endcol:
-            _draw([(" " * (rcol - endcol), "hdr_bar")], endcol, lim=w)
+        elif band and rcol > endcol:
+            _draw([(" " * (rcol - endcol), fill_key)], endcol, lim=w)
         if right:
-            _draw(right, rcol, lim=w if bar else None)
-    elif bar and endcol < w:
-        _draw([(" " * (w - endcol), "hdr_bar")], endcol, lim=w)
+            _draw(right, rcol, lim=w if band else None)
+    elif band and endcol < w:
+        _draw([(" " * (w - endcol), fill_key)], endcol, lim=w)
 
 
 _OFFSET = 0                 # scroll offset — READ only in _draw (see module docstring)
