@@ -43,6 +43,23 @@ targets. Do not move their data during harness installation. Their notes data
 root is `<agent-notes-root>`, which is mutable continuity state and should not
 be committed to this repo. Adapter docs own concrete local path realizations.
 
+## Cross-harness CLI — `fleet`
+
+`fleet` (the cross-harness live dashboard, `tools/fleet/`) is runtime-neutral — it
+observes every harness (Claude Code · Codex · opencode) from the process table and
+on-disk state, so it belongs to no single adapter. The launcher `tools/fleet/fleet.sh`
+runs from the repo directly; to get the one-word `fleet` command, symlink it onto `PATH`:
+
+```bash
+export AGENT_HOME="$HOME/agent_setting"
+mkdir -p "$HOME/.local/bin"
+ln -sfn "$AGENT_HOME/tools/fleet/fleet.sh" "$HOME/.local/bin/fleet"   # needs ~/.local/bin on PATH
+```
+
+No install step at all still works — run it by path: `bash "$AGENT_HOME/tools/fleet/fleet.sh"`
+(or, via the Claude projection above, `bash ~/.claude/tools/fleet/fleet.sh`). Zero-dep
+(stdlib python3 + curses); nothing to build.
+
 ## Codex Projection
 
 Keep `$HOME/.codex` runtime-owned. Project the portable harness through a

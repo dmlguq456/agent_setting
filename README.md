@@ -191,8 +191,9 @@ Skills/commands + capability/mode map wrapper)에서 확인한다.
 > **이 세팅의 관제탑.** 위 4 트랙·분사가 여러 세션/하네스에 퍼져 돌아가기 시작하면, _지금 무엇이 어디서 도는지_ 를 한 화면으로 보는 창이 필요하다 — 그게 `fleet` 이다. htop 이 프로세스를 보여주듯, fleet 은 **에이전트 세션**을 보여준다.
 
 ```bash
-fleet            # 라이브 TUI (~/.local/bin/fleet → tools/fleet/fleet.sh)
+fleet            # 라이브 TUI — `fleet` 한 단어는 1줄 설치 필요 (INSTALL_LAYOUT.md §Cross-harness CLI)
 fleet --once     # 한 장 스냅샷 (파이프 가능) · --json 수집 결과 · --all 휴면 포함
+# 설치 없이도: bash "$AGENT_HOME/tools/fleet/fleet.sh"  (또는 ~/.claude/tools/fleet/fleet.sh)
 ```
 
 ```text
