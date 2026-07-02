@@ -581,13 +581,22 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
             cur = _rl.get(s.harness)
             if cur is None or (s.mtime or 0) > (cur[3] or 0):
                 _rl[s.harness] = (s.rl_5h, s.rl_7d, s.rl_ms, s.mtime)
-    if _rl:
-        hs = [h for h in ("claude", "codex", "opencode") if h in _rl]
+    # harnesses with LIVE sessions but no rate source still get a row with an explicit note —
+    # a silently missing row read as a bug (2026-07-02 user: "opencode go 공급자로서 안뜨는거야?").
+    # opencode-go has no usage API (gateway 404s; docs: console-only), so say so on the board.
+    _live_h = set(s.harness for s in sessions
+                  if s.liveness not in ("stale", "dead") and not s.app_server and not s.is_child)
+    if _rl or _live_h:
+        hs = [h for h in ("claude", "codex", "opencode") if h in _rl or h in _live_h]
         for idx, h in enumerate(hs):
-            r5, r7, rms, _mt = _rl[h]
             hn = _BADGE_TEXT.get(h, h)
             row = [("usage  " if idx == 0 else "       ", "head"),
                    (_pad(hn, 14), "hb_" + h if h in _BADGE_TEXT else "hb_other")]  # bright = account
+            if h not in _rl:
+                row.append(("no usage api — plan quota is console-only", "dim"))
+                lines.append(row)
+                continue
+            r5, r7, rms, _mt = _rl[h]
             # 5h/7d + per-model buckets — ALL labels dim (a colored 'fable' read like a harness)
             gauges = [("5h ", r5), ("7d ", r7)] + [(lbl + " ", v) for lbl, v in (rms or [])]
             for gi, (lbl, v) in enumerate(gauges):
