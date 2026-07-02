@@ -7,14 +7,15 @@ Codex writes no per-session status file; telemetry is recovered from the rollout
       + payload.rate_limits.{primary,secondary}.used_percent
 Model/effort default from ~/.codex/config.toml (top-level model / model_reasoning_effort).
 
-context% = last_token_usage.input_tokens / model_context_window (each turn resends the full
-context as input, so the last request's input ≈ current context occupancy — validated 2026-07-01;
-cumulative total_token_usage is NOT context occupancy).
-
-Empirical (25 live rollouts, 2026-07-01): last_token_usage.input_tokens ALREADY includes
-cached_input_tokens (cached ≤ input in every case); (input+cached)/window yields impossible
-121-178% — additive hypothesis REJECTED. Formula stays input_tokens/model_context_window with
-min(99) clamp (see _apply_token_count). Do NOT change the formula.
+context% mirrors codex's OWN formula (codex-rs protocol.rs, fetched 2026-07-02 — user: fleet 의
+codex context 부정확): tokens_in_context_window() = LAST request's total_tokens, and
+  used% = 100 - percent_of_context_window_remaining
+        = round(100 * max(0, last.total_tokens - BASELINE) / (window - BASELINE)),
+BASELINE_TOKENS = 12000 ("prompts, tools and space to call compact") subtracted from BOTH sides
+so a fresh session reads 0% used exactly like the codex TUI's "100% context left".
+(History: v1 used input_tokens/window — plausible but ~2x codex's number; the 2026-07-01
+empirical note that rejected (input+cached)/window still holds, superseded by the source
+formula. Cumulative total_token_usage is NOT context occupancy — it double-counts inputs.)
 
 A per-tick cache (cwd → newest rollout path) is built from cheap line-1 reads of all rollouts
 (≈200 files); the expensive last-token-count parse touches only a 64 KB tail of the matched file.
@@ -117,10 +118,12 @@ def _tail_token_count(path, chunk=65536):
     return last
 
 
+_BASELINE_TOKENS = 12000    # codex-rs protocol.rs BASELINE_TOKENS — see module docstring
+
+
 def _apply_token_count(sess, line):
-    # Formula is input_tokens/model_context_window (min(99) clamp) — NOT (input+cached)/window.
-    # See module docstring: 25-rollout empirical check (2026-07-01) rejected the additive
-    # hypothesis (it produced impossible 121-178% values). input_tokens already includes cache.
+    # codex's own formula (protocol.rs percent_of_context_window_remaining, 2026-07-02):
+    # used = max(0, last.total_tokens - BASELINE) over effective window (window - BASELINE).
     try:
         p = json.loads(line).get("payload") or {}
     except Exception:
@@ -128,11 +131,13 @@ def _apply_token_count(sess, line):
     info = p.get("info") or {}
     win = info.get("model_context_window")
     ltu = info.get("last_token_usage") or {}
-    cur_in = ltu.get("input_tokens")                # includes cached — ≈ current context size
-    if isinstance(cur_in, (int, float)):
-        sess.tokens = int(cur_in)
-        if isinstance(win, (int, float)) and win:
-            sess.ctx_pct = min(99, round(100 * cur_in / win))
+    tot = ltu.get("total_tokens")                   # last request total ≈ tokens in context window
+    if isinstance(tot, (int, float)):
+        sess.tokens = int(tot)
+        if isinstance(win, (int, float)) and win > _BASELINE_TOKENS:
+            eff = win - _BASELINE_TOKENS
+            used = max(0, tot - _BASELINE_TOKENS)
+            sess.ctx_pct = min(99, round(100.0 * used / eff))
     p5, p7 = _rates_from_payload(p)                 # 300min ≈ 5h · 10080min = 7d
     if p5 is not None:
         sess.rl_5h = p5

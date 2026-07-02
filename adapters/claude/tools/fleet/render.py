@@ -831,9 +831,11 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             arow.append(("⚠ " + txt, akey))
         lines.append(arow)
 
-    # CYAN column-header bar REPLACES the `──` zone divider — htop separates meters from the
-    # process list with its header bar, not a rule. Narrow mode's 2-line cards have no single
+    # header bar REPLACES the `──` zone divider — htop separates meters from the process list
+    # with its bar, not a rule. One blank line above it (user 2026-07-02: header 위에 한칸) so
+    # the top intel zone and the bar don't touch. Narrow mode's 2-line cards have no single
     # column mapping → the bar degrades to a zone label + current-mode hint.
+    lines.append(None)
     if layout != "wide":
         lines.append([("  SESSIONS", "hdr_bar"), (_RFLUSH, None),
                       ("%s · press w to cycle  " % layout, "hdr_bar")])
