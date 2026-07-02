@@ -44,7 +44,18 @@ _JOB_LIVE_RANK = {"working": 0, "stale": 1, "dead": 2, "unknown": 3}
 _QA_INT = {"quick": curses.A_DIM, "light": curses.A_DIM, "standard": 0,
            "thorough": curses.A_BOLD, "adversarial": curses.A_BOLD}
 _NARROW_CUTOFF = 70
+_TWO_LINE_CUTOFF = 110      # width below which sessions render as 2-line cards (round-4 responsive)
+_LAYOUT = "auto"            # 'auto' (width decides) | 'wide' | 'narrow' — cycled by the `w` key
 _LOOPS_KEYS = ("oncall", "note", "study", "drill")
+
+
+def _cycle_layout():
+    global _LAYOUT
+    _LAYOUT = {"auto": "narrow", "narrow": "wide", "wide": "auto"}[_LAYOUT]
+
+
+def _two_line(w):
+    return _LAYOUT == "narrow" or (_LAYOUT == "auto" and w < _TWO_LINE_CUTOFF)
 
 _COLOR = {}   # color_key → curses attr (filled by _init_colors); empty ⇒ plain mode
 
@@ -132,6 +143,16 @@ def _init_colors():
     _COLOR["eff_high"] = _COLOR.get("yellow", 0)
     _COLOR["eff_xhigh"] = _COLOR.get("yellow", 0) | curses.A_BOLD
     _COLOR["eff_max"] = _COLOR.get("red", 0) | curses.A_BOLD
+    # htop chrome (round-4, user: 헤더 행 배경색): the ONE background pair on screen — BLACK on
+    # CYAN full-width bars wrapping the board (column-header bar + footer key bar), htop's own
+    # theme. Structural, one-shot — NOT a per-item classification color, so the fg color-axis
+    # budget ("무지개 노이즈" rule) is untouched. dim is invisible on CYAN → keycaps use BOLD.
+    try:
+        curses.init_pair(15, curses.COLOR_BLACK, curses.COLOR_CYAN)
+        _COLOR["hdr_bar"] = curses.color_pair(15)
+    except Exception:
+        _COLOR["hdr_bar"] = curses.A_REVERSE
+    _COLOR["hdr_key"] = _COLOR["hdr_bar"] | curses.A_BOLD
     # stage breadcrumb — each pipeline stage a DISTINCT color (user); the CURRENT stage is BOLD
     # (bright, "눈에 띄는"), past/pending stages the same hue but DIM. Palette cycles by stage index.
     _stage_raw = [_hue.get("opencode", 0), _hue.get("claude", 0), _COLOR.get("green", 0),
@@ -534,6 +555,79 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     return segs
 
 
+# ---------- 2-line cards (round-4 responsive narrow mode) ----------
+# L1 = identity (dot · harness · name · ▾N · gate · branch) / L2 = telemetry (model · effort ·
+# bracket gauge · cost · ⏱). model keeps its fixed width so gauges align vertically across cards
+# (the nvtop column feel). Same segment parts as the 1-line rows — zero new color keys.
+def _session_row_2line(s, is_parent=False, child_count=0):
+    live = s.liveness
+    slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
+    dim_tel = live in ("stale", "dead") or s.app_server
+    name_key = ("name_work" if live == "working"
+                else ("name_dim" if dim_tel else "name_idle"))
+    gch, gkey = _glyph(live)
+    if s.detached and live not in ("stale", "dead"):
+        gch = _DETACHED_GLYPH
+    hn = _BADGE_TEXT.get(s.harness, "?")
+    hkey = (_BADGE_KEY.get(s.harness, "dim") if dim_tel
+            else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
+    l1 = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey), (slug, name_key)]
+    if is_parent and child_count:
+        l1.append((" ▾%d" % child_count, "dim"))
+    gate, pipe = (s.gate, False) if s.gate else _gate_info(s.cwd, s.session_id)
+    gtag, gk = _gate_tag(gate, pipe)
+    if gtag:
+        l1.append((gtag, gk))
+    br = s.branch or _git_branch(s.cwd)
+    if br:
+        l1.append(("  " + br, "dim" if dim_tel else "branch_s"))
+    if s.app_server:
+        l1.append(("  app-server", "dim"))
+    if s.orphan:
+        l1.append(("  worktree-gone", "g_dead"))
+
+    l2 = [("      ", None)] + _model_cell(s.model, s.effort, _MW, dim=dim_tel)
+    if s.ctx_pct is not None and not dim_tel:
+        l2 += [("[", "dim")] + _gauge_segs(s.ctx_pct, 12) + \
+              [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct)), ("]", "dim")]
+    else:
+        l2 += [("[", "dim"), ("·" * 12, "dim"),
+               (" %3s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim"), ("]", "dim")]
+    l2.append((_RFLUSH, None))
+    cost = dash(s.cost, lambda v: "$%.2f" % v)
+    ck = "cost_hi" if (isinstance(s.cost, (int, float)) and s.cost > 100) else "dim"
+    l2 += [("%9s" % cost, ck), ("   ", None),
+           (_CLOCK, "dim"), ("%6s" % fmt_min(s.elapsed_min), "dim")]
+    return l1, l2
+
+
+def _dispatch_row_2line(j, orphan=False, parent_model=None):
+    key = j.key or "?"
+    name = j.slug or key
+    gch, gkey = _glyph(j.liveness)
+    hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
+    qa_base = j.qa or ""
+    qa_text = (("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa) if j.qa else ""
+    qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
+    tag_segs, _tw = _mq_tag(j.mode, qa_text, qa_key)
+
+    l1 = [("  ", None), ("↳ ", "dim"), (gch, gkey), (" ", None),
+          (_pad(hn, _HW - 2), _BADGE_KEY.get(j.harness, "dim")), (name, "name_dim")]
+    l1 += tag_segs
+    if orphan:
+        l1.append(("  (orphan)", "gate_u"))
+    br = j.branch or _git_branch(j.cwd)
+    if br:
+        l1.append(("  " + br, "dim"))
+
+    l2 = [("      ", None)] + _model_cell(j.model or parent_model, None, _MW, dim=True)
+    if key and key != name:
+        l2.append((key + ": ", "name_dim"))
+    l2 += _stage_segs(key, j.stage or "", working=(j.liveness == "working"))
+    l2 += [(_RFLUSH, None), (_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
+    return l1, l2
+
+
 # ---------- grouping assembler ----------
 def _group_key_session(s):
     return project_of(s.cwd)
@@ -578,7 +672,7 @@ def set_show_all(v):
     _SHOW_ALL = bool(v)
 
 
-def _build_lines(sessions, jobs, section, narrow, malformed):
+def _build_lines(sessions, jobs, section, narrow, malformed, two_line=False):
     """Return a flat list of segment-lines for the whole screen (None = blank line).
 
     Same contract consumed by BOTH `render_once` (plain, full output) and `_draw` (viewport
@@ -627,19 +721,30 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
                 lines.append(row)
                 continue
             r5, r7, rms, _mt = _rl[h]
-            # 5h/7d + per-model buckets — ALL labels dim (a colored 'fable' read like a harness)
+            # 5h/7d + per-model buckets — ALL labels dim (a colored 'fable' read like a harness).
+            # htop BRACKET METERS (round-4): `[━━━━──────── 33%]` — the bracket draws the capacity
+            # vessel, % sits inside. Session-row ctx gauges stay bare (htop's list bars are bare too).
+            gw = 8 if two_line else 12
             gauges = [("5h ", r5), ("7d ", r7)] + [(lbl + " ", v) for lbl, v in (rms or [])]
             for gi, (lbl, v) in enumerate(gauges):
-                pctstr = ("%d%%" % v) if v is not None else "—"
-                row.append(("     ", None) if gi else ("", None))        # wide gap between windows
+                row.append(("   ", None) if gi else ("", None))          # 3-col gap between meters
                 row.append((lbl, "dim"))
-                row += _gauge_segs(v, 16) if v is not None else [("·" * 16, "dim")]
-                row.append((" %4s" % pctstr, _pct_key(v)))
+                row.append(("[", "dim"))
+                if v is not None:
+                    row += _gauge_segs(v, gw)
+                    row.append((" %3d%%" % v, _pct_key(v)))
+                else:
+                    row += [("·" * gw, "dim"), ("   —", "dim")]
+                row.append(("]", "dim"))
             lines.append(row)
-        # zone divider — the ONE full-width rule on screen: usage panel ── board (user: the two
-        # zones blended together; per-group rules are gone so this single line reads as the split)
-        lines.append([(_HFILL, None)])
-        lines.append([(_COL_HEAD, "head")])            # column labels once → no per-cell emoji needed
+        # CYAN column-header bar REPLACES the `──` zone divider — htop separates meters from the
+        # process list with its header bar, not a rule. Narrow mode's 2-line cards have no single
+        # column mapping → the bar degrades to a zone label + current-mode hint.
+        if two_line:
+            lines.append([("  SESSIONS", "hdr_bar"), (_RFLUSH, None),
+                          ("narrow · press w for wide  ", "hdr_bar")])
+        else:
+            lines.append([(_COL_HEAD, "hdr_bar")])
 
     first = True
     folded_groups = []       # dormant dirs — aggregated into ONE line at the bottom (user: the
@@ -701,18 +806,30 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
         # glyph (━/─) is what keeps the stacked context bars from merging into a solid wall.
         for s in _sort_group_sessions(shown):
             kids = _sort_group_jobs(children.get(s.session_id, []))
-            lines.append(_session_row(s, narrow, is_parent=bool(kids), child_count=len(kids)))
+            if two_line:
+                lines.extend(_session_row_2line(s, is_parent=bool(kids), child_count=len(kids)))
+            else:
+                lines.append(_session_row(s, narrow, is_parent=bool(kids), child_count=len(kids)))
             for i, cj in enumerate(kids):
-                lines.append(_dispatch_row(cj, orphan=False, parent_model=s.model,
-                                           parent_harness=s.harness, is_last=(i == len(kids) - 1)))
+                if two_line:
+                    lines.extend(_dispatch_row_2line(cj, orphan=False, parent_model=s.model))
+                else:
+                    lines.append(_dispatch_row(cj, orphan=False, parent_model=s.model,
+                                               parent_harness=s.harness, is_last=(i == len(kids) - 1)))
         if group_sessions and hidden:
             lines.append([("     +%d stale/companion hidden" % hidden, "dim")])
 
         # orphans / loops: project-level fallback (standalone tree rows)
         for oj in _sort_group_jobs(orphans):
-            lines.append(_dispatch_row(oj, orphan=show_sessions))
+            if two_line:
+                lines.extend(_dispatch_row_2line(oj, orphan=show_sessions))
+            else:
+                lines.append(_dispatch_row(oj, orphan=show_sessions))
         for lj in _sort_group_jobs(loops_jobs):
-            lines.append(_dispatch_row(lj, orphan=False))
+            if two_line:
+                lines.extend(_dispatch_row_2line(lj, orphan=False))
+            else:
+                lines.append(_dispatch_row(lj, orphan=False))
 
     # dormant dirs — one aggregated line, clearly set apart from the active board (blank + dim).
     # Contains the word 'folded' so the click-toggle map and `a` both still reveal them.
@@ -756,7 +873,13 @@ def _plain(segs):
 def render_once(collect_all, hfilter, section):
     sessions, jobs = collect_all(harness_filter=hfilter)
     malformed = _malformed()
-    lines = _build_lines(sessions, jobs, section, narrow=False, malformed=malformed)
+    try:
+        import shutil
+        tw = shutil.get_terminal_size().columns
+    except Exception:
+        tw = 200
+    lines = _build_lines(sessions, jobs, section, narrow=False, malformed=malformed,
+                         two_line=_two_line(tw))
     out = "\n".join(_plain(l) for l in lines)
     sys.stdout.write(out + "\n")
     return 0
@@ -838,13 +961,20 @@ def _addline(stdscr, row, segs, w):
         return col
 
     endcol = _draw(left, 0)
+    # htop bar lines (first segment keyed hdr_bar) paint their background to FULL width — the
+    # gap between left and right (and any tail) is CYAN spaces, not bare cells (round-4).
+    bar = bool(segs) and segs[0][1] == "hdr_bar"
     if fillch is not None:              # right may be EMPTY (a bare full-width rule line) — the
         rw = sum(_dw(t) for t, _ in right)   # fill itself must still draw (bug: divider invisible)
         rcol = max(endcol + (0 if fillch == "─" else 2), w - 1 - rw)
         if fillch == "─" and rcol > endcol:
             _draw([("─" * (rcol - endcol), "head")], endcol)  # fill the gap to make a full-width rule
+        elif bar and rcol > endcol:
+            _draw([(" " * (rcol - endcol), "hdr_bar")], endcol)
         if right:
             _draw(right, rcol)
+    elif bar and endcol < w - 1:
+        _draw([(" " * (w - 1 - endcol), "hdr_bar")], endcol)
 
 
 _OFFSET = 0                 # scroll offset — READ only in _draw (see module docstring)
@@ -866,7 +996,7 @@ def _draw(stdscr, sessions, jobs, section, malformed):
     h, w = stdscr.getmaxyx()
     stdscr.erase()
     narrow = w < _NARROW_CUTOFF
-    lines = _build_lines(sessions, jobs, section, narrow, malformed)
+    lines = _build_lines(sessions, jobs, section, narrow, malformed, two_line=_two_line(w))
     body_h = max(1, h - 1)   # reserve 1 footer row
     _OFFSET = _clamp_offset(_OFFSET, len(lines), body_h)
 
@@ -886,12 +1016,18 @@ def _draw(stdscr, sessions, jobs, section, malformed):
         parts.append("↑%d" % above)
     if below:
         parts.append("↓%d" % below)
-    hint = "q quit · r refresh · a all · ↑↓/jk PgUp/Dn g/G · click +N"
-    footer = ("  " + " ".join(parts) + ("  " if parts else "") + hint)
-    try:
-        stdscr.addstr(h - 1, 0, footer[: w - 1], _attr("dim"))
-    except curses.error:
-        pass
+    # htop F-key bar (round-4): CYAN full-width, keycaps BOLD (dim is invisible on CYAN), the
+    # scroll indicator rides the right edge. `w` cycles layout auto → narrow → wide.
+    wlbl = "wide/narrow" if _LAYOUT == "auto" else ("%s!" % _LAYOUT)
+    fsegs = [(" ", "hdr_bar"),
+             ("q", "hdr_key"), (" quit · ", "hdr_bar"),
+             ("r", "hdr_key"), (" refresh · ", "hdr_bar"),
+             ("a", "hdr_key"), (" all · ", "hdr_bar"),
+             ("w", "hdr_key"), (" " + wlbl + " · ", "hdr_bar"),
+             ("jk", "hdr_key"), (" scroll · ", "hdr_bar"),
+             ("g/G", "hdr_key"), (" top/end", "hdr_bar"),
+             (_RFLUSH, None), (" ".join(parts) + " " if parts else "", "hdr_bar")]
+    _addline(stdscr, h - 1, fsegs, w)
     stdscr.noutrefresh()
     curses.doupdate()
 
@@ -936,6 +1072,8 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
             _OFFSET = 1 << 30    # clamp in _draw resolves this to maxoff
         elif ch in (ord("a"), ord("A")):
             set_show_all(not _SHOW_ALL)
+        elif ch in (ord("w"), ord("W")):
+            _cycle_layout()
         elif ch == curses.KEY_MOUSE:
             try:
                 _, mx, my, _mz, _bstate = curses.getmouse()
