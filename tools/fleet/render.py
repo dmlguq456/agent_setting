@@ -899,20 +899,14 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     # with its bar, not a rule. One blank line above it (user 2026-07-02: header 위에 한칸) so
     # the top intel zone and the bar don't touch. Narrow mode's 2-line cards have no single
     # column mapping → the bar degrades to a zone label + current-mode hint.
-    # With tints available the bar rides the SAME grey family as the panels (cap tone — user:
-    # 헤더도 블록이랑 동일한 컬러); 8-color fallback keeps the WHITE frame bar.
+    # column header = PLAIN dim labels, no bar/tint at all (user 2026-07-02: 전체 헤더는 컬러
+    # 빼자) — the tinted panels below carry the block language; the header just names columns.
     lines.append(None)
-    if _TINT_OK:
-        if layout != "wide":
-            lines.append([(_TINT_CAP, None), ("  SESSIONS", "grp"), (_RFLUSH, None),
-                          ("%s · press w to cycle  " % layout, "dim")])
-        else:
-            lines.append([(_TINT_CAP, None), (_COL_HEAD, None)])
-    elif layout != "wide":
-        lines.append([("  SESSIONS", "hdr_bar"), (_RFLUSH, None),
-                      ("%s · press w to cycle  " % layout, "hdr_bar")])
+    if layout != "wide":
+        lines.append([("  SESSIONS", "head"), (_RFLUSH, None),
+                      ("%s · press w to cycle  " % layout, "head")])
     else:
-        lines.append([(_COL_HEAD, "hdr_bar")])
+        lines.append([(_COL_HEAD, "head")])
 
     first = True
     folded_groups = []       # dormant dirs — aggregated into ONE line at the bottom (user: the
@@ -968,9 +962,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         head_segs = [("▍ ", "grp_live" if n_work else "head"), (name, "grp")]
         if gword:
             head_segs += [("  ", None), (gword, gwkey)]
-        # cap shelf tint (round-5) — the group's title bar; ACTIVE groups get the brighter
-        # variant (user: 활성 디렉토리 틴트를 더 눈에 띄게).
-        lines.append([(_TINT_CAP_HOT if n_work else _TINT_CAP, None)] + head_segs)
+        # group header rides the SAME tint as the block body (user: 디렉토리 헤더도 블록과 동일
+        # 컬러) — the whole directory is ONE uniform panel; the header line is distinguished by
+        # the ▍ anchor + bold name, not a separate shelf tone. Active groups stay brighter.
+        lines.append([(_TINT_BODY_HOT if n_work else _TINT_BODY, None)] + head_segs)
         _g0 = len(lines)                # group-content start — tinted/railified below
         _rail_key = "grp_live" if n_work else "dim"
         _body_tint = _TINT_BODY_HOT if n_work else _TINT_BODY
