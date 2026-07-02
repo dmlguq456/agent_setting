@@ -479,11 +479,10 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
 
-    # DIFFERENTIAL indent (harness 2 cols deeper than a session) via a tree connector that branches
-    # off the parent's dot column; the harness field is narrowed by 2 so the NAME still lands at the
-    # shared _NAME_COL — i.e. everything from the name onward aligns with sessions. DIM = spawned.
-    conn = "└─" if is_last else "├─"
-    segs = [("  ", None), (conn, "dim"), (gch, gkey), (" ", None),
+    # DIFFERENTIAL indent (harness 2 cols deeper than a session) with a ↳ spawn arrow off the
+    # parent's dot column (user pick over ├─/└─ tree bars); the harness field is narrowed by 2 so
+    # the NAME still lands at the shared _NAME_COL — name onward aligns with sessions. DIM = spawned.
+    segs = [("  ", None), ("↳ ", "dim"), (gch, gkey), (" ", None),
             (_pad(hn, _HW - 2), _BADGE_KEY.get(j.harness, "dim"))]
     avail = _NW_S
     tag_segs, tagw = _mq_tag(j.mode, qa_text, qa_key)
@@ -705,7 +704,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
         ("◦", "g_stale"), (" stale   ", "dim"),
         ("×", "g_dead"), (" dead     ", "dim"),
         ("▾N", "dim"), (" child jobs   ", "dim"),
-        ("├─", "dim"), (" dispatch", "dim"),
+        ("↳", "dim"), (" dispatch", "dim"),
     ])
 
     return lines
