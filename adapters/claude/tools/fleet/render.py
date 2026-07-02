@@ -223,6 +223,15 @@ def _init_colors():
     _TINT_PAIR.clear()
     try:
         if curses.COLORS >= 256:
+            # the 256 cube's darkest green (22 = #005f00) is still too bright for a herdr-grade
+            # subtle tint (user 2026-07-02: 너무 밝은데) — redefine it darker (~#143814) where
+            # the terminal allows palette changes; terminals that ignore init_color simply keep
+            # the stock 22, so the worst case is today's look, never worse.
+            try:
+                if curses.can_change_color():
+                    curses.init_color(22, 80, 220, 80)
+            except Exception:
+                pass
             hues = {"d": -1, "g": curses.COLOR_GREEN, "y": curses.COLOR_YELLOW,
                     "r": curses.COLOR_RED, "c": curses.COLOR_CYAN,
                     "m": curses.COLOR_MAGENTA, "l": curses.COLOR_BLUE}
