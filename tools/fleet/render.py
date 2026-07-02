@@ -106,11 +106,8 @@ def _init_colors():
         # bright harness color = a TOP-LEVEL session / account; a dispatch job keeps the DIM
         # harness (h_<h>) → main↔spawned weight is carried by font-color intensity (no bg fill).
         _COLOR["hb_" + h] = hue
-        # usage-bar ACCOUNT label = reverse-video badge (word only) — distinguishes the harness
-        # account from the model buckets beside it (fable read like a harness without this).
-        _COLOR["acct_" + h] = hue | curses.A_REVERSE
     _COLOR["hb_other"] = 0
-    _COLOR["acct_other"] = curses.A_REVERSE
+    _COLOR["grp"] = curses.A_BOLD      # group (directory) name — the ▍-anchored section header
     for lvl, it in _LVL_INT.items():
         _COLOR["eff_other_" + lvl] = it
     # harness identity = dim colored text (color lives ONLY here for identity)
@@ -597,24 +594,24 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
             r5, r7, rms, _mt = _rl[h]
             hn = _BADGE_TEXT.get(h, h)
             row = [("usage  " if idx == 0 else "       ", "head"),
-                   # reverse-video BADGE on the word only — harness account ≠ model bucket labels
-                   (hn, "acct_" + h if h in _BADGE_TEXT else "acct_other"),
-                   (" " * max(1, 14 - len(hn)), None)]
-            # 5h/7d + any per-model buckets (e.g. fable-only weekly) in the same gauge grammar;
-            # a bucket label wears its model-family color (fable magenta, opus cyan, …)
-            gauges = [("5h ", r5, "dim"), ("7d ", r7, "dim")] + \
-                     [(lbl + " ", v, _model_key(lbl)) for lbl, v in (rms or [])]
-            for gi, (lbl, v, lkey) in enumerate(gauges):
+                   (_pad(hn, 14), "hb_" + h if h in _BADGE_TEXT else "hb_other")]  # bright = account
+            # 5h/7d + per-model buckets — ALL labels dim (a colored 'fable' read like a harness)
+            gauges = [("5h ", r5), ("7d ", r7)] + [(lbl + " ", v) for lbl, v in (rms or [])]
+            for gi, (lbl, v) in enumerate(gauges):
                 pctstr = ("%d%%" % v) if v is not None else "—"
                 row.append(("     ", None) if gi else ("", None))        # wide gap between windows
-                row.append((lbl, lkey))
+                row.append((lbl, "dim"))
                 row += _gauge_segs(v, 16) if v is not None else [("·" * 16, "dim")]
                 row.append((" %4s" % pctstr, _pct_key(v)))
             lines.append(row)
-        lines.append(None)
+        # zone divider — the ONE full-width rule on screen: usage panel ── board (user: the two
+        # zones blended together; per-group rules are gone so this single line reads as the split)
+        lines.append([(_HFILL, None)])
         lines.append([(_COL_HEAD, "head")])            # column labels once → no per-cell emoji needed
 
     first = True
+    folded_groups = []       # dormant dirs — aggregated into ONE line at the bottom (user: the
+                             # stack of per-dir folded rules at the bottom was visual noise)
     for name in order:
         g = groups[name]
         group_sessions = g["sessions"] if show_sessions else []
@@ -628,14 +625,13 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
         must_show_jobs = bool(group_jobs)   # conservative: any job present blocks the fold
         fold = (not _SHOW_ALL) and (not live_sessions) and (not must_show_jobs)
 
+        if fold:
+            folded_groups.append((name, len(group_sessions)))
+            continue
+
         if not first:
             lines.append(None)
         first = False
-
-        if fold:
-            lines.append([("── %s  (+%d folded) " % (name, len(group_sessions)), "dim"),
-                          ("─" * max(3, 70 - _dw(name) - 14), "dim")])
-            continue
 
         shown = (group_sessions if _SHOW_ALL else
                  [s for s in group_sessions
@@ -657,13 +653,13 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
 
         gcwd = (group_sessions[0].cwd if group_sessions else
                 (group_jobs[0].cwd if group_jobs else ""))
-        ggate, gpipe = _gate_info(gcwd)                # project spec-gate (word after the rule)
+        ggate, gpipe = _gate_info(gcwd)                # project spec-gate (word after the name)
         gword, gwkey = _gate_word(ggate, gpipe)
-        head_segs = [("── ", "head"), ("📁 ", "dim"), ("%s " % name, "head"), (_HFILL, None)]
+        # ▍-anchored section header (bold name) — no per-group full-width rule (heavy stripes);
+        # the blank line between groups + the bold name carry the separation.
+        head_segs = [("▍ ", "head"), (name, "grp")]
         if gword:
-            head_segs += [("  ", None), (gword, gwkey), (" ──", "head")]
-        else:
-            head_segs.append(("──", "head"))
+            head_segs += [("  ", None), (gword, gwkey)]
         lines.append(head_segs)
 
         # rows stay tight (no blank line — that spread them too far apart); the mid-line gauge
@@ -682,6 +678,16 @@ def _build_lines(sessions, jobs, section, narrow, malformed):
             lines.append(_dispatch_row(oj, orphan=show_sessions))
         for lj in _sort_group_jobs(loops_jobs):
             lines.append(_dispatch_row(lj, orphan=False))
+
+    # dormant dirs — one aggregated line, clearly set apart from the active board (blank + dim).
+    # Contains the word 'folded' so the click-toggle map and `a` both still reveal them.
+    if folded_groups:
+        names = " · ".join(n for n, _c in folded_groups)
+        total = sum(c for _n, c in folded_groups)
+        lines.append(None)
+        lines.append([("▍ ", "dim"),
+                      ("inactive  +%d folded   " % total, "dim"),
+                      (names[:90] + ("…" if len(names) > 90 else ""), "dim")])
 
     if not order:
         lines.append([("  (no active sessions or dispatch jobs)", "dim")])
