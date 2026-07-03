@@ -479,9 +479,9 @@ def _model_cell(model, effort, width, dim=False):
     sfx = effort or ""
     lkey = _model_key(model, dim=dim)
     if sfx:
-        name = name[: max(1, width - len(sfx) - 2)]
-        pad = max(0, width - len(name) - 1 - len(sfx))
-        return [(name, lkey), (" " + sfx, _eff_key(sfx, dim)), (" " * pad, None)]
+        name = name[: max(1, width - len(sfx) - 4)]
+        pad = max(0, width - len(name) - len(sfx) - 3)
+        return [(name, lkey), (" (" + sfx + ")", _eff_key(sfx, dim)), (" " * pad, None)]
     return [(_pad(name[: width - 1], width), lkey)]
 
 
