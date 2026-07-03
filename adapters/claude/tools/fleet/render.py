@@ -173,6 +173,7 @@ def _init_colors():
     _COLOR["grp"] = curses.A_BOLD      # group (directory) card title
     _COLOR["grp_live"] = _COLOR.get("green", 0)
     _COLOR["grp_hot"] = _COLOR.get("green", 0) | curses.A_BOLD   # active card title (working)
+    _COLOR["grp_cool"] = curses.A_DIM  # cooling dir: grey ring + elapsed (완료 직후 식는 중 — 중간 상태)
     # harness identity = dim colored text (color lives ONLY here for identity)
     for h in ("claude", "codex", "opencode"):
         _COLOR["h_" + h] = _COLOR.get("h_" + h, 0) | curses.A_DIM
@@ -278,6 +279,13 @@ _LIVE_GLYPH = {"working": "●", "idle": "●", "blocked": "◑", "done": "✓",
 _DETACHED_GLYPH = "○"   # ring = 빈 자리(클라이언트 없음); idle 은 꽉 찬 dim ●
 _GLYPH_KEY = {"working": "g_work", "idle": "dim", "blocked": "g_idle", "done": "green",
               "stale": "g_stale", "dead": "g_dead", "unknown": "dim"}
+
+# group "cooling" state (user 2026-07-03): a directory with NO active work whose newest session
+# transcript write is within this window reads as "완료 직후 식는 중" — a middle state between hot
+# (green ● + green-bold title) and cold (no glyph). It gets a grey ring + time-since-last-activity
+# in the header, so a just-finished repo says "done & waiting", not fully dormant. Tune freely.
+_COOL_WINDOW_MIN = 180
+_COOL_RING = "○"        # grey ring BEFORE a cooling directory name (그룹 레벨 — _DETACHED_GLYPH 와 별개 자리)
 
 
 _BLINK_ON = True     # manual blink phase (toggled ~2 Hz in the live loop) — drives the spinner too
@@ -1032,6 +1040,17 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         # while the group works, plain bold otherwise. Doubles with the active card tint.
         n_work = sum(1 for s in live_sessions if s.liveness == "working") + \
                  sum(1 for j in group_jobs if j.liveness == "working")
+        # cooling (round-6, user 2026-07-03): no active work, but the newest session transcript
+        # write is ≤ _COOL_WINDOW_MIN old → the directory just finished and is "식는 중". A middle
+        # state between hot (green ●) and cold (no glyph): a grey ring + time-since-done, so a
+        # just-finished repo reads as "done & waiting" rather than fully dormant. Sessions linger
+        # as idle (still within the 48h live window), so the group is not folded (R4).
+        _last_act = max((s.mtime for s in group_sessions if s.mtime), default=None)
+        _cool_min = None
+        if not n_work and _last_act is not None:
+            _age = (time.time() - _last_act) / 60.0
+            if 0 <= _age <= _COOL_WINDOW_MIN:
+                _cool_min = int(_age)
         # trailing slash = the universal "this is a directory" marker (ls convention — user
         # 2026-07-03: 폴더(repo)임을 간단하게), dim so the name stays the focal word.
         # The blinking green ● now lives HERE (directory level = "work happening inside") —
@@ -1039,11 +1058,17 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         head_segs = []
         if n_work:
             head_segs += [("●", "g_work" if _BLINK_ON else "g_work_off"), (" ", None)]
+        elif _cool_min is not None:
+            # grey ring = "완료 직후 식는 중" (dead ✕ red / stale · 와 확실히 구분되는 잔잔한 회색)
+            head_segs += [(_COOL_RING, "grp_cool"), (" ", None)]
         head_segs += [(name, "grp_hot" if n_work else "grp"), ("/", "dim")]
         _nwt = _wt_count(gcwd)
         if _nwt:
             # statusline 과 같은 표기 (🚧 N = 병렬 작업장·잔존 worktree, §5.10) — 이름 바로 옆
             head_segs += [(" 🚧 %d" % _nwt, "g_idle")]
+        if _cool_min is not None:
+            # 완료 후 경과시간 (끝나고 대기하는 시간) — 이름/worktree 슬롯 옆, 잔잔한 회색
+            head_segs += [("  ", None), (fmt_min(_cool_min), "grp_cool")]
         if gword:
             head_segs += [("  ", None), (gword, gwkey)]
         # group header = the card's TITLE row (user 2026-07-03 pick: 카드 안 타이틀) — first
