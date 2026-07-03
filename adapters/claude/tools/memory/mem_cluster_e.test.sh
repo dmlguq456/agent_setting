@@ -5,7 +5,7 @@
 #        ⑥ live DB preservation  ⑦ inject/recall project_key filter
 #
 # ABSOLUTE: every case uses isolated MEM_STORE/MEM_PROJECTS (mktemp -d).
-# NEVER writes to ~/.claude/memory.
+# NEVER writes to a real runtime memory directory.
 # All mem calls via `python3 "$MEM" ...`
 set -u
 
@@ -17,7 +17,7 @@ PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); printf '  ok  %s\n' "$1"; }
 bad() { FAIL=$((FAIL+1)); printf '  BAD %s\n' "$1"; }
 
-# ---------- global isolated base store (never ~/.claude) ----------
+# ---------- global isolated base store (never real runtime home) ----------
 BASE_STORE="$(mktemp -d)"
 BASE_PROJ="$(mktemp -d)"
 trap 'rm -rf "$BASE_STORE" "$BASE_PROJ"' EXIT

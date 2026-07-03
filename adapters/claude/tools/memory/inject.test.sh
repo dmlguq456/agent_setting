@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated test for `mem inject` D-16 (QA ② + ③) + lifecycle() equivalence (Step 1.1).
-# Fully isolated via MEM_STORE + MEM_PROJECTS temp dirs — never touches real ~/.claude state.
+# Fully isolated via MEM_STORE + MEM_PROJECTS temp dirs — never touches real runtime state.
 # All mem calls via `python3 "$MEM" ...` (worktree copy, matches distill.test.sh convention).
 #
 # NOTE: The existing suites (hooks/mem-turn-nudge.test.sh, hooks/mem-distill-dispatch.test.sh,

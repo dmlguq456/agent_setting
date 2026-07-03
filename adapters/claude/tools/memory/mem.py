@@ -30,8 +30,11 @@ AGENT_HOME = default_agent_home()
 STORE = Path(os.environ.get("MEM_STORE", AGENT_HOME / "memory"))
 DB = STORE / "memory.db"
 DUMP = STORE / "dump.jsonl"
-PROJECTS = Path(os.environ.get("MEM_PROJECTS", AGENT_HOME / "projects"))
+# projects = Claude *런타임* 세션 저장소 (~/.claude) — AGENT_HOME 은 migration 후
+# repo 루트라 transcript·auto-memory 위치로 못 쓴다 (CODEX_SESSIONS 와 동형).
+PROJECTS = Path(os.environ.get("MEM_PROJECTS", HOME / ".claude" / "projects"))
 CODEX_SESSIONS = Path(os.environ.get("CODEX_SESSIONS", HOME / ".codex" / "sessions"))
+OPENCODE_EXPORT_FILE = os.environ.get("OPENCODE_EXPORT_FILE")
 USER_PROFILE = Path(os.environ.get("MEM_PROFILE", AGENT_HOME / "user_profile"))
 
 TIERS = ("working", "durable")
@@ -1039,7 +1042,7 @@ def _assistant_text(content):
 
 
 class ClaudeCodeJsonlSource:
-    """Claude Code 하네스 adapter: projects/<enc_cwd>/<sid>.jsonl → 정규화 Msg 스트림.
+    """Claude adapter session source: projects/<enc_cwd>/<sid>.jsonl → 정규화 Msg 스트림.
     .messages() 가 role 메시지를 파일 순서로 yield (전체 — marker 필터는 ingest_session)."""
 
     def __init__(self, sid, projects=None):
@@ -1141,6 +1144,141 @@ class CodexJsonlSource:
                     yield Msg("assistant", ts, f"[tool:{name}]", uuid, False)
 
 
+def _opencode_first_str(d, *keys):
+    for key in keys:
+        value = d.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _opencode_role(d):
+    role = _opencode_first_str(d, "role", "author")
+    if role in ("user", "assistant", "system"):
+        return role
+    for key in ("message", "session_message", "data"):
+        value = d.get(key)
+        if isinstance(value, dict):
+            role = _opencode_role(value)
+            if role:
+                return role
+    return None
+
+
+def _opencode_tool_name(d):
+    typ = str(d.get("type") or d.get("kind") or d.get("partType") or "").lower()
+    name = _opencode_first_str(d, "name", "tool", "toolName", "tool_name")
+    tool = d.get("tool")
+    if isinstance(tool, dict):
+        name = name or _opencode_first_str(tool, "name", "id")
+    if name and ("tool" in typ or "call" in typ or "execute" in typ):
+        return name
+    return None
+
+
+def _opencode_text(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts = [_opencode_text(item) for item in value]
+        return "\n".join(p for p in parts if p)
+    if not isinstance(value, dict):
+        return ""
+    if _opencode_tool_name(value):
+        return ""
+    for key in ("text", "content", "message", "body", "value"):
+        item = value.get(key)
+        text = _opencode_text(item)
+        if text:
+            return text
+    return ""
+
+
+def _opencode_items(payload):
+    if isinstance(payload, list):
+        for item in payload:
+            yield from _opencode_items(item)
+        return
+    if not isinstance(payload, dict):
+        return
+    typ = str(payload.get("type") or payload.get("kind") or "").lower()
+    if _opencode_role(payload) or _opencode_tool_name(payload) or typ in ("message", "tool_call", "tool"):
+        yield payload
+        return
+    for key in ("messages", "events", "transcript", "items", "entries", "parts", "data"):
+        if key in payload:
+            yield from _opencode_items(payload[key])
+
+
+class OpenCodeExportSource:
+    """OpenCode adapter: `opencode export <sid>` JSON → 정규화 Msg 스트림."""
+
+    def __init__(self, sid, export_file=None):
+        self.sid = sid
+        self.export_file = export_file or OPENCODE_EXPORT_FILE
+
+    def load(self):
+        if self.export_file:
+            try:
+                return json.loads(Path(self.export_file).read_text(encoding="utf-8"))
+            except Exception as e:
+                sys.stderr.write(f"[distill] opencode export file read failed: {e}\n")
+                return None
+        # `opencode export` truncates its stdout at a pipe-buffer boundary
+        # (~64-80KB) when the consumer is a pipe — it can exit before flushing
+        # the full payload, so a captured pipe yields invalid/half JSON for any
+        # session larger than the buffer. Redirecting to a real file is reliable,
+        # so capture to a temp file and parse that.
+        import tempfile
+        tmp = None
+        try:
+            fd, tmp = tempfile.mkstemp(prefix="opencode-export-", suffix=".json")
+            with os.fdopen(fd, "wb") as fh:
+                r = subprocess.run(["opencode", "export", self.sid],
+                                   stdout=fh, stderr=subprocess.PIPE, timeout=60)
+            if r.returncode != 0:
+                err = (r.stderr or b"").decode("utf-8", "replace").strip()
+                if err:
+                    sys.stderr.write(f"[distill] opencode export failed: {err}\n")
+                return None
+            try:
+                return json.loads(Path(tmp).read_text(encoding="utf-8"))
+            except Exception as e:
+                sys.stderr.write(f"[distill] opencode export JSON parse failed: {e}\n")
+                return None
+        except Exception as e:
+            sys.stderr.write(f"[distill] opencode export failed: {e}\n")
+            return None
+        finally:
+            if tmp and os.path.exists(tmp):
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+
+    def messages(self):
+        payload = self.load()
+        if payload is None:
+            return
+        for i, item in enumerate(_opencode_items(payload), 1):
+            ts = _opencode_first_str(item, "time", "timestamp", "created", "createdAt", "created_at")
+            uuid = _opencode_first_str(item, "id", "messageID", "message_id", "partID", "part_id")
+            if uuid is None:
+                uuid = f"opencode:{self.sid}:{i}"
+
+            tool_name = _opencode_tool_name(item)
+            if tool_name:
+                yield Msg("assistant", ts, f"[tool:{tool_name}]", uuid, False)
+                continue
+
+            role = _opencode_role(item)
+            if role not in ("user", "assistant", "system"):
+                continue
+            text = _opencode_text(item)
+            if text:
+                yield Msg(role, ts, text, uuid, False)
+
+
 # 다른 하네스용 adapter 는 같은 .messages() 인터페이스
 # (role,ts,text,uuid,is_sidechain Msg yield)만 구현하면 ingest_session·distill 불변.
 
@@ -1164,6 +1302,8 @@ def distill(sid, advance=False, source_name="claude"):
     sidechain·빈-text 는 출력 제외하되 last_uuid(marker 전진)는 전 구간 끝까지."""
     if source_name == "codex":
         source = CodexJsonlSource(sid)
+    elif source_name == "opencode":
+        source = OpenCodeExportSource(sid)
     else:
         source = ClaudeCodeJsonlSource(sid)
     last_uuid = None
@@ -1324,9 +1464,9 @@ def export_profile(apply=False):
         if not apply:
             print(f"[dry-run] → {dest}  ({first_line})")
         else:
-            # FIX 3: MEM_PROFILE 환경변수 미설정 시 실 ~/.claude/user_profile 보호
+            # FIX 3: MEM_PROFILE 환경변수 미설정 시 실 runtime profile 보호
             if "MEM_PROFILE" not in os.environ:
-                print("[abort] export --target profile --apply 는 MEM_PROFILE 명시 설정 필요 (실 ~/.claude/user_profile 보호)")
+                print("[abort] export --target profile --apply 는 MEM_PROFILE 명시 설정 필요 (실 runtime profile 보호)")
                 return
             USER_PROFILE.mkdir(parents=True, exist_ok=True)
             dest.write_text(body, encoding="utf-8")
@@ -1893,7 +2033,7 @@ def _snap_label(body):
 
 
 def curate_snapshot():
-    """세션끝 opus 큐레이터 입력 (read-only) — 현 프로젝트 durable/working snapshot + SIGNALS.
+    """세션끝 deep curator 입력 (read-only) — 현 프로젝트 durable/working snapshot + SIGNALS.
     E-2 anti-bloat layer ①(durable snapshot 재add 억제)·②(ceiling)·④(cold-decay) + orphan(E-6).
     마지막 `IDS:` 줄 = dispatch 멤버십 게이트(S2b)용 전체 id 화이트리스트 (machine-readable)."""
     if not DB.exists():
@@ -1958,7 +2098,7 @@ def curate_snapshot():
 
 
 def curate_artifacts():
-    """세션끝 opus 큐레이터 입력 (read-only) — 현 프로젝트 산출물 상태(git·plans·spec).
+    """세션끝 deep curator 입력 (read-only) — 현 프로젝트 산출물 상태(git·plans·spec).
     D-27(Cluster F): working/durable 이 가리키는 작업이 산출물에서 *끝났는지* 대조해 적극 prune
     근거를 준다. DB 무관(메모리 안 건드림)·어떤 lock 도 안 잡음 — git/파일 read-only 만."""
     import subprocess
@@ -2015,8 +2155,8 @@ def curate_artifacts():
 
 def promote_candidates():
     """D-28(Cluster F): durable 의 반복 규칙·교훈(convention/lesson)을 제도화 승격 후보로 출력.
-    아침 데스크(briefing)가 안건으로 제시 → 메인+사용자 논의로 종착지(CLAUDE.md/CONVENTIONS/
-    DESIGN_PRINCIPLES 문서 / hook / drill 케이스) 결정 → 반영·drill 검증 후 메모리에서 prune.
+    아침 데스크(briefing)가 안건으로 제시 → 메인+사용자 논의로 종착지(runtime bootstrap /
+    CONVENTIONS / DESIGN_PRINCIPLES 문서 / hook / drill 케이스) 결정 → 반영·drill 검증 후 메모리에서 prune.
     사실·결정·이력(fact/decision/project)은 메모리 본령이라 제외 — 반복 규칙·원칙만. read-only."""
     if not DB.exists():
         return
@@ -2296,9 +2436,9 @@ def inject(max_working=40, max_durable=40, hook=False):
         for aspect_key, (m, b) in prof:
             out.append(f"- {aspect_key}: {_first_line(b)[:140]}")
         out.append("")
-    # D-18: 정리 신호 섹션 — 세션끝 opus 큐레이터가 처리 (메인 housekeeping 0). informational only.
+    # D-18: 정리 신호 섹션 — 세션끝 deep curator 가 처리 (메인 housekeeping 0). informational only.
     if cleanup_lines:
-        out.append("## 🧹 정리 신호 (세션끝 opus 큐레이터가 처리 — D-18, 메인 조치 불요)")
+        out.append("## 🧹 정리 신호 (세션끝 deep curator 가 처리 — D-18, 메인 조치 불요)")
         out.extend(cleanup_lines)
         out.append("")
     # Step 4.3b: injection-flagged 레코드 존재 알림 (본문 비노출, 카운트+안내만 — 마스킹 유지하되 가시성 확보)
@@ -2415,9 +2555,9 @@ def main():
     ra.add_argument("id")
 
     sub.add_parser("curate-snapshot",
-                   help="현 프로젝트 durable/working snapshot + SIGNALS (read-only, opus 입력)")
+                   help="현 프로젝트 durable/working snapshot + SIGNALS (read-only, deep curator 입력)")
     sub.add_parser("curate-artifacts",
-                   help="현 프로젝트 산출물 상태 git·plans·spec (read-only, opus 입력 D-27)")
+                   help="현 프로젝트 산출물 상태 git·plans·spec (read-only, deep curator 입력 D-27)")
     sub.add_parser("promote-candidates",
                    help="durable convention/lesson 제도화 승격 후보 (read-only, 아침 데스크 안건 D-28)")
 
@@ -2443,7 +2583,7 @@ def main():
 
     ds = sub.add_parser("distill", help="세션 jsonl 의 marker 이후 정규화 텍스트 출력(+--advance 로 marker 전진)")
     ds.add_argument("sid")
-    ds.add_argument("--source", choices=["claude", "codex"], default=os.environ.get("MEM_SESSION_SOURCE", "claude"),
+    ds.add_argument("--source", choices=["claude", "codex", "opencode"], default=os.environ.get("MEM_SESSION_SOURCE", "claude"),
                     help="session transcript adapter source")
     ds.add_argument("--advance", action="store_true", help="처리 후 marker 를 마지막 메시지 uuid 로 전진")
 

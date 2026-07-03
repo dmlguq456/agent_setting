@@ -2,7 +2,7 @@
 # Cluster E Phase γ — isolated test suite (curator subcommands + anti-bloat + graduate).
 # Maps to Verification ②③⑤⑥⑦ (dispatch ①④⑧ live in mem-distill-dispatch.test.sh).
 #
-# ABSOLUTE: every case uses isolated MEM_STORE/MEM_PROJECTS (mktemp -d). NEVER writes ~/.claude/memory.
+# ABSOLUTE: every case uses isolated MEM_STORE/MEM_PROJECTS (mktemp -d). NEVER writes real runtime memory.
 # This suite spawns NO `claude` (ISO-2): it exercises mem.py subcommands directly via `python3 "$MEM"`.
 # project_key is made repo-independent by cd-ing into a non-git temp WORKDIR (project_key→bare enc_cwd).
 set -u

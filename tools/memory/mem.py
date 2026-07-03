@@ -30,7 +30,9 @@ AGENT_HOME = default_agent_home()
 STORE = Path(os.environ.get("MEM_STORE", AGENT_HOME / "memory"))
 DB = STORE / "memory.db"
 DUMP = STORE / "dump.jsonl"
-PROJECTS = Path(os.environ.get("MEM_PROJECTS", AGENT_HOME / "projects"))
+# projects = Claude *런타임* 세션 저장소 (~/.claude) — AGENT_HOME 은 migration 후
+# repo 루트라 transcript·auto-memory 위치로 못 쓴다 (CODEX_SESSIONS 와 동형).
+PROJECTS = Path(os.environ.get("MEM_PROJECTS", HOME / ".claude" / "projects"))
 CODEX_SESSIONS = Path(os.environ.get("CODEX_SESSIONS", HOME / ".codex" / "sessions"))
 OPENCODE_EXPORT_FILE = os.environ.get("OPENCODE_EXPORT_FILE")
 USER_PROFILE = Path(os.environ.get("MEM_PROFILE", AGENT_HOME / "user_profile"))

@@ -2428,6 +2428,8 @@ check_claude_loop_projection() {
   fi
 
   for p in $(find loops -mindepth 1 -print); do
+    # 런타임 산출물(gitignored — drill results/·metrics 등)은 projection 파리티 대상 아님
+    git check-ignore -q "$p" 2>/dev/null && continue
     rel=${p#loops/}
     adapter_p=adapters/claude/loops/$rel
     if [ -L "$adapter_p" ]; then

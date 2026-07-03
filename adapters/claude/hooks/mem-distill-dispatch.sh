@@ -6,7 +6,9 @@
 #
 #   Worker contract: MEM_DISTILL_WORKER executable receives
 #   `<mode> <model> <prompt-file>` and writes JSON-lines to stdout. This Claude
-#   adapter defaults the worker to `$AGENT_HOME/bin/mem-distill-worker.sh`.
+#   adapter defaults the worker to its own `bin/mem-distill-worker.sh` (물리
+#   adapter 경로 기준 — ~/.claude/hooks 심링크 경유 호출에도 안전; AGENT_HOME 은
+#   migration 후 repo 루트라 worker 위치로 못 쓴다).
 #
 #   두 호출 모드 (둘 다 같은 SID/CWD 변수로 수렴 → 이후 marker·lock·prompt·spawn 동일):
 #     1) stdin-JSON  : 인자 없이 호출. stdin 의 {session_id,cwd} 파싱 (SessionEnd 경로).
@@ -50,6 +52,8 @@
 #   argument 모드로 내부 호출 — 배선 불변.
 set -euo pipefail
 HOOK_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# 물리 adapter 루트: 심링크(~/.claude/hooks → claude_setting → adapters/claude) 를 풀어 해석.
+ADAPTER_DIR="$(CDPATH= cd -P -- "$HOOK_DIR/.." && pwd)"
 AGENT_HOME="${AGENT_HOME:-$("$HOOK_DIR/../utilities/agent-home.sh")}"
 APPLIER="${MEM_APPLIER:-$HOOK_DIR/../tools/memory/apply-distill-actions.py}"
 
@@ -91,7 +95,7 @@ print("CWD="+shlex.quote(d.get("cwd","") or ""))
 fi
 [ -n "$SID" ] || exit 0
 
-WORKER="${MEM_DISTILL_WORKER:-$AGENT_HOME/bin/mem-distill-worker.sh}"
+WORKER="${MEM_DISTILL_WORKER:-$ADAPTER_DIR/bin/mem-distill-worker.sh}"
 WORKER_PATH="$(command -v "$WORKER" 2>/dev/null || true)"
 [ -n "$WORKER_PATH" ] || exit 0
 
