@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Standalone test for mem-distill-dispatch.sh (spec v8 §5.5 D-12/D-13/D-14).
-# Fully isolated via MEM_STORE + MEM_PROJECTS temp dirs — never touches real ~/.claude/memory.
+# Fully isolated via MEM_STORE + MEM_PROJECTS temp dirs — never touches the real store (~/agent_setting/memory).
 # Real worker spawn is ALWAYS avoided via MEM_DISTILL_WORKER=claude plus a PATH-injected stub.
 # Covers Phase-3 Verification ②③④⑥ from plan: 2026-06-16_distiller-v7-hardening/plan/plan.md
 #
