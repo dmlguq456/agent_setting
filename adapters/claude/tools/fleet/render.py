@@ -731,24 +731,28 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False):
     return l1, l2
 
 
+def _stack_split(l2):
+    """Index where the gauge/stage part of a narrow L2 begins (the '[' of the bracket meter,
+    a stage-track segment, or the 'key: ' label) — the ultra-narrow card breaks there."""
+    for i, (t, k) in enumerate(l2):
+        if (t == "[" and k == "dim") or (isinstance(k, str) and k.startswith("stg")) \
+                or (k == "name_dim" and t.endswith(": ")):
+            return i
+    return len(l2)
+
+
 def _session_row_stack(s, is_parent=False, child_count=0):
-    """Ultra-narrow stacked card (user: '세로로 나열하는 느낌') — one field group per line:
-    harness+session / branch / model+effort / context gauge+cost+⏱."""
-    l1, l2, br_seg = _session_row_2line(s, is_parent, child_count, _split=True)
-    out = [l1]
-    if br_seg:
-        out.append([(" " * (4 + _HW), None), (br_seg[0].strip(), br_seg[1])])
-    out.append(l2)     # compact L2 (time·model·gauge ≈ 59 cols) fits ultra-narrow whole
-    return out
+    """Ultra-narrow card = the 2-line card with ONLY the context gauge pushed to its own line
+    (user 2026-07-03): L1 identity / L2 time+model / L3 gauge (aligned under the model)."""
+    l1, l2 = _session_row_2line(s, is_parent, child_count)
+    gi = _stack_split(l2)
+    return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
 def _dispatch_row_stack(j, orphan=False, parent_model=None):
-    l1, l2, br_seg = _dispatch_row_2line(j, orphan=orphan, parent_model=parent_model, _split=True)
-    out = [l1]
-    if br_seg:
-        out.append([(" " * (4 + _HW), None), (br_seg[0].strip(), br_seg[1])])
-    out.append(l2)
-    return out
+    l1, l2 = _dispatch_row_2line(j, orphan=orphan, parent_model=parent_model)
+    gi = _stack_split(l2)
+    return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
 def _dispatch_row_2line(j, orphan=False, parent_model=None, _split=False):
