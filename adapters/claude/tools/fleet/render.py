@@ -227,14 +227,8 @@ def _init_colors():
                     # 밝음 → #07081a 너무 어두움 → #0f123d 컬러 과함 → 이 값: 회색에 가까운
                     # 미드나잇, '컬러감은 죽이고')
                     curses.init_color(17, 55, 60, 130)
-                    # intel(usage) 존은 비활성 그룹(235 grey)과 다른 톤 — 아주 어두운 보라-
-                    # 그레이 ≈ #181524 (user 2026-07-03). 재정의 불가 터미널은 236 폴백.
-                    curses.init_color(54, 95, 85, 145)
-                    _TINT_LVL["i"] = 54
-                else:
-                    _TINT_LVL["i"] = 236
             except Exception:
-                _TINT_LVL["i"] = 236
+                pass
             hues = {"d": -1, "g": curses.COLOR_GREEN, "y": curses.COLOR_YELLOW,
                     "r": curses.COLOR_RED, "c": curses.COLOR_CYAN,
                     "m": curses.COLOR_MAGENTA, "l": curses.COLOR_BLUE}
@@ -835,9 +829,6 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     # opencode-go has no usage API (gateway 404s; docs: console-only), so say so on the board.
     _live_h = set(s.harness for s in sessions
                   if s.liveness not in ("stale", "dead") and not s.app_server and not s.is_child)
-    _pad_i = [(_TINT_INTEL, None), ("  ", None)]   # tinted padding row (panel 위아래 여백 — user)
-    if _TINT_OK:
-        lines.append(list(_pad_i))                 # intel panel top padding
     if _rl or _live_h:
         hs = [h for h in ("claude", "codex", "opencode") if h in _rl or h in _live_h]
         for idx, h in enumerate(hs):
@@ -846,7 +837,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                    (_pad(hn, 14), "hb_" + h if h in _BADGE_TEXT else "hb_other")]  # bright = account
             if h not in _rl:
                 row.append(("no usage api — plan quota is console-only", "dim"))
-                lines.append([(_TINT_INTEL, None)] + row)
+                lines.append(row)
                 continue
             r5, r7, rms, _mt, rrs = _rl[h]
             # 5h/7d + per-model buckets — ALL labels dim (a colored 'fable' read like a harness).
@@ -870,7 +861,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                 row.append(("]", "dim"))
                 if rs and rs > now_ts:
                     row.append((" ↻ " + fmt_min(int((rs - now_ts) / 60)), "dim"))
-            lines.append([(_TINT_INTEL, None)] + row)
+            lines.append(row)
     # fleet pulse — htop's "Tasks: N, M running" analogue: whole-board census + live spend Σ
     # (round-4b, user: "일단 띄우고 필요없으면 쳐내지뭐"). Counts skip app-server companions.
     _real = [s for s in sessions if not s.app_server]
@@ -886,7 +877,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     if jobs:
         pulse += [("↳ %d" % len(jobs), "dim"),
                   (" job%s (%d working)" % ("s" if len(jobs) != 1 else "", jw), "dim")]
-    lines.append([(_TINT_INTEL, None)] + pulse)   # (Σ cost 롤업 제거 — user: 금액 표시 삭제)
+    lines.append(pulse)                 # (Σ cost 롤업 제거 — user: 금액 표시 삭제)
 
     # alert strip — CONDITIONAL (zero lines when healthy): compaction-imminent contexts and
     # stalled dispatches (the stealth-death guard §5.10, surfaced on the board instead of only
@@ -902,14 +893,15 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         elif j.liveness == "dead":
             alerts.append(("job dead %s" % (j.slug or j.key), "lvl_r"))
     if alerts:
-        arow = [(_TINT_INTEL, None), ("  alert ", "head")]
+        arow = [("  alert ", "head")]
         for ai, (txt, akey) in enumerate(alerts[:6]):
             if ai:
                 arow.append(("   ", None))
             arow.append(("⚠ " + txt, akey))
         lines.append(arow)
-    if _TINT_OK:
-        lines.append(list(_pad_i))                 # intel panel bottom padding
+    # usage/intel zone = PLAIN bg + a full-width dim rule below it (user 2026-07-03: intel
+    # 틴트는 활성 카드와 헷갈림 → 틴트 제거, 구분선으로 존 경계) — tint stays directory-only.
+    lines.append([(_HFILL, None)])
 
     # header bar REPLACES the `──` zone divider — htop separates meters from the process list
     # with its bar, not a rule. One blank line above it (user 2026-07-02: header 위에 한칸) so
