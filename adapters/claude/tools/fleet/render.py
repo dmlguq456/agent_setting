@@ -1033,10 +1033,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             elif ln[0][1] in (None, "dim") and ln[0][0].startswith(" "):
                 lines[_i] = [("▍", _rail_key), (ln[0][0][1:], ln[0][1])] + ln[1:]
         if _TINT_OK:
-            # padding above the title (user 2026-07-03: 헤더 위에도 간격) + breathing row below
-            # it + bottom padding — inserted AFTER the tint loop (exactly one sentinel each).
-            lines.insert(_g0, [(_body_tint, None), ("  ", None)])
-            lines.insert(_g0 + 2, [(_body_tint, None), ("  ", None)])
+            # breathing row below the title + bottom padding (title-top padding tried and
+            # removed — user 2026-07-03: 별로) — inserted AFTER the tint loop (one sentinel each).
+            lines.insert(_g0 + 1, [(_body_tint, None), ("  ", None)])
             lines.append([(_body_tint, None), ("  ", None)])
 
     # dormant dirs — one aggregated line, clearly set apart from the active board (blank + dim).
