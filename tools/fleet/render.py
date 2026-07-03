@@ -227,8 +227,14 @@ def _init_colors():
                     # 밝음 → #07081a 너무 어두움 → #0f123d 컬러 과함 → 이 값: 회색에 가까운
                     # 미드나잇, '컬러감은 죽이고')
                     curses.init_color(17, 55, 60, 130)
+                    # intel(usage) 존은 비활성 그룹(235 grey)과 다른 톤 — 아주 어두운 보라-
+                    # 그레이 ≈ #181524 (user 2026-07-03). 재정의 불가 터미널은 236 폴백.
+                    curses.init_color(54, 95, 85, 145)
+                    _TINT_LVL["i"] = 54
+                else:
+                    _TINT_LVL["i"] = 236
             except Exception:
-                pass
+                _TINT_LVL["i"] = 236
             hues = {"d": -1, "g": curses.COLOR_GREEN, "y": curses.COLOR_YELLOW,
                     "r": curses.COLOR_RED, "c": curses.COLOR_CYAN,
                     "m": curses.COLOR_MAGENTA, "l": curses.COLOR_BLUE}
@@ -422,7 +428,7 @@ _MW = 23                      # model cell: name + FULL effort word ('Opus 4.8 x
 _EFW = 7                      # effort subfield ("medium"=6 +1 gap) — FIXED width so every row's
                               # effort lands in the same column, under its own 'effort' header
 _CTX_W = 16                   # context gauge (kept wide)
-_CLOCK = "⏱ "                 # elapsed-time marker before uptime (⏱ = 2 cells, see _WIDE)
+_CLOCK = "up "                # elapsed-time label — ASCII (⏱ caused two width-disagreement bugs)
 
 # known pipeline stage sequences → the stage breadcrumb (process viz). Unknown keys/stages fall
 # back to a single lit stage token (never a fabricated track). Keyed by the dispatch `key`.
@@ -1029,9 +1035,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             elif ln[0][1] in (None, "dim") and ln[0][0].startswith(" "):
                 lines[_i] = [("▍", _rail_key), (ln[0][0][1:], ln[0][1])] + ln[1:]
         if _TINT_OK:
-            # breathing row between the title and the rows + bottom padding (inserted AFTER
-            # the tint loop so they carry exactly one sentinel).
-            lines.insert(_g0 + 1, [(_body_tint, None), ("  ", None)])
+            # padding above the title (user 2026-07-03: 헤더 위에도 간격) + breathing row below
+            # it + bottom padding — inserted AFTER the tint loop (exactly one sentinel each).
+            lines.insert(_g0, [(_body_tint, None), ("  ", None)])
+            lines.insert(_g0 + 2, [(_body_tint, None), ("  ", None)])
             lines.append([(_body_tint, None), ("  ", None)])
 
     # dormant dirs — one aggregated line, clearly set apart from the active board (blank + dim).
