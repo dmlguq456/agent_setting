@@ -1098,7 +1098,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         ("·", "g_stale"), (" stale   ", "dim"),
         ("✕", "g_dead"), (" dead     ", "dim"),
         ("▾N", "dim"), (" child jobs   ", "dim"),
-        ("↳", "dim"), (" dispatch", "dim"),
+        ("↳", "dim"), (" dispatch   ", "dim"),
+        ("🚧 N", "dim"), (" worktrees", "dim"),
     ])
 
     return lines
