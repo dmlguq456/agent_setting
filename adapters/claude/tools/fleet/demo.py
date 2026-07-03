@@ -5,6 +5,8 @@ dispatch under a parent, an orphan, a loop, varied models/effort — so the rend
 exercised without waiting for real live processes. Merged INTO live data by fleet.py's --demo
 path. gate/branch are set explicitly here (fake cwds are not real repos).
 """
+import time
+
 from .model import Session, DispatchJob
 
 
@@ -39,6 +41,14 @@ def collect(harness_filter=None):
           slug="demo-app-detach", model="Opus 4.8", effort="high", detached=True,
           ctx_pct=62, rl_5h=40, rl_7d=22, cost=8.40, elapsed_min=720,
           gate="tracked", branch="fix/night-run", liveness="idle"),
+        # --- project 'demo-cool' (cooling) — no active work, last transcript write ~92min ago; the
+        # idle session lingers (within the 48h live window) so the group isn't folded, and the
+        # directory header shows a grey ○ ring + time-since-done ("완료 직후 식는 중").
+        S(harness="claude", pid=90007, cwd="/home/demo/demo-cool", session_id="demo-claude-cool",
+          slug="demo-cool-shipped", model="Opus 4.8", effort="high",
+          ctx_pct=18, rl_5h=25, rl_7d=15, cost=4.20, elapsed_min=160,
+          gate="tracked", branch="feat/shipped", liveness="idle",
+          mtime=time.time() - 92 * 60),
     ]
     jobs = [
         # nested under the demo-app claude parent (demo-claude-1)
