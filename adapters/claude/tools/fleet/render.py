@@ -924,6 +924,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                       ("%s · press w to cycle  " % layout, "head")])
     else:
         lines.append([(_sh + _COL_HEAD, "head")])
+    lines.append(None)                  # gap below the column header (user: 헤더 한칸 아래 띄우기)
 
     first = True
     folded_groups = []       # dormant dirs — aggregated into ONE line at the bottom (user: the
