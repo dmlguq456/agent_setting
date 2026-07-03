@@ -444,9 +444,9 @@ def _project_gate(cwd, sid=None):
 #     gauge slot    context % bar      stage breadcrumb (plan › exec › test)  ← "how far along"
 # main↔dispatch weight is carried by the badge (reverse vs dim font), so the identity columns can
 # stay aligned for comparison. Job flow never sits under branch/gate.
-_HW = 14                      # session harness field ("claude code" = 11 chars + gap)
-_BRANCH_COL = 46              # absolute col where branch starts (both row types)
-_NAME_COL = 18                # absolute col where the NAME starts — SHARED by both row types so
+_HW = 16                      # session harness field ("claude code" = 11 chars + 5 gap; user: 조금 더 넓게)
+_BRANCH_COL = 48              # absolute col where branch starts (both row types)
+_NAME_COL = 4 + _HW           # absolute col where the NAME starts — SHARED by both row types so
                               # everything from the name onward aligns (session: prefix 4 + harness
                               # 14; dispatch: prefix 6 + harness 12 — deeper indent, narrower harness)
 _NW_S = _BRANCH_COL - _NAME_COL   # name field (both row types): col 18 → branch 46 = 28
