@@ -19,7 +19,7 @@ import urllib.request
 
 _TTL = 180.0              # the oauth endpoint 429s under 60s polling (probed 2026-07-02)
 _STALE_MAX = 900.0        # keep serving last-good through transient failures up to 15min
-_cache = {"ts": 0.0, "ok_ts": 0.0, "data": None}
+_cache = {"ts": 0.0, "ok_ts": 0.0, "ms_ts": 0.0, "data": None}
 
 
 def _home():
@@ -103,6 +103,20 @@ def account_usage():
         d = _fetch()
         _cache["ts"] = now              # failures throttle too — no retry storm inside the TTL
         if d is not None:
+            # PARTIAL-success carry-forward (2026-07-03, user: fable 이 계속 뜨다 안 뜨다):
+            # the endpoint sometimes returns 200 WITHOUT the limits[] array — 5h/7d survive via
+            # the top-level fallback but the per-model buckets (and resets) arrive empty and
+            # would overwrite last-good as if valid. Carry the previous bucket/reset values
+            # through such partial responses, bounded by the same staleness ceiling.
+            prev = _cache["data"]
+            if prev and now - _cache["ms_ts"] <= _STALE_MAX:
+                if not d["rl_ms"] and prev.get("rl_ms"):
+                    d["rl_ms"] = prev["rl_ms"]
+                for k in ("rs_5h", "rs_7d"):
+                    if d.get(k) is None and prev.get(k) is not None:
+                        d[k] = prev[k]
+            if d["rl_ms"] and (not prev or d["rl_ms"] is not (prev or {}).get("rl_ms")):
+                _cache["ms_ts"] = now   # bucket actually seen fresh (not carried) → new anchor
             _cache["data"] = d
             _cache["ok_ts"] = now
         elif now - _cache["ok_ts"] > _STALE_MAX:
