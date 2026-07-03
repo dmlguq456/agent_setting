@@ -428,7 +428,7 @@ _MW = 23                      # model cell: name + FULL effort word ('Opus 4.8 x
 _EFW = 7                      # effort subfield ("medium"=6 +1 gap) — FIXED width so every row's
                               # effort lands in the same column, under its own 'effort' header
 _CTX_W = 16                   # context gauge (kept wide)
-_CLOCK = "up "                # elapsed-time label — ASCII (⏱ caused two width-disagreement bugs)
+_CLOCK = ""                   # elapsed time = bare value (1d4h) — ⏱ had width bugs, 'up' read 이상함
 
 # known pipeline stage sequences → the stage breadcrumb (process viz). Unknown keys/stages fall
 # back to a single lit stage token (never a fabricated track). Keyed by the dispatch `key`.
