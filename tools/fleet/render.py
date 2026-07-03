@@ -266,9 +266,9 @@ def _live_key(state):
 # status dot — SHAPE+SIZE gradient (design r2, a11y): the less active the state, the smaller
 # the glyph. ● working (blinks) · ○ idle · ◍ detached · tiny '·' stale · ✕ dead. Readable
 # without color (◌ vs ◦ were near-identical dim circles before).
-_LIVE_GLYPH = {"working": "●", "idle": "○", "blocked": "◑", "done": "✓",
+_LIVE_GLYPH = {"working": "●", "idle": "●", "blocked": "◑", "done": "✓",
                "stale": "·", "dead": "✕", "unknown": "·"}
-_DETACHED_GLYPH = "◍"
+_DETACHED_GLYPH = "○"   # ring = 빈 자리(클라이언트 없음); idle 은 꽉 찬 dim ●
 _GLYPH_KEY = {"working": "g_work", "idle": "dim", "blocked": "g_idle", "done": "green",
               "stale": "g_stale", "dead": "g_dead", "unknown": "dim"}
 
@@ -280,7 +280,7 @@ _SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"   # braille loading spinner — working
 
 def _glyph(state):
     """Session/job status glyph. working = braille spinner frame (green, advances every wake);
-    idle = dim grey ring ○ (user pick over z); detached/stale/dead unchanged."""
+    idle = dim grey FILLED ●, detached = dim ring ○ (user 2026-07-03 최종)."""
     if state == "working":
         return _SPIN[int(time.time() * 10) % len(_SPIN)], "g_work"
     return _LIVE_GLYPH.get(state, "·"), _GLYPH_KEY.get(state, "dim")
@@ -1106,8 +1106,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     lines.append(None)
     lines.append([
         ("  ", None), ("⠹", "g_work"), (" working   ", "dim"),
-        ("○", "dim"), (" idle   ", "dim"),
-        (_DETACHED_GLYPH, "g_idle"), (" detached   ", "dim"),
+        ("●", "dim"), (" idle   ", "dim"),
+        (_DETACHED_GLYPH, "dim"), (" detached   ", "dim"),
         ("·", "g_stale"), (" stale   ", "dim"),
         ("✕", "g_dead"), (" dead     ", "dim"),
         ("▾N", "dim"), (" child jobs   ", "dim"),
