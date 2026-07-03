@@ -437,7 +437,7 @@ _PIPE_STAGES = {
 # plain-text column labels (icons removed per user — "위에 아이콘들은 전부 빼자").
 # 'effort' gets its OWN header over the fixed subcolumn inside the model cell (user 2026-07-02).
 _COL_HEAD = ("    " + "harness".ljust(_HW) + "session".ljust(_NW_S)
-             + "branch".ljust(_BRW) + "model".ljust(_MW - _EFW) + "effort".ljust(_EFW)
+             + "branch".ljust(_BRW) + "model".ljust(_MW)
              + "    context / stage")
 
 
@@ -473,14 +473,16 @@ def _eff_key(effort, dim):
 
 
 def _model_cell(model, effort, width, dim=False):
-    """The model cell: name in its family color + the FULL effort word in a fixed subcolumn
-    ('Opus 4.8 | xhigh' aligned across rows, heat-ramp colored — user 2026-07-02). Whole cell
-    rides the row's brightness axis — bright on a main session, dim on a dispatch."""
+    """model + effort written TOGETHER as one flowing phrase ('Fable 5 xhigh' — user 2026-07-03:
+    항목으로 나누지 말고), padded to `width` as a whole; rides the row's brightness axis."""
     name = _clean_model(dash(model)) or "—"
-    sfx = (effort or "")[: _EFW - 1]
+    sfx = effort or ""
     lkey = _model_key(model, dim=dim)
-    nw = max(1, width - _EFW)
-    return [(_pad(name[: nw - 1], nw), lkey), (_pad(sfx, _EFW), _eff_key(sfx, dim))]
+    if sfx:
+        name = name[: max(1, width - len(sfx) - 2)]
+        pad = max(0, width - len(name) - 1 - len(sfx))
+        return [(name, lkey), (" " + sfx, _eff_key(sfx, dim)), (" " * pad, None)]
+    return [(_pad(name[: width - 1], width), lkey)]
 
 
 def _stage_segs(key, stage, working=False):
@@ -680,7 +682,7 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False):
     if s.orphan:
         l1.append(("  worktree-gone", "g_dead"))
 
-    l2 = [("      ", None)] + _model_cell(s.model, s.effort, _MW, dim=dim_tel)
+    l2 = [(" " * (4 + _HW), None)] + _model_cell(s.model, s.effort, _MW, dim=dim_tel)
     if s.ctx_pct is not None and not dim_tel:
         l2 += [("[", "dim")] + _gauge_segs(s.ctx_pct, 12) + \
               [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct)), ("]", "dim")]
@@ -699,10 +701,10 @@ def _session_row_stack(s, is_parent=False, child_count=0):
     l1, l2, br_seg = _session_row_2line(s, is_parent, child_count, _split=True)
     out = [l1]
     if br_seg:
-        out.append([("      ", None), (br_seg[0].strip(), br_seg[1])])
-    cut = 3   # l2 = [indent, model, effort | gauge…, RFLUSH, cost, ⏱] → split after effort
+        out.append([(" " * (4 + _HW), None), (br_seg[0].strip(), br_seg[1])])
+    cut = 3   # l2 = [indent, model, effort | gauge…, RFLUSH, time] → split after effort
     out.append(l2[:cut])
-    out.append([("      ", None)] + l2[cut:])
+    out.append([(" " * (4 + _HW), None)] + l2[cut:])
     return out
 
 
@@ -710,10 +712,10 @@ def _dispatch_row_stack(j, orphan=False, parent_model=None):
     l1, l2, br_seg = _dispatch_row_2line(j, orphan=orphan, parent_model=parent_model, _split=True)
     out = [l1]
     if br_seg:
-        out.append([("      ", None), (br_seg[0].strip(), br_seg[1])])
-    cut = 3   # l2 = [indent, model, effort-pad | stage…, RFLUSH, ⏱] → split after the model cell
+        out.append([(" " * (4 + _HW), None), (br_seg[0].strip(), br_seg[1])])
+    cut = 3   # l2 = [indent, model, effort-pad | stage…, RFLUSH, time] → split after the model cell
     out.append(l2[:cut])
-    out.append([("      ", None)] + l2[cut:])
+    out.append([(" " * (4 + _HW), None)] + l2[cut:])
     return out
 
 
@@ -737,7 +739,7 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, _split=False):
     if not _split and br_seg:
         l1.append(br_seg)
 
-    l2 = [("      ", None)] + _model_cell(j.model or parent_model, None, _MW, dim=True)
+    l2 = [(" " * (4 + _HW), None)] + _model_cell(j.model or parent_model, None, _MW, dim=True)
     if key and key != name:
         l2.append((key + ": ", "name_dim"))
     l2 += _stage_segs(key, j.stage or "", working=(j.liveness == "working"))
