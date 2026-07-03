@@ -285,7 +285,11 @@ _GLYPH_KEY = {"working": "g_work", "idle": "dim", "blocked": "g_idle", "done": "
 # (green ● + green-bold title) and cold (no glyph). It gets a grey ring + time-since-last-activity
 # in the header, so a just-finished repo says "done & waiting", not fully dormant. Tune freely.
 _COOL_WINDOW_MIN = 180
-_COOL_RING = "○"        # grey ring BEFORE a cooling directory name (그룹 레벨 — _DETACHED_GLYPH 와 별개 자리)
+# shape-size gradient (design r2): 더 최근·활동적일수록 채워진 큰 글리프. 방금 끝난 디렉토리(cooling)
+# = 채운 ● (아직 온기), 오래돼 잠든 디렉토리(cold) = 빈 고리 ○. 활성 working ● 은 녹색이라 회색과 구분.
+_COOL_FILLED = "●"      # cooling(방금 끝남, ≤_COOL_WINDOW_MIN) directory — 채운 원형(회색)
+_COOL_RING = "○"        # cold(오래된 비활성) directory — 고리 원형(회색)
+_COOL_TIME_ICON = "✓"   # 경과시간 프리픽스 — 이 값이 "완료 후 경과시간"임을 표시(done-then-elapsed)
 
 
 _BLINK_ON = True     # manual blink phase (toggled ~2 Hz in the live loop) — drives the spinner too
@@ -1059,7 +1063,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         if n_work:
             head_segs += [("●", "g_work" if _BLINK_ON else "g_work_off"), (" ", None)]
         elif _cool_min is not None:
-            # grey ring = "완료 직후 식는 중" (dead ✕ red / stale · 와 확실히 구분되는 잔잔한 회색)
+            # 방금 끝남 = 채운 ● (회색): 아직 온기 — dead ✕/stale · 와 확실히 구분
+            head_segs += [(_COOL_FILLED, "grp_cool"), (" ", None)]
+        else:
+            # 오래된 비활성 = 고리 ○ (회색): 잠든 디렉토리 (shape-size gradient ● > ○)
             head_segs += [(_COOL_RING, "grp_cool"), (" ", None)]
         head_segs += [(name, "grp_hot" if n_work else "grp"), ("/", "dim")]
         _nwt = _wt_count(gcwd)
@@ -1067,8 +1074,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             # statusline 과 같은 표기 (🚧 N = 병렬 작업장·잔존 worktree, §5.10) — 이름 바로 옆
             head_segs += [(" 🚧 %d" % _nwt, "g_idle")]
         if _cool_min is not None:
-            # 완료 후 경과시간 (끝나고 대기하는 시간) — 이름/worktree 슬롯 옆, 잔잔한 회색
-            head_segs += [("  ", None), (fmt_min(_cool_min), "grp_cool")]
+            # 완료 후 경과시간 (끝나고 대기하는 시간) — ✓ 프리픽스로 "완료 후 경과"임을 명시
+            head_segs += [("  ", None), ("%s %s" % (_COOL_TIME_ICON, fmt_min(_cool_min)), "grp_cool")]
         if gword:
             head_segs += [("  ", None), (gword, gwkey)]
         # group header = the card's TITLE row (user 2026-07-03 pick: 카드 안 타이틀) — first
@@ -1076,7 +1083,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         _g0 = len(lines)                # panel start (title INCLUDED in the tint range)
         lines.append(head_segs)
         _rail_key = "grp_live" if n_work else "dim"
-        _body_tint = _TINT_BODY_HOT if n_work else _TINT_BODY
+        if n_work:
+            _body_tint = _TINT_BODY_HOT       # 활성 = midnight-blue 컬러 틴트
+        elif _cool_min is not None:
+            _body_tint = _TINT_BODY_COOL      # 방금 끝남 = 중간레벨 (활성과 비활성 사이)
+        else:
+            _body_tint = _TINT_BODY           # 비활성 = 기본 어두운 grey
 
         # rows stay tight (no blank line — that spread them too far apart); the mid-line gauge
         # glyph (━/─) is what keeps the stacked context bars from merging into a solid wall.
@@ -1250,8 +1262,9 @@ _HFILL = "\x00─\x00"
 # user 2026-07-02: 활성 디렉토리 틴트를 더 눈에 띄게) · i = intel zone (usage/pulse/alert).
 _TINT_BODY, _TINT_CAP = "\x00b\x00", "\x00c\x00"
 _TINT_BODY_HOT, _TINT_CAP_HOT = "\x00B\x00", "\x00C\x00"
+_TINT_BODY_COOL = "\x00k\x00"    # cooling(방금 끝남) body — 중간레벨 (활성 blue 와 비활성 grey 사이)
 _TINT_INTEL = "\x00i\x00"
-_TINT_CHARS = {"b", "c", "B", "C", "i"}
+_TINT_CHARS = {"b", "c", "B", "C", "k", "i"}
 
 # row-bold marker (user 2026-07-03, after the whole-row tint-brightening attempt was rejected —
 # "좌우로 쭉 다 밝아져서 별로": a MAIN session's rows are entirely BOLD instead — same tint as
@@ -1262,7 +1275,7 @@ _ROW_BOLD = "\x00!\x00"
 # ACTIVE-group variants are a dark COLORED tint (user 2026-07-02 최종: 기본은 어둡게, 활성
 # 디렉토리만 컬러 — 미드나잇 블루). 17 = #00005f, the cube's darkest blue: natively subtle
 # even where init_color is ignored (green 22 #005f00 read too bright — user ×2).
-_TINT_LVL = {"b": 235, "c": 238, "B": 17, "C": 17, "i": 235}
+_TINT_LVL = {"b": 235, "c": 238, "B": 17, "C": 17, "k": 237, "i": 235}
 
 
 def _is_fill(t):
