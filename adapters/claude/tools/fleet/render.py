@@ -84,8 +84,8 @@ _HUE_OF = {
     "g_stale": ("d", _A_D), "g_dead": ("r", _A_B),
     "lvl_g": ("g", 0), "lvl_y": ("y", 0), "lvl_r": ("r", _A_B),
     "grp_live": ("g", 0), "grp_hot": ("g", _A_B), "gate_t": ("g", _A_D), "gate_u": ("y", _A_D),
-    "eff_low": ("d", _A_D), "eff_medium": ("y", _A_D), "eff_high": ("y", 0),
-    "eff_xhigh": ("y", _A_B), "eff_max": ("r", _A_B),
+    "eff_low": ("d", _A_D), "eff_medium": ("d", 0), "eff_high": ("l", 0),
+    "eff_xhigh": ("m", _A_B), "eff_max": ("r", _A_B),
     "h_claude": ("c", _A_D), "h_codex": ("m", _A_D), "h_opencode": ("l", _A_D),
     "hb_claude": ("c", 0), "hb_codex": ("m", 0), "hb_opencode": ("l", 0), "hb_other": ("d", 0),
     "fam_opus": ("c", 0), "fam_sonnet": ("l", 0), "fam_haiku": ("g", 0),
@@ -188,12 +188,13 @@ def _init_colors():
     # qa rigor ramp (dispatch tag after the name): quick dim … adversarial bold
     for lvl, it in _QA_INT.items():
         _COLOR["qa_" + lvl] = it
-    # effort heat ramp (restored 2026-07-03 — user: effort 컬러 다시): low/medium recede,
-    # high = yellow, xhigh = bold yellow, max = bold red (alarm-adjacent).
+    # effort ramp v3 (2026-07-03 — user: 노란색 거슬림 + high/xhigh 는 색으로 달라야):
+    # low/medium = no hue (weight only) < high = BLUE < xhigh = MAGENTA (bold) < max = RED
+    # (bold, the one true alarm — unchanged). No yellow anywhere in the ramp.
     _COLOR["eff_low"] = curses.A_DIM
-    _COLOR["eff_medium"] = _COLOR.get("yellow", 0) | curses.A_DIM
-    _COLOR["eff_high"] = _COLOR.get("yellow", 0)
-    _COLOR["eff_xhigh"] = _COLOR.get("yellow", 0) | curses.A_BOLD
+    _COLOR["eff_medium"] = 0
+    _COLOR["eff_high"] = _COLOR.get("h_opencode", 0) & ~curses.A_DIM   # plain blue
+    _COLOR["eff_xhigh"] = (_COLOR.get("h_codex", 0) & ~curses.A_DIM) | curses.A_BOLD  # bold magenta
     _COLOR["eff_max"] = _COLOR.get("red", 0) | curses.A_BOLD
     # htop chrome (round-4, user: 헤더 행 배경색): the ONE background pair on screen — BLACK on
     # WHITE full-width bars wrapping the board (column-header bar + footer key bar). htop's CYAN
