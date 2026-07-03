@@ -266,7 +266,7 @@ def _live_key(state):
 # status dot — SHAPE+SIZE gradient (design r2, a11y): the less active the state, the smaller
 # the glyph. ● working (blinks) · ○ idle · ◍ detached · tiny '·' stale · ✕ dead. Readable
 # without color (◌ vs ◦ were near-identical dim circles before).
-_LIVE_GLYPH = {"working": "●", "idle": "z", "blocked": "◑", "done": "✓",
+_LIVE_GLYPH = {"working": "●", "idle": "○", "blocked": "◑", "done": "✓",
                "stale": "·", "dead": "✕", "unknown": "·"}
 _DETACHED_GLYPH = "◍"
 _GLYPH_KEY = {"working": "g_work", "idle": "dim", "blocked": "g_idle", "done": "green",
@@ -280,9 +280,9 @@ _SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"   # braille loading spinner — working
 
 def _glyph(state):
     """Session/job status glyph. working = braille spinner frame (green, advances every wake);
-    idle = dim z (sleeping — htop's S state, user pick); detached/stale/dead unchanged."""
+    idle = dim grey ring ○ (user pick over z); detached/stale/dead unchanged."""
     if state == "working":
-        return _SPIN[int(time.time() * 2) % len(_SPIN)], "g_work"
+        return _SPIN[int(time.time() * 10) % len(_SPIN)], "g_work"
     return _LIVE_GLYPH.get(state, "·"), _GLYPH_KEY.get(state, "dim")
 
 
@@ -555,12 +555,12 @@ def _stage_segs(key, stage, working=False):
 def _session_row(s, narrow, is_parent=False, child_count=0):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
-    dim_tel = live in ("stale", "dead") or s.app_server
+    dim_tel = live in ("stale", "dead") or s.app_server or s.detached
     name_key = ("name_work" if live == "working"
                 else ("name_dim" if dim_tel else "name_idle"))
     gch, gkey = _glyph(live)
     if s.detached and live not in ("stale", "dead"):
-        gch = _DETACHED_GLYPH     # detached (no client attached): shape=detached, color=liveness
+        gch, gkey = _DETACHED_GLYPH, "dim"   # detached: 어둡게 (user 2026-07-03)
     hn = _BADGE_TEXT.get(s.harness, "?")
 
     # main↔spawned weight = font-color intensity (no bg fill — the reverse badge read as weird):
@@ -690,12 +690,12 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
 def _session_row_2line(s, is_parent=False, child_count=0, _split=False):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
-    dim_tel = live in ("stale", "dead") or s.app_server
+    dim_tel = live in ("stale", "dead") or s.app_server or s.detached
     name_key = ("name_work" if live == "working"
                 else ("name_dim" if dim_tel else "name_idle"))
     gch, gkey = _glyph(live)
     if s.detached and live not in ("stale", "dead"):
-        gch = _DETACHED_GLYPH
+        gch, gkey = _DETACHED_GLYPH, "dim"
     hn = _BADGE_TEXT.get(s.harness, "?")
     hkey = (_BADGE_KEY.get(s.harness, "dim") if dim_tel
             else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
@@ -811,7 +811,12 @@ def _group_sort_key(name, g):
 
 
 def _sort_group_sessions(ss):
-    return sorted(ss, key=lambda s: (_LIVE_RANK.get(s.liveness, 9), -(s.elapsed_min or 0)))
+    def k(s):
+        r = _LIVE_RANK.get(s.liveness, 9)
+        if s.detached and r < 3:
+            r = 3          # detached sinks below working/idle (user 2026-07-03: 제일 아래로)
+        return (r, -(s.elapsed_min or 0))
+    return sorted(ss, key=k)
 
 
 def _sort_group_jobs(js):
@@ -1101,7 +1106,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     lines.append(None)
     lines.append([
         ("  ", None), ("⠹", "g_work"), (" working   ", "dim"),
-        ("z", "dim"), (" idle   ", "dim"),
+        ("○", "dim"), (" idle   ", "dim"),
         (_DETACHED_GLYPH, "g_idle"), (" detached   ", "dim"),
         ("·", "g_stale"), (" stale   ", "dim"),
         ("✕", "g_dead"), (" dead     ", "dim"),
@@ -1345,8 +1350,8 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
     _draw(stdscr, sessions, jobs, section, malformed)
     while True:
         # wake exactly at the next 0.5s blink boundary (regular period) but stay key-responsive (≤200ms)
-        _nb = (int(time.time() * 2) + 1) / 2.0
-        stdscr.timeout(max(30, min(200, int((_nb - time.time()) * 1000) + 1)))
+        _nb = (int(time.time() * 10) + 1) / 10.0   # 10fps wake — the spinner cadence
+        stdscr.timeout(max(20, min(100, int((_nb - time.time()) * 1000) + 1)))
         ch = stdscr.getch()
         if ch in (ord("q"), ord("Q")):
             return 0
