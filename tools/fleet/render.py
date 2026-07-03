@@ -1011,12 +1011,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         # trailing slash = the universal "this is a directory" marker (ls convention — user
         # 2026-07-03: 폴더(repo)임을 간단하게), dim so the name stays the focal word.
         head_segs = [(name, "grp_hot" if n_work else "grp"), ("/", "dim")]
-        if gword:
-            head_segs += [("  ", None), (gword, gwkey)]
         _nwt = _wt_count(gcwd)
         if _nwt:
-            # statusline 과 같은 표기 (🚧 N = 병렬 작업장·잔존 worktree 카운터, §5.10)
-            head_segs += [(_RFLUSH, None), ("🚧 %d" % _nwt, "g_idle")]
+            # statusline 과 같은 표기 (🚧 N = 병렬 작업장·잔존 worktree, §5.10) — 이름 바로 옆
+            head_segs += [(" 🚧 %d" % _nwt, "g_idle")]
+        if gword:
+            head_segs += [("  ", None), (gword, gwkey)]
         # group header = the card's TITLE row (user 2026-07-03 pick: 카드 안 타이틀) — first
         # tinted row of the panel, ▍ anchor on the card's padding edge; no floating label.
         _g0 = len(lines)                # panel start (title INCLUDED in the tint range)
