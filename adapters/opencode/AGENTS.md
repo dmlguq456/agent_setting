@@ -4,6 +4,8 @@ This file maps the shared agent harness onto OpenCode sessions. It is an
 adapter bootstrap, not the portable source of truth. Load it through the
 `instructions` array in `opencode.json` / `opencode.jsonc`.
 
+This document is derived from core — edit core first; do not modify this adapter ahead of the core contract.
+
 ## Source Order
 
 1. Read `core/CORE.md` for the model-neutral harness contract.
@@ -28,6 +30,7 @@ adapter bootstrap, not the portable source of truth. Load it through the
 - Use `adapters/opencode/bin/preflight.sh permissions` to inspect the OpenCode native permission contract; do not port Claude `allowedTools`.
 - Use `adapters/opencode/bin/preflight.sh mcp [--check]` to inspect OpenCode's native MCP surface; do not copy Claude `settings.json` MCP registrations or project `tools/design-mcp` wholesale.
 - Before edits, run `adapters/opencode/bin/preflight.sh write <file> [session-id]`.
+- Before editing `adapters/**`, that write wrapper enforces the core-first gate; after actually reading `core/*.md`, run `adapters/opencode/bin/preflight.sh read <core-doc.md> [session-id]` so the marker exists.
 - For `material/browser-fetch` URLs, run `adapters/opencode/bin/preflight.sh browser-fetch --check <url>` before treating rendered browser access as satisfying the mode tool contract. Exit 69 means the local Playwright browser stack is unavailable.
 - For `material/data-script` outputs, run `adapters/opencode/bin/preflight.sh data-script --check <script.py>` before treating the generated analysis script as satisfying the mode tool contract.
 - For `material/figure-gen` outputs, run `adapters/opencode/bin/preflight.sh figure-gen --check <script.py>` before treating a generated matplotlib figure script as satisfying the mode tool contract.
@@ -37,9 +40,10 @@ adapter bootstrap, not the portable source of truth. Load it through the
 - For `qa/test` verification commands, run `adapters/opencode/bin/preflight.sh verification-runner --timeout <seconds> -- <command> [args...]` and report the captured exit status.
 - After design HTML writes, run `adapters/opencode/bin/preflight.sh design <file>`.
 - Before claiming full design/autopilot-design support, run `adapters/opencode/bin/preflight.sh visual-harness <file.html>` and inspect the reported screenshot. Exit 69 means the local Playwright-backed checker is unavailable.
-- After actually reading `<artifact-root>/spec/prd.md`, run `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]`; before spec-changing capability work, run `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]`.
+- After actually reading `<artifact-root>/spec/prd.md` or `core/*.md`, run `adapters/opencode/bin/preflight.sh read <file> [session-id]`; before spec-changing capability work, run `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]`.
 - OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh start [cwd] [session-id]` and `adapters/opencode/bin/preflight.sh memory [cwd]` once per session; run them manually when plugins are unavailable.
 - OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]`, `adapters/opencode/bin/preflight.sh recall "<prompt>" [cwd]`, and `adapters/opencode/bin/preflight.sh briefing [cwd]`; run them manually when plugins are unavailable.
+- For memory behavior, apply `core/MEMORY.md` §7.4 recall-first: before style, format, naming, figure/table/report-layout, or prior-convention decisions, run `adapters/opencode/bin/preflight.sh recall "<query>" [cwd]` or `tools/memory/recall.sh` directly. For deep memory-scout work, use the same read-only procedure and return the fixed <=15 line verdict; no memory or file writes.
 - Use `adapters/opencode/bin/preflight.sh status [cwd] [session-id]` when you need a read-only harness snapshot for workflow, artifact, notes, worktree, and git-risk signals. Keep OpenCode native UI/config responsible for model, context, and session fields.
 - Use `adapters/opencode/bin/preflight.sh doctor` for a quick adapter readiness check covering manifest freshness, native projections, and boundary rules.
 - Use `adapters/opencode/bin/preflight.sh loop-info <oncall|note|study|drill>` before following a loop guide; do not run Claude-coupled loop scripts as OpenCode-native executables.

@@ -49,8 +49,8 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/codex/bin/preflight.sh capability-info <capability>` to confirm Codex realization; use `adapters/codex/skills/<capability>/SKILL.md` as Codex-native guidance |
 | native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Command-like capability entrypoints use these native Skills/plugin surfaces and are verified with Codex discoverability (`codex debug prompt-input`) |
-| native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, `SessionEnd`/`Stop` memory sync/distill, `UserPromptSubmit` prompt signals and turn nudges, `PermissionRequest` (registered no-op — harness monitoring is owned by Codex native `/statusline`), `PreToolUse` write guards, `PostToolUse` spec read markers, and `PostToolUse` design HTML checks; explicit preflight remains fallback |
-| shell I/O hook boundary | Structured write tools (`Write`, `Edit`, `MultiEdit`, `apply_patch`, `functions.apply_patch`) and structured `Read` are guarded. Shell/Bash/`functions.exec_command` gets targeted detection for obvious write redirects, common mutation commands (`tee`, `touch`, `cp`, `mv`, `rm`, `install`, `rsync`), `dd of=...`, `sed -i`, direct `spec/prd.md` reads, and design HTML save paths; target-ambiguous shell I/O still requires explicit `preflight.sh write`, `preflight.sh read`, or `preflight.sh design` before touching guarded paths |
+| native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, `SessionEnd`/`Stop` memory sync/distill, `UserPromptSubmit` prompt signals and turn nudges, `PermissionRequest` (registered no-op — harness monitoring is owned by Codex native `/statusline`), `PreToolUse` write guards including the core-first adapter edit gate, `PostToolUse` spec/core read markers, and `PostToolUse` design HTML checks; explicit preflight remains fallback |
+| shell I/O hook boundary | Structured write tools (`Write`, `Edit`, `MultiEdit`, `apply_patch`, `functions.apply_patch`) and structured `Read` are guarded. Shell/Bash/`functions.exec_command` gets targeted detection for obvious write redirects, common mutation commands (`tee`, `touch`, `cp`, `mv`, `rm`, `install`, `rsync`), `dd of=...`, `sed -i`, direct `spec/prd.md` / `core/*.md` reads, and design HTML save paths; target-ambiguous shell I/O still requires explicit `preflight.sh write`, `preflight.sh read`, or `preflight.sh design` before touching guarded paths |
 | role profile | Use `roles/README.md` for meaning; Codex custom agents are materialized under `adapters/codex/agents/*.toml`; `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` resolves both concrete model roles and pipeline profiles such as `planning`, `implementation`, `verification`, and `report` |
 | role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; use the reported `native_mode_path` under `adapters/codex/modes/`; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no Codex-native runtime surface exists |
 | native mode surface | Mode guides are generated under `adapters/codex/modes/` from `roles/modes/`; design modes additionally require the Codex visual-harness tool contract before claiming rendered visual completion |
@@ -70,6 +70,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | autopilot routing | Codex exposes `autopilot-*` as native Skills/plugin entries and can select matching Skills from descriptions, but the adapter does not emulate Claude slash-command routing. `prompt-signal` emits the portable routing contract and Codex-native entrypoint surface on tracked work; for spec-backed work, rely on spec-read/capability gates plus the relevant Skill or explicit dispatch wrapper |
 | subagent delegation | Codex supports native subagent workflows, but they are explicit or main-dispatched. Run `adapters/codex/bin/preflight.sh subagent-info --check` to verify the `multi_agent` runtime feature and projected custom agents before claiming delegation parity. Use prompt-directed subagents or `preflight.sh dispatch`; do not treat UI/status state as an automatic delegation trigger |
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/codex/bin/preflight.sh write <file> [session-id]` before writes |
+| core-first gate | `core/HOOKS.md` defines marker/check semantics; Codex `PostToolUse` Read hook records actual `core/*.md` reads and `PreToolUse` write guard hard-denies ungrounded `adapters/**` edits. Explicit fallback: `adapters/codex/bin/preflight.sh read <core-doc.md> [session-id]` after core reads |
 | material browser fetch | Tool-contract check: `adapters/codex/bin/preflight.sh browser-fetch --check <url>` verifies rendered browser access through the adapter-owned Playwright launcher before using `roles/modes/material/browser-fetch.md`. Exit 69 means the local browser stack is unavailable |
 | material data script | Tool-contract check: `adapters/codex/bin/preflight.sh data-script --check <script.py>` verifies generated Python analysis scripts through the adapter-owned launcher before using `roles/modes/material/data-script.md` |
 | material figure generation | Tool-contract check: `adapters/codex/bin/preflight.sh figure-gen --check <script.py>` verifies generated matplotlib/seaborn figure scripts through the adapter-owned launcher before using `roles/modes/material/figure-gen.md` |
@@ -251,16 +252,16 @@ monitoring is owned by Codex native `/statusline` — while Codex owns approval 
 sandbox decisions. The
 `PreToolUse` bridge runs before write/edit/multiedit/patch tools, including
 qualified `functions.apply_patch` payloads, and delegates
-artifact-order, git-state, and memory-write checks to
+artifact-order, git-state, core-first, and memory-write checks to
 `adapters/codex/bin/preflight.sh write`. The `PostToolUse` Read bridge records
-actual `spec/prd.md` reads through `adapters/codex/bin/preflight.sh read`. The
+actual `spec/prd.md` and `core/*.md` reads through `adapters/codex/bin/preflight.sh read`. The
 `PostToolUse` design bridge runs after write/edit/multiedit/patch tools,
 including qualified `functions.apply_patch` payloads, and delegates
 design HTML saves to `adapters/codex/bin/preflight.sh design`.
 
 Shell/Bash/`functions.exec_command` I/O has targeted hook coverage for obvious
 write redirects, common mutation commands (`tee`, `touch`, `cp`, `mv`, `rm`,
-`install`, `rsync`), `dd of=...`, `sed -i`, direct `spec/prd.md` reads, and
+`install`, `rsync`), `dd of=...`, `sed -i`, direct `spec/prd.md` / `core/*.md` reads, and
 design HTML save paths. Treat target-ambiguous
 shell reads/writes to guarded paths as an explicit tool contract: run
 `preflight.sh write`, `preflight.sh read`, or

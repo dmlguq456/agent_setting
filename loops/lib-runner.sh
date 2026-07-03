@@ -36,8 +36,11 @@ run_case_on_adapter() {
 _loop_run_claude() {
   local pf=$1 repo=$2 to=$3 maxturns=$4 j=$5 t=$6
   local bin="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
+  local settings="${DRILL_CLAUDE_SETTINGS:-$AGENT_HOME/adapters/claude/settings.json}"
+  local settings_arg=()
+  [ -f "$settings" ] && settings_arg=(--settings "$settings")
   ( cd "$repo" && timeout "$to" "$bin" -p "$(cat "$pf")" \
-      --allowedTools "$DRILL_CLAUDE_TOOLS" --output-format json ${maxturns:+--max-turns "$maxturns"} ) \
+      "${settings_arg[@]}" --allowedTools "$DRILL_CLAUDE_TOOLS" --output-format json ${maxturns:+--max-turns "$maxturns"} ) \
       > "$j" 2>"${j%.json}.stderr.txt"
   python3 - "$j" "$t" <<'PY'
 import json, sys

@@ -54,6 +54,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "sh \"$HOME/.claude/hooks/core-first-guard.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
             "command": "bash \"$HOME/.claude/hooks/artifact-guard.sh\"",
             "timeout": 10
           }
@@ -94,6 +104,11 @@
       {
         "matcher": "Read",
         "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$HOME/.claude/hooks/core-read-marker.sh\"",
+            "timeout": 10
+          },
           {
             "type": "command",
             "command": "sh \"$HOME/.claude/hooks/spec-read-marker.sh\"",

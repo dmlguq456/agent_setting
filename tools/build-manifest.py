@@ -54,7 +54,7 @@ GENERATED_FROM = ("Claude adapter projection definitions "
 # hard_block allowlist = PreToolUse guards only (consumer attempt1 §2.4 / Claude adapter hook settings
 # PreToolUse). herdr-agent-state is also registered on PreToolUse but is a state-marker,
 # NOT a guard -> hard_block stays false for it.
-GUARDS = {"artifact-guard", "git-state-guard", "spec-skill-gate", "builtin-memory-guard"}
+GUARDS = {"artifact-guard", "git-state-guard", "spec-skill-gate", "core-first-guard", "builtin-memory-guard"}
 
 # loop -> layer constant (source: loops/README.md 계층 table membership + consumer §2.5;
 # study=L4 per the OPS-view divergence recorded in consumer §23.12 V1). The 계층 table

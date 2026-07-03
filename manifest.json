@@ -350,6 +350,15 @@
       "blurb": "자료 수집·시각·분석 라우터 — fetch·PDF·이미지검색·figure·데이터스크립트"
     },
     {
+      "slug": "agent__memory-scout",
+      "name": "memory-scout",
+      "model": "haiku",
+      "modes": [
+        "recall"
+      ],
+      "blurb": "읽기 전용 메모리 정찰"
+    },
+    {
       "slug": "agent__plan-team",
       "name": "기획팀",
       "model": "opus",
@@ -392,6 +401,13 @@
       "hard_block": false
     },
     {
+      "slug": "hook__core-read-marker__PostToolUse",
+      "name": "core-read-marker",
+      "mono": "core-read-marker",
+      "event": "PostToolUse",
+      "hard_block": false
+    },
+    {
       "slug": "hook__design-postwrite__PostToolUse",
       "name": "design-postwrite",
       "mono": "design-postwrite",
@@ -416,6 +432,13 @@
       "slug": "hook__builtin-memory-guard__PreToolUse",
       "name": "builtin-memory-guard",
       "mono": "builtin-memory-guard",
+      "event": "PreToolUse",
+      "hard_block": true
+    },
+    {
+      "slug": "hook__core-first-guard__PreToolUse",
+      "name": "core-first-guard",
+      "mono": "core-first-guard",
       "event": "PreToolUse",
       "hard_block": true
     },

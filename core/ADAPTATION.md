@@ -109,6 +109,7 @@ Portable hook semantics are named by invariant:
 | artifact order | New artifacts must be created in the allowed dependency order |
 | git state safety | Do not edit during merge/rebase/cherry-pick/detached unsafe states |
 | spec read gate | Spec-backed work must read the current blueprint before changing code/spec |
+| core first gate | Adapter edits must be grounded in an actual current-session read of the relevant core contract |
 | memory write guard | Runtime-native memory files must not bypass the unified memory store |
 | workflow signal | Surface tracked/untracked mode to the active agent |
 | memory recall/inject/distill | Inject relevant memory and optionally distill session deltas |

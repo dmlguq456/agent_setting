@@ -817,7 +817,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'routing_contract=core/WORKFLOW.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'routing_action=read-workflow-and-select-codex-skill' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'capability_entrypoints=codex-native-skills-plugin' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'enforced_hooks=structured-write-guards,posttool-spec-read-marker,posttool-design-check,session-memory,turn-nudge' adapters/codex/bin/preflight.sh; then
+    || ! grep -Fq 'enforced_hooks=structured-write-guards,core-first-guard,posttool-read-markers,posttool-design-check,session-memory,turn-nudge' adapters/codex/bin/preflight.sh; then
     fail_msg "Codex UserPromptSubmit hook must expose a structured workflow/autopilot signal"
   fi
   if ! grep -Fq 'codex route wrapper combines status, prompt signal, capability-info, and spec gate' hooks/portable-guards.test.sh; then

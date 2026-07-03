@@ -64,6 +64,17 @@
 
 ---
 
+## §0.8 Loop Engineering 제1원칙 — core first, adapters derived
+
+**공통 원칙(core) 확정 → 어댑터 파생. 어댑터 선행 수정 금지.** 어댑터에서 발견된 개선 필요도 반드시 `core/` 의 모델 중립 계약으로 올려 확정한 뒤, 각 adapter runtime surface 로 파생한다. 예외 없음.
+
+- **왜**: adapter 는 런타임 매핑이고 core 는 의미 계약이다. adapter 를 먼저 고치면 같은 행동이 Claude/Codex/OpenCode 사이에서 갈라지고, 다음 포팅 때 의도를 잃는다.
+- **절차**: ① 관련 core 문서를 읽고 ② core 계약을 갱신하거나 core 에 이미 계약이 있음을 확인한 뒤 ③ adapter bootstrap·hook·projection 을 수정한다.
+- **기계화**: `core-read-marker` + `core-first-guard` 는 `adapters/**` 편집 전에 이번 세션의 `core/*.md` 실제 read marker 를 요구한다. hard gate 는 검증 가능한 read marker 까지만 맡고, “core 를 실제로 먼저 고쳤는가”는 본 원칙과 drill 이 보완한다.
+- **위반 사례**: 2026-07-03 `adapters/claude/CLAUDE.md` 회상 행을 core 확정 없이 선수정했다가 revert. 이 사건을 계기로 본 불변식과 guard 를 추가했다.
+
+---
+
 ## §0.6 긍정형 지침 — 부정형 직접금지 절제 (cross-cutting, 지침 _편집_ 의 tenet)
 
 > 2026-06-17 사용자 핵심 원칙. 지침을 _고칠 때_ 의 방법론, 특히 hotfix-patch 식 피드백 반영 자리.

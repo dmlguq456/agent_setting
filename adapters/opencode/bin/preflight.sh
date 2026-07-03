@@ -195,6 +195,7 @@ case "$cmd" in
     file=$2
     sid=${3:-opencode}
     "$ROOT/hooks/git-state-guard.sh" --file "$file"
+    "$ROOT/hooks/core-first-guard.sh" --file "$file" --session "$sid"
     ARTIFACT_GUARD_TOGGLE_LABEL="preflight.sh track" "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/builtin-memory-guard.sh" --file "$file"
     ;;
@@ -202,6 +203,7 @@ case "$cmd" in
     [ "$#" -ge 2 ] || { echo "opencode preflight: read requires a file path" >&2; exit 64; }
     file=$2
     sid=${3:-opencode}
+    "$ROOT/hooks/core-read-marker.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/spec-read-marker.sh" --file "$file" --session "$sid"
     ;;
   capability|skill)
@@ -246,7 +248,7 @@ case "$cmd" in
       printf 'routing_action=read-workflow-and-select-opencode-skill-or-command\n'
       printf 'capability_entrypoints=opencode-native-skills-commands\n'
     fi
-    printf 'enforced_hooks=plugin-write-guards,plugin-command-spec-gate,plugin-read-marker,plugin-design-check,session-memory,prompt-recall,session-idle-distill\n'
+    printf 'enforced_hooks=plugin-write-guards,core-first-guard,plugin-command-spec-gate,plugin-read-markers,plugin-design-check,session-memory,prompt-recall,session-idle-distill\n'
     printf 'hook_boundary=plugin-tool-command-event-bridges\n'
     ;;
   ui-info)

@@ -5,6 +5,7 @@
 history.jsonl
 sessions/
 .spec-grounding/
+.core-grounding/
 session-env/
 shell-snapshots/
 paste-cache/

@@ -200,6 +200,7 @@ case "$cmd" in
     file=$2
     sid=${3:-codex}
     "$ROOT/hooks/git-state-guard.sh" --file "$file"
+    "$ROOT/hooks/core-first-guard.sh" --file "$file" --session "$sid"
     ARTIFACT_GUARD_TOGGLE_LABEL="preflight.sh track" "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/builtin-memory-guard.sh" --file "$file"
     # Spec read gate, fitted to Codex's interception point. Claude hard-denies the
@@ -228,6 +229,7 @@ case "$cmd" in
     [ "$#" -ge 2 ] || { echo "codex preflight: read requires a file path" >&2; exit 64; }
     file=$2
     sid=${3:-codex}
+    "$ROOT/hooks/core-read-marker.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/spec-read-marker.sh" --file "$file" --session "$sid"
     ;;
   route)
@@ -312,7 +314,7 @@ case "$cmd" in
       printf 'routing_action=read-workflow-and-select-codex-skill\n'
       printf 'capability_entrypoints=codex-native-skills-plugin\n'
     fi
-    printf 'enforced_hooks=structured-write-guards,posttool-spec-read-marker,posttool-design-check,session-memory,turn-nudge\n'
+    printf 'enforced_hooks=structured-write-guards,core-first-guard,posttool-read-markers,posttool-design-check,session-memory,turn-nudge\n'
     printf 'hook_boundary=shell-read-write-targeted-detection-explicit-preflight-fallback\n'
     printf 'shell_fallback=run-preflight-for-ambiguous-shell-io\n'
     ;;

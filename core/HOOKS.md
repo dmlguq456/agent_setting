@@ -38,6 +38,7 @@ conformance, never drill.
 | artifact order | `hooks/artifact-guard.sh` | `portable-check` | New tracked artifacts must be created in dependency order: spec after research/analysis, plans after spec, documents after research/analysis. | Run `hooks/artifact-guard.sh --file <path> [--session <id>]` before writes, or use an adapter wrapper. |
 | git state safety | `hooks/git-state-guard.sh` | `portable-check` | Do not edit files in merge/rebase/cherry-pick/detached unsafe git states unless explicitly unlocked. | Run `hooks/git-state-guard.sh --file <path>` before file edits, or use an adapter wrapper. |
 | spec read gate | `hooks/spec-skill-gate.sh`, `hooks/spec-read-marker.sh` | `portable-check` | Spec-changing capability calls in spec-backed projects require a current `prd.md` read marker. | Run `hooks/spec-read-marker.sh --file <prd.md> [--session <id>]` after actual reads, then `hooks/spec-skill-gate.sh --skill <capability> [--cwd <dir>] [--session <id>]` before spec/code capabilities. |
+| core first gate | `hooks/core-first-guard.sh`, `hooks/core-read-marker.sh` | `portable-check` | Adapter edits require a current-session `core/*.md` read marker so adapter changes are derived from the model-neutral contract. | Run `hooks/core-read-marker.sh --file <core-doc> [--session <id>]` after actual core reads, then `hooks/core-first-guard.sh --file <adapter-target> [--session <id>]` before adapter writes. |
 | memory write guard | `hooks/builtin-memory-guard.sh` | `portable-check` | Runtime-native file memory must not bypass the unified DB memory store. | Run `hooks/builtin-memory-guard.sh --file <path>` before writes, or remove the native memory feature. |
 | design post-write verification | `hooks/design-postwrite.sh` | `portable-check` | Saved design HTML should get deterministic console verification. | Run `hooks/design-postwrite.sh --file <path>` after design HTML writes, or attach it to a post-write event. |
 | workflow tracked signal | `utilities/workflow-guard-hook.sh` | `portable-check` | Surface tracked/untracked mode and clean stale flags. | Run `utilities/workflow-guard-hook.sh --event prompt [--cwd <dir>] [--session <id>] [--format text]` before prompt handling, and `--event start` for stale flag GC. |
@@ -70,7 +71,7 @@ executes concrete hook projection files under `adapters/claude/hooks/` via the
 runtime projection `claude_setting/hooks`.
 Codex must not consume that JSON as configuration. It can run
 `adapters/codex/bin/preflight.sh write <file> [session-id]` before edits
-(git state, artifact order, and native memory-file write checks),
+(git state, artifact order, core-first adapter edit gate, and native memory-file write checks),
 `adapters/codex/bin/preflight.sh read <prd.md> [session-id]` after actual spec
 reads, and `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]`
 before spec-changing capability work. It can also run

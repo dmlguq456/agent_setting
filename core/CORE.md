@@ -136,11 +136,15 @@ Each artifact should be changed through the capability that owns it:
 
 Each adapter should provide:
 
+- a bootstrap note that declares it is derived from core and that edits start in
+  core before adapter changes;
 - a bootstrap file that loads this core contract;
 - a way to expose portable capabilities (`capabilities/`) and portable role profiles (`roles/`);
 - a concrete mapping from portable model roles (`fast reviewer`, `deep reviewer`, `external adversary`, etc.) to runtime-specific models, tools, or prompt profiles;
 - a projection from the neutral `<agent-home>` repository into the runtime home using symlinks, generated files, or runtime-native registration;
 - hooks or checks for artifact order, git safety, and memory writes;
+- hooks or checks that prevent adapter edits before the relevant core contract
+  has actually been read in the current session;
 - a status/reminder surface for tracked vs untracked mode;
 - compatibility with both `.agent_reports/` and `.claude_reports/` until legacy projects are migrated;
 - a documented realization of `<agent-notes-root>` and `<worklog-board-app>` if

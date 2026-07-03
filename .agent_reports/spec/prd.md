@@ -3,6 +3,7 @@
 > mode: **library + cli** · 작성 2026-06-15 · v3(DB화·저장소분리) · v4(결정론-우선 원칙·Hermes port) · v5(Option 2 — user_profile·post-it 파일 메커니즘 제거, DB 단일 store, sub-agent DB 직접 읽기) · v6(Cluster C — 세션 자동 distillation: orchestration raw log → tier 메모리, "기억해둬" 수동 의존 제거) · v7(D-13 외부 분사화 + distiller sonnet + D-14 권한 하드닝 시도) · v8(D-14 권한 allowlist 무력 → no-tools+스크립트 실행 재설계) · v9(Cluster D — 결정론-first lifecycle 정비) · **v10 2026-06-17** (Cluster E — 큐레이션 단순화[세션끝 opus 풀 큐레이터, 메인 housekeeping 0] + audit P0 하드닝[strength·project_key·recall엔진·내구성])
 > 입력: `research/hermes-agent/{03_memory_system,04_benchmark_gap,07_security,08_source_grounded}.md` · 기존 `tools/memory/*` · `skills/{post-it,analyze-user}/` · `user_profile/`
 > · **v11 2026-06-22** (Cluster F — 루프↔메모리 환류: 루프 자율성 재정의·아침 논의 데스크·curator 산출물 대조 적극 prune·메모리 제도화 승격 채널 + 선결 버그 복원력)
+> · **v12 2026-07-03** (Cluster G — recall-first 반사: 창작·스타일·형식 결정 전 능동 recall, 심층 memory-scout 위임, core-first adapter guard 와 결합)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -218,6 +219,14 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 ### 5.8.6 데이터 모델·컴포넌트 영향
 - 신규 테이블·칼럼 **없음**. curator 입력 ARTIFACTS 블록은 dispatch 스크립트가 기계 캡처(코드, §0.5). 신규 상태파일: 아침 브리핑 날짜 마커(`memory/.briefing-<date>` 류) + 승격 후보 추출은 read-only projection. 신규 컴포넌트: `loops/lib.sh`(✅ 머지) + 아침 데스크 UserPromptSubmit hook(D-26).
 - **post-it 역할 재검토(열림)**: distiller 자동화로 `/post-it` 의 '수동 기억' 용도가 distiller 와 상당 부분 겹침(Cluster C 가 "기억해둬 수동 의존 제거"가 목적이었음). distiller 의 *명시 override·핸드오프 채널*로 재포지셔닝하거나 deprecate 검토 — v11 범위 밖, 별도 결정.
+
+## 5.9 Cluster G — recall-first 반사 + core-first guard (v12, 사용자 확정 2026-07-03)
+
+> 계기: SR_CorrNet_DSC 보고서용 spectrogram 스타일을 기존 메모리 컨벤션(48kHz 풀밴드·ylim 0~24kHz)과 다르게 즉흥 생성한 사고, 그리고 이를 고치며 adapter 를 core 보다 먼저 고친 순서 위반. 둘 다 "생각으로 기억"할 일이 아니라 하네스 원칙과 guard 로 닫는다.
+
+- **recall-first**: 과거 결정·교정·컨벤션뿐 아니라 산출물 스타일·형식 신규 결정 자리에서도 작업 전 recall 을 1차 행동으로 수행한다. miss 비용은 낮고 컨벤션 위반 재작업 비용이 높다.
+- **memory-scout**: 인라인 1~2쿼리를 넘는 심층 탐색은 read-only memory-scout capability 로 분리한다. 다각 쿼리 → cross-cwd → raw 세션 순으로 확장하고, 결과는 15줄 이하 verdict/record id/적용 지침으로 반환한다. 쓰기 명령은 전면 금지한다.
+- **core-first adapter guard**: adapter 편집 전 실제 `core/*.md` read marker 를 요구한다. hard gate 는 검증 가능한 read marker 와 stale 여부만 강제하고, "core 를 먼저 수정했는가"는 `core/DESIGN_PRINCIPLES.md` 제1원칙과 drill 이 보완한다.
 
 ## [library] 공개 API (v3 + v4 추가)
 ```

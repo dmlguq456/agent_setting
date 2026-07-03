@@ -14,6 +14,8 @@ OPENCODE_DISTILL="$ROOT/adapters/opencode/bin/distill-worker.sh"
 DESIGN="$ROOT/hooks/design-postwrite.sh"
 MARK="$ROOT/hooks/spec-read-marker.sh"
 SPEC="$ROOT/hooks/spec-skill-gate.sh"
+CORE_MARK="$ROOT/hooks/core-read-marker.sh"
+CORE_GUARD="$ROOT/hooks/core-first-guard.sh"
 FLOW="$ROOT/utilities/workflow-guard-hook.sh"
 TOGGLE="$ROOT/utilities/workflow-toggle.sh"
 RECALL="$ROOT/hooks/mem-recall-inject.sh"
@@ -148,6 +150,48 @@ if (cd "$TMP/specproj" && "$CODEX" read .agent_reports/spec/prd.md relsid >/tmp/
   ok "codex read wrapper resolves relative prd paths for spec gate"
 else
   bad "codex read wrapper should resolve relative prd paths for spec gate"
+fi
+
+echo "== core-first adapter edit gate CLI =="
+mkdir -p "$TMP/coreproj/core" "$TMP/coreproj/adapters/codex"
+(
+  cd "$TMP/coreproj" || exit 1
+  git init -q
+  git config user.email test@example.com
+  git config user.name Test
+  printf 'core\n' > core/CORE.md
+  printf 'adapter\n' > adapters/codex/AGENTS.md
+  git add core/CORE.md adapters/codex/AGENTS.md
+  git commit -q -m init
+)
+if "$CORE_GUARD" --file "$TMP/coreproj/adapters/codex/AGENTS.md" --session coregatesid >/tmp/core_gate.out 2>/tmp/core_gate.err; then
+  bad "adapter edit without core read marker should fail"
+else
+  [ "$?" -eq 2 ] && ok "adapter edit without core read marker exits 2" || bad "adapter edit without core marker wrong exit"
+fi
+if "$CORE_GUARD" --file "$TMP/coreproj/adapters/codex/new/sub/AGENTS.md" --session coregatesid >/tmp/core_gate_newdir.out 2>/tmp/core_gate_newdir.err; then
+  bad "new adapter subdir edit without core read marker should fail"
+else
+  [ "$?" -eq 2 ] && ok "new adapter subdir edit without core marker exits 2" || bad "new adapter subdir core marker wrong exit"
+fi
+if "$CORE_MARK" --file "$TMP/coreproj/core/CORE.md" --session coregatesid >/tmp/core_gate.out 2>/tmp/core_gate.err \
+  && "$CORE_GUARD" --file "$TMP/coreproj/adapters/codex/AGENTS.md" --session coregatesid >/tmp/core_gate.out 2>/tmp/core_gate.err; then
+  ok "core read marker allows adapter edit"
+else
+  bad "core read marker should allow adapter edit"
+fi
+sleep 1
+printf 'core updated\n' > "$TMP/coreproj/core/CORE.md"
+if "$CORE_GUARD" --file "$TMP/coreproj/adapters/codex/AGENTS.md" --session coregatesid >/tmp/core_gate.out 2>/tmp/core_gate.err; then
+  bad "updated core after marker should fail adapter edit"
+else
+  [ "$?" -eq 2 ] && ok "updated core after marker exits 2" || bad "updated core after marker wrong exit"
+fi
+if "$CODEX" read "$TMP/coreproj/core/CORE.md" codexcoregatesid >/tmp/codex_core_gate.out 2>/tmp/codex_core_gate.err \
+  && "$CODEX" write "$TMP/coreproj/adapters/codex/AGENTS.md" codexcoregatesid >/tmp/codex_core_gate.out 2>/tmp/codex_core_gate.err; then
+  ok "codex read+write wrapper passes core-first gate"
+else
+  bad "codex read+write wrapper should pass core-first gate"
 fi
 # Spec read gate fitted to Codex's write interception point (no Skill event):
 # a spec-changing artifact write while ungrounded is hard-denied; ordinary files
@@ -1436,6 +1480,22 @@ if printf '{"tool_name":"Bash","tool_input":{"command":"cat .agent_reports/spec/
   ok "codex native read hook marks obvious shell spec reads"
 else
   bad "codex native read hook should mark obvious shell spec reads"
+fi
+mkdir -p "$TMP/repo/core"
+printf 'core\n' > "$TMP/repo/core/MEMORY.md"
+if printf '{"tool_name":"Read","tool_input":{"file_path":"%s"},"session_id":"corereadsid","cwd":"%s"}\n' "$TMP/repo/core/MEMORY.md" "$TMP/repo" \
+  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_core_read_hook.out 2>/tmp/codex_core_read_hook.err \
+  && find "$TMP/codex_marker_home/.core-grounding" -type f -name 'corereadsid__*' -print -quit | grep -q .; then
+  ok "codex native hook projection records core read markers"
+else
+  bad "codex native hook projection should record core read markers"
+fi
+if printf '{"tool_name":"Bash","tool_input":{"command":"cat core/MEMORY.md"},"session_id":"shellcorereadsid","cwd":"%s"}\n' "$TMP/repo" \
+  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_shell_core_read_hook.out 2>/tmp/codex_shell_core_read_hook.err \
+  && find "$TMP/codex_marker_home/.core-grounding" -type f -name 'shellcorereadsid__*' -print -quit | grep -q .; then
+  ok "codex native read hook marks obvious shell core reads"
+else
+  bad "codex native read hook should mark obvious shell core reads"
 fi
 if printf '{"tool":{"name":"Read","input":{"path":"%s"}},"session_id":"nestedreadsid","cwd":"%s"}\n' "$TMP/repo/.agent_reports/spec/prd.md" "$TMP/repo" \
   | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_read_hook_nested.out 2>/tmp/codex_read_hook_nested.err \

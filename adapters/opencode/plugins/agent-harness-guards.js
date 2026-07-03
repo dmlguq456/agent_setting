@@ -161,8 +161,9 @@ export const AgentHarnessGuards = async (ctx) => ({
     for (const file of files) {
       if (isDesignHtml(file)) runPreflight("design", [file])
     }
-    // Spec read-grounding marker — record an actual prd.md read so the capability
-    // gate above can pass. Mirrors Claude's PostToolUse[Read] spec-read-marker.
+    // Read-grounding marker — record actual prd.md and core/*.md reads so the
+    // spec gate and core-first adapter guard can pass. Mirrors Claude's
+    // PostToolUse[Read] marker pair.
     // Non-blocking: a marker failure must never abort a successful read.
     const toolName = typeof input.tool === "string" ? input.tool : input.tool?.name || ""
     if (toolName === "read") {

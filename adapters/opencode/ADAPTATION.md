@@ -140,8 +140,8 @@ contract. This adapter materializes a concrete OpenCode plugin at
 recall, and briefing context through `adapters/opencode/bin/preflight.sh`
 without copying Claude hook JSON. It uses `tool.execute.before` to detect
 write/edit/patch targets and calls `adapters/opencode/bin/preflight.sh write
-<file> <session-id>`, which runs the portable artifact-order, git-state, and
-memory-write guards. It also uses `tool.execute.after` to route saved design
+<file> <session-id>`, which runs the portable artifact-order, git-state,
+core-first adapter edit, and memory-write guards. It also uses `tool.execute.after` to route saved design
 HTML files through `adapters/opencode/bin/preflight.sh design <file>` as a
 post-write console-check alert path.
 
@@ -151,8 +151,8 @@ It also enforces the spec read gate, mirroring Claude's
 `autopilot-code` / `autopilot-spec` and throws (aborting the command before its
 prompt expands) when the cwd is spec-backed and `prd.md` was not actually read
 this session. `tool.execute.after` on a `read` of `.../spec/prd.md` calls
-`adapters/opencode/bin/preflight.sh read <prd.md> <session-id>` to drop the
-grounding marker that lets the gate pass — non-blocking, so a marker failure
+`adapters/opencode/bin/preflight.sh read <file> <session-id>` to drop the
+grounding marker that lets the spec and core-first gates pass — non-blocking, so a marker failure
 never aborts a successful read.
 
 When changing the plugin:
