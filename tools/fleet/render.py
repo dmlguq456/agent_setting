@@ -362,6 +362,36 @@ _GATE_TTL = 3.0
 _GATE_CACHE = {"ts": 0.0, "map": {}}
 
 
+def _wt_count(cwd):
+    """Linked-worktree count for the repo owning `cwd` — counted from .git/worktrees/ entries
+    (pure filesystem, no subprocess; follows a worktree's `gitdir:` file back to the main repo).
+    Surfaces leftover/parallel worktrees that have no live session (user 2026-07-03: wt 개수)."""
+    d = cwd
+    for _ in range(30):
+        g = os.path.join(d, ".git")
+        if os.path.isdir(g):
+            base = g
+            break
+        if os.path.isfile(g):
+            try:
+                with open(g) as f:
+                    gd = f.read().split("gitdir:", 1)[1].strip()
+            except Exception:
+                return 0
+            base = gd.split("/worktrees/")[0] if "/worktrees/" in gd else gd
+            break
+        nd = os.path.dirname(d)
+        if nd == d:
+            return 0
+        d = nd
+    else:
+        return 0
+    try:
+        return len([n for n in os.listdir(os.path.join(base, "worktrees")) if not n.startswith(".")])
+    except OSError:
+        return 0
+
+
 def _gate_info(cwd, sid=None):
     """(gate, pipeline) for a cwd — gate ∈ 'tracked'/'untracked'/None, pipeline = spec/ exists.
     Walks up to the nearest .agent_reports/.claude_reports. untracked if the GLOBAL `.untracked`
@@ -983,6 +1013,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         head_segs = [(name, "grp_hot" if n_work else "grp"), ("/", "dim")]
         if gword:
             head_segs += [("  ", None), (gword, gwkey)]
+        _nwt = _wt_count(gcwd)
+        if _nwt:
+            # statusline 과 같은 표기 (🚧 N = 병렬 작업장·잔존 worktree 카운터, §5.10)
+            head_segs += [(_RFLUSH, None), ("🚧 %d" % _nwt, "g_idle")]
         # group header = the card's TITLE row (user 2026-07-03 pick: 카드 안 타이틀) — first
         # tinted row of the panel, ▍ anchor on the card's padding edge; no floating label.
         _g0 = len(lines)                # panel start (title INCLUDED in the tint range)
