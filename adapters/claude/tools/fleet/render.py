@@ -970,7 +970,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         # while the group works, plain bold otherwise. Doubles with the active card tint.
         n_work = sum(1 for s in live_sessions if s.liveness == "working") + \
                  sum(1 for j in group_jobs if j.liveness == "working")
-        head_segs = [(name, "grp_hot" if n_work else "grp")]
+        # trailing slash = the universal "this is a directory" marker (ls convention — user
+        # 2026-07-03: 폴더(repo)임을 간단하게), dim so the name stays the focal word.
+        head_segs = [(name, "grp_hot" if n_work else "grp"), ("/", "dim")]
         if gword:
             head_segs += [("  ", None), (gword, gwkey)]
         # group header = the card's TITLE row (user 2026-07-03 pick: 카드 안 타이틀) — first
