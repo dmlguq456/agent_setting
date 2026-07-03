@@ -972,11 +972,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         head_segs = [("▍ ", "grp_live" if n_work else "head"), (name, "grp")]
         if gword:
             head_segs += [("  ", None), (gword, gwkey)]
-        # group header = NO tint (user 2026-07-02 최종: 헤더는 틴트 없이) — the ▍ + bold name
-        # sit on the default bg as a label ABOVE the tinted body block; the panel = body only.
-        # +2 shift keeps the label on the panel's (inset) left edge.
-        lines.append(([(" " * (_INSET + _PAD_IN), None)] if _TINT_OK else []) + head_segs)
-        _g0 = len(lines)                # group-content start — tinted/railified below
+        # group header = the card's TITLE row (user 2026-07-03 pick: 카드 안 타이틀) — first
+        # tinted row of the panel, ▍ anchor on the card's padding edge; no floating label.
+        _g0 = len(lines)                # panel start (title INCLUDED in the tint range)
+        lines.append(head_segs)
         _rail_key = "grp_live" if n_work else "dim"
         _body_tint = _TINT_BODY_HOT if n_work else _TINT_BODY
 
@@ -1023,9 +1022,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             elif ln[0][1] in (None, "dim") and ln[0][0].startswith(" "):
                 lines[_i] = [("▍", _rail_key), (ln[0][0][1:], ln[0][1])] + ln[1:]
         if _TINT_OK:
-            # panel top/bottom padding rows (user: 블록 위아래 간격) — inserted AFTER the tint
-            # loop so they carry exactly one sentinel.
-            lines.insert(_g0, [(_body_tint, None), ("  ", None)])
+            # breathing row between the title and the rows + bottom padding (inserted AFTER
+            # the tint loop so they carry exactly one sentinel).
+            lines.insert(_g0 + 1, [(_body_tint, None), ("  ", None)])
             lines.append([(_body_tint, None), ("  ", None)])
 
     # dormant dirs — one aggregated line, clearly set apart from the active board (blank + dim).
