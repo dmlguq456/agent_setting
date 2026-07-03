@@ -227,14 +227,8 @@ def _init_colors():
                     # 밝음 → #07081a 너무 어두움 → #0f123d 컬러 과함 → 이 값: 회색에 가까운
                     # 미드나잇, '컬러감은 죽이고')
                     curses.init_color(17, 55, 60, 130)
-                    # 18 = the main-session variant of the active midnight (~#131523) — one
-                    # whisper brighter than 17. Non-redefinable terminals fall back to 17
-                    # (stock 18 #000087 would be loud) → no differentiation, never worse.
-                    curses.init_color(18, 63, 68, 135)
             except Exception:
                 pass
-            if not curses.can_change_color():
-                _TINT_LVL["S"] = 17
             hues = {"d": -1, "g": curses.COLOR_GREEN, "y": curses.COLOR_YELLOW,
                     "r": curses.COLOR_RED, "c": curses.COLOR_CYAN,
                     "m": curses.COLOR_MAGENTA, "l": curses.COLOR_BLUE}
@@ -284,11 +278,12 @@ _SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"   # braille loading spinner — working
                      # the blinking green ● moved up to the directory title
 
 
-def _glyph(state):
-    """Session/job status glyph. working = braille spinner frame (green, advances every wake);
+def _glyph(state, dim=False):
+    """Session/job status glyph. working = braille spinner frame — BRIGHT green for a main
+    session, DIM green for a dispatch job (user 2026-07-03: 스피너 컬러도 메인·분사 구분).
     idle = dim grey FILLED ●, detached = dim ring ○ (user 2026-07-03 최종)."""
     if state == "working":
-        return _SPIN[int(time.time() * 10) % len(_SPIN)], "g_work"
+        return _SPIN[int(time.time() * 10) % len(_SPIN)], ("g_work_off" if dim else "g_work")
     return _LIVE_GLYPH.get(state, "·"), _GLYPH_KEY.get(state, "dim")
 
 
@@ -652,7 +647,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     if j.qa:
         qa_text = ("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa
     name = j.slug or key
-    gch, gkey = _glyph(j.liveness)
+    gch, gkey = _glyph(j.liveness, dim=True)
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
 
@@ -767,7 +762,7 @@ def _dispatch_row_stack(j, orphan=False, parent_model=None, parent_effort=None):
 def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, _split=False):
     key = j.key or "?"
     name = j.slug or key
-    gch, gkey = _glyph(j.liveness)
+    gch, gkey = _glyph(j.liveness, dim=True)
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
     qa_base = j.qa or ""
     qa_text = (("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa) if j.qa else ""
@@ -1053,7 +1048,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         # glyph (━/─) is what keeps the stacked context bars from merging into a solid wall.
         _srow = {"wide": None, "narrow": _session_row_2line, "stack": _session_row_stack}[layout]
         _jrow = {"wide": None, "narrow": _dispatch_row_2line, "stack": _dispatch_row_stack}[layout]
-        _sess_ids = set()               # line indices of MAIN-session rows (whisper-brighter tint)
+        # LIVE main-session lines get bold text (user 2026-07-03, after a whole-row tint-
+        # brightening attempt read as "좌우로 쭉 다 밝아져서 별로" — weight, not background,
+        # carries the distinction). Excludes stale/dead/app-server/detached (already faded dim).
+        _sess_bold_ids = set()
         for s in _sort_group_sessions(shown):
             kids = _sort_group_jobs(children.get(s.session_id, []))
             _n0 = len(lines)
@@ -1061,7 +1059,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                 lines.extend(_srow(s, is_parent=bool(kids), child_count=len(kids)))
             else:
                 lines.append(_session_row(s, narrow, is_parent=bool(kids), child_count=len(kids)))
-            _sess_ids.update(range(_n0, len(lines)))
+            if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):
+                _sess_bold_ids.update(range(_n0, len(lines)))
             for i, cj in enumerate(kids):
                 if _jrow:
                     lines.extend(_jrow(cj, orphan=False, parent_model=s.model,
@@ -1093,12 +1092,17 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             if not ln or _is_fill(ln[0][0]):
                 continue
             if _TINT_OK:
-                _tch2 = (_TINT_BODY_HOT.replace("B", "S") if _i in _sess_ids else _TINT_BODY_HOT) \
-                        if n_work else \
-                        (_TINT_BODY.replace("b", "s") if _i in _sess_ids else _TINT_BODY)
-                lines[_i] = [(_tch2, None)] + ln
+                lines[_i] = [(_body_tint, None)] + ln
             elif ln[0][1] in (None, "dim") and ln[0][0].startswith(" "):
                 lines[_i] = [("▍", _rail_key), (ln[0][0][1:], ln[0][1])] + ln[1:]
+        for _i in _sess_bold_ids:
+            ln = lines[_i]
+            if not ln:
+                continue
+            if _is_fill(ln[0][0]) and ln[0][0][1] in _TINT_CHARS:
+                lines[_i] = [ln[0], (_ROW_BOLD, None)] + list(ln[1:])
+            else:
+                lines[_i] = [(_ROW_BOLD, None)] + list(ln)
         if _TINT_OK:
             # breathing row below the title + bottom padding (title-top padding tried and
             # removed — user 2026-07-03: 별로) — inserted AFTER the tint loop (one sentinel each).
@@ -1145,8 +1149,8 @@ def _plain(segs):
     out = []
     for t, _ in segs:
         if _is_fill(t):
-            if t[1] in _TINT_CHARS:
-                continue                       # tint sentinel — background only, no text
+            if t[1] in _TINT_CHARS or t[1] == "!":
+                continue                       # tint/bold sentinel — no visible text
             out.append("─────" if t == _HFILL else "   ")
         else:
             out.append(t)
@@ -1213,13 +1217,18 @@ _HFILL = "\x00─\x00"
 _TINT_BODY, _TINT_CAP = "\x00b\x00", "\x00c\x00"
 _TINT_BODY_HOT, _TINT_CAP_HOT = "\x00B\x00", "\x00C\x00"
 _TINT_INTEL = "\x00i\x00"
-_TINT_CHARS = {"b", "c", "B", "C", "i", "s", "S"}
+_TINT_CHARS = {"b", "c", "B", "C", "i"}
+
+# row-bold marker (user 2026-07-03, after the whole-row tint-brightening attempt was rejected —
+# "좌우로 쭉 다 밝아져서 별로": a MAIN session's rows are entirely BOLD instead — same tint as
+# any other row in the card, font weight carries the distinction). Inserted AFTER any tint
+# sentinel (so tint detection in _addline is unaffected) by the group-loop post-pass.
+_ROW_BOLD = "\x00!\x00"
 # 256-color background levels per sentinel char. Base panels = dark GREY (235/238); the
 # ACTIVE-group variants are a dark COLORED tint (user 2026-07-02 최종: 기본은 어둡게, 활성
 # 디렉토리만 컬러 — 미드나잇 블루). 17 = #00005f, the cube's darkest blue: natively subtle
 # even where init_color is ignored (green 22 #005f00 read too bright — user ×2).
-_TINT_LVL = {"b": 235, "c": 238, "B": 17, "C": 17, "i": 235,
-             "s": 236, "S": 18}   # s/S = MAIN-session rows, one whisper brighter (user 2026-07-03)
+_TINT_LVL = {"b": 235, "c": 238, "B": 17, "C": 17, "i": 235}
 
 
 def _is_fill(t):
@@ -1234,6 +1243,11 @@ def _addline(stdscr, row, segs, w):
     tint = None
     if segs and _is_fill(segs[0][0]) and segs[0][0][1] in _TINT_CHARS:
         tint = segs[0][0][1] if _TINT_OK else None
+        segs = segs[1:]
+    # row-bold marker (user: main-session rows are entirely bold) — strip next, same reason.
+    row_bold = False
+    if segs and _is_fill(segs[0][0]) and segs[0][0][1] == "!":
+        row_bold = True
         segs = segs[1:]
     # tinted panels are INSET two columns on both sides AND their content shifts inward with
     # them (user 2026-07-02: 좌우여백이 안 보임 — near-black tint vs default bg alone is
@@ -1266,8 +1280,11 @@ def _addline(stdscr, row, segs, w):
                 piece += ch
                 pw += cw
             if piece:
+                attr = _key_attr(color, tint)
+                if row_bold:
+                    attr |= curses.A_BOLD
                 try:
-                    stdscr.addstr(row, col, piece, _key_attr(color, tint))
+                    stdscr.addstr(row, col, piece, attr)
                 except curses.error:
                     pass
             col += pw
