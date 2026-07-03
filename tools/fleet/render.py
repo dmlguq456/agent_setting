@@ -227,8 +227,14 @@ def _init_colors():
                     # 밝음 → #07081a 너무 어두움 → #0f123d 컬러 과함 → 이 값: 회색에 가까운
                     # 미드나잇, '컬러감은 죽이고')
                     curses.init_color(17, 55, 60, 130)
+                    # 18 = the main-session variant of the active midnight (~#131523) — one
+                    # whisper brighter than 17. Non-redefinable terminals fall back to 17
+                    # (stock 18 #000087 would be loud) → no differentiation, never worse.
+                    curses.init_color(18, 63, 68, 135)
             except Exception:
                 pass
+            if not curses.can_change_color():
+                _TINT_LVL["S"] = 17
             hues = {"d": -1, "g": curses.COLOR_GREEN, "y": curses.COLOR_YELLOW,
                     "r": curses.COLOR_RED, "c": curses.COLOR_CYAN,
                     "m": curses.COLOR_MAGENTA, "l": curses.COLOR_BLUE}
@@ -1047,12 +1053,15 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         # glyph (━/─) is what keeps the stacked context bars from merging into a solid wall.
         _srow = {"wide": None, "narrow": _session_row_2line, "stack": _session_row_stack}[layout]
         _jrow = {"wide": None, "narrow": _dispatch_row_2line, "stack": _dispatch_row_stack}[layout]
+        _sess_ids = set()               # line indices of MAIN-session rows (whisper-brighter tint)
         for s in _sort_group_sessions(shown):
             kids = _sort_group_jobs(children.get(s.session_id, []))
+            _n0 = len(lines)
             if _srow:
                 lines.extend(_srow(s, is_parent=bool(kids), child_count=len(kids)))
             else:
                 lines.append(_session_row(s, narrow, is_parent=bool(kids), child_count=len(kids)))
+            _sess_ids.update(range(_n0, len(lines)))
             for i, cj in enumerate(kids):
                 if _jrow:
                     lines.extend(_jrow(cj, orphan=False, parent_model=s.model,
@@ -1084,7 +1093,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             if not ln or _is_fill(ln[0][0]):
                 continue
             if _TINT_OK:
-                lines[_i] = [(_body_tint, None)] + ln
+                _tch2 = (_TINT_BODY_HOT.replace("B", "S") if _i in _sess_ids else _TINT_BODY_HOT) \
+                        if n_work else \
+                        (_TINT_BODY.replace("b", "s") if _i in _sess_ids else _TINT_BODY)
+                lines[_i] = [(_tch2, None)] + ln
             elif ln[0][1] in (None, "dim") and ln[0][0].startswith(" "):
                 lines[_i] = [("▍", _rail_key), (ln[0][0][1:], ln[0][1])] + ln[1:]
         if _TINT_OK:
@@ -1206,7 +1218,8 @@ _TINT_CHARS = {"b", "c", "B", "C", "i"}
 # ACTIVE-group variants are a dark COLORED tint (user 2026-07-02 최종: 기본은 어둡게, 활성
 # 디렉토리만 컬러 — 미드나잇 블루). 17 = #00005f, the cube's darkest blue: natively subtle
 # even where init_color is ignored (green 22 #005f00 read too bright — user ×2).
-_TINT_LVL = {"b": 235, "c": 238, "B": 17, "C": 17, "i": 235}
+_TINT_LVL = {"b": 235, "c": 238, "B": 17, "C": 17, "i": 235,
+             "s": 236, "S": 18}   # s/S = MAIN-session rows, one whisper brighter (user 2026-07-03)
 
 
 def _is_fill(t):
