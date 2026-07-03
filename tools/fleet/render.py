@@ -266,21 +266,24 @@ def _live_key(state):
 # status dot — SHAPE+SIZE gradient (design r2, a11y): the less active the state, the smaller
 # the glyph. ● working (blinks) · ○ idle · ◍ detached · tiny '·' stale · ✕ dead. Readable
 # without color (◌ vs ◦ were near-identical dim circles before).
-_LIVE_GLYPH = {"working": "●", "idle": "○", "blocked": "◑", "done": "✓",
+_LIVE_GLYPH = {"working": "●", "idle": "z", "blocked": "◑", "done": "✓",
                "stale": "·", "dead": "✕", "unknown": "·"}
 _DETACHED_GLYPH = "◍"
-_GLYPH_KEY = {"working": "g_work", "idle": "g_idle", "blocked": "g_idle", "done": "green",
+_GLYPH_KEY = {"working": "g_work", "idle": "dim", "blocked": "g_idle", "done": "green",
               "stale": "g_stale", "dead": "g_dead", "unknown": "dim"}
 
 
-_BLINK_ON = True     # manual blink phase for the working dot (toggled ~2 Hz in the live loop)
+_BLINK_ON = True     # manual blink phase (toggled ~2 Hz in the live loop) — drives the spinner too
+_SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"   # braille loading spinner — working SESSIONS animate (user 2026-07-03);
+                     # the blinking green ● moved up to the directory title
 
 
 def _glyph(state):
-    key = _GLYPH_KEY.get(state, "dim")
-    if state == "working" and not _BLINK_ON:
-        key = "g_work_off"
-    return _LIVE_GLYPH.get(state, "·"), key
+    """Session/job status glyph. working = braille spinner frame (green, advances every wake);
+    idle = dim z (sleeping — htop's S state, user pick); detached/stale/dead unchanged."""
+    if state == "working":
+        return _SPIN[int(time.time() * 2) % len(_SPIN)], "g_work"
+    return _LIVE_GLYPH.get(state, "·"), _GLYPH_KEY.get(state, "dim")
 
 
 def _pct_key(v):
@@ -1010,7 +1013,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                  sum(1 for j in group_jobs if j.liveness == "working")
         # trailing slash = the universal "this is a directory" marker (ls convention — user
         # 2026-07-03: 폴더(repo)임을 간단하게), dim so the name stays the focal word.
-        head_segs = [(name, "grp_hot" if n_work else "grp"), ("/", "dim")]
+        # The blinking green ● now lives HERE (directory level = "work happening inside") —
+        # sessions animate a spinner instead, so the dot no longer collides with row vocabulary.
+        head_segs = []
+        if n_work:
+            head_segs += [("●", "g_work" if _BLINK_ON else "g_work_off"), (" ", None)]
+        head_segs += [(name, "grp_hot" if n_work else "grp"), ("/", "dim")]
         _nwt = _wt_count(gcwd)
         if _nwt:
             # statusline 과 같은 표기 (🚧 N = 병렬 작업장·잔존 worktree, §5.10) — 이름 바로 옆
@@ -1092,8 +1100,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     # legend — status dots (columns are labelled by the header row)
     lines.append(None)
     lines.append([
-        ("  ", None), ("●", "g_work"), (" working   ", "dim"),
-        ("○", "g_idle"), (" idle   ", "dim"),
+        ("  ", None), ("⠹", "g_work"), (" working   ", "dim"),
+        ("z", "dim"), (" idle   ", "dim"),
         (_DETACHED_GLYPH, "g_idle"), (" detached   ", "dim"),
         ("·", "g_stale"), (" stale   ", "dim"),
         ("✕", "g_dead"), (" dead     ", "dim"),
