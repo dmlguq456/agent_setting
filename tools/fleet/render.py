@@ -923,7 +923,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         lines.append([(_sh + "  SESSIONS", "head"), (_RFLUSH, None),
                       ("%s · press w to cycle  " % layout, "head")])
     else:
-        lines.append([(_sh + _COL_HEAD, "head")])
+        # right-flushed 'time' label sits over the (inset) elapsed-time column — trailing
+        # spaces mirror the tint rows' right inset so the label right-aligns with the values.
+        lines.append([(_sh + _COL_HEAD, "head"), (_RFLUSH, None),
+                      ("time" + " " * (_INSET + _PAD_IN + 1), "head")])
     lines.append(None)                  # gap below the column header (user: 헤더 한칸 아래 띄우기)
 
     first = True
