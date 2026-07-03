@@ -83,7 +83,7 @@ _HUE_OF = {
     "g_work": ("g", _A_B), "g_work_off": ("g", _A_D), "g_idle": ("y", 0),
     "g_stale": ("d", _A_D), "g_dead": ("r", _A_B),
     "lvl_g": ("g", 0), "lvl_y": ("y", 0), "lvl_r": ("r", _A_B),
-    "grp_live": ("g", 0), "gate_t": ("g", _A_D), "gate_u": ("y", _A_D),
+    "grp_live": ("g", 0), "grp_hot": ("g", _A_B), "gate_t": ("g", _A_D), "gate_u": ("y", _A_D),
     "eff_low": ("d", _A_D), "eff_medium": ("y", _A_D), "eff_high": ("y", 0),
     "eff_xhigh": ("y", _A_B), "eff_max": ("r", _A_B),
     "h_claude": ("c", _A_D), "h_codex": ("m", _A_D), "h_opencode": ("l", _A_D),
@@ -170,8 +170,9 @@ def _init_colors():
         # harness (h_<h>) → main↔spawned weight is carried by font-color intensity (no bg fill).
         _COLOR["hb_" + h] = hue
     _COLOR["hb_other"] = 0
-    _COLOR["grp"] = curses.A_BOLD      # group (directory) name — the ▍-anchored section header
-    _COLOR["grp_live"] = _COLOR.get("green", 0)    # group ▍ marker when the group has work running
+    _COLOR["grp"] = curses.A_BOLD      # group (directory) card title
+    _COLOR["grp_live"] = _COLOR.get("green", 0)
+    _COLOR["grp_hot"] = _COLOR.get("green", 0) | curses.A_BOLD   # active card title (working)
     # harness identity = dim colored text (color lives ONLY here for identity)
     for h in ("claude", "codex", "opencode"):
         _COLOR["h_" + h] = _COLOR.get("h_" + h, 0) | curses.A_DIM
@@ -964,13 +965,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                 (group_jobs[0].cwd if group_jobs else ""))
         ggate, gpipe = _gate_info(gcwd)                # project spec-gate (word after the name)
         gword, gwkey = _gate_word(ggate, gpipe)
-        # section title (bold name) — no per-group full-width rule, no count roll-up (2026-07-02
-        # user: 세션 개수 불필요). Title indicator = the rows' liveness-dot language (2026-07-03
-        # user: ▍ 세로바 어색): ● green blinking while the group works, dim ○ otherwise.
+        # section title — NO indicator glyph at all (2026-07-03 user 이력: ▍ 어색 → dot 은 세션과
+        # 혼동 → "다른 활성 방식"): the TITLE ITSELF carries the active state — green bold name
+        # while the group works, plain bold otherwise. Doubles with the active card tint.
         n_work = sum(1 for s in live_sessions if s.liveness == "working") + \
                  sum(1 for j in group_jobs if j.liveness == "working")
-        _tch, _tkey = _glyph("working") if n_work else ("○", "dim")
-        head_segs = [(_tch, _tkey), (" ", None), (name, "grp")]
+        head_segs = [(name, "grp_hot" if n_work else "grp")]
         if gword:
             head_segs += [("  ", None), (gword, gwkey)]
         # group header = the card's TITLE row (user 2026-07-03 pick: 카드 안 타이틀) — first
