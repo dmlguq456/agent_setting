@@ -715,14 +715,17 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False):
     if s.orphan:
         l1.append(("  worktree-gone", "g_dead"))
 
-    l2 = [(" " * (4 + _HW), None)] + _model_cell(s.model, s.effort, _MW, dim=dim_tel)
+    # L2: elapsed time sits UNDER the harness column (fills the old empty indent — user
+    # 2026-07-03: 시간을 harness 아래로), model under the name, gauge right after (no deep
+    # indent / no far-right flush).
+    l2 = [("    ", None), (_pad(fmt_min(s.elapsed_min), _HW), "dim")]
+    l2 += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
     if s.ctx_pct is not None and not dim_tel:
         l2 += [("[", "dim")] + _gauge_segs(s.ctx_pct, 12) + \
               [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct)), ("]", "dim")]
     else:
         l2 += [("[", "dim"), ("·" * 12, "dim"),
                (" %3s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim"), ("]", "dim")]
-    l2 += [(_RFLUSH, None), (_CLOCK, "dim"), ("%6s" % fmt_min(s.elapsed_min), "dim")]
     if _split:
         return l1, l2, br_seg
     return l1, l2
@@ -735,9 +738,7 @@ def _session_row_stack(s, is_parent=False, child_count=0):
     out = [l1]
     if br_seg:
         out.append([(" " * (4 + _HW), None), (br_seg[0].strip(), br_seg[1])])
-    cut = 3   # l2 = [indent, model, effort | gauge…, RFLUSH, time] → split after effort
-    out.append(l2[:cut])
-    out.append([(" " * (4 + _HW), None)] + l2[cut:])
+    out.append(l2)     # compact L2 (time·model·gauge ≈ 59 cols) fits ultra-narrow whole
     return out
 
 
@@ -746,9 +747,7 @@ def _dispatch_row_stack(j, orphan=False, parent_model=None):
     out = [l1]
     if br_seg:
         out.append([(" " * (4 + _HW), None), (br_seg[0].strip(), br_seg[1])])
-    cut = 3   # l2 = [indent, model, effort-pad | stage…, RFLUSH, time] → split after the model cell
-    out.append(l2[:cut])
-    out.append([(" " * (4 + _HW), None)] + l2[cut:])
+    out.append(l2)
     return out
 
 
@@ -772,11 +771,11 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, _split=False):
     if not _split and br_seg:
         l1.append(br_seg)
 
-    l2 = [(" " * (4 + _HW), None)] + _model_cell(j.model or parent_model, None, _MW, dim=True)
+    l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
+    l2 += _model_cell(j.model or parent_model, None, _MW, dim=True)
     if key and key != name:
         l2.append((key + ": ", "name_dim"))
     l2 += _stage_segs(key, j.stage or "", working=(j.liveness == "working"))
-    l2 += [(_RFLUSH, None), (_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
     if _split:
         return l1, l2, br_seg
     return l1, l2
