@@ -631,7 +631,8 @@ def _mq_tag(mode, qa_text, qa_key, profile=None):
     return out, w
 
 
-def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True):
+def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
+                  parent_effort=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
       harness  |  name (mode · qa)  |  branch  |  MODEL (the job's real model)  |  stage breadcrumb
     mode+qa ride together in a `(mode · qa)` tag right after the name; the model slot shows the
@@ -667,8 +668,9 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         segs.append((" " * (avail - used), None))
 
     segs.append(_branch_seg(j.cwd, j.branch))                  # dispatch row = everything dim
-    # model slot → the job's OWN main model (dim family color), same cell a session uses.
-    segs += _model_cell(j.model or parent_model, None, _MW, dim=True)
+    # model slot → the job's OWN main model (dim family color) + effort (headless has no
+    # statusline → parent's effort, the shared settings default — user 2026-07-03: 분사도 effort).
+    segs += _model_cell(j.model or parent_model, parent_effort, _MW, dim=True)
 
     # gauge slot → capability-LABELED stage breadcrumb: `code: plan › exec › test` — the process
     # kind rides the track it names, where the eye reads progress (user 2026-07-02: name 앞보다
@@ -749,13 +751,14 @@ def _session_row_stack(s, is_parent=False, child_count=0):
     return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
-def _dispatch_row_stack(j, orphan=False, parent_model=None):
-    l1, l2 = _dispatch_row_2line(j, orphan=orphan, parent_model=parent_model)
+def _dispatch_row_stack(j, orphan=False, parent_model=None, parent_effort=None):
+    l1, l2 = _dispatch_row_2line(j, orphan=orphan, parent_model=parent_model,
+                                 parent_effort=parent_effort)
     gi = _stack_split(l2)
     return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
-def _dispatch_row_2line(j, orphan=False, parent_model=None, _split=False):
+def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, _split=False):
     key = j.key or "?"
     name = j.slug or key
     gch, gkey = _glyph(j.liveness)
@@ -776,7 +779,7 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, _split=False):
         l1.append(br_seg)
 
     l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
-    l2 += _model_cell(j.model or parent_model, None, _MW, dim=True)
+    l2 += _model_cell(j.model or parent_model, parent_effort, _MW, dim=True)
     if key and key != name:
         l2.append((key + ": ", "name_dim"))
     l2 += _stage_segs(key, j.stage or "", working=(j.liveness == "working"))
@@ -1052,10 +1055,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                 lines.append(_session_row(s, narrow, is_parent=bool(kids), child_count=len(kids)))
             for i, cj in enumerate(kids):
                 if _jrow:
-                    lines.extend(_jrow(cj, orphan=False, parent_model=s.model))
+                    lines.extend(_jrow(cj, orphan=False, parent_model=s.model,
+                                       parent_effort=s.effort))
                 else:
                     lines.append(_dispatch_row(cj, orphan=False, parent_model=s.model,
-                                               parent_harness=s.harness, is_last=(i == len(kids) - 1)))
+                                               parent_harness=s.harness, parent_effort=s.effort,
+                                               is_last=(i == len(kids) - 1)))
         if group_sessions and hidden:
             lines.append([("     +%d stale/companion hidden" % hidden, "dim")])
 
