@@ -965,6 +965,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                 (group_jobs[0].cwd if group_jobs else ""))
         ggate, gpipe = _gate_info(gcwd)                # project spec-gate (word after the name)
         gword, gwkey = _gate_word(ggate, gpipe)
+        if not gword:
+            # no artifact root at all = outside the pipeline → same word as the exempt state
+            # (user 2026-07-03: untracked 일 때도 라벨을 띄우자 — no more blank gate slots)
+            gword, gwkey = "untracked", "gate_u"
         # section title — NO indicator glyph at all (2026-07-03 user 이력: ▍ 어색 → dot 은 세션과
         # 혼동 → "다른 활성 방식"): the TITLE ITSELF carries the active state — green bold name
         # while the group works, plain bold otherwise. Doubles with the active card tint.
