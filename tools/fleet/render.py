@@ -84,6 +84,7 @@ _HUE_OF = {
     "g_stale": ("d", _A_D), "g_dead": ("r", _A_B),
     "lvl_g": ("g", 0), "lvl_y": ("y", 0), "lvl_r": ("r", _A_B),
     "grp_live": ("g", 0), "grp_hot": ("g", _A_B), "gate_t": ("g", _A_D), "gate_u": ("y", _A_D),
+    "grp_cool": ("y", _A_D), "grp_cold": ("d", _A_D),   # cooling=dim yellow / cold=dim grey (tint 행 색)
     "eff_low": ("d", _A_D), "eff_medium": ("d", 0), "eff_high": ("l", 0),
     "eff_xhigh": ("m", _A_B), "eff_max": ("r", _A_B),
     "h_claude": ("c", _A_D), "h_codex": ("m", _A_D), "h_opencode": ("l", _A_D),
@@ -236,8 +237,8 @@ def _init_colors():
                     # 밝음 → #07081a 너무 어두움 → #0f123d 컬러 과함 → 이 값: 회색에 가까운
                     # 미드나잇, '컬러감은 죽이고')
                     curses.init_color(17, 55, 60, 130)
-                    # cooling 배경 = 살짝 어두운 갈색 (≈#33210f) — 무시되면 stock 94(#875f00 brown)
-                    curses.init_color(94, 200, 130, 65)
+                    # cooling 배경 = 어두운 갈색 (≈#1e130a) — 무시되면 stock 94(#875f00 brown)
+                    curses.init_color(94, 120, 75, 38)
             except Exception:
                 pass
             hues = {"d": -1, "g": curses.COLOR_GREEN, "y": curses.COLOR_YELLOW,
