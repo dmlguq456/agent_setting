@@ -173,7 +173,8 @@ def _init_colors():
     _COLOR["grp"] = curses.A_BOLD      # group (directory) card title
     _COLOR["grp_live"] = _COLOR.get("green", 0)
     _COLOR["grp_hot"] = _COLOR.get("green", 0) | curses.A_BOLD   # active card title (working)
-    _COLOR["grp_cool"] = curses.A_DIM  # cooling dir: grey ring + elapsed (완료 직후 식는 중 — 중간 상태)
+    _COLOR["grp_cool"] = _COLOR.get("yellow", 0) | curses.A_DIM  # cooling: 어두운 노랑(●·이름·✓경과시간)
+    _COLOR["grp_cold"] = curses.A_DIM                            # cold(오래된 비활성): 회색 고리 ○
     # harness identity = dim colored text (color lives ONLY here for identity)
     for h in ("claude", "codex", "opencode"):
         _COLOR["h_" + h] = _COLOR.get("h_" + h, 0) | curses.A_DIM
@@ -235,6 +236,8 @@ def _init_colors():
                     # 밝음 → #07081a 너무 어두움 → #0f123d 컬러 과함 → 이 값: 회색에 가까운
                     # 미드나잇, '컬러감은 죽이고')
                     curses.init_color(17, 55, 60, 130)
+                    # cooling 배경 = 살짝 어두운 갈색 (≈#33210f) — 무시되면 stock 94(#875f00 brown)
+                    curses.init_color(94, 200, 130, 65)
             except Exception:
                 pass
             hues = {"d": -1, "g": curses.COLOR_GREEN, "y": curses.COLOR_YELLOW,
@@ -1067,8 +1070,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             head_segs += [(_COOL_FILLED, "grp_cool"), (" ", None)]
         else:
             # 오래된 비활성 = 고리 ○ (회색): 잠든 디렉토리 (shape-size gradient ● > ○)
-            head_segs += [(_COOL_RING, "grp_cool"), (" ", None)]
-        head_segs += [(name, "grp_hot" if n_work else "grp"), ("/", "dim")]
+            head_segs += [(_COOL_RING, "grp_cold"), (" ", None)]
+        # cooling 디렉토리는 이름도 어두운 노랑(인디케이터 포함 통일) — cold 는 기본 제목색 유지
+        _name_key = "grp_hot" if n_work else ("grp_cool" if _cool_min is not None else "grp")
+        head_segs += [(name, _name_key), ("/", "dim")]
         _nwt = _wt_count(gcwd)
         if _nwt:
             # statusline 과 같은 표기 (🚧 N = 병렬 작업장·잔존 worktree, §5.10) — 이름 바로 옆
@@ -1275,7 +1280,7 @@ _ROW_BOLD = "\x00!\x00"
 # ACTIVE-group variants are a dark COLORED tint (user 2026-07-02 최종: 기본은 어둡게, 활성
 # 디렉토리만 컬러 — 미드나잇 블루). 17 = #00005f, the cube's darkest blue: natively subtle
 # even where init_color is ignored (green 22 #005f00 read too bright — user ×2).
-_TINT_LVL = {"b": 235, "c": 238, "B": 17, "C": 17, "k": 237, "i": 235}
+_TINT_LVL = {"b": 235, "c": 238, "B": 17, "C": 17, "k": 94, "i": 235}
 
 
 def _is_fill(t):
