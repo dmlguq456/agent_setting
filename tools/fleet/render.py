@@ -1213,7 +1213,7 @@ _HFILL = "\x00─\x00"
 _TINT_BODY, _TINT_CAP = "\x00b\x00", "\x00c\x00"
 _TINT_BODY_HOT, _TINT_CAP_HOT = "\x00B\x00", "\x00C\x00"
 _TINT_INTEL = "\x00i\x00"
-_TINT_CHARS = {"b", "c", "B", "C", "i"}
+_TINT_CHARS = {"b", "c", "B", "C", "i", "s", "S"}
 # 256-color background levels per sentinel char. Base panels = dark GREY (235/238); the
 # ACTIVE-group variants are a dark COLORED tint (user 2026-07-02 최종: 기본은 어둡게, 활성
 # 디렉토리만 컬러 — 미드나잇 블루). 17 = #00005f, the cube's darkest blue: natively subtle
