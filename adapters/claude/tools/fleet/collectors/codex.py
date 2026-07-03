@@ -255,19 +255,15 @@ def enrich(sess):
     path = _index(home).get(sess.cwd)
     if not path:
         return                                       # no matching rollout → telemetry stays '—'
-    if sess.app_server:
-        # app-server companion: sess.cwd here is the leaf's OWN cwd (/proc/<pid>/cwd),
-        # NOT the project --cwd — the real --cwd lives on the sibling node broker process,
-        # a different comm that procscan does not scan. So _index(home).get(sess.cwd) may
-        # match a WRONG/OLD interactive rollout purely by cwd coincidence. Attaching that
-        # rollout's mtime as a liveness signal would be dishonest (it belongs to an
-        # unrelated session), so we set only what's honest: skip session_id + the token
-        # block entirely, and explicitly null out mtime rather than inherit the mismatched
-        # value. With mtime=None, liveness falls back to alive-process → idle.
-        sess.mtime = None
-        return
+    # app-server 는 이 codex 버전(client-server)에서 세션 본체다. 예전엔 companion 으로 보고
+    # mtime=None 을 강제해 *모든* interactive codex 세션의 working 판정을 죽였다(2026-07-03 회귀).
+    # 실측: app-server leaf 의 /proc/cwd 가 프로젝트 cwd 와 정확히 일치하므로, cwd 로 매칭된
+    # rollout 의 mtime 은 신뢰할 수 있다. 다만 session_id 는 app_server 일 때 생략한다 — 하나의
+    # app-server 가 여러 rollout 을 서빙할 수 있어 특정 uuid 귀속은 부정확(같은 cwd 를 공유하는
+    # 세션의 우연 매칭 위험은 claude 와 동급으로 잔존). deleted worktree 는 procscan 이 orphan →
+    # liveness 가 여전히 stale 로 덮으므로 죽은 세션이 살아 보이지는 않는다.
     sid = _SID_RE.search(os.path.basename(path))
-    if sid:
+    if sid and not sess.app_server:
         sess.session_id = sid.group(1)
     try:
         sess.mtime = os.path.getmtime(path)
