@@ -98,8 +98,17 @@ $delta
 DELTA
 EOF
 
+# hang 가드: codex exec 가 응답 없이 멈추면 무한 대기 — 유한 바운드 필수 (claude 120/600s ·
+# opencode 180s 와 동형). kill 시 비0 rc 로 종료 — 호출측(preflight)의 기존 실패 처리와 동일 경로.
+timeout_s=${CODEX_DISTILL_TIMEOUT:-300}
+if command -v timeout >/dev/null 2>&1; then
+  timeout_cmd="timeout $timeout_s"
+else
+  timeout_cmd=""
+fi
+
 if [ -n "${CODEX_DISTILL_MODEL:-}" ]; then
-  MEM_DISTILL=1 codex exec \
+  MEM_DISTILL=1 $timeout_cmd codex exec \
     --cd "$cwd" \
     --sandbox read-only \
     --ephemeral \
@@ -109,7 +118,7 @@ if [ -n "${CODEX_DISTILL_MODEL:-}" ]; then
     -m "$CODEX_DISTILL_MODEL" \
     - < "$prompt_file" >/dev/null
 else
-  MEM_DISTILL=1 codex exec \
+  MEM_DISTILL=1 $timeout_cmd codex exec \
     --cd "$cwd" \
     --sandbox read-only \
     --ephemeral \

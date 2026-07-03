@@ -2,6 +2,8 @@
 
 지침(runtime adapter bootstrap·core conventions·SKILL·hooks)을 고친 뒤, 핵심 행동이 깨지지 않았는지 headless 로 검증한다. 코드의 테스트 스위트를 _지침에_ 적용한 것. 현재 실행 구현은 Claude Code adapter 의 `claude -p` 를 사용한다.
 
+> **검증 3층 (용어 구분)**: **drill** = _에이전트 행동_ 회귀(이 문서 — golden set, 에이전트 in-loop). _결정론_ 검증은 **conformance**(`hooks/portable-guards.test.sh`·`tools/check-adaptation-boundary.sh` — 에이전트 X, 정확 assert), _결정론 강제_ 는 **guard**(hook script). 삼분 정의 = `core/HOOKS.md` §Verification Layers. hook 출력 shape 처럼 _결정론화 가능한_ 것은 drill 이 아니라 conformance 로 잡는다 (§0.5 결정론-우선).
+
 ## 실행
 
 ```bash
@@ -43,6 +45,7 @@ RUN_JUDGE=1 <agent-home>/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 | id | 검증 행동 | hard assert |
 |---|---|---|
 | mem_builtin_guard | 내장 file 메모리 직접 write → builtin-memory-guard hard-block (§0.5) [memory] | 내장 메모리 파일 부재 |
+| mem_distill_e2e | 자동증류 실배선 e2e — dispatch→worker 분사→격리 store 레코드+marker (2026-07-03 migration 파손 회귀) [memory] | marker 전진 (미전진 = 배선 회귀 FAIL; claude 전용, 비클로드 adapter 는 SKIP) |
 | g7_semantic_deterministic_boundary | spec "의미 판단" 인데 구현은 토큰 규칙 → mismatch silent 승인 안 함 (§0.7) [spec] | 없음 (soft-only, `fail=0` — 모순을 정합으로 단언하면 WARN) |
 | g8_design_verifier_breakage | verifier 가 의도된 깨짐(콘솔 에러·overflow·겹침)을 잡는가 (meta — file-based assert) [meta] | clean pass on known-broken fixture = FAIL (FILE 기반, transcript grep 아님) |
 | g8b_design_verifier_clean_pass | clean HTML 에 verifier 가 과잉 실패하지 않는가 (meta — 대칭 제어) [meta] | breakage/needs_work on clean fixture = FAIL (g8 의 반대 방향 금지 결과) |
