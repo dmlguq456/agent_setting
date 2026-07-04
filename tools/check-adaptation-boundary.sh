@@ -227,6 +227,13 @@ check_claude_projection_targets() {
 
 check_claude_adapter_concrete_surfaces() {
   links=$(find adapters/claude -type l -print 2>/dev/null || true)
+  # gitignored 로컬 설치물(예: tools/design-mcp/node_modules 의 .bin symlink)은
+  # projection 파리티 대상이 아니다 — clean 트리엔 없고 로컬에만 존재하는 노이즈.
+  links=$(printf '%s\n' "$links" | while IFS= read -r l; do
+    [ -n "$l" ] || continue
+    git check-ignore -q "$l" 2>/dev/null && continue
+    printf '%s\n' "$l"
+  done)
   if [ -n "$links" ]; then
     fail_msg "adapters/claude must contain adapter-owned concrete files, not symlink passthrough entries:"
     printf '%s\n' "$links"
