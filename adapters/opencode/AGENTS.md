@@ -15,6 +15,13 @@ This document is derived from core — edit core first; do not modify this adapt
 5. For memory behavior, read `core/MEMORY.md`.
 6. For task-specific behavior, read `capabilities/README.md`, `roles/README.md`, and `roles/MODES.md` first. Use Claude Skill, Agent, or mode files only as compatibility references.
 
+## Runtime Currentness
+
+- For Claude Code or Codex runtime-surface questions or projection edits (agents/subagents, hooks, skills, settings/config, model/reasoning, permissions, headless/dispatch, or adapter parity), verify current official documentation first and then inspect local adapter realization.
+- Use recent community posts, GitHub issues, and examples only as secondary evidence for real-world gaps or practices; label them as non-authoritative.
+- Do not infer product capability from this harness projection alone. State separately: what the runtime supports, what this adapter currently projects, and what parity gaps remain versus the compared adapter.
+- Any modification plan for those surfaces must include current-doc evidence, a local runtime/projection check, and a fallback for unsupported or buggy behavior.
+
 ## Runtime Mapping
 
 - Treat `AGENT_HOME` as the installed harness root.

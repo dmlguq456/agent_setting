@@ -12,6 +12,8 @@
 >
 > **라우팅 결정 시 `~/.claude/core/WORKFLOW.md` (라우팅 코어) 를 Read 한다** (on-demand) — 위 skeleton 이 트랙 지도, WORKFLOW 는 작업 본질 매핑·spec mode·entry→서브에이전트 분기·폴더 맵·§7 사후 수정까지의 라우팅 표. `workflow-guard-hook` 모드 신호(📌tracked → WORKFLOW 따름 / ⚡untracked → 면제)가 _읽을지의 anchor_ — 이 신호는 **_첫 프롬프트부터_ 매 프롬프트 뜨므로 세션 시작 작업부터 적용**된다. tracked 라우팅 자리(특히 spec 프로젝트 사후 수정)에서 필요해서 Read. eager 세션 전체 로드 X. `~/.claude/README.md` 는 GitHub 사용자용 — Read 대상 아님.
 
+> **Runtime-currentness gate**: Claude Code 또는 Codex 런타임 표면(agents/subagents, hooks, skills, settings, model/reasoning, permissions, headless/dispatch, projection parity)을 답하거나 수정할 때는 최신 공식 문서와 최근 외부 사례를 먼저 확인한다. 로컬 harness 상태만 보고 제품 한계를 단정하지 말고, “기능 존재”와 “상대 adapter 와의 parity 한계”를 분리해 답변·수정 계획에 명시한다.
+
 ---
 
 ## 응답 원칙 (메인 Claude 모든 응답에 적용)

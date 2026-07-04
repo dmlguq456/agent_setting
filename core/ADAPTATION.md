@@ -56,6 +56,26 @@ workflow files are transformed into runtime-specific artifacts, while Claude
 plugin manifests and Codex skills are concrete runtime projections rather than
 portable source. This repo should follow the pattern, not the exact file layout.
 
+## 2.2 Runtime Currentness and Parity Claims
+
+Before answering, planning, or editing adapter projection behavior for modern
+runtime surfaces, verify the current runtime documentation and recent practice
+instead of inferring from another adapter or from local harness state.
+
+- **Claude Code / Codex surface questions require fresh external research**:
+  read the current official documentation first, then inspect local adapter
+  realization. Use community posts, issues, or examples only as secondary
+  evidence for real-world gaps or practices, and label them as such.
+- **Separate existence from parity**: if a runtime supports a feature in some
+  form, still state whether it is equivalent to the other adapter's feature.
+  Include concrete parity gaps such as model pinning, tool restriction,
+  permission inheritance, session/worktree isolation, hook lifecycle, discovery,
+  UI visibility, and noninteractive/headless behavior.
+- **Plan with verification**: when a projection change depends on a runtime
+  capability, the implementation plan must include a current-doc citation or
+  note, a local runtime/projection check, and a fallback if the feature is
+  unavailable, buggy, or unsupported in this adapter.
+
 ## 3. Portable Role Model
 
 Portable docs use role names, not vendor model names:
