@@ -15,8 +15,8 @@ import os
 
 
 def _home():
-    return (os.environ.get("AGENT_HOME") or os.environ.get("CLAUDE_HOME")
-            or os.path.expanduser("~/.claude"))
+    """Runtime config home (projects/sessions/.statusline) — Claude Code config dir."""
+    return os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
 
 
 def _enc_cwd(cwd):
