@@ -55,19 +55,19 @@ invariant.
 | Selected tools | `adapters/codex/tools/` adapter launchers plus selected portable tool projections | `codex_setting/tools` |
 | Selected utilities | `adapters/codex/utilities/` adapter wrappers plus selected portable utility projections | `codex_setting/utilities` |
 
-known gap: the Permission/sandbox contract row above is not version-controlled
-for Codex the way it is for Claude. Claude's auto-approve posture is captured
-in version-controlled `adapters/claude/settings.json` (`permissions.allow[]`
-plus `defaultMode: "auto"`), so a fresh Claude Code install reproduces the same
-approval posture directly from the repo. Codex has no adapter-owned equivalent
-fragment for this: `adapters/codex/config/` currently ships only
-`tui-statusline.toml` (the footer fragment described under Status Surface
-Boundary), and the Codex approval/sandbox equivalent (for example
-`trust_level`) lives solely in machine-local `~/.codex/config.toml`. A fresh
-Codex install therefore does not reproduce the harness-recommended
-approval/sandbox posture from the repo alone. Capturing an adapter-owned
-permission/sandbox config fragment for Codex is a separate follow-up; this
-entry discloses the current gap only.
+Permission/sandbox posture is now version-controlled for Codex the way it is for
+Claude. Claude's auto-approve posture is captured in
+`adapters/claude/settings.json` (`permissions.allow[]` plus
+`defaultMode: "auto"`), so a fresh Claude Code install reproduces it from the
+repo. The Codex equivalent — `approvals_reviewer`, per-project `trust_level`,
+and the baseline `approval_policy`/`sandbox_mode` stance — is captured in the
+adapter-owned fragment `adapters/codex/config/approval-sandbox.toml` (projected as
+`codex_setting/codex-config/approval-sandbox.toml`, reported by
+`preflight.sh permissions` as `config_fragment=…`). It holds the reproducible
+posture only — no secrets and no machine-specific absolute project paths (the
+`trust_level` project block is a template). The adapter never auto-applies it;
+merge the relevant lines into `$CODEX_HOME/config.toml` on the target machine.
+(codex-adapter-parity audit P-15: gap closed.)
 
 ## Native Skill And Plugin Surface
 
@@ -460,12 +460,46 @@ adapter. That projection exposes only `.agents/plugins/marketplace.json` and
 - `qa/verification-runner.sh` (Codex-owned launcher for explicit verification commands)
 - `research/claim-verify.sh` (Codex-owned launcher for configured external claim verification providers)
 - `design/visual-harness.sh` (Codex-owned launcher for render/screenshot/console checks)
+- `design/convert-harness.sh` (Codex-owned launcher for PDF/PPTX/bundle design export via the shared `convert.mjs`)
 
 Do not project `build-manifest.py`: it is a harness development tool that reads
 Claude adapter skills, agents, and settings. Do not project `web-bundle` until
 Codex has a documented design/tooling realization that uses it directly. The
-shared `design-mcp` package is not projected wholesale; Codex exposes only the
-adapter-owned visual harness launcher.
+shared `design-mcp` package is not projected wholesale; Codex exposes the
+adapter-owned visual harness launcher plus the converter launcher
+(`design/convert-harness.sh`, wrapping the shared `convert.mjs` for PDF/PPTX/
+bundle export — the design-handoff surface the visual harness alone does not
+cover).
+
+### MCP registration (design)
+
+`preflight.sh mcp` reports `design_mcp_projection=policy-not-adopted-approval-gated`
+rather than `unsupported`: the design MCP server *can* be registered with Codex and
+its tools are discoverable and consume screenshots (runtime-verified — a
+`[mcp_servers.design]` stdio server exposes the six tools, and a `codex exec` run
+read `DESIGN PROBE` text out of a screenshot). The adapter does **not** adopt it as
+the default design surface for two reasons: (1) policy — the owned visual harness +
+converter launcher already cover render/screenshot/console and export without a
+persistent server dependency; (2) a noninteractive `codex exec` under
+`approval_policy = "never"` auto-denies MCP tool calls, so the render→view loop only
+works interactively (TUI approval) or under an approval/trust policy that permits the
+tool.
+
+To register the design MCP server on a machine that wants the MCP path (guidance
+only — the adapter never mutates `$CODEX_HOME/config.toml`):
+
+```toml
+[mcp_servers.design]
+command = "node"
+args = ["<agent-home>/tools/design-mcp/server.js"]
+```
+
+Then run design work in an interactive Codex session (so tool approvals can be
+granted) or set an approval/trust policy for the project that allows the tool
+(see `adapters/codex/config/approval-sandbox.toml`). Actually performing the
+registration is out of scope for the adapter; this section documents the path.
+For headless/export use without a server, prefer `preflight.sh convert
+<pdf|bundle|pptx> <file.html>`.
 
 `codex_setting/utilities` points at `adapters/codex/utilities/`, not the entire
 shared `utilities/` directory. The current allowlist is:
@@ -489,30 +523,56 @@ capability uses them directly.
 
 ## Distillation Boundary
 
-Claude's adapter can run a detached `claude -p` worker with tool use denied by
-runtime flags. Current Codex CLI inspection shows sandbox and approval controls,
-but no explicit equivalent to a no-tools worker flag. The Codex adapter therefore
-separates the pipeline:
+Claude's adapter runs a detached `claude -p` worker with tool use denied by
+runtime flags. Codex has no equivalent no-tools worker flag, but a
+`codex exec --sandbox read-only` worker is physically tool-free (every write
+mechanism, shell or `apply_patch`, hits the OS read-only wall), so the adapter
+realizes the **same portable 2-tier distillation contract**
+(`core/MEMORY.md` §7, D-30/D-32) rather than only an add-only subset.
+
+The adapter reimplements the portable `hooks/mem-distill-dispatch.sh` pipeline
+**synchronously** in `adapters/codex/bin/distill-worker.sh` (the D-32
+"reimplement + preserve" path) so a headless `codex exec` session captures memory
+before it exits — the portable dispatcher detaches into the background, which is
+right for interactive Claude but leaves a codex-exec teardown race. Crucially the
+**safety layers are the shared code, not a divergent copy**: `mem.py
+curate-snapshot` / `curate-artifacts` (snapshot + `IDS:` membership) and
+`tools/memory/apply-distill-actions.py --mode/--snapshot-ids` (the whitelist
+gate). Only the synchronous orchestration shell and the prompts are Codex-owned.
+
+Two tiers + one manual surface:
 
 1. `distill-delta` reads Codex JSONL session logs and emits transcript delta text.
-2. User-facing `preflight.sh distill-propose` reports `status=tool-contract`
-   and exits 69 while disabled. With `CODEX_DISTILL_ENABLE=1`, it invokes
-   `codex exec --sandbox read-only --ephemeral --ignore-rules
-   --skip-git-repo-check` and writes a JSON-lines proposal. `codex exec` does
-   not accept `--ask-for-approval` (that is a top-level `codex` flag only); the
-   read-only sandbox alone enforces the no-write contract.
-3. The proposal is parsed by the shared `tools/memory/apply-distill-actions.py`
-   applier only when both `CODEX_DISTILL_APPLY=1` and
-   `CODEX_DISTILL_CONTRACT_ACCEPTED=1` are explicitly set.
-4. The user-facing `distill-propose` command never applies automatically — it is
-   the manual preview surface. The adapter's own `preflight.sh session-end` and
-   `turn-nudge` dispatch enable the worker by default
+2. **turn-nudge = increment (fast tier, `gpt-5.4-mini`)** — add-only. The prompt
+   is add-only, and the shared applier now **enforces** add-only in `increment`
+   mode (id-mutations `prune/merge/graduate/reattribute/reinforce` are rejected
+   outside `curate`), so a prompt-injected transcript cannot bypass the snapshot
+   whitelist (P-25).
+3. **session-end = curate (deep tier, `gpt-5.5`)** — snapshot-grounded
+   `prune/merge/graduate/consolidate`. The worker captures the current-project
+   snapshot + artifact state, and id-mutations are gated by the `--snapshot-ids`
+   membership whitelist (`member()` in the shared applier). Per-mode model tiers
+   (P-36) override with `CODEX_DISTILL_MODEL` (global) /
+   `CODEX_DISTILL_MODEL_INCREMENT` / `CODEX_DISTILL_MODEL_CURATE` /
+   `AGENT_MODEL_FAST` / `AGENT_MODEL_DEEP`.
+4. `preflight.sh session-end` invokes the worker in `curate` mode and
+   `turn-nudge` in `increment` mode, both enabled by default
    (`CODEX_DISTILL_ENABLE`/`CODEX_DISTILL_APPLY`/`CODEX_DISTILL_CONTRACT_ACCEPTED`
-   default to `1`, each overridable to `0`), so Codex matches Claude's automatic
-   session-end distillation. Both dispatch sites and the worker carry a
-   `MEM_DISTILL` recursion guard.
+   default to `1`, each overridable to `0`). Because session-end now realizes the
+   curate tier (not just add), **Codex matches Claude's automatic session-end
+   distillation on the curate axis** (both run increment+curate). The worker
+   advances the distill marker only after a successful apply (a preview or a
+   timed-out exec keeps the delta), holds a per-sid `mkdir` lock against
+   concurrent turn/session runs, and carries the `MEM_DISTILL` recursion guard at
+   both dispatch sites and inside the worker.
+5. User-facing `preflight.sh distill-propose` stays the **add-only manual
+   preview** surface: it reports `status=tool-contract` and exits 69 while
+   disabled, and with `CODEX_DISTILL_ENABLE=1` writes a JSON-lines proposal that
+   the shared applier consumes only when both `CODEX_DISTILL_APPLY=1` and
+   `CODEX_DISTILL_CONTRACT_ACCEPTED=1` are explicitly set. It never advances the
+   marker without applying.
 
-Verification (codex-cli 0.142.4):
+Verification (codex-cli 0.142.5):
 - Tool-free: an adversarial write probe under the exact worker flags
   (`codex exec --sandbox read-only --ephemeral --ignore-rules`) proved tool-free
   execution. Every model-attempted write — sentinel creation inside and outside
@@ -524,11 +584,14 @@ Verification (codex-cli 0.142.4):
   re-trigger the session-end distill path. The `MEM_DISTILL=1` guard on the exec
   call plus the `session-end`/worker `MEM_DISTILL` early-exit are defense in depth.
 - End-to-end: the enabled `preflight.sh session-end` against a throwaway store
-  applied exactly one distilled record from a real `codex exec` JSON-lines
-  proposal and terminated cleanly (no fork-bomb).
+  applies distilled records from a real `codex exec` JSON-lines proposal through
+  the shared applier and terminates cleanly (no fork-bomb). Increment
+  add-only enforcement and curate `--snapshot-ids` membership are exercised by
+  `tools/memory/apply-distill-actions.py` unit coverage and
+  `hooks/portable-guards.test.sh`.
 
-Automatic session-end and turn-nudge distillation is therefore enabled by
-default; opt out by exporting `CODEX_DISTILL_ENABLE=0`.
+Automatic session-end (curate) and turn-nudge (increment) distillation is
+therefore enabled by default; opt out by exporting `CODEX_DISTILL_ENABLE=0`.
 
 ## Worklog Boundary
 

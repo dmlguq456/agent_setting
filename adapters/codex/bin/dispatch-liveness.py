@@ -43,6 +43,34 @@ def transcript_cwd(path: Path) -> str | None:
     return None
 
 
+def parse_profile(pipe: str) -> str | None:
+    """Extract profile=<name> from the jobs.log 6th (pipe) field.
+
+    Replicates utilities/dispatch-liveness.sh:23 semantics: last ``profile=``
+    occurrence, comma-terminated. Returns None when absent (non-profile job).
+    """
+    if not pipe or "profile=" not in pipe:
+        return None
+    name = pipe.split("profile=")[-1].split(",")[0].strip()
+    return name or None
+
+
+def sessions_dir_for(pipe: str, slug: str, agent_home: Path, default_sessions: Path) -> Path:
+    """Resolve the Codex session store for one job.
+
+    A ``--profile`` dispatch runs under CODEX_HOME=.dispatch/homes/<slug>.<profile>
+    (dispatch-headless.py), so its transcripts land in that home's ``sessions/``,
+    not ~/.codex/sessions. Isomorphic to portable dispatch-liveness.sh:22-28 and
+    fleet collectors/dispatch.py, adapted to the Codex ``sessions/`` layout (the
+    sh helper's ``projects/<enc>`` is Claude-shaped). Non-profile jobs keep the
+    default store (byte-behavior for existing callers).
+    """
+    prof = parse_profile(pipe)
+    if prof:
+        return agent_home / ".dispatch" / "homes" / f"{slug}.{prof}" / "sessions"
+    return default_sessions
+
+
 def locate_latest_for_worktree(sessions: Path, worktree: str) -> Path | None:
     if not sessions.is_dir():
         return None
@@ -66,7 +94,7 @@ def main(argv: list[str]) -> int:
 
     agent_home = resolve_agent_home()
     jobs = Path(argv[1]) if len(argv) == 2 else agent_home / ".dispatch" / "jobs.log"
-    sessions = Path(os.environ.get("CODEX_SESSIONS", Path.home() / ".codex" / "sessions"))
+    default_sessions = Path(os.environ.get("CODEX_SESSIONS", Path.home() / ".codex" / "sessions"))
     stale_min = int(os.environ.get("DISPATCH_STALE_MIN", "15"))
 
     if not jobs.is_file():
@@ -83,11 +111,14 @@ def main(argv: list[str]) -> int:
             parts = raw.split("\t")
             while len(parts) < 6:
                 parts.append("")
-            ts, status, _repo, worktree, slug, _pipe = parts[:6]
+            ts, status, _repo, worktree, slug, pipe = parts[:6]
             if status != "open":
                 continue
             open_n += 1
             label = slug or "?"
+            # Resolve per-job: a profile= job lives under its isolated profile home
+            # (.dispatch/homes/<slug>.<profile>/sessions), else the default store.
+            sessions = sessions_dir_for(pipe, slug, agent_home, default_sessions)
             transcript = locate_latest_for_worktree(sessions, worktree)
             if transcript is None:
                 print(f"DEAD     {label} - Codex session transcript not found for {worktree} [open: {ts}]")

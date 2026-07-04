@@ -594,7 +594,7 @@ check_codex_bin_wrappers() {
   fi
   if ! grep -Fq 'runtime_surface=codex-native-mcp' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'claude_settings_mcp=unsupported' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'design_mcp_projection=unsupported' adapters/codex/bin/preflight.sh; then
+    || ! grep -Fq 'design_mcp_projection=policy-not-adopted-approval-gated' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must report the Codex MCP contract without Claude settings MCP projection"
   fi
   if ! grep -Fq 'runtime_surface=codex-exec-headless' adapters/codex/bin/preflight.sh \
@@ -1108,6 +1108,14 @@ check_codex_tool_projection() {
     :
   fi
 
+  if [ ! -x adapters/codex/tools/design/convert-harness.sh ]; then
+    fail_msg "adapters/codex/tools/design/convert-harness.sh must be an executable Codex-owned design converter launcher"
+  elif [ -L adapters/codex/tools/design/convert-harness.sh ]; then
+    fail_msg "adapters/codex/tools/design/convert-harness.sh must be concrete, not a symlink"
+  elif ! check_no_claude_native_refs adapters/codex/tools/design/convert-harness.sh adapters/codex/tools/design/convert-harness.sh; then
+    :
+  fi
+
   if [ ! -x adapters/codex/tools/material/data-script.sh ]; then
     fail_msg "adapters/codex/tools/material/data-script.sh must be an executable Codex-owned material launcher"
   elif [ -L adapters/codex/tools/material/data-script.sh ]; then
@@ -1164,7 +1172,7 @@ check_codex_tool_projection() {
     :
   fi
 
-  extra=$(find adapters/codex/tools -mindepth 1 ! \( -path adapters/codex/tools/memory -o -path adapters/codex/tools/memory/mem.py -o -path adapters/codex/tools/memory/apply-distill-actions.py -o -path adapters/codex/tools/memory/recall.sh -o -path adapters/codex/tools/design -o -path adapters/codex/tools/design/visual-harness.sh -o -path adapters/codex/tools/material -o -path adapters/codex/tools/material/browser-fetch.sh -o -path adapters/codex/tools/material/data-script.sh -o -path adapters/codex/tools/material/figure-gen.sh -o -path adapters/codex/tools/material/pdf-extract.sh -o -path adapters/codex/tools/material/web-image-search.sh -o -path adapters/codex/tools/qa -o -path adapters/codex/tools/qa/verification-runner.sh -o -path adapters/codex/tools/research -o -path adapters/codex/tools/research/claim-verify.sh \) -print 2>/dev/null || true)
+  extra=$(find adapters/codex/tools -mindepth 1 ! \( -path adapters/codex/tools/memory -o -path adapters/codex/tools/memory/mem.py -o -path adapters/codex/tools/memory/apply-distill-actions.py -o -path adapters/codex/tools/memory/recall.sh -o -path adapters/codex/tools/design -o -path adapters/codex/tools/design/visual-harness.sh -o -path adapters/codex/tools/design/convert-harness.sh -o -path adapters/codex/tools/material -o -path adapters/codex/tools/material/browser-fetch.sh -o -path adapters/codex/tools/material/data-script.sh -o -path adapters/codex/tools/material/figure-gen.sh -o -path adapters/codex/tools/material/pdf-extract.sh -o -path adapters/codex/tools/material/web-image-search.sh -o -path adapters/codex/tools/qa -o -path adapters/codex/tools/qa/verification-runner.sh -o -path adapters/codex/tools/research -o -path adapters/codex/tools/research/claim-verify.sh \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/codex/tools contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -2881,6 +2889,13 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'managed_keys=status_line,status_line_use_colors' adapters/codex/bin/apply-tui-config.sh \
     || ! grep -Fq 'Do not project or commit the full `$CODEX_HOME/config.toml`' core/ADAPTATION_INVENTORY.md; then
     fail_msg "Codex statusline config must be captured as an adapter-owned fragment, not full runtime config.toml"
+  fi
+  if [ ! -f adapters/codex/config/approval-sandbox.toml ] \
+    || ! grep -Fq 'approvals_reviewer = "user"' adapters/codex/config/approval-sandbox.toml \
+    || ! grep -Fq 'trust_level = "trusted"' adapters/codex/config/approval-sandbox.toml \
+    || ! grep -Fq 'config_fragment=codex_setting/codex-config/approval-sandbox.toml' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'approval-sandbox.toml' adapters/codex/ADAPTATION.md; then
+    fail_msg "Codex approval/sandbox posture must be captured as an adapter-owned config fragment (approval-sandbox.toml), referenced by preflight permissions and ADAPTATION.md"
   fi
   if grep -Fq 'core settings.json keybindings.json commands' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must not symlink runtime-owned settings.json/keybindings.json into the Claude home; Claude Code rewrites them in place and clobbers the symlink"
