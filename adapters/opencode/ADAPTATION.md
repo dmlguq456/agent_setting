@@ -38,7 +38,7 @@ documentation.
 | Commands (`.opencode/command/<name>.md` or `.opencode/commands/<name>.md`) | yes | `adapters/opencode/commands/<name>.md` generated from `capabilities/` |
 | Skills (`.opencode/skill/<name>/SKILL.md` or `.opencode/skills/<name>/SKILL.md`) | yes | `adapters/opencode/skills/<name>/SKILL.md` generated from `capabilities/` |
 | External skill autoload (`~/.claude/skills/<name>/SKILL.md`, `~/.agents/skills/<name>/SKILL.md`) | yes (compat) | not relied on; adapter must generate its own skills, not depend on Claude skill autoload |
-| Agents (`.opencode/agent/<name>.md` or `.opencode/agents/<name>.md`) | yes | `adapters/opencode/agents/<name>/<name>.md` generated from `roles/README.md` with `mode: subagent` |
+| Agents (`.opencode/agent/<name>.md` or `.opencode/agents/<name>.md`) | yes | `adapters/opencode/agents/<name>/<name>.md` generated from `roles/README.md` role profiles, plus an explicit `EXTRA_AGENTS` out-of-catalog path in `adapters/opencode/bin/sync-native-agents.py` (e.g. `memory-scout`, sourced from `core/MEMORY.md` §7.4 rather than a role-catalog row), with `mode: subagent` |
 | Plugin hooks (JS/TS: `tool.execute.before`, `tool.execute.after`, `event`, `config`, `chat.message`, `command.execute.before`, `permission.ask`, `shell.env`, ...) | yes | `adapters/opencode/plugins/agent-harness-guards.js` bridges write/edit/patch tool execution to the shared write guard, `command.execute.before` to the spec-skill gate, and `read` post-execution to the spec read marker |
 | Permission model (`permission` config: `allow`/`ask`/`deny` per tool, per-agent override) | yes | adapter documents recommended permission rules; not a harness guard replacement |
 | Permission contract wrapper | yes | `adapters/opencode/bin/preflight.sh permissions` reports native permission surfaces and rejects Claude `allowedTools` as a portable contract |
@@ -67,9 +67,14 @@ Before adding or changing OpenCode-native skills, commands, or agents:
 3. Keep OpenCode frontmatter (`name`, `description`, `mode`, `model`,
    `permission`, `variant`), command argument passthrough (`$ARGUMENTS`), and
    permission assumptions in the OpenCode adapter.
-4. Add a guard that proves every generated OpenCode skill/command/agent maps
-   to a portable capability or role and that no Claude-native file is exposed
-   as OpenCode-native.
+4. Skill and command generation are guarded by `check_opencode_native_skill_projection`
+   / `check_opencode_native_command_projection`. Agent-generation completeness is
+   guarded too: `check_opencode_native_agent_projection` requires every generated
+   `adapters/opencode/agents/<name>/` directory to be in an approved set (the
+   `roles/README.md` role profiles plus the explicit `EXTRA_AGENTS` out-of-catalog
+   list), and `check_claude_native_agent_projection` cross-checks that every
+   `adapters/claude/agents/*.md` has a corresponding OpenCode (and Codex) projection.
+   No Claude-native file may be exposed as OpenCode-native.
 5. Verify discoverability using the OpenCode runtime contract (`opencode debug
    skill`, `opencode debug agent`, or TUI invocation), not byte parity with
    Claude files. Use `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1` during this check
