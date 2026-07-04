@@ -34,7 +34,19 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--jobs")
     p.add_argument("--log-dir")
     p.add_argument("--sandbox", default="workspace-write")
-    p.add_argument("--approval", default="never")
+    p.add_argument(
+        "--approval",
+        choices=("untrusted", "on-request", "never", "inherit"),
+        default=os.environ.get("CODEX_DISPATCH_APPROVAL", "never"),
+    )
+    p.add_argument("--model-role", default=os.environ.get("CODEX_DISPATCH_MODEL_ROLE", "orchestrator"))
+    p.add_argument("--model", default=os.environ.get("CODEX_DISPATCH_MODEL"))
+    p.add_argument("--reasoning", default=os.environ.get("CODEX_DISPATCH_REASONING"))
+    p.add_argument(
+        "--inherit-model-settings",
+        action="store_true",
+        help="do not override model/reasoning; inherit the active Codex config for this dispatch",
+    )
     p.add_argument("--require-hook-trust", action="store_true")
     p.add_argument("--profile")
     return p
@@ -72,6 +84,46 @@ def qa_track(capability: str) -> str:
     if capability in {"autopilot-draft", "autopilot-refine"} or capability.startswith("draft-"):
         return "doc"
     return "general"
+
+
+def toml_string(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def role_map(role: str) -> dict[str, str]:
+    result = subprocess.run(
+        [str(ROOT / "adapters" / "codex" / "bin" / "preflight.sh"), "role", role],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise ValueError(detail or f"preflight role lookup failed for {role}")
+    fields: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            fields[key] = value
+    return fields
+
+
+def resolve_model_settings(args: argparse.Namespace) -> tuple[str, str, str] | None:
+    if args.inherit_model_settings:
+        return None
+    model = args.model
+    reasoning = args.reasoning
+    if not model or not reasoning:
+        fields = role_map(args.model_role)
+        model = model or fields.get("model")
+        reasoning = reasoning or fields.get("reasoning")
+    if not model or not reasoning:
+        raise ValueError("role map did not return model and reasoning")
+    if model in {"role-set", "role-profile", "unconfigured"}:
+        raise ValueError(f"model role {args.model_role!r} resolved to non-runnable model={model}")
+    return args.model_role, model, reasoning
 
 
 def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
@@ -121,9 +173,6 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
 
 
 def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -> str:
-    # `codex exec` does not accept --ask-for-approval (top-level `codex` flag
-    # only); it runs non-interactively, so the --sandbox policy governs writes.
-    # args.approval is retained for CLI compatibility but not passed through.
     cmd = [
         "codex",
         "exec",
@@ -131,6 +180,21 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         args.worktree,
         "--sandbox",
         args.sandbox,
+    ]
+    if args.resolved_model_settings is not None:
+        _role, model, reasoning = args.resolved_model_settings
+        cmd += [
+            "--model",
+            model,
+            "-c",
+            f"model_reasoning_effort={toml_string(reasoning)}",
+        ]
+    if args.approval != "inherit":
+        cmd += [
+            "-c",
+            f"approval_policy={toml_string(args.approval)}",
+        ]
+    cmd += [
         "--json",
         "-",
     ]
@@ -152,6 +216,11 @@ def jobs_lock(jobs: Path):
 def append_job(jobs: Path, args: argparse.Namespace) -> None:
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
     pipe = f"capability={args.capability},mode={args.mode},qa={args.qa}"
+    if args.resolved_model_settings is not None:
+        role, model, reasoning = args.resolved_model_settings
+        pipe += f",model_role={role},model={model},reasoning={reasoning}"
+    if args.approval != "inherit":
+        pipe += f",approval={args.approval}"
     if args.profile:
         pipe += f",profile={args.profile}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -235,6 +304,10 @@ def main(argv: list[str]) -> int:
     rc = validate_dispatch_inputs(args)
     if rc != 0:
         return rc
+    try:
+        args.resolved_model_settings = resolve_model_settings(args)
+    except ValueError as e:
+        return fail("invalid-dispatch-model-role", 64, model_role=args.model_role, detail=str(e))
     if args.start and shutil.which("codex") is None:
         return fail("codex-command-unavailable", 69, worktree=args.worktree)
     profile_home: Path | None = None
@@ -300,6 +373,15 @@ def main(argv: list[str]) -> int:
     print(f"capability={args.capability}")
     print(f"mode={args.mode}")
     print(f"qa={args.qa}")
+    print(f"model_role={args.model_role if args.resolved_model_settings is not None else 'inherit'}")
+    if args.resolved_model_settings is None:
+        print("model=inherit")
+        print("reasoning=inherit")
+    else:
+        _role, model, reasoning = args.resolved_model_settings
+        print(f"model={model}")
+        print(f"reasoning={reasoning}")
+    print(f"approval={args.approval}")
     print(f"profile={args.profile or '-'}")
     print(f"job_registry={jobs}")
     print(f"registry_lock={jobs}.lock")

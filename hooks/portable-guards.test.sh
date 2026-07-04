@@ -461,6 +461,8 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^strict_tool_contract_check=adapters/codex/bin/preflight.sh headless --check --require-hook-trust <worktree>$' /tmp/codex_headless.out \
   && grep -q '^runtime_projection_requires=agent-harness,AGENTS.md,hooks.json,native-skills,native-agents,native-modes$' /tmp/codex_headless.out \
   && grep -q '^runtime_projection_strict_requires=complete-codex-hook-trust$' /tmp/codex_headless.out \
+  && grep -q '^default_model_role=orchestrator$' /tmp/codex_headless.out \
+  && grep -q '^model_override_surface=--model-role <portable-role>|--model <model> --reasoning <effort>|--inherit-model-settings$' /tmp/codex_headless.out \
   && grep -q '^claude_headless=unsupported$' /tmp/codex_headless.out \
   && grep -q '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex_headless.out \
   && grep -q '^liveness_check=adapters/codex/bin/preflight.sh liveness \[jobs.log\]$' /tmp/codex_headless.out \
@@ -511,12 +513,41 @@ if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-dispatch --ca
   && grep -q '^status=dry-run$' /tmp/codex_dispatch.out \
   && grep -q '^registered=0$' /tmp/codex_dispatch.out \
   && grep -q '^started=0$' /tmp/codex_dispatch.out \
+  && grep -q '^model_role=orchestrator$' /tmp/codex_dispatch.out \
+  && grep -q '^model=gpt-5.4-mini$' /tmp/codex_dispatch.out \
+  && grep -q '^reasoning=medium$' /tmp/codex_dispatch.out \
+  && grep -q '^approval=never$' /tmp/codex_dispatch.out \
   && grep -q '^command=codex exec ' /tmp/codex_dispatch.out \
+  && grep -q -- '--model gpt-5.4-mini' /tmp/codex_dispatch.out \
+  && grep -q -- 'model_reasoning_effort=' /tmp/codex_dispatch.out \
+  && grep -q -- 'approval_policy=' /tmp/codex_dispatch.out \
   && ! grep -q -- '--ask-for-approval' /tmp/codex_dispatch.out \
   && [ ! -e "$TMP/codex-dispatch.log" ]; then
   ok "codex dispatch wrapper dry-runs headless command without registry write"
 else
   bad "codex dispatch wrapper should dry-run headless command without registry write"
+fi
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-custom-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low --approval inherit --jobs "$TMP/codex-custom-model.log" >/tmp/codex_custom_model.out 2>/tmp/codex_custom_model.err \
+  && grep -q '^model_role=orchestrator$' /tmp/codex_custom_model.out \
+  && grep -q '^model=gpt-test$' /tmp/codex_custom_model.out \
+  && grep -q '^reasoning=low$' /tmp/codex_custom_model.out \
+  && grep -q '^approval=inherit$' /tmp/codex_custom_model.out \
+  && grep -q -- '--model gpt-test' /tmp/codex_custom_model.out \
+  && ! grep -q -- 'approval_policy=' /tmp/codex_custom_model.out \
+  && [ ! -e "$TMP/codex-custom-model.log" ]; then
+  ok "codex dispatch wrapper supports explicit model/reasoning overrides"
+else
+  bad "codex dispatch wrapper should support explicit model/reasoning overrides"
+fi
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-inherit-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --inherit-model-settings --jobs "$TMP/codex-inherit-model.log" >/tmp/codex_inherit_model.out 2>/tmp/codex_inherit_model.err \
+  && grep -q '^model_role=inherit$' /tmp/codex_inherit_model.out \
+  && grep -q '^model=inherit$' /tmp/codex_inherit_model.out \
+  && grep -q '^reasoning=inherit$' /tmp/codex_inherit_model.out \
+  && ! grep -q -- '--model ' /tmp/codex_inherit_model.out \
+  && [ ! -e "$TMP/codex-inherit-model.log" ]; then
+  ok "codex dispatch wrapper can explicitly inherit model settings"
+else
+  bad "codex dispatch wrapper should explicitly inherit model settings only on request"
 fi
 if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-bad-cap --capability nope-capability --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-bad-cap.log" >/tmp/codex_bad_cap.out 2>/tmp/codex_bad_cap.err; then
   bad "codex dispatch wrapper should fail invalid capability"
@@ -608,7 +639,13 @@ if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_S
     sleep 0.1
   done
   if grep -q -- '--cd' "$TMP/codex-start.argv" 2>/dev/null; then
-    ok "codex dispatch wrapper starts nested slug after runtime projection check"
+    if grep -q -- '--model gpt-5.4-mini' "$TMP/codex-start.argv" \
+      && grep -q -- 'model_reasoning_effort=' "$TMP/codex-start.argv" \
+      && grep -q -- 'approval_policy=' "$TMP/codex-start.argv"; then
+      ok "codex dispatch wrapper starts nested slug with adapter-owned model settings"
+    else
+      bad "codex dispatch wrapper should launch codex exec with adapter-owned model settings"
+    fi
   else
     bad "codex dispatch wrapper should launch codex exec after projection check"
   fi
@@ -636,7 +673,7 @@ if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --c
   && [ -f "$TMP/codex-dispatch.log.lock" ] \
   && [ -f "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" ] \
   && grep -q 'role planning, role implementation, role verification, and role report' "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" \
-  && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard' "$TMP/codex-dispatch.log"; then
+  && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,model_role=orchestrator,model=gpt-5.4-mini,reasoning=medium,approval=never' "$TMP/codex-dispatch.log"; then
   ok "codex dispatch wrapper registers open headless job"
 else
   bad "codex dispatch wrapper should register open headless job"
