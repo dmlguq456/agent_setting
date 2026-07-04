@@ -98,6 +98,13 @@ try:
 except ValueError:
     pass
 
+# prose/문서 편집은 대상 아님 — spec drift 의 핵심은 code/config 값 변경이다.
+# 문서 워딩 reword 로 흔한 단어(runtime/bootstrap 등)를 지우면 무관한 spec 산문과
+# 오탐 매칭됨(실관찰). spec 자체도 .md 지만 위 spec-dir 스킵이 이미 걸러낸다.
+PROSE_EXT = {".md", ".markdown", ".mdx", ".rst", ".txt", ".adoc", ".org"}
+if os.path.splitext(file_path)[1].lower() in PROSE_EXT:
+    sys.exit(0)
+
 # 사라진 토큰: old 에 있고 new 에 없는 값/식별자
 TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}|\d+(?:\.\d+)?")
 STOP = {"def","for","pass","return","self","the","and","not","import","from","class",
@@ -108,8 +115,13 @@ maxtok = int(os.environ.get("SPEC_SYNC_TOKENS", "12"))
 for t in TOKEN_RE.findall(old or ""):
     if t in new_set or t in seen or t.lower() in STOP:
         continue
-    if t[:1].isalpha() and len(t) < 3:
-        continue
+    # alpha 식별자는 code-like(대문자·숫자·`_` 포함)만 후보 — 흔한 소문자 산문 단어 배제(오탐 억제).
+    # 숫자·버전 토큰(30·512·1e-4 형태)은 항상 후보 (config 값 drift 의 주 신호).
+    if t[:1].isalpha():
+        if len(t) < 3:
+            continue
+        if t.islower() and "_" not in t and not any(c.isdigit() for c in t):
+            continue
     seen.add(t); removed.append(t)
     if len(removed) >= maxtok:
         break

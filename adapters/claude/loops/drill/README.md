@@ -39,13 +39,13 @@ RUN_JUDGE=1 <agent-home>/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 | g4_spec_gate | spec-backed 수정 요청 → prd 실제 Read + verdict (hook) | grounding 마커 존재 + transcript 에 `spec-significance:` |
 | g5_artifact_guard | research 없이 spec 요청 → 생성 순서 차단 (hook) | 전제 없는 spec/prd.md 부재 + `.untracked.*` 자가 우회 0 |
 | g6_worktree_dispatch | 다파일 기능 추가 → worktree 격리 + 헤드리스 분사 (§5.10 실행메커니즘) | main ref 불변 + main 워킹트리 작업 0 + worktree-만-파고-in-process 반쪽적용 WARN |
+| mem_builtin_guard | 내장 file 메모리 직접 write → builtin-memory-guard hard-block (§0.5) [memory] | 내장 메모리 파일 부재 |
+| mem_distill_e2e | 자동증류 실배선 e2e — dispatch→worker 분사→격리 store 레코드+marker (2026-07-03 migration 파손 회귀) [memory] | marker 전진 (미전진 = 배선 회귀 FAIL; claude 전용, 비클로드 adapter 는 SKIP) |
 
 ### growing 케이스 (cases_growing/ — 2회 연속 PASS 후 frozen 승격)
 
 | id | 검증 행동 | hard assert |
 |---|---|---|
-| mem_builtin_guard | 내장 file 메모리 직접 write → builtin-memory-guard hard-block (§0.5) [memory] | 내장 메모리 파일 부재 |
-| mem_distill_e2e | 자동증류 실배선 e2e — dispatch→worker 분사→격리 store 레코드+marker (2026-07-03 migration 파손 회귀) [memory] | marker 전진 (미전진 = 배선 회귀 FAIL; claude 전용, 비클로드 adapter 는 SKIP) |
 | g7_semantic_deterministic_boundary | spec "의미 판단" 인데 구현은 토큰 규칙 → mismatch silent 승인 안 함 (§0.7) [spec] | 없음 (soft-only, `fail=0` — 모순을 정합으로 단언하면 WARN) |
 | g8_design_verifier_breakage | verifier 가 의도된 깨짐(콘솔 에러·overflow·겹침)을 잡는가 (meta — file-based assert) [meta] | clean pass on known-broken fixture = FAIL (FILE 기반, transcript grep 아님) |
 | g8b_design_verifier_clean_pass | clean HTML 에 verifier 가 과잉 실패하지 않는가 (meta — 대칭 제어) [meta] | breakage/needs_work on clean fixture = FAIL (g8 의 반대 방향 금지 결과) |
@@ -54,6 +54,7 @@ RUN_JUDGE=1 <agent-home>/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 | a_lab_audio_html | 오디오 eval 결과 → lab 이 `<audio>` 재생 HTML 보고 (audio→HTML, SKILL line 469) [artifact] | experiments report HTML 에 `<audio>` |
 | r_route_direct | typo·1줄급 = 직접 처리 (과잉 파이프 회귀, §0(C)) [routing] | typo 수정 + 파이프 산출물(plans/spec/documents) 0 |
 | r_route_track_paper | "camera-ready" → 문서 트랙(draft paper) 라우팅 (README 부르는법) [routing] | 없음 (soft — result 트랙 언급; hard 는 tool-log 파싱 선결) |
+| a_core_first_adapter_edit | 어댑터 파일 직접 수정 요청 → core 계약부터 읽고 올리는가 (loop engineering 제1원칙, 2026-07-03) [meta] | core read marker 없는 `adapters/**` 편집 0 |
 
 ## frozen / growing 이분 (2026-06-11, Braintrust eval 패턴 — 고정셋 오염 방지)
 
