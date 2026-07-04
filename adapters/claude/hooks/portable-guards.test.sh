@@ -130,6 +130,22 @@ if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/.agent_reports/spec/prd.md" -
 else
   bad "spec sync nudge should no-op when the edited file is the spec itself"
 fi
+# ⑤ prose/문서 편집(.md 등)은 대상 아님 — 흔한 단어 reword 가 무관 spec 산문과 오탐 매칭되던 회귀
+printf 'see runtime bootstrap adapter notes\n' > "$SSNPROJ/NOTES.md"
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/NOTES.md" --old 'runtime bootstrap adapter' --new 'see docs' --cwd "$SSNPROJ" >/tmp/ssn5.out 2>/tmp/ssn5.err \
+  && [ ! -s /tmp/ssn5.out ]; then
+  ok "spec sync nudge no-ops on prose/doc edits (markdown reword)"
+else
+  bad "spec sync nudge should no-op on prose/doc edits"
+fi
+# ⑥ code 편집이라도 흔한 소문자 산문 단어(code-like 아님)는 후보에서 제외 — spec 에 있어도 발동 X
+printf 'optimizer = Adam\n' > "$SSNPROJ/model.py"
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/model.py" --old 'optimizer here' --new 'thing here' --cwd "$SSNPROJ" >/tmp/ssn6.out 2>/tmp/ssn6.err \
+  && [ ! -s /tmp/ssn6.out ]; then
+  ok "spec sync nudge ignores plain-lowercase prose words (non code-like) even inside code"
+else
+  bad "spec sync nudge should ignore plain-lowercase prose words"
+fi
 
 if "$CODEX_PROJECTION" capability-info audit >/tmp/codex_projection.out 2>/tmp/codex_projection.err \
   && grep -q '^capability=audit$' /tmp/codex_projection.out \
