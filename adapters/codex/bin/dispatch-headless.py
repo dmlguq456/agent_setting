@@ -39,7 +39,7 @@ def parser() -> argparse.ArgumentParser:
         choices=("untrusted", "on-request", "never", "inherit"),
         default=os.environ.get("CODEX_DISPATCH_APPROVAL", "never"),
     )
-    p.add_argument("--model-role", default=os.environ.get("CODEX_DISPATCH_MODEL_ROLE", "orchestrator"))
+    p.add_argument("--model-role", default=os.environ.get("CODEX_DISPATCH_MODEL_ROLE"))
     p.add_argument("--model", default=os.environ.get("CODEX_DISPATCH_MODEL"))
     p.add_argument("--reasoning", default=os.environ.get("CODEX_DISPATCH_REASONING"))
     p.add_argument(
@@ -110,20 +110,48 @@ def role_map(role: str) -> dict[str, str]:
     return fields
 
 
-def resolve_model_settings(args: argparse.Namespace) -> tuple[str, str, str] | None:
+class ModelSelectionError(ValueError):
+    def __init__(self, reason: str, detail: str):
+        super().__init__(detail)
+        self.reason = reason
+
+
+def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
     if args.inherit_model_settings:
-        return None
-    model = args.model
-    reasoning = args.reasoning
-    if not model or not reasoning:
+        if args.model_role or args.model or args.reasoning:
+            raise ModelSelectionError(
+                "invalid-dispatch-model-selection",
+                "--inherit-model-settings is mutually exclusive with --model-role, --model, and --reasoning",
+            )
+        return {"source": "inherit", "role": "inherit", "model": "inherit", "reasoning": "inherit"}
+    if args.model_role and (args.model or args.reasoning):
+        raise ModelSelectionError(
+            "invalid-dispatch-model-selection",
+            "--model-role is mutually exclusive with --model and --reasoning",
+        )
+    if args.model_role:
         fields = role_map(args.model_role)
-        model = model or fields.get("model")
-        reasoning = reasoning or fields.get("reasoning")
-    if not model or not reasoning:
-        raise ValueError("role map did not return model and reasoning")
-    if model in {"role-set", "role-profile", "unconfigured"}:
-        raise ValueError(f"model role {args.model_role!r} resolved to non-runnable model={model}")
-    return args.model_role, model, reasoning
+        model = fields.get("model")
+        reasoning = fields.get("reasoning")
+        if not model or not reasoning:
+            raise ModelSelectionError("invalid-dispatch-model-role", "role map did not return model and reasoning")
+        if model in {"role-set", "role-profile", "unconfigured"}:
+            raise ModelSelectionError(
+                "invalid-dispatch-model-role",
+                f"model role {args.model_role!r} resolved to non-runnable model={model}",
+            )
+        return {"source": "role", "role": args.model_role, "model": model, "reasoning": reasoning}
+    if not args.model and not args.reasoning:
+        raise ModelSelectionError(
+            "missing-dispatch-model-selection",
+            "main dispatch must choose --model-role, --model with --reasoning, or --inherit-model-settings",
+        )
+    if not args.model or not args.reasoning:
+        raise ModelSelectionError(
+            "invalid-dispatch-model-selection",
+            "--model and --reasoning must be provided together",
+        )
+    return {"source": "explicit", "role": "-", "model": args.model, "reasoning": args.reasoning}
 
 
 def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
@@ -181,8 +209,9 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         "--sandbox",
         args.sandbox,
     ]
-    if args.resolved_model_settings is not None:
-        _role, model, reasoning = args.resolved_model_settings
+    if args.resolved_model_settings["source"] != "inherit":
+        model = args.resolved_model_settings["model"]
+        reasoning = args.resolved_model_settings["reasoning"]
         cmd += [
             "--model",
             model,
@@ -216,9 +245,8 @@ def jobs_lock(jobs: Path):
 def append_job(jobs: Path, args: argparse.Namespace) -> None:
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
     pipe = f"capability={args.capability},mode={args.mode},qa={args.qa}"
-    if args.resolved_model_settings is not None:
-        role, model, reasoning = args.resolved_model_settings
-        pipe += f",model_role={role},model={model},reasoning={reasoning}"
+    settings = args.resolved_model_settings
+    pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},reasoning={settings['reasoning']}"
     if args.approval != "inherit":
         pipe += f",approval={args.approval}"
     if args.profile:
@@ -306,8 +334,11 @@ def main(argv: list[str]) -> int:
         return rc
     try:
         args.resolved_model_settings = resolve_model_settings(args)
-    except ValueError as e:
-        return fail("invalid-dispatch-model-role", 64, model_role=args.model_role, detail=str(e))
+    except ModelSelectionError as e:
+        fields = {"detail": str(e)}
+        if args.model_role:
+            fields["model_role"] = args.model_role
+        return fail(e.reason, 64, **fields)
     if args.start and shutil.which("codex") is None:
         return fail("codex-command-unavailable", 69, worktree=args.worktree)
     profile_home: Path | None = None
@@ -373,14 +404,11 @@ def main(argv: list[str]) -> int:
     print(f"capability={args.capability}")
     print(f"mode={args.mode}")
     print(f"qa={args.qa}")
-    print(f"model_role={args.model_role if args.resolved_model_settings is not None else 'inherit'}")
-    if args.resolved_model_settings is None:
-        print("model=inherit")
-        print("reasoning=inherit")
-    else:
-        _role, model, reasoning = args.resolved_model_settings
-        print(f"model={model}")
-        print(f"reasoning={reasoning}")
+    settings = args.resolved_model_settings
+    print(f"model_source={settings['source']}")
+    print(f"model_role={settings['role']}")
+    print(f"model={settings['model']}")
+    print(f"reasoning={settings['reasoning']}")
     print(f"approval={args.approval}")
     print(f"profile={args.profile or '-'}")
     print(f"job_registry={jobs}")

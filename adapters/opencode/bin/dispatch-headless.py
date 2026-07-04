@@ -27,6 +27,14 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--mode", required=True)
     p.add_argument("--qa", required=True)
     p.add_argument("--agent", default="build")
+    p.add_argument("--model-role", default=os.environ.get("OPENCODE_DISPATCH_MODEL_ROLE"))
+    p.add_argument("--model", default=os.environ.get("OPENCODE_DISPATCH_MODEL"))
+    p.add_argument("--variant", default=os.environ.get("OPENCODE_DISPATCH_VARIANT"))
+    p.add_argument(
+        "--inherit-model-settings",
+        action="store_true",
+        help="do not override model/variant; inherit the active OpenCode config for this dispatch",
+    )
     p.add_argument("--prompt-file")
     p.add_argument("--prompt-text")
     p.add_argument("--jobs")
@@ -40,6 +48,70 @@ def fail(reason: str, code: int, **fields: str) -> int:
     for key, value in fields.items():
         print(f"{key}={value}")
     return code
+
+
+class ModelSelectionError(ValueError):
+    def __init__(self, reason: str, detail: str):
+        super().__init__(detail)
+        self.reason = reason
+
+
+def role_map(role: str) -> dict[str, str]:
+    result = subprocess.run(
+        [str(ROOT / "adapters" / "opencode" / "bin" / "preflight.sh"), "role", role],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise ModelSelectionError("invalid-dispatch-model-role", detail or f"preflight role lookup failed for {role}")
+    fields: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            fields[key] = value
+    return fields
+
+
+def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
+    if args.inherit_model_settings:
+        if args.model_role or args.model or args.variant:
+            raise ModelSelectionError(
+                "invalid-dispatch-model-selection",
+                "--inherit-model-settings is mutually exclusive with --model-role, --model, and --variant",
+            )
+        return {"source": "inherit", "role": "inherit", "model": "inherit", "variant": "inherit"}
+    if args.model_role and (args.model or args.variant):
+        raise ModelSelectionError(
+            "invalid-dispatch-model-selection",
+            "--model-role is mutually exclusive with --model and --variant",
+        )
+    if args.model_role:
+        fields = role_map(args.model_role)
+        model = fields.get("model")
+        variant = fields.get("variant")
+        if not model or not variant:
+            raise ModelSelectionError("invalid-dispatch-model-role", "role map did not return model and variant")
+        if model == "opencode-default" or variant == "runtime-default":
+            raise ModelSelectionError(
+                "invalid-dispatch-model-role",
+                f"model role {args.model_role!r} resolved to runtime defaults; configure AGENT_MODEL_* and AGENT_VARIANT_* or pass --model/--variant",
+            )
+        return {"source": "role", "role": args.model_role, "model": model, "variant": variant}
+    if not args.model and not args.variant:
+        raise ModelSelectionError(
+            "missing-dispatch-model-selection",
+            "main dispatch must choose --model-role, --model with --variant, or --inherit-model-settings",
+        )
+    if not args.model or not args.variant:
+        raise ModelSelectionError(
+            "invalid-dispatch-model-selection",
+            "--model and --variant must be provided together",
+        )
+    return {"source": "explicit", "role": "-", "model": args.model, "variant": args.variant}
 
 
 def prompt(args: argparse.Namespace) -> tuple[str, str]:
@@ -69,6 +141,13 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         "--agent",
         args.agent,
     ]
+    if args.resolved_model_settings["source"] != "inherit":
+        cmd += [
+            "--model",
+            args.resolved_model_settings["model"],
+            "--variant",
+            args.resolved_model_settings["variant"],
+        ]
     prompt_arg = f'"$(cat -- {shlex.quote(str(prompt_path))})"'
     return " ".join(shlex.quote(x) for x in cmd) + f" {prompt_arg} >> {shlex.quote(str(log_path))} 2>&1"
 
@@ -77,6 +156,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     jobs.parent.mkdir(parents=True, exist_ok=True)
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
     pipe = f"capability={args.capability},mode={args.mode},qa={args.qa}"
+    settings = args.resolved_model_settings
+    pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},variant={settings['variant']}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     with jobs.open("a", encoding="utf-8") as f:
         f.write(f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}\n")
@@ -114,6 +195,13 @@ def main(argv: list[str]) -> int:
         return fail("worktree-not-found", 66, worktree=args.worktree)
     if subprocess.run(["git", "-C", args.worktree, "rev-parse", "--is-inside-work-tree"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
         return fail("not-a-git-worktree", 65, worktree=args.worktree)
+    try:
+        args.resolved_model_settings = resolve_model_settings(args)
+    except ModelSelectionError as e:
+        fields = {"detail": str(e)}
+        if args.model_role:
+            fields["model_role"] = args.model_role
+        return fail(e.reason, 64, **fields)
     if args.start and shutil.which("opencode") is None:
         return fail("opencode-command-unavailable", 69, worktree=args.worktree)
     if args.start:
@@ -146,6 +234,11 @@ def main(argv: list[str]) -> int:
     print(f"mode={args.mode}")
     print(f"qa={args.qa}")
     print(f"agent={args.agent}")
+    settings = args.resolved_model_settings
+    print(f"model_source={settings['source']}")
+    print(f"model_role={settings['role']}")
+    print(f"model={settings['model']}")
+    print(f"variant={settings['variant']}")
     print(f"job_registry={jobs}")
     print(f"registered={1 if action in ('register', 'start') else 0}")
     print(f"started={1 if action == 'start' else 0}")

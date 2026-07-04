@@ -39,7 +39,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh tui-config
        preflight.sh subagent-info [--check]
        preflight.sh headless [--check] [--require-hook-trust] <worktree>
-       preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--model-role <role>|--model <model> --reasoning <effort>|--inherit-model-settings] [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
+       preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> (--model-role <role>|--model <model> --reasoning <effort>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]
        preflight.sh liveness [jobs.log]
        preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
@@ -431,9 +431,9 @@ status=tool-contract
 tool_contract=headless-dispatch
 tool_contract_check=adapters/codex/bin/preflight.sh headless --check <worktree>
 strict_tool_contract_check=adapters/codex/bin/preflight.sh headless --check --require-hook-trust <worktree>
-command_template=codex exec --cd <worktree> --sandbox workspace-write --model <adapter-role-model> -c model_reasoning_effort=<adapter-role-reasoning> -c approval_policy=never --json -
-default_model_role=orchestrator
-model_override_surface=--model-role <portable-role>|--model <model> --reasoning <effort>|--inherit-model-settings
+command_template=codex exec --cd <worktree> --sandbox workspace-write (--model <main-selected-model> -c model_reasoning_effort=<main-selected-reasoning>|inherit) -c approval_policy=never --json -
+model_selection_policy=main-orchestrator-must-select-per-job
+model_selection_surface=--model-role <portable-role>|--model <model> --reasoning <effort>|--inherit-model-settings
 runtime_projection_requires=agent-harness,AGENTS.md,hooks.json,native-skills,native-agents,native-modes
 runtime_projection_strict_requires=complete-codex-hook-trust
 job_registry=<agent-home>/.dispatch/jobs.log

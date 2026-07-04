@@ -34,6 +34,14 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--jobs")
     p.add_argument("--log-dir")
     p.add_argument("--profile", help="profiles/<name>.yaml masked config home to attach via CLAUDE_CONFIG_DIR")
+    p.add_argument("--model-role", default=os.environ.get("CLAUDE_DISPATCH_MODEL_ROLE"))
+    p.add_argument("--model", default=os.environ.get("CLAUDE_DISPATCH_MODEL"))
+    p.add_argument("--effort", default=os.environ.get("CLAUDE_DISPATCH_EFFORT"))
+    p.add_argument(
+        "--inherit-model-settings",
+        action="store_true",
+        help="do not override model/effort; inherit the explicitly selected profile or active Claude config",
+    )
     return p
 
 
@@ -43,6 +51,60 @@ def fail(reason: str, code: int, **fields: str) -> int:
     for key, value in fields.items():
         print(f"{key}={value}")
     return code
+
+
+class ModelSelectionError(ValueError):
+    def __init__(self, reason: str, detail: str):
+        super().__init__(detail)
+        self.reason = reason
+
+
+def role_map(role: str) -> dict[str, str]:
+    normalized = " ".join(role.strip().lower().replace("-", " ").split())
+    mappings = {
+        "fast reviewer": ("sonnet", "medium"),
+        "fast fact checker": ("sonnet", "medium"),
+        "fast fact-checker": ("sonnet", "medium"),
+        "fast writer": ("sonnet", "low"),
+        "fast implementer": ("sonnet", "medium"),
+        "deep reviewer": ("opus", "high"),
+        "deep maker": ("opus", "high"),
+        "external adversary orchestrator": ("sonnet", "medium"),
+        "orchestrator": ("sonnet", "medium"),
+    }
+    if normalized not in mappings:
+        raise ModelSelectionError("invalid-dispatch-model-role", f"unknown Claude dispatch model role: {role}")
+    model, effort = mappings[normalized]
+    return {"model": model, "effort": effort}
+
+
+def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
+    if args.inherit_model_settings:
+        if args.model_role or args.model or args.effort:
+            raise ModelSelectionError(
+                "invalid-dispatch-model-selection",
+                "--inherit-model-settings is mutually exclusive with --model-role, --model, and --effort",
+            )
+        return {"source": "inherit", "role": "inherit", "model": "inherit", "effort": "inherit"}
+    if args.model_role and (args.model or args.effort):
+        raise ModelSelectionError(
+            "invalid-dispatch-model-selection",
+            "--model-role is mutually exclusive with --model and --effort",
+        )
+    if args.model_role:
+        fields = role_map(args.model_role)
+        return {"source": "role", "role": args.model_role, "model": fields["model"], "effort": fields["effort"]}
+    if not args.model and not args.effort:
+        raise ModelSelectionError(
+            "missing-dispatch-model-selection",
+            "main dispatch must choose --model-role, --model with --effort, or --inherit-model-settings",
+        )
+    if not args.model or not args.effort:
+        raise ModelSelectionError(
+            "invalid-dispatch-model-selection",
+            "--model and --effort must be provided together",
+        )
+    return {"source": "explicit", "role": "-", "model": args.model, "effort": args.effort}
 
 
 def task_prompt(args: argparse.Namespace) -> tuple[str, str]:
@@ -104,6 +166,13 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
     # given and prints the response non-interactively, mirroring the codex
     # wrapper's file-piped `codex exec ... < prompt_path` invocation.
     cmd = ["claude", "-p"]
+    if args.resolved_model_settings["source"] != "inherit":
+        cmd += [
+            "--model",
+            args.resolved_model_settings["model"],
+            "--effort",
+            args.resolved_model_settings["effort"],
+        ]
     inner = " ".join(shlex.quote(x) for x in cmd)
     return (
         f"cd {shlex.quote(args.worktree)} && "
@@ -126,6 +195,8 @@ def jobs_lock(jobs: Path):
 def append_job(jobs: Path, args: argparse.Namespace) -> None:
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
     pipe = f"capability={args.capability},mode={args.mode},qa={args.qa}"
+    settings = args.resolved_model_settings
+    pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},effort={settings['effort']}"
     if args.profile:
         pipe += f",profile={args.profile}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -179,6 +250,13 @@ def main(argv: list[str]) -> int:
             qa=args.qa,
             allowed_qa="quick,light,standard,thorough,adversarial",
         )
+    try:
+        args.resolved_model_settings = resolve_model_settings(args)
+    except ModelSelectionError as e:
+        fields = {"detail": str(e)}
+        if args.model_role:
+            fields["model_role"] = args.model_role
+        return fail(e.reason, 64, **fields)
     if args.start and shutil.which("claude") is None:
         return fail("claude-command-unavailable", 69, worktree=args.worktree)
 
@@ -241,6 +319,11 @@ def main(argv: list[str]) -> int:
     print(f"capability={args.capability}")
     print(f"mode={args.mode}")
     print(f"qa={args.qa}")
+    settings = args.resolved_model_settings
+    print(f"model_source={settings['source']}")
+    print(f"model_role={settings['role']}")
+    print(f"model={settings['model']}")
+    print(f"effort={settings['effort']}")
     print(f"profile={args.profile or '-'}")
     print(f"instance_home={instance_dir if instance_dir else '-'}")
     print(f"job_registry={jobs}")

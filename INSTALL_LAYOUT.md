@@ -232,7 +232,7 @@ rg '^claude_settings_mcp=unsupported$' /tmp/codex-mcp.txt
 codex_setting/bin/preflight.sh headless >/tmp/codex-headless.txt
 rg '^runtime_surface=codex-exec-headless$' /tmp/codex-headless.txt
 rg '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex-headless.txt
-codex_setting/bin/preflight.sh dispatch --dry-run --worktree "$PWD" --slug install-check --capability audit --mode qa/plan-review --qa quick >/tmp/codex-dispatch.txt
+codex_setting/bin/preflight.sh dispatch --dry-run --worktree "$PWD" --slug install-check --capability audit --mode qa/plan-review --qa quick --model-role "fast reviewer" >/tmp/codex-dispatch.txt
 rg '^registered=0$' /tmp/codex-dispatch.txt
 codex_setting/bin/preflight.sh harvest --jobs /tmp/codex-missing-jobs.log --slug install-check >/tmp/codex-harvest.txt
 rg '^matched=0$' /tmp/codex-harvest.txt
@@ -380,7 +380,7 @@ rg '^claude_settings_mcp=unsupported$' /tmp/opencode-mcp.txt
 opencode_setting/bin/preflight.sh headless >/tmp/opencode-headless.txt
 rg '^runtime_surface=opencode-run-headless$' /tmp/opencode-headless.txt
 rg '^liveness_surface=opencode-sqlite-session-mtime$' /tmp/opencode-headless.txt
-opencode_setting/bin/preflight.sh dispatch --dry-run --worktree "$PWD" --slug install-check --capability audit --mode qa/plan-review --qa quick >/tmp/opencode-dispatch.txt
+opencode_setting/bin/preflight.sh dispatch --dry-run --worktree "$PWD" --slug install-check --capability audit --mode qa/plan-review --qa quick --inherit-model-settings >/tmp/opencode-dispatch.txt
 rg '^registered=0$' /tmp/opencode-dispatch.txt
 opencode_setting/bin/preflight.sh harvest --jobs /tmp/opencode-missing-jobs.log --slug install-check >/tmp/opencode-harvest.txt
 rg '^matched=0$' /tmp/opencode-harvest.txt

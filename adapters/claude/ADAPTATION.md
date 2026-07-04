@@ -88,13 +88,17 @@ distillation unsupported.
 ## Dispatch And Statusline Realization
 
 Claude Code realizes the portable dispatch contract through headless Claude Code
-main sessions and the adapter-owned statusline script:
+main sessions and the adapter-owned statusline script. Its CLI supports one-off
+model/effort overrides, so dispatch model selection follows the core rule:
+main/orchestrator chooses per job and the wrapper only reflects that choice:
 
 - Full ceremony dispatch runs a background headless main in the target worktree,
   currently shaped as `claude -p "/autopilot-code --mode <mode> --qa <level> ..."`
   with tools pre-approved through Claude Code flags/settings.
-- The headless main uses the Claude orchestrator tier, currently `--model opus`,
-  so it does not inherit an arbitrary interactive-session model.
+- The headless wrapper does not choose a default model. The main/orchestrator
+  selects `--model-role <portable-role>`, `--model <model> --effort <level>`,
+  or explicit `--inherit-model-settings` per job; that is where simple jobs
+  are downshifted and complex jobs are escalated.
 - Dispatch prompts must spell out capability, mode, and QA options because
   `adapters/claude/statusline.sh` derives the `>_ running` display from process
   command lines and sibling `-wt/<slug>` worktree paths.

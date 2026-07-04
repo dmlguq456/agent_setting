@@ -506,17 +506,37 @@ if CODEX_HOME="$TMP/codex_headless_home" "$CODEX" headless --check --require-hoo
 else
   grep -q '^check=hook-trust:review-needed' /tmp/codex_headless_strict.out && ok "codex headless strict check requires complete hook trust" || bad "codex headless strict check missing trust output wrong"
 fi
-if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-dispatch.log" >/tmp/codex_dispatch.out 2>/tmp/codex_dispatch.err \
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-missing-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-missing-model.log" >/tmp/codex_missing_model.out 2>/tmp/codex_missing_model.err; then
+  bad "codex dispatch wrapper should require main-selected model settings"
+else
+  rc=$?
+  if [ "$rc" -eq 64 ] \
+    && grep -q '^reason=missing-dispatch-model-selection$' /tmp/codex_missing_model.out \
+    && [ ! -e "$TMP/codex-missing-model.log" ]; then
+    ok "codex dispatch wrapper requires main-selected model settings"
+  else
+    bad "codex dispatch wrapper should fail cleanly without model selection"
+  fi
+fi
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low --jobs "$TMP/codex-dispatch.log" >/tmp/codex_dispatch.out 2>/tmp/codex_dispatch.err \
   && grep -q '^adapter=codex$' /tmp/codex_dispatch.out \
   && grep -q '^status=dry-run$' /tmp/codex_dispatch.out \
   && grep -q '^registered=0$' /tmp/codex_dispatch.out \
   && grep -q '^started=0$' /tmp/codex_dispatch.out \
+  && grep -q '^model_source=explicit$' /tmp/codex_dispatch.out \
+  && grep -q '^model_role=-$' /tmp/codex_dispatch.out \
+  && grep -q '^model=gpt-test$' /tmp/codex_dispatch.out \
+  && grep -q '^reasoning=low$' /tmp/codex_dispatch.out \
+  && grep -q '^approval=never$' /tmp/codex_dispatch.out \
   && grep -q '^command=codex exec ' /tmp/codex_dispatch.out \
+  && grep -q -- '--model gpt-test' /tmp/codex_dispatch.out \
+  && grep -q -- 'model_reasoning_effort=' /tmp/codex_dispatch.out \
+  && grep -q -- 'approval_policy=' /tmp/codex_dispatch.out \
   && ! grep -q -- '--ask-for-approval' /tmp/codex_dispatch.out \
   && [ ! -e "$TMP/codex-dispatch.log" ]; then
-  ok "codex dispatch wrapper dry-runs headless command without registry write"
+  ok "codex dispatch wrapper dry-runs headless command with main-selected model settings"
 else
-  bad "codex dispatch wrapper should dry-run headless command without registry write"
+  bad "codex dispatch wrapper should dry-run headless command with main-selected model settings"
 fi
 if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-bad-cap --capability nope-capability --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-bad-cap.log" >/tmp/codex_bad_cap.out 2>/tmp/codex_bad_cap.err; then
   bad "codex dispatch wrapper should fail invalid capability"
@@ -558,7 +578,7 @@ else
     bad "codex dispatch wrapper should validate QA level before registry write"
   fi
 fi
-if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-default-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" >/tmp/codex_dispatch_default.out 2>/tmp/codex_dispatch_default.err \
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-default-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low >/tmp/codex_dispatch_default.out 2>/tmp/codex_dispatch_default.err \
   && grep -Fxq "job_registry=$ROOT/.dispatch/jobs.log" /tmp/codex_dispatch_default.out \
   && grep -Fxq "prompt_file=$ROOT/.dispatch/logs/codex-default-home.codex.prompt.txt" /tmp/codex_dispatch_default.out \
   && [ ! -e "$AGENT_HOME/.dispatch/jobs.log" ]; then
@@ -566,7 +586,7 @@ if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-default-home 
 else
   bad "codex dispatch wrapper should not trust invalid AGENT_HOME for default registry"
 fi
-if AGENT_HOME="$TMP/not-agent-home" python3 "$ROOT/adapters/codex/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug codex-direct-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" >/tmp/codex_dispatch_direct.out 2>/tmp/codex_dispatch_direct.err \
+if AGENT_HOME="$TMP/not-agent-home" python3 "$ROOT/adapters/codex/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug codex-direct-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low >/tmp/codex_dispatch_direct.out 2>/tmp/codex_dispatch_direct.err \
   && grep -Fxq "job_registry=$ROOT/.dispatch/jobs.log" /tmp/codex_dispatch_direct.out \
   && grep -Fxq "prompt_file=$ROOT/.dispatch/logs/codex-direct-home.codex.prompt.txt" /tmp/codex_dispatch_direct.out; then
   ok "codex dispatch script ignores invalid AGENT_HOME"
@@ -580,7 +600,7 @@ printf '%s\n' "$*" > "$CODEX_STUB_ARGV"
 EOF
 chmod +x "$TMP/codex-stubbin/codex"
 if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_STUB_ARGV="$TMP/codex-start.argv" \
-  "$CODEX" dispatch --start --worktree "$TMP/repo" --slug nested/codex-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "nested work" --jobs "$TMP/codex-start.log" --log-dir "$TMP/codex-logs" >/tmp/codex_dispatch_start.out 2>/tmp/codex_dispatch_start.err \
+  "$CODEX" dispatch --start --worktree "$TMP/repo" --slug nested/codex-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "nested work" --model gpt-test --reasoning low --jobs "$TMP/codex-start.log" --log-dir "$TMP/codex-logs" >/tmp/codex_dispatch_start.out 2>/tmp/codex_dispatch_start.err \
   && grep -q '^status=start$' /tmp/codex_dispatch_start.out \
   && grep -q '^started=1$' /tmp/codex_dispatch_start.out \
   && [ -f "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" ] \
@@ -616,7 +636,7 @@ else
   bad "codex dispatch wrapper should start nested slug after runtime projection check"
 fi
 if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_STUB_ARGV="$TMP/codex-strict-start.argv" \
-  "$CODEX" dispatch --start --require-hook-trust --worktree "$TMP/repo" --slug codex-strict-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "strict work" --jobs "$TMP/codex-strict-start.log" --log-dir "$TMP/codex-strict-logs" >/tmp/codex_dispatch_strict_start.out 2>/tmp/codex_dispatch_strict_start.err; then
+  "$CODEX" dispatch --start --require-hook-trust --worktree "$TMP/repo" --slug codex-strict-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "strict work" --model gpt-test --reasoning low --jobs "$TMP/codex-strict-start.log" --log-dir "$TMP/codex-strict-logs" >/tmp/codex_dispatch_strict_start.out 2>/tmp/codex_dispatch_strict_start.err; then
   bad "codex dispatch strict start should fail when hook trust is incomplete"
 else
   if grep -q '^check=hook-trust:review-needed' /tmp/codex_dispatch_strict_start.out \
@@ -627,7 +647,7 @@ else
     bad "codex dispatch strict start should fail before registry writes"
   fi
 fi
-if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-dispatch.log" --log-dir "$TMP/codex-register-logs" >/tmp/codex_dispatch.out 2>/tmp/codex_dispatch.err \
+if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low --jobs "$TMP/codex-dispatch.log" --log-dir "$TMP/codex-register-logs" >/tmp/codex_dispatch.out 2>/tmp/codex_dispatch.err \
   && grep -q '^status=register$' /tmp/codex_dispatch.out \
   && grep -q '^registered=1$' /tmp/codex_dispatch.out \
   && grep -q '^started=0$' /tmp/codex_dispatch.out \
@@ -636,7 +656,7 @@ if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --c
   && [ -f "$TMP/codex-dispatch.log.lock" ] \
   && [ -f "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" ] \
   && grep -q 'role planning, role implementation, role verification, and role report' "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" \
-  && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard' "$TMP/codex-dispatch.log"; then
+  && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
   ok "codex dispatch wrapper registers open headless job"
 else
   bad "codex dispatch wrapper should register open headless job"
@@ -656,10 +676,56 @@ fi
 if "$CODEX" harvest --jobs "$TMP/codex-dispatch.log" --slug codex-dispatch --mark-done >/tmp/codex_harvest_done.out 2>/tmp/codex_harvest_done.err \
   && grep -q '^marked_done=1$' /tmp/codex_harvest_done.out \
   && grep -q '^registry_lock=.*/codex-dispatch.log.lock$' /tmp/codex_harvest_done.out \
-  && grep -q $'done\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard' "$TMP/codex-dispatch.log"; then
+  && grep -q $'done\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
   ok "codex harvest wrapper marks selected jobs done"
 else
   bad "codex harvest wrapper should mark selected jobs done"
+fi
+if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug claude-missing-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/claude-missing-model.log" >/tmp/claude_missing_model.out 2>/tmp/claude_missing_model.err; then
+  bad "claude dispatch wrapper should require main-selected model settings"
+else
+  rc=$?
+  if [ "$rc" -eq 64 ] \
+    && grep -q '^reason=missing-dispatch-model-selection$' /tmp/claude_missing_model.out \
+    && [ ! -e "$TMP/claude-missing-model.log" ]; then
+    ok "claude dispatch wrapper requires main-selected model settings"
+  else
+    bad "claude dispatch wrapper should fail cleanly without model selection"
+  fi
+fi
+if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug claude-role-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model-role "fast implementer" --jobs "$TMP/claude-role-model.log" >/tmp/claude_role_model.out 2>/tmp/claude_role_model.err \
+  && grep -q '^adapter=claude$' /tmp/claude_role_model.out \
+  && grep -q '^model_source=role$' /tmp/claude_role_model.out \
+  && grep -q '^model_role=fast implementer$' /tmp/claude_role_model.out \
+  && grep -q '^model=sonnet$' /tmp/claude_role_model.out \
+  && grep -q '^effort=medium$' /tmp/claude_role_model.out \
+  && grep -q -- '--model sonnet' /tmp/claude_role_model.out \
+  && grep -q -- '--effort medium' /tmp/claude_role_model.out \
+  && [ ! -e "$TMP/claude-role-model.log" ]; then
+  ok "claude dispatch wrapper supports main-selected model roles"
+else
+  bad "claude dispatch wrapper should support main-selected model roles"
+fi
+if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug claude-explicit-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model claude-test --effort low --jobs "$TMP/claude-explicit-model.log" >/tmp/claude_explicit_model.out 2>/tmp/claude_explicit_model.err \
+  && grep -q '^model_source=explicit$' /tmp/claude_explicit_model.out \
+  && grep -q '^model=claude-test$' /tmp/claude_explicit_model.out \
+  && grep -q '^effort=low$' /tmp/claude_explicit_model.out \
+  && grep -q -- '--model claude-test' /tmp/claude_explicit_model.out \
+  && grep -q -- '--effort low' /tmp/claude_explicit_model.out \
+  && [ ! -e "$TMP/claude-explicit-model.log" ]; then
+  ok "claude dispatch wrapper supports explicit model/effort selection"
+else
+  bad "claude dispatch wrapper should support explicit model/effort selection"
+fi
+if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug claude-inherit-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --inherit-model-settings --jobs "$TMP/claude-inherit-model.log" >/tmp/claude_inherit_model.out 2>/tmp/claude_inherit_model.err \
+  && grep -q '^model_source=inherit$' /tmp/claude_inherit_model.out \
+  && grep -q '^model=inherit$' /tmp/claude_inherit_model.out \
+  && grep -q '^effort=inherit$' /tmp/claude_inherit_model.out \
+  && ! grep -q -- '--model ' /tmp/claude_inherit_model.out \
+  && [ ! -e "$TMP/claude-inherit-model.log" ]; then
+  ok "claude dispatch wrapper can explicitly inherit model settings"
+else
+  bad "claude dispatch wrapper should inherit model settings only on request"
 fi
 mkdir -p "$TMP/codex-live-sessions/2026/06/30"
 cat > "$TMP/codex-live-sessions/2026/06/30/rollout-live-codex.jsonl" <<EOF
@@ -2210,6 +2276,8 @@ if "$OPENCODE" headless >/tmp/opencode_headless.out 2>/tmp/opencode_headless.err
   && grep -q '^adapter=opencode$' /tmp/opencode_headless.out \
   && grep -q '^runtime_surface=opencode-run-headless$' /tmp/opencode_headless.out \
   && grep -q '^tool_contract=headless-dispatch$' /tmp/opencode_headless.out \
+  && grep -q '^model_selection_policy=main-orchestrator-must-select-per-job$' /tmp/opencode_headless.out \
+  && grep -q '^model_selection_surface=--model-role <portable-role>|--model <model> --variant <variant>|--inherit-model-settings$' /tmp/opencode_headless.out \
   && grep -q '^claude_headless=unsupported$' /tmp/opencode_headless.out \
   && grep -q '^liveness_surface=opencode-sqlite-session-mtime$' /tmp/opencode_headless.out \
   && grep -q '^liveness_check=adapters/opencode/bin/preflight.sh liveness \[jobs.log\]$' /tmp/opencode_headless.out \
@@ -2261,19 +2329,36 @@ if OPENCODE_CONFIG_CONTENT='{"skills":{"paths":["/tmp/opencode-\u0073kills"]}}' 
 else
   bad "opencode headless check should accept JSON-configured native skills path"
 fi
-if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/opencode-dispatch.log" >/tmp/opencode_dispatch.out 2>/tmp/opencode_dispatch.err \
+if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-missing-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/opencode-missing-model.log" >/tmp/opencode_missing_model.out 2>/tmp/opencode_missing_model.err; then
+  bad "opencode dispatch wrapper should require main-selected model settings"
+else
+  rc=$?
+  if [ "$rc" -eq 64 ] \
+    && grep -q '^reason=missing-dispatch-model-selection$' /tmp/opencode_missing_model.out \
+    && [ ! -e "$TMP/opencode-missing-model.log" ]; then
+    ok "opencode dispatch wrapper requires main-selected model settings"
+  else
+    bad "opencode dispatch wrapper should fail cleanly without model selection"
+  fi
+fi
+if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model provider/test --variant low --jobs "$TMP/opencode-dispatch.log" >/tmp/opencode_dispatch.out 2>/tmp/opencode_dispatch.err \
   && grep -q '^adapter=opencode$' /tmp/opencode_dispatch.out \
   && grep -q '^status=dry-run$' /tmp/opencode_dispatch.out \
   && grep -q '^registered=0$' /tmp/opencode_dispatch.out \
   && grep -q '^started=0$' /tmp/opencode_dispatch.out \
+  && grep -q '^model_source=explicit$' /tmp/opencode_dispatch.out \
+  && grep -q '^model=provider/test$' /tmp/opencode_dispatch.out \
+  && grep -q '^variant=low$' /tmp/opencode_dispatch.out \
   && grep -q '^command=opencode run ' /tmp/opencode_dispatch.out \
+  && grep -q -- '--model provider/test' /tmp/opencode_dispatch.out \
+  && grep -q -- '--variant low' /tmp/opencode_dispatch.out \
   && grep -q 'opencode-dispatch.opencode.prompt.txt' /tmp/opencode_dispatch.out \
   && grep -q 'cat -- ' /tmp/opencode_dispatch.out \
   && ! grep -q 'do work' /tmp/opencode_dispatch.out \
   && [ ! -e "$TMP/opencode-dispatch.log" ]; then
-  ok "opencode dispatch wrapper dry-runs headless command without registry write"
+  ok "opencode dispatch wrapper dry-runs headless command with main-selected model settings"
 else
-  bad "opencode dispatch wrapper should dry-run headless command without registry write"
+  bad "opencode dispatch wrapper should dry-run headless command with main-selected model settings"
 fi
 mkdir -p "$TMP/opencode-stubbin"
 cat > "$TMP/opencode-stubbin/opencode" <<'EOF'
@@ -2283,7 +2368,7 @@ EOF
 chmod +x "$TMP/opencode-stubbin/opencode"
 if PATH="$TMP/opencode-stubbin:$PATH" OPENCODE_STUB_ARGV="$TMP/opencode-start.argv" \
   HOME="$TMP/opencode_headless_home" XDG_CONFIG_HOME="$TMP/opencode_headless_home/.config" \
-  "$OPENCODE" dispatch --start --worktree "$TMP/repo" --slug nested/opencode-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "nested work" --jobs "$TMP/opencode-start.log" --log-dir "$TMP/opencode-logs" >/tmp/opencode_dispatch_start.out 2>/tmp/opencode_dispatch_start.err \
+  "$OPENCODE" dispatch --start --worktree "$TMP/repo" --slug nested/opencode-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "nested work" --model provider/test --variant low --jobs "$TMP/opencode-start.log" --log-dir "$TMP/opencode-logs" >/tmp/opencode_dispatch_start.out 2>/tmp/opencode_dispatch_start.err \
   && grep -q '^status=start$' /tmp/opencode_dispatch_start.out \
   && grep -q '^started=1$' /tmp/opencode_dispatch_start.out \
   && grep -q 'cat -- ' /tmp/opencode_dispatch_start.out \
@@ -2292,15 +2377,17 @@ if PATH="$TMP/opencode-stubbin:$PATH" OPENCODE_STUB_ARGV="$TMP/opencode-start.ar
     [ -f "$TMP/opencode-start.argv" ] && break
     sleep 0.1
   done
-  if grep -q 'nested work' "$TMP/opencode-start.argv" 2>/dev/null; then
-    ok "opencode dispatch wrapper starts nested slug from prompt file"
+  if grep -q 'nested work' "$TMP/opencode-start.argv" 2>/dev/null \
+    && grep -q -- '--model provider/test' "$TMP/opencode-start.argv" \
+    && grep -q -- '--variant low' "$TMP/opencode-start.argv"; then
+    ok "opencode dispatch wrapper starts nested slug with main-selected model settings"
   else
-    bad "opencode dispatch wrapper should pass nested prompt content to opencode"
+    bad "opencode dispatch wrapper should pass prompt and main-selected model settings to opencode"
   fi
 else
   bad "opencode dispatch wrapper should start nested slug from prompt file"
 fi
-if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-default-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" >/tmp/opencode_dispatch_default.out 2>/tmp/opencode_dispatch_default.err \
+if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-default-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model provider/test --variant low >/tmp/opencode_dispatch_default.out 2>/tmp/opencode_dispatch_default.err \
   && grep -Fxq "job_registry=$ROOT/.dispatch/jobs.log" /tmp/opencode_dispatch_default.out \
   && grep -Fxq "prompt_file=$ROOT/.dispatch/logs/opencode-default-home.opencode.prompt.txt" /tmp/opencode_dispatch_default.out \
   && [ ! -e "$AGENT_HOME/.dispatch/jobs.log" ]; then
@@ -2308,18 +2395,18 @@ if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-default
 else
   bad "opencode dispatch wrapper should not trust invalid AGENT_HOME for default registry"
 fi
-if AGENT_HOME="$TMP/not-agent-home" python3 "$ROOT/adapters/opencode/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug opencode-direct-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" >/tmp/opencode_dispatch_direct.out 2>/tmp/opencode_dispatch_direct.err \
+if AGENT_HOME="$TMP/not-agent-home" python3 "$ROOT/adapters/opencode/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug opencode-direct-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model provider/test --variant low >/tmp/opencode_dispatch_direct.out 2>/tmp/opencode_dispatch_direct.err \
   && grep -Fxq "job_registry=$ROOT/.dispatch/jobs.log" /tmp/opencode_dispatch_direct.out \
   && grep -Fxq "prompt_file=$ROOT/.dispatch/logs/opencode-direct-home.opencode.prompt.txt" /tmp/opencode_dispatch_direct.out; then
   ok "opencode dispatch script ignores invalid AGENT_HOME"
 else
   bad "opencode dispatch script should validate AGENT_HOME"
 fi
-if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/opencode-dispatch.log" >/tmp/opencode_dispatch.out 2>/tmp/opencode_dispatch.err \
+if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model provider/test --variant low --jobs "$TMP/opencode-dispatch.log" >/tmp/opencode_dispatch.out 2>/tmp/opencode_dispatch.err \
   && grep -q '^status=register$' /tmp/opencode_dispatch.out \
   && grep -q '^registered=1$' /tmp/opencode_dispatch.out \
   && grep -q '^started=0$' /tmp/opencode_dispatch.out \
-  && grep -q $'open\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard' "$TMP/opencode-dispatch.log"; then
+  && grep -q $'open\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
   ok "opencode dispatch wrapper registers open headless job"
 else
   bad "opencode dispatch wrapper should register open headless job"
@@ -2337,7 +2424,7 @@ else
 fi
 if "$OPENCODE" harvest --jobs "$TMP/opencode-dispatch.log" --slug opencode-dispatch --mark-done >/tmp/opencode_harvest_done.out 2>/tmp/opencode_harvest_done.err \
   && grep -q '^marked_done=1$' /tmp/opencode_harvest_done.out \
-  && grep -q $'done\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard' "$TMP/opencode-dispatch.log"; then
+  && grep -q $'done\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
   ok "opencode harvest wrapper marks selected jobs done"
 else
   bad "opencode harvest wrapper should mark selected jobs done"

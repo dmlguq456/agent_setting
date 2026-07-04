@@ -91,8 +91,7 @@ Portable docs use role names, not vendor model names:
 | `external adversary` | Independent reviewer with different model/runtime/process assumptions |
 | `orchestrator` | Tooling, merge, dispatch, and report assembly; should not be the sole judge |
 
-Adapters map these roles to concrete models, reasoning profiles, or tools.
-Concrete model names belong in adapter documents or generated native files.
+Adapters map these roles to concrete models, reasoning profiles, or tools. Concrete model names belong in adapter documents or generated native files. For dispatch/headless jobs, the main/orchestrator must choose a portable role or concrete model/reasoning setting per job; adapter wrappers must not silently choose a default model or inherit the interactive session model unless the caller explicitly asks for inheritance.
 
 ## 4. Capability Model
 

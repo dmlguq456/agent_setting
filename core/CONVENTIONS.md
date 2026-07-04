@@ -84,7 +84,7 @@
 
 ### §2.2. Adapter mapping requirement
 
-각 adapter 는 위 role 을 자기 런타임의 concrete model / tool / prompt profile 로 매핑해야 한다. 매핑은 “기존 품질 재현”의 계약이다. Concrete model name, frontmatter value, external engine choice 는 adapter 문서와 adapter-native 파일이 소유한다.
+각 adapter 는 위 role 을 자기 런타임의 concrete model / tool / prompt profile 로 매핑해야 한다. 매핑은 “기존 품질 재현”의 계약이다. Concrete model name, frontmatter value, external engine choice 는 adapter 문서와 adapter-native 파일이 소유한다. Dispatch/headless 분사에서는 main/orchestrator 가 작업 난이도에 맞춰 이 role 또는 concrete model/effort 를 job 별로 명시 선택하며, adapter wrapper 는 기본 role/model 을 암묵 선택하지 않는다.
 
 ### §2.3. Role profile operation matrix
 

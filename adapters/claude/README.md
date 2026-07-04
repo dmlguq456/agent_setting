@@ -75,7 +75,7 @@ Claude Code adapter 는 기존 운용 품질을 보존하기 위해 `core/CONVEN
 | `external adversary` | Codex CLI (GPT-5) via `codex-review-team` | `--qa adversarial` 의 독립 hostile review |
 | `external adversary orchestrator` | `sonnet` wrapper | Codex CLI 호출·결과 정리만 담당하고 실제 판단은 external engine 에 위임 |
 
-QA 레벨의 기존 동작은 이 mapping 으로 재현한다: quick/light 는 fast reviewer 중심, standard 는 deep reviewer + fast reviewers, thorough/adversarial 은 deep reviewers + fast reviewers + optional external adversary.
+QA 레벨의 기존 동작은 이 mapping 으로 재현한다: quick/light 는 fast reviewer 중심, standard 는 deep reviewer + fast reviewers, thorough/adversarial 은 deep reviewers + fast reviewers + optional external adversary. Dispatch/headless 분사는 이 표를 기본으로 삼되 wrapper 가 자동 선택하지 않는다. main/orchestrator 가 작업 난이도별로 `--model-role`, concrete `--model --effort`, 또는 명시적 `--inherit-model-settings` 를 job 마다 선택한다.
 
 ## Compatibility
 
