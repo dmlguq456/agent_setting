@@ -49,6 +49,17 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
         if action is None and rec.get("tier") and rec.get("type") and isinstance(rec.get("body"), str):
             action = "add"
 
+        # increment = add-only, enforced (not merely prompted). The turn-nudge/fast
+        # tier reads untrusted transcript delta with no snapshot whitelist, so a
+        # prompt-injected model could name id-mutations (prune/merge/graduate/...)
+        # that member() would wave through under mode != "curate" (always True).
+        # Reject id-mutations outside curate mode so only the snapshot-grounded deep
+        # curator can ever delete/merge/graduate. Closes the P-25 whitelist bypass
+        # for every adapter at the shared applier (deterministic, §0.5).
+        if action in ("reinforce", "prune", "graduate", "reattribute", "merge") and mode != "curate":
+            sys.stderr.write(f"[distill-parse] skip {action}: id-mutation not allowed in {mode} mode (add-only)\n")
+            continue
+
         if action == "add":
             tier = rec.get("tier")
             rtype = rec.get("type")

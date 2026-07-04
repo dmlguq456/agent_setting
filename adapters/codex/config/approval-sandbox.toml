@@ -1,0 +1,38 @@
+# Codex approval/sandbox baseline posture — adapter-owned, version-controlled.
+#
+# This fragment captures the *harness-expected* Codex approval/sandbox posture the
+# way `adapters/claude/settings.json` captures Claude's (permissions.allow[] +
+# defaultMode "auto" + skip*Prompt). Before this, the Codex equivalent lived only in
+# machine-local `~/.codex/config.toml` (`trust_level`, `approvals_reviewer`), so a
+# fresh install could not reproduce the approval/sandbox stance from the repo alone
+# (codex-adapter-parity audit P-15 / card 06 G1).
+#
+# REFERENCE fragment only — merge the relevant lines into `$CODEX_HOME/config.toml`
+# yourself. The adapter never auto-applies it (it must not mutate a user's machine
+# config; see the MCP/design registration note in ADAPTATION.md for the same rule).
+# No secrets, tokens, or machine-specific absolute project paths belong here — only
+# the reproducible posture. Inspect the live contract with
+# `adapters/codex/bin/preflight.sh permissions`.
+#
+# Surface (from `preflight.sh permissions`):
+#   approval_policy  ∈ untrusted | on-request | never
+#   sandbox_mode     ∈ read-only | workspace-write | danger-full-access
+
+# Approvals route to the Codex-native reviewer. "user" keeps a human in the loop for
+# escalations while trusted projects/commands run without prompts — the low-friction
+# autonomous stance that matches Claude's auto-approve posture.
+approvals_reviewer = "user"
+
+# Baseline global posture (commented — pinning globally is a deliberate decision; by
+# default the per-project trust template below governs). workspace-write + on-request
+# is the low-friction harness default: edit within the workspace, ask before escalating
+# outside it. Do NOT ship `danger-full-access` / `never` as a repo default.
+# approval_policy = "on-request"
+# sandbox_mode = "workspace-write"
+
+# Per-project trust template. The absolute repo path is machine-specific, so this stays
+# a template rather than a literal — replace <project-abs-path> with the repo path on
+# the target machine. A trusted project runs the harness at Claude's low-friction parity
+# (no per-command prompts), the Codex analogue of settings.json defaultMode:"auto".
+# [projects."<project-abs-path>"]
+# trust_level = "trusted"

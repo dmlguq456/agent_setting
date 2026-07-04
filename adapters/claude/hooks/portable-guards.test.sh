@@ -978,7 +978,8 @@ if "$CODEX" mcp >/tmp/codex_mcp.out 2>/tmp/codex_mcp.err \
   && grep -q '^adapter=codex$' /tmp/codex_mcp.out \
   && grep -q '^runtime_surface=codex-native-mcp$' /tmp/codex_mcp.out \
   && grep -q '^mcp_surface=codex mcp$' /tmp/codex_mcp.out \
-  && grep -q '^design_mcp_projection=unsupported$' /tmp/codex_mcp.out \
+  && grep -q '^design_mcp_projection=policy-not-adopted-approval-gated$' /tmp/codex_mcp.out \
+  && grep -q '^design_mcp_registration=stdio-mcp_servers.design-node-server.js$' /tmp/codex_mcp.out \
   && grep -q '^claude_settings_mcp=unsupported$' /tmp/codex_mcp.out; then
   ok "codex mcp wrapper reports native MCP contract"
 else

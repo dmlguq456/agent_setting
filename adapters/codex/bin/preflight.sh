@@ -56,6 +56,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh verification-runner [--check] [--timeout seconds] -- <command> [args...]
        preflight.sh design <file>
        preflight.sh visual-harness [file.html]
+       preflight.sh convert [pdf|bundle|pptx] <file.html> [out]
        preflight.sh distill-delta <session-id>
        preflight.sh distill-propose <session-id> [cwd]
        preflight.sh role <portable-role|role-profile|pipeline-stage>
@@ -265,16 +266,22 @@ case "$cmd" in
     # Recursion guard: skip the whole session-end pipeline when invoked from
     # within a distiller (the codex exec worker exports MEM_DISTILL=1).
     [ "${MEM_DISTILL:-}" = "1" ] && exit 0
-    (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/mem.py" sync)
+    # SessionEnd sync 계약(core/MEMORY.md §7, D-31) = mem sync + dump.jsonl git mirror
+    # push. MEM_DUMP_PUSH 를 생략하면 Codex 세션 기억이 원격 mirror 에서 drift 한다
+    # (Claude settings.json:136 과 동형). push 는 mem.py 안에서 5s bounded·never-fatal.
+    (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" MEM_DUMP_PUSH="${MEM_DUMP_PUSH:-1}" python3 "$ROOT/tools/memory/mem.py" sync)
     # Automatic session-end distillation is enabled: the codex exec read-only
     # sandbox was verified tool-free (adapters/codex/ADAPTATION.md Distillation
     # Boundary), so default the worker to apply mode. Opt out with
-    # CODEX_DISTILL_ENABLE=0.
+    # CODEX_DISTILL_ENABLE=0. session-end runs the *curate* (deep) tier —
+    # snapshot-grounded prune/merge/graduate via the shared curate-snapshot +
+    # whitelist applier (D-30/D-32); turn-nudge runs increment. Synchronous so the
+    # headless codex exec captures memory before it exits (curate timeout-bounded).
     AGENT_HOME="$AGENT_ROOT" \
       CODEX_DISTILL_ENABLE="${CODEX_DISTILL_ENABLE:-1}" \
       CODEX_DISTILL_APPLY="${CODEX_DISTILL_APPLY:-1}" \
       CODEX_DISTILL_CONTRACT_ACCEPTED="${CODEX_DISTILL_CONTRACT_ACCEPTED:-1}" \
-      "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd"
+      "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd" curate
     ;;
   mode)
     cwd=${2:-$PWD}
@@ -341,7 +348,7 @@ case "$cmd" in
         CODEX_DISTILL_ENABLE="${CODEX_DISTILL_ENABLE:-1}" \
         CODEX_DISTILL_APPLY="${CODEX_DISTILL_APPLY:-1}" \
         CODEX_DISTILL_CONTRACT_ACCEPTED="${CODEX_DISTILL_CONTRACT_ACCEPTED:-1}" \
-        "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd" >/dev/null 2>/dev/null || true
+        "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd" increment >/dev/null 2>/dev/null || true
     fi
     printf '%s\n' "$counter" > "$state" 2>/dev/null || true
     find "$store" -maxdepth 1 -name '.codex-turn-state-*' -mmin +4320 -delete 2>/dev/null || true
@@ -379,6 +386,7 @@ permission_model=approval-policy+sandbox
 approval_surface=codex --ask-for-approval <untrusted|on-request|never>
 sandbox_surface=codex --sandbox <read-only|workspace-write|danger-full-access>
 config_surface=$CODEX_HOME/config.toml
+config_fragment=codex_setting/codex-config/approval-sandbox.toml
 claude_allowed_tools=unsupported
 guard_contract=preflight-write-hooks-and-explicit-tool-contracts
 structured_write_hooks=Write,Edit,MultiEdit,apply_patch,functions.apply_patch
@@ -577,11 +585,15 @@ runtime_surface=codex-native-mcp
 status=native-runtime-config
 mcp_surface=codex mcp
 config_surface=$CODEX_HOME/config.toml
-design_mcp_projection=unsupported
+design_mcp_projection=policy-not-adopted-approval-gated
+design_mcp_registration=stdio-mcp_servers.design-node-server.js
+design_mcp_exec_gate=noninteractive-exec-approval-blocks-tool-calls
+design_mcp_convert=adapters/codex/bin/preflight.sh convert <pdf|bundle|pptx> <file.html>
+design_mcp_guidance=adapters/codex/ADAPTATION.md
 claude_settings_mcp=unsupported
 tool_contract_check=adapters/codex/bin/preflight.sh mcp --check
-fallback=use-adapter-visual-harness-or-report-mcp-unavailable
-note=Do not copy Claude settings.json MCP registrations or project tools/design-mcp wholesale into Codex.
+fallback=use-adapter-visual-harness-or-register-design-mcp-under-approval-policy
+note=Codex can register the design MCP server (stdio [mcp_servers.design], node server.js) and its tools are discoverable and consume screenshots, but the adapter defaults to the owned visual harness; noninteractive codex exec auto-denies MCP tool calls until an approval/trust policy allows them. Do not copy Claude settings.json MCP registrations wholesale; see the MCP section of adapters/codex/ADAPTATION.md for the registration + approval path.
 EOF
     if [ "$check_only" -eq 0 ]; then
       exit 0
@@ -791,6 +803,23 @@ tool_contract_check=adapters/codex/bin/preflight.sh visual-harness <file.html>
 fallback=preflight.sh visual-harness <file.html>
 portable_source=capabilities/autopilot-design.md
 note=Codex design capabilities have native Skill guidance and an adapter-owned render/screenshot/console harness. Run it for every design HTML output, then inspect the screenshot before claiming visual completion.
+EOF
+    ;;
+  convert)
+    if [ "$#" -ge 2 ]; then
+      shift
+      "$ROOT/adapters/codex/tools/design/convert-harness.sh" "$@"
+      exit $?
+    fi
+    cat <<'EOF'
+adapter=codex
+status=tool-contract
+tool_contract=design-convert
+runtime_surface=adapter-owned-design-convert
+tool_contract_check=adapters/codex/bin/preflight.sh convert <pdf|bundle|pptx> <file.html>
+fallback=preflight.sh convert <pdf|bundle|pptx> <file.html>
+portable_source=capabilities/autopilot-design.md
+note=Codex-owned wrapper around the shared design converter (PDF/PPTX/bundle export). bundle is pure-Node; pdf/pptx report a tool-contract when Playwright/pptxgenjs are unavailable. Use it for design-handoff export where the visual harness only renders.
 EOF
     ;;
   distill-delta)
