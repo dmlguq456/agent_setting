@@ -12,6 +12,7 @@ OPENCODE="$ROOT/adapters/opencode/bin/preflight.sh"
 OPENCODE_PROJECTION="$ROOT/opencode_setting/bin/preflight.sh"
 OPENCODE_DISTILL="$ROOT/adapters/opencode/bin/distill-worker.sh"
 DESIGN="$ROOT/hooks/design-postwrite.sh"
+SSN="$ROOT/hooks/spec-sync-nudge.sh"
 MARK="$ROOT/hooks/spec-read-marker.sh"
 SPEC="$ROOT/hooks/spec-skill-gate.sh"
 CORE_MARK="$ROOT/hooks/core-read-marker.sh"
@@ -91,6 +92,45 @@ if AGENT_HOME="$ROOT" bash "$DESIGN" --file "$TMP/not-design.txt" >/tmp/design.o
 else
   bad "design postwrite wrappers should no-op on non-html"
 fi
+
+echo "== spec sync nudge CLI =="
+SSNPROJ="$TMP/ssnproj"
+mkdir -p "$SSNPROJ/.agent_reports/spec"
+printf 'project_name: demo\nmode: [research]\n' > "$SSNPROJ/.agent_reports/spec/pipeline_state.yaml"
+printf '# Demo Spec\n- 학습 epoch: **30** (기본값)\n- optimizer: Adam\n' > "$SSNPROJ/.agent_reports/spec/prd.md"
+printf 'EPOCHS = 30\n' > "$SSNPROJ/train.py"
+# ① removed value still described in spec → nudge surfaces the stale spec line
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/train.py" --old 'EPOCHS = 30' --new 'EPOCHS = 50' --cwd "$SSNPROJ" >/tmp/ssn.out 2>/tmp/ssn.err \
+  && grep -q 'spec/prd.md' /tmp/ssn.out && grep -q '30' /tmp/ssn.out; then
+  ok "spec sync nudge surfaces stale spec line for a removed value"
+else
+  bad "spec sync nudge should surface the stale spec line"
+fi
+# ② removed token absent from spec → silent no-op (empty stdout)
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/train.py" --old 'zqx_unique_token' --new 'other' --cwd "$SSNPROJ" >/tmp/ssn2.out 2>/tmp/ssn2.err \
+  && [ ! -s /tmp/ssn2.out ]; then
+  ok "spec sync nudge no-ops when the removed token is absent from spec"
+else
+  bad "spec sync nudge should no-op when the removed token is absent from spec"
+fi
+# ③ not a spec-backed project → silent no-op
+SSNNOSPEC="$TMP/ssn_nospec"
+mkdir -p "$SSNNOSPEC"
+printf 'x = 30\n' > "$SSNNOSPEC/a.py"
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNNOSPEC/a.py" --old 'x = 30' --new 'x = 50' --cwd "$SSNNOSPEC" >/tmp/ssn3.out 2>/tmp/ssn3.err \
+  && [ ! -s /tmp/ssn3.out ]; then
+  ok "spec sync nudge no-ops outside a spec-backed project"
+else
+  bad "spec sync nudge should no-op outside a spec-backed project"
+fi
+# ④ editing the spec file itself → not a target, silent no-op
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/.agent_reports/spec/prd.md" --old '30' --new '50' --cwd "$SSNPROJ" >/tmp/ssn4.out 2>/tmp/ssn4.err \
+  && [ ! -s /tmp/ssn4.out ]; then
+  ok "spec sync nudge no-ops when the edited file is the spec itself"
+else
+  bad "spec sync nudge should no-op when the edited file is the spec itself"
+fi
+
 if "$CODEX_PROJECTION" capability-info audit >/tmp/codex_projection.out 2>/tmp/codex_projection.err \
   && grep -q '^capability=audit$' /tmp/codex_projection.out \
   && grep -q '^adapter=codex$' /tmp/codex_projection.out; then
@@ -461,6 +501,8 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^strict_tool_contract_check=adapters/codex/bin/preflight.sh headless --check --require-hook-trust <worktree>$' /tmp/codex_headless.out \
   && grep -q '^runtime_projection_requires=agent-harness,AGENTS.md,hooks.json,native-skills,native-agents,native-modes$' /tmp/codex_headless.out \
   && grep -q '^runtime_projection_strict_requires=complete-codex-hook-trust$' /tmp/codex_headless.out \
+  && grep -q '^model_selection_policy=main-orchestrator-must-select-per-job$' /tmp/codex_headless.out \
+  && grep -q '^model_selection_surface=--model-role <portable-role>|--model <model> --reasoning <effort>|--inherit-model-settings$' /tmp/codex_headless.out \
   && grep -q '^claude_headless=unsupported$' /tmp/codex_headless.out \
   && grep -q '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex_headless.out \
   && grep -q '^liveness_check=adapters/codex/bin/preflight.sh liveness \[jobs.log\]$' /tmp/codex_headless.out \
@@ -537,6 +579,30 @@ if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-dispatch --ca
   ok "codex dispatch wrapper dry-runs headless command with main-selected model settings"
 else
   bad "codex dispatch wrapper should dry-run headless command with main-selected model settings"
+fi
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-custom-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low --approval inherit --jobs "$TMP/codex-custom-model.log" >/tmp/codex_custom_model.out 2>/tmp/codex_custom_model.err \
+  && grep -q '^model_source=explicit$' /tmp/codex_custom_model.out \
+  && grep -q '^model_role=-$' /tmp/codex_custom_model.out \
+  && grep -q '^model=gpt-test$' /tmp/codex_custom_model.out \
+  && grep -q '^reasoning=low$' /tmp/codex_custom_model.out \
+  && grep -q '^approval=inherit$' /tmp/codex_custom_model.out \
+  && grep -q -- '--model gpt-test' /tmp/codex_custom_model.out \
+  && ! grep -q -- 'approval_policy=' /tmp/codex_custom_model.out \
+  && [ ! -e "$TMP/codex-custom-model.log" ]; then
+  ok "codex dispatch wrapper supports explicit model/reasoning overrides"
+else
+  bad "codex dispatch wrapper should support explicit model/reasoning overrides"
+fi
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-inherit-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --inherit-model-settings --jobs "$TMP/codex-inherit-model.log" >/tmp/codex_inherit_model.out 2>/tmp/codex_inherit_model.err \
+  && grep -q '^model_source=inherit$' /tmp/codex_inherit_model.out \
+  && grep -q '^model_role=inherit$' /tmp/codex_inherit_model.out \
+  && grep -q '^model=inherit$' /tmp/codex_inherit_model.out \
+  && grep -q '^reasoning=inherit$' /tmp/codex_inherit_model.out \
+  && ! grep -q -- '--model ' /tmp/codex_inherit_model.out \
+  && [ ! -e "$TMP/codex-inherit-model.log" ]; then
+  ok "codex dispatch wrapper can explicitly inherit model settings"
+else
+  bad "codex dispatch wrapper should explicitly inherit model settings only on request"
 fi
 if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-bad-cap --capability nope-capability --mode dev/backend --qa standard --prompt-text "do work" --jobs "$TMP/codex-bad-cap.log" >/tmp/codex_bad_cap.out 2>/tmp/codex_bad_cap.err; then
   bad "codex dispatch wrapper should fail invalid capability"
@@ -628,7 +694,13 @@ if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_S
     sleep 0.1
   done
   if grep -q -- '--cd' "$TMP/codex-start.argv" 2>/dev/null; then
-    ok "codex dispatch wrapper starts nested slug after runtime projection check"
+    if grep -q -- '--model gpt-test' "$TMP/codex-start.argv" \
+      && grep -q -- 'model_reasoning_effort=' "$TMP/codex-start.argv" \
+      && grep -q -- 'approval_policy=' "$TMP/codex-start.argv"; then
+      ok "codex dispatch wrapper starts nested slug with main-selected model settings"
+    else
+      bad "codex dispatch wrapper should launch codex exec with main-selected model settings"
+    fi
   else
     bad "codex dispatch wrapper should launch codex exec after projection check"
   fi

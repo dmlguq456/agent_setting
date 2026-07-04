@@ -12,6 +12,7 @@ OPENCODE="$ROOT/adapters/opencode/bin/preflight.sh"
 OPENCODE_PROJECTION="$ROOT/opencode_setting/bin/preflight.sh"
 OPENCODE_DISTILL="$ROOT/adapters/opencode/bin/distill-worker.sh"
 DESIGN="$ROOT/hooks/design-postwrite.sh"
+SSN="$ROOT/hooks/spec-sync-nudge.sh"
 MARK="$ROOT/hooks/spec-read-marker.sh"
 SPEC="$ROOT/hooks/spec-skill-gate.sh"
 CORE_MARK="$ROOT/hooks/core-read-marker.sh"
@@ -91,6 +92,45 @@ if AGENT_HOME="$ROOT" bash "$DESIGN" --file "$TMP/not-design.txt" >/tmp/design.o
 else
   bad "design postwrite wrappers should no-op on non-html"
 fi
+
+echo "== spec sync nudge CLI =="
+SSNPROJ="$TMP/ssnproj"
+mkdir -p "$SSNPROJ/.agent_reports/spec"
+printf 'project_name: demo\nmode: [research]\n' > "$SSNPROJ/.agent_reports/spec/pipeline_state.yaml"
+printf '# Demo Spec\n- 학습 epoch: **30** (기본값)\n- optimizer: Adam\n' > "$SSNPROJ/.agent_reports/spec/prd.md"
+printf 'EPOCHS = 30\n' > "$SSNPROJ/train.py"
+# ① removed value still described in spec → nudge surfaces the stale spec line
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/train.py" --old 'EPOCHS = 30' --new 'EPOCHS = 50' --cwd "$SSNPROJ" >/tmp/ssn.out 2>/tmp/ssn.err \
+  && grep -q 'spec/prd.md' /tmp/ssn.out && grep -q '30' /tmp/ssn.out; then
+  ok "spec sync nudge surfaces stale spec line for a removed value"
+else
+  bad "spec sync nudge should surface the stale spec line"
+fi
+# ② removed token absent from spec → silent no-op (empty stdout)
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/train.py" --old 'zqx_unique_token' --new 'other' --cwd "$SSNPROJ" >/tmp/ssn2.out 2>/tmp/ssn2.err \
+  && [ ! -s /tmp/ssn2.out ]; then
+  ok "spec sync nudge no-ops when the removed token is absent from spec"
+else
+  bad "spec sync nudge should no-op when the removed token is absent from spec"
+fi
+# ③ not a spec-backed project → silent no-op
+SSNNOSPEC="$TMP/ssn_nospec"
+mkdir -p "$SSNNOSPEC"
+printf 'x = 30\n' > "$SSNNOSPEC/a.py"
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNNOSPEC/a.py" --old 'x = 30' --new 'x = 50' --cwd "$SSNNOSPEC" >/tmp/ssn3.out 2>/tmp/ssn3.err \
+  && [ ! -s /tmp/ssn3.out ]; then
+  ok "spec sync nudge no-ops outside a spec-backed project"
+else
+  bad "spec sync nudge should no-op outside a spec-backed project"
+fi
+# ④ editing the spec file itself → not a target, silent no-op
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/.agent_reports/spec/prd.md" --old '30' --new '50' --cwd "$SSNPROJ" >/tmp/ssn4.out 2>/tmp/ssn4.err \
+  && [ ! -s /tmp/ssn4.out ]; then
+  ok "spec sync nudge no-ops when the edited file is the spec itself"
+else
+  bad "spec sync nudge should no-op when the edited file is the spec itself"
+fi
+
 if "$CODEX_PROJECTION" capability-info audit >/tmp/codex_projection.out 2>/tmp/codex_projection.err \
   && grep -q '^capability=audit$' /tmp/codex_projection.out \
   && grep -q '^adapter=codex$' /tmp/codex_projection.out; then
