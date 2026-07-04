@@ -101,10 +101,10 @@ Field intelligence ends with recommendations for downstream work:
 
 | Adapter | Realization |
 |---|---|
-| Claude Code | `adapters/claude/skills/autopilot-research/SKILL.md` is the Claude-native realization; `skills/autopilot-research/SKILL.md` is the compatibility reference. |
+| Claude Code | `adapters/claude/skills/autopilot-research/SKILL.md` and `skills/autopilot-research/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-research/SKILL.md`, while `skills/autopilot-research/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
 | Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-research`. Use `adapters/codex/skills/autopilot-research/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/autopilot-research/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/autopilot-research/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info autopilot-research`. Use `adapters/opencode/skills/autopilot-research/SKILL.md` and `adapters/opencode/commands/autopilot-research.md` as native OpenCode projections; do not consume `skills/autopilot-research/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference
 
-The historical Claude Skill compatibility reference remains at `skills/autopilot-research/SKILL.md`; Claude Code consumes `adapters/claude/skills/autopilot-research/SKILL.md` as the adapter-native realization while portable meaning moves here.
+`skills/autopilot-research/SKILL.md` and `adapters/claude/skills/autopilot-research/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-research/SKILL.md`, while `skills/autopilot-research/SKILL.md` remains the compatibility reference kept for parity/drift checks.

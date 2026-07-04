@@ -54,7 +54,7 @@ surfaces rewritten to Codex-native preflight/tool-contract wording.
 
 ## 절차
 
-1. **대상을 렌더해서 본다 (필수)** — 코드/SVG 를 텍스트로 읽고 비평하지 않는다. **Codex visual harness** 로 렌더 → 이미지를 직접 본다: `adapters/codex/bin/preflight.sh visual-harness <file.html>` → `adapters/codex/bin/preflight.sh visual-harness <file.html>` (에러 먼저 짚기) → `adapters/codex/bin/preflight.sh visual-harness <file.html>` → `adapters/codex/bin/preflight.sh visual-harness <file.html>`. 반응형은 `preview` viewport 를 바꿔 mobile/desktop 각각. SVG/mermaid 단품은 `sharp`/`rsvg-convert`/`mmdc` PNG 도 가능. 큰 화면은 `clip` crop 확대. 대비·box 의심은 `adapters/codex/bin/preflight.sh visual-harness <file.html>` 로 수치 확인. 렌더 불가 환경이면 명시하고 _본 범위만_ 비평.
+1. **대상을 렌더해서 본다 (필수)** — 코드/SVG 를 텍스트로 읽고 비평하지 않는다. 산출물을 Codex visual harness 로 렌더하고(`adapters/codex/bin/preflight.sh visual-harness <file.html>`) 같은 세션에서 스크린샷과 콘솔 에러를 얻어 이미지를 직접 본다 — 콘솔 에러부터 짚는다. SVG/mermaid 단품은 `sharp`/`rsvg-convert`/`mmdc` PNG 도 가능. 반응형·다중 뷰포트 캡처·큰 화면 영역 확대·대비/box 수치 측정을 제공하는 렌더 런타임에서는 이를 활용해 mobile/desktop 각각과 의심 지점을 수치로 확인한다. 제공하지 않는 런타임(단일 스냅샷 harness 등)에서는 단일 스냅샷 + 콘솔 확인이 상한이며, 렌더 불가 환경이면 명시하고 _본 범위만_ 비평.
 2. **6축 각자 평가** — _보이는 것_ 으로 발견 사항을 우선순위로 정리
 3. **우선순위 (🔴 / 🟡 / 🟢)** 별 정리
 4. **수정 방향만 제안** — 코드 수정은 maker 또는 frontend 에 위임

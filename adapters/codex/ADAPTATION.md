@@ -55,6 +55,20 @@ invariant.
 | Selected tools | `adapters/codex/tools/` adapter launchers plus selected portable tool projections | `codex_setting/tools` |
 | Selected utilities | `adapters/codex/utilities/` adapter wrappers plus selected portable utility projections | `codex_setting/utilities` |
 
+known gap: the Permission/sandbox contract row above is not version-controlled
+for Codex the way it is for Claude. Claude's auto-approve posture is captured
+in version-controlled `adapters/claude/settings.json` (`permissions.allow[]`
+plus `defaultMode: "auto"`), so a fresh Claude Code install reproduces the same
+approval posture directly from the repo. Codex has no adapter-owned equivalent
+fragment for this: `adapters/codex/config/` currently ships only
+`tui-statusline.toml` (the footer fragment described under Status Surface
+Boundary), and the Codex approval/sandbox equivalent (for example
+`trust_level`) lives solely in machine-local `~/.codex/config.toml`. A fresh
+Codex install therefore does not reproduce the harness-recommended
+approval/sandbox posture from the repo alone. Capturing an adapter-owned
+permission/sandbox config fragment for Codex is a separate follow-up; this
+entry discloses the current gap only.
+
 ## Native Skill And Plugin Surface
 
 Current Codex support includes generated native Skill projections:
@@ -84,6 +98,13 @@ Before adding or changing Codex-native skills or plugins:
    capability and that no Claude-native Skill file is exposed as Codex-native.
 5. Verify discoverability using the Codex runtime contract, not byte parity with
    Claude files.
+
+depth caveat: byte parity is not depth parity. Codex-native `SKILL.md`
+projections stay at capability-summary depth, while the largest Claude Skills
+reach roughly 59KB of step-level procedural detail — an order of magnitude
+(roughly 8x) more than the generated Codex skill. This step-level depth gap is
+a known parity limitation distinct from the byte-parity disclaimer above;
+re-running `sync-native-skills.py` does not close it.
 
 Design capabilities are a tool-contract exception: Codex has native Skill
 guidance for them, but must run the adapter visual harness before claiming full
@@ -174,6 +195,26 @@ behavior must be verified in Codex itself before claiming Claude Code parity.
 Recent Codex issue reports show that model/reasoning settings can be runtime-
 or surface-dependent, so this adapter treats TOML generation as the source
 projection and keeps runtime validation separate.
+
+permission-model caveat: Claude's per-agent `tools:` frontmatter allowlist
+(for example `editorial-team` and `plan-team` both carry no `Bash` and no
+network tools) has no Codex custom-agent-schema equivalent — Codex custom
+agent TOML exposes no per-agent `tools` field, only `model`,
+`model_reasoning_effort`, and `sandbox_mode`. The closest Codex approximation
+is `sandbox_mode` plus `mcp_servers`, which cannot express a fine-grained tool
+allowlist. Because `editorial-team.toml` and `plan-team.toml` both set
+`sandbox_mode = "workspace-write"`, these two roles are strictly more
+permissive under Codex than under Claude.
+
+write-access caveat: Claude `qa-team` carries `Write` in its tool allowlist
+and creates its durable review-log directly. Codex's `qa-team.toml` sets
+`sandbox_mode = "read-only"` and cannot write at all, so under this adapter
+the review-log for a Codex QA pass must be ghostwritten by the
+orchestrator/dispatch harness on the QA agent's behalf, not written by the QA
+agent itself. This is part of the Codex QA agent contract, not an oversight.
+
+See Model Mapping below for the corresponding model-tier asymmetry across
+these same custom agents.
 
 Validation is currently structural plus install-path validation. The boundary
 guard verifies generated TOML fields, `model_reasoning_effort` / `sandbox_mode`
@@ -314,6 +355,13 @@ Harness-specific status signals still need Codex-native realization:
 | pipeline stage nudges | preflight/AGENTS instructions first; UI only when Codex exposes a suitable surface |
 | oncall/note/study/drill loop nudges | `preflight.sh briefing` plus `preflight.sh loop-info <loop>` for loop-specific support/fallback status |
 | merge/rebase/merged-branch risk | `preflight.sh write` git safety checks; `preflight.sh status` reports `git_operation` (merge/rebase/cherry-pick), `git_branch_done` (non-default branch fully merged = DONE-BRANCH hazard), dirty counts, and extra worktree counts. A native graphical warning remains optional polish |
+| fleet (multi-agent) observability | No Codex-native equivalent. Claude's adapter feeds a fleet dashboard via `hooks/herdr-agent-state.sh`, wired to 6 Claude hook events (`PermissionRequest`→blocked, `PreToolUse`→working, `UserPromptSubmit`→working, `SessionStart`→idle, `Stop`→idle, `SessionEnd`→release), plus a per-session `.statusline/<sid>.json` tap; Codex's `PermissionRequest` bridge is a registered no-op that emits nothing (see Native Hook Surface) |
+
+observability caveat: the gap above is scoped to fleet (multi-agent)
+observability specifically, not an absence of monitoring — Codex retains full
+per-session observability through native `/statusline`. Only the cross-agent
+dashboard view that Claude's adapter derives from `herdr-agent-state.sh` has no
+Codex-native counterpart today.
 
 ## Required Codex Mappings
 
@@ -369,6 +417,21 @@ the independent-adversary contract is stronger than the existence of a
 generated `external-adversary.toml` projection. `AGENT_EXTERNAL_CMD` can route
 an external adversary to a separate external process when stronger independence
 is required.
+
+model-tier caveat: Claude `qa-team`, `material-team`, and `editorial-team` all
+pin `model: opus`; the corresponding Codex projections default to
+`gpt-5.4-mini` — `qa-team.toml` and `editorial-team.toml` at
+`model_reasoning_effort = "medium"`, `material-team.toml` at
+`model_reasoning_effort = "low"` (each role keeps its own reasoning tier; this
+is not one uniform pin). `plan-team` is a separate case (Claude `opus` maps to
+Codex `gpt-5.5`/`high`) and is not part of this trio. Runtime measurement
+(2026-07-04) confirmed these static TOML `model`/`model_reasoning_effort` pins
+are actually applied to the spawned child process, not merely declared in the
+file — verified against child rollout JSONL, with 5 static-pin/role-map
+mismatches confirmed. This is therefore a confirmed effective gap:
+`adapters/codex/bin/preflight.sh role`/role-map resolution does not
+automatically escalate these three roles to a stronger tier at spawn time; the
+projection is a static default, not a validated model-tier equivalence.
 
 ## Current Projection Boundary
 

@@ -17,14 +17,12 @@
 
 도구는 **Design MCP** (`mcp__design__*`, 설치는 design-init 이 보장):
 
-1. **preview** — `preview({ path })` 로 HTML 을 headless 브라우저에 로드. 콘솔 버퍼 리셋.
-2. **getConsoleLogs** — 로드 직후 _첫 점검_. 에러 있으면 먼저 고친다 (깨진 화면을 비평해봐야 무의미).
-3. **screenshot → view_image** — `screenshot({ savePath, steps })` 로 캡처 후 `view_image({ path })` (또는 Read) 로 **이미지를 직접 본다**. 여러 상태(슬라이드·hover·scroll)는 `steps[]` 로 연속 캡처.
-4. **eval_js** — 의심나면 `eval_js` 로 `getComputedStyle(el)`·box 위치·대비를 질의해 _보이는 것_ 을 수치로 교차확인.
-5. **자가 비평 → 수정 → 재렌더** — 관통·overlap·정렬 어긋남·spacing 불균형·위계 불명확(focal point 없음)·색 역할 혼선·잘림(clipping). 큰 화면은 의심 영역 `clip` crop 확대. 시각적으로 깨끗할 때까지 (최대 3-5 회전).
-6. **보고는 본 것으로** — "valid/교차 0" 대신 "렌더해 확인: X 영역 관통 수정, label overlap 없음, 콘솔 에러 0" 식 _관찰_ 보고. **렌더 이미지를 사용자에 제시** (live-preview 패리티).
+1. **공통 플로어 (모든 어댑터가 실현)** — `mcp__design__preview` 로 HTML 을 렌더하고, 같은 렌더 세션에서 스크린샷과 콘솔 에러를 얻는다. 콘솔 에러가 있으면 먼저 고친다 (깨진 화면을 비평해봐야 무의미) — 캡처한 이미지는 직접 본다.
+2. **확장 기능 (지원 런타임 한정)** — 여러 상태(슬라이드·hover·scroll)의 연속 캡처·영역 확대(crop)·DOM 수치(대비·box 위치) 확인·in-loop 이미지 재조회를 제공하는 렌더 런타임에서는 이 루프 안에서 활용해 더 깊이 검증한다. 제공하지 않는 런타임(단일 스냅샷 harness 등)에서는 공통 플로어가 상한이며, 그 한계를 명시해 보고한다.
+3. **자가 비평 → 수정 → 재렌더** — 관통·overlap·정렬 어긋남·spacing 불균형·위계 불명확(focal point 없음)·색 역할 혼선·잘림. 의심 지점은 위 확장 기능의 DOM 수치 확인으로 교차확인 (지원 런타임 한정 — 미지원이면 육안 판단). 시각적으로 깨끗할 때까지 (최대 3-5 회전).
+4. **보고는 본 것으로** — "valid/교차 0" 대신 "렌더해 확인: X 영역 관통 수정, label overlap 없음, 콘솔 에러 0" 식 _관찰_ 보고. **렌더 이미지를 사용자에 제시** (live-preview 패리티).
 
-> SVG/diagram 단품은 `sharp`/`rsvg-convert`/`mmdc` 로 PNG 렌더 후 `view_image` 도 가능 (브라우저 불필요한 정적 자산). HTML·React·인터랙션·콘솔 점검이 필요하면 반드시 Design MCP.
+> SVG/diagram 단품은 `sharp`/`rsvg-convert`/`mmdc` 로 PNG 렌더 후 이미지로 직접 확인도 가능 (브라우저 불필요한 정적 자산). HTML·React·인터랙션·콘솔 점검이 필요하면 반드시 Design MCP.
 
 ## 슬롭 회피 (그대로 지킬 것)
 

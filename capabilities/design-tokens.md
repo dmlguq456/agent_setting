@@ -40,10 +40,10 @@ Adapters must preserve the portable invariants relevant to this capability:
 
 | Adapter | Realization |
 |---|---|
-| Claude Code | `adapters/claude/skills/design-tokens/SKILL.md` is the Claude-native realization; `skills/design-tokens/SKILL.md` is the compatibility reference. |
+| Claude Code | `adapters/claude/skills/design-tokens/SKILL.md` and `skills/design-tokens/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/design-tokens/SKILL.md`, while `skills/design-tokens/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
 | Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info design-tokens`. Use `adapters/codex/skills/design-tokens/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/design-tokens/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/design-tokens/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info design-tokens`. Use `adapters/opencode/skills/design-tokens/SKILL.md` and `adapters/opencode/commands/design-tokens.md` as native OpenCode projections; do not consume `skills/design-tokens/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference
 
-The historical Claude Skill compatibility reference remains at `skills/design-tokens/SKILL.md`; Claude Code consumes `adapters/claude/skills/design-tokens/SKILL.md` as the adapter-native realization while portable meaning moves here.
+`skills/design-tokens/SKILL.md` and `adapters/claude/skills/design-tokens/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/design-tokens/SKILL.md`, while `skills/design-tokens/SKILL.md` remains the compatibility reference kept for parity/drift checks.

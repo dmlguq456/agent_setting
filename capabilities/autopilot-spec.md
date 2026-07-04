@@ -99,10 +99,10 @@ Composite modes are valid. Keep shared decisions in the common PRD section and e
 
 | Adapter | Realization |
 |---|---|
-| Claude Code | `adapters/claude/skills/autopilot-spec/SKILL.md` is the Claude-native realization; `skills/autopilot-spec/SKILL.md` is the compatibility reference. |
+| Claude Code | `adapters/claude/skills/autopilot-spec/SKILL.md` and `skills/autopilot-spec/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-spec/SKILL.md`, while `skills/autopilot-spec/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
 | Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-spec`. Use `adapters/codex/skills/autopilot-spec/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/autopilot-spec/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/autopilot-spec/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info autopilot-spec`. Use `adapters/opencode/skills/autopilot-spec/SKILL.md` and `adapters/opencode/commands/autopilot-spec.md` as native OpenCode projections; do not consume `skills/autopilot-spec/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference
 
-The historical Claude Skill compatibility reference remains at `skills/autopilot-spec/SKILL.md`; Claude Code consumes `adapters/claude/skills/autopilot-spec/SKILL.md` as the adapter-native realization while portable meaning moves here.
+`skills/autopilot-spec/SKILL.md` and `adapters/claude/skills/autopilot-spec/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-spec/SKILL.md`, while `skills/autopilot-spec/SKILL.md` remains the compatibility reference kept for parity/drift checks.

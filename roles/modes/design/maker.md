@@ -39,11 +39,11 @@
 
 루프 (산출물 1 건마다, 최대 3-5 회전):
 
-1. **렌더** — `mcp__design__preview({ path })` 로 HTML 로드.
+1. **렌더 → 캡처** — `mcp__design__preview` 로 HTML 을 로드하고, 같은 렌더 세션에서 스크린샷과 콘솔 에러를 얻는다.
    - SVG/diagram 단품은 브라우저 없이 `sharp`(`node -e "require('sharp')('f.svg',{density:160}).png().toFile('/tmp/_v.png')"`) / `rsvg-convert` / `mmdc` 로 PNG 렌더도 가능.
-2. **콘솔 먼저** — `mcp__design__getConsoleLogs()`. 에러 있으면 _그것부터_ 고친다 (깨진 화면 비평은 무의미).
-3. **캡처 → 본다** — `mcp__design__screenshot({ savePath, steps })` 후 `mcp__design__view_image({ path })` (또는 Read) 로 이미지를 직접 본다. hover/scroll/슬라이드 등 여러 상태는 `steps[]` 로 연속. 큰 화면·작은 자산은 `clip` 으로 crop 확대.
-4. **자가 비평** — _보이는 것_ 으로 (좌표 추정 X): 관통/겹침 / label overlap / 정렬 어긋남 / spacing 불균형 / 위계 불명확(focal point 없음) / 색 역할 혼선 / 잘림. 의심나면 `mcp__design__eval_js` 로 `getComputedStyle`·box 위치·대비를 수치 확인.
+2. **콘솔 먼저** — 에러 있으면 _그것부터_ 고친다 (깨진 화면 비평은 무의미). 캡처한 이미지는 직접 본다.
+3. **확장 기능 (지원 런타임 한정)** — hover/scroll/슬라이드 등 다중 상태 캡처·큰 화면 영역 확대(crop)를 제공하는 렌더 런타임에서는 이를 활용해 더 깊이 검증한다. 제공하지 않는 런타임(단일 스냅샷 harness 등)에서는 위 캡처가 상한이며, 그 한계를 명시해 보고한다.
+4. **자가 비평** — _보이는 것_ 으로 (좌표 추정 X): 관통/겹침 / label overlap / 정렬 어긋남 / spacing 불균형 / 위계 불명확(focal point 없음) / 색 역할 혼선 / 잘림. 의심나면 DOM 수치 확인 (지원 런타임 한정) 으로 대비·box 위치를 수치로 교차확인 — 미지원 런타임에서는 육안 판단에 그친다.
 5. **수정 → 재렌더 → 재확인** — 시각적으로 깨끗해질 때까지.
 6. **보고는 본 것으로** — "렌더해 확인: X 영역 관통 수정, label overlap 없음, 콘솔 에러 0" 식 _관찰_ 보고 + 렌더 이미지 제시.
 
