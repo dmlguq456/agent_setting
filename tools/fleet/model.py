@@ -94,6 +94,14 @@ def project_of(cwd):
     if not cwd:
         return "(unknown)"
     parts = [p for p in cwd.rstrip("/").split("/") if p]
+    # drill 모의훈련 임시 repo (/tmp/drill-<case>-<rand>/…) → "drill:<case>" 한 그룹으로.
+    # loops 처럼 케이스별 격리 실행이라 basename 'repo' 로 뭉치면 정체 불명 + 동시 실행 시
+    # 'repo/' 가 여러 개 떠 헷갈림 (user 2026-07-04). worktree(-wt)/_worktrees 판정보다 앞 —
+    # 케이스 내부 worktree 도 같은 그룹으로 묶어 한 케이스 = 한 카드.
+    for comp in parts:
+        m = re.match(r"^drill-(.+)-[^-/]+$", comp)
+        if m:
+            return "drill:" + m.group(1)
     # pass 1 (outermost-first): `-wt` suffix — takes precedence over `_worktrees`.
     for comp in parts:
         if len(comp) > 3 and comp.endswith("-wt"):
