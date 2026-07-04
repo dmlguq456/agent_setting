@@ -14,10 +14,10 @@
 
 ## 절차 (Design MCP 경유)
 
-1. **preview** — `preview({ path })` 로 자기 브라우저에 로드.
-2. **getConsoleLogs** — 콘솔 로그·에러 수집. **에러 1 개라도 = Layer-1 hard fail** (깨진 화면).
-3. **screenshot → view_image** — 캡처 후 이미지를 _직접 본다_ (자기 컨텍스트 안 — 메인에는 반환 X). 인터랙션·상태가 있으면 `steps[]` 로 전/후 캡처. 큰 화면은 `clip` crop.
-4. **eval_js** (필요 시) — 의심 지점을 수치로 확인: `getComputedStyle` 대비, 요소 box 겹침, 잘림(scrollWidth>clientWidth), 빈 컨테이너 등.
+1. **preview** — `mcp__design__preview` 로 자기 브라우저에 로드.
+2. **콘솔 로그·에러 수집** — **에러 1 개라도 = Layer-1 hard fail** (깨진 화면).
+3. **캡처 → 본다** — 캡처 후 이미지를 _직접 본다_ (자기 컨텍스트 안 — 메인에는 반환 X). 인터랙션·상태가 있으면 상태 전후를 각각, 큰 화면은 영역 확대해 본다 — 단, 다중 상태 캡처·영역 확대는 이를 지원하는 렌더 런타임 한정; 미지원 시 단일 스냅샷 한계를 명시한다.
+4. **DOM 수치 확인 (지원 런타임 한정)** — 의심 지점을 수치로 확인: 대비, 요소 box 겹침, 잘림(scrollWidth>clientWidth), 빈 컨테이너 등.
 5. **판정** — 아래 TWO-LAYER 루브릭으로.
 
 ## 두 가지 모드
@@ -35,13 +35,13 @@ ANY single failure → 즉시 `verdict: needs_work` + `breakage: has_errors`. La
 
 | id | 설명 | MCP-free 경로 |
 |---|---|---|
-| `console.errors_zero` | 콘솔 에러·pageerror·네트워크 실패 0건 | `node <agent-home>/tools/design-mcp/console-check.mjs <file.html>` 또는 adapter equivalent (Bash, headless Chromium via playwright — postwrite hook 동일 스크립트; exit 2 = 에러 있음). MCP 있으면 `getConsoleLogs` 동등 |
-| `layout.no_overflow` | 요소가 컨테이너 밖으로 넘침 없음 | MCP 있으면 `eval_js` getBoundingClientRect; MCP-free = (a) 번들 `measure.mjs` (playwright getBoundingClientRect 직접 실행) 또는 (b) 정적 HTML 검사 (obvious inline `overflow:hidden` 깨짐·unclosed tag 등) |
-| `layout.no_overlap` | 의도치 않은 요소 겹침 없음 | 동상 — eval_js 또는 bundled measure.mjs / 정적 검사 |
-| `layout.no_zero_box` | 0px 높이·빈 컨테이너 없음 | 동상 — `height:0`·`display:none` 의심 정적 grep 또는 eval_js |
-| `components.token_contract` | inline hex/px 로 토큰 재정의 없음; globals.css/tokens.css 대비 확인 | 파일 grep (DESIGN_PRINCIPLES §9) — MCP 불필요 |
+| `console.errors_zero` | 콘솔 에러·pageerror·네트워크 실패 0건 | `node <agent-home>/tools/design-mcp/console-check.mjs <file.html>` 또는 adapter equivalent (Bash, headless Chromium via playwright — postwrite hook 동일 스크립트; exit 2 = 에러 있음). MCP 있으면 동등한 콘솔 조회 경로 |
+| `layout.no_overflow` | 요소가 컨테이너 밖으로 넘침 없음 | 렌더 런타임이 box 측정을 노출하면 그것으로 판정; 아니면 정적 HTML 검사 (obvious inline `overflow:hidden` 깨짐·unclosed tag 등) |
+| `layout.no_overlap` | 의도치 않은 요소 겹침 없음 | 동상 — 렌더 런타임 box 측정 또는 정적 검사 |
+| `layout.no_zero_box` | 0px 높이·빈 컨테이너 없음 | 동상 — `height:0`·`display:none` 의심 정적 grep 또는 렌더 런타임 box 측정 |
+| `components.token_contract` | inline hex/px 로 토큰 재정의 없음; globals.css/tokens.css 대비 확인 | 파일 grep (DESIGN_PRINCIPLES §9) — 렌더 런타임 불필요 |
 
-> `color.contrast_pass` (본문 ≥4.5:1) 및 `typography.scale_pass` (슬라이드 본문 ≥24px / 모바일 hit-target ≥44px) 는 렌더 가능 시 `getComputedStyle` 로 결정론 판정; 렌더 불가 시 `unavailable` 강등 (hard fail 아님) — 아래 MCP-free 폴백 사다리 참조.
+> `color.contrast_pass` (본문 ≥4.5:1) 및 `typography.scale_pass` (슬라이드 본문 ≥24px / 모바일 hit-target ≥44px) 는 렌더 런타임이 계산된 스타일(대비·크기)을 보고할 수 있을 때 결정론 판정; 보고 못 하면 `unavailable` 강등 (hard fail 아님) — 아래 MCP-free 폴백 사다리 참조.
 
 ### Layer-2 — vision passrate `[vis]`
 
@@ -92,7 +92,7 @@ bounded-enum status (Layer-2 only):
 **PASS** (`verdict: done`) → 침묵: `verdict + breakage + vision_passrate` 한 줄만 방출.
 
 **FAIL** (`verdict: needs_work`) → 텍스트 진단만: 실패 항목의 `reason` 목록 + `breakage: has_errors` 여부. 아래 포함 금지:
-- **스크린샷·이미지를 메인 컨텍스트에 반환 금지.** verifier 는 `view_image` 를 자기 컨텍스트 안에서 본다 — 메인에는 텍스트만 돌아간다.
+- **스크린샷·이미지를 메인 컨텍스트에 반환 금지.** verifier 는 캡처한 이미지를 자기 컨텍스트 안에서 본다 — 메인에는 텍스트만 돌아간다.
 
 ## 출력 스키마 (기계 판정 — 호출자가 파싱)
 
@@ -156,7 +156,7 @@ vision/screenshot 불가 (텍스트 전용 환경·렌더 크래시·malformed v
 - **throw 금지.** `[vis]` 항목은 `passed: false` 대신 `status: unavailable` 로 강등. `vision_passrate` 및 Layer-2 bounded-enum status = `unavailable`.
 - **Layer-1 결정론 플로어는 그대로 실행** — MCP-free 경로를 이용해 headless 에서도 돌아간다:
   - `console.errors_zero`: `node <agent-home>/tools/design-mcp/console-check.mjs <file>` 또는 adapter equivalent (Bash, playwright headless, MCP 불필요)
-  - `layout.no_overflow` / `no_overlap` / `no_zero_box`: 번들 `measure.mjs` (playwright getBoundingClientRect 직접 실행) 또는 정적 HTML 검사
+  - `layout.no_overflow` / `no_overlap` / `no_zero_box`: 정적 HTML 검사 (inline overflow 깨짐·unclosed tag·height:0/display:none 의심 grep)
   - `components.token_contract`: 파일 grep
 - **링키지 (작업③ drill)**: `[det]` 항목의 MCP-free 경로가 drill (headless, `cases_growing/g8_design_verifier_breakage/`) 이 실제로 검증하는 플로어와 동일 코드다 — 드릴이 검증하는 결정론 플로어 = 프로덕션 폴백 플로어.
 - **정직한 한계**: headless Chromium (playwright) 도 없으면 렌더 자체 불가 → 검수 불가 상태로 `verdict: needs_work` (단, 이유를 명시 — "렌더 불가로 검수 미완료"). 못 본 것을 `done` 으로 통과시키지 않는다.

@@ -40,10 +40,10 @@ Adapters must preserve the portable invariants relevant to this capability:
 
 | Adapter | Realization |
 |---|---|
-| Claude Code | `adapters/claude/skills/autopilot-draft/SKILL.md` is the Claude-native realization; `skills/autopilot-draft/SKILL.md` is the compatibility reference. |
+| Claude Code | `adapters/claude/skills/autopilot-draft/SKILL.md` and `skills/autopilot-draft/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-draft/SKILL.md`, while `skills/autopilot-draft/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
 | Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-draft`. Use `adapters/codex/skills/autopilot-draft/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/autopilot-draft/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/autopilot-draft/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info autopilot-draft`. Use `adapters/opencode/skills/autopilot-draft/SKILL.md` and `adapters/opencode/commands/autopilot-draft.md` as native OpenCode projections; do not consume `skills/autopilot-draft/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference
 
-The historical Claude Skill compatibility reference remains at `skills/autopilot-draft/SKILL.md`; Claude Code consumes `adapters/claude/skills/autopilot-draft/SKILL.md` as the adapter-native realization while portable meaning moves here.
+`skills/autopilot-draft/SKILL.md` and `adapters/claude/skills/autopilot-draft/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-draft/SKILL.md`, while `skills/autopilot-draft/SKILL.md` remains the compatibility reference kept for parity/drift checks.

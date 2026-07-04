@@ -40,10 +40,10 @@ Adapters must preserve the portable invariants relevant to this capability:
 
 | Adapter | Realization |
 |---|---|
-| Claude Code | `adapters/claude/skills/design-components/SKILL.md` is the Claude-native realization; `skills/design-components/SKILL.md` is the compatibility reference. |
+| Claude Code | `adapters/claude/skills/design-components/SKILL.md` and `skills/design-components/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/design-components/SKILL.md`, while `skills/design-components/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
 | Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info design-components`. Use `adapters/codex/skills/design-components/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/design-components/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/design-components/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info design-components`. Use `adapters/opencode/skills/design-components/SKILL.md` and `adapters/opencode/commands/design-components.md` as native OpenCode projections; do not consume `skills/design-components/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference
 
-The historical Claude Skill compatibility reference remains at `skills/design-components/SKILL.md`; Claude Code consumes `adapters/claude/skills/design-components/SKILL.md` as the adapter-native realization while portable meaning moves here.
+`skills/design-components/SKILL.md` and `adapters/claude/skills/design-components/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/design-components/SKILL.md`, while `skills/design-components/SKILL.md` remains the compatibility reference kept for parity/drift checks.

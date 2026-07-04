@@ -40,10 +40,10 @@ Adapters must preserve the portable invariants relevant to this capability:
 
 | Adapter | Realization |
 |---|---|
-| Claude Code | `adapters/claude/skills/sync-skills/SKILL.md` is the Claude-native realization; `skills/sync-skills/SKILL.md` is the compatibility reference. |
+| Claude Code | `adapters/claude/skills/sync-skills/SKILL.md` and `skills/sync-skills/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/sync-skills/SKILL.md`, while `skills/sync-skills/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
 | Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info sync-skills`. Use `adapters/codex/skills/sync-skills/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/sync-skills/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/sync-skills/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info sync-skills`. Use `adapters/opencode/skills/sync-skills/SKILL.md` and `adapters/opencode/commands/sync-skills.md` as native OpenCode projections; do not consume `skills/sync-skills/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference
 
-The historical Claude Skill compatibility reference remains at `skills/sync-skills/SKILL.md`; Claude Code consumes `adapters/claude/skills/sync-skills/SKILL.md` as the adapter-native realization while portable meaning moves here.
+`skills/sync-skills/SKILL.md` and `adapters/claude/skills/sync-skills/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/sync-skills/SKILL.md`, while `skills/sync-skills/SKILL.md` remains the compatibility reference kept for parity/drift checks.

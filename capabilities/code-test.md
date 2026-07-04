@@ -103,10 +103,10 @@ they must mark the executable tool contract as unsupported or unavailable.
 
 | Adapter | Realization |
 |---|---|
-| Claude Code | `adapters/claude/skills/code-test/SKILL.md` is the Claude-native realization; `skills/code-test/SKILL.md` is the compatibility reference. |
+| Claude Code | `adapters/claude/skills/code-test/SKILL.md` and `skills/code-test/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/code-test/SKILL.md`, while `skills/code-test/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
 | Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info code-test`. Use `adapters/codex/skills/code-test/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/code-test/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/code-test/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info code-test`. Use `adapters/opencode/skills/code-test/SKILL.md` and `adapters/opencode/commands/code-test.md` as native OpenCode projections; do not consume `skills/code-test/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference
 
-The historical Claude Skill compatibility reference remains at `skills/code-test/SKILL.md`; Claude Code consumes `adapters/claude/skills/code-test/SKILL.md` as the adapter-native realization while portable meaning moves here.
+`skills/code-test/SKILL.md` and `adapters/claude/skills/code-test/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/code-test/SKILL.md`, while `skills/code-test/SKILL.md` remains the compatibility reference kept for parity/drift checks.
