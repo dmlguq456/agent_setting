@@ -152,3 +152,14 @@ Those paths may symlink into versioned projection directories such as
 `claude_setting/`, `codex_setting/`, or `opencode_setting/`. The projection
 directory must make it clear whether each entry is native adapter output,
 portable passthrough, or compatibility debt.
+
+**Projection completeness**: a cross-adapter guard that checks whether every
+portable source item has a corresponding adapter-side projection must
+**enumerate the source domain** (iterate the actual current entries) rather
+than assert a hardcoded list fixed at authoring time — a hardcoded list stops
+catching new entries the moment the source domain grows, silently reopening
+the exact gap the guard exists to close. This applies at minimum to agents,
+hook events, tools, utilities, and scaffolds. Any intentional exclusion from
+projection belongs in an explicit exemption or name-mapping list next to the
+guard, never as a silent omission, so every excluded entry is a declared
+decision rather than an accidental leak.

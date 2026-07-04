@@ -30,6 +30,69 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# --- conformance pre-stage (P-20) ---
+# codex-adapter-parity audit P-20 (2026-07-04): 케이스 풀 구성(바로 아래 "풀: id 명시면...")
+# 이전에 둔다 — axis 오타 등으로 cases=0 이 되면 아래 0-case 조기종료가 conformance 검증을
+# 건너뛴 채 false-green(exit 0) 을 낼 수 있어서다. set -u 이므로 CONF_STATUS/CONF_FAIL 은
+# 참조되기 전에 반드시 먼저 초기화한다(SKIP 경로에서 unbound 참조로 전체 run 이 abort 되는
+# 것을 방지 — 아래 summary 행 emission 도 CONF_STATUS!=SKIP 로 guard 한다).
+CONF_STATUS=SKIP; CONF_FAIL=0
+
+RUN_CONFORMANCE=0
+if [ "${DRILL_CONFORMANCE_ONLY:-0}" = "1" ]; then
+  # conformance 전용 실행 — --list/DRILL_SKIP_CONFORMANCE 여부와 무관하게 무조건 돈다.
+  RUN_CONFORMANCE=1
+elif [ -n "$LIST" ] || [ "${DRILL_SKIP_CONFORMANCE:-0}" = "1" ]; then
+  RUN_CONFORMANCE=0
+elif [ ${#ids[@]} -gt 0 ] || [ -n "$AXIS" ] || [ -n "$SAMPLE" ]; then
+  # subset run(axis/sample/명시 id) 은 기본 auto-skip — 무관한 parity 로 좁은 런이 RED 되지
+  # 않게. DRILL_CONFORMANCE=1 로 opt-in 강제 가능.
+  [ "${DRILL_CONFORMANCE:-0}" = "1" ] && RUN_CONFORMANCE=1
+else
+  RUN_CONFORMANCE=1   # 전수(인자 0) 런 = conformance 기본 ON
+fi
+
+if [ "$RUN_CONFORMANCE" = "1" ]; then
+  # codex-adapter-parity audit P-20 (2026-07-04): $AGENT_HOME 은 이 러너가 워크트리 안에서
+  # 돌아도 (agent-home.sh 가 우선 검증하는) PRIMARY repo 로 해석될 수 있어, 그대로 쓰면
+  # 워크트리가 아니라 엉뚱한 tree 를 검증하게 된다. 러너 자기 위치(SCRIPT_DIR) 기준 git
+  # worktree root 를 따로 구해 그 tree 의 conformance 원본을 부른다. 두 conformance
+  # 스크립트는 자기 위치를 서로 다르게 찾는다 — check-adaptation-boundary.sh 는 git
+  # rev-parse 로 스스로 tree root 를 찾지만, portable-guards.test.sh 는 dirname/.. 상대경로로
+  # ROOT 를 잡으므로 반드시 repo-root 원본을 직접 호출해야 한다(adapters/claude/ 미러본을
+  # 부르면 ROOT 가 어긋나 codex/opencode 경로 참조가 깨진다).
+  HARNESS_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$AGENT_HOME")
+  echo "== conformance (tree=$HARNESS_ROOT) =="
+  echo "conformance=worktree / cases=primary"
+
+  if bash "$HARNESS_ROOT/tools/check-adaptation-boundary.sh"; then
+    CONF_STATUS=PASS
+  else
+    CONF_STATUS=FAIL
+    CONF_FAIL=1
+  fi
+
+  # portable-guards.test.sh 는 informational(non-gating) — codex 바이너리가 없으면 env-gated
+  # codex-doctor(--runtime/--runtime-strict) 가 항상 FAIL 을 섞어 내므로, 이를 게이트에 넣으면
+  # 드릴이 케이스 전부 PASS 여도 영구 RED 가 된다. 결과만 보여주고 CONF_FAIL 에는 접지 않는다.
+  if bash "$HARNESS_ROOT/hooks/portable-guards.test.sh"; then
+    echo "conformance: portable-guards.test.sh PASS (informational)"
+  else
+    echo "conformance: portable-guards.test.sh FAIL (informational, non-gating — env-gated codex-doctor 가능성)"
+  fi
+fi
+
+if [ "${DRILL_CONFORMANCE_ONLY:-0}" = "1" ]; then
+  {
+    echo "# Drill conformance-only run $STAMP"
+    echo
+    echo "| conformance | verdict |"
+    echo "|---|---|"
+    echo "| conformance | $CONF_STATUS |"
+  } > "$RESULTS/summary.md"
+  exit "$CONF_FAIL"
+fi
+
 # 풀: id 명시면 그것만, 아니면 전수 후보
 if [ ${#ids[@]} -gt 0 ]; then
   cases=("${ids[@]}")
@@ -106,6 +169,11 @@ done
   echo
   echo "| case | verdict | turns | in_tok | out_tok | cost\$ |"
   echo "|---|---|---|---|---|---|"
+  # codex-adapter-parity audit P-20 (2026-07-04): conformance 는 케이스가 아니므로 구분되는
+  # prefix("conformance |")로 별행 삽입 — metrics.csv(아래)는 ${cases[@]}만 순회해 안전하지만,
+  # summary.md 행을 케이스로 파싱하는 다른 도구가 있다면 오카운트하지 않도록. SKIP 이면(=subset
+  # auto-skip 등) 아예 행을 내지 않는다.
+  [ "$CONF_STATUS" != SKIP ] && echo "| conformance | $CONF_STATUS | - | - | - | - |"
   for c in "${cases[@]}"; do
     IFS='|' read -r mt mi mo mc <<< "${metrics[$c]:-?|?|?|?}"
     echo "| $c | ${verdicts[$c]:-?} | $mt | $mi | $mo | $mc |"
@@ -132,3 +200,9 @@ rm -rf /tmp/drill-* 2>/dev/null || true
 # claude 는 projects/<enc_cwd> 세션 레지스트리를 남긴다 (codex/opencode 는 자체 세션 저장소).
 [ "$ADAPTER" = "claude" ] && rm -rf "$AGENT_HOME/projects/"*tmp-drill*-repo 2>/dev/null || true
 echo "cleanup: drill tmp + 세션 detritus 제거 (adapter=$ADAPTER)"
+
+# codex-adapter-parity audit P-20 (2026-07-04): 기본은 report-and-continue — conformance 가
+# FAIL 이어도 케이스는 항상 실행된다. 하지만 cleanup 까지 끝난 뒤에는 boundary guard FAIL 이
+# 케이스 전부 PASS 여도 전체 run 을 non-zero 로 끝내야 한다(F4). CONF_STATUS=SKIP 이면
+# CONF_FAIL=0 이라 그대로 exit 0.
+exit "$CONF_FAIL"

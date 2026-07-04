@@ -21,6 +21,11 @@ can — out of **drill** (agent behavior) into **guard** + **conformance**
 an agent in the loop. A hook's output shape is deterministic, so it belongs in
 conformance, never drill.
 
+The drill **runner** also invokes the conformance layer directly, as a separate
+deterministic pre-stage — not a drill case, no agent in loop — before it runs
+any behavioral case. This keeps conformance firing from depending solely on the
+preflight doctor path, without blurring the conformance/drill distinction above.
+
 ## Status Classes
 
 | Status | Meaning |

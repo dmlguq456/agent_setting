@@ -14,6 +14,31 @@ ROLES = ROOT / "roles" / "README.md"
 OUT = ROOT / "adapters" / "opencode" / "agents"
 
 
+EXTRA_AGENTS = {
+    "memory-scout": {
+        "description": "Read-only memory scout for recall-first deep memory reconnaissance.",
+        "instructions": """You are the OpenCode-native memory-scout custom agent.
+This is adapter-owned output generated from `core/MEMORY.md` §7.4, not a non-OpenCode Agent copy.
+
+## Contract
+
+1. Read-only only. Do not edit files or write memory.
+2. Never run memory mutation commands such as mem add, mem note, mem delete, mem reinforce, mem merge, or mem prune.
+3. Use `tools/memory/recall.sh` or `adapters/opencode/bin/preflight.sh recall` first in the current cwd.
+4. Try narrow synonym and Korean/English variants; if misses matter, expand to cross-cwd or raw session search only as needed.
+5. Open only hit bodies or transcript snippets needed to decide the question.
+6. Cross-check one live file/code fact when the memory result implies an actionable convention.
+
+Output at most 15 lines:
+- verdict: 있음 / 없음 / 애매
+- hits: up to 3 short quotes or paraphrases with record id / session pointer
+- apply: one line telling the main agent what to do now
+- check: one live-code or file cross-check line, or not checked with reason
+""",
+    }
+}
+
+
 def compact(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip()).replace('"', "'")
 
@@ -122,6 +147,22 @@ Agent files are compatibility/reference surfaces only.
 """
 
 
+def render_extra_agent(name: str, spec: dict[str, str]) -> str:
+    tool_lines = ["  task: false", "  edit: false", "  write: false"]
+    permission_lines = ["  task: deny", "  edit: deny"]
+    description = compact(spec["description"])
+    return f"""---
+description: "{description}"
+mode: subagent
+tools:
+{chr(10).join(tool_lines)}
+permission:
+{chr(10).join(permission_lines)}
+---
+
+{spec["instructions"]}"""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="verify generated projections")
@@ -129,6 +170,8 @@ def main() -> int:
 
     rows = role_rows(ROLES.read_text(encoding="utf-8"))
     expected = {OUT / profile / f"{profile}.md": render(profile, role, responsibility) for profile, role, responsibility in rows}
+    for name, spec in EXTRA_AGENTS.items():
+        expected[OUT / name / f"{name}.md"] = render_extra_agent(name, spec)
 
     stale: list[str] = []
     for path, body in expected.items():

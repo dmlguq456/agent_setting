@@ -825,6 +825,139 @@ else
     bad "codex liveness wrapper should report dead jobs"
   fi
 fi
+# codex-adapter-parity audit P-28 (2026-07-04): the fixtures above only exercise ALIVE
+# (DISPATCH_STALE_MIN=60) and DEAD (never-matching worktree) — SUSPECT was never hit, and
+# neither impl was exercised directly against the shared STALE_MIN=15 default. Call both
+# impls (no edits) to close that gap.
+echo "== dispatch-liveness.sh state transitions (P-28) =="
+sh_wt="$TMP/sh-live-wt"
+mkdir -p "$sh_wt"
+sh_enc=$(printf '%s' "$sh_wt" | sed 's#[/._]#-#g')
+mkdir -p "$AGENT_HOME/projects/$sh_enc"
+printf '2026-07-01T00:00:00Z\topen\t%s\t%s\tsh-live\t-\n' "$TMP/repo" "$sh_wt" > "$TMP/sh-liveness-jobs.log"
+touch "$AGENT_HOME/projects/$sh_enc/s.jsonl"
+if "$ROOT/utilities/dispatch-liveness.sh" "$TMP/sh-liveness-jobs.log" >/tmp/sh_liveness_alive.out 2>/tmp/sh_liveness_alive.err \
+  && grep -q '^ALIVE      sh-live  ' /tmp/sh_liveness_alive.out \
+  && grep -q '^— open 1 · alive 1 · suspect/dead 0$' /tmp/sh_liveness_alive.out; then
+  ok "dispatch-liveness.sh reports fresh transcript ALIVE"
+else
+  bad "dispatch-liveness.sh should report fresh transcript ALIVE"
+fi
+touch -d '20 minutes ago' "$AGENT_HOME/projects/$sh_enc/s.jsonl"
+if "$ROOT/utilities/dispatch-liveness.sh" "$TMP/sh-liveness-jobs.log" >/tmp/sh_liveness_suspect.out 2>/tmp/sh_liveness_suspect.err; then
+  bad "dispatch-liveness.sh should exit non-zero when transcript goes SUSPECT"
+else
+  rc=$?
+  if [ "$rc" -eq 3 ] \
+    && grep -q 'SUSPECT  sh-live  ' /tmp/sh_liveness_suspect.out \
+    && grep -q '^— open 1 · alive 0 · suspect/dead 1$' /tmp/sh_liveness_suspect.out; then
+    ok "dispatch-liveness.sh reports stale transcript SUSPECT"
+  else
+    bad "dispatch-liveness.sh should report stale transcript SUSPECT"
+  fi
+fi
+rm -f "$AGENT_HOME/projects/$sh_enc/s.jsonl"
+if "$ROOT/utilities/dispatch-liveness.sh" "$TMP/sh-liveness-jobs.log" >/tmp/sh_liveness_dead.out 2>/tmp/sh_liveness_dead.err; then
+  bad "dispatch-liveness.sh should exit non-zero when transcript is missing"
+else
+  rc=$?
+  if [ "$rc" -eq 3 ] \
+    && grep -q 'DEAD     sh-live  ' /tmp/sh_liveness_dead.out \
+    && grep -q '^— open 1 · alive 0 · suspect/dead 1$' /tmp/sh_liveness_dead.out; then
+    ok "dispatch-liveness.sh reports missing transcript DEAD"
+  else
+    bad "dispatch-liveness.sh should report missing transcript DEAD"
+  fi
+fi
+
+echo "== dispatch-liveness.py state transitions (P-28) =="
+py_wt="$TMP/py-live-wt"
+mkdir -p "$py_wt" "$TMP/py-liveness-sessions"
+printf '{"payload":{"cwd":"%s"}}\n' "$py_wt" > "$TMP/py-liveness-sessions/s.jsonl"
+printf '2026-07-01T00:00:00Z\topen\t%s\t%s\tpy-live\t-\n' "$TMP/repo" "$py_wt" > "$TMP/py-liveness-jobs.log"
+if CODEX_SESSIONS="$TMP/py-liveness-sessions" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$TMP/py-liveness-jobs.log" >/tmp/py_liveness_alive.out 2>/tmp/py_liveness_alive.err \
+  && grep -q '^ALIVE    py-live ' /tmp/py_liveness_alive.out \
+  && grep -q '^open 1 ; alive 1 ; suspect/dead 0$' /tmp/py_liveness_alive.out; then
+  ok "dispatch-liveness.py reports fresh transcript ALIVE"
+else
+  bad "dispatch-liveness.py should report fresh transcript ALIVE"
+fi
+touch -d '20 minutes ago' "$TMP/py-liveness-sessions/s.jsonl"
+if CODEX_SESSIONS="$TMP/py-liveness-sessions" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$TMP/py-liveness-jobs.log" >/tmp/py_liveness_suspect.out 2>/tmp/py_liveness_suspect.err; then
+  bad "dispatch-liveness.py should exit non-zero when transcript goes SUSPECT"
+else
+  rc=$?
+  if [ "$rc" -eq 3 ] \
+    && grep -q '^SUSPECT  py-live ' /tmp/py_liveness_suspect.out \
+    && grep -q '^open 1 ; alive 0 ; suspect/dead 1$' /tmp/py_liveness_suspect.out; then
+    ok "dispatch-liveness.py reports stale transcript SUSPECT"
+  else
+    bad "dispatch-liveness.py should report stale transcript SUSPECT"
+  fi
+fi
+rm -f "$TMP/py-liveness-sessions/s.jsonl"
+if CODEX_SESSIONS="$TMP/py-liveness-sessions" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$TMP/py-liveness-jobs.log" >/tmp/py_liveness_dead.out 2>/tmp/py_liveness_dead.err; then
+  bad "dispatch-liveness.py should exit non-zero when transcript is missing"
+else
+  rc=$?
+  if [ "$rc" -eq 3 ] \
+    && grep -q '^DEAD     py-live ' /tmp/py_liveness_dead.out \
+    && grep -q '^open 1 ; alive 0 ; suspect/dead 1$' /tmp/py_liveness_dead.out; then
+    ok "dispatch-liveness.py reports missing transcript DEAD"
+  else
+    bad "dispatch-liveness.py should report missing transcript DEAD"
+  fi
+fi
+
+echo "== dispatch-liveness .sh/.py STALE_MIN=15 default parity (P-28) =="
+parity_sh_wt="$TMP/parity-sh-wt"
+mkdir -p "$parity_sh_wt" "$AGENT_HOME/projects"
+parity_sh_enc=$(printf '%s' "$parity_sh_wt" | sed 's#[/._]#-#g')
+mkdir -p "$AGENT_HOME/projects/$parity_sh_enc"
+printf '2026-07-01T00:00:00Z\topen\t%s\t%s\tparity-sh\t-\n' "$TMP/repo" "$parity_sh_wt" > "$TMP/parity-sh-jobs.log"
+touch -d '10 minutes ago' "$AGENT_HOME/projects/$parity_sh_enc/s.jsonl"
+if "$ROOT/utilities/dispatch-liveness.sh" "$TMP/parity-sh-jobs.log" >/tmp/parity_sh_10m.out 2>/tmp/parity_sh_10m.err \
+  && grep -q '^ALIVE      parity-sh ' /tmp/parity_sh_10m.out; then
+  ok "dispatch-liveness.sh: ~10m transcript is ALIVE under default STALE_MIN=15"
+else
+  bad "dispatch-liveness.sh should report ~10m transcript ALIVE under default STALE_MIN=15"
+fi
+
+parity_py_wt="$TMP/parity-py-wt"
+mkdir -p "$parity_py_wt" "$TMP/parity-py-sessions"
+printf '{"payload":{"cwd":"%s"}}\n' "$parity_py_wt" > "$TMP/parity-py-sessions/s.jsonl"
+touch -d '10 minutes ago' "$TMP/parity-py-sessions/s.jsonl"
+printf '2026-07-01T00:00:00Z\topen\t%s\t%s\tparity-py\t-\n' "$TMP/repo" "$parity_py_wt" > "$TMP/parity-py-jobs.log"
+if CODEX_SESSIONS="$TMP/parity-py-sessions" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$TMP/parity-py-jobs.log" >/tmp/parity_py_10m.out 2>/tmp/parity_py_10m.err \
+  && grep -q '^ALIVE    parity-py ' /tmp/parity_py_10m.out; then
+  ok "dispatch-liveness.py: ~10m transcript is ALIVE under default STALE_MIN=15"
+else
+  bad "dispatch-liveness.py should report ~10m transcript ALIVE under default STALE_MIN=15"
+fi
+
+touch -d '20 minutes ago' "$AGENT_HOME/projects/$parity_sh_enc/s.jsonl"
+if "$ROOT/utilities/dispatch-liveness.sh" "$TMP/parity-sh-jobs.log" >/tmp/parity_sh_20m.out 2>/tmp/parity_sh_20m.err; then
+  bad "dispatch-liveness.sh should exit non-zero for a ~20m transcript under default STALE_MIN=15"
+else
+  rc=$?
+  if [ "$rc" -eq 3 ] && grep -q 'SUSPECT  parity-sh  ' /tmp/parity_sh_20m.out; then
+    ok "dispatch-liveness.sh: ~20m transcript is SUSPECT under default STALE_MIN=15"
+  else
+    bad "dispatch-liveness.sh should report ~20m transcript SUSPECT under default STALE_MIN=15"
+  fi
+fi
+
+touch -d '20 minutes ago' "$TMP/parity-py-sessions/s.jsonl"
+if CODEX_SESSIONS="$TMP/parity-py-sessions" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$TMP/parity-py-jobs.log" >/tmp/parity_py_20m.out 2>/tmp/parity_py_20m.err; then
+  bad "dispatch-liveness.py should exit non-zero for a ~20m transcript under default STALE_MIN=15"
+else
+  rc=$?
+  if [ "$rc" -eq 3 ] && grep -q '^SUSPECT  parity-py ' /tmp/parity_py_20m.out; then
+    ok "dispatch-liveness.py: ~20m transcript is SUSPECT under default STALE_MIN=15"
+  else
+    bad "dispatch-liveness.py should report ~20m transcript SUSPECT under default STALE_MIN=15"
+  fi
+fi
 if "$CODEX" mcp >/tmp/codex_mcp.out 2>/tmp/codex_mcp.err \
   && grep -q '^adapter=codex$' /tmp/codex_mcp.out \
   && grep -q '^runtime_surface=codex-native-mcp$' /tmp/codex_mcp.out \

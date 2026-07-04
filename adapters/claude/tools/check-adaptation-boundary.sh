@@ -29,6 +29,25 @@ fail_msg() {
 CLAUDE_NATIVE_SURFACE_PATTERN='adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|CLAUDE_HOME|track-toggle\.sh|agent-modes|allowedTools|(^|[^[:alnum:]_/.-])skills/|/\.claude/'
 NON_CODEX_DESIGN_SURFACE_PATTERN='Design MCP|mcp__design__|tools/design-mcp|<agent-home>/tools/design-mcp|getConsoleLogs|eval_js|preview\(\{ path \}\)'
 
+# codex-adapter-parity audit P-19 (2026-07-04): module-level derivation of the portable hook-event
+# domain from adapters/claude/settings.json ".hooks" top-level keys. MUST stay module-scope (not
+# function-local) because the runner invokes the consumer check_install_layout_codex_projection
+# BEFORE the producer check_codex_bin_wrappers — a function-local var would be unbound under set -u.
+EVENTS=$(python3 -c '
+import json
+d = json.load(open("adapters/claude/settings.json"))
+for k in d.get("hooks", {}).keys():
+    print(k)
+' 2>/dev/null || true)
+if [ -z "$EVENTS" ]; then
+  fail_msg "could not derive hook EVENTS domain from adapters/claude/settings.json .hooks (empty extraction)"
+fi
+# HOOK_EVENT_EXEMPT: events in $EVENTS explicitly not required to have a Codex hooks.json bridge /
+# INSTALL_LAYOUT.md doc entry. Empty today (all 7 current events are bridged and documented) — the
+# mechanism, not a current exemption. Module-level so both consumer sites (check_install_layout_codex_projection,
+# check_codex_bin_wrappers) can read it regardless of registration order.
+HOOK_EVENT_EXEMPT=""
+
 check_no_claude_native_refs() {
   path=$1
   label=$2
@@ -299,19 +318,24 @@ check_install_layout_codex_projection() {
   fi
   if ! grep -Fq 'tmp_codex_hook_home=' INSTALL_LAYOUT.md \
     || ! grep -Fq 'codex_setting/codex-hooks/hooks.json' INSTALL_LAYOUT.md \
-    || ! grep -Fq '"SessionStart"' INSTALL_LAYOUT.md \
-    || ! grep -Fq '"SessionEnd"' INSTALL_LAYOUT.md \
-    || ! grep -Fq '"Stop"' INSTALL_LAYOUT.md \
-    || ! grep -Fq '"UserPromptSubmit"' INSTALL_LAYOUT.md \
-    || ! grep -Fq '"PermissionRequest"' INSTALL_LAYOUT.md \
-    || ! grep -Fq '"PreToolUse"' INSTALL_LAYOUT.md \
-    || ! grep -Fq '"PostToolUse"' INSTALL_LAYOUT.md \
     || ! grep -Fq 'sessionend-lifecycle.py' INSTALL_LAYOUT.md \
     || ! grep -Fq 'permissionrequest-lifecycle.py' INSTALL_LAYOUT.md \
     || ! grep -Fq 'posttooluse-read-marker.py' INSTALL_LAYOUT.md \
     || ! grep -Fq '! rg "$non_claude_runtime_re" "$tmp_codex_hook_home/hooks.json"' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate Codex native hook projection installation"
   fi
+  # codex-adapter-parity audit P-19 (2026-07-04): derive the doc-literal hook-event completeness
+  # check from the SAME module-level $EVENTS var (not a re-extraction) instead of a second hardcoded
+  # 7-event list, so a newly added Claude hook event that INSTALL_LAYOUT.md fails to document also
+  # fails loud (closes the second P-19 leak window besides check_codex_bin_wrappers at line ~789).
+  for event in $EVENTS; do
+    case " $HOOK_EVENT_EXEMPT " in
+      *" $event "*) continue ;;
+    esac
+    if ! grep -Fq "\"$event\"" INSTALL_LAYOUT.md; then
+      fail_msg "INSTALL_LAYOUT.md must document Codex native hook projection for event $event"
+    fi
+  done
   if ! grep -Fq '! rg "$non_claude_runtime_re" /tmp/codex-skills.json' INSTALL_LAYOUT.md \
     || ! grep -Fq '! rg "$non_claude_runtime_re" /tmp/codex-plugin-skills.json' INSTALL_LAYOUT.md \
     || ! grep -Fq '! rg "$non_claude_runtime_re" "$tmp_codex_agent_home/agents"' INSTALL_LAYOUT.md; then
@@ -364,30 +388,18 @@ check_install_layout_codex_projection() {
     || ! grep -Fq 'test -x codex_setting/tools/material/browser-fetch.sh' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate Codex material browser-fetch projection"
   fi
-  if ! grep -Fq 'codex_setting/bin/preflight.sh mode-info material/data-script >/tmp/codex-data-script-mode.txt' INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg '^tool_contract=data-script$' /tmp/codex-data-script-mode.txt" INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg '^runtime_surface=adapter-owned-data-script$' /tmp/codex-data-script-mode.txt" INSTALL_LAYOUT.md \
-    || ! grep -Fq 'test -x codex_setting/tools/material/data-script.sh' INSTALL_LAYOUT.md; then
-    fail_msg "INSTALL_LAYOUT.md must validate Codex material data-script projection"
-  fi
-  if ! grep -Fq 'codex_setting/bin/preflight.sh mode-info material/figure-gen >/tmp/codex-figure-gen-mode.txt' INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg '^tool_contract=figure-gen$' /tmp/codex-figure-gen-mode.txt" INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg '^runtime_surface=adapter-owned-figure-gen$' /tmp/codex-figure-gen-mode.txt" INSTALL_LAYOUT.md \
-    || ! grep -Fq 'test -x codex_setting/tools/material/figure-gen.sh' INSTALL_LAYOUT.md; then
-    fail_msg "INSTALL_LAYOUT.md must validate Codex material figure-gen projection"
-  fi
-  if ! grep -Fq 'codex_setting/bin/preflight.sh mode-info material/pdf-extract >/tmp/codex-pdf-extract-mode.txt' INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg '^tool_contract=pdf-extract$' /tmp/codex-pdf-extract-mode.txt" INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg '^runtime_surface=adapter-owned-pdf-extract$' /tmp/codex-pdf-extract-mode.txt" INSTALL_LAYOUT.md \
-    || ! grep -Fq 'test -x codex_setting/tools/material/pdf-extract.sh' INSTALL_LAYOUT.md; then
-    fail_msg "INSTALL_LAYOUT.md must validate Codex material PDF extract projection"
-  fi
-  if ! grep -Fq 'codex_setting/bin/preflight.sh mode-info material/web-image-search >/tmp/codex-web-image-search-mode.txt' INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg '^tool_contract=web-image-search$' /tmp/codex-web-image-search-mode.txt" INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg '^runtime_surface=adapter-owned-web-image-search$' /tmp/codex-web-image-search-mode.txt" INSTALL_LAYOUT.md \
-    || ! grep -Fq 'test -x codex_setting/tools/material/web-image-search.sh' INSTALL_LAYOUT.md; then
-    fail_msg "INSTALL_LAYOUT.md must validate Codex material web image search projection"
-  fi
+  # codex-adapter-parity audit P-42 (2026-07-04): fold the four IDENTICAL-shape material tool doc
+  # checks (data-script, figure-gen, pdf-extract, web-image-search) into a derived loop templated by
+  # $tool. browser-fetch is kept as its own separate block above — it carries a 5th `native_mode_path`
+  # assertion the other four do not, so it must not be swept into this fold (F3, behavior-preserving).
+  for tool in data-script figure-gen pdf-extract web-image-search; do
+    if ! grep -Fq "codex_setting/bin/preflight.sh mode-info material/$tool >/tmp/codex-$tool-mode.txt" INSTALL_LAYOUT.md \
+      || ! grep -Fq "rg '^tool_contract=$tool\$' /tmp/codex-$tool-mode.txt" INSTALL_LAYOUT.md \
+      || ! grep -Fq "rg '^runtime_surface=adapter-owned-$tool\$' /tmp/codex-$tool-mode.txt" INSTALL_LAYOUT.md \
+      || ! grep -Fq "test -x codex_setting/tools/material/$tool.sh" INSTALL_LAYOUT.md; then
+      fail_msg "INSTALL_LAYOUT.md must validate Codex material $tool projection"
+    fi
+  done
   if ! grep -Fq 'codex_setting/bin/preflight.sh mode-info qa/test >/tmp/codex-test-mode.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^tool_contract=verification-runner$' /tmp/codex-test-mode.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^runtime_surface=adapter-owned-verification-runner$' /tmp/codex-test-mode.txt" INSTALL_LAYOUT.md \
@@ -771,7 +783,15 @@ check_codex_bin_wrappers() {
       fail_msg "adapters/codex/hooks/$p is missing or not executable"
     fi
   done
-  for event in SessionStart SessionEnd Stop UserPromptSubmit PermissionRequest PreToolUse PostToolUse; do
+  # codex-adapter-parity audit P-19 (2026-07-04): derive the hook-event domain from the module-level
+  # $EVENTS var (adapters/claude/settings.json .hooks keys) instead of a hardcoded 7-event list, so a
+  # newly added Claude hook event that lacks a Codex hooks.json bridge fails loud instead of leaking.
+  # HOOK_EVENT_EXEMPT (module-level, defined near $EVENTS) is empty today — the mechanism, not a
+  # current exemption.
+  for event in $EVENTS; do
+    case " $HOOK_EVENT_EXEMPT " in
+      *" $event "*) continue ;;
+    esac
     if ! grep -Fq "\"$event\"" adapters/codex/hooks/hooks.json; then
       fail_msg "adapters/codex/hooks/hooks.json must register Codex $event"
     fi
@@ -1013,6 +1033,29 @@ check_codex_utility_projection() {
       fail_msg "adapters/codex/utilities/$p must not be projected until Codex support is documented"
     fi
   done
+
+  # codex-adapter-parity audit P-40 (2026-07-04): derived under-projection completeness pair — every
+  # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
+  # leak window where a newly added utility silently has no projection decision).
+  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh"
+  UTILITY_DEFERRED="dispatch-liveness.sh extract_web_figures.py"
+  utility_count=0
+  for f in utilities/*; do
+    [ -f "$f" ] || continue
+    utility_count=$((utility_count + 1))
+  done
+  if [ "$utility_count" -eq 0 ]; then
+    fail_msg "utilities/* domain is empty; cannot verify Codex utility projection completeness"
+    return
+  fi
+  for f in utilities/*; do
+    [ -f "$f" ] || continue
+    bn=$(basename "$f")
+    case " $UTILITY_PROJECTED $UTILITY_DEFERRED " in
+      *" $bn "*) ;;
+      *) fail_msg "no projection decision for utilities/$bn (must be classified projected or deferred)" ;;
+    esac
+  done
 }
 
 check_codex_tool_projection() {
@@ -1120,10 +1163,34 @@ check_codex_tool_projection() {
     printf '%s\n' "$extra"
   fi
 
-  for p in build-manifest.py check-adaptation-boundary.sh design-mcp web-bundle; do
+  for p in build-manifest.py check-adaptation-boundary.sh design-mcp web-bundle fleet profile; do
     if [ -e "adapters/codex/tools/$p" ] || [ -L "adapters/codex/tools/$p" ]; then
       fail_msg "adapters/codex/tools/$p must not be projected until Codex support is documented"
     fi
+  done
+
+  # codex-adapter-parity audit P-21 (2026-07-04): derived under-projection completeness — every
+  # top-level tools/* entry must be classified projected or deferred, else fail loud. design-mcp is
+  # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
+  # completeness check and the denylist above are separate assertions and must not be conflated.
+  TOOL_PROJECTED="memory material"
+  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh design-mcp web-bundle fleet profile"
+  tool_count=0
+  for f in tools/*; do
+    [ -e "$f" ] || continue
+    tool_count=$((tool_count + 1))
+  done
+  if [ "$tool_count" -eq 0 ]; then
+    fail_msg "tools/* domain is empty; cannot verify Codex tool projection completeness"
+    return
+  fi
+  for f in tools/*; do
+    [ -e "$f" ] || continue
+    bn=$(basename "$f")
+    case " $TOOL_PROJECTED $TOOL_DEFERRED " in
+      *" $bn "*) ;;
+      *) fail_msg "no projection decision for tools/$bn (must be classified projected or deferred)" ;;
+    esac
   done
 }
 
@@ -1138,10 +1205,27 @@ check_codex_scaffold_projection() {
     fail_msg "codex_setting/scaffolds points to $target; expected ../adapters/codex/scaffolds"
   fi
 
-  for p in deck_stage/deck_stage.html design_canvas/design_canvas.html device_frames/device_frames.html image_slot/image_slot.html tweaks_panel/tweaks_panel.html; do
+  # codex-adapter-parity audit P-41 (2026-07-04): derive the iterated scaffold set from scaffolds/*/
+  # (skip README.md, which is not a directory) instead of a hardcoded 5-list, so a newly added
+  # scaffold directory is required to have a Codex projection instead of silently leaking. The
+  # cmp -s shared-asset mirror (all non-deck_stage scaffolds), the deck_stage sanitization check, and
+  # the Claude-path denylist below are all preserved unchanged — only the iterated set changes.
+  scaffold_count=0
+  for scaffold_dir in scaffolds/*/; do
+    [ -d "$scaffold_dir" ] || continue
+    scaffold_count=$((scaffold_count + 1))
+  done
+  if [ "$scaffold_count" -eq 0 ]; then
+    fail_msg "scaffolds/*/ domain is empty; cannot verify Codex scaffold projection completeness"
+    return
+  fi
+  for scaffold_dir in scaffolds/*/; do
+    [ -d "$scaffold_dir" ] || continue
+    d=$(basename "$scaffold_dir")
+    p="$d/$d.html"
     if [ ! -f "adapters/codex/scaffolds/$p" ]; then
       fail_msg "adapters/codex/scaffolds/$p must exist as a Codex scaffold projection"
-    elif [ "$p" != "deck_stage/deck_stage.html" ] && ! cmp -s "scaffolds/$p" "adapters/codex/scaffolds/$p"; then
+    elif [ "$d" != "deck_stage" ] && ! cmp -s "scaffolds/$p" "adapters/codex/scaffolds/$p"; then
       fail_msg "adapters/codex/scaffolds/$p must mirror the shared scaffold asset"
     fi
   done
@@ -1432,6 +1516,48 @@ PY
     || ! grep -Fq '`codex debug agent` listing surface' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex custom agent docs must state current validation boundary until runtime agent discovery exists"
   fi
+}
+
+# codex-adapter-parity audit P-26 (2026-07-04): cross-verify each Codex role-profile agent's static
+# PROFILE_CONFIG model/reasoning pin against the concrete resolution role-map.sh produces for its
+# declared "Codex role-map input:". memory-scout is excluded (no role-map input — intentional
+# low-cost read-only pin, already asserted elsewhere). Two profiles carry a documented, intentional
+# divergence and are exempted from the equality assertion:
+#   - material-team: cost-saving — static pin gpt-5.4-mini/low vs role-map resolution
+#     (fast tool worker -> deep-maker family) gpt-5.4-mini/medium.
+#   - external-adversary: env-gated independence fallback — role-map.sh resolves "external adversary"
+#     via AGENT_MODEL_EXTERNAL/AGENT_EXTERNAL_CMD, which is unset in a clean env (`unconfigured`), so
+#     its resolved model must never be asserted here.
+check_codex_model_pin_role_map_consistency() {
+  MODEL_PIN_DIVERGENCE="material-team external-adversary"
+
+  for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
+    agent="adapters/codex/agents/$profile.toml"
+    if [ ! -f "$agent" ]; then
+      fail_msg "$agent is missing (cannot verify model pin vs role-map consistency)"
+      continue
+    fi
+
+    static_model=$(sed -n 's/^model = "\(.*\)"$/\1/p' "$agent" | head -n 1)
+    static_reasoning=$(sed -n 's/^model_reasoning_effort = "\(.*\)"$/\1/p' "$agent" | head -n 1)
+
+    case " $MODEL_PIN_DIVERGENCE " in
+      *" $profile "*) continue ;;
+    esac
+
+    mapped_role=$(sed -n 's/^Codex role-map input: `\(.*\)`$/\1/p' "$agent" | head -n 1)
+    if [ -z "$mapped_role" ] || ! adapters/codex/bin/role-map.sh "$mapped_role" >/tmp/codex-model-pin-role.out 2>/tmp/codex-model-pin-role.err; then
+      fail_msg "$agent's Codex role-map input must resolve through adapters/codex/bin/role-map.sh to verify its model pin"
+      continue
+    fi
+
+    resolved_model=$(sed -n 's/^model=\(.*\)$/\1/p' /tmp/codex-model-pin-role.out | head -n 1)
+    resolved_reasoning=$(sed -n 's/^reasoning=\(.*\)$/\1/p' /tmp/codex-model-pin-role.out | head -n 1)
+
+    if [ "$static_model" != "$resolved_model" ] || [ "$static_reasoning" != "$resolved_reasoning" ]; then
+      fail_msg "$agent static pin (model=$static_model, reasoning=$static_reasoning) must match role-map.sh resolution for '$mapped_role' (model=$resolved_model, reasoning=$resolved_reasoning), or be added to the documented MODEL_PIN_DIVERGENCE list"
+    fi
+  done
 }
 
 check_codex_native_mode_projection() {
@@ -1920,6 +2046,29 @@ check_opencode_utility_projection() {
       fail_msg "adapters/opencode/utilities/$p must not be projected until OpenCode support is documented"
     fi
   done
+
+  # codex-adapter-parity audit P-40 (2026-07-04): derived under-projection completeness pair — every
+  # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
+  # leak window where a newly added utility silently has no projection decision).
+  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh"
+  UTILITY_DEFERRED="dispatch-liveness.sh extract_web_figures.py"
+  utility_count=0
+  for f in utilities/*; do
+    [ -f "$f" ] || continue
+    utility_count=$((utility_count + 1))
+  done
+  if [ "$utility_count" -eq 0 ]; then
+    fail_msg "utilities/* domain is empty; cannot verify OpenCode utility projection completeness"
+    return
+  fi
+  for f in utilities/*; do
+    [ -f "$f" ] || continue
+    bn=$(basename "$f")
+    case " $UTILITY_PROJECTED $UTILITY_DEFERRED " in
+      *" $bn "*) ;;
+      *) fail_msg "no projection decision for utilities/$bn (must be classified projected or deferred)" ;;
+    esac
+  done
 }
 
 check_opencode_tool_projection() {
@@ -2027,10 +2176,34 @@ check_opencode_tool_projection() {
     printf '%s\n' "$extra"
   fi
 
-  for p in build-manifest.py check-adaptation-boundary.sh design-mcp web-bundle; do
+  for p in build-manifest.py check-adaptation-boundary.sh design-mcp web-bundle fleet profile; do
     if [ -e "adapters/opencode/tools/$p" ] || [ -L "adapters/opencode/tools/$p" ]; then
       fail_msg "adapters/opencode/tools/$p must not be projected until OpenCode support is documented"
     fi
+  done
+
+  # codex-adapter-parity audit P-21 (2026-07-04): derived under-projection completeness — every
+  # top-level tools/* entry must be classified projected or deferred, else fail loud. design-mcp is
+  # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
+  # completeness check and the denylist above are separate assertions and must not be conflated.
+  TOOL_PROJECTED="memory material"
+  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh design-mcp web-bundle fleet profile"
+  tool_count=0
+  for f in tools/*; do
+    [ -e "$f" ] || continue
+    tool_count=$((tool_count + 1))
+  done
+  if [ "$tool_count" -eq 0 ]; then
+    fail_msg "tools/* domain is empty; cannot verify OpenCode tool projection completeness"
+    return
+  fi
+  for f in tools/*; do
+    [ -e "$f" ] || continue
+    bn=$(basename "$f")
+    case " $TOOL_PROJECTED $TOOL_DEFERRED " in
+      *" $bn "*) ;;
+      *) fail_msg "no projection decision for tools/$bn (must be classified projected or deferred)" ;;
+    esac
   done
 }
 
@@ -2099,20 +2272,27 @@ check_opencode_native_agent_projection() {
     cat /tmp/opencode-sync-agents.err
   fi
 
-  for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
+  # codex-adapter-parity audit P-18 (2026-07-04): memory-scout added to the profile domain (EXTRA
+  # agent, no roles/README.md catalog row) — Codex precedent conditional shape (see
+  # check_codex_native_agent_projection) ported verbatim for the skip/keep/add split below.
+  for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary memory-scout; do
     agent="adapters/opencode/agents/$profile/$profile.md"
     if [ ! -f "$agent" ]; then
       fail_msg "$agent is missing"
       continue
     fi
-    if ! grep -Fq "roles/README.md" "$agent"; then
+    if [ "$profile" = "memory-scout" ]; then
+      if ! grep -Fq "core/MEMORY.md" "$agent" || ! grep -Fq "§7.4" "$agent"; then
+        fail_msg "$agent must reference core/MEMORY.md §7.4 as portable source"
+      fi
+    elif ! grep -Fq "roles/README.md" "$agent"; then
       fail_msg "$agent must reference roles/README.md as portable source"
     fi
-    if ! grep -Fq "adapters/opencode/bin/preflight.sh role" "$agent"; then
+    if [ "$profile" != "memory-scout" ] && ! grep -Fq "adapters/opencode/bin/preflight.sh role" "$agent"; then
       fail_msg "$agent must reference the OpenCode role mapper"
     fi
     mapped_role=$(sed -n 's/^- OpenCode role-map input: `\(.*\)`$/\1/p' "$agent" | head -n 1)
-    if [ -z "$mapped_role" ] || ! adapters/opencode/bin/role-map.sh "$mapped_role" >/tmp/opencode-agent-role.out 2>/tmp/opencode-agent-role.err; then
+    if [ "$profile" != "memory-scout" ] && { [ -z "$mapped_role" ] || ! adapters/opencode/bin/role-map.sh "$mapped_role" >/tmp/opencode-agent-role.out 2>/tmp/opencode-agent-role.err; }; then
       fail_msg "$agent must include an OpenCode role-map input that resolves through adapters/opencode/bin/role-map.sh"
       cat /tmp/opencode-agent-role.err
     fi
@@ -2129,11 +2309,25 @@ check_opencode_native_agent_projection() {
   for dir in adapters/opencode/agents/*; do
     [ -d "$dir" ] || continue
     profile=$(basename "$dir")
-    case " plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary " in
+    case " plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary memory-scout " in
       *" $profile "*) ;;
       *) fail_msg "$dir is not an approved OpenCode native agent projection" ;;
     esac
   done
+
+  # codex-adapter-parity audit P-18 (2026-07-04): read-only frontmatter assertion for the OpenCode
+  # memory-scout projection (mirrors the Codex model/reasoning/sandbox_mode/read-only-command check).
+  scout_agent="adapters/opencode/agents/memory-scout/memory-scout.md"
+  if [ -f "$scout_agent" ]; then
+    if ! grep -Fq 'task: false' "$scout_agent" \
+      || ! grep -Fq 'edit: false' "$scout_agent" \
+      || ! grep -Fq 'write: false' "$scout_agent" \
+      || ! grep -Fq 'task: deny' "$scout_agent" \
+      || ! grep -Fq 'edit: deny' "$scout_agent" \
+      || ! grep -Fq 'Never run memory mutation commands' "$scout_agent"; then
+      fail_msg "$scout_agent must be a read-only OpenCode subagent projection (tools/permission deny)"
+    fi
+  fi
 
   bad=$(rg -n "$CLAUDE_NATIVE_SURFACE_PATTERN" adapters/opencode/agents 2>/dev/null || true)
   if [ -n "$bad" ]; then
@@ -2409,6 +2603,43 @@ check_claude_boundary_guard_projection() {
   fi
 }
 
+# codex-adapter-parity audit Step 9.0 (2026-07-04): close the mirror cmp -s enforcement gap for the
+# two mirrors this plan edits that were previously only tree/existence-checked, not content-checked
+# (check_claude_hook_projection / check_claude_loop_projection assert existence + non-symlink only).
+check_claude_portable_guards_projection() {
+  adapter_guard=adapters/claude/hooks/portable-guards.test.sh
+  root_guard=hooks/portable-guards.test.sh
+
+  if [ ! -x "$adapter_guard" ]; then
+    fail_msg "$adapter_guard must be an executable concrete portable-guards test projection"
+    return
+  fi
+  if [ -L "$adapter_guard" ]; then
+    fail_msg "$adapter_guard must be concrete, not a symlink passthrough"
+    return
+  fi
+  if ! cmp -s "$root_guard" "$adapter_guard"; then
+    fail_msg "$adapter_guard must stay byte-equivalent to $root_guard"
+  fi
+}
+
+check_claude_drill_runner_projection() {
+  adapter_runner=adapters/claude/loops/drill/run.sh
+  root_runner=loops/drill/run.sh
+
+  if [ ! -x "$adapter_runner" ]; then
+    fail_msg "$adapter_runner must be an executable concrete drill runner projection"
+    return
+  fi
+  if [ -L "$adapter_runner" ]; then
+    fail_msg "$adapter_runner must be concrete, not a symlink passthrough"
+    return
+  fi
+  if ! cmp -s "$root_runner" "$adapter_runner"; then
+    fail_msg "$adapter_runner must stay byte-equivalent to $root_runner"
+  fi
+}
+
 check_claude_scaffold_projection() {
   if [ ! -L claude_setting/scaffolds ]; then
     fail_msg "claude_setting/scaffolds must project adapters/claude/scaffolds"
@@ -2513,6 +2744,52 @@ check_role_catalog() {
     fi
     if ! grep -Fq "adapters/opencode/agents/$profile/$profile.md" roles/README.md; then
       fail_msg "roles/README.md must document OpenCode native agent projection for $profile"
+    fi
+  done
+}
+
+check_claude_native_agent_projection() {
+  # codex-adapter-parity audit P-01 (2026-07-04): derived completeness guard — every
+  # adapters/claude/agents/*.md must resolve (via an explicit name-map) to an existing Codex TOML
+  # AND OpenCode dir. Complements (does not replace) the existing per-profile field-validation loops
+  # in check_codex_native_agent_projection / check_opencode_native_agent_projection, which own the
+  # rich field checks; this guard owns only the completeness invariant (the structural root of the
+  # memory-scout OpenCode-projection leak, P-18).
+  claude_agent_count=0
+  for a in adapters/claude/agents/*.md; do
+    [ -f "$a" ] || continue
+    claude_agent_count=$((claude_agent_count + 1))
+  done
+  if [ "$claude_agent_count" -eq 0 ]; then
+    fail_msg "adapters/claude/agents/*.md domain is empty; cannot verify Claude native agent projection completeness"
+    return
+  fi
+
+  # CLAUDE_AGENT_PROJECTION_EXEMPT: agents intentionally excluded from the projection-completeness
+  # requirement. Empty today — the mechanism, not a current exemption.
+  CLAUDE_AGENT_PROJECTION_EXEMPT=""
+
+  for a in adapters/claude/agents/*.md; do
+    [ -f "$a" ] || continue
+    name=$(basename "$a" .md)
+
+    case " $CLAUDE_AGENT_PROJECTION_EXEMPT " in
+      *" $name "*) continue ;;
+    esac
+
+    # explicit name-map: identity by default; declared renames only (never silent).
+    # memory-scout is an EXTRA agent (present in both adapters, exempt from the roles/README.md
+    # role-catalog row check_role_catalog owns) but still requires this completeness projection.
+    case "$name" in
+      codex-review-team) target=external-adversary ;;
+      *) target=$name ;;
+    esac
+
+    if [ ! -f "adapters/codex/agents/$target.toml" ]; then
+      fail_msg "adapters/claude/agents/$name.md has no Codex native agent projection (expected adapters/codex/agents/$target.toml)"
+    fi
+    if [ ! -f "adapters/opencode/agents/$target/$target.md" ]; then
+      fail_msg "adapters/claude/agents/$name.md has no OpenCode native agent projection (expected adapters/opencode/agents/$target/$target.md)"
     fi
   done
 }
@@ -3044,6 +3321,7 @@ check_codex_scaffold_projection
 check_codex_native_skill_projection
 check_codex_native_plugin_projection
 check_codex_native_agent_projection
+check_codex_model_pin_role_map_consistency
 check_codex_native_mode_projection
 check_codex_native_hook_projection
 check_portable_agent_home_resolution
@@ -3060,11 +3338,14 @@ check_claude_mode_projection
 check_claude_hook_projection
 check_claude_utility_projection
 check_claude_boundary_guard_projection
+check_claude_portable_guards_projection
+check_claude_drill_runner_projection
 check_claude_scaffold_projection
 check_claude_loop_projection
 check_claude_tool_projection
 check_removed_root_surfaces
 check_role_catalog
+check_claude_native_agent_projection
 check_adaptation_inventory_native_surfaces
 check_projection_summary_docs
 check_capability_catalog
