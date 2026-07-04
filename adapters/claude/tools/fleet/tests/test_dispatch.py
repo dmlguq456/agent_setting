@@ -1,0 +1,256 @@
+#!/usr/bin/env python3
+"""Hermetic unit tests — tools/fleet registry-home split (Phase A), cwd-fallback
+enrichment (Phase B), claude.py runtime-home (Phase C). Stdlib unittest, zero external
+deps. Every OS/process access is monkeypatched (unittest.mock) — no test here touches the
+real ps/proc/home.
+
+Runnable directly (`python3 tools/fleet/tests/test_dispatch.py`) or via
+`python3 -m unittest` / `python3 -m unittest fleet.tests.test_dispatch -v` (from `tools/`).
+"""
+import os
+import sys
+import tempfile
+import unittest
+from unittest import mock
+
+# Make `tools/` importable so `from fleet.collectors import ...` resolves regardless of
+# invocation style. This file lives one level deeper than fleet.py
+# (tools/fleet/tests/test_dispatch.py vs tools/fleet/fleet.py), so THREE dirname() hops
+# (mirroring fleet.py:20's two-hop insert) reach `tools/`.
+_TOOLS_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _TOOLS_DIR not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR)
+
+from fleet.collectors import dispatch  # noqa: E402
+from fleet.collectors import claude    # noqa: E402
+
+
+# --- D1: _registry_home() / _jobs_path() precedence ---
+class RegistryHomeTest(unittest.TestCase):
+
+    def test_agent_home_wins_over_claude_home(self):
+        with mock.patch.dict(os.environ,
+                              {"AGENT_HOME": "/agent-home", "CLAUDE_HOME": "/claude-home"},
+                              clear=True):
+            self.assertEqual(dispatch._registry_home(), "/agent-home")
+
+    def test_claude_home_used_when_agent_home_absent(self):
+        with mock.patch.dict(os.environ, {"CLAUDE_HOME": "/claude-home"}, clear=True):
+            self.assertEqual(dispatch._registry_home(), "/claude-home")
+
+    def test_agent_setting_isdir_fallback(self):
+        # Regression guard: the OLD _jobs_path/_proj_home fallback skipped this
+        # $HOME/agent_setting step entirely (plan Current State §2) — this is the step
+        # that must now be honored when no env var is set and the dir exists.
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch("fleet.collectors.dispatch.os.path.expanduser",
+                         side_effect=lambda p: p.replace("~", "/home/u")), \
+             mock.patch("fleet.collectors.dispatch.os.path.isdir", return_value=True):
+            self.assertEqual(dispatch._registry_home(), "/home/u/agent_setting")
+
+    def test_dot_claude_fallback_when_agent_setting_absent(self):
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch("fleet.collectors.dispatch.os.path.expanduser",
+                         side_effect=lambda p: p.replace("~", "/home/u")), \
+             mock.patch("fleet.collectors.dispatch.os.path.isdir", return_value=False):
+            self.assertEqual(dispatch._registry_home(), "/home/u/.claude")
+
+    def test_jobs_path_override_beats_everything(self):
+        with mock.patch.dict(os.environ,
+                              {"AGENT_DISPATCH_JOBS": "/env/jobs.log", "AGENT_HOME": "/agent-home"},
+                              clear=True):
+            self.assertEqual(dispatch._jobs_path(override="/override/jobs.log"),
+                              "/override/jobs.log")
+
+    def test_jobs_path_env_beats_registry_home(self):
+        with mock.patch.dict(os.environ,
+                              {"AGENT_DISPATCH_JOBS": "/env/jobs.log", "AGENT_HOME": "/agent-home"},
+                              clear=True):
+            self.assertEqual(dispatch._jobs_path(), "/env/jobs.log")
+
+    def test_jobs_path_uses_registry_home(self):
+        with mock.patch.dict(os.environ, {"AGENT_HOME": "/agent-home"}, clear=True):
+            self.assertEqual(dispatch._jobs_path(),
+                              os.path.join("/agent-home", ".dispatch", "jobs.log"))
+
+
+# --- D2: runtime home (_proj_home / claude._home) must NOT follow the registry home ---
+class RuntimeHomeIndependenceTest(unittest.TestCase):
+
+    def test_dispatch_proj_home_ignores_agent_home(self):
+        with mock.patch.dict(os.environ, {"AGENT_HOME": "/agent-home"}, clear=True), \
+             mock.patch("fleet.collectors.dispatch.os.path.expanduser",
+                         side_effect=lambda p: p.replace("~", "/home/u")):
+            self.assertEqual(dispatch._proj_home(), "/home/u/.claude")
+
+    def test_claude_home_ignores_agent_home(self):
+        with mock.patch.dict(os.environ, {"AGENT_HOME": "/agent-home"}, clear=True), \
+             mock.patch("fleet.collectors.claude.os.path.expanduser",
+                         side_effect=lambda p: p.replace("~", "/home/u")):
+            self.assertEqual(claude._home(), "/home/u/.claude")
+
+    def test_dispatch_proj_home_honors_claude_config_dir(self):
+        with mock.patch.dict(os.environ,
+                              {"AGENT_HOME": "/agent-home", "CLAUDE_CONFIG_DIR": "/cfg"},
+                              clear=True):
+            self.assertEqual(dispatch._proj_home(), "/cfg")
+
+    def test_claude_home_honors_claude_config_dir(self):
+        with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": "/cfg"}, clear=True):
+            self.assertEqual(claude._home(), "/cfg")
+
+
+# --- D3: cwd-fallback enrichment (fully hermetic) ---
+class CwdFallbackEnrichmentTest(unittest.TestCase):
+
+    def test_collect_enriches_tokenless_log_job(self):
+        """Case 1 — collect() end-to-end: a harness=None jobs.log row whose worktree
+        matches a live (mocked) claude -p cwd gets harness/pid/model backfilled."""
+        with tempfile.TemporaryDirectory() as tmp:
+            worktree = os.path.join(tmp, "worktree")
+            os.makedirs(worktree, exist_ok=True)
+            jobs_log = os.path.join(tmp, "jobs.log")
+            row = "\t".join([
+                "2026-07-05T01:00:00+00:00", "open", "testrepo", worktree,
+                "test-slug", "capability=autopilot-code,mode=dev,qa=quick",
+            ])
+            with open(jobs_log, "w") as f:
+                f.write(row + "\n")
+
+            # Key normalized with the SAME helper collect()'s lookup uses, so the tempdir
+            # path matches even if realpath rewrites it (plan D3 note).
+            norm_key = dispatch._norm_cwd(worktree)
+
+            with mock.patch.object(dispatch, "_scan_processes", return_value=[]), \
+                 mock.patch.object(dispatch, "_live_claude_cwds",
+                                    return_value={norm_key: 4242}), \
+                 mock.patch.object(dispatch, "_claude_job_model", return_value="Opus 4.8"), \
+                 mock.patch.object(dispatch, "_job_liveness",
+                                    side_effect=lambda *a, **k: "working"):
+                # live_stage() is intentionally left unmocked — it only walks the tmp
+                # worktree (no plans/ dir there → falls back to the raw status), which
+                # stays hermetic (plan D3 note).
+                jobs = dispatch.collect(jobs_path=jobs_log)
+
+            self.assertEqual(len(jobs), 1)
+            job = jobs[0]
+            self.assertEqual(job.harness, "claude")
+            self.assertEqual(job.pid, 4242)
+            self.assertEqual(job.model, "Opus 4.8")
+
+    def test_argv_matched_pid_excluded_from_cwd_scan(self):
+        """Case 2 — an already argv-matched (proc-scanned) pid is passed into
+        _live_claude_cwds's exclude_pids, so it is never re-resolved via cwd. A distinct
+        tokenless open row is present so the candidate guard in collect() actually runs the
+        cwd scan (an all-argv-matched collect legitimately skips the second `ps`)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_log = os.path.join(tmp, "jobs.log")
+            worktree = os.path.join(tmp, "wt")
+            with open(jobs_log, "w") as f:
+                f.write("2026-07-05T01:00:00+09:00\topen\trepo\t%s\ttokenless-slug\t"
+                        "capability=autopilot-code,mode=dev,qa=standard\n" % worktree)
+
+            proc_job = dispatch.DispatchJob(
+                key="code", slug="proc-slug", cwd=tmp, pid=4242, harness="claude",
+            )
+            with mock.patch.object(dispatch, "_scan_processes", return_value=[proc_job]), \
+                 mock.patch.object(dispatch, "_live_claude_cwds",
+                                    return_value={}) as m_live, \
+                 mock.patch.object(dispatch, "_job_liveness",
+                                    side_effect=lambda *a, **k: "working"):
+                dispatch.collect(jobs_path=jobs_log)
+
+            m_live.assert_called_once()
+            self.assertEqual(m_live.call_args.args[0], {4242})
+
+    def test_no_cwd_scan_when_no_tokenless_candidate(self):
+        """Guard — when every job is already argv-matched (no log job with harness=None+cwd),
+        collect() skips the extra `ps` spawn: _live_claude_cwds is never called."""
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_log = os.path.join(tmp, "jobs.log")
+            open(jobs_log, "w").close()  # empty log → no candidate log jobs
+            proc_job = dispatch.DispatchJob(
+                key="code", slug="proc-slug", cwd=tmp, pid=4242, harness="claude",
+            )
+            with mock.patch.object(dispatch, "_scan_processes", return_value=[proc_job]), \
+                 mock.patch.object(dispatch, "_live_claude_cwds",
+                                    return_value={}) as m_live, \
+                 mock.patch.object(dispatch, "_job_liveness",
+                                    side_effect=lambda *a, **k: "working"):
+                dispatch.collect(jobs_path=jobs_log)
+            m_live.assert_not_called()
+
+    def test_p_token_gate_and_exclude_filtering(self):
+        """Case 3 (helper-level) — _live_claude_cwds keeps only non-excluded exact `-p`
+        token rows, rejecting an interactive `claude --resume` row. procscan._ps_lines
+        carries no cwd column (pid comm etime args only — procscan.py:53), so cwd is
+        ALWAYS resolved via os.readlink("/proc/<pid>/cwd"); that seam is mocked here too
+        (mapping each synthetic pid to a distinct tmp cwd) so this case touches NO real
+        /proc or sessions path — without it the helper would hit the real /proc/<pid>/cwd,
+        get OSError, fall back to the real ~/.claude/sessions/<pid>.json, get None, and
+        skip the pid entirely (returned dict {}), which would make this assertion
+        unprovable (plan D3 round-2 fix)."""
+        ps_lines = [
+            "1001 claude 00:10 claude -p --model opus",   # -p token, EXCLUDED pid
+            "1002 claude 00:05 claude -p --model opus",   # -p token, kept
+            "1003 claude 00:20 claude --resume",          # interactive — no -p token
+        ]
+        cwd_by_proc_path = {
+            "/proc/1001/cwd": "/tmp/fleet-test-cwd-1001",
+            "/proc/1002/cwd": "/tmp/fleet-test-cwd-1002",
+            "/proc/1003/cwd": "/tmp/fleet-test-cwd-1003",
+        }
+
+        def fake_readlink(path):
+            if path in cwd_by_proc_path:
+                return cwd_by_proc_path[path]
+            raise OSError(2, "No such file or directory", path)
+
+        with mock.patch("fleet.collectors.procscan._ps_lines", return_value=ps_lines), \
+             mock.patch("fleet.collectors.dispatch.os.readlink", side_effect=fake_readlink):
+            result = dispatch._live_claude_cwds({1001})
+
+        expected_key = dispatch._norm_cwd("/tmp/fleet-test-cwd-1002")
+        self.assertEqual(result, {expected_key: 1002})
+
+
+# --- D4: _job_liveness profile-path assembly (string check, no real filesystem) ---
+class JobLivenessPathAssemblyTest(unittest.TestCase):
+
+    def test_profile_branch_composes_under_registry_home(self):
+        calls = []
+
+        def fake_listdir(path):
+            calls.append(path)
+            raise OSError
+
+        with mock.patch.object(dispatch, "_registry_home", return_value="/REGISTRY"), \
+             mock.patch.object(dispatch, "_proj_home", return_value="/RUNTIME"), \
+             mock.patch("fleet.collectors.dispatch.os.listdir", side_effect=fake_listdir):
+            result = dispatch._job_liveness("/some/jcwd", now=0, profile="lab-runner",
+                                             slug="my-slug")
+
+        expected = os.path.join("/REGISTRY", ".dispatch", "homes", "my-slug.lab-runner",
+                                 "projects", dispatch._enc("/some/jcwd"))
+        self.assertEqual(calls, [expected])
+        self.assertEqual(result, "dead")
+
+    def test_non_profile_branch_composes_under_proj_home(self):
+        calls = []
+
+        def fake_listdir(path):
+            calls.append(path)
+            raise OSError
+
+        with mock.patch.object(dispatch, "_registry_home", return_value="/REGISTRY"), \
+             mock.patch.object(dispatch, "_proj_home", return_value="/RUNTIME"), \
+             mock.patch("fleet.collectors.dispatch.os.listdir", side_effect=fake_listdir):
+            result = dispatch._job_liveness("/some/jcwd", now=0, profile=None, slug=None)
+
+        expected = os.path.join("/RUNTIME", "projects", dispatch._enc("/some/jcwd"))
+        self.assertEqual(calls, [expected])
+        self.assertEqual(result, "dead")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

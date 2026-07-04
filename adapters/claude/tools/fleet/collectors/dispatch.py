@@ -73,21 +73,36 @@ def _parse_pipe(pipe):
 
 
 # --- jobs.log path ---
+def _registry_home():
+    """Canonical dispatch-registry home — reproduces utilities/agent-home.sh resolution
+    (AGENT_HOME → CLAUDE_HOME → $HOME/agent_setting if a dir → ~/.claude). Holds
+    .dispatch/jobs.log and .dispatch/homes/ (profile masked homes). Distinct from the
+    runtime telemetry home (_proj_home). See core/OPERATIONS.md §5.10."""
+    h = os.environ.get("AGENT_HOME") or os.environ.get("CLAUDE_HOME")
+    if h:
+        return h
+    cand = os.path.expanduser("~/agent_setting")
+    if os.path.isdir(cand):
+        return cand
+    return os.path.expanduser("~/.claude")
+
+
 def _jobs_path(override=None):
     if override:
         return override
     env = os.environ.get("AGENT_DISPATCH_JOBS")
     if env:
         return env
-    home = (os.environ.get("AGENT_HOME") or os.environ.get("CLAUDE_HOME")
-            or os.path.expanduser("~/.claude"))
+    home = _registry_home()
     return os.path.join(home, ".dispatch", "jobs.log")
 
 
 # --- job liveness = transcript mtime (dispatch-liveness.sh reuse, PRD §7) ---
 def _proj_home():
-    return (os.environ.get("AGENT_HOME") or os.environ.get("CLAUDE_HOME")
-            or os.path.expanduser("~/.claude"))
+    """Runtime telemetry home (projects/sessions/.statusline) — Claude Code config dir.
+    DISTINCT from the registry home (_registry_home): telemetry dirs live only here, not
+    under agent_setting. CLAUDE_CONFIG_DIR override honored, else ~/.claude."""
+    return os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
 
 
 def _enc(path):
@@ -110,6 +125,11 @@ def _claude_job_model(pid_s, jcwd=None):
     "model" field (assistant entries carry the real model id) — without this a dispatch
     launched with --model opus showed the PARENT's model (user 2026-07-02: main=Fable /
     dispatch=Opus 정책을 fleet 으로 검증할 수 있어야 함)."""
+    # Runtime-home only (accepted asymmetry, plan A5/R7): a profile(masked) headless job's
+    # own sessions/.statusline live under its masked config home
+    # (_registry_home()/.dispatch/homes/...), not here, so this lookup misses and degrades
+    # to None while _job_liveness (which DOES branch on profile) stays correct. Deferred
+    # fix recorded in R7.
     home = _proj_home()
     try:
         with open(os.path.join(home, "sessions", "%s.json" % pid_s)) as f:
@@ -143,13 +163,16 @@ def _job_liveness(path, now, stale_min=15, profile=None, slug=None):
 
     profile-aware (isomorphic to dispatch-liveness.sh, spec §7): when `profile` is set
     (and `slug` available), the job's transcript is isolated under its masked config home
-    (`.dispatch/homes/<slug>.<profile>/projects/<enc>`) rather than the main home's
-    `projects/<enc>` — resolving against the wrong root would always false-DEAD a profile
-    job. profile None (the pre-existing, profile-less job case) → unchanged path."""
+    (`.dispatch/homes/<slug>.<profile>/projects/<enc>`) under the REGISTRY home
+    (`_registry_home()` — masked homes live under agent_setting/.dispatch/homes/, never
+    under the runtime telemetry home), rather than the RUNTIME home's `projects/<enc>`
+    (`_proj_home()`) used by the non-profile branch. Resolving the profile branch against
+    the wrong root would always false-DEAD a profile job. profile None (the pre-existing,
+    profile-less job case) → unchanged runtime-home path."""
     if not path:
         return "unknown"
     if profile and slug:
-        proj = os.path.join(_proj_home(), ".dispatch", "homes", "%s.%s" % (slug, profile),
+        proj = os.path.join(_registry_home(), ".dispatch", "homes", "%s.%s" % (slug, profile),
                              "projects", _enc(path))
     else:
         proj = os.path.join(_proj_home(), "projects", _enc(path))
@@ -280,6 +303,69 @@ def effective_qa(argv_qa, pipe_qa, jcwd, slug, key):
     if v:
         return v, "default"
     return None, None
+
+
+def _norm_cwd(p):
+    """Normalize a cwd for cross-source string-equality matching (B1/B2, R6): the jobs.log
+    `worktree` field is writer-verbatim (dispatch-headless.py:append_job — no
+    canonicalization), while a process cwd resolved via `/proc/<pid>/cwd` is already
+    symlink-canonical. Both match sides must pass through this SAME helper (realpath) so a
+    symlinked or trailing-slash worktree still reconciles against the live process cwd."""
+    return os.path.realpath(p)
+
+
+def _live_claude_cwds(exclude_pids):
+    """{normalized_cwd: pid} for live `claude -p` processes not already argv-matched.
+
+    Targets tokenless headless dispatch (stdin-piped `claude -p < promptfile`, and
+    session-limit `-p -c` resume — plan §5): argv carries no /autopilot- token, so
+    `_scan_processes()` can never surface these as proc jobs. Gate: `comm == "claude"` AND
+    an EXACT `-p` token in argv — token-equality via `args.split()` (`"-p" in args.split()`),
+    never a substring test, so a `--print` long-form flag or an incidental "-p" inside the
+    prompt body is rejected while interactive `claude --resume` sessions stay excluded too
+    (R2). cwd is resolved via `os.readlink("/proc/<pid>/cwd")`, falling back to
+    `sessions/<pid>.json`'s `cwd` field under the RUNTIME home (`_proj_home()`) if that
+    fails (`_ps_lines()` carries no cwd column — procscan.py:53). Keys are normalized with
+    `_norm_cwd` (os.path.realpath) so a symlinked/trailing-slash worktree still matches the
+    jobs.log row (R6). Two live processes sharing one cwd → lowest pid wins, deterministic
+    "earliest wins" (R3). Any per-process OS error is swallowed (skip that process); total
+    scan failure (`_ps_lines()` → []) returns {}."""
+    result = {}
+    for line in procscan._ps_lines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(None, 3)
+        if len(parts) < 3:
+            continue
+        pid_s, comm = parts[0], parts[1]
+        args = parts[3] if len(parts) > 3 else ""
+        if comm != "claude":
+            continue
+        if "-p" not in args.split():
+            continue
+        if not pid_s.isdigit():
+            continue
+        pid = int(pid_s)
+        if pid in exclude_pids:
+            continue
+        jcwd = None
+        try:
+            jcwd = os.readlink("/proc/%s/cwd" % pid_s)
+            if jcwd.endswith(" (deleted)"):
+                jcwd = jcwd[: -len(" (deleted)")]
+        except OSError:
+            try:
+                with open(os.path.join(_proj_home(), "sessions", "%s.json" % pid_s)) as f:
+                    jcwd = json.load(f).get("cwd")
+            except Exception:
+                jcwd = None
+        if not jcwd:
+            continue
+        key = _norm_cwd(jcwd)
+        if key not in result or pid < result[key]:
+            result[key] = pid
+    return result
 
 
 # --- source (a): process scan (uncapped, no related() filter) ---
@@ -443,6 +529,29 @@ def collect(jobs_path=None, harness_filter=None):
                     j.mode = lm
                 if j.profile is None:
                     j.profile = lp
+    # cwd-fallback enrichment for tokenless headless dispatch (stdin-piped `claude -p`,
+    # `-p -c` resume — plan Phase B): these jobs.log rows have harness=None because their
+    # argv carries no /autopilot- token, so _scan_processes() never argv-matched them.
+    # Additive only — enriches log_jobs whose harness is still None (disjoint from the
+    # mode+profile backfill above, which touches proc_jobs), so already-argv-matched proc
+    # jobs are never affected. Order-independent w.r.t. the liveness loop below (j.cwd /
+    # j.profile, which liveness reads, are unchanged by this block).
+    # Guard the extra `ps` spawn: only scan for live processes when there is at least one
+    # unenriched log job to match (fleet re-collects every ~2s, so skipping the second `ps`
+    # when nothing needs it saves a subprocess per tick in the common all-argv-matched case).
+    candidates = [j for j in log_jobs if j.harness is None and j.cwd]
+    if candidates:
+        exclude = {j.pid for j in proc_jobs if j.pid}
+        cwd_index = _live_claude_cwds(exclude)
+        consumed = set()
+        for j in candidates:
+            pid = cwd_index.get(_norm_cwd(j.cwd))
+            if pid and pid not in consumed:
+                j.harness = "claude"
+                j.pid = pid
+                consumed.add(pid)
+                j.model = _claude_job_model(str(pid), j.cwd)
+                j.stage = live_stage(j.cwd, j.slug, j.key)
     now = time.time()
     for j in jobs:
         j.liveness = _job_liveness(j.cwd, now, profile=j.profile, slug=j.slug)
