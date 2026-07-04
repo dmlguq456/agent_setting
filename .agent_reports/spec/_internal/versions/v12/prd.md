@@ -4,7 +4,6 @@
 > 입력: `research/hermes-agent/{03_memory_system,04_benchmark_gap,07_security,08_source_grounded}.md` · 기존 `tools/memory/*` · `skills/{post-it,analyze-user}/` · `user_profile/`
 > · **v11 2026-06-22** (Cluster F — 루프↔메모리 환류: 루프 자율성 재정의·아침 논의 데스크·curator 산출물 대조 적극 prune·메모리 제도화 승격 채널 + 선결 버그 복원력)
 > · **v12 2026-07-03** (Cluster G — recall-first 반사: 창작·스타일·형식 결정 전 능동 recall, 심층 memory-scout 위임, core-first adapter guard 와 결합)
-> · **v13 2026-07-04** (Cluster H — memory 도메인 adapter-parity 불변식: session-end distill 2-tier·MEM_DUMP_PUSH·portable distill dispatcher 계약. 근거 = codex-adapter-parity 감사 P-10·P-12·P-13·P-25·P-36)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -229,23 +228,6 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - **memory-scout**: 인라인 1~2쿼리를 넘는 심층 탐색은 read-only memory-scout capability 로 분리한다. 다각 쿼리 → cross-cwd → raw 세션 순으로 확장하고, 결과는 15줄 이하 verdict/record id/적용 지침으로 반환한다. 쓰기 명령은 전면 금지한다.
 - **core-first adapter guard**: adapter 편집 전 실제 `core/*.md` read marker 를 요구한다. hard gate 는 검증 가능한 read marker 와 stale 여부만 강제하고, "core 를 먼저 수정했는가"는 `core/DESIGN_PRINCIPLES.md` 제1원칙과 drill 이 보완한다.
 
-## 5.10 Cluster H — memory 도메인 adapter-parity 불변식 (v13, 2026-07-04)
-
-> 계기: codex-adapter-parity 전수 감사(`research/codex-adapter-parity/` — analysis_summary §1, cards/04_memory.md)가 memory lifecycle 의 어댑터 간 비대칭을 확정 — Codex session-end 가 add-only 인데 ADAPTATION 이 "Claude 와 match" 로 신고(P-12 overclaim), 그 구조적 뿌리는 portable dispatcher 미사용(P-13). 본 cluster 는 memory 계약을 adapter-agnostic 불변식으로 명문화한다. 어댑터 _전반_ parity 계약(P-01 derived guard 등)은 본 PRD 범위 밖 — `core/ADAPTATION.md` 소관으로 별도 처리.
-
-### 5.10.1 D-30 — session-end distill 은 adapter-agnostic 2-tier (계약)
-- 본 시스템의 distill 은 **turn=increment(add-only, fast tier) + session-end=curate(deep tier — snapshot-grounded prune/merge/graduate/consolidate, D-18)** 2-tier 가 계약이다. 이는 Claude adapter 구현 디테일이 아니라 **모든 어댑터의 session-end 요구사항**.
-- 어댑터는 curate 층을 실현하거나, 못 하면 **미실현을 명시 신고**(ADAPTATION 문서에 "increment-only — curate 미실현" disclosure)한다. "matches Claude's session-end distillation" 류 표현은 curate 축까지 성립할 때만 허용.
-- 현황(감사 기준): Claude ✅ 2-tier / Codex ❌ increment-only (P-12 — Phase 3 수정 대상).
-
-### 5.10.2 D-31 — SessionEnd sync 계약에 dump mirror push 포함
-- SessionEnd sync 는 `mem.py sync` 만이 아니라 **`MEM_DUMP_PUSH=1`(dump.jsonl git mirror push, E-5 내구성 안전망)** 까지가 계약 — 어댑터가 push 를 생략하면 그 어댑터로 돈 세션의 기억이 원격 mirror 에서 drift(P-10).
-- 현황: Claude ✅ / Codex ❌ push 생략 (Phase 3 수정 대상).
-
-### 5.10.3 D-32 — distill worker 는 portable dispatcher 계약 경유
-- distill worker 는 portable `hooks/mem-distill-dispatch.sh` 의 계약(`MEM_DISTILL_WORKER <mode> <model> <prompt-file>`)을 경유한다. 어댑터가 자체 worker 를 재구현하는 경우에도 **mode/model routing(fast=increment·deep=curate 모델 tier, P-36)·snapshot-id whitelist 안전층(P-25)·lock·재귀가드** 를 보존할 의무 — increment 프롬프트에 mutation action(prune/merge)을 나열하면서 whitelist 를 우회하는 조합 금지.
-- 현황: Claude ✅ dispatcher 경유 / Codex ❌ 자체 재구현 subset (P-13 — Phase 3 에서 dispatcher 채택 또는 계약 요소 보존 증명).
-
 ## [library] 공개 API (v3 + v4 추가)
 ```
 mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(dump|profile) / mem_import / mem_migrate / mem_lifecycle / mem_project
@@ -293,10 +275,6 @@ v3 그대로 (`records` 12컬럼 + `records_fts` FTS5 + trigram 보조 + `idx_re
   - **D-23 (내구성)**: dump 자동 commit(삭제 복구 안전망)·import 멱등·user_version 게이트·INJECTION_PAT persist(anti-poisoning).
   - **D-24 (E-7 폐기·model-agnostic=D-11)**: 로깅 프록시 redundant 폐기(하네스는 어차피 로그 남김→adapter 만). + graduate(working→durable) opus 가 수행.
 - **v11 신규 (Cluster F — 루프↔메모리 환류, §5.8)**:
-- **v13 신규 (Cluster H — memory adapter-parity 불변식, §5.10)**:
-  - **D-30 (session-end 2-tier adapter-agnostic)**: increment+curate 2-tier 는 모든 어댑터의 session-end 계약 — 미실현 어댑터는 명시 신고 의무, "matches" 표현은 curate 축 성립 시만 (감사 P-12).
-  - **D-31 (dump mirror push 계약)**: SessionEnd sync = `mem.py sync` + `MEM_DUMP_PUSH=1` — 어댑터 생략 시 원격 mirror drift (감사 P-10).
-  - **D-32 (portable dispatcher 계약)**: distill worker 는 `mem-distill-dispatch.sh` 계약 경유 — 재구현 시 mode/model routing·snapshot whitelist·lock·재귀가드 보존 의무 (감사 P-13·P-25·P-36).
   - **D-25 (루프 자율성 재정의)**: "루프는 일을 하지 않는다" 폐기 → "되돌림 가능+명백 = 무인 직접 처리+전수 보고 / 그 외 = 아침 논의". 가드: 되돌림 보장(graveyard·git)+전수 보고 = "사전 승인"을 "되돌림 가능+사후 통보"로. loops/README·DESIGN_PRINCIPLES·oncall.md 동기화.
   - **D-26 (아침 논의 데스크)**: 당직 이후 cwd==~/.claude 그날 첫 발화 → UserPromptSubmit hook 브리핑 주입(밤 처리 요약+논의 안건). SessionStart 아니라 '그날 첫 상호작용'(세션 유지 환경). '당직 처리해줘' 발화 트리거 승격.
   - **D-27 (curator 산출물 대조 적극 prune)**: SessionEnd opus 입력에 ARTIFACTS(git/plans/spec) DATA 블록 + prune 지침 '적극'. 죽은 working 조기정리(21일 TTL 안 기다림)+명백한 durable 정리. 안전 3겹(snapshot-id 화이트리스트·graveyard·DATA 라벨). /clear 도 SessionEnd 발동(matcher '*') 확인.
@@ -332,7 +310,3 @@ v3 그대로 (`records` 12컬럼 + `records_fts` FTS5 + trigram 보조 + `idx_re
    - **Phase 2 (D-26 아침 데스크)**: 신규 `hooks/mem-briefing-inject.sh`(UserPromptSubmit, cwd==~/.claude AND 당직후 그날 첫 발화 게이트 → 밤 처리 요약+논의 안건 inject) + 상태 마커(`.briefing-<date>`) + settings.json 배선. CLAUDE.md '당직 처리' 발화 트리거 → 자동 승격.
    - **Phase 3 (D-28 승격 채널)**: 승격 후보 추출(durable convention/lesson read-only projection) + 아침 안건 제시 + 종착지 분기(문서/hook/drill) + 반영후 prune 연결(drill 검증 게이트).
    - **D-25 원칙 문서화**: `loops/README`·`DESIGN_PRINCIPLES`·`oncall.md` "보고만"→"되돌림가능+명백=처리+보고" 동기화. **post-it 역할 재검토(§5.8.6)**: distiller 와 중복 — 별도 결정.
-8. **Cluster H (memory adapter-parity, v13 신규)** — autopilot-code --mode dev, worktree (codex-adapter-parity 감사 Phase 3 과 동일 사이클로 인계 가능):
-   - **D-30/D-32**: Codex `distill-worker.sh` 를 portable `mem-distill-dispatch.sh` 계약으로 정렬 — session-end 를 curate mode(+snapshot 캡처·whitelist)로, turn-nudge 는 increment 유지. 불가 시 ADAPTATION 에 "increment-only" disclosure 로 문구 정정 (P-12 overclaim 해소는 두 경로 중 하나 필수).
-   - **D-31**: Codex `preflight.sh session-end` 에 `MEM_DUMP_PUSH=1` 추가 (P-10).
-   - **D-32 안전층**: increment 프롬프트의 mutation action 나열 제거 또는 snapshot whitelist 적용 (P-25) + per-mode 모델 tier (P-36).

@@ -98,3 +98,12 @@ Cluster B/C/D 머지·enable 후 사용자 "메모리=가장 중요한 시스템
 - **D-28** 제도화 승격 채널 — durable 반복규칙·교훈(272 중 ~27건) → 아침 안건 → 종착지(문서/hook/drill) 분기 → 반영·drill 검증 후 prune. 정리(자동)와 승격(논의) 분리.
 - **D-29** ✅ 선결 버그 복원력 (main b95b9a9) — lib.sh PATH(cron v20)·run_claude_retry(일시장애)·oncall exit code 생존체크.
 - post-it 역할 재검토(§5.8.6, 열림): distiller 와 중복 — 별도 결정.
+
+### v12 → v13 (2026-07-04, update mode — Cluster H 추가, snapshot `_internal/versions/v12/`)
+memory 도메인 adapter-parity 불변식 (§5.10 신설, D-30~32). 계기 = codex-adapter-parity 전수 감사(`research/codex-adapter-parity/`)가 Codex adapter 의 memory lifecycle 비대칭을 확정 (P-12 overclaim 포함):
+- **D-30** session-end distill 2-tier(increment+curate) 를 adapter-agnostic 계약으로 — 미실현 어댑터는 명시 신고 의무, "matches" 표현은 curate 축 성립 시만 (P-12).
+- **D-31** SessionEnd sync 계약 = `mem.py sync` + `MEM_DUMP_PUSH=1` (원격 mirror drift 차단, P-10).
+- **D-32** distill worker 는 portable `mem-distill-dispatch.sh` 계약 경유 — 재구현 시 mode/model routing·snapshot whitelist·lock·재귀가드 보존 의무 (P-13·P-25·P-36).
+- 어댑터 전반 parity 계약(P-01 derived guard 등)은 본 PRD 범위 밖 — `core/ADAPTATION.md` 소관 명시.
+- Next 8번 항목으로 Cluster H 구현 경로(autopilot-code, 감사 Phase 3 과 동일 사이클 가능) 추가.
+- (이력 메모) v11→v12 update 때 `_internal/versions/v11/` snapshot 이 누락됐음을 확인 — v11 내용은 git 이력으로만 복원 가능. 본 v13 부터 snapshot 재준수.
