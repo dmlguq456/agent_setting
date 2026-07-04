@@ -344,6 +344,13 @@ def iter_md_files(root, exclude=()):
             continue
         if "_projection" in p.parts:
             continue
+        # 숨김 컴포넌트(.opencode-distill-workdir 등 runtime 상태)는 legacy SoT 가 아니다
+        try:
+            rel_parts = p.relative_to(root).parts
+        except ValueError:
+            rel_parts = p.parts
+        if any(part.startswith(".") for part in rel_parts):
+            continue
         try:
             meta, body = parse_record(p.read_text(encoding="utf-8"))
         except Exception:
@@ -1156,7 +1163,8 @@ def _opencode_role(d):
     role = _opencode_first_str(d, "role", "author")
     if role in ("user", "assistant", "system"):
         return role
-    for key in ("message", "session_message", "data"):
+    # opencode 1.x export: 메시지가 {info:{role,...}, parts:[...]} 로 옴 — info 안도 본다
+    for key in ("info", "message", "session_message", "data"):
         value = d.get(key)
         if isinstance(value, dict):
             role = _opencode_role(value)
@@ -1186,7 +1194,12 @@ def _opencode_text(value):
         return ""
     if _opencode_tool_name(value):
         return ""
-    for key in ("text", "content", "message", "body", "value"):
+    # 내부 사고·스텝 마커 part 는 delta 에 넣지 않는다 (text part 만 대화 내용)
+    typ = str(value.get("type") or value.get("kind") or value.get("partType") or "").lower()
+    if typ in ("reasoning", "step-start", "step-finish", "snapshot", "patch"):
+        return ""
+    # "parts" 는 마지막 — leaf 텍스트 키 우선, 없으면 opencode 1.x 메시지의 parts 배열로 하강
+    for key in ("text", "content", "message", "body", "value", "parts"):
         item = value.get(key)
         text = _opencode_text(item)
         if text:
@@ -1263,6 +1276,11 @@ class OpenCodeExportSource:
         for i, item in enumerate(_opencode_items(payload), 1):
             ts = _opencode_first_str(item, "time", "timestamp", "created", "createdAt", "created_at")
             uuid = _opencode_first_str(item, "id", "messageID", "message_id", "partID", "part_id")
+            info = item.get("info") if isinstance(item, dict) else None
+            if uuid is None and isinstance(info, dict):
+                # opencode 1.x: 메시지 id 가 info 안에 있다 — 실제 id 가 positional fallback 보다 marker 에 안전
+                uuid = _opencode_first_str(info, "id", "messageID", "message_id")
+                ts = ts or _opencode_first_str(info, "time", "timestamp", "created", "createdAt", "created_at")
             if uuid is None:
                 uuid = f"opencode:{self.sid}:{i}"
 
