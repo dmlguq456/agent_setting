@@ -332,9 +332,11 @@ role 의미만 요구한다.
 
 `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` is the executable mapping
 surface. When no override is configured it reports adapter defaults:
-`gpt-5.4-mini`/`medium` for fast roles, `gpt-5.5`/`high` for deep roles,
-`gpt-5.5`/`high` for the Codex-native external-adversary agent, and
-`gpt-5.4-mini`/`medium` for the orchestrator. `AGENT_EXTERNAL_CMD` can replace
+`gpt-5.4-mini`/`medium` for fast roles, `gpt-5.5`/`high` for deep roles, and
+`gpt-5.4-mini`/`medium` for the orchestrator. `external adversary` remains
+unavailable unless `AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured,
+because the independent-adversary contract is stronger than the existence of a
+generated `external-adversary.toml` projection. `AGENT_EXTERNAL_CMD` can replace
 the Codex-native external-adversary model with a separate external command when
 stronger process/runtime independence is required. Pipeline stages such as
 `planning`, `implementation`, `verification`, and `report` map to the

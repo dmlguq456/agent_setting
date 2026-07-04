@@ -855,13 +855,12 @@ else
   bad "codex role wrapper should map external adversary orchestrator role"
 fi
 if "$CODEX" role external adversary >/tmp/role.out 2>/tmp/role.err \
-  && grep -q '^available=1$' /tmp/role.out \
-  && grep -q '^status=default$' /tmp/role.out \
-  && grep -q '^model=gpt-5.5$' /tmp/role.out \
-  && grep -q '^reasoning=high$' /tmp/role.out; then
-  ok "codex role wrapper maps default native external adversary"
+  && grep -q '^available=0$' /tmp/role.out \
+  && grep -q '^status=unavailable$' /tmp/role.out \
+  && grep -q '^reason=set AGENT_MODEL_EXTERNAL or AGENT_EXTERNAL_CMD for an independent external adversary$' /tmp/role.out; then
+  ok "codex role wrapper marks external adversary unavailable by default"
 else
-  bad "codex role wrapper should map default native external adversary"
+  bad "codex role wrapper should mark external adversary unavailable by default"
 fi
 if AGENT_MODEL_EXTERNAL=external-model AGENT_REASONING_EXTERNAL=high "$CODEX" role external adversary >/tmp/role.out 2>/tmp/role.err \
   && grep -q '^family=external$' /tmp/role.out \

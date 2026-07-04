@@ -361,12 +361,14 @@ AGENT_REASONING_ORCHESTRATOR
 AGENT_EXTERNAL_CMD
 ```
 
-When no override is configured, the adapter reports the same defaults generated
-into Codex custom agents: fast=`gpt-5.4-mini`/medium,
-deep=`gpt-5.5`/high, external=`gpt-5.5`/high, and
-orchestrator=`gpt-5.4-mini`/medium. `AGENT_EXTERNAL_CMD` can still route an
-external adversary to a separate external process when stronger independence is
-required.
+When no override is configured, the adapter reports defaults for non-external
+roles: fast=`gpt-5.4-mini`/medium, deep=`gpt-5.5`/high, and
+orchestrator=`gpt-5.4-mini`/medium. `external adversary` remains unavailable
+unless `AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured, because
+the independent-adversary contract is stronger than the existence of a
+generated `external-adversary.toml` projection. `AGENT_EXTERNAL_CMD` can route
+an external adversary to a separate external process when stronger independence
+is required.
 
 ## Current Projection Boundary
 

@@ -142,7 +142,11 @@ if [ -z "$role_set" ]; then
       ;;
     "external adversary")
       family=external
-      if [ -n "${AGENT_EXTERNAL_CMD:-}" ]; then
+      if [ -z "${AGENT_MODEL_EXTERNAL:-}" ] && [ -z "${AGENT_EXTERNAL_CMD:-}" ]; then
+        available=0
+        status=unavailable
+        reason="set AGENT_MODEL_EXTERNAL or AGENT_EXTERNAL_CMD for an independent external adversary"
+      elif [ -n "${AGENT_EXTERNAL_CMD:-}" ]; then
         external_cmd_bin=${AGENT_EXTERNAL_CMD%% *}
         if ! command -v "$external_cmd_bin" >/dev/null 2>&1; then
           available=0
@@ -174,13 +178,15 @@ case "$family" in
     [ -n "${AGENT_MODEL_DEEP:-}${AGENT_REASONING_DEEP:-}" ] && status=configured || status=default
     ;;
   external)
-    if [ -n "${AGENT_EXTERNAL_CMD:-}" ] && [ -z "${AGENT_MODEL_EXTERNAL:-}" ]; then
+    if [ "$available" -eq 0 ] && [ -z "${AGENT_MODEL_EXTERNAL:-}" ] && [ -z "${AGENT_EXTERNAL_CMD:-}" ]; then
+      model=unconfigured
+    elif [ -n "${AGENT_EXTERNAL_CMD:-}" ] && [ -z "${AGENT_MODEL_EXTERNAL:-}" ]; then
       model=external-command
     else
       model=${AGENT_MODEL_EXTERNAL:-gpt-5.5}
     fi
     reasoning=${AGENT_REASONING_EXTERNAL:-high}
-    [ "$available" -eq 1 ] && { [ -n "${AGENT_MODEL_EXTERNAL:-}${AGENT_REASONING_EXTERNAL:-}${AGENT_EXTERNAL_CMD:-}" ] && status=configured || status=default; }
+    [ "$available" -eq 1 ] && status=configured
     ;;
   orchestrator)
     model=${AGENT_MODEL_ORCHESTRATOR:-${AGENT_MODEL_FAST:-gpt-5.4-mini}}
