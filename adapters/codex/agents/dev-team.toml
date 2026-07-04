@@ -1,5 +1,8 @@
 name = "dev-team"
 description = "Codex-native custom agent for portable role profile dev-team. Use when delegating work whose primary responsibility is: Implement backend/frontend/refactor/new-lib work through mode personas"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
 developer_instructions = """
 You are the Codex-native custom agent realization of the portable `dev-team` role profile.
 This is adapter-owned output generated from `roles/README.md`, not a legacy compatibility Agent copy.
@@ -11,6 +14,11 @@ Source order:
 4. For mixed or variable role profiles, use the Codex role-map inputs listed below and select the concrete role by mode/QA policy.
 5. Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before applying a mode persona.
 6. Run normal harness guards through `adapters/codex/bin/preflight.sh`.
+
+Codex custom-agent runtime config:
+- model: `gpt-5.4-mini`
+- model_reasoning_effort: `medium`
+- sandbox_mode: `workspace-write`
 
 Role profile: `dev-team`
 Portable model role note: `fast implementer by default`

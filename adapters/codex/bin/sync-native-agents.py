@@ -14,6 +14,45 @@ ROLES = ROOT / "roles" / "README.md"
 OUT = ROOT / "adapters" / "codex" / "agents"
 
 
+PROFILE_CONFIG = {
+    "plan-team": ("gpt-5.5", "high", "workspace-write"),
+    "dev-team": ("gpt-5.4-mini", "medium", "workspace-write"),
+    "qa-team": ("gpt-5.4-mini", "medium", "read-only"),
+    "research-team": ("gpt-5.5", "high", "workspace-write"),
+    "material-team": ("gpt-5.4-mini", "low", "workspace-write"),
+    "design-team": ("gpt-5.5", "high", "workspace-write"),
+    "editorial-team": ("gpt-5.4-mini", "medium", "workspace-write"),
+    "external-adversary": ("gpt-5.5", "high", "read-only"),
+}
+
+
+EXTRA_AGENTS = {
+    "memory-scout": {
+        "description": "Read-only memory scout for recall-first deep memory reconnaissance.",
+        "model": "gpt-5.4-mini",
+        "reasoning": "low",
+        "sandbox": "read-only",
+        "instructions": """You are the Codex-native memory-scout custom agent.
+This is adapter-owned output generated from core/MEMORY.md §7.4, not a Claude Agent copy.
+
+Contract:
+1. Read-only only. Do not edit files or write memory.
+2. Never run memory mutation commands such as mem add, mem note, mem delete, mem reinforce, mem merge, or mem prune.
+3. Use tools/memory/recall.sh or adapters/codex/bin/preflight.sh recall first in the current cwd.
+4. Try narrow synonym and Korean/English variants; if misses matter, expand to cross-cwd or raw session search only as needed.
+5. Open only hit bodies or transcript snippets needed to decide the question.
+6. Cross-check one live file/code fact when the memory result implies an actionable convention.
+
+Output at most 15 lines:
+- verdict: 있음 / 없음 / 애매
+- hits: up to 3 short quotes or paraphrases with record id / session pointer
+- apply: one line telling the main agent what to do now
+- check: one live-code or file cross-check line, or not checked with reason
+""",
+    }
+}
+
+
 def compact(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip()).replace('"', "'")
 
@@ -145,11 +184,16 @@ def boundary_section(profile: str) -> str:
     return f"Runtime boundaries:\n{body}"
 
 
+def codex_config(profile: str) -> tuple[str, str, str]:
+    return PROFILE_CONFIG.get(profile, ("gpt-5.4-mini", "medium", "workspace-write"))
+
+
 def render(profile: str, portable_role: str, responsibility: str) -> str:
     role_note = clean_role_note(portable_role)
     mapped_role = mapper_role(profile, role_note)
     mapped_roles = mapper_roles(profile, role_note)
     role_set = ", ".join(mapped_roles)
+    model, reasoning, sandbox = codex_config(profile)
     description = compact(
         f"Codex-native custom agent for portable role profile {profile}. "
         f"Use when delegating work whose primary responsibility is: {responsibility}"
@@ -165,6 +209,11 @@ Source order:
 5. Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before applying a mode persona.
 6. Run normal harness guards through `adapters/codex/bin/preflight.sh`.
 
+Codex custom-agent runtime config:
+- model: `{model}`
+- model_reasoning_effort: `{reasoning}`
+- sandbox_mode: `{sandbox}`
+
 Role profile: `{profile}`
 Portable model role note: `{role_note}`
 Codex role-map input: `{mapped_role}`
@@ -178,8 +227,22 @@ Codex-native source. Those files are compatibility/reference surfaces only.
 """
     return f'''name = "{toml_string(profile)}"
 description = "{toml_string(description)}"
+model = "{toml_string(model)}"
+model_reasoning_effort = "{toml_string(reasoning)}"
+sandbox_mode = "{toml_string(sandbox)}"
 developer_instructions = """
 {toml_multiline(instructions)}"""
+'''
+
+
+def render_extra_agent(name: str, spec: dict[str, str]) -> str:
+    return f'''name = "{toml_string(name)}"
+description = "{toml_string(spec["description"])}"
+model = "{toml_string(spec["model"])}"
+model_reasoning_effort = "{toml_string(spec["reasoning"])}"
+sandbox_mode = "{toml_string(spec["sandbox"])}"
+developer_instructions = """
+{toml_multiline(spec["instructions"])}"""
 '''
 
 
@@ -190,6 +253,8 @@ def main() -> int:
 
     rows = role_rows(ROLES.read_text(encoding="utf-8"))
     expected = {OUT / f"{profile}.toml": render(profile, role, responsibility) for profile, role, responsibility in rows}
+    for name, spec in EXTRA_AGENTS.items():
+        expected[OUT / f"{name}.toml"] = render_extra_agent(name, spec)
 
     stale: list[str] = []
     for path, body in expected.items():

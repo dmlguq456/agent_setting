@@ -142,11 +142,7 @@ if [ -z "$role_set" ]; then
       ;;
     "external adversary")
       family=external
-      if [ -z "${AGENT_MODEL_EXTERNAL:-}" ] && [ -z "${AGENT_EXTERNAL_CMD:-}" ]; then
-        available=0
-        status=unavailable
-        reason="set AGENT_MODEL_EXTERNAL or AGENT_EXTERNAL_CMD for an independent external adversary"
-      elif [ -n "${AGENT_EXTERNAL_CMD:-}" ]; then
+      if [ -n "${AGENT_EXTERNAL_CMD:-}" ]; then
         external_cmd_bin=${AGENT_EXTERNAL_CMD%% *}
         if ! command -v "$external_cmd_bin" >/dev/null 2>&1; then
           available=0
@@ -168,24 +164,28 @@ fi
 
 case "$family" in
   fast)
-    model=${AGENT_MODEL_FAST:-codex-default}
-    reasoning=${AGENT_REASONING_FAST:-runtime-default}
-    [ "$model" = "codex-default" ] && status=default || status=configured
+    model=${AGENT_MODEL_FAST:-gpt-5.4-mini}
+    reasoning=${AGENT_REASONING_FAST:-medium}
+    [ -n "${AGENT_MODEL_FAST:-}${AGENT_REASONING_FAST:-}" ] && status=configured || status=default
     ;;
   deep)
-    model=${AGENT_MODEL_DEEP:-codex-default}
-    reasoning=${AGENT_REASONING_DEEP:-runtime-default}
-    [ "$model" = "codex-default" ] && status=default || status=configured
+    model=${AGENT_MODEL_DEEP:-gpt-5.5}
+    reasoning=${AGENT_REASONING_DEEP:-high}
+    [ -n "${AGENT_MODEL_DEEP:-}${AGENT_REASONING_DEEP:-}" ] && status=configured || status=default
     ;;
   external)
-    model=${AGENT_MODEL_EXTERNAL:-external-command}
-    reasoning=${AGENT_REASONING_EXTERNAL:-runtime-default}
-    [ "$available" -eq 1 ] && status=configured
+    if [ -n "${AGENT_EXTERNAL_CMD:-}" ] && [ -z "${AGENT_MODEL_EXTERNAL:-}" ]; then
+      model=external-command
+    else
+      model=${AGENT_MODEL_EXTERNAL:-gpt-5.5}
+    fi
+    reasoning=${AGENT_REASONING_EXTERNAL:-high}
+    [ "$available" -eq 1 ] && { [ -n "${AGENT_MODEL_EXTERNAL:-}${AGENT_REASONING_EXTERNAL:-}${AGENT_EXTERNAL_CMD:-}" ] && status=configured || status=default; }
     ;;
   orchestrator)
-    model=${AGENT_MODEL_ORCHESTRATOR:-${AGENT_MODEL_FAST:-codex-default}}
-    reasoning=${AGENT_REASONING_ORCHESTRATOR:-${AGENT_REASONING_FAST:-runtime-default}}
-    [ "$model" = "codex-default" ] && status=default || status=configured
+    model=${AGENT_MODEL_ORCHESTRATOR:-${AGENT_MODEL_FAST:-gpt-5.4-mini}}
+    reasoning=${AGENT_REASONING_ORCHESTRATOR:-${AGENT_REASONING_FAST:-medium}}
+    [ -n "${AGENT_MODEL_ORCHESTRATOR:-}${AGENT_REASONING_ORCHESTRATOR:-}${AGENT_MODEL_FAST:-}${AGENT_REASONING_FAST:-}" ] && status=configured || status=default
     ;;
   role-set)
     model=role-set

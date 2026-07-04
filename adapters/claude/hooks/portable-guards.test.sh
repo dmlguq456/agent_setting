@@ -855,11 +855,13 @@ else
   bad "codex role wrapper should map external adversary orchestrator role"
 fi
 if "$CODEX" role external adversary >/tmp/role.out 2>/tmp/role.err \
-  && grep -q '^available=0$' /tmp/role.out \
-  && grep -q '^status=unavailable$' /tmp/role.out; then
-  ok "codex role wrapper marks external adversary unavailable by default"
+  && grep -q '^available=1$' /tmp/role.out \
+  && grep -q '^status=default$' /tmp/role.out \
+  && grep -q '^model=gpt-5.5$' /tmp/role.out \
+  && grep -q '^reasoning=high$' /tmp/role.out; then
+  ok "codex role wrapper maps default native external adversary"
 else
-  bad "codex role wrapper should mark external adversary unavailable by default"
+  bad "codex role wrapper should map default native external adversary"
 fi
 if AGENT_MODEL_EXTERNAL=external-model AGENT_REASONING_EXTERNAL=high "$CODEX" role external adversary >/tmp/role.out 2>/tmp/role.err \
   && grep -q '^family=external$' /tmp/role.out \
@@ -1208,11 +1210,14 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 agents = sorted(root.glob("*.toml"))
-if len(agents) != 8:
-    raise SystemExit(f"expected 8 Codex agents, got {len(agents)}")
+if len(agents) != 9:
+    raise SystemExit(f"expected 9 Codex agents, got {len(agents)}")
 for agent in agents:
     body = agent.read_text(encoding="utf-8")
     for key in ("name", "description"):
+        if not re.search(rf'^{key} = "[^"]+"$', body, re.MULTILINE):
+            raise SystemExit(f"{agent.name}: missing {key}")
+    for key in ("model", "model_reasoning_effort", "sandbox_mode"):
         if not re.search(rf'^{key} = "[^"]+"$', body, re.MULTILINE):
             raise SystemExit(f"{agent.name}: missing {key}")
     if not re.search(r'^developer_instructions = """\n.+\n"""$', body, re.MULTILINE | re.DOTALL):
@@ -1244,6 +1249,14 @@ if grep -q 'Codex role-map inputs: `fast reviewer, deep reviewer, external adver
   ok "codex native agent projection preserves mixed role sets"
 else
   bad "codex native agent projection should preserve mixed role sets"
+fi
+if grep -q 'model = "gpt-5.4-mini"' "$TMP/codex_agent_home/agents/memory-scout.toml" \
+  && grep -q 'model_reasoning_effort = "low"' "$TMP/codex_agent_home/agents/memory-scout.toml" \
+  && grep -q 'sandbox_mode = "read-only"' "$TMP/codex_agent_home/agents/memory-scout.toml" \
+  && grep -q 'Never run memory mutation commands' "$TMP/codex_agent_home/agents/memory-scout.toml"; then
+  ok "codex native memory-scout projection is low-cost read-only"
+else
+  bad "codex native memory-scout projection should be low-cost read-only"
 fi
 if [ -L "$ROOT/codex_setting/codex-modes" ] \
   && [ "$(readlink "$ROOT/codex_setting/codex-modes")" = "../adapters/codex/modes" ] \

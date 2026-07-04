@@ -647,10 +647,13 @@ native_agents_path=\$CODEX_HOME/agents
 projection=codex_setting/codex-agents
 trigger=explicit-user-request-or-main-dispatch
 auto_spawn=explicit-only
+custom_agent_config=model,model_reasoning_effort,sandbox_mode
+memory_scout=adapters/codex/agents/memory-scout.toml
 dispatch_fallback=adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start
 constraints=depth-one,main-orchestrated,approval-and-sandbox-inherited
 claude_subagent_frontmatter=unsupported
-note=Codex subagents are native workflows and do not use Claude Agent files; verify the multi_agent feature and projected custom agents before claiming delegation parity.
+parity_caveat=Codex custom agents are TOML config layers, not Claude Code Agent frontmatter; verify discovery, UI, approval inheritance, and noninteractive behavior before claiming parity.
+note=Codex subagents are native workflows and do not use Claude Agent files; verify the multi_agent feature, projected custom agents, and runtime config behavior before claiming delegation parity.
 EOF
     if [ "$check_only" -eq 0 ]; then
       exit 0

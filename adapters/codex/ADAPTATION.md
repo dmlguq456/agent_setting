@@ -155,9 +155,11 @@ or project `.codex/agents/`. This adapter materializes those role profiles as
 `codex_setting/codex-agents`.
 
 Each file defines Codex's required custom agent fields (`name`, `description`,
-and `developer_instructions`) while leaving concrete model and reasoning
-choices to `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` and the
-runtime's parent session/config inheritance. The generated instructions also
+and `developer_instructions`) and the Codex-native runtime config fields
+`model`, `model_reasoning_effort`, and `sandbox_mode`. Adapter defaults follow
+the current Codex documentation shape: `gpt-5.4-mini` for faster/lower-cost
+workers, `gpt-5.5` for deep/demanding workers, and read-only sandboxing for QA,
+external-adversary, and memory-scout agents. The generated instructions also
 encode role-specific runtime boundaries such as QA read-only behavior,
 depth-one delegation, write preflight requirements, and external-adversary
 independence. Mixed or variable role profiles include `Codex role-map inputs`
@@ -165,11 +167,21 @@ so the concrete role can be selected by mode and QA policy instead of
 flattening the profile to one model role. Do not project Claude Agent files or
 OpenCode Agent files into Codex.
 
+parity caveat: Codex custom agents can carry model/reasoning/sandbox settings,
+but they are not Claude Code Agent frontmatter. Runtime discovery, UI surfacing,
+child approval behavior, config inheritance, and noninteractive/headless
+behavior must be verified in Codex itself before claiming Claude Code parity.
+Recent Codex issue reports show that model/reasoning settings can be runtime-
+or surface-dependent, so this adapter treats TOML generation as the source
+projection and keeps runtime validation separate.
+
 Validation is currently structural plus install-path validation. The boundary
-guard verifies generated TOML fields, portable role references, role-map
-resolution, role-specific runtime boundaries, and absence of non-Codex adapter
-paths. Codex CLI 0.142.x exposes `codex debug prompt-input` for
-bootstrap/Skill/plugin discovery, but it does not expose a `codex debug agent` listing surface; add runtime discovery coverage when Codex exposes one.
+guard verifies generated TOML fields, `model_reasoning_effort` / `sandbox_mode`
+runtime config fields, portable role references, role-map resolution,
+role-specific runtime boundaries, and absence of non-Codex adapter paths. Codex
+CLI 0.142.x exposes `codex debug prompt-input` for bootstrap/Skill/plugin
+discovery, but it does not expose a `codex debug agent` listing surface; add
+runtime discovery coverage when Codex exposes one.
 
 ## Native Hook Surface
 
@@ -349,9 +361,12 @@ AGENT_REASONING_ORCHESTRATOR
 AGENT_EXTERNAL_CMD
 ```
 
-When no concrete model is configured, the adapter reports `codex-default` and
-`runtime-default`. `external adversary` remains unavailable unless
-`AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured.
+When no override is configured, the adapter reports the same defaults generated
+into Codex custom agents: fast=`gpt-5.4-mini`/medium,
+deep=`gpt-5.5`/high, external=`gpt-5.5`/high, and
+orchestrator=`gpt-5.4-mini`/medium. `AGENT_EXTERNAL_CMD` can still route an
+external adversary to a separate external process when stronger independence is
+required.
 
 ## Current Projection Boundary
 

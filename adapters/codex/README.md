@@ -196,20 +196,31 @@ Expose them to Codex by symlinking each generated `*.toml` file into
 `.codex/agents/` for a project-scoped install, using
 `codex_setting/codex-agents` as the projection source. The TOML files define
 the required Codex custom agent fields (`name`, `description`, and
-`developer_instructions`) and defer concrete model or reasoning selection to
-`adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>`. The generated
-instructions also encode role-specific runtime boundaries such as QA
-read-only behavior, depth-one delegation, write preflight requirements, and
-external-adversary independence. Mixed or variable role profiles include
-`Codex role-map inputs` so the concrete role can be selected by mode and QA
-policy instead of flattening the profile to one model role. Do not expose
-`adapters/claude/agents/` as Codex-native agents.
+`developer_instructions`) plus Codex-native runtime config fields: `model`,
+`model_reasoning_effort`, and `sandbox_mode`. Adapter defaults use
+`gpt-5.4-mini` for fast/lower-cost workers, `gpt-5.5` for deep/demanding
+workers, and read-only sandboxing for QA, external-adversary, and memory-scout
+agents. The generated instructions also encode role-specific runtime boundaries
+such as QA read-only behavior, depth-one delegation, write preflight
+requirements, and external-adversary independence. Mixed or variable role
+profiles include `Codex role-map inputs` so the concrete role can be selected
+by mode and QA policy instead of flattening the profile to one model role. Do
+not expose `adapters/claude/agents/` as Codex-native agents.
+
+parity caveat: Codex custom agents are real native subagents, but they are not
+Claude Code Agent markdown/frontmatter. Runtime discovery, UI surfacing, child
+approval behavior, config inheritance, and noninteractive/headless behavior
+must be verified in Codex itself before claiming Claude Code parity. Treat
+current GitHub issues and community examples as secondary evidence of runtime
+gaps, not as the source of truth.
 
 Current validation is structural plus install-path validation: the boundary
-guard verifies generated TOML fields, portable role references, role-map
-resolution, role-specific runtime boundaries, and absence of non-Codex adapter
-paths. Codex CLI 0.142.x exposes `codex debug prompt-input` for
-bootstrap/Skill/plugin discovery, but it does not expose a `codex debug agent` listing surface. Add a runtime discovery test when Codex exposes one.
+guard verifies generated TOML fields, `model_reasoning_effort` / `sandbox_mode`
+runtime config fields, portable role references, role-map resolution,
+role-specific runtime boundaries, and absence of non-Codex adapter paths. Codex
+CLI 0.142.x exposes `codex debug prompt-input` for bootstrap/Skill/plugin
+discovery, but it does not expose a `codex debug agent` listing surface. Add a
+runtime discovery test when Codex exposes one.
 
 ## Native Mode Projection
 
@@ -301,7 +312,7 @@ Further Codex-specific files can be added under `adapters/codex/` and symlinked 
 
 ## Model Role Mapping
 
-Codex adapter 는 `core/CONVENTIONS.md §2` 의 portable role 을 Codex 런타임에서 동등한 capability tier 로 매핑해야 한다. 현재 adapter 는 experimental 이므로 concrete default 를 고정하지 않는다.
+Codex adapter 는 `core/CONVENTIONS.md §2` 의 portable role 을 Codex 런타임에서 동등한 capability tier 로 매핑한다. Defaults mirror the generated custom-agent TOML and can still be overridden by environment variables.
 
 | Portable role | Codex adapter expectation |
 |---|---|
@@ -320,10 +331,13 @@ optional override 다. 공통 skill 은 concrete model name 을 요구하지 않
 role 의미만 요구한다.
 
 `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` is the executable mapping
-surface. When no concrete model is configured it reports `codex-default` and
-`runtime-default`; for `external adversary`, it reports unavailable unless
-`AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured. Pipeline stages
-such as `planning`, `implementation`, `verification`, and `report` map to the
+surface. When no override is configured it reports adapter defaults:
+`gpt-5.4-mini`/`medium` for fast roles, `gpt-5.5`/`high` for deep roles,
+`gpt-5.5`/`high` for the Codex-native external-adversary agent, and
+`gpt-5.4-mini`/`medium` for the orchestrator. `AGENT_EXTERNAL_CMD` can replace
+the Codex-native external-adversary model with a separate external command when
+stronger process/runtime independence is required. Pipeline stages such as
+`planning`, `implementation`, `verification`, and `report` map to the
 Codex-native role profiles `plan-team`, `dev-team`, `qa-team`, and
 `editorial-team`.
 

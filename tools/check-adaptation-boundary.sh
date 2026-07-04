@@ -1329,7 +1329,7 @@ check_codex_native_agent_projection() {
     cat /tmp/codex-sync-agents.err
   fi
 
-  for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
+  for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary memory-scout; do
     agent="adapters/codex/agents/$profile.toml"
     if [ ! -f "$agent" ]; then
       fail_msg "$agent is missing"
@@ -1347,6 +1347,9 @@ text = Path(sys.argv[1]).read_text(encoding="utf-8")
 for key in ("name", "description"):
     if not re.search(rf'^{key} = "[^"]+"$', text, re.MULTILINE):
         raise SystemExit(f"missing required Codex custom agent field: {key}")
+for key in ("model", "model_reasoning_effort", "sandbox_mode"):
+    if not re.search(rf'^{key} = "[^"]+"$', text, re.MULTILINE):
+        raise SystemExit(f"missing Codex custom agent runtime config field: {key}")
 if not re.search(r'^developer_instructions = """\n.+\n"""$', text, re.MULTILINE | re.DOTALL):
     raise SystemExit("missing required Codex custom agent field: developer_instructions")
 PY
@@ -1354,29 +1357,41 @@ PY
       fail_msg "$agent must be valid Codex custom agent TOML"
       cat /tmp/codex-agent-toml.err
     fi
-    if ! grep -Fq "roles/README.md" "$agent"; then
+    if [ "$profile" = "memory-scout" ]; then
+      if ! grep -Fq "core/MEMORY.md §7.4" "$agent"; then
+        fail_msg "$agent must reference core/MEMORY.md §7.4 as portable source"
+      fi
+    elif ! grep -Fq "roles/README.md" "$agent"; then
       fail_msg "$agent must reference roles/README.md as portable source"
     fi
-    if ! grep -Fq "adapters/codex/bin/preflight.sh role" "$agent"; then
+    if [ "$profile" != "memory-scout" ] && ! grep -Fq "adapters/codex/bin/preflight.sh role" "$agent"; then
       fail_msg "$agent must reference the Codex role mapper"
     fi
     mapped_role=$(sed -n 's/^Codex role-map input: `\(.*\)`$/\1/p' "$agent" | head -n 1)
-    if [ -z "$mapped_role" ] || ! adapters/codex/bin/role-map.sh "$mapped_role" >/tmp/codex-agent-role.out 2>/tmp/codex-agent-role.err; then
+    if [ "$profile" != "memory-scout" ] && { [ -z "$mapped_role" ] || ! adapters/codex/bin/role-map.sh "$mapped_role" >/tmp/codex-agent-role.out 2>/tmp/codex-agent-role.err; }; then
       fail_msg "$agent must include a Codex role-map input that resolves through adapters/codex/bin/role-map.sh"
       cat /tmp/codex-agent-role.err
     fi
-    if ! grep -Fq "not a legacy compatibility Agent copy" "$agent"; then
+    if ! grep -Fq "not a legacy compatibility Agent copy" "$agent" \
+      && ! grep -Fq "not a Claude Agent copy" "$agent"; then
       fail_msg "$agent must state that it is not a legacy compatibility Agent copy"
     fi
   done
   for agent in adapters/codex/agents/*.toml; do
     [ -f "$agent" ] || continue
     profile=$(basename "$agent" .toml)
-    case " plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary " in
+    case " plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary memory-scout " in
       *" $profile "*) ;;
       *) fail_msg "$agent is not an approved Codex native agent projection" ;;
     esac
   done
+
+  if ! grep -Fq 'model = "gpt-5.4-mini"' adapters/codex/agents/memory-scout.toml \
+    || ! grep -Fq 'model_reasoning_effort = "low"' adapters/codex/agents/memory-scout.toml \
+    || ! grep -Fq 'sandbox_mode = "read-only"' adapters/codex/agents/memory-scout.toml \
+    || ! grep -Fq 'Never run memory mutation commands' adapters/codex/agents/memory-scout.toml; then
+    fail_msg "Codex memory-scout must be low-cost read-only custom agent projection"
+  fi
 
   bad=$(rg -n "adapters/opencode|opencode_setting|$CLAUDE_NATIVE_SURFACE_PATTERN" adapters/codex/agents 2>/dev/null || true)
   if [ -n "$bad" ]; then
@@ -1406,9 +1421,13 @@ PY
     || ! grep -Fq 'Codex role-map inputs: `deep maker, fast reviewer`' adapters/codex/agents/editorial-team.toml; then
     fail_msg "Codex native agent projections must preserve mixed/variable role-map input sets"
   fi
-  if ! grep -Fq 'structural plus install-path validation' adapters/codex/README.md \
+  if ! grep -Fq 'model_reasoning_effort' adapters/codex/README.md \
+    || ! grep -Fq 'parity caveat' adapters/codex/README.md \
+    || ! grep -Fq 'structural plus install-path validation' adapters/codex/README.md \
     || ! grep -Fq '`codex debug agent` listing surface' adapters/codex/README.md \
     || ! grep -Fq 'role-specific runtime boundaries' adapters/codex/README.md \
+    || ! grep -Fq 'model_reasoning_effort' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'parity caveat' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'structural plus install-path validation' adapters/codex/ADAPTATION.md \
     || ! grep -Fq '`codex debug agent` listing surface' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex custom agent docs must state current validation boundary until runtime agent discovery exists"
