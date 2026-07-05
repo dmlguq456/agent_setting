@@ -43,6 +43,12 @@ WORKING_TTL_DAYS = 21
 SCHEMA_VERSION = 4  # v1 기준 / v2 strength+last_accessed / v3 cwd_origin remap / v4 injection_flag
 FM_ORDER = ["id", "tier", "scope", "type", "cwd_origin", "created", "updated",
             "expires", "source", "tags", "links", "strength", "last_accessed", "injection_flag"]
+INJECT_DEFAULT_MAX_CHARS = 2000
+INJECT_DEFAULT_MAX_BULLETS = 15
+INJECT_DEFAULT_MAX_WORKING = 8
+INJECT_DEFAULT_MAX_DURABLE = 4
+INJECT_DEFAULT_CLEANUP_LINES = 2
+INJECT_DEFAULT_SNIPPET_CHARS = 100
 
 # 15 컬럼 정규 순서 (export/import round-trip 결정성 기반)
 RECORD_COLS = ("id", "tier", "scope", "type", "cwd_origin", "created", "updated",
@@ -2364,7 +2370,55 @@ def _first_line(body):
     return body.strip()[:160]
 
 
-def inject(max_working=40, max_durable=40, hook=False):
+def _env_int(name, default, minimum=0):
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        val = int(raw)
+    except ValueError:
+        return default
+    return max(minimum, val)
+
+
+def _append_inject_line(entries, line, record_id=None):
+    entries.append((line, record_id))
+
+
+def _inject_block(entries, max_chars):
+    """Return capped markdown plus ids that remain visible in the final block."""
+    lines = [line for line, _ in entries]
+    block = "\n".join(lines)
+    if max_chars <= 0 or len(block) <= max_chars:
+        return block, [rid for _, rid in entries if rid]
+
+    hint = entries[-1] if entries and entries[-1][0].startswith("> 상세 회상:") else (
+        '> 상세 회상: `bash <agent-home>/tools/memory/recall.sh "<query>"`',
+        None,
+    )
+    body_entries = entries[:-1] if entries and entries[-1] == hint else entries
+    notice = ("… 세션 시작 기억 일부 생략됨. 필요한 내용은 recall로 조회.", None)
+    suffix = [("", None), notice, hint]
+    kept = []
+    for entry in body_entries:
+        candidate = kept + [entry] + suffix
+        candidate_block = "\n".join(line for line, _ in candidate)
+        if len(candidate_block) <= max_chars:
+            kept.append(entry)
+        else:
+            break
+
+    final_entries = kept + suffix
+    final_block = "\n".join(line for line, _ in final_entries)
+    if len(final_block) > max_chars:
+        fallback = hint[0]
+        if len(fallback) > max_chars:
+            fallback = fallback[:max_chars]
+        return fallback, []
+    return final_block, [rid for _, rid in final_entries if rid]
+
+
+def inject(max_working=None, max_durable=None, hook=False):
     """SessionStart 주입용 — DB 에서 working(cwd) + durable/project(cwd) + profile(global) 블록.
     hook=True 면 runtime settings SessionStart additionalContext JSON 으로 감싼다.
     """
@@ -2431,39 +2485,81 @@ def inject(max_working=40, max_durable=40, hook=False):
     if not (work or dur or prof):
         return
 
-    out = ["# 🧠 통합 기억 (mem store — 세션 시작 주입)", ""]
+    max_chars = _env_int("MEM_INJECT_MAX_CHARS", INJECT_DEFAULT_MAX_CHARS, 400)
+    max_bullets = _env_int("MEM_INJECT_MAX_BULLETS", INJECT_DEFAULT_MAX_BULLETS, 1)
+    if max_working is None:
+        max_working = _env_int("MEM_INJECT_MAX_WORKING", INJECT_DEFAULT_MAX_WORKING, 0)
+    if max_durable is None:
+        max_durable = _env_int("MEM_INJECT_MAX_DURABLE", INJECT_DEFAULT_MAX_DURABLE, 0)
+    cleanup_limit = _env_int("MEM_INJECT_CLEANUP_LINES", INJECT_DEFAULT_CLEANUP_LINES, 0)
+    snippet_chars = _env_int("MEM_INJECT_SNIPPET_CHARS", INJECT_DEFAULT_SNIPPET_CHARS, 40)
+
+    entries = []
+    _append_inject_line(entries, "# 🧠 통합 기억 (mem store — 세션 시작 요약)")
+    _append_inject_line(entries, "")
     # γ E-2 layer ③ injection budget: (strength desc, updated desc) top-K — reverse=True 가 두 키
     # 모두 내림차순. emitted_ids = post-slice 생존분만(실제 주입된 것) — last_accessed 갱신 대상.
-    emitted_ids = []
+    bullet_count = 0
+    omitted = []
     if work:
-        out.append("## 단기 작업기억 (working — 이 프로젝트, 자동 만료)")
+        _append_inject_line(entries, "## 단기 작업기억 (working — 이 프로젝트, 자동 만료)")
+        shown = 0
         for m, b in sorted(work, key=lambda x: (x[0].get("strength") or 1, x[0].get("updated", "")),
                            reverse=True)[:max_working]:
-            out.append(f"- {_first_line(b)[:180]}")
-            emitted_ids.append(m["id"])
-        out.append("")
+            if bullet_count >= max_bullets:
+                break
+            _append_inject_line(entries, f"- {_first_line(b)[:snippet_chars]}", m["id"])
+            bullet_count += 1
+            shown += 1
+        if len(work) > shown:
+            omitted.append(f"working {len(work) - shown}건")
+        _append_inject_line(entries, "")
     if dur:
-        out.append("## 장기 — 이 프로젝트 (durable)")
+        _append_inject_line(entries, "## 장기 — 이 프로젝트 (durable)")
+        shown = 0
         for m, b in sorted(dur, key=lambda x: (x[0].get("strength") or 1, x[0].get("updated", "")),
                            reverse=True)[:max_durable]:
-            out.append(f"- [{m.get('type')}] {_first_line(b)[:160]}")
-            emitted_ids.append(m["id"])
-        out.append("")
+            if bullet_count >= max_bullets:
+                break
+            _append_inject_line(entries, f"- [{m.get('type')}] {_first_line(b)[:snippet_chars]}", m["id"])
+            bullet_count += 1
+            shown += 1
+        if len(dur) > shown:
+            omitted.append(f"durable {len(dur) - shown}건")
+        _append_inject_line(entries, "")
     if prof:
-        out.append("## 장기 — 사용자 특성 (user profile)")
-        for aspect_key, (m, b) in prof:
-            out.append(f"- {aspect_key}: {_first_line(b)[:140]}")
-        out.append("")
+        _append_inject_line(entries, "## 장기 — 사용자 특성 (user profile)")
+        aspects = ", ".join(aspect_key for aspect_key, _ in prof)
+        if bullet_count < max_bullets:
+            _append_inject_line(entries, f"- profile aspects: {aspects[:snippet_chars]}")
+            bullet_count += 1
+        else:
+            omitted.append(f"profile {len(prof)}건")
+        _append_inject_line(entries, "")
     # D-18: 정리 신호 섹션 — 세션끝 deep curator 가 처리 (메인 housekeeping 0). informational only.
     if cleanup_lines:
-        out.append("## 🧹 정리 신호 (세션끝 deep curator 가 처리 — D-18, 메인 조치 불요)")
-        out.extend(cleanup_lines)
-        out.append("")
+        _append_inject_line(entries, "## 🧹 정리 신호 (세션끝 deep curator 가 처리 — D-18, 메인 조치 불요)")
+        shown = 0
+        for line in cleanup_lines[:cleanup_limit]:
+            if line.startswith("- ") and bullet_count >= max_bullets:
+                break
+            _append_inject_line(entries, line[:snippet_chars + 40])
+            if line.startswith("- "):
+                bullet_count += 1
+            shown += 1
+        if len(cleanup_lines) > shown:
+            omitted.append(f"cleanup {len(cleanup_lines) - shown}건")
+        _append_inject_line(entries, "")
     # Step 4.3b: injection-flagged 레코드 존재 알림 (본문 비노출, 카운트+안내만 — 마스킹 유지하되 가시성 확보)
     if flagged_cnt > 0:
-        out.append(f"⚠️ injection-flagged {flagged_cnt}건 (recall/inject 제외됨 — 오탐이면 확인)")
-        out.append("")
-    out.append("> 상세 회상: `bash <agent-home>/tools/memory/recall.sh \"<query>\"` (store+세션 전체 FTS)")
+        _append_inject_line(entries, f"⚠️ injection-flagged {flagged_cnt}건 (recall/inject 제외됨 — 오탐이면 확인)")
+        _append_inject_line(entries, "")
+    if omitted:
+        _append_inject_line(entries, f"(세션 시작 cap으로 생략: {', '.join(omitted)}. 필요한 내용은 recall 사용.)")
+        _append_inject_line(entries, "")
+    _append_inject_line(entries, "> 상세 회상: `bash <agent-home>/tools/memory/recall.sh \"<query>\"` (store+세션 전체 FTS)")
+
+    block, emitted_ids = _inject_block(entries, max_chars)
 
     # γ E-1: 주입된 working+durable/project id 의 last_accessed 갱신 (cold-decay 신호). profile 은
     # 제외(global·T1 신뢰). fail-OPEN(S3) — SessionStart hook 이라 실패해도 절대 부트스트랩 안 깸.
@@ -2482,7 +2578,7 @@ def inject(max_working=40, max_durable=40, hook=False):
             if con2 is not None:
                 con2.close()   # 예외 흡수 시에도 연결 누수 방지 (SessionEnd lock 경합 경로)
 
-    emit("\n".join(out))
+    emit(block)
 
 
 # ---------- sync ----------

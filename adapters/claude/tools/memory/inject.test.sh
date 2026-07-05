@@ -20,6 +20,7 @@
 #   T9   empty store → inject emits nothing
 #   T10  inject --hook with cleanup section → valid JSON + additionalContext contains 정리 신호
 #   T11  scope coherence: global durable near-dups excluded (project-scoped, matches inject body)
+#   T12  default budget: SessionStart context stays ≤2000 chars and ≤15 bullet lines
 set -u
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -388,6 +389,37 @@ echo "$inject_out_t11" | grep -q "장기.*이 프로젝트.*durable" \
   || bad "T11: inject did not emit project durable block (fixture error)"
 
 rm -rf "$STORE_T11"
+
+# ── T12: default budget — SessionStart context remains compact by default ──────────────────────
+echo "== T12: default inject budget ≤2000 chars and ≤15 bullet lines =="
+
+STORE_T12="$(mktemp -d)"; export MEM_STORE="$STORE_T12"
+for i in $(seq 1 30); do
+  python3 "$MEM" add working thread "budget working record number ${i} with deliberately long body text that should be clipped by default session start injection caps abcdefghijklmnopqrstuvwxyz" >/dev/null 2>&1
+done
+for i in $(seq 1 30); do
+  python3 "$MEM" add durable thread "budget durable record number ${i} with deliberately long body text that should be clipped by default session start injection caps abcdefghijklmnopqrstuvwxyz" >/dev/null 2>&1
+done
+python3 "$MEM" add durable profile "budget profile aspect one long body" --scope global --source user-profile:01_budget_profile >/dev/null 2>&1
+python3 "$MEM" index --rebuild >/dev/null 2>&1
+
+inject_out_t12="$(python3 "$MEM" inject 2>/dev/null)"
+chars_t12="$(printf '%s' "$inject_out_t12" | python3 -c 'import sys; print(len(sys.stdin.read()))')"
+bullets_t12="$(printf '%s\n' "$inject_out_t12" | grep -c '^- ' || echo 0)"
+
+[ "$chars_t12" -le 2000 ] \
+  && ok "T12a: default inject output chars ≤2000 (got $chars_t12)" \
+  || bad "T12a: default inject output too large ($chars_t12 chars)"
+
+[ "$bullets_t12" -le 15 ] \
+  && ok "T12b: default inject bullet lines ≤15 (got $bullets_t12)" \
+  || bad "T12b: default inject bullet line cap exceeded ($bullets_t12)"
+
+printf '%s' "$inject_out_t12" | grep -q "세션 시작 cap으로 생략" \
+  && ok "T12c: omitted summary points to recall path" \
+  || bad "T12c: omitted summary missing for capped output"
+
+rm -rf "$STORE_T12"
 
 # Restore original STORE env
 export MEM_STORE="$STORE"
