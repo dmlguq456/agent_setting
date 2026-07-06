@@ -962,11 +962,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     n_id = sum(1 for s in _real if s.liveness == "idle")
     n_dt = sum(1 for s in _real if s.detached and s.liveness not in ("stale", "dead"))
     jw = sum(1 for j in jobs if j.liveness == "working")
+    spin = _SPIN[int(time.time() * 10) % len(_SPIN)]
     pulse = [("  fleet ", "head"),
-             ("● %d" % n_wk, "g_work"), (" working   ", "dim"),
-             ("○ %d" % n_id, "g_idle"), (" idle   ", "dim")]
+             (spin + " %d" % n_wk, "g_work"), (" working   ", "dim"),
+             ("● %d" % n_id, "dim"), (" idle   ", "dim")]
     if n_dt:
-        pulse += [(_DETACHED_GLYPH + " %d" % n_dt, "g_idle"), (" detached   ", "dim")]
+        pulse += [(_DETACHED_GLYPH + " %d" % n_dt, "dim"), (" detached   ", "dim")]
     if jobs:
         pulse += [("↳ %d" % len(jobs), "dim"),
                   (" job%s (%d working)" % ("s" if len(jobs) != 1 else "", jw), "dim")]
