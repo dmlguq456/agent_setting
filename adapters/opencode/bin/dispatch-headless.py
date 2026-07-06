@@ -128,14 +128,22 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         return path.read_text(encoding="utf-8"), str(path)
     if args.prompt_text:
         return args.prompt_text, "inline"
+    extra = ""
+    if args.capability == "autopilot-code":
+        extra = (
+            "\nAutopilot-code execution contract:\n"
+            "- Choose the stage graph from intensity before QA. direct has no plan stage; quick uses micro-plan plus plan-check-lite; standard+ uses durable plan/execute/test/report.\n"
+            "- Plan-check is required for quick+ but stays small; do not run independent QA after every stage by default.\n"
+            "- thorough/adversarial may use bounded depth-2 planner/verifier/adversary workers and must synthesize short reports; depth 3+ is forbidden.\n"
+        )
     return (
         "Run the requested portable harness work.\n"
         f"capability={args.capability}\nmode={args.mode}\nqa={args.qa}\n"
         f"intensity={args.intensity}\ndepth={args.depth}\nparent={args.parent_slug or '-'}\n"
-        f"worktree={args.worktree}\n",
+        f"worktree={args.worktree}\n"
+        f"{extra}",
         "generated",
     )
-
 
 def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -> str:
     cmd = [

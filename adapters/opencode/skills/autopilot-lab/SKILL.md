@@ -30,7 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 - Identifier: `autopilot-lab`
 - Supported modes: `setup, eval`
-- Argument shape: `<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--qa quick|light|standard|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]`
+- Argument shape: `<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]`
 - Portable meaning: 빠른 실험 prototype. 학습 세팅과 ckpt 평가·분석 앞뒤를 돕는다.
 
 ## Portable Contract

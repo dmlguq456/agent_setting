@@ -30,7 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 - Identifier: `autopilot-draft`
 - Supported modes: `paper, presentation, doc`
-- Argument shape: `<task description> [--mode paper|presentation|doc] [--qa quick|light|standard|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]`
+- Argument shape: `<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]`
 - Portable meaning: 문서 초안 파이프. 전략·초안·검증·편집을 거쳐 적용용 문서 artifact를 만든다.
 
 ## Portable Contract

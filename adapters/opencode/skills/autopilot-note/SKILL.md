@@ -30,7 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 - Identifier: `autopilot-note`
 - Supported modes: `none`
-- Argument shape: `[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--qa quick|light|standard|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>] [--no-fact-check]`
+- Argument shape: `[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>] [--no-fact-check]`
 - Portable meaning: 산출물 라우팅/노트화. digest와 triage 제안을 만든다.
 
 ## Portable Contract

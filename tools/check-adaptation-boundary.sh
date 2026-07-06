@@ -902,15 +902,19 @@ check_codex_bin_wrappers() {
     || grep -Fq "printf 'compat_reference=skills/" adapters/codex/bin/capability-map.sh; then
     fail_msg "adapters/codex/bin/capability-map.sh must not expose root Skill compatibility paths as Codex capability-info output"
   fi
-  if ! grep -Fq 'pipeline_contract="code-plan>code-execute>code-test>code-report"' adapters/codex/bin/capability-map.sh \
+  if ! grep -Fq 'stage_graph_contract="core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance"' adapters/codex/bin/capability-map.sh \
+    || ! grep -Fq 'plan_policy="direct=no-plan;quick=micro-plan+plan-check-lite;standard+=durable-plan"' adapters/codex/bin/capability-map.sh \
+    || ! grep -Fq 'pipeline_contract="code-plan>code-execute>code-test>code-report"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'optional_pipeline_step="code-refine"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'artifact_contract="plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'role_contract="planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --depth 1|2 [--parent <slug>]"' adapters/codex/bin/capability-map.sh; then
     fail_msg "Codex autopilot-code capability-info must expose the portable pipeline/artifact/role/dispatch contracts"
   fi
-  if ! grep -Fq 'capability-info` and `route` print the portable pipeline contract (`code-plan>code-execute>code-test>code-report`)' adapters/codex/AGENTS.md \
+  if ! grep -Fq 'capability-info` and `route` print the portable pipeline contract (`code-plan>code-execute>code-test>code-report` for `standard+`)' adapters/codex/AGENTS.md \
     || ! grep -Fq 'autopilot-code pipeline' adapters/codex/README.md \
+    || ! grep -Fq 'stage_graph_contract=core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance' adapters/codex/README.md \
+    || ! grep -Fq 'plan_policy=direct=no-plan;quick=micro-plan+plan-check-lite;standard+=durable-plan' adapters/codex/README.md \
     || ! grep -Fq 'pipeline_contract=code-plan>code-execute>code-test>code-report' adapters/codex/README.md; then
     fail_msg "Codex docs must describe the autopilot-code pipeline metadata exposed by capability-info/route"
   fi

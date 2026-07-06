@@ -26,6 +26,16 @@ Each capability has:
 - required role families;
 - adapter realization notes.
 
+Autopilot entry capabilities additionally follow `core/CONVENTIONS.md §1`:
+
+- `intensity` is the primary stage-graph selector;
+- `direct` has no plan stage, no plan-check, and no durable plan artifact;
+- `quick+` has at least a small `plan-check` gate;
+- stage-local gates stay cheap and only check next-stage readiness;
+- independent QA is not repeated after every stage by default;
+- final `verify` remains capability-specific and concrete;
+- `--qa` is an assurance override for `plan-check`, selected independent reviews, and `verify`, not a pipeline-shape selector.
+
 Runtime-specific details stay out of portable capability meaning:
 
 - Claude Skill frontmatter and folder layout;

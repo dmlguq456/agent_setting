@@ -8,22 +8,44 @@
 
 ---
 
-## §1. Pipeline Intensity and Assurance (canonical)
+## §1. Pipeline Intensity, Stage Graph, and Assurance (canonical)
 
-Pipeline intensity controls _which orchestration shape_ an autopilot entry uses; QA level controls _how much assurance_ a stage receives. New autopilot contracts should choose intensity first and treat `--qa` as a legacy/override assurance knob, not the primary pipeline selector.
+Pipeline intensity controls _which orchestration shape_ an autopilot entry uses; QA level controls _how much assurance_ selected checks receive. New autopilot contracts choose intensity first and treat `--qa` as a legacy/override assurance knob, not the primary pipeline selector.
 
-| Intensity | Pipeline shape | Dispatch policy | Assurance default | Typical use |
-|---|---|---|---|---|
-| `direct` | answer/edit directly, no durable pipeline artifact unless already required | no dispatch | none/light self-check | one-off answers, typo, explicit no-artifact work |
-| `quick` | tiny plan -> execute -> focused verify -> short report | no dispatch by default | quick | small localized changes, doc minor, clear bug fix |
-| `standard` | normal plan -> execute -> test -> report | main or depth-1 worker | standard | routine tracked work |
-| `strong` | standard + one independent perspective/review before or after execution | optional depth-1 worker | standard/thorough | important but not high-stakes work |
-| `thorough` | capability-owner worker orchestrates perspective workers, synthesizes, then executes/verifies | depth 1 owner may open bounded depth 2 workers | thorough | complex multi-file or cross-domain work |
-| `adversarial` | thorough + explicit adversarial/failure-mode/security/contradiction pass | depth 1 owner may open bounded depth 2 adversary/verifier workers | adversarial | high-stakes, irreversible, security, external-facing work |
+Common stages are runtime-neutral names. Each capability maps them to its own native sub-capabilities or inline work.
+
+| Stage | Meaning | Typical capability realization |
+|---|---|---|
+| `intake` | parse request, mode, constraints, risk, intensity, QA override | route/capability preflight, spec-significance, target selection |
+| `orient` | gather only the context needed for the selected intensity | read spec/source/material artifacts; `orient-lite` for quick |
+| `plan` | choose work path before producing | no stage for `direct`; inline `micro-plan` for `quick`; durable plan for `standard+` |
+| `plan-check` | small gate that checks whether the plan can safely feed production | required for `quick+`; may be self-check, lightweight reviewer, or adversarial critique by intensity |
+| `produce` | create or modify the actual artifact | code, draft, research report, design asset, spec update, note |
+| `verify` | validate the produced artifact with the capability's concrete checker | tests, visual harness, claim verification, consistency/drift check, compile gate |
+| `synth` | merge perspective/depth2 outputs into one actionable path | only when independent perspectives ran |
+| `report` | return concise outcome, evidence, artifact paths, and remaining risk | pipeline summary, handoff, user-facing report |
+
+Canonical intensity graph:
+
+| Intensity | Stage graph | Plan policy | Check policy | Dispatch policy | Assurance default |
+|---|---|---|---|---|---|
+| `direct` | `intake -> produce -> sanity/report` | no `plan`, no `plan-check`, no durable plan artifact | final sanity only | no dispatch | none/light self-check |
+| `quick` | `intake -> orient-lite -> micro-plan -> plan-check-lite -> produce -> verify-lite -> report` | inline micro-plan only; no durable `plan.md` unless a capability explicitly requires it | plan-check is 3-4 focused questions; verify-lite is one concrete sanity check | no dispatch by default | quick |
+| `standard` | `intake -> orient -> plan -> plan-check -> produce -> verify -> report` | durable plan/checklist when the capability writes a work cycle | lightweight plan QA plus final verification; produce/report use local gates | main or depth-1 worker | standard |
+| `strong` | `intake -> orient -> plan -> plan-check(risk) -> produce -> verify -> fix-loop? -> report` | durable plan with risk focus | one independent review at the riskiest point; not every stage | optional depth-1 worker | standard/thorough |
+| `thorough` | `intake -> orient -> owner-plan -> plan-check -> depth2-perspectives? -> synth -> produce -> verify -> report` | depth-1 owner plan; depth2 may propose alternatives | plan QA plus perspective/verifier workers; synth owns integration | depth 1 owner may open bounded depth 2 workers | thorough |
+| `adversarial` | `intake -> orient -> owner-plan -> plan-check(adversarial) -> adversary/depth2 -> synth -> produce -> verify -> report` | depth-1 owner plan with adversarial critique | explicit failure-mode/security/contradiction pass | depth 1 owner may open bounded depth 2 adversary/verifier workers | adversarial |
+
+Check taxonomy:
+
+- **Stage-local gate** stays cheap and checks only whether the current stage output is fit for the next stage. Examples: plan-check, implementation sanity, report evidence completeness.
+- **Independent QA pass** means another role/model/harness performs a substantive critique. It is not repeated after every stage by default. Use it only where the selected intensity calls for it: the riskiest point for `strong`, bounded depth2/perspectives for `thorough`, adversarial/failure-mode/security for `adversarial`.
+- **Final verification** remains capability-specific and concrete: tests for code, compile/render for document/apply/design, claim/source verification for research/doc, consistency/drift checks for spec/note.
+- `plan-check` is the exception to the QA reduction: every non-`direct` graph has at least a small plan gate because a bad plan corrupts downstream produce/verify/report work.
 
 Depth contract: depth 0 is the user-facing main session. Depth 1 is the capability owner worker (`autopilot-code`, `autopilot-draft`, etc.) that owns a whole pipeline and returns only a synthesis to main. Depth 2 is allowed only under `thorough` or `adversarial`, and only as bounded sub-workers with a single role (`planner`, `verifier`, `adversary`, `cross-harness-checker`, etc.). Depth 3+ is forbidden. Raw worker logs stay in artifacts/dispatch logs; parent sessions exchange short structured summaries.
 
-`--qa quick|light|standard|thorough|adversarial` remains supported for compatibility and explicit assurance override. It must not force a monolithic full pipeline when the selected intensity is `direct` or `quick`, and it must not grant depth-2 dispatch by itself; depth-2 comes from `intensity=thorough|adversarial`.
+`--qa quick|light|standard|thorough|adversarial` remains supported for compatibility and explicit assurance override. It changes the rigor of `plan-check`, selected independent reviews, and `verify`; it must not choose the stage graph by itself, must not force a monolithic full pipeline when `intensity=direct|quick`, and must not grant depth-2 dispatch by itself. Depth-2 comes from `intensity=thorough|adversarial`.
 
 ## §1. QA Levels (canonical)
 

@@ -10,7 +10,7 @@ This is the portable capability contract for `autopilot-note`. It defines runtim
 | Group | `entry` |
 | Supported modes | `none` |
 | Portable meaning | 산출물 라우팅/노트화. digest와 triage 제안을 만든다. |
-| Argument shape | `[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--qa quick|light|standard|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>] [--no-fact-check]` |
+| Argument shape | `[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>] [--no-fact-check]` |
 
 ## Invocation Semantics
 
@@ -30,6 +30,8 @@ defaults for resolving `<agent-notes-root>` belong in adapter-native files.
 ## Role Requirements
 
 Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concrete model names, subagent frontmatter, and runtime-specific tool lists belong in adapter files.
+
+Pipeline intensity follows `core/CONVENTIONS.md §1`: `direct` has no plan stage or durable plan artifact; `quick` uses an inline micro-plan plus plan-check-lite; `standard+` uses the capability's durable work-cycle plan when applicable. `plan-check` is required for every non-`direct` graph, but independent QA is not repeated after every stage by default. QA level is an assurance override for plan-check, selected independent reviews, and final verify; it does not name a model or choose the stage graph.
 
 ## Guard Requirements
 

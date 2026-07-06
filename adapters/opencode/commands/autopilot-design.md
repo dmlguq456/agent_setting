@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-design.md`, 
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability autopilot-design [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--qa quick|standard|thorough]`.
+   `<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|standard|thorough]`.
 
 Portable contract excerpt:
 

@@ -46,6 +46,21 @@
 
 `↻` = 반복 자리. 사후 공통: `audit`(읽기 전용 점검) · `autopilot-refine`(markdown 정정). cross-project: `analyze-user` · `post-it --scope user`.
 
+## 1.1 Pipeline intensity routing
+
+Autopilot entrypoints choose `intensity` before `--qa`. Intensity selects the stage graph and dispatch depth; `--qa` only overrides assurance rigor inside `plan-check`, selected independent review, and final `verify`.
+
+| Request shape | Default intensity | Routing note |
+|---|---|---|
+| one-off answer, typo, rename, explicit no-artifact work | `direct` | no plan stage, no plan-check, no durable plan artifact |
+| small localized tracked change or doc minor | `quick` | inline micro-plan plus small plan-check; no depth dispatch |
+| routine tracked code/doc/spec/design work | `standard` | durable plan/checklist when the capability owns a work cycle |
+| important multi-file or risk-bearing work | `strong` | one independent review at the riskiest point, not every stage |
+| complex cross-domain or cross-harness work | `thorough` | depth-1 owner may open bounded depth-2 perspective/verifier workers |
+| high-stakes, irreversible, security, or external-facing work | `adversarial` | thorough plus explicit adversary/failure-mode/security pass |
+
+Direct work is the only graph with no plan. Every non-`direct` autopilot graph has a `plan-check`, but repeated independent QA after every sub-stage is not the default. See `CONVENTIONS.md §1` for the canonical stage graph.
+
 ## 2. 작업 본질 매핑 (발화 → skill)
 
 | 작업 종류 | 사전 (조사·분석) | 신규 의도·청사진 | 자산 작업 (신규·기존) |

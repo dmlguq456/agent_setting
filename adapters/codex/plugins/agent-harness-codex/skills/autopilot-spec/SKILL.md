@@ -27,7 +27,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 - Identifier: `autopilot-spec`
 - Supported modes: `app, library, api, cli, research, update`
-- Argument shape: `<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--qa quick|light|standard|thorough] [--user-refine]`
+- Argument shape: `<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough] [--user-refine]`
 - Portable meaning: 요구사항·청사진 작성·갱신. `prd.md`를 spec 변경의 단일 경로로 유지한다.
 
 ## Portable Contract
@@ -67,7 +67,7 @@ Minimum role mapping:
 - research or reference import: research role;
 - final consistency pass: QA role.
 
-QA level controls review breadth, number of refinement rounds, and how much external/independent validation is required; it does not name a model.
+Pipeline intensity follows `core/CONVENTIONS.md §1`: `direct` has no plan stage or durable plan artifact; `quick` uses an inline micro-plan plus plan-check-lite; `standard+` uses the capability's durable work-cycle plan when applicable. `plan-check` is required for every non-`direct` graph, but independent QA is not repeated after every stage by default. QA level is an assurance override for plan-check, selected independent reviews, and final verify; it does not name a model or choose the stage graph.
 
 ## Guard Requirements
 

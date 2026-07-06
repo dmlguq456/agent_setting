@@ -169,14 +169,15 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         execution_contract = (
             "\nAutopilot-code execution contract:\n"
             "- Before code edits, emit a `spec-significance` verdict.\n"
-            "- Run the pipeline in order: code-plan -> code-execute -> code-test -> code-report. Use optional code-refine only when user feedback or QA review requires plan correction.\n"
-            "- For each sub-step, read the matching adapters/codex/skills/<step>/SKILL.md when present and run adapters/codex/bin/preflight.sh capability-info <step>.\n"
-            "- Pipeline role profiles: run adapters/codex/bin/preflight.sh role planning, role implementation, role verification, and role report to map stages to Codex-native agents.\n"
-            "- Planning review: run adapters/codex/bin/preflight.sh mode-info qa/plan-review and adapters/codex/bin/preflight.sh role verification. For thorough/adversarial QA, also use a deep/external reviewer role when available.\n"
+            "- Select the stage graph from `intensity` before using QA. `direct` has no code-plan/plan-check/durable plan artifact; `quick` uses an inline micro-plan plus plan-check-lite; `standard+` uses the durable code-plan -> code-execute -> code-test -> code-report loop.\n"
+            "- For each durable sub-step that is actually used, read the matching adapters/codex/skills/<step>/SKILL.md when present and run adapters/codex/bin/preflight.sh capability-info <step>.\n"
+            "- Pipeline role profiles: for standard+ stages, run adapters/codex/bin/preflight.sh role planning, role implementation, role verification, and role report to map stages to Codex-native agents.\n"
+            "- Plan-check is required for quick+ but stays small: requirements coverage, over/under-scoping, executable verification, and missed spec-significant risk. Do not run independent QA after every stage by default.\n"
+            "- When the selected graph calls for independent plan review, run adapters/codex/bin/preflight.sh mode-info qa/plan-review and adapters/codex/bin/preflight.sh role verification before claiming that review.\n"
             "- Pipeline intensity controls ceremony. For thorough/adversarial intensity, a depth-1 capability owner may dispatch bounded depth-2 planner/verifier/adversary workers and must synthesize short reports; depth 3+ is forbidden.\n"
-            "- Implementation: run adapters/codex/bin/preflight.sh role implementation and obey the requested development mode.\n"
-            "- Testing: run adapters/codex/bin/preflight.sh mode-info qa/test, satisfy the reported verification-runner contract, and record evidence under test_logs/.\n"
-            "- Reporting: run adapters/codex/bin/preflight.sh role report, then write or update pipeline_summary.md with changed files, verification commands/results, artifact paths, and unsupported Codex tool contracts.\n"
+            "- Implementation: run adapters/codex/bin/preflight.sh role implementation for standard+ implementation stages and obey the requested development mode.\n"
+            "- Testing: run adapters/codex/bin/preflight.sh mode-info qa/test when concrete verification commands are used, satisfy the reported verification-runner contract, and record evidence under test_logs/ for standard+ work cycles.\n"
+            "- Reporting: direct/quick return a concise report; standard+ runs adapters/codex/bin/preflight.sh role report, then writes or updates pipeline_summary.md with changed files, verification commands/results, artifact paths, and unsupported Codex tool contracts.\n"
             "- Do not claim independent QA delegation if no separate Codex agent/headless pass actually ran; report inline fallback explicitly.\n"
         )
     return (

@@ -1,7 +1,7 @@
 ---
 name: autopilot-code
 description: "_코드 작업 일반_ entry — 라이브러리·연구 코드·앱 모두 커버. 신규·기존 코드 무관 (cwd 자동 감지). dev (기능 추가·신규) / debug (진단·수정) 두 mode. spec/ 컨텍스트 발견 시 spec 자동 Read + spec mode 별 분기: app mode → 디자인팀 critic + DB migration 안전 + push 자동 deploy. library mode → 공개 API 일관성 점검. cli mode → 명령·옵션 일관성. research mode → 재현성·configs·metric 검증. 코드 외 결정 (PRD·스택·skeleton·ship setup) 은 autopilot-spec 영역."
-argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [--qa quick|light|standard|thorough|adversarial] [--user-refine]"
+argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--user-refine]"
 metadata:
   group: entry
   fam: code
@@ -9,7 +9,7 @@ metadata:
   blurb: "코드 작업 일반 entry — 라이브러리·연구·앱 모두 커버, spec 컨텍스트 자동 감지"
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 코드 작업 산출물은 spec 유무와 무관하게 **항상** `<artifact-root>/plans/<date>_<slug>/` (청사진은 `spec/`, 작업은 `plans/` — 1 repo = 1 spec, 형제 bucket; [CONVENTIONS §5.4.3](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). plan/ + checklist는 T1 (root). dev_logs/, test_logs/는 T2 (root). reviewer 로그(plan_reviews, dev_reviews, test_reviews)는 모두 `_internal/` 하위. (모노레포 예외만 `spec/<component>/`·`plans/<component>/`.)
+> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier: T1 root / T2 named subdir / T3 `_internal/`). 코드 작업 산출물은 spec 유무와 무관하게 기본적으로 `<artifact-root>/plans/<date>_<slug>/` (청사진은 `spec/`, 작업은 `plans/` — 1 repo = 1 spec, 형제 bucket; [CONVENTIONS §5.4.3](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). 단 `intensity=direct` 는 plan stage/plan artifact 없음, `quick` 은 inline micro-plan + plan-check-lite 가 기본이며 durable plan 은 adapter/repo 정책상 필요할 때만 남긴다. `standard+` work cycle 에서 plan/ + checklist는 T1 (root). dev_logs/, test_logs/는 T2 (root). reviewer 로그(plan_reviews, dev_reviews, test_reviews)는 모두 `_internal/` 하위. (모노레포 예외만 `spec/<component>/`·`plans/<component>/`.)
 > `<artifact-root>` 해석: `.agent_reports` 우선, legacy `.claude_reports` 는 이미 존재하고 `.agent_reports` 가 없을 때만 사용. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports` 로 치환한다.
 
 ## Context Auto-Detection (spec mode 자동 분기 + 자료 자동 read)
@@ -221,9 +221,21 @@ autopilot-lab "X 실험" — Step 0 에서 readiness ✓ 확인 후 진행
 - debug: not supported — always starts from diagnosis
 - If --from is used with debug mode: warn "debug 모드에서는 --from이 지원되지 않습니다. 진단부터 시작합니다." and ignore.
 
+### --intensity <level>
+
+Pipeline intensity is the stage-graph selector (canonical: [CONVENTIONS.md §1](../../core/CONVENTIONS.md#1-pipeline-intensity-stage-graph-and-assurance-canonical)).
+
+- `direct`: `intake -> produce -> sanity/report`; no code-plan, no plan-check, no durable plan artifact.
+- `quick`: `intake -> orient-lite -> micro-plan -> plan-check-lite -> produce -> verify-lite -> report`; no independent QA after every stage.
+- `standard`: durable `code-plan -> plan-check -> code-execute -> code-test -> code-report`.
+- `strong`: standard plus one risk-focused independent review.
+- `thorough` / `adversarial`: depth-1 owner may open bounded depth-2 planner/verifier/adversary workers and must synthesize short reports.
+
+`plan-check` is required for every non-`direct` graph, but expensive independent QA is not repeated after every sub-stage by default.
+
 ### --qa <level>
 
-QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
+QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. QA 는 stage graph 선택자가 아니라 `plan-check`, 선택된 independent review, `code-test` 강도 override 이다. 본 skill 적용:
 
 - Supported: `quick` / `light` / `standard` / `thorough` (default) / `adversarial`
 - **security-review (code 트랙의 보안 축 — fact-check 부재 대체)**: auth / crypto·secrets / external input / api_contract / deserialization 을 건드리는 변경이 `adversarial` 이면 `Agent(품질관리팀 security-review)` 를 code QA 에 parallel 추가 — diff 의 _신규_ high-confidence(≥8) 취약점만. (내장 `/security-review` 온프레미스 — `roles/modes/qa/security-review.md`.)
@@ -236,7 +248,7 @@ QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../
 - **Propagation**: `--qa <level>` 를 code-plan / code-refine 에 flag 로 전달. code-execute / code-test / code-report 는 plan frontmatter `qa_level: <level>` 로
 - **Mid-pipeline switching**: Step 2+ 에서 `--qa` 명시 시 plan frontmatter 갱신. 명시 안 하면 frontmatter 값 보존 (없으면 `thorough`)
 - **`quick` interactions**: `--user-refine` silently ignored (refine skip). `--from refine` 으로 재개 시 frontmatter `qa_level == quick` 이면 abort ("qa_level=quick 에서는 refine 단계가 skip 됩니다. --qa <level> 을 다른 값으로 명시해 재개하세요.")
-- **`quick` = 소규모 잡일 경량 tier**: 데이터 split·포맷 변환·log 파싱·metric 재계산 같은 _로그는 남기되 deep review 불필요_ 한 작업의 자리. plan + execute + **test(forced thorough — 유지)** 는 돌되 plan-review·code-report·test-retry 는 skip. `plans/{date}_{slug}/` 에 plan + pipeline_summary + test 결과가 남아 DB-harvest 가능. _직접 처리(로그 0)_ 와 _dev/debug(full ceremony)_ 사이의 경량 자리. (test gate 는 quick 에서도 살아 있어 fast implementer execute 가 무검증 통과하지 않음.)
+- **`quick` = 소규모 잡일 경량 tier**: 데이터 split·포맷 변환·log 파싱·metric 재계산 같은 _검증은 필요하지만 full ceremony 는 과한_ 작업의 자리. inline micro-plan + plan-check-lite + produce + verify-lite 를 수행하고, plan-review/code-refine/test-retry 같은 반복 independent QA 는 skip. durable `plans/{date}_{slug}/` 는 repo/adapter 정책상 필요할 때만 남긴다. (verify-lite 는 quick 에서도 살아 있어 fast implementer execute 가 무검증 통과하지 않음.)
 
 ### --user-refine (boolean flag — opt-in only)
 
@@ -297,12 +309,12 @@ Resolve `$ARG` to a plan file path:
    - **No match** → report error
 
 ## Pipeline: Mode dev
-You (the main Claude) orchestrate by invoking each skill directly via the Skill tool. All tasks go through the full pipeline. Step 2 (plan review as user proxy) uses a **task-aware expert** — UI/visual → `디자인팀`, 그 외 → `연구팀`; Step 6 (meta-report) = 연구팀.
+You (the main Claude) orchestrate by invoking each skill directly via the Skill tool. Stage graph is selected by `--intensity` before QA. `direct` skips this full pipeline and performs produce + sanity/report only; `quick` uses inline micro-plan + plan-check-lite and focused verification. `standard+` uses the full durable pipeline below. Step 2 (plan review as user proxy) is used only when the selected graph calls for it; UI/visual → `디자인팀`, 그 외 → `연구팀`; Step 6 (meta-report) = 연구팀.
 
 > **자료팀 위임 (옵션)** — task 가 _결과 시각화·실험 log plot·result table 정리_ 같은 분석 자료를 요구하면 code-execute / code-report 단계 안에서 `Agent(자료팀, "<spec>")` 직접 호출. _훈련·실험 실행_ 자체는 autopilot-code 본 영역, 결과의 _후처리·시각화_ 만 자료팀 영역. 자료팀이 figure / 스크립트 / 표 한 묶음 생성 후 dev_logs/ 의 해당 step 안에 결과 자산 경로 박음.
 
 ### Step 1: code-plan
-Invoke Skill: `code-plan` with the task description as args.
+Skip entirely for `intensity=direct`; use inline micro-plan only for `quick`. For `standard+`, invoke Skill: `code-plan` with the task description as args.
 Wait for completion before proceeding.
 
 ### Step 2: code-refine (plan-review proxy — task-aware: 연구팀 / UI는 디자인팀)

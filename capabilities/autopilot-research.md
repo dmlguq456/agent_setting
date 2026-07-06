@@ -10,7 +10,7 @@ This is the portable capability contract for `autopilot-research`. It defines ru
 | Group | `entry` |
 | Supported modes | `academic, technology, market` |
 | Portable meaning | 공통 사전조사. 논문·기술·시장 survey 후 downstream capability로 분기한다. |
-| Argument shape | `<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--qa quick|light|standard|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]` |
+| Argument shape | `<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]` |
 
 ## Invocation Semantics
 
@@ -26,7 +26,7 @@ Research work writes to `<artifact-root>/research/<topic>/`.
 
 Required public artifacts:
 
-- `pipeline_state.yaml`: query, mode, depth, QA level, resume stage, and artifact path;
+- `pipeline_state.yaml`: query, mode, depth, intensity, QA override, resume stage, and artifact path;
 - `pipeline_summary.md`: source coverage, findings, QA result, and downstream recommendations;
 - report chapters at the research root, named by mode;
 - `cards/` for paper/project/company/source cards when the mode produces cards;
@@ -46,7 +46,7 @@ Minimum role mapping:
 - editorial cleanup of final chapters: editorial role when available;
 - downstream handoff: planning role for spec/code/draft routing.
 
-QA level controls search breadth, fact-check depth, independent verification, and whether adversarial claim verification is required; it does not name a model.
+Pipeline intensity follows `core/CONVENTIONS.md §1`: `direct` has no plan stage or durable plan artifact; `quick` uses an inline micro-plan plus plan-check-lite; `standard+` uses the capability's durable work-cycle plan when applicable. `plan-check` is required for every non-`direct` graph, but independent QA is not repeated after every stage by default. QA level is an assurance override for plan-check, selected independent reviews, and final verify; it does not name a model or choose the stage graph.
 
 ## Guard Requirements
 
@@ -69,7 +69,7 @@ Additional research-entry gates:
 
 ## Portable Procedure
 
-1. Parse query, mode, depth, QA level, optional `--from`, and skip flags.
+1. Parse query, mode, depth, intensity, QA override, optional `--from`, and skip flags.
 2. Resolve or create `<artifact-root>/research/<topic>/`; if resuming, read `pipeline_state.yaml`.
 3. Infer mode when omitted and ask scope clarification when required.
 4. Build search queries, including 2-3 synonym or alternate-phrase expansions.

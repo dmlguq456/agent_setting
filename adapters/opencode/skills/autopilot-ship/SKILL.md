@@ -30,7 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 - Identifier: `autopilot-ship`
 - Supported modes: `none`
-- Argument shape: `<task description (선택)> [--qa quick|light|standard|thorough]`
+- Argument shape: `<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough]`
 - Portable meaning: 앱 배포·출시 준비. build/deploy setup과 ship checklist를 만든다.
 
 ## Portable Contract

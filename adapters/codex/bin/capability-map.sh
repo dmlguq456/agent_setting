@@ -45,6 +45,8 @@ optional_pipeline_step=""
 artifact_contract=""
 role_contract=""
 dispatch_contract=""
+stage_graph_contract=""
+plan_policy=""
 note="Codex has no native skill/plugin realization for this capability yet; read the portable catalog and task-relevant docs, then use preflight guards. Legacy compatibility references are not native input."
 native_skill_path="adapters/codex/skills/$cap/SKILL.md"
 native_plugin_skill_path="adapters/codex/plugins/agent-harness-codex/skills/$cap/SKILL.md"
@@ -72,6 +74,8 @@ case "$cap" in
     artifact_contract="plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/"
     role_contract="planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team"
     dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --depth 1|2 [--parent <slug>]"
+    stage_graph_contract="core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance"
+    plan_policy="direct=no-plan;quick=micro-plan+plan-check-lite;standard+=durable-plan"
     note="$note Follow the reported pipeline_contract, artifact_contract, and intensity/depth dispatch contract before claiming the autopilot-code cycle is complete."
     ;;
   code-test)
@@ -126,6 +130,12 @@ if [ -n "$role_contract" ]; then
 fi
 if [ -n "$dispatch_contract" ]; then
   printf 'dispatch_contract=%s\n' "$dispatch_contract"
+fi
+if [ -n "$stage_graph_contract" ]; then
+  printf 'stage_graph_contract=%s\n' "$stage_graph_contract"
+fi
+if [ -n "$plan_policy" ]; then
+  printf 'plan_policy=%s\n' "$plan_policy"
 fi
 if [ -n "$tool_contract" ]; then
   printf 'tool_contract=%s\n' "$tool_contract"

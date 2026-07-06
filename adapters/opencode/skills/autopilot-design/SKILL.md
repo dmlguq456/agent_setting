@@ -30,7 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 - Identifier: `autopilot-design`
 - Supported modes: `none`
-- Argument shape: `<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--qa quick|standard|thorough]`
+- Argument shape: `<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|standard|thorough]`
 - Portable meaning: 시각 산출물 디자인 파이프. refs→tokens→components→review→handoff를 조율한다.
 
 ## Portable Contract
