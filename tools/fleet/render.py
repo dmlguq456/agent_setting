@@ -659,7 +659,7 @@ def _mq_tag(mode, qa_text, qa_key, profile=None):
 
 def _dispatch_prefix(j):
     depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
-    return "↳" * depth + " "
+    return "  " * (depth - 1) + "↳ "
 
 
 def _dispatch_role_suffix(j):
