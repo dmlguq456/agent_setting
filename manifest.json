@@ -422,6 +422,13 @@
       "hard_block": false
     },
     {
+      "slug": "hook__spec-sync-nudge__PostToolUse",
+      "name": "spec-sync-nudge",
+      "mono": "spec-sync-nudge",
+      "event": "PostToolUse",
+      "hard_block": false
+    },
+    {
       "slug": "hook__artifact-guard__PreToolUse",
       "name": "artifact-guard",
       "mono": "artifact-guard",
