@@ -906,7 +906,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'optional_pipeline_step="code-refine"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'artifact_contract="plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'role_contract="planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team"' adapters/codex/bin/capability-map.sh \
-    || ! grep -Fq 'dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level>"' adapters/codex/bin/capability-map.sh; then
+    || ! grep -Fq 'dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --depth 1|2 [--parent <slug>]"' adapters/codex/bin/capability-map.sh; then
     fail_msg "Codex autopilot-code capability-info must expose the portable pipeline/artifact/role/dispatch contracts"
   fi
   if ! grep -Fq 'capability-info` and `route` print the portable pipeline contract (`code-plan>code-execute>code-test>code-report`)' adapters/codex/AGENTS.md \

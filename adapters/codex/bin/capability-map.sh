@@ -71,8 +71,8 @@ case "$cap" in
     optional_pipeline_step="code-refine"
     artifact_contract="plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/"
     role_contract="planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team"
-    dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level>"
-    note="$note Follow the reported pipeline_contract and artifact_contract before claiming the autopilot-code cycle is complete."
+    dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --depth 1|2 [--parent <slug>]"
+    note="$note Follow the reported pipeline_contract, artifact_contract, and intensity/depth dispatch contract before claiming the autopilot-code cycle is complete."
     ;;
   code-test)
     status="tool-contract"

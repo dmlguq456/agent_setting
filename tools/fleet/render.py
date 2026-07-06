@@ -657,6 +657,17 @@ def _mq_tag(mode, qa_text, qa_key, profile=None):
     return out, w
 
 
+def _dispatch_prefix(j):
+    depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
+    return "↳" * depth + " "
+
+
+def _dispatch_role_suffix(j):
+    role = getattr(j, "worker_role", None)
+    intensity = getattr(j, "intensity", None)
+    parts = [x for x in (role, intensity) if x]
+    return "·".join(parts)
+
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
                   parent_effort=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
@@ -679,10 +690,15 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     # DIFFERENTIAL indent (harness 2 cols deeper than a session) with a ↳ spawn arrow off the
     # parent's dot column (user pick over ├─/└─ tree bars); the harness field is narrowed by 2 so
     # the NAME still lands at the shared _NAME_COL — name onward aligns with sessions. DIM = spawned.
-    segs = [("  ", None), ("↳ ", "dim"), (gch, gkey), (" ", None),
-            (_pad(hn, _HW - 2), _BADGE_KEY.get(j.harness, "dim"))]
+    prefix = _dispatch_prefix(j)
+    segs = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None),
+            (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim"))]
     avail = _NW_S
-    tag_segs, tagw = _mq_tag(j.mode, qa_text, qa_key, profile=j.profile)
+    profile = j.profile
+    role_suffix = _dispatch_role_suffix(j)
+    if role_suffix:
+        profile = (profile + "/" + role_suffix) if profile else role_suffix
+    tag_segs, tagw = _mq_tag(j.mode, qa_text, qa_key, profile=profile)
     otag = "  (orphan)" if orphan else ""
     nm = name[: max(3, avail - tagw - len(otag) - 1)]   # -1 → always ≥1 gap before branch
     used = len(nm)
@@ -792,10 +808,15 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     qa_base = j.qa or ""
     qa_text = (("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa) if j.qa else ""
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
-    tag_segs, _tw = _mq_tag(j.mode, qa_text, qa_key, profile=getattr(j, "profile", None))
+    profile = getattr(j, "profile", None)
+    role_suffix = _dispatch_role_suffix(j)
+    if role_suffix:
+        profile = (profile + "/" + role_suffix) if profile else role_suffix
+    tag_segs, _tw = _mq_tag(j.mode, qa_text, qa_key, profile=profile)
 
-    l1 = [("  ", None), ("↳ ", "dim"), (gch, gkey), (" ", None),
-          (_pad(hn, _HW - 2), _BADGE_KEY.get(j.harness, "dim")), (name, "name_dim")]
+    prefix = _dispatch_prefix(j)
+    l1 = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None),
+          (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim")), (name, "name_dim")]
     l1 += tag_segs
     if orphan:
         l1.append(("  (orphan)", "gate_u"))
@@ -1023,12 +1044,18 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         hidden = len(group_sessions) - len(shown)
         shown_sids = set(s.session_id for s in shown if s.session_id)
 
-        # pre-assemble session -> child-jobs map (R1/R2) before emitting rows.
-        children = {}     # session_id -> [jobs] (nested under an on-screen parent)
+        # pre-assemble session -> child-jobs and job -> sub-job maps before emitting rows.
+        # Depth 1 jobs can nest under an on-screen parent session; depth 2 jobs nest under
+        # their capability-owner job via parent_slug. This keeps main-session context light
+        # while fleet still shows cross-harness orchestration shape.
+        children = {}      # session_id -> [jobs] (nested under an on-screen parent)
+        job_children = {}  # parent dispatch slug -> [depth-2 jobs]
         orphans = []       # project-level fallback (parent dead/off-screen/no-env)
         loops_jobs = []    # no-parent-is-normal (cron loops) — no orphan marker
         for j in group_jobs:
-            if j.is_child and j.parent_sid and j.parent_sid in shown_sids:
+            if getattr(j, "parent_slug", None):
+                job_children.setdefault(j.parent_slug, []).append(j)
+            elif j.is_child and j.parent_sid and j.parent_sid in shown_sids:
                 children.setdefault(j.parent_sid, []).append(j)
             elif j.key in _LOOPS_KEYS:
                 loops_jobs.append(j)
@@ -1104,37 +1131,43 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         # brightening attempt read as "좌우로 쭉 다 밝아져서 별로" — weight, not background,
         # carries the distinction). Excludes stale/dead/app-server/detached (already faded dim).
         _sess_bold_ids = set()
+
+        def _emit_dispatch_tree(job, parent_model=None, parent_harness=None, parent_effort=None,
+                                orphan=False, is_last=True):
+            if _jrow:
+                lines.extend(_jrow(job, orphan=orphan, parent_model=parent_model,
+                                   parent_effort=parent_effort))
+            else:
+                lines.append(_dispatch_row(job, orphan=orphan, parent_model=parent_model,
+                                           parent_harness=parent_harness,
+                                           parent_effort=parent_effort, is_last=is_last))
+            for sub in _sort_group_jobs(job_children.get(job.slug, [])):
+                _emit_dispatch_tree(sub, parent_model=job.model or parent_model,
+                                    parent_harness=job.harness or parent_harness,
+                                    parent_effort=parent_effort, orphan=False)
+
         for s in _sort_group_sessions(shown):
             kids = _sort_group_jobs(children.get(s.session_id, []))
+            nested_n = len(kids) + sum(len(job_children.get(k.slug, [])) for k in kids)
             _n0 = len(lines)
             if _srow:
-                lines.extend(_srow(s, is_parent=bool(kids), child_count=len(kids)))
+                lines.extend(_srow(s, is_parent=bool(nested_n), child_count=nested_n))
             else:
-                lines.append(_session_row(s, narrow, is_parent=bool(kids), child_count=len(kids)))
+                lines.append(_session_row(s, narrow, is_parent=bool(nested_n), child_count=nested_n))
             if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):
                 _sess_bold_ids.update(range(_n0, len(lines)))
             for i, cj in enumerate(kids):
-                if _jrow:
-                    lines.extend(_jrow(cj, orphan=False, parent_model=s.model,
-                                       parent_effort=s.effort))
-                else:
-                    lines.append(_dispatch_row(cj, orphan=False, parent_model=s.model,
-                                               parent_harness=s.harness, parent_effort=s.effort,
-                                               is_last=(i == len(kids) - 1)))
+                _emit_dispatch_tree(cj, parent_model=s.model, parent_harness=s.harness,
+                                    parent_effort=s.effort, orphan=False,
+                                    is_last=(i == len(kids) - 1))
         if group_sessions and hidden:
             lines.append([("     +%d stale/companion hidden" % hidden, "dim")])
 
         # orphans / loops: project-level fallback (standalone tree rows)
         for oj in _sort_group_jobs(orphans):
-            if _jrow:
-                lines.extend(_jrow(oj, orphan=show_sessions))
-            else:
-                lines.append(_dispatch_row(oj, orphan=show_sessions))
+            _emit_dispatch_tree(oj, orphan=show_sessions)
         for lj in _sort_group_jobs(loops_jobs):
-            if _jrow:
-                lines.extend(_jrow(lj, orphan=False))
-            else:
-                lines.append(_dispatch_row(lj, orphan=False))
+            _emit_dispatch_tree(lj, orphan=False)
 
         # group BODY (round-5): every row of the group rides the body tint — the whole directory
         # is one solid panel, brighter when active (user: 디렉토리 블록 전체에 틴트, 헤더만 X).

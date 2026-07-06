@@ -37,39 +37,48 @@ _PIPE = re.compile(r"\s*([A-Za-z][\w-]*)(?::(\w+))?")
 _SHELLS = ("zsh", "bash", "sh", "dash")
 
 
-def _parse_pipe(pipe):
-    """Parse a jobs.log pipe field, dual-form → (name, mode, qa, profile).
+def _strip_autopilot_prefix(name):
+    if name and name.startswith("autopilot-"):
+        return name[len("autopilot-"):]
+    return name
 
-    OLD form: `autopilot-code:dev(agent-fleet-dashboard)` (name:mode).
-    NEW form: `capability=autopilot-code,mode=dev,qa=quick,profile=lab-runner(round-3 x)`
-    (key=val,... list before the first `(`). Distinguished by whether `=` appears before
-    any `:` in the leading (pre-`(`) segment. name has any `autopilot-` prefix stripped
-    either way. OLD form has no profile k=v, so profile is always None there.
-    Parse failure → (None, None, None, None) — caller applies its own name fallback
-    (repo or "job").
+
+def _parse_pipe_meta(pipe):
+    """Parse jobs.log pipe metadata.
+
+    The registry stays six tab fields for backward compatibility; depth/parent/intensity
+    live in this sixth ``pipe`` field as optional ``key=value`` pairs. OLD form
+    ``autopilot-code:dev(...)`` still returns name/mode only.
     """
     head = pipe.split("(", 1)[0] if pipe else ""
     eq_pos = head.find("=")
     colon_pos = head.find(":")
     if eq_pos != -1 and (colon_pos == -1 or eq_pos < colon_pos):
-        # NEW form: leading key=val,... list.
         fields = {}
         for part in head.split(","):
             if "=" in part:
                 k, v = part.split("=", 1)
                 fields[k.strip()] = v.strip()
-        name = fields.get("capability")
-        if name and name.startswith("autopilot-"):
-            name = name[len("autopilot-"):]
-        return name, fields.get("mode"), fields.get("qa"), fields.get("profile")
-    # OLD form: name:mode via _PIPE regex.
+        fields["_name"] = _strip_autopilot_prefix(fields.get("capability"))
+        return fields
     m = _PIPE.match(pipe or "")
     if not m:
-        return None, None, None, None
-    name = m.group(1)
-    if name and name.startswith("autopilot-"):
-        name = name[len("autopilot-"):]
-    return name, m.group(2), None, None
+        return {}
+    return {"_name": _strip_autopilot_prefix(m.group(1)), "mode": m.group(2)}
+
+
+def _parse_pipe(pipe):
+    """Parse a jobs.log pipe field, dual-form → (name, mode, qa, profile)."""
+    fields = _parse_pipe_meta(pipe)
+    return fields.get("_name"), fields.get("mode"), fields.get("qa"), fields.get("profile")
+
+
+def _parse_depth(value):
+    try:
+        depth = int(value or 1)
+    except (TypeError, ValueError):
+        return 1
+    return max(1, depth)
 
 
 # --- jobs.log path ---
@@ -403,14 +412,20 @@ def _scan_processes():
             seen.add(dkey)
             env = procscan.read_environ(pid_s)
             parent_sid = env.get("CLAUDE_CODE_SESSION_ID")
-            is_child = env.get("CLAUDE_CODE_CHILD_SESSION") == "1"
+            parent_slug = env.get("AGENT_DISPATCH_PARENT_SLUG")
+            depth = _parse_depth(env.get("AGENT_DISPATCH_DEPTH"))
+            is_child = env.get("CLAUDE_CODE_CHILD_SESSION") == "1" or bool(parent_slug)
             q, qsrc = effective_qa(qa, None, jcwd, slug, key)
             jobs.append(DispatchJob(
                 key=key, stage=live_stage(jcwd, slug, key), mode=mode, qa=q,
                 elapsed_min=etime_to_min(etime), slug=slug, cwd=jcwd,
-                parent_sid=parent_sid, is_child=is_child, qa_source=qsrc, source="proc",
-                harness="claude", pid=int(pid_s) if pid_s.isdigit() else None,
-                model=_claude_job_model(pid_s, jcwd),
+                parent_sid=parent_sid, parent_slug=parent_slug, is_child=is_child,
+                qa_source=qsrc, source="proc", harness="claude",
+                pid=int(pid_s) if pid_s.isdigit() else None,
+                model=_claude_job_model(pid_s, jcwd), depth=depth,
+                intensity=env.get("AGENT_DISPATCH_INTENSITY"),
+                worker_role=env.get("AGENT_DISPATCH_WORKER_ROLE"),
+                capability_owner=env.get("AGENT_DISPATCH_OWNER"),
             ))
         elif loop:
             key = loop.group(1)
@@ -469,20 +484,23 @@ def _scan_jobs_log(path, seen_slugs):
         if slug in seen_slugs:
             continue                          # already shown as a live process job
         seen_slugs.add(slug)
-        pname, pmode, pqa, pprofile = _parse_pipe(pipe or "")
-        if not pname:
-            pname = repo or "job"
-        # _parse_pipe already strips any `autopilot-` prefix on a successful parse; this
+        meta = _parse_pipe_meta(pipe or "")
+        pname = meta.get("_name") or repo or "job"
+        # _parse_pipe_meta already strips any `autopilot-` prefix on a successful parse; this
         # covers the fallback-name path (parse failure) where pname = repo or "job".
         if pname.startswith("autopilot-"):
             pname = pname[len("autopilot-"):]   # normalize to proc key form (code/spec/…)
         cwd = worktree if worktree not in ("-", "(main-tree)") else ""
-        q, qsrc = effective_qa(None, pqa, cwd, slug, pname)
+        q, qsrc = effective_qa(None, meta.get("qa"), cwd, slug, pname)
+        parent_slug = meta.get("parent") or meta.get("parent_slug") or None
         jobs.append(DispatchJob(
-            key=pname, stage=status, mode=pmode, qa=q,
+            key=pname, stage=status, mode=meta.get("mode"), qa=q,
             elapsed_min=_iso_elapsed_min(ts), slug=slug or worktree or repo,
-            cwd=cwd, parent_sid=None, is_child=False, qa_source=qsrc,
-            source="jobs", status=status, profile=pprofile,
+            cwd=cwd, parent_sid=None, parent_slug=parent_slug,
+            is_child=bool(parent_slug), qa_source=qsrc, source="jobs", status=status,
+            profile=meta.get("profile"), depth=_parse_depth(meta.get("depth")),
+            intensity=meta.get("intensity"), worker_role=meta.get("worker_role"),
+            capability_owner=meta.get("owner") or meta.get("capability_owner"),
         ))
     return jobs, malformed
 

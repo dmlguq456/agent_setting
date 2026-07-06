@@ -65,7 +65,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
        preflight.sh headless [--check] <worktree>
-       preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--agent <agent>] (--model-role <role>|--model <model> --variant <variant>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>] [--log-dir <dir>]
+       preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--intensity <level>] [--depth 1|2] [--parent <slug>] [--worker-role <role>] [--owner <capability>] [--agent <agent>] (--model-role <role>|--model <model> --variant <variant>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>] [--log-dir <dir>]
        preflight.sh liveness [jobs.log]
        preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
        preflight.sh mcp [--check]
@@ -345,7 +345,7 @@ job_registry=<agent-home>/.dispatch/jobs.log
 liveness_surface=opencode-sqlite-session-mtime
 liveness_check=adapters/opencode/bin/preflight.sh liveness [jobs.log]
 harvest_check=adapters/opencode/bin/preflight.sh harvest [--jobs jobs.log] [--slug slug] [--mark-done]
-constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required
+constraints=main-or-owner-dispatched,max-depth-2-for-thorough-adversarial,register-open-job,explicit-capability-mode-qa-intensity-depth-parent,transcript-liveness-required
 claude_headless=unsupported
 fallback=manual-main-session-or-report-unavailable
 EOF

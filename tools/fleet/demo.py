@@ -1,7 +1,7 @@
 """Synthetic fixture for rendering checks (`fleet.py --demo` or FLEET_DEMO=1).
 
 Covers all three harnesses, every liveness state, tracked/untracked gate, git branch, nested
-dispatch under a parent, an orphan, a loop, varied models/effort — so the render layer can be
+dispatch under a parent, depth-2 subdispatch, an orphan, a loop, varied models/effort — so the render layer can be
 exercised without waiting for real live processes. Merged INTO live data by fleet.py's --demo
 path. gate/branch are set explicitly here (fake cwds are not real repos).
 """
@@ -52,14 +52,26 @@ def collect(harness_filter=None):
     ]
     jobs = [
         # nested under the demo-app claude parent (demo-claude-1)
-        J(key="code", stage="exec", mode="dev", qa="standard", qa_source="argv", harness="claude",
+        J(key="code", stage="exec", mode="dev", qa="adversarial", qa_source="argv", harness="claude",
           model="Opus 4.8 (1M context)", elapsed_min=22, slug="demo-feat-x",
           cwd="/home/demo/demo-app-wt/feat-x", parent_sid="demo-claude-1", is_child=True,
-          branch="feat-x", liveness="working"),
+          branch="feat-x", liveness="working", depth=1, intensity="adversarial",
+          worker_role="capability-owner", capability_owner="autopilot-code"),
+        # depth-2 workers owned by the autopilot-code capability worker above
+        J(key="plan", stage="done", mode="review", qa="adversarial", qa_source="jobslog", harness="codex",
+          model="gpt-5.5", elapsed_min=6, slug="demo-feat-x-plan-alt",
+          cwd="/home/demo/demo-app-wt/feat-x-plan-alt", parent_slug="demo-feat-x", is_child=True,
+          branch="feat-x-plan-alt", liveness="idle", depth=2, intensity="adversarial",
+          worker_role="planner", capability_owner="autopilot-code"),
+        J(key="test", stage="test", mode="verify", qa="adversarial", qa_source="jobslog", harness="opencode",
+          model="glm-5.2", elapsed_min=4, slug="demo-feat-x-verifier",
+          cwd="/home/demo/demo-app-wt/feat-x-verifier", parent_slug="demo-feat-x", is_child=True,
+          branch="feat-x-verifier", liveness="working", depth=2, intensity="adversarial",
+          worker_role="verifier", capability_owner="autopilot-code"),
         J(key="review", stage="test", mode="debug", qa="quick", qa_source="jobslog", harness="codex",
           model="gpt-5.5", elapsed_min=8, slug="demo-review",
           cwd="/home/demo/demo-app-wt/review", parent_sid="demo-claude-1", is_child=True,
-          branch="review", liveness="working"),
+          branch="review", liveness="working", depth=1),
         # nested under demo-svc opencode parent
         J(key="spec", stage="design", mode="dev", qa="thorough", qa_source="plan", harness="opencode",
           model="glm-5.2", elapsed_min=5, slug="demo-spec",

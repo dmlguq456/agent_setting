@@ -170,6 +170,11 @@ class DispatchJob:
     liveness: str = "unknown"
     profile: Optional[str] = None       # dispatch profile name (masked config home) — None = main home
     branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
+    depth: int = 1                      # dispatch tree depth: 1 capability owner, 2 bounded sub-worker
+    parent_slug: Optional[str] = None   # parent dispatch slug for depth-2 rows
+    intensity: Optional[str] = None     # direct|quick|standard|strong|thorough|adversarial
+    worker_role: Optional[str] = None   # planner/verifier/adversary/etc.
+    capability_owner: Optional[str] = None  # owning capability slug/name for sub-workers
 
     def to_dict(self):
         return asdict(self)

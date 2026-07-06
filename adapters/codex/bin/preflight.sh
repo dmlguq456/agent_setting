@@ -39,7 +39,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh tui-config
        preflight.sh subagent-info [--check]
        preflight.sh headless [--check] [--require-hook-trust] <worktree>
-       preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> (--model-role <role>|--model <model> --reasoning <effort>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
+       preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--intensity <level>] [--depth 1|2] [--parent <slug>] [--worker-role <role>] [--owner <capability>] (--model-role <role>|--model <model> --reasoning <effort>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]
        preflight.sh liveness [jobs.log]
        preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
@@ -449,10 +449,10 @@ liveness_surface=codex-session-jsonl-mtime
 liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]
 harvest_check=adapters/codex/bin/preflight.sh harvest [--jobs jobs.log] [--slug slug] [--mark-done]
 dispatch_prompt_contract=codex-harness-autopilot-prompt
-dispatch_input_validation=capability-info,mode-info,qa-level
+dispatch_input_validation=capability-info,mode-info,qa-level,intensity-depth-parent
 worker_startup_signal=status,prompt-signal,mode
 worker_startup_signal_contract=preflight.sh status . codex-headless; preflight.sh prompt-signal . codex-headless; preflight.sh mode . codex-headless
-constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required
+constraints=main-or-owner-dispatched,max-depth-2-for-thorough-adversarial,register-open-job,explicit-capability-mode-qa-intensity-depth-parent,transcript-liveness-required
 claude_headless=unsupported
 fallback=manual-main-session-or-report-unavailable
 EOF
@@ -664,7 +664,7 @@ auto_spawn=explicit-only
 custom_agent_config=model,model_reasoning_effort,sandbox_mode
 memory_scout=adapters/codex/agents/memory-scout.toml
 dispatch_fallback=adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start
-constraints=depth-one,main-orchestrated,approval-and-sandbox-inherited
+constraints=depth-one-native-agents,depth-two-only-via-capability-owner-dispatch,approval-and-sandbox-inherited
 claude_subagent_frontmatter=unsupported
 parity_caveat=Codex custom agents are TOML config layers, not Claude Code Agent frontmatter; verify discovery, UI, approval inheritance, and noninteractive behavior before claiming parity.
 note=Codex subagents are native workflows and do not use Claude Agent files; verify the multi_agent feature, projected custom agents, and runtime config behavior before claiming delegation parity.

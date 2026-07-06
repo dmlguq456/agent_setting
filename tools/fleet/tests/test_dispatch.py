@@ -252,5 +252,42 @@ class JobLivenessPathAssemblyTest(unittest.TestCase):
         self.assertEqual(result, "dead")
 
 
+# --- D5: depth-2 registry metadata ---
+class DepthTwoRegistryMetadataTest(unittest.TestCase):
+
+    def test_jobs_log_pipe_metadata_surfaces_depth_two_parent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_log = os.path.join(tmp, "jobs.log")
+            worktree = os.path.join(tmp, "wt")
+            os.makedirs(worktree, exist_ok=True)
+            row = "\t".join([
+                "2026-07-05T01:00:00+00:00", "open", "repo", worktree,
+                "child-worker",
+                "capability=autopilot-code,mode=verify,qa=adversarial,"
+                "depth=2,parent=owner-job,intensity=adversarial,"
+                "worker_role=verifier,owner=autopilot-code",
+            ])
+            with open(jobs_log, "w") as f:
+                f.write(row + "\n")
+
+            with mock.patch.object(dispatch, "_scan_processes", return_value=[]), \
+                 mock.patch.object(dispatch, "_live_claude_cwds", return_value={}), \
+                 mock.patch.object(dispatch, "_job_liveness",
+                                    side_effect=lambda *a, **k: "working"):
+                jobs = dispatch.collect(jobs_path=jobs_log)
+
+            self.assertEqual(len(jobs), 1)
+            job = jobs[0]
+            self.assertEqual(job.key, "code")
+            self.assertEqual(job.mode, "verify")
+            self.assertEqual(job.qa, "adversarial")
+            self.assertEqual(job.depth, 2)
+            self.assertEqual(job.parent_slug, "owner-job")
+            self.assertTrue(job.is_child)
+            self.assertEqual(job.intensity, "adversarial")
+            self.assertEqual(job.worker_role, "verifier")
+            self.assertEqual(job.capability_owner, "autopilot-code")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -10,7 +10,7 @@ This is the portable capability contract for `autopilot-code`. It defines runtim
 | Group | `entry` |
 | Supported modes | `dev, debug, audit` |
 | Portable meaning | 코드 작업 entry. spec 컨텍스트를 감지하고 plan→execute→test→report 흐름을 닫는다. |
-| Argument shape | `--mode dev|debug <task/plan/error description> [--from <step>] [--qa quick|light|standard|thorough|adversarial] [--user-refine]` |
+| Argument shape | `--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--user-refine]` |
 
 ## Invocation Semantics
 
@@ -45,7 +45,7 @@ Minimum role mapping:
 - review: QA/reviewer role for plan, code, and test review;
 - app UI changes: design role as critic or handoff verifier when design artifacts exist.
 
-QA level controls review depth and number of independent passes; it does not name a model. Adapters map fast/balanced/deep/adversarial review semantics to runtime-specific models or workers.
+Pipeline intensity is the primary ceremony selector for this entrypoint. Use `direct` for inline fixes, `quick` for minimal plan/execute/test/report, `standard` for the normal closed loop, `strong` for explicit stage boundaries, and `thorough|adversarial` for owner-worker orchestration that may open bounded depth-2 perspective or verifier workers. QA level remains an assurance override or compatibility input; it controls review depth and independent passes, but must not force a monolithic full pipeline by itself. Concrete models remain adapter-specific.
 
 ## Guard Requirements
 
@@ -73,7 +73,7 @@ Additional code-entry gates:
 3. Run git/worktree preflight and remember the starting `HEAD`.
 4. If `spec/` exists, read `spec/prd.md` plus relevant mode contracts before planning.
 5. Emit `spec-significance: within-spec` or `spec-significance: SPEC-SIGNIFICANT (...)`.
-6. Run `code-plan`, optionally `code-refine`, then `code-execute`, `code-test`, and `code-report` according to QA level and resume point.
+6. Select the stage graph from pipeline intensity, then run `code-plan`, optional `code-refine`, `code-execute`, `code-test`, and `code-report` according to the selected graph, QA override, and resume point. For `thorough|adversarial`, a depth-1 capability owner may dispatch bounded depth-2 planner/verifier/adversary workers and synthesize their short reports before final write-back.
 7. Before each durable write-back or commit, re-run git/worktree safety and stop if `HEAD` or merge state changed unexpectedly.
 8. Record implementation evidence and verification results in `pipeline_summary.md`.
 

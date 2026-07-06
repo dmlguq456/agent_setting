@@ -8,6 +8,23 @@
 
 ---
 
+## §1. Pipeline Intensity and Assurance (canonical)
+
+Pipeline intensity controls _which orchestration shape_ an autopilot entry uses; QA level controls _how much assurance_ a stage receives. New autopilot contracts should choose intensity first and treat `--qa` as a legacy/override assurance knob, not the primary pipeline selector.
+
+| Intensity | Pipeline shape | Dispatch policy | Assurance default | Typical use |
+|---|---|---|---|---|
+| `direct` | answer/edit directly, no durable pipeline artifact unless already required | no dispatch | none/light self-check | one-off answers, typo, explicit no-artifact work |
+| `quick` | tiny plan -> execute -> focused verify -> short report | no dispatch by default | quick | small localized changes, doc minor, clear bug fix |
+| `standard` | normal plan -> execute -> test -> report | main or depth-1 worker | standard | routine tracked work |
+| `strong` | standard + one independent perspective/review before or after execution | optional depth-1 worker | standard/thorough | important but not high-stakes work |
+| `thorough` | capability-owner worker orchestrates perspective workers, synthesizes, then executes/verifies | depth 1 owner may open bounded depth 2 workers | thorough | complex multi-file or cross-domain work |
+| `adversarial` | thorough + explicit adversarial/failure-mode/security/contradiction pass | depth 1 owner may open bounded depth 2 adversary/verifier workers | adversarial | high-stakes, irreversible, security, external-facing work |
+
+Depth contract: depth 0 is the user-facing main session. Depth 1 is the capability owner worker (`autopilot-code`, `autopilot-draft`, etc.) that owns a whole pipeline and returns only a synthesis to main. Depth 2 is allowed only under `thorough` or `adversarial`, and only as bounded sub-workers with a single role (`planner`, `verifier`, `adversary`, `cross-harness-checker`, etc.). Depth 3+ is forbidden. Raw worker logs stay in artifacts/dispatch logs; parent sessions exchange short structured summaries.
+
+`--qa quick|light|standard|thorough|adversarial` remains supported for compatibility and explicit assurance override. It must not force a monolithic full pipeline when the selected intensity is `direct` or `quick`, and it must not grant depth-2 dispatch by itself; depth-2 comes from `intensity=thorough|adversarial`.
+
 ## §1. QA Levels (canonical)
 
 ### §1.1. 5단계 공통 정의

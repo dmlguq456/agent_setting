@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -26,6 +27,11 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--capability", required=True)
     p.add_argument("--mode", required=True)
     p.add_argument("--qa", required=True)
+    p.add_argument("--intensity", default="standard")
+    p.add_argument("--depth", type=int, default=1)
+    p.add_argument("--parent", dest="parent_slug")
+    p.add_argument("--worker-role")
+    p.add_argument("--owner", dest="capability_owner")
     p.add_argument("--agent", default="build")
     p.add_argument("--model-role", default=os.environ.get("OPENCODE_DISPATCH_MODEL_ROLE"))
     p.add_argument("--model", default=os.environ.get("OPENCODE_DISPATCH_MODEL"))
@@ -125,6 +131,7 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
     return (
         "Run the requested portable harness work.\n"
         f"capability={args.capability}\nmode={args.mode}\nqa={args.qa}\n"
+        f"intensity={args.intensity}\ndepth={args.depth}\nparent={args.parent_slug or '-'}\n"
         f"worktree={args.worktree}\n",
         "generated",
     )
@@ -155,7 +162,13 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
 def append_job(jobs: Path, args: argparse.Namespace) -> None:
     jobs.parent.mkdir(parents=True, exist_ok=True)
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
-    pipe = f"capability={args.capability},mode={args.mode},qa={args.qa}"
+    pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth}"
+    if args.parent_slug:
+        pipe += f",parent={args.parent_slug}"
+    if args.worker_role:
+        pipe += f",worker_role={args.worker_role}"
+    if args.capability_owner:
+        pipe += f",owner={args.capability_owner}"
     settings = args.resolved_model_settings
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},variant={settings['variant']}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -187,6 +200,23 @@ def check_runtime_projection(worktree: str) -> int:
     return result.returncode
 
 
+def validate_dispatch_metadata(args: argparse.Namespace) -> int:
+    if args.intensity not in INTENSITY_LEVELS:
+        return fail(
+            "invalid-dispatch-intensity",
+            64,
+            intensity=args.intensity,
+            allowed_intensity="direct,quick,standard,strong,thorough,adversarial",
+        )
+    if args.depth not in (1, 2):
+        return fail("invalid-dispatch-depth", 64, depth=str(args.depth), allowed_depth="1,2")
+    if args.depth == 2 and not args.parent_slug:
+        return fail("missing-dispatch-parent", 64, depth=str(args.depth))
+    if args.depth == 2 and args.intensity not in {"thorough", "adversarial"}:
+        return fail("invalid-depth-two-intensity", 64, depth=str(args.depth), intensity=args.intensity)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
     action = "start" if args.start else "register" if args.register else "dry-run"
@@ -195,6 +225,9 @@ def main(argv: list[str]) -> int:
         return fail("worktree-not-found", 66, worktree=args.worktree)
     if subprocess.run(["git", "-C", args.worktree, "rev-parse", "--is-inside-work-tree"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
         return fail("not-a-git-worktree", 65, worktree=args.worktree)
+    rc = validate_dispatch_metadata(args)
+    if rc != 0:
+        return rc
     try:
         args.resolved_model_settings = resolve_model_settings(args)
     except ModelSelectionError as e:
@@ -223,7 +256,14 @@ def main(argv: list[str]) -> int:
         prompt_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         prompt_path.write_text(prompt_text, encoding="utf-8")
-        subprocess.Popen(["sh", "-c", command], start_new_session=True)
+        subprocess.Popen(["sh", "-c", command], start_new_session=True, env={
+            **os.environ,
+            "AGENT_DISPATCH_DEPTH": str(args.depth),
+            "AGENT_DISPATCH_INTENSITY": args.intensity,
+            "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
+            "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
+            "AGENT_DISPATCH_OWNER": args.capability_owner or "",
+        })
 
     print("adapter=opencode")
     print("runtime_surface=opencode-run-headless")
@@ -233,6 +273,11 @@ def main(argv: list[str]) -> int:
     print(f"capability={args.capability}")
     print(f"mode={args.mode}")
     print(f"qa={args.qa}")
+    print(f"intensity={args.intensity}")
+    print(f"depth={args.depth}")
+    print(f"parent={args.parent_slug or '-'}")
+    print(f"worker_role={args.worker_role or '-'}")
+    print(f"owner={args.capability_owner or '-'}")
     print(f"agent={args.agent}")
     settings = args.resolved_model_settings
     print(f"model_source={settings['source']}")

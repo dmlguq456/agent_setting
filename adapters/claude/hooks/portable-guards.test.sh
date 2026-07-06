@@ -523,10 +523,10 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex_headless.out \
   && grep -q '^liveness_check=adapters/codex/bin/preflight.sh liveness \[jobs.log\]$' /tmp/codex_headless.out \
   && grep -q '^dispatch_prompt_contract=codex-harness-autopilot-prompt$' /tmp/codex_headless.out \
-  && grep -q '^dispatch_input_validation=capability-info,mode-info,qa-level$' /tmp/codex_headless.out \
+  && grep -q '^dispatch_input_validation=capability-info,mode-info,qa-level,intensity-depth-parent$' /tmp/codex_headless.out \
   && grep -q '^worker_startup_signal=status,prompt-signal,mode$' /tmp/codex_headless.out \
   && grep -q '^worker_startup_signal_contract=preflight.sh status . codex-headless; preflight.sh prompt-signal . codex-headless; preflight.sh mode . codex-headless$' /tmp/codex_headless.out \
-  && grep -q '^constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required$' /tmp/codex_headless.out; then
+  && grep -q '^constraints=main-or-owner-dispatched,max-depth-2-for-thorough-adversarial,register-open-job,explicit-capability-mode-qa-intensity-depth-parent,transcript-liveness-required$' /tmp/codex_headless.out; then
   ok "codex headless wrapper reports dispatch contract"
 else
   bad "codex headless wrapper should report dispatch contract"
@@ -744,7 +744,7 @@ if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --c
   && [ -f "$TMP/codex-dispatch.log.lock" ] \
   && [ -f "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" ] \
   && grep -q 'role planning, role implementation, role verification, and role report' "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" \
-  && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
+  && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
   ok "codex dispatch wrapper registers open headless job"
 else
   bad "codex dispatch wrapper should register open headless job"
@@ -764,7 +764,7 @@ fi
 if "$CODEX" harvest --jobs "$TMP/codex-dispatch.log" --slug codex-dispatch --mark-done >/tmp/codex_harvest_done.out 2>/tmp/codex_harvest_done.err \
   && grep -q '^marked_done=1$' /tmp/codex_harvest_done.out \
   && grep -q '^registry_lock=.*/codex-dispatch.log.lock$' /tmp/codex_harvest_done.out \
-  && grep -q $'done\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
+  && grep -q $'done\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
   ok "codex harvest wrapper marks selected jobs done"
 else
   bad "codex harvest wrapper should mark selected jobs done"
@@ -1205,7 +1205,7 @@ if "$CODEX" capability-info autopilot-code >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^optional_pipeline_step=code-refine$' /tmp/cap.out \
   && grep -q '^artifact_contract=plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/$' /tmp/cap.out \
   && grep -q '^role_contract=planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team$' /tmp/cap.out \
-  && grep -q '^dispatch_contract=preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level>$' /tmp/cap.out; then
+  && grep -Fq 'dispatch_contract=preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --depth 1|2 [--parent <slug>]' /tmp/cap.out; then
   ok "codex capability wrapper reports native skill and plugin realization"
 else
   bad "codex capability wrapper should report native skill and plugin realization"
@@ -2503,7 +2503,7 @@ if "$OPENCODE" headless >/tmp/opencode_headless.out 2>/tmp/opencode_headless.err
   && grep -q '^claude_headless=unsupported$' /tmp/opencode_headless.out \
   && grep -q '^liveness_surface=opencode-sqlite-session-mtime$' /tmp/opencode_headless.out \
   && grep -q '^liveness_check=adapters/opencode/bin/preflight.sh liveness \[jobs.log\]$' /tmp/opencode_headless.out \
-  && grep -q '^constraints=main-only,max-depth-1,register-open-job,explicit-capability-mode-qa,transcript-liveness-required$' /tmp/opencode_headless.out; then
+  && grep -q '^constraints=main-or-owner-dispatched,max-depth-2-for-thorough-adversarial,register-open-job,explicit-capability-mode-qa-intensity-depth-parent,transcript-liveness-required$' /tmp/opencode_headless.out; then
   ok "opencode headless wrapper reports dispatch contract"
 else
   bad "opencode headless wrapper should report dispatch contract"
@@ -2628,7 +2628,7 @@ if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-dispat
   && grep -q '^status=register$' /tmp/opencode_dispatch.out \
   && grep -q '^registered=1$' /tmp/opencode_dispatch.out \
   && grep -q '^started=0$' /tmp/opencode_dispatch.out \
-  && grep -q $'open\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
+  && grep -q $'open\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
   ok "opencode dispatch wrapper registers open headless job"
 else
   bad "opencode dispatch wrapper should register open headless job"
@@ -2646,7 +2646,7 @@ else
 fi
 if "$OPENCODE" harvest --jobs "$TMP/opencode-dispatch.log" --slug opencode-dispatch --mark-done >/tmp/opencode_harvest_done.out 2>/tmp/opencode_harvest_done.err \
   && grep -q '^marked_done=1$' /tmp/opencode_harvest_done.out \
-  && grep -q $'done\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
+  && grep -q $'done\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
   ok "opencode harvest wrapper marks selected jobs done"
 else
   bad "opencode harvest wrapper should mark selected jobs done"
