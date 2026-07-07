@@ -23,6 +23,30 @@ if _TOOLS_DIR not in sys.path:
 
 from fleet.collectors import dispatch  # noqa: E402
 from fleet.collectors import claude    # noqa: E402
+from fleet import render             # noqa: E402
+from fleet.model import DispatchJob  # noqa: E402
+
+
+class RenderDispatchPresentationTest(unittest.TestCase):
+
+    def test_depth_two_prefix_indents_without_repeated_arrow(self):
+        top = DispatchJob(key="code", slug="top", depth=1)
+        nested = DispatchJob(key="code", slug="nested", depth=2)
+
+        self.assertEqual(render._dispatch_prefix(top), "↳ ")
+        self.assertEqual(render._dispatch_prefix(nested), "    ")
+        self.assertNotIn("↳", render._dispatch_prefix(nested))
+
+    def test_dispatch_tag_labels_qa_and_path_intensity(self):
+        job = DispatchJob(key="plan", worker_role="planner", intensity="thorough")
+        tag, _width = render._mq_tag(
+            "review", "~standard", "qa_standard", profile=render._dispatch_role_suffix(job)
+        )
+        text = "".join(part for part, _key in tag)
+
+        self.assertEqual(text, " (review·qa:~standard·role:planner/path:thorough)")
+
+
 
 
 # --- D1: _registry_home() / _jobs_path() precedence ---

@@ -271,17 +271,17 @@ def _attr(key):
 
 
 def _live_key(state):
-    return {"working": "g_work", "idle": "g_idle", "stale": "g_stale",
+    return {"working": "g_work", "idle": "g_work_off", "stale": "g_stale",
             "dead": "g_dead"}.get(state, "dim")
 
 
 # status dot — SHAPE+SIZE gradient (design r2, a11y): the less active the state, the smaller
-# the glyph. ● working (blinks) · ○ idle · ◍ detached · tiny '·' stale · ✕ dead. Readable
-# without color (◌ vs ◦ were near-identical dim circles before).
+# the glyph. Working uses a bright green spinner; live idle/detached use the same dim-green
+# loading axis; stale/dead recede to grey/red. Readable without color.
 _LIVE_GLYPH = {"working": "●", "idle": "●", "blocked": "◑", "done": "✓",
                "stale": "·", "dead": "✕", "unknown": "·"}
-_DETACHED_GLYPH = "○"   # ring = 빈 자리(클라이언트 없음); idle 은 꽉 찬 dim ●
-_GLYPH_KEY = {"working": "g_work", "idle": "dim", "blocked": "g_idle", "done": "green",
+_DETACHED_GLYPH = "○"   # ring = 빈 자리(클라이언트 없음); idle 은 꽉 찬 dim-green ●
+_GLYPH_KEY = {"working": "g_work", "idle": "g_work_off", "blocked": "g_idle", "done": "green",
               "stale": "g_stale", "dead": "g_dead", "unknown": "dim"}
 
 # group "cooling" state (user 2026-07-03): a directory with NO active work whose newest session
@@ -304,7 +304,7 @@ _SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"   # braille loading spinner — working
 def _glyph(state, dim=False):
     """Session/job status glyph. working = braille spinner frame — BRIGHT green for a main
     session, DIM green for a dispatch job (user 2026-07-03: 스피너 컬러도 메인·분사 구분).
-    idle = dim grey FILLED ●, detached = dim ring ○ (user 2026-07-03 최종)."""
+    idle = dim-green FILLED ●, detached = dim-green ring ○."""
     if state == "working":
         return _SPIN[int(time.time() * 10) % len(_SPIN)], ("g_work_off" if dim else "g_work")
     return _LIVE_GLYPH.get(state, "·"), _GLYPH_KEY.get(state, "dim")
@@ -586,7 +586,7 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
                 else ("name_dim" if dim_tel else "name_idle"))
     gch, gkey = _glyph(live)
     if s.detached and live not in ("stale", "dead"):
-        gch, gkey = _DETACHED_GLYPH, "dim"   # detached: 어둡게 (user 2026-07-03)
+        gch, gkey = _DETACHED_GLYPH, "g_work_off"   # detached: loading axis, dim-green
     hn = _BADGE_TEXT.get(s.harness, "?")
 
     # main↔spawned weight = font-color intensity (no bg fill — the reverse badge read as weird):
@@ -633,7 +633,7 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
 
 
 def _mq_tag(mode, qa_text, qa_key, profile=None):
-    """The `(mode · qa · profile)` tag shown after a dispatch name (mode dim, qa in its rigor
+    """The `(mode · qa:<level> · profile)` tag shown after a dispatch name (mode dim, qa in its rigor
     color, profile dim, middle dot). Returns (segments, display_width). Empty (mode, qa_text
     and profile all absent) → ([], 0)."""
     if not mode and not qa_text and not profile:
@@ -647,7 +647,8 @@ def _mq_tag(mode, qa_text, qa_key, profile=None):
     if qa_text:
         if has_prev:
             out.append(("·", "dim")); w += 1        # flush middle dot (tighter than ' · ')
-        out.append((qa_text, qa_key)); w += len(qa_text)
+        qa_label = "qa:" + qa_text
+        out.append((qa_label, qa_key)); w += len(qa_label)
         has_prev = True
     if profile:
         if has_prev:
@@ -659,14 +660,18 @@ def _mq_tag(mode, qa_text, qa_key, profile=None):
 
 def _dispatch_prefix(j):
     depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
-    return "  " * (depth - 1) + "↳ "
+    return "↳ " if depth == 1 else "  " * depth
 
 
 def _dispatch_role_suffix(j):
     role = getattr(j, "worker_role", None)
     intensity = getattr(j, "intensity", None)
-    parts = [x for x in (role, intensity) if x]
-    return "·".join(parts)
+    parts = []
+    if role:
+        parts.append("role:" + role)
+    if intensity:
+        parts.append("path:" + intensity)
+    return "/".join(parts)
 
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
                   parent_effort=None):
@@ -739,7 +744,7 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False):
                 else ("name_dim" if dim_tel else "name_idle"))
     gch, gkey = _glyph(live)
     if s.detached and live not in ("stale", "dead"):
-        gch, gkey = _DETACHED_GLYPH, "dim"
+        gch, gkey = _DETACHED_GLYPH, "g_work_off"
     hn = _BADGE_TEXT.get(s.harness, "?")
     hkey = (_BADGE_KEY.get(s.harness, "dim") if dim_tel
             else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
@@ -965,9 +970,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     spin = _SPIN[int(time.time() * 10) % len(_SPIN)]
     pulse = [("  fleet ", "head"),
              (spin + " %d" % n_wk, "g_work"), (" working   ", "dim"),
-             ("● %d" % n_id, "dim"), (" idle   ", "dim")]
+             ("● %d" % n_id, "g_work_off"), (" idle   ", "dim")]
     if n_dt:
-        pulse += [(_DETACHED_GLYPH + " %d" % n_dt, "dim"), (" detached   ", "dim")]
+        pulse += [(_DETACHED_GLYPH + " %d" % n_dt, "g_work_off"), (" detached   ", "dim")]
     if jobs:
         pulse += [("↳ %d" % len(jobs), "dim"),
                   (" job%s (%d working)" % ("s" if len(jobs) != 1 else "", jw), "dim")]
@@ -1216,8 +1221,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     lines.append(None)
     lines.append([
         ("  ", None), ("⠹", "g_work"), (" working   ", "dim"),
-        ("●", "dim"), (" idle   ", "dim"),
-        (_DETACHED_GLYPH, "dim"), (" detached   ", "dim"),
+        ("●", "g_work_off"), (" idle   ", "dim"),
+        (_DETACHED_GLYPH, "g_work_off"), (" detached   ", "dim"),
         ("·", "g_stale"), (" stale   ", "dim"),
         ("✕", "g_dead"), (" dead     ", "dim"),
         ("▾N", "dim"), (" child jobs   ", "dim"),
