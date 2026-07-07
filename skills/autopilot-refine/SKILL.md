@@ -17,11 +17,11 @@ metadata:
 - `autopilot-research` / `autopilot-code` / `autopilot-draft` create artifacts (forward direction).
 - `autopilot-refine` reads and updates existing artifacts (reverse direction).
 
-Naming consistency: same `--qa quick|light|standard|thorough|adversarial` flag as the rest of the family. Default `thorough` (2026-05-22 통일 — 모든 autopilot-* default thorough). routine·scoped edits 자리는 `--qa light` / `quick` 명시.
+Naming consistency: same `--intensity direct|quick|standard|strong|thorough|adversarial` and `--qa quick|light|standard|thorough|adversarial` flags as the rest of the family. `intensity` selects the stage graph; `--qa` only scales selected assurance gates. Routine scoped edits default to the quick path unless the request or caller explicitly escalates intensity/QA.
 
 ## Default Invocation Rule (메인 에이전트 자동 라우팅)
 
-본 skill 은 runtime adapter bootstrap 의 "autopilot-* 호출 패턴" 컨펌 의무 적용 대상(Claude Code: [`CLAUDE.md`](../../adapters/claude/CLAUDE.md) §0). 메인 에이전트는 사용자가 `<artifact-root>/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다 (`--qa thorough` default). **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
+본 skill 은 runtime adapter bootstrap 의 "autopilot-* 호출 패턴" 컨펌 의무 적용 대상(Claude Code: [`CLAUDE.md`](../../adapters/claude/CLAUDE.md) §0). 메인 에이전트는 사용자가 `<artifact-root>/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다. 기본은 request shape에서 선택된 `intensity`를 따르고, `--qa`는 그 그래프 안의 assurance budget만 조정한다. **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
 
 **Scope**: `<artifact-root>/{documents,research}/*` 엄격 한정. project root의 임의 `.md`/`.txt`나 코드 산출물(`<artifact-root>/plans/*`)은 적용 X — 전자는 일반 Edit, 후자는 `/code-refine` 또는 `/autopilot-code`.
 
@@ -90,7 +90,7 @@ frontmatter `changelog:` 필드 자체가 없는 file은 skip. **이 step은 pip
 
 ### Major 적용 시 동작
 
-`autopilot-refine --qa thorough` (default) 자동 invoke:
+`autopilot-refine` 자동 invoke (selected intensity/QA 사용):
 
 1. Stage A-D 정상 흐름 (investigate → diff preview → 자동 apply → snapshot)
 2. snapshot: `_internal/versions/v{N+1}/` 생성
@@ -118,7 +118,7 @@ frontmatter `changelog:` 필드 자체가 없는 file은 skip. **이 step은 pip
 - **NOT for**: `<artifact-root>/plans/*` (code) — use `/code-refine`, `/code-execute`, or `/autopilot-code` instead. Code changes need test-based verification, not diff review.
 - Why this skill exists: the existing `draft-refine` / `code-refine` workflow is file-memo only, which is too heavy for routine prompt-driven edits. `autopilot-refine` is the lightweight default; memo style is reduced to an opt-in fallback.
 
-## --qa <level> (default: thorough)
+## --qa <level> (assurance budget; graph selected by intensity)
 
 QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용 (proposed diff 에 pre-apply review):
 
@@ -127,7 +127,7 @@ QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../
 | **quick** | Investigate → Stage B.5 (factual + style auto-detector, always on) → diff preview → apply. No internal review loop. Stage B.5 는 cards-grep + regex 만. |
 | **light** | + 2× fast reviewers (다른 axes) single pass. obvious regression catch. |
 | **standard** | + 1× deep reviewer + 2× fast reviewers (다른 axes) + 1× fast fact-checker (parallel, in-artifact ground truth verbatim 대조 — research: `cards/*.md`; doc: `analysis/*.md` + 기존 strategy/draft). round 1. |
-| **thorough** (default) | + 2× deep reviewers + 2× fast reviewers (다른 axes) + 1× fast fact-checker. round 2. high-stakes refine 용. |
+| **thorough** | + 2× deep reviewers + 2× fast reviewers (다른 axes) + 1× fast fact-checker, only when the selected graph includes that review point. round 2. high-stakes refine 용. |
 | **adversarial** | thorough + 1× external adversary (`codex-review-team` in Claude adapter). camera-ready / grant / public rebuttal 같은 외부 strong scrutiny 자리. |
 
 Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/draft-refine` 사용).

@@ -45,6 +45,7 @@ This document is derived from core — edit core first; do not modify this adapt
 - For `material/web-image-search` queries, run `adapters/opencode/bin/preflight.sh web-image-search --check <query>` before treating image search as satisfying the mode tool contract. Exit 69 means no provider command is configured.
 - For `qa/security-review`, use the portable read-only mode with OpenCode file and git diff tools; do not invoke or project Claude `/security-review`.
 - For `qa/test` verification commands, run `adapters/opencode/bin/preflight.sh verification-runner --timeout <seconds> -- <command> [args...]` and report the captured exit status.
+- For QA level routing, run `adapters/opencode/bin/preflight.sh qa-policy <level> [code|research|doc|general]` and obey `stage_graph_selector=intensity-not-qa`, `assurance_scope`, reviewer budgets, and fallback policy before claiming independent QA delegation.
 - After design HTML writes, run `adapters/opencode/bin/preflight.sh design <file>`.
 - Before claiming full design/autopilot-design support, run `adapters/opencode/bin/preflight.sh visual-harness <file.html>` and inspect the reported screenshot. Exit 69 means the local Playwright-backed checker is unavailable.
 - After actually reading `<artifact-root>/spec/prd.md` or `core/*.md`, run `adapters/opencode/bin/preflight.sh read <file> [session-id]`; before spec-changing capability work, run `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]`.

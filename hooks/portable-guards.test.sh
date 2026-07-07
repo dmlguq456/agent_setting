@@ -1190,6 +1190,20 @@ if "$CODEX" qa-policy adversarial code >/tmp/codex_qa_policy.out 2>/tmp/codex_qa
 else
   bad "codex qa-policy should map QA level to reviewer and fallback contract"
 fi
+if "$OPENCODE" qa-policy adversarial code >/tmp/opencode_qa_policy.out 2>/tmp/opencode_qa_policy.err \
+  && grep -q '^runtime_surface=opencode-qa-policy$' /tmp/opencode_qa_policy.out \
+  && grep -q '^source=core/CONVENTIONS.md$' /tmp/opencode_qa_policy.out \
+  && grep -q '^qa_level=adversarial$' /tmp/opencode_qa_policy.out \
+  && grep -q '^qa_track=code$' /tmp/opencode_qa_policy.out \
+  && grep -q '^fact_checker=skip-code-track$' /tmp/opencode_qa_policy.out \
+  && grep -q '^external_adversary=1x-external-adversary$' /tmp/opencode_qa_policy.out \
+  && grep -q '^opencode_role_checks=.*preflight.sh role external adversary' /tmp/opencode_qa_policy.out \
+  && grep -q '^stage_graph_selector=intensity-not-qa$' /tmp/opencode_qa_policy.out \
+  && grep -q '^independent_delegation_policy=claim-only-if-separate-opencode-agent-headless-or-external-pass-ran$' /tmp/opencode_qa_policy.out; then
+  ok "opencode qa-policy maps QA level to reviewer and fallback contract"
+else
+  bad "opencode qa-policy should map QA level to reviewer and fallback contract"
+fi
 if "$CODEX" capability-info autopilot-code >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^capability=autopilot-code$' /tmp/cap.out \
   && grep -q '^adapter=codex$' /tmp/cap.out \
@@ -2632,6 +2646,18 @@ if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-dispat
   ok "opencode dispatch wrapper registers open headless job"
 else
   bad "opencode dispatch wrapper should register open headless job"
+fi
+if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-generated --capability autopilot-code --mode qa/test --qa thorough --intensity thorough --model provider/test --variant low --jobs "$TMP/opencode-generated.log" --log-dir "$TMP/opencode-generated-logs" >/tmp/opencode_generated_dispatch.out 2>/tmp/opencode_generated_dispatch.err \
+  && grep -q '^status=register$' /tmp/opencode_generated_dispatch.out \
+  && grep -q '^registered=1$' /tmp/opencode_generated_dispatch.out \
+  && grep -q '^prompt_source=generated$' /tmp/opencode_generated_dispatch.out \
+  && [ -f "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" ] \
+  && grep -q 'qa-policy thorough code' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" \
+  && grep -q 'stage graph from intensity before QA' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" \
+  && grep -q 'depth-2 planner/verifier/adversary' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt"; then
+  ok "opencode dispatch wrapper materializes generated register prompt with QA policy"
+else
+  bad "opencode dispatch wrapper should materialize generated register prompt with QA policy"
 fi
 if "$OPENCODE" harvest --jobs "$TMP/opencode-dispatch.log" --slug opencode-dispatch >/tmp/opencode_harvest.out 2>/tmp/opencode_harvest.err \
   && grep -q '^adapter=opencode$' /tmp/opencode_harvest.out \

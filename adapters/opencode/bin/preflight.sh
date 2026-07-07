@@ -85,6 +85,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh role <portable-role>
        preflight.sh capability-info <capability>
        preflight.sh mode-info <family/mode>
+       preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]
        preflight.sh doctor
 
 Runs portable checks that OpenCode can call without consuming Claude hook JSON,
@@ -379,6 +380,78 @@ EOF
   dispatch)
     shift
     AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/opencode/bin/dispatch-headless.py" "$@"
+    ;;
+  qa-policy)
+    [ "$#" -ge 2 ] || { echo "opencode preflight: qa-policy requires a QA level" >&2; exit 64; }
+    level=$2
+    track=${3:-general}
+    case "$level" in
+      quick)
+        quality_reviewers="1x-fast-reviewer"
+        fact_checker="skip"
+        external_adversary="skip"
+        max_round="1"
+        role_checks="preflight.sh role fast reviewer"
+        ;;
+      light)
+        quality_reviewers="2x-fast-reviewers"
+        fact_checker="skip"
+        external_adversary="skip"
+        max_round="1"
+        role_checks="preflight.sh role fast reviewer"
+        ;;
+      standard)
+        quality_reviewers="1x-deep-reviewer+2x-fast-reviewers"
+        fact_checker="1x-fast-fact-checker"
+        external_adversary="skip"
+        max_round="1"
+        role_checks="preflight.sh role deep reviewer;preflight.sh role fast reviewer"
+        ;;
+      thorough)
+        quality_reviewers="2x-deep-reviewers+2x-fast-reviewers"
+        fact_checker="1x-fast-fact-checker"
+        external_adversary="skip"
+        max_round="2"
+        role_checks="preflight.sh role deep reviewer;preflight.sh role fast reviewer"
+        ;;
+      adversarial)
+        quality_reviewers="2x-deep-reviewers+2x-fast-reviewers"
+        fact_checker="1x-fast-fact-checker"
+        external_adversary="1x-external-adversary"
+        max_round="2+external-1"
+        role_checks="preflight.sh role deep reviewer;preflight.sh role fast reviewer;preflight.sh role external adversary"
+        ;;
+      *)
+        echo "opencode preflight: unknown QA level: $level" >&2
+        exit 64
+        ;;
+    esac
+    case "$track" in
+      code)
+        fact_checker="skip-code-track"
+        ;;
+      research|doc|general)
+        ;;
+      *)
+        echo "opencode preflight: unknown QA track: $track" >&2
+        exit 64
+        ;;
+    esac
+    printf 'adapter=opencode\n'
+    printf 'runtime_surface=opencode-qa-policy\n'
+    printf 'source=core/CONVENTIONS.md\n'
+    printf 'qa_level=%s\n' "$level"
+    printf 'qa_track=%s\n' "$track"
+    printf 'quality_reviewers=%s\n' "$quality_reviewers"
+    printf 'fact_checker=%s\n' "$fact_checker"
+    printf 'external_adversary=%s\n' "$external_adversary"
+    printf 'max_round=%s\n' "$max_round"
+    printf 'assurance_scope=plan-check:selected-independent-pass:final-verify\n'
+    printf 'stage_graph_selector=intensity-not-qa\n'
+    printf 'reviewer_counts=upper-bound-for-selected-pass-not-per-stage-loop\n'
+    printf 'opencode_role_checks=%s\n' "$role_checks"
+    printf 'independent_delegation_policy=claim-only-if-separate-opencode-agent-headless-or-external-pass-ran\n'
+    printf 'fallback=report-inline-review-if-independent-agent-unavailable\n'
     ;;
   mcp)
     shift

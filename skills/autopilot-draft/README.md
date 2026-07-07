@@ -32,7 +32,7 @@ flowchart LR
 |---|---|
 | `<task description>` | 첫 positional arg — 작업의 목표·의도·범위·청중 한 줄 |
 | `--mode` | 6개 모드 중 하나. 생략 시 task description에서 자동 추론 |
-| `--qa` | quick / light / standard / thorough (default) — fact-checker는 standard+에서 fast fact-checker로 parallel 추가 |
+| `--qa` | quick / light / standard / thorough / adversarial — assurance budget only; fact-checker is selected only when claims/citations/cards are in scope and the selected graph calls for it |
 | `--user-refine` | 연구팀 메모 직후 pause. 사용자가 직접 `<!-- memo: ... -->` 추가 후 `--from <stage>` 재개 |
 | `--no-clarify` | Step 0 Scope Clarification 강제 skip |
 | `--from <stage>` | pause/실패 후 특정 단계 재개 (analyze / strategy / strategy-refine / draft / draft-refine / finalize) |
@@ -79,7 +79,7 @@ Quality reviewer + fact-checker가 **parallel**로 동작 (standard+).
 | quick | 1× fast reviewer, 1-pass, refine entire skip | skip |
 | light | 1× fast reviewer | skip |
 | standard | 1× deep reviewer | 1× fast fact-checker |
-| thorough (default) | 2× deep reviewers — Domain Expert + Methodology / Content Expert + Quality | 1× fast fact-checker |
+| thorough | 2× deep reviewers — Domain Expert + Methodology / Content Expert + Quality, only when selected | 1× fast fact-checker when source claims are in scope |
 
 **Fact-checker**는 `analysis_project/paper/*.md` verbatim 대조로 venue/year/metric/citation을 narrow하게 검증. _창의적 판단이 아닌 매칭 작업_이라 fast fact-checker 로 충분.
 

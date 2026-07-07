@@ -56,7 +56,7 @@ Return which steps were changed and a brief summary.
 - Agent B: **completeness** — 변경의 downstream 영향 반영? 누락 step?
 각자 별도 리뷰 파일에 쓰기. ANY 🔴 처리 필수.
 
-## Post-Refine Review Loop (최대 3 라운드)
+## Selected Post-Refine Review Pass (caller-selected budget)
 `mkdir -p {log_dir}/plan_reviews` 후:
 - Light/Standard: 1 agent — "Review changed steps. Plan: [path], Changed: [list]. Write to: refine_round_{N}.md"
 - Thorough: 2 agents 병렬 (A/B), 다른 focus + 다른 파일

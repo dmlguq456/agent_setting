@@ -114,8 +114,8 @@ mode별 _필수·권장_ 입력:
 
 **`--qa <level>`** — QA 5 단계 정의 + model role·round 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
 
-- Supported: `quick` / `light` / `standard` / `thorough` (default) / `adversarial`
-- Omitted → `thorough`
+- Supported: `quick` / `light` / `standard` / `thorough` / `adversarial`; default assurance follows selected `intensity` unless explicitly overridden
+- Omitted → assurance follows selected `intensity`; routine work starts at standard or lower unless explicitly escalated
 - **Why fact-checker is separate**: quality reviewer 는 narrative/coverage/logic 에 집중, fact-checker 는 citation/venue/year/metric/lineage 만 narrow 하게 ground-truth (cards/PDFs) 와 verbatim 대조 — matching task 라 fast fact-checker role 로 충분 (Claude adapter: sonnet)
 - **Propagation**: `--qa <level>` 를 draft-strategy / draft-refine 에 flag 로 전달
 - **`quick` interactions**: `--from strategy-refine` 또는 `--from draft-refine` 으로 재개 시 frontmatter `qa_level == quick` 이면 abort ("qa_level=quick 에서는 refine 단계가 skip 됩니다. --qa <level> 을 다른 값으로 명시해 재개하세요.")
@@ -407,7 +407,7 @@ Invoke Skill: `draft-strategy` with args: `<resolved_mode> --inputs <comma-separ
    - Quality review log: `{strategy_folder}/_internal/strategy_reviews/research_review_quality.md`
    - Fact-check log: `{strategy_folder}/_internal/strategy_reviews/research_review_factcheck.md`
 
-   **`thorough`** (default) — **axis-decomposed parallel 연구팀** (모든 audit-aligned axes를 각각 별도 instance가 검토) + 1× 연구팀 fact-checker:
+   **`thorough`** — **axis-decomposed parallel 연구팀** only when the selected intensity/QA calls for it (audit-aligned axes as bounded selected passes) + 1× 연구팀 fact-checker when source claims are in scope:
    - **Axis A — Domain quality** (deep reviewer): refs/reviewer comments 대조, 학술 venue 컨벤션 (NeurIPS / ICML / ICASSP / Interspeech / T-ASLP — paper modes), industry standards (report/proposal/presentation), 완전성 / cohesion.
      - Review log: `{strategy_folder}/_internal/strategy_reviews/research_review_domain.md`
    - **Axis B — Methodology** (deep reviewer): 논리 일관성, 주장 설득력, 실험 설계, adversarial reviewer 약점.

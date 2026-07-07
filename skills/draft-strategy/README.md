@@ -3,7 +3,7 @@
 > 본 README 는 Claude adapter skill 요약. 권위 있는 Claude runtime 동작 명세는 같은 폴더의 `SKILL.md`; portable capability 의미는 `<agent-home>/capabilities/`.
 
 ## 개요
-분석된 참고 자료를 기반으로 초기 문서 전략(rebuttal/paper/review/report/proposal/presentation)을 생성하는 skill. 연구팀에 위임 + QA 루프 (quality + fact-checker 병렬) + 한국어 번역.
+분석된 참고 자료를 기반으로 초기 문서 전략(rebuttal/paper/review/report/proposal/presentation)을 생성하는 skill. 연구팀에 위임 + selected review/source-check pass + 한국어 번역.
 
 > autopilot-draft 내부에서 자동 호출. 직접 사용은 거의 없음 (autopilot-draft의 Step 2).
 >
@@ -57,7 +57,7 @@ mode별 전략 템플릿으로 전략 문서 작성. 자동 발견된 format spe
 연구팀이 파일 직접 작성. 오케스트레이터는 경로 + 3-5줄 한국어 요약만 받음.
 
 ## QA Scaling
-Quality reviewer + fact-checker가 **parallel**로 동작 (standard+).
+Quality reviewer + fact-checker는 selected graph/QA budget이 요구할 때만 동작한다.
 
 | Level | 조건 | Quality reviewer | Fact-checker (parallel) |
 |---|---|---|---|
@@ -67,8 +67,8 @@ Quality reviewer + fact-checker가 **parallel**로 동작 (standard+).
 
 **Fact-checker**는 `analysis_project/paper/*.md` verbatim 대조로 venue/year/metric/citation을 narrow하게 검증. quality reviewer는 narrative arc / cohesion / 모든 reviewer point 응답 여부에 집중.
 
-## Post-Strategy Review Loop (최대 2 라운드)
-1. **Quality + fact-check reviewer 병렬 호출**
+## Selected Post-Strategy Review Pass (최대 2 라운드)
+1. **Selected quality/source-check reviewer 호출**
    - Quality prompt → `round_N_quality.md`
    - Fact-check prompt → `round_N_factcheck.md`
 2. Verdict:

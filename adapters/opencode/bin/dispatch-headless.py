@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
+QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -133,6 +134,7 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         extra = (
             "\nAutopilot-code execution contract:\n"
             "- Choose the stage graph from intensity before QA. direct has no plan stage; quick uses micro-plan plus plan-check-lite; standard+ uses durable plan/execute/test/report.\n"
+            f"- Run adapters/opencode/bin/preflight.sh qa-policy {args.qa} code and obey assurance_scope, stage_graph_selector, reviewer_counts, and independent delegation policy before claiming QA coverage.\n"
             "- Plan-check is required for quick+ but stays small; do not run independent QA after every stage by default.\n"
             "- thorough/adversarial may use bounded depth-2 planner/verifier/adversary workers and must synthesize short reports; depth 3+ is forbidden.\n"
         )
@@ -208,7 +210,40 @@ def check_runtime_projection(worktree: str) -> int:
     return result.returncode
 
 
+
+def validate_preflight(kind: str, command: str, value: str, reason: str) -> int:
+    result = subprocess.run(
+        [str(ROOT / "adapters" / "opencode" / "bin" / "preflight.sh"), command, value],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode == 0:
+        return 0
+    rc = fail(reason, result.returncode or 64, **{kind: value})
+    if result.stdout:
+        print(result.stdout, end="")
+    if result.stderr:
+        print(result.stderr, end="", file=sys.stderr)
+    return rc
+
+
 def validate_dispatch_metadata(args: argparse.Namespace) -> int:
+    rc = validate_preflight("capability", "capability-info", args.capability, "invalid-dispatch-capability")
+    if rc != 0:
+        return rc
+    rc = validate_preflight("mode", "mode-info", args.mode, "invalid-dispatch-mode")
+    if rc != 0:
+        return rc
+    if args.qa not in QA_LEVELS:
+        return fail(
+            "invalid-dispatch-qa",
+            64,
+            qa=args.qa,
+            allowed_qa="quick,light,standard,thorough,adversarial",
+        )
     if args.intensity not in INTENSITY_LEVELS:
         return fail(
             "invalid-dispatch-intensity",
@@ -259,11 +294,11 @@ def main(argv: list[str]) -> int:
     command = shell_command(args, prompt_path, log_path)
 
     if action in ("register", "start"):
-        append_job(jobs, args)
-    if action == "start":
         prompt_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         prompt_path.write_text(prompt_text, encoding="utf-8")
+        append_job(jobs, args)
+    if action == "start":
         subprocess.Popen(["sh", "-c", command], start_new_session=True, env={
             **os.environ,
             "AGENT_DISPATCH_DEPTH": str(args.depth),

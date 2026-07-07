@@ -224,12 +224,12 @@ Auto-detect from sections changed. Two reviewer roles run **in parallel** at Sta
 
 **Why fast fact-checker**: card verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 fast role 로 충분하고, 비용 효율적이다.
 
-## Post-Refine Review Loop (max 2 rounds; quick = 1 round)
+## Selected Post-Refine Review Pass (max 2 rounds; quick = 1 round)
 After 연구팀 returns:
 1. **Resolve log dir**: artifact root (e.g., `<artifact-root>/documents/2026-03-25_foo/`).
    - For strategy refinement: `mkdir -p {log_dir}/_internal/strategy_reviews`
    - For draft refinement: `mkdir -p {log_dir}/_internal/draft_reviews`
-2. **Invoke quality + fact-check reviewers in parallel** (single message with multiple Agent calls per QA Scaling above):
+2. **Invoke selected quality/source-check reviewers** (parallel only when the selected QA budget calls for more than one reviewer):
 
    **Quality reviewer prompt** (deep or fast reviewer per level):
    ```

@@ -59,7 +59,7 @@ Parse `$ARGUMENTS` for optional flags:
 - **--mode**: `academic` (default) | `technology` | `market` — investigation type (see Modes below)
 - **--depth**: `shallow` | `medium` (default) | `deep`
 - (no `--refs` flag — local reference materials should be pre-processed via `/analyze-project --mode paper` first → output goes to `<artifact-root>/analysis_project/paper/` which autopilot-research auto-detects)
-- **--qa**: `quick` | `light` | `standard` | `thorough` (default) | `adversarial` — QA 5 단계 정의 + model role·round 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. `quick` 은 1라운드 강제 종료 + refine skip + fact-checker 비활성. `standard`+ 는 fast fact-checker 가 cards verbatim 대조 (citation/venue/year/metric). `adversarial` 은 thorough + external adversary + **claim-verify** (적대적 외부 진위 — 카드 정합해도 외부 모순 시 kill; camera-ready / public report 같은 외부 strong scrutiny 자리).
+- **--qa**: `quick` | `light` | `standard` | `thorough` | `adversarial` — assurance budget only. `intensity` selects the stage graph/depth; `--qa` scales selected report checks. `quick` keeps the selected gate small and disables fact-checker by default. source/fact-check runs only when claims/citations/cards are in scope and the selected graph/QA budget calls for it. `adversarial` adds external adversary / **claim-verify** where supported.
 - **--from**: `search` | `analyze` | `report` — resume the pipeline at a specific stage (see Resume below)
 - **--no-clarify**: skip Step 0 Scope Clarification (force-run with current query as-is)
 - **--no-figures**: skip Step 3.5 Web Figure Extraction (figure 자동 추출 단계 건너뜀; cards 본문은 그대로 생성, 단 `**Figures**:` 줄만 누락)
@@ -158,7 +158,7 @@ topic: <name>
 `--from <stage>` re-enters an existing artifact directory and runs from that stage onward. Stages:
 - `search` — Step 2 (Paper Search)
 - `analyze` — Step 3 (Phase A skimming + B chaining + C code search + analysis_summary)
-- `report` — Step 4 (Report Generation + QA loop)
+- `report` — Step 4 (Report Generation + selected report-check gate)
 
 When `--from` is used, the positional argument should be either the artifact directory path or a fuzzy-matchable topic name. The orchestrator resolves it via `ls -d <artifact-root>/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `query`, `mode`, `depth`, `qa_level`, `clarified_intent`. CLI flags override stored values. Step 0 Scope Clarification is always skipped on resume (already captured in first run).
 
@@ -455,7 +455,7 @@ Agent(subagent_type="자료팀"):
 - `--qa quick` mode에서는 Step 3.5 자동 skip (fastest path 우선).
 - `--no-figures` flag 명시 시 skip.
 
-### Step 4: Report Generation (direct Agent call + QA loop)
+### Step 4: Report Generation (direct Agent call + selected report-check gate)
 
 > **자료팀 위임 (옵션)** — 보고서에 _집계 통계 시각화_ 나 _cross-card metric 비교 plot_ 등 _custom 분석 figure_ 가 필요하면 본 Step 안에서 `Agent(자료팀, "<spec>")` 직접 호출 가능. paper figure 직접 추출 (자료팀 영역) 과 다른 자리 — 자료팀은 _카드 데이터로부터 새 시각화_ 만들 때. 일반 survey 자료 (taxonomy table / lineage ASCII / per-paper card) 는 연구팀 본 자리 처리.
 

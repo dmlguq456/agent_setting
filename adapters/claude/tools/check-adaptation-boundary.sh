@@ -1870,6 +1870,23 @@ check_opencode_bin_wrappers() {
     fail_msg "adapters/opencode/bin/preflight.sh must report the OpenCode headless dispatch contract without Claude headless assumptions"
   fi
 
+  if ! grep -Fq 'preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'runtime_surface=opencode-qa-policy' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'stage_graph_selector=intensity-not-qa' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'preflight.sh qa-policy <level> [code|research|doc|general]' adapters/opencode/AGENTS.md \
+    || ! grep -Fq 'QA policy mapping' adapters/opencode/README.md \
+    || ! grep -Fq 'QA policy mapping' adapters/opencode/ADAPTATION.md; then
+    fail_msg "OpenCode adapter must expose QA level policy mapping as a runtime preflight contract"
+  fi
+  if ! grep -Fq 'validate_preflight' adapters/opencode/bin/dispatch-headless.py \
+    || ! grep -Fq 'invalid-dispatch-capability' adapters/opencode/bin/dispatch-headless.py \
+    || ! grep -Fq 'invalid-dispatch-mode' adapters/opencode/bin/dispatch-headless.py \
+    || ! grep -Fq 'invalid-dispatch-qa' adapters/opencode/bin/dispatch-headless.py \
+    || ! grep -Fq 'preflight.sh qa-policy {args.qa} code' adapters/opencode/bin/dispatch-headless.py \
+    || ! grep -Fq 'prompt_path.write_text(prompt_text, encoding="utf-8")' adapters/opencode/bin/dispatch-headless.py; then
+    fail_msg "adapters/opencode/bin/dispatch-headless.py must validate inputs, materialize register prompts, and surface QA policy"
+  fi
+
   if ! grep -Fq -- '--event start' adapters/opencode/bin/preflight.sh; then
     fail_msg "adapters/opencode/bin/preflight.sh must expose workflow start cleanup"
   fi
@@ -3041,8 +3058,8 @@ check_codex_mode_map() {
     [ -f "$f" ] || continue
     rel=${f#roles/modes/}
     rel=${rel%.md}
-    out=/tmp/codex-mode-map.out
-    err=/tmp/codex-mode-map.err
+    out=${TMPDIR:-/tmp}/codex-mode-map.$$.out
+    err=${TMPDIR:-/tmp}/codex-mode-map.$$.err
     if ! "$mapper" "$rel" >"$out" 2>"$err"; then
       fail_msg "Codex mode map cannot resolve agent mode: $rel"
       cat "$err"
@@ -3181,8 +3198,8 @@ check_opencode_mode_map() {
     [ -f "$f" ] || continue
     rel=${f#roles/modes/}
     rel=${rel%.md}
-    out=/tmp/opencode-mode-map.out
-    err=/tmp/opencode-mode-map.err
+    out=${TMPDIR:-/tmp}/opencode-mode-map.$$.out
+    err=${TMPDIR:-/tmp}/opencode-mode-map.$$.err
     if ! "$mapper" "$rel" >"$out" 2>"$err"; then
       fail_msg "OpenCode mode map cannot resolve agent mode: $rel"
       cat "$err"

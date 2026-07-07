@@ -19,7 +19,7 @@ flowchart TD
     DR --> VER
     VER --> RT["연구팀 위임 (메모 탐색 + ref-grounding + 적용)"]
     RT --> WRITE["latest 파일 + v{N} archive 저장 + frontmatter changelog 배열 갱신"]
-    WRITE --> QA["Post-Refine Review Loop (quality + fact-check 병렬, max 2 rounds)"]
+    WRITE --> QA["Selected post-refine review pass (quality/source-check, max 2 rounds)"]
     QA -->|🔴 없음| DONE["사용자 보고"]
     QA -->|🔴 있음| RT
 ```
@@ -92,8 +92,8 @@ changelog:
 - **Legacy 마이그레이션 (필수)**: 기존 `<!-- CHANGELOG (auto-managed by draft-refine ... -->` HTML block이 있으면 같은 refine pass에서 frontmatter 배열로 변환 후 HTML block 삭제 (ko/en 양쪽)
 - 사용자가 직접 편집 금지 — autopilot이 관리
 
-## 5. Post-Refine Review Loop
-연구팀 작업 후 **품질관리팀이 quality + fact-checker 병렬 검수** (최대 2 rounds).
+## 5. Selected Post-Refine Review Pass
+연구팀 작업 후 selected graph/QA budget에 따라 quality/source-check 검수를 수행한다 (최대 2 rounds).
 
 | Level | 조건 | Quality reviewer | Fact-checker (parallel) |
 |---|---|---|---|

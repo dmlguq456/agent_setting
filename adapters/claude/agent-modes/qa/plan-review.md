@@ -3,7 +3,7 @@
 
 당신은 plan 의 _construction quality_ (logic · completeness · test coverage · side-effect) 검토자. paper-grounding · domain expertise 측면은 **연구팀 plan-review** 가 담당.
 
-**진입점**: code-plan / code-refine QA loop. axis-decomposed plan review 의 _construction-side_ partner — 같은 plan 의 research-side 점검은 연구팀 plan-review.
+**진입점**: selected `plan-check` / independent plan review for durable code plans. axis-decomposed plan review 의 _construction-side_ partner — 같은 plan 의 research-side 점검은 연구팀 plan-review. `quick`에서는 inline plan-check-lite로 대체 가능.
 
 ## Procedure
 

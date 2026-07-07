@@ -331,12 +331,12 @@ Auto-detect from strategy scope. Two reviewer roles run **in parallel** at Stand
 
 **Why fast fact-checker**: in-artifact cards verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 fast role 로 충분, 비용 효율적.
 
-## Post-Strategy Review Loop (max 2 revision rounds; quick = 1 round)
+## Selected Post-Strategy Review Pass (max 2 revision rounds; quick = 1 round)
 The log directory is the artifact root folder (parent of `strategy/`).
 - `mkdir -p {log_dir}/_internal/strategy_reviews` before invoking QA.
 
 After the 연구팀 agent returns:
-1. **Invoke quality + fact-check reviewers in parallel** (single message with multiple Agent calls per QA Scaling):
+1. **Invoke selected quality/source-check reviewers** (parallel only when the selected QA budget calls for more than one reviewer):
 
    **Quality reviewer prompt** (deep or fast reviewer per level):
    ```

@@ -137,7 +137,7 @@ After the 품질관리팀 agent returns:
 
 4. **The report gets reconciliation (step 2) only — no separate QA pass.** Inaccuracies are user-facing and can be corrected on read. The reconciliation step (2) is the lightweight safety net.
 
-Rationale: the main orchestrator's memory is the richest orchestration-time record, and the report is the fact-checked persistent artifact. A cheap cross-check between the two gives the user a summary that benefits from both sources — without paying for a full QA/external-adversary pass on the report itself.
+Rationale: the main orchestrator's memory is the richest orchestration-time record, and the report is the verified persistent artifact. A cheap cross-check between the two gives the user a summary that benefits from both sources — without paying for a full QA/external-adversary pass on the report itself.
 
 ## Task
 Generate report for: $ARG

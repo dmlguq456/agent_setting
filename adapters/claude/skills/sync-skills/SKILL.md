@@ -234,7 +234,7 @@ QA level / model role 표기 / family-wide invariant 은 **`<agent-home>/core/CO
 |---|---|---|
 | **adversarial = thorough + external adversary** (+ research/doc 트랙은 claim-verify) | `adversarial.*standard.*(Codex|external)` 또는 `adversarial.*=.*standard` | 🔴 `잘못된 정의: adversarial base 는 thorough + external adversary (standard 아님). research/doc 트랙은 + 연구팀 claim-verify` |
 | **autopilot-code 는 fact-checker 없음** | autopilot-code/SKILL.md or autopilot-code/README.md 에서 `fact-checker` 언급 (단, "doc/research 에만" 이라는 negative 안내는 OK) | 🔴 `code 파이프라인은 fact-checker 미적용` |
-| **autopilot-* + analyze-user adversarial 지원** | autopilot-code / autopilot-draft / autopilot-research / autopilot-refine / analyze-user 의 argument-hint 에 `adversarial` 누락 | 🔴 `2026-05-22 통일 — analyze-user 는 adversarial 고정, 나머지 4 개는 default thorough + adversarial 지원` |
+| **autopilot-* + analyze-user adversarial 지원** | autopilot-code / autopilot-draft / autopilot-research / autopilot-refine / analyze-user 의 argument-hint 에 `adversarial` 누락 또는 `--qa`를 stage graph selector처럼 설명 | 🔴 `adversarial 지원은 유지하되, autopilot-* default thorough 강제 금지. intensity가 graph/depth를 고르고 --qa는 assurance budget만 조정` |
 | **quick 은 refine skip + 1라운드 강제 종료** | quick 정의에서 위 둘 중 하나 누락 | 🟡 `quick 정의 incomplete` |
 | **`--no-fact-check` / `--no-style-audit` 는 autopilot-refine·audit 전용** | 다른 skill 의 argument-hint 에 노출 | 🔴 `해당 flag 는 refine·audit 외 노출 금지` |
 
@@ -243,7 +243,7 @@ QA level / model role 표기 / family-wide invariant 은 **`<agent-home>/core/CO
 drift 발견 시 Step 7 final report 에 별도 섹션:
 ```
 [QA invariant drift]
-🔴 skills/autopilot-refine/SKILL.md:46 — adversarial 정의가 'standard + external'로 잘못 적힘 (canonical: 'thorough + external adversary')
+🔴 skills/autopilot-refine/SKILL.md:46 — `--qa thorough`를 default graph처럼 설명함 (canonical: `intensity`가 graph/depth를 선택하고 `--qa`는 selected assurance만 조정)
 🟡 skills/autopilot-research/SKILL.md:632 — quick 정의에 'refine skip' 명시 누락
 ```
 
