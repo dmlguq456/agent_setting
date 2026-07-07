@@ -65,6 +65,41 @@ def locate_latest_for_worktree(con: sqlite3.Connection, worktree: str) -> tuple[
     return None
 
 
+def heartbeat_age_min(agent_home: Path, slug: str, now: float) -> float | None:
+    """Return the heartbeat file age in minutes, or None when no heartbeat exists.
+
+    The plugin agent-harness-guards.js touches
+    <agent-home>/.dispatch/logs/<slug>.heartbeat on every session.idle event
+    when OPENCODE_DISPATCH_SLUG is set (i.e., the session is a dispatched
+    headless worker). A missing or aging heartbeat is a secondary liveness
+    signal: it never overrides a fresher OpenCode SQLite mtime, but when the
+    SQLite mtime is inconclusive or the working session cannot be located, a
+    recent heartbeat is evidence the plugin loaded and reached idle.
+    """
+    if not slug:
+        return None
+    hb = agent_home / ".dispatch" / "logs" / f"{slug}.heartbeat"
+    try:
+        mtime = hb.stat().st_mtime
+    except OSError:
+        return None
+    return (now - mtime) / 60.0
+
+
+def plugin_loaded_for_slug(agent_home: Path, slug: str) -> bool:
+    """True when the plugin-load marker for this dispatch slug exists.
+
+    dispatch-headless.py exports OPENCODE_DISPATCH_SLUG to the runtime child;
+    agent-harness-guards.js writes <agent-home>/.dispatch/plugin-load.<slug>.mark
+    once at plugin init. A missing marker means the plugin did not load in the
+    headless runtime — a strong DEAD signal even when the OpenCode SQLite
+    session is alive (the session is running but no harness guards are active).
+    """
+    if not slug:
+        return False
+    return (agent_home / ".dispatch" / f"plugin-load.{slug}.mark").is_file()
+
+
 def main(argv: list[str]) -> int:
     if len(argv) > 2 or (len(argv) == 2 and argv[1] in {"-h", "--help"}):
         return usage()
@@ -101,7 +136,20 @@ def main(argv: list[str]) -> int:
             label = slug or "?"
             match = locate_latest_for_worktree(con, worktree)
             if match is None:
-                print(f"DEAD     {label} - OpenCode session not found for {worktree} [open: {ts}]")
+                # No SQLite session for this worktree. Fall back to the heartbeat
+                # side-channel: a recent heartbeat means the plugin is still
+                # touching it on session.idle even though the OpenCode session row
+                # is gone or unreadable.
+                hb_age = heartbeat_age_min(agent_home, slug, now)
+                plugin_marker = plugin_loaded_for_slug(agent_home, slug)
+                if hb_age is not None and hb_age <= stale_min:
+                    print(f"ALIVE    {label} (heartbeat {hb_age:.1f}m ago; plugin_loaded={plugin_marker})")
+                    alive += 1
+                    continue
+                if not plugin_marker:
+                    print(f"DEAD     {label} - OpenCode session not found for {worktree} and no plugin-load marker [open: {ts}]")
+                else:
+                    print(f"DEAD     {label} - OpenCode session not found for {worktree} [open: {ts}]")
                 suspect += 1
                 continue
             session_id, session_slug, updated_at = match
@@ -109,12 +157,26 @@ def main(argv: list[str]) -> int:
             detail = f"{session_id}"
             if session_slug:
                 detail = f"{session_id}/{session_slug}"
+            # Cross-check plugin-load marker: a running SQLite session *without*
+            # the marker means the headless runtime loaded OpenCode but the
+            # harness plugin did not init — guards are not active, so the run is
+            # effectively unguarded even if the process is alive.
+            plugin_marker = plugin_loaded_for_slug(agent_home, slug)
             if age <= stale_min:
-                print(f"ALIVE    {label} (OpenCode session {age}m ago: {detail})")
+                marker_note = "" if plugin_marker else " plugin_loaded=false"
+                print(f"ALIVE    {label} (OpenCode session {age}m ago: {detail}{marker_note})")
+                if not plugin_marker and slug:
+                    # Alive but unguarded — flag as SUSPECT so main harvests attention.
+                    print(f"  note: no plugin-load marker for {slug}; harness guards likely inactive")
                 alive += 1
             else:
-                print(f"SUSPECT  {label} - OpenCode session {age}m stale: {detail} [open: {ts}]")
-                suspect += 1
+                hb_age = heartbeat_age_min(agent_home, slug, now)
+                if hb_age is not None and hb_age <= stale_min:
+                    print(f"ALIVE    {label} (heartbeat {hb_age:.1f}m ago overrides stale SQLite {age}m: {detail})")
+                    alive += 1
+                else:
+                    print(f"SUSPECT  {label} - OpenCode session {age}m stale: {detail} [open: {ts}]")
+                    suspect += 1
 
     print(f"open {open_n} ; alive {alive} ; suspect/dead {suspect}")
     if suspect:

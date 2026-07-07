@@ -99,9 +99,11 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
   selects `--model-role <portable-role>`, `--model <model> --effort <level>`,
   or explicit `--inherit-model-settings` per job; that is where simple jobs
   are downshifted and complex jobs are escalated.
-- Dispatch prompts must spell out capability, mode, and QA options because
-  `adapters/claude/statusline.sh` derives the `>_ running` display from process
-  command lines and sibling `-wt/<slug>` worktree paths.
+- Dispatch prompts and jobs.log rows must spell out capability, mode, QA,
+  intensity, depth, parent slug/session, worker role, owner capability, and owner
+  harness. Cross-harness launches from Codex pass `CODEX_THREAD_ID` through
+  `parent_sid`, so fleet can render the Claude worker under the Codex orchestrator
+  instead of as an orphan.
 - `utilities/dispatch-liveness.sh` inspects Claude session transcript mtimes
   under the Claude runtime project log layout to catch hung headless jobs.
 

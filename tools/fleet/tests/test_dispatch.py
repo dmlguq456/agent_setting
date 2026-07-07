@@ -37,14 +37,31 @@ class RenderDispatchPresentationTest(unittest.TestCase):
         self.assertEqual(render._dispatch_prefix(nested), "    ")
         self.assertNotIn("↳", render._dispatch_prefix(nested))
 
-    def test_dispatch_tag_labels_qa_and_path_intensity(self):
+    def test_dispatch_tag_labels_path_before_assurance(self):
         job = DispatchJob(key="plan", worker_role="planner", intensity="thorough")
         tag, _width = render._mq_tag(
-            "review", "~standard", "qa_standard", profile=render._dispatch_role_suffix(job)
+            "review", None, "qa_standard", profile=render._dispatch_role_suffix(job, "~standard")
         )
         text = "".join(part for part, _key in tag)
 
-        self.assertEqual(text, " (review·qa:~standard·role:planner/path:thorough)")
+        self.assertEqual(text, " (review·path:thorough/role:planner/check:~standard)")
+
+    def test_dispatch_two_line_compacts_long_session_name(self):
+        job = DispatchJob(
+            key="code",
+            slug="smoke-claude-dispatch-with-overlong-name",
+            harness="claude",
+            mode="qa/test",
+            qa="quick",
+            qa_source="jobslog",
+            intensity="quick",
+            worker_role="verifier",
+        )
+        l1, _l2 = render._dispatch_row_2line(job)
+        text = "".join(part for part, _key in l1)
+
+        self.assertIn("smoke-claude-disp…", text)
+        self.assertNotIn("smoke-claude-dispatch-with-overlong-name", text)
 
 
 
@@ -288,7 +305,7 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
                 "2026-07-05T01:00:00+00:00", "open", "repo", worktree,
                 "child-worker",
                 "capability=autopilot-code,mode=verify,qa=adversarial,"
-                "depth=2,parent=owner-job,intensity=adversarial,"
+                "depth=2,harness=codex,parent=owner-job,parent_sid=codex-main,intensity=adversarial,"
                 "worker_role=verifier,owner=autopilot-code",
             ])
             with open(jobs_log, "w") as f:
@@ -306,11 +323,52 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
             self.assertEqual(job.mode, "verify")
             self.assertEqual(job.qa, "adversarial")
             self.assertEqual(job.depth, 2)
+            self.assertEqual(job.harness, "codex")
             self.assertEqual(job.parent_slug, "owner-job")
+            self.assertEqual(job.parent_sid, "codex-main")
             self.assertTrue(job.is_child)
             self.assertEqual(job.intensity, "adversarial")
             self.assertEqual(job.worker_role, "verifier")
             self.assertEqual(job.capability_owner, "autopilot-code")
+
+    def test_legacy_jobs_log_infers_harness_from_runtime_model_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_log = os.path.join(tmp, "jobs.log")
+            worktree = os.path.join(tmp, "wt")
+            os.makedirs(worktree, exist_ok=True)
+            rows = [
+                "\t".join([
+                    "2026-07-05T01:00:00+00:00", "open", "repo", worktree,
+                    "legacy-codex",
+                    "capability=sync-skills,mode=qa/test,qa=quick,intensity=quick,"
+                    "depth=1,model=gpt-test,reasoning=low,approval=never",
+                ]),
+                "\t".join([
+                    "2026-07-05T01:00:01+00:00", "open", "repo", worktree,
+                    "legacy-opencode",
+                    "capability=sync-skills,mode=qa/test,qa=quick,intensity=quick,"
+                    "depth=1,model=provider/test,variant=low",
+                ]),
+                "\t".join([
+                    "2026-07-05T01:00:02+00:00", "open", "repo", worktree,
+                    "legacy-claude",
+                    "capability=sync-skills,mode=ops/verification,qa=quick,intensity=quick,"
+                    "depth=1,model=sonnet,effort=medium",
+                ]),
+            ]
+            with open(jobs_log, "w") as f:
+                f.write("\n".join(rows) + "\n")
+
+            with mock.patch.object(dispatch, "_scan_processes", return_value=[]), \
+                 mock.patch.object(dispatch, "_live_claude_cwds", return_value={}), \
+                 mock.patch.object(dispatch, "_dispatch_liveness",
+                                    side_effect=lambda *a, **k: "working"):
+                jobs = dispatch.collect(jobs_path=jobs_log)
+
+            by_slug = {j.slug: j for j in jobs}
+            self.assertEqual(by_slug["legacy-codex"].harness, "codex")
+            self.assertEqual(by_slug["legacy-opencode"].harness, "opencode")
+            self.assertEqual(by_slug["legacy-claude"].harness, "claude")
 
 
 if __name__ == "__main__":

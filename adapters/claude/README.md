@@ -10,6 +10,7 @@ This adapter maps the common agent harness onto Claude Code.
 | Runtime settings | `adapters/claude/settings.json` |
 | Slash commands | `adapters/claude/commands/` |
 | Runtime worker wrappers | `adapters/claude/bin/` |
+| Dispatch registry metadata | `adapters/claude/bin/dispatch-headless.py` records `intensity`, `depth`, `parent_sid`, `worker_role`, `owner`, and `owner_harness` so fleet can render cross-harness ownership such as Codex → Claude. |
 | Capabilities | `adapters/claude/skills/*/SKILL.md` |
 | Role profiles | `adapters/claude/agents/*.md` |
 | Hook scripts | `hooks/`, `utilities/` |

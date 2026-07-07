@@ -258,7 +258,7 @@ def jobs_lock(jobs: Path):
 
 def append_job(jobs: Path, args: argparse.Namespace) -> None:
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
-    pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth}"
+    pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth},harness=codex"
     if args.parent_slug:
         pipe += f",parent={args.parent_slug}"
     if args.worker_role:

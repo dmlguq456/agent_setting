@@ -658,19 +658,32 @@ def _mq_tag(mode, qa_text, qa_key, profile=None):
     return out, w
 
 
+_DISPATCH_NAME_MAX = 18
+
+
+def _compact_dispatch_name(name, max_width=_DISPATCH_NAME_MAX):
+    if not name or len(name) <= max_width:
+        return name or ""
+    if max_width <= 1:
+        return name[:max_width]
+    return name[: max_width - 1] + "…"
+
+
 def _dispatch_prefix(j):
     depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
     return "↳ " if depth == 1 else "  " * depth
 
 
-def _dispatch_role_suffix(j):
+def _dispatch_role_suffix(j, check_text=None):
     role = getattr(j, "worker_role", None)
     intensity = getattr(j, "intensity", None)
     parts = []
-    if role:
-        parts.append("role:" + role)
     if intensity:
         parts.append("path:" + intensity)
+    if role:
+        parts.append("role:" + role)
+    if check_text:
+        parts.append("check:" + check_text)
     return "/".join(parts)
 
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
@@ -700,12 +713,13 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
             (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim"))]
     avail = _NW_S
     profile = j.profile
-    role_suffix = _dispatch_role_suffix(j)
+    role_suffix = _dispatch_role_suffix(j, qa_text)
     if role_suffix:
         profile = (profile + "/" + role_suffix) if profile else role_suffix
-    tag_segs, tagw = _mq_tag(j.mode, qa_text, qa_key, profile=profile)
+    tag_segs, tagw = _mq_tag(j.mode, None, qa_key, profile=profile)
     otag = "  (orphan)" if orphan else ""
-    nm = name[: max(3, avail - tagw - len(otag) - 1)]   # -1 → always ≥1 gap before branch
+    name_room = min(_DISPATCH_NAME_MAX, max(3, avail - tagw - len(otag) - 1))
+    nm = _compact_dispatch_name(name, name_room)
     used = len(nm)
     segs.append((nm, "name_dim"))
     segs += tag_segs; used += tagw
@@ -814,14 +828,15 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     qa_text = (("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa) if j.qa else ""
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
     profile = getattr(j, "profile", None)
-    role_suffix = _dispatch_role_suffix(j)
+    role_suffix = _dispatch_role_suffix(j, qa_text)
     if role_suffix:
         profile = (profile + "/" + role_suffix) if profile else role_suffix
-    tag_segs, _tw = _mq_tag(j.mode, qa_text, qa_key, profile=profile)
+    tag_segs, _tw = _mq_tag(j.mode, None, qa_key, profile=profile)
 
     prefix = _dispatch_prefix(j)
+    shown_name = _compact_dispatch_name(name)
     l1 = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None),
-          (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim")), (name, "name_dim")]
+          (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim")), (shown_name, "name_dim")]
     l1 += tag_segs
     if orphan:
         l1.append(("  (orphan)", "gate_u"))

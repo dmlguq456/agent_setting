@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
+INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -29,6 +30,22 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--capability", required=True)
     p.add_argument("--mode", required=True)
     p.add_argument("--qa", required=True)
+    p.add_argument("--intensity", default="standard")
+    p.add_argument("--depth", type=int, default=1)
+    p.add_argument("--parent", dest="parent_slug")
+    p.add_argument(
+        "--parent-session-id",
+        default=os.environ.get("AGENT_DISPATCH_PARENT_SESSION_ID")
+        or os.environ.get("CODEX_THREAD_ID")
+        or os.environ.get("CLAUDE_CODE_SESSION_ID"),
+    )
+    p.add_argument("--worker-role")
+    p.add_argument("--owner", dest="capability_owner")
+    p.add_argument(
+        "--owner-harness",
+        default=os.environ.get("AGENT_DISPATCH_OWNER_HARNESS")
+        or ("codex" if os.environ.get("CODEX_THREAD_ID") else "claude"),
+    )
     p.add_argument("--prompt-file")
     p.add_argument("--prompt-text")
     p.add_argument("--jobs")
@@ -130,9 +147,20 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- capability: {args.capability}\n"
         f"- mode: {args.mode}\n"
         f"- qa: {args.qa}\n"
+        f"- intensity: {args.intensity}\n"
+        f"- depth: {args.depth}\n"
+        f"- parent: {args.parent_slug or '-'}\n"
+        f"- parent_session_id: {args.parent_session_id or '-'}\n"
+        f"- worker_role: {args.worker_role or '-'}\n"
+        f"- owner: {args.capability_owner or '-'}\n"
+        f"- owner_harness: {args.owner_harness or '-'}\n"
         f"- worktree: {args.worktree}\n"
     )
-    depth1 = "이 세션은 depth-1 worker입니다 — 추가 재분사(claude -p 등 nested dispatch) 금지.\n"
+    depth_note = (
+        "Depth contract: depth 1 is a capability-owner worker. It may open bounded depth-2 "
+        "sub-workers only when intensity is thorough/adversarial and the task explicitly requires it; "
+        "depth 3+ is forbidden. Otherwise do not nested-dispatch.\n"
+    )
     if args.profile:
         # Unlike the codex wrapper, do not force a preflight/bootstrap chain
         # here: CLAUDE_CONFIG_DIR already points at this dispatch's masked
@@ -152,7 +180,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         header
         + metadata
         + "\n"
-        + depth1
+        + depth_note
         + "\nUser task:\n"
         + f"{task.rstrip()}\n\n"
         + "Return a concise Korean report with changed files, verification commands/results, "
@@ -194,7 +222,17 @@ def jobs_lock(jobs: Path):
 
 def append_job(jobs: Path, args: argparse.Namespace) -> None:
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
-    pipe = f"capability={args.capability},mode={args.mode},qa={args.qa}"
+    pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth},harness=claude"
+    if args.parent_slug:
+        pipe += f",parent={args.parent_slug}"
+    if args.parent_session_id:
+        pipe += f",parent_sid={args.parent_session_id}"
+    if args.worker_role:
+        pipe += f",worker_role={args.worker_role}"
+    if args.capability_owner:
+        pipe += f",owner={args.capability_owner}"
+    if args.owner_harness:
+        pipe += f",owner_harness={args.owner_harness}"
     settings = args.resolved_model_settings
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},effort={settings['effort']}"
     if args.profile:
@@ -250,6 +288,19 @@ def main(argv: list[str]) -> int:
             qa=args.qa,
             allowed_qa="quick,light,standard,thorough,adversarial",
         )
+    if args.intensity not in INTENSITY_LEVELS:
+        return fail(
+            "invalid-dispatch-intensity",
+            64,
+            intensity=args.intensity,
+            allowed_intensity="direct,quick,standard,strong,thorough,adversarial",
+        )
+    if args.depth not in (1, 2):
+        return fail("invalid-dispatch-depth", 64, depth=str(args.depth), allowed_depth="1,2")
+    if args.depth == 2 and not args.parent_slug:
+        return fail("missing-dispatch-parent", 64, depth=str(args.depth))
+    if args.depth == 2 and args.intensity not in {"thorough", "adversarial"}:
+        return fail("invalid-depth-two-intensity", 64, depth=str(args.depth), intensity=args.intensity)
     try:
         args.resolved_model_settings = resolve_model_settings(args)
     except ModelSelectionError as e:
@@ -307,6 +358,16 @@ def main(argv: list[str]) -> int:
 
     if action == "start":
         env = {**os.environ}
+        env.update({
+            "CLAUDE_CODE_CHILD_SESSION": "1",
+            "AGENT_DISPATCH_DEPTH": str(args.depth),
+            "AGENT_DISPATCH_INTENSITY": args.intensity,
+            "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
+            "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
+            "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
+            "AGENT_DISPATCH_OWNER": args.capability_owner or "",
+            "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
+        })
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
         subprocess.Popen(["sh", "-c", command], env=env, start_new_session=True)
@@ -319,6 +380,13 @@ def main(argv: list[str]) -> int:
     print(f"capability={args.capability}")
     print(f"mode={args.mode}")
     print(f"qa={args.qa}")
+    print(f"intensity={args.intensity}")
+    print(f"depth={args.depth}")
+    print(f"parent={args.parent_slug or '-'}")
+    print(f"parent_session_id={args.parent_session_id or '-'}")
+    print(f"worker_role={args.worker_role or '-'}")
+    print(f"owner={args.capability_owner or '-'}")
+    print(f"owner_harness={args.owner_harness or '-'}")
     settings = args.resolved_model_settings
     print(f"model_source={settings['source']}")
     print(f"model_role={settings['role']}")

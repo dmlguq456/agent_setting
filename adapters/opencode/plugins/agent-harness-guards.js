@@ -1,7 +1,7 @@
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { spawnSync, spawn } from "node:child_process"
-import { existsSync } from "node:fs"
+import { existsSync, mkdirSync, writeFileSync, utimesSync } from "node:fs"
 
 const pluginDir = path.dirname(fileURLToPath(import.meta.url))
 const pluginRoot = path.resolve(pluginDir, "../../..")
@@ -21,6 +21,53 @@ const promptBySession = new Map()
 
 function baseDir(ctx) {
   return ctx.worktree || ctx.directory || process.cwd()
+}
+
+// Headless dispatch liveness probe support.
+// When the OpenCode runtime starts a headless dispatch via dispatch-headless.py,
+// it exports OPENCODE_DISPATCH_SLUG (and the dispatch interpreter passes the
+// same env to the runtime child). Recording two artifacts at plugin init gives
+// dispatch-liveness.py a secondary, cheap signal independent of the OpenCode
+// SQLite session mtime:
+//   * <agent-home>/.dispatch/plugin-load.<slug>.mark — created once at plugin
+//     init, proving the plugin was actually loaded by the headless runtime.
+//   * <agent-home>/.dispatch/logs/<slug>.heartbeat — touched on every
+//     session.idle event (idle == turn done == still alive), so a stale or
+//     crashed headless that never reaches idle will have an aging heartbeat.
+// Both are best-effort: a plugin must never block a turn because it failed to
+// record a liveness side-channel.
+function dispatchSlug() {
+  return process.env.OPENCODE_DISPATCH_SLUG || ""
+}
+
+function touchHeartbeat(slug) {
+  if (!slug) return
+  try {
+    const dispatchDir = path.join(root, ".dispatch")
+    const logsDir = path.join(dispatchDir, "logs")
+    mkdirSync(logsDir, { recursive: true })
+    const hb = path.join(logsDir, `${slug}.heartbeat`)
+    const now = new Date()
+    try {
+      utimesSync(hb, now, now)
+    } catch {
+      writeFileSync(hb, `${now.toISOString()}\n`, { encoding: "utf8" })
+    }
+  } catch {
+    // best-effort; liveness side-channel must never throw
+  }
+}
+
+function markPluginLoaded(slug) {
+  if (!slug) return
+  try {
+    const dispatchDir = path.join(root, ".dispatch")
+    mkdirSync(dispatchDir, { recursive: true })
+    const marker = path.join(dispatchDir, `plugin-load.${slug}.mark`)
+    writeFileSync(marker, `${new Date().toISOString()}\n`, { encoding: "utf8" })
+  } catch {
+    // best-effort
+  }
 }
 
 function normalizeFile(ctx, file) {
@@ -110,7 +157,13 @@ function appendContext(output, text) {
   output.system.push(text)
 }
 
-export const AgentHarnessGuards = async (ctx) => ({
+export const AgentHarnessGuards = async (ctx) => {
+  // Record plugin-load marker once per plugin init. In a headless dispatch the
+  // runtime child inherits OPENCODE_DISPATCH_SLUG, so this proves the plugin
+  // was loaded by the headless runtime (dispatch-liveness.py inspects it).
+  markPluginLoaded(dispatchSlug())
+
+  return ({
   event: async ({ event }) => {
     // session.idle fires after each turn (the session is waiting for the user).
     // Use it as the auto-distillation trigger; preflight session-end debounces
@@ -119,6 +172,10 @@ export const AgentHarnessGuards = async (ctx) => ({
     if (event && event.type === "session.idle") {
       const sid = (event.properties && event.properties.sessionID) || "opencode-plugin"
       spawnDetached("session-end", [baseDir(ctx), sid])
+      // Liveness side-channel: touch the heartbeat for the active dispatch slug
+      // so dispatch-liveness.py can detect stale/crashed headless sessions even
+      // when the OpenCode SQLite session mtime is inconclusive.
+      touchHeartbeat(dispatchSlug())
     }
   },
   "chat.message": async (input, output) => {
@@ -171,4 +228,5 @@ export const AgentHarnessGuards = async (ctx) => ({
       if (readFile) collectPreflight("read", [readFile, input.sessionID || "opencode-plugin"])
     }
   },
-})
+  })
+}

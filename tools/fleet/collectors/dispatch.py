@@ -17,6 +17,7 @@ statusline.sh:131-171) so the label reflects live progress, not the static argv.
 import json
 import os
 import re
+import sqlite3
 import time
 from datetime import datetime, timezone
 
@@ -79,6 +80,160 @@ def _parse_depth(value):
     except (TypeError, ValueError):
         return 1
     return max(1, depth)
+
+
+_KNOWN_HARNESSES = {"claude", "codex", "opencode"}
+
+
+def _infer_harness(meta, slug=None):
+    """Return dispatch runtime from explicit metadata or legacy model fields."""
+    h = (meta.get("harness") or "").strip().lower()
+    if h in _KNOWN_HARNESSES:
+        return h
+    if meta.get("reasoning") or meta.get("approval"):
+        return "codex"
+    if meta.get("variant") or meta.get("agent"):
+        return "opencode"
+    if meta.get("effort"):
+        return "claude"
+    s = slug or ""
+    for h in _KNOWN_HARNESSES:
+        if s.startswith(h + "-") or ("-" + h + "-") in s:
+            return h
+    return None
+
+
+def _same_path(a, b):
+    if not a or not b:
+        return False
+    return a == b or os.path.abspath(a) == os.path.abspath(b)
+
+
+def _codex_home():
+    return os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")
+
+
+def _codex_transcript_cwd(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if '"cwd"' not in line:
+                    continue
+                try:
+                    payload = (json.loads(line).get("payload") or {})
+                except Exception:
+                    continue
+                cwd = payload.get("cwd")
+                if isinstance(cwd, str) and cwd:
+                    return cwd
+    except OSError:
+        return None
+    return None
+
+
+def _codex_sessions_dir(profile=None, slug=None):
+    if profile and slug:
+        return os.path.join(_registry_home(), ".dispatch", "homes", "%s.%s" % (slug, profile), "sessions")
+    return os.path.join(_codex_home(), "sessions")
+
+
+def _codex_job_liveness(cwd, now, stale_min=15, profile=None, slug=None):
+    if not cwd:
+        return "unknown"
+    sessions = _codex_sessions_dir(profile, slug)
+    newest = None
+    try:
+        for root, _dirs, names in os.walk(sessions):
+            for name in names:
+                if not (name.startswith("rollout-") and name.endswith(".jsonl")):
+                    continue
+                path = os.path.join(root, name)
+                if not _same_path(_codex_transcript_cwd(path) or "", cwd):
+                    continue
+                mtime = os.path.getmtime(path)
+                if newest is None or mtime > newest:
+                    newest = mtime
+    except OSError:
+        return "dead"
+    if newest is None:
+        return "dead"
+    return "working" if (now - newest) / 60.0 <= stale_min else "stale"
+
+
+def _opencode_db():
+    explicit = os.environ.get("OPENCODE_DB")
+    if explicit:
+        return explicit
+    data_home = os.environ.get("OPENCODE_DATA_HOME")
+    if data_home:
+        return os.path.join(data_home, "opencode.db")
+    return os.path.expanduser("~/.local/share/opencode/opencode.db")
+
+
+def _opencode_to_seconds(ts):
+    if ts is None:
+        return 0.0
+    return float(ts) / 1000.0 if ts > 10_000_000_000 else float(ts)
+
+
+def _opencode_heartbeat_age(slug, now):
+    if not slug:
+        return None
+    path = os.path.join(_registry_home(), ".dispatch", "logs", slug + ".heartbeat")
+    try:
+        return (now - os.path.getmtime(path)) / 60.0
+    except OSError:
+        return None
+
+
+def _opencode_job_liveness(cwd, now, stale_min=15, slug=None):
+    if not cwd:
+        return "unknown"
+    db = _opencode_db()
+    if not os.path.exists(db):
+        return "unknown"
+    con = None
+    try:
+        con = sqlite3.connect("file:%s?mode=ro" % db, uri=True, timeout=1.0)
+        rows = con.execute(
+            """
+            SELECT
+              s.directory,
+              MAX(
+                s.time_updated,
+                COALESCE((SELECT MAX(time_updated) FROM message WHERE session_id = s.id), 0),
+                COALESCE((SELECT MAX(time_updated) FROM part WHERE session_id = s.id), 0),
+                COALESCE((SELECT MAX(time_updated) FROM session_message WHERE session_id = s.id), 0),
+                COALESCE((SELECT MAX(time_created) FROM session_input WHERE session_id = s.id), 0)
+              ) AS last_updated
+            FROM session s
+            ORDER BY last_updated DESC
+            """
+        )
+        newest = None
+        for row in rows:
+            if _same_path(row[0], cwd):
+                newest = _opencode_to_seconds(row[1])
+                break
+    except Exception:
+        newest = None
+    finally:
+        if con is not None:
+            con.close()
+    if newest:
+        return "working" if (now - newest) / 60.0 <= stale_min else "stale"
+    hb_age = _opencode_heartbeat_age(slug, now)
+    if hb_age is not None and hb_age <= stale_min:
+        return "working"
+    return "dead"
+
+
+def _dispatch_liveness(job, now):
+    if job.harness == "codex":
+        return _codex_job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
+    if job.harness == "opencode":
+        return _opencode_job_liveness(job.cwd, now, slug=job.slug)
+    return _job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
 
 
 # --- jobs.log path ---
@@ -411,10 +566,10 @@ def _scan_processes():
                 continue
             seen.add(dkey)
             env = procscan.read_environ(pid_s)
-            parent_sid = env.get("CLAUDE_CODE_SESSION_ID")
+            parent_sid = env.get("AGENT_DISPATCH_PARENT_SESSION_ID") or env.get("CLAUDE_CODE_SESSION_ID")
             parent_slug = env.get("AGENT_DISPATCH_PARENT_SLUG")
             depth = _parse_depth(env.get("AGENT_DISPATCH_DEPTH"))
-            is_child = env.get("CLAUDE_CODE_CHILD_SESSION") == "1" or bool(parent_slug)
+            is_child = env.get("CLAUDE_CODE_CHILD_SESSION") == "1" or bool(parent_slug or parent_sid)
             q, qsrc = effective_qa(qa, None, jcwd, slug, key)
             jobs.append(DispatchJob(
                 key=key, stage=live_stage(jcwd, slug, key), mode=mode, qa=q,
@@ -493,11 +648,14 @@ def _scan_jobs_log(path, seen_slugs):
         cwd = worktree if worktree not in ("-", "(main-tree)") else ""
         q, qsrc = effective_qa(None, meta.get("qa"), cwd, slug, pname)
         parent_slug = meta.get("parent") or meta.get("parent_slug") or None
+        parent_sid = meta.get("parent_sid") or meta.get("parent_session_id") or None
+        harness = _infer_harness(meta, slug)
         jobs.append(DispatchJob(
             key=pname, stage=status, mode=meta.get("mode"), qa=q,
             elapsed_min=_iso_elapsed_min(ts), slug=slug or worktree or repo,
-            cwd=cwd, parent_sid=None, parent_slug=parent_slug,
-            is_child=bool(parent_slug), qa_source=qsrc, source="jobs", status=status,
+            cwd=cwd, parent_sid=parent_sid, parent_slug=parent_slug,
+            is_child=bool(parent_slug or parent_sid), qa_source=qsrc, source="jobs", status=status,
+            harness=harness, model=meta.get("model"),
             profile=meta.get("profile"), depth=_parse_depth(meta.get("depth")),
             intensity=meta.get("intensity"), worker_role=meta.get("worker_role"),
             capability_owner=meta.get("owner") or meta.get("capability_owner"),
@@ -572,7 +730,7 @@ def collect(jobs_path=None, harness_filter=None):
                 j.stage = live_stage(j.cwd, j.slug, j.key)
     now = time.time()
     for j in jobs:
-        j.liveness = _job_liveness(j.cwd, now, profile=j.profile, slug=j.slug)
+        j.liveness = _dispatch_liveness(j, now)
     # stash malformed count on the module for the render header (optional signal)
     collect.last_malformed = malformed
     return jobs

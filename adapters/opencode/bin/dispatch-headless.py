@@ -172,7 +172,7 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
 def append_job(jobs: Path, args: argparse.Namespace) -> None:
     jobs.parent.mkdir(parents=True, exist_ok=True)
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
-    pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth}"
+    pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth},harness=opencode"
     if args.parent_slug:
         pipe += f",parent={args.parent_slug}"
     if args.worker_role:
@@ -306,6 +306,12 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
             "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
+            # Headless liveness contract: the OpenCode runtime child exposes
+            # the dispatch slug to the plugin, which records a plugin-load
+            # marker at init and touches <log_dir>/<slug>.heartbeat on every
+            # session.idle event. dispatch-liveness.py inspects both as a
+            # secondary alive signal independent of the OpenCode SQLite mtime.
+            "OPENCODE_DISPATCH_SLUG": args.slug,
         })
 
     print("adapter=opencode")
