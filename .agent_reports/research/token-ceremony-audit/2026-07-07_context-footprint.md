@@ -63,5 +63,5 @@ Measured in current repo with synthetic session id `measure-token`.
 1. Pick one Codex skill exposure path as active: local adapter skills or plugin skills, not both in normal runtime. Keep the other as build artifact/reference but do not install/link both into the same session.
 2. Shorten skill descriptions across Codex/Claude to 1-line trigger/scope text. Use references for details; descriptions are always-on metadata.
 3. Thin Claude `autopilot-code` like Codex: keep entry skill as router + compact stage contract, move deep policy tables into references loaded by selected intensity/mode.
-4. Audit `briefing` gating: ensure normal coding repos do not receive daily oncall reports unless explicitly on the discussion desk or user asks for oncall.
+4. Briefing gate P0 applied: normal `agent_setting` coding sessions no longer receive daily oncall briefing unless `MEM_BRIEFING_DESK` points there.
 5. Add a deterministic `context-footprint` check script later: count bootstrap, metadata, hook injection samples, and fail/warn on thresholds.
