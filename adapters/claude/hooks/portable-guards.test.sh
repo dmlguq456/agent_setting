@@ -2180,6 +2180,7 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-run
   && grep -q '^check=hook-trust:review-needed' /tmp/codex_rp2.out \
   && grep -q '^check=hooks-json:ok' /tmp/codex_rp2.out \
   && grep -q '^check=skill-link:autopilot-code:ok' /tmp/codex_rp2.out \
+  && grep -q '^check=skill-discovery:native' /tmp/codex_rp2.out \
   && grep -q '^check=skills-linked:ok' /tmp/codex_rp2.out \
   && grep -q '^check=agent-link:plan-team.toml:ok' /tmp/codex_rp2.out \
   && grep -q '^check=agents-linked:ok' /tmp/codex_rp2.out \
@@ -2187,6 +2188,22 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-run
   ok "codex install-runtime-projection wires the home and the checker passes"
 else
   bad "codex install-runtime-projection + checker should wire and validate the runtime home"
+fi
+RPPLUGIN="$TMP/codex-runtime-home-plugin"
+rm -rf "$RPPLUGIN"; mkdir -p "$RPPLUGIN"
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPPLUGIN" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" --install-plugin >/tmp/codex_rp_plugin_install.out 2>/tmp/codex_rp_plugin_install.err \
+  && grep -q '^skills_mode=plugin' /tmp/codex_rp_plugin_install.out \
+  && grep -q '^skills_linked=0' /tmp/codex_rp_plugin_install.out \
+  && [ ! -e "$RPPLUGIN/skills/autopilot-code" ] \
+  && AGENT_HOME="$ROOT" CODEX_HOME="$RPPLUGIN" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/tmp/codex_rp_plugin.out 2>/tmp/codex_rp_plugin.err \
+  && grep -q '^check=skill-link:autopilot-code:absent' /tmp/codex_rp_plugin.out \
+  && grep -q '^check=skill-discovery:plugin' /tmp/codex_rp_plugin.out \
+  && grep -q '^check=skills-linked:skipped reason=plugin-skill-discovery' /tmp/codex_rp_plugin.out \
+  && grep -q '^check=plugin:ok' /tmp/codex_rp_plugin.out \
+  && grep -q '^status=ok' /tmp/codex_rp_plugin.out; then
+  ok "codex install-runtime-projection supports plugin-only skill discovery"
+else
+  bad "codex install-runtime-projection should support plugin-only skill discovery"
 fi
 RPBAD="$TMP/codex-runtime-home-bad"
 rm -rf "$RPBAD"; mkdir -p "$RPBAD"

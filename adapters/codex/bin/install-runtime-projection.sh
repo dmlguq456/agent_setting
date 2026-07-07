@@ -5,12 +5,15 @@
 #
 # It NEVER touches Codex-owned credentials, sessions, history, logs, caches,
 # config.toml, or local databases. It only creates/refreshes the harness
-# `agent-*` pointers, `hooks.json`, and per-skill / per-agent symlinks. A pre-existing real
-# `hooks.json` is backed up once to `hooks.json.pre-harness` before it is
-# replaced by the projection symlink.
+# `agent-*` pointers, `hooks.json`, and selected per-skill / per-agent symlinks. A
+# pre-existing real `hooks.json` is backed up once to `hooks.json.pre-harness`
+# before it is replaced by the projection symlink.
 #
 # Plugin install is opt-in: pass --install-plugin to run the `codex plugin`
-# commands; otherwise the plugin is left untouched (the checker reports it).
+# commands; otherwise the plugin is left untouched (the checker reports it). Skill
+# discovery is selectable: native symlinks, plugin, or both. When --install-plugin
+# is used and --skills-mode is omitted, plugin mode is selected to avoid duplicate
+# skill metadata in Codex's initial context.
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -21,21 +24,49 @@ fi
 CODEX_HOME=${CODEX_HOME:-$HOME/.codex}
 
 install_plugin=0
-for arg in "$@"; do
-  case "$arg" in
-    --install-plugin) install_plugin=1 ;;
+skills_mode=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --install-plugin)
+      install_plugin=1
+      shift
+      ;;
+    --skills-mode)
+      [ "$#" -ge 2 ] || { echo "install-runtime-projection: --skills-mode requires native|plugin|both" >&2; exit 64; }
+      skills_mode=$2
+      shift 2
+      ;;
+    --skills-mode=*)
+      skills_mode=${1#--skills-mode=}
+      shift
+      ;;
     -h|--help)
       cat <<EOF
-usage: install-runtime-projection.sh [--install-plugin]
+usage: install-runtime-projection.sh [--install-plugin] [--skills-mode native|plugin|both]
 
 Wires \$CODEX_HOME (default \$HOME/.codex) to the harness projection in
 codex_setting/. Idempotent; never mutates Codex-owned runtime state.
-  --install-plugin   also run codex plugin marketplace add + plugin add
+  --install-plugin             also run codex plugin marketplace add + plugin add
+  --skills-mode native|plugin|both
+                               choose Codex skill discovery surface. Default: native;
+                               with --install-plugin: plugin.
 EOF
       exit 0 ;;
-    *) echo "install-runtime-projection: unknown option: $arg" >&2; exit 64 ;;
+    *) echo "install-runtime-projection: unknown option: $1" >&2; exit 64 ;;
   esac
 done
+
+if [ -z "$skills_mode" ]; then
+  if [ "$install_plugin" = "1" ]; then
+    skills_mode=plugin
+  else
+    skills_mode=native
+  fi
+fi
+case "$skills_mode" in
+  native|plugin|both) ;;
+  *) echo "install-runtime-projection: --skills-mode must be native, plugin, or both" >&2; exit 64 ;;
+esac
 
 if [ ! -d "$AGENT_HOME/codex_setting" ]; then
   echo "install-runtime-projection: codex_setting projection missing under $AGENT_HOME" >&2
@@ -66,6 +97,8 @@ link() {
   printf 'link=%s\n' "$linkpath"
 }
 
+real() { readlink -f "$1" 2>/dev/null || true; }
+
 S="$AGENT_HOME/codex_setting"
 
 # Stable harness pointers consumed by the Codex adapter at runtime.
@@ -87,15 +120,33 @@ link "$S/codex-hooks"                    "$CODEX_HOME/agent-hooks"
 link "$S/codex-config"                   "$CODEX_HOME/agent-config"
 link "$S/codex-hooks/hooks.json"         "$CODEX_HOME/hooks.json"
 
-# Native Codex skill discovery: one symlink per generated skill directory.
+# Native Codex skill discovery: one symlink per generated skill directory, or
+# plugin-only discovery with stale harness-owned skill symlinks removed.
 skills_linked=0
+skills_unlinked=0
 mkdir -p "$CODEX_HOME/skills"
-for d in "$S/codex-skills"/*; do
-  [ -d "$d" ] || continue
-  ln -sfn "$d" "$CODEX_HOME/skills/$(basename "$d")"
-  skills_linked=$((skills_linked + 1))
-done
+case "$skills_mode" in
+  native|both)
+    for d in "$S/codex-skills"/*; do
+      [ -d "$d" ] || continue
+      ln -sfn "$d" "$CODEX_HOME/skills/$(basename "$d")"
+      skills_linked=$((skills_linked + 1))
+    done
+    ;;
+  plugin)
+    for d in "$S/codex-skills"/*; do
+      [ -d "$d" ] || continue
+      linkpath="$CODEX_HOME/skills/$(basename "$d")"
+      if [ -L "$linkpath" ] && [ -n "$(real "$linkpath")" ] && [ "$(real "$linkpath")" = "$(real "$d")" ]; then
+        rm -f "$linkpath"
+        skills_unlinked=$((skills_unlinked + 1))
+      fi
+    done
+    ;;
+esac
+printf 'skills_mode=%s\n' "$skills_mode"
 printf 'skills_linked=%s\n' "$skills_linked"
+[ "$skills_mode" = "plugin" ] && printf 'skills_unlinked=%s\n' "$skills_unlinked"
 
 # Native Codex custom-agent discovery: one symlink per generated TOML.
 agents_linked=0

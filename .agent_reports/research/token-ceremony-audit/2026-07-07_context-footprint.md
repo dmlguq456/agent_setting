@@ -60,7 +60,7 @@ Measured in current repo with synthetic session id `measure-token`.
 
 ## Recommended Next Actions
 
-1. Pick one Codex skill exposure path as active: local adapter skills or plugin skills, not both in normal runtime. Keep the other as build artifact/reference but do not install/link both into the same session.
+1. Codex duplicate skill exposure P1 applied: runtime projection now supports `--skills-mode native|plugin|both`, and plugin install defaults to plugin-only skill discovery.
 2. Shorten skill descriptions across Codex/Claude to 1-line trigger/scope text. Use references for details; descriptions are always-on metadata.
 3. Thin Claude `autopilot-code` like Codex: keep entry skill as router + compact stage contract, move deep policy tables into references loaded by selected intensity/mode.
 4. Briefing gate P0 applied: normal `agent_setting` coding sessions no longer receive daily oncall briefing unless `MEM_BRIEFING_DESK` points there.

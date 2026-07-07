@@ -17,13 +17,15 @@ Status: applied in this change set.
 
 Problem: Codex projects the same 28 harness skills through both `$CODEX_HOME/skills/<name>` and the installed `agent-harness-codex` plugin. Local metadata is about 7.1k chars, plugin metadata about 8.4k chars, combined about 15.5k chars before runtime truncation.
 
-Recommended design:
+Status: applied in this change set.
 
-1. Make runtime projection choose one active skill discovery path.
-2. Default should be plugin-first when the plugin is installed, because plugin namespacing avoids collision with personal skills and is the shareable distribution path.
-3. Keep `$CODEX_HOME/agent-skills` as a read-only pointer for inspection, but do not symlink every skill into `$CODEX_HOME/skills` when plugin mode is active.
-4. Add `install-runtime-projection.sh --skills-mode native|plugin|both` with default `native` unless `--install-plugin` is passed; then default `plugin`.
-5. Update `check-runtime-projection.sh` to report `check=skill-discovery:plugin|native|duplicate-warning` instead of hard-failing when per-skill symlinks are intentionally absent in plugin mode.
+Implemented design:
+
+1. Runtime projection now chooses one active skill discovery path.
+2. Default remains `native` for compatibility; when `--install-plugin` is passed and `--skills-mode` is omitted, default is `plugin`.
+3. `$CODEX_HOME/agent-skills` remains a read-only pointer for inspection, while plugin mode removes only harness-owned `$CODEX_HOME/skills/<name>` symlinks.
+4. `install-runtime-projection.sh --skills-mode native|plugin|both` is supported.
+5. `check-runtime-projection.sh` reports `check=skill-discovery:native`, `check=skill-discovery:plugin`, or a native duplicate warning when the plugin is also installed.
 
 ### P2 — Shorten always-visible descriptions
 

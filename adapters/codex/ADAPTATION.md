@@ -74,7 +74,10 @@ merge the relevant lines into `$CODEX_HOME/config.toml` on the target machine.
 Current Codex support includes generated native Skill projections:
 `adapters/codex/skills/<name>/SKILL.md` is generated from
 `capabilities/<name>.md` by `adapters/codex/bin/sync-native-skills.py` and
-projected as `codex_setting/codex-skills`.
+projected as `codex_setting/codex-skills`. Runtime discovery should use either
+per-skill native symlinks or the adapter-owned Codex plugin by default, not both;
+`install-runtime-projection.sh --skills-mode both` is reserved for compatibility
+or debugging because it duplicates skill metadata in Codex's initial context.
 
 The same generated skills are also packaged into the adapter-owned Codex plugin
 `adapters/codex/plugins/agent-harness-codex`, with repo-local marketplace

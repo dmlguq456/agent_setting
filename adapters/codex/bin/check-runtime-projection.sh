@@ -114,27 +114,119 @@ else
   fails=$((fails + 1))
 fi
 
-# Native skill links: every projected skill must be linked to the matching
-# adapter-owned directory. A count-only check can miss stale or wrong targets.
+detect_plugin_state() {
+  if [ "${CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY:-0}" = "1" ]; then
+    plugin_state=skipped_cli
+    return 0
+  fi
+  if ! command -v codex >/dev/null 2>&1; then
+    plugin_state=command_not_found
+    return 0
+  fi
+  plugin_out=""
+  if plugin_out=$(CODEX_HOME="$CODEX_HOME" timeout "$CLI_TIMEOUT" codex plugin list --json 2>/dev/null); then
+    if printf '%s\n' "$plugin_out" | grep -q 'agent-harness-codex'; then
+      plugin_state=installed
+    else
+      plugin_state=missing
+    fi
+  else
+    plugin_rc=$?
+    if [ "$plugin_rc" -eq 124 ] || [ "$plugin_rc" -eq 137 ]; then
+      plugin_state=timeout
+    else
+      plugin_state=list_failed
+    fi
+  fi
+}
+
+print_plugin_check() {
+  case "$plugin_state" in
+    installed)
+      printf 'check=plugin:ok\n'
+      ;;
+    missing)
+      printf 'check=plugin:missing\n'
+      printf 'plugin_install_1=codex plugin marketplace add %s/codex-plugin-marketplace\n' "$S"
+      printf 'plugin_install_2=codex plugin add agent-harness-codex@agent-harness\n'
+      printf 'plugin_hint=run install-runtime-projection.sh --install-plugin\n'
+      ;;
+    skipped_cli)
+      printf 'check=plugin:skipped reason=codex-cli-discovery-skipped\n'
+      ;;
+    timeout)
+      printf 'check=plugin:skipped reason=codex-cli-timeout timeout=%s\n' "$CLI_TIMEOUT"
+      ;;
+    list_failed)
+      printf 'check=plugin:missing reason=codex-plugin-list-failed exit=%s\n' "${plugin_rc:-unknown}"
+      printf 'plugin_install_1=codex plugin marketplace add %s/codex-plugin-marketplace\n' "$S"
+      printf 'plugin_install_2=codex plugin add agent-harness-codex@agent-harness\n'
+      printf 'plugin_hint=run install-runtime-projection.sh --install-plugin\n'
+      ;;
+    command_not_found|*)
+      printf 'check=plugin:skipped reason=codex-command-not-found\n'
+      ;;
+  esac
+}
+
+plugin_state=unknown
+plugin_rc=
+detect_plugin_state
+
+# Codex skill discovery may be native symlinks or the installable plugin. A
+# count-only check can miss stale or wrong targets, so every projected skill is
+# classified before selecting the active discovery surface.
 projected_skills=$(find -L "$S/codex-skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 linked_skills=$(find "$CODEX_HOME/skills" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
-printf 'skills_projected=%s skills_linked=%s\n' "$projected_skills" "$linked_skills"
+printf 'skills_projected=%s skills_linked=%s plugin_state=%s\n' "$projected_skills" "$linked_skills" "$plugin_state"
 skill_link_fails=0
+skill_link_ok=0
+skill_link_absent=0
 for d in "$S/codex-skills"/*; do
   [ -d "$d" ] || continue
   name=$(basename "$d")
   linkpath="$CODEX_HOME/skills/$name"
-  if [ -L "$linkpath" ] && [ -n "$(real "$linkpath")" ] && [ "$(real "$linkpath")" = "$(real "$d")" ]; then
-    printf 'check=skill-link:%s:ok\n' "$name"
-  else
-    printf 'check=skill-link:%s:failed reason=expected-symlink-to:%s\n' "$name" "$d"
+  if [ -L "$linkpath" ]; then
+    if [ -n "$(real "$linkpath")" ] && [ "$(real "$linkpath")" = "$(real "$d")" ]; then
+      printf 'check=skill-link:%s:ok\n' "$name"
+      skill_link_ok=$((skill_link_ok + 1))
+    else
+      printf 'check=skill-link:%s:failed reason=expected-symlink-to:%s\n' "$name" "$d"
+      skill_link_fails=$((skill_link_fails + 1))
+    fi
+  elif [ -e "$linkpath" ]; then
+    printf 'check=skill-link:%s:failed reason=non-symlink-exists\n' "$name"
     skill_link_fails=$((skill_link_fails + 1))
+  else
+    printf 'check=skill-link:%s:absent\n' "$name"
+    skill_link_absent=$((skill_link_absent + 1))
   fi
 done
-if [ "$skill_link_fails" -eq 0 ] && [ "$projected_skills" -gt 0 ]; then
+if [ "$projected_skills" -eq 0 ]; then
+  printf 'check=skill-discovery:failed reason=no-projected-skills\n'
+  printf 'check=skills-linked:failed reason=no-projected-skills\n'
+  fails=$((fails + 1))
+elif [ "$skill_link_fails" -gt 0 ]; then
+  printf 'check=skill-discovery:failed reason=harness-skills-miswired\n'
+  printf 'check=skills-linked:failed reason=harness-skills-miswired\n'
+  fails=$((fails + 1))
+elif [ "$skill_link_ok" -eq "$projected_skills" ]; then
+  if [ "$plugin_state" = installed ]; then
+    printf 'check=skill-discovery:native duplicate-warning=plugin-also-installed\n'
+  else
+    printf 'check=skill-discovery:native\n'
+  fi
   printf 'check=skills-linked:ok\n'
+elif [ "$skill_link_absent" -eq "$projected_skills" ] && [ "$plugin_state" = installed ]; then
+  printf 'check=skill-discovery:plugin plugin=installed\n'
+  printf 'check=skills-linked:skipped reason=plugin-skill-discovery\n'
+elif [ "$skill_link_absent" -eq "$projected_skills" ]; then
+  printf 'check=skill-discovery:failed reason=no-native-skill-links-and-plugin-unavailable plugin_state=%s\n' "$plugin_state"
+  printf 'check=skills-linked:failed reason=harness-skills-not-linked-and-plugin-unavailable\n'
+  fails=$((fails + 1))
 else
-  printf 'check=skills-linked:failed reason=harness-skills-not-linked-or-miswired\n'
+  printf 'check=skill-discovery:failed reason=partial-native-skill-links ok=%s absent=%s projected=%s\n' "$skill_link_ok" "$skill_link_absent" "$projected_skills"
+  printf 'check=skills-linked:failed reason=partial-native-skill-links\n'
   fails=$((fails + 1))
 fi
 
@@ -166,7 +258,6 @@ fi
 # intentionally skip this when `codex` is stubbed for launch testing.
 if [ "${CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY:-0}" = "1" ]; then
   printf 'check=bootstrap:skipped reason=codex-cli-discovery-skipped\n'
-  printf 'check=plugin:skipped reason=codex-cli-discovery-skipped\n'
 elif command -v codex >/dev/null 2>&1; then
   bootstrap_out=""
   if bootstrap_out=$(CODEX_HOME="$CODEX_HOME" timeout "$CLI_TIMEOUT" codex debug prompt-input 'agent harness runtime projection check' 2>/dev/null); then
@@ -185,32 +276,10 @@ elif command -v codex >/dev/null 2>&1; then
       fails=$((fails + 1))
     fi
   fi
-  # Plugin presence (soft): report install commands when missing.
-  plugin_out=""
-  if plugin_out=$(CODEX_HOME="$CODEX_HOME" timeout "$CLI_TIMEOUT" codex plugin list --json 2>/dev/null); then
-    if printf '%s\n' "$plugin_out" | grep -q 'agent-harness-codex'; then
-      printf 'check=plugin:ok\n'
-    else
-      printf 'check=plugin:missing\n'
-      printf 'plugin_install_1=codex plugin marketplace add %s/codex-plugin-marketplace\n' "$S"
-      printf 'plugin_install_2=codex plugin add agent-harness-codex@agent-harness\n'
-      printf 'plugin_hint=run install-runtime-projection.sh --install-plugin\n'
-    fi
-  else
-    rc=$?
-    if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
-      printf 'check=plugin:skipped reason=codex-cli-timeout timeout=%s\n' "$CLI_TIMEOUT"
-    else
-      printf 'check=plugin:missing reason=codex-plugin-list-failed exit=%s\n' "$rc"
-      printf 'plugin_install_1=codex plugin marketplace add %s/codex-plugin-marketplace\n' "$S"
-      printf 'plugin_install_2=codex plugin add agent-harness-codex@agent-harness\n'
-      printf 'plugin_hint=run install-runtime-projection.sh --install-plugin\n'
-    fi
-  fi
 else
   printf 'check=bootstrap:skipped reason=codex-command-not-found\n'
-  printf 'check=plugin:skipped reason=codex-command-not-found\n'
 fi
+print_plugin_check
 
 if [ "$fails" -eq 0 ]; then
   printf 'status=ok\n'
