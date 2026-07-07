@@ -1,6 +1,6 @@
 ---
 name: design-handoff
-description: "Use when the user requests design-handoff: 디자인 결과를 개발 handoff용 자산·스펙으로 정리한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for design-handoff: 디자인 결과를 개발 handoff용 자산·스펙으로 정리한다."
 ---
 
 # design-handoff

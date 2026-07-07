@@ -1,6 +1,6 @@
 ---
 name: autopilot-lab
-description: "Use when the user requests autopilot-lab: 빠른 실험 prototype. 학습 세팅과 ckpt 평가·분석 앞뒤를 돕는다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for autopilot-lab: 빠른 실험 prototype. 학습 세팅과 ckpt 평가·분석 앞뒤를 돕는다."
 ---
 
 # autopilot-lab

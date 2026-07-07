@@ -1,6 +1,6 @@
 ---
 name: autopilot-apply
-description: "Use when the user requests autopilot-apply: cheatsheet 초안을 실제 source artifact에 적용하고 검증한다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for autopilot-apply: cheatsheet 초안을 실제 source artifact에 적용하고 검증한다."
 metadata:
   portable_source: capabilities/autopilot-apply.md
   adapter: opencode

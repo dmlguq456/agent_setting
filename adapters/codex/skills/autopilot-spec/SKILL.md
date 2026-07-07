@@ -1,6 +1,6 @@
 ---
 name: autopilot-spec
-description: "Use when the user requests autopilot-spec: 요구사항·청사진 작성·갱신. `prd.md`를 spec 변경의 단일 경로로 유지한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for autopilot-spec: 요구사항·청사진 작성·갱신. `prd.md`를 spec 변경의 단일 경로로 유지한다."
 ---
 
 # autopilot-spec

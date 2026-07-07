@@ -1,6 +1,6 @@
 ---
 name: autopilot-research
-description: "Use when the user requests autopilot-research: 공통 사전조사. 논문·기술·시장 survey 후 downstream capability로 분기한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for autopilot-research: 공통 사전조사. 논문·기술·시장 survey 후 downstream capability로 분기한다."
 ---
 
 # autopilot-research

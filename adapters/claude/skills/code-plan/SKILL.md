@@ -1,6 +1,6 @@
 ---
 name: code-plan
-description: Create a detailed implementation plan based on actual codebase
+description: "코드 분석 후 상세 구현 plan 작성 — 기획팀 경유 sub-skill"
 argument-hint: "<task description> [--qa quick|light|standard|thorough|adversarial]"
 metadata:
   group: sub

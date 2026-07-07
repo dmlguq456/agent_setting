@@ -1,6 +1,6 @@
 ---
 name: code-refine
-description: Reflect user memos/comments in a plan and update it (do NOT implement)
+description: "사용자 메모·QA 피드백 반영해 기존 plan 정정 — sub-skill"
 argument-hint: "<plan name or path> [--qa quick|light|standard|thorough|adversarial]"
 metadata:
   group: sub

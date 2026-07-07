@@ -1,6 +1,6 @@
 ---
 name: code-test
-description: "Use when the user requests code-test: 구현 결과를 단계별로 검증하고 evidence를 기록한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for code-test: 구현 결과를 단계별로 검증하고 evidence를 기록한다."
 ---
 
 # code-test

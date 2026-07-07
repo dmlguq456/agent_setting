@@ -28,10 +28,10 @@ Caveat: `tiktoken` is not installed locally, so this report uses character count
 
 | Surface | Items | Chars | Notes |
 |---|---:|---:|---|
-| Codex local skill metadata | 28 | 7,084 | name/description/path style listing. |
-| Codex plugin skill metadata | 28 | 8,428 | same 28 capabilities with `agent-harness-codex:` prefix. |
-| Codex local + plugin metadata | 56 | 15,513 | 28-name duplicate overlap. This can exceed Codex's documented 8,000-char initial skills-list budget. |
-| Claude skill metadata projection | 28 | 14,718 | Long descriptions; should be shortened if surfaced in-session. |
+| Codex local skill metadata | 28 | 3,501 | P2 shortened generated descriptions; plugin-only runtime makes this inactive by default when plugin is installed. |
+| Codex plugin skill metadata | 28 | 4,845 | P2 shortened generated descriptions; active plugin surface remains under the 8,000-char budget signal. |
+| Codex local + plugin metadata | 56 | 8,346 | Still duplicate if `--skills-mode both` is used; normal runtime should choose one surface. |
+| Claude skill metadata projection | 28 | 2,834 | P2 replaced long descriptions with compact `metadata.blurb` summaries. |
 
 Main waste signal: Codex currently projects the same 28 harness skills twice (local adapter skills and installable plugin skills). Even if Codex truncates to 8,000 chars, the duplicate set can crowd out useful metadata and degrade trigger clarity.
 
@@ -61,7 +61,7 @@ Measured in current repo with synthetic session id `measure-token`.
 ## Recommended Next Actions
 
 1. Codex duplicate skill exposure P1 applied: runtime projection now supports `--skills-mode native|plugin|both`, and plugin install defaults to plugin-only skill discovery.
-2. Shorten skill descriptions across Codex/Claude to 1-line trigger/scope text. Use references for details; descriptions are always-on metadata.
+2. Skill description shortening P2 applied: active Codex plugin metadata is now about 4.8k chars and Claude skill metadata about 2.8k chars.
 3. Thin Claude `autopilot-code` like Codex: keep entry skill as router + compact stage contract, move deep policy tables into references loaded by selected intensity/mode.
 4. Briefing gate P0 applied: normal `agent_setting` coding sessions no longer receive daily oncall briefing unless `MEM_BRIEFING_DESK` points there.
 5. Add a deterministic `context-footprint` check script later: count bootstrap, metadata, hook injection samples, and fail/warn on thresholds.

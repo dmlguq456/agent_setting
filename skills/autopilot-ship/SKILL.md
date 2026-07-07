@@ -1,6 +1,6 @@
 ---
 name: autopilot-ship
-description: "_앱 배포 셋업_ entry — 이미 `spec/` 가 잡혀 있고 기능 어느 정도 완성된 자리에서 첫 ship setup·env·domain·migration deploy 안내. 호스팅 선정 (Vercel / Fly / Railway / Cloudflare / EAS) + CI/CD 파일 + `.env.example` + 도메인 가이드 + deploy_record. 실제 배포 명령은 사용자 직접 실행 — 본 skill 은 _안내만_. autopilot-spec 의 _초기 spec·skeleton_ 자리와 작업 본질 분리. 재호출 가능 (env 변경·domain 추가·migration 운영 배포 자리)."
+description: "앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트"
 argument-hint: "<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough]"
 metadata:
   group: entry

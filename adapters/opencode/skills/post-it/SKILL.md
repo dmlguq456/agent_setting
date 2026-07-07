@@ -1,6 +1,6 @@
 ---
 name: post-it
-description: "Use when the user requests post-it: 프로젝트·cross-project 기록과 handoff를 working memory로 남긴다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for post-it: 프로젝트·cross-project 기록과 handoff를 working memory로 남긴다."
 metadata:
   portable_source: capabilities/post-it.md
   adapter: opencode

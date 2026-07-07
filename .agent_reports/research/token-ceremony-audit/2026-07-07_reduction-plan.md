@@ -29,13 +29,16 @@ Implemented design:
 
 ### P2 — Shorten always-visible descriptions
 
-Problem: skill metadata descriptions are the always-on part. Claude skill metadata projection is about 14.7k chars; Codex duplicate metadata is worse when both surfaces are installed.
+Problem: skill metadata descriptions are the always-on part. Claude skill metadata projection was about 14.7k chars; Codex duplicate metadata was worse when both surfaces were installed.
 
-Recommended design:
+Status: applied in this change set.
 
-- Cap each skill description to one trigger sentence plus one negative boundary when needed.
-- Move examples, stage details, QA policy, artifacts, and mode tables into `references/` loaded only by selected mode/intensity.
-- Add a metadata budget check: warn at 8k chars for Codex active skill surface; warn at 10k chars for Claude visible metadata.
+Implemented design:
+
+- Codex/OpenCode generated Skill descriptions now contain only `Use for <identifier>: <portable meaning>`.
+- Claude adapter and root compatibility Skill descriptions now use the existing compact `metadata.blurb` field.
+- Current metadata footprint after P1/P2: Codex local 3,501 chars, Codex plugin 4,845 chars, OpenCode 3,585 chars, Claude 2,834 chars (name+description+path estimate).
+- Deterministic budget enforcement is folded into P4's `tools/context-footprint.py` guard.
 
 ### P3 — Thin Claude autopilot bodies
 

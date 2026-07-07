@@ -1,6 +1,6 @@
 ---
 name: code-execute
-description: "Use when the user requests code-execute: plan 단계별 구현 실행. 개발 role에 작업을 위임하고 execution log를 남긴다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for code-execute: plan 단계별 구현 실행. 개발 role에 작업을 위임하고 execution log를 남긴다."
 metadata:
   portable_source: capabilities/code-execute.md
   adapter: opencode

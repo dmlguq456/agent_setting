@@ -1,6 +1,6 @@
 ---
 name: draft-strategy
-description: "Use when the user requests draft-strategy: 문서 전략 초안 작성. 자료 기반으로 writing plan을 만든다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for draft-strategy: 문서 전략 초안 작성. 자료 기반으로 writing plan을 만든다."
 ---
 
 # draft-strategy

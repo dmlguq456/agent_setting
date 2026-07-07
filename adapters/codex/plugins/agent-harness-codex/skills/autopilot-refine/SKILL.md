@@ -1,6 +1,6 @@
 ---
 name: autopilot-refine
-description: "Use when the user requests autopilot-refine: 기존 문서·연구 산출물의 정정·갱신. 버전 snapshot과 변경 이력을 보존한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for autopilot-refine: 기존 문서·연구 산출물의 정정·갱신. 버전 snapshot과 변경 이력을 보존한다."
 ---
 
 # autopilot-refine

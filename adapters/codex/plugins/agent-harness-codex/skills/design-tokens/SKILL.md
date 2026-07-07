@@ -1,6 +1,6 @@
 ---
 name: design-tokens
-description: "Use when the user requests design-tokens: 색·타이포·간격 등 디자인 토큰을 정의한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for design-tokens: 색·타이포·간격 등 디자인 토큰을 정의한다."
 ---
 
 # design-tokens

@@ -1,6 +1,6 @@
 ---
 name: design-init
-description: "Use when the user requests design-init: 디자인 환경과 state를 bootstrap한다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for design-init: 디자인 환경과 state를 bootstrap한다."
 metadata:
   portable_source: capabilities/design-init.md
   adapter: opencode

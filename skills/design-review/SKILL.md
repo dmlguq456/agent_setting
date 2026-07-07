@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: Visual review — two gates. (1) verifier (디자인팀 verifier mode, separate context, Design MCP) screens for breakage — console errors, layout collapse, intent mismatch — and must pass before critique. (2) critic (디자인팀 critic mode) gives a 6-axis quality critique (hierarchy, alignment, accessibility, responsiveness, UX flow, tone). Both render via the Design MCP and view the image. Read-only — no auto-fix.
+description: "디자인 결과물 6축 비평·토큰 계약 점검 sub-skill"
 argument-hint: "<design path or app path>"
 metadata:
   group: sub

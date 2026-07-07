@@ -1,6 +1,6 @@
 ---
 name: sync-skills
-description: "Skills + Agents 정의 변경을 감지해 <agent-home>/README.md (GitHub) 의 대시보드 (워크플로우 map + cheat-sheet + 통합 가이드라인) 를 동기화한다. drift 체크 전용 모드도 지원."
+description: "skills·agents 정의 변경 감지 후 README 대시보드·manifest 동기화"
 argument-hint: "[--check] [--force] [--auto-fix [--dry-run]]"
 metadata:
   group: ops

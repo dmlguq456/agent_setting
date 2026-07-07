@@ -1,6 +1,6 @@
 ---
 name: autopilot-design
-description: "Use when the user requests autopilot-design: 시각 산출물 디자인 파이프. refs→tokens→components→review→handoff를 조율한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for autopilot-design: 시각 산출물 디자인 파이프. refs→tokens→components→review→handoff를 조율한다."
 ---
 
 # autopilot-design

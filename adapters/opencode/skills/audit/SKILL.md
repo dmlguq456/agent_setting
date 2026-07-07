@@ -1,6 +1,6 @@
 ---
 name: audit
-description: "Use when the user requests audit: 산출물·파이프 사후 점검. drift·일관성·누락을 읽기 중심으로 진단한다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for audit: 산출물·파이프 사후 점검. drift·일관성·누락을 읽기 중심으로 진단한다."
 metadata:
   portable_source: capabilities/audit.md
   adapter: opencode

@@ -1,6 +1,6 @@
 ---
 name: code-report
-description: Generate a detailed change report from plan + dev logs — focuses on key changes, principles, and insights for future reference
+description: "코드 작업 사이클 결과 요약·보고 sub-skill"
 argument-hint: "<plan name or path>"
 metadata:
   group: sub

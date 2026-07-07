@@ -1470,7 +1470,7 @@ if command -v codex >/dev/null 2>&1; then
   done
   if CODEX_HOME="$TMP/codex_home" codex debug prompt-input 'autopilot-code' >/tmp/codex_skills.out 2>/tmp/codex_skills.err \
     && grep -q -- '- autopilot-code:' /tmp/codex_skills.out \
-    && grep -q 'Read the portable capability spec and run the Codex preflight wrapper' /tmp/codex_skills.out \
+    && grep -q 'Use for autopilot-code' /tmp/codex_skills.out \
     && ! grep -q '/.claude/skills' /tmp/codex_skills.out; then
     ok "codex native skill projection is discoverable without Claude skill paths"
   else

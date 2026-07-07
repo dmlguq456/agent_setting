@@ -1,6 +1,6 @@
 ---
 name: autopilot-draft
-description: "Use when the user requests autopilot-draft: 문서 초안 파이프. 전략·초안·검증·편집을 거쳐 적용용 문서 artifact를 만든다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for autopilot-draft: 문서 초안 파이프. 전략·초안·검증·편집을 거쳐 적용용 문서 artifact를 만든다."
 metadata:
   portable_source: capabilities/autopilot-draft.md
   adapter: opencode

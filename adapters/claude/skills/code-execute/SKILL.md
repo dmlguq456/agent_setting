@@ -1,6 +1,6 @@
 ---
 name: code-execute
-description: Execute an implementation plan with progress tracking
+description: "plan 단계별 구현 실행 — 개발팀 디스패치 sub-skill"
 argument-hint: "<plan name or path>"
 metadata:
   group: sub

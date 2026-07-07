@@ -65,10 +65,7 @@ def render(capability_file: Path) -> tuple[str, str]:
 - Invocation semantics: {invocation_semantics}
 """
     meaning_sentence = meaning if meaning.endswith((".", "!", "?")) else f"{meaning}."
-    description = compact(
-        f"Use when the user requests {identifier}: {meaning_sentence} "
-        "Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
-    )
+    description = compact(f"Use for {identifier}: {meaning_sentence}")
 
     body = f"""---
 name: {identifier}

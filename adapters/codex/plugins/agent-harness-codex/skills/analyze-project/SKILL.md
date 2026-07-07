@@ -1,6 +1,6 @@
 ---
 name: analyze-project
-description: "Use when the user requests analyze-project: 사전 분석. 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로 만든다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for analyze-project: 사전 분석. 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로 만든다."
 ---
 
 # analyze-project

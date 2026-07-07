@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: "Use when the user requests design-review: 디자인 결과물을 품질·토큰 계약·breakage 관점으로 점검한다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for design-review: 디자인 결과물을 품질·토큰 계약·breakage 관점으로 점검한다."
 metadata:
   portable_source: capabilities/design-review.md
   adapter: opencode

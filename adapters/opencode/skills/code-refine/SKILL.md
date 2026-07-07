@@ -1,6 +1,6 @@
 ---
 name: code-refine
-description: "Use when the user requests code-refine: 사용자 메모·plan-check 피드백·검증 실패 메모를 반영해 기존 plan을 정정한다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for code-refine: 사용자 메모·plan-check 피드백·검증 실패 메모를 반영해 기존 plan을 정정한다."
 metadata:
   portable_source: capabilities/code-refine.md
   adapter: opencode

@@ -1,6 +1,6 @@
 ---
 name: design-handoff
-description: Final handoff — consolidates design artifacts into a single handoff.md that frontend devs (or autopilot-spec build phase) can use directly. Lists components, token paths, import paths, reproduction guide.
+description: "디자인 → 개발 핸드오프 자산·스펙 정리 sub-skill"
 argument-hint: "<design path or app path>"
 metadata:
   group: sub

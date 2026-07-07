@@ -1,6 +1,6 @@
 ---
 name: code-test
-description: Run functional tests after code-execute or on demand to verify code correctness
+description: "구현 결과 단계별 검증 — 품질관리팀 test 모드 sub-skill"
 argument-hint: "<plan name, path, or test scope>"
 metadata:
   group: sub

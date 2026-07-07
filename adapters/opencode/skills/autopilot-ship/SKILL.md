@@ -1,6 +1,6 @@
 ---
 name: autopilot-ship
-description: "Use when the user requests autopilot-ship: 앱 배포·출시 준비. build/deploy setup과 ship checklist를 만든다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for autopilot-ship: 앱 배포·출시 준비. build/deploy setup과 ship checklist를 만든다."
 metadata:
   portable_source: capabilities/autopilot-ship.md
   adapter: opencode

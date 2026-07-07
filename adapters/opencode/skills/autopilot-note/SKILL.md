@@ -1,6 +1,6 @@
 ---
 name: autopilot-note
-description: "Use when the user requests autopilot-note: 산출물 라우팅/노트화. digest와 triage 제안을 만든다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for autopilot-note: 산출물 라우팅/노트화. digest와 triage 제안을 만든다."
 metadata:
   portable_source: capabilities/autopilot-note.md
   adapter: opencode

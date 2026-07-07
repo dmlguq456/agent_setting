@@ -1,6 +1,6 @@
 ---
 name: draft-refine
-description: "Use when the user requests draft-refine: 초안 정련·다듬기. memo/review feedback을 문서 전략이나 draft에 반영한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for draft-refine: 초안 정련·다듬기. memo/review feedback을 문서 전략이나 draft에 반영한다."
 ---
 
 # draft-refine

@@ -1,6 +1,6 @@
 ---
 name: draft-refine
-description: Reflect user memos/review feedback in a document strategy or draft. Snapshots prior version under `_internal/versions/v{N}/` (modern; per CONVENTIONS.md §5) or `_v{N}.md` siblings (legacy). Auto-managed `changelog:` array inside YAML frontmatter (NOT a top-of-file HTML comment — that breaks markdown preview when frontmatter is also present). Mandatory ref-grounding per memo (re-read source; override memo if it conflicts with source).
+description: "초안 정련·다듬기 sub-skill — 편집팀 검수 경유"
 argument-hint: "<strategy or draft name or path> [--qa quick|light|standard|thorough|adversarial]"
 metadata:
   group: sub

@@ -1,6 +1,6 @@
 ---
 name: draft-strategy
-description: Create an initial document strategy. Internal mode enum 6종 (rebuttal / paper / review / report / proposal / presentation) — autopilot-draft 의 form-first 3-mode (paper / presentation / doc) 에서 doc intent (자연어 키워드 → rebuttal-response / review / report / proposal / generic) 가 본 sub-skill 의 직접 mode 라벨로 변환되어 전달됨. 직접 호출 시는 사용자가 첫 인자로 6-mode 중 하나를 명시.
+description: "문서 전략 초안 작성 — 6 모드(rebuttal·paper·review·report·proposal·presentation) sub-skill"
 argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--qa quick|light|standard|thorough|adversarial] <task description>"
 metadata:
   group: sub

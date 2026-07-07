@@ -1,6 +1,6 @@
 ---
 name: autopilot-code
-description: "Use when the user requests autopilot-code: 코드 작업 entry. spec 컨텍스트를 감지하고 plan→execute→test→report 흐름을 닫는다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for autopilot-code: 코드 작업 entry. spec 컨텍스트를 감지하고 plan→execute→test→report 흐름을 닫는다."
 metadata:
   portable_source: capabilities/autopilot-code.md
   adapter: opencode

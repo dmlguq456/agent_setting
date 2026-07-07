@@ -1,6 +1,6 @@
 ---
 name: code-report
-description: "Use when the user requests code-report: 코드 작업 사이클 결과를 사용자-facing 보고서로 조립한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for code-report: 코드 작업 사이클 결과를 사용자-facing 보고서로 조립한다."
 ---
 
 # code-report

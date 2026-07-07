@@ -1,6 +1,6 @@
 ---
 name: analyze-user
-description: "Use when the user requests analyze-user: cross-project 사용자 성향 프로필 작성·갱신. 코드·작성·분석 패턴을 추출한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for analyze-user: cross-project 사용자 성향 프로필 작성·갱신. 코드·작성·분석 패턴을 추출한다."
 ---
 
 # analyze-user

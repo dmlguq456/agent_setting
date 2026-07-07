@@ -1,6 +1,6 @@
 ---
 name: design-refs
-description: "Use when the user requests design-refs: 외부·사용자 reference 시각 자료를 수집하고 brief를 만든다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for design-refs: 외부·사용자 reference 시각 자료를 수집하고 brief를 만든다."
 metadata:
   portable_source: capabilities/design-refs.md
   adapter: opencode

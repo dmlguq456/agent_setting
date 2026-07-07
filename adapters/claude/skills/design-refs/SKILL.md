@@ -1,6 +1,6 @@
 ---
 name: design-refs
-description: Reference collection and brief — gathers user-provided images, external web references (via 자료팀 web-image-search), existing design system assets. Writes a brief that informs subsequent phases.
+description: "레퍼런스 시각 자료 수집·정리 sub-skill"
 argument-hint: "<design task> [--design <path>] [--refs <image paths>] [--no-web]"
 metadata:
   group: sub

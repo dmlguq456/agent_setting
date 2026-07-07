@@ -1,6 +1,6 @@
 ---
 name: sync-skills
-description: "Use when the user requests sync-skills: 정의 변경을 읽어 README/manifest/cross-doc invariant drift를 점검·동기화한다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for sync-skills: 정의 변경을 읽어 README/manifest/cross-doc invariant drift를 점검·동기화한다."
 metadata:
   portable_source: capabilities/sync-skills.md
   adapter: opencode

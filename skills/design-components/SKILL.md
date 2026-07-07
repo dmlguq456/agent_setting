@@ -1,6 +1,6 @@
 ---
 name: design-components
-description: Component / visual asset creation — invokes 디자인팀 maker mode. Produces shadcn/Tailwind components (ui), composed full-screen pages (webapp), slide visual guides (slide), SVG icons (icon), or mermaid/direct-SVG/excalidraw diagrams (diagram). Every output is rendered and visually self-verified (render → Read → fix loop), and can be emitted as a self-contained single-file HTML preview artifact (--artifact standalone).
+description: "UI 컴포넌트 mockup·구현 sub-skill"
 argument-hint: "<design path or app path>"
 metadata:
   group: sub

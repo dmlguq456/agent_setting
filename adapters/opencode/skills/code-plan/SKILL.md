@@ -1,6 +1,6 @@
 ---
 name: code-plan
-description: "Use when the user requests code-plan: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity/QA에 맞는 plan-check gate를 수행한다. Read the portable capability spec and run the OpenCode preflight wrapper before claiming support."
+description: "Use for code-plan: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity/QA에 맞는 plan-check gate를 수행한다."
 metadata:
   portable_source: capabilities/code-plan.md
   adapter: opencode

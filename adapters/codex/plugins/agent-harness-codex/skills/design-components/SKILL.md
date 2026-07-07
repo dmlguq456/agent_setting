@@ -1,6 +1,6 @@
 ---
 name: design-components
-description: "Use when the user requests design-components: UI component/mockup 구현과 preview artifact를 만든다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use for design-components: UI component/mockup 구현과 preview artifact를 만든다."
 ---
 
 # design-components
