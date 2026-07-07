@@ -93,7 +93,7 @@
 | Tier | Role | 예 | Anti-pattern |
 |------|------|-----|--------------|
 | **Orchestrator** | Deterministic state machine. 라우팅·gate·verdict 만, content 안 봄. | `autopilot-code` / `autopilot-draft` / `autopilot-research` / `autopilot-refine` 의 SKILL.md 본체 | Orchestrator 가 file content 읽기·요약·판단 |
-| **Skill** | Expert capability module. WHAT + verification loop 정의. | `init-plan` · `execute-plan` · `run-test` · `init-doc-strategy` · `refine-doc` 등 | Skill 안에 orchestration 로직 (다른 skill 호출 chain, QA budget) |
+| **Skill** | Expert capability module. WHAT + selected verification/assurance gate 정의. | `code-plan` · `code-execute` · `code-test` · `draft-strategy` · `draft-refine` 등 | Skill 안에 전체 pipeline graph나 반복 QA loop를 숨김 |
 | **Agent** | Persona with tools. Skill 안에서 실제 작업 수행. | `기획팀` · `품질관리팀` · `연구팀` · `편집팀` · `자료팀` · `개발팀` · `디자인팀` · `external-adversary` | Agent 가 verbose 결과를 orchestrator 로 반환 |
 
 > **이름 충돌 주의**: 본 절의 _3-Tier_ 는 _역할 분리_. §4 의 _3-tier T1/T2/T3_ 는 _산출물 가시성 분리_. 같은 숫자지만 다른 layer.
@@ -125,7 +125,7 @@ orchestrator 가 _단일 expert flow_ 만 다루는 경우 (예: `autopilot-refi
 family 의 모든 멤버는 confirm 없이 pipeline 을 끝까지 돌린다. 사용자가 명시할 때만 멈춘다.
 
 - `--user-refine` / `--confirm` 같은 pause flag 는 **사용자가 직접 typed 한 자리에서만** 켠다 (default false).
-- `--qa thorough` / `--qa adversarial` 같은 비싼 옵션도 명시했을 때만. default 는 skill 별 권장값 — CONVENTIONS.md §1.4 매트릭스.
+- `--intensity thorough|adversarial` 같은 비싼 stage graph는 명시 신호나 high-risk routing이 있을 때만. `--qa`는 assurance override이며 graph/depth selector가 아니다 — CONVENTIONS.md §1.
 - 실패 시 fail loudly + `pipeline_summary.md` 미해결 기록. 다음 호출에서 `--from <stage>` 재개.
 
 **Why**: 사용자가 _명시 요청_ 을 했는데 메인 에이전트가 _신중을 위해_ 라며 confirm 단계를 추가하면 작업이 한 turn 지연되고 "이미 했어?" 같은 follow-up 으로 갈등이 누적. high-stakes 일수록 사용자가 _직접_ pause 를 거는 게 자연스럽다.
@@ -173,13 +173,15 @@ Artifact 폴더 안의 _가시성 분리_. 상세는 CONVENTIONS.md §5 single s
 
 ## 5. Quality Gates
 
-QA loop 는 _skill 안에서 닫힌 loop_ 으로 돌고, orchestrator 는 verdict token 만 본다.
+Quality gates live inside the selected stage graph. The orchestrator chooses `intensity` first, then `--qa` scales `plan-check`, selected independent passes, and final verification. A high QA level does not open hidden stages, repeated loops, or depth2 workers by itself.
 
-- **QA 5단계** (quick / light / standard / thorough / adversarial) — CONVENTIONS.md §1 single source. wording / Skill 별 매트릭스 / opt-out flag 그곳.
-- **Fact-checker** — doc / research / refine 한정 (code 는 ground-truth 가 코드 자신이라 fact-check 무의미). `--no-fact-check` 단독 skip 가능 — autopilot-refine · audit 전용, 다른 skill 노출 시 drift.
+- **QA assurance levels** (quick / light / standard / thorough / adversarial) — CONVENTIONS.md §1 single source. They are budgets for selected checks, not pipeline selectors.
+- **Stage-local gates** stay small and only decide whether the next stage can proceed.
+- **Independent QA passes** run only where the selected intensity/risk calls for them: strongest risk point for `strong`, bounded depth2 for `thorough`, adversary/security/claim-verify for `adversarial`.
+- **Fact/source checking** applies to doc / research / refine / note claims when selected; code has no fact-checker because ground truth is code/tests/runtime behavior. `--no-fact-check` remains limited to capabilities that expose it.
 - **Natural-integration rule** (paper mode 한정) — reviewer 의견 → 본문 mutation 옮길 때 표·enumeration 통째 paste 금지. 1~2 문장 in-line rewrite 가 안 되면 drop 또는 Appendix. 4-step Paragraph Cohesion Pre-Check (substance 중복 / paragraph axis / cross-section redundancy / EDIT·REPLACE·INSERT·DROP 분류) 가 mechanical INSERT 사전 차단. 상세 — `init-doc-strategy/SKILL.md` paper mode + `autopilot-draft/SKILL.md` Step 4.1.
 
-**Why**: QA 가 orchestrator 에 박혀 있으면 skill 마다 budget 정책이 어긋남. Skill 안 닫혀 있어야 _expert + verification_ 한 단위가 reuse 가능. fact-checker 의 _verbatim 대조_ 와 quality reviewer 의 _구조 판단_ 은 다른 layer 라 parallel.
+**Why**: QA budget이 stage graph와 섞이면 작은 작업도 full ceremony가 되고, 반대로 cross-harness 검증은 monolithic skill 안에서 열 수 없다. Graph는 intensity가, assurance는 QA가 소유해야 토큰 비용과 검증 강도를 독립적으로 조절할 수 있다.
 
 ---
 

@@ -162,6 +162,6 @@ Direct work is the only graph with no plan. Every non-`direct` autopilot graph h
    - spec-significant (route / schema·entity / UI-flow / 외부 연동 / 마이그레이션) **또는 코드 기존 drift** → **`autopilot-spec` update 모드** (prd.md 최신화 + `_internal/versions/v{N}/prd.md` 스냅샷). drift 가 _명확_ 하면 자율 진행 후 한 줄 보고, **_애매_ 하면 사용자에 확인.**
    - within-spec (구현 디테일) → _"spec 영향 없음"_ 확인.
    > 이 체크는 `autopilot-code` 의 **pre-flight Step 0** 로 절차화 — 라우팅에서 빠뜨려도 code 스킬 진입 시 verdict 보고로 다시 걸린다.
-4. **`autopilot-code` 경유** — 작은 자연어 요청도 `--qa quick` (모든 모드 공통 경량 tier) 로 산출물 남기며 진행 → `plans/<date>_<slug>/` (매 사이클 새 plan). 소스 코드·기존 산출물 편집은 hook 비차단 (convention); autopilot-code 유도는 UserPromptSubmit 라우팅 reminder + 본 skill 행동(매 사이클 plan 트레일)이 담당.
+4. **`autopilot-code` 경유** — stage graph는 `--intensity`가 선택한다. `direct`는 plan 없이 produce+sanity/report, `quick`은 inline micro-plan+plan-check-lite+verify-lite, `standard+`만 `plans/<date>_<slug>/` durable cycle을 만든다. `--qa`는 assurance override일 뿐 새 plan cycle을 강제하지 않는다.
 
 > 핵심: ① 트레일 단절 (거의 모든 요청 quick-pipe → `plans/`) ② spec drift (spec 변경은 항상 autopilot-spec update + versioning) ③ 새 세션 맹목 (진입 시 기존 산출물 파악 1 순위 + 도메인 트리거) 셋을 닫는다. autopilot-spec·autopilot-code 둘 다 iterable — 사후 수정은 _재호출_ 이지 새 사이클이 아니다.

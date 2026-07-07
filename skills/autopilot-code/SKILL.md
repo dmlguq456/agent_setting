@@ -191,7 +191,8 @@ autopilot-lab "X 실험" — Step 0 에서 readiness ✓ 확인 후 진행
 ### Default 옵션 권장값 (컨펌 시 메인 에이전트가 제안)
 
 - `--mode`: 발화 신호로 dev/debug 자동 추론. cwd 가 plan 폴더 + 최근 dev_logs/ 있으면 dev 우세, 에러 로그·traceback 있으면 debug 우세.
-- `--qa`: dev=thorough, debug=standard (default — global §6 high-stakes 신호 시 adversarial 자동 상향)
+- `--intensity`: 발화 risk/범위로 추론 (`direct|quick|standard|strong|thorough|adversarial`). stage graph 선택자.
+- `--qa`: assurance override. 기본은 선택된 intensity를 따른다 (`quick`→quick, `standard|strong`→standard, `thorough`→thorough, `adversarial`→adversarial). debug는 보통 `standard` 이상으로 충분하며, 명시 adversarial만 상향.
 - `--from`: 자동 추론 (`pipeline_state.yaml` 발견 시 마지막 성공 stage 다음부터)
 - `--user-refine`: **off** (글로벌 §2 — "사용자 검토 끼워" / "memo 추가하게 멈춰줘" 같은 명시 신호 있을 때만 켬)
 
@@ -235,20 +236,18 @@ Pipeline intensity is the stage-graph selector (canonical: [CONVENTIONS.md §1](
 
 ### --qa <level>
 
-QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. QA 는 stage graph 선택자가 아니라 `plan-check`, 선택된 independent review, `code-test` 강도 override 이다. 본 skill 적용:
+QA assurance policy는 [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-qa-assurance-levels-canonical)이 단일 source다. `--qa`는 stage graph 선택자가 아니라 `plan-check`, selected independent review, final `code-test`의 강도 override다. Depth2 dispatch는 `--qa thorough`가 아니라 `--intensity thorough|adversarial`에서만 열린다.
 
-- Supported: `quick` / `light` / `standard` / `thorough` (default) / `adversarial`
-- **security-review (code 트랙의 보안 축 — fact-check 부재 대체)**: auth / crypto·secrets / external input / api_contract / deserialization 을 건드리는 변경이 `adversarial` 이면 `Agent(품질관리팀 security-review)` 를 code QA 에 parallel 추가 — diff 의 _신규_ high-confidence(≥8) 취약점만. (내장 `/security-review` 온프레미스 — `roles/modes/qa/security-review.md`.)
-- **behavioral test (app/cli/api/library mode)**: code-test(품질관리팀 test)가 Level 5b _런타임 관찰_(실제 앱·CLI·API·라이브러리 구동 + 증거 캡처)을 자동 포함 — 단순 ML 학습 코드는 Level 1-5 로 충분. (내장 `/verify`·`/run` 온프레미스.)
-- Mode-specific:
-  - dev: 5 levels 모두 accept. default `thorough`.
-  - debug: `adversarial` 받으면 `thorough` 로 downgrade + warn. default `standard` (빠른 root-cause 우선).
-- 유효하지 않은 값 → `standard` fallback + warn ("유효하지 않은 QA level '{value}'. standard 로 기본 설정합니다.")
-- Auto-detect: omitted 시 각 sub-skill 이 scope 기반 추정
-- **Propagation**: `--qa <level>` 를 code-plan / code-refine 에 flag 로 전달. code-execute / code-test / code-report 는 plan frontmatter `qa_level: <level>` 로
-- **Mid-pipeline switching**: Step 2+ 에서 `--qa` 명시 시 plan frontmatter 갱신. 명시 안 하면 frontmatter 값 보존 (없으면 `thorough`)
-- **`quick` interactions**: `--user-refine` silently ignored (refine skip). `--from refine` 으로 재개 시 frontmatter `qa_level == quick` 이면 abort ("qa_level=quick 에서는 refine 단계가 skip 됩니다. --qa <level> 을 다른 값으로 명시해 재개하세요.")
-- **`quick` = 소규모 잡일 경량 tier**: 데이터 split·포맷 변환·log 파싱·metric 재계산 같은 _검증은 필요하지만 full ceremony 는 과한_ 작업의 자리. inline micro-plan + plan-check-lite + produce + verify-lite 를 수행하고, plan-review/code-refine/test-retry 같은 반복 independent QA 는 skip. durable `plans/{date}_{slug}/` 는 repo/adapter 정책상 필요할 때만 남긴다. (verify-lite 는 quick 에서도 살아 있어 fast implementer execute 가 무검증 통과하지 않음.)
+- Supported: `quick` / `light` / `standard` / `thorough` / `adversarial`.
+- Code track에는 fact-checker가 없다. Ground truth는 코드, tests, runtime behavior, API/CLI surface, security review다.
+- `quick`: inline micro-plan + plan-check-lite + produce + verify-lite. `code-plan`, `code-refine`, 반복 independent QA, durable `plans/{date}_{slug}/`는 기본적으로 열지 않는다.
+- `standard`: durable `code-plan -> code-execute -> code-test -> code-report` with lightweight plan-check and concrete verification.
+- `strong`: standard graph plus one risk-focused independent review at the riskiest point.
+- `thorough|adversarial`: depth-1 owner may open bounded depth2 planner/verifier/adversary workers and must synthesize their short reports before write-back.
+- Security review: auth / crypto·secrets / external input / api_contract / deserialization changes under adversarial risk may add `roles/modes/qa/security-review.md`; claim it only if the pass actually ran.
+- Invalid value: fall back to the selected intensity's default assurance and warn.
+
+Propagation: durable `standard+` cycles store the selected `qa_level` and `intensity` in plan/frontmatter or pipeline state. `code-plan`, optional `code-refine`, and `code-test` inherit that context. Mid-pipeline `--qa` can raise/lower assurance for future checks, but it must not rewrite the stage graph by itself.
 
 ### --user-refine (boolean flag — opt-in only)
 
@@ -285,7 +284,7 @@ The pipeline runs with sane defaults and only pauses on genuinely ambiguous or d
 
 | Decision Point | Default Behavior |
 |---|---|
-| Test failure (after code-test internal hotfix loop) | Auto-retry once (mode dev). |
+| Test failure after code-test verdict | Caller/orchestrator may open one bounded retry/fix stage in mode dev. |
 | Pipeline-level catastrophic failure (plan status = failed) | Stop and report; no retry. |
 | Final retry failure | Auto-stop, write pipeline_summary(failed), report. |
 | Research team adds many memos | Auto-refine (or pause if `--user-refine` is set). |
@@ -317,33 +316,20 @@ You (the main Claude) orchestrate by invoking each skill directly via the Skill 
 Skip entirely for `intensity=direct`; use inline micro-plan only for `quick`. For `standard+`, invoke Skill: `code-plan` with the task description as args.
 Wait for completion before proceeding.
 
-### Step 2: code-refine (plan-review proxy — task-aware: 연구팀 / UI는 디자인팀)
-**`--qa quick` short-circuit**: if `qa_level == quick`, skip the entire plan-review + code-refine invocation. Log to pipeline_summary Decision Points: `Step 2 | refine skipped (qa=quick) | auto | proceed to Step 3`. Proceed directly to Step 3.
+### Step 2: plan-check / optional code-refine
 
-Otherwise:
+This step exists only for durable `standard+` graphs. `direct` has no plan-check and `quick` already performed inline `plan-check-lite` before produce.
+
 1. Resolve plan paths from code-plan output: `en_plan_path`, `ko_plan_path`, `log_dir`.
-2. **Detect task type** before invoking 연구팀 (this hint provides the type-specific lens — see `adapters/claude/agents/research-team.md` Role 1 Step 3 table):
-   - Read the plan's "## Change Plan" target files. If any target is under `<agent-home>/adapters/claude/skills/*` / `<agent-home>/skills/*` (compatibility refs) / `<agent-home>/adapters/claude/agents/*` / `<agent-home>/README.md` / `<agent-home>/skills/.sync_state.json` → `task_type=meta-skill`.
-   - If targets are under `~/.claude/settings.json` / `keybindings.json` / hooks → `task_type=infra/config`.
-   - If targets are project source code (`.py`, `.cpp`, etc.) → `task_type=paper-driven code`.
-   - If targets are under `<artifact-root>/documents/*` → `task_type=paper-driven doc`.
-   - If targets are under `<artifact-root>/research/*` → `task_type=research artifact`.
-   - If targets are **UI/visual** (`*.css` / `globals.css` / `styles/` / 앱 컴포넌트 `*.tsx`·`*.jsx` 의 _시각·레이아웃·디자인 토큰_ 변경) → `task_type=ui/visual`.
-   - Mixed → `task_type=mixed`.
-
-   > **plan-review proxy = task-aware (DESIGN_PRINCIPLES §9).** `task_type=ui/visual` 이면 아래 연구팀 호출을 **`Agent(디자인팀)` plan-review** 로 _대체_ — plan + 디자인 계약(`spec/design/05_handoff/handoff.md`·토큰)을 읽고 _계획된 접근_ 을 6축(위계·정렬·a11y·반응형·UX·톤) + **토큰 계약 준수** + slop 으로 리뷰 (render 전이라 _no-render plan-review_ 모드; 정의 = `roles/modes/design/critic.md`). 메모는 동일하게 `_internal/plan_reviews/design_review.md` → code-refine. UI 가 paper-driven 로직과 섞인 `mixed` 면 디자인팀 + 연구팀 둘 다 parallel. 그 외 task_type 은 연구팀(아래).
-
-   **By `qa_level`** (reviewer 수·model 매트릭스는 [CONVENTIONS.md §1.1](../../core/CONVENTIONS.md#11-5단계-공통-정의) 단일 source — 본 sub-skill 은 그 spec 을 instance·axis 분담으로 풀어씀):
-   - **quick / light** — 1× / 2× fast reviewer single pass, all task-type axes 단일 prompt 로:
-     ```
-     Invoke 연구팀: "Review this plan as user proxy. **Task type: {task_type}** — apply ALL Role 1 Step 3 axes for this task type (no Focus axis). Korean plan: {ko_plan_path}. English plan: {en_plan_path}. Review log: {log_dir}/_internal/plan_reviews/research_review.md. Weight task-type-specific axes heavily (for meta-skill: family-level naming conflict + cross-skill scope overlap + sync-skills downstream + frontmatter validity)."
-     ```
-   - **standard / thorough / adversarial** — **axis-decomposed parallel 연구팀**: dispatch N parallel instances (standard = 1× deep reviewer + 2× fast reviewers, thorough/adversarial = 2× deep reviewers + 2× fast reviewers). 각 invocation 에 `Focus axis: <axis_name>` 포함해 single lens 로 제한. axis list 와 task-type 별 axis 매핑은 `adapters/claude/agents/research-team.md` Role 1 _Multi-axis parallel mode_ 표 single source. deep reviewer instance 는 _깊이 axis_ (correctness / methodology / domain), fast reviewer instance 는 _coverage axis_ (completeness / style / cross-ref / test gap). 각 instance 는 `[<axis_name>]` prefix 메모 + separate review log (`{log_dir}/_internal/plan_reviews/research_review_<axis_name>.md`) 작성. 모든 parallel 완료 후 메모 merge + dedup → code-refine. adversarial 은 추가로 `Agent(codex-review-team)` external adversary review parallel.
-   - **Why decomposition at standard+**: 단일 instance 가 많은 axis 를 다루면 주의가 분산. parallel decomposition 으로 각 instance 가 좁게 집중해 사용자가 직접 잡아낼 만한 자리 (naming conflict / test coverage gap / style drift) 전부 커버.
-3. If memos added:
-   - **`--user-refine` pause**: if the flag is set (CLI or plan frontmatter), update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command, and exit. Do NOT invoke code-refine.
-   - Otherwise: invoke Skill `code-refine` with the Korean plan path.
-4. If no memos: skip to Step 3.
+2. Decide whether the selected graph calls for independent plan review:
+   - `standard`: one lightweight construction/domain review when risk warrants it.
+   - `strong`: one independent review at the riskiest point.
+   - `thorough|adversarial`: bounded depth2 or multi-axis reviewers may run; each reviewer gets one focus axis and returns a short memo/log.
+   - UI/visual plan risk uses 디자인팀 critic; research/domain risk uses 연구팀 plan-review; construction quality uses 품질관리팀 plan-review.
+3. If memos or blocking findings exist:
+   - if `--user-refine` is set, pause with `paused_at_stage: refine` and print the resume command.
+   - otherwise invoke `code-refine` once per selected correction budget. Do not open repeated QA loops merely because `--qa` is high.
+4. If no memos or no independent review was selected, proceed to Step 3.
 
 ### Step 3: code-execute
 Invoke Skill: `code-execute` with the plan name/path as args.
@@ -359,16 +345,15 @@ After code-execute completes, read the English plan's frontmatter `status` field
 Invoke Skill: `code-test` with the plan name/path as args.
 Wait for completion before proceeding.
 
-## Retry Budget (Total)
-- code-test internal hotfix loop: max 2 attempts per test run
-- Mode dev retry loop: max 1 pipeline-level retry
-- Total theoretical maximum: 2 (first code-test) + 2 (second code-test after retry) = 4 hotfix attempts
-- At each code-test invocation, the hotfix counter resets.
+## Retry Budget (Caller-Owned)
+- `code-test` is read-only final verification and does not hotfix.
+- Mode dev retry loop: max 1 bounded pipeline-level retry when the selected assurance allows it.
+- `quick` does not retry automatically; it reports the failed verify-lite result.
 
 #### Test Failure → Retry Loop (max 1 pipeline-level retry; quick = no retry)
 **`--qa quick` short-circuit**: if `qa_level == quick` and code-test reports failure, do NOT retry. Skip the retry loop below and go directly to Step 5 (code-report) with status reflecting the test failure. Log to pipeline_summary Decision Points: `Step 4 | test failure, no retry (qa=quick) | auto | proceed to code-report`.
 
-Otherwise (qa_level != quick), if code-test reports failure (after its internal hotfix loop of 2 attempts), auto-retry once:
+Otherwise (qa_level != quick), if code-test reports failure and the selected graph allows a fix-loop, auto-retry once:
 
 1. **Collect failure context**: Note the test failure verdict from code-test's return. Failure details are in `test_logs/test_report.md` and `_internal/test_reviews/` — these will be consumed by code-refine's agent, not by the orchestrator.
 
@@ -383,7 +368,7 @@ Otherwise (qa_level != quick), if code-test reports failure (after its internal 
 
 5. **Loop back to Step 2**:
    - **`--user-refine` pause**: if the flag is set, update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command (`/autopilot-code --mode dev --from refine <plan>`), and exit. The user can review the failure memos plus add their own before re-resuming.
-   - Otherwise: invoke Skill `code-refine` with the plan path (QA review loop runs as usual, max 3 rounds).
+   - Otherwise: invoke Skill `code-refine` with the plan path using the selected correction budget. Do not open a repeated QA loop by default.
 
 6. **Re-execute**: Invoke Skill: `code-execute` with the same plan path.
 
@@ -487,10 +472,10 @@ Scope: Minimal — fix the root cause only. Do not refactor or improve surroundi
 
 The plan folder will be: `<artifact-root>/plans/{YYYY-MM-DD}_fix_{short-error-name}/`
 
-### Step 3: Review fix plan (QA only, skip research-team)
-- Skip 연구팀 review — debugging fixes should be fast.
-- QA review still runs via code-plan's built-in Post-Plan Review Loop.
-- If QA has 🔴 issues, let the review loop resolve them (max 3 rounds as usual).
+### Step 3: Review fix plan (plan-check only)
+- Skip 연구팀 review by default — debugging fixes should be fast and minimal.
+- Run a focused plan-check on the fix plan only when the selected assurance/risk requires it.
+- If blocking issues appear, apply one bounded correction; do not open the old multi-round code-plan QA loop.
 
 ### Step 4: Execute fix
 Invoke Skill: `code-execute` with the fix plan path.
@@ -596,7 +581,7 @@ Populate the Decision Points table from in-memory decision records. If none: `| 
 ### Common (all modes)
 - If execution fails catastrophically (plan status = `failed`), stop and report to user immediately.
 - Always verify — testing 은 모든 path 에서 실행.
-- 각 skill 의 QA loop 는 그 skill 이 자체 처리 (orchestrator 는 위임).
+- QA/verification responsibility follows the selected stage graph: stage-local gates stay small, independent QA runs only when selected, and final verification stays concrete.
 
 ### Mode dev
 (No additional mode-specific rules beyond common.)

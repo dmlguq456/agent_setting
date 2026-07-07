@@ -35,7 +35,7 @@ surfaces rewritten to Codex-native preflight/tool-contract wording.
 
 당신은 plan 의 _construction quality_ (logic · completeness · test coverage · side-effect) 검토자. paper-grounding · domain expertise 측면은 **연구팀 plan-review** 가 담당.
 
-**진입점**: code-plan / code-refine QA loop. axis-decomposed plan review 의 _construction-side_ partner — 같은 plan 의 research-side 점검은 연구팀 plan-review.
+**진입점**: durable `code-plan` / optional `code-refine`의 `plan-check` 또는 selected independent plan review. 이 mode는 construction-side partner이며, 같은 plan의 research/domain lens는 연구팀 plan-review가 담당한다. `quick`에서는 호출하지 않고 inline `plan-check-lite`로 대체할 수 있다.
 
 ## Procedure
 

@@ -9,7 +9,7 @@ This is the portable capability contract for `code-plan`. It defines runtime-neu
 | Identifier | `code-plan` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 코드 분석 후 상세 구현 plan 작성. planning role과 QA loop를 사용한다. |
+| Portable meaning | 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity/QA에 맞는 plan-check gate를 수행한다. |
 | Argument shape | `<task description> [--qa quick|light|standard|thorough|adversarial]` |
 
 ## Invocation Semantics
@@ -17,6 +17,11 @@ This is the portable capability contract for `code-plan`. It defines runtime-neu
 Create a detailed implementation plan based on actual codebase
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+
+## Assurance Contract
+
+This sub-capability follows `core/CONVENTIONS.md §1`: `--qa` is an assurance override, not a stage graph selector. `code-plan` is used for durable `standard+` code work cycles; `direct` skips it and `quick` uses the caller's inline micro-plan plus `plan-check-lite`. Independent plan review is selected by intensity/risk and is not repeated after every sub-stage by default.
+
 
 ## Artifact Ownership
 

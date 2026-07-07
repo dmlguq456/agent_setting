@@ -3,77 +3,33 @@
 > 본 README 는 Claude adapter skill 요약. 권위 있는 Claude runtime 동작 명세는 같은 폴더의 `SKILL.md`; portable capability 의미는 `<agent-home>/capabilities/`.
 
 ## 개요
-code-execute 이후 또는 온디맨드로 기능 테스트를 실행해 코드 정확성을 검증하는 skill. **항상 Thorough 모드** (2 병렬 QA 팀 강제), external adversary 가용 시 자동 Adversarial로 상향.
+code-execute 이후 또는 온디맨드로 concrete verification evidence를 기록하는 skill. `code-test`는 read-only final verify stage이며, hotfix·commit·parallel QA fan-out을 자체적으로 열지 않는다. 선택된 `intensity`/`qa_level`이 테스트 폭과 test-adequacy review 여부를 정한다.
 
 ## 호출 형식
 ```
-/code-test <plan name, path, or test scope>
+/code-test <plan name, path, or test scope> [--qa quick|light|standard|thorough|adversarial]
 ```
 
 ## Plan Resolution (canonical)
 1. `.md` → 그대로
 2. 디렉토리 → `/plan/plan.md`
-3. 퍼지 검색 → `_audit`/`_fix_` 없는 폴더 우선. **없으면 fallback**: 인자를 파일/디렉토리 경로로 간주하여 직접 테스트
+3. 퍼지 검색 → `_audit`/`_fix_` 없는 폴더 우선. 없으면 인자를 파일/디렉토리 경로로 간주하여 직접 테스트
 
 ## 위임 — 품질관리팀 (test 모드)
-프롬프트 유형별:
-- **plan 파일 경로**: "Run graduated tests for plan: {$ARG}. Read verification sections and checklist.md. Execute Level 1→2→3→4→5, stop on first failure."
-- **파일/디렉토리**: "Run graduated tests on: {$ARG}. Execute Level 1→5, stop on first failure. Skip levels that don't apply."
-- **비어있음**: "Run graduated tests on recently changed files. Use `git diff --name-only HEAD~1`."
+프롬프트 유형별로 Level 1→5 graduated verification을 실행하고, 첫 실패에서 멈춘다. 사용자-facing surface 변경이면 selected assurance가 허락할 때 Level 5b behavioral runtime observation을 추가한다.
 
-### 테스트 로그 요구 (필수)
-```
-Write a detailed test log to: {log_dir}/test_logs/test_report.md
+### 테스트 로그 요구
+모든 실행은 `{log_dir}/test_logs/test_report.md`에 exact command, stdout/stderr excerpt, PASS/FAIL/SKIP/BLOCKED reason을 남긴다.
 
-Format:
-## Level N: [Level Name]
-### Test N.1: [description]
-**Command:** [exact command]
-**Output:** [stdout/stderr]
-**Verdict:** PASS / FAIL — [reason]
-```
-
-## QA 요구 (Thorough 강제, external adversary 가용 시 Adversarial)
-**`qa_level` 플래그 적용 안 됨** — 테스트 엄격도는 협상 불가.
-
-**Adversarial 자동 상향**: QA launch 전 adapter 가용성 체크 실행(Claude adapter: `codex --version 2>/dev/null`). external adversary 가용 시 자동 상향. 없으면 Thorough.
-
-**항상 2 QA agents 병렬**:
-- Agent A (**coverage**, fast reviewer): 모든 변경 파일 테스트됐나? 미테스트 코드 경로/엣지 케이스? 실데이터 사용? before/after 비교?
-  - `test_reviews/test_review_coverage.md`
-- Agent B (**accuracy**, deep reviewer): 실패 진단이 올바른가(pre-existing 오진 아님)? 올바른 engine_mode? 명령이 변경 경로와 일치? 부정 테스트 존재?
-  - `test_reviews/test_review_accuracy.md`
-
-**Adversarial 추가**:
-- Agent C (external adversary): Claude adapter 는 `codex-review-team` (`adversarial-review --wait --scope auto`) 사용
-
-ANY agent의 이슈 처리 필수.
-
-## Post-Test — QA Review
-품질관리팀 (test 모드) 반환 후:
-1. 테스트 로그 읽기
-2. **2× 품질관리팀 병렬**
-3. 양쪽 리뷰 읽기. 이슈 발견 → 품질관리팀 (test 모드) 재호출 (test_report.md에 append). 둘 다 통과 → 결과 보고
+## Assurance
+- `quick`: 가장 좁은 concrete check 1개와 skip reason.
+- `light`: focused syntax/import/smoke 또는 caller explicit command.
+- `standard`: 적용 가능한 graduated levels + command evidence.
+- `thorough`: 더 넓은 target coverage와 surface 변경 시 runtime observation, 필요 시 test-adequacy review.
+- `adversarial`: selected graph/risk가 요구할 때 security/failure-mode/external adversary evidence 추가.
 
 ## 결과 보고
-1. 요약 테이블로 테스트 결과 전달
-2. 모든 레벨 통과 + QA 승인:
-   - `git status`로 미커밋 확인. 변경 존재 시 **auto-commit** (사용자 질문 없음)
-   - 성공 리포트 + 중단
-3. 실패 시 **Hotfix Loop** (최대 2 시도)
-
-### Hotfix Loop
-> 단일 code-test 호출 내 self-contained. 상위 파이프라인 retry 시 이 루프 리셋.
-
-1. **Attempt 1** (자동 — 저위험): 개발팀 auto mode subagent, 실패 level + 에러 + 파일 제공. "Auto mode. Hotfix: fix this test failure."
-2. 실패 level부터 재호출
-3. 통과 + QA 승인 시 auto-commit + 성공 리포트
-4. **Attempt 2** (자동 — bounded retry budget): 새 에러 컨텍스트로 재시도
-5. 여전히 실패 → 원본 에러, 시도한 내용, 권장 조치 리포트
-
-## 로그 디렉토리 규칙
-- plan 파일: 로그 dir = task root (plan/plan.md의 조부모)
-- plan 없음: `<artifact-root>/tests/` + 날짜 스탬프 서브디렉토리
+성공/실패 verdict와 report path를 caller에게 반환한다. 실패하면 caller/orchestrator가 bounded retry/fix stage를 결정한다. `code-test`는 source 수정, hotfix agent 호출, auto-commit을 하지 않는다.
 
 ---
 *Claude adapter realization: `<agent-home>/adapters/claude/skills/code-test/SKILL.md`; compatibility reference: `<agent-home>/skills/code-test/SKILL.md`*

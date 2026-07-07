@@ -10,16 +10,22 @@ This is the portable capability contract for `code-test`. It defines runtime-neu
 | Group | `sub` |
 | Supported modes | `none` |
 | Portable meaning | 구현 결과를 단계별로 검증하고 evidence를 기록한다. |
-| Argument shape | `<plan name, path, or test scope>` |
+| Argument shape | `<plan name, path, or test scope> [--qa quick|light|standard|thorough|adversarial]` |
 
 ## Invocation Semantics
 
 Run graduated verification after `code-execute` or on demand to verify code
-correctness. The capability resolves a plan path, changed-file list, or test
+correctness. `--qa` scales final verification and test-adequacy review; it does
+not force a separate parallel QA loop by itself. The capability resolves a plan path, changed-file list, or test
 scope, runs the applicable test levels, stops on the first failing level, and
 records durable evidence before reporting a verdict.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+
+## Assurance Contract
+
+`code-test` realizes the final `verify` stage for code work. It is concrete verification, not a mandatory second QA pipeline. The selected QA level changes command breadth, evidence requirements, and whether a separate test-adequacy/security/adversarial review is opened. `quick` may run one focused verify-lite command; `standard+` runs the applicable graduated levels; `thorough|adversarial` may add adequacy, runtime-observation, security, or external adversary review only when the selected intensity/risk calls for it.
+
 
 ## Artifact Ownership
 
@@ -47,7 +53,7 @@ belong in adapter files.
 Minimum role mapping:
 
 - verification: QA role using `roles/modes/qa/test.md`;
-- review: QA reviewer for test adequacy when QA level is `standard` or higher;
+- review: optional QA reviewer for test adequacy when selected by QA/intensity risk;
 - reporting: editorial/reporting role only for user-facing summary polish, not
   for changing the test verdict.
 

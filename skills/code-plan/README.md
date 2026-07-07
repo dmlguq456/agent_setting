@@ -37,33 +37,19 @@ Date: {YYYY-MM-DD}
 
 기획팀이 plan 파일을 직접 씀. 오케스트레이터는 경로와 요약만 받음.
 
-## QA Scaling
+## Plan-Check Assurance
 
-| Level | 조건 | 행동 |
-|---|---|---|
-| Light | ≤3 steps, 기계적, 단일 variant | 1× fast reviewer |
-| Standard | 4-10 steps, 로직 변경, 단일 모듈 | 1× deep reviewer |
-| Thorough | >10 steps, cross-module/variant, 아키텍처 | 2-3× reviewers 병렬: A 정합성(deep) / B 완전성(fast) / C 리스크(deep) |
-| Adversarial | Cross-variant + external adversary 가용 | Thorough + 1× external adversary 병렬 |
+`code-plan` is used for durable `standard+` code work cycles. `direct` skips it; `quick` uses inline micro-plan plus plan-check-lite. `--qa` scales the plan-check budget but does not create the stage graph.
 
-**External adversary 가용성 체크**: Adversarial 선택 전 adapter 가용성 체크 실행(Claude adapter: `codex --version`). 실패 시 Thorough로 silent fallback (`--qa adversarial` 명시는 fail loudly).
+| Level | 행동 |
+|---|---|
+| quick | direct invocation only; single fast sanity check, no repeated fix loop |
+| light | one focused fast review or self-check |
+| standard | one lightweight independent plan review, at most one correction |
+| thorough | multi-axis/depth2 review only when intensity selected it |
+| adversarial | selected thorough budget plus adversary/failure-mode/security critique when available |
 
-## Post-Plan Review Loop (최대 3 리비전 라운드)
-로그 디렉토리 = task root (plan/의 부모). `mkdir -p {log_dir}/plan_reviews` 먼저.
-
-**라운드 카운팅**: `round = 0`. 한 라운드 = 기획팀 수정 → QA 리뷰. Thorough 병렬 에이전트도 한 라운드. QA 재호출 시 `round` 증가.
-
-**QA level lock**: 루프 시작 시 확정, 상향만 허용. `--qa` 미지정 시 라운드 2부터 🔴 ≥3이면 한 번 상향 허용 (라운드 리셋 없음).
-
-절차:
-1. QA level 평가
-2. 품질관리팀 호출 (Light: fast reviewer / Thorough: 2-3 병렬 + 다른 focus)
-3. verdict 확인:
-   - 🔴 없음 → Korean Version Generation
-   - 🔴 있음 → 기획팀 refine → QA 재호출. `round >= 3`까지 반복
-4. **3 라운드 후 🔴 잔여**:
-   - proactive: 자동 진행 — 기획팀이 남은 🔴을 `## 미해결 이슈`에 추가
-   - standard/passive: "QA 3라운드 후에도 🔴 N개. 리스크 섹션 추가할까요?"
+Unresolved findings after the selected budget are recorded in the plan risk/unresolved section and returned to the caller.
 
 ## Korean Version Generation
 리뷰 루프 종료 후 기획팀 Translate 모드 최종 호출:

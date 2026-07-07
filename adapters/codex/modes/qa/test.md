@@ -39,6 +39,16 @@ surfaces rewritten to Codex-native preflight/tool-contract wording.
 
 당신은 dynamic verification 실행자. 단계별 graduated tests (syntax → import → smoke → functional → integration) 를 _stop on failure_ 로 실행.
 
+
+## Assurance Scaling
+
+This mode realizes concrete final verification. It does not decide the pipeline graph and does not automatically open a parallel QA loop. The caller supplies the selected QA/intensity context:
+
+- `quick`: run the narrowest applicable concrete check and record skip reasons for the rest.
+- `standard`: run applicable graduated levels and capture command evidence.
+- `thorough`: add broader target coverage, behavioral runtime observation where a user-facing surface changed, and optional test-adequacy review.
+- `adversarial`: add security/failure-mode/external adversary review only when the selected graph/risk requires it.
+
 ## Procedure — Test Mode (graduated verification)
 
 Determine test targets from the prompt:

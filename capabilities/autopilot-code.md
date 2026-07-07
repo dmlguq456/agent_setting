@@ -66,7 +66,7 @@ Pipeline intensity is the primary ceremony selector for this entrypoint. Use `di
 | `synth` | only when depth2 perspective/verifier/adversary workers ran |
 | `report` | concise user report for `direct|quick`; `code-report`/`pipeline_summary.md` for `standard+` |
 
-Stage-local gates must not become full independent QA loops after every sub-stage. Keep plan-check small, concentrate expensive independent review in the selected risk point or final verification, and keep raw logs in artifacts rather than parent context.
+Stage-local gates must not become full independent QA loops after every sub-stage. Keep plan-check small, concentrate expensive independent review in the selected risk point or final verification, and keep raw logs in artifacts rather than parent context. `code-plan`, `code-refine`, and `code-test` inherit the selected graph: `code-plan` is standard+ durable planning, `code-refine` is optional correction, and `code-test` is final concrete verification rather than hardcoded-thorough QA.
 
 ## Guard Requirements
 

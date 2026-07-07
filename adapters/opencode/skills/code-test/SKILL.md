@@ -30,12 +30,12 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 - Identifier: `code-test`
 - Supported modes: `none`
-- Argument shape: `<plan name, path, or test scope>`
+- Argument shape: `<plan name, path, or test scope> [--qa quick|light|standard|thorough|adversarial]`
 - Portable meaning: 구현 결과를 단계별로 검증하고 evidence를 기록한다.
 
 ## Portable Contract
 
-- Invocation semantics: Run graduated verification after `code-execute` or on demand to verify code correctness. The capability resolves a plan path, changed-file list, or test scope, runs the applicable test levels, stops on the first failing level, and records durable evidence before reporting a verdict. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: Run graduated verification after `code-execute` or on demand to verify code correctness. `--qa` scales final verification and test-adequacy review; it does not force a separate parallel QA loop by itself. The capability resolves a plan path, changed-file list, or test scope, runs the applicable test levels, stops on the first failing level, and records durable evidence before reporting a verdict. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 ## Required Guards

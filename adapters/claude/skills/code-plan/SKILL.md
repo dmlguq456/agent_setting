@@ -41,36 +41,24 @@ Write the plan files directly. Return ONLY the file paths and a 3-5 line Korean 
 
 The agent writes the plan file directly; the orchestrator only receives paths and a summary.
 
-## QA Scaling
-If `$ARGUMENTS` contains `--qa quick|light|standard|thorough|adversarial`, use that level and strip the flag from the task description. Otherwise, auto-detect from the plan's scope. When `qa_level` is set in plan frontmatter, it overrides auto-detect.
+## Plan-Check Assurance
+If `$ARGUMENTS` contains `--qa quick|light|standard|thorough|adversarial`, use that level and strip the flag from the task description. Otherwise infer the assurance level from the caller's selected intensity and plan risk. `--qa` is not a stage graph selector; `code-plan` only runs when the caller already selected a durable `standard+` plan graph. `direct` skips this skill, and `quick` uses inline micro-plan plus plan-check-lite in the caller.
 
-| Level | Auto-detect condition | Action |
+The log directory is the task root folder (parent of `plan/`). Example: `<artifact-root>/plans/2026-03-18_task/plan/plan.md` → log dir is `<artifact-root>/plans/2026-03-18_task/`. Run `mkdir -p {log_dir}/_internal/plan_reviews` before invoking an independent review.
+
+| QA level | Plan-check action | Fix behavior |
 |---|---|---|
-| **Quick** | (manual only — never auto-selected) | 1× fast reviewer (Claude adapter: 품질관리팀 `model: "sonnet"`), single pass, **max 1 review round** (no iteration even if 🔴 found — 🔴 are recorded as 미해결 이슈 and loop exits) |
-| **Light** | ≤3 steps, mechanical, single-variant | 1× fast reviewer |
-| **Standard** | 4-10 steps, logic changes, single module | 1× deep reviewer |
-| **Thorough** | >10 steps, cross-module/variant, architectural | 2-3× reviewers in parallel: Agent A correctness (deep), B completeness (fast), C risk (deep, optional, >15 steps); each writes `round_{N}_{focus}.md`; all 🔴 issues must be resolved |
-| **Adversarial** | Cross-variant (SE+SS+CSS), shared modules (utils/, network.py), or >20 steps with architectural impact — **AND external adversary available** | Thorough-level 품질관리팀 + 1× external adversary (`codex-review-team` in Claude adapter) in parallel; external review writes adapter-specific review log; all 🔴 from ANY agent must be resolved |
-
-**External adversary availability check**: Before selecting Adversarial, run the adapter availability check (Claude adapter: `codex --version`, suppress stderr). If unavailable, fall back to Thorough silently. This check is skipped if `--qa adversarial` is explicitly specified (fail loudly instead).
-
-## Post-Plan Review Loop (max 3 revision rounds; quick = 1 round)
-
-The log directory is the task root folder (parent of `plan/`). Example: `<artifact-root>/plans/2026-03-18_task/plan/plan.md` → log dir is `<artifact-root>/plans/2026-03-18_task/`. Run `mkdir -p {log_dir}/_internal/plan_reviews` before invoking QA.
-
-**Round counting:** Initialize `round = 0`. A round = one plan-team fix → QA review cycle; all parallel Thorough agents count as one round. Increment `round` only when QA is re-invoked after a revision. "max 3 rounds" means 기획팀 is invoked at most 3 times to fix issues. **`quick` mode**: max rounds = 1 — after the single review pass, exit regardless of 🔴 (record residuals as 미해결 이슈 and skip the fix-round).
-
-**QA level lock:** QA level is determined once at loop start; only upward escalation allowed (no downgrade). If `--qa` was NOT specified, the orchestrator MAY upgrade once (starting round 2) when 🔴 count ≥3 in the one-line verdict (no review file reading needed); round counter does NOT reset. If `--qa` was manually specified, no change allowed. `quick` is never auto-upgraded (user opted in for fastest path).
+| `quick` | Should normally not reach `code-plan`. If invoked directly, run a single fast sanity review or self-check. | Record residual concerns in the plan; no repeated fix loop. |
+| `light` | One focused fast reviewer or equivalent self-check. | One correction pass only if the issue blocks execution. |
+| `standard` | Lightweight independent plan review focused on feasibility, missing steps, and concrete verification commands. | At most one correction pass. |
+| `thorough` | Deeper or multi-axis plan review only when `intensity=thorough` selected it. | Up to two correction passes; synthesize review outputs before refining. |
+| `adversarial` | Thorough plan review plus explicit adversary/failure-mode/security critique when the adapter can prove it ran. | Explicit `--qa adversarial` fails loudly if unavailable; auto escalation falls back to thorough. |
 
 After the 기획팀 agent returns:
-1. **Assess QA level** from plan scope per the QA Scaling table above.
-2. **Invoke 품질관리팀:** Prompt: "Review this plan in plan review mode for feasibility. Plan file: [plan_path]. Write review results to: [log_dir]/_internal/plan_reviews/round_{N}.md. Return ONLY the file path and a one-line verdict."
-   - Light: use fast reviewer (Claude adapter: pass `model: 'sonnet'`). Thorough: 2-3 parallel agents with focus suffix and separate output files; use fast reviewer for the B (completeness) agent and deep reviewer for A (correctness) and C (risk). Do NOT read the review file unless relaying verdict to user.
-3. **Check one-line verdict:**
-   - **No 🔴**: Loop ends → proceed to Korean Version Generation.
-   - **🔴 found AND qa_level == quick**: Loop ends (no fix-round). Invoke 기획팀: "Refine mode. Add 🔴 issues from {log_dir}/_internal/plan_reviews/round_1.md to the plan's 리스크 section under ## 미해결 이슈. Return brief Korean summary." Then proceed to Korean Version Generation.
-   - **🔴 found**: Re-invoke 기획팀: "Refine mode. Plan file: {plan_path}. QA review: {log_dir}/_internal/plan_reviews/round_{N}.md. Fix 🔴 issues. Return only changed steps + brief Korean summary." Increment `round`, re-invoke 품질관리팀. Repeat until no 🔴 or `round >= 3`.
-4. **If 🔴 remain after `round >= 3`**: Auto-proceed — invoke 기획팀: "Refine mode. Add remaining 🔴 issues to the plan's 리스크 section under ## 미해결 이슈. Return brief Korean summary." Then report to user: plan path, resolved issues, and unresolved issues with reasons.
+1. Decide whether the selected graph actually calls for independent plan review. If not, run an inline plan-check and proceed to mirror generation.
+2. If independent review is selected, invoke 품질관리팀 plan-review with the selected focus and write to `{log_dir}/_internal/plan_reviews/round_{N}.md`. Use separate reviewers only when `intensity=thorough|adversarial` selected bounded parallel/depth2 review.
+3. If review finds blocking issues, re-invoke 기획팀 for one bounded correction pass (`standard`) or up to the selected budget (`thorough|adversarial`). Do not loop merely because a QA level exists.
+4. If unresolved issues remain after the selected budget, add them to the plan's risk/unresolved section and proceed only when the caller can safely handle the risk.
 
 > Record any user-facing pause (e.g., active-plan ambiguity) so the pipeline skill can surface it in pipeline_summary.md.
 

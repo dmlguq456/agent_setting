@@ -47,63 +47,47 @@ Depth contract: depth 0 is the user-facing main session. Depth 1 is the capabili
 
 `--qa quick|light|standard|thorough|adversarial` remains supported for compatibility and explicit assurance override. It changes the rigor of `plan-check`, selected independent reviews, and `verify`; it must not choose the stage graph by itself, must not force a monolithic full pipeline when `intensity=direct|quick`, and must not grant depth-2 dispatch by itself. Depth-2 comes from `intensity=thorough|adversarial`.
 
-## §1. QA Levels (canonical)
+### §1.1 QA Assurance Levels (canonical)
 
-### §1.1. 5단계 공통 정의
+QA level is an _assurance budget_ for checks that the selected intensity graph already contains. It does not create stages, does not select the pipeline graph, and does not grant depth-2 dispatch. The only graph selector is `intensity`; the only depth-2 selectors are `intensity=thorough|adversarial`.
 
-| Level | Quality reviewer (parallel) | Fact-checker¹ (parallel) | External adversary (parallel) | Max round | 비고 |
+Reviewer counts below are upper bounds for a selected independent pass, not automatic work to run after every stage. If the current graph has only `plan-check-lite` and `verify-lite`, the QA level scales those checks in place rather than expanding the graph into a full loop.
+
+| QA level | Plan-check rigor | Selected independent pass budget | Final verify rigor | Retry/fix-loop budget | Intended use |
 |---|---|---|---|---|---|
-| **quick** | 1× fast reviewer | skip | skip | 1 (강제) | refine 단계 skip / 1라운드 강제 종료 / 🔴 잔존 시 `unresolved.md` 에 기록만 |
-| **light** | 2× fast reviewers (다른 axes²) | skip | skip | 1 | 사소 작업 — refine 단계 skip |
-| **standard** | 1× deep reviewer + 2× fast reviewers (다른 axes²) | 1× fast fact-checker | skip | 1 | 간단 작업 — refine 단계 가능 |
-| **thorough** | 2× deep reviewers + 2× fast reviewers (다른 axes²) | 1× fast fact-checker | skip | 2 | **default** — refine 단계 가능 |
-| **adversarial** | 2× deep reviewers + 2× fast reviewers (다른 axes²) | 1× fast fact-checker | 1× external adversary | 2 + external 1 | high-stakes. **research/doc 트랙은 + `Agent(연구팀 claim-verify)`** (적대적 외부 진위 — N-vote default-refute, WebSearch 모순 탐색; fact-check 와 보완층). code 트랙은 외부 claim 없어 미적용 |
+| `quick` | self-check or fast 3-4 question gate | none by default | one concrete sanity check / verify-lite | no automatic retry loop | small localized work where ceremony must stay low |
+| `light` | fast reviewer or focused self-check | at most one fast reviewer when the graph already selected a review point | focused command/render/source check | one pass, no multi-round refinement | low-risk tracked work |
+| `standard` | lightweight independent plan review where planning exists | one selected review point; avoid parallel fan-out by default | normal capability verification; doc/research may add source/fact check | at most one correction round | routine tracked work |
+| `thorough` | deeper plan review or multi-axis review only when the graph selected it | bounded parallel/depth2 perspectives only under `intensity=thorough` | broader verification evidence and test adequacy review | up to two correction rounds | complex cross-domain/cross-harness work |
+| `adversarial` | adversarial critique of the owner plan | thorough budget plus explicit external adversary / failure-mode / security / contradiction pass | verify plus adversarial evidence where the track supports it | two correction rounds plus one adversary pass | high-stakes, irreversible, security, or public-facing work |
 
-¹ Fact-checker 는 _doc/research/refine 파이프라인_ 에만 적용. autopilot-code 계열 (init-plan / refine-plan / execute-plan / run-test) 은 fact-checker 없음 — ground-truth 가 코드 자신이라 verbatim 대조 무용.
+Track rules:
 
-² 다중 reviewer 는 _다른 axes_ 분담: deep reviewer 는 도메인 expertise / methodology / completeness / safety 같은 고추론 axis, fast reviewer 는 coverage·typo·표기 일관성·structure·verbatim matching 같은 비용 효율 axis. 각 skill SKILL.md 가 자기 axis 분담 명시.
+- **Code**: no fact-checker. Ground truth is the code, tests, runtime behavior, API/CLI surface, and security review when relevant. `code-test` is final verification, not a mandatory separate reviewer fan-out.
+- **Doc/research/refine/note**: source/fact checking applies only when claims, citations, extracted cards, or external truth are in scope. `adversarial` may add claim-verify/contradiction checks.
+- **Design/apply/ship**: concrete render/build/deploy/compile evidence is the final verification surface; reviewer QA never substitutes for the executable/visual gate.
+- **Spec**: review checks coherence, API/data/UI impact, and downstream consistency; fact-checker is not automatic unless the spec cites external factual claims.
 
-> **`quick` 는 모든 autopilot mode 공통의 경량 tier**: 작은 자연어 요청·tweak 도 quick 으로 돌려 plan·log·snapshot artifact 를 남긴다 (1 라운드 강제 / refine 단계 skip). runtime adapter bootstrap 이 강제하는 "작업은 해당 autopilot-* 경유로 산출물 기록" 원칙의 비용 거의 0 인 경로 — 누적 drift 를 막는다.
+Defaults are derived in this order: explicit `--intensity`, explicit `--qa`, capability default, then `WORKFLOW.md §1.1` request-shape routing. In the absence of an explicit `--qa`, the assurance level normally follows intensity (`direct`→none/light, `quick`→quick, `standard|strong`→standard, `thorough`→thorough, `adversarial`→adversarial) unless a capability documents a lower routine default.
 
-### §1.2. External adversary availability 정책 (adversarial 전용)
+External adversary policy:
 
-- 현재 adapter 구현은 `external adversary` role 을 별도 wrapper/engine 조합으로 실현할 수 있다.
-- Adversarial 선택 전 adapter 가 external adversary availability 를 확인한다.
-- 실패 시: `--qa adversarial` _명시_ 호출 → fail loudly / auto-detect로 adversarial 선택 → Thorough로 silent fallback
-- external adversary 는 `adversarial-review --wait --scope auto` 실행 → `_internal/{stage}_reviews/round_{N}_external.md` 또는 adapter-specific legacy path (`round_{N}_codex.md`) 작성
+- External adversary is only required for `qa=adversarial` when the selected graph actually includes an adversarial pass.
+- Before claiming that pass, the adapter must prove an external reviewer/engine/harness ran. If unavailable: explicit `--qa adversarial` fails loudly; auto-escalated adversarial falls back to `thorough` and reports the fallback.
+- Adapter wrapper names are not portable semantics. The portable role is `external adversary`; runtime-specific names belong in adapter docs.
 
-### §1.3. opt-out flags (orthogonal)
+Opt-out flags remain orthogonal:
 
-- `--no-fact-check` — 모든 level에서 fact-checker 단독 skip (`quick`/`light`는 어차피 skip이라 무의미)
-- `--no-style-audit` — Stage B.5 style aspect skip (refine 계열만)
+- `--no-fact-check` disables fact/source checking where that check would otherwise be selected.
+- `--no-style-audit` disables style audit where the refine/audit capability exposes it.
+- These flags do not alter the stage graph and must not appear on unrelated capabilities.
 
-이 두 flag는 `--qa` level 무관하게 적용되며, fact-checker / style audit을 끄는 _유일한_ 메커니즘 (ad-hoc prompt로 무시 불가). **autopilot-refine · audit 전용** — 다른 skill의 argument-hint에 노출되면 drift.
+Sub-capability inheritance:
 
-### §1.4. Skill별 사용 매트릭스
-
-| Skill | Supported levels | Default | Adversarial | Fact-checker | 비고 |
-|---|---|---|---|---|---|
-| `autopilot-research` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | adversarial = thorough + external adversary + **claim-verify**(Step 4b 적대적 외부 진위). doc 트랙(draft/refine)도 adversarial 시 claim-verify 적용 후보 |
-| `autopilot-code` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ (dev only; debug 는 thorough 로 downgrade) | **X** (code 는 fact-checker 없음) | |
-| `autopilot-lab` | quick/light/standard/thorough/**adversarial** | `light` | ✓ | **X** (실험 prototype — code 와 동일 — fact-checker 없음) | default 가 light 인 이유: 실험 prototype 빠른 cycle 1순위. 사용자 high-stakes 발화 (논문 결과·외부 공개) 시 standard+ 자동 상향 |
-| `autopilot-draft` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | |
-| `autopilot-refine` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | standard+ | default 변경 (이전 quick → thorough) |
-| `autopilot-spec` | quick/light/standard/thorough/**adversarial** | `thorough` | ✓ | **X** (spec 은 청사진 — verbatim 대조 대상 아님) | `quick` = 작은 spec tweak·update mode (기존 prd.md 갱신) 자리 — ad-hoc 직접 Edit 대신 quick 으로 돌려 snapshot·log artifact 를 남김 |
-| `autopilot-note` | quick/light/standard/thorough/**adversarial** | `light` | ✓ | standard+ | routing skill — default light (routine cron). standard+ 자리는 주말 묶음·노션 migration 검수. fact-check 는 source ↔ 카드 본문 verbatim 대조 |
-| `autopilot-apply` | — (`--qa` 없음) | — | — | **X** | verify = build/compile gate (latexmk) + latexdiff. reviewer QA loop 아님 — `run-test` 의 build 검증과 동류. ground-truth 는 컴파일 결과 |
-| `analyze-user` | **adversarial (고정)** | `adversarial` | ✓ (강제) | standard+ | user profile 정확성 critical — qa 협상 불가, 다른 level 명시해도 adversarial 로 force |
-| `audit` | — | — | — | `--no-fact-check` flag | `--qa` 대신 `--scope` 사용; fact-check 는 Stage B.5 에서 별도 |
-| `init-plan` (sub) | quick/light/standard/thorough/adversarial | auto-detect from scope (plan frontmatter override) | ✓ | X | autopilot-code 내부 |
-| `refine-plan` (sub) | quick/light/standard/thorough/adversarial | inherit from plan frontmatter | ✓ | X | autopilot-code 내부 |
-| `execute-plan` (sub) | inherit | inherit | inherit | X | autopilot-code 내부 |
-| `run-test` (sub) | **forced thorough** (`--qa` 무시) | thorough | auto-upgrade if external adversary available | X | 항상 2팀 병렬, external adversary 가용 시 자동 상향 |
-| `final-report` (sub) | 1× fast writer (level-independent) | — | — | — | 모든 level 에서 writer 는 항상 fast writer |
-| `init-doc-strategy` (sub) | quick/light/standard/thorough/adversarial | inherit from autopilot-draft | ✓ | standard+ | autopilot-draft 내부 |
-| `refine-doc` (sub) | quick/light/standard/thorough/adversarial | inherit | ✓ | standard+ | autopilot-draft 내부 |
-
-> _Sub-skill_ (init-plan / refine-plan / execute-plan / run-test / final-report / init-doc-strategy / refine-doc): orchestrator가 결정한 `--qa` 값을 그대로 받음. 직접 호출 시는 자체 default 사용.
-
----
+- `code-plan` realizes the durable `plan` plus `plan-check` stages for `standard+` code graphs. It is not used for `direct`; `quick` uses inline micro-plan plus `plan-check-lite`.
+- `code-refine` is optional correction of an existing durable plan after user memo, plan-check feedback, or test failure. It is not an automatic stage in `quick`.
+- `code-test` realizes final concrete verification. Its rigor follows the selected QA/track policy but is no longer forced to `thorough` for every invocation.
+- `code-report` is reporting/synthesis; it does not add QA by itself.
 
 ## §2. Model Role 표기 (canonical)
 
@@ -132,7 +116,7 @@ Depth contract: depth 0 is the user-facing main session. Depth 1 is the capabili
 | Role family | Portable role | 실제 작동 |
 |---|---|---|
 | `기획팀` (plan-team) | deep maker | deep maker 단일 |
-| `품질관리팀` (qa-team) | variable reviewer | **가변** — review 모드: Light=1× fast reviewer / Standard=1× deep reviewer / Thorough=doc·research·refine 갈래 2× deep reviewers parallel · code 갈래 (init-plan/refine-plan/execute-plan) 1× deep reviewer + 1× fast reviewer parallel (completeness reviewer 는 mechanical 매칭 비중이 커 fast role 이 cost-efficient). test 모드 (run-test): Agent A=fast coverage + Agent B=deep accuracy (2026-05-22 테스트팀 흡수) · security-review 모드: deep reviewer |
+| `품질관리팀` (qa-team) | variable reviewer/verifier | **가변** — selected QA pass에서 fast/deep reviewer budget을 제공한다. `plan-check`는 light/standard에서 작게, `thorough|adversarial`에서만 parallel/depth2로 커질 수 있다. test 모드는 final verification evidence를 실행·검토하며, 별도 reviewer fan-out은 QA budget과 intensity가 함께 요구할 때만 연다. security-review 모드는 code track의 adversarial/failure-mode pass다. |
 | `연구팀` (research-team) | variable research reviewer | **가변** — default deep maker/reviewer (Plan Review·domain reviewer); fact-checker subrole·light QA는 fast fact-checker/reviewer |
 | `자료팀` (material-team) | deep maker default, fast tool worker subroles | 자료 수집·시각·분석. browser-fetch/pdf-extract/web-image-search 는 fast tool worker, figure-gen/data-script 는 deep maker |
 | `개발팀` (dev-team) | fast implementer default | fast implementer 단일. 복잡한 API·라이브러리 설계는 deep maker 로 상향 가능 |
@@ -144,13 +128,15 @@ Depth contract: depth 0 is the user-facing main session. Depth 1 is the capabili
 
 ## §3. Hard Cross-Doc Invariants (sync-skills `--check`가 자동 검사)
 
-1. 각 SKILL.md / README 에서 §1.1 5단계 정의의 **Quality reviewer / Fact-checker / External adversary 컬럼 wording**은 본 문서와 의미 일치 (사소한 표현 차이는 허용, 의미가 다르면 drift).
-2. **adversarial** 정의는 반드시 `thorough + 1× external adversary` (+ research/doc 트랙은 `1× 연구팀 claim-verify`). Adapter 구현명은 portable 의미가 아니며 adapter 문서가 소유한다. 자주 잘못 적힌 패턴: `standard + external/Codex` — _틀림_ (base 는 thorough).
-3. autopilot-code의 QA 표에 fact-checker가 적힌 곳이 있으면 drift (code는 fact-checker 없음).
-4. `--no-fact-check` / `--no-style-audit`는 autopilot-refine / audit 외 다른 skill에 노출되면 안 됨.
-5. external adversary wrapper 를 실제 reviewer role 단독으로 표기하면 drift — 실제 review 는 external adversary engine, wrapper 는 orchestrator role. §2 매트릭스에 따라 "external adversary + fast orchestrator" 같이 분리 표기.
-6. **의도 동반 (2026-06-11)**: 지침·규칙·hook 의 신설/강화에는 _왜(계기 사건 + 날짜)_ 를 인라인 주석 또는 commit message 에 남긴다 — 예: "(drill g2 가 잡은 구멍, 2026-06-11)". 의도 없는 규칙은 시간이 지나면 정리도 못 하고 의심도 못 하는 짐 — 연수 루프가 _의도 불명 지침_ 을 정리 후보로 보고한다. 의도의 최상위 보존 형태는 drill 케이스 (실행 가능한 의도 — 오답노트 승격 채널).
-7. **의미↔규칙 경계 (2026-06-22, worklog-board 참사)**: 의미 판단을 규칙·토큰 매칭 스크립트로 내리지 말 것 — spec 이 "의미 판단"을 명시하면 구현이 그 의미를 capture 했는지 검증한다 (상세·검증 절차·3선택 = DESIGN_PRINCIPLES §0.7).
+1. `intensity`가 stage graph/depth를 선택하고 `--qa`가 assurance budget만 조절한다는 분리가 모든 autopilot entrypoint와 adapter prompt에 유지되어야 한다. `--qa thorough`만으로 depth2 dispatch나 full pipeline을 열면 drift.
+2. `quick`은 inline micro-plan, `plan-check-lite`, verify-lite를 뜻한다. 작은 작업마다 durable `plan.md`, 반복 QA loop, parallel reviewer fan-out을 강제하면 drift.
+3. **adversarial** 정의는 selected thorough budget plus external adversary/failure-mode/security/claim-verify pass다. Adapter 구현명은 portable 의미가 아니며 adapter 문서가 소유한다. 자주 잘못 적힌 패턴: `standard + external/Codex` — _틀림_.
+4. autopilot-code의 QA 표에 fact-checker가 적힌 곳이 있으면 drift (code는 fact-checker 없음).
+5. `code-test`를 모든 호출에서 hardcoded thorough/parallel QA로 정의하면 drift. It scales final verification by selected QA/intensity and may add adequacy review only when selected.
+6. `--no-fact-check` / `--no-style-audit`는 autopilot-refine / audit 외 다른 skill에 노출되면 안 됨.
+7. external adversary wrapper 를 실제 reviewer role 단독으로 표기하면 drift — 실제 review 는 external adversary engine, wrapper 는 orchestrator role. §2 매트릭스에 따라 "external adversary + fast orchestrator" 같이 분리 표기.
+8. **의도 동반 (2026-06-11)**: 지침·규칙·hook 의 신설/강화에는 _왜(계기 사건 + 날짜)_ 를 인라인 주석 또는 commit message 에 남긴다 — 예: "(drill g2 가 잡은 구멍, 2026-06-11)". 의도 없는 규칙은 시간이 지나면 정리도 못 하고 의심도 못 하는 짐 — 연수 루프가 _의도 불명 지침_ 을 정리 후보로 보고한다. 의도의 최상위 보존 형태는 drill 케이스 (실행 가능한 의도 — 오답노트 승격 채널).
+9. **의미↔규칙 경계 (2026-06-22, worklog-board 참사)**: 의미 판단을 규칙·토큰 매칭 스크립트로 내리지 말 것 — spec 이 "의미 판단"을 명시하면 구현이 그 의미를 capture 했는지 검증한다 (상세·검증 절차·3선택 = DESIGN_PRINCIPLES §0.7).
 
 새 invariant 추가는 본 섹션 list에 한 행 추가하면 sync-skills Step 5b.5의 자동 검사 list에 포함.
 

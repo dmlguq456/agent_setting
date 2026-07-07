@@ -44,42 +44,18 @@ Re-read source files if needed, update the Korean plan in-place, and sync change
 Return which steps were changed and a brief summary.
 ```
 
-## QA Scaling
-If `$ARGUMENTS` contains `--qa light|standard|thorough|adversarial`, use that level and strip the flag.
+## Refine Assurance
+If `$ARGUMENTS` contains `--qa quick|light|standard|thorough|adversarial`, use that level and strip the flag. Otherwise inherit the plan's selected assurance context. `code-refine` is optional correction of an existing durable plan; it is not an automatic stage in `direct` or `quick`.
 
-> Note: code-refine delegates to 기획팀 and runs a QA review loop. The "3 rounds with 🔴 remaining" outcome is handled at the code-plan level and does not need separate gating here.
-
-Otherwise, auto-detect from the refinement scope:
-
-| Level | Auto-detect condition | Action |
+| QA level | Review action after refine | Fix behavior |
 |---|---|---|
-| **Quick** | (manual via `--qa quick` only — autopilot skips refine entirely in quick mode, so this only matters on direct invocation) | 1× fast reviewer (Claude adapter: 품질관리팀 `model: "sonnet"`), single pass, **max 1 round** (no fix-round on 🔴 — record as 미해결 이슈 and exit) |
-| **Light** | ≤3 steps changed, mechanical | 1× fast reviewer |
-| **Standard** | 4-10 steps changed, logic changes | 1× deep reviewer |
-| **Thorough** | >10 steps changed, architectural | 2× reviewers in parallel: A correctness (deep), B completeness (fast) |
-| **Adversarial** | Cross-variant (SE+SS+CSS), shared modules (utils/, network.py), or >20 steps changed — **AND external adversary available** | Thorough-level 품질관리팀 (A/B) + 1× external adversary (`codex-review-team` in Claude adapter) in parallel |
+| `quick` | Direct invocation only: one fast sanity review or self-check. | Record remaining concerns; no repeated fix-round. |
+| `light` | One focused fast review when the changed plan steps could affect execution. | One bounded correction if blocking. |
+| `standard` | One lightweight plan-review pass for changed steps. | At most one correction pass. |
+| `thorough` | Multi-axis review only when selected by `intensity=thorough`. | Up to two corrections with synthesis. |
+| `adversarial` | Thorough plus explicit adversary/failure-mode/security critique when available and selected. | Fail loudly only for explicit unavailable adversarial; otherwise fall back to thorough and report. |
 
-> See `--qa` flag for manual override. When `qa_level` is set in plan frontmatter, it overrides auto-detect.
-
-**External adversary availability check**: Before selecting Adversarial, run the adapter availability check (Claude adapter: `codex --version`, suppress stderr). If unavailable, fall back to Thorough silently. This check is skipped if `--qa adversarial` is explicitly specified (fail loudly instead).
-
-**Thorough mode** — launch 2 QA agents in parallel:
-- Agent A: "Focus on **correctness**: Do the revised steps reference correct files/functions? Are dependencies updated?"
-- Agent B: "Focus on **completeness**: Are downstream impacts of the changes reflected? Any missing steps?"
-- Each writes to a separate review file. All 🔴 issues from ANY agent must be addressed.
-
-## Post-Refine Review Loop (max 3 rounds; quick = 1 round)
-Log dir = task root folder (parent of `plan/`). Run `mkdir -p {log_dir}/_internal/plan_reviews` before invoking QA.
-
-After 기획팀 returns, assess QA level (changed step count, nature) per the table above, then:
-- **Light/Standard**: 1 agent — "Review changed steps. Plan: [path], Changed: [list]. Write to: {log_dir}/_internal/plan_reviews/refine_round_{N}.md. Return file path + one-line verdict." (Light: fast reviewer; Claude adapter: pass `model: 'sonnet'`)
-- **Thorough**: 2 agents in parallel (A/B), each with different focus suffix and output file. Use fast reviewer for the B (completeness) agent and deep reviewer for A (correctness).
-
-**Check verdict:**
-- **No 🔴**: Loop ends. Report changed steps and review results to user.
-- **qa_level == quick AND 🔴 found**: Loop ends after round 1. Add 🔴 issues to plan's **리스크** section under `## 미해결 이슈` (no fix-round). Report to user.
-- **🔴 found**: Re-invoke 기획팀 — "Refine mode. Fix QA issues. Plan: {plan_path}, QA review: {log_dir}/_internal/plan_reviews/refine_round_{N}.md. Re-read sources if needed. Return changed steps + summary." Then re-invoke QA. Repeat until clear or max rounds.
-- **After 3 rounds with 🔴 remaining**: Add to plan's **리스크** section under `## 미해결 이슈`. Report to user: changed steps, resolved issues, unresolved issues and why.
+After 기획팀 returns, run only the review action selected by the caller's graph. Do not open a repeated QA loop merely because `--qa` is high. If unresolved concerns remain after the selected budget, add them to the plan's risk/unresolved section and report them to the caller.
 
 ## Task
 Refine the plan at: $ARGUMENTS

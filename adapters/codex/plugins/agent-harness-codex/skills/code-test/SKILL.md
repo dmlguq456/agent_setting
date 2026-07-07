@@ -27,12 +27,12 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 - Identifier: `code-test`
 - Supported modes: `none`
-- Argument shape: `<plan name, path, or test scope>`
+- Argument shape: `<plan name, path, or test scope> [--qa quick|light|standard|thorough|adversarial]`
 - Portable meaning: 구현 결과를 단계별로 검증하고 evidence를 기록한다.
 
 ## Portable Contract
 
-- Invocation semantics: Run graduated verification after `code-execute` or on demand to verify code correctness. The capability resolves a plan path, changed-file list, or test scope, runs the applicable test levels, stops on the first failing level, and records durable evidence before reporting a verdict. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: Run graduated verification after `code-execute` or on demand to verify code correctness. `--qa` scales final verification and test-adequacy review; it does not force a separate parallel QA loop by itself. The capability resolves a plan path, changed-file list, or test scope, runs the applicable test levels, stops on the first failing level, and records durable evidence before reporting a verdict. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 
@@ -64,7 +64,7 @@ belong in adapter files.
 Minimum role mapping:
 
 - verification: QA role using `roles/modes/qa/test.md`;
-- review: QA reviewer for test adequacy when QA level is `standard` or higher;
+- review: optional QA reviewer for test adequacy when selected by QA/intensity risk;
 - reporting: editorial/reporting role only for user-facing summary polish, not
   for changing the test verdict.
 

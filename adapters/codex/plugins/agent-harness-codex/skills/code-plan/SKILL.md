@@ -1,6 +1,6 @@
 ---
 name: code-plan
-description: "Use when the user requests code-plan: 코드 분석 후 상세 구현 plan 작성. planning role과 QA loop를 사용한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
+description: "Use when the user requests code-plan: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity/QA에 맞는 plan-check gate를 수행한다. Read the portable capability spec and run the Codex preflight wrapper before claiming support."
 ---
 
 # code-plan
@@ -28,7 +28,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Identifier: `code-plan`
 - Supported modes: `none`
 - Argument shape: `<task description> [--qa quick|light|standard|thorough|adversarial]`
-- Portable meaning: 코드 분석 후 상세 구현 plan 작성. planning role과 QA loop를 사용한다.
+- Portable meaning: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity/QA에 맞는 plan-check gate를 수행한다.
 
 ## Portable Contract
 

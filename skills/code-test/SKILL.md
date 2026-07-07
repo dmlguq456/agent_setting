@@ -62,71 +62,25 @@ Format:
 **Verdict:** PASS / FAIL — [reason]
 ```
 
-## QA Requirements (Mandatory Thorough, Adversarial if external adversary available)
-**code-test always uses at minimum Thorough mode (2 parallel QA agents).** Testing rigor is fixed independent of `qa_level` — code-test always enforces at least Thorough.
+## Verification Assurance
+`code-test` is the concrete final `verify` stage. It is not hardcoded to thorough and does not automatically launch a parallel QA loop. Read the selected QA/intensity context from the plan frontmatter or caller prompt.
 
-**Adversarial auto-escalation**: Before launching QA, run the adapter availability check (Claude adapter: `codex --version 2>/dev/null`). If the external adversary is available, automatically escalate to Adversarial mode (add external adversary to the parallel batch). If unavailable, proceed with Thorough.
+| QA level | Verification behavior | Optional adequacy review |
+|---|---|---|
+| `quick` | Run the narrowest applicable concrete command/check and record skip reasons. | none by default |
+| `light` | Run focused syntax/import/smoke or the caller's explicit command. | fast review only if risk-selected |
+| `standard` | Run applicable graduated levels and capture command evidence. | one focused test-adequacy review when changed surface is nontrivial |
+| `thorough` | Broader target coverage plus behavioral runtime observation where user-facing surfaces changed. | selected parallel/depth2 review only if `intensity=thorough` selected it |
+| `adversarial` | Thorough verification plus security/failure-mode/external adversary evidence where the track supports it. | must prove the adversary/security pass ran before claiming it |
 
-**Always launch 2 QA agents in parallel** (Agent A = fast reviewer for the coverage checklist; Agent B = deep reviewer for accuracy diagnosis):
-- Agent A (fast reviewer; Claude adapter: `model: 'sonnet'`): "Focus on **coverage**: Were ALL changed files tested? Are any untested code paths or edge cases? Did tests use real data where available? Are behavioral changes compared before/after?"
-- Agent B (deep reviewer): "Focus on **accuracy**: Are failures correctly diagnosed (not misdiagnosed as pre-existing)? Were correct engine_modes used? Do commands match changed code paths? Are negative tests present?"
-- Each writes to: `_internal/test_reviews/test_review_coverage.md`, `_internal/test_reviews/test_review_accuracy.md`.
-
-**Adversarial (when external adversary available):**
-- Agent C (external adversary): 1× `codex-review-team` in Claude adapter (`adversarial-review --wait --scope auto`). Writes to adapter-specific external review log.
-- Launched in the same parallel batch as Agent A and B.
-
-All issues from ANY agent (including external adversary) must be addressed before proceeding.
-
-## Post-Test: QA Review
-After the 품질관리팀 (test 모드) agent returns:
-1. **Read the test log** (skill-level read — permitted per DESIGN_PRINCIPLES 3.3) (`{log_dir}/test_logs/test_report.md`).
-2. **Invoke 2× 품질관리팀 in parallel** (Agent A fast reviewer, Agent B deep reviewer):
-
-   - **Agent A prompt (coverage)**:
-   ```
-   Review this test report in code review mode.
-   Test log: {log_dir}/test_logs/test_report.md
-   Changed source files: [list from plan or git diff]
-   Review focus (COVERAGE): untested files/paths, real vs. random data, missing before/after comparisons.
-   Write review to: {log_dir}/_internal/test_reviews/test_review_coverage.md
-   Return the file path and a one-line verdict.
-   ```
-
-   - **Agent B prompt (accuracy)**:
-   ```
-   Review this test report in code review mode.
-   Test log: {log_dir}/test_logs/test_report.md
-   Changed source files: [list from plan or git diff]
-   Review focus (ACCURACY): correct failure diagnosis, correct engine_modes, commands match changed paths, negative tests present.
-   Write review to: {log_dir}/_internal/test_reviews/test_review_accuracy.md
-   Return the file path and a one-line verdict.
-   ```
-
-3. **Read both QA reviews** (skill-level read — permitted per DESIGN_PRINCIPLES 3.3). If either finds issues: re-invoke 품질관리팀 (test 모드) for those items, appending to test_report.md. If both pass: proceed to result reporting.
-
-## Commit Message Convention
-- Safety checkpoint: `chore: Safety checkpoint before {plan-name} execution`
-- Success commit: `{type}: {plan goal summary}\n\n{bullet list of key changes from checklist}`
-- Type prefix: `feat` (new functionality), `fix` (bug fix), `refactor` (code restructuring), `chore` (maintenance) — determined from the plan's goal
+After the 품질관리팀 (test mode) agent returns, read the test log and decide whether the selected assurance budget requires a separate adequacy review. If yes, run the focused reviewer(s) and append issues to the test report. If no, report the concrete verification verdict directly. Do not mutate source files while acting in `code-test`; any hotfix belongs to the caller's retry/fix stage.
 
 ## Report Results
-1. Relay the test results to the user (concise summary table).
-2. If all levels passed and QA approved:
-   - Check `git status` for uncommitted changes. If changes exist: **auto-commit** with a success commit message following the Commit Message Convention above (no user gating — per the family-wide "no autonomy gating" policy).
-   - Report success and stop.
-3. If any level failed, enter the **Hotfix Loop** (max 2 attempts):
+1. Relay the verification results to the caller with the report path, executed commands, skipped levels, blockers, and first actionable failure if any.
+2. If all selected levels passed and any selected adequacy review passed, return success. Do not commit; commit/merge ownership belongs to the caller or `code-report`/orchestrator.
+3. If any level failed, return failure with enough context for the caller's retry/fix stage. Do not invoke a hotfix agent from `code-test`; this keeps final verification read-only and prevents hidden mutation inside QA.
 
-### Hotfix Loop
-> Note: This loop is self-contained within a single code-test invocation. If the calling pipeline retries, this loop resets.
-
-1. **Attempt 1** (always automatic — low risk): Invoke a 개발팀 (dev-team) subagent in auto mode with the failing level, exact error, files involved, and instruction: "Auto mode. Hotfix: fix the following test failure. Read the error, read the file, fix it directly. Write a step log to the plan's log directory if available, otherwise skip logging."
-2. Re-invoke 품질관리팀 (test 모드) from the failed level onward (same logging requirements).
-3. If tests pass AND QA approves: auto-commit and report success.
-4. **Attempt 2** (always automatic — repeated failure but bounded retry budget): repeat with new error context.
-5. If still failing after 2 attempts: report failure with original error, what was attempted, and suggested next steps.
-
-> Record each commit / hotfix outcome per the Decision Point Logging Rule. code-test keeps decisions in memory; they propagate up to the pipeline skill's pipeline_summary.md.
+> Record the verdict and blocker context so the pipeline skill can decide whether to open its bounded retry/fix stage.
 
 ## Log Directory Resolution
 - If $ARG points to a plan file: log directory is the task root (grandparent of `plan/plan.md`).

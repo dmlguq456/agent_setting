@@ -1,5 +1,5 @@
 ---
-description: "Run the portable code-refine capability through the OpenCode adapter. Meaning: 사용자 메모·QA 피드백을 반영해 기존 plan을 정정한다."
+description: "Run the portable code-refine capability through the OpenCode adapter. Meaning: 사용자 메모·plan-check 피드백·검증 실패 메모를 반영해 기존 plan을 정정한다."
 ---
 
 Use the OpenCode adapter realization of portable capability `code-refine`.

@@ -1,5 +1,5 @@
 ---
-description: "Run the portable code-plan capability through the OpenCode adapter. Meaning: 코드 분석 후 상세 구현 plan 작성. planning role과 QA loop를 사용한다."
+description: "Run the portable code-plan capability through the OpenCode adapter. Meaning: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity/QA에 맞는 plan-check gate를 수행한다."
 ---
 
 Use the OpenCode adapter realization of portable capability `code-plan`.
