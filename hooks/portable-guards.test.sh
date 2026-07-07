@@ -2165,6 +2165,15 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runti
 else
   grep -q '^status=failed' /tmp/codex_rp0.out && ok "codex check-runtime-projection reports an unwired home as failed" || bad "codex check-runtime-projection unwired output wrong"
 fi
+if python3 "$ROOT/tools/context-footprint.py" --root "$ROOT" --skip-runtime --skip-hooks >/tmp/context_footprint.out 2>/tmp/context_footprint.err \
+  && grep -q '^context_footprint_report=1' /tmp/context_footprint.out \
+  && grep -q '^surface=codex-plugin ' /tmp/context_footprint.out \
+  && grep -q '^surface=claude ' /tmp/context_footprint.out \
+  && grep -q '^status=ok' /tmp/context_footprint.out; then
+  ok "context-footprint reports bootstrap and skill metadata without runtime hooks"
+else
+  bad "context-footprint should report deterministic metadata footprint"
+fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >/tmp/codex_rp1.out 2>/tmp/codex_rp1.err \
   && grep -q '^status=ok' /tmp/codex_rp1.out \
   && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/tmp/codex_rp2.out 2>/tmp/codex_rp2.err \

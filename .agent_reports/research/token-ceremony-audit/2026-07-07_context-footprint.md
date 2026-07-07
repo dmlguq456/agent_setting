@@ -64,4 +64,4 @@ Measured in current repo with synthetic session id `measure-token`.
 2. Skill description shortening P2 applied: active Codex plugin metadata is now about 4.8k chars and Claude skill metadata about 2.8k chars.
 3. Claude `autopilot-code` thinning P3 applied: selected body is now about 4.1k chars, with detailed policy in references loaded by selected mode/stage.
 4. Briefing gate P0 applied: normal `agent_setting` coding sessions no longer receive daily oncall briefing unless `MEM_BRIEFING_DESK` points there.
-5. Add a deterministic `context-footprint` check script later: count bootstrap, metadata, hook injection samples, and fail/warn on thresholds.
+5. Deterministic footprint guard P4 applied: `tools/context-footprint.py` reports bootstrap, metadata, active duplicate exposure, hook samples, and largest skill bodies with warning thresholds.

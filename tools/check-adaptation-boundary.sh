@@ -1193,7 +1193,7 @@ check_codex_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh design-mcp web-bundle fleet profile"
+  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py design-mcp web-bundle fleet profile"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2223,7 +2223,7 @@ check_opencode_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh design-mcp web-bundle fleet profile"
+  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py design-mcp web-bundle fleet profile"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue

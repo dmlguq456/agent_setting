@@ -54,14 +54,16 @@ Implemented design:
 
 ### P4 — Add deterministic footprint guard
 
-Recommended script: `tools/context-footprint.py`.
+Status: applied in this change set.
+
+Implemented script: `tools/context-footprint.py`.
 
 Checks:
 
-- bootstrap file chars (`AGENTS.md`, `CLAUDE.md`);
-- active skill metadata chars by adapter;
-- duplicate skill names across Codex native/plugin active surfaces;
-- sample hook outputs for memory/mode/recall/briefing;
-- top 10 largest selected skill bodies.
+- bootstrap file chars (`AGENTS.md`, `CLAUDE.md`, OpenCode `AGENTS.md`);
+- skill metadata chars by adapter;
+- active Codex native/plugin runtime exposure and duplicate skill names;
+- sample hook/preflight outputs for mode, recall, and briefing;
+- top 10 largest selected Skill bodies.
 
-Use it as a report/warn tool first, not a failing CI gate, until thresholds stabilize.
+It is report/warn by default and exits 0. Use `--strict` only when warnings should fail a check. Test fixtures use `--skip-runtime --skip-hooks` for deterministic metadata-only validation.
