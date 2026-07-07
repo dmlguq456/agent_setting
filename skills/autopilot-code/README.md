@@ -77,7 +77,7 @@ flowchart TD
 > autopilot-code는 fact-checker reviewer 미적용 (doc/research 파이프라인과 달리 cards/PDFs 대조할 ground-truth source가 없으므로 quality reviewer만 운용. adversarial 레벨은 external adversary 리뷰로 이를 대체).
 
 **스킬별 예외**:
-- **code-test**: 항상 Thorough (병렬 2팀 강제). `--qa` 플래그도 무시
+- **code-test**: final concrete verification. 선택된 `intensity`/`qa_level`에 따라 테스트 폭과 adequacy review 여부가 달라지며, 자체적으로 parallel QA fan-out을 강제하지 않음
 - **code-report**: 높은 임계값. Thorough에서도 병렬화 없음
 
 ## 핵심 설계 원칙

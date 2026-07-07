@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-note.md`, no
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability autopilot-note [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>] [--no-fact-check]`.
+   `[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]`.
 
 Portable contract excerpt:
 

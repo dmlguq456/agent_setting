@@ -1,7 +1,7 @@
 ---
 name: autopilot-note
 description: "산출물 라우팅 파이프 entry — 2-Layer 노트화·digest·triage 제안"
-argument-hint: "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>] [--no-fact-check]"
+argument-hint: "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]"
 metadata:
   group: entry
   fam: ops
@@ -123,7 +123,7 @@ QA 5 단계 정의 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS
 | **thorough** | + 2× deep reviewers + 2× fast reviewers + 1× fast fact-checker. round 2. _월간 cleanup_ / _노션 migration 검수_. |
 | **adversarial** | thorough + 1× external adversary (`codex-review-team` in Claude adapter). _Phase 3 노션 migration 1차 검수_ 같은 high-stakes 자리. |
 
-opt-out flag — `--no-fact-check` 만 (standard+ 자리에서).
+Fact/source checks follow the selected QA budget; this entrypoint does not expose a fact-check opt-out flag.
 
 **reviewer axis 분담**:
 - _linking precision_ (deep reviewer) — note `card_id`/`backbone_ids`/`task_ids` 가 올바른 L1 카드·L2 카탈로그 가리키나, 잘못된 매달림 catch
