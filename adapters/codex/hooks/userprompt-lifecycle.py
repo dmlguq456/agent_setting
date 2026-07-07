@@ -13,6 +13,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "adapters" / "codex" / "bin" / "preflight.sh"
+DEFAULT_TRACKED_ANCHOR = "🧭 📌tracked"
 
 
 def first_string(mapping: dict[str, Any], *keys: str) -> str:
@@ -105,6 +106,15 @@ def run_preflight(*args: str) -> str:
     return result.stdout
 
 
+def env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").lower() in {"1", "true", "yes", "on"}
+
+
+def is_default_tracked_anchor(text: str) -> bool:
+    stripped = text.strip()
+    return stripped.startswith(DEFAULT_TRACKED_ANCHOR) and "untracked" not in stripped
+
+
 def emit_context(event_name: str, parts: list[str]) -> None:
     context = "\n".join(part.strip() for part in parts if part.strip())
     if not context:
@@ -118,9 +128,10 @@ def main() -> int:
     sid = session_id(payload)
     prompt = prompt_text(payload)
 
-    parts = [
-        run_preflight("mode", current_cwd, sid),
-    ]
+    parts = []
+    mode_context = run_preflight("mode", current_cwd, sid)
+    if env_truthy("CODEX_MODE_ANCHOR_ALWAYS") or not is_default_tracked_anchor(mode_context):
+        parts.append(mode_context)
     if prompt:
         parts.append(run_preflight("recall", prompt, current_cwd))
     parts.append(run_preflight("briefing", current_cwd))

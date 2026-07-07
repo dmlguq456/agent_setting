@@ -233,18 +233,21 @@ Codex supports lifecycle hooks through `hooks.json` and inline config. This
 adapter materializes a Codex-native hook projection under `adapters/codex/hooks/`.
 Hook commands enter through `run-hook.sh`, which validates `AGENT_HOME` or the
 Codex harness pointer before executing bridge scripts.
-The `SessionStart` bridge calls `adapters/codex/bin/preflight.sh start` and
-`memory` for stale workflow cleanup and memory context, then emits the collected
-context as `hookSpecificOutput.additionalContext`. The `SessionEnd` and
+The `SessionStart` bridge calls `adapters/codex/bin/preflight.sh start` as
+a silent side effect for stale workflow cleanup. It keeps memory injection off by
+default because Codex `SessionStart` can run on startup, resume, clear, and
+compact; `CODEX_SESSION_MEMORY_INJECT=1` restores `memory` output as
+`hookSpecificOutput.additionalContext`. The `SessionEnd` and
 `Stop` bridges call `session-end` for `mem sync` plus the verified automatic distill worker
 (default on; `CODEX_DISTILL_ENABLE=0` opt-out) while emitting only Codex-valid
 minimal hook JSON (`{}`) so Stop hook output never violates Codex parsing. The
 `UserPromptSubmit` bridge extracts prompt text from top-level and nested
-message/content payloads, then calls `mode` (the one-line tracked/untracked routing
-anchor), plus `recall` and `briefing` when they have content, and the `turn-nudge`
-side effect, emitting the collected prompt context as one
-`hookSpecificOutput.additionalContext` — the mode anchor line, matching Claude Code's
-per-turn footprint (no routing-contract/git-risk aggregate). The structured
+message/content payloads, then calls `mode`, suppresses the default tracked anchor, preserves
+non-default mode context such as untracked state, plus `recall` and `briefing`
+when they have content, and the `turn-nudge` side effect. It emits
+`hookSpecificOutput.additionalContext` only when non-default prompt context exists
+(`CODEX_MODE_ANCHOR_ALWAYS=1` restores the tracked anchor); no routing-contract or
+git-risk aggregate is injected per turn. The structured
 `prompt-signal` subcommand (worker-startup/manual, not a per-turn hook call) reports
 `routing_contract=core/WORKFLOW.md`,
 `routing_action=read-workflow-and-select-codex-skill`, and
@@ -347,7 +350,7 @@ Harness-specific status signals still need Codex-native realization:
 | Harness signal | Codex direction |
 |---|---|
 | stale workflow bypass flag cleanup | Codex `SessionStart` hook bridge runs `preflight.sh start`; explicit preflight remains fallback when hooks are unavailable |
-| tracked/untracked workflow state | Codex `UserPromptSubmit` hook bridge runs `preflight.sh mode` (the one-line routing anchor, Claude-parity per-turn footprint); `preflight.sh prompt-signal` (worker-startup/manual subcommand, not a per-turn injection) additionally carries the full routing contract plus git dirty/worktree/dead-branch risk fields from `preflight.sh status`; explicit preflight remains fallback when hooks are unavailable |
+| tracked/untracked workflow state | Codex `UserPromptSubmit` hook bridge runs `preflight.sh mode`, suppresses the default tracked anchor, and emits only non-default mode context such as untracked state (`CODEX_MODE_ANCHOR_ALWAYS=1` restores the tracked anchor); `preflight.sh prompt-signal` (worker-startup/manual subcommand, not a per-turn injection) additionally carries the full routing contract plus git dirty/worktree/dead-branch risk fields from `preflight.sh status`; explicit preflight remains fallback when hooks are unavailable |
 | workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; includes tracked-dirty vs untracked counts and sibling worktree counts; keep Codex `/statusline` for native model/context/token/session fields |
 | UI boundary report | explicit `preflight.sh ui-info`; reports built-in footer/title support, unsupported arbitrary live statusline scripts, Skill/plugin autopilot entrypoints, and explicit/main-dispatched subagent behavior |
 | subagent delegation | explicit `preflight.sh subagent-info --check`; verifies the Codex `multi_agent` runtime feature and projected custom agents before claiming native subagent delegation parity |
@@ -379,7 +382,7 @@ Codex-native counterpart today.
 | workflow start cleanup | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]`; run it manually when no automatic hook is attached |
 | workflow signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` per turn; `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` is the worker-startup/manual subcommand carrying the full routing contract; run them manually when no automatic hook is attached |
 | workflow toggle | Run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly requests tracked/untracked mode switching |
-| memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text session-start memory injection |
+| memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text memory injection; Codex SessionStart hook emission is opt-in via `CODEX_SESSION_MEMORY_INJECT=1` |
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |
 | oncall briefing | Run `adapters/codex/bin/preflight.sh briefing [cwd]` before prompt handling on the dedicated agent desk |
 | loop guidance | Run `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill>` before following loop guides; Codex reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts. The `note` loop is an external scheduler/worklog-board contract; use the related `autopilot-note` Skill/plugin projection only for on-demand note routing |

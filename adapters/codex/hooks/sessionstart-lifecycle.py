@@ -73,6 +73,10 @@ def run_preflight(*args: str) -> str:
     return result.stdout
 
 
+def env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").lower() in {"1", "true", "yes", "on"}
+
+
 def emit_context(event_name: str, parts: list[str]) -> None:
     context = "\n".join(part.strip() for part in parts if part.strip())
     if not context:
@@ -85,13 +89,11 @@ def main() -> int:
     current_cwd = cwd(payload)
     sid = session_id(payload)
 
-    emit_context(
-        "SessionStart",
-        [
-            run_preflight("start", current_cwd, sid),
-            run_preflight("memory", current_cwd),
-        ],
-    )
+    run_preflight("start", current_cwd, sid)
+    parts = []
+    if env_truthy("CODEX_SESSION_MEMORY_INJECT"):
+        parts.append(run_preflight("memory", current_cwd))
+    emit_context("SessionStart", parts)
     return 0
 
 

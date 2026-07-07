@@ -819,7 +819,12 @@ check_codex_bin_wrappers() {
     fail_msg "Codex lifecycle hook bridges must route through preflight.sh lifecycle commands"
   fi
   if ! grep -Fq '세션 시작 기억 주입 확인' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'keeps session start context silent by default' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'can opt into session start memory context' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'CODEX_SESSION_MEMORY_INJECT=1' hooks/portable-guards.test.sh \
     || ! grep -Fq 'out["hookEventName"]=="SessionStart"' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'suppresses default tracked prompt context' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'injects only non-default prompt context' hooks/portable-guards.test.sh \
     || ! grep -Fq 'out["hookEventName"]=="UserPromptSubmit"' hooks/portable-guards.test.sh \
     || ! grep -Fq 'valid minimal hook JSON' hooks/portable-guards.test.sh \
     || ! grep -Fq 'adapter loop runtime logs are ignored' hooks/portable-guards.test.sh \
@@ -828,10 +833,11 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'headless_open_jobs=' hooks/portable-guards.test.sh \
     || ! grep -Fq 'hook_event=UserPromptSubmit' hooks/portable-guards.test.sh \
     || ! grep -Fq 'runtime_surface=adapter-owned-harness-status' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'CODEX_SESSION_MEMORY_INJECT' adapters/codex/hooks/sessionstart-lifecycle.py \
+    || ! grep -Fq 'CODEX_MODE_ANCHOR_ALWAYS' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'hookSpecificOutput.additionalContext' adapters/codex/README.md \
-    || ! grep -Fq 'hookSpecificOutput.additionalContext' adapters/codex/AGENTS.md \
     || ! grep -Fq 'hookSpecificOutput.additionalContext' adapters/codex/ADAPTATION.md; then
-    fail_msg "Codex lifecycle hooks must aggregate runtime context into hookSpecificOutput.additionalContext and prove it in portable guards"
+    fail_msg "Codex lifecycle hooks must prove silent defaults plus opt-in/non-default additionalContext paths in portable guards"
   fi
   if ! grep -Fq 'def text_from_value' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq '"content", "messages", "input", "payload", "event", "data"' adapters/codex/hooks/userprompt-lifecycle.py; then
@@ -1550,6 +1556,9 @@ PY
 check_codex_model_pin_role_map_consistency() {
   MODEL_PIN_DIVERGENCE="material-team external-adversary"
 
+  role_tmp="/tmp/codex-model-pin-role.$$"
+  role_err="/tmp/codex-model-pin-role.$$.err"
+
   for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
     agent="adapters/codex/agents/$profile.toml"
     if [ ! -f "$agent" ]; then
@@ -1565,13 +1574,13 @@ check_codex_model_pin_role_map_consistency() {
     esac
 
     mapped_role=$(sed -n 's/^Codex role-map input: `\(.*\)`$/\1/p' "$agent" | head -n 1)
-    if [ -z "$mapped_role" ] || ! adapters/codex/bin/role-map.sh "$mapped_role" >/tmp/codex-model-pin-role.out 2>/tmp/codex-model-pin-role.err; then
+    if [ -z "$mapped_role" ] || ! env -u AGENT_MODEL_FAST -u AGENT_MODEL_DEEP -u AGENT_MODEL_EXTERNAL -u AGENT_MODEL_ORCHESTRATOR -u AGENT_REASONING_FAST -u AGENT_REASONING_DEEP -u AGENT_REASONING_EXTERNAL -u AGENT_REASONING_ORCHESTRATOR -u AGENT_EXTERNAL_CMD adapters/codex/bin/role-map.sh "$mapped_role" >"$role_tmp" 2>"$role_err"; then
       fail_msg "$agent's Codex role-map input must resolve through adapters/codex/bin/role-map.sh to verify its model pin"
       continue
     fi
 
-    resolved_model=$(sed -n 's/^model=\(.*\)$/\1/p' /tmp/codex-model-pin-role.out | head -n 1)
-    resolved_reasoning=$(sed -n 's/^reasoning=\(.*\)$/\1/p' /tmp/codex-model-pin-role.out | head -n 1)
+    resolved_model=$(sed -n 's/^model=\(.*\)$/\1/p' "$role_tmp" | head -n 1)
+    resolved_reasoning=$(sed -n 's/^reasoning=\(.*\)$/\1/p' "$role_tmp" | head -n 1)
 
     if [ "$static_model" != "$resolved_model" ] || [ "$static_reasoning" != "$resolved_reasoning" ]; then
       fail_msg "$agent static pin (model=$static_model, reasoning=$static_reasoning) must match role-map.sh resolution for '$mapped_role' (model=$resolved_model, reasoning=$resolved_reasoning), or be added to the documented MODEL_PIN_DIVERGENCE list"

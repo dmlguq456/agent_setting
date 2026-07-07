@@ -49,7 +49,7 @@ preflight doctor path, without blurring the conformance/drill distinction above.
 | spec sync nudge | `hooks/spec-sync-nudge.sh` | `portable-check` | In a spec-backed project, a source edit that removes a value/identifier still described in `spec/*.md` should surface those spec lines so the corresponding spec text is synced as part of the change. Read-only: emits context only, never blocks. | Run `hooks/spec-sync-nudge.sh --file <path> [--old <s>] [--new <s>] [--cwd <dir>] [--format text]` after edits, or attach it to a post-write event that supplies the edited path and old/new strings. |
 | workflow tracked signal | `utilities/workflow-guard-hook.sh` | `portable-check` | Surface tracked/untracked mode and clean stale flags. | Run `utilities/workflow-guard-hook.sh --event prompt [--cwd <dir>] [--session <id>] [--format text]` before prompt handling, and `--event start` for stale flag GC. |
 | workflow mode toggle | `utilities/workflow-toggle.sh` | `portable-check` | Toggle or set the session-scoped `.untracked[.<session>]` escape-hatch flag under the artifact root. | Expose an adapter-native toggle surface; Codex uses `adapters/codex/bin/preflight.sh track [cwd] [session-id]`, Claude uses `/track`. |
-| memory injection | `tools/memory/mem.py inject` | `portable-check` | Inject relevant DB memory at session start. | Run `tools/memory/mem.py inject` for text output, or `tools/memory/mem.py inject --hook` when the runtime accepts Claude-style `additionalContext`. |
+| memory injection | `tools/memory/mem.py inject` | `portable-check` | Inject relevant DB memory at session start. | Run `tools/memory/mem.py inject` for text output, or `tools/memory/mem.py inject --hook` when the runtime accepts Claude-style `additionalContext`; adapters may keep automatic session-start injection opt-in when the runtime can fire start events on resume or compact. |
 | memory recall injection | `hooks/mem-recall-inject.sh` | `portable-check` | Recall signal words trigger DB recall and context injection. | Run `hooks/mem-recall-inject.sh --prompt <text> [--cwd <dir>] [--format text]` before prompt handling, or attach it to a prompt-submit event. |
 | memory distillation trigger | `hooks/mem-turn-nudge.sh`, `hooks/mem-distill-dispatch.sh` | `adapter-coupled-automation` | Periodically distill session deltas into DB memory through a no-tools worker. The shared dispatcher uses `MEM_DISTILL_WORKER=<executable>` with `<mode> <model> <prompt-file>` arguments. | Provide session transcript source (`mem.py distill --source <adapter>`), detached worker invocation, and no-tools/action contract before automatic memory mutation. |
 | oncall briefing injection | `hooks/mem-briefing-inject.sh` | `portable-check` | On the dedicated agent desk, inject daily oncall report once per day. | Run `hooks/mem-briefing-inject.sh --cwd <dir> [--format text]` before prompt handling, or attach it to a prompt-submit event. |
@@ -83,14 +83,17 @@ reads, and `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]
 before spec-changing capability work. It can also run
 `adapters/codex/bin/preflight.sh start [cwd] [session-id]` at session start for
 stale workflow bypass flag cleanup, and
-`adapters/codex/bin/preflight.sh mode [cwd] [session-id]` to surface tracked
-or untracked workflow state through the Codex `UserPromptSubmit` hook per turn;
+`adapters/codex/bin/preflight.sh mode [cwd] [session-id]` through the Codex
+`UserPromptSubmit` hook; the Codex bridge suppresses the default tracked anchor
+and emits only non-default mode context such as untracked state unless
+`CODEX_MODE_ANCHOR_ALWAYS=1`;
 `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` carries the
 fuller routing contract as a worker-startup/manual subcommand, not a per-turn
 injection. Use `adapters/codex/bin/preflight.sh
 track [cwd] [session-id]` to toggle the same session-scoped workflow bypass flag
 without relying on a Claude slash command. Use `adapters/codex/bin/preflight.sh
-memory [cwd]` for plain-text memory injection.
+memory [cwd]` for plain-text memory injection; Codex automatic SessionStart
+context is opt-in via `CODEX_SESSION_MEMORY_INJECT=1`.
 Use `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` to run the same
 recall-signal injection logic without Claude hook JSON.
 Use `adapters/codex/bin/preflight.sh briefing [cwd]` to surface the same

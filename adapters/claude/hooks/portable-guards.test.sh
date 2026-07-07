@@ -1738,12 +1738,20 @@ else
 fi
 if (cd "$TMP/repo" && MEM_STORE="$TMP/codex_hook_mem" python3 "$ROOT/tools/memory/mem.py" add durable thread "세션 시작 기억 주입 확인: Codex SessionStart bridge는 mem inject 결과를 hookSpecificOutput additionalContext로 전달해야 한다" >/tmp/codex_session_seed.out 2>/tmp/codex_session_seed.err) \
   && printf '{"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo" \
-  | MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionstart-lifecycle.py" >/tmp/codex_session_hook.out 2>/tmp/codex_session_hook.err \
+  | MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionstart-lifecycle.py" >/tmp/codex_session_hook_default.out 2>/tmp/codex_session_hook_default.err \
+  && [ ! -s /tmp/codex_session_hook_default.out ] \
+  && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_session_hook_default.out /tmp/codex_session_hook_default.err; then
+  ok "codex native hook projection keeps session start context silent by default"
+else
+  bad "codex native hook projection should keep session start context silent by default"
+fi
+if printf '{"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo" \
+  | CODEX_SESSION_MEMORY_INJECT=1 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionstart-lifecycle.py" >/tmp/codex_session_hook.out 2>/tmp/codex_session_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); out=d["hookSpecificOutput"]; assert out["hookEventName"]=="SessionStart"; assert "세션 시작 기억 주입 확인" in out["additionalContext"]' /tmp/codex_session_hook.out \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_session_hook.out /tmp/codex_session_hook.err; then
-  ok "codex native hook projection bridges session start lifecycle"
+  ok "codex native hook projection can opt into session start memory context"
 else
-  bad "codex native hook projection should bridge session start lifecycle"
+  bad "codex native hook projection should opt into session start memory context"
 fi
 if printf '{"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo" \
   | MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionend-lifecycle.py" >/tmp/codex_session_end_hook.out 2>/tmp/codex_session_end_hook.err \
@@ -1774,16 +1782,25 @@ if git check-ignore -q "$ROOT/adapters/claude/loops/oncall.log"; then
 else
   bad "adapter loop runtime logs should be ignored"
 fi
-if "$CODEX" track "$TMP/flowproj" promptlifecyclesid >/tmp/codex_prompt_toggle.out 2>/tmp/codex_prompt_toggle.err \
+if "$TOGGLE" --cwd "$TMP/flowproj" --session promptlifecyclesid --set tracked >/tmp/codex_prompt_toggle_tracked.out 2>/tmp/codex_prompt_toggle_tracked.err \
+  && printf '{"prompt":"plain prompt","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
+  | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook_tracked.out 2>/tmp/codex_prompt_hook_tracked.err \
+  && [ ! -s /tmp/codex_prompt_hook_tracked.out ] \
+  && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_prompt_hook_tracked.out /tmp/codex_prompt_hook_tracked.err; then
+  ok "codex native hook projection suppresses default tracked prompt context"
+else
+  bad "codex native hook projection should suppress default tracked prompt context"
+fi
+if "$TOGGLE" --cwd "$TMP/flowproj" --session promptlifecyclesid --set untracked >/tmp/codex_prompt_toggle.out 2>/tmp/codex_prompt_toggle.err \
   && printf '{"prompt":"remember this project context","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
   | MEM_NUDGE_INTERVAL=1 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook.out 2>/tmp/codex_prompt_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); out=d["hookSpecificOutput"]; ctx=out["additionalContext"]; assert out["hookEventName"]=="UserPromptSubmit"; assert "untracked" in ctx; assert "autopilot_route=" not in ctx; assert "routing_contract=" not in ctx; assert "git_dirty_tracked=" not in ctx; assert "hook_event=" not in ctx; assert "headless_open_jobs=" not in ctx' /tmp/codex_prompt_hook.out \
   && grep -q 'untracked' /tmp/codex_prompt_hook.out \
   && grep -q '^0$' "$TMP/codex_hook_mem/.codex-turn-state-promptlifecyclesid" \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_prompt_hook.out /tmp/codex_prompt_hook.err; then
-  ok "codex native hook projection injects only the mode routing anchor per turn (Claude-parity: no per-turn prompt-signal aggregate)"
+  ok "codex native hook projection injects only non-default prompt context"
 else
-  bad "codex native hook projection should inject only the mode routing anchor per turn (Claude-parity)"
+  bad "codex native hook projection should inject only non-default prompt context"
 fi
 if printf '{"context":{"cwd":"%s","session_id":"permissionsid"}}\n' "$TMP/flowproj" \
   | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/permissionrequest-lifecycle.py" >/tmp/codex_permission_hook.out 2>/tmp/codex_permission_hook.err \
