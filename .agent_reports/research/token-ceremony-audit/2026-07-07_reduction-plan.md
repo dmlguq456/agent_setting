@@ -42,13 +42,15 @@ Implemented design:
 
 ### P3 — Thin Claude autopilot bodies
 
-Problem: Claude `autopilot-code/SKILL.md` is 36.2k chars versus Codex 8.4k chars. All Claude skill bodies total about 545k chars, so selected monolithic skills are still expensive.
+Problem: Claude `autopilot-code/SKILL.md` was 44.4k chars after recent policy additions, versus Codex 8.6k chars. Selected monolithic skills are still expensive even when metadata is short.
 
-Recommended design:
+Status: applied in this change set for `autopilot-code`.
 
-- Use Codex style as target: entry skill = router + compact stage contract.
-- Split deep policy into `references/intensity.md`, `references/spec-impact.md`, `references/app-mode.md`, and `references/recovery.md`.
-- Preserve current behavior by requiring the selected reference reads at the relevant stage, not at skill load.
+Implemented design:
+
+- Claude/root `autopilot-code/SKILL.md` is now a 4.1k-char router + compact stage contract.
+- Deep policy moved into direct references: `context-and-guards.md`, `arguments-and-decisions.md`, `dev-pipeline.md`, `debug-audit.md`, and `pipeline-summary-safety.md`.
+- The router explicitly tells the agent which reference to read for each mode/stage, preserving behavior with progressive disclosure.
 
 ### P4 — Add deterministic footprint guard
 

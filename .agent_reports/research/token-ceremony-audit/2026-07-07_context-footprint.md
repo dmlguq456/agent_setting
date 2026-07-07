@@ -19,7 +19,7 @@ Caveat: `tiktoken` is not installed locally, so this report uses character count
 | `adapters/claude/CLAUDE.md` | 15,188 | 148 | Claude always-on project/bootstrap guidance candidate. |
 | `core/{CORE,WORKFLOW,CONVENTIONS,OPERATIONS,MEMORY}.md` total | 83,704 | 1,158 | Not automatically needed in full; expensive if read wholesale at start. |
 | Codex `autopilot-code/SKILL.md` | 8,446 | 129 | Loaded when selected; now relatively thin. |
-| Claude `autopilot-code/SKILL.md` | 36,217 | 594 | Loaded when selected; still large versus Codex. |
+| Claude `autopilot-code/SKILL.md` | 4,063 | 74 | P3 split: selected body is now router-sized; detailed policy moved to direct references. |
 | Codex native skills full bodies, 28 files | 126,372 | n/a | Progressive disclosure means not all should load up front. |
 | Codex plugin skills full bodies, duplicate 28 files | 126,372 | n/a | Same bodies duplicated through plugin projection. |
 | Claude skills full bodies, 28 files | 545,686 | n/a | Large if selected skills remain monolithic. |
@@ -62,6 +62,6 @@ Measured in current repo with synthetic session id `measure-token`.
 
 1. Codex duplicate skill exposure P1 applied: runtime projection now supports `--skills-mode native|plugin|both`, and plugin install defaults to plugin-only skill discovery.
 2. Skill description shortening P2 applied: active Codex plugin metadata is now about 4.8k chars and Claude skill metadata about 2.8k chars.
-3. Thin Claude `autopilot-code` like Codex: keep entry skill as router + compact stage contract, move deep policy tables into references loaded by selected intensity/mode.
+3. Claude `autopilot-code` thinning P3 applied: selected body is now about 4.1k chars, with detailed policy in references loaded by selected mode/stage.
 4. Briefing gate P0 applied: normal `agent_setting` coding sessions no longer receive daily oncall briefing unless `MEM_BRIEFING_DESK` points there.
 5. Add a deterministic `context-footprint` check script later: count bootstrap, metadata, hook injection samples, and fail/warn on thresholds.
