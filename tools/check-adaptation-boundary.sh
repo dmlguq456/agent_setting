@@ -826,7 +826,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'suppresses default tracked prompt context' hooks/portable-guards.test.sh \
     || ! grep -Fq 'injects only non-default prompt context' hooks/portable-guards.test.sh \
     || ! grep -Fq 'out["hookEventName"]=="UserPromptSubmit"' hooks/portable-guards.test.sh \
-    || ! grep -Fq 'valid minimal hook JSON' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'silent success output' hooks/portable-guards.test.sh \
     || ! grep -Fq 'adapter loop runtime logs are ignored' hooks/portable-guards.test.sh \
     || ! grep -Fq 'adapters/*/loops/*.log' .gitignore \
     || ! grep -Fq 'git_dirty_tracked=' hooks/portable-guards.test.sh \

@@ -239,8 +239,8 @@ default because Codex `SessionStart` can run on startup, resume, clear, and
 compact; `CODEX_SESSION_MEMORY_INJECT=1` restores `memory` output as
 `hookSpecificOutput.additionalContext`. The `SessionEnd` and
 `Stop` bridges call `session-end` for `mem sync` plus the verified automatic distill worker
-(default on; `CODEX_DISTILL_ENABLE=0` opt-out) while emitting only Codex-valid
-minimal hook JSON (`{}`) so Stop hook output never violates Codex parsing. The
+(default on; `CODEX_DISTILL_ENABLE=0` opt-out) while exiting 0 with silent stdout
+on success so Stop hook output never violates Codex parsing. The
 `UserPromptSubmit` bridge extracts prompt text from top-level and nested
 message/content payloads, then calls `mode`, suppresses the default tracked anchor, preserves
 non-default mode context such as untracked state, plus `recall` and `briefing`
