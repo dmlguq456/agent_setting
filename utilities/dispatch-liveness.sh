@@ -11,7 +11,14 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/agent-home.sh")}"
 JOBS="${1:-$AGENT_HOME/.dispatch/jobs.log}"
 STALE_MIN="${DISPATCH_STALE_MIN:-15}"   # transcript 가 N분+ 멈췄으면 hang/death 의심
-PROJ="$AGENT_HOME/projects"
+# runtime-root(harness-layer-sync §4.1 · HLS-6): 런타임이 세션 transcript/state 를 쓰는 곳은
+# AGENT_HOME(하네스 소스 repo)이 아니다. Claude 세션 transcript 는 ~/.claude/projects/ 에 있어
+# $AGENT_HOME/projects 로는 못 봐 살아있는 non-profile job 을 DEAD 오탐한다(2026-07-09 실측).
+# Claude=${CLAUDE_CONFIG_DIR:-$HOME/.claude}; 타 런타임은 DISPATCH_RUNTIME_ROOT 로 재정의
+# (Codex=$CODEX_HOME · OpenCode=~/.config/opencode). profile 경로(아래 homes/<slug>.<name>/)는
+# 이미 runtime-root 격리라 이 계약과 정합 — 건드리지 않는다.
+RUNTIME_ROOT="${DISPATCH_RUNTIME_ROOT:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}"
+PROJ="$RUNTIME_ROOT/projects"
 [ -f "$JOBS" ] || { echo "(jobs.log 없음: $JOBS)"; exit 0; }
 
 now=$(date +%s); alive=0; suspect=0; open_n=0

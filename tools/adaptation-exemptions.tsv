@@ -1,0 +1,15 @@
+# adaptation-exemptions.tsv — Claude 어댑터 공유층(hooks/tools/utilities) 물리 유지 예외 선언
+# harness-layer-sync spec §3.1 (가드 옆 예외 선언 계약 · ADAPTATION.md §6 "explicit exemption list, never a silent omission").
+# check-adaptation-boundary.sh 가 이 파일을 읽어 클래스 계약을 assert 한다.
+# 여기에 없는 최상위 공유층 파일은 canonical(../../../<layer>/<name>)로 collapse(symlink)되어 있어야 한다 — collapse 가 기본, 예외가 증명 부담.
+#
+# 형식(탭 구분): <adapter_path>	<class>	<rationale>	<delta_baseline>
+#   class = wrapper | delta
+#   wrapper: canonical 을 exec 하는 얇은 어댑터 래퍼. concrete 유지. 가드가 exec 위임 형식 assert.
+#   delta:   canonical + 선언된 어댑터 patch. concrete 유지. 가드가 canonical 과 실차이(≠) assert.
+#   delta_baseline: canonical baseline hash 바인딩 — Phase 2(hash-manifest, HLS-3)로 유보. 현재 '-'.
+#
+adapters/claude/hooks/core-first-guard.sh	wrapper	exec-delegates to $AGENT_HOME/hooks/core-first-guard.sh (repo-root portable guard); full-copy 시 SCRIPT_DIR/.. 의 빈 .core-grounding 를 읽어 항상 deny 하던 회귀를 정합(S6 2026-07-09).	-
+adapters/claude/hooks/core-read-marker.sh	wrapper	exec-delegates to $AGENT_HOME/hooks/core-read-marker.sh (core-first-guard 짝 마커 writer, 동형 wrapper).	-
+adapters/claude/hooks/mem-distill-dispatch.sh	delta	Claude 어댑터가 no-tools worker 를 bin/mem-distill-worker.sh 로 기본 바인딩(ADAPTER_DIR 심링크 unwrap 경로). canonical 은 MEM_DISTILL_WORKER 미설정 시 exit 0. settings.json MEM_DISTILL_ENABLE=1 이라 worker 기본값이 load-bearing — collapse 시 distill 무력화.	-
+adapters/claude/utilities/agent-worklog-state.sh	delta	Claude 런타임 로컬 worklog-board(~/.claude/worklog-board)·notes root 발견 기본값 하드코딩. canonical 은 env-var 구동+미설정 시 unconfigured. settings.json 에 해당 env 미설정이라 collapse 시 live board 발견 상실. Phase 2 재검토: settings.json env 외부화 후 collapse 가능.	-

@@ -229,13 +229,32 @@ check_claude_adapter_concrete_surfaces() {
   links=$(find adapters/claude -type l -print 2>/dev/null || true)
   # gitignored 로컬 설치물(예: tools/design-mcp/node_modules 의 .bin symlink)은
   # projection 파리티 대상이 아니다 — clean 트리엔 없고 로컬에만 존재하는 노이즈.
+  # harness-layer-sync §3.1: hooks/tools/utilities 최상위의 collapsed 심링크(canonical 로 접힘)는
+  # 정당한 실행본이므로 허용한다. 그 외 어댑터 심링크(하위 디렉터리·타 표면)는 여전히 passthrough 위반.
   links=$(printf '%s\n' "$links" | while IFS= read -r l; do
     [ -n "$l" ] || continue
     git check-ignore -q "$l" 2>/dev/null && continue
+    rel=${l#adapters/claude/}
+    layer=${rel%%/*}
+    sub=${rel#*/}
+    case "$layer" in
+      hooks|tools|utilities)
+        case "$sub" in
+          */*) : ;;  # 하위 디렉터리 심링크는 collapse 대상 아님 → 위반으로 남긴다
+          *)
+            if [ "$(readlink "$l")" = "../../../$layer/$sub" ] \
+              && [ -n "$(readlink -f "$l" 2>/dev/null)" ] \
+              && [ "$(readlink -f "$l" 2>/dev/null)" = "$(readlink -f "$layer/$sub" 2>/dev/null)" ]; then
+              continue
+            fi
+            ;;
+        esac
+        ;;
+    esac
     printf '%s\n' "$l"
   done)
   if [ -n "$links" ]; then
-    fail_msg "adapters/claude must contain adapter-owned concrete files, not symlink passthrough entries:"
+    fail_msg "adapters/claude symlinks must be canonical collapses (../../../<layer>/<name>) or adapter-owned concrete files:"
     printf '%s\n' "$links"
   fi
 }
@@ -288,6 +307,67 @@ check_link_target() {
   if [ "$target" != "$expected" ]; then
     fail_msg "$path points to $target; expected $expected"
   fi
+}
+
+# harness-layer-sync §3.1 / HLS-5: Claude 공유층(hooks/tools/utilities) 최상위 파일의 3-class 계약.
+#   collapsed = canonical(../../../<layer>/<name>) 로 접힌 symlink — 런타임 실행본이 canonical 에 닿음.
+#   wrapper   = canonical 을 exec 하는 얇은 concrete 어댑터 래퍼.
+#   delta     = canonical + 선언된 어댑터 patch 인 concrete 파일.
+# 예외(wrapper/delta)는 tools/adaptation-exemptions.tsv 에 등재돼야 하고, 미등재 concrete 는 collapse 누락으로 fail.
+# 가드는 "공유본이 옳은가"가 아니라 "런타임이 실제 실행하는 파일(settings.json→claude_setting→adapters/claude)이
+# canonical 과 정합인가"를 검증한다(§4, S-1 이 통과하던 구멍을 닫음).
+EXEMPTIONS_FILE=tools/adaptation-exemptions.tsv
+
+# 예외 클래스 조회: "wrapper" | "delta" | "" (미등재). $1 = adapter 경로.
+exemption_class() {
+  [ -f "$EXEMPTIONS_FILE" ] || { printf ''; return; }
+  awk -F'\t' -v p="$1" '$0 !~ /^[[:space:]]*#/ && $1 == p { print $2; exit }' "$EXEMPTIONS_FILE"
+}
+
+# 최상위 공유 파일 1건의 3-class 계약 assert. $1 = layer(hooks|tools|utilities), $2 = name.
+assert_shared_adapter_class() {
+  _layer=$1
+  _name=$2
+  _canonical="$_layer/$_name"
+  _adapter="adapters/claude/$_layer/$_name"
+  _expected_target="../../../$_layer/$_name"
+  _class=$(exemption_class "$_adapter")
+
+  if [ -L "$_adapter" ]; then
+    if [ -n "$_class" ]; then
+      fail_msg "$_adapter is a symlink but declared '$_class' in $EXEMPTIONS_FILE; exemptions (wrapper/delta) must stay concrete"
+      return
+    fi
+    _target=$(readlink "$_adapter")
+    if [ "$_target" != "$_expected_target" ]; then
+      fail_msg "$_adapter collapses to $_target; expected $_expected_target (canonical)"
+      return
+    fi
+    # 런타임 실행본이 canonical 에 실제로 닿는지 (projection 체인 physical resolution)
+    _resolved=$(readlink -f "$_adapter" 2>/dev/null || true)
+    _want=$(readlink -f "$_canonical" 2>/dev/null || true)
+    if [ -z "$_resolved" ] || [ "$_resolved" != "$_want" ]; then
+      fail_msg "$_adapter does not resolve to canonical $_canonical (resolved: ${_resolved:-missing})"
+    fi
+    return
+  fi
+
+  # concrete: 반드시 예외 등재 (collapse 가 기본, 예외가 증명 부담)
+  case "$_class" in
+    wrapper)
+      if ! grep -Fq "exec \"\$AGENT_HOME/$_layer/$_name\"" "$_adapter"; then
+        fail_msg "$_adapter is declared 'wrapper' but does not 'exec \"\$AGENT_HOME/$_layer/$_name\"' (canonical delegation form)"
+      fi
+      ;;
+    delta)
+      if cmp -s "$_canonical" "$_adapter"; then
+        fail_msg "$_adapter is declared 'delta' but is byte-identical to canonical $_canonical; collapse it instead of exempting"
+      fi
+      ;;
+    *)
+      fail_msg "$_adapter is a concrete copy of canonical $_canonical but is not declared in $EXEMPTIONS_FILE; collapse it to ../../../$_canonical or declare it wrapper/delta"
+      ;;
+  esac
 }
 
 check_install_layout_codex_projection() {
@@ -1055,7 +1135,7 @@ check_codex_utility_projection() {
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
   UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh"
-  UTILITY_DEFERRED="dispatch-liveness.sh extract_web_figures.py"
+  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh extract_web_figures.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -1199,7 +1279,7 @@ check_codex_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py design-mcp web-bundle fleet profile"
+  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv design-mcp web-bundle fleet profile"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2096,7 +2176,7 @@ check_opencode_utility_projection() {
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
   UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh"
-  UTILITY_DEFERRED="dispatch-liveness.sh extract_web_figures.py"
+  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh extract_web_figures.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -2232,7 +2312,7 @@ check_opencode_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py design-mcp web-bundle fleet profile"
+  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv design-mcp web-bundle fleet profile"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2588,16 +2668,16 @@ check_claude_hook_projection() {
     fail_msg "claude_setting/hooks points to $target; expected ../adapters/claude/hooks"
   fi
 
+  # harness-layer-sync §3.1: 각 canonical hook 의 어댑터 실행본이 3-class 계약(collapsed/wrapper/delta)에
+  # 맞는지 검증한다. collapse 가 기본, 예외는 tools/adaptation-exemptions.tsv 등재분만.
   for f in hooks/*; do
     [ -f "$f" ] || continue
     name=${f#hooks/}
-    if [ ! -f "adapters/claude/hooks/$name" ]; then
+    if [ ! -e "adapters/claude/hooks/$name" ]; then
       fail_msg "adapters/claude/hooks/$name is missing"
       continue
     fi
-    if [ -L "adapters/claude/hooks/$name" ]; then
-      fail_msg "adapters/claude/hooks/$name must be a concrete adapter-owned hook projection"
-    fi
+    assert_shared_adapter_class hooks "$name"
   done
 }
 
@@ -2612,59 +2692,38 @@ check_claude_utility_projection() {
     fail_msg "claude_setting/utilities points to $target; expected ../adapters/claude/utilities"
   fi
 
+  # harness-layer-sync §3.1: canonical utility 별 3-class 계약 검증 (collapse 기본, 예외 등재분만).
   for f in utilities/*; do
     [ -f "$f" ] || continue
     name=${f#utilities/}
-    if [ ! -f "adapters/claude/utilities/$name" ]; then
+    if [ ! -e "adapters/claude/utilities/$name" ]; then
       fail_msg "adapters/claude/utilities/$name is missing"
       continue
     fi
-    if [ -L "adapters/claude/utilities/$name" ]; then
-      fail_msg "adapters/claude/utilities/$name must be a concrete adapter-owned utility projection"
-    fi
+    assert_shared_adapter_class utilities "$name"
   done
 
+  # workflow-toggle.sh 은 collapse 대상이므로 실행본이 canonical 로 접혀 byte-동일임을 재확인 (심링크 해석).
   if [ ! -x adapters/claude/utilities/workflow-toggle.sh ]; then
-    fail_msg "adapters/claude/utilities/workflow-toggle.sh must be an executable concrete workflow toggle helper"
+    fail_msg "adapters/claude/utilities/workflow-toggle.sh must resolve to an executable canonical workflow toggle helper"
   elif ! cmp -s utilities/workflow-toggle.sh adapters/claude/utilities/workflow-toggle.sh; then
     fail_msg "adapters/claude/utilities/workflow-toggle.sh must stay byte-equivalent to utilities/workflow-toggle.sh"
   fi
 }
 
+# harness-layer-sync §3.1: 가드 실행본과 portable-guards 테스트는 collapse 대상(SAME) — canonical 로 접힌
+# 심링크 계약을 assert 한다. 과거의 concrete byte-equal copy 강제(divergence 위험원)를 대체.
 check_claude_boundary_guard_projection() {
-  adapter_guard=adapters/claude/tools/check-adaptation-boundary.sh
-  root_guard=tools/check-adaptation-boundary.sh
-
-  if [ ! -x "$adapter_guard" ]; then
-    fail_msg "$adapter_guard must be an executable concrete boundary guard projection"
-    return
-  fi
-  if [ -L "$adapter_guard" ]; then
-    fail_msg "$adapter_guard must be concrete, not a symlink passthrough"
-    return
-  fi
-  if ! cmp -s "$root_guard" "$adapter_guard"; then
-    fail_msg "$adapter_guard must stay byte-equivalent to $root_guard"
+  assert_shared_adapter_class tools check-adaptation-boundary.sh
+  if [ ! -x adapters/claude/tools/check-adaptation-boundary.sh ]; then
+    fail_msg "adapters/claude/tools/check-adaptation-boundary.sh must resolve to an executable canonical guard"
   fi
 }
 
-# codex-adapter-parity audit Step 9.0 (2026-07-04): close the mirror cmp -s enforcement gap for the
-# two mirrors this plan edits that were previously only tree/existence-checked, not content-checked
-# (check_claude_hook_projection / check_claude_loop_projection assert existence + non-symlink only).
 check_claude_portable_guards_projection() {
-  adapter_guard=adapters/claude/hooks/portable-guards.test.sh
-  root_guard=hooks/portable-guards.test.sh
-
-  if [ ! -x "$adapter_guard" ]; then
-    fail_msg "$adapter_guard must be an executable concrete portable-guards test projection"
-    return
-  fi
-  if [ -L "$adapter_guard" ]; then
-    fail_msg "$adapter_guard must be concrete, not a symlink passthrough"
-    return
-  fi
-  if ! cmp -s "$root_guard" "$adapter_guard"; then
-    fail_msg "$adapter_guard must stay byte-equivalent to $root_guard"
+  assert_shared_adapter_class hooks portable-guards.test.sh
+  if [ ! -x adapters/claude/hooks/portable-guards.test.sh ]; then
+    fail_msg "adapters/claude/hooks/portable-guards.test.sh must resolve to an executable canonical portable-guards test"
   fi
 }
 
@@ -2750,18 +2809,41 @@ check_claude_tool_projection() {
     fail_msg "claude_setting/tools points to $target; expected ../adapters/claude/tools"
   fi
 
+  # harness-layer-sync §3.1: 최상위 tools/* 파일은 3-class 계약(collapse 기본)으로 검증한다.
+  # 하위 디렉터리(design-mcp/·memory/·material/ 등)는 Phase 1 범위 밖 — 기존 concrete 계약 유지.
   for p in $(find tools -mindepth 1 ! -path '*/__pycache__' ! -path '*/__pycache__/*' -print); do
     rel=${p#tools/}
     adapter_p=adapters/claude/tools/$rel
-    if [ -L "$adapter_p" ]; then
-      fail_msg "$adapter_p must be a concrete adapter-owned tool projection"
-      continue
-    fi
-    if [ -d "$p" ]; then
-      [ -d "$adapter_p" ] || fail_msg "$adapter_p is missing"
-    elif [ -f "$p" ]; then
-      [ -f "$adapter_p" ] || fail_msg "$adapter_p is missing"
-    fi
+    case "$rel" in
+      */*)
+        # 하위 디렉터리 항목: concrete 유지 (collapse 대상 아님)
+        if [ -L "$adapter_p" ]; then
+          fail_msg "$adapter_p must be a concrete adapter-owned tool projection"
+          continue
+        fi
+        if [ -d "$p" ]; then
+          [ -d "$adapter_p" ] || fail_msg "$adapter_p is missing"
+        elif [ -f "$p" ]; then
+          [ -f "$adapter_p" ] || fail_msg "$adapter_p is missing"
+        fi
+        ;;
+      *)
+        if [ -d "$p" ]; then
+          # 최상위 디렉터리(design-mcp 등)는 concrete 디렉터리 유지
+          if [ -L "$adapter_p" ]; then
+            fail_msg "$adapter_p must be a concrete adapter-owned tool projection"
+          else
+            [ -d "$adapter_p" ] || fail_msg "$adapter_p is missing"
+          fi
+        elif [ -f "$p" ]; then
+          if [ ! -e "$adapter_p" ]; then
+            fail_msg "$adapter_p is missing"
+          else
+            assert_shared_adapter_class tools "$rel"
+          fi
+        fi
+        ;;
+    esac
   done
 }
 
