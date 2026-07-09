@@ -237,10 +237,9 @@ The `SessionStart` bridge calls `adapters/codex/bin/preflight.sh start` as
 a silent side effect for stale workflow cleanup. It keeps memory injection off by
 default because Codex `SessionStart` can run on startup, resume, clear, and
 compact; `CODEX_SESSION_MEMORY_INJECT=1` restores `memory` output as
-`hookSpecificOutput.additionalContext`. The `SessionEnd` and
-`Stop` bridges call `session-end` for `mem sync` plus the verified automatic distill worker
-(default on; `CODEX_DISTILL_ENABLE=0` opt-out) while exiting 0 with silent stdout
-on success so Stop hook output never violates Codex parsing. The
+`hookSpecificOutput.additionalContext`. The `SessionEnd` bridge calls `session-end` for `mem sync` plus the verified automatic distill worker
+(default on; `CODEX_DISTILL_ENABLE=0` opt-out). The `Stop` bridge enters the same lifecycle bridge but detaches
+`session-end` into the background and exits 0 with silent stdout so turn-scoped Stop hook output and timeouts never block on distillation. The
 `UserPromptSubmit` bridge extracts prompt text from top-level and nested
 message/content payloads, then calls `mode`, suppresses the default tracked anchor, preserves
 non-default mode context such as untracked state, plus `recall` and `briefing`
@@ -386,7 +385,7 @@ Codex-native counterpart today.
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` before prompt handling when no automatic prompt hook is attached |
 | oncall briefing | Run `adapters/codex/bin/preflight.sh briefing [cwd]` before prompt handling on the dedicated agent desk |
 | loop guidance | Run `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill>` before following loop guides; Codex reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts. The `note` loop is an external scheduler/worklog-board contract; use the related `autopilot-note` Skill/plugin projection only for on-demand note routing |
-| memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`. The user-facing `distill-propose` stays an explicit opt-in preview (reports `status=tool-contract`, exits 69 until `CODEX_DISTILL_ENABLE=1`). Automatic session-end and turn-nudge distillation is enabled by default: the `codex exec --sandbox read-only` worker is verified tool-free (see Distillation Boundary) and applies through `apply-distill-actions.py`; opt out with `CODEX_DISTILL_ENABLE=0` |
+| memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`. The user-facing `distill-propose` stays an explicit opt-in preview (reports `status=tool-contract`, exits 69 until `CODEX_DISTILL_ENABLE=1`). Automatic session-end and turn-nudge distillation is enabled by default: the `codex exec --sandbox read-only` worker is verified tool-free (see Distillation Boundary) and applies through `apply-distill-actions.py`; the Stop hook schedules session-end distillation detached to avoid foreground hook timeouts; opt out with `CODEX_DISTILL_ENABLE=0` |
 | worklog state signal | Run `adapters/codex/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before Codex updates notes or diagnoses board state |
 | role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` to resolve Codex model/reasoning-effort settings or pipeline profile aliases to native custom agents |
 | permission mapping | Run `adapters/codex/bin/preflight.sh permissions` to inspect the Codex approval/sandbox contract and confirm Claude `allowedTools` is unsupported |
@@ -395,7 +394,7 @@ Codex-native counterpart today.
 | role modes | Read `roles/MODES.md`, then run `adapters/codex/bin/preflight.sh mode-info <family/mode>`; read the reported `native_mode_path`, obey `fallback=reference-only` only for unsupported modes, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
 | mode guides | Use `adapters/codex/modes/<family>/<mode>.md` as the Codex-native realization guide reported by `mode-info`; satisfy named tool contracts or report unavailable before claiming support |
 | design modes | Use `adapters/codex/modes/design/<mode>.md` as the Codex-native realization guide; satisfy `visual-harness` or report unavailable before claiming rendered visual verification |
-| hook invariants | `adapters/codex/hooks/sessionend-lifecycle.py` realizes SessionEnd/Stop memory sync/distill hooks; `permissionrequest-lifecycle.py` is a registered no-op for Codex `PermissionRequest` (harness monitoring is owned by Codex native `/statusline`); `pretooluse-write-guard.py` realizes write guards (artifact-order, git-state, core-first, memory-write, and the spec read gate for spec-changing artifacts) through Codex `PreToolUse`; `posttooluse-read-marker.py` records actual spec/core reads through `PostToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
+| hook invariants | `adapters/codex/hooks/sessionend-lifecycle.py` realizes SessionEnd memory sync/distill and Stop detached session-end scheduling; `permissionrequest-lifecycle.py` is a registered no-op for Codex `PermissionRequest` (harness monitoring is owned by Codex native `/statusline`); `pretooluse-write-guard.py` realizes write guards (artifact-order, git-state, core-first, memory-write, and the spec read gate for spec-changing artifacts) through Codex `PreToolUse`; `posttooluse-read-marker.py` records actual spec/core reads through `PostToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
 | capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 
 ## Model Mapping

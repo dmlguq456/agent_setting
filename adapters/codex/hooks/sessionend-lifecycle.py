@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Codex SessionEnd bridge for portable memory lifecycle signals."""
+"""Codex SessionEnd/Stop bridge for portable memory lifecycle signals."""
 
 from __future__ import annotations
 
@@ -72,9 +72,39 @@ def run_preflight(*args: str) -> None:
         sys.stderr.write(result.stderr)
 
 
+def spawn_preflight(*args: str) -> None:
+    env = os.environ.copy()
+    env.setdefault("AGENT_HOME", str(ROOT))
+    env.setdefault("CODEX_SESSION_END_BACKGROUND", "1")
+    subprocess.Popen(
+        [str(PREFLIGHT), *args],
+        cwd=str(ROOT),
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        close_fds=True,
+    )
+
+
+def hook_event(payload: dict[str, Any]) -> str:
+    event = os.environ.get("CODEX_HOOK_EVENT", "")
+    if event:
+        return event
+    return nested_string(payload, "hook_event_name", "hookEventName", "event_name", "eventName")
+
+
 def main() -> int:
     payload = load_payload()
-    run_preflight("session-end", cwd(payload), session_id(payload))
+    event_cwd = cwd(payload)
+    event_session_id = session_id(payload)
+    if hook_event(payload).lower() == "stop":
+        # Codex Stop is turn-scoped and timeout-bound. The session-end pipeline can
+        # legitimately run a distillation worker, so detach it and return silently.
+        spawn_preflight("session-end", event_cwd, event_session_id)
+    else:
+        run_preflight("session-end", event_cwd, event_session_id)
     return 0
 
 

@@ -1773,9 +1773,9 @@ if printf '{"session_id":"stopsid","cwd":"%s"}\n' "$TMP/repo" \
   | MEM_STORE="$TMP/codex_hook_mem_stop" HOME="$TMP/codex_hook_home" sh -c "$codex_stop_command" >/tmp/codex_stop_hook.out 2>/tmp/codex_stop_hook.err \
   && [ ! -s /tmp/codex_stop_hook.out ] \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_stop_hook.out /tmp/codex_stop_hook.err; then
-  ok "codex native hook projection aliases Stop to session end lifecycle with silent success output"
+  ok "codex native hook projection detaches Stop session end lifecycle with silent success output"
 else
-  bad "codex native hook projection should alias Stop to session end lifecycle with silent success output"
+  bad "codex native hook projection should detach Stop session end lifecycle with silent success output"
 fi
 if git check-ignore -q "$ROOT/adapters/claude/loops/oncall.log"; then
   ok "adapter loop runtime logs are ignored"

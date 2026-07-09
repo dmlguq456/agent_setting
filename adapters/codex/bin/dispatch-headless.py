@@ -179,7 +179,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         execution_contract = (
             "\nAutopilot-code execution contract:\n"
             "- Before code edits, emit a `spec-significance` verdict.\n"
-            "- Select the stage graph from `intensity` before using QA. `direct` has no code-plan/plan-check/durable plan artifact; `quick` uses an inline micro-plan plus plan-check-lite; `standard+` uses owner-plan plus optional bounded depth2 verifier/planner, synth, then the durable code-execute -> code-test -> code-report loop.\n"
+            "- Select the stage graph from `intensity` before using QA. `direct` has no code-plan/plan-check/durable plan artifact; `quick` uses an inline micro-plan plus plan-check-lite; `standard+` uses owner-plan plus optional bounded depth2 verifier/planner, synth, then the durable code-execute -> code-test -> code-report loop. Canonical standard+ pipeline: code-plan -> code-execute -> code-test -> code-report.\n"
             "- For each durable sub-step that is actually used, read the matching adapters/codex/skills/<step>/SKILL.md when present and run adapters/codex/bin/preflight.sh capability-info <step>.\n"
             "- Pipeline role profiles: for standard+ stages, run adapters/codex/bin/preflight.sh role planning, role implementation, role verification, and role report to map stages to Codex-native agents.\n"
             "- Plan-check is required for quick+ but stays small: requirements coverage, over/under-scoping, executable verification, and missed spec-significant risk. Do not run independent QA after every stage by default.\n"
