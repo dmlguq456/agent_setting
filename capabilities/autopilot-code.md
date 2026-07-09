@@ -51,7 +51,7 @@ Minimum role mapping:
 - review: QA/reviewer role for plan, code, and test review;
 - app UI changes: design role as critic or handoff verifier when design artifacts exist.
 
-Pipeline intensity is the primary ceremony selector for this entrypoint. Use `direct` for inline fixes with no plan stage, `quick` for micro-plan plus plan-check-lite, `standard` for the normal closed loop, `strong` for the normal loop plus one risk-focused independent review, and `thorough|adversarial` for owner-worker orchestration that may open bounded depth-2 perspective or verifier workers. QA level remains an assurance override or compatibility input; it changes `plan-check`, selected independent reviews, and `code-test` rigor, but must not force a monolithic full pipeline by itself. Concrete models remain adapter-specific.
+Pipeline intensity is the primary ceremony selector for this entrypoint. Use `direct` for inline fixes with no plan stage, `quick` for micro-plan plus plan-check-lite, `standard` for the normal closed loop, `strong` for the normal loop plus one risk-focused independent review, and `standard+` for owner-worker orchestration that should open bounded depth-2 verifier/planner work when separable, with `thorough|adversarial` expanding to multi-perspective or adversary workers. QA level remains an assurance override or compatibility input; it changes `plan-check`, selected independent reviews, and `code-test` rigor, but must not force a monolithic full pipeline by itself. Concrete models remain adapter-specific.
 
 ## Stage Mapping
 
@@ -94,7 +94,7 @@ Additional code-entry gates:
 3. Run git/worktree preflight and remember the starting `HEAD`.
 4. If `spec/` exists, read `spec/prd.md` plus relevant mode contracts before planning.
 5. Emit `spec-significance: within-spec` or `spec-significance: SPEC-SIGNIFICANT (...)`.
-6. Select the stage graph from pipeline intensity, then map common stages to code sub-capabilities. `direct` skips `code-plan`; `quick` uses an inline micro-plan and plan-check-lite; `standard+` uses `code-plan`, optional `code-refine`, `code-execute`, `code-test`, and `code-report` according to the selected graph, QA override, and resume point. For `thorough|adversarial`, a depth-1 capability owner may dispatch bounded depth-2 planner/verifier/adversary workers and synthesize their short reports before final write-back.
+6. Select the stage graph from pipeline intensity, then map common stages to code sub-capabilities. `direct` skips `code-plan`; `quick` uses an inline micro-plan and plan-check-lite; `standard+` uses `code-plan`, optional `code-refine`, `code-execute`, `code-test`, and `code-report` according to the selected graph, QA override, and resume point. For `standard+`, a depth-1 capability owner may dispatch bounded depth-2 planner/verifier/adversary workers when the task is separable and must synthesize their short reports before final write-back. `direct|quick` stay inline unless explicitly escalated.
 7. Before each durable write-back or commit, re-run git/worktree safety and stop if `HEAD` or merge state changed unexpectedly.
 8. Record implementation evidence and verification results in `pipeline_summary.md`.
 

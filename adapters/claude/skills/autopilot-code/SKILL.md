@@ -46,9 +46,9 @@ Defaults:
 |---|---|---|---|
 | `direct` | intake -> produce -> sanity/report | 없음 | 독립 QA 없음 |
 | `quick` | intake -> orient-lite -> micro-plan -> plan-check-lite -> produce -> verify-lite -> report | 기본 없음 | 3-4문항 inline check |
-| `standard` | code-plan -> plan-check -> code-execute -> code-test -> code-report | 필수 | 필요 시 lightweight plan review |
-| `strong` | standard + one risk-focused independent review | 필수 | 가장 위험한 지점 1회 |
-| `thorough`/`adversarial` | standard + bounded depth2 planner/verifier/adversary synthesis | 필수 | depth2 worker report를 짧게 합성 |
+| `standard` | code-plan -> plan-check -> bounded depth2 verifier/planner? -> synth -> code-execute -> code-test -> code-report | 필수 | separable work는 depth2 verifier/planner 기본 |
+| `strong` | standard + one risk-focused depth2 review | 필수 | 가장 위험한 지점 1회 |
+| `thorough`/`adversarial` | standard + multi-axis depth2 planner/verifier/adversary synthesis | 필수 | depth2 worker report를 짧게 합성 |
 
 ## Mode Routing
 

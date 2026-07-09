@@ -56,7 +56,7 @@ The log directory is the task root folder (parent of `plan/`). Example: `<artifa
 
 After the 기획팀 agent returns:
 1. Decide whether the selected graph actually calls for independent plan review. If not, run an inline plan-check and proceed to mirror generation.
-2. If independent review is selected, invoke 품질관리팀 plan-review with the selected focus and write to `{log_dir}/_internal/plan_reviews/round_{N}.md`. Use separate reviewers only when `intensity=thorough|adversarial` selected bounded parallel/depth2 review.
+2. If independent review is selected, invoke 품질관리팀 plan-review with the selected focus and write to `{log_dir}/_internal/plan_reviews/round_{N}.md`. Use separate reviewers when the selected standard+ owner-worker graph opens bounded depth2 review; thorough/adversarial expands that to multi-axis review.
 3. If review finds blocking issues, re-invoke 기획팀 for one bounded correction pass (`standard`) or up to the selected budget (`thorough|adversarial`). Do not loop merely because a QA level exists.
 4. If unresolved issues remain after the selected budget, add them to the plan's risk/unresolved section and proceed only when the caller can safely handle the risk.
 

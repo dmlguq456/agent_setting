@@ -452,7 +452,7 @@ dispatch_prompt_contract=codex-harness-autopilot-prompt
 dispatch_input_validation=capability-info,mode-info,qa-level,intensity-depth-parent
 worker_startup_signal=status,prompt-signal,mode
 worker_startup_signal_contract=preflight.sh status . codex-headless; preflight.sh prompt-signal . codex-headless; preflight.sh mode . codex-headless
-constraints=main-or-owner-dispatched,max-depth-2-for-thorough-adversarial,register-open-job,explicit-capability-mode-qa-intensity-depth-parent,transcript-liveness-required
+constraints=main-or-owner-dispatched,max-depth-2-for-standard-plus-owner,register-open-job,explicit-capability-mode-qa-intensity-depth-parent-parent_sid,transcript-liveness-required
 claude_headless=unsupported
 fallback=manual-main-session-or-report-unavailable
 EOF
@@ -667,7 +667,7 @@ auto_spawn=explicit-only
 custom_agent_config=model,model_reasoning_effort,sandbox_mode
 memory_scout=adapters/codex/agents/memory-scout.toml
 dispatch_fallback=adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start
-constraints=depth-one-native-agents,depth-two-only-via-capability-owner-dispatch,approval-and-sandbox-inherited
+constraints=depth-one-owner-with-standard-plus-depth-two,depth-two-standard-plus-via-capability-owner-dispatch,approval-and-sandbox-inherited
 claude_subagent_frontmatter=unsupported
 parity_caveat=Codex custom agents are TOML config layers, not Claude Code Agent frontmatter; verify discovery, UI, approval inheritance, and noninteractive behavior before claiming parity.
 note=Codex subagents are native workflows and do not use Claude Agent files; verify the multi_agent feature, projected custom agents, and runtime config behavior before claiming delegation parity.

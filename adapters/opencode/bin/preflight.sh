@@ -348,7 +348,7 @@ liveness_heartbeat=<agent-home>/.dispatch/logs/<slug>.heartbeat
 liveness_plugin_load_marker=<agent-home>/.dispatch/plugin-load.<slug>.mark
 liveness_check=adapters/opencode/bin/preflight.sh liveness [jobs.log]
 harvest_check=adapters/opencode/bin/preflight.sh harvest [--jobs jobs.log] [--slug slug] [--mark-done]
-constraints=main-or-owner-dispatched,max-depth-2-for-thorough-adversarial,register-open-job,explicit-capability-mode-qa-intensity-depth-parent,transcript-liveness-required
+constraints=main-or-owner-dispatched,max-depth-2-for-standard-plus-owner,register-open-job,explicit-capability-mode-qa-intensity-depth-parent-parent_sid,transcript-liveness-required
 claude_headless=unsupported
 fallback=manual-main-session-or-report-unavailable
 EOF

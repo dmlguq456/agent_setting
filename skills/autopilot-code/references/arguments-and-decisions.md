@@ -22,22 +22,22 @@ Pipeline intensity is the stage-graph selector (canonical: [CONVENTIONS.md §1](
 
 - `direct`: `intake -> produce -> sanity/report`; no code-plan, no plan-check, no durable plan artifact.
 - `quick`: `intake -> orient-lite -> micro-plan -> plan-check-lite -> produce -> verify-lite -> report`; no independent QA after every stage.
-- `standard`: durable `code-plan -> plan-check -> code-execute -> code-test -> code-report`.
-- `strong`: standard plus one risk-focused independent review.
-- `thorough` / `adversarial`: depth-1 owner may open bounded depth-2 planner/verifier/adversary workers and must synthesize short reports.
+- `standard`: durable `code-plan -> plan-check -> bounded depth2 verifier/planner? -> synth -> code-execute -> code-test -> code-report`.
+- `strong`: standard plus one risk-focused depth2 review.
+- `thorough` / `adversarial`: depth-1 owner expands bounded depth-2 planner/verifier/adversary workers and must synthesize short reports.
 
 `plan-check` is required for every non-`direct` graph, but expensive independent QA is not repeated after every sub-stage by default.
 
 ### --qa <level>
 
-QA assurance policy는 [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-qa-assurance-levels-canonical)이 단일 source다. `--qa`는 stage graph 선택자가 아니라 `plan-check`, selected independent review, final `code-test`의 강도 override다. Depth2 dispatch는 `--qa thorough`가 아니라 `--intensity thorough|adversarial`에서만 열린다.
+QA assurance policy는 [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-qa-assurance-levels-canonical)이 단일 source다. `--qa`는 stage graph 선택자가 아니라 `plan-check`, selected independent review, final `code-test`의 강도 override다. Depth2 dispatch는 `--qa thorough`가 아니라 `standard+` owner-worker graph에서 열린다. `direct|quick`은 명시 escalation 없이는 depth2를 열지 않는다.
 
 - Supported: `quick` / `light` / `standard` / `thorough` / `adversarial`.
 - Code track에는 fact-checker가 없다. Ground truth는 코드, tests, runtime behavior, API/CLI surface, security review다.
 - `quick`: inline micro-plan + plan-check-lite + produce + verify-lite. `code-plan`, `code-refine`, 반복 independent QA, durable `plans/{date}_{slug}/`는 기본적으로 열지 않는다.
 - `standard`: durable `code-plan -> code-execute -> code-test -> code-report` with lightweight plan-check and concrete verification.
 - `strong`: standard graph plus one risk-focused independent review at the riskiest point.
-- `thorough|adversarial`: depth-1 owner may open bounded depth2 planner/verifier/adversary workers and must synthesize their short reports before write-back.
+- `thorough|adversarial`: depth-1 owner expands bounded depth2 planner/verifier/adversary workers and must synthesize their short reports before write-back.
 - Security review: auth / crypto·secrets / external input / api_contract / deserialization changes under adversarial risk may add `roles/modes/qa/security-review.md`; claim it only if the pass actually ran.
 - Invalid value: fall back to the selected intensity's default assurance and warn.
 

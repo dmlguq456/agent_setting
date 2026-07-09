@@ -54,9 +54,9 @@ Autopilot entrypoints choose `intensity` before `--qa`. Intensity selects the st
 |---|---|---|
 | one-off answer, typo, rename, explicit no-artifact work | `direct` | no plan stage, no plan-check, no durable plan artifact |
 | small localized tracked change or doc minor | `quick` | inline micro-plan plus small plan-check; no depth dispatch |
-| routine tracked code/doc/spec/design work | `standard` | durable plan/checklist when the capability owns a work cycle |
-| important multi-file or risk-bearing work | `strong` | one independent review at the riskiest point, not every stage |
-| complex cross-domain or cross-harness work | `thorough` | depth-1 owner may open bounded depth-2 perspective/verifier workers |
+| routine tracked code/doc/spec/design work | `standard` | durable plan/checklist; depth-1 owner should open bounded depth-2 verifier/planner work when the task is separable |
+| important multi-file or risk-bearing work | `strong` | default depth-2 check at the riskiest point, not every stage |
+| complex cross-domain or cross-harness work | `thorough` | depth-1 owner opens bounded depth-2 perspective/verifier workers |
 | high-stakes, irreversible, security, or external-facing work | `adversarial` | thorough plus explicit adversary/failure-mode/security pass |
 
 Direct work is the only graph with no plan. Every non-`direct` autopilot graph has a `plan-check`, but repeated independent QA after every sub-stage is not the default. See `CONVENTIONS.md §1` for the canonical stage graph.

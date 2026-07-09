@@ -1074,7 +1074,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         orphans = []       # project-level fallback (parent dead/off-screen/no-env)
         loops_jobs = []    # no-parent-is-normal (cron loops) — no orphan marker
         for j in group_jobs:
-            if getattr(j, "parent_slug", None):
+            if getattr(j, "parent_slug", None) and getattr(j, "depth", 1) >= 2:
                 job_children.setdefault(j.parent_slug, []).append(j)
             elif j.is_child and j.parent_sid and j.parent_sid in shown_sids:
                 children.setdefault(j.parent_sid, []).append(j)

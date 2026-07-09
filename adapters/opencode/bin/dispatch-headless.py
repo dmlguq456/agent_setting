@@ -31,8 +31,19 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--intensity", default="standard")
     p.add_argument("--depth", type=int, default=1)
     p.add_argument("--parent", dest="parent_slug")
+    p.add_argument(
+        "--parent-session-id",
+        default=os.environ.get("AGENT_DISPATCH_PARENT_SESSION_ID")
+        or os.environ.get("OPENCODE_SESSION_ID")
+        or os.environ.get("CODEX_THREAD_ID")
+        or os.environ.get("CLAUDE_CODE_SESSION_ID"),
+    )
     p.add_argument("--worker-role")
     p.add_argument("--owner", dest="capability_owner")
+    p.add_argument(
+        "--owner-harness",
+        default=os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "opencode",
+    )
     p.add_argument("--agent", default="build")
     p.add_argument("--model-role", default=os.environ.get("OPENCODE_DISPATCH_MODEL_ROLE"))
     p.add_argument("--model", default=os.environ.get("OPENCODE_DISPATCH_MODEL"))
@@ -133,15 +144,16 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
     if args.capability == "autopilot-code":
         extra = (
             "\nAutopilot-code execution contract:\n"
-            "- Choose the stage graph from intensity before QA. direct has no plan stage; quick uses micro-plan plus plan-check-lite; standard+ uses durable plan/execute/test/report.\n"
+            "- Choose the stage graph from intensity before QA. direct has no plan stage; quick uses micro-plan plus plan-check-lite; standard+ uses owner-plan plus optional bounded depth2 verifier/planner, synth, and durable execute/test/report.\n"
             f"- Run adapters/opencode/bin/preflight.sh qa-policy {args.qa} code and obey assurance_scope, stage_graph_selector, reviewer_counts, and independent delegation policy before claiming QA coverage.\n"
             "- Plan-check is required for quick+ but stays small; do not run independent QA after every stage by default.\n"
-            "- thorough/adversarial may use bounded depth-2 planner/verifier/adversary workers and must synthesize short reports; depth 3+ is forbidden.\n"
+            "- standard+ may use bounded depth-2 planner/verifier workers when separable; thorough/adversarial expands to multi-axis/adversary workers. Synthesize short reports; depth 3+ is forbidden.\n"
         )
     return (
         "Run the requested portable harness work.\n"
         f"capability={args.capability}\nmode={args.mode}\nqa={args.qa}\n"
         f"intensity={args.intensity}\ndepth={args.depth}\nparent={args.parent_slug or '-'}\n"
+        f"parent_session_id={args.parent_session_id or '-'}\n"
         f"worktree={args.worktree}\n"
         f"{extra}",
         "generated",
@@ -175,10 +187,14 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth},harness=opencode"
     if args.parent_slug:
         pipe += f",parent={args.parent_slug}"
+    if args.parent_session_id:
+        pipe += f",parent_sid={args.parent_session_id}"
     if args.worker_role:
         pipe += f",worker_role={args.worker_role}"
     if args.capability_owner:
         pipe += f",owner={args.capability_owner}"
+    if args.owner_harness:
+        pipe += f",owner_harness={args.owner_harness}"
     settings = args.resolved_model_settings
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},variant={settings['variant']}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -255,7 +271,7 @@ def validate_dispatch_metadata(args: argparse.Namespace) -> int:
         return fail("invalid-dispatch-depth", 64, depth=str(args.depth), allowed_depth="1,2")
     if args.depth == 2 and not args.parent_slug:
         return fail("missing-dispatch-parent", 64, depth=str(args.depth))
-    if args.depth == 2 and args.intensity not in {"thorough", "adversarial"}:
+    if args.depth == 2 and args.intensity in {"direct", "quick"}:
         return fail("invalid-depth-two-intensity", 64, depth=str(args.depth), intensity=args.intensity)
     return 0
 
@@ -304,8 +320,10 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_DEPTH": str(args.depth),
             "AGENT_DISPATCH_INTENSITY": args.intensity,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
+            "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
             "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
+            "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
             # Headless liveness contract: the OpenCode runtime child exposes
             # the dispatch slug to the plugin, which records a plugin-load
             # marker at init and touches <log_dir>/<slug>.heartbeat on every
@@ -325,8 +343,10 @@ def main(argv: list[str]) -> int:
     print(f"intensity={args.intensity}")
     print(f"depth={args.depth}")
     print(f"parent={args.parent_slug or '-'}")
+    print(f"parent_session_id={args.parent_session_id or '-'}")
     print(f"worker_role={args.worker_role or '-'}")
     print(f"owner={args.capability_owner or '-'}")
+    print(f"owner_harness={args.owner_harness or '-'}")
     print(f"agent={args.agent}")
     settings = args.resolved_model_settings
     print(f"model_source={settings['source']}")

@@ -526,7 +526,7 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^dispatch_input_validation=capability-info,mode-info,qa-level,intensity-depth-parent$' /tmp/codex_headless.out \
   && grep -q '^worker_startup_signal=status,prompt-signal,mode$' /tmp/codex_headless.out \
   && grep -q '^worker_startup_signal_contract=preflight.sh status . codex-headless; preflight.sh prompt-signal . codex-headless; preflight.sh mode . codex-headless$' /tmp/codex_headless.out \
-  && grep -q '^constraints=main-or-owner-dispatched,max-depth-2-for-thorough-adversarial,register-open-job,explicit-capability-mode-qa-intensity-depth-parent,transcript-liveness-required$' /tmp/codex_headless.out; then
+  && grep -q '^constraints=main-or-owner-dispatched,max-depth-2-for-standard-plus-owner,register-open-job,explicit-capability-mode-qa-intensity-depth-parent-parent_sid,transcript-liveness-required$' /tmp/codex_headless.out; then
   ok "codex headless wrapper reports dispatch contract"
 else
   bad "codex headless wrapper should report dispatch contract"
@@ -2585,7 +2585,7 @@ if "$OPENCODE" headless >/tmp/opencode_headless.out 2>/tmp/opencode_headless.err
   && grep -q '^liveness_heartbeat=<agent-home>/.dispatch/logs/<slug>.heartbeat$' /tmp/opencode_headless.out \
   && grep -q '^liveness_plugin_load_marker=<agent-home>/.dispatch/plugin-load.<slug>.mark$' /tmp/opencode_headless.out \
   && grep -q '^liveness_check=adapters/opencode/bin/preflight.sh liveness \[jobs.log\]$' /tmp/opencode_headless.out \
-  && grep -q '^constraints=main-or-owner-dispatched,max-depth-2-for-thorough-adversarial,register-open-job,explicit-capability-mode-qa-intensity-depth-parent,transcript-liveness-required$' /tmp/opencode_headless.out; then
+  && grep -q '^constraints=main-or-owner-dispatched,max-depth-2-for-standard-plus-owner,register-open-job,explicit-capability-mode-qa-intensity-depth-parent-parent_sid,transcript-liveness-required$' /tmp/opencode_headless.out; then
   ok "opencode headless wrapper reports dispatch contract"
 else
   bad "opencode headless wrapper should report dispatch contract"

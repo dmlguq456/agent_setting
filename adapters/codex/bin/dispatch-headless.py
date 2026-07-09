@@ -33,8 +33,18 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--intensity", default="standard")
     p.add_argument("--depth", type=int, default=1)
     p.add_argument("--parent", dest="parent_slug")
+    p.add_argument(
+        "--parent-session-id",
+        default=os.environ.get("AGENT_DISPATCH_PARENT_SESSION_ID")
+        or os.environ.get("CODEX_THREAD_ID")
+        or os.environ.get("CLAUDE_CODE_SESSION_ID"),
+    )
     p.add_argument("--worker-role")
     p.add_argument("--owner", dest="capability_owner")
+    p.add_argument(
+        "--owner-harness",
+        default=os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "codex",
+    )
     p.add_argument("--prompt-file")
     p.add_argument("--prompt-text")
     p.add_argument("--jobs")
@@ -169,12 +179,12 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         execution_contract = (
             "\nAutopilot-code execution contract:\n"
             "- Before code edits, emit a `spec-significance` verdict.\n"
-            "- Select the stage graph from `intensity` before using QA. `direct` has no code-plan/plan-check/durable plan artifact; `quick` uses an inline micro-plan plus plan-check-lite; `standard+` uses the durable code-plan -> code-execute -> code-test -> code-report loop.\n"
+            "- Select the stage graph from `intensity` before using QA. `direct` has no code-plan/plan-check/durable plan artifact; `quick` uses an inline micro-plan plus plan-check-lite; `standard+` uses owner-plan plus optional bounded depth2 verifier/planner, synth, then the durable code-execute -> code-test -> code-report loop.\n"
             "- For each durable sub-step that is actually used, read the matching adapters/codex/skills/<step>/SKILL.md when present and run adapters/codex/bin/preflight.sh capability-info <step>.\n"
             "- Pipeline role profiles: for standard+ stages, run adapters/codex/bin/preflight.sh role planning, role implementation, role verification, and role report to map stages to Codex-native agents.\n"
             "- Plan-check is required for quick+ but stays small: requirements coverage, over/under-scoping, executable verification, and missed spec-significant risk. Do not run independent QA after every stage by default.\n"
             "- When the selected graph calls for independent plan review, run adapters/codex/bin/preflight.sh mode-info qa/plan-review and adapters/codex/bin/preflight.sh role verification before claiming that review.\n"
-            "- Pipeline intensity controls ceremony. For thorough/adversarial intensity, a depth-1 capability owner may dispatch bounded depth-2 planner/verifier/adversary workers and must synthesize short reports; depth 3+ is forbidden.\n"
+            "- Pipeline intensity controls ceremony. For standard+ intensity, a depth-1 capability owner should dispatch bounded depth-2 planner/verifier workers when the task is separable; thorough/adversarial expands this to multi-axis/adversary workers. Synthesize short reports; depth 3+ is forbidden.\n"
             "- Implementation: run adapters/codex/bin/preflight.sh role implementation for standard+ implementation stages and obey the requested development mode.\n"
             "- Testing: run adapters/codex/bin/preflight.sh mode-info qa/test when concrete verification commands are used, satisfy the reported verification-runner contract, and record evidence under test_logs/ for standard+ work cycles.\n"
             "- Reporting: direct/quick return a concise report; standard+ runs adapters/codex/bin/preflight.sh role report, then writes or updates pipeline_summary.md with changed files, verification commands/results, artifact paths, and unsupported Codex tool contracts.\n"
@@ -202,8 +212,10 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- intensity: {args.intensity}\n"
         f"- depth: {args.depth}\n"
         f"- parent: {args.parent_slug or '-'}\n"
+        f"- parent_session_id: {args.parent_session_id or '-'}\n"
         f"- worker_role: {args.worker_role or '-'}\n"
         f"- owner: {args.capability_owner or '-'}\n"
+        f"- owner_harness: {args.owner_harness or '-'}\n"
         f"- worktree: {args.worktree}\n\n"
         f"{execution_contract}"
         "User task:\n"
@@ -261,10 +273,14 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth},harness=codex"
     if args.parent_slug:
         pipe += f",parent={args.parent_slug}"
+    if args.parent_session_id:
+        pipe += f",parent_sid={args.parent_session_id}"
     if args.worker_role:
         pipe += f",worker_role={args.worker_role}"
     if args.capability_owner:
         pipe += f",owner={args.capability_owner}"
+    if args.owner_harness:
+        pipe += f",owner_harness={args.owner_harness}"
     settings = args.resolved_model_settings
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},reasoning={settings['reasoning']}"
     if args.approval != "inherit":
@@ -349,7 +365,7 @@ def validate_dispatch_inputs(args: argparse.Namespace) -> int:
         return fail("invalid-dispatch-depth", 64, depth=str(args.depth), allowed_depth="1,2")
     if args.depth == 2 and not args.parent_slug:
         return fail("missing-dispatch-parent", 64, depth=str(args.depth))
-    if args.depth == 2 and args.intensity not in {"thorough", "adversarial"}:
+    if args.depth == 2 and args.intensity in {"direct", "quick"}:
         return fail("invalid-depth-two-intensity", 64, depth=str(args.depth), intensity=args.intensity)
     return 0
 
@@ -429,8 +445,10 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_DEPTH": str(args.depth),
             "AGENT_DISPATCH_INTENSITY": args.intensity,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
+            "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
             "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
+            "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
         }
         if profile_home is not None:
             dispatch_env["CODEX_HOME"] = str(profile_home)
@@ -447,8 +465,10 @@ def main(argv: list[str]) -> int:
     print(f"intensity={args.intensity}")
     print(f"depth={args.depth}")
     print(f"parent={args.parent_slug or '-'}")
+    print(f"parent_session_id={args.parent_session_id or '-'}")
     print(f"worker_role={args.worker_role or '-'}")
     print(f"owner={args.capability_owner or '-'}")
+    print(f"owner_harness={args.owner_harness or '-'}")
     settings = args.resolved_model_settings
     print(f"model_source={settings['source']}")
     print(f"model_role={settings['role']}")

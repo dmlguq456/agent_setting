@@ -157,9 +157,10 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- worktree: {args.worktree}\n"
     )
     depth_note = (
-        "Depth contract: depth 1 is a capability-owner worker. It may open bounded depth-2 "
-        "sub-workers only when intensity is thorough/adversarial and the task explicitly requires it; "
-        "depth 3+ is forbidden. Otherwise do not nested-dispatch.\n"
+        "Depth contract: depth 1 is a capability-owner worker. It should open bounded depth-2 "
+        "sub-workers for separable standard+ work; thorough/adversarial expands this to "
+        "multi-axis or adversary workers. Direct/quick stay inline unless explicitly escalated; "
+        "depth 3+ is forbidden.\n"
     )
     if args.profile:
         # Unlike the codex wrapper, do not force a preflight/bootstrap chain
@@ -299,7 +300,7 @@ def main(argv: list[str]) -> int:
         return fail("invalid-dispatch-depth", 64, depth=str(args.depth), allowed_depth="1,2")
     if args.depth == 2 and not args.parent_slug:
         return fail("missing-dispatch-parent", 64, depth=str(args.depth))
-    if args.depth == 2 and args.intensity not in {"thorough", "adversarial"}:
+    if args.depth == 2 and args.intensity in {"direct", "quick"}:
         return fail("invalid-depth-two-intensity", 64, depth=str(args.depth), intensity=args.intensity)
     try:
         args.resolved_model_settings = resolve_model_settings(args)
