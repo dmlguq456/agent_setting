@@ -82,6 +82,10 @@ Branch `skill-p3-split` (96b61db) splits the 12 remaining >20k Claude skills (dr
 
 `adapters/claude/CLAUDE.md` Drift-Free Essentials artifact table / scope bullets / flag list and the memory/profile Source-of-Truth prose were derived duplication of `core/CONVENTIONS.md` §5 (single source, "재정의 금지"), `core/WORKFLOW.md`, and `core/MEMORY.md` §7. Replaced with single-source pointers; update-trigger policy synced.
 
+### Drill verification (2026-07-09 17:44, post-merge)
+
+Full drill run: 18/18 cases PASS + conformance PASS. `g0_overhead` fixed-tax measurement: 53,932 in-tokens (2026-07-04 baseline, pre-reduction) -> 49,131 (post P0/P2/P5), -8.9% on the always-on per-turn cost. P3 body savings apply on skill selection, not to g0. Dispatch behavior: `g3_dispatch_branch`/`g6_worktree_dispatch` PASS; depth-2 registry contract covered by conformance greps; fleet unit tests 22/22.
+
 ### P6 — AGENTS.md diet is guard-coupled (deferred, needs decision)
 
 `adapters/codex/AGENTS.md` (19.0k) cannot be meaningfully reduced without a guard-spec change: 42 pinned "must document" assertions in `check-adaptation-boundary.sh` cover 13.1k chars (the per-capability tool-contract bullets), and the unpinned 5.9k remainder is the irreducible bootstrap skeleton (source order, currentness gate, response policy, compatibility boundary). A real diet means moving pinned bullets to an on-demand reference doc and re-pointing those assertions — exposed as a design decision rather than applied silently.
