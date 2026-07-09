@@ -219,5 +219,10 @@ fi
 
   # delta window 마감: 레코드 0건이어도 무조건 advance (M1 과 합쳐 항상 이 줄에 도달).
   python3 "$MEM" distill "$SID" --source "${MEM_SESSION_SOURCE:-claude}" --advance >/dev/null 2>&1 || true
-) &
+# S5(2026-07-09): 서브셸 FD 를 부모(= 하네스 SessionEnd hook)의 stdin/stdout/stderr 에서 분리한다.
+#   미분리 시 백그라운드 서브셸이 하네스 파이프 FD 를 상속·보유 → 워커의 setsid 가 claude(curate=600s)
+#   종료까지 블록(이 환경 setsid 는 -w 없이도 wait — 실측)하는 동안 하네스가 hook stdout EOF 를 못 받아
+#   hook timeout(30s) 후 "Hook cancelled". FD 분리로 exit 0 이 즉시 EOF 를 내 하네스가 진행하고,
+#   서브셸은 백그라운드로 계속(setsid 가 claude 를 별도 세션 격리). detach 는 setsid 가 아니라 이 분리가 담당.
+) </dev/null >/dev/null 2>&1 &
 exit 0
