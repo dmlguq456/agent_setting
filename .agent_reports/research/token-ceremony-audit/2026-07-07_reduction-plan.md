@@ -67,3 +67,21 @@ Checks:
 - top 10 largest selected Skill bodies.
 
 It is report/warn by default and exits 0. Use `--strict` only when warnings should fail a check. Test fixtures use `--skip-runtime --skip-hooks` for deterministic metadata-only validation.
+
+## Follow-up — 2026-07-09
+
+### P1 runtime switch applied
+
+Local `$CODEX_HOME` switched to plugin-only skill discovery via `install-runtime-projection.sh --skills-mode plugin` (28 native symlinks removed, plugin kept). `context-footprint.py` now reports `codex_active_surfaces=plugin chars=5629 duplicate_names=0`, warnings 0.
+
+### P3 extended to all remaining large Claude skill bodies
+
+Branch `skill-p3-split` (96b61db) splits the 12 remaining >20k Claude skills (draft/research/lab/note/refine/spec, analyze-user/project, sync-skills, draft-strategy, audit, post-it) into thin routers plus `references/*.md`. Frontmatter unchanged, content moved verbatim by line slice (zero heading/non-blank-line loss), root `skills/` mirror byte-equivalent. Selected-load fixed cost for the 12 skills: 481k -> 108k chars (-77%); largest remaining Claude body 17.9k. All gates pass (adaptation-boundary, sync-native --check x3, manifest --check, portable-guards, footprint warnings 0).
+
+### P5 — CLAUDE.md always-on dedup (this change set)
+
+`adapters/claude/CLAUDE.md` Drift-Free Essentials artifact table / scope bullets / flag list and the memory/profile Source-of-Truth prose were derived duplication of `core/CONVENTIONS.md` §5 (single source, "재정의 금지"), `core/WORKFLOW.md`, and `core/MEMORY.md` §7. Replaced with single-source pointers; update-trigger policy synced.
+
+### P6 — AGENTS.md diet is guard-coupled (deferred, needs decision)
+
+`adapters/codex/AGENTS.md` (19.0k) cannot be meaningfully reduced without a guard-spec change: 42 pinned "must document" assertions in `check-adaptation-boundary.sh` cover 13.1k chars (the per-capability tool-contract bullets), and the unpinned 5.9k remainder is the irreducible bootstrap skeleton (source order, currentness gate, response policy, compatibility boundary). A real diet means moving pinned bullets to an on-demand reference doc and re-pointing those assertions — exposed as a design decision rather than applied silently.
