@@ -33,7 +33,7 @@ for sub in cards _layer2/notes _layer2/backbones _layer2/tasks _layer2/papers _t
   printf 'notes.%s.files=%s\n' "$sub" "$(count_files "$path")"
 done
 
-for path in "$board_app" "$board_app/.cache" "$board_app/.dispatch" "$board_app/.claude_reports" "$board_wt"; do
+for path in "$board_app" "$board_app/.cache" "$board_app/.dispatch" "$board_app/.agent_reports" "$board_app/.claude_reports" "$board_wt"; do
   if [ -e "$path" ]; then
     printf 'path.exists=%s\n' "$path"
   else

@@ -601,7 +601,7 @@ AskUserQuestion(questions=[{
 
 #### §2 자율 진행 (응답 없을 때)
 
-질문 발동 시 runtime adapter bootstrap 의 pause/autonomy rule 동일(Claude Code realization: [`adapters/claude/CLAUDE.md`](../adapters/claude/CLAUDE.md) §2) — ScheduleWakeup 15-20분 동시 호출, 응답 없으면 추천 기본값으로 자율 진행(한 줄 보고).
+질문 발동 시 runtime adapter bootstrap 의 pause/autonomy rule 동일(Claude Code realization: [`adapters/claude/CLAUDE.md`](../adapters/claude/CLAUDE.md) §2) — ScheduleWakeup 10–30분 동시 호출, 응답 없으면 추천 기본값으로 자율 진행(한 줄 보고).
 
 #### 기존 track 인스턴스와의 관계
 
