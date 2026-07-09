@@ -38,7 +38,7 @@ for sub in cards _layer2/notes _layer2/backbones _layer2/tasks _layer2/papers _t
 done
 
 if [ -n "$board_app" ]; then
-  for path in "$board_app" "$board_app/.cache" "$board_app/.dispatch" "$board_app/.claude_reports"; do
+  for path in "$board_app" "$board_app/.cache" "$board_app/.dispatch" "$board_app/.agent_reports" "$board_app/.claude_reports"; do
     if [ -e "$path" ]; then
       printf 'path.exists=%s\n' "$path"
     else

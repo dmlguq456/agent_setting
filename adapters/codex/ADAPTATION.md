@@ -47,7 +47,7 @@ invariant.
 | Custom agents | `adapters/codex/agents/<role>.toml` generated from `roles/README.md` | `codex_setting/codex-agents` |
 | Mode guides | `adapters/codex/modes/*/*.md` generated from `roles/modes/` with Codex mode-info contracts | `codex_setting/codex-modes` |
 | Plugin marketplace | `adapters/codex/plugin-marketplace/.agents/plugins/marketplace.json` plus `adapters/codex/plugin-marketplace/plugins/agent-harness-codex` | `codex_setting/codex-plugin-marketplace` |
-| Hook bridge | `adapters/codex/hooks/hooks.json`, `adapters/codex/hooks/pretooluse-write-guard.py`, `adapters/codex/hooks/posttooluse-design-check.py` | `codex_setting/codex-hooks` |
+| Hook bridge | `adapters/codex/hooks/hooks.json`, `adapters/codex/hooks/run-hook.sh`, `adapters/codex/hooks/sessionstart-lifecycle.py`, `adapters/codex/hooks/sessionend-lifecycle.py`, `adapters/codex/hooks/userprompt-lifecycle.py`, `adapters/codex/hooks/permissionrequest-lifecycle.py`, `adapters/codex/hooks/pretooluse-write-guard.py`, `adapters/codex/hooks/posttooluse-read-marker.py`, `adapters/codex/hooks/posttooluse-design-check.py` | `codex_setting/codex-hooks` |
 | Permission/sandbox contract | `adapters/codex/bin/preflight.sh permissions` | `codex_setting/bin/preflight.sh permissions` |
 | MCP contract | `adapters/codex/bin/preflight.sh mcp` | `codex_setting/bin/preflight.sh mcp` |
 | Design scaffold assets | `adapters/codex/scaffolds/` Codex-owned projection of shared scaffold HTML assets | `codex_setting/scaffolds` |
@@ -181,9 +181,9 @@ or project `.codex/agents/`. This adapter materializes those role profiles as
 Each file defines Codex's required custom agent fields (`name`, `description`,
 and `developer_instructions`) and the Codex-native runtime config fields
 `model`, `model_reasoning_effort`, and `sandbox_mode`. Adapter defaults follow
-the current Codex documentation shape: `gpt-5.4-mini` for faster/lower-cost
-workers, `gpt-5.5` for deep/demanding workers, and read-only sandboxing for QA,
-external-adversary, and memory-scout agents. The generated instructions also
+the current Codex documentation shape: the fast/deep model tuple defined in
+**Model Mapping** below, and read-only sandboxing for QA, external-adversary,
+and memory-scout agents. The generated instructions also
 encode role-specific runtime boundaries such as QA read-only behavior,
 depth-one delegation, write preflight requirements, and external-adversary
 independence. Mixed or variable role profiles include `Codex role-map inputs`
@@ -394,7 +394,7 @@ Codex-native counterpart today.
 | role modes | Read `roles/MODES.md`, then run `adapters/codex/bin/preflight.sh mode-info <family/mode>`; read the reported `native_mode_path`, obey `fallback=reference-only` only for unsupported modes, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
 | mode guides | Use `adapters/codex/modes/<family>/<mode>.md` as the Codex-native realization guide reported by `mode-info`; satisfy named tool contracts or report unavailable before claiming support |
 | design modes | Use `adapters/codex/modes/design/<mode>.md` as the Codex-native realization guide; satisfy `visual-harness` or report unavailable before claiming rendered visual verification |
-| hook invariants | `adapters/codex/hooks/sessionend-lifecycle.py` realizes SessionEnd memory sync/distill and Stop detached session-end scheduling; `permissionrequest-lifecycle.py` is a registered no-op for Codex `PermissionRequest` (harness monitoring is owned by Codex native `/statusline`); `pretooluse-write-guard.py` realizes write guards (artifact-order, git-state, core-first, memory-write, and the spec read gate for spec-changing artifacts) through Codex `PreToolUse`; `posttooluse-read-marker.py` records actual spec/core reads through `PostToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
+| hook invariants | `adapters/codex/hooks/sessionstart-lifecycle.py` realizes SessionStart bootstrap context injection; `userprompt-lifecycle.py` realizes UserPromptSubmit mode/prompt-signal injection; `sessionend-lifecycle.py` realizes SessionEnd memory sync/distill and Stop detached session-end scheduling; `permissionrequest-lifecycle.py` is a registered no-op for Codex `PermissionRequest` (harness monitoring is owned by Codex native `/statusline`); `pretooluse-write-guard.py` realizes write guards (artifact-order, git-state, core-first, memory-write, and the spec read gate for spec-changing artifacts) through Codex `PreToolUse`; `posttooluse-read-marker.py` records actual spec/core reads through `PostToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
 | capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 
 ## Model Mapping

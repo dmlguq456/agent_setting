@@ -287,7 +287,7 @@ Agent(subagent_type="연구팀"):
 > 연구팀이 자연 산출 언어 (한국어) 로 직접 작성하고, 편집팀이 _수정만_ — 두 번 쓰는 노동 회피.
 
 #### Step 4b: QA Loop (max 2 rounds; quick = 1 round; adversarial = 2 + external 1)
-QA level: `--qa` flag if provided, else default `thorough` (모든 autopilot-* 통일 — [CONVENTIONS.md §1.4](../../core/CONVENTIONS.md#14-skill별-사용-매트릭스)).
+QA level: `--qa` flag if provided, else derived from the selected intensity (assurance normally follows intensity — direct→none/light, quick→quick, standard→standard, thorough→thorough, adversarial→adversarial; see [CONVENTIONS.md §1.1](../../core/CONVENTIONS.md#11-qa-assurance-levels-canonical)).
 
 **Two reviewer roles run in parallel** at standard+ (**three at adversarial** — + claim-verify):
 - **Quality reviewer(s)**: coverage / no-fabrication / progressive disclosure / actionable roadmap
