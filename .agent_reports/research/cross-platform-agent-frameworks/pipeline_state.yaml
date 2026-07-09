@@ -1,0 +1,11 @@
+pipeline: autopilot-research
+query: >-
+  크로스 플랫폼 에이전트 세팅 프레임워크 구조 조사 — GSD(최우선) + spec-kit/BMAD-METHOD/SuperClaude/
+  Superpowers/agent-os/claude-flow + Claude Code 공식 plugin/marketplace + 멀티하네스 projection 사례.
+  핵심 관심: core/adapter/proj 3층 drift 방지 메커니즘.
+mode: technology
+depth: medium
+qa_level: standard
+clarified_intent: null
+last_completed_stage: report
+artifact_dir: /home/Uihyeop/agent_setting-wt/gsd-research/.agent_reports/research/cross-platform-agent-frameworks
