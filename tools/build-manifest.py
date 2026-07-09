@@ -37,6 +37,7 @@ import re
 import json
 import glob
 import shlex
+import hashlib
 
 try:
     import yaml
@@ -44,8 +45,19 @@ except ImportError:
     sys.stderr.write("PyYAML required: pip install pyyaml\n")
     sys.exit(2)
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # tools/ -> repo root
+# realpath (not abspath): this script is executed via the collapsed adapter symlink
+# (adapters/claude/tools/build-manifest.py -> ../../../tools/build-manifest.py). abspath
+# keeps the symlink path, resolving REPO_ROOT to repo/adapters/claude (double-path bug);
+# realpath follows the link to the canonical tools/, giving the true repo root either way.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))  # tools/ -> repo root
 MANIFEST_PATH = os.path.join(REPO_ROOT, "manifest.json")
+
+# harness-layer-sync HLS-3 (hash-manifest) / HLS-7 (surface 파생). The exemption ledger
+# is the single declaration file for adapter shared-layer exceptions (like GSD's
+# gsd-file-manifest.json + FIELD_CLASSIFICATION: one row = one decision). delta rows bind
+# a canonical raw-byte sha256 baseline; the guard reds when live canonical drifts from it.
+EXEMPTIONS_PATH = os.path.join(REPO_ROOT, "tools", "adaptation-exemptions.tsv")
+SHARED_LAYERS = ("hooks", "utilities", "tools")
 
 # Fixed provenance string — NO date/timestamp (idempotency invariant).
 GENERATED_FROM = ("Claude adapter projection definitions "
@@ -321,6 +333,155 @@ def build_tracks(skill_slugs):
     return [dict(t) for t in TRACKS]
 
 
+# ---------------------------------------------------------------------------
+# harness-layer-sync HLS-3 / HLS-7 — adaptation shared-layer surface + delta hash-manifest
+#
+# GSD-grounded (bin/install.js fileHash L7718 / saveLocalPatches L8057): baseline binding
+# is a raw-byte sha256 of the CANONICAL file, and drift = live-hash != recorded-baseline.
+# We keep only that half of GSD's model (the guard reds on drift → human re-derives the
+# delta), dropping gsd-local-patches/reapply 3-way merge: our delta set is 2 internally
+# owned files, not consumed upstream, so automatic patch replay is overkill.
+# ---------------------------------------------------------------------------
+def _sha256(path):
+    with open(path, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+def _read_exemptions():
+    """Parse tools/adaptation-exemptions.tsv -> list of dicts. Comment/blank lines skipped.
+    Fields: adapter_path, class(wrapper|delta), rationale, delta_baseline."""
+    rows = []
+    if not os.path.exists(EXEMPTIONS_PATH):
+        return rows
+    with open(EXEMPTIONS_PATH, encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            cells = line.rstrip("\n").split("\t")
+            if len(cells) < 2:
+                continue
+            rows.append({
+                "adapter_path": cells[0],
+                "class": cells[1],
+                "rationale": cells[2] if len(cells) > 2 else "",
+                "delta_baseline": cells[3] if len(cells) > 3 else "-",
+            })
+    return rows
+
+
+def _canonical_for(adapter_path):
+    """adapters/claude/<layer>/<name> -> <layer>/<name> (canonical top-level path)."""
+    m = re.match(r"^adapters/claude/(hooks|utilities|tools)/(.+)$", adapter_path)
+    if not m:
+        return None
+    return "%s/%s" % (m.group(1), m.group(2))
+
+
+def delta_baselines():
+    """For each delta exemption, the canonical path + its live raw-byte sha256.
+    Used by --sync-baselines (write) and --check (verify)."""
+    out = []
+    for row in _read_exemptions():
+        if row["class"] != "delta":
+            continue
+        canonical = _canonical_for(row["adapter_path"])
+        if not canonical:
+            continue
+        canonical_abs = os.path.join(REPO_ROOT, canonical)
+        live = _sha256(canonical_abs) if os.path.exists(canonical_abs) else None
+        out.append({
+            "adapter_path": row["adapter_path"],
+            "canonical": canonical,
+            "recorded": row["delta_baseline"],
+            "live": live,
+        })
+    return out
+
+
+def sync_baselines():
+    """Rewrite the delta_baseline (4th) column of each delta row with the live canonical
+    sha256. Idempotent: byte-identical output when nothing changed. Returns changed count."""
+    if not os.path.exists(EXEMPTIONS_PATH):
+        sys.stderr.write("no exemptions file at %s\n" % EXEMPTIONS_PATH)
+        return 0
+    live_by_path = {b["adapter_path"]: b["live"] for b in delta_baselines()}
+    changed = 0
+    lines = open(EXEMPTIONS_PATH, encoding="utf-8").read().split("\n")
+    for i, line in enumerate(lines):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        cells = line.split("\t")
+        if len(cells) < 2 or cells[1] != "delta":
+            continue
+        want = live_by_path.get(cells[0])
+        if not want:
+            continue
+        while len(cells) < 4:
+            cells.append("-")
+        if cells[3] != want:
+            cells[3] = want
+            lines[i] = "\t".join(cells)
+            changed += 1
+    open(EXEMPTIONS_PATH, "w", encoding="utf-8").write("\n".join(lines))
+    return changed
+
+
+def check_baselines():
+    """Return (ok, messages). ok=False if any delta baseline is unset/invalid/drifted."""
+    ok = True
+    msgs = []
+    for b in delta_baselines():
+        rec = b["recorded"]
+        if b["live"] is None:
+            ok = False
+            msgs.append("delta baseline: canonical %s is missing" % b["canonical"])
+            continue
+        if not re.fullmatch(r"[0-9a-f]{64}", rec or ""):
+            ok = False
+            msgs.append("delta baseline unset/invalid for %s (expected sha256 of %s = %s; run --sync-baselines)"
+                        % (b["adapter_path"], b["canonical"], b["live"]))
+            continue
+        if rec != b["live"]:
+            ok = False
+            msgs.append("delta baseline DRIFT for %s: canonical %s now %s but ledger records %s "
+                        "(canonical changed — re-derive the delta patch, then --sync-baselines)"
+                        % (b["adapter_path"], b["canonical"], b["live"], rec))
+    return ok, msgs
+
+
+def _layer_files(layer):
+    """Top-level (non-directory) canonical files under <layer>/, sorted. __pycache__ excluded."""
+    d = os.path.join(REPO_ROOT, layer)
+    if not os.path.isdir(d):
+        return []
+    return sorted(
+        f for f in os.listdir(d)
+        if os.path.isfile(os.path.join(d, f)) and not f.endswith((".pyc", ".pyo"))
+    )
+
+
+def adaptation_surface(kind):
+    """Filesystem-derived surface sets (HLS-7 — replaces hardcoded enumerations).
+      codex-hooks     : adapters/codex/hooks/*.py native bridge basenames
+      shared-canonical: '<layer>/<name>\t<class>' for every top-level shared file
+    """
+    if kind == "codex-hooks":
+        d = os.path.join(REPO_ROOT, "adapters", "codex", "hooks")
+        if not os.path.isdir(d):
+            return []
+        return sorted(f for f in os.listdir(d) if f.endswith(".py"))
+    if kind == "shared-canonical":
+        cls_by_path = {r["adapter_path"]: r["class"] for r in _read_exemptions()}
+        rows = []
+        for layer in SHARED_LAYERS:
+            for name in _layer_files(layer):
+                adapter_path = "adapters/claude/%s/%s" % (layer, name)
+                rows.append("%s/%s\t%s" % (layer, name, cls_by_path.get(adapter_path, "collapsed")))
+        return rows
+    sys.stderr.write("unknown adaptation-surface kind: %s\n" % kind)
+    sys.exit(2)
+
+
 def build_manifest():
     skills = build_skills()
     skill_slugs = {r["slug"] for r in skills}
@@ -339,18 +500,39 @@ def render(manifest):
 
 
 def main(argv):
+    # HLS-7: filesystem-derived surface sets consumed by check-adaptation-boundary.sh.
+    if "--adaptation-surface" in argv:
+        i = argv.index("--adaptation-surface")
+        kind = argv[i + 1] if i + 1 < len(argv) else ""
+        for line in adaptation_surface(kind):
+            print(line)
+        return 0
+    # HLS-3: regenerate delta baselines (canonical raw-byte sha256) into the exemption ledger.
+    if "--sync-baselines" in argv:
+        n = sync_baselines()
+        print("synced %d delta baseline(s) in %s" % (n, os.path.relpath(EXEMPTIONS_PATH, REPO_ROOT)))
+        return 0
+
     check = "--check" in argv
     text = render(build_manifest())
     if check:
+        rc = 0
         existing = ""
         if os.path.exists(MANIFEST_PATH):
             existing = open(MANIFEST_PATH, encoding="utf-8").read()
         if text != existing:
             sys.stderr.write("manifest drift: manifest.json is out of date — run "
                              "`python3 tools/build-manifest.py`\n")
-            return 1
-        print("manifest up-to-date")
-        return 0
+            rc = 1
+        # HLS-3: --check is the single drill/CI entry point — also verify delta baselines.
+        ok, msgs = check_baselines()
+        for m in msgs:
+            sys.stderr.write(m + "\n")
+        if not ok:
+            rc = 1
+        if rc == 0:
+            print("manifest up-to-date; delta baselines bound")
+        return rc
     open(MANIFEST_PATH, "w", encoding="utf-8").write(text)
     print("wrote %s" % os.path.relpath(MANIFEST_PATH, REPO_ROOT))
     return 0
