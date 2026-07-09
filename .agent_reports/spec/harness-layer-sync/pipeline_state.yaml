@@ -1,0 +1,34 @@
+project_name: harness-layer-sync
+component: harness-layer-sync      # 하네스 내부 구조 개선 (repo spec/prd.md = Unified Memory System, spec/agent-fleet-dashboard·spec/dispatch-profiles 무관)
+created: 2026-07-09
+mode: [library, cli]              # library(canonical 바인딩 계약·생성기) + cli(가드/매니페스트·dispatch-liveness) — infra
+scope_note: "core>adapter>proj 3층 어긋남 해소 — 공유층 물리 이중화를 단일 canonical+예외목록(hash-manifest)으로, parity 가드를 런타임 실행본까지, INVENTORY 를 파일목록 파생으로. b2(행동규율 core 승격)는 사용자 논의 미결."
+inputs:
+  - analysis_project/harness-alignment/summary.md          # 구조후보 b1~b4
+  - analysis_project/harness-alignment/findings.md          # §S(S-1~S-4)·Axis 1~7
+  - analysis_project/harness-alignment/cards/00_structural_shared-copy-drift.md
+  - research/cross-platform-agent-frameworks/analysis_summary.md   # §4~§5
+  - research/cross-platform-agent-frameworks/06_implementation.md
+  - research/cross-platform-agent-frameworks/cards/gsd.md          # hash-manifest 채택 근거
+  - research/cross-platform-agent-frameworks/cards/multi-harness-projection.md
+  - research/cross-platform-agent-frameworks/cards/claude-flow.md  # 반면교사(#1834)
+  - 현행 계약 실측 2026-07-09: core/ADAPTATION.md·ADAPTATION_INVENTORY.md / tools/check-adaptation-boundary.sh / adapters/claude/settings.json / hooks·tools·utilities 전수 diff census
+phases:
+  spec: done              # PRD v1 — b1/b3/b4 채택 + 보조 2 + b2 open. 구현 phase 분할 §10
+  scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§9 module 구조만 확정)
+  design: n/a             # 시각 UI 없음 (인프라 도구)
+  dev: pending            # autopilot-code 가 누적 (Phase 1: 복제제거+가드확장 / Phase 2: manifest·INVENTORY 파생·보조)
+last_updated: 2026-07-09  # v1 작성 (harness-layer-sync 브랜치)
+decisions_locked:
+  - HLS-1: 최상위 hooks/tools/utilities = 유일 canonical, Claude 런타임도 canonical 실행 (물리 복사본 collapse)
+  - HLS-2: 복제 불가피 파일만 명시 예외목록 (wrapper/delta 2클래스, 사유 필수) — collapse 가 기본
+  - HLS-3: delta 예외 = hash-manifest 로 canonical 바인딩 (GSD-style, 세부는 실코드 정독 후)
+  - HLS-4: 신규 시스템 아님 — build-manifest.py·check-adaptation-boundary.sh 증분
+  - HLS-5: parity 가드 검증대상 = 런타임 실행본 (settings.json 경로 추종, S-1 구멍 차단)
+  - HLS-6: runtime-root ≠ AGENT_HOME 명문화 — transcript/liveness 는 runtime-root, dispatch-liveness PROJ 정정
+  - HLS-7: surface 집합 = 파일시스템 파생 (하드코딩 열거 폐기), ledger prose = 사유만
+  - HLS-8: parity-loss = explicit warning (silent skip 금지), hook 격리 재현불가 정직 인정
+  - HLS-9: bootstrap byte-budget 회귀 (GSD size-budget 차용, phase 2 보조)
+  - HLS-10: 파일복사 스캐폴딩(claude-flow)·spec-kit registry·Claude SHA-pin 기각/범위한정
+decisions_open:
+  - HLS-OPEN-1: b2 포터블 행동규율 core 승격 범위 = 사용자 논의 안건 (옵션 A현행/B roles/C core + 6-1·6-2 분리). phase 확정 전 미정.
