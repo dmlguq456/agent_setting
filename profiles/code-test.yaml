@@ -1,0 +1,10 @@
+name: code-test
+description: "code-test 스테이지-워커 — autopilot-code Step 4 depth-2 분사용 (품질관리팀 test, 소스 read-only)"
+harness: claude
+model_role: fast reviewer
+fragments:
+  - profiles/fragments/code-test.md
+expose:
+  skills: [code-test, autopilot-code, post-it]
+  agents: [qa-team]
+  triggers: []

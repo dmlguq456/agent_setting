@@ -1,0 +1,10 @@
+name: code-report
+description: "code-report 스테이지-워커 — autopilot-code Step 5 depth-2 분사용 (품질관리팀 fast writer)"
+harness: claude
+model_role: fast writer
+fragments:
+  - profiles/fragments/code-report.md
+expose:
+  skills: [code-report, autopilot-code, post-it, analyze-project]
+  agents: [qa-team]
+  triggers: []

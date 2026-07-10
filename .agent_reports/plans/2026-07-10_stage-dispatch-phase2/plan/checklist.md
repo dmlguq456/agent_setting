@@ -18,7 +18,7 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
   - [x] C2 AGENT_DISPATCH_SELF_SLUG child env
   - [x] C3 depth-1 depth_note one-shot wait clause
   - [x] C4 utilities/dispatch-wait.sh + test
-- [ ] **Phase D** — SD-12 stage-worker profiles (4 fragments + 4 yaml + README + --check)
+- [x] **Phase D** — SD-12 stage-worker profiles (4 fragments + 4 yaml + README + --check ok ×4, instance build clean)
 - [ ] **Phase E** — hooks
   - [ ] E1 stage-dispatch-reminder.sh (SD-11, soft) + register + conformance
   - [ ] E2 conductor-stop-gate.sh (SD-14b) — **UNREGISTERED (held)**, on-disk + CLI unit only
@@ -31,4 +31,5 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
 
 ## Safety commits
 - `5ae8c8a` Phase A+B (probe verdict + core docs)
-- (Phase C committed next)
+- `e97d916` Phase C (wrapper + dispatch-wait)
+- (Phase D committed next)

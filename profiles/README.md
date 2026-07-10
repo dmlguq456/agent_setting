@@ -12,6 +12,10 @@ partial-projection — there is no content fork.
 | Profile | Description |
 |---|---|
 | `lab-runner` | 실험 실행 특화 — autopilot-lab 자율 구간 분사용 |
+| `code-plan` | code-plan 스테이지-워커 — autopilot-code Step 2 depth-2 분사용 (기획팀) |
+| `code-execute` | code-execute 스테이지-워커 — autopilot-code Step 3 depth-2 분사용 (개발팀, 유일 소스 변경 스테이지) |
+| `code-test` | code-test 스테이지-워커 — autopilot-code Step 4 depth-2 분사용 (품질관리팀 test, 소스 read-only) |
+| `code-report` | code-report 스테이지-워커 — autopilot-code Step 5 depth-2 분사용 (품질관리팀 fast writer) |
 
 ## The three-layer instruction model
 
