@@ -491,6 +491,29 @@ _PIPE_STAGES = {
     "draft": ["draft", "refine", "apply"],
 }
 
+# depth-2 code-* stage sub-skill → human stage label (SD-F1). Reuses the "code" track's
+# plan/exec/test vocabulary — no new words invented. "report" (code-report) sits outside that
+# track (see _stage_segs fallthrough for how a lone "report" token renders).
+_STAGE_ROLE = {
+    "code-plan": "plan",
+    "code-execute": "exec",
+    "code-test": "test",
+    "code-report": "report",
+}
+
+
+def _stage_role_label(worker_role):
+    """(base_label, suffix) for a depth-2 stage worker_role, e.g. 'code-execute:phase-A' ->
+    ('exec', ':phase-A'). base_label is None when worker_role isn't a known stage sub-skill —
+    callers fall back to the existing _ROLE_SHORT/_compact_dispatch_name path."""
+    if not worker_role:
+        return None, ""
+    base, _sep, suffix = worker_role.partition(":")
+    label = _STAGE_ROLE.get(base)
+    if label is None:
+        return None, ""
+    return label, (":" + suffix if suffix else "")
+
 # plain-text column labels (icons removed per user — "위에 아이콘들은 전부 빼자").
 # 'effort' gets its OWN header over the fixed subcolumn inside the model cell (user 2026-07-02).
 _COL_HEAD = ("    " + "harness".ljust(_HW) + "session".ljust(_NW_S)
@@ -692,9 +715,12 @@ _ROLE_SHORT = {
     "dev-refactor": "impl",
     "dev-new-lib": "impl",
     "research-survey": "research",
-    "g6_worktree_dispatch": "g6",
-    "g9_cross_harness_depth2_dispatch": "g9",
 }
+
+# drill/loop case ids (g6_worktree_dispatch, g9_cross_harness_depth2_dispatch, g8b_...) shrink
+# to their gN prefix by a GENERAL rule instead of a per-case hardcoded entry above (F-9(b) —
+# each new drill case used to need a code change here).
+_G_CASE_PREFIX = re.compile(r"^(g\d+[a-z]?)")
 
 
 def _short_level(value):
@@ -708,7 +734,13 @@ def _short_level(value):
 def _short_role(value):
     if not value:
         return ""
-    role = _ROLE_SHORT.get(value, value.replace("-", "_"))
+    label, suffix = _stage_role_label(value)
+    if label is not None:
+        # stage suffix (":phase-A") rides along as part of the same dim profile tag — the
+        # whole tag already renders "dim" (see _mq_tag), so no separate color key is needed.
+        return _compact_dispatch_name(label + suffix, 14)
+    m = _G_CASE_PREFIX.match(value)
+    role = _ROLE_SHORT.get(value) or (m.group(1) if m else value.replace("-", "_"))
     return _compact_dispatch_name(role, 14)
 
 
@@ -737,7 +769,7 @@ def _dispatch_profile(j, check_text=None):
     return _compact_dispatch_name(profile, 28) if profile else None
 
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
-                  parent_effort=None):
+                  parent_effort=None, stage_override=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
       harness  |  name (mode · qa)  |  branch  |  MODEL (the job's real model)  |  stage breadcrumb
     mode+qa ride together in a `(mode · qa)` tag right after the name; the model slot shows the
@@ -745,7 +777,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     blinks while working). Weight vs a session = dim-font harness + ↳ + dim name.
     """
     key = j.key or "?"
-    stage = j.stage or ""
+    stage = stage_override if stage_override is not None else (j.stage or "")
     qa_base = j.qa or ""
     qa_text = ""
     if j.qa:
@@ -776,9 +808,11 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         segs.append((" " * (avail - used), None))
 
     segs.append(_branch_seg("" if key in _LOOPS_KEYS else j.cwd, j.branch))  # loop temp repos hide throwaway branches
-    # model slot → the job's OWN main model (dim family color) + effort (headless has no
-    # statusline → parent's effort, the shared settings default — user 2026-07-03: 분사도 effort).
-    segs += _model_cell(j.model or parent_model, parent_effort, _MW, dim=True)
+    # model slot → the job's OWN main model (dim family color) + effort. SD-F3: the job's own
+    # effort is first-class; when it's absent (proc-scan rows — env doesn't export it yet), fall
+    # back to the parent's effort marked with the derived-value `~` prefix (legend F-9d).
+    eff = j.effort or (("~" + parent_effort) if parent_effort else None)
+    segs += _model_cell(j.model or parent_model, eff, _MW, dim=True)
 
     # gauge slot → capability-LABELED stage breadcrumb: `code: plan › exec › test` — the process
     # kind rides the track it names, where the eye reads progress (user 2026-07-02: name 앞보다
@@ -859,14 +893,15 @@ def _session_row_stack(s, is_parent=False, child_count=0):
     return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
-def _dispatch_row_stack(j, orphan=False, parent_model=None, parent_effort=None):
+def _dispatch_row_stack(j, orphan=False, parent_model=None, parent_effort=None, stage_override=None):
     l1, l2 = _dispatch_row_2line(j, orphan=orphan, parent_model=parent_model,
-                                 parent_effort=parent_effort)
+                                 parent_effort=parent_effort, stage_override=stage_override)
     gi = _stack_split(l2)
     return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
-def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, _split=False):
+def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, _split=False,
+                        stage_override=None):
     key = j.key or "?"
     name = j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
@@ -889,11 +924,13 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     if not _split and br_seg:
         l1.append(br_seg)
 
+    stage = stage_override if stage_override is not None else (j.stage or "")
+    eff = j.effort or (("~" + parent_effort) if parent_effort else None)
     l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
-    l2 += _model_cell(j.model or parent_model, parent_effort, _MW, dim=True)
+    l2 += _model_cell(j.model or parent_model, eff, _MW, dim=True)
     if key and key != name:
         l2.append((key + ": ", "name_dim"))
-    l2 += _stage_segs(key, j.stage or "", working=(j.liveness == "working"))
+    l2 += _stage_segs(key, stage, working=(j.liveness == "working"))
     if _split:
         return l1, l2, br_seg
     return l1, l2
@@ -1235,17 +1272,33 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
 
         def _emit_dispatch_tree(job, parent_model=None, parent_harness=None, parent_effort=None,
                                 orphan=False, is_last=True):
+            # SD-F2 — a depth-1 conductor's OWN breadcrumb tracks its active depth-2 code-*
+            # stage-worker, not its static argv/plan-derived `stage`. `job_children` is the
+            # enclosing closure dict, so this is readable before the row renders.
+            stage_override = _conductor_stage_override(job)
             if _jrow:
                 lines.extend(_jrow(job, orphan=orphan, parent_model=parent_model,
-                                   parent_effort=parent_effort))
+                                   parent_effort=parent_effort, stage_override=stage_override))
             else:
                 lines.append(_dispatch_row(job, orphan=orphan, parent_model=parent_model,
                                            parent_harness=parent_harness,
-                                           parent_effort=parent_effort, is_last=is_last))
+                                           parent_effort=parent_effort, is_last=is_last,
+                                           stage_override=stage_override))
             for sub in _sort_group_jobs(job_children.get(job.slug, [])):
                 _emit_dispatch_tree(sub, parent_model=job.model or parent_model,
                                     parent_harness=job.harness or parent_harness,
                                     parent_effort=parent_effort, orphan=False)
+
+        def _conductor_stage_override(job):
+            kids = [(k, _stage_role_label(getattr(k, "worker_role", None))[0])
+                    for k in job_children.get(job.slug, []) if getattr(k, "depth", 1) == 2]
+            kids = [(k, label) for k, label in kids if label is not None]
+            if not kids:
+                return None
+            active = [label for k, label in kids if k.liveness == "working"]
+            if active:
+                return active[0]
+            return job.stage
 
         for s in _sort_group_sessions(shown):
             kids = _sort_group_jobs(children.get(s.session_id, []))

@@ -40,6 +40,7 @@ _QA = re.compile(r"--qa ([a-z]+)")
 _QA_LEVELS = ("quick", "light", "standard", "thorough", "adversarial")
 _PIPE = re.compile(r"\s*([A-Za-z][\w-]*)(?::(\w+))?")
 _SHELLS = ("zsh", "bash", "sh", "dash")
+_PIPE_TOK = re.compile(r"[,\s]+")
 
 
 def _strip_autopilot_prefix(name):
@@ -59,11 +60,26 @@ def _parse_pipe_meta(pipe):
     eq_pos = head.find("=")
     colon_pos = head.find(":")
     if eq_pos != -1 and (colon_pos == -1 or eq_pos < colon_pos):
+        # continuation tokenizer (SD-F4, 2026-07-09 wild fixture): the writer
+        # (dispatch-headless.py:260) emits a closed key= vocabulary, but a value can itself
+        # contain spaces (e.g. `model_role=deep maker`) — a naive `,`-only or whitespace-only
+        # split breaks one of the two forms. Tokenize on `[,\s]+`; a token WITH `=` starts a
+        # new (k, v) pair, a token WITHOUT `=` is a continuation that space-joins onto the
+        # PREVIOUS pair's value. This assumes every real field is written as `key=value`
+        # (never a bare value) — see plan R8/N2 — so a stray `=`-free token can only be a
+        # continuation, never a new field.
         fields = {}
-        for part in head.split(","):
-            if "=" in part:
-                k, v = part.split("=", 1)
-                fields[k.strip()] = v.strip()
+        last_key = None
+        for tok in _PIPE_TOK.split(head):
+            if not tok:
+                continue
+            if "=" in tok:
+                k, v = tok.split("=", 1)
+                k = k.strip()
+                fields[k] = v.strip()
+                last_key = k
+            elif last_key is not None:
+                fields[last_key] = fields[last_key] + " " + tok
         fields["_name"] = _strip_autopilot_prefix(fields.get("capability"))
         return fields
     m = _PIPE.match(pipe or "")
@@ -637,6 +653,8 @@ def _scan_processes():
                 intensity=env.get("AGENT_DISPATCH_INTENSITY"),
                 worker_role=env.get("AGENT_DISPATCH_WORKER_ROLE"),
                 capability_owner=env.get("AGENT_DISPATCH_OWNER"),
+                effort=env.get("AGENT_DISPATCH_EFFORT"),
+                model_role=env.get("AGENT_DISPATCH_MODEL_ROLE"),
             ))
         elif loop:
             key = loop.group(1)
@@ -668,6 +686,8 @@ def _scan_processes():
                 is_child=is_child, source="proc", harness="claude" if env.get("CLAUDECODE") or "claude" in args else None,
                 pid=int(pid_s) if pid_s.isdigit() else None, worker_role=current_case,
                 capability_owner=key,
+                effort=env.get("AGENT_DISPATCH_EFFORT"),
+                model_role=env.get("AGENT_DISPATCH_MODEL_ROLE"),
             ))
     return jobs
 
@@ -738,6 +758,7 @@ def _scan_jobs_log(path, seen_slugs):
             profile=meta.get("profile"), depth=_parse_depth(meta.get("depth")),
             intensity=meta.get("intensity"), worker_role=meta.get("worker_role"),
             capability_owner=meta.get("owner") or meta.get("capability_owner"),
+            effort=meta.get("effort"), model_role=meta.get("model_role"),
         ))
     return jobs, malformed
 

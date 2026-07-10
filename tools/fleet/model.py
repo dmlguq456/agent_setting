@@ -176,6 +176,8 @@ class DispatchJob:
     intensity: Optional[str] = None     # direct|quick|standard|strong|thorough|adversarial
     worker_role: Optional[str] = None   # planner/verifier/adversary/etc.
     capability_owner: Optional[str] = None  # owning capability slug/name for sub-workers
+    effort: Optional[str] = None        # dispatch runtime effort (pipe `effort=`; None = parent-inherit)
+    model_role: Optional[str] = None    # portable model role (pipe `model_role=`; SD-5 관제)
 
     def to_dict(self):
         return asdict(self)
