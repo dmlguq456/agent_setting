@@ -60,3 +60,7 @@ Phase 1(계약문서+wrapper증분+autopilot-code pilot) · Phase 2(autopilot-* 
 - **잔여 handoff**: drill 케이스 정의만(러너 미설치, `loops/**` 타 세션 소유), `assert.sh` POSIX `sh -n` bashism 전달 필요.
 - 상세: `.agent_reports/plans/2026-07-10_stage-dispatch-phase2/final_report.md`
 - minor (2026-07-10, 머지 후 상태 동기): dev phase in_progress→done — Phase 2 main 머지 52f2f2c. 잔여(다음 사이클): 프로필 효과 계측·SD-14b(-p Stop hook 미발화로 held)·SD-11 deny 재판단·drill 러너 등록(loops 세션 handoff).
+- v3 (2026-07-10): 사용량 복원력 + 크로스 하네스 등재 — autopilot-spec update quick, v2 snapshot = `_internal/versions/v2/prd.md`.
+  - **SD-15** (운영 실증 ⑤): Phase 2 conductor 1차 분사가 launch 직후 session limit 즉사 — row open 잔존, liveness SUSPECT 로만 16분 지연 발견. wrapper 가 조기 exit + 로그 limit 패턴을 감지해 row 자동 마감 + reset 시각 표면화. dispatch-wait/liveness 도 로그 패턴을 DEAD 근거에 추가.
+  - **SD-16** (사용자 요구): "codex·claude 사용량 직접 체크 + 상호보완(사용량·특성) 크로스 하네스 분사" — usage-check 헬퍼(runtime-currentness 조사 필수), 상호보완 라우팅(사용량 failover + 특성 강점 배치 + 검증 자리 타 모델 계열 교차 — codex-review-team 선례), fleet 연속성, thorough+ 다축 동시성 실측 검증(사용자 확인 요청 — 계약은 다축 워커 명시하나 병렬 실측 부재).
+  - **SD-OPEN-3**: 보완 라우팅 가중 — 초기 보수 정책, 계측 후 조정.

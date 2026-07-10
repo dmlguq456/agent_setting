@@ -190,26 +190,6 @@ pilot 실측: spec-less repo 에서 스테이지 세션이 `artifact-guard` 에 
 
 pilot 부수발견 ②: 스테이지 세션도 SessionEnd 에 mem curator(distiller) 를 기동한다. Phase 1 에선 메모리 오염 없었으나, 다중 스테이지 세션이 순차로 curator 를 돌리는 구조의 영향(중복 add·불필요 curate 비용·동시성)은 미검증 — **Phase 2 에서 관찰만 지속**(계측 로그에 curator 기동 여부 기록), 개입 결정은 증거 후.
 
-### 8.5.7b SD-15 — wrapper 의 limit-사망 즉시 감지 (운영 실증 ⑤, v3 2026-07-10)
-
-**실증**: Phase 2 conductor 1차 분사가 launch 직후 session limit 로 즉사 — stdout 로그에 "You've hit your session limit · resets 3pm" 한 줄만 남기고 exit 했으나 jobs.log row 는 `open` 잔존, liveness SUSPECT(transcript-mtime 16분 정지)로만 간접 발견. 감지 지연 + "hang 인지 죽음인지" 오인 여지.
-
-**결정**: (a) wrapper `--start` 가 child spawn 후 짧은 워치(수십 초)에서 조기 exit 를 감지하면 로그 tail 의 limit/auth 류 종료 패턴을 검사해 jobs.log row 를 `done,note=dead-<사유>` 로 즉시 마감하고 사유·reset 시각을 출력에 한 줄 표면화. (b) `dispatch-wait`/`dispatch-liveness` 도 로그의 limit 패턴을 DEAD 판정 근거에 추가(transcript-mtime 단독 의존 탈피). (c) codex/opencode wrapper 는 동형 검토(불가 시 ADAPTATION disclosure). loops 의 `run_claude_retry`(limit 시 ABORT) 선례와 동일 계열 — wrapper 는 재시도까지는 하지 않고 감지·마감·표면화만(재분사 판단은 orchestrator 의미 구간).
-
-### 8.5.7c SD-16 — 사용량-인지 크로스 하네스 분사 (사용자 요구, v3 2026-07-10)
-
-**사용자 요구**: "codex 와 claude code 의 사용량을 직접 체크하면서, 둘을 골고루 고려해 크로스 하네스로 분사를 구성하도록 강화." 배경 = 운영 실증 ⑤(limit 즉사)가 보여준 단일 하네스 의존 취약 — Claude 가 막히면 전체 파이프 정지. 기존 기반: codex/opencode `preflight.sh dispatch` 가 이미 동형 계약(depth/parent/worker_role/jobs.log `harness=` 표기, cross-harness `parent_sid` 연결 — OPERATIONS §5.10).
-
-**결정**:
-- (a) **사용량 직접 체크 헬퍼**: 분사 직전 orchestrator(main/conductor)가 Claude·Codex 양쪽의 사용량/limit 상태를 결정론적으로 조회하는 헬퍼 신설(`utilities/usage-check.sh` 류). 소스 = 각 CLI 의 공식 사용량 표면(**구현 시 runtime-currentness 조사 필수** — 최신 공식 문서 확인) + jobs.log `dead-session-limit` 마커·reset 시각 캐시(SD-15 연동). 출력 = harness 별 `{ok | limited(reset시각) | unknown}` 한 줄(파싱 가능).
-- (b) **상호보완 라우팅 계약** (사용자 정제: "codex 와 claude 가 서로 상호보완적인 — 사용량이나 특성이나 — 동작"): 목표는 단순 부하 균형이 아니라 **보완성** —
-  - **사용량 보완 (failover·분산)**: limit 상태인 하네스를 회피하고 여유 하네스로 우회(limited 면 타 하네스, 둘 다 여유면 분산). Claude 막힘 → codex preflight dispatch 동형 우회 명문화.
-  - **특성 보완 (강점 배치)**: 작업 특성별 하네스/모델 적합성 배치 — CONVENTIONS §2 role 매핑의 하네스별 실현 + 검증·리뷰 자리는 **타 모델 계열 교차**(다른 실패 모드 = 리뷰 다양성 이득, codex-review-team 선례)를 우선 후보로. 같은 사이클 안에서 maker 하네스와 checker 하네스를 다르게 두는 조합을 정규 옵션화.
-  - 계약 자리 = OPERATIONS §5.10 ⑦ 확장 + dev-pipeline 등 파이프 스테이지 분사 절.
-- (c) **관제·계측**: cross-harness row 는 기존 `harness=`/`owner_harness=`/`parent_sid` 표기로 fleet 연속성 유지. harness 별 분사 분포·limit 회피 이벤트·교차 리뷰 조합을 계측에 기록.
-- (d) **thorough+ 동시성 검증** (사용자 확인 요청): 현행 계약은 thorough/adversarial 에서 depth-1 owner 가 **다축 depth-2 perspective/verifier/adversary 워커**를 열도록 명시(WORKFLOW §1.1·OPERATIONS §5.10 ④)하고 동시 상한 ⑤ 가 "동시 분사"를 전제하나, **다축 워커의 병렬 실행이 실측 검증된 적은 없다**(Phase 1·2 사이클은 strong — 단일 리뷰). 검증 항목: thorough 사이클에서 다축 워커가 실제 동시 jobs.log row 로 뜨는지 + Σ 상한 계산 준수 + dispatch-wait 의 다중 자식 대기 의미론. 
-- **SD-OPEN-3 (미결)**: 보완 정책의 정확한 가중("limit 회피 > 특성 적합 > 분산" 초기 보수 정책) — 편중·교차 리뷰 효과는 계측 누적 후 조정.
-
 ### 8.5.7 SD-14 — conductor 대기 계약 결정론화 (운영 실증 ④, 2026-07-10 타 세션 발견)
 
 **실증**: 첫 conductor(sonnet)가 code-plan 분사 후 "Monitor 대기"로 turn 을 끝내 headless 프로세스가 조기 종료 — **one-shot `claude -p` 세션에선 turn 종료 = 프로세스 종료**이고 background 완료 알림은 영영 오지 않는다. 스테이지(code-plan)는 완주해 산출물은 남았으나 conductor 가 죽어 파이프가 고아화. 임시책(재개 conductor 프롬프트에 폴링 대기 명시)은 instruction 층이라 비결정론.
@@ -338,12 +318,6 @@ skills/autopilot-{draft,research,spec,design,lab}  # 스테이지 분사 계약 
 - **SD-13**: conductor 의 스테이지 분사 전 spec 전제 선보장. (§8.5.4, pilot 부수발견)
 - **SD-14**: conductor 대기 계약 결정론화 — (a) wrapper depth_note one-shot 대기 계약 (b) Stop hook 게이트(open 자식 row 차단, -p Stop 발화 검증·registry 갭 선해소 전제) (c) dispatch-wait 헬퍼. dev-pipeline 본문(SD-10)에 대기 절차 포함. (§8.5.7, 운영 실증 ④)
 - **SD-OPEN-2**(미결 — 관찰): 스테이지 SessionEnd mem curator 기동 영향 — 계측 로그로 관찰만, 개입은 증거 후. (§8.5.6)
-
-### v3 추가 (2026-07-10 — 사용량 복원력 + 크로스 하네스)
-
-- **SD-15**: wrapper limit-사망 즉시 감지 — launch 직후 조기 exit + 로그 limit 패턴 → jobs.log row 자동 마감(`dead-<사유>`) + reset 시각 표면화. dispatch-wait/liveness 도 로그 패턴을 DEAD 근거에 추가. 재시도는 안 함(orchestrator 판단). (§8.5.7b, 운영 실증 ⑤)
-- **SD-16**: 사용량-인지 상호보완 크로스 하네스 분사 — (a) usage-check 헬퍼(양 하네스 limit 상태 결정론 조회, runtime-currentness 조사 필수) (b) 상호보완 라우팅(사용량 failover + 특성 강점 배치 + 검증 자리 타 모델 계열 교차) (c) fleet 연속성·계측 (d) thorough+ 다축 동시성 실측 검증. (§8.5.7c, 사용자 요구)
-- **SD-OPEN-3**(미결): 보완 라우팅 가중 정책 — 초기 "limit 회피 > 특성 적합 > 분산", 계측 후 조정. (§8.5.7c)
 
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
