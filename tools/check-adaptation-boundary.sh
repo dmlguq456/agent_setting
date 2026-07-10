@@ -324,6 +324,23 @@ exemption_class() {
   awk -F'\t' -v p="$1" '$0 !~ /^[[:space:]]*#/ && $1 == p { print $2; exit }' "$EXEMPTIONS_FILE"
 }
 
+# delta 예외의 canonical baseline hash(4번째 필드) 조회. $1 = adapter 경로. 미설정 시 "-".
+exemption_baseline() {
+  [ -f "$EXEMPTIONS_FILE" ] || { printf '-'; return; }
+  awk -F'\t' -v p="$1" '$0 !~ /^[[:space:]]*#/ && $1 == p { print ($4 == "" ? "-" : $4); exit }' "$EXEMPTIONS_FILE"
+}
+
+# 파일 raw-byte sha256 (HLS-3 / GSD bin/install.js fileHash 모델). sha256sum→shasum fallback.
+file_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" 2>/dev/null | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1
+  else
+    printf ''
+  fi
+}
+
 # 최상위 공유 파일 1건의 3-class 계약 assert. $1 = layer(hooks|tools|utilities), $2 = name.
 assert_shared_adapter_class() {
   _layer=$1
@@ -362,6 +379,18 @@ assert_shared_adapter_class() {
     delta)
       if cmp -s "$_canonical" "$_adapter"; then
         fail_msg "$_adapter is declared 'delta' but is byte-identical to canonical $_canonical; collapse it instead of exempting"
+      fi
+      # HLS-3 hash-manifest: delta 는 canonical baseline(raw-byte sha256, 4번째 필드)에 바인딩된다.
+      # canonical 이 바뀌면(예: S-1 형 fix 가 canonical 한쪽만) live 해시가 뒤집혀 red — delta 복제본이
+      # 선언된 baseline 밖으로 divergence 했음을 잡아 재파생을 강제. (GSD saveLocalPatches drift 모델.)
+      _baseline=$(exemption_baseline "$_adapter")
+      _live=$(file_sha256 "$_canonical")
+      if [ -z "$_live" ]; then
+        fail_msg "$_adapter delta baseline cannot be verified: no sha256 tool (sha256sum/shasum) available"
+      elif ! printf '%s' "$_baseline" | grep -Eq '^[0-9a-f]{64}$'; then
+        fail_msg "$_adapter is 'delta' but has no valid canonical baseline hash in $EXEMPTIONS_FILE (field 4='$_baseline'); expected sha256($_canonical)=$_live — run: python3 tools/build-manifest.py --sync-baselines"
+      elif [ "$_baseline" != "$_live" ]; then
+        fail_msg "$_adapter delta baseline DRIFT: canonical $_canonical is now $_live but $EXEMPTIONS_FILE binds $_baseline; canonical changed — re-derive the declared patch into $_adapter, then --sync-baselines"
       fi
       ;;
     *)
@@ -865,7 +894,14 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'codex read wrapper resolves relative prd paths for spec gate' hooks/portable-guards.test.sh; then
     fail_msg "spec-read-marker.sh and portable guards must prove explicit preflight read accepts relative prd paths"
   fi
-  for p in sessionstart-lifecycle.py sessionend-lifecycle.py userprompt-lifecycle.py permissionrequest-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
+  # harness-layer-sync HLS-7: Codex native hook bridge 집합을 하드코딩 열거 대신 build-manifest 파생
+  # (adapters/codex/hooks/*.py)로 iterate 한다. 새 hook 파일이 생기면 자동 포함되고, ADAPTATION_INVENTORY
+  # ledger 도 파생값과 대조(아래 check_adaptation_inventory_native_surfaces)해 3자 불일치(S-2 계열)를 막는다.
+  CODEX_NATIVE_HOOKS=$(python3 tools/build-manifest.py --adaptation-surface codex-hooks 2>/dev/null || true)
+  if [ -z "$CODEX_NATIVE_HOOKS" ]; then
+    fail_msg "could not derive Codex native hook surface from build-manifest --adaptation-surface codex-hooks"
+  fi
+  for p in $CODEX_NATIVE_HOOKS; do
     if [ ! -x "adapters/codex/hooks/$p" ]; then
       fail_msg "adapters/codex/hooks/$p is missing or not executable"
     fi
@@ -1279,7 +1315,7 @@ check_codex_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv design-mcp web-bundle fleet profile"
+  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp web-bundle fleet profile"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2312,7 +2348,7 @@ check_opencode_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv design-mcp web-bundle fleet profile"
+  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp web-bundle fleet profile"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2927,6 +2963,20 @@ check_adaptation_inventory_native_surfaces() {
     return
   fi
 
+  # harness-layer-sync HLS-7: ledger 의 _파일목록_ 은 파생값(build-manifest)과 대조한다 — drift 시 red.
+  # 여기선 "Codex native hook surface" 행이 파일시스템에서 파생한 codex native hook 집합을 하나도
+  # 빠짐없이 참조하는지 검증한다. (spec §5: ADAPTATION_INVENTORY:33 이 3파일만 서술해 실제 7개와
+  # 어긋나던 ledger·실제·가드 3자 불일치를 파생 대조로 봉쇄. prose 사유는 그대로 두고 목록만 강제.)
+  _derived_codex_hooks=$(python3 tools/build-manifest.py --adaptation-surface codex-hooks 2>/dev/null || true)
+  if [ -z "$_derived_codex_hooks" ]; then
+    fail_msg "could not derive Codex native hook surface for ADAPTATION_INVENTORY ledger cross-check"
+  fi
+  for _h in $_derived_codex_hooks; do
+    if ! grep -Fq "$_h" core/ADAPTATION_INVENTORY.md; then
+      fail_msg "core/ADAPTATION_INVENTORY.md 'Codex native hook surface' row must list derived hook bridge $_h (ledger drifted from filesystem-derived set)"
+    fi
+  done
+
   if grep -Fq 'Future runtimes need native command wrappers or instruction entries' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must not describe non-Claude command surfaces as future-only"
   fi
@@ -3431,6 +3481,58 @@ warn_concrete_runtime_terms() {
   fi
 }
 
+# harness-layer-sync HLS-8 (§6.1): parity-loss = explicit warning, silent skip 금지.
+# 한 런타임에만 있는 기능(hook 실행 격리 등)이 다른 런타임에 없을 때, 그 손실이 adapter 표면에
+# 명시 unsupported/fallback 로 _신고_ 되는지 가드가 검증한다(존재 검증). research 결론: 어떤 도구도
+# 없는 런타임에서 hook 실행 격리를 진짜 재현 못 함 → skip+warning 이 최선(ruler 반면교사).
+check_parity_loss_explicit_warnings() {
+  # 각 항목: "<설명>|<파일>|<명시 토큰>" — 토큰이 없으면 silent drop 으로 간주하고 red.
+  # 앵커: hook 실행 격리(§6.1 canonical 예), loop auto-run(drill/note), claude headless,
+  # allowedTools, settings.json MCP — 전부 one-runtime-only 표면.
+  # heredoc redirect(파이프 아님)로 while 을 현재 셸에서 돌려 fail_msg 의 fail=1 이 전파되게 한다.
+  while IFS='|' read -r _desc _file _token; do
+    [ -n "$_desc" ] || continue
+    if [ ! -f "$_file" ]; then
+      fail_msg "parity-loss warning source $_file for '$_desc' is missing"
+      continue
+    fi
+    if ! grep -Fq "$_token" "$_file"; then
+      fail_msg "parity-loss for '$_desc' must be an explicit unsupported/fallback signal in $_file (expected token: $_token) — silent skip forbidden (HLS-8/§6.1)"
+    fi
+  done <<'PARITY_LOSS_EOF'
+hook-execution-isolation(codex)|adapters/codex/bin/preflight.sh|claude_headless=unsupported
+loop-auto-run(codex)|adapters/codex/bin/preflight.sh|auto_run=unsupported
+allowedTools(codex)|adapters/codex/bin/preflight.sh|claude_allowed_tools=unsupported
+settings-mcp(codex)|adapters/codex/bin/preflight.sh|claude_settings_mcp=unsupported
+loop-note(codex)|core/ADAPTATION_INVENTORY.md|unsupported/manual-contract
+mode-fragment(opencode)|adapters/opencode/ADAPTATION.md|status=unsupported
+allowedTools(opencode)|adapters/opencode/ADAPTATION.md|allowedTools` is unsupported
+PARITY_LOSS_EOF
+}
+
+# harness-layer-sync HLS-9 (§6.2): adapter bootstrap byte-budget 회귀. bootstrap 비대화가 런타임
+# truncation 을 silent 유발하는 것을 조기 감지 (GSD tests/workflow-size-budget.test.cjs 차용, byte 단위).
+# 상한 근거: Codex `project_doc_max_bytes` 기본 truncation cliff = 32768 을 codex 상한으로 앵커(넘으면
+# AGENTS.md 가 조용히 잘림). Claude/OpenCode 는 현재 실측 + 여유율(round to KiB)로 회귀 방지.
+check_bootstrap_byte_budget() {
+  # "<파일>|<byte 상한>|<근거>" — heredoc redirect 로 현재 셸 실행(fail 전파).
+  while IFS='|' read -r _bf _cap _why; do
+    [ -n "$_bf" ] || continue
+    if [ ! -f "$_bf" ]; then
+      fail_msg "bootstrap byte-budget: $_bf is missing"
+      continue
+    fi
+    _sz=$(wc -c < "$_bf" | tr -d ' ')
+    if [ "$_sz" -gt "$_cap" ]; then
+      fail_msg "bootstrap byte-budget: $_bf is $_sz bytes, over the $_cap-byte ceiling ($_why). Trim it or raise the ceiling with a documented reason (HLS-9/§6.2)"
+    fi
+  done <<'BYTE_BUDGET_EOF'
+adapters/claude/CLAUDE.md|28672|현재 ~22.8KB; CLAUDE.md 비확장 운영정책 + ~25% 여유(28KiB)
+adapters/codex/AGENTS.md|32768|Codex project_doc_max_bytes 기본 truncation cliff = 32768; 넘으면 silent 잘림
+adapters/opencode/AGENTS.md|24576|현재 ~11.8KB; always-load instructions footprint 여유(24KiB)
+BYTE_BUDGET_EOF
+}
+
 check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_projection_symlinks opencode_setting
@@ -3491,6 +3593,8 @@ check_opencode_capability_map
 check_codex_mode_map
 check_opencode_mode_map
 check_hook_catalog
+check_parity_loss_explicit_warnings
+check_bootstrap_byte_budget
 check_legacy_root_links
 warn_concrete_runtime_terms
 
