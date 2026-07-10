@@ -706,13 +706,20 @@ class StageWorkerRenderTest(unittest.TestCase):
             ("code-report", "report"),
         ]
         for worker_role, label in cases:
-            job = DispatchJob(key="code", slug="stage-job", depth=2, worker_role=worker_role,
+            # D2 (test_round1.md): a live depth-2 stage worker's `j.key` IS its capability
+            # (collectors/dispatch.py `pname = meta["capability"]`, e.g. "code-execute") — the
+            # old fixture used key="code" (the depth-1 conductor's track key), which masked the
+            # D1 raw-prefix leak since "code: " looks like a legitimate label already.
+            job = DispatchJob(key=worker_role, slug="stage-job", depth=2, worker_role=worker_role,
                               liveness="working")
             lines = render._build_lines([], [job], section="both", narrow=False, malformed=0,
                                         layout="wide")
             text = "\n".join("".join(part for part, _key in line) for line in lines if line)
             self.assertIn(label, text)
             self.assertNotIn(worker_role.replace("-", "_"), text)
+            # the raw capability key must never leak as a breadcrumb prefix (D1) — only its
+            # humanized _STAGE_ROLE label (asserted above) may appear.
+            self.assertNotIn(worker_role + ":", text)
             self.assertNotIn(worker_role, text)
 
     def test_g_case_prefix_general_rule_matches_known_drill_cases(self):

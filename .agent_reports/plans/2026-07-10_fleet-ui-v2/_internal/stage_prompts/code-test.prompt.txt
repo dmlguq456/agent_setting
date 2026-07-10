@@ -1,0 +1,31 @@
+You are a Claude headless depth-2 worker (worker_role=code-test, owner=autopilot-code, parent=fleet-ui-v2). Your turn ends when the process exits — do all verification in this session.
+
+TASK: Run the `code-test` sub-skill (품질관리팀, test mode) to verify the fleet UI v2 implementation just completed by the code-execute stage. Graduated verification: syntax → import → unit → functional → LIVE runtime observation.
+
+Sub-skill: code-test (품질관리팀 test mode, deep review — this is a TUI render regression + live-fixture verification, so be thorough).
+
+INPUT ARTIFACTS (read directly):
+- Plan: /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/plans/2026-07-10_fleet-ui-v2/plan/plan.md  (see Verification section)
+- Checklist: /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/plans/2026-07-10_fleet-ui-v2/plan/checklist.md
+- Execute log: /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/plans/2026-07-10_fleet-ui-v2/dev_logs/execute_round1.md
+
+TARGET CODE: tools/fleet/ (collectors/dispatch.py · model.py · render.py · tests/test_dispatch.py)
+
+QA: standard · Intensity: standard · Slug: fleet-ui-v2-test · depth 2.
+
+MANDATORY verification items (must all be checked and reported):
+1. Unit suite: `cd tools && python3 -m unittest fleet.tests.test_dispatch -v` — ALL green (baseline was 36; execute added 12 → expect ~48). Report exact count. Confirm the D5 canonical-comma tests (test_dispatch.py ~459–647) did NOT regress from the SD-F4 tolerant parser.
+2. New tests present & meaningful: (a) space-separated pipe (b) `model_role=deep maker` value-internal-space (c) unknown-key-ignored (d) stage-name labels code-plan/execute/test/report (e) conductor breadcrumb aggregation + N5 report lone-token case (f) alert humanize aggregation.
+3. LIVE 관제 실증 — run `python3 tools/fleet/fleet.py --once` and `python3 tools/fleet/fleet.py --json`:
+   (a) THIS cycle's depth-2 stage rows (fleet-ui-v2-execute, and yourself fleet-ui-v2-test while running) render with human stage-name labels (plan/exec/test/report), NOT raw `code_execute`/`code-test`.
+   (b) the conductor row (fleet-ui-v2 capability-owner) breadcrumb aggregates the active stage child.
+   (c) NO existing render regression (usage header · pulse · group cards · folded · legend · footer all intact).
+   (d) `--json` shows `effort`/`model_role` fields populated on the stage jobs.
+4. Syntax/import clean, no crash on `--once`/`--json`/`--demo --once`.
+
+OUTPUT CONTRACT (write before finishing):
+- Test report: /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/plans/2026-07-10_fleet-ui-v2/test_logs/test_round1.md — verdict (PASS/FAIL per item), exact test count, live-fixture evidence (paste the relevant fleet --once row lines proving stage-name rendering + conductor aggregation), any regressions or defects found.
+- If defects found: report them clearly in the test log with file:line; do NOT fix them yourself (report stage / conductor decides). Set an overall verdict.
+- Do NOT merge/push/clean worktree. You MAY commit the test_logs artifact on branch fleet-ui-v2.
+
+Return a concise Korean verdict: pass/fail per mandatory item, exact test count, live-fixture evidence summary, and the test_logs path.

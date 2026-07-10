@@ -855,7 +855,12 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         # 여기가 autopilot-code 정체를 직관적으로 전달). loops jobs (key == slug) skip the label.
         segs.append(("    ", None))                       # 4-col gap (reads separate from effort/qa)
         if key and key != name:
-            segs.append((key + ": ", "name_dim"))
+            # SD-F1: a depth-2 stage worker's `key` IS its capability (code-plan/code-execute/
+            # code-test/code-report) — reuse _stage_role_label (same helper the F-13 legend uses)
+            # to humanize it instead of leaking the raw capability token onto the board.
+            role_label, role_suffix = _stage_role_label(key)
+            prefix_text = (role_label + role_suffix) if role_label else key
+            segs.append((prefix_text + ": ", "name_dim"))
         segs += _stage_segs(key, stage, working=(j.liveness == "working"))
 
     segs.append((_RFLUSH, None))
@@ -965,7 +970,11 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
     l2 += _model_cell(j.model or parent_model, eff, _MW, dim=True)
     if key and key != name:
-        l2.append((key + ": ", "name_dim"))
+        # SD-F1/D1: same capability→label humanization as the wide-layout _dispatch_row —
+        # the narrow 2-line card must not leak the raw code-* capability key either.
+        role_label, role_suffix = _stage_role_label(key)
+        prefix_text = (role_label + role_suffix) if role_label else key
+        l2.append((prefix_text + ": ", "name_dim"))
     l2 += _stage_segs(key, stage, working=(j.liveness == "working"))
     if _split:
         return l1, l2, br_seg
