@@ -107,3 +107,5 @@ memory 도메인 adapter-parity 불변식 (§5.10 신설, D-30~32). 계기 = cod
 - 어댑터 전반 parity 계약(P-01 derived guard 등)은 본 PRD 범위 밖 — `core/ADAPTATION.md` 소관 명시.
 - Next 8번 항목으로 Cluster H 구현 경로(autopilot-code, 감사 Phase 3 과 동일 사이클 가능) 추가.
 - (이력 메모) v11→v12 update 때 `_internal/versions/v11/` snapshot 이 누락됐음을 확인 — v11 내용은 git 이력으로만 복원 가능. 본 v13 부터 snapshot 재준수.
+
+- 2026-07-10 minor: memory mirror repo 개명 반영 (claude-memory → agent-memory, GitHub rename + remote/mem.py 주석/README 동기) — 사용자 지시, 하네스-중립 명명 정렬. 본문 4곳·state D-6 표기 갱신 (버전 스냅샷은 불변).

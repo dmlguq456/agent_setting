@@ -122,7 +122,7 @@ def _head_unpushed(repo):
 
 
 def _commit_dump():
-    """sync 후 DUMP 가 속한 git repo(claude-memory)에 자동 commit (default ON, MEM_DUMP_COMMIT=0 면 skip).
+    """sync 후 DUMP 가 속한 git repo(agent-memory, 구 claude-memory)에 자동 commit (default ON, MEM_DUMP_COMMIT=0 면 skip).
     메시지는 사용자 관행 `chore: dump —` prefix 에 `auto-sync` 라벨 (수동/자동 구분).
     직전 HEAD 가 _미푸시_ auto-sync 커밋이면 --amend 로 rolling 단일 커밋 (log 폭증 차단).
     수동 커밋·푸시된 커밋은 절대 amend X (prefix 체크 + 미푸시 체크 두 가드).
@@ -130,7 +130,7 @@ def _commit_dump():
     절대 raise X (sync 비치명). dump.jsonl 단일 파일만 stage — 다른 dirty/untracked 비오염."""
     if os.environ.get("MEM_DUMP_COMMIT") == "0":
         return  # escape hatch: 자동 commit 끄기
-    repo = DUMP.parent  # STORE; dump.jsonl lives in the claude-memory repo working tree
+    repo = DUMP.parent  # STORE; dump.jsonl lives in the agent-memory repo working tree
     if not _git_out(["rev-parse", "--is-inside-work-tree"], repo):
         return  # 비 git repo → no-op
     # dump.jsonl 단일 파일만 stage (memory.db·.bak·다른 파일은 절대 건드리지 않음)

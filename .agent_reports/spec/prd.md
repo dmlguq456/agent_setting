@@ -10,7 +10,7 @@
 
 ## 0. 한 줄
 
-흩어진 3개 기억(post-it 단기 · auto-memory 장기 · user_profile 전역)을 **하나의 SQLite store(`memory.db`) + tier 모델**로 통합. 진실원천=DB, git=`dump.jsonl` 텍스트 mirror, 전용 private repo `claude-memory`. v4에서 **profile을 진짜 완전 통합**하고 **Hermes 잔여 port 2종**을 결정론-우선으로 붙인다.
+흩어진 3개 기억(post-it 단기 · auto-memory 장기 · user_profile 전역)을 **하나의 SQLite store(`memory.db`) + tier 모델**로 통합. 진실원천=DB, git=`dump.jsonl` 텍스트 mirror, 전용 private repo `agent-memory`(구 claude-memory, 2026-07-10 개명). v4에서 **profile을 진짜 완전 통합**하고 **Hermes 잔여 port 2종**을 결정론-우선으로 붙인다.
 
 ## 0.5 설계 원칙 — 결정론 우선 (deterministic-first) ★ cross-cutting
 
@@ -42,7 +42,7 @@
 - **D6**: 자체 하네스 — SessionStart `mem inject --hook` + SessionEnd `mem sync`.
 - **D7 → Cluster A로 격상** (§4): 통합 깊이.
 - **D8**: 보안 — injection 패턴·secret 마스킹 (코드). 메모리는 데이터로만.
-- **D9**: 저장소 분리 — 전용 private repo `claude-memory`, config repo `memory/` gitignore + 이력 filter-repo 제거.
+- **D9**: 저장소 분리 — 전용 private repo `agent-memory`(구 claude-memory), config repo `memory/` gitignore + 이력 filter-repo 제거.
 
 ## 3. 잘라낸 것 (v3 완료)
 markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내장 FTS5 · post-it 파일/파싱 → working 레코드 · 3중 분산 위치 → 1 store. (✅ 200 레코드 무손실 이주 완료.)
@@ -116,7 +116,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - opt-in 게이트(`MEM_DISTILL_ENABLE=1`) 유지. enable 전 검증 ✅완료분: 재귀가드 env-상속(`claude -p` 가 SessionEnd 발화 + `MEM_DISTILL=1` 상속 확인)·ghost-marker·hang-free. 남은 gate = 위 no-tools acceptance.
 
 ### 5.5.5 데이터 모델 영향
-- 신규 테이블 **없음** — distill 결과는 기존 `records`(working/durable)로 흡수. raw 대화는 jsonl(하네스 native)에 남고 DB로 복제 안 함(D-11 source는 read-only adapter). dump.jsonl·claude-memory 동기 대상은 기존 records 그대로(원문 대화 비포함 — 프라이버시·용량).
+- 신규 테이블 **없음** — distill 결과는 기존 `records`(working/durable)로 흡수. raw 대화는 jsonl(하네스 native)에 남고 DB로 복제 안 함(D-11 source는 read-only adapter). dump.jsonl·agent-memory 동기 대상은 기존 records 그대로(원문 대화 비포함 — 프라이버시·용량).
 - 신규 상태 파일: **단일 공유 increment marker**(세션별, `memory/.distill-state-<sid>` 류 — turn-state 패턴 동형) + 세션당 distiller lock(`.distill-lock-<sid>`, mkdir-atomic 동시 1개). 둘 다 루트 `/memory/` gitignore 가 커버 — 별도 gitignore 파일 불필요(구현 D1; 루트 ignore 가 `memory/` 전체를 무시하므로 lock·state 가 git 에 침투 못 함). 두 트리거(①·②) 양쪽이 같은 marker 를 읽고 전진시킴.
 
 ## 5.6 Cluster D — 결정론-first lifecycle 정비 (v9, 사용자 확정 2026-06-17)
@@ -180,7 +180,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 
 ### 5.7.9 데이터 모델 영향
 - records 신규 칼럼: `strength` INTEGER · `last_accessed` TEXT (E-1). `cwd_origin` → project_key 값(E-3, 의미 변경+마이그레이션). **`PRAGMA user_version` 마이그레이션 프레임**(E-5) — 다발 schema 변경의 단일 게이트.
-- 신규 컴포넌트 **없음** (E-7 프록시 폐기). raw 대화는 계속 vendor jsonl(하네스 native)에 — distiller 가 D-11 adapter 로 읽고 distill, DB 복제 X. dump.jsonl·claude-memory 동기엔 distill 결과만(raw 비포함) 유지.
+- 신규 컴포넌트 **없음** (E-7 프록시 폐기). raw 대화는 계속 vendor jsonl(하네스 native)에 — distiller 가 D-11 adapter 로 읽고 distill, DB 복제 X. dump.jsonl·agent-memory 동기엔 distill 결과만(raw 비포함) 유지.
 
 ## 5.8 Cluster F — 루프↔메모리 환류 + 적극 정리 (v11, 사용자 확정 2026-06-22)
 

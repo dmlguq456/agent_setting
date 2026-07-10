@@ -18,7 +18,7 @@ decisions_locked:
   - D-3: user_profile — raw=레코드, aspect=DB→generated view
   - D-4: 주입·회수 — SessionStart inject + SessionEnd sync
   - D-5: SoT = 로컬 SQLite memory.db (git=dump.jsonl 텍스트 mirror, .db 비추적)
-  - D-6: 저장소 분리 — claude-memory private repo, config repo memory/ 이력 filter-repo 제거
+  - D-6: 저장소 분리 — agent-memory private repo (구 claude-memory, 2026-07-10 개명), config repo memory/ 이력 filter-repo 제거
   - D-7: 통합 깊이 — user_profile+post-it+auto-memory 한 DB (tier/scope/type 컬럼 구분 유지)
   - D-8: 결정론 우선 (deterministic-first) — SW 가능 요소는 코드(hook/script/gate/DB)로, agent 판단 최소화 (cross-cutting, DESIGN_PRINCIPLES 격상)
   - D-9: 파일 메커니즘 제거(Option 2) — user_profile/·post-it.md 파일 제거, DB 유일 SoT, sub-agent는 mem profile/recall로 DB 직접 읽기 (Cluster A)
