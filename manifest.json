@@ -471,6 +471,13 @@
       "hard_block": true
     },
     {
+      "slug": "hook__worktree-path-guard__PreToolUse",
+      "name": "worktree-path-guard",
+      "mono": "worktree-path-guard",
+      "event": "PreToolUse",
+      "hard_block": false
+    },
+    {
       "slug": "hook__herdr-agent-state__SessionEnd",
       "name": "herdr-agent-state release",
       "mono": "herdr-agent-state",

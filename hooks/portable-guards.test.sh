@@ -21,6 +21,7 @@ FLOW="$ROOT/utilities/workflow-guard-hook.sh"
 TOGGLE="$ROOT/utilities/workflow-toggle.sh"
 RECALL="$ROOT/hooks/mem-recall-inject.sh"
 BRIEF="$ROOT/hooks/mem-briefing-inject.sh"
+WTG="$ROOT/hooks/worktree-path-guard.sh"
 
 PASS=0
 FAIL=0
@@ -66,6 +67,57 @@ if "$GIT" --file "$TMP/repo/f" >/tmp/git.out 2>/tmp/git.err; then
   bad "detached repo should fail"
 else
   [ "$?" -eq 2 ] && ok "detached repo exits 2" || bad "detached repo wrong exit"
+fi
+
+echo "== worktree path guard CLI =="
+# git repo for the guard (reuse "$TMP/repo"; a git toplevel is all the guard needs).
+# (a) 내장 EnterWorktree 전면 deny (repo 안 .claude/worktrees/ 오염).
+if "$WTG" --tool EnterWorktree --cwd "$TMP/repo" --session wtgsid >/tmp/wtg.out 2>/tmp/wtg.err; then
+  bad "EnterWorktree should be denied"
+else
+  [ "$?" -eq 2 ] && grep -q 'EnterWorktree' /tmp/wtg.err && ok "worktree guard denies builtin EnterWorktree (exit 2)" \
+    || bad "worktree guard wrong exit/message on EnterWorktree"
+fi
+# (b) Bash `git worktree add` 대상이 <repo>-wt/ 밖 → deny.
+if "$WTG" --tool Bash --command 'git worktree add .claude/worktrees/foo -b foo' --cwd "$TMP/repo" --session wtgsid >/tmp/wtg.out 2>/tmp/wtg.err; then
+  bad "git worktree add outside -wt/ should be denied"
+else
+  [ "$?" -eq 2 ] && grep -q -- '-wt/' /tmp/wtg.err && ok "worktree guard denies git worktree add outside -wt/ (exit 2)" \
+    || bad "worktree guard wrong exit/message on non -wt/ worktree add"
+fi
+# 오차단 금지 ①: 정규 형제 경로 <repo>-wt/<slug> 의 git worktree add 는 절대 차단 금지 (분사 정상 흐름).
+if "$WTG" --tool Bash --command 'git worktree add /home/x/repo-wt/slug -b slug main' --cwd "$TMP/repo" --session wtgsid >/tmp/wtg.out 2>/tmp/wtg.err; then
+  ok "worktree guard passes regular <repo>-wt/<slug> add"
+else
+  bad "worktree guard should never block a regular <repo>-wt/ add"
+fi
+# 오차단 금지 ②: 비-add 서브커맨드(remove/list/prune)는 무간섭.
+if "$WTG" --tool Bash --command 'git worktree remove /home/x/repo-wt/slug' --cwd "$TMP/repo" --session wtgsid >/tmp/wtg.out 2>/tmp/wtg.err \
+  && "$WTG" --tool Bash --command 'git worktree prune' --cwd "$TMP/repo" --session wtgsid >/tmp/wtg.out 2>/tmp/wtg.err \
+  && "$WTG" --tool Bash --command 'git worktree list' --cwd "$TMP/repo" --session wtgsid >/tmp/wtg.out 2>/tmp/wtg.err; then
+  ok "worktree guard leaves non-add worktree subcommands alone"
+else
+  bad "worktree guard should leave remove/prune/list alone"
+fi
+# 오차단 금지 ③: ⚡untracked 세션 flag 존재 → 전면 우회.
+: > "$TMP/repo/.untracked.wtgbypass"
+if "$WTG" --tool EnterWorktree --cwd "$TMP/repo" --session wtgbypass >/tmp/wtg.out 2>/tmp/wtg.err; then
+  ok "worktree guard honors ⚡untracked bypass flag"
+else
+  bad "worktree guard should bypass under untracked flag"
+fi
+rm -f "$TMP/repo/.untracked.wtgbypass"
+# 오차단 금지 ④: 비-git cwd → 무간섭 (fail-open).
+if "$WTG" --tool EnterWorktree --cwd "$TMP" --session wtgsid >/tmp/wtg.out 2>/tmp/wtg.err; then
+  ok "worktree guard fails open outside a git repo"
+else
+  bad "worktree guard should fail open outside a git repo"
+fi
+# 오차단 금지 ⑤: 무관한 Bash 명령 → 무간섭.
+if "$WTG" --tool Bash --command 'ls -la && git status' --cwd "$TMP/repo" --session wtgsid >/tmp/wtg.out 2>/tmp/wtg.err; then
+  ok "worktree guard leaves unrelated Bash commands alone"
+else
+  bad "worktree guard should leave unrelated Bash commands alone"
 fi
 
 echo "== codex preflight wrapper =="
