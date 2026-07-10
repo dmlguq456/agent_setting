@@ -109,3 +109,10 @@ memory 도메인 adapter-parity 불변식 (§5.10 신설, D-30~32). 계기 = cod
 - (이력 메모) v11→v12 update 때 `_internal/versions/v11/` snapshot 이 누락됐음을 확인 — v11 내용은 git 이력으로만 복원 가능. 본 v13 부터 snapshot 재준수.
 
 - 2026-07-10 minor: memory mirror repo 개명 반영 (claude-memory → agent-memory, GitHub rename + remote/mem.py 주석/README 동기) — 사용자 지시, 하네스-중립 명명 정렬. 본문 4곳·state D-6 표기 갱신 (버전 스냅샷은 불변).
+
+### v13 → v14 (2026-07-10, update mode — Cluster I 추가, snapshot `_internal/versions/v13/`)
+Claude Code와 Codex의 동시 진단을 교차검증해 “저장은 되지만 꺼내 쓰기 어렵다”는 병목을 구조 문제로 확정했다. 실제 agent-memory 이력에서는 canonical handoff와 보강 2건이 함께 존재한 뒤 보강 2건 삭제+canonical strength `1→3`이 동시에 발생해, D-27 curator의 near-duplicate merge 오판으로 고유 인계 내용이 사라진 사고가 확인됐다.
+- **D-33** full-body retrieval: `mem show <id>`와 `recall --full/--limit`, visibility fence, generic not-found. 읽기는 소비가 아니다.
+- **D-34** prompt auto-recall: 모든 project 발화를 shared candidate engine으로 no-touch probe하고 identifier/CJK/coverage 기반 고신뢰 hit만 top3/1,200자로 주입. raw prompt 없는 bounded event telemetry로 hit-rate·정밀도·latency를 관측한다.
+- **D-35** handoff delivery protection: schema v5 `delivery_state(ordinary|pending|consumed)`, 명시 `consume`, pending 대상 destructive operation의 실행시점 fail-closed, merge 원자 취소, lifecycle 보호, 단건 restore. 기존 handoff/HANDOFF 기록은 fail-safe pending backfill.
+- **D-36** injection cap hold: cap 확대보다 recall 접근성을 먼저 고치고 `probe→qualified→injected→show/consume` 퍼널을 재관찰한다.

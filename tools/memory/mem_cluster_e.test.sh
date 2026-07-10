@@ -84,9 +84,9 @@ python3 "$MEM" stats >/dev/null 2>&1
 rc1=$?
 [ "$rc1" = "0" ] && ok "①: mem stats exit 0 (first run)" || bad "①: mem stats failed (rc=$rc1)"
 
-# Assert user_version == 4 (Phase 1 — injection_flag 컬럼 추가 후 v4 로 갱신됨)
+# Assert user_version == 5 (Cluster I — delivery_state 추가)
 uv=$(python3 -c "import sqlite3; con=sqlite3.connect('$STORE_1/memory.db'); print(con.execute('PRAGMA user_version').fetchone()[0])")
-[ "$uv" = "4" ] && ok "①: PRAGMA user_version == 4 after migration" || bad "①: user_version=$uv (expected 4)"
+[ "$uv" = "5" ] && ok "①: PRAGMA user_version == 5 after migration" || bad "①: user_version=$uv (expected 5)"
 
 # Export dump run-1
 DUMP_1A="$(mktemp)"
@@ -133,10 +133,10 @@ print(','.join(cols))
   && ok "①: fresh-DB column order == migrated-DB column order (pins positional INSERT risk)" \
   || bad "①: column order mismatch — fresh='$fresh_cols' migrated='$migrated_cols'"
 
-# Verify tail columns are ...,strength,last_accessed,injection_flag (Phase 1 v4 — injection_flag 추가)
-tail_ok=$(echo "$fresh_cols" | python3 -c "import sys; s=sys.stdin.read().strip(); cols=s.split(','); ok = cols[-3]=='strength' and cols[-2]=='last_accessed' and cols[-1]=='injection_flag'; print('ok' if ok else f'bad:{cols[-3:]}')")
+# Verify tail columns are ...,strength,last_accessed,injection_flag,delivery_state
+tail_ok=$(echo "$fresh_cols" | python3 -c "import sys; s=sys.stdin.read().strip(); cols=s.split(','); ok = cols[-4:]==['strength','last_accessed','injection_flag','delivery_state']; print('ok' if ok else f'bad:{cols[-4:]}')")
 [ "$tail_ok" = "ok" ] \
-  && ok "①: column tail ends in ...,strength,last_accessed,injection_flag" \
+  && ok "①: column tail ends in ...,strength,last_accessed,injection_flag,delivery_state" \
   || bad "①: column tail wrong — $tail_ok"
 
 rm -rf "$FRESH_STORE" "$FRESH_PROJ" "$STORE_1" "$PROJ_1"

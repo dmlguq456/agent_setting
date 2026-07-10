@@ -58,7 +58,7 @@ PY
 graves() { local g="$MEM_STORE/deleted-records.jsonl"; [ -f "$g" ] && wc -l < "$g" | tr -d ' ' || echo 0; }
 exists() { sql "SELECT COUNT(*) FROM records WHERE id=?" "$1"; }
 
-# initialize DB/schema (migrate to v4)
+# initialize DB/schema (migrate to v5)
 initdb
 DAY40="$(python3 -c 'import datetime;print((datetime.date.today()-datetime.timedelta(days=40)).isoformat())')"
 TODAY="$(python3 -c 'import datetime;print(datetime.date.today().isoformat())')"
@@ -92,13 +92,14 @@ G0=$(graves)
 python3 "$MEM" prune own_p1 >/dev/null; rc=$?
 [ "$rc" = 0 ] && [ "$(exists own_p1)" = 0 ] && ok "② prune: deleted + rc0" || bad "② prune failed"
 [ "$(graves)" = "$((G0+1))" ] && ok "② prune: graveyard +1 line" || bad "② prune graveyard line count"
-# DEST-1: parse last graveyard line, assert 15-col sort_keys JSON + key cols match pre-delete
-python3 - "$MEM_STORE/deleted-records.jsonl" "$PRE_BODY" <<'PY' && ok "DEST-1 graveyard = exact 15-col sort_keys JSON (id/body/tier/cwd_origin match)" || bad "DEST-1 graveyard shape/content mismatch"
+# DEST-1: parse last graveyard line, assert 16-col record + recovery metadata
+python3 - "$MEM_STORE/deleted-records.jsonl" "$PRE_BODY" <<'PY' && ok "DEST-1 graveyard = exact 16-col record + recovery metadata" || bad "DEST-1 graveyard shape/content mismatch"
 import json, sys
 line = open(sys.argv[1]).read().splitlines()[-1]
 rec = json.loads(line)
 COLS = {"id","tier","scope","type","cwd_origin","created","updated","expires","source",
-        "tags","links","body","strength","last_accessed","injection_flag"}
+        "tags","links","body","strength","last_accessed","injection_flag","delivery_state",
+        "_deleted_at","_action","_canonical"}
 assert set(rec) == COLS, set(rec) ^ COLS
 assert json.dumps(rec, sort_keys=True, ensure_ascii=False) == line, "not sort_keys canonical"
 assert rec["id"] == "own_p1" and rec["body"] == sys.argv[2]
@@ -196,8 +197,8 @@ python3 - "$COLD_STORE/memory.db" "$PKEY" "$TODAY" <<'PY'
 import sqlite3, sys
 con = sqlite3.connect(sys.argv[1]); pk, t = sys.argv[2], sys.argv[3]
 rows = [(f"ceil_{i}","durable","project","note",pk,t,t,None,None,"[]","[]",
-         f"ceiling filler durable record number {i} body content", 1, t, 0) for i in range(85)]
-con.executemany("INSERT OR REPLACE INTO records VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+         f"ceiling filler durable record number {i} body content", 1, t, 0, "ordinary") for i in range(85)]
+con.executemany("INSERT OR REPLACE INTO records VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
 con.commit(); con.close()
 PY
 python3 "$MEM" curate-snapshot | grep -q "ceiling: durable .* > 80 — aggressive consolidate" \

@@ -109,8 +109,9 @@ LOCK="$STORE/.distill-lock-$SID"
 mkdir "$LOCK" 2>/dev/null || exit 0
 
 # γ curate(SessionEnd) 모드 — 현 프로젝트 snapshot 캡처(deep curator 입력 DATA) + 멤버십 id 화이트리스트.
-# SNAPSHOT 은 PROMPT 에 DATA 로 임베드(S2a — 라벨은 mem.py 가 구조적 무력화). IDS: 줄 → 멤버십
-# 파일(S2b — parser 가 prune/merge/... 대상 id 를 이 집합으로 제한). increment 모드는 캡처 안 함.
+# SNAPSHOT 은 PROMPT 에 DATA 로 임베드(S2a — 라벨은 mem.py 가 구조적 무력화). IDS: 줄은
+# destructive allowlist 이며 PROTECTED PENDING handoff/thread id 는 제외된다. parser 는
+# prune/merge/... 대상 id 를 이 집합으로 제한한다(S2b). increment 모드는 캡처 안 함.
 SNAPSHOT=""
 ARTIFACTS=""
 SNAPIDS_FILE="$STORE/.distill-snapids-$SID"
@@ -161,8 +162,10 @@ $ARTIFACTS
 규칙:
 - prose·코드 펜스·설명 텍스트 일절 금지. JSON 오브젝트 줄만.
 - prune (적극): ARTIFACTS 에 *끝난 증거*가 있으면 — 그 working/durable 이 가리키는 브랜치가 GIT 에 머지됨·plan 완료·작업 해결 — *적극적으로* prune 하세요 (working 의 21일 TTL 을 기다리지 말 것, cold durable 도). 적극성 방향 = \"막연히 더 지우기\"가 아니라 \"산출물 증거가 받쳐주면 자신있게\". 증거 없는 추측 삭제는 금지.
-- 안전망 인지: prune 대상은 SNAPSHOT IDS 화이트리스트로 제한되고 삭제분은 graveyard 에 백업돼 되돌릴 수 있으니, 증거가 받쳐주면 망설이지 마세요. merge 는 명백히 겹치는 것만.
-- id 는 *반드시 위 SNAPSHOT 에 나온 id* 만 사용. snapshot 에 없는 id 는 무시됩니다.
+- PROTECTED PENDING 은 아직 소비되지 않은 handoff/thread 입니다. destructive IDS 에서 의도적으로 제외되며, consume 전에는 ARTIFACTS 완료·cold·ceiling 신호가 있어도 prune·merge·delete 하면 안 됩니다.
+- 안전망 인지: prune 대상은 destructive IDS 화이트리스트로 제한되고 삭제분은 graveyard 에 백업되지만, 이 복구 가능성은 pending 보호를 완화하지 않습니다.
+- merge 는 본문이 실질적으로 동등하고 canonical 에 모든 고유 의무가 남을 때만 허용합니다. 관련 보강·후속 요구는 near-duplicate 가 아닙니다.
+- delete 는 curator action 이 아닙니다. id 변이 action 은 *반드시 destructive IDS 에 나온 id* 만 사용하며, snapshot 의 다른 id 는 무시됩니다.
 - ceiling SIGNAL 이 있으면 더 공격적으로 consolidate(merge/prune) 하세요.
 - 할 게 없으면 빈 출력(줄도 없이)."
 else

@@ -20,6 +20,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DISPATCH="$ROOT/hooks/mem-distill-dispatch.sh"
 TURNNUDGE="$ROOT/hooks/mem-turn-nudge.sh"
 MEM="$ROOT/tools/memory/mem.py"
+APPLIER="$ROOT/tools/memory/apply-distill-actions.py"
+CLAUDE_DISPATCH="$ROOT/adapters/claude/hooks/mem-distill-dispatch.sh"
+CODEX_DISTILL="$ROOT/adapters/codex/bin/distill-worker.sh"
+OPENCODE_DISTILL="$ROOT/adapters/opencode/bin/distill-worker.sh"
 [ -f "$DISPATCH" ] || { echo "FAIL: dispatch hook not found at $DISPATCH"; exit 1; }
 [ -f "$TURNNUDGE" ] || { echo "FAIL: turn-nudge hook not found at $TURNNUDGE"; exit 1; }
 # dispatch 가 *이 worktree* 의 mem.py 를 쓰도록 강제 (라이브 ~/.claude 는 pre-γ — curate-snapshot/prune 부재).
@@ -499,6 +503,53 @@ PY
 [ -f "$STOREg5/deleted-records.jsonl" ] && grep -q "$RID5" "$STOREg5/deleted-records.jsonl" \
   && ok "routing: prune graveyard 기록됨 (S2b in-snapshot 경로)" || bad "routing: graveyard 미기록"
 rmdir "$STOREg5/.distill-lock-$SIDg5" 2>/dev/null || true
+
+# D-35 pending handoff boundary: mem.py exposes protected records in a separate
+# snapshot section and omits them from IDS. The applier must treat IDS as the
+# destructive allowlist, and every runtime prompt must preserve that contract.
+echo "== D-35 pending handoff/thread → destructive IDS 제외 + prompt parity =="
+prompt_contract_ok=1
+for f in "$DISPATCH" "$CLAUDE_DISPATCH" "$CODEX_DISTILL" "$OPENCODE_DISTILL"; do
+  grep -q 'PROTECTED PENDING' "$f" || prompt_contract_ok=0
+done
+if [ "$prompt_contract_ok" = 1 ]; then
+  ok "D-35: Claude canonical/delta + Codex/OpenCode prompts name PROTECTED PENDING"
+else
+  bad "D-35: a runtime distill prompt is missing PROTECTED PENDING"
+fi
+if ! grep -q '"action":"prune"' "$OPENCODE_DISTILL" && grep -q 'increment/add-only' "$OPENCODE_DISTILL"; then
+  ok "D-35: OpenCode increment prompt exposes add-only actions"
+else
+  bad "D-35: OpenCode increment prompt still exposes destructive actions"
+fi
+
+PEND_TMP="$(mktemp -d)"; CLEANUP+=("$PEND_TMP")
+cat > "$PEND_TMP/actions.jsonl" <<'JSONL'
+{"action":"prune","id":"pending_handoff"}
+{"action":"merge","ids":["allowed_record","pending_thread"],"canonical":"allowed_record"}
+{"action":"delete","id":"pending_handoff"}
+{"action":"prune","id":"allowed_record"}
+JSONL
+printf '%s\n' "allowed_record" > "$PEND_TMP/destructive-ids"
+cat > "$PEND_TMP/mem-stub.py" <<'PY'
+import os
+import sys
+with open(os.environ["PENDING_CALLS"], "a", encoding="utf-8") as fh:
+    fh.write("|".join(sys.argv[1:]) + "\n")
+PY
+PENDING_CALLS="$PEND_TMP/calls" python3 "$APPLIER" \
+  "$PEND_TMP/actions.jsonl" "$PEND_TMP/mem-stub.py" \
+  --mode curate --snapshot-ids "$PEND_TMP/destructive-ids" \
+  2> "$PEND_TMP/applier.err"
+calls="$(cat "$PEND_TMP/calls" 2>/dev/null || true)"
+if [ "$calls" = "prune|allowed_record" ] \
+  && grep -q 'non-destructive-allowlist id (prune)' "$PEND_TMP/applier.err" \
+  && grep -q 'id outside destructive allowlist' "$PEND_TMP/applier.err" \
+  && grep -q 'unsupported destructive action' "$PEND_TMP/applier.err"; then
+  ok "D-35: pending prune/merge/delete skipped; destructive IDS member alone reaches mem.py"
+else
+  bad "D-35: applier destructive allowlist leak (calls=[$calls])"
+fi
 
 echo
 echo "RESULT: PASS=$PASS FAIL=$FAIL"
