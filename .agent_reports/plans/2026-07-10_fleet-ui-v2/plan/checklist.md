@@ -28,13 +28,15 @@ Safety commit: ae8c1657e66fb6b282b4923ef75e46c411aa11c2
 - [x] 3.8 F-13 dead/stale row telemetry 생략 + `last seen <age>` (live row 만 explicit —; `_session_row`/`_dispatch_row` 1-line 레이아웃만 — 2line/stack 변형은 plan Current State Analysis 인용 범위 밖이라 미변경)
 
 ## Phase 4 — 검증
-- [ ] Unit: `cd tools && python3 -m unittest fleet.tests.test_dispatch -v` 전부 green
-- [ ] 신규 (a) space-separated pipe fixture
-- [ ] 신규 (b) `model_role=deep maker` value-internal-space fixture
-- [ ] 신규 (c) unknown-key-ignored fixture
-- [ ] 신규 (d) stage-name label (code-plan/execute/test/report)
-- [ ] 신규 (e) conductor breadcrumb 집계
-- [ ] 신규 (f) alert humanize 집계
-- [ ] Smoke: `python3 tools/fleet/fleet.py --once` — 이 파이프 depth-2 스테이지 row 단계명 렌더
-- [ ] Smoke: `python3 tools/fleet/fleet.py --json` — 스테이지 잡 effort/model_role 채워짐
-- [ ] conductor row breadcrumb = 활성 스테이지 자식 일치 + 기존 render 회귀 없음
+- [x] Unit: `cd tools && python3 -m unittest fleet.tests.test_dispatch -v` 전부 green (48 tests — 기존 36 + 신규 12)
+- [x] 신규 (a) space-separated pipe fixture
+- [x] 신규 (b) `model_role=deep maker` value-internal-space fixture (+ N2 continuation-then-field 케이스)
+- [x] 신규 (c) unknown-key-ignored fixture
+- [x] 신규 (d) stage-name label (code-plan/execute/test/report) + g-case-prefix 일반 규칙 회귀 확인
+- [x] 신규 (e) conductor breadcrumb 집계 (active-child / fallback / N5 report lone-token 3케이스)
+- [x] 신규 (f) alert humanize 집계 (다수 집계 + 단일 미집계)
+- [x] Smoke: `python3 tools/fleet/fleet.py --once` — 이 파이프 depth-2 스테이지 row 단계명 렌더 (실행 확인, 크래시 없음)
+- [x] Smoke: `python3 tools/fleet/fleet.py --json` — 스테이지 잡 effort/model_role 채워짐 (실행 확인)
+- [x] conductor row breadcrumb = 활성 스테이지 자식 일치 + 기존 render 회귀 없음 (`--demo --once` 육안 확인)
+
+(참고: code-execute 스테이지는 최종 검증 게이트가 아님 — 위 실행은 반복 확인용. 최종 검증은 code-test 스테이지 담당.)

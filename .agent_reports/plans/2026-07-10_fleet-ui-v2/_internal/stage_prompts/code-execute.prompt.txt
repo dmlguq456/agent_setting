@@ -1,0 +1,34 @@
+You are a Claude headless depth-2 worker (worker_role=code-execute, owner=autopilot-code, parent=fleet-ui-v2). Your turn ends when the process exits — do all work in this session, no waiting on notifications.
+
+TASK: Run the `code-execute` sub-skill to implement the fleet UI v2 plan. Invoke the sub-skill (개발팀 dispatch) and execute the plan step by step.
+
+Sub-skill: code-execute (개발팀, refactor/backend mode as fits — this is Python TUI collector/render code in tools/fleet/).
+
+INPUT ARTIFACTS (read these directly — do NOT expect plan body pasted here):
+- Plan: /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/plans/2026-07-10_fleet-ui-v2/plan/plan.md
+- Checklist: /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/plans/2026-07-10_fleet-ui-v2/plan/checklist.md  (mark items [x] as you complete them; fill "Safety commit" line at top with the git rev BEFORE first edit)
+- Plan review (non-blocking notes N1–N6 to fold in per your judgment): /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/plans/2026-07-10_fleet-ui-v2/_internal/plan_reviews/round_1.md
+- Spec (within-spec already judged — read only for gate context): /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/spec/agent-fleet-dashboard/prd.md
+
+TARGET CODE: tools/fleet/  (collectors/dispatch.py · model.py · render.py · tests/test_dispatch.py)
+
+QA: standard · Intensity: standard · Slug: fleet-ui-v2-execute · depth 2.
+
+REVIEW NOTES to honor (from round_1.md, non-blocking but recommended):
+- N1: g9/g6 regress test citation is 467–535 (not 72–80); general rule ^(g\d+[a-z]?) must still yield g9/g8b.
+- N2: add continuation-then-field parse case to new test (b); document writer key= contract assumption in SD-F4 comment.
+- N3: SD-F2 stage_override wiring point is _emit_dispatch_tree call site; stack forwards to 2line.
+- N5: report breadcrumb — decide lone-token vs explicit; pin expected render in new test (e).
+
+EXECUTION CONTRACT:
+- Safety commit FIRST: record current HEAD rev into checklist "Safety commit" line before any edit.
+- Implement Phase 1→2→3 per plan; respect R6 ordering (2.7 before 3.4 for _stage_segs), R3 _OFFSET invariant.
+- Add the new unit tests (a)–(f) described in plan Verification. Do NOT run the full verification suite as the final gate — that's the code-test stage's job — but you MAY run tests iteratively to confirm your edits compile/pass as you go.
+- Commit your work incrementally on branch fleet-ui-v2 (source + any dev_logs). Do NOT merge, push, or clean worktree.
+
+OUTPUT CONTRACT (write before finishing):
+- Implementation log: /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/plans/2026-07-10_fleet-ui-v2/dev_logs/execute_round1.md — list changed files with line refs, per-checklist-item status, any deviations from plan (esp. N5 report-breadcrumb decision), and the safety-commit rev.
+- Update checklist.md with [x] marks.
+- Leave the branch with commits accumulated (source + plans/ artifacts — this repo git-tracks the artifact root).
+
+Return a concise Korean summary: changed files, checklist completion, N5 decision, and the dev_logs path.
