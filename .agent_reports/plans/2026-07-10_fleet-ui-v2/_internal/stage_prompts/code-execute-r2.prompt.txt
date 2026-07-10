@@ -1,0 +1,25 @@
+You are a Claude headless depth-2 worker (worker_role=code-execute, owner=autopilot-code, parent=fleet-ui-v2). Fix-forward remediation round. Your turn ends when the process exits — do all work here.
+
+TASK: Run the `code-execute` sub-skill to fix TWO defects the code-test stage found in the fleet UI v2 implementation, then self-verify the fix (unit + live fixture). This is a bounded display-layer remediation — do NOT re-implement anything else.
+
+Sub-skill: code-execute (개발팀).
+
+INPUT ARTIFACTS (read directly):
+- Test report with defect detail: /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/plans/2026-07-10_fleet-ui-v2/test_logs/test_round1.md
+- Plan (context, SD-F1 contract): /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/plans/2026-07-10_fleet-ui-v2/plan/plan.md
+
+DEFECTS TO FIX:
+- **D1** (medium, display-layer) `tools/fleet/render.py:857-858` — depth-2 stage-worker breadcrumb key prefix emits raw `code-test:` (capability key) unhumanized. `if key and key != name: segs.append((key + ": ", ...))` passes `j.key` raw. Since every depth-2 stage worker's key is its capability (`code-plan`/`code-execute`/`code-test`/`code-report`), ALL depth-2 stage rows systematically leak a raw `code-*` prefix. This violates SD-F1 ("no raw code_execute/code-test in stage rows"). FIX: humanize the key prefix via the existing `_STAGE_ROLE` map (e.g. code-test → test) when the key maps, OR omit the prefix for single-stage depth-2 workers. Choose the approach most consistent with the existing SD-F1 `_stage_role_label` helper — reuse it, do not invent new vocabulary. The conductor row breadcrumb (`code: plan›exec›test`) must stay UNCHANGED (it was correct / PASS).
+- **D2** (low, test gap) `tools/fleet/tests/test_dispatch.py:709` — `test_stage_worker_rows_render_stage_labels` fixture builds the depth-2 job with `key="code"`, but real live depth-2 stage jobs have `key="code-test"` (= capability). This gap hid D1 at unit level. FIX: change the fixture to use the realistic `key="code-<stage>"` (e.g. `code-execute`, `code-test`) so the test now asserts the raw `code-*` prefix does NOT leak — i.e. the strengthened test must FAIL before your D1 fix and PASS after.
+
+SELF-VERIFICATION GATE (must run and confirm all before finishing):
+1. `cd tools && python3 -m unittest fleet.tests.test_dispatch -v` — ALL green (expect 48, unchanged count unless you add an assertion). The strengthened D2 test must pass WITH the D1 fix.
+2. Confirm the strengthened test genuinely guards D1: it should reference the realistic capability key and assert no raw `code-<stage>:` prefix in the rendered stage row.
+3. LIVE re-check: `python3 tools/fleet/fleet.py --once` — the depth-2 stage row (this session, fleet-ui-v2-execute, key=code-execute) breadcrumb must show the humanized stage label with NO raw `code-execute:` prefix leak. Paste the proving row line into your dev log. Confirm conductor row `code: plan›exec›test` aggregation still intact (no regression).
+4. `--json` and `--demo --once` still exit 0.
+
+OUTPUT CONTRACT:
+- Append a remediation section to: /home/Uihyeop/agent_setting-wt/fleet-ui-v2/.agent_reports/plans/2026-07-10_fleet-ui-v2/dev_logs/execute_round2.md — D1 fix (file:line, approach chosen), D2 fix, before/after live row lines, unit result (count), verdict.
+- Commit on branch fleet-ui-v2 (source + dev_logs). Do NOT merge/push/clean worktree.
+
+Return a concise Korean summary: D1 fix approach, D2 fix, exact test count, before/after breadcrumb evidence, and the dev_logs path.

@@ -57,6 +57,7 @@ _NARROW_CUTOFF = 70
 _TWO_LINE_CUTOFF = 110      # width below which sessions render as 2-line cards (round-4 responsive)
 _LAYOUT = "auto"            # 'auto' (width decides) | 'wide' | 'narrow' | 'stack' — `w` key cycles
 _LOOPS_KEYS = ("oncall", "note", "study", "drill")
+_ALERT_TAIL = re.compile(r"-\d{8,}-\d+$")   # loop job `<case>-<ts>-<pid>` tail (F-10 alert humanize)
 
 
 def _cycle_layout():
@@ -500,6 +501,29 @@ _PIPE_STAGES = {
     "draft": ["draft", "refine", "apply"],
 }
 
+# depth-2 code-* stage sub-skill → human stage label (SD-F1). Reuses the "code" track's
+# plan/exec/test vocabulary — no new words invented. "report" (code-report) sits outside that
+# track (see _stage_segs fallthrough for how a lone "report" token renders).
+_STAGE_ROLE = {
+    "code-plan": "plan",
+    "code-execute": "exec",
+    "code-test": "test",
+    "code-report": "report",
+}
+
+
+def _stage_role_label(worker_role):
+    """(base_label, suffix) for a depth-2 stage worker_role, e.g. 'code-execute:phase-A' ->
+    ('exec', ':phase-A'). base_label is None when worker_role isn't a known stage sub-skill —
+    callers fall back to the existing _ROLE_SHORT/_compact_dispatch_name path."""
+    if not worker_role:
+        return None, ""
+    base, _sep, suffix = worker_role.partition(":")
+    label = _STAGE_ROLE.get(base)
+    if label is None:
+        return None, ""
+    return label, (":" + suffix if suffix else "")
+
 # plain-text column labels (icons removed per user — "위에 아이콘들은 전부 빼자").
 # 'effort' gets its OWN header over the fixed subcolumn inside the model cell (user 2026-07-02).
 _COL_HEAD = ("    " + "harness".ljust(_HW) + "session".ljust(_NW_S)
@@ -583,6 +607,15 @@ def _stage_segs(key, stage, working=False):
             out.append((st, "stg%d_off" % (i % 5)))
         return out
     if stage:
+        # F-11: no known pipeline track for this key (seq is None) — jobs.log raw status vocab
+        # ("open"/"running") shouldn't leak onto the board as-is. "open" humanizes to "queued";
+        # "running" (no track to light up) renders dim rather than as a bright lit token that
+        # would misleadingly imply an active named stage. jobs.log status vocabulary itself is
+        # unchanged — display layer only.
+        if stage == "open":
+            return [("queued", _cur_key(0))]
+        if stage == "running":
+            return [("running", "stg0_off")]
         return [(stage, _cur_key(0))]
     return [("—", "dim")]
 
@@ -591,6 +624,7 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
     dim_tel = live in ("stale", "dead") or s.app_server or s.detached
+    dead_stale = live in ("stale", "dead")   # F-13: telemetry gone, replaced with a single age cell
     name_key = ("name_work" if live == "working"
                 else ("name_dim" if dim_tel else "name_idle"))
     gch, gkey = _glyph(live)
@@ -623,13 +657,19 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
         segs.append((" " * (_NW_S - used), None))
 
     segs.append(_branch_seg(s.cwd, s.branch, dim=dim_tel))     # main row = bright branch/model
-    segs += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
-
-    # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate from effort
-    if s.ctx_pct is not None and not dim_tel:
-        segs += [("    ", None)] + _gauge_segs(s.ctx_pct, _CTX_W) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
+    if dead_stale:
+        # F-13: a stale/dead row has no live model/effort/ctx to show — a wall of "—" placeholders
+        # read as broken telemetry rather than "this session stopped". One `last seen <age>` cell
+        # replaces the whole model+gauge zone (LIVE rows keep the explicit "—" convention, F-3).
+        age_min = int((time.time() - s.mtime) / 60) if s.mtime else (s.elapsed_min or 0)
+        segs += [(" " * _MW, None), ("    ", None), ("last seen %s" % fmt_min(age_min), "dim")]
     else:
-        segs += [("    ", None), ("─" * _CTX_W, "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
+        segs += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
+        # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate from effort
+        if s.ctx_pct is not None and not dim_tel:
+            segs += [("    ", None)] + _gauge_segs(s.ctx_pct, _CTX_W) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
+        else:
+            segs += [("    ", None), ("─" * _CTX_W, "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
     if s.app_server:
         segs.append(("  app-server", "dim"))
     if s.orphan:
@@ -701,9 +741,12 @@ _ROLE_SHORT = {
     "dev-refactor": "impl",
     "dev-new-lib": "impl",
     "research-survey": "research",
-    "g6_worktree_dispatch": "g6",
-    "g9_cross_harness_depth2_dispatch": "g9",
 }
+
+# drill/loop case ids (g6_worktree_dispatch, g9_cross_harness_depth2_dispatch, g8b_...) shrink
+# to their gN prefix by a GENERAL rule instead of a per-case hardcoded entry above (F-9(b) —
+# each new drill case used to need a code change here).
+_G_CASE_PREFIX = re.compile(r"^(g\d+[a-z]?)")
 
 
 def _short_level(value):
@@ -717,11 +760,20 @@ def _short_level(value):
 def _short_role(value):
     if not value:
         return ""
-    role = _ROLE_SHORT.get(value, value.replace("-", "_"))
+    label, suffix = _stage_role_label(value)
+    if label is not None:
+        # stage suffix (":phase-A") rides along as part of the same dim profile tag — the
+        # whole tag already renders "dim" (see _mq_tag), so no separate color key is needed.
+        return _compact_dispatch_name(label + suffix, 14)
+    m = _G_CASE_PREFIX.match(value)
+    role = _ROLE_SHORT.get(value) or (m.group(1) if m else value.replace("-", "_"))
     return _compact_dispatch_name(role, 14)
 
 
-def _dispatch_role_suffix(j, check_text=None):
+_PROFILE_MAX = 28
+
+
+def _dispatch_role_suffix(j, check_text=None, max_width=None):
     raw_role = getattr(j, "worker_role", None)
     if getattr(j, "key", None) in _LOOPS_KEYS and raw_role == getattr(j, "slug", None):
         raw_role = None
@@ -730,23 +782,33 @@ def _dispatch_role_suffix(j, check_text=None):
     check = _short_level(check_text)
     parts = []
     if intensity:
-        parts.append(intensity)
+        parts.append(("intensity", intensity))
     if role:
-        parts.append(role)
+        parts.append(("role", role))
     if check:
-        parts.append("qa:" + check)
-    return "/".join(parts)
+        parts.append(("qa", "qa:" + check))
+    if max_width is not None:
+        # F-9(c) width-drop priority: qa first, then intensity, then role — mode isn't part of
+        # this suffix (owned by _mq_tag's own mode segment). Drops whole components instead of
+        # silently tail-cutting the joined string (which used to chop qa:thorough mid-word).
+        for kind in ("qa", "intensity", "role"):
+            joined = "/".join(t for _k, t in parts)
+            if len(joined) <= max_width:
+                break
+            parts = [(k, t) for k, t in parts if k != kind]
+    return "/".join(t for _k, t in parts)
 
 
 def _dispatch_profile(j, check_text=None):
     profile = getattr(j, "profile", None)
-    role_suffix = _dispatch_role_suffix(j, check_text)
+    budget = _PROFILE_MAX - (len(profile) + 1 if profile else 0)
+    role_suffix = _dispatch_role_suffix(j, check_text, max_width=max(0, budget))
     if role_suffix:
         profile = (profile + "/" + role_suffix) if profile else role_suffix
-    return _compact_dispatch_name(profile, 28) if profile else None
+    return _compact_dispatch_name(profile, _PROFILE_MAX) if profile else None
 
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
-                  parent_effort=None):
+                  parent_effort=None, stage_override=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
       harness  |  name (mode · qa)  |  branch  |  MODEL (the job's real model)  |  stage breadcrumb
     mode+qa ride together in a `(mode · qa)` tag right after the name; the model slot shows the
@@ -754,7 +816,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     blinks while working). Weight vs a session = dim-font harness + ↳ + dim name.
     """
     key = j.key or "?"
-    stage = j.stage or ""
+    stage = stage_override if stage_override is not None else (j.stage or "")
     qa_base = j.qa or ""
     qa_text = ""
     if j.qa:
@@ -785,17 +847,30 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         segs.append((" " * (avail - used), None))
 
     segs.append(_branch_seg("" if key in _LOOPS_KEYS else j.cwd, j.branch))  # loop temp repos hide throwaway branches
-    # model slot → the job's OWN main model (dim family color) + effort (headless has no
-    # statusline → parent's effort, the shared settings default — user 2026-07-03: 분사도 effort).
-    segs += _model_cell(j.model or parent_model, parent_effort, _MW, dim=True)
+    if j.liveness in ("stale", "dead"):
+        # F-13: a stale/dead job has no live model/effort/stage worth showing — collapse the
+        # whole telemetry zone (model cell + stage breadcrumb) into one `last seen <age>` cell.
+        segs.append(("    ", None))
+        segs.append(("last seen %s" % fmt_min(j.elapsed_min), "dim"))
+    else:
+        # model slot → the job's OWN main model (dim family color) + effort. SD-F3: the job's own
+        # effort is first-class; when it's absent (proc-scan rows — env doesn't export it yet),
+        # fall back to the parent's effort marked with the derived-value `~` prefix (legend F-9d).
+        eff = j.effort or (("~" + parent_effort) if parent_effort else None)
+        segs += _model_cell(j.model or parent_model, eff, _MW, dim=True)
 
-    # gauge slot → capability-LABELED stage breadcrumb: `code: plan › exec › test` — the process
-    # kind rides the track it names, where the eye reads progress (user 2026-07-02: name 앞보다
-    # 여기가 autopilot-code 정체를 직관적으로 전달). loops jobs (key == slug) skip the label.
-    segs.append(("    ", None))                       # 4-col gap (reads separate from effort/qa)
-    if key and key != name:
-        segs.append((key + ": ", "name_dim"))
-    segs += _stage_segs(key, stage, working=(j.liveness == "working"))
+        # gauge slot → capability-LABELED stage breadcrumb: `code: plan › exec › test` — the process
+        # kind rides the track it names, where the eye reads progress (user 2026-07-02: name 앞보다
+        # 여기가 autopilot-code 정체를 직관적으로 전달). loops jobs (key == slug) skip the label.
+        segs.append(("    ", None))                       # 4-col gap (reads separate from effort/qa)
+        if key and key != name:
+            # SD-F1: a depth-2 stage worker's `key` IS its capability (code-plan/code-execute/
+            # code-test/code-report) — reuse _stage_role_label (same helper the F-13 legend uses)
+            # to humanize it instead of leaking the raw capability token onto the board.
+            role_label, role_suffix = _stage_role_label(key)
+            prefix_text = (role_label + role_suffix) if role_label else key
+            segs.append((prefix_text + ": ", "name_dim"))
+        segs += _stage_segs(key, stage, working=(j.liveness == "working"))
 
     segs.append((_RFLUSH, None))
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
@@ -868,14 +943,15 @@ def _session_row_stack(s, is_parent=False, child_count=0):
     return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
-def _dispatch_row_stack(j, orphan=False, parent_model=None, parent_effort=None):
+def _dispatch_row_stack(j, orphan=False, parent_model=None, parent_effort=None, stage_override=None):
     l1, l2 = _dispatch_row_2line(j, orphan=orphan, parent_model=parent_model,
-                                 parent_effort=parent_effort)
+                                 parent_effort=parent_effort, stage_override=stage_override)
     gi = _stack_split(l2)
     return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
-def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, _split=False):
+def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, _split=False,
+                        stage_override=None):
     key = j.key or "?"
     name = j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
@@ -898,11 +974,17 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     if not _split and br_seg:
         l1.append(br_seg)
 
+    stage = stage_override if stage_override is not None else (j.stage or "")
+    eff = j.effort or (("~" + parent_effort) if parent_effort else None)
     l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
-    l2 += _model_cell(j.model or parent_model, parent_effort, _MW, dim=True)
+    l2 += _model_cell(j.model or parent_model, eff, _MW, dim=True)
     if key and key != name:
-        l2.append((key + ": ", "name_dim"))
-    l2 += _stage_segs(key, j.stage or "", working=(j.liveness == "working"))
+        # SD-F1/D1: same capability→label humanization as the wide-layout _dispatch_row —
+        # the narrow 2-line card must not leak the raw code-* capability key either.
+        role_label, role_suffix = _stage_role_label(key)
+        prefix_text = (role_label + role_suffix) if role_label else key
+        l2.append((prefix_text + ": ", "name_dim"))
+    l2 += _stage_segs(key, stage, working=(j.liveness == "working"))
     if _split:
         return l1, l2, br_seg
     return l1, l2
@@ -996,6 +1078,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     order = sorted(groups.keys(), key=lambda name: _group_sort_key(name, groups[name]))
 
     lines = []
+    # F-12(c) legend glyph-appearance tracking — LOCAL to this call (never module/global state,
+    # _OFFSET invariant R3): which of the conditional legend glyphs actually got emitted this
+    # build. working/idle/dispatch/`~` stay unconditional (always relevant vocabulary); the
+    # rest (detached/stale/dead/child-jobs/worktrees) only show up in the legend when at least
+    # one row used them.
+    _seen_glyphs = set()
     # account-level usage — shared per harness/account. ONE LINE PER HARNESS (user 2026-07-01:
     # "모든 윈도우가 쭉 붙어있다 → 서로 간격 띄우고 게이지 길게"): long gauges, generous gaps, aligned.
     # rate is account-shared → take the FRESHEST session's value per harness (a stale session's
@@ -1065,19 +1153,48 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     # alert strip — CONDITIONAL (zero lines when healthy): compaction-imminent contexts and
     # stalled dispatches (the stealth-death guard §5.10, surfaced on the board instead of only
     # in dispatch-liveness.sh runs). dead jobs = red, warnings = yellow.
-    alerts = []
-    for s in _real:
-        if s.ctx_pct is not None and s.ctx_pct >= 80 and s.liveness in ("working", "idle"):
-            alerts.append(("ctx %d%% %s" % (s.ctx_pct, s.slug or "?"),
-                           "lvl_r" if s.ctx_pct >= 90 else "lvl_y"))
-    for j in jobs:
-        if j.liveness == "stale":
-            alerts.append(("job stale %s" % (j.slug or j.key), "lvl_y"))
-        elif j.liveness == "dead":
-            alerts.append(("job dead %s" % (j.slug or j.key), "lvl_r"))
-    if alerts:
+    # F-10: names go through the same compaction as dispatch rows (_compact_dispatch_name) with
+    # a loop job's `<case>-<ts>-<pid>` tail stripped first (raw timestamps/pids are noise here);
+    # same-kind alerts aggregate into one line (`⚠ 2 dead jobs: a·b`), bucketed dead/stale/ctx.
+    def _alert_name(name):
+        return _compact_dispatch_name(_ALERT_TAIL.sub("", name or "") or (name or "?"), 20)
+
+    def _bucket_text(label, names):
+        if not names:
+            return None
+        if len(names) == 1:
+            return "%s %s" % (label, names[0])
+        shown = "·".join(names[:4])
+        more = " +%d" % (len(names) - 4) if len(names) > 4 else ""
+        return "%d %s jobs: %s%s" % (len(names), label, shown, more)
+
+    dead_names = [_alert_name(j.slug or j.key) for j in jobs if j.liveness == "dead"]
+    stale_names = [_alert_name(j.slug or j.key) for j in jobs if j.liveness == "stale"]
+    ctx_items = [(s.slug or "?", s.ctx_pct) for s in _real
+                 if s.ctx_pct is not None and s.ctx_pct >= 80 and s.liveness in ("working", "idle")]
+
+    buckets = []
+    dead_text = _bucket_text("dead", dead_names)
+    if dead_text:
+        buckets.append((dead_text, "lvl_r"))
+    stale_text = _bucket_text("stale", stale_names)
+    if stale_text:
+        buckets.append((stale_text, "lvl_y"))
+    if ctx_items:
+        worst = max(pct for _n, pct in ctx_items)
+        ctx_text = _bucket_text("ctx-high", [_alert_name(n) for n, _p in ctx_items]) \
+            if len(ctx_items) > 1 else "ctx %d%% %s" % (ctx_items[0][1], _alert_name(ctx_items[0][0]))
+        buckets.append((ctx_text, "lvl_r" if worst >= 90 else "lvl_y"))
+
+    if buckets:
+        # priority truncation dead > stale > ctx when the row would overflow — buckets are
+        # already in that priority order, so drop from the tail. Budget mirrors the existing
+        # dormant-dirs line convention (`names[:90]`) rather than a hardcoded terminal width.
+        kept = list(buckets)
+        while len(kept) > 1 and sum(len(t) for t, _k in kept) + 3 * (len(kept) - 1) > 100:
+            kept.pop()
         arow = [("  alert ", "head")]
-        for ai, (txt, akey) in enumerate(alerts[:6]):
+        for ai, (txt, akey) in enumerate(kept):
             if ai:
                 arow.append(("   ", None))
             arow.append(("⚠ " + txt, akey))
@@ -1216,6 +1333,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         if _nwt:
             # statusline 과 같은 표기 (🚧 N = 병렬 작업장·잔존 worktree, §5.10) — 이름 바로 옆
             head_segs += [(" 🚧 %d" % _nwt, "g_idle")]
+            _seen_glyphs.add("wt")
         if _cool_min is not None:
             # 완료 후 경과시간 (끝나고 대기하는 시간) — ✓ 프리픽스로 "완료 후 경과"임을 명시
             head_segs += [("  ", None), ("%s %s" % (_COOL_TIME_ICON, fmt_min(_cool_min)), "grp_cool")]
@@ -1244,21 +1362,49 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
 
         def _emit_dispatch_tree(job, parent_model=None, parent_harness=None, parent_effort=None,
                                 orphan=False, is_last=True):
+            # SD-F2 — a depth-1 conductor's OWN breadcrumb tracks its active depth-2 code-*
+            # stage-worker, not its static argv/plan-derived `stage`. `job_children` is the
+            # enclosing closure dict, so this is readable before the row renders.
+            stage_override = _conductor_stage_override(job)
+            if job.liveness == "stale":
+                _seen_glyphs.add("stale")
+            elif job.liveness == "dead":
+                _seen_glyphs.add("dead")
             if _jrow:
                 lines.extend(_jrow(job, orphan=orphan, parent_model=parent_model,
-                                   parent_effort=parent_effort))
+                                   parent_effort=parent_effort, stage_override=stage_override))
             else:
                 lines.append(_dispatch_row(job, orphan=orphan, parent_model=parent_model,
                                            parent_harness=parent_harness,
-                                           parent_effort=parent_effort, is_last=is_last))
+                                           parent_effort=parent_effort, is_last=is_last,
+                                           stage_override=stage_override))
             for sub in _sort_group_jobs(job_children.get(job.slug, [])):
                 _emit_dispatch_tree(sub, parent_model=job.model or parent_model,
                                     parent_harness=job.harness or parent_harness,
                                     parent_effort=parent_effort, orphan=False)
 
+        def _conductor_stage_override(job):
+            kids = [(k, _stage_role_label(getattr(k, "worker_role", None))[0])
+                    for k in job_children.get(job.slug, []) if getattr(k, "depth", 1) == 2]
+            kids = [(k, label) for k, label in kids if label is not None]
+            if not kids:
+                return None
+            active = [label for k, label in kids if k.liveness == "working"]
+            if active:
+                return active[0]
+            return job.stage
+
         for s in _sort_group_sessions(shown):
             kids = _sort_group_jobs(children.get(s.session_id, []))
             nested_n = len(kids) + sum(len(job_children.get(k.slug, [])) for k in kids)
+            if s.liveness == "stale":
+                _seen_glyphs.add("stale")
+            elif s.liveness == "dead":
+                _seen_glyphs.add("dead")
+            if s.detached and s.liveness not in ("stale", "dead"):
+                _seen_glyphs.add("detached")
+            if nested_n:
+                _seen_glyphs.add("child")
             _n0 = len(lines)
             if _srow:
                 lines.extend(_srow(s, is_parent=bool(nested_n), child_count=nested_n))
@@ -1321,18 +1467,28 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         lines.append(None)
         lines.append([("  +%d malformed jobs.log rows skipped" % malformed, "dim")])
 
-    # legend — status dots (columns are labelled by the header row)
+    # legend — status dots (columns are labelled by the header row). F-12(c): working/idle/
+    # dispatch/`~` are always-relevant vocabulary and stay unconditional; the rest only appear
+    # when this build actually used them (_seen_glyphs, tracked above — local, not global).
     lines.append(None)
-    lines.append([
+    legend = [
         ("  ", None), ("⠹", "g_work"), (" working   ", "dim"),
         ("●", "g_work_off"), (" idle   ", "dim"),
-        (_DETACHED_GLYPH, "g_work_off"), (" detached   ", "dim"),
-        ("·", "g_stale"), (" stale   ", "dim"),
-        ("✕", "g_dead"), (" dead     ", "dim"),
-        ("▾N", "dim"), (" child jobs   ", "dim"),
-        ("↳", "dim"), (" dispatch   ", "dim"),
-        ("🚧 N", "dim"), (" worktrees", "dim"),
-    ])
+    ]
+    if "detached" in _seen_glyphs:
+        legend += [(_DETACHED_GLYPH, "g_work_off"), (" detached   ", "dim")]
+    if "stale" in _seen_glyphs:
+        legend += [("·", "g_stale"), (" stale   ", "dim")]
+    if "dead" in _seen_glyphs:
+        legend += [("✕", "g_dead"), (" dead     ", "dim")]
+    if "child" in _seen_glyphs:
+        legend += [("▾N", "dim"), (" child jobs   ", "dim")]
+    if jobs:
+        legend += [("↳", "dim"), (" dispatch   ", "dim")]
+    if "wt" in _seen_glyphs:
+        legend += [("🚧 N", "dim"), (" worktrees   ", "dim")]
+    legend += [("~", "dim"), (" derived/inherited value", "dim")]  # F-9(d)
+    lines.append(legend)
 
     return lines
 
@@ -1558,7 +1714,7 @@ def _draw(stdscr, sessions, jobs, section, malformed):
         parts.append("↓%d" % below)
     # htop F-key bar (round-4): CYAN full-width, keycaps BOLD (dim is invisible on CYAN), the
     # scroll indicator rides the right edge. `w` cycles layout auto → narrow → wide.
-    wlbl = "wide/narrow" if _LAYOUT == "auto" else ("%s!" % _LAYOUT)
+    wlbl = "wide/narrow/stack" if _LAYOUT == "auto" else ("%s!" % _LAYOUT)
     fsegs = [(" ", "hdr_bar"),
              ("q", "hdr_key"), (" quit · ", "hdr_bar"),
              ("r", "hdr_key"), (" refresh · ", "hdr_bar"),
