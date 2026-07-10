@@ -59,3 +59,4 @@ Phase 1(계약문서+wrapper증분+autopilot-code pilot) · Phase 2(autopilot-* 
 - **검증**: code-test Level 3 판정 시점 PASS 311/FAIL 12(신규 회귀 2건, baseline 기존 FAIL 10건). code-execute-fix 이후 conductor 재검증 = `check-adaptation-boundary.sh` PASS(FAIL 0)·`build-manifest.py --check` up-to-date → **최종 신규 회귀 0**.
 - **잔여 handoff**: drill 케이스 정의만(러너 미설치, `loops/**` 타 세션 소유), `assert.sh` POSIX `sh -n` bashism 전달 필요.
 - 상세: `.agent_reports/plans/2026-07-10_stage-dispatch-phase2/final_report.md`
+- minor (2026-07-10, 머지 후 상태 동기): dev phase in_progress→done — Phase 2 main 머지 52f2f2c. 잔여(다음 사이클): 프로필 효과 계측·SD-14b(-p Stop hook 미발화로 held)·SD-11 deny 재판단·drill 러너 등록(loops 세션 handoff).
