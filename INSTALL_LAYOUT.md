@@ -43,6 +43,42 @@ targets. Do not move their data during harness installation. Their notes data
 root is `<agent-notes-root>`, which is mutable continuity state and should not
 be committed to this repo. Adapter docs own concrete local path realizations.
 
+## Windows Projection (Git Bash)
+
+Claude Code runs on Windows, but the harness assumes a POSIX runtime. Two
+Windows-specific facts break the projection silently — a one-shot installer
+(`adapters/claude/bin/install-windows.sh`, run from Git Bash) repairs both and
+is idempotent:
+
+```bash
+bash ~/.claude/adapters/claude/bin/install-windows.sh
+```
+
+1. **Unreliable `$HOME`.** The shell Claude Code spawns for hook / statusLine
+   commands sees `$HOME` as either empty or the MSYS `/home/<user>` — never the
+   real `%USERPROFILE%` where `.claude` actually lives. Every
+   `bash "$HOME/.claude/hooks/<x>.sh"` command therefore fails to resolve and the
+   hook/statusline no-ops with no obvious cause. The installer injects
+   `HOME` / `CLAUDE_HOME` / `AGENT_HOME` into the runtime `settings.json` `env`
+   block (which Claude Code applies to command execution) so those paths resolve.
+
+2. **`core.symlinks=false`.** A Windows checkout writes repo symlinks out as
+   small pointer-TEXT files (content = the link target path), not real files. So
+   the entry files the Linux projection step symlinks into the runtime home
+   (`CLAUDE.md`, `statusline.sh`, `track-toggle.sh`) are absent or pointer-text on
+   Windows, and `~/.claude/CLAUDE.md` never loads. The installer copies each from
+   its single source of truth (`adapters/claude/<name>`) into the runtime home
+   when the target is missing or a pointer — the Windows equivalent of the Linux
+   `ln -sfn` step.
+
+The installer also restores the per-machine memory DB from the git-tracked
+`dump.jsonl` mirror when it is missing (`mem import`).
+
+**Known limitation — `fleet`.** The `fleet` dashboard is a `curses` TUI, and
+native Windows Python ships no `curses` module. `fleet` is therefore
+unsupported on native Windows; run it under WSL or Linux. Everything else
+(hooks, memory, statusline, skills) runs under Git Bash.
+
 ## Cross-harness CLI — `fleet`
 
 `fleet` (the cross-harness live dashboard, `tools/fleet/`) is runtime-neutral — it
