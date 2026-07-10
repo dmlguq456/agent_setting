@@ -18,7 +18,8 @@ backups/
 telemetry/
 todos/
 tasks/
-plans/
+# root-anchored(/plans/): 런타임 plan-mode 디렉토리만 — 비앵커 plans/ 가 .agent_reports/plans/(커밋 자산, CONVENTIONS §5 agent-home 예외)까지 오폭하던 것 정정 (2026-07-10)
+/plans/
 plugins/
 !adapters/codex/plugins/
 !adapters/codex/plugins/**
