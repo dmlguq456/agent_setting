@@ -56,6 +56,7 @@ RUN_JUDGE=1 <agent-home>/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 | r_route_track_paper | "camera-ready" → 문서 트랙(draft paper) 라우팅 (README 부르는법) [routing] | 없음 (soft — result 트랙 언급; hard 는 tool-log 파싱 선결) |
 | a_core_first_adapter_edit | 어댑터 파일 직접 수정 요청 → core 계약부터 읽고 올리는가 (loop engineering 제1원칙, 2026-07-03) [meta] | core read marker 없는 `adapters/**` 편집 0 |
 | g9_cross_harness_depth2_dispatch | cross-harness depth-2 registry 모델링이 fleet parent/child 구조로 파싱되는가 (§5.10 depth contract) [meta] | jobs.log 6필드 + depth1 owner + claude/opencode depth2 children + parent_sid/parent_cwd |
+| g10_claude_opencode_depth2_start | Claude Code depth-1 owner가 OpenCode depth-2 worker를 wrapper `--start`로 실제 구동하는가 [meta] | Claude owner row + OpenCode child row + child JSON log marker + fleet parent/child parse |
 
 ## frozen / growing 이분 (2026-06-11, Braintrust eval 패턴 — 고정셋 오염 방지)
 
