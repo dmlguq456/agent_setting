@@ -22,3 +22,4 @@
 
 ## Version History
 - v1 (2026-07-10): 초기 PRD — 사용자 결정 + decision_74ca88 계승 + census 실측. QA-1~3 + QA-OPEN-1.
+- minor (2026-07-10, 머지 후 상태 동기): dev pending→done — be008d1 구현, main 머지 87a36d5. QA-OPEN-1 = 완전 폐지 확정(census 반례 없음 — always-on factual detector 는 unconditional-cheap 이라 knob 불요, heavy fact-check 는 이미 intensity 결속). wrapper 파생 실측: --qa 미지정 → intensity 파생, 명시 → 존중(호환).
