@@ -649,12 +649,13 @@ def _scan_jobs_log(path, seen_slugs):
         q, qsrc = effective_qa(None, meta.get("qa"), cwd, slug, pname)
         parent_slug = meta.get("parent") or meta.get("parent_slug") or None
         parent_sid = meta.get("parent_sid") or meta.get("parent_session_id") or None
+        parent_cwd = meta.get("parent_cwd") or meta.get("parent_worktree") or None
         harness = _infer_harness(meta, slug)
         jobs.append(DispatchJob(
             key=pname, stage=status, mode=meta.get("mode"), qa=q,
             elapsed_min=_iso_elapsed_min(ts), slug=slug or worktree or repo,
-            cwd=cwd, parent_sid=parent_sid, parent_slug=parent_slug,
-            is_child=bool(parent_slug or parent_sid), qa_source=qsrc, source="jobs", status=status,
+            cwd=cwd, parent_sid=parent_sid, parent_cwd=parent_cwd, parent_slug=parent_slug,
+            is_child=bool(parent_slug or parent_sid or parent_cwd), qa_source=qsrc, source="jobs", status=status,
             harness=harness, model=meta.get("model"),
             profile=meta.get("profile"), depth=_parse_depth(meta.get("depth")),
             intensity=meta.get("intensity"), worker_role=meta.get("worker_role"),

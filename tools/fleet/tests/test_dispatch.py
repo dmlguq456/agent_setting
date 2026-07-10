@@ -44,7 +44,10 @@ class RenderDispatchPresentationTest(unittest.TestCase):
         )
         text = "".join(part for part, _key in tag)
 
-        self.assertEqual(text, " (review·path:thorough/role:planner/check:~standard)")
+        self.assertEqual(text, " (review·thr/planner/qa:~std)")
+        self.assertNotIn("path:", text)
+        self.assertNotIn("role:", text)
+        self.assertNotIn("check:", text)
 
     def test_dispatch_two_line_compacts_long_session_name(self):
         job = DispatchJob(
@@ -297,6 +300,51 @@ class JobLivenessPathAssemblyTest(unittest.TestCase):
 class DepthTwoRegistryMetadataTest(unittest.TestCase):
 
 
+    def test_parent_sid_groups_drill_temp_job_under_parent_project(self):
+        from fleet.model import Session
+        sess = Session(harness="codex", pid=1, cwd="/work/agent_setting", session_id="parent-sid",
+                       slug="agent_setting", liveness="working")
+        job = DispatchJob(key="drill", slug="drill-g9", cwd="/tmp/drill-g9-abcd/repo",
+                          parent_sid="parent-sid", is_child=True, harness="codex",
+                          mode="loop/drill", qa="quick", qa_source="jobslog",
+                          liveness="working", worker_role="g9_cross_harness_depth2_dispatch")
+        lines = render._build_lines([sess], [job], section="both", narrow=False, malformed=0,
+                                    layout="wide")
+        text = "\n".join("".join(part for part, _key in line) for line in lines if line)
+
+        self.assertIn("agent_setting/", text)
+        self.assertIn("loop/drill·g9", text)
+        self.assertNotIn("drill:g9", text)
+
+    def test_parent_cwd_fallback_groups_drill_temp_job_without_matching_sid(self):
+        from fleet.model import Session
+        sess = Session(harness="codex", pid=1, cwd="/work/agent_setting", session_id="runtime-sid",
+                       slug="agent_setting", liveness="working")
+        job = DispatchJob(key="drill", slug="drill-g9", cwd="/tmp/drill-g9-abcd/repo",
+                          parent_sid="stale-sid", parent_cwd="/work/agent_setting", is_child=True,
+                          harness="codex", mode="loop/drill", qa="quick", qa_source="jobslog",
+                          liveness="working", worker_role="g9_cross_harness_depth2_dispatch")
+        lines = render._build_lines([sess], [job], section="both", narrow=False, malformed=0,
+                                    layout="wide")
+        text = "\n".join("".join(part for part, _key in line) for line in lines if line)
+
+        self.assertIn("agent_setting/", text)
+        self.assertIn("loop/drill·g9", text)
+        self.assertNotIn("drill:g9", text)
+        self.assertNotIn(" main", text)
+
+    def test_unparented_drill_temp_job_groups_under_loops(self):
+        job = DispatchJob(key="drill", slug="drill-g9", cwd="/tmp/drill-g9-abcd/repo",
+                          harness="codex", mode="loop/drill", qa="quick", qa_source="jobslog",
+                          liveness="working", worker_role="g9_cross_harness_depth2_dispatch")
+        lines = render._build_lines([], [job], section="both", narrow=False, malformed=0,
+                                    layout="wide")
+        text = "\n".join("".join(part for part, _key in line) for line in lines if line)
+
+        self.assertIn("loops/", text)
+        self.assertNotIn("drill:g9", text)
+
+
     def test_drill_jobs_log_row_is_visible_as_loop_dispatch(self):
         with tempfile.TemporaryDirectory() as tmp:
             jobs_log = os.path.join(tmp, "jobs.log")
@@ -358,6 +406,7 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
             self.assertEqual(job.harness, "codex")
             self.assertEqual(job.parent_slug, "owner-job")
             self.assertEqual(job.parent_sid, "codex-main")
+            self.assertIsNone(job.parent_cwd)
             self.assertTrue(job.is_child)
             self.assertEqual(job.intensity, "adversarial")
             self.assertEqual(job.worker_role, "verifier")

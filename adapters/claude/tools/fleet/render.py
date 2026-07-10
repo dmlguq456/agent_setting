@@ -674,17 +674,64 @@ def _dispatch_prefix(j):
     return "↳ " if depth == 1 else "  " * depth
 
 
+_LEVEL_SHORT = {
+    "direct": "direct",
+    "quick": "q",
+    "light": "lt",
+    "standard": "std",
+    "strong": "strong",
+    "thorough": "thr",
+    "adversarial": "adv",
+}
+
+_ROLE_SHORT = {
+    "capability-owner": "owner",
+    "deep-reviewer": "review",
+    "fast-reviewer": "review",
+    "fast-implementer": "impl",
+    "dev-refactor": "impl",
+    "dev-new-lib": "impl",
+    "research-survey": "research",
+    "g6_worktree_dispatch": "g6",
+    "g9_cross_harness_depth2_dispatch": "g9",
+}
+
+
+def _short_level(value):
+    if not value:
+        return ""
+    prefix = "~" if str(value).startswith("~") else ""
+    raw = str(value)[1:] if prefix else str(value)
+    return prefix + _LEVEL_SHORT.get(raw, raw)
+
+
+def _short_role(value):
+    if not value:
+        return ""
+    role = _ROLE_SHORT.get(value, value.replace("-", "_"))
+    return _compact_dispatch_name(role, 14)
+
+
 def _dispatch_role_suffix(j, check_text=None):
-    role = getattr(j, "worker_role", None)
-    intensity = getattr(j, "intensity", None)
+    role = _short_role(getattr(j, "worker_role", None))
+    intensity = _short_level(getattr(j, "intensity", None))
+    check = _short_level(check_text)
     parts = []
     if intensity:
-        parts.append("path:" + intensity)
+        parts.append(intensity)
     if role:
-        parts.append("role:" + role)
-    if check_text:
-        parts.append("check:" + check_text)
+        parts.append(role)
+    if check:
+        parts.append("qa:" + check)
     return "/".join(parts)
+
+
+def _dispatch_profile(j, check_text=None):
+    profile = getattr(j, "profile", None)
+    role_suffix = _dispatch_role_suffix(j, check_text)
+    if role_suffix:
+        profile = (profile + "/" + role_suffix) if profile else role_suffix
+    return _compact_dispatch_name(profile, 28) if profile else None
 
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
                   parent_effort=None):
@@ -712,10 +759,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     segs = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None),
             (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim"))]
     avail = _NW_S
-    profile = j.profile
-    role_suffix = _dispatch_role_suffix(j, qa_text)
-    if role_suffix:
-        profile = (profile + "/" + role_suffix) if profile else role_suffix
+    profile = _dispatch_profile(j, qa_text)
     tag_segs, tagw = _mq_tag(j.mode, None, qa_key, profile=profile)
     otag = "  (orphan)" if orphan else ""
     name_room = min(_DISPATCH_NAME_MAX, max(3, avail - tagw - len(otag) - 1))
@@ -728,7 +772,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     if used < avail:
         segs.append((" " * (avail - used), None))
 
-    segs.append(_branch_seg(j.cwd, j.branch))                  # dispatch row = everything dim
+    segs.append(_branch_seg("" if key in _LOOPS_KEYS else j.cwd, j.branch))  # loop temp repos hide throwaway branches
     # model slot → the job's OWN main model (dim family color) + effort (headless has no
     # statusline → parent's effort, the shared settings default — user 2026-07-03: 분사도 effort).
     segs += _model_cell(j.model or parent_model, parent_effort, _MW, dim=True)
@@ -827,10 +871,7 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     qa_base = j.qa or ""
     qa_text = (("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa) if j.qa else ""
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
-    profile = getattr(j, "profile", None)
-    role_suffix = _dispatch_role_suffix(j, qa_text)
-    if role_suffix:
-        profile = (profile + "/" + role_suffix) if profile else role_suffix
+    profile = _dispatch_profile(j, qa_text)
     tag_segs, _tw = _mq_tag(j.mode, None, qa_key, profile=profile)
 
     prefix = _dispatch_prefix(j)
@@ -840,7 +881,7 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     l1 += tag_segs
     if orphan:
         l1.append(("  (orphan)", "gate_u"))
-    br = j.branch or _git_branch(j.cwd)
+    br = None if key in _LOOPS_KEYS else (j.branch or _git_branch(j.cwd))
     br_seg = ("  " + br, "dim") if br else None
     if not _split and br_seg:
         l1.append(br_seg)
@@ -860,10 +901,18 @@ def _group_key_session(s):
     return project_of(s.cwd)
 
 
-def _group_key_job(j):
-    # loops jobs (empty cwd, key in the loops vocabulary) always group under "loops" —
-    # project_of('') would return '(unknown)', which is wrong for a recognized loop job.
-    if not j.cwd and j.key in _LOOPS_KEYS:
+def _group_key_job(j, session_groups=None, job_groups=None):
+    session_groups = session_groups or {}
+    job_groups = job_groups or {}
+    if getattr(j, "parent_slug", None) and j.parent_slug in job_groups:
+        return job_groups[j.parent_slug]
+    if getattr(j, "parent_sid", None) and j.parent_sid in session_groups:
+        return session_groups[j.parent_sid]
+    if getattr(j, "parent_cwd", None):
+        return project_of(j.parent_cwd)
+    # Loop/drill temp repos are throwaway execution roots. Without a visible parent, keep
+    # them under the loop control plane instead of presenting /tmp/drill-* as a project.
+    if j.key in _LOOPS_KEYS:
         return "loops"
     return project_of(j.cwd)
 
@@ -914,12 +963,20 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     # top-level sessions (the same headless process would otherwise double-show as session+job).
     sessions = [s for s in sessions if not s.is_child]
     groups = {}
+    session_groups = {}
     for s in sessions:
         gk = _group_key_session(s)
         groups.setdefault(gk, {"sessions": [], "jobs": []})["sessions"].append(s)
-    for j in jobs:
-        gk = _group_key_job(j)
+        if s.session_id:
+            session_groups[s.session_id] = gk
+    job_groups = {}
+    top_jobs = [j for j in jobs if not (getattr(j, "parent_slug", None) and getattr(j, "depth", 1) >= 2)]
+    depth_jobs = [j for j in jobs if getattr(j, "parent_slug", None) and getattr(j, "depth", 1) >= 2]
+    for j in top_jobs + depth_jobs:
+        gk = _group_key_job(j, session_groups=session_groups, job_groups=job_groups)
         groups.setdefault(gk, {"sessions": [], "jobs": []})["jobs"].append(j)
+        if j.slug:
+            job_groups[j.slug] = gk
 
     show_sessions = section in ("fleet", "both")
     show_jobs = section in ("dispatch", "both")
@@ -1064,6 +1121,18 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                   if not (s.liveness in ("stale", "dead") or s.app_server)])
         hidden = len(group_sessions) - len(shown)
         shown_sids = set(s.session_id for s in shown if s.session_id)
+        shown_cwds = {}
+        ambiguous_cwds = set()
+        for s in shown:
+            if not s.cwd or not s.session_id:
+                continue
+            key_cwd = os.path.realpath(s.cwd)
+            if key_cwd in shown_cwds:
+                ambiguous_cwds.add(key_cwd)
+            else:
+                shown_cwds[key_cwd] = s.session_id
+        for key_cwd in ambiguous_cwds:
+            shown_cwds.pop(key_cwd, None)
 
         # pre-assemble session -> child-jobs and job -> sub-job maps before emitting rows.
         # Depth 1 jobs can nest under an on-screen parent session; depth 2 jobs nest under
@@ -1078,12 +1147,20 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
                 job_children.setdefault(j.parent_slug, []).append(j)
             elif j.is_child and j.parent_sid and j.parent_sid in shown_sids:
                 children.setdefault(j.parent_sid, []).append(j)
+            elif j.is_child and getattr(j, "parent_cwd", None):
+                sid = shown_cwds.get(os.path.realpath(j.parent_cwd))
+                if sid:
+                    children.setdefault(sid, []).append(j)
+                elif j.key in _LOOPS_KEYS:
+                    loops_jobs.append(j)
+                else:
+                    orphans.append(j)
             elif j.key in _LOOPS_KEYS:
                 loops_jobs.append(j)
             else:
                 orphans.append(j)
 
-        gcwd = (group_sessions[0].cwd if group_sessions else
+        gcwd = "" if name == "loops" else (group_sessions[0].cwd if group_sessions else
                 (group_jobs[0].cwd if group_jobs else ""))
         ggate, gpipe = _gate_info(gcwd)                # project spec-gate (word after the name)
         gword, gwkey = _gate_word(ggate, gpipe)

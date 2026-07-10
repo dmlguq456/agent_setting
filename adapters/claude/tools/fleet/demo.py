@@ -54,7 +54,7 @@ def collect(harness_filter=None):
         # nested under the demo-app claude parent (demo-claude-1)
         J(key="code", stage="exec", mode="dev", qa="adversarial", qa_source="argv", harness="claude",
           model="Opus 4.8 (1M context)", elapsed_min=22, slug="demo-feat-x",
-          cwd="/home/demo/demo-app-wt/feat-x", parent_sid="demo-claude-1", is_child=True,
+          cwd="/home/demo/demo-app-wt/feat-x", parent_sid="demo-claude-1", parent_cwd="/home/demo/demo-app", is_child=True,
           branch="feat-x", liveness="working", depth=1, intensity="adversarial",
           worker_role="capability-owner", capability_owner="autopilot-code"),
         # depth-2 workers owned by the autopilot-code capability worker above
@@ -70,17 +70,34 @@ def collect(harness_filter=None):
           worker_role="verifier", capability_owner="autopilot-code"),
         J(key="review", stage="test", mode="debug", qa="quick", qa_source="jobslog", harness="codex",
           model="gpt-5.5", elapsed_min=8, slug="demo-review",
-          cwd="/home/demo/demo-app-wt/review", parent_sid="demo-claude-1", is_child=True,
+          cwd="/home/demo/demo-app-wt/review", parent_sid="demo-claude-1", parent_cwd="/home/demo/demo-app", is_child=True,
           branch="review", liveness="working", depth=1),
+        # drill launched by a Codex parent from a throwaway /tmp fixture, with depth-2
+        # cross-harness checks. It should render under the parent, not as a /tmp project.
+        J(key="drill", stage="run", mode="loop/drill", qa="quick", qa_source="jobslog", harness="codex",
+          model="gpt-5.5", elapsed_min=3, slug="drill-g6-worktree",
+          cwd="/tmp/drill-g6_worktree_dispatch-abcd/repo", parent_sid="demo-codex-1",
+          parent_cwd="/home/demo/demo-app", is_child=True, branch="main", liveness="working",
+          depth=1, intensity="quick", worker_role="g6_worktree_dispatch", capability_owner="drill"),
+        J(key="drill", stage="review", mode="loop/drill-verify", qa="quick", qa_source="jobslog", harness="claude",
+          model="Sonnet 5", elapsed_min=2, slug="drill-g6-claude-verify",
+          cwd="/tmp/drill-g6_worktree_dispatch-verify/repo", parent_slug="drill-g6-worktree",
+          parent_cwd="/home/demo/demo-app", is_child=True, liveness="idle", depth=2,
+          intensity="quick", worker_role="verifier", capability_owner="drill"),
+        J(key="drill", stage="review", mode="loop/drill-verify", qa="quick", qa_source="jobslog", harness="opencode",
+          model="glm-5.2", elapsed_min=1, slug="drill-g6-opencode-verify",
+          cwd="/tmp/drill-g6_worktree_dispatch-verify2/repo", parent_slug="drill-g6-worktree",
+          parent_cwd="/home/demo/demo-app", is_child=True, liveness="working", depth=2,
+          intensity="quick", worker_role="verifier", capability_owner="drill"),
         # nested under demo-svc opencode parent
         J(key="spec", stage="design", mode="dev", qa="thorough", qa_source="plan", harness="opencode",
           model="glm-5.2", elapsed_min=5, slug="demo-spec",
-          cwd="/home/demo/demo-svc-wt/spec", parent_sid="demo-oc-2", is_child=True,
+          cwd="/home/demo/demo-svc-wt/spec", parent_sid="demo-oc-2", parent_cwd="/home/demo/demo-svc", is_child=True,
           branch="spec", liveness="working"),
         # orphan (parent not on screen) — stale, in demo-lib
         J(key="debug", stage="running", mode="debug", qa="thorough", qa_source="jobslog",
           harness="codex", elapsed_min=290 * 60, slug="demo-orphan",
-          cwd="/home/demo/demo-lib-wt/orphan", parent_sid="demo-dead", is_child=True,
+          cwd="/home/demo/demo-lib-wt/orphan", parent_sid="demo-dead", parent_cwd="/home/demo/demo-lib", is_child=True,
           branch="orphan", liveness="stale"),
         # loop
         J(key="oncall", elapsed_min=12, slug="oncall", cwd="", parent_sid=None, liveness="working"),

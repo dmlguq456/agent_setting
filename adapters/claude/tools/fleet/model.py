@@ -162,6 +162,7 @@ class DispatchJob:
     slug: str = ""
     cwd: str = ""
     parent_sid: Optional[str] = None    # spawning parent session id (CLAUDE_CODE_SESSION_ID from environ)
+    parent_cwd: Optional[str] = None    # fallback parent cwd when runtime session id is unavailable/mismatched
     is_child: bool = False              # headless child marker (CLAUDE_CODE_CHILD_SESSION=1)
     harness: Optional[str] = None       # claude | codex | opencode — dispatch runtime (None = unknown / jobs.log-only)
     qa_source: Optional[str] = None     # provenance of effective qa: argv | jobslog | plan | default
