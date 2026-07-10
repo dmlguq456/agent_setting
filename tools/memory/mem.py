@@ -15,6 +15,16 @@ import argparse, datetime, hashlib, json, os, re, sqlite3, subprocess, sys
 from collections import namedtuple
 from pathlib import Path
 
+# Force UTF-8 stdout/stderr. On Windows the console codepage is often cp949/cp1252,
+# which cannot encode emoji/box glyphs in memory content; `print(json.dumps(...,
+# ensure_ascii=False))` then raises UnicodeEncodeError and (in the SessionStart
+# inject hook) surfaces as a hook traceback. Linux is already UTF-8 (no-op).
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+
 def _home() -> Path:
     # On Windows, USERPROFILE is the authoritative user profile. A shell that runs
     # our hooks (Git Bash) injects a POSIX-style $HOME ('/home/<user>') that both
