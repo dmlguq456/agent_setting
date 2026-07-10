@@ -279,7 +279,8 @@ class SecurityTest(_ConfigHomeMixin, unittest.TestCase):
     def test_validate_caps_injected_long_string(self):
         payload = "rm -rf / ; " * 20
         out = rt.validate_title(payload)
-        self.assertLessEqual(len(out), rt.TITLE_MAXLEN)
+        # 강화(2026-07-10): 문장형 긴 주입은 클립이 아니라 거부(None) — 둘 다 오염 차단
+        self.assertTrue(out is None or len(out) <= rt.TITLE_MAXLEN)
 
 
 @unittest.skipUnless(os.path.exists(_STATUSLINE), "adapters/claude/statusline.sh not found")
@@ -383,6 +384,40 @@ class TriggerLogicTest(unittest.TestCase):
     def test_trigger_recursion_guard(self):
         self._run(extra_env={"FLEET_TITLE_REFRESH": "1"})
         self.assertFalse(os.path.exists(self.sentinel))
+
+
+class ValidatorHardeningTest(unittest.TestCase):
+    """2026-07-10 라이브 실측 회귀: raw jsonl 조각이 DATA 로 흘러가 haiku 가 한국어
+    오류 문장을 냈고 검증이 통과시킴 — 영어-우세·단어수 캡·raw fallback 제거 강제."""
+
+    def test_korean_error_sentence_rejected(self):
+        self.assertIsNone(rt.validate_title(
+            "대화 발췌가 인코딩되어 읽을 수 없습니다. 원본 텍스트를 제공하거나 구체"))
+
+    def test_sentence_over_word_cap_rejected(self):
+        self.assertIsNone(rt.validate_title(
+            "this is a very long chatty sentence about the session"))
+
+    def test_short_english_title_accepted(self):
+        self.assertEqual(rt.validate_title("Fleet UI Optimization"),
+                         "Fleet UI Optimization")
+
+    def test_delta_text_drops_unparseable_lines(self):
+        txt = rt._delta_text('{"broken json fragment...\nnot json either\n')
+        self.assertEqual(txt, "")
+
+    def test_read_delta_drops_partial_first_line(self):
+        import tempfile, os as _os
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _os.path.join(tmp, "t.jsonl")
+            big = json.dumps({"type": "assistant",
+                              "message": {"content": [{"type": "text", "text": "x" * 100000}]}})
+            tail = json.dumps({"type": "user", "message": "short readable line"})
+            with open(path, "w") as f:
+                f.write(big + "\n" + tail + "\n")
+            text, off = rt.read_delta(path, 10)   # offset 이 big 라인 중간
+            self.assertIn("short readable line", text)
+            self.assertNotIn("x" * 200, text)
 
 
 if __name__ == "__main__":
