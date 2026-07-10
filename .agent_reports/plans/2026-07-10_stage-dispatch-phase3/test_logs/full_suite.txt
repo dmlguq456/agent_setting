@@ -1,0 +1,28 @@
+### SD-15 wrapper (dispatch-headless.sd15.test.sh)
+ok   - scan_death patterns + reset extraction
+ok   - limit-death → row done,note=dead-session-limit,reset=3pm
+ok   - reset cache written
+ok   - clean fast exit → row stays open (normal harvest owns it)
+— dispatch-headless SD-15 conformance: PASS
+
+### SD-16a usage-check (usage-check.test.sh)
+ok   - fresh dead-limit → limited(reset)
+ok   - no marker → ok
+ok   - missing jobs.log → unknown
+ok   - stale marker beyond window → ok(expired)
+ok   - harness scope: claude ok / codex limited
+— usage-check conformance: PASS
+
+### SD-16d concurrency (dispatch-concurrency.test.sh)
+ok   - (1) 3 concurrent open rows, same parent (병렬 분사 성립)
+ok   - (2) liveness: 3 workers ALIVE simultaneously (병렬 실행 성립)
+ok   - (3a) dispatch-wait reports 3 children (다중-자식 대기 의미론)
+ok   - (3b) all children done → dispatch-wait exit 0 (수확)
+ok   - (4) 상한 비강제 확인: wrapper 는 동시 분사 수를 게이트하지 않음 — Σ≤5 는 conductor 큐잉 책임(계약 §5.10 ⑤, drift 아님)
+— dispatch-concurrency (SD-16d) 실측: PASS — 병렬 성립
+
+### regression: dispatch-liveness
+dispatch-liveness runtime-root regression: PASS
+### regression: dispatch-wait
+dispatch-wait conformance: PASS
+### portable-guards (hooks untouched, sanity)

@@ -16,6 +16,8 @@
 #   exit 2 = 아직 살아있음, --max 도달 → 재호출하라(반복-호출 폴 형태; conductor 의 다음 Bash 가 이어감).
 #   exit 3 = SUSPECT/DEAD 자식 있음 → 대기 금지, transcript tail·dispatch 로그로 진단→수확/재분사.
 #   각 iteration 한 줄 status 출력. background/nohup 없음(스테이지-워커 의무 — 동기 폴만).
+#   SD-15 (OPERATIONS §5.10 ⑨): DEAD 판정은 dispatch-liveness 재사용이라, 자식 dispatch
+#   로그의 limit/auth 즉사 패턴도 자동으로 exit 3 근거가 된다(transcript-mtime 단독 의존 탈피).
 set -u   # POSIX sh(dash)에는 pipefail 없음 — liveness 재사용이라 pipe 상태 의존 없음.
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

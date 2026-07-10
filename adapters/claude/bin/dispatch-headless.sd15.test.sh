@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# dispatch-headless.sd15.test.sh — SD-15 (OPERATIONS §5.10 ⑨) limit-사망 즉시 감지 회귀.
+#   증명: (1) scan_death 패턴/ reset 추출 (2) launch 직후 조기 limit-death → row done,
+#   note=dead-<reason>,reset=<x> 로 즉시 마감 + reset 캐시 기록 (3) clean 조기 exit(비-limit)
+#   는 row 를 건드리지 않음 (open 유지).
+set -uo pipefail
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+WRAP="$SCRIPT_DIR/dispatch-headless.py"
+fails=0
+ok()  { printf 'ok   - %s\n' "$1"; }
+bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+
+# --- Unit: scan_death ---
+u=$(python3 - "$WRAP" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("dh", sys.argv[1])
+dh = importlib.util.module_from_spec(spec); spec.loader.exec_module(dh)
+cases = {
+  "You've hit your session limit · resets 3pm": ("session-limit", "3pm"),
+  "Error: usage limit reached, resets at 5:30pm": ("usage-limit", "5:30pm"),
+  "invalid api key provided": ("auth", ""),
+  "all good, work complete": None,
+}
+bad = 0
+for text, want in cases.items():
+    got = dh.scan_death(text)
+    if got != want:
+        print(f"MISMATCH {text!r}: got {got} want {want}"); bad += 1
+print("SCAN_OK" if bad == 0 else "SCAN_FAIL")
+PY
+)
+echo "$u" | grep -q SCAN_OK && ok "scan_death patterns + reset extraction" || { bad "scan_death: $u"; }
+
+command -v git >/dev/null || { echo "(git 없음 — skip launch cases)"; exit $fails; }
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+AH="$tmp/agent_setting"; mkdir -p "$AH/core"; : > "$AH/core/CORE.md"
+bin="$tmp/bin"; mkdir -p "$bin"
+
+launch() { # $1=fake-claude-body $2=slug $3=watch
+  printf '%s' "$1" > "$bin/claude"; chmod +x "$bin/claude"
+  wt="$tmp/wt/$2"; mkdir -p "$wt"
+  ( cd "$wt" && git init -q && git -c user.email=a@b -c user.name=a commit -q --allow-empty -m x )
+  AGENT_HOME="$AH" PATH="$bin:$PATH" python3 "$WRAP" --start \
+    --worktree "$wt" --slug "$2" --capability code-plan --mode dev --qa standard \
+    --intensity standard --depth 2 --parent cx --worker-role code-plan --owner autopilot-code \
+    --model sonnet --effort medium --early-exit-watch "$3" 2>&1
+}
+
+# --- Case: limit-death closes row ---
+out=$(launch "#!/bin/sh
+echo \"You've hit your session limit · resets 3pm\"
+exit 1" limit1 6)
+echo "$out" | grep -q 'early_death=session-limit' \
+  && grep -q $'\tdone\t.*note=dead-session-limit,reset=3pm' "$AH/.dispatch/jobs.log" \
+  && ok "limit-death → row done,note=dead-session-limit,reset=3pm" \
+  || bad "limit-death row not closed. out=[$out] jobs=[$(cat "$AH/.dispatch/jobs.log")]"
+[ -f "$AH/.dispatch/usage-reset.claude" ] && ok "reset cache written" || bad "no reset cache"
+
+# --- Case: clean fast exit does NOT close row ---
+out=$(launch "#!/bin/sh
+echo ok done
+exit 0" clean1 4)
+echo "$out" | grep -q 'early_death=-' \
+  && awk -F'\t' '$5=="clean1"{print $2}' "$AH/.dispatch/jobs.log" | grep -qx open \
+  && ok "clean fast exit → row stays open (normal harvest owns it)" \
+  || bad "clean exit wrongly closed. out=[$out]"
+
+echo "— dispatch-headless SD-15 conformance: $([ $fails -eq 0 ] && echo PASS || echo "FAIL ($fails)")"
+exit $fails

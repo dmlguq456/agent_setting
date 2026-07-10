@@ -14,7 +14,7 @@ phases:
   spec: done              # PRD v2 — SD-1~14 채택 + SD-OPEN-1(inline 임계 계측 누적)·SD-OPEN-2(curator 관찰). v1 snapshot = _internal/versions/v1/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: in_progress        # Phase 1 done (5b7cf33) / Phase 2 done (52f2f2c) / Phase 3 진행 — SD-15(limit 감지)+SD-16(상호보완 크로스 하네스)+프로필 A/B 계측+문서-효력 검증(최소 프롬프트 conductor)+thorough 동시성 검증. 잔여 이월: SD-14b·SD-11 재판단, drill 러너 등록(loops 세션)
+  dev: in_progress        # Phase 1 done (5b7cf33) / Phase 2 done (52f2f2c) / Phase 3 구현 done (브랜치 stage-dispatch-phase3, 미머지) — SD-15(limit 감지·마감·표면화)+SD-16(usage-check 보수 조회·상호보완 라우팅 core+skill·row 연속성)+SD-16d thorough+ 동시성 실측 PASS(병렬 성립). 잔여 이월: SD-15 codex/opencode wrapper 동형·프로필 A/B 계측·SD-14b·SD-11 재판단·drill 러너 등록(loops 세션)
 last_updated: 2026-07-10  # v3 — SD-15·SD-16·SD-OPEN-3 등재 (v2 snapshot = _internal/versions/v2/)
 decisions_locked:
   - SD-1: depth-1 owner = 얇은 conductor, 스테이지(plan/execute/test/report) = depth-2 headless 세션 (conductor 는 verdict/게이트만, 스테이지 본문 미독)

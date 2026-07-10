@@ -1,0 +1,1 @@
+../../../utilities/usage-check.test.sh

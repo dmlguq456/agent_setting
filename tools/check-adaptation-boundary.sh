@@ -1196,7 +1196,7 @@ check_codex_utility_projection() {
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
   UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh"
-  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh extract_web_figures.py"
+  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh extract_web_figures.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -2237,7 +2237,7 @@ check_opencode_utility_projection() {
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
   UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh"
-  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh extract_web_figures.py"
+  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh extract_web_figures.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
