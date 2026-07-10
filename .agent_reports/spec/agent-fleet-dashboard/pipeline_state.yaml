@@ -5,9 +5,10 @@ mode: [cli]
 inputs:
   - research/agent-fleet-dashboard/00_prior_art.md
   - research/agent-fleet-dashboard/01_tap_mechanics.md
+  - spec/stage-dispatch/prd.md   # v2: SD-3·§9-13 스테이지 row 관제 parity
 phases:
-  spec: done            # PRD v1 완성
+  spec: done            # PRD v2 (2026-07-10: drift 흡수 + stage-dispatch parity + UI 가독성; v1 snapshot = _internal/versions/v1/)
   scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
   design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
-  dev: pending          # autopilot-code 가 누적
-last_updated: 2026-07-01
+  dev: in_progress      # v1 순서 1~7 완료 (plans/2026-07-01_*·07-03_fleet-cooling-groups + 직접 커밋) · v2 §Next 1~4 = 이번 사이클
+last_updated: 2026-07-10

@@ -1,8 +1,8 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-- **Date**: 2026-07-01
+- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec done (v1)
+- **Status**: spec done (v2)
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## Process Log
@@ -22,8 +22,19 @@
 - F-7 zero-dep python curses, tmux 세로 사이드 페인 런처.
 - F-8 sparkline·herdr 소켓·커스터마이즈 후순위(스코프 밖).
 
+## v2 update (2026-07-10) — drift 흡수 + stage-dispatch parity + UI 가독성
+
+| Step | Action | Result |
+|---|---|---|
+| 정보 수집 | 현행 `tools/fleet/` 전수 실측 (Explore, file:line-cited) + `spec/stage-dispatch/prd.md` SD-3·§9-13 대조 + jobs.log wild 행 실측 | drift 목록 + parity 갭 + wild pipe 구분자 오파싱 발견 |
+| update | v1 snapshot → `_internal/versions/v1/prd.md`, prd.md v2 덮어쓰기 | §4 [v2 기준선] 신설(07-01~07-10 진화 소급 승인), §4.5 SD-F1~F4, §4.6 F-9~F-13, §0.5 F-1 확장, §3 `w` 키, §6 wild drift 행 |
+
+- 계기: 사용자 "fleet UI 최적화·개선 — 워크플로우를 못 따라감 + 아쉬운 점 다수" (2026-07-10). drift CLEAR 판정 → 자율 진행.
+- 핵심 결정: 스테이지 row 단계명 라벨(SD-F1) / conductor breadcrumb 자식 실측 연동(SD-F2) / 스테이지 자기 model·effort(SD-F3) / pipe 공백·콤마 tolerant(SD-F4) / 가독성 5건(F-9~F-13).
+
 ## Next
-`/autopilot-code --mode dev "agent-fleet-dashboard 구현"` (worktree). 순서 = PRD §Next 1~7.
+`/autopilot-code --mode dev --intensity standard "fleet UI 개선 — PRD v2 §4.5·§4.6"` (worktree, conductor 분사 — 파이프 자체가 SD-F1~F3 라이브 검증 fixture). 순서 = PRD v2 §Next 1~4.
 
 ## Version History
 - v1 (2026-07-01): 초기 PRD. research 2건 근거.
+- v2 (2026-07-10): drift 흡수([v2 기준선]) + stage-dispatch 관제 parity(SD-F1~F4) + UI 가독성(F-9~F-13). snapshot = `_internal/versions/v1/prd.md`.

@@ -1,11 +1,9 @@
 # agent-fleet-dashboard — Spec (PRD)
 
-> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선)
+> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · v1
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
-> **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`). skeleton 은 lean 유지 위해 autopilot-code 로 이월(§9 module 구조만 확정).
-> v1 원본 = `_internal/versions/v1/prd.md`. v1 이후 07-01~07-10 사이 커밋된 렌더 진화(§4 [v2 기준선] 참조)는 본 v2 가 소급 흡수 — 이 구간의 산출물 트레일은 `plans/2026-07-01_agent-fleet-dashboard/`·`plans/2026-07-01_fleet-render-v2/`·`plans/2026-07-03_fleet-cooling-groups/` + 직접 커밋(git log `tools/fleet`).
 
 ## 0. 한 줄
 
@@ -14,8 +12,6 @@
 ## 0.5 설계 원칙 — 외부 관찰자 (zero-injection) ★ cross-cutting
 
 **대시보드는 어떤 하네스의 TUI·hook·프로세스에도 아무것도 주입하지 않는다.** 이미 디스크에 존재하는 신호(프로세스 테이블·transcript·statusline JSON·SQLite row·jobs.log)만 읽어 렌더한다. 유일한 예외 = 우리가 _소유한_ Claude statusLine 을 세션별 파일도 쓰게 하는 것(§5) — 이건 우리 자산이라 주입이 아니다.
-
-> **[v2 확장] "관찰" 의 범위**: 디스크·프로세스 외에 **하네스 계정 usage API 의 read-only 호출**(claude OAuth `/api/oauth/usage`, codex `wham/usage` — usage 헤더의 rate-limit 소스, `usage_api.py`·`codex.py` 실측)을 관찰로 인정한다. 쓰기·주입이 아니고 하네스 세션에 영향 0 — F-1 불변. opencode 는 usage API 부재 → 헤더에 "no usage api" 명시(결손 침묵 금지, F-3 동형).
 
 - **왜**: codex·opencode 의 TUI/hook 은 우리가 못 건드림(그리고 건드리면 안 됨). 관찰자로만 두면 하네스 버전 업그레이드·재시작과 무관하게 동작하고, 대시보드 크래시가 세션에 영향 0.
 - **적용**: 새 데이터가 필요하면 "이 하네스가 이미 어디에 남기나?"를 먼저 묻는다(§2 tap 매트릭스). 없으면 프로세스 스캔(universal 백본)으로 fallback. 새 emit 경로를 하네스에 심지 않는다.
@@ -77,7 +73,6 @@
 | `PgUp`/`PgDn` | 페이지 단위 스크롤 |
 | `Home`/`g`, `End`/`G` | 맨 위 / 맨 아래로 이동(뷰포트는 항상 맨 아래까지 도달) |
 | `a` | stale/dead 세션 + codex app-server companion 표시↔숨김 토글(`--all` 과 동일 효과, 라이브 재토글 가능) |
-| `w` | **(v2 소급 흡수)** 레이아웃 cycle `auto → wide → narrow → stack` — auto 는 폭 컷오프(70/110열)가 결정, wide=1줄 grid·narrow=2줄 카드·stack=3줄 세로. 어느 모드든 harness 배지·slug·liveness 는 불락(정체성 anchor). footer 키 바에 현재 모드 표기(3-모드 전부 — §4.6 F-12). |
 | 마우스 클릭(`+N hidden` 줄) | `a` 와 동일한 토글. `tmux set -g mouse on` 필요 |
 | `q` | 종료 |
 | `r` | 즉시 새로고침 |
@@ -91,19 +86,6 @@
 ## 4. UI — project(cwd) 그룹 레이아웃 + 렌더 모델
 
 > **[minor edit · render v2 cycle, 2026-07-01]** 아래는 v1 의 "(A) fleet 섹션 / (B) dispatch 섹션" 2섹션 분리 모델을 **project(cwd) 그룹** 모델로 대체한다. v1 원본 레이아웃은 `plans/2026-07-01_agent-fleet-dashboard/`(v1 빌드 사이클) 참조. §1 아키텍처 다이어그램의 "2섹션" 표기는 개념상 이 그룹 모델로 대체된 것으로 읽는다(다이어그램 자체는 미변경, §9-11 도 동일).
-
-### [v2 기준선] 현행 화면 구성 (07-01~07-10 진화 소급 흡수 — 코드 실측)
-
-v1 이후 커밋으로 진화한 현행 렌더 모델을 spec 기준선으로 승인한다 (render.py `_build_lines` 실측 순서):
-
-1. **usage 헤더** — harness 별 1행 rate-limit 게이지: claude `5h/7d/<per-model>` (OAuth usage API + statusline tap), codex `5h/7d` (wham API + rollout fallback, expiry-aware), opencode = "no usage api" 명시행. 라벨은 dim(harness 로 오독 방지).
-2. **fleet pulse 요약행** — `fleet <spinner> N working · M idle · [K detached] · ↳ J jobs (…)`. app-server companion 은 카운트 제외.
-3. **alert strip** (조건부, healthy 면 0줄) — ctx ≥80% 세션 + stale/dead job, 최대 6개.
-4. **프로젝트 그룹 카드** — 그룹 헤더(hot/cooling/cold 3단계 + `🚧 N` worktree 카운트 + tracked/untracked 게이트 배지) → 세션 행 → dispatch 트리. 그룹핑 키 = 부모 repo 역매핑(`-wt`/`_worktrees` 2-pass) + `drill:<case>` 특수 그룹 + `loops` 그룹.
-5. **folded 집계 1행** — live 세션 0 + 잡 0 그룹은 접어 `inactive +N folded <names>`.
-6. **legend + footer 키 바** — 글리프 범례, 키 힌트, 스크롤 `↑N/↓N` 인디케이터.
-
-레이아웃 3모드(`w` cycle, §3) · main-session bold · stale/companion dim·숨김 · 수동 blink(tmux A_BLINK strip 대응) · 256색 body tint(hot=midnight-blue/cooling=brown/cold=grey, 실패 시 `▍` rail fallback) 포함 전부 기준선. 이 기준선 위에서 v2 의 신규 계약은 §4.5(stage-dispatch 관제)·§4.6(UI 가독성)이다.
 
 ### project(cwd) 그룹 — 부모 repo 당 그룹 1개
 세션과 그 프로젝트의 dispatch 잡을 **같은 그룹**에 묶는다. 그룹핑 키 = 부모 repo:
@@ -153,25 +135,6 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - 키: `q`=종료, `r`=즉시 새로고침, 스크롤/`a`/마우스는 §3 참조.
 - 폭이 아주 좁으면(<~70열) cost/rl → effort → model 순으로 필드를 줄인다(배지·slug·liveness 는 정체성·상태 앵커라 항상 유지). 2열 그리드 승격은 MVP 밖(변경 없음).
 
-## 4.5 [v2 신설] stage-dispatch 관제 parity — 스테이지 row 계약 ★ 이번 사이클 핵심
-
-> 근거: `spec/stage-dispatch/prd.md` SD-3(스테이지 세션 = jobs.log `depth=2,parent=<conductor>,worker_role=<sub-skill>,owner=autopilot-code` 등록 → fleet 스테이지 row)·§9-13(fleet 표시 라벨 = Phase 2 잔여). 운영 실증 ① "fleet 관제 불가시" 해소의 마지막 마일. 사용자 관찰("워크플로우를 못 따라감")과 일치.
-
-- **SD-F1 (스테이지 row 사람 라벨)**: `worker_role=code-plan/code-execute/code-test/code-report`(+`:phase-A` 류 접미 허용) depth-2 row 는 raw role 문자열 대신 **스테이지 단계명**으로 렌더 — `plan`/`exec`/`test`/`report` (기존 `_PIPE_STAGES` breadcrumb 어휘와 동일 — 새 어휘 발명 금지). 접미는 뒤에 dim 으로 (`exec:phase-A`). 현행 14자 중간잘림(`diagnosis_gro…`)이 스테이지 워커에 적용되지 않게 한다.
-- **SD-F2 (conductor 집계)**: depth-1 job 이 `owner=autopilot-code` 스테이지 자식(depth-2, worker_role=code-*)을 가지면 그 job 은 **conductor** — conductor row 의 stage breadcrumb(`code: plan › exec › test`) 하이라이트는 **활성(=live) 스테이지 자식과 일치**해야 한다(자식 실측 우선, `live_stage()` 산출물 유도는 fallback). 스테이지 자식이 done 이고 다음 스테이지가 미분사인 갭 구간은 conductor 의 산출물 유도값으로 표시.
-- **SD-F3 (스테이지 자기 model/effort)**: dispatch wrapper 는 pipe 에 `model_role=/model=/effort=` 를 이미 실으므로(dispatch-headless.py 실측) 스테이지 row 는 **자기 모델·effort 를 1급 표시** — SD-5(스테이지별 model role 명시) 관제의 핵심. 현행 "parent effort 상속 표시"는 pipe 값 부재 시 fallback 으로 강등(dim + 상속 표기).
-- **SD-F4 (pipe 파싱 tolerant)**: pipe key=value 구분자는 콤마가 canonical(OPERATIONS §5.10 하드 계약)이되, **wild 에 실존하는 공백 구분 행**(2026-07-09 실측 — 현행 파서는 첫 key 의 value 에 나머지 전체가 붙어 오파싱)을 **공백/콤마 혼용 tolerant** 로 수용한다. F-5(jobs.log tolerant) 원칙의 확장 — 미지 key 는 무시, 오파싱은 결손(`—`)보다 나쁘다.
-- **비대상(경계)**: conductor·스테이지의 _제어_(재분사·kill)는 여전히 Non-goal(모니터 only). depth-3+ 는 wrapper 가 막으므로 fleet 은 depth ≤2 만 정식 렌더(3+ 는 방어적 들여쓰기만).
-
-## 4.6 [v2 신설] UI 가독성 개선 — 정보 위계·스캔 가능성 (사용자 "아쉬운 점" 해소)
-
-- **F-9 (dispatch 메타라벨 가독화)**: 현행 `(loop/drill-diagnosis·q/diagnosis_gro…/qa:~q)` 처럼 축약·중간잘림이 겹친 라벨을 재배분 — (a) role 은 SD-F1 단계명 매핑 우선, 매핑 밖 role 은 **중간잘림 대신 뒤에서 자름**(head 보존) (b) drill 케이스 하드코딩 축약 맵(`g6`/`g9` 등)은 **일반 규칙으로 대체**(`g\d+` 접두 추출 — 신규 케이스마다 코드 수정하는 구조 제거) (c) 라벨 성분 우선순위 명문화: 폭 부족 시 `qa → intensity → role` 순으로 드롭하되 mode 는 유지 (d) `~` 유도값 접두는 유지 + legend 에 1회 설명.
-- **F-10 (alert 행 humanize)**: alert 의 job 이름도 dispatch 행과 같은 compact 이름 경로 재사용 — loop 잡의 `<case>-<ts>-<pid>` 꼬리(`…-20260710035842-294678`)는 strip. 같은 종류 alert 다수면 개수 집계(`⚠ 2 dead jobs: a·b`). 화면 폭 초과는 조용한 클립 대신 우선순위 절단(dead > stale > ctx).
-- **F-11 (raw status 어휘 정리)**: registry-only 잡의 stage=`open`/`running` raw 노출과 loop 잡 `drill: running` 류를 사람 어휘로 — `open`=`queued`(미기동 대기), `running`=breadcrumb 미점등 트랙(기존 규칙 재사용). status 어휘 자체(jobs.log)는 불변 — 표시층만.
-- **F-12 (footer·잡음 절제)**: (a) `+N malformed jobs.log rows skipped` 는 dim 강등 — 진단 상세는 `--json` 몫 (b) footer `w` 라벨이 stack 모드를 누락하는 표기 버그 수정(3-모드 전부) (c) legend 는 현재 화면에 실제 등장한 글리프만.
-- **F-13 (dead/stale 행 결손 절제)**: dead/stale row 의 `— … — … —` 나열 대신 telemetry 셀은 생략하고 **마지막 관측 경과**(`last seen 2h`) 1값으로 대체 — "없음" 명시 원칙(F-3)은 live 행에만 적용, 죽은 행은 결손 나열이 정보가 아니다.
-- **적용 순서(정보 위계)**: 위 개선은 전부 표시층(render.py) — collector 계약·모델 스키마 불변(SD-F4 만 collector). 시각 결정이 substantial 해지면(레이아웃 구조 변경 급) autopilot-design 리드 — 이번 사이클은 표시 규칙 정제 범위로 한정.
-
 ## 5. 능동 변경 — Claude per-session statusline tap (유일한 write)
 
 현재 `statusline.sh:10` 이 **모든 세션을 `~/.claude/.statusline-last.json` 한 파일에 덮어씀**(last-writer-wins) → 멀티세션 대시보드가 세션별 telemetry 를 못 얻음. 해결:
@@ -187,7 +150,6 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 
 - **대시보드 측**: live 판정에 `{open, running}` 둘 다 수용. malformed 행(field ≠ 6, `worktree`=`-`/`(main-tree)`) tolerant — skip 하되 카운트만.
 - **동반 수정(권고, autopilot-code 가 판단)**: `harness-status.sh`·`dispatch-liveness.sh`·`dispatch-liveness.py`(codex/opencode) 의 `open` 필터를 `{open,running}` 으로 통일하거나, 쓰기 측(Claude 수동 append 규약)을 `open` 으로 통일. **canonical 은 `core/OPERATIONS.md:95`** — 어휘 단일화는 그 문서 갱신과 함께(대응 동기화). 대시보드 자체는 어느 쪽이든 tolerant 하게 읽어 회귀 안전.
-- **[v2 추가] pipe 구분자 wild drift**: 2026-07-09 실측 — 콤마 canonical 인데 공백 구분 `key=value` 행이 레지스트리에 실존(현행 파서 오파싱). 표시층이 아니라 collector tolerance 로 흡수 = §4.5 SD-F4.
 
 ## 7. Liveness 모델 (재사용)
 
@@ -277,19 +239,15 @@ flowchart TD
 - **F-7 (zero-dep curses)**: python 표준 라이브러리만. tmux 세로 사이드 페인 런처. (§9)
 - **F-8 (MVP 경계)**: sparkline·herdr 소켓·커스터마이즈는 후순위 스코프 밖. (§11)
 
-## 확정 결정 (v2 추가, 2026-07-10)
+## Next (구현 순서 — autopilot-code, 본 v1 입력)
 
-- **SD-F1~F4 (stage-dispatch 관제 parity)**: 스테이지 row 단계명 라벨 / conductor 집계 breadcrumb = 자식 실측 우선 / 스테이지 자기 model·effort 1급 / pipe 공백·콤마 tolerant. (§4.5, stage-dispatch SD-3·§9-13)
-- **F-9~F-13 (UI 가독성)**: 메타라벨 축약 재배분(+drill 하드코딩 맵 → 일반 규칙) / alert humanize / raw status 어휘 표시층 정리 / footer·legend 잡음 절제 / dead·stale 결손 절제(`last seen`). (§4.6)
-- **F-1 확장**: 관찰 = 디스크·프로세스 + 하네스 usage API read-only. (§0.5)
-- **v2 기준선 승인**: usage 헤더·pulse 요약·alert strip·그룹 카드(3단계 온도·🚧·게이트 배지)·folded 집계·`w` 레이아웃 cycle·main-bold·tint 체계 — 07-01~07-10 진화 전체. (§4 [v2 기준선])
+`/autopilot-code --mode dev "agent-fleet-dashboard 구현"` (worktree 브랜치). 권장 순서:
+1. **model.py + procscan.py** — 정규화 스키마 + universal 백본(먼저 `--json` 으로 세션 열거 검증).
+2. **collectors/{claude,codex,opencode}.py + liveness.py** — 하네스별 enrichment + 4-state. `--json` 으로 결손 칸·비대칭 확인.
+3. **dispatch.py** — statusline 잡스캔 포팅(uncapped) + jobs.log tolerant 병합.
+4. **render.py + fleet.py** — curses 2섹션 레이아웃 + tick 루프 + resize.
+5. **§5 statusline.sh 확장** — per-session tap(+ stale 청소). 멀티세션 실측.
+6. **fleet.sh** — tmux 세로 사이드 페인 런처.
+7. (선택) **§6 동반 수정** — jobs.log 어휘 단일화(OPERATIONS.md 동기화) — 별도 결정.
 
-## Next (구현 순서 — autopilot-code, 본 v2 입력 · v1 순서 1~7 은 완료)
-
-`/autopilot-code --mode dev --intensity standard "fleet UI 개선 — PRD v2 §4.5·§4.6"` (worktree 브랜치, depth-1 conductor 분사 + 스테이지 depth-2 분사 — 이 파이프 자체가 SD-F1~F3 의 라이브 검증 fixture 가 된다). 권장 순서:
-1. **SD-F4 pipe tolerant 파싱** (collectors/dispatch.py) — 공백/콤마 혼용 + 미지 key 무시. 기존 tests 에 wild 실측 행(2026-07-09 space-separated) fixture 추가.
-2. **SD-F1~F3 스테이지 row 렌더** (render.py) — 단계명 라벨·conductor breadcrumb 자식 실측 연동·자기 model/effort 표시.
-3. **F-9~F-13 가독성** (render.py) — 라벨 재배분·drill 일반 규칙·alert humanize·status 어휘·footer/legend·dead/stale 절제.
-4. **검증** — 단위 tests(tests/) + `--once`/`--json` smoke + **스테이지 분사 라이브 관제 실측**(이 사이클의 depth-2 스테이지 세션이 fleet 에 단계명 row 로 뜨는지 — stage-dispatch pilot 성공 기준 ① 의 fleet 측 마감).
-
-테스트: 기존 tests/ 회귀 + 신규 fixture(스테이지 row·space-separated pipe·alert humanize) + `--once` 렌더 smoke.
+테스트: `--json` 스냅샷으로 각 collector 단위 검증(라이브 세션 3종 있을 때 결손 칸·liveness 대조) + `--once` 렌더 smoke.
