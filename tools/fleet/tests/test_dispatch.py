@@ -773,9 +773,12 @@ class ConductorBreadcrumbTest(unittest.TestCase):
     def _stage_keys(self, lines, anchor_text):
         # anchor on the role tag ("owner"), not the slug — the dispatch name column
         # (_compact_dispatch_name) can tail-cut a long slug before this test's assertions run.
+        # F-15b P1-5: a stage BEFORE the active one carries a done "✓" suffix (e.g. "plan✓") —
+        # strip it here so lookups stay keyed by the bare stage word.
         for ln in lines:
             if ln and any(t == anchor_text for t, _k in ln):
-                return {t: k for t, k in ln if t in ("plan", "exec", "test", "report")}
+                return {t.rstrip("✓"): k for t, k in ln
+                        if t.rstrip("✓") in ("plan", "exec", "test", "report")}
         return None
 
     def test_conductor_breadcrumb_aggregates_active_child_stage(self):
