@@ -3540,24 +3540,34 @@ else
   bad "opencode session-end should debounce repeated triggers"
 fi
 
-echo "== SD-11 stage-dispatch reminder (soft, non-deny) =="
-# (i) conductor + standard + code-plan → emits additionalContext
-out=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_SELF_SLUG=cyc "$SDR" --skill code-plan --depth 1 --intensity standard 2>/dev/null)
-if printf '%s' "$out" | grep -q '"additionalContext"' && printf '%s' "$out" | grep -q 'stage-dispatch'; then
-  ok "SDR emits additionalContext for conductor+standard+code-plan"
-else bad "SDR should emit additionalContext for conductor+standard+code-plan [$out]"; fi
-# (ii) direct/quick → no-op
-out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill code-plan --depth 1 --intensity quick 2>/dev/null)
-[ -z "$out" ] && ok "SDR no-ops for intensity=quick" || bad "SDR should no-op for quick [$out]"
+echo "== SD-11b stage-dispatch gate (deny 상향 + opt-out + intensity 불명) =="
+# (i) conductor + standard + code-plan, NO opt-out → HARD DENY (CLI: exit 2, stderr ⛔)
+err=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_SELF_SLUG=cyc "$SDR" --skill code-plan --depth 1 --intensity standard 2>&1 >/dev/null); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s' "$err" | grep -q 'deny' && printf '%s' "$err" | grep -q 'dispatch-headless'; then
+  ok "SDR hard-denies conductor+standard+code-plan without opt-out (exit 2)"
+else bad "SDR should deny conductor+standard+code-plan (rc=$rc) [$err]"; fi
+# (i-opt) same but STAGE_DISPATCH_INLINE_OK=1 → soft reminder (additionalContext, exit 0)
+out=$(CLAUDE_CODE_CHILD_SESSION=1 STAGE_DISPATCH_INLINE_OK=1 AGENT_DISPATCH_SELF_SLUG=cyc "$SDR" --skill code-plan --depth 1 --intensity standard 2>/dev/null); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '"additionalContext"' && printf '%s' "$out" | grep -q 'stage-dispatch'; then
+  ok "SDR downgrades to reminder under STAGE_DISPATCH_INLINE_OK=1 opt-out"
+else bad "SDR should emit reminder (not deny) under opt-out [$out]"; fi
+# (i-unknown) conductor + code-plan but intensity empty (old wrapper) → reminder, NEVER deny
+out=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_SELF_SLUG=cyc "$SDR" --skill code-plan --depth 1 --intensity "" 2>/dev/null); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '"additionalContext"'; then
+  ok "SDR keeps soft reminder (no deny) when intensity is unknown (backward compat)"
+else bad "SDR should reminder (not deny) for unknown intensity [$out] rc=$rc"; fi
+# (ii) direct/quick → no-op (legit inline)
+out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill code-plan --depth 1 --intensity quick 2>&1); rc=$?
+[ "$rc" -eq 0 ] && [ -z "$out" ] && ok "SDR no-ops for intensity=quick" || bad "SDR should no-op for quick [$out] rc=$rc"
 # (iii) depth-2 stage session → no-op
-out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill code-plan --depth 2 --intensity standard 2>/dev/null)
-[ -z "$out" ] && ok "SDR no-ops for depth-2 stage session" || bad "SDR should no-op for depth-2 [$out]"
+out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill code-plan --depth 2 --intensity standard 2>&1); rc=$?
+[ "$rc" -eq 0 ] && [ -z "$out" ] && ok "SDR no-ops for depth-2 stage session" || bad "SDR should no-op for depth-2 [$out] rc=$rc"
 # (iv) non-code skill → no-op
-out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill autopilot-draft --depth 1 --intensity standard 2>/dev/null)
-[ -z "$out" ] && ok "SDR no-ops for non-code skill" || bad "SDR should no-op for non-code skill [$out]"
+out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill autopilot-draft --depth 1 --intensity standard 2>&1); rc=$?
+[ "$rc" -eq 0 ] && [ -z "$out" ] && ok "SDR no-ops for non-code skill" || bad "SDR should no-op for non-code skill [$out] rc=$rc"
 # (v) main (no child env) → no-op
-out=$(env -u CLAUDE_CODE_CHILD_SESSION "$SDR" --skill code-plan --depth 1 --intensity standard 2>/dev/null)
-[ -z "$out" ] && ok "SDR no-ops for main (no child env)" || bad "SDR should no-op for main [$out]"
+out=$(env -u CLAUDE_CODE_CHILD_SESSION "$SDR" --skill code-plan --depth 1 --intensity standard 2>&1); rc=$?
+[ "$rc" -eq 0 ] && [ -z "$out" ] && ok "SDR no-ops for main (no child env)" || bad "SDR should no-op for main [$out] rc=$rc"
 
 echo "== SD-14b conductor Stop gate (UNREGISTERED / CLI unit) =="
 sdtmp="$(mktemp -d)"
