@@ -14,7 +14,12 @@
 #     · unknown         — jobs.log 부재/해석 불가 → 조회 실패로 취급(막지 말고 orchestrator 판단).
 #
 #   사용: usage-check.sh [--harness claude|codex|all] [--jobs <path>] [--window-min <N>]
-#   출력: harness 당 한 줄 `<harness> <state>` (파싱 가능). exit 0 항상(informational).
+#   출력: harness 당 한 줄 `<harness> <state>` (파싱 가능) + 마지막 한 줄 `bias <harness>`.
+#   exit 0 항상(informational).
+#
+#   한도 비대칭 기본값 (SD-OPEN-3, 사용자 제공 2026-07-10): 현행 가정 = Claude Code 한도 > Codex
+#   → 분산 기본 방향(bias) = claude 주력, codex 는 교차 리뷰·failover 고가치 자리 우선.
+#   **가변 전제 — 하드코드 금지**: `HARNESS_CAPACITY_BIAS` env 로 교체(예: codex), 미설정 시 claude.
 set -u
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -73,3 +78,6 @@ for h in $HARNESSES; do
   [ -f "$JOBS" ] || state="unknown"
   printf '%s %s\n' "$h" "$state"
 done
+
+# 한도 비대칭 기본값 — 이름 있는 설정값(SD-OPEN-3): env 로 교체 가능, 하드코드 금지.
+printf 'bias %s\n' "${HARNESS_CAPACITY_BIAS:-claude}"

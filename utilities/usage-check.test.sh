@@ -17,21 +17,21 @@ old_iso=$(date -u -d '10 hours ago' +%Y-%m-%dT%H:%M:%SZ)
 
 # Case: fresh claude dead-session-limit marker → limited(3pm)
 printf '%s\tdone\tr\tw\ts1\tcapability=code-plan,depth=2,harness=claude,parent=cx,note=dead-session-limit,reset=3pm\n' "$now_iso" > "$jobs"
-out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1)
+out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1 | grep -v "^bias ")
 [ "$out" = "claude limited(3pm)" ] && ok "fresh dead-limit → limited(reset)" || bad "expected 'claude limited(3pm)', got [$out]"
 
 # Case: no marker → ok
 printf '%s\topen\tr\tw\ts2\tcapability=code-plan,depth=2,harness=claude,parent=cx\n' "$now_iso" > "$jobs"
-out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1)
+out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1 | grep -v "^bias ")
 [ "$out" = "claude ok" ] && ok "no marker → ok" || bad "expected 'claude ok', got [$out]"
 
 # Case: jobs.log missing → unknown
-out=$(AGENT_HOME="$AH" bash "$UC" --harness claude --jobs "$tmp/none.log" 2>&1)
+out=$(AGENT_HOME="$AH" bash "$UC" --harness claude --jobs "$tmp/none.log" 2>&1 | grep -v "^bias ")
 [ "$out" = "claude unknown" ] && ok "missing jobs.log → unknown" || bad "expected 'claude unknown', got [$out]"
 
 # Case: stale marker (10h ago, window 300m) → expired → ok
 printf '%s\tdone\tr\tw\ts3\tcapability=code-plan,depth=2,harness=claude,note=dead-session-limit,reset=1pm\n' "$old_iso" > "$jobs"
-out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1)
+out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1 | grep -v "^bias ")
 [ "$out" = "claude ok" ] && ok "stale marker beyond window → ok(expired)" || bad "expected 'claude ok', got [$out]"
 
 # Case: harness scope — codex marker must not leak into claude
@@ -39,6 +39,14 @@ printf '%s\tdone\tr\tw\ts4\tcapability=code-plan,depth=2,harness=codex,owner_har
 out=$(AGENT_HOME="$AH" bash "$UC" --harness all 2>&1)
 echo "$out" | grep -q '^claude ok$' && echo "$out" | grep -q '^codex limited(noon)$' \
   && ok "harness scope: claude ok / codex limited" || bad "harness scope wrong: [$out]"
+
+# Case: bias default line present and defaults to claude
+out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1)
+echo "$out" | grep -q '^bias claude$' && ok "bias default → claude" || bad "expected 'bias claude' line, got [$out]"
+
+# Case: bias overridable via HARNESS_CAPACITY_BIAS (가변 전제 — 하드코드 금지)
+out=$(AGENT_HOME="$AH" HARNESS_CAPACITY_BIAS=codex bash "$UC" --harness claude 2>&1)
+echo "$out" | grep -q '^bias codex$' && ok "bias env override → codex" || bad "expected 'bias codex' line, got [$out]"
 
 echo "— usage-check conformance: $([ $fails -eq 0 ] && echo PASS || echo "FAIL ($fails)")"
 exit $fails
