@@ -73,25 +73,29 @@ for name in CLAUDE.md statusline.sh; do project_file "$name"; done
 
 # --- 2. Merge harness hooks + statusLine + env into the runtime settings.json ---
 # Preserve every existing runtime key (permissions, plugins, tui, ...). Inject a
-# reliable HOME/CLAUDE_HOME/AGENT_HOME so `$HOME/.claude/...` hook/statusLine
-# commands resolve regardless of the Windows shell's $HOME quirk.
+# reliable HOME so `$HOME/.claude/...` hook/statusLine commands resolve regardless
+# of the Windows shell's $HOME quirk. Do NOT set AGENT_HOME/CLAUDE_HOME here: the
+# memory store lives at ~/agent_setting/memory, and mem.py resolves its agent-home
+# as AGENT_HOME -> CLAUDE_HOME -> ~/agent_setting -> ~/.claude; pinning either to
+# ~/.claude would send mem to the wrong (empty) store. HOME alone fixes the shell
+# path resolution and leaves agent-home auto-detection intact (matches Linux).
 [ -f "$RUN_SETTINGS" ] && cp -n "$RUN_SETTINGS" "$RUN_SETTINGS.pre-harness.bak" 2>/dev/null || true
-"$PYBIN" - "$CANON_SETTINGS" "$RUN_SETTINGS" "$CLAUDE_DIR" "$HOME_DIR" <<'PY'
+"$PYBIN" - "$CANON_SETTINGS" "$RUN_SETTINGS" "$HOME_DIR" <<'PY'
 import json, os, sys
-canon_p, run_p, cdir, home = sys.argv[1:5]
+canon_p, run_p, home = sys.argv[1:4]
 canon = json.load(open(canon_p, encoding='utf-8'))
 run = json.load(open(run_p, encoding='utf-8')) if os.path.exists(run_p) else {}
 run['hooks'] = canon['hooks']
 run['statusLine'] = canon['statusLine']
 env = dict(canon.get('env', {}))
 env.update(run.get('env', {}))          # existing runtime env wins over canonical
+env.pop('AGENT_HOME', None)             # self-heal: an earlier installer set these and
+env.pop('CLAUDE_HOME', None)            # they mis-point mem.py's store home (see comment above)
 env.setdefault('MEM_DISTILL_ENABLE', '1')
 env['HOME'] = home                        # real %USERPROFILE% so $HOME/.claude resolves
-env['CLAUDE_HOME'] = cdir
-env['AGENT_HOME'] = cdir
 run['env'] = env
 json.dump(run, open(run_p, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-print('[install-windows] settings.json: wired %d hook events + statusLine + env(HOME/CLAUDE_HOME/AGENT_HOME)' % len(run['hooks']))
+print('[install-windows] settings.json: wired %d hook events + statusLine + env(HOME)' % len(run['hooks']))
 PY
 
 # --- 3. Restore the local memory DB from the git-tracked dump if it is missing ---

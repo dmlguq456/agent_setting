@@ -150,9 +150,13 @@ bash ~/.claude/adapters/claude/bin/install-windows.sh
    commands sees `$HOME` as either empty or the MSYS `/home/<user>` — never the
    real `%USERPROFILE%` where `.claude` actually lives. Every
    `bash "$HOME/.claude/hooks/<x>.sh"` command therefore fails to resolve and the
-   hook/statusline no-ops with no obvious cause. The installer injects
-   `HOME` / `CLAUDE_HOME` / `AGENT_HOME` into the runtime `settings.json` `env`
-   block (which Claude Code applies to command execution) so those paths resolve.
+   hook/statusline no-ops with no obvious cause. The installer injects `HOME`
+   (the real `%USERPROFILE%`) into the runtime `settings.json` `env` block (which
+   Claude Code applies to command execution) so those paths resolve. It does NOT
+   pin `AGENT_HOME`/`CLAUDE_HOME` — mem.py resolves its store home as
+   `AGENT_HOME → CLAUDE_HOME → ~/agent_setting → ~/.claude`, so pinning either to
+   `~/.claude` would point the memory store at the wrong tree; `HOME` alone fixes
+   path resolution and leaves that auto-detection intact.
 
 2. **`core.symlinks=false`.** A Windows checkout writes repo symlinks out as
    small pointer-TEXT files (content = the link target path), not real files. So
