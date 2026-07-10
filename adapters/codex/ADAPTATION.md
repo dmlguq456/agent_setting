@@ -526,6 +526,23 @@ the portable jobs registry from `open` to `done`; it never performs merge or
 worktree cleanup. Do not project material/design helpers such as `extract_web_figures.py` until a Codex
 capability uses them directly.
 
+### SD-15 limit-death detection (OPERATIONS §5.10 ⑨) — parity: realized
+
+`adapters/codex/bin/dispatch-headless.py` ports the Claude wrapper's SD-15
+early-limit-death detection homomorphically: `--early-exit-watch <secs>` watches a
+just-launched `codex exec` child; if it exits within the window and its log tail matches a
+limit/auth `DEATH_PATTERN`, the wrapper closes its own `jobs.log` row to
+`done,note=dead-<reason>[,reset=<x>]`, writes `.dispatch/usage-reset.codex` (SD-16
+usage-check cache), and surfaces `early_death=`/`row_closed=` on stdout. No retry — detection,
+closure, and surfacing only; re-dispatch/harness failover is the orchestrator's semantic
+zone (⑧). `adapters/codex/bin/dispatch-liveness.py` adds a `LIMIT_RE` log-tail scan (axis 6,
+SD-15b) that judges an open row DEAD when its dispatch log shows a limit/auth pattern,
+independent of transcript mtime. **Parity note vs OpenCode**: codex `exec` exits non-zero on
+retry exhaustion (openai/codex#9148·#12677), so the launch early-exit-watch axis is realized;
+runtime-currentness patterns (`exceeded retry limit`, `usage_limit_reached`, `429`) are
+best-effort per 2026-07 issue evidence, conservative and kept in sync with the shared list.
+Conformance: `adapters/codex/bin/dispatch-headless.sd15.test.sh`.
+
 ## Distillation Boundary
 
 Claude's adapter runs a detached `claude -p` worker with tool use denied by

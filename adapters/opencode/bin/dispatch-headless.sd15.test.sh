@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# dispatch-headless.sd15.test.sh — SD-15 (OPERATIONS §5.10 ⑨) limit-사망 즉시 감지 회귀 (opencode).
+#   Homomorphic with the claude/codex SD-15 tests. --start 가 preflight projection 게이트를
+#   거치므로 이식된 SD-15 헬퍼를 import 로 직접 구동해 검증한다:
+#   (1) scan_death 패턴/reset (2) clean-exit limit-death → row done,note=dead-<reason> 마감 + 캐시
+#   (3) clean 조기 exit(비-limit)는 row open 유지 (4) ADAPTATION: hang-on-limit(#8203)은 watch 를
+#   벗어나 row open 유지(→ liveness 담당) (5) liveness log_shows_limit 이 그 hang 로그를 DEAD 로 잡음.
+set -uo pipefail
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+WRAP="$SCRIPT_DIR/dispatch-headless.py"
+LIVE="$SCRIPT_DIR/dispatch-liveness.py"
+fails=0
+ok()  { printf 'ok   - %s\n' "$1"; }
+bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+
+# --- Unit: scan_death ---
+u=$(python3 - "$WRAP" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("dh", sys.argv[1])
+dh = importlib.util.module_from_spec(spec); spec.loader.exec_module(dh)
+cases = {
+  "You've hit your session limit · resets 3pm": ("session-limit", "3pm"),
+  "Provider Rate Limit exceeded [retrying in 15s attempt #5]": ("usage-limit", ""),
+  "API rate limited (429)": ("usage-limit", ""),
+  "not logged in": ("auth", ""),
+  "all good, work complete": None,
+}
+bad = 0
+for text, want in cases.items():
+    got = dh.scan_death(text)
+    if got != want:
+        print(f"MISMATCH {text!r}: got {got} want {want}"); bad += 1
+print("SCAN_OK" if bad == 0 else "SCAN_FAIL")
+PY
+)
+echo "$u" | grep -q SCAN_OK && ok "scan_death patterns (opencode provider-rate-limit/429) + reset" || bad "scan_death: $u"
+
+command -v git >/dev/null || { echo "(git 없음 — skip launch cases)"; exit $fails; }
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+AH="$tmp/agent_setting"; mkdir -p "$AH/.dispatch/logs"
+
+drive=$(python3 - "$WRAP" "$AH" <<'PY'
+import importlib.util, subprocess, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("dh", sys.argv[1])
+dh = importlib.util.module_from_spec(spec); spec.loader.exec_module(dh)
+AH = Path(sys.argv[2])
+jobs = AH / ".dispatch" / "jobs.log"
+logs = AH / ".dispatch" / "logs"
+
+def row(slug, wt):
+    pipe = "capability=code-plan,mode=dev,qa=standard,intensity=standard,depth=2,harness=opencode,parent=oc,worker_role=code-plan,owner=autopilot-code"
+    with jobs.open("a", encoding="utf-8") as f:
+        f.write(f"2026-07-10T00:00:00Z\topen\t/repo\t{wt}\t{slug}\t{pipe}\n")
+
+def launch(slug, body, watch):
+    wt = f"/wt/{slug}"
+    row(slug, wt)
+    log_path = logs / f"{slug}.opencode.jsonl"
+    proc = subprocess.Popen(["sh", "-c", f"( {body} ) >> {log_path} 2>&1"], start_new_session=True)
+    death = dh.watch_early_death(proc, log_path, watch)
+    if death:
+        reason, reset = death
+        dh.close_job_row(jobs, slug, wt, reason, reset)
+        dh.write_reset_cache(AH, "opencode", reason, reset)
+        return f"early_death={reason}:{reset}"
+    return "early_death=-"
+
+print(launch("limit1", "echo \"You've hit your session limit · resets 3pm\"; exit 1", 6))
+print(launch("clean1", "echo ok done; exit 0", 4))
+# hang-on-limit (#8203): prints the limit line but does NOT exit within the watch window.
+print("hang1=" + launch("hang1", "echo 'API rate limited (429)'; sleep 5", 1))
+PY
+)
+
+echo "$drive" | grep -q 'early_death=session-limit:3pm' \
+  && grep -q $'\tdone\t.*note=dead-session-limit,reset=3pm' "$AH/.dispatch/jobs.log" \
+  && ok "clean-exit limit-death → row done,note=dead-session-limit,reset=3pm" \
+  || bad "limit-death row not closed. drive=[$drive] jobs=[$(cat "$AH/.dispatch/jobs.log")]"
+[ -f "$AH/.dispatch/usage-reset.opencode" ] && ok "reset cache written" || bad "no reset cache"
+
+echo "$drive" | grep -q 'early_death=-' \
+  && awk -F'\t' '$5=="clean1"{print $2}' "$AH/.dispatch/jobs.log" | grep -qx open \
+  && ok "clean fast exit → row stays open" \
+  || bad "clean exit wrongly closed. drive=[$drive]"
+
+# ADAPTATION disclosure: hang-on-limit escapes the launch watch → row stays open.
+echo "$drive" | grep -q 'hang1=early_death=-' \
+  && awk -F'\t' '$5=="hang1"{print $2}' "$AH/.dispatch/jobs.log" | grep -qx open \
+  && ok "hang-on-limit (#8203) escapes launch watch → row open (liveness owns it)" \
+  || bad "hang case unexpected. drive=[$drive]"
+
+# Axis 6 (SD-15b): liveness log_shows_limit catches that same hung log as DEAD.
+live=$(python3 - "$LIVE" "$AH" <<'PY'
+import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("lv", sys.argv[1])
+lv = importlib.util.module_from_spec(spec); spec.loader.exec_module(lv)
+AH = Path(sys.argv[2])
+hit = lv.log_shows_limit(AH, "hang1")
+miss = lv.log_shows_limit(AH, "clean1")
+print("LIVE_OK" if (hit is not None and miss is None) else f"LIVE_FAIL hit={hit} miss={miss}")
+PY
+)
+echo "$live" | grep -q LIVE_OK && ok "liveness log_shows_limit: hung limit log DEAD, clean log alive" || bad "liveness: $live"
+
+echo "— opencode dispatch-headless SD-15 conformance: $([ $fails -eq 0 ] && echo PASS || echo "FAIL ($fails)")"
+exit $fails
