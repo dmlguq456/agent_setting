@@ -14,11 +14,31 @@ AH="$tmp/agent_setting"; mkdir -p "$AH/.dispatch" "$AH/core"; : > "$AH/core/CORE
 jobs="$AH/.dispatch/jobs.log"
 now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 old_iso=$(date -u -d '10 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+# SD-16e: reset 값을 실행 시각에 비의존이 되도록 now 상대로 동적 산출한다.
+fut_clock=$(date -d '+2 hours' +%H:%M)          # 아직 안 온 리셋 → limited 유지
+mk30_iso=$(date -u -d '30 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+past_clock=$(date -d '10 minutes ago' +%H:%M)   # 마커(30m 전) 이후·now 이전 → 경과 → ok
+mk90_iso=$(date -u -d '90 minutes ago' +%Y-%m-%dT%H:%M:%SZ)  # unknown-reset 60m 창 밖·300m 창 안
 
-# Case: fresh claude dead-session-limit marker → limited(3pm)
-printf '%s\tdone\tr\tw\ts1\tcapability=code-plan,depth=2,harness=claude,parent=cx,note=dead-session-limit,reset=3pm\n' "$now_iso" > "$jobs"
+# Case: fresh claude dead-session-limit marker, reset not yet passed → limited(reset)
+printf '%s\tdone\tr\tw\ts1\tcapability=code-plan,depth=2,harness=claude,parent=cx,note=dead-session-limit,reset=%s\n' "$now_iso" "$fut_clock" > "$jobs"
 out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1 | grep -v "^bias ")
-[ "$out" = "claude limited(3pm)" ] && ok "fresh dead-limit → limited(reset)" || bad "expected 'claude limited(3pm)', got [$out]"
+[ "$out" = "claude limited($fut_clock)" ] && ok "fresh dead-limit, reset未경과 → limited(reset)" || bad "expected 'claude limited($fut_clock)', got [$out]"
+
+# Case (SD-16e): marker within window but reset= already passed → ok(expired)
+printf '%s\tdone\tr\tw\ts1b\tcapability=code-plan,depth=2,harness=claude,note=dead-session-limit,reset=%s\n' "$mk30_iso" "$past_clock" > "$jobs"
+out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1 | grep -v "^bias ")
+[ "$out" = "claude ok" ] && ok "reset= passed within window → ok(expired)" || bad "expected 'claude ok' (expired reset), got [$out]"
+
+# Case (SD-16e): dead marker with NO reset=, within UNKNOWN_WINDOW_MIN → limited(unknown-reset)
+printf '%s\tdone\tr\tw\ts1c\tcapability=code-plan,depth=2,harness=claude,note=dead-session-limit\n' "$now_iso" > "$jobs"
+out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1 | grep -v "^bias ")
+[ "$out" = "claude limited(unknown-reset)" ] && ok "no reset=, recent → limited(unknown-reset)" || bad "expected 'claude limited(unknown-reset)', got [$out]"
+
+# Case (SD-16e): dead marker with NO reset=, past UNKNOWN window but within WINDOW → ok (downgrade)
+printf '%s\tdone\tr\tw\ts1d\tcapability=code-plan,depth=2,harness=claude,note=dead-session-limit\n' "$mk90_iso" > "$jobs"
+out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1 | grep -v "^bias ")
+[ "$out" = "claude ok" ] && ok "no reset=, beyond unknown-window → ok(downgrade)" || bad "expected 'claude ok' (unknown-reset downgrade), got [$out]"
 
 # Case: no marker → ok
 printf '%s\topen\tr\tw\ts2\tcapability=code-plan,depth=2,harness=claude,parent=cx\n' "$now_iso" > "$jobs"

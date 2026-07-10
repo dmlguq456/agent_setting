@@ -27,7 +27,15 @@ LIMIT_RE = re.compile(
 
 
 def log_shows_limit(agent_home: Path, slug: str) -> Path | None:
-    """Return the dispatch log path if its tail matches a limit/auth death, else None."""
+    """Return the dispatch log path if a terse trailing line shows a limit/auth death.
+
+    SD-15b (OPERATIONS §8.6.1): anchor the match. A real CLI limit death prints a terse
+    standalone error line (e.g. "You've hit your session limit · resets 3pm") at the log
+    tail and exits; a completion report that merely *discusses* limits would false-positive
+    a whole-tail scan. So we only look at the last few non-empty lines and only accept a
+    match on a short/standalone line. The fresh-signal completion check is applied by main()
+    (a fresh SQLite session or heartbeat never reaches this function).
+    """
     if not slug:
         return None
     log_dir = agent_home / ".dispatch" / "logs"
@@ -43,8 +51,10 @@ def log_shows_limit(agent_home: Path, slug: str) -> Path | None:
                 tail = fh.read().decode("utf-8", errors="replace")
         except OSError:
             continue
-        if LIMIT_RE.search(tail):
-            return lf
+        nonempty = [ln for ln in tail.splitlines() if ln.strip()]
+        for ln in nonempty[-3:]:
+            if len(ln) <= 200 and LIMIT_RE.search(ln):
+                return lf
     return None
 
 
@@ -170,13 +180,6 @@ def main(argv: list[str]) -> int:
                 continue
             open_n += 1
             label = slug or "?"
-            # SD-15: scan the dispatch log for a limit/auth death first — definitive and
-            # independent of SQLite mtime; this is what catches hang-on-limit (#8203).
-            log_hit = log_shows_limit(agent_home, slug)
-            if log_hit is not None:
-                print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
-                suspect += 1
-                continue
             match = locate_latest_for_worktree(con, worktree)
             if match is None:
                 # No SQLite session for this worktree. Fall back to the heartbeat
@@ -186,10 +189,17 @@ def main(argv: list[str]) -> int:
                 hb_age = heartbeat_age_min(agent_home, slug, now)
                 plugin_marker = plugin_loaded_for_slug(agent_home, slug)
                 if hb_age is not None and hb_age <= stale_min:
+                    # SD-15b: fresh heartbeat is a liveness signal — do NOT consult the log
+                    # (a report discussing limits must not force DEAD).
                     print(f"ALIVE    {label} (heartbeat {hb_age:.1f}m ago; plugin_loaded={plugin_marker})")
                     alive += 1
                     continue
-                if not plugin_marker:
+                # No fresh signal — SD-15b: consult the anchored log scan to name a limit/auth
+                # death (also catches hang-on-limit #8203); else fall through to the DEAD reasons.
+                log_hit = log_shows_limit(agent_home, slug)
+                if log_hit is not None:
+                    print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
+                elif not plugin_marker:
                     print(f"DEAD     {label} - OpenCode session not found for {worktree} and no plugin-load marker [open: {ts}]")
                 else:
                     print(f"DEAD     {label} - OpenCode session not found for {worktree} [open: {ts}]")
@@ -218,7 +228,13 @@ def main(argv: list[str]) -> int:
                     print(f"ALIVE    {label} (heartbeat {hb_age:.1f}m ago overrides stale SQLite {age}m: {detail})")
                     alive += 1
                 else:
-                    print(f"SUSPECT  {label} - OpenCode session {age}m stale: {detail} [open: {ts}]")
+                    # Stale with no fresh heartbeat — SD-15b: consult the anchored log scan for a
+                    # definitive limit/auth reason (hang-on-limit #8203); else SUSPECT (mtime-stale).
+                    log_hit = log_shows_limit(agent_home, slug)
+                    if log_hit is not None:
+                        print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
+                    else:
+                        print(f"SUSPECT  {label} - OpenCode session {age}m stale: {detail} [open: {ts}]")
                     suspect += 1
 
     print(f"open {open_n} ; alive {alive} ; suspect/dead {suspect}")

@@ -27,7 +27,15 @@ LIMIT_RE = re.compile(
 
 
 def log_shows_limit(agent_home: Path, slug: str) -> Path | None:
-    """Return the dispatch log path if its tail matches a limit/auth death, else None."""
+    """Return the dispatch log path if a terse trailing line shows a limit/auth death.
+
+    SD-15b (OPERATIONS §8.6.1): anchor the match. A real CLI limit death prints a terse
+    standalone error line (e.g. "You've hit your session limit · resets 3pm") at the log
+    tail and exits; a completion report that merely *discusses* limits would false-positive
+    a whole-tail scan. So we only look at the last few non-empty lines and only accept a
+    match on a short/standalone line. The fresh-transcript completion signal is applied by
+    main() (a fresh transcript never reaches this function).
+    """
     if not slug:
         return None
     log_dir = agent_home / ".dispatch" / "logs"
@@ -43,8 +51,10 @@ def log_shows_limit(agent_home: Path, slug: str) -> Path | None:
                 tail = fh.read().decode("utf-8", errors="replace")
         except OSError:
             continue
-        if LIMIT_RE.search(tail):
-            return lf
+        nonempty = [ln for ln in tail.splitlines() if ln.strip()]
+        for ln in nonempty[-3:]:
+            if len(ln) <= 200 and LIMIT_RE.search(ln):
+                return lf
     return None
 
 
@@ -152,27 +162,34 @@ def main(argv: list[str]) -> int:
                 continue
             open_n += 1
             label = slug or "?"
-            # SD-15: scan the dispatch log for a limit/auth death first — a limit death is
-            # definitive and independent of transcript mtime (catches the hang case too).
-            log_hit = log_shows_limit(agent_home, slug)
-            if log_hit is not None:
-                print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
-                suspect += 1
-                continue
             # Resolve per-job: a profile= job lives under its isolated profile home
             # (.dispatch/homes/<slug>.<profile>/sessions), else the default store.
             sessions = sessions_dir_for(pipe, slug, agent_home, default_sessions)
             transcript = locate_latest_for_worktree(sessions, worktree)
             if transcript is None:
-                print(f"DEAD     {label} - Codex session transcript not found for {worktree} [open: {ts}]")
+                # No transcript — a launch that died before writing, or never came up. SD-15b:
+                # consult the anchored log scan to name a limit/auth death; else generic DEAD.
+                log_hit = log_shows_limit(agent_home, slug)
+                if log_hit is not None:
+                    print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
+                else:
+                    print(f"DEAD     {label} - Codex session transcript not found for {worktree} [open: {ts}]")
                 suspect += 1
                 continue
             age = int((now - transcript.stat().st_mtime) // 60)
             if age <= stale_min:
+                # SD-15b: a fresh transcript is a completion/liveness signal — do NOT let a log
+                # that merely discusses limits force DEAD (the anchored scan isn't even consulted).
                 print(f"ALIVE    {label} (Codex transcript {age}m ago: {transcript})")
                 alive += 1
             else:
-                print(f"SUSPECT  {label} - Codex transcript {age}m stale [open: {ts}]")
+                # Stale — hang, or a post-limit death. SD-15b: consult the anchored log scan for a
+                # definitive limit/auth reason; else SUSPECT (mtime-stale).
+                log_hit = log_shows_limit(agent_home, slug)
+                if log_hit is not None:
+                    print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
+                else:
+                    print(f"SUSPECT  {label} - Codex transcript {age}m stale [open: {ts}]")
                 suspect += 1
 
     print(f"open {open_n} ; alive {alive} ; suspect/dead {suspect}")
