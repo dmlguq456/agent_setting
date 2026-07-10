@@ -18,14 +18,14 @@ Safety commit: ae8c1657e66fb6b282b4923ef75e46c411aa11c2
 - [x] 2.8 render.py SD-F3 자기 model/effort 1급 + parent-inherit fallback `~` 표기 (`_dispatch_row`/`_2line`)
 
 ## Phase 3 — F-9~F-13 가독성 (render.py 표시층)
-- [ ] 3.1 F-9(c) 드롭 우선순위 `qa→intensity→role` (mode 유지)
-- [ ] 3.2 F-9(d) legend `~` 유도값 1회 설명
-- [ ] 3.3 F-10 alert humanize — 꼬리 strip + 종류별 집계 + 우선순위 절단(dead>stale>ctx)
-- [ ] 3.4 F-11 `_stage_segs` — `open`→`queued`, seq-없는 `running` dim track (status 어휘 불변)
-- [ ] 3.5 F-12(b) footer `wlbl` 3-모드(`wide/narrow/stack`)
-- [ ] 3.6 F-12(a) `+N malformed` dim 확인만
-- [ ] 3.7 F-12(c) legend glyph-appearance 추적 (`_build_lines` 로컬, `_OFFSET` 불변식 준수) [decision: significant]
-- [ ] 3.8 F-13 dead/stale row telemetry 생략 + `last seen <age>` (live row 만 explicit —)
+- [x] 3.1 F-9(c) 드롭 우선순위 `qa→intensity→role` (mode 유지)
+- [x] 3.2 F-9(d) legend `~` 유도값 1회 설명
+- [x] 3.3 F-10 alert humanize — 꼬리 strip + 종류별 집계 + 우선순위 절단(dead>stale>ctx)
+- [x] 3.4 F-11 `_stage_segs` — `open`→`queued`, seq-없는 `running` dim track (status 어휘 불변)
+- [x] 3.5 F-12(b) footer `wlbl` 3-모드(`wide/narrow/stack`)
+- [x] 3.6 F-12(a) `+N malformed` dim 확인만 (변경 없음, 이미 충족)
+- [x] 3.7 F-12(c) legend glyph-appearance 추적 (`_build_lines` 로컬 `_seen_glyphs` set, `_OFFSET` 불변식 준수 — 모듈 전역 미사용) [decision: significant — 최소안: 데이터 기반 predicate 로 구현, row-by-row glyph-string 수집 대신 조건 재사용]
+- [x] 3.8 F-13 dead/stale row telemetry 생략 + `last seen <age>` (live row 만 explicit —; `_session_row`/`_dispatch_row` 1-line 레이아웃만 — 2line/stack 변형은 plan Current State Analysis 인용 범위 밖이라 미변경)
 
 ## Phase 4 — 검증
 - [ ] Unit: `cd tools && python3 -m unittest fleet.tests.test_dispatch -v` 전부 green
