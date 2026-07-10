@@ -2934,7 +2934,15 @@ check_claude_shared_layer_census() {
   for _layer in hooks tools utilities; do
     _root="adapters/claude/$_layer"
     [ -d "$_root" ] || continue
-    for _f in $(find "$_root" -type f ! -path '*/__pycache__/*' -print 2>/dev/null); do
+    # Census scope = tracked + untracked-non-ignored files. Gitignored runtime
+    # artifacts (node_modules, installed deps) are not projections of canonical
+    # and must not enter the census; a bare find also walks node_modules and
+    # blows up guard runtime. Worktree checkouts lack these dirs, so the
+    # Phase 1b in-worktree verification could not observe either failure mode.
+    for _f in $(git ls-files --cached --others --exclude-standard -- "$_root" 2>/dev/null); do
+      [ -f "$_f" ] || continue
+      [ -L "$_f" ] && continue
+      case "$_f" in */__pycache__/*) continue ;; esac
       is_census_deferred "$_f" && continue
       _cls=$(exemption_class "$_f")
       if [ -z "$_cls" ]; then
