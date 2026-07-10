@@ -12,6 +12,7 @@ sessions/<pid>.json statusUpdatedAt.
 """
 import json
 import os
+import re
 
 
 def _home():
@@ -31,24 +32,69 @@ def _mtime(path):
         return None
 
 
-def _newest_transcript_mtime(home, cwd, sid):
+def _newest_transcript_path(home, cwd, sid):
+    """Transcript path for liveness/title extraction: prefer `<sid>.jsonl`, else the
+    newest .jsonl in the project dir. Shared by mtime and ai-title lookups so both use
+    the same resolved path (one os.listdir scan, not two)."""
     if not cwd:
         return None
     proj = os.path.join(home, "projects", _enc_cwd(cwd))
     if sid:
-        m = _mtime(os.path.join(proj, sid + ".jsonl"))
-        if m is not None:
-            return m
-    best = None
+        p = os.path.join(proj, sid + ".jsonl")
+        if _mtime(p) is not None:
+            return p
+    best, best_m = None, None
     try:
         for name in os.listdir(proj):
             if name.endswith(".jsonl"):
-                m = _mtime(os.path.join(proj, name))
-                if m is not None and (best is None or m > best):
-                    best = m
+                p = os.path.join(proj, name)
+                m = _mtime(p)
+                if m is not None and (best_m is None or m > best_m):
+                    best, best_m = p, m
     except OSError:
         pass
     return best
+
+
+def _newest_transcript_mtime(home, cwd, sid):
+    path = _newest_transcript_path(home, cwd, sid)
+    return _mtime(path) if path else None
+
+
+_TITLE_JUNK_RE = re.compile(r"^(new session\b|\d{4}-\d{2}-\d{2}[t ]\d{2}:\d{2})", re.IGNORECASE)
+
+
+def _tail_ai_title(path, chunk=8192):
+    """Last `ai-title` line's aiTitle value within the file's trailing `chunk` bytes.
+    A transcript can carry several ai-title lines appended over the session's life
+    (renamed/refined) — the last one wins. tolerant: malformed json lines are skipped,
+    a missing/empty/placeholder ("New session …", bare ISO timestamp) title → None so
+    the caller falls back to slug."""
+    try:
+        sz = os.path.getsize(path)
+        start = max(0, sz - chunk)
+        with open(path, "rb") as f:
+            f.seek(start)
+            data = f.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    lines = data.splitlines()
+    if start > 0 and lines:
+        lines = lines[1:]                           # drop the partial first line
+    title = None
+    for ln in lines:
+        if '"ai-title"' not in ln:
+            continue
+        try:
+            d = json.loads(ln)
+        except Exception:
+            continue
+        t = d.get("aiTitle")
+        if isinstance(t, str) and t.strip():
+            title = t.strip()
+    if title and _TITLE_JUNK_RE.match(title):
+        return None
+    return title
 
 
 def _apply_statusline(sess, d):
@@ -126,10 +172,15 @@ def enrich(sess):
         except Exception:
             pass
 
-    # 3) liveness mtime
-    m = _newest_transcript_mtime(home, sess.cwd, sid)
+    # 3) liveness mtime + ai-title (F-14) — resolve the transcript path once, use it for both
+    path = _newest_transcript_path(home, sess.cwd, sid)
+    m = _mtime(path) if path else None
     if m is None and isinstance(sj, dict):
         su = sj.get("statusUpdatedAt") or sj.get("updatedAt")
         if isinstance(su, (int, float)):
             m = su / 1000.0                        # ms → s
     sess.mtime = m
+    if path:
+        t = _tail_ai_title(path)
+        if t:
+            sess.title = t
