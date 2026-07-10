@@ -229,8 +229,9 @@ check_claude_adapter_concrete_surfaces() {
   links=$(find adapters/claude -type l -print 2>/dev/null || true)
   # gitignored 로컬 설치물(예: tools/design-mcp/node_modules 의 .bin symlink)은
   # projection 파리티 대상이 아니다 — clean 트리엔 없고 로컬에만 존재하는 노이즈.
-  # harness-layer-sync §3.1: hooks/tools/utilities 최상위의 collapsed 심링크(canonical 로 접힘)는
-  # 정당한 실행본이므로 허용한다. 그 외 어댑터 심링크(하위 디렉터리·타 표면)는 여전히 passthrough 위반.
+  # harness-layer-sync §3.1 (+Phase 1b): hooks/tools/utilities 의 collapsed 심링크(canonical 로 접힘)는
+  # _최상위든 하위 디렉토리든_ 정당한 실행본이므로 허용한다 — target 이 canonical 상대경로이고 실제 canonical
+  # 로 resolve 되는 경우에 한함. 그 외 어댑터 심링크(타 표면·잘못된 target)는 여전히 passthrough 위반.
   links=$(printf '%s\n' "$links" | while IFS= read -r l; do
     [ -n "$l" ] || continue
     git check-ignore -q "$l" 2>/dev/null && continue
@@ -239,16 +240,17 @@ check_claude_adapter_concrete_surfaces() {
     sub=${rel#*/}
     case "$layer" in
       hooks|tools|utilities)
-        case "$sub" in
-          */*) : ;;  # 하위 디렉터리 심링크는 collapse 대상 아님 → 위반으로 남긴다
-          *)
-            if [ "$(readlink "$l")" = "../../../$layer/$sub" ] \
-              && [ -n "$(readlink -f "$l" 2>/dev/null)" ] \
-              && [ "$(readlink -f "$l" 2>/dev/null)" = "$(readlink -f "$layer/$sub" 2>/dev/null)" ]; then
-              continue
-            fi
-            ;;
-        esac
+        # 심링크가 adapters/claude/<layer>/<sub> 위치. 루트까지 ../ 개수 = 2(adapters,claude)+1(layer)+sub 슬래시 수.
+        _slashes=$(printf '%s' "$sub" | tr -cd '/' | wc -c)
+        _up=$((3 + _slashes))
+        _prefix=""; _i=0
+        while [ "$_i" -lt "$_up" ]; do _prefix="../$_prefix"; _i=$((_i + 1)); done
+        _want="${_prefix}${layer}/${sub}"
+        if [ "$(readlink "$l")" = "$_want" ] \
+          && [ -n "$(readlink -f "$l" 2>/dev/null)" ] \
+          && [ "$(readlink -f "$l" 2>/dev/null)" = "$(readlink -f "$layer/$sub" 2>/dev/null)" ]; then
+          continue
+        fi
         ;;
     esac
     printf '%s\n' "$l"
@@ -318,6 +320,22 @@ check_link_target() {
 # canonical 과 정합인가"를 검증한다(§4, S-1 이 통과하던 구멍을 닫음).
 EXEMPTIONS_FILE=tools/adaptation-exemptions.tsv
 
+# CENSUS_DEFERRED: 공유층 하위 subtree 중 _다른 작업 세션이 collapse 를 소유_ 중이라 본 재귀 census 가
+# 아직 검사하지 않는 곳. 상시 예외가 아니다 — 해당 세션이 랜딩하면 이 파일들도 canonical 로 collapse 되거나
+# adaptation-exemptions.tsv 에 등재되어야 하며, 그때 여기서 항목을 지운다. 명시적으로 적어(silent omission
+# 금지, ADAPTATION.md §6) 재귀 census 가 in-flight 작업에 false-red 내지 않게 한다.
+#   현재: fleet/** (harness-layer-sync fleet collapse, 동시 세션 진행 중).
+CENSUS_DEFERRED="adapters/claude/tools/fleet"
+
+# $1(adapter 경로)이 CENSUS_DEFERRED subtree 에 속하면 0(참).
+is_census_deferred() {
+  for _d in $CENSUS_DEFERRED; do
+    [ "$1" = "$_d" ] && return 0
+    case "$1" in "$_d"/*) return 0;; esac
+  done
+  return 1
+}
+
 # 예외 클래스 조회: "wrapper" | "delta" | "" (미등재). $1 = adapter 경로.
 exemption_class() {
   [ -f "$EXEMPTIONS_FILE" ] || { printf ''; return; }
@@ -341,13 +359,20 @@ file_sha256() {
   fi
 }
 
-# 최상위 공유 파일 1건의 3-class 계약 assert. $1 = layer(hooks|tools|utilities), $2 = name.
+# 공유 파일 1건의 3-class 계약 assert. $1 = layer(hooks|tools|utilities), $2 = rel(최상위 name 또는
+# 하위 디렉토리 포함 rel, 예: memory/mem.py). collapse target 상대깊이는 rel 의 디렉토리 깊이에서 파생.
 assert_shared_adapter_class() {
   _layer=$1
   _name=$2
   _canonical="$_layer/$_name"
   _adapter="adapters/claude/$_layer/$_name"
-  _expected_target="../../../$_layer/$_name"
+  # 심링크는 adapters/claude/<layer>/<rel> 위치. 루트까지 ../ 개수 = 3(adapters,claude,layer) + rel 의 슬래시 수.
+  _slashes=$(printf '%s' "$_name" | tr -cd '/' | wc -c)
+  _up=$((3 + _slashes))
+  _prefix=""
+  _i=0
+  while [ "$_i" -lt "$_up" ]; do _prefix="../$_prefix"; _i=$((_i + 1)); done
+  _expected_target="${_prefix}${_layer}/${_name}"
   _class=$(exemption_class "$_adapter")
 
   if [ -L "$_adapter" ]; then
@@ -2845,22 +2870,37 @@ check_claude_tool_projection() {
     fail_msg "claude_setting/tools points to $target; expected ../adapters/claude/tools"
   fi
 
-  # harness-layer-sync §3.1: 최상위 tools/* 파일은 3-class 계약(collapse 기본)으로 검증한다.
-  # 하위 디렉터리(design-mcp/·memory/·material/ 등)는 Phase 1 범위 밖 — 기존 concrete 계약 유지.
+  # harness-layer-sync §3.1 (+Phase 1b): tools/* 파일은 _최상위든 하위 디렉토리든_ 3-class 계약(collapse
+  # 기본)으로 검증한다. Phase 1 은 하위 디렉토리를 concrete 강제해 census-gap(물리 복사본 생존)을 남겼으므로,
+  # nested 파일도 assert_shared_adapter_class 로 통일. 하위 디렉토리 _자체_ 는 심링크를 담는 실디렉토리로 유지.
+  # CENSUS_DEFERRED(fleet 등 동시 세션 소유)는 기존 concrete 계약 유지 — 그 세션이 랜딩하면 여기서 풀린다.
   for p in $(find tools -mindepth 1 ! -path '*/__pycache__' ! -path '*/__pycache__/*' -print); do
     rel=${p#tools/}
     adapter_p=adapters/claude/tools/$rel
+    if is_census_deferred "$adapter_p"; then
+      # 동시 세션 소유 subtree: 기존 concrete 계약만 확인 (collapse 강제하지 않음)
+      if [ -d "$p" ]; then
+        [ -d "$adapter_p" ] || fail_msg "$adapter_p is missing"
+      elif [ -f "$p" ]; then
+        [ -e "$adapter_p" ] || fail_msg "$adapter_p is missing"
+      fi
+      continue
+    fi
     case "$rel" in
       */*)
-        # 하위 디렉터리 항목: concrete 유지 (collapse 대상 아님)
-        if [ -L "$adapter_p" ]; then
-          fail_msg "$adapter_p must be a concrete adapter-owned tool projection"
-          continue
-        fi
+        # 하위 디렉토리 항목: dir 은 실디렉토리 유지, file 은 3-class 계약(collapse 기본)
         if [ -d "$p" ]; then
-          [ -d "$adapter_p" ] || fail_msg "$adapter_p is missing"
+          if [ -L "$adapter_p" ]; then
+            fail_msg "$adapter_p must be a concrete adapter-owned tool directory (holds collapsed file symlinks)"
+          else
+            [ -d "$adapter_p" ] || fail_msg "$adapter_p is missing"
+          fi
         elif [ -f "$p" ]; then
-          [ -f "$adapter_p" ] || fail_msg "$adapter_p is missing"
+          if [ ! -e "$adapter_p" ]; then
+            fail_msg "$adapter_p is missing"
+          else
+            assert_shared_adapter_class tools "$rel"
+          fi
         fi
         ;;
       *)
@@ -2880,6 +2920,28 @@ check_claude_tool_projection() {
         fi
         ;;
     esac
+  done
+}
+
+# harness-layer-sync HLS-5·7 (Phase 1b): 공유층 재귀 census — 구조적 census-gap 봉합.
+# Phase 1 의 census 가 adapters/claude/{hooks,tools,utilities} 의 _최상위만_ 훑어 하위 디렉토리의
+# 물리 복사본(예: tools/memory/*)이 생존했다. 이 assert 는 세 층을 _모든 깊이_ 로 스캔해, 예외 목록
+# (wrapper/delta)에 없는 비-symlink 실파일이 존재하면 red 낸다 — "물리 복사본 생존" 클래스를 사람
+# vigilance 가 아니라 기계가 잡는다(§0.5 결정론, ADAPTATION.md §6 "explicit exemption, never silent").
+# collapse 된 파일은 심링크라 -type f 에 안 잡히고, concrete 예외는 exemptions.tsv 로 승인, CENSUS_DEFERRED
+# (동시 세션 소유)만 유예. 그 외 concrete = collapse 누락.
+check_claude_shared_layer_census() {
+  for _layer in hooks tools utilities; do
+    _root="adapters/claude/$_layer"
+    [ -d "$_root" ] || continue
+    for _f in $(find "$_root" -type f ! -path '*/__pycache__/*' -print 2>/dev/null); do
+      is_census_deferred "$_f" && continue
+      _cls=$(exemption_class "$_f")
+      if [ -z "$_cls" ]; then
+        _rel=${_f#adapters/claude/}
+        fail_msg "$_f is a non-symlink real file under the shared $_layer/ layer but is not declared wrapper/delta in $EXEMPTIONS_FILE; collapse it to canonical $_rel (symlink) or declare an exemption (harness-layer-sync recursive census — HLS-5/7)"
+      fi
+    done
   done
 }
 
@@ -3582,6 +3644,7 @@ check_claude_drill_runner_projection
 check_claude_scaffold_projection
 check_claude_loop_projection
 check_claude_tool_projection
+check_claude_shared_layer_census
 check_removed_root_surfaces
 check_role_catalog
 check_claude_native_agent_projection
