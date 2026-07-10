@@ -24,13 +24,113 @@
 
 DRILL_CLAUDE_TOOLS="${DRILL_CLAUDE_TOOLS:-Bash,Read,Write,Edit,Glob,Grep,Skill,Agent,TodoWrite}"
 
+_loop_agent_home() {
+  if [ -n "${AGENT_HOME:-}" ]; then
+    printf '%s\n' "$AGENT_HOME"
+    return 0
+  fi
+  local src="${BASH_SOURCE[0]:-$0}" dir root cand
+  dir=$(CDPATH= cd -- "$(dirname -- "$src")" && pwd)
+  root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$root" ] && [ -f "$root/core/CORE.md" ]; then
+    printf '%s\n' "$root"
+    return 0
+  fi
+  cand="$HOME/agent_setting"
+  if [ -d "$cand" ]; then
+    printf '%s\n' "$cand"
+    return 0
+  fi
+  printf '%s\n' "${CLAUDE_HOME:-$HOME/.claude}"
+}
+
+_loop_jobs_path() {
+  if [ -n "${AGENT_DISPATCH_JOBS:-}" ]; then
+    printf '%s\n' "$AGENT_DISPATCH_JOBS"
+    return 0
+  fi
+  printf '%s/.dispatch/jobs.log\n' "$(_loop_agent_home)"
+}
+
+_loop_registry_value() {
+  local v="${1:-}"
+  v=${v//$'\t'/_}
+  v=${v//$'\n'/_}
+  v=${v//$'\r'/_}
+  v=${v//,/_}
+  printf '%s' "$v"
+}
+
+_loop_case_id() {
+  local pf=$1 dir
+  dir=$(CDPATH= cd -- "$(dirname -- "$pf")" && pwd)
+  _loop_registry_value "$(basename "$dir")"
+}
+
+_loop_registry_slug() {
+  local adapter=$1 case_id=$2 raw
+  raw="drill-$adapter-$case_id-$(date -u +%Y%m%d%H%M%S)-$$"
+  raw=${raw//[^A-Za-z0-9_.-]/-}
+  printf '%s\n' "$raw"
+}
+
+_loop_registry_append() {
+  local jobs=$1 line=$2 dir lock
+  dir=$(dirname -- "$jobs")
+  mkdir -p "$dir" 2>/dev/null || return 0
+  lock="$jobs.lock"
+  if command -v flock >/dev/null 2>&1; then
+    (
+      flock -x 9
+      printf '%s\n' "$line" >> "$jobs"
+    ) 9>>"$lock" 2>/dev/null || true
+  else
+    printf '%s\n' "$line" >> "$jobs" 2>/dev/null || true
+  fi
+}
+
+_loop_register_dispatch_job() {
+  [ "${DRILL_FLEET_REGISTRY:-1}" = "0" ] && return 0
+  local status=$1 adapter=$2 pf=$3 repo=$4 slug=$5
+  local jobs ts case_id git_root parent_sid mode worker_role pipe line
+  jobs=$(_loop_jobs_path)
+  ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  case_id=$(_loop_case_id "$pf")
+  git_root=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$repo")
+  parent_sid="${AGENT_DISPATCH_PARENT_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${OPENCODE_SESSION_ID:-}}}}}"
+  mode=$(_loop_registry_value "${DRILL_FLEET_MODE:-loop/drill}")
+  worker_role=$(_loop_registry_value "${DRILL_FLEET_WORKER_ROLE:-$case_id}")
+  pipe="capability=drill,mode=$mode,qa=quick,intensity=quick,depth=1,harness=$(_loop_registry_value "$adapter"),worker_role=$worker_role,owner=drill"
+  if [ -n "$parent_sid" ]; then
+    pipe="$pipe,parent_sid=$(_loop_registry_value "$parent_sid")"
+  fi
+  line=$(printf '%s\t%s\t%s\t%s\t%s\t%s' \
+    "$ts" "$status" "$git_root" "$repo" "$slug" "$pipe")
+  _loop_registry_append "$jobs" "$line"
+}
+
 run_case_on_adapter() {
-  case "$1" in
-    claude)   _loop_run_claude   "${@:2}" ;;
-    codex)    _loop_run_codex    "${@:2}" ;;
-    opencode) _loop_run_opencode "${@:2}" ;;
+  local adapter=$1
+  shift
+  case "$adapter" in
+    claude|codex|opencode) ;;
     *) echo "?|?|?|?"; return 64 ;;
   esac
+
+  local pf=$1 repo=$2 case_id slug metrics rc
+  case_id=$(_loop_case_id "$pf")
+  slug=$(_loop_registry_slug "$adapter" "$case_id")
+  _loop_register_dispatch_job open "$adapter" "$pf" "$repo" "$slug" || true
+
+  case "$adapter" in
+    claude)   metrics=$(_loop_run_claude   "$@"); rc=$? ;;
+    codex)    metrics=$(_loop_run_codex    "$@"); rc=$? ;;
+    opencode) metrics=$(_loop_run_opencode "$@"); rc=$? ;;
+  esac
+
+  _loop_register_dispatch_job done "$adapter" "$pf" "$repo" "$slug" || true
+  printf '%s\n' "${metrics:-?|?|?|?}"
+  return "$rc"
 }
 
 _loop_run_claude() {

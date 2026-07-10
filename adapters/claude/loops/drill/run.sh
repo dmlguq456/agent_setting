@@ -157,9 +157,14 @@ for c in "${cases[@]}"; do
 
   # FAIL 자동 진단 — 원인 추정 + 수정안 초안까지 (적용은 사용자 서명)
   if [[ "${verdicts[$c]}" == FAIL* ]]; then
+    diag_slug=$(_loop_registry_slug claude "diagnosis-$c")
+    DRILL_FLEET_MODE=loop/drill-diagnosis DRILL_FLEET_WORKER_ROLE="diagnosis-$c" \
+      _loop_register_dispatch_job open claude "$CASE_DIR/prompt.md" "$WORK/repo" "$diag_slug" || true
     timeout 600 "$CLAUDE_BIN" -p "drill set 케이스 FAIL 진단. 케이스 정의: $CASE_DIR (prompt.md=사용자 발화, assert.sh=판정). assert 출력: $RESULTS/$c.assert.txt. transcript: $T. fixture 결과물: $WORK.
 이 자료를 읽고 (1) 위반 행동이 정확히 무엇이었나 (2) 어느 지침이 닿지 않았거나 모호했나 (3) 수정안 — 지침 diff 초안 또는 hook 승격 제안 중 택1, 적용 명령 포함 — 을 $RESULTS/$c.diagnosis.md 에 한국어로 간결히 작성하라. 지침 파일을 직접 수정하지 말 것 (진단·제안만)." \
       --allowedTools "Bash,Read,Glob,Grep,Write" --max-turns 25 >> "$RESULTS/$c.diagnosis.log" 2>&1
+    DRILL_FLEET_MODE=loop/drill-diagnosis DRILL_FLEET_WORKER_ROLE="diagnosis-$c" \
+      _loop_register_dispatch_job done claude "$CASE_DIR/prompt.md" "$WORK/repo" "$diag_slug" || true
     [ -f "$RESULTS/$c.diagnosis.md" ] && echo "  진단서: $RESULTS/$c.diagnosis.md"
   fi
 done

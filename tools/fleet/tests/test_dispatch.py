@@ -296,6 +296,38 @@ class JobLivenessPathAssemblyTest(unittest.TestCase):
 # --- D5: depth-2 registry metadata ---
 class DepthTwoRegistryMetadataTest(unittest.TestCase):
 
+
+    def test_drill_jobs_log_row_is_visible_as_loop_dispatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_log = os.path.join(tmp, "jobs.log")
+            worktree = os.path.join(tmp, "drill-g6_worktree_dispatch-abcd", "repo")
+            os.makedirs(worktree, exist_ok=True)
+            row = "\t".join([
+                "2026-07-05T01:00:00+00:00", "open", "repo", worktree,
+                "drill-codex-g6_worktree_dispatch-010000-1234",
+                "capability=drill,mode=loop/drill,qa=quick,intensity=quick,"
+                "depth=1,harness=codex,worker_role=g6_worktree_dispatch,owner=drill",
+            ])
+            with open(jobs_log, "w") as f:
+                f.write(row + "\n")
+
+            with mock.patch.object(dispatch, "_scan_processes", return_value=[]), \
+                 mock.patch.object(dispatch, "_live_claude_cwds", return_value={}), \
+                 mock.patch.object(dispatch, "_dispatch_liveness",
+                                    side_effect=lambda *a, **k: "working"):
+                jobs = dispatch.collect(jobs_path=jobs_log)
+
+            self.assertEqual(len(jobs), 1)
+            job = jobs[0]
+            self.assertEqual(job.key, "drill")
+            self.assertEqual(job.mode, "loop/drill")
+            self.assertEqual(job.qa, "quick")
+            self.assertEqual(job.harness, "codex")
+            self.assertEqual(job.worker_role, "g6_worktree_dispatch")
+            self.assertEqual(job.capability_owner, "drill")
+            self.assertEqual(job.status, "open")
+            self.assertEqual(job.source, "jobs")
+
     def test_jobs_log_pipe_metadata_surfaces_depth_two_parent(self):
         with tempfile.TemporaryDirectory() as tmp:
             jobs_log = os.path.join(tmp, "jobs.log")
