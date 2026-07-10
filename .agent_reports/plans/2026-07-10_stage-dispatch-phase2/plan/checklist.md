@@ -29,6 +29,14 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
 - [x] **Phase I** — drill case handoff artifact drill_case_stage_dispatch/ (fixture builds spec-backed repo; assert HARD passes; loops/ untouched)
 - [x] **Phase J** — instrumentation.md (pilot seed row, SD-OPEN-2 observation table); post-it handoff pending final step
 
+## Fix cycle (code-test 회귀 2건 — projection/mirror 동기화)
+- [x] **Fix-1** utilities/dispatch-wait.sh·.test.sh 를 `tools/check-adaptation-boundary.sh` 의 Codex/OpenCode `UTILITY_DEFERRED` 목록에 추가 (dispatch-liveness.sh 선례 따름) — 2곳(check_codex_utility_projection, check_opencode_utility_projection).
+- [x] **Fix-2** `adapters/claude/hooks/{conductor-stop-gate.sh,stage-dispatch-reminder.sh}` 심볼릭 링크 생성 (canonical `hooks/` collapse 기본 원칙, 기존 hooks 심링크 패턴과 동일).
+- [x] **Fix-3** `skills/**` 10파일 Phase 2 편집분을 `adapters/claude/skills/**` 미러로 복사 (byte-equivalent 회복; diff 는 순수 추가분이었음, 충돌 없음).
+- [x] **Fix-4** `python3 tools/build-manifest.py` 재실행 — 미러 변경분 반영해 manifest.json 재생성.
+- 검증: `bash tools/check-adaptation-boundary.sh` → `OK: adaptation boundary checks passed`. 기록: `dev_logs/step_fix.md`.
+- Commit: (아래 참조)
+
 ## Safety commits
 - `5ae8c8a` Phase A+B (probe verdict + core docs)
 - `e97d916` Phase C (wrapper + dispatch-wait)

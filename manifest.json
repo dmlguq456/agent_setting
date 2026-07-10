@@ -471,6 +471,13 @@
       "hard_block": true
     },
     {
+      "slug": "hook__stage-dispatch-reminder__PreToolUse",
+      "name": "stage-dispatch-reminder",
+      "mono": "stage-dispatch-reminder",
+      "event": "PreToolUse",
+      "hard_block": false
+    },
+    {
       "slug": "hook__worktree-path-guard__PreToolUse",
       "name": "worktree-path-guard",
       "mono": "worktree-path-guard",

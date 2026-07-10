@@ -2,6 +2,18 @@
 
 전체 = **setup** → [사용자 학습] → **eval**. `--mode auto` 면 발화로 분기. 각 모드는 독립 호출이고 `pipeline_state.yaml` 에 상태 누적.
 
+> **Stage-dispatch 계약** (`standard+`, OPERATIONS §5.10 ③④·SD-1·SD-2): `standard+` 자리에서 durable 한 setup/eval/report 스테이지는 각각 독립된 **depth-2 headless 세션**으로 dispatch 된다 (in-session 팀 호출은 그 세션 안에서 실행) — **file-only handoff** 원칙(입력은 산출물 파일에서 읽고, 이전 스테이지의 대화 맥락은 참조하지 않음)을 따른다. depth-1 conductor 는 경로만 넘기고 verdict/status 만 회수한다. **실제 실험 run 은 길고 비동기·human-gated (`_RUNLOG.md` ⏳ 대기줄이 실제 학습 완료를 기다림) — dispatch 대상 스테이지가 아니다.** run 세그먼트는 기존 `lab-runner.yaml` dispatch profile 을 그대로 쓰고, 본 stage-dispatch 계약은 그 profile 과 합성(compose)된다. `direct/quick` 및 단발 실험 run 안내는 inline 유지, 스테이지 세션은 재-dispatch 하지 않는다(depth 3+ 금지). pipe 본문 자체를 dispatch 명령형으로 다시 쓰는 건 별도 후속 작업.
+
+#### stage-worker 매핑 (setup)
+
+| stage | in-session team | input artifacts | output artifacts | write class |
+|---|---|---|---|---|
+| S1 spec | 연구팀 (plan-review) | `_RUNLOG.md` 최근 줄 + research 산출 | `experiments/{date}_{slug}/experiment_spec.md` | dispatched (depth-2) |
+| S2 scaffold | 개발팀 (new-lib) | `experiment_spec.md` + ref/parent config | `train.py`/`eval.py`/`config.yaml`/`metrics.jsonl` logger | dispatched (depth-2) |
+| S3 run | — (사용자 직접 실행 / cluster submit) | `config.yaml` | `_RUNLOG.md` ⏳ 대기줄 + `run.json`(status:"running") | **NOT dispatched** — long/async·human-gated, `lab-runner.yaml` profile 이 담당 |
+
+eval 쪽 stage-worker 행(E2/E3-2/E3-3)은 `eval-procedure.md` 참조.
+
 ## ━━━ setup 모드 ━━━ (학습 전 세팅)
 
 ### S1: spec (1 화면)

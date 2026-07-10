@@ -1,5 +1,14 @@
 ### Step 4: Report Generation (direct Agent call + selected report-check gate)
 
+> **Stage-dispatch back-reference** (OPERATIONS §5.10 ③④·SD-1·SD-2): `standard+` 에서 아래 Step 4a/4b 는 각각 독립된 depth-2 headless stage 로 dispatch 된다 — 전체 계약 원문·conditional stage(2e/3c) 목록은 [pipeline-search-analysis.md](pipeline-search-analysis.md) 의 stage-worker 매핑 표 참조, 본 문서는 report-side row 만 반복한다.
+
+| stage | in-session team | input artifacts | output artifacts | write class |
+|---|---|---|---|---|
+| Step 4a (Report Generation) | 연구팀 | `analysis_summary.md`, `_internal/chaining_results.md`(있으면), `_internal/code_search.md`(있으면), `_internal/search_results.json`, `cards/` | `{00-08}_*.md`(mode-specific report set) | root (deliverable, T1/T2) |
+| Step 4b (QA Loop) | 연구팀 (quality/fact-check/claim-verify subroles) / codex-review-team (adversarial external) | report set + `cards/` | `_internal/reviews/round_{n}_*.md`, `unresolved.md`(있으면) | _internal (raw, T3) |
+
+두 stage 간 **file-only handoff** — 4b 는 4a 가 쓴 report 파일만 읽고, 4a 세션의 대화·중간 판단은 넘어오지 않는다.
+
 > **자료팀 위임 (옵션)** — 보고서에 _집계 통계 시각화_ 나 _cross-card metric 비교 plot_ 등 _custom 분석 figure_ 가 필요하면 본 Step 안에서 `Agent(자료팀, "<spec>")` 직접 호출 가능. paper figure 직접 추출 (자료팀 영역) 과 다른 자리 — 자료팀은 _카드 데이터로부터 새 시각화_ 만들 때. 일반 survey 자료 (taxonomy table / lineage ASCII / per-paper card) 는 연구팀 본 자리 처리.
 
 #### Step 4a: Generate Reports
