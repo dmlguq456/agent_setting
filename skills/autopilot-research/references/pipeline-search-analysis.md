@@ -1,5 +1,21 @@
 ## Pipeline
 
+> **Stage-dispatch 계약** (`standard+`, OPERATIONS §5.10 ③④·SD-1·SD-2): `standard+` 에서 아래 각 durable stage 는 독립된 **depth-2 headless session** 으로 dispatch 되고, 각 step 에 명시된 in-session team 은 그 stage session _안에서_ 실행된다. depth-1 conductor 는 artifact path 만 넘기고 verdict/status 만 읽는다 — stage 본문이나 이전 stage 의 대화는 넘기지 않는다 (**file-only handoff**: 각 stage 는 입력을 파일에서 읽는다). `direct/quick` 과 micro-stage 는 inline 유지, stage session 은 재분사하지 않는다 (depth 3+ 금지). depth-gated step (2e/3c) 은 conditional stage — depth 조건 만족 시에만 별도 dispatch. 아래 stage-worker 매핑은 _계약 + 매핑 추가_ 만 — 각 파이프 본문을 imperative dispatch 로 재작성하는 건 후속 작업.
+
+#### Stage-worker 매핑 (§6-homolog)
+
+| stage | in-session team | input artifacts | output artifacts | write class |
+|---|---|---|---|---|
+| Step 2 (Source Search, 2a-2d) | 연구팀 | `queries`(오케스트레이터 생성), HF `paper_search` 결과(optional) | `_internal/search_results.json` | _internal (raw, T3) |
+| Step 2e (Query Expansion Rounds — **conditional**, depth-gated) | 연구팀 | `_internal/search_results.json`(read) + 새 keyword 기반 `new_queries` | `_internal/search_results.json`(merge 갱신) | _internal (raw, T3, append/merge) |
+| Step 3b (Phase A — Parallel Skimming Batches) | 연구팀 (batch, parallel) | `_internal/search_results.json`, `_internal/browser_extracts/`(자료팀 사전 fetch) | `cards/{paper}.md` | root (deliverable, T1/T2) |
+| Step 3c (Phase B — Reference Chaining — **conditional**, depth-gated) | 연구팀 | `cards/`, `_internal/search_results.json` | `_internal/chaining_results.md` | _internal (raw, T3) |
+| Step 3e (Compile analysis_summary.md) | 연구팀 | `cards/`, `_internal/chaining_results.md`(있으면), `_internal/code_search.md`(있으면) | `analysis_summary.md` | root (deliverable, T1/T2) |
+| Step 4a (Report Generation — [report-generation.md](report-generation.md)) | 연구팀 | `analysis_summary.md`, `_internal/*`, `cards/` | `{00-08}_*.md`(mode-specific report set) | root (deliverable, T1/T2) |
+| Step 4b (QA Loop — [report-generation.md](report-generation.md)) | 연구팀 (quality/fact-check/claim-verify subroles) / codex-review-team (adversarial external) | report set + `cards/` | `_internal/reviews/round_{n}_*.md`, `unresolved.md`(있으면) | _internal (raw, T3) |
+
+> 자료팀 (browser-fetch / web-image-search, Step 3a·3.5) 은 위 stage 들 _안에서_ 일어나는 sub-delegation — 별도 dispatch stage 가 아니다. 두 stage 가 lock 없이 동일 파일에 동시 write 하지 않는다: Step 2e 는 매 라운드 순차 재호출로 `_internal/search_results.json` 을 merge 하고(동시 write 없음), Step 3b 병렬 batch 는 batch 마다 서로 다른 `cards/{paper}.md` 에만 써서 충돌하지 않는다.
+
 ### Step 1: Input Parsing & Validation
 - Detect query type: keyword, paper title, arXiv ID, PDF path, folder path
 - Resolve `--mode`: explicit flag value, or infer from query keywords (academic / technology / market — see Modes section). Notify user of inferred mode in one line. Multi-match → defer resolution to Step 1.5 Scope Clarification.

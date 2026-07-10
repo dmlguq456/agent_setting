@@ -25,9 +25,9 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
   - [x] E3 HOOKS.md catalog rows (parity note → Phase G)
 - [x] **Phase F** — SD-10 dev-pipeline dispatch-first (closed 2-cond fallback, dispatch-headless.py×5, dispatch-wait per stage) + SKILL Stage Graph annotation
 - [x] **Phase G** — adapter bootstrap parity (claude CLAUDE.md §0(C) + codex/opencode AGENTS.md one-shot parity)
-- [ ] **Phase H** — diffusion (draft/research/spec/design/lab stage-worker tables)
-- [ ] **Phase I** — drill case handoff artifact (under plan dir, NOT loops/)
-- [ ] **Phase J** — instrumentation + post-it handoff
+- [x] **Phase H** — diffusion: 5 pipes gained stage-worker table + contract (via 5 parallel in-session 개발팀)
+- [x] **Phase I** — drill case handoff artifact drill_case_stage_dispatch/ (fixture builds spec-backed repo; assert HARD passes; loops/ untouched)
+- [x] **Phase J** — instrumentation.md (pilot seed row, SD-OPEN-2 observation table); post-it handoff pending final step
 
 ## Safety commits
 - `5ae8c8a` Phase A+B (probe verdict + core docs)
@@ -35,4 +35,5 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
 - `d27ab12` Phase D (profiles)
 - `3dfb993` Phase E (hooks)
 - `7a74889` Phase F (SD-10 dev-pipeline)
-- (Phase G committed next)
+- `976ba3a` Phase G (adapter parity)
+- (Phase H+I+J committed next)

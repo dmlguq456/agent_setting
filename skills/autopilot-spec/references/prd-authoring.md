@@ -47,6 +47,8 @@ mode (추론):     <mode list> (근거: <증거>)
 
 ### Step 3: PRD 작성 — 3 자리 분할 (중간 컨펌)
 
+> **Stage-dispatch 메모**: PRD 작성은 conductor-inline — `spec/prd.md` 를 conductor 가 직접 쓰는 판단 자리라 dispatch 되는 stage-worker 아님. dispatch 되는 유일한 stage 는 scaffold (개발팀 new-lib) — `scaffolding.md` 의 stage-worker 매핑 표 참조.
+
 `spec/prd.md` 를 한 번에 다 쓰지 않고 _3 자리로 분할_ 각자리 사용자 검토. _빠른 진행_ 발화 시 자동 일괄.
 
 #### Step 3a: 공통 + 핵심 mode 섹션 작성 → 컨펌

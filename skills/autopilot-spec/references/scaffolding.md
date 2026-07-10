@@ -1,5 +1,14 @@
 ### Step 4: Scaffolding + Skeleton 코드 생성 (mode 5종 통일)
 
+> **Stage-dispatch (`standard+`, OPERATIONS §5.10 ③④·SD-1·SD-2)**: autopilot-spec 는 비대칭 — PRD 작성은 conductor-inline (conductor 가 `spec/prd.md` 를 직접 쓰고 그 자체가 conductor 의 판단 자리라 dispatch 되는 stage 아님). 유일하게 명확한 dispatchable stage 는 **scaffold** (개발팀 new-lib) — 분리 가능한 artifact-producing stage: `standard+` 자리에서 **depth-2 headless session** 으로 dispatch, **file-only handoff** (입력은 파일에서 읽고 이전 stage 대화는 절대 참조 X) — depth-1 conductor 는 path 만 넘기고 verdict/status 만 읽는다. `direct/quick` 은 inline 유지, stage session 은 재dispatch 안 함 (depth 3+ 금지). 모든 pipe 가 4 단계 대칭 구조인 건 아니다 — per-pipe 본문 rewrite 는 후속 과제.
+
+#### stage-worker 매핑
+
+| stage | in-session team | input artifacts | output artifacts | write class |
+|---|---|---|---|---|
+| PRD authoring | conductor-inline (N/A) | research/analysis 산출 | `spec/prd.md` | conductor-inline (not dispatched) |
+| scaffold (Phase 2) | 개발팀 new-lib | `prd.md` | scaffolded source/dirs | scaffold source |
+
 mode 5종 모두 scaffold 단계 통일 — 빈 자리에서도 _뼈대 + skeleton_ 까지 spec 단에서 완성, 이후 autopilot-code 는 _layout 위 logic 추가_ 자리만 담당. _기존 repo 최대 활용_ — autopilot-research 의 외부 ref 또는 사용자 코드베이스의 내부 유사 모델이 1순위, generic skeleton 은 마지막 fallback.
 
 #### Phase 0: ref source 결정 + 컨펌
