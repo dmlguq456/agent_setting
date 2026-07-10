@@ -223,7 +223,7 @@ per-project 메모는 두 layer 분리.
 - 유지: QA round 수 / agent prompt 풍성함 / verification step
 - 줄임: orchestrator 가 agent 작업을 다시 읽고 요약하는 중복 / context 에 결과 본문이 누적되는 노이즈
 - 결과 흐름: file 통해 (verdict 만 token)
-- **적용 범위 (2026-07-10 stage-dispatch 승격)**: 이 "file 통해 (verdict 만 token)" 원칙은 _in-session agent→orchestrator_ 를 넘어 **headless 스테이지 세션→conductor** 에도 적용된다. `standard+` autopilot 파이프의 각 sub-skill 스테이지(code-plan·execute·test·report)를 depth-2 headless 세션으로 분사하고, 세션 간 소통은 오직 산출물 파일(대화 컨텍스트 전달 금지 = "산출물 기반 소통"). depth-1 owner 는 스테이지 본문을 안 읽는 얇은 conductor 가 되어 lean 을 한 겹 더 얻는다. 이는 2026-07-06 "owner 단일 세션 + in-session 팀" 기본값의 **명시적 반전**이며, 원칙 신설이 아니라 기존 §8 원칙의 적용 범위 확장이다 (계약: 산출물이 다음 스테이지 컨텍스트를 완전히 담아야 하고, 못 담으면 대화로 때우지 말고 산출물 스키마를 보강). 근거·결정 = `.agent_reports/spec/stage-dispatch/prd.md` (SD-1·SD-2).
+- **적용 범위 (2026-07-10 stage-dispatch 승격)**: 이 "file 통해 (verdict 만 token)" 원칙은 _in-session agent→orchestrator_ 를 넘어 **headless 스테이지 세션→conductor** 에도 적용된다. `standard+` autopilot 파이프의 각 sub-skill 스테이지(code-plan·execute·test·report)를 depth-2 headless 세션으로 분사하고, 세션 간 소통은 오직 산출물 파일(대화 컨텍스트 전달 금지 = "산출물 기반 소통"). depth-1 owner 는 스테이지 본문을 안 읽는 얇은 conductor 가 되어 lean 을 한 겹 더 얻는다. 이는 2026-07-06 "owner 단일 세션 + in-session 팀" 기본값의 **명시적 반전**이며, 원칙 신설이 아니라 기존 §8 원칙의 적용 범위 확장이다 (계약: 산출물이 다음 스테이지 컨텍스트를 완전히 담아야 하고, 못 담으면 대화로 때우지 말고 산출물 스키마를 보강). 근거·결정 = `.agent_reports/spec/stage-dispatch/prd.md` (SD-1·SD-2). 대기·수확도 이 결정론 흐름의 일부다 (SD-14): conductor 의 스테이지 대기는 완료 알림 신뢰가 아니라 `dispatch-wait`(liveness 재사용) 폴링으로 결정론화되고(Claude adapter 는 `-p` Stop hook 미발화로 Stop 게이트를 보류 — probe 2026-07-10), 죽은 스테이지 해석만 conductor 의미 판단으로 남는다.
 
 ---
 

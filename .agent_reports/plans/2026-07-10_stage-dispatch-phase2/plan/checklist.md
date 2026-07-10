@@ -1,0 +1,33 @@
+# Checklist — stage-dispatch Phase 2 (code-execute)
+
+slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=standard · intensity=strong
+
+## Decision Points
+- **SD-14b① Stop probe (Phase A)**: `Stop` hook does **NOT** fire under `claude -p` (probe 2026-07-10, exit 1, no sentinel). Cross-check: CC issue #38651 (Stop empties `-p` output), #40506/#20063. → **Stop gate HELD** (E2 unregistered, on-disk only). SD-14 ships via depth_note + dispatch-wait.
+
+## Phase status
+
+- [x] **Phase A** — probe done. Verdict: Stop unfired → E2 registration held. Record: `_internal/dev_reviews/phaseA_stop_probe.md`.
+- [ ] **Phase B** — core doc increments (core-first)
+  - [ ] B1 OPERATIONS §5.10 one-shot wait contract + SD-13 spec precondition
+  - [ ] B2 WORKFLOW §5 diffusion rows + new autopilot-lab row
+  - [ ] B3 CONVENTIONS §1 capability-neutral clarifier
+  - [ ] B4 DESIGN_PRINCIPLES §8 SD-14 determinism note
+- [ ] **Phase C** — wrapper + dispatch-wait.sh
+  - [ ] C1 resolve_agent_home registry-gap fix
+  - [ ] C2 AGENT_DISPATCH_SELF_SLUG child env
+  - [ ] C3 depth-1 depth_note one-shot wait clause
+  - [ ] C4 utilities/dispatch-wait.sh + test
+- [ ] **Phase D** — SD-12 stage-worker profiles (4 fragments + 4 yaml + README + --check)
+- [ ] **Phase E** — hooks
+  - [ ] E1 stage-dispatch-reminder.sh (SD-11, soft) + register + conformance
+  - [ ] E2 conductor-stop-gate.sh (SD-14b) — **UNREGISTERED (held)**, on-disk + CLI unit only
+  - [ ] E3 HOOKS.md catalog + parity note
+- [ ] **Phase F** — SD-10 dev-pipeline dispatch-first + SKILL Stage Graph
+- [ ] **Phase G** — adapter bootstrap parity (claude/codex/opencode one-shot clause)
+- [ ] **Phase H** — diffusion (draft/research/spec/design/lab stage-worker tables)
+- [ ] **Phase I** — drill case handoff artifact (under plan dir, NOT loops/)
+- [ ] **Phase J** — instrumentation + post-it handoff
+
+## Safety commits
+(recorded per phase below as work lands)

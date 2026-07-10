@@ -108,14 +108,15 @@ Direct work is the only graph with no plan. Every non-`direct` autopilot graph h
 
 | entry | 내부 분기 |
 |---|---|
-| **autopilot-research** | 연구팀 research-survey + 자료팀 browser-fetch/pdf-extract/web-image-search + 연구팀 fact-check |
+| **autopilot-research** | 연구팀 research-survey + 자료팀 browser-fetch/pdf-extract/web-image-search + 연구팀 fact-check. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
 | **analyze-project** | 단일 skill — code/paper/doc mode 자체 분석 |
-| **autopilot-spec** | 기획팀(PRD 위임) + 자료팀(research import) / setup: 호스팅·CI/CD logic |
-| **autopilot-design** | 디자인팀 maker + 디자인팀 critic + 자료팀 web-image-search |
+| **autopilot-spec** | 기획팀(PRD 위임) + 자료팀(research import) / setup: 호스팅·CI/CD logic. `standard+` 에선 각 durable 스테이지(특히 scaffold)가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
+| **autopilot-design** | 디자인팀 maker + 디자인팀 critic + 자료팀 web-image-search. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
 | **autopilot-code** (일반) | 기획팀(plan) + 개발팀(execute) + 품질관리팀 code-review·test + **task-aware plan-review** (UI/visual → 디자인팀 critic / research·code → 연구팀). `standard+` 에선 각 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
 | **autopilot-code** (앱 mode) | 위 + **디자인팀 critic 2자리** (plan 단계 _plan-review_ + render 후 결과 critic) + DB migration 안전 logic + push 자동 deploy |
-| **autopilot-draft** | 자료팀(figure·data·reference) + 개발팀(writing) + 편집팀 polish + 연구팀 fact-check |
-| **autopilot-refine** | autopilot-draft 와 동일 재활용 + 편집팀 review |
+| **autopilot-draft** | 자료팀(figure·data·reference) + 개발팀(writing) + 편집팀 polish + 연구팀 fact-check. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
+| **autopilot-refine** | autopilot-draft 와 동일 재활용 + 편집팀 review. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
+| **autopilot-lab** | (setup) 연구팀 plan-review + 개발팀 new-lib scaffold + 품질관리팀 test smoke / (eval) 품질관리팀 test functional + 자료팀 figure-gen + 연구팀 research-survey. `standard+` setup/eval 스테이지는 **독립 headless 세션**(OPERATIONS §5.10 ③④), 팀은 세션 _안_. 실제 학습 run 은 long/async·사람 게이트(RUNLOG ⏳)라 분사 스테이지가 아님. `direct/quick`·단발 실험 run 은 inline |
 | **analyze-user** | 자료팀(cross-project 수집) + 편집팀 review |
 
 **사용자 주도성**: 각 entry = 명시 의도 단위. 메인 에이전트가 옵션 자동 구성 + 자연어 요약 컨펌 → CONFIRM Gate 4 갈래(진행 / 수정-refine v2 / back-jump / 중단). 발화 모호 시 재질문(임의 추측 X). 호출 패턴 상세 = runtime adapter bootstrap (Claude Code: [`adapters/claude/CLAUDE.md §0`](../adapters/claude/CLAUDE.md)).
