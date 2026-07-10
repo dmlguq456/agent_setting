@@ -18,7 +18,11 @@ from fleet import titles                       # noqa: E402
 
 DELTA_CAP = 65536         # tail 읽기 윈도우 바이트 (jsonl 은 한 줄이 수십 KB 일 수 있음)
 TEXT_CAP = 2000           # 프롬프트 DATA 에 넣는 추출 텍스트 상한 (chars)
-TITLE_MAXLEN = 40         # 검증 상한 (PRD §4.6: ≤40자)
+TITLE_MAXLEN = 40
+import re as _re
+_META_RE = _re.compile(
+    r"^(no |none\b|cannot|can.t|unable|sorry|i |there (is|are) no|untitled\b|empty\b|error\b)",
+    _re.IGNORECASE)         # 검증 상한 (PRD §4.6: ≤40자)
 WORKER_TIMEOUT = 60       # haiku no-tools 는 짧음; hang backstop
 MODEL = os.environ.get("FLEET_TITLE_MODEL", "haiku")
 
@@ -130,6 +134,10 @@ def validate_title(raw):
     # 7단어 이상(문장형 수다/오류 설명) 은 거부 → 기존 제목 유지가 오염보다 낫다.
     ascii_ratio = sum(1 for ch in line if ord(ch) < 128) / len(line)
     if ascii_ratio < 0.8 or len(line.split()) > 6:
+        return None
+    # 메타-응답 거부 (라이브 실측: "No conversation excerpt provided" 가 제목으로 통과) —
+    # 제목이 아니라 모델의 상태 보고인 어두는 결정론으로 차단, 기존 제목 유지.
+    if _META_RE.match(line):
         return None
     return line
 

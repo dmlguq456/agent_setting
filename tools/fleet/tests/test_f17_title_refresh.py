@@ -398,6 +398,11 @@ class ValidatorHardeningTest(unittest.TestCase):
         self.assertIsNone(rt.validate_title(
             "this is a very long chatty sentence about the session"))
 
+    def test_meta_response_rejected(self):
+        for s in ("No conversation excerpt provided", "Cannot determine title",
+                  "I cannot read this", "untitled", "Error reading excerpt"):
+            self.assertIsNone(rt.validate_title(s), s)
+
     def test_short_english_title_accepted(self):
         self.assertEqual(rt.validate_title("Fleet UI Optimization"),
                          "Fleet UI Optimization")
