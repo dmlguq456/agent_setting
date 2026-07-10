@@ -1,6 +1,6 @@
 # stage-dispatch — Spec (PRD)
 
-> mode: **library + cli** (하네스 인프라 — 스테이지 분사 계약 문서 + dispatch wrapper·jobs.log·fleet 관제) · 작성 2026-07-10 · v1 · **v2 2026-07-10** (Phase 2 결정 등재 — SD-10~13·SD-OPEN-2. Phase 1 main 머지 5b7cf33 반영: 계약 12표면 개정 + wrapper depth-aware + pilot 계측 plan 218s/execute 255s/test 46s/report 28s·conductor 프롬프트 ~2KB 일정)
+> mode: **library + cli** (하네스 인프라 — 스테이지 분사 계약 문서 + dispatch wrapper·jobs.log·fleet 관제) · 작성 2026-07-10 · v1
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - **사용자 결정 (2026-07-10 확정)**: "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로 했으면 한다. 어차피 산출물 기반 소통인데." — 입도 = sub-skill 스테이지 단위, 적용 = `standard+`, 이는 2026-07-06 depth 재설계 기본값의 명시적 반전.
@@ -154,53 +154,6 @@ CONVENTIONS §2.3 role 매트릭스 → 스테이지 매핑:
 - **실패·재개 의미론(기존 산출물 재사용)**: 스테이지 실패 시 conductor 는 `--from <stage>` 로 **그 스테이지만 재분사**, 앞 스테이지 산출물은 재사용(재생성 금지). test 실패 retry 는 §4 memo-주입 경로(최대 1회 pipeline-level retry, `qa=quick` 은 retry 없음 — 현행 유지). 스테이지 세션이 hang/crash(§5 stealth-death)면 conductor 가 진단 후 동일 스테이지 재분사 — 부분 산출물이 있으면 이어쓰기, 없으면 처음부터 그 스테이지만.
 - **§5.8 pipeline lock 범위**: lock 은 `spec/prd.md`·`spec/pipeline_state.yaml`·`spec/pipeline_summary.md` _공유 단일파일 쓰기_ 만 보호. 스테이지 산출물은 전부 `plans/<slug>/` 경로-분리라 **비경합 → lock 불요**. 예외 = **code-report 가 `pipeline_summary.md`(공유 단일파일)를 쓰는 자리만 lock acquire**(현행 code-report 계약과 동일). 즉 스테이지 분사가 lock 경합을 새로 만들지 않는다.
 
-## 8.5 Phase 2 추가 결정 (v2, 2026-07-10 — Phase 1 pilot 실측 + 사용자 확인 발견)
-
-> Phase 1 은 main 머지(5b7cf33; cfbd098 계약 개정 / 0cb216e pilot 계측). pilot 성공 기준(§12) 은 통과 — fleet 스테이지 row·산출물 정상·depth≤2·대화 전달 0. 아래는 pilot 과 사용자 후속 확인에서 나온 Phase 2 입력 결정.
-
-### 8.5.1 SD-10 — autopilot-code 배선 완성: dev-pipeline 본문 dispatch-first 재작성 ★ Phase 2 최우선
-
-**발견 (사용자 확인, 2026-07-10)**: Phase 1 의 §9-8 개정이 **반쪽** — `dev-pipeline.md` 는 앞머리(line 4)에 stage-dispatch 계약 블록을 얹었으나, 본문 Step 1~7 (Step 1 "invoke Skill: `code-plan`", Step 3/4/5 동형, retry loop 5~7항)이 여전히 in-session "Invoke Skill:" 명령형 그대로 = **이중 신호**. 또 계약 블록의 "When still orchestrating in-session (e.g. `--intensity` downgraded, or a runtime without headless dispatch)" 의 **e.g. 비한정 escape hatch** 가 in-session 우회를 정당화한다. 지시 문서에서 앞머리 계약과 본문 명령형이 갈리면 실행 주체는 본문을 따른다 — pilot 이 통과한 것은 conductor 프롬프트가 분사를 떠먹여줬기 때문이지 문서 자체의 효력이 아니다(§8.5.5 drill 연동).
-
-**결정**:
-- (a) Step 1~7 본문을 **dispatch-first 명령형**으로 재작성 — `standard+` 의 각 스테이지 Step = `dispatch-headless.py --depth 2 --parent <conductor-slug> --worker-role code-<stage>` 분사 명령이 1차 지시. in-session Skill 호출은 **[direct/quick] 또는 [headless dispatch 불가 런타임]** 두 명시 조건의 fallback 분기로 격하하고, 비한정 "e.g." escape hatch 는 제거(조건 열거를 한정형으로).
-- (b) `SKILL.md` Stage Graph 표에 **dispatch 모드 표기** 반영 — `standard+` 행이 "스테이지 = depth-2 headless 분사"임을 표에서 즉독 가능하게.
-
-### 8.5.2 SD-11 — 결정론 신호: conductor 의 code-* 직접 Skill 호출 reminder hook
-
-conductor(depth-1, `worker_role=capability-owner`) 세션이 `code-plan`/`code-execute`/`code-test`/`code-report` Skill 을 직접 부르면 reminder 를 주입하는 hook 신설 — `worktree-path-guard`(drill g3/g6) 선례의 stage-dispatch 판. **deny 가 아니라 reminder(soft)로 시작**: in-session fallback 이 direct/quick·headless-불가 런타임에서 정당하고, hook 이 그 자리의 intensity 를 결정론적으로 알기 어려워 deny 는 false-positive 위험. deny 상향 여부는 drill·계측 누적 후 재판단(미결로 유지 — §14 의미↔규칙 경계).
-
-### 8.5.3 SD-12 — 스테이지-워커별 bootstrap 최적화 (dispatch-profiles 연결)
-
-**사용자 요구**: 분사 세션마다 하네스/부트스트랩 컨텍스트를 스테이지별로 최적화해 싣기. 기존 인프라 = **dispatch-profiles** (`spec/dispatch-profiles/` SoT; `profiles/fragments/<name>.md` + `tools/profile/build-home.py` 가 masked `CLAUDE_CONFIG_DIR` home 생성, `dispatch-headless.py --profile` 지원) — 신규 시스템이 아니라 기존 인프라의 스테이지 입도 연결.
-
-- 스테이지-워커(code-plan/execute/test/report)별 **최소 프로필 fragment** 정의 — full bootstrap(CLAUDE.md 전체) 대신 그 스테이지 계약(해당 sub-skill + 필요한 core 절)만.
-- conductor 의 스테이지 분사에 `--profile <stage-fragment>` **기본 배선**.
-- **효과 계측(토큰/시간)을 SD-OPEN-1 데이터와 같이 수집** — full bootstrap vs 최소 프로필의 스테이지 세션 startup·총 토큰 비교.
-
-### 8.5.4 SD-13 — conductor 의 spec 전제 선보장 (pilot 부수발견 ①)
-
-pilot 실측: spec-less repo 에서 스테이지 세션이 `artifact-guard` 에 차단됨 — 스테이지는 풀 ceremony 를 받으므로(§5 의도된 획득) 생성-순서 게이트도 그대로 받는다. **결정**: conductor 는 스테이지 분사 _전_ 대상 repo 의 spec 전제(artifact root 존재 + `spec/` 존재 또는 untracked 모드)를 선확인·선보장한다 — 스테이지 세션 안에서 차단으로 발견하면 재분사 비용, conductor 게이트 판단 자리에서 잡으면 무료.
-
-### 8.5.5 drill 회귀 확장 — 문서 자체의 효력 검증 (§9-14 개정)
-
-스테이지 분사 회귀 drill 에 **"conductor 가 프롬프트 떠먹임 없이 스킬 문서만 보고 스테이지를 분사하는가"** 검증 포함 — pilot 처럼 분사 지시가 프롬프트에 명시된 통과가 아니라, `dev-pipeline.md`/`SKILL.md` 만 주어진 상태에서 분사가 일어나는지(SD-10 이중 신호 제거의 acceptance 이기도 함). 기존 검증(fleet row·산출물·depth≤2·lock 미경합)에 추가.
-
-### 8.5.6 SD-OPEN-2 — 스테이지 SessionEnd mem curator 기동 (관찰 항목, 결정 아님)
-
-pilot 부수발견 ②: 스테이지 세션도 SessionEnd 에 mem curator(distiller) 를 기동한다. Phase 1 에선 메모리 오염 없었으나, 다중 스테이지 세션이 순차로 curator 를 돌리는 구조의 영향(중복 add·불필요 curate 비용·동시성)은 미검증 — **Phase 2 에서 관찰만 지속**(계측 로그에 curator 기동 여부 기록), 개입 결정은 증거 후.
-
-### 8.5.7 SD-14 — conductor 대기 계약 결정론화 (운영 실증 ④, 2026-07-10 타 세션 발견)
-
-**실증**: 첫 conductor(sonnet)가 code-plan 분사 후 "Monitor 대기"로 turn 을 끝내 headless 프로세스가 조기 종료 — **one-shot `claude -p` 세션에선 turn 종료 = 프로세스 종료**이고 background 완료 알림은 영영 오지 않는다. 스테이지(code-plan)는 완주해 산출물은 남았으나 conductor 가 죽어 파이프가 고아화. 임시책(재개 conductor 프롬프트에 폴링 대기 명시)은 instruction 층이라 비결정론.
-
-**결정 — 3층 (§0.5 결정론-first)**:
-- (a) **wrapper 대기 계약 주입** (즉시, 최저비용): `dispatch_prompt()` 의 depth-1 `depth_note` 에 one-shot 계약 명문화 — "너는 one-shot 프로세스다 / background 완료 알림은 오지 않는다 / Monitor·알림 대기로 turn 을 끝내지 말라 / 같은 turn 안에서 폴링 대기 후 수확하라". 모든 conductor 분사에 자동 적용. (여전히 instruction 이지만 전달이 결정론 — 프롬프트 누락 불가.)
-- (b) **Stop hook 하드 게이트** (가장 결정론적): headless 자식 세션(`CLAUDE_CODE_CHILD_SESSION=1` + `AGENT_DISPATCH_DEPTH=1` — wrapper 가 이미 주입, 실측 385-386행)이 turn 종료 시도 시, jobs.log 에 `parent=<자기 slug>` 인 `open` 스테이지 row 가 남아 있으면 Stop 차단 + 피드백. **피드백은 "대기하라"가 아니라 행동 지시**: liveness 점검(`dispatch-liveness.sh`) → ALIVE 면 폴링 계속 / SUSPECT·DEAD 면 진단→수확·재분사·row 정리 후 종료 — 죽은 스테이지 때문에 conductor 가 영구 hang 하는 역전 방지. 무한루프 가드(stop_hook_active 존중) 포함. **전제 2건 선해소**: ① `-p` 모드에서 Stop hook 발화 여부 실측 검증 ② worktree-local registry 갭(wrapper `AGENT_HOME` 폴백 시 parent/child 가 다른 jobs.log 를 보는 문제) 선수정 — hook 이 올바른 registry 를 봐야 성립.
-- (c) **`dispatch-wait` 동기 대기 헬퍼** (실수 표면 제거): conductor 가 "알아서 폴링"하지 않도록 기존 `dispatch-liveness.sh` 를 재사용하는 헬퍼 신설 — 스테이지 종료·SUSPECT 시 exit, Bash 호출당 timeout(≤10분) 제약으로 반복 호출 형태. conductor 절차를 "분사 → `dispatch-wait` 반복 → 수확"으로 고정하고, 이 대기 계약을 **SD-10 의 dev-pipeline 본문 재작성에 포함**(스텝 명령형이 대기 방법까지 지정).
-
-채택 = (a)+(b) 조합이 기본, (c) 는 절차 단순화 보강. 구현 자리 = Phase 2 wrapper 증분(SD-12 `--profile` 배선과 같은 묶음 — 같은 파일·같은 사이클). **타 세션 협조 노트**: 발견 세션이 registry 갭(AGENT_HOME)을 자체 수정할 수 있음 — 구현 전 wrapper 최신 상태 재실측으로 이중 수정 회피.
-
 ## 9. 영향 표면 목록 (구현 phase 에서 갱신 — 현행 문구 → 개정 방향)
 
 > **SD-7**: 아래 표가 구현(autopilot-code) 시 묶음 갱신할 자리. 각 surface = {현행 문구, 개정 방향}. 실제 문구 편집은 소유 스킬(core-first) 경유 별도 — 본 spec 은 방향만 확정.
@@ -214,17 +167,13 @@ pilot 부수발견 ②: 스테이지 세션도 SessionEnd 에 mem curator(distil
 | 5 | `CONVENTIONS.md §1`(stage graph Dispatch policy 열) | `standard`: "depth-1 owner with bounded depth-2 sub-workers when useful" | Dispatch policy 에 **스테이지 = depth-2 headless 기본**(standard+) 반영. depth 계약(§1 line 46)에 스테이지-워커 클래스 추가. |
 | 6 | `DESIGN_PRINCIPLES.md §8`(Performance Preservation) | "결과 흐름: file 통해 (verdict 만 token)" | 적용 범위를 **headless 스테이지 세션→conductor** 까지 확장 명시(원칙 승격, §0.5). 2026-07-06 재설계 기본값 반전을 이력에 기록. |
 | 7 | `skills/autopilot-code/references/context-and-guards.md:51` | "파이프 스테이지를 헤드리스로 쪼개면 worst of both — **금지**" | **금지 해제 → 기본 권장**으로 반전. "산출물이 상태를 완전히 담으므로 재발굴=파일로드, 연속성=파일 매체"로 우려 해소 근거 병기(§2.2·§0.5). |
-| 8 | `skills/autopilot-code/references/dev-pipeline.md`(Step 1/3/4/5) | ~~"invoke Skill: `code-plan/…` (인라인)"~~ → **Phase 1 반쪽**: 앞머리 계약 블록만 추가, Step 본문은 in-session 명령형 잔존(이중 신호) | **SD-10**: Step 1~7 본문 dispatch-first 재작성 + fallback 조건 한정형(direct/quick·headless 불가 런타임) + SD-14 대기 계약(분사→dispatch-wait↻→수확) 포함. |
-| 8b | `skills/autopilot-code/SKILL.md` Stage Graph 표 | `standard` 행에 dispatch 모드 표기 없음 | **SD-10(b)**: `standard+` 행 = "스테이지 depth-2 headless 분사" 즉독 표기. |
-| 9 | sub-skills(code-plan/execute/test/report) SKILL.md | "orchestrator 가 Skill 로 호출 … in-session 팀 위임" | 스테이지가 **독립 세션 진입점**으로도 동작하도록 입력=산출물 경로 계약 명문화(§4 완결성). 팀 위임은 세션 _안_ 그대로. (Phase 1 완료분 유지) |
-| 9b | 신규 hook (`hooks/`) — conductor 의 code-* 직접 Skill 호출 감지 | 없음 | **SD-11**: reminder(soft) hook 신설 — deny 는 미결(계측 후). |
-| 9c | `profiles/fragments/` + conductor 분사 `--profile` 배선 | dispatch-profiles 인프라 존재하나 스테이지-워커 fragment 없음 | **SD-12**: code-plan/execute/test/report 별 최소 프로필 fragment + conductor 기본 배선 + 토큰/시간 계측. |
-| 9d | wrapper `dispatch_prompt()` depth-1 `depth_note` + Stop hook + `utilities/dispatch-wait` | one-shot 대기 계약 없음 (운영 실증 ④ conductor 조기 종료) | **SD-14**: (a) depth_note 대기 계약 주입 (b) Stop hook 게이트(open 자식 row 시 차단, 전제 2건 선해소) (c) dispatch-wait 헬퍼. |
+| 8 | `skills/autopilot-code/references/dev-pipeline.md`(Step 1/3/4/5) | "invoke Skill: `code-plan/…` (인라인)" | `standard+`: "**dispatch-headless 로 스테이지 분사**(depth=2,parent=conductor,worker_role=<skill>)" / `direct/quick`: 인라인 유지. |
+| 9 | sub-skills(code-plan/execute/test/report) SKILL.md | "orchestrator 가 Skill 로 호출 … in-session 팀 위임" | 스테이지가 **독립 세션 진입점**으로도 동작하도록 입력=산출물 경로 계약 명문화(§4 완결성). 팀 위임은 세션 _안_ 그대로. |
 | 10 | `adapters/claude/CLAUDE.md §0(C)` | "분사는 main 전용·깊이 1" / "in-session nested 는 ceremony 격리 못 받음" | "**conductor(depth-1)가 스테이지를 depth-2 로 분사**" 추가 — 깊이 1 전용 문구를 깊이 2 스테이지까지 확장. ceremony 격리 문구는 유지(오히려 분사 정당화). |
 | 11 | `adapters/codex/AGENTS.md` · `adapters/opencode/AGENTS.md`(동형) | headless dispatch 계약 "depth 1, or depth 2 by depth-1 owner under standard+" | 동일 개정 — 스테이지 분사를 depth-2 정규 용법으로 병기. 3어댑터 parity 유지(codex/opencode preflight dispatch 도 이미 depth=2/parent 지원). |
 | 12 | `adapters/claude/bin/dispatch-headless.py`(+codex/opencode preflight dispatch) | depth=2/parent/worker_role 이미 지원(§2.4) | **재작성 불요**. 판단: (a) conductor 편의용 **stage-dispatch helper**(스테이지 순서·경로 계약을 캡슐화) 신설 여부 (b) worker_role 표준값 문서화. helper 는 pilot 후 필요성 판정. |
-| 13 | fleet 관제(`tools/fleet`) | in-session 서브에이전트 미표시 | ~~스테이지 row 표시~~ → **Phase 2 범위 제외** (tools/fleet/** 타 세션 소유, 2026-07-10 handoff). |
-| 14 | drill 케이스 | 스테이지 분사 회귀 없음 | **스테이지 분사 회귀 케이스 신설**(Phase 2): fleet row·산출물 정상·depth≤2 강제 + **문서-효력 검증**(§8.5.5 — 프롬프트 떠먹임 없이 스킬 문서만으로 분사 발생). ※ drill 러너(loops/**) 자체는 타 세션 소유 — 케이스 정의만 본 spec 범위. |
+| 13 | fleet 관제(`tools/fleet`) | in-session 서브에이전트 미표시 | 스테이지 row(worker_role 라벨)를 사람이 읽는 stage 진행으로 표시(§5). collector 는 이미 `open|running` 파싱 — 표시 라벨만. |
+| 14 | drill 케이스 | 스테이지 분사 회귀 없음 | **스테이지 분사 회귀 케이스 신설**(Phase 2): fleet 에 스테이지 row 뜨는지·산출물 정상·depth≤2 강제. |
 
 ## 10. 기각·비채택 (근거와 함께)
 
@@ -251,18 +200,8 @@ core/WORKFLOW.md §1.1·§5     # 스테이지 분사 기본 반영 (§9-3,4)
 core/CONVENTIONS.md §1       # Dispatch policy·depth 계약 (§9-5)
 core/DESIGN_PRINCIPLES.md §8 # 산출물 기반 소통 승격·재설계 반전 이력 (§9-6)
 adapters/{claude,codex,opencode} bootstrap §0(C)   # 깊이 1 전용 → 스테이지 depth-2 확장 (§9-10,11)
-tools/fleet                  # (범위 제외 — 타 세션 소유, §9-13)
-loops/drill                  # 스테이지 분사 회귀 케이스 정의 (§9-14, Phase 2 — 러너는 타 세션 소유)
-
-# --- v2 추가 (Phase 2) ---
-skills/autopilot-code/references/dev-pipeline.md   # Step 1~7 본문 dispatch-first 재작성 + SD-14 대기 절차 (SD-10)
-skills/autopilot-code/SKILL.md                     # Stage Graph 표 dispatch 표기 (SD-10b)
-hooks/<stage-dispatch reminder>                    # conductor 의 code-* 직접 호출 reminder (SD-11, soft)
-profiles/fragments/code-{plan,execute,test,report}.md  # 스테이지-워커 최소 프로필 (SD-12)
-adapters/claude/bin/dispatch-headless.py           # depth_note 대기 계약 + --profile 스테이지 배선 (SD-12·14a)
-hooks/<conductor Stop 게이트>                       # open 자식 row 시 Stop 차단 (SD-14b, 전제 2건 선해소)
-utilities/dispatch-wait.sh                         # 동기 대기 헬퍼 — dispatch-liveness 재사용 (SD-14c)
-skills/autopilot-{draft,research,spec,design,lab}  # 스테이지 분사 계약 확산 (§12-1)
+tools/fleet                  # 스테이지 row 표시 라벨 (§9-13)
+loops/drill                  # 스테이지 분사 회귀 케이스 (§9-14, Phase 2)
 ```
 
 - 신규 코드 최소화 — wrapper 재작성 없음(§2.4). 대부분 계약 문서(core·bootstrap·SKILL) 개정 + 얇은 conductor 오케스트레이션 문구 + (판정 시) stage-dispatch helper.
@@ -284,18 +223,10 @@ skills/autopilot-{draft,research,spec,design,lab}  # 스테이지 분사 계약 
 - depth ≤ 2 강제 확인(스테이지가 depth-3 안 염), §5.8 lock 경합 미발생.
 - **토큰/시간 비교 계측** — 동일 작업 in-session(현행) vs 스테이지 분사의 conductor 컨텍스트 크기·총 토큰·wall-clock. 마이크로-스테이지 inline 경계 임계(SD-OPEN-1) 캘리브레이트 데이터.
 
-### Phase 2 — 배선 완성 + 확산 + drill 회귀 (v2 재구성, 2026-07-10 — Phase 1 머지 5b7cf33 후)
-
-우선순위 순 (0 = 최우선):
-
-0. **SD-10 배선 완성** — dev-pipeline.md Step 1~7 본문 dispatch-first 재작성(이중 신호 제거, fallback 조건 한정형) + SD-14 대기 계약 포함 + SKILL.md Stage Graph 표 dispatch 표기(§8.5.1). SD-11 reminder hook 신설(§8.5.2). SD-14 wrapper 증분 — depth_note 대기 계약·Stop hook 게이트(전제 2건 선해소)·dispatch-wait 헬퍼(§8.5.7).
-1. **확산** — autopilot-draft/research/spec/design/lab 파이프에 스테이지 분사 계약 적용. 각 파이프의 스테이지-워커 클래스·산출물 계약 매핑(§6 동형 표 신설).
-2. **SD-12 프로필 배선** — 스테이지-워커별 최소 프로필 fragment + conductor `--profile` 기본 배선 + 토큰/시간 계측(§8.5.3).
-3. **drill 케이스** — 스테이지 분사 회귀(§9-14): fleet row·산출물·depth≤2·lock 미경합 + **문서-효력 검증**(§8.5.5). 케이스 정의만 — drill 러너(loops/**)는 타 세션 소유.
-4. **부수발견 반영** — SD-13 conductor spec 전제 선보장(§8.5.4) + SD-OPEN-2 curator 기동 관찰 로그(§8.5.6).
-5. **SD-OPEN-1 계측 누적만** — 마이크로-스테이지 inline 임계는 확정하지 않음, 실운영 계측 수집만.
-
-**제외 (타 세션 소유, 2026-07-10 handoff)**: `loops/**` · `tools/fleet/**` (§9-13 fleet 표시 이관, drill 러너 fix 3건 handoff 済).
+### Phase 2 — 나머지 autopilot-* 확산 + drill 회귀
+5. **확산** — autopilot-draft/research/design 등 다른 autopilot-* 파이프에 스테이지 분사 적용(pilot 성공 기준 통과 후). 각 파이프의 스테이지-워커 클래스·산출물 계약 매핑.
+6. **fleet 표시** — 스테이지 row 라벨(§9-13).
+7. **drill 케이스** — 스테이지 분사 회귀(§9-14): fleet row·산출물·depth≤2·lock 미경합 자동 검증.
 
 ## 13. 결정 목록
 
@@ -308,19 +239,10 @@ skills/autopilot-{draft,research,spec,design,lab}  # 스테이지 분사 계약 
 - **SD-7**: 영향 표면 14곳(§9 표) — core·bootstrap·SKILL·wrapper·fleet·drill. 문구 편집은 소유 스킬(core-first) 별도. (§9·§11)
 - **SD-8**: 적용 = `standard+` 기본. `direct/quick` = 현행 inline 유지. 2026-07-06 "owner 단일 세션" 기본값의 명시적 반전. (§0·§10, 사용자 결정)
 - **SD-9**: wrapper 재작성 불요 — depth=2/parent/worker_role 이미 지원. helper 신설은 pilot 후 판정. (§2.4·§11·§9-12)
-- **SD-OPEN-1**(미결 — 계측 누적): 마이크로-스테이지 inline 의 정확한 손익 임계(어느 스테이지 크기부터 분사가 이득). research 가 per-stage cost 미수치화 → 추측 금지. Phase 1 pilot 1표본(plan 218s/execute 255s/test 46s/report 28s) 확보 — Phase 2 는 계측 누적만, 확정은 표본 축적 후. (§8·§12)
-
-### v2 추가 (2026-07-10 — Phase 2 입력)
-
-- **SD-10**: dev-pipeline.md Step 1~7 본문 dispatch-first 재작성(이중 신호 제거, in-session 은 direct/quick·headless 불가 런타임 한정 fallback) + SKILL.md Stage Graph dispatch 표기. Phase 2 최우선. (§8.5.1, 사용자 확인 발견)
-- **SD-11**: conductor 의 code-* 직접 Skill 호출 시 reminder hook(soft) — deny 는 drill·계측 후 재판단 미결. (§8.5.2, drill g3/g6 선례)
-- **SD-12**: 스테이지-워커별 dispatch-profiles 최소 fragment + conductor `--profile` 기본 배선 + 토큰/시간 계측. (§8.5.3, 사용자 요구)
-- **SD-13**: conductor 의 스테이지 분사 전 spec 전제 선보장. (§8.5.4, pilot 부수발견)
-- **SD-14**: conductor 대기 계약 결정론화 — (a) wrapper depth_note one-shot 대기 계약 (b) Stop hook 게이트(open 자식 row 차단, -p Stop 발화 검증·registry 갭 선해소 전제) (c) dispatch-wait 헬퍼. dev-pipeline 본문(SD-10)에 대기 절차 포함. (§8.5.7, 운영 실증 ④)
-- **SD-OPEN-2**(미결 — 관찰): 스테이지 SessionEnd mem curator 기동 영향 — 계측 로그로 관찰만, 개입은 증거 후. (§8.5.6)
+- **SD-OPEN-1**(미결 — pilot 계측): 마이크로-스테이지 inline 의 정확한 손익 임계(어느 스테이지 크기부터 분사가 이득). research 가 per-stage cost 미수치화 → 추측 금지, Phase 1 pilot 토큰/시간 계측으로 확정. (§8·§12)
 
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
-- **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화).
-- **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김.
-- **충돌**: 없음 — 반전의 핵심 우려(현행 "상태 재발굴·연속성 상실")를 §0.5 계약 완결성 의무 + §8 inline 경계로 규칙화해 흡수했다. 우려를 사람 vigilance 로 남기지 않고 "산출물이 상태를 완전히 담는가"라는 검증 가능한 규칙으로 전환한 것이 이 경계 존중. per-stage cost 는 추측으로 규칙화하지 않고 계측(SD-OPEN-1)으로 미룬 것도 동일.
+- **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사.
+- **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — pilot 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지.
+- **충돌**: 없음 — 반전의 핵심 우려(현행 "상태 재발굴·연속성 상실")를 §0.5 계약 완결성 의무 + §8 inline 경계로 규칙화해 흡수했다. 우려를 사람 vigilance 로 남기지 않고 "산출물이 상태를 완전히 담는가"라는 검증 가능한 규칙으로 전환한 것이 이 경계 존중. per-stage cost 는 추측으로 규칙화하지 않고 pilot 계측(SD-OPEN-1)으로 미룬 것도 의미↔규칙 경계 존중.

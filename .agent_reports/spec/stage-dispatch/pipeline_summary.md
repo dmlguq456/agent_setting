@@ -2,7 +2,7 @@
 
 - **Date**: 2026-07-10
 - **Mode**: library + cli (autopilot 파이프 디스패치 토폴로지 개정 인프라)
-- **Status**: spec done (v1)
+- **Status**: spec done (v2) · dev Phase 1 done (main 5b7cf33) · Phase 2 in progress
 - **Placement**: 독립 컴포넌트 `spec/stage-dispatch/` — 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 무수정.
 
 ## 배경
@@ -38,3 +38,12 @@ Phase 1(계약문서+wrapper증분+autopilot-code pilot) · Phase 2(autopilot-* 
 
 ## Version History
 - v1 (2026-07-10): 초기 PRD. 사용자 결정(스테이지 분사 기본화) + research cross-platform-agent-frameworks §4-(8) + 운영 실증 3종 종합. 2026-07-06 depth 재설계 기본값 반전 명시 기록.
+- v2 (2026-07-10): Phase 2 결정 등재 — autopilot-spec update, v1 snapshot = `_internal/versions/v1/prd.md`.
+  - **SD-10** (최우선, 사용자 확인 발견): Phase 1 의 dev-pipeline.md 개정이 반쪽 — 앞머리 계약 블록만 있고 Step 1~7 본문은 in-session "Invoke Skill" 잔존(이중 신호) + 비한정 e.g. escape hatch. 본문 dispatch-first 재작성 + fallback 조건 한정형(direct/quick·headless 불가 런타임) + SKILL.md Stage Graph dispatch 표기.
+  - **SD-11**: conductor 의 code-* 직접 Skill 호출 reminder hook — soft 로 시작(deny 는 hook 이 intensity 를 몰라 false-positive 위험 → drill·계측 후 재판단).
+  - **SD-12** (사용자 요구): 스테이지-워커별 dispatch-profiles 최소 fragment + conductor `--profile` 기본 배선 — full bootstrap 대신 스테이지 계약만. 토큰/시간 계측을 SD-OPEN-1 데이터와 병행 수집.
+  - **SD-13** (pilot 부수발견 ①): conductor 의 스테이지 분사 전 spec 전제 선보장 — spec-less repo 에서 스테이지가 artifact-guard 에 차단된 실측.
+  - **SD-14** (운영 실증 ④, 타 세션 발견): conductor 조기 종료 — one-shot `claude -p` 에서 turn 종료 = 프로세스 종료인데 sonnet conductor 가 Monitor 대기로 turn 을 끝냄. 3층 결정론화: (a) wrapper depth_note 에 one-shot 대기 계약 주입 (b) Stop hook 게이트 — open 자식 스테이지 row 남기고 종료 시 차단(전제: -p 모드 Stop hook 발화 실측 + worktree-local registry 갭 선수정) (c) dispatch-wait 동기 대기 헬퍼(dispatch-liveness 재사용). env 식별자(CLAUDE_CODE_CHILD_SESSION·AGENT_DISPATCH_DEPTH)는 wrapper 가 이미 주입함을 실측 확인.
+  - **SD-OPEN-2** (관찰): 스테이지 SessionEnd mem curator 기동 — 개입 없이 계측 로그 관찰만.
+  - **drill 확장**: 회귀 케이스에 "프롬프트 떠먹임 없이 스킬 문서만으로 분사 발생" 문서-효력 검증 추가 (SD-10 acceptance).
+  - **범위 제외 명시**: `loops/**`·`tools/fleet/**` 타 세션 소유 — §9-13 fleet 표시 이관.
