@@ -156,12 +156,34 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- owner_harness: {args.owner_harness or '-'}\n"
         f"- worktree: {args.worktree}\n"
     )
-    depth_note = (
-        "Depth contract: depth 1 is a capability-owner worker. It should open bounded depth-2 "
-        "sub-workers for separable standard+ work; thorough/adversarial expands this to "
-        "multi-axis or adversary workers. Direct/quick stay inline unless explicitly escalated; "
-        "depth 3+ is forbidden.\n"
-    )
+    if args.depth >= 2:
+        role = (args.worker_role or "").strip()
+        if role.startswith("code-") or role in {"code-plan", "code-execute", "code-test", "code-report"}:
+            depth_note = (
+                "Depth contract: you are a depth-2 pipeline stage-worker "
+                f"('{role}') dispatched by a depth-1 conductor (2026-07-10 stage-dispatch). "
+                "Read your inputs only from the artifact files named in the task (never from "
+                "prior-stage conversation); write only your stage's artifact class; source is "
+                "mutated by code-execute alone. Do NOT open further headless dispatch (depth 3+ "
+                "is forbidden) — internal parallelism uses in-session teams. Return only a short "
+                "structured verdict/summary; the conductor reads your artifacts, not your prose.\n"
+            )
+        else:
+            depth_note = (
+                "Depth contract: you are a depth-2 review sub-worker dispatched by a depth-1 "
+                "owner. Stay within your single assigned role, default to read-only unless the "
+                "task grants scoped write, and return a short structured summary. Do NOT open "
+                "further headless dispatch; depth 3+ is forbidden.\n"
+            )
+    else:
+        depth_note = (
+            "Depth contract: depth 1 is a capability-owner worker. It should open bounded depth-2 "
+            "sub-workers for separable standard+ work; for standard+ pipelines it acts as a thin "
+            "conductor that dispatches each stage (code-plan/execute/test/report) as its own "
+            "depth-2 session with file-only handoff. thorough/adversarial expands review to "
+            "multi-axis or adversary workers. Direct/quick stay inline unless explicitly escalated; "
+            "depth 3+ is forbidden.\n"
+        )
     if args.profile:
         # Unlike the codex wrapper, do not force a preflight/bootstrap chain
         # here: CLAUDE_CONFIG_DIR already points at this dispatch's masked

@@ -223,6 +223,7 @@ per-project 메모는 두 layer 분리.
 - 유지: QA round 수 / agent prompt 풍성함 / verification step
 - 줄임: orchestrator 가 agent 작업을 다시 읽고 요약하는 중복 / context 에 결과 본문이 누적되는 노이즈
 - 결과 흐름: file 통해 (verdict 만 token)
+- **적용 범위 (2026-07-10 stage-dispatch 승격)**: 이 "file 통해 (verdict 만 token)" 원칙은 _in-session agent→orchestrator_ 를 넘어 **headless 스테이지 세션→conductor** 에도 적용된다. `standard+` autopilot 파이프의 각 sub-skill 스테이지(code-plan·execute·test·report)를 depth-2 headless 세션으로 분사하고, 세션 간 소통은 오직 산출물 파일(대화 컨텍스트 전달 금지 = "산출물 기반 소통"). depth-1 owner 는 스테이지 본문을 안 읽는 얇은 conductor 가 되어 lean 을 한 겹 더 얻는다. 이는 2026-07-06 "owner 단일 세션 + in-session 팀" 기본값의 **명시적 반전**이며, 원칙 신설이 아니라 기존 §8 원칙의 적용 범위 확장이다 (계약: 산출물이 다음 스테이지 컨텍스트를 완전히 담아야 하고, 못 담으면 대화로 때우지 말고 산출물 스키마를 보강). 근거·결정 = `.agent_reports/spec/stage-dispatch/prd.md` (SD-1·SD-2).
 
 ---
 
@@ -250,3 +251,4 @@ per-project 메모는 두 layer 분리.
 | §5 Natural-integration | `bf8d565` rebuttal 표 본문 paste 거부 (2026-05-19 ICML camera-ready M11/M15 incident) + 2026-05-20 M8/M9 Paragraph Cohesion Pre-Check 4-step |
 | §6 편집팀 + 응답 원칙 | `3f5a48c` translation-team 신설 → `cfb0e12` editorial-team rename + scope 확장 / `bf8d565` 응답 원칙 §3 / `2058325` §4 / `3f5a48c` §1 (판교체) |
 | §7 Memory layers | `60f141a` `/notes` skill 신설 (현 `/post-it` — self-pruning lifecycle 로 진화) — 사용자 통제 layer 와 자동 메모리 분리 |
+| §8 Performance Preservation | 2026-07-06 owner 단일 세션+in-session 팀 토큰 재설계 → 2026-07-10 stage-dispatch 로 기본값 반전: `standard+` 스테이지를 depth-2 headless 세션으로 분사, file-only handoff 로 "file 통해 (verdict 만 token)" 를 스테이지 입도로 승격 (spec/stage-dispatch, SD-1·SD-2) |

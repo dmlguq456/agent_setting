@@ -9,6 +9,8 @@ metadata:
   blurb: "코드 작업 사이클 결과 요약·보고 sub-skill"
 ---
 
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Inputs = plan·checklist·dev_logs·test_logs·`_internal/*_reviews/`·`pipeline_summary.md` (files) — a dispatched session does **not** carry in-session orchestration memory, so it reconciles against those artifacts (see step 2 below). Write class = `final_report.md`·`analysis_project/code/*.md`·`pipeline_summary.md` (via §5.8 lock). 품질관리팀 delegation stays **inside** this session.
+
 ## Plan Resolution (canonical — keep in sync with code-execute, code-test, code-report, code-refine, autopilot-code)
 Resolve `$ARG` to a plan file path:
 1. If it ends with `.md` → use as-is
@@ -106,7 +108,7 @@ After the 품질관리팀 agent returns:
 
 1. **Read the produced `final_report.md` once.** The file is short (1-3 pages, ≲1500 tokens) — cheap.
 
-2. **Reconcile with your orchestration memory.** You already carry rich context from running code-plan → code-refine → code-execute → code-test through subagent returns and your own Bash/Edit/Read calls. Compare the report against that memory:
+2. **Reconcile against the cycle record.** When you ran in-session, that record is your orchestration memory (subagent returns + your own Bash/Edit/Read calls). When you were **dispatched as a depth-2 stage session** (spec/stage-dispatch), you carry no such memory — reconcile the report against the artifact files instead (`checklist.md` step marks, `dev_logs/`, `test_logs/test_report.md`, `_internal/*_reviews/`, `git log`/`git diff <safety-commit>..HEAD`). Compare the report against that record:
    - **Numbers**: step counts, 🔴 resolution rounds, test pass/fail counts, commit hashes, file counts.
    - **Line numbers**: if the report cites `file.py:NNN`, verify you remember the same location (drift is common).
    - **Status of follow-ups**: report may claim an item is "pending" when memory says it was resolved in a later round.
@@ -137,7 +139,7 @@ After the 품질관리팀 agent returns:
 
 4. **The report gets reconciliation (step 2) only — no separate QA pass.** Inaccuracies are user-facing and can be corrected on read. The reconciliation step (2) is the lightweight safety net.
 
-Rationale: the main orchestrator's memory is the richest orchestration-time record, and the report is the verified persistent artifact. A cheap cross-check between the two gives the user a summary that benefits from both sources — without paying for a full QA/external-adversary pass on the report itself.
+Rationale: the cycle record (in-session orchestration memory, or the artifact files when dispatched) and the report are two views of the same work; a cheap cross-check between them gives the user a summary that benefits from both — without paying for a full QA/external-adversary pass on the report itself.
 
 ## Task
 Generate report for: $ARG
