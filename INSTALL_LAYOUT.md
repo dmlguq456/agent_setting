@@ -79,8 +79,10 @@ on native Windows under Git Bash — `render.py` imports `curses` lazily, so the
 snapshot/scripting paths need no `curses` at all and write UTF-8 directly (so a
 cp949/non-UTF-8 console codepage does not raise `UnicodeEncodeError`). Only the
 live full-screen TUI (`fleet` with no `--once`) needs `curses`; install it with
-`pip install windows-curses`, or run the live view under WSL/Linux. Everything
-else (hooks, memory, statusline, skills) runs under Git Bash.
+`pip install windows-curses`, or run the live view under WSL/Linux. The
+installer also drops a `fleet` launcher into `~/.local/bin` (put that dir on
+your Git Bash `PATH`) so `fleet` works as a one-word command. Everything else
+(hooks, memory, statusline, skills) runs under Git Bash.
 
 ## Cross-harness CLI — `fleet`
 
