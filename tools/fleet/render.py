@@ -25,7 +25,10 @@ Module-global state invariants (single-process / single-thread only — no concu
   - `_TOGGLE_ROWS` is reset at the TOP of `_draw`, before any early-return / short-circuit, so a
     stale toggle map never survives to the next click.
 """
-import curses
+try:
+    import curses
+except ImportError:  # native Windows without windows-curses: plain --once / --json still work
+    curses = None
 import glob
 import os
 import re
@@ -33,6 +36,12 @@ import sys
 import time
 
 from .model import fmt_min, dash, project_of
+
+# curses attribute constants — real values when curses is present, harmless 0 fallbacks
+# otherwise, so this module imports (and the plain --once path runs) with no curses at all.
+# The live TUI (run_live) still requires curses and guards for its absence explicitly.
+_A_BOLD = getattr(curses, "A_BOLD", 0)
+_A_DIM = getattr(curses, "A_DIM", 0)
 
 # harness = dim lowercase word in its identity color (no bracket chip, no reverse-video)
 _BADGE_TEXT = {"claude": "claude code", "codex": "codex", "opencode": "opencode"}
@@ -42,8 +51,8 @@ _JOB_LIVE_RANK = {"working": 0, "stale": 1, "dead": 2, "unknown": 3}
 # effort → 2-char suffix after the model (design review r2: the effort column repeated 'xhigh'
 # everywhere and burned a column; a dim suffix keeps the info without the noise)
 # qa rigor ramp (a dispatch job's analogue of effort) — quick recedes, adversarial stands out
-_QA_INT = {"quick": curses.A_DIM, "light": curses.A_DIM, "standard": 0,
-           "thorough": curses.A_BOLD, "adversarial": curses.A_BOLD}
+_QA_INT = {"quick": _A_DIM, "light": _A_DIM, "standard": 0,
+           "thorough": _A_BOLD, "adversarial": _A_BOLD}
 _NARROW_CUTOFF = 70
 _TWO_LINE_CUTOFF = 110      # width below which sessions render as 2-line cards (round-4 responsive)
 _LAYOUT = "auto"            # 'auto' (width decides) | 'wide' | 'narrow' | 'stack' — `w` key cycles
@@ -73,7 +82,7 @@ _TINT_PAIR = {}    # (tint_char, hue_char) → curses attr — the (fg, tint_bg)
 # fg color_key → (hue, attr) decomposition (spec §5.2) — the basis for composing (fg, tint_bg)
 # pairs. hue: d=default g=green y=yellow r=red c=cyan m=magenta l=blue. Keys absent here render
 # as default-hue plain text under tint (safe degradation).
-_A_B, _A_D = curses.A_BOLD, curses.A_DIM
+_A_B, _A_D = _A_BOLD, _A_DIM
 _HUE_OF = {
     None: ("d", 0), "dim": ("d", _A_D), "head": ("d", _A_D), "unknown": ("d", _A_D),
     "name_work": ("d", _A_B), "name_idle": ("d", _A_B), "name_dim": ("d", _A_D),
@@ -1350,8 +1359,15 @@ def render_once(collect_all, hfilter, section):
         tw = 200
     lines = _build_lines(sessions, jobs, section, narrow=False, malformed=malformed,
                          layout=_layout_mode(tw))
-    out = "\n".join(_plain(l) for l in lines)
-    sys.stdout.write(out + "\n")
+    out = "\n".join(_plain(l) for l in lines) + "\n"
+    # Write UTF-8 bytes directly so the snapshot's box/braille glyphs survive a
+    # non-UTF-8 console codepage (e.g. Windows cp949), which would otherwise raise
+    # UnicodeEncodeError. Falls back to text stdout when buffer is unavailable.
+    try:
+        sys.stdout.buffer.write(out.encode("utf-8"))
+        sys.stdout.buffer.flush()
+    except (AttributeError, ValueError):
+        sys.stdout.write(out)
     return 0
 
 
@@ -1617,6 +1633,11 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
 
 
 def run_live(collect_all, hfilter, section, interval):
+    if curses is None:
+        sys.stderr.write("fleet: the live TUI needs curses (unavailable here; on native "
+                         "Windows run `pip install windows-curses`, or use WSL). "
+                         "Use --once (snapshot) or --json meanwhile.\n")
+        return 1
     if not sys.stdout.isatty():
         sys.stderr.write("fleet: stdout is not a TTY — use --once (snapshot) or --json.\n")
         return 1

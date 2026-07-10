@@ -74,10 +74,13 @@ bash ~/.claude/adapters/claude/bin/install-windows.sh
 The installer also restores the per-machine memory DB from the git-tracked
 `dump.jsonl` mirror when it is missing (`mem import`).
 
-**Known limitation — `fleet`.** The `fleet` dashboard is a `curses` TUI, and
-native Windows Python ships no `curses` module. `fleet` is therefore
-unsupported on native Windows; run it under WSL or Linux. Everything else
-(hooks, memory, statusline, skills) runs under Git Bash.
+**`fleet` on Windows.** `fleet --json` and `fleet --once` (plain snapshot) run
+on native Windows under Git Bash — `render.py` imports `curses` lazily, so the
+snapshot/scripting paths need no `curses` at all and write UTF-8 directly (so a
+cp949/non-UTF-8 console codepage does not raise `UnicodeEncodeError`). Only the
+live full-screen TUI (`fleet` with no `--once`) needs `curses`; install it with
+`pip install windows-curses`, or run the live view under WSL/Linux. Everything
+else (hooks, memory, statusline, skills) runs under Git Bash.
 
 ## Cross-harness CLI — `fleet`
 

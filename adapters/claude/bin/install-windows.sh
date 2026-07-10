@@ -113,9 +113,9 @@ if [ -f "$MEM" ]; then
   fi
 fi
 
-# --- 4. Known Windows limitation: fleet TUI ---
+# --- 4. fleet note: --json/--once work here; only the live TUI needs curses ---
 if ! "$PYBIN" -c 'import curses' >/dev/null 2>&1; then
-  log "note: 'fleet' (curses TUI dashboard) is unavailable on native Windows Python (no curses module). Use WSL/Linux for fleet."
+  log "note: 'fleet --json' and 'fleet --once' work on Windows; the live TUI needs curses ('pip install windows-curses', or use WSL/Linux)."
 fi
 
 log "done. Restart Claude Code for settings.json changes to take effect."
