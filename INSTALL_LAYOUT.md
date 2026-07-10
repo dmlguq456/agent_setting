@@ -156,7 +156,13 @@ bash ~/.claude/adapters/claude/bin/install-windows.sh
    pin `AGENT_HOME`/`CLAUDE_HOME` — mem.py resolves its store home as
    `AGENT_HOME → CLAUDE_HOME → ~/agent_setting → ~/.claude`, so pinning either to
    `~/.claude` would point the memory store at the wrong tree; `HOME` alone fixes
-   path resolution and leaves that auto-detection intact.
+   path resolution and leaves that auto-detection intact. As a stronger guard the
+   installer also rewrites each hook/statusLine command to an **absolute** config
+   path (not `$HOME/.claude`) and swaps `python3` (the crash-prone WindowsApps
+   stub) for a real `python.exe` — argv survives the bash→exe boundary even with a
+   non-ASCII username, whereas env values do not. mem.py additionally prefers
+   `USERPROFILE` over a shell-injected POSIX `$HOME` so `Path.home()` cannot raise
+   `RuntimeError: Could not determine home directory` at SessionStart.
 
 2. **`core.symlinks=false`.** A Windows checkout writes repo symlinks out as
    small pointer-TEXT files (content = the link target path), not real files. So
