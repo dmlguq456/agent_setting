@@ -108,11 +108,81 @@ def _is_detached(tty, app_server, det_ttys):
     return tty in det_ttys
 
 
+def _pid_alive(pid):
+    """True if pid is a live process. Windows has no /proc: probe via OpenProcess."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if os.name == "nt":
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        h = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if h:
+            ctypes.windll.kernel32.CloseHandle(h)
+            return True
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _scan_disk(harness_filter=None):
+    """Windows / no-procfs backbone: derive sessions from on-disk state instead of
+    `ps -eo comm` + /proc (neither exists under MSYS). Claude writes one
+    ~/.claude/sessions/<pid>.json per live session (sessionId, pid, cwd, status);
+    presence + a live pid = an existing session. Per-harness collectors enrich as usual.
+    Codex/opencode still surface via their own collectors; only claude has this native
+    session-state file, so it is the one reconstructed here."""
+    import glob
+    import json
+    from . import claude as _claude   # lazy: avoid procscan<->claude import cycle
+    sessions = []
+    if harness_filter and "claude" not in harness_filter:
+        return sessions
+    try:
+        home = _claude._home()
+    except Exception:
+        return sessions
+    for path in sorted(glob.glob(os.path.join(home, "sessions", "*.json"))):
+        try:
+            d = json.load(open(path, encoding="utf-8"))
+        except Exception:
+            d = {}
+        pid = d.get("pid")
+        if not isinstance(pid, int):
+            try:
+                pid = int(os.path.splitext(os.path.basename(path))[0])
+            except ValueError:
+                continue
+        if not _pid_alive(pid):
+            continue
+        cwd = (d.get("cwd") or "").replace("\\", "/")
+        sessions.append(Session(
+            harness="claude",
+            pid=pid,
+            cwd=cwd,
+            orphan=False,
+            app_server=False,
+            is_child=False,
+            detached=False,
+            elapsed_min=0,
+            slug=os.path.basename(cwd.rstrip("/")) if cwd else None,
+        ))
+    return sessions
+
+
 def scan(harness_filter=None):
     """Return [Session] for every live harness leaf process.
 
     harness_filter: optional iterable of harness names to keep (e.g. {'claude','codex'}).
     """
+    if os.name == "nt":
+        # Windows: MSYS `ps` has no -eo/comm and there is no /proc — reconstruct
+        # session existence from on-disk state (see _scan_disk).
+        return _scan_disk(harness_filter)
     sessions = []
     pid_tty = _pid_ttys()
     det_ttys = _detached_ttys()
