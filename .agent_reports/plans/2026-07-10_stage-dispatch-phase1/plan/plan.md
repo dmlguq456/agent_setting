@@ -3,7 +3,7 @@ slug: 2026-07-10_stage-dispatch-phase1
 mode: dev
 intensity: strong
 qa: standard
-status: in_progress
+status: done
 spec: .agent_reports/spec/stage-dispatch/prd.md
 ---
 
