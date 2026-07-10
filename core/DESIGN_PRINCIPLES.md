@@ -4,7 +4,7 @@
 >
 > 자매 문서 (각자 단일 출처, 본 문서는 포인터만):
 > - `CONVENTIONS.md` — QA 5단계 / agent model 표기 / 산출물 폴더 컨벤션 (§5) / hard invariants
-> - runtime adapter bootstrap (Claude Code: `adapters/claude/CLAUDE.md` §0~§3) — 작업 라우팅 (spec-first 파이프 + autopilot-* 호출 Pre-check) + 메인 에이전트 행동 메타 원칙 (응답 규율·pause/자율·후속 단계)
+> - **메인 에이전트 응답 메타 원칙 = 2층 위임**: 포터블 최소 계약은 `roles/response-policy.md` (runtime-neutral — 응답 규율·pause/자율·후속 단계), 런타임 구체화·언어 톤은 runtime adapter bootstrap (Claude Code: `adapters/claude/CLAUDE.md` §0~§3 — 작업 라우팅 spec-first 파이프 + autopilot-* Pre-check 포함).
 >
 > 본 문서는 _구조와 행동의 골격_ 만 담고, 정의·정책·운영 wording 은 위 자매 문서로 위임.
 
@@ -193,7 +193,7 @@ Quality gates live inside the selected stage graph. The orchestrator chooses `in
 - 판교체 회피 — 한국어 산출물에서 영어 어휘를 한국어 어순에 그냥 박지 않는다. 도메인 영어와 정착 외래어만 영어로, 나머지는 한국어로. 매핑 표 — `adapters/claude/agents/editorial-team.md`
 - 적용 범위 — 사용자가 직접 보는 _모든_ .md 산출물 (doc 한정 X). autopilot-code 의 final-report, audit 보고서, autopilot-refine 결과, pipeline_summary 등
 
-**메인 에이전트 응답 자체** 의 메타 원칙은 별개 layer — runtime adapter bootstrap 이 single source (Claude Code: `adapters/claude/CLAUDE.md` §0~§3; §0 작업 라우팅: spec-first 파이프 + autopilot-* 호출 Pre-check·컨펌 · §1 응답 규율: 판교체 회피·출력 자제·동사 약속어 self-check · §2 pause flag 비자동·자율 진행 · §3 후속 단계 자동).
+**메인 에이전트 응답 자체** 의 메타 원칙은 별개 layer — **2층 위임**이다. (1) _포터블 최소 계약_ = `roles/response-policy.md` (runtime-neutral: 간결·약속-행동 일치·검증 후 단언·컨벤션 준수 · pause 비자동·자율 진행 · 후속 단계 자동). (2) _런타임 구체화·언어 톤_ = runtime adapter bootstrap (Claude Code: `adapters/claude/CLAUDE.md` §0~§3; §0 작업 라우팅 spec-first 파이프 + autopilot-* Pre-check·컨펌 · §1 판교체 회피·한국어 어미 등 언어 고유분 · §2·§3 을 roles/response-policy 위에 구체화). 어댑터는 포터블 절을 _재정의_ 하지 않고 realization 만 얹는다 (b2 옵션 B, 사용자 확정 2026-07-10 · HLS-OPEN-1). 6-1("무조건 브랜치") 운영 안전 규칙은 응답 메타가 아니라 `OPERATIONS.md §5.10` 규모 분기표가 소유.
 
 **Why**: 산출물 품질만 좋고 응답 / 가독성이 부자연스러우면 사용자 짜증이 누적. 편집팀이 _마지막 한 번_ 의 다듬기를 책임지고, runtime adapter bootstrap 의 응답 원칙이 _매 turn_ 의 메타 self-check.
 

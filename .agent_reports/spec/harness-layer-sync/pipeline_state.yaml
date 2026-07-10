@@ -18,7 +18,7 @@ phases:
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§9 module 구조만 확정)
   design: n/a             # 시각 UI 없음 (인프라 도구)
   dev: pending            # autopilot-code 가 누적 (Phase 1: 복제제거+가드확장 / Phase 2: manifest·INVENTORY 파생·보조)
-last_updated: 2026-07-09  # v1 작성 (harness-layer-sync 브랜치)
+last_updated: 2026-07-10  # v2 — HLS-OPEN-1 해소 (b2 옵션 B, b2-response-policy 브랜치)
 decisions_locked:
   - HLS-1: 최상위 hooks/tools/utilities = 유일 canonical, Claude 런타임도 canonical 실행 (물리 복사본 collapse)
   - HLS-2: 복제 불가피 파일만 명시 예외목록 (wrapper/delta 2클래스, 사유 필수) — collapse 가 기본
@@ -30,5 +30,5 @@ decisions_locked:
   - HLS-8: parity-loss = explicit warning (silent skip 금지), hook 격리 재현불가 정직 인정
   - HLS-9: bootstrap byte-budget 회귀 (GSD size-budget 차용, phase 2 보조)
   - HLS-10: 파일복사 스캐폴딩(claude-flow)·spec-kit registry·Claude SHA-pin 기각/범위한정
-decisions_open:
-  - HLS-OPEN-1: b2 포터블 행동규율 core 승격 범위 = 사용자 논의 안건 (옵션 A현행/B roles/C core + 6-1·6-2 분리). phase 확정 전 미정.
+  - HLS-OPEN-1(해소 2026-07-10): b2 승격 = 옵션 B(roles/) + 6-1/6-2 분리. 6-2→roles/response-policy.md(3어댑터 참조), 6-1→OPERATIONS §5.10, DESIGN_PRINCIPLES 위임 2층 정정. 구현 plans/2026-07-10_b2-response-policy/
+decisions_open: []  # HLS-OPEN-1 해소로 미결 없음

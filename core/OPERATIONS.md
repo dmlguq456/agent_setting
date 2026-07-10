@@ -84,7 +84,7 @@ echo "state: branch=$br head=$head base=$def dirty=$(git status --porcelain 2>/d
 | 규모 | 처리 |
 |---|---|
 | 자잘한 단발 (typo·1줄·quick 급 소규모) | main 워킹트리에서 바로 (현행) |
-| 본작업 (qa standard 이상 · plan 추적 대상) | **worktree + 작업 브랜치** — base 최신에서 plan slug 브랜치 (§5.9 DONE-BRANCH 연계), mutation 커밋 누적 |
+| 본작업 (qa standard 이상 · plan 추적 대상) | **worktree + 작업 브랜치** — base 최신에서 plan slug 브랜치 (§5.9 DONE-BRANCH 연계), mutation 커밋 누적. **기능 추가·모듈 신설·다파일 변경은 규모 판단 없이 무조건 브랜치, 애매해도 브랜치 쪽** (2026-06 drill g3 재발 방지 — main 트리 직접 편집은 typo·1줄급 자잘한 단발로 한정). |
 | 병렬 요청 (작업 진행 중 새 독립 요청) | 즉시 새 worktree 로 분사 (아래 규칙) — 앞 job 완료를 기다리지 않는다 |
 
 **디스패치 규칙**:
