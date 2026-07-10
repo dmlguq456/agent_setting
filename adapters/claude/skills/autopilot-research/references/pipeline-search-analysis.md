@@ -289,5 +289,5 @@ Agent(subagent_type="자료팀"):
 - 추출 figure 품질 변동 — 사용자 polish 또는 직접 캡처가 더 적합한 경우 다수.
 
 **Skipping**:
-- `--qa quick` mode에서는 Step 3.5 자동 skip (fastest path 우선).
+- intensity `quick` 에서는 Step 3.5 자동 skip (fastest path 우선).
 - `--no-figures` flag 명시 시 skip.

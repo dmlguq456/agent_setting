@@ -25,7 +25,7 @@
 
 ### QA 강도 — _adversarial 고정_ (사용자 협상 불가)
 
-본 skill 의 QA level 은 _항상 adversarial_. `--qa` flag 자체 없음. 이유:
+본 skill 의 검증 rigor 는 _항상 adversarial-tier_ (intensity=adversarial). 별도 `--qa` flag 없음. 이유:
 
 - 사용자 프로필은 _한 번 만들어지면 모든 sub-agent 가 default 로 따르는 자료_ — 작은 오류도 모든 작업에 propagating.
 - 가벼운 incremental 갱신이라도 _기존 자료와의 모순_ 또는 _과잉 일반화_ 위험이 있어 multi-reviewer 검증이 필수.

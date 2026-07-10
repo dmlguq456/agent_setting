@@ -1,7 +1,7 @@
 ---
 name: code-refine
 description: "사용자 메모·QA 피드백 반영해 기존 plan 정정 — sub-skill"
-argument-hint: "<plan name or path> [--qa quick|light|standard|thorough|adversarial]"
+argument-hint: "<plan name or path>"
 metadata:
   group: sub
   fam: sub
@@ -45,9 +45,9 @@ Return which steps were changed and a brief summary.
 ```
 
 ## Refine Assurance
-If `$ARGUMENTS` contains `--qa quick|light|standard|thorough|adversarial`, use that level and strip the flag. Otherwise inherit the plan's selected assurance context. `code-refine` is optional correction of an existing durable plan; it is not an automatic stage in `direct` or `quick`.
+The verification rigor tier is derived from the plan's selected `--intensity` context (per [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)). `code-refine` is optional correction of an existing durable plan; it is not an automatic stage in `direct` or `quick`.
 
-| QA level | Review action after refine | Fix behavior |
+| Rigor tier | Review action after refine | Fix behavior |
 |---|---|---|
 | `quick` | Direct invocation only: one fast sanity review or self-check. | Record remaining concerns; no repeated fix-round. |
 | `light` | One focused fast review when the changed plan steps could affect execution. | One bounded correction if blocking. |
@@ -55,7 +55,7 @@ If `$ARGUMENTS` contains `--qa quick|light|standard|thorough|adversarial`, use t
 | `thorough` | Multi-axis review only when selected by `intensity=thorough`. | Up to two corrections with synthesis. |
 | `adversarial` | Thorough plus explicit adversary/failure-mode/security critique when available and selected. | Fail loudly only for explicit unavailable adversarial; otherwise fall back to thorough and report. |
 
-After 기획팀 returns, run only the review action selected by the caller's graph. Do not open a repeated QA loop merely because `--qa` is high. If unresolved concerns remain after the selected budget, add them to the plan's risk/unresolved section and report them to the caller.
+After 기획팀 returns, run only the review action selected by the caller's graph. Do not open a repeated QA loop merely because the rigor tier is high. If unresolved concerns remain after the selected budget, add them to the plan's risk/unresolved section and report them to the caller.
 
 ## Task
 Refine the plan at: $ARGUMENTS

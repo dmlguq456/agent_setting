@@ -9,7 +9,7 @@
 
 ## 호출 형식
 ```
-/autopilot-research <topic> --mode academic|technology|market [--depth shallow|medium|deep] [--qa quick|light|standard|thorough] [--from search|analyze|report] [--no-clarify] [--no-figures]
+/autopilot-research <topic> --mode academic|technology|market [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--from search|analyze|report] [--no-clarify] [--no-figures]
 ```
 
 ## 3개 모드
@@ -33,10 +33,11 @@
 - `medium` (default): 인용수·venue tier로 우선순위, citation > 10이면 full read
 - `deep`: paywall 페이지까지 자료팀 위임, reference chaining
 
-## --qa
-- `quick` (1-pass 1 라운드)
-- `light` (fast reviewer single-pass)
-- `standard` (deep reviewer + fast fact-checker parallel)
+## 검증 rigor (intensity-derived — 별도 `--qa` 축 없음, CONVENTIONS §1.1)
+검증 rigor 는 `--intensity` 에서 파생된다. 파생 tier 별 reviewer 편성:
+- `quick` (1-pass 1 라운드, fact-checker skip)
+- `light`/none — `direct` (fast reviewer single-pass, fact-checker skip)
+- `standard` — `standard`/`strong` (deep reviewer + fast fact-checker parallel)
 - `thorough` (2× deep reviewers + fast fact-checker)
 - `adversarial` (thorough + external adversary + claim-verify)
 

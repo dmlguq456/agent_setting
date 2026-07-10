@@ -7,7 +7,7 @@
 ## 전체 구조
 ```mermaid
 flowchart LR
-    A["사용자 쿼리"] -->|<task> + --mode + --qa| B["autopilot-draft (오케스트레이터)"]
+    A["사용자 쿼리"] -->|<task> + --mode + --intensity| B["autopilot-draft (오케스트레이터)"]
     B --> SC["Step 0: Scope Clarification"]
     SC --> C["Step 1: Material Analysis (implicit input discovery)"]
     C -->|Step 2| D["draft-strategy (연구팀 위임)"]
@@ -25,14 +25,14 @@ flowchart LR
 
 ## 명령 형식
 ```
-/autopilot-draft "<task description>" [--mode paper|presentation|doc] [--qa quick|light|standard|thorough] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]
+/autopilot-draft "<task description>" [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]
 ```
 
 | 플래그 | 설명 |
 |---|---|
 | `<task description>` | 첫 positional arg — 작업의 목표·의도·범위·청중 한 줄 |
 | `--mode` | 6개 모드 중 하나. 생략 시 task description에서 자동 추론 |
-| `--qa` | quick / light / standard / thorough / adversarial — assurance budget only; fact-checker is selected only when claims/citations/cards are in scope and the selected graph calls for it |
+| `--intensity` | direct / quick / standard / strong / thorough / adversarial — stage graph 선택자이자 검증 rigor의 유일한 파생원 (별도 `--qa` 축 없음; CONVENTIONS §1.1). fact-checker는 claims/citations/cards가 scope에 있고 선택된 graph가 부를 때만 선택된다 |
 | `--user-refine` | 연구팀 메모 직후 pause. 사용자가 직접 `<!-- memo: ... -->` 추가 후 `--from <stage>` 재개 |
 | `--no-clarify` | Step 0 Scope Clarification 강제 skip |
 | `--from <stage>` | pause/실패 후 특정 단계 재개 (analyze / strategy / strategy-refine / draft / draft-refine / finalize) |

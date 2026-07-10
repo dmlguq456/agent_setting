@@ -48,9 +48,9 @@ Detect type by path prefix:
 
 ### Stage B.5 — Factual claim & Style auto-detector (always runs, even in quick)
 
-Runs after Stage B's per-file change list is built but BEFORE Stage C diff preview. The two detectors below execute on every proposed change regardless of `--qa` level — they are cards-grep / regex only, no web fetch, so cost is negligible. Their findings become markers in Stage C, not auto-rejections.
+Runs after Stage B's per-file change list is built but BEFORE Stage C diff preview. The two detectors below execute on every proposed change unconditionally, regardless of the derived rigor tier (intensity) — they are cards-grep / regex only, no web fetch, so cost is negligible. Their findings become markers in Stage C, not auto-rejections.
 
-**Pre-check (flag-based opt-out, orthogonal to `--qa`)** — before either detector runs, inspect the original invocation argv:
+**Pre-check (flag-based opt-out, orthogonal to intensity)** — before either detector runs, inspect the original invocation argv:
 - If `--no-fact-check` is present → **skip the factual claim detector entirely** (including the section-heading context cross-check). Emit one informational line at the top of Stage C diff preview: `ℹ Stage B.5 factual aspect: skipped via --no-fact-check flag (memory feedback_factcheck_principles 정책에 따른 명시적 opt-out)`. Style lint still runs.
 - If `--no-style-audit` is present → **skip the style lint** only. Emit: `ℹ Stage B.5 style aspect: skipped via --no-style-audit flag`. Factual detector still runs.
 - If both flags are present → both detectors skipped; both informational lines emitted.

@@ -81,7 +81,7 @@ Before any code changes, ensure the working tree is clean and up-to-date:
 
 | Level | Auto-detect condition | Action |
 |---|---|---|
-| **Quick** | (manual via `--qa quick` only — inherited from autopilot-code) | 1× fast reviewer (Claude adapter: 품질관리팀 `model: "sonnet"`), single pass; major 🔴 issues are logged but the pipeline does NOT branch to rollback retry — issues propagate to `pipeline_summary.md` Decision Points instead |
+| **Quick** | (via `--intensity quick` — inherited from autopilot-code) | 1× fast reviewer (Claude adapter: 품질관리팀 `model: "sonnet"`), single pass; major 🔴 issues are logged but the pipeline does NOT branch to rollback retry — issues propagate to `pipeline_summary.md` Decision Points instead |
 | **Light** | ≤3 units, mechanical, single-variant | 1× fast reviewer |
 | **Standard** | 4–10 units, logic changes, single module | 1× deep reviewer |
 | **Thorough** | >10 units, cross-module/variant, architectural | 2–3× reviewers in parallel: A=correctness (deep), B=consistency (fast), C=safety (deep, >20 files) |
@@ -91,7 +91,7 @@ Thorough mode — A: bugs/logic/signature mismatches (deep); B: naming/conventio
 
 Adversarial mode — runs all Thorough agents PLUS an additional external adversary in the same parallel batch. Claude adapter uses `codex-review-team`, which runs `adversarial-review --wait --scope auto` and writes adapter-specific external review logs. All 🔴 from ANY agent must be addressed.
 
-**External adversary availability check**: Before selecting Adversarial, run the adapter availability check (Claude adapter: `codex --version`, suppress stderr). If unavailable, fall back to Thorough silently. This check is skipped if `--qa adversarial` is explicitly specified (fail loudly instead).
+**External adversary availability check**: Before selecting Adversarial, run the adapter availability check (Claude adapter: `codex --version`, suppress stderr). If unavailable, fall back to Thorough silently. This check is skipped if `--intensity adversarial` is explicitly specified (fail loudly instead).
 
 ## Change Log & Phase Review
 - Each 개발팀 subagent writes its own step log file in `{log_dir}/dev_logs/`.

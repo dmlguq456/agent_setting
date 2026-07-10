@@ -7,7 +7,7 @@
 
 ## 호출 형식
 ```
-/code-plan <task description> [--qa light|standard|thorough|adversarial] [--autonomy proactive|standard|passive]
+/code-plan <task description> [--autonomy proactive|standard|passive]
 ```
 
 > **Caller note**: 계획 수립은 `high` / `xhigh` effort에서 이점. 낮은 effort에서는 cross-file 분석에서 호출 지점 누락 가능.
@@ -39,9 +39,9 @@ Date: {YYYY-MM-DD}
 
 ## Plan-Check Assurance
 
-`code-plan` is used for durable `standard+` code work cycles. `direct` skips it; `quick` uses inline micro-plan plus plan-check-lite. `--qa` scales the plan-check budget but does not create the stage graph.
+`code-plan` is used for durable `standard+` code work cycles. `direct` skips it; `quick` uses inline micro-plan plus plan-check-lite. The rigor tier (derived from `--intensity`, per [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)) scales the plan-check budget but does not create the stage graph.
 
-| Level | 행동 |
+| Rigor tier | 행동 |
 |---|---|
 | quick | direct invocation only; single fast sanity check, no repeated fix loop |
 | light | one focused fast review or self-check |

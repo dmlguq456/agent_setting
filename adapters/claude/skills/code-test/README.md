@@ -7,7 +7,7 @@ code-execute 이후 또는 온디맨드로 concrete verification evidence를 기
 
 ## 호출 형식
 ```
-/code-test <plan name, path, or test scope> [--qa quick|light|standard|thorough|adversarial]
+/code-test <plan name, path, or test scope>
 ```
 
 ## Plan Resolution (canonical)

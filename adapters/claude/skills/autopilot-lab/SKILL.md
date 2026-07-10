@@ -1,7 +1,7 @@
 ---
 name: autopilot-lab
 description: "빠른 실험 prototype entry — 학습 세팅(setup)과 ckpt 평가(eval) 앞뒤를 돕는다"
-argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
+argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
 metadata:
   group: entry
   fam: code
@@ -40,7 +40,7 @@ metadata:
 | `analyze-project` | 코드 청사진 추출 | `analysis_project/` |
 | `autopilot-spec` | 비코드 청사진 (PRD·스택·skeleton) | `spec/` |
 | **`autopilot-lab`** (본 skill) | **빠른 학습 실험 prototype (setup·eval, hands-on)** | **`experiments/`** |
-| `autopilot-code` | brownfield 정련·라이브러리화 (full) / `--qa quick`: 소규모 잡일 (가벼움 + 로그) | `plans/` |
+| `autopilot-code` | brownfield 정련·라이브러리화 (full) / `--intensity quick`: 소규모 잡일 (가벼움 + 로그) | `plans/` |
 | `autopilot-draft / refine` | 문서 작업 | `documents/` |
 
 ## 흐름 안에서 본 skill 의 자리
@@ -124,12 +124,12 @@ metadata:
 - `--mode`: `auto` (default) — 발화로 setup/eval 추론. 학습 동사("돌려/학습/ablation") → setup, 평가 동사("평가/분석/비교") → eval. ckpt 존재 + 평가 발화 → eval.
 - `--parent`: 자동 — _이어가는 발화_ ("거기서·그 모델에·추가로") + 직전 `_RUNLOG` 실험 발견 시 그 slug 추정. 사용자 명시 override.
 - `--ref`: 자동 (`similar_models.md` 추천 가장 유사 자리). setup `--parent` 자리는 ref 대신 부모 ckpt.
-- `--qa`: `light` (default — 실험 prototype 빠른 cycle. high-stakes 신호(논문 결과·외부 공개) 시 standard 자동 상향)
+- 검증 강도: `--intensity` 에서 파생 (별도 `--qa` 축 없음 — [CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)). default 는 light-tier (실험 prototype 빠른 cycle). high-stakes 신호(논문 결과·외부 공개) 시 intensity 상향
 - `--from`: 자동 (`pipeline_state.yaml` / `_RUNLOG.md` 직전 실험 발견 시 컨텍스트 자동 load)
 
 ### Override 1순위 — autopilot 우회
 
-- 단발 데이터 정제·변환·script — _로그 남기고 싶으면_ `/autopilot-code --qa quick` (가벼운 plan + execute + test, `plans/` 에 로그). 진짜 throwaway(로그 불필요)만 메인 에이전트 직접. lab 모드 아님
+- 단발 데이터 정제·변환·script — _로그 남기고 싶으면_ `/autopilot-code --intensity quick` (가벼운 plan + execute + test, `plans/` 에 로그). 진짜 throwaway(로그 불필요)만 메인 에이전트 직접. lab 모드 아님
 - 단발 plot 만 — `Agent(자료팀, mode="figure-gen")` 직접
 - 정련 / 라이브러리화 / spec 정돈 — `/autopilot-code` 또는 `/autopilot-spec`
 - `/autopilot-lab <args>` slash 직접 입력 — 컨펌 skip
@@ -153,9 +153,9 @@ metadata:
 ### --ref <path>
 참고 코드 path 명시 (예: `model/TF_Restormer`). 미명시 시 `similar_models.md` 자동 추천. setup `--parent` 자리는 무시 (부모 ckpt 우선).
 
-### --qa
-- `quick` / `light` (default) / `standard` / `thorough` / `adversarial` — [CONVENTIONS.md §1](../../core/CONVENTIONS.md)
-- 본 skill default 가 `light` 인 이유: 실험 prototype 은 _빠른 cycle_ 이 1순위. high-stakes 신호(논문 결과·외부 공개) 시 사용자가 standard+ 명시 또는 메인 에이전트 자동 상향.
+### 검증 강도 (intensity 파생)
+- 검증 rigor 는 별도 `--qa` 축이 아니라 `--intensity` 에서 결정론적으로 파생된다 — 5 단계 tier 정의·매핑은 [CONVENTIONS.md §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot) 단일 source.
+- 본 skill default 가 light-tier 인 이유: 실험 prototype 은 _빠른 cycle_ 이 1순위. high-stakes 신호(논문 결과·외부 공개) 시 사용자가 `--intensity` 상향 명시 또는 메인 에이전트 자동 상향.
 
 ### --from
 - setup 모드: `spec` / `scaffold` / `run` — 단계 재개
@@ -188,7 +188,7 @@ metadata:
 - ref/부모 모델 폴더 직접 수정 (variation 만, base 보존)
 - 라이브러리화·module 정련 (autopilot-code 영역)
 - PRD·스택 결정 (autopilot-spec 영역)
-- 단발 데이터 변환·정제 script (`autopilot-code --qa quick` 또는 메인 에이전트 직접 — lab 모드 아님)
+- 단발 데이터 변환·정제 script (`autopilot-code --intensity quick` 또는 메인 에이전트 직접 — lab 모드 아님)
 - 실험 자동 실행·학습·평가 (사용자 환경·queue 가변 — 명령만 안내. 가벼운 eval 만 발화 시 테스트팀)
 - ckpt·log destructive 삭제 (`_internal/` 외)
 

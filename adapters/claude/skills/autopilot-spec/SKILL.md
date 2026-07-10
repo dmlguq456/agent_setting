@@ -1,7 +1,7 @@
 ---
 name: autopilot-spec
 description: "요구사항·청사진 작성·갱신 entry — prd.md 단일 출처, 모든 spec 변경의 canonical 경로"
-argument-hint: "<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough] [--user-refine]"
+argument-hint: "<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
 metadata:
   group: entry
   fam: code
@@ -64,7 +64,7 @@ metadata:
 ### Default 옵션 권장값
 
 - `--mode`: **`auto`** (default) — 발화·기존 코드·산출물 검사로 자동 추론 (단일 또는 복수)
-- `--qa`: `standard` (high-stakes 신호 시 thorough 자동 상향)
+- 검증 강도: `--intensity` 에서 파생 (별도 `--qa` 축 없음 — [CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)). default 는 standard-tier. high-stakes 신호 시 intensity 상향
 - `--user-refine`: **off** (사용자 명시 시만 on)
 
 ### Override 1순위 — autopilot 우회
@@ -90,14 +90,14 @@ metadata:
 
 ## Required Reads
 
-- 옵션 해석(`--mode`/`--qa`/`--user-refine`), mode 자동 추론 단서, 신규 vs 재진입 자동 분기, update mode canonical 경로, refine v{N+1} 버전 규약: `references/invocation-and-modes.md`.
+- 옵션 해석(`--mode`/`--intensity`/`--user-refine`), mode 자동 추론 단서, 신규 vs 재진입 자동 분기, update mode canonical 경로, refine v{N+1} 버전 규약: `references/invocation-and-modes.md`.
 - PRD 작성 (Procedure Step 1~3.5 — 정보 수집·중간 컨펌·PRD 본문 템플릿·Architecture Diagrams·묶음 갱신 logic): `references/prd-authoring.md`.
 - Scaffolding + Skeleton (Step 4 Phase 0~3 — ref source·ckpt 사전 동작 점검·개발팀 new-lib·Step 5 CONFIRM Gate): `references/scaffolding.md`.
 - 배포 셋업 라우팅·Forbidden Zones·CONFIRM Gate 응답 분기·`pipeline_state.yaml`·Return Format·Update memory·Examples: `references/operations-and-examples.md`.
 
 ## Reference Map
 
-- `references/invocation-and-modes.md`: Argument Parsing(`--mode`/`--qa`/`--user-refine`), Mode 자동 추론 단서, Context Auto-Detection(`pipeline_state.yaml` 자동 검사·발화→step 자동 분류·자동 컨펌 한 화면·update mode canonical 경로·refine v{N+1} 버전 관리).
+- `references/invocation-and-modes.md`: Argument Parsing(`--mode`/`--intensity`/`--user-refine`), Mode 자동 추론 단서, Context Auto-Detection(`pipeline_state.yaml` 자동 검사·발화→step 자동 분류·자동 컨펌 한 화면·update mode canonical 경로·refine v{N+1} 버전 관리).
 - `references/prd-authoring.md`: Procedure(중간 컨펌 default·동시성 가드) + Step 1(정보 수집)·2(한 화면 컨펌)·3a-3d(PRD 3 자리 분할 + 의미↔규칙 경계 체크) + PRD 본문 템플릿 + Architecture Diagrams + Step 3.5(묶음 갱신 logic).
 - `references/scaffolding.md`: Step 4 Scaffolding+Skeleton(Phase 0 ref source·1 ref repo/ckpt 가져오기·1.5 pretrained ckpt 사전 동작 점검·2 개발팀 new-lib·3 결과 컨펌) + Step 5 CONFIRM Gate.
 - `references/operations-and-examples.md`: 배포 셋업 자리(autopilot-ship 라우팅)·Forbidden Zones·CONFIRM Gate 응답 분기·Pipeline state 관리·Return Format·Update memory·Examples 1-4.

@@ -1,7 +1,7 @@
 ---
 name: autopilot-design
 description: "시각 산출물 디자인 파이프 entry — 토큰·컴포넌트·레퍼런스·핸드오프 통합"
-argument-hint: "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|standard|thorough]"
+argument-hint: "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: entry
   fam: design
@@ -30,7 +30,7 @@ metadata:
 
 - `--scope`: `mixed` (auto-detect — UI 면 `ui`, 슬라이드면 `slide`, 단일 자산이면 `icon` 등)
 - `--from`: auto-detect (design_state.yaml 있으면 다음 phase 부터)
-- `--qa`: `standard`
+- 검증 강도: `--intensity` 에서 파생 (별도 `--qa` 축 없음 — [CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)). default 는 standard-tier
 
 ### Override
 
@@ -65,10 +65,11 @@ scope 에 따라 일부 phase auto-skip:
 - `init` / `refs` / `tokens` / `components` / `review` / `handoff`
 - design_state.yaml 발견 시 마지막 `done` phase 다음부터
 
-### --qa
-- `quick` (review phase skip)
-- `standard` (default)
-- `thorough` (디자인팀 critic + 외부 레퍼런스 cross-check)
+### 검증 강도 (intensity 파생)
+검증 rigor 는 별도 `--qa` 축이 아니라 `--intensity` 에서 파생된다 — tier 정의·매핑은 [CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot) 단일 source. 본 skill 적용:
+- quick-tier (`--intensity quick`) — review phase skip
+- standard-tier (default) — 표준 review phase
+- thorough-tier (`--intensity thorough`) — 디자인팀 critic + 외부 레퍼런스 cross-check
 
 ## Context Auto-Detection (신규 vs 재호출 자동 분기)
 
@@ -244,7 +245,7 @@ Invoke Skill: `design-components` with the design path as args.
 
 ### Phase 4: design-review
 
-`--qa quick` 시 skip. 그 외:
+quick-tier (`--intensity quick`) 시 skip. 그 외:
 
 Invoke Skill: `design-review` with the design path as args.
 
@@ -292,7 +293,7 @@ last_updated: <timestamp>
 
 autopilot-spec Phase 2 가 `Invoke Skill: autopilot-design --app <name>` 호출 시:
 - 산출물 위치를 `<artifact-root>/spec/design/` 로 자동 설정
-- `--qa` 옵션은 autopilot-spec 의 그것 상속
+- `--intensity` 옵션은 autopilot-spec 의 그것 상속 (검증 rigor 는 거기서 파생)
 - 완료 후 `phases.design: done` 을 autopilot-spec 의 `pipeline_state.yaml` 에 갱신
 
 ## Return Format

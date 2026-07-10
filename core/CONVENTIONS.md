@@ -10,13 +10,13 @@
 
 ## §1. Pipeline Intensity, Stage Graph, and Assurance (canonical)
 
-Pipeline intensity controls _which orchestration shape_ an autopilot entry uses; QA level controls _how much assurance_ selected checks receive. New autopilot contracts choose intensity first and treat `--qa` as a legacy/override assurance knob, not the primary pipeline selector.
+Pipeline intensity controls _which orchestration shape_ an autopilot entry uses; verification rigor (_how much assurance_ selected checks receive) is **derived from that same intensity** via the §1.1 mapping table, not a separate axis. Autopilot contracts choose intensity only — rigor follows deterministically, and there is no user-facing `--qa` selector to reconcile against the pipeline selector.
 
 Common stages are runtime-neutral names. Each capability maps them to its own native sub-capabilities or inline work.
 
 | Stage | Meaning | Typical capability realization |
 |---|---|---|
-| `intake` | parse request, mode, constraints, risk, intensity, QA override | route/capability preflight, spec-significance, target selection |
+| `intake` | parse request, mode, constraints, risk, intensity (rigor derives from it) | route/capability preflight, spec-significance, target selection |
 | `orient` | gather only the context needed for the selected intensity | read spec/source/material artifacts; `orient-lite` for quick |
 | `plan` | choose work path before producing | no stage for `direct`; inline `micro-plan` for `quick`; durable plan for `standard+` |
 | `plan-check` | small gate that checks whether the plan can safely feed production | required for `quick+`; may be self-check, lightweight reviewer, or adversarial critique by intensity |
@@ -45,21 +45,21 @@ Check taxonomy:
 
 Depth contract: depth 0 is the user-facing main session. Depth 1 is the capability owner worker (`autopilot-code`, `autopilot-draft`, etc.) that owns a whole pipeline and returns only a synthesis to main; for `standard+` it acts as a thin conductor. Depth 2 is allowed for `standard+` owner-worker pipelines and has two uses: (a) **review sub-workers** with a single role (`planner`, `verifier`, `adversary`, `cross-harness-checker`, etc.), read-only by default, reporting short structured summaries; and (b) **pipeline stage-workers** — the conductor dispatches each sub-skill stage (code-* for autopilot-code; the homologous stage set for autopilot-draft/research/spec/design/lab — see each pipe's stage-worker table) as its own depth-2 headless session with class-scoped write ownership (only code-execute mutates source; plan/test/report write disjoint `plans/<slug>/` paths) and file-only handoff. `direct|quick` stay inline (both review and stage dispatch) and do not open depth2 unless the user explicitly asks to escalate. Depth 3+ is forbidden — stage sessions do not re-dispatch headless; their internal parallelism is in-session teams only. Raw worker logs stay in artifacts/dispatch logs; parent sessions exchange short structured summaries.
 
-`--qa quick|light|standard|thorough|adversarial` remains supported for compatibility and explicit assurance override. It changes the rigor of `plan-check`, selected independent reviews, and `verify`; it must not choose the stage graph by itself, must not force a monolithic full pipeline when `intensity=direct|quick`, and must not grant depth-2 dispatch by itself. Depth-2 eligibility comes from the `standard+` owner-worker graph; QA only changes how much reviewer/verifier budget that selected graph receives.
+Verification rigor is **not** a user-facing axis. It is derived deterministically from `intensity` via the §1.1 mapping table, which is the single source of truth for rigor. The derived rigor tier scales `plan-check`, selected independent reviews, and `verify`; it never chooses the stage graph by itself, never forces a monolithic full pipeline when `intensity=direct|quick`, and never grants depth-2 dispatch by itself. Depth-2 eligibility comes solely from the `standard+` owner-worker graph; the derived rigor only changes how much reviewer/verifier budget that selected graph receives. There is no separate `--qa` axis to reconcile — the verification processes themselves are unchanged, only the selection knob is folded into `intensity`.
 
-### §1.1 QA Assurance Levels (canonical)
+### §1.1 Verification Rigor Tiers (intensity-derived, canonical SoT)
 
-QA level is an _assurance budget_ for checks that the selected intensity graph already contains. It does not create stages, does not select the pipeline graph, and does not grant depth-2 dispatch. The graph selector is `intensity`; depth-2 is part of `standard+` owner-worker dispatch and stays unavailable for `direct|quick` unless the user explicitly escalates the work.
+The rigor tier is an _assurance budget_ for checks that the selected intensity graph already contains. It is **derived from `intensity`** per the mapping column below, not chosen independently; this table is the single source of truth for how much verification each intensity buys. It does not create stages, does not select the pipeline graph, and does not grant depth-2 dispatch. The graph selector is `intensity`; depth-2 is part of `standard+` owner-worker dispatch and stays unavailable for `direct|quick` unless the user explicitly escalates the work.
 
-Reviewer counts below are upper bounds for a selected independent pass, not automatic work to run after every stage. If the current graph has only `plan-check-lite` and `verify-lite`, the QA level scales those checks in place rather than expanding the graph into a full loop.
+Reviewer counts below are upper bounds for a selected independent pass, not automatic work to run after every stage. If the current graph has only `plan-check-lite` and `verify-lite`, the derived rigor scales those checks in place rather than expanding the graph into a full loop.
 
-| QA level | Plan-check rigor | Selected independent pass budget | Final verify rigor | Retry/fix-loop budget | Intended use |
-|---|---|---|---|---|---|
-| `quick` | self-check or fast 3-4 question gate | none by default | one concrete sanity check / verify-lite | no automatic retry loop | small localized work where ceremony must stay low |
-| `light` | fast reviewer or focused self-check | at most one fast reviewer when the graph already selected a review point | focused command/render/source check | one pass, no multi-round refinement | low-risk tracked work |
-| `standard` | lightweight independent plan review where planning exists | one selected bounded depth2 review point when the task is separable; avoid broad fan-out | normal capability verification; doc/research may add source/fact check | at most one correction round | routine tracked work |
-| `thorough` | deeper plan review or multi-axis review when the graph selected it | additional bounded parallel/depth2 perspectives beyond the standard verifier/planner shape | broader verification evidence and test adequacy review | up to two correction rounds | complex cross-domain/cross-harness work |
-| `adversarial` | adversarial critique of the owner plan | thorough budget plus explicit external adversary / failure-mode / security / contradiction pass | verify plus adversarial evidence where the track supports it | two correction rounds plus one adversary pass | high-stakes, irreversible, security, or public-facing work |
+| Rigor tier | Derived from intensity | Plan-check rigor | Selected independent pass budget | Final verify rigor | Retry/fix-loop budget | Intended use |
+|---|---|---|---|---|---|---|
+| `quick` | `quick` | self-check or fast 3-4 question gate | none by default | one concrete sanity check / verify-lite | no automatic retry loop | small localized work where ceremony must stay low |
+| `light`/none | `direct` | fast reviewer or focused self-check | at most one fast reviewer when the graph already selected a review point | focused command/render/source check | one pass, no multi-round refinement | low-risk tracked work |
+| `standard` | `standard` / `strong` | lightweight independent plan review where planning exists | one selected bounded depth2 review point when the task is separable; avoid broad fan-out | normal capability verification; doc/research may add source/fact check | at most one correction round | routine tracked work |
+| `thorough` | `thorough` | deeper plan review or multi-axis review when the graph selected it | additional bounded parallel/depth2 perspectives beyond the standard verifier/planner shape | broader verification evidence and test adequacy review | up to two correction rounds | complex cross-domain/cross-harness work |
+| `adversarial` | `adversarial` | adversarial critique of the owner plan | thorough budget plus explicit external adversary / failure-mode / security / contradiction pass | verify plus adversarial evidence where the track supports it | two correction rounds plus one adversary pass | high-stakes, irreversible, security, or public-facing work |
 
 Track rules:
 
@@ -68,12 +68,12 @@ Track rules:
 - **Design/apply/ship**: concrete render/build/deploy/compile evidence is the final verification surface; reviewer QA never substitutes for the executable/visual gate.
 - **Spec**: review checks coherence, API/data/UI impact, and downstream consistency; fact-checker is not automatic unless the spec cites external factual claims.
 
-Defaults are derived in this order: explicit `--intensity`, explicit `--qa`, capability default, then `WORKFLOW.md §1.1` request-shape routing. In the absence of an explicit `--qa`, the assurance level normally follows intensity (`direct`→none/light, `quick`→quick, `standard|strong`→standard, `thorough`→thorough, `adversarial`→adversarial) unless a capability documents a lower routine default.
+Intensity itself is derived in this order: explicit `--intensity`, capability default, then `WORKFLOW.md §1.1` request-shape routing. The rigor tier then follows deterministically from intensity per the table above (`direct`→none/light, `quick`→quick, `standard|strong`→standard, `thorough`→thorough, `adversarial`→adversarial). A capability may document a lower routine default, but there is no user-facing `--qa` override — rigor is not selectable apart from intensity.
 
 External adversary policy:
 
-- External adversary is only required for `qa=adversarial` when the selected graph actually includes an adversarial pass.
-- Before claiming that pass, the adapter must prove an external reviewer/engine/harness ran. If unavailable: explicit `--qa adversarial` fails loudly; auto-escalated adversarial falls back to `thorough` and reports the fallback.
+- External adversary is only required for `intensity=adversarial` when the selected graph actually includes an adversarial pass.
+- Before claiming that pass, the adapter must prove an external reviewer/engine/harness ran. If unavailable: explicit `intensity=adversarial` fails loudly; auto-escalated adversarial falls back to `thorough` and reports the fallback.
 - Adapter wrapper names are not portable semantics. The portable role is `external adversary`; runtime-specific names belong in adapter docs.
 
 Opt-out flags remain orthogonal:
@@ -86,7 +86,7 @@ Sub-capability inheritance:
 
 - `code-plan` realizes the durable `plan` plus `plan-check` stages for `standard+` code graphs. It is not used for `direct`; `quick` uses inline micro-plan plus `plan-check-lite`.
 - `code-refine` is optional correction of an existing durable plan after user memo, plan-check feedback, or test failure. It is not an automatic stage in `quick`.
-- `code-test` realizes final concrete verification. Its rigor follows the selected QA/track policy but is no longer forced to `thorough` for every invocation.
+- `code-test` realizes final concrete verification. Its rigor follows the intensity-derived rigor tier and track policy but is no longer forced to `thorough` for every invocation.
 - `code-report` is reporting/synthesis; it does not add QA by itself.
 
 ## §2. Model Role 표기 (canonical)
@@ -102,7 +102,7 @@ Sub-capability inheritance:
 | `fast fact-checker` | 창의적 판단을 억제하고 source artifact 와 claim 을 좁게 대조하는 fast role | citation/venue/year/metric/lineage/table value 검증 |
 | `fast writer` | 이미 검증된 artifact 를 사용자-facing summary 로 조립하는 저비용 writer | final report, short synthesis |
 | `deep maker` | 생성 자체가 미학·전략·도메인 판단을 요구하는 role | plan, research synthesis, visual design, editorial rewrite |
-| `external adversary` | 같은 런타임과 다른 독립 engine 으로 hostile review 를 수행하는 role | `--qa adversarial` 추가 검토 |
+| `external adversary` | 같은 런타임과 다른 독립 engine 으로 hostile review 를 수행하는 role | `intensity=adversarial` 추가 검토 |
 | `orchestrator` | 호출·도구 실행·결과 병합·한국어 재정리 담당. 실제 판단 role 과 분리 가능 | wrapper agent, headless dispatch, external adversary adapter |
 
 ### §2.2. Adapter mapping requirement
@@ -116,7 +116,7 @@ Sub-capability inheritance:
 | Role family | Portable role | 실제 작동 |
 |---|---|---|
 | `기획팀` (plan-team) | deep maker | deep maker 단일 |
-| `품질관리팀` (qa-team) | variable reviewer/verifier | **가변** — selected QA pass에서 fast/deep reviewer budget을 제공한다. `plan-check`는 light/standard에서 작게, `thorough|adversarial`에서만 parallel/depth2로 커질 수 있다. test 모드는 final verification evidence를 실행·검토하며, 별도 reviewer fan-out은 QA budget과 intensity가 함께 요구할 때만 연다. security-review 모드는 code track의 adversarial/failure-mode pass다. |
+| `품질관리팀` (qa-team) | variable reviewer/verifier | **가변** — selected verification pass에서 fast/deep reviewer budget을 제공한다 (budget은 intensity-파생 rigor tier가 정한다). `plan-check`는 light/standard에서 작게, `thorough|adversarial`에서만 parallel/depth2로 커질 수 있다. test 모드는 final verification evidence를 실행·검토하며, 별도 reviewer fan-out은 intensity-파생 rigor가 요구할 때만 연다. security-review 모드는 code track의 adversarial/failure-mode pass다. |
 | `연구팀` (research-team) | variable research reviewer | **가변** — default deep maker/reviewer (Plan Review·domain reviewer); fact-checker subrole·light QA는 fast fact-checker/reviewer |
 | `자료팀` (material-team) | deep maker default, fast tool worker subroles | 자료 수집·시각·분석. browser-fetch/pdf-extract/web-image-search 는 fast tool worker, figure-gen/data-script 는 deep maker |
 | `개발팀` (dev-team) | fast implementer default | fast implementer 단일. 복잡한 API·라이브러리 설계는 deep maker 로 상향 가능 |
@@ -124,17 +124,17 @@ Sub-capability inheritance:
 | `편집팀` (editorial-team) | deep maker/editor with fast reviewer subrole | translate/polish 는 deep editor, review 는 fast reviewer |
 | external review wrapper | external adversary orchestrator | actual review·analysis 는 external adversary engine 이 수행할 수 있고, wrapper 는 호출·결과 정리만 담당 |
 
-**스테이지 분사 시 model role 매핑 (SD-5)**: `standard+` 스테이지를 depth-2 로 분사할 때 conductor 는 위 role 을 스테이지별로 명시(`--model-role`, wrapper 암묵 선택 금지) — code-plan=**deep maker**(기획팀), code-execute=**fast implementer** default(복잡 설계는 deep maker 상향), code-test=**variable reviewer/verifier**(품질관리팀, qa/intensity 가 결정), code-report=**fast writer**. 난이도별 상향/하향은 conductor 판단(OPERATIONS §5.10 ⑦).
+**스테이지 분사 시 model role 매핑 (SD-5)**: `standard+` 스테이지를 depth-2 로 분사할 때 conductor 는 위 role 을 스테이지별로 명시(`--model-role`, wrapper 암묵 선택 금지) — code-plan=**deep maker**(기획팀), code-execute=**fast implementer** default(복잡 설계는 deep maker 상향), code-test=**variable reviewer/verifier**(품질관리팀, intensity-파생 rigor 가 결정), code-report=**fast writer**. 난이도별 상향/하향은 conductor 판단(OPERATIONS §5.10 ⑦).
 
 ---
 
 ## §3. Hard Cross-Doc Invariants (sync-skills `--check`가 자동 검사)
 
-1. `intensity`가 stage graph/depth를 선택하고 `--qa`가 assurance budget만 조절한다는 분리가 모든 autopilot entrypoint와 adapter prompt에 유지되어야 한다. `--qa thorough`만으로 depth2 dispatch나 full pipeline을 열면 drift.
+1. `intensity`가 stage graph/depth를 선택하고, verification rigor(assurance budget)는 그 intensity에서 §1.1 표로 파생된다 — 사용자-facing `--qa` 축은 없다. 파생 rigor만으로 depth2 dispatch나 full pipeline을 열면 drift (rigor는 graph를 못 고른다).
 2. `quick`은 inline micro-plan, `plan-check-lite`, verify-lite를 뜻한다. 작은 작업마다 durable `plan.md`, 반복 QA loop, parallel reviewer fan-out을 강제하면 drift.
 3. **adversarial** 정의는 selected thorough budget plus external adversary/failure-mode/security/claim-verify pass다. Adapter 구현명은 portable 의미가 아니며 adapter 문서가 소유한다. 자주 잘못 적힌 패턴: `standard + external/Codex` — _틀림_.
 4. autopilot-code의 QA 표에 fact-checker가 적힌 곳이 있으면 drift (code는 fact-checker 없음).
-5. `code-test`를 모든 호출에서 hardcoded thorough/parallel QA로 정의하면 drift. It scales final verification by selected QA/intensity and may add adequacy review only when selected.
+5. `code-test`를 모든 호출에서 hardcoded thorough/parallel QA로 정의하면 drift. It scales final verification by the intensity-derived rigor tier and may add adequacy review only when selected.
 6. `--no-fact-check` / `--no-style-audit`는 autopilot-refine / audit 외 다른 skill에 노출되면 안 됨.
 7. external adversary wrapper 를 실제 reviewer role 단독으로 표기하면 drift — 실제 review 는 external adversary engine, wrapper 는 orchestrator role. §2 매트릭스에 따라 "external adversary + fast orchestrator" 같이 분리 표기.
 8. **의도 동반 (2026-06-11)**: 지침·규칙·hook 의 신설/강화에는 _왜(계기 사건 + 날짜)_ 를 인라인 주석 또는 commit message 에 남긴다 — 예: "(drill g2 가 잡은 구멍, 2026-06-11)". 의도 없는 규칙은 시간이 지나면 정리도 못 하고 의심도 못 하는 짐 — 연수 루프가 _의도 불명 지침_ 을 정리 후보로 보고한다. 의도의 최상위 보존 형태는 drill 케이스 (실행 가능한 의도 — 오답노트 승격 채널).

@@ -18,7 +18,7 @@ metadata:
 
 ## Pre-Check
 
-- `phases.review: done` (또는 `--qa quick` 으로 review skip 됐을 시 components: done)
+- `phases.review: done` (또는 `--intensity quick` 으로 review skip 됐을 시 components: done)
 - 검토 결과 review 가 `failed` 면 handoff 거부, 사용자에 fix 권장
 
 ## Procedure

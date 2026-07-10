@@ -19,6 +19,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
+# Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
+# `--qa` is no longer a user-facing axis; it is optional and, when omitted, derived here.
+# The jobs.log `qa=` field is retained (derived value) for fleet-collector compatibility.
+QA_FROM_INTENSITY = {
+    "direct": "light",
+    "quick": "quick",
+    "standard": "standard",
+    "strong": "standard",
+    "thorough": "thorough",
+    "adversarial": "adversarial",
+}
 
 # SD-15 (OPERATIONS §5.10 ⑨): limit/auth 즉사 패턴. wrapper 가 launch 직후 조기 exit 를 잡을 때,
 # 그리고 dispatch-liveness.sh / dispatch-wait.sh 가 open row 로그를 DEAD 로 판정할 때 공유하는
@@ -65,7 +76,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--slug", required=True)
     p.add_argument("--capability", required=True)
     p.add_argument("--mode", required=True)
-    p.add_argument("--qa", required=True)
+    p.add_argument("--qa", default=None)  # optional/derived from --intensity (CONVENTIONS §1.1)
     p.add_argument("--intensity", default="standard")
     p.add_argument("--depth", type=int, default=1)
     p.add_argument("--parent", dest="parent_slug")
@@ -441,6 +452,8 @@ def main(argv: list[str]) -> int:
         stderr=subprocess.DEVNULL,
     ).returncode != 0:
         return fail("not-a-git-worktree", 65, worktree=args.worktree)
+    if args.qa is None:
+        args.qa = QA_FROM_INTENSITY.get(args.intensity, "standard")
     if args.qa not in QA_LEVELS:
         return fail(
             "invalid-dispatch-qa",

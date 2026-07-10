@@ -6,7 +6,7 @@
 
 ## 파이프라인 워크플로우
 
-**커맨드**: `/autopilot-code --mode dev|debug <args> [--from <step>] [--qa light|standard|thorough|adversarial] [--user-refine]`
+**커맨드**: `/autopilot-code --mode dev|debug <args> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]`
 
 > 모드 미지정 시 dev로 기본 설정 + 경고 메시지
 
@@ -50,7 +50,7 @@ flowchart TD
 | code-test 재시도 | hotfix 2회 + retry 1회 | 1회 + 원본 에러 재현 |
 | 롤백 범위 | 전체 | fix 변경만 |
 | --from 지원 | plan/refine/execute/test/report | 미지원 (항상 진단부터) |
-| --qa adversarial | 지원 | thorough로 다운그레이드 |
+| --intensity adversarial | 지원 | thorough로 다운그레이드 |
 
 ## 서브스킬 상세
 - [code-plan](code-plan/README.md)
@@ -77,7 +77,7 @@ flowchart TD
 > autopilot-code는 fact-checker reviewer 미적용 (doc/research 파이프라인과 달리 cards/PDFs 대조할 ground-truth source가 없으므로 quality reviewer만 운용. adversarial 레벨은 external adversary 리뷰로 이를 대체).
 
 **스킬별 예외**:
-- **code-test**: final concrete verification. 선택된 `intensity`/`qa_level`에 따라 테스트 폭과 adequacy review 여부가 달라지며, 자체적으로 parallel QA fan-out을 강제하지 않음
+- **code-test**: final concrete verification. 선택된 `intensity`(와 그로부터 파생된 rigor tier)에 따라 테스트 폭과 adequacy review 여부가 달라지며, 자체적으로 parallel QA fan-out을 강제하지 않음
 - **code-report**: 높은 임계값. Thorough에서도 병렬화 없음
 
 ## 핵심 설계 원칙

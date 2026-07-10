@@ -7,18 +7,18 @@ Autopilot family — **post-creation iteration pipeline for research and doc art
 
 - **Prompt-driven**: target artifact는 prompt 키워드 fuzzy match against `<artifact-root>/{research,documents}/*`로 자동 식별
 - artifact의 file structure 자동 발견 → plans edits → diff preview → 사용자 confirm → 적용 + 버전 스냅샷 + integrated history 누적 (`pipeline_summary.md` — 단일 source of truth, 별도 CHANGELOG 없음)
-- 기본 `--qa quick` (1-pass review, fastest path). escalate to light/standard/thorough/adversarial for multi-round review, fact-check, or external adversary pass
+- 기본 `--intensity quick` (1-pass review, fastest path). intensity를 standard/thorough/adversarial로 상향하면 multi-round review, fact-check, external adversary pass — 검증 rigor는 intensity에서 파생 (CONVENTIONS §1.1, 별도 `--qa` 축 없음)
 - Optional `--memo <file>` falls back to file-memo style for deferred reviews
 
 > code 산출물은 본 skill 대상 아님 — `/code-refine` 또는 `/autopilot-code` 사용.
 
 ## 호출 형식
 ```
-/autopilot-refine "<prompt>" [--qa quick|light|standard|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]
+/autopilot-refine "<prompt>" [--intensity quick|light|standard|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]
 ```
 
 ## Default Invocation Rule (자동 호출 트리거)
-**메인 에이전트가 slash command 명시 없이 자동 invoke되는 조건은 _major-level 변경_으로만 narrowing.** `<artifact-root>/{documents,research}/*` 하위 artifact에 대한 prompt가 다음 3-criteria 중 하나에 해당할 때 `autopilot-refine "<prompt>" --qa quick`을 자동 호출:
+**메인 에이전트가 slash command 명시 없이 자동 invoke되는 조건은 _major-level 변경_으로만 narrowing.** `<artifact-root>/{documents,research}/*` 하위 artifact에 대한 prompt가 다음 3-criteria 중 하나에 해당할 때 `autopilot-refine "<prompt>" --intensity quick`을 자동 호출:
 
 1. **사용자 명시**: "major" / "v{N+1}" / "/autopilot-refine" / "전면 재작성" / "phase 재시작"
 2. **구조적 대규모 변경**: ≥200 줄 영향 / 전체 section rewrite / mutation tier 재분류 batch

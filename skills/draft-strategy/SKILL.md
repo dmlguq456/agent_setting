@@ -1,7 +1,7 @@
 ---
 name: draft-strategy
 description: "문서 전략 초안 작성 — 6 모드(rebuttal·paper·review·report·proposal·presentation) sub-skill"
-argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--qa quick|light|standard|thorough|adversarial] <task description>"
+argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> <task description>"
 metadata:
   group: sub
   fam: sub
@@ -17,7 +17,7 @@ Parse `$ARGUMENTS`:
 - **mode**: first word — `rebuttal | paper | review | report | proposal | presentation`
 - **--inputs <comma-separated-paths>**: comma-joined list of pre-discovered input paths (from autopilot-draft Pre-flight Step 2 Input Discovery — typically `analysis_project/{paper,doc}/...` and/or `research/{topic}/`). Each path is an artifact directory containing pre-analyzed materials.
 - **--output <dir>**: artifact output directory (`<artifact-root>/documents/{date}_{name}/`)
-- **--qa <level>**: `quick | light | standard | thorough | adversarial` — overrides auto-detect (autopilot-draft propagates this). 단일 source: [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical)
+- **검증 rigor tier**: `quick | light | standard | thorough | adversarial` — `--intensity` 에서 파생 (autopilot-draft 가 전파). 단일 source: [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)
 - Remaining text: task description / context
 
 ## Pre-Check

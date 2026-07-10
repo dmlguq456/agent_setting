@@ -342,7 +342,7 @@ When triggered, invoke the **편집팀** (editorial-team) agent in 모드 A (옮
 
 ### Step 4b — Post-draft factual detector (orchestrator-side, all modes)
 
-**Always runs** — even at `--qa quick` or `--qa light`. Orchestrator executes directly (no sub-agent). Cost is small: regex + cards grep only.
+**Always runs** — intensity-independent (runs at every intensity, including `quick`). Orchestrator executes directly (no sub-agent). Cost is small: regex + cards grep only.
 
 1. **Run detector**: apply regex + cards lookup + section-context cross-check to `{strategy_folder}/draft/draft.md` (and the mirror file `draft_ko.md` or `draft_en.md` if Step 4-KO was triggered).
    - For each domain claim (model name / venue / year / metric / dataset / lineage / citation), attempt lookup in `{research_artifact}/cards/*.md`.
@@ -365,7 +365,7 @@ If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}
 draft 본문이 사용자가 직접 검토 / paste 작업하는 산출물 — final 단계 직전에 _마지막 1회_ 편집팀 다듬기.
 
 호출 조건 (single source — `adapters/claude/agents/editorial-team.md` 모드 B 호출 조건):
-- `qa_level` 가 **standard / thorough / adversarial** 일 때만 호출. `quick` / `light` 는 skip.
+- 파생 rigor 가 **standard / thorough / adversarial** 일 때만 호출 (intensity `standard+`). `direct` / `quick` 는 skip.
 - skip 시 곧장 Step 6 (pipeline_summary) 진행.
 
 ```

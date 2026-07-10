@@ -11,7 +11,7 @@ metadata:
 
 # analyze-user
 
-cross-project 사용자 성향 프로필 entry. 사용자의 과거 산출물(figure·writing·presentation·analysis·domain·coding)에서 범용 패턴을 추출해 DB `type=profile` 레코드로 영속·갱신한다. `discover → analyze → verify → qa → output → summary` 6-phase 파이프이며, QA 는 항상 adversarial 고정. 이 파일은 라우터·호출 계약만 담고, 세부 절차·프롬프트·템플릿은 필요할 때 아래 reference 를 Read 한다.
+cross-project 사용자 성향 프로필 entry. 사용자의 과거 산출물(figure·writing·presentation·analysis·domain·coding)에서 범용 패턴을 추출해 DB `type=profile` 레코드로 영속·갱신한다. `discover → analyze → verify → qa → output → summary` 6-phase 파이프이며, 검증 rigor 는 항상 adversarial-tier 고정 (intensity=adversarial). 이 파일은 라우터·호출 계약만 담고, 세부 절차·프롬프트·템플릿은 필요할 때 아래 reference 를 Read 한다.
 
 > **산출물 위치**: DB `type=profile` 레코드 (읽기: `python3 <agent-home>/tools/memory/mem.py profile <stem>` / `mem profile <stem>`). stem 목록: `01_paper_figure_style` ~ `07_coding_convention` (7 개). `_internal/` 은 source index / qa reviews / pipeline state 용 _일시 스크래치_ 디렉터리 — SoT 아님 (SoT 는 DB). `<artifact-root>/` 가 아니므로 [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 의 _3-tier_ 가 _직접 적용_ 되진 않음 — 다만 main outputs / internal logs 의 _2-tier 분리_ 정신은 따른다.
 
@@ -52,7 +52,7 @@ cross-project 사용자 성향 프로필 entry. 사용자의 과거 산출물(fi
 
 ## Core Invariants
 
-- **QA adversarial 고정** — `--qa` flag 없음. Phase 4 는 항상 4-reviewer 병렬(source coverage / pattern accuracy / factcheck / external adversary). 사용자 프로필은 모든 sub-agent 가 default 로 따르는 propagating 자료라 협상 불가.
+- **QA adversarial 고정** — 별도 rigor flag 없음 — intensity=adversarial 로 고정. Phase 4 는 항상 4-reviewer 병렬(source coverage / pattern accuracy / factcheck / external adversary). 사용자 프로필은 모든 sub-agent 가 default 로 따르는 propagating 자료라 협상 불가.
 - **산출 = DB `type=profile` 레코드** (파일 Write X). write 는 `mem add durable profile <body> --scope global --source user-profile:<stem>` (source-keyed UPSERT — id 보존), read 는 `mem profile <stem>` (rowid-DESC newest-wins tie-break).
 - **`## 사용자 수동 메모` two-writer contract** — analyze-user(update) 와 `/post-it --scope user` 두 곳이 같은 `user-profile:<stem>` 레코드에 write. 반드시 `mem profile <stem>` tie-broken read 후 splice (raw query 금지 — stale dup splice 시 promoted memo orphan).
 - **per-stem 사후 read-back** — 각 stem write 직후 `mem profile <stem>` 로 read-back 해 dedup 병합 여부 검증 (불일치 → 큰 소리로 fail).

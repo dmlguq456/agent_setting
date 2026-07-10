@@ -100,7 +100,7 @@ A portable capability describes:
 - trigger semantics;
 - required inputs and artifact roots;
 - output contract;
-- QA level semantics;
+- Verification rigor (intensity-derived) semantics;
 - delegation roles using the portable role model;
 - deterministic guards and side effects;
 - recovery and audit requirements.

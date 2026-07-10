@@ -47,7 +47,7 @@ spec 의 `mode` 배열 (단일 또는 복수) 에 따라 자동 활성화:
 > **DONE-BRANCH → 새 브랜치 (이 cycle 이 새 작업일 때)**: §5.9 게이트가 `DONE-BRANCH`(현재 브랜치가 base 에 ahead 0 = 머지 완료된 끝난 브랜치) 를 내면, 이 plan 의 slug(`plans/<date>_<slug>/` 와 동일)로 **base 최신에서 새 브랜치를 판 뒤** 코드 작업 진행 — `git fetch origin && git switch -c <slug> origin/<base>` (worktree 안전: base 를 체크아웃 안 해 main worktree 와 비충돌). 현재 브랜치가 이미 이번 작업용 빈 브랜치면 그대로 사용. 죽은(머지된) 브랜치 위에 새 작업을 쌓지 않게 하는 자리 — worktree+merge 워크플로우의 핵심 누락. 한 줄 보고 후 진행.
 
 > **규모 분기 ([OPERATIONS.md §5.10](../../core/OPERATIONS.md#510-작업-격리병렬-디스패치-worktree-정책-canonical))**: 두 축으로 게이트 — 어느 하나라도 본작업이면 worktree.
-> - **변경 종류 (qa 레벨 무관, adapter worktree policy (Claude Code: [CLAUDE.md §0(C)](../../adapters/claude/CLAUDE.md))·drill g3)**: 기능 추가·모듈 신설·다파일 변경은 **규모·qa 판단 없이 무조건 worktree+작업 브랜치**. main 트리 직접은 typo·1줄급 자잘한 단발만 (qa quick 이어도 다파일이면 worktree — "quick 이니 main" 우회 금지).
+> - **변경 종류 (intensity 무관, adapter worktree policy (Claude Code: [CLAUDE.md §0(C)](../../adapters/claude/CLAUDE.md))·drill g3)**: 기능 추가·모듈 신설·다파일 변경은 **규모·intensity 판단 없이 무조건 worktree+작업 브랜치**. main 트리 직접은 typo·1줄급 자잘한 단발만 (intensity quick 이어도 다파일이면 worktree — "quick 이니 main" 우회 금지).
 > - **실행 메커니즘 (반쪽 적용 금지 — drill 신설 자리)**: worktree 를 _파 두기만_ 하고 main(depth 0)에서 autopilot-code 를 in-process(Skill)로 돌리지 않는다. worktree 확보 _즉시_ 그 안으로 **`claude -p` 헤드리스 분사 (§5.10 풀 ceremony)** — main 은 _정찰(분사 대상 결정)·분사·수확_ 만 (§5.10 "조정만 main"). 파이프를 **main(depth 0)과 헤드리스로 쪼개는 것은 여전히 금지** (상태 재발굴 + 연속성 상실 = worst of both). 단 가벼운 정찰(파일 나열·diff 범위)로 _무엇을 분사할지 결정_ 하는 건 main 정상.
 > - **스테이지 분사 (2026-07-10 stage-dispatch 반전 — `standard+` 기본 권장)**: 위 헤드리스 세션(depth-1 conductor) _안_ 에서는 반대로, 각 sub-skill 스테이지(code-plan·refine·execute·test·report)를 **depth-2 headless 세션으로 분사하는 것이 `standard+` 기본**이다. 과거 "스테이지를 쪼개면 상태 재발굴·연속성 상실 = 금지" 우려는 **산출물 기반 소통**으로 해소됐다 — 스테이지 인터페이스는 이미 파일(`plan.md`·`checklist.md`·`dev_logs/`·`test_logs/`·`final_report.md`, §2.1 계약)이므로 "재발굴"은 파일 로드 비용으로 수렴하고, 연속성의 매체가 대화가 아니라 파일이라 "연속성 상실"이 발생하지 않는다 (OPERATIONS §5.10 ③④, DESIGN_PRINCIPLES §8, spec/stage-dispatch SD-1·SD-2). conductor 는 스테이지 산출물 _본문_ 을 안 읽고 verdict/status·게이트 분기만 쥔다. 계약 완결성 의무: 산출물이 다음 스테이지 컨텍스트를 완전히 담아야 하며, 못 담으면 대화로 때우지 말고 산출물 스키마를 보강한다. **경계**: 산출물을 새로 쓰지 않거나 한 줄 verdict 만 내는 마이크로-스테이지(plan-check self-check 등)와 `direct/quick` 파이프 전체는 **inline 유지** — 분사 오버헤드가 실작업보다 크면 손해(손익 임계는 SD-OPEN-1 pilot 계측).
 >
@@ -181,8 +181,7 @@ autopilot-lab "X 실험" — Step 0 에서 readiness ✓ 확인 후 진행
 ### Default 옵션 권장값 (컨펌 시 메인 에이전트가 제안)
 
 - `--mode`: 발화 신호로 dev/debug 자동 추론. cwd 가 plan 폴더 + 최근 dev_logs/ 있으면 dev 우세, 에러 로그·traceback 있으면 debug 우세.
-- `--intensity`: 발화 risk/범위로 추론 (`direct|quick|standard|strong|thorough|adversarial`). stage graph 선택자.
-- `--qa`: assurance override. 기본은 선택된 intensity를 따른다 (`quick`→quick, `standard|strong`→standard, `thorough`→thorough, `adversarial`→adversarial). debug는 보통 `standard` 이상으로 충분하며, 명시 adversarial만 상향.
+- `--intensity`: 발화 risk/범위로 추론 (`direct|quick|standard|strong|thorough|adversarial`). stage graph 선택자이자 검증 rigor의 유일한 파생원. 검증 rigor는 별도 `--qa` 축이 아니라 여기서 파생된다 (`direct`→none/light, `quick`→quick, `standard|strong`→standard, `thorough`→thorough, `adversarial`→adversarial; CONVENTIONS §1.1). debug는 보통 `standard` 이상으로 충분하며, high-stakes 신호 시 intensity를 상향한다.
 - `--from`: 자동 추론 (`pipeline_state.yaml` 발견 시 마지막 성공 stage 다음부터)
 - `--user-refine`: **off** (글로벌 §2 — "사용자 검토 끼워" / "memo 추가하게 멈춰줘" 같은 명시 신호 있을 때만 켬)
 

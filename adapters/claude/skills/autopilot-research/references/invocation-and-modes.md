@@ -5,7 +5,7 @@ Parse `$ARGUMENTS` for optional flags:
 - **--mode**: `academic` (default) | `technology` | `market` — investigation type (see Modes below)
 - **--depth**: `shallow` | `medium` (default) | `deep`
 - (no `--refs` flag — local reference materials should be pre-processed via `/analyze-project --mode paper` first → output goes to `<artifact-root>/analysis_project/paper/` which autopilot-research auto-detects)
-- **--qa**: `quick` | `light` | `standard` | `thorough` | `adversarial` — assurance budget only. `intensity` selects the stage graph/depth; `--qa` scales selected report checks. `quick` keeps the selected gate small and disables fact-checker by default. source/fact-check runs only when claims/citations/cards are in scope and the selected graph/QA budget calls for it. `adversarial` adds external adversary / **claim-verify** where supported.
+- **검증 rigor (intensity-derived — 별도 `--qa` 축 없음)**: `--intensity` selects the stage graph/depth AND deterministically derives verification rigor (CONVENTIONS §1.1); there is no separate `--qa` selector. The derived rigor scales selected report checks. intensity `quick`/`light` keeps the selected gate small and skips the fact-checker; `standard+` runs source/fact-check when claims/citations/cards are in scope and the selected graph calls for it. `adversarial` adds external adversary / **claim-verify** where supported.
 - **--from**: `search` | `analyze` | `report` — resume the pipeline at a specific stage (see Resume below)
 - **--no-clarify**: skip Step 0 Scope Clarification (force-run with current query as-is)
 - **--no-figures**: skip Step 3.5 Web Figure Extraction (figure 자동 추출 단계 건너뜀; cards 본문은 그대로 생성, 단 `**Figures**:` 줄만 누락)
@@ -106,7 +106,7 @@ topic: <name>
 - `analyze` — Step 3 (Phase A skimming + B chaining + C code search + analysis_summary)
 - `report` — Step 4 (Report Generation + selected report-check gate)
 
-When `--from` is used, the positional argument should be either the artifact directory path or a fuzzy-matchable topic name. The orchestrator resolves it via `ls -d <artifact-root>/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `query`, `mode`, `depth`, `qa_level`, `clarified_intent`. CLI flags override stored values. Step 0 Scope Clarification is always skipped on resume (already captured in first run).
+When `--from` is used, the positional argument should be either the artifact directory path or a fuzzy-matchable topic name. The orchestrator resolves it via `ls -d <artifact-root>/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `query`, `mode`, `depth`, `intensity`, `clarified_intent`. CLI flags override stored values. Step 0 Scope Clarification is always skipped on resume (already captured in first run).
 
 ### pipeline_state.yaml
 
@@ -117,7 +117,7 @@ pipeline: autopilot-research
 query: <original query>
 mode: academic                   # academic | technology | market (resolved at Step 1)
 depth: medium
-qa_level: standard
+intensity: standard              # verification rigor derives from this (CONVENTIONS §1.1); no separate qa axis
 clarified_intent: <string or null>    # Step 0 output (if Clarification ran)
 last_completed_stage: analyze    # one of: clarify, search, analyze, report
 artifact_dir: <abs path>

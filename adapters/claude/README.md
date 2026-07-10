@@ -73,10 +73,10 @@ Claude Code adapter 는 기존 운용 품질을 보존하기 위해 `core/CONVEN
 | `deep reviewer` | `opus` | methodology, domain expertise, completeness, safety/security, architecture risk |
 | `deep maker` | `opus` | planning, research synthesis, visual/editorial judgment 처럼 생성 자체가 고차 판단을 요구하는 작업 |
 | `fast implementer` | `sonnet` | 기본 코드 구현·리팩터링. 복잡한 API/library 설계는 호출자가 deep role 로 상향 |
-| `external adversary` | Codex CLI (GPT-5) via `codex-review-team` | `--qa adversarial` 의 독립 hostile review |
+| `external adversary` | Codex CLI (GPT-5) via `codex-review-team` | `intensity=adversarial` 의 독립 hostile review |
 | `external adversary orchestrator` | `sonnet` wrapper | Codex CLI 호출·결과 정리만 담당하고 실제 판단은 external engine 에 위임 |
 
-QA 레벨의 기존 동작은 이 mapping 으로 재현한다: quick/light 는 fast reviewer 중심, standard 는 deep reviewer + fast reviewers, thorough/adversarial 은 deep reviewers + fast reviewers + optional external adversary. Dispatch/headless 분사는 이 표를 기본으로 삼되 wrapper 가 자동 선택하지 않는다. main/orchestrator 가 작업 난이도별로 `--model-role`, concrete `--model --effort`, 또는 명시적 `--inherit-model-settings` 를 job 마다 선택한다.
+검증 rigor tier 의 기존 동작은 이 mapping 으로 재현한다 (tier 는 `--intensity` 에서 파생 — CONVENTIONS §1.1, 별도 `--qa` 축 없음): quick/light 는 fast reviewer 중심, standard 는 deep reviewer + fast reviewers, thorough/adversarial 은 deep reviewers + fast reviewers + optional external adversary. Dispatch/headless 분사는 이 표를 기본으로 삼되 wrapper 가 자동 선택하지 않는다. main/orchestrator 가 작업 난이도별로 `--model-role`, concrete `--model --effort`, 또는 명시적 `--inherit-model-settings` 를 job 마다 선택한다.
 
 ## Compatibility
 

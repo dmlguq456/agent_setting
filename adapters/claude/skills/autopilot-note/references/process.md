@@ -24,7 +24,7 @@
 `run_id`/`run_at` 은 _실행 1회 = 1 batch_ — Stage A 진입 시 한 번 정해 그 실행의 모든 노트에 동일하게 박는다 (`run-{YYYYMMDD}-{HHMM}`).
 
 ### Stage C.5 — Verification (light+)
-`--qa` level 매트릭스에 따라 reviewer 호출. CONVENTIONS.md §1 정합. 검수 자리:
+intensity 파생 rigor tier 매트릭스에 따라 reviewer 호출 (별도 `--qa` 축 없음). CONVENTIONS.md §1.1 정합. 검수 자리:
 - _linking precision_ — `card_id`/`backbone_ids`/`task_ids` 잘못 매달림 없나
 - _카탈로그 emerge·L1 제안_ 너무 너그러운가 / 박한가
 - _note narrative_ 가 source 핵심 잘 요약하나 (standard+)

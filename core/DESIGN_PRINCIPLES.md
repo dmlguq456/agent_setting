@@ -125,7 +125,7 @@ orchestrator 가 _단일 expert flow_ 만 다루는 경우 (예: `autopilot-refi
 family 의 모든 멤버는 confirm 없이 pipeline 을 끝까지 돌린다. 사용자가 명시할 때만 멈춘다.
 
 - `--user-refine` / `--confirm` 같은 pause flag 는 **사용자가 직접 typed 한 자리에서만** 켠다 (default false).
-- `--intensity thorough|adversarial` 같은 비싼 stage graph는 명시 신호나 high-risk routing이 있을 때만. `--qa`는 assurance override이며 graph/depth selector가 아니다 — CONVENTIONS.md §1.
+- `--intensity thorough|adversarial` 같은 비싼 stage graph는 명시 신호나 high-risk routing이 있을 때만. verification rigor는 intensity에서 파생될 뿐(CONVENTIONS.md §1.1) graph/depth selector가 아니며, 별도 `--qa` 축은 없다.
 - 실패 시 fail loudly + `pipeline_summary.md` 미해결 기록. 다음 호출에서 `--from <stage>` 재개.
 
 **Why**: 사용자가 _명시 요청_ 을 했는데 메인 에이전트가 _신중을 위해_ 라며 confirm 단계를 추가하면 작업이 한 turn 지연되고 "이미 했어?" 같은 follow-up 으로 갈등이 누적. high-stakes 일수록 사용자가 _직접_ pause 를 거는 게 자연스럽다.
@@ -173,7 +173,7 @@ Artifact 폴더 안의 _가시성 분리_. 상세는 CONVENTIONS.md §5 single s
 
 ## 5. Quality Gates
 
-Quality gates live inside the selected stage graph. The orchestrator chooses `intensity` first, then `--qa` scales `plan-check`, selected independent passes, and final verification. A high QA level does not open hidden stages, repeated loops, or depth2 workers by itself.
+Quality gates live inside the selected stage graph. The orchestrator chooses `intensity`, and the verification rigor derived from it (CONVENTIONS §1.1) scales `plan-check`, selected independent passes, and final verification. A high rigor tier does not open hidden stages, repeated loops, or depth2 workers by itself.
 
 - **QA assurance levels** (quick / light / standard / thorough / adversarial) — CONVENTIONS.md §1 single source. They are budgets for selected checks, not pipeline selectors.
 - **Stage-local gates** stay small and only decide whether the next stage can proceed.

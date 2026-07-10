@@ -1,6 +1,6 @@
 # autopilot-refine — Versioning & mode detail
 
-Router(`../SKILL.md`)의 `## Default Invocation Rule` / `## --qa` / `## Mode Forms` 에서 참조되는 세부. minor log 형식, major 적용 동작, why-this-split rationale, --qa adversarial propagation, mode-forms default/STRUCT-halt 근거, tunable constants.
+Router(`../SKILL.md`)의 `## Default Invocation Rule` / `## Verification rigor` / `## Mode Forms` 에서 참조되는 세부. minor log 형식, major 적용 동작, why-this-split rationale, adversarial-tier propagation, mode-forms default/STRUCT-halt 근거, tunable constants.
 
 ### Minor log entry 형식 (반드시 준수 — 추적성 핵심)
 
@@ -61,7 +61,7 @@ frontmatter `changelog:` 필드 자체가 없는 file은 skip. **이 step은 pip
 
 > 본 섹션은 `/sync-skills`가 `<agent-home>/README.md`의 "운영 룰" 섹션으로 자동 반영한다.
 
-### --qa `adversarial` propagation (from `## --qa`)
+### adversarial-tier propagation (from `## Verification rigor`)
 
 > **`adversarial` propagation**: at this tier, after the thorough reviewers return, spawn external adversary (`Agent(codex-review-team)` in Claude adapter) with (a) the proposed diff, (b) the artifact's intent (from `pipeline_summary.md`), and (c) the source ground-truth (research: `cards/*.md`; doc: `analysis/*.md` + existing strategy/draft). Surface external findings alongside internal reviewer findings before the user-confirm step. If the external adversary flags a blocking issue, mark it in the diff preview as `⚠ External: <issue>` so the user can decide whether to apply, revise, or abort.
 
