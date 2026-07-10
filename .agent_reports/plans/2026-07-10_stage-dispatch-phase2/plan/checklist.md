@@ -8,16 +8,16 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
 ## Phase status
 
 - [x] **Phase A** — probe done. Verdict: Stop unfired → E2 registration held. Record: `_internal/dev_reviews/phaseA_stop_probe.md`.
-- [ ] **Phase B** — core doc increments (core-first)
-  - [ ] B1 OPERATIONS §5.10 one-shot wait contract + SD-13 spec precondition
-  - [ ] B2 WORKFLOW §5 diffusion rows + new autopilot-lab row
-  - [ ] B3 CONVENTIONS §1 capability-neutral clarifier
-  - [ ] B4 DESIGN_PRINCIPLES §8 SD-14 determinism note
-- [ ] **Phase C** — wrapper + dispatch-wait.sh
-  - [ ] C1 resolve_agent_home registry-gap fix
-  - [ ] C2 AGENT_DISPATCH_SELF_SLUG child env
-  - [ ] C3 depth-1 depth_note one-shot wait clause
-  - [ ] C4 utilities/dispatch-wait.sh + test
+- [x] **Phase B** — core doc increments (core-first)
+  - [x] B1 OPERATIONS §5.10 one-shot wait contract + SD-13 spec precondition
+  - [x] B2 WORKFLOW §5 diffusion rows + new autopilot-lab row
+  - [x] B3 CONVENTIONS §1 capability-neutral clarifier
+  - [x] B4 DESIGN_PRINCIPLES §8 SD-14 determinism note
+- [x] **Phase C** — wrapper + dispatch-wait.sh
+  - [x] C1 resolve_agent_home registry-gap fix
+  - [x] C2 AGENT_DISPATCH_SELF_SLUG child env
+  - [x] C3 depth-1 depth_note one-shot wait clause
+  - [x] C4 utilities/dispatch-wait.sh + test
 - [ ] **Phase D** — SD-12 stage-worker profiles (4 fragments + 4 yaml + README + --check)
 - [ ] **Phase E** — hooks
   - [ ] E1 stage-dispatch-reminder.sh (SD-11, soft) + register + conformance
@@ -30,4 +30,5 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
 - [ ] **Phase J** — instrumentation + post-it handoff
 
 ## Safety commits
-(recorded per phase below as work lands)
+- `5ae8c8a` Phase A+B (probe verdict + core docs)
+- (Phase C committed next)

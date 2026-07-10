@@ -182,7 +182,13 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
             "conductor that dispatches each stage (code-plan/execute/test/report) as its own "
             "depth-2 session with file-only handoff. thorough/adversarial expands review to "
             "multi-axis or adversary workers. Direct/quick stay inline unless explicitly escalated; "
-            "depth 3+ is forbidden.\n"
+            "depth 3+ is forbidden. "
+            "You are a one-shot process: ending your turn ends the process, and background "
+            "completion notifications never arrive after that. After dispatching a stage, do NOT "
+            "end the turn on a Monitor/notification wait — poll within the same turn using "
+            "utilities/dispatch-wait.sh (which reuses dispatch-liveness) until the stage row "
+            "leaves 'open', then harvest its artifact verdict and dispatch the next stage. On "
+            "SUSPECT/DEAD, diagnose and re-dispatch rather than waiting.\n"
         )
     if args.profile:
         # Unlike the codex wrapper, do not force a preflight/bootstrap chain
@@ -267,9 +273,24 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
 
 
 def resolve_agent_home() -> Path:
-    env_home = os.environ.get("AGENT_HOME")
-    if env_home and (Path(env_home) / "core" / "CORE.md").is_file():
-        return Path(env_home)
+    # Mirror utilities/agent-home.sh preference order so the wrapper (writer of
+    # jobs.log) and the shell readers (dispatch-liveness / dispatch-wait / the
+    # conductor Stop gate) agree on ONE registry root. When AGENT_HOME is unset,
+    # falling straight back to ROOT (=worktree) split the registry: the wrapper
+    # wrote jobs.log under the worktree while the readers looked under
+    # $HOME/agent_setting/.dispatch — so the liveness/Stop layer never saw the
+    # rows the wrapper appended (SD-14b② registry gap).
+    def _valid(p):
+        return bool(p) and (Path(p) / "core" / "CORE.md").is_file()
+
+    for cand in (
+        os.environ.get("AGENT_HOME"),
+        os.environ.get("CLAUDE_HOME"),
+        str(Path.home() / "agent_setting"),
+        str(Path.home() / ".claude"),
+    ):
+        if _valid(cand):
+            return Path(cand)
     return ROOT
 
 
@@ -385,6 +406,10 @@ def main(argv: list[str]) -> int:
             "CLAUDE_CODE_CHILD_SESSION": "1",
             "AGENT_DISPATCH_DEPTH": str(args.depth),
             "AGENT_DISPATCH_INTENSITY": args.intensity,
+            # This session's own slug — the conductor Stop gate / dispatch-wait
+            # identify "open child rows whose parent= equals MY slug" and cannot
+            # do so from AGENT_DISPATCH_PARENT_SLUG (which points at the parent).
+            "AGENT_DISPATCH_SELF_SLUG": args.slug,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
             "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
             "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
