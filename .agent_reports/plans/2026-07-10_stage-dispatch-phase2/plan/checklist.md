@@ -19,10 +19,10 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
   - [x] C3 depth-1 depth_note one-shot wait clause
   - [x] C4 utilities/dispatch-wait.sh + test
 - [x] **Phase D** — SD-12 stage-worker profiles (4 fragments + 4 yaml + README + --check ok ×4, instance build clean)
-- [ ] **Phase E** — hooks
-  - [ ] E1 stage-dispatch-reminder.sh (SD-11, soft) + register + conformance
-  - [ ] E2 conductor-stop-gate.sh (SD-14b) — **UNREGISTERED (held)**, on-disk + CLI unit only
-  - [ ] E3 HOOKS.md catalog + parity note
+- [x] **Phase E** — hooks
+  - [x] E1 stage-dispatch-reminder.sh (SD-11, soft) REGISTERED + 5 conformance PASS
+  - [x] E2 conductor-stop-gate.sh (SD-14b) — UNREGISTERED (held), on-disk + 4 CLI unit PASS
+  - [x] E3 HOOKS.md catalog rows (parity note → Phase G)
 - [ ] **Phase F** — SD-10 dev-pipeline dispatch-first + SKILL Stage Graph
 - [ ] **Phase G** — adapter bootstrap parity (claude/codex/opencode one-shot clause)
 - [ ] **Phase H** — diffusion (draft/research/spec/design/lab stage-worker tables)
@@ -32,4 +32,5 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
 ## Safety commits
 - `5ae8c8a` Phase A+B (probe verdict + core docs)
 - `e97d916` Phase C (wrapper + dispatch-wait)
-- (Phase D committed next)
+- `d27ab12` Phase D (profiles)
+- (Phase E committed next)

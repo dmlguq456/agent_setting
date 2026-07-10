@@ -22,6 +22,8 @@ TOGGLE="$ROOT/utilities/workflow-toggle.sh"
 RECALL="$ROOT/hooks/mem-recall-inject.sh"
 BRIEF="$ROOT/hooks/mem-briefing-inject.sh"
 WTG="$ROOT/hooks/worktree-path-guard.sh"
+SDR="$ROOT/hooks/stage-dispatch-reminder.sh"
+CSG="$ROOT/hooks/conductor-stop-gate.sh"
 
 PASS=0
 FAIL=0
@@ -3537,6 +3539,46 @@ if [ -n "$se_stamp" ] \
 else
   bad "opencode session-end should debounce repeated triggers"
 fi
+
+echo "== SD-11 stage-dispatch reminder (soft, non-deny) =="
+# (i) conductor + standard + code-plan → emits additionalContext
+out=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_SELF_SLUG=cyc "$SDR" --skill code-plan --depth 1 --intensity standard 2>/dev/null)
+if printf '%s' "$out" | grep -q '"additionalContext"' && printf '%s' "$out" | grep -q 'stage-dispatch'; then
+  ok "SDR emits additionalContext for conductor+standard+code-plan"
+else bad "SDR should emit additionalContext for conductor+standard+code-plan [$out]"; fi
+# (ii) direct/quick → no-op
+out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill code-plan --depth 1 --intensity quick 2>/dev/null)
+[ -z "$out" ] && ok "SDR no-ops for intensity=quick" || bad "SDR should no-op for quick [$out]"
+# (iii) depth-2 stage session → no-op
+out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill code-plan --depth 2 --intensity standard 2>/dev/null)
+[ -z "$out" ] && ok "SDR no-ops for depth-2 stage session" || bad "SDR should no-op for depth-2 [$out]"
+# (iv) non-code skill → no-op
+out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill autopilot-draft --depth 1 --intensity standard 2>/dev/null)
+[ -z "$out" ] && ok "SDR no-ops for non-code skill" || bad "SDR should no-op for non-code skill [$out]"
+# (v) main (no child env) → no-op
+out=$(env -u CLAUDE_CODE_CHILD_SESSION "$SDR" --skill code-plan --depth 1 --intensity standard 2>/dev/null)
+[ -z "$out" ] && ok "SDR no-ops for main (no child env)" || bad "SDR should no-op for main [$out]"
+
+echo "== SD-14b conductor Stop gate (UNREGISTERED / CLI unit) =="
+sdtmp="$(mktemp -d)"
+sdjobs="$sdtmp/jobs.log"
+: > "$sdjobs"
+# no open children → exit 0, no block
+out=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_DEPTH=1 "$CSG" --self-slug cyc --jobs "$sdjobs" 2>/dev/null)
+[ -z "$out" ] && ok "CSG no block when no open children" || bad "CSG should not block with no children [$out]"
+# open child, dead (no transcript) → block with diagnose
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-10T00:00:00" "open" "repo" "$sdtmp/wt/d" "dc" "capability=code-plan,parent=cyc" >> "$sdjobs"
+out=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_DEPTH=1 DISPATCH_RUNTIME_ROOT="$sdtmp/rt" "$CSG" --self-slug cyc --jobs "$sdjobs" 2>/dev/null)
+if printf '%s' "$out" | grep -q '"decision":[[:space:]]*"block"' && printf '%s' "$out" | grep -q 'SUSPECT/DEAD'; then
+  ok "CSG blocks with diagnose for dead open child"
+else bad "CSG should block-diagnose for dead child [$out]"; fi
+# stop_hook_active → no block (loop guard)
+out=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_DEPTH=1 "$CSG" --self-slug cyc --jobs "$sdjobs" --stop-active true 2>/dev/null)
+[ -z "$out" ] && ok "CSG no block when stop_hook_active" || bad "CSG should no-op when stop_hook_active [$out]"
+# non-conductor env → no block
+out=$(env -u CLAUDE_CODE_CHILD_SESSION "$CSG" --self-slug cyc --jobs "$sdjobs" 2>/dev/null)
+[ -z "$out" ] && ok "CSG no block for non-conductor env" || bad "CSG should no-op for non-conductor [$out]"
+rm -rf "$sdtmp"
 
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
