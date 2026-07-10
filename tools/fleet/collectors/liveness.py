@@ -17,6 +17,14 @@ STALE_MIN = 48 * 60
 def _alive(pid):
     if not pid:
         return True
+    if os.name == "nt":
+        # Windows has no os.kill(pid, 0) semantics and no /proc — probe via OpenProcess.
+        import ctypes
+        h = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))  # QUERY_LIMITED_INFORMATION
+        if h:
+            ctypes.windll.kernel32.CloseHandle(h)
+            return True
+        return False
     try:
         os.kill(pid, 0)
         return True
