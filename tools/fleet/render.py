@@ -484,6 +484,8 @@ _NAME_COL = 4 + _HW           # absolute col where the NAME starts — SHARED by
                               # everything from the name onward aligns (session: prefix 4 + harness
                               # 14; dispatch: prefix 6 + harness 12 — deeper indent, narrower harness)
 _NW_S = _BRANCH_COL - _NAME_COL   # name field (both row types): col 18 → branch 46 = 28
+_NAME2_MAX = 40               # 2-line name zone tail-cut cap (display cells) — no fixed branch
+                              # column there, so an unbounded title could push branch off-draw (F-14)
 _BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
 _MW = 23                      # model cell: name + FULL effort word ('Opus 4.8 xhigh' — no abbrev)
 _EFW = 7                      # effort subfield ("medium"=6 +1 gap) — FIXED width so every row's
@@ -639,10 +641,11 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
             else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
     segs = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey)]
 
-    # name zone: slug(focus) + ▾N(dim) + gate tag(dim), padded to the shared branch column.
+    # name zone: title-or-slug(focus) + ▾N(dim) + gate tag(dim), padded to the shared branch column.
     used = 0
-    slug_show = slug[: min(len(slug), _NW_S - 1)]
-    segs.append((slug_show, name_key)); used += len(slug_show)
+    name_txt = s.title or slug
+    shown = _clip_w(name_txt, _NW_S - 1)
+    segs.append((shown, name_key)); used += _dw(shown)   # display width, not char count (F-14 #4)
     if is_parent and child_count and used + 3 <= _NW_S:
         t = " ▾%d" % child_count
         segs.append((t, "dim")); used += len(t)
@@ -893,7 +896,8 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False):
     hn = _BADGE_TEXT.get(s.harness, "?")
     hkey = (_BADGE_KEY.get(s.harness, "dim") if dim_tel
             else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
-    l1 = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey), (slug, name_key)]
+    l1 = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey),
+          (_clip_w(s.title or slug, _NAME2_MAX), name_key)]
     if is_parent and child_count:
         l1.append((" ▾%d" % child_count, "dim"))
     gate, pipe = (s.gate, False) if s.gate else _gate_info(s.cwd, s.session_id)
@@ -1560,6 +1564,23 @@ def _cw(ch):
 
 def _dw(s):
     return sum(_cw(c) for c in s)
+
+
+def _clip_w(s, maxw, ellipsis="…"):
+    """Tail-cut `s` to display width maxw (head preserved), stopping at cell boundaries
+    so a double-width char (e.g. Hangul) is never split in half. Appends `ellipsis` (width 1)
+    when clipped — mirrors _compact_dispatch_name's ellipsis convention (F-14)."""
+    s = s or ""
+    if _dw(s) <= maxw:
+        return s
+    lim = maxw - (_cw(ellipsis) if ellipsis else 0)
+    out, w = [], 0
+    for ch in s:
+        cw = _cw(ch)
+        if w + cw > lim:
+            break
+        out.append(ch); w += cw
+    return "".join(out) + (ellipsis if ellipsis else "")
 
 
 # fill sentinels (3-char \x00<fill>\x00): everything after is right-aligned to the edge; the gap
