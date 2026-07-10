@@ -242,17 +242,6 @@ pilot 부수발견 ②: 스테이지 세션도 SessionEnd 에 mem curator(distil
 - (c) **자기수정 예외의 처리**: 예외를 문서 조항으로 남기지 않는다(2연속 실증 — 조항은 차용된다). 정당한 자기수정 자리(분사 launch 경로 자체 편집)는 사용자/main 이 분사 프롬프트에 명시 opt-out (`STAGE_DISPATCH_INLINE_OK` 류 env/문구)을 줄 때만 — 판단을 conductor 재량에서 orchestrator 명시로 이동.
 - 문서-효력 재검증은 본 deny 착지 후 다음 일반 사이클에서.
 
-## 8.7 SD-17 — 적용 조건 정련: separability 판정 (v5, 2026-07-10 사용자 결정 (a))
-
-**근거 (conductor 3연속 실측)**: ① Phase 3 — 자기수정 예외 inline(정당) ② sd15-parity — 예외 차용 inline(위반 사례) ③ qa-intensity-unify — 경계-결합 문서 리팩터를 "비분리 편집은 inline + 분리 가능한 부분만 in-session 병렬 3워커"로 처리(계약의 "separable" 취지 인용, 조리 있는 판정). 증거 수렴: 스테이지 분사의 실익은 **separable 한 작업**에서 발생. SD-11b deny 는 code-* Skill 경로만 커버 — Skill 미사용 직접 오케스트레이션은 결정론 강제 불가.
-
-**결정 (사용자 선택 (a))**:
-- **기본값 불변**: `standard+` 파이프의 스테이지 = depth-2 headless 분사 기본.
-- **conductor 는 분사 전 separability 판정**: [스테이지 산출물 계약이 완결적(파일만으로 다음 스테이지 가능) && 편집 표면이 경계-결합(공유 semantic anchor·boundary assertion 의 순차 결합)이 아님] → separable → **분사 의무**.
-- **비분리 판정 시 inline 허용** — 단 3중 의무: (a) 판정 근거를 `plans/<slug>/_internal/metrics.md` 에 기록 (기록 없는 inline = 위반 — drill/audit 이 잡는 감사 표면) (b) 분리 가능한 부분(census·독립 파일군 편집)은 in-session 워커 병렬로 (qa-unify 선례) (c) 자기수정 자리는 SD-11b(c) orchestrator opt-out 경로 그대로.
-- **SD-OPEN-1 과의 관계**: separability = inline 임계의 **질적 축** (기존 크기 축과 병행) — 계측 항목에 판정 결과 포함.
-- **강제 계층**: 결정론(deny hook)은 code-* Skill 경로 유지, separability 는 기록-의무+감사(의미 판단 구간을 억지 규칙화하지 않음 — §14 경계 존중).
-
 ## 9. 영향 표면 목록 (구현 phase 에서 갱신 — 현행 문구 → 개정 방향)
 
 > **SD-7**: 아래 표가 구현(autopilot-code) 시 묶음 갱신할 자리. 각 surface = {현행 문구, 개정 방향}. 실제 문구 편집은 소유 스킬(core-first) 경유 별도 — 본 spec 은 방향만 확정.
@@ -381,10 +370,6 @@ skills/autopilot-{draft,research,spec,design,lab}  # 스테이지 분사 계약 
 
 - **SD-15b**: 로그-패턴 DEAD 앵커링 — CLI 종료 에러 라인 형식 한정 + 정상 완주 신호 결합(완주면 배제). "limit 논하는 보고문" 오탐 실측 대응. (§8.6.1)
 - **SD-16e**: usage-check reset 의미론 — reset 경과 시 ok(expired), reset 부재 마커는 창 단축/구분 표기, 수동 마감 reset 기입 계약화. stale limited 오탐 실측 대응. (§8.6.2)
-### v5 추가 (2026-07-10 — 사용자 결정 (a))
-
-- **SD-17**: 적용 조건 정련 — 분사 기본 불변 + conductor 의 separability 판정. 비분리 시 inline 허용(판정 기록 의무·분리 부분 병렬·자기수정은 opt-out 경로). 기록 없는 inline = 위반(감사 표면). SD-OPEN-1 의 질적 축. (§8.7, conductor 3연속 실측)
-
 - **SD-11b**: reminder → **deny 상향** — wrapper 가 `AGENT_DISPATCH_INTENSITY` env 주입으로 결정론 조건 확보, [depth1·standard+·code-* Skill 직접 호출] hard deny. 자기수정 예외는 문서 조항이 아니라 orchestrator 명시 opt-out 으로만. 문서-효력 2연속 실패(soft reminder 무효) 실증. (§8.6.3)
 
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
