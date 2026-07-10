@@ -12,9 +12,9 @@
 | `research` | 연구 코드 spec — entry + configs + 재현 명령 + 예상 metric |
 | `app,library` 등 콤마 | 복수 mode — 한 PRD 안 mode 별 독립 섹션 |
 
-### --qa
-- `quick` / `light` / `standard` (default) / `thorough` — [CONVENTIONS.md §1](../../core/CONVENTIONS.md)
-- `quick` 는 작은 spec tweak·update mode 자리 권장 — refine 단계 skip / 1 라운드 강제. ad-hoc 직접 Edit 대신 quick 으로 돌려 snapshot·log artifact 를 남긴다.
+### 검증 강도 (intensity 파생)
+- 검증 rigor 는 별도 `--qa` 축이 아니라 `--intensity` 에서 결정론적으로 파생된다 (default standard-tier) — tier 정의·매핑은 [CONVENTIONS.md §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot) 단일 source.
+- `--intensity quick` 는 작은 spec tweak·update mode 자리 권장 — refine 단계 skip / 1 라운드 강제. ad-hoc 직접 Edit 대신 quick 으로 돌려 snapshot·log artifact 를 남긴다.
 
 ### --user-refine
 - PRD 작성 후 사용자 메모 받고 refine loop (`_internal/refine_v{N}.md` 백업)
@@ -110,7 +110,7 @@ update mode 가 하는 일 (3 가지, 한 트랜잭션):
 - **drift 가 CLEAR** (변경 의도·범위 명확) → 자율 진행 + 한 줄 보고.
 - **drift 가 AMBIGUOUS** (의도 해석 갈림 / 영향 범위 불명) → 사용자에게 먼저 확인 후 진행 (임의 추측 X).
 
-작은 spec tweak 은 `--intensity quick` 으로 inline micro-plan + plan-check-lite + verify-lite만 수행한다. Durable snapshot/log는 spec 영향이 실제로 있고 autopilot-spec update가 `prd.md`를 갱신할 때 남긴다; `--qa quick`만으로 plan/log/snapshot artifact를 강제하지 않는다.
+작은 spec tweak 은 `--intensity quick` 으로 inline micro-plan + plan-check-lite + verify-lite만 수행한다. Durable snapshot/log는 spec 영향이 실제로 있고 autopilot-spec update가 `prd.md`를 갱신할 때 남긴다; `--intensity quick`만으로 plan/log/snapshot artifact를 강제하지 않는다.
 
 ### refine v{N+1} 버전 관리 (doc 트랙과 동일 원리)
 

@@ -35,8 +35,8 @@ Router(`../SKILL.md`)에서 참조되는 invocation 예시, apply 시 지켜야 
 # Doc artifact (auto-detected from prompt keyword)
 /autopilot-refine "se-seminar-tfrestormer draft Slide 4 task family 표를 4행으로 변경"
 
-# Higher QA — pre-apply reviewer pass
-/autopilot-refine "se-seminar-tfrestormer 결론 챕터 wording 다듬기" --qa standard
+# Higher rigor — pre-apply reviewer pass (rigor 는 intensity 파생)
+/autopilot-refine "se-seminar-tfrestormer 결론 챕터 wording 다듬기" --intensity standard
 ```
 
 ## When NOT to use

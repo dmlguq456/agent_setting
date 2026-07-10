@@ -37,11 +37,11 @@ Phase 2 까지 source 1-6 활성, source 7 (노션) 은 _Phase 3 활성_ — `--
 - _보고서 작성_ → `autopilot-draft`. 본 skill 은 _보고 후보 추출 + 노트화_ 자리만.
 - _Layer 2 카탈로그 (backbone/task/paper) 의 대규모 재구조_ → 사용자 또는 `autopilot-code`. 본 skill 은 _필요한 카탈로그 entry emerge_ 만.
 
-## --qa <level> (default: light)
+## 검증 rigor tier (intensity-파생, default: light-tier)
 
-QA 5 단계 정의 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
+검증 rigor 는 별도 `--qa` 축이 아니라 `--intensity` 에서 결정론적으로 파생된다 — tier 정의·매핑은 [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot) 단일 source. 아래 tier 는 각각 intensity `quick`←quick, `direct`←light, `standard`←standard, `thorough`←thorough, `adversarial`←adversarial 에 대응. 본 skill 적용:
 
-| Level | Behavior |
+| Rigor tier | Behavior |
 |---|---|
 | **quick** | Routing 분류 + Stage C dry-summary + 자동 apply. _대량 backfill·1회성 경량_ 자리. reviewer round 0, polish 없음. |
 | **light** (default) | + 1× fast reviewer single axis (linking precision — card_id/backbone/task 매달림 정합) + **편집팀 polish batch 1회** (Stage D.5). _매일 cron 기본_. |
@@ -49,7 +49,7 @@ QA 5 단계 정의 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS
 | **thorough** | + 2× deep reviewers + 2× fast reviewers + 1× fast fact-checker. round 2. _월간 cleanup_ / _노션 migration 검수_. |
 | **adversarial** | thorough + 1× external adversary (`codex-review-team` in Claude adapter). _Phase 3 노션 migration 1차 검수_ 같은 high-stakes 자리. |
 
-Fact/source checks follow the selected QA budget; this entrypoint does not expose a fact-check opt-out flag.
+Fact/source checks follow the derived rigor budget (intensity-파생); this entrypoint does not expose a fact-check opt-out flag.
 
 **reviewer axis 분담**:
 - _linking precision_ (deep reviewer) — note `card_id`/`backbone_ids`/`task_ids` 가 올바른 L1 카드·L2 카탈로그 가리키나, 잘못된 매달림 catch
@@ -60,13 +60,13 @@ Fact/source checks follow the selected QA budget; this entrypoint does not expos
 
 ```
 # 매일 cron — 가장 흔한 자리
-/autopilot-note --scope today --qa quick
+/autopilot-note --scope today --intensity quick
 
 # 주말 묶음 정리 — 한 주 누적 + 다이제스트 narrative
-/autopilot-note --scope since 2026-05-26 --qa standard
+/autopilot-note --scope since 2026-05-26 --intensity standard
 
-# 첫 실행 (historical bulk) — 가용 source 모두 노트화
-/autopilot-note --scope all --qa light
+# 첫 실행 (historical bulk) — 가용 source 모두 노트화 (default light-tier)
+/autopilot-note --scope all
 
 # Dry-run — 적용 전 routing plan (note id / card_id / catalog) 확인
 /autopilot-note --scope yesterday --dry-run
@@ -78,7 +78,7 @@ Fact/source checks follow the selected QA budget; this entrypoint does not expos
 /autopilot-note --triage-only
 
 # 노션 migration (Phase 3)
-/autopilot-note --scope since 2026-01-01 --source notion --qa adversarial
+/autopilot-note --scope since 2026-01-01 --source notion --intensity adversarial
 
 # 한 source 만 — autopilot-lab 실험 산출물만 노트화
 /autopilot-note --source experiment --scope yesterday

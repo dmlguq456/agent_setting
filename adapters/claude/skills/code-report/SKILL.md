@@ -34,7 +34,7 @@ Resolve `$ARG` to a plan file path:
 | **Thorough** | >15 steps, cross-variant, or architectural | 1× fast writer writes the report |
 | **Adversarial** | Cross-variant / shared modules / >20 steps | 1× fast writer writes the report |
 
-QA level from plan frontmatter `qa_level` or `--qa` flag still flows in (for context logging), but in code-report it affects **only the prompt's context**, not the model role or any post-write review. No external adversary review of the report. No parallel writers. No review loop.
+The rigor tier (derived from intensity, logged as the plan frontmatter `qa_level` field) flows in for context logging only — in code-report it affects **only the prompt's context**, not the model role or any post-write review. No external adversary review of the report. No parallel writers. No review loop.
 
 ## Delegate to 품질관리팀
 Invoke the **qa-team** (품질관리팀) agent as fast writer (Claude adapter: `model: "sonnet"`, all levels) as a subagent with the following prompt:

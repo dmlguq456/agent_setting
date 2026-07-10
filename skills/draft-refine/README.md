@@ -97,7 +97,7 @@ changelog:
 
 | Level | 조건 | Quality reviewer | Fact-checker (parallel) |
 |---|---|---|---|
-| Quick | `--qa quick` only | 1× fast reviewer, spot-check만 | skip (`--qa quick`는 autopilot에서 refine entirely skip — manual invoke 시만) |
+| Quick | `--intensity quick` | 1× fast reviewer, spot-check만 | skip (`--intensity quick`는 autopilot에서 refine entirely skip — manual invoke 시만) |
 | Light | ≤3 sections 변경 | 1× fast reviewer | skip |
 | Standard | 4+ sections 변경 | 1× deep reviewer | 1× fast fact-checker |
 | Thorough | major overhaul / new evidence | 2× deep reviewers parallel | 1× fast fact-checker |

@@ -1,7 +1,7 @@
 ---
 name: autopilot-refine
 description: "기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존"
-argument-hint: "\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
+argument-hint: "\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
 metadata:
   group: entry
   fam: doc
@@ -11,7 +11,7 @@ metadata:
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
 
-기존 문서·연구 산출물의 정정·갱신 entry. 이 파일은 라우터 — routing 결정(major vs minor, mode form, qa)과 stage 개요만 담고, 세부 orchestration·log 형식·detector·예시는 필요할 때 아래 reference를 읽는다.
+기존 문서·연구 산출물의 정정·갱신 entry. 이 파일은 라우터 — routing 결정(major vs minor, mode form, intensity-파생 rigor)과 stage 개요만 담고, 세부 orchestration·log 형식·detector·예시는 필요할 때 아래 reference를 읽는다.
 
 ## Position in autopilot family
 
@@ -19,11 +19,11 @@ metadata:
 - `autopilot-research` / `autopilot-code` / `autopilot-draft` create artifacts (forward direction).
 - `autopilot-refine` reads and updates existing artifacts (reverse direction).
 
-Naming consistency: same `--intensity direct|quick|standard|strong|thorough|adversarial` and `--qa quick|light|standard|thorough|adversarial` flags as the rest of the family. `intensity` selects the stage graph; `--qa` only scales selected assurance gates. Routine scoped edits default to the quick path unless the request or caller explicitly escalates intensity/QA.
+Naming consistency: same `--intensity direct|quick|standard|strong|thorough|adversarial` flag as the rest of the family. `intensity` selects the stage graph; verification rigor is **derived** from that same intensity (CONVENTIONS §1.1) and scales the selected assurance gates — there is no separate `--qa` axis. Routine scoped edits default to the quick path unless the request or caller explicitly escalates intensity.
 
 ## Default Invocation Rule (메인 에이전트 자동 라우팅)
 
-본 skill 은 runtime adapter bootstrap 의 "autopilot-* 호출 패턴" 컨펌 의무 적용 대상(Claude Code: [`CLAUDE.md`](../../adapters/claude/CLAUDE.md) §0). 메인 에이전트는 사용자가 `<artifact-root>/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다. 기본은 request shape에서 선택된 `intensity`를 따르고, `--qa`는 그 그래프 안의 assurance budget만 조정한다. **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
+본 skill 은 runtime adapter bootstrap 의 "autopilot-* 호출 패턴" 컨펌 의무 적용 대상(Claude Code: [`CLAUDE.md`](../../adapters/claude/CLAUDE.md) §0). 메인 에이전트는 사용자가 `<artifact-root>/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다. 기본은 request shape에서 선택된 `intensity`를 따르고, 검증 rigor 는 그 intensity 에서 파생돼 그래프 안의 assurance budget을 조정한다 (별도 `--qa` 축 없음 — CONVENTIONS §1.1). **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
 
 **Scope**: `<artifact-root>/{documents,research}/*` 엄격 한정. project root의 임의 `.md`/`.txt`나 코드 산출물(`<artifact-root>/plans/*`)은 적용 X — 전자는 일반 Edit, 후자는 `/code-refine` 또는 `/autopilot-code`.
 
@@ -52,10 +52,10 @@ Naming consistency: same `--intensity direct|quick|standard|strong|thorough|adve
 
 다음 중 하나라도 prompt에 있으면 위 분기 룰을 건너뛴다:
 
-- 다른 qa level 명시 — `standard`/`thorough`/`adversarial` (강제 refine, level 명시)
+- 다른 intensity 명시 — `--intensity standard`/`thorough`/`adversarial` (강제 refine, intensity 명시 → rigor 파생)
 - "refine 없이 직접 edit" / "Edit으로 처리" / "versioning 없이" / "snapshot 없이" — 강제 minor 경로
 - `--review-only` — 검수만, 적용 X
-- `/autopilot-refine` slash 명시 invoke — 강제 refine flow (qa level은 따로 명시 안 하면 `quick`)
+- `/autopilot-refine` slash 명시 invoke — 강제 refine flow (intensity 따로 명시 안 하면 `quick`, rigor 도 quick-tier)
 
 ## Scope
 
@@ -63,11 +63,11 @@ Naming consistency: same `--intensity direct|quick|standard|strong|thorough|adve
 - **NOT for**: `<artifact-root>/plans/*` (code) — use `/code-refine`, `/code-execute`, or `/autopilot-code` instead. Code changes need test-based verification, not diff review.
 - Why this skill exists: the existing `draft-refine` / `code-refine` workflow is file-memo only, which is too heavy for routine prompt-driven edits. `autopilot-refine` is the lightweight default; memo style is reduced to an opt-in fallback.
 
-## --qa <level> (assurance budget; graph selected by intensity)
+## Verification rigor (intensity-derived)
 
-QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용 (proposed diff 에 pre-apply review):
+검증 rigor 는 별도 `--qa` 축이 아니라 `--intensity` 에서 결정론적으로 파생된다 — 5 단계 tier 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot) 단일 source. 아래 tier 는 각각 intensity `quick`←quick, `direct`←light, `standard`←standard, `thorough`←thorough, `adversarial`←adversarial 에 대응. 본 skill 적용 (proposed diff 에 pre-apply review):
 
-| Level | Behavior on proposed diff |
+| Rigor tier | Behavior on proposed diff |
 |---|---|
 | **quick** | Investigate → Stage B.5 (factual + style auto-detector, always on) → diff preview → apply. No internal review loop. Stage B.5 는 cards-grep + regex 만. |
 | **light** | + 2× fast reviewers (다른 axes) single pass. obvious regression catch. |
@@ -77,11 +77,11 @@ QA 5 단계 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1`](../../
 
 Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/draft-refine` 사용).
 
-> The two opt-out flags `--no-fact-check` and `--no-style-audit` are **orthogonal to every `--qa` level** — they skip the corresponding Stage B.5 aspect regardless of qa level. These are the _only_ disable mechanism per `feedback_factcheck_principles.md` Principle 0.
+> The two opt-out flags `--no-fact-check` and `--no-style-audit` are **orthogonal to intensity** — they skip the corresponding Stage B.5 aspect regardless of the derived rigor tier. These are the _only_ disable mechanism per `feedback_factcheck_principles.md` Principle 0.
 
 > `adversarial` tier의 external adversary propagation 세부: `references/versioning-and-modes.md`.
 
-## Mode Forms (orthogonal to --qa)
+## Mode Forms (orthogonal to intensity)
 
 | Form | Behavior |
 |---|---|
@@ -116,12 +116,12 @@ target 식별(Artifact Resolution) 후 Stage A→E 로 진행. 각 단계 full o
 
 ## Required Reads
 
-- major refine flow 세부(minor log 형식, major apply 동작, --qa adversarial propagation, mode-forms 근거, tunable constants, why-this-split): `references/versioning-and-modes.md`.
+- major refine flow 세부(minor log 형식, major apply 동작, adversarial-tier propagation, mode-forms 근거, tunable constants, why-this-split): `references/versioning-and-modes.md`.
 - 실제 실행 orchestration(Artifact Resolution + Stage A→E, B.5 detector, diff preview, apply/versioning, memo): `references/process-stages.md`.
 - invocation 예시, constraints(빈칸>잘못 채우기 등), when-not-to-use, post-apply checklist: `references/examples-and-constraints.md`.
 
 ## Reference Map
 
-- `references/versioning-and-modes.md`: minor log entry 형식, major 적용 동작, why-this-split rationale, --qa adversarial propagation, mode-forms default/STRUCT-halt 근거, tunable constants.
+- `references/versioning-and-modes.md`: minor log entry 형식, major 적용 동작, why-this-split rationale, adversarial-tier propagation, mode-forms default/STRUCT-halt 근거, tunable constants.
 - `references/process-stages.md`: artifact resolution, Stage A/B/B.5/C/D/E full orchestration (factual+style auto-detector, diff preview, apply/versioning, memo mode).
 - `references/examples-and-constraints.md`: invocation examples, constraints, when-not-to-use, post-apply checklist.

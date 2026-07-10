@@ -1,7 +1,7 @@
 ---
 name: autopilot-code
 description: "코드 작업 일반 entry — 라이브러리·연구·앱 모두 커버, spec 컨텍스트 자동 감지"
-argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--user-refine]"
+argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
 metadata:
   group: entry
   fam: code
@@ -18,7 +18,7 @@ metadata:
 - 산출물: 기본 `<artifact-root>/plans/<date>_<slug>/`; `direct`는 durable plan 없음, `quick`은 micro-plan, `standard+`는 plan/checklist/pipeline_summary/dev_logs/test_logs.
 - spec이 있으면 코드 편집 전 `spec-significance`를 한 줄로 판정한다. spec-significant 변경은 `autopilot-spec` update를 먼저 거친다.
 - git/worktree 상태는 진입 시와 durable write-back/commit 직전에 재확인한다. merge/rebase/detached/head 변경은 중단한다.
-- QA는 stage마다 무조건 병렬화하지 않는다. `plan-check`와 최종 `code-test`가 선택된 intensity/QA에 맞춰 커진다.
+- QA는 stage마다 무조건 병렬화하지 않는다. `plan-check`와 최종 `code-test`는 intensity에서 파생된 rigor(CONVENTIONS §1.1)에 맞춰 커진다.
 - 보고는 한국어로 한다.
 
 ## Required Reads
@@ -31,13 +31,12 @@ metadata:
 
 ## Argument Shape
 
-`--mode dev|debug|audit <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--user-refine]`
+`--mode dev|debug|audit <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]`
 
 Defaults:
 
 - `--mode`: 생략 시 dev. 에러 로그/traceback이면 debug로 추론 가능.
-- `--intensity`: 범위와 위험으로 선택한다. 단발 1줄급은 direct, 작은 scoped change는 quick, 다단계/다파일은 standard+.
-- `--qa`: 기본은 intensity와 함께 간다. 명시 QA는 assurance override이지 full pipeline 강제 스위치가 아니다.
+- `--intensity`: 범위와 위험으로 선택한다. 단발 1줄급은 direct, 작은 scoped change는 quick, 다단계/다파일은 standard+. 검증 rigor는 별도 축이 아니라 이 intensity에서 파생된다 (CONVENTIONS §1.1).
 - `--user-refine`: 사용자가 검토/메모 pause를 명시한 경우만 켠다.
 
 ## Stage Graph

@@ -1,7 +1,7 @@
 ---
 name: autopilot-ship
 description: "앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트"
-argument-hint: "<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough]"
+argument-hint: "<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: entry
   fam: app
@@ -45,7 +45,7 @@ metadata:
 
 ### Default 옵션 권장값
 
-- `--qa`: `standard` (default — 호스팅 / CI/CD 파일은 _신중_ 자리)
+- 검증 강도: `--intensity` 에서 파생 (별도 `--qa` 축 없음 — [CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)). default 는 standard-tier (호스팅 / CI/CD 파일은 _신중_ 자리)
 
 ### Override 1순위 — autopilot 우회
 

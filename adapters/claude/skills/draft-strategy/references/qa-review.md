@@ -5,11 +5,11 @@ Auto-detect from strategy scope. Two reviewer roles run **in parallel** at Stand
 
 | Level | Condition | Quality reviewer | Fact-checker (parallel) | Max rounds |
 |---|---|---|---|---|
-| **Quick** | (manual via `--qa quick` only) | 1× fast reviewer, spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
+| **Quick** | (via `--intensity quick`) | 1× fast reviewer, spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
 | **Light** | review/presentation mode, or report with ≤3 input paths | 1× fast reviewer | _skip_ | 2 |
 | **Standard** | paper/report/proposal mode, or rebuttal with ≤3 reviewers | 1× deep reviewer | **1× fast fact-checker** | 2 |
 | **Thorough** | rebuttal with ≥4 reviewers, or report/proposal with ≥10 input items (papers + doc materials) | 2× deep reviewers in parallel | **1× fast fact-checker** | 2 |
-| **Adversarial** | external-review-imminent (camera-ready / submission / public report), or manual via `--qa adversarial` | 2× deep reviewers in parallel + 1× external adversary (`codex-review-team` in Claude adapter) | **1× fast fact-checker** | 2 + external 1 |
+| **Adversarial** | external-review-imminent (camera-ready / submission / public report), or `--intensity adversarial` explicitly specified | 2× deep reviewers in parallel + 1× external adversary (`codex-review-team` in Claude adapter) | **1× fast fact-checker** | 2 + external 1 |
 
 **Why fast fact-checker**: in-artifact cards verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 fast role 로 충분, 비용 효율적.
 

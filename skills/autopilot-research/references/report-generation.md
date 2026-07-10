@@ -276,8 +276,8 @@ Agent(subagent_type="연구팀"):
 연구팀이 한국어로 직접 작성한 보고서 세트에 편집팀 모드 B (다듬기) 호출 — 판교체·번역체 회피, 표기 일관성, 줄바꿈·호흡 마무리. _수정만_ (mirror 생성 아님).
 
 호출 조건 (single source — `adapters/claude/agents/editorial-team.md` 모드 B 호출 조건):
-- **기본**: `--qa standard / thorough / adversarial` 일 때만 호출
-- **skip**: `--qa quick` / `--qa light` 또는 사용자 명시 skip
+- **기본**: 파생 rigor 가 `standard / thorough / adversarial` 일 때만 호출 (intensity `standard+`)
+- **skip**: intensity `direct` / `quick` (파생 rigor light/quick) 또는 사용자 명시 skip
 
 ```
 모드 B — 다듬기 (다중 파일, in-place).
@@ -296,7 +296,7 @@ Agent(subagent_type="연구팀"):
 > 연구팀이 자연 산출 언어 (한국어) 로 직접 작성하고, 편집팀이 _수정만_ — 두 번 쓰는 노동 회피.
 
 #### Step 4b: QA Loop (max 2 rounds; quick = 1 round; adversarial = 2 + external 1)
-QA level: `--qa` flag if provided, else derived from the selected intensity (assurance normally follows intensity — direct→none/light, quick→quick, standard→standard, thorough→thorough, adversarial→adversarial; see [CONVENTIONS.md §1.1](../../core/CONVENTIONS.md#11-qa-assurance-levels-canonical)).
+Rigor tier: derived deterministically from the selected `--intensity`, not a separate `--qa` selector (direct→none/light, quick→quick, standard|strong→standard, thorough→thorough, adversarial→adversarial; see [CONVENTIONS.md §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)).
 
 **Two reviewer roles run in parallel** at standard+ (**three at adversarial** — + claim-verify):
 - **Quality reviewer(s)**: coverage / no-fabrication / progressive disclosure / actionable roadmap
@@ -362,7 +362,7 @@ Loop:
      Return ONLY path + one-line verdict."
 
   No 🔴 from any reviewer → exit.
-  qa_level == quick → after round 1, write unresolved.md if any 🔴 remain (tag fact-check residuals as [FACT-RESIDUAL]), exit. NEVER re-invoke 연구팀.
+  intensity == quick → after round 1, write unresolved.md if any 🔴 remain (tag fact-check residuals as [FACT-RESIDUAL]), exit. NEVER re-invoke 연구팀.
   🔴 from quality + round < 2 → re-invoke 연구팀 with quality findings.
   🔴 from fact-checker + round < 2 → re-invoke 연구팀 with mandatory ref-grounding (re-read named cards).
   🔴 from claim-verify (killed) + round < 2 → re-invoke 연구팀: killed claim 은 본문에서 제거/한정(qualify) + report "검증 탈락(refuted)" 섹션으로 이동(반증 근거 첨부). 🟡 abstain = confidence low 로 강등.

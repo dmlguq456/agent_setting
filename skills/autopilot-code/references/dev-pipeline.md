@@ -23,7 +23,7 @@ AGENT_HOME=$(utilities/agent-home.sh)
 REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports
 python3 "$AGENT_HOME/adapters/claude/bin/dispatch-headless.py" --start \
   --worktree "$PWD" --slug <cycle-slug> \
-  --capability code-plan --mode dev --qa <qa> --intensity <intensity> \
+  --capability code-plan --mode dev --intensity <intensity> \
   --depth 2 --parent <cycle-slug> --worker-role code-plan --owner autopilot-code \
   --model-role "deep maker" --profile code-plan \
   --prompt-text "<sub-skill contract + input artifact ABSOLUTE paths + output contract + slug>"
@@ -53,7 +53,7 @@ This step exists only for durable `standard+` graphs. `direct` has no plan-check
    - UI/visual plan risk uses 디자인팀 critic; research/domain risk uses 연구팀 plan-review; construction quality uses 품질관리팀 plan-review.
 3. If memos or blocking findings exist:
    - if `--user-refine` is set, pause with `paused_at_stage: refine` and print the resume command.
-   - otherwise invoke `code-refine` once per selected correction budget. Do not open repeated QA loops merely because `--qa` is high.
+   - otherwise invoke `code-refine` once per selected correction budget. Do not open repeated QA loops merely because the intensity-derived rigor is high.
 4. If no memos or no independent review was selected, proceed to Step 3.
 
 ### Step 3: code-execute
@@ -80,9 +80,9 @@ For `standard+`, **dispatch** code-test as its own depth-2 session — same `dis
 - `quick` does not retry automatically; it reports the failed verify-lite result.
 
 #### Test Failure → Retry Loop (max 1 pipeline-level retry; quick = no retry)
-**`--qa quick` short-circuit**: if `qa_level == quick` and code-test reports failure, do NOT retry. Skip the retry loop below and go directly to Step 5 (code-report) with status reflecting the test failure. Log to pipeline_summary Decision Points: `Step 4 | test failure, no retry (qa=quick) | auto | proceed to code-report`.
+**`quick` intensity short-circuit**: if `intensity == quick` and code-test reports failure, do NOT retry. Skip the retry loop below and go directly to Step 5 (code-report) with status reflecting the test failure. Log to pipeline_summary Decision Points: `Step 4 | test failure, no retry (intensity=quick) | auto | proceed to code-report`.
 
-Otherwise (qa_level != quick), if code-test reports failure and the selected graph allows a fix-loop, auto-retry once:
+Otherwise (intensity != quick), if code-test reports failure and the selected graph allows a fix-loop, auto-retry once:
 
 1. **Collect failure context**: Note the test failure verdict from code-test's return. Failure details are in `test_logs/test_report.md` and `_internal/test_reviews/` — these will be consumed by code-refine's agent, not by the orchestrator.
 

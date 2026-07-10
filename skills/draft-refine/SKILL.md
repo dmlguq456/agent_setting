@@ -1,7 +1,7 @@
 ---
 name: draft-refine
 description: "초안 정련·다듬기 sub-skill — 편집팀 검수 경유"
-argument-hint: "<strategy or draft name or path> [--qa quick|light|standard|thorough|adversarial]"
+argument-hint: "<strategy or draft name or path>"
 metadata:
   group: sub
   fam: sub
@@ -216,11 +216,11 @@ Auto-detect from sections changed. Two reviewer roles run **in parallel** at Sta
 
 | Level | Condition | Quality reviewer | Fact-checker (parallel) | Max rounds |
 |---|---|---|---|---|
-| **Quick** | (manual via `--qa quick` only — autopilot skips refine entirely in quick mode) | 1× fast reviewer, spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
+| **Quick** | (via `--intensity quick` — autopilot skips refine entirely in quick mode) | 1× fast reviewer, spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
 | **Light** | ≤3 sections | 1× fast reviewer | _skip_ (quality reviewer covers basic spot-checks) | 2 |
 | **Standard** | 4+ sections | 1× deep reviewer | **1× fast fact-checker** | 2 |
 | **Thorough** | Major overhaul or new evidence | 2× deep reviewers in parallel | **1× fast fact-checker** | 2 |
-| **Adversarial** | external-review-imminent (camera-ready / submission), or manual via `--qa adversarial` | 2× deep reviewers in parallel + 1× external adversary (`codex-review-team` in Claude adapter) | **1× fast fact-checker** | 2 + external 1 |
+| **Adversarial** | external-review-imminent (camera-ready / submission), or `--intensity adversarial` explicitly specified | 2× deep reviewers in parallel + 1× external adversary (`codex-review-team` in Claude adapter) | **1× fast fact-checker** | 2 + external 1 |
 
 **Why fast fact-checker**: card verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 fast role 로 충분하고, 비용 효율적이다.
 

@@ -28,20 +28,20 @@ Pipeline intensity is the stage-graph selector (canonical: [CONVENTIONS.md §1](
 
 `plan-check` is required for every non-`direct` graph, but expensive independent QA is not repeated after every sub-stage by default.
 
-### --qa <level>
+### 검증 rigor (intensity-derived — 별도 `--qa` 축 없음)
 
-QA assurance policy는 [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-qa-assurance-levels-canonical)이 단일 source다. `--qa`는 stage graph 선택자가 아니라 `plan-check`, selected independent review, final `code-test`의 강도 override다. Depth2 dispatch는 `--qa thorough`가 아니라 `standard+` owner-worker graph에서 열린다. `direct|quick`은 명시 escalation 없이는 depth2를 열지 않는다.
+검증 rigor는 사용자 선택 축이 아니라 `--intensity`에서 결정론적으로 파생된다 ([`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)이 단일 source). 파생된 rigor tier는 `plan-check`, selected independent review, final `code-test`의 강도를 조절할 뿐 stage graph를 스스로 고르지 않는다. Depth2 dispatch는 rigor가 아니라 `standard+` owner-worker graph에서 열린다. `direct|quick`은 명시 escalation 없이는 depth2를 열지 않는다.
 
-- Supported: `quick` / `light` / `standard` / `thorough` / `adversarial`.
+- rigor 파생: `direct`→none/light, `quick`→quick, `standard|strong`→standard, `thorough`→thorough, `adversarial`→adversarial.
 - Code track에는 fact-checker가 없다. Ground truth는 코드, tests, runtime behavior, API/CLI surface, security review다.
 - `quick`: inline micro-plan + plan-check-lite + produce + verify-lite. `code-plan`, `code-refine`, 반복 independent QA, durable `plans/{date}_{slug}/`는 기본적으로 열지 않는다.
 - `standard`: durable `code-plan -> code-execute -> code-test -> code-report` with lightweight plan-check and concrete verification.
 - `strong`: standard graph plus one risk-focused independent review at the riskiest point.
 - `thorough|adversarial`: depth-1 owner expands bounded depth2 planner/verifier/adversary workers and must synthesize their short reports before write-back.
 - Security review: auth / crypto·secrets / external input / api_contract / deserialization changes under adversarial risk may add `roles/modes/qa/security-review.md`; claim it only if the pass actually ran.
-- Invalid value: fall back to the selected intensity's default assurance and warn.
+- High-stakes 신호(신중히·꼼꼼히·PR open 직전 등) 시 `--intensity`를 상향(strong/thorough/adversarial)해 rigor를 올린다.
 
-Propagation: durable `standard+` cycles store the selected `qa_level` and `intensity` in plan/frontmatter or pipeline state. `code-plan`, optional `code-refine`, and `code-test` inherit that context. Mid-pipeline `--qa` can raise/lower assurance for future checks, but it must not rewrite the stage graph by itself.
+Propagation: durable `standard+` cycles store the selected `intensity` (and its derived rigor tier) in plan/frontmatter or pipeline state. `code-plan`, optional `code-refine`, and `code-test` inherit that context. Mid-pipeline intensity 상향/하향은 이후 check의 rigor를 바꿀 수 있으나 stage graph를 스스로 재작성하지는 않는다.
 
 ### --user-refine (boolean flag — opt-in only)
 
@@ -64,7 +64,7 @@ When present, the orchestrator **pauses** at refine points so the user can add t
 
 **Resume behavior**: When invoked with `--from refine`, the orchestrator skips Step 1 and goes directly to Step 2's code-refine invocation, then continues normally.
 
-**Persistence**: `user_refine: <true|false>` lives in the English plan's YAML frontmatter (same place as `qa_level`). On `--from` resume, if `--user-refine` is not re-specified, preserve the frontmatter value.
+**Persistence**: `user_refine: <true|false>` lives in the English plan's YAML frontmatter (same place as `intensity`). On `--from` resume, if `--user-refine` is not re-specified, preserve the frontmatter value.
 
 When `--from` is used together with `--user-refine` (dev only), `--from refine` is the natural resume point after a user-refine pause.
 

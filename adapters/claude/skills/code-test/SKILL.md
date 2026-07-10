@@ -67,7 +67,7 @@ Format:
 ## Verification Assurance
 `code-test` is the concrete final `verify` stage. It is not hardcoded to thorough and does not automatically launch a parallel QA loop. Read the selected QA/intensity context from the plan frontmatter or caller prompt.
 
-| QA level | Verification behavior | Optional adequacy review |
+| Rigor tier | Verification behavior | Optional adequacy review |
 |---|---|---|
 | `quick` | Run the narrowest applicable concrete command/check and record skip reasons. | none by default |
 | `light` | Run focused syntax/import/smoke or the caller's explicit command. | fast review only if risk-selected |

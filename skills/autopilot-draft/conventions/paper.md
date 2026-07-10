@@ -44,7 +44,7 @@
 
 **금지 (추적용은 별도 파일로)**:
 - `changelog:` 배열 → `_internal/draft_meta.yaml` 또는 `pipeline_summary.md` 으로 격리
-- `mutation_count`, `intentional_id_gaps`, `predecessor`, `strategy_ref`, `qa_level`, `subtype`, `scope` 같은 추적용 → 같은 격리 파일로
+- `mutation_count`, `intentional_id_gaps`, `predecessor`, `strategy_ref`, `intensity`, `subtype`, `scope` 같은 추적용 → 같은 격리 파일로
 - frontmatter 안 긴 `note` 줄 (변경 이력) → frontmatter 밖 평문으로 또는 격리 파일로
 
 이유: YAML frontmatter 가 길면 preview 에서 줄글로 깨져 사용자가 본문 첫 줄까지 도달하는 데 한 화면을 소비한다.

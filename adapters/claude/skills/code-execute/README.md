@@ -45,7 +45,7 @@ plan frontmatter의 `qa_level`이 모든 phase auto-detect를 override.
 
 | Level | 조건 | 행동 |
 |---|---|---|
-| Quick | `--qa quick` 명시 시 (autopilot-code에서 전파) | 1× fast reviewer, 1-pass; 🔴 이슈는 `pipeline_summary.md` Decision Points에 기록만 |
+| Quick | `--intensity quick` 시 (autopilot-code에서 전파) | 1× fast reviewer, 1-pass; 🔴 이슈는 `pipeline_summary.md` Decision Points에 기록만 |
 | Light | ≤3 units, 기계적, 단일 variant | 1× fast reviewer |
 | Standard | 4-10 units, 로직, 단일 모듈 | 1× deep reviewer |
 | Thorough | >10 units, cross-module, 아키텍처 | 2-3× 병렬: A 정확성(deep) / B 일관성(fast) / C 안전(deep) |

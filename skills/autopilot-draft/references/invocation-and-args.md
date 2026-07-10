@@ -47,13 +47,12 @@ mode별 _필수·권장_ 입력:
 > - `{discovered_inputs}` — Pre-flight Step 2 (Input Discovery)에서 결정된 input path list. Agent prompt 구성 시 orchestrator가 newline-join 형식으로 expand (`Discovered inputs:\n  - <path1>\n  - <path2>\n  ...`). sub-skill 호출 시에는 `--inputs <comma-separated paths>` 인수로 전달.
 > - 단일 ground-truth 경로는 `analysis_project/paper/*.md` (analyze-project --mode paper 산출물).
 
-**`--qa <level>`** — QA 5 단계 정의 + model role·round 매트릭스는 [`CONVENTIONS.md §1`](../../core/CONVENTIONS.md#1-qa-levels-canonical) 단일 source. 본 skill 적용:
+**검증 rigor (intensity-derived — 별도 `--qa` 축 없음)** — rigor tier 정의 + model role·round 매트릭스는 [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot) 단일 source. 검증 rigor 는 사용자 선택 축이 아니라 `--intensity` 에서 결정론적으로 파생된다. 본 skill 적용:
 
-- Supported: `quick` / `light` / `standard` / `thorough` / `adversarial`; default assurance follows selected `intensity` unless explicitly overridden
-- Omitted → assurance follows selected `intensity`; routine work starts at standard or lower unless explicitly escalated
+- rigor 파생: `direct`→none/light, `quick`→quick, `standard|strong`→standard, `thorough`→thorough, `adversarial`→adversarial. routine work 는 standard 이하에서 시작하며 명시 escalation 시 상향
 - **Why fact-checker is separate**: quality reviewer 는 narrative/coverage/logic 에 집중, fact-checker 는 citation/venue/year/metric/lineage 만 narrow 하게 ground-truth (cards/PDFs) 와 verbatim 대조 — matching task 라 fast fact-checker role 로 충분 (Claude adapter: sonnet)
-- **Propagation**: `--qa <level>` 를 draft-strategy / draft-refine 에 flag 로 전달
-- **`quick` interactions**: `--from strategy-refine` 또는 `--from draft-refine` 으로 재개 시 frontmatter `qa_level == quick` 이면 abort ("qa_level=quick 에서는 refine 단계가 skip 됩니다. --qa <level> 을 다른 값으로 명시해 재개하세요.")
+- **Propagation**: 선택된 `--intensity` (와 그로부터 파생된 rigor tier) 를 draft-strategy / draft-refine 에 flag 로 전달
+- **`quick` interactions**: `--from strategy-refine` 또는 `--from draft-refine` 으로 재개 시 frontmatter `intensity == quick` 이면 abort ("intensity=quick 에서는 refine 단계가 skip 됩니다. --intensity 를 standard 이상으로 명시해 재개하세요.")
 
 **`--user-refine`** (boolean flag — opt-in only)
 
@@ -80,7 +79,7 @@ If 연구팀 added no memos, the pause is skipped (nothing to refine).
 - `draft-refine` — Step 5 wrapper: 연구팀 review + (user memos if `--user-refine`) + draft-refine on the draft
 - `finalize` — Step 6 (Pipeline Summary)
 
-When resuming with `--from`, the positional argument should be either the artifact directory path or a fuzzy-matchable short name. The orchestrator resolves it via the same fuzzy lookup used by Plan Resolution in autopilot-code: `ls -d <artifact-root>/documents/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `mode`, `qa_level`, `discovered_inputs` (list), `user_refine`. CLI flags override state file; missing flags inherit from state.
+When resuming with `--from`, the positional argument should be either the artifact directory path or a fuzzy-matchable short name. The orchestrator resolves it via the same fuzzy lookup used by Plan Resolution in autopilot-code: `ls -d <artifact-root>/documents/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `mode`, `intensity`, `discovered_inputs` (list), `user_refine`. CLI flags override state file; missing flags inherit from state.
 
 **Format spec auto-discovery (no flag)** — venue/journal/lab-specific format references (review form / rebuttal template / paper template / grant body sections / etc.) are discovered automatically from `analysis_project/doc/{matching}/formats/`. There is no `--format-ref` flag. User pre-processes the spec once via `/analyze-project --mode doc <folder>`, after which all autopilot-draft modes pick it up.
 
@@ -138,7 +137,7 @@ Written/updated at `{strategy_folder}/pipeline_state.yaml` after each completed 
 ```yaml
 pipeline: autopilot-draft
 mode: presentation
-qa_level: thorough
+intensity: thorough                   # verification rigor derives from this (CONVENTIONS §1.1); no separate qa axis
 user_refine: true
 discovered_inputs:                    # list of paths discovered by Pre-flight Step 2 (Input Discovery)
   - <path-to-analysis_project/paper-or-doc-or-research-artifact>

@@ -7,7 +7,7 @@
 
 ## 호출 형식
 ```
-/code-refine <plan name or path> [--qa light|standard|thorough|adversarial]
+/code-refine <plan name or path>
 ```
 
 ## Plan Resolution (canonical)
@@ -41,8 +41,8 @@ Remove memo comments after incorporating them.
 Return which steps were changed and a brief summary.
 ```
 
-## QA Scaling
-`$ARGUMENTS`의 `--qa` 명시 우선. 없으면 plan frontmatter의 `qa_level`. `--autonomy`는 strip만 (code-refine은 autonomy gating 없음).
+## Rigor Scaling
+검증 rigor tier 는 plan frontmatter 의 `qa_level` (intensity 에서 파생된 값, [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)) 에서 온다. `--autonomy`는 strip만 (code-refine은 autonomy gating 없음).
 
 | Level | 조건 | 행동 |
 |---|---|---|
