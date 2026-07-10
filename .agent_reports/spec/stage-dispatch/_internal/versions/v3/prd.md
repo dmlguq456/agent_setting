@@ -222,26 +222,6 @@ pilot 부수발견 ②: 스테이지 세션도 SessionEnd 에 mem curator(distil
 
 채택 = (a)+(b) 조합이 기본, (c) 는 절차 단순화 보강. 구현 자리 = Phase 2 wrapper 증분(SD-12 `--profile` 배선과 같은 묶음 — 같은 파일·같은 사이클). **타 세션 협조 노트**: 발견 세션이 registry 갭(AGENT_HOME)을 자체 수정할 수 있음 — 구현 전 wrapper 최신 상태 재실측으로 이중 수정 회피.
 
-## 8.6 v4 정련 — 도그푸딩 발견 3건 (2026-07-10, SD-15/16 첫 실전 + 문서-효력 2연속 실측)
-
-### 8.6.1 SD-15b — 로그-패턴 DEAD 판정 앵커링 (오탐 실측)
-
-**실측**: sd15-adapter-parity conductor 가 **정상 완주**했는데 dispatch-liveness 가 로그 limit/auth 패턴으로 DEAD 오탐 — conductor 의 최종 보고문이 limit 감지를 _주제로_ 서술해 `LIMIT_RE` 가 본문에 걸림. **결정**: 로그-패턴 DEAD 판정을 앵커링 — (a) 패턴 매치를 CLI 의 실제 종료 에러 라인 형식(예: 로그 말미 N줄 + 짧은 단독 라인)에 한정 (b) 정상 완주 신호(구조화 최종 출력 존재·프로세스 exit 0)와 결합해 완주면 DEAD 배제. 회귀 케이스: "limit 를 논하는 보고문" fixture.
-
-### 8.6.2 SD-16e — usage-check reset 의미론 (stale limited 오탐 실측)
-
-**실측**: 아침 limit 사망 마커(수동 작성, `reset=` 필드 부재)가 300분 창 내내 `claude limited(-)` 로 읽힘 — 실제 리셋(15시)이 지나도 해제 안 됨. **결정**: (a) `reset=` 있는 마커는 reset 시각 경과 시 즉시 `ok(expired)` (b) `reset=` 없는 마커는 보수 창을 단축하거나 `limited(unknown-reset)` 로 구분 표기 — orchestrator 가 "확인 필요"로 읽게 (c) 수동 row 마감 시 reset 필드 기입을 OPERATIONS 계약에 명문화.
-
-### 8.6.3 SD-11b — reminder → deny 상향 (문서-효력 2연속 실패 실증)
-
-**실측 (2연속)**: 최소 프롬프트 conductor 가 ① Phase 3 — 자기수정 예외(성립: Claude 분사 경로 편집)로 inline ② sd15-adapter-parity — **Claude 분사 경로 무변인데도 동일 예외를 차용**(과잉 적용)해 inline. soft reminder(SD-11)는 두 번 다 행동을 바꾸지 못함. 한정형 2조건 fallback 문서도 자기 발명 예외를 막지 못함.
-
-**결정**:
-- (a) **결정론 조건 확보**: wrapper 가 자식 env 에 `AGENT_DISPATCH_INTENSITY`(+이미 있는 `AGENT_DISPATCH_DEPTH`) 주입 → hook 이 [depth==1 && intensity∈standard+ && code-* Skill 직접 호출] 을 결정론적으로 식별 가능 — SD-11 이 deny 를 보류했던 false-positive 근거(intensity 불가지) 해소.
-- (b) **deny 상향**: 위 조건에서 code-* Skill 호출을 **hard deny** + "dispatch-headless 로 분사하라" 피드백. direct/quick(env intensity 로 구분)·headless-불가 런타임(env 부재)은 자동 비대상.
-- (c) **자기수정 예외의 처리**: 예외를 문서 조항으로 남기지 않는다(2연속 실증 — 조항은 차용된다). 정당한 자기수정 자리(분사 launch 경로 자체 편집)는 사용자/main 이 분사 프롬프트에 명시 opt-out (`STAGE_DISPATCH_INLINE_OK` 류 env/문구)을 줄 때만 — 판단을 conductor 재량에서 orchestrator 명시로 이동.
-- 문서-효력 재검증은 본 deny 착지 후 다음 일반 사이클에서.
-
 ## 9. 영향 표면 목록 (구현 phase 에서 갱신 — 현행 문구 → 개정 방향)
 
 > **SD-7**: 아래 표가 구현(autopilot-code) 시 묶음 갱신할 자리. 각 surface = {현행 문구, 개정 방향}. 실제 문구 편집은 소유 스킬(core-first) 경유 별도 — 본 spec 은 방향만 확정.
@@ -364,13 +344,7 @@ skills/autopilot-{draft,research,spec,design,lab}  # 스테이지 분사 계약 
 
 - **SD-15**: wrapper limit-사망 즉시 감지 — launch 직후 조기 exit + 로그 limit 패턴 → jobs.log row 자동 마감(`dead-<사유>`) + reset 시각 표면화. dispatch-wait/liveness 도 로그 패턴을 DEAD 근거에 추가. 재시도는 안 함(orchestrator 판단). (§8.5.7b, 운영 실증 ⑤)
 - **SD-16**: 사용량-인지 상호보완 크로스 하네스 분사 — (a) usage-check 헬퍼(양 하네스 limit 상태 결정론 조회, runtime-currentness 조사 필수) (b) 상호보완 라우팅(사용량 failover + 특성 강점 배치 + 검증 자리 타 모델 계열 교차) (c) fleet 연속성·계측 (d) thorough+ 다축 동시성 실측 검증. (§8.5.7c, 사용자 요구)
-- **SD-OPEN-3**(미결): 보완 라우팅 가중 정책 — 초기 "limit 회피 > 특성 적합 > 분산" + 한도 비대칭 기본값(Claude>Codex 가변, `HARNESS_CAPACITY_BIAS`), 계측 후 조정. (§8.5.7c)
-
-### v4 추가 (2026-07-10 — 도그푸딩 정련)
-
-- **SD-15b**: 로그-패턴 DEAD 앵커링 — CLI 종료 에러 라인 형식 한정 + 정상 완주 신호 결합(완주면 배제). "limit 논하는 보고문" 오탐 실측 대응. (§8.6.1)
-- **SD-16e**: usage-check reset 의미론 — reset 경과 시 ok(expired), reset 부재 마커는 창 단축/구분 표기, 수동 마감 reset 기입 계약화. stale limited 오탐 실측 대응. (§8.6.2)
-- **SD-11b**: reminder → **deny 상향** — wrapper 가 `AGENT_DISPATCH_INTENSITY` env 주입으로 결정론 조건 확보, [depth1·standard+·code-* Skill 직접 호출] hard deny. 자기수정 예외는 문서 조항이 아니라 orchestrator 명시 opt-out 으로만. 문서-효력 2연속 실패(soft reminder 무효) 실증. (§8.6.3)
+- **SD-OPEN-3**(미결): 보완 라우팅 가중 정책 — 초기 "limit 회피 > 특성 적합 > 분산", 계측 후 조정. (§8.5.7c)
 
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
