@@ -88,6 +88,26 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$HOME/.claude/hooks/worktree-path-guard.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$HOME/.claude/hooks/worktree-path-guard.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
