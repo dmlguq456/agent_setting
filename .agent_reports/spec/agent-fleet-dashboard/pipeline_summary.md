@@ -37,6 +37,7 @@
 
 ## Minor-log
 - 2026-07-10 (v2 minor #1): §4.6 에 **F-14 (세션 표시명 = 하네스 세션 제목)** 추가 — 사용자 요청("fleet 세션명만이라도 요약된 것으로"). 소스 실측(claude `ai-title` transcript 라인·opencode `session.title`) + 공식 문서 확인(진행형 auto-retitle 하네스 미지원 → fleet 표시층 담당). 구현 = fleet-ui-v2 수확 후 후속 사이클 (render/model 파일 겹침 → 큐잉).
+- 2026-07-10 (v2 minor #3): §4.6 에 **F-17 (라이브 제목 refresher — sidecar + no-tools haiku 워커)** 추가, F-16 영어 실현을 F-17 1차로 재지정 — 사용자 승인("haiku 같은 거 써서 agent로… 알아서"). transcript 직접 쓰기는 위험 판정(라이브 원본·내부 포맷·zero-injection 위반) → fleet 소유 sidecar + statusline debounce 트리거 + D-14 no-tools 패턴. 구현 = F-15 수확 후 사이클.
 - 2026-07-10 (v2 minor #2): §4.6 에 **F-15 (분사 row 레이아웃 재설계)** + **F-16 (표시명 짧게·영어)** 추가 — F-14 출하 직후 사용자 피드백 4건("가로로 늘어짐이 최대 불만" / "옵션은 중요 관찰 요소, 숨기지 말고 잘 설계" / "워크플로우에 맞게 더 최적화" / "queued 오라벨 의문"). F-9(c) 성분-드롭 접근을 F-15 재배치로 대체. queued 오라벨 = registry-only liveness 유도로 해소. 구현 = fleet-f15 사이클.
 
 ## Version History

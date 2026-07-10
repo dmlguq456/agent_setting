@@ -182,7 +182,14 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - 디자인팀 critic 을 plan 단계 텍스트 목업 비평에 필수 투입 (UI plan-review 계약) — 잡 다수일 때 세로 폭증·레이아웃별(wide/narrow/stack) 분기까지 비평 범위.
 - **F-16 (세션 표시명: 최대한 짧게 + 영어, 사용자 요구 2026-07-10 저녁)**: F-14 의 title 표시가 문장형(한국어)으로 길다.
   - **짧게**: name zone 의 title 표시 예산을 타이트하게(≈20~24 display cols, tail-cut — F-9 head 보존). 전체 제목은 `--json`·(도입 시) info 표시에서.
-  - **영어**: fleet 은 번역하지 않는다(zero-injection) — 소스 영어화는 **하네스 title 언어 설정**으로 실현(adapter settings 영역, 본 spec 밖 — 설정 키 확인 후 별도 적용). 기존 한국어 제목 세션은 그대로 클립 표시.
+  - **영어**: fleet 은 번역하지 않는다(zero-injection) — 1차 실현 = **F-17 sidecar 제목**(생성 단계에서 짧은 영어 강제, 아래). 보조 = 하네스 `language` 설정(v2.1.176, 미문서 — `en` 적용해둠, 실측 대기). 기존 한국어 ai-title 은 F-17 미적용 세션의 fallback 으로만 클립 표시.
+- **F-17 (라이브 제목 refresher — fleet 소유 sidecar + no-tools 경량 LLM 워커, 사용자 승인 2026-07-10 "haiku 같은 거 써서 agent로 해도 되고… 알아서")**: 하네스는 진행형 재요약을 안 하고(F-14 경계), transcript 에 쓰는 건 위험(라이브 세션 원본·내부 포맷·주입 금지 원칙 위반)이므로 **fleet 이 소유한 sidecar 파일**로 해결한다 — F-4(statusline per-session tap)와 같은 "우리 자산 write" 예외 계열.
+  - **sidecar**: `~/.claude/.fleet-titles/<sid>.json` — `{title, ts, source}`. fleet 세션 title 우선순위 = **sidecar(신선, <24h) → ai-title → slug**. 부재·stale·파싱 실패 = 무해 fallback (회귀 없음).
+  - **워커 (D-14 no-tools 보안 패턴 재사용)**: `claude -p --model haiku` + 도구 전면 차단. 입력 = transcript tail delta(수 KB)를 DATA 로 프롬프트에 주입, 출력 = **한 줄 영어 제목(≤4단어)** 만. dispatch 스크립트가 출력 검증(길이 ≤40자·printable·개행 제거) 후 sidecar 에 write — LLM 출력은 데이터로만, 주입돼도 최악 = 표시 문자열 오염(검증이 cap).
+  - **트리거**: `statusline.sh` debounce 확장 — 자기 세션의 sidecar 가 오래됐고(예: >10min) transcript 가 자랐으면 detached 워커 1회 spawn (우리 소유 surface — F-4 선례, 새 cron 불요). 재귀 가드: 워커는 `-p` 라 statusline 미실행 + env 플래그. 동시 1개 lock(세션당).
+  - **하네스 비대칭(F-3 동형)**: claude 만 refresher 대상(statusline = claude 소유 surface). opencode = 네이티브 `session.title` 로 충분, codex = 제목 소스 없음 → slug 유지.
+  - **비용**: haiku·no-tools·세션당 ≥10min 간격·tail 수 KB — 무시 가능. 워커 실패·미설치(`claude` 부재)·quota 소진 = sidecar 미갱신일 뿐 fleet 무영향 (결정론적 degrade).
+  - **구현 순서**: F-15 사이클 수확 후 별도 사이클 (파일 겹침 최소화: statusline.sh·신규 스크립트·collectors/claude.py 우선순위 로직·tests).
 - **적용 순서(정보 위계)**: 위 개선은 전부 표시층(render.py) — collector 계약·모델 스키마 불변(SD-F4 만 collector). 시각 결정이 substantial 해지면(레이아웃 구조 변경 급) autopilot-design 리드 — 이번 사이클은 표시 규칙 정제 범위로 한정.
 
 ## 5. 능동 변경 — Claude per-session statusline tap (유일한 write)
