@@ -1,17 +1,45 @@
 ## Pipeline: Mode dev
 You orchestrate the stages below. Stage graph is selected by `--intensity` before QA. `direct` skips this full pipeline and performs produce + sanity/report only; `quick` uses inline micro-plan + plan-check-lite and focused verification — **both run inline** (no stage dispatch). `standard+` uses the full durable pipeline below. Step 2 (plan review as user proxy) is used only when the selected graph calls for it; UI/visual → `디자인팀`, 그 외 → `연구팀`; Step 6 (meta-report) = 연구팀.
 
-> **Stage-dispatch orchestration (`standard+` default, 2026-07-10 — OPERATIONS §5.10 ③④, spec/stage-dispatch SD-1·SD-2)**: for `standard+`, the depth-1 owner runs as a **thin conductor**. Instead of invoking each stage skill in-session via the Skill tool, it **dispatches each stage as its own depth-2 headless session** with `adapters/claude/bin/dispatch-headless.py --depth 2 --parent <conductor-slug> --worker-role code-<stage> --owner autopilot-code --model-role <stage role, CONVENTIONS §2.3>` (codex/opencode: `bin/preflight.sh dispatch` 동형). The dispatch prompt carries only {sub-skill name, **input artifact absolute paths**, output artifact contract, qa/intensity, slug} — never plan bodies or prior-stage conversation; each stage reads its inputs from files (§2.1). The conductor reads only verdict/status (plan frontmatter `status`, `test_report.md` Level) to drive gate branches, not stage bodies. Register each stage in `.dispatch/jobs.log`, watch liveness (§5.10 stealth-death), and keep `Σ(conductor + active stage) ≤ 5`. Micro-stages that write no new artifact or emit a one-line verdict (plan-check self-check, ≤3-step integration review) stay inline. When still orchestrating in-session (e.g. `--intensity` downgraded, or a runtime without headless dispatch), invoke each stage via the Skill tool as written below — the stage skills are the same contract either way.
+> **Stage-dispatch orchestration (`standard+` default, 2026-07-10 — OPERATIONS §5.10 ③④, spec/stage-dispatch SD-1·SD-2)**: for `standard+`, the depth-1 owner runs as a **thin conductor**. Instead of invoking each stage skill in-session via the Skill tool, it **dispatches each stage as its own depth-2 headless session** with `adapters/claude/bin/dispatch-headless.py --depth 2 --parent <conductor-slug> --worker-role code-<stage> --owner autopilot-code --model-role <stage role, CONVENTIONS §2.3>` (codex/opencode: `bin/preflight.sh dispatch` 동형). The dispatch prompt carries only {sub-skill name, **input artifact absolute paths**, output artifact contract, qa/intensity, slug} — never plan bodies or prior-stage conversation; each stage reads its inputs from files (§2.1). The conductor reads only verdict/status (plan frontmatter `status`, `test_report.md` Level) to drive gate branches, not stage bodies. Register each stage in `.dispatch/jobs.log`, watch liveness (§5.10 stealth-death), and keep `Σ(conductor + active stage) ≤ 5`. Micro-stages that write no new artifact or emit a one-line verdict (plan-check self-check, ≤3-step integration review) stay inline.
+>
+> **one-shot wait (SD-14)**: the conductor is a one-shot process — ending the turn ends the process, so a background completion notification never arrives. After dispatching a stage, do **not** end the turn on a Monitor/notification wait; poll in the same turn with `sh <agent-home>/utilities/dispatch-wait.sh --parent <conductor-slug>` (exit 0 = stage done → harvest; exit 2 = still alive → call it again; exit 3 = SUSPECT/DEAD → diagnose via dispatch-liveness + transcript tail, then re-dispatch, do not keep waiting). `<agent-home>` = `$(utilities/agent-home.sh)`.
+>
+> **In-session Skill fallback = closed two-condition set** (not an open escape hatch): the in-session Skill path is used **only when [a] intensity is `direct`/`quick` (micro-stages, no dispatch) or [b] the runtime has no headless dispatch (codex/opencode `preflight.sh` reports unavailable)**. In all other `standard+` cases, dispatch is **mandatory, not optional** — the stage skills are the same contract either way.
 
 > **자료팀 위임 (옵션)** — task 가 _결과 시각화·실험 log plot·result table 정리_ 같은 분석 자료를 요구하면 code-execute / code-report 단계 안에서 `Agent(자료팀, "<spec>")` 직접 호출. _훈련·실험 실행_ 자체는 autopilot-code 본 영역, 결과의 _후처리·시각화_ 만 자료팀 영역. 자료팀이 figure / 스크립트 / 표 한 묶음 생성 후 dev_logs/ 의 해당 step 안에 결과 자산 경로 박음.
 
 ### Step 1: code-plan
-Skip entirely for `intensity=direct`; use inline micro-plan only for `quick`. For `standard+`, invoke Skill: `code-plan` with the task description as args.
-Wait for completion before proceeding.
+Skip entirely for `intensity=direct`; use inline micro-plan only for `quick`.
+
+For `standard+`, **dispatch** code-plan as its own depth-2 session (do not invoke it in-session). First ensure the **SD-13 spec precondition**: the target repo has an artifact root and a `spec/` (or `/track` untracked) — a stage session runs full ceremony including the artifact-guard create-order gate, so catch a missing precondition here (free) rather than inside the stage (a wasted re-dispatch). Then:
+
+```
+AGENT_HOME=$(utilities/agent-home.sh)
+REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports
+python3 "$AGENT_HOME/adapters/claude/bin/dispatch-headless.py" --start \
+  --worktree "$PWD" --slug <cycle-slug> \
+  --capability code-plan --mode dev --qa <qa> --intensity <intensity> \
+  --depth 2 --parent <cycle-slug> --worker-role code-plan --owner autopilot-code \
+  --model-role "deep maker" --profile code-plan \
+  --prompt-text "<sub-skill contract + input artifact ABSOLUTE paths + output contract + slug>"
+```
+
+Then poll + harvest in the **same turn** (one-shot wait contract, SD-14):
+
+```
+sh "$AGENT_HOME/utilities/dispatch-wait.sh" --parent <cycle-slug>   # exit 0=done · 2=re-call · 3=diagnose
+```
+
+Loop the dispatch-wait call until exit 0, then read only the plan frontmatter `status` + plan paths (verdict/status, not the plan body) to drive Step 2. On exit 3, diagnose via `dispatch-liveness.sh` + transcript tail → re-dispatch that stage (reuse existing artifacts, SD-6). **The dispatch prompt carries input artifact paths only — never the plan body or prior-stage conversation.**
+
+**[direct/quick] or [headless-unavailable runtime] fallback**: invoke Skill `code-plan` with the task description as args (in-session), then proceed.
 
 ### Step 2: plan-check / optional code-refine
 
 This step exists only for durable `standard+` graphs. `direct` has no plan-check and `quick` already performed inline `plan-check-lite` before produce.
+
+> **Inline micro-stage** (SD-6): the plan-check self-check is **not a dispatched stage** — it writes no new durable artifact and emits a one-line verdict, so the conductor runs it inline. When it decides an *independent* review is warranted, that review is a bounded depth-2 review sub-worker (§5.10 ④(a)), distinct from the code-* stage-workers. A blocking finding triggers a `code-refine` correction (Step 6-style memo loop), not a full re-dispatch here.
 
 1. Resolve plan paths from code-plan output: `en_plan_path`, `ko_plan_path`, `log_dir`.
 2. Decide whether the selected graph calls for independent plan review:
@@ -25,8 +53,11 @@ This step exists only for durable `standard+` graphs. `direct` has no plan-check
 4. If no memos or no independent review was selected, proceed to Step 3.
 
 ### Step 3: code-execute
-Invoke Skill: `code-execute` with the plan name/path as args.
-Wait for completion before proceeding.
+For `standard+`, **dispatch** code-execute as its own depth-2 session — same `dispatch-headless.py --start` template as Step 1 with `--capability code-execute --worker-role code-execute --model-role "fast implementer" --profile code-execute`. Input = the `plan/plan.md` absolute path (carried in the dispatch prompt, not the plan body). Poll + harvest with `dispatch-wait --parent <cycle-slug>` in the same turn; on exit 3, diagnose → re-dispatch.
+
+After harvest, the conductor reads the plan frontmatter `status` from the **file** (the Status Check below now reads the file, not an in-session return).
+
+**[direct/quick] or [headless-unavailable runtime] fallback**: invoke Skill `code-execute` with the plan name/path as args (in-session).
 
 #### Status Check (between Step 3 and Step 4)
 After code-execute completes, read the English plan's frontmatter `status` field:
@@ -35,8 +66,9 @@ After code-execute completes, read the English plan's frontmatter `status` field
 - `failed` → code-execute already rolled back source code. **STOP the pipeline.** Write pipeline_summary.md (status: failed) FIRST, then report failure to the user with the checklist summary. Do NOT proceed to code-test or code-report.
 
 ### Step 4: code-test
-Invoke Skill: `code-test` with the plan name/path as args.
-Wait for completion before proceeding.
+For `standard+`, **dispatch** code-test as its own depth-2 session — same `dispatch-headless.py --start` template with `--capability code-test --worker-role code-test --model-role "fast reviewer" --profile code-test` (the conductor may raise the role to a deeper reviewer at strong+). Input = the `plan.md` verification section + `checklist.md` paths. Poll + harvest with `dispatch-wait --parent <cycle-slug>`; then the conductor reads `test_logs/test_report.md` Level verdict from the **file** to drive the retry branch. On exit 3, diagnose → re-dispatch.
+
+**[direct/quick] or [headless-unavailable runtime] fallback**: invoke Skill `code-test` with the plan name/path as args (in-session).
 
 ## Retry Budget (Caller-Owned)
 - `code-test` is read-only final verification and does not hotfix.
@@ -63,14 +95,18 @@ Otherwise (qa_level != quick), if code-test reports failure and the selected gra
    - **`--user-refine` pause**: if the flag is set, update plan frontmatter (`user_refine: true`, `paused_at_stage: refine`), print the resume command (`/autopilot-code --mode dev --from refine <plan>`), and exit. The user can review the failure memos plus add their own before re-resuming.
    - Otherwise: invoke Skill `code-refine` with the plan path using the selected correction budget. Do not open a repeated QA loop by default.
 
-6. **Re-execute**: Invoke Skill: `code-execute` with the same plan path.
+   The conductor-side rollback (`git checkout <safety-commit> -- <changed paths>`) stays conductor-side: it reads the Safety commit from `plan/checklist.md` (a file read, fine for the thin conductor).
 
-7. **Re-test**: If plan status is not `failed`, invoke Skill: `code-test`.
+6. **Re-execute**: For `standard+`, **re-dispatch** code-execute (same Step 3 dispatch template + dispatch-wait harvest) with the same plan path. Fallback (direct/quick or headless-unavailable): invoke Skill `code-execute`.
+
+7. **Re-test**: If plan status is not `failed`, **re-dispatch** code-test (same Step 4 dispatch template + dispatch-wait harvest); fallback = invoke Skill `code-test`.
    - **Pass** → continue to Step 5 (code-report).
    - **Fail again** → rollback, **STOP**. Write pipeline_summary.md (status: failed, note both attempts) FIRST, then report to user. Do NOT proceed to code-report.
 
 ### Step 5: code-report
-Invoke Skill: `code-report` with the plan name/path as args.
+For `standard+`, **dispatch** code-report as its own depth-2 session — same `dispatch-headless.py --start` template with `--capability code-report --worker-role code-report --model-role "fast writer" --profile code-report`. Input = plan/checklist/dev_logs/test_logs/_reviews paths. Poll + harvest with `dispatch-wait --parent <cycle-slug>`; the conductor reads the report path/headline from the file.
+
+**[direct/quick] or [headless-unavailable runtime] fallback**: invoke Skill `code-report` with the plan name/path as args (in-session).
 
 ### Step 6: Pipeline Summary Report
 > **동시성 가드 (공유 `<artifact-root>`)**: `pipeline_summary.md`·`pipeline_state.yaml` 등 `spec/` 공유 단일파일 쓰기 _직전_ **OPERATIONS.md §5.8** `.pipeline-lock` 획득, 쓰기 직후 해제(짧게 보유). spec-drift 로 prd.md 갱신(§ "Spec 영향 변경 감지" → autopilot-spec update) 시도 lock 경유(해당 skill 이 자체 획득). `plans/<cycle>/` 쓰기는 경로 분리라 비-lock. BLOCKED(`exit 3`) 면 쓰기 멈추고 사용자 보고.
