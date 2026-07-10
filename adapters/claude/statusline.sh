@@ -19,6 +19,7 @@ model = m.get("display_name") or m.get("id") or "?"
 mid = (m.get("id") or "").lower()
 effort = ((d.get("effort") or {}).get("level") or "")  # reasoning effort: low|medium|high|xhigh|max
 sid = d.get("session_id") or ""
+tpath = d.get("transcript_path") or ""
 rl = d.get("rate_limits") or {}
 def rlpct(k):
     v = (rl.get(k) or {}).get("used_percentage")
@@ -59,13 +60,14 @@ print("S_MS=" + shlex.quote(" ".join(ms_parts)))
 print("S_MODEL=" + shlex.quote(model))
 print("S_EFFORT=" + shlex.quote(effort))
 print("S_SID=" + shlex.quote(sid))
+print("S_TRANSCRIPT=" + shlex.quote(tpath))
 print("S_5H=" + shlex.quote(rlpct("five_hour")))
 print("S_7D=" + shlex.quote(rlpct("seven_day")))
 print("S_5H_RST=" + shlex.quote(rlrem("five_hour")))
 print("S_7D_RST=" + shlex.quote(rlrem("seven_day")))
 print("S_CTX=" + shlex.quote(str(cpct)))
 ' 2>/dev/null)"
-: "${S_CWD:=$PWD}" "${S_MODEL:=?}" "${S_EFFORT:=}" "${S_SID:=}" "${S_5H:=}" "${S_7D:=}" "${S_5H_RST:=}" "${S_7D_RST:=}" "${S_CTX:=-1}" "${S_MS:=}"
+: "${S_CWD:=$PWD}" "${S_MODEL:=?}" "${S_EFFORT:=}" "${S_SID:=}" "${S_5H:=}" "${S_7D:=}" "${S_5H_RST:=}" "${S_7D_RST:=}" "${S_CTX:=-1}" "${S_MS:=}" "${S_TRANSCRIPT:=}"
 
 # §5 per-session statusline tap (agent-fleet-dashboard) — 멀티세션 대시보드(tools/fleet)가
 # 세션별 telemetry 를 읽게 stdin JSON 을 세션별 파일로도 dump. 단일 .statusline-last.json 은
@@ -81,6 +83,40 @@ if [ -n "$S_SID" ]; then
   fi
   # stale 청소: mtime > 1일 세션 파일 제거(디렉토리 폭증 방지 — 종료된 세션 잔존물). find 없으면 skip.
   find "$sldir" -maxdepth 1 \( -name '*.json' -o -name '.*.json.tmp' \) -mtime +1 -delete 2>/dev/null || true
+fi
+
+# §4.6 F-17 라이브 제목 refresher 트리거 — claude 소유 surface(statusline) debounce 확장.
+# 조건: (a) sidecar 부재 OR ts>10min AND (b) transcript 가 sidecar ts 이후 자람.
+# 재귀가드: refresher 의 claude -p 는 statusline 미실행 + FLEET_TITLE_REFRESH env 이중.
+# 반드시 즉시 반환 — 판정은 stat 2회, 실행은 detached setsid.
+if [ -n "$S_SID" ] && [ -n "${S_TRANSCRIPT:-}" ] && [ "${FLEET_TITLE_REFRESH:-}" != "1" ] \
+   && [ -f "$S_TRANSCRIPT" ] && command -v python3 >/dev/null 2>&1; then
+  refresher="$AGENT_HOME/../agent_setting/tools/fleet/refresh_title.py"   # ↙ 실경로는 §6 note
+  [ -f "$refresher" ] || refresher="$(dirname "$AGENT_HOME")/tools/fleet/refresh_title.py"
+  sc="$AGENT_HOME/.fleet-titles/$S_SID.json"
+  now=$(date +%s)
+  scts=0; [ -f "$sc" ] && scts=$(stat -c %Y "$sc" 2>/dev/null || echo 0)
+  trm=$(stat -c %Y "$S_TRANSCRIPT" 2>/dev/null || echo 0)
+  # (a) 오래됨: sidecar 없음(scts=0) 또는 10min(600s) 초과
+  if [ "$scts" -eq 0 ] || [ $((now - scts)) -gt 600 ]; then
+    # (b) 자람: transcript mtime 이 sidecar ts 이후 (sidecar 없으면 무조건 자람)
+    if [ "$scts" -eq 0 ] || [ "$trm" -gt "$scts" ]; then
+      lockdir="$AGENT_HOME/.fleet-titles/.lock-$S_SID"
+      if [ -f "$refresher" ] && mkdir -p "$AGENT_HOME/.fleet-titles" 2>/dev/null \
+         && mkdir "$lockdir" 2>/dev/null; then
+        # 세션당 동시 1개. child 가 trap 으로 lock 해제. 즉시 반환(&).
+        # 서브셸 자체도 stdout/stderr 를 /dev/null 로 돌려야 한다 — 안 그러면 서브셸이
+        # statusline 의 stdout pipe fd 를 그대로 물고 있어(내부 setsid 커맨드만 리다이렉트해도
+        # 서브셸 프로세스 자신은 fork 시점에 상속한 fd 를 계속 들고 있음), 호출자가 stdout 을
+        # 파이프로 읽을 때(Claude Code 의 실제 statusLine 소비 방식) EOF 가 refresher 종료까지
+        # 지연돼 "즉시 반환" 불변식이 깨진다.
+        ( trap 'rmdir "$lockdir" 2>/dev/null || true' EXIT
+          FLEET_TITLE_REFRESH=1 setsid python3 "$refresher" \
+            --sid "$S_SID" --transcript "$S_TRANSCRIPT" >/dev/null 2>&1 </dev/null
+        ) >/dev/null 2>&1 &
+      fi
+    fi
+  fi
 fi
 
 dir=$(basename "$S_CWD")
