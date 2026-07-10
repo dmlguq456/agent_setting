@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
-# mem-recall-inject — D-15 B1 완성: 회상 신호어 자동 사전주입 (DESIGN_PRINCIPLES §0.5, spec v9 Cluster D).
-#   UserPromptSubmit 마다 한국어 신호어(지난번|예전에|전에 등)를 regex 감지, 매칭 시
-#   mem recall 을 실행해 결과를 additionalContext 로 메인에 사전주입. 메인의 "recall 할까"
-#   판단을 결정론 hook 이 대체 (B1 완성 — runtime bootstrap 의 회상 신호어 자율 트리거).
+# mem-recall-inject — UserPromptSubmit 자동 회상 사전주입.
+#   모든 일반 prompt 를 shared mem recall --auto 엔진에 전달하고, 엔진이 선별한
+#   고신뢰 결과만 additionalContext 로 메인에 사전주입한다.
 #
 #   Guards:
 #     - MEM_DISTILL=1 → 즉시 exit 0 (distiller 세션 재귀 차단 — 세 hook 다 동일)
 #     - hook_event_name ≠ UserPromptSubmit → exit 0 no-op
-#     - 신호어 미감지 → exit 0 no-op (압도적 다수 정상 경로)
-#     - recall 결과에 실제 hit-line 없음(header-only / 매칭 없음) → inject 0 exit 0 (empty-result no-op)
+#     - prompt 없음 → exit 0 no-op
+#     - tracked project cwd 아님 / 세션이 untracked → exit 0 no-op
+#     - auto recall 결과 없음 → inject 0 exit 0
 #
-#   Read-only 불변식: mem recall 은 DB write 0. additionalContext 만 emit — 메인 상태 무변경.
+#   Hook 자체는 DB를 직접 쓰지 않는다. access/telemetry 기록은 shared recall engine 계약이 소유한다.
 #
 #   Cap 환경변수 (context blowup 방지):
-#     MEM_RECALL_LINES  (default 12) — 주입할 최대 줄 수
-#     MEM_RECALL_CHARS  (default 2000) — 주입할 최대 글자 수 (python 문자 슬라이스 — UTF-8 경계 안전)
+#     hit line 최대 3개 (CLI --limit 3 + hook 방어 cap)
+#     MEM_RECALL_CHARS  (default/max 1200) — 더 작은 cap만 허용
 #
 #   Portable CLI:
-#     mem-recall-inject.sh --prompt <text> [--cwd <dir>] [--format text|claude-json]
+#     mem-recall-inject.sh --prompt <text> [--cwd <dir>] [--session-id <id>]
+#                              [--format text|claude-json]
 #
 #   등록은 adapter hook 설정이 담당한다 (no-matcher, timeout 10).
 #         mem-recall-inject.sh 가 세 번째 MEM_DISTILL=1 재귀가드 honor 훅.
@@ -27,7 +28,7 @@ AGENT_HOME="${AGENT_HOME:-$("$HOOK_DIR/../utilities/agent-home.sh")}"
 
 usage() {
   cat <<'EOF'
-usage: mem-recall-inject.sh --prompt <text> [--cwd <dir>] [--format text|claude-json]
+usage: mem-recall-inject.sh --prompt <text> [--cwd <dir>] [--session-id <id>] [--format text|claude-json]
 
 Without arguments, reads Claude hook JSON from stdin and emits Claude hook JSON.
 EOF
@@ -56,6 +57,11 @@ if [ "$#" -gt 0 ]; then
       --cwd)
         [ "$#" -ge 2 ] || { echo "mem-recall-inject: --cwd requires a dir" >&2; exit 64; }
         CWD=$2
+        shift 2
+        ;;
+      --session-id)
+        [ "$#" -ge 2 ] || { echo "mem-recall-inject: --session-id requires an id" >&2; exit 64; }
+        SID=$2
         shift 2
         ;;
       --format)
@@ -90,27 +96,50 @@ print("CWD="+shlex.quote(d.get("cwd","") or ""))
 fi
 
 [ "$EVENT" = "UserPromptSubmit" ] || exit 0
+[ -n "${PROMPT//[[:space:]]/}" ] || exit 0
 
-# 신호어 regex (D-15 canonical PAT — MEMORY §7.5 + 테스트 픽스처와 동일 출처):
-# 순수 리터럴 alternation (no \b / char-ranges — 로케일 해저드 회피).
-# 주의: bare top-level [[ =~ ]] 는 set -e 하에서 no-match 시 스크립트를 exit 1 로 종료함.
-# 아래 '|| exit 0' 가드 형식으로 no-match 를 clean no-op 으로 처리한다.
-PAT='지난번|지난번에|예전에|이전에|전에|그때|저번에|아까'
-[[ "${PROMPT:-}" =~ $PAT ]] || exit 0
+# Project-only/tracked-only gate. Git 프로젝트 또는 상위 artifact root를 프로젝트로 인정하고,
+# workflow escape-hatch가 열린 세션에서는 global/project memory를 자동 probe하지 않는다.
+PROJECT_ROOT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || true)
+if [ -z "$PROJECT_ROOT" ]; then
+  d=$CWD
+  while [ -n "$d" ]; do
+    if [ -d "$d/.agent_reports" ] || [ -d "$d/.claude_reports" ]; then
+      PROJECT_ROOT=$d
+      break
+    fi
+    [ "$d" = "/" ] && break
+    parent=$(dirname "$d")
+    [ "$parent" = "$d" ] && break
+    d=$parent
+  done
+fi
+[ -n "$PROJECT_ROOT" ] || exit 0
+for base in \
+  "$PROJECT_ROOT/.agent_reports/.untracked" \
+  "$PROJECT_ROOT/.claude_reports/.untracked" \
+  "$PROJECT_ROOT/.untracked"; do
+  [ -f "$base" ] && exit 0
+  [ "$SID" != "default" ] && [ -f "$base.$SID" ] && exit 0
+done
 
-# 신호어 감지 — mem recall 실행 (deployed path, mem.py L426-529 recall(), read-only)
-recall_out=$(cd "$CWD" 2>/dev/null && python3 "$AGENT_HOME/tools/memory/mem.py" recall "$PROMPT" 2>/dev/null || true)
+# shared engine 이 trigger/candidate/coverage/noise 판단을 소유한다. 저신뢰 또는 generic prompt 는
+# 빈 stdout 을 반환한다. Hook 은 adapter payload 변환과 최종 context cap 만 담당한다.
+RECALL_RUNTIME="${MEM_RECALL_RUNTIME:-unknown}"
+[ "$FORMAT" = "claude-json" ] && RECALL_RUNTIME="${MEM_RECALL_RUNTIME:-claude}"
+recall_out=$(cd "$CWD" 2>/dev/null \
+  && MEM_RECALL_RUNTIME="$RECALL_RUNTIME" \
+     python3 "$AGENT_HOME/tools/memory/mem.py" recall "$PROMPT" --auto --limit 3 2>/dev/null \
+  || true)
 
-# 결과 cap (context blowup 방지) — env-overridable
-# 줄 수만 shell(head -n)로 cap. 글자 수 cap 은 아래 python emit 에서 문자 슬라이스로 —
-# head -c 는 바이트 절단이라 한글(3바이트) 중간을 끊어 깨진 시퀀스를 만들 수 있음.
-MAX_LINES="${MEM_RECALL_LINES:-12}"
+# CLI limit 이 깨져도 hook 이 최대 3 hit line 만 싣도록 방어한다. optional heading 은 한 줄만
+# 보존하고, 기존 "  [tier/scope/type] id: snippet" 형식 외 출력은 버린다.
+capped=$(printf '%s' "$recall_out" | awk '
+  /^#/ { if (!heading) { print; heading=1 }; next }
+  /^  \[/ { if (hits < 3) { print; hits++ } }
+' 2>/dev/null || true)
 
-capped=$(printf '%s' "$recall_out" | head -n "$MAX_LINES" 2>/dev/null || true)
-
-# Empty-result no-op: recall 은 항상 "# recall:" 헤더를 출력.
-# 실제 hit-line 은 "  [{tier}/{scope}/{type}] {id}: {snip}" 형식 (두 칸 들여쓰기 + '[' 시작).
-# hit-line 없으면 inject 0 — (store 매칭 없음) / (store 없음) 등 header-only 케이스.
+# Empty-result/malformed-result no-op. 자동 주입은 hit-line 외 출력을 컨텍스트로 올리지 않는다.
 if ! printf '%s' "$capped" | grep -qP '^ {2}\[' 2>/dev/null; then
   # grep -P 미지원 환경 fallback
   if ! printf '%s' "$capped" | grep -q '^  \[' 2>/dev/null; then
@@ -123,23 +152,32 @@ fi
 # 글자 수 cap 은 여기서 문자 슬라이스(b[:N])로 — 멀티바이트 경계 안전.
 # '|| true': emit 이 어떤 이유로든 실패해도 hook 은 항상 exit 0 (never-block 불변식).
 if [ "$FORMAT" = "text" ]; then
-  REC_BLOCK="$capped" MAX_CHARS="${MEM_RECALL_CHARS:-2000}" python3 -c '
+  REC_BLOCK="$capped" MAX_CHARS="${MEM_RECALL_CHARS:-1200}" python3 -c '
 import os
-b = os.environ["REC_BLOCK"][: int(os.environ.get("MAX_CHARS", "2000"))]
-label = "# 🧠 과거 기억 회상 (recall 자동주입 — 신호어 감지)\n"
-print(label + b)
+try:
+    requested = int(os.environ.get("MAX_CHARS", "1200"))
+except ValueError:
+    requested = 1200
+cap = min(max(requested, 0), 1200)
+label = "# 🧠 과거 기억 회상 (recall 자동주입 — 고신뢰 매칭)\n"
+print((label + os.environ["REC_BLOCK"])[:cap])
 ' || true
   exit 0
 fi
 
-REC_BLOCK="$capped" MAX_CHARS="${MEM_RECALL_CHARS:-2000}" python3 -c '
+REC_BLOCK="$capped" MAX_CHARS="${MEM_RECALL_CHARS:-1200}" python3 -c '
 import os, json
-b = os.environ["REC_BLOCK"][: int(os.environ.get("MAX_CHARS", "2000"))]
-label = "# \U0001f9e0 과거 기억 회상 (recall 자동주입 — 신호어 감지)\n"
+try:
+    requested = int(os.environ.get("MAX_CHARS", "1200"))
+except ValueError:
+    requested = 1200
+cap = min(max(requested, 0), 1200)
+label = "# \U0001f9e0 과거 기억 회상 (recall 자동주입 — 고신뢰 매칭)\n"
+payload = (label + os.environ["REC_BLOCK"])[:cap]
 out = {
     "hookSpecificOutput": {
         "hookEventName": "UserPromptSubmit",
-        "additionalContext": label + b
+        "additionalContext": payload
     }
 }
 print(json.dumps(out, ensure_ascii=False))

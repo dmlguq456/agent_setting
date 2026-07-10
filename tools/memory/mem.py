@@ -10,7 +10,7 @@ spec: <agent-home>/.agent_reports/spec/prd.md (legacy: .claude_reports/spec/prd.
   - 기억 저장 = 자동(품질필터만, 사람 승인 게이트 없음).
   - 외부 의존 0 (stdlib: sqlite3/argparse/json/hashlib/...). rg 있으면 회상 가속.
 """
-import argparse, datetime, hashlib, json, os, re, sqlite3, subprocess, sys
+import argparse, datetime, hashlib, json, math, os, re, sqlite3, subprocess, sys, time, unicodedata
 from collections import namedtuple
 from pathlib import Path
 
@@ -40,9 +40,10 @@ USER_PROFILE = Path(os.environ.get("MEM_PROFILE", AGENT_HOME / "user_profile"))
 TIERS = ("working", "durable")
 SCOPES = ("project", "global")
 WORKING_TTL_DAYS = 21
-SCHEMA_VERSION = 4  # v1 기준 / v2 strength+last_accessed / v3 cwd_origin remap / v4 injection_flag
+SCHEMA_VERSION = 5  # v1 기준 / v2 strength+last_accessed / v3 cwd remap / v4 injection / v5 delivery
 FM_ORDER = ["id", "tier", "scope", "type", "cwd_origin", "created", "updated",
-            "expires", "source", "tags", "links", "strength", "last_accessed", "injection_flag"]
+            "expires", "source", "tags", "links", "strength", "last_accessed", "injection_flag",
+            "delivery_state"]
 INJECT_DEFAULT_MAX_CHARS = 2000
 INJECT_DEFAULT_MAX_BULLETS = 15
 INJECT_DEFAULT_MAX_WORKING = 8
@@ -50,10 +51,18 @@ INJECT_DEFAULT_MAX_DURABLE = 4
 INJECT_DEFAULT_CLEANUP_LINES = 2
 INJECT_DEFAULT_SNIPPET_CHARS = 100
 
-# 15 컬럼 정규 순서 (export/import round-trip 결정성 기반)
+# 16 컬럼 정규 순서 (export/import round-trip 결정성 기반)
 RECORD_COLS = ("id", "tier", "scope", "type", "cwd_origin", "created", "updated",
                "expires", "source", "tags", "links", "body", "strength", "last_accessed",
-               "injection_flag")
+               "injection_flag", "delivery_state")
+DELIVERY_STATES = ("ordinary", "pending", "consumed")
+RECALL_AUTO_LIMIT = 3
+RECALL_AUTO_MAX_CHARS = 1200
+RECALL_EVENTS = Path(os.environ.get(
+    "MEM_RECALL_EVENTS",
+    Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
+    / "agent-memory" / "recall-events.jsonl",
+))
 
 
 def artifact_root(cwd: Path) -> Path:
@@ -392,7 +401,8 @@ def _ensure_schema(con):
         body        TEXT NOT NULL,
         strength    INTEGER DEFAULT 1,
         last_accessed TEXT,
-        injection_flag INTEGER DEFAULT 0
+        injection_flag INTEGER DEFAULT 0,
+        delivery_state TEXT NOT NULL DEFAULT 'ordinary'
     )""")
     con.execute("CREATE INDEX IF NOT EXISTS idx_records_scope ON records(scope, cwd_origin, tier)")
 
@@ -486,6 +496,26 @@ def _migrate_v4(con):
     con.execute("UPDATE records SET injection_flag=0 WHERE injection_flag IS NULL")
 
 
+def _pending_backfill(rtype, body):
+    """Old records/dumps have no delivery state; fail-safe only explicit handoff shapes."""
+    return rtype in ("hint", "handoff") or bool(re.match(r"^\s*HANDOFF\b", body or "", re.I))
+
+
+def _migrate_v5(con):
+    """Add delivery state and protect live legacy handoffs before any curator runs."""
+    cols = {r[1] for r in con.execute("PRAGMA table_info(records)")}
+    if "delivery_state" not in cols:
+        con.execute("ALTER TABLE records ADD COLUMN delivery_state TEXT NOT NULL DEFAULT 'ordinary'")
+    for rid, rtype, body, state in con.execute(
+            "SELECT id, type, body, delivery_state FROM records"):
+        normalized = state if state in DELIVERY_STATES else "ordinary"
+        if normalized == "ordinary" and _pending_backfill(rtype, body):
+            normalized = "pending"
+        if normalized != state:
+            con.execute("UPDATE records SET delivery_state=? WHERE id=?", (normalized, rid))
+    con.execute("UPDATE records SET expires=NULL WHERE delivery_state='pending'")
+
+
 def _run_migrations(con):
     """PRAGMA user_version 기반 스키마 마이그레이션 프레임.
     NOTE: migrate() 함수(legacy md→DB 이주)와는 별개 — 이 함수는 스키마-버전 전용.
@@ -522,6 +552,8 @@ def _run_migrations(con):
             _migrate_v3_apply(con, v3_plan)
         if cur2 < 4:
             _migrate_v4(con)
+        if cur2 < 5:
+            _migrate_v5(con)
         con.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         con.execute("COMMIT")
     except Exception:
@@ -562,15 +594,23 @@ def _row_to_meta(row):
 
 
 def _meta_to_params(meta, body):
-    """meta dict + body → 15-tuple for INSERT (RECORD_COLS 순).
+    """meta dict + body → 16-tuple for INSERT (RECORD_COLS 순).
     None → NULL passthrough 규칙: expires/source/cwd_origin 은 None → SQL NULL (절대 "" 다운그레이드 X).
     tags/links: 항상 list → JSON 텍스트 (None 이면 []).
     strength: None 또는 0 → 1 로 coerce (DEFAULT 의미론; Phase α 에서 strength=0 케이스 없음).
     last_accessed: None → SQL NULL (migration/import 에서 COALESCE 백필 예정).
-    injection_flag: None/absent/0 모두 0 으로 coerce (`or 0` 필수 — old-dump None 흐름 차단).
+    injection_flag: None/absent는 body에서 재산정하고, 명시 0/1은 보존한다.
+    delivery_state: absent/invalid → legacy handoff heuristic, otherwise ordinary.
     """
     tags = meta.get("tags") or []
     links = meta.get("links") or []
+    delivery_state = meta.get("delivery_state")
+    if delivery_state not in DELIVERY_STATES:
+        delivery_state = "pending" if _pending_backfill(meta.get("type"), body) else "ordinary"
+    injection_flag = meta.get("injection_flag")
+    if injection_flag is None:
+        injection_flag = 1 if INJECTION_PAT.search(body or "") else 0
+    expires = None if delivery_state == "pending" else meta.get("expires")
     return (
         meta["id"],
         meta["tier"],
@@ -579,14 +619,15 @@ def _meta_to_params(meta, body):
         meta.get("cwd_origin"),    # None → SQL NULL
         meta.get("created"),
         meta.get("updated"),
-        meta.get("expires"),       # None → SQL NULL
+        expires,
         meta.get("source"),        # None → SQL NULL
         json.dumps(tags, ensure_ascii=False),
         json.dumps(links, ensure_ascii=False),
         body,
         meta.get("strength", 1) or 1,    # None/0 → 1 default
         meta.get("last_accessed"),       # None → SQL NULL (back-filled by migration/import)
-        meta.get("injection_flag", 0) or 0,  # None/absent/0 → 0 (old-dump None 도 0 coerce)
+        injection_flag or 0,
+        delivery_state,
     )
 
 
@@ -630,29 +671,38 @@ def sanitize(body):
     return masked, flags
 
 
-def find_by_source(tier, scope, rtype, source, con):
-    """source-keyed lookup — (tier, scope, type, source) 동일 레코드 id 반환 (없으면 None).
-    type 도 매칭 — 같은 source 가 다른 type 행을 cross-overwrite 하는 것 방지 (source↔type 1:1 컨벤션 강제)."""
+def find_by_source(tier, scope, rtype, source, cwd_origin, con):
+    """source-keyed lookup. Project records are namespaced by cwd_origin."""
     if not source:
         return None
+    where = "tier=? AND scope=? AND type=? AND source=?"
+    params = [tier, scope, rtype, source]
+    if scope == "project":
+        where += " AND cwd_origin=?"
+        params.append(cwd_origin)
     row = con.execute(
-        "SELECT id FROM records WHERE tier=? AND scope=? AND type=? AND source=? "
-        "ORDER BY rowid DESC LIMIT 1", (tier, scope, rtype, source)).fetchone()
+        f"SELECT id FROM records WHERE {where} ORDER BY rowid DESC LIMIT 1",
+        params).fetchone()
     return row[0] if row else None
 
 
-def find_dup(tier, scope, body, con=None):
+def find_dup(tier, scope, body, cwd_origin, con=None):
     """dedup 검사. con 전달 시 재사용(write_record 내 단일 트랜잭션 유지)."""
     nb = norm_body(body)
     h = hashlib.sha256(nb.encode()).hexdigest()[:16]
-    for meta, b in db_iter_records(con, "tier=? AND scope=?", (tier, scope)):
+    where = "tier=? AND scope=?"
+    params = [tier, scope]
+    if scope == "project":
+        where += " AND cwd_origin=?"
+        params.append(cwd_origin)
+    for meta, b in db_iter_records(con, where, params):
         if hashlib.sha256(norm_body(b).encode()).hexdigest()[:16] == h:
             return meta["id"]
     return None
 
 
 def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=None,
-                 source=None, quiet=False):
+                 source=None, quiet=False, requires_consume=False):
     """DB write 프리미티브. one write = one connection = one transaction."""
     assert tier in TIERS and scope in SCOPES
     ok, why = quality_ok(body)
@@ -661,12 +711,15 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             print(f"[skip] {why}")
         return None
     body, flags = sanitize(body)
+    if cwd_origin is None:
+        cwd_origin = project_key(Path.cwd(), seed=True) if scope == "project" else "global"
 
     # 단일 연결로 dedup + INSERT + FTS mirror 를 하나의 트랜잭션으로
     con = get_con()
     try:
         # source-keyed UPSERT: 동일 (tier, scope, type, source) 면 in-place UPDATE (id 보존)
-        existing = find_by_source(tier, scope, rtype, source, con)
+        requested_delivery = "pending" if (rtype == "handoff" or requires_consume) else "ordinary"
+        existing = find_by_source(tier, scope, rtype, source, cwd_origin, con)
         if existing:
             # NOTE(🟡-2): in-place UPDATE 는 기존 행의 cwd_origin/created/type/source 를 보존 —
             # cwd_origin 재계산 주입하지 않음 (UPDATE SET 목록에서 의도적으로 제외).
@@ -677,15 +730,19 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             if tier == "working":
                 new_expires = (datetime.date.today() +
                                datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
+            if requested_delivery == "pending":
+                new_expires = None
             # Step 4.3: injection_flag 도 body 교체와 함께 재계산·갱신
             new_inj_flag = 1 if "injection-pattern" in flags else 0
             con.execute(
                 "UPDATE records SET body=?, updated=?, expires=?, tags=?, links=?,"
-                " injection_flag=? WHERE id=?",
+                " injection_flag=?, delivery_state=CASE "
+                "WHEN delivery_state='pending' OR ?='pending' THEN 'pending' "
+                "ELSE delivery_state END WHERE id=?",
                 (body, today(), new_expires,
                  json.dumps(tags or [], ensure_ascii=False),
                  json.dumps(links or [], ensure_ascii=False),
-                 new_inj_flag, existing))
+                 new_inj_flag, requested_delivery, existing))
             if _FTS_OK:
                 con.execute("DELETE FROM records_fts WHERE id=?", (existing,))
                 con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (existing, body))
@@ -696,7 +753,7 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             if not quiet:
                 print(f"[upsert] {tier}/{scope} source={source} → {existing}")
             return existing
-        dup = find_dup(tier, scope, body, con=con)
+        dup = find_dup(tier, scope, body, cwd_origin, con=con)
         if dup:
             # E-1 (γ): dedup = 버리기 아니라 reinforce — 재출현=중요도(Hebbian). strength++ +
             # last_accessed 갱신. working 은 expires 도 today+TTL 로 연장(F1 — UPSERT 경로 :637-639
@@ -706,17 +763,21 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
                            datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
                 con.execute(
                     "UPDATE records SET strength=COALESCE(strength,1)+1, last_accessed=?,"
-                    " expires=? WHERE id=?", (today(), new_exp, dup))
+                    " expires=CASE WHEN delivery_state='pending' OR ?='pending' THEN NULL ELSE ? END,"
+                    " delivery_state=CASE "
+                    "WHEN delivery_state='pending' OR ?='pending' THEN 'pending' "
+                    "ELSE delivery_state END WHERE id=?",
+                    (today(), requested_delivery, new_exp, requested_delivery, dup))
             else:
                 con.execute(
-                    "UPDATE records SET strength=COALESCE(strength,1)+1, last_accessed=?"
-                    " WHERE id=?", (today(), dup))
+                    "UPDATE records SET strength=COALESCE(strength,1)+1, last_accessed=?,"
+                    " delivery_state=CASE WHEN delivery_state='pending' OR ?='pending' "
+                    "THEN 'pending' ELSE delivery_state END WHERE id=?",
+                    (today(), requested_delivery, dup))
             con.commit()
             if not quiet:
                 print(f"[reinforce] 기존 레코드 재출현 → {dup} strength++")
             return dup
-        if cwd_origin is None:
-            cwd_origin = project_key(Path.cwd(), seed=True) if scope == "project" else "global"
         base = slugify(f"{rtype} {body}")
         # FIX 1: tier/scope/cwd_origin 을 해시 seed 에 포함해 namespace 충돌 방지
         # (동일 body+type 이라도 tier/scope 가 다르면 다른 id → INSERT OR REPLACE 가 앞 행 파괴하지 않음)
@@ -730,8 +791,9 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             "strength": 1, "last_accessed": today(),
             # Step 4.3: sanitize() 결과 flags 를 DB 에 영속
             "injection_flag": 1 if "injection-pattern" in flags else 0,
+            "delivery_state": requested_delivery,
         }
-        if tier == "working":
+        if tier == "working" and requested_delivery != "pending":
             meta["expires"] = (datetime.date.today() +
                                datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
 
@@ -842,12 +904,212 @@ def _has_cjk(s):
     return bool(re.search(r"[　-鿿가-힯]", s))
 
 
-def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
-    print(f"# recall: \"{query}\"  [tier={tier or '*'} scope={scope or '*'} "
-          f"cwd={'현재' if cwd else '전체'}]")
+_AUTO_STOPWORDS = frozenset({
+    "그리고", "그러면", "그래서", "그런데", "근데", "뭔가", "그냥", "이거", "저거",
+    "여기", "아래", "위에", "지금", "오늘", "현재", "관련", "대해", "대한", "통해",
+    "있는", "없는", "있어", "없어", "하는", "해서", "하면", "되는", "되어", "같은",
+    "같아", "같지가", "것", "거", "잘", "좀", "더", "정도", "말이지", "혹시", "필요",
+    "상황", "작업", "agent", "에이전트", "code", "코드", "please", "this", "that", "with",
+    "from", "have", "what", "when", "where", "about", "into", "then", "just", "current",
+})
+_AUTO_KO_SUFFIXES = tuple(sorted(
+    set(_KO_PARTICLES) | {"쪽", "도록", "이라서", "라서", "이라", "라고", "인데", "하고",
+                          "하게", "해서", "하면", "되는", "되어", "있어", "같아"},
+    key=len, reverse=True))
+
+
+def _visibility_clause(alias="r", all_projects=False):
+    """Shared read fence: flagged rows never surface; default is current project + global."""
+    prefix = f"{alias}." if alias else ""
+    clean = f"({prefix}injection_flag=0 OR {prefix}injection_flag IS NULL)"
+    if all_projects:
+        return clean, []
+    return f"{clean} AND ({prefix}scope='global' OR {prefix}cwd_origin=?)", [project_key(Path.cwd())]
+
+
+def _touch_records(ids):
+    ids = list(dict.fromkeys(ids))
+    if not ids:
+        return
+    con = None
+    try:
+        con = get_con()
+        ph = ",".join("?" for _ in ids)
+        con.execute(f"UPDATE records SET last_accessed=? WHERE id IN ({ph})", [today(), *ids])
+        con.commit()
+    except Exception:
+        pass
+    finally:
+        if con is not None:
+            con.close()
+
+
+def _auto_terms(query):
+    text = unicodedata.normalize("NFKC", query or "").lower()
+    raw = re.findall(r"[a-z0-9가-힣][a-z0-9가-힣_./:@+-]*", text)
+    out = []
+    for token in raw:
+        token = token.strip("._/:@+-")
+        if not token or token in _RECALL_SIGNAL_WORDS or token in _AUTO_STOPWORDS:
+            continue
+        if _has_cjk(token):
+            # 조사 뒤 의미 suffix가 겹치는 형태(메모리쪽을 → 메모리)를 최대 2단계 정규화.
+            for _ in range(2):
+                stripped = False
+                for suffix in _AUTO_KO_SUFFIXES:
+                    if token.endswith(suffix) and len(token) - len(suffix) >= 2:
+                        token = token[:-len(suffix)]
+                        stripped = True
+                        break
+                if not stripped:
+                    break
+            if len(token) < 2 or token in _AUTO_STOPWORDS:
+                continue
+        elif len(token) < 3 and not any(ch.isdigit() for ch in token):
+            continue
+        if token not in out:
+            out.append(token)
+        if len(out) >= 8:
+            break
+    return out
+
+
+def _term_match(term, body):
+    normalized = unicodedata.normalize("NFKC", body or "").lower()
+    compact = re.sub(r"[^a-z0-9가-힣_./:@+-]+", "", normalized)
+    identifier = bool(re.search(r"[_./:@+-]|\d", term))
+    if term in normalized or term in compact:
+        return True, True, identifier or len(term) >= (3 if _has_cjk(term) else 6)
+    if _has_cjk(term) and len(term) >= 4:
+        grams = {term[i:i + 3] for i in range(len(term) - 2)}
+        ratio = sum(g in compact for g in grams) / max(1, len(grams))
+        if ratio >= 0.67:
+            return True, False, len(term) >= 5
+    return False, False, False
+
+
+def _append_recall_event(event):
+    """Bounded, raw-prompt-free observability. Telemetry failure never breaks a prompt hook."""
+    try:
+        RECALL_EVENTS.parent.mkdir(parents=True, exist_ok=True)
+        if RECALL_EVENTS.exists() and RECALL_EVENTS.stat().st_size > 256 * 1024:
+            lines = RECALL_EVENTS.read_text(encoding="utf-8").splitlines()[-500:]
+            RECALL_EVENTS.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        with RECALL_EVENTS.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(event, sort_keys=True, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def auto_recall(query, limit=RECALL_AUTO_LIMIT, touch=True, json_output=False):
+    started = time.monotonic()
+    explicit = any(word in unicodedata.normalize("NFKC", query or "")
+                   for word in _RECALL_SIGNAL_WORDS)
+    mode = "explicit" if explicit else "implicit"
+    terms = _auto_terms(query)
+    candidates = []
+    raw_candidate_count = 0
+    reject_reason = "no-terms" if not terms else "no-candidates"
+    if DB.exists() and terms:
+        con = get_con()
+        try:
+            fence, params = _visibility_clause("", all_projects=False)
+            rows = list(db_iter_records(
+                con, f"{fence} AND (expires IS NULL OR expires>=? OR delivery_state='pending')",
+                [*params, today()]))
+        finally:
+            con.close()
+        doc_freq = {term: 0 for term in terms}
+        matches_by_id = {}
+        for meta, body in rows:
+            details = {}
+            for term in terms:
+                matched, exact, specific = _term_match(term, body)
+                if matched:
+                    doc_freq[term] += 1
+                    details[term] = (exact, specific)
+            if details:
+                matches_by_id[meta["id"]] = (meta, body, details)
+        total_docs = max(1, len(rows))
+        effective = [term for term in terms
+                     if doc_freq[term] and (doc_freq[term] <= max(8, math.ceil(total_docs * 0.45))
+                                            or bool(re.search(r"[_./:@+-]|\d", term)))]
+        for rid, (meta, body, details) in matches_by_id.items():
+            matched = [term for term in effective if term in details]
+            if not matched:
+                continue
+            coverage = len(matched) / max(1, len(effective))
+            rare_specific = any(
+                details[term][0] and details[term][1]
+                and doc_freq[term] <= max(2, math.ceil(total_docs * 0.05))
+                for term in matched)
+            if explicit:
+                qualified = (len(matched) >= 2 and coverage >= 0.4) or rare_specific or any(
+                    details[term][0] and len(term) >= 3
+                    and doc_freq[term] <= max(8, math.ceil(total_docs * 0.2))
+                    for term in matched)
+            else:
+                qualified = (len(matched) >= 2 and coverage >= 0.5) or rare_specific
+            if not qualified:
+                continue
+            idf = sum(math.log((total_docs + 1) / (doc_freq[t] + 1)) + 1 for t in matched)
+            score = idf + coverage * 2 + min(meta.get("strength") or 1, 5) * 0.05
+            candidates.append({
+                "id": rid, "tier": meta["tier"], "scope": meta["scope"],
+                "type": meta["type"], "delivery_state": meta.get("delivery_state", "ordinary"),
+                "body": body, "score": round(score, 4),
+                "matched_terms": matched,
+            })
+        raw_candidate_count = len(matches_by_id)
+        candidates.sort(key=lambda item: (-item["score"], item["id"]))
+        reject_reason = "low-confidence" if matches_by_id and not candidates else (
+            "no-candidates" if not candidates else "")
+
+    results = candidates[:max(1, min(limit, 100))]
+    if touch and results:
+        _touch_records([item["id"] for item in results])
+    event = {
+        "at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "event": "auto-recall",
+        "runtime": os.environ.get("MEM_RECALL_RUNTIME", "unknown"),
+        "mode": mode,
+        "term_count": len(terms),
+        "candidate_count": raw_candidate_count,
+        "qualified_count": len(candidates),
+        "injected_ids": [item["id"] for item in results] if touch else [],
+        "reject_reason": reject_reason,
+        "latency_ms": round((time.monotonic() - started) * 1000, 2),
+    }
+    _append_recall_event(event)
+    if json_output:
+        payload = dict(event)
+        payload["results"] = results
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+    elif results:
+        lines = ["# 관련 기억 (자동 회상)"]
+        for item in results:
+            snippet = _first_line(item["body"]).replace("\n", " ")[:220]
+            rid = item["id"]
+            identifier = f"[pending:{rid}]" if item.get("delivery_state") == "pending" else rid
+            lines.append(
+                f"  [{item['tier']}/{item['scope']}/{item['type']}] {identifier}: {snippet}")
+        block = "\n".join(lines)
+        print(block[:RECALL_AUTO_MAX_CHARS])
+    return results
+
+
+def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
+           full=False, touch=True, auto=False, json_output=False):
+    limit = max(1, min(int(limit), 100))
+    if auto:
+        return auto_recall(query, limit=limit, touch=touch, json_output=json_output)
+    if not json_output:
+        print(f"# recall: \"{query}\"  [tier={tier or '*'} scope={scope or '*'} "
+              f"cwd={'현재' if cwd else '전체'}]")
     hits = []
     if not DB.exists():
-        print("(store 없음 — mem index 또는 mem sync 먼저)")
+        if not json_output:
+            print("(store 없음 — mem index 또는 mem sync 먼저)")
         if sessions:
             print(f"\n# raw 세션 transcript: \"{query}\"  (미정제)")
             _recall_sessions(query, cwd)
@@ -884,12 +1146,13 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
             return '"' + q.replace('"', '""') + '"'
 
         # -------------------------------------------------------
-        # 5경로 전부 8-tuple (id, tier, scope, type, cwd_origin, snippet, strength, score) 로 통일.
+        # 5경로 전부 9-tuple
+        # (id, tier, scope, type, cwd_origin, snippet, strength, score, delivery_state) 로 통일.
         # 버킷: 0=FTS(unicode61 tokenized OR), 1=trigram(raw substring phrase), 2=LIKE(score=0.0).
         # 최종 정렬: (bucket, score, -strength) — bm25 가 dominator, strength 는 tie-break 전용.
-        # 사용자-가시 출력 불변: hits.append 5-tuple / CLI print 포맷 변경 없음(strength/score 비노출).
+        # hits.append 5-tuple 반환 호환은 유지하고 pending ID만 CLI/JSON에 명시한다.
         # -------------------------------------------------------
-        tagged = []  # (bucket, score, -strength, row_8tuple)
+        tagged = []  # (bucket, score, -strength, row_9tuple)
         seen_ids: set = set()
 
         if has_fts:
@@ -901,7 +1164,7 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
                 where, params = build_where(("records_fts MATCH ?", [match_expr]))
                 sql = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
                        f"snippet(records_fts,1,'»','«','…',12), "
-                       f"r.strength, bm25(records_fts) AS score "
+                       f"r.strength, bm25(records_fts) AS score, r.delivery_state "
                        f"FROM records_fts f JOIN records r ON r.id=f.id "
                        f"WHERE {where} ORDER BY bm25(records_fts) LIMIT ?")
                 fts_rows = con.execute(sql, params + [limit * 3]).fetchall()
@@ -920,7 +1183,7 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
                             where2, params2 = build_where(("records_trig MATCH ?", [_fts_literal(query)]))
                             sql2 = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
                                     f"snippet(records_trig,1,'»','«','…',12), "
-                                    f"r.strength, bm25(records_trig) AS score "
+                                    f"r.strength, bm25(records_trig) AS score, r.delivery_state "
                                     f"FROM records_trig t JOIN records r ON r.id=t.id "
                                     f"WHERE {where2} ORDER BY bm25(records_trig) LIMIT ?")
                             trig_rows = con.execute(sql2, params2 + [limit * 3]).fetchall()
@@ -935,7 +1198,7 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
                     where_l, params_l = build_where()
                     where_l = (where_l + " AND r.body LIKE ?") if where_l != "1" else "r.body LIKE ?"
                     sql_l = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
-                             f"substr(r.body,1,160), r.strength, 0.0 AS score "
+                             f"substr(r.body,1,160), r.strength, 0.0 AS score, r.delivery_state "
                              f"FROM records r WHERE {where_l} LIMIT ?")
                     like_rows = con.execute(sql_l, params_l + [f"%{query}%", limit * 3]).fetchall()
                     for lr in like_rows:
@@ -947,7 +1210,7 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
                 where_l, params_l = build_where()
                 where_l = (where_l + " AND r.body LIKE ?") if where_l != "1" else "r.body LIKE ?"
                 sql_l = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
-                         f"substr(r.body,1,160), r.strength, 0.0 AS score "
+                         f"substr(r.body,1,160), r.strength, 0.0 AS score, r.delivery_state "
                          f"FROM records r WHERE {where_l} LIMIT ?")
                 err_rows = con.execute(sql_l, params_l + [f"%{query}%", limit * 3]).fetchall()
                 for er in err_rows:
@@ -959,7 +1222,7 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
             where_l, params_l = build_where()
             where_l = (where_l + " AND r.body LIKE ?") if where_l != "1" else "r.body LIKE ?"
             sql_l = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
-                     f"substr(r.body,1,160), r.strength, 0.0 AS score "
+                     f"substr(r.body,1,160), r.strength, 0.0 AS score, r.delivery_state "
                      f"FROM records r WHERE {where_l} LIMIT ?")
             nofts_rows = con.execute(sql_l, params_l + [f"%{query}%", limit * 3]).fetchall()
             for nr in nofts_rows:
@@ -974,33 +1237,57 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20):
     ranked = sorted(tagged, key=lambda e: (e[0], e[1], e[2]))
     rows_final = [e[3] for e in ranked]
 
-    # 8-tuple unpack → 5-tuple hits (strength/score 는 정렬 전용, 사용자 노출 X)
+    full_bodies = {}
+    if full and rows_final:
+        con_body = get_con()
+        try:
+            ids = [row[0] for row in rows_final[:limit]]
+            ph = ",".join("?" for _ in ids)
+            fence, fence_params = _visibility_clause("", all_projects=not bool(cwd))
+            full_bodies = dict(con_body.execute(
+                f"SELECT id, body FROM records WHERE id IN ({ph}) AND {fence}",
+                [*ids, *fence_params]).fetchall())
+        finally:
+            con_body.close()
+
+    # 9-tuple unpack → 5-tuple hits (strength/score/state는 출력 보조, 반환 호환 유지)
     hit_ids = []
-    for rid, rt, rs, rtype, cwd_orig, snip, _strength, _score in rows_final[:limit]:
-        hits.append((rt, rs, rtype, rid, snip.replace("\n", " ")))
+    hit_states = {}
+    for rid, rt, rs, rtype, cwd_orig, snip, _strength, _score, state in rows_final[:limit]:
+        rendered = full_bodies.get(rid, snip) if full else snip.replace("\n", " ")
+        hits.append((rt, rs, rtype, rid, rendered))
         hit_ids.append(rid)
+        hit_states[rid] = state or "ordinary"
 
     # γ E-1: recall hit = access → last_accessed 갱신 (cold-decay 신호). fail-OPEN(S3) —
     # 절대 read 경로를 깨면 안 됨. con2=get_con()(busy_timeout 상속, C-cross). IN-clause 는
     # ?-placeholder 정확 구성(C2 — 리스트를 단일 ? 에 bind 금지, id f-string 금지).
-    if hit_ids:
-        con2 = None
-        try:
-            ph = ",".join("?" for _ in hit_ids)
-            con2 = get_con()
-            con2.execute(f"UPDATE records SET last_accessed=? WHERE id IN ({ph})",
-                         [today(), *hit_ids])
-            con2.commit()
-        except Exception:
-            pass
-        finally:
-            if con2 is not None:
-                con2.close()   # 예외 흡수 시에도 연결 누수 방지 (SessionEnd lock 경합 경로)
+    if touch:
+        _touch_records(hit_ids)
+    _append_recall_event({
+        "at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "event": "explicit-recall",
+        "runtime": os.environ.get("MEM_RECALL_RUNTIME", "unknown"),
+        "result_count": len(hit_ids),
+        "accessed_ids": hit_ids if touch else [],
+        "full": bool(full),
+        "sessions": bool(sessions),
+    })
 
-    if not hits:
-        print("(store 매칭 없음)")
-    for rt, rs, rtype, rid, snip in hits:
-        print(f"  [{rt}/{rs}/{rtype}] {rid}: {snip}")
+    if json_output:
+        print(json.dumps({"results": [
+            {"tier": rt, "scope": rs, "type": rtype, "id": rid,
+             "delivery_state": hit_states.get(rid, "ordinary"), "body": snip}
+            for rt, rs, rtype, rid, snip in hits]}, sort_keys=True, ensure_ascii=False))
+    else:
+        if not hits:
+            print("(store 매칭 없음)")
+        for rt, rs, rtype, rid, snip in hits:
+            identifier = f"[pending:{rid}]" if hit_states.get(rid) == "pending" else rid
+            if full:
+                print(f"  [{rt}/{rs}/{rtype}] {identifier}:\n{snip}")
+            else:
+                print(f"  [{rt}/{rs}/{rtype}] {identifier}: {snip}")
     if sessions:
         print(f"\n# raw 세션 transcript: \"{query}\"  (미정제)")
         _recall_sessions(query, cwd)
@@ -1350,7 +1637,7 @@ def distill(sid, advance=False, source_name="claude"):
 
 # ---------- export / import ----------
 def export_dump(target_path=None):
-    """DB → dump.jsonl (git mirror). 결정론적: id 정렬 + sort_keys + 15 컬럼 전부."""
+    """DB → dump.jsonl (git mirror). 결정론적: id 정렬 + sort_keys + 16 컬럼 전부."""
     dest = Path(target_path) if target_path else DUMP
     con = get_con()
     try:
@@ -1795,25 +2082,113 @@ def near_dup_groups(con, where=None, params=()):
     return [ids for ids in seen.values() if len(ids) > 1]
 
 
+def _visible_record(con, rid, all_projects=False):
+    fence, params = _visibility_clause("", all_projects=all_projects)
+    return con.execute(
+        f"SELECT {', '.join(RECORD_COLS)} FROM records WHERE id=? AND {fence}",
+        [rid, *params]).fetchone()
+
+
+def show_record(rid, all_projects=False):
+    """Print one visible record in full. Reading never consumes a pending delivery."""
+    if not DB.exists():
+        print(f"[show] visible record not found: {rid}")
+        return False
+    con = get_con()
+    try:
+        row = _visible_record(con, rid, all_projects=all_projects)
+        if row is None:
+            print(f"[show] visible record not found: {rid}")
+            return False
+        meta, body = _row_to_meta(row)
+        con.execute("UPDATE records SET last_accessed=? WHERE id=?", (today(), rid))
+        con.commit()
+        meta["last_accessed"] = today()
+    finally:
+        con.close()
+    print(f"# {meta['id']}")
+    for key in ("tier", "scope", "type", "cwd_origin", "created", "updated", "expires",
+                "source", "tags", "links", "strength", "last_accessed", "delivery_state"):
+        value = meta.get(key)
+        if value not in (None, "", []):
+            print(f"{key}: {json.dumps(value, ensure_ascii=False) if isinstance(value, list) else value}")
+    print("\n" + body, end="" if body.endswith("\n") else "\n")
+    _append_recall_event({
+        "at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "event": "show", "runtime": os.environ.get("MEM_RECALL_RUNTIME", "unknown"),
+        "accessed_ids": [rid], "all_projects": bool(all_projects),
+    })
+    return True
+
+
+def consume(rid):
+    """Explicit acknowledgement. Recall/show/inject intentionally do not call this."""
+    if not DB.exists():
+        print(f"[consume] visible record not found: {rid}")
+        return False
+    con = get_con()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        row = _visible_record(con, rid, all_projects=False)
+        if row is None:
+            print(f"[consume] visible record not found: {rid}")
+            return False
+        meta, _body = _row_to_meta(row)
+        state = meta.get("delivery_state") or "ordinary"
+        if state == "ordinary":
+            print(f"[consume] 거부 (pending delivery 아님): {rid}")
+            return False
+        if state == "consumed":
+            print(f"[consume] 이미 consumed: {rid}")
+            return True
+        expires = meta.get("expires")
+        if meta.get("tier") == "working":
+            expires = (datetime.date.today() +
+                       datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
+        con.execute(
+            "UPDATE records SET delivery_state='consumed', expires=?, updated=?, last_accessed=? "
+            "WHERE id=?",
+            (expires, today(), today(), rid))
+        con.commit()
+        print(f"[consume] {rid} pending→consumed")
+        _append_recall_event({
+            "at": datetime.datetime.now().isoformat(timespec="seconds"),
+            "event": "consume", "runtime": os.environ.get("MEM_RECALL_RUNTIME", "unknown"),
+            "consumed_ids": [rid],
+        })
+        return True
+    finally:
+        con.close()
+
+
 def lifecycle(apply=False):
     print(f"# lifecycle  ({'APPLY' if apply else 'report'})")
     con = get_con()
     try:
+        if apply:
+            con.execute("BEGIN IMMEDIATE")
         # 만료된 working 레코드
         expired_rows = list(db_iter_records(
             con, "tier='working' AND expires IS NOT NULL AND expires < ?", (today(),)))
         # durable near-dup 플래깅
-        dups = near_dup_groups(con)
+        dups = near_dup_groups(con, "delivery_state!='pending'")
 
+        protected = []
+        deleted = 0
         for meta, body in expired_rows:
+            if meta.get("delivery_state") == "pending":
+                protected.append(meta["id"])
+                print(f"  [protected-expired] {meta['id']} (pending, expires {meta.get('expires')})")
+                continue
             print(f"  [expire] {meta['id']} (expires {meta.get('expires')})")
             if apply:
                 try:
-                    con.execute("DELETE FROM records WHERE id=?", (meta["id"],))
-                    if _FTS_OK:
-                        con.execute("DELETE FROM records_fts WHERE id=?", (meta["id"],))
-                    if _TRIG_OK:
-                        con.execute("DELETE FROM records_trig WHERE id=?", (meta["id"],))
+                    if not _graveyard_append(con, meta["id"], action="lifecycle-expire"):
+                        sys.stderr.write(
+                            f"[lifecycle] graveyard 실패 — 삭제 중단: {meta['id']}\n")
+                        continue
+                    _delete_rows(con, meta["id"])
+                    deleted += 1
                 except Exception as e:
                     sys.stderr.write(f"[lifecycle] 삭제 실패(계속): {meta['id']}: {e}\n")
         if apply:
@@ -1822,7 +2197,8 @@ def lifecycle(apply=False):
         for ids in dups:
             print(f"  [dup-flag] {ids}  (consolidate 후보 — 자동삭제 X)")
 
-        print(f"  → 만료 {len(expired_rows)}{'(삭제)' if apply else ''} · dup-flag {len(dups)}")
+        suffix = f"(삭제 {deleted})" if apply else ""
+        print(f"  → 만료 {len(expired_rows)}{suffix} · protected {len(protected)} · dup-flag {len(dups)}")
     finally:
         con.close()
     return [m for m, _ in expired_rows], dups
@@ -1845,17 +2221,24 @@ def _delete_rows(con, rid):
             sys.stderr.write(f"[delete] trig 미러 삭제 실패(계속): {rid}: {e}\n")
 
 
-def delete_record(rid, quiet=False):
+def delete_record(rid, quiet=False, force=False):
     """단건 결정론 삭제 — records + FTS + trig 3-table DELETE.
-    공개 동작 보존: 자체 연결 open + 자체 commit. 3-table 로직은 _delete_rows 단일화.
-    NOTE: 이 경로는 사용자-개시(LLM 미개입) — graveyard 없이 즉시 삭제 (γ curator prune/merge 와
-    달리 fail-closed graveyard 게이트를 두지 않음. 사용자가 명시 삭제를 택한 자리)."""
+    pending 은 명시 consume 또는 --force 전까지 거부하고 모든 삭제를 graveyard에 보존한다."""
     con = get_con()
     try:
-        row = con.execute("SELECT id FROM records WHERE id=?", (rid,)).fetchone()
+        con.execute("BEGIN IMMEDIATE")
+        row = con.execute("SELECT id, delivery_state FROM records WHERE id=?", (rid,)).fetchone()
         if not row:
             if not quiet:
                 print(f"[delete] id 없음: {rid}")
+            return False
+        if row[1] == "pending" and not force:
+            if not quiet:
+                print(f"[delete] 거부 (pending — consume 선행 또는 --force): {rid}")
+            return False
+        if not _graveyard_append(con, rid, action="delete-force" if force else "delete"):
+            if not quiet:
+                print(f"[delete] graveyard 실패 — 삭제 중단: {rid}")
             return False
         _delete_rows(con, rid)
         con.commit()
@@ -1870,11 +2253,10 @@ def delete_record(rid, quiet=False):
 GRAVEYARD = STORE / "deleted-records.jsonl"
 
 
-def _graveyard_append(con, rid):
-    """삭제 전 레코드 전문(15-col, export_dump 동형 sort_keys JSON)을 graveyard 에 append.
+def _graveyard_append(con, rid, action="prune", canonical=None):
+    """삭제 전 레코드 전문(16-col, export_dump 동형 sort_keys JSON)을 graveyard 에 append.
     반환 bool — write+flush+fsync 전부 성공해야 True. S1 fail-closed: curator prune/merge 는
-    False 면 삭제 중단(영구소실 방지). 절대 raise 안 함 (caller 가 abort 판단). 사용자-개시
-    delete_record 는 graveyard 안 거침 (best-effort 정책은 LLM 미개입 경로 전용)."""
+    False 면 삭제 중단(영구소실 방지). 절대 raise 안 함 (caller 가 abort 판단)."""
     row = con.execute(
         f"SELECT {', '.join(RECORD_COLS)} FROM records WHERE id=?", (rid,)).fetchone()
     if row is None:
@@ -1885,6 +2267,9 @@ def _graveyard_append(con, rid):
             rec[k] = json.loads(v) if v else []
         else:
             rec[k] = v   # None → JSON null (export_dump 동형)
+    rec["_deleted_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+    rec["_action"] = action
+    rec["_canonical"] = canonical
     line = json.dumps(rec, sort_keys=True, ensure_ascii=False)
     try:
         GRAVEYARD.parent.mkdir(parents=True, exist_ok=True)
@@ -1899,7 +2284,59 @@ def _graveyard_append(con, rid):
         return False
 
 
-def _in_current_project(con, rid):
+def restore(rid):
+    """Restore the newest visible graveyard entry for one id; graveyard remains append-only."""
+    if not GRAVEYARD.exists():
+        print(f"[restore] visible graveyard record not found: {rid}")
+        return False
+    found = None
+    try:
+        with GRAVEYARD.open(encoding="utf-8") as f:
+            for line in f:
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if rec.get("id") == rid:
+                    found = rec
+    except OSError:
+        found = None
+    if found is None:
+        print(f"[restore] visible graveyard record not found: {rid}")
+        return False
+    pkey = project_key(Path.cwd())
+    if found.get("scope") != "global" and found.get("cwd_origin") != pkey:
+        print(f"[restore] visible graveyard record not found: {rid}")
+        return False
+    con = get_con()
+    try:
+        if con.execute("SELECT 1 FROM records WHERE id=?", (rid,)).fetchone():
+            print(f"[restore] 거부 (live id already exists): {rid}")
+            return False
+        body = found.get("body", "")
+        meta = {k: found.get(k) for k in RECORD_COLS if k != "body"}
+        for key in ("tags", "links"):
+            meta[key] = meta.get(key) or []
+        if meta.get("delivery_state") not in DELIVERY_STATES:
+            meta["delivery_state"] = (
+                "pending" if _pending_backfill(meta.get("type"), body) else "ordinary")
+        con.execute(
+            f"INSERT INTO records VALUES({','.join(['?'] * len(RECORD_COLS))})",
+            _meta_to_params(meta, body))
+        if _FTS_OK:
+            con.execute("DELETE FROM records_fts WHERE id=?", (rid,))
+            con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (rid, body))
+        if _TRIG_OK:
+            con.execute("DELETE FROM records_trig WHERE id=?", (rid,))
+            con.execute("INSERT INTO records_trig(id, body) VALUES(?,?)", (rid, body))
+        con.commit()
+        print(f"[restore] {rid} ({meta['delivery_state']})")
+        return True
+    finally:
+        con.close()
+
+
+def _in_current_project(con, rid, pkey=None):
     """화이트리스트 게이트 — reinforce/merge/prune/graduate 대상이 현 프로젝트 소속인지.
     반환 (ok: bool, reason: str). profile/global/다른프로젝트/존재안함 모두 거부.
     reattribute 는 이 게이트를 쓰지 않음 (역게이트, reattribute() 참조)."""
@@ -1912,7 +2349,7 @@ def _in_current_project(con, rid):
         return False, "profile-protected"
     if scope == "global":
         return False, "global-protected"
-    if cwd_origin == project_key(Path.cwd()):
+    if cwd_origin == (pkey if pkey is not None else project_key(Path.cwd())):
         return True, ""
     return False, "other-project"
 
@@ -1938,13 +2375,19 @@ def reinforce(rid):
 
 def prune(rid):
     """삭제 — graveyard 백업 성공 후에만 (S1 fail-closed). 화이트리스트 게이트."""
+    pkey = project_key(Path.cwd())
     con = get_con()
     try:
-        ok, reason = _in_current_project(con, rid)
+        con.execute("BEGIN IMMEDIATE")
+        ok, reason = _in_current_project(con, rid, pkey)
         if not ok:
             print(f"[prune] 거부 ({reason}): {rid}")
             return False
-        if not _graveyard_append(con, rid):
+        state = con.execute("SELECT delivery_state FROM records WHERE id=?", (rid,)).fetchone()[0]
+        if state == "pending":
+            print(f"[prune] 거부 (pending — consume 선행): {rid}")
+            return False
+        if not _graveyard_append(con, rid, action="prune"):
             print(f"[prune] graveyard 실패 — 삭제 중단: {rid}")
             return False
         _delete_rows(con, rid)
@@ -1963,14 +2406,23 @@ def merge(canonical, ids):
         print(f"[merge] 거부 (canonical∉ids 또는 ids<2): {canonical} {ids}")
         return False
     non_canonical = [i for i in ids if i != canonical]   # canonical 절대 미포함
+    pkey = project_key(Path.cwd())
     con = get_con()
     try:
+        con.execute("BEGIN IMMEDIATE")
         # gate EVERY id BEFORE any mutation (per-id gate-then-delete 금지 — 부분파괴 방지)
         for i in ids:
-            ok, reason = _in_current_project(con, i)
+            ok, reason = _in_current_project(con, i, pkey)
             if not ok:
                 print(f"[merge] 거부 ({reason}): {i} — 전체 merge 취소 (삭제 0, graveyard 0)")
                 return False
+        pending = [rid for rid, state in con.execute(
+            f"SELECT id, delivery_state FROM records WHERE id IN ({','.join('?' for _ in ids)})",
+            ids).fetchall() if state == "pending"]
+        if pending:
+            print(f"[merge] 거부 (pending 포함): {pending} — 전체 merge 취소 "
+                  "(삭제 0, strength 변경 0, graveyard 0)")
+            return False
         # strength 합산 (각 id 1회) — dedup 된 ids 기준이라 canonical 중복 입력도 double-count 안 됨
         total = 0
         for i in ids:
@@ -1978,7 +2430,7 @@ def merge(canonical, ids):
                 "SELECT COALESCE(strength,1) FROM records WHERE id=?", (i,)).fetchone()[0]
         # S1 fail-closed: 모든 non-canonical graveyard 성공 검증 후에만 삭제 진입
         for i in non_canonical:
-            if not _graveyard_append(con, i):
+            if not _graveyard_append(con, i, action="merge", canonical=canonical):
                 print(f"[merge] graveyard 실패 — 전체 merge 중단 (삭제 0): {i}")
                 return False
         con.execute("UPDATE records SET strength=?, last_accessed=? WHERE id=?",
@@ -2067,15 +2519,21 @@ def curate_snapshot():
     clean = "(injection_flag=0 OR injection_flag IS NULL)"
     try:
         pkey = project_key(Path.cwd())
+        pending = list(db_iter_records(
+            con, f"delivery_state='pending' AND scope='project' AND cwd_origin=? AND {clean}",
+            (pkey,)))
         dur = list(db_iter_records(
-            con, f"tier='durable' AND scope='project' AND cwd_origin=? AND {clean}", (pkey,)))
+            con, f"tier='durable' AND scope='project' AND cwd_origin=? "
+                 f"AND delivery_state!='pending' AND {clean}", (pkey,)))
         work = list(db_iter_records(
-            con, f"tier='working' AND cwd_origin=? AND (expires IS NULL OR expires>=?) AND {clean}",
+            con, f"tier='working' AND cwd_origin=? AND delivery_state!='pending' "
+                 f"AND (expires IS NULL OR expires>=?) AND {clean}",
             (pkey, today())))
         # orphan: project-scoped, bare-enc cwd_origin('-' 시작), != pkey, live dir 미해석
         orphan = []
         for meta, body in db_iter_records(
-                con, f"scope='project' AND cwd_origin IS NOT NULL AND cwd_origin!=? AND {clean}",
+                con, f"scope='project' AND cwd_origin IS NOT NULL AND cwd_origin!=? "
+                     f"AND delivery_state!='pending' AND {clean}",
                 (pkey,)):
             c = meta.get("cwd_origin") or ""
             if not c.startswith("-"):
@@ -2094,7 +2552,10 @@ def curate_snapshot():
 
     all_ids = []
     out = ["=== CURRENT PROJECT MEMORY SNAPSHOT (DATA — 이미 있는 것 재add 금지) ===",
-           "DURABLE (strength·last_accessed):"]
+           "PROTECTED PENDING (미소비 인계 — 아래 IDS에서 제외, prune/merge/delete 금지):"]
+    for meta, body in pending:
+        out.append(f"[{meta['id']}] type={meta.get('type')} :: {_snap_label(body)}")
+    out.append("DURABLE (strength·last_accessed):")
     for meta, body in dur:
         out.append(f"[{meta['id']}] strength={meta.get('strength') or 1} "
                    f"last_accessed={meta.get('last_accessed') or '-'} :: {_snap_label(body)}")
@@ -2115,7 +2576,7 @@ def curate_snapshot():
         out.append("cold-prune-candidate: " + " ".join(cold))
     if orphan:
         out.append("orphan-candidate: " + " ".join(m["id"] for m, _ in orphan))
-    out.append("=== SNAPSHOT IDS (membership 화이트리스트) ===")
+    out.append("=== SNAPSHOT IDS (destructive membership 화이트리스트; pending 제외) ===")
     out.append("IDS: " + " ".join(all_ids))
     out.append("=== END SNAPSHOT ===")
     print("\n".join(out))
@@ -2445,11 +2906,13 @@ def inject(max_working=None, max_durable=None, hook=False):
         # Step 4.3 inject 마스킹: injection-flagged 레코드를 주입 블록에서 제외.
         # profile 읽기(위 prof_raw)는 type='profile' T1 신뢰 — 마스킹 X.
         work = list(db_iter_records(
-            con, "tier='working' AND cwd_origin=? AND (expires IS NULL OR expires >= ?)"
+            con, "tier='working' AND cwd_origin=? "
+                 "AND (expires IS NULL OR expires >= ? OR delivery_state='pending')"
                  " AND (injection_flag=0 OR injection_flag IS NULL)",
             (encc, today())))
         dur  = list(db_iter_records(
-            con, "tier='durable' AND scope='project' AND cwd_origin=? AND (expires IS NULL OR expires >= ?)"
+            con, "tier='durable' AND scope='project' AND cwd_origin=? "
+                 "AND (expires IS NULL OR expires >= ? OR delivery_state='pending')"
                  " AND (injection_flag=0 OR injection_flag IS NULL)",
             (encc, today())))
         # D-16: con 이 열린 상태에서 정리 후보 수집 (R1 — finally close 전에 실행)
@@ -2508,7 +2971,8 @@ def inject(max_working=None, max_durable=None, hook=False):
                            reverse=True)[:max_working]:
             if bullet_count >= max_bullets:
                 break
-            _append_inject_line(entries, f"- {_first_line(b)[:snippet_chars]}", m["id"])
+            pending = f"[pending:{m['id']}] " if m.get("delivery_state") == "pending" else ""
+            _append_inject_line(entries, f"- {pending}{_first_line(b)[:snippet_chars]}", m["id"])
             bullet_count += 1
             shown += 1
         if len(work) > shown:
@@ -2521,7 +2985,9 @@ def inject(max_working=None, max_durable=None, hook=False):
                            reverse=True)[:max_durable]:
             if bullet_count >= max_bullets:
                 break
-            _append_inject_line(entries, f"- [{m.get('type')}] {_first_line(b)[:snippet_chars]}", m["id"])
+            pending = f"[pending:{m['id']}] " if m.get("delivery_state") == "pending" else ""
+            _append_inject_line(
+                entries, f"- {pending}[{m.get('type')}] {_first_line(b)[:snippet_chars]}", m["id"])
             bullet_count += 1
             shown += 1
         if len(dur) > shown:
@@ -2577,6 +3043,12 @@ def inject(max_working=None, max_durable=None, hook=False):
         finally:
             if con2 is not None:
                 con2.close()   # 예외 흡수 시에도 연결 누수 방지 (SessionEnd lock 경합 경로)
+        _append_recall_event({
+            "at": datetime.datetime.now().isoformat(timespec="seconds"),
+            "event": "session-inject",
+            "runtime": os.environ.get("MEM_RECALL_RUNTIME", "unknown"),
+            "injected_ids": emitted_ids,
+        })
 
     emit(block)
 
@@ -2610,6 +3082,16 @@ def sync():
 
 
 # ---------- CLI ----------
+def _recall_limit(value):
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("limit must be an integer") from exc
+    if not 1 <= parsed <= 100:
+        raise argparse.ArgumentTypeError("limit must be between 1 and 100")
+    return parsed
+
+
 def main():
     ap = argparse.ArgumentParser(prog="mem", description="Unified Memory System")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -2623,10 +3105,13 @@ def main():
     a.add_argument("--links", default="")
     a.add_argument("--cwd-origin")
     a.add_argument("--source", default=None)
+    a.add_argument("--requires-consume", action="store_true",
+                   help="handoff 목적 thread 등을 pending delivery로 기록")
 
     n = sub.add_parser("note", help="working tier 단축 기록")
     n.add_argument("body")
     n.add_argument("--type", default="thread")
+    n.add_argument("--requires-consume", action="store_true")
 
     r = sub.add_parser("recall", help="회상")
     r.add_argument("query")
@@ -2634,6 +3119,21 @@ def main():
     r.add_argument("--scope", choices=SCOPES)
     r.add_argument("--all", action="store_true", help="전 cwd (default: 현 cwd)")
     r.add_argument("--sessions", action="store_true")
+    r.add_argument("--full", action="store_true", help="ranked hit의 전문 출력")
+    r.add_argument("--limit", type=_recall_limit, default=20)
+    r.add_argument("--auto", action="store_true", help="prompt용 고신뢰 자동 회상 probe")
+    r.add_argument("--json", dest="json_output", action="store_true")
+    r.add_argument("--no-touch", action="store_true", help="last_accessed를 갱신하지 않음")
+
+    sh = sub.add_parser("show", help="visible record metadata+전문 출력")
+    sh.add_argument("id")
+    sh.add_argument("--all", action="store_true", help="project fence만 해제; flagged는 계속 제외")
+
+    cs = sub.add_parser("consume", help="pending handoff/thread의 반영 완료를 명시")
+    cs.add_argument("id")
+
+    rs = sub.add_parser("restore", help="graveyard의 최신 단건 기록 복구")
+    rs.add_argument("id")
 
     ix = sub.add_parser("index", help="FTS5 색인")
     ix.add_argument("--rebuild", action="store_true")
@@ -2649,6 +3149,7 @@ def main():
 
     dl = sub.add_parser("delete", help="단건 결정론 삭제 (records+FTS 3-table)")
     dl.add_argument("id")
+    dl.add_argument("--force", action="store_true", help="pending도 graveyard 후 강제 삭제")
 
     # ---- Cluster E γ curator 서브커맨드 (화이트리스트 게이트 내장; dispatch 가 argv 로 호출) ----
     rf = sub.add_parser("reinforce", help="strength++ + last_accessed (화이트리스트 게이트)")
@@ -2712,12 +3213,22 @@ def main():
             tags=[t for t in args.tags.split(",") if t],
             links=[l for l in args.links.split(",") if l],
             source=args.source,
+            requires_consume=args.requires_consume,
         )
     elif args.cmd == "note":
-        write_record("working", "project", args.type, args.body)
+        write_record("working", "project", args.type, args.body,
+                     requires_consume=args.requires_consume)
     elif args.cmd == "recall":
         recall(args.query, tier=args.tier, scope=args.scope,
-               cwd=not args.all, sessions=args.sessions)
+               cwd=not args.all, sessions=args.sessions, limit=args.limit,
+               full=args.full, touch=not args.no_touch, auto=args.auto,
+               json_output=args.json_output)
+    elif args.cmd == "show":
+        sys.exit(0 if show_record(args.id, all_projects=args.all) else 1)
+    elif args.cmd == "consume":
+        sys.exit(0 if consume(args.id) else 1)
+    elif args.cmd == "restore":
+        sys.exit(0 if restore(args.id) else 1)
     elif args.cmd == "index":
         index_build(rebuild=args.rebuild)
     elif args.cmd == "project":
@@ -2727,7 +3238,7 @@ def main():
     elif args.cmd == "lifecycle":
         lifecycle(apply=args.apply)
     elif args.cmd == "delete":
-        delete_record(args.id)
+        sys.exit(0 if delete_record(args.id, force=args.force) else 1)
     elif args.cmd == "reinforce":
         sys.exit(0 if reinforce(args.id) else 1)
     elif args.cmd == "prune":

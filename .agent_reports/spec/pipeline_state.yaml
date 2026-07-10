@@ -6,7 +6,7 @@ phases:
   spec: done               # v3 PRD 확정 (D-1~7 lock — DB화·저장소분리·통합강화)
   scaffolding: pending
   dev: in_progress         # v3 완료(DB화·분리). v4 신규 = Cluster A(profile 완전통합)+B(Hermes port) 구현 대기
-last_updated: 2026-07-04  # v13: Cluster H — memory adapter-parity 불변식(D-30 session-end 2-tier·D-31 MEM_DUMP_PUSH·D-32 portable dispatcher 계약). snapshot v12 (주의: v11→v12 때 v11 snapshot 누락 — 이력 gap 기록)
+last_updated: 2026-07-10  # v14: Cluster I — 전문 retrieval·고신뢰 자동 recall·미소비 handoff fail-closed·관측성. snapshot v13
 inputs:
   - .agent_reports/research/hermes-agent/
   - VISION.md
@@ -33,3 +33,4 @@ decisions_locked:
   - D-18~D-24: Cluster E(v10) — 세션끝 opus 풀 큐레이터(단순화)·strength reinforcement·폭증방지 4겹·project_key robust(worktree/이동)·recall 엔진(OR+bm25)·내구성(dump commit·user_version·INJECTION persist)·E-7 프록시 폐기(model-agnostic=D-11 adapter)
   - D-25~D-29: Cluster F(v11) — 루프 자율성 재정의(되돌림가능+명백=무인처리+전수보고)·아침 논의 데스크(cwd==~/.claude 당직후 첫 발화 inject)·curator 산출물 대조 적극 prune(ARTIFACTS 블록+안전 3겹)·제도화 승격 채널(durable 규칙·교훈→문서/hook/drill, 반영후 prune)·루프 복원력(✅ b95b9a9). post-it 재검토 열림(§5.8.6)
   - D-30~D-32: Cluster H(v13) — memory adapter-parity 불변식: session-end distill 2-tier(increment+curate) adapter-agnostic 계약(미실현=명시 신고 의무)·SessionEnd sync=MEM_DUMP_PUSH 포함·distill worker=portable dispatcher 계약(재구현 시 routing·whitelist·lock·재귀가드 보존). 근거=codex-adapter-parity 감사 P-10·P-12·P-13·P-25·P-36
+  - D-33~D-36: Cluster I(v14) — show/recall-full 전문 접근·project prompt 고신뢰 자동 recall(no-touch probe+bounded telemetry)·delivery_state pending/consumed 기반 handoff 파괴 차단+consume/restore·SessionStart cap 유지 후 재관찰

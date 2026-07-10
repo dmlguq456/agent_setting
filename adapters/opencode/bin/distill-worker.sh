@@ -140,15 +140,14 @@ Constraints:
 - Use only the transcript delta below.
 - Output JSON Lines only, with one action object per line.
 - Do not output Markdown, commentary, or code fences.
+- This worker is increment/add-only. Never emit prune, merge, delete, consume,
+  reinforce, graduate, or reattribute actions.
+- PROTECTED PENDING handoff/thread records remain pending until an explicit
+  consume outside this worker; retrieval or artifact completion is not consumption.
 
 Allowed actions:
-- {"action":"add","tier":"working","type":"fact|decision|todo|preference|context","body":"..."}
+- {"action":"add","tier":"working","type":"fact|decision|todo|preference|context|handoff","body":"..."}
 - {"action":"add","tier":"durable","type":"fact|decision|todo|preference|context","body":"..."}
-- {"action":"reinforce","id":"...","evidence":"..."}
-- {"action":"prune","id":"...","reason":"..."}
-- {"action":"graduate","id":"...","evidence":"..."}
-- {"action":"reattribute","id":"...","subject":"..."}
-- {"action":"merge","ids":["..."],"canonical":"..."}
 
 Transcript delta:
 <<<DELTA

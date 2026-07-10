@@ -1,216 +1,209 @@
 #!/usr/bin/env bash
-# Isolated test for mem-recall-inject.sh (D-15, QA ①).
-# Fully isolated via MEM_STORE temp dir — never touches real ~/.claude state.
-# Hook calls $HOME/.claude/tools/memory/mem.py (deployed path) but reads MEM_STORE from env,
-# so seeding into an isolated MEM_STORE is enough to exercise recall against a temp DB.
-#
-# QA cases:
-#   T1  signal-word prompt + matching record → valid JSON additionalContext
-#   T2  no-signal prompt → empty stdout, exit 0
-#   T3  MEM_DISTILL=1 + signal prompt → empty stdout, exit 0 (recursion guard)
-#   T4  broken stdin → exit 0, empty stdout
-#   T5  signal prompt but no matching hit → empty stdout (empty-result no-op)
-#   T6  result cap — char cap (Korean body) → valid JSON + chars ≤ cap
-#   T7  result cap — line cap → injected lines ≤ cap
-#   T8  non-UserPromptSubmit event → exit 0, empty stdout
+# Isolated contract tests for mem-recall-inject.sh.
+# A stub mem.py records argv/cwd and models the shared --auto engine's hit/empty output.
 set -u
 
 HOOK="$(cd "$(dirname "$0")" && pwd)/mem-recall-inject.sh"
 [ -f "$HOOK" ] || { echo "FAIL: hook not found at $HOOK"; exit 1; }
 
-MEM_PY="$HOME/.claude/tools/memory/mem.py"
-[ -f "$MEM_PY" ] || { echo "FAIL: deployed mem.py not found at $MEM_PY"; exit 1; }
+PASS=0
+FAIL=0
+ok()  { PASS=$((PASS + 1)); printf '  ok  %s\n' "$1"; }
+bad() { FAIL=$((FAIL + 1)); printf '  BAD %s\n' "$1"; }
 
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); printf '  ok  %s\n' "$1"; }
-bad() { FAIL=$((FAIL+1)); printf '  BAD %s\n' "$1"; }
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+HARNESS="$TMP/harness"
+WORK="$TMP/project cwd"
+LOG="$TMP/calls.jsonl"
+mkdir -p "$HARNESS/tools/memory" "$WORK/.agent_reports"
 
-# ---------- isolated store ----------
-STORE="$(mktemp -d)"
-trap 'rm -rf "$STORE"' EXIT
-export MEM_STORE="$STORE"
+cat > "$HARNESS/tools/memory/mem.py" <<'PY'
+#!/usr/bin/env python3
+import json
+import os
+import sys
 
-# seed: add a record that will be found by recall (body contains the signal phrase as substring)
-# Canonical signal words from hook PAT: 지난번|지난번에|예전에|이전에|전에|그때|저번에|아까
-# Fixture: body contains "지난번 결정론" so prompt "지난번 결정론" is an exact substring + has signal word
-python3 "$MEM_PY" add durable thread "지난번 결정론 우선 설계가 핵심이라고 배웠다" >/dev/null 2>&1
-python3 "$MEM_PY" index --rebuild >/dev/null 2>&1
+entry = {"argv": sys.argv[1:], "cwd": os.getcwd()}
+with open(os.environ["MEM_STUB_LOG"], "a", encoding="utf-8") as fh:
+    fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-# ---------- helper: run hook with given event + prompt, stdout → temp file ----------
-run_hook() {  # $1=event $2=prompt ; env already exported MEM_STORE
-  local event="$1" prompt="$2"
-  local tmpf
-  tmpf="$(mktemp)"
-  printf '{"hook_event_name":"%s","session_id":"testsid","prompt":"%s"}' "$event" "$prompt" \
-    | bash "$HOOK" >"$tmpf" 2>/dev/null
-  local rc=$?
-  echo "$tmpf:$rc"  # caller uses colon-split
+if len(sys.argv) < 5 or sys.argv[1] != "recall":
+    raise SystemExit(64)
+prompt = sys.argv[2]
+if prompt in {"오늘 날씨는 어때요", "generic empty result"}:
+    raise SystemExit(0)
+if prompt == "cap fixture":
+    payload = "가" * 500
+    print("# 관련 기억 (자동 회상)")
+    for idx in range(1, 6):
+        print(f"  [durable/project/lesson] cap-{idx}: {payload}")
+    raise SystemExit(0)
+
+print("# 관련 기억 (자동 회상)")
+print(f"  [durable/project/lesson] auto-hit: recalled {prompt}")
+PY
+
+run_stdin() {
+  local event=$1 prompt=$2 cwd=$3 outfile=$4
+  printf '{"hook_event_name":"%s","session_id":"test-session","prompt":"%s","cwd":"%s"}\n' \
+    "$event" "$prompt" "$cwd" \
+    | AGENT_HOME="$HARNESS" MEM_STUB_LOG="$LOG" bash "$HOOK" >"$outfile" 2>/dev/null
 }
 
-# ── T1: signal-word prompt + seeded matching record → valid JSON with additionalContext ──────────
-echo "== T1: signal-word + matching record → JSON additionalContext =="
+last_call_matches() {
+  local prompt=$1 cwd=$2
+  python3 - "$LOG" "$prompt" "$cwd" <<'PY'
+import json
+import sys
 
-tmpf_t1="$(mktemp)"
-printf '{"hook_event_name":"UserPromptSubmit","session_id":"s1","prompt":"지난번 결정론"}' \
-  | bash "$HOOK" >"$tmpf_t1" 2>/dev/null
-rc_t1=$?
+rows = [json.loads(line) for line in open(sys.argv[1], encoding="utf-8") if line.strip()]
+expected = ["recall", sys.argv[2], "--auto", "--limit", "3"]
+raise SystemExit(0 if rows and rows[-1] == {"argv": expected, "cwd": sys.argv[3]} else 1)
+PY
+}
 
-[ "$rc_t1" = "0" ] && ok "T1: exit 0" || bad "T1: expected exit 0, got $rc_t1"
+json_context_has() {
+  local file=$1 needle=$2
+  python3 - "$file" "$needle" <<'PY'
+import json
+import sys
 
-# Validate JSON via file-read (not echo — avoids \n mangling per plan (E))
-json_ok_t1="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0)' "$tmpf_t1" 2>/dev/null && echo yes || echo no)"
-[ "$json_ok_t1" = "yes" ] && ok "T1: stdout is valid JSON" || bad "T1: stdout not valid JSON (content: $(cat "$tmpf_t1"))"
-
-# Check additionalContext contains the seeded body
-has_body="$(python3 -c '
-import json, sys
 try:
-    d = json.load(open(sys.argv[1]))
-    ctx = d["hookSpecificOutput"]["additionalContext"]
-    sys.exit(0 if "결정론" in ctx else 1)
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+    output = data["hookSpecificOutput"]
+    valid = output["hookEventName"] == "UserPromptSubmit" and sys.argv[2] in output["additionalContext"]
 except Exception:
-    sys.exit(1)
-' "$tmpf_t1" 2>/dev/null && echo yes || echo no)"
-[ "$has_body" = "yes" ] && ok "T1: additionalContext contains recalled body" || bad "T1: additionalContext missing recalled body (content: $(cat "$tmpf_t1"))"
+    valid = False
+raise SystemExit(0 if valid else 1)
+PY
+}
 
-rm -f "$tmpf_t1"
+echo "== T1: no-signal project prompt reaches shared auto engine =="
+OUT="$TMP/t1.out"
+: > "$LOG"
+run_stdin "UserPromptSubmit" "stage-dispatch handoff 점검" "$WORK" "$OUT"
+rc=$?
+[ "$rc" = 0 ] && ok "T1: exit 0" || bad "T1: exit $rc"
+last_call_matches "stage-dispatch handoff 점검" "$WORK" \
+  && ok "T1: argv=recall <prompt> --auto --limit 3 and cwd preserved" \
+  || bad "T1: shared engine argv/cwd mismatch: $(cat "$LOG")"
+json_context_has "$OUT" "stage-dispatch handoff 점검" \
+  && ok "T1: Claude payload emits JSON additionalContext" \
+  || bad "T1: missing JSON context: $(cat "$OUT")"
 
-# ── T2: no-signal prompt → empty stdout, exit 0 ──────────────────────────────────────────────────
-echo "== T2: no-signal prompt → empty stdout =="
+echo "== T2: signal-word prompt uses the same auto path =="
+OUT="$TMP/t2.out"
+: > "$LOG"
+AGENT_HOME="$HARNESS" MEM_STUB_LOG="$LOG" bash "$HOOK" \
+  --prompt "지난번 stage-dispatch 확인" --cwd "$WORK" --session-id cli-session \
+  --format text >"$OUT" 2>/dev/null
+rc=$?
+[ "$rc" = 0 ] && ok "T2: exit 0" || bad "T2: exit $rc"
+last_call_matches "지난번 stage-dispatch 확인" "$WORK" \
+  && ok "T2: signal prompt also calls --auto --limit 3" \
+  || bad "T2: signal prompt bypassed shared engine: $(cat "$LOG")"
+grep -q "고신뢰 매칭" "$OUT" && grep -q "지난번 stage-dispatch 확인" "$OUT" \
+  && ok "T2: text adapter output contains recalled hit" \
+  || bad "T2: text output mismatch: $(cat "$OUT")"
 
-tmpf_t2="$(mktemp)"
-printf '{"hook_event_name":"UserPromptSubmit","session_id":"s2","prompt":"오늘 날씨는 어때요"}' \
-  | bash "$HOOK" >"$tmpf_t2" 2>/dev/null
-rc_t2=$?
+echo "== T3: generic prompt is delegated; empty engine result is a no-op =="
+OUT="$TMP/t3.out"
+: > "$LOG"
+run_stdin "UserPromptSubmit" "오늘 날씨는 어때요" "$WORK" "$OUT"
+rc=$?
+[ "$rc" = 0 ] && ok "T3: exit 0" || bad "T3: exit $rc"
+last_call_matches "오늘 날씨는 어때요" "$WORK" \
+  && ok "T3: generic prompt still reaches shared classifier" \
+  || bad "T3: generic prompt was not delegated: $(cat "$LOG")"
+[ ! -s "$OUT" ] && ok "T3: empty auto result injects nothing" || bad "T3: unexpected output: $(cat "$OUT")"
 
-[ "$rc_t2" = "0" ] && ok "T2: exit 0" || bad "T2: expected exit 0, got $rc_t2"
-out_t2="$(cat "$tmpf_t2")"
-[ -z "$out_t2" ] && ok "T2: empty stdout (no-signal no-op)" || bad "T2: stdout not empty: $out_t2"
-rm -f "$tmpf_t2"
+echo "== T4: distiller recursion and empty prompt skip engine =="
+OUT="$TMP/t4.out"
+: > "$LOG"
+printf '{"hook_event_name":"UserPromptSubmit","prompt":"stage-dispatch","cwd":"%s"}\n' "$WORK" \
+  | MEM_DISTILL=1 AGENT_HOME="$HARNESS" MEM_STUB_LOG="$LOG" bash "$HOOK" >"$OUT" 2>/dev/null
+rc=$?
+[ "$rc" = 0 ] && [ ! -s "$OUT" ] && [ ! -s "$LOG" ] \
+  && ok "T4a: MEM_DISTILL skips engine and output" \
+  || bad "T4a: distiller guard failed"
+run_stdin "UserPromptSubmit" "" "$WORK" "$OUT"
+rc=$?
+[ "$rc" = 0 ] && [ ! -s "$OUT" ] && [ ! -s "$LOG" ] \
+  && ok "T4b: empty prompt skips engine and output" \
+  || bad "T4b: empty prompt guard failed"
 
-# ── T3: MEM_DISTILL=1 + signal prompt → empty stdout, exit 0 (recursion guard) ─────────────────
-echo "== T3: MEM_DISTILL=1 + signal prompt → recursion guard =="
+echo "== T5: hook enforces top-3 and 1200-char maximum =="
+OUT="$TMP/t5.out"
+: > "$LOG"
+printf '{"hook_event_name":"UserPromptSubmit","prompt":"cap fixture","cwd":"%s"}\n' "$WORK" \
+  | MEM_RECALL_CHARS=5000 AGENT_HOME="$HARNESS" MEM_STUB_LOG="$LOG" bash "$HOOK" >"$OUT" 2>/dev/null
+python3 - "$OUT" <<'PY'
+import json
+import sys
 
-tmpf_t3="$(mktemp)"
-printf '{"hook_event_name":"UserPromptSubmit","session_id":"s3","prompt":"지난번에 뭘 했죠"}' \
-  | MEM_DISTILL=1 bash "$HOOK" >"$tmpf_t3" 2>/dev/null
-rc_t3=$?
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+context = data["hookSpecificOutput"]["additionalContext"]
+valid = len(context) <= 1200 and "cap-1" in context and "cap-3" in context and "cap-4" not in context
+raise SystemExit(0 if valid else 1)
+PY
+rc=$?
+[ "$rc" = 0 ] \
+  && ok "T5a: context body <=1200 chars and no fourth hit" \
+  || bad "T5a: fixed cap failed"
+OUT_SMALL="$TMP/t5-small.out"
+printf '{"hook_event_name":"UserPromptSubmit","prompt":"cap fixture","cwd":"%s"}\n' "$WORK" \
+  | MEM_RECALL_CHARS=80 AGENT_HOME="$HARNESS" MEM_STUB_LOG="$LOG" bash "$HOOK" >"$OUT_SMALL" 2>/dev/null
+python3 - "$OUT_SMALL" <<'PY'
+import json
+import sys
 
-[ "$rc_t3" = "0" ] && ok "T3: exit 0 under MEM_DISTILL=1" || bad "T3: expected exit 0, got $rc_t3"
-out_t3="$(cat "$tmpf_t3")"
-[ -z "$out_t3" ] && ok "T3: empty stdout (distill guard no-op)" || bad "T3: stdout not empty under MEM_DISTILL=1: $out_t3"
-rm -f "$tmpf_t3"
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+context = data["hookSpecificOutput"]["additionalContext"]
+raise SystemExit(0 if len(context) <= 80 else 1)
+PY
+rc=$?
+[ "$rc" = 0 ] && ok "T5b: smaller UTF-8-safe env cap remains supported" || bad "T5b: small cap failed"
 
-# ── T4: broken stdin → exit 0, empty stdout ──────────────────────────────────────────────────────
-echo "== T4: broken stdin → exit 0 fail-safe =="
+echo "== T6: irrelevant runtime events and malformed payloads are no-ops =="
+OUT="$TMP/t6.out"
+: > "$LOG"
+run_stdin "SessionStart" "stage-dispatch" "$WORK" "$OUT"
+rc=$?
+[ "$rc" = 0 ] && [ ! -s "$OUT" ] && [ ! -s "$LOG" ] \
+  && ok "T6a: non-UserPromptSubmit skips engine" \
+  || bad "T6a: event guard failed"
+printf 'not json' | AGENT_HOME="$HARNESS" MEM_STUB_LOG="$LOG" bash "$HOOK" >"$OUT" 2>/dev/null
+rc=$?
+[ "$rc" = 0 ] && [ ! -s "$OUT" ] && [ ! -s "$LOG" ] \
+  && ok "T6b: malformed payload fails open without recall" \
+  || bad "T6b: malformed payload handling failed"
 
-tmpf_t4="$(mktemp)"
-printf 'not json at all' | bash "$HOOK" >"$tmpf_t4" 2>/dev/null
-rc_t4=$?
-
-[ "$rc_t4" = "0" ] && ok "T4: exit 0 on broken stdin" || bad "T4: expected exit 0, got $rc_t4"
-out_t4="$(cat "$tmpf_t4")"
-[ -z "$out_t4" ] && ok "T4: empty stdout on broken stdin" || bad "T4: stdout not empty: $out_t4"
-rm -f "$tmpf_t4"
-
-# ── T5: signal prompt but no matching hit → empty stdout (empty-result no-op) ───────────────────
-# Per plan (C): seed ONE unrelated record (store exists), signal-word prompt with no matching terms
-echo "== T5: signal-word prompt + no matching hit → empty-result no-op =="
-
-# Store already has "결정론" record. Use a signal word with totally unrelated query terms.
-# "그때 xyznonexistent12345" — signal word "그때" but no body contains "xyznonexistent12345"
-tmpf_t5="$(mktemp)"
-printf '{"hook_event_name":"UserPromptSubmit","session_id":"s5","prompt":"그때 xyznonexistent12345"}' \
-  | bash "$HOOK" >"$tmpf_t5" 2>/dev/null
-rc_t5=$?
-
-[ "$rc_t5" = "0" ] && ok "T5: exit 0 on no-hit" || bad "T5: expected exit 0, got $rc_t5"
-out_t5="$(cat "$tmpf_t5")"
-[ -z "$out_t5" ] && ok "T5: empty stdout (no-hit no-op)" || bad "T5: stdout not empty on no-hit: $out_t5"
-rm -f "$tmpf_t5"
-
-# ── T6: char cap — Korean body, MEM_RECALL_CHARS small → valid JSON + chars ≤ cap ───────────────
-echo "== T6: char cap (MEM_RECALL_CHARS=50) → valid JSON + len ≤ cap =="
-
-# Seed a record whose body contains the exact prompt as a substring (plan (C): exact substring match)
-# prompt = "예전에 긴 내용 캡테스트" must appear verbatim in the body
-python3 "$MEM_PY" add durable thread "예전에 긴 내용 캡테스트 이것은 글자수캡 테스트용으로 사용되는 매우 긴 바디입니다 계속됩니다 더 늘립니다" >/dev/null 2>&1
-python3 "$MEM_PY" index --rebuild >/dev/null 2>&1
-
-tmpf_t6="$(mktemp)"
-printf '{"hook_event_name":"UserPromptSubmit","session_id":"s6","prompt":"예전에 긴 내용 캡테스트"}' \
-  | MEM_RECALL_CHARS=50 bash "$HOOK" >"$tmpf_t6" 2>/dev/null
-rc_t6=$?
-
-[ "$rc_t6" = "0" ] && ok "T6: exit 0 with char cap" || bad "T6: expected exit 0, got $rc_t6"
-
-python3 -c '
-import json, sys
-try:
-    d = json.load(open(sys.argv[1]))
-    ctx = d["hookSpecificOutput"]["additionalContext"]
-    # body = additionalContext after the label line. The hook slices the recall block to
-    # MEM_RECALL_CHARS=50 chars (python char-slice b[:50]); the label is prepended and exempt.
-    # Assert BOTH: valid JSON (escaping survived the Korean char slice) AND body ≤ 50 chars (cap pinned).
-    body = ctx[ctx.index("\n")+1:] if "\n" in ctx else ctx
-    print("cap_ok" if len(body) <= 50 else f"cap_exceeded: {len(body)} chars")
-except Exception as e:
-    print(f"invalid: {e}")
-' "$tmpf_t6" | grep -q "^cap_ok" \
-  && ok "T6: char cap enforced — body ≤ MEM_RECALL_CHARS(50) AND valid JSON (Korean char slice)" \
-  || bad "T6: char cap not enforced / invalid JSON (content: $(cat "$tmpf_t6"))"
-
-rm -f "$tmpf_t6"
-
-# ── T7: line cap (MEM_RECALL_LINES=2) → injected lines ≤ cap ────────────────────────────────────
-echo "== T7: line cap (MEM_RECALL_LINES=2) =="
-
-# Each record's body must contain the exact query as a substring.
-# prompt = "아까 LINE_CAP_TEST_라인캡" — each body starts with this exact phrase
-for i in 1 2 3 4 5; do
-  python3 "$MEM_PY" add durable thread "아까 LINE_CAP_TEST_라인캡 번호 ${i} 기억 내용입니다 라인캡 테스트 목적" >/dev/null 2>&1
-done
-python3 "$MEM_PY" index --rebuild >/dev/null 2>&1
-
-tmpf_t7="$(mktemp)"
-printf '{"hook_event_name":"UserPromptSubmit","session_id":"s7","prompt":"아까 LINE_CAP_TEST_라인캡"}' \
-  | MEM_RECALL_LINES=2 bash "$HOOK" >"$tmpf_t7" 2>/dev/null
-rc_t7=$?
-
-[ "$rc_t7" = "0" ] && ok "T7: exit 0 with line cap" || bad "T7: expected exit 0, got $rc_t7"
-
-python3 -c '
-import json, sys
-try:
-    d = json.load(open(sys.argv[1]))
-    ctx = d["hookSpecificOutput"]["additionalContext"]
-    # body = additionalContext after the label line. The hook caps the recall block to
-    # MEM_RECALL_LINES=2 via head -n (recall header + ≤1 hit-line = ≤2 block lines), then prepends the label.
-    # Single-branch assert (no OR fallback): the recall block itself is ≤ MEM_RECALL_LINES(2) lines.
-    body = ctx[ctx.index("\n")+1:] if "\n" in ctx else ctx
-    nlines = len(body.splitlines())
-    print("cap_ok" if nlines <= 2 else f"cap_exceeded: {nlines} block lines")
-except Exception as e:
-    print(f"error: {e}")
-' "$tmpf_t7" | grep -q "^cap_ok" \
-  && ok "T7: line cap enforced — recall block ≤ MEM_RECALL_LINES(2) lines" \
-  || bad "T7: line cap not enforced (content: $(cat "$tmpf_t7"))"
-
-rm -f "$tmpf_t7"
-
-# ── T8: non-UserPromptSubmit event → exit 0, empty stdout ────────────────────────────────────────
-echo "== T8: non-UserPromptSubmit event (SessionStart) → exit 0 no-op =="
-
-tmpf_t8="$(mktemp)"
-printf '{"hook_event_name":"SessionStart","session_id":"s8","prompt":"지난번 결정론"}' \
-  | bash "$HOOK" >"$tmpf_t8" 2>/dev/null
-rc_t8=$?
-
-[ "$rc_t8" = "0" ] && ok "T8: exit 0 on SessionStart event" || bad "T8: expected exit 0, got $rc_t8"
-out_t8="$(cat "$tmpf_t8")"
-[ -z "$out_t8" ] && ok "T8: empty stdout on non-UserPromptSubmit" || bad "T8: stdout not empty: $out_t8"
-rm -f "$tmpf_t8"
+echo "== T7: non-project and untracked cwd skip automatic recall =="
+OUT="$TMP/t7.out"
+PLAIN="$TMP/plain cwd"; mkdir -p "$PLAIN"
+: > "$LOG"
+run_stdin "UserPromptSubmit" "stage-dispatch" "$PLAIN" "$OUT"
+rc=$?
+[ "$rc" = 0 ] && [ ! -s "$OUT" ] && [ ! -s "$LOG" ] \
+  && ok "T7a: non-project cwd skips engine" \
+  || bad "T7a: non-project gate failed"
+: > "$WORK/.agent_reports/.untracked.test-session"
+run_stdin "UserPromptSubmit" "stage-dispatch" "$WORK" "$OUT"
+rc=$?
+[ "$rc" = 0 ] && [ ! -s "$OUT" ] && [ ! -s "$LOG" ] \
+  && ok "T7b: session-scoped untracked flag skips engine" \
+  || bad "T7b: untracked gate failed"
+rm -f "$WORK/.agent_reports/.untracked.test-session"
+: > "$WORK/.agent_reports/.untracked.cli-session"
+AGENT_HOME="$HARNESS" MEM_STUB_LOG="$LOG" bash "$HOOK" \
+  --prompt "stage-dispatch" --cwd "$WORK" --session-id cli-session --format text >"$OUT" 2>/dev/null
+rc=$?
+[ "$rc" = 0 ] && [ ! -s "$OUT" ] && [ ! -s "$LOG" ] \
+  && ok "T7c: CLI-projected session id honors untracked flag" \
+  || bad "T7c: CLI session propagation failed"
+rm -f "$WORK/.agent_reports/.untracked.cli-session"
 
 echo
 echo "RESULT: PASS=$PASS FAIL=$FAIL"
-[ "$FAIL" = "0" ]
+[ "$FAIL" = 0 ]

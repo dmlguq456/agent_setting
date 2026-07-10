@@ -85,7 +85,7 @@ guards and tool-contract reporting.
 | git safety gate | `core/HOOKS.md` defines the invariant; included in `adapters/opencode/bin/preflight.sh write <file> [session-id]` |
 | memory write guard | `core/HOOKS.md` defines the invariant; included in `adapters/opencode/bin/preflight.sh write <file> [session-id]` |
 | memory injection | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh memory [cwd]` once per session; run it manually when plugins are unavailable |
-| memory recall injection | OpenCode plugin `chat.message` captures prompt text and system transform runs `adapters/opencode/bin/preflight.sh recall <prompt> [cwd]`; run it manually when plugins are unavailable |
+| memory recall injection | OpenCode plugin `chat.message` captures prompt text and system transform runs `adapters/opencode/bin/preflight.sh recall <prompt> [cwd] [session-id]`; run it manually when plugins are unavailable |
 | oncall briefing injection | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh briefing [cwd]`; run it manually when plugins are unavailable |
 | loop guidance | `adapters/opencode/bin/preflight.sh loop-info <oncall|note|study|drill>` reports whether a loop has an OpenCode manual contract, unsupported executable projection, or missing native implementation; `note` remains an external scheduler loop while the related `autopilot-note` capability is available on demand through OpenCode-native Skill/command projections |
 | capability mapping | `adapters/opencode/bin/preflight.sh capability-info <capability>` reports OpenCode's native Skill/command realization and instruction-only or tool-contract status; root Skill compatibility references are not projected and report `compat_reference=not-projected` |

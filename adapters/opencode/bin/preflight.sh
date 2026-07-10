@@ -60,7 +60,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh mode [cwd] [session-id]
        preflight.sh track [cwd] [session-id]
        preflight.sh memory [cwd]
-       preflight.sh recall <prompt> [cwd]
+       preflight.sh recall <prompt> [cwd] [session-id]
        preflight.sh briefing [cwd]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
@@ -282,7 +282,10 @@ EOF
     [ "$#" -ge 2 ] || { echo "opencode preflight: recall requires prompt text" >&2; exit 64; }
     prompt=$2
     cwd=${3:-$PWD}
-    AGENT_HOME="$AGENT_ROOT" "$ROOT/hooks/mem-recall-inject.sh" --prompt "$prompt" --cwd "$cwd" --format text
+    sid=${4:-default}
+    AGENT_HOME="$AGENT_ROOT" MEM_RECALL_RUNTIME=opencode \
+      "$ROOT/hooks/mem-recall-inject.sh" --prompt "$prompt" --cwd "$cwd" \
+      --session-id "$sid" --format text
     ;;
   briefing)
     cwd=${2:-$PWD}

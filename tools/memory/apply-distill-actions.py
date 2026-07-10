@@ -21,10 +21,13 @@ def _load_snapshot_ids(path):
 
 
 def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
-    snap_ids = _load_snapshot_ids(snapshot_ids_path)
+    # In curate mode this is a destructive allowlist, not every id printed in the
+    # snapshot. `curate-snapshot` deliberately omits PROTECTED PENDING handoff/
+    # thread ids, so model output cannot prune or merge them through this layer.
+    destructive_ids = _load_snapshot_ids(snapshot_ids_path)
 
     def member(rid):
-        return (mode != "curate") or (rid in snap_ids)
+        return (mode != "curate") or (rid in destructive_ids)
 
     try:
         with open(out_path, "r", encoding="utf-8", errors="replace") as fh:
@@ -48,6 +51,13 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
         action = rec.get("action")
         if action is None and rec.get("tier") and rec.get("type") and isinstance(rec.get("body"), str):
             action = "add"
+
+        # `mem delete` is a user-controlled path and is never a curator action.
+        # Keep this explicit so a future mem.py delete surface cannot accidentally
+        # become reachable from untrusted distiller output.
+        if action == "delete":
+            sys.stderr.write("[distill-parse] skip delete: unsupported destructive action\n")
+            continue
 
         # increment = add-only, enforced (not merely prompted). The turn-nudge/fast
         # tier reads untrusted transcript delta with no snapshot whitelist, so a
@@ -84,7 +94,7 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
                 sys.stderr.write(f"[distill-parse] skip {action}: missing id\n")
                 continue
             if not member(rid):
-                sys.stderr.write(f"[distill-parse] skip non-snapshot id ({action}): {rid!r}\n")
+                sys.stderr.write(f"[distill-parse] skip non-destructive-allowlist id ({action}): {rid!r}\n")
                 continue
             if action == "graduate":
                 subprocess.run(["python3", mem_path, "graduate", rid, "--to", "durable"])
@@ -102,7 +112,7 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
                 sys.stderr.write("[distill-parse] skip merge: bad canonical\n")
                 continue
             if not all(member(i) for i in ids):
-                sys.stderr.write("[distill-parse] skip merge: non-snapshot id\n")
+                sys.stderr.write("[distill-parse] skip merge: id outside destructive allowlist\n")
                 continue
             subprocess.run(["python3", mem_path, "merge", "--canonical", canonical, *ids])
 

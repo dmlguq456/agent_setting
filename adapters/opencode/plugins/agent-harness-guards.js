@@ -193,7 +193,7 @@ export const AgentHarnessGuards = async (ctx) => {
     appendContext(output, collectPreflight("prompt-signal", [cwd, sid]))
     appendContext(output, collectPreflight("mode", [cwd, sid]))
     const prompt = promptBySession.get(sid) || ""
-    if (prompt) appendContext(output, collectPreflight("recall", [prompt, cwd]))
+    if (prompt) appendContext(output, collectPreflight("recall", [prompt, cwd, sid]))
     appendContext(output, collectPreflight("briefing", [cwd]))
   },
   "command.execute.before": async (input, output) => {

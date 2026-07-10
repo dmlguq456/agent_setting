@@ -133,7 +133,7 @@ def main() -> int:
     if env_truthy("CODEX_MODE_ANCHOR_ALWAYS") or not is_default_tracked_anchor(mode_context):
         parts.append(mode_context)
     if prompt:
-        parts.append(run_preflight("recall", prompt, current_cwd))
+        parts.append(run_preflight("recall", prompt, current_cwd, sid))
     parts.append(run_preflight("briefing", current_cwd))
     run_preflight("turn-nudge", current_cwd, sid)
     emit_context("UserPromptSubmit", parts)
