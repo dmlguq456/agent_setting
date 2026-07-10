@@ -39,3 +39,19 @@ An adapter that supports role delegation must document:
 Concrete model names do not belong in this directory. Use the portable model
 roles from `core/ADAPTATION.md` and let adapter documents define concrete
 mapping.
+
+## Behavior Contract (separate from the role catalog)
+
+Beyond the delegation-role catalog above, this directory also holds the
+portable **response behavior contract** for the main agent's own responses:
+
+- `response-policy.md` — the runtime-neutral minimum behavior contract
+  (concise output, promise–action match, verify-before-assert, convention
+  adherence, pause/autonomy, follow-through). The three adapter bootstraps
+  reference it as the single source for these portable clauses and add their
+  own locale-specific voice (tone, sentence endings) on top. `core/DESIGN_PRINCIPLES.md`
+  points here for the portable layer; the adapter bootstrap owns the runtime
+  specialization.
+
+This is a behavior contract, not an agent role — it does not appear in the
+Role Catalog table and has no per-adapter native agent file.
