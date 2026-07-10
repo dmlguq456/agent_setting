@@ -248,6 +248,11 @@ def _opencode_job_liveness(cwd, now, stale_min=15, slug=None):
     return "dead"
 
 
+_QUEUED_GRACE_MIN = 15   # F-15c: an `open` registry row with no transcript yet, within this
+                          # startup grace window, is genuinely "not started" (queued) rather
+                          # than dead — past the window with still no transcript, it's dead.
+
+
 def _dispatch_liveness(job, now):
     if job.source == "proc" and job.key in _LOOP_KEYS:
         return "working"
@@ -255,7 +260,11 @@ def _dispatch_liveness(job, now):
         return _codex_job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
     if job.harness == "opencode":
         return _opencode_job_liveness(job.cwd, now, slug=job.slug)
-    return _job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
+    live = _job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
+    if (live == "dead" and job.source == "jobs" and job.status == "open"
+            and (job.elapsed_min or 0) <= _QUEUED_GRACE_MIN):
+        return "queued"
+    return live
 
 
 # --- jobs.log path ---
@@ -519,6 +528,18 @@ def effective_qa(argv_qa, pipe_qa, jcwd, slug, key):
     return None, None
 
 
+_STAGE_SUFFIX_RE = re.compile(r"-(?:code-)?(?:plan|exec|execute|test|report)$")
+
+
+def _slug_stem(slug):
+    """Strip a trailing depth-2 stage-role suffix (F-15c dedup key): 'fleet-ui-v2-execute'
+    -> 'fleet-ui-v2', 'x-code-plan' -> 'x', 'already' unchanged. Display/matching helper
+    only — never mutates DispatchJob.slug itself."""
+    if not slug:
+        return slug
+    return _STAGE_SUFFIX_RE.sub("", slug)
+
+
 def _norm_cwd(p):
     """Normalize a cwd for cross-source string-equality matching (B1/B2, R6): the jobs.log
     `worktree` field is writer-verbatim (dispatch-headless.py:append_job — no
@@ -703,7 +724,7 @@ def _iso_elapsed_min(ts):
     return max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 60))
 
 
-def _scan_jobs_log(path, seen_slugs):
+def _scan_jobs_log(path, seen_slugs, seen_keys=None):
     jobs = []
     malformed = 0
     try:
@@ -734,8 +755,15 @@ def _scan_jobs_log(path, seen_slugs):
         ts, status, repo, worktree, _slug, pipe = latest[slug]
         if status not in ("open", "running"):
             continue                          # newest state is terminal (done/killed/…) → not live
+        cwd = worktree if worktree not in ("-", "(main-tree)") else ""
         if slug in seen_slugs:
             continue                          # already shown as a live process job
+        # F-15c: (normalized cwd, slug-stem) dedup — a stage-worker registry row
+        # (fleet-ui-v2-execute) reconciles against its already-shown proc job
+        # (fleet-ui-v2) ONLY when both cwd and stem match; a different worktree (conductor
+        # vs its own depth-2 child, OPERATIONS §5.10) never collapses, so both stay visible.
+        if cwd and seen_keys and (_norm_cwd(cwd), _slug_stem(slug)) in seen_keys:
+            continue
         seen_slugs.add(slug)
         meta = _parse_pipe_meta(pipe or "")
         pname = meta.get("_name") or repo or "job"
@@ -743,7 +771,6 @@ def _scan_jobs_log(path, seen_slugs):
         # covers the fallback-name path (parse failure) where pname = repo or "job".
         if pname.startswith("autopilot-"):
             pname = pname[len("autopilot-"):]   # normalize to proc key form (code/spec/…)
-        cwd = worktree if worktree not in ("-", "(main-tree)") else ""
         q, qsrc = effective_qa(None, meta.get("qa"), cwd, slug, pname)
         parent_slug = meta.get("parent") or meta.get("parent_slug") or None
         parent_sid = meta.get("parent_sid") or meta.get("parent_session_id") or None
@@ -797,11 +824,12 @@ def collect(jobs_path=None, harness_filter=None):
     is cross-harness by design (jobs, not sessions)."""
     proc_jobs = _scan_processes()
     seen = set(j.slug for j in proc_jobs if j.slug)
+    seen_keys = set((_norm_cwd(j.cwd), _slug_stem(j.slug)) for j in proc_jobs if j.cwd and j.slug)
     paths = _candidate_jobs_paths(jobs_path)
     log_jobs = []
     malformed = 0
     for path in paths:
-        path_jobs, path_malformed = _scan_jobs_log(path, seen)
+        path_jobs, path_malformed = _scan_jobs_log(path, seen, seen_keys)
         log_jobs.extend(path_jobs)
         malformed += path_malformed
     jobs = proc_jobs + log_jobs
@@ -843,6 +871,13 @@ def collect(jobs_path=None, harness_filter=None):
     now = time.time()
     for j in jobs:
         j.liveness = _dispatch_liveness(j, now)
+    # F-15c(a): a registry-only row (source="jobs") that turns out to be genuinely working
+    # re-derives its breadcrumb from the real plan artifacts instead of the raw jobs.log
+    # status word ("open"/"running") — otherwise a live job with real progress shows a
+    # static "queued"/"running" placeholder forever (the reported "queued 오라벨" bug).
+    for j in jobs:
+        if j.source == "jobs" and j.cwd and j.liveness == "working":
+            j.stage = live_stage(j.cwd, j.slug, j.key)
     # stash malformed count on the module for the render header (optional signal)
     collect.last_malformed = malformed
     return jobs
