@@ -383,6 +383,28 @@ registry from `open` to `done`; it never performs merge or worktree cleanup. Do
 not project material/design helpers such as `extract_web_figures.py` until an
 OpenCode capability uses them directly.
 
+### SD-15 limit-death detection (OPERATIONS §5.10 ⑨) — parity: partial (disclosed)
+
+`adapters/opencode/bin/dispatch-headless.py` ports the Claude wrapper's SD-15 early-limit-death
+detection: `--early-exit-watch <secs>` watches a just-launched `opencode run` child; on a
+clean exit within the window whose log tail matches a limit/auth `DEATH_PATTERN`, the wrapper
+closes its own `jobs.log` row to `done,note=dead-<reason>[,reset=<x>]`, writes
+`.dispatch/usage-reset.opencode` (SD-16 cache), and surfaces `early_death=`/`row_closed=`. It
+also adds a `jobs_lock` flock so the SD-15 row-rewrite and concurrent appends cannot interleave.
+No retry — detection/closure/surfacing only.
+
+**Disclosed structural constraint (axis not fully realized)**: `opencode run` has a known bug
+(anomalyco/opencode#8203) where it **hangs indefinitely on API errors** (rate limit / 429)
+instead of exiting. The launch early-exit-watch requires the child to *exit*, so a hang-on-limit
+escapes it and the row stays `open`. That case is instead caught by **axis 6** — 
+`adapters/opencode/bin/dispatch-liveness.py`'s `LIMIT_RE` log-tail scan (SD-15b) judges the open
+row DEAD from the `Rate limited`/`Provider Rate Limit exceeded`/`429` line the hung child leaves
+in its log, independent of the SQLite session mtime. So OpenCode realizes: clean-exit-on-limit →
+launch watch; hang-on-limit → liveness log scan. (Claude and Codex realize both axes because
+their runtimes exit on limit.) Patterns are conservative per 2026-07 issue evidence
+(#8203·#34886·#15890) and kept in sync with the shared list. Conformance (incl. the hang case):
+`adapters/opencode/bin/dispatch-headless.sd15.test.sh`.
+
 ## Distillation Boundary
 
 Claude's adapter runs a detached `claude -p` worker with tool use denied by

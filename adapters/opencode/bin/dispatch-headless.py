@@ -4,17 +4,73 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import os
+import re
 import shutil
 import shlex
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
+
+# SD-15 (OPERATIONS §5.10 ⑨): limit/auth 즉사 패턴 — homomorphic port of the Claude
+# wrapper's DEATH_PATTERNS. `opencode run --format json` surfaces provider limit/auth
+# failures as text/JSON in the log; a raw tail substring scan matches either. Runtime-
+# currentness (2026-07, anomalyco/opencode#8203·#11104·#34886·#15890): OpenCode prints
+# "Provider Rate Limit exceeded [retrying in Ns attempt #N]", "API rate limited (429)",
+# and "Rate limited. Quick retry in 1s…". ⚠️ ADAPTATION CONSTRAINT: `opencode run` has a
+# known bug (#8203) where it *hangs* on API errors instead of exiting — the launch
+# early-exit watch (which requires the child to exit) only catches the clean-exit path;
+# hang-on-limit is caught later by dispatch-liveness.py's log scan (both share this list).
+DEATH_PATTERNS = [
+    ("session-limit", r"hit your (?:session|usage) limit|session limit reached"),
+    ("usage-limit", r"usage[_ ]limit[_ ]reached|usage limit reached|weekly limit|"
+     r"rate limit(?:ed)?|provider rate limit|exceeded retry limit|\b429\b"),
+    ("auth", r"invalid api key|authentication_error|not logged in|please run /login|unauthorized|\b401\b"),
+    ("credit", r"credit balance is too low|insufficient (?:credit|quota|funds)"),
+]
+_RESET_RE = re.compile(
+    r"resets?(?:\s+at)?\s+([0-9]{1,2}:[0-9]{2}\s*(?:am|pm)?|[0-9]{1,2}\s*(?:am|pm))",
+    re.I,
+)
+
+
+def scan_death(text: str) -> tuple[str, str] | None:
+    """Return (reason, reset) if the log text shows a limit/auth death, else None.
+
+    reset is a best-effort human string ('3pm', '15:45', ...) or '' when absent.
+    Homomorphic with the Claude wrapper's scan_death and dispatch-liveness.py LIMIT_RE.
+    """
+    low = text.lower()
+    reason = ""
+    for name, pat in DEATH_PATTERNS:
+        if re.search(pat, low):
+            reason = name
+            break
+    if not reason:
+        return None
+    m = _RESET_RE.search(text)
+    reset = re.sub(r"\s+", "", m.group(1)) if m else ""
+    return reason, reset
+
+
+@contextmanager
+def jobs_lock(jobs: Path):
+    jobs.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = Path(f"{jobs}.lock")
+    with lock_path.open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield lock_path
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -57,6 +113,15 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--prompt-text")
     p.add_argument("--jobs")
     p.add_argument("--log-dir")
+    p.add_argument(
+        "--early-exit-watch",
+        type=float,
+        default=float(os.environ.get("OPENCODE_DISPATCH_EARLY_EXIT_WATCH", "8")),
+        help="SD-15: seconds to watch a just-launched child for a limit/auth early death "
+        "(0 disables). On detection the jobs.log row is closed done,note=dead-<reason>. "
+        "Note: OpenCode may hang on limit (#8203) rather than exit; hangs are caught by "
+        "dispatch-liveness's log scan, not this watch.",
+    )
     return p
 
 
@@ -198,8 +263,85 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     settings = args.resolved_model_settings
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},variant={settings['variant']}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    with jobs.open("a", encoding="utf-8") as f:
-        f.write(f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}\n")
+    # SD-15: serialize with the same flock close_job_row uses so a concurrent close
+    # (row-rewrite) and this append cannot interleave and drop rows.
+    with jobs_lock(jobs):
+        with jobs.open("a", encoding="utf-8") as f:
+            f.write(f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}\n")
+
+
+def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str) -> bool:
+    """SD-15: flip this dispatch's own open row to done with a dead-<reason> note.
+
+    Matches by (slug, worktree, status==open) under the same flock append_job uses.
+    Appends note=dead-<reason>[,reset=<reset>] to the pipe column. Idempotent: returns
+    False if no matching open row is found. Homomorphic with the Claude/codex wrappers.
+    """
+    if not jobs.is_file():
+        return False
+    with jobs_lock(jobs):
+        lines = jobs.read_text(encoding="utf-8").splitlines(keepends=True)
+        changed = False
+        for i, line in enumerate(lines):
+            if not line.strip():
+                continue
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 6:
+                continue
+            ts, status, repo, wt, row_slug, pipe = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+            if status != "open" or row_slug != slug or wt != worktree:
+                continue
+            pipe += f",note=dead-{reason}"
+            if reset:
+                pipe += f",reset={reset}"
+            lines[i] = f"{ts}\tdone\t{repo}\t{wt}\t{row_slug}\t{pipe}\n"
+            changed = True
+            break
+        if changed:
+            jobs.write_text("".join(lines), encoding="utf-8")
+        return changed
+
+
+def write_reset_cache(agent_home: Path, harness: str, reason: str, reset: str) -> None:
+    """SD-15↔SD-16: cache the last known limit reset for usage-check.sh to read.
+
+    File `.dispatch/usage-reset.<harness>` holds one line: `<iso-ts> <reason> <reset>`.
+    Best-effort — a cache write failure never blocks dispatch bookkeeping.
+    """
+    try:
+        cache = agent_home / ".dispatch" / f"usage-reset.{harness}"
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        cache.write_text(f"{ts} {reason} {reset}\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def watch_early_death(
+    proc: subprocess.Popen, log_path: Path, watch_secs: float
+) -> tuple[str, str] | None:
+    """SD-15: poll a just-launched child for a limit/auth early death.
+
+    Returns (reason, reset) if the child exits within watch_secs AND its log tail matches
+    a DEATH_PATTERN; otherwise None. ADAPTATION note: `opencode run` may hang on API
+    errors (#8203) instead of exiting — a hang leaves proc.poll() None so this returns
+    None and the row stays open; dispatch-liveness.py's log scan then catches it as DEAD.
+    Only the clean-exit-on-limit path is closed here.
+    """
+    if watch_secs <= 0:
+        return None
+    deadline = time.monotonic() + watch_secs
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            break
+        time.sleep(0.5)
+    if proc.poll() is None:
+        return None  # still alive/hanging past the watch window — not a clean early death
+    try:
+        tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+    except OSError:
+        return None
+    return scan_death(tail)
 
 
 def resolve_agent_home() -> Path:
@@ -315,7 +457,7 @@ def main(argv: list[str]) -> int:
         prompt_path.write_text(prompt_text, encoding="utf-8")
         append_job(jobs, args)
     if action == "start":
-        subprocess.Popen(["sh", "-c", command], start_new_session=True, env={
+        proc = subprocess.Popen(["sh", "-c", command], start_new_session=True, env={
             **os.environ,
             "AGENT_DISPATCH_DEPTH": str(args.depth),
             "AGENT_DISPATCH_INTENSITY": args.intensity,
@@ -331,6 +473,14 @@ def main(argv: list[str]) -> int:
             # secondary alive signal independent of the OpenCode SQLite mtime.
             "OPENCODE_DISPATCH_SLUG": args.slug,
         })
+        # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a clean-exit limit/auth death.
+        # A hang-on-limit (#8203) escapes this watch and is caught by liveness log scan.
+        death = watch_early_death(proc, log_path, args.early_exit_watch)
+        if death:
+            reason, reset = death
+            close_job_row(jobs, args.slug, args.worktree, reason, reset)
+            write_reset_cache(agent_home, "opencode", reason, reset)
+            args.early_death = (reason, reset)
 
     print("adapter=opencode")
     print("runtime_surface=opencode-run-headless")
@@ -356,6 +506,14 @@ def main(argv: list[str]) -> int:
     print(f"job_registry={jobs}")
     print(f"registered={1 if action in ('register', 'start') else 0}")
     print(f"started={1 if action == 'start' else 0}")
+    early_death = getattr(args, "early_death", None)
+    if early_death:
+        reason, reset = early_death
+        print(f"early_death={reason}")
+        print(f"early_death_reset={reset or '-'}")
+        print(f"row_closed=done,note=dead-{reason}")
+    else:
+        print("early_death=-")
     print(f"prompt_source={prompt_source}")
     print(f"prompt_file={prompt_path}")
     print(f"log_file={log_path}")

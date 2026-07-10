@@ -7,16 +7,58 @@ import argparse
 from contextlib import contextmanager
 import fcntl
 import os
+import re
 import shutil
 import shlex
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
+
+# SD-15 (OPERATIONS §5.10 ⑨): limit/auth 즉사 패턴 — homomorphic port of the Claude
+# wrapper's DEATH_PATTERNS. codex exec surfaces provider limit/auth failures as JSON
+# events (`--json`), but a raw tail substring scan still matches the text inside those
+# events, so no JSON parsing is needed (same as the Claude tail scan). Runtime-currentness
+# (2026-07, openai/codex#9148·#12677·#11434·#4840): codex prints "exceeded retry limit,
+# last status: 429 Too Many Requests" / "usage_limit_reached" and generally exits non-zero
+# on retry exhaustion, so the launch early-exit watch is realizable (best-effort). The
+# shell/other-adapter counterparts (dispatch-liveness.py LIMIT_RE) keep the same list —
+# intentional cross-runtime duplication, keep in sync.
+DEATH_PATTERNS = [
+    ("session-limit", r"hit your (?:session|usage) limit|session limit reached"),
+    ("usage-limit", r"usage[_ ]limit[_ ]reached|usage limit reached|weekly limit|"
+     r"rate limit(?:ed)?|provider rate limit|exceeded retry limit|\b429\b"),
+    ("auth", r"invalid api key|authentication_error|not logged in|please run /login|unauthorized|\b401\b"),
+    ("credit", r"credit balance is too low|insufficient (?:credit|quota|funds)"),
+]
+_RESET_RE = re.compile(
+    r"resets?(?:\s+at)?\s+([0-9]{1,2}:[0-9]{2}\s*(?:am|pm)?|[0-9]{1,2}\s*(?:am|pm))",
+    re.I,
+)
+
+
+def scan_death(text: str) -> tuple[str, str] | None:
+    """Return (reason, reset) if the log text shows a limit/auth death, else None.
+
+    reset is a best-effort human string ('3pm', '15:45', ...) or '' when absent.
+    Homomorphic with the Claude wrapper's scan_death and dispatch-liveness.py LIMIT_RE.
+    """
+    low = text.lower()
+    reason = ""
+    for name, pat in DEATH_PATTERNS:
+        if re.search(pat, low):
+            reason = name
+            break
+    if not reason:
+        return None
+    m = _RESET_RE.search(text)
+    reset = re.sub(r"\s+", "", m.group(1)) if m else ""
+    return reason, reset
 
 
 def parser() -> argparse.ArgumentParser:
@@ -65,6 +107,13 @@ def parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--require-hook-trust", action="store_true")
     p.add_argument("--profile")
+    p.add_argument(
+        "--early-exit-watch",
+        type=float,
+        default=float(os.environ.get("CODEX_DISPATCH_EARLY_EXIT_WATCH", "8")),
+        help="SD-15: seconds to watch a just-launched child for a limit/auth early death "
+        "(0 disables). On detection the jobs.log row is closed done,note=dead-<reason>.",
+    )
     return p
 
 
@@ -293,6 +342,82 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
             f.write(f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}\n")
 
 
+def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str) -> bool:
+    """SD-15: flip this dispatch's own open row to done with a dead-<reason> note.
+
+    Matches by (slug, worktree, status==open) under the same flock the writer uses,
+    so a concurrent conductor appending other rows is serialized. Appends
+    note=dead-<reason>[,reset=<reset>] to the pipe column (kv style). Idempotent:
+    returns False if no matching open row is found. Homomorphic with the Claude wrapper.
+    """
+    if not jobs.is_file():
+        return False
+    with jobs_lock(jobs):
+        lines = jobs.read_text(encoding="utf-8").splitlines(keepends=True)
+        changed = False
+        for i, line in enumerate(lines):
+            if not line.strip():
+                continue
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 6:
+                continue
+            ts, status, repo, wt, row_slug, pipe = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+            if status != "open" or row_slug != slug or wt != worktree:
+                continue
+            pipe += f",note=dead-{reason}"
+            if reset:
+                pipe += f",reset={reset}"
+            lines[i] = f"{ts}\tdone\t{repo}\t{wt}\t{row_slug}\t{pipe}\n"
+            changed = True
+            break
+        if changed:
+            jobs.write_text("".join(lines), encoding="utf-8")
+        return changed
+
+
+def write_reset_cache(agent_home: Path, harness: str, reason: str, reset: str) -> None:
+    """SD-15↔SD-16: cache the last known limit reset for usage-check.sh to read.
+
+    File `.dispatch/usage-reset.<harness>` holds one line: `<iso-ts> <reason> <reset>`.
+    Best-effort — a cache write failure never blocks dispatch bookkeeping.
+    """
+    try:
+        cache = agent_home / ".dispatch" / f"usage-reset.{harness}"
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        cache.write_text(f"{ts} {reason} {reset}\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def watch_early_death(
+    proc: subprocess.Popen, log_path: Path, watch_secs: float
+) -> tuple[str, str] | None:
+    """SD-15: poll a just-launched child for a limit/auth early death.
+
+    Returns (reason, reset) if the child exits within watch_secs AND its log tail
+    matches a DEATH_PATTERN; otherwise None (still running, or exited cleanly with no
+    limit signal — normal harvest owns those). Polls in 0.5s steps. ADAPTATION note:
+    codex exec exits non-zero on retry exhaustion so this launch-watch axis is realized;
+    a runtime that *hangs* on limit instead of exiting (see OpenCode #8203) escapes this
+    watch and is caught later by dispatch-liveness's log scan instead.
+    """
+    if watch_secs <= 0:
+        return None
+    deadline = time.monotonic() + watch_secs
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            break
+        time.sleep(0.5)
+    if proc.poll() is None:
+        return None  # still alive past the watch window — not an early death
+    try:
+        tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+    except OSError:
+        return None
+    return scan_death(tail)
+
+
 def resolve_agent_home() -> Path:
     env_home = os.environ.get("AGENT_HOME")
     if env_home and (Path(env_home) / "core" / "CORE.md").is_file():
@@ -452,7 +577,16 @@ def main(argv: list[str]) -> int:
         }
         if profile_home is not None:
             dispatch_env["CODEX_HOME"] = str(profile_home)
-        subprocess.Popen(["sh", "-c", command], start_new_session=True, env=dispatch_env)
+        proc = subprocess.Popen(["sh", "-c", command], start_new_session=True, env=dispatch_env)
+        # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a limit/auth early death so a
+        # limit-killed launch closes its own row now instead of lingering `open` until
+        # liveness SUSPECT catches it minutes later.
+        death = watch_early_death(proc, log_path, args.early_exit_watch)
+        if death:
+            reason, reset = death
+            close_job_row(jobs, args.slug, args.worktree, reason, reset)
+            write_reset_cache(agent_home, "codex", reason, reset)
+            args.early_death = (reason, reset)
 
     print("adapter=codex")
     print("runtime_surface=codex-exec-headless")
@@ -481,6 +615,14 @@ def main(argv: list[str]) -> int:
     print(f"registered={1 if action in ('register', 'start') else 0}")
     print(f"started={1 if action == 'start' else 0}")
     print(f"require_hook_trust={1 if args.require_hook_trust else 0}")
+    early_death = getattr(args, "early_death", None)
+    if early_death:
+        reason, reset = early_death
+        print(f"early_death={reason}")
+        print(f"early_death_reset={reset or '-'}")
+        print(f"row_closed=done,note=dead-{reason}")
+    else:
+        print("early_death=-")
     print(f"prompt_source={prompt_source}")
     print(f"prompt_file={prompt_path}")
     print(f"log_file={log_path}")

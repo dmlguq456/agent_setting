@@ -4,12 +4,48 @@
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import sys
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+
+# SD-15 (OPERATIONS §5.10 ⑨): if an open row's dispatch log shows a limit/auth death
+# pattern, judge it DEAD regardless of the SQLite session mtime — this is the axis that
+# catches OpenCode's hang-on-limit (#8203), which the wrapper's launch watch cannot.
+# Kept in sync with dispatch-headless.py DEATH_PATTERNS (intentional duplication).
+LIMIT_RE = re.compile(
+    r"hit your (session|usage) limit|session limit reached|usage[_ ]limit[_ ]reached|"
+    r"usage limit reached|weekly limit|rate limit(ed)?|provider rate limit|"
+    r"exceeded retry limit|[^0-9]429[^0-9]|invalid api key|authentication_error|"
+    r"not logged in|please run /login|unauthorized|[^0-9]401[^0-9]|"
+    r"credit balance is too low|insufficient (credit|quota|funds)",
+    re.I,
+)
+
+
+def log_shows_limit(agent_home: Path, slug: str) -> Path | None:
+    """Return the dispatch log path if its tail matches a limit/auth death, else None."""
+    if not slug:
+        return None
+    log_dir = agent_home / ".dispatch" / "logs"
+    for lf in sorted(log_dir.glob(f"{slug}.*")):
+        if not lf.is_file():
+            continue
+        try:
+            with lf.open("rb") as fh:
+                try:
+                    fh.seek(-8000, os.SEEK_END)
+                except OSError:
+                    fh.seek(0)
+                tail = fh.read().decode("utf-8", errors="replace")
+        except OSError:
+            continue
+        if LIMIT_RE.search(tail):
+            return lf
+    return None
 
 
 def usage() -> int:
@@ -134,6 +170,13 @@ def main(argv: list[str]) -> int:
                 continue
             open_n += 1
             label = slug or "?"
+            # SD-15: scan the dispatch log for a limit/auth death first — definitive and
+            # independent of SQLite mtime; this is what catches hang-on-limit (#8203).
+            log_hit = log_shows_limit(agent_home, slug)
+            if log_hit is not None:
+                print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
+                suspect += 1
+                continue
             match = locate_latest_for_worktree(con, worktree)
             if match is None:
                 # No SQLite session for this worktree. Fall back to the heartbeat
