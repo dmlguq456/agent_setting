@@ -9,6 +9,8 @@ metadata:
   blurb: "구현 결과 단계별 검증 — 품질관리팀 test 모드 sub-skill"
 ---
 
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Input = `plan/plan.md` verification section + `plan/checklist.md` (resolved below), read from files — never prior-stage conversation. Source is **read-only** here; write class = `test_logs/`·`_internal/test_reviews/` only. 품질관리팀 delegation stays **inside** this session.
+
 ## Plan Resolution (canonical — keep in sync with code-execute, code-test, code-report, code-refine, autopilot-code)
 Resolve `$ARG` to a plan file path:
 1. If it ends with `.md` → use as-is

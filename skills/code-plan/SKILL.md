@@ -11,6 +11,8 @@ metadata:
 
 > Caller note: planning benefits from `high` or `xhigh` effort; lower effort may miss call sites in cross-file analysis.
 
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: this stage runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Its only inputs are the task description (args) and the artifact tree (`<artifact-root>/plans/`) — never prior-stage conversation context. Write class: `plan/plan.md`·`plan/plan_ko.md`·`_internal/plan_reviews/`. 기획팀 delegation below stays **inside** this session.
+
 ## Language Rule
 - All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft).
 

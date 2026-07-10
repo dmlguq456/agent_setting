@@ -54,8 +54,8 @@ Autopilot entrypoints choose `intensity` before `--qa`. Intensity selects the st
 |---|---|---|
 | one-off answer, typo, rename, explicit no-artifact work | `direct` | no plan stage, no plan-check, no durable plan artifact |
 | small localized tracked change or doc minor | `quick` | inline micro-plan plus small plan-check; no depth dispatch |
-| routine tracked code/doc/spec/design work | `standard` | durable plan/checklist; depth-1 owner should open bounded depth-2 verifier/planner work when the task is separable |
-| important multi-file or risk-bearing work | `strong` | default depth-2 check at the riskiest point, not every stage |
+| routine tracked code/doc/spec/design work | `standard` | durable plan/checklist; depth-1 owner is a thin conductor that dispatches each pipeline stage (plan/execute/test/report) as its own depth-2 headless session by default (file-only handoff), and may also open bounded depth-2 verifier/planner work when separable |
+| important multi-file or risk-bearing work | `strong` | stage dispatch as in `standard`, plus a depth-2 check at the riskiest point, not every stage |
 | complex cross-domain or cross-harness work | `thorough` | depth-1 owner opens bounded depth-2 perspective/verifier workers |
 | high-stakes, irreversible, security, or external-facing work | `adversarial` | thorough plus explicit adversary/failure-mode/security pass |
 
@@ -112,7 +112,7 @@ Direct work is the only graph with no plan. Every non-`direct` autopilot graph h
 | **analyze-project** | 단일 skill — code/paper/doc mode 자체 분석 |
 | **autopilot-spec** | 기획팀(PRD 위임) + 자료팀(research import) / setup: 호스팅·CI/CD logic |
 | **autopilot-design** | 디자인팀 maker + 디자인팀 critic + 자료팀 web-image-search |
-| **autopilot-code** (일반) | 기획팀(plan) + 개발팀(execute) + 품질관리팀 code-review·test + **task-aware plan-review** (UI/visual → 디자인팀 critic / research·code → 연구팀) |
+| **autopilot-code** (일반) | 기획팀(plan) + 개발팀(execute) + 품질관리팀 code-review·test + **task-aware plan-review** (UI/visual → 디자인팀 critic / research·code → 연구팀). `standard+` 에선 각 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
 | **autopilot-code** (앱 mode) | 위 + **디자인팀 critic 2자리** (plan 단계 _plan-review_ + render 후 결과 critic) + DB migration 안전 logic + push 자동 deploy |
 | **autopilot-draft** | 자료팀(figure·data·reference) + 개발팀(writing) + 편집팀 polish + 연구팀 fact-check |
 | **autopilot-refine** | autopilot-draft 와 동일 재활용 + 편집팀 review |
