@@ -24,7 +24,7 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
   - [x] E2 conductor-stop-gate.sh (SD-14b) — UNREGISTERED (held), on-disk + 4 CLI unit PASS
   - [x] E3 HOOKS.md catalog rows (parity note → Phase G)
 - [x] **Phase F** — SD-10 dev-pipeline dispatch-first (closed 2-cond fallback, dispatch-headless.py×5, dispatch-wait per stage) + SKILL Stage Graph annotation
-- [ ] **Phase G** — adapter bootstrap parity (claude/codex/opencode one-shot clause)
+- [x] **Phase G** — adapter bootstrap parity (claude CLAUDE.md §0(C) + codex/opencode AGENTS.md one-shot parity)
 - [ ] **Phase H** — diffusion (draft/research/spec/design/lab stage-worker tables)
 - [ ] **Phase I** — drill case handoff artifact (under plan dir, NOT loops/)
 - [ ] **Phase J** — instrumentation + post-it handoff
@@ -34,4 +34,5 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
 - `e97d916` Phase C (wrapper + dispatch-wait)
 - `d27ab12` Phase D (profiles)
 - `3dfb993` Phase E (hooks)
-- (Phase F committed next)
+- `7a74889` Phase F (SD-10 dev-pipeline)
+- (Phase G committed next)
