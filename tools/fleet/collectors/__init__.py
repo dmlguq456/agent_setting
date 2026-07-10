@@ -5,9 +5,49 @@ liveness, and dispatch modules are imported defensively so a partial checkout / 
 enricher never drops the backbone rows (PRD §1: enrichment is 칸 채우기, not 존재 판정).
 """
 import importlib
+import os
 import time as _time
 
 from . import procscan
+
+
+def _same_path(a, b):
+    if not a or not b:
+        return False
+    return a == b or os.path.realpath(a) == os.path.realpath(b)
+
+
+def _mark_dispatch_child_sessions(sessions, jobs):
+    """Hide runtime session rows that are already represented by dispatch jobs.
+
+    Claude exposes an env marker for child sessions at procscan time, but Codex/OpenCode
+    headless runs only become identifiable after jobs.log is collected. Match active child
+    jobs by runtime+cold cwd, while explicitly protecting the parent session cwd/id.
+    """
+    child_jobs = []
+    for j in jobs:
+        if not getattr(j, 'cwd', None) or not getattr(j, 'harness', None):
+            continue
+        if not (getattr(j, 'is_child', False) or getattr(j, 'parent_sid', None)
+                or getattr(j, 'parent_cwd', None) or getattr(j, 'parent_slug', None)):
+            continue
+        child_jobs.append(j)
+    if not child_jobs:
+        return
+    for s in sessions:
+        if getattr(s, 'is_child', False) or getattr(s, 'app_server', False) or not getattr(s, 'cwd', None):
+            continue
+        for j in child_jobs:
+            if s.harness != j.harness:
+                continue
+            if not _same_path(s.cwd, j.cwd):
+                continue
+            if j.parent_sid and s.session_id and j.parent_sid == s.session_id:
+                continue
+            if getattr(j, 'parent_cwd', None) and _same_path(s.cwd, j.parent_cwd):
+                continue
+            s.is_child = True
+            break
 
 
 def collect_all(harness_filter=None, jobs_path=None):
@@ -87,5 +127,10 @@ def collect_all(harness_filter=None, jobs_path=None):
         jobs = dispatch.collect(jobs_path=jobs_path, harness_filter=harness_filter)
     except Exception:
         jobs = []
+
+    try:
+        _mark_dispatch_child_sessions(sessions, jobs)
+    except Exception:
+        pass
 
     return sessions, jobs

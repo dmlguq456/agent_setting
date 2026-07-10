@@ -6,8 +6,10 @@ matched by /proc/cwd == session.directory; among sessions in that directory we t
 recently updated top-level (parent_id IS NULL) session.
 
 Structurally missing (render '—', PRD §2/§4): rate-limit (no column). effort = model.variant.
-context% = tokens_input (last-request input == current context) / model context window, the
-window read from opencode's own models.dev registry cache (~/.cache/opencode/models.json).
+context% = last-request prompt size (input + cache.read + cache.write from the latest
+assistant message's tokens object) / model context window, the window read from opencode's
+own models.dev registry cache (~/.cache/opencode/models.json). The session-table column
+tokens_input is a cumulative cost-side aggregate, NOT the current context size.
 """
 import json
 import os
@@ -70,14 +72,50 @@ def _query(cur, cwd):
     return None
 
 
+def _context_tokens_from_payload(payload):
+    tokens = payload.get("tokens") if isinstance(payload, dict) else None
+    if not isinstance(tokens, dict):
+        return None
+    cache = tokens.get("cache") if isinstance(tokens.get("cache"), dict) else {}
+    total = 0
+    for value in (tokens.get("input"), cache.get("read"), cache.get("write")):
+        if isinstance(value, (int, float)):
+            total += value
+    return total or None
+
+
+def _last_request_context(con, sid):
+    """Latest assistant step prompt size, excluding output/cumulative session totals."""
+    for table in ("message", "part", "session_message"):
+        try:
+            rows = con.execute(
+                "SELECT data FROM %s WHERE session_id=? ORDER BY time_updated DESC LIMIT 50" % table,
+                (sid,),
+            )
+        except Exception:
+            continue
+        for (data,) in rows:
+            try:
+                payload = json.loads(data) or {}
+            except Exception:
+                continue
+            ctx = _context_tokens_from_payload(payload)
+            if ctx:
+                return ctx
+    return None
+
+
 def enrich(sess):
     db = _db()
     if not sess.cwd or not os.path.exists(db):
         return
     con = None
+    last_ctx = None
     try:
         con = sqlite3.connect("file:%s?mode=ro" % db, uri=True, timeout=1.0)
         row = _query(con.cursor(), sess.cwd)
+        if row and row[0]:
+            last_ctx = _last_request_context(con, row[0])
     except Exception:
         return
     finally:
@@ -103,12 +141,18 @@ def enrich(sess):
         sess.cost = cost
     toks = sum(x for x in (ti, to, tr) if isinstance(x, (int, float)))
     sess.tokens = toks or None
-    # context% = current-context tokens (tokens_input = last request's input, NOT cumulative —
-    # verified against the newest message part) / model window (registry). Matches opencode's TUI.
-    if isinstance(ti, (int, float)) and ti:
+    # context% = current-context size (last API request's prompt ~ what the model
+    # actually saw as context) / model window (registry). NOT session.tokens_input,
+    # which is cumulative API input across all requests in the session — cost-side,
+    # not context-side. The real last-request context size lives in the data JSON of
+    # the latest assistant message: tokens.input + tokens.cache.read +
+    # tokens.cache.write. Falls back to session.tokens_input only when per-message
+    # tokens are unavailable.
+    ctx_for_pct = last_ctx if last_ctx else (ti if isinstance(ti, (int, float)) else None)
+    if isinstance(ctx_for_pct, (int, float)) and ctx_for_pct:
         lim = _model_ctx_limit(sess.model)
         if lim:
-            sess.ctx_pct = min(99, round(100 * ti / lim))
+            sess.ctx_pct = min(99, round(100 * ctx_for_pct / lim))
     if isinstance(tupd, (int, float)):
         sess.mtime = tupd / 1000.0                  # ms → s
     # rl_5h / rl_7d: opencode has no rate-limit column → left None ('—').

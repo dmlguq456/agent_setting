@@ -8,6 +8,7 @@ Runnable directly (`python3 tools/fleet/tests/test_dispatch.py`) or via
 `python3 -m unittest` / `python3 -m unittest fleet.tests.test_dispatch -v` (from `tools/`).
 """
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -23,8 +24,10 @@ if _TOOLS_DIR not in sys.path:
 
 from fleet.collectors import dispatch  # noqa: E402
 from fleet.collectors import claude    # noqa: E402
+from fleet.collectors import opencode  # noqa: E402
 from fleet import render             # noqa: E402
-from fleet.model import DispatchJob  # noqa: E402
+from fleet import collectors as fleet_collectors  # noqa: E402
+from fleet.model import DispatchJob, Session  # noqa: E402
 
 
 class RenderDispatchPresentationTest(unittest.TestCase):
@@ -65,6 +68,16 @@ class RenderDispatchPresentationTest(unittest.TestCase):
 
         self.assertIn("smoke-claude-disp…", text)
         self.assertNotIn("smoke-claude-dispatch-with-overlong-name", text)
+
+    def test_loop_dispatch_profile_omits_duplicate_case_role(self):
+        job = DispatchJob(
+            key="drill",
+            slug="g8_design_verifier_breakage",
+            mode="loop/drill",
+            worker_role="g8_design_verifier_breakage",
+        )
+
+        self.assertIsNone(render._dispatch_profile(job))
 
 
 
@@ -117,6 +130,37 @@ class RegistryHomeTest(unittest.TestCase):
             self.assertEqual(dispatch._jobs_path(),
                               os.path.join("/agent-home", ".dispatch", "jobs.log"))
 
+    def test_candidate_jobs_paths_env_is_single_explicit_registry(self):
+        with mock.patch.dict(os.environ, {"AGENT_DISPATCH_JOBS": "/env/jobs.log"}, clear=True), \
+             mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=True):
+            self.assertEqual(dispatch._candidate_jobs_paths(), ["/env/jobs.log"])
+
+    def test_candidate_jobs_paths_default_adds_legacy_claude_registry(self):
+        def fake_expanduser(path):
+            return path.replace("~", "/home/u")
+
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(dispatch, "_jobs_path",
+                               return_value="/home/u/agent_setting/.dispatch/jobs.log"), \
+             mock.patch("fleet.collectors.dispatch.os.path.expanduser",
+                        side_effect=fake_expanduser), \
+             mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=True):
+            self.assertEqual(dispatch._candidate_jobs_paths(), [
+                "/home/u/agent_setting/.dispatch/jobs.log",
+                "/home/u/.claude/.dispatch/jobs.log",
+            ])
+
+    def test_candidate_jobs_paths_skips_duplicate_legacy_registry(self):
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(dispatch, "_jobs_path",
+                               return_value="/home/u/.claude/.dispatch/jobs.log"), \
+             mock.patch("fleet.collectors.dispatch.os.path.expanduser",
+                        return_value="/home/u/.claude/.dispatch/jobs.log"), \
+             mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=True):
+            self.assertEqual(dispatch._candidate_jobs_paths(), [
+                "/home/u/.claude/.dispatch/jobs.log",
+            ])
+
 
 # --- D2: runtime home (_proj_home / claude._home) must NOT follow the registry home ---
 class RuntimeHomeIndependenceTest(unittest.TestCase):
@@ -144,8 +188,124 @@ class RuntimeHomeIndependenceTest(unittest.TestCase):
             self.assertEqual(claude._home(), "/cfg")
 
 
+class OpenCodeContextTest(unittest.TestCase):
+
+    def test_last_request_context_uses_latest_nonzero_message_tokens(self):
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE message (session_id text, time_updated integer, data text)")
+        con.execute("INSERT INTO message VALUES (?, ?, ?)", (
+            "sid", 3, '{"role":"assistant","tokens":{"input":0,"cache":{"read":0,"write":0}}}',
+        ))
+        con.execute("INSERT INTO message VALUES (?, ?, ?)", (
+            "sid", 2, '{"role":"assistant","tokens":{"input":14,"cache":{"read":182016,"write":7},"output":703}}',
+        ))
+
+        self.assertEqual(opencode._last_request_context(con, "sid"), 182037)
+        con.close()
+
+    def test_opencode_enrich_uses_message_context_before_closing_db(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "opencode.db")
+            con = sqlite3.connect(db)
+            con.execute("""
+                CREATE TABLE session (
+                    id text, slug text, agent text, model text, cost real,
+                    tokens_input integer, tokens_output integer, tokens_reasoning integer,
+                    time_updated integer, parent_id text, directory text
+                )
+            """)
+            con.execute("CREATE TABLE message (session_id text, time_updated integer, data text)")
+            con.execute("INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (
+                "sid", "shiny-wizard", "build", '{"id":"glm-5.2"}', 0.0,
+                5862526, 0, 0, 1234567890, None, "/repo",
+            ))
+            con.execute("INSERT INTO message VALUES (?, ?, ?)", (
+                "sid", 2, '{"role":"assistant","tokens":{"input":14,"cache":{"read":182016,"write":7},"output":703}}',
+            ))
+            con.commit()
+            con.close()
+
+            sess = Session(harness="opencode", pid=1, cwd="/repo")
+            with mock.patch.dict(os.environ, {"OPENCODE_DB": db}, clear=True), \
+                 mock.patch.object(opencode, "_model_ctx_limit", return_value=2_000_000):
+                opencode.enrich(sess)
+
+        self.assertEqual(sess.ctx_pct, 9)
+
+
 # --- D3: cwd-fallback enrichment (fully hermetic) ---
 class CwdFallbackEnrichmentTest(unittest.TestCase):
+
+    def test_proc_scanned_drill_loop_surfaces_parent_and_current_case(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = os.path.join(tmp, "drill-post-phase2.log")
+            with open(log_path, "w") as f:
+                f.write("▶ g7_semantic_deterministic_boundary (work=/tmp/drill-g7-aaaa)\n")
+                f.write("  → PASS(g)\n")
+                f.write("▶ growing:g8b_design_verifier_clean_pass (work=/tmp/drill-g8b-bbbb)\n")
+
+            ps_lines = [
+                "1001 zsh 00:58 /usr/bin/zsh -c bash ~/.claude/loops/drill/run.sh > %s 2>&1" % log_path,
+                "1002 bash 00:57 bash /home/u/.claude/loops/drill/run.sh",
+            ]
+
+            with mock.patch("fleet.collectors.procscan._ps_lines", return_value=ps_lines), \
+                 mock.patch("fleet.collectors.dispatch.os.readlink",
+                            return_value="/home/u/agent_setting"), \
+                 mock.patch("fleet.collectors.procscan.read_environ", return_value={
+                     "CLAUDE_CODE_SESSION_ID": "parent-sid",
+                     "CLAUDE_CODE_CHILD_SESSION": "1",
+                     "CLAUDECODE": "1",
+                     "PWD": "/home/u/agent_setting",
+                 }):
+                jobs = dispatch._scan_processes()
+
+        self.assertEqual(len(jobs), 1)
+        job = jobs[0]
+        self.assertEqual(job.key, "drill")
+        self.assertEqual(job.slug, "g8b_design_verifier_clean_pass")
+        self.assertEqual(job.mode, "loop/drill")
+        self.assertEqual(job.stage, "running")
+        self.assertEqual(job.cwd, "/home/u/agent_setting")
+        self.assertEqual(job.parent_sid, "parent-sid")
+        self.assertEqual(job.parent_cwd, "/home/u/agent_setting")
+        self.assertTrue(job.is_child)
+        self.assertEqual(job.harness, "claude")
+        self.assertEqual(job.worker_role, "g8b_design_verifier_clean_pass")
+
+    def test_collect_reads_current_and_legacy_jobs_logs_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            current = os.path.join(tmp, "current.jobs.log")
+            legacy = os.path.join(tmp, "legacy.jobs.log")
+            current_wt = os.path.join(tmp, "current-wt")
+            legacy_wt = os.path.join(tmp, "legacy-wt")
+            os.makedirs(current_wt, exist_ok=True)
+            os.makedirs(legacy_wt, exist_ok=True)
+            with open(current, "w") as f:
+                f.write("\t".join([
+                    "2026-07-05T01:00:00+00:00", "open", "repo", current_wt,
+                    "current-codex-job",
+                    "capability=autopilot-code,mode=dev,qa=standard,harness=codex",
+                ]) + "\n")
+            with open(legacy, "w") as f:
+                f.write("\t".join([
+                    "2026-07-05T01:00:01+00:00", "open", "repo", legacy_wt,
+                    "legacy-claude-drill",
+                    "capability=drill,mode=loop/drill,qa=quick,harness=claude",
+                ]) + "\n")
+
+            with mock.patch.object(dispatch, "_candidate_jobs_paths",
+                                   return_value=[current, legacy]), \
+                 mock.patch.object(dispatch, "_scan_processes", return_value=[]), \
+                 mock.patch.object(dispatch, "_dispatch_liveness",
+                                   side_effect=lambda *a, **k: "working"):
+                jobs = dispatch.collect()
+
+            self.assertEqual({j.slug for j in jobs}, {
+                "current-codex-job",
+                "legacy-claude-drill",
+            })
+            self.assertEqual(dispatch.collect.last_malformed, 0)
 
     def test_collect_enriches_tokenless_log_job(self):
         """Case 1 — collect() end-to-end: a harness=None jobs.log row whose worktree
@@ -344,6 +504,41 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
         self.assertIn("loops/", text)
         self.assertNotIn("drill:g9", text)
 
+
+    def test_dispatch_child_session_matching_jobs_log_cwd_is_hidden(self):
+        from fleet.model import Session
+        parent = Session(harness="codex", pid=1, cwd="/work/agent_setting",
+                         session_id="parent-sid", slug="agent_setting", liveness="working")
+        child_session = Session(harness="codex", pid=2, cwd="/tmp/drill-g9-abcd/repo",
+                                session_id="child-sid", slug="repo", liveness="working")
+        job = DispatchJob(key="drill", slug="drill-g9", cwd="/tmp/drill-g9-abcd/repo",
+                          parent_sid="parent-sid", parent_cwd="/work/agent_setting",
+                          is_child=True, harness="codex", mode="loop/drill", qa="quick",
+                          qa_source="jobslog", liveness="working",
+                          worker_role="g9_cross_harness_depth2_dispatch")
+
+        fleet_collectors._mark_dispatch_child_sessions([parent, child_session], [job])
+        self.assertFalse(parent.is_child)
+        self.assertTrue(child_session.is_child)
+
+        lines = render._build_lines([parent, child_session], [job], section="both",
+                                    narrow=False, malformed=0, layout="wide")
+        text = "\n".join("".join(part for part, _key in line) for line in lines if line)
+        self.assertIn("agent_setting/", text)
+        self.assertIn("loop/drill·g9", text)
+        self.assertNotIn("drill:g9", text)
+
+    def test_dispatch_child_session_marker_does_not_hide_parent_cwd(self):
+        from fleet.model import Session
+        parent = Session(harness="codex", pid=1, cwd="/work/agent_setting",
+                         session_id="parent-sid", slug="agent_setting", liveness="working")
+        job = DispatchJob(key="drill", slug="drill-g9", cwd="/work/agent_setting",
+                          parent_sid="parent-sid", parent_cwd="/work/agent_setting",
+                          is_child=True, harness="codex", mode="loop/drill", qa="quick",
+                          qa_source="jobslog", liveness="working")
+
+        fleet_collectors._mark_dispatch_child_sessions([parent], [job])
+        self.assertFalse(parent.is_child)
 
     def test_drill_jobs_log_row_is_visible_as_loop_dispatch(self):
         with tempfile.TemporaryDirectory() as tmp:

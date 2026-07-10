@@ -713,7 +713,10 @@ def _short_role(value):
 
 
 def _dispatch_role_suffix(j, check_text=None):
-    role = _short_role(getattr(j, "worker_role", None))
+    raw_role = getattr(j, "worker_role", None)
+    if getattr(j, "key", None) in _LOOPS_KEYS and raw_role == getattr(j, "slug", None):
+        raw_role = None
+    role = _short_role(raw_role)
     intensity = _short_level(getattr(j, "intensity", None))
     check = _short_level(check_text)
     parts = []

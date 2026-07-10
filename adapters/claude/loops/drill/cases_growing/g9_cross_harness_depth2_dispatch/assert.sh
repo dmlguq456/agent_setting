@@ -15,6 +15,17 @@ if [ -n "$bad_fields" ]; then
   fail=1
 fi
 
+bad_status=$(awk -F '\t' '$2 !~ /^(open|running)$/ {print NR ":" $2}' "$JOBS")
+if [ -n "$bad_status" ]; then
+  echo "FAIL: fleet live registry status(open/running) 위반: $bad_status"
+  fail=1
+fi
+
+if awk -F '\t' '$6 ~ / / || $6 !~ /,/ {bad=1} END {exit bad ? 0 : 1}' "$JOBS"; then
+  echo "FAIL: pipe metadata는 comma-separated key=value 여야 함"
+  fail=1
+fi
+
 owner=$(awk -F '\t' '$5 == "xh-depth2-owner" && $6 ~ /capability=autopilot-code/ && $6 ~ /depth=1/ && $6 ~ /harness=codex/ && $6 ~ /worker_role=capability-owner/ && $6 ~ /owner=autopilot-code/ {n++} END {print n+0}' "$JOBS")
 [ "$owner" -ge 1 ] || { echo "FAIL: autopilot-code codex depth-1 owner row 없음"; fail=1; }
 

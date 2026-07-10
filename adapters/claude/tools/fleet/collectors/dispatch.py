@@ -4,9 +4,10 @@ Two sources, merged:
   (a) process scan: Claude autopilot-*/loops jobs — the statusline job-scan logic ported
       verbatim EXCEPT the top-3 cap and the per-session related() cwd filter are removed
       (this is a global monitor, not a per-session statusline).
-  (b) ~/.claude/.dispatch/jobs.log: tolerant merge. status ∈ {open, running} accepted
-      (the live registry writes `running`, not `open` — §6 vocabulary gap); rows that are
-      malformed (field count ≠ 6) are skipped and counted, never crash the reader.
+  (b) dispatch registries: the current neutral <agent-home> registry plus legacy
+      ~/.claude/.dispatch/jobs.log when different. status ∈ {open, running} accepted;
+      rows that are malformed (field count ≠ 6) are skipped and counted, never crash
+      the reader.
 
 codex/opencode headless dispatch appears ONLY via jobs.log (their argv has no /autopilot-,
 01_tap §4d), so jobs.log rows not already covered by a live process are surfaced here.
@@ -26,6 +27,9 @@ from . import procscan
 
 _AUTOPILOT = re.compile(r"/autopilot-([a-z-]+)")
 _LOOPS = re.compile(r"loops/(oncall|note|study|drill)")
+_LOOP_KEYS = ("oncall", "note", "study", "drill")
+_DRILL_LOG_PATH = re.compile(r"(/[^\s'\";]*drill[^\s'\";]*\.log)")
+_DRILL_CASE_LINE = re.compile(r"^▶\s+(.+?)\s+\(work=", re.MULTILINE)
 _MODE = re.compile(r"--mode ([a-z]+)")
 _QA = re.compile(r"--qa ([a-z]+)")
 # Valid qa levels — guards argv layer-1 (effective_qa) against contaminated matches:
@@ -229,6 +233,8 @@ def _opencode_job_liveness(cwd, now, stale_min=15, slug=None):
 
 
 def _dispatch_liveness(job, now):
+    if job.source == "proc" and job.key in _LOOP_KEYS:
+        return "working"
     if job.harness == "codex":
         return _codex_job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
     if job.harness == "opencode":
@@ -259,6 +265,34 @@ def _jobs_path(override=None):
         return env
     home = _registry_home()
     return os.path.join(home, ".dispatch", "jobs.log")
+
+
+def _candidate_jobs_paths(override=None):
+    """Dispatch registries to read, in precedence order.
+
+    Explicit override/env means the caller intentionally selected one registry. The default
+    path follows the neutral <agent-home> resolution, then adds legacy ~/.claude only when
+    it is a distinct existing file. This keeps old long-running drill/Claude jobs visible
+    during migration without duplicating rows for normal projected installs.
+    """
+    if override:
+        return [override]
+    env = os.environ.get("AGENT_DISPATCH_JOBS")
+    if env:
+        return [env]
+    paths = [_jobs_path()]
+    legacy = os.path.expanduser("~/.claude/.dispatch/jobs.log")
+    if legacy and not _same_path(legacy, paths[0]) and os.path.exists(legacy):
+        paths.append(legacy)
+    result = []
+    seen = set()
+    for path in paths:
+        key = os.path.realpath(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(path)
+    return result
 
 
 # --- job liveness = transcript mtime (dispatch-liveness.sh reuse, PRD §7) ---
@@ -532,6 +566,28 @@ def _live_claude_cwds(exclude_pids):
     return result
 
 
+def _drill_current_case_from_log(path):
+    try:
+        sz = os.path.getsize(path)
+        with open(path, "rb") as f:
+            f.seek(max(0, sz - 65536))
+            data = f.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    matches = _DRILL_CASE_LINE.findall(data)
+    if not matches:
+        return None
+    return matches[-1].strip().replace("growing:", "")
+
+
+def _loop_current_case(args):
+    for path in reversed(_DRILL_LOG_PATH.findall(args or "")):
+        case_id = _drill_current_case_from_log(path)
+        if case_id:
+            return case_id
+    return None
+
+
 # --- source (a): process scan (uncapped, no related() filter) ---
 def _scan_processes():
     jobs = []
@@ -584,12 +640,34 @@ def _scan_processes():
             ))
         elif loop:
             key = loop.group(1)
-            if key in seen:
+            current_case = _loop_current_case(args)
+            if current_case:
+                dkey = "%s:%s" % (key, current_case)
+            else:
+                if any(k.startswith(key + ":") for k in seen):
+                    continue
+                dkey = key
+            if dkey in seen:
                 continue
-            seen.add(key)
+            seen.add(dkey)
+            try:
+                jcwd = os.readlink("/proc/%s/cwd" % pid_s)
+            except OSError:
+                jcwd = ""
+            if jcwd.endswith(" (deleted)"):
+                jcwd = jcwd[: -len(" (deleted)")]
+            env = procscan.read_environ(pid_s)
+            parent_sid = env.get("AGENT_DISPATCH_PARENT_SESSION_ID") or env.get("CLAUDE_CODE_SESSION_ID")
+            parent_slug = env.get("AGENT_DISPATCH_PARENT_SLUG")
+            parent_cwd = env.get("AGENT_DISPATCH_PARENT_CWD") or (env.get("PWD") if parent_sid else None)
+            is_child = env.get("CLAUDE_CODE_CHILD_SESSION") == "1" or bool(parent_slug or parent_sid)
             jobs.append(DispatchJob(
-                key=key, stage=None, elapsed_min=etime_to_min(etime),
-                slug=key, parent_sid=None, is_child=False, source="proc",
+                key=key, stage="running", mode="loop/%s" % key,
+                elapsed_min=etime_to_min(etime), slug=current_case or key, cwd=jcwd,
+                parent_sid=parent_sid, parent_cwd=parent_cwd, parent_slug=parent_slug,
+                is_child=is_child, source="proc", harness="claude" if env.get("CLAUDECODE") or "claude" in args else None,
+                pid=int(pid_s) if pid_s.isdigit() else None, worker_role=current_case,
+                capability_owner=key,
             ))
     return jobs
 
@@ -664,25 +742,32 @@ def _scan_jobs_log(path, seen_slugs):
     return jobs, malformed
 
 
-def _jobs_log_fields(path):
+def _jobs_log_fields(paths):
     """{slug: (mode, profile)} from the latest jobs.log row per slug (last-occurrence-wins,
     mirrors the reconciliation in _scan_jobs_log). Tolerant: missing file / malformed rows
     (field count != 6) never raise — worst case an empty or partial map."""
+    if isinstance(paths, (str, bytes, os.PathLike)):
+        paths = [paths]
     fields_by_slug = {}
-    try:
-        with open(path, encoding="utf-8", errors="replace") as f:
-            rows = f.read().splitlines()
-    except OSError:
-        return fields_by_slug
-    for line in rows:
-        if not line.strip():
+    for path in paths:
+        path_fields = {}
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                rows = f.read().splitlines()
+        except OSError:
             continue
-        fields = line.split("\t")
-        if len(fields) != 6:
-            continue
-        slug = fields[4]
-        _pname, pmode, _pqa, pprofile = _parse_pipe(fields[5] or "")
-        fields_by_slug[slug] = (pmode, pprofile)   # last occurrence wins (append order)
+        for line in rows:
+            if not line.strip():
+                continue
+            fields = line.split("\t")
+            if len(fields) != 6:
+                continue
+            slug = fields[4]
+            _pname, pmode, _pqa, pprofile = _parse_pipe(fields[5] or "")
+            path_fields[slug] = (pmode, pprofile)   # last occurrence wins within a file
+        for slug, value in path_fields.items():
+            if slug not in fields_by_slug:
+                fields_by_slug[slug] = value         # first registry wins across files
     return fields_by_slug
 
 
@@ -691,14 +776,19 @@ def collect(jobs_path=None, harness_filter=None):
     is cross-harness by design (jobs, not sessions)."""
     proc_jobs = _scan_processes()
     seen = set(j.slug for j in proc_jobs if j.slug)
-    path = _jobs_path(jobs_path)
-    log_jobs, malformed = _scan_jobs_log(path, seen)
+    paths = _candidate_jobs_paths(jobs_path)
+    log_jobs = []
+    malformed = 0
+    for path in paths:
+        path_jobs, path_malformed = _scan_jobs_log(path, seen)
+        log_jobs.extend(path_jobs)
+        malformed += path_malformed
     jobs = proc_jobs + log_jobs
     # mode+profile backfill for proc jobs whose argv lacked --mode (mode=None is an
     # opportunistic fix, not spec-mandated; profile=None backfill IS spec §7-mandated —
     # a proc-scanned profile job has no argv signal for --profile at all).
     if any(j.mode is None or j.profile is None for j in proc_jobs):
-        log_fields = _jobs_log_fields(path)
+        log_fields = _jobs_log_fields(paths)
         for j in proc_jobs:
             if j.slug and (j.mode is None or j.profile is None):
                 lm, lp = log_fields.get(j.slug, (None, None))
