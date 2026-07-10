@@ -134,6 +134,35 @@ class TailAiTitleTest(unittest.TestCase):
             path = self._write(tmp, "t.jsonl", [{"type": "user", "message": "hi"}])
             self.assertIsNone(claude._tail_ai_title(path))
 
+    def test_tail_ai_title_beyond_first_window_is_found(self):
+        # 2026-07-10 실측 회귀: 긴 세션은 제목 뒤로 수십 KB 의 메시지가 쌓여
+        # 고정 8KB tail 윈도우가 제목을 놓쳤다 — growing backward scan 으로 도달해야 한다.
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [{"type": "ai-title", "aiTitle": "Early title", "sessionId": "a"}]
+            filler = "x" * 200
+            lines += [{"type": "assistant", "message": filler} for _ in range(400)]  # ~80KB tail
+            path = self._write(tmp, "t.jsonl", lines)
+            self.assertGreater(os.path.getsize(path), 8192 * 8)
+            self.assertEqual(claude._tail_ai_title(path), "Early title")
+
+    def test_tail_ai_title_junk_beyond_window_stops_scan(self):
+        # 마지막 제목이 placeholder 면 (윈도우 확장으로 그 줄을 찾았더라도) None fallback.
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [{"type": "ai-title", "aiTitle": "New session - 2026-07-10T10:00:00Z"}]
+            lines += [{"type": "assistant", "message": "x" * 200} for _ in range(100)]
+            path = self._write(tmp, "t.jsonl", lines)
+            self.assertIsNone(claude._tail_ai_title(path))
+
+    def test_tail_ai_title_cache_invalidated_on_append(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, "t.jsonl", [
+                {"type": "ai-title", "aiTitle": "First title", "sessionId": "a"},
+            ])
+            self.assertEqual(claude._tail_ai_title(path), "First title")
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"type": "ai-title", "aiTitle": "Renamed title"}) + "\n")
+            self.assertEqual(claude._tail_ai_title(path), "Renamed title")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

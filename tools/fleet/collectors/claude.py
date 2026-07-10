@@ -64,36 +64,61 @@ def _newest_transcript_mtime(home, cwd, sid):
 _TITLE_JUNK_RE = re.compile(r"^(new session\b|\d{4}-\d{2}-\d{2}[t ]\d{2}:\d{2})", re.IGNORECASE)
 
 
-def _tail_ai_title(path, chunk=8192):
-    """Last `ai-title` line's aiTitle value within the file's trailing `chunk` bytes.
-    A transcript can carry several ai-title lines appended over the session's life
-    (renamed/refined) — the last one wins. tolerant: malformed json lines are skipped,
-    a missing/empty/placeholder ("New session …", bare ISO timestamp) title → None so
-    the caller falls back to slug."""
+_TITLE_CACHE = {}   # path -> (mtime, size, title) — avoid rescanning an unchanged transcript every tick
+
+
+def _tail_ai_title(path, chunk=8192, max_scan=None):
+    """Last `ai-title` line's aiTitle value, scanning backward from EOF in growing
+    windows (chunk, ×8 each step) until an ai-title line is seen or the whole file
+    is covered. Long sessions keep appending messages after the title lines, so a
+    fixed tail window misses them (2026-07-10 실측: 제목이 EOF 뒤로 31–100KB) —
+    the growing scan keeps short-session cost at one small read while still
+    reaching early titles. A transcript can carry several ai-title lines appended
+    over the session's life (renamed/refined) — the last one wins. tolerant:
+    malformed json lines are skipped, a missing/empty/placeholder ("New session …",
+    bare ISO timestamp) title → None so the caller falls back to slug. Results are
+    memoized per (mtime, size) so unchanged files are not re-read on every tick."""
     try:
-        sz = os.path.getsize(path)
-        start = max(0, sz - chunk)
-        with open(path, "rb") as f:
-            f.seek(start)
-            data = f.read().decode("utf-8", "replace")
+        st = os.stat(path)
     except OSError:
         return None
-    lines = data.splitlines()
-    if start > 0 and lines:
-        lines = lines[1:]                           # drop the partial first line
+    cached = _TITLE_CACHE.get(path)
+    if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
+        return cached[2]
+    sz = st.st_size
+    limit = sz if max_scan is None else min(sz, max_scan)
+    window = chunk
     title = None
-    for ln in lines:
-        if '"ai-title"' not in ln:
-            continue
+    found_line = False
+    while True:
+        start = max(0, sz - window)
         try:
-            d = json.loads(ln)
-        except Exception:
-            continue
-        t = d.get("aiTitle")
-        if isinstance(t, str) and t.strip():
-            title = t.strip()
+            with open(path, "rb") as f:
+                f.seek(start)
+                data = f.read().decode("utf-8", "replace")
+        except OSError:
+            return None
+        lines = data.splitlines()
+        if start > 0 and lines:
+            lines = lines[1:]                       # drop the partial first line
+        for ln in lines:
+            if '"ai-title"' not in ln:
+                continue
+            try:
+                d = json.loads(ln)
+            except Exception:
+                continue
+            if "aiTitle" not in d:
+                continue
+            found_line = True
+            t = d.get("aiTitle")
+            title = t.strip() if isinstance(t, str) and t.strip() else None
+        if found_line or window >= limit:
+            break
+        window = min(window * 8, limit)
     if title and _TITLE_JUNK_RE.match(title):
-        return None
+        title = None
+    _TITLE_CACHE[path] = (st.st_mtime, st.st_size, title)
     return title
 
 
