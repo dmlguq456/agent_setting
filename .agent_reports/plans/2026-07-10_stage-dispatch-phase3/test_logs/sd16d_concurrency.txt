@@ -1,0 +1,6 @@
+ok   - (1) 3 concurrent open rows, same parent (병렬 분사 성립)
+ok   - (2) liveness: 3 workers ALIVE simultaneously (병렬 실행 성립)
+ok   - (3a) dispatch-wait reports 3 children (다중-자식 대기 의미론)
+ok   - (3b) all children done → dispatch-wait exit 0 (수확)
+ok   - (4) 상한 비강제 확인: wrapper 는 동시 분사 수를 게이트하지 않음 — Σ≤5 는 conductor 큐잉 책임(계약 §5.10 ⑤, drift 아님)
+— dispatch-concurrency (SD-16d) 실측: PASS — 병렬 성립

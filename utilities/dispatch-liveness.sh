@@ -19,12 +19,27 @@ STALE_MIN="${DISPATCH_STALE_MIN:-15}"   # transcript 가 N분+ 멈췄으면 hang
 # 이미 runtime-root 격리라 이 계약과 정합 — 건드리지 않는다.
 RUNTIME_ROOT="${DISPATCH_RUNTIME_ROOT:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}"
 PROJ="$RUNTIME_ROOT/projects"
+LOG_DIR="$AGENT_HOME/.dispatch/logs"
+# SD-15 (OPERATIONS §5.10 ⑨): open row 의 dispatch 로그가 limit/auth 즉사 패턴을 보이면
+# transcript-mtime 과 무관하게 DEAD 로 판정한다 (wrapper 워치 창이 놓쳤거나 launch 후 뒤늦게
+# 죽은 자식). 패턴 목록은 dispatch-headless.py 의 DEATH_PATTERNS 와 동기 유지(의도적 복제).
+LIMIT_RE='hit your (session|usage) limit|session limit reached|usage limit reached|weekly limit|rate limit|[^0-9]429[^0-9]|invalid api key|authentication_error|not logged in|please run /login|unauthorized|[^0-9]401[^0-9]|credit balance is too low|insufficient (credit|quota|funds)'
 [ -f "$JOBS" ] || { echo "(jobs.log 없음: $JOBS)"; exit 0; }
 
 now=$(date +%s); alive=0; suspect=0; open_n=0
 while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   [ "${status:-}" = "open" ] || continue
   open_n=$((open_n + 1))
+  # SD-15: dispatch 로그 limit 스캔 (transcript 판정보다 먼저 — limit 사망은 확정적).
+  log_hit=""
+  for lf in "$LOG_DIR/${slug}."*.log; do
+    [ -f "$lf" ] || continue
+    if tail -c 8000 "$lf" 2>/dev/null | grep -Eiq "$LIMIT_RE"; then log_hit="$lf"; break; fi
+  done
+  if [ -n "$log_hit" ]; then
+    echo "⚠️ DEAD     ${slug:-?}  — 로그 limit/auth 패턴 ($log_hit)  [open: $ts]"
+    suspect=$((suspect + 1)); continue
+  fi
   enc=$(printf '%s' "${wt:-}" | sed 's#[/._]#-#g')
   name=""
   case "$pipe" in *profile=*) name=${pipe##*profile=}; name=${name%%,*};; esac
