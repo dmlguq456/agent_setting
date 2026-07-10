@@ -4,12 +4,31 @@ set -u
 WORK=$1
 T=$2
 REPO="$WORK/repo"
-JOBS="$REPO/.dispatch/jobs.log"
-LOG_DIR="$REPO/.dispatch/logs"
-OC_LOG="$LOG_DIR/xh-claude-opencode-verifier.opencode.jsonl"
-OC_PROMPT_COPY="$LOG_DIR/xh-claude-opencode-verifier.opencode.prompt.txt"
+CASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+HARNESS_ROOT=$(git -C "$CASE_DIR" rev-parse --show-toplevel 2>/dev/null || pwd)
+AGENT_HOME="${AGENT_HOME:-$HARNESS_ROOT}"
+JOBS="${AGENT_DISPATCH_JOBS:-$AGENT_HOME/.dispatch/jobs.log}"
+LOG_DIR="$AGENT_HOME/.dispatch/logs"
+SLUGS="$REPO/.dispatch/g10_slugs.env"
 WRAPPER_OUT="$REPO/dispatch_wrapper_output.txt"
 fail=0
+
+if [ ! -f "$SLUGS" ]; then
+  echo "FAIL: .dispatch/g10_slugs.env 없음"
+  exit 1
+fi
+# shellcheck source=/dev/null
+. "$SLUGS"
+: "${OWNER_SLUG:=}"
+: "${CHILD_SLUG:=}"
+case "$OWNER_SLUG:$CHILD_SLUG" in
+  *[!A-Za-z0-9_.:-]*|:|*:)
+    echo "FAIL: invalid g10 slug values OWNER_SLUG='$OWNER_SLUG' CHILD_SLUG='$CHILD_SLUG'"
+    exit 1
+    ;;
+esac
+OC_LOG="$LOG_DIR/$CHILD_SLUG.opencode.jsonl"
+OC_PROMPT_COPY="$LOG_DIR/$CHILD_SLUG.opencode.prompt.txt"
 
 [ -f "$REPO/src/slugger.py" ] || { echo "FAIL: src/slugger.py 없음"; fail=1; }
 [ -f "$REPO/skill_result.md" ] || { echo "FAIL: skill_result.md 없음"; fail=1; }
@@ -33,23 +52,6 @@ PY
 [ -f "$JOBS" ] || { echo "FAIL: .dispatch/jobs.log 없음"; exit 1; }
 [ -f "$WRAPPER_OUT" ] || { echo "FAIL: dispatch_wrapper_output.txt 없음"; fail=1; }
 
-bad_fields=$(awk -F '\t' 'NF != 6 {print NR ":" NF}' "$JOBS")
-if [ -n "$bad_fields" ]; then
-  echo "FAIL: jobs.log 6필드 위반: $bad_fields"
-  fail=1
-fi
-
-bad_status=$(awk -F '\t' '$2 !~ /^(open|running)$/ {print NR ":" $2}' "$JOBS")
-if [ -n "$bad_status" ]; then
-  echo "FAIL: fleet live registry status(open/running) 위반: $bad_status"
-  fail=1
-fi
-
-if awk -F '\t' 'NF == 6 && ($6 ~ / / || $6 !~ /,/ || $6 !~ /=/) {bad=1} END {exit bad ? 0 : 1}' "$JOBS"; then
-  echo "FAIL: pipe metadata는 공백 없는 comma-separated key=value 여야 함"
-  fail=1
-fi
-
 if [ -f "$WRAPPER_OUT" ]; then
   grep -q 'adapter=claude' "$WRAPPER_OUT" || { echo "FAIL: claude owner wrapper 출력 없음"; fail=1; }
   grep -q 'runtime_surface=claude-print-headless' "$WRAPPER_OUT" || { echo "FAIL: claude wrapper surface 출력 없음"; fail=1; }
@@ -68,7 +70,7 @@ else
   grep -q 'OPENCODE_DEPTH2_VERIFIER_PASS' "$OC_PROMPT_COPY" || { echo "FAIL: OpenCode child prompt marker 누락"; fail=1; }
 fi
 
-marker='OPENCODE_DEPTH2_VERIFIER_PASS parent=xh-claude-owner owner_harness=claude depth=2'
+marker="OPENCODE_DEPTH2_VERIFIER_PASS parent=$OWNER_SLUG owner_harness=claude depth=2"
 deadline=$((SECONDS + 240))
 while [ $SECONDS -lt $deadline ]; do
   if [ -f "$OC_LOG" ] && grep -q 'OPENCODE_DEPTH2_VERIFIER_PASS' "$OC_LOG"; then
@@ -83,6 +85,9 @@ elif ! grep -q 'OPENCODE_DEPTH2_VERIFIER_PASS' "$OC_LOG"; then
   echo "FAIL: OpenCode child log에 verifier marker 없음"
   tail -80 "$OC_LOG" || true
   fail=1
+elif ! grep -Fq "$marker" "$OC_LOG"; then
+  echo "FAIL: OpenCode child log에 정확한 dynamic marker 없음: $marker"
+  fail=1
 elif ! grep -q 'owner_harness=claude' "$OC_LOG"; then
   echo "FAIL: OpenCode child log에 claude owner_harness marker 없음"
   fail=1
@@ -90,14 +95,14 @@ else
   echo "PASS: OpenCode depth-2 child emitted verifier marker"
 fi
 
-CASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-HARNESS_ROOT=$(git -C "$CASE_DIR" rev-parse --show-toplevel 2>/dev/null || pwd)
-PYTHONPATH="$HARNESS_ROOT/tools" REPO="$REPO" JOBS="$JOBS" python3 - <<'PY' || fail=1
+PYTHONPATH="$HARNESS_ROOT/tools" REPO="$REPO" JOBS="$JOBS" OWNER_SLUG="$OWNER_SLUG" CHILD_SLUG="$CHILD_SLUG" python3 - <<'PY' || fail=1
 import os
 from fleet.collectors import dispatch
 
 repo = os.environ["REPO"]
 jobs_path = os.environ["JOBS"]
+owner_slug = os.environ["OWNER_SLUG"]
+child_slug = os.environ["CHILD_SLUG"]
 
 rows = []
 with open(jobs_path, encoding="utf-8") as f:
@@ -128,9 +133,14 @@ def require(condition, message):
         raise SystemExit(message)
 
 def one(slug):
-    matches = [r for r in rows if r["slug"] == slug]
-    require(len(matches) == 1, f"expected exactly one {slug} row, got {len(matches)}")
-    return matches[0]
+    matches = [r for r in rows if r["slug"] == slug and r["worktree"] == repo]
+    require(matches, f"expected at least one {slug} row for current repo, got 0")
+    row = matches[-1]
+    require(row["status"] in {"open", "running"}, f"{slug} latest status not live before assert harvest: {row['status']}")
+    require(row["repo"] == repo, f"{slug} repo field not fixture repo: {row['repo']}")
+    pipe = row["meta"]
+    require(pipe and all(" " not in k and " " not in v for k, v in pipe.items()), f"{slug} metadata contains spaces: {pipe}")
+    return row
 
 def expect(row, **expected):
     meta = row["meta"]
@@ -138,7 +148,7 @@ def expect(row, **expected):
         got = meta.get(key)
         require(got == value, f"{row['slug']} metadata {key}={got!r}, want {value!r}")
 
-owner = one("xh-claude-owner")
+owner = one(owner_slug)
 expect(
     owner,
     capability="autopilot-code",
@@ -156,7 +166,7 @@ expect(
     effort="medium",
 )
 
-child = one("xh-claude-opencode-verifier")
+child = one(child_slug)
 expect(
     child,
     capability="code-test",
@@ -165,7 +175,7 @@ expect(
     intensity="standard",
     depth="2",
     harness="opencode",
-    parent="xh-claude-owner",
+    parent=owner_slug,
     parent_sid="drill-claude-parent-session",
     worker_role="verifier",
     owner="autopilot-code",
@@ -176,15 +186,10 @@ expect(
     variant="inherit",
 )
 
-for row in rows:
-    require(row["status"] in {"open", "running"}, f"{row['slug']} not live status: {row['status']}")
-    require(row["repo"] == repo, f"{row['slug']} repo field not fixture repo: {row['repo']}")
-    require(row["worktree"] == repo, f"{row['slug']} worktree field not fixture repo: {row['worktree']}")
-
 jobs = dispatch.collect(jobs_path=jobs_path)
 fleet_owner = [
     j for j in jobs
-    if j.slug == "xh-claude-owner"
+    if j.slug == owner_slug
     and j.key == "code"
     and j.mode == "dev/refactor"
     and j.depth == 1
@@ -195,8 +200,8 @@ fleet_owner = [
 ]
 fleet_child = [
     j for j in jobs
-    if j.slug == "xh-claude-opencode-verifier"
-    and j.parent_slug == "xh-claude-owner"
+    if j.slug == child_slug
+    and j.parent_slug == owner_slug
     and j.depth == 2
     and j.harness == "opencode"
     and j.is_child
@@ -207,5 +212,10 @@ require(fleet_owner, "fleet parse missing Claude depth-1 owner")
 require(fleet_child, "fleet parse missing OpenCode depth-2 child linked to Claude owner")
 print("PASS: fleet collector preserves Claude depth-1 -> OpenCode depth-2 linkage")
 PY
+
+if [ "$fail" -eq 0 ]; then
+  "$AGENT_HOME/adapters/opencode/bin/preflight.sh" harvest --jobs "$JOBS" --slug "$OWNER_SLUG" --mark-done >/dev/null 2>&1 || true
+  "$AGENT_HOME/adapters/opencode/bin/preflight.sh" harvest --jobs "$JOBS" --slug "$CHILD_SLUG" --mark-done >/dev/null 2>&1 || true
+fi
 
 exit $fail

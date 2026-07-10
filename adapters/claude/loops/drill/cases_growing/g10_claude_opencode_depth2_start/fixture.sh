@@ -3,6 +3,10 @@
 set -eu
 WORK=$1
 REPO="$WORK/repo"
+OBSERVE_SECONDS="${DRILL_G10_OBSERVE_SECONDS:-0}"
+case "$OBSERVE_SECONDS" in
+  ''|*[!0-9]*) OBSERVE_SECONDS=0 ;;
+esac
 mkdir -p "$REPO/.dispatch" "$REPO/src" "$WORK/.pre"
 cd "$REPO"
 git init -q && git checkout -q -b main
@@ -19,12 +23,19 @@ This fixture checks the real cross-harness start path:
 MD
 cat > src/__init__.py <<'PY'
 PY
-cat > opencode_depth2_prompt.md <<'MD'
+{
+cat <<'MD'
 You are the OpenCode depth-2 verifier for drill case g10_claude_opencode_depth2_start.
 
+MD
+if [ "$OBSERVE_SECONDS" -gt 0 ]; then
+  printf 'First run `sleep %s` so the fleet UI has time to show this depth-2 dispatch row.\n\n' "$OBSERVE_SECONDS"
+fi
+cat <<'MD'
 Do not edit files. Reply with one short line containing exactly this marker and the parent linkage:
 
 OPENCODE_DEPTH2_VERIFIER_PASS parent=xh-claude-owner owner_harness=claude depth=2
 MD
+} > opencode_depth2_prompt.md
 git add -A && git commit -q -m init
 printf '%s\n' "$REPO/.dispatch/jobs.log" > "$WORK/.pre/jobs_path"
