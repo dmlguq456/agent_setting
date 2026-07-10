@@ -36,4 +36,9 @@ slug: 2026-07-10_stage-dispatch-phase2 · branch: stage-dispatch-phase2 · qa=st
 - `3dfb993` Phase E (hooks)
 - `7a74889` Phase F (SD-10 dev-pipeline)
 - `976ba3a` Phase G (adapter parity)
-- (Phase H+I+J committed next)
+- `a63b708` Phase H+I+J (diffusion + drill + instrumentation)
+- (final: plan status → implemented)
+
+## Deferred (out of code-execute write class — for conductor/code-report)
+- J3 post-it handoff memo (drill case awaiting loops/ install · SD-14b Stop-gate held · SD-11 deny-escalation deferred) — DB write, not code-execute class.
+- `pipeline_summary.md` Decision Points sync — code-report class (§5.8 lock).
