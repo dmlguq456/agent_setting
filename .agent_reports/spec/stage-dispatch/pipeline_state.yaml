@@ -36,4 +36,4 @@ decisions_locked:
 decisions_open:
   - SD-OPEN-1: 마이크로-스테이지 inline 손익 임계(어느 스테이지 크기부터 분사 이득). Phase 1 pilot 1표본 확보 — Phase 2 계측 누적만, 확정은 표본 축적 후
   - SD-OPEN-2: 스테이지 SessionEnd mem curator 기동 영향 — 관찰만(계측 로그 기록), 개입은 증거 후 (v2)
-  - SD-OPEN-3: 상호보완 라우팅 가중 정책 — 초기 'limit 회피 > 특성 적합 > 분산', 편중·교차 리뷰 효과 계측 후 조정 (v3)
+  - SD-OPEN-3: 상호보완 라우팅 가중 정책 — 초기 'limit 회피 > 특성 적합 > 분산' + 한도 비대칭 기본값(Claude>Codex, 가변 — 설정값으로 선언, 하드코드 금지), 편중·교차 리뷰 효과 계측 후 조정 (v3)

@@ -208,7 +208,8 @@ pilot 부수발견 ②: 스테이지 세션도 SessionEnd 에 mem curator(distil
   - 계약 자리 = OPERATIONS §5.10 ⑦ 확장 + dev-pipeline 등 파이프 스테이지 분사 절.
 - (c) **관제·계측**: cross-harness row 는 기존 `harness=`/`owner_harness=`/`parent_sid` 표기로 fleet 연속성 유지. harness 별 분사 분포·limit 회피 이벤트·교차 리뷰 조합을 계측에 기록.
 - (d) **thorough+ 동시성 검증** (사용자 확인 요청): 현행 계약은 thorough/adversarial 에서 depth-1 owner 가 **다축 depth-2 perspective/verifier/adversary 워커**를 열도록 명시(WORKFLOW §1.1·OPERATIONS §5.10 ④)하고 동시 상한 ⑤ 가 "동시 분사"를 전제하나, **다축 워커의 병렬 실행이 실측 검증된 적은 없다**(Phase 1·2 사이클은 strong — 단일 리뷰). 검증 항목: thorough 사이클에서 다축 워커가 실제 동시 jobs.log row 로 뜨는지 + Σ 상한 계산 준수 + dispatch-wait 의 다중 자식 대기 의미론. 
-- **SD-OPEN-3 (미결)**: 보완 정책의 정확한 가중("limit 회피 > 특성 적합 > 분산" 초기 보수 정책) — 편중·교차 리뷰 효과는 계측 누적 후 조정.
+- **한도 비대칭 기본값** (사용자 제공 2026-07-10, minor): 현행 가정 = **Claude Code 한도 > Codex 한도** → 기본 배분 = Claude 주력(주 파이프·대량 스테이지), Codex 보완(교차 리뷰·failover·특성 적합 자리에 우선 소비 — 낮은 한도를 고가치 자리에 아껴 씀). 단 **이 비대칭은 향후 바뀔 수 있는 가변 전제** — 코드에 하드코드 금지, 이름 있는 설정값(정책 파일/명시 상수, 예: `dispatch-policy` 의 `harness_capacity_bias`)으로 선언해 한 자리 수정으로 뒤집을 수 있게 한다.
+- **SD-OPEN-3 (미결)**: 보완 정책의 정확한 가중("limit 회피 > 특성 적합 > 분산" 초기 보수 정책, 위 한도 비대칭 기본값 반영) — 편중·교차 리뷰 효과는 계측 누적 후 조정.
 
 ### 8.5.7 SD-14 — conductor 대기 계약 결정론화 (운영 실증 ④, 2026-07-10 타 세션 발견)
 
