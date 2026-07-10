@@ -232,6 +232,43 @@ class OpenCodeContextTest(unittest.TestCase):
 
         self.assertEqual(sess.ctx_pct, 9)
 
+    def _make_db(self, tmp, with_title_col):
+        db = os.path.join(tmp, "opencode.db")
+        con = sqlite3.connect(db)
+        cols = ("id text, slug text, agent text, model text, cost real, "
+                "tokens_input integer, tokens_output integer, tokens_reasoning integer, "
+                "time_updated integer, parent_id text, directory text")
+        if with_title_col:
+            cols += ", title text"
+        con.execute("CREATE TABLE session (%s)" % cols)
+        vals = ["sid", "shiny-wizard", "build", '{"id":"glm-5.2"}', 0.0,
+                0, 0, 0, 1234567890, None, "/repo"]
+        if with_title_col:
+            vals.append("개발 서버 시작")
+        con.execute("INSERT INTO session VALUES (%s)" %
+                     ",".join("?" * len(vals)), vals)
+        con.commit()
+        con.close()
+        return db
+
+    def test_opencode_enrich_fills_title_when_column_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._make_db(tmp, with_title_col=True)
+            sess = Session(harness="opencode", pid=1, cwd="/repo")
+            with mock.patch.dict(os.environ, {"OPENCODE_DB": db}, clear=True):
+                opencode.enrich(sess)
+        self.assertEqual(sess.title, "개발 서버 시작")
+        self.assertEqual(sess.slug, "shiny-wizard")
+
+    def test_opencode_enrich_tolerates_missing_title_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._make_db(tmp, with_title_col=False)
+            sess = Session(harness="opencode", pid=1, cwd="/repo")
+            with mock.patch.dict(os.environ, {"OPENCODE_DB": db}, clear=True):
+                opencode.enrich(sess)
+        self.assertIsNone(sess.title)
+        self.assertEqual(sess.slug, "shiny-wizard")
+
 
 # --- D3: cwd-fallback enrichment (fully hermetic) ---
 class CwdFallbackEnrichmentTest(unittest.TestCase):
