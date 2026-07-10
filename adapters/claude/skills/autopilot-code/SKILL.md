@@ -50,6 +50,8 @@ Defaults:
 | `strong` | standard + one risk-focused depth2 review | 필수 | 가장 위험한 지점 1회 |
 | `thorough`/`adversarial` | standard + multi-axis depth2 planner/verifier/adversary synthesis | 필수 | depth2 worker report를 짧게 합성 |
 
+**`standard+` dispatch**: 각 durable 스테이지(code-plan/execute/test/report)는 depth-2 headless 세션으로 분사된다 — depth-1 conductor 는 산출물 경로만 넘기고 verdict/status 만 읽으며, 대기·수확은 one-shot wait(dispatch-wait) 폴링으로 결정론화한다 (dev-pipeline Step 1~7, OPERATIONS §5.10 ③④·SD-14). `direct/quick` 과 plan-check 마이크로-스테이지는 inline.
+
 ## Mode Routing
 
 - `dev`: 기능 추가, 리팩터, 구현 작업. `direct|quick`은 full sub-skill pipeline을 줄이고, `standard+`는 `code-plan`, optional `code-refine`, `code-execute`, `code-test`, `code-report`를 사용한다.

@@ -1,0 +1,10 @@
+name: code-execute
+description: "code-execute 스테이지-워커 — autopilot-code Step 3 depth-2 분사용 (개발팀, 유일 소스 변경 스테이지)"
+harness: claude
+model_role: fast implementer
+fragments:
+  - profiles/fragments/code-execute.md
+expose:
+  skills: [code-execute, autopilot-code, post-it]
+  agents: [dev-team]
+  triggers: []

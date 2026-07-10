@@ -1,5 +1,20 @@
 ## Pipeline
 
+> **Stage-dispatch (`standard+`, OPERATIONS §5.10 ③④·SD-1·SD-2)**: for `standard+`, each durable stage below is dispatched as its own **depth-2 headless session**; the in-session team named in each step runs *inside* that stage session. The depth-1 conductor passes only artifact paths and reads verdict/status — never stage bodies or prior-stage conversation (**file-only handoff**: each stage reads its inputs from files, not from the conductor's memory of earlier stages). `direct/quick` and micro-stages (pure orchestrator/regex steps) stay inline; stage sessions never re-dispatch (depth 3+ forbidden). Per-pipe body rewrite to imperative dispatch commands is follow-up work — this block only adds the contract + the stage-worker mapping below.
+
+**Stage-worker mapping** (durable `standard+` stages; step numbers/names verbatim from this file):
+
+| stage | in-session team | input artifacts | output artifacts | write class |
+|---|---|---|---|---|
+| Step 1: Material Analysis | orchestrator (direct, no sub-agent) — candidate stage | refs / `analysis_project` materials | `analysis/material_index.md`, `analysis/{ref,reviewer}_analysis.md` | analysis |
+| Step 2: draft-strategy | `draft-strategy` sub-skill (own internal team) | `analysis/*`, discovered inputs | `{strategy_folder}/strategy/strategy.md` (+ `strategy_ko.md`) | strategy |
+| Step 4.0b: On-demand Figure Extraction | 자료팀 — candidate stage | cards PDF paths | `figures/figure_index.md` | figures |
+| Step 4.1: Draft Generation | 연구팀 | strategy.md (+ Style Guide) + analysis/ + discovered inputs | `{strategy_folder}/draft/draft.md` | draft |
+| Step 5.5: Editorial polish | 편집팀 (모드 B) | `draft/draft.md` | `draft/draft.md` (polished, in-place) | draft (same-file, sequential single-writer) |
+| Step 4b: Post-draft factual detector | orchestrator (inline, regex + cards grep) | `draft/draft.md` | `pipeline_summary.md` Decision Points row | **INLINE — not dispatched** (micro-stage) |
+
+No two stages mutate the same shared file without a lock (mirrors the autopilot-code `pipeline_summary.md` lock exception) — `draft.md` in particular is written by a single stage at a time in sequence (Step 4.1 writes it, then Step 5.5 polishes it in-place; the two never run concurrently).
+
 ### Pre-flight Validation [ALL modes — runs first, before any work]
 Validate mode-specific required inputs. If any check fails, **abort immediately** with a clear error message — do NOT create the artifact directory or invoke any sub-skills/agents.
 

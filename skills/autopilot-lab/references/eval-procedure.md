@@ -2,6 +2,18 @@
 
 학습 완료된 ckpt 를 평가·분석한다. 대상은 _직전 setup 실험_ (자동) 또는 `--parent <slug>` (재평가·새 데이터).
 
+> **Stage-dispatch (eval 쪽)** — 계약 본문은 `setup-procedure.md` 상단(§Stage-dispatch 계약) 참조. eval 의 durable 스테이지(E2 실행/E3-2 plot/E3-3 비교)도 `standard+` 자리엔 depth-2 headless 세션으로 dispatch 되며, **file-only handoff** 를 유지한다 — 각 팀은 산출물 경로(metrics.jsonl / REPORT.md / research/)만 입력받고 이전 스테이지 대화 맥락은 참조하지 않는다.
+
+#### stage-worker 매핑 (eval)
+
+| stage | in-session team | input artifacts | output artifacts | write class |
+|---|---|---|---|---|
+| E2 실행 | 테스트팀 (functional) | `eval.py` + ckpt | metric 값(run.json best) + `metrics.jsonl` | dispatched (depth-2) |
+| E3-2 plot | 자료팀 (figure-gen) | `metrics.jsonl` | `figures/*.{png,pdf}` | dispatched (depth-2) |
+| E3-3 compare | 연구팀 (research-survey) | `REPORT.md` + `research/`/`analysis_project/paper/` | `REPORT.md` "기존 paper 와의 비교" 섹션 | dispatched (depth-2) |
+
+> **동시성 가드**: 서로 다른 스테이지가 동일 파일에 락 없이 동시에 쓰지 않는다(필요하면 OPERATIONS §5.8 `.pipeline-lock`) — `autopilot-code` 의 `pipeline_summary.md` 락 취급과 동형. 단 `_RUNLOG.md` 는 **append-only timeline** 이라 예외: S3-2 가 자신의 experiment 줄을 append 하고, E3-4 는 _그 줄만_ 찾아 갱신(새 줄 append 아님) — 다른 실험 줄과 충돌하지 않는다.
+
 ### E1: eval spec (1 화면)
 
 **E1-1. 대상 결정** — `--from`/직전 `_RUNLOG` ⏳ 대기 줄 또는 `--parent` 로 _어떤 실험·ckpt_ 인지 확정. 평가 데이터(기존 test set 또는 새 데이터)·metric 자동 추론.

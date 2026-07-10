@@ -1,0 +1,10 @@
+name: code-plan
+description: "code-plan 스테이지-워커 — autopilot-code Step 2 depth-2 분사용 (기획팀)"
+harness: claude
+model_role: deep maker
+fragments:
+  - profiles/fragments/code-plan.md
+expose:
+  skills: [code-plan, autopilot-code, post-it]
+  agents: [plan-team]
+  triggers: []

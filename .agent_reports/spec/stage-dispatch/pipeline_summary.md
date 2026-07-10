@@ -47,3 +47,15 @@ Phase 1(계약문서+wrapper증분+autopilot-code pilot) · Phase 2(autopilot-* 
   - **SD-OPEN-2** (관찰): 스테이지 SessionEnd mem curator 기동 — 개입 없이 계측 로그 관찰만.
   - **drill 확장**: 회귀 케이스에 "프롬프트 떠먹임 없이 스킬 문서만으로 분사 발생" 문서-효력 검증 추가 (SD-10 acceptance).
   - **범위 제외 명시**: `loops/**`·`tools/fleet/**` 타 세션 소유 — §9-13 fleet 표시 이관.
+
+## Phase 2 완료 (code-report, 2026-07-10)
+
+- **Status**: Phase 2 **implemented** — 스테이지 분사(code-plan→code-execute→code-test→code-execute-fix, 전부 depth-2 headless) 로 완주. 커밋 `5ae8c8a..cd9859b`(9개, `8596e25` 대비).
+- **Decision Points 갱신**:
+  - SD-10~13: 구현 완료(dev-pipeline dispatch-first, SD-11 reminder soft 등록, SD-12 프로필 4종, SD-13 spec 전제 문구).
+  - **SD-14b (Stop gate)**: **held** — `claude -p` Stop hook 미발화 실측(probe 2026-07-10, `_internal/dev_reviews/phaseA_stop_probe.md`, CC #38651/#40506/#20063 교차확인) → 등록 보류, SD-14 는 depth_note 대기계약 + `dispatch-wait.sh` 로 커버.
+  - **SD-OPEN-1**: pilot 계측 진행 중(마이크로-스테이지 inline 임계 미확정).
+  - **SD-OPEN-2**: 관찰 지속(스테이지 SessionEnd mem curator, 개입 없음).
+- **검증**: code-test Level 3 판정 시점 PASS 311/FAIL 12(신규 회귀 2건, baseline 기존 FAIL 10건). code-execute-fix 이후 conductor 재검증 = `check-adaptation-boundary.sh` PASS(FAIL 0)·`build-manifest.py --check` up-to-date → **최종 신규 회귀 0**.
+- **잔여 handoff**: drill 케이스 정의만(러너 미설치, `loops/**` 타 세션 소유), `assert.sh` POSIX `sh -n` bashism 전달 필요.
+- 상세: `.agent_reports/plans/2026-07-10_stage-dispatch-phase2/final_report.md`

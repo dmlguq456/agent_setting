@@ -121,6 +121,21 @@ Phase 4: design-review      (비평 — 디자인팀 critic, 6축 점검)
 Phase 5: design-handoff     (코드 위치·import path·재현 가이드)
 ```
 
+> **Stage-dispatch (`standard+`, OPERATIONS §5.10 ③④·SD-1·SD-2)**: for `standard+`, each durable design phase below is dispatched as its own **depth-2 headless session**; the 디자인팀 mode (또는 orchestrator step) named in each phase runs *inside* that stage session. The depth-1 conductor passes only artifact paths and reads verdict/status — never phase bodies or prior-phase conversation (**file-only handoff**: each phase reads its inputs from files — `design_state.yaml` + prior-phase artifacts — never from the conductor's memory of earlier phases). Design phases carry `[CONFIRM Gate]`s — the conductor holds the gate verdict *between* dispatched phases via `design_state.yaml` phase status (다음 phase 는 진행 응답이 기록된 뒤에만 dispatch). `direct/quick` and micro-stages (산출물 없는 확인 스텝) stay inline; stage sessions never re-dispatch (depth 3+ forbidden). Per-pipe body rewrite to imperative dispatch commands is follow-up work — this block only adds the contract + the stage-worker mapping below.
+
+**Stage-worker mapping** (durable `standard+` phases; phase names verbatim from Pipeline Overview above):
+
+| stage | in-session team | input artifacts | output artifacts | write class |
+|---|---|---|---|---|
+| Phase 0: design-init | orchestrator (환경 프로비저닝, no sub-agent) | design 발화 + cwd (Figma MCP / shadcn / tokens.css 유무) | `00_init/environment_check.md`, `design_state.yaml` | init |
+| Phase 1: design-refs | orchestrator + `Agent(자료팀, mode=web-image-search)` (외부 검색 시) | 사용자 image / 기존 디자인 자산 / 발화 | `01_refs/brief.md`, `_internal/references/` | refs |
+| Phase 2: design-tokens | orchestrator (직접, Design MCP specimen 자가검증 — sub-agent 미위임) | `01_refs/brief.md` + 기존 토큰 파일(있으면) | `02_tokens/tokens.md`, `02_tokens/specimen.html`, `tokens.css`/`tailwind.config.ts` | tokens |
+| Phase 3: design-components | `Agent(디자인팀, mode=maker)` | `02_tokens/tokens.*`, `01_refs/brief.md` | `03_components/` (spec/mockup/code, scope 별 `preview.html`/`slides.html` 등) | components |
+| Phase 4: design-review | `Agent(디자인팀, mode=verifier)` → `Agent(디자인팀, mode=critic)` | `03_components/` 렌더 산출 | `04_review/verifier.md`, `04_review/critique.md` | review (read-only critique — 03_components 산출물 미수정) |
+| Phase 5: design-handoff | orchestrator (직접, no sub-agent) | `03_components/`, `04_review/*`, `02_tokens/tokens.*` | `05_handoff/handoff.md`, `05_handoff/exports/` | handoff |
+
+No two stages mutate the same shared file without a lock (mirrors the autopilot-code `pipeline_summary.md` lock exception) — `design_state.yaml` in particular is written by a single phase at a time in sequence (각 phase 는 CONFIRM Gate 통과 후 자기 `phases.<phase>` 항목만 갱신, 동시 쓰기 없음).
+
 ## Paper architecture figure 는 _layout 가이드_ 까지만 (2026-05-28 정책)
 
 논문용 architecture diagram (사용자 deck 양식의 그림) 은 **LLM 시각 craft 의 한계 영역** — 디자인팀은 본 그림을 생성하지 않는다. 다음 자리에서만 개입:
