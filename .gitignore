@@ -66,7 +66,6 @@ user_profile/_internal/
 # assets 는 사용자 실제 연구 figure (pptx 추출 SVG 54장·원본 anchor PNG·primitives, ~42M, 일부 미공개) — 로컬 전용.
 # pptx(ref_user_profile/figure_ppt/)에서 pdftocairo 로 언제든 재생성. clone 엔 불필요.
 user_profile/assets/
-.cwm_removal_backup/
 .cache/
 loops/*.log
 adapters/*/loops/*.log
