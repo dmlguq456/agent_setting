@@ -140,10 +140,12 @@ run_case_on_adapter() {
 _loop_run_claude() {
   local pf=$1 repo=$2 to=$3 maxturns=$4 j=$5 t=$6
   local bin="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
+  local agent_home="$(_loop_agent_home)"
+  export AGENT_HOME="$agent_home"
   local settings="${DRILL_CLAUDE_SETTINGS:-$AGENT_HOME/adapters/claude/settings.json}"
   local settings_arg=()
   [ -f "$settings" ] && settings_arg=(--settings "$settings")
-  ( cd "$repo" && timeout "$to" "$bin" -p "$(cat "$pf")" \
+  ( cd "$repo" && AGENT_HOME="$agent_home" timeout "$to" "$bin" -p "$(cat "$pf")" \
       "${settings_arg[@]}" --allowedTools "$DRILL_CLAUDE_TOOLS" --output-format json ${maxturns:+--max-turns "$maxturns"} ) \
       > "$j" 2>"${j%.json}.stderr.txt"
   python3 - "$j" "$t" <<'PY'
@@ -160,7 +162,8 @@ PY
 _loop_run_codex() {
   local pf=$1 repo=$2 to=$3 maxturns=$4 j=$5 t=$6
   local bin="${CODEX_BIN:-codex}"
-  ( cd "$repo" && timeout "$to" "$bin" exec --cd "$repo" --sandbox workspace-write --skip-git-repo-check --json - < "$pf" ) \
+  local agent_home="$(_loop_agent_home)"
+  ( cd "$repo" && AGENT_HOME="$agent_home" timeout "$to" "$bin" exec --cd "$repo" --sandbox workspace-write --skip-git-repo-check --json - < "$pf" ) \
       > "$j" 2>"${j%.json}.stderr.txt"
   python3 - "$j" "$t" <<'PY'
 import json, sys
@@ -188,9 +191,10 @@ PY
 _loop_run_opencode() {
   local pf=$1 repo=$2 to=$3 maxturns=$4 j=$5 t=$6
   local bin="${OPENCODE_BIN:-opencode}"
+  local agent_home="$(_loop_agent_home)"
   command -v "$bin" >/dev/null 2>&1 || bin="$HOME/.opencode/bin/opencode"
   local model_arg=(); [ -n "${OPENCODE_LOOP_MODEL:-}" ] && model_arg=(-m "$OPENCODE_LOOP_MODEL")
-  ( cd "$repo" && timeout "$to" "$bin" run --dir "$repo" --format json "${model_arg[@]}" "$(cat "$pf")" ) \
+  ( cd "$repo" && AGENT_HOME="$agent_home" timeout "$to" "$bin" run --dir "$repo" --format json "${model_arg[@]}" "$(cat "$pf")" ) \
       > "$j" 2>"${j%.json}.stderr.txt"
   python3 - "$j" "$t" <<'PY'
 import json, sys
