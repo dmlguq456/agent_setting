@@ -118,6 +118,19 @@ else
   ok "build-manifest adapter path is concrete (skip symlink realpath case)"
 fi
 
+# --- Case 7: 하위 디렉토리 비-symlink 실파일 심으면 → red (재귀 census, HLS-5/7) ---
+# Phase 1 census 가 놓친 "하위 디렉토리 물리 복사본 생존" 클래스를 기계가 잡는지 증명.
+tmp_census="adapters/claude/tools/memory/_zz-negtest-census.py"
+CREATED="$CREATED $tmp_census"
+printf '#!/usr/bin/env python3\n# negative-test nested real file\n' > "$tmp_census"
+out=$(run_guard); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'recursive census'; then
+  ok "nested non-symlink real file under shared layer → guard red (recursive census)"
+else
+  bad "expected recursive-census red; rc=$rc"
+fi
+rm -f "$tmp_census"; CREATED=$(printf '%s' "$CREATED" | sed "s#$tmp_census##")
+
 # --- 종료: 음성 변형이 baseline(변형 전 상태)으로 원복됐는지 확인 ---
 now_status=$(git status --porcelain -- hooks/ utilities/ tools/ adapters/ core/ 2>/dev/null || true)
 if [ "$now_status" = "$BASELINE_STATUS" ]; then
