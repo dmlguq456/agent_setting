@@ -49,14 +49,19 @@ if [ ! -f "$JOBS" ]; then
   exit 0
 fi
 
-# open 자식 row 추출: --parent 주면 pipe 의 parent=<slug> 키가 정확히 일치하는 open row 만.
+# open 자식 row 추출: --parent 주면 pipe 의 parent=<slug> 키가 정확히 일치하는 자식만.
+# slug 별 "최종 상태" 기준 — 수확이 in-place flip 이 아니라 done row *append* 로 기록되는
+# 패턴(fleet last-occurrence-wins 와 동일)에서도 이미 닫힌 자식을 open 으로 오인하지 않는다.
 open_children() {
   awk -F'\t' -v slug="$PARENT" '
-    ($2=="open") {
-      if (slug=="") { print; next }
+    NF==6 {
+      key=$5; st[key]=$2
+      if (slug=="") { m[key]=1; if ($2=="open") ln[key]=$0; next }
       n=split($6, kv, ",")
-      for (i=1;i<=n;i++) { if (kv[i]=="parent=" slug) { print; next } }
-    }' "$JOBS"
+      for (i=1;i<=n;i++) if (kv[i]=="parent=" slug) { m[key]=1 }
+      if ($2=="open") ln[key]=$0
+    }
+    END { for (k in st) if (st[k]=="open" && m[k]) print ln[k] }' "$JOBS"
 }
 
 elapsed=0

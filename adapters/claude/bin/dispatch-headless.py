@@ -242,7 +242,11 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
             "end the turn on a Monitor/notification wait — poll within the same turn using "
             "utilities/dispatch-wait.sh (which reuses dispatch-liveness) until the stage row "
             "leaves 'open', then harvest its artifact verdict and dispatch the next stage. On "
-            "SUSPECT/DEAD, diagnose and re-dispatch rather than waiting.\n"
+            "SUSPECT/DEAD, diagnose and re-dispatch rather than waiting. After harvesting a "
+            "stage (including a DEAD one you re-dispatched), you MUST update its jobs.log row "
+            "from 'open' to 'done' in place (OPERATIONS §5.10 registry duty) — rows left open "
+            "orphan the pipe for fleet/oncall and block dispatch-wait for your own next stage "
+            "(2026-07-11 drill g_stage_dispatch HARD-5 finding).\n"
         )
     if args.profile:
         # Unlike the codex wrapper, do not force a preflight/bootstrap chain
