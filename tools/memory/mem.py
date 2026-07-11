@@ -65,11 +65,17 @@ RECALL_EVENTS = Path(os.environ.get(
 ))
 # D-37 (v15 Cluster J): 쓰기측 이벤트 저널 — D-34 RECALL_EVENTS 와 위치·rotation 패턴 대칭
 # (읽기/쓰기 telemetry 대칭). dump.jsonl·agent-memory 동기 대상 아님(로컬 관측 데이터).
-WRITE_EVENTS = Path(os.environ.get(
-    "MEM_WRITE_EVENTS",
-    Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
-    / "agent-memory" / "write-events.jsonl",
-))
+# 경로 우선순위: MEM_WRITE_EVENTS 명시 > MEM_STORE override 시 그 store 옆(fixture DB 를 쓰는
+# 모든 테스트가 실 저널을 오염시키지 않게 — 저널은 store 의 관측 사이드카) > XDG state 기본.
+if "MEM_WRITE_EVENTS" in os.environ:
+    WRITE_EVENTS = Path(os.environ["MEM_WRITE_EVENTS"])
+elif "MEM_STORE" in os.environ:
+    WRITE_EVENTS = STORE / "write-events.jsonl"
+else:
+    WRITE_EVENTS = (
+        Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
+        / "agent-memory" / "write-events.jsonl"
+    )
 WRITE_ACTORS = ("manual", "distiller", "curator", "lifecycle", "sync", "restore")
 # D-39 doctor 임계값 — durable soft-ceiling 은 inject_cleanup_candidates() 기본값(80)과 동일 숫자
 # 재사용(중복 상수 회피는 안 됨 — 서로 다른 함수 시그니처 기본값이라 여기서 한 번 더 명시).

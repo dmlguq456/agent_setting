@@ -57,7 +57,8 @@ Hermes 메모리 벤치마킹의 store/write 층. spec: `<artifact-root>/spec/pr
 env override (테스트용): `MEM_STORE` · `MEM_PROJECTS` · `MEM_PROFILE` · `MEM_INJECT_MAX_CHARS` · `MEM_INJECT_MAX_BULLETS` · `MEM_INJECT_MAX_WORKING` · `MEM_INJECT_MAX_DURABLE` · `MEM_INJECT_CLEANUP_LINES` · `MEM_INJECT_SNIPPET_CHARS` · `MEM_DISTILL` · `MEM_DISTILL_ENABLE` · `MEM_DISTILL_WORKER` · `MEM_DISTILL_MODEL` · `MEM_WRITE_EVENTS` · `MEM_ACTOR` · `MEM_SID`.
 
 ## Cluster J 불변식 (v15 D-37/D-38/D-39)
-- 전 변이 경로(add/note/consume/reinforce/merge/prune/graduate/reattribute/delete/restore/lifecycle-expire)가 `write-events.jsonl`에 1줄 append — 필드 `ts/action/id/tier/scope/type/actor/sid/snippet(≤80자)`. RECALL_EVENTS와 동일 위치·rotation 패턴(256KB/최근 500줄, `$XDG_STATE_HOME/agent-memory/`)의 쓰기측 대칭. dump.jsonl·agent-memory 동기 대상 아님(로컬 관측 데이터).
+- 전 변이 경로(add/note/consume/reinforce/merge/prune/graduate/reattribute/delete/restore/lifecycle-expire)가 `write-events.jsonl`에 1줄 append — 필드 `ts/action/id/tier/scope/type/actor/sid/snippet(≤80자)`. RECALL_EVENTS와 동일 rotation 패턴(256KB/최근 500줄)의 쓰기측 대칭. dump.jsonl·agent-memory 동기 대상 아님(로컬 관측 데이터).
+- 저널 경로 우선순위: `MEM_WRITE_EVENTS` 명시 > **`MEM_STORE` override 시 그 store 옆**(`<store>/write-events.jsonl` — fixture DB 를 쓰는 모든 테스트가 실 XDG 저널을 오염시키지 않는 격리 계약, 2026-07-11 실유출 회귀 고정) > `$XDG_STATE_HOME/agent-memory/write-events.jsonl` 기본.
 - **fail-open (graveyard와 반대 방향, 의도적)**: 저널 append 실패는 절대 mutation을 막지 않는다. graveyard(파괴 복구 안전망)=fail-closed 유지, 저널(관측 telemetry)=fail-open — 이중화가 아니라 역할이 다른 두 안전판.
 - actor 결정론: `MEM_ACTOR`(명시 override) → `MEM_DISTILL=1`(distiller) → 각 함수 호출 맥락 default(예: `restore`→restore, `lifecycle --apply`→lifecycle) → 최종 fallback `manual`. `apply-distill-actions.py`는 `--mode curate` 실행 시 자식 프로세스 env에 `MEM_ACTOR=curator`를 세팅해 D-18 큐레이터 실행분을 세션 distiller(`MEM_DISTILL=1`)와 구분한다.
 - `mem log`는 `stats`(스냅샷)를 보완하는 흐름(시간축) 조회이지 대체가 아니다.

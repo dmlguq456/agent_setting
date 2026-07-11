@@ -321,6 +321,18 @@ grep -q '\[WARN\] worker-health' /tmp/doctor_worker.out \
   && ok "doctor: 활성 프로젝트 + 저널 무소식 → worker-health WARN" \
   || bad "doctor worker-health 미검출: $(cat /tmp/doctor_worker.out)"
 
+# ⑩ 저널 경로 격리 — MEM_STORE override + MEM_WRITE_EVENTS 미설정 → 저널은 그 store 옆으로
+# (fixture DB 테스트가 실 XDG 저널을 오염시키지 않는 계약 — 2026-07-11 실유출 회귀 고정)
+ISO_STORE="$(mktemp -d)"
+env -u MEM_WRITE_EVENTS MEM_STORE="$ISO_STORE" MEM_PROJECTS="$BASE_PROJ" \
+  python3 "$MEM" add working hint "journal isolation probe" >/dev/null 2>&1
+if [ -f "$ISO_STORE/write-events.jsonl" ] && grep -q "journal isolation probe" "$ISO_STORE/write-events.jsonl"; then
+  ok "저널 격리: MEM_STORE override 시 write-events 가 store 옆에 생성"
+else
+  bad "저널 격리 실패: $ISO_STORE/write-events.jsonl 부재 또는 미기록"
+fi
+rm -rf "$ISO_STORE"
+
 echo
 echo "RESULT: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = 0 ]
