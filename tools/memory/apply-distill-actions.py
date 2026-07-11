@@ -6,6 +6,7 @@ snapshot membership checks, and argv-only calls into mem.py.
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 
@@ -28,6 +29,12 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
 
     def member(rid):
         return (mode != "curate") or (rid in destructive_ids)
+
+    # D-37: mode=curate 는 D-18 세션끝 opus 큐레이터 실행분 — 저널 actor 를 distiller 와
+    # 구분해 curator 로 결정론 귀속(부모가 MEM_DISTILL=1 로 돌아도 이 자식 호출만 override).
+    mem_env = os.environ.copy()
+    if mode == "curate":
+        mem_env["MEM_ACTOR"] = "curator"
 
     try:
         with open(out_path, "r", encoding="utf-8", errors="replace") as fh:
@@ -86,7 +93,7 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
             if len(body) > 2000:
                 sys.stderr.write(f"[distill-parse] skip body too long ({len(body)})\n")
                 continue
-            subprocess.run(["python3", mem_path, "add", tier, rtype, body])
+            subprocess.run(["python3", mem_path, "add", tier, rtype, body], env=mem_env)
 
         elif action in ("reinforce", "prune", "graduate", "reattribute"):
             rid = rec.get("id")
@@ -97,9 +104,9 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
                 sys.stderr.write(f"[distill-parse] skip non-destructive-allowlist id ({action}): {rid!r}\n")
                 continue
             if action == "graduate":
-                subprocess.run(["python3", mem_path, "graduate", rid, "--to", "durable"])
+                subprocess.run(["python3", mem_path, "graduate", rid, "--to", "durable"], env=mem_env)
             else:
-                subprocess.run(["python3", mem_path, action, rid])
+                subprocess.run(["python3", mem_path, action, rid], env=mem_env)
 
         elif action == "merge":
             ids = rec.get("ids")
@@ -114,7 +121,7 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
             if not all(member(i) for i in ids):
                 sys.stderr.write("[distill-parse] skip merge: id outside destructive allowlist\n")
                 continue
-            subprocess.run(["python3", mem_path, "merge", "--canonical", canonical, *ids])
+            subprocess.run(["python3", mem_path, "merge", "--canonical", canonical, *ids], env=mem_env)
 
         else:
             sys.stderr.write(f"[distill-parse] skip unknown action: {action!r}\n")
