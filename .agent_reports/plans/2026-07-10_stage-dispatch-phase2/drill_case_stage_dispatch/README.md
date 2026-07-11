@@ -1,5 +1,7 @@
 # Drill case handoff — `g_stage_dispatch` (stage-dispatch doc-efficacy)
 
+> **✅ Installed 2026-07-11** into `loops/drill/cases_growing/g_stage_dispatch/` (+ HARD-5 고아-파이프 검출 추가 — SD-14 대기 계약 회귀). 아래 원문은 handoff 이력.
+>
 > **This is a handoff artifact, NOT installed.** `loops/**` is owned by another
 > session. The loops-owning session installs this case; this Phase-2 plan only
 > authors it. Do not edit `loops/`.
