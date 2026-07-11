@@ -18,6 +18,7 @@
 8. **디스패치 job 현황** (`<agent-home>/.dispatch/jobs.log` — OPERATIONS §5.10 등록부): `open` 항목 전부 보고에 나열 (현황 가시화). 그중 — (a) worktree 경로가 소멸했거나 24시간+ 경과 → **고아 의심**, (b) worktree 는 있는데 최근 24시간 커밋·artifact root 의 `plans/*/dev_logs` 변경 둘 다 없음 → **무진전 의심**. 둘 다 보고만 — 프로세스 kill·worktree 정리는 사용자 결정.
 9. **메모리 승격 후보 (self-review nudge)** — Hermes periodic self-review 벤치마킹 이식(T4). 전날(`git log --since="36 hours ago"` 기준) `<agent-home>` 및 작업 repo 의 커밋 메시지·산출물 변경에서, _재사용 절차·사용자 선호·교정(correction)·컨벤션·교훈_ 으로 보이는데 아직 기록 안 된 것 → "메모리 승격 후보" 로 **가장 명확한 1~2개만** 목록. 판단 기준 = 메모리 승격 휴리스틱([MEMORY §7](../MEMORY.md) canonical): preferences·conventions·corrections·lessons = 승격 / trivial·재발견가능·git 이력에 이미 있는 것·ephemera = skip. 저장 자리: `mem add`/`mem note`(직접 store write) + 하네스 auto-memory(`runtime-home/projects/<cwd>/memory/` → SessionEnd `mem sync` 로 store **durable** mirror) + post-it(→ store **working** mirror). **저장하지 않는다 — 후보 제시만**(저장은 사용자 흐름 안 `/post-it` 또는 `mem add`). 노이즈 방지: 확실한 것 없으면 이 항목 통째로 생략(빈칸 > 잘못 채우기). 행동양식 변경 후보는 메모리 아니라 원칙 문서 자리이므로 제외. _※ 세션 중 자동 store write 는 미구현 — runtime 내장 memory→sync mirror + 수동 mem add/note 가 현 구현 경로._
 10. **(폐기 — `mem lifecycle` 일임)** post-it 파일 regex 스캔은 제거됨 (제거된 `post-it.md` 파일 모델 잔재). store working tier staleness 는 SessionEnd `mem sync` → `mem lifecycle --apply` 가 `WORKING_TTL_DAYS`(현재 21d) 기준으로 자동 만료 처리하므로 야간 정찰 점검 대상 아님. (durable consolidate 후보 플래깅은 `mem lifecycle` report 모드가 담당 — oncall 재구현 X.)
+11. **메모리 store 전수 진단 (D-39)**: `python3 <agent-home>/tools/memory/mem.py doctor` 실행 — read-only 9항목(integrity·FTS 정합·schema 불변식·working 비대·stale pending·durable soft-ceiling·graveyard 정합·dump 신선도·워커 건강) 결정론 체크. exit 0(clean) 은 무보고, exit 1(WARN)/2(FAIL) 이면 `[WARN]`/`[FAIL]` 항목을 그대로 보고에 옮긴다 — **조치는 하지 않는다**: 삭제·consolidate·merge·graduate 권한은 세션끝 opus 큐레이터(D-18) 소유 불변이라, doctor 발견은 아침 논의 안건·큐레이터 입력으로만 흐른다 (D-25 read-only 진단+보고 계약). (`tools/memory/index-check.sh`(legacy 파일 인덱스)와 별개 — doctor 는 store(DB) 대상.)
 
 ## drill 승격 후보 태깅 (2026-06-11, P7 반자동화)
 
@@ -26,5 +27,5 @@
 ## 보고
 
 - `/home/nas/user/Uihyeop/notes/oncall/<오늘 날짜 YYYY-MM-DD>.md` 에 간결한 한국어 보고 작성 — 항목당 1~2줄, repo 경로·브랜치 명시, 권장 조치 한 줄.
-- **발견 0 이어도 파일은 반드시 남긴다** — `# 야간 정찰 — <날짜>\n이상 없음 (점검 10항목 전부 통과)` 한 줄. 파일 자체가 heartbeat — 아침에 파일이 없으면 "이상 없음"이 아니라 **루프 고장**(cron·인증·timeout)을 뜻한다.
+- **발견 0 이어도 파일은 반드시 남긴다** — `# 야간 정찰 — <날짜>\n이상 없음 (점검 11항목 전부 통과)` 한 줄. 파일 자체가 heartbeat — 아침에 파일이 없으면 "이상 없음"이 아니라 **루프 고장**(cron·인증·timeout)을 뜻한다.
 - 보고는 사실만 — 추정 수치·과장 금지 (빈칸 > 잘못 채우기).

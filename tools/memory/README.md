@@ -30,7 +30,9 @@ Hermes 메모리 벤치마킹의 store/write 층. spec: `<artifact-root>/spec/pr
 | `project [--cwd]` | 보조 projection 생성 (세션 주입은 `inject` 담당) |
 | `migrate [--apply]` | auto-memory(전 cwd) + post-it + **구 markdown SoT 파일** → DB (멱등, default dry-run) |
 | `lifecycle [--apply]` | working 만료 + durable dup-flag. pending handoff/thread는 `--apply`에서도 보존 |
-| `stats` | store 통계 (`records` 테이블 GROUP BY) |
+| `stats` | store 통계 (`records` 테이블 GROUP BY, 스냅샷) |
+| `log [--limit 20] [--action] [--tier] [--actor] [--json]` | **(v15 D-38)** write-events 저널 tail 조회 — `stats`(스냅샷)를 보완하는 흐름(시간축). fleet·oncall·사용자 공용 표면 |
+| `doctor` | **(v15 D-39, read-only)** store 전수 진단 9항목(integrity·FTS 정합·schema 불변식·working 비대·stale pending·durable soft-ceiling·graveyard 정합·dump 신선도·워커 건강) + exit 0(clean)/1(WARN)/2(FAIL). 수정 0 — 조치는 D-18 세션끝 curator 소유 불변 |
 | `inject [--hook]` | SessionStart 주입 — DB(durable+working+profile)→context 직접 주입. 기본 2000자·15개 bullet hard cap 후 초과분은 recall 안내로 대체. `--hook` 시 `additionalContext` JSON 출력 |
 | `sync` | SessionEnd 회수 — `projects/<cwd>/memory/` auto-memory → DB durable 흡수 + FTS5 재구축 + `dump.jsonl` 재export |
 | `distill <sid> [--advance]` | 세션 jsonl 의 공유 marker 이후 정규화 텍스트 출력(+`--advance` 로 marker 전진). SessionEnd distiller(D-12)·in-session consolidation(D-13) 공용 헬퍼 |
@@ -52,7 +54,15 @@ Hermes 메모리 벤치마킹의 store/write 층. spec: `<artifact-root>/spec/pr
 - telemetry 기본 위치는 `$XDG_STATE_HOME/agent-memory/recall-events.jsonl`(미설정 시 `~/.local/state/agent-memory/`)이며 memory git mirror 밖의 local state다. `MEM_RECALL_EVENTS`로 테스트/운영 경로를 바꿀 수 있다.
 - SessionStart 기본 2000자·15 bullet cap은 그대로 유지한다. retrieval 배포 뒤 `probe→qualified→injected→explicit-recall/show→consume` 퍼널로 단순 노출과 실제 재사용률을 분리 관찰한 뒤 별도 조정한다.
 
-env override (테스트용): `MEM_STORE` · `MEM_PROJECTS` · `MEM_PROFILE` · `MEM_INJECT_MAX_CHARS` · `MEM_INJECT_MAX_BULLETS` · `MEM_INJECT_MAX_WORKING` · `MEM_INJECT_MAX_DURABLE` · `MEM_INJECT_CLEANUP_LINES` · `MEM_INJECT_SNIPPET_CHARS` · `MEM_DISTILL` · `MEM_DISTILL_ENABLE` · `MEM_DISTILL_WORKER` · `MEM_DISTILL_MODEL`.
+env override (테스트용): `MEM_STORE` · `MEM_PROJECTS` · `MEM_PROFILE` · `MEM_INJECT_MAX_CHARS` · `MEM_INJECT_MAX_BULLETS` · `MEM_INJECT_MAX_WORKING` · `MEM_INJECT_MAX_DURABLE` · `MEM_INJECT_CLEANUP_LINES` · `MEM_INJECT_SNIPPET_CHARS` · `MEM_DISTILL` · `MEM_DISTILL_ENABLE` · `MEM_DISTILL_WORKER` · `MEM_DISTILL_MODEL` · `MEM_WRITE_EVENTS` · `MEM_ACTOR` · `MEM_SID`.
+
+## Cluster J 불변식 (v15 D-37/D-38/D-39)
+- 전 변이 경로(add/note/consume/reinforce/merge/prune/graduate/reattribute/delete/restore/lifecycle-expire)가 `write-events.jsonl`에 1줄 append — 필드 `ts/action/id/tier/scope/type/actor/sid/snippet(≤80자)`. RECALL_EVENTS와 동일 rotation 패턴(256KB/최근 500줄)의 쓰기측 대칭. dump.jsonl·agent-memory 동기 대상 아님(로컬 관측 데이터).
+- 저널 경로 우선순위: `MEM_WRITE_EVENTS` 명시 > **`MEM_STORE` override 시 그 store 옆**(`<store>/write-events.jsonl` — fixture DB 를 쓰는 모든 테스트가 실 XDG 저널을 오염시키지 않는 격리 계약, 2026-07-11 실유출 회귀 고정) > `$XDG_STATE_HOME/agent-memory/write-events.jsonl` 기본.
+- **fail-open (graveyard와 반대 방향, 의도적)**: 저널 append 실패는 절대 mutation을 막지 않는다. graveyard(파괴 복구 안전망)=fail-closed 유지, 저널(관측 telemetry)=fail-open — 이중화가 아니라 역할이 다른 두 안전판.
+- actor 결정론: `MEM_ACTOR`(명시 override) → `MEM_DISTILL=1`(distiller) → 각 함수 호출 맥락 default(예: `restore`→restore, `lifecycle --apply`→lifecycle) → 최종 fallback `manual`. `apply-distill-actions.py`는 `--mode curate` 실행 시 자식 프로세스 env에 `MEM_ACTOR=curator`를 세팅해 D-18 큐레이터 실행분을 세션 distiller(`MEM_DISTILL=1`)와 구분한다.
+- `mem log`는 `stats`(스냅샷)를 보완하는 흐름(시간축) 조회이지 대체가 아니다.
+- `mem doctor`는 read-only 진단 전용 — 발견을 스스로 고치지 않는다. 삭제·consolidate·merge·graduate 실행 권한은 세션끝 opus 큐레이터(D-18)에 있고, doctor 발견은 그 입력·oncall 안건으로만 흐른다 (D-25).
 - `MEM_STORE` → `memory.db` 경로와 `dump.jsonl` 경로 모두 이 디렉터리 하위로 파생됨.
 - `MEM_PROFILE` → `export --target profile` 의 출력 디렉터리. 테스트 시 `/tmp/...` 로 지정해 실 `user_profile/` 보호.
 - `MEM_INJECT_MAX_CHARS` / `MEM_INJECT_MAX_BULLETS` → SessionStart memory injection hard cap when an adapter enables automatic or opt-in injection. 기본 2000자·15 bullet. 초과분은 본문 주입 대신 생략 요약과 `mem recall` 안내로 전환해 초기 컨텍스트를 보호.

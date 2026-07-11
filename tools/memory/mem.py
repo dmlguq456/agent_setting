@@ -63,6 +63,25 @@ RECALL_EVENTS = Path(os.environ.get(
     Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
     / "agent-memory" / "recall-events.jsonl",
 ))
+# D-37 (v15 Cluster J): 쓰기측 이벤트 저널 — D-34 RECALL_EVENTS 와 위치·rotation 패턴 대칭
+# (읽기/쓰기 telemetry 대칭). dump.jsonl·agent-memory 동기 대상 아님(로컬 관측 데이터).
+# 경로 우선순위: MEM_WRITE_EVENTS 명시 > MEM_STORE override 시 그 store 옆(fixture DB 를 쓰는
+# 모든 테스트가 실 저널을 오염시키지 않게 — 저널은 store 의 관측 사이드카) > XDG state 기본.
+if "MEM_WRITE_EVENTS" in os.environ:
+    WRITE_EVENTS = Path(os.environ["MEM_WRITE_EVENTS"])
+elif "MEM_STORE" in os.environ:
+    WRITE_EVENTS = STORE / "write-events.jsonl"
+else:
+    WRITE_EVENTS = (
+        Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
+        / "agent-memory" / "write-events.jsonl"
+    )
+WRITE_ACTORS = ("manual", "distiller", "curator", "lifecycle", "sync", "restore")
+# D-39 doctor 임계값 — durable soft-ceiling 은 inject_cleanup_candidates() 기본값(80)과 동일 숫자
+# 재사용(중복 상수 회피는 안 됨 — 서로 다른 함수 시그니처 기본값이라 여기서 한 번 더 명시).
+DOCTOR_DURABLE_SOFT_CEILING = 80
+DOCTOR_WORKING_BLOAT_CEILING = 150
+DOCTOR_WORKER_STALE_DAYS = 7
 
 
 def artifact_root(cwd: Path) -> Path:
@@ -702,7 +721,7 @@ def find_dup(tier, scope, body, cwd_origin, con=None):
 
 
 def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=None,
-                 source=None, quiet=False, requires_consume=False):
+                 source=None, quiet=False, requires_consume=False, journal_action=None):
     """DB write 프리미티브. one write = one connection = one transaction."""
     assert tier in TIERS and scope in SCOPES
     ok, why = quality_ok(body)
@@ -752,6 +771,9 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             con.commit()
             if not quiet:
                 print(f"[upsert] {tier}/{scope} source={source} → {existing}")
+            if journal_action:
+                _append_write_event(journal_action, existing, tier=tier, scope=scope,
+                                     rtype=rtype, snippet=_first_line(body))
             return existing
         dup = find_dup(tier, scope, body, cwd_origin, con=con)
         if dup:
@@ -777,6 +799,9 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             con.commit()
             if not quiet:
                 print(f"[reinforce] 기존 레코드 재출현 → {dup} strength++")
+            if journal_action:
+                _append_write_event(journal_action, dup, tier=tier, scope=scope,
+                                     rtype=rtype, snippet=_first_line(body))
             return dup
         base = slugify(f"{rtype} {body}")
         # FIX 1: tier/scope/cwd_origin 을 해시 seed 에 포함해 namespace 충돌 방지
@@ -812,6 +837,9 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
         if not quiet:
             fl = f"  ({'·'.join(flags)})" if flags else ""
             print(f"[write] {tier}/{scope}/{rtype} → {sid}{fl}")
+        if journal_action:
+            _append_write_event(journal_action, sid, tier=tier, scope=scope,
+                                 rtype=rtype, snippet=_first_line(body))
         return sid
     finally:
         con.close()
@@ -996,6 +1024,50 @@ def _append_recall_event(event):
             lines = RECALL_EVENTS.read_text(encoding="utf-8").splitlines()[-500:]
             RECALL_EVENTS.write_text("\n".join(lines) + "\n", encoding="utf-8")
         with RECALL_EVENTS.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(event, sort_keys=True, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def _write_actor(default="manual"):
+    """D-37 actor 결정론 판별 — env(MEM_DISTILL·MEM_ACTOR) 우선, 판별 불가면 호출자 default.
+    MEM_DISTILL=1 은 세션 distillation 재귀가드로 이미 쓰이는 env(hooks/mem-distill-dispatch.sh) —
+    그 경로로 들어온 write 는 actor=distiller 로 결정론 귀속. apply-distill-actions.py(D-18 큐레이터
+    executor) 는 MEM_ACTOR=curator 로 자식 프로세스를 표시한다. 둘 다 없으면 각 mutation 함수가
+    자신의 통상 실행 맥락(default 인자)으로 귀속하고, 그마저 불명확하면 manual."""
+    explicit = os.environ.get("MEM_ACTOR")
+    if explicit in WRITE_ACTORS:
+        return explicit
+    if os.environ.get("MEM_DISTILL"):
+        return "distiller"
+    return default if default in WRITE_ACTORS else "manual"
+
+
+def _append_write_event(action, rid, tier=None, scope=None, rtype=None, actor=None,
+                         snippet=None):
+    """D-37 쓰기 이벤트 저널 append — 공용 훅, 전 변이 경로가 호출.
+    fail-open (graveyard 와 반대 방향, 의도적): append 실패는 절대 쓰기를 막지 않는다 — telemetry
+    실패가 데이터 mutation 을 되돌리거나 막으면 안 됨. RECALL_EVENTS 와 동일 위치·rotation 패턴
+    (256KB/최근 500줄, XDG_STATE_HOME) — 읽기/쓰기 telemetry 대칭."""
+    try:
+        snip = (snippet or "")
+        snip = re.sub(r"[\x00-\x1f\x7f]", " ", snip).strip()[:80]
+        event = {
+            "ts": datetime.datetime.now().isoformat(timespec="seconds"),
+            "action": action,
+            "id": rid,
+            "tier": tier,
+            "scope": scope,
+            "type": rtype,
+            "actor": actor or _write_actor(),
+            "sid": os.environ.get("MEM_SID", ""),
+            "snippet": snip,
+        }
+        WRITE_EVENTS.parent.mkdir(parents=True, exist_ok=True)
+        if WRITE_EVENTS.exists() and WRITE_EVENTS.stat().st_size > 256 * 1024:
+            lines = WRITE_EVENTS.read_text(encoding="utf-8").splitlines()[-500:]
+            WRITE_EVENTS.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        with WRITE_EVENTS.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event, sort_keys=True, ensure_ascii=False) + "\n")
     except OSError:
         pass
@@ -2156,6 +2228,8 @@ def consume(rid):
             "event": "consume", "runtime": os.environ.get("MEM_RECALL_RUNTIME", "unknown"),
             "consumed_ids": [rid],
         })
+        _append_write_event("consume", rid, tier=meta.get("tier"), scope=meta.get("scope"),
+                             rtype=meta.get("type"))
         return True
     finally:
         con.close()
@@ -2175,6 +2249,7 @@ def lifecycle(apply=False):
 
         protected = []
         deleted = 0
+        expired_ok = []
         for meta, body in expired_rows:
             if meta.get("delivery_state") == "pending":
                 protected.append(meta["id"])
@@ -2189,10 +2264,16 @@ def lifecycle(apply=False):
                         continue
                     _delete_rows(con, meta["id"])
                     deleted += 1
+                    expired_ok.append((meta, body))
                 except Exception as e:
                     sys.stderr.write(f"[lifecycle] 삭제 실패(계속): {meta['id']}: {e}\n")
         if apply:
             con.commit()
+            actor = _write_actor(default="lifecycle")
+            for meta, body in expired_ok:
+                _append_write_event("lifecycle-expire", meta["id"], tier=meta.get("tier"),
+                                     scope=meta.get("scope"), rtype=meta.get("type"),
+                                     actor=actor, snippet=_first_line(body))
 
         for ids in dups:
             print(f"  [dup-flag] {ids}  (consolidate 후보 — 자동삭제 X)")
@@ -2227,7 +2308,9 @@ def delete_record(rid, quiet=False, force=False):
     con = get_con()
     try:
         con.execute("BEGIN IMMEDIATE")
-        row = con.execute("SELECT id, delivery_state FROM records WHERE id=?", (rid,)).fetchone()
+        row = con.execute(
+            "SELECT id, delivery_state, tier, scope, type FROM records WHERE id=?", (rid,)
+        ).fetchone()
         if not row:
             if not quiet:
                 print(f"[delete] id 없음: {rid}")
@@ -2244,6 +2327,7 @@ def delete_record(rid, quiet=False, force=False):
         con.commit()
         if not quiet:
             print(f"[delete] {rid}")
+        _append_write_event("delete", rid, tier=row[2], scope=row[3], rtype=row[4])
         return True
     finally:
         con.close()
@@ -2331,6 +2415,9 @@ def restore(rid):
             con.execute("INSERT INTO records_trig(id, body) VALUES(?,?)", (rid, body))
         con.commit()
         print(f"[restore] {rid} ({meta['delivery_state']})")
+        _append_write_event("restore", rid, tier=meta.get("tier"), scope=meta.get("scope"),
+                             rtype=meta.get("type"), actor=_write_actor(default="restore"),
+                             snippet=_first_line(body))
         return True
     finally:
         con.close()
@@ -2362,12 +2449,14 @@ def reinforce(rid):
         if not ok:
             print(f"[reinforce] 거부 ({reason}): {rid}")
             return False
+        row = con.execute("SELECT tier, scope, type FROM records WHERE id=?", (rid,)).fetchone()
         con.execute(
             "UPDATE records SET strength=COALESCE(strength,1)+1, last_accessed=? WHERE id=?",
             (today(), rid))
         con.commit()
         n = con.execute("SELECT strength FROM records WHERE id=?", (rid,)).fetchone()[0]
         print(f"[reinforce] {rid} strength→{n}")
+        _append_write_event("reinforce", rid, tier=row[0], scope=row[1], rtype=row[2])
         return True
     finally:
         con.close()
@@ -2383,7 +2472,10 @@ def prune(rid):
         if not ok:
             print(f"[prune] 거부 ({reason}): {rid}")
             return False
-        state = con.execute("SELECT delivery_state FROM records WHERE id=?", (rid,)).fetchone()[0]
+        row = con.execute(
+            "SELECT delivery_state, tier, scope, type FROM records WHERE id=?", (rid,)
+        ).fetchone()
+        state = row[0]
         if state == "pending":
             print(f"[prune] 거부 (pending — consume 선행): {rid}")
             return False
@@ -2393,6 +2485,7 @@ def prune(rid):
         _delete_rows(con, rid)
         con.commit()                 # 단일 terminal commit (예외 시 미커밋→close 에서 롤백)
         print(f"[prune] {rid} (graveyarded)")
+        _append_write_event("prune", rid, tier=row[1], scope=row[2], rtype=row[3])
         return True
     finally:
         con.close()
@@ -2433,12 +2526,16 @@ def merge(canonical, ids):
             if not _graveyard_append(con, i, action="merge", canonical=canonical):
                 print(f"[merge] graveyard 실패 — 전체 merge 중단 (삭제 0): {i}")
                 return False
+        canon_row = con.execute(
+            "SELECT tier, scope, type FROM records WHERE id=?", (canonical,)).fetchone()
         con.execute("UPDATE records SET strength=?, last_accessed=? WHERE id=?",
                     (total, today(), canonical))
         for i in non_canonical:
             _delete_rows(con, i)
         con.commit()                 # 단일 terminal commit (원자성)
         print(f"[merge] {canonical} ← {non_canonical} strength→{total}")
+        _append_write_event("merge", canonical, tier=canon_row[0], scope=canon_row[1],
+                             rtype=canon_row[2], snippet=f"← {','.join(non_canonical)}")
         return True
     finally:
         con.close()
@@ -2461,6 +2558,8 @@ def graduate(rid, to="durable"):
             "updated=?, last_accessed=? WHERE id=?", (today(), today(), rid))
         con.commit()
         print(f"[graduate] {rid} working→durable")
+        rtype = con.execute("SELECT type FROM records WHERE id=?", (rid,)).fetchone()[0]
+        _append_write_event("graduate", rid, tier="durable", scope="project", rtype=rtype)
         return True
     finally:
         con.close()
@@ -2497,6 +2596,8 @@ def reattribute(rid):
         con.execute("UPDATE records SET cwd_origin=? WHERE id=?", (pkey, rid))
         con.commit()
         print(f"[reattribute] {rid} {cwd_origin}→{pkey}")
+        _append_write_event("reattribute", rid, scope=scope, rtype=rtype,
+                             snippet=f"{cwd_origin}→{pkey}")
         return True
     finally:
         con.close()
@@ -2742,6 +2843,254 @@ def orphans():
             print(f"  [orphan] {c}: {n} records")
             total += n
     print(f"  → orphan records: {total}")
+
+
+# ---------- D-38: mem log (write-events 저널 tail 1급 조회) ----------
+def _read_write_events():
+    """WRITE_EVENTS 를 append 순서(오래된→최신)로 읽어 dict 목록으로 반환. 손상 줄은 skip."""
+    if not WRITE_EVENTS.exists():
+        return []
+    out = []
+    try:
+        with WRITE_EVENTS.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    out.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        pass
+    return out
+
+
+def log(limit=20, action=None, tier=None, actor=None, json_output=False):
+    """D-38: 저널 tail 조회 — stats(스냅샷)와 달리 흐름(시간축)을 보완. fleet·oncall·사용자 공용."""
+    events = _read_write_events()
+    if action:
+        events = [e for e in events if e.get("action") == action]
+    if tier:
+        events = [e for e in events if e.get("tier") == tier]
+    if actor:
+        events = [e for e in events if e.get("actor") == actor]
+    limit = max(1, min(limit, 500))
+    events = events[-limit:]
+    if json_output:
+        print(json.dumps({"count": len(events), "events": events}, sort_keys=True,
+                          ensure_ascii=False))
+        return
+    print(f"# write log (최근 {len(events)}건)")
+    if not events:
+        print(f"  (기록 없음: {WRITE_EVENTS})")
+        return
+    for e in events:
+        snip = f"  {e['snippet']}" if e.get("snippet") else ""
+        print(f"  {e.get('ts','?')}  {e.get('action','?'):<16} {e.get('id','?'):<40} "
+              f"{e.get('tier') or '-'}/{e.get('scope') or '-'}/{e.get('type') or '-'}  "
+              f"actor={e.get('actor','?')}{snip}")
+
+
+# ---------- D-39: mem doctor (read-only 전수 진단) ----------
+def _doctor_check(results, name, status, message):
+    results.append((name, status, message))
+
+
+def doctor():
+    """D-39: read-only 전수 진단 9항목. 수정 0 — 조치 권한은 D-18 세션끝 curator 소유 불변.
+    출력: 항목별 OK/WARN/FAIL. 반환값: exit code (0 clean / 1 warn / 2 fail) — oncall·스크립트 소비."""
+    print("# doctor (read-only 전수 진단)")
+    results = []  # list of (name, status, message)
+
+    if not DB.exists():
+        print(f"  (DB 없음: {DB})")
+        return 2
+
+    con = get_con()
+    try:
+        # ① PRAGMA integrity_check
+        rows = con.execute("PRAGMA integrity_check").fetchall()
+        verdict = rows[0][0] if rows else "unknown"
+        if verdict == "ok":
+            _doctor_check(results, "integrity_check", "OK", "ok")
+        else:
+            _doctor_check(results, "integrity_check", "FAIL",
+                          "; ".join(r[0] for r in rows[:5]))
+
+        # ② records↔FTS 카운트 정합
+        rec_n = con.execute("SELECT COUNT(*) FROM records").fetchone()[0]
+        if _FTS_OK:
+            fts_n = con.execute("SELECT COUNT(*) FROM records_fts").fetchone()[0]
+            if fts_n == rec_n:
+                _doctor_check(results, "fts-parity", "OK", f"records={rec_n} fts={fts_n}")
+            else:
+                _doctor_check(results, "fts-parity", "FAIL",
+                              f"records={rec_n} fts={fts_n} (drift)")
+        else:
+            _doctor_check(results, "fts-parity", "WARN", "FTS5 미가용 — 확인 skip")
+
+        # ③ schema 불변식 (tier/scope/delivery_state enum, non-pending working expires 존재)
+        bad_tier = con.execute(
+            f"SELECT COUNT(*) FROM records WHERE tier NOT IN "
+            f"({','.join('?' for _ in TIERS)})", TIERS).fetchone()[0]
+        bad_scope = con.execute(
+            f"SELECT COUNT(*) FROM records WHERE scope NOT IN "
+            f"({','.join('?' for _ in SCOPES)})", SCOPES).fetchone()[0]
+        bad_delivery = con.execute(
+            f"SELECT COUNT(*) FROM records WHERE delivery_state NOT IN "
+            f"({','.join('?' for _ in DELIVERY_STATES)})", DELIVERY_STATES).fetchone()[0]
+        missing_expires = con.execute(
+            "SELECT COUNT(*) FROM records WHERE tier='working' "
+            "AND delivery_state!='pending' AND expires IS NULL").fetchone()[0]
+        invariant_bad = bad_tier + bad_scope + bad_delivery + missing_expires
+        if invariant_bad == 0:
+            _doctor_check(results, "schema-invariants", "OK", "ok")
+        else:
+            _doctor_check(results, "schema-invariants", "FAIL",
+                          f"bad_tier={bad_tier} bad_scope={bad_scope} "
+                          f"bad_delivery={bad_delivery} missing_expires={missing_expires}")
+
+        # ④ working 비대 (프로젝트별)
+        bloated = con.execute(
+            "SELECT cwd_origin, COUNT(*) c FROM records WHERE tier='working' "
+            "GROUP BY cwd_origin HAVING c > ?", (DOCTOR_WORKING_BLOAT_CEILING,)).fetchall()
+        if not bloated:
+            _doctor_check(results, "working-bloat", "OK",
+                          f"soft-ceiling {DOCTOR_WORKING_BLOAT_CEILING} 이하")
+        else:
+            _doctor_check(results, "working-bloat", "WARN",
+                          "; ".join(f"{c}={n}" for c, n in bloated))
+
+        # ⑤ stale pending (pending WORKING_TTL_DAYS일+ 미소비)
+        stale_deadline = (datetime.date.today() -
+                          datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
+        stale_pending = con.execute(
+            "SELECT id FROM records WHERE delivery_state='pending' AND created<=?",
+            (stale_deadline,)).fetchall()
+        if not stale_pending:
+            _doctor_check(results, "stale-pending", "OK", "0건")
+        else:
+            _doctor_check(results, "stale-pending", "WARN",
+                          f"{len(stale_pending)}건: " +
+                          ",".join(r[0] for r in stale_pending[:10]))
+
+        # ⑥ durable soft-ceiling 초과 (프로젝트별)
+        over = con.execute(
+            "SELECT cwd_origin, COUNT(*) c FROM records WHERE tier='durable' AND scope='project' "
+            "GROUP BY cwd_origin HAVING c > ?", (DOCTOR_DURABLE_SOFT_CEILING,)).fetchall()
+        if not over:
+            _doctor_check(results, "durable-ceiling", "OK",
+                          f"soft-ceiling {DOCTOR_DURABLE_SOFT_CEILING} 이하")
+        else:
+            _doctor_check(results, "durable-ceiling", "WARN",
+                          "; ".join(f"{c}={n}" for c, n in over))
+
+        # ⑦ graveyard↔DB 정합 (graveyard 삭제 id 가 DB 에 생존 — restore 정당성 확인 필요 신호)
+        alive_ids = {r[0] for r in con.execute("SELECT id FROM records").fetchall()}
+    finally:
+        con.close()
+
+    grave_ids = set()
+    if GRAVEYARD.exists():
+        try:
+            with GRAVEYARD.open(encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if rec.get("id"):
+                        grave_ids.add(rec["id"])
+        except OSError:
+            pass
+    revived = sorted(grave_ids & alive_ids)
+    if not revived:
+        _doctor_check(results, "graveyard-parity", "OK", "0건")
+    else:
+        _doctor_check(results, "graveyard-parity", "WARN",
+                      f"{len(revived)}건 (mem restore 정당성 확인): " + ",".join(revived[:10]))
+
+    # ⑧ dump.jsonl 신선도 (마지막 sync 반영 vs DB max(updated))
+    con = get_con()
+    try:
+        db_max = con.execute("SELECT MAX(updated) FROM records").fetchone()[0]
+    finally:
+        con.close()
+    if not DUMP.exists():
+        if db_max:
+            _doctor_check(results, "dump-freshness", "WARN", "dump.jsonl 없음 — sync 미실행")
+        else:
+            _doctor_check(results, "dump-freshness", "OK", "레코드 0건")
+    else:
+        dump_max = None
+        try:
+            with DUMP.open(encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    u = rec.get("updated")
+                    if u and (dump_max is None or u > dump_max):
+                        dump_max = u
+        except OSError:
+            pass
+        if db_max and (dump_max is None or db_max > dump_max):
+            _doctor_check(results, "dump-freshness", "WARN",
+                          f"DB max(updated)={db_max} > dump max(updated)={dump_max} — sync 필요")
+        else:
+            _doctor_check(results, "dump-freshness", "OK", f"dump max(updated)={dump_max}")
+
+    # ⑨ 워커 건강 (프로젝트별 마지막 distill/curate 시각 — 저널 기반)
+    events = _read_write_events()
+    con = get_con()
+    try:
+        cwd_by_id = {r[0]: r[1] for r in con.execute(
+            "SELECT id, cwd_origin FROM records WHERE scope='project'").fetchall()}
+        active_projects = {r[0] for r in con.execute(
+            "SELECT DISTINCT cwd_origin FROM records WHERE tier='working' AND scope='project' "
+            "AND last_accessed IS NOT NULL AND last_accessed>=?",
+            ((datetime.date.today() - datetime.timedelta(days=DOCTOR_WORKER_STALE_DAYS))
+             .isoformat(),)).fetchall()}
+    finally:
+        con.close()
+    last_worker_ts = {}
+    for e in events:
+        if e.get("actor") not in ("distiller", "curator"):
+            continue
+        cwd = cwd_by_id.get(e.get("id"))
+        if not cwd:
+            continue
+        ts = e.get("ts") or ""
+        if ts and (cwd not in last_worker_ts or ts > last_worker_ts[cwd]):
+            last_worker_ts[cwd] = ts
+    stale_deadline_ts = (datetime.datetime.now() -
+                        datetime.timedelta(days=DOCTOR_WORKER_STALE_DAYS)).isoformat()
+    silent = sorted(
+        p for p in active_projects
+        if p not in last_worker_ts or last_worker_ts[p] < stale_deadline_ts)
+    if not silent:
+        _doctor_check(results, "worker-health", "OK",
+                      f"활성 프로젝트 {len(active_projects)}건 — 무소식 없음")
+    else:
+        _doctor_check(results, "worker-health", "WARN",
+                      f"{len(silent)}건 silent-death 후보: " + ",".join(silent[:10]))
+
+    max_level = 0
+    for name, status, message in results:
+        level = {"OK": 0, "WARN": 1, "FAIL": 2}.get(status, 2)
+        max_level = max(max_level, level)
+        print(f"  [{status}] {name}: {message}")
+    print(f"  → {'clean' if max_level == 0 else 'WARN' if max_level == 1 else 'FAIL'}"
+          f" ({len(results)}항목)")
+    return max_level
 
 
 def register_postit(path):
@@ -3204,6 +3553,15 @@ def main():
 
     sub.add_parser("orphans", help="해석 안 되는 cwd_origin 조회 (read-only)")
 
+    lg = sub.add_parser("log", help="write-events 저널 tail 조회 (D-38, 최근 활동)")
+    lg.add_argument("--limit", type=int, default=20)
+    lg.add_argument("--action", default=None)
+    lg.add_argument("--tier", choices=TIERS, default=None)
+    lg.add_argument("--actor", choices=WRITE_ACTORS, default=None)
+    lg.add_argument("--json", dest="json_output", action="store_true")
+
+    sub.add_parser("doctor", help="read-only 전수 진단 (D-39, 수정 0 — exit 0/1/2)")
+
     args = ap.parse_args()
 
     if args.cmd == "add":
@@ -3214,10 +3572,11 @@ def main():
             links=[l for l in args.links.split(",") if l],
             source=args.source,
             requires_consume=args.requires_consume,
+            journal_action="add",
         )
     elif args.cmd == "note":
         write_record("working", "project", args.type, args.body,
-                     requires_consume=args.requires_consume)
+                     requires_consume=args.requires_consume, journal_action="note")
     elif args.cmd == "recall":
         recall(args.query, tier=args.tier, scope=args.scope,
                cwd=not args.all, sessions=args.sessions, limit=args.limit,
@@ -3279,6 +3638,11 @@ def main():
         distill(args.sid, advance=args.advance, source_name=args.source)
     elif args.cmd == "orphans":
         orphans()
+    elif args.cmd == "log":
+        log(limit=args.limit, action=args.action, tier=args.tier, actor=args.actor,
+            json_output=args.json_output)
+    elif args.cmd == "doctor":
+        sys.exit(doctor())
 
 
 if __name__ == "__main__":
