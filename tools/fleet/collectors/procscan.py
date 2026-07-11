@@ -160,6 +160,8 @@ def _scan_disk(harness_filter=None):
         if not _pid_alive(pid):
             continue
         cwd = (d.get("cwd") or "").replace("\\", "/")
+        # nt 경로는 /proc/<pid>/environ 이 없어 F-18b mem_worker 마커 판독 불가 —
+        # mem_worker 를 넘기지 않아 default False 유지 (무해 degrade).
         sessions.append(Session(
             harness="claude",
             pid=pid,
@@ -212,7 +214,11 @@ def scan(harness_filter=None):
         app_server = comm == "codex" and "app-server" in args
         # headless dispatch child marker (claude only) — env CLAUDE_CODE_CHILD_SESSION=1.
         # These are surfaced as dispatch rows under their parent, not as top-level sessions.
-        is_child = comm == "claude" and read_environ(pid).get("CLAUDE_CODE_CHILD_SESSION") == "1"
+        env = read_environ(pid)                       # 1회 read 재사용
+        is_child = comm == "claude" and env.get("CLAUDE_CODE_CHILD_SESSION") == "1"
+        # F-18b: memory distiller/curator(MEM_DISTILL) 또는 F-17 title refresher(FLEET_TITLE_REFRESH)
+        # 세션 — 부모 cwd/env 상속으로 오귀속(drill 그룹·부모 자식 row)되는 것을 막기 위한 태깅.
+        mem_worker = env.get("MEM_DISTILL") == "1" or env.get("FLEET_TITLE_REFRESH") == "1"
         detached = _is_detached(pid_tty.get(pid), app_server, det_ttys)
         sessions.append(Session(
             harness=comm,
@@ -224,5 +230,6 @@ def scan(harness_filter=None):
             detached=detached,
             elapsed_min=etime_to_min(etime),
             slug=os.path.basename(cwd.rstrip("/")) if cwd else None,
+            mem_worker=mem_worker,
         ))
     return sessions

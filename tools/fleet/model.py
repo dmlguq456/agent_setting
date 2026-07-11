@@ -145,6 +145,7 @@ class Session:
     liveness: str = "unknown"
     gate: Optional[str] = None          # spec-gate override (tracked/untracked) — demo fixtures; None = compute from cwd
     branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
+    mem_worker: bool = False   # F-18b: memory distiller/curator(MEM_DISTILL) 또는 F-17 refresher(FLEET_TITLE_REFRESH) 세션 — 기본 표시 제외, 🧠N 요약으로만
 
     def to_dict(self):
         return asdict(self)
