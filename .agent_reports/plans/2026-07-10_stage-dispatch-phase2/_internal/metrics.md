@@ -33,3 +33,26 @@
 - code-plan gate: status=planned + 자체리뷰 통과 → PASS(§8 마이크로-스테이지 plan-check inline).
 - code-test gate: Level 3, 신규 회귀 2건 → **retry 분기**(code-execute-fix 분사).
 - fix 후 독립 재검증: `bash tools/check-adaptation-boundary.sh` → PASS(FAIL 0), `build-manifest.py --check` up-to-date → 신규 회귀 0, 잔존 baseline FAIL 10건뿐 → 파이프 통과.
+
+## 후속 정비 — drill 케이스 upkeep (2026-07-11, worktree drill-case-upkeep)
+
+> 후속 사이클: Phase 2 가 handoff 한 `drill_case_stage_dispatch/` 케이스 정의를 (1) assert.sh POSIX 정합 (2) SD-17 separability 기록 검증 추가로 정비. depth-1 capability-owner(autopilot-code --mode dev --intensity standard, parent=main).
+
+### SD-17 separability 판정 (본 upkeep 자기적용 — 기록 의무 이행, §8.7)
+- **판정: 비분리(non-separable) → inline 처리**. 근거: 편집 표면이 단일 파일(assert.sh) 안 HARD/SOFT 블록의 **공유 semantic anchor·순차 boundary 결합**(POSIX 수정·신규 HARD 4·헤더 주석이 같은 구조를 순차로 건드림) + fixture/README 정합이 assert 변경에 종속. 스테이지 산출물 계약이 완결적이지도, 편집이 파일-분리되지도 않음 → separable 요건 미충족.
+- **따라서 depth-2 스테이지 분사 없이 inline**(§8.7 비분리 inline 허용). 분리 가능한 독립 부분 없음(단일 파일 중심) → in-session 병렬 워커도 불요. 자기수정 예외(SD-11b(c)) 아님 — 분사 launch 경로가 아니라 drill 케이스 산출물 편집.
+- 이 문단이 SD-17 "기록 없는 inline = 위반" 을 막는 감사 기록. (마침 본 upkeep 이 추가한 assert HARD 4 가 검사하는 바로 그 항목 — 자기 dogfooding.)
+
+### 스테이지 wall-clock·분사 방식 (소규모 표본 — Phase 2·3 대비)
+| 단계 | 방식 | 대략 규모 | 비고 |
+|---|---|---|---|
+| 진입·SoT Read(prd §8.5.5/§8.7)·타깃 4파일 Read | inline | 6 tool call | 분사 없음 |
+| assert.sh 편집(shebang 주석·HARD3 POSIX·HARD4 SD-17) + fixture/README 정합 | inline | 4 Edit | 단일 세션 |
+| 검증(`sh -n`×3 + mock fixture 양성 3·음성 2 = 5케이스 경계) | inline | 2 Bash | 아래 결과 |
+- **분사 방식**: 전 구간 inline(depth-1 워커 단일 세션, depth-2 스테이지 분사 0) — 비분리 판정의 귀결. 소규모(단일 파일 중심·3 Edit급) + 경계-결합이라 분사 오버헤드가 순손해였을 표본 = SD-OPEN-1 의 "질적 축(separability)이 크기 축과 함께 inline 을 정당화" 사례.
+- **프로필 사용**: 없음 — headless worker 로 full bootstrap 진입(`--profile` 미배선). Phase 2 와 동일 baseline.
+- **SD-OPEN-1 표본 대비**: Phase 1 pilot(plan 218s…) / Phase 2(plan ~974s…)은 _분사된_ 대규모 스테이지. 본 upkeep 은 _inline 소규모_ 반대극 표본 — 분사 임계 아래 구간의 데이터점. 확정은 여전히 보류(누적만).
+
+### 검증 결과
+- `sh -n` 게이트: assert.sh·fixture.sh·config **3파일 전부 OK**(dash). 기존 실패는 assert.sh:48 프로세스 치환(`done < <(...)`) 1건 — command-substitution 순회로 대체.
+- assert.sh mock-fixture 구동(경계 5케이스, AGENT_HOME 격리 registry): A 분사(depth-2 execute row)→exit0 / B inline+separability 기록→exit0 OK(soft) / C inline+metrics 무-separability→exit1 FAIL / D inline+metrics 부재→exit1 FAIL / E turn-cap(산출물 무)→exit0 비트리거. **양성·음성 모두 기대 일치**.
