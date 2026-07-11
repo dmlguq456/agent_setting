@@ -36,6 +36,7 @@
 `/autopilot-code --mode dev --intensity standard "fleet UI 개선 — PRD v2 §4.5·§4.6"` (worktree, conductor 분사 — 파이프 자체가 SD-F1~F3 라이브 검증 fixture). 순서 = PRD v2 §Next 1~4.
 
 ## Minor-log
+- 2026-07-11 (v2 minor #5): §4.6 에 **F-19 (메모리 관측 패널)** 추가 — 사용자 확정("fleet에 memory 기능 추가", 방향 논의 후 추천안 승인). 소스 = Unified Memory System PRD v15 Cluster J write-events.jsonl(D-37)+graveyard tail, `collectors/memory.py` 신설(read-only·tolerant·additive), 🧠 요약행+`a` 토글 상세+alert 편입(ceiling·distill 무소식). F-18b(워커 태깅)와 상보 — 워커(프로세스)와 효과(이벤트). 구현 = Cluster J 저널 사이클과 병렬 가능(표면 비겹침, 저널 부재 시 graveyard-only degrade). ⚠️ **minor 누적 5 도달 — 컨벤션상 `/audit` 점검 권장 시점** (다음 major 때 v3 로 minor 5건 흡수 고려).
 - 2026-07-10 (v2 minor #1): §4.6 에 **F-14 (세션 표시명 = 하네스 세션 제목)** 추가 — 사용자 요청("fleet 세션명만이라도 요약된 것으로"). 소스 실측(claude `ai-title` transcript 라인·opencode `session.title`) + 공식 문서 확인(진행형 auto-retitle 하네스 미지원 → fleet 표시층 담당). 구현 = fleet-ui-v2 수확 후 후속 사이클 (render/model 파일 겹침 → 큐잉).
 - 2026-07-11 (v2 minor #4): §4.6 에 **F-18 (loop·drill·mem-워커 귀속 정밀화)** 추가 — 사용자 점검 요청 + drill 실발사 실측 2종(runner 이중 표시 dedup 갭 / mem distiller·curator·refresher 워커가 부모 cwd·env 상속으로 세션 자식·drill 그룹 오귀속). environ 마커(MEM_DISTILL·FLEET_TITLE_REFRESH) 태깅 + case명·cwd 상관 dedup. 구현 = fleet-f18 사이클.
 - 2026-07-10 (v2 minor #3): §4.6 에 **F-17 (라이브 제목 refresher — sidecar + no-tools haiku 워커)** 추가, F-16 영어 실현을 F-17 1차로 재지정 — 사용자 승인("haiku 같은 거 써서 agent로… 알아서"). transcript 직접 쓰기는 위험 판정(라이브 원본·내부 포맷·zero-injection 위반) → fleet 소유 sidecar + statusline debounce 트리거 + D-14 no-tools 패턴. 구현 = F-15 수확 후 사이클.

@@ -6,7 +6,6 @@
 > · **v12 2026-07-03** (Cluster G — recall-first 반사: 창작·스타일·형식 결정 전 능동 recall, 심층 memory-scout 위임, core-first adapter guard 와 결합)
 > · **v13 2026-07-04** (Cluster H — memory 도메인 adapter-parity 불변식: session-end distill 2-tier·MEM_DUMP_PUSH·portable distill dispatcher 계약. 근거 = codex-adapter-parity 감사 P-10·P-12·P-13·P-25·P-36)
 > · **v14 2026-07-10** (Cluster I — retrieval usability: 전문 조회·고신뢰 자동 회상·미소비 handoff 보호·회상 관측성. 근거 = Claude Code/Codex 동시 진단 + 당일 handoff merge 실사고)
-> · **v15 2026-07-11** (Cluster J — 쓰기 관측성·전수 진단: 변이 이벤트 저널 + `mem log` + `mem doctor`. 계기 = fleet 메모리 가시화[agent-fleet-dashboard F-19]의 전제 + 읽기/쓰기 telemetry 비대칭 실측)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -273,40 +272,15 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - 현 top-K/문자 cap 자체는 이번 단계에서 확대하지 않는다. 병목은 cap보다 생략분에 접근하는 recall 경로다. D-33~35 배포 뒤 telemetry로 `probe→qualified→injected→explicit show/consume` 퍼널과 omitted memory 재사용률을 관찰한 뒤 cap을 별도 결정한다.
 - Codex SessionStart memory inject opt-in과 adapter별 lifecycle 차이는 유지하되, prompt recall 정책·전문 조회·pending 보호는 runtime에 무관한 공유 계약이다.
 
-## 5.12 Cluster J — 쓰기 관측성 + 전수 진단 (v15, 사용자 확정 2026-07-11)
-
-> 계기: fleet 메모리 가시화(agent-fleet-dashboard **F-19**) 설계 중 실측 — 읽기측 telemetry(D-34 recall-events.jsonl)는 있는데 **쓰기측은 삭제만 graveyard 에 남고 add/note/consume/reinforce/merge/graduate 는 per-event 흔적 0** (간접 이력 = dump.jsonl git diff 뿐). `mem` 에 `log`/`recent` 류 명령 없음, `stats` 는 시간축 부재. "최근 무엇이 기억되고 무엇이 지워졌나"의 1급 경로와 store 전수 건강 진단이 둘 다 부재. §0.5 결정론-first 정합 — 이벤트 기록·진단 전부 코드, LLM 판단 0.
-
-### 5.12.1 D-37 — 쓰기 이벤트 저널 (write-side event telemetry)
-- mem.py 의 **모든 변이 경로**(add/note/consume/reinforce/merge/prune/graduate/reattribute/delete/restore/lifecycle-expire)가 write-events.jsonl 에 1줄 append — 위치·패턴 = D-34 recall-events 와 대칭(`$XDG_STATE_HOME/agent-memory/`, bounded rotation 256KB/최근 500줄, raw 대화·전문 비저장).
-- 레코드: `ts / action / id / tier / scope / type / actor / sid / snippet(≤80자)`. `actor ∈ {manual, distiller, curator, lifecycle, sync, restore}` — apply-distill-actions·hook 경유는 env(`MEM_DISTILL`·mode)로 결정론 판별, 판별 불가면 `manual`.
-- **fail-open (graveyard 와 반대 방향, 의도적)**: 저널 append 실패는 쓰기를 막지 않는다 — graveyard(파괴 복구 안전망)=fail-closed 유지, 저널(관측 telemetry)=fail-open. 이중화 아님: 파괴 이벤트는 양쪽에 남되 역할이 다름(복구 vs 관측).
-- dump.jsonl·agent-memory 동기 대상 아님(로컬 관측 데이터).
-
-### 5.12.2 D-38 — `mem log` (최근 활동 1급 조회)
-- `mem log [--limit N] [--action <a>] [--tier <t>] [--actor <a>] [--json]` — 저널 tail 을 사람용(1줄/이벤트)·기계용(`--json`)으로 출력, 기본 20건. fleet·oncall·사용자 공용 표면.
-- `stats`(스냅샷 카운트)는 불변 — log 는 흐름(시간축)을 보완.
-
-### 5.12.3 D-39 — `mem doctor` (read-only 전수 진단) + oncall 편입
-- 서브커맨드 1개, 전 항목 결정론 체크·read-only·수정 0: ① `PRAGMA integrity_check` ② records↔FTS 카운트 정합 ③ schema 불변식(tier/delivery_state enum·working 의 expires 존재) ④ working 비대 ⑤ stale pending(pending 21일+ 미소비) ⑥ durable soft-ceiling 초과 ⑦ graveyard↔DB 정합(graveyard 의 삭제 id 가 DB 에 생존 시 위반) ⑧ dump.jsonl 신선도(마지막 sync 반영 vs DB max(updated)) ⑨ 워커 건강(프로젝트별 마지막 distill/curate 시각 — 저널 기반, 활성 프로젝트 장기 무소식 = silent-death 신호).
-- 출력: 항목별 OK/WARN/FAIL + exit code(0 clean / 1 warn / 2 fail) — oncall·스크립트 기계 소비.
-- **oncall 항목 1개 추가, 새 loop 신설 없음** — D-25 계약대로 read-only 진단+보고(아침 브리핑 편입). **조치 권한 불변**: 삭제·consolidate·merge = D-18 세션끝 opus 큐레이터 소유 — doctor 발견은 아침 논의 안건·큐레이터 입력으로만 흐른다(doctor 는 진단, 고치는 손은 기존 소유자).
-- `tools/memory/index-check.sh`(legacy 파일 인덱스 대상)와 별개 — doctor 는 store(DB) 대상.
-
-### 5.12.4 데이터 모델·컴포넌트 영향
-- 신규 테이블·칼럼 **없음** — 저널은 XDG state jsonl 1개, doctor 는 read-only 조회.
-- 소비자: fleet `collectors/memory.py`(agent-fleet-dashboard F-19 — read-only tail 관찰; 저널은 memory 시스템이 자기 목적으로 남기는 로그라 fleet F-1 zero-injection 과 정합) + oncall(doctor) + 사용자(`mem log`). 저널 포맷 변경 시 양 spec 동기 의무.
-
 ## [library] 공개 API (v3 + v4 추가)
 ```
 mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(dump|profile) / mem_import / mem_migrate / mem_lifecycle / mem_project
 + (B2) turn-counter state (hook이 갱신, mem이 읽어 nudge 판정)
 + (I) mem_show / mem_consume / mem_restore / mem_auto_recall_probe
-+ (J) mem_log / mem_doctor (+ 내부: write-event append 훅 — 전 변이 경로 공용)
 ```
 
 ## [cli] `mem` 명령
-v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 body를 결정론적으로 출력 — sub-agent·CLAUDE.md 트리거의 user_profile 파일 Read 대체). **v14 신규 `mem show <id>`, `mem recall --full [--limit N]`, `mem recall --auto --json --no-touch`, `mem consume <id>`, `mem restore <id>`**. **v15 신규 `mem log [--limit/--action/--tier/--actor/--json]`, `mem doctor`** (§5.12). `export --target profile`은 on-demand 사람 열람 캐시용으로만(SoT 아님, sync/analyze-user 자동 wiring 불필요 — 파일 없음). `register-postit`·`.postit-roots`는 **폐기**(post-it.md 파일 제거). B2 turn-counter는 hook+state.
+v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 body를 결정론적으로 출력 — sub-agent·CLAUDE.md 트리거의 user_profile 파일 Read 대체). **v14 신규 `mem show <id>`, `mem recall --full [--limit N]`, `mem recall --auto --json --no-touch`, `mem consume <id>`, `mem restore <id>`**. `export --target profile`은 on-demand 사람 열람 캐시용으로만(SoT 아님, sync/analyze-user 자동 wiring 불필요 — 파일 없음). `register-postit`·`.postit-roots`는 **폐기**(post-it.md 파일 제거). B2 turn-counter는 hook+state.
 
 ## 데이터 모델
 기존 records v4 15컬럼에 v14 `delivery_state`를 추가한 schema v5. `records_fts` FTS5 + trigram 보조 + `idx_records_scope`; `dump.jsonl` 결정론적 export/import는 delivery_state를 round-trip하고 구 dump는 heuristic backfill한다. profile = type=profile 레코드(body=aspect 전문), source=`user-profile:<stem>` (A2 파일명 도출 근거).
@@ -357,10 +331,6 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
   - **D-32 (portable dispatcher 계약)**: distill worker 는 `mem-distill-dispatch.sh` 계약 경유 — 재구현 시 mode/model routing·snapshot whitelist·lock·재귀가드 보존 의무 (감사 P-13·P-25·P-36).
 - **v14 신규 (Cluster I — retrieval usability, §5.11)**:
   - **D-33~D-36**: `show`/`recall --full` 전문 접근, project prompt 고신뢰 auto-recall+bounded event telemetry, `delivery_state` 기반 미소비 handoff 파괴 차단+consume/restore, cap 유지 후 퍼널 재관찰.
-- **v15 신규 (Cluster J — 쓰기 관측성+전수 진단, §5.12)**:
-  - **D-37 (쓰기 이벤트 저널)**: 전 변이 경로 → write-events.jsonl (XDG state, bounded 256KB/500줄, **fail-open** — graveyard 는 fail-closed 불변). D-34 recall-events 와 읽기/쓰기 대칭.
-  - **D-38 (`mem log`)**: 저널 tail 1급 조회 (--limit/--action/--tier/--actor/--json, 기본 20건). stats 는 불변(스냅샷), log 는 흐름.
-  - **D-39 (`mem doctor` + oncall 편입)**: read-only 전수 진단 9항목(integrity·FTS 정합·schema 불변식·working 비대·stale pending·ceiling·graveyard 정합·dump 신선도·워커 건강) + exit code. 새 loop 없음 — oncall 항목 1개. 조치 권한 = D-18 큐레이터 불변(doctor 는 진단만). 소비자 = fleet F-19·oncall·사용자.
 
 ## Next (구현 순서 — autopilot-code, 본 v5 입력)
 1. **Cluster A (파일 메커니즘 제거, Option 2)** 먼저 — 사용자 지적 incoherence 해소:
@@ -400,4 +370,3 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
    - **D-34**: shared auto-recall candidate engine, no-touch probe, high-confidence hook injection, bounded privacy-preserving telemetry, runtime parity 회귀.
    - **D-35**: schema v5 migration/import, consume/restore, pending fail-closed gates(prune/merge/delete/lifecycle+curator snapshot), 실사고 fixture 회귀.
    - **D-36**: SessionStart cap 유지, 배포 후 recall funnel 재관찰.
-10. **Cluster J (쓰기 관측성+전수 진단, v15 신규)** — autopilot-code, worktree, standard QA: **D-37 저널**(mem.py 변이 경로 공용 append 훅 + rotation, fail-open) → **D-38 `mem log`** → **D-39 `mem doctor`** + `loops/oncall.md` 항목 1개. fleet F-19(agent-fleet-dashboard spec §4.6)가 저널 포맷을 소비 — 포맷 변경 시 양 spec 동기. F-19 구현은 fleet 사이클 별도(파일 표면 비겹침 — 병렬 가능, 저널 부재 시 graveyard-only degrade 계약).

@@ -116,3 +116,10 @@ Claude Code와 Codex의 동시 진단을 교차검증해 “저장은 되지만 
 - **D-34** prompt auto-recall: 모든 project 발화를 shared candidate engine으로 no-touch probe하고 identifier/CJK/coverage 기반 고신뢰 hit만 top3/1,200자로 주입. raw prompt 없는 bounded event telemetry로 hit-rate·정밀도·latency를 관측한다.
 - **D-35** handoff delivery protection: schema v5 `delivery_state(ordinary|pending|consumed)`, 명시 `consume`, pending 대상 destructive operation의 실행시점 fail-closed, merge 원자 취소, lifecycle 보호, 단건 restore. 기존 handoff/HANDOFF 기록은 fail-safe pending backfill.
 - **D-36** injection cap hold: cap 확대보다 recall 접근성을 먼저 고치고 `probe→qualified→injected→show/consume` 퍼널을 재관찰한다.
+
+### v14 → v15 (2026-07-11, update mode — Cluster J 추가, snapshot `_internal/versions/v14/`)
+계기 = fleet 메모리 가시화(agent-fleet-dashboard F-19) 방향 확정(사용자 2026-07-11). 설계 탐색 실측: 읽기측 telemetry(D-34 recall-events)는 있는데 쓰기측은 삭제만 graveyard 에 남고 add/note/consume/reinforce/merge/graduate 는 per-event 흔적 0(간접 이력 = dump.jsonl git diff 뿐), `mem` 에 log/recent 류 명령 없음, store 전수 건강 진단 부재(index-check 는 legacy 파일 인덱스용, oncall 메모리 항목은 승격 nudge 뿐).
+- **D-37** 쓰기 이벤트 저널: 전 변이 경로 → write-events.jsonl(XDG state, bounded 256KB/500줄, fail-open — graveyard fail-closed 불변). recall-events 와 읽기/쓰기 대칭.
+- **D-38** `mem log`: 저널 tail 1급 조회(--limit/--action/--tier/--actor/--json). stats(스냅샷)는 불변, log 가 흐름 보완.
+- **D-39** `mem doctor` + oncall 편입: read-only 전수 진단 9항목 + exit code. 새 loop 신설 없음(oncall 항목 1개, D-25 계약). 조치 권한 = D-18 세션끝 opus 큐레이터 불변 — doctor 는 진단·보고까지만.
+- 소비자 연결: fleet `collectors/memory.py`(F-19, read-only 관찰 — fleet F-1 정합) — 저널 포맷 변경 시 양 spec 동기 의무. 구현 = Next 10(autopilot-code, worktree; fleet F-19 는 별도 사이클, 파일 표면 비겹침 병렬 가능).

@@ -194,6 +194,12 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **F-18a (drill runner 이중 표시 dedup)**: 같은 drill 실행이 두 row 로 뜬다 — (i) proc-scan loop job (key=`drill`, cwd=fixture) (ii) lib-runner 가 registry 에 쓴 row (slug=`drill-<harness>-<case>-<ts>-<pid>`, 매 실행 고유). slug 불일치로 기존 dedup(동일 slug skip)이 안 걸린다. 해소: **case 명 + cwd 상관**으로 매칭해 registry row 를 정본으로 1행 병합(proc 는 liveness 소스로 흡수) — F-15 의 proc↔registry 정합과 같은 계열, 매칭 키만 drill 명명으로 확장.
   - **F-18b (mem-워커 오귀속)**: 메모리 distiller/curator(`claude -p`, env `MEM_DISTILL=1`)와 F-17 refresher(`FLEET_TITLE_REFRESH=1`)가 부모 세션의 cwd·env 를 물려받아 (i) 부모 세션 밑 `↳` 자식 row 로 떠올랐다 수 분 내 사라지고(사용자 실관찰 "서브로 떴다가 지시하자마자 없어짐") (ii) cwd 가 drill fixture 면 `drill:<case>` 그룹으로 오귀속된다(실관찰: 큐레이터가 "drill running" 으로 표시). 해소: procscan 이 `/proc/<pid>/environ` 의 이 마커들을 읽어(동일 user, dispatch collector 의 AGENT_DISPATCH_* 선례) **mem-worker 세션으로 태깅** — 기본은 fleet pulse 카운트·그룹 row 에서 제외하고 legend 급 요약(`🧠N`)으로만, `a` 토글 시 dim row 노출(라벨 `mem`). drill/프로젝트 그룹 오귀속 차단이 1차 목적.
   - 불변식: collector/`--json` additive only(drill g9/g10 파이썬 임포트 표면)·registry 무write·기존 dedup·F-14~F-17 계약 유지.
+- **F-19 (메모리 관측 패널 — mem 이벤트 요약행+상세, 사용자 확정 2026-07-11 "fleet에 memory 기능 추가")**: F-18b 가 mem-*워커*(프로세스)를 태깅한다면 F-19 는 그 *효과*(무엇이 기억·삭제됐나)를 보인다. 소스 = Unified Memory System PRD **v15 Cluster J** 의 write-events.jsonl(변이 이벤트 저널, D-37) + `memory/deleted-records.jsonl`(graveyard) tail — 둘 다 memory 시스템이 자기 목적으로 남기는 로그를 read-only 관찰(F-1 zero-injection 불변, 신규 emit 경로 아님).
+  - **collector**: `collectors/memory.py` 신설 — 저널·graveyard tail 파싱(tolerant: 파일 부재·미구현·malformed 행 = 패널 생략/부분 표시, 회귀 없음). 기존 Session/DispatchJob 스키마 불변 — additive 신규 구조(`--json` 에 `memory` 키 추가).
+  - **요약행**: pulse 근처 1행 — `🧠 mem  +N added(w·d) · M expired · K pruned · last distill <경과>` (오늘 로컬 자정 기준 집계, 이벤트 0 이고 alert 없으면 행 생략 — healthy 무음 원칙, alert strip 동형).
+  - **상세**: `a` 토글 시 최근 이벤트 N줄(기본 8) dim row — 시각·action·tier/type·actor·body 스니펫 (F-18b dim row 계열, legend 글리프는 등장 시만 — F-12).
+  - **alert 편입**: durable soft-ceiling 초과 · 활성 프로젝트 distill 무소식(저널 기준 임계 초과 = silent-death 신호) → 기존 alert strip 버킷 추가(우선순위 dead > stale > ctx > mem).
+  - **의존·경계**: Cluster J D-37 저널이 add/reinforce 계열의 유일 소스 — 저널 미출하 구간엔 graveyard 만으로 삭제측 degrade 표시. 저널 포맷 변경 시 양 spec 동기 의무. 제어(prune 실행 등)는 여전히 Non-goal — 관찰만.
 - **적용 순서(정보 위계)**: 위 개선은 전부 표시층(render.py) — collector 계약·모델 스키마 불변(SD-F4 만 collector). 시각 결정이 substantial 해지면(레이아웃 구조 변경 급) autopilot-design 리드 — 이번 사이클은 표시 규칙 정제 범위로 한정.
 
 ## 5. 능동 변경 — Claude per-session statusline tap (유일한 write)
