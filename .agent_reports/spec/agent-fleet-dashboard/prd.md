@@ -190,6 +190,10 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **하네스 비대칭(F-3 동형)**: claude 만 refresher 대상(statusline = claude 소유 surface). opencode = 네이티브 `session.title` 로 충분, codex = 제목 소스 없음 → slug 유지.
   - **비용**: haiku·no-tools·세션당 ≥10min 간격·tail 수 KB — 무시 가능. 워커 실패·미설치(`claude` 부재)·quota 소진 = sidecar 미갱신일 뿐 fleet 무영향 (결정론적 degrade).
   - **구현 순서**: F-15 사이클 수확 후 별도 사이클 (파일 겹침 최소화: statusline.sh·신규 스크립트·collectors/claude.py 우선순위 로직·tests).
+- **F-18 (loop·drill·mem-워커 귀속 정밀화, 사용자 점검 요청 2026-07-11 "fleet에서 loop나 drill 관련한 부분 점검")**: 2026-07-11 drill 실발사 관찰로 확정된 표시 결함 2종.
+  - **F-18a (drill runner 이중 표시 dedup)**: 같은 drill 실행이 두 row 로 뜬다 — (i) proc-scan loop job (key=`drill`, cwd=fixture) (ii) lib-runner 가 registry 에 쓴 row (slug=`drill-<harness>-<case>-<ts>-<pid>`, 매 실행 고유). slug 불일치로 기존 dedup(동일 slug skip)이 안 걸린다. 해소: **case 명 + cwd 상관**으로 매칭해 registry row 를 정본으로 1행 병합(proc 는 liveness 소스로 흡수) — F-15 의 proc↔registry 정합과 같은 계열, 매칭 키만 drill 명명으로 확장.
+  - **F-18b (mem-워커 오귀속)**: 메모리 distiller/curator(`claude -p`, env `MEM_DISTILL=1`)와 F-17 refresher(`FLEET_TITLE_REFRESH=1`)가 부모 세션의 cwd·env 를 물려받아 (i) 부모 세션 밑 `↳` 자식 row 로 떠올랐다 수 분 내 사라지고(사용자 실관찰 "서브로 떴다가 지시하자마자 없어짐") (ii) cwd 가 drill fixture 면 `drill:<case>` 그룹으로 오귀속된다(실관찰: 큐레이터가 "drill running" 으로 표시). 해소: procscan 이 `/proc/<pid>/environ` 의 이 마커들을 읽어(동일 user, dispatch collector 의 AGENT_DISPATCH_* 선례) **mem-worker 세션으로 태깅** — 기본은 fleet pulse 카운트·그룹 row 에서 제외하고 legend 급 요약(`🧠N`)으로만, `a` 토글 시 dim row 노출(라벨 `mem`). drill/프로젝트 그룹 오귀속 차단이 1차 목적.
+  - 불변식: collector/`--json` additive only(drill g9/g10 파이썬 임포트 표면)·registry 무write·기존 dedup·F-14~F-17 계약 유지.
 - **적용 순서(정보 위계)**: 위 개선은 전부 표시층(render.py) — collector 계약·모델 스키마 불변(SD-F4 만 collector). 시각 결정이 substantial 해지면(레이아웃 구조 변경 급) autopilot-design 리드 — 이번 사이클은 표시 규칙 정제 범위로 한정.
 
 ## 5. 능동 변경 — Claude per-session statusline tap (유일한 write)
