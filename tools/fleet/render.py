@@ -1097,6 +1097,78 @@ def _mem_row(s, layout="wide"):
     return [seg]
 
 
+def _mem_summary_segs(memory):
+    """F-19 pulse-adjacent summary row — `🧠 mem  +N added(Nw·Nd) · M expired · K pruned ·
+    last distill <elapsed>`. Healthy-silent: None when today's journal is empty AND no alert
+    fired (mirrors the alert-strip zero-lines-when-healthy convention)."""
+    if not memory:
+        return None
+    today = memory.get("today") or {}
+    added = today.get("added", 0)
+    expired = today.get("expired", 0)
+    pruned = today.get("pruned", 0)
+    alerts = memory.get("alerts") or {}
+    alert_active = bool(alerts.get("durable_over")) or bool(alerts.get("distill_stale"))
+    if not (added or expired or pruned) and not alert_active:
+        return None
+    last_min = memory.get("last_distill_min")
+    seg = [("  🧠 ", "dim"), ("mem  ", "dim"),
+           ("+%d added(%dw·%dd)" % (added, today.get("added_working", 0),
+                                     today.get("added_durable", 0)), "dim"),
+           (" · ", "dim"), ("%d expired" % expired, "dim"),
+           (" · ", "dim"), ("%d pruned" % pruned, "dim"),
+           (" · ", "dim"),
+           ("last distill %s" % (fmt_min(last_min) if last_min is not None else "—"), "dim")]
+    return seg
+
+
+def _mem_event_rows(memory, limit=8):
+    """F-19 `a`-toggle detail — most-recent-first dim rows (F-18b dim-row family): time ·
+    action · tier/type · actor · snippet."""
+    if not memory:
+        return []
+    rows = []
+    for e in (memory.get("recent") or [])[:limit]:
+        ts = (e.get("ts") or "—")
+        if "T" in ts:
+            ts = ts.split("T", 1)[1]   # HH:MM:SS only — date is always "today or recent"
+        tier_type = "%s/%s" % (e.get("tier") or "-", e.get("type") or "-")
+        snip = e.get("snippet") or ""
+        seg = [("  🧠 ", "dim"), (ts, "dim"), ("  ", None),
+               (e.get("action") or "?", "dim"), ("  ", None),
+               (tier_type, "dim"), ("  ", None),
+               (e.get("actor") or "?", "dim")]
+        if snip:
+            seg += [("  ", None), (_clip_w(snip, 60), "dim")]
+        rows.append(seg)
+    return rows
+
+
+def _mem_alert_bucket(memory):
+    """F-19 alert-strip bucket — durable soft-ceiling + distill-silence, appended LAST in the
+    dead > stale > ctx > mem priority order (§4.6)."""
+    if not memory:
+        return None
+    alerts = memory.get("alerts") or {}
+    parts = []
+    over = alerts.get("durable_over") or []
+    if over:
+        names = []
+        for cwd_origin, count in over[:4]:
+            label = str(cwd_origin or "?")
+            for prefix in ("git:", "root:", "id:"):
+                if label.startswith(prefix):
+                    label = label[len(prefix):]
+            names.append("%s=%d" % (_clip_w(label, 20), count))
+        more = " +%d" % (len(over) - 4) if len(over) > 4 else ""
+        parts.append("durable-over %s%s" % ("·".join(names), more))
+    if alerts.get("distill_stale"):
+        parts.append("distill stale %s" % fmt_min(memory.get("last_distill_min")))
+    if not parts:
+        return None
+    return (" · ".join(parts), "lvl_y")
+
+
 def _group_key_job(j, session_groups=None, job_groups=None):
     session_groups = session_groups or {}
     job_groups = job_groups or {}
@@ -1152,11 +1224,14 @@ def set_show_all(v):
     _SHOW_ALL = bool(v)
 
 
-def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
+def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memory=None):
     """Return a flat list of segment-lines for the whole screen (None = blank line).
 
     Same contract consumed by BOTH `render_once` (plain, full output) and `_draw` (viewport
     slices this same list) — `_OFFSET` must never be read here (see module docstring).
+
+    `memory` = F-19 collectors.memory.collect() result (or None — panel/alerts simply omitted;
+    tests default to None so every pre-F-19 call site keeps working unchanged).
     """
     # F-18b: mem-worker (distiller/curator/F-17 refresher) census — computed on the ORIGINAL
     # session list, before is_child/mem filtering, so folded/mem-only groups still surface a
@@ -1268,6 +1343,15 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         pulse += [("↳ %d" % len(jobs), "dim"),
                   (" job%s (%d working)" % ("s" if len(jobs) != 1 else "", jw), "dim")]
     lines.append(pulse)                 # (Σ cost 롤업 제거 — user: 금액 표시 삭제)
+    _mem_summary = _mem_summary_segs(memory)
+    if _mem_summary is not None:
+        lines.append(_mem_summary)
+        _seen_glyphs.add("mem")
+    if _SHOW_ALL:
+        _mem_events = _mem_event_rows(memory)
+        if _mem_events:
+            lines.extend(_mem_events)
+            _seen_glyphs.add("mem")
 
     # alert strip — CONDITIONAL (zero lines when healthy): compaction-imminent contexts and
     # stalled dispatches (the stealth-death guard §5.10, surfaced on the board instead of only
@@ -1304,6 +1388,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         ctx_text = _bucket_text("ctx-high", [_alert_name(n) for n, _p in ctx_items]) \
             if len(ctx_items) > 1 else "ctx %d%% %s" % (ctx_items[0][1], _alert_name(ctx_items[0][0]))
         buckets.append((ctx_text, "lvl_r" if worst >= 90 else "lvl_y"))
+    mem_bucket = _mem_alert_bucket(memory)   # F-19 — last in priority (dead > stale > ctx > mem)
+    if mem_bucket:
+        buckets.append(mem_bucket)
+        _seen_glyphs.add("mem")
 
     if buckets:
         # priority truncation dead > stale > ctx when the row would overflow — buckets are
@@ -1623,9 +1711,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         legend += [("↳", "dim"), (" dispatch   ", "dim")]
     if "wt" in _seen_glyphs:
         legend += [("🚧 N", "dim"), (" worktrees   ", "dim")]
-    if n_mem_total:
+    if n_mem_total or "mem" in _seen_glyphs:
         # 전역 총계 — mem-only 그룹은 fold 되어 header badge 가 안 뜰 수 있으므로 legend 에서
-        # 항상 존재를 노출 (group badge 는 활성 그룹 컨텍스트, 여긴 board 전역).
+        # 항상 존재를 노출 (group badge 는 활성 그룹 컨텍스트, 여긴 board 전역). F-19: mem-worker
+        # 세션이 0 이어도 write-events 요약행/alert 가 떴으면 legend 는 여전히 노출한다.
         legend += [("🧠 %d" % n_mem_total, "dim"), (" mem   ", "dim")]
     legend += [("~", "dim"), (" derived/inherited value", "dim")]  # F-9(d)
     lines.append(legend)
@@ -1648,16 +1737,26 @@ def _plain(segs):
     return "".join(out)
 
 
+def _collect_memory():
+    # F-19: best-effort — a collector import/read failure must never break the render.
+    try:
+        from .collectors import memory as memcol
+        return memcol.collect()
+    except Exception:
+        return None
+
+
 def render_once(collect_all, hfilter, section):
     sessions, jobs = collect_all(harness_filter=hfilter)
     malformed = _malformed()
+    mem_snapshot = _collect_memory()
     try:
         import shutil
         tw = shutil.get_terminal_size().columns
     except Exception:
         tw = 200
     lines = _build_lines(sessions, jobs, section, narrow=False, malformed=malformed,
-                         layout=_layout_mode(tw))
+                         layout=_layout_mode(tw), memory=mem_snapshot)
     out = "\n".join(_plain(l) for l in lines) + "\n"
     # Write UTF-8 bytes directly so the snapshot's box/braille glyphs survive a
     # non-UTF-8 console codepage (e.g. Windows cp949), which would otherwise raise
@@ -1843,13 +1942,14 @@ def reset_scroll():
     _OFFSET = 0
 
 
-def _draw(stdscr, sessions, jobs, section, malformed):
+def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
     global _OFFSET, _TOGGLE_ROWS
     _TOGGLE_ROWS = {}    # reset before any early-return so a stale map never survives a click
     h, w = stdscr.getmaxyx()
     stdscr.erase()
     narrow = w < _NARROW_CUTOFF
-    lines = _build_lines(sessions, jobs, section, narrow, malformed, layout=_layout_mode(w))
+    lines = _build_lines(sessions, jobs, section, narrow, malformed, layout=_layout_mode(w),
+                         memory=memory)
     body_h = max(1, h - 1)   # reserve 1 footer row
     _OFFSET = _clamp_offset(_OFFSET, len(lines), body_h)
 
@@ -1900,8 +2000,9 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
     stdscr.timeout(200)                     # getch blocks ≤200ms → responsive keys
     sessions, jobs = collect_all(harness_filter=hfilter)
     malformed = _malformed()
+    mem_snapshot = _collect_memory()
     last = time.time()
-    _draw(stdscr, sessions, jobs, section, malformed)
+    _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
     while True:
         # wake exactly at the next 0.5s blink boundary (regular period) but stay key-responsive (≤200ms)
         _nb = (int(time.time() * 10) + 1) / 10.0   # 10fps wake — the spinner cadence
@@ -1942,10 +2043,11 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
         if force or (now - last) >= interval:
             sessions, jobs = collect_all(harness_filter=hfilter)
             malformed = _malformed()
+            mem_snapshot = _collect_memory()
             last = now
         _BLINK_ON = (int(now * 2) % 2 == 0)     # ~2 Hz working-dot blink (manual — A_BLINK unreliable)
         # redraw every wake (covers KEY_RESIZE, blink and tick) — _draw clamps _OFFSET internally.
-        _draw(stdscr, sessions, jobs, section, malformed)
+        _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
 
 
 def run_live(collect_all, hfilter, section, interval):
