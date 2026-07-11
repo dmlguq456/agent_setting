@@ -1087,6 +1087,16 @@ def _group_key_session(s):
     return project_of(s.cwd)
 
 
+def _mem_row(s, layout="wide"):
+    """F-18b: mem-worker 세션의 dim 1-line — 기본 숨김, `a` 토글 시만. 라벨 'mem'."""
+    name = _clip_w(s.title or s.slug or (s.harness or "?"), 40)
+    seg = [("  🧠 ", "dim"), ("mem ", "dim"),
+           (name, "dim"), ("  ", None),
+           ((s.harness or "—"), "dim"), ("  ", None),
+           (fmt_min(s.elapsed_min), "dim")]
+    return [seg]
+
+
 def _group_key_job(j, session_groups=None, job_groups=None):
     session_groups = session_groups or {}
     job_groups = job_groups or {}
@@ -1148,9 +1158,22 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     Same contract consumed by BOTH `render_once` (plain, full output) and `_draw` (viewport
     slices this same list) — `_OFFSET` must never be read here (see module docstring).
     """
+    # F-18b: mem-worker (distiller/curator/F-17 refresher) census — computed on the ORIGINAL
+    # session list, before is_child/mem filtering, so folded/mem-only groups still surface a
+    # total in the legend even when no group header badge fires.
+    n_mem_total = sum(1 for s in sessions if getattr(s, "mem_worker", False))
+    mem_by_group = {}
+    for s in sessions:
+        if getattr(s, "mem_worker", False):
+            gk_mem = _group_key_session(s)
+            mem_by_group[gk_mem] = mem_by_group.get(gk_mem, 0) + 1
     # headless dispatch children are shown as dispatch rows under their parent — never as
     # top-level sessions (the same headless process would otherwise double-show as session+job).
-    sessions = [s for s in sessions if not s.is_child]
+    # mem-worker sessions are excluded from grouping/census by default (F-18b) — they inherit
+    # parent cwd/env and would otherwise misattribute into drill/project groups; `a` toggle
+    # (_SHOW_ALL) restores them as a dedicated dim row (see _mem_row below).
+    sessions = [s for s in sessions
+                if not s.is_child and not (getattr(s, "mem_worker", False) and not _SHOW_ALL)]
     groups = {}
     session_groups = {}
     for s in sessions:
@@ -1193,7 +1216,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     # a silently missing row read as a bug (2026-07-02 user: "opencode go 공급자로서 안뜨는거야?").
     # opencode-go has no usage API (gateway 404s; docs: console-only), so say so on the board.
     _live_h = set(s.harness for s in sessions
-                  if s.liveness not in ("stale", "dead") and not s.app_server and not s.is_child)
+                  if s.liveness not in ("stale", "dead") and not s.app_server and not s.is_child
+                  and not getattr(s, "mem_worker", False))
     if _rl or _live_h:
         hs = [h for h in ("claude", "codex", "opencode") if h in _rl or h in _live_h]
         for idx, h in enumerate(hs):
@@ -1229,7 +1253,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             lines.append(row)
     # fleet pulse — htop's "Tasks: N, M running" analogue: whole-board census + live spend Σ
     # (round-4b, user: "일단 띄우고 필요없으면 쳐내지뭐"). Counts skip app-server companions.
-    _real = [s for s in sessions if not s.app_server]
+    _real = [s for s in sessions if not s.app_server and not getattr(s, "mem_worker", False)]
     n_wk = sum(1 for s in _real if s.liveness == "working")
     n_id = sum(1 for s in _real if s.liveness == "idle")
     n_dt = sum(1 for s in _real if s.detached and s.liveness not in ("stale", "dead"))
@@ -1429,6 +1453,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             # statusline 과 같은 표기 (🚧 N = 병렬 작업장·잔존 worktree, §5.10) — 이름 바로 옆
             head_segs += [(" 🚧 %d" % _nwt, "g_idle")]
             _seen_glyphs.add("wt")
+        _nmem = mem_by_group.get(name, 0)
+        if _nmem:
+            head_segs += [(" 🧠 %d" % _nmem, "dim")]
+            _seen_glyphs.add("mem")
         if _cool_min is not None:
             # 완료 후 경과시간 (끝나고 대기하는 시간) — ✓ 프리픽스로 "완료 후 경과"임을 명시
             head_segs += [("  ", None), ("%s %s" % (_COOL_TIME_ICON, fmt_min(_cool_min)), "grp_cool")]
@@ -1497,6 +1525,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             return job.stage
 
         for s in _sort_group_sessions(shown):
+            if getattr(s, "mem_worker", False):
+                # F-18b: `a` 토글로만 노출되는 dim mem row — 활성 row 렌더러(스타일/기울기/depth
+                # nesting)를 타지 않고 전용 요약 1-line 으로.
+                lines.extend(_mem_row(s, layout))
+                _seen_glyphs.add("mem")
+                continue
             kids = _sort_group_jobs(children.get(s.session_id, []))
             nested_n = len(kids) + sum(len(job_children.get(k.slug, [])) for k in kids)
             if s.liveness == "stale":
@@ -1589,6 +1623,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         legend += [("↳", "dim"), (" dispatch   ", "dim")]
     if "wt" in _seen_glyphs:
         legend += [("🚧 N", "dim"), (" worktrees   ", "dim")]
+    if n_mem_total:
+        # 전역 총계 — mem-only 그룹은 fold 되어 header badge 가 안 뜰 수 있으므로 legend 에서
+        # 항상 존재를 노출 (group badge 는 활성 그룹 컨텍스트, 여긴 board 전역).
+        legend += [("🧠 %d" % n_mem_total, "dim"), (" mem   ", "dim")]
     legend += [("~", "dim"), (" derived/inherited value", "dim")]  # F-9(d)
     lines.append(legend)
 

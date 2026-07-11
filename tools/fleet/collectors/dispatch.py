@@ -41,6 +41,24 @@ _QA_LEVELS = ("quick", "light", "standard", "thorough", "adversarial")
 _PIPE = re.compile(r"\s*([A-Za-z][\w-]*)(?::(\w+))?")
 _SHELLS = ("zsh", "bash", "sh", "dash")
 _PIPE_TOK = re.compile(r"[,\s]+")
+_DRILL_SLUG_RE = re.compile(r"^drill-[a-z]+-(.+)-\d{14}-\d+$")   # registry slug → case
+_DRILL_CWD_COMP_RE = re.compile(r"^drill-(.+)-[^-]+$")           # /tmp/drill-<case>-<rand> 컴포넌트 → case (project_of 선례)
+
+
+def _drill_case_from_slug(slug):
+    """registry slug 'drill-<adapter>-<case>-<ts>-<pid>' → case (없으면 None)."""
+    m = _DRILL_SLUG_RE.match(slug or "")
+    return m.group(1) if m else None
+
+
+def _drill_case_from_cwd(cwd):
+    """cwd 경로 컴포넌트 중 '/tmp/drill-<case>-<rand>' 의 case (없으면 None)."""
+    for comp in (cwd or "").split("/"):
+        if comp.startswith("drill-"):
+            m = _DRILL_CWD_COMP_RE.match(comp)
+            if m:
+                return m.group(1)
+    return None
 
 
 def _strip_autopilot_prefix(name):
@@ -819,6 +837,47 @@ def _jobs_log_fields(paths):
     return fields_by_slug
 
 
+def _reconcile_drill_rows(jobs):
+    """F-18a: 같은 drill 실행의 registry row(정본)와 proc loop job(중복)을 1행으로.
+
+    match = registry slug 의 case명 == proc drill job 의 case명, 그리고 registry cwd 가
+    '/tmp/drill-<case>-' 임(cwd 상관). 병합 시 registry row 를 남기고 proc 의 pid·liveness 를
+    흡수(live proc = ground truth), proc row 는 제거. registry 무write.
+    """
+    # registry drill rows: source=jobs & slug 이 drill 패턴 & cwd 가 /tmp/drill-<case>-
+    reg_by_case = {}
+    for r in jobs:
+        if r.source != "jobs":
+            continue
+        case = _drill_case_from_slug(r.slug)
+        if not case:
+            continue
+        if _drill_case_from_cwd(r.cwd) != case:      # cwd 상관 가드 (/tmp/drill-<case>- 확인)
+            continue
+        reg_by_case.setdefault(case, r)              # 첫 registry row 정본
+    if not reg_by_case:
+        return jobs
+    drop = set()
+    for p in jobs:
+        if p.source != "proc" or p.key != "drill":
+            continue
+        case = _drill_case_from_cwd(p.cwd) or p.worker_role or (p.slug if p.slug != "drill" else None)
+        r = reg_by_case.get(case)
+        if r is None:
+            continue
+        # registry 정본에 proc 의 liveness/pid 흡수
+        if r.pid is None:
+            r.pid = p.pid
+        if r.elapsed_min is None:
+            r.elapsed_min = p.elapsed_min
+        if p.liveness in ("working", "idle") and r.liveness in ("queued", "stale", "dead", "unknown"):
+            r.liveness = p.liveness                  # live proc = ground truth
+        drop.add(id(p))
+    if not drop:
+        return jobs
+    return [j for j in jobs if id(j) not in drop]
+
+
 def collect(jobs_path=None, harness_filter=None):
     """Return merged [DispatchJob]. harness_filter does not restrict dispatch — the section
     is cross-harness by design (jobs, not sessions)."""
@@ -871,6 +930,7 @@ def collect(jobs_path=None, harness_filter=None):
     now = time.time()
     for j in jobs:
         j.liveness = _dispatch_liveness(j, now)
+    jobs = _reconcile_drill_rows(jobs)
     # F-15c(a): a registry-only row (source="jobs") that turns out to be genuinely working
     # re-derives its breadcrumb from the real plan artifacts instead of the raw jobs.log
     # status word ("open"/"running") — otherwise a live job with real progress shows a
