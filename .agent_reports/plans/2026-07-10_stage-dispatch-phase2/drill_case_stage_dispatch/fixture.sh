@@ -3,6 +3,8 @@
 # 목적(§8.5.5 doc-efficacy) — skill 문서(dev-pipeline Step 1~7)만 주고, conductor 가
 #   각 스테이지를 depth-2 headless 로 분사하는지(스푼피딩 없이) 관찰.
 # SD-13 전제: fixture 에 spec/ 가 이미 있어 spec precondition 통과.
+# 이 fixture 는 pre-state 만 만든다 — assert 의 SD-17 항목(§8.7)은 conductor 가 산출하는
+# post-state(plan/plan.md·_internal/metrics.md)를 감사하므로 fixture 지원 코드는 불요.
 set -eu
 WORK=$1; mkdir -p "$WORK/.pre"
 git init -q --bare "$WORK/origin.git"
