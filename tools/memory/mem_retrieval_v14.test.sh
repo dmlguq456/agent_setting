@@ -206,5 +206,30 @@ grep -q "PROTECTED PENDING" <<<"$SNAP" && grep -q "$PTHREAD" <<<"$SNAP" \
   && ! grep '^IDS:' <<<"$SNAP" | grep -q "$PTHREAD" && ok "pending visible but excluded from destructive IDS" \
   || bad "snapshot pending/IDS exclusion"
 
+echo "== manual recall: hyphen ≡ space (E-4 multi-term OR, silent-miss fix) =="
+# 하이픈 compound(adjacent) 와 동일 sub-word 가 비인접으로 흩어진 레코드 두 개.
+cli add durable fact 'zqmark gamma-sync pipeline compound ADJ-7A2' >/dev/null
+cli add durable fact 'zqmark gamma orchestration then sync distinct SEP-7B3' >/dev/null
+NH="$(cli recall 'gamma-sync' --limit 50 | grep -c zqmark)"
+NS="$(cli recall 'gamma sync'  --limit 50 | grep -c zqmark)"
+# 하이픈 쿼리가 split-OR 로 비인접 레코드(SEP)까지 잡아야 함 — 수정 전엔 phrase 라 miss.
+cli recall 'gamma-sync' --limit 50 | grep -q 'SEP-7B3' && SEP_HIT=1 || SEP_HIT=0
+[ "$NH" = "$NS" ] && [ "$NH" -ge 2 ] && [ "$SEP_HIT" = 1 ] \
+  && ok "hyphen query == space query (split-OR surfaces non-adjacent record)" \
+  || bad "hyphen!=space NH=$NH NS=$NS sep_hit=$SEP_HIT"
+
+echo "== manual recall: Korean 조사 strip 회귀 (CJK run 미분해) =="
+cli add durable fact 'zqkor 스테이지분사 토큰 검색 회귀 KOR-9C4' >/dev/null
+# 조사 '에서' strip 이 살아있어야 stem '스테이지분사' 로 매칭 (CJK run 은 sub-token 분해 안 됨).
+cli recall '스테이지분사에서' --limit 50 | grep -q 'KOR-9C4' \
+  && ok "Korean particle-strip recall intact after sub-token split" \
+  || bad "Korean recall regressed"
+
+echo "== manual recall: FTS 연산자 주입 중화 유지 =="
+# per sub-token quote 로 OR/*/따옴표 가 리터럴화되어 FTS5 syntax error 없이 종료.
+cli recall 'gamma-sync OR pipeline* "x"' --limit 5 >/dev/null 2>&1 \
+  && ok "special-char query neutralized (no FTS syntax error)" \
+  || bad "special-char query raised error"
+
 printf '\nRESULT: PASS=%s FAIL=%s\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
