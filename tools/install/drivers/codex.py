@@ -3,7 +3,8 @@
 호출 대상(재구현 금지): `adapters/codex/bin/sync-native-*.py`(agents/skills/modes/plugin),
 `adapters/codex/bin/preflight.sh`. plugin 채널은 기존 `adapters/codex/plugin-marketplace/`
 (`.agents/plugins/marketplace.json`)를 재사용 — installer 는 `codex plugin marketplace add`
-+ `codex plugin add <name>@<marketplace>` 를 wrapping 한다 (Phase 7, 이 사이클 범위 밖).
++ `codex plugin add <name>@<marketplace>` 를 wrapping 한다 (Phase 7, INSTALL_LAYOUT.md
+Migration Order 353-357 이 이미 검증한 두 명령 그대로 — CLI 부재 시 SKIP).
 
 ⚠️ plugin 이 못 싣는 것(공식 확인, PRD 표): custom agents(`.codex/agents/*.toml`)·prompts·
 config.toml fragment·AGENTS.md — 이들은 plugin 채널과 무관하게 symlink projection 이 계속
@@ -23,6 +24,66 @@ import manifest
 import verifier
 
 RUNTIME = "codex"
+
+_MARKETPLACE_SOURCE_RELPATH = "codex_setting/codex-plugin-marketplace"
+_MARKETPLACE_NAME = "agent-harness"
+_PLUGIN_SPEC = f"agent-harness-codex@{_MARKETPLACE_NAME}"
+
+
+def _plugin_action(dry_run):
+    """Phase 7 Step 7.1 — `codex plugin marketplace add`/`plugin add` wrapping.
+
+    marketplace source 는 codex_setting/codex-plugin-marketplace (adapters/codex/
+    plugin-marketplace 로 symlink, INSTALL_LAYOUT.md Migration Order 353-357 이 검증한
+    그대로). CLI 부재 시 SKIP — subprocess 를 실행하지 않는다.
+    """
+    marketplace_source = str(paths.resolve_source(_MARKETPLACE_SOURCE_RELPATH))
+    marketplace_cmd = ["codex", "plugin", "marketplace", "add", marketplace_source, "--json"]
+    plugin_cmd = ["codex", "plugin", "add", _PLUGIN_SPEC, "--json"]
+
+    if dry_run:
+        return {
+            "action": "plugin",
+            "status": "planned",
+            "detail": f"dry-run: {' '.join(marketplace_cmd)} ; {' '.join(plugin_cmd)}",
+        }
+
+    if shutil.which("codex") is None:
+        return {
+            "action": "plugin",
+            "status": "skipped",
+            "detail": "SKIP(codex): plugin channel wrapping — codex CLI absent",
+        }
+
+    try:
+        mp_result = subprocess.run(marketplace_cmd, capture_output=True, text=True, timeout=60)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return {"action": "plugin", "status": "blocked", "detail": f"marketplace add 실행 실패: {exc}"}
+
+    if mp_result.returncode != 0:
+        return {
+            "action": "plugin",
+            "status": "blocked",
+            "detail": f"marketplace add exit={mp_result.returncode} stderr={mp_result.stderr[:300]!r}",
+        }
+
+    try:
+        plugin_result = subprocess.run(plugin_cmd, capture_output=True, text=True, timeout=60)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return {"action": "plugin", "status": "blocked", "detail": f"plugin add 실행 실패: {exc}"}
+
+    if plugin_result.returncode != 0:
+        return {
+            "action": "plugin",
+            "status": "blocked",
+            "detail": f"plugin add exit={plugin_result.returncode} stderr={plugin_result.stderr[:300]!r}",
+        }
+
+    return {
+        "action": "plugin",
+        "status": "registered",
+        "detail": f"marketplace + plugin add OK: {_PLUGIN_SPEC}",
+    }
 
 
 def install(scope="global", plugin=False, dry_run=False):
@@ -119,16 +180,7 @@ def install(scope="global", plugin=False, dry_run=False):
             continue
 
     if plugin:
-        actions.append(
-            {
-                "action": "plugin",
-                "status": "skipped",
-                "detail": (
-                    "codex plugin marketplace/add wrapping — Phase 7 (not yet implemented "
-                    "in this dispatch), symlink projection still applied above (INST-D-5)"
-                ),
-            }
-        )
+        actions.append(_plugin_action(dry_run))
 
     manifest_result = None
     if not dry_run:
@@ -180,6 +232,12 @@ def checks(scope="global"):
             ["adapters/codex/bin/preflight.sh", "role", "fast", "reviewer"],
             must_match=[r"^adapter=codex$"],
             cwd=agent_home,
+        )
+    )
+    check_list.append(
+        verifier.check_file_exists(
+            "codex.plugin-marketplace-source",
+            str(paths.resolve_source(_MARKETPLACE_SOURCE_RELPATH) / ".agents" / "plugins" / "marketplace.json"),
         )
     )
 

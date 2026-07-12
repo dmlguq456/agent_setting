@@ -36,4 +36,5 @@ Phase 6: mem import + ~/.local/bin launcher symlinks (P0.5) [independent, parall
   [x] Step 6.2: bootstrap.py — ~/.local/bin/{harness,fleet} launcher symlinks + PATH-collision guard
 
 Phase 7: P1 — plugin channel wrapping (BOUNDARY — Codex in-cycle, Claude deferred)
-  [ ] Step 7.1: drivers/codex.py — plugin=True wraps `codex plugin marketplace add` + `codex plugin add` (CLI-gated); drivers/claude.py plugin=True emits deferred SKIP
+  [x] Step 7.1: drivers/codex.py — plugin=True wraps `codex plugin marketplace add` + `codex plugin add` (CLI-gated); drivers/claude.py plugin=True emits deferred SKIP (unchanged from Phase 3)
+  [DEFERRED] Claude plugin content generator + `install --plugin` CLI wrapping — explicitly out of cycle-1 scope per plan.md Phase 7 boundary, left for a future cycle.
