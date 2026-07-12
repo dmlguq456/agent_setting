@@ -1,0 +1,25 @@
+project_name: harness-installer
+created: 2026-07-12
+mode: [cli]
+scope_note: "하네스 배포 표면 — 2-채널 하이브리드(런타임 native plugin 채널 + bootstrap installer CLI `harness`). INSTALL_LAYOUT.md 수동 레시피 대체. HLS(harness-layer-sync) interlock — hash-manifest 스키마·GSD 정독 게이트 공유."
+phases:
+  spec: done                # v1 PRD 확정 (2026-07-12 — 하이브리드 구조·`harness` 명령 사용자 확정, currentness 검증 반영)
+  scaffolding: in_progress  # worktree harness-installer-scaffold 에 skeleton 분사
+  dev: pending              # autopilot-code — hash-manifest 는 GSD 실코드 정독 게이트 후
+last_updated: 2026-07-12
+inputs:
+  - .agent_reports/research/cross-platform-agent-frameworks/
+  - .agent_reports/analysis_project/harness-alignment/
+  - .agent_reports/spec/harness-layer-sync/ (interlock)
+  - INSTALL_LAYOUT.md (실측·대체 대상)
+  - runtime-currentness 검증 2026-07-12 (Claude/Codex/OpenCode plugin surface 공식 문서)
+decisions_locked:
+  - INST-D-1: 2-채널 하이브리드 — plugin 채널(소비) + installer CLI(dev·runtime-owned 표면), 병존 (사용자 확정 2026-07-12)
+  - INST-D-2: CLI 진입 명령 = `harness` (한 단어 + 서브명령, fleet 동형; 사용자 확정 2026-07-12)
+  - INST-D-3: hash-manifest 는 installer 가 복사한 파일만 추적(소유 경계) — HLS 와 스키마 공유, GSD bin/install.js 정독 선행 게이트(HLS §3.2 공유)
+  - INST-D-4: plugin 내용물 SoT = capabilities/·roles/ + sync-native 생성기 — 손복사 금지, Claude plugin cache 의 self-contained 요구는 빌드 시점 생성물 포함으로 충족
+  - INST-D-5: Codex plugin 은 agents(.toml) 미탑재(공식 한계) — symlink projection 병행 유지
+open:
+  - INST-OPEN-1: plugin 탑재 hook 의 파일별 범위 (방향 확정 — self-contained·fail-open 가드만; 목록은 구현 plan)
+  - INST-OPEN-3: INSTALL_LAYOUT.md 사후 위상 (구현 사이클에서 축소·동기화)
+  - INST-OPEN-4: OpenCode 배선 drift(복수형 디렉토리·skills.paths 부재) migration 포함 여부 — 구현 Step 0 실측 후
