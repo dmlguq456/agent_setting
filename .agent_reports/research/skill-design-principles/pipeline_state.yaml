@@ -1,0 +1,15 @@
+pipeline: autopilot-research
+query: "Matt Pocock 'Skills for Real Engineers' — AI 에이전트 skill 설계 원칙 심층 조사 (trigger·structure·guidance·pruning) — 스킬셋 진단·개선 설계 입력"
+mode: technology
+depth: deep
+intensity: thorough
+clarified_intent: "사용자 제공 Matt Pocock 4단계 체크리스트(trigger/structure/guidance/pruning)를 anchor로 원문 대조·생태계 확장·원칙 일반화·하네스 매핑(28개 스킬 전수감사는 scope 밖, 로드맵만) 조사. 다운스트림은 스킬셋 audit+개선 spec."
+last_completed_stage: report
+phase_flags:
+  phase_a_skim: true
+  phase_b_chaining: false   # technology mode — 비활성
+  phase_c_code_search: true
+  chaining_available: false
+  code_search_available: true
+analyze_notes: "anchor = mattpocock/skills git clone verbatim. 4축 확정: Invocation/Information Hierarchy/Steering/Pruning. Guidance↔Steering CONFIRMED. cards=21, code_resources=9."
+artifact_dir: /home/Uihyeop/agent_setting-wt/research-skill-design-principles/.agent_reports/research/skill-design-principles
