@@ -1,0 +1,17 @@
+pipeline: autopilot-research
+query: "caveman·ponytail 심층 분석 — 에이전트 토큰 사용 자기조절(self-regulation) 메커니즘 설계 입력 (intensity 축과 독립)"
+mode: technology
+depth: deep
+intensity: thorough
+clarified_intent: >
+  핵심 대상: github.com/JuliusBrussee/caveman (출력 산문 압축, ~65% 출력 토큰 절감,
+  세션 전체 효과 4-5% 비판 존재) 및 github.com/DietrichGebert/ponytail (lazy senior dev
+  decision ladder 로 코드 작성량 자체 억제). 보조 생태계: wilpel/caveman-compression,
+  Headroom(RTK)/TokenSave, Hackenberger Ultimate Token-Saving Stack, openagentskill/skillsllm
+  카탈로그 유사 skill. 분석축: (1) 메커니즘 분류(출력압축/행동억제/입력절감/budget지시)
+  (2) 실측 절감과 한계(output-only 세션전체효과, 재주입 오버헤드, 품질회귀)
+  (3) self-regulation 일반화(신호->레버 매핑) (4) 하네스 시사점(intensity 축과 독립인
+  token-budget 자기조절 축 설계 입력, 두 축 직교성/간섭 지점). 다운스트림: autopilot-spec.
+  내부 참조(재조사 아님): .agent_reports/research/token-ceremony-audit/ (2026-07-07).
+last_completed_stage: report
+artifact_dir: /home/Uihyeop/agent_setting-wt/research-token-self-regulation/.agent_reports/research/token-self-regulation
