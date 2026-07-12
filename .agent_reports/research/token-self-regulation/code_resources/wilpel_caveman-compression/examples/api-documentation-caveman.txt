@@ -1,1 +1,0 @@
-Authenticate API. Include API key in Authorization header. Prefix API key with "Bearer" space. Authentication fails, server returns 401 Unauthorized. Error message explains failure. API keys sensitive. Never commit to version control. Never share publicly. Store in environment variables. Use secure secrets management.
