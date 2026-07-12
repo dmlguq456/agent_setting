@@ -514,20 +514,23 @@ _PIPE_STAGES = {
     "draft": ["draft", "refine", "apply"],
 }
 
-# depth-2 code-* stage sub-skill → human stage label (SD-F1). Reuses the "code" track's
-# plan/exec/test vocabulary — no new words invented. "report" (code-report) sits outside that
-# track (see _stage_segs fallthrough for how a lone "report" token renders).
+# depth-2 stage worker role → human stage label (SD-F1). Code workers use their sub-skill
+# names; other pipelines use the portable `stage-<name>` role emitted by dispatch. The label
+# also drives the parent conductor's active breadcrumb via _conductor_stage_override().
 _STAGE_ROLE = {
     "code-plan": "plan",
     "code-execute": "exec",
     "code-test": "test",
     "code-report": "report",
+    "stage-search": "search",
+    "stage-analyze": "analyze",
+    "stage-report": "report",
 }
 
 
 def _stage_role_label(worker_role):
-    """(base_label, suffix) for a depth-2 stage worker_role, e.g. 'code-execute:phase-A' ->
-    ('exec', ':phase-A'). base_label is None when worker_role isn't a known stage sub-skill —
+    """(base_label, suffix) for a depth-2 stage worker_role, e.g. 'stage-search:phase-A' ->
+    ('search', ':phase-A'). base_label is None when worker_role isn't a known stage sub-skill —
     callers fall back to the existing _ROLE_SHORT/_compact_dispatch_name path."""
     if not worker_role:
         return None, ""
@@ -1573,8 +1576,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
 
         def _emit_dispatch_tree(job, parent_model=None, parent_harness=None, parent_effort=None,
                                 orphan=False, is_last=True):
-            # SD-F2 — a depth-1 conductor's OWN breadcrumb tracks its active depth-2 code-*
-            # stage-worker, not its static argv/plan-derived `stage`. `job_children` is the
+            # SD-F2 — a depth-1 conductor's OWN breadcrumb tracks its active depth-2 stage
+            # worker, not its static argv/plan-derived `stage`. `job_children` is the
             # enclosing closure dict, so this is readable before the row renders.
             stage_override = _conductor_stage_override(job)
             if job.liveness == "stale":

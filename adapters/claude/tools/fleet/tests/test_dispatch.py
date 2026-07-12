@@ -778,8 +778,30 @@ class ConductorBreadcrumbTest(unittest.TestCase):
         for ln in lines:
             if ln and any(t == anchor_text for t, _k in ln):
                 return {t.rstrip("✓"): k for t, k in ln
-                        if t.rstrip("✓") in ("plan", "exec", "test", "report")}
+                        if t.rstrip("✓") in
+                        ("plan", "exec", "test", "search", "analyze", "report")}
         return None
+
+    def test_research_conductor_blinks_active_search_child(self):
+        conductor = DispatchJob(key="research", slug="research-topic", depth=1,
+                                liveness="working", stage="research",
+                                worker_role="capability-owner")
+        child = DispatchJob(key="research", slug="topic-search", depth=2,
+                            parent_slug="research-topic", worker_role="stage-search",
+                            liveness="working")
+
+        def stage_keys(blink_on):
+            with mock.patch.object(render, "_BLINK_ON", blink_on):
+                lines = render._build_lines([], [conductor, child], section="both", narrow=False,
+                                            malformed=0, layout="wide")
+            return self._stage_keys(lines, "owner")
+
+        on, off = stage_keys(True), stage_keys(False)
+        self.assertIsNotNone(on)
+        self.assertIsNotNone(off)
+        self.assertEqual(on.get("search"), "stg0_on")
+        self.assertEqual(off.get("search"), "stg0_off")
+        self.assertEqual(on.get("analyze"), "stg1_off")
 
     def test_conductor_breadcrumb_aggregates_active_child_stage(self):
         conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",
