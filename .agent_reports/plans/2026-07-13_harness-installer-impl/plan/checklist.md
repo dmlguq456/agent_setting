@@ -26,10 +26,10 @@ Phase 4: verifier.py real check lists (P0.2) [depends on Phase 3]
   [x] Step 4.4: drivers/opencode.py checks() — symlink existence + sync-native --check x3 + preflight smoke + drift-watch sentinel + bootstrap smoke (CLI-gated)
 
 Phase 5: installer.py wiring — cmd_* real behavior (P0 integration) [depends on 1,2,3]
-  [ ] Step 5.1: installer.py cmd_install — driver.install() real call, SKIP/BLOCKED surfacing
-  [ ] Step 5.2: installer.py cmd_status — driver.status() real call
-  [ ] Step 5.3: installer.py cmd_update — remove reapply-gated drift computation; always compute drift; --reapply path
-  [ ] Step 5.4: installer.py cmd_uninstall — manifest-scoped removal
+  [x] Step 5.1: installer.py cmd_install — driver.install() real call, SKIP/BLOCKED surfacing
+  [x] Step 5.2: installer.py cmd_status — driver.status() real call
+  [x] Step 5.3: installer.py cmd_update — remove reapply-gated drift computation; always compute drift; --reapply path
+  [x] Step 5.4: installer.py cmd_uninstall — manifest-scoped removal
 
 Phase 6: mem import + ~/.local/bin launcher symlinks (P0.5) [independent, parallel with 1-4]
   [x] Step 6.1: bootstrap.py (new) or cmd_install hook — mem import when DB absent
