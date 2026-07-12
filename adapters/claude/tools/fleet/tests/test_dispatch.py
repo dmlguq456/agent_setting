@@ -767,6 +767,25 @@ class StageWorkerRenderTest(unittest.TestCase):
         self.assertEqual(render._short_role("g8b_design_verifier_clean_pass"), "g8b")
 
 
+class QuickDispatchRenderTest(unittest.TestCase):
+    def test_quick_depth_one_renders_single_quick_exec_breadcrumb(self):
+        job = DispatchJob(key="code", slug="quick-worker", depth=1, intensity="quick",
+                          liveness="working", worker_role="capability-owner")
+        texts = []
+        texts.append("\n".join("".join(part for part, _key in line)
+                                 for line in render._build_lines([], [job], section="both",
+                                                                 narrow=False, malformed=0,
+                                                                 layout="wide") if line))
+        l1, l2 = render._dispatch_row_2line(job)
+        texts.append("".join(part for part, _key in l1 + l2))
+        for text in texts:
+            self.assertIn("quick/exec", text)
+            self.assertEqual(text.count("quick/exec"), 1)
+            self.assertNotIn("plan ›", text)
+            self.assertNotIn("exec ›", text)
+            self.assertNotIn("test ›", text)
+
+
 class ConductorBreadcrumbTest(unittest.TestCase):
     """SD-F2 — a depth-1 conductor's breadcrumb tracks its active depth-2 code-* child stage."""
 

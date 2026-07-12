@@ -729,6 +729,21 @@ if AGENT_HOME="$TMP/not-agent-home" python3 "$ROOT/adapters/codex/bin/dispatch-h
 else
   bad "codex dispatch script should validate AGENT_HOME"
 fi
+if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-quick-depth1 --capability autopilot-code --mode dev/backend --intensity quick --depth 1 --prompt-text "quick work" --model gpt-test --reasoning low --jobs "$TMP/codex-quick-depth1.log" >/tmp/codex_quick_depth1.out 2>/tmp/codex_quick_depth1.err   && grep -q '^status=register$' /tmp/codex_quick_depth1.out   && grep -q '^registered=1$' /tmp/codex_quick_depth1.out   && grep -q '^depth=1$' /tmp/codex_quick_depth1.out   && grep -q '^intensity=quick$' /tmp/codex_quick_depth1.out   && grep -q $'open	.*/repo	.*/repo	codex-quick-depth1	capability=autopilot-code,mode=dev/backend,qa=quick,intensity=quick,depth=1,harness=codex,parent_sid=019f56f7-86b5-7cf1-b65c-f9f244bae927,owner_harness=codex,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-quick-depth1.log"; then
+  ok "codex dispatch wrapper accepts quick depth-1 one-shot jobs"
+else
+  bad "codex dispatch wrapper should accept quick depth-1 one-shot jobs"
+fi
+if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-quick-depth2 --capability autopilot-code --mode dev/backend --intensity quick --depth 2 --parent codex-parent --prompt-text "quick work" --model gpt-test --reasoning low >/tmp/codex_quick_depth2.out 2>/tmp/codex_quick_depth2.err; then
+  bad "codex dispatch wrapper should reject quick depth-2 jobs"
+else
+  rc=$?
+  if [ "$rc" -eq 64 ]     && grep -q '^reason=invalid-depth-two-intensity$' /tmp/codex_quick_depth2.out     && grep -q '^depth=2$' /tmp/codex_quick_depth2.out     && grep -q '^intensity=quick$' /tmp/codex_quick_depth2.out     && [ ! -e "$TMP/codex-quick-depth2.log" ]; then
+    ok "codex dispatch wrapper rejects quick depth-2 jobs"
+  else
+    bad "codex dispatch wrapper should reject quick depth-2 jobs"
+  fi
+fi
 mkdir -p "$TMP/codex-stubbin"
 cat > "$TMP/codex-stubbin/codex" <<'EOF'
 #!/usr/bin/env sh
@@ -798,7 +813,7 @@ if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --c
   && [ -f "$TMP/codex-dispatch.log.lock" ] \
   && [ -f "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" ] \
   && grep -q 'role planning, role implementation, role verification, and role report' "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" \
-  && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=codex,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
+  && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=codex,parent_sid=019f56f7-86b5-7cf1-b65c-f9f244bae927,owner_harness=codex,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
   ok "codex dispatch wrapper registers open headless job"
 else
   bad "codex dispatch wrapper should register open headless job"
@@ -818,7 +833,7 @@ fi
 if "$CODEX" harvest --jobs "$TMP/codex-dispatch.log" --slug codex-dispatch --mark-done >/tmp/codex_harvest_done.out 2>/tmp/codex_harvest_done.err \
   && grep -q '^marked_done=1$' /tmp/codex_harvest_done.out \
   && grep -q '^registry_lock=.*/codex-dispatch.log.lock$' /tmp/codex_harvest_done.out \
-  && grep -q $'done\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=codex,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
+  && grep -q $'done\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=codex,parent_sid=019f56f7-86b5-7cf1-b65c-f9f244bae927,owner_harness=codex,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
   ok "codex harvest wrapper marks selected jobs done"
 else
   bad "codex harvest wrapper should mark selected jobs done"
@@ -2760,11 +2775,26 @@ if AGENT_HOME="$TMP/not-agent-home" python3 "$ROOT/adapters/opencode/bin/dispatc
 else
   bad "opencode dispatch script should validate AGENT_HOME"
 fi
+if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-quick-depth1 --capability autopilot-code --mode dev/backend --intensity quick --depth 1 --prompt-text "quick work" --model provider/test --variant low --jobs "$TMP/opencode-quick-depth1.log" >/tmp/opencode_quick_depth1.out 2>/tmp/opencode_quick_depth1.err   && grep -q '^status=register$' /tmp/opencode_quick_depth1.out   && grep -q '^registered=1$' /tmp/opencode_quick_depth1.out   && grep -q '^depth=1$' /tmp/opencode_quick_depth1.out   && grep -q '^intensity=quick$' /tmp/opencode_quick_depth1.out   && grep -q $'open	.*/repo	.*/repo	opencode-quick-depth1	capability=autopilot-code,mode=dev/backend,qa=quick,intensity=quick,depth=1,harness=opencode,parent_sid=019f56f7-86b5-7cf1-b65c-f9f244bae927,owner_harness=codex,agent=build,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-quick-depth1.log"; then
+  ok "opencode dispatch wrapper accepts quick depth-1 one-shot jobs"
+else
+  bad "opencode dispatch wrapper should accept quick depth-1 one-shot jobs"
+fi
+if "$OPENCODE" dispatch --dry-run --worktree "$TMP/repo" --slug opencode-quick-depth2 --capability autopilot-code --mode dev/backend --intensity quick --depth 2 --parent opencode-parent --prompt-text "quick work" --model provider/test --variant low >/tmp/opencode_quick_depth2.out 2>/tmp/opencode_quick_depth2.err; then
+  bad "opencode dispatch wrapper should reject quick depth-2 jobs"
+else
+  rc=$?
+  if [ "$rc" -eq 64 ]     && grep -q '^reason=invalid-depth-two-intensity$' /tmp/opencode_quick_depth2.out     && grep -q '^depth=2$' /tmp/opencode_quick_depth2.out     && grep -q '^intensity=quick$' /tmp/opencode_quick_depth2.out     && [ ! -e "$TMP/opencode-quick-depth2.log" ]; then
+    ok "opencode dispatch wrapper rejects quick depth-2 jobs"
+  else
+    bad "opencode dispatch wrapper should reject quick depth-2 jobs"
+  fi
+fi
 if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-dispatch --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model provider/test --variant low --jobs "$TMP/opencode-dispatch.log" >/tmp/opencode_dispatch.out 2>/tmp/opencode_dispatch.err \
   && grep -q '^status=register$' /tmp/opencode_dispatch.out \
   && grep -q '^registered=1$' /tmp/opencode_dispatch.out \
   && grep -q '^started=0$' /tmp/opencode_dispatch.out \
-  && grep -q $'open\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=opencode,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
+  && grep -q $'open\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=opencode,parent_sid=019f56f7-86b5-7cf1-b65c-f9f244bae927,owner_harness=codex,agent=build,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
   ok "opencode dispatch wrapper registers open headless job"
 else
   bad "opencode dispatch wrapper should register open headless job"
@@ -2794,7 +2824,7 @@ else
 fi
 if "$OPENCODE" harvest --jobs "$TMP/opencode-dispatch.log" --slug opencode-dispatch --mark-done >/tmp/opencode_harvest_done.out 2>/tmp/opencode_harvest_done.err \
   && grep -q '^marked_done=1$' /tmp/opencode_harvest_done.out \
-  && grep -q $'done\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=opencode,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
+  && grep -q $'done\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=opencode,parent_sid=019f56f7-86b5-7cf1-b65c-f9f244bae927,owner_harness=codex,agent=build,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
   ok "opencode harvest wrapper marks selected jobs done"
 else
   bad "opencode harvest wrapper should mark selected jobs done"
@@ -3556,9 +3586,9 @@ out=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_SELF_SLUG=cyc "$SDR" --skill co
 if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '"additionalContext"'; then
   ok "SDR keeps soft reminder (no deny) when intensity is unknown (backward compat)"
 else bad "SDR should reminder (not deny) for unknown intensity [$out] rc=$rc"; fi
-# (ii) direct/quick → no-op (legit inline)
+# (ii) direct/quick → no-op (direct inline; quick is a depth-1 one-shot worker)
 out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill code-plan --depth 1 --intensity quick 2>&1); rc=$?
-[ "$rc" -eq 0 ] && [ -z "$out" ] && ok "SDR no-ops for intensity=quick" || bad "SDR should no-op for quick [$out] rc=$rc"
+[ "$rc" -eq 0 ] && [ -z "$out" ] && ok "SDR no-ops for intensity=quick" || bad "SDR should no-op for quick one-shot worker [$out] rc=$rc"
 # (iii) depth-2 stage session → no-op
 out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill code-plan --depth 2 --intensity standard 2>&1); rc=$?
 [ "$rc" -eq 0 ] && [ -z "$out" ] && ok "SDR no-ops for depth-2 stage session" || bad "SDR should no-op for depth-2 [$out] rc=$rc"

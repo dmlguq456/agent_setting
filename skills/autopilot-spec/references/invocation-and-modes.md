@@ -110,7 +110,7 @@ update mode 가 하는 일 (3 가지, 한 트랜잭션):
 - **drift 가 CLEAR** (변경 의도·범위 명확) → 자율 진행 + 한 줄 보고.
 - **drift 가 AMBIGUOUS** (의도 해석 갈림 / 영향 범위 불명) → 사용자에게 먼저 확인 후 진행 (임의 추측 X).
 
-작은 spec tweak 은 `--intensity quick` 으로 inline micro-plan + plan-check-lite + verify-lite만 수행한다. Durable snapshot/log는 spec 영향이 실제로 있고 autopilot-spec update가 `prd.md`를 갱신할 때 남긴다; `--intensity quick`만으로 plan/log/snapshot artifact를 강제하지 않는다.
+작은 spec tweak 은 `--intensity quick` 으로 depth-1 one-shot worker 가 inline micro-plan + plan-check-lite + verify-lite만 수행한다. Durable snapshot/log는 spec 영향이 실제로 있고 autopilot-spec update가 `prd.md`를 갱신할 때 남긴다; `--intensity quick`만으로 plan/log/snapshot artifact를 강제하지 않는다.
 
 ### refine v{N+1} 버전 관리 (doc 트랙과 동일 원리)
 

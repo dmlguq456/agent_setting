@@ -220,7 +220,7 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
     if args.capability == "autopilot-code":
         extra = (
             "\nAutopilot-code execution contract:\n"
-            "- Choose the stage graph from intensity before QA. direct has no plan stage; quick uses micro-plan plus plan-check-lite; standard+ uses owner-plan plus optional bounded depth2 verifier/planner, synth, and durable execute/test/report.\n"
+            "- Choose the stage graph from intensity before QA. direct has no plan stage; quick is a depth-1 one-shot worker that uses micro-plan plus plan-check-lite and focused verification; standard+ uses owner-plan plus optional bounded depth2 verifier/planner, synth, and durable execute/test/report.\n"
             f"- Run adapters/opencode/bin/preflight.sh qa-policy {args.qa} code and obey assurance_scope, stage_graph_selector, reviewer_counts, and independent delegation policy before claiming QA coverage.\n"
             "- Plan-check is required for quick+ but stays small; do not run independent QA after every stage by default.\n"
             "- standard+ may use bounded depth-2 planner/verifier workers when separable; thorough/adversarial expands to multi-axis/adversary workers. Synthesize short reports; depth 3+ is forbidden.\n"

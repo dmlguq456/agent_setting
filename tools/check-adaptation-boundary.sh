@@ -1050,7 +1050,7 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/bin/capability-map.sh must not expose root Skill compatibility paths as Codex capability-info output"
   fi
   if ! grep -Fq 'stage_graph_contract="core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance"' adapters/codex/bin/capability-map.sh \
-    || ! grep -Fq 'plan_policy="direct=no-plan;quick=micro-plan+plan-check-lite;standard+=durable-plan"' adapters/codex/bin/capability-map.sh \
+    || ! grep -Fq 'plan_policy="direct=no-plan;quick=depth1-one-shot-micro-plan+plan-check-lite;standard+=durable-plan"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'pipeline_contract="code-plan>code-execute>code-test>code-report"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'optional_pipeline_step="code-refine"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'artifact_contract="plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/"' adapters/codex/bin/capability-map.sh \
@@ -1061,7 +1061,7 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'capability-info` and `route` print the portable pipeline contract (`code-plan>code-execute>code-test>code-report` for `standard+`)' adapters/codex/AGENTS.md \
     || ! grep -Fq 'autopilot-code pipeline' adapters/codex/README.md \
     || ! grep -Fq 'stage_graph_contract=core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance' adapters/codex/README.md \
-    || ! grep -Fq 'plan_policy=direct=no-plan;quick=micro-plan+plan-check-lite;standard+=durable-plan' adapters/codex/README.md \
+    || ! grep -Fq 'plan_policy=direct=no-plan;quick=depth1-one-shot-micro-plan+plan-check-lite;standard+=durable-plan' adapters/codex/README.md \
     || ! grep -Fq 'pipeline_contract=code-plan>code-execute>code-test>code-report' adapters/codex/README.md; then
     fail_msg "Codex docs must describe the autopilot-code pipeline metadata exposed by capability-info/route"
   fi
@@ -1340,7 +1340,7 @@ check_codex_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp web-bundle fleet profile"
+  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp web-bundle fleet profile install"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2373,7 +2373,7 @@ check_opencode_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp web-bundle fleet profile"
+  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp web-bundle fleet profile install"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue

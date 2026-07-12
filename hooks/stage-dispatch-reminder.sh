@@ -16,7 +16,7 @@
 #     conductor_code_stage = CLAUDE_CODE_CHILD_SESSION=1 AND AGENT_DISPATCH_DEPTH=1
 #                            AND skill ∈ {code-plan,code-execute,code-test,code-report}
 #     · not conductor_code_stage        → silent (main, depth-2 stage session, non-code)
-#     · intensity ∈ {direct,quick}      → silent (these legitimately run inline)
+#     · intensity ∈ {direct,quick}      → silent (direct inline; quick is a depth-1 one-shot worker)
 #     · intensity ∈ {standard,strong,thorough,adversarial}:
 #         · STAGE_DISPATCH_INLINE_OK=1   → soft reminder (orchestrator granted an explicit
 #                                          inline opt-out — e.g. a self-modification cycle
@@ -67,7 +67,7 @@ print(json.dumps(out, ensure_ascii=False))' "$1"
 
 emit_reminder() { # $1=skill
   self="${AGENT_DISPATCH_SELF_SLUG:-\$AGENT_DISPATCH_SELF_SLUG}"
-  msg="📌 stage-dispatch: 이 세션은 depth-1 conductor(intensity=${AGENT_DISPATCH_INTENSITY:-?})입니다. ${1} 를 in-session Skill 로 직접 부르는 대신 dispatch-headless.py --depth 2 --parent ${self} --worker-role ${1} 로 스테이지를 분사하고 dispatch-wait 로 수확하세요 (dev-pipeline Step 1~7). in-session Skill 은 direct/quick 또는 headless-불가 런타임 fallback 자리에서만."
+  msg="📌 stage-dispatch: 이 세션은 depth-1 conductor(intensity=${AGENT_DISPATCH_INTENSITY:-?})입니다. ${1} 를 in-session Skill 로 직접 부르는 대신 dispatch-headless.py --depth 2 --parent ${self} --worker-role ${1} 로 스테이지를 분사하고 dispatch-wait 로 수확하세요 (dev-pipeline Step 1~7). in-session Skill 은 direct inline 또는 quick one-shot worker / headless-불가 런타임 fallback 자리에서만."
   _json_wrap context "$msg"
 }
 
@@ -86,7 +86,7 @@ emit_deny() { # $1=skill
 decide() { # $1=skill $2=depth $3=intensity
   conductor_code_stage "$1" "$2" || return 0
   case "$3" in
-    direct|quick) return 0 ;;  # 정당 inline — 조용히.
+    direct|quick) return 0 ;;  # direct inline / quick one-shot worker — 조용히.
     standard|strong|thorough|adversarial)
       if [ "${STAGE_DISPATCH_INLINE_OK:-}" = "1" ]; then
         emit_reminder "$1"     # orchestrator 명시 opt-out → soft reminder.

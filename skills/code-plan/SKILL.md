@@ -44,7 +44,7 @@ Write the plan files directly. Return ONLY the file paths and a 3-5 line Korean 
 The agent writes the plan file directly; the orchestrator only receives paths and a summary.
 
 ## Plan-Check Assurance
-The verification rigor tier is derived from the caller's selected `--intensity` and plan risk (per [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)). The rigor tier is not a stage graph selector; `code-plan` only runs when the caller already selected a durable `standard+` plan graph. `direct` skips this skill, and `quick` uses inline micro-plan plus plan-check-lite in the caller.
+The verification rigor tier is derived from the caller's selected `--intensity` and plan risk (per [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)). The rigor tier is not a stage graph selector; `code-plan` only runs when the caller already selected a durable `standard+` plan graph. `direct` skips this skill, and `quick` is a depth-1 one-shot worker with inline micro-plan plus plan-check-lite in the caller.
 
 The log directory is the task root folder (parent of `plan/`). Example: `<artifact-root>/plans/2026-03-18_task/plan/plan.md` → log dir is `<artifact-root>/plans/2026-03-18_task/`. Run `mkdir -p {log_dir}/_internal/plan_reviews` before invoking an independent review.
 

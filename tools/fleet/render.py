@@ -640,6 +640,30 @@ def _stage_segs(key, stage, working=False):
     return [("—", "dim")]
 
 
+def _dispatch_stage_segs(j, key, stage, slug_name, working=False):
+    depth = max(1, int(getattr(j, "depth", 1) or 1))
+    intensity = getattr(j, "intensity", None) or ""
+    if depth == 1 and intensity == "quick":
+        return [("quick/exec", "stg0_on" if working and _BLINK_ON else "stg0_off")]
+    if depth >= 2:
+        # P0-1: a depth-2 stage worker never repeats its parent conductor's full
+        # breadcrumb — its identity already rode the name zone (label above); this slot
+        # is its own micro-status only.
+        if j.liveness == "working":
+            return [("running", "stg0_on" if _BLINK_ON else "stg0_off")]
+        if stage and stage not in ("open", "running"):
+            return [(stage, "stg0_off")]
+        return []
+    if key and key != slug_name:
+        # SD-F1: a depth-2 stage worker's `key` IS its capability (code-plan/code-execute/
+        # code-test/code-report) — reuse _stage_role_label (same helper the F-13 legend
+        # uses) to humanize it instead of leaking the raw capability token onto the board.
+        role_label, role_suffix = _stage_role_label(key)
+        prefix_text = (role_label + role_suffix) if role_label else key
+        return [(prefix_text + ": ", "name_dim")] + _stage_segs(key, stage, working=working)
+    return _stage_segs(key, stage, working=working)
+
+
 def _session_row(s, narrow, is_parent=False, child_count=0):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
@@ -930,23 +954,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
             segs.append((" " * (_OPTW - optw), None))
 
         segs.append(("  ", None))
-        if depth >= 2:
-            # P0-1: a depth-2 stage worker never repeats its parent conductor's full
-            # breadcrumb — its identity already rode the name zone (label above); this slot
-            # is its own micro-status only.
-            if j.liveness == "working":
-                segs.append(("running", "stg0_on" if _BLINK_ON else "stg0_off"))
-            elif stage and stage not in ("open", "running"):
-                segs.append((stage, "stg0_off"))
-        else:
-            if key and key != slug_name:
-                # SD-F1: a depth-2 stage worker's `key` IS its capability (code-plan/code-execute/
-                # code-test/code-report) — reuse _stage_role_label (same helper the F-13 legend
-                # uses) to humanize it instead of leaking the raw capability token onto the board.
-                role_label, role_suffix = _stage_role_label(key)
-                prefix_text = (role_label + role_suffix) if role_label else key
-                segs.append((prefix_text + ": ", "name_dim"))
-            segs += _stage_segs(key, stage, working=(j.liveness == "working"))
+        segs += _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"))
 
     segs.append((_RFLUSH, None))
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
@@ -1066,20 +1074,7 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     if optw < _OPTW:
         l2.append((" " * (_OPTW - optw), None))
     l2.append(("  ", None))
-    if depth >= 2:
-        # P0-1: no repeated parent breadcrumb — own micro-status only.
-        if j.liveness == "working":
-            l2.append(("running", "stg0_on" if _BLINK_ON else "stg0_off"))
-        elif stage and stage not in ("open", "running"):
-            l2.append((stage, "stg0_off"))
-    else:
-        if key and key != slug_name:
-            # SD-F1/D1: same capability→label humanization as the wide-layout _dispatch_row —
-            # the narrow 2-line card must not leak the raw code-* capability key either.
-            role_label, role_suffix = _stage_role_label(key)
-            prefix_text = (role_label + role_suffix) if role_label else key
-            l2.append((prefix_text + ": ", "name_dim"))
-        l2 += _stage_segs(key, stage, working=(j.liveness == "working"))
+    l2 += _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"))
     if _split:
         return l1, l2, br_seg
     return l1, l2
