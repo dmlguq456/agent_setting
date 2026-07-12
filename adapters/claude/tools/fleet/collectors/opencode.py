@@ -116,6 +116,13 @@ def enrich(sess):
         row = _query(con.cursor(), sess.cwd)
         if row and row[0]:
             last_ctx = _last_request_context(con, row[0])
+            try:
+                tr = con.execute(
+                    "SELECT title FROM session WHERE id=? LIMIT 1", (row[0],)).fetchone()
+                if tr and tr[0] and str(tr[0]).strip():
+                    sess.title = str(tr[0]).strip()
+            except Exception:
+                pass   # older DB without a title column → title stays None (tolerant, F-3)
     except Exception:
         return
     finally:

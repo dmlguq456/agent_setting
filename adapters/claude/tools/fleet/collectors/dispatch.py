@@ -40,6 +40,25 @@ _QA = re.compile(r"--qa ([a-z]+)")
 _QA_LEVELS = ("quick", "light", "standard", "thorough", "adversarial")
 _PIPE = re.compile(r"\s*([A-Za-z][\w-]*)(?::(\w+))?")
 _SHELLS = ("zsh", "bash", "sh", "dash")
+_PIPE_TOK = re.compile(r"[,\s]+")
+_DRILL_SLUG_RE = re.compile(r"^drill-[a-z]+-(.+)-\d{14}-\d+$")   # registry slug → case
+_DRILL_CWD_COMP_RE = re.compile(r"^drill-(.+)-[^-]+$")           # /tmp/drill-<case>-<rand> 컴포넌트 → case (project_of 선례)
+
+
+def _drill_case_from_slug(slug):
+    """registry slug 'drill-<adapter>-<case>-<ts>-<pid>' → case (없으면 None)."""
+    m = _DRILL_SLUG_RE.match(slug or "")
+    return m.group(1) if m else None
+
+
+def _drill_case_from_cwd(cwd):
+    """cwd 경로 컴포넌트 중 '/tmp/drill-<case>-<rand>' 의 case (없으면 None)."""
+    for comp in (cwd or "").split("/"):
+        if comp.startswith("drill-"):
+            m = _DRILL_CWD_COMP_RE.match(comp)
+            if m:
+                return m.group(1)
+    return None
 
 
 def _strip_autopilot_prefix(name):
@@ -59,11 +78,26 @@ def _parse_pipe_meta(pipe):
     eq_pos = head.find("=")
     colon_pos = head.find(":")
     if eq_pos != -1 and (colon_pos == -1 or eq_pos < colon_pos):
+        # continuation tokenizer (SD-F4, 2026-07-09 wild fixture): the writer
+        # (dispatch-headless.py:260) emits a closed key= vocabulary, but a value can itself
+        # contain spaces (e.g. `model_role=deep maker`) — a naive `,`-only or whitespace-only
+        # split breaks one of the two forms. Tokenize on `[,\s]+`; a token WITH `=` starts a
+        # new (k, v) pair, a token WITHOUT `=` is a continuation that space-joins onto the
+        # PREVIOUS pair's value. This assumes every real field is written as `key=value`
+        # (never a bare value) — see plan R8/N2 — so a stray `=`-free token can only be a
+        # continuation, never a new field.
         fields = {}
-        for part in head.split(","):
-            if "=" in part:
-                k, v = part.split("=", 1)
-                fields[k.strip()] = v.strip()
+        last_key = None
+        for tok in _PIPE_TOK.split(head):
+            if not tok:
+                continue
+            if "=" in tok:
+                k, v = tok.split("=", 1)
+                k = k.strip()
+                fields[k] = v.strip()
+                last_key = k
+            elif last_key is not None:
+                fields[last_key] = fields[last_key] + " " + tok
         fields["_name"] = _strip_autopilot_prefix(fields.get("capability"))
         return fields
     m = _PIPE.match(pipe or "")
@@ -232,6 +266,11 @@ def _opencode_job_liveness(cwd, now, stale_min=15, slug=None):
     return "dead"
 
 
+_QUEUED_GRACE_MIN = 15   # F-15c: an `open` registry row with no transcript yet, within this
+                          # startup grace window, is genuinely "not started" (queued) rather
+                          # than dead — past the window with still no transcript, it's dead.
+
+
 def _dispatch_liveness(job, now):
     if job.source == "proc" and job.key in _LOOP_KEYS:
         return "working"
@@ -239,7 +278,11 @@ def _dispatch_liveness(job, now):
         return _codex_job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
     if job.harness == "opencode":
         return _opencode_job_liveness(job.cwd, now, slug=job.slug)
-    return _job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
+    live = _job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
+    if (live == "dead" and job.source == "jobs" and job.status == "open"
+            and (job.elapsed_min or 0) <= _QUEUED_GRACE_MIN):
+        return "queued"
+    return live
 
 
 # --- jobs.log path ---
@@ -503,6 +546,18 @@ def effective_qa(argv_qa, pipe_qa, jcwd, slug, key):
     return None, None
 
 
+_STAGE_SUFFIX_RE = re.compile(r"-(?:code-)?(?:plan|exec|execute|test|report)$")
+
+
+def _slug_stem(slug):
+    """Strip a trailing depth-2 stage-role suffix (F-15c dedup key): 'fleet-ui-v2-execute'
+    -> 'fleet-ui-v2', 'x-code-plan' -> 'x', 'already' unchanged. Display/matching helper
+    only — never mutates DispatchJob.slug itself."""
+    if not slug:
+        return slug
+    return _STAGE_SUFFIX_RE.sub("", slug)
+
+
 def _norm_cwd(p):
     """Normalize a cwd for cross-source string-equality matching (B1/B2, R6): the jobs.log
     `worktree` field is writer-verbatim (dispatch-headless.py:append_job — no
@@ -637,6 +692,8 @@ def _scan_processes():
                 intensity=env.get("AGENT_DISPATCH_INTENSITY"),
                 worker_role=env.get("AGENT_DISPATCH_WORKER_ROLE"),
                 capability_owner=env.get("AGENT_DISPATCH_OWNER"),
+                effort=env.get("AGENT_DISPATCH_EFFORT"),
+                model_role=env.get("AGENT_DISPATCH_MODEL_ROLE"),
             ))
         elif loop:
             key = loop.group(1)
@@ -668,6 +725,8 @@ def _scan_processes():
                 is_child=is_child, source="proc", harness="claude" if env.get("CLAUDECODE") or "claude" in args else None,
                 pid=int(pid_s) if pid_s.isdigit() else None, worker_role=current_case,
                 capability_owner=key,
+                effort=env.get("AGENT_DISPATCH_EFFORT"),
+                model_role=env.get("AGENT_DISPATCH_MODEL_ROLE"),
             ))
     return jobs
 
@@ -683,7 +742,7 @@ def _iso_elapsed_min(ts):
     return max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 60))
 
 
-def _scan_jobs_log(path, seen_slugs):
+def _scan_jobs_log(path, seen_slugs, seen_keys=None):
     jobs = []
     malformed = 0
     try:
@@ -714,8 +773,15 @@ def _scan_jobs_log(path, seen_slugs):
         ts, status, repo, worktree, _slug, pipe = latest[slug]
         if status not in ("open", "running"):
             continue                          # newest state is terminal (done/killed/…) → not live
+        cwd = worktree if worktree not in ("-", "(main-tree)") else ""
         if slug in seen_slugs:
             continue                          # already shown as a live process job
+        # F-15c: (normalized cwd, slug-stem) dedup — a stage-worker registry row
+        # (fleet-ui-v2-execute) reconciles against its already-shown proc job
+        # (fleet-ui-v2) ONLY when both cwd and stem match; a different worktree (conductor
+        # vs its own depth-2 child, OPERATIONS §5.10) never collapses, so both stay visible.
+        if cwd and seen_keys and (_norm_cwd(cwd), _slug_stem(slug)) in seen_keys:
+            continue
         seen_slugs.add(slug)
         meta = _parse_pipe_meta(pipe or "")
         pname = meta.get("_name") or repo or "job"
@@ -723,7 +789,6 @@ def _scan_jobs_log(path, seen_slugs):
         # covers the fallback-name path (parse failure) where pname = repo or "job".
         if pname.startswith("autopilot-"):
             pname = pname[len("autopilot-"):]   # normalize to proc key form (code/spec/…)
-        cwd = worktree if worktree not in ("-", "(main-tree)") else ""
         q, qsrc = effective_qa(None, meta.get("qa"), cwd, slug, pname)
         parent_slug = meta.get("parent") or meta.get("parent_slug") or None
         parent_sid = meta.get("parent_sid") or meta.get("parent_session_id") or None
@@ -738,6 +803,7 @@ def _scan_jobs_log(path, seen_slugs):
             profile=meta.get("profile"), depth=_parse_depth(meta.get("depth")),
             intensity=meta.get("intensity"), worker_role=meta.get("worker_role"),
             capability_owner=meta.get("owner") or meta.get("capability_owner"),
+            effort=meta.get("effort"), model_role=meta.get("model_role"),
         ))
     return jobs, malformed
 
@@ -771,16 +837,58 @@ def _jobs_log_fields(paths):
     return fields_by_slug
 
 
+def _reconcile_drill_rows(jobs):
+    """F-18a: 같은 drill 실행의 registry row(정본)와 proc loop job(중복)을 1행으로.
+
+    match = registry slug 의 case명 == proc drill job 의 case명, 그리고 registry cwd 가
+    '/tmp/drill-<case>-' 임(cwd 상관). 병합 시 registry row 를 남기고 proc 의 pid·liveness 를
+    흡수(live proc = ground truth), proc row 는 제거. registry 무write.
+    """
+    # registry drill rows: source=jobs & slug 이 drill 패턴 & cwd 가 /tmp/drill-<case>-
+    reg_by_case = {}
+    for r in jobs:
+        if r.source != "jobs":
+            continue
+        case = _drill_case_from_slug(r.slug)
+        if not case:
+            continue
+        if _drill_case_from_cwd(r.cwd) != case:      # cwd 상관 가드 (/tmp/drill-<case>- 확인)
+            continue
+        reg_by_case.setdefault(case, r)              # 첫 registry row 정본
+    if not reg_by_case:
+        return jobs
+    drop = set()
+    for p in jobs:
+        if p.source != "proc" or p.key != "drill":
+            continue
+        case = _drill_case_from_cwd(p.cwd) or p.worker_role or (p.slug if p.slug != "drill" else None)
+        r = reg_by_case.get(case)
+        if r is None:
+            continue
+        # registry 정본에 proc 의 liveness/pid 흡수
+        if r.pid is None:
+            r.pid = p.pid
+        if r.elapsed_min is None:
+            r.elapsed_min = p.elapsed_min
+        if p.liveness in ("working", "idle") and r.liveness in ("queued", "stale", "dead", "unknown"):
+            r.liveness = p.liveness                  # live proc = ground truth
+        drop.add(id(p))
+    if not drop:
+        return jobs
+    return [j for j in jobs if id(j) not in drop]
+
+
 def collect(jobs_path=None, harness_filter=None):
     """Return merged [DispatchJob]. harness_filter does not restrict dispatch — the section
     is cross-harness by design (jobs, not sessions)."""
     proc_jobs = _scan_processes()
     seen = set(j.slug for j in proc_jobs if j.slug)
+    seen_keys = set((_norm_cwd(j.cwd), _slug_stem(j.slug)) for j in proc_jobs if j.cwd and j.slug)
     paths = _candidate_jobs_paths(jobs_path)
     log_jobs = []
     malformed = 0
     for path in paths:
-        path_jobs, path_malformed = _scan_jobs_log(path, seen)
+        path_jobs, path_malformed = _scan_jobs_log(path, seen, seen_keys)
         log_jobs.extend(path_jobs)
         malformed += path_malformed
     jobs = proc_jobs + log_jobs
@@ -822,6 +930,14 @@ def collect(jobs_path=None, harness_filter=None):
     now = time.time()
     for j in jobs:
         j.liveness = _dispatch_liveness(j, now)
+    jobs = _reconcile_drill_rows(jobs)
+    # F-15c(a): a registry-only row (source="jobs") that turns out to be genuinely working
+    # re-derives its breadcrumb from the real plan artifacts instead of the raw jobs.log
+    # status word ("open"/"running") — otherwise a live job with real progress shows a
+    # static "queued"/"running" placeholder forever (the reported "queued 오라벨" bug).
+    for j in jobs:
+        if j.source == "jobs" and j.cwd and j.liveness == "working":
+            j.stage = live_stage(j.cwd, j.slug, j.key)
     # stash malformed count on the module for the render header (optional signal)
     collect.last_malformed = malformed
     return jobs

@@ -232,6 +232,43 @@ class OpenCodeContextTest(unittest.TestCase):
 
         self.assertEqual(sess.ctx_pct, 9)
 
+    def _make_db(self, tmp, with_title_col):
+        db = os.path.join(tmp, "opencode.db")
+        con = sqlite3.connect(db)
+        cols = ("id text, slug text, agent text, model text, cost real, "
+                "tokens_input integer, tokens_output integer, tokens_reasoning integer, "
+                "time_updated integer, parent_id text, directory text")
+        if with_title_col:
+            cols += ", title text"
+        con.execute("CREATE TABLE session (%s)" % cols)
+        vals = ["sid", "shiny-wizard", "build", '{"id":"glm-5.2"}', 0.0,
+                0, 0, 0, 1234567890, None, "/repo"]
+        if with_title_col:
+            vals.append("개발 서버 시작")
+        con.execute("INSERT INTO session VALUES (%s)" %
+                     ",".join("?" * len(vals)), vals)
+        con.commit()
+        con.close()
+        return db
+
+    def test_opencode_enrich_fills_title_when_column_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._make_db(tmp, with_title_col=True)
+            sess = Session(harness="opencode", pid=1, cwd="/repo")
+            with mock.patch.dict(os.environ, {"OPENCODE_DB": db}, clear=True):
+                opencode.enrich(sess)
+        self.assertEqual(sess.title, "개발 서버 시작")
+        self.assertEqual(sess.slug, "shiny-wizard")
+
+    def test_opencode_enrich_tolerates_missing_title_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._make_db(tmp, with_title_col=False)
+            sess = Session(harness="opencode", pid=1, cwd="/repo")
+            with mock.patch.dict(os.environ, {"OPENCODE_DB": db}, clear=True):
+                opencode.enrich(sess)
+        self.assertIsNone(sess.title)
+        self.assertEqual(sess.slug, "shiny-wizard")
+
 
 # --- D3: cwd-fallback enrichment (fully hermetic) ---
 class CwdFallbackEnrichmentTest(unittest.TestCase):
@@ -645,6 +682,174 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
             self.assertEqual(by_slug["legacy-codex"].harness, "codex")
             self.assertEqual(by_slug["legacy-opencode"].harness, "opencode")
             self.assertEqual(by_slug["legacy-claude"].harness, "claude")
+
+
+# --- fleet UI v2: SD-F4 tolerant pipe parsing + SD-F1~F3 stage rows + F-9~F-13 readability ---
+class TolerantPipeParsingTest(unittest.TestCase):
+    """SD-F4 continuation tokenizer — comma/space tolerant, value-internal-space safe."""
+
+    def test_parse_pipe_space_separated_row(self):
+        fields = dispatch._parse_pipe_meta("capability=code a=1 b=2 c=3")
+        self.assertEqual(fields["a"], "1")
+        self.assertEqual(fields["b"], "2")
+        self.assertEqual(fields["c"], "3")
+        self.assertEqual(fields["capability"], "code")
+
+    def test_parse_pipe_value_internal_space(self):
+        fields = dispatch._parse_pipe_meta("model_role=deep maker,model=opus")
+        self.assertEqual(fields["model_role"], "deep maker")
+        self.assertEqual(fields["model"], "opus")
+
+    def test_parse_pipe_continuation_then_field(self):
+        # N2 — a continuation (value-internal space) followed by MORE key=value pairs must not
+        # get swallowed into the continuation; the next `=`-bearing token starts a fresh pair.
+        fields = dispatch._parse_pipe_meta(
+            "capability=code,model_role=deep maker,model=opus,qa=quick")
+        self.assertEqual(fields["capability"], "code")
+        self.assertEqual(fields["model_role"], "deep maker")
+        self.assertEqual(fields["model"], "opus")
+        self.assertEqual(fields["qa"], "quick")
+
+    def test_parse_pipe_unknown_key_ignored(self):
+        fields = dispatch._parse_pipe_meta("capability=code,bogus=nonsense,qa=quick")
+        self.assertEqual(fields["capability"], "code")
+        self.assertEqual(fields["qa"], "quick")
+        # unknown key is stored but nothing reads it — the point is it doesn't crash and
+        # doesn't corrupt the known fields.
+        self.assertEqual(fields.get("bogus"), "nonsense")
+
+    def test_canonical_comma_pipe_still_parses_unchanged(self):
+        # R1 regression guard alongside the existing D5 class — continuation tokenizer must
+        # not disturb the canonical comma-only form.
+        fields = dispatch._parse_pipe_meta(
+            "capability=autopilot-code,mode=verify,qa=adversarial,depth=2,"
+            "worker_role=verifier,owner=autopilot-code")
+        self.assertEqual(fields["_name"], "code")
+        self.assertEqual(fields["mode"], "verify")
+        self.assertEqual(fields["qa"], "adversarial")
+        self.assertEqual(fields["depth"], "2")
+        self.assertEqual(fields["worker_role"], "verifier")
+        self.assertEqual(fields["owner"], "autopilot-code")
+
+
+class StageWorkerRenderTest(unittest.TestCase):
+    """SD-F1 — depth-2 code-* stage workers render human stage labels, not raw worker_role."""
+
+    def test_stage_worker_rows_render_stage_labels(self):
+        cases = [
+            ("code-plan", "plan"),
+            ("code-execute", "exec"),
+            ("code-test", "test"),
+            ("code-report", "report"),
+        ]
+        for worker_role, label in cases:
+            # D2 (test_round1.md): a live depth-2 stage worker's `j.key` IS its capability
+            # (collectors/dispatch.py `pname = meta["capability"]`, e.g. "code-execute") — the
+            # old fixture used key="code" (the depth-1 conductor's track key), which masked the
+            # D1 raw-prefix leak since "code: " looks like a legitimate label already.
+            job = DispatchJob(key=worker_role, slug="stage-job", depth=2, worker_role=worker_role,
+                              liveness="working")
+            lines = render._build_lines([], [job], section="both", narrow=False, malformed=0,
+                                        layout="wide")
+            text = "\n".join("".join(part for part, _key in line) for line in lines if line)
+            self.assertIn(label, text)
+            self.assertNotIn(worker_role.replace("-", "_"), text)
+            # the raw capability key must never leak as a breadcrumb prefix (D1) — only its
+            # humanized _STAGE_ROLE label (asserted above) may appear.
+            self.assertNotIn(worker_role + ":", text)
+            self.assertNotIn(worker_role, text)
+
+    def test_g_case_prefix_general_rule_matches_known_drill_cases(self):
+        # N1 — the general rule replacing the removed g6/g9 hardcoded _ROLE_SHORT entries must
+        # still shrink live drill/loop case ids to their gN prefix.
+        self.assertEqual(render._short_role("g9_cross_harness_depth2_dispatch"), "g9")
+        self.assertEqual(render._short_role("g6_worktree_dispatch"), "g6")
+        self.assertEqual(render._short_role("g8b_design_verifier_clean_pass"), "g8b")
+
+
+class ConductorBreadcrumbTest(unittest.TestCase):
+    """SD-F2 — a depth-1 conductor's breadcrumb tracks its active depth-2 code-* child stage."""
+
+    def _stage_keys(self, lines, anchor_text):
+        # anchor on the role tag ("owner"), not the slug — the dispatch name column
+        # (_compact_dispatch_name) can tail-cut a long slug before this test's assertions run.
+        # F-15b P1-5: a stage BEFORE the active one carries a done "✓" suffix (e.g. "plan✓") —
+        # strip it here so lookups stay keyed by the bare stage word.
+        for ln in lines:
+            if ln and any(t == anchor_text for t, _k in ln):
+                return {t.rstrip("✓"): k for t, k in ln
+                        if t.rstrip("✓") in ("plan", "exec", "test", "report")}
+        return None
+
+    def test_conductor_breadcrumb_aggregates_active_child_stage(self):
+        conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",
+                                stage="plan", worker_role="capability-owner")
+        child = DispatchJob(key="code", slug="fleet-ui-v2-exec", depth=2,
+                            parent_slug="fleet-ui-v2", worker_role="code-execute",
+                            liveness="working")
+        lines = render._build_lines([], [conductor, child], section="both", narrow=False,
+                                    malformed=0, layout="wide")
+        stage_keys = self._stage_keys(lines, "owner")
+        self.assertIsNotNone(stage_keys)
+        self.assertEqual(stage_keys.get("exec"), "stg1_on")
+        self.assertEqual(stage_keys.get("plan"), "stg0_off")
+        self.assertEqual(stage_keys.get("test"), "stg2_off")
+
+    def test_conductor_breadcrumb_falls_back_to_own_stage_when_child_not_working(self):
+        conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",
+                                stage="test", worker_role="capability-owner")
+        child = DispatchJob(key="code", slug="fleet-ui-v2-exec", depth=2,
+                            parent_slug="fleet-ui-v2", worker_role="code-execute",
+                            liveness="done")
+        lines = render._build_lines([], [conductor, child], section="both", narrow=False,
+                                    malformed=0, layout="wide")
+        stage_keys = self._stage_keys(lines, "owner")
+        self.assertIsNotNone(stage_keys)
+        self.assertEqual(stage_keys.get("test"), "stg2_on")
+
+    def test_conductor_breadcrumb_report_child_renders_lone_bright_token(self):
+        # N5 — "report" sits outside the code track (plan/exec/test); the accepted minimal
+        # behavior is a single bright lone "report" token (fallthrough), not a dim/unlit track.
+        conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",
+                                stage="test", worker_role="capability-owner")
+        child = DispatchJob(key="code", slug="fleet-ui-v2-report", depth=2,
+                            parent_slug="fleet-ui-v2", worker_role="code-report",
+                            liveness="working")
+        lines = render._build_lines([], [conductor, child], section="both", narrow=False,
+                                    malformed=0, layout="wide")
+        stage_keys = self._stage_keys(lines, "owner")
+        self.assertIsNotNone(stage_keys)
+        self.assertIn("report", stage_keys)
+        self.assertTrue(stage_keys["report"].startswith("stg0_"))
+
+
+class AlertHumanizeTest(unittest.TestCase):
+    """F-10 — alert strip strips loop-job <case>-<ts>-<pid> tails and aggregates by kind."""
+
+    def _alert_text(self, lines):
+        for ln in lines:
+            if ln and ln[0][0] == "  alert ":
+                return "".join(t for t, _k in ln)
+        return None
+
+    def test_alert_humanize_aggregates_and_strips_tail(self):
+        dead_a = DispatchJob(key="drill", slug="case-a-20260709-11111", liveness="dead")
+        dead_b = DispatchJob(key="drill", slug="case-b-20260709-22222", liveness="dead")
+        lines = render._build_lines([], [dead_a, dead_b], section="both", narrow=False,
+                                    malformed=0, layout="wide")
+        text = self._alert_text(lines)
+        self.assertIsNotNone(text)
+        self.assertIn("2 dead jobs: case-a·case-b", text)
+        self.assertNotIn("20260709", text)
+
+    def test_alert_humanize_single_stale_job_not_aggregated(self):
+        stale = DispatchJob(key="drill", slug="lone-case-20260709-33333", liveness="stale")
+        lines = render._build_lines([], [stale], section="both", narrow=False, malformed=0,
+                                    layout="wide")
+        text = self._alert_text(lines)
+        self.assertIsNotNone(text)
+        self.assertIn("stale lone-case", text)
+        self.assertNotIn("20260709", text)
 
 
 if __name__ == "__main__":

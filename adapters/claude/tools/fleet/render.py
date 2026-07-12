@@ -25,7 +25,10 @@ Module-global state invariants (single-process / single-thread only — no concu
   - `_TOGGLE_ROWS` is reset at the TOP of `_draw`, before any early-return / short-circuit, so a
     stale toggle map never survives to the next click.
 """
-import curses
+try:
+    import curses
+except ImportError:  # native Windows without windows-curses: plain --once / --json still work
+    curses = None
 import glob
 import os
 import re
@@ -34,20 +37,30 @@ import time
 
 from .model import fmt_min, dash, project_of
 
+# curses attribute constants — real values when curses is present, harmless 0 fallbacks
+# otherwise, so this module imports (and the plain --once path runs) with no curses at all.
+# The live TUI (run_live) still requires curses and guards for its absence explicitly.
+_A_BOLD = getattr(curses, "A_BOLD", 0)
+_A_DIM = getattr(curses, "A_DIM", 0)
+
 # harness = dim lowercase word in its identity color (no bracket chip, no reverse-video)
 _BADGE_TEXT = {"claude": "claude code", "codex": "codex", "opencode": "opencode"}
 _BADGE_KEY = {"claude": "h_claude", "codex": "h_codex", "opencode": "h_opencode"}
 _LIVE_RANK = {"working": 0, "idle": 1, "blocked": 2, "done": 3, "stale": 4, "dead": 5, "unknown": 6}
-_JOB_LIVE_RANK = {"working": 0, "stale": 1, "dead": 2, "unknown": 3}
+_JOB_LIVE_RANK = {"working": 0, "queued": 1, "stale": 2, "dead": 3, "unknown": 4}
 # effort → 2-char suffix after the model (design review r2: the effort column repeated 'xhigh'
 # everywhere and burned a column; a dim suffix keeps the info without the noise)
 # qa rigor ramp (a dispatch job's analogue of effort) — quick recedes, adversarial stands out
-_QA_INT = {"quick": curses.A_DIM, "light": curses.A_DIM, "standard": 0,
-           "thorough": curses.A_BOLD, "adversarial": curses.A_BOLD}
+_QA_INT = {"quick": _A_DIM, "light": _A_DIM, "standard": 0,
+           "thorough": _A_BOLD, "adversarial": _A_BOLD}
 _NARROW_CUTOFF = 70
-_TWO_LINE_CUTOFF = 110      # width below which sessions render as 2-line cards (round-4 responsive)
+_TWO_LINE_CUTOFF = 138     # width below which sessions render as 2-line cards (F-15a P0-3: the
+                           # wide 1-line grid now needs room for the options column too, so the
+                           # dead-zone between the old 110 cutoff and wide's real ~138-col need
+                           # is gone — 2-line cards are the PRIMARY layout, wide 1-line is rare)
 _LAYOUT = "auto"            # 'auto' (width decides) | 'wide' | 'narrow' | 'stack' — `w` key cycles
 _LOOPS_KEYS = ("oncall", "note", "study", "drill")
+_ALERT_TAIL = re.compile(r"-\d{8,}-\d+$")   # loop job `<case>-<ts>-<pid>` tail (F-10 alert humanize)
 
 
 def _cycle_layout():
@@ -57,7 +70,9 @@ def _cycle_layout():
 
 def _layout_mode(w):
     """wide (1-line grid) / narrow (2-line cards) / stack (ultra-narrow, fields stacked
-    vertically — user 2026-07-02: '세로로 나열하는 느낌'). auto: width decides."""
+    vertically — user 2026-07-02: '세로로 나열하는 느낌'). auto: width decides.
+    F-15a P0-3: <70 stack · <138 narrow (2-line, the PRIMARY layout — most real terminals are
+    ≤120 cols) · ≥138 wide (1-line, needs room for the options column too)."""
     if _LAYOUT != "auto":
         return _LAYOUT
     if w < _NARROW_CUTOFF:
@@ -73,7 +88,7 @@ _TINT_PAIR = {}    # (tint_char, hue_char) → curses attr — the (fg, tint_bg)
 # fg color_key → (hue, attr) decomposition (spec §5.2) — the basis for composing (fg, tint_bg)
 # pairs. hue: d=default g=green y=yellow r=red c=cyan m=magenta l=blue. Keys absent here render
 # as default-hue plain text under tint (safe degradation).
-_A_B, _A_D = curses.A_BOLD, curses.A_DIM
+_A_B, _A_D = _A_BOLD, _A_DIM
 _HUE_OF = {
     None: ("d", 0), "dim": ("d", _A_D), "head": ("d", _A_D), "unknown": ("d", _A_D),
     "name_work": ("d", _A_B), "name_idle": ("d", _A_B), "name_dim": ("d", _A_D),
@@ -279,10 +294,10 @@ def _live_key(state):
 # the glyph. Working uses a bright green spinner; live idle/detached use the same dim-green
 # loading axis; stale/dead recede to grey/red. Readable without color.
 _LIVE_GLYPH = {"working": "●", "idle": "●", "blocked": "◑", "done": "✓",
-               "stale": "·", "dead": "✕", "unknown": "·"}
+               "stale": "·", "dead": "✕", "queued": "◦", "unknown": "·"}
 _DETACHED_GLYPH = "○"   # ring = 빈 자리(클라이언트 없음); idle 은 꽉 찬 dim-green ●
 _GLYPH_KEY = {"working": "g_work", "idle": "g_work_off", "blocked": "g_idle", "done": "green",
-              "stale": "g_stale", "dead": "g_dead", "unknown": "dim"}
+              "stale": "g_stale", "dead": "g_dead", "queued": "dim", "unknown": "dim"}
 
 # group "cooling" state (user 2026-07-03): a directory with NO active work whose newest session
 # transcript write is within this window reads as "완료 직후 식는 중" — a middle state between hot
@@ -474,6 +489,14 @@ _NAME_COL = 4 + _HW           # absolute col where the NAME starts — SHARED by
                               # everything from the name onward aligns (session: prefix 4 + harness
                               # 14; dispatch: prefix 6 + harness 12 — deeper indent, narrower harness)
 _NW_S = _BRANCH_COL - _NAME_COL   # name field (both row types): col 18 → branch 46 = 28
+_NAME2_MAX = 40               # 2-line name zone tail-cut cap (display cells) — no fixed branch
+                              # column there, so an unbounded title could push branch off-draw (F-14)
+_TITLE_MAX = 24               # F-16: display-name budget (session title AND dispatch composed
+                              # label+slug) — tighter than the raw name-zone width so a long
+                              # harness ai-title/plan slug doesn't dominate the row
+_OPTW = 18                    # F-15a options column width (dim mode·qa·profile token, sits
+                              # between the model cell and the stage breadcrumb — declutters
+                              # the name zone, which used to carry this as a parenthetical tag)
 _BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
 _MW = 23                      # model cell: name + FULL effort word ('Opus 4.8 xhigh' — no abbrev)
 _EFW = 7                      # effort subfield ("medium"=6 +1 gap) — FIXED width so every row's
@@ -490,6 +513,29 @@ _PIPE_STAGES = {
     "research": ["search", "analyze", "report"],
     "draft": ["draft", "refine", "apply"],
 }
+
+# depth-2 code-* stage sub-skill → human stage label (SD-F1). Reuses the "code" track's
+# plan/exec/test vocabulary — no new words invented. "report" (code-report) sits outside that
+# track (see _stage_segs fallthrough for how a lone "report" token renders).
+_STAGE_ROLE = {
+    "code-plan": "plan",
+    "code-execute": "exec",
+    "code-test": "test",
+    "code-report": "report",
+}
+
+
+def _stage_role_label(worker_role):
+    """(base_label, suffix) for a depth-2 stage worker_role, e.g. 'code-execute:phase-A' ->
+    ('exec', ':phase-A'). base_label is None when worker_role isn't a known stage sub-skill —
+    callers fall back to the existing _ROLE_SHORT/_compact_dispatch_name path."""
+    if not worker_role:
+        return None, ""
+    base, _sep, suffix = worker_role.partition(":")
+    label = _STAGE_ROLE.get(base)
+    if label is None:
+        return None, ""
+    return label, (":" + suffix if suffix else "")
 
 # plain-text column labels (icons removed per user — "위에 아이콘들은 전부 빼자").
 # 'effort' gets its OWN header over the fixed subcolumn inside the model cell (user 2026-07-02).
@@ -556,11 +602,15 @@ def _stage_segs(key, stage, working=False):
         return "stg%d_on" % (i % 5)
     seq = _PIPE_STAGES.get(key)
     if seq and stage in seq:
+        cur_i = seq.index(stage)
         out = []
         for i, st in enumerate(seq):
             if i:
                 out.append((" › ", "dim"))
-            out.append((st, _cur_key(i) if st == stage else "stg%d_off" % (i % 5)))
+            # P1-5: a stage BEFORE the current one is done — a bright ✓ marker makes the
+            # "past stages are folded into this breadcrumb" contract visible (F-15b).
+            label = st + ("✓" if i < cur_i else "")
+            out.append((label, _cur_key(i) if st == stage else "stg%d_off" % (i % 5)))
         return out
     if seq and stage in ("", key, "open", "running"):
         # pre-plan boot (live_stage fell back to the argv key) / registry-only rows: show the
@@ -574,6 +624,15 @@ def _stage_segs(key, stage, working=False):
             out.append((st, "stg%d_off" % (i % 5)))
         return out
     if stage:
+        # F-11: no known pipeline track for this key (seq is None) — jobs.log raw status vocab
+        # ("open"/"running") shouldn't leak onto the board as-is. "open" humanizes to "queued";
+        # "running" (no track to light up) renders dim rather than as a bright lit token that
+        # would misleadingly imply an active named stage. jobs.log status vocabulary itself is
+        # unchanged — display layer only.
+        if stage == "open":
+            return [("queued", _cur_key(0))]
+        if stage == "running":
+            return [("running", "stg0_off")]
         return [(stage, _cur_key(0))]
     return [("—", "dim")]
 
@@ -582,6 +641,7 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
     dim_tel = live in ("stale", "dead") or s.app_server or s.detached
+    dead_stale = live in ("stale", "dead")   # F-13: telemetry gone, replaced with a single age cell
     name_key = ("name_work" if live == "working"
                 else ("name_dim" if dim_tel else "name_idle"))
     gch, gkey = _glyph(live)
@@ -596,10 +656,11 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
             else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
     segs = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey)]
 
-    # name zone: slug(focus) + ▾N(dim) + gate tag(dim), padded to the shared branch column.
+    # name zone: title-or-slug(focus) + ▾N(dim) + gate tag(dim), padded to the shared branch column.
     used = 0
-    slug_show = slug[: min(len(slug), _NW_S - 1)]
-    segs.append((slug_show, name_key)); used += len(slug_show)
+    name_txt = s.title or slug
+    shown = _clip_w(name_txt, min(_NW_S - 1, _TITLE_MAX))   # F-16: tighter display-name budget
+    segs.append((shown, name_key)); used += _dw(shown)   # display width, not char count (F-14 #4)
     if is_parent and child_count and used + 3 <= _NW_S:
         t = " ▾%d" % child_count
         segs.append((t, "dim")); used += len(t)
@@ -614,13 +675,19 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
         segs.append((" " * (_NW_S - used), None))
 
     segs.append(_branch_seg(s.cwd, s.branch, dim=dim_tel))     # main row = bright branch/model
-    segs += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
-
-    # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate from effort
-    if s.ctx_pct is not None and not dim_tel:
-        segs += [("    ", None)] + _gauge_segs(s.ctx_pct, _CTX_W) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
+    if dead_stale:
+        # F-13: a stale/dead row has no live model/effort/ctx to show — a wall of "—" placeholders
+        # read as broken telemetry rather than "this session stopped". One `last seen <age>` cell
+        # replaces the whole model+gauge zone (LIVE rows keep the explicit "—" convention, F-3).
+        age_min = int((time.time() - s.mtime) / 60) if s.mtime else (s.elapsed_min or 0)
+        segs += [(" " * _MW, None), ("    ", None), ("last seen %s" % fmt_min(age_min), "dim")]
     else:
-        segs += [("    ", None), ("─" * _CTX_W, "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
+        segs += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
+        # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate from effort
+        if s.ctx_pct is not None and not dim_tel:
+            segs += [("    ", None)] + _gauge_segs(s.ctx_pct, _CTX_W) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
+        else:
+            segs += [("    ", None), ("─" * _CTX_W, "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
     if s.app_server:
         segs.append(("  app-server", "dim"))
     if s.orphan:
@@ -692,9 +759,12 @@ _ROLE_SHORT = {
     "dev-refactor": "impl",
     "dev-new-lib": "impl",
     "research-survey": "research",
-    "g6_worktree_dispatch": "g6",
-    "g9_cross_harness_depth2_dispatch": "g9",
 }
+
+# drill/loop case ids (g6_worktree_dispatch, g9_cross_harness_depth2_dispatch, g8b_...) shrink
+# to their gN prefix by a GENERAL rule instead of a per-case hardcoded entry above (F-9(b) —
+# each new drill case used to need a code change here).
+_G_CASE_PREFIX = re.compile(r"^(g\d+[a-z]?)")
 
 
 def _short_level(value):
@@ -708,11 +778,20 @@ def _short_level(value):
 def _short_role(value):
     if not value:
         return ""
-    role = _ROLE_SHORT.get(value, value.replace("-", "_"))
+    label, suffix = _stage_role_label(value)
+    if label is not None:
+        # stage suffix (":phase-A") rides along as part of the same dim profile tag — the
+        # whole tag already renders "dim" (see _mq_tag), so no separate color key is needed.
+        return _compact_dispatch_name(label + suffix, 14)
+    m = _G_CASE_PREFIX.match(value)
+    role = _ROLE_SHORT.get(value) or (m.group(1) if m else value.replace("-", "_"))
     return _compact_dispatch_name(role, 14)
 
 
-def _dispatch_role_suffix(j, check_text=None):
+_PROFILE_MAX = 28
+
+
+def _dispatch_role_suffix(j, check_text=None, max_width=None):
     raw_role = getattr(j, "worker_role", None)
     if getattr(j, "key", None) in _LOOPS_KEYS and raw_role == getattr(j, "slug", None):
         raw_role = None
@@ -721,36 +800,78 @@ def _dispatch_role_suffix(j, check_text=None):
     check = _short_level(check_text)
     parts = []
     if intensity:
-        parts.append(intensity)
+        parts.append(("intensity", intensity))
     if role:
-        parts.append(role)
+        parts.append(("role", role))
     if check:
-        parts.append("qa:" + check)
-    return "/".join(parts)
+        parts.append(("qa", "qa:" + check))
+    if max_width is not None:
+        # F-9(c) width-drop priority: qa first, then intensity, then role — mode isn't part of
+        # this suffix (owned by _mq_tag's own mode segment). Drops whole components instead of
+        # silently tail-cutting the joined string (which used to chop qa:thorough mid-word).
+        for kind in ("qa", "intensity", "role"):
+            joined = "/".join(t for _k, t in parts)
+            if len(joined) <= max_width:
+                break
+            parts = [(k, t) for k, t in parts if k != kind]
+    return "/".join(t for _k, t in parts)
 
 
 def _dispatch_profile(j, check_text=None):
     profile = getattr(j, "profile", None)
-    role_suffix = _dispatch_role_suffix(j, check_text)
+    budget = _PROFILE_MAX - (len(profile) + 1 if profile else 0)
+    role_suffix = _dispatch_role_suffix(j, check_text, max_width=max(0, budget))
     if role_suffix:
         profile = (profile + "/" + role_suffix) if profile else role_suffix
-    return _compact_dispatch_name(profile, 28) if profile else None
+    return _compact_dispatch_name(profile, _PROFILE_MAX) if profile else None
+
+def _dispatch_stage_label(j):
+    """(label_prefix, is_stage_worker) — the depth-2 stage-role label ('exec', 'plan'...) that
+    now identifies a depth-2 child in the NAME zone (F-15a P0-1: identity lives here, not in a
+    duplicated breadcrumb). depth-1 conductors/orphans have no such label — their identity is
+    just their own slug."""
+    if max(1, int(getattr(j, "depth", 1) or 1)) < 2:
+        return None
+    label, suffix = _stage_role_label(getattr(j, "worker_role", None))
+    if label is None:
+        return None
+    return label + suffix
+
+
+def _opts_segs(j, qa_text, qa_key):
+    """F-15a options column — the job's (mode · qa · profile) dial, relocated OUT of the name
+    zone into its own dim slot between the model cell and the stage breadcrumb (P0-1/R2: the
+    name zone is identity-only now). Reuses `_mq_tag`'s content, just without the enclosing
+    parens (this is a column, not an inline tag) and without a leading name to hang off of."""
+    profile = _dispatch_profile(j, qa_text)
+    parts = []
+    w = 0
+    if j.mode:
+        parts.append((j.mode, "dim")); w += len(j.mode)
+    if profile:
+        if parts:
+            parts.append(("·", "dim")); w += 1
+        parts.append((profile, "dim")); w += len(profile)
+    return parts, w
+
 
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
-                  parent_effort=None):
+                  parent_effort=None, stage_override=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
-      harness  |  name (mode · qa)  |  branch  |  MODEL (the job's real model)  |  stage breadcrumb
-    mode+qa ride together in a `(mode · qa)` tag right after the name; the model slot shows the
-    job's own main model; the gauge slot is the stage breadcrumb (per-stage colors, current bold,
-    blinks while working). Weight vs a session = dim-font harness + ↳ + dim name.
+      harness  |  [stage label] name  |  branch  |  MODEL  |  options  |  stage breadcrumb
+    F-15a: the name zone is identity-only (no more parenthetical mode/qa tag — that moved to
+    its own options column after the model cell). A depth-2 stage worker's identity is its
+    stage label + slug (P0-1); its breadcrumb slot shows its own micro-status instead of
+    repeating the parent conductor's full breadcrumb.
     """
     key = j.key or "?"
-    stage = j.stage or ""
+    depth = max(1, int(getattr(j, "depth", 1) or 1))
+    stage = stage_override if stage_override is not None else (j.stage or "")
     qa_base = j.qa or ""
     qa_text = ""
     if j.qa:
         qa_text = ("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa
-    name = j.slug or key
+    slug_name = j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
@@ -762,31 +883,67 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     segs = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None),
             (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim"))]
     avail = _NW_S
-    profile = _dispatch_profile(j, qa_text)
-    tag_segs, tagw = _mq_tag(j.mode, None, qa_key, profile=profile)
     otag = "  (orphan)" if orphan else ""
-    name_room = min(_DISPATCH_NAME_MAX, max(3, avail - tagw - len(otag) - 1))
-    nm = _compact_dispatch_name(name, name_room)
+    label = _dispatch_stage_label(j)
+    name_room = min(_TITLE_MAX, max(3, avail - len(otag)))
+    if label:
+        # P2-6 composed cap: slug shares the same budget as its stage label.
+        slug_room = max(1, name_room - len(label) - 1)
+        nm = label + " " + _compact_dispatch_name(slug_name, slug_room)
+    else:
+        nm = _compact_dispatch_name(slug_name, name_room)
     used = len(nm)
     segs.append((nm, "name_dim"))
-    segs += tag_segs; used += tagw
     if otag and used + len(otag) <= avail:
         segs.append((otag, "gate_u")); used += len(otag)
     if used < avail:
         segs.append((" " * (avail - used), None))
 
     segs.append(_branch_seg("" if key in _LOOPS_KEYS else j.cwd, j.branch))  # loop temp repos hide throwaway branches
-    # model slot → the job's OWN main model (dim family color) + effort (headless has no
-    # statusline → parent's effort, the shared settings default — user 2026-07-03: 분사도 effort).
-    segs += _model_cell(j.model or parent_model, parent_effort, _MW, dim=True)
+    if j.liveness == "dead":
+        # P2-11: a dead job's last-known stage replaces the redundant "last seen <age>" (the
+        # time column already shows elapsed) — "dead @exec" tells you WHERE it died.
+        last_stage = stage if stage not in (None, "", "open", "running") else key
+        segs.append(("    ", None))
+        segs.append(("dead @%s" % last_stage, "g_dead"))
+    elif j.liveness == "stale":
+        # F-13: a stale job has no live model/effort/stage worth showing — collapse the whole
+        # telemetry zone (model cell + stage breadcrumb) into one `last seen <age>` cell.
+        segs.append(("    ", None))
+        segs.append(("last seen %s" % fmt_min(j.elapsed_min), "dim"))
+    else:
+        # model slot → the job's OWN main model (dim family color) + effort. SD-F3: the job's own
+        # effort is first-class; when it's absent (proc-scan rows — env doesn't export it yet),
+        # fall back to the parent's effort marked with the derived-value `~` prefix (legend F-9d).
+        eff = j.effort or (("~" + parent_effort) if parent_effort else None)
+        segs += _model_cell(j.model or parent_model, eff, _MW, dim=True)
 
-    # gauge slot → capability-LABELED stage breadcrumb: `code: plan › exec › test` — the process
-    # kind rides the track it names, where the eye reads progress (user 2026-07-02: name 앞보다
-    # 여기가 autopilot-code 정체를 직관적으로 전달). loops jobs (key == slug) skip the label.
-    segs.append(("    ", None))                       # 4-col gap (reads separate from effort/qa)
-    if key and key != name:
-        segs.append((key + ": ", "name_dim"))
-    segs += _stage_segs(key, stage, working=(j.liveness == "working"))
+        # F-15a options column (fixed-ish gap, dim mode/qa/profile) — a declutter move OUT of
+        # the name zone, not a new axis.
+        segs.append(("    ", None))
+        opt_segs, optw = _opts_segs(j, qa_text, qa_key)
+        segs += opt_segs
+        if optw < _OPTW:
+            segs.append((" " * (_OPTW - optw), None))
+
+        segs.append(("  ", None))
+        if depth >= 2:
+            # P0-1: a depth-2 stage worker never repeats its parent conductor's full
+            # breadcrumb — its identity already rode the name zone (label above); this slot
+            # is its own micro-status only.
+            if j.liveness == "working":
+                segs.append(("running", "stg0_on" if _BLINK_ON else "stg0_off"))
+            elif stage and stage not in ("open", "running"):
+                segs.append((stage, "stg0_off"))
+        else:
+            if key and key != slug_name:
+                # SD-F1: a depth-2 stage worker's `key` IS its capability (code-plan/code-execute/
+                # code-test/code-report) — reuse _stage_role_label (same helper the F-13 legend
+                # uses) to humanize it instead of leaking the raw capability token onto the board.
+                role_label, role_suffix = _stage_role_label(key)
+                prefix_text = (role_label + role_suffix) if role_label else key
+                segs.append((prefix_text + ": ", "name_dim"))
+            segs += _stage_segs(key, stage, working=(j.liveness == "working"))
 
     segs.append((_RFLUSH, None))
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
@@ -809,7 +966,8 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False):
     hn = _BADGE_TEXT.get(s.harness, "?")
     hkey = (_BADGE_KEY.get(s.harness, "dim") if dim_tel
             else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
-    l1 = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey), (slug, name_key)]
+    l1 = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey),
+          (_clip_w(s.title or slug, min(_NAME2_MAX, _TITLE_MAX)), name_key)]   # F-16
     if is_parent and child_count:
         l1.append((" ▾%d" % child_count, "dim"))
     gate, pipe = (s.gate, False) if s.gate else _gate_info(s.cwd, s.session_id)
@@ -859,29 +1017,35 @@ def _session_row_stack(s, is_parent=False, child_count=0):
     return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
-def _dispatch_row_stack(j, orphan=False, parent_model=None, parent_effort=None):
+def _dispatch_row_stack(j, orphan=False, parent_model=None, parent_effort=None, stage_override=None):
     l1, l2 = _dispatch_row_2line(j, orphan=orphan, parent_model=parent_model,
-                                 parent_effort=parent_effort)
+                                 parent_effort=parent_effort, stage_override=stage_override)
     gi = _stack_split(l2)
     return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
-def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, _split=False):
+def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, _split=False,
+                        stage_override=None):
+    """F-15a narrow card — L1 = identity ONLY (stage label + slug, no mode/qa tag); L2 =
+    elapsed · model · options (relocated from L1) · breadcrumb/micro-status."""
     key = j.key or "?"
-    name = j.slug or key
+    depth = max(1, int(getattr(j, "depth", 1) or 1))
+    slug_name = j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
     qa_base = j.qa or ""
     qa_text = (("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa) if j.qa else ""
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
-    profile = _dispatch_profile(j, qa_text)
-    tag_segs, _tw = _mq_tag(j.mode, None, qa_key, profile=profile)
 
     prefix = _dispatch_prefix(j)
-    shown_name = _compact_dispatch_name(name)
+    label = _dispatch_stage_label(j)
+    if label:
+        slug_room = max(1, _DISPATCH_NAME_MAX - len(label) - 1)
+        shown_name = label + " " + _compact_dispatch_name(slug_name, slug_room)
+    else:
+        shown_name = _compact_dispatch_name(slug_name)
     l1 = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None),
           (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim")), (shown_name, "name_dim")]
-    l1 += tag_segs
     if orphan:
         l1.append(("  (orphan)", "gate_u"))
     br = None if key in _LOOPS_KEYS else (j.branch or _git_branch(j.cwd))
@@ -889,11 +1053,30 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     if not _split and br_seg:
         l1.append(br_seg)
 
+    stage = stage_override if stage_override is not None else (j.stage or "")
+    eff = j.effort or (("~" + parent_effort) if parent_effort else None)
     l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
-    l2 += _model_cell(j.model or parent_model, parent_effort, _MW, dim=True)
-    if key and key != name:
-        l2.append((key + ": ", "name_dim"))
-    l2 += _stage_segs(key, j.stage or "", working=(j.liveness == "working"))
+    l2 += _model_cell(j.model or parent_model, eff, _MW, dim=True)
+    l2.append(("    ", None))
+    opt_segs, optw = _opts_segs(j, qa_text, qa_key)
+    l2 += opt_segs
+    if optw < _OPTW:
+        l2.append((" " * (_OPTW - optw), None))
+    l2.append(("  ", None))
+    if depth >= 2:
+        # P0-1: no repeated parent breadcrumb — own micro-status only.
+        if j.liveness == "working":
+            l2.append(("running", "stg0_on" if _BLINK_ON else "stg0_off"))
+        elif stage and stage not in ("open", "running"):
+            l2.append((stage, "stg0_off"))
+    else:
+        if key and key != slug_name:
+            # SD-F1/D1: same capability→label humanization as the wide-layout _dispatch_row —
+            # the narrow 2-line card must not leak the raw code-* capability key either.
+            role_label, role_suffix = _stage_role_label(key)
+            prefix_text = (role_label + role_suffix) if role_label else key
+            l2.append((prefix_text + ": ", "name_dim"))
+        l2 += _stage_segs(key, stage, working=(j.liveness == "working"))
     if _split:
         return l1, l2, br_seg
     return l1, l2
@@ -902,6 +1085,88 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
 # ---------- grouping assembler ----------
 def _group_key_session(s):
     return project_of(s.cwd)
+
+
+def _mem_row(s, layout="wide"):
+    """F-18b: mem-worker 세션의 dim 1-line — 기본 숨김, `a` 토글 시만. 라벨 'mem'."""
+    name = _clip_w(s.title or s.slug or (s.harness or "?"), 40)
+    seg = [("  🧠 ", "dim"), ("mem ", "dim"),
+           (name, "dim"), ("  ", None),
+           ((s.harness or "—"), "dim"), ("  ", None),
+           (fmt_min(s.elapsed_min), "dim")]
+    return [seg]
+
+
+def _mem_summary_segs(memory):
+    """F-19 pulse-adjacent summary row — `🧠 mem  +N added(Nw·Nd) · M expired · K pruned ·
+    last distill <elapsed>`. Healthy-silent: None when today's journal is empty AND no alert
+    fired (mirrors the alert-strip zero-lines-when-healthy convention)."""
+    if not memory:
+        return None
+    today = memory.get("today") or {}
+    added = today.get("added", 0)
+    expired = today.get("expired", 0)
+    pruned = today.get("pruned", 0)
+    alerts = memory.get("alerts") or {}
+    alert_active = bool(alerts.get("durable_over")) or bool(alerts.get("distill_stale"))
+    if not (added or expired or pruned) and not alert_active:
+        return None
+    last_min = memory.get("last_distill_min")
+    seg = [("  🧠 ", "dim"), ("mem  ", "dim"),
+           ("+%d added(%dw·%dd)" % (added, today.get("added_working", 0),
+                                     today.get("added_durable", 0)), "dim"),
+           (" · ", "dim"), ("%d expired" % expired, "dim"),
+           (" · ", "dim"), ("%d pruned" % pruned, "dim"),
+           (" · ", "dim"),
+           ("last distill %s" % (fmt_min(last_min) if last_min is not None else "—"), "dim")]
+    return seg
+
+
+def _mem_event_rows(memory, limit=8):
+    """F-19 `a`-toggle detail — most-recent-first dim rows (F-18b dim-row family): time ·
+    action · tier/type · actor · snippet."""
+    if not memory:
+        return []
+    rows = []
+    for e in (memory.get("recent") or [])[:limit]:
+        ts = (e.get("ts") or "—")
+        if "T" in ts:
+            ts = ts.split("T", 1)[1]   # HH:MM:SS only — date is always "today or recent"
+        tier_type = "%s/%s" % (e.get("tier") or "-", e.get("type") or "-")
+        snip = e.get("snippet") or ""
+        seg = [("  🧠 ", "dim"), (ts, "dim"), ("  ", None),
+               (e.get("action") or "?", "dim"), ("  ", None),
+               (tier_type, "dim"), ("  ", None),
+               (e.get("actor") or "?", "dim")]
+        if snip:
+            seg += [("  ", None), (_clip_w(snip, 60), "dim")]
+        rows.append(seg)
+    return rows
+
+
+def _mem_alert_bucket(memory):
+    """F-19 alert-strip bucket — durable soft-ceiling + distill-silence, appended LAST in the
+    dead > stale > ctx > mem priority order (§4.6)."""
+    if not memory:
+        return None
+    alerts = memory.get("alerts") or {}
+    parts = []
+    over = alerts.get("durable_over") or []
+    if over:
+        names = []
+        for cwd_origin, count in over[:4]:
+            label = str(cwd_origin or "?")
+            for prefix in ("git:", "root:", "id:"):
+                if label.startswith(prefix):
+                    label = label[len(prefix):]
+            names.append("%s=%d" % (_clip_w(label, 20), count))
+        more = " +%d" % (len(over) - 4) if len(over) > 4 else ""
+        parts.append("durable-over %s%s" % ("·".join(names), more))
+    if alerts.get("distill_stale"):
+        parts.append("distill stale %s" % fmt_min(memory.get("last_distill_min")))
+    if not parts:
+        return None
+    return (" · ".join(parts), "lvl_y")
 
 
 def _group_key_job(j, session_groups=None, job_groups=None):
@@ -949,6 +1214,9 @@ def _sort_group_jobs(js):
 
 
 _SHOW_ALL = False   # --all: reveal stale/dead/app_server sessions (folded by default per group)
+_FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: depth-2 stage-worker
+                                                                # rows folded into the conductor
+                                                                # breadcrumb unless working/stale/dead
 
 
 def set_show_all(v):
@@ -956,15 +1224,31 @@ def set_show_all(v):
     _SHOW_ALL = bool(v)
 
 
-def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
+def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memory=None):
     """Return a flat list of segment-lines for the whole screen (None = blank line).
 
     Same contract consumed by BOTH `render_once` (plain, full output) and `_draw` (viewport
     slices this same list) — `_OFFSET` must never be read here (see module docstring).
+
+    `memory` = F-19 collectors.memory.collect() result (or None — panel/alerts simply omitted;
+    tests default to None so every pre-F-19 call site keeps working unchanged).
     """
+    # F-18b: mem-worker (distiller/curator/F-17 refresher) census — computed on the ORIGINAL
+    # session list, before is_child/mem filtering, so folded/mem-only groups still surface a
+    # total in the legend even when no group header badge fires.
+    n_mem_total = sum(1 for s in sessions if getattr(s, "mem_worker", False))
+    mem_by_group = {}
+    for s in sessions:
+        if getattr(s, "mem_worker", False):
+            gk_mem = _group_key_session(s)
+            mem_by_group[gk_mem] = mem_by_group.get(gk_mem, 0) + 1
     # headless dispatch children are shown as dispatch rows under their parent — never as
     # top-level sessions (the same headless process would otherwise double-show as session+job).
-    sessions = [s for s in sessions if not s.is_child]
+    # mem-worker sessions are excluded from grouping/census by default (F-18b) — they inherit
+    # parent cwd/env and would otherwise misattribute into drill/project groups; `a` toggle
+    # (_SHOW_ALL) restores them as a dedicated dim row (see _mem_row below).
+    sessions = [s for s in sessions
+                if not s.is_child and not (getattr(s, "mem_worker", False) and not _SHOW_ALL)]
     groups = {}
     session_groups = {}
     for s in sessions:
@@ -987,6 +1271,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     order = sorted(groups.keys(), key=lambda name: _group_sort_key(name, groups[name]))
 
     lines = []
+    # F-12(c) legend glyph-appearance tracking — LOCAL to this call (never module/global state,
+    # _OFFSET invariant R3): which of the conditional legend glyphs actually got emitted this
+    # build. working/idle/dispatch/`~` stay unconditional (always relevant vocabulary); the
+    # rest (detached/stale/dead/child-jobs/worktrees) only show up in the legend when at least
+    # one row used them.
+    _seen_glyphs = set()
     # account-level usage — shared per harness/account. ONE LINE PER HARNESS (user 2026-07-01:
     # "모든 윈도우가 쭉 붙어있다 → 서로 간격 띄우고 게이지 길게"): long gauges, generous gaps, aligned.
     # rate is account-shared → take the FRESHEST session's value per harness (a stale session's
@@ -1001,7 +1291,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
     # a silently missing row read as a bug (2026-07-02 user: "opencode go 공급자로서 안뜨는거야?").
     # opencode-go has no usage API (gateway 404s; docs: console-only), so say so on the board.
     _live_h = set(s.harness for s in sessions
-                  if s.liveness not in ("stale", "dead") and not s.app_server and not s.is_child)
+                  if s.liveness not in ("stale", "dead") and not s.app_server and not s.is_child
+                  and not getattr(s, "mem_worker", False))
     if _rl or _live_h:
         hs = [h for h in ("claude", "codex", "opencode") if h in _rl or h in _live_h]
         for idx, h in enumerate(hs):
@@ -1037,7 +1328,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
             lines.append(row)
     # fleet pulse — htop's "Tasks: N, M running" analogue: whole-board census + live spend Σ
     # (round-4b, user: "일단 띄우고 필요없으면 쳐내지뭐"). Counts skip app-server companions.
-    _real = [s for s in sessions if not s.app_server]
+    _real = [s for s in sessions if not s.app_server and not getattr(s, "mem_worker", False)]
     n_wk = sum(1 for s in _real if s.liveness == "working")
     n_id = sum(1 for s in _real if s.liveness == "idle")
     n_dt = sum(1 for s in _real if s.detached and s.liveness not in ("stale", "dead"))
@@ -1052,23 +1343,65 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         pulse += [("↳ %d" % len(jobs), "dim"),
                   (" job%s (%d working)" % ("s" if len(jobs) != 1 else "", jw), "dim")]
     lines.append(pulse)                 # (Σ cost 롤업 제거 — user: 금액 표시 삭제)
+    _mem_summary = _mem_summary_segs(memory)
+    if _mem_summary is not None:
+        lines.append(_mem_summary)
+        _seen_glyphs.add("mem")
+    if _SHOW_ALL:
+        _mem_events = _mem_event_rows(memory)
+        if _mem_events:
+            lines.extend(_mem_events)
+            _seen_glyphs.add("mem")
 
     # alert strip — CONDITIONAL (zero lines when healthy): compaction-imminent contexts and
     # stalled dispatches (the stealth-death guard §5.10, surfaced on the board instead of only
     # in dispatch-liveness.sh runs). dead jobs = red, warnings = yellow.
-    alerts = []
-    for s in _real:
-        if s.ctx_pct is not None and s.ctx_pct >= 80 and s.liveness in ("working", "idle"):
-            alerts.append(("ctx %d%% %s" % (s.ctx_pct, s.slug or "?"),
-                           "lvl_r" if s.ctx_pct >= 90 else "lvl_y"))
-    for j in jobs:
-        if j.liveness == "stale":
-            alerts.append(("job stale %s" % (j.slug or j.key), "lvl_y"))
-        elif j.liveness == "dead":
-            alerts.append(("job dead %s" % (j.slug or j.key), "lvl_r"))
-    if alerts:
+    # F-10: names go through the same compaction as dispatch rows (_compact_dispatch_name) with
+    # a loop job's `<case>-<ts>-<pid>` tail stripped first (raw timestamps/pids are noise here);
+    # same-kind alerts aggregate into one line (`⚠ 2 dead jobs: a·b`), bucketed dead/stale/ctx.
+    def _alert_name(name):
+        return _compact_dispatch_name(_ALERT_TAIL.sub("", name or "") or (name or "?"), 20)
+
+    def _bucket_text(label, names):
+        if not names:
+            return None
+        if len(names) == 1:
+            return "%s %s" % (label, names[0])
+        shown = "·".join(names[:4])
+        more = " +%d" % (len(names) - 4) if len(names) > 4 else ""
+        return "%d %s jobs: %s%s" % (len(names), label, shown, more)
+
+    dead_names = [_alert_name(j.slug or j.key) for j in jobs if j.liveness == "dead"]
+    stale_names = [_alert_name(j.slug or j.key) for j in jobs if j.liveness == "stale"]
+    ctx_items = [(s.slug or "?", s.ctx_pct) for s in _real
+                 if s.ctx_pct is not None and s.ctx_pct >= 80 and s.liveness in ("working", "idle")]
+
+    buckets = []
+    dead_text = _bucket_text("dead", dead_names)
+    if dead_text:
+        buckets.append((dead_text, "lvl_r"))
+    stale_text = _bucket_text("stale", stale_names)
+    if stale_text:
+        buckets.append((stale_text, "lvl_y"))
+    if ctx_items:
+        worst = max(pct for _n, pct in ctx_items)
+        ctx_text = _bucket_text("ctx-high", [_alert_name(n) for n, _p in ctx_items]) \
+            if len(ctx_items) > 1 else "ctx %d%% %s" % (ctx_items[0][1], _alert_name(ctx_items[0][0]))
+        buckets.append((ctx_text, "lvl_r" if worst >= 90 else "lvl_y"))
+    mem_bucket = _mem_alert_bucket(memory)   # F-19 — last in priority (dead > stale > ctx > mem)
+    if mem_bucket:
+        buckets.append(mem_bucket)
+        _seen_glyphs.add("mem")
+
+    if buckets:
+        # priority truncation dead > stale > ctx when the row would overflow — buckets are
+        # already in that priority order, so drop from the tail. Budget mirrors the existing
+        # dormant-dirs line convention (`names[:90]`) rather than a hardcoded terminal width.
+        kept = list(buckets)
+        while len(kept) > 1 and sum(len(t) for t, _k in kept) + 3 * (len(kept) - 1) > 100:
+            kept.pop()
         arow = [("  alert ", "head")]
-        for ai, (txt, akey) in enumerate(alerts[:6]):
+        for ai, (txt, akey) in enumerate(kept):
             if ai:
                 arow.append(("   ", None))
             arow.append(("⚠ " + txt, akey))
@@ -1207,6 +1540,11 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         if _nwt:
             # statusline 과 같은 표기 (🚧 N = 병렬 작업장·잔존 worktree, §5.10) — 이름 바로 옆
             head_segs += [(" 🚧 %d" % _nwt, "g_idle")]
+            _seen_glyphs.add("wt")
+        _nmem = mem_by_group.get(name, 0)
+        if _nmem:
+            head_segs += [(" 🧠 %d" % _nmem, "dim")]
+            _seen_glyphs.add("mem")
         if _cool_min is not None:
             # 완료 후 경과시간 (끝나고 대기하는 시간) — ✓ 프리픽스로 "완료 후 경과"임을 명시
             head_segs += [("  ", None), ("%s %s" % (_COOL_TIME_ICON, fmt_min(_cool_min)), "grp_cool")]
@@ -1235,21 +1573,62 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
 
         def _emit_dispatch_tree(job, parent_model=None, parent_harness=None, parent_effort=None,
                                 orphan=False, is_last=True):
+            # SD-F2 — a depth-1 conductor's OWN breadcrumb tracks its active depth-2 code-*
+            # stage-worker, not its static argv/plan-derived `stage`. `job_children` is the
+            # enclosing closure dict, so this is readable before the row renders.
+            stage_override = _conductor_stage_override(job)
+            if job.liveness == "stale":
+                _seen_glyphs.add("stale")
+            elif job.liveness == "dead":
+                _seen_glyphs.add("dead")
             if _jrow:
                 lines.extend(_jrow(job, orphan=orphan, parent_model=parent_model,
-                                   parent_effort=parent_effort))
+                                   parent_effort=parent_effort, stage_override=stage_override))
             else:
                 lines.append(_dispatch_row(job, orphan=orphan, parent_model=parent_model,
                                            parent_harness=parent_harness,
-                                           parent_effort=parent_effort, is_last=is_last))
+                                           parent_effort=parent_effort, is_last=is_last,
+                                           stage_override=stage_override))
             for sub in _sort_group_jobs(job_children.get(job.slug, [])):
+                # F-15b P0-2: a depth-2 stage worker that is done/queued/idle is already
+                # absorbed into the conductor's own breadcrumb (✓/dim future segment) — only
+                # working (active) or stale/dead (failed, needs to be seen) children get their
+                # own row. `_SHOW_ALL` (the existing `a`-key toggle) restores the folded ones.
+                if (max(1, int(getattr(sub, "depth", 1) or 1)) >= 2 and not _SHOW_ALL
+                        and sub.liveness in _FOLD_CHILD_LIVENESS):
+                    continue
                 _emit_dispatch_tree(sub, parent_model=job.model or parent_model,
                                     parent_harness=job.harness or parent_harness,
                                     parent_effort=parent_effort, orphan=False)
 
+        def _conductor_stage_override(job):
+            kids = [(k, _stage_role_label(getattr(k, "worker_role", None))[0])
+                    for k in job_children.get(job.slug, []) if getattr(k, "depth", 1) == 2]
+            kids = [(k, label) for k, label in kids if label is not None]
+            if not kids:
+                return None
+            active = [label for k, label in kids if k.liveness == "working"]
+            if active:
+                return active[0]
+            return job.stage
+
         for s in _sort_group_sessions(shown):
+            if getattr(s, "mem_worker", False):
+                # F-18b: `a` 토글로만 노출되는 dim mem row — 활성 row 렌더러(스타일/기울기/depth
+                # nesting)를 타지 않고 전용 요약 1-line 으로.
+                lines.extend(_mem_row(s, layout))
+                _seen_glyphs.add("mem")
+                continue
             kids = _sort_group_jobs(children.get(s.session_id, []))
             nested_n = len(kids) + sum(len(job_children.get(k.slug, [])) for k in kids)
+            if s.liveness == "stale":
+                _seen_glyphs.add("stale")
+            elif s.liveness == "dead":
+                _seen_glyphs.add("dead")
+            if s.detached and s.liveness not in ("stale", "dead"):
+                _seen_glyphs.add("detached")
+            if nested_n:
+                _seen_glyphs.add("child")
             _n0 = len(lines)
             if _srow:
                 lines.extend(_srow(s, is_parent=bool(nested_n), child_count=nested_n))
@@ -1312,18 +1691,33 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide"):
         lines.append(None)
         lines.append([("  +%d malformed jobs.log rows skipped" % malformed, "dim")])
 
-    # legend — status dots (columns are labelled by the header row)
+    # legend — status dots (columns are labelled by the header row). F-12(c): working/idle/
+    # dispatch/`~` are always-relevant vocabulary and stay unconditional; the rest only appear
+    # when this build actually used them (_seen_glyphs, tracked above — local, not global).
     lines.append(None)
-    lines.append([
+    legend = [
         ("  ", None), ("⠹", "g_work"), (" working   ", "dim"),
         ("●", "g_work_off"), (" idle   ", "dim"),
-        (_DETACHED_GLYPH, "g_work_off"), (" detached   ", "dim"),
-        ("·", "g_stale"), (" stale   ", "dim"),
-        ("✕", "g_dead"), (" dead     ", "dim"),
-        ("▾N", "dim"), (" child jobs   ", "dim"),
-        ("↳", "dim"), (" dispatch   ", "dim"),
-        ("🚧 N", "dim"), (" worktrees", "dim"),
-    ])
+    ]
+    if "detached" in _seen_glyphs:
+        legend += [(_DETACHED_GLYPH, "g_work_off"), (" detached   ", "dim")]
+    if "stale" in _seen_glyphs:
+        legend += [("·", "g_stale"), (" stale   ", "dim")]
+    if "dead" in _seen_glyphs:
+        legend += [("✕", "g_dead"), (" dead     ", "dim")]
+    if "child" in _seen_glyphs:
+        legend += [("▾N", "dim"), (" child jobs   ", "dim")]
+    if jobs:
+        legend += [("↳", "dim"), (" dispatch   ", "dim")]
+    if "wt" in _seen_glyphs:
+        legend += [("🚧 N", "dim"), (" worktrees   ", "dim")]
+    if n_mem_total or "mem" in _seen_glyphs:
+        # 전역 총계 — mem-only 그룹은 fold 되어 header badge 가 안 뜰 수 있으므로 legend 에서
+        # 항상 존재를 노출 (group badge 는 활성 그룹 컨텍스트, 여긴 board 전역). F-19: mem-worker
+        # 세션이 0 이어도 write-events 요약행/alert 가 떴으면 legend 는 여전히 노출한다.
+        legend += [("🧠 %d" % n_mem_total, "dim"), (" mem   ", "dim")]
+    legend += [("~", "dim"), (" derived/inherited value", "dim")]  # F-9(d)
+    lines.append(legend)
 
     return lines
 
@@ -1343,18 +1737,35 @@ def _plain(segs):
     return "".join(out)
 
 
+def _collect_memory():
+    # F-19: best-effort — a collector import/read failure must never break the render.
+    try:
+        from .collectors import memory as memcol
+        return memcol.collect()
+    except Exception:
+        return None
+
+
 def render_once(collect_all, hfilter, section):
     sessions, jobs = collect_all(harness_filter=hfilter)
     malformed = _malformed()
+    mem_snapshot = _collect_memory()
     try:
         import shutil
         tw = shutil.get_terminal_size().columns
     except Exception:
         tw = 200
     lines = _build_lines(sessions, jobs, section, narrow=False, malformed=malformed,
-                         layout=_layout_mode(tw))
-    out = "\n".join(_plain(l) for l in lines)
-    sys.stdout.write(out + "\n")
+                         layout=_layout_mode(tw), memory=mem_snapshot)
+    out = "\n".join(_plain(l) for l in lines) + "\n"
+    # Write UTF-8 bytes directly so the snapshot's box/braille glyphs survive a
+    # non-UTF-8 console codepage (e.g. Windows cp949), which would otherwise raise
+    # UnicodeEncodeError. Falls back to text stdout when buffer is unavailable.
+    try:
+        sys.stdout.buffer.write(out.encode("utf-8"))
+        sys.stdout.buffer.flush()
+    except (AttributeError, ValueError):
+        sys.stdout.write(out)
     return 0
 
 
@@ -1388,6 +1799,23 @@ def _cw(ch):
 
 def _dw(s):
     return sum(_cw(c) for c in s)
+
+
+def _clip_w(s, maxw, ellipsis="…"):
+    """Tail-cut `s` to display width maxw (head preserved), stopping at cell boundaries
+    so a double-width char (e.g. Hangul) is never split in half. Appends `ellipsis` (width 1)
+    when clipped — mirrors _compact_dispatch_name's ellipsis convention (F-14)."""
+    s = s or ""
+    if _dw(s) <= maxw:
+        return s
+    lim = maxw - (_cw(ellipsis) if ellipsis else 0)
+    out, w = [], 0
+    for ch in s:
+        cw = _cw(ch)
+        if w + cw > lim:
+            break
+        out.append(ch); w += cw
+    return "".join(out) + (ellipsis if ellipsis else "")
 
 
 # fill sentinels (3-char \x00<fill>\x00): everything after is right-aligned to the edge; the gap
@@ -1514,13 +1942,14 @@ def reset_scroll():
     _OFFSET = 0
 
 
-def _draw(stdscr, sessions, jobs, section, malformed):
+def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
     global _OFFSET, _TOGGLE_ROWS
     _TOGGLE_ROWS = {}    # reset before any early-return so a stale map never survives a click
     h, w = stdscr.getmaxyx()
     stdscr.erase()
     narrow = w < _NARROW_CUTOFF
-    lines = _build_lines(sessions, jobs, section, narrow, malformed, layout=_layout_mode(w))
+    lines = _build_lines(sessions, jobs, section, narrow, malformed, layout=_layout_mode(w),
+                         memory=memory)
     body_h = max(1, h - 1)   # reserve 1 footer row
     _OFFSET = _clamp_offset(_OFFSET, len(lines), body_h)
 
@@ -1542,7 +1971,7 @@ def _draw(stdscr, sessions, jobs, section, malformed):
         parts.append("↓%d" % below)
     # htop F-key bar (round-4): CYAN full-width, keycaps BOLD (dim is invisible on CYAN), the
     # scroll indicator rides the right edge. `w` cycles layout auto → narrow → wide.
-    wlbl = "wide/narrow" if _LAYOUT == "auto" else ("%s!" % _LAYOUT)
+    wlbl = "wide/narrow/stack" if _LAYOUT == "auto" else ("%s!" % _LAYOUT)
     fsegs = [(" ", "hdr_bar"),
              ("q", "hdr_key"), (" quit · ", "hdr_bar"),
              ("r", "hdr_key"), (" refresh · ", "hdr_bar"),
@@ -1571,8 +2000,9 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
     stdscr.timeout(200)                     # getch blocks ≤200ms → responsive keys
     sessions, jobs = collect_all(harness_filter=hfilter)
     malformed = _malformed()
+    mem_snapshot = _collect_memory()
     last = time.time()
-    _draw(stdscr, sessions, jobs, section, malformed)
+    _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
     while True:
         # wake exactly at the next 0.5s blink boundary (regular period) but stay key-responsive (≤200ms)
         _nb = (int(time.time() * 10) + 1) / 10.0   # 10fps wake — the spinner cadence
@@ -1613,13 +2043,19 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
         if force or (now - last) >= interval:
             sessions, jobs = collect_all(harness_filter=hfilter)
             malformed = _malformed()
+            mem_snapshot = _collect_memory()
             last = now
         _BLINK_ON = (int(now * 2) % 2 == 0)     # ~2 Hz working-dot blink (manual — A_BLINK unreliable)
         # redraw every wake (covers KEY_RESIZE, blink and tick) — _draw clamps _OFFSET internally.
-        _draw(stdscr, sessions, jobs, section, malformed)
+        _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
 
 
 def run_live(collect_all, hfilter, section, interval):
+    if curses is None:
+        sys.stderr.write("fleet: the live TUI needs curses (unavailable here; on native "
+                         "Windows run `pip install windows-curses`, or use WSL). "
+                         "Use --once (snapshot) or --json meanwhile.\n")
+        return 1
     if not sys.stdout.isatty():
         sys.stderr.write("fleet: stdout is not a TTY — use --once (snapshot) or --json.\n")
         return 1

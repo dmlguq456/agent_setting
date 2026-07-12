@@ -12,6 +12,7 @@ sessions/<pid>.json statusUpdatedAt.
 """
 import json
 import os
+import re
 
 
 def _home():
@@ -31,24 +32,94 @@ def _mtime(path):
         return None
 
 
-def _newest_transcript_mtime(home, cwd, sid):
+def _newest_transcript_path(home, cwd, sid):
+    """Transcript path for liveness/title extraction: prefer `<sid>.jsonl`, else the
+    newest .jsonl in the project dir. Shared by mtime and ai-title lookups so both use
+    the same resolved path (one os.listdir scan, not two)."""
     if not cwd:
         return None
     proj = os.path.join(home, "projects", _enc_cwd(cwd))
     if sid:
-        m = _mtime(os.path.join(proj, sid + ".jsonl"))
-        if m is not None:
-            return m
-    best = None
+        p = os.path.join(proj, sid + ".jsonl")
+        if _mtime(p) is not None:
+            return p
+    best, best_m = None, None
     try:
         for name in os.listdir(proj):
             if name.endswith(".jsonl"):
-                m = _mtime(os.path.join(proj, name))
-                if m is not None and (best is None or m > best):
-                    best = m
+                p = os.path.join(proj, name)
+                m = _mtime(p)
+                if m is not None and (best_m is None or m > best_m):
+                    best, best_m = p, m
     except OSError:
         pass
     return best
+
+
+def _newest_transcript_mtime(home, cwd, sid):
+    path = _newest_transcript_path(home, cwd, sid)
+    return _mtime(path) if path else None
+
+
+_TITLE_JUNK_RE = re.compile(r"^(new session\b|\d{4}-\d{2}-\d{2}[t ]\d{2}:\d{2})", re.IGNORECASE)
+
+
+_TITLE_CACHE = {}   # path -> (mtime, size, title) — avoid rescanning an unchanged transcript every tick
+
+
+def _tail_ai_title(path, chunk=8192, max_scan=None):
+    """Last `ai-title` line's aiTitle value, scanning backward from EOF in growing
+    windows (chunk, ×8 each step) until an ai-title line is seen or the whole file
+    is covered. Long sessions keep appending messages after the title lines, so a
+    fixed tail window misses them (2026-07-10 실측: 제목이 EOF 뒤로 31–100KB) —
+    the growing scan keeps short-session cost at one small read while still
+    reaching early titles. A transcript can carry several ai-title lines appended
+    over the session's life (renamed/refined) — the last one wins. tolerant:
+    malformed json lines are skipped, a missing/empty/placeholder ("New session …",
+    bare ISO timestamp) title → None so the caller falls back to slug. Results are
+    memoized per (mtime, size) so unchanged files are not re-read on every tick."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    cached = _TITLE_CACHE.get(path)
+    if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
+        return cached[2]
+    sz = st.st_size
+    limit = sz if max_scan is None else min(sz, max_scan)
+    window = chunk
+    title = None
+    found_line = False
+    while True:
+        start = max(0, sz - window)
+        try:
+            with open(path, "rb") as f:
+                f.seek(start)
+                data = f.read().decode("utf-8", "replace")
+        except OSError:
+            return None
+        lines = data.splitlines()
+        if start > 0 and lines:
+            lines = lines[1:]                       # drop the partial first line
+        for ln in lines:
+            if '"ai-title"' not in ln:
+                continue
+            try:
+                d = json.loads(ln)
+            except Exception:
+                continue
+            if "aiTitle" not in d:
+                continue
+            found_line = True
+            t = d.get("aiTitle")
+            title = t.strip() if isinstance(t, str) and t.strip() else None
+        if found_line or window >= limit:
+            break
+        window = min(window * 8, limit)
+    if title and _TITLE_JUNK_RE.match(title):
+        title = None
+    _TITLE_CACHE[path] = (st.st_mtime, st.st_size, title)
+    return title
 
 
 def _apply_statusline(sess, d):
@@ -126,10 +197,21 @@ def enrich(sess):
         except Exception:
             pass
 
-    # 3) liveness mtime
-    m = _newest_transcript_mtime(home, sess.cwd, sid)
+    # 3) liveness mtime + title. 우선순위(PRD §4.6 F-17): sidecar(fresh <24h) → ai-title → slug.
+    path = _newest_transcript_path(home, sess.cwd, sid)
+    m = _mtime(path) if path else None
     if m is None and isinstance(sj, dict):
         su = sj.get("statusUpdatedAt") or sj.get("updatedAt")
         if isinstance(su, (int, float)):
             m = su / 1000.0                        # ms → s
     sess.mtime = m
+    # 3a) fleet-owned sidecar (F-17) — 신선하면 ai-title 을 이긴다. 부재/stale/parse-fail = 무해 passthrough.
+    from fleet import titles                      # 지연 import: 순환 없음, stdlib-only
+    st = titles.fresh_title(sid) if sid else None
+    if st:
+        sess.title = st
+    elif path:                                     # 3b) F-14 ai-title fallback
+        t = _tail_ai_title(path)
+        if t:
+            sess.title = t
+    # else: sess.title=None → render 가 slug fallback (render.py:661)

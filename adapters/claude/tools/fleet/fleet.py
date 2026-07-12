@@ -61,11 +61,23 @@ def _harness_filter(spec):
     return hs or None
 
 
+def _collect_memory():
+    # F-19: additive, best-effort — a collector import/read failure must never break --json.
+    try:
+        if __package__ in (None, ""):
+            from fleet.collectors import memory as memcol
+        else:
+            from .collectors import memory as memcol
+        return memcol.collect()
+    except Exception:
+        return None
+
+
 def _snapshot_json(sessions, jobs):
     counts = {}
     for s in sessions:
         counts[s.harness] = counts.get(s.harness, 0) + 1
-    return json.dumps({
+    out = {
         "sessions": [s.to_dict() for s in sessions],
         "jobs": [j.to_dict() for j in jobs],
         "summary": {
@@ -73,7 +85,11 @@ def _snapshot_json(sessions, jobs):
             "by_harness": counts,
             "dispatch_count": len(jobs),
         },
-    }, ensure_ascii=False, indent=2)
+    }
+    mem = _collect_memory()
+    if mem is not None:
+        out["memory"] = mem
+    return json.dumps(out, ensure_ascii=False, indent=2)
 
 
 def main(argv=None):

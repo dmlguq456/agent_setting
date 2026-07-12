@@ -18,7 +18,11 @@ done
 SCRIPT_DIR=$(cd -P "$(dirname "$SOURCE")" && pwd)
 FLEET_PY="$SCRIPT_DIR/fleet.py"
 
-PY=$(command -v python3 || command -v python || true)
+# FLEET_PYTHON overrides interpreter discovery. On Windows the `python`/`python3`
+# on PATH are the WindowsApps app-execution aliases (a pymanager stub that can
+# crash with "Internal error 0x00000001"); the launcher points FLEET_PYTHON at a
+# real python.exe to bypass it.
+PY=${FLEET_PYTHON:-$(command -v python3 || command -v python || true)}
 if [ -z "$PY" ]; then echo "fleet: python3 가 필요합니다." >&2; exit 1; fi
 if [ ! -f "$FLEET_PY" ]; then echo "fleet: fleet.py 를 찾을 수 없습니다 ($FLEET_PY)." >&2; exit 1; fi
 

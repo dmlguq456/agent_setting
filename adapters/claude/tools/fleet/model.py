@@ -130,6 +130,7 @@ class Session:
     # --- enrichment (None = harness doesn't expose it → render '—') ---
     session_id: Optional[str] = None
     slug: Optional[str] = None
+    title: Optional[str] = None        # harness session title (ai-title/DB title) — render name zone only, slug fallback when None
     model: Optional[str] = None
     effort: Optional[str] = None
     ctx_pct: Optional[int] = None      # context window used %
@@ -144,6 +145,7 @@ class Session:
     liveness: str = "unknown"
     gate: Optional[str] = None          # spec-gate override (tracked/untracked) — demo fixtures; None = compute from cwd
     branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
+    mem_worker: bool = False   # F-18b: memory distiller/curator(MEM_DISTILL) 또는 F-17 refresher(FLEET_TITLE_REFRESH) 세션 — 기본 표시 제외, 🧠N 요약으로만
 
     def to_dict(self):
         return asdict(self)
@@ -176,6 +178,8 @@ class DispatchJob:
     intensity: Optional[str] = None     # direct|quick|standard|strong|thorough|adversarial
     worker_role: Optional[str] = None   # planner/verifier/adversary/etc.
     capability_owner: Optional[str] = None  # owning capability slug/name for sub-workers
+    effort: Optional[str] = None        # dispatch runtime effort (pipe `effort=`; None = parent-inherit)
+    model_role: Optional[str] = None    # portable model role (pipe `model_role=`; SD-5 관제)
 
     def to_dict(self):
         return asdict(self)
