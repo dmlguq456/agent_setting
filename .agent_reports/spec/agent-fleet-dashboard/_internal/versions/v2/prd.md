@@ -1,6 +1,6 @@
 # agent-fleet-dashboard — Spec (PRD)
 
-> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`)
+> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -68,7 +68,6 @@
 | `--harness <list>` | all | 특정 하네스만(예: `claude,codex`). |
 | `--json` | off | curses 대신 수집 결과를 JSON 으로 stdout(파이프·디버그·테스트). |
 | `--all` | off | fleet 리스트에 stale/dead 세션도 표시. **기본은 숨김**(활성 working/idle 만; 헤더 카운트·`+N hidden` 요약은 유지). |
-| `--demo` | off | **(v3 소급 등재 — audit 🟡-2)** demo fixture 를 라이브 데이터에 _병합_ 주입해 렌더 검증(대체 아님 — `2e23462`). env `FLEET_DEMO=1` 동등(런처·alias 경유 시). |
 
 **(v2 신설) 라이브 조작 키**:
 
@@ -171,10 +170,6 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-11 (raw status 어휘 정리)**: registry-only 잡의 stage=`open`/`running` raw 노출과 loop 잡 `drill: running` 류를 사람 어휘로 — `open`=`queued`(미기동 대기), `running`=breadcrumb 미점등 트랙(기존 규칙 재사용). status 어휘 자체(jobs.log)는 불변 — 표시층만.
 - **F-12 (footer·잡음 절제)**: (a) `+N malformed jobs.log rows skipped` 는 dim 강등 — 진단 상세는 `--json` 몫 (b) footer `w` 라벨이 stack 모드를 누락하는 표기 버그 수정(3-모드 전부) (c) legend 는 현재 화면에 실제 등장한 글리프만.
 - **F-13 (dead/stale 행 결손 절제)**: dead/stale row 의 `— … — … —` 나열 대신 telemetry 셀은 생략하고 **마지막 관측 경과**(`last seen 2h`) 1값으로 대체 — "없음" 명시 원칙(F-3)은 live 행에만 적용, 죽은 행은 결손 나열이 정보가 아니다.
-## 4.7 [v3 승격] 표시명·관제 표면 확장 — F-14~F-19
-
-> v2 minor 5건(2026-07-10~11)의 승격 흡수. §4.6 이 "가독성 정제"(표시층 한정)였다면 본 절은 **신기능·신규 표면**이다 — 제목 소스 승격(F-14)·레이아웃 재설계(F-15/16)·fleet 소유 sidecar+LLM 워커(F-17)·collector 태깅(F-18)·신규 collector+패널(F-19). audit 🟡-1(섹션 의미 확장) 해소 분할.
-
 - **F-14 (세션 표시명 = 하네스 세션 제목, 사용자 요청 2026-07-10 — 후속 사이클)**: 세션 row 이름을 합성 slug(`<cwd>-<sid8>`)에서 **하네스가 이미 남긴 세션 제목**으로 승격 — "ChatGPT 세션명처럼" 내용 요약이 관제에 보이게.
   - **소스 (실측 2026-07-10)**: claude = transcript jsonl 의 마지막 `{"type":"ai-title","aiTitle":…}` 라인 (v2.1.176+ 대화 언어 auto-title; `/rename` 반영 자리. **내부 포맷 — 버전 간 변경 가능**이 공식 입장이므로 tolerant 파싱 + 부재 시 fallback 의무) / opencode = DB `session.title` (정식 컬럼, 실측 확인) / codex = 제목 소스 미상 → 현행 유지 (F-3 비대칭 동형, 구현 시 rollout 실측 후 판단).
   - **표시 규칙**: 제목 있으면 name zone 에 제목(뒤에서 자름 — F-9 head 보존), 합성 slug 는 대체(식별 필요 시 dim 보조). headless 자식 세션(`-p`)엔 ai-title 이 없음 → 현행 slug 유지. 제목 부재·파싱 실패 = 현행 합성명 fallback (회귀 없음 원칙).
@@ -205,8 +200,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **상세**: `a` 토글 시 최근 이벤트 N줄(기본 8) dim row — 시각·action·tier/type·actor·body 스니펫 (F-18b dim row 계열, legend 글리프는 등장 시만 — F-12).
   - **alert 편입**: durable soft-ceiling 초과 · 활성 프로젝트 distill 무소식(저널 기준 임계 초과 = silent-death 신호) → 기존 alert strip 버킷 추가(우선순위 dead > stale > ctx > mem).
   - **의존·경계**: Cluster J D-37 저널이 add/reinforce 계열의 유일 소스 — 저널 미출하 구간엔 graveyard 만으로 삭제측 degrade 표시. 저널 포맷 변경 시 양 spec 동기 의무. 제어(prune 실행 등)는 여전히 Non-goal — 관찰만.
-- **적용 순서(정보 위계, v3 정정)**: §4.6(F-9~F-13)은 표시층(render.py) 한정 — collector 계약·모델 스키마 불변(SD-F4 만 collector). §4.7(F-14~F-19)은 각 항목에 명시된 표면까지 — F-17 sidecar+statusline 트리거, F-18 procscan environ 태깅, F-19 신규 collector(`collectors/memory.py`)·`--json` additive `memory` 키. 시각 결정이 substantial 해지면(레이아웃 구조 변경 급) autopilot-design 리드.
-- **🧠 글리프 위계 (v3 명문화, audit 정보성 반영)**: 같은 글리프의 두 표면 — 그룹 헤더 `🧠 N` = F-18b mem-*워커 프로세스* 수 / pulse 인접 `🧠 mem …` 행 = F-19 메모리 *이벤트* 집계. 라벨 문맥(`N` vs `mem`)이 구분자 — 새 🧠 표면 추가 시 이 두 의미와 충돌 금지.
+- **적용 순서(정보 위계)**: 위 개선은 전부 표시층(render.py) — collector 계약·모델 스키마 불변(SD-F4 만 collector). 시각 결정이 substantial 해지면(레이아웃 구조 변경 급) autopilot-design 리드 — 이번 사이클은 표시 규칙 정제 범위로 한정.
 
 ## 5. 능동 변경 — Claude per-session statusline tap (유일한 write)
 
@@ -243,24 +237,18 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 
 ```
 tools/fleet/
-  fleet.py          # 진입 — 인자 파싱, curses 루프 or --once/--json/--demo
+  fleet.py          # 진입 — 인자 파싱, curses 루프 or --once/--json
   collectors/
     __init__.py     # collect_all() → [Session...] (백본 프로세스 스캔 + 하네스별 enrich 디스패치)
-    procscan.py     # comm ∈ {claude,codex,opencode} + /proc/cwd + etime + environ 마커 태깅(F-18b)
-    claude.py       # ~/.claude/.statusline/<sid>.json + sessions/<pid>.json + ai-title/sidecar 제목(F-14/17)
+    procscan.py     # comm ∈ {claude,codex,opencode} + /proc/cwd + etime  (universal 백본)
+    claude.py       # ~/.claude/.statusline/<sid>.json + sessions/<pid>.json enrich
     codex.py        # rollout jsonl 최신 token_count tail + config.toml
     opencode.py     # opencode.db session row (sqlite3 ro)
-    dispatch.py     # statusline 잡스캔 로직 포팅(uncapped) + jobs.log 병합 + SD-F4 tolerant 파싱
+    dispatch.py     # statusline 잡스캔 로직 포팅(uncapped) + jobs.log 병합
     liveness.py     # 15min stale + kill -0 + (deleted) orphan → 4-state
-    memory.py       # (v3/F-19) write-events 저널 + graveyard tail read-only 관찰
-    usage_api.py    # (v2 F-1 확장) 하네스 계정 usage API read-only
-  render.py         # curses 레이아웃(그룹 카드 + dispatch 트리 + mem 패널), 결손칸 —, 색
+  render.py         # curses 레이아웃(fleet 그리드 + dispatch 리스트), 결손칸 —, 색
   model.py          # Session/DispatchJob dataclass (하네스 무관 정규화 스키마)
-  titles.py         # (v3/F-17) sidecar 제목 read + 신선도 판정
-  refresh_title.py  # (v3/F-17) no-tools 경량 LLM 제목 워커 (statusline debounce 가 spawn)
-  demo.py           # --demo/FLEET_DEMO fixture 병합 (§3)
-  tests/            # unittest 스위트 (mirror-parity 가드 포함)
-  fleet.sh          # 런처 (v2: full-terminal 기본, --window 시 tmux 새 창) → fleet.py
+  fleet.sh          # tmux 세로 사이드 페인 런처 → fleet.py
 ```
 - 의존성: python3 표준 라이브러리만(`curses`,`sqlite3`,`json`,`os`,`subprocess`,`re`,`time`). 외부 pip 0.
 - 설치: `~/.claude/tools/fleet/` 심링크(statusline.sh 선례). 실행 = `bash ~/.claude/tools/fleet/fleet.sh` 또는 alias.
@@ -325,12 +313,6 @@ flowchart TD
 - **F-9~F-13 (UI 가독성)**: 메타라벨 축약 재배분(+drill 하드코딩 맵 → 일반 규칙) / alert humanize / raw status 어휘 표시층 정리 / footer·legend 잡음 절제 / dead·stale 결손 절제(`last seen`). (§4.6)
 - **F-1 확장**: 관찰 = 디스크·프로세스 + 하네스 usage API read-only. (§0.5)
 - **v2 기준선 승인**: usage 헤더·pulse 요약·alert strip·그룹 카드(3단계 온도·🚧·게이트 배지)·folded 집계·`w` 레이아웃 cycle·main-bold·tint 체계 — 07-01~07-10 진화 전체. (§4 [v2 기준선])
-
-## 확정 결정 (v3 승격, 2026-07-12 — minor 5건 흡수 + audit 반영)
-
-- **F-14~F-19 lock (§4.7)**: 세션 표시명=하네스 제목(+짧게·영어 F-16, sidecar refresher F-17) / 분사 row 레이아웃 재설계·done-stage breadcrumb 흡수·queued=진짜 미기동만(F-15) / mem-워커 environ 태깅·drill dedup(F-18) / 메모리 관측 패널 — memory PRD v15 Cluster J 저널 소비(F-19). 구현 전량 main 머지 확인 (audit forward 15/15 🟢).
-- **§3 `--demo` 소급 등재** (audit 🟡-2) · **§9 모듈 트리 현행화** (audit 🟡-3) · **🧠 글리프 위계 명문화** (§4.7).
-- minor log 리셋 — v3 스냅샷 baseline (audit `_internal/audit/audit_2026-07-12T0910.md`).
 
 ## Next (구현 순서 — autopilot-code, 본 v2 입력 · v1 순서 1~7 은 완료)
 

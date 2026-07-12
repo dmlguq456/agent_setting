@@ -35,7 +35,16 @@
 ## Next
 `/autopilot-code --mode dev --intensity standard "fleet UI 개선 — PRD v2 §4.5·§4.6"` (worktree, conductor 분사 — 파이프 자체가 SD-F1~F3 라이브 검증 fixture). 순서 = PRD v2 §Next 1~4.
 
-## Minor-log
+## v3 update (2026-07-12) — minor 5건 승격 흡수 + audit 반영
+
+| Step | Action | Result |
+|---|---|---|
+| audit | minor 누적 5 도달 트리거 — spec↔코드 정합 전수 점검 (`_internal/audit/audit_2026-07-12T0910.md`) | 🔴 0 / 🟡 3 / 🟢 20 — forward 계약 15/15 코드 실재, 역-drift 는 문서측만 |
+| update | v2 snapshot → `_internal/versions/v2/prd.md`, prd.md v3 | §4.7 신설(F-14~F-19 를 §4.6 에서 분리 — 섹션 의미 괴리 해소), §3 `--demo` 소급 등재, §9 모듈 트리 현행화(titles·refresh_title·memory·demo·tests), 🧠 글리프 위계 명문화, 확정 결정 v3 블록 |
+
+- **Minor-log 리셋**: 아래 5건은 v3 에 흡수 완료 — 이력 보존용으로만 유지. 새 minor 카운트는 v3 기준 0 부터.
+
+## Minor-log (v2 시대 — v3 에 흡수 완료, 이력 보존)
 - 2026-07-11 (v2 minor #5): §4.6 에 **F-19 (메모리 관측 패널)** 추가 — 사용자 확정("fleet에 memory 기능 추가", 방향 논의 후 추천안 승인). 소스 = Unified Memory System PRD v15 Cluster J write-events.jsonl(D-37)+graveyard tail, `collectors/memory.py` 신설(read-only·tolerant·additive), 🧠 요약행+`a` 토글 상세+alert 편입(ceiling·distill 무소식). F-18b(워커 태깅)와 상보 — 워커(프로세스)와 효과(이벤트). 구현 = Cluster J 저널 사이클과 병렬 가능(표면 비겹침, 저널 부재 시 graveyard-only degrade). ⚠️ **minor 누적 5 도달 — 컨벤션상 `/audit` 점검 권장 시점** (다음 major 때 v3 로 minor 5건 흡수 고려).
 - 2026-07-10 (v2 minor #1): §4.6 에 **F-14 (세션 표시명 = 하네스 세션 제목)** 추가 — 사용자 요청("fleet 세션명만이라도 요약된 것으로"). 소스 실측(claude `ai-title` transcript 라인·opencode `session.title`) + 공식 문서 확인(진행형 auto-retitle 하네스 미지원 → fleet 표시층 담당). 구현 = fleet-ui-v2 수확 후 후속 사이클 (render/model 파일 겹침 → 큐잉).
 - 2026-07-11 (v2 minor #4): §4.6 에 **F-18 (loop·drill·mem-워커 귀속 정밀화)** 추가 — 사용자 점검 요청 + drill 실발사 실측 2종(runner 이중 표시 dedup 갭 / mem distiller·curator·refresher 워커가 부모 cwd·env 상속으로 세션 자식·drill 그룹 오귀속). environ 마커(MEM_DISTILL·FLEET_TITLE_REFRESH) 태깅 + case명·cwd 상관 dedup. 구현 = fleet-f18 사이클.
@@ -45,3 +54,4 @@
 ## Version History
 - v1 (2026-07-01): 초기 PRD. research 2건 근거.
 - v2 (2026-07-10): drift 흡수([v2 기준선]) + stage-dispatch 관제 parity(SD-F1~F4) + UI 가독성(F-9~F-13). snapshot = `_internal/versions/v1/prd.md`.
+- v3 (2026-07-12): minor 5건(F-14~F-19) 승격 흡수 — §4.7 분리 + audit 🟡 3건 반영(§3 --demo·§9 현행화·글리프 위계). snapshot = `_internal/versions/v2/prd.md`. audit = `_internal/audit/audit_2026-07-12T0910.md`.
