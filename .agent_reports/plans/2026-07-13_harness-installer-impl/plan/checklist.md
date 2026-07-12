@@ -15,15 +15,15 @@ Phase 2: manifest.py — hash-manifest / drift / reapply (P0.3) [depends on Phas
   [x] Step 2.4: manifest.py — reapply(runtimes, scope, sources=None) via git merge-file
 
 Phase 3: drivers/{claude,codex,opencode}.py — install()/status()/checks() (P0.4) [depends on Phase 1]
-  [ ] Step 3.1: drivers/claude.py — install/status/checks (delegates to install-windows.sh on Windows)
-  [ ] Step 3.2: drivers/codex.py — install/status/checks (symlinks + optional --generate)
-  [ ] Step 3.3: drivers/opencode.py — install/status/checks (opencode.json non-destructive merge)
+  [x] Step 3.1: drivers/claude.py — install/status/checks (delegates to install-windows.sh on Windows)
+  [x] Step 3.2: drivers/codex.py — install/status/checks (symlinks + optional --generate)
+  [x] Step 3.3: drivers/opencode.py — install/status/checks (opencode.json non-destructive merge)
 
 Phase 4: verifier.py real check lists (P0.2) [depends on Phase 3]
-  [ ] Step 4.1: verifier.py / checks_common.py — shared check helpers (check_symlink, check_cmd, check_file_exists)
-  [ ] Step 4.2: drivers/claude.py checks() — symlink existence + build-manifest --check + compile smoke + bootstrap smoke (CLI-gated)
-  [ ] Step 4.3: drivers/codex.py checks() — symlink existence + sync-native --check x4 + preflight smoke + bootstrap smoke (CLI-gated)
-  [ ] Step 4.4: drivers/opencode.py checks() — symlink existence + sync-native --check x3 + preflight smoke + drift-watch sentinel + bootstrap smoke (CLI-gated)
+  [x] Step 4.1: verifier.py — shared check helpers (check_symlink, check_cmd, check_file_exists) [done by orchestrator directly, foundational for Phase 3 driver dispatch]
+  [x] Step 4.2: drivers/claude.py checks() — symlink existence + build-manifest --check + compile smoke + bootstrap smoke (CLI-gated)
+  [x] Step 4.3: drivers/codex.py checks() — symlink existence + sync-native --check x4 + preflight smoke + bootstrap smoke (CLI-gated)
+  [x] Step 4.4: drivers/opencode.py checks() — symlink existence + sync-native --check x3 + preflight smoke + drift-watch sentinel + bootstrap smoke (CLI-gated)
 
 Phase 5: installer.py wiring — cmd_* real behavior (P0 integration) [depends on 1,2,3]
   [ ] Step 5.1: installer.py cmd_install — driver.install() real call, SKIP/BLOCKED surfacing
@@ -32,8 +32,8 @@ Phase 5: installer.py wiring — cmd_* real behavior (P0 integration) [depends o
   [ ] Step 5.4: installer.py cmd_uninstall — manifest-scoped removal
 
 Phase 6: mem import + ~/.local/bin launcher symlinks (P0.5) [independent, parallel with 1-4]
-  [ ] Step 6.1: bootstrap.py (new) or cmd_install hook — mem import when DB absent
-  [ ] Step 6.2: bootstrap.py — ~/.local/bin/{harness,fleet} launcher symlinks + PATH-collision guard
+  [x] Step 6.1: bootstrap.py (new) or cmd_install hook — mem import when DB absent
+  [x] Step 6.2: bootstrap.py — ~/.local/bin/{harness,fleet} launcher symlinks + PATH-collision guard
 
 Phase 7: P1 — plugin channel wrapping (BOUNDARY — Codex in-cycle, Claude deferred)
   [ ] Step 7.1: drivers/codex.py — plugin=True wraps `codex plugin marketplace add` + `codex plugin add` (CLI-gated); drivers/claude.py plugin=True emits deferred SKIP
