@@ -4,8 +4,8 @@ mode: [cli]
 scope_note: "하네스 배포 표면 — 2-채널 하이브리드(런타임 native plugin 채널 + bootstrap installer CLI `harness`). INSTALL_LAYOUT.md 수동 레시피 대체. HLS(harness-layer-sync) interlock — hash-manifest 스키마·GSD 정독 게이트 공유."
 phases:
   spec: done                # v1 PRD 확정 (2026-07-12 — 하이브리드 구조·`harness` 명령 사용자 확정, currentness 검증 반영)
-  scaffolding: done         # 브랜치 harness-installer-scaffold (9792fd3, 13 files) — merge 는 사용자 신호 대기
-  dev: pending              # autopilot-code — 선행: GSD bin/install.js 정독 게이트(hash-manifest) + INST-OPEN-4 실측
+  scaffolding: done         # 브랜치 9792fd3 → main 머지 완료(4de50f6, 사용자 신호 2026-07-13)
+  dev: in_progress          # 사이클 1 (plans/2026-07-13_harness-installer-impl) — conductor 분사, 선행 게이트(GSD 정독·OpenCode 실측) 통과
 last_updated: 2026-07-13
 inputs:
   - .agent_reports/research/cross-platform-agent-frameworks/
