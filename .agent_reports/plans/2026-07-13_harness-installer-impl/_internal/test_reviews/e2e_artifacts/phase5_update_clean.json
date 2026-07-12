@@ -1,0 +1,1 @@
+{"runtime": ["claude", "codex", "opencode"], "channel": "dev", "checks": [{"id": "update.drift", "ok": true, "detail": "drift 없음"}], "drift": [], "exit": 0, "lines": ["update: runtime=claude reapply=False", "update: runtime=codex reapply=False", "update: runtime=opencode reapply=False"]}

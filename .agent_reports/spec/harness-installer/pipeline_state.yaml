@@ -5,7 +5,7 @@ scope_note: "하네스 배포 표면 — 2-채널 하이브리드(런타임 nati
 phases:
   spec: done                # v1 PRD 확정 (2026-07-12 — 하이브리드 구조·`harness` 명령 사용자 확정, currentness 검증 반영)
   scaffolding: done         # 브랜치 9792fd3 → main 머지 완료(4de50f6, 사용자 신호 2026-07-13)
-  dev: in_progress          # 사이클 1 (plans/2026-07-13_harness-installer-impl) — conductor 분사, 선행 게이트(GSD 정독·OpenCode 실측) 통과
+  dev: in_progress          # 사이클 1 done(installer CLI 경로 Phase 0-6 + Codex plugin wrap, e2e 51/51 PASS) — 단 §0.5 원칙1(2-채널 하이브리드)의 Claude plugin content generator+`install --plugin` 이 명시 deferred 라 전체 dev 는 not-done 유지. 다음 사이클 필요. 근거: plans/2026-07-13_harness-installer-impl/final_report.md
 last_updated: 2026-07-13
 inputs:
   - .agent_reports/research/cross-platform-agent-frameworks/

@@ -18,12 +18,16 @@ import sys
 import os
 import json
 import argparse
+import shutil
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 
+import paths
 import projector
 import manifest
 import verifier
+import bootstrap
 from drivers import get_driver, RUNTIMES
 
 # exit code 상수 — PRD [cli] "### Exit code" 표와 1:1
@@ -100,16 +104,72 @@ def emit(result, as_json):
 
 def cmd_install(args):
     runtimes = resolve_runtimes(args)
-    plan = projector.plan(runtimes, scope=args.scope)
     lines = [f"install: runtime={r} scope={args.scope} plugin={args.plugin} dry_run={args.dry_run}" for r in runtimes]
     checks = []
+    results = []
+
     for rt in runtimes:
         driver = get_driver(rt)
-        # TODO(autopilot-code): driver.install() 실행 — projector.plan() 결과를 실 symlink/
-        # plugin-add 로 적용하고 manifest.record() 로 hash 등재. 지금은 계획만 노출한다.
-        checks.append({"id": f"{rt}.plan", "ok": True, "detail": f"{len(plan.get(rt, []))}개 projection 항목 계획됨"})
+        result = driver.install(scope=args.scope, plugin=args.plugin, dry_run=args.dry_run)
+        results.append(result)
+
+        for a in result["actions"]:
+            dest = a.get("dest", "")
+            detail = a.get("detail")
+            line = f"{rt}: {a['action']} {dest} -> {a['status']}"
+            if detail and a["status"] not in ("created", "unchanged"):
+                line += f" ({detail})"
+            lines.append(line)
+
+            check_name = Path(dest).name if dest else "x"
+            checks.append(
+                {
+                    "id": f"{rt}.{a['action']}.{check_name}",
+                    "ok": a["status"] != "blocked",
+                    "detail": detail if detail else a["status"],
+                }
+            )
+
+    any_blocked = any(result["blocked"] for result in results)
+
+    if not any_blocked:
+        if args.dry_run:
+            launcher_results = bootstrap.install_launchers(dry_run=True)
+            lines.append("bootstrap: mem-import skipped (dry-run — no dry-run mode for restore_memory)")
+            for lr in launcher_results:
+                lines.append(f"bootstrap: launcher {lr['name']} -> {lr['status']} (dry-run)")
+                checks.append(
+                    {
+                        "id": f"bootstrap.launcher.{lr['name']}",
+                        "ok": lr["status"] != "skipped-collision",
+                        "detail": lr.get("detail", lr["status"]),
+                    }
+                )
+        else:
+            mem_result = bootstrap.restore_memory()
+            lines.append(f"bootstrap: mem-import -> {mem_result['action']} ({mem_result['detail']})")
+            checks.append(
+                {
+                    "id": "bootstrap.mem-import",
+                    "ok": mem_result["action"] != "failed",
+                    "detail": mem_result["detail"],
+                }
+            )
+
+            launcher_results = bootstrap.install_launchers(dry_run=False)
+            for lr in launcher_results:
+                lines.append(f"bootstrap: launcher {lr['name']} -> {lr['status']}")
+                checks.append(
+                    {
+                        "id": f"bootstrap.launcher.{lr['name']}",
+                        "ok": lr["status"] != "skipped-collision",
+                        "detail": lr.get("detail", lr["status"]),
+                    }
+                )
+
+    exit_code = EXIT_BLOCKED if any_blocked else EXIT_OK
     return {"runtime": runtimes, "channel": "plugin" if args.plugin else "dev", "checks": checks,
-            "drift": [], "exit": EXIT_OK, "lines": lines}
+            "drift": [], "exit": exit_code, "lines": lines}
 
 
 def cmd_verify(args):
@@ -129,10 +189,67 @@ def cmd_verify(args):
 
 def cmd_update(args):
     runtimes = resolve_runtimes(args)
-    drift = manifest.check_drift(runtimes) if args.reapply else []
+    drift = manifest.check_drift(runtimes, scope=args.scope)
     lines = [f"update: runtime={r} reapply={args.reapply}" for r in runtimes]
-    exit_code = EXIT_DRIFT if drift and not args.reapply else EXIT_OK
-    return {"runtime": runtimes, "channel": "plugin" if args.plugin else "dev", "checks": [],
+    checks = []
+
+    if not args.reapply:
+        if drift:
+            for d in drift:
+                lines.append(f"drift: {d['runtime']}/{d['path']} ({d['detail']})")
+            checks.append(
+                {
+                    "id": "update.drift",
+                    "ok": False,
+                    "detail": f"{len(drift)}개 drift 발견 — --reapply 로 재적용하거나 직접 확인",
+                }
+            )
+            exit_code = EXIT_DRIFT
+        else:
+            checks.append({"id": "update.drift", "ok": True, "detail": "drift 없음"})
+            exit_code = EXIT_OK
+        return {"runtime": runtimes, "channel": "plugin" if args.plugin else "dev", "checks": checks,
+                "drift": drift, "exit": exit_code, "lines": lines}
+
+    # --reapply: build sources dict from current projector plan's copy_once entries.
+    sources = {rt: {} for rt in runtimes}
+    for rt in runtimes:
+        entries = projector.plan([rt], scope=args.scope)[rt]
+        for entry in entries:
+            if entry["action"] == "copy_once":
+                relpath = Path(entry["dest"]).name
+                sources[rt][relpath] = entry["source"]
+
+    result = manifest.reapply(runtimes, scope=args.scope, sources=sources)
+
+    for r in result["reapplied"]:
+        lines.append(f"reapplied: {r['runtime']}/{r['path']}")
+    for c in result["conflicts"]:
+        lines.append(f"conflict: {c['runtime']}/{c['path']} ({c.get('status')})")
+    for v in result["verify_failed"]:
+        lines.append(f"verify_failed: {v['runtime']}/{v['path']} ({v.get('status')})")
+    for m in result["missing"]:
+        lines.append(f"missing: {m['runtime']}/{m['path']}")
+
+    checks.append({"id": "update.reapplied", "ok": True, "detail": f"{len(result['reapplied'])}개 재적용"})
+    checks.append(
+        {
+            "id": "update.conflicts",
+            "ok": not result["conflicts"],
+            "detail": f"{len(result['conflicts'])}개 충돌",
+        }
+    )
+    checks.append(
+        {
+            "id": "update.verify_failed",
+            "ok": not result["verify_failed"],
+            "detail": f"{len(result['verify_failed'])}개 verify 실패",
+        }
+    )
+    checks.append({"id": "update.missing", "ok": True, "detail": f"{len(result['missing'])}개 누락 파일"})
+
+    exit_code = EXIT_DRIFT if (result["conflicts"] or result["verify_failed"]) else EXIT_OK
+    return {"runtime": runtimes, "channel": "plugin" if args.plugin else "dev", "checks": checks,
             "drift": drift, "exit": exit_code, "lines": lines}
 
 
@@ -142,16 +259,78 @@ def cmd_status(args):
     checks = []
     for rt in runtimes:
         driver = get_driver(rt)
-        # TODO(autopilot-code): 실제 채널·commit·drift 조회 — driver.status() + manifest 대조.
-        checks.append({"id": f"{rt}.status", "ok": True, "detail": "channel=미확인 (scaffold stub)"})
-        lines.append(f"{rt}: channel=미확인 (scaffold stub)")
+        s = driver.status(scope=args.scope)
+        detail = f"channel={s['channel']} version={s['version']} drift={s['drift_count']}"
+        checks.append({"id": f"{rt}.status", "ok": True, "detail": detail})
+        lines.append(f"{rt}: {detail}")
     return {"runtime": runtimes, "channel": "dev", "checks": checks, "drift": [], "exit": EXIT_OK, "lines": lines}
 
 
 def cmd_uninstall(args):
     runtimes = resolve_runtimes(args)
-    lines = [f"uninstall: runtime={r} (manifest 등재분만 제거 — 소유 경계)" for r in runtimes]
-    return {"runtime": runtimes, "channel": "dev", "checks": [], "drift": [], "exit": EXIT_OK, "lines": lines}
+    lines = []
+    checks = []
+
+    for rt in runtimes:
+        manifest_path = manifest._manifest_path(rt, args.scope)
+        manifest_data = manifest._load_manifest(manifest_path)
+
+        if manifest_data is None:
+            lines.append(f"uninstall: {rt} — manifest 없음, 제거할 것 없음")
+            checks.append({"id": f"{rt}.uninstall", "ok": True, "detail": "no manifest, nothing to uninstall"})
+            continue
+
+        runtime_home = paths.runtime_home(rt, args.scope)
+
+        copy_once_dests = [runtime_home / relpath for relpath in manifest_data.get("files", {})]
+
+        entries = projector.plan([rt], scope=args.scope)[rt]
+        symlink_dests = [Path(e["dest"]) for e in entries if e["action"] == "symlink"]
+
+        if args.dry_run:
+            for d in copy_once_dests:
+                lines.append(f"uninstall(dry-run): {rt} — remove copy-once file {d}")
+            for d in symlink_dests:
+                lines.append(f"uninstall(dry-run): {rt} — remove symlink {d}")
+            lines.append(f"uninstall(dry-run): {rt} — remove manifest {manifest_path}")
+            checks.append(
+                {
+                    "id": f"{rt}.uninstall",
+                    "ok": True,
+                    "detail": f"dry-run: {len(copy_once_dests)}개 copy-once + {len(symlink_dests)}개 symlink 제거 예정",
+                }
+            )
+            continue
+
+        # 1) 심볼릭 링크 제거 (idempotent — 이미 없으면 조용히 skip).
+        for d in symlink_dests:
+            if d.is_symlink():
+                d.unlink()
+                lines.append(f"uninstall: {rt} — removed symlink {d}")
+
+        # 2) copy-once 파일 — 백업 후 제거.
+        for relpath, d in zip(manifest_data.get("files", {}), copy_once_dests):
+            if d.exists():
+                backup_path = paths.harness_state_dir(rt, args.scope) / "local-patches" / relpath
+                backup_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(d, backup_path)
+                d.unlink()
+                lines.append(f"uninstall: {rt} — removed copy-once file {d} (backed up to {backup_path})")
+
+        # 3) manifest.json 마지막 제거.
+        if manifest_path.exists():
+            manifest_path.unlink()
+            lines.append(f"uninstall: {rt} — removed manifest {manifest_path}")
+
+        checks.append(
+            {
+                "id": f"{rt}.uninstall",
+                "ok": True,
+                "detail": f"{len(copy_once_dests)}개 copy-once + {len(symlink_dests)}개 symlink 제거됨",
+            }
+        )
+
+    return {"runtime": runtimes, "channel": "dev", "checks": checks, "drift": [], "exit": EXIT_OK, "lines": lines}
 
 
 COMMANDS = {
