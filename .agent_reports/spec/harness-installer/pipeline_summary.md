@@ -7,4 +7,5 @@
 - runtime-currentness 검증(작성 중, 백그라운드 에이전트): Claude Code plugin 은 hooks·bin 까지 탑재 가능(cache self-contained·ephemeral), Codex plugin 은 skills/hooks/MCP/app 4종만(agents .toml 불가 → symlink 병행), OpenCode 는 번들 포맷 부재 + 기존 배선 drift 발견(복수형 디렉토리·`skills.paths` 문서 부재 → INST-OPEN-4).
 - 사용자 결정 2건: 2-채널 하이브리드 구조(INST-D-1), CLI 명령 `harness`(INST-D-2).
 - 의미↔규칙 경계 체크: 충돌 0 (config merge 충돌 판정도 규칙 처리).
-- Step 4 scaffold: worktree `agent_setting-wt/harness-installer-scaffold` 에 headless 분사 (skeleton — tools/install/ + Claude plugin-marketplace 대칭 skeleton).
+- Step 4 scaffold: worktree `agent_setting-wt/harness-installer-scaffold` 에 headless 분사 (sonnet·fast implementer, ~25분 완주) — 브랜치 커밋 `9792fd3`(skeleton 13 files, 432 insertions) + `20c4f7e`(handoff 보고). 산출: `tools/install/{harness.sh,installer.py,projector,manifest,verifier,drivers/*}` + `adapters/claude/plugin-marketplace/` 대칭 skeleton + `.gitignore` 예외 2줄(Codex 선례 동형). 구문·JSON·CLI 스모크 전부 통과. hash-manifest 는 의도적 `NotImplementedError`(GSD 정독 게이트 준수). 상세 = `_internal/scaffold_v1.md`(브랜치).
+- 다음: 사용자 merge 신호 → 브랜치 수확 / 구현 = `autopilot-code` (선행 게이트: GSD `bin/install.js` 정독 + INST-OPEN-4 OpenCode 실측).
