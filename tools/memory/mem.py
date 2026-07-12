@@ -893,6 +893,11 @@ _RECALL_SIGNAL_WORDS = frozenset({
 _KO_PARTICLES = ("에서", "으로", "한테", "부터", "까지", "은", "는", "이", "가",
                  "을", "를", "에", "와", "과", "도", "만", "의", "로", "께")
 
+# word-ish run = alphanumeric + CJK(기호·가나·한자 U+3000–U+9FFF, 한글 U+AC00–U+D7AF).
+# 그 외 문자(하이픈/슬래시/점/콜론/언더스코어/@/+ …)에서 sub-token 을 가른다.
+# CJK run 은 통째 보존되어 char 단위로 쪼개지지 않는다 (findall 이 최대 run 매칭).
+_SUBTOKEN_RE = re.compile(r"[0-9A-Za-z　-鿿가-힯]+")
+
 
 def _tokenize_query(q: str) -> list:
     """NL query 를 FTS OR MATCH 토큰 리스트로 분해.
@@ -901,14 +906,26 @@ def _tokenize_query(q: str) -> list:
     1. 공백 분할.
     2. 회상 신호어(_RECALL_SIGNAL_WORDS) 전체 토큰 제거.
     3. 한국어 조사 suffix-strip: stem 길이 ≥ 2 일 때만 strip.
-    4. 각 생존 토큰을 FTS5-escape: '"tok"' (FTS5 연산자 주입 차단).
-    5. 빈 결과 → [] 반환 (호출자가 _fts_literal phrase fallback).
+    4. 내부 구두점(하이픈/슬래시/점/언더스코어 …)에서 sub-token 분해 —
+       "stage-dispatch" → "stage" OR "dispatch". 하이픈 쿼리가 단일 phrase 로
+       굳어 인접 매칭만 되던 조용한 miss 를 막고, 공백 쿼리("stage dispatch")와
+       동일한 multi-term OR 로 동작한다 (E-4 계약 실현). 다부분 토큰은 원본도
+       phrase 로 함께 실어 exact-identifier bm25 랭킹을 보존한다.
+    5. 각 sub-token 을 FTS5-escape: '"tok"' (FTS5 연산자 주입 차단).
+    6. 빈 결과 → [] 반환 (호출자가 _fts_literal phrase fallback).
 
     trigram MATCH 는 substring 매칭이므로 tokenize 하지 않는다 — 호출자가 직접
     _fts_literal 를 사용. (unicode61 FTS 전용).
     """
     tokens = []
     seen = set()
+
+    def _emit(term):
+        escaped = '"' + term.replace('"', '""') + '"'
+        if escaped not in seen:
+            seen.add(escaped)
+            tokens.append(escaped)
+
     for tok in q.split():
         # 회상 신호어 제거
         if tok in _RECALL_SIGNAL_WORDS:
@@ -920,11 +937,15 @@ def _tokenize_query(q: str) -> list:
                 break
         if not tok:
             continue
-        # FTS5 per-token quote (연산자 주입 차단)
-        escaped = '"' + tok.replace('"', '""') + '"'
-        if escaped not in seen:
-            seen.add(escaped)
-            tokens.append(escaped)
+        # 내부 구두점에서 sub-token 분해 (CJK run 보존)
+        parts = _SUBTOKEN_RE.findall(tok)
+        if not parts:
+            continue
+        # 다부분 토큰이면 원본 phrase 도 함께(랭킹 보존) — 단일 run 은 sub-token 뿐.
+        if len(parts) > 1:
+            _emit(tok)
+        for part in parts:
+            _emit(part)
     return tokens
 
 
