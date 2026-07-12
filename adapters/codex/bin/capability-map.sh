@@ -75,7 +75,7 @@ case "$cap" in
     role_contract="planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team"
     dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --depth 1|2 [--parent <slug>]"
     stage_graph_contract="core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance"
-    plan_policy="direct=no-plan;quick=micro-plan+plan-check-lite;standard+=durable-plan"
+    plan_policy="direct=no-plan;quick=depth1-one-shot-micro-plan+plan-check-lite;standard+=durable-plan"
     note="$note Follow the reported pipeline_contract, artifact_contract, and intensity/depth dispatch contract before claiming the autopilot-code cycle is complete."
     ;;
   code-test)

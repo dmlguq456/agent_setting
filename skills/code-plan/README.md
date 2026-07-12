@@ -39,7 +39,7 @@ Date: {YYYY-MM-DD}
 
 ## Plan-Check Assurance
 
-`code-plan` is used for durable `standard+` code work cycles. `direct` skips it; `quick` uses inline micro-plan plus plan-check-lite. The rigor tier (derived from `--intensity`, per [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)) scales the plan-check budget but does not create the stage graph.
+`code-plan` is used for durable `standard+` code work cycles. `direct` skips it; `quick` is a depth-1 one-shot worker with inline micro-plan plus plan-check-lite. The rigor tier (derived from `--intensity`, per [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)) scales the plan-check budget but does not create the stage graph.
 
 | Rigor tier | 행동 |
 |---|---|

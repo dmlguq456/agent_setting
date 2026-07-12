@@ -99,7 +99,7 @@ Additional code-entry gates:
 3. Run git/worktree preflight and remember the starting `HEAD`.
 4. If `spec/` exists, read `spec/prd.md` plus relevant mode contracts before planning.
 5. Emit `spec-significance: within-spec` or `spec-significance: SPEC-SIGNIFICANT (...)`.
-6. Select the stage graph from pipeline intensity, then map common stages to code sub-capabilities. `direct` skips `code-plan`; `quick` uses an inline micro-plan and plan-check-lite; `standard+` uses `code-plan`, optional `code-refine`, `code-execute`, `code-test`, and `code-report` according to the selected graph, QA override, and resume point. For `standard+`, a depth-1 capability owner may dispatch bounded depth-2 planner/verifier/adversary workers when the task is separable and must synthesize their short reports before final write-back. `direct|quick` stay inline unless explicitly escalated.
+6. Select the stage graph from pipeline intensity, then map common stages to code sub-capabilities. `direct` skips `code-plan`; `quick` runs as a depth-1 one-shot worker with an inline micro-plan and plan-check-lite; `standard+` uses `code-plan`, optional `code-refine`, `code-execute`, `code-test`, and `code-report` according to the selected graph, QA override, and resume point. For `standard+`, a depth-1 capability owner may dispatch bounded depth-2 planner/verifier/adversary workers when the task is separable and must synthesize their short reports before final write-back. `direct` stays inline; `quick` is a depth-1 one-shot worker unless explicitly escalated.
 7. Before each durable write-back or commit, re-run git/worktree safety and stop if `HEAD` or merge state changed unexpectedly.
 8. Record implementation evidence and verification results in `pipeline_summary.md`.
 

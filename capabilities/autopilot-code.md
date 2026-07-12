@@ -59,12 +59,12 @@ Pipeline intensity is the primary ceremony selector for this entrypoint. Use `di
 |---|---|
 | `intake` | parse `dev|debug|audit`, classify spec significance, choose intensity and QA override |
 | `orient` | read `spec/prd.md` and relevant source context; `orient-lite` reads only the touched area |
-| `plan` | none for `direct`; inline micro-plan for `quick`; `code-plan` durable artifact for `standard+` |
-| `plan-check` | none for `direct`; 3-4 question inline gate for `quick`; lightweight plan QA for `standard`; risk/adversarial critique only for `strong+` |
-| `produce` | direct edit for `direct`; `code-execute` or scoped implementation for `quick+` |
-| `verify` | sanity check for `direct`; focused command/review for `quick`; `code-test` evidence for `standard+` |
+| `plan` | none for `direct`; depth-1 one-shot worker micro-plan for `quick`; `code-plan` durable artifact for `standard+` |
+| `plan-check` | none for `direct`; 3-4 question gate inside the depth-1 quick worker; lightweight plan QA for `standard`; risk/adversarial critique only for `strong+` |
+| `produce` | direct edit for `direct`; quick is a depth-1 one-shot worker and `code-execute` or scoped implementation for `quick+` |
+| `verify` | sanity check for `direct`; focused command/review inside the quick one-shot worker; `code-test` evidence for `standard+` |
 | `synth` | only when depth2 perspective/verifier/adversary workers ran |
-| `report` | concise user report for `direct|quick`; `code-report`/`pipeline_summary.md` for `standard+` |
+| `report` | concise user report for `direct`; quick returns its concise report from the depth-1 one-shot worker; `code-report`/`pipeline_summary.md` for `standard+` |
 
 Stage-local gates must not become full independent QA loops after every sub-stage. Keep plan-check small, concentrate expensive independent review in the selected risk point or final verification, and keep raw logs in artifacts rather than parent context. `code-plan`, `code-refine`, and `code-test` inherit the selected graph: `code-plan` is standard+ durable planning, `code-refine` is optional correction, and `code-test` is final concrete verification rather than hardcoded-thorough QA.
 
@@ -94,7 +94,7 @@ Additional code-entry gates:
 3. Run git/worktree preflight and remember the starting `HEAD`.
 4. If `spec/` exists, read `spec/prd.md` plus relevant mode contracts before planning.
 5. Emit `spec-significance: within-spec` or `spec-significance: SPEC-SIGNIFICANT (...)`.
-6. Select the stage graph from pipeline intensity, then map common stages to code sub-capabilities. `direct` skips `code-plan`; `quick` uses an inline micro-plan and plan-check-lite; `standard+` uses `code-plan`, optional `code-refine`, `code-execute`, `code-test`, and `code-report` according to the selected graph, QA override, and resume point. For `standard+`, a depth-1 capability owner may dispatch bounded depth-2 planner/verifier/adversary workers when the task is separable and must synthesize their short reports before final write-back. `direct|quick` stay inline unless explicitly escalated.
+6. Select the stage graph from pipeline intensity, then map common stages to code sub-capabilities. `direct` skips `code-plan`; `quick` runs as a depth-1 one-shot worker with an inline micro-plan and plan-check-lite; `standard+` uses `code-plan`, optional `code-refine`, `code-execute`, `code-test`, and `code-report` according to the selected graph, QA override, and resume point. For `standard+`, a depth-1 capability owner may dispatch bounded depth-2 planner/verifier/adversary workers when the task is separable and must synthesize their short reports before final write-back. `direct` stays inline; `quick` is a depth-1 one-shot worker unless explicitly escalated.
 7. Before each durable write-back or commit, re-run git/worktree safety and stop if `HEAD` or merge state changed unexpectedly.
 8. Record implementation evidence and verification results in `pipeline_summary.md`.
 

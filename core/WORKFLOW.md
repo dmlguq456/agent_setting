@@ -53,7 +53,7 @@ Autopilot entrypoints choose `intensity`; verification rigor is derived from it 
 | Request shape | Default intensity | Routing note |
 |---|---|---|
 | one-off answer, typo, rename, explicit no-artifact work | `direct` | no plan stage, no plan-check, no durable plan artifact |
-| small localized tracked change or doc minor | `quick` | inline micro-plan plus small plan-check; no depth dispatch |
+| small localized tracked change or doc minor | `quick` | depth-1 one-shot capability worker with orient-lite / micro-plan / plan-check-lite / focused verification / concise report; no depth-2 |
 | routine tracked code/doc/spec/design work | `standard` | durable plan/checklist; depth-1 owner is a thin conductor that dispatches each pipeline stage (plan/execute/test/report) as its own depth-2 headless session by default (file-only handoff), and may also open bounded depth-2 verifier/planner work when separable |
 | important multi-file or risk-bearing work | `strong` | stage dispatch as in `standard`, plus a depth-2 check at the riskiest point, not every stage |
 | complex cross-domain or cross-harness work | `thorough` | depth-1 owner opens bounded depth-2 perspective/verifier workers |
@@ -108,14 +108,14 @@ Direct work is the only graph with no plan. Every non-`direct` autopilot graph h
 
 | entry | 내부 분기 |
 |---|---|
-| **autopilot-research** | 연구팀 research-survey + 자료팀 browser-fetch/pdf-extract/web-image-search + 연구팀 fact-check. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
+| **autopilot-research** | 연구팀 research-survey + 자료팀 browser-fetch/pdf-extract/web-image-search + 연구팀 fact-check. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. direct = depth-0 inline; quick = depth-1 one-shot worker
 | **analyze-project** | 단일 skill — code/paper/doc mode 자체 분석 |
-| **autopilot-spec** | 기획팀(PRD 위임) + 자료팀(research import) / setup: 호스팅·CI/CD logic. `standard+` 에선 각 durable 스테이지(특히 scaffold)가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
-| **autopilot-design** | 디자인팀 maker + 디자인팀 critic + 자료팀 web-image-search. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
-| **autopilot-code** (일반) | 기획팀(plan) + 개발팀(execute) + 품질관리팀 code-review·test + **task-aware plan-review** (UI/visual → 디자인팀 critic / research·code → 연구팀). `standard+` 에선 각 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
+| **autopilot-spec** | 기획팀(PRD 위임) + 자료팀(research import) / setup: 호스팅·CI/CD logic. `standard+` 에선 각 durable 스테이지(특히 scaffold)가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. direct = depth-0 inline; quick = depth-1 one-shot worker
+| **autopilot-design** | 디자인팀 maker + 디자인팀 critic + 자료팀 web-image-search. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. direct = depth-0 inline; quick = depth-1 one-shot worker
+| **autopilot-code** (일반) | direct = depth-0 inline; quick = depth-1 one-shot capability worker(orient-lite → micro-plan → plan-check-lite → produce → focused verification → concise report) + Fleet-visible quick/exec stage; `standard+` 에선 기획팀(plan) + 개발팀(execute) + 품질관리팀 code-review·test + **task-aware plan-review** (UI/visual → 디자인팀 critic / research·code → 연구팀) 스테이지를 **독립 headless 세션**(OPERATIONS §5.10 ③④)으로 분사하고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. |
 | **autopilot-code** (앱 mode) | 위 + **디자인팀 critic 2자리** (plan 단계 _plan-review_ + render 후 결과 critic) + DB migration 안전 logic + push 자동 deploy |
-| **autopilot-draft** | 자료팀(figure·data·reference) + 개발팀(writing) + 편집팀 polish + 연구팀 fact-check. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
-| **autopilot-refine** | autopilot-draft 와 동일 재활용 + 편집팀 review. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. `direct/quick` 은 inline |
+| **autopilot-draft** | 자료팀(figure·data·reference) + 개발팀(writing) + 편집팀 polish + 연구팀 fact-check. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. direct = depth-0 inline; quick = depth-1 one-shot worker
+| **autopilot-refine** | autopilot-draft 와 동일 재활용 + 편집팀 review. `standard+` 에선 각 durable 스테이지가 **독립 headless 세션**(OPERATIONS §5.10 ③④)이고 위 팀은 그 스테이지 세션 _안_ 에서 실행 — depth-1 conductor 는 산출물 경로만 넘긴다. direct = depth-0 inline; quick = depth-1 one-shot worker
 | **autopilot-lab** | (setup) 연구팀 plan-review + 개발팀 new-lib scaffold + 품질관리팀 test smoke / (eval) 품질관리팀 test functional + 자료팀 figure-gen + 연구팀 research-survey. `standard+` setup/eval 스테이지는 **독립 headless 세션**(OPERATIONS §5.10 ③④), 팀은 세션 _안_. 실제 학습 run 은 long/async·사람 게이트(RUNLOG ⏳)라 분사 스테이지가 아님. `direct/quick`·단발 실험 run 은 inline |
 | **analyze-user** | 자료팀(cross-project 수집) + 편집팀 review |
 
@@ -163,6 +163,6 @@ Direct work is the only graph with no plan. Every non-`direct` autopilot graph h
    - spec-significant (route / schema·entity / UI-flow / 외부 연동 / 마이그레이션) **또는 코드 기존 drift** → **`autopilot-spec` update 모드** (prd.md 최신화 + `_internal/versions/v{N}/prd.md` 스냅샷). drift 가 _명확_ 하면 자율 진행 후 한 줄 보고, **_애매_ 하면 사용자에 확인.**
    - within-spec (구현 디테일) → _"spec 영향 없음"_ 확인.
    > 이 체크는 `autopilot-code` 의 **pre-flight Step 0** 로 절차화 — 라우팅에서 빠뜨려도 code 스킬 진입 시 verdict 보고로 다시 걸린다.
-4. **`autopilot-code` 경유** — stage graph는 `--intensity`가 선택한다. `direct`는 plan 없이 produce+sanity/report, `quick`은 inline micro-plan+plan-check-lite+verify-lite, `standard+`만 `plans/<date>_<slug>/` durable cycle을 만든다. verification rigor는 intensity에서 파생될 뿐 새 plan cycle을 강제하지 않는다.
+4. **`autopilot-code` 경유** — stage graph는 `--intensity`가 선택한다. `direct`는 depth-0 inline produce+sanity/report, `quick`은 depth-1 one-shot capability worker가 micro-plan+plan-check-lite+focused verification+concise report를 한 세션에서 끝내며 depth-2를 열지 않는다, `standard+`만 `plans/<date>_<slug>/` durable cycle을 만든다. verification rigor는 intensity에서 파생될 뿐 새 plan cycle을 강제하지 않는다.
 
 > 핵심: ① 트레일 단절 (거의 모든 요청 quick-pipe → `plans/`) ② spec drift (spec 변경은 항상 autopilot-spec update + versioning) ③ 새 세션 맹목 (진입 시 기존 산출물 파악 1 순위 + 도메인 트리거) 셋을 닫는다. autopilot-spec·autopilot-code 둘 다 iterable — 사후 수정은 _재호출_ 이지 새 사이클이 아니다.

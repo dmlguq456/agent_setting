@@ -2,12 +2,12 @@
 
 - **Date**: 2026-07-10
 - **Mode**: library + cli (autopilot 파이프 디스패치 토폴로지 개정 인프라)
-- **Status**: spec done (v2) · dev Phase 1 done (main 5b7cf33) · Phase 2 in progress
+- **Status**: spec done (v6) · quick depth-1 topology specified · implementation pending
 - **Placement**: 독립 컴포넌트 `spec/stage-dispatch/` — 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 무수정.
 
 ## 배경
 
-사용자 결정(2026-07-10): "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로. 어차피 산출물 기반 소통." → autopilot 파이프의 각 sub-skill 스테이지(code-plan·execute·test·report)를 `standard+` 에서 **기본으로 별개 headless 세션** 분사. 이는 2026-07-06 "owner 단일 세션 + in-session 팀" 재설계 기본값의 **명시적 반전**. 직접 계기 = 2026-07-10 운영 실증 3종(① in-session 서브에이전트 fleet 미표시 ② hook ceremony 미수령 ③ owner 컨텍스트 비대). research(cross-platform-agent-frameworks) 가 "fresh-context per agent + file-state"를 지배 관용구로 확증(§4-(8))해 근거 보강.
+사용자 결정(2026-07-10): "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로. 어차피 산출물 기반 소통." → `standard+` 에서 각 sub-skill 스테이지를 별개 headless 세션으로 분사. 사용자 결정(2026-07-13): `direct` 는 depth-0 inline 유지, `quick` 은 단일 depth-1 one-shot capability worker 로 이동, `standard+` 는 기존 depth-1 conductor -> 순차 depth-2 stage-worker topology 유지. Codex 공식 manual 근거는 subagent 가 main-thread context pollution 을 줄이지만 token 비용이 늘고 parallel write-heavy workflow 는 충돌·조정비용 주의가 필요하다는 점이다.
 
 ## Process Log
 | Step | Action | Result | Notes |
@@ -24,7 +24,7 @@
 - **SD-4 (depth-2 write 개정)**: read-only 기본을 스테이지-워커 클래스별 write 소유로 재정의(plan/execute소스/test/report). depth 3+ 금지 유지.
 - **SD-5~6 (모델·가드레일)**: model role conductor 명시(§5.10 ⑦). 동시상한5=Σ(conductor+활성스테이지)·마이크로 inline·실패=스테이지만 재분사·lock=report의 pipeline_summary만.
 - **SD-7 (영향 표면)**: 14곳(core·bootstrap 3어댑터·SKILL·wrapper·fleet·drill) 현행문구→개정방향 표. 문구 편집은 core-first 별도.
-- **SD-8 (적용 범위)**: standard+ 기본, direct/quick inline 유지 — 2026-07-06 기본값 명시 반전.
+- **SD-8 / SD-18 (적용 범위)**: standard+ stage-dispatch 기본, direct depth-0 inline 유지, quick depth-1 one-shot capability worker 로 승격(depth-2 금지).
 - **SD-9 (wrapper)**: 재작성 불요. stage-dispatch helper 신설은 pilot 후 판정.
 
 ## 미결 (open — pilot 계측)
@@ -68,3 +68,9 @@ Phase 1(계약문서+wrapper증분+autopilot-code pilot) · Phase 2(autopilot-* 
 - **Phase 3 구현 done** (2026-07-10, 브랜치 `stage-dispatch-phase3`, 미머지 — 수확은 메인): SD-15(wrapper `--early-exit-watch`+`scan_death`+`close_job_row` → limit-즉사 row 자동 마감·reset 표면화, liveness/wait 로그-limit DEAD 근거)·SD-16(a `usage-check.sh` 보수 조회 — 공식 스크립트 표면 부재 확정[Claude `/usage`·Codex `/status` 대화형뿐]로 jobs.log 마커+reset 캐시 기반, b 상호보완 라우팅 core §5.10 ⑧+dev-pipeline 파생, c row 연속성 실측)·SD-16(d) thorough+ 다축 동시성 실측 **PASS(병렬 성립, 계약 drift 없음)**. 검증: 신규 3+회귀 2 스위트 PASS, boundary check 신규 FAIL 0(잔존 1=fleet baseline). 상세: `.agent_reports/plans/2026-07-10_stage-dispatch-phase3/final_report.md`. 이월: SD-15 codex/opencode wrapper 동형(ADAPTATION disclosure)·프로필 A/B 계측. **수확 노트(메인)**: 이 사이클은 인프라 자기수정 예외로 inline 실행(drift 자진 공개, metrics.md) — 문서-효력 단독 검증은 미완, 다음 일반 사이클로 이월.
 - v4 (2026-07-10): 도그푸딩 정련 3건 — SD-15/16 첫 실전 오탐 2건(SD-15b 로그-패턴 DEAD 앵커링 — 정상 완주한 conductor 의 "limit 논하는 보고문"에 LIMIT_RE 오탐 / SD-16e usage-check reset 의미론 — reset 부재 마커가 실제 리셋 후에도 limited(-)) + SD-11b deny 상향(최소 프롬프트 conductor 2연속 inline — Phase 3 는 자기수정 예외 성립, sd15-parity 는 Claude 분사 경로 무변인데 예외 차용 = soft reminder·한정형 fallback 문서 무효 실증 → wrapper env AGENT_DISPATCH_INTENSITY 주입으로 결정론 deny, 자기수정 예외는 orchestrator 명시 opt-out 만). v3 snapshot = _internal/versions/v3/.
 - v5 (2026-07-10): SD-17 separability 판정 — 사용자 결정 (a). conductor 3연속 실측(자기수정 정당 1·차용 위반 1·경계-결합 정당 1)이 "분사 실익 = separable 작업" 수렴 → 분사 기본 불변 + 비분리 판정 시 inline 허용(metrics 기록 의무 — 기록 없는 inline 은 위반으로 감사 표면화, 분리 부분 in-session 병렬, 자기수정은 SD-11b(c) opt-out). deny 는 code-* Skill 경로 한정 유지(의미 판단 구간 억지 규칙화 회피). v4 snapshot = _internal/versions/v4/.
+
+- v6 (2026-07-13): quick depth-1 topology — autopilot-spec update standard, v5 snapshot = `_internal/versions/v5/prd.md`.
+  - **SD-18**: `direct` depth-0 inline, `quick` depth-1 one-shot capability worker, `standard+` depth-1 conductor -> 순차 depth-2 stage-workers. quick worker 는 micro-plan·plan-check-lite·implementation·focused verification·concise report 를 한 세션에서 끝내고 depth-2 를 열지 않음. mutation-capable quick 은 isolated worktree 사용.
+  - **SD-19**: Codex quick 은 headless check 통과 시 headless dispatch 우선(Fleet-visible). headless 실패 시 native subagent fallback + Fleet visibility degradation note; 둘 다 불가 시 inline + concise fallback reason. parent local evidence: native subagent ok, strict headless projection ok, quick depth-1 dry-run accepted, quick depth-2 forbidden.
+  - **SD-20**: Fleet 는 depth-1 quick worker 를 blinking `quick/exec` activity stage 하나로 표시. quick depth-2 child row 는 계약 위반.
+  - **Official evidence**: OpenAI Codex manual Subagents section (`https://developers.openai.com/codex/codex-manual.md#execution-model-and-workflows`) — subagents move noisy work off the main thread, consume more tokens, and parallel write-heavy workflows require caution. Helper fetch ended with missing `x-content-sha256`; cached official manual was inspected.

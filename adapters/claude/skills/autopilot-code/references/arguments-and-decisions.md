@@ -34,7 +34,7 @@ Pipeline intensity is the stage-graph selector (canonical: [CONVENTIONS.md §1](
 
 - rigor 파생: `direct`→none/light, `quick`→quick, `standard|strong`→standard, `thorough`→thorough, `adversarial`→adversarial.
 - Code track에는 fact-checker가 없다. Ground truth는 코드, tests, runtime behavior, API/CLI surface, security review다.
-- `quick`: inline micro-plan + plan-check-lite + produce + verify-lite. `code-plan`, `code-refine`, 반복 independent QA, durable `plans/{date}_{slug}/`는 기본적으로 열지 않는다.
+- `quick`: depth-1 one-shot worker with inline micro-plan + plan-check-lite + produce + verify-lite. `code-plan`, `code-refine`, 반복 independent QA, durable `plans/{date}_{slug}/`는 기본적으로 열지 않는다.
 - `standard`: durable `code-plan -> code-execute -> code-test -> code-report` with lightweight plan-check and concrete verification.
 - `strong`: standard graph plus one risk-focused independent review at the riskiest point.
 - `thorough|adversarial`: depth-1 owner expands bounded depth2 planner/verifier/adversary workers and must synthesize their short reports before write-back.
