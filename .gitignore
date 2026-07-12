@@ -29,6 +29,8 @@ plugins/
 !adapters/codex/.agents/**
 !adapters/opencode/plugins/
 !adapters/opencode/plugins/**
+!adapters/claude/plugin-marketplace/
+!adapters/claude/plugin-marketplace/**
 
 # Python bytecode caches (per-machine, ephemeral)
 __pycache__/

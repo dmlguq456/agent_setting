@@ -1,0 +1,13 @@
+{
+  "name": "agent-harness",
+  "owner": {
+    "name": "agent-harness"
+  },
+  "plugins": [
+    {
+      "name": "agent-harness-claude",
+      "source": "./plugins/agent-harness-claude",
+      "description": "Portable agent harness — skills/agents/hooks projection for Claude Code."
+    }
+  ]
+}
