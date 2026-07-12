@@ -1,6 +1,8 @@
 ---
-status: active
+status: done
 created: 2026-07-13
+deferred: "Phase 7 (P1): Claude plugin content generator + Claude `install --plugin` CLI wrapping — explicitly deferred to a future cycle per the plan's own Phase 7 boundary (Codex plugin wrap landed in-cycle)."
+incident: "See .agent_reports/plans/2026-07-13_harness-installer-impl/_internal/dev_reviews/INCIDENT_real_home_touched.md — real ~/.claude/settings.json was corrupted during Phase 5 verification (env-var scoping mistake in a dev-team agent) and still needs user action to fix; the harness-installer code itself is not the cause and the fix is a one-line truncation documented in that file."
 phases:
   - "Phase 0: manifest schema + layout decisions (foundation)"
   - "Phase 1: projector.py — INSTALL_LAYOUT recipe port (P0.1)"
