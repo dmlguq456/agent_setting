@@ -1,12 +1,9 @@
 # stage-dispatch — Spec (PRD)
 
-> mode: **library + cli** (하네스 인프라 — 스테이지 분사 계약 문서 + dispatch wrapper·jobs.log·fleet 관제) · 작성 2026-07-10 · v1 · **v2 2026-07-10** (Phase 2 결정 등재 — SD-10~13·SD-OPEN-2. Phase 1 main 머지 5b7cf33 반영: 계약 12표면 개정 + wrapper depth-aware + pilot 계측 plan 218s/execute 255s/test 46s/report 28s·conductor 프롬프트 ~2KB 일정) · **v6 2026-07-13** (사용자 승인 topology 변경: `quick` = depth-1 one-shot capability worker, depth-2 금지, headless 우선/Fleet 표시)
+> mode: **library + cli** (하네스 인프라 — 스테이지 분사 계약 문서 + dispatch wrapper·jobs.log·fleet 관제) · 작성 2026-07-10 · v1 · **v2 2026-07-10** (Phase 2 결정 등재 — SD-10~13·SD-OPEN-2. Phase 1 main 머지 5b7cf33 반영: 계약 12표면 개정 + wrapper depth-aware + pilot 계측 plan 218s/execute 255s/test 46s/report 28s·conductor 프롬프트 ~2KB 일정)
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - **사용자 결정 (2026-07-10 확정)**: "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로 했으면 한다. 어차피 산출물 기반 소통인데." — 입도 = sub-skill 스테이지 단위, 적용 = `standard+`, 이는 2026-07-06 depth 재설계 기본값의 명시적 반전.
-> - **사용자 결정 (2026-07-13 확정)**: `direct` 는 depth-0 inline 유지, `quick` 은 depth-0 실행에서 **단일 depth-1 one-shot capability worker** 로 이동한다. quick worker 는 micro-plan·plan-check-lite·implementation·focused verification·concise report 를 한 세션에서 끝내며, **depth-2 를 열지 않는다**. `standard+` 는 기존 depth-0 main → depth-1 conductor → 순차 depth-2 stage-worker topology 유지.
-> - **공식 Codex 근거 (2026-07-13 확인 시도)**: OpenAI Codex manual `https://developers.openai.com/codex/codex-manual.md#execution-model-and-workflows` / Subagents 섹션은 subagent workflow 가 noisy work 를 main thread 밖으로 옮겨 context pollution 을 줄이고, 병렬 read-heavy 작업에 유용하지만 write-heavy 병렬은 충돌·조정비용 주의가 필요하며 각 subagent 가 자체 model/tool work 를 하므로 single-agent 대비 token 을 더 쓴다고 설명한다. skill helper 는 `x-content-sha256` 헤더 누락으로 실패했으나 `/tmp/openai-docs-cache/codex-manual.md` 에서 해당 공식 manual 섹션을 확인했다.
-> - **로컬 runtime 근거 (parent 검증 완료, 2026-07-13)**: Codex native subagent check ok, strict headless projection restored/check ok, quick depth-1 dispatch dry-run accepted, quick depth-2 remains forbidden.
 > - research `.agent_reports/research/cross-platform-agent-frameworks/` — `analysis_summary.md` §4-(8)(fresh-context-per-agent + file-state 지배 관용구), `cards/gsd.md`(fresh-context subagent per stage·`.planning/` file-state·two-stage routing·size-budget), `06_implementation.md`(파일-복제 회피·parity 정직성).
 > - 운영 실증 (2026-07-10, 이 결정의 직접 계기): ① in-session Task 서브에이전트 = jobs.log 미등록 → fleet 관제에 스테이지 진행 불가시 ② in-session 서브에이전트는 hook ceremony(가드·spec 게이트) 미수령 ③ owner 단일 세션 = 스테이지 누적 컨텍스트 비대.
 > - 현행 계약 실측 (2026-07-10, 본 워크트리): `core/OPERATIONS.md §5.10`·`§5.8`, `core/CONVENTIONS.md §1`·`§2`, `core/WORKFLOW.md §1.1`·`§5`, `core/DESIGN_PRINCIPLES.md §8`, `skills/autopilot-code/references/{dev-pipeline,context-and-guards}.md` + sub-skills, `adapters/claude/bin/dispatch-headless.py`, `adapters/{claude,codex,opencode}` bootstrap §0(C)/AGENTS.md.
@@ -14,7 +11,7 @@
 
 ## 0. 한 줄
 
-**autopilot 파이프의 각 sub-skill 스테이지(code-plan·code-execute·code-test·code-report)를 `standard+` 에서 기본으로 별개 headless 세션에 분사하고, 세션 간 소통은 오직 산출물 파일로 한다.** depth-1 owner 는 스테이지 산출물 경로를 계약으로 넘기고 게이트 판단만 자기 컨텍스트에서 쥔 **얇은 conductor** 가 된다. `direct` 는 depth-0 inline 이고, `quick` 은 단일 depth-1 one-shot capability worker 가 micro-plan부터 concise report까지 한 세션에서 끝낸다(depth-2 금지). 이는 2026-07-06 "owner 단일 세션 + in-session 팀" 재설계의 **기본값을 반전**하고, 2026-07-13 quick topology 를 Fleet-visible one-shot worker 로 승격하는 결정이다.
+**autopilot 파이프의 각 sub-skill 스테이지(code-plan·code-execute·code-test·code-report)를 `standard+` 에서 기본으로 별개 headless 세션에 분사하고, 세션 간 소통은 오직 산출물 파일로 한다.** depth-1 owner 는 스테이지 산출물 경로를 계약으로 넘기고 게이트 판단만 자기 컨텍스트에서 쥔 **얇은 conductor** 가 된다. `direct/quick` 은 현행 inline 유지. 이는 2026-07-06 "owner 단일 세션 + in-session 팀" 재설계의 **기본값을 반전**하는 결정이다.
 
 ## 0.5 설계 원칙 — 산출물 기반 소통 (file-only handoff) ★ cross-cutting
 
@@ -153,7 +150,7 @@ CONVENTIONS §2.3 role 매트릭스 → 스테이지 매핑:
 > **SD-6**: 동시 상한 5 안 동시성 계산 / 마이크로-스테이지 inline 경계 / 스테이지 실패 재시도·재개 의미론 / §5.8 lock 범위를 명문화.
 
 - **동시 상한 5 안 동시성**(§5.10 ⑤): 스테이지 파이프는 **순차**(plan→execute→test→report)라 한 conductor 는 보통 동시 1 스테이지만 점유 — conductor(1) + 활성 스테이지(1) = 2. 여러 요청을 병렬 처리하면 conductor 가 여럿이 되므로 상한 계산은 **`Σ(활성 conductor + 각 conductor 의 활성 스테이지)` ≤ 5**. code-execute 내부 병렬 개발팀은 in-session(depth 미증가)이라 상한에 안 셈. 초과 예상 시 conductor 는 스테이지 분사를 큐잉(다음 스테이지는 앞 스테이지 done 후이므로 자연 직렬).
-- **마이크로-스테이지 inline 경계**(현행 우려 §2.2 흡수, v6 정정): 분사 오버헤드(세션 startup·산출물 로드)가 스테이지 실작업보다 크면 분사가 손해다. **경계 규칙**: 산출물을 새로 쓰지 않거나 한 줄 verdict 만 내는 스테이지(예: plan-check self-check, `direct` 파이프 전체, ≤3 step plan 의 통합 리뷰)는 **inline 유지**. `quick` 은 더 이상 depth-0 inline 실행이 아니라 **단일 depth-1 one-shot capability worker** 가 micro-plan·plan-check-lite·implementation·focused verification·concise report 를 한 세션에서 끝낸다. quick 내부 micro-stages 는 worker 세션 안에서 inline 이며, quick worker 는 depth-2 를 열지 않는다. 산출물을 실제로 생성·mutation 하는 `standard+` 스테이지(plan 작성·execute·test·report)만 depth-2 로 분사한다. 정확한 손익 임계(어느 크기부터 분사가 이득인가)는 **pilot 계측으로 캘리브레이트**(§12, SD-OPEN-1) — research 도 per-stage dispatch 비용을 수치화하지 않았으므로(digest 주의) 추측하지 말고 측정.
+- **마이크로-스테이지 inline 경계**(현행 우려 §2.2 흡수): 분사 오버헤드(세션 startup·산출물 로드)가 스테이지 실작업보다 크면 분사가 손해다. **경계 규칙**: 산출물을 새로 쓰지 않거나 한 줄 verdict 만 내는 스테이지(예: plan-check self-check, `direct/quick` 파이프 전체, ≤3 step plan 의 통합 리뷰)는 **inline 유지**. 산출물을 실제로 생성·mutation 하는 스테이지(plan 작성·execute·test·report)만 분사. 정확한 손익 임계(어느 크기부터 분사가 이득인가)는 **pilot 계측으로 캘리브레이트**(§12, SD-OPEN-1) — research 도 per-stage dispatch 비용을 수치화하지 않았으므로(digest 주의) 추측하지 말고 측정.
 - **실패·재개 의미론(기존 산출물 재사용)**: 스테이지 실패 시 conductor 는 `--from <stage>` 로 **그 스테이지만 재분사**, 앞 스테이지 산출물은 재사용(재생성 금지). test 실패 retry 는 §4 memo-주입 경로(최대 1회 pipeline-level retry, `qa=quick` 은 retry 없음 — 현행 유지). 스테이지 세션이 hang/crash(§5 stealth-death)면 conductor 가 진단 후 동일 스테이지 재분사 — 부분 산출물이 있으면 이어쓰기, 없으면 처음부터 그 스테이지만.
 - **§5.8 pipeline lock 범위**: lock 은 `spec/prd.md`·`spec/pipeline_state.yaml`·`spec/pipeline_summary.md` _공유 단일파일 쓰기_ 만 보호. 스테이지 산출물은 전부 `plans/<slug>/` 경로-분리라 **비경합 → lock 불요**. 예외 = **code-report 가 `pipeline_summary.md`(공유 단일파일)를 쓰는 자리만 lock acquire**(현행 code-report 계약과 동일). 즉 스테이지 분사가 lock 경합을 새로 만들지 않는다.
 
@@ -166,12 +163,12 @@ CONVENTIONS §2.3 role 매트릭스 → 스테이지 매핑:
 **발견 (사용자 확인, 2026-07-10)**: Phase 1 의 §9-8 개정이 **반쪽** — `dev-pipeline.md` 는 앞머리(line 4)에 stage-dispatch 계약 블록을 얹었으나, 본문 Step 1~7 (Step 1 "invoke Skill: `code-plan`", Step 3/4/5 동형, retry loop 5~7항)이 여전히 in-session "Invoke Skill:" 명령형 그대로 = **이중 신호**. 또 계약 블록의 "When still orchestrating in-session (e.g. `--intensity` downgraded, or a runtime without headless dispatch)" 의 **e.g. 비한정 escape hatch** 가 in-session 우회를 정당화한다. 지시 문서에서 앞머리 계약과 본문 명령형이 갈리면 실행 주체는 본문을 따른다 — pilot 이 통과한 것은 conductor 프롬프트가 분사를 떠먹여줬기 때문이지 문서 자체의 효력이 아니다(§8.5.5 drill 연동).
 
 **결정**:
-- (a) Step 1~7 본문을 **dispatch-first 명령형**으로 재작성 — `standard+` 의 각 스테이지 Step = `dispatch-headless.py --depth 2 --parent <conductor-slug> --worker-role code-<stage>` 분사 명령이 1차 지시. in-session Skill 호출은 **[direct] 또는 [headless dispatch 불가 런타임]** fallback 으로 격하하고, v6 이후 `quick` 은 별도 depth-1 one-shot worker 경로로 분리한다. 비한정 "e.g." escape hatch 는 제거(조건 열거를 한정형으로).
+- (a) Step 1~7 본문을 **dispatch-first 명령형**으로 재작성 — `standard+` 의 각 스테이지 Step = `dispatch-headless.py --depth 2 --parent <conductor-slug> --worker-role code-<stage>` 분사 명령이 1차 지시. in-session Skill 호출은 **[direct/quick] 또는 [headless dispatch 불가 런타임]** 두 명시 조건의 fallback 분기로 격하하고, 비한정 "e.g." escape hatch 는 제거(조건 열거를 한정형으로).
 - (b) `SKILL.md` Stage Graph 표에 **dispatch 모드 표기** 반영 — `standard+` 행이 "스테이지 = depth-2 headless 분사"임을 표에서 즉독 가능하게.
 
 ### 8.5.2 SD-11 — 결정론 신호: conductor 의 code-* 직접 Skill 호출 reminder hook
 
-conductor(depth-1, `worker_role=capability-owner`) 세션이 `code-plan`/`code-execute`/`code-test`/`code-report` Skill 을 직접 부르면 reminder 를 주입하는 hook 신설 — `worktree-path-guard`(drill g3/g6) 선례의 stage-dispatch 판. **deny 가 아니라 reminder(soft)로 시작**: 당시에는 in-session fallback 이 direct/quick·headless-불가 런타임에서 정당했고, hook 이 그 자리의 intensity 를 결정론적으로 알기 어려워 deny 는 false-positive 위험이었다. v6 이후 quick 은 code-* stage 직접 호출 경로가 아니라 depth-1 one-shot worker 경로로 분리된다. deny 상향 여부는 drill·계측 누적 후 재판단(미결로 유지 — §14 의미↔규칙 경계).
+conductor(depth-1, `worker_role=capability-owner`) 세션이 `code-plan`/`code-execute`/`code-test`/`code-report` Skill 을 직접 부르면 reminder 를 주입하는 hook 신설 — `worktree-path-guard`(drill g3/g6) 선례의 stage-dispatch 판. **deny 가 아니라 reminder(soft)로 시작**: in-session fallback 이 direct/quick·headless-불가 런타임에서 정당하고, hook 이 그 자리의 intensity 를 결정론적으로 알기 어려워 deny 는 false-positive 위험. deny 상향 여부는 drill·계측 누적 후 재판단(미결로 유지 — §14 의미↔규칙 경계).
 
 ### 8.5.3 SD-12 — 스테이지-워커별 bootstrap 최적화 (dispatch-profiles 연결)
 
@@ -241,7 +238,7 @@ pilot 부수발견 ②: 스테이지 세션도 SessionEnd 에 mem curator(distil
 
 **결정**:
 - (a) **결정론 조건 확보**: wrapper 가 자식 env 에 `AGENT_DISPATCH_INTENSITY`(+이미 있는 `AGENT_DISPATCH_DEPTH`) 주입 → hook 이 [depth==1 && intensity∈standard+ && code-* Skill 직접 호출] 을 결정론적으로 식별 가능 — SD-11 이 deny 를 보류했던 false-positive 근거(intensity 불가지) 해소.
-- (b) **deny 상향**: 위 조건에서 code-* Skill 호출을 **hard deny** + "dispatch-headless 로 분사하라" 피드백. direct(env intensity 로 구분)·headless-불가 런타임(env 부재)은 자동 비대상. v6 quick 은 code-* depth-2 stage 호출을 열지 않는 별도 depth-1 one-shot worker 로 판정한다.
+- (b) **deny 상향**: 위 조건에서 code-* Skill 호출을 **hard deny** + "dispatch-headless 로 분사하라" 피드백. direct/quick(env intensity 로 구분)·headless-불가 런타임(env 부재)은 자동 비대상.
 - (c) **자기수정 예외의 처리**: 예외를 문서 조항으로 남기지 않는다(2연속 실증 — 조항은 차용된다). 정당한 자기수정 자리(분사 launch 경로 자체 편집)는 사용자/main 이 분사 프롬프트에 명시 opt-out (`STAGE_DISPATCH_INLINE_OK` 류 env/문구)을 줄 때만 — 판단을 conductor 재량에서 orchestrator 명시로 이동.
 - 문서-효력 재검증은 본 deny 착지 후 다음 일반 사이클에서.
 
@@ -256,44 +253,6 @@ pilot 부수발견 ②: 스테이지 세션도 SessionEnd 에 mem curator(distil
 - **SD-OPEN-1 과의 관계**: separability = inline 임계의 **질적 축** (기존 크기 축과 병행) — 계측 항목에 판정 결과 포함.
 - **강제 계층**: 결정론(deny hook)은 code-* Skill 경로 유지, separability 는 기록-의무+감사(의미 판단 구간을 억지 규칙화하지 않음 — §14 경계 존중).
 
-## 8.8 v6 topology 변경 — quick depth-1 one-shot capability worker (2026-07-13 사용자 승인)
-
-### 8.8.1 SD-18 — intensity별 depth topology 재정의
-
-**결정**: intensity topology 는 세 갈래로 고정한다.
-
-| Intensity | Topology | Worker contract |
-|---|---|---|
-| `direct` | depth-0 main inline | plan stage 없음, durable plan 없음, final sanity/report 만 수행 |
-| `quick` | depth-0 main → **depth-1 one-shot capability worker** | worker 한 세션이 `orient-lite -> micro-plan -> plan-check-lite -> produce -> focused verification -> concise report` 를 끝냄. quick 내부 micro-stages 는 모두 inline, **depth-2 금지** |
-| `standard+` | depth-0 main → depth-1 conductor → 순차 depth-2 stage-workers | 기존 SD-1~17 유지: conductor 는 얇게 verdict/status 와 게이트만 쥐고 code-plan/execute/test/report 등 stage-worker 를 순차 headless 분사 |
-
-**quick worker 의 범위**: quick 은 작은 tracked 변경의 ceremony 를 main thread 밖으로 옮기는 topology 변경이지, full stage-dispatch 로 승격하는 것이 아니다. quick worker 는 durable `plans/<slug>/` cycle 을 강제하지 않고, 필요한 경우 기존 capability 의 quick 산출물/summary 만 남긴다. quick worker 가 별도 planner/verifier/stage worker 를 열면 계약 위반이다.
-
-**mutation quick 격리**: source mutation 이 가능한 quick job 은 isolated worktree 를 사용한다. mutation 없는 문서/검토 quick 은 main worktree 에서 depth-1 worker 를 열 수 있으나, file overlap·dirty state·merge state 가 있으면 기존 §5.9/§5.10 safety gate 를 우선한다.
-
-### 8.8.2 SD-19 — Codex quick dispatch preference and fallback
-
-**선호 경로**: Codex quick job 은 `adapters/codex/bin/preflight.sh headless --check` 가 통과하면 headless dispatch 를 우선한다. 이유는 `.dispatch/jobs.log` row 로 Fleet 이 볼 수 있고, parent 가 liveness/harvest 계약을 공유하기 때문이다.
-
-**fallback 순서**:
-
-1. `headless --check` 실패, native subagent check ok → Codex native subagent 로 depth-1 quick worker 를 실행하되, **Fleet visibility degradation note** 를 남긴다. native subagent 는 main-thread context pollution 을 줄이는 runtime 지원이지만, headless jobs.log row/liveness 가 없거나 제한될 수 있음을 보고한다.
-2. headless 와 native subagent 모두 불가 → depth-0 inline 으로 수행하고, concise fallback reason 을 pipeline summary/final report 에 남긴다.
-
-**공식 Codex rationale**: OpenAI Codex manual 의 Subagents 섹션은 subagents 가 noisy exploration/test/log output 을 main thread 밖으로 옮겨 context pollution 을 줄인다고 설명한다. 동시에 각 subagent 가 자체 model/tool work 를 수행해 token 을 더 쓰며, parallel write-heavy workflow 는 충돌과 조정 비용을 늘릴 수 있으므로 주의하라고 한다. 따라서 quick 은 depth-1 **단일** worker 로 main context 오염을 줄이되, depth-2 fan-out 과 병렬 write 를 금지한다.
-
-### 8.8.3 SD-20 — Fleet activity contract for quick
-
-Fleet 는 quick depth-1 worker 를 하나의 live activity 로 보여야 한다. 표시 계약:
-
-- stage label: `quick/exec`
-- visual state: one blinking activity stage while the depth-1 quick worker is open/running
-- metadata: `capability=<entry>,intensity=quick,depth=1,worker_role=capability-owner,owner=<entry>,harness=<runtime>`
-- no child rows for quick depth-2; quick depth-2 row 가 생기면 contract violation
-
-Headless dispatch 가 preferred 인 이유는 이 표시 계약을 jobs.log 로 자연스럽게 충족하기 때문이다. native subagent fallback 은 Fleet visibility degradation note 를 남기고, inline fallback 은 activity stage 를 만들 수 없음을 보고한다.
-
 ## 9. 영향 표면 목록 (구현 phase 에서 갱신 — 현행 문구 → 개정 방향)
 
 > **SD-7**: 아래 표가 구현(autopilot-code) 시 묶음 갱신할 자리. 각 surface = {현행 문구, 개정 방향}. 실제 문구 편집은 소유 스킬(core-first) 경유 별도 — 본 spec 은 방향만 확정.
@@ -302,12 +261,12 @@ Headless dispatch 가 preferred 인 이유는 이 표시 계약을 jobs.log 로 
 |---|---|---|---|
 | 1 | `OPERATIONS.md §5.10 ③`(depth 모델 narrative) | "depth 2 는 `standard+` owner-worker pipeline 의 기본 도구 … 단일 역할 worker(verifier/planner/…)" | depth-2 용도에 **파이프 스테이지 워커 클래스** 추가(리뷰 보조와 병기). 스테이지 = 기본 분사(`standard+`) 명문화. |
 | 2 | `OPERATIONS.md §5.10 ④`(depth-2 write 계약) | "depth 2 worker 는 기본 read-only, 구현 worker 만 제한 write" | **스테이지-워커 클래스별 write 소유**(§6 표)로 재정의. 리뷰 워커 read-only 기본은 유지. |
-| 3 | `WORKFLOW.md §1.1`(intensity routing 표) | `standard`: "depth-1 owner should open bounded depth-2 verifier/planner work" | `standard+` 행에 "**스테이지 분사 기본**(plan/execute/test/report 각 headless)" 추가. v6 기준 `direct` = depth-0 inline, `quick` = depth-1 one-shot capability worker 명시. |
+| 3 | `WORKFLOW.md §1.1`(intensity routing 표) | `standard`: "depth-1 owner should open bounded depth-2 verifier/planner work" | `standard+` 행에 "**스테이지 분사 기본**(plan/execute/test/report 각 headless)" 추가. `direct/quick` = inline 명시(현행 유지). |
 | 4 | `WORKFLOW.md §5`(entry→서브에이전트 분기) | "autopilot-code: 기획팀(plan)+개발팀(execute)+품질관리팀 … (in-session)" | 각 스테이지가 **headless 세션(내부에 그 팀)** 임을 명시 — 팀은 스테이지 세션 _안_ 에서 실행. |
 | 5 | `CONVENTIONS.md §1`(stage graph Dispatch policy 열) | `standard`: "depth-1 owner with bounded depth-2 sub-workers when useful" | Dispatch policy 에 **스테이지 = depth-2 headless 기본**(standard+) 반영. depth 계약(§1 line 46)에 스테이지-워커 클래스 추가. |
 | 6 | `DESIGN_PRINCIPLES.md §8`(Performance Preservation) | "결과 흐름: file 통해 (verdict 만 token)" | 적용 범위를 **headless 스테이지 세션→conductor** 까지 확장 명시(원칙 승격, §0.5). 2026-07-06 재설계 기본값 반전을 이력에 기록. |
 | 7 | `skills/autopilot-code/references/context-and-guards.md:51` | "파이프 스테이지를 헤드리스로 쪼개면 worst of both — **금지**" | **금지 해제 → 기본 권장**으로 반전. "산출물이 상태를 완전히 담으므로 재발굴=파일로드, 연속성=파일 매체"로 우려 해소 근거 병기(§2.2·§0.5). |
-| 8 | `skills/autopilot-code/references/dev-pipeline.md`(Step 1/3/4/5) | ~~"invoke Skill: `code-plan/…` (인라인)"~~ → **Phase 1 반쪽**: 앞머리 계약 블록만 추가, Step 본문은 in-session 명령형 잔존(이중 신호) | **SD-10 + v6**: `standard+` Step 1~7 본문 dispatch-first 재작성 + fallback 조건 한정형(direct·headless 불가 런타임) + SD-14 대기 계약 포함. `quick` 은 depth-1 one-shot worker 경로로 분리. |
+| 8 | `skills/autopilot-code/references/dev-pipeline.md`(Step 1/3/4/5) | ~~"invoke Skill: `code-plan/…` (인라인)"~~ → **Phase 1 반쪽**: 앞머리 계약 블록만 추가, Step 본문은 in-session 명령형 잔존(이중 신호) | **SD-10**: Step 1~7 본문 dispatch-first 재작성 + fallback 조건 한정형(direct/quick·headless 불가 런타임) + SD-14 대기 계약(분사→dispatch-wait↻→수확) 포함. |
 | 8b | `skills/autopilot-code/SKILL.md` Stage Graph 표 | `standard` 행에 dispatch 모드 표기 없음 | **SD-10(b)**: `standard+` 행 = "스테이지 depth-2 headless 분사" 즉독 표기. |
 | 9 | sub-skills(code-plan/execute/test/report) SKILL.md | "orchestrator 가 Skill 로 호출 … in-session 팀 위임" | 스테이지가 **독립 세션 진입점**으로도 동작하도록 입력=산출물 경로 계약 명문화(§4 완결성). 팀 위임은 세션 _안_ 그대로. (Phase 1 완료분 유지) |
 | 9b | 신규 hook (`hooks/`) — conductor 의 code-* 직접 Skill 호출 감지 | 없음 | **SD-11**: reminder(soft) hook 신설 — deny 는 미결(계측 후). |
@@ -323,11 +282,10 @@ Headless dispatch 가 preferred 인 이유는 이 표시 계약을 jobs.log 로 
 
 | 항목 | 판정 | 근거 |
 |---|---|---|
-| **owner 단일 세션 + in-session 팀 유지**(2026-07-06 기본값) | **반전(비채택)** | 운영 실증 ①②③(관제 불가시·ceremony 미수령·컨텍스트 비대). v6 기준 `direct` 만 depth-0 inline 유지, `quick` 은 depth-1 one-shot worker 로 이동. |
-| **quick depth-0 inline 유지**(v5까지의 기본값) | **반전(비채택)** | 사용자 승인 topology 변경(2026-07-13). quick 은 main thread 오염을 줄이고 Fleet 에 보이도록 depth-1 one-shot worker 로 이동한다. 단 quick worker 내부 micro-stages 는 inline 이고 depth-2 fan-out 은 금지한다. |
+| **owner 단일 세션 + in-session 팀 유지**(2026-07-06 기본값) | **반전(비채택)** | 운영 실증 ①②③(관제 불가시·ceremony 미수령·컨텍스트 비대). 단 `direct/quick` 은 이 모델 유지(분사 오버헤드가 이득 초과). |
 | **스테이지 세션도 depth-3 headless 를 열기** | **기각** | depth 3+ 금지 불변(§2.3·§6). 스테이지 내부 병렬은 in-session 팀으로 충분. wrapper 가 depth 3 자체를 차단. |
 | **대화 컨텍스트 요약을 프롬프트로 운반**(하이브리드) | **기각** | §0.5 산출물 기반 소통 위반 — 재현 불가·drift 원천. 산출물 불완전은 스키마 보강으로 해결(§4). |
-| **모든 intensity 에서 스테이지 분사** | **범위 한정** | `direct` 는 inline, `quick` 은 depth-1 one-shot worker 이지만 내부 micro-stages 는 inline 이고 depth-2 stage 분사를 열지 않는다. stage-worker 분사는 `standard+` 만. |
+| **모든 intensity 에서 스테이지 분사** | **범위 한정** | `direct/quick` 은 inline — 마이크로 작업에 분사 오버헤드는 손해(§8). 적용은 `standard+` 만(사용자 결정). |
 | **per-stage dispatch 비용을 spec 에서 수치 단정** | **미결로 이관** | research 가 per-stage dispatch cost 를 수치화 안 함(digest 주의). 손익 임계는 pilot 계측(SD-OPEN-1) — 추측 금지. |
 
 ## 11. Module 구조 (확정 — 코드 생성은 autopilot-code)
@@ -400,13 +358,13 @@ skills/autopilot-{draft,research,spec,design,lab}  # 스테이지 분사 계약 
 - **SD-5**: 스테이지 model role 은 conductor 가 CONVENTIONS §2 매핑으로 명시(wrapper 암묵 선택 금지). (§7, §5.10 ⑦·§2.3)
 - **SD-6**: 동시 상한 5 = Σ(conductor+활성 스테이지). 마이크로-스테이지 inline. 실패=스테이지만 재분사(산출물 재사용). lock 은 report 의 pipeline_summary 쓰기만. (§8, §5.10 ⑤·§5.8)
 - **SD-7**: 영향 표면 14곳(§9 표) — core·bootstrap·SKILL·wrapper·fleet·drill. 문구 편집은 소유 스킬(core-first) 별도. (§9·§11)
-- **SD-8**: 적용 = `standard+` 기본. `direct` = depth-0 inline 유지, `quick` = v6에서 depth-1 one-shot capability worker 로 승격. 2026-07-06 "owner 단일 세션" 기본값의 명시적 반전. (§0·§10, 사용자 결정)
+- **SD-8**: 적용 = `standard+` 기본. `direct/quick` = 현행 inline 유지. 2026-07-06 "owner 단일 세션" 기본값의 명시적 반전. (§0·§10, 사용자 결정)
 - **SD-9**: wrapper 재작성 불요 — depth=2/parent/worker_role 이미 지원. helper 신설은 pilot 후 판정. (§2.4·§11·§9-12)
 - **SD-OPEN-1**(미결 — 계측 누적): 마이크로-스테이지 inline 의 정확한 손익 임계(어느 스테이지 크기부터 분사가 이득). research 가 per-stage cost 미수치화 → 추측 금지. Phase 1 pilot 1표본(plan 218s/execute 255s/test 46s/report 28s) 확보 — Phase 2 는 계측 누적만, 확정은 표본 축적 후. (§8·§12)
 
 ### v2 추가 (2026-07-10 — Phase 2 입력)
 
-- **SD-10**: dev-pipeline.md Step 1~7 본문 dispatch-first 재작성(이중 신호 제거, in-session 은 direct·headless 불가 런타임 한정 fallback) + SKILL.md Stage Graph dispatch 표기. v6 이후 quick 은 depth-1 one-shot worker 경로로 분리. Phase 2 최우선. (§8.5.1, 사용자 확인 발견)
+- **SD-10**: dev-pipeline.md Step 1~7 본문 dispatch-first 재작성(이중 신호 제거, in-session 은 direct/quick·headless 불가 런타임 한정 fallback) + SKILL.md Stage Graph dispatch 표기. Phase 2 최우선. (§8.5.1, 사용자 확인 발견)
 - **SD-11**: conductor 의 code-* 직접 Skill 호출 시 reminder hook(soft) — deny 는 drill·계측 후 재판단 미결. (§8.5.2, drill g3/g6 선례)
 - **SD-12**: 스테이지-워커별 dispatch-profiles 최소 fragment + conductor `--profile` 기본 배선 + 토큰/시간 계측. (§8.5.3, 사용자 요구)
 - **SD-13**: conductor 의 스테이지 분사 전 spec 전제 선보장. (§8.5.4, pilot 부수발견)
@@ -429,14 +387,8 @@ skills/autopilot-{draft,research,spec,design,lab}  # 스테이지 분사 계약 
 
 - **SD-11b**: reminder → **deny 상향** — wrapper 가 `AGENT_DISPATCH_INTENSITY` env 주입으로 결정론 조건 확보, [depth1·standard+·code-* Skill 직접 호출] hard deny. 자기수정 예외는 문서 조항이 아니라 orchestrator 명시 opt-out 으로만. 문서-효력 2연속 실패(soft reminder 무효) 실증. (§8.6.3)
 
-### v6 추가 (2026-07-13 — quick depth-1 topology)
-
-- **SD-18**: intensity topology 재정의 — `direct` depth-0 inline, `quick` depth-1 one-shot capability worker, `standard+` depth-1 conductor → 순차 depth-2 stage-workers. quick worker 는 micro-plan·plan-check-lite·implementation·focused verification·concise report 를 한 세션에서 끝내고 depth-2 를 열지 않는다. mutation quick 은 isolated worktree 를 사용한다. (§8.8.1)
-- **SD-19**: Codex quick dispatch preference/fallback — headless check 통과 시 headless dispatch 우선(Fleet-visible). headless 실패 + native subagent ok 이면 native subagent fallback + Fleet visibility degradation note. 둘 다 불가하면 inline + concise fallback reason. parent 로컬 근거: native subagent ok, strict headless projection ok, quick depth-1 dry-run accepted, quick depth-2 forbidden. (§8.8.2)
-- **SD-20**: Fleet quick 표시 계약 — depth-1 quick worker 는 하나의 blinking `quick/exec` activity stage 로 표시. quick depth-2 child row 는 contract violation. (§8.8.3)
-
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
-- **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화). **v6 추가**: quick depth-2 금지, quick jobs.log child-row 부재, mutation quick isolated worktree 는 결정론 gate 대상.
-- **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김. **v6 추가**: headless 실패 시 native subagent 로 충분한지, 또는 inline fallback 으로 낮출지의 fallback reason 작성은 runtime 상태 해석이므로 의미 판단으로 남긴다.
+- **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화).
+- **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김.
 - **충돌**: 없음 — 반전의 핵심 우려(현행 "상태 재발굴·연속성 상실")를 §0.5 계약 완결성 의무 + §8 inline 경계로 규칙화해 흡수했다. 우려를 사람 vigilance 로 남기지 않고 "산출물이 상태를 완전히 담는가"라는 검증 가능한 규칙으로 전환한 것이 이 경계 존중. per-stage cost 는 추측으로 규칙화하지 않고 계측(SD-OPEN-1)으로 미룬 것도 동일.
