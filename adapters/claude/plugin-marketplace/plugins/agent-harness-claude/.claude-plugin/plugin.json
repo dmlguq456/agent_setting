@@ -1,0 +1,7 @@
+{
+  "name": "agent-harness-claude",
+  "description": "Portable agent harness (skills/agents/hooks/.mcp.json/bin) projected for Claude Code — see PRD .agent_reports/spec/harness-installer/prd.md.",
+  "author": {
+    "name": "agent-harness"
+  }
+}
