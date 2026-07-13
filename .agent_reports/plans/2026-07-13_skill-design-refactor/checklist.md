@@ -60,8 +60,14 @@
 - [x] C1 완료(P4·P7 한정): 양 트리 mirror-parity(diff .sync_state.json 만) + `build-manifest.py --check` 통과. **C1-FLIP·C1-GATE(b)(c) 는 다음 사이클로 이월**
 
 ## 최종 회귀 (SD-10)
-- [ ] variance-bug=0 재검 (pointer/Reference Index 3요소 유지)
-- [ ] premature-completion=0 재검 (completion criterion checkable, gate 문장 SKILL.md 잔류)
-- [ ] no-op=0 · sediment=0 재검 (옛 블록 완전 제거 grep)
-- [ ] Predictability 골격 무손상 (스킬 diff 리뷰)
-- [ ] drill `g7_skill_conformance` PASS + audit rubric 재적용
+- [x] variance-bug=0 재검 — pointer 3요소(파일+시점+의무) 유지 확인(C2-5 Reference Index 리뷰), `grep "Required Reads\|Reference Map"` 잔존 0
+- [x] premature-completion=0 재검 — autopilot-design [CONFIRM Gate] 문구 SKILL.md 잔류(references 로 안 밀림) 확인
+- [x] no-op=0 · sediment=0 재검 — `grep -rln "keep in sync"` 양 트리 0
+- [x] Predictability 골격 무손상 — 편집 전 구간 diff 리뷰(behavior-preserving, pointer/추출만)
+- [x] drill `g7_skill_conformance` PASS (`bash loops/drill/cases/g7_skill_conformance/assert.sh`) — audit rubric 전면 재적용은 미착수(잔여 항목, 다음 사이클)
+
+## 잔여 항목 (다음 사이클 인계)
+- C1-GATE (a) 재시도 — main(비-nested) 세션에서 직접 관측 필요(본 conductor 는 nested 라 샌드박스 차단)
+- C1-GATE (b)(c) · C1-FLIP 13개 — (a) 확정 후
+- C1-P4 발화→자리/deploy=user 3중 dedupe(autopilot-ship) — 이번 사이클 미착수
+- audit rubric 전면 재적용(4강점 최종 확인) — drill g7 로 정량 규범만 우선 확인, 의미 판단 축은 별도 세션
