@@ -38,3 +38,10 @@ PASS: skill-conformance 정량 규범 (line_ok · ref_depth_ok · disable_model 
 | g7_skill_conformance | PASS | 0 | 0 | 0 | 0 |
 status=ok
 exit_code=0
+
+PARENT POST-COMMIT LIVE-ENTRY RECHECK
+COMMAND: AGENT_HOME="$PWD" DRILL_HOME=<isolated-tmp>/loops/drill DRILL_SKIP_CONFORMANCE=1 bash ~/.claude/loops/drill/run.sh --adapter codex g7_skill_conformance
+RESOLVED ENTRY: /home/Uihyeop/agent_setting/adapters/claude/loops/drill/run.sh
+RESULT: PASS — skill-conformance 정량 규범 (line_ok · ref_depth_ok · disable_model 파싱), exit 0
+RUN SUMMARY: turns=1, input_tokens=22401, output_tokens=95, cost=0
+NOTE: live entry는 main projection runner로 해석됐지만 AGENT_HOME·skills symlink·DRILL_HOME을 worktree/격리 위치로 고정했다. 위 repository worktree runner 재검은 동일 case를 static 0-turn으로 통과했다.

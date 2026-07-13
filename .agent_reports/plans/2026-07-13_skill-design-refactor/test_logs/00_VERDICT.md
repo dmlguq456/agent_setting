@@ -19,7 +19,7 @@ No source, capability, checklist, pipeline state, gate log, summary, or jobs reg
 - Completion greps on both trees: all requested remnants 0; Plan Resolution authority 2 copies across the two mirrored trees and 16 pointers.
 - P4: exactly 12 `use_when=Y` entries, all 12 retaining Hangul; autopilot-ship remains `use_when=N` as observed.
 - Autopilot-ship Step 4: unique env/domain/migration semantics 3/3 in each tree.
-- Repository drill entry: `g7_skill_conformance` PASS, exit 0, 0 turns/tokens/cost.
+- Repository worktree drill entry: `g7_skill_conformance` PASS, exit 0, 0 turns/tokens/cost. Parent post-commit literal `~/.claude/loops/drill/run.sh` entry도 worktree `AGENT_HOME`/격리 `DRILL_HOME`으로 PASS(exit 0, 1 turn).
 - Semantic rubric: `no-op=0`, `sediment=0`, `premature-completion=0`, `variance-bug=0`.
 - Source read-only proof: source-tree worktree diff 0; branch delta versus merge-base is only the two intended autopilot-ship SKILL files.
 

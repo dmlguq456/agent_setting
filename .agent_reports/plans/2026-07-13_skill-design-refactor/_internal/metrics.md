@@ -11,7 +11,7 @@
 |---|---|---:|---|
 | execute | `skill-design-c1-code-execute` | 2 | autopilot-ship 양 트리 dedupe 완료; parent diff review 후 `9d1abb2` commit |
 | test | `skill-design-c1-code-test` | 2 | 14개 test artifact 수확; source gates green, sync/capability drift 분리 보고 |
-| report | `skill-design-c1-code-report` | 2 | final state 동기화 뒤 dispatch·수확 예정 |
+| report | `skill-design-c1-code-report` | 2 | `pipeline_summary.md` 작성·수확 완료; source/state 무변경 확인 |
 
 ## Runtime observations
 

@@ -15,7 +15,7 @@
 - **양 트리 grep/scan:** PASS. `skills/`와 `adapters/claude/skills/` scan 출력 동일, stale `keep in sync`·Language Rule·artifact-root snippet·Required Reads/Reference Map 헤더 0.
 - **mirror:** PASS. 두 트리는 byte parity이며 허용 차이는 `skills/.sync_state.json`뿐.
 - **manifest:** PASS — `python3 tools/build-manifest.py --check` up-to-date.
-- **g7:** PASS — `g7_skill_conformance`, Codex 격리 repository drill exit 0, 0 turns/tokens/cost. Codex-native drill executable projection은 `loop-info drill`상 manual-only.
+- **g7:** PASS — worktree repository runner는 격리 실행 exit 0, 0 turns/tokens/cost. parent의 literal `~/.claude/loops/drill/run.sh` 재검도 worktree `AGENT_HOME`/격리 `DRILL_HOME`으로 exit 0(1 turn). Codex-native drill executable projection은 `loop-info drill`상 manual-only.
 
 ## 잔여·지원 한계
 
@@ -27,10 +27,10 @@
 
 ## 브랜치·커밋·변경 범위
 
-- branch: `skill-design-c1`; worktree: `/home/Uihyeop/agent_setting-wt/skill-design-c1`; HEAD `9d1abb2` (`refactor(skills): dedupe autopilot ship routing`).
-- `9d1abb2` 변경: `adapters/claude/skills/autopilot-ship/SKILL.md`, `skills/autopilot-ship/SKILL.md`.
-- 최근 기준 커밋: `a8305be`, `f76c513`, `619f260`, `b4e303a`.
-- 현재 비소스 worktree 변경은 보존: checklist/pipeline_state/c1_gate_log/metrics/test_logs 및 `profiles/c1-gate.yaml`. **push/merge/cleanup 수행 안 함.**
+- branch: `skill-design-c1`; worktree: `/home/Uihyeop/agent_setting-wt/skill-design-c1`.
+- cluster commits: `9d1abb2`(autopilot-ship dedupe), `8078cd5`(C1 gate/profile), `770ac50`(SD-10 audit), `aa4945a`(state·handoff records). 본 post-commit 검증 기록은 후속 commit에 포함.
+- source 변경은 `9d1abb2`의 `adapters/claude/skills/autopilot-ship/SKILL.md`, `skills/autopilot-ship/SKILL.md` 두 파일뿐이다.
+- **push/merge/worktree cleanup 수행 안 함.**
 
 ## 검증 명령·증거 경로
 
