@@ -10,7 +10,7 @@ This is the portable capability contract for `code-refine`. It defines runtime-n
 | Group | `sub` |
 | Supported modes | `none` |
 | Portable meaning | 사용자 메모·plan-check 피드백·검증 실패 메모를 반영해 기존 plan을 정정한다. |
-| Argument shape | `<plan name or path> [--qa quick|light|standard|thorough|adversarial]` |
+| Argument shape | `<plan name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]` |
 
 ## Invocation Semantics
 
@@ -20,7 +20,7 @@ Adapters may expose this capability through native commands, skill files, prompt
 
 ## Assurance Contract
 
-This sub-capability follows `core/CONVENTIONS.md §1`: `--qa` is an assurance override, not a stage graph selector. `code-refine` is optional correction of an existing durable plan after user memo, plan-check feedback, or verification failure. It is not an automatic stage in `direct` or `quick`; `quick` records residual plan concerns instead of opening a repeated review/fix loop.
+This sub-capability follows `core/CONVENTIONS.md §1`: correction and review rigor is derived from intensity rather than independently selected. `code-refine` is optional correction of an existing durable plan after user memo, plan-check feedback, or verification failure. It is not an automatic stage in `direct` or `quick`; `quick` records residual plan concerns instead of opening a repeated review/fix loop.
 
 
 ## Artifact Ownership

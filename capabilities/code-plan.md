@@ -9,8 +9,8 @@ This is the portable capability contract for `code-plan`. It defines runtime-neu
 | Identifier | `code-plan` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity/QA에 맞는 plan-check gate를 수행한다. |
-| Argument shape | `<task description> [--qa quick|light|standard|thorough|adversarial]` |
+| Portable meaning | 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity에서 파생된 rigor에 맞는 plan-check gate를 수행한다. |
+| Argument shape | `<task description> [--intensity direct|quick|standard|strong|thorough|adversarial]` |
 
 ## Invocation Semantics
 
@@ -20,7 +20,7 @@ Adapters may expose this capability through native commands, skill files, prompt
 
 ## Assurance Contract
 
-This sub-capability follows `core/CONVENTIONS.md §1`: `--qa` is an assurance override, not a stage graph selector. `code-plan` is used for durable `standard+` code work cycles; `direct` skips it and `quick` is handled by a depth-1 one-shot worker with its inline micro-plan plus `plan-check-lite`. Independent plan review is selected by intensity/risk and is not repeated after every sub-stage by default.
+This sub-capability follows `core/CONVENTIONS.md §1`: plan-check and review rigor is derived from intensity rather than independently selected. `code-plan` is used for durable `standard+` code work cycles; `direct` skips it and `quick` is handled by a depth-1 one-shot worker with its inline micro-plan plus `plan-check-lite`. Independent plan review is selected by intensity/risk and is not repeated after every sub-stage by default.
 
 
 ## Artifact Ownership

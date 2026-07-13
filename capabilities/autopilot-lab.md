@@ -10,7 +10,7 @@ This is the portable capability contract for `autopilot-lab`. It defines runtime
 | Group | `entry` |
 | Supported modes | `setup, eval` |
 | Portable meaning | 빠른 실험 prototype. 학습 세팅과 ckpt 평가·분석 앞뒤를 돕는다. |
-| Argument shape | `<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]` |
+| Argument shape | `<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]` |
 
 ## Invocation Semantics
 
@@ -26,7 +26,7 @@ Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude
 
 Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concrete model names, subagent frontmatter, and runtime-specific tool lists belong in adapter files.
 
-Pipeline intensity follows `core/CONVENTIONS.md §1`: `direct` has no plan stage or durable plan artifact; `quick` is a depth-1 one-shot worker with its inline micro-plan plus plan-check-lite; `standard+` uses the capability's durable work-cycle plan when applicable. `plan-check` is required for every non-`direct` graph, but independent QA is not repeated after every stage by default. QA level is an assurance override for plan-check, selected independent reviews, and final verify; it does not name a model or choose the stage graph.
+Pipeline intensity follows `core/CONVENTIONS.md §1`: `direct` has no plan stage or durable plan artifact; `quick` is a depth-1 one-shot worker with its inline micro-plan plus plan-check-lite; `standard+` uses the capability's durable work-cycle plan when applicable. `plan-check` is required for every non-`direct` graph, but independent QA is not repeated after every stage by default. Verification rigor for plan-check, selected independent reviews, and final verify is derived from intensity; it does not name a model or introduce a separate stage graph.
 
 ## Guard Requirements
 

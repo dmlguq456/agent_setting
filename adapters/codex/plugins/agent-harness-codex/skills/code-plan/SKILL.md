@@ -1,6 +1,6 @@
 ---
 name: code-plan
-description: "Use for code-plan: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity/QA에 맞는 plan-check gate를 수행한다."
+description: "Use for code-plan: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity에서 파생된 rigor에 맞는 plan-check gate를 수행한다."
 ---
 
 # code-plan
@@ -27,8 +27,8 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 - Identifier: `code-plan`
 - Supported modes: `none`
-- Argument shape: `<task description> [--qa quick|light|standard|thorough|adversarial]`
-- Portable meaning: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity/QA에 맞는 plan-check gate를 수행한다.
+- Argument shape: `<task description> [--intensity direct|quick|standard|strong|thorough|adversarial]`
+- Portable meaning: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity에서 파생된 rigor에 맞는 plan-check gate를 수행한다.
 
 ## Portable Contract
 

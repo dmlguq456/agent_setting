@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/code-refine.md`, not a
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability code-refine [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `<plan name or path> [--qa quick|light|standard|thorough|adversarial]`.
+   `<plan name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]`.
 
 Portable contract excerpt:
 

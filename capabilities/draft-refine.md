@@ -10,7 +10,7 @@ This is the portable capability contract for `draft-refine`. It defines runtime-
 | Group | `sub` |
 | Supported modes | `none` |
 | Portable meaning | 초안 정련·다듬기. memo/review feedback을 문서 전략이나 draft에 반영한다. |
-| Argument shape | `<strategy or draft name or path> [--qa quick|light|standard|thorough|adversarial]` |
+| Argument shape | `<strategy or draft name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]` |
 
 ## Invocation Semantics
 

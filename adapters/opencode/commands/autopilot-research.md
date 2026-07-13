@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-research.md`
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability autopilot-research [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]`.
+   `<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]`.
 
 Portable contract excerpt:
 

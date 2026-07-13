@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/draft-strategy.md`, no
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability draft-strategy [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--qa quick|light|standard|thorough|adversarial] <task description>`.
+   `<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--intensity direct|quick|standard|strong|thorough|adversarial] <task description>`.
 
 Portable contract excerpt:
 

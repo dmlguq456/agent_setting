@@ -1,5 +1,5 @@
 ---
-description: "Run the portable code-plan capability through the OpenCode adapter. Meaning: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity/QA에 맞는 plan-check gate를 수행한다."
+description: "Run the portable code-plan capability through the OpenCode adapter. Meaning: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity에서 파생된 rigor에 맞는 plan-check gate를 수행한다."
 ---
 
 Use the OpenCode adapter realization of portable capability `code-plan`.
@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/code-plan.md`, not a r
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability code-plan [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `<task description> [--qa quick|light|standard|thorough|adversarial]`.
+   `<task description> [--intensity direct|quick|standard|strong|thorough|adversarial]`.
 
 Portable contract excerpt:
 

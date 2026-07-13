@@ -30,7 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 - Identifier: `autopilot-research`
 - Supported modes: `academic, technology, market`
-- Argument shape: `<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]`
+- Argument shape: `<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]`
 - Portable meaning: 공통 사전조사. 논문·기술·시장 survey 후 downstream capability로 분기한다.
 
 ## Portable Contract

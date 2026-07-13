@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-lab.md`, not
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability autopilot-lab [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]`.
+   `<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]`.
 
 Portable contract excerpt:
 
