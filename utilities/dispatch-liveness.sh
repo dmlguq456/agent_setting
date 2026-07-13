@@ -2,10 +2,15 @@
 # dispatch-liveness — adapter-specific headless job 의 stealth-death 결정론 점검.
 #   문제: hung/crashed headless 는 exit 안 함 → 완료 알림 안 옴 → 메인 무한 대기 (2026-06-16 5h 사고).
 #   §0.5 결정론-우선: "vigilant 하게 기억" 대신 이 스크립트가 jobs.log 의 open 분사를 판정.
-#   신호 = 세션 transcript(`projects/<enc-cwd>/*.jsonl`) mtime — hang/death 하면 transcript 가 멈춘다
-#   (pgrep 경로매칭은 흔한 path 가 무관 프로세스에 걸려 false-alive → 불채택).
-#   사용: 분사 후 대기 자리에서 실행. SUSPECT/DEAD 면 transcript·dispatch 로그 진단 → 수확/재분사 (대기 X).
-#   OPERATIONS §5.10 분사 가드. exit 3 = stealth-death 의심 1+.
+#   신호 1순위 = row 의 `pid=`(wrapper 가 launch 직후 기록) — /proc/<pid> 실존 + cmdline 'claude' 대조
+#   (pid-reuse 가드). 공유-worktree 자식은 conductor 자신의 Bash 활동이 같은 transcript 디렉토리를
+#   신선하게 유지해 mtime 단독 판정이 "이미 종료한 자식"을 ALIVE 로 오탐한다(2026-07-13 실측, ~50분
+#   수확 지연) — pid 신호가 이 aliasing 을 닫는다. pid 종료+row open = EXITED(수확 필요).
+#   신호 2순위(fallback, pid 없는 legacy·타 하네스 row) = 세션 transcript(`projects/<enc-cwd>/*.jsonl`)
+#   mtime — hang/death 하면 transcript 가 멈춘다 (pgrep 경로매칭은 흔한 path 가 무관 프로세스에 걸려
+#   false-alive → 불채택; pid= 는 경로매칭이 아니라 wrapper 가 기록한 정확한 자식 pid 라 이 함정 없음).
+#   사용: 분사 후 대기 자리에서 실행. SUSPECT/DEAD/EXITED 면 transcript·dispatch 로그 진단 → 수확/재분사 (대기 X).
+#   OPERATIONS §5.10 분사 가드. exit 3 = stealth-death 의심 또는 미수확 종료 1+.
 set -uo pipefail
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/agent-home.sh")}"
@@ -50,6 +55,24 @@ now=$(date +%s); alive=0; suspect=0; open_n=0
 while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   [ "${status:-}" = "open" ] || continue
   open_n=$((open_n + 1))
+  # ── 1순위: pid 신호 (wrapper 기록 — 공유-worktree transcript aliasing 무관) ──
+  pid=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^pid=//p' | head -1)
+  [ -d /proc ] || pid=""   # /proc 없는 플랫폼은 fallback (mtime 판정)
+  if [ -n "$pid" ] && [ -d "/proc/$pid" ] \
+     && tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q 'claude'; then
+    echo "ALIVE      ${slug:-?}  (pid $pid 실행 중)"
+    alive=$((alive + 1)); continue
+  fi
+  if [ -n "$pid" ]; then
+    # pid 종료 + row open = 정상 완주(미수확) 또는 사망 — limit 사유 스캔으로 구분 표기.
+    if log_hit=$(scan_log_death "$slug"); then
+      echo "⚠️ DEAD     ${slug:-?}  — 로그 limit/auth 패턴 ($log_hit)  [open: $ts]"
+    else
+      echo "⚠️ EXITED   ${slug:-?}  — pid $pid 종료·row 미마감 (dispatch 로그 tail 로 verdict 수확)  [open: $ts]"
+    fi
+    suspect=$((suspect + 1)); continue
+  fi
+  # ── 2순위(fallback): transcript-mtime 판정 (pid 없는 legacy·타 하네스 row) ──
   enc=$(printf '%s' "${wt:-}" | sed 's#[/._]#-#g')
   name=""
   case "$pipe" in *profile=*) name=${pipe##*profile=}; name=${name%%,*};; esac
@@ -87,9 +110,9 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   fi
 done < "$JOBS"
 
-echo "— open $open_n · alive $alive · suspect/dead $suspect"
+echo "— open $open_n · alive $alive · suspect/dead/exited $suspect"
 if [ "$suspect" -gt 0 ]; then
-  echo "→ SUSPECT/DEAD: transcript tail·dispatch 로그 확인 → 수확 또는 재분사. 완료 알림 무한 대기 금지."
+  echo "→ SUSPECT/DEAD/EXITED: transcript tail·dispatch 로그 확인 → 수확 또는 재분사. 완료 알림 무한 대기 금지."
   exit 3
 fi
 exit 0

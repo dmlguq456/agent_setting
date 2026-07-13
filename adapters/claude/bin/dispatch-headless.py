@@ -353,6 +353,33 @@ def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str)
         return changed
 
 
+def annotate_job_row(jobs: Path, slug: str, worktree: str, extra_kv: str) -> bool:
+    """Append `,<extra_kv>` to the pipe column of this dispatch's open row.
+
+    Same match keys and flock discipline as close_job_row. Used right after
+    launch to record the child pid (`pid=<n>`, OPERATIONS §5.10 job 레지스트리)
+    so dispatch-liveness judges the child by process instead of transcript
+    mtime — a conductor sharing the child's worktree keeps the transcript
+    directory fresh and masks an exited child behind ALIVE (shared-worktree
+    aliasing, 2026-07-13 실측).
+    """
+    if not jobs.is_file():
+        return False
+    with jobs_lock(jobs):
+        lines = jobs.read_text(encoding="utf-8").splitlines(keepends=True)
+        for i, line in enumerate(lines):
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 6:
+                continue
+            ts, status, repo, wt, row_slug, pipe = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+            if status != "open" or row_slug != slug or wt != worktree:
+                continue
+            lines[i] = f"{ts}\t{status}\t{repo}\t{wt}\t{row_slug}\t{pipe},{extra_kv}\n"
+            jobs.write_text("".join(lines), encoding="utf-8")
+            return True
+    return False
+
+
 def write_reset_cache(agent_home: Path, harness: str, reason: str, reset: str) -> None:
     """SD-15↔SD-16: cache the last known limit reset for usage-check.sh to read.
 
@@ -543,6 +570,11 @@ def main(argv: list[str]) -> int:
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
         proc = subprocess.Popen(["sh", "-c", command], env=env, start_new_session=True)
+        # 공유-worktree aliasing 대응 (OPERATIONS §5.10 신호 서열 ①): 자식 pid 를 row 에
+        # 기록해 liveness 가 process 신호로 판정하게 한다 — transcript mtime 은 같은
+        # worktree 의 conductor 활동에 오염될 수 있다 (2026-07-13 실측).
+        annotate_job_row(jobs, args.slug, args.worktree, f"pid={proc.pid}")
+        args.child_pid = proc.pid
         # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a limit/auth early death so
         # a limit-killed launch closes its own row now instead of lingering `open`
         # until liveness SUSPECT catches it minutes later.
@@ -579,6 +611,7 @@ def main(argv: list[str]) -> int:
     print(f"registry_lock={jobs}.lock")
     print(f"registered={1 if action in ('register', 'start') else 0}")
     print(f"started={1 if action == 'start' else 0}")
+    print(f"child_pid={getattr(args, 'child_pid', None) or '-'}")
     early_death = getattr(args, "early_death", None)
     if early_death:
         reason, reset = early_death
