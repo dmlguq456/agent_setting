@@ -13,8 +13,8 @@
 |---|---|---|---|---|---|
 | `git-state-guard.sh` (PreToolUse) | guard | ✅ git 만 의존, AGENT_HOME 무 | ✅ non-git dir → `exit 0` (L39-40) | **채택** | merge/rebase/detached HEAD 중 편집 차단 — 하네스 상태 무관, 어떤 소비자에게도 유효한 순수 git 가드 |
 | `artifact-guard.sh` (PreToolUse) | guard | ✅ cwd 상향 탐색만, AGENT_HOME 무·마커는 artifact root 내부 | ✅ artifact root 없으면 `exit 0` (L69) | **채택** | autopilot 산출물 생성 순서 강제 — plugin 이 싣는 skills 와 짝. artifact root 부재 시 조용히 no-op |
-| `spec-skill-gate.sh` (PreToolUse) | guard(spec) | ⚠️ `$AGENT_HOME/.spec-grounding` 마커 write | ✅ spec 없으면 통과 | **제외(defer)** | spec-read-marker 와 짝 + grounding 상태를 AGENT_HOME 에 write → `${CLAUDE_PLUGIN_DATA}` 재기준 배선 필요. cycle 2 self-contained 보장 위해 이월(소비자 spec 파이프 지원 원하면 재검토) |
-| `spec-read-marker.sh` (PostToolUse) | marker | ⚠️ `$AGENT_HOME/.spec-grounding` write | ✅ | **제외(defer)** | 위 gate 의 짝 — 함께 이월 |
+| `spec-skill-gate.sh` (PreToolUse) | guard(spec) | ✅(cycle 3) `$AGENT_HOME/.spec-grounding` 마커 write, `hooks.json` env-prefix 로 `${CLAUDE_PLUGIN_DATA}` 재기준 — canonical 무수정 | ✅ spec 없으면 통과 | **채택(cycle 3)** | spec-read-marker 와 짝. hook 본체는 이미 `AGENT_HOME` env 를 최우선 override 로 존중 → `hooks.json` command 에 `AGENT_HOME="${CLAUDE_PLUGIN_DATA}"` prefix 를 얹는 것만으로 self-contained 재기준 달성(사이클 2 defer 사유 해소, plan `2026-07-13_harness-installer-hooks`) |
+| `spec-read-marker.sh` (PostToolUse) | marker | ✅(cycle 3) 〃 | ✅ | **채택(cycle 3)** | 위 gate 의 짝 — 함께 채택 |
 | `core-first-guard.sh` (PreToolUse) | guard(dev) | ⚠️ `$AGENT_HOME/.core-grounding` + core/adapters 구조 | ✅ repo 밖 통과 | **제외** | 하네스 _자체 개발_(core/ 먼저 편집) 가드 — skills 소비자에겐 무의미(repo core/ 편집 안 함) |
 | `core-read-marker.sh` (PostToolUse) | marker | ⚠️ `$AGENT_HOME/.core-grounding` write | ✅ | **제외** | 위 core-first-guard 의 짝 |
 | `builtin-memory-guard.sh` (PreToolUse) | **memory** | ⚠️ deny 메시지가 `mem.py` 지시 | ✅ | **제외** | memory 계열 — mem CLI 부재 시 deny 안내가 오도. CLI 설치 전제 |
@@ -28,31 +28,38 @@
 | `stage-dispatch-reminder.sh` (PreToolUse) | **dispatch** | ✕ dispatch-headless.py 전제 | ✅ | **제외** | conductor/스테이지 분사 인프라 전제 — dispatch 계열 |
 | `worktree-path-guard.sh` (PreToolUse) | **dispatch** | ✕ jobs.log/worktree 컨벤션 | ✅ | **제외** | worktree 분사 컨벤션 전제 — dispatch 계열 |
 | `design-postwrite.sh` (PostToolUse) | design | ✕ `node AGENT_HOME/tools/design-mcp/...` 실행 | — | **제외** | plugin root 밖 node 툴 실행 — self-contained 위반 |
-| `spec-sync-nudge.sh` (PostToolUse) | nudge(spec) | ⚠️ AGENT_HOME + spec 상태 | ✅ | **제외(defer)** | spec 파이프 nudge — spec-skill-gate 와 함께 이월 |
+| `spec-sync-nudge.sh` (PostToolUse) | nudge(spec) | ✅(cycle 3) uniformity+`set -e` 회피 목적 defensive-only env-prefix (기능상 AGENT_HOME 미사용 — read-only, `find_spec_dir` 는 cwd 기준) | ✅ | **채택(cycle 3)** | spec 파이프 nudge — spec-skill-gate 와 함께 채택. 기능은 무영향(AGENT_HOME 미참조)이지만 uniformity 목적으로 동일 env-prefix 적용 |
 
-## 결론 — cycle 2 채택 set = **2개**
+## 결론 — cycle 3 채택 set = **5개** (사이클 2: 2개 → 사이클 3: +3개)
 
 ```
 git-state-guard.sh      (PreToolUse)
 artifact-guard.sh       (PreToolUse)
+spec-skill-gate.sh      (PreToolUse, AGENT_HOME="${CLAUDE_PLUGIN_DATA}" env-prefix)
+spec-read-marker.sh     (PostToolUse, 〃)
+spec-sync-nudge.sh      (PostToolUse, 〃 defensive-only)
 ```
 
-두 hook 모두 (1) AGENT_HOME 참조 0 (self-contained), (2) 하네스 상태 부재 시 `exit 0` no-op
-(fail-open), (3) memory/statusline/dispatch 계열 아님. plugin `hooks/hooks.json` 은 이 둘을
-`PreToolUse` 에 `${CLAUDE_PLUGIN_ROOT}/hooks/<name>` 경로로 등록한다.
-
-**이월(defer) 후보** = spec-skill-gate + spec-read-marker + spec-sync-nudge (spec 파이프 3종
-묶음). 채택하려면 `.spec-grounding` write 를 `${CLAUDE_PLUGIN_DATA}` 로 재기준하는 배선이
-필요 — cycle 2 self-contained 원칙을 흐리므로 별도 사이클. **소비자가 plugin 만으로 spec 파이프를
-쓰려는 요구가 확인되면 재개.**
+cycle 2 채택 2 개는 AGENT_HOME 참조 0 (self-contained), 하네스 상태 부재 시 `exit 0` no-op
+(fail-open). **cycle 3 추가 3 개(spec 파이프)**는 `$AGENT_HOME/.spec-grounding` 을
+read/write 하지만, canonical hook 본체가 이미 `AGENT_HOME` env 를 top-priority override 로
+존중하므로 `hooks.json` command 에 `AGENT_HOME="${CLAUDE_PLUGIN_DATA}"` env-prefix 를 얹는
+것만으로 **canonical `hooks/*.sh` 무수정** 재기준을 달성 — 사이클 2 defer 사유("grounding
+상태 write → `${CLAUDE_PLUGIN_DATA}` 재기준 배선 필요")가 해소됨(plan
+`.agent_reports/plans/2026-07-13_harness-installer-hooks/plan/plan.md`). 세 hook 모두
+plugin `hooks/hooks.json` 에 각자의 event(PreToolUse/PostToolUse)·matcher 로 등록되고,
+유일 외부 참조인 `utilities/agent-home.sh` 도 plugin 에 번들된다. memory/statusline/dispatch
+계열은 여전히 제외(CLI 설치 전제 상태, self-contained 불가).
 
 ## PRD 갱신 필요 여부 (code-report 에 명시할 것)
 
-PRD §INST-OPEN-1 은 "파일별 목록은 구현 plan 에서 확정" 이라 열어 둔 상태. 본 표로 **파일별
-확정 완료** → **INST-OPEN-1 closeable**. 단 이 스테이지는 prd.md 를 편집하지 않는다 —
-code-report 가 final_report 에 "PRD §INST-OPEN-1 을 '확정(채택 2 / defer 3 / 제외 나머지)'
-으로 닫을 수 있으며, 실제 prd 편집은 main orchestrator 의 autopilot-spec update 몫" 이라고
-기록한다.
+PRD §INST-OPEN-1 은 사이클 2 에서 "확정(채택 2 / defer 3 / 제외 나머지)"로 닫혔다. 본 사이클로
+defer 3 이 채택으로 이동 → **"채택 5(git-state·artifact + spec 파이프 3종 DATA-rebased) / 제외
+나머지"**로 좁힐 수 있다. INST-D-6 / `pipeline_state.yaml` `dev:` 이월 항목("spec 파이프 hook
+3종 PLUGIN_DATA 재기준")도 이번 사이클로 완결 — decisions_locked/이월 문구 갱신 필요. 단 이
+스테이지(code-execute)는 `prd.md`·`pipeline_state.yaml` 을 편집하지 않는다 — code-report 가
+final_report 에 위 갱신 필요 사항을 기록하고, 실제 편집은 main orchestrator 의
+`autopilot-spec update` 몫이다.
 
 ---
 
