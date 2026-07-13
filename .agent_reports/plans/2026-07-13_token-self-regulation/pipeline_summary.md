@@ -7,4 +7,4 @@
 - review: two independent read-only reviewers; correction round complete, no P0/P1
 - runtime: installed projection mismatch is expected until integration/reinstall
 - deferred: Phase 2 reinjection accounting, Phase 3 dynamic policy
-- handoff: dedicated branch for main-session review; no self-merge
+- handoff: implementation commit `0f8f52a` pushed to `origin/token-self-regulation`; no self-merge

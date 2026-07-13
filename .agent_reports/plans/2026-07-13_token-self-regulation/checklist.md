@@ -14,4 +14,4 @@
 - [x] Portable guards and adaptation boundary pass.
 - [x] Doctor/runtime projection checked with pre-existing projection mismatch separated.
 - [x] Dev log, test evidence, final report, and pipeline summary written.
-- [ ] Branch committed and pushed for main-session review; no self-merge.
+- [x] Branch committed and pushed for main-session review; no self-merge.

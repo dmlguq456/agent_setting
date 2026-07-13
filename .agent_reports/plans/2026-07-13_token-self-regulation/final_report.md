@@ -28,4 +28,4 @@ Repository readiness is green. The installed `$CODEX_HOME` projection still poin
 - Phase 2: measured reinjection bytes/tokens, net savings, and cadence evaluation.
 - Phase 3: dynamic-policy experiment and a separate adoption gate.
 
-The branch is ready for main-session review and integration; this worktree does not self-merge.
+Implementation commit `0f8f52a` was pushed to `origin/token-self-regulation`. The branch is ready for main-session review and integration; this worktree does not self-merge.
