@@ -1583,13 +1583,18 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _seen_glyphs.add("stale")
             elif job.liveness == "dead":
                 _seen_glyphs.add("dead")
+            # A child may cross harnesses (for example Codex -> Claude). Never fill an
+            # unknown Claude model/effort with the Codex parent's telemetry.
+            same_runtime = not job.harness or not parent_harness or job.harness == parent_harness
+            row_parent_model = parent_model if same_runtime else None
+            row_parent_effort = parent_effort if same_runtime else None
             if _jrow:
-                lines.extend(_jrow(job, orphan=orphan, parent_model=parent_model,
-                                   parent_effort=parent_effort, stage_override=stage_override))
+                lines.extend(_jrow(job, orphan=orphan, parent_model=row_parent_model,
+                                   parent_effort=row_parent_effort, stage_override=stage_override))
             else:
-                lines.append(_dispatch_row(job, orphan=orphan, parent_model=parent_model,
+                lines.append(_dispatch_row(job, orphan=orphan, parent_model=row_parent_model,
                                            parent_harness=parent_harness,
-                                           parent_effort=parent_effort, is_last=is_last,
+                                           parent_effort=row_parent_effort, is_last=is_last,
                                            stage_override=stage_override))
             for sub in _sort_group_jobs(job_children.get(job.slug, [])):
                 # F-15b P0-2: a depth-2 stage worker that is done/queued/idle is already

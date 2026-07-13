@@ -663,6 +663,13 @@ def _scan_processes():
         args = parts[3] if len(parts) > 3 else ""
         ms = _AUTOPILOT.findall(args)
         loop = _LOOPS.search(args)
+        env = procscan.read_environ(pid_s) if (ms or loop) else {}
+        # Session-end distillers and Fleet title refreshers can inherit dispatch
+        # metadata and even contain `/autopilot-*` as prompt data. They are support
+        # workers, not dispatch jobs; procscan exposes them only through the dedicated
+        # mem-worker path when `a` is enabled.
+        if env.get("MEM_DISTILL") == "1" or env.get("FLEET_TITLE_REFRESH") == "1":
+            continue
         if ms and "claude" in args:
             if os.path.basename(args.split(None, 1)[0]) in _SHELLS:
                 continue                      # launcher shell wrapper, not the claude process
@@ -681,7 +688,6 @@ def _scan_processes():
             if dkey in seen:
                 continue
             seen.add(dkey)
-            env = procscan.read_environ(pid_s)
             parent_sid = env.get("AGENT_DISPATCH_PARENT_SESSION_ID") or env.get("CLAUDE_CODE_SESSION_ID")
             parent_slug = env.get("AGENT_DISPATCH_PARENT_SLUG")
             depth = _parse_depth(env.get("AGENT_DISPATCH_DEPTH"))
@@ -718,7 +724,6 @@ def _scan_processes():
                 jcwd = ""
             if jcwd.endswith(" (deleted)"):
                 jcwd = jcwd[: -len(" (deleted)")]
-            env = procscan.read_environ(pid_s)
             parent_sid = env.get("AGENT_DISPATCH_PARENT_SESSION_ID") or env.get("CLAUDE_CODE_SESSION_ID")
             parent_slug = env.get("AGENT_DISPATCH_PARENT_SLUG")
             parent_cwd = env.get("AGENT_DISPATCH_PARENT_CWD") or (env.get("PWD") if parent_sid else None)

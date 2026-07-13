@@ -32,6 +32,20 @@ from fleet.model import DispatchJob, Session  # noqa: E402
 
 class RenderDispatchPresentationTest(unittest.TestCase):
 
+    def test_cross_harness_child_does_not_inherit_parent_model(self):
+        parent = Session(harness="codex", pid=1, cwd="/work/repo",
+                         session_id="codex-parent", slug="repo", model="gpt-5.6-sol",
+                         effort="xhigh", liveness="working")
+        child = DispatchJob(key="audit", slug="claude-child", cwd="/work/child",
+                            parent_sid="codex-parent", is_child=True, harness="claude",
+                            mode="qa/code-review", liveness="working")
+
+        lines = render._build_lines([parent], [child], section="both", narrow=False,
+                                    malformed=0, layout="wide")
+        text = "\n".join("".join(part for part, _key in line) for line in lines if line)
+
+        self.assertEqual(text.count("gpt-5.6-sol"), 1)
+
     def test_depth_two_prefix_indents_without_repeated_arrow(self):
         top = DispatchJob(key="code", slug="top", depth=1)
         nested = DispatchJob(key="code", slug="nested", depth=2)
@@ -278,6 +292,21 @@ class OpenCodeContextTest(unittest.TestCase):
 
 # --- D3: cwd-fallback enrichment (fully hermetic) ---
 class CwdFallbackEnrichmentTest(unittest.TestCase):
+
+    def test_mem_distiller_prompt_is_not_a_dispatch_job(self):
+        ps_lines = [
+            "123 claude 00:08 claude -p /autopilot-apply session summary --model opus"
+        ]
+        with mock.patch("fleet.collectors.procscan._ps_lines", return_value=ps_lines), \
+             mock.patch("fleet.collectors.procscan.read_environ", return_value={
+                 "MEM_DISTILL": "1",
+                 "AGENT_DISPATCH_PARENT_SESSION_ID": "codex-parent",
+             }), \
+             mock.patch("fleet.collectors.dispatch.os.readlink") as m_readlink:
+            jobs = dispatch._scan_processes()
+
+        self.assertEqual(jobs, [])
+        m_readlink.assert_not_called()
 
     def test_proc_scanned_drill_loop_surfaces_parent_and_current_case(self):
         with tempfile.TemporaryDirectory() as tmp:
