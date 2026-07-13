@@ -96,6 +96,15 @@ coordination에만 쓴다; 둘은 alias가 아니다.
 | 본작업 (qa standard 이상 · plan 추적 대상) | **worktree + 작업 브랜치** — base 최신에서 plan slug 브랜치 (§5.9 DONE-BRANCH 연계), mutation 커밋 누적. **기능 추가·모듈 신설·다파일 변경은 규모 판단 없이 무조건 브랜치, 애매해도 브랜치 쪽** (2026-06 drill g3 재발 방지 — main 트리 직접 편집은 typo·1줄급 자잘한 단발로 한정). **`standard+` 다파일·기능 본작업은 headless 분사가 기본(=의무, 재량 아님)** — 아래 "풀 ceremony (headless 분사)"; 경량 팀위임·inline 은 quick·마이크로-스테이지 한정 (2026-07 drill g6 — "필요하면" 조건부가 분사 생략으로 오독되던 자리 명확화). |
 | 병렬 요청 (작업 진행 중 새 독립 요청) | 즉시 새 worktree 로 분사 (아래 규칙) — 앞 job 완료를 기다리지 않는다 |
 
+**Token-pressure non-interference (2026-07-13 Ponytail follow-up)**:
+observed token/context pressure cannot downshift this table or the dispatch rules
+below. In particular it cannot turn a `standard+` stage worker into inline work,
+remove a required depth, suppress plan/execute/test/report, skip liveness/registry
+handling, or weaken worktree/write/spec/sandbox/approval guards. Unknown or
+exceeded budgets keep the existing pipeline and surface a degraded/unavailable
+signal; they do not redefine partial completion as success. Only unrequested
+optional exploration and user-facing verbosity may be reduced.
+
 **디스패치 규칙**:
 1. **파일 겹침 triage**: 새 요청이 진행 중 job 과 같은 파일을 건드릴 것으로 추정되면 병렬 금지 — 그 job 뒤에 큐잉 (같은 브랜치에 이어서). 안 겹치면 병렬.
 2. **실행** — worktree 생성 (`git worktree add <path> -b <slug> origin/<base>`, base 선정은 §5.9) 후 두 모드. **`<path>` 명명 규칙 (canonical, 2026-06-12 사용자 확정)**: 형제 디렉토리 `<repo>-wt/<slug>` 로 판다 (예: repo 가 `…/Foo` 면 worktree 는 `…/Foo-wt/<slug>`). Adapter UI/status surface 가 이 규칙을 신호로 삼을 수 있으므로 `<repo>_worktrees/` 같은 변형 금지, **`-wt/` 단일 표준**. (harness: `worktree-path-guard` hook 이 이 경로 컨벤션을 hard 강제 — 내장 worktree 툴(repo 안 기본 경로)과 `<repo>-wt/` 밖 `git worktree add` 를 deny; `.untracked`·비-add 서브커맨드·비-git 은 fail-open. 2026-07-10 drill g3/g6.)

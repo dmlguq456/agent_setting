@@ -89,6 +89,40 @@ Sub-capability inheritance:
 - `code-test` realizes final concrete verification. Its rigor follows the intensity-derived rigor tier and track policy but is no longer forced to `thorough` for every invocation.
 - `code-report` is reporting/synthesis; it does not add QA by itself.
 
+### §1.2 Token/Context Pressure (orthogonal response axis)
+
+Token/context pressure is an **observed response-shaping signal**, not a second
+pipeline selector or assurance budget. It is orthogonal to `intensity`: pressure
+may shorten user-facing explanation and defer only unrequested optional extras,
+but it never changes the selected stage graph, depth, dispatch, model role,
+reasoning effort, plan-check, reviewer budget, final verification, retry contract,
+or definition of done. This separation was made explicit after the Ponytail
+research found that repeated budget rules could increase reasoning-model tokens
+and that “tight -> suppress dispatch” conflicts with the `standard+` stage contract
+(2026-07-13).
+
+Portable token telemetry keeps these meanings separate:
+
+- **active context**: the latest runtime-reported context occupancy and window;
+- **session cumulative counters**: raw input, cached input, output, reasoning
+  output, and total counters where the runtime exposes them;
+- **policy score**: a response-control signal only, never billing cost.
+
+Do not reuse a generic adapter field whose meaning differs by runtime. Unknown,
+stale, malformed, ambiguous, unsupported, or decreasing session counters fail
+open to the existing pipeline and are reported as unavailable/degraded rather
+than estimated from another session. Forks and subagents remain separate session
+denominators; parent/child aggregation is a separate cycle metric.
+
+Safety rail: token pressure cannot reduce validation, tests, error/data-loss
+handling, security/auth/permissions, accessibility, spec/plan gates,
+sandbox/approval, git/write/hook/liveness guards, or required tools. Automatic
+input/transcript/artifact pruning is off. A runtime adapter may inject a compact
+output directive only on a verified pressure-band transition; normal, unknown,
+unsupported, native-owned, and repeated same-band states contribute zero prompt
+bytes. Runtime-owned token-budget configuration remains read-only unless the user
+explicitly selects a separately verified native opt-in path.
+
 ## §2. Model Role 표기 (canonical)
 
 공통 계약은 concrete model name 이 아니라 _model role_ 을 쓴다. Vendor-specific model names 는 adapter 구현값이다. 새 cross-tool 문서·skill·README 는 아래 role 을 먼저 쓰고, concrete 재현값은 adapter 문서에서 mapping 한다.
@@ -163,6 +197,7 @@ contract before changing adapter-owned model maps, generated agents, or docs.
 7. external adversary wrapper 를 실제 reviewer role 단독으로 표기하면 drift — 실제 review 는 external adversary engine, wrapper 는 orchestrator role. §2 매트릭스에 따라 "external adversary + fast orchestrator" 같이 분리 표기.
 8. **의도 동반 (2026-06-11)**: 지침·규칙·hook 의 신설/강화에는 _왜(계기 사건 + 날짜)_ 를 인라인 주석 또는 commit message 에 남긴다 — 예: "(drill g2 가 잡은 구멍, 2026-06-11)". 의도 없는 규칙은 시간이 지나면 정리도 못 하고 의심도 못 하는 짐 — 연수 루프가 _의도 불명 지침_ 을 정리 후보로 보고한다. 의도의 최상위 보존 형태는 drill 케이스 (실행 가능한 의도 — 오답노트 승격 채널).
 9. **의미↔규칙 경계 (2026-06-22, worklog-board 참사)**: 의미 판단을 규칙·토큰 매칭 스크립트로 내리지 말 것 — spec 이 "의미 판단"을 명시하면 구현이 그 의미를 capture 했는지 검증한다 (상세·검증 절차·3선택 = DESIGN_PRINCIPLES §0.7).
+10. **token pressure ⊥ intensity (2026-07-13, Ponytail 조사)**: token/context pressure는 출력 표현만 조절하며 stage graph·depth·dispatch·model role·verification rigor·필수 guard/input context를 줄이지 않는다. unknown/unsupported는 기존 파이프로 fail-open하고 normal/unknown/native/same-band prompt 주입은 0 byte다.
 
 새 invariant 추가는 본 섹션 list에 한 행 추가하면 sync-skills Step 5b.5의 자동 검사 list에 포함.
 

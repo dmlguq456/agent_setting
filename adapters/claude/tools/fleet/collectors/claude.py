@@ -132,9 +132,25 @@ def _apply_statusline(sess, d):
     up = cw.get("used_percentage")
     if isinstance(up, (int, float)):
         sess.ctx_pct = min(99, round(up))
+    current = cw.get("current_usage") or {}
+    if isinstance(current, dict):
+        active_parts = [
+            current.get("input_tokens"),
+            current.get("cache_creation_input_tokens"),
+            current.get("cache_read_input_tokens"),
+        ]
+        if any(isinstance(value, (int, float)) for value in active_parts):
+            sess.active_context_tokens = int(sum(
+                value for value in active_parts if isinstance(value, (int, float))))
+    window = cw.get("context_window_size")
+    if isinstance(window, (int, float)) and window > 0:
+        sess.context_window_tokens = int(window)
     ti, to = cw.get("total_input_tokens"), cw.get("total_output_tokens")
     if isinstance(ti, (int, float)) or isinstance(to, (int, float)):
         sess.tokens = int((ti or 0) + (to or 0))
+        sess.session_input_tokens = int(ti) if isinstance(ti, (int, float)) else None
+        sess.session_output_tokens = int(to) if isinstance(to, (int, float)) else None
+        sess.session_total_tokens = sess.tokens
     rl = d.get("rate_limits") or {}
 
     def pct(k):

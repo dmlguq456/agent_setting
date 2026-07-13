@@ -142,6 +142,15 @@ class Session:
     rl_windows: Optional[list] = None  # dynamic account windows [[label, pct, reset_epoch], ...]; preferred over rl_5h/rl_7d when present
     cost: Optional[float] = None
     tokens: Optional[int] = None
+    # Token-budget telemetry is explicit because legacy ``tokens`` is not
+    # cross-harness comparable (Codex=current context; Claude/OpenCode=cumulative).
+    active_context_tokens: Optional[int] = None
+    context_window_tokens: Optional[int] = None
+    session_input_tokens: Optional[int] = None
+    session_cached_input_tokens: Optional[int] = None
+    session_output_tokens: Optional[int] = None
+    session_reasoning_output_tokens: Optional[int] = None
+    session_total_tokens: Optional[int] = None
     status: Optional[str] = None        # raw harness status (claude idle/shell/busy)
     mtime: Optional[float] = None       # newest transcript/db mtime (epoch sec) for liveness
     liveness: str = "unknown"

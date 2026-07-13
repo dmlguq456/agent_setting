@@ -30,6 +30,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh mode [cwd] [session-id]
        preflight.sh prompt-signal [cwd] [session-id]
        preflight.sh turn-nudge [cwd] [session-id]
+       preflight.sh token-budget [cwd] [session-id] [kv|json|hook]
        preflight.sh track [cwd] [session-id]
        preflight.sh memory [cwd]
        preflight.sh recall <prompt> [cwd] [session-id]
@@ -142,6 +143,8 @@ doctor() {
     "$ROOT/adapters/codex/hooks/pretooluse-write-guard.py" \
     "$ROOT/adapters/codex/hooks/posttooluse-design-check.py" \
     "$ROOT/adapters/codex/hooks/posttooluse-read-marker.py" || rc=1
+  doctor_check token-budget python3 "$ROOT/utilities/token-budget.py" \
+    --adapter portable --active-context-tokens 1 --context-window 100 --format json || rc=1
   doctor_check adaptation-boundary doctor_boundary || rc=1
   if [ "$runtime_check" -eq 1 ]; then
     if [ "$require_hook_trust" -eq 1 ]; then
@@ -352,6 +355,20 @@ case "$cmd" in
     fi
     printf '%s\n' "$counter" > "$state" 2>/dev/null || true
     find "$store" -maxdepth 1 -name '.codex-turn-state-*' -mmin +4320 -delete 2>/dev/null || true
+    ;;
+  token-budget)
+    cwd=${2:-$PWD}
+    sid=${3:-codex-hook}
+    format=${4:-kv}
+    case "$format" in
+      kv|json|hook) ;;
+      *) echo "codex preflight: token-budget format must be kv, json, or hook" >&2; exit 64 ;;
+    esac
+    # cwd is intentionally not a rollout selection key: exact session id only.
+    # Unknown/degraded signals return success and emit no hook directive.
+    : "$cwd"
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/token-budget.py" \
+      --adapter codex --session-id "$sid" --format "$format"
     ;;
   track)
     cwd=${2:-$PWD}

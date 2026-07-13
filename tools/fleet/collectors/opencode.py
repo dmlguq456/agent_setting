@@ -148,6 +148,10 @@ def enrich(sess):
         sess.cost = cost
     toks = sum(x for x in (ti, to, tr) if isinstance(x, (int, float)))
     sess.tokens = toks or None
+    sess.session_input_tokens = int(ti) if isinstance(ti, (int, float)) else None
+    sess.session_output_tokens = int(to) if isinstance(to, (int, float)) else None
+    sess.session_reasoning_output_tokens = int(tr) if isinstance(tr, (int, float)) else None
+    sess.session_total_tokens = toks or None
     # context% = current-context size (last API request's prompt ~ what the model
     # actually saw as context) / model window (registry). NOT session.tokens_input,
     # which is cumulative API input across all requests in the session — cost-side,
@@ -157,8 +161,10 @@ def enrich(sess):
     # tokens are unavailable.
     ctx_for_pct = last_ctx if last_ctx else (ti if isinstance(ti, (int, float)) else None)
     if isinstance(ctx_for_pct, (int, float)) and ctx_for_pct:
+        sess.active_context_tokens = int(ctx_for_pct)
         lim = _model_ctx_limit(sess.model)
         if lim:
+            sess.context_window_tokens = int(lim)
             sess.ctx_pct = min(99, round(100 * ctx_for_pct / lim))
     if isinstance(tupd, (int, float)):
         sess.mtime = tupd / 1000.0                  # ms → s

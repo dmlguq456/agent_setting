@@ -1918,6 +1918,30 @@ if "$TOGGLE" --cwd "$TMP/flowproj" --session promptlifecyclesid --set tracked >/
 else
   bad "codex native hook projection should suppress default tracked prompt context"
 fi
+budget_sid=12345678-1234-1234-1234-123456789abc
+budget_rollout="$TMP/codex_hook_home/.codex/sessions/2026/07/13/rollout-test-$budget_sid.jsonl"
+mkdir -p "$(dirname "$budget_rollout")" "$TMP/codex_budget_state"
+printf '%s\n' '{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":82000},"total_token_usage":{"input_tokens":120000,"cached_input_tokens":70000,"output_tokens":20000,"reasoning_output_tokens":10000,"total_tokens":150000},"model_context_window":112000}}}' > "$budget_rollout"
+budget_preflight="$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/bin/preflight.sh"
+if CODEX_HOME="$TMP/codex_hook_home/.codex" "$budget_preflight" token-budget "$TMP/flowproj" "$budget_sid" kv >/tmp/codex_budget_kv.out 2>/tmp/codex_budget_kv.err \
+  && grep -q '^active_context_tokens=82000$' /tmp/codex_budget_kv.out \
+  && grep -q '^session_total_tokens=150000$' /tmp/codex_budget_kv.out \
+  && grep -q '^policy_state=tight$' /tmp/codex_budget_kv.out; then
+  ok "codex token-budget preflight separates active context and cumulative session counters"
+else
+  bad "codex token-budget preflight should expose exact-session telemetry"
+fi
+if printf '{"prompt":"plain prompt","session_id":"%s","cwd":"%s"}\n' "$budget_sid" "$TMP/flowproj" \
+  | CODEX_HOME="$TMP/codex_hook_home/.codex" XDG_STATE_HOME="$TMP/codex_budget_state" MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_budget_hook_first.out 2>/tmp/codex_budget_hook_first.err \
+  && grep -q 'TOKEN_BUDGET=tight' /tmp/codex_budget_hook_first.out \
+  && python3 -c 'import json,sys; ctx=json.load(open(sys.argv[1],encoding="utf-8"))["hookSpecificOutput"]["additionalContext"]; line=[x for x in ctx.splitlines() if x.startswith("TOKEN_BUDGET=")]; assert len(line)==1; assert len((line[0]+"\n").encode()) <= 240; assert "required work" in line[0] and "tests" in line[0] and "input context unchanged" in line[0]' /tmp/codex_budget_hook_first.out \
+  && printf '{"prompt":"plain prompt","session_id":"%s","cwd":"%s"}\n' "$budget_sid" "$TMP/flowproj" \
+  | CODEX_HOME="$TMP/codex_hook_home/.codex" XDG_STATE_HOME="$TMP/codex_budget_state" MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_budget_hook_repeat.out 2>/tmp/codex_budget_hook_repeat.err \
+  && [ ! -s /tmp/codex_budget_hook_repeat.out ]; then
+  ok "codex prompt hook injects token budget only on pressure-band transition"
+else
+  bad "codex prompt hook should keep same-band token budget reinjection at zero bytes"
+fi
 if "$TOGGLE" --cwd "$TMP/flowproj" --session promptlifecyclesid --set untracked >/tmp/codex_prompt_toggle.out 2>/tmp/codex_prompt_toggle.err \
   && printf '{"prompt":"remember this project context","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
   | MEM_NUDGE_INTERVAL=1 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook.out 2>/tmp/codex_prompt_hook.err \

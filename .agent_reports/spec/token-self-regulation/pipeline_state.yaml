@@ -1,0 +1,28 @@
+project_name: token-self-regulation
+component: token-self-regulation
+created: 2026-07-13
+last_updated: 2026-07-13
+mode: [library, cli, runtime-hook]
+scope_note: "Phase 0 session token/context measurement + Phase 1 transition-only safe output response; Phase 2 reinjection accounting and Phase 3 dynamic policy are deferred."
+inputs:
+  - .agent_reports/research/token-self-regulation/pipeline_summary.md
+  - .agent_reports/research/token-self-regulation/06_implementation.md
+  - OpenAI Codex developer commands and config reference, verified 2026-07-13
+phases:
+  research: done
+  spec: done
+  plan: done
+  dev: done
+  verify: done
+  report: done
+decisions_locked:
+  - TSR-1: active context and cumulative session counters are explicit, separate, non-billing signals
+  - TSR-2: native Codex rollout budget requires a validated explicit opt-in; runtime config remains read-only
+  - TSR-3: token pressure never changes intensity, routing, model role, stage depth, or verification rigor
+  - TSR-4: safety/security/validation/error handling/accessibility and all required guards remain invariant
+  - TSR-5: input/context reduction stays off in Phase 1
+  - TSR-6: hook reinjection is transition-only, zero for normal/unknown/native/same-band, and one compact line for tight/critical entry
+  - TSR-7: exact-session tolerant parsing; missing/stale/ambiguous signals fail open to the normal pipeline
+decisions_open:
+  - Phase 2 measured net-token accounting and reminder cadence
+  - Phase 3 dynamic policy experiment and adoption gate

@@ -324,6 +324,7 @@ check_non_claude_adapter_symlink_boundaries() {
         adapters/codex/utilities/workflow-guard-hook.sh:../../../utilities/workflow-guard-hook.sh|\
         adapters/codex/utilities/workflow-toggle.sh:../../../utilities/workflow-toggle.sh|\
         adapters/codex/utilities/dispatch-route.sh:../../../utilities/dispatch-route.sh|\
+        adapters/codex/utilities/token-budget.py:../../../utilities/token-budget.py|\
         adapters/opencode/tools/memory/apply-distill-actions.py:../../../../tools/memory/apply-distill-actions.py|\
         adapters/opencode/utilities/agent-worklog-state.sh:../../../utilities/agent-worklog-state.sh|\
         adapters/opencode/utilities/artifact-root.sh:../../../utilities/artifact-root.sh|\
@@ -921,7 +922,7 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/AGENTS.md must document the Codex workflow toggle wrapper"
   fi
 
-  for p in 'preflight.sh start' 'preflight.sh session-end' 'preflight.sh mode' 'preflight.sh prompt-signal' 'preflight.sh turn-nudge' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh ui-info' 'preflight.sh tui-config' 'preflight.sh subagent-info' 'preflight.sh loop-info' 'preflight.sh qa-policy' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
+  for p in 'preflight.sh start' 'preflight.sh session-end' 'preflight.sh mode' 'preflight.sh prompt-signal' 'preflight.sh turn-nudge' 'preflight.sh token-budget' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh ui-info' 'preflight.sh tui-config' 'preflight.sh subagent-info' 'preflight.sh loop-info' 'preflight.sh qa-policy' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
     if ! grep -Fq "$p" adapters/codex/AGENTS.md; then
       fail_msg "adapters/codex/AGENTS.md must document manual Codex lifecycle wrapper $p"
     fi
@@ -1021,6 +1022,9 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'run_preflight("mode"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'run_preflight("recall"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'run_preflight("briefing"' adapters/codex/hooks/userprompt-lifecycle.py \
+    || ! grep -Fq 'run_preflight("token-budget"' adapters/codex/hooks/userprompt-lifecycle.py \
+    || ! grep -Fq 'timeout_seconds=token_budget_timeout()' adapters/codex/hooks/userprompt-lifecycle.py \
+    || ! grep -Fq 'CODEX_TOKEN_BUDGET_HOOK_TIMEOUT_SECONDS' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'run_preflight("turn-nudge"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'emit_context("UserPromptSubmit"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'hookSpecificOutput' adapters/codex/hooks/userprompt-lifecycle.py; then
@@ -1033,6 +1037,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'out["hookEventName"]=="SessionStart"' hooks/portable-guards.test.sh \
     || ! grep -Fq 'suppresses default tracked prompt context' hooks/portable-guards.test.sh \
     || ! grep -Fq 'injects only non-default prompt context' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'injects token budget only on pressure-band transition' hooks/portable-guards.test.sh \
     || ! grep -Fq 'out["hookEventName"]=="UserPromptSubmit"' hooks/portable-guards.test.sh \
     || ! grep -Fq 'silent success output' hooks/portable-guards.test.sh \
     || ! grep -Fq 'adapter loop runtime logs are ignored' hooks/portable-guards.test.sh \
@@ -1050,6 +1055,18 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'def text_from_value' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq '"content", "messages", "input", "payload", "event", "data"' adapters/codex/hooks/userprompt-lifecycle.py; then
     fail_msg "Codex UserPromptSubmit bridge must extract prompt text from nested runtime payloads"
+  fi
+  if [ ! -f tools/fleet/token_budget.py ] \
+    || [ ! -f utilities/token-budget.py ] \
+    || ! grep -Fq 'token-budget)' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'token pressure ⊥ intensity' core/CONVENTIONS.md \
+    || ! grep -Fq 'Token-pressure non-interference' core/OPERATIONS.md \
+    || ! grep -Fq 'normal, unknown, repeated-band, and validated-native states' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'runtime-owned `$CODEX_HOME/config.toml`' adapters/codex/README.md \
+    || ! grep -Fq 'AGENT_TOKEN_BUDGET_NATIVE_VALIDATED=1' adapters/codex/ADAPTATION.md \
+    || grep -Fq 'import fcntl' utilities/token-budget.py \
+    || ! grep -Fq 'class TransitionLock' utilities/token-budget.py; then
+    fail_msg "token-budget projection must preserve portable orthogonality, transition-only injection, and native-config boundaries"
   fi
   if ! grep -Fq 'runtime_surface=codex-userprompt-hook-signal' adapters/codex/bin/preflight.sh \
     || ! grep -Fq '"$0" status "$cwd" "$sid"' adapters/codex/bin/preflight.sh \
@@ -1241,7 +1258,7 @@ check_codex_utility_projection() {
     fail_msg "adapters/codex/utilities/agent-home.sh must support the Codex runtime agent-harness pointer"
   fi
 
-  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh; do
+  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh token-budget.py; do
     if [ ! -L "adapters/codex/utilities/$p" ]; then
       fail_msg "adapters/codex/utilities/$p must be a selective portable utility projection"
       continue
@@ -1252,7 +1269,7 @@ check_codex_utility_projection() {
     fi
   done
 
-  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name dispatch-route.sh \) -print 2>/dev/null || true)
+  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name dispatch-route.sh -o -name token-budget.py \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/codex/utilities contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -1267,7 +1284,7 @@ check_codex_utility_projection() {
   # codex-adapter-parity audit P-40 (2026-07-04): derived under-projection completeness pair — every
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
-  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh dispatch-route.sh"
+  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh dispatch-route.sh token-budget.py"
   UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py"
   utility_count=0
   for f in utilities/*; do
@@ -2320,7 +2337,7 @@ check_opencode_utility_projection() {
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
   UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh dispatch-route.sh"
-  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py"
+  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py token-budget.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue

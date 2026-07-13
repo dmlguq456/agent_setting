@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -89,9 +90,30 @@ def prompt_text(payload: dict[str, Any]) -> str:
     return ""
 
 
-def run_preflight(*args: str) -> str:
+def run_preflight(*args: str, timeout_seconds: float | None = None) -> str:
     env = os.environ.copy()
     env.setdefault("AGENT_HOME", str(ROOT))
+    if timeout_seconds is not None:
+        process = subprocess.Popen(
+            [str(PREFLIGHT), *args], cwd=str(ROOT), env=env, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            start_new_session=os.name == "posix",
+        )
+        try:
+            stdout, stderr = process.communicate(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            try:
+                if os.name == "posix":
+                    os.killpg(process.pid, signal.SIGKILL)
+                else:
+                    process.kill()
+            except (OSError, ProcessLookupError):
+                pass
+            process.communicate()
+            return ""
+        if stderr:
+            sys.stderr.write(stderr)
+        return stdout
     result = subprocess.run(
         [str(PREFLIGHT), *args],
         cwd=str(ROOT),
@@ -108,6 +130,14 @@ def run_preflight(*args: str) -> str:
 
 def env_truthy(name: str) -> bool:
     return os.environ.get(name, "").lower() in {"1", "true", "yes", "on"}
+
+
+def token_budget_timeout() -> float:
+    try:
+        value = float(os.environ.get("CODEX_TOKEN_BUDGET_HOOK_TIMEOUT_SECONDS", "1.0"))
+    except ValueError:
+        value = 1.0
+    return min(5.0, max(0.05, value))
 
 
 def is_default_tracked_anchor(text: str) -> bool:
@@ -135,6 +165,10 @@ def main() -> int:
     if prompt:
         parts.append(run_preflight("recall", prompt, current_cwd, sid))
     parts.append(run_preflight("briefing", current_cwd))
+    # Phase 1 token self-regulation is transition-only. Normal, unknown,
+    # native-owned, and repeated bands return an empty string (zero injection).
+    parts.append(run_preflight("token-budget", current_cwd, sid, "hook",
+                               timeout_seconds=token_budget_timeout()))
     run_preflight("turn-nudge", current_cwd, sid)
     emit_context("UserPromptSubmit", parts)
     return 0

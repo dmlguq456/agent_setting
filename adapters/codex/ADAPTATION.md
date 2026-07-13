@@ -243,7 +243,13 @@ compact; `CODEX_SESSION_MEMORY_INJECT=1` restores `memory` output as
 `UserPromptSubmit` bridge extracts prompt text from top-level and nested
 message/content payloads, then calls `mode`, suppresses the default tracked anchor, preserves
 non-default mode context such as untracked state, plus `recall` and `briefing`
-when they have content, and the `turn-nudge` side effect. It emits
+when they have content, a transition-only `token-budget ... hook` response, and
+the `turn-nudge` side effect. Token-budget output is empty for normal, unknown,
+repeated-band, and validated-native states; only entry into `tight`/`critical`
+adds one compact directive. The directive can shorten output and defer optional
+extras, but core/CONVENTIONS.md §1.2 forbids changing intensity, dispatch/depth,
+model role, required tools/tests, safety/validation/security/error handling/
+accessibility, input context, or guards. It emits
 `hookSpecificOutput.additionalContext` only when non-default prompt context exists
 (`CODEX_MODE_ANCHOR_ALWAYS=1` restores the tracked anchor); no routing-contract or
 git-risk aggregate is injected per turn. The structured
@@ -380,6 +386,7 @@ Codex-native counterpart today.
 | spec read gate | Auto-enforced through Codex hooks: `PostToolUse[Read]` records actual `prd.md` reads, and `PreToolUse` write guard hard-denies an ungrounded write to a spec-changing artifact (`plans/*` or a `spec/` blueprint) — Codex's interception equivalent of Claude's `PreToolUse[Skill]` gate (no skill event exists). Manual fallbacks: `preflight.sh read <prd.md>` after reads, `preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
 | workflow start cleanup | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]`; run it manually when no automatic hook is attached |
 | workflow signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` per turn; `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` is the worker-startup/manual subcommand carrying the full routing contract; run them manually when no automatic hook is attached |
+| token/context pressure | `preflight.sh token-budget [cwd] [session-id] [kv|json|hook]` reads an exact Codex rollout session and keeps active context separate from cumulative raw counters. `kv`/`json` are read-only. Unknown/degraded signals fail open. `hook` is transition-only, bounded by a fail-open timeout, and stores only hashed-session state under XDG user state, not the repo or runtime config. Native rollout-budget ownership requires `AGENT_TOKEN_BUDGET_NATIVE_VALIDATED=1` only after feature + no-side-effect config probes pass; local Codex 0.144.1 fails that probe, so rollout JSON observation is the default. The adapter never writes `$CODEX_HOME/config.toml` |
 | workflow toggle | Run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly requests tracked/untracked mode switching |
 | memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text memory injection; Codex SessionStart hook emission is opt-in via `CODEX_SESSION_MEMORY_INJECT=1` |
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd] [session-id]` before prompt handling when no automatic prompt hook is attached |
@@ -394,7 +401,7 @@ Codex-native counterpart today.
 | role modes | Read `roles/MODES.md`, then run `adapters/codex/bin/preflight.sh mode-info <family/mode>`; read the reported `native_mode_path`, obey `fallback=reference-only` only for unsupported modes, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
 | mode guides | Use `adapters/codex/modes/<family>/<mode>.md` as the Codex-native realization guide reported by `mode-info`; satisfy named tool contracts or report unavailable before claiming support |
 | design modes | Use `adapters/codex/modes/design/<mode>.md` as the Codex-native realization guide; satisfy `visual-harness` or report unavailable before claiming rendered visual verification |
-| hook invariants | `adapters/codex/hooks/sessionstart-lifecycle.py` realizes SessionStart bootstrap context injection; `userprompt-lifecycle.py` realizes UserPromptSubmit mode/prompt-signal injection; `sessionend-lifecycle.py` realizes SessionEnd memory sync/distill and Stop detached session-end scheduling; `permissionrequest-lifecycle.py` is a registered no-op for Codex `PermissionRequest` (harness monitoring is owned by Codex native `/statusline`); `pretooluse-write-guard.py` realizes write guards (artifact-order, git-state, core-first, memory-write, and the spec read gate for spec-changing artifacts) through Codex `PreToolUse`; `posttooluse-read-marker.py` records actual spec/core reads through `PostToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
+| hook invariants | `adapters/codex/hooks/sessionstart-lifecycle.py` realizes SessionStart bootstrap context injection; `userprompt-lifecycle.py` realizes UserPromptSubmit mode/recall/briefing plus transition-only token-budget context and turn-nudge; `sessionend-lifecycle.py` realizes SessionEnd memory sync/distill and Stop detached session-end scheduling; `permissionrequest-lifecycle.py` is a registered no-op for Codex `PermissionRequest` (harness monitoring is owned by Codex native `/statusline`); `pretooluse-write-guard.py` realizes write guards (artifact-order, git-state, core-first, memory-write, and the spec read gate for spec-changing artifacts) through Codex `PreToolUse`; `posttooluse-read-marker.py` records actual spec/core reads through `PostToolUse`; `posttooluse-design-check.py` realizes design HTML console checks through `PostToolUse`; run explicit preflight wrappers for events not yet covered by native hooks |
 | capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 
 ## Model Mapping

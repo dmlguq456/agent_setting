@@ -29,6 +29,8 @@ import sqlite3
 import time
 import urllib.request
 
+from fleet.token_budget import parse_codex_token_count
+
 # rollout filename tail: rollout-<ISO-ts>-<uuid>.jsonl
 _SID_RE = re.compile(r"-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$")
 
@@ -276,26 +278,25 @@ def _tail_token_count(path, chunk=65536):
     return last
 
 
-_BASELINE_TOKENS = 12000    # codex-rs protocol.rs BASELINE_TOKENS — see module docstring
-
-
 def _apply_token_count(sess, line):
-    # codex's own formula (protocol.rs percent_of_context_window_remaining, 2026-07-02):
-    # used = max(0, last.total_tokens - BASELINE) over effective window (window - BASELINE).
+    # Shared parser keeps active context separate from cumulative session counters.
+    telemetry = parse_codex_token_count(line, session_id=sess.session_id)
+    sess.active_context_tokens = telemetry.active_context_tokens
+    sess.context_window_tokens = telemetry.context_window_tokens
+    sess.session_input_tokens = telemetry.session_input_tokens
+    sess.session_cached_input_tokens = telemetry.session_cached_input_tokens
+    sess.session_output_tokens = telemetry.session_output_tokens
+    sess.session_reasoning_output_tokens = telemetry.session_reasoning_output_tokens
+    sess.session_total_tokens = telemetry.session_total_tokens
+    if telemetry.active_context_tokens is not None:
+        # Legacy render compatibility: Codex ``tokens`` remains active context.
+        sess.tokens = telemetry.active_context_tokens
+    if telemetry.context_used_pct is not None:
+        sess.ctx_pct = telemetry.context_used_pct
     try:
         p = json.loads(line).get("payload") or {}
     except Exception:
         return
-    info = p.get("info") or {}
-    win = info.get("model_context_window")
-    ltu = info.get("last_token_usage") or {}
-    tot = ltu.get("total_tokens")                   # last request total ≈ tokens in context window
-    if isinstance(tot, (int, float)):
-        sess.tokens = int(tot)
-        if isinstance(win, (int, float)) and win > _BASELINE_TOKENS:
-            eff = win - _BASELINE_TOKENS
-            used = max(0, tot - _BASELINE_TOKENS)
-            sess.ctx_pct = min(99, round(100.0 * used / eff))
     p5, p7, windows = _rates_from_payload(p)
     if p5 is not None:
         sess.rl_5h = p5
