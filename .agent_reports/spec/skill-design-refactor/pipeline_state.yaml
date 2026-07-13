@@ -14,7 +14,7 @@ phases:
   spec: done              # PRD v2 — 편집 대상 live 트리 정정 + 미러 불변식(SD-11)
   scaffolding: n/a        # 기존 skills/ 리팩터 — 신규 scaffold 없음
   design: n/a             # instruction 파일 리팩터 — 시각 UI 없음
-  dev: resumable          # back-jump 후 재개 대기 — 첫 항목 = cd48b25 root 편집분을 adapters 트리 미러 적용(§3.1 ⚑)
+  dev: partial            # 재개 완료(2026-07-13 main merge f41ba83): 미러 적용 + CORE·Cluster2·3 + C1 P4/P7 done. 잔여 = C1-GATE(trial-flip, 비-nested 세션 필요)·C1-FLIP 13개·autopilot-ship 3중 dedupe·audit rubric 재적용(drill)
 spec_version: v2          # _internal/versions/v1/prd.md 스냅샷 보존 후 v2 반영
 back_jump:
   - from: dev
