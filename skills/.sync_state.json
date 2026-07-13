@@ -1,150 +1,154 @@
 {
-  "version": 4,
-  "last_readme_sync": "2026-06-26T16:35:01.135313+09:00",
-  "items": {
-    "skills/analyze-project": {
-      "sha256": "94a703501d4a3ba79c87128ce920529dd4359d8d5f3969b4654805e43425079e",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/analyze-user": {
-      "sha256": "251651d60b1f452ddd63c6f8cf3b47511fb6642202aa084f7e959d6f3d3377d4",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/audit": {
-      "sha256": "98dae342405fb111c5d1a4369f586fc7e31b7e4d616524701bef4f0b0c8692af",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/autopilot-apply": {
-      "sha256": "6c0cd8a3eb19afde7cebf27f65c95235f00b4869f0c543d6ecd90a2028ec77a6",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/autopilot-code": {
-      "sha256": "792f8cb987a0fe3309aeea1768cbd634f1693a1f50eefc5e9a53cbb9acc8e40e",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/autopilot-design": {
-      "sha256": "6863c918c8f2c32e6197c9278c042f858513b4d066005b8768ec6bf0009a1998",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/autopilot-draft": {
-      "sha256": "e3942843f2ad98c033cf3981c9b95e0e1dc03e01fd39beed513bb14a814df1c5",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/autopilot-lab": {
-      "sha256": "0e4578bf04868aec86242eb86f301c79466b2562707194edcbe36dfc7515e842",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/autopilot-note": {
-      "sha256": "6ea3751d67b2baad726a917cdaeaba287a3a5ba8777b4e9c9ee1a18326a0be1d",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/autopilot-refine": {
-      "sha256": "db4e66178f4017821f166b40ec17bcefc51969afd8feac7109ba931802b80122",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/autopilot-research": {
-      "sha256": "621a5f1bd84f5602407b4feb65d1fbaaaf8e0f83b036169c62d858d3b78ce4bb",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/autopilot-ship": {
-      "sha256": "f190e02f925b0192f00b800dfbc44756922a66e7df9806e8cbebf399efdf3984",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/autopilot-spec": {
-      "sha256": "64f5b07bc8828ed04fe6dabeaa078b18875bd956eb47098fe628732a71290761",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/code-execute": {
-      "sha256": "2c74c31ae1773c72fa0d391475f1d950ce0c0250e25c4f35db96ac8e8abad2fa",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/code-plan": {
-      "sha256": "f6e346cdc4bac9b12b3024ec8084eb3a925ecb2469ac8cd857064a3017003552",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/code-refine": {
-      "sha256": "850a4d250b76209dd877eb7f9396c9911b941ad6a11328ad90837c4605ac7fce",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/code-report": {
-      "sha256": "a1b5eef1ed1cab13ebf616ec70cd0825748920e428c75bdfa38a6a37e330411f",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/code-test": {
-      "sha256": "bc33b759a1cfed54893c33afaaac0bc6c02699a179e06201d3fe89340d61f06a",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/design-components": {
-      "sha256": "cfc66995cf70fce302aa1698de7df81113832ec0d14791f0edf7e38231b14a59",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/design-handoff": {
-      "sha256": "2761b1beb9643a7601eb893008a0c5bf97249e26d17a35a6e412074926ded8fa",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/design-init": {
-      "sha256": "de43b18088fc95487a4ba8bfe42110c10814fd395b87b14efd7e3e709d5b4f06",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/design-refs": {
-      "sha256": "48033d1f7c128cb0c31d6ecd02d4a79ef7f891880520a08ba96d721b59c8e297",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/design-review": {
-      "sha256": "ae08bcc66ffaa22b0568d2be74489cf61e8f5e192700c4c8baee4ac5bd2cb9db",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/design-tokens": {
-      "sha256": "8ec0bea80fbf946afe808f503bf7245ed208043a7750bc91ad035136b54d6c34",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/draft-refine": {
-      "sha256": "a9c0be49a1ae5e7ab1ab6423be0244b331810bea71b1bdeb403a5355b4a3f417",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/draft-strategy": {
-      "sha256": "aaa8df32925b126b9ceef59605d3071994fe830ca2fe9e35fc772e1435460338",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/post-it": {
-      "sha256": "d5ca328664b8b2ab6d02b88d5bab299f7d2e54b7a1824bb6e9569b6093eeaaf2",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "skills/sync-skills": {
-      "sha256": "16e8ec56db51d2851ddb9f2b5b22c4d0705954600079c749eb88fa54f2dba4d0",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "agents/codex-review-team": {
-      "sha256": "9f122f658184a23e8f544f840045b4ce7720710b59b88c8e4c002d14fedd75de",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "agents/design-team": {
-      "sha256": "44d5bc6e47aa0ecad41fa1949f6bbee90472a31343d31a01a68c5601610ffa22",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "agents/dev-team": {
-      "sha256": "7278e6cc90471d21dd9d7543bcd6f913bad229d8df3b523a5393007e46fb8e14",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "agents/editorial-team": {
-      "sha256": "db3fddb65f30451e9fed62098482f7eba7f604836f0ddc01e1ad856eb0bbf5e5",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "agents/material-team": {
-      "sha256": "6c64fca4df37ea8aa7ad899ad8f58f95c63497c56cee701b728926863b469b19",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "agents/plan-team": {
-      "sha256": "90c75edaafb687adf20a52104accc8bd82efc8e4a26e1681aab23b43c22493e0",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "agents/qa-team": {
-      "sha256": "2cc6ec88bde1dc6337b9f5acb04167b474474d78ca32dee97562a91111fbf5d9",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    },
-    "agents/research-team": {
-      "sha256": "ce09e4076e287dd8585ae1b57d5e6f08f7fafcf7f59b3da58aa6728f639f0499",
-      "synced_at": "2026-06-24T07:05:27+09:00"
-    }
+ "version": 4,
+ "last_readme_sync": "2026-07-13T14:33:03.820328+09:00",
+ "items": {
+  "adapters/claude/agents/codex-review-team": {
+   "sha256": "1a72e13e396a6aa90afd08bc9d2f6a06c01e0fbc715329e2e5d747307a1fe3fb",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/agents/design-team": {
+   "sha256": "998a3130868562410dfe8075093c7a0d91276879d3aa488b6e42b26d7b92921a",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/agents/dev-team": {
+   "sha256": "f8e3ae5902f4d9ffd1cabfd5d61dff76b3ae5962a1874255708c7d0e7057d35b",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/agents/editorial-team": {
+   "sha256": "c584eabbcc216e1397429afb571551857eb031a097616aa2d1956744d0496290",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/agents/material-team": {
+   "sha256": "3f4cdb7f13332c14dea74d047c31e836418393c16558dd469b5ad69eb73ef859",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/agents/memory-scout": {
+   "sha256": "04b63f18cc7b0b6b6228de980c9591c08845a2b5cd4e955e36645499128a48c7",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/agents/plan-team": {
+   "sha256": "b574515e4b0a5533da78cf51f4a3357b00ecae7a1de4c3ddb4c785719e4c82ac",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/agents/qa-team": {
+   "sha256": "d0550de1811deddf2accbdd7d87952b72bb255be0bb8115ece8d1b06da7d15be",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/agents/research-team": {
+   "sha256": "22504d9ea931a61e1c1556d0d096578e7cb36ec49ada283fec3006be44ad2515",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/analyze-project": {
+   "sha256": "007806d8583df3c8b483314f8dcacd90f7121a2bb588d4f27dd2ec89ce1cdfe0",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/analyze-user": {
+   "sha256": "74d48787d8b68cc8a907c7d51b06fd0a9e7cdf01a10bfe903135a6fb0bcb9557",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/audit": {
+   "sha256": "21b74d61f870e97be041c57e23e87e57f5a4039372c0a2810f88d7d75164067d",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/autopilot-apply": {
+   "sha256": "220effe994b63596c8ba252e1e06353f8e078d2ec07ce8b0bc8ede2e5d40616b",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/autopilot-code": {
+   "sha256": "31c2ba5569baebf6b985914139842e4737c2dcc7749b025e5d2d42ca607b87b8",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/autopilot-design": {
+   "sha256": "b982e2ba4bbe47b9fd0e3d19c4d2ecc4667b85e871767a106e06d4ddf9ead75e",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/autopilot-draft": {
+   "sha256": "55b66500f09bb16d722f904f7a771df4bbc591189bc82fdfc2005001859797a3",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/autopilot-lab": {
+   "sha256": "47ab7c16dbfd8f3f89490afbf65adadaa8fcd116a8afea1907afcd11f1b4a353",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/autopilot-note": {
+   "sha256": "07d948180efe21a493e477f9b974c8b72e73a51cb3ceed6185a399396f305f64",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/autopilot-refine": {
+   "sha256": "8d018e895f77d08774927336e20927d8ebbdc998860b4c86064309fb7394aa1d",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/autopilot-research": {
+   "sha256": "76450d93861a75a9d7b1a1b5518de1c7021001730096adaa06d7cbcdb59f72ed",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/autopilot-ship": {
+   "sha256": "8948b33b581984c67801a4465dd25e68334d1df9af95bf5153ee73fb45390b9c",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/autopilot-spec": {
+   "sha256": "f523bc91179100df9014b8e58fde53cccc2af9d2731dcec66b6acfa00629ba13",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/code-execute": {
+   "sha256": "d13f2f2c9ad4c46926789fe38a10fecbe3a4d291366b01d7787a399c6bf153cf",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/code-plan": {
+   "sha256": "12b2affbe3fe00148a31dfbc8e1172eefa1da016f11db98b3f377c5bf54ebac8",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/code-refine": {
+   "sha256": "f9f4ab4ebcf8a42fd81aa5de50843e06a489ff93fe9269cf26e265483f3ffd13",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/code-report": {
+   "sha256": "4c083fc475771e9640dc8f2e34f61011988902de19d6c710004b322d83ee4542",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/code-test": {
+   "sha256": "9f46660b09c0e5df512fa8a10687d7d9161ddf6e1cb449fefd52e3f9d9148b0e",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/design-components": {
+   "sha256": "b9b24aebb8dd1023ce048ff2493177668a87e113d55ccc5b80fa2d51fa79b3a1",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/design-handoff": {
+   "sha256": "28e64eed4eb48efc091e082727d7fd45c76ee526157c98ca2da1ac302314d514",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/design-init": {
+   "sha256": "92e0ce6905ca410f59882ed779f6fe864f20c35394e0e8295fce53c9a29dfbb1",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/design-refs": {
+   "sha256": "35223bd1162b9d64dcfcca2ea05f146a3df124be5505fa67f30cf06387badac0",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/design-review": {
+   "sha256": "0c191e0714947f30c2ed3a8f0cbc02c70f816b2e494a6e74b33a07426cde9425",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/design-tokens": {
+   "sha256": "aaa03b137bc32c37d247a5cdd860720dc5d30463908b9d508fe6940a7ea35662",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/draft-refine": {
+   "sha256": "c2340d6733b65f98c1426f70d7d422a0d1c7e7a5c3ed738ef73023fefc6469b1",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/draft-strategy": {
+   "sha256": "7f2670af11367b33b91fef73661b455bf2b3332897525796fd2408a6a0657c01",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/post-it": {
+   "sha256": "1d468d0cab59495c92c2608f1f30ff304c47c1b4211ba2f4ca2c7ddc6ec8e15c",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+  },
+  "adapters/claude/skills/sync-skills": {
+   "sha256": "89ddcbca695dce3e8808e48199e1019e917ebcf0fcde2f8726d31449660ed957",
+   "synced_at": "2026-07-13T14:33:03.820328+09:00"
   }
+ }
 }
