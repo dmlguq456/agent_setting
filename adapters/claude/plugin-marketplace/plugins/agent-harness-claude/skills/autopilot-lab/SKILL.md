@@ -1,6 +1,6 @@
 ---
 name: autopilot-lab
-description: "빠른 실험 prototype entry — 학습 세팅(setup)과 ckpt 평가(eval) 앞뒤를 돕는다"
+description: "Use when running a quick experiment (training setup or checkpoint eval). 빠른 실험 prototype entry — 학습 세팅(setup)과 ckpt 평가(eval) 앞뒤를 돕는다"
 argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
 metadata:
   group: entry
@@ -11,13 +11,15 @@ metadata:
 
 > 산출물 폴더: `<artifact-root>/experiments/` ([CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier). _RUNLOG timeline 한 자리 + experiment 단위 폴더 누적.
 
-## Required Reads
+## Reference Index
 
-- 모든 호출: `references/auto-load-context.md` — Step 0 자동 read 목록(실험 컨벤션·`_RUNLOG`·직전/부모 실험·유사 모델·ready 점검 등) + 컨벤션·ready 부재/미흡 처리 흐름. 매 호출 시 이 컨텍스트를 먼저 로드해 사용자 재설명 부담을 없앤다.
-- 기계판독 출력(`metrics.jsonl`·`run.json`·parent 계보·종료 dispatch·`report/`): `references/data-contract.md` — scaffold 의 logger, run.json 출생/갱신, dispatch emit 자리에서 참조.
-- `--mode setup` (또는 auto→setup): `references/setup-procedure.md` (S1 spec → S2 scaffold → S3 run).
-- `--mode eval` (또는 auto→eval): `references/eval-procedure.md` (E1 eval spec → E2 실행 → E3 분석·summary).
-- 산출물 폴더 구조·`pipeline_state.yaml`·졸업 hand-off·Update memory·Return Format·Examples: `references/outputs-and-examples.md`.
+| 파일 | 언제 로드 (의무) | 내용 |
+|---|---|---|
+| `references/auto-load-context.md` | 모든 호출 (Step 0, 필수 — 사용자 재설명 부담 제거) | Step 0 자동 read 컨텍스트 목록(per-project 컨벤션 1순위 / cross-project profile 2순위 · `_RUNLOG` · 직전/부모 실험 · 유사 모델 · ready 점검) + 컨벤션·ready 부재/미흡 보류 흐름 |
+| `references/data-contract.md` | 기계판독 출력(logger·run.json·dispatch·`report/`) 자리 | `metrics.jsonl` per-step append-only 스트림, `run.json` manifest(출생→done+best), parent 계보 SoT, 종료 dispatch(방출만), `report/` iframe 렌더 규약 |
+| `references/setup-procedure.md` | `--mode setup`(또는 auto→setup) 시 | S1 spec(worktree·1 화면 컨펌·연구팀 plan-review) → S2 scaffold(개발팀 new-lib·4 원칙 prepend·metrics.jsonl logger) → S3 run 안내·`_RUNLOG` ⏳·run.json 출생·smoke/ml-debug 옵션 |
+| `references/eval-procedure.md` | `--mode eval`(또는 auto→eval) 시 | E1 eval spec(+eval-only `--parent` run.json 출생) → E2 실행 안내 → E3 분석·figure-gen·paper 비교·`REPORT.md`·`summary`/`STORY`·`_RUNLOG` ✅·run.json done·dispatch emit |
+| `references/outputs-and-examples.md` | 산출물 구조·졸업 hand-off·memory·Return·Examples 자리 | `experiments/` 산출물 구조(폴더형·model/{name}형 2 컨벤션), `pipeline_state.yaml`, 졸업(autopilot-code/spec hand-off), Update memory, Return Format, Examples 4개(lr sweep·MDTA ablation·fine-tune 계보·재평가) |
 
 ## Purpose — _빠른 실험 prototype_ entry
 
@@ -192,13 +194,7 @@ metadata:
 - 실험 자동 실행·학습·평가 (사용자 환경·queue 가변 — 명령만 안내. 가벼운 eval 만 발화 시 테스트팀)
 - ckpt·log destructive 삭제 (`_internal/` 외)
 
-## Reference Map
-
-- `references/auto-load-context.md`: Step 0 자동 read 컨텍스트 목록(per-project 컨벤션 1순위 / cross-project profile 2순위 등) + 컨벤션·ready 부재 자리 처리 + 실험 ready 미흡 보류 흐름.
-- `references/data-contract.md`: 출력 데이터계약 — `metrics.jsonl` per-step append-only 스트림, `run.json` run manifest(출생→done+best), parent 계보 SoT, 종료 dispatch(방출만), `report/` iframe 렌더 규약.
-- `references/setup-procedure.md`: setup 모드 절차 — S1 spec(worktree 확보·1 화면 컨펌·연구팀 plan-review) → S2 scaffold(개발팀 new-lib·4 원칙 prepend·metrics.jsonl logger) → S3 run 명령 안내·`_RUNLOG` ⏳ 대기·run.json 출생·smoke/ml-debug 옵션.
-- `references/eval-procedure.md`: eval 모드 절차 — E1 eval spec(+eval-only `--parent` run.json 출생) → E2 eval 실행 안내 → E3 분석·figure-gen·paper 비교·`REPORT.md`·`summary`/`STORY`·`_RUNLOG` ✅·run.json done·dispatch emit.
-- `references/outputs-and-examples.md`: `experiments/` 산출물 구조(폴더형·model/{name}형 2 컨벤션), `pipeline_state.yaml`, 졸업 자리(autopilot-code/spec hand-off), Update memory, Return Format, Examples 4개(lr sweep 사이클·MDTA ablation·fine-tune 계보·재평가).
+> reference 파일 목록·로드 시점·내용은 위 [Reference Index](#reference-index) 표 참조 (단일 표).
 
 ## Task
 $ARGUMENTS

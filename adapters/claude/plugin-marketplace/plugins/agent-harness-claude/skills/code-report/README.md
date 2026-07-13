@@ -10,10 +10,8 @@ plan + dev logs로부터 상세 변경 보고서를 생성하는 skill. **핵심
 /code-report <plan name or path>
 ```
 
-## Plan Resolution (canonical)
-1. `.md` → 그대로
-2. 디렉토리 → `/plan/plan.md`
-3. 퍼지 검색 → `_audit`/`_fix_` 없는 폴더 우선
+## Plan Resolution
+> `$ARG`→plan 경로 해석 단일 authority = [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md).
 
 ## Model & QA Policy
 **Writer: 항상 fast writer** (Claude adapter: sonnet). 최종 보고서는 이전 파이프라인 단계(plan reviews, code reviews, test reviews)에서 이미 검증된 아티팩트의 합성. 보고서 자체에 QA/리뷰 패스는 불필요 — 부정확성(라인 번호 drift, 낡은 follow-up)은 사용자가 읽으면서 교정 가능하며 커밋된 코드에 영향 없음.

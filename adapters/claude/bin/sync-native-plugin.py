@@ -12,8 +12,10 @@ so all content must be copied in, not symlinked).
 Mirrors `adapters/codex/bin/sync-native-plugin.py` (const block /
 `plugin_json`+`marketplace_json` literals / `write_json` / `sync()` /
 `check()`+`check_file()` / `main()`), extended: Codex's generator carries
-skills only; this one carries skills + agents + hooks + hooks.json
-(INST-OPEN-1, `_internal/hooks_inventory.md` adopt set = 2 hooks).
+skills only; this one carries skills + agents + hooks(5: 2 self-contained +
+3 spec-pipeline DATA-rebased) + hooks.json + utilities/agent-home.sh
+(INST-OPEN-1, `_internal/hooks_inventory.md` adopt set — cycle 3 adopts the
+spec-pipeline trio via hooks.json AGENT_HOME env-prefix rebasing).
 """
 
 from __future__ import annotations
@@ -34,20 +36,53 @@ PLUGIN_ROOT = MARKETPLACE_ROOT / "plugins" / PLUGIN_NAME
 SKILLS = ADAPTER / "skills"
 AGENTS = ADAPTER / "agents"
 HOOKS_SOURCE = ROOT / "hooks"
+UTILITIES_SOURCE = ROOT / "utilities"
+UTIL_BUNDLE = ["agent-home.sh"]
 
 # INST-OPEN-1 adopt set (_internal/hooks_inventory.md): self-contained +
-# fail-open guards only. memory/statusline/dispatch families excluded;
-# spec-pipeline trio deferred (would need ${CLAUDE_PLUGIN_DATA} rebasing).
-HOOK_ADOPT = ["git-state-guard.sh", "artifact-guard.sh"]
+# fail-open guards, plus (cycle 3, 2026-07-13) the spec-pipeline trio —
+# adopted (cycle 3, ${CLAUDE_PLUGIN_DATA} rebasing via hooks.json
+# AGENT_HOME env-prefix; see plan 2026-07-13_harness-installer-hooks).
+# memory/statusline/dispatch families remain excluded (CLI-install-owned
+# state, not self-contained under a plugin cache).
+HOOK_ADOPT = [
+    "git-state-guard.sh",
+    "artifact-guard.sh",
+    "spec-skill-gate.sh",
+    "spec-read-marker.sh",
+    "spec-sync-nudge.sh",
+]
 
-# matcher/shell taken verbatim from adapters/claude/settings.json registration.
+# event/matcher/shell taken verbatim from adapters/claude/settings.json registration.
+_HOOK_EVENTS = {
+    "git-state-guard.sh": "PreToolUse",
+    "artifact-guard.sh": "PreToolUse",
+    "spec-skill-gate.sh": "PreToolUse",
+    "spec-read-marker.sh": "PostToolUse",
+    "spec-sync-nudge.sh": "PostToolUse",
+}
 _HOOK_MATCHERS = {
     "git-state-guard.sh": "Edit|Write|MultiEdit|NotebookEdit",
     "artifact-guard.sh": "Edit|Write|MultiEdit",
+    "spec-skill-gate.sh": "Skill",
+    "spec-read-marker.sh": "Read",
+    "spec-sync-nudge.sh": "Edit|Write|MultiEdit",
 }
 _HOOK_SHELLS = {
     "git-state-guard.sh": "sh",
     "artifact-guard.sh": "bash",
+    "spec-skill-gate.sh": "sh",
+    "spec-read-marker.sh": "sh",
+    "spec-sync-nudge.sh": "bash",
+}
+# spec-pipeline trio: rebase state (`.spec-grounding` markers) onto the
+# plugin's persistent, update-surviving data dir instead of the default
+# agent-home.sh fallback — canonical hook bodies stay unmodified (they
+# already honor `AGENT_HOME` as a top-priority env override).
+_HOOK_DATA_HOME = {
+    "spec-skill-gate.sh",
+    "spec-read-marker.sh",
+    "spec-sync-nudge.sh",
 }
 
 
@@ -86,27 +121,26 @@ def hooks_json() -> dict:
     """hooks/hooks.json — wrapped under a top-level "hooks" key (plugin schema,
     verified against current Claude Code docs: code.claude.com/docs/en/
     plugins-reference — differs from the flat settings.json shape). Each
-    adopted hook registers on PreToolUse with its settings.json matcher, path
-    rebased to ${CLAUDE_PLUGIN_ROOT}.
+    adopted hook registers on its settings.json event (PreToolUse/PostToolUse)
+    with its settings.json matcher, path rebased to ${CLAUDE_PLUGIN_ROOT}.
+    Hooks in `_HOOK_DATA_HOME` additionally get an `AGENT_HOME=
+    "${CLAUDE_PLUGIN_DATA}"` env-prefix on the command — this rebases their
+    `.spec-grounding` state onto the plugin's persistent data dir without
+    modifying the canonical hook bodies (cycle 3, 2026-07-13; see plan
+    2026-07-13_harness-installer-hooks). Event/hook ordering follows
+    `HOOK_ADOPT` for determinism (dict insertion order = output order).
     """
-    return {
-        "hooks": {
-            "PreToolUse": [
-                {
-                    "matcher": _HOOK_MATCHERS[name],
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": (
-                                f'{_HOOK_SHELLS[name]} "${{CLAUDE_PLUGIN_ROOT}}/hooks/{name}"'
-                            ),
-                        }
-                    ],
-                }
-                for name in HOOK_ADOPT
-            ]
-        }
-    }
+    events: dict[str, list] = {}
+    for name in HOOK_ADOPT:
+        prefix = 'AGENT_HOME="${CLAUDE_PLUGIN_DATA}" ' if name in _HOOK_DATA_HOME else ""
+        command = f'{prefix}{_HOOK_SHELLS[name]} "${{CLAUDE_PLUGIN_ROOT}}/hooks/{name}"'
+        events.setdefault(_HOOK_EVENTS[name], []).append(
+            {
+                "matcher": _HOOK_MATCHERS[name],
+                "hooks": [{"type": "command", "command": command}],
+            }
+        )
+    return {"hooks": events}
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -119,6 +153,9 @@ def sync() -> None:
         raise SystemExit(f"Claude native skills are missing: {SKILLS}")
     if not AGENTS.exists():
         raise SystemExit(f"Claude native agents are missing: {AGENTS}")
+    for name in UTIL_BUNDLE:
+        if not (UTILITIES_SOURCE / name).exists():
+            raise SystemExit(f"Claude native utility is missing: {UTILITIES_SOURCE / name}")
 
     write_json(PLUGIN_ROOT / ".claude-plugin" / "plugin.json", plugin_json())
     write_json(MARKETPLACE, marketplace_json())
@@ -140,6 +177,13 @@ def sync() -> None:
     for name in HOOK_ADOPT:
         shutil.copy2(HOOKS_SOURCE / name, plugin_hooks / name)
     write_json(plugin_hooks / "hooks.json", hooks_json())
+
+    plugin_utils = PLUGIN_ROOT / "utilities"
+    if plugin_utils.exists() or plugin_utils.is_symlink():
+        shutil.rmtree(plugin_utils)
+    plugin_utils.mkdir(parents=True)
+    for name in UTIL_BUNDLE:
+        shutil.copy2(UTILITIES_SOURCE / name, plugin_utils / name)
 
 
 def check_file(path: Path, expected: str, stale: list[str]) -> None:
@@ -205,6 +249,19 @@ def check() -> int:
             if path.name == "hooks.json":
                 continue
             if path not in expected_hooks:
+                stale.append(str(path.relative_to(ROOT)))
+
+    # utilities: bundled shared scripts, byte-compare + excess-file detection.
+    expected_utils = {PLUGIN_ROOT / "utilities" / name for name in UTIL_BUNDLE}
+    for name in UTIL_BUNDLE:
+        src_util = UTILITIES_SOURCE / name
+        plugin_util = PLUGIN_ROOT / "utilities" / name
+        if not plugin_util.exists() or plugin_util.read_bytes() != src_util.read_bytes():
+            stale.append(str(plugin_util.relative_to(ROOT)))
+    plugin_utils_dir = PLUGIN_ROOT / "utilities"
+    if plugin_utils_dir.exists():
+        for path in sorted(plugin_utils_dir.glob("*")):
+            if path not in expected_utils:
                 stale.append(str(path.relative_to(ROOT)))
 
     if stale:

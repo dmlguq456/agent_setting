@@ -18,6 +18,35 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/artifact-guard.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AGENT_HOME=\"${CLAUDE_PLUGIN_DATA}\" sh \"${CLAUDE_PLUGIN_ROOT}/hooks/spec-skill-gate.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AGENT_HOME=\"${CLAUDE_PLUGIN_DATA}\" sh \"${CLAUDE_PLUGIN_ROOT}/hooks/spec-read-marker.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AGENT_HOME=\"${CLAUDE_PLUGIN_DATA}\" bash \"${CLAUDE_PLUGIN_ROOT}/hooks/spec-sync-nudge.sh\""
+          }
+        ]
       }
     ]
   }
