@@ -29,10 +29,10 @@
 ## 브랜치·커밋·변경 범위
 
 - branch: `skill-design-c1`; worktree: `/home/Uihyeop/agent_setting-wt/skill-design-c1`.
-- invocation closure follow-up: branch `skill-invocation-contract`; worktree `/home/Uihyeop/agent_setting-wt/skill-invocation-contract`.
+- invocation closure follow-up: branch `skill-invocation-contract`; implementation commit `ca96e94`; worktree `/home/Uihyeop/agent_setting-wt/skill-invocation-contract`.
 - cluster commits: `9d1abb2`(autopilot-ship dedupe), `8078cd5`(C1 gate/profile), `770ac50`(SD-10 audit), `aa4945a`(state·handoff records). 본 post-commit 검증 기록은 후속 commit에 포함.
-- source 변경은 `9d1abb2`의 `adapters/claude/skills/autopilot-ship/SKILL.md`, `skills/autopilot-ship/SKILL.md` 두 파일뿐이다.
-- follow-up 브랜치는 검증 후 push하며, main self-merge와 worktree cleanup은 수행하지 않는다.
+- invocation closure는 core invocation 계약, registry/checker, g7 fixture/assert, sync 문서·Claude plugin projection, spec/plan 상태를 변경했다.
+- follow-up 브랜치는 `origin/skill-invocation-contract`에 push 완료. main self-merge와 worktree cleanup은 수행하지 않았다.
 
 ## 검증 명령·증거 경로
 
