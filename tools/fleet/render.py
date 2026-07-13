@@ -1176,9 +1176,13 @@ def _group_key_job(j, session_groups=None, job_groups=None):
         return session_groups[j.parent_sid]
     if getattr(j, "parent_cwd", None):
         return project_of(j.parent_cwd)
-    # Loop/drill temp repos are throwaway execution roots. Without a visible parent, keep
-    # them under the loop control plane instead of presenting /tmp/drill-* as a project.
+    # Drill is fixture-rooted: keep its runner + depth-1 owner + depth-2 workers
+    # together in one /tmp/drill-* card. Other scheduled loops stay in the shared
+    # control-plane group.
     if j.key in _LOOPS_KEYS:
+        drill_group = project_of(j.cwd)
+        if j.key == "drill" and drill_group.startswith("drill:"):
+            return drill_group
         return "loops"
     return project_of(j.cwd)
 

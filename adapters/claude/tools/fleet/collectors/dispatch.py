@@ -53,11 +53,14 @@ def _drill_case_from_slug(slug):
 
 def _drill_case_from_cwd(cwd):
     """cwd 경로 컴포넌트 중 '/tmp/drill-<case>-<rand>' 의 case (없으면 None)."""
+    if not (cwd or "").startswith("/tmp/"):
+        return None
     for comp in (cwd or "").split("/"):
         if comp.startswith("drill-"):
             m = _DRILL_CWD_COMP_RE.match(comp)
             if m:
-                return m.group(1)
+                case = m.group(1)
+                return case[len("growing_"):] if case.startswith("growing_") else case
     return None
 
 
@@ -885,6 +888,7 @@ def _reconcile_drill_rows(jobs):
     """
     # registry drill rows: source=jobs & slug 이 drill 패턴 & cwd 가 /tmp/drill-<case>-
     reg_by_case = {}
+    reg_by_runner_pid = {}
     for r in jobs:
         if r.source != "jobs":
             continue
@@ -894,6 +898,9 @@ def _reconcile_drill_rows(jobs):
         if _drill_case_from_cwd(r.cwd) != case:      # cwd 상관 가드 (/tmp/drill-<case>- 확인)
             continue
         reg_by_case.setdefault(case, r)              # 첫 registry row 정본
+        pid_match = re.search(r"-(\d+)$", r.slug or "")
+        if pid_match:
+            reg_by_runner_pid.setdefault(int(pid_match.group(1)), r)
     if not reg_by_case:
         return jobs
     drop = set()
@@ -902,6 +909,11 @@ def _reconcile_drill_rows(jobs):
             continue
         case = _drill_case_from_cwd(p.cwd) or p.worker_role or (p.slug if p.slug != "drill" else None)
         r = reg_by_case.get(case)
+        if r is None and p.pid is not None:
+            # run.sh itself runs from the harness worktree, not the fixture cwd,
+            # so it may have no case signal. Registry slugs end in run.sh's $$;
+            # use that exact PID to collapse the proc/control row deterministically.
+            r = reg_by_runner_pid.get(p.pid)
         if r is None:
             continue
         # registry 정본에 proc 의 liveness/pid 흡수

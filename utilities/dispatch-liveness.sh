@@ -14,7 +14,7 @@
 set -uo pipefail
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/agent-home.sh")}"
-JOBS="${1:-$AGENT_HOME/.dispatch/jobs.log}"
+JOBS="${1:-${AGENT_DISPATCH_JOBS:-$AGENT_HOME/.dispatch/jobs.log}}"
 STALE_MIN="${DISPATCH_STALE_MIN:-15}"   # transcript 가 N분+ 멈췄으면 hang/death 의심
 # runtime-root(harness-layer-sync §4.1 · HLS-6): 런타임이 세션 transcript/state 를 쓰는 곳은
 # AGENT_HOME(하네스 소스 repo)이 아니다. Claude 세션 transcript 는 ~/.claude/projects/ 에 있어

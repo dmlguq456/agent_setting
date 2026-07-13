@@ -40,6 +40,18 @@ if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '열린 자식 없음'; then
   ok "no open children for parent → exit 0"
 else bad "done-only children expected 0 got $rc [$out]"; fi
 
+# --- Case 0b2: --jobs 생략 시 shared registry env를 사용 ---
+out=$(AGENT_HOME="$agent_home" AGENT_DISPATCH_JOBS="$jobs" sh "$WAIT" --parent conf 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '열린 자식 없음'; then
+  ok "AGENT_DISPATCH_JOBS selects the shared registry when --jobs is omitted"
+else bad "shared registry done-only children expected 0 got $rc [$out]"; fi
+
+# --- Case 0b2: --jobs 생략 시 shared registry env를 사용 ---
+out=$(AGENT_HOME="$agent_home" AGENT_DISPATCH_JOBS="$jobs" sh "$WAIT" --parent conf 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '열린 자식 없음'; then
+  ok "AGENT_DISPATCH_JOBS selects the shared registry when --jobs is omitted"
+else bad "shared registry done-only children expected 0 got $rc [$out]"; fi
+
 # --- Case 0c: open 자식이 있으나 parent 불일치 → exit 0 (내 자식 아님) ---
 : > "$jobs"
 mk_transcript "$tmp/wt/other"

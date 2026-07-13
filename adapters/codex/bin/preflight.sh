@@ -483,7 +483,7 @@ EOF
     printf 'check=ok\nworktree=%s\n' "$worktree"
     ;;
   liveness)
-    jobs=${2:-"$AGENT_ROOT/.dispatch/jobs.log"}
+    jobs=${2:-${AGENT_DISPATCH_JOBS:-"$AGENT_ROOT/.dispatch/jobs.log"}}
     AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$jobs"
     ;;
   harvest)

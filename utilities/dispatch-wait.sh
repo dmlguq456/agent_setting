@@ -39,7 +39,7 @@ while [ $# -gt 0 ]; do
     *) echo "dispatch-wait: unknown arg '$1'" >&2; exit 64 ;;
   esac
 done
-[ -n "$JOBS" ] || JOBS="$AGENT_HOME/.dispatch/jobs.log"
+[ -n "$JOBS" ] || JOBS="${AGENT_DISPATCH_JOBS:-$AGENT_HOME/.dispatch/jobs.log}"
 # 상한 클램프: 단일 Bash timeout 안에 끝나도록.
 [ "$MAX" -gt 600 ] 2>/dev/null && MAX=600
 [ "$INTERVAL" -ge 1 ] 2>/dev/null || INTERVAL=20

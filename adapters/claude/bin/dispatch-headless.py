@@ -506,16 +506,11 @@ def main(argv: list[str]) -> int:
         return fail("claude-command-unavailable", 69, worktree=args.worktree)
 
     agent_home = resolve_agent_home()
-    # Claude and codex share one AGENT_HOME (typically ~/.claude) and therefore
-    # the same `.dispatch/jobs.log` registry and `.dispatch/homes/` root
-    # whenever AGENT_HOME resolves there. This is a *shared* registry, not two
-    # independent ones: it is what lets codex's harness-agnostic
-    # dispatch-harvest.py reclaim claude profile instance homes too (cleanup
-    # keys off `profile=` in the pipe, not the harness). codex may still pass
-    # `--jobs` to point at a repo-relative registry for non-profile runs, but
-    # profile dispatch presumes this shared ~/.claude registry so harvest can
-    # see every row.
-    jobs = Path(args.jobs) if args.jobs else agent_home / ".dispatch" / "jobs.log"
+    # All harnesses may share one registry through AGENT_DISPATCH_JOBS. An
+    # explicit --jobs remains highest priority; otherwise the adapter-local
+    # AGENT_HOME registry is the compatibility fallback.
+    jobs_override = args.jobs or os.environ.get("AGENT_DISPATCH_JOBS")
+    jobs = Path(jobs_override) if jobs_override else agent_home / ".dispatch" / "jobs.log"
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     home_root = agent_home / ".dispatch" / "homes"
     instance_dir = home_root / f"{args.slug}.{args.profile}" if args.profile else None

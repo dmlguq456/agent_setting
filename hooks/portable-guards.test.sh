@@ -664,6 +664,51 @@ if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-custom-model 
 else
   bad "codex dispatch wrapper should support explicit model/reasoning overrides"
 fi
+if CODEX_DISPATCH_SANDBOX=danger-full-access \
+  "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-env-sandbox --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low --jobs "$TMP/codex-env-sandbox.log" >/tmp/codex_env_sandbox.out 2>/tmp/codex_env_sandbox.err \
+  && grep -q -- '--sandbox danger-full-access' /tmp/codex_env_sandbox.out \
+  && [ ! -e "$TMP/codex-env-sandbox.log" ]; then
+  ok "codex dispatch wrapper inherits an explicit sandbox environment override"
+else
+  bad "codex dispatch wrapper should inherit an explicit sandbox environment override"
+fi
+if CODEX_DISPATCH_SANDBOX=workspace-write CODEX_DISPATCH_SANDBOX_FORCE=danger-full-access \
+  "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-forced-sandbox --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low --sandbox workspace-write --jobs "$TMP/codex-forced-sandbox.log" >/tmp/codex_forced_sandbox.out 2>/tmp/codex_forced_sandbox.err \
+  && grep -q -- '--sandbox danger-full-access' /tmp/codex_forced_sandbox.out \
+  && [ ! -e "$TMP/codex-forced-sandbox.log" ]; then
+  ok "codex dispatch wrapper preserves a forced nested sandbox invariant"
+else
+  bad "codex dispatch wrapper should preserve a forced nested sandbox invariant"
+fi
+if CODEX_THREAD_ID=codex-current-thread CODEX_DISPATCH_PARENT_CURRENT_FORCE=1 \
+  "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-current-parent --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low --depth 1 --parent invented-parent --parent-session-id invented-session --jobs "$TMP/codex-current-parent.log" --log-dir "$TMP/current-parent-logs" >/tmp/codex_current_parent.out 2>/tmp/codex_current_parent.err \
+  && grep -q '^parent_session_id=codex-current-thread$' /tmp/codex_current_parent.out \
+  && grep -q -- '- parent: -' "$TMP/current-parent-logs/codex-current-parent.codex.prompt.txt" \
+  && grep -q -- '- parent_session_id: codex-current-thread' "$TMP/current-parent-logs/codex-current-parent.codex.prompt.txt" \
+  && grep -q 'parent_sid=codex-current-thread' "$TMP/codex-current-parent.log" \
+  && ! grep -q 'parent=invented-parent' "$TMP/codex-current-parent.log"; then
+  ok "codex drill dispatch ancestry follows the current runtime thread"
+else
+  bad "codex drill dispatch ancestry should follow the current runtime thread"
+fi
+if AGENT_DISPATCH_JOBS="$TMP/codex-env-jobs.log" \
+  "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-env-jobs --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low >/tmp/codex_env_jobs.out 2>/tmp/codex_env_jobs.err \
+  && grep -q "codex-env-jobs" "$TMP/codex-env-jobs.log" \
+  && grep -q "^job_registry=$TMP/codex-env-jobs.log$" /tmp/codex_env_jobs.out; then
+  ok "codex dispatch wrapper keeps nested jobs in the selected shared registry"
+else
+  bad "codex dispatch wrapper should keep nested jobs in the selected shared registry"
+fi
+if AGENT_DISPATCH_JOBS="$TMP/codex-env-jobs.log" \
+  "$CODEX" harvest --slug codex-env-jobs --mark-done >/tmp/codex_env_harvest.out 2>/tmp/codex_env_harvest.err \
+  && grep -q "^job_registry=$TMP/codex-env-jobs.log$" /tmp/codex_env_harvest.out \
+  && grep -q '^marked_done=1$' /tmp/codex_env_harvest.out \
+  && AGENT_DISPATCH_JOBS="$TMP/codex-env-jobs.log" "$CODEX" liveness >/tmp/codex_env_liveness.out 2>/tmp/codex_env_liveness.err \
+  && grep -q '^open 0 ; alive 0 ; suspect/dead 0$' /tmp/codex_env_liveness.out; then
+  ok "codex harvest and liveness keep using the selected shared registry"
+else
+  bad "codex harvest and liveness should keep using the selected shared registry"
+fi
 if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-inherit-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --inherit-model-settings --jobs "$TMP/codex-inherit-model.log" >/tmp/codex_inherit_model.out 2>/tmp/codex_inherit_model.err \
   && grep -q '^model_source=inherit$' /tmp/codex_inherit_model.out \
   && grep -q '^model_role=inherit$' /tmp/codex_inherit_model.out \
@@ -755,8 +800,11 @@ if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_S
   "$CODEX" dispatch --start --worktree "$TMP/repo" --slug nested/codex-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "nested work" --model gpt-test --reasoning low --jobs "$TMP/codex-start.log" --log-dir "$TMP/codex-logs" >/tmp/codex_dispatch_start.out 2>/tmp/codex_dispatch_start.err \
   && grep -q '^status=start$' /tmp/codex_dispatch_start.out \
   && grep -q '^started=1$' /tmp/codex_dispatch_start.out \
+  && [ "$(readlink "$TMP/repo/.dispatch/codex-home")" = "$TMP/codex_headless_home" ] \
+  && grep -Fxq "runtime_home_projection=$TMP/repo/.dispatch/codex-home" /tmp/codex_dispatch_start.out \
   && [ -f "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" ] \
-  && grep -q 'Read adapters/codex/AGENTS.md first' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'Read \$AGENT_HOME/adapters/codex/AGENTS.md first' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'Run \$AGENT_HOME/adapters/codex/bin/preflight.sh status' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'preflight.sh status . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'preflight.sh prompt-signal . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'preflight.sh mode . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
@@ -885,6 +933,14 @@ if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree
 else
   bad "claude dispatch wrapper should inherit model settings only on request"
 fi
+if AGENT_DISPATCH_JOBS="$TMP/claude-env-jobs.log" \
+  python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --worktree "$TMP/repo" --slug claude-env-jobs --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --inherit-model-settings >/tmp/claude_env_jobs.out 2>/tmp/claude_env_jobs.err \
+  && grep -q "^job_registry=$TMP/claude-env-jobs.log$" /tmp/claude_env_jobs.out \
+  && grep -q $'open\t.*/repo\t.*/repo\tclaude-env-jobs\t' "$TMP/claude-env-jobs.log"; then
+  ok "claude dispatch wrapper uses the selected shared registry"
+else
+  bad "claude dispatch wrapper should use the selected shared registry"
+fi
 if CODEX_THREAD_ID=codex-parent python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --worktree "$TMP/repo" --slug claude-owned --capability sync-skills --mode ops/verification --qa standard --intensity thorough --depth 1 --worker-role verifier --owner sync-skills --model-role "fast reviewer" --prompt-text "verify" --jobs "$TMP/claude-owned.log" --log-dir "$TMP/claude-owned-logs" >/tmp/claude_owned.out 2>/tmp/claude_owned.err \
   && grep -q '^intensity=thorough$' /tmp/claude_owned.out \
   && grep -q '^depth=1$' /tmp/claude_owned.out \
@@ -945,34 +1001,34 @@ sh_enc=$(printf '%s' "$sh_wt" | sed 's#[/._]#-#g')
 mkdir -p "$AGENT_HOME/projects/$sh_enc"
 printf '2026-07-01T00:00:00Z\topen\t%s\t%s\tsh-live\t-\n' "$TMP/repo" "$sh_wt" > "$TMP/sh-liveness-jobs.log"
 touch "$AGENT_HOME/projects/$sh_enc/s.jsonl"
-if "$ROOT/utilities/dispatch-liveness.sh" "$TMP/sh-liveness-jobs.log" >/tmp/sh_liveness_alive.out 2>/tmp/sh_liveness_alive.err \
+if DISPATCH_RUNTIME_ROOT="$AGENT_HOME" "$ROOT/utilities/dispatch-liveness.sh" "$TMP/sh-liveness-jobs.log" >/tmp/sh_liveness_alive.out 2>/tmp/sh_liveness_alive.err \
   && grep -q '^ALIVE      sh-live  ' /tmp/sh_liveness_alive.out \
-  && grep -q '^— open 1 · alive 1 · suspect/dead 0$' /tmp/sh_liveness_alive.out; then
+  && grep -q '^— open 1 · alive 1 · suspect/dead/exited 0$' /tmp/sh_liveness_alive.out; then
   ok "dispatch-liveness.sh reports fresh transcript ALIVE"
 else
   bad "dispatch-liveness.sh should report fresh transcript ALIVE"
 fi
 touch -d '20 minutes ago' "$AGENT_HOME/projects/$sh_enc/s.jsonl"
-if "$ROOT/utilities/dispatch-liveness.sh" "$TMP/sh-liveness-jobs.log" >/tmp/sh_liveness_suspect.out 2>/tmp/sh_liveness_suspect.err; then
+if DISPATCH_RUNTIME_ROOT="$AGENT_HOME" "$ROOT/utilities/dispatch-liveness.sh" "$TMP/sh-liveness-jobs.log" >/tmp/sh_liveness_suspect.out 2>/tmp/sh_liveness_suspect.err; then
   bad "dispatch-liveness.sh should exit non-zero when transcript goes SUSPECT"
 else
   rc=$?
   if [ "$rc" -eq 3 ] \
     && grep -q 'SUSPECT  sh-live  ' /tmp/sh_liveness_suspect.out \
-    && grep -q '^— open 1 · alive 0 · suspect/dead 1$' /tmp/sh_liveness_suspect.out; then
+    && grep -q '^— open 1 · alive 0 · suspect/dead/exited 1$' /tmp/sh_liveness_suspect.out; then
     ok "dispatch-liveness.sh reports stale transcript SUSPECT"
   else
     bad "dispatch-liveness.sh should report stale transcript SUSPECT"
   fi
 fi
 rm -f "$AGENT_HOME/projects/$sh_enc/s.jsonl"
-if "$ROOT/utilities/dispatch-liveness.sh" "$TMP/sh-liveness-jobs.log" >/tmp/sh_liveness_dead.out 2>/tmp/sh_liveness_dead.err; then
+if DISPATCH_RUNTIME_ROOT="$AGENT_HOME" "$ROOT/utilities/dispatch-liveness.sh" "$TMP/sh-liveness-jobs.log" >/tmp/sh_liveness_dead.out 2>/tmp/sh_liveness_dead.err; then
   bad "dispatch-liveness.sh should exit non-zero when transcript is missing"
 else
   rc=$?
   if [ "$rc" -eq 3 ] \
     && grep -q 'DEAD     sh-live  ' /tmp/sh_liveness_dead.out \
-    && grep -q '^— open 1 · alive 0 · suspect/dead 1$' /tmp/sh_liveness_dead.out; then
+    && grep -q '^— open 1 · alive 0 · suspect/dead/exited 1$' /tmp/sh_liveness_dead.out; then
     ok "dispatch-liveness.sh reports missing transcript DEAD"
   else
     bad "dispatch-liveness.sh should report missing transcript DEAD"
@@ -1025,7 +1081,7 @@ parity_sh_enc=$(printf '%s' "$parity_sh_wt" | sed 's#[/._]#-#g')
 mkdir -p "$AGENT_HOME/projects/$parity_sh_enc"
 printf '2026-07-01T00:00:00Z\topen\t%s\t%s\tparity-sh\t-\n' "$TMP/repo" "$parity_sh_wt" > "$TMP/parity-sh-jobs.log"
 touch -d '10 minutes ago' "$AGENT_HOME/projects/$parity_sh_enc/s.jsonl"
-if "$ROOT/utilities/dispatch-liveness.sh" "$TMP/parity-sh-jobs.log" >/tmp/parity_sh_10m.out 2>/tmp/parity_sh_10m.err \
+if DISPATCH_RUNTIME_ROOT="$AGENT_HOME" "$ROOT/utilities/dispatch-liveness.sh" "$TMP/parity-sh-jobs.log" >/tmp/parity_sh_10m.out 2>/tmp/parity_sh_10m.err \
   && grep -q '^ALIVE      parity-sh ' /tmp/parity_sh_10m.out; then
   ok "dispatch-liveness.sh: ~10m transcript is ALIVE under default STALE_MIN=15"
 else
@@ -1045,7 +1101,7 @@ else
 fi
 
 touch -d '20 minutes ago' "$AGENT_HOME/projects/$parity_sh_enc/s.jsonl"
-if "$ROOT/utilities/dispatch-liveness.sh" "$TMP/parity-sh-jobs.log" >/tmp/parity_sh_20m.out 2>/tmp/parity_sh_20m.err; then
+if DISPATCH_RUNTIME_ROOT="$AGENT_HOME" "$ROOT/utilities/dispatch-liveness.sh" "$TMP/parity-sh-jobs.log" >/tmp/parity_sh_20m.out 2>/tmp/parity_sh_20m.err; then
   bad "dispatch-liveness.sh should exit non-zero for a ~20m transcript under default STALE_MIN=15"
 else
   rc=$?
@@ -1325,7 +1381,8 @@ if "$CODEX" capability-info code-test >/tmp/cap_code_test.out 2>/tmp/cap_code_te
   && grep -q '^tool_contract=verification-runner$' /tmp/cap_code_test.out \
   && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh verification-runner --check -- <command>$' /tmp/cap_code_test.out \
   && grep -q '^runtime_surface=adapter-owned-verification-runner$' /tmp/cap_code_test.out \
-  && grep -q '^artifact_contract=plans/<date>_<slug>:test_logs/,pipeline_summary.md$' /tmp/cap_code_test.out \
+  && grep -q '^artifact_contract=plans/<date>_<slug>:test_logs/,_internal/test_reviews/;handoff=code-report$' /tmp/cap_code_test.out \
+  && grep -Fq '`code-report` alone updates `pipeline_summary.md`' "$ROOT/capabilities/code-test.md" \
   && grep -q '^role_contract=verification=qa-team,review=qa-team$' /tmp/cap_code_test.out \
   && grep -q 'graduated verification' "$ROOT/adapters/codex/skills/code-test/SKILL.md" \
   && grep -q 'verification-runner' "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/code-test/SKILL.md"; then
@@ -2776,6 +2833,16 @@ if AGENT_HOME="$TMP/not-agent-home" python3 "$ROOT/adapters/opencode/bin/dispatc
 else
   bad "opencode dispatch script should validate AGENT_HOME"
 fi
+if AGENT_DISPATCH_JOBS="$TMP/opencode-env-jobs.log" \
+  "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-env-jobs --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model provider/test --variant low >/tmp/opencode_env_jobs.out 2>/tmp/opencode_env_jobs.err \
+  && grep -q "^job_registry=$TMP/opencode-env-jobs.log$" /tmp/opencode_env_jobs.out \
+  && AGENT_DISPATCH_JOBS="$TMP/opencode-env-jobs.log" "$OPENCODE" harvest --slug opencode-env-jobs --mark-done >/tmp/opencode_env_harvest.out 2>/tmp/opencode_env_harvest.err \
+  && grep -q "^job_registry=$TMP/opencode-env-jobs.log$" /tmp/opencode_env_harvest.out \
+  && grep -q '^marked_done=1$' /tmp/opencode_env_harvest.out; then
+  ok "opencode dispatch and harvest use the selected shared registry"
+else
+  bad "opencode dispatch and harvest should use the selected shared registry"
+fi
 if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-quick-depth1 --capability autopilot-code --mode dev/backend --intensity quick --depth 1 --parent-session-id test-parent --owner-harness opencode --prompt-text "quick work" --model provider/test --variant low --jobs "$TMP/opencode-quick-depth1.log" >/tmp/opencode_quick_depth1.out 2>/tmp/opencode_quick_depth1.err   && grep -q '^status=register$' /tmp/opencode_quick_depth1.out   && grep -q '^registered=1$' /tmp/opencode_quick_depth1.out   && grep -q '^depth=1$' /tmp/opencode_quick_depth1.out   && grep -q '^intensity=quick$' /tmp/opencode_quick_depth1.out   && grep -q $'open	.*/repo	.*/repo	opencode-quick-depth1	capability=autopilot-code,mode=dev/backend,qa=quick,intensity=quick,depth=1,harness=opencode,parent_sid=test-parent,owner_harness=opencode,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-quick-depth1.log"; then
   ok "opencode dispatch wrapper accepts quick depth-1 one-shot jobs"
 else
@@ -2937,7 +3004,7 @@ else
   bad "opencode role wrapper should map fast portable role"
 fi
 if AGENT_MODEL_ORCHESTRATOR=provider/orchestrator-model AGENT_VARIANT_ORCHESTRATOR=medium "$OPENCODE" role external adversary orchestrator >/tmp/opencode_role.out 2>/tmp/opencode_role.err \
-  && grep -q '^family=orchestrator$' /tmp/opencode_role.out \
+  && grep -q '^family=balanced$' /tmp/opencode_role.out \
   && grep -q '^adapter=opencode$' /tmp/opencode_role.out \
   && grep -q '^model=provider/orchestrator-model$' /tmp/opencode_role.out \
   && grep -q '^variant=medium$' /tmp/opencode_role.out \

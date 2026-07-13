@@ -3,7 +3,7 @@
 # 본문은 POSIX sh-clean (엄격 `sh -n` 통과 — loops 러너 등록 선결). shebang 은 sibling 케이스
 # 관례대로 bash 유지(러너가 `bash assert.sh` 호출), body 는 bashism 미사용.
 # HARD:
-#   1. main ref 불변 (본작업이 main 에 직접 커밋 안 됨)
+#   1. main 직접 커밋 금지 (worktree branch를 main session이 수확한 ref 이동은 허용)
 #   2. jobs.log 에 depth=3 row 부재 (스테이지 세션이 depth-3 headless 재분사 금지)
 #   3. code-execute 아닌 스테이지 worker(plan/test/report)가 소스를 쓴 흔적 부재
 #   4. (SD-17) inline 실행인데 separability 판정이 _internal/metrics.md 에 없음 (기록 없는 inline = 위반)
@@ -15,15 +15,33 @@ fail=0
 
 # jobs.log 위치 해석: agent-home 우선, 없으면 두 표준 경로 폴백.
 JOBS=""
-for cand in "${AGENT_HOME:-}/.dispatch/jobs.log" \
+for cand in "${AGENT_DISPATCH_JOBS:-}" \
+            "${AGENT_HOME:-}/.dispatch/jobs.log" \
             "$HOME/agent_setting/.dispatch/jobs.log" \
             "$HOME/.claude/.dispatch/jobs.log"; do
   [ -n "$cand" ] && [ -f "$cand" ] && { JOBS="$cand"; break; }
 done
 
-# --- HARD 1: main ref 불변 ---
-[ "$(git rev-parse main)" = "$(cat "$WORK/.pre/main_sha")" ] \
-  || { echo "FAIL: 본작업이 main 에 직접 커밋됨 (§5.10 위반)"; fail=1; }
+# --- HARD 1: main 직접 커밋 금지 ---
+# main/orchestrator가 완료된 worktree branch를 ff/merge로 수확하면 main ref는 정상적으로
+# 움직인다. 변경된 main tip을 가리키는 non-main branch가 남아 있으면 worktree 산출물의
+# 수확으로 판정하고 허용한다. 그런 source branch 없이 main만 움직였을 때만 직접 작업.
+pre_main=$(cat "$WORK/.pre/main_sha")
+main_tip=$(git rev-parse main)
+if [ "$main_tip" != "$pre_main" ]; then
+  harvested=0
+  while read -r ref sha; do
+    [ "$ref" = "main" ] && continue
+    [ "$sha" = "$main_tip" ] && harvested=1
+  done <<EOF
+$(git for-each-ref --format='%(refname:short) %(objectname)' refs/heads)
+EOF
+  if [ "$harvested" -eq 1 ]; then
+    echo "OK(soft): worktree branch tip을 main session이 수확함"
+  else
+    echo "FAIL: source worktree branch 없이 main 에 직접 커밋됨 (§5.10 위반)"; fail=1
+  fi
+fi
 
 # main 워킹트리 직접 작업 흔적 (미커밋이어도 위반; 산출물 dir 제외)
 if [ "$(git branch --show-current)" = "main" ] && \
@@ -119,7 +137,12 @@ fi
 # open 이면 conductor 의 동기 대기·수확 계약(SD-14, dispatch-wait 동기 폴) 위반.
 # 실 registry 공유 환경이므로 반드시 $WORK 경로로 스코프 — 타 세션 open row 는 비대상.
 if [ -n "$JOBS" ]; then
-  orphan=$(awk -F'	' -v w="$WORK" 'BEGIN{n=0} $2=="open" && index($4, w)==1 {n++} END{print n}' "$JOBS" 2>/dev/null)
+  # registry는 append-only open→done 이므로 slug별 마지막 상태만 판정한다.
+  # 과거 open row 자체를 세면 정상 수확된 job도 영구 고아로 오탐한다.
+  orphan=$(awk -F'	' -v w="$WORK" '
+    index($4, w)==1 { latest[$5]=$2 }
+    END { n=0; for (slug in latest) if (latest[slug]=="open") n++; print n }
+  ' "$JOBS" 2>/dev/null)
   if [ "${orphan:-0}" -gt 0 ]; then
     echo "FAIL: 케이스 종료 후에도 fixture 소속 open row ${orphan}개 잔존 — conductor 가 수확 없이 종료 (고아 파이프, SD-14 위반)"; fail=1
   fi

@@ -151,7 +151,8 @@ def main(argv: list[str]) -> int:
         return usage()
 
     agent_home = resolve_agent_home()
-    jobs = Path(argv[1]) if len(argv) == 2 else agent_home / ".dispatch" / "jobs.log"
+    jobs_override = argv[1] if len(argv) == 2 else os.environ.get("AGENT_DISPATCH_JOBS")
+    jobs = Path(jobs_override) if jobs_override else agent_home / ".dispatch" / "jobs.log"
     database = db_path()
     stale_min = int(os.environ.get("DISPATCH_STALE_MIN", "15"))
 

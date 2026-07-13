@@ -31,18 +31,20 @@ Adapters may expose this capability through native commands, skill files, prompt
 
 Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not.
 
-When invoked from an `autopilot-code` work cycle, write verification evidence
-under `<artifact-root>/plans/<date>_<slug>/test_logs/` and update
-`pipeline_summary.md` with the final verdict. Standalone invocations should
-create or reuse an appropriate `plans/<date>_<slug>/` work-cycle directory
-before writing durable logs.
+When invoked from a `standard+` `autopilot-code` stage cycle, write verification
+evidence only under `<artifact-root>/plans/<date>_<slug>/test_logs/` and
+`_internal/test_reviews/`. Return the final verdict to `code-report`, which owns
+`pipeline_summary.md`; the `code-test` stage must not write that report-owned
+artifact. Standalone invocations should create or reuse an appropriate
+`plans/<date>_<slug>/` work-cycle directory and may update their own standalone
+summary when no `code-report` stage exists.
 
 Required evidence:
 
 - test target resolution: plan path, changed-file list, or inferred scope;
 - command log or explicit skip/block reason for each attempted level;
 - failing level and first actionable error when verification fails;
-- final one-line verdict suitable for `code-report` and `pipeline_summary.md`.
+- final one-line verdict suitable for handoff to `code-report`.
 
 ## Role Requirements
 
@@ -91,8 +93,10 @@ Additional test-entry gates:
 3. Run each applicable level in order and stop on the first failure.
 4. Record commands, outputs or excerpts, skips, blockers, and the first
    actionable failure in `test_logs/`.
-5. Update `pipeline_summary.md` or the standalone work-cycle summary with the
-   final verdict.
+5. Emit the final verdict as a handoff to `code-report`; in a `standard+` stage
+   cycle, `code-report` alone updates `pipeline_summary.md`. When no
+   `code-report` stage exists, a standalone invocation may update its own
+   standalone work-cycle summary.
 6. Return a concise report path plus verdict to the caller.
 
 ## Tool Contract Mapping

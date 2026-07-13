@@ -1,6 +1,6 @@
 # Drill — 지침 회귀 테스트 (메타 루프 · 업계 용어: golden set)
 
-지침(runtime adapter bootstrap·core conventions·SKILL·hooks)을 고친 뒤, 핵심 행동이 깨지지 않았는지 headless 로 검증한다. 코드의 테스트 스위트를 _지침에_ 적용한 것. 현재 실행 구현은 Claude Code adapter 의 `claude -p` 를 사용한다.
+지침(runtime adapter bootstrap·core conventions·SKILL·hooks)을 고친 뒤, 핵심 행동이 깨지지 않았는지 headless 로 검증한다. 코드의 테스트 스위트를 _지침에_ 적용한 것. case는 공유하고 `DRILL_ADAPTER=claude|codex|opencode` 또는 `--adapter`로 runner만 선택한다.
 
 > **검증 3층 (용어 구분)**: **drill** = _에이전트 행동_ 회귀(이 문서 — golden set, 에이전트 in-loop). _결정론_ 검증은 **conformance**(`hooks/portable-guards.test.sh`·`tools/check-adaptation-boundary.sh` — 에이전트 X, 정확 assert), _결정론 강제_ 는 **guard**(hook script). 삼분 정의 = `core/HOOKS.md` §Verification Layers. hook 출력 shape 처럼 _결정론화 가능한_ 것은 drill 이 아니라 conformance 로 잡는다 (§0.5 결정론-우선).
 
@@ -12,10 +12,13 @@
 <agent-home>/loops/drill/run.sh --axis spec  # 축만 (git/spec/memory/routing/artifact/meta)
 <agent-home>/loops/drill/run.sh --sample 3   # 랜덤 3개 (주기 점검 — 전수 대신 표본)
 <agent-home>/loops/drill/run.sh --axis git --list   # 선별만 출력 (dry-run, 실행 X)
+DRILL_ADAPTER=codex <agent-home>/loops/drill/run.sh g0_overhead  # 같은 case를 Codex runner로 실행
 RUN_JUDGE=1 <agent-home>/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 ```
 
 > **매번 전수 X** — 지침 변경 축만 `--axis`, cron(당직/연수)은 `--sample` 표본, 사람 전수는 인자 0. full ceremony 케이스(artifact 축 등)가 비싸니 선별.
+
+> **Fleet 표시 기준** — 각 case는 `/tmp/drill-<case>-*/repo`를 단일 그룹 root로 쓴다. `AGENT_DISPATCH_JOBS`가 지정되면 runner·owner·stage/child의 등록·감시·수확이 모두 그 한 registry를 사용한다. runner row는 실행을 시작한 agent_setting/main 세션의 `parent_sid`·`parent_cwd`를 암묵 상속하지 않는다. case 내부 capability owner는 depth 1, 그 owner가 연 stage/review worker는 depth 2로 표시한다.
 
 - 돌리는 시점: **`<agent-home>` 지침 커밋 후** (매일밤 X — 변경 있을 때만).
 - 모델: 사용자 default (pin 안 함 — 실사용 모델로 검증).
@@ -59,7 +62,7 @@ RUN_JUDGE=1 <agent-home>/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 | r_route_track_paper | "camera-ready" → 문서 트랙(draft paper) 라우팅 (README 부르는법) [routing] | 없음 (soft — result 트랙 언급; hard 는 tool-log 파싱 선결) |
 | a_core_first_adapter_edit | 어댑터 파일 직접 수정 요청 → core 계약부터 읽고 올리는가 (loop engineering 제1원칙, 2026-07-03) [meta] | core read marker 없는 `adapters/**` 편집 0 |
 | g9_cross_harness_depth2_dispatch | cross-harness depth-2 registry 모델링이 fleet parent/child 구조로 파싱되는가 (§5.10 depth contract) [meta] | jobs.log 6필드 + depth1 owner + claude/opencode depth2 children + parent_sid/parent_cwd |
-| g10_claude_opencode_depth2_start | Claude Code depth-1 owner가 OpenCode depth-2 worker를 wrapper `--start`로 실제 구동하는가 [meta] | Claude owner row + OpenCode child row + child JSON log marker + fleet parent/child parse |
+| g10_claude_opencode_depth2_start | 선택된 drill adapter의 depth-1 owner가 OpenCode depth-2 worker를 wrapper `--start`로 실제 구동하는가(legacy id) [meta] | selected-adapter owner row + OpenCode child row + child JSON log marker + fleet parent/child parse |
 
 ## frozen / growing 이분 (2026-06-11, Braintrust eval 패턴 — 고정셋 오염 방지)
 
