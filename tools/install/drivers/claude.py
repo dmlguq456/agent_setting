@@ -38,6 +38,28 @@ _MARKETPLACE_NAME = "agent-harness"
 _PLUGIN_SPEC = f"agent-harness-claude@{_MARKETPLACE_NAME}"
 
 
+def _dev_channel_active(scope="global"):
+    """dev 채널(symlink projection)이 이미 걸려 있는지 판정 (PRD §0.5 원칙 1 — 2-채널 병존).
+
+    `<runtime_home>/CLAUDE.md` 가 `paths.agent_home()` 안쪽을 가리키는 symlink 이면 dev
+    채널 활성으로 본다. install()/status()/checks() 가 공유하는 단일 판정 지점 — plugin
+    미등록을 dev 채널 정상 상태와 진짜 미설치 drift 로 구분하는 데 쓴다.
+    """
+    claude_md = paths.runtime_home(RUNTIME, scope) / "CLAUDE.md"
+    if not claude_md.is_symlink():
+        return False
+    try:
+        resolved = claude_md.resolve()
+        home = paths.agent_home().resolve()
+    except (OSError, RuntimeError):
+        return False
+    try:
+        resolved.relative_to(home)
+        return True
+    except ValueError:
+        return False
+
+
 def _plugin_action(dry_run):
     """Phase 2 Step 2.1 — `claude plugin marketplace add`/`plugin install` wrapping.
 
@@ -360,6 +382,11 @@ def checks(scope="global"):
     # verify; queries `claude plugin marketplace list --json` / `claude plugin
     # list --json` (verified live via --help: both support --json, unlike the
     # mutating `marketplace add`/`install` commands — see dev_logs/step_01).
+    # 채널-인지 (2026-07-13 fix): marketplace 미등록은 plugin 채널을 아예 안 쓰는
+    # dev-only 머신에서 **정상 상태** (PRD §0.5 원칙 1 — 2-채널은 대체가 아니라 병존).
+    # dev 채널(symlink projection) 활성 && marketplace 미등록 = SKIP(ok=True, parity-loss
+    # warning 명시, PRD §"parity-loss warning" — silent drop 금지). marketplace 는
+    # 등록됐는데 plugin 미설치인 경우는 여전히 진짜 실패로 ✗ 유지.
     def _plugin_registered():
         if shutil.which("claude") is None:
             return {
@@ -391,6 +418,12 @@ def checks(scope="global"):
             return {"id": "claude.plugin-registered", "ok": False, "detail": f"marketplace list JSON 파싱 실패: {mp_result.stdout[:300]!r}"}
         marketplace_present = any(m.get("name") == _MARKETPLACE_NAME for m in marketplaces)
         if not marketplace_present:
+            if _dev_channel_active(scope):
+                return {
+                    "id": "claude.plugin-registered",
+                    "ok": True,
+                    "detail": "SKIP: plugin 채널 미채택 (dev 채널 활성) — marketplace 'agent-harness' 미등록은 정상",
+                }
             return {
                 "id": "claude.plugin-registered",
                 "ok": False,
@@ -439,13 +472,21 @@ def status(scope="global"):
     """channel·version·drift 요약."""
     manifest_data = manifest._load_manifest(manifest._manifest_path("claude", scope))
     drift = manifest.check_drift(["claude"], scope=scope)
+    dev_channel_active = _dev_channel_active(scope)
 
     if manifest_data is None:
-        return {"channel": "dev", "version": "not-installed", "file_count": 0, "drift_count": len(drift)}
+        return {
+            "channel": "dev",
+            "version": "not-installed",
+            "file_count": 0,
+            "drift_count": len(drift),
+            "dev_channel_active": dev_channel_active,
+        }
 
     return {
         "channel": "dev",
         "version": manifest_data.get("version", "none"),
         "file_count": len(manifest_data.get("files", {})),
         "drift_count": len(drift),
+        "dev_channel_active": dev_channel_active,
     }
