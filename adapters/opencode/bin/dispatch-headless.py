@@ -457,7 +457,8 @@ def main(argv: list[str]) -> int:
             return rc
 
     agent_home = resolve_agent_home()
-    jobs = Path(args.jobs) if args.jobs else agent_home / ".dispatch" / "jobs.log"
+    jobs_override = args.jobs or os.environ.get("AGENT_DISPATCH_JOBS")
+    jobs = Path(jobs_override) if jobs_override else agent_home / ".dispatch" / "jobs.log"
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = prompt(args)
     prompt_path = log_dir / f"{args.slug}.opencode.prompt.txt"

@@ -600,7 +600,7 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
         self.assertNotIn("drill:g9", text)
         self.assertNotIn(" main", text)
 
-    def test_unparented_drill_temp_job_groups_under_loops(self):
+    def test_unparented_drill_temp_job_groups_under_fixture(self):
         job = DispatchJob(key="drill", slug="drill-g9", cwd="/tmp/drill-g9-abcd/repo",
                           harness="codex", mode="loop/drill", qa="quick", qa_source="jobslog",
                           liveness="working", worker_role="g9_cross_harness_depth2_dispatch")
@@ -608,8 +608,8 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
                                     layout="wide")
         text = "\n".join("".join(part for part, _key in line) for line in lines if line)
 
-        self.assertIn("loops/", text)
-        self.assertNotIn("drill:g9", text)
+        self.assertIn("drill:g9/", text)
+        self.assertNotIn("loops/", text)
 
 
     def test_dispatch_child_session_matching_jobs_log_cwd_is_hidden(self):

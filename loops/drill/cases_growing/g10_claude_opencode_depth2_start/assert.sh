@@ -1,5 +1,5 @@
 #!/bin/bash
-# hard: Claude depth-1 worker must start an OpenCode depth-2 worker through wrappers.
+# hard: selected-adapter depth-1 owner must start an OpenCode depth-2 worker through wrappers.
 set -u
 WORK=$1
 T=$2
@@ -11,7 +11,19 @@ JOBS="${AGENT_DISPATCH_JOBS:-$AGENT_HOME/.dispatch/jobs.log}"
 LOG_DIR="$AGENT_HOME/.dispatch/logs"
 SLUGS="$REPO/.dispatch/g10_slugs.env"
 WRAPPER_OUT="$REPO/dispatch_wrapper_output.txt"
+PARENT_ENV="$REPO/.dispatch/g10_parent.env"
 fail=0
+
+[ -f "$PARENT_ENV" ] || { echo "FAIL: .dispatch/g10_parent.env 없음"; exit 1; }
+# shellcheck source=/dev/null
+. "$PARENT_ENV"
+case "${PARENT_ADAPTER:-}:${PARENT_RUNTIME_SURFACE:-}" in
+  claude:claude-print-headless|codex:codex-exec-headless|opencode:opencode-run-headless) ;;
+  *) echo "FAIL: invalid parent adapter contract"; exit 1 ;;
+esac
+case "${PARENT_SESSION_ID:-}" in
+  ''|*[!A-Za-z0-9_.:-]*) echo "FAIL: invalid resolved parent session id"; exit 1 ;;
+esac
 
 if [ ! -f "$SLUGS" ]; then
   echo "FAIL: .dispatch/g10_slugs.env 없음"
@@ -53,10 +65,10 @@ PY
 [ -f "$WRAPPER_OUT" ] || { echo "FAIL: dispatch_wrapper_output.txt 없음"; fail=1; }
 
 if [ -f "$WRAPPER_OUT" ]; then
-  grep -q 'adapter=claude' "$WRAPPER_OUT" || { echo "FAIL: claude owner wrapper 출력 없음"; fail=1; }
-  grep -q 'runtime_surface=claude-print-headless' "$WRAPPER_OUT" || { echo "FAIL: claude wrapper surface 출력 없음"; fail=1; }
-  grep -q 'status=register' "$WRAPPER_OUT" || { echo "FAIL: claude owner register 출력 없음"; fail=1; }
-  grep -q 'started=0' "$WRAPPER_OUT" || { echo "FAIL: claude owner는 start되면 안 됨"; fail=1; }
+  grep -Fq "adapter=$PARENT_ADAPTER" "$WRAPPER_OUT" || { echo "FAIL: $PARENT_ADAPTER owner wrapper 출력 없음"; fail=1; }
+  grep -Fq "runtime_surface=$PARENT_RUNTIME_SURFACE" "$WRAPPER_OUT" || { echo "FAIL: $PARENT_ADAPTER wrapper surface 출력 없음"; fail=1; }
+  grep -q 'status=register' "$WRAPPER_OUT" || { echo "FAIL: selected owner register 출력 없음"; fail=1; }
+  grep -q 'started=0' "$WRAPPER_OUT" || { echo "FAIL: selected owner는 start되면 안 됨"; fail=1; }
   grep -q 'adapter=opencode' "$WRAPPER_OUT" || { echo "FAIL: opencode child wrapper 출력 없음"; fail=1; }
   grep -q 'runtime_surface=opencode-run-headless' "$WRAPPER_OUT" || { echo "FAIL: opencode wrapper surface 출력 없음"; fail=1; }
   grep -q 'status=start' "$WRAPPER_OUT" || { echo "FAIL: opencode child start 출력 없음"; fail=1; }
@@ -70,7 +82,7 @@ else
   grep -q 'OPENCODE_DEPTH2_VERIFIER_PASS' "$OC_PROMPT_COPY" || { echo "FAIL: OpenCode child prompt marker 누락"; fail=1; }
 fi
 
-marker="OPENCODE_DEPTH2_VERIFIER_PASS parent=$OWNER_SLUG owner_harness=claude depth=2"
+marker="OPENCODE_DEPTH2_VERIFIER_PASS parent=$OWNER_SLUG owner_harness=$PARENT_ADAPTER depth=2"
 deadline=$((SECONDS + 240))
 while [ $SECONDS -lt $deadline ]; do
   if [ -f "$OC_LOG" ] && grep -q 'OPENCODE_DEPTH2_VERIFIER_PASS' "$OC_LOG"; then
@@ -88,14 +100,14 @@ elif ! grep -q 'OPENCODE_DEPTH2_VERIFIER_PASS' "$OC_LOG"; then
 elif ! grep -Fq "$marker" "$OC_LOG"; then
   echo "FAIL: OpenCode child log에 정확한 dynamic marker 없음: $marker"
   fail=1
-elif ! grep -q 'owner_harness=claude' "$OC_LOG"; then
-  echo "FAIL: OpenCode child log에 claude owner_harness marker 없음"
+elif ! grep -Fq "owner_harness=$PARENT_ADAPTER" "$OC_LOG"; then
+  echo "FAIL: OpenCode child log에 selected owner_harness marker 없음"
   fail=1
 else
   echo "PASS: OpenCode depth-2 child emitted verifier marker"
 fi
 
-PYTHONPATH="$HARNESS_ROOT/tools" REPO="$REPO" JOBS="$JOBS" OWNER_SLUG="$OWNER_SLUG" CHILD_SLUG="$CHILD_SLUG" python3 - <<'PY' || fail=1
+PYTHONPATH="$HARNESS_ROOT/tools" REPO="$REPO" JOBS="$JOBS" OWNER_SLUG="$OWNER_SLUG" CHILD_SLUG="$CHILD_SLUG" PARENT_ADAPTER="$PARENT_ADAPTER" PARENT_SESSION_ID="$PARENT_SESSION_ID" python3 - <<'PY' || fail=1
 import os
 from fleet.collectors import dispatch
 
@@ -103,6 +115,8 @@ repo = os.environ["REPO"]
 jobs_path = os.environ["JOBS"]
 owner_slug = os.environ["OWNER_SLUG"]
 child_slug = os.environ["CHILD_SLUG"]
+parent_adapter = os.environ["PARENT_ADAPTER"]
+parent_session_id = os.environ["PARENT_SESSION_ID"]
 
 rows = []
 with open(jobs_path, encoding="utf-8") as f:
@@ -156,14 +170,14 @@ expect(
     qa="standard",
     intensity="standard",
     depth="1",
-    harness="claude",
-    parent_sid="drill-claude-parent-session",
+    harness=parent_adapter,
+    parent_sid=parent_session_id,
     worker_role="capability-owner",
     owner="autopilot-code",
-    owner_harness="claude",
-    model_source="explicit",
-    model="sonnet",
-    effort="medium",
+    owner_harness=parent_adapter,
+    model_source="inherit",
+    model_role="inherit",
+    model="inherit",
 )
 
 child = one(child_slug)
@@ -176,10 +190,10 @@ expect(
     depth="2",
     harness="opencode",
     parent=owner_slug,
-    parent_sid="drill-claude-parent-session",
+    parent_sid=parent_session_id,
     worker_role="verifier",
     owner="autopilot-code",
-    owner_harness="claude",
+    owner_harness=parent_adapter,
     model_source="inherit",
     model_role="inherit",
     model="inherit",
@@ -193,10 +207,10 @@ fleet_owner = [
     and j.key == "code"
     and j.mode == "dev/refactor"
     and j.depth == 1
-    and j.harness == "claude"
+    and j.harness == parent_adapter
     and j.worker_role == "capability-owner"
     and j.capability_owner == "autopilot-code"
-    and j.parent_sid == "drill-claude-parent-session"
+    and j.parent_sid == parent_session_id
 ]
 fleet_child = [
     j for j in jobs
@@ -205,12 +219,12 @@ fleet_child = [
     and j.depth == 2
     and j.harness == "opencode"
     and j.is_child
-    and j.parent_sid == "drill-claude-parent-session"
+    and j.parent_sid == parent_session_id
     and j.capability_owner == "autopilot-code"
 ]
-require(fleet_owner, "fleet parse missing Claude depth-1 owner")
-require(fleet_child, "fleet parse missing OpenCode depth-2 child linked to Claude owner")
-print("PASS: fleet collector preserves Claude depth-1 -> OpenCode depth-2 linkage")
+require(fleet_owner, f"fleet parse missing {parent_adapter} depth-1 owner")
+require(fleet_child, f"fleet parse missing OpenCode depth-2 child linked to {parent_adapter} owner")
+print(f"PASS: fleet collector preserves {parent_adapter} depth-1 -> OpenCode depth-2 linkage")
 PY
 
 if [ "$fail" -eq 0 ]; then

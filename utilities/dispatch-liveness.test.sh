@@ -39,6 +39,24 @@ else
   bad "expected ALIVE/exit0 with correct runtime-root; got rc=$rcA out=[$outA]"
 fi
 
+# --- Case A2: 명시 인자 없이 shared registry env를 같은 정본으로 사용 ---
+outA2=$(AGENT_HOME="$agent_home" AGENT_DISPATCH_JOBS="$jobs" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" 2>&1)
+rcA2=$?
+if [ "$rcA2" -eq 0 ] && printf '%s' "$outA2" | grep -q 'ALIVE'; then
+  ok "AGENT_DISPATCH_JOBS selects the shared registry when no path argument is given"
+else
+  bad "expected shared registry ALIVE/exit0; got rc=$rcA2 out=[$outA2]"
+fi
+
+# --- Case A2: 명시 인자 없이 shared registry env를 같은 정본으로 사용 ---
+outA2=$(AGENT_HOME="$agent_home" AGENT_DISPATCH_JOBS="$jobs" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" 2>&1)
+rcA2=$?
+if [ "$rcA2" -eq 0 ] && printf '%s' "$outA2" | grep -q 'ALIVE'; then
+  ok "AGENT_DISPATCH_JOBS selects the shared registry when no path argument is given"
+else
+  bad "expected shared registry ALIVE/exit0; got rc=$rcA2 out=[$outA2]"
+fi
+
 # --- Case B (구버그 재현): runtime-root 를 projects 없는 AGENT_HOME 으로 → DEAD 오탐, exit 3 ---
 outB=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$agent_home" bash "$LIVENESS" "$jobs" 2>&1)
 rcB=$?

@@ -48,6 +48,54 @@ fi
 # check_codex_bin_wrappers) can read it regardless of registration order.
 HOOK_EVENT_EXEMPT=""
 
+is_mechanized_install_layout() {
+  grep -Fq 'tools/install/harness.sh' INSTALL_LAYOUT.md 2>/dev/null
+}
+
+check_mechanized_install_projection() {
+  runtime=$1
+  expected_ids=$2
+  out="${TMPDIR:-/tmp}/agent-harness-install-plan-$runtime-$$.json"
+
+  if [ ! -x tools/install/harness.sh ]; then
+    fail_msg "tools/install/harness.sh must be executable because the installed harness launcher points to it"
+    return
+  fi
+  if ! grep -Fq "harness install $runtime" INSTALL_LAYOUT.md \
+    || ! grep -Fq 'harness verify  [claude|codex|opencode|all] --json' INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must route $runtime installation and verification through the mechanized harness CLI"
+    return
+  fi
+  if ! grep -Fq 'def checks(scope="global")' "tools/install/drivers/$runtime.py"; then
+    fail_msg "tools/install/drivers/$runtime.py must provide the read-only verify checks replacing the old manual INSTALL_LAYOUT recipe"
+    return
+  fi
+
+  if ! AGENT_HOME="$ROOT" HOME="${TMPDIR:-/tmp}/agent-harness-layout-home" \
+    tools/install/harness.sh install "$runtime" --dry-run --json > "$out"; then
+    fail_msg "mechanized $runtime install dry-run failed"
+    rm -f "$out"
+    return
+  fi
+  if ! python3 - "$out" "$expected_ids" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+checks = {item.get("id"): item for item in data.get("checks", [])}
+expected = [item for item in sys.argv[2].split() if item]
+missing = [item for item in expected if item not in checks]
+failed = [item for item in data.get("checks", []) if not item.get("ok")]
+if data.get("exit") != 0 or missing or failed:
+    print(f"exit={data.get('exit')} missing={missing} failed={failed}", file=sys.stderr)
+    raise SystemExit(1)
+PY
+  then
+    fail_msg "mechanized $runtime install plan is missing required projection actions"
+  fi
+  rm -f "$out"
+}
+
 check_no_claude_native_refs() {
   path=$1
   label=$2
@@ -429,6 +477,12 @@ assert_shared_adapter_class() {
 check_install_layout_codex_projection() {
   [ -f INSTALL_LAYOUT.md ] || { fail_msg "INSTALL_LAYOUT.md is missing"; return; }
 
+  if is_mechanized_install_layout; then
+    check_mechanized_install_projection codex \
+      "codex.symlink.agent-harness codex.symlink.AGENTS.md codex.symlink.agent-harness-readme.md codex.symlink.agent-core codex.symlink.agent-capabilities codex.symlink.agent-roles codex.symlink.agent-bin codex.symlink.agent-tools codex.symlink.agent-utilities codex.symlink.agent-scaffolds codex.symlink.agent-skills codex.symlink.agent-modes codex.symlink.agent-agents codex.symlink.agent-plugin-marketplace codex.symlink.agent-hooks codex.symlink.agent-config codex.symlink.hooks.json"
+    return
+  fi
+
   for p in AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents; do
     if ! grep -Fq "\$AGENT_HOME/codex_setting/$p" INSTALL_LAYOUT.md; then
       fail_msg "INSTALL_LAYOUT.md must include Codex projection install step for codex_setting/$p"
@@ -560,6 +614,12 @@ check_install_layout_codex_projection() {
 
 check_install_layout_opencode_projection() {
   [ -f INSTALL_LAYOUT.md ] || { fail_msg "INSTALL_LAYOUT.md is missing"; return; }
+
+  if is_mechanized_install_layout; then
+    check_mechanized_install_projection opencode \
+      "opencode.symlink.agent-harness opencode.symlink.agent-agents.md opencode.symlink.agent-harness-readme.md opencode.symlink.agent-core opencode.symlink.agent-capabilities opencode.symlink.agent-roles opencode.symlink.agent-bin opencode.symlink.agent-tools opencode.symlink.agent-utilities opencode.symlink.agent-skills opencode.symlink.agent-agents opencode.symlink.agent-commands opencode.symlink.agent-harness-guards.js"
+    return
+  fi
 
   for p in AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands opencode-plugins; do
     if ! grep -Fq "\$AGENT_HOME/opencode_setting/$p" INSTALL_LAYOUT.md; then
@@ -701,6 +761,11 @@ check_codex_bin_wrappers() {
       fail_msg "adapters/codex/bin/$p must validate AGENT_HOME before using it as the harness root"
     fi
   done
+  for p in dispatch-headless.py dispatch-liveness.py dispatch-harvest.py; do
+    if ! grep -Fq 'AGENT_DISPATCH_JOBS' "adapters/codex/bin/$p"; then
+      fail_msg "adapters/codex/bin/$p must honor the shared dispatch registry override"
+    fi
+  done
 
   if ! grep -Fq 'utilities/workflow-toggle.sh' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must realize workflow toggle through utilities/workflow-toggle.sh"
@@ -758,21 +823,21 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'invalid-dispatch-mode' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'invalid-dispatch-qa' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'quick,light,standard,thorough,adversarial' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'Read adapters/codex/AGENTS.md first' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh status . codex-headless' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh prompt-signal . codex-headless' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh mode . codex-headless' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh route {args.capability} . codex-headless' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh mode-info {args.mode}' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh qa-policy {args.qa} {track}' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'Read $AGENT_HOME/adapters/codex/AGENTS.md first' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh status . codex-headless' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh prompt-signal . codex-headless' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh mode . codex-headless' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh route {args.capability} . codex-headless' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh mode-info {args.mode}' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh qa-policy {args.qa} {track}' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'Autopilot-code execution contract' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'code-plan -> code-execute -> code-test -> code-report' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'role planning, role implementation, role verification, and role report' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh mode-info qa/plan-review' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh mode-info qa/test' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh role verification' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh role implementation' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh role report' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/plan-review' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/test' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh role verification' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh role implementation' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh role report' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'prompt_path.write_text(prompt_text, encoding="utf-8")' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'pipeline_summary.md' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'Do not claim independent QA delegation' adapters/codex/bin/dispatch-headless.py \
@@ -1036,13 +1101,15 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'tool_contract="verification-runner"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'runtime_surface=adapter-owned-verification-runner' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'tool_contract_check=adapters/codex/bin/preflight.sh verification-runner --check -- <command>' adapters/codex/bin/capability-map.sh \
-    || ! grep -Fq 'artifact_contract="plans/<date>_<slug>:test_logs/,pipeline_summary.md"' adapters/codex/bin/capability-map.sh \
+    || ! grep -Fq 'artifact_contract="plans/<date>_<slug>:test_logs/,_internal/test_reviews/;handoff=code-report"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'role_contract="verification=qa-team,review=qa-team"' adapters/codex/bin/capability-map.sh; then
     fail_msg "Codex code-test capability-info must expose the verification-runner tool contract"
   fi
   if ! grep -Fq 'graduated verification' capabilities/code-test.md \
+    || ! grep -Fq '`code-report` alone updates `pipeline_summary.md`' capabilities/code-test.md \
     || ! grep -Fq 'verification-runner' capabilities/code-test.md \
     || ! grep -Fq 'test_logs/' adapters/codex/skills/code-test/SKILL.md \
+    || ! grep -Fq '`code-report` alone updates `pipeline_summary.md`' adapters/codex/skills/code-test/SKILL.md \
     || ! grep -Fq 'verification-runner' adapters/codex/plugins/agent-harness-codex/skills/code-test/SKILL.md; then
     fail_msg "code-test portable spec and Codex projections must describe the verification-runner contract"
   fi
@@ -1969,6 +2036,9 @@ check_claude_bin_wrappers() {
   if [ ! -x adapters/claude/bin/mem-distill-worker.sh ]; then
     fail_msg "adapters/claude/bin/mem-distill-worker.sh is missing or not executable"
   fi
+  if ! grep -Fq 'AGENT_DISPATCH_JOBS' adapters/claude/bin/dispatch-headless.py; then
+    fail_msg "adapters/claude/bin/dispatch-headless.py must honor the shared dispatch registry override"
+  fi
 }
 
 check_opencode_bin_wrappers() {
@@ -1993,6 +2063,11 @@ check_opencode_bin_wrappers() {
       || ! grep -Fq 'core" / "CORE.md"' "adapters/opencode/bin/$p" \
       || grep -Fq 'Path(os.environ.get("AGENT_HOME", os.getcwd()))' "adapters/opencode/bin/$p"; then
       fail_msg "adapters/opencode/bin/$p must validate AGENT_HOME before using it as the harness root"
+    fi
+  done
+  for p in dispatch-headless.py dispatch-liveness.py dispatch-harvest.py; do
+    if ! grep -Fq 'AGENT_DISPATCH_JOBS' "adapters/opencode/bin/$p"; then
+      fail_msg "adapters/opencode/bin/$p must honor the shared dispatch registry override"
     fi
   done
 
@@ -2778,6 +2853,11 @@ check_claude_utility_projection() {
   elif ! cmp -s utilities/workflow-toggle.sh adapters/claude/utilities/workflow-toggle.sh; then
     fail_msg "adapters/claude/utilities/workflow-toggle.sh must stay byte-equivalent to utilities/workflow-toggle.sh"
   fi
+  for p in dispatch-liveness.sh dispatch-wait.sh; do
+    if ! grep -Fq 'AGENT_DISPATCH_JOBS' "utilities/$p"; then
+      fail_msg "utilities/$p must honor the shared dispatch registry override"
+    fi
+  done
 }
 
 # harness-layer-sync §3.1: 가드 실행본과 portable-guards 테스트는 collapse 대상(SAME) — canonical 로 접힌
@@ -3067,9 +3147,9 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'adapters/codex/plugin-marketplace/.agents/plugins/marketplace.json' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must point Codex plugin marketplace inventory at adapters/codex/plugin-marketplace, not obsolete adapters/codex/.agents"
   fi
-  if grep -Fq 'python3 -m py_compile tools/build-manifest.py' INSTALL_LAYOUT.md \
-    || ! grep -Fq '[compile(open(f, encoding=' INSTALL_LAYOUT.md; then
-    fail_msg "INSTALL_LAYOUT.md must syntax-check build-manifest/mem via in-memory compile; py_compile writes __pycache__ even under PYTHONDONTWRITEBYTECODE"
+  if ! grep -Fq '"claude.compile-smoke"' tools/install/drivers/claude.py \
+    || ! grep -Fq "compile(open(f,encoding='utf-8').read(), f, 'exec')" tools/install/drivers/claude.py; then
+    fail_msg "Claude installer verify must syntax-check build-manifest/mem via in-memory compile without writing __pycache__"
   fi
   for s in install-runtime-projection.sh check-runtime-projection.sh; do
     if [ ! -x "adapters/codex/bin/$s" ]; then
@@ -3143,9 +3223,9 @@ check_adaptation_inventory_native_surfaces() {
   if grep -Fq 'core settings.json keybindings.json commands' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must not symlink runtime-owned settings.json/keybindings.json into the Claude home; Claude Code rewrites them in place and clobbers the symlink"
   fi
-  if ! grep -Fq 'for p in settings.json keybindings.json; do' INSTALL_LAYOUT.md \
-    || ! grep -Fq 'cp "$AGENT_HOME/claude_setting/$p" "$HOME/.claude/$p"' INSTALL_LAYOUT.md; then
-    fail_msg "INSTALL_LAYOUT.md must copy (not symlink) runtime-owned settings.json/keybindings.json into the Claude home so Claude Code settings writes do not pollute the repo"
+  if ! grep -Fq '_CLAUDE_COPY_ONCE_NAMES = ["settings.json", "keybindings.json"]' tools/install/projector.py \
+    || ! grep -Fq 'if action == "copy_once":' tools/install/drivers/claude.py; then
+    fail_msg "Claude installer must copy-once (not symlink) runtime-owned settings.json/keybindings.json so runtime writes do not pollute the repo"
   fi
   if ! grep -Fq 'Codex/OpenCode `preflight.sh loop-info`' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'without executing Claude-coupled loop scripts' core/ADAPTATION_INVENTORY.md \

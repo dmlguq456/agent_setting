@@ -84,7 +84,8 @@ def main(argv: list[str]) -> int:
         return 64
 
     agent_home = resolve_agent_home()
-    jobs = Path(args.jobs) if args.jobs else agent_home / ".dispatch" / "jobs.log"
+    jobs_override = args.jobs or os.environ.get("AGENT_DISPATCH_JOBS")
+    jobs = Path(jobs_override) if jobs_override else agent_home / ".dispatch" / "jobs.log"
     with jobs_lock(jobs):
         if not jobs.exists():
             emit_header(args, jobs, 0, 0, 0)

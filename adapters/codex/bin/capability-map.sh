@@ -81,7 +81,7 @@ case "$cap" in
   code-test)
     status="tool-contract"
     tool_contract="verification-runner"
-    artifact_contract="plans/<date>_<slug>:test_logs/,pipeline_summary.md"
+    artifact_contract="plans/<date>_<slug>:test_logs/,_internal/test_reviews/;handoff=code-report"
     role_contract="verification=qa-team,review=qa-team"
     note="$note Run mode-info qa/test and the verification-runner contract before claiming code-test results."
     ;;

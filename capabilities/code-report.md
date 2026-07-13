@@ -20,7 +20,13 @@ Adapters may expose this capability through native commands, skill files, prompt
 
 ## Artifact Ownership
 
-Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not. Capability-specific output placement follows `core/CONVENTIONS.md` section 5 until this spec is expanded with a stricter per-capability artifact map.
+Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not.
+
+In a `standard+` `autopilot-code` stage cycle, `code-report` owns
+`final_report.md`, `analysis_project/code/`, and `pipeline_summary.md` (using the
+shared lock where required). It consumes plan, checklist, development, and test
+evidence but must not rewrite source or another stage's evidence class. This is
+the report half of the stage ownership contract in `core/OPERATIONS.md` §5.10.
 
 ## Role Requirements
 

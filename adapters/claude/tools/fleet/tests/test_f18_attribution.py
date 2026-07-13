@@ -14,7 +14,7 @@ if _TOOLS_DIR not in sys.path:
 
 from fleet import render                       # noqa: E402
 from fleet.collectors import codex, dispatch, procscan  # noqa: E402
-from fleet.model import DispatchJob, Session    # noqa: E402
+from fleet.model import DispatchJob, Session, project_of    # noqa: E402
 
 
 class ProcscanTaggingTest(unittest.TestCase):
@@ -149,11 +149,21 @@ class DrillCaseExtractionTest(unittest.TestCase):
             dispatch._drill_case_from_cwd("/tmp/drill-g_stage_dispatch-Ab3d/repo"),
             "g_stage_dispatch")
 
+    def test_growing_case_cwd_normalizes_to_registry_case(self):
+        self.assertEqual(
+            dispatch._drill_case_from_cwd("/tmp/drill-growing_g_stage_dispatch-Ab3d/repo"),
+            "g_stage_dispatch")
+
     def test_non_drill_slug_returns_none(self):
         self.assertIsNone(dispatch._drill_case_from_slug("fleet-ui-v2-execute"))
 
     def test_non_drill_cwd_returns_none(self):
         self.assertIsNone(dispatch._drill_case_from_cwd("/home/u/proj/repo"))
+
+    def test_named_worktree_is_not_a_tmp_drill_fixture(self):
+        cwd = "/home/u/agent_setting-wt/drill-fail-followup"
+        self.assertIsNone(dispatch._drill_case_from_cwd(cwd))
+        self.assertEqual(project_of(cwd), "agent_setting")
 
 
 class DrillReconcileTest(unittest.TestCase):
@@ -181,6 +191,18 @@ class DrillReconcileTest(unittest.TestCase):
                            source="proc")
         jobs = dispatch._reconcile_drill_rows([registry, proc])
         self.assertEqual(len(jobs), 2)
+
+    def test_runner_pid_merges_when_shell_cwd_has_no_case_signal(self):
+        registry = DispatchJob(key="drill", slug="drill-codex-CASE-20260711160000-777",
+                               cwd="/tmp/drill-CASE-x/repo", pid=None, source="jobs",
+                               liveness="queued")
+        proc = DispatchJob(key="drill", slug="drill", worker_role=None,
+                           cwd="/home/u/agent_setting-wt/drill-fixes", pid=777,
+                           liveness="working", source="proc")
+        jobs = dispatch._reconcile_drill_rows([registry, proc])
+        self.assertEqual(jobs, [registry])
+        self.assertEqual(registry.pid, 777)
+        self.assertEqual(registry.liveness, "working")
 
     def test_registry_cwd_not_tmp_drill_skips_merge(self):
         registry = DispatchJob(key="drill", slug="drill-claude-CASE-20260711160000-12345",

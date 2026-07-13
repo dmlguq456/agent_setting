@@ -92,13 +92,18 @@ _loop_registry_append() {
 _loop_register_dispatch_job() {
   [ "${DRILL_FLEET_REGISTRY:-1}" = "0" ] && return 0
   local status=$1 adapter=$2 pf=$3 repo=$4 slug=$5
-  local jobs ts case_id git_root parent_sid parent_cwd mode worker_role pipe line
+  local jobs ts case_id git_root parent_sid parent_cwd parent_slug mode worker_role pipe line
   jobs=$(_loop_jobs_path)
   ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   case_id=$(_loop_case_id "$pf")
   git_root=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$repo")
-  parent_sid="${AGENT_DISPATCH_PARENT_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${OPENCODE_SESSION_ID:-}}}}}"
-  parent_cwd="${AGENT_DISPATCH_PARENT_CWD:-$PWD}"
+  # A drill case is its own fixture-rooted Fleet tree. Do not inherit the
+  # interactive launcher session/cwd: doing so renders one run twice, once under
+  # agent_setting and once under /tmp/drill-*. Explicit drill-only parent fields
+  # remain available for a caller that intentionally nests diagnostic workers.
+  parent_sid="${DRILL_FLEET_PARENT_SESSION_ID:-}"
+  parent_cwd="${DRILL_FLEET_PARENT_CWD:-}"
+  parent_slug="${DRILL_FLEET_PARENT_SLUG:-}"
   mode=$(_loop_registry_value "${DRILL_FLEET_MODE:-loop/drill}")
   worker_role=$(_loop_registry_value "${DRILL_FLEET_WORKER_ROLE:-$case_id}")
   pipe="capability=drill,mode=$mode,qa=quick,intensity=quick,depth=1,harness=$(_loop_registry_value "$adapter"),worker_role=$worker_role,owner=drill"
@@ -107,6 +112,9 @@ _loop_register_dispatch_job() {
   fi
   if [ -n "$parent_cwd" ]; then
     pipe="$pipe,parent_cwd=$(_loop_registry_value "$parent_cwd")"
+  fi
+  if [ -n "$parent_slug" ]; then
+    pipe="$pipe,parent=$(_loop_registry_value "$parent_slug")"
   fi
   line=$(printf '%s\t%s\t%s\t%s\t%s\t%s' \
     "$ts" "$status" "$git_root" "$repo" "$slug" "$pipe")
@@ -141,6 +149,7 @@ _loop_run_claude() {
   local pf=$1 repo=$2 to=$3 maxturns=$4 j=$5 t=$6
   local bin="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
   local agent_home="$(_loop_agent_home)"
+  local runtime_rc parse_rc
   export AGENT_HOME="$agent_home"
   local settings="${DRILL_CLAUDE_SETTINGS:-$AGENT_HOME/adapters/claude/settings.json}"
   local settings_arg=()
@@ -148,6 +157,7 @@ _loop_run_claude() {
   ( cd "$repo" && AGENT_HOME="$agent_home" timeout "$to" "$bin" -p "$(cat "$pf")" \
       "${settings_arg[@]}" --allowedTools "$DRILL_CLAUDE_TOOLS" --output-format json ${maxturns:+--max-turns "$maxturns"} ) \
       > "$j" 2>"${j%.json}.stderr.txt"
+  runtime_rc=$?
   python3 - "$j" "$t" <<'PY'
 import json, sys
 try: d = json.load(open(sys.argv[1]))
@@ -157,17 +167,59 @@ u = d.get("usage", {}) or {}
 tin = (u.get("input_tokens", 0) or 0) + (u.get("cache_creation_input_tokens", 0) or 0) + (u.get("cache_read_input_tokens", 0) or 0)
 print(f"{d.get('num_turns','?')}|{tin}|{u.get('output_tokens',0)}|{round(d.get('total_cost_usd') or 0, 3)}")
 PY
+  parse_rc=$?
+  [ "$parse_rc" -eq 0 ] || return "$parse_rc"
+  return "$runtime_rc"
 }
 
 _loop_run_codex() {
   local pf=$1 repo=$2 to=$3 maxturns=$4 j=$5 t=$6
   local bin="${CODEX_BIN:-codex}"
   local agent_home="$(_loop_agent_home)"
-  ( cd "$repo" && AGENT_HOME="$agent_home" timeout "$to" "$bin" exec --cd "$repo" --sandbox workspace-write --skip-git-repo-check --json - < "$pf" ) \
+  local work_root dispatch_root spec_marker_root core_marker_root codex_sandbox runtime_home runtime_link
+  local sandbox_args=() runtime_rc parse_rc
+  work_root=$(CDPATH= cd -- "$repo/.." && pwd)
+  dispatch_root=$(dirname -- "$(_loop_jobs_path)")
+  spec_marker_root="$agent_home/.spec-grounding"
+  core_marker_root="$agent_home/.core-grounding"
+  mkdir -p "$dispatch_root" "$spec_marker_root" "$core_marker_root"
+  # Fleet resolves Codex liveness through a deterministic worktree-local pointer.
+  # Drill may use an isolated CODEX_HOME to avoid touching runtime-owned config;
+  # project only that path, never its contents, into the disposable fixture.
+  runtime_home="${CODEX_HOME:-$HOME/.codex}"
+  runtime_link="$repo/.dispatch/codex-home"
+  mkdir -p "$(dirname -- "$runtime_link")"
+  if [ -L "$runtime_link" ]; then
+    ln -sfn "$runtime_home" "$runtime_link"
+  elif [ ! -e "$runtime_link" ]; then
+    ln -s "$runtime_home" "$runtime_link"
+  fi
+  codex_sandbox="${LOOP_CODEX_SANDBOX:-workspace-write}"
+  case "$codex_sandbox" in
+    danger-full-access)
+      # Disposable drill fixtures exercise git refs/worktree creation. Codex's
+      # workspace-write sandbox protects .git even under --add-dir, so drill may
+      # opt into this mode explicitly without changing other loop defaults.
+      sandbox_args=(--sandbox danger-full-access)
+      ;;
+    workspace-write)
+      # `--add-dir` grants the non-git writable roots needed by normal loops.
+      sandbox_args=(--sandbox workspace-write --add-dir "$work_root" --add-dir "$dispatch_root" \
+        --add-dir "$spec_marker_root" --add-dir "$core_marker_root")
+      ;;
+    *)
+      printf 'unsupported LOOP_CODEX_SANDBOX=%s\n' "$codex_sandbox" >&2
+      return 64
+      ;;
+  esac
+  ( cd "$repo" && AGENT_HOME="$agent_home" timeout "$to" "$bin" exec --cd "$repo" \
+      "${sandbox_args[@]}" \
+      --skip-git-repo-check --json - < "$pf" ) \
       > "$j" 2>"${j%.json}.stderr.txt"
+  runtime_rc=$?
   python3 - "$j" "$t" <<'PY'
 import json, sys
-texts = []; tin = tout = turns = 0
+texts = []; tin = tout = turns = 0; failed = False
 for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
     line = line.strip()
     if not line: continue
@@ -183,19 +235,28 @@ for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
         u = e.get("usage") or {}
         tin += (u.get("input_tokens", 0) or 0)
         tout += (u.get("output_tokens", 0) or 0)
+    elif et == "turn.failed":
+        failed = True
 open(sys.argv[2], "w").write("\n".join(texts))
 print(f"{turns or '?'}|{tin}|{tout}|0")
+if failed:
+    raise SystemExit(70)
 PY
+  parse_rc=$?
+  [ "$parse_rc" -eq 0 ] || return "$parse_rc"
+  return "$runtime_rc"
 }
 
 _loop_run_opencode() {
   local pf=$1 repo=$2 to=$3 maxturns=$4 j=$5 t=$6
   local bin="${OPENCODE_BIN:-opencode}"
   local agent_home="$(_loop_agent_home)"
+  local runtime_rc parse_rc
   command -v "$bin" >/dev/null 2>&1 || bin="$HOME/.opencode/bin/opencode"
   local model_arg=(); [ -n "${OPENCODE_LOOP_MODEL:-}" ] && model_arg=(-m "$OPENCODE_LOOP_MODEL")
   ( cd "$repo" && AGENT_HOME="$agent_home" timeout "$to" "$bin" run --dir "$repo" --format json "${model_arg[@]}" "$(cat "$pf")" ) \
       > "$j" 2>"${j%.json}.stderr.txt"
+  runtime_rc=$?
   python3 - "$j" "$t" <<'PY'
 import json, sys
 parts = {}; tin = tout = turns = 0; cost = 0.0
@@ -218,4 +279,7 @@ for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
 open(sys.argv[2], "w").write("\n".join(parts.values()))
 print(f"{turns or '?'}|{tin}|{tout}|{round(cost, 3)}")
 PY
+  parse_rc=$?
+  [ "$parse_rc" -eq 0 ] || return "$parse_rc"
+  return "$runtime_rc"
 }

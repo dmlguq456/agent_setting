@@ -13,6 +13,7 @@ GOLD="${DRILL_HOME:-$AGENT_HOME/loops/drill}"   # DRILL_HOME override = worktree
 . "$SCRIPT_DIR/../lib-runner.sh"
 ADAPTER="${DRILL_ADAPTER:-claude}"
 CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
+RUNNER_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$AGENT_HOME")
 STAMP=$(date +%F_%H%M)
 RESULTS="$GOLD/results/$STAMP"
 mkdir -p "$RESULTS"
@@ -30,6 +31,26 @@ while [ $# -gt 0 ]; do
     *)         ids+=("$1"); shift ;;
   esac
 done
+export DRILL_ADAPTER="$ADAPTER"
+# Codex workspace-write deliberately protects .git metadata, while several
+# disposable drill cases validate branch/worktree operations. Scope the wider
+# sandbox to drill only; every other loop keeps lib-runner's workspace-write
+# default. Set DRILL_CODEX_SANDBOX=workspace-write to opt back down.
+if [ "$ADAPTER" = "codex" ]; then
+  export LOOP_CODEX_SANDBOX="${DRILL_CODEX_SANDBOX:-danger-full-access}"
+  # Depth-1/2 Codex workers are nested processes. In workspace-write the parent
+  # cannot update git metadata and its children inherit network denial, so carry
+  # the drill-only sandbox choice through dispatch-headless.py as well.
+  export CODEX_DISPATCH_SANDBOX="$LOOP_CODEX_SANDBOX"
+  # A stage owner may spell out a narrower --sandbox after reading a generic
+  # command template. Drill fixtures need the selected sandbox to remain an
+  # invariant across nested depth-1/2 dispatch, so force it only for this loop.
+  export CODEX_DISPATCH_SANDBOX_FORCE="$LOOP_CODEX_SANDBOX"
+  # Fleet ancestry must follow the actual running Codex thread, not a model-
+  # invented parent id/slug. The wrapper applies this dynamically in every
+  # depth-1/2 session; depth 1 has no dispatch-job parent slug of its own.
+  export CODEX_DISPATCH_PARENT_CURRENT_FORCE=1
+fi
 
 # --- conformance pre-stage (P-20) ---
 # codex-adapter-parity audit P-20 (2026-07-04): 케이스 풀 구성(바로 아래 "풀: id 명시면...")
@@ -125,6 +146,7 @@ echo "drill 대상 ${#cases[@]}개${AXIS:+ [axis=$AXIS]}${SAMPLE:+ [sample=$SAMP
 [ -n "$LIST" ] && { echo "(--list: 선별만 출력 — 실행 안 함)"; exit 0; }
 
 declare -A verdicts metrics
+case_workdirs=()
 for c in "${cases[@]}"; do
   grow=""
   case "$c" in growing:*) grow="(g)"; CASE_DIR="$GOLD/cases_growing/${c#growing:}" ;; *) CASE_DIR="$GOLD/cases/$c"; [ -d "$CASE_DIR" ] || CASE_DIR="$GOLD/cases_growing/$c" ;; esac
@@ -140,6 +162,7 @@ for c in "${cases[@]}"; do
 
   # 케이스 id 의 "growing:" 콜론이 assert 의 PYTHONPATH="$REPO"·clone 경로를 파괴한다
   WORK=$(mktemp -d "/tmp/drill-${c//:/_}-XXXX")
+  case_workdirs+=("$WORK")
   echo "▶ $c (work=$WORK)"
   bash "$CASE_DIR/fixture.sh" "$WORK" || { verdicts[$c]="FIXTURE-ERR"; continue; }
 
@@ -170,20 +193,23 @@ for c in "${cases[@]}"; do
   echo "$out" | tee "$RESULTS/$c.assert.txt"
   echo "  → ${verdicts[$c]} ($ADAPTER exit $rc, ${metrics[$c]})"
 
-  # FAIL 자동 진단 — 원인 추정 + 수정안 초안까지 (적용은 사용자 서명)
-  if [[ "${verdicts[$c]}" == FAIL* ]]; then
-    diag_slug=$(_loop_registry_slug claude "diagnosis-$c")
-    DRILL_FLEET_MODE=loop/drill-diagnosis DRILL_FLEET_WORKER_ROLE="diagnosis-$c" \
-      _loop_register_dispatch_job open claude "$CASE_DIR/prompt.md" "$WORK/repo" "$diag_slug" || true
-    (
-      cd "$WORK/repo" || exit 1
-      timeout 600 "$CLAUDE_BIN" -p "drill set 케이스 FAIL 진단. 케이스 정의: $CASE_DIR (prompt.md=사용자 발화, assert.sh=판정). assert 출력: $RESULTS/$c.assert.txt. transcript: $T. fixture 결과물: $WORK.
-이 자료를 읽고 (1) 위반 행동이 정확히 무엇이었나 (2) 어느 지침이 닿지 않았거나 모호했나 (3) 수정안 — 지침 diff 초안 또는 hook 승격 제안 중 택1, 적용 명령 포함 — 을 $RESULTS/$c.diagnosis.md 에 한국어로 간결히 작성하라. 지침 파일을 직접 수정하지 말 것 (진단·제안만)." \
-        --allowedTools "Bash,Read,Glob,Grep,Write" --max-turns 25
-    ) >> "$RESULTS/$c.diagnosis.log" 2>&1
-    DRILL_FLEET_MODE=loop/drill-diagnosis DRILL_FLEET_WORKER_ROLE="diagnosis-$c" \
-      _loop_register_dispatch_job done claude "$CASE_DIR/prompt.md" "$WORK/repo" "$diag_slug" || true
-    [ -f "$RESULTS/$c.diagnosis.md" ] && echo "  진단서: $RESULTS/$c.diagnosis.md"
+  # FAIL 자동 진단도 선택 adapter를 사용한다. DRILL_ADAPTER=codex/opencode 런이
+  # Claude Code 토큰을 암묵 소비하지 않도록 direct `claude -p` 경로는 두지 않는다.
+  if [[ "${verdicts[$c]}" == FAIL* ]] && [ "${DRILL_AUTO_DIAG:-1}" = "1" ]; then
+    DIAG_PROMPT="$WORK/diagnosis.prompt.md"
+    {
+      echo "drill set 케이스 FAIL 진단."
+      echo "케이스 정의: $CASE_DIR (prompt.md=사용자 발화, assert.sh=판정)"
+      echo "assert 출력: $RESULTS/$c.assert.txt"
+      echo "transcript: $T"
+      echo "fixture 결과물: $WORK"
+      echo
+      echo "이 자료를 읽고 (1) 위반 행동 (2) 닿지 않거나 모호한 지침 (3) 수정안 하나를 한국어로 간결히 답하라. 파일은 수정하지 마라."
+    } > "$DIAG_PROMPT"
+    diag_metrics=$(DRILL_FLEET_MODE=loop/drill-diagnosis DRILL_FLEET_WORKER_ROLE="diagnosis-$c" \
+      run_case_on_adapter "$ADAPTER" "$DIAG_PROMPT" "$WORK/repo" 600 25 \
+        "$RESULTS/$c.diagnosis.json" "$RESULTS/$c.diagnosis.md") || true
+    [ -s "$RESULTS/$c.diagnosis.md" ] && echo "  진단서: $RESULTS/$c.diagnosis.md ($ADAPTER, ${diag_metrics:-?})"
   fi
 done
 
@@ -210,18 +236,27 @@ done
 
 # 옵션: 응답규율 채점 pass (약자 풀이·번역체·약속-행동) — transcript 일괄 LLM 채점
 if [ "${RUN_JUDGE:-0}" = "1" ]; then
-  "$CLAUDE_BIN" -p "$(cat "$GOLD/judge.md")
-
-대상 transcript 디렉토리: $RESULTS (각 *.transcript.txt)" \
-    --allowedTools "Read,Glob,Grep,Write" > "$RESULTS/judge.md" 2>&1
-  echo "judge → $RESULTS/judge.md"
+  JUDGE_PROMPT="$RESULTS/judge.prompt.md"
+  {
+    cat "$GOLD/judge.md"
+    echo
+    echo "대상 transcript 디렉토리: $RESULTS (각 *.transcript.txt). 파일을 수정하지 말고 채점 보고서만 응답하라."
+  } > "$JUDGE_PROMPT"
+  judge_metrics=$(run_case_on_adapter "$ADAPTER" "$JUDGE_PROMPT" "$RUNNER_ROOT" 600 25 \
+    "$RESULTS/judge.json" "$RESULTS/judge.md") || true
+  echo "judge → $RESULTS/judge.md ($ADAPTER, ${judge_metrics:-?})"
 fi
 
 # --- 정리: 헤드리스 케이스가 남긴 세션 detritus 제거 (레지스트리·세션목록 오염 방지) ---
-# 각 case 의 헤드리스 run 은 cwd=/tmp/drill-* 라 세션이 등록됨 → run 후 청소.
-rm -rf /tmp/drill-* 2>/dev/null || true
-# claude 는 projects/<enc_cwd> 세션 레지스트리를 남긴다 (codex/opencode 는 자체 세션 저장소).
-[ "$ADAPTER" = "claude" ] && rm -rf "$AGENT_HOME/projects/"*tmp-drill*-repo 2>/dev/null || true
+# 각 case 의 헤드리스 run 은 cwd=/tmp/drill-* 라 세션이 등록됨 → 이 실행이 만든
+# 정확한 경로만 청소한다. 동시 실행 중인 다른 drill의 /tmp/drill-* 는 건드리지 않는다.
+for work in "${case_workdirs[@]}"; do
+  if [ "$ADAPTER" = "claude" ]; then
+    enc=$(printf '%s' "$work/repo" | sed 's#[/._]#-#g')
+    rm -rf "$AGENT_HOME/projects/$enc" 2>/dev/null || true
+  fi
+  rm -rf "$work" 2>/dev/null || true
+done
 echo "cleanup: drill tmp + 세션 detritus 제거 (adapter=$ADAPTER)"
 
 # codex-adapter-parity audit P-20 (2026-07-04): 기본은 report-and-continue — conformance 가

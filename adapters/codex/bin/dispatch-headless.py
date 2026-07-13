@@ -102,7 +102,11 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--prompt-text")
     p.add_argument("--jobs")
     p.add_argument("--log-dir")
-    p.add_argument("--sandbox", default="workspace-write")
+    p.add_argument(
+        "--sandbox",
+        choices=("read-only", "workspace-write", "danger-full-access"),
+        default=os.environ.get("CODEX_DISPATCH_SANDBOX", "workspace-write"),
+    )
     p.add_argument(
         "--approval",
         choices=("untrusted", "on-request", "never", "inherit"),
@@ -240,30 +244,31 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
             "\nAutopilot-code execution contract:\n"
             "- Before code edits, emit a `spec-significance` verdict.\n"
             "- Select the stage graph from `intensity` before using QA. `direct` has no code-plan/plan-check/durable plan artifact; `quick` is a depth-1 one-shot worker that uses an inline micro-plan plus plan-check-lite and focused verification; `standard+` uses owner-plan plus optional bounded depth2 verifier/planner, synth, then the durable code-execute -> code-test -> code-report loop. Canonical standard+ pipeline: code-plan -> code-execute -> code-test -> code-report.\n"
-            "- For each durable sub-step that is actually used, read the matching adapters/codex/skills/<step>/SKILL.md when present and run adapters/codex/bin/preflight.sh capability-info <step>.\n"
-            "- Pipeline role profiles: for standard+ stages, run adapters/codex/bin/preflight.sh role planning, role implementation, role verification, and role report to map stages to Codex-native agents.\n"
+            "- For each durable sub-step that is actually used, read the matching $AGENT_HOME/adapters/codex/skills/<step>/SKILL.md when present and run $AGENT_HOME/adapters/codex/bin/preflight.sh capability-info <step>.\n"
+            "- Pipeline role profiles: for standard+ stages, run $AGENT_HOME/adapters/codex/bin/preflight.sh role planning, role implementation, role verification, and role report to map stages to Codex-native agents.\n"
             "- Plan-check is required for quick+ but stays small: requirements coverage, over/under-scoping, executable verification, and missed spec-significant risk. Do not run independent QA after every stage by default.\n"
-            "- When the selected graph calls for independent plan review, run adapters/codex/bin/preflight.sh mode-info qa/plan-review and adapters/codex/bin/preflight.sh role verification before claiming that review.\n"
+            "- When the selected graph calls for independent plan review, run $AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/plan-review and $AGENT_HOME/adapters/codex/bin/preflight.sh role verification before claiming that review.\n"
             "- Pipeline intensity controls ceremony. For standard+ intensity, a depth-1 capability owner should dispatch bounded depth-2 planner/verifier workers when the task is separable; thorough/adversarial expands this to multi-axis/adversary workers. Synthesize short reports; depth 3+ is forbidden.\n"
-            "- Implementation: run adapters/codex/bin/preflight.sh role implementation for standard+ implementation stages and obey the requested development mode.\n"
-            "- Testing: run adapters/codex/bin/preflight.sh mode-info qa/test when concrete verification commands are used, satisfy the reported verification-runner contract, and record evidence under test_logs/ for standard+ work cycles.\n"
-            "- Reporting: direct returns a concise report; quick returns its concise report from the depth-1 one-shot worker; standard+ runs adapters/codex/bin/preflight.sh role report, then writes or updates pipeline_summary.md with changed files, verification commands/results, artifact paths, and unsupported Codex tool contracts.\n"
+            "- Implementation: run $AGENT_HOME/adapters/codex/bin/preflight.sh role implementation for standard+ implementation stages and obey the requested development mode.\n"
+            "- Testing: run $AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/test when concrete verification commands are used, satisfy the reported verification-runner contract, and record evidence under test_logs/ for standard+ work cycles.\n"
+            "- Reporting: direct returns a concise report; quick returns its concise report from the depth-1 one-shot worker; standard+ runs $AGENT_HOME/adapters/codex/bin/preflight.sh role report, then writes or updates pipeline_summary.md with changed files, verification commands/results, artifact paths, and unsupported Codex tool contracts.\n"
             "- Do not claim independent QA delegation if no separate Codex agent/headless pass actually ran; report inline fallback explicitly.\n"
         )
     return (
         "You are a Codex headless worker launched by the portable agent harness.\n"
         "Follow the Codex adapter contract before doing task work.\n\n"
         "Required bootstrap:\n"
-        "- Read adapters/codex/AGENTS.md first.\n"
-        "- Run adapters/codex/bin/preflight.sh status . codex-headless and inspect workflow, artifact, git, worktree, and headless-job risk fields.\n"
-        "- Run adapters/codex/bin/preflight.sh prompt-signal . codex-headless to mirror the Codex UserPromptSubmit routing signal.\n"
-        "- Run adapters/codex/bin/preflight.sh mode . codex-headless to mirror the tracked/untracked workflow guard.\n"
-        f"- Run adapters/codex/bin/preflight.sh route {args.capability} . codex-headless.\n"
-        f"- Read adapters/codex/skills/{args.capability}/SKILL.md when present.\n"
-        f"- Run adapters/codex/bin/preflight.sh mode-info {args.mode} and read the reported native_mode_path when present.\n"
-        f"- Run adapters/codex/bin/preflight.sh qa-policy {args.qa} {track} and obey the reported reviewer, external-adversary, and fallback policy.\n"
-        "- If you actually read .agent_reports/spec/prd.md or legacy .claude_reports/spec/prd.md, run adapters/codex/bin/preflight.sh read <prd.md> codex-headless after the read.\n"
-        "- Before edits, run adapters/codex/bin/preflight.sh write <file> codex-headless.\n"
+        "- Resolve harness files through $AGENT_HOME; the target project need not contain an adapters/ directory.\n"
+        "- Read $AGENT_HOME/adapters/codex/AGENTS.md first.\n"
+        "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh status . codex-headless and inspect workflow, artifact, git, worktree, and headless-job risk fields.\n"
+        "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh prompt-signal . codex-headless to mirror the Codex UserPromptSubmit routing signal.\n"
+        "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh mode . codex-headless to mirror the tracked/untracked workflow guard.\n"
+        f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh route {args.capability} . codex-headless.\n"
+        f"- Read $AGENT_HOME/adapters/codex/skills/{args.capability}/SKILL.md when present.\n"
+        f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh mode-info {args.mode} and read the reported native_mode_path under $AGENT_HOME when present.\n"
+        f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh qa-policy {args.qa} {track} and obey the reported reviewer, external-adversary, and fallback policy.\n"
+        "- If you actually read .agent_reports/spec/prd.md or legacy .claude_reports/spec/prd.md, run $AGENT_HOME/adapters/codex/bin/preflight.sh read <prd.md> codex-headless after the read.\n"
+        "- Before edits, run $AGENT_HOME/adapters/codex/bin/preflight.sh write <file> codex-headless.\n"
         "- Do not use adapters/claude, claude_setting, Claude slash commands, or Claude hook/statusline files as Codex-native input.\n\n"
         "Dispatch metadata:\n"
         f"- capability: {args.capability}\n"
@@ -436,6 +441,22 @@ def resolve_agent_home() -> Path:
     return ROOT
 
 
+def ensure_runtime_home_projection(worktree: Path) -> Path | None:
+    """Expose the active Codex session store to Fleet without copying runtime state."""
+    runtime_home = Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser().resolve()
+    link = worktree / ".dispatch" / "codex-home"
+    try:
+        link.parent.mkdir(parents=True, exist_ok=True)
+        if link.is_symlink():
+            link.unlink()
+        elif link.exists():
+            return None
+        link.symlink_to(runtime_home, target_is_directory=True)
+        return link
+    except OSError:
+        return None
+
+
 def check_runtime_projection(worktree: str, require_hook_trust: bool) -> int:
     command = [str(ROOT / "adapters" / "codex" / "bin" / "preflight.sh"), "headless", "--check"]
     if require_hook_trust:
@@ -510,6 +531,17 @@ def validate_dispatch_inputs(args: argparse.Namespace) -> int:
 
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
+    forced_sandbox = os.environ.get("CODEX_DISPATCH_SANDBOX_FORCE")
+    if forced_sandbox:
+        if forced_sandbox not in ("read-only", "workspace-write", "danger-full-access"):
+            return fail("invalid-forced-dispatch-sandbox", 64, sandbox=forced_sandbox)
+        args.sandbox = forced_sandbox
+    if os.environ.get("CODEX_DISPATCH_PARENT_CURRENT_FORCE") == "1":
+        current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
+        if current_thread:
+            args.parent_session_id = current_thread
+        if args.depth == 1:
+            args.parent_slug = None
     action = "start" if args.start else "register" if args.register else "dry-run"
     worktree = Path(args.worktree)
     if not worktree.is_dir():
@@ -564,8 +596,13 @@ def main(argv: list[str]) -> int:
                 return fail("profile-build-failed", 3, profile=args.profile)
             profile_home = home_root / f"{args.slug}.{args.profile}"
 
+    runtime_home_projection = None
+    if args.start and profile_home is None:
+        runtime_home_projection = ensure_runtime_home_projection(worktree)
+
     agent_home = resolve_agent_home()
-    jobs = Path(args.jobs) if args.jobs else agent_home / ".dispatch" / "jobs.log"
+    jobs_override = args.jobs or os.environ.get("AGENT_DISPATCH_JOBS")
+    jobs = Path(jobs_override) if jobs_override else agent_home / ".dispatch" / "jobs.log"
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = dispatch_prompt(args)
     prompt_path = log_dir / f"{args.slug}.codex.prompt.txt"
@@ -624,6 +661,7 @@ def main(argv: list[str]) -> int:
     print(f"reasoning={settings['reasoning']}")
     print(f"approval={args.approval}")
     print(f"profile={args.profile or '-'}")
+    print(f"runtime_home_projection={runtime_home_projection or '-'}")
     print(f"job_registry={jobs}")
     print(f"registry_lock={jobs}.lock")
     print(f"registered={1 if action in ('register', 'start') else 0}")
