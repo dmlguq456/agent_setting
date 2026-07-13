@@ -34,6 +34,14 @@ def _mark_dispatch_child_sessions(sessions, jobs):
         child_jobs.append(j)
     if not child_jobs:
         return
+    # A procscan-marked child is stronger evidence than cwd reconciliation. Once a
+    # runtime child already represents a job in the same harness/cwd, do not let that
+    # job's shared cwd reclassify interactive root sessions as children as well.
+    represented = {
+        (s.harness, os.path.realpath(s.cwd))
+        for s in sessions
+        if getattr(s, 'is_child', False) and getattr(s, 'cwd', None)
+    }
     for s in sessions:
         if getattr(s, 'is_child', False) or getattr(s, 'app_server', False) or not getattr(s, 'cwd', None):
             continue
@@ -41,6 +49,8 @@ def _mark_dispatch_child_sessions(sessions, jobs):
             if s.harness != j.harness:
                 continue
             if not _same_path(s.cwd, j.cwd):
+                continue
+            if (j.harness, os.path.realpath(j.cwd)) in represented:
                 continue
             if j.parent_sid and s.session_id and j.parent_sid == s.session_id:
                 continue

@@ -583,6 +583,25 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
         fleet_collectors._mark_dispatch_child_sessions([parent], [job])
         self.assertFalse(parent.is_child)
 
+    def test_existing_marked_child_same_cwd_protects_interactive_roots(self):
+        from fleet.model import Session
+        root_a = Session(harness="claude", pid=1, cwd="/work/agent_setting",
+                         session_id="root-a", slug="agent-setting-a", liveness="working")
+        root_b = Session(harness="claude", pid=2, cwd="/work/agent_setting",
+                         session_id="root-b", slug="agent-setting-b", liveness="idle")
+        worker = Session(harness="claude", pid=3, cwd="/work/agent_setting",
+                         session_id="worker", slug="agent-setting-worker", liveness="working",
+                         is_child=True)
+        job = DispatchJob(key="apply", slug="agent_setting", cwd="/work/agent_setting",
+                          parent_sid="worker-parent", is_child=True, harness="claude",
+                          mode="presentation", liveness="working")
+
+        fleet_collectors._mark_dispatch_child_sessions([root_a, root_b, worker], [job])
+
+        self.assertFalse(root_a.is_child)
+        self.assertFalse(root_b.is_child)
+        self.assertTrue(worker.is_child)
+
     def test_drill_jobs_log_row_is_visible_as_loop_dispatch(self):
         with tempfile.TemporaryDirectory() as tmp:
             jobs_log = os.path.join(tmp, "jobs.log")
