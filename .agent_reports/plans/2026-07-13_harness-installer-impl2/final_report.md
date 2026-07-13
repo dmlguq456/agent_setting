@@ -79,9 +79,16 @@ plugin `hooks/hooks.json`은 채택 2개를 `PreToolUse`에 `${CLAUDE_PLUGIN_ROO
 
 ## 7. 커밋 목록 + 브랜치 상태
 
-브랜치 `harness-installer-impl2` (main 미머지, 이 사이클 전용). **이 스테이지(code-report)가 report 작성 직후 사이클 전체를 일괄 커밋한다** — 커밋 대상은 uncommitted 상태인 `INSTALL_LAYOUT.md` 수정, `tools/install/drivers/claude.py` 수정, `adapters/claude/bin/sync-native-plugin.py` 신규, `adapters/claude/plugin-marketplace/plugins/agent-harness-claude/{skills,agents,hooks}` 신규, `.agent_reports/plans/2026-07-13_harness-installer-impl2/` 산출물 전부다.
+브랜치 `harness-installer-impl2` (main 미머지, 이 사이클 전용). 사이클 1과 동형인 phase 별 커밋 컨벤션으로 이 스테이지(code-report)가 일괄 커밋했다:
 
-(커밋은 code-report 스테이지가 report 작성 직후 일괄 수행 — 최종 해시는 아래 갱신)
+```
+1a6e509 test+report: harness-installer-impl2 cycle 2 — code-test (53/53 PASS) + final_report
+fc2b27b docs: harness-installer Phase 4 — INSTALL_LAYOUT.md reduction (INST-OPEN-3)
+f924b9f feat: harness-installer Phase 2-3 — install --plugin claude wiring + verify checks
+b97208f feat: harness-installer Phase 1 — Claude plugin content generator
+```
+
+(base `0e6b3fe`, 사이클 1 main 머지 커밋, 이후 diffstat: 141 files changed, 15940 insertions(+), 417 deletions(-) — `adapters/claude/bin/sync-native-plugin.py` 신규 + plugin-marketplace 생성물(skills 28/agents 9/hooks 2+hooks.json) + `tools/install/drivers/claude.py` + `INSTALL_LAYOUT.md` + plan/checklist/dev_logs/test_logs/final_report 산출물.)
 
 merge·push·worktree 정리는 미수행 — main orchestrator 몫.
 
