@@ -48,17 +48,13 @@ mode↔autopilot-draft 매핑 표·6종 template 전문·Paragraph Cohesion Pre-
 4. **Mirror** (conditional, default skip): strategy primary language ≠ 사용자 작업 언어일 때만 `references/mirror.md` 의 편집팀 모드 A 호출.
 5. 사용자 보고: strategy path(s) + summary + QA verdict.
 
-## Required Reads
+## Reference Index
 
-- 연구팀 delegate 프롬프트 (Inputs, Paragraph Cohesion Pre-Check, mode 매핑, 6종 template, Tone Auto-Detection, Slide Format Conventions, Quality Requirements): `references/delegate-prompt.md`.
-- QA 레벨 스케일링 + 리뷰 패스 (reviewer/fact-checker 프롬프트, verdict 처리): `references/qa-review.md`.
-- Mirror 생성 (편집팀 모드 A, primary-language 판정, 최종 사용자 보고): `references/mirror.md`.
-
-## Reference Map
-
-- `references/delegate-prompt.md`: `## Delegate to 연구팀` 전체 — 연구팀 프롬프트(Inputs / Paragraph Cohesion Pre-Check / Mode mapping / Mode-Specific Instructions 6종 template(rebuttal·paper·review·report·proposal·presentation) / Tone Auto-Detection / Slide Format Conventions / Quality Requirements) + orchestrator 반환 계약.
-- `references/qa-review.md`: `## QA Scaling`(레벨 표·fast fact-checker 근거) + `## Selected Post-Strategy Review Pass`(reviewer/fact-checker 프롬프트, verdict 분기, max 2 rounds).
-- `references/mirror.md`: `## Mirror Generation`(편집팀 모드 A 조건부 호출, primary-language 판정, 최종 사용자 보고 라인).
+| 파일 | 언제 로드 (의무) | 내용 |
+|---|---|---|
+| `references/delegate-prompt.md` | 연구팀 delegate 프롬프트 구성 시 (필수) | `## Delegate to 연구팀` 전체 — 연구팀 프롬프트(Inputs / Paragraph Cohesion Pre-Check / Mode mapping / Mode-Specific Instructions 6종 template: rebuttal·paper·review·report·proposal·presentation / Tone Auto-Detection / Slide Format Conventions / Quality Requirements) + orchestrator 반환 계약 |
+| `references/qa-review.md` | QA 레벨 스케일링·리뷰 패스 시 | `## QA Scaling`(레벨 표·fast fact-checker 근거) + `## Selected Post-Strategy Review Pass`(reviewer/fact-checker 프롬프트, verdict 분기, max 2 rounds) |
+| `references/mirror.md` | Mirror 생성 시 | `## Mirror Generation`(편집팀 모드 A 조건부 호출, primary-language 판정, 최종 사용자 보고 라인) |
 
 ## Task
 $ARGUMENTS

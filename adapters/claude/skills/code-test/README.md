@@ -10,10 +10,8 @@ code-execute 이후 또는 온디맨드로 concrete verification evidence를 기
 /code-test <plan name, path, or test scope>
 ```
 
-## Plan Resolution (canonical)
-1. `.md` → 그대로
-2. 디렉토리 → `/plan/plan.md`
-3. 퍼지 검색 → `_audit`/`_fix_` 없는 폴더 우선. 없으면 인자를 파일/디렉토리 경로로 간주하여 직접 테스트
+## Plan Resolution
+> `$ARG`→plan 경로 해석 단일 authority = [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md). 단, no-match 시 code-test 는 인자를 직접 테스트할 파일/디렉토리 경로로 간주 (test 고유).
 
 ## 위임 — 품질관리팀 (test 모드)
 프롬프트 유형별로 Level 1→5 graduated verification을 실행하고, 첫 실패에서 멈춘다. 사용자-facing surface 변경이면 selected assurance가 허락할 때 Level 5b behavioral runtime observation을 추가한다.

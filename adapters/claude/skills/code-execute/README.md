@@ -10,10 +10,8 @@
 /code-execute <plan name or path>
 ```
 
-## Plan Resolution (canonical)
-1. `.md` 접미사 → 그대로
-2. 디렉토리 → `/plan/plan.md`
-3. 퍼지 검색 → `_audit`/`_fix_` 없는 폴더 우선
+## Plan Resolution
+> `$ARG`→plan 경로 해석 단일 authority = [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md).
 
 ## 커밋 메시지 규칙
 - Safety checkpoint: `chore: Safety checkpoint before {plan-name} execution`

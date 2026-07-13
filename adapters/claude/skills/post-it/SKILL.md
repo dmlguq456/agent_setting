@@ -28,17 +28,13 @@ metadata:
 - **Sub-action 7종**: show(무인자) / add / resolve / decide / sweep / promote / handoff — 절차 전문과 Confirm 정책 표 → `references/sub-actions.md`.
 - **레코드 write 자리**: Writing Style(1 bullet = 1줄, dense) 준수 → `references/nudge-and-boundaries.md`.
 
-## Required Reads
+## Reference Index
 
-- 모든 호출: scope 판정(project vs user·aspect)·lifecycle 분류·type taxonomy·mem 명령 형태 — `references/lifecycle-and-scope.md`.
-- sub-action 실행(add/resolve/decide/sweep/promote/handoff 절차 + Confirm 정책 요약 표) — `references/sub-actions.md`.
-- 자동 기록 자리(proactive nudge·자동 handoff)와 auto-memory 경계 판단, 레코드 write 전 Writing Style — `references/nudge-and-boundaries.md`.
-
-## Reference Map
-
-- `references/lifecycle-and-scope.md`: Lifecycle(graduated/stale/live), Scope — project vs user(scope 표·aspect 표·analyze-user 책임 분리·두 writer 계약·artifact-guard 주의), DB working tier & 자동 로드(mem 명령 형태), 5 카테고리 type taxonomy(aging stamp·시간 tier).
-- `references/sub-actions.md`: Sub-Actions 전문(show/add/resolve/decide/sweep — project·user scope 절차 / promote — read-modify-write·두 writer 계약 / handoff — sweep 자동 포함), Confirm 정책 요약 표.
-- `references/nudge-and-boundaries.md`: Proactive nudge(자동 기록 트리거·자동 기록 모델), What this skill is NOT, Auto-memory와의 경계, Writing Style(간결성 원칙).
+| 파일 | 언제 로드 (의무) | 내용 |
+|---|---|---|
+| `references/lifecycle-and-scope.md` | 모든 호출 (필수) | Lifecycle(graduated/stale/live), Scope — project vs user(scope 표·aspect 표·analyze-user 책임 분리·두 writer 계약·artifact-guard 주의), DB working tier & 자동 로드(mem 명령 형태), 5 카테고리 type taxonomy(aging stamp·시간 tier) |
+| `references/sub-actions.md` | sub-action 실행 시 (add/resolve/decide/sweep/promote/handoff) | Sub-Actions 전문(show/add/resolve/decide/sweep — project·user scope 절차 / promote — read-modify-write·두 writer 계약 / handoff — sweep 자동 포함), Confirm 정책 요약 표 |
+| `references/nudge-and-boundaries.md` | 자동 기록 자리·auto-memory 경계·write 전 Writing Style 판단 시 | Proactive nudge(자동 기록 트리거·자동 기록 모델), What this skill is NOT, Auto-memory와의 경계, Writing Style(간결성 원칙) |
 
 ## Language Rule
 - 사용자 대화는 한국어.

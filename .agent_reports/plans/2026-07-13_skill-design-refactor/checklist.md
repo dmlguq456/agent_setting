@@ -15,7 +15,7 @@
 - [x] CORE-4 scan.sh → `tools/skill-conformance/scan.sh` stable 위치 이전 (git mv, executable 유지)
 - [x] CORE-4 `sync-skills` `--check` 에 scan.sh 정량 규범 lint 스텝 편입 (finalize-and-hooks.md Step 6c + SKILL.md Step 표)
 - [x] CORE-4 drill `loops/drill/cases/g7_skill_conformance/{config,fixture.sh,assert.sh}` 신규 (AXIS=static, run.sh static-branch, README 등재, PASS 검증)
-- [ ] CORE 완료: `sync-skills` → adapter doctor/parity 통과 (**다음 test 스테이지**)
+- [x] CORE 완료: mirror 적용(cd48b25 diff → adapters 트리 patch 적용) + `python3 tools/build-manifest.py --check`(up-to-date) + `diff -rq skills/ adapters/claude/skills/`(.sync_state.json만 차이) + scan.sh 양 트리 출력 일치 확인 (2026-07-13 재개)
 
 ## Cluster 2 — SoT 통합 (P2+P5, SD-2)
 - [x] C2-1 authority `autopilot-code/references/arguments-and-decisions.md` Plan Resolution 헤더 "keep in sync" 제거 (single SoT authority 표기)
@@ -37,7 +37,7 @@
 - [x] C2-5 `core/CONVENTIONS.md §5.6` 단일 Reference Index 컨벤션 1줄 추가
 - [x] C2-5 13 라우터 Required Reads+Reference Map → 단일 Reference Index 표 병합 (파일+시점+의무 3요소 유지)
 - [x] C2-5 완료: 13 스킬 각 `Required Reads`/`Reference Map` 헤더 0, Reference Index 1
-- [ ] C2 완료: `sync-skills` → README/manifest + adapter doctor/parity 통과 (**다음 test 스테이지**)
+- [x] C2 완료: 양 트리 grep 완료기준 재확인(keep in sync/Language Rule/artifact-root snippet/Required Reads·Reference Map 헤더 = 0 양 트리) + manifest --check 통과 (2026-07-13 재개, mirror 적용 후)
 
 ## Cluster 3 — Sprawl 추출 (P3+P6, SD-8)
 - [ ] C3-1 `skills/autopilot-design/references/` 신설 (pipeline-execution.md ← :183-271, harness.md ← :149-162)

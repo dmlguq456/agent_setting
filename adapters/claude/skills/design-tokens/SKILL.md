@@ -118,7 +118,7 @@ shadcn default 보다 살짝 작게 — 사용자 선호 (memory 참조 시).
 - **type scale 전체** — xs~2xl 까지 실제 글자로 렌더 (line-height 포함)
 - **spacing / radius / shadow ruler** — 각 단계를 시각 막대·박스로
 
-루프: specimen.html 렌더 (`mcp__design__preview` → `screenshot` → `view_image`) → **이미지 직접 보기** → 대비·조화 자가 비평 (대비 미달 쌍 / 색 충돌 / scale 점프 불균일). 대비는 `mcp__design__eval_js` 로 `getComputedStyle` 수치 확인 가능 → 토큰 조정 → 재렌더. 깨끗할 때까지. **이 검증을 통과해야 component 가 토큰을 소비**.
+루프: specimen.html 을 렌더해 **이미지로 직접 보고** 대비·조화 자가 비평 (대비 미달 쌍 / 색 충돌 / scale 점프 불균일) → 토큰 조정 → 재렌더, 깨끗할 때까지. 대비는 `mcp__design__eval_js` 로 `getComputedStyle` 수치 확인. 공통 렌더 흐름(`preview`→`screenshot`→`view_image`)은 [_design_rules.md §시각 자가검증 루프](../../roles/modes/design/_design_rules.md) 단일 SoT. **이 검증을 통과해야 component 가 토큰을 소비** (specimen-consume gate — design-tokens 고유).
 
 ### Step 4: 실제 토큰 파일 작성
 
