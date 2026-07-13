@@ -27,7 +27,7 @@ metadata:
 
 - `01_refs/brief.md` — 의도·톤
 - `02_tokens/tokens.md` — 디자인 토큰 (단일 source)
-- **scaffold 매칭** — 바퀴 재발명 금지. `~/.claude/scaffolds/` 에서 골라 design 폴더로 복사 후 채운다:
+- **scaffold 매칭** — 기존 scaffold를 재사용한다. `~/.claude/scaffolds/` 에서 골라 design 폴더로 복사 후 채운다:
   - `slide` → `deck_stage/deck_stage.html` (자동 스케일·키보드 내비·PDF). **덱은 `deck_stage` scaffold 를 베이스로 만든다.**
   - variant 요청 → `tweaks_panel/` (파일 늘리지 말고 트윅). 목업 → `device_frames/`. 옵션 비교 → `design_canvas/`. 이미지 자리 → `image_slot/`.
 
@@ -67,7 +67,7 @@ Agent(디자인팀, mode=maker):
      - 강조 패턴 (bold / highlight / accent stripe)
    **`deck_stage` scaffold 를 베이스로** — `~/.claude/scaffolds/deck_stage/deck_stage.html` 복사 →
    각 슬라이드를 `<section class=\"slide\">` 로 채운다 (자동 스케일·키보드 내비·PDF·스피커노트 슬롯 내장).
-   본문 ≥ 24px (1920×1080 기준). **모든 슬라이드가 렌더 대상** (마크다운 가이드만으로 끝내지 않음).
+   본문 ≥ 24px (1920×1080 기준). **모든 슬라이드가 렌더 대상** (마크다운 가이드와 함께 렌더 가능한 HTML 덱을 산출).
    산출 위치:
      - 03_components/slides/slide_<N>.md (마크다운 가이드, 의도 기록용)
      - 03_components/slides/slides.html (deck_stage 기반 단일 self-contained 덱)

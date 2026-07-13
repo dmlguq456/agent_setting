@@ -27,6 +27,7 @@ fi
 declare -a policy_names=()
 declare -A policy_class=()
 parent_count=0
+entry_count=0
 while IFS=$'\t' read -r name class _rest; do
   name=${name%$'\r'}
   class=${class%$'\r'}
@@ -44,6 +45,7 @@ while IFS=$'\t' read -r name class _rest; do
   policy_names+=("$name")
   policy_class[$name]="$class"
   [ "$class" = "parent-invoked" ] && parent_count=$((parent_count + 1))
+  [ "$class" = "entry-router" ] && entry_count=$((entry_count + 1))
 done < "$POLICY"
 
 if [ "${#policy_names[@]}" -eq 0 ]; then
@@ -52,6 +54,10 @@ if [ "${#policy_names[@]}" -eq 0 ]; then
 fi
 if [ "$POLICY" = "$DEFAULT_POLICY" ] && [ "$parent_count" -ne 13 ]; then
   echo "FAIL: canonical parent-invoked registry must contain 13 skills (found $parent_count)"
+  fail=1
+fi
+if [ "$POLICY" = "$DEFAULT_POLICY" ] && [ "$entry_count" -ne 13 ]; then
+  echo "FAIL: canonical entry-router registry must contain 13 skills (found $entry_count)"
   fail=1
 fi
 

@@ -1,6 +1,6 @@
 ---
 name: autopilot-ship
-description: "앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트"
+description: "Use when preparing an app for deployment or release (hosting/CI/env/domain/migration). 앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트"
 argument-hint: "<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: entry

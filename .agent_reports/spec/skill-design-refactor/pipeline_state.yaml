@@ -14,7 +14,7 @@ phases:
   spec: done              # PRD v2 + runtime amendment — live 트리 정정 + invocation 계약 반영
   scaffolding: n/a        # 기존 skills/ 리팩터 — 신규 scaffold 없음
   design: n/a             # instruction 파일 리팩터 — 시각 UI 없음
-  dev: partial            # C1 invocation 계약+g7 closure 완료. 잔여 = autopilot-ship Use when + capabilities --qa drift + adaptation boundary + 상태/worktree 정리
+  dev: done               # Pocock 범위 최종 완료: P4 ship trigger, P8 positive steering, capability --qa cleanup, skill-conformance projection/state closure
 spec_version: v2          # v2 active PRD에 C1 runtime 결과를 within-spec amendment로 반영
 back_jump:
   - from: dev
@@ -22,7 +22,7 @@ back_jump:
     date: 2026-07-13
     reason: "BLOCKING_FINDING — audit/PRD v1 이 legacy root skills/ 를 대상으로 삼았으나 live Claude source 는 adapters/claude/skills/*/SKILL.md. main 기준 두 트리 동일 확인돼 audit 진단 재사용, 대상 경로만 정정 + 미러 불변식(SD-11) 추가."
     done_before_halt: "CORE(CORE-1~4)+Cluster2(C2-1~5) root skills/ 편집 완료·커밋 cd48b25 — 재개 시 adapters 트리로 미러 적용이 첫 항목"
-last_updated: 2026-07-13  # invocation closure amendment + 잔여 범위 갱신
+last_updated: 2026-07-13  # Pocock finalization; Ponytail·Codex depth-2/liveness는 별도 범위
 decisions_locked:
   - SD-1: 실행 순서 Cluster 2(SoT) → 3(sprawl) → 1(invocation 검증 후)
   - SD-2: Plan Resolution SoT = autopilot-code 단일 authority, 5개 pointer (grep "keep in sync"=0)
