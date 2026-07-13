@@ -77,7 +77,7 @@ main orchestrator 의 `autopilot-spec update` 로 반영할 항목:
 브랜치 `harness-installer-hooks` (main 미머지, 이 사이클 전용). 사이클 2와 동형인 phase 별 커밋 컨벤션으로 이 스테이지(code-report)가 일괄 커밋했다:
 
 ```
-67d7402 test+report: harness-installer cycle 3 — code-test (29/29 PASS) + final_report
+d7c1b33 test+report: harness-installer cycle 3 — code-test (29/29 PASS) + final_report
 af94367 docs: harness-installer Phase 3 — hooks_inventory.md defer→adopt
 82c394e feat: harness-installer Phase 2 — spec 파이프 3종 hook PLUGIN_DATA 재기준
 ```
