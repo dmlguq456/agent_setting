@@ -12,4 +12,4 @@
 - F1/F2/F3는 해결되었습니다: maker-family, role normalization, selector coverage, Sol/Terra/Luna split이 완료되었습니다.
 
 산출물: checklist.md, pipeline_summary.md, final_report.md.
-커밋/merge/push/runtime 설치/worktree 정리는 parent orchestrator에 남깁니다.
+구현 커밋과 main merge, 설치된 Codex projection 및 `fleet` 실출력 확인은 완료했습니다. push는 parent orchestrator가 이어서 수행하며, worktree는 rollback window 동안 유지합니다.

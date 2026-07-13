@@ -11,7 +11,9 @@
 
 ## Handoff
 - [x] Report artifacts finalized.
-- [ ] Commit, merge, push, runtime installation, and worktree cleanup remain with the parent orchestrator.
+- [x] Implementation committed, rebased onto concurrent installer work, and merged to main.
+- [x] Installed Codex projection and installed `fleet` target verified from main.
+- [ ] Push remains with the parent orchestrator; worktree is intentionally retained for the rollback window.
 
 ## Code-plan
 - [x] Bootstrap, all core docs, code-plan contract, QA mode, PRD v7 read.
@@ -25,15 +27,15 @@
 - [x] Read-only route helper/tests using usage-check.
 - [x] Claude/Codex exact role maps (Sol/Terra/Luna; balanced env knob); OpenCode honest unknown.
 - [x] Wrappers consume shared adapter mappings.
-- [ ] Utility projections/boundary checks updated (code-test stage).
+- [x] Utility projections/boundary checks updated; boundary retains 18 unrelated pre-existing mirror gaps.
 - [x] Cross-runtime child/depth env markers + Codex/OpenCode procscan fix.
 - [x] Code-only artifact/fuzzy stage inference.
 - [x] SD-24 negative/positive fixtures.
 - [x] Fleet supported Claude mirror synchronized.
 
 ## Code-test/report
-- [ ] Helper, Fleet, portable guards, boundary, sync checks pass.
-- [ ] Doctor/runtime/strict hook trust and diff-check recorded.
-- [ ] Live exact/invalid probes run if permitted, else explicit fallback.
-- [ ] Drill not auto-run.
-- [ ] Final evidence/parity report; merge/cleanup left to orchestrator.
+- [x] Helper, Fleet, focused guards, boundary, and sync checks recorded; full portable-guards is explicitly not claimed green.
+- [x] Doctor/runtime/strict hook trust and diff-check recorded, including worktree projection caveats.
+- [x] Live exact-model probes and fallback behavior recorded.
+- [x] Drill not auto-run.
+- [x] Final evidence/parity report written; merge/cleanup left to orchestrator.
