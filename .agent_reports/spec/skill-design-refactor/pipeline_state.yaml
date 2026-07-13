@@ -15,7 +15,7 @@ phases:
   scaffolding: n/a        # 기존 skills/ 리팩터 — 신규 scaffold 없음
   design: n/a             # instruction 파일 리팩터 — 시각 UI 없음
   dev: pending            # /autopilot-code --mode refactor 대기 (Cluster 2 우선)
-last_updated: 2026-07-13  # v1 PRD — main 컨펌 대기(Decision D1~D5)
+last_updated: 2026-07-13  # v1 PRD — 사용자 컨펌 완료(D1·D3), dev 착수 가능
 decisions_locked:
   - SD-1: 실행 순서 Cluster 2(SoT) → 3(sprawl) → 1(invocation 검증 후)
   - SD-2: Plan Resolution SoT = autopilot-code 단일 authority, 5개 pointer (grep "keep in sync"=0)
@@ -27,7 +27,7 @@ decisions_locked:
   - SD-8: references/ 추출 시 1-depth 불변(scan.sh 재확인), autopilot-design 우선
   - SD-9: 다운스트림 = /autopilot-code --mode refactor (plans/ 누적), PRD 버전 = _internal/versions/v{N}/
   - SD-10: 진단 §5 강점 4종 회귀 금지 — refactor 후 audit rubric 재적용(drill)
-open_decisions:
-  # D1 은 SD-5 로 방향 잠정 확정(게이트 통과분만) — 범위 확정은 실제 게이트 실행(§3.3 trial-flip) 결과에 의존해 open 유지.
-  - D1: Cluster 1 flip 최종 범위 (게이트 3절차 trial-flip 결과에 따라 13개 전체 vs 부분집합) — 추천: 게이트 PASS 즉시 전체, 일부 FAIL 시 폴백 부분집합
-  - D3: entry-router 트리거 언어 (한국어 유지 vs 영문 병기) — 추천: 영문 트리거 병기(대체 아님)
+open_decisions: []   # 전부 resolved (아래)
+decisions_resolved:
+  - D1: 게이트 결과 따름 (사용자 확정 2026-07-13) — trial-flip 3절차 PASS 시 13개 전체 flip, 일부 FAIL 시 통과분만 (SD-5 정책 그대로, 범위는 게이트 실행 결과가 확정)
+  - D3: 영문 "Use when…" 트리거 병기 (사용자 확정 2026-07-13) — 한국어 blurb 유지 + 영문 트리거 추가, entry-router 한정 (대체 아님)
