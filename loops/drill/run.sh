@@ -138,10 +138,17 @@ for c in "${cases[@]}"; do
 
   T="$RESULTS/$c.transcript.txt"
   J="$RESULTS/$c.json"
-  # Adapter runner: writes $J (raw) + $T (normalized transcript), echoes
-  # turns|in_tok|out_tok|cost. Same contract for claude|codex|opencode.
-  metrics[$c]=$(run_case_on_adapter "$ADAPTER" "$CASE_DIR/prompt.md" "$WORK/repo" "$TIMEOUT" "${MAX_TURNS:-}" "$J" "$T")
-  rc=$?
+  # Static-assert cases (AXIS=static) carry no user turn — they lint the live
+  # repo deterministically (e.g. skill-conformance scan). Skip the adapter run,
+  # emit a zero-cost metric, and go straight to assert.sh.
+  if [ -f "$CASE_DIR/config" ] && grep -q '^AXIS=static' "$CASE_DIR/config"; then
+    metrics[$c]="0|0|0|0"; : > "$T"; rc=0
+  else
+    # Adapter runner: writes $J (raw) + $T (normalized transcript), echoes
+    # turns|in_tok|out_tok|cost. Same contract for claude|codex|opencode.
+    metrics[$c]=$(run_case_on_adapter "$ADAPTER" "$CASE_DIR/prompt.md" "$WORK/repo" "$TIMEOUT" "${MAX_TURNS:-}" "$J" "$T")
+    rc=$?
+  fi
 
   # Spec-grounding marker home for assertions: guards write the marker to the
   # ADAPTER's resolved agent-home, so cases must read it there, not a literal

@@ -366,6 +366,20 @@ scoping 비대칭 의도:
   ```markdown
   > 산출물 폴더 컨벤션: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier)
   ```
+- **reference 목록은 단일 `## Reference Index` 표 1회** — `Required Reads` / `Reference Map` 이원화 금지. 한 표에 _파일 + 언제 로드(시점) + 의무_ 3열을 유지한다 (포인터 약화 금지 — 파일명만 남기고 시점·의무를 떨어뜨리면 must-have 자료가 약한 포인터 뒤로 숨는 variance-bug 회귀).
+
+### §5.6a. Skill-Design 정량 규범 (scan.sh lint SoT)
+
+> 스킬 설계의 _스캔 가능한_ 정량 기준의 단일 SoT. 아래 표의 각 규범은 `tools/skill-conformance/scan.sh` 의 출력 컬럼과 1:1 로 매핑된다 — 규범 위반은 컬럼 값으로 결정론적으로 드러난다.
+
+| 규범 | 기준 | scan.sh 컬럼 |
+|---|---|---|
+| SKILL.md body 길이 | `< 500` lines | `body_lines` / `line_ok` |
+| references/ depth | 1-depth (하위 디렉터리 0) | `ref_dir` / `ref_depth_ok` |
+| invocation frontmatter | 순수 sub-skill = `disable-model-invocation: true`; entry-router = model-invoked + 영문 "Use when" 트리거 병기 | `disable_model` / `invocation` / `use_when` |
+
+- **강제 경로**: 본 규범 위반은 `sync-skills --check` 가 scan.sh 로 자동 감지(§CORE-4 / `skills/sync-skills/references/finalize-and-hooks.md`). 신규·수정 스킬은 통과가 merge 전제. drill `g7_skill_conformance` 가 회귀 게이트.
+- **4축 철학·비용축 tenet 은 [DESIGN_PRINCIPLES §10](DESIGN_PRINCIPLES.md#10-skill-design-tenets-pocock-4축--predictability)** — 여기선 스캔 가능한 규범만 두고 tenet 은 중복 서술하지 않는다.
 
 ### §5.7. Backward compat detection (구현 가이드)
 

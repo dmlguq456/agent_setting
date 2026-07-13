@@ -238,6 +238,18 @@ per-project 메모는 두 layer 분리.
 
 **Why**: design 결정이 code 로 새면 (a) 토큰이 코드에 흩어져 시각 일관성이 무너지고 (b) `designs/` 가 화석이 되며 (c) 디자인 이력의 단일 출처가 사라진다. 토큰을 _design 소유 단일 계약_ 으로 두면 design 이 진짜 spec 역할을 하고, 복제·drift 가 원천 소멸한다. (2026-06-08 worklog-board: `designs/02_tokens/tokens.css`(7KB·06-01 화석) vs `app/globals.css`(50KB·06-08) 복제·drift 진단에서 도출.)
 
+## 10. Skill-Design Tenets (Pocock 4축 + Predictability)
+
+스킬셋 자체의 설계 철학 — 개별 스킬을 _왜_ 그렇게 짜는가의 tenet. 정량 수치(줄 수·depth·frontmatter 요건)는 여기 두지 않는다.
+
+- **root virtue = Predictability**: 스킬의 목표는 같은 _출력_ 이 아니라 같은 _과정_ 의 재현 — 같은 상황이면 같은 절차·같은 게이트가 돈다. 28스킬이 이미 이 골격 위에 🟢 서 있고, refactor 는 이 골격을 흔들지 않는 선에서만 움직인다 (behavior-preserving 의 근거).
+- **4축 레버** (설계를 조정하는 네 축):
+  1. **Invocation** — 도달성(reachability) gain 없는 resident description 은 context 낭비다. 순수 sub-skill(부모가 Skill-tool 로만 부르는 것)은 `disable-model-invocation` 으로 자동발화 표면에서 내린다. entry-router 는 model-invoked 로 남기되 영문 "Use when" 트리거를 병기해 도달성을 높인다.
+  2. **Information Hierarchy** — 3-rung progressive disclosure: SKILL.md 는 라우터·계약·mapping 표만, 상세 본문(worked example·delegate prompt·템플릿·실행 본문)은 `references/*.md` 로 밀어 필요할 때만 로드. references/ 는 1-depth 유지.
+  3. **Steering** — leading concept(무엇을 하는지 앞머리 한 줄)와 checkable completion(끝났는지 눈으로/grep 으로 확인 가능한 완료 기준)로 조향한다. safety negation(파괴 작업 금지·게이트 미통과 시 중단 등 부정형 지시)은 정당한 steering 이지 no-op 이 아니다.
+  4. **Pruning** — cross-skill 중복은 단일 authority(SoT) 한 곳 + pointer 로 접는다. 같은 규칙을 여러 SKILL.md 가 복사-서술하면 drift·sediment 의 근원 → SoT 지정 후 나머지는 _파일명+시점+의무_ 를 유지한 포인터로.
+- **1줄 포인터**: 정량 규범(줄 수·depth·frontmatter 요건)은 [CONVENTIONS §5.6a](CONVENTIONS.md#56a-skill-design-정량-규범-scansh-lint-sot) — 스캔 가능한 기준은 그쪽 단일 SoT, 본 절은 tenet(철학·비용축)만.
+
 ## 부록 — 도입 이력 (간략)
 
 본 문서의 각 절이 어떤 incident 에서 결정됐는지 git log 기반 압축 reference. 상세 narrative 는 `git log --oneline` + 각 SKILL.md 의 `## Why` 절.
@@ -252,3 +264,4 @@ per-project 메모는 두 layer 분리.
 | §6 편집팀 + 응답 원칙 | `3f5a48c` translation-team 신설 → `cfb0e12` editorial-team rename + scope 확장 / `bf8d565` 응답 원칙 §3 / `2058325` §4 / `3f5a48c` §1 (판교체) |
 | §7 Memory layers | `60f141a` `/notes` skill 신설 (현 `/post-it` — self-pruning lifecycle 로 진화) — 사용자 통제 layer 와 자동 메모리 분리 |
 | §8 Performance Preservation | 2026-07-06 owner 단일 세션+in-session 팀 토큰 재설계 → 2026-07-10 stage-dispatch 로 기본값 반전: `standard+` 스테이지를 depth-2 headless 세션으로 분사, file-only handoff 로 "file 통해 (verdict 만 token)" 를 스테이지 입도로 승격 (spec/stage-dispatch, SD-1·SD-2) |
+| §10 Skill-Design Tenets | 2026-07-13 skill-design-refactor: Pocock 4축(Invocation·Information Hierarchy·Steering·Pruning) + Predictability tenet 을 §10 에, 스캔 가능한 정량 규범은 CONVENTIONS §5.6a 로 분할 배치 (spec/skill-design-refactor) |

@@ -60,16 +60,9 @@ Agent(디자인팀, mode=verifier):
 
 ### Step 2: 검토 대상을 **렌더해서 본다** (critic 입력 — 렌더한 이미지로 본다)
 
-critic 은 렌더한 _이미지_ 를 직접 본다. **Design MCP** 로: `mcp__design__preview` → `screenshot` → `view_image`. 반응형은 `preview` viewport 를 바꿔 mobile/desktop 각각.
+critic 은 렌더한 _이미지_ 를 직접 본다 (좌표·코드가 아니라 눈으로). 공통 렌더 흐름과 scope 별 렌더 표(ui/webapp·slide·icon·diagram)는 [_design_rules.md §시각 자가검증 루프](../../roles/modes/design/_design_rules.md) 단일 SoT — 로드해 그대로 돈다.
 
-| scope | 렌더 → 본다 |
-|---|---|
-| ui / webapp | `preview.html` → preview/screenshot/view_image. 컴포넌트 + 페이지 전체. mobile/desktop viewport 각각 |
-| slide | `slides.html` (deck_stage) → `screenshot({ steps })` 전 슬라이드 |
-| icon | SVG → `sharp`/`rsvg-convert` PNG → view_image (확대) |
-| diagram | SVG/mermaid → PNG → view_image. 관통·overlap·label 겹침 확인 |
-
-렌더 불가 환경이면 그 사실을 critique 에 명시하고 _본 범위만_ 비평 (못 본 것을 본 척 X).
+> 렌더 불가 환경이면 그 사실을 critique 에 명시하고 _본 범위만_ 비평 (못 본 것을 본 척 X).
 
 ### Step 3: 디자인팀 critic 호출
 

@@ -22,6 +22,19 @@
 3. **자가 비평 → 수정 → 재렌더** — 관통·overlap·정렬 어긋남·spacing 불균형·위계 불명확(focal point 없음)·색 역할 혼선·잘림. 의심 지점은 위 확장 기능의 DOM 수치 확인으로 교차확인 (지원 런타임 한정 — 미지원이면 육안 판단). 시각적으로 깨끗할 때까지 (최대 3-5 회전).
 4. **보고는 본 것으로** — "valid/교차 0" 대신 "렌더해 확인: X 영역 관통 수정, label overlap 없음, 콘솔 에러 0" 식 _관찰_ 보고. **렌더 이미지를 사용자에 제시** (live-preview 패리티).
 
+### scope 별 렌더 (ui/webapp · slide · icon · diagram)
+
+공통 흐름: `mcp__design__preview({ path })` → `mcp__design__getConsoleLogs()` (에러 먼저) → `mcp__design__screenshot({ savePath, steps })` → `mcp__design__view_image({ path })`. scope 별 구체:
+
+| scope | 렌더 → 본다 |
+|---|---|
+| `ui` / `webapp` | `preview.html` 을 `preview` → screenshot → view_image. 컴포넌트 단품 + **페이지 합성 전체 화면** 둘 다. hover/active/empty/loading 은 `steps[]` 로. 반응형은 `preview` viewport 변경 (mobile/desktop 각각) |
+| `slide` | `slides.html` (deck_stage) 을 `preview` → `screenshot({ steps })` 로 **전 슬라이드** 캡처 (각 step: 다음 슬라이드로 이동) → view_image. _un-rendered 가이드로 남는 슬라이드 없음_ |
+| `icon` | SVG → `sharp`/`rsvg-convert` PNG → view_image (작은 자산은 `clip`/density 확대). 또는 preview.html gallery 로 |
+| `diagram` | SVG → PNG / mermaid → `mmdc` PNG → view_image. 관통·overlap·label 겹침 확인, 의심 영역 `clip` crop 확대 |
+
+> 렌더 불가 환경(Design MCP 미부착·단일 스냅샷 harness 등)이면 그 사실을 명시하고 `sharp`/`rsvg`/`mmdc` 정적 렌더로 fallback + _본 범위만_ 비평한다 (못 본 것을 본 척 X).
+
 > SVG/diagram 단품은 `sharp`/`rsvg-convert`/`mmdc` 로 PNG 렌더 후 이미지로 직접 확인도 가능 (브라우저 불필요한 정적 자산). HTML·React·인터랙션·콘솔 점검이 필요하면 반드시 Design MCP.
 
 ## 슬롭 회피 (그대로 지킬 것)

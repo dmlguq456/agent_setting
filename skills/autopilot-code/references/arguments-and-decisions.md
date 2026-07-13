@@ -1,5 +1,5 @@
 ## Language Rule
-- When explaining something to the user, write in Korean.
+- All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft). code track 전 스테이지(code-plan·refine·execute·test·report)의 단일 SoT.
 
 ## Argument Parsing
 
@@ -92,7 +92,7 @@ The pipeline runs with sane defaults and only pauses on genuinely ambiguous or d
 
 **Logging**: When the pipeline pauses (active-plan ambiguity, ambiguous root cause, or `--user-refine`), record the event for the Decision Points table in `pipeline_summary.md`. Auto-decisions are not individually logged.
 
-## Plan Resolution (canonical — keep in sync with code-execute, code-test, code-report, code-refine)
+## Plan Resolution (canonical authority — single SoT)
 Resolve `$ARG` to a plan file path:
 1. If it ends with `.md` → use as-is
 2. If it's a directory path → append `/plan/plan.md`

@@ -10,7 +10,7 @@ metadata:
 ---
 
 > 산출물 폴더: `<artifact-root>/spec/` (CONVENTIONS.md §5.4.3 3-tier). 숫자 prefix 없는 평이한 이름 — `prd.md` (T1, 항상 최신) · `stack.md` · `design/` · `ship.md` · `pipeline_state.yaml` · `_internal/`.
-> `<artifact-root>` 해석: `.agent_reports` 우선, legacy `.claude_reports` 는 이미 존재하고 `.agent_reports` 가 없을 때만 사용. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports` 로 치환한다.
+> `<artifact-root>` 해석·치환(`.agent_reports` 우선, legacy `.claude_reports` fallback): [CONVENTIONS §5.1](../../core/CONVENTIONS.md#51-workspace-assumption-전제).
 
 > **Intake 게이트**: 진입 직후 입력이 비가역 결정 커버리지(스택·인증·DB·배포타깃·핵심 entity 등)에 미달이면 [CONVENTIONS.md §6.6](../../core/CONVENTIONS.md#66-autopilot-intake-gate) 의 1라운드 구조화 질문 먼저 (AskUserQuestion, 항상 탈출구). slash 직접 args 충분·이미 명시·throwaway(/track)·재개(--from) 시 skip (별도 flag 불요).
 
@@ -88,16 +88,11 @@ metadata:
 - **동시성 lock** (`references/prd-authoring.md`): 쓰기 단계 진입 _직전_ `.pipeline-lock` 획득 (OPERATIONS §5.8), BLOCKED 면 쓰기 멈추고 사용자 보고.
 - **Forbidden Zones · CONFIRM Gate 응답 분기** (`references/operations-and-examples.md`): 배포·결제·DNS·env 실값 등 명시 요청 없이 X / 각 Gate 응답은 진행·수정·back-jump·중단 분기.
 
-## Required Reads
+## Reference Index
 
-- 옵션 해석(`--mode`/`--intensity`/`--user-refine`), mode 자동 추론 단서, 신규 vs 재진입 자동 분기, update mode canonical 경로, refine v{N+1} 버전 규약: `references/invocation-and-modes.md`.
-- PRD 작성 (Procedure Step 1~3.5 — 정보 수집·중간 컨펌·PRD 본문 템플릿·Architecture Diagrams·묶음 갱신 logic): `references/prd-authoring.md`.
-- Scaffolding + Skeleton (Step 4 Phase 0~3 — ref source·ckpt 사전 동작 점검·개발팀 new-lib·Step 5 CONFIRM Gate): `references/scaffolding.md`.
-- 배포 셋업 라우팅·Forbidden Zones·CONFIRM Gate 응답 분기·`pipeline_state.yaml`·Return Format·Update memory·Examples: `references/operations-and-examples.md`.
-
-## Reference Map
-
-- `references/invocation-and-modes.md`: Argument Parsing(`--mode`/`--intensity`/`--user-refine`), Mode 자동 추론 단서, Context Auto-Detection(`pipeline_state.yaml` 자동 검사·발화→step 자동 분류·자동 컨펌 한 화면·update mode canonical 경로·refine v{N+1} 버전 관리).
-- `references/prd-authoring.md`: Procedure(중간 컨펌 default·동시성 가드) + Step 1(정보 수집)·2(한 화면 컨펌)·3a-3d(PRD 3 자리 분할 + 의미↔규칙 경계 체크) + PRD 본문 템플릿 + Architecture Diagrams + Step 3.5(묶음 갱신 logic).
-- `references/scaffolding.md`: Step 4 Scaffolding+Skeleton(Phase 0 ref source·1 ref repo/ckpt 가져오기·1.5 pretrained ckpt 사전 동작 점검·2 개발팀 new-lib·3 결과 컨펌) + Step 5 CONFIRM Gate.
-- `references/operations-and-examples.md`: 배포 셋업 자리(autopilot-ship 라우팅)·Forbidden Zones·CONFIRM Gate 응답 분기·Pipeline state 관리·Return Format·Update memory·Examples 1-4.
+| 파일 | 언제 로드 (의무) | 내용 |
+|---|---|---|
+| `references/invocation-and-modes.md` | 옵션 해석·mode 추론·신규 vs 재진입 분기 자리 | Argument Parsing(`--mode`/`--intensity`/`--user-refine`), Mode 자동 추론 단서, Context Auto-Detection(`pipeline_state.yaml` 자동 검사·발화→step 분류·자동 컨펌 한 화면·update mode canonical 경로·refine v{N+1} 버전 관리) |
+| `references/prd-authoring.md` | PRD 작성 시 (Procedure Step 1~3.5) | Procedure(중간 컨펌 default·동시성 가드) + Step 1(정보 수집)·2(한 화면 컨펌)·3a-3d(PRD 3 자리 분할 + 의미↔규칙 경계 체크) + PRD 본문 템플릿 + Architecture Diagrams + Step 3.5(묶음 갱신 logic) |
+| `references/scaffolding.md` | Scaffolding + Skeleton 시 (Step 4 Phase 0~3) | Phase 0 ref source·1 ref repo/ckpt 가져오기·1.5 pretrained ckpt 사전 동작 점검·2 개발팀 new-lib·3 결과 컨펌 + Step 5 CONFIRM Gate |
+| `references/operations-and-examples.md` | 배포 라우팅·CONFIRM Gate 분기·Return·memory·Examples 자리 | 배포 셋업 자리(autopilot-ship 라우팅)·Forbidden Zones·CONFIRM Gate 응답 분기·Pipeline state 관리·Return Format·Update memory·Examples 1-4 |
