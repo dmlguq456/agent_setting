@@ -1,6 +1,11 @@
 # Checklist — skill-design-refactor (cycle 1)
 
 > plan.md 의 checkable step 1:1. 미체크 상태로 초기화. 순서 = CORE → C2 → C3 → C1 → 회귀.
+>
+> **⚠️ BLOCKED (2026-07-13, SD-6 게이트 실행 중 발견)**: `_internal/BLOCKING_FINDING.md` — root `skills/`
+> 는 Claude 런타임 live source 가 아니다(`adapters/claude/skills/` 가 진짜 SoT, manifest.json 도 거기만
+> glob). CORE+Cluster 2 는 계획대로 완료·커밋(`cd48b25`)했으나 **live 런타임엔 미반영**. Cluster 3·1 은
+> 같은 오류 반복 방지를 위해 **중단** — spec back-jump 필요(대상 트리 재확정 후 재개).
 
 ## CORE — 설계 계약 core-first (SD-3·SD-4)
 - [x] CORE-1 `core/CONVENTIONS.md` §5.6a Skill-Design 정량 규범 표 추가 (줄 수/depth/frontmatter + DESIGN_PRINCIPLES 상호 포인터)
