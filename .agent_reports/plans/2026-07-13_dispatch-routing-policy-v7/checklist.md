@@ -13,7 +13,7 @@
 - [x] Report artifacts finalized.
 - [x] Implementation committed, rebased onto concurrent installer work, and merged to main.
 - [x] Installed Codex projection and installed `fleet` target verified from main.
-- [ ] Push remains with the parent orchestrator; worktree is intentionally retained for the rollback window.
+- [x] Main pushed; worktree intentionally retained for the rollback window.
 
 ## Code-plan
 - [x] Bootstrap, all core docs, code-plan contract, QA mode, PRD v7 read.

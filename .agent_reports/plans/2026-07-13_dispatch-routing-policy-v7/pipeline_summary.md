@@ -14,4 +14,4 @@ F1/F2/F3 are resolved: maker-family consumed, portable role normalization restor
 
 ## Handoff
 
-Implementation is committed and merged to main. Installed Codex projection is healthy, and the installed `fleet` command resolves to the merged canonical implementation. Push remains with the parent orchestrator; the worktree stays for the rollback window.
+Implementation is committed, merged, and pushed to main. Installed Codex projection is healthy, and the installed `fleet` command resolves to the merged canonical implementation. The worktree stays for the rollback window.
