@@ -1,0 +1,11 @@
+[
+  {
+    "id": "agent-harness-claude@agent-harness",
+    "version": "0e6b3fee8fab",
+    "scope": "user",
+    "enabled": true,
+    "installPath": "/tmp/tmp.JHfRv2yBHT/plugins/cache/agent-harness/agent-harness-claude/0e6b3fee8fab",
+    "installedAt": "2026-07-13T01:17:50.229Z",
+    "lastUpdated": "2026-07-13T01:17:50.229Z"
+  }
+]

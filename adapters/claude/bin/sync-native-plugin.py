@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""Generate the Claude-native plugin projection for the portable harness.
+
+Claude is the native runtime — skills/agents live at the repo-root SoT
+directly (`adapters/claude/skills/`, `adapters/claude/agents/`), unlike
+Codex which needs a sync-native-skills generator first. This is the
+*first* Claude sync-native generator: it exists only to physically
+materialize the plugin channel (Claude Code plugin installs are
+self-contained — a plugin cannot reference `../` outside its own root,
+so all content must be copied in, not symlinked).
+
+Mirrors `adapters/codex/bin/sync-native-plugin.py` (const block /
+`plugin_json`+`marketplace_json` literals / `write_json` / `sync()` /
+`check()`+`check_file()` / `main()`), extended: Codex's generator carries
+skills only; this one carries skills + agents + hooks + hooks.json
+(INST-OPEN-1, `_internal/hooks_inventory.md` adopt set = 2 hooks).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[3]
+ADAPTER = ROOT / "adapters" / "claude"
+PLUGIN_NAME = "agent-harness-claude"
+MARKETPLACE_ROOT = ADAPTER / "plugin-marketplace"
+MARKETPLACE = MARKETPLACE_ROOT / ".claude-plugin" / "marketplace.json"
+PLUGIN_ROOT = MARKETPLACE_ROOT / "plugins" / PLUGIN_NAME
+SKILLS = ADAPTER / "skills"
+AGENTS = ADAPTER / "agents"
+HOOKS_SOURCE = ROOT / "hooks"
+
+# INST-OPEN-1 adopt set (_internal/hooks_inventory.md): self-contained +
+# fail-open guards only. memory/statusline/dispatch families excluded;
+# spec-pipeline trio deferred (would need ${CLAUDE_PLUGIN_DATA} rebasing).
+HOOK_ADOPT = ["git-state-guard.sh", "artifact-guard.sh"]
+
+# matcher/shell taken verbatim from adapters/claude/settings.json registration.
+_HOOK_MATCHERS = {
+    "git-state-guard.sh": "Edit|Write|MultiEdit|NotebookEdit",
+    "artifact-guard.sh": "Edit|Write|MultiEdit",
+}
+_HOOK_SHELLS = {
+    "git-state-guard.sh": "sh",
+    "artifact-guard.sh": "bash",
+}
+
+
+def plugin_json() -> dict:
+    return {
+        "name": PLUGIN_NAME,
+        "description": (
+            "Portable agent harness (skills/agents/hooks/.mcp.json/bin) projected for "
+            "Claude Code — see PRD .agent_reports/spec/harness-installer/prd.md."
+        ),
+        "author": {
+            "name": "agent-harness",
+        },
+    }
+
+
+def marketplace_json() -> dict:
+    return {
+        "name": "agent-harness",
+        "owner": {
+            "name": "agent-harness",
+        },
+        "plugins": [
+            {
+                "name": PLUGIN_NAME,
+                "source": f"./plugins/{PLUGIN_NAME}",
+                "description": (
+                    "Portable agent harness — skills/agents/hooks projection for Claude Code."
+                ),
+            }
+        ],
+    }
+
+
+def hooks_json() -> dict:
+    """hooks/hooks.json — wrapped under a top-level "hooks" key (plugin schema,
+    verified against current Claude Code docs: code.claude.com/docs/en/
+    plugins-reference — differs from the flat settings.json shape). Each
+    adopted hook registers on PreToolUse with its settings.json matcher, path
+    rebased to ${CLAUDE_PLUGIN_ROOT}.
+    """
+    return {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": _HOOK_MATCHERS[name],
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": (
+                                f'{_HOOK_SHELLS[name]} "${{CLAUDE_PLUGIN_ROOT}}/hooks/{name}"'
+                            ),
+                        }
+                    ],
+                }
+                for name in HOOK_ADOPT
+            ]
+        }
+    }
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def sync() -> None:
+    if not SKILLS.exists():
+        raise SystemExit(f"Claude native skills are missing: {SKILLS}")
+    if not AGENTS.exists():
+        raise SystemExit(f"Claude native agents are missing: {AGENTS}")
+
+    write_json(PLUGIN_ROOT / ".claude-plugin" / "plugin.json", plugin_json())
+    write_json(MARKETPLACE, marketplace_json())
+
+    plugin_skills = PLUGIN_ROOT / "skills"
+    if plugin_skills.exists() or plugin_skills.is_symlink():
+        shutil.rmtree(plugin_skills)
+    shutil.copytree(SKILLS, plugin_skills)
+
+    plugin_agents = PLUGIN_ROOT / "agents"
+    if plugin_agents.exists() or plugin_agents.is_symlink():
+        shutil.rmtree(plugin_agents)
+    shutil.copytree(AGENTS, plugin_agents)
+
+    plugin_hooks = PLUGIN_ROOT / "hooks"
+    if plugin_hooks.exists() or plugin_hooks.is_symlink():
+        shutil.rmtree(plugin_hooks)
+    plugin_hooks.mkdir(parents=True)
+    for name in HOOK_ADOPT:
+        shutil.copy2(HOOKS_SOURCE / name, plugin_hooks / name)
+    write_json(plugin_hooks / "hooks.json", hooks_json())
+
+
+def check_file(path: Path, expected: str, stale: list[str]) -> None:
+    if not path.exists() or path.read_text(encoding="utf-8") != expected:
+        stale.append(str(path.relative_to(ROOT)))
+
+
+def check() -> int:
+    stale: list[str] = []
+
+    check_file(
+        PLUGIN_ROOT / ".claude-plugin" / "plugin.json",
+        json.dumps(plugin_json(), indent=2, ensure_ascii=False) + "\n",
+        stale,
+    )
+    check_file(
+        MARKETPLACE,
+        json.dumps(marketplace_json(), indent=2, ensure_ascii=False) + "\n",
+        stale,
+    )
+    check_file(
+        PLUGIN_ROOT / "hooks" / "hooks.json",
+        json.dumps(hooks_json(), indent=2, ensure_ascii=False) + "\n",
+        stale,
+    )
+
+    # skills: per-skill SKILL.md byte-compare + excess-file detection.
+    expected_skills = {
+        PLUGIN_ROOT / "skills" / skill.relative_to(SKILLS) for skill in SKILLS.glob("*/SKILL.md")
+    }
+    for skill in sorted(SKILLS.glob("*/SKILL.md")):
+        plugin_skill = PLUGIN_ROOT / "skills" / skill.relative_to(SKILLS)
+        if not plugin_skill.exists() or plugin_skill.read_bytes() != skill.read_bytes():
+            stale.append(str(plugin_skill.relative_to(ROOT)))
+    plugin_skills_dir = PLUGIN_ROOT / "skills"
+    if plugin_skills_dir.exists():
+        for path in sorted(plugin_skills_dir.glob("*/SKILL.md")):
+            if path not in expected_skills:
+                stale.append(str(path.relative_to(ROOT)))
+
+    # agents: single-level *.md files, byte-compare + excess-file detection.
+    expected_agents = {PLUGIN_ROOT / "agents" / p.name for p in AGENTS.glob("*.md")}
+    for agent_file in sorted(AGENTS.glob("*.md")):
+        plugin_agent = PLUGIN_ROOT / "agents" / agent_file.name
+        if not plugin_agent.exists() or plugin_agent.read_bytes() != agent_file.read_bytes():
+            stale.append(str(plugin_agent.relative_to(ROOT)))
+    plugin_agents_dir = PLUGIN_ROOT / "agents"
+    if plugin_agents_dir.exists():
+        for path in sorted(plugin_agents_dir.glob("*.md")):
+            if path not in expected_agents:
+                stale.append(str(path.relative_to(ROOT)))
+
+    # hooks: adopted set only (hooks.json checked separately above).
+    expected_hooks = {PLUGIN_ROOT / "hooks" / name for name in HOOK_ADOPT}
+    for name in HOOK_ADOPT:
+        src_hook = HOOKS_SOURCE / name
+        plugin_hook = PLUGIN_ROOT / "hooks" / name
+        if not plugin_hook.exists() or plugin_hook.read_bytes() != src_hook.read_bytes():
+            stale.append(str(plugin_hook.relative_to(ROOT)))
+    plugin_hooks_dir = PLUGIN_ROOT / "hooks"
+    if plugin_hooks_dir.exists():
+        for path in sorted(plugin_hooks_dir.glob("*")):
+            if path.name == "hooks.json":
+                continue
+            if path not in expected_hooks:
+                stale.append(str(path.relative_to(ROOT)))
+
+    if stale:
+        print("Claude native plugin projection is stale:", file=sys.stderr)
+        for item in stale:
+            print(f"  {item}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true", help="verify generated projection")
+    args = parser.parse_args()
+
+    if args.check:
+        return check()
+    sync()
+    print(f"generated Claude native plugin projection at {PLUGIN_ROOT.relative_to(ROOT)}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
