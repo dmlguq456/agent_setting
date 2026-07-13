@@ -14,3 +14,5 @@
 - 의미↔규칙 경계 체크: 충돌 0 (config merge 충돌 판정도 규칙 처리).
 - Step 4 scaffold: worktree `agent_setting-wt/harness-installer-scaffold` 에 headless 분사 (sonnet·fast implementer, ~25분 완주) — 브랜치 커밋 `9792fd3`(skeleton 13 files, 432 insertions) + `20c4f7e`(handoff 보고). 산출: `tools/install/{harness.sh,installer.py,projector,manifest,verifier,drivers/*}` + `adapters/claude/plugin-marketplace/` 대칭 skeleton + `.gitignore` 예외 2줄(Codex 선례 동형). 구문·JSON·CLI 스모크 전부 통과. hash-manifest 는 의도적 `NotImplementedError`(GSD 정독 게이트 준수). 상세 = `_internal/scaffold_v1.md`(브랜치).
 - 다음: 사용자 merge 신호 → 브랜치 수확 / 구현 = `autopilot-code` (선행 게이트: GSD `bin/install.js` 정독 + INST-OPEN-4 OpenCode 실측).
+
+- minor(2026-07-13, 사이클 3 반영): INST-D-6 이월 3종 해소 — spec 파이프 hook PLUGIN_DATA env-prefix 탑재(채택 set 2→5, canonical 무수정, 29/29 PASS). PRD OPEN-1 문구 동기. 부수: dispatch-liveness pid 신호(별건 머지)·codex modes projection 재동기.
