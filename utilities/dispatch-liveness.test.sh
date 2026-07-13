@@ -107,6 +107,50 @@ else
   bad "expected SUSPECT (anchoring rejects prose limit match); got rc=$rcF out=[$outF]"
 fi
 
+# ===== pid 신호 서열 (공유-worktree transcript aliasing, 2026-07-13) =====
+if [ -d /proc ]; then
+  # --- Case G: pid= 실행 중 (cmdline 에 claude) → transcript 없어도 ALIVE(pid), exit 0.
+  bash -c 'exec -a claude sleep 30' & pidG=$!
+  wtG="$tmp/wt/pid-alive"   # projects/ transcript 없음 — pid 신호가 1순위임을 증명
+  jobsG="$agent_home/.dispatch/jobs.log"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-13T00:00:00" "open" "agent_setting" "$wtG" "pidalive" "capability=x,pid=$pidG" > "$jobsG"
+  outG=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" "$jobsG" 2>&1); rcG=$?
+  if [ "$rcG" -eq 0 ] && printf '%s' "$outG" | grep -q 'ALIVE.*pid'; then
+    ok "live pid (claude cmdline) → ALIVE(pid) without any transcript"
+  else
+    bad "expected ALIVE(pid)/exit0 for live pid; got rc=$rcG out=[$outG]"
+  fi
+  kill "$pidG" 2>/dev/null; wait "$pidG" 2>/dev/null
+
+  # --- Case H (본 수정의 회귀 핵심): pid 종료 + *신선* transcript → EXITED, exit 3.
+  #     구버전은 conductor 활동이 만든 신선 transcript 때문에 ALIVE 오탐(수확 ~50분 지연 실측).
+  sleep 0.1 & pidH=$!; wait "$pidH" 2>/dev/null   # 즉시 종료한 pid 확보
+  wtH="$tmp/wt/pid-exited"; encH=$(printf '%s' "$wtH" | sed 's#[/._]#-#g')
+  mkdir -p "$runtime_root/projects/$encH"; : > "$runtime_root/projects/$encH/s.jsonl"   # 신선 transcript (aliasing 조건)
+  jobsH="$agent_home/.dispatch/jobs.log"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-13T00:00:00" "open" "agent_setting" "$wtH" "pidexited" "capability=x,pid=$pidH" > "$jobsH"
+  outH=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" "$jobsH" 2>&1); rcH=$?
+  if [ "$rcH" -eq 3 ] && printf '%s' "$outH" | grep -q '⚠️ EXITED' && ! printf '%s' "$outH" | grep -q 'ALIVE'; then
+    ok "dead pid + fresh transcript → EXITED not ALIVE (shared-worktree aliasing closed)"
+  else
+    bad "expected EXITED/exit3 (pid beats fresh transcript); got rc=$rcH out=[$outH]"
+  fi
+
+  # --- Case I: pid 없는 legacy row 는 기존 transcript-mtime 판정 유지 (Case A 재확인 겸).
+  wtI="$tmp/wt/legacy-row"; encI=$(printf '%s' "$wtI" | sed 's#[/._]#-#g')
+  mkdir -p "$runtime_root/projects/$encI"; : > "$runtime_root/projects/$encI/s.jsonl"
+  jobsI="$agent_home/.dispatch/jobs.log"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-13T00:00:00" "open" "agent_setting" "$wtI" "legacyrow" "capability=x" > "$jobsI"
+  outI=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" "$jobsI" 2>&1); rcI=$?
+  if [ "$rcI" -eq 0 ] && printf '%s' "$outI" | grep -q 'ALIVE.*transcript'; then
+    ok "pid-less legacy row still judged by transcript mtime (fallback intact)"
+  else
+    bad "expected legacy transcript ALIVE for pid-less row; got rc=$rcI out=[$outI]"
+  fi
+else
+  echo "skip - /proc 없음: pid 신호 케이스 G/H/I 생략 (fallback 경로는 A~F 가 커버)"
+fi
+
 if [ "$fails" -eq 0 ]; then
   echo "dispatch-liveness runtime-root regression: PASS"
   exit 0
