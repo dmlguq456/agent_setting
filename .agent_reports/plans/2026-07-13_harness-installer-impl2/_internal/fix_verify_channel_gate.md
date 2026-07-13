@@ -60,5 +60,5 @@ real home unchanged: sha256 before=6156677a5f23d88191afea8b2b91488a094f1d2bc6e5f
 격리 안에서만 실행되고 실 런타임 홈은 무변경임을 재확인.
 
 ## 커밋
-- hash: `1b7e2b4` (`tools/install/drivers/claude.py`)
+- hash: `b347719` (`tools/install/drivers/claude.py` + 본 보고서)
 - 브랜치: `harness-installer-fix-verify-gate` (main 머지 안 함)
