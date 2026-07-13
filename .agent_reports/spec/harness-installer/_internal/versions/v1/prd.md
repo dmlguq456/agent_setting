@@ -1,6 +1,6 @@
 # harness-installer — Spec (PRD)
 
-> mode: **cli** (하네스 배포 표면 — 2-채널 하이브리드 installer) · 작성 2026-07-12 · v1 · **v2 (2026-07-13)**: 구현 사이클 1·2 반영 — INST-OPEN-1 확정(plugin hook 목록), INST-OPEN-3 완료(INSTALL_LAYOUT 축소), verify 채널-인지 계약 추가. 구 버전 = `_internal/versions/v1/prd.md`
+> mode: **cli** (하네스 배포 표면 — 2-채널 하이브리드 installer) · 작성 2026-07-12 · v1
 > 컴포넌트: `agent_setting` repo 의 **배포·설치 표면** — 하네스를 Claude Code·Codex·OpenCode 세 런타임에서 "바로 플러그인 형태로" 설치·검증·갱신하게 한다. `spec/harness-layer-sync/`(내부 canonical 바인딩)와 **형제·interlock** 관계의 독립 청사진 — 이 폴더(`spec/harness-installer/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - research `.agent_reports/research/cross-platform-agent-frameworks/` — `05_deployment.md`(3단 배포 골격·cost model), `06_implementation.md`(채택 후보 1 = GSD hash-manifest), `cards/{gsd,claude-code-official-plugins,multi-harness-projection,claude-flow}.md`
@@ -42,7 +42,7 @@
 | 명령 | 무엇 | 채널 |
 |---|---|---|
 | `install [claude\|codex\|opencode\|all]` | dev 머신 기본 경로 — symlink projection(INSTALL_LAYOUT 레시피 기계화) + runtime-owned 표면 처리(아래 표) + manifest 기록. `--plugin` 시 plugin 채널 경로(각 런타임 CLI 의 marketplace add/plugin add 를 wrapping·안내) | 양쪽 |
-| `verify [runtime]` | Migration Order 수동 검증 ~260줄의 기계화 — projection 링크·생성기 `--check`·preflight 계약·bootstrap 로드 스모크를 check 목록으로 실행, 결과 pass/fail 표. **채널-인지**: plugin 채널 미채택 머신(dev projection 활성 + marketplace 미등록)에서 plugin check 는 명시 SKIP(ok) — parity-loss 원칙(silent drop 금지)과 동형. marketplace 등록됐는데 plugin 미설치·생성물 drift 는 실패 유지 | 공통 |
+| `verify [runtime]` | Migration Order 수동 검증 ~260줄의 기계화 — projection 링크·생성기 `--check`·preflight 계약·bootstrap 로드 스모크를 check 목록으로 실행, 결과 pass/fail 표 | 공통 |
 | `update [--reapply]` | repo pull 후 재-projection + plugin 채널이면 런타임 update 명령 wrapping. `--reapply` = local-patches 를 새 파일에 재적용 | 양쪽 |
 | `status` | 설치 상태 요약 — 런타임별 채널·버전(commit)·drift(수정 감지) 유무 | 공통 |
 | `uninstall [runtime]` | manifest 등재분만 제거(소유 경계) + 백업 안내 | 공통 |
@@ -132,9 +132,9 @@ flowchart TD
 - 의미 판단 구간 스캔: installer 동작은 전부 결정론(파일 ops·hash 비교·config merge·check 실행). **충돌 0**.
 - 유일 경계 후보 = OpenCode config merge 의 "충돌" 판정 — **규칙으로 처리**(같은 key 에 다른 값 = 충돌 → 보고·중단, 자동 해석 시도 없음). LLM fallback 불요.
 
-## 열린 결정 (OPEN) — v2 현황
+## 열린 결정 (OPEN)
 
-- ~~INST-OPEN-1~~ **확정(구현 사이클 2, 2026-07-13)**: plugin 탑재 hook 목록 — **채택 2**: `git-state-guard.sh`·`artifact-guard.sh`(self-contained·fail-open 충족) / **이월 3**: spec 파이프 계열 3종(`spec-skill-gate` 등 — `${CLAUDE_PLUGIN_DATA}` 재기준 작업 필요, 후속 사이클) / **제외**: memory(mem-*)·statusline·dispatch·core-first 계열(CLI 설치 전제 상태 의존). 근거 = `plans/2026-07-13_harness-installer-impl2/final_report.md`.
+- **INST-OPEN-1** (범위 축소 — 기술 가능성은 확인됨): Claude·Codex plugin 에 싣는 hook 의 **범위**. 방향 = 소비자에게 의미 있는 self-contained 가드만(경로는 `${CLAUDE_PLUGIN_ROOT}`/`${CLAUDE_PLUGIN_DATA}` 재기준, 하네스 상태 부재 시 fail-open no-op); memory·statusline·dispatch 계열은 CLI 설치 전제. 파일별 목록은 구현 plan(autopilot-code)에서 확정.
 - ~~INST-OPEN-2~~ **확정(사용자, 2026-07-12)**: CLI 진입 명령 = **`harness`** (fleet 동형 한 단어 + 서브명령, `tools/install/harness.sh` launcher → `~/.local/bin/harness` symlink). PATH 충돌은 install 시 기존 `harness` 명령 존재 검사로 방어.
-- ~~INST-OPEN-3~~ **완료(구현 사이클 2, 2026-07-13)**: `INSTALL_LAYOUT.md` 514→250줄 — 셸 레시피 나열·수동 검증 블록을 `harness install`/`harness verify` 참조로 대체, 계약적 내용(Windows 절·런타임별 특기사항) 보존.
-- **INST-OPEN-4** (유지): OpenCode 배선 drift(복수형 디렉토리·`skills.paths` 부재) — 로컬 1.17.13 은 단수형 배선으로 정상 동작(verify `opencode.drift-watch` check 가 상시 감시), 복수형 migration 은 opencode 버전업 시 별도 사이클.
+- **INST-OPEN-3**: `INSTALL_LAYOUT.md` 의 사후 위상 — CLI 가 대체한 뒤 문서는 "계약 서술 + `verify` 참조"로 축소(구현 사이클에서 동기화, §3 대응 동기화 원칙).
+- **INST-OPEN-4**: OpenCode 배선 drift(복수형 디렉토리·`skills.paths` 부재)의 처리 — installer 구현에 migration 을 포함할지, 별도 opencode-adapter 정비 사이클로 뗄지. 구현 Step 0 실측 후 결정.

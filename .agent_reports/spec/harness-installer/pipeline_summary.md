@@ -1,5 +1,10 @@
 # harness-installer — pipeline summary
 
+## v2 (2026-07-13) — spec update (구현 사이클 1·2 반영)
+
+- snapshot: `_internal/versions/v1/prd.md`. 변경: INST-OPEN-1 확정(hook 채택 2·이월 3·제외 기록), INST-OPEN-3 완료(INSTALL_LAYOUT 514→250줄), INST-OPEN-4 만 잔존(drift-watch 상시 감시로 강등), [cli] verify 절에 채널-인지 계약 추가(실측 오탐 → quick fix 사이클 `harness-installer-fix-verify-gate` 와 동기).
+- 구현 현황: 사이클 1(0e6b3fe — CLI 본체·3-런타임 driver·hash-manifest 3-way·Codex plugin wrap, 51/51 PASS) + 사이클 2(8311dcf — Claude plugin content generator·install --plugin·문서 축소, 53/53 PASS). 실환경 verify 로 opencode projection drift 1건 발견·복구 실적.
+
 ## v1 (2026-07-12) — 신규 spec 생성
 
 - 계기: 사용자 발화 "claude code와 codex, opencode 등을 바로 플러그인 형태로 쓸 수 있는 installer" (2026-07-12). 라우팅 컨펌 — 새 spec 독립 생성(HLS v3 확장 아님).
