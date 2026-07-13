@@ -79,6 +79,12 @@ class RenderDispatchPresentationTest(unittest.TestCase):
 
         self.assertIsNone(render._dispatch_profile(job))
 
+    def test_runtime_watch_loop_is_recognized(self):
+        match = dispatch._LOOPS.search("bash loops/runtime-watch.sh --probe")
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), "runtime-watch")
+
 
 
 

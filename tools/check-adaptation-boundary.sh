@@ -1114,9 +1114,12 @@ check_codex_bin_wrappers() {
   fi
 
   if ! grep -Fq 'loop-info)' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'loop-info <oncall|note|study|drill>' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'loop-info <oncall|note|study|drill|runtime-watch>' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'source=loops/oncall.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'source=loops/study.md' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'source=loops/runtime-watch.md' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'action=deterministic-probe-and-proposal-report-only' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'auto_edit=unsupported' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'source=loops/drill/README.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'auto_run=unsupported' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'related_capability=autopilot-note' adapters/codex/bin/preflight.sh \
@@ -1125,7 +1128,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'fallback=worklog-board-or-manual-post-it-flow' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must expose Codex loop-info contracts without running loop scripts"
   fi
-  if ! grep -Fq 'loop-info <oncall|note|study|drill>' adapters/codex/README.md \
+  if ! grep -Fq 'loop-info <oncall|note|study|drill|runtime-watch>' adapters/codex/README.md \
     || ! grep -Fq 'preflight.sh loop-info <loop>' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex docs must document loop-info support/fallback contracts"
   fi
@@ -2169,9 +2172,12 @@ check_opencode_bin_wrappers() {
   fi
 
   if ! grep -Fq 'loop-info)' adapters/opencode/bin/preflight.sh \
-    || ! grep -Fq 'loop-info <oncall|note|study|drill>' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'loop-info <oncall|note|study|drill|runtime-watch>' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'source=loops/oncall.md' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'source=loops/study.md' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'source=loops/runtime-watch.md' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'action=deterministic-probe-and-proposal-report-only' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'auto_edit=unsupported' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'source=loops/drill/README.md' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'auto_run=unsupported' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'related_capability=autopilot-note' adapters/opencode/bin/preflight.sh \
@@ -2180,7 +2186,7 @@ check_opencode_bin_wrappers() {
     || ! grep -Fq 'fallback=worklog-board-or-manual-post-it-flow' adapters/opencode/bin/preflight.sh; then
     fail_msg "adapters/opencode/bin/preflight.sh must expose OpenCode loop-info contracts without running loop scripts"
   fi
-  if ! grep -Fq 'loop-info <oncall|note|study|drill>' adapters/opencode/README.md \
+  if ! grep -Fq 'loop-info <oncall|note|study|drill|runtime-watch>' adapters/opencode/README.md \
     || ! grep -Fq 'preflight.sh loop-info <loop>' adapters/opencode/ADAPTATION.md; then
     fail_msg "OpenCode docs must document loop-info support/fallback contracts"
   fi

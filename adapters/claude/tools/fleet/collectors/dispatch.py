@@ -26,8 +26,8 @@ from ..model import DispatchJob, etime_to_min
 from . import procscan
 
 _AUTOPILOT = re.compile(r"/autopilot-([a-z-]+)")
-_LOOPS = re.compile(r"loops/(oncall|note|study|drill)")
-_LOOP_KEYS = ("oncall", "note", "study", "drill")
+_LOOPS = re.compile(r"loops/(oncall|note|study|drill|runtime-watch)")
+_LOOP_KEYS = ("oncall", "note", "study", "drill", "runtime-watch")
 _DRILL_LOG_PATH = re.compile(r"(/[^\s'\";]*drill[^\s'\";]*\.log)")
 _DRILL_CASE_LINE = re.compile(r"^▶\s+(.+?)\s+\(work=", re.MULTILINE)
 _MODE = re.compile(r"--mode ([a-z]+)")

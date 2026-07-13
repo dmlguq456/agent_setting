@@ -1,0 +1,1 @@
+../../../../tools/memory/mem_cluster_j.test.sh

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # usage-check.test.sh — SD-16(a) 사용량 조회 헬퍼 회귀.
 #   증명: dead-limit 마커 → limited(reset), 마커 없음 → ok, jobs.log 부재 → unknown,
-#   window 밖(오래된) 마커 → ok(만료), harness 스코프 필터.
+#   reset 없는 window 밖(오래된) 마커 → ok(만료), known future reset → limited, harness 스코프 필터.
 set -uo pipefail
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 UC="$SCRIPT_DIR/usage-check.sh"
@@ -49,10 +49,15 @@ out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1 | grep -v "^bias ")
 out=$(AGENT_HOME="$AH" bash "$UC" --harness claude --jobs "$tmp/none.log" 2>&1 | grep -v "^bias ")
 [ "$out" = "claude unknown" ] && ok "missing jobs.log → unknown" || bad "expected 'claude unknown', got [$out]"
 
-# Case: stale marker (10h ago, window 300m) → expired → ok
-printf '%s\tdone\tr\tw\ts3\tcapability=code-plan,depth=2,harness=claude,note=dead-session-limit,reset=1pm\n' "$old_iso" > "$jobs"
+# Case (runtime-currentness 2026-07-13): old marker but known future reset → still limited.
+printf '%s\tdone\tr\tw\ts3\tcapability=code-plan,depth=2,harness=claude,note=dead-session-limit,reset=%s\n' "$old_iso" "$fut_clock" > "$jobs"
 out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1 | grep -v "^bias ")
-[ "$out" = "claude ok" ] && ok "stale marker beyond window → ok(expired)" || bad "expected 'claude ok', got [$out]"
+[ "$out" = "claude limited($fut_clock)" ] && ok "old marker + future reset → limited(reset)" || bad "expected 'claude limited($fut_clock)', got [$out]"
+
+# Case: old marker without reset → bounded unknown window expired → ok
+printf '%s\tdone\tr\tw\ts3b\tcapability=code-plan,depth=2,harness=claude,note=dead-session-limit\n' "$old_iso" > "$jobs"
+out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1 | grep -v "^bias ")
+[ "$out" = "claude ok" ] && ok "old marker without reset → ok(downgrade)" || bad "expected 'claude ok', got [$out]"
 
 # Case: harness scope — codex marker must not leak into claude
 printf '%s\tdone\tr\tw\ts4\tcapability=code-plan,depth=2,harness=codex,owner_harness=codex,note=dead-usage-limit,reset=noon\n' "$now_iso" > "$jobs"
@@ -60,9 +65,9 @@ out=$(AGENT_HOME="$AH" bash "$UC" --harness all 2>&1)
 echo "$out" | grep -q '^claude ok$' && echo "$out" | grep -q '^codex limited(noon)$' \
   && ok "harness scope: claude ok / codex limited" || bad "harness scope wrong: [$out]"
 
-# Case: bias default line present and defaults to claude
+# Case: bias default line present and defaults to neutral auto
 out=$(AGENT_HOME="$AH" bash "$UC" --harness claude 2>&1)
-echo "$out" | grep -q '^bias claude$' && ok "bias default → claude" || bad "expected 'bias claude' line, got [$out]"
+echo "$out" | grep -q '^bias auto$' && ok "bias default → auto" || bad "expected 'bias auto' line, got [$out]"
 
 # Case: bias overridable via HARNESS_CAPACITY_BIAS (가변 전제 — 하드코드 금지)
 out=$(AGENT_HOME="$AH" HARNESS_CAPACITY_BIAS=codex bash "$UC" --harness claude 2>&1)

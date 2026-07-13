@@ -4,7 +4,7 @@ Codex writes no per-session status file; telemetry is recovered from the rollout
   ~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<sid>.jsonl
   · line 1  = session_meta  → payload.cwd (pid↔session match key)
   · last "token_count" event → payload.info.{last_token_usage, model_context_window}
-      + payload.rate_limits.{primary,secondary}.used_percent
+      + payload.rate_limits.{primary,secondary}.used_percent and optional limit_window_seconds
 Model/effort default from ~/.codex/config.toml (top-level model / model_reasoning_effort).
 
 context% mirrors codex's OWN formula (codex-rs protocol.rs, fetched 2026-07-02 — user: fleet 의
@@ -24,6 +24,7 @@ import json
 import os
 import re
 import time
+import urllib.request
 
 # rollout filename tail: rollout-<ISO-ts>-<uuid>.jsonl
 _SID_RE = re.compile(r"-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$")
@@ -223,31 +224,86 @@ def _apply_token_count(sess, line):
             eff = win - _BASELINE_TOKENS
             used = max(0, tot - _BASELINE_TOKENS)
             sess.ctx_pct = min(99, round(100.0 * used / eff))
-    p5, p7 = _rates_from_payload(p)                 # 300min ≈ 5h · 10080min = 7d
+    p5, p7, windows = _rates_from_payload(p)
     if p5 is not None:
         sess.rl_5h = p5
     if p7 is not None:
         sess.rl_7d = p7
+    if windows:
+        sess.rl_windows = windows
+
+
+def _duration_label(seconds):
+    """Human label for a Codex limit_window_seconds value.
+
+    Incident 2026-07-13: Codex primary_window changed to 604800 seconds while fleet still
+    hard-labeled primary as 5h. Known durations get stable labels; unknown durations are
+    shown as their actual duration instead of being forced into the old 5h/7d schema.
+    """
+    if not isinstance(seconds, (int, float)) or seconds <= 0:
+        return None
+    seconds = int(seconds)
+    known = {
+        300 * 60: "5h",
+        24 * 60 * 60: "24h",
+        7 * 24 * 60 * 60: "7d",
+        30 * 24 * 60 * 60: "30d",
+    }
+    if seconds in known:
+        return known[seconds]
+    if seconds % (7 * 24 * 60 * 60) == 0:
+        return "%dw" % (seconds // (7 * 24 * 60 * 60))
+    if seconds % (24 * 60 * 60) == 0:
+        return "%dd" % (seconds // (24 * 60 * 60))
+    if seconds % 3600 == 0:
+        return "%dh" % (seconds // 3600)
+    if seconds % 60 == 0:
+        return "%dm" % (seconds // 60)
+    return "%ds" % seconds
+
+
+def _legacy_window_key(label):
+    if label == "5h":
+        return "rl_5h"
+    if label == "7d":
+        return "rl_7d"
+    return None
+
+
+def _window_from_limit(name, data, legacy_label):
+    d = data or {}
+    v = d.get("used_percent")
+    if not isinstance(v, (int, float)):
+        return None
+    label = _duration_label(d.get("limit_window_seconds")) or legacy_label
+    rs = d.get("reset_at")
+    if not isinstance(rs, (int, float)):
+        rs = d.get("resets_at")
+    reset = float(rs) if isinstance(rs, (int, float)) else None
+    return {"source": name, "label": label, "pct": round(v), "reset": reset}
 
 
 def _rates_from_payload(p):
-    """(rl_5h, rl_7d) from a token_count payload, EXPIRY-AWARE: rollout samples freeze at the
-    last activity, so a window whose resets_at has since passed shows its PRE-reset value (e.g.
-    a 17h-old 3% — or 94% — for the 5h window). No newer sample ⇒ no local consumption since ⇒
-    the current window is effectively 0%. (2026-07-02 user: codex usage looked wrong.)"""
+    """(rl_5h, rl_7d, windows) from a token_count payload, EXPIRY-AWARE.
+
+    Legacy rollout payloads had primary/secondary windows that meant 5h/7d. Newer Codex
+    payloads may include `limit_window_seconds`; that duration is now the label source.
+    """
     rl = p.get("rate_limits") or {}
 
-    def rp(k):
-        d = rl.get(k) or {}
-        v = d.get("used_percent")
-        if not isinstance(v, (int, float)):
-            return None
-        rs = d.get("resets_at")
-        if isinstance(rs, (int, float)) and rs < time.time():
-            return 0
-        return round(v)
-
-    return rp("primary"), rp("secondary")
+    windows = []
+    legacy = {"rl_5h": None, "rl_7d": None}
+    for source, fallback in (("primary", "5h"), ("secondary", "7d")):
+        win = _window_from_limit(source, rl.get(source), fallback)
+        if not win:
+            continue
+        if isinstance(win.get("reset"), (int, float)) and win["reset"] < time.time():
+            win["pct"] = 0
+        windows.append([win["label"], win["pct"], win.get("reset")])
+        key = _legacy_window_key(win["label"])
+        if key:
+            legacy[key] = win["pct"]
+    return legacy["rl_5h"], legacy["rl_7d"], windows
 
 
 _ACCT = {"ts": 0.0, "data": None}
@@ -268,7 +324,6 @@ def _api_usage():
         return None
     if not tok:
         return None
-    import urllib.request
     req = urllib.request.Request(
         "https://chatgpt.com/backend-api/wham/usage",
         headers={"Authorization": "Bearer " + tok,
@@ -281,19 +336,25 @@ def _api_usage():
         return None
     rl = (d if isinstance(d, dict) else {}).get("rate_limit") or {}
 
-    def rp(k):
+    def rp(k, fallback):
         w = rl.get(k) or {}
-        v = w.get("used_percent")
-        rs = w.get("reset_at")            # epoch seconds (probed 2026-07-02)
-        return (round(v) if isinstance(v, (int, float)) else None,
-                float(rs) if isinstance(rs, (int, float)) else None)
+        return _window_from_limit(k, w, fallback)
 
-    (p5, rs5), (p7, rs7) = rp("primary_window"), rp("secondary_window")
-    return (p5, p7, rs5, rs7) if (p5 is not None or p7 is not None) else None
+    raw_windows = [rp("primary_window", "5h"), rp("secondary_window", "7d")]
+    windows = [[w["label"], w["pct"], w.get("reset")] for w in raw_windows if w]
+    if not windows:
+        return None
+    p5 = p7 = rs5 = rs7 = None
+    for label, pct, reset in windows:
+        if label == "5h":
+            p5, rs5 = pct, reset
+        elif label == "7d":
+            p7, rs7 = pct, reset
+    return {"rl_5h": p5, "rl_7d": p7, "rs_5h": rs5, "rs_7d": rs7, "windows": windows}
 
 
 def account_usage():
-    """Account-level (rl_5h, rl_7d): live API first (see _api_usage), then the NEWEST on-disk
+    """Account-level usage: live API first (see _api_usage), then the NEWEST on-disk
     rollout carrying rate_limits (expiry rule applied) as offline fallback. TTL-cached 60s."""
     now = time.time()
     if now - _ACCT["ts"] <= 60.0:
@@ -321,9 +382,11 @@ def account_usage():
         except Exception:
             continue
         if payload.get("rate_limits"):
-            p5, p7 = _rates_from_payload(payload)
-            if p5 is not None or p7 is not None:
-                _ACCT["data"] = (p5, p7, None, None)   # rollout fallback: no reliable reset time
+            p5, p7, windows = _rates_from_payload(payload)
+            if windows:
+                windows = [[lbl, pct, rs] for lbl, pct, rs in (windows or [])]
+                _ACCT["data"] = {"rl_5h": p5, "rl_7d": p7, "rs_5h": None, "rs_7d": None,
+                                  "windows": windows}   # rollout fallback: no reliable reset time
                 break
     return _ACCT["data"]
 

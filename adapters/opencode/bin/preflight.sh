@@ -70,7 +70,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
-       preflight.sh loop-info <oncall|note|study|drill>
+       preflight.sh loop-info <oncall|note|study|drill|runtime-watch>
        preflight.sh claim-verify [--check] <claim> [--out <file>]
        preflight.sh browser-fetch [--check] <url> [--out <dir>]
        preflight.sh data-script [--check] <script.py> [-- args...]
@@ -571,6 +571,25 @@ scheduler_surface=external-worklog-board
 action=not-implemented-in-repo
 fallback=worklog-board-or-manual-post-it-flow
 note=OpenCode has an on-demand autopilot-note capability projection, but this repo has no OpenCode-native scheduled note loop runner.
+EOF
+        ;;
+      runtime-watch)
+        cat <<'EOF'
+adapter=opencode
+loop=runtime-watch
+source=loops/runtime-watch.md
+status=manual-contract
+runtime_surface=opencode-loop-guidance
+trigger=change-triggered-or-conservative-schedule
+action=deterministic-probe-and-proposal-report-only
+auto_edit=unsupported
+output=notes/runtime-watch/<date>.md
+official_sources=openai-codex-pricing,openai-codex-changelog,openai-codex-rate-card,openai-codex-plan,claude-code-plan,claude-code-changelog
+local_projection_checks=codex-runtime-projection,usage-check,cli-version
+executable_projection=portable-shell-probe
+probe=loops/runtime-watch.sh --probe
+fallback=read-source-and-run-probe-or-report-unavailable
+note=Runtime-watch separates official runtime support, local adapter projection, parity gap, and fallback. It must not auto-edit policy.
 EOF
         ;;
       *)

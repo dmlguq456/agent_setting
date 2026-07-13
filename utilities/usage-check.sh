@@ -7,9 +7,9 @@
 #   대화형 슬래시 커맨드뿐 — 스크립트 가능한 headless 사용량 API 가 없다(Codex 는 openai/codex
 #   #15281 이 open feature). 따라서 본 헬퍼는 공식 표면 대신 **보수 조회**:
 #     · jobs.log 의 `note=dead-*limit*` 마커(SD-15 wrapper 가 심음, OPERATIONS §5.10 ⑨)
-#     · `.dispatch/usage-reset.<harness>` reset 캐시(SD-15 가 씀)
 #   판정 (SD-16e §8.6.2 reset 의미론):
-#     · limited(<reset>)      — window(기본 300분=5h rolling) 안 dead-limit 마커 + reset= 미경과.
+#     · limited(<reset>)      — dead-limit 마커 + 알려진 reset= 미경과. reset 이 있으면 마커 age가
+#                               예전 300분 창보다 오래돼도 reset clock 을 우선한다(2026-07-13).
 #     · limited(unknown-reset)— dead-limit 마커에 reset= 이 없음. 해제 시각 미상 → orchestrator 가
 #                               "확인 필요"로 읽어야 함. UNKNOWN_WINDOW_MIN(기본 60분) 안에서만 이 상태,
 #                               넘기면 ok 로 downgrade(근거 없는 5h 봉쇄 방지).
@@ -18,13 +18,12 @@
 #                               (OPERATIONS §5.10 jobs.log 하드 계약).
 #     · unknown               — jobs.log 부재/해석 불가 → 조회 실패로 취급(막지 말고 orchestrator 판단).
 #
-#   사용: usage-check.sh [--harness claude|codex|all] [--jobs <path>] [--window-min <N>]
+#   사용: usage-check.sh [--harness claude|codex|all] [--jobs <path>] [--unknown-window-min <N>]
 #   출력: harness 당 한 줄 `<harness> <state>` (파싱 가능) + 마지막 한 줄 `bias <harness>`.
 #   exit 0 항상(informational).
 #
-#   한도 비대칭 기본값 (SD-OPEN-3, 사용자 제공 2026-07-10): 현행 가정 = Claude Code 한도 > Codex
-#   → 분산 기본 방향(bias) = claude 주력, codex 는 교차 리뷰·failover 고가치 자리 우선.
-#   **가변 전제 — 하드코드 금지**: `HARNESS_CAPACITY_BIAS` env 로 교체(예: codex), 미설정 시 claude.
+#   기본 capacity policy (runtime-currentness, 2026-07-13): stale한 Claude>Codex 가정을 제거한다.
+#   `HARNESS_CAPACITY_BIAS` 를 명시하면 그 값을 쓰고, 미설정이면 `auto`(balanced/neutral)로 출력한다.
 set -u
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -32,16 +31,14 @@ AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/agent-home.sh")}"
 
 HARNESS="all"
 JOBS=""
-WINDOW_MIN=300
 # SD-16e (§8.6.2): reset= 없는 마커는 해제 시각을 모르므로 보수 창을 단축한다 — 이 창 안에서만
-# `limited(unknown-reset)` 로 표기하고, 창을 넘기면 `ok` 로 downgrade 해 reset-less 마커가 전체
-# WINDOW_MIN(5h) 내내 하네스를 봉쇄하지 않게 한다. env 로 교체 가능(하드코드 금지).
+# `limited(unknown-reset)` 로 표기하고, 창을 넘기면 `ok` 로 downgrade 한다.
 UNKNOWN_WINDOW_MIN="${UNKNOWN_WINDOW_MIN:-60}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --harness) HARNESS="${2:-all}"; shift 2 ;;
     --jobs) JOBS="${2:-}"; shift 2 ;;
-    --window-min) WINDOW_MIN="${2:-300}"; shift 2 ;;
+    --window-min) UNKNOWN_WINDOW_MIN="${2:-60}"; shift 2 ;; # backward-compatible alias
     --unknown-window-min) UNKNOWN_WINDOW_MIN="${2:-60}"; shift 2 ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "usage-check: unknown arg '$1'" >&2; exit 64 ;;
@@ -94,22 +91,17 @@ for h in $HARNESSES; do
     reset=$(printf '%s' "$marker" | cut -f2)
     mepoch=$(to_epoch "$mts")
     age_min=$(( (now - mepoch) / 60 ))
-    if [ "$mepoch" -gt 0 ] && [ "$age_min" -lt "$WINDOW_MIN" ]; then
-      # SD-16e (§8.6.2): reset 의미론. 마커 시각이 WINDOW_MIN 안이어도 reset 을 반영한다.
+    if [ "$mepoch" -gt 0 ]; then
+      # reset 이 알려져 있으면 age window 보다 reset clock 이 우선이다. Codex/Claude runtime
+      # windows can change; an old 300-minute assumption must not clear a known future reset.
       reset_epoch=$(reset_to_epoch "$reset" "$mepoch")
       if [ "$reset_epoch" -gt 0 ]; then
-        # reset= 있고 파싱됨 — 경과했으면 ok(expired), 아니면 limited(reset).
-        if [ "$now" -ge "$reset_epoch" ]; then
-          state="ok"
-        else
+        if [ "$now" -lt "$reset_epoch" ]; then
           state="limited(${reset})"
         fi
-      else
-        # reset= 부재/파싱불가 — 해제 시각 미상. 보수 창 단축 + 구분 표기(둘 다):
-        # UNKNOWN_WINDOW_MIN 안에서만 limited(unknown-reset), 넘기면 ok 로 downgrade.
-        if [ "$age_min" -lt "$UNKNOWN_WINDOW_MIN" ]; then
-          state="limited(unknown-reset)"
-        fi
+      elif [ "$age_min" -lt "$UNKNOWN_WINDOW_MIN" ]; then
+        # reset= 부재/파싱불가 — 해제 시각 미상. UNKNOWN_WINDOW_MIN 안에서만 보수 제한.
+        state="limited(unknown-reset)"
       fi
     fi
   fi
@@ -118,5 +110,5 @@ for h in $HARNESSES; do
   printf '%s %s\n' "$h" "$state"
 done
 
-# 한도 비대칭 기본값 — 이름 있는 설정값(SD-OPEN-3): env 로 교체 가능, 하드코드 금지.
-printf 'bias %s\n' "${HARNESS_CAPACITY_BIAS:-claude}"
+# 중립 기본값 — 명시 override 없이는 특정 하네스를 주력으로 가정하지 않는다.
+printf 'bias %s\n' "${HARNESS_CAPACITY_BIAS:-auto}"
