@@ -1279,12 +1279,13 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # "모든 윈도우가 쭉 붙어있다 → 서로 간격 띄우고 게이지 길게"): long gauges, generous gaps, aligned.
     # rate is account-shared → take the FRESHEST session's value per harness (a stale session's
     # per-file rate is old; e.g. a 16-min-old file showed 7d 100% while the live rate was 15%).
-    _rl = {}   # harness -> (rl_5h, rl_7d, rl_ms, mtime, rl_rs)
+    _rl = {}   # harness -> (rl_5h, rl_7d, rl_ms, mtime, rl_rs, rl_windows)
     for s in sessions:
-        if s.rl_5h is not None or s.rl_7d is not None or s.rl_ms:
+        if s.rl_5h is not None or s.rl_7d is not None or s.rl_ms or getattr(s, "rl_windows", None):
             cur = _rl.get(s.harness)
             if cur is None or (s.mtime or 0) > (cur[3] or 0):
-                _rl[s.harness] = (s.rl_5h, s.rl_7d, s.rl_ms, s.mtime, s.rl_rs)
+                _rl[s.harness] = (s.rl_5h, s.rl_7d, s.rl_ms, s.mtime, s.rl_rs,
+                                  getattr(s, "rl_windows", None))
     # harnesses with LIVE sessions but no rate source still get a row with an explicit note —
     # a silently missing row read as a bug (2026-07-02 user: "opencode go 공급자로서 안뜨는거야?").
     # opencode-go has no usage API (gateway 404s; docs: console-only), so say so on the board.
@@ -1301,15 +1302,18 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 row.append(("no usage api — plan quota is console-only", "dim"))
                 lines.append(row)
                 continue
-            r5, r7, rms, _mt, rrs = _rl[h]
-            # 5h/7d + per-model buckets — ALL labels dim (a colored 'fable' read like a harness).
+            r5, r7, rms, _mt, rrs, rwins = _rl[h]
+            # Dynamic windows + per-model buckets — ALL labels dim (a colored 'fable' read like a harness).
             # htop BRACKET METERS (round-4): `[━━━━──────── 33%]` — the bracket draws the capacity
             # vessel, % sits inside. Session-row ctx gauges stay bare (htop's list bars are bare too).
             # ↻ = time until the window resets (API resets_at — was collected and discarded).
             gw = 8 if layout != "wide" else 12
             rs5, rs7 = (rrs or (None, None))[0], (rrs or (None, None))[1]
-            gauges = [("5h ", r5, rs5), ("7d ", r7, rs7)] + \
-                     [(lbl + " ", v, None) for lbl, v in (rms or [])]
+            if rwins:
+                gauges = [(str(lbl) + " ", pct, reset) for lbl, pct, reset in rwins]
+            else:
+                gauges = [("5h ", r5, rs5), ("7d ", r7, rs7)]
+            gauges += [(lbl + " ", v, None) for lbl, v in (rms or [])]
             now_ts = time.time()
             for gi, (lbl, v, rs) in enumerate(gauges):
                 row.append(("   ", None) if gi else ("", None))          # 3-col gap between meters

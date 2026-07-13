@@ -32,8 +32,9 @@
 | **일지** (`note`) | 시간 | cron 05:03 | 전날 산출물 내용 | worklog-board L2 **노트화·라우팅** (idempotent) | `notes/_layer2/notes/` + digest | worklog-board `/triage` |
 | **모의훈련** (`drill/`) | 사건 | 지침 _행동규칙_ 수정 후 `drill/run.sh` (정기 회귀 `--sample 2` 랜덤 2개 · 가드/라우팅 대폭 변경 시만 관련 케이스·전수 — 매번 전수는 과부하) | 메인 에이전트 행동 (지침 준수) | fixture 가상 상황에서 headless **시험·채점** + FAIL 시 **진단·수정안 초안** 자동 작성(적용 X) | `drill/results/<일시>/` (+ `<case>.diagnosis.md`) | FAIL 시 수정안 승인 |
 | **연수** (`study`) | 시간 | cron 일요일 06:17 | 외부 동향 × 현 세팅 | agent engineering 신간·현재 주 adapter 변경 조사 → 세팅 대조 → **개선 제안서만** (🔴 한정 **자동 초안** 동반) (+ g0 세금 추세) | `notes/study/<date>.md` | 제안 채택 서명 → 적용 → 모의훈련 |
+| **런타임 감시** (`runtime-watch`) | 상태 | 일 1회 이하 또는 runtime-currentness 사건 후 수동 | Codex·Claude Code 공식 정책/런타임 사실 × 로컬 adapter projection | 공식 primary source fingerprint + 로컬 CLI/projection/usage helper probe → **보고/제안만** (정책 auto-edit 금지, token 절약 위해 deterministic probe 우선) | `notes/runtime-watch/<date>.md` | 변경 감지 시 autopilot-spec/code 사이클 제안 |
 
-새벽 시간표: 05:03 note → 05:37 oncall (충돌 방지 간격).
+새벽 시간표: 05:03 note → 05:37 oncall (충돌 방지 간격). runtime-watch 는 네트워크·정책 currentness 감시라 매일 강제하지 않고 oncall 이후 수동/상태형으로 둔다(2026-07-13 Codex window currentness 사고).
 
 ## 후보 (backlog)
 

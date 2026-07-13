@@ -276,7 +276,7 @@ Harness-specific status signals need OpenCode-native realization:
 | headless/autopilot/background jobs | `preflight.sh headless` / `dispatch` / `liveness` / `harvest` provide the tool-contract path over `opencode run`; `preflight.sh status` surfaces in-flight jobs as `headless_open_jobs` / `headless_open_slugs` from the dispatch registry. A native graphical display remains optional polish |
 | sibling `-wt/<slug>` dispatch detection | preserve the worktree naming invariant; choose an OpenCode-native display surface later |
 | pipeline stage nudges | preflight/AGENTS instructions first; UI only when OpenCode exposes a suitable surface |
-| oncall/note/study/drill loop nudges | `preflight.sh briefing` plus `preflight.sh loop-info <loop>` for loop-specific support/fallback status |
+| oncall/note/study/drill/runtime-watch loop nudges | `preflight.sh briefing` plus `preflight.sh loop-info <loop>` for loop-specific support/fallback status |
 | merge/rebase/merged-branch risk | `preflight.sh write` git safety checks; `preflight.sh status` reports `git_operation` (merge/rebase/cherry-pick) and `git_branch_done` (non-default branch fully merged = DONE-BRANCH hazard). A native graphical warning remains optional polish |
 
 ## Required OpenCode Mappings
@@ -294,7 +294,7 @@ Harness-specific status signals need OpenCode-native realization:
 | memory inject | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh memory [cwd]` once per session; run it manually when plugins are unavailable |
 | memory recall | OpenCode plugin `chat.message` captures prompt text and system transform runs `adapters/opencode/bin/preflight.sh recall <prompt> [cwd] [session-id]`; run it manually when plugins are unavailable |
 | oncall briefing | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh briefing [cwd]`; run it manually when plugins are unavailable |
-| loop guidance | Run `adapters/opencode/bin/preflight.sh loop-info <oncall|note|study|drill>` before following loop guides; OpenCode reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts. The `note` loop is an external scheduler/worklog-board contract; use the related `autopilot-note` Skill/command projection only for on-demand note routing |
+| loop guidance | Run `adapters/opencode/bin/preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` before following loop guides; OpenCode reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts. The `note` loop is an external scheduler/worklog-board contract; use the related `autopilot-note` Skill/command projection only for on-demand note routing |
 | memory distill | The plugin `event` hook auto-distills on `session.idle` via detached `preflight session-end` → no-tools `opencode run` worker (verified); enabled by default, opt out `OPENCODE_DISTILL_ENABLE=0`, set `OPENCODE_DISTILL_MODEL` for quality. Manual: `preflight.sh distill-delta <sid>` extracts the delta, `preflight.sh distill-propose <sid>` runs a proposal |
 | worklog state signal | Run `adapters/opencode/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before OpenCode updates notes or diagnoses board state |
 | role profiles | Read `roles/README.md`, then run `adapters/opencode/bin/preflight.sh role <portable-role>` to resolve OpenCode model/variant settings |

@@ -273,7 +273,7 @@ for line in sys.stdin:
         lbl = head + f" {D}\u23f3{mins(etime)}{R}" + (f" {desc}" if desc else "")
         dkey = f"{key}:{slug}"  # \uc2ac\ub7ec\uadf8 \ub2e8\uc704 \u2014 \uac19\uc740 \ud30c\uc774\ud504 N\uac1c \ubcd1\ub82c \ubd84\uc0ac\uac00 \ud55c \ud56d\ubaa9\uc73c\ub85c \ubb49\uac1c\uc9c0\uc9c0 \uc54a\uac8c (2026-06-11)
     else:
-        l = re.search(r"loops/(oncall|note|study|drill)", args)
+        l = re.search(r"loops/(oncall|note|study|drill|runtime-watch)", args)
         if not l: continue
         key = l.group(1); lbl = paint(key, key) + f" \033[2m\u23f3{mins(etime)}\033[0m"
         dkey = key

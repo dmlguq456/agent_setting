@@ -1,6 +1,6 @@
 # agent-fleet-dashboard — Spec (PRD)
 
-> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`)
+> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract. 계기 = Codex wham usage `primary_window.limit_window_seconds=604800`인데 fleet 이 `5h 10% reset 6d22h`로 오표시한 runtime-currentness 사고)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -46,7 +46,7 @@
 | 세션 id | UUID | UUID | `ses_…`(+slug) |
 | model / cwd | statusline JSON | rollout `session_meta.cwd` + config model | DB `session.model`/`directory` |
 | token / context% | statusline `context_window.*` | rollout `token_count.info.*` | DB `tokens_*`(ctx% 유도) |
-| **rate limit** | ✅ 5h/7d | ✅ primary/secondary | ❌ 없음 |
+| **rate limit** | ✅ 5h/7d | ✅ duration-labeled windows | ❌ 없음 |
 | **effort** | ✅ | ✅ config | ❌ 없음 |
 | cost | ✅ | 토큰서 유도 | ✅ `session.cost` |
 | liveness | transcript mtime + `sessions/<pid>.json` | rollout mtime | DB `MAX(time_updated)` |
@@ -97,7 +97,7 @@
 
 v1 이후 커밋으로 진화한 현행 렌더 모델을 spec 기준선으로 승인한다 (render.py `_build_lines` 실측 순서):
 
-1. **usage 헤더** — harness 별 1행 rate-limit 게이지: claude `5h/7d/<per-model>` (OAuth usage API + statusline tap), codex `5h/7d` (wham API + rollout fallback, expiry-aware), opencode = "no usage api" 명시행. 라벨은 dim(harness 로 오독 방지).
+1. **usage 헤더** — harness 별 1행 rate-limit 게이지: claude `5h/7d/<per-model>` (OAuth usage API + statusline tap), codex `duration-labeled windows` (wham API + rollout fallback, expiry-aware; `limit_window_seconds` 우선, legacy 에서만 primary=5h/secondary=7d), opencode = "no usage api" 명시행. 라벨은 dim(harness 로 오독 방지).
 2. **fleet pulse 요약행** — `fleet <spinner> N working · M idle · [K detached] · ↳ J jobs (…)`. app-server companion 은 카운트 제외.
 3. **alert strip** (조건부, healthy 면 0줄) — ctx ≥80% 세션 + stale/dead job, 최대 6개.
 4. **프로젝트 그룹 카드** — 그룹 헤더(hot/cooling/cold 3단계 + `🚧 N` worktree 카운트 + tracked/untracked 게이트 배지) → 세션 행 → dispatch 트리. 그룹핑 키 = 부모 repo 역매핑(`-wt`/`_worktrees` 2-pass) + `drill:<case>` 특수 그룹 + `loops` 그룹.
@@ -205,6 +205,12 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **상세**: `a` 토글 시 최근 이벤트 N줄(기본 8) dim row — 시각·action·tier/type·actor·body 스니펫 (F-18b dim row 계열, legend 글리프는 등장 시만 — F-12).
   - **alert 편입**: durable soft-ceiling 초과 · 활성 프로젝트 distill 무소식(저널 기준 임계 초과 = silent-death 신호) → 기존 alert strip 버킷 추가(우선순위 dead > stale > ctx > mem).
   - **의존·경계**: Cluster J D-37 저널이 add/reinforce 계열의 유일 소스 — 저널 미출하 구간엔 graveyard 만으로 삭제측 degrade 표시. 저널 포맷 변경 시 양 spec 동기 의무. 제어(prune 실행 등)는 여전히 Non-goal — 관찰만.
+- **F-20 (Codex dynamic rate-window contract, 2026-07-13 runtime-currentness incident)**: Codex usage windows are runtime data, not fixed names.
+  - **Runtime support (official-source basis)**: OpenAI Codex public docs now frame Codex usage through ChatGPT plan-relative usage, credits, and token/credit consumption rather than a universal API-primary 5h window. Claude official support still documents Claude/Claude Code shared usage limits and reset waiting behavior. Normative fleet labels must come from official sources plus observed runtime schema, never from stale harness assumptions.
+  - **Local projection**: Codex `wham/usage` and rollout `rate_limits` windows may carry `limit_window_seconds`. Fleet must parse that duration and render the label from the duration (`604800` -> `7d`, `18000` -> `5h`, etc.). The legacy mapping remains only when duration is absent: `primary`/`primary_window` -> `5h`, `secondary`/`secondary_window` -> `7d`.
+  - **Parity gap**: Claude still exposes/usefully maps `5h`/`7d` buckets; Codex may expose one or more differently-sized windows, and `secondary_window` may be null. Fleet must not force Codex parity by naming primary as `5h`.
+  - **Fallback**: Unknown positive durations render as their actual duration (`12345s`, `90m`, `2w`) rather than a false semantic label. Missing duration plus missing legacy slot renders the normal `—`/no usage row fallback. Expired reset timestamps still zero out stale rollout samples.
+  - **Docs/examples**: user-facing examples must say `windows` or duration labels for Codex, not "Codex 5h/7d" as a guarantee. Claude examples may keep 5h/7d where the source remains Claude usage support.
 - **적용 순서(정보 위계, v3 정정)**: §4.6(F-9~F-13)은 표시층(render.py) 한정 — collector 계약·모델 스키마 불변(SD-F4 만 collector). §4.7(F-14~F-19)은 각 항목에 명시된 표면까지 — F-17 sidecar+statusline 트리거, F-18 procscan environ 태깅, F-19 신규 collector(`collectors/memory.py`)·`--json` additive `memory` 키. 시각 결정이 substantial 해지면(레이아웃 구조 변경 급) autopilot-design 리드.
 - **🧠 글리프 위계 (v3 명문화, audit 정보성 반영)**: 같은 글리프의 두 표면 — 그룹 헤더 `🧠 N` = F-18b mem-*워커 프로세스* 수 / pulse 인접 `🧠 mem …` 행 = F-19 메모리 *이벤트* 집계. 라벨 문맥(`N` vs `mem`)이 구분자 — 새 🧠 표면 추가 시 이 두 의미와 충돌 금지.
 
@@ -331,6 +337,10 @@ flowchart TD
 - **F-14~F-19 lock (§4.7)**: 세션 표시명=하네스 제목(+짧게·영어 F-16, sidecar refresher F-17) / 분사 row 레이아웃 재설계·done-stage breadcrumb 흡수·queued=진짜 미기동만(F-15) / mem-워커 environ 태깅·drill dedup(F-18) / 메모리 관측 패널 — memory PRD v15 Cluster J 저널 소비(F-19). 구현 전량 main 머지 확인 (audit forward 15/15 🟢).
 - **§3 `--demo` 소급 등재** (audit 🟡-2) · **§9 모듈 트리 현행화** (audit 🟡-3) · **🧠 글리프 위계 명문화** (§4.7).
 - minor log 리셋 — v3 스냅샷 baseline (audit `_internal/audit/audit_2026-07-12T0910.md`).
+
+## 확정 결정 (v4 승격, 2026-07-13 — runtime-currentness F-20)
+
+- **F-20 lock**: Codex rate windows are dynamically labeled from `limit_window_seconds` when present. The old `primary=5h`/`secondary=7d` mapping is compatibility fallback only. Incident recorded inline: local Codex `primary_window.limit_window_seconds=604800, used_percent=10, secondary_window=null` must render as a 7d window, not `5h 10% reset 6d22h`.
 
 ## Next (구현 순서 — autopilot-code, 본 v2 입력 · v1 순서 1~7 은 완료)
 

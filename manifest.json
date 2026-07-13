@@ -601,6 +601,16 @@
       "layer": "L3"
     },
     {
+      "slug": "loop__runtime-watch",
+      "name": "런타임 감시",
+      "mono": "runtime-watch",
+      "type": "event",
+      "schedule": "일 1회 이하 또는 runtime-currentness 사건 후 수동",
+      "blurb": "공식 primary source fingerprint + 로컬 CLI/projection/usage helper probe → **보고/제안만** (정책 auto-edit 금지, token 절약 위해 deterministic probe 우선)",
+      "output_path": "`notes/runtime-watch/<date>.md`",
+      "layer": "L4"
+    },
+    {
       "slug": "loop__study",
       "name": "연수",
       "mono": "study",

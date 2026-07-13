@@ -300,6 +300,11 @@ rg '^related_capability=autopilot-note$' /tmp/codex-loop-note.txt
 rg '^native_capability_surface=codex-native-skill-plugin$' /tmp/codex-loop-note.txt
 rg '^scheduler_surface=external-worklog-board$' /tmp/codex-loop-note.txt
 rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/codex-loop-note.txt
+codex_setting/bin/preflight.sh loop-info runtime-watch >/tmp/codex-loop-runtime-watch.txt
+rg '^status=manual-contract$' /tmp/codex-loop-runtime-watch.txt
+rg '^source=loops/runtime-watch.md$' /tmp/codex-loop-runtime-watch.txt
+rg '^action=deterministic-probe-and-proposal-report-only$' /tmp/codex-loop-runtime-watch.txt
+rg '^auto_edit=unsupported$' /tmp/codex-loop-runtime-watch.txt
 if codex_setting/bin/preflight.sh distill-propose install-check "$PWD" >/tmp/codex-distill-propose.txt; then false; else test "$?" -eq 69; fi
 rg '^status=tool-contract$' /tmp/codex-distill-propose.txt
 rg '^reason=distill-proposal-disabled$' /tmp/codex-distill-propose.txt
@@ -446,6 +451,11 @@ rg '^related_capability=autopilot-note$' /tmp/opencode-loop-note.txt
 rg '^native_capability_surface=opencode-native-skill-command$' /tmp/opencode-loop-note.txt
 rg '^scheduler_surface=external-worklog-board$' /tmp/opencode-loop-note.txt
 rg '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/opencode-loop-note.txt
+opencode_setting/bin/preflight.sh loop-info runtime-watch >/tmp/opencode-loop-runtime-watch.txt
+rg '^status=manual-contract$' /tmp/opencode-loop-runtime-watch.txt
+rg '^source=loops/runtime-watch.md$' /tmp/opencode-loop-runtime-watch.txt
+rg '^action=deterministic-probe-and-proposal-report-only$' /tmp/opencode-loop-runtime-watch.txt
+rg '^auto_edit=unsupported$' /tmp/opencode-loop-runtime-watch.txt
 if opencode_setting/bin/preflight.sh distill-propose install-check "$PWD" >/tmp/opencode-distill-propose.txt; then false; else test "$?" -eq 69; fi
 rg '^status=tool-contract$' /tmp/opencode-distill-propose.txt
 rg '^reason=distill-proposal-disabled$' /tmp/opencode-distill-propose.txt

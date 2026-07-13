@@ -71,7 +71,7 @@ GUARDS = {"artifact-guard", "git-state-guard", "spec-skill-gate", "core-first-gu
 # loop -> layer constant (source: loops/README.md 계층 table membership + consumer §2.5;
 # study=L4 per the OPS-view divergence recorded in consumer §23.12 V1). The 계층 table
 # itself is left semantically unchanged — this map is the machine-readable layer source.
-LOOP_LAYER = {"oncall": "L3", "note": "L3", "drill": "L4", "study": "L4"}
+LOOP_LAYER = {"oncall": "L3", "note": "L3", "drill": "L4", "study": "L4", "runtime-watch": "L4"}
 
 # 4-track skeleton — documented constant (source: README.md §4 / WORKFLOW.md §1 4-track
 # chains; gate positions = artifact-guard rule, not parseable from prose, per consumer

@@ -197,7 +197,8 @@ fleet --once     # 한 장 스냅샷 (파이프 가능) · --json 수집 결과 
 ```
 
 ```text
-usage  claude code   5h ━━──────  14%   7d ──────  3%   fable ━─────  4%   ← 계정 사용량 (oauth API 라이브)
+usage  claude code   5h ━━──────  14%   7d ──────  3%   fable ━─────  4%   ← 계정 사용량 (Claude OAuth API 라이브)
+usage  codex         7d ━───────  10%                                      ← Codex duration-labeled window
 ─────────────────────────────────────────────────────────────────────────
 ▍ my-app  tracked  ●1 ○2 ↳2                                               ← 프로젝트(디렉토리)별 그룹 + 상태 롤업
   ● claude code   my-app-a7 ▾2 tracked   main    Opus 4.8  xhigh  ━━━━━━──── 45%  $12.30  ⏱1h35m
@@ -206,7 +207,7 @@ usage  claude code   5h ━━──────  14%   7d ──────  3
 
 - **모든 활성 세션** (Claude Code · Codex · opencode 프로세스 스캔) — model·effort·context 게이지·비용·경과, 상태 점(● working 점멸 / ○ idle / ◍ detached / · stale / ✕ dead)
 - **분사 job 을 부모 세션 밑에 트리로** — [`OPERATIONS §5.10`](core/OPERATIONS.md) worktree 디스패치의 라이브 뷰. `(mode·qa)` + 파이프라인 stage 브레드크럼(`plan › exec › test`, 현재 단계 점멸)까지
-- **계정 사용량** — 5h/7d + 모델별 버킷(Fable 등)을 `/usage` 와 같은 소스에서
+- **계정 사용량** — Claude 는 5h/7d + 모델별 버킷(Fable 등)을 `/usage` 같은 소스에서 읽고, Codex 는 `limit_window_seconds` 가 있으면 duration label(예: 604800초 → 7d)로 표시한다. duration 이 없는 legacy Codex payload 에서만 primary=5h/secondary=7d fallback 을 쓴다(2026-07-13 runtime-currentness 사고 반영).
 - 순수 외부 관찰자 (zero-injection) — 하네스에 아무것도 주입하지 않고 프로세스 테이블·디스크 산출물만 읽는다 (유일한 예외: usage API read-only 조회)
 
 **언제 쓰나**: 병렬 분사를 띄웠을 때 (§5.10 — 분사 직후 에이전트가 fleet 안내), 밤새 돌린 headless 를 아침에 점검할 때, 어느 세션이 context/사용량을 태우는지 볼 때. 소스: [`tools/fleet/`](tools/fleet/).

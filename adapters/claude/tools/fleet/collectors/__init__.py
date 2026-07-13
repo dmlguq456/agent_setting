@@ -102,12 +102,22 @@ def collect_all(harness_filter=None, jobs_path=None):
         if cu:
             for s in sessions:
                 if s.harness == "codex":
-                    if cu[0] is not None:
-                        s.rl_5h = cu[0]
-                    if cu[1] is not None:
-                        s.rl_7d = cu[1]
-                    if len(cu) > 3 and (cu[2] or cu[3]):
-                        s.rl_rs = (cu[2], cu[3])
+                    if isinstance(cu, dict):
+                        if cu.get("rl_5h") is not None:
+                            s.rl_5h = cu["rl_5h"]
+                        if cu.get("rl_7d") is not None:
+                            s.rl_7d = cu["rl_7d"]
+                        if cu.get("windows"):
+                            s.rl_windows = cu["windows"]
+                        if cu.get("rs_5h") or cu.get("rs_7d"):
+                            s.rl_rs = (cu.get("rs_5h"), cu.get("rs_7d"))
+                    else:
+                        if cu[0] is not None:
+                            s.rl_5h = cu[0]
+                        if cu[1] is not None:
+                            s.rl_7d = cu[1]
+                        if len(cu) > 3 and (cu[2] or cu[3]):
+                            s.rl_rs = (cu[2], cu[3])
     except Exception:
         pass
 
