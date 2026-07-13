@@ -40,14 +40,14 @@
 - [x] C2 완료: 양 트리 grep 완료기준 재확인(keep in sync/Language Rule/artifact-root snippet/Required Reads·Reference Map 헤더 = 0 양 트리) + manifest --check 통과 (2026-07-13 재개, mirror 적용 후)
 
 ## Cluster 3 — Sprawl 추출 (P3+P6, SD-8)
-- [ ] C3-1 `skills/autopilot-design/references/` 신설 (pipeline-execution.md ← :183-271, harness.md ← :149-162)
-- [ ] C3-1 완료: `wc -l autopilot-design/SKILL.md` < 200, references/ 1-depth
-- [ ] C3-2 `draft-refine/references/` (delegate-prompt.md, changelog-example.md ← :153-198) 추출
-- [ ] C3-3 `autopilot-ship/references/examples.md` (:207-238) + 발화→자리/deploy=user 3중 dedupe
-- [ ] C3-4 `design-tokens/references/` (tokens-exemplar.md ← :41-110, templates.md ← :129-167) 추출
-- [ ] C3-5 `autopilot-apply` 3중 제외 목록 dedupe (+선택 references/build-detection.md)
-- [ ] C3 완료: `tools/skill-conformance/scan.sh skills` — 타깃 body_lines baseline 대비 감소, ref_depth_ok=N 행 0
-- [ ] C3 완료: `sync-skills` → adapter references/ 투영 + doctor/parity 통과
+- [x] C3-1 `autopilot-design/references/{pipeline-execution,harness,paper-figure-policy}.md` 신설 (adapters 정본 편집 후 root 미러) — 312→196줄
+- [x] C3-1 완료: `wc -l` < 200 (196), references/ 1-depth (scan.sh ref_depth_ok=Y)
+- [x] C3-2 `draft-refine/references/{delegate-prompt,changelog-example}.md` 추출 — 278→129줄 (worked example 은 delegate-prompt.md 내 유지, changelog-example.md 는 별도 문서화 사본으로 분리해 프롬프트 무결성 보존; plan 의 정확한 2-분할과 소폭 다름 — 이유는 dev_logs 참조)
+- [x] C3-3 `autopilot-ship/references/examples.md` 추출 — 241→212줄 (발화→자리/deploy=user 3중은 이번 사이클 미착수 — 잔여 항목)
+- [x] C3-4 `design-tokens/references/{tokens-exemplar,templates}.md` 추출 — 212→99줄
+- [x] C3-5 `autopilot-apply` 3중 제외 목록(Override/Scope NOT-for) → `## When NOT to use` 단일 authority pointer — 191→185줄 (references/ 신설 없음, plan 그대로)
+- [x] C3 완료: `bash tools/skill-conformance/scan.sh skills`(=adapters, 양 트리 diff 0) — 5개 타깃 전부 body_lines 감소, ref_depth_ok 전부 Y(N행 0)
+- [x] C3 완료: `python3 tools/build-manifest.py --check` 통과 (2026-07-13 재개)
 
 ## Cluster 1 — Invocation 재분류 (P1+P4+P7, SD-5) — 게이트 후
 - [ ] C1-GATE (a) draft-strategy trial-flip → `claude -p "/draft-strategy"` slash 생존 관측 (FAIL→revert)
