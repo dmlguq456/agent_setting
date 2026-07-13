@@ -88,10 +88,16 @@ Portable docs use role names, not vendor model names:
 | `fast implementer` | Routine implementation and refactoring |
 | `deep reviewer` | Architecture, methodology, safety, domain correctness, high-risk review |
 | `deep maker` | High-judgment creation: planning, synthesis, visual/editorial craft |
+| `deep orchestrator` | High-judgment conductor: stage gates, failover, and evidence synthesis for `standard+` depth-1 work |
 | `external adversary` | Independent reviewer with different model/runtime/process assumptions |
-| `orchestrator` | Tooling, merge, dispatch, and report assembly; should not be the sole judge |
+| `orchestrator` | Balanced mechanical coordination of already-decided tooling, paths, and report assembly; not a deep-conductor alias |
 
 Adapters map these roles to concrete models, reasoning profiles, or tools. Concrete model names belong in adapter documents or generated native files. For dispatch/headless jobs, the main/orchestrator must choose a portable role or concrete model/reasoning setting per job; adapter wrappers must not silently choose a default model or inherit the interactive session model unless the caller explicitly asks for inheritance.
+
+Adapter and projection edits are derived core-first: change the portable invariant in
+`core/` first, read that governing core document in the current session, then update
+the adapter realization and generated projection. A runtime marker proves the read
+gate only; it does not replace this source-order review.
 
 ## 4. Capability Model
 

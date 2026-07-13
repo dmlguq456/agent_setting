@@ -1,0 +1,178 @@
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=python3
+timeout=300
+test_alert_humanize_aggregates_and_strips_tail (test_dispatch.AlertHumanizeTest) ... ok
+test_alert_humanize_single_stale_job_not_aggregated (test_dispatch.AlertHumanizeTest) ... ok
+test_conductor_breadcrumb_aggregates_active_child_stage (test_dispatch.ConductorBreadcrumbTest) ... ok
+test_conductor_breadcrumb_falls_back_to_own_stage_when_child_not_working (test_dispatch.ConductorBreadcrumbTest) ... ok
+test_conductor_breadcrumb_report_child_renders_lone_bright_token (test_dispatch.ConductorBreadcrumbTest) ... ok
+test_research_conductor_blinks_active_search_child (test_dispatch.ConductorBreadcrumbTest) ... ok
+test_argv_matched_pid_excluded_from_cwd_scan (test_dispatch.CwdFallbackEnrichmentTest)
+Case 2 — an already argv-matched (proc-scanned) pid is passed into ... ok
+test_collect_enriches_tokenless_log_job (test_dispatch.CwdFallbackEnrichmentTest)
+Case 1 — collect() end-to-end: a harness=None jobs.log row whose worktree ... ok
+test_collect_reads_current_and_legacy_jobs_logs_by_default (test_dispatch.CwdFallbackEnrichmentTest) ... ok
+test_no_cwd_scan_when_no_tokenless_candidate (test_dispatch.CwdFallbackEnrichmentTest)
+Guard — when every job is already argv-matched (no log job with harness=None+cwd), ... ok
+test_p_token_gate_and_exclude_filtering (test_dispatch.CwdFallbackEnrichmentTest)
+Case 3 (helper-level) — _live_claude_cwds keeps only non-excluded exact `-p` ... ok
+test_proc_scanned_drill_loop_surfaces_parent_and_current_case (test_dispatch.CwdFallbackEnrichmentTest) ... ok
+test_dispatch_child_session_marker_does_not_hide_parent_cwd (test_dispatch.DepthTwoRegistryMetadataTest) ... ok
+test_dispatch_child_session_matching_jobs_log_cwd_is_hidden (test_dispatch.DepthTwoRegistryMetadataTest) ... ok
+test_drill_jobs_log_row_is_visible_as_loop_dispatch (test_dispatch.DepthTwoRegistryMetadataTest) ... ok
+test_jobs_log_pipe_metadata_surfaces_depth_two_parent (test_dispatch.DepthTwoRegistryMetadataTest) ... ok
+test_legacy_jobs_log_infers_harness_from_runtime_model_fields (test_dispatch.DepthTwoRegistryMetadataTest) ... ok
+test_parent_cwd_fallback_groups_drill_temp_job_without_matching_sid (test_dispatch.DepthTwoRegistryMetadataTest) ... ok
+test_parent_sid_groups_drill_temp_job_under_parent_project (test_dispatch.DepthTwoRegistryMetadataTest) ... ok
+test_unparented_drill_temp_job_groups_under_loops (test_dispatch.DepthTwoRegistryMetadataTest) ... ok
+test_non_profile_branch_composes_under_proj_home (test_dispatch.JobLivenessPathAssemblyTest) ... ok
+test_profile_branch_composes_under_registry_home (test_dispatch.JobLivenessPathAssemblyTest) ... ok
+test_last_request_context_uses_latest_nonzero_message_tokens (test_dispatch.OpenCodeContextTest) ... ok
+test_opencode_enrich_fills_title_when_column_present (test_dispatch.OpenCodeContextTest) ... ok
+test_opencode_enrich_tolerates_missing_title_column (test_dispatch.OpenCodeContextTest) ... ok
+test_opencode_enrich_uses_message_context_before_closing_db (test_dispatch.OpenCodeContextTest) ... ok
+test_quick_depth_one_renders_single_quick_exec_breadcrumb (test_dispatch.QuickDispatchRenderTest) ... ok
+test_agent_home_wins_over_claude_home (test_dispatch.RegistryHomeTest) ... ok
+test_agent_setting_isdir_fallback (test_dispatch.RegistryHomeTest) ... ok
+test_candidate_jobs_paths_default_adds_legacy_claude_registry (test_dispatch.RegistryHomeTest) ... ok
+test_candidate_jobs_paths_env_is_single_explicit_registry (test_dispatch.RegistryHomeTest) ... ok
+test_candidate_jobs_paths_skips_duplicate_legacy_registry (test_dispatch.RegistryHomeTest) ... ok
+test_claude_home_used_when_agent_home_absent (test_dispatch.RegistryHomeTest) ... ok
+test_dot_claude_fallback_when_agent_setting_absent (test_dispatch.RegistryHomeTest) ... ok
+test_jobs_path_env_beats_registry_home (test_dispatch.RegistryHomeTest) ... ok
+test_jobs_path_override_beats_everything (test_dispatch.RegistryHomeTest) ... ok
+test_jobs_path_uses_registry_home (test_dispatch.RegistryHomeTest) ... ok
+test_depth_two_prefix_indents_without_repeated_arrow (test_dispatch.RenderDispatchPresentationTest) ... ok
+test_dispatch_tag_labels_path_before_assurance (test_dispatch.RenderDispatchPresentationTest) ... ok
+test_dispatch_two_line_compacts_long_session_name (test_dispatch.RenderDispatchPresentationTest) ... ok
+test_loop_dispatch_profile_omits_duplicate_case_role (test_dispatch.RenderDispatchPresentationTest) ... ok
+test_claude_home_honors_claude_config_dir (test_dispatch.RuntimeHomeIndependenceTest) ... ok
+test_claude_home_ignores_agent_home (test_dispatch.RuntimeHomeIndependenceTest) ... ok
+test_dispatch_proj_home_honors_claude_config_dir (test_dispatch.RuntimeHomeIndependenceTest) ... ok
+test_dispatch_proj_home_ignores_agent_home (test_dispatch.RuntimeHomeIndependenceTest) ... ok
+test_g_case_prefix_general_rule_matches_known_drill_cases (test_dispatch.StageWorkerRenderTest) ... ok
+test_stage_worker_rows_render_stage_labels (test_dispatch.StageWorkerRenderTest) ... ok
+test_canonical_comma_pipe_still_parses_unchanged (test_dispatch.TolerantPipeParsingTest) ... ok
+test_parse_pipe_continuation_then_field (test_dispatch.TolerantPipeParsingTest) ... ok
+test_parse_pipe_space_separated_row (test_dispatch.TolerantPipeParsingTest) ... ok
+test_parse_pipe_unknown_key_ignored (test_dispatch.TolerantPipeParsingTest) ... ok
+test_parse_pipe_value_internal_space (test_dispatch.TolerantPipeParsingTest) ... ok
+test_clip_w_ascii_tailcut (test_f14_title.ClipWTest) ... ok
+test_clip_w_hangul_boundary (test_f14_title.ClipWTest) ... ok
+test_clip_w_noop_under_limit (test_f14_title.ClipWTest) ... ok
+test_session_row_2line_title_clipped_to_name2_max (test_f14_title.SessionRowTitleTest) ... ok
+test_session_row_name_zone_width_is_display_width_aligned (test_f14_title.SessionRowTitleTest) ... ok
+test_session_row_title_absent_falls_back_to_slug (test_f14_title.SessionRowTitleTest) ... ok
+test_session_row_title_present_shows_title_not_slug (test_f14_title.SessionRowTitleTest) ... ok
+test_json_title_additive_slug_unchanged (test_f14_title.SessionToDictAdditiveTest) ... ok
+test_json_title_defaults_to_none (test_f14_title.SessionToDictAdditiveTest) ... ok
+test_tail_ai_title_absent_returns_none (test_f14_title.TailAiTitleTest) ... ok
+test_tail_ai_title_beyond_first_window_is_found (test_f14_title.TailAiTitleTest) ... ok
+test_tail_ai_title_cache_invalidated_on_append (test_f14_title.TailAiTitleTest) ... ok
+test_tail_ai_title_filters_new_session_placeholder (test_f14_title.TailAiTitleTest) ... ok
+test_tail_ai_title_junk_beyond_window_stops_scan (test_f14_title.TailAiTitleTest) ... ok
+test_tail_ai_title_picks_last_of_several (test_f14_title.TailAiTitleTest) ... ok
+test_tail_ai_title_tolerant_of_malformed_lines (test_f14_title.TailAiTitleTest) ... ok
+test_different_cwd_same_stem_keeps_both_rows (test_f15_rows.DedupKeyTest) ... ok
+test_same_cwd_same_stem_merges_to_one_row (test_f15_rows.DedupKeyTest) ... ok
+test_only_working_child_gets_own_row_others_folded (test_f15_rows.FoldingTest) ... ok
+test_show_all_restores_folded_children (test_f15_rows.FoldingTest) ... ok
+test_stale_dead_children_stay_visible (test_f15_rows.FoldingTest) ... ok
+test_narrow_below_138 (test_f15_rows.LayoutCutoffTest) ... ok
+test_stack_below_70 (test_f15_rows.LayoutCutoffTest) ... ok
+test_wide_at_or_above_138 (test_f15_rows.LayoutCutoffTest) ... ok
+test_open_no_transcript_large_elapsed_is_dead (test_f15_rows.QueuedLivenessTest) ... ok
+test_open_no_transcript_small_elapsed_is_queued (test_f15_rows.QueuedLivenessTest) ... ok
+test_open_with_transcript_activity_is_working (test_f15_rows.QueuedLivenessTest) ... ok
+test_no_over_strip_of_multiple_hyphen_tokens (test_f15_rows.SlugStemTest) ... ok
+test_strips_code_plan_suffix (test_f15_rows.SlugStemTest) ... ok
+test_strips_execute_suffix (test_f15_rows.SlugStemTest) ... ok
+test_unmatched_slug_unchanged (test_f15_rows.SlugStemTest) ... ok
+test_stage_segs_marks_past_stages_done (test_f15_rows.StageDoneMarkerTest) ... ok
+test_dispatch_composed_label_plus_slug_capped (test_f15_rows.TitleCapTest) ... ok
+test_session_title_capped_at_title_max (test_f15_rows.TitleCapTest) ... ok
+test_wide_row_child_does_not_duplicate_parent_breadcrumb (test_f15_rows.WideRowNoParentheticalTagTest) ... ok
+test_wide_row_child_name_zone_shows_stage_label (test_f15_rows.WideRowNoParentheticalTagTest) ... ok
+test_wide_row_name_zone_has_no_bracket_option_tag (test_f15_rows.WideRowNoParentheticalTagTest) ... ok
+test_code_worker_derives_stage_from_artifacts (test_f15_rows.WorkingRegistryStageInductionTest) ... ok
+test_non_code_plans_path_never_derives_stage (test_f15_rows.WorkingRegistryStageInductionTest) ... ok
+test_working_registry_row_stage_is_live_derived_not_raw_status (test_f15_rows.WorkingRegistryStageInductionTest) ... ok
+test_main_empty_delta_advances_ts_keeps_title (test_f17_title_refresh.DeltaOffsetTest) ... ok
+test_read_delta_caps_to_4kb (test_f17_title_refresh.DeltaOffsetTest) ... ok
+test_read_delta_from_offset (test_f17_title_refresh.DeltaOffsetTest) ... ok
+test_read_delta_offset_beyond_size_resyncs (test_f17_title_refresh.DeltaOffsetTest) ... ok
+test_priority_all_absent_title_none_slug_fallback (test_f17_title_refresh.PriorityTest) ... ok
+test_priority_no_sidecar_uses_ai_title (test_f17_title_refresh.PriorityTest) ... ok
+test_priority_sidecar_fresh_beats_ai_title (test_f17_title_refresh.PriorityTest) ... ok
+test_priority_sidecar_stale_falls_to_ai_title (test_f17_title_refresh.PriorityTest) ... ok
+test_sidecar_malformed_falls_through (test_f17_title_refresh.PriorityTest) ... ok
+test_slug_never_overwritten (test_f17_title_refresh.PriorityTest) ... ok
+test_injection_payload_cannot_execute (test_f17_title_refresh.SecurityTest) ... ok
+test_validate_caps_injected_long_string (test_f17_title_refresh.SecurityTest) ... ok
+test_worker_argv_blocks_all_tools (test_f17_title_refresh.SecurityTest) ... ok
+test_fresh_title_empty_title_is_none (test_f17_title_refresh.TitlesHelperTest) ... ok
+test_fresh_title_stale_beyond_24h (test_f17_title_refresh.TitlesHelperTest) ... ok
+test_fresh_title_within_window (test_f17_title_refresh.TitlesHelperTest) ... ok
+test_read_malformed_json_passthrough (test_f17_title_refresh.TitlesHelperTest) ... ok
+test_read_missing_returns_none (test_f17_title_refresh.TitlesHelperTest) ... ok
+test_sweep_deletes_old_keeps_fresh (test_f17_title_refresh.TitlesHelperTest) ... ok
+test_write_atomic_no_partial (test_f17_title_refresh.TitlesHelperTest) ... ok
+test_write_then_read_roundtrip (test_f17_title_refresh.TitlesHelperTest) ... ok
+test_trigger_debounce_fresh_sidecar_no_spawn (test_f17_title_refresh.TriggerLogicTest) ... skipped 'adapters/claude/statusline.sh not found'
+test_trigger_lock_prevents_double_spawn (test_f17_title_refresh.TriggerLogicTest) ... skipped 'adapters/claude/statusline.sh not found'
+test_trigger_no_delay (test_f17_title_refresh.TriggerLogicTest) ... skipped 'adapters/claude/statusline.sh not found'
+test_trigger_recursion_guard (test_f17_title_refresh.TriggerLogicTest) ... skipped 'adapters/claude/statusline.sh not found'
+test_trigger_stale_and_grown_spawns_once (test_f17_title_refresh.TriggerLogicTest) ... skipped 'adapters/claude/statusline.sh not found'
+test_validate_empty_returns_none (test_f17_title_refresh.ValidateTitleTest) ... ok
+test_validate_len_cap (test_f17_title_refresh.ValidateTitleTest) ... ok
+test_validate_newline_strip_takes_first_line (test_f17_title_refresh.ValidateTitleTest) ... ok
+test_validate_non_printable_reject (test_f17_title_refresh.ValidateTitleTest) ... ok
+test_validate_strips_quotes_and_period (test_f17_title_refresh.ValidateTitleTest) ... ok
+test_delta_text_drops_unparseable_lines (test_f17_title_refresh.ValidatorHardeningTest) ... ok
+test_korean_error_sentence_rejected (test_f17_title_refresh.ValidatorHardeningTest) ... ok
+test_meta_response_rejected (test_f17_title_refresh.ValidatorHardeningTest) ... ok
+test_read_delta_drops_partial_first_line (test_f17_title_refresh.ValidatorHardeningTest) ... ok
+test_sentence_over_word_cap_rejected (test_f17_title_refresh.ValidatorHardeningTest) ... ok
+test_short_english_title_accepted (test_f17_title_refresh.ValidatorHardeningTest) ... ok
+test_case_from_cwd (test_f18_attribution.DrillCaseExtractionTest) ... ok
+test_case_from_slug (test_f18_attribution.DrillCaseExtractionTest) ... ok
+test_non_drill_cwd_returns_none (test_f18_attribution.DrillCaseExtractionTest) ... ok
+test_non_drill_slug_returns_none (test_f18_attribution.DrillCaseExtractionTest) ... ok
+test_case_mismatch_keeps_both_rows (test_f18_attribution.DrillReconcileTest) ... ok
+test_merges_matching_case_and_absorbs_proc_liveness (test_f18_attribution.DrillReconcileTest) ... ok
+test_registry_cwd_not_tmp_drill_skips_merge (test_f18_attribution.DrillReconcileTest) ... ok
+test_codex_dispatch_child_marker_hides_only_marked_child (test_f18_attribution.ProcscanTaggingTest) ... ok
+test_environ_read_failure_degrades_to_false (test_f18_attribution.ProcscanTaggingTest) ... ok
+test_mem_distill_marker_tags_true (test_f18_attribution.ProcscanTaggingTest) ... ok
+test_no_marker_tags_false (test_f18_attribution.ProcscanTaggingTest) ... ok
+test_title_refresh_marker_tags_true (test_f18_attribution.ProcscanTaggingTest) ... ok
+test_default_excludes_mem_from_pulse_and_rows (test_f18_attribution.RenderMemExclusionTest) ... ok
+test_pure_mem_only_group_folds_but_legend_shows_total (test_f18_attribution.RenderMemExclusionTest) ... ok
+test_show_all_reveals_mem_row (test_f18_attribution.RenderMemExclusionTest) ... ok
+test_corrupt_db_degrades_to_empty (test_f19_memory.DurableOverTest) ... ok
+test_db_absent_degrades_to_empty (test_f19_memory.DurableOverTest) ... ok
+test_over_ceiling_project_surfaces (test_f19_memory.DurableOverTest) ... ok
+test_absent_files_return_none (test_f19_memory.JournalParseTest) ... ok
+test_distill_not_stale_within_threshold (test_f19_memory.JournalParseTest) ... ok
+test_distill_stale_flags_when_over_threshold (test_f19_memory.JournalParseTest) ... ok
+test_journal_absent_graveyard_only_degrades (test_f19_memory.JournalParseTest) ... ok
+test_journal_only_aggregates_today (test_f19_memory.JournalParseTest) ... ok
+test_malformed_lines_are_skipped (test_f19_memory.JournalParseTest) ... ok
+test_recent_events_newest_first_capped_at_8 (test_f19_memory.JournalParseTest) ... ok
+test_a_toggle_off_hides_recent_events (test_f19_memory.RenderIntegrationTest) ... ok
+test_a_toggle_reveals_recent_events (test_f19_memory.RenderIntegrationTest) ... ok
+test_distill_stale_alert_bucket_appears (test_f19_memory.RenderIntegrationTest) ... ok
+test_durable_over_alert_bucket_appears (test_f19_memory.RenderIntegrationTest) ... ok
+test_healthy_zero_event_no_alert_row_omitted (test_f19_memory.RenderIntegrationTest) ... ok
+test_none_memory_omits_row_and_never_raises (test_f19_memory.RenderIntegrationTest) ... ok
+test_summary_row_renders_counts (test_f19_memory.RenderIntegrationTest) ... ok
+test_mirror_matches_canonical (test_mirror_parity.TestMirrorParity) ... skipped 'adapter mirror absent (non-repo install layout)'
+
+----------------------------------------------------------------------
+Ran 162 tests in 0.351s
+
+OK (skipped=6)
+status=ok
+exit_code=0

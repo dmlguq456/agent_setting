@@ -275,12 +275,14 @@ check_non_claude_adapter_symlink_boundaries() {
         adapters/codex/utilities/harness-status.sh:../../../utilities/harness-status.sh|\
         adapters/codex/utilities/workflow-guard-hook.sh:../../../utilities/workflow-guard-hook.sh|\
         adapters/codex/utilities/workflow-toggle.sh:../../../utilities/workflow-toggle.sh|\
+        adapters/codex/utilities/dispatch-route.sh:../../../utilities/dispatch-route.sh|\
         adapters/opencode/tools/memory/apply-distill-actions.py:../../../../tools/memory/apply-distill-actions.py|\
         adapters/opencode/utilities/agent-worklog-state.sh:../../../utilities/agent-worklog-state.sh|\
         adapters/opencode/utilities/artifact-root.sh:../../../utilities/artifact-root.sh|\
         adapters/opencode/utilities/harness-status.sh:../../../utilities/harness-status.sh|\
         adapters/opencode/utilities/workflow-guard-hook.sh:../../../utilities/workflow-guard-hook.sh|\
-        adapters/opencode/utilities/workflow-toggle.sh:../../../utilities/workflow-toggle.sh)
+        adapters/opencode/utilities/workflow-toggle.sh:../../../utilities/workflow-toggle.sh|\
+        adapters/opencode/utilities/dispatch-route.sh:../../../utilities/dispatch-route.sh)
           ;;
         *)
           fail_msg "$link points to $target; $adapter adapter symlinks must be explicitly allowlisted portable projections"
@@ -1180,7 +1182,7 @@ check_codex_utility_projection() {
     fi
   done
 
-  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh \) -print 2>/dev/null || true)
+  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name dispatch-route.sh \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/codex/utilities contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -1195,8 +1197,8 @@ check_codex_utility_projection() {
   # codex-adapter-parity audit P-40 (2026-07-04): derived under-projection completeness pair — every
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
-  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh"
-  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh extract_web_figures.py"
+  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh dispatch-route.sh"
+  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -1636,7 +1638,7 @@ PY
     esac
   done
 
-  if ! grep -Fq 'model = "gpt-5.4-mini"' adapters/codex/agents/memory-scout.toml \
+  if ! grep -Fq 'model = "gpt-5.6-luna"' adapters/codex/agents/memory-scout.toml \
     || ! grep -Fq 'model_reasoning_effort = "low"' adapters/codex/agents/memory-scout.toml \
     || ! grep -Fq 'sandbox_mode = "read-only"' adapters/codex/agents/memory-scout.toml \
     || ! grep -Fq 'Never run memory mutation commands' adapters/codex/agents/memory-scout.toml; then
@@ -2221,7 +2223,7 @@ check_opencode_utility_projection() {
     fi
   done
 
-  extra=$(find adapters/opencode/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh \) -print 2>/dev/null || true)
+  extra=$(find adapters/opencode/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name dispatch-route.sh \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/opencode/utilities contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -2236,8 +2238,8 @@ check_opencode_utility_projection() {
   # codex-adapter-parity audit P-40 (2026-07-04): derived under-projection completeness pair — every
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
-  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh"
-  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh extract_web_figures.py"
+  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh dispatch-route.sh"
+  UTILITY_DEFERRED="dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue

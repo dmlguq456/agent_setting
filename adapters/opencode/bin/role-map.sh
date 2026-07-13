@@ -12,6 +12,7 @@ profile selection. There is no numeric reasoning-effort config field.
 
 Config knobs:
   AGENT_MODEL_FAST / AGENT_VARIANT_FAST
+  AGENT_MODEL_BALANCED / AGENT_VARIANT_BALANCED
   AGENT_MODEL_DEEP / AGENT_VARIANT_DEEP
   AGENT_MODEL_EXTERNAL / AGENT_VARIANT_EXTERNAL
   AGENT_MODEL_ORCHESTRATOR / AGENT_VARIANT_ORCHESTRATOR
@@ -33,10 +34,13 @@ reason=""
 external_cmd_bin=""
 
 case "$role" in
-  "fast reviewer"|"fast fact checker"|"fast fact-checker"|"fast writer"|"fast implementer"|"fast tool worker")
+  "fast reviewer"|"fast fact checker"|"fast fact-checker"|"fast writer"|"fast tool worker")
     family=fast
     ;;
-  "deep reviewer"|"deep maker"|"deep editor")
+  "fast implementer"|"orchestrator"|"external adversary orchestrator")
+    family=balanced
+    ;;
+  "deep reviewer"|"deep maker"|"deep editor"|"deep orchestrator")
     family=deep
     ;;
   "external adversary")
@@ -54,9 +58,6 @@ case "$role" in
       fi
     fi
     ;;
-  "orchestrator"|"external adversary orchestrator")
-    family=orchestrator
-    ;;
   *)
     echo "opencode role-map: unknown portable role: $raw" >&2
     usage >&2
@@ -70,6 +71,11 @@ case "$family" in
     variant=${AGENT_VARIANT_FAST:-runtime-default}
     [ "$model" = "opencode-default" ] && status=default || status=configured
     ;;
+  balanced)
+    model=${AGENT_MODEL_BALANCED:-${AGENT_MODEL_ORCHESTRATOR:-opencode-default}}
+    variant=${AGENT_VARIANT_BALANCED:-${AGENT_VARIANT_ORCHESTRATOR:-runtime-default}}
+    [ "$model" = "opencode-default" ] && status=default || status=configured
+    ;;
   deep)
     model=${AGENT_MODEL_DEEP:-opencode-default}
     variant=${AGENT_VARIANT_DEEP:-runtime-default}
@@ -79,11 +85,6 @@ case "$family" in
     model=${AGENT_MODEL_EXTERNAL:-external-command}
     variant=${AGENT_VARIANT_EXTERNAL:-runtime-default}
     [ "$available" -eq 1 ] && status=configured
-    ;;
-  orchestrator)
-    model=${AGENT_MODEL_ORCHESTRATOR:-${AGENT_MODEL_FAST:-opencode-default}}
-    variant=${AGENT_VARIANT_ORCHESTRATOR:-${AGENT_VARIANT_FAST:-runtime-default}}
-    [ "$model" = "opencode-default" ] && status=default || status=configured
     ;;
 esac
 

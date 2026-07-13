@@ -1225,7 +1225,7 @@ else
   bad "codex role wrapper should report mixed role sets"
 fi
 if AGENT_MODEL_ORCHESTRATOR=orchestrator-model AGENT_REASONING_ORCHESTRATOR=medium "$CODEX" role external adversary orchestrator >/tmp/role.out 2>/tmp/role.err \
-  && grep -q '^family=orchestrator$' /tmp/role.out \
+  && grep -q '^family=balanced$' /tmp/role.out \
   && grep -q '^adapter=codex$' /tmp/role.out \
   && grep -q '^model=orchestrator-model$' /tmp/role.out \
   && grep -q '^reasoning=medium$' /tmp/role.out \
@@ -1644,7 +1644,7 @@ if grep -q 'Codex role-map inputs: `fast reviewer, deep reviewer, external adver
 else
   bad "codex native agent projection should preserve mixed role sets"
 fi
-if grep -q 'model = "gpt-5.4-mini"' "$TMP/codex_agent_home/agents/memory-scout.toml" \
+if grep -q 'model = "gpt-5.6-luna"' "$TMP/codex_agent_home/agents/memory-scout.toml" \
   && grep -q 'model_reasoning_effort = "low"' "$TMP/codex_agent_home/agents/memory-scout.toml" \
   && grep -q 'sandbox_mode = "read-only"' "$TMP/codex_agent_home/agents/memory-scout.toml" \
   && grep -q 'Never run memory mutation commands' "$TMP/codex_agent_home/agents/memory-scout.toml"; then

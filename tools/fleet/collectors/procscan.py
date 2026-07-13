@@ -212,10 +212,12 @@ def scan(harness_filter=None):
         # call (see _ps_lines), so args are never truncated and the token stays visible
         # even for long command lines.
         app_server = comm == "codex" and "app-server" in args
-        # headless dispatch child marker (claude only) — env CLAUDE_CODE_CHILD_SESSION=1.
-        # These are surfaced as dispatch rows under their parent, not as top-level sessions.
+        # Cross-runtime headless child marker (SD-24). Unreadable environ fails open:
+        # a process is never hidden merely from argv/PPID/cwd resemblance.
         env = read_environ(pid)                       # 1회 read 재사용
-        is_child = comm == "claude" and env.get("CLAUDE_CODE_CHILD_SESSION") == "1"
+        is_child = bool(env.get("AGENT_DISPATCH_DEPTH")) or env.get("AGENT_DISPATCH_CHILD") == "1" or (
+            comm == "claude" and env.get("CLAUDE_CODE_CHILD_SESSION") == "1"
+        )
         # F-18b: memory distiller/curator(MEM_DISTILL) 또는 F-17 title refresher(FLEET_TITLE_REFRESH)
         # 세션 — 부모 cwd/env 상속으로 오귀속(drill 그룹·부모 자식 row)되는 것을 막기 위한 태깅.
         mem_worker = env.get("MEM_DISTILL") == "1" or env.get("FLEET_TITLE_REFRESH") == "1"

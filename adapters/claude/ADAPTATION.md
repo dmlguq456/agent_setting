@@ -1,5 +1,13 @@
 # Claude Code Adaptation
 
+## Dispatch model realization
+
+`deep maker`, `deep reviewer`, `deep editor`, and `deep orchestrator` map to
+`opus`/high. Retained `orchestrator` is the balanced mechanical role and maps to
+`sonnet`/medium; it is not an alias for the standard+ depth-1 conductor. Fast
+portable roles map to `sonnet`/medium. The adapter mapper normalizes case,
+hyphens, and underscores but accepts no undocumented role aliases.
+
 This adapter preserves the previous Claude Code setting behavior while moving
 runtime-specific files out of the common root.
 

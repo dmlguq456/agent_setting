@@ -1,0 +1,7 @@
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=adapters/opencode/bin/sync-native-commands.py
+timeout=120
+status=ok
+exit_code=0

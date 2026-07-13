@@ -12,6 +12,11 @@
 
 본 문서가 **모든 작업 흐름의 단일 라우터**. 모든 발화는 §2 작업-본질 매핑을 먼저 거치고, 직접 처리·플러그인(codex)·빌트인 스킬도 WORKFLOW 가 배치하는 자리에서만 쓴다.
 
+Adapter/runtime projection work also follows core-first source order: establish the
+portable invariant in `core/`, read its governing document, then change adapter and
+projection output. The adapter read-marker is a deterministic gate for that order,
+not a substitute for the portable review.
+
 **(a) 하드 순서 게이트** — 산출물은 한 방향으로만, 앞 단계 산출물 없이 다음 단계 진입 금지:
 
 ```

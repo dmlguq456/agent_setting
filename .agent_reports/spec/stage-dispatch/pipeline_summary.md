@@ -2,12 +2,12 @@
 
 - **Date**: 2026-07-10
 - **Mode**: library + cli (autopilot 파이프 디스패치 토폴로지 개정 인프라)
-- **Status**: spec done (v6) · quick depth-1 topology specified · implementation pending
+- **Status**: spec done (v7) · deep conductor/model-family routing + Fleet hotfix acceptance specified · implementation pending
 - **Placement**: 독립 컴포넌트 `spec/stage-dispatch/` — 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 무수정.
 
 ## 배경
 
-사용자 결정(2026-07-10): "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로. 어차피 산출물 기반 소통." → `standard+` 에서 각 sub-skill 스테이지를 별개 headless 세션으로 분사. 사용자 결정(2026-07-13): `direct` 는 depth-0 inline 유지, `quick` 은 단일 depth-1 one-shot capability worker 로 이동, `standard+` 는 기존 depth-1 conductor -> 순차 depth-2 stage-worker topology 유지. Codex 공식 manual 근거는 subagent 가 main-thread context pollution 을 줄이지만 token 비용이 늘고 parallel write-heavy workflow 는 충돌·조정비용 주의가 필요하다는 점이다.
+사용자 결정(2026-07-10): "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로. 어차피 산출물 기반 소통." → `standard+` 에서 각 sub-skill 스테이지를 별개 headless 세션으로 분사. 사용자 결정(2026-07-13): `direct` 는 depth-0 inline 유지, `quick` 은 단일 depth-1 one-shot capability worker 로 이동, `standard+` 는 기존 depth-1 conductor -> 순차 depth-2 stage-worker topology 유지. v7에서는 standard+ conductor를 high-reasoning/deep orchestration 기본으로 고정하고, planning 계열은 GPT family via Codex + deep maker affinity(비-hard-pin), plan review는 다른 family를 선호하도록 정했다. Codex 공식 manual 근거는 subagent가 main-thread context pollution을 줄이지만 token 비용이 늘고 parallel write-heavy workflow는 충돌·조정비용 주의가 필요하다는 점이다. OpenAI Models의 현재 권장은 GPT-5.6 Sol(`gpt-5.6-sol`)이지만 API alias와 Codex ChatGPT runtime 허용 ID는 같다고 가정하지 않으며 adapter exact-ID probe를 요구한다.
 
 ## Process Log
 | Step | Action | Result | Notes |
@@ -17,6 +17,7 @@
 | 현행 실측 | context-and-guards.md:51 "스테이지 헤드리스 분리 = worst of both, 금지" 발견 | — | 본 spec 이 **반전하는 정확한 조항** — §2.2·§9-7 |
 | 현행 실측 | dispatch-headless.py depth=2/parent/worker_role/게이트 census | — | wrapper 가 **이미 스테이지 분사 골격 지원** → 재작성 불요(§2.4·SD-9) |
 | spec | PRD 작성 (lean) | `prd.md` v1 | SD-1~9 채택 + SD-OPEN-1 open(inline 임계 pilot 계측). 영향 표면 14곳. 구현 2-phase |
+| v7 update | root/component PRD full read + current v6↔`_internal/versions/v6/prd.md` byte compare + official model currentness 확인 | `prd.md` v7 | v6 snapshot cmp=0, 재생성 안 함. SD-21~24 및 pipeline state/summary만 갱신. |
 
 ## 채택 결정 (locked)
 - **SD-1~2 (토폴로지·인터페이스)**: depth-1 owner = 얇은 conductor(verdict/게이트만), 스테이지 = depth-2 headless 세션. 인터페이스 = 산출물 파일만, 대화 컨텍스트 전달 금지(산출물 기반 소통). 근거 = 사용자 결정 + research §4-(8) + DESIGN_PRINCIPLES §8 "결과 흐름 file 통해".
@@ -26,6 +27,10 @@
 - **SD-7 (영향 표면)**: 14곳(core·bootstrap 3어댑터·SKILL·wrapper·fleet·drill) 현행문구→개정방향 표. 문구 편집은 core-first 별도.
 - **SD-8 / SD-18 (적용 범위)**: standard+ stage-dispatch 기본, direct depth-0 inline 유지, quick depth-1 one-shot capability worker 로 승격(depth-2 금지).
 - **SD-9 (wrapper)**: 재작성 불요. stage-dispatch helper 신설은 pilot 후 판정.
+- **SD-21 (conductor tier)**: standard+ depth-1 conductor는 `orchestrator` + high-reasoning/deep orchestration 기본. fast orchestration은 mechanical-only.
+- **SD-22 (route policy)**: explicit > hard eligibility/tool/runtime/account/limit > stage affinity > maker-checker family diversity > capacity/cost/latency. planning 계열은 deep maker + GPT/Codex affinity(비-hard-pin), plan review는 다른 family 선호. core는 family/role, adapter는 runtime-probed exact model/reasoning 소유.
+- **SD-23 (helper)**: read-only `route-dispatch` 계약. Claude+Codex부터 지원하고 OpenCode는 probe 계약 확정 전 honest unknown. 실제 dispatch/registry/file mutation은 하지 않음.
+- **SD-24 (Fleet acceptance)**: env-marked Codex headless child-hidden, non-code fuzzy `plans`/거짓 `spec:test` 0건, 정상 code stage 표시 유지.
 
 ## 미결 (open — pilot 계측)
 - **SD-OPEN-1**: 마이크로-스테이지 inline 의 손익 임계(어느 스테이지 크기부터 분사가 이득). research 가 per-stage dispatch cost 를 수치화하지 않음 → 추측 금지, Phase 1 pilot 토큰/시간 계측으로 확정.
@@ -74,3 +79,9 @@ Phase 1(계약문서+wrapper증분+autopilot-code pilot) · Phase 2(autopilot-* 
   - **SD-19**: Codex quick 은 headless check 통과 시 headless dispatch 우선(Fleet-visible). headless 실패 시 native subagent fallback + Fleet visibility degradation note; 둘 다 불가 시 inline + concise fallback reason. parent local evidence: native subagent ok, strict headless projection ok, quick depth-1 dry-run accepted, quick depth-2 forbidden.
   - **SD-20**: Fleet 는 depth-1 quick worker 를 blinking `quick/exec` activity stage 하나로 표시. quick depth-2 child row 는 계약 위반.
   - **Official evidence**: OpenAI Codex manual Subagents section (`https://developers.openai.com/codex/codex-manual.md#execution-model-and-workflows`) — subagents move noisy work off the main thread, consume more tokens, and parallel write-heavy workflows require caution. Helper fetch ended with missing `x-content-sha256`; cached official manual was inspected.
+- v7 (2026-07-13): orchestration/model-family routing + Fleet hotfix acceptance — autopilot-spec update standard. 기존 v6 snapshot `_internal/versions/v6/prd.md`가 update 직전 current v6와 byte-identical(`cmp` exit 0)임을 확인했고 재생성하지 않음.
+  - **SD-21**: standard+ conductor high-reasoning/deep orchestration 기본, fast mechanical-only.
+  - **SD-22**: planning/architecture/decomposition GPT family via Codex + deep maker affinity(비-hard-pin), plan review 다른 family 선호, 단일 route priority와 core/adapter 소유 경계 확정.
+  - **Currentness**: 공식 Models는 GPT-5.6 Sol을 권장하고 exact ID=`gpt-5.6-sol`, API alias=`gpt-5.6`으로 게시. parent Codex ChatGPT surface는 alias를 거부하고 현 환경 exact ID를 지원했으므로 adapter probe 성공 exact ID만 선택하고 clean fallback.
+  - **SD-23**: read-only `route-dispatch` helper(Claude+Codex, OpenCode honest unknown).
+  - **SD-24**: Fleet env-child-hidden + non-code stage fuzzy-match 차단 수용 기준.

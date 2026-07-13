@@ -169,7 +169,7 @@ def toml_string(value: str) -> str:
 
 def role_map(role: str) -> dict[str, str]:
     result = subprocess.run(
-        [str(ROOT / "adapters" / "codex" / "bin" / "preflight.sh"), "role", role],
+        [str(ROOT / "adapters" / "codex" / "bin" / "model-map.sh"), role],
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
@@ -208,7 +208,7 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
         )
     if args.model_role:
         fields = role_map(args.model_role)
-        model = fields.get("model")
+        model = fields.get("exact_model_id")
         reasoning = fields.get("reasoning")
         if not model or not reasoning:
             raise ModelSelectionError("invalid-dispatch-model-role", "role map did not return model and reasoning")
@@ -580,6 +580,7 @@ def main(argv: list[str]) -> int:
     if action == "start":
         dispatch_env = {
             **os.environ,
+            "AGENT_DISPATCH_CHILD": "1",
             "AGENT_DISPATCH_DEPTH": str(args.depth),
             "AGENT_DISPATCH_INTENSITY": args.intensity,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",

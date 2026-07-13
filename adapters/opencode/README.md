@@ -135,6 +135,7 @@ docs use:
 - `harness-status.sh`
 - `workflow-guard-hook.sh`
 - `workflow-toggle.sh`
+- `dispatch-route.sh` (read-only SD-23 selector; returns model `unknown` until an OpenCode probe exists)
 
 Claude-specific helpers such as the shared `dispatch-liveness.sh` stay out of
 the OpenCode projection. OpenCode exposes its adapter-owned liveness command
@@ -264,13 +265,15 @@ reasoning-effort config field.
 | Portable role | OpenCode adapter expectation |
 |---|---|
 | `fast reviewer` / `fast fact-checker` / `fast writer` | 낮은 비용·낮은 지연의 모델 또는 `small_model` + 낮은 variant. surface, coverage, format, verbatim matching 중심 |
+| `fast implementer` | configured balanced model/variant; concrete default는 runtime inventory 전까지 unknown |
 | `deep reviewer` / `deep maker` | 높은 variant 또는 더 강한 모델. methodology, domain, architecture, safety 판단 중심 |
 | `external adversary` | 가능하면 primary OpenCode session 과 다른 모델·설정·프로세스. 없으면 explicit unavailable 로 보고하고 thorough 로 fallback |
-| `orchestrator` | 도구 호출·artifact merge·한국어 정리 담당. 실제 판단 role 과 분리 가능 |
+| `deep orchestrator` | standard+ depth-1 conductor; concrete model은 runtime inventory/probe 전까지 unknown |
+| `orchestrator` | balanced mechanical coordination; concrete model은 runtime inventory/probe 전까지 unknown |
 
-OpenCode wrapper 는 `AGENT_MODEL_FAST`, `AGENT_MODEL_DEEP`,
+OpenCode wrapper 는 `AGENT_MODEL_FAST`, `AGENT_MODEL_BALANCED`, `AGENT_MODEL_DEEP`,
 `AGENT_MODEL_EXTERNAL`, `AGENT_MODEL_ORCHESTRATOR`,
-`AGENT_VARIANT_FAST`, `AGENT_VARIANT_DEEP`,
+`AGENT_VARIANT_FAST`, `AGENT_VARIANT_BALANCED`, `AGENT_VARIANT_DEEP`,
 `AGENT_VARIANT_EXTERNAL`, `AGENT_VARIANT_ORCHESTRATOR` 같은 환경변수로
 이 mapping 을 드러낸다. 공통 skill 은 concrete model name 을 요구하지
 않고 role 의미만 요구한다.

@@ -131,22 +131,12 @@ class ModelSelectionError(ValueError):
 
 
 def role_map(role: str) -> dict[str, str]:
-    normalized = " ".join(role.strip().lower().replace("-", " ").split())
-    mappings = {
-        "fast reviewer": ("sonnet", "medium"),
-        "fast fact checker": ("sonnet", "medium"),
-        "fast fact-checker": ("sonnet", "medium"),
-        "fast writer": ("sonnet", "low"),
-        "fast implementer": ("sonnet", "medium"),
-        "deep reviewer": ("opus", "high"),
-        "deep maker": ("opus", "high"),
-        "external adversary orchestrator": ("sonnet", "medium"),
-        "orchestrator": ("sonnet", "medium"),
-    }
-    if normalized not in mappings:
-        raise ModelSelectionError("invalid-dispatch-model-role", f"unknown Claude dispatch model role: {role}")
-    model, effort = mappings[normalized]
-    return {"model": model, "effort": effort}
+    result = subprocess.run([str(ROOT / "adapters" / "claude" / "bin" / "model-map.sh"), role], text=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if result.returncode:
+        raise ModelSelectionError("invalid-dispatch-model-role", (result.stderr or result.stdout).strip())
+    fields = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+    return {"model": fields["exact_model_id"], "effort": fields["reasoning"]}
 
 
 def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
@@ -537,6 +527,7 @@ def main(argv: list[str]) -> int:
         env = {**os.environ}
         env.update({
             "CLAUDE_CODE_CHILD_SESSION": "1",
+            "AGENT_DISPATCH_CHILD": "1",
             "AGENT_DISPATCH_DEPTH": str(args.depth),
             "AGENT_DISPATCH_INTENSITY": args.intensity,
             # This session's own slug — the conductor Stop gate / dispatch-wait

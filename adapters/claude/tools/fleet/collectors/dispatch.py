@@ -434,16 +434,21 @@ def _job_liveness(path, now, stale_min=15, profile=None, slug=None):
 # --- live_stage (ported statusline.sh:131-171) ---
 def _has_entries(p):
     try:
-        return any(True for _ in os.scandir(p))
+        with os.scandir(p) as entries:
+            return any(True for _ in entries)
     except OSError:
         return False
 
 
-def _find_plan_dir(jcwd, slug):
+def _is_code_job(key=None, capability=None, worker_role=None):
+    return (key or "").startswith("code") or (capability or "") == "autopilot-code" or (worker_role or "").startswith("code-")
+
+
+def _find_plan_dir(jcwd, slug, key=None, capability=None, worker_role=None):
     """Locate the plans/*_<slug>/ folder for (jcwd, slug): exact `_<slug>` suffix match,
     else the folder with max hyphen-token overlap (skipping done folders). abs path or None.
     Extracted from live_stage (REFACTOR, behavior-preserving — see plan Step 1.3)."""
-    if not jcwd or not slug:
+    if not _is_code_job(key, capability, worker_role) or not jcwd or not slug:
         return None
     ar = ".agent_reports" if os.path.isdir(os.path.join(jcwd, ".agent_reports")) else ".claude_reports"
     base = os.path.join(jcwd, ar, "plans")
@@ -477,11 +482,11 @@ def _find_plan_dir(jcwd, slug):
     return os.path.join(base, cand[-1])
 
 
-def live_stage(jcwd, slug, fallback):
+def live_stage(jcwd, slug, fallback, capability=None, worker_role=None):
     """Derive plan→exec→test→done from plans/*_<slug>/ artifacts; fallback = argv key."""
     if not jcwd or not slug:
         return fallback
-    pd = _find_plan_dir(jcwd, slug)
+    pd = _find_plan_dir(jcwd, slug, fallback, capability, worker_role)
     if not pd:
         return fallback
     if os.path.exists(os.path.join(pd, "pipeline_summary.md")):
@@ -501,10 +506,10 @@ def live_stage(jcwd, slug, fallback):
     return "plan"
 
 
-def _plan_qa(jcwd, slug):
+def _plan_qa(jcwd, slug, key=None, capability=None, worker_role=None):
     """Read qa_level: from the resolved plan dir's pipeline_state.yaml (or plan/plan.md
     frontmatter) via a small line scan. None on any miss."""
-    pd = _find_plan_dir(jcwd, slug)
+    pd = _find_plan_dir(jcwd, slug, key, capability, worker_role)
     if not pd:
         return None
     for relpath in ("pipeline_state.yaml", os.path.join("plan", "plan.md")):
@@ -530,14 +535,14 @@ _QA_DEFAULT = {
 }
 
 
-def effective_qa(argv_qa, pipe_qa, jcwd, slug, key):
+def effective_qa(argv_qa, pipe_qa, jcwd, slug, key, capability=None, worker_role=None):
     """Layered qa resolver, first-hit precedence: argv > jobslog(pipe) > plan artifact >
     CONVENTIONS default. Returns (qa, source) — source in argv|jobslog|plan|default|None."""
     if argv_qa:
         return argv_qa, "argv"
     if pipe_qa:
         return pipe_qa, "jobslog"
-    v = _plan_qa(jcwd, slug)
+    v = _plan_qa(jcwd, slug, key, capability, worker_role)
     if v:
         return v, "plan"
     v = _QA_DEFAULT.get(key)
@@ -789,7 +794,9 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None):
         # covers the fallback-name path (parse failure) where pname = repo or "job".
         if pname.startswith("autopilot-"):
             pname = pname[len("autopilot-"):]   # normalize to proc key form (code/spec/…)
-        q, qsrc = effective_qa(None, meta.get("qa"), cwd, slug, pname)
+        capability = meta.get("capability")
+        worker_role = meta.get("worker_role")
+        q, qsrc = effective_qa(None, meta.get("qa"), cwd, slug, pname, capability, worker_role)
         parent_slug = meta.get("parent") or meta.get("parent_slug") or None
         parent_sid = meta.get("parent_sid") or meta.get("parent_session_id") or None
         parent_cwd = meta.get("parent_cwd") or meta.get("parent_worktree") or None
@@ -801,7 +808,7 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None):
             is_child=bool(parent_slug or parent_sid or parent_cwd), qa_source=qsrc, source="jobs", status=status,
             harness=harness, model=meta.get("model"),
             profile=meta.get("profile"), depth=_parse_depth(meta.get("depth")),
-            intensity=meta.get("intensity"), worker_role=meta.get("worker_role"),
+            intensity=meta.get("intensity"), worker_role=worker_role,
             capability_owner=meta.get("owner") or meta.get("capability_owner"),
             effort=meta.get("effort"), model_role=meta.get("model_role"),
         ))
@@ -926,7 +933,7 @@ def collect(jobs_path=None, harness_filter=None):
                 j.pid = pid
                 consumed.add(pid)
                 j.model = _claude_job_model(str(pid), j.cwd)
-                j.stage = live_stage(j.cwd, j.slug, j.key)
+                j.stage = live_stage(j.cwd, j.slug, j.key, j.capability_owner, j.worker_role)
     now = time.time()
     for j in jobs:
         j.liveness = _dispatch_liveness(j, now)
@@ -937,7 +944,7 @@ def collect(jobs_path=None, harness_filter=None):
     # static "queued"/"running" placeholder forever (the reported "queued 오라벨" bug).
     for j in jobs:
         if j.source == "jobs" and j.cwd and j.liveness == "working":
-            j.stage = live_stage(j.cwd, j.slug, j.key)
+            j.stage = live_stage(j.cwd, j.slug, j.key, j.capability_owner, j.worker_role)
     # stash malformed count on the module for the render header (optional signal)
     collect.last_malformed = malformed
     return jobs

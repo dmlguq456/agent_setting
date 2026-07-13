@@ -1,0 +1,14 @@
+adapter=codex
+runtime_surface=adapter-readiness-doctor
+agent_home=/home/Uihyeop/agent_setting
+runtime_cli=available
+check=manifest:ok
+check=native-skills:ok
+check=native-plugin:ok
+check=native-agents:ok
+check=native-modes:ok
+check=native-subagents:ok
+check=hook-bridges:ok
+check=adaptation-boundary:failed
+check=runtime-projection:ok
+status=failed

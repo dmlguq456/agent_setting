@@ -1,0 +1,28 @@
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=300
+FAIL: adapters/claude/loops/drill/cases_growing/g_stage_dispatch is missing
+FAIL: adapters/claude/loops/drill/cases_growing/g_stage_dispatch/config is missing
+FAIL: adapters/claude/loops/drill/cases_growing/g_stage_dispatch/assert.sh is missing
+FAIL: adapters/claude/loops/drill/cases_growing/g_stage_dispatch/fixture.sh is missing
+FAIL: adapters/claude/loops/drill/cases_growing/g_stage_dispatch/prompt.md is missing
+FAIL: adapters/claude/tools/memory/mem_cluster_j.test.sh is missing
+FAIL: adapters/claude/tools/install is missing
+FAIL: adapters/claude/tools/install/projector.py is missing
+FAIL: adapters/claude/tools/install/drivers is missing
+FAIL: adapters/claude/tools/install/drivers/opencode.py is missing
+FAIL: adapters/claude/tools/install/drivers/claude.py is missing
+FAIL: adapters/claude/tools/install/drivers/codex.py is missing
+FAIL: adapters/claude/tools/install/drivers/__init__.py is missing
+FAIL: adapters/claude/tools/install/verifier.py is missing
+FAIL: adapters/claude/tools/install/harness.sh is missing
+FAIL: adapters/claude/tools/install/paths.py is missing
+FAIL: adapters/claude/tools/install/bootstrap.py is missing
+FAIL: adapters/claude/tools/install/manifest.py is missing
+FAIL: adapters/claude/tools/install/installer.py is missing
+WARN: 58 concrete Claude/model references remain in portable areas.
+      This is allowed only where documented as adapter mapping, compat-reference, or compat-passthrough.
+status=failed
+exit_code=1
