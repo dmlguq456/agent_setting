@@ -3713,12 +3713,13 @@ else
   bad "drill adapter runner should propagate turn.failed (rc=$runner_rc metrics=$runner_out)"
 fi
 last_runner_row=$(tail -n 1 "$drilljobs")
-if printf '%s' "$last_runner_row" | grep -q $'\tdone\t' \
+if [ "$(wc -l < "$drilljobs")" -eq 1 ] \
+  && printf '%s' "$last_runner_row" | grep -q $'\tdone\t' \
   && printf '%s' "$last_runner_row" | grep -q 'note=dead-usage-limit' \
   && printf '%s' "$last_runner_row" | grep -q 'reset=2099-01-01T09:06:00'; then
-  ok "drill runner records usage-limit death and reset in Fleet registry"
+  ok "drill runner closes one Fleet row with usage-limit death and reset"
 else
-  bad "drill runner should record usage-limit metadata [$last_runner_row]"
+  bad "drill runner should close its existing Fleet row [$last_runner_row]"
 fi
 usage_out=$(bash "$ROOT/utilities/usage-check.sh" --harness codex --jobs "$drilljobs")
 if printf '%s\n' "$usage_out" | grep -q '^codex limited(2099-01-01T09:06:00)$'; then
