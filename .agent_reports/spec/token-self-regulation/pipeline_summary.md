@@ -33,6 +33,9 @@ Official Codex docs expose native status/context surfaces and an under-developme
 
 ## Runtime boundary and next
 
-Headless dispatch and installed-runtime verification remain unavailable in this feature worktree because the installed `$CODEX_HOME` projection points to main and its hook projection differs. No live runtime configuration was mutated. After branch integration, reinstall/check the runtime projection before claiming the installed hook is active.
+The feature was fast-forwarded to main and pushed. The installed `$CODEX_HOME`
+projection was refreshed with native skill discovery; strict projection and hook
+trust checks pass. No runtime-owned `config.toml`, credential, transcript, or
+session store was mutated.
 
 Phase 2 reinjection cost accounting and Phase 3 dynamic-policy experiments remain intentionally deferred.

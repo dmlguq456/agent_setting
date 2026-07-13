@@ -59,6 +59,12 @@
 - `doctor --runtime`: FAIL because the installed `$CODEX_HOME` projection points to the main checkout rather than this feature worktree, and its `hooks.json` is not the worktree projection. This was the pre-existing reason headless dispatch was unavailable and is expected before branch integration/reinstall; repository readiness doctor is green.
 - Hook trust itself reports ok. No runtime projection mutation was attempted from the worktree.
 
+Post-integration update: main was fast-forwarded and the installed projection was
+refreshed with `--skills-mode native`. The strict
+`runtime-projection --require-hook-trust` check passes with
+`hooks-json:ok` and hook trust ok.
+
 ## Verdict
 
-PASS for repository implementation and adapter contracts. Installed-runtime projection remains a post-integration wiring check, not a source/test failure.
+PASS for repository implementation, adapter contracts, and the post-integration
+installed-runtime projection.

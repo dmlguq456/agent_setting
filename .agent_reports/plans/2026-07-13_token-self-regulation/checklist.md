@@ -15,3 +15,6 @@
 - [x] Doctor/runtime projection checked with pre-existing projection mismatch separated.
 - [x] Dev log, test evidence, final report, and pipeline summary written.
 - [x] Branch committed and pushed for main-session review; no self-merge.
+- [x] Main fast-forward integration and push completed.
+- [x] Installed Codex runtime projection refreshed with native skill discovery.
+- [x] Strict runtime projection and hook-trust check passed.

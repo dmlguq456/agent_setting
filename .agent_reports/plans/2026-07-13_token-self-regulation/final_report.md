@@ -19,13 +19,47 @@ Phase 0–1 is implemented on the dedicated `token-self-regulation` worktree bra
 - adaptation boundary, manifest, native skills/plugin/agents/modes, mirror parity, diff check, and repository doctor passed.
 - Two independent read-only implementation reviews completed; all actionable findings were corrected and no P0/P1 remains.
 
+## Ponytail synthesis
+
+The integration keeps Ponytail's useful idea — spend fewer tokens when work can
+be expressed more compactly — but narrows it to an observable output-response
+axis:
+
+| Ponytail idea retained | Harness realization |
+|---|---|
+| Budget-aware self-regulation | Exact-session active-context pressure with deterministic normal/tight/critical bands |
+| Be concise under pressure | Tight/critical transitions request concise user-facing output and defer only unrequested optional extras |
+| Avoid waste | Normal, unknown, native-owned, and repeated bands inject zero prompt bytes |
+| Know when not to be lazy | Required implementation, tools, tests, QA, safety, security, validation, error handling, accessibility, and input context are invariant |
+
+The ambiguous or unsafe parts were excluded:
+
+- “be lazy” cannot lower intensity, model effort, dispatch/depth, stage topology,
+  reviewer budget, or definition of done;
+- dispatch suppression from the research sketch was rejected because it conflicts
+  with the standard+ execution contract;
+- input pruning, transcript compression, and context deletion remain off;
+- per-payload percentages are not presented as session savings: active context and
+  cumulative session counters are explicit separate signals;
+- repeated budget-rule reinjection is replaced by one <=240-byte line only on a
+  verified band transition;
+- missing, stale, malformed, ambiguous, or decreasing signals fail open instead of
+  inventing a budget estimate;
+- native rollout-budget support is never auto-enabled and runtime-owned config is
+  never edited by this policy.
+
 ## Runtime/install boundary
 
-Repository readiness is green. The installed `$CODEX_HOME` projection still points to main rather than this feature worktree, so `doctor --runtime` correctly reports a projection mismatch before integration. No runtime projection, `config.toml`, credential, transcript, or session store was mutated.
+Repository readiness is green. After fast-forward integration, the installed
+`$CODEX_HOME` projection was refreshed from main with native skill discovery.
+`runtime-projection --require-hook-trust` now passes, including `hooks-json:ok`
+and hook trust. Runtime-owned `config.toml`, credentials, transcripts, and
+session stores were not modified.
 
 ## Deferred scope
 
 - Phase 2: measured reinjection bytes/tokens, net savings, and cadence evaluation.
 - Phase 3: dynamic-policy experiment and a separate adoption gate.
 
-Implementation commit `0f8f52a` was pushed to `origin/token-self-regulation`. The branch is ready for main-session review and integration; this worktree does not self-merge.
+Implementation commit `0f8f52a` and handoff commit `489fdae` were fast-forwarded
+to main and pushed to `origin/main`.
