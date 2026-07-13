@@ -1,13 +1,11 @@
 # stage-dispatch — Spec (PRD)
 
-> mode: **library + cli** (하네스 인프라 — 스테이지 분사 계약 문서 + dispatch wrapper·jobs.log·fleet 관제) · 작성 2026-07-10 · v1 · **v2 2026-07-10** (Phase 2 결정 등재 — SD-10~13·SD-OPEN-2. Phase 1 main 머지 5b7cf33 반영: 계약 12표면 개정 + wrapper depth-aware + pilot 계측 plan 218s/execute 255s/test 46s/report 28s·conductor 프롬프트 ~2KB 일정) · **v6 2026-07-13** (사용자 승인 topology 변경: `quick` = depth-1 one-shot capability worker, depth-2 금지, headless 우선/Fleet 표시) · **v7 2026-07-13** (standard+ conductor deep orchestration 기본·family/role 기반 route-dispatch 계약·Fleet hotfix 수용 기준)
+> mode: **library + cli** (하네스 인프라 — 스테이지 분사 계약 문서 + dispatch wrapper·jobs.log·fleet 관제) · 작성 2026-07-10 · v1 · **v2 2026-07-10** (Phase 2 결정 등재 — SD-10~13·SD-OPEN-2. Phase 1 main 머지 5b7cf33 반영: 계약 12표면 개정 + wrapper depth-aware + pilot 계측 plan 218s/execute 255s/test 46s/report 28s·conductor 프롬프트 ~2KB 일정) · **v6 2026-07-13** (사용자 승인 topology 변경: `quick` = depth-1 one-shot capability worker, depth-2 금지, headless 우선/Fleet 표시)
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - **사용자 결정 (2026-07-10 확정)**: "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로 했으면 한다. 어차피 산출물 기반 소통인데." — 입도 = sub-skill 스테이지 단위, 적용 = `standard+`, 이는 2026-07-06 depth 재설계 기본값의 명시적 반전.
 > - **사용자 결정 (2026-07-13 확정)**: `direct` 는 depth-0 inline 유지, `quick` 은 depth-0 실행에서 **단일 depth-1 one-shot capability worker** 로 이동한다. quick worker 는 micro-plan·plan-check-lite·implementation·focused verification·concise report 를 한 세션에서 끝내며, **depth-2 를 열지 않는다**. `standard+` 는 기존 depth-0 main → depth-1 conductor → 순차 depth-2 stage-worker topology 유지.
-> - **사용자 결정 (2026-07-13 v7 확정)**: depth-1 `standard+` conductor 는 high-reasoning/deep orchestration 을 기본으로 하고 fast orchestration 은 mechanical-only 로 한정한다. planning/architecture/decomposition 은 Codex의 GPT family + `deep maker` affinity 를 우선하되 hard pin 하지 않으며, plan review 는 maker 와 다른 family 를 선호한다. 라우팅 우선순위·read-only helper 계약과 Fleet 오탐 hotfix 수용 기준을 본 v7에 고정한다.
 > - **공식 Codex 근거 (2026-07-13 확인 시도)**: OpenAI Codex manual `https://developers.openai.com/codex/codex-manual.md#execution-model-and-workflows` / Subagents 섹션은 subagent workflow 가 noisy work 를 main thread 밖으로 옮겨 context pollution 을 줄이고, 병렬 read-heavy 작업에 유용하지만 write-heavy 병렬은 충돌·조정비용 주의가 필요하며 각 subagent 가 자체 model/tool work 를 하므로 single-agent 대비 token 을 더 쓴다고 설명한다. skill helper 는 `x-content-sha256` 헤더 누락으로 실패했으나 `/tmp/openai-docs-cache/codex-manual.md` 에서 해당 공식 manual 섹션을 확인했다.
-> - **공식 모델 currentness 근거 (2026-07-13 확인)**: OpenAI Models 문서는 최신 권장 시작점으로 GPT-5.6 Sol을 복잡한 reasoning/coding에 안내하고 exact model ID=`gpt-5.6-sol`, API alias=`gpt-5.6`으로 게시한다. 단 API alias 게시와 Codex ChatGPT runtime 허용 ID는 별도 표면이다. parent 실측에서 Codex ChatGPT surface는 `gpt-5.6` alias를 거부했고 이 환경은 exact `gpt-5.6-sol`을 지원했다. 따라서 adapter는 현재 runtime에 exact ID를 probe한 뒤 성공한 ID만 선택하고, 실패 시 다음 eligible 후보로 깨끗하게 fallback해야 한다.
 > - **로컬 runtime 근거 (parent 검증 완료, 2026-07-13)**: Codex native subagent check ok, strict headless projection restored/check ok, quick depth-1 dispatch dry-run accepted, quick depth-2 remains forbidden.
 > - research `.agent_reports/research/cross-platform-agent-frameworks/` — `analysis_summary.md` §4-(8)(fresh-context-per-agent + file-state 지배 관용구), `cards/gsd.md`(fresh-context subagent per stage·`.planning/` file-state·two-stage routing·size-budget), `06_implementation.md`(파일-복제 회피·parity 정직성).
 > - 운영 실증 (2026-07-10, 이 결정의 직접 계기): ① in-session Task 서브에이전트 = jobs.log 미등록 → fleet 관제에 스테이지 진행 불가시 ② in-session 서브에이전트는 hook ceremony(가드·spec 게이트) 미수령 ③ owner 단일 세션 = 스테이지 누적 컨텍스트 비대.
@@ -16,7 +14,7 @@
 
 ## 0. 한 줄
 
-**autopilot 파이프의 각 sub-skill 스테이지(code-plan·code-execute·code-test·code-report)를 `standard+` 에서 기본으로 별개 headless 세션에 분사하고, 세션 간 소통은 오직 산출물 파일로 한다.** depth-1 owner 는 스테이지 산출물 경로를 계약으로 넘기고 게이트 판단만 자기 컨텍스트에서 쥔 **얇지만 deep-orchestration conductor** 가 된다. `direct` 는 depth-0 inline 이고, `quick` 은 단일 depth-1 one-shot capability worker 가 micro-plan부터 concise report까지 한 세션에서 끝낸다(depth-2 금지). 이는 2026-07-06 "owner 단일 세션 + in-session 팀" 재설계의 **기본값을 반전**하고, 2026-07-13 quick topology 를 Fleet-visible one-shot worker 로 승격하며 standard+ 라우팅 판단 품질을 high-reasoning 기본으로 고정하는 결정이다.
+**autopilot 파이프의 각 sub-skill 스테이지(code-plan·code-execute·code-test·code-report)를 `standard+` 에서 기본으로 별개 headless 세션에 분사하고, 세션 간 소통은 오직 산출물 파일로 한다.** depth-1 owner 는 스테이지 산출물 경로를 계약으로 넘기고 게이트 판단만 자기 컨텍스트에서 쥔 **얇은 conductor** 가 된다. `direct` 는 depth-0 inline 이고, `quick` 은 단일 depth-1 one-shot capability worker 가 micro-plan부터 concise report까지 한 세션에서 끝낸다(depth-2 금지). 이는 2026-07-06 "owner 단일 세션 + in-session 팀" 재설계의 **기본값을 반전**하고, 2026-07-13 quick topology 를 Fleet-visible one-shot worker 로 승격하는 결정이다.
 
 ## 0.5 설계 원칙 — 산출물 기반 소통 (file-only handoff) ★ cross-cutting
 
@@ -149,31 +147,6 @@ CONVENTIONS §2.3 role 매트릭스 → 스테이지 매핑:
 
 - conductor 는 스테이지마다 `--model-role <role>` 또는 concrete `--model+--effort` 를 명시. dispatch-headless.py `role_map`: deep maker→(opus,high), fast implementer→(sonnet,medium), fast writer→(sonnet,low) 등(§2.4 실측)이 재현.
 - **작업 난이도별 상향은 conductor 판단**(§5.10 ⑦): 어려운 plan·복잡 API 는 conductor 가 deep maker/opus 로 상향, 단순 스테이지는 하향. wrapper 가 임의 기본 선택하거나 interactive session model 암묵 상속 금지.
-
-### 7.1 v7 orchestration·family routing 계약 (SD-21~23)
-
-> **SD-21 — conductor 기본**: depth-1 `standard+` conductor 는 portable `orchestrator` role + **high reasoning/deep orchestration** profile이 기본이다. "얇음"은 스테이지 본문을 들지 않는 context 책임이고, 라우팅·분해·게이트 판단을 가볍게 한다는 뜻이 아니다. fast orchestration 은 입력 정규화, 정해진 명령 조립, 상태/경로 전달, 결정된 결과 병합처럼 **선택지가 없고 의미 판단이 없는 mechanical-only** 작업에만 허용한다.
-
-> **SD-22 — family affinity와 우선순위**: planning·architecture·decomposition은 portable `deep maker`이며 **GPT family via Codex affinity**를 우선한다. 이는 품질 affinity이지 hard pin이 아니므로 runtime/account/tool/limit 부적격이면 다른 eligible family/adapter로 fallback한다. plan review는 가능한 경우 maker와 **다른 model family**의 reviewer를 선호해 실패 모드 다양성을 확보한다.
-
-라우팅 결정 순서는 다음 하나로 고정한다.
-
-1. **explicit choice** — 사용자가 지정한 harness/family/role/model. 단 실행 불가능한 선택은 조용히 대체하지 않고 hard eligibility 실패를 reason trace에 남긴 뒤 fallback한다.
-2. **hard eligibility** — 필요한 tool/runtime surface, account entitlement, 정확한 model ID 지원, active usage limit. 부적격 후보는 제거한다.
-3. **stage affinity** — planning/architecture/decomposition=`deep maker` + GPT/Codex 선호 등 stage별 family/role 적합성.
-4. **maker-checker family diversity** — review/checker는 가능한 경우 maker와 다른 family.
-5. **capacity/cost/latency** — 위 조건이 동률일 때만 잔여 용량, 비용, 지연으로 결정한다.
-
-portable core/registry는 **family + role**만 canonical하게 기록한다. concrete model ID, reasoning flag, endpoint/CLI syntax은 adapter가 소유한다. Adapter는 dispatch 직전 current runtime을 probe해 실제 허용되는 **exact ID**를 확정해야 하며 cached alias·문서 alias를 가용성 증거로 쓰지 않는다. 2026-07-13 currentness 기준 공식 권장은 GPT-5.6 Sol이고 API alias는 `gpt-5.6`이지만, parent Codex ChatGPT 실측은 alias를 거부하고 exact `gpt-5.6-sol`을 허용했다. 그러므로 Codex 선택은 adapter-verified exact ID를 사용하고 probe 실패 시 다음 eligible exact ID/family로 clean fallback하며 선택 이유와 실패 ID를 기록한다.
-
-> **SD-23 — `route-dispatch` helper**: 라우팅을 설명 가능하고 재현 가능하게 만드는 **read-only** helper를 둔다. 이는 SD-9의 stage 순서·경로 실행 helper와 별개인 후보 선택 helper다. 초기 지원 adapter는 Claude+Codex이며, OpenCode는 runtime model inventory/probe 계약이 확정되기 전까지 `unknown`을 정직하게 반환한다.
-
-Helper 입력/출력 계약:
-
-- 입력: stage/capability, intensity, QA, required tools/runtime surfaces, explicit choice(있으면), maker family(리뷰 시), adapter별 usage/account/runtime probe 결과.
-- 출력: portable `{family, role}`, 선택 adapter, adapter-verified `{exact_model_id, reasoning}`, 우선순위별 reason trace, rejected candidates와 fallback chain, unknown/unsupported 필드.
-- 금지: jobs.log 등록·프로세스 시작·worktree/file mutation·limit 상태 갱신. Helper는 후보를 **계산·보고만** 하고 실제 dispatch는 기존 adapter wrapper가 수행한다.
-- OpenCode: family/model을 추측하거나 Claude/Codex mapping을 복사하지 않는다. probe surface가 없거나 불명확하면 `adapter=opencode,status=unknown`으로 반환하고 다른 eligible adapter로 fallback 가능하게 한다.
 
 ## 8. 비용·안전 가드레일 (채택)
 
@@ -321,15 +294,6 @@ Fleet 는 quick depth-1 worker 를 하나의 live activity 로 보여야 한다.
 
 Headless dispatch 가 preferred 인 이유는 이 표시 계약을 jobs.log 로 자연스럽게 충족하기 때문이다. native subagent fallback 은 Fleet visibility degradation note 를 남기고, inline fallback 은 activity stage 를 만들 수 없음을 보고한다.
 
-## 8.9 v7 Fleet hotfix acceptance (SD-24)
-
-> **SD-24**: 라우팅 변경과 함께 드러난 Fleet process/stage 오탐은 아래 두 회귀가 모두 닫혀야 hotfix accepted다.
-
-1. **Codex headless child 숨김**: dispatch wrapper가 부여한 환경 marker로 식별되는 Codex headless dispatch 프로세스는 Fleet의 top-level/local process 목록에서 child-hidden이어야 한다. command substring/부모 PID 추측이 아니라 env marker가 판정 근거이며, jobs.log의 정상 depth-1/2 row와 liveness는 계속 보인다.
-2. **비-code job stage 오탐 금지**: non-code capability/spec/research/document job은 경로나 slug가 `plans`와 유사해도 code plan을 fuzzy-match하지 않는다. 명시적 capability/worker_role/stage metadata가 없으면 code stage를 합성하지 않으며, 특히 거짓 `spec:test` 표시가 없어야 한다.
-
-수용 테스트는 (a) env-marked Codex headless child가 process 목록에서 숨고 registry row는 유지됨, (b) non-code fixture의 유사 경로/slug에서도 stage가 capability metadata대로 표시되고 `spec:test`가 0건임, (c) 정상 code-plan/code-test fixture는 기존 표시가 유지됨을 함께 단언한다.
-
 ## 9. 영향 표면 목록 (구현 phase 에서 갱신 — 현행 문구 → 개정 방향)
 
 > **SD-7**: 아래 표가 구현(autopilot-code) 시 묶음 갱신할 자리. 각 surface = {현행 문구, 개정 방향}. 실제 문구 편집은 소유 스킬(core-first) 경유 별도 — 본 spec 은 방향만 확정.
@@ -354,8 +318,6 @@ Headless dispatch 가 preferred 인 이유는 이 표시 계약을 jobs.log 로 
 | 12 | `adapters/claude/bin/dispatch-headless.py`(+codex/opencode preflight dispatch) | depth=2/parent/worker_role 이미 지원(§2.4) | **재작성 불요**. 판단: (a) conductor 편의용 **stage-dispatch helper**(스테이지 순서·경로 계약을 캡슐화) 신설 여부 (b) worker_role 표준값 문서화. helper 는 pilot 후 필요성 판정. |
 | 13 | fleet 관제(`tools/fleet`) | in-session 서브에이전트 미표시 | ~~스테이지 row 표시~~ → **Phase 2 범위 제외** (tools/fleet/** 타 세션 소유, 2026-07-10 handoff). |
 | 14 | drill 케이스 | 스테이지 분사 회귀 없음 | **스테이지 분사 회귀 케이스 신설**(Phase 2): fleet row·산출물 정상·depth≤2 강제 + **문서-효력 검증**(§8.5.5 — 프롬프트 떠먹임 없이 스킬 문서만으로 분사 발생). ※ drill 러너(loops/**) 자체는 타 세션 소유 — 케이스 정의만 본 spec 범위. |
-| 15 | portable route contract + adapter model resolution | family/role affinity, exact model currentness probe, 설명 가능한 우선순위 helper가 없음 | **SD-21~23**: core는 portable family/role과 우선순위만 소유. read-only `route-dispatch`는 Claude+Codex부터 시작하고 adapter가 exact model/reasoning을 runtime-probe; OpenCode는 unknown 정직 보고. |
-| 16 | Fleet process/stage collector | Codex headless child가 top-level process로 중복 노출될 수 있고 non-code job이 fuzzy `plans` 매치로 `spec:test`를 합성할 수 있음 | **SD-24**: env-marked Codex child-hidden + metadata-exact stage 분류. non-code 유사경로 fixture와 정상 code fixture를 함께 회귀 테스트. |
 
 ## 10. 기각·비채택 (근거와 함께)
 
@@ -385,13 +347,6 @@ core/DESIGN_PRINCIPLES.md §8 # 산출물 기반 소통 승격·재설계 반전
 adapters/{claude,codex,opencode} bootstrap §0(C)   # 깊이 1 전용 → 스테이지 depth-2 확장 (§9-10,11)
 tools/fleet                  # (범위 제외 — 타 세션 소유, §9-13)
 loops/drill                  # 스테이지 분사 회귀 케이스 정의 (§9-14, Phase 2 — 러너는 타 세션 소유)
-
-# --- v7 추가 (구현은 후속 autopilot-code) ---
-core model-routing contract                   # portable family/role·우선순위만 기록 (SD-21·22)
-utilities/route-dispatch                      # read-only 후보 계산·reason trace (SD-23)
-adapters/{claude,codex}/model probe mapping   # current exact ID/reasoning resolution
-adapters/opencode/model probe mapping         # 미확정 동안 honest unknown
-tools/fleet collector + regression fixtures   # env child-hidden·metadata-exact stage (SD-24)
 
 # --- v2 추가 (Phase 2) ---
 skills/autopilot-code/references/dev-pipeline.md   # Step 1~7 본문 dispatch-first 재작성 + SD-14 대기 절차 (SD-10)
@@ -480,15 +435,8 @@ skills/autopilot-{draft,research,spec,design,lab}  # 스테이지 분사 계약 
 - **SD-19**: Codex quick dispatch preference/fallback — headless check 통과 시 headless dispatch 우선(Fleet-visible). headless 실패 + native subagent ok 이면 native subagent fallback + Fleet visibility degradation note. 둘 다 불가하면 inline + concise fallback reason. parent 로컬 근거: native subagent ok, strict headless projection ok, quick depth-1 dry-run accepted, quick depth-2 forbidden. (§8.8.2)
 - **SD-20**: Fleet quick 표시 계약 — depth-1 quick worker 는 하나의 blinking `quick/exec` activity stage 로 표시. quick depth-2 child row 는 contract violation. (§8.8.3)
 
-### v7 추가 (2026-07-13 — orchestration/model routing + Fleet hotfix)
-
-- **SD-21**: depth-1 `standard+` conductor는 `orchestrator` + high-reasoning/deep orchestration 기본. fast orchestration은 mechanical-only. 얇음은 context 소유 범위이지 판단 tier 하향이 아니다. (§7.1)
-- **SD-22**: planning/architecture/decomposition=`deep maker` + GPT family via Codex affinity(비-hard-pin), plan review는 다른 family 선호. 우선순위=`explicit choice > hard eligibility/tool/runtime/account/limit > stage affinity > maker-checker family diversity > capacity/cost/latency`. core는 portable family/role, adapter는 runtime-probed exact model/reasoning을 소유. 공식 GPT-5.6 Sol 권장과 Codex alias/exact-ID 차이를 currentness 사례로 기록. (§7.1)
-- **SD-23**: read-only `route-dispatch` helper — Claude+Codex 초기 지원, 입력 후보/상태에서 family·role·adapter exact ID·reason trace·fallback을 계산하되 dispatch/mutation 금지. OpenCode는 probe 계약 확정 전 honest `unknown`. (§7.1)
-- **SD-24**: Fleet hotfix acceptance — env-marked Codex headless dispatch process child-hidden, non-code job은 fuzzy `plans` 매치 및 거짓 `spec:test` 0건, 정상 code stage 표시 유지. (§8.9)
-
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
-- **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화). **v6 추가**: quick depth-2 금지, quick jobs.log child-row 부재, mutation quick isolated worktree 는 결정론 gate 대상. **v7 추가**: hard eligibility 기반 후보 제거·adapter exact-ID probe·reason trace 필드·helper read-only·Fleet env child-hidden/metadata-exact 분류는 결정론 테스트 대상.
-- **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김. **v6 추가**: headless 실패 시 native subagent 로 충분한지, 또는 inline fallback 으로 낮출지의 fallback reason 작성은 runtime 상태 해석이므로 의미 판단으로 남긴다. **v7 추가**: stage affinity와 family diversity의 품질 판단은 의미 구간이지만, 그 적용 순서와 후보 탈락 사유는 helper가 구조화한다.
+- **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화). **v6 추가**: quick depth-2 금지, quick jobs.log child-row 부재, mutation quick isolated worktree 는 결정론 gate 대상.
+- **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김. **v6 추가**: headless 실패 시 native subagent 로 충분한지, 또는 inline fallback 으로 낮출지의 fallback reason 작성은 runtime 상태 해석이므로 의미 판단으로 남긴다.
 - **충돌**: 없음 — 반전의 핵심 우려(현행 "상태 재발굴·연속성 상실")를 §0.5 계약 완결성 의무 + §8 inline 경계로 규칙화해 흡수했다. 우려를 사람 vigilance 로 남기지 않고 "산출물이 상태를 완전히 담는가"라는 검증 가능한 규칙으로 전환한 것이 이 경계 존중. per-stage cost 는 추측으로 규칙화하지 않고 계측(SD-OPEN-1)으로 미룬 것도 동일.

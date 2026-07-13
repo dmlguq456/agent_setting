@@ -2,7 +2,7 @@ project_name: stage-dispatch
 component: stage-dispatch          # autopilot 파이프 디스패치 토폴로지 개정 (repo spec/prd.md = Unified Memory System, spec/harness-layer-sync·dispatch-profiles·agent-fleet-dashboard 무관)
 created: 2026-07-10
 mode: [library, cli]              # library(스테이지 분사 계약·오케스트레이션) + cli(dispatch wrapper·jobs.log·fleet 관제) — infra
-scope_note: "direct=depth-0 inline, quick=단일 depth-1 one-shot capability worker(depth-2 금지, headless 우선/Fleet-visible), standard+=depth-0 main -> depth-1 conductor -> 순차 depth-2 stage-worker. 인터페이스는 산출물 기반 소통."
+scope_note: "direct=depth-0 inline, quick=단일 depth-1 one-shot capability worker(depth-2 금지, headless 우선/Fleet-visible), standard+=depth-0 main -> high-reasoning/deep-orchestration depth-1 conductor -> 순차 depth-2 stage-worker. 인터페이스는 산출물 기반 소통."
 inputs:
   - '사용자 결정 2026-07-10: "스킬 단위 처리 분사를 기본 지침으로. 어차피 산출물 기반 소통." (입도=sub-skill, 적용=standard+)'
   - '사용자 결정 2026-07-13: direct depth-0 inline 유지, quick depth-1 one-shot capability worker 승격(depth-2 금지), standard+ 기존 stage-dispatch 유지'
@@ -13,12 +13,14 @@ inputs:
   - '운영 실증 2026-07-10: ① in-session 서브에이전트 jobs.log 미등록(fleet 관제 불가시) ② hook ceremony 미수령 ③ owner 단일 세션 컨텍스트 비대 ④ conductor 조기 종료(one-shot turn 종료 = 프로세스 종료 — Monitor 대기 불가, v2)'
   - '공식 Codex evidence 2026-07-13: developers.openai.com/codex/codex-manual.md Subagents — context pollution 완화, subagent token 비용 증가, parallel write-heavy caution'
   - 'parent local runtime evidence 2026-07-13: Codex native subagent ok, strict headless projection ok, quick depth-1 dry-run accepted, quick depth-2 forbidden'
+  - '사용자 결정 2026-07-13 v7: standard+ conductor deep orchestration 기본, GPT/Codex planning affinity(비-hard-pin), route priority/helper, Fleet hotfix acceptance'
+  - '공식 OpenAI Models 2026-07-13: GPT-5.6 Sol 권장, exact ID gpt-5.6-sol, API alias gpt-5.6; parent Codex ChatGPT 실측은 alias 거부/exact ID 지원'
 phases:
-  spec: done              # PRD v6 — quick depth-1 topology(SD-18~20) 채택. v5 snapshot = _internal/versions/v5/
+  spec: done              # PRD v7 — orchestration/family routing/Fleet acceptance(SD-21~24) 채택. v6 snapshot = _internal/versions/v6/ (현재 v6와 cmp 일치 확인, 재생성 안 함)
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: in_progress        # v6 spec-only update done; implementation pending for quick depth-1 topology. 기존 done: Phase 1/2/3, capacity-bias, SD-15 adapter parity, v4 정련, SD-17. 잔여 이월: quick depth-1 implementation, Fleet quick/exec 표시, SD-15 codex/opencode wrapper 동형, 프로필 A/B 계측, SD-14b, drill 러너 등록(loops 세션)
-last_updated: 2026-07-13  # v6 — quick depth-1 one-shot topology (v5 snapshot = _internal/versions/v5/)
+  dev: in_progress        # v7 spec-only update done; 구현 대기: deep conductor/model routing + route-dispatch helper + Fleet hotfix, 기존 quick depth-1/Fleet quick 표시, SD-15 codex/opencode wrapper 동형, 프로필 A/B 계측, SD-14b, drill 러너 등록
+last_updated: 2026-07-13  # v7 — orchestration/model routing + Fleet hotfix acceptance (v6 snapshot verified at _internal/versions/v6/)
 decisions_locked:
   - 'SD-1: depth-1 owner = 얇은 conductor, 스테이지(plan/execute/test/report) = depth-2 headless 세션 (conductor 는 verdict/게이트만, 스테이지 본문 미독)'
   - 'SD-2: 인터페이스 = 산출물 파일만, 세션 간 대화 컨텍스트 전달 금지, 계약 완결성 의무 (산출물 기반 소통 명문화)'
@@ -43,6 +45,10 @@ decisions_locked:
   - 'SD-18: intensity topology 재정의 — direct depth-0 inline, quick depth-1 one-shot capability worker, standard+ depth-1 conductor -> 순차 depth-2 stage-workers. quick depth-2 금지, mutation quick isolated worktree (v6)'
   - 'SD-19: Codex quick dispatch preference/fallback — headless 우선(Fleet-visible), headless 실패 시 native subagent + Fleet visibility degradation note, 둘 다 불가 시 inline + concise fallback reason (v6)'
   - 'SD-20: Fleet quick 표시 계약 — depth-1 quick worker 는 blinking quick/exec activity stage 하나로 표시, quick depth-2 child row 는 violation (v6)'
+  - 'SD-21: standard+ depth-1 conductor = orchestrator + high-reasoning/deep orchestration 기본. fast orchestration 은 mechanical-only; 얇음은 context 범위이지 판단 tier 하향 아님 (v7)'
+  - 'SD-22: planning/architecture/decomposition = deep maker + GPT family via Codex affinity(비-hard-pin), plan review 다른 family 선호. priority = explicit > hard eligibility/tool/runtime/account/limit > affinity > family diversity > capacity/cost/latency. core=portable family/role, adapters=runtime-probed exact model/reasoning (v7)'
+  - 'SD-23: read-only route-dispatch helper — Claude+Codex 초기 지원, OpenCode honest unknown; reason trace/fallback 출력, dispatch/jobs/file mutation 금지 (v7)'
+  - 'SD-24: Fleet hotfix acceptance — env-marked Codex headless process child-hidden + non-code fuzzy plans/spec:test 오탐 0 + 정상 code stage 유지 (v7)'
 decisions_open:
   - 'SD-OPEN-1: 마이크로-스테이지 inline 손익 임계(어느 스테이지 크기부터 분사 이득). Phase 1 pilot 1표본 확보 — Phase 2 계측 누적만, 확정은 표본 축적 후'
   - 'SD-OPEN-2: 스테이지 SessionEnd mem curator 기동 영향 — 관찰만(계측 로그 기록), 개입은 증거 후 (v2)'
