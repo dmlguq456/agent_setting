@@ -1206,7 +1206,10 @@ if "$CODEX" loop-info oncall >/tmp/codex_loop_oncall.out 2>/tmp/codex_loop_oncal
   && grep -q '^source=loops/oncall.md$' /tmp/codex_loop_oncall.out \
   && grep -q '^status=manual-contract$' /tmp/codex_loop_oncall.out \
   && grep -q '^runtime_surface=codex-loop-guidance$' /tmp/codex_loop_oncall.out \
-  && grep -q '^executable_projection=unsupported-runtime-script$' /tmp/codex_loop_oncall.out; then
+  && grep -q '^adapter_selection=auto-usage-aware-claude-codex$' /tmp/codex_loop_oncall.out \
+  && grep -q '^selector=utilities/usage-check.sh$' /tmp/codex_loop_oncall.out \
+  && grep -q '^executable_projection=shared-external-runner$' /tmp/codex_loop_oncall.out \
+  && grep -q '^codex_native_executable=unsupported$' /tmp/codex_loop_oncall.out; then
   ok "codex loop wrapper reports oncall manual contract"
 else
   bad "codex loop wrapper should report oncall manual contract"
@@ -1216,6 +1219,8 @@ if "$CODEX" loop-info drill >/tmp/codex_loop_drill.out 2>/tmp/codex_loop_drill.e
   && grep -q '^status=manual-contract$' /tmp/codex_loop_drill.out \
   && grep -q '^trigger=manual-only$' /tmp/codex_loop_drill.out \
   && grep -q '^auto_run=unsupported$' /tmp/codex_loop_drill.out \
+  && grep -q '^adapter_selection=auto-usage-aware-claude-codex$' /tmp/codex_loop_drill.out \
+  && grep -q '^executable_projection=shared-external-runner$' /tmp/codex_loop_drill.out \
   && grep -q '^fallback=report-drill-would-be-useful$' /tmp/codex_loop_drill.out; then
   ok "codex loop wrapper prevents automatic drill execution"
 else
@@ -1225,6 +1230,8 @@ if "$CODEX" loop-info study >/tmp/codex_loop_study.out 2>/tmp/codex_loop_study.e
   && grep -q '^source=loops/study.md$' /tmp/codex_loop_study.out \
   && grep -q '^status=manual-contract$' /tmp/codex_loop_study.out \
   && grep -q '^action=proposal-report-only$' /tmp/codex_loop_study.out \
+  && grep -q '^adapter_selection=auto-usage-aware-claude-codex$' /tmp/codex_loop_study.out \
+  && grep -q '^executable_projection=shared-external-runner$' /tmp/codex_loop_study.out \
   && grep -q '^fallback=read-source-and-draft-proposal-in-main-session$' /tmp/codex_loop_study.out; then
   ok "codex loop wrapper reports study proposal contract"
 else
@@ -3712,6 +3719,13 @@ out=$(env -u CLAUDE_CODE_CHILD_SESSION "$CSG" --self-slug cyc --jobs "$sdjobs" 2
 [ -z "$out" ] && ok "CSG no block for non-conductor env" || bad "CSG should no-op for non-conductor [$out]"
 rm -rf "$sdtmp"
 
+echo "== usage-aware loop adapter routing =="
+if bash "$ROOT/loops/lib.test.sh" > "$TMP/loop-lib-test.out" 2>&1; then
+  ok "shared loop selector and runtime failover pass fake-CLI regression"
+else
+  bad "shared loop selector regression failed [$(cat "$TMP/loop-lib-test.out")]"
+fi
+
 echo "== drill runtime failure propagation + Fleet limit marker =="
 drilltmp="$TMP/drill-runtime-failure"
 drilljobs="$drilltmp/jobs.log"
@@ -3759,12 +3773,25 @@ printf '%s\n' '#!/bin/sh' 'mkdir -p "$1/repo"' > "$mini_case/fixture.sh"
 printf '%s\n' '#!/bin/sh' 'exit 0' > "$mini_case/assert.sh"
 : > "$mini_case/prompt.md"
 chmod +x "$mini_case/fixture.sh" "$mini_case/assert.sh"
+auto_jobs="$drilltmp/auto-jobs.log"
+: > "$auto_jobs"
+AGENT_HOME="$drilltmp/agent-home" AGENT_DISPATCH_JOBS="$auto_jobs" HARNESS_CAPACITY_BIAS=codex \
+  DRILL_HOME="$mini_drill" DRILL_ADAPTER=auto DRILL_SKIP_CONFORMANCE=1 \
+  bash "$ROOT/loops/drill/run.sh" --list > "$drilltmp/auto-list.out" 2>&1
+auto_rc=$?
+if [ "$auto_rc" -eq 0 ] \
+  && grep -q '^drill adapter=codex requested=auto reason=capacity-bias:codex ' "$drilltmp/auto-list.out" \
+  && [ ! -s "$auto_jobs" ]; then
+  ok "drill auto selector chooses Codex without invoking a runtime"
+else
+  bad "drill auto selector integration (rc=$auto_rc) [$(cat "$drilltmp/auto-list.out")]"
+fi
 AGENT_HOME="$drilltmp/agent-home" AGENT_DISPATCH_JOBS="$drilljobs" \
   CODEX_BIN="$fake_codex" DRILL_HOME="$mini_drill" DRILL_ADAPTER=codex \
   DRILL_SKIP_CONFORMANCE=1 DRILL_AUTO_DIAG=1 \
   bash "$ROOT/loops/drill/run.sh" runtime_fail > "$drilltmp/run.out" 2>&1
 drill_rc=$?
-if [ "$drill_rc" -eq 1 ] && grep -q '| runtime_fail | FAIL |' "$mini_drill"/results/*/summary.md; then
+if [ "$drill_rc" -eq 1 ] && grep -q '| runtime_fail | codex | FAIL |' "$mini_drill"/results/*/summary.md; then
   ok "drill run exits non-zero when runtime fails despite a passing assertion"
 else
   bad "drill run should fail on runtime failure (rc=$drill_rc) [$(cat "$drilltmp/run.out")]"

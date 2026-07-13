@@ -720,9 +720,13 @@ runtime_surface=codex-loop-guidance
 trigger=external-scheduler-or-manual
 action=read-only-report
 output=notes/oncall/<date>.md
-executable_projection=unsupported-runtime-script
+external_runner=loops/oncall.sh
+adapter_selection=auto-usage-aware-claude-codex
+selector=utilities/usage-check.sh
+executable_projection=shared-external-runner
+codex_native_executable=unsupported
 fallback=read-source-and-report-in-main-session
-note=Codex may follow the portable oncall guide manually; do not run the Claude-coupled loop script as a Codex-native executable.
+note=The external scheduler may use the shared runner to select Codex or Claude from known limit state. This is not a Codex-native background scheduler.
 EOF
         ;;
       study)
@@ -735,9 +739,13 @@ runtime_surface=codex-loop-guidance
 trigger=external-scheduler-or-manual
 action=proposal-report-only
 output=notes/study/<date>.md
-executable_projection=unsupported-runtime-script
+external_runner=loops/study.sh
+adapter_selection=auto-usage-aware-claude-codex
+selector=utilities/usage-check.sh
+executable_projection=shared-external-runner
+codex_native_executable=unsupported
 fallback=read-source-and-draft-proposal-in-main-session
-note=Codex may follow the portable study guide manually; any proposed edits remain proposals until the user accepts them.
+note=The external scheduler may use the shared runner to select Codex or Claude. Any proposed edits remain proposals until the user accepts them.
 EOF
         ;;
       drill)
@@ -750,9 +758,13 @@ runtime_surface=codex-loop-guidance
 trigger=manual-only
 action=report-usefulness-before-running
 auto_run=unsupported
-executable_projection=unsupported-runtime-script
+external_runner=loops/drill/run.sh
+adapter_selection=auto-usage-aware-claude-codex
+selector=utilities/usage-check.sh
+executable_projection=shared-external-runner
+codex_native_executable=unsupported
 fallback=report-drill-would-be-useful
-note=Do not run drill automatically from Codex; it can launch headless runtime sessions and spend tokens.
+note=Do not run drill automatically from the Codex UI. When the user starts the shared external runner, auto may choose Codex or Claude from known limit state.
 EOF
         ;;
       note)

@@ -49,12 +49,15 @@
 
 ## 루프 러너 — core/adapter 분리 (2026-07-01)
 
-루프의 **케이스(prompt/fixture/assert)는 런타임 중립**, **러너만 어댑터별**이다 — 하네스 전체의 core/adapter 분리를 루프 축에도 적용. `loops/lib-runner.sh` 의 `run_case_on_adapter <adapter> …` 가 `claude`(`claude -p --output-format json`) · `codex`(`codex exec --json`) · `opencode`(`opencode run --format json`) 를 같은 계약(transcript + `turns|in_tok|out_tok|cost`)으로 정규화한다. `drill/run.sh --adapter <a>` (또는 `DRILL_ADAPTER`) 로 선택, 기본 `claude`.
+루프의 **케이스(prompt/fixture/assert)는 런타임 중립**, **러너만 어댑터별**이다 — 하네스 전체의 core/adapter 분리를 루프 축에도 적용. `loops/lib-runner.sh` 의 `run_case_on_adapter <adapter> …` 가 `claude`(`claude -p --output-format json`) · `codex`(`codex exec --json`) · `opencode`(`opencode run --format json`) 를 같은 계약(transcript + `turns|in_tok|out_tok|cost`)으로 정규화한다. `drill/run.sh --adapter <a>` (또는 `DRILL_ADAPTER`) 로 선택하며 기본은 `auto`다.
 
 - **케이스 포터블화**: 마커 경로는 `$DRILL_MARKER_HOME/.spec-grounding`(러너가 어댑터 agent-home 으로 export), 산출물은 `.agent_reports`(+legacy `.claude_reports`). g4_spec_gate 가 포터블 기준 케이스. design(g8*)·mem_builtin 은 claude 고유(design-MCP·claude 내장 memory)라 잔존.
-- **oncall/study 러너**: `loops/lib.sh` 의 `run_claude_retry` 도 `LOOP_ADAPTER`(claude 기본 · codex · opencode)로 dispatch — codex/opencode 는 자체 sandbox/permission 으로 프롬프트(oncall.md/study.md)를 돌리고 claude 전용 인자(--model/--allowedTools)는 무시. note 는 이미 포터블한 `autopilot-note` capability 라 스케줄 shim 만 남음.
+- **공통 usage-aware 선택**: `DRILL_ADAPTER=auto`와 `LOOP_ADAPTER=auto`가 기본이다. `utilities/usage-check.sh --select <routing-key>`가 한 canonical jobs.log의 known-limit을 먼저 회피하고, 한쪽만 `ok`면 그쪽, 둘 다 `ok|unknown`이면 `HARNESS_CAPACITY_BIAS=claude|codex` 또는 날짜+loop key 중립 분산으로 고른다. 둘 다 limited면 실행하지 않는다. 정확한 잔여 quota API가 없으므로 `auto`는 잔여 퍼센트 추정이 아니다. "거의 소진"처럼 limit 전 사람이 아는 상태는 `HARNESS_CAPACITY_BIAS`로 전달한다.
+- **명시 선택**: `DRILL_ADAPTER`/`--adapter` 또는 `LOOP_ADAPTER`를 `claude|codex|opencode`로 주면 강제 선택이며 auto failover하지 않는다. OpenCode는 사용량 상태원이 없어 명시 선택만 지원한다.
+- **Fleet·실행 중 failover**: drill case와 oncall/study runtime attempt는 모두 physical harness repo의 한 canonical jobs.log에 `open→done`으로 보여 중복 Fleet tree를 만들지 않는다. auto로 고른 런타임이 새 session/usage limit을 반환하면 그 row에 `note=dead-*-limit,reset=`을 남긴다. oncall/study는 같은 실행에서 반대 하네스로 한 번 즉시 넘기고, drill은 같은 case를 한 번 넘긴 뒤 다음 case 전 상태를 다시 읽는다.
+- **oncall/study 러너**: `loops/lib.sh` 의 기존 `run_claude_retry` 이름은 호출 호환을 위해 유지하지만 실제로는 Claude/Codex/OpenCode dispatch를 담당한다. Codex/OpenCode는 자체 sandbox/permission으로 프롬프트(oncall.md/study.md)를 돌리고 Claude 전용 인자(`--model`/`--allowedTools`)는 무시한다. note는 이미 포터블한 `autopilot-note` capability라 스케줄 shim만 남음.
 - **behavioral 검증 게이트 (선결)**: codex/opencode 로 케이스를 _실제_ 돌리려면 (1) 해당 어댑터의 runtime projection 설치(bootstrap+hooks/plugin 로드), (2) 마커 등 하네스 상태쓰기가 sandbox 안에 떨어지게 agent-home 배치가 필요. 러너·케이스 배선은 완료, 이 게이트가 다음 단계.
-- 진단·judge 메타 층은 아직 `claude -p` (결과 분석용, 시험 대상 아님).
+- 진단·judge 메타 층도 그 실행에서 선택된 adapter를 재사용해 다른 runtime 토큰을 암묵 소비하지 않는다.
 
 ## 케이스 승격 (오답노트 → drill)
 

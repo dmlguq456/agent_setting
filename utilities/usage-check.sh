@@ -19,8 +19,11 @@
 #     · unknown               — jobs.log 부재/해석 불가 → 조회 실패로 취급(막지 말고 orchestrator 판단).
 #
 #   사용: usage-check.sh [--harness claude|codex|all] [--jobs <path>] [--unknown-window-min <N>]
-#   출력: harness 당 한 줄 `<harness> <state>` (파싱 가능) + 마지막 한 줄 `bias <harness>`.
-#   exit 0 항상(informational).
+#                        [--select <routing-key>]
+#   출력: harness 당 한 줄 `<harness> <state>` (파싱 가능) + `bias <harness|auto>`.
+#         `--select`면 `selected <claude|codex|unavailable>` +
+#         `selection_reason <reason>`을 추가한다.
+#   exit: 조회만 하면 0. `--select`에서 둘 다 limited면 1, 잘못된 bias/slot이면 64.
 #
 #   기본 capacity policy (runtime-currentness, 2026-07-13): stale한 Claude>Codex 가정을 제거한다.
 #   `HARNESS_CAPACITY_BIAS` 를 명시하면 그 값을 쓰고, 미설정이면 `auto`(balanced/neutral)로 출력한다.
@@ -31,6 +34,7 @@ AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/agent-home.sh")}"
 
 HARNESS="all"
 JOBS=""
+SELECT_KEY=""
 # SD-16e (§8.6.2): reset= 없는 마커는 해제 시각을 모르므로 보수 창을 단축한다 — 이 창 안에서만
 # `limited(unknown-reset)` 로 표기하고, 창을 넘기면 `ok` 로 downgrade 한다.
 UNKNOWN_WINDOW_MIN="${UNKNOWN_WINDOW_MIN:-60}"
@@ -38,6 +42,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --harness) HARNESS="${2:-all}"; shift 2 ;;
     --jobs) JOBS="${2:-}"; shift 2 ;;
+    --select) SELECT_KEY="${2:-}"; shift 2 ;;
     --window-min) UNKNOWN_WINDOW_MIN="${2:-60}"; shift 2 ;; # backward-compatible alias
     --unknown-window-min) UNKNOWN_WINDOW_MIN="${2:-60}"; shift 2 ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -46,6 +51,10 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$JOBS" ] || JOBS="$AGENT_HOME/.dispatch/jobs.log"
 case "$HARNESS" in all) HARNESSES="claude codex" ;; *) HARNESSES="$HARNESS" ;; esac
+[ -z "$SELECT_KEY" ] || [ "$HARNESS" = "all" ] || {
+  echo "usage-check: --select requires --harness all" >&2
+  exit 64
+}
 
 now=$(date +%s)
 
@@ -82,6 +91,8 @@ latest_limit_marker() { # $1=harness
     }' "$JOBS" | sort | tail -1
 }
 
+claude_state="unknown"
+codex_state="unknown"
 for h in $HARNESSES; do
   state="ok"
   marker=$(latest_limit_marker "$h")
@@ -107,8 +118,69 @@ for h in $HARNESSES; do
   fi
   # jobs.log 자체가 없으면 조회 불가 = unknown.
   [ -f "$JOBS" ] || state="unknown"
+  case "$h" in
+    claude) claude_state=$state ;;
+    codex) codex_state=$state ;;
+  esac
   printf '%s %s\n' "$h" "$state"
 done
 
 # 중립 기본값 — 명시 override 없이는 특정 하네스를 주력으로 가정하지 않는다.
-printf 'bias %s\n' "${HARNESS_CAPACITY_BIAS:-auto}"
+bias="${HARNESS_CAPACITY_BIAS:-auto}"
+printf 'bias %s\n' "$bias"
+
+[ -n "$SELECT_KEY" ] || exit 0
+
+case "$bias" in
+  auto|claude|codex) ;;
+  *)
+    printf 'selected unavailable\n'
+    printf 'selection_reason invalid-bias:%s\n' "$bias"
+    exit 64
+    ;;
+esac
+
+is_limited() {
+  case "$1" in limited\(*\)) return 0 ;; *) return 1 ;; esac
+}
+
+selected=""
+reason=""
+if is_limited "$claude_state" && is_limited "$codex_state"; then
+  selected="unavailable"
+  reason="both-limited"
+elif is_limited "$claude_state"; then
+  selected="codex"
+  reason="known-limit:claude"
+elif is_limited "$codex_state"; then
+  selected="claude"
+  reason="known-limit:codex"
+elif [ "$claude_state" = "ok" ] && [ "$codex_state" = "unknown" ]; then
+  selected="claude"
+  reason="known-ok:claude"
+elif [ "$codex_state" = "ok" ] && [ "$claude_state" = "unknown" ]; then
+  selected="codex"
+  reason="known-ok:codex"
+elif [ "$bias" = "claude" ] || [ "$bias" = "codex" ]; then
+  selected="$bias"
+  reason="capacity-bias:$bias"
+else
+  slot="${HARNESS_ROUTE_SLOT:-}"
+  if [ -n "$slot" ]; then
+    case "$slot" in *[!0-9]*)
+      printf 'selected unavailable\n'
+      printf 'selection_reason invalid-route-slot:%s\n' "$slot"
+      exit 64
+      ;; esac
+  else
+    # 같은 날·같은 routing key는 재현 가능하고, key/day가 바뀌면 특정 vendor에
+    # 영구 고정되지 않게 분산한다. 이 값은 quota 추정치가 아니다.
+    slot=$(printf '%s' "$(date -u +%Y%m%d):$SELECT_KEY" | cksum | awk '{print $1}')
+  fi
+  if [ $((slot % 2)) -eq 0 ]; then selected="claude"; else selected="codex"; fi
+  reason="neutral-spread:$((slot % 2))"
+fi
+
+printf 'selected %s\n' "$selected"
+printf 'selection_reason %s\n' "$reason"
+[ "$selected" != "unavailable" ] || exit 1

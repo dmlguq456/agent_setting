@@ -243,6 +243,9 @@ if not reset:
     if match:
         reset = re.sub(r"\s+", "", match.group(1).lower())
 
+if reason.endswith("-limit") and not reset:
+    reset = "unknown-reset"
+
 print(f"{reason}\t{reset}")
 PY
 }

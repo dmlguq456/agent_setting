@@ -27,9 +27,17 @@ case "$stage" in
 esac
 [ -n "$role" ] || role=$default_role
 usage_script="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/usage-check.sh"
-if [ -n "$jobs" ]; then usage=$($usage_script --harness all --jobs "$jobs"); else usage=$($usage_script --harness all); fi
+usage_rc=0
+if [ -n "$jobs" ]; then
+  usage=$($usage_script --harness all --jobs "$jobs" --select "dispatch:$stage") || usage_rc=$?
+else
+  usage=$($usage_script --harness all --select "dispatch:$stage") || usage_rc=$?
+fi
+[ "$usage_rc" -ne 64 ] || { printf '%s\n' "$usage" >&2; exit 64; }
 state() { printf '%s\n' "$usage" | awk -v h="$1" '$1==h {print $2}'; }
 bias=$(printf '%s\n' "$usage" | awk '$1=="bias" {print $2; exit}')
+auto_choice=$(printf '%s\n' "$usage" | awk '$1=="selected" {print $2; exit}')
+selection_reason=$(printf '%s\n' "$usage" | awk '$1=="selection_reason" {print $2; exit}')
 family_of() { [ "$1" = codex ] && printf gpt || printf claude; }
 eligible() { s=$(state "$1"); [ "$s" != limited ] && [ "${s#limited(}" = "$s" ]; }
 
@@ -47,9 +55,13 @@ if [ -z "$choose" ]; then
     codex:*) choose=codex;;
     diverse:claude) choose=codex;;
     diverse:gpt) choose=claude;;
-    diverse:*) choose=${bias:-claude};;
-    neutral:*) choose=${bias:-claude};;
+    diverse:*) choose=$auto_choice;;
+    neutral:*) choose=$auto_choice;;
   esac
+fi
+if [ "$choose" = unavailable ] || [ -z "$choose" ]; then
+  # Detailed unavailable output remains owned by the eligibility block below.
+  choose=claude
 fi
 case "$choose" in claude|codex) ;; *) echo 'dispatch-route: no known candidate' >&2; exit 64;; esac
 
@@ -74,3 +86,4 @@ echo status=eligible; echo "adapter=$choose"; echo "family=$(family_of "$choose"
 [ -z "$fallback" ] || echo "fallback.1=$fallback"
 echo "trace.1=explicit=${adapter:-none};family=${family:-none};eligibility=usage-$(state "$choose")"
 echo "trace.2=affinity=$affinity;maker_family=${maker_family:-unknown};required=${required:-none};bias=${bias:-unknown}"
+echo "trace.3=usage-selection=${selection_reason:-unknown}"

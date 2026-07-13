@@ -11,7 +11,9 @@ GOLD="${DRILL_HOME:-$AGENT_HOME/loops/drill}"   # DRILL_HOME override = worktree
 # adapter-specific. DRILL_ADAPTER / --adapter selects claude|codex|opencode.
 # shellcheck source=../lib-runner.sh
 . "$SCRIPT_DIR/../lib-runner.sh"
-ADAPTER="${DRILL_ADAPTER:-claude}"
+# shellcheck source=../lib.sh
+. "$SCRIPT_DIR/../lib.sh"
+ADAPTER="${DRILL_ADAPTER:-auto}"
 CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 RUNNER_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$AGENT_HOME")
 STAMP=$(date +%F_%H%M)
@@ -26,17 +28,29 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --axis)    AXIS="${2:-}"; shift 2 ;;
     --sample)  SAMPLE="${2:-}"; shift 2 ;;
-    --adapter) ADAPTER="${2:-claude}"; shift 2 ;;
+    --adapter) ADAPTER="${2:-auto}"; shift 2 ;;
     --list)    LIST=1; shift ;;
     *)         ids+=("$1"); shift ;;
   esac
 done
+REQUESTED_ADAPTER="$ADAPTER"
+if ! select_loop_adapter "$REQUESTED_ADAPTER" drill; then
+  echo "drill adapter unavailable (requested=$REQUESTED_ADAPTER, reason=${LOOP_ROUTE_REASON:-unknown}, claude=${LOOP_CLAUDE_STATE:-unknown}, codex=${LOOP_CODEX_STATE:-unknown})" >&2
+  exit 2
+fi
+ADAPTER="$LOOP_SELECTED_ADAPTER"
+export DRILL_REQUESTED_ADAPTER="$REQUESTED_ADAPTER"
 export DRILL_ADAPTER="$ADAPTER"
+# Runtime projection(~/.claude)으로 시작해도 Fleet은 physical harness repo의 한 registry만 본다.
+AGENT_DISPATCH_JOBS="${AGENT_DISPATCH_JOBS:-$RUNNER_ROOT/.dispatch/jobs.log}"
+export AGENT_DISPATCH_JOBS
+echo "drill adapter=$ADAPTER requested=$REQUESTED_ADAPTER reason=$LOOP_ROUTE_REASON claude=$LOOP_CLAUDE_STATE codex=$LOOP_CODEX_STATE"
 # Codex workspace-write deliberately protects .git metadata, while several
 # disposable drill cases validate branch/worktree operations. Scope the wider
 # sandbox to drill only; every other loop keeps lib-runner's workspace-write
-# default. Set DRILL_CODEX_SANDBOX=workspace-write to opt back down.
-if [ "$ADAPTER" = "codex" ]; then
+# default. Auto failover can enter Codex after startup, so configure on every switch.
+configure_drill_adapter() {
+  [ "$ADAPTER" = "codex" ] || return 0
   export LOOP_CODEX_SANDBOX="${DRILL_CODEX_SANDBOX:-danger-full-access}"
   # Depth-1/2 Codex workers are nested processes. In workspace-write the parent
   # cannot update git metadata and its children inherit network denial, so carry
@@ -50,7 +64,8 @@ if [ "$ADAPTER" = "codex" ]; then
   # invented parent id/slug. The wrapper applies this dynamically in every
   # depth-1/2 session; depth 1 has no dispatch-job parent slug of its own.
   export CODEX_DISPATCH_PARENT_CURRENT_FORCE=1
-fi
+}
+configure_drill_adapter
 
 # --- conformance pre-stage (P-20) ---
 # codex-adapter-parity audit P-20 (2026-07-04): 케이스 풀 구성(바로 아래 "풀: id 명시면...")
@@ -145,7 +160,7 @@ fi
 echo "drill 대상 ${#cases[@]}개${AXIS:+ [axis=$AXIS]}${SAMPLE:+ [sample=$SAMPLE]}: ${cases[*]}"
 [ -n "$LIST" ] && { echo "(--list: 선별만 출력 — 실행 안 함)"; exit 0; }
 
-declare -A verdicts metrics
+declare -A verdicts metrics case_adapters
 case_workdirs=()
 for c in "${cases[@]}"; do
   grow=""
@@ -153,10 +168,27 @@ for c in "${cases[@]}"; do
   [ -d "$CASE_DIR" ] || { echo "SKIP $c (없음)"; continue; }
   MAX_TURNS=""; TIMEOUT=1800; ADAPTERS=""
   [ -f "$CASE_DIR/config" ] && . "$CASE_DIR/config"
+  # auto run은 앞 case가 남긴 새 limit marker를 다음 case 전에 다시 반영한다.
+  if [ "$REQUESTED_ADAPTER" = "auto" ]; then
+    if select_loop_adapter auto drill; then
+      if [ "$ADAPTER" != "$LOOP_SELECTED_ADAPTER" ]; then
+        echo "  adapter refresh $ADAPTER → $LOOP_SELECTED_ADAPTER ($LOOP_ROUTE_REASON)"
+        ADAPTER="$LOOP_SELECTED_ADAPTER"
+        export DRILL_ADAPTER="$ADAPTER"
+        configure_drill_adapter
+      fi
+    else
+      verdicts[$c]="FAIL(unavailable)"; metrics[$c]="0|0|0|0"; case_adapters[$c]="unavailable"
+      CASE_FAIL=1
+      echo "▶ $c → FAIL (both harnesses unavailable: $LOOP_ROUTE_REASON)"
+      continue
+    fi
+  fi
   # per-case adapter pin: assert 가 특정 runtime 증거(codex JSONL tool 출력 등)를
   # 요구하는 케이스는 config ADAPTERS 로 고정 — 다른 adapter 런에선 FAIL 대신 SKIP.
   if [ -n "$ADAPTERS" ] && ! printf ' %s ' "$ADAPTERS" | grep -qF " $ADAPTER "; then
     verdicts[$c]="SKIP(adapter!=$ADAPTERS)"; metrics[$c]="0|0|0|0"
+    case_adapters[$c]="$ADAPTER"
     echo "▶ $c → SKIP (requires adapter: $ADAPTERS, run=$ADAPTER)"; continue
   fi
 
@@ -178,7 +210,20 @@ for c in "${cases[@]}"; do
     # turns|in_tok|out_tok|cost. Same contract for claude|codex|opencode.
     metrics[$c]=$(run_case_on_adapter "$ADAPTER" "$CASE_DIR/prompt.md" "$WORK/repo" "$TIMEOUT" "${MAX_TURNS:-}" "$J" "$T")
     rc=$?
+    # 새 limit이 이번 case에서 처음 드러난 경우, auto만 반대 하네스로 같은 case를 한 번 재실행.
+    if [ "$rc" -ne 0 ] && [ "$REQUESTED_ADAPTER" = "auto" ]; then
+      old_adapter="$ADAPTER"
+      if select_loop_adapter auto drill && [ "$LOOP_SELECTED_ADAPTER" != "$old_adapter" ] && { [ -z "$ADAPTERS" ] || printf ' %s ' "$ADAPTERS" | grep -qF " $LOOP_SELECTED_ADAPTER "; }; then
+        ADAPTER="$LOOP_SELECTED_ADAPTER"
+        export DRILL_ADAPTER="$ADAPTER"
+        configure_drill_adapter
+        echo "  runtime failover $old_adapter → $ADAPTER ($LOOP_ROUTE_REASON)"
+        metrics[$c]=$(run_case_on_adapter "$ADAPTER" "$CASE_DIR/prompt.md" "$WORK/repo" "$TIMEOUT" "${MAX_TURNS:-}" "$J" "$T")
+        rc=$?
+      fi
+    fi
   fi
+  case_adapters[$c]="$ADAPTER"
 
   # Spec-grounding marker home for assertions: guards write the marker to the
   # ADAPTER's resolved agent-home, so cases must read it there, not a literal
@@ -222,16 +267,16 @@ done
 {
   echo "# Drill run $STAMP"
   echo
-  echo "| case | verdict | turns | in_tok | out_tok | cost\$ |"
-  echo "|---|---|---|---|---|---|"
+  echo "| case | adapter | verdict | turns | in_tok | out_tok | cost\$ |"
+  echo "|---|---|---|---|---|---|---|"
   # codex-adapter-parity audit P-20 (2026-07-04): conformance 는 케이스가 아니므로 구분되는
   # prefix("conformance |")로 별행 삽입 — metrics.csv(아래)는 ${cases[@]}만 순회해 안전하지만,
   # summary.md 행을 케이스로 파싱하는 다른 도구가 있다면 오카운트하지 않도록. SKIP 이면(=subset
   # auto-skip 등) 아예 행을 내지 않는다.
-  [ "$CONF_STATUS" != SKIP ] && echo "| conformance | $CONF_STATUS | - | - | - | - |"
+  [ "$CONF_STATUS" != SKIP ] && echo "| conformance | - | $CONF_STATUS | - | - | - | - |"
   for c in "${cases[@]}"; do
     IFS='|' read -r mt mi mo mc <<< "${metrics[$c]:-?|?|?|?}"
-    echo "| $c | ${verdicts[$c]:-?} | $mt | $mi | $mo | $mc |"
+    echo "| $c | ${case_adapters[$c]:-$ADAPTER} | ${verdicts[$c]:-?} | $mt | $mi | $mo | $mc |"
   done
 } | tee "$RESULTS/summary.md"
 
@@ -257,10 +302,8 @@ fi
 # 각 case 의 헤드리스 run 은 cwd=/tmp/drill-* 라 세션이 등록됨 → 이 실행이 만든
 # 정확한 경로만 청소한다. 동시 실행 중인 다른 drill의 /tmp/drill-* 는 건드리지 않는다.
 for work in "${case_workdirs[@]}"; do
-  if [ "$ADAPTER" = "claude" ]; then
-    enc=$(printf '%s' "$work/repo" | sed 's#[/._]#-#g')
-    rm -rf "$AGENT_HOME/projects/$enc" 2>/dev/null || true
-  fi
+  enc=$(printf '%s' "$work/repo" | sed 's#[/._]#-#g')
+  rm -rf "$AGENT_HOME/projects/$enc" 2>/dev/null || true
   rm -rf "$work" 2>/dev/null || true
 done
 echo "cleanup: drill tmp + 세션 detritus 제거 (adapter=$ADAPTER)"

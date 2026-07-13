@@ -1,6 +1,6 @@
 # Drill — 지침 회귀 테스트 (메타 루프 · 업계 용어: golden set)
 
-지침(runtime adapter bootstrap·core conventions·SKILL·hooks)을 고친 뒤, 핵심 행동이 깨지지 않았는지 headless 로 검증한다. 코드의 테스트 스위트를 _지침에_ 적용한 것. case는 공유하고 `DRILL_ADAPTER=claude|codex|opencode` 또는 `--adapter`로 runner만 선택한다.
+지침(runtime adapter bootstrap·core conventions·SKILL·hooks)을 고친 뒤, 핵심 행동이 깨지지 않았는지 headless 로 검증한다. 코드의 테스트 스위트를 _지침에_ 적용한 것. case는 공유하고 `DRILL_ADAPTER=auto|claude|codex|opencode` 또는 `--adapter`로 runner만 선택한다. 기본 `auto`는 `usage-check.sh`의 known-limit·capacity bias·중립 분산 정책으로 Claude/Codex를 고른다.
 
 > **검증 3층 (용어 구분)**: **drill** = _에이전트 행동_ 회귀(이 문서 — golden set, 에이전트 in-loop). _결정론_ 검증은 **conformance**(`hooks/portable-guards.test.sh`·`tools/check-adaptation-boundary.sh` — 에이전트 X, 정확 assert), _결정론 강제_ 는 **guard**(hook script). 삼분 정의 = `core/HOOKS.md` §Verification Layers. hook 출력 shape 처럼 _결정론화 가능한_ 것은 drill 이 아니라 conformance 로 잡는다 (§0.5 결정론-우선).
 
@@ -12,11 +12,14 @@
 <agent-home>/loops/drill/run.sh --axis spec  # 축만 (git/spec/memory/routing/artifact/meta)
 <agent-home>/loops/drill/run.sh --sample 3   # 랜덤 3개 (주기 점검 — 전수 대신 표본)
 <agent-home>/loops/drill/run.sh --axis git --list   # 선별만 출력 (dry-run, 실행 X)
+HARNESS_CAPACITY_BIAS=codex <agent-home>/loops/drill/run.sh g0_overhead # auto의 주력 후보를 Codex로
 DRILL_ADAPTER=codex <agent-home>/loops/drill/run.sh g0_overhead  # 같은 case를 Codex runner로 실행
 RUN_JUDGE=1 <agent-home>/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 ```
 
 > **매번 전수 X** — 지침 변경 축만 `--axis`, cron(당직/연수)은 `--sample` 표본, 사람 전수는 인자 0. full ceremony 케이스(artifact 축 등)가 비싸니 선별.
+
+> **사용량 선택의 한계** — 양 runtime의 스크립트 가능한 잔여 quota API가 없어 `auto`는 jobs.log의 known-limit 회피 + 명시 `HARNESS_CAPACITY_BIAS` + 중립 분산이다. 실행 중 새 limit이 나오면 marker를 남기고 반대 하네스로 같은 case를 한 번 재실행한다. `DRILL_ADAPTER=claude|codex|opencode`는 강제 선택이라 자동 우회하지 않는다.
 
 > **Fleet 표시 기준** — 각 case는 `/tmp/drill-<case>-*/repo`를 단일 그룹 root로 쓴다. `AGENT_DISPATCH_JOBS`가 지정되면 runner·owner·stage/child의 등록·감시·수확이 모두 그 한 registry를 사용한다. runner row는 실행을 시작한 agent_setting/main 세션의 `parent_sid`·`parent_cwd`를 암묵 상속하지 않는다. case 내부 capability owner는 depth 1, 그 owner가 연 stage/review worker는 depth 2로 표시한다.
 

@@ -73,5 +73,25 @@ echo "$out" | grep -q '^bias auto$' && ok "bias default → auto" || bad "expect
 out=$(AGENT_HOME="$AH" HARNESS_CAPACITY_BIAS=codex bash "$UC" --harness claude 2>&1)
 echo "$out" | grep -q '^bias codex$' && ok "bias env override → codex" || bad "expected 'bias codex' line, got [$out]"
 
+# Case: neutral auto selection is deterministic and does not hardcode one vendor.
+: > "$jobs"
+out=$(AGENT_HOME="$AH" HARNESS_ROUTE_SLOT=0 bash "$UC" --harness all --select loop:test 2>&1)
+echo "$out" | grep -q '^selected claude$' && echo "$out" | grep -q '^selection_reason neutral-spread:0$' && ok "neutral slot 0 → claude" || bad "expected neutral claude selection, got [$out]"
+out=$(AGENT_HOME="$AH" HARNESS_ROUTE_SLOT=1 bash "$UC" --harness all --select loop:test 2>&1)
+echo "$out" | grep -q '^selected codex$' && echo "$out" | grep -q '^selection_reason neutral-spread:1$' && ok "neutral slot 1 → codex" || bad "expected neutral codex selection, got [$out]"
+
+# Case: explicit capacity bias wins only after known-limit avoidance.
+out=$(AGENT_HOME="$AH" HARNESS_ROUTE_SLOT=0 HARNESS_CAPACITY_BIAS=codex bash "$UC" --harness all --select loop:test 2>&1)
+echo "$out" | grep -q '^selected codex$' && echo "$out" | grep -q '^selection_reason capacity-bias:codex$' && ok "capacity bias → codex" || bad "expected biased codex selection, got [$out]"
+printf '%s\tdone\tr\tw\ts5\tcapability=loop,depth=1,harness=claude,note=dead-session-limit,reset=%s\n' "$now_iso" "$fut_clock" > "$jobs"
+out=$(AGENT_HOME="$AH" HARNESS_CAPACITY_BIAS=claude bash "$UC" --harness all --select loop:test 2>&1)
+echo "$out" | grep -q '^selected codex$' && echo "$out" | grep -q '^selection_reason known-limit:claude$' && ok "known limit overrides bias" || bad "expected limit failover to codex, got [$out]"
+
+# Case: both limited means no loop session should launch.
+printf '%s\tdone\tr\tw\ts6\tcapability=loop,depth=1,harness=codex,note=dead-usage-limit,reset=%s\n' "$now_iso" "$fut_clock" >> "$jobs"
+out=$(AGENT_HOME="$AH" bash "$UC" --harness all --select loop:test 2>&1)
+rc=$?
+[ "$rc" -eq 1 ] && echo "$out" | grep -q '^selected unavailable$' && echo "$out" | grep -q '^selection_reason both-limited$' && ok "both limited → unavailable" || bad "expected unavailable rc=1, got rc=$rc [$out]"
+
 echo "— usage-check conformance: $([ $fails -eq 0 ] && echo PASS || echo "FAIL ($fails)")"
 exit $fails
