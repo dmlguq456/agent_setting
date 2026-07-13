@@ -7,6 +7,7 @@ real ps/proc/home.
 Runnable directly (`python3 tools/fleet/tests/test_dispatch.py`) or via
 `python3 -m unittest` / `python3 -m unittest fleet.tests.test_dispatch -v` (from `tools/`).
 """
+import json
 import os
 import sqlite3
 import sys
@@ -526,6 +527,40 @@ class JobLivenessPathAssemblyTest(unittest.TestCase):
         expected = os.path.join("/RUNTIME", "projects", dispatch._enc("/some/jcwd"))
         self.assertEqual(calls, [expected])
         self.assertEqual(result, "dead")
+
+
+class CodexJobLivenessPathTest(unittest.TestCase):
+
+    def test_nested_worker_uses_worktree_local_codex_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worktree = os.path.join(tmp, "nested-worktree")
+            sessions = os.path.join(
+                worktree, ".dispatch", "codex-home", "sessions", "2026", "07", "13"
+            )
+            os.makedirs(sessions)
+            rollout = os.path.join(sessions, "rollout-test.jsonl")
+            with open(rollout, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"payload": {"cwd": worktree}}) + "\n")
+
+            now = os.path.getmtime(rollout)
+            with mock.patch.object(
+                dispatch, "_codex_home", return_value=os.path.join(tmp, "missing")
+            ):
+                result = dispatch._codex_job_liveness(
+                    worktree, now=now, profile=None, slug="nested-child"
+                )
+
+        self.assertEqual(result, "working")
+
+    def test_profile_job_does_not_fall_back_to_worktree_local_home(self):
+        with mock.patch.object(dispatch, "_registry_home", return_value="/REGISTRY"):
+            result = dispatch._codex_sessions_dirs(
+                "/worktree", profile="lab", slug="nested-child"
+            )
+
+        self.assertEqual(result, [
+            "/REGISTRY/.dispatch/homes/nested-child.lab/sessions"
+        ])
 
 
 # --- D5: depth-2 registry metadata ---

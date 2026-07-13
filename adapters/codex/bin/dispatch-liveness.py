@@ -117,6 +117,33 @@ def sessions_dir_for(pipe: str, slug: str, agent_home: Path, default_sessions: P
     return default_sessions
 
 
+def sessions_dirs_for(
+    pipe: str,
+    slug: str,
+    agent_home: Path,
+    default_sessions: Path,
+    worktree: str,
+) -> list[Path]:
+    """Resolve all possible session stores without weakening profile isolation."""
+    prof = parse_profile(pipe)
+    if prof:
+        return [sessions_dir_for(pipe, slug, agent_home, default_sessions)]
+
+    candidates = [
+        Path(worktree) / ".dispatch" / "codex-home" / "sessions",
+        default_sessions,
+    ]
+    result: list[Path] = []
+    seen: set[str] = set()
+    for path in candidates:
+        key = os.path.abspath(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(path)
+    return result
+
+
 def locate_latest_for_worktree(sessions: Path, worktree: str) -> Path | None:
     if not sessions.is_dir():
         return None
@@ -132,6 +159,20 @@ def locate_latest_for_worktree(sessions: Path, worktree: str) -> Path | None:
         if same_path(transcript_cwd(path) or "", worktree):
             return path
     return None
+
+
+def locate_latest_for_worktree_dirs(sessions_dirs: list[Path], worktree: str) -> Path | None:
+    matches = [
+        path
+        for sessions in sessions_dirs
+        if (path := locate_latest_for_worktree(sessions, worktree)) is not None
+    ]
+    if not matches:
+        return None
+    try:
+        return max(matches, key=lambda path: path.stat().st_mtime)
+    except OSError:
+        return None
 
 
 def main(argv: list[str]) -> int:
@@ -162,10 +203,13 @@ def main(argv: list[str]) -> int:
                 continue
             open_n += 1
             label = slug or "?"
-            # Resolve per-job: a profile= job lives under its isolated profile home
-            # (.dispatch/homes/<slug>.<profile>/sessions), else the default store.
-            sessions = sessions_dir_for(pipe, slug, agent_home, default_sessions)
-            transcript = locate_latest_for_worktree(sessions, worktree)
+            # Profile jobs live under their isolated home. Non-profile nested workers
+            # may inherit a conductor's worktree-local CODEX_HOME, so inspect both that
+            # deterministic projection and the caller's default session store.
+            sessions_dirs = sessions_dirs_for(
+                pipe, slug, agent_home, default_sessions, worktree
+            )
+            transcript = locate_latest_for_worktree_dirs(sessions_dirs, worktree)
             if transcript is None:
                 # No transcript — a launch that died before writing, or never came up. SD-15b:
                 # consult the anchored log scan to name a limit/auth death; else generic DEAD.

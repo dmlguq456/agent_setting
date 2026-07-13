@@ -175,24 +175,51 @@ def _codex_sessions_dir(profile=None, slug=None):
     return os.path.join(_codex_home(), "sessions")
 
 
+def _codex_sessions_dirs(cwd, profile=None, slug=None):
+    """Return every session store that can own this Codex dispatch.
+
+    Nested Codex conductors commonly launch a stage worker with a worktree-local
+    CODEX_HOME. The registry records the worktree but not that inherited environment,
+    so inspect the deterministic local projection before the Fleet process' own home.
+    Profile jobs remain isolated to their explicit profile home.
+    """
+    if profile and slug:
+        return [_codex_sessions_dir(profile, slug)]
+
+    candidates = []
+    if cwd:
+        candidates.append(os.path.join(cwd, ".dispatch", "codex-home", "sessions"))
+    candidates.append(_codex_sessions_dir())
+
+    result = []
+    seen = set()
+    for path in candidates:
+        key = os.path.abspath(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(path)
+    return result
+
+
 def _codex_job_liveness(cwd, now, stale_min=15, profile=None, slug=None):
     if not cwd:
         return "unknown"
-    sessions = _codex_sessions_dir(profile, slug)
     newest = None
-    try:
-        for root, _dirs, names in os.walk(sessions):
-            for name in names:
-                if not (name.startswith("rollout-") and name.endswith(".jsonl")):
-                    continue
-                path = os.path.join(root, name)
-                if not _same_path(_codex_transcript_cwd(path) or "", cwd):
-                    continue
-                mtime = os.path.getmtime(path)
-                if newest is None or mtime > newest:
-                    newest = mtime
-    except OSError:
-        return "dead"
+    for sessions in _codex_sessions_dirs(cwd, profile, slug):
+        try:
+            for root, _dirs, names in os.walk(sessions):
+                for name in names:
+                    if not (name.startswith("rollout-") and name.endswith(".jsonl")):
+                        continue
+                    path = os.path.join(root, name)
+                    if not _same_path(_codex_transcript_cwd(path) or "", cwd):
+                        continue
+                    mtime = os.path.getmtime(path)
+                    if newest is None or mtime > newest:
+                        newest = mtime
+        except OSError:
+            continue
     if newest is None:
         return "dead"
     return "working" if (now - newest) / 60.0 <= stale_min else "stale"

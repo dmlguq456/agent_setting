@@ -93,10 +93,22 @@ lv = importlib.util.module_from_spec(spec); spec.loader.exec_module(lv)
 AH = Path(sys.argv[2])
 hit = lv.log_shows_limit(AH, "limit1")
 miss = lv.log_shows_limit(AH, "clean1")
-print("LIVE_OK" if (hit is not None and miss is None) else f"LIVE_FAIL hit={hit} miss={miss}")
+worktree = AH / "nested-worktree"
+local_sessions = worktree / ".dispatch" / "codex-home" / "sessions"
+stores = lv.sessions_dirs_for("", "nested", AH, AH / "default-sessions", str(worktree))
+profile_stores = lv.sessions_dirs_for(
+    "profile=lab", "nested", AH, AH / "default-sessions", str(worktree)
+)
+paths_ok = stores == [local_sessions, AH / "default-sessions"]
+profile_ok = profile_stores == [AH / ".dispatch" / "homes" / "nested.lab" / "sessions"]
+print(
+    "LIVE_OK"
+    if (hit is not None and miss is None and paths_ok and profile_ok)
+    else f"LIVE_FAIL hit={hit} miss={miss} stores={stores} profile={profile_stores}"
+)
 PY
 )
-echo "$live" | grep -q LIVE_OK && ok "liveness log_shows_limit: limit log DEAD, clean log alive" || bad "liveness: $live"
+echo "$live" | grep -q LIVE_OK && ok "liveness limit scan + nested CODEX_HOME resolution" || bad "liveness: $live"
 
 echo "— codex dispatch-headless SD-15 conformance: $([ $fails -eq 0 ] && echo PASS || echo "FAIL ($fails)")"
 exit $fails
