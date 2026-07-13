@@ -89,6 +89,66 @@ _loop_registry_append() {
   fi
 }
 
+_loop_registry_finish_unlocked() {
+  local jobs=$1 slug=$2 death_reason=$3 reset=$4
+  python3 - "$jobs" "$slug" "$death_reason" "$reset" <<'PY'
+import os
+import pathlib
+import stat
+import sys
+
+path = pathlib.Path(sys.argv[1])
+slug, reason, reset = sys.argv[2:]
+try:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    mode = stat.S_IMODE(path.stat().st_mode)
+except OSError:
+    raise SystemExit(3)
+
+changed = False
+for idx, line in enumerate(lines):
+    fields = line.split("\t")
+    if len(fields) != 6 or fields[4] != slug or fields[1] not in {"open", "running"}:
+        continue
+    fields[1] = "done"
+    if reason:
+        fields[5] += f",note=dead-{reason}"
+        if reset:
+            fields[5] += f",reset={reset}"
+    lines[idx] = "\t".join(fields)
+    changed = True
+
+if not changed:
+    raise SystemExit(3)
+
+tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+try:
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.chmod(tmp, mode)
+    os.replace(tmp, path)
+finally:
+    try:
+        tmp.unlink()
+    except FileNotFoundError:
+        pass
+PY
+}
+
+_loop_registry_finish() {
+  local jobs=$1 slug=$2 death_reason=$3 reset=$4 dir lock
+  dir=$(dirname -- "$jobs")
+  mkdir -p "$dir" 2>/dev/null || return 3
+  lock="$jobs.lock"
+  if command -v flock >/dev/null 2>&1; then
+    (
+      flock -x 9
+      _loop_registry_finish_unlocked "$jobs" "$slug" "$death_reason" "$reset"
+    ) 9>>"$lock"
+  else
+    _loop_registry_finish_unlocked "$jobs" "$slug" "$death_reason" "$reset"
+  fi
+}
+
 _loop_register_dispatch_job() {
   [ "${DRILL_FLEET_REGISTRY:-1}" = "0" ] && return 0
   local status=$1 adapter=$2 pf=$3 repo=$4 slug=$5
@@ -120,6 +180,10 @@ _loop_register_dispatch_job() {
   if [ -n "$death_reason" ]; then
     pipe="$pipe,note=dead-$(_loop_registry_value "$death_reason")"
     [ -n "$reset" ] && pipe="$pipe,reset=$(_loop_registry_value "$reset")"
+  fi
+  if [ "$status" = "done" ] && _loop_registry_finish "$jobs" "$slug" \
+    "$(_loop_registry_value "$death_reason")" "$(_loop_registry_value "$reset")"; then
+    return 0
   fi
   line=$(printf '%s\t%s\t%s\t%s\t%s\t%s' \
     "$ts" "$status" "$git_root" "$repo" "$slug" "$pipe")
