@@ -1,6 +1,6 @@
 ---
 name: audit
-description: "산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고"
+description: "Use when doing a post-hoc audit of artifacts/pipeline (drift/consistency/gaps). 산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고"
 argument-hint: "<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]"
 metadata:
   group: ops
@@ -14,7 +14,7 @@ metadata:
 산출물·파이프 사후 점검 entry (read-only). Stage A→E (type 감지 → scope 결정 → P1 baseline ingestion → aspect lint → 보고 → auto-fix chain dispatch) 로 drift·일관성·누락을 진단한다. 이 파일은 라우터와 stage 계약만 담고, stage별 세부 절차·진단 축 정의·보고서 템플릿·예시는 필요할 때 아래 reference를 Read 한다.
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 입력 artifact를 _수정하지 않음_ — 점검 보고서만 생성. 보고서는 `{artifact_dir}/_internal/audit/audit_{YYYY-MM-DDTHHMM}.md`에 기록.
-> `<artifact-root>` 해석: `.agent_reports` 우선, legacy `.claude_reports` 는 이미 존재하고 `.agent_reports` 가 없을 때만 사용. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports` 로 치환한다.
+> `<artifact-root>` 해석·치환(`.agent_reports` 우선, legacy `.claude_reports` fallback): [CONVENTIONS §5.1](../../core/CONVENTIONS.md#51-workspace-assumption-전제).
 
 ## Position in autopilot family
 
@@ -100,16 +100,11 @@ All user-facing output (chat report, audit log) in natural **Korean** (no transl
 - Full pipeline 재실행 필요 → `/autopilot-{research,doc,code}` 또는 `--from <stage>`.
 - 산출물 자체가 존재하지 않음 (사전 분석부터 필요) → `/analyze-project` 또는 `/autopilot-research`.
 
-## Required Reads
+## Reference Index
 
-- 모든 호출 (Stage A~B.5 진입 전): `references/scope-and-baseline.md` — type 감지, effective scope 결정 (auto-scope 단서 표 / `--scope` 매핑 표), P1 baseline ingestion 절차.
-- Stage C aspect lint 실행: `references/aspect-lints.md` — `--no-fact-check` pre-check, cards source resolution, documents / research / plans aspect 정의와 severity 규칙 전문.
-- Stage D~E 보고·후속: `references/report-and-autofix.md` — audit 보고서 템플릿 전문, 편집팀 polish 프롬프트, chat 출력 양식, auto-fix chain dispatch 규칙.
-- 호출 예시·`--report-only` 후속 판단: `references/examples-and-checklist.md`.
-
-## Reference Map
-
-- `references/scope-and-baseline.md`: Stage A (Detect artifact type), Stage B (effective scope — B.1 auto-scope detection 단서 표 / B.2 type-specific aspect mapping), Stage B.5 (minor log baseline ingestion — P1 입력·diff·cross-correlate·chat 출력).
-- `references/aspect-lints.md`: Stage C per-aspect lint — pre-check (`--no-fact-check`), documents aspects (cards source resolution + facts / style / structure / cross-ref / coverage), research aspects (cards 정합성 / Tier / coverage / cross-card), plans aspects (test results / lint / code review / TODO·미구현 / semantic-deterministic consistency).
-- `references/report-and-autofix.md`: Stage D 보고서 템플릿 전문, Stage D.5 편집팀 polish, chat 출력 양식, Stage E auto-fix chain (skip 조건·fix prompt·dispatch·logging·rationale).
-- `references/examples-and-checklist.md`: 호출 Examples, Post-Audit Checklist (`--report-only` 사용 시 후속).
+| 파일 | 언제 로드 (의무) | 내용 |
+|---|---|---|
+| `references/scope-and-baseline.md` | 모든 호출 (Stage A~B.5 진입 전, 필수) | Stage A(Detect artifact type), Stage B(effective scope — B.1 auto-scope detection 단서 표 / B.2 type-specific aspect mapping), Stage B.5(minor log baseline ingestion — P1 입력·diff·cross-correlate·chat 출력) |
+| `references/aspect-lints.md` | Stage C aspect lint 실행 시 | per-aspect lint — pre-check(`--no-fact-check`), documents aspects(cards source resolution + facts/style/structure/cross-ref/coverage), research aspects(cards 정합성/Tier/coverage/cross-card), plans aspects(test results/lint/code review/TODO·미구현/semantic-deterministic consistency) |
+| `references/report-and-autofix.md` | Stage D~E 보고·후속 시 | Stage D 보고서 템플릿 전문, Stage D.5 편집팀 polish, chat 출력 양식, Stage E auto-fix chain(skip 조건·fix prompt·dispatch·logging·rationale) |
+| `references/examples-and-checklist.md` | 호출 예시·`--report-only` 후속 판단 자리 | 호출 Examples, Post-Audit Checklist(`--report-only` 사용 시 후속) |

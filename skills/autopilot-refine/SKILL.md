@@ -1,6 +1,6 @@
 ---
 name: autopilot-refine
-description: "기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존"
+description: "Use when correcting or updating an existing document or research artifact. 기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존"
 argument-hint: "\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
 metadata:
   group: entry
@@ -98,7 +98,7 @@ Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/draft-
 
 All user-facing output (chat diffs, pipeline_summary entries, reports) in natural **Korean** (no translationese — write Korean natively, don't translate from an English draft).
 
-> `<artifact-root>` 해석: `.agent_reports` 우선, legacy `.claude_reports` 는 이미 존재하고 `.agent_reports` 가 없을 때만 사용. 실제 쉘 명령에서는 `REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports` 로 치환한다.
+> `<artifact-root>` 해석·치환(`.agent_reports` 우선, legacy `.claude_reports` fallback): [CONVENTIONS §5.1](../../core/CONVENTIONS.md#51-workspace-assumption-전제).
 
 ---
 
@@ -114,14 +114,10 @@ target 식별(Artifact Resolution) 후 Stage A→E 로 진행. 각 단계 full o
 - **Stage D — Apply**: version 결정 → pre-edit snapshot → Edit 적용 → `pipeline_summary.md` 5-part update(메타·버전 히스토리·변경 사항·minor log migration·in-file changelog) → report.
 - **Stage E — Memo mode (`--memo <file>`)**: 메모 파일을 proposal source로 읽어 Stage B~D 실행.
 
-## Required Reads
+## Reference Index
 
-- major refine flow 세부(minor log 형식, major apply 동작, adversarial-tier propagation, mode-forms 근거, tunable constants, why-this-split): `references/versioning-and-modes.md`.
-- 실제 실행 orchestration(Artifact Resolution + Stage A→E, B.5 detector, diff preview, apply/versioning, memo): `references/process-stages.md`.
-- invocation 예시, constraints(빈칸>잘못 채우기 등), when-not-to-use, post-apply checklist: `references/examples-and-constraints.md`.
-
-## Reference Map
-
-- `references/versioning-and-modes.md`: minor log entry 형식, major 적용 동작, why-this-split rationale, adversarial-tier propagation, mode-forms default/STRUCT-halt 근거, tunable constants.
-- `references/process-stages.md`: artifact resolution, Stage A/B/B.5/C/D/E full orchestration (factual+style auto-detector, diff preview, apply/versioning, memo mode).
-- `references/examples-and-constraints.md`: invocation examples, constraints, when-not-to-use, post-apply checklist.
+| 파일 | 언제 로드 (의무) | 내용 |
+|---|---|---|
+| `references/versioning-and-modes.md` | major refine flow 세부 판단 시 | minor log entry 형식, major 적용 동작, why-this-split rationale, adversarial-tier propagation, mode-forms default/STRUCT-halt 근거, tunable constants |
+| `references/process-stages.md` | 실제 실행 orchestration 시 (필수) | artifact resolution, Stage A/B/B.5/C/D/E full orchestration(factual+style auto-detector, diff preview, apply/versioning, memo mode) |
+| `references/examples-and-constraints.md` | invocation 예시·constraints·후속 판단 자리 | invocation examples, constraints(빈칸>잘못 채우기 등), when-not-to-use, post-apply checklist |

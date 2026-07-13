@@ -18,6 +18,18 @@ python3 tools/build-manifest.py --check  # 빌드 결과를 기존 manifest.json
 - `--check` 모드 (위 Argument Parsing) 에서는 `build-manifest.py --check` 로 manifest drift 도 감지해 Step 3 drift report / Step 7 final report 에 노출 (비-0 exit = 정의 변경 후 manifest 재방출 누락).
 - 소비자(worklog-board)는 이 manifest **한 계약만** 소비한다 — 내부 정의를 직접 뒤지지 않는다 (경계 분리).
 
+### Step 6c: scan.sh 정량 규범 lint (§CONVENTIONS 5.6a)
+
+스킬 설계의 정량 규범([CONVENTIONS §5.6a](../../../core/CONVENTIONS.md#56a-skill-design-정량-규범-scansh-lint-sot) — body `<500` lines · references/ 1-depth · invocation frontmatter)을 결정론적으로 lint 한다.
+
+```bash
+bash tools/skill-conformance/scan.sh skills   # TSV: name·body_lines·line_ok·disable_model·invocation·use_when·desc_has_hangul·ref_dir·ref_depth_ok·ref_files
+```
+
+- `--check` 모드에서 실행: `line_ok=N`(≥500 lines) 또는 `ref_depth_ok=N`(references/ 하위 디렉터리 존재) 행이 하나라도 있으면 정량 규범 drift 로 Step 3 drift report / Step 7 final report 에 노출한다 (`build-manifest.py --check` 와 같은 게이트 흐름). 신규·수정 스킬은 통과가 merge 전제.
+- invocation 컬럼(`disable_model`/`use_when`)은 스킬별 invocation 정책(순수 sub-skill = disable / entry-router = model-invoked + "Use when")의 관측 지점 — 정책 위반은 drift report 에 참고로 함께 노출.
+- 회귀 게이트는 drill `g7_skill_conformance` (`loops/drill/cases/`) 가 static-assert 로 상시 검증.
+
 ### Step 7: Final report
 ```
 ✅ Sync 완료

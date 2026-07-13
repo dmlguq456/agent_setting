@@ -11,17 +11,9 @@ metadata:
 
 > **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Input = the plan path (args) resolved below; it reads `plan/plan.md` from files, never prior-stage conversation. This is the **only source-mutating stage**; write class = source code + `plan/checklist.md`·`dev_logs/`·`_internal/dev_reviews/`·plan frontmatter `status`. 개발팀 delegation stays **inside** this session (its own in-session parallel dev-team is depth-uncounted).
 
-## Plan Resolution (canonical — keep in sync with code-execute, code-test, code-report, code-refine, autopilot-code)
-Resolve `$ARG` to a plan file path:
-1. If it ends with `.md` → use as-is
-2. If it's a directory path → append `/plan/plan.md`
-3. Otherwise, fuzzy search: `ls -d <artifact-root>/plans/*/*$ARG* 2>/dev/null`
-   - **1 match** → use `{match}/plan/plan.md`
-   - **Multiple matches** → prefer folder without `_audit`/`_fix_` suffix; if still multiple, ask user
-   - **No match** → report error
+> **Plan Resolution**: `$ARG`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다.
 
-## Language Rule
-- All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft).
+> **Language Rule**: 사용자-facing 출력은 자연스러운 한국어. 단일 SoT = [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
 
 ## Commit Message Convention
 - Safety checkpoint: `chore: Safety checkpoint before {plan-name} execution`

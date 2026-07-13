@@ -1,6 +1,6 @@
 ---
 name: analyze-user
-description: "cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출"
+description: "Use when building or updating the cross-project user-preference profile. cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출"
 argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]"
 metadata:
   group: pre
@@ -85,14 +85,10 @@ cross-project 사용자 성향 프로필 entry. 사용자의 과거 산출물(fi
 
 각 phase 의 절차·Agent 프롬프트·자동 변환 명령·QA reviewer·출력 템플릿 전문 → `references/pipeline-phases.md`.
 
-## Required Reads
+## Reference Index
 
-- 인자 해석(aspect↔stem·`--source`·`--mode`·QA adversarial 고정·`--from`·`--user-refine`), Decision Defaults, Resume(`pipeline_state.yaml`): `references/arguments-and-decisions.md`.
-- 6-phase 파이프 실행 (Phase 1~6, 2.1/2.2/3.5/5b — Agent 프롬프트·자동 변환 명령·QA reviewer·출력 템플릿): `references/pipeline-phases.md`.
-- sub-agent 참조 매트릭스, 메모리와의 관계, 호출 예시, 갱신 빈도 권장: `references/integration-and-usage.md`.
-
-## Reference Map
-
-- `references/arguments-and-decisions.md`: Argument Parsing (`<aspect>` 표 / `--source` / `--mode init|update` / QA adversarial 고정 / `--from` / `--user-refine`), Decision Defaults (no autonomy gating), Resume(`--from`) + `pipeline_state.yaml` 스키마.
-- `references/pipeline-phases.md`: Pipeline 6 phase 전문 — Phase 1 Source Discovery+자동변환, Phase 2 Aspect Analysis(2.1 3-instance extraction / 2.2 consensus aggregation), Phase 3 Cross-reference Validation, Phase 3.5 Prior-version 변증법, Phase 4 Multi-agent QA, Phase 5 Output Generation, Phase 5b pptx 개체 추출, Phase 6 Pipeline Summary.
-- `references/integration-and-usage.md`: sub-agent 참조 패턴 매트릭스, 메모리와의 관계 표, 호출 예시, 갱신 빈도 권장.
+| 파일 | 언제 로드 (의무) | 내용 |
+|---|---|---|
+| `references/arguments-and-decisions.md` | 인자 해석·Decision·Resume 자리 | Argument Parsing (`<aspect>` 표 / `--source` / `--mode init\|update` / QA adversarial 고정 / `--from` / `--user-refine`), Decision Defaults (no autonomy gating), Resume(`--from`) + `pipeline_state.yaml` 스키마 |
+| `references/pipeline-phases.md` | 6-phase 파이프 실행 시 (필수) | Phase 1 Source Discovery+자동변환, Phase 2 Aspect Analysis(2.1 3-instance extraction / 2.2 consensus aggregation), Phase 3 Cross-reference Validation, Phase 3.5 Prior-version 변증법, Phase 4 Multi-agent QA, Phase 5 Output Generation, Phase 5b pptx 개체 추출, Phase 6 Pipeline Summary |
+| `references/integration-and-usage.md` | sub-agent 참조·메모리 관계·호출 예시 판단 자리 | sub-agent 참조 패턴 매트릭스, 메모리와의 관계 표, 호출 예시, 갱신 빈도 권장 |

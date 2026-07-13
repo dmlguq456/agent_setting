@@ -11,17 +11,9 @@ metadata:
 
 > **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Inputs = plan·checklist·dev_logs·test_logs·`_internal/*_reviews/`·`pipeline_summary.md` (files) — a dispatched session does **not** carry in-session orchestration memory, so it reconciles against those artifacts (see step 2 below). Write class = `final_report.md`·`analysis_project/code/*.md`·`pipeline_summary.md` (via §5.8 lock). 품질관리팀 delegation stays **inside** this session.
 
-## Plan Resolution (canonical — keep in sync with code-execute, code-test, code-report, code-refine, autopilot-code)
-Resolve `$ARG` to a plan file path:
-1. If it ends with `.md` → use as-is
-2. If it's a directory path → append `/plan/plan.md`
-3. Otherwise, fuzzy search: `ls -d <artifact-root>/plans/*$ARG* 2>/dev/null`
-   - **1 match** → use `{match}/plan/plan.md`
-   - **Multiple matches** → prefer folder without `_audit`/`_fix_` suffix; if still multiple, ask user
-   - **No match** → report error
+> **Plan Resolution**: `$ARG`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다.
 
-## Language Rule
-- All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft).
+> **Language Rule**: 사용자-facing 출력은 자연스러운 한국어. 단일 SoT = [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
 
 ## Model & QA Policy
 
@@ -42,7 +34,7 @@ Invoke the **qa-team** (품질관리팀) agent as fast writer (Claude adapter: `
 ```
 Generate a final change report.
 
-Plan file: {$ARG} (resolved via Plan Resolution above)
+Plan file: {$ARG} (resolved via Plan Resolution — 위 pointer 의 authority 절차)
 Log directory: {task root folder — grandparent of plan/plan.md}
 Korean plan: {same directory as plan.md}/plan_ko.md
 Report output: {log_directory}/final_report.md

@@ -9,19 +9,9 @@ metadata:
   blurb: "사용자 메모·QA 피드백 반영해 기존 plan 정정 — sub-skill"
 ---
 
-## Plan Resolution (canonical — keep in sync with code-execute, code-test, code-report, code-refine, autopilot-code)
-Resolve `$ARGUMENTS` to plan file paths. Always resolve BOTH `plan.md` and `plan_ko.md`:
-1. If it ends with `.md` → use as-is; derive the other file by path swap (`plan.md` ↔ `plan_ko.md`)
-2. If it's a directory path → append `/plan/plan.md` (English) and `/plan/plan_ko.md` (Korean)
-3. Otherwise, fuzzy search: `ls -d <artifact-root>/plans/*$ARGUMENTS* 2>/dev/null`
-   - **1 match** → use `{match}/plan/plan.md` and `{match}/plan/plan_ko.md`
-   - **Multiple matches** → prefer folder without `_audit`/`_fix_` suffix; if still multiple, ask user
-   - **No match** → report error
+> **Plan Resolution**: `$ARGUMENTS`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다. **단, code-refine 은 `plan.md` 와 `plan_ko.md` 를 _둘 다_ 해석한다** (path swap `plan.md`↔`plan_ko.md`; refine 고유).
 
-Example: `/code-refine inference-refactor` → English: `.../plan/plan.md`, Korean: `.../plan/plan_ko.md`
-
-## Language Rule
-- All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft).
+> **Language Rule**: 사용자-facing 출력은 자연스러운 한국어. 단일 SoT = [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
 
 ## Delegate to 기획팀
 Invoke the **plan-team** (기획팀) agent as a subagent with the following prompt:

@@ -1,6 +1,6 @@
 ---
 name: autopilot-apply
-description: "cheatsheet 초안을 canonical main.tex 에 paste·반영하는 적용 entry"
+description: "Use when applying a finalized cheatsheet draft into the canonical LaTeX source and verifying it compiles. cheatsheet 초안을 canonical main.tex 에 paste·반영하는 적용 entry"
 argument-hint: "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]"
 metadata:
   group: entry
@@ -40,9 +40,7 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 - cheatsheet: prompt 키워드로 `<artifact-root>/documents/*` fuzzy match (autopilot-refine 와 동일 방식)
 
 ### Override 1순위 — autopilot 우회
-- cheatsheet 자체를 _고치는_ 일 (적용 아님) → `/autopilot-refine` 또는 `/autopilot-draft --from draft`
-- `<artifact-root>/` 안 markdown 산출물 수정 → `/autopilot-refine`
-- 코드베이스 변경 → `/autopilot-code`
+- 우회 대상 3건(cheatsheet 자체 수정 / markdown 산출물 / 코드베이스) = **§When NOT to use** 단일 authority
 - `/autopilot-apply <args>` slash 직접 입력 → 컨펌 skip, 즉시 invoke
 
 > 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰로 자동 반영.
@@ -51,10 +49,7 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 
 - **Targets**: `<artifact-root>/` _밖_ 의 실제 작업 source (현재 `--target latex` → `*.tex`). git 으로 추적되는 프로젝트 전제.
 - **Source of changes**: `<artifact-root>/documents/*/draft/draft*.md` 의 cheatsheet (autopilot-draft paper mode 산출물). 새 plan 을 만들지 않는다.
-- **NOT for**:
-  - `<artifact-root>/{research,documents}/*` markdown 산출물 → `/autopilot-refine`
-  - `<artifact-root>/plans/*` / 코드베이스 → `/autopilot-code`
-  - cheatsheet 가 아직 없을 때 → 먼저 `/autopilot-draft --mode paper`
+- **NOT for**: **§When NOT to use** 단일 authority(하단) 참조.
 
 ## Preconditions (Stage A 에서 강제 — 하나라도 실패 시 abort)
 
