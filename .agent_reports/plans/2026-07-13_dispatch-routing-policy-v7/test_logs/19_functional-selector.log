@@ -1,0 +1,68 @@
+=== SD-23 selector probes ===
+-- (1) stage=plan → GPT/Codex deep-maker affinity --
+status=eligible
+adapter=codex
+family=gpt
+role=deep maker
+exact_model_id=gpt-5.6-sol
+reasoning=high
+trace.1=explicit=none;eligibility=usage-ok
+trace.2=affinity=codex;maker_family=unknown;required=none
+
+-- (2) stage=architecture → same affinity --
+status=eligible
+adapter=codex
+family=gpt
+role=deep maker
+exact_model_id=gpt-5.6-sol
+reasoning=high
+trace.1=explicit=none;eligibility=usage-ok
+trace.2=affinity=codex;maker_family=unknown;required=none
+
+-- (3) stage=review → diverse checker affinity, default claude --
+status=eligible
+adapter=claude
+family=claude
+role=deep reviewer
+exact_model_id=opus
+reasoning=high
+trace.1=explicit=none;eligibility=usage-ok
+trace.2=affinity=diverse;maker_family=gpt;required=none
+
+-- (4) stage=test (orchestrator/neutral) explicit claude --
+status=eligible
+adapter=claude
+family=claude
+role=deep reviewer
+exact_model_id=opus
+reasoning=high
+trace.1=explicit=claude;eligibility=usage-ok
+trace.2=affinity=diverse;maker_family=unknown;required=none
+
+-- (5) explicit OpenCode → honest unknown, no fabrication --
+status=unknown
+adapter=opencode
+family=unknown
+role=deep maker
+exact_model_id=unknown
+reasoning=unknown
+trace.1=opencode-probe-unavailable
+unknown=opencode-runtime-model-inventory-unavailable
+
+-- (6) explicit override adapter=codex on a review stage (explicit>affinity) --
+status=eligible
+adapter=codex
+family=gpt
+role=deep reviewer
+exact_model_id=gpt-5.6-sol
+reasoning=high
+trace.1=explicit=codex;eligibility=usage-ok
+trace.2=affinity=diverse;maker_family=unknown;required=none
+
+-- (7) unknown arg → exit 64 --
+dispatch-route: unknown arg --bogus
+exit=64
+
+-- (8) missing --stage → exit 64 --
+dispatch-route: --stage is required
+exit=64

@@ -472,6 +472,7 @@ def main(argv: list[str]) -> int:
     if action == "start":
         proc = subprocess.Popen(["sh", "-c", command], start_new_session=True, env={
             **os.environ,
+            "AGENT_DISPATCH_CHILD": "1",
             "AGENT_DISPATCH_DEPTH": str(args.depth),
             "AGENT_DISPATCH_INTENSITY": args.intensity,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",

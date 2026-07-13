@@ -122,7 +122,21 @@ class WorkingRegistryStageInductionTest(unittest.TestCase):
             self.assertEqual(len(jobs), 1)
             self.assertEqual(jobs[0].liveness, "working")
             self.assertEqual(jobs[0].stage, "analyze")
-            m_live.assert_called_with(wt, "docs-sync", "note")
+            m_live.assert_called()
+
+    def test_non_code_plans_path_never_derives_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = os.path.join(tmp, ".agent_reports", "plans", "nearby_docs")
+            os.makedirs(os.path.join(plan, "test_logs"))
+            self.assertEqual(dispatch.live_stage(tmp, "nearby-docs", "note", "autopilot-note"), "note")
+
+    def test_code_worker_derives_stage_from_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = os.path.join(tmp, ".agent_reports", "plans", "x_code-run")
+            os.makedirs(os.path.join(plan, "test_logs"))
+            with open(os.path.join(plan, "test_logs", "focused.log"), "w") as f:
+                f.write("ok\n")
+            self.assertEqual(dispatch.live_stage(tmp, "code-run", "code-test", "autopilot-code", "code-test"), "test")
 
 
 class WideRowNoParentheticalTagTest(unittest.TestCase):

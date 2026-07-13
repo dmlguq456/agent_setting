@@ -1,0 +1,45 @@
+############ SD-21~23 FUNCTIONAL PROBES ############
+=== model-map: codex roles (Sol=gpt-5.6-sol deep, fast tier) ===
+-- deep maker --
+adapter=codex
+family=gpt
+exact_model_id=gpt-5.6-sol
+reasoning=high
+probe=opt-in:codex exec --ephemeral --sandbox read-only --model <id> -c model_reasoning_effort=<level>
+-- orchestrator (SD-21: must be deep/high) --
+adapter=codex
+family=gpt
+exact_model_id=gpt-5.6-sol
+reasoning=high
+probe=opt-in:codex exec --ephemeral --sandbox read-only --model <id> -c model_reasoning_effort=<level>
+-- fast implementer --
+adapter=codex
+family=gpt
+exact_model_id=gpt-5.4-mini
+reasoning=medium
+probe=opt-in:codex exec --ephemeral --sandbox read-only --model <id> -c model_reasoning_effort=<level>
+-- unknown role (must exit 64) --
+codex model-map: unknown role: bogus
+exit=64
+
+=== model-map: claude honesty (real opus/sonnet) ===
+-- orchestrator --
+adapter=claude
+family=claude
+exact_model_id=opus
+reasoning=high
+probe=opt-in:claude -p --no-session-persistence --permission-mode plan --max-turns 1 --model <id> --effort <level>
+-- fast writer --
+adapter=claude
+family=claude
+exact_model_id=sonnet
+reasoning=medium
+probe=opt-in:claude -p --no-session-persistence --permission-mode plan --max-turns 1 --model <id> --effort <level>
+
+=== model-map: opencode honesty (unknown, no fabrication) ===
+adapter=opencode
+status=unknown
+family=unknown
+exact_model_id=unknown
+reasoning=unknown
+reason=runtime-model-inventory-probe-not-supported

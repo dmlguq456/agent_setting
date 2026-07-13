@@ -13,7 +13,7 @@ if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
 from fleet import render                       # noqa: E402
-from fleet.collectors import dispatch, procscan  # noqa: E402
+from fleet.collectors import codex, dispatch, procscan  # noqa: E402
 from fleet.model import DispatchJob, Session    # noqa: E402
 
 
@@ -48,6 +48,48 @@ class ProcscanTaggingTest(unittest.TestCase):
         # read_environ() already returns {} on OSError — same code path as no-marker.
         s = self._scan_one({})
         self.assertFalse(s.mem_worker)
+
+    def test_cross_harness_dispatch_markers_hide_children_but_not_ordinary_codex(self):
+        s = self._scan_one({"AGENT_DISPATCH_CHILD": "1"})
+        self.assertTrue(s.is_child)
+        self.assertTrue(self._scan_one({"AGENT_DISPATCH_DEPTH": "2"}).is_child)
+        self.assertFalse(self._scan_one({}).is_child)
+
+
+class CodexRolloutAttributionTest(unittest.TestCase):
+    def test_two_same_cwd_sessions_remain_unknown_when_fallback_is_ambiguous(self):
+        sessions = [Session(harness="codex", pid=1, cwd="/work/repo", elapsed_min=1),
+                    Session(harness="codex", pid=2, cwd="/work/repo", elapsed_min=1)]
+        with mock.patch.object(codex, "_index", return_value={"/work/repo": ["/r/one", "/r/two"]}), \
+             mock.patch.object(codex, "_sid", side_effect=lambda p: {"/r/one": "one", "/r/two": "two"}[p]), \
+             mock.patch.object(codex, "_rollout_meta", return_value={"timestamp": "2024-07-13T00:00:00Z"}), \
+             mock.patch.object(codex.time, "time", return_value=1720828860):
+            codex._FALLBACK_CLAIMS.update(ts=0, sids=set())
+            self.assertEqual([codex._fallback_rollout(s, "/home/codex") for s in sessions], [None, None])
+
+    def test_root_rollout_beats_open_subagent_rollout(self):
+        fd_links = {"3": "/home/codex/sessions/a/rollout-2026-07-13T00-00-00-11111111-1111-1111-1111-111111111111.jsonl",
+                    "4": "/home/codex/sessions/a/rollout-2026-07-13T00-00-00-22222222-2222-2222-2222-222222222222.jsonl"}
+        with mock.patch.object(codex.os, "listdir", return_value=list(fd_links)), \
+             mock.patch.object(codex.os, "readlink", side_effect=lambda p: fd_links[p.rsplit("/", 1)[-1]]), \
+             mock.patch.object(codex.os.path, "realpath", side_effect=lambda p: p), \
+             mock.patch.object(codex, "_rollout_meta", side_effect=lambda p: {
+                 "cwd": "/work/repo",
+                 "source": {"subagent": {"thread_spawn": {}}} if "2222" in p else "cli",
+             }):
+            path = codex._proc_rollout(99, "/work/repo", "/home/codex")
+        self.assertIn("11111111", path)
+
+
+class RenderDuplicateParentTest(unittest.TestCase):
+    def test_duplicate_session_id_renders_child_tree_once(self):
+        sessions = [Session(harness="codex", pid=1, cwd="/work/repo", session_id="same", slug="repo", liveness="working"),
+                    Session(harness="codex", pid=2, cwd="/work/repo", session_id="same", slug="repo", liveness="working")]
+        job = DispatchJob(key="autopilot-code", slug="child", cwd="/work/child", parent_sid="same", is_child=True,
+                          harness="codex", mode="dev/refactor", liveness="working")
+        lines = render._build_lines(sessions, [job], section="both", narrow=False, malformed=0, layout="wide")
+        text = "\n".join("".join(part for part, _key in line) for line in lines if line)
+        self.assertEqual(text.count("dev/refactor"), 1)
 
 
 class RenderMemExclusionTest(unittest.TestCase):

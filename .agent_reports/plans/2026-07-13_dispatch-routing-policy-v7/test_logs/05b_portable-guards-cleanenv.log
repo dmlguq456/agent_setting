@@ -1,0 +1,351 @@
+== artifact guard CLI ==
+  ok  new spec without research exits 2
+  ok  new spec with research passes
+== git state guard CLI ==
+  ok  clean repo passes
+  ok  detached repo exits 2
+== worktree path guard CLI ==
+  ok  worktree guard denies builtin EnterWorktree (exit 2)
+  ok  worktree guard denies git worktree add outside -wt/ (exit 2)
+  ok  worktree guard passes regular <repo>-wt/<slug> add
+  ok  worktree guard leaves non-add worktree subcommands alone
+  ok  worktree guard honors ⚡untracked bypass flag
+  ok  worktree guard fails open outside a git repo
+  ok  worktree guard leaves unrelated Bash commands alone
+== codex preflight wrapper ==
+  ok  codex preflight passes clean write
+  ok  builtin memory guard exits 2
+  ok  codex preflight blocks memory file write
+  ok  design postwrite wrappers no-op on non-html
+== spec sync nudge CLI ==
+  ok  spec sync nudge surfaces stale spec line for a removed value
+  ok  spec sync nudge no-ops when the removed token is absent from spec
+  ok  spec sync nudge no-ops outside a spec-backed project
+  ok  spec sync nudge no-ops when the edited file is the spec itself
+  ok  spec sync nudge no-ops on prose/doc edits (markdown reword)
+  ok  spec sync nudge ignores plain-lowercase prose words (non code-like) even inside code
+  ok  codex projection preflight resolves harness root
+  ok  codex agent-home wrapper resolves runtime pointer
+  ok  codex agent-home wrapper ignores invalid AGENT_HOME
+== spec read gate CLI ==
+  ok  spec-backed capability without read marker exits 2
+  ok  non spec-changing capability passes
+  ok  read marker allows spec-changing capability
+  ok  updated prd after marker exits 2
+  ok  codex read+capability wrapper passes spec gate
+  ok  codex read wrapper resolves relative prd paths for spec gate
+== core-first adapter edit gate CLI ==
+  ok  adapter edit without core read marker exits 2
+  ok  new adapter subdir edit without core marker exits 2
+  ok  core read marker allows adapter edit
+  ok  updated core after marker exits 2
+  ok  codex read+write wrapper passes core-first gate
+  ok  codex write guard denies ungrounded spec-changing write
+  ok  codex write guard passes spec-changing write after prd read
+  ok  codex write guard does not gate ordinary source files
+  ok  codex route wrapper combines status, prompt signal, capability-info, and spec gate
+  ok  codex capability wrapper rejects unknown capabilities
+== workflow signal CLI ==
+  ok  workflow signal emits tracked text
+  ok  codex start wrapper cleans stale untracked flags
+  ok  codex write wrapper adapts artifact toggle hint
+  ok  workflow toggle CLI enables untracked mode
+  ok  workflow toggle CLI restores tracked mode
+  ok  codex track wrapper enables untracked mode
+  ok  codex mode wrapper emits untracked text
+  ok  codex track wrapper restores tracked mode
+  ok  codex memory wrapper exits cleanly
+  ok  codex memory launcher ignores invalid non-harness AGENT_HOME
+  ok  recall wrapper no-ops without signal word
+  ok  codex recall wrapper exits cleanly
+  ok  briefing wrapper no-ops outside agent desk
+  ok  codex briefing wrapper exits cleanly
+  ok  codex worklog wrapper reports read-only state
+  ok  codex worklog wrapper has no Claude runtime defaults
+  ok  codex status wrapper reports harness snapshot
+  ok  codex status flags a merged dead branch (DONE-BRANCH risk)
+  ok  codex status distinguishes tracked dirty, untracked files, and sibling worktrees
+  ok  codex prompt signal carries tracked autopilot routing contract
+  ok  codex prompt signal carries git dirty, worktree, and dead-branch risks
+  ok  codex permissions wrapper reports native approval/sandbox contract
+  ok  codex headless wrapper reports dispatch contract
+  ok  portable operations routes headless liveness through adapter wrappers
+  ok  codex headless wrapper reports missing worktree
+  ok  codex headless check validates runtime projection
+  ok  codex headless strict check requires complete hook trust
+  ok  codex dispatch wrapper requires main-selected model settings
+  ok  codex dispatch wrapper dry-runs headless command with main-selected model settings
+  ok  codex dispatch wrapper supports explicit model/reasoning overrides
+  ok  codex dispatch wrapper can explicitly inherit model settings
+  ok  codex dispatch wrapper validates capability before registry write
+  ok  codex dispatch wrapper validates mode before registry write
+  ok  codex dispatch wrapper validates QA level before registry write
+  ok  codex dispatch wrapper defaults to validated harness root
+  ok  codex dispatch script ignores invalid AGENT_HOME
+  ok  codex dispatch wrapper accepts quick depth-1 one-shot jobs
+  ok  codex dispatch wrapper rejects quick depth-2 jobs
+  ok  codex dispatch wrapper starts nested slug with main-selected model settings
+  ok  codex dispatch strict start fails before registry writes when hook trust is incomplete
+  ok  codex dispatch wrapper registers open headless job
+  ok  codex harvest wrapper reports open registry jobs
+  ok  codex harvest wrapper marks selected jobs done
+  ok  claude dispatch wrapper requires main-selected model settings
+  ok  claude dispatch wrapper supports main-selected model roles
+  ok  claude dispatch wrapper supports explicit model/effort selection
+  ok  claude dispatch wrapper can explicitly inherit model settings
+  ok  claude dispatch wrapper records cross-harness ownership metadata
+  ok  claude dispatch wrapper validates depth-2 parent metadata
+  ok  codex liveness wrapper matches worktree to session transcript
+  ok  codex liveness wrapper reports dead jobs
+== dispatch-liveness.sh state transitions (P-28) ==
+  BAD dispatch-liveness.sh should report fresh transcript ALIVE
+  BAD dispatch-liveness.sh should report stale transcript SUSPECT
+  ok  dispatch-liveness.sh reports missing transcript DEAD
+== dispatch-liveness.py state transitions (P-28) ==
+  ok  dispatch-liveness.py reports fresh transcript ALIVE
+  ok  dispatch-liveness.py reports stale transcript SUSPECT
+  ok  dispatch-liveness.py reports missing transcript DEAD
+== dispatch-liveness .sh/.py STALE_MIN=15 default parity (P-28) ==
+  BAD dispatch-liveness.sh should report ~10m transcript ALIVE under default STALE_MIN=15
+  ok  dispatch-liveness.py: ~10m transcript is ALIVE under default STALE_MIN=15
+  BAD dispatch-liveness.sh should report ~20m transcript SUSPECT under default STALE_MIN=15
+  ok  dispatch-liveness.py: ~20m transcript is SUSPECT under default STALE_MIN=15
+  ok  codex mcp wrapper reports native MCP contract
+  ok  codex mcp wrapper checks native MCP CLI
+  ok  codex ui-info reports native UI and parity boundaries
+  ok  codex subagent-info reports native subagent contract
+  ok  codex subagent-info checks native multi-agent feature
+  ok  codex tui-config applies only harness statusline keys
+  ok  codex tui-config is idempotent
+  ok  codex loop wrapper reports oncall manual contract
+  ok  codex loop wrapper prevents automatic drill execution
+  ok  codex loop wrapper reports study proposal contract
+  ok  codex loop wrapper marks missing note loop unsupported
+  ok  codex role wrapper maps fast portable role
+  ok  codex role wrapper maps pipeline stages to native role profiles
+  ok  codex role wrapper reports mixed role sets
+  ok  codex role wrapper maps external adversary orchestrator role
+  ok  codex role wrapper marks external adversary unavailable by default
+  ok  codex role wrapper maps configured external adversary model
+  ok  codex role wrapper accepts external adversary command with args
+  ok  codex role wrapper reports missing external adversary command
+  ok  codex qa-policy maps QA level to reviewer and fallback contract
+  ok  opencode qa-policy maps QA level to reviewer and fallback contract
+  ok  codex capability wrapper reports native skill and plugin realization
+  ok  codex code-test capability reports verification-runner contract
+  ok  codex design capability reports visual harness contract
+  ok  codex visual harness reports adapter-native tool-contract
+  ok  codex visual harness reports unavailable checker dependency
+  ok  codex data-script wrapper checks Python analysis scripts
+  ok  codex claim-verify wrapper reports tool contract
+  ok  codex claim-verify wrapper reports unavailable provider
+  ok  codex figure-gen wrapper reports tool contract
+  ok  codex figure-gen wrapper reports missing script
+  ok  codex browser-fetch wrapper reports tool contract
+  ok  codex browser-fetch wrapper reports bad URL
+  ok  codex pdf-extract wrapper reports tool contract
+  ok  codex pdf-extract wrapper reports missing PDF
+  ok  codex web-image-search wrapper reports tool contract
+  ok  codex web-image-search wrapper reports unavailable provider
+  ok  codex verification runner checks explicit commands
+  ok  codex verification runner executes explicit commands
+  ok  codex native skill projection carries portable autopilot-code procedure
+  ok  codex bootstrap projection is discoverable without Claude bootstrap
+  ok  codex native skill projection is discoverable without Claude skill paths
+  ok  codex native plugin projection is installable and discovers generated skills
+  ok  codex native agent projection has valid custom agent TOML without Claude paths
+  ok  codex native agent projection enforces role-specific runtime boundaries
+  ok  codex native agent projection preserves mixed role sets
+  ok  codex native memory-scout projection is low-cost read-only
+  ok  codex native mode projection covers portable modes without Claude paths
+  ok  codex scaffold projection exposes shared design assets without Claude runtime paths
+  ok  codex native mode projection embeds sanitized portable mode contracts
+  ok  codex native hook projection bridges clean writes to preflight
+  ok  codex native hook projection blocks obvious shell write targets
+  ok  codex native hook projection blocks common shell mutation targets
+  ok  codex native hook projection treats cp destination as the shell write target
+  ok  codex native hook projection blocks install and rsync destinations
+  ok  codex native hook projection blocks dd output and sed inline edits
+  ok  codex native hook projection accepts string-tool nested input payloads
+  ok  codex hook command resolves harness through AGENT_HOME
+  ok  codex hook command ignores invalid AGENT_HOME
+  ok  codex native hook projection keeps session start context silent by default
+  ok  codex native hook projection can opt into session start memory context
+  ok  codex native hook projection bridges session end lifecycle with silent success output
+  ok  codex native hook projection detaches Stop session end lifecycle with silent success output
+  ok  adapter loop runtime logs are ignored
+  ok  codex native hook projection suppresses default tracked prompt context
+  ok  codex native hook projection injects only non-default prompt context
+  ok  codex native hook projection keeps PermissionRequest a no-op (monitoring owned by native /statusline)
+  ok  codex native prompt hook extracts nested message content for recall
+  ok  codex native hook projection records spec read markers
+  ok  codex native read hook marks obvious shell spec reads
+  ok  codex native hook projection records core read markers
+  ok  codex native read hook marks obvious shell core reads
+  ok  codex native read hook accepts nested tool input payloads
+  ok  codex native read hook resolves nested cwd/session payloads
+  ok  codex native hook projection blocks guarded writes
+  ok  codex native write hook resolves nested cwd/session payloads
+  ok  codex native hook projection blocks guarded MultiEdit writes
+  ok  codex native hook projection blocks qualified apply_patch writes
+  ok  codex native hook projection bridges design post-write checks
+  ok  codex native design hook accepts toolUse input payloads
+  ok  codex native design hook accepts MultiEdit payloads
+  ok  codex native design hook marks targeted shell design writes
+  ok  codex native design hook accepts qualified apply_patch payloads
+  ok  codex mode wrapper maps portable mode
+  ok  codex mode wrapper treats security-review as portable read-only guidance
+  ok  codex mode wrapper maps design modes to native visual-harness contract
+  ok  codex mode wrapper reports material data-script contract surface
+  ok  codex mode wrapper reports material figure-gen contract surface
+  ok  codex mode wrapper reports material pdf-extract contract surface
+  ok  codex mode wrapper reports qa test verification runner surface
+  ok  codex mode wrapper reports material browser-fetch contract surface
+  ok  codex mode wrapper reports material web-image-search contract surface
+  ok  codex mode wrapper reports named claim verification contract
+  ok  codex session source distills transcript
+  ok  codex distill worker is disabled by default
+  ok  codex distill-propose reports disabled tool-contract by default
+  ok  codex distill proposal uses constrained exec
+  ok  codex distill apply requires accepted no-tools/action contract
+  ok  codex distill explicit apply works after accepted contract
+  ok  codex session-end auto-distills and applies by default
+  ok  codex session-end no-ops under MEM_DISTILL=1 recursion guard
+  ok  codex check-runtime-projection reports an unwired home as failed
+  ok  context-footprint reports bootstrap and skill metadata without runtime hooks
+  ok  codex install-runtime-projection wires the home and the checker passes
+  ok  codex install-runtime-projection supports plugin-only skill discovery
+  ok  codex check-runtime-projection rejects miswired skill and agent links
+  ok  codex preflight runtime-projection validates installed runtime wiring
+  ok  codex runtime-projection requires distinct Stop hook trust
+  ok  codex strict runtime-projection requires complete hook trust
+  ok  codex runtime-projection can require hook trust
+  ok  codex runtime-projection accepts Stop trust as SessionEnd alias
+  BAD codex doctor --runtime should include runtime projection validation
+  BAD codex doctor --runtime-strict should require and accept complete hook trust
+  ok  codex install-runtime-projection is idempotent
+  ok  codex install-runtime-projection backs up a pre-existing hooks.json
+== opencode preflight wrapper ==
+  ok  opencode preflight passes clean write
+  ok  opencode preflight blocks memory file write
+  ok  opencode design postwrite wrappers no-op on non-html
+  ok  opencode projection preflight resolves harness root
+  ok  opencode agent-home wrapper resolves runtime pointer
+  ok  opencode agent-home wrapper ignores invalid AGENT_HOME
+== opencode spec read gate ==
+  ok  opencode read+capability wrapper passes spec gate
+  ok  opencode capability denies spec capability without prd read
+  ok  opencode capability allows non-spec-governed capability ungrounded
+== opencode plugin spec-gate bridge ==
+  ok  opencode plugin command.execute.before blocks ungrounded spec capability
+  ok  opencode plugin tool.execute.after marks prd read so gate passes
+  ok  opencode plugin command.execute.before ignores non-spec capability
+== opencode workflow signal CLI ==
+  ok  opencode start wrapper cleans stale untracked flags
+  ok  opencode write wrapper adapts artifact toggle hint
+  ok  opencode mode wrapper emits tracked text
+  ok  opencode track wrapper enables untracked mode
+  ok  opencode mode wrapper emits untracked text
+  ok  opencode track wrapper restores tracked mode
+  ok  opencode memory wrapper exits cleanly
+  ok  opencode memory launcher ignores invalid non-harness AGENT_HOME
+  ok  opencode recall wrapper exits cleanly
+  ok  opencode briefing wrapper exits cleanly
+  ok  opencode worklog wrapper reports read-only state
+  ok  opencode worklog wrapper has no Claude runtime defaults
+  ok  opencode status wrapper reports harness snapshot
+  ok  opencode permissions wrapper reports native permission contract
+  ok  opencode headless wrapper reports dispatch contract
+  ok  opencode headless wrapper reports missing worktree
+  ok  opencode headless check validates runtime projection
+  ok  opencode headless check accepts JSON-configured native skills path
+  ok  opencode dispatch wrapper requires main-selected model settings
+  ok  opencode dispatch wrapper dry-runs headless command with main-selected model settings
+  ok  opencode dispatch wrapper starts nested slug with main-selected model settings
+  ok  opencode dispatch wrapper defaults to validated harness root
+  ok  opencode dispatch script ignores invalid AGENT_HOME
+  ok  opencode dispatch wrapper accepts quick depth-1 one-shot jobs
+  ok  opencode dispatch wrapper rejects quick depth-2 jobs
+  ok  opencode dispatch wrapper registers open headless job
+  ok  opencode dispatch wrapper materializes generated register prompt with QA policy
+  ok  opencode harvest wrapper reports open registry jobs
+  ok  opencode harvest wrapper marks selected jobs done
+  ok  opencode liveness wrapper matches worktree to session DB
+  ok  opencode liveness wrapper reports dead jobs
+  ok  opencode mcp wrapper reports native MCP contract
+  ok  opencode mcp wrapper checks native MCP CLI
+  ok  opencode loop wrapper reports oncall manual contract
+  ok  opencode loop wrapper prevents automatic drill execution
+  ok  opencode loop wrapper reports study proposal contract
+  ok  opencode loop wrapper marks missing note loop unsupported
+== opencode role mapping ==
+  ok  opencode role wrapper maps fast portable role
+  ok  opencode role wrapper maps external adversary orchestrator role
+  ok  opencode role wrapper marks external adversary unavailable by default
+  ok  opencode role wrapper maps configured external adversary model
+  ok  opencode role wrapper accepts external adversary command with args
+  ok  opencode role wrapper reports missing external adversary command
+  ok  opencode role wrapper reports opencode-default when unconfigured
+  ok  opencode bootstrap config projects instructions and skills without Claude paths
+  ok  opencode native agent projection is discoverable without Claude paths
+  ok  opencode qa agent projection enforces read-only and depth-one tools
+  ok  opencode native command projection is discoverable without Claude paths
+  ok  opencode native plugin projection is discoverable without Claude hooks
+  ok  opencode native plugin write hook bridges to preflight
+  ok  opencode native plugin ignores invalid AGENT_HOME
+  ok  opencode native plugin copy resolves harness through AGENT_HOME
+  ok  opencode native plugin prompt lifecycle bridges to preflight
+  ok  opencode native plugin write hook blocks guarded writes
+  ok  opencode native plugin design after hook bridges to preflight
+== opencode capability mapping ==
+  ok  opencode capability wrapper reports native skill and command realization
+  ok  opencode capability wrapper downgrades note when native projections are missing
+  ok  opencode design capability reports visual harness contract
+  ok  opencode visual harness reports adapter-native tool-contract
+  ok  opencode visual harness reports unavailable checker dependency
+  ok  opencode data-script wrapper checks Python analysis scripts
+  ok  opencode claim-verify wrapper reports tool contract
+  ok  opencode claim-verify wrapper reports unavailable provider
+  ok  opencode figure-gen wrapper reports tool contract
+  ok  opencode figure-gen wrapper reports missing script
+  ok  opencode browser-fetch wrapper reports tool contract
+  ok  opencode browser-fetch wrapper reports bad URL
+  ok  opencode pdf-extract wrapper reports tool contract
+  ok  opencode pdf-extract wrapper reports missing PDF
+  ok  opencode web-image-search wrapper reports tool contract
+  ok  opencode web-image-search wrapper reports unavailable provider
+  ok  opencode verification runner checks explicit commands
+  ok  opencode verification runner executes explicit commands
+  ok  opencode native skill projection is discoverable without Claude compat autoload
+== opencode mode mapping ==
+  ok  opencode mode wrapper maps portable mode
+  ok  opencode mode wrapper treats security-review as portable read-only guidance
+  ok  opencode mode wrapper marks every adapter-coupled design mode unsupported
+  ok  opencode mode wrapper reports material data-script contract surface
+  ok  opencode mode wrapper reports material figure-gen contract surface
+  ok  opencode mode wrapper reports material pdf-extract contract surface
+  ok  opencode mode wrapper reports qa test verification runner surface
+  ok  opencode mode wrapper reports material browser-fetch contract surface
+  ok  opencode mode wrapper reports material web-image-search contract surface
+  ok  opencode mode wrapper reports named claim verification contract
+== opencode distill source ==
+  ok  opencode export source distills transcript
+  ok  opencode distill worker no-ops when OPENCODE_DISTILL_ENABLE unset
+  ok  opencode distill worker recursion guard no-ops under MEM_DISTILL=1
+  ok  opencode distill worker exits 69 when opencode runtime unavailable
+  ok  opencode session-end recursion guard no-ops under MEM_DISTILL=1
+  ok  opencode session-end debounces repeated triggers
+== SD-11b stage-dispatch gate (deny 상향 + opt-out + intensity 불명) ==
+  ok  SDR hard-denies conductor+standard+code-plan without opt-out (exit 2)
+  ok  SDR downgrades to reminder under STAGE_DISPATCH_INLINE_OK=1 opt-out
+  ok  SDR keeps soft reminder (no deny) when intensity is unknown (backward compat)
+  ok  SDR no-ops for intensity=quick
+  ok  SDR no-ops for depth-2 stage session
+  ok  SDR no-ops for non-code skill
+  ok  SDR no-ops for main (no child env)
+== SD-14b conductor Stop gate (UNREGISTERED / CLI unit) ==
+  ok  CSG no block when no open children
+  ok  CSG blocks with diagnose for dead open child
+  ok  CSG no block when stop_hook_active
+  ok  CSG no block for non-conductor env
+PASS=323 FAIL=6

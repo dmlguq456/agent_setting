@@ -415,21 +415,19 @@ AGENT_EXTERNAL_CMD
 ```
 
 When no override is configured, the adapter reports defaults for non-external
-roles: fast=`gpt-5.4-mini`/medium, deep=`gpt-5.5`/high, and
-orchestrator=`gpt-5.4-mini`/medium. `external adversary` remains unavailable
+roles: fast reviewer/fact-checker/writer/tool=`gpt-5.6-luna`/medium,
+fast implementer=`gpt-5.6-terra`/medium, deep roles including `deep orchestrator`
+=`gpt-5.6-sol`/high, and retained balanced `orchestrator`=`gpt-5.6-terra`/medium
+through the named `AGENT_MODEL_BALANCED` override. `external adversary` remains unavailable
 unless `AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured, because
 the independent-adversary contract is stronger than the existence of a
 generated `external-adversary.toml` projection. `AGENT_EXTERNAL_CMD` can route
 an external adversary to a separate external process when stronger independence
 is required.
 
-model-tier caveat: Claude `qa-team`, `material-team`, and `editorial-team` all
-pin `model: opus`; the corresponding Codex projections default to
-`gpt-5.4-mini` — `qa-team.toml` and `editorial-team.toml` at
-`model_reasoning_effort = "medium"`, `material-team.toml` at
-`model_reasoning_effort = "low"` (each role keeps its own reasoning tier; this
-is not one uniform pin). `plan-team` is a separate case (Claude `opus` maps to
-Codex `gpt-5.5`/`high`) and is not part of this trio. Runtime measurement
+model-tier caveat: static Codex projections use Luna for QA/material fast paths,
+Terra for implementation, and Sol for plan/research/design/editorial/deep-review
+paths. Runtime measurement
 (2026-07-04) confirmed these static TOML `model`/`model_reasoning_effort` pins
 are actually applied to the spawned child process, not merely declared in the
 file — verified against child rollout JSONL, with 5 static-pin/role-map

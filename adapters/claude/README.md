@@ -72,7 +72,9 @@ Claude Code adapter 는 기존 운용 품질을 보존하기 위해 `core/CONVEN
 | `fast writer` | `sonnet` | 이미 검증된 artifact 를 final report 로 조립 |
 | `deep reviewer` | `opus` | methodology, domain expertise, completeness, safety/security, architecture risk |
 | `deep maker` | `opus` | planning, research synthesis, visual/editorial judgment 처럼 생성 자체가 고차 판단을 요구하는 작업 |
+| `deep orchestrator` | `opus` high | `standard+` depth-1 capability owner의 stage gate·failover·evidence 판단 |
 | `fast implementer` | `sonnet` | 기본 코드 구현·리팩터링. 복잡한 API/library 설계는 호출자가 deep role 로 상향 |
+| `orchestrator` | `sonnet` medium | 이미 결정된 호출·경로·상태를 조립하는 balanced mechanical coordination |
 | `external adversary` | Codex CLI (GPT-5) via `codex-review-team` | `intensity=adversarial` 의 독립 hostile review |
 | `external adversary orchestrator` | `sonnet` wrapper | Codex CLI 호출·결과 정리만 담당하고 실제 판단은 external engine 에 위임 |
 

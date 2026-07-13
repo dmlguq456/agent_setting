@@ -10,6 +10,9 @@ Prints a Codex adapter mapping for a portable model role or role profile.
 Config knobs:
   AGENT_MODEL_FAST / AGENT_REASONING_FAST
   AGENT_MODEL_DEEP / AGENT_REASONING_DEEP
+  AGENT_MODEL_TERRA / AGENT_REASONING_TERRA
+  AGENT_MODEL_LUNA / AGENT_REASONING_LUNA
+  AGENT_MODEL_BALANCED / AGENT_REASONING_BALANCED
   AGENT_MODEL_EXTERNAL / AGENT_REASONING_EXTERNAL
   AGENT_MODEL_ORCHESTRATOR / AGENT_REASONING_ORCHESTRATOR
   AGENT_EXTERNAL_CMD
@@ -134,10 +137,13 @@ esac
 
 if [ -z "$role_set" ]; then
   case "$role" in
-    "fast reviewer"|"fast fact checker"|"fast fact-checker"|"fast writer"|"fast implementer"|"fast tool worker")
+    "fast reviewer"|"fast fact checker"|"fast fact-checker"|"fast writer"|"fast tool worker")
       family=fast
       ;;
-    "deep reviewer"|"deep maker"|"deep editor")
+    "fast implementer")
+      family=implementer
+      ;;
+    "deep reviewer"|"deep maker"|"deep editor"|"deep orchestrator")
       family=deep
       ;;
     "external adversary")
@@ -156,7 +162,7 @@ if [ -z "$role_set" ]; then
       fi
       ;;
     "orchestrator"|"external adversary orchestrator")
-      family=orchestrator
+      family=balanced
       ;;
     *)
       echo "codex role-map: unknown portable role: $raw" >&2
@@ -168,12 +174,17 @@ fi
 
 case "$family" in
   fast)
-    model=${AGENT_MODEL_FAST:-gpt-5.4-mini}
-    reasoning=${AGENT_REASONING_FAST:-medium}
-    [ -n "${AGENT_MODEL_FAST:-}${AGENT_REASONING_FAST:-}" ] && status=configured || status=default
+    model=${AGENT_MODEL_LUNA:-${AGENT_MODEL_FAST:-gpt-5.6-luna}}
+    reasoning=${AGENT_REASONING_LUNA:-${AGENT_REASONING_FAST:-medium}}
+    [ -n "${AGENT_MODEL_LUNA:-}${AGENT_REASONING_LUNA:-}${AGENT_MODEL_FAST:-}${AGENT_REASONING_FAST:-}" ] && status=configured || status=default
+    ;;
+  implementer)
+    model=${AGENT_MODEL_TERRA:-gpt-5.6-terra}
+    reasoning=${AGENT_REASONING_TERRA:-medium}
+    [ -n "${AGENT_MODEL_TERRA:-}${AGENT_REASONING_TERRA:-}" ] && status=configured || status=default
     ;;
   deep)
-    model=${AGENT_MODEL_DEEP:-gpt-5.5}
+    model=${AGENT_MODEL_DEEP:-gpt-5.6-sol}
     reasoning=${AGENT_REASONING_DEEP:-high}
     [ -n "${AGENT_MODEL_DEEP:-}${AGENT_REASONING_DEEP:-}" ] && status=configured || status=default
     ;;
@@ -183,15 +194,15 @@ case "$family" in
     elif [ -n "${AGENT_EXTERNAL_CMD:-}" ] && [ -z "${AGENT_MODEL_EXTERNAL:-}" ]; then
       model=external-command
     else
-      model=${AGENT_MODEL_EXTERNAL:-gpt-5.5}
+      model=${AGENT_MODEL_EXTERNAL:-gpt-5.6-sol}
     fi
     reasoning=${AGENT_REASONING_EXTERNAL:-high}
     [ "$available" -eq 1 ] && status=configured
     ;;
-  orchestrator)
-    model=${AGENT_MODEL_ORCHESTRATOR:-${AGENT_MODEL_FAST:-gpt-5.4-mini}}
-    reasoning=${AGENT_REASONING_ORCHESTRATOR:-${AGENT_REASONING_FAST:-medium}}
-    [ -n "${AGENT_MODEL_ORCHESTRATOR:-}${AGENT_REASONING_ORCHESTRATOR:-}${AGENT_MODEL_FAST:-}${AGENT_REASONING_FAST:-}" ] && status=configured || status=default
+  balanced)
+    model=${AGENT_MODEL_BALANCED:-${AGENT_MODEL_ORCHESTRATOR:-${AGENT_MODEL_TERRA:-gpt-5.6-terra}}}
+    reasoning=${AGENT_REASONING_BALANCED:-${AGENT_REASONING_ORCHESTRATOR:-${AGENT_REASONING_TERRA:-medium}}}
+    [ -n "${AGENT_MODEL_BALANCED:-}${AGENT_REASONING_BALANCED:-}${AGENT_MODEL_ORCHESTRATOR:-}${AGENT_REASONING_ORCHESTRATOR:-}${AGENT_MODEL_TERRA:-}${AGENT_REASONING_TERRA:-}" ] && status=configured || status=default
     ;;
   role-set)
     model=role-set

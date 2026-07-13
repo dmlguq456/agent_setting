@@ -1610,6 +1610,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 return active[0]
             return job.stage
 
+        rendered_parent_sids = set()  # ambiguous enrichment must not duplicate a dispatch tree
         for s in _sort_group_sessions(shown):
             if getattr(s, "mem_worker", False):
                 # F-18b: `a` 토글로만 노출되는 dim mem row — 활성 row 렌더러(스타일/기울기/depth
@@ -1618,6 +1619,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _seen_glyphs.add("mem")
                 continue
             kids = _sort_group_jobs(children.get(s.session_id, []))
+            if s.session_id in rendered_parent_sids:
+                kids = []
+            elif s.session_id:
+                rendered_parent_sids.add(s.session_id)
             nested_n = len(kids) + sum(len(job_children.get(k.slug, [])) for k in kids)
             if s.liveness == "stale":
                 _seen_glyphs.add("stale")

@@ -28,8 +28,9 @@ import time
 # rollout filename tail: rollout-<ISO-ts>-<uuid>.jsonl
 _SID_RE = re.compile(r"-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$")
 
-_INDEX = {"ts": 0.0, "map": None}          # cwd → newest rollout path
+_INDEX = {"ts": 0.0, "map": None}          # cwd → rollout paths (newest first)
 _INDEX_TTL = 1.5
+_FALLBACK_CLAIMS = {"ts": 0.0, "sids": set()}  # session ids assigned without a proc fd
 _CFG = {"ts": 0.0, "model": None, "effort": None}
 
 
@@ -74,6 +75,18 @@ def _rollout_cwd(path):
     return None
 
 
+def _rollout_meta(path):
+    """Minimal session_meta payload for a rollout, or {} when it is unreadable."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            m = json.loads(f.readline())
+        if m.get("type") == "session_meta":
+            return m.get("payload") or {}
+    except Exception:
+        pass
+    return {}
+
+
 def _index(home):
     now = time.time()
     if _INDEX["map"] is not None and now - _INDEX["ts"] < _INDEX_TTL:
@@ -88,14 +101,86 @@ def _index(home):
                     files.append((os.path.getmtime(p), p))
                 except OSError:
                     pass
-    files.sort(reverse=True)                        # newest first → first per cwd wins
+    files.sort(reverse=True)
     m = {}
     for _mt, p in files:
         cwd = _rollout_cwd(p)
-        if cwd and cwd not in m:
-            m[cwd] = p
+        if cwd:
+            m.setdefault(cwd, []).append(p)
     _INDEX.update(ts=now, map=m)
     return m
+
+
+def _sid(path):
+    match = _SID_RE.search(os.path.basename(path))
+    return match.group(1) if match else None
+
+
+def _is_subagent(meta):
+    source = meta.get("source")
+    return (
+        source == "subagent"
+        or (isinstance(source, dict) and "subagent" in source)
+        or meta.get("originator") == "subagent"
+        or meta.get("thread_source") == "subagent"
+    )
+
+
+def _proc_rollout(pid, cwd, home):
+    """Return the rollout open by this process, preferring root/user over subagent."""
+    candidates = []
+    try:
+        names = os.listdir("/proc/%s/fd" % pid)
+    except OSError:
+        return None
+    sessions_root = os.path.realpath(os.path.join(home, "sessions")) + os.sep
+    wanted_cwd = os.path.realpath(cwd)
+    for name in names:
+        try:
+            path = os.readlink("/proc/%s/fd/%s" % (pid, name))
+            if path.endswith(" (deleted)"):
+                path = path[:-10]
+        except OSError:
+            continue
+        real = os.path.realpath(path)
+        if not real.startswith(sessions_root) or not _sid(real):
+            continue
+        meta = _rollout_meta(real)
+        if os.path.realpath(meta.get("cwd") or "") != wanted_cwd:
+            continue
+        candidates.append((1 if _is_subagent(meta) else 0, real))
+    return min(candidates, default=(None, None))[1]
+
+
+def _session_created(meta):
+    value = meta.get("timestamp")
+    if not isinstance(value, str):
+        return None
+    try:
+        return __import__("datetime").datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def _fallback_rollout(sess, home):
+    """Match an idle TUI only when exactly one unclaimed rollout fits its start time."""
+    now = time.time()
+    if now - _FALLBACK_CLAIMS["ts"] >= _INDEX_TTL:
+        _FALLBACK_CLAIMS.update(ts=now, sids=set())
+    process_started = now - max(0, sess.elapsed_min) * 60
+    candidates = []
+    for path in _index(home).get(sess.cwd, []):
+        sid = _sid(path)
+        if not sid or sid in _FALLBACK_CLAIMS["sids"]:
+            continue
+        created = _session_created(_rollout_meta(path))
+        if created is not None and process_started - 300 <= created <= now + 300:
+            candidates.append(path)
+    if len(candidates) != 1:
+        return None
+    path = candidates[0]
+    _FALLBACK_CLAIMS["sids"].add(_sid(path))
+    return path
 
 
 def _tail_token_count(path, chunk=65536):
@@ -252,19 +337,15 @@ def enrich(sess):
         sess.effort = effort
     if not sess.cwd:
         return
-    path = _index(home).get(sess.cwd)
+    path = _proc_rollout(sess.pid, sess.cwd, home) or _fallback_rollout(sess, home)
     if not path:
         return                                       # no matching rollout → telemetry stays '—'
     # app-server 는 이 codex 버전(client-server)에서 세션 본체다. 예전엔 companion 으로 보고
     # mtime=None 을 강제해 *모든* interactive codex 세션의 working 판정을 죽였다(2026-07-03 회귀).
     # 실측: app-server leaf 의 /proc/cwd 가 프로젝트 cwd 와 정확히 일치하므로, cwd 로 매칭된
-    # rollout 의 mtime 은 신뢰할 수 있다. 다만 session_id 는 app_server 일 때 생략한다 — 하나의
-    # app-server 가 여러 rollout 을 서빙할 수 있어 특정 uuid 귀속은 부정확(같은 cwd 를 공유하는
-    # 세션의 우연 매칭 위험은 claude 와 동급으로 잔존). deleted worktree 는 procscan 이 orphan →
-    # liveness 가 여전히 stale 로 덮으므로 죽은 세션이 살아 보이지는 않는다.
-    sid = _SID_RE.search(os.path.basename(path))
-    if sid and not sess.app_server:
-        sess.session_id = sid.group(1)
+    # A UUID comes only from an owned fd or a one-candidate fallback; one newest
+    # cwd rollout must never be stamped on every live TUI sharing the repository.
+    sess.session_id = _sid(path)
     try:
         sess.mtime = os.path.getmtime(path)
     except OSError:

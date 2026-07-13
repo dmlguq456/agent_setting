@@ -77,7 +77,15 @@ echo "state: branch=$br head=$head base=$def dirty=$(git status --porcelain 2>/d
 
 ### §5.10. 작업 격리·병렬 디스패치 (worktree 정책, canonical)
 
+Adapter/projection changes keep the same core-first source order as other
+portable work: establish and read the governing `core/` contract before adapter
+edits; write/read markers enforce that operational gate but do not replace review.
+
 **왜**: 사용자가 요구사항을 연속으로 던질 때 main 세션이 한 건씩 직렬 처리하면 느리다. 실작업(편집·테스트·QA)은 worktree 로 격리해 background 병렬, 조정(triage·분사·보고)만 main 이 맡는다. 2026-07-06 토큰 절감 재설계: autopilot pipeline 을 main 이 통째로 직접 들고 가면 context 가 과하게 커지고, 반대로 monolithic skill 로 닫으면 cross-harness 관점을 내부에서 활용하기 어렵다. 따라서 depth 모델을 분리한다. **depth 0** = 사용자-facing main/orchestrator, **depth 1** = capability owner worker(예: `autopilot-code` 전체 파이프 책임), **depth 2** = `standard+` owner 가 여는 bounded sub-worker(계획·검증·관점·적대 리뷰). **direct 는 inline, quick 은 depth-1 one-shot worker, depth 3+ 금지**.
+
+`standard+` depth-1 capability owner의 portable role은 `deep orchestrator`다.
+Retained `orchestrator`는 이미 결정된 명령·상태·경로를 조립하는 balanced mechanical
+coordination에만 쓴다; 둘은 alias가 아니다.
 
 **규모 분기** (요청 진입 시 main 이 판정):
 

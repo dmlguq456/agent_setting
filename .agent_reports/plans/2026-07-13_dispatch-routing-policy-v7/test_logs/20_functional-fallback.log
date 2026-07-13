@@ -1,0 +1,26 @@
+=== SD-23 usage: claude limited → verify usage-check sees it ===
+claude limited(12:28)
+codex ok
+bias claude
+
+=== selector on a claude-default stage (review) with claude limited → must reject+fallback to codex ===
+rejected.1=claude:usage-limited(12:28)
+fallback.1=codex:known-limit-on-claude
+status=eligible
+adapter=codex
+family=gpt
+role=deep reviewer
+exact_model_id=gpt-5.6-sol
+reasoning=high
+trace.1=explicit=none;eligibility=usage-ok
+trace.2=affinity=diverse;maker_family=unknown;required=none
+-- jobs.log unchanged? --
+UNCHANGED (no mutation ✓)
+
+=== explicit --adapter claude while claude limited → explicit>eligibility: does it still reject? ===
+rejected.1=claude:usage-limited(12:28)
+fallback.1=codex:known-limit-on-claude
+status=eligible
+adapter=codex
+trace.1=explicit=claude;eligibility=usage-ok
+trace.2=affinity=diverse;maker_family=unknown;required=none

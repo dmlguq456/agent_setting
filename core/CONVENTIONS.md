@@ -102,12 +102,36 @@ Sub-capability inheritance:
 | `fast fact-checker` | 창의적 판단을 억제하고 source artifact 와 claim 을 좁게 대조하는 fast role | citation/venue/year/metric/lineage/table value 검증 |
 | `fast writer` | 이미 검증된 artifact 를 사용자-facing summary 로 조립하는 저비용 writer | final report, short synthesis |
 | `deep maker` | 생성 자체가 미학·전략·도메인 판단을 요구하는 role | plan, research synthesis, visual design, editorial rewrite |
+| `deep orchestrator` | high/deep 판단으로 stage gate, failover, evidence synthesis를 조정하는 conductor | `standard+` depth-1 capability owner |
 | `external adversary` | 같은 런타임과 다른 독립 engine 으로 hostile review 를 수행하는 role | `intensity=adversarial` 추가 검토 |
-| `orchestrator` | 호출·도구 실행·결과 병합·한국어 재정리 담당. 실제 판단 role 과 분리 가능 | wrapper agent, headless dispatch, external adversary adapter |
+| `orchestrator` | 이미 결정된 호출·경로·상태를 조립하는 balanced mechanical coordinator | wrapper agent, mechanical dispatch, report assembly |
+
+### §2.1a. Dispatch routing (SD-21~23)
+
+`standard+` depth-1 conductor의 기본 role은 `deep orchestrator`다. `orchestrator`는
+별도 retained balanced role이며 입력 정규화, 이미 정해진 명령 조립, 상태·경로 전달처럼
+의미 판단이 없는 mechanical-only 작업에만 쓴다. 둘을 alias로 취급하거나 balanced
+orchestrator를 deep conductor로 승격하지 않는다.
+
+Dispatch 선택 순서는 `explicit choice > hard eligibility > stage affinity >
+maker/checker family diversity > capacity/cost/latency` 로 고정한다. Portable core는
+`gpt|claude|unknown` family와 role만 기록한다. planning/architecture/decomposition은
+`deep maker`이며 Codex/GPT family affinity를 선호하지만 hard pin이 아니다. 정확한
+model ID·reasoning·runtime probe는 adapter가 소유하고, 명시 선택도 tool/runtime,
+account, exact-model, active-limit eligibility를 우회할 수 없다. reviewer는 가능한
+경우 maker와 다른 family를 선호한다.
+
+`utilities/dispatch-route.sh`는 이 계약을 계산·추적하는 read-only helper다. helper는
+registry 등록, process launch, cache/worktree mutation을 하지 않으며 stable
+`key=value` trace/rejected/fallback/unknown을 출력한다. adapter probe가 없는
+OpenCode는 family/model을 추측하지 않고 `unknown`을 반환한다.
 
 ### §2.2. Adapter mapping requirement
 
 각 adapter 는 위 role 을 자기 런타임의 concrete model / tool / prompt profile 로 매핑해야 한다. 매핑은 “기존 품질 재현”의 계약이다. Concrete model name, frontmatter value, external engine choice 는 adapter 문서와 adapter-native 파일이 소유한다. Dispatch/headless 분사에서는 main/orchestrator 가 작업 난이도에 맞춰 이 role 또는 concrete model/effort 를 job 별로 명시 선택하며, adapter wrapper 는 기본 role/model 을 암묵 선택하지 않는다.
+
+Adapter mapping and projection changes are core-first: update and read this portable
+contract before changing adapter-owned model maps, generated agents, or docs.
 
 ### §2.3. Role profile operation matrix
 

@@ -15,21 +15,21 @@ OUT = ROOT / "adapters" / "codex" / "agents"
 
 
 PROFILE_CONFIG = {
-    "plan-team": ("gpt-5.5", "high", "workspace-write"),
-    "dev-team": ("gpt-5.4-mini", "medium", "workspace-write"),
-    "qa-team": ("gpt-5.4-mini", "medium", "read-only"),
-    "research-team": ("gpt-5.5", "high", "workspace-write"),
-    "material-team": ("gpt-5.4-mini", "low", "workspace-write"),
-    "design-team": ("gpt-5.5", "high", "workspace-write"),
-    "editorial-team": ("gpt-5.4-mini", "medium", "workspace-write"),
-    "external-adversary": ("gpt-5.5", "high", "read-only"),
+    "plan-team": ("gpt-5.6-sol", "high", "workspace-write"),
+    "dev-team": ("gpt-5.6-terra", "medium", "workspace-write"),
+    "qa-team": ("gpt-5.6-luna", "medium", "read-only"),
+    "research-team": ("gpt-5.6-sol", "high", "workspace-write"),
+    "material-team": ("gpt-5.6-luna", "low", "workspace-write"),
+    "design-team": ("gpt-5.6-sol", "high", "workspace-write"),
+    "editorial-team": ("gpt-5.6-sol", "high", "workspace-write"),
+    "external-adversary": ("gpt-5.6-sol", "high", "read-only"),
 }
 
 
 EXTRA_AGENTS = {
     "memory-scout": {
         "description": "Read-only memory scout for recall-first deep memory reconnaissance.",
-        "model": "gpt-5.4-mini",
+        "model": "gpt-5.6-luna",
         "reasoning": "low",
         "sandbox": "read-only",
         "instructions": """You are the Codex-native memory-scout custom agent.
@@ -70,6 +70,8 @@ def clean_role_note(text: str) -> str:
 
 def mapper_role(profile: str, role_note: str) -> str:
     note = clean_role_note(role_note).lower()
+    if profile == "editorial-team":
+        return "deep editor"
     if "external adversary" in note:
         return "external adversary"
     if "fast implementer" in note:
@@ -185,7 +187,7 @@ def boundary_section(profile: str) -> str:
 
 
 def codex_config(profile: str) -> tuple[str, str, str]:
-    return PROFILE_CONFIG.get(profile, ("gpt-5.4-mini", "medium", "workspace-write"))
+    return PROFILE_CONFIG.get(profile, ("gpt-5.6-luna", "medium", "workspace-write"))
 
 
 def render(profile: str, portable_role: str, responsibility: str) -> str:

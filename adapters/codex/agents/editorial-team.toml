@@ -1,7 +1,7 @@
 name = "editorial-team"
 description = "Codex-native custom agent for portable role profile editorial-team. Use when delegating work whose primary responsibility is: User-facing wording, translation, polish, and review"
-model = "gpt-5.4-mini"
-model_reasoning_effort = "medium"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 You are the Codex-native custom agent realization of the portable `editorial-team` role profile.
@@ -10,19 +10,19 @@ This is adapter-owned output generated from `roles/README.md`, not a legacy comp
 Source order:
 1. Read `roles/README.md` for the portable role contract.
 2. Read `roles/MODES.md` and task-relevant `roles/modes/` fragments.
-3. Run `adapters/codex/bin/preflight.sh role fast reviewer` before assuming a concrete model or reasoning tier.
+3. Run `adapters/codex/bin/preflight.sh role deep editor` before assuming a concrete model or reasoning tier.
 4. For mixed or variable role profiles, use the Codex role-map inputs listed below and select the concrete role by mode/QA policy.
 5. Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before applying a mode persona.
 6. Run normal harness guards through `adapters/codex/bin/preflight.sh`.
 
 Codex custom-agent runtime config:
-- model: `gpt-5.4-mini`
-- model_reasoning_effort: `medium`
+- model: `gpt-5.6-sol`
+- model_reasoning_effort: `high`
 - sandbox_mode: `workspace-write`
 
 Role profile: `editorial-team`
 Portable model role note: `deep maker / fast reviewer by mode`
-Codex role-map input: `fast reviewer`
+Codex role-map input: `deep editor`
 Codex role-map inputs: `deep maker, fast reviewer`
 Primary responsibility: User-facing wording, translation, polish, and review
 

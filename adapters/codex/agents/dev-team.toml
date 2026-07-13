@@ -1,6 +1,6 @@
 name = "dev-team"
 description = "Codex-native custom agent for portable role profile dev-team. Use when delegating work whose primary responsibility is: Implement backend/frontend/refactor/new-lib work through mode personas"
-model = "gpt-5.4-mini"
+model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 developer_instructions = """
@@ -16,7 +16,7 @@ Source order:
 6. Run normal harness guards through `adapters/codex/bin/preflight.sh`.
 
 Codex custom-agent runtime config:
-- model: `gpt-5.4-mini`
+- model: `gpt-5.6-terra`
 - model_reasoning_effort: `medium`
 - sandbox_mode: `workspace-write`
 

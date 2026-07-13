@@ -1,0 +1,18 @@
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=120
+ok   - fresh dead-limit, reset未경과 → limited(reset)
+ok   - reset= passed within window → ok(expired)
+ok   - no reset=, recent → limited(unknown-reset)
+ok   - no reset=, beyond unknown-window → ok(downgrade)
+ok   - no marker → ok
+ok   - missing jobs.log → unknown
+ok   - stale marker beyond window → ok(expired)
+ok   - harness scope: claude ok / codex limited
+ok   - bias default → claude
+ok   - bias env override → codex
+— usage-check conformance: PASS
+status=ok
+exit_code=0
