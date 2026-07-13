@@ -1,0 +1,104 @@
+COMMAND: adapters/codex/bin/preflight.sh verification-runner --timeout 120 -- bash -lc 'rc=0
+echo "== Step 1-3: discover/hash/state drift =="
+python3 -c '"'"'import glob,hashlib,json,pathlib,sys
+state=json.load(open("skills/.sync_state.json",encoding="utf-8"))
+items=state.get("items",{})
+current={}
+for raw in glob.glob("adapters/claude/skills/*/SKILL.md"):
+ p=pathlib.Path(raw); current["skills/"+p.parent.name]=hashlib.sha256(p.read_bytes()).hexdigest()
+for raw in glob.glob("adapters/claude/agents/*.md"):
+ p=pathlib.Path(raw); current["agents/"+p.stem]=hashlib.sha256(p.read_bytes()).hexdigest()
+ks=set(items); kc=set(current)
+new=sorted(kc-ks); deleted=sorted(ks-kc); changed=sorted(k for k in kc&ks if items[k].get("sha256")!=current[k]); same=sorted((kc&ks)-set(changed))
+print("sync_state_version="+str(state.get("version")))
+print("last_readme_sync="+str(state.get("last_readme_sync")))
+print(f"current={len(current)} changed={len(changed)} new={len(new)} deleted={len(deleted)} same={len(same)}")
+for label,seq in (("CHANGED",changed),("NEW",new),("DELETED",deleted)):
+ for x in seq: print(label+"\t"+x)
+sys.exit(1 if changed or new or deleted else 0)'"'"' || rc=1
+echo "== Step 5b: hard cross-doc invariants =="
+qa=$(rg -n -- '"'"'argument-hint:.*--qa'"'"' adapters/claude/skills skills || true)
+if [ -n "$qa" ]; then printf "%s\n" "$qa"; rc=1; else echo "live_skill_argument_hint_qa_axis=0"; fi
+for f in autopilot-code autopilot-draft autopilot-research autopilot-refine analyze-user; do
+  hint=$(sed -n '"'"'1,/^---$/p'"'"' "adapters/claude/skills/$f/SKILL.md" | sed -n '"'"'s/^argument-hint: //p'"'"')
+  printf "%s\t%s\n" "$f" "$hint"
+  printf "%s" "$hint" | grep -q '"'"'adversarial'"'"' || rc=1
+done
+badflag=$(rg -n -- '"'"'argument-hint:.*--no-(fact-check|style-audit)'"'"' adapters/claude/skills skills | grep -Ev '"'"'/(autopilot-refine|audit)/'"'"' || true)
+if [ -n "$badflag" ]; then printf "%s\n" "$badflag"; rc=1; else echo "misplaced_opt_out_flags=0"; fi
+echo "== Step 5c: inventory/name parity =="
+skills_n=$(find adapters/claude/skills -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d " ")
+caps_n=$(find capabilities -maxdepth 1 -name '"'"'*.md'"'"' ! -name README.md | wc -l | tr -d " ")
+missing=0
+for d in adapters/claude/skills/*; do n=$(basename "$d"); [ -f "capabilities/$n.md" ] || { echo "missing capability: $n"; missing=1; }; done
+echo "claude_skills=$skills_n capability_specs=$caps_n missing_capability=$missing"
+[ "$missing" = 0 ] || rc=1
+echo "== Step 6b: manifest =="
+python3 tools/build-manifest.py --check || rc=1
+echo "== Step 6c: quantitative lint =="
+bad=$(bash tools/skill-conformance/scan.sh skills | awk -F '"'"'\t'"'"' '"'"'NR>1 && ($3=="N" || $9=="N"){print}'"'"')
+if [ -n "$bad" ]; then printf "%s\n" "$bad"; rc=1; else echo "line_ok/ref_depth_ok drift=0"; fi
+exit $rc'
+EXIT: 1
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=120
+== Step 1-3: discover/hash/state drift ==
+sync_state_version=4
+last_readme_sync=2026-06-26T16:35:01.135313+09:00
+current=37 changed=36 new=1 deleted=0 same=0
+CHANGED	agents/codex-review-team
+CHANGED	agents/design-team
+CHANGED	agents/dev-team
+CHANGED	agents/editorial-team
+CHANGED	agents/material-team
+CHANGED	agents/plan-team
+CHANGED	agents/qa-team
+CHANGED	agents/research-team
+CHANGED	skills/analyze-project
+CHANGED	skills/analyze-user
+CHANGED	skills/audit
+CHANGED	skills/autopilot-apply
+CHANGED	skills/autopilot-code
+CHANGED	skills/autopilot-design
+CHANGED	skills/autopilot-draft
+CHANGED	skills/autopilot-lab
+CHANGED	skills/autopilot-note
+CHANGED	skills/autopilot-refine
+CHANGED	skills/autopilot-research
+CHANGED	skills/autopilot-ship
+CHANGED	skills/autopilot-spec
+CHANGED	skills/code-execute
+CHANGED	skills/code-plan
+CHANGED	skills/code-refine
+CHANGED	skills/code-report
+CHANGED	skills/code-test
+CHANGED	skills/design-components
+CHANGED	skills/design-handoff
+CHANGED	skills/design-init
+CHANGED	skills/design-refs
+CHANGED	skills/design-review
+CHANGED	skills/design-tokens
+CHANGED	skills/draft-refine
+CHANGED	skills/draft-strategy
+CHANGED	skills/post-it
+CHANGED	skills/sync-skills
+NEW	agents/memory-scout
+== Step 5b: hard cross-doc invariants ==
+live_skill_argument_hint_qa_axis=0
+autopilot-code	"--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
+autopilot-draft	"<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
+autopilot-research	"<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]"
+autopilot-refine	"\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
+analyze-user	"<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]"
+misplaced_opt_out_flags=0
+== Step 5c: inventory/name parity ==
+claude_skills=28 capability_specs=28 missing_capability=0
+== Step 6b: manifest ==
+manifest up-to-date; delta baselines bound
+== Step 6c: quantitative lint ==
+line_ok/ref_depth_ok drift=0
+status=failed
+exit_code=1

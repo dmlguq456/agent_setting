@@ -1,0 +1,23 @@
+COMMAND: adapters/codex/bin/preflight.sh verification-runner --check -- true
+EXIT: 0
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=true
+timeout=60
+check=command-available
+status=ok
+
+COMMAND: adapters/codex/bin/preflight.sh loop-info drill
+EXIT: 0
+adapter=codex
+loop=drill
+source=loops/drill/README.md
+status=manual-contract
+runtime_surface=codex-loop-guidance
+trigger=manual-only
+action=report-usefulness-before-running
+auto_run=unsupported
+executable_projection=unsupported-runtime-script
+fallback=report-drill-would-be-useful
+note=Do not run drill automatically from Codex; it can launch headless runtime sessions and spend tokens.

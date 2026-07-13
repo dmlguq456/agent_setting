@@ -1,0 +1,91 @@
+COMMAND: adapters/codex/bin/preflight.sh verification-runner --timeout 120 -- bash -lc 'set -u
+rc=0
+arg_drift=0
+names="analyze-project analyze-user audit autopilot-apply autopilot-code autopilot-design autopilot-draft autopilot-lab autopilot-note autopilot-refine autopilot-research autopilot-ship autopilot-spec code-execute code-plan code-refine code-report code-test design-components design-review design-tokens draft-refine draft-strategy post-it sync-skills"
+for n in $names; do
+  shint=$(sed -n '"'"'1,/^---$/p'"'"' "adapters/claude/skills/$n/SKILL.md" | sed -n '"'"'s/^argument-hint: //p'"'"' | head -1)
+  shint=${shint#\"}; shint=${shint%\"}
+  cint=$(sed -n '"'"'s/^| Argument shape | `\(.*\)` |$/\1/p'"'"' "capabilities/$n.md" | head -1)
+  if [ "$shint" != "$cint" ]; then printf "ARG_DRIFT\t%s\nskill=%s\ncapability=%s\n" "$n" "$shint" "$cint"; rc=1; arg_drift=$((arg_drift+1)); fi
+done
+echo "argument_shape_drift_count=$arg_drift"
+echo "== stale separate QA-axis language in touched capability contracts =="
+files=""
+for n in $names; do files="$files capabilities/$n.md"; done
+qa_files=$(rg -l -- '"'"'--qa|QA level is an assurance override|Default `--qa'"'"' $files | sort || true)
+qa_count=$(printf "%s\n" "$qa_files" | sed '"'"'/^$/d'"'"' | wc -l | tr -d " ")
+printf "%s\n" "$qa_files"
+echo "stale_qa_axis_file_count=$qa_count"
+[ "$qa_count" = 0 ] || rc=1
+echo "== autopilot-ship semantic contract =="
+rg -n '"'"'첫 ship setup|env|domain|migration|실제 배포 명령은 사용자 직접|재호출 가능'"'"' capabilities/autopilot-ship.md
+exit $rc'
+EXIT: 1
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=120
+ARG_DRIFT	autopilot-code
+skill=--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]
+capability=--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--user-refine]
+ARG_DRIFT	autopilot-design
+skill=<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial]
+capability=<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|standard|thorough]
+ARG_DRIFT	autopilot-draft
+skill=<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]
+capability=<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]
+ARG_DRIFT	autopilot-lab
+skill=<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]
+capability=<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]
+ARG_DRIFT	autopilot-note
+skill=[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]
+capability=[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]
+ARG_DRIFT	autopilot-refine
+skill=\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]
+capability=\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]
+ARG_DRIFT	autopilot-research
+skill=<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]
+capability=<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]
+ARG_DRIFT	autopilot-ship
+skill=<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial]
+capability=<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough]
+ARG_DRIFT	autopilot-spec
+skill=<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]
+capability=<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough] [--user-refine]
+ARG_DRIFT	code-plan
+skill=<task description>
+capability=<task description> [--qa quick|light|standard|thorough|adversarial]
+ARG_DRIFT	code-refine
+skill=<plan name or path>
+capability=<plan name or path> [--qa quick|light|standard|thorough|adversarial]
+ARG_DRIFT	code-test
+skill=<plan name, path, or test scope>
+capability=<plan name, path, or test scope> [--qa quick|light|standard|thorough|adversarial]
+ARG_DRIFT	draft-refine
+skill=<strategy or draft name or path>
+capability=<strategy or draft name or path> [--qa quick|light|standard|thorough|adversarial]
+ARG_DRIFT	draft-strategy
+skill=<mode> --inputs <comma-separated-paths> --output <artifact-dir> <task description>
+capability=<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--qa quick|light|standard|thorough|adversarial] <task description>
+argument_shape_drift_count=14
+== stale separate QA-axis language in touched capability contracts ==
+capabilities/autopilot-code.md
+capabilities/autopilot-design.md
+capabilities/autopilot-draft.md
+capabilities/autopilot-lab.md
+capabilities/autopilot-note.md
+capabilities/autopilot-refine.md
+capabilities/autopilot-research.md
+capabilities/autopilot-ship.md
+capabilities/autopilot-spec.md
+capabilities/code-plan.md
+capabilities/code-refine.md
+capabilities/code-test.md
+capabilities/draft-refine.md
+capabilities/draft-strategy.md
+stale_qa_axis_file_count=14
+== autopilot-ship semantic contract ==
+17:_앱 배포 셋업_ entry — 이미 `spec/` 가 잡혀 있고 기능 어느 정도 완성된 자리에서 첫 ship setup·env·domain·migration deploy 안내. 호스팅 선정 (Vercel / Fly / Railway / Cloudflare / EAS) + CI/CD 파일 + `.env.example` + 도메인 가이드 + deploy_record. 실제 배포 명령은 사용자 직접 실행 — 본 skill 은 _안내만_. autopilot-spec 의 _초기 spec·skeleton_ 자리와 작업 본질 분리. 재호출 가능 (env 변경·domain 추가·migration 운영 배포 자리).
+status=failed
+exit_code=1

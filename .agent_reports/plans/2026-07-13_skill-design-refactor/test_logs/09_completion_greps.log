@@ -1,0 +1,80 @@
+COMMAND: adapters/codex/bin/preflight.sh verification-runner --timeout 120 -- bash -lc 'set -u
+rc=0
+trees="skills adapters/claude/skills"
+echo "== C2 remnants =="
+for tree in $trees; do
+  n=$(grep -rln "keep in sync" "$tree"/*/SKILL.md "$tree"/*/README.md 2>/dev/null | wc -l | tr -d " "); echo "$tree keep_in_sync=$n"; [ "$n" = 0 ] || rc=1
+  n=$(grep -rl "^## Language Rule" "$tree"/code-*/SKILL.md 2>/dev/null | wc -l | tr -d " "); echo "$tree code_language_rule_headings=$n"; [ "$n" = 0 ] || rc=1
+  n=$(grep -rFl '"'"'REPORTS_DIR=.agent_reports; [ -d .claude_reports ]'"'"' "$tree"/*/SKILL.md 2>/dev/null | wc -l | tr -d " "); echo "$tree artifact_root_snippet=$n"; [ "$n" = 0 ] || rc=1
+  n=$(grep -rEl '"'"'^## (Required Reads|Reference Map)'"'"' "$tree"/*/SKILL.md 2>/dev/null | wc -l | tr -d " "); echo "$tree legacy_reference_headings=$n"; [ "$n" = 0 ] || rc=1
+  n=$(grep -rEl '"'"'mcp__design__preview.*screenshot|시각 자가검증 루프 공통'"'"' "$tree"/design-*/SKILL.md "$tree"/autopilot-design/SKILL.md 2>/dev/null | wc -l | tr -d " "); echo "$tree inline_visual_loop=$n"; [ "$n" = 0 ] || rc=1
+done
+echo "== Plan Resolution authority/pointers =="
+a=$(grep -R "^## Plan Resolution (canonical authority — single SoT)" skills/autopilot-code/references adapters/claude/skills/autopilot-code/references | wc -l | tr -d " ")
+p=$(grep -R "arguments-and-decisions.md#plan-resolution" skills/code-{execute,test,report,refine} adapters/claude/skills/code-{execute,test,report,refine} | wc -l | tr -d " ")
+echo "authority_count_both_trees=$a pointer_occurrences_both_trees=$p"
+[ "$a" = 2 ] || rc=1
+[ "$p" -ge 16 ] || rc=1
+echo "== C3 target line counts =="
+for tree in $trees; do
+  for name in autopilot-design draft-refine autopilot-ship design-tokens autopilot-apply; do
+    n=$(wc -l < "$tree/$name/SKILL.md" | tr -d " "); echo "$tree/$name=$n"
+  done
+done
+[ "$(wc -l < skills/autopilot-design/SKILL.md | tr -d " ")" -lt 200 ] || rc=1
+echo "== P4 entry-router scanner =="
+scan=$(bash tools/skill-conformance/scan.sh skills)
+uy=$(printf "%s\n" "$scan" | awk -F '"'"'\t'"'"' '"'"'NR>1 && $6=="Y"{c++} END{print c+0}'"'"')
+hy=$(printf "%s\n" "$scan" | awk -F '"'"'\t'"'"' '"'"'NR>1 && $6=="Y" && $7=="Y"{c++} END{print c+0}'"'"')
+ship=$(printf "%s\n" "$scan" | awk -F '"'"'\t'"'"' '"'"'$1=="autopilot-ship"{print "use_when="$6" hangul="$7}'"'"')
+echo "use_when_Y=$uy use_when_and_hangul_Y=$hy autopilot-ship_$ship"
+[ "$uy" = 12 ] || rc=1
+[ "$hy" = 12 ] || rc=1
+echo "== autopilot-ship Step 4 unique semantics =="
+for tree in $trees; do
+  sec=$(sed -n '"'"'/^### Step 4:/,/^### Step 5:/p'"'"' "$tree/autopilot-ship/SKILL.md")
+  checks=0
+  printf "%s" "$sec" | grep -q '"'"'env 변경.*\.env\.example.*dashboard.*changelog'"'"' && checks=$((checks+1))
+  printf "%s" "$sec" | grep -q '"'"'도메인 추가.*DNS.*Domain.*changelog'"'"' && checks=$((checks+1))
+  printf "%s" "$sec" | grep -q '"'"'migration 운영 배포.*destructive.*사용자 직접.*rollback.*Notes.*changelog'"'"' && checks=$((checks+1))
+  echo "$tree Step4_semantic_rows=$checks/3"
+  [ "$checks" = 3 ] || rc=1
+done
+exit $rc'
+EXIT: 0
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=120
+== C2 remnants ==
+skills keep_in_sync=0
+skills code_language_rule_headings=0
+skills artifact_root_snippet=0
+skills legacy_reference_headings=0
+skills inline_visual_loop=0
+adapters/claude/skills keep_in_sync=0
+adapters/claude/skills code_language_rule_headings=0
+adapters/claude/skills artifact_root_snippet=0
+adapters/claude/skills legacy_reference_headings=0
+adapters/claude/skills inline_visual_loop=0
+== Plan Resolution authority/pointers ==
+authority_count_both_trees=2 pointer_occurrences_both_trees=16
+== C3 target line counts ==
+skills/autopilot-design=196
+skills/draft-refine=129
+skills/autopilot-ship=209
+skills/design-tokens=99
+skills/autopilot-apply=185
+adapters/claude/skills/autopilot-design=196
+adapters/claude/skills/draft-refine=129
+adapters/claude/skills/autopilot-ship=209
+adapters/claude/skills/design-tokens=99
+adapters/claude/skills/autopilot-apply=185
+== P4 entry-router scanner ==
+use_when_Y=12 use_when_and_hangul_Y=12 autopilot-ship_use_when=N hangul=Y
+== autopilot-ship Step 4 unique semantics ==
+skills Step4_semantic_rows=3/3
+adapters/claude/skills Step4_semantic_rows=3/3
+status=ok
+exit_code=0
