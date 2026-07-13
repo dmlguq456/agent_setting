@@ -58,7 +58,7 @@ fi
 # 건너뛴 채 false-green(exit 0) 을 낼 수 있어서다. set -u 이므로 CONF_STATUS/CONF_FAIL 은
 # 참조되기 전에 반드시 먼저 초기화한다(SKIP 경로에서 unbound 참조로 전체 run 이 abort 되는
 # 것을 방지 — 아래 summary 행 emission 도 CONF_STATUS!=SKIP 로 guard 한다).
-CONF_STATUS=SKIP; CONF_FAIL=0
+CONF_STATUS=SKIP; CONF_FAIL=0; CASE_FAIL=0
 
 RUN_CONFORMANCE=0
 if [ "${DRILL_CONFORMANCE_ONLY:-0}" = "1" ]; then
@@ -164,7 +164,7 @@ for c in "${cases[@]}"; do
   WORK=$(mktemp -d "/tmp/drill-${c//:/_}-XXXX")
   case_workdirs+=("$WORK")
   echo "▶ $c (work=$WORK)"
-  bash "$CASE_DIR/fixture.sh" "$WORK" || { verdicts[$c]="FIXTURE-ERR"; continue; }
+  bash "$CASE_DIR/fixture.sh" "$WORK" || { verdicts[$c]="FIXTURE-ERR"; CASE_FAIL=1; continue; }
 
   T="$RESULTS/$c.transcript.txt"
   J="$RESULTS/$c.json"
@@ -185,17 +185,23 @@ for c in "${cases[@]}"; do
   # claude path. Default to this run's AGENT_HOME.
   export DRILL_MARKER_HOME="${DRILL_MARKER_HOME:-$AGENT_HOME}"
 
-  if out=$(bash "$CASE_DIR/assert.sh" "$WORK" "$T" 2>&1); then
+  assert_rc=0
+  out=$(bash "$CASE_DIR/assert.sh" "$WORK" "$T" 2>&1) || assert_rc=$?
+  if [ "$rc" -eq 0 ] && [ "$assert_rc" -eq 0 ]; then
     verdicts[$c]="PASS$grow"
   else
     verdicts[$c]="FAIL$grow"
+    CASE_FAIL=1
+    if [ "$rc" -ne 0 ]; then
+      out="RUNTIME-FAIL: $ADAPTER exit $rc${out:+$'\n'$out}"
+    fi
   fi
   echo "$out" | tee "$RESULTS/$c.assert.txt"
   echo "  → ${verdicts[$c]} ($ADAPTER exit $rc, ${metrics[$c]})"
 
   # FAIL 자동 진단도 선택 adapter를 사용한다. DRILL_ADAPTER=codex/opencode 런이
   # Claude Code 토큰을 암묵 소비하지 않도록 direct `claude -p` 경로는 두지 않는다.
-  if [[ "${verdicts[$c]}" == FAIL* ]] && [ "${DRILL_AUTO_DIAG:-1}" = "1" ]; then
+  if [[ "${verdicts[$c]}" == FAIL* ]] && [ "$rc" -eq 0 ] && [ "${DRILL_AUTO_DIAG:-1}" = "1" ]; then
     DIAG_PROMPT="$WORK/diagnosis.prompt.md"
     {
       echo "drill set 케이스 FAIL 진단."
@@ -262,5 +268,8 @@ echo "cleanup: drill tmp + 세션 detritus 제거 (adapter=$ADAPTER)"
 # codex-adapter-parity audit P-20 (2026-07-04): 기본은 report-and-continue — conformance 가
 # FAIL 이어도 케이스는 항상 실행된다. 하지만 cleanup 까지 끝난 뒤에는 boundary guard FAIL 이
 # 케이스 전부 PASS 여도 전체 run 을 non-zero 로 끝내야 한다(F4). CONF_STATUS=SKIP 이면
-# CONF_FAIL=0 이라 그대로 exit 0.
-exit "$CONF_FAIL"
+# CONF_FAIL=0 이라도 fixture/runtime/assert 실패가 있으면 non-zero 로 끝낸다.
+if [ "$CONF_FAIL" -ne 0 ] || [ "$CASE_FAIL" -ne 0 ]; then
+  exit 1
+fi
+exit 0

@@ -3688,5 +3688,67 @@ out=$(env -u CLAUDE_CODE_CHILD_SESSION "$CSG" --self-slug cyc --jobs "$sdjobs" 2
 [ -z "$out" ] && ok "CSG no block for non-conductor env" || bad "CSG should no-op for non-conductor [$out]"
 rm -rf "$sdtmp"
 
+echo "== drill runtime failure propagation + Fleet limit marker =="
+drilltmp="$TMP/drill-runtime-failure"
+drilljobs="$drilltmp/jobs.log"
+fake_codex="$drilltmp/fake-codex"
+mkdir -p "$drilltmp/case/repo"
+: > "$drilljobs"
+: > "$drilltmp/case/prompt.md"
+printf '%s\n' \
+  '#!/bin/sh' \
+  "printf '%s\\n' '{\"type\":\"thread.started\",\"thread_id\":\"fake-thread\"}' '{\"type\":\"turn.failed\",\"error\":{\"message\":\"You have hit your usage limit. Try again at Jan 1st, 2099 9:06 AM.\"}}'" \
+  'exit 0' > "$fake_codex"
+chmod +x "$fake_codex"
+
+runner_out=$(AGENT_HOME="$drilltmp/agent-home" AGENT_DISPATCH_JOBS="$drilljobs" \
+  CODEX_BIN="$fake_codex" LOOP_CODEX_SANDBOX=danger-full-access \
+  bash -c '. "$1"; run_case_on_adapter codex "$2" "$3" 10 "" "$4" "$5"' \
+    _ "$ROOT/loops/lib-runner.sh" "$drilltmp/case/prompt.md" "$drilltmp/case/repo" \
+    "$drilltmp/case.json" "$drilltmp/case.transcript.txt")
+runner_rc=$?
+if [ "$runner_rc" -eq 70 ] && [ "$runner_out" = '?|0|0|0' ]; then
+  ok "drill adapter runner propagates Codex turn.failed as exit 70"
+else
+  bad "drill adapter runner should propagate turn.failed (rc=$runner_rc metrics=$runner_out)"
+fi
+last_runner_row=$(tail -n 1 "$drilljobs")
+if printf '%s' "$last_runner_row" | grep -q $'\tdone\t' \
+  && printf '%s' "$last_runner_row" | grep -q 'note=dead-usage-limit' \
+  && printf '%s' "$last_runner_row" | grep -q 'reset=2099-01-01T09:06:00'; then
+  ok "drill runner records usage-limit death and reset in Fleet registry"
+else
+  bad "drill runner should record usage-limit metadata [$last_runner_row]"
+fi
+usage_out=$(bash "$ROOT/utilities/usage-check.sh" --harness codex --jobs "$drilljobs")
+if printf '%s\n' "$usage_out" | grep -q '^codex limited(2099-01-01T09:06:00)$'; then
+  ok "Fleet usage check exposes the drill Codex limit"
+else
+  bad "Fleet usage check should expose drill limit [$usage_out]"
+fi
+
+mini_drill="$drilltmp/mini-drill"
+mini_case="$mini_drill/cases/runtime_fail"
+mkdir -p "$mini_case"
+printf '%s\n' '#!/bin/sh' 'mkdir -p "$1/repo"' > "$mini_case/fixture.sh"
+printf '%s\n' '#!/bin/sh' 'exit 0' > "$mini_case/assert.sh"
+: > "$mini_case/prompt.md"
+chmod +x "$mini_case/fixture.sh" "$mini_case/assert.sh"
+AGENT_HOME="$drilltmp/agent-home" AGENT_DISPATCH_JOBS="$drilljobs" \
+  CODEX_BIN="$fake_codex" DRILL_HOME="$mini_drill" DRILL_ADAPTER=codex \
+  DRILL_SKIP_CONFORMANCE=1 DRILL_AUTO_DIAG=1 \
+  bash "$ROOT/loops/drill/run.sh" runtime_fail > "$drilltmp/run.out" 2>&1
+drill_rc=$?
+if [ "$drill_rc" -eq 1 ] && grep -q '| runtime_fail | FAIL |' "$mini_drill"/results/*/summary.md; then
+  ok "drill run exits non-zero when runtime fails despite a passing assertion"
+else
+  bad "drill run should fail on runtime failure (rc=$drill_rc) [$(cat "$drilltmp/run.out")]"
+fi
+if ! find "$mini_drill/results" -name '*.diagnosis.json' -print -quit | grep -q .; then
+  ok "drill skips redundant auto-diagnosis after runtime failure"
+else
+  bad "drill should not retry unavailable runtime for auto-diagnosis"
+fi
+
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

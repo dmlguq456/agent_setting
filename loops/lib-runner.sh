@@ -92,6 +92,7 @@ _loop_registry_append() {
 _loop_register_dispatch_job() {
   [ "${DRILL_FLEET_REGISTRY:-1}" = "0" ] && return 0
   local status=$1 adapter=$2 pf=$3 repo=$4 slug=$5
+  local death_reason="${6:-}" reset="${7:-}"
   local jobs ts case_id git_root parent_sid parent_cwd parent_slug mode worker_role pipe line
   jobs=$(_loop_jobs_path)
   ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -116,9 +117,70 @@ _loop_register_dispatch_job() {
   if [ -n "$parent_slug" ]; then
     pipe="$pipe,parent=$(_loop_registry_value "$parent_slug")"
   fi
+  if [ -n "$death_reason" ]; then
+    pipe="$pipe,note=dead-$(_loop_registry_value "$death_reason")"
+    [ -n "$reset" ] && pipe="$pipe,reset=$(_loop_registry_value "$reset")"
+  fi
   line=$(printf '%s\t%s\t%s\t%s\t%s\t%s' \
     "$ts" "$status" "$git_root" "$repo" "$slug" "$pipe")
   _loop_registry_append "$jobs" "$line"
+}
+
+# Runtime failures are also Fleet availability signals. Extract a stable death
+# reason and, when the runtime supplies one, a machine-parseable reset time from
+# the raw event stream/stderr. Empty output means an ordinary non-limit failure.
+_loop_failure_metadata() {
+  local raw=$1
+  python3 - "$raw" "${raw%.json}.stderr.txt" <<'PY'
+import datetime as dt
+import pathlib
+import re
+import sys
+
+text = "\n".join(
+    p.read_text(errors="replace")
+    for name in sys.argv[1:]
+    if (p := pathlib.Path(name)).is_file()
+)
+low = text.lower()
+
+reason = ""
+if re.search(r"(?:session|weekly|monthly)\s+(?:usage\s+)?limit", low):
+    reason = "session-limit"
+elif re.search(r"(?:usage|rate)\s+limit|hit\s+your[^\n]{0,80}\blimit\b|quota\s+exceeded", low):
+    reason = "usage-limit"
+elif re.search(r"(?:credit|balance)[^\n]{0,80}(?:exhaust|insufficient|limit|deplet)", low):
+    reason = "credit-limit"
+elif re.search(r"authentication|unauthori[sz]ed|invalid\s+(?:api\s+)?key|login\s+required", low):
+    reason = "auth"
+
+if not reason:
+    raise SystemExit(0)
+
+reset = ""
+match = re.search(r"try\s+again\s+at\s+([^\n\"]+)", text, re.I)
+if match:
+    value = match.group(1).strip().rstrip(". )]}")
+    value = re.sub(r"(?<=\d)(?:st|nd|rd|th)\b", "", value, flags=re.I)
+    for fmt in ("%b %d, %Y %I:%M %p", "%B %d, %Y %I:%M %p"):
+        try:
+            reset = dt.datetime.strptime(value, fmt).isoformat(timespec="seconds")
+            break
+        except ValueError:
+            pass
+
+if not reset:
+    match = re.search(
+        r"reset(?:s|ting)?(?:\s+at|\s*:)[ \t]*"
+        r"([0-9]{1,2}(?::[0-9]{2})?\s*(?:am|pm)?|noon|midnight)",
+        text,
+        re.I,
+    )
+    if match:
+        reset = re.sub(r"\s+", "", match.group(1).lower())
+
+print(f"{reason}\t{reset}")
+PY
 }
 
 run_case_on_adapter() {
@@ -129,7 +191,7 @@ run_case_on_adapter() {
     *) echo "?|?|?|?"; return 64 ;;
   esac
 
-  local pf=$1 repo=$2 case_id slug metrics rc
+  local pf=$1 repo=$2 case_id slug metrics rc failure_meta death_reason reset
   case_id=$(_loop_case_id "$pf")
   slug=$(_loop_registry_slug "$adapter" "$case_id")
   _loop_register_dispatch_job open "$adapter" "$pf" "$repo" "$slug" || true
@@ -140,7 +202,12 @@ run_case_on_adapter() {
     opencode) metrics=$(_loop_run_opencode "$@"); rc=$? ;;
   esac
 
-  _loop_register_dispatch_job done "$adapter" "$pf" "$repo" "$slug" || true
+  death_reason=""; reset=""
+  if [ "$rc" -ne 0 ]; then
+    failure_meta=$(_loop_failure_metadata "$5" 2>/dev/null || true)
+    IFS=$'\t' read -r death_reason reset <<< "$failure_meta"
+  fi
+  _loop_register_dispatch_job done "$adapter" "$pf" "$repo" "$slug" "$death_reason" "$reset" || true
   printf '%s\n' "${metrics:-?|?|?|?}"
   return "$rc"
 }
