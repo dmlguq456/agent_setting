@@ -1334,16 +1334,17 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     n_wk = sum(1 for s in _real if s.liveness == "working")
     n_id = sum(1 for s in _real if s.liveness == "idle")
     n_dt = sum(1 for s in _real if s.detached and s.liveness not in ("stale", "dead"))
-    jw = sum(1 for j in jobs if j.liveness == "working")
+    listed_jobs = jobs if _SHOW_ALL else [j for j in jobs if j.liveness != "dead"]
+    jw = sum(1 for j in listed_jobs if j.liveness == "working")
     spin = _SPIN[int(time.time() * 10) % len(_SPIN)]
     pulse = [("  fleet ", "head"),
              (spin + " %d" % n_wk, "g_work"), (" working   ", "dim"),
              ("● %d" % n_id, "g_work_off"), (" idle   ", "dim")]
     if n_dt:
         pulse += [(_DETACHED_GLYPH + " %d" % n_dt, "g_work_off"), (" detached   ", "dim")]
-    if jobs:
-        pulse += [("↳ %d" % len(jobs), "dim"),
-                  (" job%s (%d working)" % ("s" if len(jobs) != 1 else "", jw), "dim")]
+    if listed_jobs:
+        pulse += [("↳ %d" % len(listed_jobs), "dim"),
+                  (" job%s (%d working)" % ("s" if len(listed_jobs) != 1 else "", jw), "dim")]
     lines.append(pulse)                 # (Σ cost 롤업 제거 — user: 금액 표시 삭제)
     _mem_summary = _mem_summary_segs(memory)
     if _mem_summary is not None:
@@ -1437,6 +1438,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         g = groups[name]
         group_sessions = g["sessions"] if show_sessions else []
         group_jobs = g["jobs"] if show_jobs else []
+        if not _SHOW_ALL:
+            group_jobs = [j for j in group_jobs if j.liveness != "dead"]
         if not group_sessions and not group_jobs:
             continue    # empty-group suppression per --section: no dangling header
 

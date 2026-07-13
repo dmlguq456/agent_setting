@@ -195,13 +195,26 @@ class FoldingTest(unittest.TestCase):
         self.assertNotIn("plan fleet-ui-v2-plan", text)
         self.assertNotIn("test fleet-ui-v2-test", text)
 
-    def test_stale_dead_children_stay_visible(self):
+    def test_dead_children_fold_to_alert_by_default(self):
         conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",
                                 stage="exec", worker_role="capability-owner")
         dead_c = DispatchJob(key="code-test", slug="fleet-ui-v2-test", depth=2,
                              parent_slug="fleet-ui-v2", worker_role="code-test",
                              liveness="dead")
         text = self._emit(conductor, [dead_c])
+        self.assertNotIn("test fleet-ui-v2-test", text)
+        self.assertIn("dead fleet-ui-v2-test", text)
+
+        all_text = self._emit(conductor, [dead_c], show_all=True)
+        self.assertIn("test fleet-ui-v2-test", all_text)
+
+    def test_stale_children_stay_visible(self):
+        conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",
+                                stage="exec", worker_role="capability-owner")
+        stale_c = DispatchJob(key="code-test", slug="fleet-ui-v2-test", depth=2,
+                              parent_slug="fleet-ui-v2", worker_role="code-test",
+                              liveness="stale")
+        text = self._emit(conductor, [stale_c])
         self.assertIn("test fleet-ui-v2-test", text)
 
     def test_show_all_restores_folded_children(self):
