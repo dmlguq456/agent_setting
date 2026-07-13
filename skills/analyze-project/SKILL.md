@@ -1,6 +1,6 @@
 ---
 name: analyze-project
-description: "사전조사 분석 — 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로"
+description: "Use when analyzing existing code/papers/docs as structured input for downstream work. 사전조사 분석 — 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로"
 argument-hint: "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]"
 metadata:
   group: pre

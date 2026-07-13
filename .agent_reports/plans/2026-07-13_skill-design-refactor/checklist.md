@@ -50,16 +50,14 @@
 - [x] C3 완료: `python3 tools/build-manifest.py --check` 통과 (2026-07-13 재개)
 
 ## Cluster 1 — Invocation 재분류 (P1+P4+P7, SD-5) — 게이트 후
-- [ ] C1-GATE (a) draft-strategy trial-flip → `claude -p "/draft-strategy"` slash 생존 관측 (FAIL→revert)
-- [ ] C1-GATE (b) code-test trial-flip → autopilot-code depth-2 Skill-dispatch 생존 관측 (FAIL→revert)
-- [ ] C1-GATE (c) (a)+(b) PASS 시 autopilot-code standard 파이프 1회 통과 (plan→execute→test→report)
-- [ ] C1-GATE 산출: `_internal/c1_gate_log.md` 3절차 PASS/FAIL + 증거
-- [ ] C1-FLIP 게이트 통과분 13(또는 폴백 부분집합) frontmatter `disable-model-invocation: true` 추가
-- [ ] C1-FLIP 완료: scan.sh 통과분 disable_model=true + frontmatter diff 로그
-- [ ] C1-P7 `post-it/SKILL.md:14` wording 완화 (model-invoked+proactive-nudge 계약과 정합, flip 아님)
-- [ ] C1-P4 entry-router 12(autopilot-*·analyze-*·audit) description 첫 문장 영문 "Use when…" 병기 (한국어 blurb 유지)
-- [ ] C1-P4 완료: scan.sh 12 entry-router use_when=Y, desc_has_hangul=Y 유지
-- [ ] C1 완료: `sync-skills` → manifest invocation/adapter 미러 + doctor(28/28/9) 통과
+- [x] C1-GATE (a) draft-strategy trial-flip 시도 → **BLOCKED**(nested `claude -p` 샌드박스 auto-mode classifier 차단 + fallback 격리 config 신호 오염, PASS/FAIL 판정 불가) — 즉시 revert 완료. 상세 = `_internal/c1_gate_log.md`
+- [ ] C1-GATE (b)/(c) — (a) 미확정으로 미착수(게이트 순서 종속)
+- [x] C1-GATE 산출: `_internal/c1_gate_log.md` (a) blocked 기록 + main 세션 결정 필요 권고
+- [ ] C1-FLIP — 게이트 미통과(불확정)로 **미실행, 13개 전부 model-invoked 유지**(SD-5 폴백: 안전측)
+- [x] C1-P7 `post-it/SKILL.md:14` wording 완화 — "명시 호출할 때만 변경" → "주 변경 경로는 명시 호출 + nudge-and-boundaries.md proactive-nudge 계약에 따른 model-invoked auto-record" (model-invoked frontmatter 와 정합, flip 아님)
+- [x] C1-P4 entry-router 12(autopilot-*·analyze-*·audit) description 첫 문장 영문 "Use when…" 병기 (한국어 blurb·metadata.blurb 유지)
+- [x] C1-P4 완료: scan.sh 12 entry-router `use_when=Y, desc_has_hangul=Y` 확인(양 트리)
+- [x] C1 완료(P4·P7 한정): 양 트리 mirror-parity(diff .sync_state.json 만) + `build-manifest.py --check` 통과. **C1-FLIP·C1-GATE(b)(c) 는 다음 사이클로 이월**
 
 ## 최종 회귀 (SD-10)
 - [ ] variance-bug=0 재검 (pointer/Reference Index 3요소 유지)

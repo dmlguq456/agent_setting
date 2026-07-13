@@ -1,6 +1,6 @@
 ---
 name: autopilot-apply
-description: "cheatsheet 초안을 canonical main.tex 에 paste·반영하는 적용 entry"
+description: "Use when applying a finalized cheatsheet draft into the canonical LaTeX source and verifying it compiles. cheatsheet 초안을 canonical main.tex 에 paste·반영하는 적용 entry"
 argument-hint: "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]"
 metadata:
   group: entry

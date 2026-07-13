@@ -1,6 +1,6 @@
 ---
 name: audit
-description: "산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고"
+description: "Use when doing a post-hoc audit of artifacts/pipeline (drift/consistency/gaps). 산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고"
 argument-hint: "<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]"
 metadata:
   group: ops

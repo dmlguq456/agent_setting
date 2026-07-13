@@ -1,6 +1,6 @@
 ---
 name: autopilot-refine
-description: "기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존"
+description: "Use when correcting or updating an existing document or research artifact. 기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존"
 argument-hint: "\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
 metadata:
   group: entry

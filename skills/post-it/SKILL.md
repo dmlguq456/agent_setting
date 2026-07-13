@@ -11,7 +11,7 @@ metadata:
 
 ## 목적
 
-사용자가 **직접 통제하는** 포스트잇 메모리. `<agent-home>/projects/*/memory/` 의 자동 메모리 시스템과는 별개로, 사용자가 명시적으로 `/post-it` 명령을 호출할 때만 변경된다. 세션 종료 시 conversation 이 사라지는 휘발성을 메우는 목적 (compact 는 일시적 보존이라 불충분).
+사용자가 **직접 통제하는** 포스트잇 메모리. `<agent-home>/projects/*/memory/` 의 자동 메모리 시스템과는 별개로, 주 변경 경로는 사용자의 명시적 `/post-it` 호출이나, [references/nudge-and-boundaries.md](references/nudge-and-boundaries.md) 의 proactive-nudge 계약에 따라 model-invoked auto-record 도 함께 일어난다. 세션 종료 시 conversation 이 사라지는 휘발성을 메우는 목적 (compact 는 일시적 보존이라 불충분).
 
 **핵심 비유 — 임시 포스트잇.** post-it 은 _영구 기록이 아니다_. 영구 진실은 산출물(`plans/`·`documents/`·`spec/`·code·git) 과 구조화 프로필(DB `type=profile` 레코드) 에 있다. post-it 은 그 사이를 잇는 _휘발성 작업면_ — 지금 떠올려야 할 것만 짧게 붙여두고, 산출물로 졸업하면 떼어낸다.
 

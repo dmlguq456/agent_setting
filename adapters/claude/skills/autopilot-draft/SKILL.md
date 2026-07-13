@@ -1,6 +1,6 @@
 ---
 name: autopilot-draft
-description: "문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태"
+description: "Use when starting a document draft (paper/slides/prose). 문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태"
 argument-hint: "<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 metadata:
   group: entry
