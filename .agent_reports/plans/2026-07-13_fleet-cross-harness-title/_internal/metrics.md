@@ -9,3 +9,5 @@
   same API anchors. The implementation remains isolated in its own worktree and keeps source
   mutation in one session.
 - start_head: 016a883e25ca7ec566d62f06768344067ab8e25e
+- implementation_commit: 92181b6
+- integrated_main: a2fa614

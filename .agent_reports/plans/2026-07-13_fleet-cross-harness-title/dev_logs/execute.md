@@ -13,3 +13,6 @@ Implemented F-21 in the canonical fleet and regenerated the Claude fleet mirror.
 The first real smoke exposed that `session_index.jsonl` lagged active Codex sessions.
 Local runtime inspection found `state_5.sqlite/threads.title` as the current native source;
 the implementation and PRD were corrected before final verification.
+
+Latest main (`a2fa614`, Pocock closure) was merged without conflicts and its new
+skill-conformance projection remained intact.

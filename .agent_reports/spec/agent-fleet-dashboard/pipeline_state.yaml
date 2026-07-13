@@ -11,5 +11,5 @@ phases:
   spec: done            # PRD v5 (2026-07-13: F-21 Codex state title + JSONL fallback/shared provider; v4 snapshot 보존)
   scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
   design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
-  dev: in_progress      # F-21 cross-harness title implementation 진행 중
+  dev: done             # F-21 구현·187 tests·real fleet smoke 완료
 last_updated: 2026-07-13

@@ -9,4 +9,4 @@
 - [x] Claude statusline shared-state migration
 - [x] canonical/Claude mirror sync
 - [x] focused and full verification
-- [ ] commit, merge, push, cleanup
+- [x] commit, merge, push, cleanup
