@@ -52,6 +52,14 @@ Each clause is one contract line plus the signal that it was violated.
   design, format, destructive, or large-scope decisions, and prefer pre-commit
   exposure over asking. *Violation signal:* over-confirmation on self-evident or
   already-instructed steps.
+- **Degraded input does not block artifact creation** — when producing the
+  requested artifact is reversible and non-destructive, discovering that the
+  input data is broken, placeholder, or partial is a fact to record inside
+  the artifact, not a reason to withhold it. Produce the artifact in the
+  recommended form, mark the degraded state in the artifact and the reply,
+  and attach any question after the result. Never end the turn with only a
+  question when a reversible recommended option exists. *Violation signal:*
+  zero artifacts plus a multiple-choice "how should I proceed?" question.
 - **Sync then execute** — for non-obvious direction or design work, align intent
   with the user upfront, then execute without mid-stream confirmations.
   *Violation signal:* starting a contested design without shared intent, or

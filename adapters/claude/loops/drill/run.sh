@@ -129,19 +129,33 @@ for c in "${cases[@]}"; do
   grow=""
   case "$c" in growing:*) grow="(g)"; CASE_DIR="$GOLD/cases_growing/${c#growing:}" ;; *) CASE_DIR="$GOLD/cases/$c"; [ -d "$CASE_DIR" ] || CASE_DIR="$GOLD/cases_growing/$c" ;; esac
   [ -d "$CASE_DIR" ] || { echo "SKIP $c (없음)"; continue; }
-  MAX_TURNS=""; TIMEOUT=1800
+  MAX_TURNS=""; TIMEOUT=1800; ADAPTERS=""
   [ -f "$CASE_DIR/config" ] && . "$CASE_DIR/config"
+  # per-case adapter pin: assert 가 특정 runtime 증거(codex JSONL tool 출력 등)를
+  # 요구하는 케이스는 config ADAPTERS 로 고정 — 다른 adapter 런에선 FAIL 대신 SKIP.
+  if [ -n "$ADAPTERS" ] && ! printf ' %s ' "$ADAPTERS" | grep -qF " $ADAPTER "; then
+    verdicts[$c]="SKIP(adapter!=$ADAPTERS)"; metrics[$c]="0|0|0|0"
+    echo "▶ $c → SKIP (requires adapter: $ADAPTERS, run=$ADAPTER)"; continue
+  fi
 
-  WORK=$(mktemp -d "/tmp/drill-$c-XXXX")
+  # 케이스 id 의 "growing:" 콜론이 assert 의 PYTHONPATH="$REPO"·clone 경로를 파괴한다
+  WORK=$(mktemp -d "/tmp/drill-${c//:/_}-XXXX")
   echo "▶ $c (work=$WORK)"
   bash "$CASE_DIR/fixture.sh" "$WORK" || { verdicts[$c]="FIXTURE-ERR"; continue; }
 
   T="$RESULTS/$c.transcript.txt"
   J="$RESULTS/$c.json"
-  # Adapter runner: writes $J (raw) + $T (normalized transcript), echoes
-  # turns|in_tok|out_tok|cost. Same contract for claude|codex|opencode.
-  metrics[$c]=$(run_case_on_adapter "$ADAPTER" "$CASE_DIR/prompt.md" "$WORK/repo" "$TIMEOUT" "${MAX_TURNS:-}" "$J" "$T")
-  rc=$?
+  # Static-assert cases (AXIS=static) carry no user turn — they lint the live
+  # repo deterministically (e.g. skill-conformance scan). Skip the adapter run,
+  # emit a zero-cost metric, and go straight to assert.sh.
+  if [ -f "$CASE_DIR/config" ] && grep -q '^AXIS=static' "$CASE_DIR/config"; then
+    metrics[$c]="0|0|0|0"; : > "$T"; rc=0
+  else
+    # Adapter runner: writes $J (raw) + $T (normalized transcript), echoes
+    # turns|in_tok|out_tok|cost. Same contract for claude|codex|opencode.
+    metrics[$c]=$(run_case_on_adapter "$ADAPTER" "$CASE_DIR/prompt.md" "$WORK/repo" "$TIMEOUT" "${MAX_TURNS:-}" "$J" "$T")
+    rc=$?
+  fi
 
   # Spec-grounding marker home for assertions: guards write the marker to the
   # ADAPTER's resolved agent-home, so cases must read it there, not a literal
