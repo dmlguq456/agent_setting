@@ -1,6 +1,8 @@
 """Codex CLI enrichment — passive, read-only (01_tap_mechanics.md §2).
 
-Codex writes no per-session status file; telemetry is recovered from the rollout jsonl:
+Codex telemetry is recovered from the rollout jsonl, while the native task title is
+read from the read-only ``threads.title`` state DB with ``session_index.jsonl``
+(``id`` -> ``thread_name``) as a compatibility fallback:
   ~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<sid>.jsonl
   · line 1  = session_meta  → payload.cwd (pid↔session match key)
   · last "token_count" event → payload.info.{last_token_usage, model_context_window}
@@ -23,6 +25,7 @@ A per-tick cache (cwd → newest rollout path) is built from cheap line-1 reads 
 import json
 import os
 import re
+import sqlite3
 import time
 import urllib.request
 
@@ -33,10 +36,79 @@ _INDEX = {"ts": 0.0, "map": None}          # cwd → rollout paths (newest first
 _INDEX_TTL = 1.5
 _FALLBACK_CLAIMS = {"ts": 0.0, "sids": set()}  # session ids assigned without a proc fd
 _CFG = {"ts": 0.0, "model": None, "effort": None}
+_TITLE_INDEX = {"stamp": None, "map": {}}      # native state stamps -> sid: title
 
 
 def _home():
     return os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")
+
+
+def _state_db(home):
+    """Return the newest versioned Codex state DB without assuming one schema version."""
+    candidates = []
+    try:
+        names = os.listdir(home)
+    except OSError:
+        return None
+    for name in names:
+        match = re.fullmatch(r"state_(\d+)\.sqlite", name)
+        if match:
+            candidates.append((int(match.group(1)), os.path.join(home, name)))
+    return max(candidates, default=(None, None))[1]
+
+
+def _file_stamp(path):
+    if not path:
+        return None
+    try:
+        st = os.stat(path)
+        return st.st_mtime_ns, st.st_size
+    except OSError:
+        return None
+
+
+def _thread_titles(home):
+    """Tolerant Codex native-title index; state DB wins over the JSONL fallback."""
+    index_path = os.path.join(home, "session_index.jsonl")
+    db_path = _state_db(home)
+    stamp = (
+        _file_stamp(index_path),
+        db_path,
+        _file_stamp(db_path),
+        _file_stamp(db_path + "-wal") if db_path else None,
+    )
+    if _TITLE_INDEX["stamp"] == stamp:
+        return _TITLE_INDEX["map"]
+    mapped = {}
+    try:
+        with open(index_path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                sid = row.get("id") if isinstance(row, dict) else None
+                name = row.get("thread_name") if isinstance(row, dict) else None
+                if isinstance(sid, str) and isinstance(name, str) and name.strip():
+                    mapped[sid] = name.strip()
+    except OSError:
+        pass
+    if db_path:
+        connection = None
+        try:
+            connection = sqlite3.connect("file:" + db_path + "?mode=ro", uri=True)
+            for sid, title in connection.execute(
+                "SELECT id, title FROM threads WHERE title IS NOT NULL AND title != ''"
+            ):
+                if isinstance(sid, str) and isinstance(title, str) and title.strip():
+                    mapped[sid] = title.strip()
+        except (OSError, sqlite3.Error):
+            pass
+        finally:
+            if connection is not None:
+                connection.close()
+    _TITLE_INDEX.update(stamp=stamp, map=mapped)
+    return mapped
 
 
 def _config_model_effort(home):
@@ -409,6 +481,12 @@ def enrich(sess):
     # A UUID comes only from an owned fd or a one-candidate fallback; one newest
     # cwd rollout must never be stamped on every live TUI sharing the repository.
     sess.session_id = _sid(path)
+    sess._transcript_path = path                 # ephemeral: live title scheduler, not --json
+    if sess.session_id:
+        from fleet import titles
+        native_title = _thread_titles(home).get(sess.session_id)
+        sidecar_title = titles.fresh_title(sess.session_id, harness="codex")
+        sess.title = sidecar_title or native_title or sess.title
     try:
         sess.mtime = os.path.getmtime(path)
     except OSError:

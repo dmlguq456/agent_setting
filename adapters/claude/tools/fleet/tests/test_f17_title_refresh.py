@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""F-17 — live-title refresher (fleet-owned sidecar + no-tools haiku worker).
-Hermetic: real fs access is confined to tempfile dirs; CLAUDE_CONFIG_DIR is pointed at a
-tmp home so sidecar reads/writes never touch the real ~/.claude. No live `claude` process
-is invoked — run_worker() is monkeypatched for security/behavior assertions.
+"""F-17 — live-title refresher (fleet-owned sidecar + no-tools title worker).
+Hermetic: real fs access is confined to tempfile dirs; title state and Claude config are
+pointed at tmp roots. No live provider is invoked — run_worker() is monkeypatched for
+security/behavior assertions.
 """
 import json
 import os
@@ -27,18 +27,24 @@ _STATUSLINE = os.path.join(_REPO_ROOT, "adapters", "claude", "statusline.sh")
 
 
 class _ConfigHomeMixin:
-    """Points CLAUDE_CONFIG_DIR at a fresh tmp dir so titles.py/claude.py share isolated state."""
+    """Points runtime/config state at a fresh tmp dir."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self._old_env = os.environ.get("CLAUDE_CONFIG_DIR")
-        os.environ["CLAUDE_CONFIG_DIR"] = self._tmp.name
+        self._old_title_state = os.environ.get("FLEET_TITLE_STATE_DIR")
+        os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(self._tmp.name, "claude")
+        os.environ["FLEET_TITLE_STATE_DIR"] = os.path.join(self._tmp.name, "state")
 
     def tearDown(self):
         if self._old_env is None:
             os.environ.pop("CLAUDE_CONFIG_DIR", None)
         else:
             os.environ["CLAUDE_CONFIG_DIR"] = self._old_env
+        if self._old_title_state is None:
+            os.environ.pop("FLEET_TITLE_STATE_DIR", None)
+        else:
+            os.environ["FLEET_TITLE_STATE_DIR"] = self._old_title_state
         self._tmp.cleanup()
 
 
@@ -210,7 +216,6 @@ class DeltaOffsetTest(_ConfigHomeMixin, unittest.TestCase):
             self.assertLessEqual(len(delta.encode("utf-8")), rt.DELTA_CAP)
 
     def test_main_empty_delta_advances_ts_keeps_title(self):
-        home = os.environ["CLAUDE_CONFIG_DIR"]
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "t.jsonl")
             with open(path, "w", encoding="utf-8") as f:
@@ -221,7 +226,6 @@ class DeltaOffsetTest(_ConfigHomeMixin, unittest.TestCase):
             d = titles.read("sidM")
             self.assertEqual(d["title"], "Existing Title")
             self.assertGreater(d["ts"], time.time() - 5)
-            del home  # unused, kept for clarity that CLAUDE_CONFIG_DIR scoping applies
 
 
 class SecurityTest(_ConfigHomeMixin, unittest.TestCase):
@@ -250,6 +254,7 @@ class SecurityTest(_ConfigHomeMixin, unittest.TestCase):
 
         class _FakeCompleted:
             stdout = "A Title"
+            returncode = 0
 
         def fake_run(argv, **kwargs):
             captured["argv"] = argv
@@ -322,6 +327,7 @@ class TriggerLogicTest(unittest.TestCase):
         self._write_setsid_stub()
         env = dict(os.environ)
         env["AGENT_HOME"] = self.agent_home
+        env["FLEET_TITLE_STATE_DIR"] = os.path.join(self.root, "title-state")
         env["PATH"] = self.stubdir + os.pathsep + env.get("PATH", "")
         if extra_env:
             env.update(extra_env)
@@ -339,7 +345,7 @@ class TriggerLogicTest(unittest.TestCase):
         return proc, elapsed
 
     def test_trigger_debounce_fresh_sidecar_no_spawn(self):
-        sc_dir = os.path.join(self.agent_home, ".fleet-titles")
+        sc_dir = os.path.join(self.root, "title-state", "claude")
         os.makedirs(sc_dir, exist_ok=True)
         with open(os.path.join(sc_dir, "sidT.json"), "w", encoding="utf-8") as f:
             json.dump({"title": "x", "ts": time.time(), "source": "refresher", "offset": 0}, f)
@@ -347,7 +353,7 @@ class TriggerLogicTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.sentinel))
 
     def test_trigger_stale_and_grown_spawns_once(self):
-        sc_dir = os.path.join(self.agent_home, ".fleet-titles")
+        sc_dir = os.path.join(self.root, "title-state", "claude")
         os.makedirs(sc_dir, exist_ok=True)
         sc_path = os.path.join(sc_dir, "sidT.json")
         with open(sc_path, "w", encoding="utf-8") as f:
@@ -361,7 +367,7 @@ class TriggerLogicTest(unittest.TestCase):
         self.assertEqual(len(lines), 1)
 
     def test_trigger_lock_prevents_double_spawn(self):
-        lockdir = os.path.join(self.agent_home, ".fleet-titles", ".lock-sidT")
+        lockdir = os.path.join(self.root, "title-state", "claude", ".lock-sidT")
         os.makedirs(lockdir, exist_ok=True)
         self._run()
         self.assertFalse(os.path.exists(self.sentinel))
@@ -370,6 +376,7 @@ class TriggerLogicTest(unittest.TestCase):
         self._write_setsid_stub(sleep_s=3)
         env = dict(os.environ)
         env["AGENT_HOME"] = self.agent_home
+        env["FLEET_TITLE_STATE_DIR"] = os.path.join(self.root, "title-state")
         env["PATH"] = self.stubdir + os.pathsep + env.get("PATH", "")
         stdin_json = json.dumps({
             "session_id": "sidT", "transcript_path": self.transcript,

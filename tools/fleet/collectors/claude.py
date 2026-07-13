@@ -197,17 +197,19 @@ def enrich(sess):
         except Exception:
             pass
 
-    # 3) liveness mtime + title. 우선순위(PRD §4.6 F-17): sidecar(fresh <24h) → ai-title → slug.
+    # 3) liveness mtime + title. 우선순위(PRD §4.7 F-21): sidecar(fresh <24h) → ai-title → slug.
     path = _newest_transcript_path(home, sess.cwd, sid)
+    if path:
+        sess._transcript_path = path              # ephemeral: live title scheduler, not --json
     m = _mtime(path) if path else None
     if m is None and isinstance(sj, dict):
         su = sj.get("statusUpdatedAt") or sj.get("updatedAt")
         if isinstance(su, (int, float)):
             m = su / 1000.0                        # ms → s
     sess.mtime = m
-    # 3a) fleet-owned sidecar (F-17) — 신선하면 ai-title 을 이긴다. 부재/stale/parse-fail = 무해 passthrough.
+    # 3a) neutral fleet sidecar (F-21) — 신선하면 ai-title 을 이긴다. 부재/stale/parse-fail = 무해 passthrough.
     from fleet import titles                      # 지연 import: 순환 없음, stdlib-only
-    st = titles.fresh_title(sid) if sid else None
+    st = titles.fresh_title(sid, harness="claude") if sid else None
     if st:
         sess.title = st
     elif path:                                     # 3b) F-14 ai-title fallback

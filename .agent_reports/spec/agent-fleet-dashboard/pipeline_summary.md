@@ -1,8 +1,8 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2)
+- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec done (v2)
+- **Status**: implementation done through v5/F-21
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## Process Log
@@ -55,3 +55,14 @@
 - v1 (2026-07-01): 초기 PRD. research 2건 근거.
 - v2 (2026-07-10): drift 흡수([v2 기준선]) + stage-dispatch 관제 parity(SD-F1~F4) + UI 가독성(F-9~F-13). snapshot = `_internal/versions/v1/prd.md`.
 - v3 (2026-07-12): minor 5건(F-14~F-19) 승격 흡수 — §4.7 분리 + audit 🟡 3건 반영(§3 --demo·§9 현행화·글리프 위계). snapshot = `_internal/versions/v2/prd.md`. audit = `_internal/audit/audit_2026-07-12T0910.md`.
+- v4 (2026-07-13): F-20 Codex dynamic usage-window runtime-currentness 계약. snapshot = `_internal/versions/v3/prd.md`.
+- v5 (2026-07-13): F-21 Codex native state DB title + JSONL fallback, cross-harness neutral title sidecar/provider. Claude-only refresher/`slug` fallback 계약 폐기. snapshot = `_internal/versions/v4/prd.md`.
+
+## v5 implementation closure (2026-07-13)
+
+- Codex current title source corrected by real-runtime smoke: newest versioned state DB
+  `threads.title` wins; `session_index.jsonl` remains compatibility fallback.
+- neutral sidecar/provider and live-only scheduler shipped for Claude/Codex; default Haiku,
+  shell-free custom wrapper supported.
+- verification: fleet suite 187/187, syntax/compile, `--json`/`--once` real smoke,
+  canonical/Claude mirror parity. Adaptation-boundary comparison added zero new failures.
