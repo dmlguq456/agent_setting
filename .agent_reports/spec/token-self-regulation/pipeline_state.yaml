@@ -1,28 +1,70 @@
 project_name: token-self-regulation
 component: token-self-regulation
+spec_version: 2
 created: 2026-07-13
 last_updated: 2026-07-13
-mode: [library, cli, runtime-hook]
-scope_note: "Phase 0 session token/context measurement + Phase 1 transition-only safe output response; Phase 2 reinjection accounting and Phase 3 dynamic policy are deferred."
+mode: [library, cli, runtime-hook, update, isolated-experiment]
+scope_note: >-
+  Phase 0-1 remains implemented. V2 specifies Phase 2 bounded reinjection
+  accounting/progressive disclosure and Phase 3 production-disabled offline
+  forecast plus isolated paired control/static/dynamic evaluation.
 inputs:
+  - .agent_reports/spec/token-self-regulation/_internal/versions/v1/prd.md
   - .agent_reports/research/token-self-regulation/pipeline_summary.md
   - .agent_reports/research/token-self-regulation/06_implementation.md
-  - OpenAI Codex developer commands and config reference, verified 2026-07-13
+  - existing Phase 0-1 implementation and tests
+artifacts:
+  canonical_prd: .agent_reports/spec/token-self-regulation/prd.md
+  experiment_contract: .agent_reports/spec/token-self-regulation/experiment_contract.md
+  previous_version: .agent_reports/spec/token-self-regulation/_internal/versions/v1/prd.md
 phases:
-  research: done
-  spec: done
-  plan: done
-  dev: done
-  verify: done
-  report: done
+  phase_0_measurement:
+    status: done
+  phase_1_static_policy:
+    status: done
+    production_policy: static-transition-only
+  phase_2_spec:
+    status: done
+  phase_2_implementation:
+    status: pending
+  phase_2_verification:
+    status: pending
+  phase_3_contract:
+    status: done
+    production_dynamic_enabled: false
+  phase_3_offline_candidate:
+    status: pending
+  phase_3_paired_experiment:
+    status: pending
+  phase_3_adoption:
+    status: blocked-on-evidence-and-explicit-user-decision
 decisions_locked:
-  - TSR-1: active context and cumulative session counters are explicit, separate, non-billing signals
-  - TSR-2: native Codex rollout budget requires a validated explicit opt-in; runtime config remains read-only
-  - TSR-3: token pressure never changes intensity, routing, model role, stage depth, or verification rigor
-  - TSR-4: safety/security/validation/error handling/accessibility and all required guards remain invariant
-  - TSR-5: input/context reduction stays off in Phase 1
-  - TSR-6: hook reinjection is transition-only, zero for normal/unknown/native/same-band, and one compact line for tight/critical entry
-  - TSR-7: exact-session tolerant parsing; missing/stale/ambiguous signals fail open to the normal pipeline
-decisions_open:
-  - Phase 2 measured net-token accounting and reminder cadence
-  - Phase 3 dynamic policy experiment and adoption gate
+  - TSR-1..7: Phase 0-1 exact-session, static transition-only, orthogonality and safety invariants remain unchanged
+  - TSR-8: hook counts, exact directive UTF-8 bytes and runtime cumulative counter deltas are separate non-billing observations
+  - TSR-9: no token estimate without exact tokenizer provenance for the emitted payload
+  - TSR-10: accounting is bounded, content-free, hashed-session XDG aggregate and fail-open
+  - TSR-11: progressive disclosure keeps L0 zero and L1 compact; diagnostics and experiments are never auto-injected
+  - TSR-12: dynamic policy stays disabled in production and runs only offline/isolated
+  - TSR-13: input pruning, RL, model effort, intensity, dispatch/depth and QA changes remain forbidden
+  - TSR-14: evaluator cannot adopt; explicit user decision and a later spec/code cycle are required
+adoption_gate:
+  minimum_complete_triplets: 30
+  minimum_per_declared_stratum: 10
+  required_and_safety_pass_rate: 1.0
+  quality_tolerance: 0.02
+  bootstrap_resamples: 10000
+  bootstrap_seed: 20260713
+  observed_control_vs_dynamic_lower_95_must_exceed: 0
+  observed_static_vs_dynamic_lower_95_must_exceed: 0
+  explicit_user_decision_required: true
+  current_decision: pending_user_decision
+resume:
+  next_capability: autopilot-code
+  next_scope: phase-2-accounting-then-phase-3-isolated-evaluator
+  production_dynamic_enabled: false
+  commit_push_by_this_worker: false
+unsupported_contracts:
+  - >-
+    Codex flat spec-read preflight currently does not recognize the component
+    PRD path spec/token-self-regulation/prd.md; actual component PRD read was
+    completed and the unsupported gate must be reported.
