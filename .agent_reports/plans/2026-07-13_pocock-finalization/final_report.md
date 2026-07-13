@@ -17,6 +17,7 @@ Ponytail을 제외한 Pocock 설계원칙 관련 잔여 작업을 완료했다.
 - mirror: two Claude skill trees identical except sync state.
 - generation: manifest, Claude plugin, Codex/OpenCode native skills current.
 - focused adaptation boundary: `skill-conformance` findings 0.
+- implementation commit: `aac4f2f` on branch `pocock-finalize`.
 
 ## Explicit limits
 

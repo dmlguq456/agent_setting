@@ -9,4 +9,4 @@
 - [x] Sync generated surfaces and state.
 - [x] Focused executable and semantic verification.
 - [x] Original cycle status/summary/checklist synchronized.
-- [ ] Commit and push branch for main harvest.
+- [x] Commit implementation as `aac4f2f`; push branch for main harvest.
