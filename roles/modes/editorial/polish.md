@@ -10,11 +10,11 @@
 다음 두 조건이 _모두_ 만족할 때만 polish 호출. 사용자가 _안 보는 중간 산출물_ 에 polish 강제하면 비용 낭비.
 
 1. **사용자가 직접 보는 자리**:
-   - autopilot-* 의 _final 마무리 단계_ (`code-report` / `audit` 보고서 / `autopilot-research` 보고서 세트 / `autopilot-draft` 의 final draft 단계 / `sync-skills` README 자동 갱신 등)
+   - autopilot-* 의 _final 마무리 단계_ (`code-report` / `audit` 보고서 / `autopilot-research` 보고서 세트 / `autopilot-draft` 의 final draft 단계 등)
    - `--user-refine` pause 직전 (사용자가 직접 메모 추가하러 검토)
 2. **QA 강도가 standard 이상** — `--qa quick` / `--qa light` 는 _fastest path_ 의도 → polish skip. `--qa standard` / `--qa thorough` / `--qa adversarial` 에서만 호출.
 
-> 예외 — `--qa` flag 자체가 없는 skill (`audit`, `sync-skills`) 은 _조건 1 만 적용_. polish 가 산출 자체 의미와 분리 안 됨.
+> 예외 — `--qa` flag 자체가 없는 skill (`audit`) 은 _조건 1 만 적용_. polish 가 산출 자체 의미와 분리 안 됨.
 
 > 예외 — `Agent(편집팀)` 직접 호출 (사용자가 작은 다듬기 우회 요청) 은 본 조건 무관 — 사용자 의도 명시.
 

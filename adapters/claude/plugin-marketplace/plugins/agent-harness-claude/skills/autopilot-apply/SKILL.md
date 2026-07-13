@@ -43,8 +43,6 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 - 우회 대상 3건(cheatsheet 자체 수정 / markdown 산출물 / 코드베이스) = **§When NOT to use** 단일 authority
 - `/autopilot-apply <args>` slash 직접 입력 → 컨펌 skip, 즉시 invoke
 
-> 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰로 자동 반영.
-
 ## Scope
 
 - **Targets**: `<artifact-root>/` _밖_ 의 실제 작업 source (현재 `--target latex` → `*.tex`). git 으로 추적되는 프로젝트 전제.

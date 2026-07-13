@@ -42,8 +42,6 @@ cross-project 사용자 성향 프로필 entry. 사용자의 과거 산출물(fi
 - 한 aspect 의 한 자리만 수정 — `/post-it --scope user <aspect>` 를 통해 DB 레코드 body 갱신. 파일 직접 Edit 아님 (SoT 는 DB). `## 사용자 수동 메모` 절은 사용자 영역이므로 `/post-it --scope user <aspect>` 경유.
 - `/analyze-user <args>` slash 직접 입력 — 컨펌 skip 즉시 invoke.
 
-> 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰 안내로 자동 반영.
-
 ## Language Rule
 
 - All user-facing output and 산출물 (DB profile 레코드 body) 본문 in 자연스러운 **한국어** (번역체 회피).

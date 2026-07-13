@@ -51,8 +51,6 @@ metadata:
 - 기존 research 폴더에 entry 추가만 — `/autopilot-refine`
 - `/autopilot-research <args>` slash 직접 입력 — 컨펌 skip 하고 즉시 invoke
 
-> 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰 안내로 자동 반영.
-
 ## Language Rule
 - When explaining something to the user, write in Korean.
 

@@ -1500,9 +1500,9 @@ check_codex_native_skill_projection() {
     return
   fi
 
-  if ! adapters/codex/bin/sync-native-skills.py --check >/tmp/codex-sync-skills.out 2>/tmp/codex-sync-skills.err; then
+  if ! adapters/codex/bin/sync-native-skills.py --check >/tmp/codex-native-skills.out 2>/tmp/codex-native-skills.err; then
     fail_msg "Codex native skill projections are stale; run adapters/codex/bin/sync-native-skills.py"
-    cat /tmp/codex-sync-skills.err
+    cat /tmp/codex-native-skills.err
   fi
 
   for f in capabilities/*.md; do
@@ -2499,9 +2499,9 @@ check_opencode_native_skill_projection() {
     return
   fi
 
-  if ! adapters/opencode/bin/sync-native-skills.py --check >/tmp/opencode-sync-skills.out 2>/tmp/opencode-sync-skills.err; then
+  if ! adapters/opencode/bin/sync-native-skills.py --check >/tmp/opencode-native-skills.out 2>/tmp/opencode-native-skills.err; then
     fail_msg "OpenCode native skill projections are stale; run adapters/opencode/bin/sync-native-skills.py"
-    cat /tmp/opencode-sync-skills.err
+    cat /tmp/opencode-native-skills.err
   fi
 
   for f in capabilities/*.md; do
@@ -2779,9 +2779,9 @@ check_claude_skill_projection() {
     fi
   done
 
-  diff_out=$(diff -qr --exclude=.sync_state.json skills adapters/claude/skills 2>/dev/null || true)
+  diff_out=$(diff -qr skills adapters/claude/skills 2>/dev/null || true)
   if [ -n "$diff_out" ]; then
-    fail_msg "skills/ compatibility refs must stay byte-equivalent to adapters/claude/skills/ except .sync_state.json:"
+    fail_msg "skills/ compatibility refs must stay byte-equivalent to adapters/claude/skills/:"
     printf '%s\n' "$diff_out"
   fi
 }

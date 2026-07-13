@@ -279,15 +279,6 @@
       "modes": [],
       "blurb": "프로젝트·cross-project 기록·handoff — 세션 간 연속성 working 메모",
       "argument_hint": "[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]"
-    },
-    {
-      "slug": "skill__sync-skills",
-      "name": "sync-skills",
-      "group": "ops",
-      "fam": "ops",
-      "modes": [],
-      "blurb": "skills·agents 정의 변경 감지 후 README 대시보드·manifest 동기화",
-      "argument_hint": "[--check] [--force] [--auto-fix [--dry-run]]"
     }
   ],
   "agents": [

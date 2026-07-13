@@ -190,5 +190,3 @@ autopilot-lab "X 실험" — Step 0 에서 readiness ✓ 확인 후 진행
 - 작은 작업 (한 줄 수정·rename·cleanup) — `Agent(개발팀)` 직접 호출 또는 직접 Edit
 - 단발성 코드 리뷰 — `Agent(품질관리팀)` 직접 호출
 - `/autopilot-code <args>` slash 직접 입력 — 컨펌 skip 하고 즉시 invoke
-
-> 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰 안내로 자동 반영.

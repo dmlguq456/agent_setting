@@ -1,6 +1,6 @@
 # harness-installer — Spec (PRD)
 
-> mode: **cli** (하네스 배포 표면 — 2-채널 하이브리드 installer) · 작성 2026-07-12 · v1 · v2 (2026-07-13) · **v3 (2026-07-13)**: 공개 진입점 계약 추가 — root README를 human-owned product landing page로 전환하고 `sync-skills` capability를 퇴역. 구 버전 = `_internal/versions/v2/prd.md`
+> mode: **cli** (하네스 배포 표면 — 2-채널 하이브리드 installer) · 작성 2026-07-12 · v1 · **v2 (2026-07-13)**: 구현 사이클 1·2 반영 — INST-OPEN-1 확정(plugin hook 목록), INST-OPEN-3 완료(INSTALL_LAYOUT 축소), verify 채널-인지 계약 추가. 구 버전 = `_internal/versions/v1/prd.md`
 > 컴포넌트: `agent_setting` repo 의 **배포·설치 표면** — 하네스를 Claude Code·Codex·OpenCode 세 런타임에서 "바로 플러그인 형태로" 설치·검증·갱신하게 한다. `spec/harness-layer-sync/`(내부 canonical 바인딩)와 **형제·interlock** 관계의 독립 청사진 — 이 폴더(`spec/harness-installer/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - research `.agent_reports/research/cross-platform-agent-frameworks/` — `05_deployment.md`(3단 배포 골격·cost model), `06_implementation.md`(채택 후보 1 = GSD hash-manifest), `cards/{gsd,claude-code-official-plugins,multi-harness-projection,claude-flow}.md`
@@ -20,7 +20,6 @@
 3. **파일-복제 회피 (claude-flow #1834 반면교사)** — plugin 채널에 들어가는 내용물도 **생성된 projection**(`codex_setting/codex-skills` 동형)에서 나온다. 손복사·중복 SoT 금지. plugin 내용물의 SoT 는 언제나 `capabilities/`·`roles/`·core 이고, sync-native-* 생성기가 유일 경로.
 4. **소유 경계 (GSD 모델)** — installer 는 **자신이 설치한 파일(manifest 등재분)만** 관리한다. 사용자 영역(runtime credentials·sessions·`projects/`·기존 사용자 config)은 불가침. 지우기 전 백업, 덮기 전 감지.
 5. **idempotent** — 같은 명령 재실행이 안전 (`install-windows.sh` 선례 계승). 부분 실패 후 재실행이 복구 경로.
-6. **공개 문서는 사람이 소유한다 (v3)** — root `README.md`는 설치 전 사용자가 제품을 이해하고 선택하는 공개 진입점이다. capability 정의를 기계적으로 늘어놓거나 prose를 hash로 동기화하지 않는다. 생성 가능한 manifest·runtime projection은 코드로 생성·검증하고, README의 가치 제안·정보 순서·예시는 review와 링크 검증으로 관리한다.
 
 ## 1. 배경 — 문제와 근거
 
@@ -28,7 +27,6 @@
 - **Codex 채널 절반 존재**: `adapters/codex/plugin-marketplace/` + `codex plugin add agent-harness-codex@agent-harness` 가 이미 동작(Migration Order 검증 항목으로 실측). Claude Code·OpenCode 에는 대응물이 없다 — 비대칭.
 - **research 결론**: 모든 조사 대상이 "SoT repo → distribution channel → target" 3단 골격(`05_deployment.md` §1). 채택 권고 = **GSD-style hash-manifest + reapply**(후보 1, 유일한 양방향 divergence 실구현) + 보조(parity-loss warning·byte-budget). 파일-복제식 스캐폴딩은 명시 회피.
 - **HLS 와의 경계 (interlock)**: HLS = repo **내부** canonical↔adapter 바인딩(공유층 물리 이중화 해소). installer = repo→**runtime home** 배포. hash-manifest 메커니즘·생성기(`tools/build-manifest.py` 증분)·GSD 실코드 정독 게이트(HLS §3.2)는 **공유** — 한 번 정독이 양쪽 구현의 입력이고, manifest 스키마는 두 spec 이 같은 것을 쓴다(중복 구현 금지). HLS 구현이 canonical 구조를 바꾸면 installer 의 projection 소스 경로가 따라간다 — installer 는 경로를 하드코드하지 않고 HLS 예외 목록·manifest 를 읽는다.
-- **공개 진입점 drift (v3)**: root README가 capability 전개표·내부 디렉터리 지도·런타임별 레거시 상태를 한 문서에서 자동 재생성하면서, 실제 installer/plugin 표면보다 뒤처져도 `.sync_state.json` hash만 갱신되면 정상처럼 보였다. 따라서 prose sync capability를 제거하고, 공개 설명과 기계 계약을 분리한다.
 
 ## 공통
 
@@ -94,15 +92,6 @@
 - **OpenCode**: marketplace·번들 포맷 **부재 확인** — plugin 채널 없음, installer 가 유일 경로. `opencode.json` 에 `instructions[]`·`plugin[]` 을 **non-destructive merge**(rulesync 선례: 기존 사용자 config 보존, 충돌 시 보고·중단 — 의미 판단 아닌 규칙) + convention 디렉토리 projection.
   - ⚠️ **drift(currentness 검증)**: 현행 공식 문서는 **복수형** 디렉토리(`.opencode/skills|commands|agents|plugins/`, global `~/.config/opencode/…`)이고 **`skills.paths` config key 는 문서에 없다**(skill 노출은 `permission.skill` 규칙 + convention 디렉토리) — 기존 `INSTALL_LAYOUT.md`·`opencode_setting` 배선(단수형 `agent/`·`command/`, `skills.paths`)은 legacy 일 가능성. **구현 Step 0 에서 로컬 opencode 버전 대상 실측 후 migration 포함**(구식 배선 침묵 유지 금지).
 
-### 공개 진입점 — root README (v3)
-
-- **목적**: 저장소 내부를 이미 아는 운영자용 dashboard가 아니라, 처음 방문한 사용자가 30초 안에 “무엇인지 / 어떻게 설치하는지 / 어떤 런타임을 지원하는지 / 어디서 더 읽는지” 판단하는 product landing page.
-- **정보 순서**: 한 줄 가치 제안 → 빠른 설치(`harness install`) → 바로 쓰는 예시 → 핵심 기능 → 런타임별 배포 차이 → 작동 구조 → 깊은 문서/개발 검증. 세부 capability 전수 표와 전체 디렉터리 트리는 각각 `capabilities/README.md`, `MANUAL.md`, `core/`, `INSTALL_LAYOUT.md`로 보낸다.
-- **포지셔닝**: 제품 전체는 단일 plugin이 아니라 **portable agent harness**다. Claude Code와 Codex에서는 native plugin + installer projection을 제공하고, marketplace bundle이 없는 OpenCode는 installer projection을 제공한다. 지원 수준을 같은 것으로 뭉개지 않는다.
-- **소유권**: README prose는 human-owned. 자동 생성 블록을 기본으로 두지 않는다. 이름·경로·projection의 기계적 정합성은 `tools/build-manifest.py --check`, adapter `sync-native-* --check`, `tools/check-adaptation-boundary.sh`, `tools/skill-conformance/check.sh`, `harness verify`가 담당한다.
-- **`sync-skills` 퇴역**: `capabilities/sync-skills.md`, Claude compatibility skill, Codex/OpenCode native projections, catalog/manifest entry, `.sync_state.json`, README regeneration/oncall reminder를 제거한다. 기존 cross-doc 불변식은 결정론적 guard의 명시적 명령으로 유지하고, 문서 편집 품질은 review 대상이다. 역사 산출물과 git 이력은 소급 수정하지 않는다.
-- **근거**: `_internal/readme-reference-brief.md`의 GitHub 상위 프로젝트 패턴과 2026-07-13 공식 runtime 문서 재검증. 외부 프로젝트의 문구/레이아웃을 복제하지 않고 정보 구조만 참고한다.
-
 ### hash-manifest + reapply (fork-drift 대응)
 
 - **대상**: installer 가 runtime home 에 **복사**한 파일만 (settings.json·keybindings·Windows copy 분기). symlink 는 자체가 canonical 이라 제외, plugin cache 는 런타임 소유라 제외.
@@ -136,8 +125,6 @@ flowchart TD
     D2 --> G1
     D3 --> G1
     MAN -.공유 스키마.-> HLS[harness-layer-sync<br/>hash-manifest / build-manifest.py]
-    README[root README<br/>human-owned landing page] --> ENTRY
-    README --> DOCS[MANUAL · capabilities · core · INSTALL_LAYOUT]
 ```
 
 ## 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
@@ -145,14 +132,9 @@ flowchart TD
 - 의미 판단 구간 스캔: installer 동작은 전부 결정론(파일 ops·hash 비교·config merge·check 실행). **충돌 0**.
 - 유일 경계 후보 = OpenCode config merge 의 "충돌" 판정 — **규칙으로 처리**(같은 key 에 다른 값 = 충돌 → 보고·중단, 자동 해석 시도 없음). LLM fallback 불요.
 
-## 열린 결정 (OPEN) — v3 현황
+## 열린 결정 (OPEN) — v2 현황
 
 - ~~INST-OPEN-1~~ **확정(구현 사이클 2, 2026-07-13)**: plugin 탑재 hook 목록 — **채택 2**: `git-state-guard.sh`·`artifact-guard.sh`(self-contained·fail-open 충족) / ~~이월 3~~ **채택 완결(사이클 3, 2026-07-13)**: spec 파이프 3종(`spec-skill-gate`·`spec-read-marker`·`spec-sync-nudge`) — 생성기 `hooks.json` 의 `AGENT_HOME="${CLAUDE_PLUGIN_DATA}"` env-prefix 로 재기준, canonical 무수정 / **제외**: memory(mem-*)·statusline·dispatch·core-first 계열(CLI 설치 전제 상태 의존). 근거 = `plans/2026-07-13_harness-installer-impl2/final_report.md`.
 - ~~INST-OPEN-2~~ **확정(사용자, 2026-07-12)**: CLI 진입 명령 = **`harness`** (fleet 동형 한 단어 + 서브명령, `tools/install/harness.sh` launcher → `~/.local/bin/harness` symlink). PATH 충돌은 install 시 기존 `harness` 명령 존재 검사로 방어.
 - ~~INST-OPEN-3~~ **완료(구현 사이클 2, 2026-07-13)**: `INSTALL_LAYOUT.md` 514→250줄 — 셸 레시피 나열·수동 검증 블록을 `harness install`/`harness verify` 참조로 대체, 계약적 내용(Windows 절·런타임별 특기사항) 보존.
 - **INST-OPEN-4** (유지): OpenCode 배선 drift(복수형 디렉토리·`skills.paths` 부재) — 로컬 1.17.13 은 단수형 배선으로 정상 동작(verify `opencode.drift-watch` check 가 상시 감시), 복수형 migration 은 opencode 버전업 시 별도 사이클.
-
-## v3 확정 결정
-
-- **INST-D-8 (사용자 확정, 2026-07-13)**: root README는 plugin/product landing page 구조의 human-owned 공개 문서다. 세부 내부 지도를 자동 재생성하지 않는다.
-- **INST-D-9 (사용자 확정, 2026-07-13)**: `sync-skills` portable capability와 모든 현역 runtime projection을 퇴역한다. manifest/projection/adaptation/conformance 검사는 각각의 결정론 도구가 계속 소유한다.

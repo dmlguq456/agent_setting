@@ -941,20 +941,20 @@ if AGENT_DISPATCH_JOBS="$TMP/claude-env-jobs.log" \
 else
   bad "claude dispatch wrapper should use the selected shared registry"
 fi
-if CODEX_THREAD_ID=codex-parent python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --worktree "$TMP/repo" --slug claude-owned --capability sync-skills --mode ops/verification --qa standard --intensity thorough --depth 1 --worker-role verifier --owner sync-skills --model-role "fast reviewer" --prompt-text "verify" --jobs "$TMP/claude-owned.log" --log-dir "$TMP/claude-owned-logs" >/tmp/claude_owned.out 2>/tmp/claude_owned.err \
+if CODEX_THREAD_ID=codex-parent python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --worktree "$TMP/repo" --slug claude-owned --capability audit --mode ops/verification --qa standard --intensity thorough --depth 1 --worker-role verifier --owner audit --model-role "fast reviewer" --prompt-text "verify" --jobs "$TMP/claude-owned.log" --log-dir "$TMP/claude-owned-logs" >/tmp/claude_owned.out 2>/tmp/claude_owned.err \
   && grep -q '^intensity=thorough$' /tmp/claude_owned.out \
   && grep -q '^depth=1$' /tmp/claude_owned.out \
   && grep -q '^parent_session_id=codex-parent$' /tmp/claude_owned.out \
   && grep -q '^worker_role=verifier$' /tmp/claude_owned.out \
-  && grep -q '^owner=sync-skills$' /tmp/claude_owned.out \
+  && grep -q '^owner=audit$' /tmp/claude_owned.out \
   && grep -q '^owner_harness=codex$' /tmp/claude_owned.out \
-  && grep -q $'open\t.*/repo\t.*/repo\tclaude-owned\tcapability=sync-skills,mode=ops/verification,qa=standard,intensity=thorough,depth=1,harness=claude,parent_sid=codex-parent,worker_role=verifier,owner=sync-skills,owner_harness=codex,model_source=role,model_role=fast reviewer,model=sonnet,effort=medium' "$TMP/claude-owned.log" \
+  && grep -q $'open\t.*/repo\t.*/repo\tclaude-owned\tcapability=audit,mode=ops/verification,qa=standard,intensity=thorough,depth=1,harness=claude,parent_sid=codex-parent,worker_role=verifier,owner=audit,owner_harness=codex,model_source=role,model_role=fast reviewer,model=sonnet,effort=medium' "$TMP/claude-owned.log" \
   && grep -q 'parent_session_id: codex-parent' "$TMP/claude-owned-logs/claude-owned.claude.prompt.txt"; then
   ok "claude dispatch wrapper records cross-harness ownership metadata"
 else
   bad "claude dispatch wrapper should record cross-harness ownership metadata"
 fi
-if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug claude-bad-depth --capability sync-skills --mode ops/verification --qa standard --intensity standard --depth 2 --model-role "fast reviewer" --prompt-text "verify" --jobs "$TMP/claude-bad-depth.log" >/tmp/claude_bad_depth.out 2>/tmp/claude_bad_depth.err; then
+if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug claude-bad-depth --capability audit --mode ops/verification --qa standard --intensity standard --depth 2 --model-role "fast reviewer" --prompt-text "verify" --jobs "$TMP/claude-bad-depth.log" >/tmp/claude_bad_depth.out 2>/tmp/claude_bad_depth.err; then
   bad "claude dispatch wrapper should reject depth-2 without parent"
 else
   rc=$?

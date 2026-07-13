@@ -12,7 +12,7 @@ SoT = the adapter definitions themselves:
   - TRACKS              documented constant (below), validated against discovered skills
 
 manifest.json is a PURE derivation — never hand-edit it. Edit the definitions, then
-re-run this script (or `/sync-skills`, which calls it). The build is byte-identical on
+re-run this script directly. The build is byte-identical on
 re-run (idempotent): GENERATED_FROM is a fixed string (NO date/timestamp), every list is
 sorted by a stable key, json.dumps uses ensure_ascii=False + indent=2 + sort_keys=False
 (field order preserved) + a trailing newline.

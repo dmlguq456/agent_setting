@@ -742,19 +742,19 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
                 "\t".join([
                     "2026-07-05T01:00:00+00:00", "open", "repo", worktree,
                     "legacy-codex",
-                    "capability=sync-skills,mode=qa/test,qa=quick,intensity=quick,"
+                    "capability=audit,mode=qa/test,qa=quick,intensity=quick,"
                     "depth=1,model=gpt-test,reasoning=low,approval=never",
                 ]),
                 "\t".join([
                     "2026-07-05T01:00:01+00:00", "open", "repo", worktree,
                     "legacy-opencode",
-                    "capability=sync-skills,mode=qa/test,qa=quick,intensity=quick,"
+                    "capability=audit,mode=qa/test,qa=quick,intensity=quick,"
                     "depth=1,model=provider/test,variant=low",
                 ]),
                 "\t".join([
                     "2026-07-05T01:00:02+00:00", "open", "repo", worktree,
                     "legacy-claude",
-                    "capability=sync-skills,mode=ops/verification,qa=quick,intensity=quick,"
+                    "capability=audit,mode=ops/verification,qa=quick,intensity=quick,"
                     "depth=1,model=sonnet,effort=medium",
                 ]),
             ]

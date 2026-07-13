@@ -13,7 +13,7 @@ plugin 채널(marketplace 콘텐츠 실물화 + `claude plugin marketplace add`/
 wrapping, `_plugin_action`)은 cycle 2 에서 `drivers/codex.py._plugin_action` 을 미러해
 채운다 — CLI 부재 시 SKIP, dry-run 시 두 명령 문자열만 보고, 성공 시 registered.
 
-싣기 가능(공식 확인, PRD 표 + `_internal/hooks_inventory.md`): skills(28)·agents(9)·
+싣기 가능(공식 확인, PRD 표 + `_internal/hooks_inventory.md`): skills(27)·agents(9)·
 `hooks/hooks.json`(채택 2 개, git-state-guard/artifact-guard). `.mcp.json`/`bin/` 은
 탑재 대상 없음(부재/비-self-contained, hooks_inventory 조사 결론).
 불가: settings.json 일반 키(`agent`·`subagentStatusLine` 만)·env·permissions·statusline·

@@ -13,6 +13,7 @@ inputs:
   - .agent_reports/spec/harness-layer-sync/ (interlock)
   - INSTALL_LAYOUT.md (실측·대체 대상)
   - runtime-currentness 검증 2026-07-12 (Claude/Codex/OpenCode plugin surface 공식 문서)
+  - root README 공개 진입점 진단 + GitHub reference brief 2026-07-13
 decisions_locked:
   - INST-D-1: 2-채널 하이브리드 — plugin 채널(소비) + installer CLI(dev·runtime-owned 표면), 병존 (사용자 확정 2026-07-12)
   - INST-D-2: CLI 진입 명령 = `harness` (한 단어 + 서브명령, fleet 동형; 사용자 확정 2026-07-12)
@@ -21,5 +22,7 @@ decisions_locked:
   - INST-D-5: Codex plugin 은 agents(.toml) 미탑재(공식 한계) — symlink projection 병행 유지
   - INST-D-6: plugin 탑재 hook — 채택 5종 완결(사이클 3: spec 파이프 3종 AGENT_HOME=PLUGIN_DATA env-prefix 재기준, canonical 무수정) / 제외 memory·statusline·dispatch·core-first 계열
   - INST-D-7: verify 는 채널-인지 — plugin 채널 미채택 머신에서 plugin check 명시 SKIP(ok), 등록+미설치·drift 는 실패 유지 (parity-loss 원칙)
+  - INST-D-8: root README = human-owned product landing page — 가치/설치/사용/런타임 차이를 앞세우고 내부 전수 지도는 canonical deep docs로 위임 (사용자 확정 2026-07-13)
+  - INST-D-9: sync-skills portable capability와 현역 runtime projection 퇴역 — prose hash sync 대신 manifest/projection/adaptation/conformance 결정론 검사 유지 (사용자 확정 2026-07-13)
 open:
   - INST-OPEN-4: OpenCode 복수형 migration — 로컬 1.17.13 단수형 정상, drift-watch check 상시 감시, 버전업 시 별도 사이클

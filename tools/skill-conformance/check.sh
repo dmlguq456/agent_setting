@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Deterministic skill-design conformance gate.
 # Combines scan.sh observations with the explicit invocation classification
-# registry so g7/sync-skills cannot silently accept a forbidden frontmatter flip.
+# registry so deterministic checks and drill g7 cannot silently accept a forbidden frontmatter flip.
 set -uo pipefail
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
+ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
+if [ -z "$ROOT" ]; then
+  ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
+fi
 SCAN="$SCRIPT_DIR/scan.sh"
 DEFAULT_POLICY="$SCRIPT_DIR/invocation-policy.tsv"
 POLICY="${SKILL_INVOCATION_POLICY:-$DEFAULT_POLICY}"

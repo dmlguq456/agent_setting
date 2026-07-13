@@ -4,7 +4,7 @@
 >
 > **자동 로드 메커니즘**: runtime adapter bootstrap 의 "Source of Truth"에 본 파일이 등재되어 세션 시작 또는 관련 작업 시 인지. QA·model-role·family-wide flag 관련 작업 시 메인 에이전트가 본 파일을 직접 read해 정의를 가져옴. Claude Code adapter 의 구현 파일은 `adapters/claude/CLAUDE.md`.
 >
-> **자동 propagation**: `/sync-skills`의 Step 5b.5가 본 문서를 canonical로 cross-doc grep해 drift 보고. `--auto-fix` flag로 자동 propagation 수행 (default는 report-only).
+> **검증 소유권**: manifest와 runtime projection은 `tools/build-manifest.py --check`와 adapter `sync-native-* --check`, adapter 경계는 `tools/check-adaptation-boundary.sh`, skill 정량 규범은 `tools/skill-conformance/check.sh`, 설치 표면은 `harness verify`가 결정론적으로 검사한다. 의미가 있는 prose 정합성은 문서 review가 소유한다.
 
 ---
 
@@ -186,7 +186,7 @@ contract before changing adapter-owned model maps, generated agents, or docs.
 
 ---
 
-## §3. Hard Cross-Doc Invariants (sync-skills `--check`가 자동 검사)
+## §3. Hard Cross-Doc Invariants
 
 1. `intensity`가 stage graph/depth를 선택하고, verification rigor(assurance budget)는 그 intensity에서 §1.1 표로 파생된다 — 사용자-facing `--qa` 축은 없다. 파생 rigor만으로 depth2 dispatch나 full pipeline을 열면 drift (rigor는 graph를 못 고른다).
 2. `quick`은 inline micro-plan, `plan-check-lite`, verify-lite를 뜻한다. 작은 작업마다 durable `plan.md`, 반복 QA loop, parallel reviewer fan-out을 강제하면 drift.
@@ -199,17 +199,18 @@ contract before changing adapter-owned model maps, generated agents, or docs.
 9. **의미↔규칙 경계 (2026-06-22, worklog-board 참사)**: 의미 판단을 규칙·토큰 매칭 스크립트로 내리지 말 것 — spec 이 "의미 판단"을 명시하면 구현이 그 의미를 capture 했는지 검증한다 (상세·검증 절차·3선택 = DESIGN_PRINCIPLES §0.7).
 10. **token pressure ⊥ intensity (2026-07-13, Ponytail 조사)**: token/context pressure는 출력 표현만 조절하며 stage graph·depth·dispatch·model role·verification rigor·필수 guard/input context를 줄이지 않는다. unknown/unsupported는 기존 파이프로 fail-open하고 normal/unknown/native/same-band prompt 주입은 0 byte다.
 
-새 invariant 추가는 본 섹션 list에 한 행 추가하면 sync-skills Step 5b.5의 자동 검사 list에 포함.
+새 invariant를 추가할 때 기계적으로 표현 가능한 부분은 해당 결정론 도구나 회귀 테스트에 함께 추가한다. 의미·표현 정합성은 source 문서 review에서 확인한다.
 
 ---
 
-## §4. 자동 fix 정책
+## §4. Cross-doc 검증 책임 경계
 
-`/sync-skills --auto-fix` (default는 report-only):
-- §3의 hard invariants 위반 발견 시 canonical wording을 다른 곳으로 propagate
-- _Wording 자체_가 다를 경우 (의미 동일·표현 차이): skip (사람 결정 사항)
-- _의미가 다른_ 명백한 drift: canonical로 강제 교체 + commit 안내
-- `--auto-fix --dry-run`으로 미리보기
+- manifest/name/path drift: `python3 tools/build-manifest.py --check`
+- runtime-native projection drift: 각 adapter의 `sync-native-* --check`
+- canonical↔adapter boundary: `tools/check-adaptation-boundary.sh`
+- skill 구조·invocation policy: `tools/skill-conformance/check.sh`
+- 설치된 runtime surface: `harness verify`
+- 가치 제안·정보 순서·의미가 같은지 여부: human review (자동 prose fix 없음)
 
 ---
 
@@ -413,7 +414,7 @@ scoping 비대칭 의도:
 | references/ depth | 1-depth (하위 디렉터리 0) | `ref_dir` / `ref_depth_ok` |
 | invocation frontmatter | 사용자 전용(manual-only) skill = `disable-model-invocation: true`; parent/pipeline 호출 또는 subagent preload 대상 = model-invoked(`false`/미지정); entry-router = model-invoked + 영문 "Use when" 트리거 병기 | `disable_model` / `invocation` / `use_when` |
 
-- **강제 경로**: 본 규범 위반은 `sync-skills --check` 가 `check.sh`(scan.sh 관측값 + invocation registry)로 자동 감지(§CORE-4 / `skills/sync-skills/references/finalize-and-hooks.md`). 신규·수정 스킬은 통과가 merge 전제. drill `g7_skill_conformance` 가 회귀 게이트.
+- **강제 경로**: 본 규범 위반은 `tools/skill-conformance/check.sh`가 `scan.sh` 관측값과 invocation registry를 대조해 결정론적으로 감지한다. 신규·수정 skill은 통과가 merge 전제이며 drill `g7_skill_conformance`가 회귀 게이트다.
 - **invocation 분류 계약**: `disable-model-invocation: true` 는 자동 추천 강도 조절값이 아니라 Claude의 programmatic Skill 호출과 subagent preload까지 막는 hard boundary다. 따라서 사용자가 `/name`으로만 시작해야 하는 manual-only workflow에만 쓴다. parent/pipeline이 호출하거나 subagent가 preload하는 skill은 직접 slash 호출 지원 여부와 무관하게 model-invoked로 남긴다. `user-invocable: false`는 `/` 메뉴 노출만 조절하는 별도 축이며 model invocation 차단 수단이 아니다. (C1-GATE b/c가 parent Skill-tool·실파이프 차단을 재현, 2026-07-13.)
 - **결정론 registry**: runtime-known 분류는 `tools/skill-conformance/invocation-policy.tsv`가 열거하고 `check.sh`·drill `g7_skill_conformance`가 양 Claude skill 트리에서 강제한다. 현재 parent-invoked sub-skill 13개는 모두 `disable_model=false`여야 하며, future manual-only skill은 registry에 `user-only`로 먼저 분류한 뒤 `true`를 쓴다.
 - **4축 철학·비용축 tenet 은 [DESIGN_PRINCIPLES §10](DESIGN_PRINCIPLES.md#10-skill-design-tenets-pocock-4축--predictability)** — 여기선 스캔 가능한 규범만 두고 tenet 은 중복 서술하지 않는다.
