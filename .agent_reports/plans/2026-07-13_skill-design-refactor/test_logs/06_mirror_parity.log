@@ -1,0 +1,11 @@
+COMMAND: adapters/codex/bin/preflight.sh verification-runner --timeout 60 -- bash -lc '<diff -rq; only skills/.sync_state.json allowed>'
+EXIT: 0
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=60
+Only in skills: .sync_state.json
+mirror_parity=PASS allowed_only=skills/.sync_state.json
+status=ok
+exit_code=0

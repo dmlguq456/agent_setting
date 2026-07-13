@@ -38,10 +38,7 @@ metadata:
 
 ### Trigger 신호 (자연어 발화 예시)
 
-- "배포 셋업" / "Vercel 셋업" / "배포 준비"
-- "env 변경" / ".env 파일 보강"
-- "도메인 연결" / "DNS 안내"
-- "migration 운영 배포" / "production DB migration"
+발화 → 자리 분류는 [Step 2](#step-2-자리-분기-발화-기반)의 단일 표를 적용.
 
 ### Default 옵션 권장값
 
@@ -49,7 +46,7 @@ metadata:
 
 ### Override 1순위 — autopilot 우회
 
-- 실제 배포 명령 실행은 _사용자 직접_ — `vercel deploy --prod` 같은 자리 본 skill 안 X
+- 실제 배포 명령 실행 경계는 [Step 2](#step-2-자리-분기-발화-기반) 적용 — 본 skill 은 안내만
 - `/autopilot-ship <args>` slash 직접 입력 — 컨펌 skip
 
 ## Context Auto-Detection
@@ -61,14 +58,7 @@ metadata:
 | `spec/ship.md` 부재 | **첫 ship setup** — 호스팅 선정 + CI/CD + env + domain |
 | `ship.md` 존재 | **재호출** — 발화 의도 분류 (env / domain / migration) 후 해당 자리만 |
 
-발화 → 자리 자동 분류:
-
-| 발화 | 추론 자리 |
-|---|---|
-| "배포 셋업" / "Vercel" | 첫 ship setup (전체) |
-| "env 변경" / "환경 변수" | env 보강 자리만 |
-| "도메인 연결" / "DNS" | domain 자리만 |
-| "migration 운영 배포" | DB migration 자리만 (destructive 위험 안내) |
+발화 → 자리 분류와 실제 배포 명령 실행 경계는 [Step 2](#step-2-자리-분기-발화-기반) 적용.
 
 ## Language Rule
 - Think in English internally. Write user-facing output in Korean.
@@ -92,7 +82,14 @@ metadata:
 
 ### Step 2: 자리 분기 (발화 기반)
 
-위 _Context Auto-Detection_ 의 _발화 → 자리_ 표 적용. 발화 모호 시 사용자 컨펌.
+발화가 모호하면 사용자 컨펌. **실제 배포 명령은 사용자가 직접 실행**하며, 본 skill 은 명령 안내만 한다.
+
+| 발화 | 추론 자리 |
+|---|---|
+| "배포 셋업" / "Vercel" | 첫 ship setup (전체) |
+| "env 변경" / "환경 변수" | env 보강 자리만 |
+| "도메인 연결" / "DNS" | domain 자리만 |
+| "migration 운영 배포" | DB migration 자리만 (destructive 위험 안내) |
 
 ### Step 3: 첫 ship setup (가장 흔함)
 
@@ -130,7 +127,7 @@ vercel link
 vercel deploy --prod
 ```
 
-또는 호스팅 별 명령. **배포 명령은 사용자가 직접 실행** (본 skill 은 명령 안내만).
+또는 호스팅 별 명령. 실행 경계는 [Step 2](#step-2-자리-분기-발화-기반) 적용.
 
 #### 3-6. `spec/ship.md` 작성
 
@@ -181,7 +178,7 @@ changelog:
 
 ## Forbidden Zones (명시 요청 없이 X)
 
-- 실제 배포 명령 (`vercel deploy` / `fly deploy` 등) — 안내만
+- 실제 배포 명령 (`vercel deploy` / `fly deploy` 등) — [Step 2](#step-2-자리-분기-발화-기반) 실행 경계: 안내만
 - 결제 정보·credit card 등록
 - DNS 직접 변경
 - 도메인 구매

@@ -1,0 +1,68 @@
+COMMAND: adapters/codex/bin/preflight.sh verification-runner --timeout 60 -- bash -lc 'set -u
+rc=0
+git diff --quiet -- skills adapters/claude/skills capabilities core tools loops || rc=1
+git diff --cached --quiet -- skills adapters/claude/skills capabilities core tools loops || rc=1
+echo "source_tree_worktree_diff_flag=$rc"
+base=$(git merge-base HEAD main)
+echo "merge_base=$base"
+actual=$(git diff --name-only "$base"..HEAD | sort)
+printf "%s\n" "$actual"
+expected=$(printf "%s\n" adapters/claude/skills/autopilot-ship/SKILL.md skills/autopilot-ship/SKILL.md)
+[ "$actual" = "$expected" ] || rc=1
+echo "non_source_worktree_status:"
+git status --short
+exit $rc'
+EXIT: 0
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=60
+source_tree_worktree_diff_flag=0
+merge_base=a8305be07c19ca1684e13daf4af2b867bc0db9e7
+adapters/claude/skills/autopilot-ship/SKILL.md
+skills/autopilot-ship/SKILL.md
+non_source_worktree_status:
+ M .agent_reports/plans/2026-07-13_skill-design-refactor/_internal/c1_gate_log.md
+?? profiles/c1-gate.yaml
+status=ok
+exit_code=0
+
+COMMAND: adapters/codex/bin/preflight.sh verification-runner --timeout 60 -- bash -lc 'set -u
+dir=.agent_reports/plans/2026-07-13_skill-design-refactor/test_logs
+count=$(find "$dir" -maxdepth 1 -type f | wc -l | tr -d " ")
+echo "artifact_file_count=$count"
+find "$dir" -maxdepth 1 -type f -printf '"'"'%f\n'"'"' | sort
+[ "$count" = 14 ]
+cmp "$dir/02_scan_skills.tsv" "$dir/03_scan_adapters_claude_skills.tsv"
+rg -n '"'"'no-op.*0|sediment.*0|premature-completion.*0|variance-bug.*0'"'"' "$dir/12_semantic_rubric.md"
+git diff --quiet -- skills adapters/claude/skills capabilities core tools loops
+echo "artifact_integrity=PASS source_tree_unchanged=PASS"'
+EXIT: 0
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=60
+artifact_file_count=14
+00_VERDICT.md
+01_runner_contract.log
+02_scan_skills.tsv
+03_scan_adapters_claude_skills.tsv
+04_scan_identical.log
+05_reference_depth.log
+06_mirror_parity.log
+07_build_manifest_check.log
+08_sync_skills_check.log
+09_completion_greps.log
+10_g7_drill.log
+11_capability_contracts.log
+12_semantic_rubric.md
+13_git_scope.log
+14:| `no-op` | 0 | PASS — extracted text is replaced by actionable authority pointers or stage-specific instructions; the new autopilot-ship pointers alter routing/ownership and are not default-behavior filler. |
+15:| `sediment` | 0 | PASS — old Plan Resolution/Language Rule/artifact-root/Required Reads·Reference Map remnants are absent in both trees; no stale duplicate route table remains around autopilot-ship. |
+16:| `premature-completion` | 0 | PASS — checkable completion and CONFIRM/Final Confirm boundaries remain in the router SKILL files; extraction did not hide terminal gates behind post-completion prose. |
+17:| `variance-bug` | 0 | PASS — must-have references name the file and the load stage, with mandatory wording where unconditional; examples/exemplars left behind simple pointers are optional support material, not must-have execution assets. |
+artifact_integrity=PASS source_tree_unchanged=PASS
+status=ok
+exit_code=0

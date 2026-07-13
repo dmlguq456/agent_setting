@@ -1,0 +1,9 @@
+name: c1-gate
+description: "skill-design-refactor C1 trial-flip isolated runtime probe"
+harness: claude
+model_role: fast reviewer
+fragments: []
+expose:
+  skills: [draft-strategy, code-test, autopilot-code, autopilot-draft]
+  agents: []
+  triggers: []

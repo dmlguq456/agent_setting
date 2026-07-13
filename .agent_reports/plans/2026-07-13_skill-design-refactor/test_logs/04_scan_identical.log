@@ -1,0 +1,9 @@
+COMMAND: adapters/codex/bin/preflight.sh verification-runner --timeout 60 -- bash -lc 'diff -u <(bash tools/skill-conformance/scan.sh skills) <(bash tools/skill-conformance/scan.sh adapters/claude/skills)'
+EXIT: 0
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=60
+status=ok
+exit_code=0

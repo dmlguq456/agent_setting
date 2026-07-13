@@ -1,0 +1,11 @@
+COMMAND: adapters/codex/bin/preflight.sh verification-runner --timeout 60 -- bash -lc '<references one-depth assertion>'
+EXIT: 0
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=60
+reference_dirs=34
+nested_reference_dirs=0
+status=ok
+exit_code=0

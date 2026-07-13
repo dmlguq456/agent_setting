@@ -1,0 +1,47 @@
+COMMAND: adapters/codex/bin/preflight.sh verification-runner --timeout 120 -- bash -lc 'set -u
+tmp=$(mktemp -d /tmp/sd10-g7.XXXXXX)
+trap '"'"'rm -rf "$tmp"'"'"' EXIT
+mkdir -p "$tmp/loops/drill/cases"
+cp -R loops/drill/cases/g7_skill_conformance "$tmp/loops/drill/cases/"
+ln -s "$PWD/tools" "$tmp/tools"
+ln -s "$PWD/skills" "$tmp/skills"
+DRILL_HOME="$tmp/loops/drill" AGENT_HOME="$PWD" DRILL_SKIP_CONFORMANCE=1 bash loops/drill/run.sh --adapter codex g7_skill_conformance
+rc=$?
+echo "== isolated drill artifacts =="
+find "$tmp/loops/drill/results" -type f -maxdepth 3 -print -exec sed -n '"'"'1,120p'"'"' {} \;
+exit $rc'
+EXIT: 0
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=120
+drill 대상 1개: g7_skill_conformance
+▶ g7_skill_conformance (work=/tmp/drill-g7_skill_conformance-d7BH)
+PASS: skill-conformance 정량 규범 (line_ok · ref_depth_ok · disable_model 파싱) 통과
+  → PASS (codex exit 0, 0|0|0|0)
+# Drill run 2026-07-13_1407
+
+| case | verdict | turns | in_tok | out_tok | cost$ |
+|---|---|---|---|---|---|
+| g7_skill_conformance | PASS | 0 | 0 | 0 | 0 |
+cleanup: drill tmp + 세션 detritus 제거 (adapter=codex)
+== isolated drill artifacts ==
+/tmp/sd10-g7.5rO1jT/loops/drill/results/2026-07-13_1407/g7_skill_conformance.transcript.txt
+/tmp/sd10-g7.5rO1jT/loops/drill/results/2026-07-13_1407/g7_skill_conformance.assert.txt
+PASS: skill-conformance 정량 규범 (line_ok · ref_depth_ok · disable_model 파싱) 통과
+/tmp/sd10-g7.5rO1jT/loops/drill/results/2026-07-13_1407/summary.md
+# Drill run 2026-07-13_1407
+
+| case | verdict | turns | in_tok | out_tok | cost$ |
+|---|---|---|---|---|---|
+| g7_skill_conformance | PASS | 0 | 0 | 0 | 0 |
+status=ok
+exit_code=0
+
+PARENT POST-COMMIT LIVE-ENTRY RECHECK
+COMMAND: AGENT_HOME="$PWD" DRILL_HOME=<isolated-tmp>/loops/drill DRILL_SKIP_CONFORMANCE=1 bash ~/.claude/loops/drill/run.sh --adapter codex g7_skill_conformance
+RESOLVED ENTRY: /home/Uihyeop/agent_setting/adapters/claude/loops/drill/run.sh
+RESULT: PASS — skill-conformance 정량 규범 (line_ok · ref_depth_ok · disable_model 파싱), exit 0
+RUN SUMMARY: turns=1, input_tokens=22401, output_tokens=95, cost=0
+NOTE: live entry는 main projection runner로 해석됐지만 AGENT_HOME·skills symlink·DRILL_HOME을 worktree/격리 위치로 고정했다. 위 repository worktree runner 재검은 동일 case를 static 0-turn으로 통과했다.
