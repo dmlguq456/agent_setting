@@ -244,7 +244,7 @@ per-project 메모는 두 layer 분리.
 
 - **root virtue = Predictability**: 스킬의 목표는 같은 _출력_ 이 아니라 같은 _과정_ 의 재현 — 같은 상황이면 같은 절차·같은 게이트가 돈다. 28스킬이 이미 이 골격 위에 🟢 서 있고, refactor 는 이 골격을 흔들지 않는 선에서만 움직인다 (behavior-preserving 의 근거).
 - **4축 레버** (설계를 조정하는 네 축):
-  1. **Invocation** — 도달성(reachability) gain 없는 resident description 은 context 낭비다. 순수 sub-skill(부모가 Skill-tool 로만 부르는 것)은 `disable-model-invocation` 으로 자동발화 표면에서 내린다. entry-router 는 model-invoked 로 남기되 영문 "Use when" 트리거를 병기해 도달성을 높인다.
+  1. **Invocation** — 도달성(reachability) gain 없는 resident description 은 context 낭비지만, invocation control은 호출 그래프를 보존한 뒤 최적화한다. 사용자가 `/name`으로만 시작해야 하는 manual-only workflow만 `disable-model-invocation: true`로 내린다. parent/pipeline이 Skill tool로 호출하거나 subagent가 preload하는 sub-skill은 그 flag가 programmatic 호출 자체를 막으므로 model-invoked로 유지한다. entry-router도 model-invoked로 남기되 영문 "Use when" 트리거를 병기해 도달성을 높인다. 메뉴 노출만 숨길 때는 orthogonal `user-invocable: false`를 검토한다. (C1-GATE b/c runtime 차단 실측, 2026-07-13.)
   2. **Information Hierarchy** — 3-rung progressive disclosure: SKILL.md 는 라우터·계약·mapping 표만, 상세 본문(worked example·delegate prompt·템플릿·실행 본문)은 `references/*.md` 로 밀어 필요할 때만 로드. references/ 는 1-depth 유지.
   3. **Steering** — leading concept(무엇을 하는지 앞머리 한 줄)와 checkable completion(끝났는지 눈으로/grep 으로 확인 가능한 완료 기준)로 조향한다. safety negation(파괴 작업 금지·게이트 미통과 시 중단 등 부정형 지시)은 정당한 steering 이지 no-op 이 아니다.
   4. **Pruning** — cross-skill 중복은 단일 authority(SoT) 한 곳 + pointer 로 접는다. 같은 규칙을 여러 SKILL.md 가 복사-서술하면 drift·sediment 의 근원 → SoT 지정 후 나머지는 _파일명+시점+의무_ 를 유지한 포인터로.

@@ -54,7 +54,7 @@ metadata:
 | 모드 | 호출 형태 | 트리거 |
 |---|---|---|
 | `translate` | `translate <원본 경로> → <대상 경로>` | 산출물의 _주 언어_ 가 사용자 작업 언어와 다른 경우 _만_. 예 — 영문 paper draft 의 한국어 검토 mirror |
-| `polish` | `polish <문서 경로>` | 산출물의 _언어 자체_ 는 맞는데 _표기 일관성·판교체·번역체·가독성_ 에서 어색할 때. 사용자가 직접 보는 자리 + `--qa standard` 이상에서 호출 |
+| `polish` | `polish <문서 경로>` | 산출물의 _언어 자체_ 는 맞는데 _표기 일관성·판교체·번역체·가독성_ 에서 어색할 때. 사용자가 직접 보는 자리 + intensity standard 이상에서 호출 |
 | `review` | `audit <문서 경로>` 또는 `audit <원본>,<대상>` | 산출물을 수정하지 않고 _가독성·일관성·번역체·판교체_ 만 보고서로 받고 싶을 때. read-only |
 
 판단 후 **즉시**: `<agent-home>/agent-modes/editorial/{mode}.md` Read.

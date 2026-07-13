@@ -2,10 +2,9 @@
 
 > plan.md 의 checkable step 1:1. 미체크 상태로 초기화. 순서 = CORE → C2 → C3 → C1 → 회귀.
 >
-> **⚠️ BLOCKED (2026-07-13, SD-6 게이트 실행 중 발견)**: `_internal/BLOCKING_FINDING.md` — root `skills/`
+> **✅ RESOLVED (2026-07-13)**: `_internal/BLOCKING_FINDING.md`가 지적한 root `skills/`
 > 는 Claude 런타임 live source 가 아니다(`adapters/claude/skills/` 가 진짜 SoT, manifest.json 도 거기만
-> glob). CORE+Cluster 2 는 계획대로 완료·커밋(`cd48b25`)했으나 **live 런타임엔 미반영**. Cluster 3·1 은
-> 같은 오류 반복 방지를 위해 **중단** — spec back-jump 필요(대상 트리 재확정 후 재개).
+> glob). PRD v2 back-jump로 live tree를 정본, root tree를 mirror로 확정했고 양 트리 반영·검증을 완료했다.
 
 ## CORE — 설계 계약 core-first (SD-3·SD-4)
 - [x] CORE-1 `core/CONVENTIONS.md` §5.6a Skill-Design 정량 규범 표 추가 (줄 수/depth/frontmatter + DESIGN_PRINCIPLES 상호 포인터)
@@ -13,7 +12,7 @@
 - [x] CORE-2 `core/DESIGN_PRINCIPLES.md` 부록 이력 1줄
 - [x] CORE-3 `roles/modes/design/_design_rules.md` §시각 자가검증 루프 = SoT 지정 + 4-scope(ui/webapp·slide·icon·diagram) 렌더 표 1회 흡수
 - [x] CORE-4 scan.sh → `tools/skill-conformance/scan.sh` stable 위치 이전 (git mv, executable 유지)
-- [x] CORE-4 `sync-skills` `--check` 에 scan.sh 정량 규범 lint 스텝 편입 (finalize-and-hooks.md Step 6c + SKILL.md Step 표)
+- [x] CORE-4 `sync-skills --check`에 `check.sh` 구조+invocation registry gate 편입 (초기 scan-only lint를 closure에서 상향)
 - [x] CORE-4 drill `loops/drill/cases/g7_skill_conformance/{config,fixture.sh,assert.sh}` 신규 (AXIS=static, run.sh static-branch, README 등재, PASS 검증)
 - [x] CORE 완료: mirror 적용(cd48b25 diff → adapters 트리 patch 적용) + `python3 tools/build-manifest.py --check`(up-to-date) + `diff -rq skills/ adapters/claude/skills/`(.sync_state.json만 차이) + scan.sh 양 트리 출력 일치 확인 (2026-07-13 재개)
 
@@ -59,7 +58,14 @@
 - [x] C1-P7 `post-it/SKILL.md:14` wording 완화 — "명시 호출할 때만 변경" → "주 변경 경로는 명시 호출 + nudge-and-boundaries.md proactive-nudge 계약에 따른 model-invoked auto-record" (model-invoked frontmatter 와 정합, flip 아님)
 - [x] C1-P4 entry-router 12(autopilot-*·analyze-*·audit) description 첫 문장 영문 "Use when…" 병기 (한국어 blurb·metadata.blurb 유지)
 - [x] C1-P4 완료: scan.sh 12 entry-router `use_when=Y, desc_has_hangul=Y` 확인(양 트리)
-- [x] C1 완료(P4·P7+게이트 판정): 양 트리 mirror-parity(diff .sync_state.json 만) + `build-manifest.py --check` 통과. **flip 자체는 runtime handoff 실패로 0개 안전 종결; invocation 계약 재결정은 잔여**
+- [x] C1 완료(P4·P7+게이트 판정): 양 트리 mirror-parity(diff .sync_state.json 만) + `build-manifest.py --check` 통과. **flip 자체는 runtime handoff 실패로 0개 안전 종결; invocation 계약은 아래 closure에서 확정**
+
+## C1 invocation 계약 closure (2026-07-13 follow-up)
+- [x] 공식 Claude Code 문서 재확인 — disable flag가 model Skill 호출·subagent preload를 차단하고 user slash만 보존
+- [x] core 계약 수정 — user-only manual만 `true`, parent/pipeline/preload는 model-invoked 유지, `user-invocable`은 orthogonal
+- [x] parent-invoked 13개 분류 registry 추가 + 양 Claude skill 트리 `disable_model=false` 강제
+- [x] g7 TODO 제거 — live positive gate + parent/user-only 양방향 failure control 통과
+- [x] sync-skills·README·Claude plugin projection 동기화
 
 ## 최종 회귀 (SD-10)
 - [x] variance-bug=0 재검 — pointer 3요소(파일+시점+의무) 유지 확인(C2-5 Reference Index 리뷰), `grep "Required Reads\|Reference Map"` 잔존 0
@@ -70,7 +76,5 @@
 - [x] repository drill runner `g7_skill_conformance` PASS (exit 0, static 0 turn/token/cost); Codex-native loop executable projection은 manual-only라 격리 `DRILL_HOME`에서 repo runner 사용
 
 ## 잔여 항목 (다음 사이클 인계)
-- invocation 계약/runtime realization 결정 — 현 Claude runtime에서 `disable-model-invocation: true`는 slash를 보존하지만 Skill-tool과 실제 pipeline handoff를 막으므로, 13개 pure sub-skill flip 목표와 충돌
-- `sync-skills --check` state drift — `skills/.sync_state.json`에 누적 변경 36개 + 신규 `agents/memory-scout` 1개 미반영. 이번 residual cycle 범위를 넘어 README/state 정식 sync 필요
 - `capabilities/*.md` 계약 drift 14개 — live SKILL은 intensity-derived rigor인데 portable capability argument shape에는 폐지된 별도 `--qa` 축 잔존. 불변식에 따라 자동 수정하지 않음; `test_logs/11_capability_contracts.log`
 - Codex depth-2 parity gap — 격리 `CODEX_HOME` worker 실행·file handoff는 정상이나 liveness가 실행 중 worker를 DEAD로 오판했고, workspace-write child는 main repo 아래 Git worktree metadata에 쓸 수 없어 parent commit 수확이 필요

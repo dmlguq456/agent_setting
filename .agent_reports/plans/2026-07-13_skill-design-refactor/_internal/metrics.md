@@ -20,3 +20,9 @@
 - `preflight.sh liveness`는 격리 projection의 실제 실행 프로세스와 JSONL 진행 중에도 `DEAD`를 반환했다. 실행 실패가 아니라 transcript/process discovery false negative로 관측했으며 정확한 하위 원인은 미확정이다.
 - `workspace-write` child의 commit은 `/home/Uihyeop/agent_setting/.git/worktrees/skill-design-c1/index.lock`가 sandbox 밖이라 실패했다. parent가 수확·검토·commit하는 방식으로 닫았다.
 - depth 3+는 계약상 사용하지 않았다.
+
+## Invocation contract closure separability (2026-07-13)
+
+- core의 분류 문장과 g7의 expected frontmatter는 같은 semantic anchor다. 한쪽만 독립 stage에서 바꾸면 변경 중간에 현재의 올바른 13개 `false` 상태를 잘못 FAIL시키거나, 반대로 낡은 규범을 계속 PASS시키므로 boundary-coupled로 판정했다.
+- invocation contract → registry → checker → g7 fixture/assert를 한 브랜치에서 inline 결합 수정했다. 분리 가능한 검증은 syntax, live positive gate, synthetic negative/positive controls로 각각 독립 실행했다.
+- dispatch 인프라 자체는 수정하지 않았다. full drill runner는 Codex `loop-info drill`의 manual-only 계약에 따라 실행하지 않고 0-turn static fixture/assert만 verification-runner로 직접 실행했다.

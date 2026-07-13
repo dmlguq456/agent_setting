@@ -2,7 +2,7 @@ project_name: skill-design-refactor
 component: skill-design-refactor   # 별도 컴포넌트 (repo spec/prd.md = Unified Memory System, 무관)
 created: 2026-07-13
 mode: [library]
-scope_note: "28스킬 Pocock 4축 진단(skill_design_audit)의 정합 튜닝 refactor — Cluster 2(cross-skill SoT 통합) → Cluster 3(sprawl 추출) → Cluster 1(invocation 재분류·검증 게이트 후). 4축+Predictability 적극 표준 채택, 하네스가 원칙보다 나간 지점(auto-activation hook 우회)은 유지."
+scope_note: "28스킬 Pocock 4축 진단(skill_design_audit)의 정합 튜닝 refactor — Cluster 2(cross-skill SoT 통합) → Cluster 3(sprawl 추출) → Cluster 1(invocation runtime 검증·분류 확정). 4축+Predictability 적극 표준 채택, 하네스가 원칙보다 나간 지점(auto-activation hook 우회)은 유지."
 inputs:
   - analysis_project/code/skill_design_audit.md           # 28스킬×4축 verdict·Step7 P1~P8·§6 Cluster 매핑
   - analysis_project/code/skill_design_audit_per_skill.md  # file:line 근거 (Plan Resolution 복제·flip 검증 대상)
@@ -11,24 +11,24 @@ inputs:
   - research/skill-design-principles/04_technical_deep_dive.md  # 4축 메커니즘(attention budget 근거)
   - _internal/skill_design_audit/scan.sh (audit T3, 기존)   # 정량 규범 전수 스캔 — lint 승격 재사용
 phases:
-  spec: done              # PRD v2 — 편집 대상 live 트리 정정 + 미러 불변식(SD-11)
+  spec: done              # PRD v2 + runtime amendment — live 트리 정정 + invocation 계약 반영
   scaffolding: n/a        # 기존 skills/ 리팩터 — 신규 scaffold 없음
   design: n/a             # instruction 파일 리팩터 — 시각 UI 없음
-  dev: partial            # 잔여 사이클 실행: C1-GATE a PASS/b·c FAIL→D1 flip 0개, autopilot-ship dedupe·SD-10 rubric/g7 완료. 잔여 = invocation 계약/runtime 전략 + sync-state 36변경·1신규 + capabilities 14개 --qa drift
-spec_version: v2          # _internal/versions/v1/prd.md 스냅샷 보존 후 v2 반영
+  dev: partial            # C1 invocation 계약+g7 closure 완료. 잔여 = autopilot-ship Use when + capabilities --qa drift + adaptation boundary + 상태/worktree 정리
+spec_version: v2          # v2 active PRD에 C1 runtime 결과를 within-spec amendment로 반영
 back_jump:
   - from: dev
     to: spec
     date: 2026-07-13
     reason: "BLOCKING_FINDING — audit/PRD v1 이 legacy root skills/ 를 대상으로 삼았으나 live Claude source 는 adapters/claude/skills/*/SKILL.md. main 기준 두 트리 동일 확인돼 audit 진단 재사용, 대상 경로만 정정 + 미러 불변식(SD-11) 추가."
     done_before_halt: "CORE(CORE-1~4)+Cluster2(C2-1~5) root skills/ 편집 완료·커밋 cd48b25 — 재개 시 adapters 트리로 미러 적용이 첫 항목"
-last_updated: 2026-07-13  # v2 PRD — dev resumable (back-jump 기록)
+last_updated: 2026-07-13  # invocation closure amendment + 잔여 범위 갱신
 decisions_locked:
   - SD-1: 실행 순서 Cluster 2(SoT) → 3(sprawl) → 1(invocation 검증 후)
   - SD-2: Plan Resolution SoT = autopilot-code 단일 authority, 5개 pointer (grep "keep in sync"=0)
   - SD-3: 설계 계약 = 정량 규범 CONVENTIONS / 4축 tenet DESIGN_PRINCIPLES 분할 + 상호 포인터
-  - SD-4: 정량 규범 강제 = scan.sh lint 승격 + drill 회귀 케이스 등재
-  - SD-5: Cluster 1 flip = 검증 게이트(slash·Skill-dispatch·실파이프) 통과분만, 실패분 model-invoked 유지 폴백
+  - SD-4: 정량 규범 강제 = check.sh 구조+invocation registry gate + g7 회귀 케이스
+  - SD-5 (runtime amendment): manual-only만 disable=true; parent/pipeline/preload 대상은 model-invoked 유지. 현재 13개는 parent-invoked
   - SD-6: 각 Cluster 완료 시 sync-skills + adapter doctor/parity mirror 검증 의무
   - SD-7: 원칙-하네스 충돌 3건(auto-activation hook 우회·한국어 blurb·hook 라우팅) 유지
   - SD-8: references/ 추출 시 1-depth 불변(scan.sh 재확인), autopilot-design 우선
@@ -37,5 +37,5 @@ decisions_locked:
   - SD-11 (v2): 편집 대상 = adapters/claude/skills (live realization SoT), root skills/ = 미러. 양 트리 동일 적용·완료 grep 양 트리, diff -rq 차이는 .sync_state.json 만 허용. 각 Cluster capabilities/*.md 계약 drift 점검(어긋나면 표면화, 자동수정 금지)
 open_decisions: []   # 전부 resolved (아래)
 decisions_resolved:
-  - D1: 게이트 결과 따름 (사용자 확정 2026-07-13) — trial-flip 3절차 PASS 시 13개 전체 flip, 일부 FAIL 시 통과분만 (SD-5 정책 그대로, 범위는 게이트 실행 결과가 확정)
+  - D1: runtime gate 결과 확정 — slash 호출만 생존, parent Skill-tool·실파이프는 차단. 13개는 parent-invoked로 model invocation 유지
   - D3: 영문 "Use when…" 트리거 병기 (사용자 확정 2026-07-13) — 한국어 blurb 유지 + 영문 트리거 추가, entry-router 한정 (대체 아님)

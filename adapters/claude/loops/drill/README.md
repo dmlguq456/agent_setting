@@ -42,6 +42,7 @@ RUN_JUDGE=1 <agent-home>/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
 | mem_builtin_guard | 내장 file 메모리 직접 write → builtin-memory-guard hard-block (§0.5) [memory] | 내장 메모리 파일 부재 |
 | mem_distill_e2e | 자동증류 실배선 e2e — dispatch→worker 분사→격리 store 레코드+marker (2026-07-03 migration 파손 회귀) [memory] | marker 전진 (미전진 = 배선 회귀 FAIL; claude 전용, 비클로드 adapter 는 SKIP) |
 | a_postedit_spec_sync | 자잘 직접 코드수정(epoch)이 spec 서술 stale → 코드+prd 사후 동기화 (CLAUDE §3; spec-sync-nudge hook 결정론 backstop) [spec] | 코드 50 + prd 50 동기화 (30 잔존 = FAIL) |
+| g7_skill_conformance | skill-design 정량 규범(body <500·references 1-depth·invocation frontmatter) lint (CONVENTIONS §5.6a, SD-4) [static] | `check.sh` 양 Claude 트리 PASS + parent-invoked 13개 `disable_model=false` + user-only만 `true`; 양방향 failure control |
 
 ### growing 케이스 (cases_growing/ — 2회 연속 PASS 후 frozen 승격)
 

@@ -2,13 +2,14 @@
 
 > mode: **library** · component spec (repo 루트 spec = unified-memory-system, 무관) · 작성 2026-07-13 v1
 > · **v2 2026-07-13** (편집 대상 = live 트리 `adapters/claude/skills/` 정정 + root `skills/` = 미러 불변식. back-jump 사유: dev Cluster 2 실행 중 `BLOCKING_FINDING.md` — audit/PRD v1 이 legacy root `skills/` 를 대상으로 삼았으나 live Claude source 는 `adapters/claude/skills/*/SKILL.md`. 단 main 기준 두 트리 내용 동일이 확인돼(§1.5) audit 진단·file:line 근거는 live 에 유효 — 재감사 불요, 대상 경로만 정정.)
+> · **runtime amendment 2026-07-13** (C1 runtime gate 결과 반영: `disable-model-invocation`은 context 최적화 힌트가 아니라 programmatic Skill 호출·subagent preload를 막는 hard boundary. manual-only와 parent-invoked를 분리하고 13개 parent-invoked는 model-invoked 유지.)
 > 입력: `analysis_project/code/skill_design_audit.md`(28스킬×4축 진단·Step7 P1~P8·§6 Cluster 인계) · `skill_design_audit_per_skill.md`(file:line 근거) · `research/skill-design-principles/`(00_briefing·02_standards·04_technical_deep_dive·cards — Pocock 4축 SoT)
 > 본 문서는 청사진(PRD). 구현은 `/autopilot-code --mode refactor` (산출물 `plans/`).
 > **방향(사용자 확정 2026-07-13)**: Pocock 4축(Invocation/Information Hierarchy/Steering/Pruning) + root virtue **Predictability** 를 보수적 cherry-pick 이 아니라 **적극 표준 채택**. 단 하네스가 원칙보다 더 나간 지점(auto-activation hook 우회 등)은 **유지가 기본** — 원칙 쪽 회귀 금지, 충돌은 §Decision 에 명시.
 
 ## 0. 한 줄
 
-28스킬 진단(`skill_design_audit.md` §4 P1~P8)이 수렴한 두 gap — **Invocation systemic**(순수 sub-skill 13개 오분류) + **Pruning 중복**(cross-skill SoT 물리 복제·장문 sprawl) — 을 Pocock 4축을 정식 설계 계약으로 앉힌 위에서 **Cluster 2(SoT 통합·즉시) → Cluster 3(sprawl 추출) → Cluster 1(invocation 재분류·검증 게이트 후)** 순서로 정합 튜닝한다. 구조 도입이 아니라 정합성 튜닝(audit §0 "한 줄 결론").
+28스킬 진단(`skill_design_audit.md` §4 P1~P8)이 제기한 두 gap — **Invocation systemic**(13개 sub-skill의 호출 성격 미검증) + **Pruning 중복**(cross-skill SoT 물리 복제·장문 sprawl) — 을 Pocock 4축을 정식 설계 계약으로 앉힌 위에서 **Cluster 2(SoT 통합·즉시) → Cluster 3(sprawl 추출) → Cluster 1(invocation runtime 검증·분류 확정)** 순서로 정합 튜닝한다. C1 실측 결과 13개는 parent/pipeline 호출 대상이므로 model-invoked 유지가 올바른 계약이다.
 
 ## 1. 배경 — 진단이 수렴한 것
 
@@ -17,7 +18,7 @@ audit `skill_design_audit.md` §0 verdict 분포:
 | 항목 | 🟢 | 🟡 | 🔴 | 읽기 |
 |---|---|---|---|---|
 | Step 0 · Predictability | **28** | 0 | 0 | root virtue 는 이미 전 스킬 달성 — refactor 가 흔들면 안 되는 골격 |
-| ① Invocation | 0 | 28† | 0† | 전 스킬 model-invoked + "Use when" 트리거 부재. 순수 sub-skill 13개는 "worst of both worlds"(context 지불+auto-reach gain 0) |
+| ① Invocation | 0 | 28† | 0† | 진단 당시 전 스킬 model-invoked + "Use when" 트리거 부재. 13개 sub-skill은 C1 runtime gate에서 parent/pipeline 호출 대상임이 확인돼 model-invoked 유지로 재분류 |
 | ② Information Hierarchy | 18 | 9 | 1 | autopilot-design(315줄) 유일 🔴 |
 | ③ Steering | 19 | 9 | 0 | negation 8건 대부분 load-bearing safety invariant — 재작성 대상 소수 |
 | ④ Pruning | 3 | 24 | 1 | duplication 25/28 — 위험한 건 cross-skill SoT 복제뿐 |
@@ -45,7 +46,7 @@ audit `skill_design_audit.md` §0 verdict 분포:
 `adapters/claude/skills/*/SKILL.md` 는 portable `capabilities/*.md` 계약의 Claude realization 이다(`capabilities/README.md`: "Claude Code realizes these capabilities through adapter-owned concrete Skill files"). 따라서 각 Cluster 편집 시 **해당 스킬의 SKILL.md 변경이 대응 `capabilities/<name>.md` 계약 서술과 어긋나는지 확인**한다:
 
 - **어긋나지 않으면**: 진행(대부분의 SoT pointer 화·sprawl 추출은 realization 디테일이라 portable 계약 불변).
-- **어긋나면**: **자동 수정 금지** — "계약 갱신 항목"으로 plan 에 표면화(capabilities 계약은 별도 결정 대상). 특히 Cluster 1 invocation flip(`disable-model-invocation`)은 capability 의 invocation 성격 서술과 직접 맞닿으므로 flip 대상 스킬마다 capabilities 계약 정합을 명시 점검.
+- **어긋나면**: **자동 수정 금지** — "계약 갱신 항목"으로 plan 에 표면화(capabilities 계약은 별도 결정 대상). 특히 Cluster 1 invocation 분류는 capability 의 호출 그래프와 직접 맞닿으므로 manual-only/parent-invoked 판정마다 capabilities 계약 정합을 명시 점검.
 
 ## 2. 설계 계약의 앉을 자리 (필수 §1)
 
@@ -65,8 +66,8 @@ audit `skill_design_audit.md` §0 verdict 분포:
 CLAUDE.md §0.5 결정론 우선 원칙에 따라 **가능한 부분은 스크립트화**하고 의미 판단만 리뷰에 남긴다.
 
 - **재사용 자산**: `.agent_reports/analysis_project/code/_internal/skill_design_audit/scan.sh` 는 이미 존재(audit T3, 확인 완료). Step 1-2 정량 규범 전수 스캔(줄 수·references/ depth·invocation type·"Use when" 트리거 유무)을 `scan_raw.tsv` 로 출력한다.
-- **강제 방법**: scan.sh 를 harness 상시 lint 로 승격 — 신규 skill 추가 시 (a) `SKILL.md body <500줄` (b) `references/ 1-depth` (c) `invocation frontmatter`(model-invoked 이면 "Use when" 트리거 유무, 순수 sub-skill 이면 `disable-model-invocation`) 자동 스캔. 위치 후보: `sync-skills` 스킬 파이프 또는 `hooks/` 정합 가드에 lint 훅으로 편입(구현 단계 결정).
-- **drill 회귀 케이스 후보**: audit §6 "refactor 후 본 audit rubric 재적용(drill 회귀 후보)". 정량 규범 위반(500줄 초과·2-depth·순수 sub-skill 이 model-invoked 잔존)을 drill 케이스로 등재해, 지침 파일 수정 후 회귀를 조기 감지(CLAUDE.md 도메인 트리거 "지침 파일 수정·커밋 후" 행과 정합).
+- **강제 방법**: `scan.sh` 관측값과 `tools/skill-conformance/invocation-policy.tsv` 분류를 합성하는 `check.sh`를 harness 상시 lint 로 사용한다 — 신규 skill 추가 시 (a) `SKILL.md body <500줄` (b) `references/ 1-depth` (c) manual-only=`disable-model-invocation: true`, parent/pipeline/preload=`false`/미지정, entry-router=model-invoked+"Use when"을 자동 검사한다. 분류되지 않은 `true`는 실패한다.
+- **drill 회귀 케이스**: `g7_skill_conformance`가 양 live tree를 검사하고, parent-invoked의 잘못된 `true`와 manual-only의 누락된 `true`를 각각 거부하는 negative control 및 올바른 manual-only positive control을 실행한다.
 - **의미 판단은 리뷰**: Step 0·3-6(Predictability·failure-mode 판정)은 스크립트화 불가 — plan-review/audit 자리에서 rubric(`RUBRIC_BRIEF.md`)으로 in-session 판정 유지.
 
 ## 3. Cluster별 refactor 청사진 (필수 §2)
@@ -100,21 +101,18 @@ audit §6 매핑 그대로: **Cluster1=P1+P4+P7, Cluster2=P2+P5, Cluster3=P3+P6*
 - **이어서(P6)**: draft-refine(278·delegate prompt :60-207) · autopilot-ship(241) · design-tokens(212·70줄 exemplar :41-110) · autopilot-apply(190)의 worked example/delegate prompt/템플릿을 각 `references/` 로 추출.
 - **완료 기준(checkable)**: `scan.sh` 재실행 시 (a) 각 파일 body 라인수 감소(특히 autopilot-design <315, 목표 <200급) (b) references/ **1-depth 유지**(2-depth 중첩 0 — scan.sh 재확인). 진단 §5 강점 3("progressive disclosure 이미 구현")을 회귀시키지 않음.
 
-### 3.3 Cluster 1 · Invocation 재분류 (P1+P4+P7) — **검증 게이트 후**
+### 3.3 Cluster 1 · Invocation 분류 확정 (P1+P4+P7) — **runtime gate 완료**
 
-**대상**: 순수 sub-skill **13개** — code-* 5(execute/plan/refine/report/test) + design-* 6 + draft-refine + draft-strategy → `disable-model-invocation: true` 전환 후보(audit §4 P1). 근거: resident model-invoked description 이 도달성 gain 없이 context 지불("worst of both worlds", audit P1; 04 Invocation (c) "invocation 은 어떤 load 를 지불하느냐의 경제 문제").
+**대상**: code-* 5(execute/plan/refine/report/test) + design-* 6 + draft-refine + draft-strategy의 13개 sub-skill. C1 trial에서 (a) 사용자 `/draft-strategy` 호출은 생존했지만, (b) parent Skill-tool 호출과 (c) autopilot-draft 실파이프 handoff는 `disable-model-invocation` 때문에 명시적으로 실패했다(`_internal/c1_gate_log.md`). pilot flag는 즉시 원복했다.
 
-**검증 게이트 필수(연구팀 그룹 C dissent 근거 + runtime-currentness gate)** — flip 전 아래 재현 가능 절차를 통과해야 한다:
+**확정 계약**:
 
-순수 pre-flip 점검만으로는 `disable-model-invocation` 하 동작을 관측할 수 없다 — **희생 스킬 1개를 실제로 trial-flip 한 뒤 관측 → 실패 시 즉시 revert** 하는 절차로 실행한다:
+- `disable-model-invocation: true`는 사용자가 `/name`으로만 시작해야 하는 **manual-only** workflow에만 사용한다.
+- parent/pipeline이 Skill tool로 호출하거나 subagent가 preload하는 skill은 **parent-invoked**이며 model-invoked(`false`/미지정)로 유지한다. `user-invocable: false`는 slash 메뉴 노출만 조절하는 별도 축이다.
+- 현재 13개는 모두 parent-invoked다. `tools/skill-conformance/invocation-policy.tsv`가 분류 SoT이고 `check.sh`와 g7이 양 Claude skill tree에서 `disable_model=false`를 강제한다.
 
-- **(a) slash 명시 호출 생존**: Skill-tool dispatch 경로가 없는 **draft-strategy** 1개를 trial-flip(`disable-model-invocation: true`) → headless `claude -p "/draft-strategy <args>"` slash 호출이 정상 동작하는지 관측. per-skill :170 "`/code-test` slash 경로는 disable-model-invocation 에서도 유지되나" — 문서상 유지되나 실측 필요. 실패 시 revert.
-- **(b) parent Skill 도구 명시 호출 무영향**: **code-test** 1개를 trial-flip → autopilot-code conductor 의 depth-2 **Skill-tool dispatch** 경로(현재 code-plan/code-execute 등을 Skill 로 호출)가 생존하는지 관측. per-skill :170 "autopilot-code conductor 의 depth-2 Skill-tool dispatch 경로가 disable flag 하에 생존하는지는 P1 검증 대상 — flip 전 확인 필요". 실패 시 revert.
-- **(c) 실파이프 1회 통과**: (a)(b) 가 모두 PASS 한 뒤, 최소 1개 파이프(예: autopilot-code standard 사이클)를 실제로 돌려 code-plan→execute→test→report 4스테이지 통과 확인 — 이 시점의 code-* flip 상태 그대로 나머지 12개로 확장.
+**완료 기준(checkable)**: 공식 문서+runtime 실측 로그, 13개 registry 정확성, 양 tree `check.sh` PASS, parent/user-only failure control을 포함한 g7 PASS. 새 manual-only skill은 registry 분류와 `true`를 같은 변경에서 추가해야 한다.
 
-**폴백 조건(게이트 실패 시)**: P1 범위를 **게이트 통과 스킬의 부분집합으로 축소**한다(audit P1 "검증 실패 시 P1 범위 축소"). 예: (a)만 통과하고 (b) Skill-tool dispatch 가 깨지면, autopilot-code 가 Skill 호출하는 code-* 5개는 model-invoked 유지, Skill 경로 없는 draft-strategy 등만 flip. 게이트는 병렬 검증 트랙으로 분리(audit §6 "병렬 검증 트랙").
-
-- **완료 기준(checkable)**: 검증 로그(3절차 각 PASS/FAIL) + frontmatter 변경 diff(`disable-model-invocation: true` 추가된 스킬 목록). **flip 정본 = `adapters/claude/skills/*/SKILL.md` frontmatter**(manifest.json 이 읽는 트리 — trial-flip 게이트가 유의미하려면 이 트리여야 함, §1.5). root `skills/*` 는 미러. flip 대상 스킬마다 대응 `capabilities/*.md` invocation 성격 서술 정합을 §1.5.1 대로 점검(어긋나면 계약 갱신 항목 표면화).
 - **P7(post-it wording)**: `post-it/SKILL.md:14` "호출할 때만 변경" wording ↔ 실제 model-invoked+proactive-nudge 계약 불일치를 문구 완화 or disable flag 로 정합(audit P7).
 - **P4(entry-router 트리거)**: §Decision 참조 — 별도 정책 결정 항목.
 
@@ -122,7 +120,7 @@ audit §6 매핑 그대로: **Cluster1=P1+P4+P7, Cluster2=P2+P5, Cluster3=P3+P6*
 
 `skills/` 수정(특히 frontmatter invocation 변경, references/ 신설)은 **Codex/OpenCode adapter projection 과 한 몸**이다 — `sync-skills` 스킬이 `manifest.json` 을 재생성하고, adapter 하위 skill 미러를 갱신한다(기억: manifest.json = agent_setting/ 최상단 인덱스, 6키 skills(28)/agents(9)…).
 
-- **각 Cluster 완료 시 `sync-skills` 실행 의무**: (Cluster 2) pointer 교체·공유 reference 신설 → skill 본문 변경 → 미러 재투영. (Cluster 3) references/ 신설 → adapter skill 디렉터리 파일 투영 갱신. (Cluster 1) frontmatter invocation 변경 → manifest invocation 필드·adapter 미러 재생성.
+- **각 Cluster 완료 시 `sync-skills` 실행 의무**: (Cluster 2) pointer 교체·공유 reference 신설 → skill 본문 변경 → 미러 재투영. (Cluster 3) references/ 신설 → adapter skill 디렉터리 파일 투영 갱신. (Cluster 1) invocation registry/checker와 관련 adapter/plugin 문서를 동기화하고 manifest·mirror를 재검증.
 - **parity mirror 영향**: parity 미러 불변식(기억 durable, 2026-07-06 실측) — tools/*·frozen 케이스 변경 시 adapters/claude 하위 concrete 미러 byte-identical 동기화 필수, 누락 시 derived 가드(`check_claude_loop_projection`·`check_claude_tool_projection`)가 FAIL. skills/ 변경도 동형으로 3-harness(claude/codex/opencode) 1:1:1 매핑(기억: doctor check skills 28/commands 28/agents 9)을 유지해야 한다.
 - **README 대시보드 갱신**: `sync-skills` 가 README.md 워크플로우 대시보드를 자동 갱신(CLAUDE.md "워크플로우 맵: sync-skills 자동"). Cluster 별 완료 후 대시보드 재생성으로 parity 반영.
 - **검증**: 각 Cluster merge 전 adapter `doctor`/`check-runtime-projection` 통과 확인(dispatch-profiles 선례 §6 "활성 게이트" 패턴 승계).
@@ -131,17 +129,17 @@ audit §6 매핑 그대로: **Cluster1=P1+P4+P7, Cluster2=P2+P5, Cluster3=P3+P6*
 
 - **PRD versioning**: `_internal/versions/v{N}/` — 선행 CLAUDE.md 컨벤션(§0b 버전 트래킹 표: "spec/prd.md 등 청사진 → autopilot-spec update → `_internal/versions/v{N}/`")과 동일. 향후 update 시 스냅샷 보존.
 - **다운스트림 인계 커맨드**: **`/autopilot-code --mode refactor`** — spec 컨텍스트 자동 감지(cwd/상위 `spec/pipeline_state.yaml` 존재), plans/ 누적(`plans/<date>_<slug>/`, 사이클 누적). audit §6 "06_implementation §4 권장 순서: `/audit` → `/autopilot-spec` → `/autopilot-code --mode refactor`" 의 마지막 단계.
-- **refactor mode 선택 근거**: behavior-preserving cleanup(SoT pointer 화·references/ 추출·frontmatter flip)은 신기능이 아니라 정합 튜닝 → refactor mode(개발팀 refactor persona)가 적합.
+- **refactor mode 선택 근거**: behavior-preserving cleanup(SoT pointer 화·references/ 추출·invocation 분류 정합)은 신기능이 아니라 정합 튜닝 → refactor mode(개발팀 refactor persona)가 적합.
 
 ## 6. Decision 섹션 (main 세션 컨펌용 — 각 항목 추천안+근거 1줄)
 
 | # | 결정 항목 | 추천안 | 근거 1줄 |
 |---|---|---|---|
-| **D1** | Cluster 1 invocation flip 범위 (13개 전체 vs 게이트 통과분만) | **검증 게이트 선행 → 게이트 통과 스킬만 우선 flip**, 실패분은 폴백(model-invoked 유지) | 그룹 C dissent 는 flip 방향 지지하나 runtime-currentness gate 상 slash/Skill-dispatch 생존 미검증 — 깨진 채 flip 하면 파이프 붕괴(audit P1 "flip 전 검증 의무"). |
+| **D1** | Cluster 1 invocation 분류 | **manual-only만 disable; parent/pipeline/preload는 model-invoked 유지. 현재 13개는 parent-invoked** | 공식 문서와 C1 runtime gate가 flag의 parent Skill-tool·subagent preload 차단을 확인. slash-only 생존은 parent pipeline 안전성을 보장하지 않는다. |
 | **D2** | 설계 계약 앉을 자리 | **정량 규범 → CONVENTIONS §skill-design(신규), 4축 tenet+Predictability → DESIGN_PRINCIPLES(신규 tenet)** 분할 배치 + 상호 포인터 | CONVENTIONS=family-wide 정량 규범, DESIGN_PRINCIPLES=아키텍처 tenet — 각 문서 현재 성격에 맞춰 분할(중복은 Pruning SoT 자기위반). |
 | **D3** | entry-router "Use when…" 트리거 언어 정책 (P4) | **현행 한국어 blurb 유지 + 영문 트리거 문장을 description 첫 문장에 _추가_(대체 아님)**, entry-router(autopilot-*·analyze-*·audit)만 우선 | 02_standards §3: wording 단독 자동발화 불신(hook 후에도 ~50%, scottspence) → soft 규범. 한국어 blurb 는 트리거 신뢰도 우선이라 유지하되, entry 는 auto-routing 의존 최고라 영문 트리거 병기로 보강(P4 low-cost). |
 | **D4** | 원칙-하네스 충돌 유지 항목 (명시 리스트업) | **아래 3건 유지 — 원칙 회귀 금지** | 하네스가 원칙보다 더 나간 지점은 유지가 기본(사용자 확정). |
-| **D5** | 실행 순서 | **Cluster 2(SoT·즉시) → Cluster 3(sprawl) → Cluster 1(검증 게이트 후, 병렬 검증 트랙)** | audit §6 우선 실행 권장 그대로 — SoT 는 검증 불요 즉시 실익, invocation 은 검증 의존이라 마지막. |
+| **D5** | 실행 순서 | **Cluster 2(SoT·즉시) → Cluster 3(sprawl) → Cluster 1(runtime 검증·분류 확정)** | audit §6 우선 실행 권장대로 invocation을 마지막에 실측했고, 결과를 registry와 g7 강제 규칙으로 닫았다. |
 
 **D4 상세 — 원칙-하네스 충돌 유지 리스트(auto-activation hook 우회 등)**:
 
@@ -154,8 +152,8 @@ audit §6 매핑 그대로: **Cluster1=P1+P4+P7, Cluster2=P2+P5, Cluster3=P3+P6*
 - **SD-1**: 실행 순서 = Cluster 2 → 3 → 1 (SoT 즉시 → sprawl → invocation 검증 후). audit §6.
 - **SD-2**: Plan Resolution SoT = `autopilot-code/references/arguments-and-decisions.md` 단일 authority, code-execute/refine/report/test **4개**(SKILL.md+README.md) pointer. 완료 기준 = **양 트리(SD-11)** `grep -rln "keep in sync" adapters/claude/skills/*/SKILL.md adapters/claude/skills/*/README.md skills/*/SKILL.md skills/*/README.md`=0.
 - **SD-3**: 설계 계약 = 정량 규범 CONVENTIONS / 4축 tenet DESIGN_PRINCIPLES 분할 + 상호 포인터.
-- **SD-4**: 정량 규범 강제 = scan.sh(기존 T3) lint 승격 + drill 회귀 케이스 등재(결정론 우선).
-- **SD-5**: Cluster 1 flip = 검증 게이트(slash·Skill-dispatch·실파이프 3절차) 통과분만 우선, 실패분 model-invoked 유지 폴백.
+- **SD-4**: 정량 규범 강제 = `check.sh`(scan 관측 + invocation registry) + g7 failure control(결정론 우선).
+- **SD-5** (runtime amendment): invocation 분류 = manual-only만 `disable-model-invocation: true`; parent/pipeline/preload는 model-invoked 유지. 현재 13개 parent-invoked는 registry + `check.sh` + g7로 `false`를 강제한다.
 - **SD-6**: Cross-harness — 각 Cluster 완료 시 sync-skills 실행 + adapter doctor/parity mirror 검증 의무.
 - **SD-7**: 원칙-하네스 충돌 3건(auto-activation hook 우회·한국어 blurb·hook 라우팅) 유지 — 원칙 회귀 금지.
 - **SD-8**: references/ 추출 시 1-depth 불변(scan.sh 재확인). autopilot-design 우선.
@@ -165,6 +163,6 @@ audit §6 매핑 그대로: **Cluster1=P1+P4+P7, Cluster2=P2+P5, Cluster3=P3+P6*
 
 ## 8. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
-- **규칙 구간(코드)**: 정량 규범 스캔(scan.sh lint)·`grep` 완료 기준·frontmatter diff·sync-skills projection·parity mirror 가드 — 전부 결정론(§0.5).
+- **규칙 구간(코드)**: 정량 규범 스캔·invocation registry/checker·`grep` 완료 기준·sync-skills projection·parity mirror 가드 — 전부 결정론(§0.5).
 - **의미 판단 구간(리뷰)**: Step 0·3-6 failure-mode 판정·negation→positive 선별(safety invariant 제외)·"어느 블록이 authority 인가" 지정 — plan-review/audit 자리 LLM 판정.
-- **충돌**: Cluster 1 flip 은 의미 판단(재분류 타당성)이나 게이트로 규칙화(검증 로그) — 의미를 규칙으로 떠넘기지 않고 **검증 게이트로 매개**. 없음.
+- **충돌**: Cluster 1은 호출 그래프 의미 판단을 공식 문서+runtime gate로 매개하고, 확정된 분류만 registry/checker로 규칙화했다. 없음.

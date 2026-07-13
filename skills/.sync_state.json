@@ -1,6 +1,6 @@
 {
  "version": 4,
- "last_readme_sync": "2026-07-13T14:33:03.820328+09:00",
+ "last_readme_sync": "2026-07-13T15:30:29+09:00",
  "items": {
   "adapters/claude/agents/codex-review-team": {
    "sha256": "1a72e13e396a6aa90afd08bc9d2f6a06c01e0fbc715329e2e5d747307a1fe3fb",
@@ -147,8 +147,8 @@
    "synced_at": "2026-07-13T14:33:03.820328+09:00"
   },
   "adapters/claude/skills/sync-skills": {
-   "sha256": "89ddcbca695dce3e8808e48199e1019e917ebcf0fcde2f8726d31449660ed957",
-   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+   "sha256": "7a808ddab484c05c85eecb76bdfc3f3248d37568355662e47068319ba38f4ea5",
+   "synced_at": "2026-07-13T15:30:29+09:00"
   }
  }
 }

@@ -62,7 +62,7 @@ metadata:
 | Step 1–3 | Discover + hash → sync state 로드(v4 스키마) → Drift report (신규/변경/삭제/동일 · `--check` 종료) | `references/detect-and-report.md` |
 | Step 4·5·5a | Dashboard 섹션 생성(4a 트랙 텍스트 체인 · 4b 9섹션 canonical layout) → README.md 작성(섹션별 자동 갱신 정책) → 편집팀 검수 | `references/readme-dashboard.md` |
 | Step 5b·5c·5d | Cross-doc invariant scan(QA 정의/model role) → skill name rename drift scan → 에이전트 엔지니어링 매뉴얼 동기 검토 | `references/cross-doc-invariants.md` |
-| Step 6·6b·6c·7 + Hook | Sync state 갱신 → manifest.json 재방출 → scan.sh 정량 규범 lint(§CONVENTIONS 5.6a) → Final report + Hook integration(옵션) | `references/finalize-and-hooks.md` |
+| Step 6·6b·6c·7 + Hook | Sync state 갱신 → manifest.json 재방출 → skill-conformance gate(구조 + invocation registry, §CONVENTIONS 5.6a) → Final report + Hook integration(옵션) | `references/finalize-and-hooks.md` |
 
 ## Reference Index
 
@@ -71,7 +71,7 @@ metadata:
 | `references/detect-and-report.md` | drift 감지 실행 시 (Step 1~3) | Step 1(Discover + hash), Step 2(Read sync state — v4 스키마), Step 3(Drift report — 4 분류·한국어 출력·`--check` 종료) |
 | `references/readme-dashboard.md` | README 재생성 시 (Step 4·5·5a) | Step 4(dashboard — 4a 트랙 텍스트 체인, 4b README 9섹션 canonical layout·원칙·_넣지 않음_ drop+link), Step 5(Write README.md — 섹션별 자동 갱신 정책 표), Step 5a(편집팀 검수) |
 | `references/cross-doc-invariants.md` | Cross-doc drift 스캔 시 (Step 5b·5c·5d) | Step 5b(QA/model role invariant scan 5b-1~5b-4), Step 5c(skill name rename drift 5c-1~5c-5), Step 5d(에이전트 엔지니어링 매뉴얼 동기 검토) |
-| `references/finalize-and-hooks.md` | 종료 시 (Step 6·6b·6c·7 + Hook) | Step 6(Update sync state), Step 6b(Emit manifest.json), Step 6c(scan.sh 정량 규범 lint §CONVENTIONS 5.6a), Step 7(Final report), Hook integration(옵션 Stop hook) |
+| `references/finalize-and-hooks.md` | 종료 시 (Step 6·6b·6c·7 + Hook) | Step 6(Update sync state), Step 6b(Emit manifest.json), Step 6c(skill-conformance 구조+invocation gate §CONVENTIONS 5.6a), Step 7(Final report), Hook integration(옵션 Stop hook) |
 
 ## Safety Rules
 - README.md 는 자동 생성 표지가 있는 경우에만 덮어쓴다. 사용자 수동 편집 흔적이 감지되면 abort + 경고.

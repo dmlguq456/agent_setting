@@ -29,15 +29,15 @@
   |---|---|---|
   | SKILL.md body 길이 | `< 500` lines | `body_lines`/`line_ok` |
   | references/ depth | 1-depth (하위 디렉터리 0) | `ref_depth_ok` |
-  | invocation frontmatter | 순수 sub-skill = `disable-model-invocation: true`; entry-router = model-invoked + 영문 "Use when" 트리거 병기 | `disable_model`/`invocation`/`use_when` |
-- **강제 경로 1줄**: "본 규범 위반은 `sync-skills --check` 가 scan.sh 로 자동 감지(§CORE-4). 신규/수정 스킬은 통과가 merge 전제."
+  | invocation frontmatter | user-only manual skill = `disable-model-invocation: true`; parent/pipeline 호출·subagent preload 대상 = model-invoked; entry-router = model-invoked + 영문 "Use when" 트리거 병기 | `disable_model`/`invocation`/`use_when` |
+- **강제 경로 1줄**: "본 규범 위반은 `sync-skills --check`가 `check.sh`(scan 관측 + invocation registry)로 자동 감지(§CORE-4). 신규/수정 스킬은 통과가 merge 전제."
 - **DESIGN_PRINCIPLES 상호 포인터**: 표 아래 "4축 철학·비용축 tenet 은 [DESIGN_PRINCIPLES §10](DESIGN_PRINCIPLES.md#10) — 여기선 규범만, tenet 중복 서술 없음."
 
 ### CORE-2. `core/DESIGN_PRINCIPLES.md` — 신규 `## §10 Skill-Design Tenets (Pocock 4축 + Predictability)`
 - **자리**: `## 9. Design ownership`(현 :230) 직후 신규 `## §10`.
 - **내용(tenet만 — 정량 수치는 넣지 않음)**:
   - **root virtue = Predictability**(같은 *출력*이 아니라 같은 *과정* 재현) — 이미 28스킬 🟢, refactor 가 흔들면 안 되는 골격.
-  - **4축 레버**: ① Invocation(도달성 gain 없는 resident description = context 낭비 — 순수 sub-skill 은 disable) ② Information Hierarchy(3-rung: SKILL.md 라우터 → references/ disclosure) ③ Steering(leading concept·checkable completion; safety negation 은 정당) ④ Pruning(cross-skill SoT 단일 authority + pointer).
+  - **4축 레버**: ① Invocation(도달성 gain 없는 resident description은 context 낭비지만 호출 그래프를 먼저 보존 — manual-only만 disable, parent-invoked는 model-invoked 유지) ② Information Hierarchy(3-rung: SKILL.md 라우터 → references/ disclosure) ③ Steering(leading concept·checkable completion; safety negation 은 정당) ④ Pruning(cross-skill SoT 단일 authority + pointer).
   - **1줄 포인터**: "정량 규범(줄 수·depth·frontmatter 요건)은 [CONVENTIONS §5.6a](CONVENTIONS.md#56a-skill-design-정량-규범) — 스캔 가능 기준은 그쪽 단일 SoT."
 - **부록 이력 1줄**(`## 부록` :241): "2026-07-13 skill-design-refactor: §10 tenet + CONVENTIONS §5.6a 정량 규범 분할 배치."
 
@@ -48,11 +48,11 @@
 ### CORE-4. scan.sh 상시 lint 승격 + drill 회귀 케이스 (SD-4)
 - **scan.sh 이전(location 결정)**: 현재 `.agent_reports/analysis_project/code/_internal/skill_design_audit/scan.sh` = audit run 의 throwaway scratch. **stable 위치로 이전**: `tools/skill-conformance/scan.sh` (신규 dir). 근거 — lint 자산은 audit 산출물 수명과 분리돼야 하고, `tools/` 는 harness 도구 표준 자리.
 - **상시 lint 자리(결정)**: **`sync-skills` 파이프 `--check` 모드**에 편입(추천) > hooks/ PreToolUse. 근거 — sync-skills 는 이미 "스킬 정의 변경 감지" 게이트이고 `build-manifest.py --check`·cross-doc-invariants 를 돌린다(`skills/sync-skills/references/finalize-and-hooks.md:14`). scan.sh 를 같은 `--check` 흐름에 붙이면 정의 변경 자리에서 정량 규범 drift 를 exit≠0 로 노출. hooks/ 매-편집 가드는 per-edit noisy 라 2순위.
-  - 구현: `skills/sync-skills/references/finalize-and-hooks.md` 에 "scan.sh 정량 규범 lint(§CONVENTIONS 5.6a)" 스텝 추가 + `sync-skills` Step 표(현 SKILL.md :60-65)에 한 행.
+  - 구현: `skills/sync-skills/references/finalize-and-hooks.md` 에 `check.sh` 구조+invocation gate(§CONVENTIONS 5.6a) 스텝 추가 + `sync-skills` Step 표에 한 행.
 - **drill 회귀 케이스 `g7_skill_conformance`** (static-assert, prompt-driven 아님):
   - `loops/drill/cases/g7_skill_conformance/{config,fixture.sh,assert.sh}` 신규.
   - `config`: `AXIS=static`(신규 축; run.sh 가 Claude turn 없이 assert 만 돌리도록) 또는 기존 축 재사용 + `MAX_TURNS=0`.
-  - `assert.sh`: live `skills/` 에 `bash tools/skill-conformance/scan.sh skills` 실행 → (a) `line_ok=N` 행 0 (b) `ref_depth_ok=N` 행 0 (c) 순수 sub-skill 13개 목록에서 `disable_model=false` 행 0(Cluster 1 flip 후). FAIL 시 PRD SD-4 참조 메시지.
+  - `assert.sh`: `check.sh`를 양 Claude skill 트리에 실행 → (a) `line_ok=N` 0 (b) `ref_depth_ok=N` 0 (c) parent-invoked 13개 `disable_model=false` 강제 (d) 명시 `user-only`만 `true` 허용. parent/user-only 양방향 failure control도 실행.
   - drill README/run.sh case 목록에 `g7_skill_conformance` 등재(run.sh 는 `cases/` 자동 discovery 이므로 dir 생성만으로 편입, :106/:130).
 
 **CORE 완료 게이트**: `sync-skills` 1회 → core→adapter 미러 재투영(DESIGN_PRINCIPLES/CONVENTIONS 는 core, adapter 파생) + doctor 통과.
@@ -149,19 +149,21 @@
 
 ## 4. Cluster 1 — Invocation 재분류 (P1+P4+P7, PRD §3.3) — **검증 게이트 후**
 
-> 이 Cluster 는 **게이트(C1-GATE) 통과가 flip 의 전제**. code-plan 스테이지(본 plan)는 절차를 _명세_ 한다 — 실제 trial-flip·관측·확장은 code-execute(또는 전용 검증 스텝)가 실행. flip 은 게이트 결과에 종속(D1 resolved: 3절차 all-PASS → 13개 전체, 일부 FAIL → 통과분만).
+> 이 Cluster의 trial-flip 절차는 runtime 계약을 확인하기 위한 게이트였다. C1-GATE 결과 slash만 PASS하고 parent Skill-tool·실파이프가 FAIL해 13개 모두 model-invoked 유지로 확정했다.
+
+> **Runtime amendment (2026-07-13, C1-GATE b/c 이후)**: 공식 Claude Code 계약과 fresh probe가 `disable-model-invocation: true`의 Skill-tool·subagent preload 차단을 확인했다. 아래 trial 절차는 역사적 근거로 유지하되, C1-FLIP 지시는 폐기한다. 현재 계약은 user-only manual workflow만 disable하고 parent/pipeline 호출 13개는 model-invoked로 유지하는 것이다.
 
 ### C1-GATE. trial-flip 검증 게이트 (flip 전 필수, PRD §3.3 (a)(b)(c))
 - **(a) slash 명시 호출 생존**: `draft-strategy` **1개만** trial-flip(`disable-model-invocation: true`) → 격리 검증: `claude -p "/draft-strategy <args>"` slash 호출이 정상 동작하는지 관측. PASS/FAIL 기록. **FAIL 시 즉시 revert**.
 - **(b) parent Skill-tool dispatch 무영향**: `code-test` **1개만** trial-flip → autopilot-code conductor 의 depth-2 **Skill-tool dispatch**(code-plan/execute/test 를 Skill 로 호출) 경로가 disable flag 하에 생존하는지 관측. **FAIL 시 즉시 revert**.
 - **(c) 실파이프 1회 통과**: (a)+(b) 모두 PASS 시 → autopilot-code standard 사이클 1회 실제 구동 → code-plan→execute→test→report 4스테이지 통과 확인.
 - **산출**: `_internal/c1_gate_log.md` 에 3절차 각 PASS/FAIL + 관측 증거(명령·exit·transcript mtime).
-- **폴백(게이트 실패 시, SD-5)**: 범위를 통과 스킬 부분집합으로 축소. 예 — (b) Skill-dispatch FAIL 이면 Skill 로 호출되는 code-* 5개는 model-invoked 유지, Skill 경로 없는 draft-strategy 등만 flip. 게이트는 병렬 검증 트랙.
+- **관측 결과(SD-5 runtime amendment)**: (b)(c) 실패로 pilot을 원복했다. 13개 모두 parent/pipeline 호출 그래프에 있으므로 slash-only 통과분을 안전한 flip 부분집합으로 취급하지 않는다.
 
-### C1-FLIP. 13개 후보 flip (게이트 통과분)
-- **후보 13**: code-execute·code-plan·code-refine·code-report·code-test(5) + design-components·design-handoff·design-init·design-refs·design-review·design-tokens(6) + draft-refine·draft-strategy(2).
-- **작업**: 각 SKILL.md frontmatter 에 `disable-model-invocation: true` 1줄 추가(baseline 전부 `disable_model=false`).
-- **완료 기준**: `bash tools/skill-conformance/scan.sh skills` 에서 통과분 `disable_model=true`. frontmatter diff 로그 = flip 목록.
+### C1-CONTRACT. 13개 parent-invoked model invocation 보존
+- **대상 13**: code-execute·code-plan·code-refine·code-report·code-test(5) + design-components·design-handoff·design-init·design-refs·design-review·design-tokens(6) + draft-refine·draft-strategy(2).
+- **작업**: `tools/skill-conformance/invocation-policy.tsv`에 `parent-invoked`로 명시하고, `check.sh`가 양 Claude skill 트리에서 `disable_model=false`를 강제한다. manual-only workflow는 `user-only` 분류 뒤에만 `true`를 허용한다.
+- **완료 기준**: `check.sh skills adapters/claude/skills` PASS + g7의 parent flip/user-only missing-flag failure control이 각각 예상대로 FAIL하고 user-only true control이 PASS.
 
 ### C1-P7. post-it wording 정합
 - **대상**: `skills/post-it/SKILL.md:14` "사용자가 명시적으로 `/post-it` 호출할 때만 변경"(user-invoked 계약 wording) ↔ frontmatter model-invoked + proactive-nudge auto-record 불일치(per-skill :257).
@@ -208,7 +210,7 @@
 1. **CORE-1~4** (core-first 계약) → sync-skills → doctor ✅
 2. **Cluster 2** (C2-1~5 SoT 통합) → `grep "keep in sync"`=0 → sync-skills → doctor ✅
 3. **Cluster 3** (C3-1~5 sprawl 추출) → scan.sh body 감소·1-depth → sync-skills → doctor ✅
-4. **Cluster 1** (C1-GATE → C1-FLIP → P7 → P4) → scan.sh invocation/use_when → sync-skills → doctor ✅
+4. **Cluster 1** (C1-GATE → C1-CONTRACT → P7 → P4) → check.sh invocation policy/use_when → sync-skills → doctor ✅
 5. **최종** SD-10 회귀(drill g7 + audit rubric) ✅
 
-> **주의**: Cluster 1 은 C1-GATE PASS 전 flip 금지. GATE 는 병렬 검증 트랙으로 Cluster 2/3 진행 중 착수 가능하나, flip(C1-FLIP)은 GATE 결과 확정 후.
+> **결과**: Cluster 1 runtime gate 완료. 새 manual-only 후보가 생기면 호출 그래프를 먼저 확인하고 registry 분류와 frontmatter를 같은 변경에서 추가한다.

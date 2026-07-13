@@ -376,9 +376,11 @@ scoping 비대칭 의도:
 |---|---|---|
 | SKILL.md body 길이 | `< 500` lines | `body_lines` / `line_ok` |
 | references/ depth | 1-depth (하위 디렉터리 0) | `ref_dir` / `ref_depth_ok` |
-| invocation frontmatter | 순수 sub-skill = `disable-model-invocation: true`; entry-router = model-invoked + 영문 "Use when" 트리거 병기 | `disable_model` / `invocation` / `use_when` |
+| invocation frontmatter | 사용자 전용(manual-only) skill = `disable-model-invocation: true`; parent/pipeline 호출 또는 subagent preload 대상 = model-invoked(`false`/미지정); entry-router = model-invoked + 영문 "Use when" 트리거 병기 | `disable_model` / `invocation` / `use_when` |
 
-- **강제 경로**: 본 규범 위반은 `sync-skills --check` 가 scan.sh 로 자동 감지(§CORE-4 / `skills/sync-skills/references/finalize-and-hooks.md`). 신규·수정 스킬은 통과가 merge 전제. drill `g7_skill_conformance` 가 회귀 게이트.
+- **강제 경로**: 본 규범 위반은 `sync-skills --check` 가 `check.sh`(scan.sh 관측값 + invocation registry)로 자동 감지(§CORE-4 / `skills/sync-skills/references/finalize-and-hooks.md`). 신규·수정 스킬은 통과가 merge 전제. drill `g7_skill_conformance` 가 회귀 게이트.
+- **invocation 분류 계약**: `disable-model-invocation: true` 는 자동 추천 강도 조절값이 아니라 Claude의 programmatic Skill 호출과 subagent preload까지 막는 hard boundary다. 따라서 사용자가 `/name`으로만 시작해야 하는 manual-only workflow에만 쓴다. parent/pipeline이 호출하거나 subagent가 preload하는 skill은 직접 slash 호출 지원 여부와 무관하게 model-invoked로 남긴다. `user-invocable: false`는 `/` 메뉴 노출만 조절하는 별도 축이며 model invocation 차단 수단이 아니다. (C1-GATE b/c가 parent Skill-tool·실파이프 차단을 재현, 2026-07-13.)
+- **결정론 registry**: runtime-known 분류는 `tools/skill-conformance/invocation-policy.tsv`가 열거하고 `check.sh`·drill `g7_skill_conformance`가 양 Claude skill 트리에서 강제한다. 현재 parent-invoked sub-skill 13개는 모두 `disable_model=false`여야 하며, future manual-only skill은 registry에 `user-only`로 먼저 분류한 뒤 `true`를 쓴다.
 - **4축 철학·비용축 tenet 은 [DESIGN_PRINCIPLES §10](DESIGN_PRINCIPLES.md#10-skill-design-tenets-pocock-4축--predictability)** — 여기선 스캔 가능한 규범만 두고 tenet 은 중복 서술하지 않는다.
 
 ### §5.7. Backward compat detection (구현 가이드)

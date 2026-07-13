@@ -1,0 +1,16 @@
+# Skill invocation classification registry (CONVENTIONS §5.6a).
+# Columns: skill<TAB>class<TAB>caller/intent
+# Classes: user-only | parent-invoked | entry-router
+code-execute	parent-invoked	autopilot-code
+code-plan	parent-invoked	autopilot-code
+code-refine	parent-invoked	autopilot-code
+code-report	parent-invoked	autopilot-code
+code-test	parent-invoked	autopilot-code
+design-components	parent-invoked	autopilot-design
+design-handoff	parent-invoked	autopilot-design
+design-init	parent-invoked	autopilot-design
+design-refs	parent-invoked	autopilot-design
+design-review	parent-invoked	autopilot-design
+design-tokens	parent-invoked	autopilot-design
+draft-refine	parent-invoked	autopilot-draft/autopilot-refine
+draft-strategy	parent-invoked	autopilot-draft
