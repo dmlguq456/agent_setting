@@ -1,6 +1,19 @@
 # Skill invocation classification registry (CONVENTIONS §5.6a).
 # Columns: skill<TAB>class<TAB>caller/intent
 # Classes: user-only | parent-invoked | entry-router
+analyze-project	entry-router	model-selected project analysis routing
+analyze-user	entry-router	model-selected user analysis routing
+audit	entry-router	model-selected audit routing
+autopilot-apply	entry-router	model-selected cheatsheet application routing
+autopilot-code	entry-router	model-selected code workflow routing
+autopilot-design	entry-router	model-selected design workflow routing
+autopilot-draft	entry-router	model-selected document drafting routing
+autopilot-lab	entry-router	model-selected experiment routing
+autopilot-note	entry-router	model-selected note routing
+autopilot-refine	entry-router	model-selected refinement routing
+autopilot-research	entry-router	model-selected research routing
+autopilot-ship	entry-router	model-selected deployment/release routing
+autopilot-spec	entry-router	model-selected specification routing
 code-execute	parent-invoked	autopilot-code
 code-plan	parent-invoked	autopilot-code
 code-refine	parent-invoked	autopilot-code

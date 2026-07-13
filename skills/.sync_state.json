@@ -1,6 +1,6 @@
 {
  "version": 4,
- "last_readme_sync": "2026-07-13T15:30:29+09:00",
+ "last_readme_sync": "2026-07-13T17:59:22+09:00",
  "items": {
   "adapters/claude/agents/codex-review-team": {
    "sha256": "1a72e13e396a6aa90afd08bc9d2f6a06c01e0fbc715329e2e5d747307a1fe3fb",
@@ -83,8 +83,8 @@
    "synced_at": "2026-07-13T14:33:03.820328+09:00"
   },
   "adapters/claude/skills/autopilot-ship": {
-   "sha256": "8948b33b581984c67801a4465dd25e68334d1df9af95bf5153ee73fb45390b9c",
-   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+   "sha256": "5b9aa3ad08e6b01a6ea9ec7f4885cbb2ca91ca9b656e61c3e4e8006f02757ed9",
+   "synced_at": "2026-07-13T17:59:22+09:00"
   },
   "adapters/claude/skills/autopilot-spec": {
    "sha256": "f523bc91179100df9014b8e58fde53cccc2af9d2731dcec66b6acfa00629ba13",
@@ -111,8 +111,8 @@
    "synced_at": "2026-07-13T14:33:03.820328+09:00"
   },
   "adapters/claude/skills/design-components": {
-   "sha256": "b9b24aebb8dd1023ce048ff2493177668a87e113d55ccc5b80fa2d51fa79b3a1",
-   "synced_at": "2026-07-13T14:33:03.820328+09:00"
+   "sha256": "fefccc799d261b746985081ed16d7b333f76c0012768c1100f5f5a2a5dd29fb0",
+   "synced_at": "2026-07-13T17:59:22+09:00"
   },
   "adapters/claude/skills/design-handoff": {
    "sha256": "28e64eed4eb48efc091e082727d7fd45c76ee526157c98ca2da1ac302314d514",

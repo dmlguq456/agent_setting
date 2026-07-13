@@ -75,6 +75,11 @@
 - [x] audit rubric 전면 재적용 — 양 트리 28/28 정량 scan 동일, `no-op=0`·`sediment=0`·`premature-completion=0`·`variance-bug=0`; `test_logs/12_semantic_rubric.md`
 - [x] repository drill runner `g7_skill_conformance` PASS (exit 0, static 0 turn/token/cost); Codex-native loop executable projection은 manual-only라 격리 `DRILL_HOME`에서 repo runner 사용
 
-## 잔여 항목 (다음 사이클 인계)
-- `capabilities/*.md` 계약 drift 14개 — live SKILL은 intensity-derived rigor인데 portable capability argument shape에는 폐지된 별도 `--qa` 축 잔존. 불변식에 따라 자동 수정하지 않음; `test_logs/11_capability_contracts.log`
-- Codex depth-2 parity gap — 격리 `CODEX_HOME` worker 실행·file handoff는 정상이나 liveness가 실행 중 worker를 DEAD로 오판했고, workspace-write child는 main repo 아래 Git worktree metadata에 쓸 수 없어 parent commit 수확이 필요
+## 최종 closure (2026-07-13 follow-up)
+- [x] capability 계약 drift 14개 — `1e77a34`에서 폐지된 `--qa` 축 제거, merge `016a883`으로 main 반영 확인
+- [x] P4 — 누락됐던 `autopilot-ship` 영문 `Use when…` 트리거 추가; 13 entry-router 전체를 invocation registry/checker로 강제
+- [x] P8 — `design-components`의 비안전 negation 2건만 positive executable wording으로 전환; safety guardrail은 유지
+- [x] SD-4/SD-6 — `tools/skill-conformance` Claude projection 추가, Codex/OpenCode selective projection은 deferred로 분류, portable inventory 기록
+- [x] 상태·생성물 — 양 Claude tree, native Claude plugin, manifest, sync state 동기화
+- [x] focused QA — conformance 26분류, g7, mirror, native projection check, focused adaptation-boundary 모두 PASS
+- [x] Pocock 범위 GREEN. Ponytail과 Codex depth-2/liveness는 이번 범위에 포함하지 않음
