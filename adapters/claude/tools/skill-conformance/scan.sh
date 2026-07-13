@@ -1,0 +1,1 @@
+../../../../tools/skill-conformance/scan.sh
