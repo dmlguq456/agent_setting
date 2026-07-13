@@ -10,7 +10,7 @@ This is the portable capability contract for `draft-strategy`. It defines runtim
 | Group | `sub` |
 | Supported modes | `rebuttal, paper, review, report, proposal, presentation` |
 | Portable meaning | 문서 전략 초안 작성. 자료 기반으로 writing plan을 만든다. |
-| Argument shape | `<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--qa quick|light|standard|thorough|adversarial] <task description>` |
+| Argument shape | `<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--intensity direct|quick|standard|strong|thorough|adversarial] <task description>` |
 
 ## Invocation Semantics
 

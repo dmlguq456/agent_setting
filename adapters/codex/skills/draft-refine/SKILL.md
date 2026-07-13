@@ -27,7 +27,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 - Identifier: `draft-refine`
 - Supported modes: `none`
-- Argument shape: `<strategy or draft name or path> [--qa quick|light|standard|thorough|adversarial]`
+- Argument shape: `<strategy or draft name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]`
 - Portable meaning: 초안 정련·다듬기. memo/review feedback을 문서 전략이나 draft에 반영한다.
 
 ## Portable Contract

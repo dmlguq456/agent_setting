@@ -27,7 +27,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 - Identifier: `draft-strategy`
 - Supported modes: `rebuttal, paper, review, report, proposal, presentation`
-- Argument shape: `<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--qa quick|light|standard|thorough|adversarial] <task description>`
+- Argument shape: `<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--intensity direct|quick|standard|strong|thorough|adversarial] <task description>`
 - Portable meaning: 문서 전략 초안 작성. 자료 기반으로 writing plan을 만든다.
 
 ## Portable Contract

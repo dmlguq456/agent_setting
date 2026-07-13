@@ -27,7 +27,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 - Identifier: `autopilot-code`
 - Supported modes: `dev, debug, audit`
-- Argument shape: `--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--user-refine]`
+- Argument shape: `--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]`
 - Portable meaning: 코드 작업 entry. spec 컨텍스트를 감지하고 plan→execute→test→report 흐름을 닫는다.
 
 ## Portable Contract
@@ -71,7 +71,7 @@ Minimum role mapping:
 - review: QA/reviewer role for plan, code, and test review;
 - app UI changes: design role as critic or handoff verifier when design artifacts exist.
 
-Pipeline intensity is the primary ceremony selector for this entrypoint. Use `direct` for inline fixes with no plan stage, `quick` for micro-plan plus plan-check-lite, `standard` for the normal closed loop, `strong` for the normal loop plus one risk-focused independent review, and `standard+` for owner-worker orchestration that should open bounded depth-2 verifier/planner work when separable, with `thorough|adversarial` expanding to multi-perspective or adversary workers. QA level remains an assurance override or compatibility input; it changes `plan-check`, selected independent reviews, and `code-test` rigor, but must not force a monolithic full pipeline by itself. Concrete models remain adapter-specific.
+Pipeline intensity is the primary ceremony selector for this entrypoint. Use `direct` for inline fixes with no plan stage, `quick` for micro-plan plus plan-check-lite, `standard` for the normal closed loop, `strong` for the normal loop plus one risk-focused independent review, and `standard+` for owner-worker orchestration that should open bounded depth-2 verifier/planner work when separable, with `thorough|adversarial` expanding to multi-perspective or adversary workers. The same intensity determines `plan-check`, selected independent reviews, and `code-test` rigor without introducing a separate user-facing axis or forcing a monolithic full pipeline. Concrete models remain adapter-specific.
 
 ## Guard Requirements
 

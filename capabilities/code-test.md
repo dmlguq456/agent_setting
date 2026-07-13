@@ -10,12 +10,12 @@ This is the portable capability contract for `code-test`. It defines runtime-neu
 | Group | `sub` |
 | Supported modes | `none` |
 | Portable meaning | 구현 결과를 단계별로 검증하고 evidence를 기록한다. |
-| Argument shape | `<plan name, path, or test scope> [--qa quick|light|standard|thorough|adversarial]` |
+| Argument shape | `<plan name, path, or test scope> [--intensity direct|quick|standard|strong|thorough|adversarial]` |
 
 ## Invocation Semantics
 
 Run graduated verification after `code-execute` or on demand to verify code
-correctness. `--qa` scales final verification and test-adequacy review; it does
+correctness. Intensity-derived rigor scales final verification and test-adequacy review; it does
 not force a separate parallel QA loop by itself. The capability resolves a plan path, changed-file list, or test
 scope, runs the applicable test levels, stops on the first failing level, and
 records durable evidence before reporting a verdict.
@@ -24,7 +24,7 @@ Adapters may expose this capability through native commands, skill files, prompt
 
 ## Assurance Contract
 
-`code-test` realizes the final `verify` stage for code work. It is concrete verification, not a mandatory second QA pipeline. The selected QA level changes command breadth, evidence requirements, and whether a separate test-adequacy/security/adversarial review is opened. `quick` may run one focused verify-lite command; `standard+` runs the applicable graduated levels; `thorough|adversarial` may add adequacy, runtime-observation, security, or external adversary review only when the selected intensity/risk calls for it.
+`code-test` realizes the final `verify` stage for code work. It is concrete verification, not a mandatory second QA pipeline. Intensity-derived rigor changes command breadth, evidence requirements, and whether a separate test-adequacy/security/adversarial review is opened. `quick` may run one focused verify-lite command; `standard+` runs the applicable graduated levels; `thorough|adversarial` may add adequacy, runtime-observation, security, or external adversary review only when the selected intensity/risk calls for it.
 
 
 ## Artifact Ownership

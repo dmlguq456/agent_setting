@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-code.md`, no
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability autopilot-code [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--qa quick|light|standard|thorough|adversarial] [--user-refine]`.
+   `--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]`.
 
 Portable contract excerpt:
 

@@ -16,11 +16,11 @@ This is adapter-owned output generated from `capabilities/code-test.md`, not a r
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability code-test [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `<plan name, path, or test scope> [--qa quick|light|standard|thorough|adversarial]`.
+   `<plan name, path, or test scope> [--intensity direct|quick|standard|strong|thorough|adversarial]`.
 
 Portable contract excerpt:
 
-- Invocation semantics: Run graduated verification after `code-execute` or on demand to verify code correctness. `--qa` scales final verification and test-adequacy review; it does not force a separate parallel QA loop by itself. The capability resolves a plan path, changed-file list, or test scope, runs the applicable test levels, stops on the first failing level, and records durable evidence before reporting a verdict. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: Run graduated verification after `code-execute` or on demand to verify code correctness. Intensity-derived rigor scales final verification and test-adequacy review; it does not force a separate parallel QA loop by itself. The capability resolves a plan path, changed-file list, or test scope, runs the applicable test levels, stops on the first failing level, and records durable evidence before reporting a verdict. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 User arguments from OpenCode: `$ARGUMENTS`
