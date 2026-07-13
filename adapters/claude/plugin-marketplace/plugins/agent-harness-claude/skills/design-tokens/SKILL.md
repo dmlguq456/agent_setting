@@ -38,76 +38,7 @@ metadata:
 
 ### Step 2: 디자인 결정 (`02_tokens/tokens.md`)
 
-```markdown
-# Design Tokens — <name>
-
-## Color Palette
-
-### Brand
-- `--color-brand-50`: #FFF8F3
-- `--color-brand-500`: #F97316  (primary)
-- `--color-brand-700`: #C2410C
-- ...
-
-**결정 사유**: 사용자 brief 의 "warm, minimal" — orange-coral 계열로 단일 brand axis. neutral 은 zinc 계열로 대비.
-
-### Neutral
-- `--color-neutral-50`: ...
-- ...
-
-### Semantic
-- `--color-success-500`: green-500
-- `--color-warning-500`: amber-500
-- `--color-danger-500`: red-500
-
-## Typography
-
-### Font Family
-- `--font-sans`: 'Inter', system-ui, sans-serif
-- `--font-serif`: 'Iowan Old Style', serif  (paper figure 만)
-- `--font-mono`: 'JetBrains Mono', monospace
-
-### Scale
-- `--text-xs`: 12px / 16px
-- `--text-sm`: 14px / 20px
-- `--text-base`: 16px / 24px
-- `--text-lg`: 18px / 28px
-- `--text-xl`: 20px / 28px
-- `--text-2xl`: 24px / 32px
-
-**결정 사유**: 본문 16px / 1.5 — 가독성 표준. heading scale 은 1.25 modular (minor 3rd).
-
-## Spacing
-
-- `--space-1`: 4px
-- `--space-2`: 8px
-- `--space-3`: 12px
-- `--space-4`: 16px
-- `--space-6`: 24px
-- `--space-8`: 32px
-
-8-point grid + 4-point sub-unit. Tailwind default 와 호환.
-
-## Radius
-
-- `--radius-sm`: 4px
-- `--radius-md`: 8px
-- `--radius-lg`: 12px
-- `--radius-full`: 9999px
-
-shadcn default 보다 살짝 작게 — 사용자 선호 (memory 참조 시).
-
-## Shadow
-
-- `--shadow-sm`: 0 1px 2px rgb(0 0 0 / 0.05)
-- `--shadow-md`: 0 4px 6px -1px rgb(0 0 0 / 0.1)
-
-## Motion
-
-- `--ease-out`: cubic-bezier(0.16, 1, 0.3, 1)
-- `--duration-fast`: 150ms
-- `--duration-base`: 250ms
-```
+작성 대상 절: Color Palette(Brand/Neutral/Semantic) · Typography(Font Family/Scale) · Spacing · Radius · Shadow · Motion — 각 절은 값 + **결정 사유** 1줄. 전체 worked exemplar = [references/tokens-exemplar.md](references/tokens-exemplar.md).
 
 ### Step 3: specimen 시각 자가검증 (필수 — 토큰을 component 가 소비하기 _전_)
 
@@ -118,55 +49,11 @@ shadcn default 보다 살짝 작게 — 사용자 선호 (memory 참조 시).
 - **type scale 전체** — xs~2xl 까지 실제 글자로 렌더 (line-height 포함)
 - **spacing / radius / shadow ruler** — 각 단계를 시각 막대·박스로
 
-루프: specimen.html 렌더 (`mcp__design__preview` → `screenshot` → `view_image`) → **이미지 직접 보기** → 대비·조화 자가 비평 (대비 미달 쌍 / 색 충돌 / scale 점프 불균일). 대비는 `mcp__design__eval_js` 로 `getComputedStyle` 수치 확인 가능 → 토큰 조정 → 재렌더. 깨끗할 때까지. **이 검증을 통과해야 component 가 토큰을 소비**.
+루프: specimen.html 을 렌더해 **이미지로 직접 보고** 대비·조화 자가 비평 (대비 미달 쌍 / 색 충돌 / scale 점프 불균일) → 토큰 조정 → 재렌더, 깨끗할 때까지. 대비는 `mcp__design__eval_js` 로 `getComputedStyle` 수치 확인. 공통 렌더 흐름(`preview`→`screenshot`→`view_image`)은 [_design_rules.md §시각 자가검증 루프](../../roles/modes/design/_design_rules.md) 단일 SoT. **이 검증을 통과해야 component 가 토큰을 소비** (specimen-consume gate — design-tokens 고유).
 
 ### Step 4: 실제 토큰 파일 작성
 
-#### Option A: tokens.css (CSS variables)
-
-`<project_root>/styles/tokens.css` 또는 `<project_root>/app/tokens.css`:
-
-```css
-:root {
-  --color-brand-500: #F97316;
-  --color-neutral-50: #FAFAFA;
-  /* ... */
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-neutral-50: #18181B;
-    /* dark mode 적응 */
-  }
-}
-```
-
-#### Option B: tailwind.config.ts
-
-`<project_root>/tailwind.config.ts`:
-
-```ts
-import type { Config } from 'tailwindcss'
-
-const config: Config = {
-  theme: {
-    extend: {
-      colors: {
-        brand: {
-          50: '#FFF8F3',
-          500: '#F97316',
-          // ...
-        },
-      },
-      fontFamily: { /* ... */ },
-      spacing: { /* ... */ },
-    },
-  },
-}
-export default config
-```
-
-스택에 따라 둘 중 하나 또는 둘 다.
+CSS variables(`tokens.css`) 또는 `tailwind.config.ts` — 스택에 따라 둘 중 하나 또는 둘 다. 템플릿 = [references/templates.md](references/templates.md).
 
 ### Step 5: 기존 토큰 호환 + 버전 스냅샷
 

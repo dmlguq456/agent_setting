@@ -117,16 +117,7 @@ pnpm dlx shadcn@latest add button card dialog
 
 maker 가 산출 직후 **반드시 렌더해서 본다** (Design MCP 경유). 좌표·코드만으로 완료 보고 금지. 상세 루프는 `roles/modes/design/maker.md` + `_design_rules.md` "시각 자가검증 루프".
 
-공통 흐름: `mcp__design__preview({ path })` → `mcp__design__getConsoleLogs()` (에러 먼저) → `mcp__design__screenshot({ savePath, steps })` → `mcp__design__view_image({ path })`. scope 별:
-
-| scope | 렌더 → 본다 |
-|---|---|
-| `ui` / `webapp` | `preview.html` 을 `preview` → screenshot → view_image. 컴포넌트 단품 + **페이지 합성 전체 화면** 둘 다. hover/active/empty/loading 은 `steps[]` 로. 반응형은 `preview` viewport 변경 |
-| `slide` | `slides.html` (deck_stage) 을 `preview` → `screenshot({ steps })` 로 **전 슬라이드** 캡처 (각 step: 다음 슬라이드로 이동) → view_image. _un-rendered 가이드로 남는 슬라이드 없음_ |
-| `icon` | SVG → `sharp`/`rsvg-convert` PNG → view_image (작은 자산은 `clip`/density 확대). 또는 preview.html gallery 로 |
-| `diagram` | SVG → PNG / mermaid → `mmdc` PNG → view_image. 관통·overlap·label 겹침 확인, 의심 영역 `clip` crop 확대 |
-
-루프: 렌더 → view_image → 자가 비평 (관통·overlap·정렬·위계·잘림·색 역할) → 수정 → 재렌더. 시각적으로 깨끗할 때까지 (최대 3-5 회전). **렌더 이미지를 사용자에 제시** (live-preview 패리티). _Design MCP 미부착 세션_ (막 등록함) 이면 `sharp`/`rsvg`/`mmdc` 정적 렌더로 fallback.
+> 공통 렌더 흐름(`preview`→`getConsoleLogs`→`screenshot`→`view_image`) · scope 별 렌더 표(ui/webapp·slide·icon·diagram) · 자가비평 루프(관통·overlap·정렬·위계·잘림·색 역할, 최대 3-5 회전)의 상세는 [_design_rules.md §시각 자가검증 루프](../../roles/modes/design/_design_rules.md) 단일 SoT — 로드해 그대로 돈다. **렌더 이미지를 사용자에 제시**(live-preview 패리티), Design MCP 미부착이면 `sharp`/`rsvg`/`mmdc` 정적 렌더 fallback.
 
 ### Step 4b: standalone preview artifact (`--artifact standalone` 또는 stack 부재 시)
 

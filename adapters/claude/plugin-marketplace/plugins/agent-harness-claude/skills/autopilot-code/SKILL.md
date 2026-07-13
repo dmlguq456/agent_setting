@@ -1,6 +1,6 @@
 ---
 name: autopilot-code
-description: "코드 작업 일반 entry — 라이브러리·연구·앱 모두 커버, spec 컨텍스트 자동 감지"
+description: "Use when starting or routing any code task (library/research/app). 코드 작업 일반 entry — 라이브러리·연구·앱 모두 커버, spec 컨텍스트 자동 감지"
 argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
 metadata:
   group: entry
@@ -21,13 +21,15 @@ metadata:
 - QA는 stage마다 무조건 병렬화하지 않는다. `plan-check`와 최종 `code-test`는 intensity에서 파생된 rigor(CONVENTIONS §1.1)에 맞춰 커진다.
 - 보고는 한국어로 한다.
 
-## Required Reads
+## Reference Index
 
-- 모든 호출: `references/context-and-guards.md`의 artifact/spec/git guard 요약을 확인한다.
-- 인자 해석, `--from`, pause/resume, active plan 충돌: `references/arguments-and-decisions.md`.
-- `--mode dev`: `references/dev-pipeline.md`.
-- `--mode debug` 또는 `--mode audit`: `references/debug-audit.md`.
-- terminal state, 실패/부분성공/rollback, 사용자 보고 전 summary 작성: `references/pipeline-summary-safety.md`.
+| 파일 | 언제 로드 (의무) | 내용 |
+|---|---|---|
+| `references/context-and-guards.md` | 모든 호출 (필수) | artifact/spec/git guard 요약, spec mode 감지, design/app/library/api/cli/research guard, experiment-ready input, invocation triggers |
+| `references/arguments-and-decisions.md` | 인자 해석·`--from`·pause/resume·active plan 충돌 자리 | argument parsing, default decisions, active/partial/done plan handling, plan path resolution |
+| `references/dev-pipeline.md` | `--mode dev` 실행 시 | dev mode stage-by-stage orchestration, plan-check, retry, analyze-project update |
+| `references/debug-audit.md` | `--mode debug`\|`audit` 실행 시 | debug diagnosis/fix flow, audit fan-out/autofix workflow |
+| `references/pipeline-summary-safety.md` | terminal state·실패/부분성공/rollback·summary 작성 자리 | summary template, terminal-state reporting, common safety rules |
 
 ## Argument Shape
 
@@ -66,10 +68,4 @@ Defaults:
 5. Before source write-back or commit, re-run git-state preflight.
 6. On any terminal state, write `pipeline_summary.md` before reporting to the user.
 
-## Reference Map
-
-- `references/context-and-guards.md`: spec mode 감지, design/app/library/api/cli/research guard, experiment-ready input, invocation triggers.
-- `references/arguments-and-decisions.md`: argument parsing, default decisions, active/partial/done plan handling, plan path resolution.
-- `references/dev-pipeline.md`: dev mode stage-by-stage orchestration, plan-check, retry, analyze-project update.
-- `references/debug-audit.md`: debug diagnosis/fix flow and audit fan-out/autofix workflow.
-- `references/pipeline-summary-safety.md`: summary template, terminal-state reporting, common safety rules.
+> reference 파일 목록·로드 시점·내용은 위 [Reference Index](#reference-index) 표 참조 (단일 표).

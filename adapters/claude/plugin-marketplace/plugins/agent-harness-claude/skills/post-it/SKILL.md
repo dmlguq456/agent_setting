@@ -11,7 +11,7 @@ metadata:
 
 ## 목적
 
-사용자가 **직접 통제하는** 포스트잇 메모리. `<agent-home>/projects/*/memory/` 의 자동 메모리 시스템과는 별개로, 사용자가 명시적으로 `/post-it` 명령을 호출할 때만 변경된다. 세션 종료 시 conversation 이 사라지는 휘발성을 메우는 목적 (compact 는 일시적 보존이라 불충분).
+사용자가 **직접 통제하는** 포스트잇 메모리. `<agent-home>/projects/*/memory/` 의 자동 메모리 시스템과는 별개로, 주 변경 경로는 사용자의 명시적 `/post-it` 호출이나, [references/nudge-and-boundaries.md](references/nudge-and-boundaries.md) 의 proactive-nudge 계약에 따라 model-invoked auto-record 도 함께 일어난다. 세션 종료 시 conversation 이 사라지는 휘발성을 메우는 목적 (compact 는 일시적 보존이라 불충분).
 
 **핵심 비유 — 임시 포스트잇.** post-it 은 _영구 기록이 아니다_. 영구 진실은 산출물(`plans/`·`documents/`·`spec/`·code·git) 과 구조화 프로필(DB `type=profile` 레코드) 에 있다. post-it 은 그 사이를 잇는 _휘발성 작업면_ — 지금 떠올려야 할 것만 짧게 붙여두고, 산출물로 졸업하면 떼어낸다.
 
@@ -28,17 +28,13 @@ metadata:
 - **Sub-action 7종**: show(무인자) / add / resolve / decide / sweep / promote / handoff — 절차 전문과 Confirm 정책 표 → `references/sub-actions.md`.
 - **레코드 write 자리**: Writing Style(1 bullet = 1줄, dense) 준수 → `references/nudge-and-boundaries.md`.
 
-## Required Reads
+## Reference Index
 
-- 모든 호출: scope 판정(project vs user·aspect)·lifecycle 분류·type taxonomy·mem 명령 형태 — `references/lifecycle-and-scope.md`.
-- sub-action 실행(add/resolve/decide/sweep/promote/handoff 절차 + Confirm 정책 요약 표) — `references/sub-actions.md`.
-- 자동 기록 자리(proactive nudge·자동 handoff)와 auto-memory 경계 판단, 레코드 write 전 Writing Style — `references/nudge-and-boundaries.md`.
-
-## Reference Map
-
-- `references/lifecycle-and-scope.md`: Lifecycle(graduated/stale/live), Scope — project vs user(scope 표·aspect 표·analyze-user 책임 분리·두 writer 계약·artifact-guard 주의), DB working tier & 자동 로드(mem 명령 형태), 5 카테고리 type taxonomy(aging stamp·시간 tier).
-- `references/sub-actions.md`: Sub-Actions 전문(show/add/resolve/decide/sweep — project·user scope 절차 / promote — read-modify-write·두 writer 계약 / handoff — sweep 자동 포함), Confirm 정책 요약 표.
-- `references/nudge-and-boundaries.md`: Proactive nudge(자동 기록 트리거·자동 기록 모델), What this skill is NOT, Auto-memory와의 경계, Writing Style(간결성 원칙).
+| 파일 | 언제 로드 (의무) | 내용 |
+|---|---|---|
+| `references/lifecycle-and-scope.md` | 모든 호출 (필수) | Lifecycle(graduated/stale/live), Scope — project vs user(scope 표·aspect 표·analyze-user 책임 분리·두 writer 계약·artifact-guard 주의), DB working tier & 자동 로드(mem 명령 형태), 5 카테고리 type taxonomy(aging stamp·시간 tier) |
+| `references/sub-actions.md` | sub-action 실행 시 (add/resolve/decide/sweep/promote/handoff) | Sub-Actions 전문(show/add/resolve/decide/sweep — project·user scope 절차 / promote — read-modify-write·두 writer 계약 / handoff — sweep 자동 포함), Confirm 정책 요약 표 |
+| `references/nudge-and-boundaries.md` | 자동 기록 자리·auto-memory 경계·write 전 Writing Style 판단 시 | Proactive nudge(자동 기록 트리거·자동 기록 모델), What this skill is NOT, Auto-memory와의 경계, Writing Style(간결성 원칙) |
 
 ## Language Rule
 - 사용자 대화는 한국어.
