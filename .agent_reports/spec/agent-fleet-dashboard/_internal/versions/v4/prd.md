@@ -1,6 +1,6 @@
 # agent-fleet-dashboard — Spec (PRD)
 
-> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기)
+> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract. 계기 = Codex wham usage `primary_window.limit_window_seconds=604800`인데 fleet 이 `5h 10% reset 6d22h`로 오표시한 runtime-currentness 사고)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -13,7 +13,7 @@
 
 ## 0.5 설계 원칙 — 외부 관찰자 (zero-injection) ★ cross-cutting
 
-**대시보드는 어떤 하네스의 TUI·transcript·프로세스에도 아무것도 주입하지 않는다.** 이미 디스크에 존재하는 신호(프로세스 테이블·transcript·statusline JSON·SQLite row·jobs.log)를 읽어 렌더한다. write 예외는 fleet이 _소유한_ local state뿐이다: Claude per-session statusline tap(§5)과 제목 sidecar(`$FLEET_TITLE_STATE_DIR` 또는 XDG state). 하네스 원본 transcript·DB에는 쓰지 않는다.
+**대시보드는 어떤 하네스의 TUI·hook·프로세스에도 아무것도 주입하지 않는다.** 이미 디스크에 존재하는 신호(프로세스 테이블·transcript·statusline JSON·SQLite row·jobs.log)만 읽어 렌더한다. 유일한 예외 = 우리가 _소유한_ Claude statusLine 을 세션별 파일도 쓰게 하는 것(§5) — 이건 우리 자산이라 주입이 아니다.
 
 > **[v2 확장] "관찰" 의 범위**: 디스크·프로세스 외에 **하네스 계정 usage API 의 read-only 호출**(claude OAuth `/api/oauth/usage`, codex `wham/usage` — usage 헤더의 rate-limit 소스, `usage_api.py`·`codex.py` 실측)을 관찰로 인정한다. 쓰기·주입이 아니고 하네스 세션에 영향 0 — F-1 불변. opencode 는 usage API 부재 → 헤더에 "no usage api" 명시(결손 침묵 금지, F-3 동형).
 
@@ -176,7 +176,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 > v2 minor 5건(2026-07-10~11)의 승격 흡수. §4.6 이 "가독성 정제"(표시층 한정)였다면 본 절은 **신기능·신규 표면**이다 — 제목 소스 승격(F-14)·레이아웃 재설계(F-15/16)·fleet 소유 sidecar+LLM 워커(F-17)·collector 태깅(F-18)·신규 collector+패널(F-19). audit 🟡-1(섹션 의미 확장) 해소 분할.
 
 - **F-14 (세션 표시명 = 하네스 세션 제목, 사용자 요청 2026-07-10 — 후속 사이클)**: 세션 row 이름을 합성 slug(`<cwd>-<sid8>`)에서 **하네스가 이미 남긴 세션 제목**으로 승격 — "ChatGPT 세션명처럼" 내용 요약이 관제에 보이게.
-  - **소스 (실측 2026-07-10, Codex 재검 2026-07-13)**: claude = transcript jsonl 의 마지막 `{"type":"ai-title","aiTitle":…}` 라인 / opencode = DB `session.title` / codex = `$CODEX_HOME/state_<version>.sqlite` read-only `threads.title`(현재 활성 세션 포함) 우선 + `session_index.jsonl`의 최신 `thread_name` compatibility fallback. Codex 0.144.1에서 state DB 293행 중 286개 title, JSONL index 164개 이름을 확인했고 공식 `/rename` 표면과 정합한다. 전부 tolerant 파싱하며 부재·스키마 변경 시 fallback한다. Codex rollout `session_meta`에 제목이 없다는 과거 관찰만으로 Codex 전체 runtime에 제목 소스가 없다고 결론 내리지 않는다.
+  - **소스 (실측 2026-07-10)**: claude = transcript jsonl 의 마지막 `{"type":"ai-title","aiTitle":…}` 라인 (v2.1.176+ 대화 언어 auto-title; `/rename` 반영 자리. **내부 포맷 — 버전 간 변경 가능**이 공식 입장이므로 tolerant 파싱 + 부재 시 fallback 의무) / opencode = DB `session.title` (정식 컬럼, 실측 확인) / codex = 제목 소스 미상 → 현행 유지 (F-3 비대칭 동형, 구현 시 rollout 실측 후 판단).
   - **표시 규칙**: 제목 있으면 name zone 에 제목(뒤에서 자름 — F-9 head 보존), 합성 slug 는 대체(식별 필요 시 dim 보조). headless 자식 세션(`-p`)엔 ai-title 이 없음 → 현행 slug 유지. 제목 부재·파싱 실패 = 현행 합성명 fallback (회귀 없음 원칙).
   - **비용**: liveness 가 이미 transcript mtime 을 보고 있으므로 같은 파일 tail 역스캔(수 KB)으로 마지막 ai-title 추출 — tick 당 부담 미미, 필요 시 mtime 키 캐시.
   - 하네스 자체 기능과의 경계: Claude Code 는 `/rename`·시작 시 auto-name 만 있고 _진행형_ 자동 재요약·프로그램적 갱신은 미지원(공식 문서 확인) — 그래서 이 자리는 fleet 표시층이 맡는 게 맞다 (zero-injection 관찰, §0.5).
@@ -188,12 +188,13 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-16 (세션 표시명: 최대한 짧게 + 영어, 사용자 요구 2026-07-10 저녁)**: F-14 의 title 표시가 문장형(한국어)으로 길다.
   - **짧게**: name zone 의 title 표시 예산을 타이트하게(≈20~24 display cols, tail-cut — F-9 head 보존). 전체 제목은 `--json`·(도입 시) info 표시에서.
   - **영어**: fleet 은 번역하지 않는다(zero-injection) — 1차 실현 = **F-17 sidecar 제목**(생성 단계에서 짧은 영어 강제, 아래). 보조 = 하네스 `language` 설정(v2.1.176, 미문서 — `en` 적용해둠, 실측 대기). 기존 한국어 ai-title 은 F-17 미적용 세션의 fallback 으로만 클립 표시.
-- **F-17 (라이브 제목 refresher — cross-harness fleet sidecar + no-tools 경량 LLM 워커, 사용자 승인 2026-07-10·공유 확장 2026-07-13)**: 하네스 원본 transcript에 쓰지 않고 **fleet 소유 neutral sidecar**로 진행형 재요약을 제공한다.
-  - **sidecar**: `${FLEET_TITLE_STATE_DIR:-${XDG_STATE_HOME:-~/.local/state}/agent-fleet/titles}/<harness>/<sid>.json` — `{title, ts, source, offset}`. `<harness>/<sid>` namespace로 충돌을 막는다. 기존 `~/.claude/.fleet-titles/<sid>.json`은 Claude read-only migration fallback이다. 표시 우선순위 = **fresh sidecar(<24h) → runtime-native title(ai-title/threads.title/thread_name/session.title) → slug**.
-  - **공용 워커**: `tools/fleet/refresh_title.py`가 Claude/Codex transcript delta를 공통 대화 텍스트로 정규화한다. 기본 provider는 기존 `claude -p --model haiku` + 도구 전면 차단이다. `FLEET_TITLE_COMMAND` argv template와 `FLEET_TITLE_MODEL`로 GPT 계열 등 별도 저비용 no-tools wrapper를 교체할 수 있다. shell은 사용하지 않으며 모델 출력은 한 줄 영어 제목(≤4단어, ≤40자) 데이터로만 검증한다.
-  - **트리거**: Claude는 statusline debounce를 유지하되 neutral state/공용 워커를 쓴다. Codex는 live fleet loop가 collector가 찾은 rollout을 대상으로 같은 debounce(기본 10분)·`<harness>/<sid>` lock을 적용한다. `--json`, `--once`, demo/test 경로는 worker를 spawn하지 않는다.
-  - **하네스 차이**: title provider와 sidecar 계약은 공용이다. native source만 다르다(Claude `ai-title`, Codex `threads.title` + legacy `thread_name`, OpenCode `session.title`). OpenCode는 native title이 충분해 이번 live refresher trigger 대상에서 제외하되 provider 계약을 막지 않는다.
-  - **비용·fallback**: provider 실패·미설치·quota 소진은 sidecar 미갱신으로 끝난다. Codex는 state DB/JSONL native title, Claude/OpenCode는 각 native title, 마지막으로 slug가 남으므로 제목이 사라지지 않는다.
+- **F-17 (라이브 제목 refresher — fleet 소유 sidecar + no-tools 경량 LLM 워커, 사용자 승인 2026-07-10 "haiku 같은 거 써서 agent로 해도 되고… 알아서")**: 하네스는 진행형 재요약을 안 하고(F-14 경계), transcript 에 쓰는 건 위험(라이브 세션 원본·내부 포맷·주입 금지 원칙 위반)이므로 **fleet 이 소유한 sidecar 파일**로 해결한다 — F-4(statusline per-session tap)와 같은 "우리 자산 write" 예외 계열.
+  - **sidecar**: `~/.claude/.fleet-titles/<sid>.json` — `{title, ts, source}`. fleet 세션 title 우선순위 = **sidecar(신선, <24h) → ai-title → slug**. 부재·stale·파싱 실패 = 무해 fallback (회귀 없음).
+  - **워커 (D-14 no-tools 보안 패턴 재사용)**: `claude -p --model haiku` + 도구 전면 차단. 입력 = transcript tail delta(수 KB)를 DATA 로 프롬프트에 주입, 출력 = **한 줄 영어 제목(≤4단어)** 만. dispatch 스크립트가 출력 검증(길이 ≤40자·printable·개행 제거) 후 sidecar 에 write — LLM 출력은 데이터로만, 주입돼도 최악 = 표시 문자열 오염(검증이 cap).
+  - **트리거**: `statusline.sh` debounce 확장 — 자기 세션의 sidecar 가 오래됐고(예: >10min) transcript 가 자랐으면 detached 워커 1회 spawn (우리 소유 surface — F-4 선례, 새 cron 불요). 재귀 가드: 워커는 `-p` 라 statusline 미실행 + env 플래그. 동시 1개 lock(세션당).
+  - **하네스 비대칭(F-3 동형)**: claude 만 refresher 대상(statusline = claude 소유 surface). opencode = 네이티브 `session.title` 로 충분, codex = 제목 소스 없음 → slug 유지.
+  - **비용**: haiku·no-tools·세션당 ≥10min 간격·tail 수 KB — 무시 가능. 워커 실패·미설치(`claude` 부재)·quota 소진 = sidecar 미갱신일 뿐 fleet 무영향 (결정론적 degrade).
+  - **구현 순서**: F-15 사이클 수확 후 별도 사이클 (파일 겹침 최소화: statusline.sh·신규 스크립트·collectors/claude.py 우선순위 로직·tests).
 - **F-18 (loop·drill·mem-워커 귀속 정밀화, 사용자 점검 요청 2026-07-11 "fleet에서 loop나 drill 관련한 부분 점검")**: 2026-07-11 drill 실발사 관찰로 확정된 표시 결함 2종.
   - **F-18a (drill runner 이중 표시 dedup)**: 같은 drill 실행이 두 row 로 뜬다 — (i) proc-scan loop job (key=`drill`, cwd=fixture) (ii) lib-runner 가 registry 에 쓴 row (slug=`drill-<harness>-<case>-<ts>-<pid>`, 매 실행 고유). slug 불일치로 기존 dedup(동일 slug skip)이 안 걸린다. 해소: **case 명 + cwd 상관**으로 매칭해 registry row 를 정본으로 1행 병합(proc 는 liveness 소스로 흡수) — F-15 의 proc↔registry 정합과 같은 계열, 매칭 키만 drill 명명으로 확장.
   - **F-18b (mem-워커 오귀속)**: 메모리 distiller/curator(`claude -p`, env `MEM_DISTILL=1`)와 F-17 refresher(`FLEET_TITLE_REFRESH=1`)가 부모 세션의 cwd·env 를 물려받아 (i) 부모 세션 밑 `↳` 자식 row 로 떠올랐다 수 분 내 사라지고(사용자 실관찰 "서브로 떴다가 지시하자마자 없어짐") (ii) cwd 가 drill fixture 면 `drill:<case>` 그룹으로 오귀속된다(실관찰: 큐레이터가 "drill running" 으로 표시). 해소: procscan 이 `/proc/<pid>/environ` 의 이 마커들을 읽어(동일 user, dispatch collector 의 AGENT_DISPATCH_* 선례) **mem-worker 세션으로 태깅** — 기본은 fleet pulse 카운트·그룹 row 에서 제외하고 legend 급 요약(`🧠N`)으로만, `a` 토글 시 dim row 노출(라벨 `mem`). drill/프로젝트 그룹 오귀속 차단이 1차 목적.
@@ -210,11 +211,10 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **Parity gap**: Claude still exposes/usefully maps `5h`/`7d` buckets; Codex may expose one or more differently-sized windows, and `secondary_window` may be null. Fleet must not force Codex parity by naming primary as `5h`.
   - **Fallback**: Unknown positive durations render as their actual duration (`12345s`, `90m`, `2w`) rather than a false semantic label. Missing duration plus missing legacy slot renders the normal `—`/no usage row fallback. Expired reset timestamps still zero out stale rollout samples.
   - **Docs/examples**: user-facing examples must say `windows` or duration labels for Codex, not "Codex 5h/7d" as a guarantee. Claude examples may keep 5h/7d where the source remains Claude usage support.
-- **F-21 (Codex title parity + shared provider, 2026-07-13 사용자 요구)**: F-14/F-17의 stale Codex `slug` 폴백을 폐기한다. Codex collector는 최신 versioned state DB의 `threads.title`을 read-only로 읽고 DB/WAL stamp cache를 적용하며, `session_index.jsonl` 최신 `thread_name`은 compatibility fallback으로 병합한다. fresh fleet sidecar가 native title을 이기며, live fleet만 shared refresher를 schedule한다. acceptance = 현재 활성 Codex native title 표시, JSONL fallback, sidecar precedence, Claude legacy fallback, 두 transcript parser, provider shell-free argv, live-only spawn, canonical/Claude mirror parity.
-- **적용 순서(정보 위계, v5 정정)**: §4.6(F-9~F-13)은 표시층(render.py) 한정 — collector 계약·모델 스키마 불변(SD-F4 만 collector). §4.7(F-14~F-21)은 각 항목에 명시된 표면까지 — F-17/F-21 neutral sidecar+shared trigger, F-18 procscan environ 태깅, F-19 신규 collector(`collectors/memory.py`)·`--json` additive `memory` 키, F-20 Codex usage runtime-currentness. 시각 결정이 substantial 해지면 autopilot-design 리드.
+- **적용 순서(정보 위계, v3 정정)**: §4.6(F-9~F-13)은 표시층(render.py) 한정 — collector 계약·모델 스키마 불변(SD-F4 만 collector). §4.7(F-14~F-19)은 각 항목에 명시된 표면까지 — F-17 sidecar+statusline 트리거, F-18 procscan environ 태깅, F-19 신규 collector(`collectors/memory.py`)·`--json` additive `memory` 키. 시각 결정이 substantial 해지면(레이아웃 구조 변경 급) autopilot-design 리드.
 - **🧠 글리프 위계 (v3 명문화, audit 정보성 반영)**: 같은 글리프의 두 표면 — 그룹 헤더 `🧠 N` = F-18b mem-*워커 프로세스* 수 / pulse 인접 `🧠 mem …` 행 = F-19 메모리 *이벤트* 집계. 라벨 문맥(`N` vs `mem`)이 구분자 — 새 🧠 표면 추가 시 이 두 의미와 충돌 금지.
 
-## 5. 능동 변경 — fleet-owned local state write
+## 5. 능동 변경 — Claude per-session statusline tap (유일한 write)
 
 현재 `statusline.sh:10` 이 **모든 세션을 `~/.claude/.statusline-last.json` 한 파일에 덮어씀**(last-writer-wins) → 멀티세션 대시보드가 세션별 telemetry 를 못 얻음. 해결:
 
@@ -222,7 +222,6 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **stale 청소**: 대시보드 또는 statusline 이 오래된(예: mtime > 1일) 세션 파일 정리(디렉토리 폭증 방지). 또는 SessionEnd hook 이 해당 파일 삭제.
 - 구현 위치 후보: (a) `statusline.sh` 에 `<session_id>.json` 추가 write 한 줄(가장 간단, 60s 주기라 최신성 충분), (b) SessionStart/UserPromptSubmit/Stop hook — 단 hook stdin 엔 telemetry 없음(§01_tap 1b), 그래서 **(a) statusline.sh 확장이 정답**. 결정: **(a)**.
 - 하위호환·drift: statusline.sh 은 이 repo 소유 파일이라 변경이 곧 배포(심링크). 세션별 파일 추가는 기존 렌더 무영향.
-- F-17/F-21 제목 sidecar도 fleet-owned local state다. Claude statusline과 live fleet scheduler는 같은 neutral title state/lock을 사용하며 하네스 transcript·DB를 수정하지 않는다.
 
 ## 6. 알려진 버그 동시 정리 (scope 포함)
 
@@ -254,8 +253,8 @@ tools/fleet/
   collectors/
     __init__.py     # collect_all() → [Session...] (백본 프로세스 스캔 + 하네스별 enrich 디스패치)
     procscan.py     # comm ∈ {claude,codex,opencode} + /proc/cwd + etime + environ 마커 태깅(F-18b)
-    claude.py       # ~/.claude/.statusline/<sid>.json + sessions/<pid>.json + ai-title/shared sidecar
-    codex.py        # rollout token_count + config.toml + state DB title/JSONL fallback/shared sidecar
+    claude.py       # ~/.claude/.statusline/<sid>.json + sessions/<pid>.json + ai-title/sidecar 제목(F-14/17)
+    codex.py        # rollout jsonl 최신 token_count tail + config.toml
     opencode.py     # opencode.db session row (sqlite3 ro)
     dispatch.py     # statusline 잡스캔 로직 포팅(uncapped) + jobs.log 병합 + SD-F4 tolerant 파싱
     liveness.py     # 15min stale + kill -0 + (deleted) orphan → 4-state
@@ -263,8 +262,8 @@ tools/fleet/
     usage_api.py    # (v2 F-1 확장) 하네스 계정 usage API read-only
   render.py         # curses 레이아웃(그룹 카드 + dispatch 트리 + mem 패널), 결손칸 —, 색
   model.py          # Session/DispatchJob dataclass (하네스 무관 정규화 스키마)
-  titles.py         # (v5/F-21) neutral <harness>/<sid> sidecar + Claude legacy fallback
-  refresh_title.py  # (v5/F-21) cross-harness transcript parser + pluggable no-tools title provider/scheduler
+  titles.py         # (v3/F-17) sidecar 제목 read + 신선도 판정
+  refresh_title.py  # (v3/F-17) no-tools 경량 LLM 제목 워커 (statusline debounce 가 spawn)
   demo.py           # --demo/FLEET_DEMO fixture 병합 (§3)
   tests/            # unittest 스위트 (mirror-parity 가드 포함)
   fleet.sh          # 런처 (v2: full-terminal 기본, --window 시 tmux 새 창) → fleet.py
@@ -279,7 +278,7 @@ flowchart TD
     subgraph SOURCES[디스크·프로세스 관찰 소스 · read-only]
       PS[ps / /proc/cwd/etime]
       CJ["~/.claude/.statusline/&lt;sid&gt;.json<br/>sessions/&lt;pid&gt;.json"]
-      CX["~/.codex/sessions/**/rollout-*.jsonl<br/>state_*.sqlite(ro) · session_index.jsonl · config.toml"]
+      CX["~/.codex/sessions/**/rollout-*.jsonl<br/>config.toml"]
       OC["opencode.db (ro)"]
       JL["~/.claude/.dispatch/jobs.log"]
     end
@@ -296,10 +295,6 @@ flowchart TD
     R --> TUI[fleet TUI]
     SH[fleet.sh · tmux side pane] -.launch.-> TUI
     SL["statusline.sh (능동 변경 §5)"] -.writes.-> CJ
-    COL -.live only schedule.-> TW["shared title provider<br/>Haiku default / custom command"]
-    TW -.writes fleet state.-> TS["XDG agent-fleet/titles/&lt;harness&gt;/&lt;sid&gt;.json"]
-    TS --> CL
-    TS --> CXP
 ```
 
 ## 11. MVP 경계
@@ -321,7 +316,7 @@ flowchart TD
 
 ## 확정 결정 (locked, v1)
 
-- **F-1 (외부 관찰자)**: zero-injection. write는 우리 소유 local state(statusline tap + neutral title sidecar)만 허용하고 하네스 원본 transcript/DB에는 쓰지 않는다. (§0.5·§5)
+- **F-1 (외부 관찰자)**: zero-injection. 유일 write = 우리 소유 statusline 의 per-session tap(§5). (§0.5)
 - **F-2 (3계층·2섹션)**: 프로세스 스캔 백본(세션 존재 진실) + 하네스별 passive enrichment(칸 채우기) + curses 렌더. fleet + dispatch 2섹션. (§1)
 - **F-3 (하네스 비대칭 허용)**: opencode rate-limit·effort 결손 칸 `—`. Codex telemetry = rollout `token_count` tail. (§2,§4)
 - **F-4 (per-session Claude tap)**: statusline.sh 이 `~/.claude/.statusline/<sid>.json` 도 write(단일 파일 덮어쓰기 해소). 구현=statusline.sh 확장. (§5)
@@ -347,13 +342,7 @@ flowchart TD
 
 - **F-20 lock**: Codex rate windows are dynamically labeled from `limit_window_seconds` when present. The old `primary=5h`/`secondary=7d` mapping is compatibility fallback only. Incident recorded inline: local Codex `primary_window.limit_window_seconds=604800, used_percent=10, secondary_window=null` must render as a 7d window, not `5h 10% reset 6d22h`.
 
-## 확정 결정 (v5 승격, 2026-07-13 — cross-harness title F-21)
-
-- **F-21 lock**: Codex `threads.title`은 현재 native title 정본이며 `thread_name`은 compatibility fallback이다. title provider/sidecar는 Claude adapter 기능이 아니라 fleet 공용 계약이며, 기본 Haiku no-tools provider는 `FLEET_TITLE_COMMAND`로 다른 저비용 no-tools model wrapper와 교체 가능하다. fresh sidecar → native title → slug 순서와 live-only scheduling을 강제한다.
-
 ## Next (구현 순서 — autopilot-code, 본 v2 입력 · v1 순서 1~7 은 완료)
-
-0. **F-21 cross-harness title parity** — `plans/2026-07-13_fleet-cross-harness-title/`: Codex state DB title + JSONL fallback, neutral sidecar, shared provider/scheduler, cross-harness tests, mirror sync.
 
 `/autopilot-code --mode dev --intensity standard "fleet UI 개선 — PRD v2 §4.5·§4.6"` (worktree 브랜치, depth-1 conductor 분사 + 스테이지 depth-2 분사 — 이 파이프 자체가 SD-F1~F3 의 라이브 검증 fixture 가 된다). 권장 순서:
 1. **SD-F4 pipe tolerant 파싱** (collectors/dispatch.py) — 공백/콤마 혼용 + 미지 key 무시. 기존 tests 에 wild 실측 행(2026-07-09 space-separated) fixture 추가.

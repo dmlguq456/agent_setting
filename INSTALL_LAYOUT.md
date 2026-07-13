@@ -123,6 +123,22 @@ No install step at all still works — run it by path: `bash "$AGENT_HOME/tools/
 (or, via the Claude projection above, `bash ~/.claude/tools/fleet/fleet.sh`). Zero-dep
 (stdlib python3 + curses); nothing to build.
 
+Session titles are also cross-harness. Fleet reads Codex's native state DB title with
+the JSONL `thread_name` index as a compatibility fallback, and may
+refresh active Claude/Codex titles into
+`${FLEET_TITLE_STATE_DIR:-${XDG_STATE_HOME:-~/.local/state}/agent-fleet/titles}/<harness>/`.
+The default refresher is the existing no-tools Haiku provider. To use a GPT-mini-class
+or other small model, point `FLEET_TITLE_COMMAND` at a no-tools wrapper; the value is
+parsed as an argv template, never through a shell:
+
+```bash
+export FLEET_TITLE_MODEL="small-model"
+export FLEET_TITLE_COMMAND='my-title-wrapper --model {model} --prompt {prompt}'
+```
+
+The wrapper owns its provider-specific no-tools restriction. `fleet --json` and
+`fleet --once` never start title workers.
+
 ## Codex Projection
 
 Keep `$HOME/.codex` runtime-owned. The portable harness projects through a

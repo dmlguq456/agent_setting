@@ -2,8 +2,9 @@
 """fleet — cross-harness live agent dashboard (entry point).
 
 Zero external deps (stdlib curses/sqlite3/json/subprocess/re/os/time only). Pure external
-observer: reads process table + on-disk state artifacts, injects nothing (PRD §0.5). The one
-write in the whole system lives in adapters/claude/statusline.sh (§5), never here.
+observer: reads process table + on-disk state artifacts and injects nothing (PRD §0.5).
+The live TUI may schedule the fleet-owned title refresher, which writes only neutral local
+state; ``--json`` and ``--once`` remain side-effect-free snapshots.
 
 Modes:
   (default)  curses full-screen, re-collect + redraw every --interval seconds
@@ -127,7 +128,22 @@ def main(argv=None):
     if args.once:
         return render.render_once(collector, hfilter, args.section)
     render.reset_scroll()   # fresh launch starts scrolled to top (belt-and-suspenders)
-    return render.run_live(collector, hfilter, args.section, args.interval)
+
+    base_collector = collector
+
+    def live_collector(harness_filter=None):
+        sessions, jobs = base_collector(harness_filter=harness_filter)
+        try:
+            if __package__ in (None, ""):
+                from fleet import refresh_title
+            else:
+                from . import refresh_title
+            refresh_title.schedule_sessions(sessions)
+        except Exception:
+            pass                              # title refresh must never break observation
+        return sessions, jobs
+
+    return render.run_live(live_collector, hfilter, args.section, args.interval)
 
 
 if __name__ == "__main__":

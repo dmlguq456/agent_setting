@@ -85,7 +85,7 @@ if [ -n "$S_SID" ]; then
   find "$sldir" -maxdepth 1 \( -name '*.json' -o -name '.*.json.tmp' \) -mtime +1 -delete 2>/dev/null || true
 fi
 
-# §4.6 F-17 라이브 제목 refresher 트리거 — claude 소유 surface(statusline) debounce 확장.
+# §4.7 F-17/F-21 공용 fleet 제목 refresher 트리거 — Claude statusline debounce surface.
 # 조건: (a) sidecar 부재 OR ts>10min AND (b) transcript 가 sidecar ts 이후 자람.
 # 재귀가드: refresher 의 claude -p 는 statusline 미실행 + FLEET_TITLE_REFRESH env 이중.
 # 반드시 즉시 반환 — 판정은 stat 2회, 실행은 detached setsid.
@@ -93,7 +93,9 @@ if [ -n "$S_SID" ] && [ -n "${S_TRANSCRIPT:-}" ] && [ "${FLEET_TITLE_REFRESH:-}"
    && [ -f "$S_TRANSCRIPT" ] && command -v python3 >/dev/null 2>&1; then
   refresher="$AGENT_HOME/../agent_setting/tools/fleet/refresh_title.py"   # ↙ 실경로는 §6 note
   [ -f "$refresher" ] || refresher="$(dirname "$AGENT_HOME")/tools/fleet/refresh_title.py"
-  sc="$AGENT_HOME/.fleet-titles/$S_SID.json"
+  title_root="${FLEET_TITLE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/agent-fleet/titles}"
+  title_dir="$title_root/claude"
+  sc="$title_dir/$S_SID.json"
   now=$(date +%s)
   scts=0; [ -f "$sc" ] && scts=$(stat -c %Y "$sc" 2>/dev/null || echo 0)
   trm=$(stat -c %Y "$S_TRANSCRIPT" 2>/dev/null || echo 0)
@@ -101,8 +103,8 @@ if [ -n "$S_SID" ] && [ -n "${S_TRANSCRIPT:-}" ] && [ "${FLEET_TITLE_REFRESH:-}"
   if [ "$scts" -eq 0 ] || [ $((now - scts)) -gt 600 ]; then
     # (b) 자람: transcript mtime 이 sidecar ts 이후 (sidecar 없으면 무조건 자람)
     if [ "$scts" -eq 0 ] || [ "$trm" -gt "$scts" ]; then
-      lockdir="$AGENT_HOME/.fleet-titles/.lock-$S_SID"
-      if [ -f "$refresher" ] && mkdir -p "$AGENT_HOME/.fleet-titles" 2>/dev/null \
+      lockdir="$title_dir/.lock-$S_SID"
+      if [ -f "$refresher" ] && mkdir -p "$title_dir" 2>/dev/null \
          && mkdir "$lockdir" 2>/dev/null; then
         # 세션당 동시 1개. child 가 trap 으로 lock 해제. 즉시 반환(&).
         # 서브셸 자체도 stdout/stderr 를 /dev/null 로 돌려야 한다 — 안 그러면 서브셸이
@@ -112,7 +114,7 @@ if [ -n "$S_SID" ] && [ -n "${S_TRANSCRIPT:-}" ] && [ "${FLEET_TITLE_REFRESH:-}"
         # 지연돼 "즉시 반환" 불변식이 깨진다.
         ( trap 'rmdir "$lockdir" 2>/dev/null || true' EXIT
           FLEET_TITLE_REFRESH=1 setsid python3 "$refresher" \
-            --sid "$S_SID" --transcript "$S_TRANSCRIPT" >/dev/null 2>&1 </dev/null
+            --harness claude --sid "$S_SID" --transcript "$S_TRANSCRIPT" >/dev/null 2>&1 </dev/null
         ) >/dev/null 2>&1 &
       fi
     fi
