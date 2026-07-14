@@ -21,7 +21,15 @@ mkdir -p /home/nas/user/Uihyeop/notes/oncall
   run_claude_retry 900 "$LOOP_DIR/oncall.md" \
     --model sonnet \
     --allowedTools "Bash,Read,Glob,Grep,Write"
-  echo "=== exit $? $(date -Iseconds) ==="
+  rc=$?
+  # Success requires today's heartbeat report file: a clean exit without the
+  # file is a silent failure (e.g. an empty-prompt run), not a pass.
+  today_report="/home/nas/user/Uihyeop/notes/oncall/$(date +%F).md"
+  if [ "$rc" -eq 0 ] && [ ! -f "$today_report" ]; then
+    echo "=== FAIL: exit 0 but heartbeat report missing ($today_report) ==="
+    rc=1
+  fi
+  echo "=== exit $rc $(date -Iseconds) ==="
 } >> "$LOG"
 
 # Bound the log to the most recent 2,000 lines.
