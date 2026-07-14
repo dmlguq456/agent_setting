@@ -5,10 +5,12 @@ set -eu
 usage() {
   cat <<'EOF'
 usage: figure-gen.sh [--check] <script.py> [-- args...]
+       figure-gen.sh --verify-report <manifest.json> <report.md>
 
 Checks or runs a generated matplotlib/seaborn figure script through an
 OpenCode-owned material tool-contract surface. With --check, only Python syntax
-and matplotlib availability are verified.
+and matplotlib availability are verified. --verify-report runs the portable
+fail-closed spectrogram metadata, claim-evidence, and visual-review gate.
 EOF
 }
 
@@ -26,6 +28,22 @@ if [ "$#" -eq 0 ]; then
   printf 'tool_contract_check=adapters/opencode/bin/preflight.sh figure-gen --check <script.py>\n'
   printf 'fallback=satisfy-tool-contract-or-report-unavailable\n'
   exit 0
+fi
+
+if [ "${1:-}" = "--verify-report" ]; then
+  shift
+  [ "$#" -eq 2 ] || { echo "opencode figure-gen: --verify-report requires manifest and report" >&2; exit 64; }
+  SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+  if command -v git >/dev/null 2>&1 && ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null); then
+    :
+  else
+    ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../../.." && pwd)
+  fi
+  if ! command -v python3 >/dev/null 2>&1 || [ ! -f "$ROOT/tools/figure-semantic-verify.py" ]; then
+    printf 'status=tool-contract\nreason=figure-semantic-verifier-unavailable\n'
+    exit 69
+  fi
+  exec python3 "$ROOT/tools/figure-semantic-verify.py" --manifest "$1" --report "$2"
 fi
 
 check_only=0

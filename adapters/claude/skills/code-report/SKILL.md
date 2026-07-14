@@ -110,6 +110,12 @@ Preserve change content, rationale, principles, QA summary, decision record, num
 
 Do not run a separate report QA pass. Reconciliation is the lightweight accuracy check; code and test assurance remain owned by earlier stages.
 
+If `final_report.md` embeds or cites a generated spectrogram, require a passing
+semantic-verifier entry in `test_logs/` plus its manifest and hash-current
+representative PNG review. Cross-check every full-band, broadband, or
+high-frequency statement against the registered evidence range. Do not relay a
+complete status when this evidence is absent or failing.
+
 ## Relay
 
 Return a concise 2–3 paragraph brief in the conversation language, not only a path. Include final status and commit hash, 3–5 concrete deliverables, any report/evidence discrepancy, and obvious next steps.

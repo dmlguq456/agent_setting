@@ -101,7 +101,7 @@ def render(mode_file: Path) -> tuple[Path, str]:
         f"- Status: `{status}`",
         f"- Realization: `{realization}`",
     ]
-    for key in ("tool_contract", "tool_contract_check", "runtime_surface", "fallback"):
+    for key in ("tool_contract", "tool_contract_check", "report_tool_contract_check", "runtime_surface", "fallback"):
         if fields.get(key):
             contract_lines.append(f"- {key.replace('_', ' ').title()}: `{fields[key]}`")
     if requirement:

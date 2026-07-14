@@ -38,6 +38,25 @@ Spectrogram 생성 시 _샘플링 속도 별 window 크기_ 와 _색 축 (caxis 
 
 비교 묶음 layout (panel 배치·라벨 패턴) 은 사용자 특성 자료 (`mem profile 01_paper_figure_style` — adapter memory wrapper 또는 `python3 <agent-home>/tools/memory/mem.py profile 01_paper_figure_style`) 참조; 실행해 그 body 를 default 로 따른다 (사용자가 turn 안 다른 명시 주면 override).
 
+### Metric/display band와 보고서 QA
+
+- 분석 범위와 표시 범위는 별도 상수로 선언한다. 예:
+  `METRIC_BAND_HZ = (20, 1000)`, `FIGURE_BAND_HZ = (0, 24000)`.
+  metric crop이나 helper 기본값을 plot 함수에 암묵적으로 전달하지 않는다.
+- 48 kHz 전 대역 보고서 spectrogram은 portable
+  `spectrogram-report-48k-full-band` manifest를 만들고
+  `python3 <agent-home>/tools/figure-semantic-verify.py --manifest
+  <manifest.json> --report <report.md>`를 실행한다. `sample_rate_hz=48000`,
+  `min_hz=0`, `max_hz=24000`, `shared_scale_per_figure=true`와 필수
+  dynamic range/colormap가 아니면 완료하지 않는다.
+- 전 대역·고주파·broadband 문장은 범위를 포함하는 figure/metric
+  evidence에 연결한다. 20–1000 Hz metric은 전 대역 claim의 근거가 아니다.
+  고주파 문장은 `고주파(8–24 kHz)`처럼 용어 바로 옆에 범위를 쓰고 manifest
+  `claimed_band_hz`와 동일하게 기록한다.
+- 생성 후 대표 PNG를 직접 열어 0–24 kHz y축, tick, colorbar, 공통
+  vmin/vmax, label 가독성을 확인한다. PNG SHA-256, reviewer/tool, timestamp,
+  판정을 manifest에 남기며 PNG가 바뀌면 재검토한다.
+
 ## 출력 컨벤션
 
 - 스크립트 안 _상수_ (color hex, figsize, font list 등) 는 파일 상단 한 자리에 모아 사용자가 한 줄로 갈아끼울 수 있게.

@@ -64,6 +64,14 @@ Format:
 
 Run test commands through the active adapter's bounded verification runner when its contract requires one. Preserve the actual exit status in the log.
 
+When changed outputs include a report spectrogram, add the report-figure
+semantic level from `roles/modes/qa/test.md`: run
+`tools/figure-semantic-verify.py` or the adapter-native `figure-gen
+--verify-report` wrapper against the manifest and report. Exit 2 is a test
+failure; unavailable or unreadable required inputs are blockers. Record the
+manifest path, PNG hash, claim-evidence verdict, and visual-review evidence.
+PNG existence, dimensions, count, and links alone are not a pass.
+
 ## Verification Assurance
 
 This is the concrete final verify stage. Derive rigor from plan frontmatter or caller intensity; do not hardcode Thorough or automatically open a parallel QA loop.
