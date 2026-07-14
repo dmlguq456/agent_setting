@@ -185,6 +185,21 @@ def task_prompt(args: argparse.Namespace) -> tuple[str, str]:
     )
 
 
+def resolve_artifact_root(worktree: str) -> str:
+    result = subprocess.run(
+        [str(ROOT / "utilities" / "artifact-root.sh"), worktree],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    value = result.stdout.strip()
+    if result.returncode != 0 or not value or not Path(value).is_absolute():
+        detail = (result.stderr or result.stdout or "invalid artifact root").strip()
+        raise ValueError(detail)
+    return value
+
+
 def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
     task, source = task_prompt(args)
     metadata = (
@@ -200,6 +215,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- owner: {args.capability_owner or '-'}\n"
         f"- owner_harness: {args.owner_harness or '-'}\n"
         f"- worktree: {args.worktree}\n"
+        f"- artifact_root: {args.artifact_root}\n"
     )
     if args.depth >= 2:
         role = (args.worker_role or "").strip()
@@ -262,7 +278,9 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         + "\nUser task:\n"
         + f"{task.rstrip()}\n\n"
         + "Return a concise report with changed files, verification commands/results, "
-        "and artifact paths. Leave merge and worktree cleanup to the main orchestrator.\n",
+        "and artifact paths. Write every durable agent artifact only under artifact_root; "
+        "the task worktree's tracked .agent_reports/.claude_reports snapshot is read-only "
+        "shadow state. Leave merge and guarded worktree cleanup to the main orchestrator.\n",
         source,
     )
 
@@ -271,7 +289,7 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
     # `claude -p` reads the prompt from stdin when no positional prompt is
     # given and prints the response non-interactively, mirroring the codex
     # wrapper's file-piped `codex exec ... < prompt_path` invocation.
-    cmd = ["claude", "-p"]
+    cmd = ["claude", "-p", "--add-dir", args.artifact_root]
     if args.resolved_model_settings["source"] != "inherit":
         cmd += [
             "--model",
@@ -315,6 +333,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},effort={settings['effort']}"
     if args.profile:
         pipe += f",profile={args.profile}"
+    pipe += f",artifact_root={args.artifact_root}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     with jobs_lock(jobs):
         with jobs.open("a", encoding="utf-8") as f:
@@ -474,6 +493,10 @@ def main(argv: list[str]) -> int:
         stderr=subprocess.DEVNULL,
     ).returncode != 0:
         return fail("not-a-git-worktree", 65, worktree=args.worktree)
+    try:
+        args.artifact_root = resolve_artifact_root(args.worktree)
+    except ValueError as e:
+        return fail("artifact-root-resolution-failed", 64, detail=str(e), worktree=args.worktree)
     if args.qa is None:
         args.qa = QA_FROM_INTENSITY.get(args.intensity, "standard")
     if args.qa not in QA_LEVELS:
@@ -562,6 +585,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
+            "AGENT_ARTIFACT_ROOT": args.artifact_root,
         })
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
@@ -585,6 +609,8 @@ def main(argv: list[str]) -> int:
     print("runtime_surface=claude-print-headless")
     print(f"status={action}")
     print(f"worktree={args.worktree}")
+    print(f"artifact_root={args.artifact_root}")
+    print("artifact_write_scope=canonical-only")
     print(f"slug={args.slug}")
     print(f"capability={args.capability}")
     print(f"mode={args.mode}")

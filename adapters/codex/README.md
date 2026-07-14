@@ -58,7 +58,8 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | agent home | Set `AGENT_HOME` to the installed harness directory |
 | permission model | Run `adapters/codex/bin/preflight.sh permissions`; use Codex native approval policy and sandbox settings, not Claude `allowedTools` |
 | MCP config | Run `adapters/codex/bin/preflight.sh mcp [--check]`; use Codex native `codex mcp`/config surfaces, not Claude `settings.json` MCP payloads |
-| artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
+| artifact root | primary-checkout canonical `.agent_reports` via `utilities/artifact-root.sh`; linked-worktree snapshots are read-only; legacy fallback only at the canonical root |
+| worktree cleanup | `preflight.sh worktree-cleanup`; dry-run first, apply only after merge + integrated verification + push |
 | workflow start cleanup | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]`; run it manually when hooks are unavailable |
 | tracked/untracked signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`, suppresses the default tracked anchor, and emits only non-default mode context such as untracked state (`CODEX_MODE_ANCHOR_ALWAYS=1` restores the tracked anchor). `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` is the richer worker-startup/manual subcommand whose tracked output includes `routing_contract=core/WORKFLOW.md`, `routing_action=read-workflow-and-select-codex-skill`, `capability_entrypoints=codex-native-skills`, and git dirty/worktree/dead-branch risk fields (re-derived from the harness status snapshot); run it manually or at worker startup, not per turn |
 | harness status snapshot | Run `adapters/codex/bin/preflight.sh status [cwd] [session-id]` for read-only workflow, artifact, notes, worktree, and git-risk signals, including tracked-dirty vs untracked counts and sibling worktree counts. This does not replace Codex `/statusline` for model/context/token/session fields |
@@ -345,7 +346,7 @@ Codex-native role profiles `plan-team`, `dev-team`, `qa-team`, and
 
 ## Compatibility
 
-Codex should create new project artifacts under `.agent_reports/`. Use `utilities/artifact-root.sh` or the equivalent rule: prefer `.agent_reports`; use `.claude_reports` only if it already exists and `.agent_reports` does not.
+Codex should create new project artifacts only under the root returned by `utilities/artifact-root.sh`. In a linked task worktree this is the primary checkout's `.agent_reports/`, not the tracked local snapshot. The dispatch wrapper injects `AGENT_ARTIFACT_ROOT` and grants exactly that path with Codex `--add-dir`; legacy `.claude_reports/` remains a canonical-root fallback.
 
 Codex should resolve harness-home paths through `AGENT_HOME` or the Codex-owned `utilities/agent-home.sh`. Some shared legacy tools still accept `CLAUDE_HOME` as a migration alias, but Codex-owned wrappers should not use it as their runtime-home fallback.
 

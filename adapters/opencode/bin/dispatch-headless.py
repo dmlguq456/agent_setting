@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 import fcntl
+import json
 import os
 import re
 import shutil
@@ -208,6 +209,58 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
     return {"source": "explicit", "role": "-", "model": args.model, "variant": args.variant}
 
 
+def resolve_artifact_root(worktree: str) -> str:
+    result = subprocess.run(
+        [str(ROOT / "utilities" / "artifact-root.sh"), worktree],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    value = result.stdout.strip()
+    if result.returncode != 0 or not value or not Path(value).is_absolute():
+        detail = (result.stderr or result.stdout or "invalid artifact root").strip()
+        raise ValueError(detail)
+    return value
+
+
+def scoped_external_directory_config(artifact_root: str) -> str:
+    raw = os.environ.get("OPENCODE_CONFIG_CONTENT", "").strip()
+    try:
+        config = json.loads(raw) if raw else {}
+    except json.JSONDecodeError as e:
+        raise ValueError(f"OPENCODE_CONFIG_CONTENT is not valid JSON: {e}") from e
+    if not isinstance(config, dict):
+        raise ValueError("OPENCODE_CONFIG_CONTENT must contain a JSON object")
+
+    permission = config.get("permission")
+    if permission is None:
+        permission = {}
+    elif isinstance(permission, str):
+        permission = {"*": permission}
+    elif not isinstance(permission, dict):
+        raise ValueError("OpenCode permission config must be a string or object")
+    else:
+        permission = dict(permission)
+
+    external = permission.get("external_directory")
+    if external is None:
+        rules: dict[str, str] = {"*": "ask"}
+    elif isinstance(external, str):
+        rules = {"*": external}
+    elif isinstance(external, dict):
+        rules = dict(external)
+    else:
+        raise ValueError("OpenCode external_directory permission must be a string or object")
+
+    for pattern in (artifact_root, f"{artifact_root}/**"):
+        rules.pop(pattern, None)
+        rules[pattern] = "allow"
+    permission["external_directory"] = rules
+    config["permission"] = permission
+    return json.dumps(config, ensure_ascii=False, separators=(",", ":"))
+
+
 def prompt(args: argparse.Namespace) -> tuple[str, str]:
     if args.prompt_file and args.prompt_text:
         raise ValueError("--prompt-file and --prompt-text are mutually exclusive")
@@ -231,6 +284,9 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"intensity={args.intensity}\ndepth={args.depth}\nparent={args.parent_slug or '-'}\n"
         f"parent_session_id={args.parent_session_id or '-'}\n"
         f"worktree={args.worktree}\n"
+        f"artifact_root={args.artifact_root}\n"
+        "Write every durable agent artifact only under artifact_root; the task "
+        "worktree's tracked .agent_reports/.claude_reports snapshot is read-only shadow state.\n"
         f"{extra}",
         "generated",
     )
@@ -273,6 +329,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",owner_harness={args.owner_harness}"
     settings = args.resolved_model_settings
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},variant={settings['variant']}"
+    pipe += f",artifact_root={args.artifact_root}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     # SD-15: serialize with the same flock close_job_row uses so a concurrent close
     # (row-rewrite) and this append cannot interleave and drop rows.
@@ -359,6 +416,9 @@ def resolve_agent_home() -> Path:
     env_home = os.environ.get("AGENT_HOME")
     if env_home and (Path(env_home) / "core" / "CORE.md").is_file():
         return Path(env_home)
+    maintainer_home = Path.home() / "agent_setting"
+    if (maintainer_home / "core" / "CORE.md").is_file():
+        return maintainer_home
     return ROOT
 
 
@@ -439,6 +499,11 @@ def main(argv: list[str]) -> int:
         return fail("worktree-not-found", 66, worktree=args.worktree)
     if subprocess.run(["git", "-C", args.worktree, "rev-parse", "--is-inside-work-tree"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
         return fail("not-a-git-worktree", 65, worktree=args.worktree)
+    try:
+        args.artifact_root = resolve_artifact_root(args.worktree)
+        args.opencode_config_content = scoped_external_directory_config(args.artifact_root)
+    except ValueError as e:
+        return fail("artifact-root-access-config-failed", 64, detail=str(e), worktree=args.worktree)
     rc = validate_dispatch_metadata(args)
     if rc != 0:
         return rc
@@ -481,6 +546,8 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
+            "AGENT_ARTIFACT_ROOT": args.artifact_root,
+            "OPENCODE_CONFIG_CONTENT": args.opencode_config_content,
             # Headless liveness contract: the OpenCode runtime child exposes
             # the dispatch slug to the plugin, which records a plugin-load
             # marker at init and touches <log_dir>/<slug>.heartbeat on every
@@ -501,6 +568,9 @@ def main(argv: list[str]) -> int:
     print("runtime_surface=opencode-run-headless")
     print(f"status={action}")
     print(f"worktree={args.worktree}")
+    print(f"artifact_root={args.artifact_root}")
+    print("artifact_write_scope=canonical-only")
+    print("external_directory_permission=scoped-allow")
     print(f"slug={args.slug}")
     print(f"capability={args.capability}")
     print(f"mode={args.mode}")

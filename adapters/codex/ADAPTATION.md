@@ -5,6 +5,19 @@ so Codex can reproduce the portable harness invariants through Codex-native
 surfaces, tool contracts, and explicit fallbacks without copying Claude-specific
 assumptions into the common core.
 
+## Canonical artifact and cleanup boundary (2026-07-14)
+
+- **Runtime support:** the official Codex manual documents app-managed
+  worktrees and their cleanup lifecycle, while the local `codex exec` CLI
+  exposes `--add-dir` for an additional writable directory. That app lifecycle
+  does not own harness-created sibling worktrees.
+- **Adapter realization:** dispatch resolves the primary checkout's artifact
+  root, injects `AGENT_ARTIFACT_ROOT`, and adds exactly that path with
+  `--add-dir`. Shared guards reject worker-local artifact writes.
+- **Parity gap/fallback:** Stop/SessionEnd cannot prove merge or push and never
+  deletes worktrees. Main uses `preflight.sh worktree-cleanup` after integrated
+  verification and push.
+
 ## Design Principle
 
 Codex adaptation targets harness parity on Codex, not Claude surface parity.

@@ -248,3 +248,16 @@ The following runtime paths must continue to work:
 
 If a future split changes any target path, update `claude_setting/` first and
 verify through the runtime path above.
+
+## Canonical artifact and cleanup boundary (2026-07-14)
+
+- **Runtime support:** official Claude worktree documentation says changed
+  worktrees require retention/cleanup handling, and noninteractive
+  `-p --worktree` sessions are not automatically cleaned. `--add-dir` is the
+  native scoped path surface.
+- **Adapter realization:** the wrapper resolves the primary checkout's artifact
+  root, injects `AGENT_ARTIFACT_ROOT`, and passes that one path through
+  `--add-dir`. Shared guards reject worker-local artifact writes.
+- **Parity gap/fallback:** SessionEnd cannot prove merge or push and never
+  deletes worktrees. Main uses `bin/worktree-cleanup.sh` after integrated
+  verification and push.

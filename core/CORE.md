@@ -78,6 +78,20 @@ Existing projects may still use:
 
 `.claude_reports/` is a legacy alias. Runtime code must recognize both names during migration. New projects and new documentation should prefer `.agent_reports/`.
 
+The artifact root is a **project-wide canonical write surface**, not a
+per-worktree directory. Resolve it with `utilities/artifact-root.sh <cwd>`:
+
+1. an explicit absolute `AGENT_ARTIFACT_ROOT`;
+2. for Git, the primary worktree's `.agent_reports/`, falling back to its
+   existing legacy `.claude_reports/` only when the new root is absent;
+3. for non-Git, the nearest existing root above `cwd`, otherwise
+   `<cwd>/.agent_reports/`.
+
+Linked task worktrees are source-only execution surfaces. A tracked artifact
+directory may appear there as a Git snapshot, but it is read-only shadow state
+and must never receive agent output. Dispatch adapters pass the canonical root
+to workers and grant only the runtime-specific access needed for that path.
+
 The artifact root contains durable, project-scoped work products:
 
 | Folder | Meaning |
@@ -156,6 +170,8 @@ Each adapter should provide:
   has actually been read in the current session;
 - a status/reminder surface for tracked vs untracked mode;
 - compatibility with both `.agent_reports/` and `.claude_reports/` until legacy projects are migrated;
+- canonical artifact-root propagation plus a fail-closed guard against writes
+  to linked-worktree artifact snapshots;
 - a documented realization of `<agent-notes-root>` and `<worklog-board-app>` if
   that runtime reads or updates cross-project worklog state.
 

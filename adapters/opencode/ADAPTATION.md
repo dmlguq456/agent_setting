@@ -10,6 +10,17 @@ wrappers only for harness-specific signals that OpenCode does not expose
 directly. Claude files are implementation references, not files to port
 wholesale.
 
+## Canonical artifact and cleanup boundary (2026-07-14)
+
+- **Runtime support:** official OpenCode agent/permission documentation exposes
+  scoped `permission.external_directory` rules, and plugin lifecycle events
+  expose session state but not Git merge/push completion.
+- **Adapter realization:** dispatch injects `AGENT_ARTIFACT_ROOT` and merges
+  exact canonical-root allow patterns into `OPENCODE_CONFIG_CONTENT` while
+  preserving other settings. Shared guards reject worker-local artifact writes.
+- **Parity gap/fallback:** `session.idle` never deletes worktrees. Main uses
+  `preflight.sh worktree-cleanup` after integrated verification and push.
+
 ## Design Principle
 
 Start from the portable invariant in `core/`, then map it onto OpenCode-native

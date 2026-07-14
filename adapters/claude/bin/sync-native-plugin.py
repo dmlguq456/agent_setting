@@ -13,7 +13,8 @@ Mirrors `adapters/codex/bin/sync-native-plugin.py` (const block /
 `plugin_json`+`marketplace_json` literals / `write_json` / `sync()` /
 `check()`+`check_file()` / `main()`), extended: Codex's generator carries
 skills only; this one carries skills + agents + hooks(5: 2 self-contained +
-3 spec-pipeline DATA-rebased) + hooks.json + utilities/agent-home.sh
+3 spec-pipeline DATA-rebased) + hooks.json + the utility bundle required by
+those hooks (agent-home.sh, artifact-root.sh)
 (INST-OPEN-1, `_internal/hooks_inventory.md` adopt set — cycle 3 adopts the
 spec-pipeline trio via hooks.json AGENT_HOME env-prefix rebasing).
 """
@@ -37,7 +38,7 @@ SKILLS = ADAPTER / "skills"
 AGENTS = ADAPTER / "agents"
 HOOKS_SOURCE = ROOT / "hooks"
 UTILITIES_SOURCE = ROOT / "utilities"
-UTIL_BUNDLE = ["agent-home.sh"]
+UTIL_BUNDLE = ["agent-home.sh", "artifact-root.sh"]
 
 # INST-OPEN-1 adopt set (_internal/hooks_inventory.md): self-contained +
 # fail-open guards, plus (cycle 3, 2026-07-13) the spec-pipeline trio —

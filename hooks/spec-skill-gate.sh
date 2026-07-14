@@ -8,6 +8,7 @@
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/../utilities/agent-home.sh")}"
+ARTIFACT_ROOT_RESOLVER="$SCRIPT_DIR/../utilities/artifact-root.sh"
 
 usage() {
   cat <<'EOF'
@@ -22,19 +23,27 @@ find_prd() {
   dir=$1
   prd=""
   root=""
-  for _ in 0 1 2 3; do
-    if [ -f "$dir/.agent_reports/spec/prd.md" ]; then prd="$dir/.agent_reports/spec/prd.md"; root="$dir"; break; fi
-    if [ -f "$dir/.claude_reports/spec/prd.md" ]; then prd="$dir/.claude_reports/spec/prd.md"; root="$dir"; break; fi
+  while [ ! -d "$dir" ]; do
     parent=$(dirname "$dir")
-    [ "$parent" = "$dir" ] && break
+    [ "$parent" = "$dir" ] && return 0
     dir=$parent
   done
+  dir=$(CDPATH= cd -- "$dir" && pwd -P)
+  artifact_root=$("$ARTIFACT_ROOT_RESOLVER" "$dir" 2>/dev/null) || return 0
+  if [ -f "$artifact_root/spec/prd.md" ]; then
+    prd="$artifact_root/spec/prd.md"
+    root=$(dirname "$artifact_root")
+  fi
 }
 
 check_gate() {
   skill=$1
   cwd=$2
   sid=$3
+
+  if [ -d "$cwd" ]; then
+    cwd=$(CDPATH= cd -- "$cwd" && pwd -P)
+  fi
 
   case "$skill" in
     autopilot-code|autopilot-spec) ;;

@@ -34,8 +34,9 @@ def emit_header(args: argparse.Namespace, jobs: Path, matched: int, marked_done:
     print(f"marked_done={marked_done}")
     print(f"malformed={malformed}")
     print("merge_action=unsupported")
-    print("cleanup_action=unsupported")
-    print("note=registry-only; merge remains main/orchestrator")
+    print("cleanup_action=guarded-separate-step")
+    print("cleanup_command=adapters/opencode/bin/preflight.sh worktree-cleanup --check --worktree <path>")
+    print("note=registry-only; merge remains main/orchestrator; apply cleanup only after merge, integrated verification, and push")
 
 
 def matches(args: argparse.Namespace, fields: list[str]) -> bool:

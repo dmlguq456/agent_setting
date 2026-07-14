@@ -24,7 +24,8 @@ This adapter maps the common agent harness onto Claude Code.
 | role profile | Agent |
 | adapter bootstrap | `adapters/claude/CLAUDE.md` |
 | agent home | `$HOME/.claude` by default; overridable with `AGENT_HOME` or `CLAUDE_HOME` |
-| artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
+| artifact root | primary-checkout canonical `.agent_reports` via `utilities/artifact-root.sh`; linked-worktree snapshots are read-only; legacy fallback only at the canonical root |
+| worktree cleanup | `adapters/claude/bin/worktree-cleanup.sh`; dry-run first, apply only after merge + integrated verification + push |
 | tracked/untracked signal | `workflow-guard-hook.sh` + `adapters/claude/statusline.sh` |
 | artifact-order gate | `hooks/artifact-guard.sh` |
 | spec read gate | `hooks/spec-skill-gate.sh` + `hooks/spec-read-marker.sh` |
@@ -82,8 +83,8 @@ This mapping reproduces the intensity-derived rigor tiers from `CONVENTIONS §1.
 
 ## Compatibility
 
-Claude Code projects created before the neutral artifact root use `.claude_reports/`. This adapter recognizes both names. New projects should use `.agent_reports/`; existing projects can migrate later or keep the legacy directory indefinitely.
+Claude Code projects created before the neutral artifact root use `.claude_reports/`. This adapter recognizes both names at the project-wide canonical root. New projects should use `.agent_reports/`; existing projects can migrate later or keep the legacy directory indefinitely.
 
-For shell code, use `utilities/artifact-root.sh` or the equivalent rule: prefer `.agent_reports`; use `.claude_reports` only if it already exists and `.agent_reports` does not.
+For shell code, use `utilities/artifact-root.sh`. In a linked task worktree it resolves the primary checkout, so a tracked local artifact snapshot is never a write target. Headless dispatch passes that exact path with Claude `--add-dir`.
 
 For harness-home paths, use `utilities/agent-home.sh` or the equivalent rule: prefer `AGENT_HOME`, then `CLAUDE_HOME`, then `$HOME/agent_setting` when present, then `$HOME/.claude` as legacy fallback.

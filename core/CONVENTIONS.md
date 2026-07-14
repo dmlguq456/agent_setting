@@ -194,9 +194,22 @@ Every autopilot capability and `analyze-project` follows this artifact structure
 
 ### §5.1. Workspace Assumption
 
-Skills run from the project root. Prefer `.agent_reports/`; use `.claude_reports/` only when it already exists and the new root does not. Shell examples resolve `REPORTS_DIR` accordingly. `analyze-project` reads the current directory, `autopilot-code` mutates code there, and draft/research/refine discover persistent inputs below the artifact root. Cross-project work changes cwd and uses another session.
+Skills run from the project root. Resolve the project-wide write surface with
+`utilities/artifact-root.sh`. In a linked task worktree this selects the
+primary worktree's canonical `.agent_reports/`, not the tracked local
+snapshot; legacy `.claude_reports/` is selected only when it already exists
+at the canonical project root and the new root does not. `analyze-project`
+reads the current source checkout, `autopilot-code` mutates code there, and
+draft/research/refine read and write persistent inputs only below the canonical
+artifact root. Cross-project work changes cwd and uses another session.
 
-Artifact directories are normally gitignored. Add `.agent_reports/` to `.gitignore` on first creation in a tracked repository; treat legacy `.claude_reports/` similarly. The exception is `<agent-home>`, where artifact history is itself a repository asset and is committed, while transient locks and untracked markers remain ignored.
+Artifact directories are normally gitignored. Add `.agent_reports/` to
+`.gitignore` on first creation in a tracked repository; treat legacy
+`.claude_reports/` similarly. The exception is `<agent-home>`, where artifact
+history is itself a repository asset and is committed. Git therefore checks
+that directory out into linked worktrees too, but those copies remain read-only
+shadow state; durable writes still target the primary checkout's canonical
+root. Transient locks and untracked markers remain ignored.
 
 Inputs come from persistent project artifacts. External raw material is first normalized through `analyze-project --mode paper|doc`; the family has no flag for arbitrary external artifact directories.
 

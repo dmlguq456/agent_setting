@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 # Canonical-only change, stale edit rejection, and second-run determinism.
 set -eu
+export PYTHONDONTWRITEBYTECODE=1
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TMP=$(mktemp -d)
@@ -133,6 +134,8 @@ cmp -s "$ROOT/adapters/codex/skills/analyze-project/SKILL.md" \
   "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/analyze-project/SKILL.md"
 cmp -s "$ROOT/adapters/claude/skills/code-test/SKILL.md" \
   "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills/code-test/SKILL.md"
+cmp -s "$ROOT/utilities/artifact-root.sh" \
+  "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/utilities/artifact-root.sh"
 python3 "$ROOT/tools/figure-semantic-verify.test.py" >/dev/null
 
 WRAPPER_FIXTURE="$TMP/figure-wrapper"

@@ -28,9 +28,11 @@ context in this order:
    discovery. This is an agent judgment for orientation, not a prompt-keyword
    classifier. A shortened, ellipsized, or otherwise insufficient hit is only
    an index: read the full body by record ID before using it as evidence.
-2. Use the adapter status surface to determine tracked state and resolve the
-   artifact root. Prefer an existing `.agent_reports/`; only when it is absent,
-   use an existing legacy `.claude_reports/` as the project-state surface.
+2. Use the adapter status surface and `utilities/artifact-root.sh` to determine
+   tracked state and resolve the project-wide canonical artifact root. In a
+   linked worktree, ignore its tracked artifact snapshot and read the primary
+   worktree's canonical root. Prefer canonical `.agent_reports/`; only when it
+   is absent, use an existing legacy `.claude_reports/`.
 3. Read existing state before a broad source census: the newest relevant
    `pipeline_summary.md`, `pipeline_state.yaml`, `summary.md`, `REPORT.md`, or
    `STORY.md`; the latest experiment contract and `experiments/_RUNLOG.md`;

@@ -157,6 +157,21 @@ def task_prompt(args: argparse.Namespace) -> tuple[str, str]:
     )
 
 
+def resolve_artifact_root(worktree: str) -> str:
+    result = subprocess.run(
+        [str(ROOT / "utilities" / "artifact-root.sh"), worktree],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    value = result.stdout.strip()
+    if result.returncode != 0 or not value or not Path(value).is_absolute():
+        detail = (result.stderr or result.stdout or "invalid artifact root").strip()
+        raise ValueError(detail)
+    return value
+
+
 def qa_track(capability: str) -> str:
     if capability.startswith("code-") or capability == "autopilot-code":
         return "code"
@@ -282,11 +297,14 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- owner: {args.capability_owner or '-'}\n"
         f"- owner_harness: {args.owner_harness or '-'}\n"
         f"- worktree: {args.worktree}\n\n"
+        f"- artifact_root: {args.artifact_root}\n\n"
         f"{execution_contract}"
         "User task:\n"
         f"{task.rstrip()}\n\n"
         "Return a concise report with changed files, verification commands, artifact paths, and any blocked/unsupported Codex tool contracts. "
-        "Leave merge and worktree cleanup to the main orchestrator.\n",
+        "Write every durable agent artifact only under artifact_root; the task worktree's "
+        "tracked .agent_reports/.claude_reports snapshot is read-only shadow state. "
+        "Leave merge and guarded worktree cleanup to the main orchestrator.\n",
         source,
     )
 
@@ -297,6 +315,8 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         "exec",
         "--cd",
         args.worktree,
+        "--add-dir",
+        args.artifact_root,
         "--sandbox",
         args.sandbox,
     ]
@@ -352,6 +372,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",approval={args.approval}"
     if args.profile:
         pipe += f",profile={args.profile}"
+    pipe += f",artifact_root={args.artifact_root}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     with jobs_lock(jobs):
         with jobs.open("a", encoding="utf-8") as f:
@@ -438,6 +459,9 @@ def resolve_agent_home() -> Path:
     env_home = os.environ.get("AGENT_HOME")
     if env_home and (Path(env_home) / "core" / "CORE.md").is_file():
         return Path(env_home)
+    maintainer_home = Path.home() / "agent_setting"
+    if (maintainer_home / "core" / "CORE.md").is_file():
+        return maintainer_home
     return ROOT
 
 
@@ -548,6 +572,10 @@ def main(argv: list[str]) -> int:
         return fail("worktree-not-found", 66, worktree=args.worktree)
     if subprocess.run(["git", "-C", args.worktree, "rev-parse", "--is-inside-work-tree"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
         return fail("not-a-git-worktree", 65, worktree=args.worktree)
+    try:
+        args.artifact_root = resolve_artifact_root(args.worktree)
+    except ValueError as e:
+        return fail("artifact-root-resolution-failed", 64, detail=str(e), worktree=args.worktree)
     rc = validate_dispatch_inputs(args)
     if rc != 0:
         return rc
@@ -625,6 +653,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
+            "AGENT_ARTIFACT_ROOT": args.artifact_root,
         }
         if profile_home is not None:
             dispatch_env["CODEX_HOME"] = str(profile_home)
@@ -643,6 +672,8 @@ def main(argv: list[str]) -> int:
     print("runtime_surface=codex-exec-headless")
     print(f"status={action}")
     print(f"worktree={args.worktree}")
+    print(f"artifact_root={args.artifact_root}")
+    print("artifact_write_scope=canonical-only")
     print(f"slug={args.slug}")
     print(f"capability={args.capability}")
     print(f"mode={args.mode}")

@@ -78,6 +78,9 @@ Pipeline intensity is the primary ceremony selector for this entrypoint. Use `di
 Adapters must preserve the portable invariants relevant to this capability:
 
 - resolve artifact root through `utilities/artifact-root.sh` or equivalent logic;
+- in a linked task worktree, treat the local artifact snapshot as read-only and
+  write plans/logs/reports only to the canonical root passed through
+  `AGENT_ARTIFACT_ROOT`;
 - enforce git/worktree safety before edits;
 - enforce artifact ordering before new durable artifacts;
 - enforce spec-read gating when this capability changes spec-backed code or specs;
@@ -91,6 +94,9 @@ Additional code-entry gates:
 - for app mode, treat design tokens and handoff artifacts as source contracts, not suggestions;
 - for destructive DB/schema/migration work, explain the command and risk, but do not auto-run destructive operations without explicit user approval;
 - for non-trivial feature, multi-file, or module work, use the runtime's isolated-worktree or equivalent dispatch policy from `core/OPERATIONS.md`.
+- after main/orchestrator merges, verifies the integrated tree, and pushes the
+  integration ref, invoke the guarded worktree cleanup check/apply path; never
+  infer cleanup eligibility from a runtime session-end event.
 
 ## Portable Procedure
 

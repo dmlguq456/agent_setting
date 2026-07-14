@@ -21,6 +21,11 @@ fi
 cwd=${1:-$PWD}
 sid=${2:-agent-status}
 adapter=${AGENT_ADAPTER:-portable}
+self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+if [ -d "$cwd" ]; then
+  cwd=$(CDPATH= cd -- "$cwd" && pwd -P)
+fi
 
 printf 'adapter=%s\n' "$adapter"
 printf 'runtime_surface=adapter-owned-harness-status\n'
@@ -33,39 +38,32 @@ if command -v git >/dev/null 2>&1 && git -C "$cwd" rev-parse --is-inside-work-tr
 fi
 
 search_root=${project_root:-$cwd}
-d=$search_root
-artifact_root=""
-artifact_kind=""
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40; do
-  if [ -d "$d/.agent_reports" ]; then
-    artifact_root="$d/.agent_reports"
-    artifact_kind=".agent_reports"
-    break
-  fi
-  if [ -d "$d/.claude_reports" ]; then
-    artifact_root="$d/.claude_reports"
-    artifact_kind=".claude_reports"
-    break
-  fi
-  [ "$d" = "/" ] && break
-  [ "$d" = "$HOME" ] && break
-  d=$(dirname "$d")
-done
+artifact_root=$("$self_dir/artifact-root.sh" "$search_root")
+artifact_kind=$(basename "$artifact_root")
 
-if [ -n "$artifact_root" ]; then
+if [ -d "$artifact_root" ]; then
   printf 'artifact_root=%s\n' "$artifact_root"
   printf 'artifact_root_kind=%s\n' "$artifact_kind"
   printf 'artifact_root_exists=1\n'
 else
-  expected=${project_root:-$cwd}/.agent_reports
-  printf 'artifact_root=%s\n' "$expected"
-  printf 'artifact_root_kind=.agent_reports\n'
+  printf 'artifact_root=%s\n' "$artifact_root"
+  printf 'artifact_root_kind=%s\n' "$artifact_kind"
   printf 'artifact_root_exists=0\n'
 fi
 
+if [ -n "${AGENT_ARTIFACT_ROOT:-}" ]; then
+  artifact_scope=explicit
+elif [ -n "$project_root" ] && [ "$(dirname "$artifact_root")" != "$project_root" ]; then
+  artifact_scope=primary-worktree
+else
+  artifact_scope=project-local
+fi
+printf 'artifact_root_scope=%s\n' "$artifact_scope"
+printf 'artifact_write_target=canonical-only\n'
+
 workflow_state=not-configured
 untracked_flag=""
-if [ -n "$artifact_root" ]; then
+if [ -d "$artifact_root" ]; then
   workflow_state=tracked
   if [ -f "$artifact_root/.untracked.$sid" ]; then
     workflow_state=untracked
@@ -201,7 +199,6 @@ fi
 # ts, state, repo, worktree, slug, pipe). Surfaces in-flight background work that
 # native status footers do not cover. Override the registry path with
 # AGENT_DISPATCH_JOBS.
-self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 status_home=${AGENT_HOME:-}
 if [ -z "$status_home" ] || [ ! -f "$status_home/core/CORE.md" ]; then
   status_home=$(CDPATH= cd -- "$self_dir/.." && pwd)

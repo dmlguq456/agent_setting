@@ -4,7 +4,14 @@
 
 ## §5.8. Pipeline Lock — Guarding a Shared Artifact Root Across Worktrees
 
-When several git worktrees symlink one canonical artifact root—`.agent_reports`, with legacy `.claude_reports` compatibility—simultaneous writes to shared `spec/prd.md`, `pipeline_state.yaml`, or `pipeline_summary.md` can lose updates. `plans/<cycle>/` is path-separated by cycle and does not require this lock.
+Every project has one canonical artifact root—`.agent_reports`, with legacy
+`.claude_reports` compatibility—resolved by
+`utilities/artifact-root.sh <cwd>`. Linked task worktrees are source-only:
+their tracked artifact snapshots are read-only, while all workers share the
+primary checkout's canonical root through `AGENT_ARTIFACT_ROOT`. Simultaneous
+writes to shared `spec/prd.md`, `pipeline_state.yaml`, or
+`pipeline_summary.md` can lose updates. `plans/<cycle>/` is path-separated by
+cycle and does not require this lock.
 
 - **Lock file:** `<artifact-root>/.pipeline-lock`, visible to all worktrees. It is transient because the artifact root is gitignored.
 - **Protected scope:** write sections for the three shared `spec/` files only. Reads and plan writes do not lock.
@@ -13,7 +20,7 @@ When several git worktrees symlink one canonical artifact root—`.agent_reports
 Acquire immediately before `autopilot-spec` Step 3 or update mode, `autopilot-code` state/summary writes, or a spec-drift update:
 
 ```bash
-REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports
+REPORTS_DIR=$("${AGENT_HOME:-$HOME/agent_setting}/utilities/artifact-root.sh" "$PWD") || exit
 LOCK="$REPORTS_DIR/.pipeline-lock"; NOW=$(date +%s); WT=$(pwd -P)
 if [ -f "$LOCK" ]; then
   LAT=$(sed -n 's/^at=//p' "$LOCK"); LWT=$(sed -n 's/^worktree=//p' "$LOCK"); LBR=$(sed -n 's/^branch=//p' "$LOCK")
@@ -30,18 +37,20 @@ On exit 3, stop the write, report that another worktree is editing the spec, and
 Release after normal completion and on interruption or error:
 
 ```bash
-REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports
+REPORTS_DIR=$("${AGENT_HOME:-$HOME/agent_setting}/utilities/artifact-root.sh" "$PWD") || exit
 rm -f "$REPORTS_DIR/.pipeline-lock"
 ```
 
 For a read-only check before touching the spec:
 
 ```bash
-REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports
+REPORTS_DIR=$("${AGENT_HOME:-$HOME/agent_setting}/utilities/artifact-root.sh" "$PWD") || exit
 [ -f "$REPORTS_DIR/.pipeline-lock" ] && cat "$REPORTS_DIR/.pipeline-lock" || echo "no active edit"
 ```
 
-In a single-checkout environment the lock always belongs to the same worktree and safely overrides. It becomes an effective guard only when symlink-sharing worktrees exist.
+In a single-checkout environment the lock always belongs to the same worktree
+and safely overrides. With linked worktrees, the canonical resolver makes the
+same lock visible without replacing a tracked directory with a symlink.
 
 ### §5.9. Git Working-State Preflight
 
@@ -99,6 +108,13 @@ Dispatch rules:
 
 1. **Overlap triage:** if a new request is likely to touch the same files as an active job, queue it behind that job on the same branch. Otherwise it may run in parallel.
 2. **Execution and naming:** create the worktree with `git worktree add <path> -b <slug> origin/<base>` using §5.9 base selection. The sole canonical path is the sibling directory `<repo>-wt/<slug>`, such as `Foo-wt/<slug>` for `Foo`; do not invent `<repo>_worktrees/`. `worktree-path-guard` hard-enforces this naming for `git worktree add`, while untracked mode, non-add subcommands, and non-git contexts fail open.
+   - **Source-only worktree:** immediately resolve the primary checkout's
+     canonical artifact root. Dispatch wrappers inject it as
+     `AGENT_ARTIFACT_ROOT`, include it in prompt/registry metadata, and open
+     only that external path through runtime-native scoped access (Claude/Codex
+     `--add-dir`; OpenCode exact `permission.external_directory` rule).
+     Writes to the task worktree's `.agent_reports/**` or
+     `.claude_reports/**` snapshot fail closed.
    - **Light team delegation:** open a team agent in the background and name the work root in its prompt. The main session opens QA against that same path. Use only for small, fast iterations.
    - **Quick one-shot:** open one depth-1 owner. Its micro-stages stay inline inside that worker, it opens no depth-2 fan-out, and any mutating quick job uses an isolated worktree.
    - **Full headless ceremony:** launch an adapter-specific headless main in the worktree. It acts as a complete main for that runtime, including team roles, hooks or preflight, and plan artifacts. The adapter owns noninteractive tool and permission setup and documents its cost realization. The top-level dispatch is a depth-1 capability owner that returns only synthesis to main.
@@ -110,11 +126,27 @@ Dispatch rules:
    - The parent orchestrator chooses a portable model role or a concrete runtime model and effort for each job, or explicitly inherits settings. Wrappers reflect the choice and must not silently pick a default or inherit the interactive model. The orchestrator also chooses the harness.
    - **Cross-harness routing under SD-16:** before dispatch, query each harness through `utilities/usage-check.sh`, which reports `ok`, `limited(reset)`, or `unknown`. Avoid a limited harness, distribute when both are available, place work by runtime strengths, and prefer a checker from a different model family than the maker. Initial weighting is limit avoidance, then task fit, then distribution. `HARNESS_CAPACITY_BIAS` may provide an explicit preference; otherwise remain neutral `auto`. Never hardcode a durable claim that one vendor has more capacity. Current interactive `/usage` and `/status` commands are not headless usage APIs, so the helper conservatively derives limits from `jobs.log` death markers; `ok` means no known block, not guaranteed capacity.
    - **Immediate limit-death handling under SD-15:** wrappers watch briefly after launch. If a child exits immediately on session, usage, or authentication limits, mark its row `done` with `note=dead-<reason>` and, when available, `reset=<time>`. Liveness also recognizes anchored short CLI error lines at the end of logs, but a fresh completion or activity transcript wins over a report that merely discusses limits. Wrappers do not retry; the orchestrator chooses redispatch or failover.
-   - **Canonical job registry:** explicit `--jobs` wins, then `AGENT_DISPATCH_JOBS`, then `<agent-home>/.dispatch/jobs.log`. Every harness registers before launch using six tab-separated fields: `<ISO-time>`, `open`, `<repo>`, `<worktree>`, `<slug>`, and `<pipe>`. The comma-separated `<pipe>` field carries `capability`, `mode`, `qa`, `intensity`, `depth`, `harness`, `parent`, `parent_sid`, `parent_cwd`, `worker_role`, `owner`, `owner_harness`, `profile`, and exact child `pid`. Status words are only `open`, `running`, and `done`; never substitute `registered`. Cross-harness `parent_sid` preserves Fleet parent-child ownership. Manual completion of a limit death must include `reset=<time>` when known so capacity clears at the right time.
+   - **Canonical job registry:** explicit `--jobs` wins, then `AGENT_DISPATCH_JOBS`, then `<agent-home>/.dispatch/jobs.log`. Every harness registers before launch using six tab-separated fields: `<ISO-time>`, `open`, `<repo>`, `<worktree>`, `<slug>`, and `<pipe>`. The comma-separated `<pipe>` field carries `capability`, `mode`, `qa`, `intensity`, `depth`, `harness`, `parent`, `parent_sid`, `parent_cwd`, `worker_role`, `owner`, `owner_harness`, `profile`, canonical `artifact_root`, and exact child `pid`. Status words are only `open`, `running`, and `done`; never substitute `registered`. Cross-harness `parent_sid` preserves Fleet parent-child ownership. Manual completion of a limit death must include `reset=<time>` when known so capacity clears at the right time.
    - **Fleet notice:** after starting background work, tell the user once that Fleet is the live cross-harness dashboard for stage and liveness status. Its quality depends on complete argv and registry metadata; do not repeat the notice when the user already has Fleet open.
    - **Stealth-death guard:** never wait indefinitely on completion notifications. Use the adapter liveness wrapper: Codex `adapters/codex/bin/preflight.sh liveness [jobs.log]`, OpenCode `adapters/opencode/bin/preflight.sh liveness [jobs.log]`, or Claude/shared `utilities/dispatch-liveness.sh [jobs.log]`. They report `ALIVE`, `SUSPECT`, `DEAD`, or `EXITED`; exit 3 means at least one suspicious or unharvested job. Diagnose through transcript and dispatch-log tails, then harvest or redispatch. Exact recorded `pid` plus `/proc/<pid>/cmdline` is the strongest signal. Transcript or DB mtime is a fallback only because workers sharing a worktree can make each other's directories look fresh; path-based `pgrep` is rejected as false-positive prone.
    - **One-shot wait contract under SD-14:** a headless main, including a conductor, exits when its turn ends. A conductor therefore must not end a turn waiting for a notification after dispatching a stage. It polls within the same turn through `utilities/dispatch-wait.sh`, then harvests. Enforcement combines injected wrapper guidance and the deterministic wait helper. A Claude Stop-hook gate remains disabled because it does not fire reliably under `claude -p` and can corrupt result output.
-3. **Merge selection belongs to main or the orchestrator:** merge only after an explicit user signal or while harvesting a background job that main dispatched. Do not self-merge the current turn's substantive branch; finish with the branch and a concise report while preserving main. Keep the branch after merge as a rollback point. Remove a harvested worktree directory at the next natural pause only after stopping orphaned processes and copying gitignored artifacts such as `.agent_reports/plans/` back to main's artifact root. Review `git diff main...<branch>`, skip regressions or duplicated work, resolve conflicts by interpreting both intents rather than choosing a side automatically, stop when ambiguity would revert an established result, and verify the integrated build. “Merge everything” means merge all valid work selectively, not blindly accept every diff.
+3. **Merge and cleanup belong to main or the orchestrator:** merge only after an explicit user signal or while harvesting a background job that main dispatched. Do not self-merge the current turn's substantive branch; finish with the branch and a concise report while preserving main unless the user has already authorized integration. Review `git diff main...<branch>`, skip regressions or duplicated work, resolve conflicts by interpreting both intents rather than choosing a side automatically, stop when ambiguity would revert an established result, and verify the integrated build. “Merge everything” means merge all valid work selectively, not blindly accept every diff.
+   - After merge, integrated verification, and a successful push of the
+     integration ref, main automatically runs
+     `utilities/worktree-cleanup.py --check --worktree <path>` and then the
+     same command with `--apply` when eligible. The state machine blocks the
+     primary worktree, dirty/untracked state, Git operations, locks, unmerged
+     HEADs, an integration ref not synchronized with its upstream, and active
+     exact job PIDs or process cwd. It never uses `--force`, and the branch is
+     retained as a rollback point.
+   - Cleanup does not copy or harvest agent artifacts: workers wrote them to
+     the canonical root from the start. A stale matching open registry row is
+     reconciled to `done,note=cleanup-merged` only after every other safety
+     gate passes. `--all-eligible` considers only worktrees referenced by the
+     selected jobs registry; `git worktree lock` is an explicit keep veto.
+   - Runtime lifecycle events such as Claude `SessionEnd`, Codex `Stop`, or
+     OpenCode `session.idle` do not prove merge/push completion and must never
+     perform destructive cleanup. They may expose diagnostics only.
 4. **Shared artifacts:** route writes to shared artifact-root files through the §5.8 lock. `plans/<slug>/` remains path-separated and noncontending.
 5. **Context:** when coordination records pressure the main context, propose a post-it handoff under the global continuity rule.
 

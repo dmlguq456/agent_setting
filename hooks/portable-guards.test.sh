@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -u
+export PYTHONDONTWRITEBYTECODE=1
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ART="$ROOT/hooks/artifact-guard.sh"
@@ -34,6 +35,8 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 export AGENT_HOME="$TMP/agent_home"
 unset AGENT_DISPATCH_PARENT_SESSION_ID AGENT_DISPATCH_OWNER_HARNESS CODEX_THREAD_ID
+DIRECT_DISPATCH_HOME="$ROOT"
+[ -f "$HOME/agent_setting/core/CORE.md" ] && DIRECT_DISPATCH_HOME="$HOME/agent_setting"
 
 echo "== artifact guard CLI =="
 mkdir -p "$TMP/proj/.agent_reports/spec"
@@ -47,6 +50,32 @@ if "$ART" --file "$TMP/proj/.agent_reports/spec/prd.md" --session test >/tmp/art
   ok "new spec with research passes"
 else
   bad "new spec with research should pass"
+fi
+
+echo "== source-only worktree artifact guard =="
+mkdir -p "$TMP/artrepo/.agent_reports/_internal" "$TMP/artrepo-wt"
+(
+  cd "$TMP/artrepo" || exit 1
+  git init -q
+  git config user.email test@example.com
+  git config user.name Test
+  printf 'canonical\n' > .agent_reports/_internal/marker
+  git add .
+  git commit -q -m init
+  git worktree add -q -b artifact-topic "$TMP/artrepo-wt/topic"
+)
+if "$ART" --file "$TMP/artrepo-wt/topic/.agent_reports/_internal/probe.md" >/tmp/art_local.out 2>/tmp/art_local.err; then
+  bad "linked-worktree artifact write should fail"
+else
+  [ "$?" -eq 2 ] \
+    && grep -q 'source-only' /tmp/art_local.err \
+    && ok "linked-worktree artifact write exits 2" \
+    || bad "linked-worktree artifact write wrong exit/message"
+fi
+if "$ART" --file "$TMP/artrepo/.agent_reports/_internal/probe.md" >/tmp/art_main.out 2>/tmp/art_main.err; then
+  ok "canonical artifact write passes"
+else
+  bad "canonical artifact write should pass"
 fi
 
 echo "== git state guard CLI =="
@@ -261,6 +290,32 @@ if (cd "$TMP/specproj" && "$CODEX" read .agent_reports/spec/prd.md relsid >/tmp/
   ok "codex read wrapper resolves relative prd paths for spec gate"
 else
   bad "codex read wrapper should resolve relative prd paths for spec gate"
+fi
+
+mkdir -p "$TMP/canonical-spec/.agent_reports/spec" "$TMP/canonical-spec-wt"
+(
+  cd "$TMP/canonical-spec" || exit 1
+  git init -q
+  git config user.email test@example.com
+  git config user.name Test
+  printf 'canonical prd\n' > .agent_reports/spec/prd.md
+  git add .
+  git commit -q -m init
+  git worktree add -q -b spec-topic "$TMP/canonical-spec-wt/topic"
+)
+"$MARK" --file "$TMP/canonical-spec-wt/topic/.agent_reports/spec/prd.md" --session shadowread
+if "$SPEC" --skill autopilot-code --cwd "$TMP/canonical-spec-wt/topic" --session shadowread >/tmp/spec_shadow.out 2>/tmp/spec_shadow.err; then
+  bad "worker-local shadow spec read should not satisfy canonical gate"
+else
+  [ "$?" -eq 2 ] \
+    && ok "worker-local shadow spec read does not satisfy gate" \
+    || bad "worker-local shadow spec read wrong exit"
+fi
+if "$MARK" --file "$TMP/canonical-spec/.agent_reports/spec/prd.md" --session canonicalread \
+  && (cd "$TMP/canonical-spec-wt/topic" && "$SPEC" --skill autopilot-code --cwd . --session canonicalread); then
+  ok "canonical spec marker satisfies relative linked-worktree gate"
+else
+  bad "canonical spec marker should satisfy relative linked-worktree gate"
 fi
 
 echo "== core-first adapter edit gate CLI =="
@@ -769,8 +824,8 @@ else
   bad "codex dispatch wrapper should not trust invalid AGENT_HOME for default registry"
 fi
 if AGENT_HOME="$TMP/not-agent-home" python3 "$ROOT/adapters/codex/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug codex-direct-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low >/tmp/codex_dispatch_direct.out 2>/tmp/codex_dispatch_direct.err \
-  && grep -Fxq "job_registry=$ROOT/.dispatch/jobs.log" /tmp/codex_dispatch_direct.out \
-  && grep -Fxq "prompt_file=$ROOT/.dispatch/logs/codex-direct-home.codex.prompt.txt" /tmp/codex_dispatch_direct.out; then
+  && grep -Fxq "job_registry=$DIRECT_DISPATCH_HOME/.dispatch/jobs.log" /tmp/codex_dispatch_direct.out \
+  && grep -Fxq "prompt_file=$DIRECT_DISPATCH_HOME/.dispatch/logs/codex-direct-home.codex.prompt.txt" /tmp/codex_dispatch_direct.out; then
   ok "codex dispatch script ignores invalid AGENT_HOME"
 else
   bad "codex dispatch script should validate AGENT_HOME"
@@ -2875,8 +2930,8 @@ else
   bad "opencode dispatch wrapper should not trust invalid AGENT_HOME for default registry"
 fi
 if AGENT_HOME="$TMP/not-agent-home" python3 "$ROOT/adapters/opencode/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug opencode-direct-home --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model provider/test --variant low >/tmp/opencode_dispatch_direct.out 2>/tmp/opencode_dispatch_direct.err \
-  && grep -Fxq "job_registry=$ROOT/.dispatch/jobs.log" /tmp/opencode_dispatch_direct.out \
-  && grep -Fxq "prompt_file=$ROOT/.dispatch/logs/opencode-direct-home.opencode.prompt.txt" /tmp/opencode_dispatch_direct.out; then
+  && grep -Fxq "job_registry=$DIRECT_DISPATCH_HOME/.dispatch/jobs.log" /tmp/opencode_dispatch_direct.out \
+  && grep -Fxq "prompt_file=$DIRECT_DISPATCH_HOME/.dispatch/logs/opencode-direct-home.opencode.prompt.txt" /tmp/opencode_dispatch_direct.out; then
   ok "opencode dispatch script ignores invalid AGENT_HOME"
 else
   bad "opencode dispatch script should validate AGENT_HOME"

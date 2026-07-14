@@ -6,6 +6,7 @@
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/../utilities/agent-home.sh")}"
+ARTIFACT_ROOT_RESOLVER="$SCRIPT_DIR/../utilities/artifact-root.sh"
 
 usage() {
   cat <<'EOF'
@@ -31,7 +32,18 @@ mark_read() {
   esac
   [ -f "$fp" ] || return 0
 
-  root=$(dirname "$(dirname "$(dirname "$fp")")")
+  file_root=$(dirname "$(dirname "$(dirname "$fp")")")
+  canonical=$("$ARTIFACT_ROOT_RESOLVER" "$file_root" 2>/dev/null) || return 0
+  canonical_prd="$canonical/spec/prd.md"
+  canonical_parent=$(dirname "$canonical_prd")
+  canonical_parent=$(CDPATH= cd -- "$canonical_parent" 2>/dev/null && pwd -P) || return 0
+  canonical_prd="$canonical_parent/$(basename "$canonical_prd")"
+  file_parent=$(dirname "$fp")
+  file_parent=$(CDPATH= cd -- "$file_parent" 2>/dev/null && pwd -P) || return 0
+  fp="$file_parent/$(basename "$fp")"
+  [ "$fp" = "$canonical_prd" ] || return 0
+
+  root=$(dirname "$canonical")
   key=$(printf '%s' "$root" | sed 's#[/ ]#_#g')
   mtime=$(stat -c %Y "$fp" 2>/dev/null || echo 0)
 

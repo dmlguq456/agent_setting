@@ -68,6 +68,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--intensity <level>] [--depth 1|2] [--parent <slug>] [--worker-role <role>] [--owner <capability>] [--agent <agent>] (--model-role <role>|--model <model> --variant <variant>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>] [--log-dir <dir>]
        preflight.sh liveness [jobs.log]
        preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
+       preflight.sh worktree-cleanup [--check|--apply] (--worktree <path>|--all-eligible [--repo <path>]) [--integration-ref <ref>] [--jobs <jobs.log>]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
        preflight.sh loop-info <oncall|note|study|drill|runtime-watch>
@@ -377,6 +378,10 @@ EOF
   harvest)
     shift
     AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/opencode/bin/dispatch-harvest.py" "$@"
+    ;;
+  worktree-cleanup)
+    shift
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/worktree-cleanup.py" "$@"
     ;;
   dispatch)
     shift

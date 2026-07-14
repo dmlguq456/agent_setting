@@ -48,30 +48,54 @@ print("SID="+shlex.quote(d.get("session_id","") or ""))
 fi
 
 [ -z "$fp" ] && exit 0
-case "$fp" in */_internal/*) exit 0 ;; esac   # Machine-managed snapshot.
 
-# ---- Project root containing the artifact root ----
-d=$(dirname "$fp"); root=""
-for _ in $(seq 1 40); do
-  [ -d "$d/.agent_reports" ] && { root="$d"; break; }
-  [ -d "$d/.claude_reports" ] && { root="$d"; break; }
-  [ "$d" = "/" ] && break
-  d=$(dirname "$d")
-done
-# Infer the root from an .agent_reports or .claude_reports path even when the
-# directory does not yet exist, so the first artifact cannot bypass ordering.
-if [ -z "$root" ]; then
-  case "$fp" in
-    */.agent_reports/*) root="${fp%%/.agent_reports/*}" ;;
-    */.claude_reports/*) root="${fp%%/.claude_reports/*}" ;;
-  esac
-fi
-[ -z "$root" ] && exit 0
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+ARTIFACT_ROOT_RESOLVER="$SCRIPT_DIR/../utilities/artifact-root.sh"
+
 case "$fp" in
-  */.agent_reports/*) cr="$root/.agent_reports" ;;
-  */.claude_reports/*) cr="$root/.claude_reports" ;;
-  *) [ -d "$root/.agent_reports" ] && cr="$root/.agent_reports" || cr="$root/.claude_reports" ;;
+  /*) ;;
+  *) fp="$PWD/$fp" ;;
 esac
+
+# ---- Source-only linked worktree gate ----
+# A tracked artifact snapshot can exist in every Git worktree. It is read-only
+# shadow state: only the canonical artifact root selected by artifact-root.sh is
+# writable. Run this before the _internal snapshot exemption.
+case "$fp" in
+  */.agent_reports/*) local_project=${fp%%/.agent_reports/*}; local_artifact="$local_project/.agent_reports" ;;
+  */.claude_reports/*) local_project=${fp%%/.claude_reports/*}; local_artifact="$local_project/.claude_reports" ;;
+  *) local_project=""; local_artifact="" ;;
+esac
+if [ -n "$local_project" ]; then
+  canonical=$("$ARTIFACT_ROOT_RESOLVER" "$local_project" 2>/dev/null) || {
+    echo "⛔ Cannot resolve the canonical artifact root; artifact writes fail closed: $fp" >&2
+    exit 2
+  }
+  if [ -d "$local_artifact" ]; then
+    local_artifact=$(CDPATH= cd -- "$local_artifact" 2>/dev/null && pwd -P) || {
+      echo "⛔ Cannot normalize artifact write target: $fp" >&2
+      exit 2
+    }
+  else
+    local_parent=$(dirname "$local_artifact")
+    local_parent=$(CDPATH= cd -- "$local_parent" 2>/dev/null && pwd -P) || {
+      echo "⛔ Cannot normalize artifact write target: $fp" >&2
+      exit 2
+    }
+    local_artifact="$local_parent/$(basename "$local_artifact")"
+  fi
+  if [ "$local_artifact" != "$canonical" ]; then
+    printf '⛔ Task worktrees are source-only; agent artifacts must use the canonical root.\n   requested=%s\n   canonical=%s\n' "$fp" "$canonical" >&2
+    exit 2
+  fi
+fi
+
+case "$fp" in */_internal/*) exit 0 ;; esac   # Machine-managed canonical snapshot.
+
+# ---- Project root containing the canonical artifact root ----
+root=$local_project
+[ -z "$root" ] && exit 0
+cr=$canonical
 
 # ---- ⚡untracked bypass (per-session flag isolates concurrent sessions) ----
 flagbase="$cr/.untracked"; [ -d "$cr" ] || flagbase="$root/.untracked"

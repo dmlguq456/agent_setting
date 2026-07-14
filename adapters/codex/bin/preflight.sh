@@ -44,6 +44,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]
        preflight.sh liveness [jobs.log]
        preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
+       preflight.sh worktree-cleanup [--check|--apply] (--worktree <path>|--all-eligible [--repo <path>]) [--integration-ref <ref>] [--jobs <jobs.log>]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
        preflight.sh ui-info
@@ -503,6 +504,10 @@ EOF
   harvest)
     shift
     AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/dispatch-harvest.py" "$@"
+    ;;
+  worktree-cleanup)
+    shift
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/worktree-cleanup.py" "$@"
     ;;
   dispatch)
     shift

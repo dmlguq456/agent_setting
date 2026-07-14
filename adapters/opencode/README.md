@@ -61,7 +61,8 @@ guards and tool-contract reporting.
 | agent home | Set `AGENT_HOME` to the installed harness directory |
 | permission model | Run `adapters/opencode/bin/preflight.sh permissions`; use OpenCode native `permission` config and plugin hooks, not Claude `allowedTools` |
 | MCP config | Run `adapters/opencode/bin/preflight.sh mcp [--check]`; use OpenCode native `opencode mcp`/config surfaces, not Claude `settings.json` MCP payloads |
-| artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
+| artifact root | primary-checkout canonical `.agent_reports` via `utilities/artifact-root.sh`; linked-worktree snapshots are read-only; legacy fallback only at the canonical root |
+| worktree cleanup | `preflight.sh worktree-cleanup`; dry-run first, apply only after merge + integrated verification + push |
 | workflow start cleanup | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh start [cwd] [session-id]` once per session; run it manually when plugins are unavailable |
 | tracked/untracked signal | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]`; run it manually when plugins are unavailable |
 | harness status snapshot | Run `adapters/opencode/bin/preflight.sh status [cwd] [session-id]` for read-only workflow, artifact, notes, worktree, and git-risk signals. This does not replace OpenCode native model/context/session UI |
@@ -283,9 +284,12 @@ configured.
 
 ## Compatibility
 
-OpenCode should create new project artifacts under `.agent_reports/`. Use
-`utilities/artifact-root.sh` or the equivalent rule: prefer `.agent_reports`;
-use `.claude_reports` only if it already exists and `.agent_reports` does not.
+OpenCode should create new project artifacts only under the root returned by
+`utilities/artifact-root.sh`. In a linked task worktree this is the primary
+checkout's `.agent_reports/`, not the tracked local snapshot. The dispatch
+wrapper injects `AGENT_ARTIFACT_ROOT` and adds exact
+`permission.external_directory` allow rules while retaining all other config;
+legacy `.claude_reports/` remains a canonical-root fallback.
 
 OpenCode should resolve harness-home paths through `AGENT_HOME` or the
 OpenCode-owned `utilities/agent-home.sh`. Some shared legacy tools still accept
