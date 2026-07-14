@@ -263,19 +263,17 @@ reasoning-effort config field.
 
 | Portable role | OpenCode adapter expectation |
 |---|---|
-| `fast reviewer` / `fast fact-checker` / `fast writer` | 낮은 비용·낮은 지연의 모델 또는 `small_model` + 낮은 variant. surface, coverage, format, verbatim matching 중심 |
-| `fast implementer` | configured balanced model/variant; concrete default는 runtime inventory 전까지 unknown |
-| `deep reviewer` / `deep maker` | 높은 variant 또는 더 강한 모델. methodology, domain, architecture, safety 판단 중심 |
-| `external adversary` | 가능하면 primary OpenCode session 과 다른 모델·설정·프로세스. 없으면 explicit unavailable 로 보고하고 thorough 로 fallback |
-| `deep orchestrator` | standard+ depth-1 conductor; concrete model은 runtime inventory/probe 전까지 unknown |
-| `orchestrator` | balanced mechanical coordination; concrete model은 runtime inventory/probe 전까지 unknown |
+| `fast reviewer` / `fast fact-checker` / `fast writer` | Low-cost, low-latency model or `small_model` with a low variant for surface, coverage, format, and verbatim matching |
+| `fast implementer` | Configured balanced model/variant; concrete default remains unknown until runtime inventory exists |
+| `deep reviewer` / `deep maker` | Higher variant or stronger model for methodology, domain, architecture, and safety judgment |
+| `external adversary` | Prefer a model, configuration, or process different from the primary OpenCode session; otherwise report unavailable and fall back to thorough |
+| `deep orchestrator` | Standard+ depth-1 conductor; concrete model remains unknown until runtime inventory or probe exists |
+| `orchestrator` | Balanced mechanical coordination; concrete model remains unknown until runtime inventory or probe exists |
 
-OpenCode wrapper 는 `AGENT_MODEL_FAST`, `AGENT_MODEL_BALANCED`, `AGENT_MODEL_DEEP`,
+OpenCode wrappers expose the mapping through `AGENT_MODEL_FAST`, `AGENT_MODEL_BALANCED`, `AGENT_MODEL_DEEP`,
 `AGENT_MODEL_EXTERNAL`, `AGENT_MODEL_ORCHESTRATOR`,
 `AGENT_VARIANT_FAST`, `AGENT_VARIANT_BALANCED`, `AGENT_VARIANT_DEEP`,
-`AGENT_VARIANT_EXTERNAL`, `AGENT_VARIANT_ORCHESTRATOR` 같은 환경변수로
-이 mapping 을 드러낸다. 공통 skill 은 concrete model name 을 요구하지
-않고 role 의미만 요구한다.
+`AGENT_VARIANT_EXTERNAL`, and `AGENT_VARIANT_ORCHESTRATOR`. Shared Skills require role meaning rather than concrete model names.
 
 `adapters/opencode/bin/preflight.sh role <portable-role>` is the executable
 mapping surface. When no concrete model is configured it reports

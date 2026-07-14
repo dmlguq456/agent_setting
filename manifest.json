@@ -990,51 +990,51 @@
   "loops": [
     {
       "slug": "loop__drill",
-      "name": "모의훈련",
+      "name": "Drill",
       "mono": "drill",
       "type": "event",
-      "schedule": "지침 _행동규칙_ 수정 후 `drill/run.sh` (정기 회귀 `--sample 2` 랜덤 2개 · 가드/라우팅 대폭 변경 시만 관련 케이스·전수 — 매번 전수는 과부하)",
-      "blurb": "fixture 가상 상황에서 headless **시험·채점** + FAIL 시 **진단·수정안 초안** 자동 작성(적용 X)",
-      "output_path": "`drill/results/<일시>/` (+ `<case>.diagnosis.md`)",
+      "schedule": "`drill/run.sh` after behavioral instruction changes; periodic `--sample 2`; related cases or full run only after major guard/routing changes",
+      "blurb": "Headless fixture tests and scoring; on failure, automatically draft diagnosis and a proposed fix without applying it",
+      "output_path": "`drill/results/<timestamp>/` plus `<case>.diagnosis.md`",
       "layer": "L4"
     },
     {
       "slug": "loop__note",
-      "name": "일지",
+      "name": "Note",
       "mono": "note",
       "type": "time",
-      "schedule": "cron 05:03",
-      "blurb": "worklog-board L2 **노트화·라우팅** (idempotent)",
-      "output_path": "`notes/_layer2/notes/` + digest",
+      "schedule": "Cron at 05:03",
+      "blurb": "Idempotent worklog-board Layer 2 note creation and routing",
+      "output_path": "`notes/_layer2/notes/` plus digest",
       "layer": "L3"
     },
     {
       "slug": "loop__oncall",
-      "name": "당직",
+      "name": "On-call",
       "mono": "oncall",
       "type": "time",
-      "schedule": "cron 05:37",
-      "blurb": "야간 순찰 — 이상 **발견·보고만**",
-      "output_path": "`notes/oncall/<date>.md` (당직 보고서)",
+      "schedule": "Cron at 05:37",
+      "blurb": "Overnight patrol; detect and report anomalies only",
+      "output_path": "`notes/oncall/<date>.md`",
       "layer": "L3"
     },
     {
       "slug": "loop__runtime-watch",
-      "name": "런타임 감시",
+      "name": "Runtime watch",
       "mono": "runtime-watch",
       "type": "event",
-      "schedule": "일 1회 이하 또는 runtime-currentness 사건 후 수동",
-      "blurb": "공식 primary source fingerprint + 로컬 CLI/projection/usage helper probe → **보고/제안만** (정책 auto-edit 금지, token 절약 위해 deterministic probe 우선)",
+      "schedule": "At most daily, or manually after a runtime-currentness event",
+      "blurb": "Fingerprint authoritative sources and probe local CLI/projection/usage helpers; report or propose only, with no policy auto-edits",
       "output_path": "`notes/runtime-watch/<date>.md`",
       "layer": "L4"
     },
     {
       "slug": "loop__study",
-      "name": "연수",
+      "name": "Study",
       "mono": "study",
       "type": "time",
-      "schedule": "cron 일요일 06:17",
-      "blurb": "agent engineering 신간·현재 주 adapter 변경 조사 → 세팅 대조 → **개선 제안서만** (🔴 한정 **자동 초안** 동반) (+ g0 세금 추세)",
+      "schedule": "Sunday cron at 06:17",
+      "blurb": "Survey recent agent-engineering work and adapter changes, compare with the harness, and produce proposals only; critical items may include an automatic draft",
       "output_path": "`notes/study/<date>.md`",
       "layer": "L4"
     }
@@ -1042,7 +1042,7 @@
   "tracks": [
     {
       "id": "research-lab",
-      "label": "연구·실험",
+      "label": "Research & experiments",
       "color_token": "--cat-1",
       "steps": [
         "skill__analyze-project",
@@ -1058,7 +1058,7 @@
     },
     {
       "id": "library",
-      "label": "라이브러리·CLI",
+      "label": "Libraries & CLI",
       "color_token": "--cat-5",
       "steps": [
         "skill__analyze-project",
@@ -1072,7 +1072,7 @@
     },
     {
       "id": "document",
-      "label": "문서",
+      "label": "Documents",
       "color_token": "--cat-2",
       "steps": [
         "skill__analyze-project",
@@ -1087,7 +1087,7 @@
     },
     {
       "id": "app",
-      "label": "앱",
+      "label": "Apps",
       "color_token": "--cat-3",
       "steps": [
         "skill__autopilot-spec",

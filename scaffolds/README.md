@@ -1,28 +1,35 @@
 # Design scaffolds
 
-Reusable starting points so the agent never re-draws bezels, deck shells, or tweak panels by
-hand. Component ④ of `claude-design-harness-spec.md`. Each is a self-contained HTML file the
-agent **copies into the design artifact folder** and fills in — then renders & verifies via the
-Design MCP visual loop.
+Reusable starting points for bezels, deck shells, tweak panels, and comparison
+canvases. Each self-contained HTML file is copied into the design artifact
+folder, filled with real content, and verified through the active runtime
+adapter's visual harness. The portable rendering contract lives in
+[`roles/modes/design/_design_rules.md`](../roles/modes/design/_design_rules.md).
 
-| scaffold | file | 용도 | 핵심 |
+| Scaffold | File | Purpose | Key behavior |
 |---|---|---|---|
-| `deck_stage` | `deck_stage/deck_stage.html` | 슬라이드 덱 | 1920×1080 고정 캔버스 자동 스케일(레터박싱) · 키보드 내비(← → Space Home End) · 슬라이드 카운터 · print→PDF (1 슬라이드=1 페이지) · 스피커노트 슬롯 |
-| `tweaks_panel` | `tweaks_panel/tweaks_panel.html` | 변형(variant) 처리 | host 프로토콜(패널은 CSS 변수만 set) · localStorage 영속화 · 큐레이션 스와치(자유 피커 X). **새 버전 요청 = 파일 늘리지 말고 여기 트윅 추가** |
-| `device_frames` | `device_frames/device_frames.html` | 목업 베젤 | `.ios-frame`(폰: 노치·상태바·홈 인디케이터) + `.browser-frame`(데스크탑 크롬: 트래픽 라이트·주소창). 순수 CSS |
-| `design_canvas` | `design_canvas/design_canvas.html` | 2+ 옵션 비교 | 반응형 grid, 옵션별 라벨. 방향 탐색 시 |
-| `image_slot` | `image_slot/image_slot.html` | 이미지 placeholder | drag-drop + 클릭 업로드, localStorage 영속화. **이미지를 SVG 로 위조하지 말고** 이걸로 자리만 |
+| `deck_stage` | `deck_stage/deck_stage.html` | Slide decks | Auto-scaled 1920×1080 fixed canvas with letterboxing; keyboard navigation (← → Space Home End); slide counter; print-to-PDF with one slide per page; speaker-note slots |
+| `tweaks_panel` | `tweaks_panel/tweaks_panel.html` | Variant controls | Host protocol in which the panel only sets CSS variables; localStorage persistence; curated swatches instead of a free-form picker. **For a new version, add a tweak here instead of adding another file.** |
+| `device_frames` | `device_frames/device_frames.html` | Device mockup bezels | `.ios-frame` for a phone notch, status bar, and home indicator; `.browser-frame` for desktop browser traffic lights and address bar. Pure CSS |
+| `design_canvas` | `design_canvas/design_canvas.html` | Compare two or more options | Responsive grid with per-option labels for direction exploration |
+| `image_slot` | `image_slot/image_slot.html` | Image placeholder | Drag-and-drop and click upload with localStorage persistence. **Use this to reserve space; do not fake an image with SVG.** |
 
-## 사용 흐름
+## Workflow
 
-1. design-components 가 scope·요청에 맞는 scaffold 를 골라 design 폴더로 복사
-   (예: `slide` → `deck_stage.html` → `03_components/slides/slides.html`).
-2. 예시 블록을 실제 콘텐츠로 교체 (주석의 HOW TO USE 참조).
-3. Design MCP `preview` → `getConsoleLogs` → `screenshot` → `view_image` 로 렌더 검증.
-4. handoff 단계에서 converters (`~/.claude/tools/design-mcp/convert.mjs`) 로 PDF/PPTX/번들 출력.
+1. `design-components` chooses the scaffold that fits the scope and request, then copies it into the design folder
+   (for example, `slide` → `deck_stage.html` → `03_components/slides/slides.html`).
+2. Replace the example blocks with real content; see the `HOW TO USE` comments.
+3. Verify the render through the active adapter's browser-backed visual harness:
+   render the file, capture a screenshot, collect console errors, inspect the
+   image, and rerender after fixes. Follow the adapter bootstrap for its concrete
+   command or tool surface; do not substitute a source-only check for a render.
+4. When the requested handoff format is supported, the current shared converter
+   is [`tools/design-mcp/convert.mjs`](../tools/design-mcp/convert.mjs). Treat it
+   as an optional tool surface rather than a capability guaranteed by every
+   adapter, and report the adapter fallback when it is unavailable.
 
-## 규약
+## Rules
 
-- 모든 scaffold 는 외부 빌드 의존 0 (브라우저로 바로 열림) — standalone artifact 패리티.
-- 본문 ≥ 24px(덱) / 히트타깃 ≥ 44px(모바일) 등 스케일 규칙은 `roles/modes/design/_design_rules.md`.
-- 모두 렌더 검증 완료 (deck_stage·tweaks_panel·device_frames·image_slot·design_canvas, 콘솔 에러 0).
+- Every scaffold has zero external build dependencies and opens directly in a browser, preserving standalone-artifact parity.
+- Scale rules such as body text ≥ 24 px for decks and touch targets ≥ 44 px for mobile live in `roles/modes/design/_design_rules.md`.
+- All five scaffolds have passed render verification with zero console errors.

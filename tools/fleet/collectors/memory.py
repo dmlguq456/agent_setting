@@ -18,7 +18,7 @@ from pathlib import Path
 # mirrors tools/memory/mem.py DOCTOR_DURABLE_SOFT_CEILING (D-39) — duplicated constant is
 # intentional (collector must not import mem.py; different module, same number by contract).
 DOCTOR_DURABLE_SOFT_CEILING = 80
-DISTILL_STALE_MIN = 24 * 60   # silent-death threshold for "활성 프로젝트 distill 무소식"
+DISTILL_STALE_MIN = 24 * 60   # silent-death threshold for no distill activity in an active project
 RECENT_LIMIT = 8
 ADDED_ACTIONS = ("add", "note")
 EXPIRED_ACTIONS = ("lifecycle-expire",)

@@ -1,12 +1,12 @@
 #!/bin/bash
-# 야간 정찰 루프 — crontab 에서 호출 (37 5 * * *)
-# read-only 점검 + notes/oncall/ 보고 1개. 수정·커밋 없음.
+# Nightly read-only reconnaissance loop, invoked from crontab.
+# Produces one notes/oncall report and never edits or commits source.
 set -u
 AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
 LOOP_DIR="$AGENT_HOME/loops"
 LOG="$LOOP_DIR/oncall.log"
-source "$LOOP_DIR/lib.sh"   # PATH 보정(①) + run_claude_retry(②)
-# --- 일시 hold 가드 (토큰 절약, .hold 파일에 만료일 YYYY-MM-DD, 그날까지 skip 후 자동 재개) ---
+source "$LOOP_DIR/lib.sh"   # PATH correction and retry wrapper.
+# Temporary hold guard: .hold contains YYYY-MM-DD and resumes automatically after expiry.
 if [ -f "$LOOP_DIR/.hold" ]; then _h=$(cat "$LOOP_DIR/.hold" 2>/dev/null); _t=$(date +%F);
   if [ -z "$_h" ] || [[ "$_t" < "$_h" ]] || [ "$_t" = "$_h" ]; then
     echo "[held until ${_h:-indefinite}] $(date -Iseconds)" >> "$LOG" 2>/dev/null || true; exit 0;
@@ -24,5 +24,5 @@ mkdir -p /home/nas/user/Uihyeop/notes/oncall
   echo "=== exit $? $(date -Iseconds) ==="
 } >> "$LOG"
 
-# 로그 비대 방지 — 최근 2000줄만 유지
+# Bound the log to the most recent 2,000 lines.
 tail -n 2000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"

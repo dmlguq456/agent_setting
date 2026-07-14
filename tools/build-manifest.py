@@ -6,7 +6,7 @@
 generated compatibility views.
 
 Additional adapter/runtime inputs:
-  - loops/README.md     "현역" table  + LOOP_LAYER constant
+  - loops/README.md     "Active Loops" table + LOOP_LAYER constant
   - adapters/claude/settings.json  Claude adapter hook registration (read-only)
   - TRACKS              documented constant (below), validated against discovered skills
 
@@ -53,7 +53,7 @@ import harness_manifest
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))  # tools/ -> repo root
 MANIFEST_PATH = os.path.join(REPO_ROOT, "manifest.json")
 
-# harness-layer-sync HLS-3 (hash-manifest) / HLS-7 (surface 파생). The exemption ledger
+# harness-layer-sync HLS-3 (hash manifest) / HLS-7 (surface derivation). The exemption ledger
 # is the single declaration file for adapter shared-layer exceptions (like GSD's
 # gsd-file-manifest.json + FIELD_CLASSIFICATION: one row = one decision). delta rows bind
 # a canonical raw-byte sha256 baseline; the guard reds when live canonical drifts from it.
@@ -71,8 +71,8 @@ GENERATED_FROM = (
 # NOT a guard -> hard_block stays false for it.
 GUARDS = {"artifact-guard", "git-state-guard", "spec-skill-gate", "core-first-guard", "builtin-memory-guard"}
 
-# loop -> layer constant (source: loops/README.md 계층 table membership + consumer §2.5;
-# study=L4 per the OPS-view divergence recorded in consumer §23.12 V1). The 계층 table
+# Loop-to-layer constant, based on loops/README.md membership and consumer §2.5.
+# Study remains L4 per the OPS-view divergence recorded in consumer §23.12 V1. The layer table
 # itself is left semantically unchanged — this map is the machine-readable layer source.
 LOOP_LAYER = {"oncall": "L3", "note": "L3", "drill": "L4", "study": "L4", "runtime-watch": "L4"}
 
@@ -82,18 +82,18 @@ LOOP_LAYER = {"oncall": "L3", "note": "L3", "drill": "L4", "study": "L4", "runti
 # build_tracks() (typo in a hand-typed slug => hard ERROR, since tracks is the one curated
 # constant in an otherwise pure transcription).
 TRACKS = [
-    {"id": "research-lab", "label": "연구·실험", "color_token": "--cat-1",
+    {"id": "research-lab", "label": "Research & experiments", "color_token": "--cat-1",
      "steps": ["skill__analyze-project", "skill__autopilot-research", "skill__autopilot-spec",
                "skill__autopilot-code", "skill__autopilot-lab"],
      "gates": ["artifact-guard:after-research", "artifact-guard:after-spec"]},
-    {"id": "library", "label": "라이브러리·CLI", "color_token": "--cat-5",
+    {"id": "library", "label": "Libraries & CLI", "color_token": "--cat-5",
      "steps": ["skill__analyze-project", "skill__autopilot-spec", "skill__autopilot-code"],
      "gates": ["artifact-guard:after-analyze", "artifact-guard:after-spec"]},
-    {"id": "document", "label": "문서", "color_token": "--cat-2",
+    {"id": "document", "label": "Documents", "color_token": "--cat-2",
      "steps": ["skill__analyze-project", "skill__autopilot-research", "skill__autopilot-draft",
                "skill__autopilot-refine", "skill__autopilot-apply"],
      "gates": ["artifact-guard:after-research"]},
-    {"id": "app", "label": "앱", "color_token": "--cat-3",
+    {"id": "app", "label": "Apps", "color_token": "--cat-3",
      "steps": ["skill__autopilot-spec", "skill__autopilot-design", "skill__autopilot-code",
                "skill__autopilot-ship"],
      "gates": ["artifact-guard:after-spec"]},
@@ -287,17 +287,16 @@ def _is_separator(line):
     return bool(re.match(r'^\s*\|?\s*:?-{2,}', line)) and set(line.strip()) <= set("|-: ")
 
 
-_HYUNYEOK_HEADER = ["루프", "형", "트리거", "대상", "하는 일", "산출", "사용자 접점"]
+_ACTIVE_LOOPS_HEADER = ["Loop", "Type", "Trigger", "Scope", "Work", "Output", "User touchpoint"]
 _LOOP_CELL = re.compile(r'\*\*(.+?)\*\*\s*\(`([^`]+)`\)')
 
 
 def build_loops():
     lines = open(os.path.join(REPO_ROOT, "loops", "README.md"), encoding="utf-8").read().split("\n")
-    # locate the 현역 table by EXACT 7-column header (the 후보 table shares the 형 column,
-    # so a loose match would grab the wrong table).
+    # Locate the active table by its exact seven-column header.
     start = None
     for idx, line in enumerate(lines):
-        if line.lstrip().startswith("|") and _split_row(line) == _HYUNYEOK_HEADER:
+        if line.lstrip().startswith("|") and _split_row(line) == _ACTIVE_LOOPS_HEADER:
             start = idx
             break
     if start is None:
@@ -309,24 +308,24 @@ def build_loops():
         if _is_separator(line):
             continue                                # skip |---|---| row
         cells = _split_row(line)
-        if len(cells) != len(_HYUNYEOK_HEADER):
-            sys.stderr.write("WARN: loops 현역 row has %d cols (expected %d), skipped: %s\n"
-                             % (len(cells), len(_HYUNYEOK_HEADER), line.strip()[:60]))
+        if len(cells) != len(_ACTIVE_LOOPS_HEADER):
+            sys.stderr.write("WARN: active loop row has %d cols (expected %d), skipped: %s\n"
+                             % (len(cells), len(_ACTIVE_LOOPS_HEADER), line.strip()[:60]))
             continue
-        rec = dict(zip(_HYUNYEOK_HEADER, cells))
-        m = _LOOP_CELL.search(rec["루프"])
+        rec = dict(zip(_ACTIVE_LOOPS_HEADER, cells))
+        m = _LOOP_CELL.search(rec["Loop"])
         if not m:
             continue
-        name_kr = m.group(1).strip()
+        display_name = m.group(1).strip()
         mono = m.group(2).strip().rstrip("/")        # drill cell is `drill/` -> drill
         rows.append({
             "slug": "loop__%s" % mono,
-            "name": name_kr,
+            "name": display_name,
             "mono": mono,
-            "type": "time" if "시간" in rec["형"] else "event",
-            "schedule": rec["트리거"],                # verbatim (markdown retained; consumer renders)
-            "blurb": rec["하는 일"],
-            "output_path": rec["산출"],
+            "type": "time" if "Time" in rec["Type"] else "event",
+            "schedule": rec["Trigger"],                # Verbatim Markdown; the consumer renders it.
+            "blurb": rec["Work"],
+            "output_path": rec["Output"],
             "layer": LOOP_LAYER.get(mono, ""),
         })
     return sorted(rows, key=lambda r: r["slug"])

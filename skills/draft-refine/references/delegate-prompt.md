@@ -1,20 +1,20 @@
-# Delegate to 연구팀 — prompt template
+# Prompt Template for Delegation to `연구팀`
 
-Invoke the **research-team** (연구팀) agent as a subagent with the following prompt (substitute `{...}` variables, then invoke verbatim — this is the actual subagent prompt, not documentation):
+Invoke the **research-team** (`연구팀`) agent as a subagent with the prompt below. Substitute `{...}` variables, then invoke it verbatim; this is the actual subagent prompt, not documentation.
 
 ```
 Refine mode (versioned + ref-grounded). Update an existing document {doc_type} based on user memos and review feedback.
 
-Korean {doc_type} file (current/latest): {ko_path}
-English {doc_type} file (current/latest): {en_path}
+Canonical {doc_type} file (current/latest): {canonical_path}
+Existing required companion files: {companion_paths or none}
 Previous version archive (immutable, already created by Pre-Refine setup):
 - Modern: `{artifact_root}/_internal/versions/v{prev_version}/{relative-subdir}/{filename}` (where `{relative-subdir}` is `strategy/` or `draft/`)
-- Legacy: `{ko_path.parent}/{ko_path.stem}_v{prev_version}.md` (and English equivalent — only if artifact already used `_v{N}.md` siblings AND lacks `_internal/`)
+- Legacy: `{path.parent}/{path.stem}_v{prev_version}.md` for each existing file, only if the artifact already used `_v{N}.md` siblings and lacks `_internal/`
 Convention mode: {modern | legacy}
 Next version: v{next_version}
 
 ## Memo Detection
-Read the Korean {doc_type} and find all user memos. Memos can appear in any of these formats:
+Read the canonical {doc_type} and every existing required companion, then find all user memos. Memos can appear in any of these formats:
 - `<!-- memo: ... -->` (standard memo tag)
 - `<!-- ... -->` (HTML comment — treat any HTML comment as a user memo, EXCEPT a **legacy** `<!-- CHANGELOG (auto-managed by draft-refine ... -->` block at top-of-file. Such legacy blocks are NOT memos; they must be **migrated** into the frontmatter `changelog:` array and then deleted from the body (see "Changelog (frontmatter `changelog:` array)" below).
 - `// ...` (inline comment)
@@ -41,7 +41,7 @@ For draft refinement: also cross-check against the strategy document at `{artifa
 
 ## Output Versioning
 
-1. **Write the new content to current files** (`{ko_path}`, `{en_path}`) — these always represent the latest version.
+1. **Write the new content to the canonical file and every existing required companion** (`{canonical_path}`, `{companion_paths}`) — these always represent the latest version.
 2. The pre-edit snapshot is already written by the Pre-Refine setup step (see "Pre-Refine: Versioning Setup" above) — to either `_internal/versions/v{prev_version}/...` (modern) or `{file}_v{prev_version}.md` (legacy). No additional snapshot needed at output time.
 3. **Remove all memo comments** (HTML comments, `// ...`, `[memo] ...`, etc.) from the new version. EXCEPT preserve/update the frontmatter `changelog:` array (see below).
 
@@ -93,7 +93,7 @@ changelog:
    - v1 entry — `version: v1`, `date: "{creation date from existing frontmatter, or the literal string \"initial\" if unknown}"`, `note: "initial draft from autopilot-draft {mode} pipeline"`, no `entries:` required.
    - v2 entry — this round's changes (above v1).
 5. **No frontmatter at all (rare)**: create a minimal frontmatter block at the very top of the file with at least `changelog:` (and any other keys you can derive from the document).
-6. **Legacy migration (required on first encounter)**: if the file has a `<!-- CHANGELOG (auto-managed by draft-refine ... -->` HTML block (above or below the frontmatter), convert each `vN (date, applied X / overrode Y): ...` line into a frontmatter array entry **in the same refine pass** and **delete the HTML block** (including its surrounding blank lines). After migration the file must begin with `---` on line 1. This migration applies to BOTH `{ko_path}` and `{en_path}`.
+6. **Legacy migration (required on first encounter)**: if a file has a `<!-- CHANGELOG (auto-managed by draft-refine ... -->` HTML block (above or below the frontmatter), convert each `vN (date, applied X / overrode Y): ...` line into a frontmatter array entry **in the same refine pass** and **delete the HTML block** (including its surrounding blank lines). After migration the file must begin with `---` on line 1. Apply this migration to the canonical file and every existing required companion.
 
 ### Worked example
 

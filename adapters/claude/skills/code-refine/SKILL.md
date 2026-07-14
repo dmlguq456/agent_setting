@@ -10,45 +10,49 @@ metadata:
   blurb: "Revise an existing plan using user notes, plan-check feedback, and verification-failure notes."
 ---
 
-> **Plan Resolution**: `$ARGUMENTS`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다. **단, code-refine 은 `plan.md` 와 `plan_ko.md` 를 _둘 다_ 해석한다** (path swap `plan.md`↔`plan_ko.md`; refine 고유).
+# code-refine
 
-> **Language Rule**: user-facing artifacts follow the audience and artifact
-> language contract in
-> [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
+> **Plan resolution**: Treat [arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) as the single authority for resolving `$ARGUMENTS`. Recognize both canonical `plan.md` and any existing companion such as legacy `plan_ko.md`; swap between known companion paths only when both files actually belong to the same plan.
 
-## Delegate to 기획팀
-Invoke the **plan-team** (기획팀) agent as a subagent with the following prompt:
+> **Language rule**: Follow the audience and artifact language contract in [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md). Preserve the canonical plan's selected language and synchronize only companions that already exist or are explicitly required.
 
-```
-Refine mode. Update an existing plan based on user memos.
+## Delegate Refinement
 
-Korean plan file: {$ARGUMENTS}
-English plan file: {$ARGUMENTS with plan_ko.md replaced by plan.md}
+Invoke `plan-team` as a subagent with this task:
 
-Read the Korean plan and find all user memos. Memos can appear in any of these formats:
-- `<!-- memo: ... -->` (standard memo tag)
-- `<!-- ... -->` (HTML comment — treat any HTML comment as a user memo)
-- `// ...` (inline comment)
-- `[memo] ...` (bracketed annotation)
-- `(**...**)` (parenthetical note)
-- Any other text marked as a user annotation (e.g., a distinct block inserted between plan steps, or an inline sentence addressed to the planner). Do NOT treat the plan's original author-written prose as a memo.
+```text
+Refine mode. Update an existing implementation plan from user memos, plan-check feedback, or verification-failure notes.
 
-Re-read source files if needed, update the Korean plan in-place, and sync changes to the English plan. Remove the memo comments after incorporating them.
-Return which steps were changed and a brief summary.
+Supplied plan: {$ARGUMENTS}
+Canonical plan: {resolved plan.md path}
+Existing companion plans: {resolved paths, or none}
+
+Read the supplied and canonical plan files and identify user annotations. Memos may use any of these forms:
+- `<!-- memo: ... -->`
+- `<!-- ... -->` (treat any HTML comment as a user memo)
+- `// ...`
+- `[memo] ...`
+- `(**...**)`
+- another distinct annotation inserted between steps or addressed to the planner
+
+Do not treat original plan prose as a memo. Re-read relevant source files when needed, update the canonical plan in place, synchronize existing required companions, and remove incorporated memo comments.
+Return the changed step numbers, file paths, and a brief summary only.
 ```
 
 ## Refine Assurance
-The verification rigor tier is derived from the plan's selected `--intensity` context (per [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)). `code-refine` is optional correction of an existing durable plan; it is not an automatic stage in `direct` or `quick`.
 
-| Rigor tier | Review action after refine | Fix behavior |
+Derive verification rigor from the plan's selected `--intensity` context under [CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers). This capability is an optional correction of a durable plan; it is not an automatic stage in `direct` or `quick`.
+
+| Rigor | Review after refinement | Correction budget |
 |---|---|---|
-| `quick` | Direct invocation only: one fast sanity review or self-check. | Record remaining concerns; no repeated fix-round. |
-| `light` | One focused fast review when the changed plan steps could affect execution. | One bounded correction if blocking. |
-| `standard` | One lightweight plan-review pass for changed steps. | At most one correction pass. |
-| `thorough` | Multi-axis review only when selected by `intensity=thorough`. | Up to two corrections with synthesis. |
-| `adversarial` | Thorough plus explicit adversary/failure-mode/security critique when available and selected. | Fail loudly only for explicit unavailable adversarial; otherwise fall back to thorough and report. |
+| `quick` | Direct invocation only: one fast sanity review or self-check | Record residual concerns; no repeated loop |
+| `light` | One focused fast review when changed steps could affect execution | One bounded correction for blocking issues |
+| `standard` | One lightweight `qa-team` plan-review pass over changed steps | At most one correction |
+| `thorough` | Multi-axis review only when selected by `intensity=thorough` | Up to two synthesized corrections |
+| `adversarial` | Thorough review plus explicit failure-mode, security, and adversarial critique when available | Explicit unavailable requests fail loudly; automatic escalation falls back to thorough and reports it |
 
-After 기획팀 returns, run only the review action selected by the caller's graph. Do not open a repeated QA loop merely because the rigor tier is high. If unresolved concerns remain after the selected budget, add them to the plan's risk/unresolved section and report them to the caller.
+After `plan-team` returns, run only the review action selected by the caller's graph. Do not open a repeated QA loop merely because the rigor tier is high. Add unresolved concerns to the plan's risk or unresolved section after the selected budget and report them to the caller.
 
 ## Task
+
 Refine the plan at: $ARGUMENTS

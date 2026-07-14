@@ -45,7 +45,7 @@ def read_environ(pid):
 def _ps_lines():
     # COLUMNS pinned huge: Claude Code injects terminal width into the statusline env and
     # ps truncates args= to COLUMNS, which would break argv matching downstream
-    # (statusline.sh:108 실측). Harmless for procscan's comm match but kept for the shared
+    # (observed in statusline.sh:108). Harmless for procscan's comm match but kept for the shared
     # dispatch scan that reuses the same ps invocation contract.
     env = dict(os.environ, COLUMNS="100000")
     try:
@@ -160,8 +160,7 @@ def _scan_disk(harness_filter=None):
         if not _pid_alive(pid):
             continue
         cwd = (d.get("cwd") or "").replace("\\", "/")
-        # nt 경로는 /proc/<pid>/environ 이 없어 F-18b mem_worker 마커 판독 불가 —
-        # mem_worker 를 넘기지 않아 default False 유지 (무해 degrade).
+        # NT has no /proc/<pid>/environ, so mem_worker safely remains false.
         sessions.append(Session(
             harness="claude",
             pid=pid,
@@ -214,12 +213,11 @@ def scan(harness_filter=None):
         app_server = comm == "codex" and "app-server" in args
         # Cross-runtime headless child marker (SD-24). Unreadable environ fails open:
         # a process is never hidden merely from argv/PPID/cwd resemblance.
-        env = read_environ(pid)                       # 1회 read 재사용
+        env = read_environ(pid)                       # Read once and reuse.
         is_child = bool(env.get("AGENT_DISPATCH_DEPTH")) or env.get("AGENT_DISPATCH_CHILD") == "1" or (
             comm == "claude" and env.get("CLAUDE_CODE_CHILD_SESSION") == "1"
         )
-        # F-18b: memory distiller/curator(MEM_DISTILL) 또는 F-17 title refresher(FLEET_TITLE_REFRESH)
-        # 세션 — 부모 cwd/env 상속으로 오귀속(drill 그룹·부모 자식 row)되는 것을 막기 위한 태깅.
+        # Tag memory workers and title refreshers to prevent inherited cwd/env misattribution.
         mem_worker = env.get("MEM_DISTILL") == "1" or env.get("FLEET_TITLE_REFRESH") == "1"
         detached = _is_detached(pid_tty.get(pid), app_server, det_ttys)
         sessions.append(Session(

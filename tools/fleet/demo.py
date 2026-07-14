@@ -43,7 +43,7 @@ def collect(harness_filter=None):
           gate="tracked", branch="fix/night-run", liveness="idle"),
         # --- project 'demo-cool' (cooling) — no active work, last transcript write ~92min ago; the
         # idle session lingers (within the 48h live window) so the group isn't folded, and the
-        # directory header shows a grey ○ ring + time-since-done ("완료 직후 식는 중").
+        # The directory header shows a grey ring and time since completion while cooling.
         S(harness="claude", pid=90007, cwd="/home/demo/demo-cool", session_id="demo-claude-cool",
           slug="demo-cool-shipped", model="Opus 4.8", effort="high",
           ctx_pct=18, rl_5h=25, rl_7d=15, cost=4.20, elapsed_min=160,

@@ -10,43 +10,48 @@ metadata:
   blurb: "Verify implementation results in stages and record evidence."
 ---
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Input = `plan/plan.md` verification section + `plan/checklist.md` (resolved below), read from files — never prior-stage conversation. Source is **read-only** here; write class = `test_logs/`·`_internal/test_reviews/` only. 품질관리팀 delegation stays **inside** this session.
+# code-test
 
-> **Plan Resolution**: `$ARG`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다. **단, code-test 는 no-match 시 error 대신 인자를 직접 테스트할 파일/디렉터리 경로로 취급한다** (test 스테이지 고유).
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated depth-2 stage worker dispatched by the `autopilot-code` conductor. Read the verification section in `plan/plan.md` and marks in `plan/checklist.md` from disk; never depend on prior-stage conversation. Source is read-only in this stage. The write class is `test_logs/` and `_internal/test_reviews/`. Any `qa-team` delegation remains inside this stage session.
 
-> **Language Rule**: user-facing artifacts follow the audience and artifact
-> language contract in
-> [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
+> **Plan resolution**: Treat [arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) as the single authority for resolving `$ARG`. If no plan matches, interpret the argument as the file or directory test target instead of returning a plan-resolution error.
 
-## Delegate to 품질관리팀 (test 모드)
-Invoke the **품질관리팀** agent in **test mode** (the agent absorbed the former 테스트팀 in 2026-05-22; specify "test 모드" in the prompt so mode dispatch is unambiguous) with the following prompt:
+> **Language rule**: Follow the audience and artifact language contract in [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md). Preserve commands, paths, test names, identifiers, and raw output.
 
-- If $ARG points to a plan file:
-  ```
+## Run Graduated Tests
+
+Invoke `qa-team` in test mode. Select one prompt form:
+
+- Plan path:
+
+  ```text
   Run graduated tests for plan: {$ARG}
-  Read the plan's verification sections and the log directory's plan/checklist.md to identify targets.
-  Execute Level 1 → 2 → 3 → 4 → 5 in order, stopping on first failure.
+  Read the plan verification sections and plan/checklist.md in the task root to identify targets.
+  Execute Level 1 → 2 → 3 → 4 → 5 in order, stopping on the first failure.
   ```
 
-- If $ARG is a file/directory path:
-  ```
+- File or directory path:
+
+  ```text
   Run graduated tests on: {$ARG}
-  Execute Level 1 → 2 → 3 → 4 → 5 in order, stopping on first failure.
-  Skip levels that don't apply (e.g., Level 4 if no plan file).
+  Execute Level 1 → 2 → 3 → 4 → 5 in order, stopping on the first failure.
+  Skip levels that do not apply, such as Level 4 when no plan exists.
   ```
 
-- If $ARG is empty:
-  ```
+- Empty argument:
+
+  ```text
   Run graduated tests on recently changed files.
   Use git diff --name-only HEAD~1 to find targets.
-  Execute Level 1 → 2 → 3 → 4 → 5 in order, stopping on first failure.
-  Skip levels that don't apply (e.g., Level 4 if no plan file).
+  Execute Level 1 → 2 → 3 → 4 → 5 in order, stopping on the first failure.
+  Skip levels that do not apply, such as Level 4 when no plan exists.
   ```
 
-### Test Log Requirement (CRITICAL)
-**Always** include this in the 품질관리팀 (test 모드) prompt. Every test must record: exact command, full stdout/stderr (last 50 lines if long), and PASS/FAIL verdict with error message.
+## Test Log Contract
 
-```
+Always include this requirement in the `qa-team` test prompt. Record the exact command, full stdout/stderr or the last 50 lines when long, and a PASS/FAIL verdict with the error reason.
+
+```text
 Write a detailed test log to: {log_dir}/test_logs/test_report.md
 
 Format:
@@ -57,30 +62,38 @@ Format:
 **Verdict:** PASS / FAIL — [reason]
 ```
 
+Run test commands through the active adapter's bounded verification runner when its contract requires one. Preserve the actual exit status in the log.
+
 ## Verification Assurance
-`code-test` is the concrete final `verify` stage. It is not hardcoded to thorough and does not automatically launch a parallel QA loop. Read the selected QA/intensity context from the plan frontmatter or caller prompt.
 
-| Rigor tier | Verification behavior | Optional adequacy review |
+This is the concrete final verify stage. Derive rigor from plan frontmatter or caller intensity; do not hardcode Thorough or automatically open a parallel QA loop.
+
+| Rigor | Concrete verification | Optional adequacy review |
 |---|---|---|
-| `quick` | Run the narrowest applicable concrete command/check and record skip reasons. | none by default |
-| `light` | Run focused syntax/import/smoke or the caller's explicit command. | fast review only if risk-selected |
-| `standard` | Run applicable graduated levels and capture command evidence. | one focused test-adequacy review when changed surface is nontrivial |
-| `thorough` | Broader target coverage plus behavioral runtime observation where user-facing surfaces changed. | selected parallel/depth2 review only if `intensity=thorough` selected it |
-| `adversarial` | Thorough verification plus security/failure-mode/external adversary evidence where the track supports it. | must prove the adversary/security pass ran before claiming it |
+| `quick` | Run the narrowest applicable command or check and record skip reasons | None by default |
+| `light` | Run focused syntax, import, smoke, or caller-specified checks | One fast review only when risk selects it |
+| `standard` | Run applicable graduated levels and capture command evidence | One focused adequacy review for a nontrivial change surface |
+| `thorough` | Broaden target coverage and add behavioral runtime observation for changed user-facing surfaces | Parallel or depth-2 review only when selected by `intensity=thorough` |
+| `adversarial` | Thorough verification plus applicable security, failure-mode, and external-adversary evidence | Prove every claimed adversary or security pass ran |
 
-After the 품질관리팀 (test mode) agent returns, read the test log and decide whether the selected assurance budget requires a separate adequacy review. If yes, run the focused reviewer(s) and append issues to the test report. If no, report the concrete verification verdict directly. Do not mutate source files while acting in `code-test`; any hotfix belongs to the caller's retry/fix stage.
+After `qa-team` returns, read `test_logs/test_report.md`. Run a separate adequacy review only when the selected assurance budget requires it, and append its findings to the report. Otherwise return the concrete verification verdict directly.
+
+Do not modify source or invoke a hotfix worker from this stage. Any repair belongs to the caller's bounded retry/fix path.
 
 ## Report Results
-1. Relay the verification results to the caller with the report path, executed commands, skipped levels, blockers, and first actionable failure if any.
-2. If all selected levels passed and any selected adequacy review passed, return success. Do not commit; commit/merge ownership belongs to the caller or `code-report`/orchestrator.
-3. If any level failed, return failure with enough context for the caller's retry/fix stage. Do not invoke a hotfix agent from `code-test`; this keeps final verification read-only and prevents hidden mutation inside QA.
 
-> Record the verdict and blocker context so the pipeline skill can decide whether to open its bounded retry/fix stage.
+Return the report path, executed commands, skipped levels and reasons, blockers, and the first actionable failure when present.
 
-## Log Directory Resolution
-- If $ARG points to a plan file: log directory is the task root (grandparent of `plan/plan.md`).
-  Example: `<artifact-root>/plans/2026-03-18_refactor/plan/plan.md` → `<artifact-root>/plans/2026-03-18_refactor/`
-- If no plan file: use `<artifact-root>/tests/` with a date-stamped subdirectory.
+- Success requires every selected level and selected adequacy review to pass.
+- Failure must include enough evidence for the caller to open a bounded retry/fix stage.
+- Do not commit or merge; ownership remains with the caller or orchestrator.
+- Record verdict and blockers for the pipeline decision record.
+
+## Log Directory
+
+- Plan path: use the task root above `plan/`; for example, `<artifact-root>/plans/2026-03-18_refactor/plan/plan.md` → `<artifact-root>/plans/2026-03-18_refactor/`.
+- No plan: use a date-stamped directory under `<artifact-root>/tests/`.
 
 ## Task
+
 Test: $ARG

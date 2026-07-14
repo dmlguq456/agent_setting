@@ -1,54 +1,55 @@
-# autopilot-refine — Examples, constraints & checklists
+# autopilot-refine — Examples, constraints, and checklists
 
-Router(`../SKILL.md`)에서 참조되는 invocation 예시, apply 시 지켜야 할 constraints, when-not-to-use, post-apply checklist.
+Invocation examples, application constraints, exclusions, and the post-apply checklist referenced by the router in `../SKILL.md`.
 
 ## Constraints
 
-- **빈칸 > 잘못 채우기** — when Stage B.5 flags an `⚠ Unverified` claim and no ground-truth source confirms it within the artifact's `cards/` (or cross-research `<artifact-root>/research/*/cards/`), prefer to leave the claim **blank or marked `[?]`** in the new_text rather than filling it from inference. Applies even if the prompt seems to require the claim — emit the marker and let the user decide. Cost of a `[?]` placeholder is small; cost of a hallucinated venue/year/task is high (drift compounds over 20+ refine cycles).
-- **No silent additions** — Stage D applies only what was shown in Stage C diff (or auto-mode summary). If a new issue is discovered during apply, abort that single edit and note it in the v{N} 변경 사항 section's `Skipped` list, but do NOT propose new edits beyond the original list.
-- **Versioning is mandatory** when applying — every apply increments version + creates snapshot. Only `--review-only` skips this (because it doesn't apply).
-- **Cards = primary source for research** — for taxonomy/definition/coverage prompts, always re-read `cards/*.md` and cite in reasoning.
-- **Don't auto-rename historical citations** — paper titles, baseline names as published, specific challenge names. List these in Stage C as "intentionally untouched" if relevant.
-- **Cross-artifact ripple is announced, not auto-propagated** — if a research change affects a downstream doc artifact, surface this in the v{N} 변경 사항 section's `Downstream sync needed` field. The user invokes `/autopilot-refine` again on the doc; this skill never auto-cascades.
-- **STRUCT escape hatch** — if changes look structural, halt with a recommendation; don't try to handle structural rewrites in this skill.
-
----
+- **Prefer a blank over a false fill.** When Stage B.5 marks a claim `⚠ Unverified` and neither the artifact's `cards/` nor cross-research `<artifact-root>/research/*/cards/` confirms it, leave the claim blank or mark it `[?]` instead of inferring an answer. Do this even when the prompt appears to require a value. A placeholder is cheap; a fabricated venue, year, or task compounds across later refine cycles.
+- **Do not add edits silently.** Stage D may apply only changes shown in the Stage C diff or auto-mode summary. If application exposes a new issue, skip that edit, record it under `Skipped` in `## v{N} 변경 사항`, and do not introduce a new proposal beyond the original list.
+- **Version every application.** Increment the version and create a snapshot for every apply. Only `--review-only` skips versioning because it does not modify anything.
+- **Treat cards as the primary research source.** For taxonomy, definition, or coverage prompts, reread `cards/*.md` and cite them in the reasoning.
+- **Do not automatically rename historical citations.** Preserve published paper titles, baseline names, and challenge names. List relevant cases as intentionally untouched in Stage C.
+- **Announce cross-artifact ripple effects without propagating them.** When a research change affects a downstream document artifact, record it in `Downstream sync needed` under `## v{N} 변경 사항`. The user must invoke `/autopilot-refine` on the dependent document separately.
+- **Use the STRUCT escape hatch.** Halt and recommend a heavier pipeline for structural changes; do not attempt structural rewrites here.
 
 ## Examples
 
-```
-# Default — chat-loop with diff preview. Artifact inferred from prompt.
+```text
+# Default chat loop with diff preview; infer the artifact from the prompt.
 /autopilot-refine "speech-enhancement-trends에서 General Restoration과 Universal SE를 task family로 통합"
-# (skill fuzzy-matches "speech-enhancement-trends" → research artifact, shows diff, ends turn)
-# user replies: "all"
-# → applies, snapshots to _internal/versions/v1/, updates pipeline_summary.md with v2 row + 변경 사항 section
+# Fuzzy-match speech-enhancement-trends, show the diff, and end the turn.
+# User: "all"
+# Apply, snapshot to _internal/versions/v1/, and add the v2 row and change section to pipeline_summary.md.
 
-# Auto-apply via prompt signal (no separate flag)
+# Auto-apply through the prompt signal, without another flag.
 /autopilot-refine "speech-enhancement-trends Year×Paradigm heatmap의 2026년 칸 채우기. 확인 없이 자동 적용."
 
-# Review only — no edits (artifact 식별자는 prompt에 포함)
+# Review only; include the artifact identifier in the prompt.
 /autopilot-refine "speech-enhancement-trends에서 최신 카드 5편이 분류표에 누락됐는지 검토" --review-only
 
-# Memo mode — fall back to file-memo for deferred review
+# Memo mode for a deferred review.
 /autopilot-refine --memo .../review_memo.md "2026-05-06_se-seminar-tfrestormer 메모 반영"
 
-# Doc artifact (auto-detected from prompt keyword)
+# Document artifact, detected from the prompt keyword.
 /autopilot-refine "se-seminar-tfrestormer draft Slide 4 task family 표를 4행으로 변경"
 
-# Higher rigor — pre-apply reviewer pass (rigor 는 intensity 파생)
+# Higher rigor before application; rigor is derived from intensity.
 /autopilot-refine "se-seminar-tfrestormer 결론 챕터 wording 다듬기" --intensity standard
 ```
 
-## When NOT to use
+The Korean text above is intentional quoted multilingual request data; preserve it verbatim when validating invocation behavior.
 
-- Single-file typo / cosmetic edit → just `Edit`.
-- Code artifacts → `/code-refine`, `/code-execute`, `/autopilot-code`.
-- Whole-axis structural redesign → `/autopilot-research --from analyze` or `/autopilot-draft --from strategy`.
-- Pure deferred review (annotate over hours/days) → this skill's `--memo <file>` form (file-memo). `/draft-refine` 는 autopilot-draft 내부 sub-skill 이라 사용자 직접 호출 X.
+## When not to use
 
-## Post-Apply Checklist
+- For a single-file typo or cosmetic edit, use direct `Edit`.
+- For code artifacts, use `/code-refine`, `/code-execute`, or `/autopilot-code`.
+- For whole-axis structural redesign, use `/autopilot-research --from analyze` or `/autopilot-draft --from strategy`.
+- For a deferred review over hours or days, use this skill's `--memo <file>` form. `/draft-refine` is an internal autopilot-draft sub-skill, not a user entry point.
 
-After successful apply, suggest to user:
-1. If `Downstream sync needed: Yes` → run `/autopilot-refine "{dependent_artifact_name} pipeline_summary v{N} 반영"` for each dependent artifact.
-2. Optionally `git add -A && git commit -m "autopilot-refine: {prompt summary}"` if artifact is under git.
-3. If this skill contract changed, regenerate affected native projections and run `tools/skill-conformance/check.sh` plus `tools/check-adaptation-boundary.sh`.
+## Post-apply checklist
+
+After a successful application:
+
+1. When `Downstream sync needed: Yes`, run `/autopilot-refine "{dependent_artifact_name} pipeline_summary v{N} 반영"` for each dependent artifact.
+2. If the artifact is under Git, optionally run `git add -A && git commit -m "autopilot-refine: {prompt summary}"`.
+3. If this skill contract changed, regenerate affected native projections and run `tools/skill-conformance/check.sh` and `tools/check-adaptation-boundary.sh`.

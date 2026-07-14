@@ -1,271 +1,240 @@
 # Autopilot Design Principles
 
-> `<agent-home>/core/` 의 _아키텍처 헌법_ — autopilot family 가 어떻게 분리되고 어떻게 협력하는지의 single source.
+> The architectural constitution under `<agent-home>/core/`: the single source for how the autopilot family separates and collaborates.
 >
-> 자매 문서 (각자 단일 출처, 본 문서는 포인터만):
-> - `CONVENTIONS.md` — QA 5단계 / agent model 표기 / 산출물 폴더 컨벤션 (§5) / hard invariants
-> - **메인 에이전트 응답 메타 원칙 = 2층 위임**: 포터블 최소 계약은 `roles/response-policy.md` (runtime-neutral — 응답 규율·pause/자율·후속 단계), 런타임 구체화·언어 톤은 runtime adapter bootstrap (Claude Code: `adapters/claude/CLAUDE.md` §0~§3 — 작업 라우팅 spec-first 파이프 + autopilot-* Pre-check 포함).
+> Sibling sources:
+> - `CONVENTIONS.md` owns QA levels, portable model roles, artifact folders, and hard invariants.
+> - Main-agent response behavior has two layers. `roles/response-policy.md` owns the runtime-neutral minimum, including audience language, response discipline, pause/autonomy, and follow-through. Each runtime adapter bootstrap adds only runtime mechanics and non-locale-specific voice details.
 >
-> 본 문서는 _구조와 행동의 골격_ 만 담고, 정의·정책·운영 wording 은 위 자매 문서로 위임.
+> This document contains the structural and behavioral skeleton. Definitions, policies, and operational wording remain in the sibling sources.
 
 ---
 
-## §0. 존재의의 — model-agnostic skeleton (다른 모든 절보다 상위)
+## §0. Purpose — Model-Agnostic Skeleton
 
-이 레포(`<agent-home>`)의 근본 목적은 **특정 LLM 에 종속되지 않는, 어떤 모델로 갈아타도 동작하는 작업 substrate(skeleton)** 다. _"평생 Claude 만 쓴다는 보장은 없다."_ 모든 스킬·에이전트·하네스는 _프롬프트 + 로컬 도구 + 인코딩된 판단 규칙 + scaffold_ 로 구성돼, 모델을 갈아끼워도 그 골격 위에서 동작한다.
+The fundamental purpose of `<agent-home>` is a work substrate that does not depend on a particular model and continues to work after switching LLMs. A Skill, agent, or harness surface is made from prompts, local tools, encoded judgment guidance, and scaffolds that survive replacement of the model.
 
-- **가치 판단 규칙 (불변)**: 어떤 능력이 특정 벤더 내장(Claude Design · deep-research 등)으로 _지금 더 잘_ 되더라도, **그것을 이유로 우리 온프레미스 구현을 빼지 않는다.** 벤더 advantage 는 그 벤더에 묶여 있어 모델 전환 시 증발하지만, 우리 스킬은 살아남는다.
-- **평가 기준의 전환**: 산출물·스킬을 _"현재 Claude 대비 우열"_ 로 재지 않는다. 기준은 _"다른 LLM(GPT·Gemini·로컬)이 몰아도 그럭저럭 동작하는가"_. 따라서 **_실사용 빈도 0 도 제거 근거가 아니다_** — 일부는 daily tool 이 아니라 _모델 전환 대비 보험·substrate_ 다.
-- **그래서 internalization**: 벤더 내장의 잘 설계된 파이프는 _RE 해서 우리 스킬로 흡수_ 한다 (deep-research → 연구팀 claim-verify, `/security-review` → qa security-review, Claude Design 공개 룰 → `_design_rules.md` 등). 호출이 아니라 _자급 재구현_ — 의존 없이 단독으로 돈다. 작업·소스 보존 = `nas_Uihyeop/claude-meta-spec/`.
+- **Value invariant:** even when one vendor currently offers a better built-in capability, do not remove the portable on-premises realization for that reason. Vendor advantage disappears on a model switch; a portable capability survives.
+- **Evaluation criterion:** do not measure a capability only against the current runtime. Ask whether GPT, Gemini, a local model, or another future engine could drive the process adequately. Zero daily usage is not sufficient reason to remove it; some components are model-switching insurance and substrate.
+- **Internalization:** reverse-engineer well-designed vendor pipelines into portable capabilities rather than depending on their invocation. Examples include deep research into claim verification, native security review into the QA security role, and public design rules into `_design_rules.md`. Preserve source work under `nas_Uihyeop/claude-meta-spec/`.
 
-> 구조 결정(역할 분리·QA·산출물 컨벤션)이 이 §0 과 충돌하면 **이 원칙이 우선**한다.
-
----
-
-## §0.5 결정론 우선 — deterministic-first (cross-cutting, §0 다음 상위)
-
-> 2026-06-15 사용자 핵심 원칙. §1 의 _Orchestrator = deterministic state machine_ 을 **전 스킬·하네스의 보편 tenet 으로 격상**.
-
-**결정론적·소프트웨어로 처리 가능한 요소는 가능한 한 코드(hook·script·gate·DB 제약)로 대체해, 에이전트가 _생각_ 할 영역을 최소화한다.** 그래야 에이전트가 진짜 판단이 필요한 자리에 집중해 더 똑똑·신뢰성 있게 동작한다.
-
-- **왜**: 매 agent 판단은 비결정·실수 가능·토큰 비용. 결정론 기계화는 무료·정확·재현가능. (또 §0 과 정합 — hook/script/gate 는 모델 전환에도 살아남는 substrate, agent 판단은 모델 능력에 종속.)
-- **적용 규칙**: 새 기능·정책 설계 시 _"이걸 코드로 강제·자동화할 수 있나?"_ 를 **먼저** 묻는다. 가능하면 instruction(에이전트 판단)이 아니라 메커니즘(hook/script/gate/DB)으로. **agent judgment 는 결정론이 불가능한 의미·창의 판단의 _fallback_.**
-- **발현 예**: orchestrator state machine(§1) · artifact-guard·git-state·pipeline-lock hook · 메모리 write 게이트·dedup·만료·turn-counter nudge · QA gate 통과기준. ↔ anti-pattern: "에이전트가 매번 알아서 판단" 으로 떠넘기기 (재현 불가·드리프트).
-
-> 구조 결정이 본 §0.5 와 충돌하면 (§0 다음으로) **이 원칙을 우선** 적용한다 — 단 결정론화가 *과한 경직*을 낳는 자리(진짜 의미 판단)는 예외.
+When a structural decision conflicts with §0, this section wins.
 
 ---
 
-## §0.7 의미↔규칙 경계 검증 — semantic↔rule boundary verification (cross-cutting, §0.5 의 검증 층)
+## §0.5. Deterministic First
 
-> 2026-06-22 worklog-board 참사 계기. §0.5(결정론 우선)는 _설계 시점_에 "이걸 코드로 강제 가능한가"를 먼저 묻는 원칙이고, 본 §0.7은 _작성·완료·회귀 시점_에 "그 경계가 의미를 규칙으로 떨구지 않았나"를 재검하는 검증 층이다 — §0.5와 시점·동작이 달라 재탕이 아니며, §0.5 내용을 복사하지 않고 참조만 한다.
+Mechanize what is genuinely deterministic through hooks, scripts, gates, and DB constraints so agents can spend judgment on meaning and creativity. This 2026-06-15 principle generalizes the deterministic orchestrator state machine across the harness.
 
-**규칙(deterministic)이 맡는 것** = 큰 갈래 경계·정책 (라우팅·gate·hard 불변식). 세부 의미 판단(맥락·적절성·"의미상 맞는 매칭")은 LLM의 몫 — §0.5의 _fallback_ 규정과 정합 (참조: §0.5 line 32 fallback 절, line 35 예외절).
+- Agent judgments can be inconsistent, fallible, and token-expensive. Mechanical enforcement is cheap, exact, reproducible, and model-independent.
+- For a new feature or policy, first ask whether code can enforce or automate it. Use an instruction only for the semantic or creative judgment that cannot be reduced without losing meaning.
+- Examples include routing state machines, artifact/git/lock guards, schema and scope checks, pending protection, turn-counter nudges, and machine-checkable QA criteria.
+- The anti-pattern is delegating a mechanical invariant to “the agent will decide each time.” The opposite anti-pattern is encoding semantic relevance as token rules merely because code can match text.
 
-**본 §0.7의 검증 _판정_ 자체**(어느 구간이 의미요구인가·구현이 의미를 capture 했나)는 의미 판단이라 §0.5 line 35 예외절·line 32 fallback에 해당 — 결정론화 대상이 아니다. 단 검증의 _발사_(언제·어디서 도나)는 결정론으로 강제한다(Step 3d substep·audit auto-scope·drill 회귀). 즉 _판정은 LLM·발사는 결정론_ 분리 — 이게 §0.5와의 정확한 정합점이다.
-
-**anti-pattern (worklog 참사형, 2026-06-22)**: spec이 "의미 판단"을 명시했는데 구현이 그 의미를 토큰 매칭·규칙 스크립트로 *내려버리는* 것. 규칙은 의미를 capture 못 하므로 silent 오작동.
-
-**Memory application (D-40)**: storing, retrieving, promoting, merging, and pruning memory are semantic decisions owned by the acting agent. Deterministic memory code may enforce storage integrity, scope isolation, pending protection, lifecycle mechanics, bounded telemetry, and recovery, but it does not infer relevance from prompt tokens, fixed phrases, content categories, or confidence thresholds.
-
-**검증 절차 (3 step)**:
-
-- **(a)** spec 본문에서 _의미 판단 구간_ 찾기 (키워드 신호: 의미/판단/적절/맥락/contextual/semantic 등).
-- **(b)** 대응 구현이 그 의미를 _규칙으로 떨궜는지_ 확인 (토큰 매칭·정규식·고정 룰만으로 의미 판단을 대신하고 있나).
-- **(c)** 충돌 시 **3선택**: ① spec 재정의 (의미 요구를 규칙으로 표현 가능하게 좁힘) / ② 구현 수정 (의미 판단을 LLM 단계로 올림) / ③ LLM 판단문 추가 (규칙 갈래 뒤에 의미 판단 fallback 명시).
-
-**적용 자리 (3 시점 커버)**:
-
-- autopilot-spec Step 3d (_저술 시점_ — PRD 작성 중 의미 구간 표시)
-- audit plans aspect (_완료 시점_ — done plan에서 spec 의미요구 ↔ 구현의 drift 재검출, Step 3d 통과분이 이후 코드 수정으로 어긋났나)
-- drill g7 (_회귀 시점_)
-
-본 §0.7은 그 세 층의 _공통 정의 출처_ — 각 층은 본 절을 참조한다 (재정의 금지). **미커버: autopilot-code dev 단계(구현이 의미요구를 규칙으로 떨구는 _순간_)는 현재 게이트가 없어 사후 audit에서만 잡힌다 — 향후 확장 여지. 즉 본 체계는 _완전_ 커버가 아니라 저술·완료·회귀 _3 시점_ 커버다.**
-
-> 운영 1-liner 불변식 = CONVENTIONS §3 #7. 본 절이 상세 단일 출처.
+This section follows only §0 in priority. True semantic judgment is the explicit exception; §0.7 verifies that boundary.
 
 ---
 
-## §0.8 Loop Engineering 제1원칙 — core first, adapters derived
+## §0.7. Semantic-to-Rule Boundary Verification
 
-**공통 원칙(core) 확정 → 어댑터 파생. 어댑터 선행 수정 금지.** 어댑터에서 발견된 개선 필요도 반드시 `core/` 의 모델 중립 계약으로 올려 확정한 뒤, 각 adapter runtime surface 로 파생한다. 예외 없음.
+This verification layer was added after the 2026-06-22 worklog-board incident. §0.5 asks at design time whether a behavior can be mechanized. §0.7 asks during authoring, completion, and regression whether mechanization accidentally reduced a semantic requirement into brittle rules.
 
-- **왜**: adapter 는 런타임 매핑이고 core 는 의미 계약이다. adapter 를 먼저 고치면 같은 행동이 Claude/Codex/OpenCode 사이에서 갈라지고, 다음 포팅 때 의도를 잃는다.
-- **절차**: ① 관련 core 문서를 읽고 ② core 계약을 갱신하거나 core 에 이미 계약이 있음을 확인한 뒤 ③ adapter bootstrap·hook·projection 을 수정한다.
-- **기계화**: `core-read-marker` + `core-first-guard` 는 `adapters/**` 편집 전에 이번 세션의 `core/*.md` 실제 read marker 를 요구한다. hard gate 는 검증 가능한 read marker 까지만 맡고, “core 를 실제로 먼저 고쳤는가”는 본 원칙과 drill 이 보완한다.
-- **위반 사례**: 2026-07-03 `adapters/claude/CLAUDE.md` 회상 행을 core 확정 없이 선수정했다가 revert. 이 사건을 계기로 본 불변식과 guard 를 추가했다.
+Deterministic code owns branch boundaries, routing, gates, and hard invariants. Contextual appropriateness and semantic matching belong to the model. Deciding whether a requirement is semantic and whether an implementation captures it is itself semantic, so the verdict remains model-owned. Determinism owns when and where that review runs: spec Step 3d, automatic audit scope, and drills.
 
----
+The incident-shaped anti-pattern is a spec that explicitly requires semantic judgment but an implementation that replaces it with token matching, regex, or fixed rules and then fails silently.
 
-## §0.6 긍정형 지침 — 부정형 직접금지 절제 (cross-cutting, 지침 _편집_ 의 tenet)
+Memory follows D-40: the acting agent decides storing, retrieval, promotion, merge, and pruning. Deterministic memory code enforces integrity, scope, pending protection, lifecycle mechanics, bounded telemetry, and recovery; it does not infer relevance from prompt tokens, fixed phrases, content categories, or confidence thresholds.
 
-> 2026-06-17 사용자 핵심 원칙. 지침을 _고칠 때_ 의 방법론, 특히 hotfix-patch 식 피드백 반영 자리.
+Three-step review:
 
-**원하는 행동을 지침에 _기술_ 한다 — 원치 않는 행동을 "하지 마"로 막으려 하지 않는다.** 부정형 직접금지("X 하지 마")는 X 를 _언급_ 함으로써 오히려 prime 한다 ("코끼리를 생각하지 마" 효과). hotfix 로 누적되면 금지문 더미가 되어 잡음·prime↑, 유지보수↓.
+1. Locate semantic requirements in the spec, including contextual or appropriateness judgments.
+2. Inspect whether the implementation substitutes only fixed tokens, regex, or rules for that meaning.
+3. Resolve a conflict by narrowing the spec into an honestly deterministic requirement, moving the implementation back to an LLM judgment, or adding an explicit semantic fallback after the deterministic branch.
 
-- **왜**: 언급 자체가 신호다. 안 했을 행동을 "하지 마"로 적으면 그 행동을 _떠올리게_ 만들어 빈도가 되레 오른다. 또 금지 패치는 근본(왜 그 행동이 나왔나)을 안 고치고 증상만 덮는다.
-- **올바른 수정 (근본)**: bad behavior 가 _어떤 지침의 잘못된 mention·여지에서_ 비롯됐으면, 금지문을 _덧붙이는_ 게 아니라 **그 원래 mention 을 제거하거나 positive 로 재작성** 한다. _애초에 언급이 없었으면 안 했을 일_ 이면 → 언급을 없앤다. (행동이 지침과 무관한 외부 요인에서 왔을 때만 새 지시를 고려.)
-- **부정형 예외 (드물게)**: 안전·비가역·하드 게이트(파괴 작업·보안)처럼 positive 재구성이 불가능하고 _반드시_ 차단해야 하는 자리만. 그 외엔 positive 가 default.
-- **적용**: 모든 instruction 편집(autopilot-spec·autopilot-code meta-skill·직접 hotfix). meta-skill 리뷰(연구팀)가 _부정형 남용·prime 위험·증상-덮기 패치_ 를 체크 축으로 잡는다.
+Run this review while authoring at `autopilot-spec` Step 3d, after completion in the audit plans aspect, and during the corresponding drill. These three points do not yet cover the exact development moment when code first introduces the mismatch; audit remains the backstop. `CONVENTIONS §3 item 7` holds the one-line operational invariant.
 
 ---
 
-## 1. 3-Tier Role Separation
+## §0.8. Loop Engineering First Principle — Core First, Adapters Derived
 
-| Tier | Role | 예 | Anti-pattern |
-|------|------|-----|--------------|
-| **Orchestrator** | Deterministic state machine. 라우팅·gate·verdict 만, content 안 봄. | `autopilot-code` / `autopilot-draft` / `autopilot-research` / `autopilot-refine` 의 SKILL.md 본체 | Orchestrator 가 file content 읽기·요약·판단 |
-| **Skill** | Expert capability module. WHAT + selected verification/assurance gate 정의. | `code-plan` · `code-execute` · `code-test` · `draft-strategy` · `draft-refine` 등 | Skill 안에 전체 pipeline graph나 반복 QA loop를 숨김 |
-| **Agent** | Persona with tools. Skill 안에서 실제 작업 수행. | 로스터 단일출처 = `roles/README.md` Role Catalog 참조 | Agent 가 verbose 결과를 orchestrator 로 반환 |
+Establish the shared contract in core, then derive adapters. A runtime-specific improvement must first be expressed or confirmed in the model-neutral `core/` contract, then mapped into each adapter surface.
 
-> **이름 충돌 주의**: 본 절의 _3-Tier_ 는 _역할 분리_. §4 의 _3-tier T1/T2/T3_ 는 _산출물 가시성 분리_. 같은 숫자지만 다른 layer.
+- Adapters map runtimes; core owns meaning. Adapter-first edits cause behavior to diverge across Claude, Codex, and OpenCode and erase intent during the next port.
+- Read the relevant core document, update the contract or confirm that it already covers the behavior, then edit bootstrap, hook, or projection files.
+- `core-read-marker` and `core-first-guard` mechanically require a session read marker before `adapters/**` edits. They verify the read, while this principle and drills verify that core actually led the change.
+- The motivating incident was a 2026-07-03 adapter recall edit made before the core contract and then reverted.
 
-### Interface Contract
+---
 
-```
-Orchestrator → Agent:  file paths + 1-line task directive
-Agent → Orchestrator:  file path + verdict token (한 줄)
-Agent ↔ Agent:         file system 통해 (B 가 A 가 쓴 파일을 read)
+## §0.6. Prefer Positive Instructions
+
+Describe the desired behavior rather than accumulating “do not do X” patches. Naming an unwanted behavior can prime it, and repeated hotfix prohibitions create noise while hiding the original cause.
+
+- If an unwanted behavior came from an existing misleading mention or ambiguity, remove that mention or rewrite it positively instead of adding another ban.
+- Add a new instruction only when the cause is external to the existing contract.
+- Negative instructions remain appropriate for safety, irreversibility, security, and hard gates where a positive formulation cannot safely block the action.
+- Apply this review to every instruction edit, including direct hotfixes and meta-Skill changes. Reviewers check negative overuse, priming risk, and symptom-only patches.
+
+---
+
+## 1. Three-Tier Role Separation
+
+| Tier | Role | Examples | Anti-pattern |
+|---|---|---|---|
+| **Orchestrator** | Deterministic state machine owning routing, gates, and verdicts rather than content | Main bodies of `autopilot-code`, `autopilot-draft`, `autopilot-research`, and `autopilot-refine` | Reading, summarizing, or judging delegated content |
+| **Skill** | Expert capability defining its work and selected assurance gate | `code-plan`, `code-execute`, `code-test`, `draft-strategy`, `draft-refine` | Hiding the entire pipeline graph or repeated QA loop inside one Skill |
+| **Agent** | Tool-enabled persona that performs work inside a Skill | Role Catalog in `roles/README.md` | Returning verbose bodies to the orchestrator instead of artifacts and verdicts |
+
+This role separation is distinct from the T1/T2/T3 artifact visibility tiers in §4.
+
+```text
+Orchestrator → Agent: file paths plus a one-line task directive
+Agent → Orchestrator: file path plus a one-line verdict token
+Agent ↔ Agent: file system; the next agent reads the prior artifact
 ```
 
-Orchestrator 는 _내용을 매개하지 않는다_ — 오로지 path 만 전달.
-
-### "No Read" 의 범위
-
-이 규칙은 **orchestrator 에만** 적용. Skill 본문과 그 안 agent 는 file 을 자유롭게 read — orchestrator 는 delegate, skill·agent 는 execute.
-
-### Stage 통합 orchestrator 의 예외
-
-orchestrator 가 _단일 expert flow_ 만 다루는 경우 (예: `autopilot-refine` Stage A~E — investigate · plan · diff preview · apply · report 가 한 흐름) sub-skill 분리 비용이 커, orchestrator 가 직접 file read·Edit 해도 헌법 위반 X. _sub-skill 분리_ 는 _두 개 이상의 expert capability_ 가 모일 때만 의미 있고, 단일 expert flow 는 orchestrator-also-execute 가 정당.
-
-같은 원칙이 `final-report` 의 _다른 artifact dir (`analysis_project/code/`) 보강 write_ 같이 _자기 책임의 자연 확장_ 자리에도 적용 — sub-skill 책임 범위가 자기 폴더에 한정된다는 _엄격 해석_ 은 헌법 의도 아님. 신규 sub-skill 도입 시 _분리해야 할 expert capability 가 둘 이상인가_ 만 점검하면 충분.
+The no-read rule applies only to the orchestrator. Skills and their agents read files freely. A single expert flow may combine orchestration and execution when splitting it would add more cost than capability separation—for example, investigate → plan → diff preview → apply → report in one refinement stage. A sub-Skill may also make a natural extension such as final-report updating `analysis_project/code/`. Split only when two or more genuinely distinct expert capabilities are present.
 
 ---
 
-## 2. Default Behavior — Autopilot 정신
+## 2. Default Autopilot Behavior
 
-family 의 모든 멤버는 confirm 없이 pipeline 을 끝까지 돌린다. 사용자가 명시할 때만 멈춘다.
+Autopilot members run their pipeline to completion unless the user explicitly requests a pause.
 
-- `--user-refine` / `--confirm` 같은 pause flag 는 **사용자가 직접 typed 한 자리에서만** 켠다 (default false).
-- `--intensity thorough|adversarial` 같은 비싼 stage graph는 명시 신호나 high-risk routing이 있을 때만. verification rigor는 intensity에서 파생될 뿐(CONVENTIONS.md §1.1) graph/depth selector가 아니며, 별도 `--qa` 축은 없다.
-- 실패 시 fail loudly + `pipeline_summary.md` 미해결 기록. 다음 호출에서 `--from <stage>` 재개.
+- Enable `--user-refine`, `--confirm`, or an equivalent pause only when the user explicitly asks for it; defaults remain false.
+- Select expensive `thorough` or `adversarial` graphs from explicit signals or high-risk routing. Verification rigor derives from intensity; it is not a separate graph or `--qa` selector.
+- On failure, fail loudly, record unresolved work in `pipeline_summary.md`, and allow the next call to resume with `--from <stage>`.
 
-**Why**: 사용자가 _명시 요청_ 을 했는데 메인 에이전트가 _신중을 위해_ 라며 confirm 단계를 추가하면 작업이 한 turn 지연되고 "이미 했어?" 같은 follow-up 으로 갈등이 누적. high-stakes 일수록 사용자가 _직접_ pause 를 거는 게 자연스럽다.
-
-**강제 위치**: runtime adapter bootstrap 의 응답 원칙(Pause·자율 진행; Claude Code realization: `adapters/claude/CLAUDE.md` §2) + 각 SKILL.md `--user-refine` 절 default false.
+Adding a cautionary confirmation after the user has already given clear intent delays work and creates follow-up friction. The runtime adapter response policy and each capability's pause-option contract enforce this principle.
 
 ---
 
 ## 3. Implicit Input Discovery
 
-입력 자료는 _프로젝트 컨텍스트 내부의 영속 산출물_ 에서 자동 발견한다.
+Discover inputs automatically from persistent artifacts in the project context:
 
-- `<artifact-root>/analysis_project/{code,paper,doc}/*` — analyze-project 산출물
-- `<artifact-root>/research/{topic}/*` — autopilot-research 산출물
-- 외부 raw 자료는 `analyze-project --mode {code|paper|doc}` 으로 먼저 영속화 → 이후 skill 이 fuzzy match 로 implicit 인지
+- `<artifact-root>/analysis_project/{code,paper,doc}/*` from `analyze-project`;
+- `<artifact-root>/research/<topic>/*` from `autopilot-research`;
+- external raw inputs first persisted through `analyze-project --mode code|paper|doc`, then found through contextual matching.
 
-**Why**: 한 세션 한 프로젝트의 단순한 가정 (cwd = working dir) 이 cognitive cost 를 낮추고, 영속 산출물 재활용성을 높인다. cross-project 작업은 `cd <other>` 후 별도 세션.
+The assumption that one session works in one cwd reduces cognitive cost and increases artifact reuse. Cross-project work changes into the other repository and uses a separate session.
 
 ---
 
-## 4. Artifact Convention — 3-tier T1/T2/T3
+## 4. Artifact Convention — T1/T2/T3
 
-Artifact 폴더 안의 _가시성 분리_. 상세는 CONVENTIONS.md §5 single source.
+`CONVENTIONS §5` is the detail source for visibility inside an artifact directory.
 
-| Tier | 위치 | 예 |
+| Tier | Location | Examples |
 |---|---|---|
-| **T1** Primary | root | `pipeline_summary.md`, `draft/`, `plan/` |
-| **T2** Secondary | named subdir | `strategy/`, `analysis/`, `dev_logs/`, `test_logs/`, `cards/` |
-| **T3** Tertiary | `_internal/` 하위 | review logs, version 스냅샷, raw scan metadata |
+| **T1 primary** | Root | `pipeline_summary.md`, `draft/`, `plan/` |
+| **T2 secondary** | Named subdirectory | `strategy/`, `analysis/`, `dev_logs/`, `test_logs/`, `cards/` |
+| **T3 tertiary** | `_internal/` | Review logs, version snapshots, raw scan metadata |
 
-### Minor vs Major 변경
+Follow-up changes to one artifact also have two scales:
 
-같은 artifact 의 후속 변경도 두 layer 분리:
-
-| Tier | 처리 | 추적 |
+| Scale | Handling | Tracking |
 |---|---|---|
-| **Minor** (default) | 직접 Edit | `pipeline_summary.md` 안 minor log entry |
-| **Major** (3-criteria — 사용자 명시 / 구조적 ≥200 줄 / 외부 검토 직전) | `/autopilot-refine` ceremony | snapshot + 통합 history + QA |
+| **Minor**, default | Direct edit | Minor log entry in `pipeline_summary.md` |
+| **Major**: user-declared, structurally at least 200 lines, or immediately before external review | `autopilot-refine` ceremony | Snapshot, integrated history, and QA |
 
-누적 minor 5건 도달 시 `/audit` chat alert → audit 이 dual-perspective (vs last major + vs universal principles) batch 점검.
-
-상세 — `autopilot-refine/SKILL.md` Default Invocation Rule + runtime adapter bootstrap 의 도메인 트리거 표(Claude Code realization: `adapters/claude/CLAUDE.md`).
+After five accumulated minor changes, surface an `/audit` alert. Audit compares both against the last major version and against universal principles.
 
 ---
 
 ## 5. Quality Gates
 
-Quality gates live inside the selected stage graph. The orchestrator chooses `intensity`, and the verification rigor derived from it (CONVENTIONS §1.1) scales `plan-check`, selected independent passes, and final verification. A high rigor tier does not open hidden stages, repeated loops, or depth2 workers by itself.
+Quality gates live inside the selected graph. Intensity chooses the graph; derived verification rigor scales plan checks, selected independent passes, and final verification. A high rigor tier does not secretly open stages, repeat loops, or depth-2 workers.
 
-- **QA assurance levels** (quick / light / standard / thorough / adversarial) — CONVENTIONS.md §1 single source. They are budgets for selected checks, not pipeline selectors.
-- **Stage-local gates** stay small and only decide whether the next stage can proceed.
-- **Independent QA passes** run only where the selected intensity/risk calls for them: strongest risk point for `strong`, bounded depth2 for `thorough`, adversary/security/claim-verify for `adversarial`.
-- **Fact/source checking** applies to doc / research / refine / note claims when selected; code has no fact-checker because ground truth is code/tests/runtime behavior. `--no-fact-check` remains limited to capabilities that expose it.
-- **Natural-integration rule** (paper mode 한정) — reviewer 의견 → 본문 mutation 옮길 때 표·enumeration 통째 paste 금지. 1~2 문장 in-line rewrite 가 안 되면 drop 또는 Appendix. 4-step Paragraph Cohesion Pre-Check (substance 중복 / paragraph axis / cross-section redundancy / EDIT·REPLACE·INSERT·DROP 분류) 가 mechanical INSERT 사전 차단. 상세 — `init-doc-strategy/SKILL.md` paper mode + `autopilot-draft/SKILL.md` Step 4.1.
+- QA assurance levels—quick, light, standard, thorough, adversarial—are check budgets defined in `CONVENTIONS §1`, not graph selectors.
+- Stage-local gates stay small and answer only whether the next stage may proceed.
+- Independent QA runs where intensity and risk call for it: the strongest risk point at strong, bounded depth 2 at thorough, and adversary/security/claim verification at adversarial.
+- Fact and source checking applies to selected document, research, refinement, and note claims. Code uses code, tests, and runtime behavior as ground truth. `--no-fact-check` remains limited to capabilities that expose it.
+- In paper mode, integrate reviewer feedback naturally. Do not paste an entire table or enumeration into prose. If one or two inline sentences cannot express it, drop it or move it to an appendix. The four-step Paragraph Cohesion Pre-Check evaluates substantive duplication, paragraph axis, cross-section redundancy, and the EDIT/REPLACE/INSERT/DROP action before a mechanical insert.
 
-**Why**: QA budget이 stage graph와 섞이면 작은 작업도 full ceremony가 되고, 반대로 cross-harness 검증은 monolithic skill 안에서 열 수 없다. Graph는 intensity가, assurance는 QA가 소유해야 토큰 비용과 검증 강도를 독립적으로 조절할 수 있다.
+Keeping assurance separate from stage selection prevents small work from becoming full ceremony while still allowing cross-harness review outside a monolithic Skill.
 
 ---
 
-## 6. Output Surface — 사용자 향 산출물의 일관성
+## 6. Output Surface
 
-사용자가 직접 보는 markdown 산출물은 _내용 정확성_ 만 아니라 _읽기 호흡_ 까지 책임진다. 전담 부서 — **편집팀** (editorial-team, deep editor; concrete runtime mapping 은 adapter 문서가 소유).
+User-facing Markdown owns both factual quality and readable rhythm. The editorial role performs the final pass.
 
-- **Audience-language first** — 사용자에게 직접 향하는 문서·산출물은 사용자가 현재 소통하는 언어를 기본으로 한다. 사용자가 지정한 대상 언어, 출판 venue, 외부 청중, 기존 artifact 언어가 있으면 그 계약이 우선한다. 저장소 자체의 공개 문서는 저장소가 선택한 documentation language를 따른다.
-- 모드 3종: A 옮기기 (source → target language) / B 다듬기 (언어 무관, 어색한 혼용·번역체·표기 불일치 정리) / C 점검만
-- 불필요한 언어 혼용 회피 — 문서의 target language 안에서 자연스럽게 쓸 수 있는 일반 표현을 다른 언어로 무리하게 삽입하지 않는다. 도메인 용어·고유명사·정착 외래어는 보존한다. 매핑 표 — `adapters/claude/agents/editorial-team.md`
-- 적용 범위 — 사용자가 직접 보는 _모든_ .md 산출물 (doc 한정 X). autopilot-code 의 final-report, audit 보고서, autopilot-refine 결과, pipeline_summary 등
+- **Audience-language first:** a document or artifact intended for the user defaults to the language the user currently uses. Explicit target language, publication venue, external audience, or existing artifact language overrides that default. Public repository documentation follows the repository's chosen documentation language.
+- Editorial modes are translation into a target language, language-independent polish, and review-only.
+- Avoid unnecessary language mixing when a natural expression exists in the target language. Preserve domain terms, proper names, and established loanwords.
+- This applies to every user-facing Markdown artifact, including final reports, audits, refinement results, and pipeline summaries.
 
-**메인 에이전트 응답 자체** 의 메타 원칙은 별개 layer — **2층 위임**이다. (1) _포터블 최소 계약_ = `roles/response-policy.md` (runtime-neutral: audience-language first · 간결·약속-행동 일치·검증 후 단언·컨벤션 준수 · pause 비자동·자율 진행 · 후속 단계 자동). (2) _런타임 구체화_ = runtime adapter bootstrap (작업 라우팅·도구·세션 lifecycle 같은 runtime mechanics만 추가). 어댑터는 고정 locale을 추가하거나 포터블 절을 _재정의_ 하지 않고 realization 만 얹는다. 6-1("무조건 브랜치") 운영 안전 규칙은 응답 메타가 아니라 `OPERATIONS.md §5.10` 규모 분기표가 소유.
-
-**Why**: 산출물 품질만 좋고 응답 / 가독성이 부자연스러우면 사용자 짜증이 누적. 편집팀이 _마지막 한 번_ 의 다듬기를 책임지고, runtime adapter bootstrap 의 응답 원칙이 _매 turn_ 의 메타 self-check.
+Main-agent replies are a separate two-layer contract. `roles/response-policy.md` owns the portable minimum; runtime adapters add routing, tools, and session lifecycle mechanics without imposing a fixed locale or redefining portable clauses. Worktree safety belongs to `OPERATIONS §5.10`, not response style.
 
 ---
 
 ## 7. Memory Layers
 
-per-project 메모는 두 layer 분리.
+### Memory application (D-40)
 
-| Layer | 위치 | 갱신 주체 | 용도 |
+Project memory distinguishes explicit user-directed notes from agent-learned records.
+
+| Layer | Location | Owner | Purpose |
 |---|---|---|---|
-| **사용자 수동** | DB working tier — `/post-it` 가 `mem note`/`mem add` 로 author; 5 카테고리(conventions·external resources·open threads·decisions·next session hints)는 `type` taxonomy 로 유지 | `/post-it` (사용자 명시) | 사용자가 박아두려는 conventions / resources / threads / decisions / hints |
-| **자동 학습** | DB working/durable — 외부 distiller 가 세션 delta 를 distill → `mem add` (Cluster C) | **외부 detached distiller** (메인 아님; turn-counter·SessionEnd hook 트리거 — §0.5 판단 외부화) | 재사용 절차·교정·컨벤션·교훈 자동 학습 |
+| Explicit user note | DB working tier through `/post-it` and `mem note` or `mem add`; the former five categories remain as type taxonomy | User-directed `/post-it` | Conventions, resources, open threads, decisions, and next-session hints the user wants retained |
+| Agent learning | DB working or durable tier populated by an external distiller from session deltas | Detached distiller triggered by turn count or SessionEnd | Reusable procedures, corrections, conventions, and lessons selected contextually by the agent |
 
-- **Semantic ownership**: the main agent, distiller, or curator decides contextually what to retrieve or mutate. Scripts expose candidates and enforce mechanical safety; they do not replace that judgment with keyword rules or automatic prompt classification.
-- 내장 file 메모리(`<agent-home>/projects/*/memory/`)는 **직접 write hard-block**(`builtin-memory-guard.sh`); `mem sync` 는 다른 세션·하네스의 stray write 만 안전망 흡수. 기억 write 경로 = `mem`(DB) 단일.
-- **삭제·prune·consolidate·merge·graduate(비가역) = 세션끝 deep curator** (Cluster E — no-tools + action JSON + script 실행, D-18; concrete runtime mapping 은 adapter 문서가 소유; 비가역삭제 3중방어). N턴 distiller = fast add-only worker. 메인 housekeeping 0. working TTL(21일) = deterministic backstop. (원칙: 추가[가역]=외부 자동 / 정리·삭제[비가역]=세션끝 deep curator.)
-- 세션 주입 = `mem inject --hook` (DB working+durable+profile). 상세 SoT = runtime adapter bootstrap + MEMORY §7.
+- Main, distiller, or curator owns semantic decisions. Scripts expose candidates and mechanical safety rather than keyword rules or automatic prompt classification.
+- Direct writes to built-in file memory under `<agent-home>/projects/*/memory/` are hard-blocked. `mem sync` only absorbs stray writes from other sessions or harnesses; `mem` is the unified write path.
+- The session-end deep curator owns deletion, pruning, consolidation, merge, and graduation through no-tools action JSON plus guarded script execution. The N-turn distiller is add-only. Main performs no housekeeping, and a 21-day working TTL is a deterministic backstop.
+- Session injection uses `mem inject --hook`. `core/MEMORY.md §7` and adapter bootstraps own details.
 
-**Why**: 자동 메모리가 모든 feedback 을 누적하면 사용자가 _명시적으로 박아두고 싶은_ 정보 (코딩 컨벤션 · 외부 자원 link · 미해결 thread) 가 noise 에 묻혀 보인다. layer 분리 후 우선순위 명확.
+The separation prevents automatic learning noise from burying information the user deliberately chose to retain.
 
 ---
 
 ## 8. Performance Preservation
 
-효율 ≠ corner cutting. 줄어드는 것은 _orchestrator 의 중복 reasoning_ 이지 _verification 의 깊이_ 가 아니다.
+Efficiency is not corner cutting. Reduce duplicated orchestrator reasoning, not verification depth.
 
-- 유지: QA round 수 / agent prompt 풍성함 / verification step
-- 줄임: orchestrator 가 agent 작업을 다시 읽고 요약하는 중복 / context 에 결과 본문이 누적되는 노이즈
-- 결과 흐름: file 통해 (verdict 만 token)
-- **적용 범위 (2026-07-10 stage-dispatch 승격)**: 이 "file 통해 (verdict 만 token)" 원칙은 _in-session agent→orchestrator_ 를 넘어 **headless 스테이지 세션→conductor** 에도 적용된다. `standard+` autopilot 파이프의 각 sub-skill 스테이지(code-plan·execute·test·report)를 depth-2 headless 세션으로 분사하고, 세션 간 소통은 오직 산출물 파일(대화 컨텍스트 전달 금지 = "산출물 기반 소통"). depth-1 owner 는 스테이지 본문을 안 읽는 얇은 conductor 가 되어 lean 을 한 겹 더 얻는다. 이는 2026-07-06 "owner 단일 세션 + in-session 팀" 기본값의 **명시적 반전**이며, 원칙 신설이 아니라 기존 §8 원칙의 적용 범위 확장이다 (계약: 산출물이 다음 스테이지 컨텍스트를 완전히 담아야 하고, 못 담으면 대화로 때우지 말고 산출물 스키마를 보강). 근거·결정 = `.agent_reports/spec/stage-dispatch/prd.md` (SD-1·SD-2). 대기·수확도 이 결정론 흐름의 일부다 (SD-14): conductor 의 스테이지 대기는 완료 알림 신뢰가 아니라 `dispatch-wait`(liveness 재사용) 폴링으로 결정론화되고(Claude adapter 는 `-p` Stop hook 미발화로 Stop 게이트를 보류 — probe 2026-07-10), 죽은 스테이지 해석만 conductor 의미 판단으로 남는다.
+- Preserve QA rounds selected by the graph, rich role prompts, and required verification.
+- Remove repeated orchestrator reading and summarization and the accumulation of large result bodies in context.
+- Pass results through files and return only verdict tokens.
+- At `standard+`, extend this file-only principle from in-session agent handoff to depth-2 headless stage handoff. Each plan, execute, test, and report stage writes a complete artifact for the next stage. The depth-1 owner remains a thin conductor that reads status and verdicts rather than bodies. If a file cannot carry the required context, improve the artifact schema instead of passing conversation history.
+- Waiting and harvesting are part of the deterministic flow: conductors poll through `dispatch-wait`, while semantic interpretation remains only for a dead stage. `OPERATIONS §5.10` owns the runtime details.
 
 ---
 
-## 9. Design ownership — design 이 리드, code 는 적용 (토큰 단일 계약)
+## 9. Design Ownership — Design Leads, Code Applies
 
-디자인은 _코드에서 즉흥_ 으로 정하지 않는다. **design 이 시각을 먼저 잡고, code 는 적용만** 한다 — design 이 spec 역할(시각 청사진).
+Visual decisions begin in design rather than emerging ad hoc in code. Design acts as the visual blueprint, and implementation applies it.
 
-- **토큰은 _단일 계약_ — design 소유, code import.** 디자인 토큰(색·타이포·spacing·radius·shadow)은 _하나의 파일_ 에만 산다 = **앱이 실제로 import 하는 파일**(예: `app/globals.css` 의 `@theme`, 또는 `styles/tokens.css`). autopilot-design 이 그 파일을 _결정·편집_ 하고, autopilot-code 는 _참조·사용만_ 한다. **`designs/` 에 토큰 _사본_ 을 두지 않는다** (복제 = drift·화석의 근원). `designs/`(또는 `spec/design/`) 는 _refs·mockup·결정 근거·specimen_ 만 — spec/prd 가 "왜"를 담듯.
-- **code 는 토큰을 재정의·즉흥변경하지 않는다.** 컴포넌트는 design 계약의 토큰을 _쓰기만_ (인라인 hex·px 흩뿌리기 금지). 토큰을 바꿔야 하면 design 으로 돌아간다.
-- **빌트앱도 design-first** — mockup 이 아니라 **실제 돌아가는 앱 화면을 adapter visual harness 로 렌더** 해서 시각 결정. 그래야 롱테일("쓰다 보니 거슬림")도 design 이 리드한다.
-- **경계 (substantial vs trivial)**: 방향·토큰·새 화면 레이아웃·구조 변경 = _substantial_ → **design-first** (실제 앱 렌더 → 결정 → 토큰 계약 갱신), code 적용. 한 요소 색 한 끗 같은 _trivial tweak_ 만 code 직접 허용.
+- **Tokens are one design-owned contract imported by code.** Color, typography, spacing, radius, and shadow live in exactly one file that the real app imports, such as `app/globals.css` with `@theme` or `styles/tokens.css`. `autopilot-design` decides and edits that file; `autopilot-code` consumes it. Do not keep a token copy under `designs/`, which should contain references, mockups, rationale, and specimens only.
+- Components consume tokens rather than redefining them through scattered inline hex or pixel values. A token change routes back to design.
+- Built apps remain design-first: render the real running application through the adapter visual harness, make the visual decision, update the token contract, and then apply code.
+- Direction, tokens, a new screen layout, or structure are substantial and route through design-first. A tiny adjustment to one element may remain a direct code tweak.
 
-**Why**: design 결정이 code 로 새면 (a) 토큰이 코드에 흩어져 시각 일관성이 무너지고 (b) `designs/` 가 화석이 되며 (c) 디자인 이력의 단일 출처가 사라진다. 토큰을 _design 소유 단일 계약_ 으로 두면 design 이 진짜 spec 역할을 하고, 복제·drift 가 원천 소멸한다. (2026-06-08 worklog-board: `designs/02_tokens/tokens.css`(7KB·06-01 화석) vs `app/globals.css`(50KB·06-08) 복제·drift 진단에서 도출.)
+This prevents token drift, fossilized design copies, and loss of visual decision history. The rule came from the 2026-06-08 worklog-board divergence between a stale 7 KB design token copy and the live 50 KB application stylesheet.
 
-## 10. Skill-Design Tenets (Pocock 4축 + Predictability)
+## 10. Skill-Design Tenets
 
-스킬셋 자체의 설계 철학 — 개별 스킬을 _왜_ 그렇게 짜는가의 tenet. 정량 수치(줄 수·depth·frontmatter 요건)는 여기 두지 않는다.
+The root virtue is **predictability**: reproduce the same process, gates, and procedure in the same situation rather than forcing identical output. Refactoring preserves this behavior skeleton.
 
-- **root virtue = Predictability**: 스킬의 목표는 같은 _출력_ 이 아니라 같은 _과정_ 의 재현 — 같은 상황이면 같은 절차·같은 게이트가 돈다. 28스킬이 이미 이 골격 위에 🟢 서 있고, refactor 는 이 골격을 흔들지 않는 선에서만 움직인다 (behavior-preserving 의 근거).
-- **4축 레버** (설계를 조정하는 네 축):
-  1. **Invocation** — 도달성(reachability) gain 없는 resident description 은 context 낭비지만, invocation control은 호출 그래프를 보존한 뒤 최적화한다. 사용자가 `/name`으로만 시작해야 하는 manual-only workflow만 `disable-model-invocation: true`로 내린다. parent/pipeline이 Skill tool로 호출하거나 subagent가 preload하는 sub-skill은 그 flag가 programmatic 호출 자체를 막으므로 model-invoked로 유지한다. entry-router도 model-invoked로 남기되 영문 "Use when" 트리거를 병기해 도달성을 높인다. 메뉴 노출만 숨길 때는 orthogonal `user-invocable: false`를 검토한다. (C1-GATE b/c runtime 차단 실측, 2026-07-13.)
-  2. **Information Hierarchy** — 3-rung progressive disclosure: SKILL.md 는 라우터·계약·mapping 표만, 상세 본문(worked example·delegate prompt·템플릿·실행 본문)은 `references/*.md` 로 밀어 필요할 때만 로드. references/ 는 1-depth 유지.
-  3. **Steering** — leading concept(무엇을 하는지 앞머리 한 줄)와 checkable completion(끝났는지 눈으로/grep 으로 확인 가능한 완료 기준)로 조향한다. safety negation(파괴 작업 금지·게이트 미통과 시 중단 등 부정형 지시)은 정당한 steering 이지 no-op 이 아니다.
-  4. **Pruning** — cross-skill 중복은 단일 authority(SoT) 한 곳 + pointer 로 접는다. 같은 규칙을 여러 SKILL.md 가 복사-서술하면 drift·sediment 의 근원 → SoT 지정 후 나머지는 _파일명+시점+의무_ 를 유지한 포인터로.
-- **1줄 포인터**: 정량 규범(줄 수·depth·frontmatter 요건)은 [CONVENTIONS §5.6a](CONVENTIONS.md#56a-skill-design-정량-규범-scansh-lint-sot) — 스캔 가능한 기준은 그쪽 단일 SoT, 본 절은 tenet(철학·비용축)만.
+Four design levers:
 
-## 부록 — 도입 이력 (간략)
+1. **Invocation:** a resident description with no reachability gain wastes context, but optimize invocation only after preserving the call graph. Set `disable-model-invocation: true` only for workflows that must begin through explicit user invocation. Sub-Skills called by parents or preloaded into subagents remain model-invoked because the flag blocks programmatic use too. Entrypoint routers remain model-invoked and use clear English “Use when” triggers. Consider orthogonal `user-invocable: false` only to hide menu exposure.
+2. **Information hierarchy:** use three-rung progressive disclosure. Keep only the router, contract, and mapping table in `SKILL.md`; move examples, delegate prompts, templates, and execution detail to one-depth `references/*.md` loaded on demand.
+3. **Steering:** start with one leading-concept line and end with checkable completion. Negative safety gates remain valid steering when they protect destructive or irreversible boundaries.
+4. **Pruning:** collapse cross-Skill duplication into one source plus pointers. Repeated prose drifts and sediments; pointers retain filename, timing, and obligation.
 
-본 문서의 각 절이 어떤 incident 에서 결정됐는지 git log 기반 압축 reference. 상세 narrative 는 `git log --oneline` + 각 SKILL.md 의 `## Why` 절.
+Quantitative limits for line count, reference depth, and frontmatter live only in `CONVENTIONS §5.6a`.
 
-| 절 | 도입 incident · key commit |
+## Appendix — Decision History
+
+| Section | Incident or decision |
 |---|---|
-| §1 3-Tier role | 초기 autopilot family 설계 — orchestrator 가 file 읽고 reasoning 하던 시기 → state machine 으로 분리 |
-| §2 Autopilot 정신 | `782ccf6` autopilot-refine default 자동 apply / `2058325` user-refine opt-in only (2026-05-21 사용자 지적) |
-| §3 Implicit discovery | `444616a` analyze-project cwd default / `d8f42cd` `--format-ref` 제거 / `215fc23` legacy cleanup |
-| §4 T1/T2/T3 + Minor·Major | 초기 SKILL_OUTPUT_CONVENTION 도입 → 2026-05-21 CONVENTIONS.md §5 흡수 / `56708c4` minor vs major + dual-perspective audit |
-| §5 Natural-integration | `bf8d565` rebuttal 표 본문 paste 거부 (2026-05-19 ICML camera-ready M11/M15 incident) + 2026-05-20 M8/M9 Paragraph Cohesion Pre-Check 4-step |
-| §6 편집팀 + 응답 원칙 | `3f5a48c` translation-team 신설 → `cfb0e12` editorial-team rename + scope 확장 / `bf8d565` 응답 원칙 §3 / `2058325` §4 / `3f5a48c` §1 (판교체) |
-| §7 Memory layers | `60f141a` `/notes` skill 신설 (현 `/post-it` — self-pruning lifecycle 로 진화) — 사용자 통제 layer 와 자동 메모리 분리 |
-| §8 Performance Preservation | 2026-07-06 owner 단일 세션+in-session 팀 토큰 재설계 → 2026-07-10 stage-dispatch 로 기본값 반전: `standard+` 스테이지를 depth-2 headless 세션으로 분사, file-only handoff 로 "file 통해 (verdict 만 token)" 를 스테이지 입도로 승격 (spec/stage-dispatch, SD-1·SD-2) |
-| §10 Skill-Design Tenets | 2026-07-13 skill-design-refactor: Pocock 4축(Invocation·Information Hierarchy·Steering·Pruning) + Predictability tenet 을 §10 에, 스캔 가능한 정량 규범은 CONVENTIONS §5.6a 로 분할 배치 (spec/skill-design-refactor) |
+| §1 | Early autopilot orchestration mixed file reading with state control; it was separated into a state machine |
+| §2 | `782ccf6` made refinement auto-apply by default; `2058325` made user pause opt-in only after 2026-05-21 feedback |
+| §3 | `444616a` added cwd-default analysis, `d8f42cd` removed `--format-ref`, and `215fc23` cleaned legacy behavior |
+| §4 | Early output conventions moved into `CONVENTIONS §5`; `56708c4` added minor/major tracking and dual-perspective audit |
+| §5 | `bf8d565` rejected pasting a rebuttal table into paper prose after the ICML camera-ready incident; the four-step cohesion check followed |
+| §6 | `3f5a48c` created the translation role; `cfb0e12` renamed and expanded it into editorial ownership |
+| §7 | `60f141a` created the notes flow, now `/post-it`, separating explicit retention from agent learning |
+| §8 | A 2026-07-06 single-owner design was reversed on 2026-07-10 into stage dispatch with file-only depth-2 handoff |
+| §10 | The 2026-07-13 Skill-design refactor placed Pocock's four levers plus predictability here and scan-ready quantitative rules in `CONVENTIONS §5.6a` |

@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
-# harness.sh — thin POSIX sh launcher: 심링크(AGENT_HOME) 해석 후 installer.py 서브명령 트리로
-# 위임한다 (fleet.sh 동형 패턴, PRD §공통 "언어·런타임"). 옵션은 그대로 installer.py 로 전달.
-# 설치: PATH 상 `harness` 심링크 → 이 스크립트 (INST-OPEN-2 확정: 진입 명령 = `harness`).
+# harness.sh — thin POSIX sh launcher. Resolve the AGENT_HOME symlink and delegate
+# to the installer.py command tree. Pass all options through unchanged.
+# Installation exposes this script as the `harness` command on PATH.
 set -eu
 
-# 심링크 경유해도 실제 스크립트 위치 해석 (POSIX sh — bash 배열/BASH_SOURCE 없이 $0 만 사용)
+# Resolve the real script location even when invoked through a symlink.
 SOURCE=$0
 while [ -h "$SOURCE" ]; do
   DIR=$(CDPATH= cd -P "$(dirname "$SOURCE")" && pwd)
@@ -18,7 +18,7 @@ SCRIPT_DIR=$(CDPATH= cd -P "$(dirname "$SOURCE")" && pwd)
 INSTALLER_PY="$SCRIPT_DIR/installer.py"
 
 PY=$(command -v python3 || command -v python || true)
-if [ -z "$PY" ]; then echo "harness: python3 가 필요합니다." >&2; exit 1; fi
-if [ ! -f "$INSTALLER_PY" ]; then echo "harness: installer.py 를 찾을 수 없습니다 ($INSTALLER_PY)." >&2; exit 1; fi
+if [ -z "$PY" ]; then echo "harness: python3 is required." >&2; exit 1; fi
+if [ ! -f "$INSTALLER_PY" ]; then echo "harness: installer.py was not found ($INSTALLER_PY)." >&2; exit 1; fi
 
 exec "$PY" "$INSTALLER_PY" "$@"

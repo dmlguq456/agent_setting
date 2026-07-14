@@ -459,7 +459,7 @@ STOREi2="$(mktemp -d)"; CLEANUP+=("$STOREi2")
 SENTINEL_I2="$STOREi2/SENTINEL_I2"
 out_i2="$(MEM_STORE="$STOREi2" python3 "$MEM" prune "x\"; touch $SENTINEL_I2; echo \"" 2>&1)"; rc=$?
 [ ! -f "$SENTINEL_I2" ] && ok "INJ-2: sentinel 미생성 — prune id argv-only (셸 미실행)" || bad "INJ-2: sentinel 생성! prune id 셸 실행됨 (CRITICAL)"
-{ [ "$rc" = 1 ] && printf '%s' "$out_i2" | grep -q "거부"; } \
+{ [ "$rc" = 1 ] && printf '%s' "$out_i2" | grep -q "refused"; } \
   && ok "INJ-2: prune 실제 시도됨 — 전체 문자열 1개 id argv 로 게이트 거부(false-green 아님)" \
   || bad "INJ-2: prune 거부 미발생 (rc=$rc out=[$out_i2])"
 

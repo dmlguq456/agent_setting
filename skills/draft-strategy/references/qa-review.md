@@ -1,26 +1,30 @@
 ## QA Scaling
-Auto-detect from strategy scope. Two reviewer roles run **in parallel** at Standard+:
-- **Quality reviewer** (품질관리팀): completeness / logical soundness / venue norms / reviewer-coverage (rebuttal)
-- **Fact-checker** (연구팀 subrole): in-artifact materials verbatim 대조 (`analysis_project/paper/cards/*.md`, `analysis_project/doc/*/...`, `research/{topic}/cards/*.md`), citation/venue/metric/year 검증. classification 8-row table 의 canonical 정의는 [`research-team.md`](../../adapters/claude/agents/research-team.md) L258-300 single source.
 
-| Level | Condition | Quality reviewer | Fact-checker (parallel) | Max rounds |
+Infer the level from strategy scope. At Standard+, run the two reviewer roles in parallel:
+
+- **Quality reviewer** (`품질관리팀`): completeness, logical soundness, venue norms, and reviewer coverage for rebuttals
+- **Fact-checker** (`연구팀` subrole): verbatim comparison with in-artifact materials such as `analysis_project/paper/cards/*.md`, `analysis_project/doc/*/...`, and `research/{topic}/cards/*.md`; verify citation, venue, metric, year, and classification. [`research-team.md`](../../../adapters/claude/agents/research-team.md) lines 258–300 are the single source for the eight-row classification table.
+
+| Level | Condition | Quality reviewer | Parallel fact-checker | Max rounds |
 |---|---|---|---|---|
-| **Quick** | (via `--intensity quick`) | 1× fast reviewer, spot-check만 | _skip_ | **1 (no re-invoke even on 🔴)** |
-| **Light** | review/presentation mode, or report with ≤3 input paths | 1× fast reviewer | _skip_ | 2 |
-| **Standard** | paper/report/proposal mode, or rebuttal with ≤3 reviewers | 1× deep reviewer | **1× fast fact-checker** | 2 |
-| **Thorough** | rebuttal with ≥4 reviewers, or report/proposal with ≥10 input items (papers + doc materials) | 2× deep reviewers in parallel | **1× fast fact-checker** | 2 |
-| **Adversarial** | external-review-imminent (camera-ready / submission / public report), or `--intensity adversarial` explicitly specified | 2× deep reviewers in parallel + 1× external adversary (`codex-review-team` in Claude adapter) | **1× fast fact-checker** | 2 + external 1 |
+| **Quick** | `--intensity quick` | 1 fast reviewer, spot-check only | Skip | **1; do not reinvoke on 🔴** |
+| **Light** | review/presentation, or report with ≤3 input paths | 1 fast reviewer | Skip | 2 |
+| **Standard** | paper/report/proposal, or rebuttal with ≤3 reviewers | 1 deep reviewer | **1 fast fact-checker** | 2 |
+| **Thorough** | rebuttal with ≥4 reviewers, or report/proposal with ≥10 inputs | 2 parallel deep reviewers | **1 fast fact-checker** | 2 |
+| **Adversarial** | External review imminent—camera-ready, submission, public report—or explicit `--intensity adversarial` | 2 parallel deep reviewers + 1 external adversary (`codex-review-team` in the Claude adapter) | **1 fast fact-checker** | 2 + 1 external |
 
-**Why fast fact-checker**: in-artifact cards verbatim 대조는 _창의적 판단_이 아닌 _단순 매칭 작업_이라 fast role 로 충분, 비용 효율적.
+A fast fact-checker is sufficient because verbatim matching against artifact cards is narrow comparison work, not creative judgment.
 
-## Selected Post-Strategy Review Pass (max 2 revision rounds; quick = 1 round)
-The log directory is the artifact root folder (parent of `strategy/`).
-- `mkdir -p {log_dir}/_internal/strategy_reviews` before invoking QA.
+## Selected Post-Strategy Review Pass
 
-After the 연구팀 agent returns:
-1. **Invoke selected quality/source-check reviewers** (parallel only when the selected QA budget calls for more than one reviewer):
+The log directory is the artifact root, parent of `strategy/`. Run `mkdir -p {log_dir}/_internal/strategy_reviews` before invoking QA.
 
-   **Quality reviewer prompt** (deep or fast reviewer per level):
+After the `연구팀` agent returns:
+
+1. **Invoke the selected quality/source-check reviewers.** Run them in parallel only when the QA budget selects more than one reviewer.
+
+   **Quality reviewer prompt** using a deep or fast reviewer according to level:
+
    ```
    Review this document strategy for completeness and logical soundness.
    Strategy file: [path]. Mode: {mode}.
@@ -30,7 +34,8 @@ After the 연구팀 agent returns:
    Return ONLY the file path and a one-line verdict.
    ```
 
-   **Fact-checker prompt** (fast fact-checker, parallel — Standard/Thorough only):
+   **Fact-checker prompt** for a fast fact-checker, parallel at Standard/Thorough:
+
    ```
    You are a fact-check focused reviewer — NOT narrative quality.
    Strategy file: [path]. Mode: {mode}. Discovered inputs: {inputs_paths_list}.
@@ -54,10 +59,10 @@ After the 연구팀 agent returns:
    Return ONLY path + one-line verdict.
    ```
 
-2. **Check verdict (both reviewers):**
-   - **No 🔴 from either**: proceed to Korean Version Generation.
-   - **qa_level == quick**: after round 1, exit regardless of 🔴. Add 🔴 issues to `## 미해결 이슈` section in the strategy. Proceed to Korean Version Generation.
-   - **🔴 from quality reviewer**: re-invoke 연구팀 with quality findings (max 2 rounds).
-   - **🔴 from fact-checker**: re-invoke 연구팀 with **mandatory ref-grounding** (re-read named cards/PDFs). Max 2 rounds.
-   - **🔴 from both**: re-invoke 연구팀 with combined findings.
-3. **If 🔴 issues remain after 2 rounds**: Add to `## 미해결 이슈` section in the strategy, report to user. Tag fact-check residuals with `[FACT-RESIDUAL]`.
+2. **Check both verdicts:**
+   - No 🔴 → generate a language companion only when an explicit second-language, external-audience, or existing-workflow contract requires one.
+   - `qa_level == quick` → exit after round 1 regardless of 🔴. Add findings under the functional compatibility heading `## 미해결 이슈`, then continue to companion generation only when that explicit contract exists.
+   - Quality 🔴 → reinvoke `연구팀` with quality findings, up to two rounds.
+   - Fact-check 🔴 → reinvoke `연구팀` with mandatory reference grounding and reread the named cards/PDFs, up to two rounds.
+   - Both → reinvoke `연구팀` with combined findings.
+3. If 🔴 remains after two rounds, add it under `## 미해결 이슈`, report it, and tag factual residuals `[FACT-RESIDUAL]`.

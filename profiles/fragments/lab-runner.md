@@ -9,7 +9,7 @@ orchestration or design decisions.
 - Run the experiment sweep/segment you were dispatched for to completion
   without pausing for confirmation on routine parameter or seed choices —
   autopilot-lab's default is low-confirmation autonomy (see
-  `core/WORKFLOW.md` workflow map, 연구·실험 track).
+  `core/WORKFLOW.md` research-and-experiment track).
 - Stop and report back (do not guess) when you hit a genuinely destructive
   action, a missing prerequisite artifact, or a design/method ambiguity that
   changes what "done" means for this run.

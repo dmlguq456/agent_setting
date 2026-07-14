@@ -34,7 +34,7 @@ _MODE = re.compile(r"--mode ([a-z]+)")
 _QA = re.compile(r"--qa ([a-z]+)")
 # Valid qa levels — guards argv layer-1 (effective_qa) against contaminated matches:
 # `\w+` is Unicode so `--qa (\w+)` would capture Korean/label text that merely mentions
-# "--qa" inside a task description (e.g. "분사 시 --qa 없으면 …"). Narrowing to [a-z]+ AND
+# ``--qa`` inside a task description. Narrowing to [a-z]+ and
 # filtering to real levels keeps the argv layer trustworthy, so the R3 layered resolver
 # only falls through to jobs.log/plan/default when argv genuinely has no --qa.
 _QA_LEVELS = ("quick", "light", "standard", "thorough", "adversarial")
@@ -42,17 +42,17 @@ _PIPE = re.compile(r"\s*([A-Za-z][\w-]*)(?::(\w+))?")
 _SHELLS = ("zsh", "bash", "sh", "dash")
 _PIPE_TOK = re.compile(r"[,\s]+")
 _DRILL_SLUG_RE = re.compile(r"^drill-[a-z]+-(.+)-\d{14}-\d+$")   # registry slug → case
-_DRILL_CWD_COMP_RE = re.compile(r"^drill-(.+)-[^-]+$")           # /tmp/drill-<case>-<rand> 컴포넌트 → case (project_of 선례)
+_DRILL_CWD_COMP_RE = re.compile(r"^drill-(.+)-[^-]+$")           # /tmp/drill-<case>-<rand> component to case
 
 
 def _drill_case_from_slug(slug):
-    """registry slug 'drill-<adapter>-<case>-<ts>-<pid>' → case (없으면 None)."""
+    """Extract a case from registry slug ``drill-<adapter>-<case>-<ts>-<pid>``."""
     m = _DRILL_SLUG_RE.match(slug or "")
     return m.group(1) if m else None
 
 
 def _drill_case_from_cwd(cwd):
-    """cwd 경로 컴포넌트 중 '/tmp/drill-<case>-<rand>' 의 case (없으면 None)."""
+    """Extract a case from a ``/tmp/drill-<case>-<rand>`` cwd component."""
     if not (cwd or "").startswith("/tmp/"):
         return None
     for comp in (cwd or "").split("/"):
@@ -395,7 +395,7 @@ def _claude_job_model(pid_s, jcwd=None):
     HEADLESS sessions never render a statusline, so fall back to the transcript's own
     "model" field (assistant entries carry the real model id) — without this a dispatch
     launched with --model opus showed the PARENT's model (user 2026-07-02: main=Fable /
-    dispatch=Opus 정책을 fleet 으로 검증할 수 있어야 함)."""
+    dispatch-model policy remains observable through fleet)."""
     # Runtime-home only (accepted asymmetry, plan A5/R7): a profile(masked) headless job's
     # own sessions/.statusline live under its masked config home
     # (_registry_home()/.dispatch/homes/...), not here, so this lookup misses and degrades
@@ -880,13 +880,12 @@ def _jobs_log_fields(paths):
 
 
 def _reconcile_drill_rows(jobs):
-    """F-18a: 같은 drill 실행의 registry row(정본)와 proc loop job(중복)을 1행으로.
+    """Merge duplicate registry and process rows for the same drill run.
 
-    match = registry slug 의 case명 == proc drill job 의 case명, 그리고 registry cwd 가
-    '/tmp/drill-<case>-' 임(cwd 상관). 병합 시 registry row 를 남기고 proc 의 pid·liveness 를
-    흡수(live proc = ground truth), proc row 는 제거. registry 무write.
+    Keep the registry row, absorb process PID and liveness as ground truth, and
+    never write the registry.
     """
-    # registry drill rows: source=jobs & slug 이 drill 패턴 & cwd 가 /tmp/drill-<case>-
+    # Index registry drill rows by validated case.
     reg_by_case = {}
     reg_by_runner_pid = {}
     for r in jobs:
@@ -895,9 +894,9 @@ def _reconcile_drill_rows(jobs):
         case = _drill_case_from_slug(r.slug)
         if not case:
             continue
-        if _drill_case_from_cwd(r.cwd) != case:      # cwd 상관 가드 (/tmp/drill-<case>- 확인)
+        if _drill_case_from_cwd(r.cwd) != case:      # Validate the cwd case component.
             continue
-        reg_by_case.setdefault(case, r)              # 첫 registry row 정본
+        reg_by_case.setdefault(case, r)              # First registry row is canonical.
         pid_match = re.search(r"-(\d+)$", r.slug or "")
         if pid_match:
             reg_by_runner_pid.setdefault(int(pid_match.group(1)), r)
@@ -916,7 +915,7 @@ def _reconcile_drill_rows(jobs):
             r = reg_by_runner_pid.get(p.pid)
         if r is None:
             continue
-        # registry 정본에 proc 의 liveness/pid 흡수
+        # Absorb process liveness and PID into the canonical registry row.
         if r.pid is None:
             r.pid = p.pid
         if r.elapsed_min is None:
@@ -985,7 +984,7 @@ def collect(jobs_path=None, harness_filter=None):
     # F-15c(a): a registry-only row (source="jobs") that turns out to be genuinely working
     # re-derives its breadcrumb from the real plan artifacts instead of the raw jobs.log
     # status word ("open"/"running") — otherwise a live job with real progress shows a
-    # static "queued"/"running" placeholder forever (the reported "queued 오라벨" bug).
+    # Avoid leaving a static queued/running placeholder forever.
     for j in jobs:
         if j.source == "jobs" and j.cwd and j.liveness == "working":
             j.stage = live_stage(j.cwd, j.slug, j.key, j.capability_owner, j.worker_role)

@@ -1,5 +1,5 @@
 name: lab-runner
-description: "실험 실행 특화 — autopilot-lab 자율 구간 분사용"
+description: "Experiment-execution specialist — delegated autonomous segments of autopilot-lab"
 harness: claude
 model_role: fast implementer
 effort: medium

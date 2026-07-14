@@ -1,109 +1,110 @@
 # autopilot-draft
 
-> 본 README 는 Claude adapter skill 요약. 권위 있는 Claude runtime 동작 명세는 같은 폴더의 `SKILL.md`; portable capability 의미는 `<agent-home>/capabilities/`.
+> This README summarizes the portable capability for users and maintainers. The model-neutral contract lives under `<agent-home>/capabilities/`; `SKILL.md` in this directory provides shared guidance for runtime-specific projections.
 
-> **Paper mode camera-ready / major revision 특이 룰** (2026-05-19): reviewer concern → paper-body mutation 변환 시 **natural-integration rule** 적용. Single gating question — *"1-2 sentence inline rewrite로 자연 통합 가능한가?"* YES → M15-style inline rewrite. NO → drop / Appendix defer (rebuttal-format은 본문 mutation 금지). 상세 — `SKILL.md` Mode-Specific Draft Structure `### paper` 끝.
+> **Paper-mode rule for camera-ready and major-revision work** (2026-05-19): apply the natural-integration rule when converting reviewer concerns into paper-body mutations. Ask one gating question: *Can this be integrated naturally as a one- or two-sentence inline rewrite?* If yes, use an M15-style inline rewrite. If no, drop it or defer it to the appendix. Rebuttal-format material must not be pasted into the paper body. See the end of `SKILL.md` → Mode-Specific Draft Structure → `paper`.
 
-## 전체 구조
+## Pipeline
+
 ```mermaid
 flowchart LR
-    A["사용자 쿼리"] -->|<task> + --mode + --intensity| B["autopilot-draft (오케스트레이터)"]
-    B --> SC["Step 0: Scope Clarification"]
-    SC --> C["Step 1: Material Analysis (implicit input discovery)"]
-    C -->|Step 2| D["draft-strategy (연구팀 위임)"]
-    D -->|Step 3| E["Strategy Review (연구팀 + fact-checker 병렬)"]
-    E -->|메모 있으면| F["draft-refine (연구팀 위임)"]
-    F --> G["Step 4: Draft Generation"]
-    E -->|메모 없으면| G
-    G --> I["Step 5: Draft Review (연구팀 + fact-checker 병렬)"]
-    I -->|메모 있으면| RD["draft-refine (draft)"]
-    I -->|메모 없으면| J["Step 6: Pipeline Summary"]
+    A["User request"] -->|<task> + --mode + --intensity| B["autopilot-draft orchestrator"]
+    B --> SC["Step 0: Scope clarification"]
+    SC --> C["Step 1: Material analysis and implicit input discovery"]
+    C -->|Step 2| D["draft-strategy (delegated to 연구팀)"]
+    D -->|Step 3| E["Strategy review (연구팀 + fact-checker in parallel)"]
+    E -->|memo exists| F["draft-refine (delegated to 연구팀)"]
+    F --> G["Step 4: Draft generation"]
+    E -->|no memo| G
+    G --> I["Step 5: Draft review (연구팀 + fact-checker in parallel)"]
+    I -->|memo exists| RD["draft-refine (draft)"]
+    I -->|no memo| J["Step 6: Pipeline summary"]
     RD --> J
 ```
 
-> 참고 자료(PDFs, 리뷰어 코멘트, format spec 등)를 분석하고 문서 작업의 **전략 + 초안**을 markdown으로 산출하는 파이프라인. 6개 모드 모두 strategy + draft 생성. 외부 자료 조사가 필요하면 **autopilot-research**를 먼저 돌려 그 산출물을 implicit 자동 발견하게 함.
+The pipeline analyzes source material such as PDFs, reviewer comments, and format specifications, then produces a Markdown strategy and draft. Run **autopilot-research** first when external research is required; autopilot-draft discovers its outputs automatically.
 
-## 명령 형식
-```
+## Invocation
+
+```text
 /autopilot-draft "<task description>" [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]
 ```
 
-| 플래그 | 설명 |
+| Argument | Description |
 |---|---|
-| `<task description>` | 첫 positional arg — 작업의 목표·의도·범위·청중 한 줄 |
-| `--mode` | 6개 모드 중 하나. 생략 시 task description에서 자동 추론 |
-| `--intensity` | direct / quick / standard / strong / thorough / adversarial — stage graph 선택자이자 검증 rigor의 유일한 파생원 (별도 `--qa` 축 없음; CONVENTIONS §1.1). fact-checker는 claims/citations/cards가 scope에 있고 선택된 graph가 부를 때만 선택된다 |
-| `--user-refine` | 연구팀 메모 직후 pause. 사용자가 직접 `<!-- memo: ... -->` 추가 후 `--from <stage>` 재개 |
-| `--no-clarify` | Step 0 Scope Clarification 강제 skip |
-| `--from <stage>` | pause/실패 후 특정 단계 재개 (analyze / strategy / strategy-refine / draft / draft-refine / finalize) |
+| `<task description>` | First positional argument: one-line goal, intent, scope, and audience. |
+| `--mode` | One of the three output forms. Infer it from the task when omitted. Document genres are selected from natural-language intent. |
+| `--intensity` | Selects the stage graph and is the only source of verification rigor; there is no separate `--qa` axis (CONVENTIONS §1.1). Use the fact-checker only when claims, citations, or cards are in scope and the selected graph calls for it. |
+| `--user-refine` | Pause after a review memo so the user can add `<!-- memo: ... -->`, then resume with `--from <stage>`. |
+| `--no-clarify` | Skip Step 0 scope clarification. |
+| `--from <stage>` | Resume after a pause or failure at `analyze`, `strategy`, `strategy-refine`, `draft`, `draft-refine`, or `finalize`. |
 
-> **`--refs` flag 없음**: 입력은 `<artifact-root>/{analysis_project,research}/*`에서 implicit 자동 발견. 사전에 `/analyze-project --mode {paper|doc}` 또는 `/autopilot-research`로 materialize.
-> **`--format-ref` flag 없음**: format spec(venue/journal/lab 가이드라인)은 `analysis_project/doc/{matching}/formats/`에서 자동 발견. `/analyze-project --mode doc <folder>` 사전 처리.
+There is no `--refs` flag. Discover inputs implicitly under `<artifact-root>/{analysis_project,research}/*`; materialize them first with `/analyze-project --mode {paper|doc}` or `/autopilot-research`.
 
-## 6개 모드
+There is no `--format-ref` flag. Discover venue, journal, and lab guidance under `analysis_project/doc/{matching}/formats/`; preprocess the source folder with `/analyze-project --mode doc <folder>`.
 
-| 모드 | 용도 | 산출물 |
+## Output forms and genres
+
+| Form | Natural-language genre intent | Output |
 |---|---|---|
-| rebuttal | 학회 reviewer 응답 | 포인트별 응답 strategy + draft |
-| paper | 학술 논문 / camera-ready / major revision / 백서 / 책 챕터 / 기술 블로그 | 섹션별 outline + draft (markdown) |
-| review | 본인이 reviewer 입장 (peer review) | review draft (format spec 기반 섹션 구성) |
-| report | 기술 보고서 / 시장 분석 / 분기 보고 / post-mortem | 분석 framework + draft |
-| proposal | 연구 grant / 사업 제안 / 내부 프로젝트 제안 | 문제 정의 + 접근법 + draft |
-| presentation | 논문 발표 / 사내 세미나 / 컨퍼런스 키노트 | slide-by-slide markdown (PPTX export 미지원) |
+| `paper` | Academic paper, camera-ready revision, major revision, white paper, book chapter, or technical article | Section outline and prose or paste-ready LaTeX cards |
+| `presentation` | Paper talk, internal seminar, lecture, or keynote | Slide-by-slide Markdown; PPTX export is not supported |
+| `doc` | Rebuttal, peer review, technical or market report, post-mortem, grant, or business proposal | Format-aware strategy and draft |
 
-> 모든 모드 공통 패턴: strategy + draft markdown 산출 → **사용자가 최종 작성·빌드·디자인 마무리**.
+Every form produces a strategy and a Markdown draft. The user remains responsible for final writing, build, and visual design.
 
-## Format spec auto-discovery (no flag)
-학회·저널·연도·랩마다 다른 _개별 가이드라인 / 템플릿 / 샘플 / format-spec 파일_을 사전에 `/analyze-project --mode doc`으로 처리해 두면, autopilot-draft이 `analysis_project/doc/{matching}/formats/`에서 자동 발견. **built-in preset 없음** (venue마다 매년 다르므로).
+## Format-spec discovery
 
-**Resolution 순서**:
-1. Auto-discovery in `analysis_project/doc/{matching}/formats/`
-2. 0 candidates → 모드별 fallback
+Preprocess venue-, year-, journal-, or lab-specific templates and examples with `/analyze-project --mode doc`. autopilot-draft then discovers them under `analysis_project/doc/{matching}/formats/`. There are no built-in presets because requirements change by venue and year.
 
-| 모드 | format spec 미존재 시 |
+Resolution order:
+
+1. Discover candidates in `analysis_project/doc/{matching}/formats/`.
+2. If none exist, apply the form- and genre-specific fallback.
+
+| Genre | Behavior without a format spec |
 |---|---|
-| review | **Hard fail** — reviewer guideline 없이 진행 X |
-| rebuttal | Step 0 prompt — materialize 후 retry / inline 선언 / generic 동의 |
-| paper / presentation / proposal / report | warn-and-fallback (generic layout으로 진행) |
+| Peer review | Hard fail; do not draft without the review form. |
+| Rebuttal | Ask whether to materialize and retry, accept an inline declaration, or use a generic format. |
+| Paper, presentation, proposal, report | Warn and continue with the generic layout. |
 
-**rebuttal sub-type 3종** (format spec 또는 task description에 명시, 별도 flag 없음):
-- *meta-only* — AC/SAC만 보는 단일 응답
-- *reviewer-dialogue* — reviewer 다회 왕복 (OpenReview 토론)
-- *response-with-revision* — rebuttal 본문 + paper 수정본 (ACL ARR / 저널 major revision)
+Rebuttal subtypes are inferred from the task or format spec: `meta-only`, `reviewer-dialogue`, and `response-with-revision`.
 
-## QA Scaling
-Quality reviewer + fact-checker가 **parallel**로 동작 (standard+).
+## QA scaling
 
-| Level | Quality reviewer | Fact-checker (parallel) |
+Quality and fact review run in parallel at `standard+`.
+
+| Level | Quality review | Fact review |
 |---|---|---|
-| quick | 1× fast reviewer, 1-pass, refine entire skip | skip |
-| light | 1× fast reviewer | skip |
-| standard | 1× deep reviewer | 1× fast fact-checker |
-| thorough | 2× deep reviewers — Domain Expert + Methodology / Content Expert + Quality, only when selected | 1× fast fact-checker when source claims are in scope |
+| `quick` | One fast, single-pass review; skip full refinement | Skip |
+| `light` | One fast reviewer | Skip |
+| `standard` | One deep reviewer | One fast fact-checker |
+| `thorough` | Two deep reviewers when selected: Domain Expert plus Methodology, or Content Expert plus Quality | One fast fact-checker when sourced claims are in scope |
 
-**Fact-checker**는 `analysis_project/paper/*.md` verbatim 대조로 venue/year/metric/citation을 narrow하게 검증. _창의적 판단이 아닌 매칭 작업_이라 fast fact-checker 로 충분.
+The fact-checker performs narrow matching against `analysis_project/paper/*.md` for venue, year, metrics, and citations. Apply the same pattern to strategy review in Step 3 and draft review in Step 5.
 
-> Strategy review (Step 3) + Draft review (Step 5) 두 곳에서 동일 패턴.
+## Scope clarification
 
-## Step 0: Scope Clarification
-query가 모호하거나 mode multi-match일 때 autopilot이 2-4개 sharp question을 던지고 사용자 답변을 받아 진행. 충분히 구체적인 query는 자동 skip. `--no-clarify`로 강제 skip 가능.
+When the request is ambiguous or matches multiple forms or genres, ask two to four focused questions. Skip this step for a sufficiently specific request or when `--no-clarify` is set.
 
-## 서브스킬 (2개)
-- [draft-strategy](draft-strategy/README.md)
-- [draft-refine](draft-refine/README.md)
+## Subskills
 
-> 서브스킬은 autopilot-draft 내부에서 자동 호출. 직접 사용은 pause 재개 시점에만.
+- [draft-strategy](../draft-strategy/README.md)
+- [draft-refine](../draft-refine/README.md)
 
-## 산출물 구조
-```
+The orchestrator normally invokes these subskills. Direct use is reserved for resuming at a paused stage.
+
+## Artifact layout
+
+```text
 <artifact-root>/documents/{YYYY-MM-DD}_{short-name}/
 ├─ pipeline_summary.md       (T1)
 ├─ draft/                    (T1)
 │  ├─ draft.md
-│  └─ draft_ko.md
+│  └─ draft_{language}.md    (explicitly required companion only)
 ├─ strategy/                 (T2)
 │  ├─ strategy.md
-│  └─ strategy_ko.md
+│  └─ strategy_{language}.md (explicitly required companion only)
 ├─ analysis/                 (T2)
 │  ├─ reviewer_analysis.md   (rebuttal)
 │  ├─ ref_analysis.md
@@ -114,24 +115,28 @@ query가 모호하거나 mode multi-match일 때 autopilot이 2-4개 sharp quest
    └─ versions/v{N}/strategy|draft/
 ```
 
-## 핵심 설계 원칙
-1. 6개 모드 = 6개 deliverable 카테고리. 모드별 strategy + draft 패턴 일관
-2. Format spec auto-discovery (no flag). venue가 발행한 가이드라인 1개에 sections / length / tone / sub-type 모두 포함
-3. Fact-checker 병렬 검수. quality reviewer는 narrative / coverage, fact-checker는 venue/year/citation 매칭
-4. 인용 무결성. discovered_inputs / paper analyses / format spec에 실재하는 자료만 참조
-5. Refine 단계는 versioned + ref-grounded
-6. 양어 문서. 영어(실행용) + 한국어(전달용) 쌍
-7. `--user-refine` 패턴. 연구팀 메모 직후 pause → 사용자 직접 메모 추가 → `--from <stage>` 재개
-8. Source discovery는 별도 파이프라인 (autopilot-research)로 분리
+## Design principles
 
-## autopilot-research와의 chaining
+1. The harness is portable across agent runtimes; adapter files realize the shared capability for a specific runtime.
+2. Select an output form first, then infer the document genre from the task and format specification.
+3. Follow the user's communication language for user-facing guidance and select the artifact language from its audience and venue. Generate a companion only when explicitly requested, required by an external audience, or already required by the artifact workflow.
+4. Discover format specifications instead of embedding venue presets.
+5. Run quality and fact review in parallel when the selected intensity requires both.
+6. Cite only material present in discovered inputs, paper analyses, or the format specification.
+7. Keep refinement versioned and grounded in references.
+8. Treat memory as context for agent judgment, not as a source of rigid user-facing rules or fixed recall keywords.
+9. Keep source discovery in the separate autopilot-research pipeline.
+
+## Chaining from autopilot-research
+
 ```mermaid
 flowchart LR
-    AR["autopilot-research (분야 조사)"] -->|implicit| AD["autopilot-draft (문서 작성)"]
-    AD --> OUT[("📦 documents/")]
+    AR["autopilot-research"] -->|implicit discovery| AD["autopilot-draft"]
+    AD --> OUT[("documents/")]
 ```
 
-학술/산업/시장 조사가 필요하면 autopilot-research를 먼저 돌리면 그 산출물(`research/{topic}/`)을 autopilot-draft이 implicit 자동 발견.
+Run autopilot-research first for academic, industry, or market research. autopilot-draft then discovers the resulting `research/{topic}/` artifacts automatically.
 
 ---
-*Claude adapter realization: `<agent-home>/adapters/claude/skills/autopilot-draft/SKILL.md`; compatibility reference: `<agent-home>/skills/autopilot-draft/SKILL.md`*
+
+*Portable capability contract: `<agent-home>/capabilities/autopilot-draft.md`; shared skill guidance: `<agent-home>/skills/autopilot-draft/SKILL.md`.*

@@ -1,16 +1,9 @@
-"""drivers/opencode.py — OpenCode channel driver (PRD "plugin 채널 — OpenCode").
+"""OpenCode channel driver.
 
-호출 대상(재구현 금지): `adapters/opencode/bin/sync-native-*.py`(agents/skills/commands),
-`adapters/opencode/bin/preflight.sh`. marketplace·번들 포맷 **부재 확인** — plugin 채널
-없음, installer 가 유일 경로. `opencode.json` 은 `instructions[]`·`skills.paths` 를
-non-destructive merge(기존 사용자 config 보존, 충돌 시 보고·중단 — 자동 해석 시도 없음).
-
-⚠️ drift(PRD currentness 검증): 현행 공식 문서는 복수형 디렉토리(`.opencode/skills|commands|
-agents|plugins/`, global `~/.config/opencode/…`)이고 `skills.paths` config key 는 문서에
-없을 수 있음 — 기존 `INSTALL_LAYOUT.md`·`opencode_setting` 배선(단수형 `agent/`·`command/`,
-`skills.paths`)은 legacy 일 가능성(INST-OPEN-4, 로컬 실측 버전 1.17.13 기준). impl-inputs §B
-에 따라 이번 사이클은 그 단수형 배선을 그대로 유지하고(임의 전환 금지), Phase 4.4(d) 의
-drift-watch sentinel 로 미래 버전업 시 복수형 등장 여부만 관측한다.
+Reuse generated native projections and preflight checks. OpenCode has no
+marketplace bundle channel, so the installer is the only installation path.
+Merge harness entries into ``opencode.json`` without overwriting user config;
+report incompatible types instead of resolving them automatically.
 """
 
 import json
@@ -28,13 +21,7 @@ RUNTIME = "opencode"
 
 
 def _config_path(scope):
-    """이번 사이클 단순화: global/project 모두 `runtime_home / opencode.json` 을 쓴다.
-
-    INSTALL_LAYOUT.md 의 project 예시는 실제로는 프로젝트 루트에 `opencode.json`을 두는
-    쪽을 보여주지만(`paths.runtime_home('opencode','project')` 는 `<cwd>/.opencode`),
-    이 사이클에서는 두 scope 모두 `runtime_home / opencode.json` 으로 일관되게 둔다 —
-    project-root 배치는 이후 사이클 과제로 남긴다(step log Decision 참조).
-    """
+    """Use ``runtime_home / opencode.json`` consistently for both scopes."""
     return paths.runtime_home("opencode", scope) / "opencode.json"
 
 
@@ -47,13 +34,10 @@ def _skills_path():
 
 
 def _merge_config(existing, our_instructions, our_skills_path):
-    """existing(dict) 에 our_instructions/our_skills_path 를 non-destructive 로 병합한다.
+    """Merge harness instruction and skill paths without modifying conflicts.
 
-    반환: (merged_dict, changed: bool, blocked: bool, detail: str)
-    - key 부재 → 새로 만든다.
-    - key 가 list(또는 skills.paths 의 경우 skills dict + paths list) 이고 우리 값이
-      없으면 append, 있으면 그대로(no-op).
-    - key 가 있지만 기대 타입이 아니면(conflict) blocked=True, existing 은 변경하지 않는다.
+    Return ``(merged, changed, blocked, detail)``. Create missing keys, append
+    missing values to valid lists, and block on incompatible existing types.
     """
     merged = dict(existing)
     changed = False
@@ -115,11 +99,9 @@ def _merge_config(existing, our_instructions, our_skills_path):
 
 
 def install(scope="global", plugin=False, dry_run=False):
-    """symlink projection 적용 + opencode.json non-destructive merge.
+    """Apply symlink projection and a non-destructive ``opencode.json`` merge.
 
-    같은 key 다른 semantic(conflict) 은 자동 해석 없이 report·중단 — 이 install() 호출
-    전체의 opencode 컴포넌트를 blocked=True 로 보고한다. 이전에 처리된 symlink 액션은
-    롤백하지 않는다(BLOCKED = stop+report, undo 아님).
+    Report semantic conflicts as blocked without rolling back prior symlinks.
     """
     entries = projector.plan(["opencode"], scope=scope)["opencode"]
 
@@ -263,7 +245,7 @@ def install(scope="global", plugin=False, dry_run=False):
 
 
 def checks(scope="global"):
-    """verify 가 실행할 core projection + preflight check 목록."""
+    """Return core-projection and preflight checks for ``verify``."""
     entries = projector.plan(["opencode"], scope=scope)["opencode"]
 
     check_list = []
@@ -277,7 +259,7 @@ def checks(scope="global"):
             check_list.append(
                 verifier.check_symlink(check_id, dest, entry["source"])
             )
-        # "skip"/"merge" 항목은 read-only check 대상이 아님.
+        # Skip and merge entries are not read-only verification targets.
 
     agent_home = str(paths.agent_home())
 
@@ -307,7 +289,7 @@ def checks(scope="global"):
     )
 
     def _drift_watch_sentinel():
-        """INST-OPEN-4 — doc-vs-wiring drift-watch (Phase 4.4d). 항상 ok=True (informational)."""
+        """Informational INST-OPEN-4 documentation-versus-wiring drift watch."""
         version_detail = "opencode CLI absent, version unknown"
         oc_bin = shutil.which("opencode")
         if oc_bin:
@@ -317,10 +299,9 @@ def checks(scope="global"):
                 )
                 version_detail = f"opencode --version: {result.stdout.strip() or result.stderr.strip()}"
             except Exception as exc:
-                version_detail = f"opencode --version 실행 실패: {exc}"
+                version_detail = f"opencode --version failed: {exc}"
 
-        # "plugins" 는 후보에서 제외 — 우리 자신이 항상 만드는 정당한 디렉터리
-        # (agent-harness-guards.js dest) 라 마이그레이션 신호가 아니라 상시 오탐이 된다.
+        # Exclude plugins because the harness itself legitimately creates it.
         plural_candidates = [
             Path.home() / ".config" / "opencode" / "skills",
             Path.home() / ".config" / "opencode" / "commands",
@@ -380,19 +361,19 @@ def checks(scope="global"):
                 return {
                     "id": "opencode.bootstrap-smoke",
                     "ok": False,
-                    "detail": f"opencode debug config 실행 실패: {exc}",
+                    "detail": f"opencode debug config failed: {exc}",
                 }
 
             if "opencode_setting/AGENTS.md" in result.stdout:
                 return {
                     "id": "opencode.bootstrap-smoke",
                     "ok": True,
-                    "detail": "opencode debug config --pure 출력에 opencode_setting/AGENTS.md 확인",
+                    "detail": "found opencode_setting/AGENTS.md in opencode debug config --pure output",
                 }
             return {
                 "id": "opencode.bootstrap-smoke",
                 "ok": False,
-                "detail": f"opencode_setting/AGENTS.md 미발견 (stdout 일부: {result.stdout[:300]!r})",
+                "detail": f"opencode_setting/AGENTS.md not found (stdout excerpt: {result.stdout[:300]!r})",
             }
 
     check_list.append(_bootstrap_smoke)
@@ -401,7 +382,7 @@ def checks(scope="global"):
 
 
 def status(scope="global"):
-    """channel·version·drift·pointer·config-merge 요약."""
+    """Summarize channel, version, drift, pointer, and config-merge state."""
     manifest_data = manifest._load_manifest(manifest._manifest_path("opencode", scope))
     drift = manifest.check_drift(["opencode"], scope=scope)
 

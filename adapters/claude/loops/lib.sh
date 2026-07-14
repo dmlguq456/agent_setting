@@ -1,31 +1,23 @@
 #!/bin/bash
-# loops 공용 헬퍼 — source 전용 (직접 실행하지 않는다).
-# study.sh·oncall.sh 가 LOG 변수 정의 직후 `source "$LOOP_DIR/lib.sh"` 한다.
+# Shared loop helpers; source this file instead of executing it directly.
+# study.sh and oncall.sh source it immediately after defining LOG.
 
-# --- 버그①: cron 환경 PATH 보정 ---
-# cron 의 제한 PATH 는 /usr/bin/node(v10) 를 집어, claude 가 SessionEnd 때 codex 플러그인
-# hook(.mjs, `import ... "node:fs"`)을 실행하다 ESM/`node:` 스킴을 못 읽어 SyntaxError 로
-# 죽었다 (2026-06-21 연수 사고). ~/.local/bin(v20) 을 앞세워 cron 에서도 최신 node 가 잡히게.
+# Correct cron's restricted PATH so modern Node handles ESM and ``node:`` imports.
 export PATH="$HOME/.local/bin:$PATH"
 
-# --- 루프 러너: 어댑터 선택 (core/adapter 분리) ---
-# LOOP_ADAPTER 로 oncall/study 를 claude|codex|opencode 로 돌린다. claude 가 기본
-# (기존 동작 보존). codex/opencode 는 자체 sandbox/permission 으로 프롬프트를 실행하며
-# claude 전용 인자(--model/--allowedTools)는 무시한다.
+# Select the runtime adapter through LOOP_ADAPTER; Claude remains the compatibility default.
+# Codex and OpenCode use their own sandbox and permission contracts.
 LOOP_ADAPTER="${LOOP_ADAPTER:-claude}"
 
-# --- 버그②: 일시장애 재시도 래퍼 (어댑터 dispatch) ---
-# 사용:  run_claude_retry <timeout초> <프롬프트파일> [claude 추가인자...]
-#   401·5xx·overloaded·rate-limit = *일시* 장애 → 백오프 후 재시도 (최대 3회).
-#   session/usage limit = 리셋 전엔 안 풀림 → 즉시 ABORT (재시도 무의미).
-#   매 시도 출력은 stdout 으로 그대로 흘리고, 종료 사유를 마커로 남긴다 (당직이 점검).
+# Retry transient adapter failures with backoff. Session or usage limits abort immediately.
+# Usage: run_claude_retry <timeout-seconds> <prompt-file> [extra Claude arguments...]
 run_claude_retry() {
   local to="$1" pf="$2"; shift 2
   local max=3 attempt rc out
-  local backoff=(0 30 120)   # 시도 전 대기 (1회차 0s)
+  local backoff=(0 30 120)   # Delay before each attempt; first attempt starts immediately.
   for ((attempt = 1; attempt <= max; attempt++)); do
     if [ "${backoff[attempt-1]}" -gt 0 ]; then
-      echo "=== retry $attempt/$max — ${backoff[attempt-1]}s 대기 후 재시도 ==="
+      echo "=== retry $attempt/$max after ${backoff[attempt-1]}s ==="
       sleep "${backoff[attempt-1]}"
     fi
     case "$LOOP_ADAPTER" in
@@ -39,12 +31,12 @@ run_claude_retry() {
     esac
     rc=$?
     printf '%s\n' "$out"
-    # 사용량 제한 — 리셋 전엔 안 풀리므로 재시도하지 않고 명확히 끝낸다
+    # Usage limits do not clear before reset, so do not retry.
     if printf '%s' "$out" | grep -qiE 'session limit|usage limit|hit your .*limit'; then
-      echo "=== ABORT: session/usage limit — 재시도 무의미 (rc=$rc, attempt=$attempt) ==="
+      echo "=== ABORT: session/usage limit; retry would not help (rc=$rc, attempt=$attempt) ==="
       return 2
     fi
-    # 성공 = 종료 0 + 일시오류 마커 없음
+    # Success requires exit zero and no transient-error marker.
     if [ "$rc" -eq 0 ] && ! printf '%s' "$out" \
         | grep -qiE '401|invalid authentication|overloaded|rate.?limit|internal server error|api error: 5[0-9][0-9]'; then
       return 0

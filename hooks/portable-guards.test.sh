@@ -1751,13 +1751,13 @@ if [ -L "$ROOT/codex_setting/scaffolds" ] \
 else
   bad "codex scaffold projection should expose shared design assets without Claude runtime paths"
 fi
-if grep -q 'Test Levels (execute in order, stop on failure)' "$ROOT/codex_setting/codex-modes/qa/test.md" \
-  && grep -q 'Level 5b: Behavioral runtime observation' "$ROOT/codex_setting/codex-modes/qa/test.md" \
+if grep -q '## Levels' "$ROOT/codex_setting/codex-modes/qa/test.md" \
+  && grep -q '5b. \*\*Behavioral runtime observation:\*\*' "$ROOT/codex_setting/codex-modes/qa/test.md" \
   && grep -q 'verification-runner' "$ROOT/codex_setting/codex-modes/qa/test.md" \
-  && grep -q 'Codex visual harness' "$ROOT/codex_setting/codex-modes/design/maker.md" \
+  && grep -q 'Tool Contract: `visual-harness`' "$ROOT/codex_setting/codex-modes/design/maker.md" \
   && grep -q 'preflight.sh visual-harness <file.html>' "$ROOT/codex_setting/codex-modes/design/maker.md" \
   && grep -q 'preflight.sh visual-harness <file.html>' "$ROOT/codex_setting/codex-modes/design/verifier.md" \
-  && grep -q 'adapter skill projections' "$ROOT/codex_setting/codex-modes/research/plan-review.md"; then
+  && grep -q 'Portable capabilities, roles, modes, and adapter projections' "$ROOT/codex_setting/codex-modes/research/plan-review.md"; then
   ok "codex native mode projection embeds sanitized portable mode contracts"
 else
   bad "codex native mode projection should embed sanitized portable mode contracts"

@@ -6,7 +6,7 @@ updates the code analysis project.
 
 ### Sub-skill role + in-session team
 
-- Run `code-report`. Internal parallelism is the in-session **qa-team (품질관리팀)**
+- Run `code-report`. Internal parallelism is the in-session **qa-team**
   as a fast writer — synthesize plan/checklist/dev_logs/test_logs into the report.
 - Return only a short verdict (report path + headline); the conductor reads the
   report file, not your prose.

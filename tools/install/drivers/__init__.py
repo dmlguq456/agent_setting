@@ -1,7 +1,8 @@
-"""drivers — 런타임별 channel driver (PRD "channel drivers" component diagram).
+"""Per-runtime channel drivers from the PRD's channel-driver component.
 
-각 driver 는 canonical ``tools/generate.py --check``와 runtime preflight를 호출한다.
-projection 생성 규칙을 driver에서 재구현하지 않으며 이 패키지는 driver 선택만 맡는다.
+Each driver invokes the canonical ``tools/generate.py --check`` and runtime
+preflight. Drivers do not reimplement projection generation; this package only
+selects the appropriate driver.
 """
 from . import claude as _claude
 from . import codex as _codex

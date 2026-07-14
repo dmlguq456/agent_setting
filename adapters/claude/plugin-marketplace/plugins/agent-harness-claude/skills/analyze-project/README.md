@@ -1,73 +1,79 @@
 # analyze-project
 
-> 본 README 는 Claude adapter skill 요약. 권위 있는 Claude runtime 동작 명세는 같은 폴더의 `SKILL.md`; portable capability 의미는 `<agent-home>/capabilities/`.
+> This README summarizes the portable capability for users and maintainers. The model-neutral contract lives under `<agent-home>/capabilities/`; `SKILL.md` in this directory provides shared guidance for runtime-specific projections.
 
-## 개요
-코드베이스를 분석해 `<artifact-root>/analysis_project/{code,paper,doc}/`에 구조화된 문서를 생성하는 skill. autopilot 파이프라인의 **사전 준비 skill**. mode별:
-- `--mode code` — 코드베이스 모듈 매핑·interface
-- `--mode paper` — 논문 PDFs cards + overview
-- `--mode doc` — reviewer comments / format templates / past samples 분류
+## Overview
 
-## 호출 형식
-```
+Analyze a codebase or source collection and write structured documentation under `<artifact-root>/analysis_project/{code,paper,doc}/`. This is an **upfront preparation Skill** for autopilot pipelines.
+
+- `--mode code` — map codebase modules and interfaces.
+- `--mode paper` — produce cards and an overview from academic PDFs.
+- `--mode doc` — classify reviewer comments, format templates, past samples, and mixed document sources.
+
+## Invocation
+
+```text
 /analyze-project [--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]
 ```
 
-- `--mode`: 생략 시 code/doc 자동 감지 (paper만 명시 필요)
-- `--skip-qa` — Phase 5 QA Verification 생략
-- 플래그 제거 후 남은 텍스트는 target directory / scope
+- If `--mode` is omitted, detect code or document mode; paper mode must be explicit.
+- `--skip-qa` skips Phase 5 QA verification.
+- Remaining text after flag removal is the target directory or scope.
 
-## 언어 규칙
-- `<artifact-root>/analysis_project/` 산출 문서는 **영어**
-- User-facing explanations follow the user's communication language and should read naturally rather than as literal translations.
+## Language
 
-## Phase 1: Codebase Analysis (code mode)
-범위 결정:
-- `$ARGUMENTS`가 디렉토리 → recursive 읽기
-- keyword → CLAUDE.md 구조 섹션으로 관련 모듈 매핑 후 읽기
-- 비어있음/없음 → CLAUDE.md Project Structure 참조, 없으면 repo root entry point + `src/`·`lib/`
+- Follow an explicit artifact or audience language for `<artifact-root>/analysis_project/`; otherwise use the user's communication language.
+- User-facing explanations follow the same contract and should read naturally rather than as literal translations.
 
-식별:
-- 각 파일/모듈 역할과 인터페이스
-- 데이터 플로우 (input → processing → output)
-- 모듈 간 의존성
-- 설계 의도 및 핵심 알고리즘
+## Code Mode
 
-## Phase 2: Documentation
-`<artifact-root>/analysis_project/code/` 아래 topic별 md 파일로 분리:
-- role 기준 분할 (monolithic 금지)
-- code-level 상세 집중
-- 영어
-- 각 문서 끝에 `## Interface Reference` 섹션:
-  ```
-  | Class/Function | File | Signature | Called by |
-  |---|---|---|---|
-  | `ClassName` | file.py:L | `(arg1, ...) → return` | `caller.func` |
-  ```
-- 모든 public class, 핵심 함수, cross-module caller 있는 함수 포함
+### Phase 1: Codebase Analysis
 
-## Phase 3: CLAUDE.md
-코드 내용 최소화, 아래만 포함:
-- 산출 문서 리스트 + coverage table
-- 행동 규칙 (코딩 rules, 제한, commit rules)
-- 프로젝트 구조 overview (tree)
-- 실행 예시
-- 기존 CLAUDE.md 존재 시 기존 규칙 보존 + 새 발견 merge
+Resolve scope as follows:
 
-## Phase 4: Documentation Coverage 검증
-주요 모듈 디렉토리의 모든 코드 파일이 최소 1개 산출 문서에 cover되는지 확인.
+- Directory argument → read recursively.
+- Keyword argument → map it to modules through the project instruction file's structure section, then read those modules.
+- Empty argument → use the project structure section when present; otherwise inspect repository entry points and obvious source directories such as `src/` and `lib/`.
 
-## Phase 5: QA Verification (선택, `--skip-qa`로 생략)
-품질관리팀을 code review 모드로 호출하여 Interface Reference 엔트리를 실제 소스와 대조.
-- **범위**: 현재 run에서 업데이트된 문서 파일만
-- **최소 검증**: 파일당 최소 2개 엔트리 — 시그니처, 파일 경로, 라인 번호 대조
-- **QA model role**: Light QA (fast reviewer; Claude adapter: sonnet)
+Identify each file or module's role and interface, data flow, dependencies, design intent, and core algorithms.
 
-## paper mode
-보유 논문 PDFs를 읽어 `<artifact-root>/analysis_project/paper/`에 논문별 cards + `00_overview_and_constraints.md` 생성. 연구팀에 위임. autopilot-draft·autopilot-code·autopilot-research가 implicit input source로 활용.
+### Phase 2: Documentation
 
-## doc mode
-reviewer comments / format templates / past samples / mixed doc 자료를 `<artifact-root>/analysis_project/doc/{name}/` 하위에 분류 (reviewers/, formats/, samples/, misc/). autopilot-draft의 format spec auto-discovery source.
+Write role-separated Markdown files under `<artifact-root>/analysis_project/code/`. Avoid one monolithic document. Focus on code-level detail, use the selected artifact language, and end every document with:
+
+```markdown
+## Interface Reference
+
+| Class/Function | File | Signature | Called by |
+|---|---|---|---|
+| `ClassName` | file.py:L | `(arg1, ...) → return` | `caller.func` |
+```
+
+Include every public class, key function, and function with cross-module callers.
+
+### Phase 3: Project Instruction File
+
+Keep code detail out of the project instruction file. Add only the analysis-document list and coverage table, behavioral rules, a project-structure tree, and execution examples. Preserve and merge existing rules.
+
+### Phase 4: Coverage
+
+Confirm that every code file in major module directories is covered by at least one analysis document.
+
+### Phase 5: QA Verification
+
+Unless `--skip-qa` is set, invoke the **qa-team** in code-review mode to compare Interface Reference entries with live source.
+
+- Scope: documents updated in this run.
+- Minimum: two entries per file, checking signature, path, and line number.
+- Portable role: light QA with a fast reviewer; Claude adapter mapping: sonnet.
+
+## Paper Mode
+
+Read owned or reference PDFs and produce per-paper cards plus `<artifact-root>/analysis_project/paper/00_overview_and_constraints.md`. Delegate analysis to the **research-team**. These artifacts become implicit inputs to autopilot-draft, autopilot-code, and autopilot-research.
+
+## Document Mode
+
+Classify reviewer comments, templates, samples, and mixed document sources under `<artifact-root>/analysis_project/doc/{name}/{reviewers,formats,samples,misc}/`. This is the format-spec discovery source for autopilot-draft.
 
 ---
-*Claude adapter realization: `<agent-home>/adapters/claude/skills/analyze-project/SKILL.md`; compatibility reference: `<agent-home>/skills/analyze-project/SKILL.md`*
+*Portable capability contract: `<agent-home>/capabilities/analyze-project.md`; shared skill guidance: `<agent-home>/skills/analyze-project/SKILL.md`.*

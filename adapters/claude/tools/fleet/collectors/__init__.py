@@ -2,7 +2,7 @@
 
 Assembled incrementally: procscan is the backbone (session existence). Enrichment,
 liveness, and dispatch modules are imported defensively so a partial checkout / a failing
-enricher never drops the backbone rows (PRD §1: enrichment is 칸 채우기, not 존재 판정).
+enricher never drops backbone rows (PRD §1: enrichment fills fields; it does not decide existence).
 """
 import importlib
 import os

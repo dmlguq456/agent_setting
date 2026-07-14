@@ -128,7 +128,7 @@ wait "$writer"
 RG1=0; [ -f "$STORE/deleted-records.jsonl" ] && RG1=$(wc -l < "$STORE/deleted-records.jsonl")
 race_state="$(python3 -c "import sqlite3;print(sqlite3.connect('$STORE/memory.db').execute(\"select delivery_state from records where id='$RACE'\").fetchone()[0])")"
 [ "$race_rc" = 1 ] && [ "$race_state" = pending ] && [ "$RG0" = "$RG1" ] \
-  && grep -q '거부 (pending' <<<"$RACE_OUT" \
+  && grep -q 'refused pending record' <<<"$RACE_OUT" \
   && ok "curator re-reads pending under one BEGIN IMMEDIATE transaction" \
   || bad "TOCTOU gate rc=$race_rc state=$race_state graves=$RG0/$RG1 out=$RACE_OUT"
 

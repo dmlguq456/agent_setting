@@ -11,7 +11,7 @@
 - `--color-brand-700`: #C2410C
 - ...
 
-**결정 사유**: 사용자 brief 의 "warm, minimal" — orange-coral 계열로 단일 brand axis. neutral 은 zinc 계열로 대비.
+**Rationale**: The user's "warm, minimal" brief calls for one orange-coral brand axis, contrasted with zinc neutrals.
 
 ### Neutral
 - `--color-neutral-50`: ...
@@ -26,7 +26,7 @@
 
 ### Font Family
 - `--font-sans`: 'Inter', system-ui, sans-serif
-- `--font-serif`: 'Iowan Old Style', serif  (paper figure 만)
+- `--font-serif`: 'Iowan Old Style', serif  (paper figures only)
 - `--font-mono`: 'JetBrains Mono', monospace
 
 ### Scale
@@ -37,7 +37,7 @@
 - `--text-xl`: 20px / 28px
 - `--text-2xl`: 24px / 32px
 
-**결정 사유**: 본문 16px / 1.5 — 가독성 표준. heading scale 은 1.25 modular (minor 3rd).
+**Rationale**: Use a readable 16px / 1.5 body and a 1.25 modular heading scale (minor third).
 
 ## Spacing
 
@@ -48,7 +48,7 @@
 - `--space-6`: 24px
 - `--space-8`: 32px
 
-8-point grid + 4-point sub-unit. Tailwind default 와 호환.
+Use an 8-point grid with a 4-point sub-unit, compatible with Tailwind defaults.
 
 ## Radius
 
@@ -57,7 +57,7 @@
 - `--radius-lg`: 12px
 - `--radius-full`: 9999px
 
-shadcn default 보다 살짝 작게 — 사용자 선호 (memory 참조 시).
+Slightly smaller than the shadcn default when supported by the user's stated or recalled preference.
 
 ## Shadow
 

@@ -1,85 +1,96 @@
 # draft-strategy
 
-> 본 README 는 Claude adapter skill 요약. 권위 있는 Claude runtime 동작 명세는 같은 폴더의 `SKILL.md`; portable capability 의미는 `<agent-home>/capabilities/`.
+> This README summarizes the portable capability for users and maintainers. The model-neutral contract lives under `<agent-home>/capabilities/`; `SKILL.md` in this directory provides shared guidance for runtime-specific projections.
 
-## 개요
-분석된 참고 자료를 기반으로 초기 문서 전략(rebuttal/paper/review/report/proposal/presentation)을 생성하는 skill. 연구팀에 위임 + selected review/source-check pass + 한국어 번역.
+## Overview
 
-> autopilot-draft 내부에서 자동 호출. 직접 사용은 거의 없음 (autopilot-draft의 Step 2).
->
-> **Paragraph Cohesion Pre-Check (모든 mode, 2026-05-20)**: paste-ready block (LaTeX / markdown / slide / table) 작성 전 target paragraph **전체 narrative flow** 분석 + 4-step self-check — (1) substance 이미 명시 여부 / (2) paragraph axis (motivation→design→formalization 등) 단절 여부 / (3) §-level cross-section redundancy / (4) edit type 선택 (응집성 순 EDIT in-line > REPLACE > INSERT > DROP). Anti-pattern: mechanical "INSERT after sentence X", AFTER가 BEFORE보다 verbose, 같은 substance § 레벨 반복. 상세 — `SKILL.md` ## Paragraph Cohesion Pre-Check 섹션.
->
-> **Paper mode camera-ready / major revision 특이 룰** (2026-05-19): reviewer concern → paper-body mutation 변환 시 **natural-integration rule** 적용 (위 Pre-Check 통과 후 추가 gate). Single gating question — *"1-2 sentence inline rewrite로 자연 통합 가능한가?"* YES → M15-style inline rewrite (subsection-head opening + 본론 paragraph touch-up + Figure cascade). NO → drop / Appendix defer (rebuttal-format table·Q&A block은 본문 mutation 금지). 상세 — `SKILL.md` paper mode "Natural-integration rule" 섹션.
+Creates an initial document strategy for rebuttal, paper, review, report, proposal, or presentation from analyzed reference materials. It delegates to `연구팀`, runs the selected review/source-check pass, and creates a language companion only when the user explicitly requests one, an external audience requires one, or the existing workflow already depends on one.
 
-## 호출 형식
+autopilot-draft invokes this skill automatically at Step 2. Direct use is uncommon.
+
+> **Paragraph Cohesion Pre-Check (all modes, 2026-05-20):** Before writing a paste-ready LaTeX, Markdown, slide, or table block, analyze the target paragraph's full narrative flow and run four checks: (1) whether the substance is already stated, (2) whether the edit breaks the paragraph axis such as motivation → design → formalization, (3) whether it creates section-level redundancy, and (4) the edit type, in cohesion order: inline EDIT > REPLACE > INSERT > DROP. Reject mechanical “INSERT after sentence X,” AFTER text that becomes more verbose than BEFORE, and repeated substance across sections. See `SKILL.md` §Paragraph Cohesion Pre-Check.
+
+> **Paper-mode camera-ready/major-revision rule (2026-05-19):** When converting a reviewer concern into a paper-body mutation, apply the natural-integration rule after the pre-check. Ask one question: *Can this be integrated naturally as a one- or two-sentence inline rewrite?* YES → use an M15-style inline rewrite: subsection opening, body-paragraph adjustment, and Figure cascade. NO → drop or defer to the Appendix; do not place rebuttal-format tables or Q&A blocks in the body. See `SKILL.md` §Natural-integration rule.
+
+## Invocation
+
 ```
 /draft-strategy <mode> --inputs <comma-separated-paths> --output <artifact-dir> <task description>
 ```
 
-### 인자
-- **mode**: 첫 단어 — `rebuttal | paper | review | report | proposal | presentation` (6개)
-- **--inputs**: Input Discovery 결과 path list (콤마 구분). autopilot-draft Pre-flight Step 2에서 결정.
-- **--output**: artifact 디렉토리 (`<artifact-root>/documents/{date}_{name}/`)
-- 남은 텍스트: task description
+### Arguments
 
-> survey 모드는 autopilot-research로 분리됨 (`/autopilot-research <주제> --mode academic|technology|market`).
-> format spec은 `analysis_project/doc/{matching}/formats/`에서 자동 발견 (`--format-ref` flag 없음).
+- **mode:** first word; one of `rebuttal | paper | review | report | proposal | presentation`
+- **`--inputs`:** comma-separated paths from autopilot-draft Pre-flight Step 2 Input Discovery
+- **`--output`:** artifact directory, `<artifact-root>/documents/{date}_{name}/`
+- Remaining text: task description
+
+Survey work belongs to autopilot-research: `/autopilot-research <topic> --mode academic|technology|market`. Discover the format spec automatically under `analysis_project/doc/{matching}/formats/`; there is no `--format-ref` flag.
 
 ## Pre-Check
-`{output_dir}/analysis/`에 분석 파일 존재 확인:
-- `material_index.md` (모든 모드 필수)
-- `reviewer_analysis.md` (rebuttal 필수)
-- `ref_analysis.md` (paper/review/report/proposal/presentation 필수)
 
-누락 시 에러 — autopilot-draft Step 1이 생성했어야 함.
+Require these analysis files under `{output_dir}/analysis/`:
 
-## 위임 — 연구팀
-mode별 전략 템플릿으로 전략 문서 작성. 자동 발견된 format spec이 있으면 venue-specific section/length/tone 추출.
+- `material_index.md` for every mode
+- `reviewer_analysis.md` for rebuttal
+- `ref_analysis.md` for paper, review, report, proposal, and presentation
 
-### 모드별 핵심 섹션 (요약)
+If one is missing, fail: autopilot-draft Step 1 should have created it.
 
-| 모드 | 핵심 섹션 |
+## Delegation — `연구팀`
+
+Write the strategy from the mode-specific template. When an automatically discovered format spec exists, extract venue-specific sections, length, and tone.
+
+### Core Sections by Mode
+
+| Mode | Core sections |
 |---|---|
-| rebuttal | Meta-Review / Response Priority Matrix / Reviewer별 상세 / Additional Experiments / Paper Revision / Tone / Risk |
-| paper | Positioning / Contribution / Outline / Key Arguments / Related Work 전략 / Experiment Design / Risk / Venue |
-| review | format spec에서 추출한 섹션 (venue별 다름). 패턴: Summary / Strengths / Weaknesses / Questions / Missing References / Overall / Confidence |
+| rebuttal | Meta-Review / Response Priority Matrix / reviewer details / Additional Experiments / Paper Revision / Tone / Risk |
+| paper | Positioning / Contribution / Outline / Key Arguments / Related Work strategy / Experiment Design / Risk / Venue |
+| review | Sections extracted from the venue format spec; common pattern: Summary / Strengths / Weaknesses / Questions / Missing References / Overall / Confidence |
 | report | Objective / Key Findings / Analysis Framework / Section Plan / Evidence / Recommendations / Risk |
-| proposal | Problem / Prior Art / Approach / Feasibility / Work Plan / Resource / Impact / Risk |
+| proposal | Problem / Prior Art / Approach / Feasibility / Work Plan / Resources / Impact / Risk |
 | presentation | Audience / Core Message / Story Arc / Slide Outline / Visuals / Q&A / Time / Delivery Notes |
 
-### 품질 요구
-- 모든 reviewer 포인트가 rebuttal 전략에 등장 (누락은 Critical Error)
-- Severity 분류 justification 필요
-- 모든 citation은 **paper analyses / discovered_inputs의 실재 자료만** (fabricate 금지)
-- 전략은 구체적·실행 가능
-- academic: venue-specific norms / professional: 업계 best practice
+### Quality Requirements
 
-연구팀이 파일 직접 작성. 오케스트레이터는 경로 + 3-5줄 요약만 받음.
+- Include every reviewer point in a rebuttal strategy; omission is a critical error.
+- Justify severity classifications.
+- Cite only real materials from paper analyses or discovered inputs; never fabricate.
+- Make the strategy concrete and actionable.
+- Apply venue-specific norms to academic work and domain-relevant industry practice to professional work.
+
+`연구팀` writes the file directly. The orchestrator receives only the path and a three- to five-line summary.
 
 ## QA Scaling
-Quality reviewer + fact-checker는 selected graph/QA budget이 요구할 때만 동작한다.
 
-| Level | 조건 | Quality reviewer | Fact-checker (parallel) |
+Run quality and fact-check reviewers only when required by the selected graph and QA budget.
+
+| Level | Condition | Quality reviewer | Parallel fact-checker |
 |---|---|---|---|
-| Light | review/presentation 또는 ≤3 inputs | 1× fast reviewer | skip |
-| Standard | paper/report/proposal 또는 rebuttal ≤3 reviewers | 1× deep reviewer | 1× fast fact-checker |
-| Thorough | rebuttal ≥4 reviewers 또는 ≥10 inputs | 2× deep reviewers 병렬 | 1× fast fact-checker |
+| Light | review/presentation, or ≤3 inputs | 1 fast reviewer | Skip |
+| Standard | paper/report/proposal, or rebuttal with ≤3 reviewers | 1 deep reviewer | 1 fast fact-checker |
+| Thorough | rebuttal with ≥4 reviewers, or ≥10 inputs | 2 parallel deep reviewers | 1 fast fact-checker |
 
-**Fact-checker**는 `analysis_project/paper/*.md` verbatim 대조로 venue/year/metric/citation을 narrow하게 검증. quality reviewer는 narrative arc / cohesion / 모든 reviewer point 응답 여부에 집중.
+The fact-checker narrowly verifies venue, year, metric, and citation values against `analysis_project/paper/*.md`. The quality reviewer focuses on narrative arc, cohesion, and coverage of all reviewer points.
 
-## Selected Post-Strategy Review Pass (최대 2 라운드)
-1. **Selected quality/source-check reviewer 호출**
-   - Quality prompt → `round_N_quality.md`
-   - Fact-check prompt → `round_N_factcheck.md`
-2. Verdict:
-   - 🔴 없음 (양쪽) → Korean Version Generation
-   - 🔴 quality → 연구팀 revise with quality findings
-   - 🔴 fact-check → 연구팀 revise with **mandatory ref-grounding** (re-read named paper analyses)
-   - 🔴 양쪽 → 연구팀 revise with combined findings
-3. 2 라운드 후 🔴 잔여 → `## 미해결 이슈` (`[FACT-RESIDUAL]` 태그)
+## Selected Post-Strategy Review Pass
 
-## Korean Version Generation
-연구팀 Translate 모드 최종 호출. 전체 번역 (요약 X). Code identifiers·paper titles·technical terms는 영어.
+Run at most two rounds:
+
+1. Invoke the selected quality/source-check reviewers:
+   - Quality output → `round_N_quality.md`
+   - Fact-check output → `round_N_factcheck.md`
+2. Handle verdicts:
+   - No 🔴 in either review → generate a language companion only when the explicit audience or workflow contract requires one.
+   - Quality 🔴 → ask `연구팀` to revise from quality findings.
+   - Fact-check 🔴 → ask `연구팀` to revise with mandatory reference grounding and reread the named paper analyses.
+   - Both → ask `연구팀` to revise from the combined findings.
+3. If 🔴 remains after two rounds, record it under the functional compatibility heading `## 미해결 이슈`; tag factual residuals `[FACT-RESIDUAL]`.
+
+## Conditional Language Companion
+
+Skip companion generation by default. Invoke the editorial translation mode only when the user explicitly requests a second language, an external audience requires one, or the existing artifact workflow already contains and requires a companion. Preserve code identifiers, paper titles, citations, paths, and precise technical terms in their source language when translation would reduce clarity. A difference between artifact and conversation languages does not create a companion requirement.
 
 ---
-*Claude adapter realization: `<agent-home>/adapters/claude/skills/draft-strategy/SKILL.md`; compatibility reference: `<agent-home>/skills/draft-strategy/SKILL.md`*
+*Portable capability contract: `<agent-home>/capabilities/draft-strategy.md`; shared skill guidance: `<agent-home>/skills/draft-strategy/SKILL.md`.*

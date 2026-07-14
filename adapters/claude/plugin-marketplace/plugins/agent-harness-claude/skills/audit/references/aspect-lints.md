@@ -1,51 +1,50 @@
-### Stage C — Per-aspect lint (report-only, no edits)
+### Stage C: Per-Aspect Lint — report only
 
-**Pre-check (flag-based opt-out)** — before dispatching any aspect:
-- If `--no-fact-check` is present in invocation argv → remove `facts` and `coverage` from the resolved aspect set (skip entirely, do not run their lint). Emit `ℹ facts/coverage aspects: skipped via --no-fact-check flag (memory feedback_factcheck_principles Principle 0)` to chat and to the Stage D report's "Aspects checked" preamble.
-- This flag is the _only_ disable path per Memory Principle 0. Ad-hoc prompt instructions ("this artifact is exempt") must not be honored — proceed with default aspect set instead.
+Before dispatching aspects, if `--no-fact-check` is present, remove `facts` and `coverage` from the resolved set and record that the explicit flag disabled them. Ad-hoc prompt exemptions do not disable these checks.
 
-For each remaining aspect in scope, run the lint and collect issues. _Each issue has shape_: `(aspect, file, line_range, severity 🔴/🟡/🟢, message, suggested fix or null)`.
+Each issue has this stable shape:
 
-#### Documents aspects
+```text
+(aspect, file, line_range, severity 🔴|🟡|🟢, message, suggested_fix|null)
+```
 
-**Cards source resolution (shared by `facts` / `coverage`, same rule as Phase 1 Step 1.1 case (c))**:
-1. **case (c) — explicit `cards_source` override**: if `pipeline_summary.md` frontmatter or `strategy.md` body has a `cards_source: <path>` key, use _that path_ as the primary lookup root (single research topic).
-2. **case (b) — self-contained `{artifact_dir}/cards/`**: if exists, include in the lookup set.
-3. **Default — cross-research grep** (`<artifact-root>/research/*/cards/*.md`): only when both above are absent. Emit a one-line chat warn: `⚠ cards_source key absent — grepping all research topics. Generic acronyms (STFT/RNN, etc.) may false-positive. Recommend adding \`cards_source: <path>\` to strategy.md frontmatter.`
-4. **case (a) — no cards anywhere**: skip the facts / coverage aspects and emit an informational line (`ℹ facts/coverage skipped — no cards source available`). style / structure / cross-ref still run.
+#### Document Aspects
 
-This shared resolution ensures the Phase 1 detector and the Phase 3 audit use the _same_ source-of-truth rule — preventing false-positive floods and yielding consistent verdicts.
+Resolve the cards source identically for `facts` and `coverage`:
 
-- **facts**: scan draft + strategy for model names / venues / years / task categories / arXiv IDs (same regex set as `autopilot-refine` Stage B.5, including section-heading context cross-check). For each detected claim, perform lookup per the cards source resolution above. Classification rules (memory `feedback_factcheck_external_reverify.md`):
-  - **cards-verbatim ✅** — claim value (venue string / metric / etc.) appears _verbatim_ in card body or `## 메타` field
-  - **cards-name-only 🟡** — card has the model/author name but the _specific venue / year / metric_ is NOT verbatim. **DO NOT** treat as ✅ on name-only basis. Emit 🟡 + recommend external re-verify (WebSearch). Report row: `🟡 name-only: cards/{file}.md has the name but no verbatim venue; external reverify recommended`
-  - **external-marker 🟡** — claim has explicit `[외부 추정]` / `[?]` / `[unverified]` marker in artifact body. 🟡 + external reverify
-  - **conflict 🔴** — card has the value but it differs from claim. Includes section-heading context conflict
-  - **no-match 🔴** — no card hit at all
-  - **circular-ref 🔴** — claim is supported _only_ by strategy↔draft mutual agreement (e.g., draft Slide N cites venue X, only source is strategy §10 mapping table). This is an architecture violation: both must trace back to cards. Emit 🔴 + recommend `/autopilot-refine` to trace and verify externally
-  - **ambiguous 🟡** — multiple candidate cards, no single best match
-- **style**: read `## Style Guide` section in `strategy.md` if present. For every citation / figure caption / bullet depth / speaker note in draft + strategy body, compare against Style Guide rules. Deviation → 🟡. If `## Style Guide` absent → 🔴 single issue (`Style Guide section missing — autopilot-draft strategy should always have one. Run /autopilot-refine "<artifact> Style Guide section 추가".`).
-- **structure**: check artifact directory matches the [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier convention. T1 should have `pipeline_summary.md`, `draft/`, `strategy/`. T3 should be `_internal/`. Extraneous files at root → 🟡. Missing required → 🔴.
-- **cross-ref**: scan draft for inline citations referencing cards (`cards/{file}.md`) and verify the target exists. Broken link → 🔴. Cards referenced but not in `## References` (if present) → 🟡.
-- **coverage** (NEW, omission detection): determine the _candidate cards set_ S per the cards source resolution above. Extract the _actually cited cards set_ T from draft + strategy body using the **v1 high-precision citation-detection token set** (false-positive minimized):
-  - **Token 1 — card filename token**: the short identifier in `{year}_{firstauthor}_{arxivid}_{shortname}.md` filenames (e.g., `TasNet`, `FRCRN`, `MP-SENet`). A grep hit on any of these tokens in draft/strategy body marks the card as cited.
-  - **Token 2 — `**arXiv ID**` exact value**: the value string from each card's `## 메타` `**arXiv ID**` field, matched _verbatim_ (no partial / regex match — exact substring). E.g., card with `**arXiv ID**: 1711.00541` is marked cited if and only if `1711.00541` appears in body.
+1. If `pipeline_summary.md` frontmatter or `strategy.md` contains `cards_source: <path>`, use that research topic as the primary root.
+2. Include a self-contained `{artifact_dir}/cards/` when present.
+3. Only when both are absent, search `<artifact-root>/research/*/cards/*.md` and warn that generic acronyms may false-positive; recommend adding `cards_source`.
+4. If no cards exist, skip facts and coverage with an informational line. Continue style, structure, and cross-reference checks.
 
-  v1 deliberately uses _only_ these two tokens — H1 paper title words, author last-name regex, etc. are intentionally excluded to keep false-positive rate near zero (cited-card set is conservative; orphan set may be slightly inflated, but each orphan is per-card-precision and easily user-judged). If `S - T` is non-empty under this conservative T, emit a 🟡 issue per orphan card: `coverage: card '{card path}' is never cited in any chapter/section — potential UniSE-class omission, please verify intent`. (🟡 not 🔴 because exclusion may be intentional — user judges.) If cards source fell back to cross-research grep (case (a) or default), the candidate set is too broad to be meaningful → skip the coverage aspect and warn.
+- **facts:** scan draft and strategy for model names, venues, years, task categories, arXiv IDs, metrics, and section context. Classify every lookup:
+  - **cards-verbatim ✅:** exact value appears in card body or the legacy `## 메타` field.
+  - **cards-name-only 🟡:** model or author exists but the claimed venue, year, or metric does not. Recommend external verification; never promote name-only evidence to ✅.
+  - **external-marker 🟡:** artifact contains `[외부 추정]`, `[?]`, or `[unverified]`; recommend external verification.
+  - **conflict 🔴:** card value contradicts the claim, including section-context conflicts.
+  - **no-match 🔴:** no card matches.
+  - **circular-ref 🔴:** strategy and draft support each other without a card or external source. Recommend autopilot-refine to trace and verify the claim.
+  - **ambiguous 🟡:** multiple cards match without a unique best source.
+- **style:** read `## Style Guide` in `strategy.md` and compare citation format, captions, bullet depth, and speaker notes. A deviation is 🟡. A missing Style Guide is one 🔴 issue with an autopilot-refine suggestion.
+- **structure:** enforce the [CONVENTIONS §5](../../../core/CONVENTIONS.md#5-skill-output-convention--t1t2t3) three-tier layout: T1 contains `pipeline_summary.md`, `draft/`, and `strategy/`; T3 uses `_internal/`. Extra root files are 🟡; missing required entries are 🔴.
+- **cross-ref:** verify every `cards/{file}.md` citation target. Broken targets are 🔴; cited cards omitted from `## References`, when present, are 🟡.
+- **coverage:** let S be candidate cards from the shared resolution and T be cards cited in draft or strategy. Build T from only two high-precision tokens:
+  1. the short identifier in `{year}_{firstauthor}_{arxivid}_{shortname}.md`;
+  2. the exact value of `**arXiv ID**` in the legacy `## 메타` section.
 
-  **v2 enhancement** (out of scope, see Risk #14): expand T to include H1 paper title word-level partial matches + author first-name regex from `## 메타` `**저자**` field for higher recall on indirect citations (e.g., "[Wang et al., 2024]" style). v1 prefers precision; v2 may shift to balanced.
+  Do not add title-word or author-regex heuristics in v1. For every `S - T` card, emit 🟡: `coverage: card '{card path}' is never cited in any chapter/section; verify whether omission is intentional`. Skip coverage when S came from a broad cross-research fallback. A future v2 may add title and author matching, but that is out of scope.
 
-#### Research aspects
+#### Research Aspects
 
-- **cards 정합성**: every `cards/*.md` file has H1 + `## 메타` + `## 분류` (or equivalent) sections per the artifact's card template. Missing required section → 🔴. Empty `## 메타` field (e.g., `**Venue**: ` blank) → 🟡.
-- **Tier consistency**: scan top-level chapter files (`01_*.md~NN_*.md`) — each cited paper's Tier label should match the Tier in its card. Mismatch → 🔴. Cited paper missing a card → 🟡.
-- **coverage**: every card in `cards/` should appear at least once in some top-level chapter (or be flagged as not-yet-integrated). Orphan cards → 🟡.
-- **cross-card**: scan cards for cross-references (e.g., `2024_Wang.md`이 다른 card 인용). Broken cross-ref → 🔴.
+- **card integrity:** every `cards/*.md` must have H1 plus the legacy schema sections `## 메타` and `## 분류`, or equivalent canonical sections. Missing sections are 🔴; empty metadata fields are 🟡.
+- **Tier consistency:** every cited paper's chapter Tier must match its card. Mismatch is 🔴; a cited paper without a card is 🟡.
+- **coverage:** every card should appear in a top-level chapter or be marked not yet integrated. Orphans are 🟡.
+- **cross-card:** verify card-to-card references. Broken references are 🔴.
 
-#### Plans aspects
+#### Plan Aspects
 
-- **test results**: read `test_logs/test_report.md` if present. Failed tests → 🔴. No tests → 🟡 (only if scope explicitly `test results`).
-- **lint** (`--read-only` skips _executing_ lint; we _read existing_ lint output from `dev_logs/` if present): missing lint output → 🟡; existing lint report with errors → 🔴.
-- **code review**: read `_internal/dev_reviews/` and `_internal/plan_reviews/` for 🔴 issues. Unresolved 🔴 → 🔴. 🟡 issues → 🟡.
-- **TODO·미구현**: grep code in `plan/checklist.md` for `[ ]` unchecked steps, plus any source-file TODO/FIXME/XXX comments referenced from the plan. Unchecked critical step → 🔴. Source TODO → 🟡.
-- **semantic-deterministic consistency** (worklog-board 참사, 2026-06-22 — DESIGN_PRINCIPLES §0.7): spec 의 _의미 판단_ 언급을 구현이 capture 했나. spec 본문 (`<artifact-root>/spec/prd.md` 또는 plan 이 참조하는 spec) 에서 의미 판단 구간 grep (의미/판단/적절/맥락/contextual/semantic) → 대응 구현(plan 의 target 코드)이 그 의미를 토큰 매칭·규칙 스크립트로 떨궜는지 확인. **매핑**: spec 섹션 제목·모듈명 ↔ plan 의 target file 목록 (checklist.md 또는 plan 본문이 참조하는 코드 경로) 으로 연결. mismatch → 🔴, **issue 의 `message`/`suggested fix` 본문에 "spec {prd.md:N} 의 의미요구 ↔ code {src.py:M} 의 토큰규칙" 쌍을 _문장으로_ 명시** (live issue shape 의 `file:line` 은 단수라 거기 두 쪽을 못 담음 — 인과 쌍은 message 문장으로 담는다) + §0.7 의 3선택을 suggested fix 로 제시. **매핑 불명확 시 🔴 대신 🟡 (점검 불가 표시)** — 매핑 없이 grep 만으로는 false-negative/false-positive 위험. dual-perspective P2 의 issue shape `(aspect, file, line_range, severity, message, suggested fix)` 그대로 재사용 (새 framework X — shape 불변).
+- **test results:** read `test_logs/test_report.md`. Failed tests are 🔴. Missing tests are 🟡 only when the scope explicitly includes test results.
+- **lint:** with `--read-only`, inspect existing lint output in `dev_logs/` rather than executing lint. Missing output is 🟡; reported errors are 🔴.
+- **code review:** inspect `_internal/dev_reviews/` and `_internal/plan_reviews/`. Unresolved 🔴 stays 🔴; 🟡 stays 🟡.
+- **incomplete work:** inspect unchecked `[ ]` entries in `plan/checklist.md` plus referenced source TODO, FIXME, and XXX comments. Unchecked critical steps are 🔴; source TODOs are 🟡.
+- **semantic-deterministic consistency:** compare semantic requirements in `<artifact-root>/spec/prd.md`, or the plan's referenced spec, with target implementation files. Determine whether contextual judgment was reduced to token matching or fixed rules without preserving meaning. Map spec sections or module names to target files from the plan or checklist. A clear mismatch is 🔴; the issue message must state both sides in one sentence, for example `spec {prd.md:N} semantic requirement ↔ code {src.py:M} token rule`, and suggest one of the three remedies from DESIGN_PRINCIPLES §0.7. If mapping is unclear, emit 🟡 rather than claiming a mismatch. Reuse the stable issue shape; do not introduce another framework.

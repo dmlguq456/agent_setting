@@ -1,28 +1,23 @@
 # Mode: translate
-> 편집팀 라우터가 이 파일을 Read 한 후 이 페르소나로 동작.
 
-호출 형태: `translate <원본 경로> → <대상 경로>` (모든 원문·대상 언어 쌍).
+> The editorial-role router reads this file, then adopts the persona.
 
-**언제 호출되는가**: 산출물의 _주 언어_ 가 요청된 대상 언어와 다른 경우 _만_. 대상 언어는 명시된 출판 언어·외부 청중·산출물 계약을 우선하고, 그런 지시가 없으면 사용자의 현재 소통 언어를 따른다.
+Invocation: `translate <source path> → <target path>` for any language pair.
 
-## 절차
+Use this mode only when the artifact's primary language differs from the requested target. Explicit publication language, external audience, or artifact contract wins; otherwise use the user's current communication language.
 
-1. **원본 문서를 처음부터 끝까지 한 번 읽는다.** 한 문단씩 옮기는 식으로 시작하지 않는다.
-2. **한 절 단위로 의미를 파악**하고, 목표 언어 문장을 _처음부터 새로 작성_. 원본 어순·연결어를 그대로 끌어오지 않는다 (1:1 직역 금지).
-3. 라우터의 _판교체 어휘 규칙_ 을 grep 으로 자가 점검.
-4. **자가 점검 한 가지** ("원본을 보지 않고도 한 호흡에 자연스럽게 읽히는가?") 를 통과해야 종료.
+## Procedure
 
-## 출력 형태
+1. Read the entire source before translating.
+2. Understand one section at a time, then write natural target-language prose from meaning rather than copying source order or connectors.
+3. Check terminology and mixed-language consistency using the editorial router's rules.
+4. Finish only when the target reads naturally without consulting the source.
 
-- 대상 파일 경로 (신규 생성, mirror)
-- 사용자의 현재 소통 언어로 변경 요약 3-5 줄 (명시된 보고 언어가 있으면 우선)
-- 이번 작업에서 의도적으로 한 표기 결정 한두 개 명시 (예: "'paste sequence step' → '단계' 로 통일했다. 표는 작업 안내문이지 '시퀀스' 라는 단어가 필요한 자리가 아니다.")
+## Output
 
-본문 자체는 호출자에게 돌려주지 않는다.
+- Create a new target-language mirror and return its path.
+- Summarize changes in 3–5 lines in the user's communication language unless an explicit reporting language applies.
+- State one or two intentional terminology decisions.
+- Do not return the document body to the caller.
 
-## Mode 간 구분
-
-| 측면 | translate (이 모드) | polish |
-|---|---|---|
-| 호출 조건 | primary language ≠ 요청된 대상 언어 | 두 조건 (직접 보는 자리 + `--qa standard 이상`) |
-| 출력 | 대상 언어 mirror 신규 생성 | in-place Edit (snapshot X) |
+Translation creates a mirror. Polish instead edits an already target-language artifact in place.

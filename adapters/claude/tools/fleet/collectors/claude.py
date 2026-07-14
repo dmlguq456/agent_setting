@@ -71,7 +71,7 @@ def _tail_ai_title(path, chunk=8192, max_scan=None):
     """Last `ai-title` line's aiTitle value, scanning backward from EOF in growing
     windows (chunk, ×8 each step) until an ai-title line is seen or the whole file
     is covered. Long sessions keep appending messages after the title lines, so a
-    fixed tail window misses them (2026-07-10 실측: 제목이 EOF 뒤로 31–100KB) —
+    fixed tail window misses them (observed titles can sit 31–100KB before EOF) —
     the growing scan keeps short-session cost at one small read while still
     reaching early titles. A transcript can carry several ai-title lines appended
     over the session's life (renamed/refined) — the last one wins. tolerant:
@@ -213,7 +213,7 @@ def enrich(sess):
         except Exception:
             pass
 
-    # 3) liveness mtime + title. 우선순위(PRD §4.7 F-21): sidecar(fresh <24h) → ai-title → slug.
+    # 3) Liveness mtime and title. Priority: fresh sidecar, AI title, then slug.
     path = _newest_transcript_path(home, sess.cwd, sid)
     if path:
         sess._transcript_path = path              # ephemeral: live title scheduler, not --json
@@ -223,8 +223,8 @@ def enrich(sess):
         if isinstance(su, (int, float)):
             m = su / 1000.0                        # ms → s
     sess.mtime = m
-    # 3a) neutral fleet sidecar (F-21) — 신선하면 ai-title 을 이긴다. 부재/stale/parse-fail = 무해 passthrough.
-    from fleet import titles                      # 지연 import: 순환 없음, stdlib-only
+    # 3a) A fresh neutral sidecar overrides the AI title; failures pass through safely.
+    from fleet import titles                      # Deferred import; no cycle, standard library only.
     st = titles.fresh_title(sid, harness="claude") if sid else None
     if st:
         sess.title = st
@@ -232,4 +232,4 @@ def enrich(sess):
         t = _tail_ai_title(path)
         if t:
             sess.title = t
-    # else: sess.title=None → render 가 slug fallback (render.py:661)
+    # Otherwise render falls back from a missing title to the slug.

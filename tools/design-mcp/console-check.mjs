@@ -69,7 +69,7 @@ try {
 
 if (res.errors && res.errors.length) {
   process.stderr.write(
-    `⚠️ design console-check: ${path.basename(target)} 에서 콘솔 에러 ${res.errors.length}건 — 턴 종료 전에 고치세요:\n` +
+    `⚠️ design console-check: ${res.errors.length} console error(s) in ${path.basename(target)} — fix before ending the turn:\n` +
       res.errors.slice(0, 5).map((e) => "  • " + e).join("\n") + "\n"
   );
   process.exit(2); // feed alert back to the agent

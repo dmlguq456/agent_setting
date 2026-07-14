@@ -274,11 +274,8 @@ check_claude_projection_targets() {
 
 check_claude_adapter_concrete_surfaces() {
   links=$(find adapters/claude -type l -print 2>/dev/null || true)
-  # gitignored 로컬 설치물(예: tools/design-mcp/node_modules 의 .bin symlink)은
-  # projection 파리티 대상이 아니다 — clean 트리엔 없고 로컬에만 존재하는 노이즈.
-  # harness-layer-sync §3.1 (+Phase 1b): hooks/tools/utilities 의 collapsed 심링크(canonical 로 접힘)는
-  # _최상위든 하위 디렉토리든_ 정당한 실행본이므로 허용한다 — target 이 canonical 상대경로이고 실제 canonical
-  # 로 resolve 되는 경우에 한함. 그 외 어댑터 심링크(타 표면·잘못된 target)는 여전히 passthrough 위반.
+  # Ignore gitignored local installs. Canonical collapsed symlinks under shared
+  # layers are valid at any depth when their relative targets resolve correctly.
   links=$(printf '%s\n' "$links" | while IFS= read -r l; do
     [ -n "$l" ] || continue
     git check-ignore -q "$l" 2>/dev/null && continue
@@ -287,7 +284,7 @@ check_claude_adapter_concrete_surfaces() {
     sub=${rel#*/}
     case "$layer" in
       hooks|tools|utilities)
-        # 심링크가 adapters/claude/<layer>/<sub> 위치. 루트까지 ../ 개수 = 2(adapters,claude)+1(layer)+sub 슬래시 수.
+        # Derive the relative depth from adapters/claude/<layer>/<sub>.
         _slashes=$(printf '%s' "$sub" | tr -cd '/' | wc -c)
         _up=$((3 + _slashes))
         _prefix=""; _i=0
@@ -362,23 +359,16 @@ check_link_target() {
   fi
 }
 
-# harness-layer-sync §3.1 / HLS-5: Claude 공유층(hooks/tools/utilities) 최상위 파일의 3-class 계약.
-#   collapsed = canonical(../../../<layer>/<name>) 로 접힌 symlink — 런타임 실행본이 canonical 에 닿음.
-#   wrapper   = canonical 을 exec 하는 얇은 concrete 어댑터 래퍼.
-#   delta     = canonical + 선언된 어댑터 patch 인 concrete 파일.
-# 예외(wrapper/delta)는 tools/adaptation-exemptions.tsv 에 등재돼야 하고, 미등재 concrete 는 collapse 누락으로 fail.
-# 가드는 "공유본이 옳은가"가 아니라 "런타임이 실제 실행하는 파일(settings.json→claude_setting→adapters/claude)이
-# canonical 과 정합인가"를 검증한다(§4, S-1 이 통과하던 구멍을 닫음).
+# HLS-5 three-class contract for Claude shared layers:
+# collapsed symlink, thin wrapper, or declared adapter delta. Concrete exceptions
+# must appear in adaptation-exemptions.tsv.
 EXEMPTIONS_FILE=tools/adaptation-exemptions.tsv
 
-# CENSUS_DEFERRED: 공유층 하위 subtree 중 _다른 작업 세션이 collapse 를 소유_ 중이라 본 재귀 census 가
-# 아직 검사하지 않는 곳. 상시 예외가 아니다 — 해당 세션이 랜딩하면 이 파일들도 canonical 로 collapse 되거나
-# adaptation-exemptions.tsv 에 등재되어야 하며, 그때 여기서 항목을 지운다. 명시적으로 적어(silent omission
-# 금지, ADAPTATION.md §6) 재귀 census 가 in-flight 작업에 false-red 내지 않게 한다.
-#   현재: fleet/** (harness-layer-sync fleet collapse, 동시 세션 진행 중).
+# CENSUS_DEFERRED lists temporary subtrees owned by another in-flight collapse.
+# Remove entries when that work lands; this is not a permanent exemption.
 CENSUS_DEFERRED="adapters/claude/tools/fleet"
 
-# $1(adapter 경로)이 CENSUS_DEFERRED subtree 에 속하면 0(참).
+# Return true when an adapter path is under CENSUS_DEFERRED.
 is_census_deferred() {
   for _d in $CENSUS_DEFERRED; do
     [ "$1" = "$_d" ] && return 0
@@ -387,19 +377,19 @@ is_census_deferred() {
   return 1
 }
 
-# 예외 클래스 조회: "wrapper" | "delta" | "" (미등재). $1 = adapter 경로.
+# Return wrapper, delta, or empty for an adapter path.
 exemption_class() {
   [ -f "$EXEMPTIONS_FILE" ] || { printf ''; return; }
   awk -F'\t' -v p="$1" '$0 !~ /^[[:space:]]*#/ && $1 == p { print $2; exit }' "$EXEMPTIONS_FILE"
 }
 
-# delta 예외의 canonical baseline hash(4번째 필드) 조회. $1 = adapter 경로. 미설정 시 "-".
+# Return a delta's canonical baseline hash, or '-'.
 exemption_baseline() {
   [ -f "$EXEMPTIONS_FILE" ] || { printf '-'; return; }
   awk -F'\t' -v p="$1" '$0 !~ /^[[:space:]]*#/ && $1 == p { print ($4 == "" ? "-" : $4); exit }' "$EXEMPTIONS_FILE"
 }
 
-# 파일 raw-byte sha256 (HLS-3 / GSD bin/install.js fileHash 모델). sha256sum→shasum fallback.
+# Raw-byte SHA-256 with sha256sum-to-shasum fallback.
 file_sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" 2>/dev/null | cut -d' ' -f1
@@ -410,14 +400,13 @@ file_sha256() {
   fi
 }
 
-# 공유 파일 1건의 3-class 계약 assert. $1 = layer(hooks|tools|utilities), $2 = rel(최상위 name 또는
-# 하위 디렉토리 포함 rel, 예: memory/mem.py). collapse target 상대깊이는 rel 의 디렉토리 깊이에서 파생.
+# Assert one shared file's three-class contract from layer and relative path.
 assert_shared_adapter_class() {
   _layer=$1
   _name=$2
   _canonical="$_layer/$_name"
   _adapter="adapters/claude/$_layer/$_name"
-  # 심링크는 adapters/claude/<layer>/<rel> 위치. 루트까지 ../ 개수 = 3(adapters,claude,layer) + rel 의 슬래시 수.
+  # Derive the relative target depth from the adapter path.
   _slashes=$(printf '%s' "$_name" | tr -cd '/' | wc -c)
   _up=$((3 + _slashes))
   _prefix=""
@@ -436,7 +425,7 @@ assert_shared_adapter_class() {
       fail_msg "$_adapter collapses to $_target; expected $_expected_target (canonical)"
       return
     fi
-    # 런타임 실행본이 canonical 에 실제로 닿는지 (projection 체인 physical resolution)
+    # Confirm that the runtime projection physically resolves to canonical.
     _resolved=$(readlink -f "$_adapter" 2>/dev/null || true)
     _want=$(readlink -f "$_canonical" 2>/dev/null || true)
     if [ -z "$_resolved" ] || [ "$_resolved" != "$_want" ]; then
@@ -445,7 +434,7 @@ assert_shared_adapter_class() {
     return
   fi
 
-  # concrete: 반드시 예외 등재 (collapse 가 기본, 예외가 증명 부담)
+  # Concrete files require an explicit exemption; collapse is the default.
   case "$_class" in
     wrapper)
       if ! grep -Fq "exec \"\$AGENT_HOME/$_layer/$_name\"" "$_adapter"; then
@@ -456,9 +445,8 @@ assert_shared_adapter_class() {
       if cmp -s "$_canonical" "$_adapter"; then
         fail_msg "$_adapter is declared 'delta' but is byte-identical to canonical $_canonical; collapse it instead of exempting"
       fi
-      # HLS-3 hash-manifest: delta 는 canonical baseline(raw-byte sha256, 4번째 필드)에 바인딩된다.
-      # canonical 이 바뀌면(예: S-1 형 fix 가 canonical 한쪽만) live 해시가 뒤집혀 red — delta 복제본이
-      # 선언된 baseline 밖으로 divergence 했음을 잡아 재파생을 강제. (GSD saveLocalPatches drift 모델.)
+      # Bind each delta to its declared canonical raw-byte hash so canonical drift
+      # forces deliberate re-derivation.
       _baseline=$(exemption_baseline "$_adapter")
       _live=$(file_sha256 "$_canonical")
       if [ -z "$_live" ]; then
@@ -983,9 +971,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'codex read wrapper resolves relative prd paths for spec gate' hooks/portable-guards.test.sh; then
     fail_msg "spec-read-marker.sh and portable guards must prove explicit preflight read accepts relative prd paths"
   fi
-  # harness-layer-sync HLS-7: Codex native hook bridge 집합을 하드코딩 열거 대신 build-manifest 파생
-  # (adapters/codex/hooks/*.py)로 iterate 한다. 새 hook 파일이 생기면 자동 포함되고, ADAPTATION_INVENTORY
-  # ledger 도 파생값과 대조(아래 check_adaptation_inventory_native_surfaces)해 3자 불일치(S-2 계열)를 막는다.
+  # Derive Codex native hook bridges from build-manifest rather than hardcoding them.
   CODEX_NATIVE_HOOKS=$(python3 tools/build-manifest.py --adaptation-surface codex-hooks 2>/dev/null || true)
   if [ -z "$CODEX_NATIVE_HOOKS" ]; then
     fail_msg "could not derive Codex native hook surface from build-manifest --adaptation-surface codex-hooks"
@@ -1026,8 +1012,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'hookSpecificOutput' adapters/codex/hooks/userprompt-lifecycle.py; then
     fail_msg "Codex lifecycle hook bridges must route through preflight.sh lifecycle commands"
   fi
-  if ! grep -Fq '세션 시작 기억 주입 확인' hooks/portable-guards.test.sh \
-    || ! grep -Fq 'keeps session start context silent by default' hooks/portable-guards.test.sh \
+  if ! grep -Fq 'keeps session start context silent by default' hooks/portable-guards.test.sh \
     || ! grep -Fq 'can opt into session start memory context' hooks/portable-guards.test.sh \
     || ! grep -Fq 'CODEX_SESSION_MEMORY_INJECT=1' hooks/portable-guards.test.sh \
     || ! grep -Fq 'out["hookEventName"]=="SessionStart"' hooks/portable-guards.test.sh \
@@ -1058,8 +1043,8 @@ check_codex_bin_wrappers() {
     || [ ! -f utilities/token-budget.py ] \
     || [ ! -f utilities/token-budget-experiment.py ] \
     || ! grep -Fq 'token-budget)' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'token pressure ⊥ intensity' core/CONVENTIONS.md \
-    || ! grep -Fq 'Token-pressure non-interference' core/OPERATIONS.md \
+    || ! grep -Fq 'Token pressure is orthogonal to intensity' core/CONVENTIONS.md \
+    || ! grep -Fq '**Token-pressure non-interference:**' core/OPERATIONS.md \
     || ! grep -Fq 'normal, unknown, repeated-band, and validated-native states' adapters/codex/AGENTS.md \
     || ! grep -Fq 'runtime-owned `$CODEX_HOME/config.toml`' adapters/codex/README.md \
     || ! grep -Fq 'AGENT_TOKEN_BUDGET_NATIVE_VALIDATED=1' adapters/codex/ADAPTATION.md \
@@ -1871,17 +1856,17 @@ check_codex_native_mode_projection() {
     fi
   done
 
-  if ! grep -Fq "Test Levels (execute in order, stop on failure)" adapters/codex/modes/qa/test.md \
-    || ! grep -Fq "Level 5b: Behavioral runtime observation" adapters/codex/modes/qa/test.md \
+  if ! grep -Fq "## Levels" adapters/codex/modes/qa/test.md \
+    || ! grep -Fq "5b. **Behavioral runtime observation:**" adapters/codex/modes/qa/test.md \
     || ! grep -Fq "verification-runner" adapters/codex/modes/qa/test.md; then
     fail_msg "adapters/codex/modes/qa/test.md must project the QA graduated test contract"
   fi
-  if ! grep -Fq "Codex visual harness" adapters/codex/modes/design/maker.md \
+  if ! grep -Fq 'Tool Contract: `visual-harness`' adapters/codex/modes/design/maker.md \
     || ! grep -Fq "preflight.sh visual-harness <file.html>" adapters/codex/modes/design/maker.md \
     || ! grep -Fq "preflight.sh visual-harness <file.html>" adapters/codex/modes/design/verifier.md; then
     fail_msg "adapters/codex/modes/design/maker.md must project the design visual harness contract"
   fi
-  if ! grep -Fq "adapter skill projections" adapters/codex/modes/research/plan-review.md; then
+  if ! grep -Fq "Portable capabilities, roles, modes, and adapter projections" adapters/codex/modes/research/plan-review.md; then
     fail_msg "adapters/codex/modes/research/plan-review.md must sanitize runtime adapter projection references"
   fi
 
@@ -2836,8 +2821,7 @@ check_claude_hook_projection() {
     fail_msg "claude_setting/hooks points to $target; expected ../adapters/claude/hooks"
   fi
 
-  # harness-layer-sync §3.1: 각 canonical hook 의 어댑터 실행본이 3-class 계약(collapsed/wrapper/delta)에
-  # 맞는지 검증한다. collapse 가 기본, 예외는 tools/adaptation-exemptions.tsv 등재분만.
+  # Verify each canonical hook against the collapsed/wrapper/delta contract.
   for f in hooks/*; do
     [ -f "$f" ] || continue
     name=${f#hooks/}
@@ -2860,7 +2844,7 @@ check_claude_utility_projection() {
     fail_msg "claude_setting/utilities points to $target; expected ../adapters/claude/utilities"
   fi
 
-  # harness-layer-sync §3.1: canonical utility 별 3-class 계약 검증 (collapse 기본, 예외 등재분만).
+  # Verify each canonical utility against the three-class contract.
   for f in utilities/*; do
     [ -f "$f" ] || continue
     name=${f#utilities/}
@@ -2871,7 +2855,7 @@ check_claude_utility_projection() {
     assert_shared_adapter_class utilities "$name"
   done
 
-  # workflow-toggle.sh 은 collapse 대상이므로 실행본이 canonical 로 접혀 byte-동일임을 재확인 (심링크 해석).
+  # workflow-toggle.sh is collapsed and must resolve byte-identically to canonical.
   if [ ! -x adapters/claude/utilities/workflow-toggle.sh ]; then
     fail_msg "adapters/claude/utilities/workflow-toggle.sh must resolve to an executable canonical workflow toggle helper"
   elif ! cmp -s utilities/workflow-toggle.sh adapters/claude/utilities/workflow-toggle.sh; then
@@ -2884,8 +2868,7 @@ check_claude_utility_projection() {
   done
 }
 
-# harness-layer-sync §3.1: 가드 실행본과 portable-guards 테스트는 collapse 대상(SAME) — canonical 로 접힌
-# 심링크 계약을 assert 한다. 과거의 concrete byte-equal copy 강제(divergence 위험원)를 대체.
+# Guard runtimes and portable-guard tests are collapsed symlinks to canonical.
 check_claude_boundary_guard_projection() {
   assert_shared_adapter_class tools check-adaptation-boundary.sh
   if [ ! -x adapters/claude/tools/check-adaptation-boundary.sh ]; then
@@ -2955,7 +2938,7 @@ check_claude_loop_projection() {
   fi
 
   for p in $(find loops -mindepth 1 -print); do
-    # 런타임 산출물(gitignored — drill results/·metrics 등)은 projection 파리티 대상 아님
+    # Gitignored runtime output such as drill results is outside projection parity.
     git check-ignore -q "$p" 2>/dev/null && continue
     rel=${p#loops/}
     adapter_p=adapters/claude/loops/$rel
@@ -2982,10 +2965,8 @@ check_claude_tool_projection() {
     fail_msg "claude_setting/tools points to $target; expected ../adapters/claude/tools"
   fi
 
-  # harness-layer-sync §3.1 (+Phase 1b): tools/* 파일은 _최상위든 하위 디렉토리든_ 3-class 계약(collapse
-  # 기본)으로 검증한다. Phase 1 은 하위 디렉토리를 concrete 강제해 census-gap(물리 복사본 생존)을 남겼으므로,
-  # nested 파일도 assert_shared_adapter_class 로 통일. 하위 디렉토리 _자체_ 는 심링크를 담는 실디렉토리로 유지.
-  # CENSUS_DEFERRED(fleet 등 동시 세션 소유)는 기존 concrete 계약 유지 — 그 세션이 랜딩하면 여기서 풀린다.
+  # Apply the three-class contract to tools files at every depth; directories
+  # remain concrete containers for collapsed file symlinks.
   for p in $(find tools -mindepth 1 ! -path '*/__pycache__' ! -path '*/__pycache__/*' -print); do
     rel=${p#tools/}
     adapter_p=adapters/claude/tools/$rel
@@ -2996,7 +2977,7 @@ check_claude_tool_projection() {
         ;;
     esac
     if is_census_deferred "$adapter_p"; then
-      # 동시 세션 소유 subtree: 기존 concrete 계약만 확인 (collapse 강제하지 않음)
+      # In-flight deferred subtrees retain their existing concrete contract.
       if [ -d "$p" ]; then
         [ -d "$adapter_p" ] || fail_msg "$adapter_p is missing"
       elif [ -f "$p" ]; then
@@ -3006,7 +2987,7 @@ check_claude_tool_projection() {
     fi
     case "$rel" in
       */*)
-        # 하위 디렉토리 항목: dir 은 실디렉토리 유지, file 은 3-class 계약(collapse 기본)
+        # Nested directories stay concrete; files follow the three-class contract.
         if [ -d "$p" ]; then
           if [ -L "$adapter_p" ]; then
             fail_msg "$adapter_p must be a concrete adapter-owned tool directory (holds collapsed file symlinks)"
@@ -3023,7 +3004,7 @@ check_claude_tool_projection() {
         ;;
       *)
         if [ -d "$p" ]; then
-          # 최상위 디렉터리(design-mcp 등)는 concrete 디렉터리 유지
+          # Top-level tool directories remain concrete.
           if [ -L "$adapter_p" ]; then
             fail_msg "$adapter_p must be a concrete adapter-owned tool projection"
           else
@@ -3041,13 +3022,9 @@ check_claude_tool_projection() {
   done
 }
 
-# harness-layer-sync HLS-5·7 (Phase 1b): 공유층 재귀 census — 구조적 census-gap 봉합.
-# Phase 1 의 census 가 adapters/claude/{hooks,tools,utilities} 의 _최상위만_ 훑어 하위 디렉토리의
-# 물리 복사본(예: tools/memory/*)이 생존했다. 이 assert 는 세 층을 _모든 깊이_ 로 스캔해, 예외 목록
-# (wrapper/delta)에 없는 비-symlink 실파일이 존재하면 red 낸다 — "물리 복사본 생존" 클래스를 사람
-# vigilance 가 아니라 기계가 잡는다(§0.5 결정론, ADAPTATION.md §6 "explicit exemption, never silent").
-# collapse 된 파일은 심링크라 -type f 에 안 잡히고, concrete 예외는 exemptions.tsv 로 승인, CENSUS_DEFERRED
-# (동시 세션 소유)만 유예. 그 외 concrete = collapse 누락.
+# Recursively census every shared layer so nested concrete copies cannot evade
+# the collapsed/wrapper/delta contract. Only declared exceptions and temporary
+# CENSUS_DEFERRED ownership are allowed.
 check_claude_shared_layer_census() {
   for _layer in hooks tools utilities; do
     _root="adapters/claude/$_layer"
@@ -3151,10 +3128,7 @@ check_adaptation_inventory_native_surfaces() {
     return
   fi
 
-  # harness-layer-sync HLS-7: ledger 의 _파일목록_ 은 파생값(build-manifest)과 대조한다 — drift 시 red.
-  # 여기선 "Codex native hook surface" 행이 파일시스템에서 파생한 codex native hook 집합을 하나도
-  # 빠짐없이 참조하는지 검증한다. (spec §5: ADAPTATION_INVENTORY:33 이 3파일만 서술해 실제 7개와
-  # 어긋나던 ledger·실제·가드 3자 불일치를 파생 대조로 봉쇄. prose 사유는 그대로 두고 목록만 강제.)
+  # Compare ledger file lists against build-manifest-derived native hook surfaces.
   _derived_codex_hooks=$(python3 tools/build-manifest.py --adaptation-surface codex-hooks 2>/dev/null || true)
   if [ -z "$_derived_codex_hooks" ]; then
     fail_msg "could not derive Codex native hook surface for ADAPTATION_INVENTORY ledger cross-check"
@@ -3271,9 +3245,6 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'adapter liveness wrapper' core/OPERATIONS.md; then
     fail_msg "core/OPERATIONS.md must describe adapter-native liveness wrappers, not only the shared Claude-compatible dispatch-liveness helper"
   fi
-  if grep -Fq '능동 점검한다**: `bash <agent-home>/utilities/dispatch-liveness.sh`' core/OPERATIONS.md; then
-    fail_msg "core/OPERATIONS.md must not direct every runtime to the shared dispatch-liveness.sh path"
-  fi
   if ! grep -Fq 'Codex and OpenCode expose `preflight.sh distill-propose` as a no-tools worker tool-contract by default' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'Codex exits 69 until `CODEX_DISTILL_ENABLE=1`' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'OpenCode exits 69 until `OPENCODE_DISTILL_ENABLE=1`' core/ADAPTATION_INVENTORY.md; then
@@ -3293,8 +3264,8 @@ check_adaptation_inventory_native_surfaces() {
   fi
   if ! grep -Fq 'capabilities/analyze-user.md' core/MEMORY.md \
     || ! grep -Fq 'adapter-native `analyze-user` projection' core/MEMORY.md \
-    || ! grep -Fq 'root `skills/analyze-user/SKILL.md` 는 compatibility reference' core/MEMORY.md \
-    || grep -Fq '`skills/analyze-user/SKILL.md` 의 agent-중심 표는 동형 뷰' core/MEMORY.md; then
+    || ! grep -Fq 'root `skills/analyze-user/SKILL.md` is only a compatibility reference' core/MEMORY.md \
+    || grep -Fq 'The agent-centric table in `skills/analyze-user/SKILL.md` is an isomorphic view' core/MEMORY.md; then
     fail_msg "core/MEMORY.md must route analyze-user profile mapping through portable capability and adapter projections, not root Skill compatibility refs"
   fi
 }
@@ -3660,15 +3631,9 @@ warn_concrete_runtime_terms() {
   fi
 }
 
-# harness-layer-sync HLS-8 (§6.1): parity-loss = explicit warning, silent skip 금지.
-# 한 런타임에만 있는 기능(hook 실행 격리 등)이 다른 런타임에 없을 때, 그 손실이 adapter 표면에
-# 명시 unsupported/fallback 로 _신고_ 되는지 가드가 검증한다(존재 검증). research 결론: 어떤 도구도
-# 없는 런타임에서 hook 실행 격리를 진짜 재현 못 함 → skip+warning 이 최선(ruler 반면교사).
+# HLS-8 requires explicit unsupported/fallback warnings for parity loss.
 check_parity_loss_explicit_warnings() {
-  # 각 항목: "<설명>|<파일>|<명시 토큰>" — 토큰이 없으면 silent drop 으로 간주하고 red.
-  # 앵커: hook 실행 격리(§6.1 canonical 예), loop auto-run(drill/note), claude headless,
-  # allowedTools, settings.json MCP — 전부 one-runtime-only 표면.
-  # heredoc redirect(파이프 아님)로 while 을 현재 셸에서 돌려 fail_msg 의 fail=1 이 전파되게 한다.
+  # Each row is description|file|required-token; a missing token is a silent drop.
   while IFS='|' read -r _desc _file _token; do
     [ -n "$_desc" ] || continue
     if [ ! -f "$_file" ]; then
@@ -3689,12 +3654,9 @@ allowedTools(opencode)|adapters/opencode/ADAPTATION.md|allowedTools` is unsuppor
 PARITY_LOSS_EOF
 }
 
-# harness-layer-sync HLS-9 (§6.2): adapter bootstrap byte-budget 회귀. bootstrap 비대화가 런타임
-# truncation 을 silent 유발하는 것을 조기 감지 (GSD tests/workflow-size-budget.test.cjs 차용, byte 단위).
-# 상한 근거: Codex `project_doc_max_bytes` 기본 truncation cliff = 32768 을 codex 상한으로 앵커(넘으면
-# AGENTS.md 가 조용히 잘림). Claude/OpenCode 는 현재 실측 + 여유율(round to KiB)로 회귀 방지.
+# HLS-9 guards adapter bootstrap byte budgets against silent runtime truncation.
 check_bootstrap_byte_budget() {
-  # "<파일>|<byte 상한>|<근거>" — heredoc redirect 로 현재 셸 실행(fail 전파).
+  # Each row is file|byte-limit|rationale.
   while IFS='|' read -r _bf _cap _why; do
     [ -n "$_bf" ] || continue
     if [ ! -f "$_bf" ]; then
@@ -3706,19 +3668,28 @@ check_bootstrap_byte_budget() {
       fail_msg "bootstrap byte-budget: $_bf is $_sz bytes, over the $_cap-byte ceiling ($_why). Trim it or raise the ceiling with a documented reason (HLS-9/§6.2)"
     fi
   done <<'BYTE_BUDGET_EOF'
-adapters/claude/CLAUDE.md|28672|현재 ~22.8KB; CLAUDE.md 비확장 운영정책 + ~25% 여유(28KiB)
-adapters/codex/AGENTS.md|32768|Codex project_doc_max_bytes 기본 truncation cliff = 32768; 넘으면 silent 잘림
-adapters/opencode/AGENTS.md|24576|현재 ~11.8KB; always-load instructions footprint 여유(24KiB)
+adapters/claude/CLAUDE.md|28672|approximately 22.8KB plus 25 percent headroom
+adapters/codex/AGENTS.md|32768|Codex project_doc_max_bytes default truncation boundary
+adapters/opencode/AGENTS.md|24576|approximately 11.8KB with ample always-loaded headroom
 BYTE_BUDGET_EOF
 }
 
 check_language_neutrality_contract() {
+  # Scope this prose gate to user-facing root documentation. Hangul in explicit
+  # multilingual retrieval fixtures, tokenizer data, and drill/test corpora is
+  # functional data and is intentionally outside this check.
+  root_doc_hangul=$(rg -n '[가-힣]' README.md MANUAL.md INSTALL_LAYOUT.md 2>/dev/null || true)
+  if [ -n "$root_doc_hangul" ]; then
+    fail_msg "README.md, MANUAL.md, and INSTALL_LAYOUT.md must not contain Hangul prose:"
+    printf '%s\n' "$root_doc_hangul"
+  fi
+
   if ! grep -Fq '**Audience-language first**' roles/response-policy.md \
     || ! grep -Fq "default to the language the user is currently using to communicate" roles/response-policy.md; then
     fail_msg "roles/response-policy.md must define the audience-language-first artifact contract"
   fi
-  if ! grep -Fq '## 최우선 원칙 — 청중의 언어' adapters/claude/agents/editorial-team.md \
-    || ! grep -Fq '별도의 고정 locale·어미를 강제하지 않는다' adapters/claude/agents/editorial-team.md; then
+  if ! grep -Fq '## Highest-priority principle — audience language' adapters/claude/agents/editorial-team.md \
+    || ! grep -Fq 'Do not enforce a fixed locale or sentence ending.' adapters/claude/agents/editorial-team.md; then
     fail_msg "the editorial router must apply the audience-language contract before language-specific style rules"
   fi
 
@@ -3726,7 +3697,7 @@ check_language_neutrality_contract() {
     if grep -Fq 'Answer the user in Korean' "$bootstrap"; then
       fail_msg "$bootstrap must not impose a fixed response locale"
     fi
-    if ! grep -Eiq 'Audience-language first|청중 언어 우선' "$bootstrap"; then
+    if ! grep -Eiq 'Audience-language first' "$bootstrap"; then
       fail_msg "$bootstrap must realize the portable audience-language-first artifact contract"
     fi
   done
@@ -3760,7 +3731,7 @@ check_language_neutrality_contract() {
   fi
 
   if ! grep -Fq 'The agent decides contextually what is worth storing, retrieving, promoting, merging, or pruning.' core/MEMORY.md \
-    || ! grep -Fq 'Memory application (D-40)' core/DESIGN_PRINCIPLES.md \
+    || ! grep -Fq 'Memory follows D-40: the acting agent decides storing, retrieval, promotion, merge, and pruning.' core/DESIGN_PRINCIPLES.md \
     || ! grep -Fq 'tools/memory/recall.sh' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'tools/memory/recall.sh' adapters/opencode/bin/preflight.sh; then
     fail_msg "memory semantics must be agent-owned while adapters retain explicit retrieval helpers"

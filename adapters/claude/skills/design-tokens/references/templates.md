@@ -1,10 +1,10 @@
-# 실제 토큰 파일 템플릿
+# Token File Templates
 
-스택에 따라 둘 중 하나 또는 둘 다 작성.
+Create either or both files as appropriate for the stack.
 
 ## Option A: tokens.css (CSS variables)
 
-`<project_root>/styles/tokens.css` 또는 `<project_root>/app/tokens.css`:
+`<project_root>/styles/tokens.css` or `<project_root>/app/tokens.css`:
 
 ```css
 :root {
@@ -16,7 +16,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --color-neutral-50: #18181B;
-    /* dark mode 적응 */
+    /* dark-mode adaptation */
   }
 }
 ```
