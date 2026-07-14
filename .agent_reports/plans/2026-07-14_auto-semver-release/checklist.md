@@ -6,7 +6,7 @@
 - [x] Tighten release-builder version validation.
 - [x] Add public release policy and README link.
 - [x] Wire serialized main-push and manual-tag release workflow.
-- [ ] Run focused and full release/runtime regressions.
-- [ ] Inspect final diff and dry-run the repository release decision.
-- [ ] Commit, integrate, push, and observe the automatic GitHub Release.
-- [ ] Verify public release metadata and four assets.
+- [x] Run focused and full release/runtime regressions.
+- [x] Inspect final diff and dry-run the repository release decision.
+- [x] Commit, integrate, push, and observe the automatic GitHub Release.
+- [x] Verify public release metadata and four assets.

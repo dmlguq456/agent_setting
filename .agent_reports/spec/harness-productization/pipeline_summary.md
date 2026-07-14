@@ -8,6 +8,7 @@
 - explicit breaking/feature commit signal은 major/minor, 나머지 배포 동작 변경은 patch이며 docs/report/CI/test-only 변경은 release를 만들지 않는다.
 - 검증한 exact commit의 annotated tag와 네 asset을 한 직렬 workflow에서 게시해 `main`/release 분리를 자동으로 닫는다.
 - valid SemVer/prerelease tag의 수동 push는 maintainer override로 남기고 immutable tag 원칙을 적용한다.
+- 첫 자동 실행은 accumulated feature diff를 minor로 분류해 `v1.1.0`을 게시했으며 exact tag target과 네 public asset/checksum이 검증됐다.
 
 ## v7 변경
 

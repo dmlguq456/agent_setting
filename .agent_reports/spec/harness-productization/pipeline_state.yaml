@@ -5,7 +5,7 @@ spec_version: 8
 mode:
   - library
   - cli
-status: completed
+status: completed # v1.1.0 automatic release verified
 source_of_truth: .agent_reports/spec/harness-productization/prd.md
 inputs:
   - .agent_reports/research/cross-platform-agent-frameworks/analysis_summary.md

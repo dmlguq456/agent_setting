@@ -6,7 +6,7 @@ phases:
   spec: done                # v1 PRD 확정 (2026-07-12 — 하이브리드 구조·`harness` 명령 사용자 확정, currentness 검증 반영)
   scaffolding: done         # 브랜치 9792fd3 → main 머지 완료(4de50f6, 사용자 신호 2026-07-13)
   dev: done                 # 사이클 1(51/51)+2(53/53)+3(29/29, hook 5종 완결)+quick fix 2건(verify 채널-인지·liveness pid) — 전부 main 머지
-  release_delivery: done         # v5 release-bound bootstrap published and verified as v1.0.1
+  release_delivery: done         # v6 automatic SemVer policy published and verified as v1.1.0
 last_updated: 2026-07-14
 spec_version: 6
 inputs:
