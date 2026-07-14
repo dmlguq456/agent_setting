@@ -113,6 +113,10 @@ def validate(data: dict, root: Path = ROOT) -> None:
 
     capability_graph: dict[str, list[str]] = {}
     for identifier, spec in capabilities.items():
+        _expect(
+            not identifier.startswith("external-"),
+            f"capability {identifier} uses the reserved external extension prefix",
+        )
         _expect(isinstance(spec, dict), f"capability {identifier} must be an object")
         _expect(set(spec) == {"group", "family", "modes", "summary", "argument_shape", "requires"},
                 f"capability {identifier} fields do not match schema")

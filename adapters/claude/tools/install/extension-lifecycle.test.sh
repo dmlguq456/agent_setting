@@ -1,0 +1,1 @@
+../../../../tools/install/extension-lifecycle.test.sh

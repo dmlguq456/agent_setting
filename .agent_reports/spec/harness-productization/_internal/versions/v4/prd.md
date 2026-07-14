@@ -1,8 +1,8 @@
 # Harness Productization — PRD
 
 > 유형: component spec · library + CLI
-> 상태: phase 3 complete
-> 버전: v5 (2026-07-14)
+> 상태: phase 2 complete
+> 버전: v4 (2026-07-14)
 
 ## 0. 한 줄 정의
 
@@ -206,76 +206,6 @@ core에 외부 변수를 끌어들이지 않으면서 공개 스킬 생태계와
 - 외부 skill은 `external/<publisher>/<skill>` namespace와 source/ref/SHA/checksum lock을 사용한다.
 - script, hook, MCP, connector, package install은 각각 별도 승인 없이는 활성화하지 않는다.
 
-### v1 source와 manifest 계약
-
-- source는 URL이 아닌 존재하는 local directory만 받는다. directory가 Git worktree 안이면 현재 local checkout의 repo root, ref, HEAD SHA, dirty 여부를 기록하지만 fetch·pull·clone은 실행하지 않는다.
-- source root에는 `extension.json`과 하나의 instruction skill이 있어야 한다. manifest 최소 필드는 `schema_version=1`, `publisher`, `name`, `version`, `license`, `skill_path`, `requirements`다.
-- `publisher`와 `name`은 lowercase alphanumeric + single-hyphen 형식이다. canonical id는 `external/<publisher>/<name>`이다. 세 runtime의 flat discovery id는 `external-<readable>-<sha256(canonical-id)[:12]>`이며 전체 64자 이하가 되도록 readable 부분만 경계에서 truncate한다. 이 physical id는 서로 다른 canonical id가 같은 flat name이 되는 충돌을 막는다.
-- v1 extension은 한 manifest당 skill 하나다. 여러 skill bundle, remote source, archive, marketplace catalog, registry client는 범위 밖이다.
-- canonical source는 수정하지 않는다. add/update는 검사된 Markdown instruction 파일만 harness-owned immutable snapshot으로 materialize한다.
-
-`requirements`는 다음 다섯 배열을 가진다.
-
-```json
-{
-  "scripts": [],
-  "hooks": [],
-  "mcp": [],
-  "connectors": [],
-  "packages": []
-}
-```
-
-선언과 실제 file census가 다르면 둘 다 보고한다. `scripts`, `hooks`, `mcp`, `connectors`는 v1에서 항상 inactive이며 projection에 포함하지 않는다. `packages`가 하나라도 있으면 add/update는 mutation 전에 `external-dependency-required`로 중단한다.
-
-### CLI 계약
-
-```text
-harness extension inspect <local-source> [--json]
-harness extension add <local-source> [--runtime codex|claude|opencode|all] [--json]
-harness extension update <external/publisher/skill> [--source <local-source>] [--json]
-harness extension remove <external/publisher/skill> [--json]
-```
-
-- `inspect`는 read-only이며 manifest validity, provenance, license, source checksum, secret finding, symlink finding, declared/detected surface, external dependency, runtime parity를 반환한다.
-- `add`는 inspect를 내부에서 다시 실행하고 모든 blocking finding을 mutation 전에 거부한다. source root를 directory fd로 고정한 `lstat`/`O_NOFOLLOW` census의 `extension.json` bytes를 manifest 입력으로 사용하고, staging materialize → staging bytes 재검사 → canonical identity·manifest digest·source checksum 재확인까지 통과한 뒤에만 선택 runtime 전체를 한 transaction으로 projection한다.
-- `update`는 lock의 기존 source를 기본 사용하며 `--source`로 다른 local checkout을 명시할 수 있다. checksum이 같으면 no-op이다.
-- `remove`는 registry가 소유하고 현재 lock과 일치하는 projection만 제거한다. 사용자가 교체한 path나 다른 target은 ownership conflict로 남기고 임의 삭제하지 않는다.
-- extension command는 core `verify`, runtime `doctor`, built-in profile의 성공 조건에 들어가지 않는다. extension failure는 별도 nonzero exit와 report로만 격리한다.
-
-### Provenance lock과 저장 위치
-
-- registry: `${XDG_STATE_HOME:-~/.local/state}/agent-harness/extensions/registry.json`
-- immutable snapshot: `${XDG_DATA_HOME:-~/.local/share}/agent-harness/extensions/<publisher>/<skill>/<checksum>/`
-- XDG/runtime override는 절대 경로만 허용한다. Codex는 `$CODEX_HOME`, Claude Code는 `$CLAUDE_CONFIG_DIR`, OpenCode는 `$XDG_CONFIG_HOME/opencode`를 해석하며 add 시 확정된 runtime root를 lock에 기록한다. update/remove 시 root가 달라졌으면 기존 소유권을 추측하지 않고 중단한다.
-- lock 최소 필드: canonical id, absolute source, source kind, Git root/ref/SHA/dirty, source checksum, projection checksum, manifest version/license, snapshot root, selected runtimes, runtime root, runtime별 destination/status/parity loss, created/updated timestamp.
-- digest는 versioned canonical encoding(`source-digest-v1`, `projection-digest-v1`)으로 path/type/link-target/content를 묶는다. source checksum과 exact projected-tree checksum을 분리하고 snapshot key는 둘의 composite digest다. 기존 snapshot은 재계산 결과가 lock과 정확히 맞고 symlink가 없을 때만 재사용한다.
-- registry, transaction journal, snapshot directory 자체가 symlink면 fail closed한다. source symlink는 root-anchored directory-fd census로 전수 검사해 source root 밖 escape, broken target, cycle을 blocking finding으로 처리하고 projection snapshot에는 symlink를 보존하지 않는다. Snapshot lookup, digest, cleanup도 XDG data root부터 각 component를 no-follow로 열고 root-anchored deletion을 사용한다. unreadable, file-count/size limit 초과도 skip하지 않고 blocking finding이다.
-- secret 검사 결과에는 pattern id와 relative path만 남기며 matched value를 출력·lock 저장하지 않는다. private-key/token 형식의 high-confidence finding은 add/update를 막는다.
-- registry는 삭제 권한의 진실원천이 아니다. canonical id와 runtime에서 destination/native id를 다시 계산하고, snapshot path도 검증된 XDG data root와 checksum에서 다시 계산한다. 저장된 arbitrary path는 mutation에 사용하지 않는다.
-
-### Runtime projection과 parity 계약
-
-| Runtime | v1 projection | session action | plugin/runtime-specific surface |
-|---|---|---|---|
-| Codex | `$CODEX_HOME/skills/<physical-id>` → immutable snapshot | skill 재호출 또는 새 session | plugin/hook/MCP는 inactive |
-| Claude Code | `~/.claude/skills/<physical-id>` → immutable snapshot | watched dir이면 재호출, top-level dir 최초 생성 시 새 session | plugin namespace·agent·hook·MCP는 inactive |
-| OpenCode | `~/.config/opencode/skills/<physical-id>` → immutable snapshot | restart-required fallback | JS/TS plugin·MCP·custom tool은 inactive |
-
-- source `SKILL.md`의 instruction body는 보존하되 snapshot frontmatter의 `name`은 hashed physical id로 생성한다. source name은 manifest name과 일치해야 한다.
-- instruction-only extension은 세 runtime에서 `parity=full`이다. runtime-specific/실행 surface가 있으면 skill projection과 별개로 `parity=degraded`, `inactive_surfaces`, runtime별 loss reason을 반환한다.
-- physical name은 canonical namespace의 projection mapping이지 source identity 변경이 아니다. registry와 user-facing 출력은 항상 canonical id를 우선한다.
-
-### Transaction과 ownership 계약
-
-1. add/update/remove 전에 모든 destination과 current registry ownership을 preflight한다.
-2. invocation 전체에 XDG state file lock을 잡고 registry schema/generation을 검증해 concurrent lost update를 막는다.
-3. snapshot은 temp directory에서 staging 재검사와 projection checksum을 확인한 뒤 atomic rename으로 publish한다.
-4. 첫 mutation 전에 registry 원본 bytes·hash·generation, 예상 after hash/generation, 모든 runtime link 상태를 XDG transaction journal에 기록한다. 다음 extension invocation은 incomplete journal을 먼저 복구하되 현재 registry가 기록된 before 또는 expected-after state일 때만 복구하고, 다른 generation/content면 `recovery-conflict`로 fail closed한다.
-5. runtime link는 temp symlink + atomic replace로 전환한다. multi-runtime 중간 실패나 registry write 실패 시 journal에서 역순 복구한다.
-6. registry와 link commit 뒤 journal을 committed로 전환한 후에만 이전/미사용 snapshot을 정리한다. source, runtime-owned config, credential, session, cache, built-in activation state는 건드리지 않는다.
-7. built-in capability id에는 `external-` prefix를 예약한다. add/update는 built-in manifest, registry, 세 destination을 함께 preflight한다.
-
 ### 구현 범위
 
 1. built-in pack manifest와 profile resolver 통합.
@@ -284,8 +214,6 @@ harness extension remove <external/publisher/skill> [--json]
 4. ownership-aware uninstall/rollback과 supply-chain 검사.
 5. instruction-only portable fixture 1개와 runtime-specific fixture 1개.
 
-기존 `harness-manifest.json`의 five-pack/profile resolver는 Phase 2 결과를 그대로 재사용하고 Phase 3 회귀 테스트에서 local-only invariant를 확인한다. extension registry를 canonical built-in manifest에 합치지 않는다.
-
 ### 수용 기준
 
 - 빈 network namespace에서도 built-in pack과 local extension lifecycle이 동작한다.
@@ -293,23 +221,10 @@ harness extension remove <external/publisher/skill> [--json]
 - 외부 extension 실패가 kernel 시작, doctor, built-in capability 실행을 깨지 않는다.
 - dependency download가 필요하면 자동 실행하지 않고 `external-dependency-required`로 중단한다.
 - unsupported/parity loss를 성공으로 위장하지 않는다.
-- malicious symlink, secret token, invalid namespace/path, destination ownership conflict가 mutation 전에 거부된다.
-- multi-runtime failure injection 후 registry, prior projection, built-in activation state가 byte-for-byte 복구된다.
-- instruction-only fixture는 세 runtime 모두 full parity이고 runtime-specific fixture는 inactive surface와 degraded parity를 runtime별로 정확히 보고한다.
-- source TOCTOU, tampered registry/snapshot, concurrent writer, incomplete transaction journal이 fail closed 또는 이전 상태 복구로 끝난다.
-- dangling/corrupt external extension과 extension-only+legacy-plugin 조합이 native built-in duplicate로 오인되지 않고 core doctor 결과를 바꾸지 않는다.
 
 ### 종료 게이트
 
 두 fixture의 offline lifecycle, security boundary, rollback, 세 runtime parity report가 통과하면 v1 productization을 완료한다.
-
-### 구현 결과 — 2026-07-14
-
-- `harness extension inspect|add|update|remove`를 기존 installer CLI에 추가하고 JSON/human exit 계약을 고정했다.
-- instruction-only snapshot만 projection하며 script, hook, MCP, connector, plugin은 inactive/parity loss로 남고 package dependency는 mutation 전에 차단된다.
-- source/manifest TOCTOU, secret, symlink escape, XDG parent escape, destination collision, registry/snapshot tamper, runtime-root drift, concurrent writer, injected rollback, crash-journal CAS recovery를 isolated HOME E2E로 검증했다.
-- Codex·Claude Code·OpenCode runtime skill projection은 각 runtime override를 따르고, built-in profile/runtime activation state와 core doctor는 extension 실패 도메인에서 격리된다.
-- 독립 구현 리뷰의 HIGH 3건과 MEDIUM 4건을 모두 폐쇄했으며 남은 HIGH/MEDIUM finding은 없다.
 
 ## 9. 순서와 의존성
 
@@ -344,18 +259,10 @@ Phase 3: optional external extension bridge
 10. 신규 activation 기본 profile은 `builder`다. `starter`와 `full`은 명시적으로 선택한다.
 11. canonical machine source는 `harness-manifest.json`이며 root `manifest.json`과 runtime metadata는 generated output이다.
 12. core projection의 단일 build/check entrypoint는 `tools/generate.py`다. marketplace bundle generator는 이 경로 밖에 둔다.
-13. extension v1 source는 local directory 또는 그 directory를 포함하는 existing local Git checkout뿐이다.
-14. extension canonical id는 `external/<publisher>/<skill>`, native discovery id는 readable prefix + canonical-id hash suffix의 64자 이하 physical id다.
-15. extension state/snapshot은 XDG state/data 아래 harness-owned 영역에 있고 built-in manifest·source와 분리한다.
-16. v1은 Markdown instruction skill만 projection하며 script/hook/MCP/connector/plugin/package를 활성화하지 않는다.
-17. package dependency가 있으면 install을 시도하지 않고 `external-dependency-required`로 중단한다.
-18. extension 실패와 drift는 core verify/runtime doctor의 성공 조건과 격리한다.
-19. add/update/remove는 multi-runtime transaction과 ownership preflight를 적용한다.
-20. remote fetch, marketplace, archive, dependency resolver, 실행 surface 승인 UI는 v1 범위 밖이다.
 
 ### 열린 결정
 
-없음. Phase 3 v1 source, namespace, projection, state, security, parity, rollback 계약을 위에서 고정했다.
+없음. Phase 3의 extension 세부 결정은 Phase 3 cycle에서 해당 범위의 spec 변경으로 연다.
 
 ## 11. 주요 위험과 완화
 
@@ -372,6 +279,6 @@ Phase 3: optional external extension bridge
 
 - Cycle 1 — 완료: 세 runtime activation census, 상태 schema, linked activate/status/doctor, duplicate cleanup, rollback.
 - Cycle 2 — 완료: canonical manifest/generator, generated consumer migration, profile resolver와 quickstart.
-- Cycle 3 — 완료: built-in pack 계약을 사용하는 offline extension lifecycle, provenance/security/parity.
+- Cycle 3 — 다음: built-in pack 계약을 사용하는 offline extension lifecycle, provenance/security/parity.
 
 Cycle 3 착수 전 `autopilot-code`가 세 runtime의 현재 extension surface와 local-path security boundary를 공식 문서와 로컬 realization에서 다시 확인하고 이 PRD를 source of truth로 읽어야 한다.

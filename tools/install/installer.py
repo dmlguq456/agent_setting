@@ -29,6 +29,7 @@ import manifest
 import verifier
 import bootstrap
 import runtime_activation
+import extensions
 from drivers import get_driver, RUNTIMES
 
 # exit code 상수 — PRD [cli] "### Exit code" 표와 1:1
@@ -121,6 +122,43 @@ def build_parser():
     p_runtime_doctor = runtime_sub.add_parser("doctor", help="projection/duplicate/freshness 진단")
     runtime_common(p_runtime_doctor)
     p_runtime_doctor.add_argument("--strict", action="store_true")
+
+    p_extension = sub.add_parser(
+        "extension", help="offline instruction-only external extension lifecycle"
+    )
+    extension_sub = p_extension.add_subparsers(
+        dest="extension_command", required=True, parser_class=_UsageExitParser
+    )
+    p_extension_inspect = extension_sub.add_parser(
+        "inspect", help="inspect a local extension source without mutation"
+    )
+    p_extension_inspect.add_argument("source")
+    p_extension_inspect.add_argument("--json", action="store_true")
+
+    p_extension_add = extension_sub.add_parser(
+        "add", help="inspect, snapshot, and project a local extension"
+    )
+    p_extension_add.add_argument("source")
+    p_extension_add.add_argument(
+        "--runtime",
+        action="append",
+        choices=[*RUNTIMES, "all"],
+        dest="extension_runtimes",
+    )
+    p_extension_add.add_argument("--json", action="store_true")
+
+    p_extension_update = extension_sub.add_parser(
+        "update", help="refresh an installed extension from a local source"
+    )
+    p_extension_update.add_argument("canonical_id")
+    p_extension_update.add_argument("--source")
+    p_extension_update.add_argument("--json", action="store_true")
+
+    p_extension_remove = extension_sub.add_parser(
+        "remove", help="remove only registry-owned extension projections"
+    )
+    p_extension_remove.add_argument("canonical_id")
+    p_extension_remove.add_argument("--json", action="store_true")
 
     return p
 
@@ -561,6 +599,91 @@ def cmd_runtime(args):
     return _runtime_emit_shape(args.runtime_command, reports, exit_code, lines)
 
 
+def cmd_extension(args):
+    operation = args.extension_command
+    try:
+        if operation == "inspect":
+            report = extensions.inspect_source(args.source)
+            blocked = report["status"] == "blocked"
+            return {
+                "operation": operation,
+                "extension": report,
+                "checks": report["findings"],
+                "drift": [],
+                "exit": EXIT_VERIFY_FAIL if blocked else EXIT_OK,
+                "lines": [
+                    f"extension inspect: {report['status']}: {report['canonical_id']}",
+                    f"checksum: {report['source_checksum']}",
+                    (
+                        "parity: "
+                        + ", ".join(
+                            f"{runtime}={value['status']}"
+                            for runtime, value in report["parity"].items()
+                        )
+                    ),
+                    (
+                        "inactive: "
+                        + (",".join(report["inactive_surfaces"]) or "none")
+                    ),
+                    f"findings: {len(report['findings'])}",
+                    (
+                        f"next: extension add {report['source']}"
+                        if not blocked
+                        else "next: resolve blocking findings and inspect again"
+                    ),
+                ],
+            }
+        if operation == "add":
+            result = extensions.add(args.source, args.extension_runtimes)
+        elif operation == "update":
+            result = extensions.update(args.canonical_id, args.source)
+        elif operation == "remove":
+            result = extensions.remove(args.canonical_id)
+        else:
+            raise extensions.ExtensionError(
+                "unsupported-operation", f"unsupported extension operation: {operation}"
+            )
+        changed = "changed" if result["changed"] else "unchanged"
+        return {
+            "operation": operation,
+            "extension": result,
+            "checks": [],
+            "drift": [],
+            "exit": EXIT_OK,
+            "lines": [
+                f"extension {operation}: {changed}: {result['canonical_id']}",
+                f"checksum: {result['snapshot_key']}",
+                (
+                    "projection: "
+                    + ", ".join(
+                        f"{runtime}={destination}"
+                        for runtime, destination in result["runtime_projection"].items()
+                    )
+                ),
+                f"inactive: {','.join(result['inactive_surfaces']) or 'none'}",
+                f"snapshot: {result['snapshot'] or 'removed'}",
+                (
+                    "next-session: "
+                    + ", ".join(
+                        f"{runtime}={action}"
+                        for runtime, action in result["next_session_action"].items()
+                    )
+                ),
+            ],
+        }
+    except extensions.ExtensionError as exc:
+        exit_code = EXIT_VERIFY_FAIL if operation == "inspect" else EXIT_BLOCKED
+        return {
+            "operation": operation,
+            "extension": None,
+            "checks": [{"id": exc.reason, "ok": False, "detail": str(exc)}],
+            "drift": [],
+            "exit": exit_code,
+            "reason": exc.reason,
+            "lines": [f"extension {operation}: blocked ({exc.reason}): {exc}"],
+        }
+
+
 COMMANDS = {
     "install": cmd_install,
     "verify": cmd_verify,
@@ -568,6 +691,7 @@ COMMANDS = {
     "status": cmd_status,
     "uninstall": cmd_uninstall,
     "runtime": cmd_runtime,
+    "extension": cmd_extension,
 }
 
 

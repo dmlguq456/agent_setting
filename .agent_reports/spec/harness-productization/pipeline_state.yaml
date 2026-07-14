@@ -1,11 +1,11 @@
 project_name: harness-productization
 created: 2026-07-14
 updated: 2026-07-14
-spec_version: 4
+spec_version: 5
 mode:
   - library
   - cli
-status: phase_2_complete
+status: completed
 source_of_truth: .agent_reports/spec/harness-productization/prd.md
 inputs:
   - .agent_reports/research/cross-platform-agent-frameworks/analysis_summary.md
@@ -16,7 +16,7 @@ inputs:
 phases:
   phase_1_cross_runtime_source_activation: completed
   phase_2_manifest_projections_profiles: completed
-  phase_3_local_first_optional_extensions: pending
+  phase_3_local_first_optional_extensions: completed
 locked_decisions:
   - phase_1_covers_codex_claude_and_opencode
   - linked_is_the_maintainer_default
@@ -35,5 +35,15 @@ locked_decisions:
   - harness_manifest_is_the_canonical_machine_source
   - core_projection_uses_one_generator_entrypoint
   - marketplace_bundles_are_outside_core_checks
+  - extension_v1_accepts_local_directories_only
+  - extension_identity_uses_external_publisher_skill_namespace
+  - extension_projection_is_instruction_only
+  - extension_state_is_xdg_owned_and_separate_from_builtins
+  - external_packages_block_without_install
+  - executable_surfaces_stay_inactive
+  - extension_lifecycle_is_transactional_and_ownership_aware
+  - extension_manifest_and_snapshot_io_are_root_anchored_and_no_follow
+  - extension_journal_recovery_uses_raw_registry_bytes_and_generation_cas
+  - extension_runtime_roots_are_locked_at_add_time
 open_decisions: []
-next_action: run_autopilot_code_for_phase_3
+next_action: maintain_regression_gates_and_collect_external_usage_evidence

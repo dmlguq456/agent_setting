@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "publisher": "fixture-labs",
+  "name": "claude-aware",
+  "version": "1.0.0",
+  "license": "MIT",
+  "skill_path": "skill",
+  "requirements": {
+    "scripts": [],
+    "hooks": [
+      "hooks/hooks.json"
+    ],
+    "mcp": [],
+    "connectors": [],
+    "packages": []
+  }
+}

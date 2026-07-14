@@ -1,12 +1,12 @@
 # Harness Productization — Pipeline Summary
 
-> updated: 2026-07-14 · status: phase 2 complete · spec v4
+> updated: 2026-07-14 · status: complete · spec v5
 
 ## 결정된 개선 순서
 
 1. **Cross-Runtime Source Activation — complete**: Codex·Claude Code·OpenCode의 active source/revision을 노출하고 linked와 packaged를 배타적으로 운영한다.
 2. **Manifest + Generated Projections + Profiles — complete**: machine metadata를 하나의 manifest로 모으고 starter/builder/full로 runtime discovery 크기를 조절한다.
-3. **Local-First Packs + Optional Extensions — next**: built-in은 외부 의존 없이 유지하고 외부 skill은 격리된 선택 기능으로만 조합한다.
+3. **Local-First Packs + Optional Extensions — complete**: built-in은 외부 의존 없이 유지하고 외부 skill은 격리된 선택 기능으로만 조합한다.
 
 공개 채택은 내부 작업으로 만들어낼 수 없으므로 이 spec의 자동 검증은 회귀 방지와 재현 가능성만 주장한다.
 
@@ -37,6 +37,23 @@
 - Codex/Claude marketplace bundle은 명시적 legacy 배포 산출물이며 core 성공 조건이 아니다.
 - linked repo 변경이 discovery path에 보이는 것과 현재 session이 instruction을 다시 읽는 것은 별개이며 `session_action`이 그 차이를 보고한다.
 
+## v5 Phase 3 계약
+
+- 외부 source는 local directory/existing local Git checkout만 받으며 fetch·clone·marketplace·archive를 지원하지 않는다.
+- `extension.json` 한 개와 instruction skill 한 개를 `external/<publisher>/<skill>`로 lock하고 runtime에는 flat safe name으로 projection한다.
+- XDG state registry와 immutable data snapshot이 source/ref/SHA/checksum, license, runtime destinations, parity loss를 소유한다.
+- inspect가 secret, symlink escape, scripts/hooks/MCP/connectors/packages를 mutation 전에 전수 보고한다.
+- v1은 Markdown instruction만 projection한다. 실행 surface는 항상 inactive이고 package requirement는 `external-dependency-required`로 add/update를 막는다.
+- add/update/remove는 multi-runtime atomic rollback과 exact ownership check를 사용하며 core verify/runtime doctor와 실패 도메인을 분리한다.
+
+## Phase 3 완료 근거
+
+- local instruction-only/runtime-specific fixture의 inspect→add→no-op update→changed update→remove lifecycle이 세 runtime에서 통과했다.
+- manifest/census 원자성, root-anchored no-follow snapshot I/O, secret/package/symlink 차단, destination ownership, snapshot/registry tamper, runtime-root drift를 회귀 테스트로 고정했다.
+- registry 원본 bytes/hash/generation CAS와 transaction journal이 injected failure 및 hard-crash 뒤 이전 상태를 복구하고 foreign registry state는 덮어쓰지 않는다.
+- Phase 1/2 profile/runtime activation, generated projections, adaptation boundary/negative guard, Codex doctor가 모두 통과했다.
+- 독립 risk review가 이전 HIGH 3건·MEDIUM 4건의 폐쇄와 남은 HIGH/MEDIUM 0건을 확인했다.
+
 ## 다음 작업
 
-[PRD](./prd.md)의 Phase 3 `Local-First Packs and Optional Extension Bridge`만 별도 `autopilot-code` cycle로 연다. 기존 built-in pack/profile resolver를 재사용하고, local path extension의 inspect-first·provenance·rollback·parity-loss 계약을 추가한다.
+공개 사용 근거는 내부 구현으로 대체하지 않는다. 이후에는 실제 외부 extension 사용 사례와 실패 데이터를 수집하되, remote marketplace/package execution은 별도 spec 없이는 core 경로에 넣지 않는다.

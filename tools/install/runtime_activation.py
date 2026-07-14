@@ -651,8 +651,43 @@ def _native_present(runtime: str, scope: str = "global") -> bool:
     for candidate in candidates:
         if not candidate.is_symlink():
             continue
-        target = str(candidate.resolve(strict=False))
-        if "agent_setting" in target or "agent-harness" in target:
+        if _native_harness_target(runtime, candidate):
+            return True
+    return False
+
+
+def _native_harness_target(runtime: str, candidate: Path) -> bool:
+    """Recognize only a canonical harness projection, never a path substring."""
+    try:
+        target = candidate.resolve(strict=False)
+    except RuntimeError:
+        return False
+    for root in (target, *target.parents):
+        if not (root / "harness-manifest.json").is_file():
+            continue
+        try:
+            relative = target.relative_to(root).parts
+        except ValueError:
+            continue
+        allowed = {
+            "codex": (
+                ("adapters", "codex", "skills"),
+                ("adapters", "codex", "agents"),
+                ("codex_setting", "codex-skills"),
+                ("codex_setting", "codex-agents"),
+            ),
+            "claude": (
+                ("adapters", "claude", "skills"),
+                ("adapters", "claude", "agents"),
+                ("claude_setting", "skills"),
+                ("claude_setting", "agents"),
+            ),
+            "opencode": (
+                ("adapters", "opencode", "skills"),
+                ("adapters", "opencode", "plugins"),
+            ),
+        }[runtime]
+        if any(relative[: len(prefix)] == prefix for prefix in allowed):
             return True
     return False
 
