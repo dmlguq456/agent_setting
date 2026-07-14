@@ -19,7 +19,7 @@
 
 ## 언어 규칙
 - `<artifact-root>/analysis_project/` 산출 문서는 **영어**
-- 사용자 설명은 자연스러운 한국어 (번역체 회피)
+- User-facing explanations follow the user's communication language and should read naturally rather than as literal translations.
 
 ## Phase 1: Codebase Analysis (code mode)
 범위 결정:

@@ -40,7 +40,7 @@ metadata:
 - `/autopilot-design <args>` slash 직접 입력 — 컨펌 skip
 
 ## Language Rule
-- Korean output, English code identifiers, English design tokens (color names, font families).
+- User-facing output follows the user's communication language; preserve code identifiers and canonical design-token values or names.
 
 ## Argument Parsing
 

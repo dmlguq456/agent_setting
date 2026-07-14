@@ -1,5 +1,5 @@
 ---
-description: "Run the portable post-it capability through the OpenCode adapter. Meaning: 프로젝트·cross-project 기록과 handoff를 working memory로 남긴다."
+description: "Run the portable post-it capability through the OpenCode adapter. Meaning: Store project/cross-project notes and handoffs in working memory."
 ---
 
 Use the OpenCode adapter realization of portable capability `post-it`.

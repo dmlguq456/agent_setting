@@ -9,7 +9,7 @@ This is the portable capability contract for `code-plan`. It defines runtime-neu
 | Identifier | `code-plan` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity에서 파생된 rigor에 맞는 plan-check gate를 수행한다. |
+| Portable meaning | Analyze code, write a detailed implementation plan, and run the plan-check gate at the rigor derived from intensity. |
 | Argument shape | `<task description> [--intensity direct|quick|standard|strong|thorough|adversarial]` |
 
 ## Invocation Semantics

@@ -9,7 +9,7 @@ This is the portable capability contract for `code-refine`. It defines runtime-n
 | Identifier | `code-refine` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 사용자 메모·plan-check 피드백·검증 실패 메모를 반영해 기존 plan을 정정한다. |
+| Portable meaning | Revise an existing plan using user notes, plan-check feedback, and verification-failure notes. |
 | Argument shape | `<plan name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]` |
 
 ## Invocation Semantics

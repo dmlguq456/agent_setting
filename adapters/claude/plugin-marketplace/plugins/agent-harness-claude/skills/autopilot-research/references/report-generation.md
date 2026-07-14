@@ -31,8 +31,8 @@ Agent(subagent_type="연구팀"):
    ## Report Structure (mode-specific)
 
    The report set differs per mode. Common rules across all modes:
-   - **Korean prose** (default). autopilot-research 의 보고서는 _한국어 사용자가 직접 읽고 검토_ 하는 산출물이라 _주 언어 한국어 단일_ 이 자연. 사용자가 task description 에서 _영문 보고서_ 를 명시한 경우만 영문 산출.
-   - Technical terms stay in English (논문 제목·저자·학회·모델·약자·지표 영어 그대로) — 한국어 본문 + 영문 도메인 용어 혼합 (판교체 와 다름: 판교체는 _한국어로 자연스럽게 쓸 수 있는_ 일반 명사를 굳이 영어로 박는 패턴).
+   - **Audience language**: default to the user's communication language. An explicit audience, publication, or artifact-language requirement overrides that default.
+   - Preserve paper titles, author names, venues, model names, acronyms, metrics, and other canonical domain terms when translation would reduce precision.
    - Save each report file to root `{artifact_dir}/{filename}.md`. _internal/en/ 같은 분리 경로 안 씀 — 단일 산출.
    - Every comparison table ends with bold **Takeaway** line
    - Numbers/claims sourced only from analysis_summary / cards — NO fabrication
@@ -103,7 +103,7 @@ Agent(subagent_type="연구팀"):
    - **research** — "연구 방향", "research direction", "open problem", "hypothesis", "what's next" → research direction scoping
    - **adopt** — "기술 도입", "선택", "어떤 모델 써야", "production 적용" → technology selection / adoption decision
 
-   **Template by goal** (always end with a Cross-References section + 5-7 line Korean summary):
+   **Template by goal** (always end with a Cross-References section plus a 5-7 line summary in the selected report language):
 
    #### Goal: build — Implementation Roadmap
    - Architecture decision matrix (5-8 decisions): each with Option A/B/C + Recommendation + reasoning. Decision keys depend on domain (e.g., backbone, loss, training paradigm, deployment target, data pipeline).
@@ -268,7 +268,7 @@ Agent(subagent_type="연구팀"):
    - Code snippets in 06_implementation.md must be runnable Python
    - Numbers only from card files / analysis_summary — NO fabrication
    - Do NOT return report content in response — write files only
-   Return file paths (under `{artifact_dir}/`) + 3-5 line Korean summary."
+   Return file paths (under `{artifact_dir}/`) plus a 3-5 line summary in the user's communication language."
 ```
 
 #### Step 4a-Polish: Editorial polish (편집팀 모드 B — optional)

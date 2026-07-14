@@ -9,12 +9,17 @@ This is the portable capability contract for `design-components`. It defines run
 | Identifier | `design-components` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | UI component/mockup 구현과 preview artifact를 만든다. |
+| Portable meaning | Build UI components/mockups and preview artifacts. |
 | Argument shape | `<design path or app path>` |
 
 ## Invocation Semantics
 
-Component / visual asset creation — invokes 디자인팀 maker mode. Produces shadcn/Tailwind components (ui), composed full-screen pages (webapp), slide visual guides (slide), SVG icons (icon), or mermaid/direct-SVG/excalidraw diagrams (diagram). Every output is rendered and visually self-verified (render → Read → fix loop), and can be emitted as a self-contained single-file HTML preview artifact (--artifact standalone).
+Component and visual-asset creation through the design role's maker mode.
+Produce shadcn/Tailwind components (`ui`), composed full-screen pages
+(`webapp`), slide visual guides (`slide`), SVG icons (`icon`), or
+Mermaid/direct-SVG/Excalidraw diagrams (`diagram`). Render and visually
+self-verify every output through a render→read→fix loop. With
+`--artifact standalone`, emit a self-contained single-file HTML preview.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 

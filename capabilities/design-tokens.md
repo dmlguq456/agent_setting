@@ -9,7 +9,7 @@ This is the portable capability contract for `design-tokens`. It defines runtime
 | Identifier | `design-tokens` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 색·타이포·간격 등 디자인 토큰을 정의한다. |
+| Portable meaning | Define design tokens such as color, typography, and spacing. |
 | Argument shape | `<design path or app path>` |
 
 ## Invocation Semantics

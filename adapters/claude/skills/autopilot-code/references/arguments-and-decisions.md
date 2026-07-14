@@ -57,7 +57,7 @@ When present, the orchestrator **pauses** at refine points so the user can add t
 **Pause behavior** (dev mode):
 1. After 연구팀 writes memos at Step 2 (or after failure memos are written in the test-failure retry loop), do NOT invoke code-refine.
 2. Update plan frontmatter: `user_refine: true`, `paused_at_stage: refine`.
-3. Print to user (Korean) the memo file path and the resume command:
+3. Print the memo file path and resume command in the user's communication language:
    ```
    연구팀 메모가 {ko_plan_path}에 기록되었습니다.
    직접 메모를 추가한 뒤 다음 명령으로 재개하세요:

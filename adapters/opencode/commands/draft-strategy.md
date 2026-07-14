@@ -1,5 +1,5 @@
 ---
-description: "Run the portable draft-strategy capability through the OpenCode adapter. Meaning: 문서 전략 초안 작성. 자료 기반으로 writing plan을 만든다."
+description: "Run the portable draft-strategy capability through the OpenCode adapter. Meaning: Create an initial document strategy and evidence-based writing plan."
 ---
 
 Use the OpenCode adapter realization of portable capability `draft-strategy`.
@@ -20,7 +20,7 @@ This is adapter-owned output generated from `capabilities/draft-strategy.md`, no
 
 Portable contract excerpt:
 
-- Invocation semantics: Create an initial document strategy. Internal mode enum 6종 (rebuttal / paper / review / report / proposal / presentation) — autopilot-draft 의 form-first 3-mode (paper / presentation / doc) 에서 doc intent (자연어 키워드 → rebuttal-response / review / report / proposal / generic) 가 본 sub-skill 의 직접 mode 라벨로 변환되어 전달됨. 직접 호출 시는 사용자가 첫 인자로 6-mode 중 하나를 명시. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: Create an initial document strategy. The internal mode enum has six values: rebuttal, paper, review, report, proposal, and presentation. Autopilot-draft's form-first paper/presentation/doc modes convert doc intent from natural-language keywords (rebuttal response, review, report, proposal, or generic) into one of these direct sub-skill mode labels. For direct invocation, require the user to provide one of the six modes as the first argument. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 User arguments from OpenCode: `$ARGUMENTS`

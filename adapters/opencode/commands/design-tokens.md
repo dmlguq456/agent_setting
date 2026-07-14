@@ -1,5 +1,5 @@
 ---
-description: "Run the portable design-tokens capability through the OpenCode adapter. Meaning: 색·타이포·간격 등 디자인 토큰을 정의한다."
+description: "Run the portable design-tokens capability through the OpenCode adapter. Meaning: Define design tokens such as color, typography, and spacing."
 ---
 
 Use the OpenCode adapter realization of portable capability `design-tokens`.

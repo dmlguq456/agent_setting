@@ -1,5 +1,5 @@
 ---
-description: "Run the portable code-report capability through the OpenCode adapter. Meaning: 코드 작업 사이클 결과를 사용자-facing 보고서로 조립한다."
+description: "Run the portable code-report capability through the OpenCode adapter. Meaning: Assemble code-cycle results into a user-facing report."
 ---
 
 Use the OpenCode adapter realization of portable capability `code-report`.

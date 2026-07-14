@@ -10,7 +10,7 @@ metadata:
 ---
 
 ## Language Rule
-- Korean output.
+- User-facing output follows the user's communication language unless the target audience requires another language.
 
 ## Design Resolution
 

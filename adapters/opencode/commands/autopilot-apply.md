@@ -1,5 +1,5 @@
 ---
-description: "Run the portable autopilot-apply capability through the OpenCode adapter. Meaning: cheatsheet 초안을 실제 source artifact에 적용하고 검증한다."
+description: "Run the portable autopilot-apply capability through the OpenCode adapter. Meaning: Apply a cheatsheet draft to the real source artifact and verify the result."
 ---
 
 Use the OpenCode adapter realization of portable capability `autopilot-apply`.

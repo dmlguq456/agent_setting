@@ -10,7 +10,7 @@ metadata:
 ---
 
 ## Language Rule
-- Korean output, English tool/path identifiers.
+- User-facing output follows the user's communication language; preserve tool and path identifiers.
 
 ## Pre-Check
 

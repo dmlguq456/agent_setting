@@ -9,3 +9,10 @@
 - [x] Regenerate runtime projections
 - [x] Run regression gates and record evidence
 - [x] Commit and push the isolated branch
+- [x] Translate portable capability contracts and generated Codex/OpenCode surfaces
+- [x] Replace fixed Korean-output directives in active compatibility Skills
+- [x] Add deterministic audience-language neutrality conformance coverage
+- [ ] Finish English prose conversion across hand-authored Skill bodies and references
+- [ ] Translate non-installer runtime scripts and keep tests synchronized
+- [x] Regenerate affected projections and rerun the full regression suite
+- [x] Commit and push the continued Englishization phase

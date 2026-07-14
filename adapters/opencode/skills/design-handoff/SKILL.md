@@ -1,6 +1,6 @@
 ---
 name: design-handoff
-description: "Use for design-handoff: 디자인 결과를 개발 handoff용 자산·스펙으로 정리한다."
+description: "Use for design-handoff: Package design results as assets and specifications for development handoff."
 metadata:
   portable_source: capabilities/design-handoff.md
   adapter: opencode
@@ -31,7 +31,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 - Identifier: `design-handoff`
 - Supported modes: `none`
 - Argument shape: `<design path or app path>`
-- Portable meaning: 디자인 결과를 개발 handoff용 자산·스펙으로 정리한다.
+- Portable meaning: Package design results as assets and specifications for development handoff.
 
 ## Portable Contract
 

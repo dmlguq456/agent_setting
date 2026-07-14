@@ -9,7 +9,7 @@ This is the portable capability contract for `code-report`. It defines runtime-n
 | Identifier | `code-report` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 코드 작업 사이클 결과를 사용자-facing 보고서로 조립한다. |
+| Portable meaning | Assemble code-cycle results into a user-facing report. |
 | Argument shape | `<plan name or path>` |
 
 ## Invocation Semantics

@@ -9,7 +9,7 @@ This is the portable capability contract for `post-it`. It defines runtime-neutr
 | Identifier | `post-it` |
 | Group | `ops` |
 | Supported modes | `none` |
-| Portable meaning | 프로젝트·cross-project 기록과 handoff를 working memory로 남긴다. |
+| Portable meaning | Store project/cross-project notes and handoffs in working memory. |
 | Argument shape | `[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]` |
 
 ## Invocation Semantics

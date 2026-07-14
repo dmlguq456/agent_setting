@@ -1,6 +1,6 @@
 ---
 name: autopilot-apply
-description: "Use for autopilot-apply: cheatsheet 초안을 실제 source artifact에 적용하고 검증한다."
+description: "Use for autopilot-apply: Apply a cheatsheet draft to the real source artifact and verify the result."
 metadata:
   portable_source: capabilities/autopilot-apply.md
   adapter: opencode
@@ -31,7 +31,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 - Identifier: `autopilot-apply`
 - Supported modes: `none`
 - Argument shape: `\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]`
-- Portable meaning: cheatsheet 초안을 실제 source artifact에 적용하고 검증한다.
+- Portable meaning: Apply a cheatsheet draft to the real source artifact and verify the result.
 
 ## Portable Contract
 

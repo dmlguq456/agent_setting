@@ -10,7 +10,7 @@ metadata:
 ---
 
 ## Language Rule
-- Korean output, English code/path identifiers.
+- User-facing output follows the user's communication language; preserve code and path identifiers.
 
 ## Design Resolution
 

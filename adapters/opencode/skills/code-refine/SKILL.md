@@ -1,6 +1,6 @@
 ---
 name: code-refine
-description: "Use for code-refine: 사용자 메모·plan-check 피드백·검증 실패 메모를 반영해 기존 plan을 정정한다."
+description: "Use for code-refine: Revise an existing plan using user notes, plan-check feedback, and verification-failure notes."
 metadata:
   portable_source: capabilities/code-refine.md
   adapter: opencode
@@ -31,7 +31,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 - Identifier: `code-refine`
 - Supported modes: `none`
 - Argument shape: `<plan name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]`
-- Portable meaning: 사용자 메모·plan-check 피드백·검증 실패 메모를 반영해 기존 plan을 정정한다.
+- Portable meaning: Revise an existing plan using user notes, plan-check feedback, and verification-failure notes.
 
 ## Portable Contract
 

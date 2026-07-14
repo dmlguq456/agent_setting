@@ -1,5 +1,5 @@
 ---
-description: "Run the portable design-refs capability through the OpenCode adapter. Meaning: 외부·사용자 reference 시각 자료를 수집하고 brief를 만든다."
+description: "Run the portable design-refs capability through the OpenCode adapter. Meaning: Collect external and user-provided visual references and create a brief."
 ---
 
 Use the OpenCode adapter realization of portable capability `design-refs`.
@@ -20,7 +20,7 @@ This is adapter-owned output generated from `capabilities/design-refs.md`, not a
 
 Portable contract excerpt:
 
-- Invocation semantics: Reference collection and brief — gathers user-provided images, external web references (via 자료팀 web-image-search), existing design system assets. Writes a brief that informs subsequent phases. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: Reference collection and briefing: gather user-provided images, external web references through the material role's web-image-search mode, and existing design-system assets. Write a brief that informs subsequent phases. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 User arguments from OpenCode: `$ARGUMENTS`

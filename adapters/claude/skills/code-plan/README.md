@@ -13,7 +13,7 @@
 > **Caller note**: 계획 수립은 `high` / `xhigh` effort에서 이점. 낮은 effort에서는 cross-file 분석에서 호출 지점 누락 가능.
 
 ## 언어 규칙
-- 사용자 출력은 자연스러운 한국어 (번역체 회피)
+- User-facing output follows the user's communication language and should read naturally rather than as a literal translation.
 
 ## Pre-Check — 기존 plan 상태 게이팅
 `--autonomy` 플래그 파싱 후 `<artifact-root>/plans/` 유사 plan 존재 확인:

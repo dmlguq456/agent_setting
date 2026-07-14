@@ -1,6 +1,6 @@
 ---
 name: code-execute
-description: "Use for code-execute: plan 단계별 구현 실행. 개발 role에 작업을 위임하고 execution log를 남긴다."
+description: "Use for code-execute: Execute a plan step by step, delegate implementation to the development role, and record an execution log."
 metadata:
   portable_source: capabilities/code-execute.md
   adapter: opencode
@@ -31,7 +31,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 - Identifier: `code-execute`
 - Supported modes: `none`
 - Argument shape: `<plan name or path>`
-- Portable meaning: plan 단계별 구현 실행. 개발 role에 작업을 위임하고 execution log를 남긴다.
+- Portable meaning: Execute a plan step by step, delegate implementation to the development role, and record an execution log.
 
 ## Portable Contract
 

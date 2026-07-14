@@ -1,6 +1,6 @@
 ---
 name: draft-refine
-description: "Use for draft-refine: 초안 정련·다듬기. memo/review feedback을 문서 전략이나 draft에 반영한다."
+description: "Use for draft-refine: Refine a draft by applying memo/review feedback to a document strategy or draft."
 metadata:
   portable_source: capabilities/draft-refine.md
   adapter: opencode
@@ -31,7 +31,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 - Identifier: `draft-refine`
 - Supported modes: `none`
 - Argument shape: `<strategy or draft name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]`
-- Portable meaning: 초안 정련·다듬기. memo/review feedback을 문서 전략이나 draft에 반영한다.
+- Portable meaning: Refine a draft by applying memo/review feedback to a document strategy or draft.
 
 ## Portable Contract
 

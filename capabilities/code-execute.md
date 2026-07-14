@@ -9,7 +9,7 @@ This is the portable capability contract for `code-execute`. It defines runtime-
 | Identifier | `code-execute` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | plan 단계별 구현 실행. 개발 role에 작업을 위임하고 execution log를 남긴다. |
+| Portable meaning | Execute a plan step by step, delegate implementation to the development role, and record an execution log. |
 | Argument shape | `<plan name or path>` |
 
 ## Invocation Semantics

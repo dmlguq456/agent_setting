@@ -9,7 +9,7 @@ This is the portable capability contract for `autopilot-apply`. It defines runti
 | Identifier | `autopilot-apply` |
 | Group | `entry` |
 | Supported modes | `none` |
-| Portable meaning | cheatsheet 초안을 실제 source artifact에 적용하고 검증한다. |
+| Portable meaning | Apply a cheatsheet draft to the real source artifact and verify the result. |
 | Argument shape | `\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]` |
 
 ## Invocation Semantics

@@ -9,7 +9,7 @@ This is the portable capability contract for `code-test`. It defines runtime-neu
 | Identifier | `code-test` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 구현 결과를 단계별로 검증하고 evidence를 기록한다. |
+| Portable meaning | Verify implementation results in stages and record evidence. |
 | Argument shape | `<plan name, path, or test scope> [--intensity direct|quick|standard|strong|thorough|adversarial]` |
 
 ## Invocation Semantics

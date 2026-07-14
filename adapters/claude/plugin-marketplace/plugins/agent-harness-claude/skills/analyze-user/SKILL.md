@@ -44,9 +44,9 @@ cross-project 사용자 성향 프로필 entry. 사용자의 과거 산출물(fi
 
 ## Language Rule
 
-- All user-facing output and 산출물 (DB profile 레코드 body) 본문 in 자연스러운 **한국어** (번역체 회피).
-- 코드·파일 경로·식별자·도메인 표현은 영어 그대로.
-- 어미 톤 — chat 응답은 대화체, user_profile 본문은 _평어 단정형_ (보고서 톤 — `~다 / ~이다`).
+- User-facing output and artifact prose (including the DB profile-record body) follow the user's communication language unless an explicit audience or artifact-language requirement overrides it.
+- Preserve code, file paths, identifiers, and domain expressions when translation would reduce precision.
+- Match chat tone to the conversation; keep the user-profile body concise, declarative, and report-like in the selected language.
 
 ## Core Invariants
 

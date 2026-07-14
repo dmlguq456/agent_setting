@@ -10,7 +10,7 @@ metadata:
 ---
 
 ## Language Rule
-- Korean output, English token names (color hex, font family names, spacing units).
+- User-facing output follows the user's communication language; preserve token values and canonical token names.
 
 ## Design Resolution
 

@@ -61,7 +61,7 @@ When present, pause at refine points so the user can add their own `<!-- memo: .
 
 Pause behavior: after 연구팀 writes memos at Step 3 (strategy review) or Step 5 (draft review), do NOT invoke draft-refine. Instead:
 1. Update `pipeline_state.yaml` at `{strategy_folder}/` with `user_refine: true`, `paused_at_stage: <strategy-refine|draft-refine>`.
-2. Print to user (Korean) the memo file path and the resume command:
+2. Print the memo file path and resume command in the user's communication language:
    ```
    연구팀 메모가 {ko_path}에 기록되었습니다.
    직접 메모를 추가한 뒤 다음 명령으로 재개하세요:

@@ -102,7 +102,7 @@ Agent(subagent_type="연구팀"):
    - Year: , (\d{4})\s*[-–] pattern (leading comma required)
    - Citation: >Cited by (\d+)< pattern
 
-   Follow your Role 2a procedure. Return file paths + 3-5 line Korean summary."
+   Follow your Role 2a procedure. Return file paths plus a 3-5 line summary in the user's communication language."
 ```
 
 #### Step 2d: Post-Search Validation
@@ -199,7 +199,7 @@ Agent(subagent_type="연구팀"):
    Per-paper timeout: 60s. Batch budget: 10min. WebFetch 3xx loop / empty response → skip.
    Paywall / Access priority / browser_extracts handling: per your Role 2b 본문 (paywall fast-detect + 60s timeout + 5-tier access ladder + 자료팀 분리 원칙) — single source 거기.
 
-   Follow your Role 2b procedure. Return file paths + Korean summary."
+   Follow your Role 2b procedure. Return file paths plus a summary in the user's communication language."
 ```
 Launch batches in parallel. **Error handling**: Individual batch failure → log and continue. Total failure (0 batches succeed) → pipeline_summary(failed) → STOP.
 
@@ -212,7 +212,7 @@ Agent(subagent_type="연구팀"):
    Search results: {artifact_dir}/_internal/search_results.json
    Depth: {depth}
    Output: {artifact_dir}/_internal/chaining_results.md
-   Follow your Role 2b reference chaining procedure. Return file paths + Korean summary."
+   Follow your Role 2b reference chaining procedure. Return file paths plus a summary in the user's communication language."
 ```
 
 **Loopback control** (orchestrator responsibility):
@@ -231,7 +231,7 @@ Agent(subagent_type="연구팀"):
    Paper cards: {artifact_dir}/cards/
    Output: {artifact_dir}/code_resources/
    Aggregate: {artifact_dir}/_internal/code_search.md
-   Follow your Role 2c procedure. Return file paths + Korean summary."
+   Follow your Role 2c procedure. Return file paths plus a summary in the user's communication language."
 ```
 
 #### Step 3e: Compile analysis_summary.md
@@ -241,7 +241,7 @@ Agent(subagent_type="연구팀"):
    Compile from: cards/, _internal/chaining_results.md (if exists), _internal/code_search.md (if exists).
    Set phase flags: chaining_available, code_search_available.
    Output: {artifact_dir}/analysis_summary.md
-   Return file path + Korean summary."
+   Return the file path plus a summary in the user's communication language."
 ```
 
 #### Step 3 Status Check

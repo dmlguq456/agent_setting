@@ -9,7 +9,7 @@ This is the portable capability contract for `autopilot-refine`. It defines runt
 | Identifier | `autopilot-refine` |
 | Group | `entry` |
 | Supported modes | `none` |
-| Portable meaning | 기존 문서·연구 산출물의 정정·갱신. 버전 snapshot과 변경 이력을 보존한다. |
+| Portable meaning | Correct and update existing document/research artifacts while preserving snapshots and change history. |
 | Argument shape | `\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]` |
 
 ## Invocation Semantics

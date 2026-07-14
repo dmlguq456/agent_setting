@@ -75,8 +75,8 @@ metadata:
 - `/autopilot-spec <args>` slash 직접 입력 — 컨펌 skip
 
 ## Language Rule
-- Think in English internally. Write user-facing output in Korean.
-- Code identifiers, file paths, technical terms stay in English.
+- User-facing output follows the user's communication language unless an explicit audience or artifact-language requirement overrides it.
+- Preserve code identifiers, file paths, and technical terms as written when translation would reduce precision.
 
 ## Spec 변경 canonical 경로·게이트 (개요)
 

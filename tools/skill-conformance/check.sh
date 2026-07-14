@@ -121,9 +121,19 @@ for skills_dir in "$@"; do
       fail=1
     fi
   done < <(printf '%s\n' "$body" | awk -F'\t' '$4=="true"{print $1}')
+
+  # User-facing language follows the portable audience-language contract.
+  # Reject fixed Korean-output directives while allowing conditional Korean
+  # mirrors, examples, tokenization fixtures, and existing schema literals.
+  fixed_language_re='Korean output|output in Korean|in Korean:[[:space:]]*$|Print to user \(Korean\)|print to chat \(Korean\)|Korean summary|Korean brief|보고는 한국어로|사용자 대화는 한국어|사용자 출력은 자연스러운 한국어'
+  while IFS= read -r hit; do
+    [ -z "$hit" ] && continue
+    echo "FAIL: fixed user-facing language directive: $hit"
+    fail=1
+  done < <(grep -RInE --include='*.md' "$fixed_language_re" "$skills_dir" 2>/dev/null || true)
 done
 
 if [ "$fail" -eq 0 ]; then
-  echo "PASS: skill conformance (structure + invocation policy ${#policy_names[@]} classifications)"
+  echo "PASS: skill conformance (structure + invocation policy ${#policy_names[@]} classifications + audience-language neutrality)"
 fi
 exit "$fail"

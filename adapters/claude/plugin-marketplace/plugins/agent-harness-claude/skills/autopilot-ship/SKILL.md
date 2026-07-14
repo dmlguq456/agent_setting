@@ -61,7 +61,7 @@ metadata:
 발화 → 자리 분류와 실제 배포 명령 실행 경계는 [Step 2](#step-2-자리-분기-발화-기반) 적용.
 
 ## Language Rule
-- Think in English internally. Write user-facing output in Korean.
+- User-facing output follows the user's communication language unless an explicit audience or artifact-language requirement overrides it.
 
 ## Procedure
 
