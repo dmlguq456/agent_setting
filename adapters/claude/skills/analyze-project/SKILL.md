@@ -1,18 +1,33 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: analyze-project
-description: "Use when invoking the portable analyze-project capability. Upfront analysis that structures primary code, paper, and document materials for downstream work."
+description: "Use when invoking the portable analyze-project capability. Creates or refreshes persistent analysis from primary code, paper, or document materials when analysis is absent, stale, or explicitly requested; not for read-only context recovery."
 argument-hint: "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]"
 metadata:
   group: pre
   fam: pre
   modes: ["code", "paper", "doc"]
-  blurb: "Upfront analysis that structures primary code, paper, and document materials for downstream work."
+  blurb: "Creates or refreshes persistent analysis from primary code, paper, or document materials when analysis is absent, stale, or explicitly requested; not for read-only context recovery."
 ---
 
 # analyze-project
 
 사전조사 분석 entry. 코드·논문·문서 primary 자료를 구조화해 다운스트림(autopilot-code / autopilot-lab / autopilot-draft / autopilot-research) 입력으로 만든다. 이 파일은 라우터와 mode 계약만 담고, mode별 Phase 상세 절차·산출물 템플릿은 필요할 때 아래 reference를 Read 한다.
+
+## Routing Boundary
+
+Invoke this Skill only to create or refresh persistent project analysis when
+analysis is absent, demonstrably stale for the requested downstream work, or
+explicitly requested by the user. A request to understand the project, recover
+prior context, resume work, or report current status is read-only orientation,
+not an `analyze-project` trigger.
+
+Before invocation, resolve the existing artifact root and read current
+summaries, state, spec, run logs, and relevant prior analysis according to
+`core/WORKFLOW.md §0.1`. Treat legacy `.claude_reports/` as the existing
+project-state surface when `.agent_reports/` is absent. For orientation, invoke
+no capability and write no artifact; use memory only as a continuity pointer,
+then follow and cross-check relevant paths against artifacts or live code.
 
 > Caller note: this skill performs deep analysis. Callers should invoke at `high` or `xhigh` effort when the runtime supports it; at lower effort, depth narrows automatically.
 

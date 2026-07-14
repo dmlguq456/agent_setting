@@ -17,6 +17,43 @@ portable invariant in `core/`, read its governing document, then change adapter 
 projection output. The adapter read-marker is a deterministic gate for that order,
 not a substitute for the portable review.
 
+### 0.1. Read-Only Orientation Before Capability Routing
+
+Before selecting a capability or Skill, distinguish read-only orientation from
+work that creates or refreshes a persistent artifact. A request whose desired
+outcome is to understand the project, recover prior context, resume from the
+current state, or report status is orientation when it does not also ask for a
+new analysis or a modification. These examples describe intent; they are not a
+keyword classifier.
+
+Read-only orientation invokes no capability and writes no artifact:
+
+1. Use the adapter status surface to determine tracked state and resolve the
+   artifact root. Prefer an existing `.agent_reports/`; when it is absent,
+   treat an existing legacy `.claude_reports/` as the same project-state
+   surface rather than as a lower-value input.
+2. Read existing state before a broad source census: relevant
+   `pipeline_summary.md` and `pipeline_state.yaml`, the current
+   `spec/prd.md`, `experiments/_RUNLOG.md`, and the recent
+   `summary.md`, `REPORT.md`, or `STORY.md` files that identify the
+   active work. Read only the subset needed to orient.
+3. Use memory recall after project artifacts when cross-session continuity
+   could materially help. Memory is a continuity and navigation layer: follow
+   relevant file or artifact pointers and cross-check their targets. Current
+   artifacts and live code override stale memory when they conflict.
+4. Inspect raw source and logs only when the existing state leaves a material
+   question unanswered.
+
+`analyze-project` becomes eligible only when no usable analysis exists,
+existing analysis is demonstrably stale for the requested downstream work, or
+the user explicitly asks to create or refresh persistent project analysis.
+When analysis already exists, read it before deciding that reanalysis is
+needed.
+
+This boundary was strengthened after a 2026-07-14 incident where a context
+recovery request in a tracked project was routed to `analyze-project` before
+its existing legacy artifact root and memory-linked artifacts were read.
+
 **(a) 하드 순서 게이트** — 산출물은 한 방향으로만, 앞 단계 산출물 없이 다음 단계 진입 금지:
 
 ```
@@ -161,7 +198,7 @@ Direct work is the only graph with no plan. Every non-`direct` autopilot graph h
 
 > 본 §7 은 _지침_ 으로 적재된다 — adapter bootstrap 이 세션 시작 또는 해당 도메인 트리거에서 WORKFLOW.md 를 Read 한다. Claude Code adapter 에서는 `adapters/claude/CLAUDE.md` §0(A)가 spec-backed 사후 수정 트리거를 가리킨다. `workflow-guard-hook` 은 매 프롬프트에 모드 신호(📌tracked 따름 / ⚡untracked 면제)만 띄운다(런타임 flag 상태). 규칙 본문의 단일 출처는 본 §0/§7.
 
-0. **기존 artifact root (`.agent_reports/`, legacy `.claude_reports/`) 산출물 파악 (1 순위, 특히 새 세션)** — 손대기 전 `spec/prd.md` · `pipeline_state.yaml` · 최근 `plans/*` 를 먼저 읽어 프로젝트 상태·진행 자리를 잡는다. 맥락 모른 채 작업 X. **spec-backed cwd 에선 `prd.md` Read 가 _필수 게이트_** — `spec-skill-gate`/`spec-read-marker` 가 이번 세션 prd.md 미Read(또는 Read 후 prd 갱신) 시 `autopilot-code`/`autopilot-spec` 등 spec-changing capability 진입을 hard DENY 한다 (선택 아님; Claude 는 settings hook, Codex 는 preflight wrapper, [README](../README.md) 'hard 차단 셋' 중 하나).
+0. **§0.1 read-only orientation 순서로 기존 artifact root (`.agent_reports/`, legacy `.claude_reports/`) 산출물 파악 (1 순위, 특히 새 세션)** — capability 선택이나 수정 전 `spec/prd.md` · `pipeline_state.yaml` · 최근 `plans/*` 를 먼저 읽어 프로젝트 상태·진행 자리를 잡는다. 맥락 모른 채 작업 X. **spec-backed cwd 에선 `prd.md` Read 가 _필수 게이트_** — `spec-skill-gate`/`spec-read-marker` 가 이번 세션 prd.md 미Read(또는 Read 후 prd 갱신) 시 `autopilot-code`/`autopilot-spec` 등 spec-changing capability 진입을 hard DENY 한다 (선택 아님; Claude 는 settings hook, Codex 는 preflight wrapper, [README](../README.md) 'hard 차단 셋' 중 하나).
 1. **(필요 시) analyze 갱신** — `analysis_project/code/` 가 stale 하거나 낯선 영역이면 `analyze-project --mode code` (incremental) 먼저.
 2. **spec 존재 확인** — 없으면 `autopilot-spec` 먼저 유도 (**spec → dev 하드 원칙**; throwaway 1 회성만 예외, 반복 시 spec 승격 권장).
 3. **spec-drift 사전 체크 (code 경유 _전_, 최우선)** — `spec/prd.md` 대조:

@@ -1,5 +1,5 @@
 ---
-description: "Run the portable analyze-project capability through the OpenCode adapter. Meaning: Upfront analysis that structures primary code, paper, and document materials for downstream work."
+description: "Run the portable analyze-project capability through the OpenCode adapter. Meaning: Creates or refreshes persistent analysis from primary code, paper, or document materials when analysis is absent, stale, or explicitly requested; not for read-only context recovery."
 ---
 
 Use the OpenCode adapter realization of portable capability `analyze-project`.
@@ -20,7 +20,7 @@ This is adapter-owned output generated from `capabilities/analyze-project.md`, n
 
 Portable contract excerpt:
 
-- Invocation semantics: Pre-work analysis skill — analyzes the project's primary materials and writes structured artifacts to <artifact-root>/analysis_project/. Three modes — code (codebase), paper (academic PDFs), doc (miscellaneous doc materials like reviewer comments, format templates, samples, internal notes). Mode auto-detects between code and doc when omitted; paper requires explicit --mode paper. Output is the persistent input source for downstream autopilot-{draft,code,research} skills. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: Pre-work analysis capability — analyzes the project's primary materials and writes structured artifacts to `<artifact-root>/analysis_project/`. Invoke it only when no usable project analysis exists, existing analysis is demonstrably stale for the requested downstream work, or the user explicitly requests a persistent analysis document or refresh. A request to understand the current project, recover prior context, resume work, or report status is read-only orientation and is not an `analyze-project` trigger by itself. When analysis already exists, read it before deciding that reanalysis is needed. Three modes are available: code (codebase), paper (academic PDFs), and doc (miscellaneous document materials such as reviewer comments, format templates, samples, and internal notes). Mode auto-detects between code and doc when omitted; paper requires explicit `--mode paper`. Output is the persistent input source for downstream `autopilot-{draft,code,research}` capabilities. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 User arguments from OpenCode: `$ARGUMENTS`

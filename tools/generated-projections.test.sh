@@ -48,4 +48,41 @@ fi
 cp "$TMP/generated-skill" "$TARGET"
 python3 "$ROOT/tools/generate.py" --check >/dev/null
 
+ORIENTATION_FIXTURE="$TMP/orientation-fixture"
+mkdir -p \
+  "$ORIENTATION_FIXTURE/.claude_reports/analysis_project/code" \
+  "$ORIENTATION_FIXTURE/.claude_reports/experiments/example"
+printf '%s\n' 'existing analysis' > "$ORIENTATION_FIXTURE/.claude_reports/analysis_project/code/summary.md"
+printf '%s\n' 'run log' > "$ORIENTATION_FIXTURE/.claude_reports/experiments/_RUNLOG.md"
+printf '%s\n' 'story' > "$ORIENTATION_FIXTURE/.claude_reports/experiments/example/STORY.md"
+
+resolved=$("$ROOT/utilities/artifact-root.sh" "$ORIENTATION_FIXTURE")
+[ "$resolved" = "$ORIENTATION_FIXTURE/.claude_reports" ] || {
+  echo "not ok - legacy artifact root was not selected for orientation" >&2
+  exit 1
+}
+mkdir -p "$ORIENTATION_FIXTURE/.agent_reports"
+resolved=$("$ROOT/utilities/artifact-root.sh" "$ORIENTATION_FIXTURE")
+[ "$resolved" = "$ORIENTATION_FIXTURE/.agent_reports" ] || {
+  echo "not ok - canonical artifact root did not take precedence" >&2
+  exit 1
+}
+
+grep -Fq '### 0.1. Read-Only Orientation Before Capability Routing' "$ROOT/core/WORKFLOW.md"
+grep -Fq 'Read-only orientation invokes no capability and writes no artifact' "$ROOT/core/WORKFLOW.md"
+grep -Fq '## Routing Boundary' "$ROOT/capabilities/analyze-project.md"
+grep -Fq 'orientation and is not an `analyze-project` trigger by itself' "$ROOT/capabilities/analyze-project.md"
+grep -Fq 'Pointer follow-through' "$ROOT/core/MEMORY.md"
+
+for projected in \
+  "$ROOT/skills/analyze-project/SKILL.md" \
+  "$ROOT/adapters/claude/skills/analyze-project/SKILL.md" \
+  "$ROOT/adapters/codex/skills/analyze-project/SKILL.md" \
+  "$ROOT/adapters/opencode/skills/analyze-project/SKILL.md"; do
+  grep -Fq 'not for read-only context recovery' "$projected" || {
+    echo "not ok - orientation exclusion missing from $projected" >&2
+    exit 1
+  }
+done
+
 echo "generated-projections: PASS"

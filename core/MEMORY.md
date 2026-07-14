@@ -53,6 +53,13 @@ Purely deterministic monitors may surface candidates but cannot promote, skip, m
 
 **Agent-initiated recall** — The agent decides whether prior context may materially improve the current judgment. No fixed signal words, mandatory topic list, prompt classifier, or category-to-recall rule substitutes for that contextual decision. Once the agent chooses to recall, search curated memory first, widen to `--all` or `--sessions` only when useful, and cross-check retrieved claims against current code or artifacts because memory can be stale.
 
+- **Pointer follow-through:** when a recall result names a project file or
+  artifact path relevant to the task, read that current target before using
+  the memory claim to report project state. Memory supplies continuity and
+  navigation; the referenced artifact and live code supply current facts. A
+  missing or changed target is evidence that the memory pointer may be stale,
+  not a reason to substitute the remembered summary for the file.
+
 **인라인 vs memory-scout 이원화**:
 
 - **Inline recall**: for a simple agent-chosen search, run `tools/memory/recall.sh "<query>"` directly for one or two queries. If a hit needs more context, follow with `mem show <id>` or `recall --full --limit N`.

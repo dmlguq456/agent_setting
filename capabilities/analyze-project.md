@@ -10,12 +10,25 @@ This is the portable capability contract for `analyze-project`. It defines runti
 | Identifier | `analyze-project` |
 | Group | `pre` |
 | Supported modes | `code, paper, doc` |
-| Portable meaning | Upfront analysis that structures primary code, paper, and document materials for downstream work. |
+| Portable meaning | Creates or refreshes persistent analysis from primary code, paper, or document materials when analysis is absent, stale, or explicitly requested; not for read-only context recovery. |
 | Argument shape | `[--mode code\|paper\|doc] [<scope/target/input-folder>] [--skip-qa]` |
 
 ## Invocation Semantics
 
-Pre-work analysis skill — analyzes the project's primary materials and writes structured artifacts to <artifact-root>/analysis_project/. Three modes — code (codebase), paper (academic PDFs), doc (miscellaneous doc materials like reviewer comments, format templates, samples, internal notes). Mode auto-detects between code and doc when omitted; paper requires explicit --mode paper. Output is the persistent input source for downstream autopilot-{draft,code,research} skills.
+Pre-work analysis capability — analyzes the project's primary materials and
+writes structured artifacts to `<artifact-root>/analysis_project/`. Invoke it
+only when no usable project analysis exists, existing analysis is demonstrably
+stale for the requested downstream work, or the user explicitly requests a
+persistent analysis document or refresh. A request to understand the current
+project, recover prior context, resume work, or report status is read-only
+orientation and is not an `analyze-project` trigger by itself. When analysis
+already exists, read it before deciding that reanalysis is needed.
+
+Three modes are available: code (codebase), paper (academic PDFs), and doc
+(miscellaneous document materials such as reviewer comments, format templates,
+samples, and internal notes). Mode auto-detects between code and doc when
+omitted; paper requires explicit `--mode paper`. Output is the persistent input
+source for downstream `autopilot-{draft,code,research}` capabilities.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
@@ -36,6 +49,19 @@ Adapters must preserve the portable invariants relevant to this capability:
 - enforce artifact ordering before new durable artifacts;
 - enforce spec-read gating when this capability changes spec-backed code or specs;
 - use DB memory paths, not runtime-native memory files.
+
+## Routing Boundary
+
+Before invocation, follow `core/WORKFLOW.md §0.1`: resolve the existing
+artifact root through the adapter status surface and inspect current summaries,
+state, spec, run logs, and relevant prior analysis. Existing
+`.claude_reports/` is the legacy form of the same project-state surface when
+`.agent_reports/` is absent.
+
+For read-only orientation, do not invoke this capability and do not create or
+update `analysis_project/`. Memory recall may supplement continuity after the
+artifact read, but relevant memory paths must be followed and checked against
+the current artifact or live code before reporting project state.
 
 ## Adapter Realization
 

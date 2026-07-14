@@ -13,7 +13,7 @@
         "paper",
         "doc"
       ],
-      "blurb": "Upfront analysis that structures primary code, paper, and document materials for downstream work.",
+      "blurb": "Creates or refreshes persistent analysis from primary code, paper, or document materials when analysis is absent, stale, or explicitly requested; not for read-only context recovery.",
       "argument_hint": "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]"
     },
     {
