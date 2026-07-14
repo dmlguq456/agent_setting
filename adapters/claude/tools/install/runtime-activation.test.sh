@@ -1,0 +1,1 @@
+../../../../tools/install/runtime-activation.test.sh

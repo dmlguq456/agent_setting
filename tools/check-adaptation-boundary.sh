@@ -3297,8 +3297,8 @@ check_projection_summary_docs() {
   if grep -Fq 'Codex does not currently consume the full harness natively' README.md INSTALL_LAYOUT.md 2>/dev/null; then
     fail_msg "Codex install docs must describe selected native projections instead of implying instruction-only support"
   fi
-  if ! grep -Fq 'native skills/plugin/agents/hooks' README.md \
-    || ! grep -Fq 'native skills/commands/agents/plugin' README.md; then
+  if ! grep -Fq 'native skills·custom agents·modes·hooks' README.md \
+    || ! grep -Fq 'skills/agents/commands/plugins' README.md; then
     fail_msg "README.md must summarize Codex and OpenCode native projection surfaces"
   fi
   if ! grep -Fq 'Codex-native Skills, custom Agents, plugin' INSTALL_LAYOUT.md \

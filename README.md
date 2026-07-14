@@ -2,7 +2,7 @@
 
 **자연어 한 줄을 조사·기획·구현·검증까지 이어지는 재현 가능한 작업 흐름으로 바꿉니다.**
 
-Agent Harness는 Claude Code, Codex, OpenCode에서 같은 작업 원칙을 쓰기 위한 portable agent harness입니다. 공통 계약은 한곳에서 관리하고, 각 런타임에는 그 런타임이 이해하는 native plugin 또는 installer projection으로 배포합니다. 제품 전체가 하나의 plugin인 것은 아닙니다.
+Agent Harness는 Claude Code, Codex, OpenCode에서 같은 작업 원칙을 쓰기 위한 portable agent harness입니다. 공통 계약은 한곳에서 관리하고, 각 런타임에는 그 런타임이 이해하는 native projection으로 활성화합니다. 제품 전체가 하나의 plugin인 것은 아니며, plugin이나 marketplace는 기본 실행 경로에 필요하지 않습니다.
 
 ## 빠른 설치
 
@@ -11,26 +11,25 @@ Python 3.10+, Git, 사용할 런타임 CLI가 필요합니다.
 ```bash
 git clone https://github.com/dmlguq456/agent_setting.git ~/agent_setting
 cd ~/agent_setting
-./tools/install/harness.sh install all
-./tools/install/harness.sh verify
+./tools/install/harness.sh runtime activate --runtime all --mode linked
+./tools/install/harness.sh runtime doctor --runtime all --strict
 ```
 
 설치가 끝나면 PATH의 `harness` 명령으로 상태와 업데이트를 관리할 수 있습니다.
 
 ```bash
-harness status
-harness update
-harness verify
+harness runtime status --runtime all
+harness runtime refresh --runtime all
+harness runtime doctor --runtime all --strict
 ```
 
-Claude Code나 Codex의 marketplace plugin 채널을 쓰려면 런타임을 지정합니다.
+다른 머신에 고정 revision을 전달하려면 local packaged mode를 사용합니다. 이 경로도 marketplace나 네트워크를 호출하지 않습니다.
 
 ```bash
-harness install claude --plugin
-harness install codex --plugin
+harness runtime activate --runtime all --mode packaged --source ~/agent_setting
 ```
 
-실행 계획만 확인하려면 `--dry-run`, 자동화에서 구조화 결과가 필요하면 `--json`을 붙이세요. 수동 설치와 소유 경계는 [INSTALL_LAYOUT.md](INSTALL_LAYOUT.md)에 정리되어 있습니다.
+`linked`는 maintainer 기본값으로 repo 수정이 discovery path에 즉시 보이고, `packaged`는 `runtime refresh` 전까지 active revision을 바꾸지 않습니다. `native+plugin` 동시 discovery는 금지되며 `runtime doctor --strict`가 중복을 실패로 보고합니다. 자동화에서 구조화 결과가 필요하면 `--json`을 붙이세요. 수동 설치와 소유 경계는 [INSTALL_LAYOUT.md](INSTALL_LAYOUT.md)에 정리되어 있습니다.
 
 ## 바로 쓰기
 
@@ -54,21 +53,21 @@ harness install codex --plugin
 - **런타임이 바뀌어도 유지되는 계약** — workflow, role, artifact, memory, intensity와 검증 의미는 portable core가 소유하고 runtime adapter는 native surface로 번역합니다.
 - **판단보다 코드로 지키는 안전장치** — artifact 순서, git 상태, spec grounding, projection drift를 hook과 결정론적 검사로 확인합니다.
 - **세션을 넘어가는 작업 기억** — project working memory, durable memory, 사용자 profile을 공통 store와 recall 경로로 연결합니다.
-- **보이는 검증** — 설치와 projection 상태를 `harness verify`, manifest, adapter check, conformance check의 exit status로 확인할 수 있습니다.
+- **보이는 검증** — active source의 절대경로·revision·digest·중복·session action을 `harness runtime status`와 `doctor`의 exit status로 확인할 수 있습니다.
 
 ## 런타임별 배포 차이
 
 세 런타임은 지원하는 확장 표면이 다릅니다. installer가 차이를 숨기지 않고 설치·검증 결과에 `SKIP` 또는 제한 사유를 표시합니다.
 
-| 런타임 | Native 배포 | Installer projection이 맡는 것 | 권장 진입 |
+| 런타임 | `linked` 기본 | `packaged` 경계 | 권장 진입 |
 |---|---|---|---|
-| **Claude Code** | 현재 marketplace plugin projection: skills, agents, 선택된 hooks | runtime-owned settings, statusline, env/PATH, memory와 개발용 symlink projection | `harness install claude --plugin` 또는 `harness install claude` |
-| **Codex** | 현재 native plugin projection: portable skills | custom agent TOML, modes, hooks, bootstrap/config 조각, runtime-home 개발 projection | `harness install codex --plugin` 또는 `harness install codex` |
-| **OpenCode** | 공식 marketplace bundle 없음 | convention 디렉터리와 `opencode.json`을 보존적으로 연결하는 installer projection | `harness install opencode` |
+| **Claude Code** | native skills·agents·commands·hooks를 local repo에 연결 | immutable local bundle을 같은 native 경로에 연결 | `harness runtime activate --runtime claude --mode linked` |
+| **Codex** | native skills·custom agents·modes·hooks를 local repo에 연결 | immutable local bundle을 같은 native 경로에 연결 | `harness runtime activate --runtime codex --mode linked` |
+| **OpenCode** | 복수형 `skills/agents/commands/plugins`를 local repo에 연결 | immutable local bundle을 같은 native 경로에 연결 | `harness runtime activate --runtime opencode --mode linked` |
 
-Plugin은 소비·공유 채널이고 installer는 개발 머신과 runtime-owned 표면을 다루는 채널입니다. 둘은 경쟁 관계가 아니라 함께 쓰는 2-channel 배포 구조입니다. 세부 지원 범위는 [Claude adapter](adapters/claude/README.md), [Codex adapter](adapters/codex/README.md), [OpenCode adapter](adapters/opencode/README.md)를 참고하세요.
+Plugin은 Phase 1 활성화 형식이 아닙니다. 두 mode 모두 runtime-native discovery만 사용하며, 기존 Codex/Claude harness plugin registry와 cache 및 OpenCode의 명시적 harness npm 항목은 네트워크 호출 없이 비활성화합니다. Claude hook은 기존 `settings.json`의 사용자 키를 보존해 병합합니다. credentials, sessions, DB, logs, foreign cache는 쓰지 않습니다. 세부 지원 범위는 [Claude adapter](adapters/claude/README.md), [Codex adapter](adapters/codex/README.md), [OpenCode adapter](adapters/opencode/README.md)를 참고하세요.
 
-전체 projection 기준으로 Codex는 native skills/plugin/agents/hooks를, OpenCode는 native skills/commands/agents/plugin을 사용합니다. plugin 하나가 담지 못하는 runtime-owned 설정과 개발용 연결은 installer가 보완합니다.
+파일 변경이 보이는 것과 현재 대화가 새 instruction을 읽는 것은 별개입니다. `runtime status`의 `freshness`와 runtime별 `session_action`이 재호출·새 세션·restart 필요 여부를 따로 표시합니다.
 
 ## 작동 구조
 
@@ -79,8 +78,8 @@ portable contract
 core/ + capabilities/ + roles/
    ↓  deterministic generators
 runtime-native projections
-Claude plugin · Codex plugin · OpenCode conventions
-   ↓  harness install / verify
+Claude native · Codex native · OpenCode conventions
+   ↓  harness runtime activate / status / doctor
 runtime home + project .agent_reports/
 ```
 
@@ -121,6 +120,7 @@ adapters/opencode/bin/sync-native-agents.py --check
 tools/check-adaptation-boundary.sh
 tools/skill-conformance/check.sh
 adapters/codex/bin/preflight.sh doctor
+./tools/install/runtime-activation.test.sh
 ./tools/install/harness.sh verify
 ```
 

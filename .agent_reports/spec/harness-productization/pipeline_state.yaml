@@ -1,11 +1,11 @@
 project_name: harness-productization
 created: 2026-07-14
 updated: 2026-07-14
-spec_version: 2
+spec_version: 3
 mode:
   - library
   - cli
-status: specified
+status: phase_1_complete
 source_of_truth: .agent_reports/spec/harness-productization/prd.md
 inputs:
   - .agent_reports/research/cross-platform-agent-frameworks/analysis_summary.md
@@ -14,13 +14,13 @@ inputs:
   - .agent_reports/spec/harness-layer-sync/prd.md
   - .agent_reports/spec/skill-design-refactor/prd.md
 phases:
-  phase_1_cross_runtime_source_activation: pending
-  phase_2_manifest_projections_profiles: blocked_by_phase_1
+  phase_1_cross_runtime_source_activation: completed
+  phase_2_manifest_projections_profiles: pending
   phase_3_local_first_optional_extensions: blocked_by_phase_2
 locked_decisions:
   - phase_1_covers_codex_claude_and_opencode
   - linked_is_the_maintainer_default
-  - plugins_are_optional_distribution_artifacts
+  - plugins_are_outside_phase_1_activation
   - native_and_plugin_discovery_cannot_be_active_together
   - core_activation_has_no_network_or_package_manager_dependency
   - kernel_guards_are_always_on
@@ -28,8 +28,9 @@ locked_decisions:
   - profiles_compose_packs_without_forking_capabilities
   - external_skills_never_auto_promote_to_core
   - phases_execute_in_order
+  - runtime_cli_extends_the_existing_installer
+  - packaged_uses_checksum_pinned_native_local_bundles
+  - phase_1_runtime_activation_is_global_only
 open_decisions:
-  - runtime_activation_cli_module_location
-  - packaged_bundle_format
   - new_install_default_profile
-next_action: run_autopilot_code_for_phase_1
+next_action: run_autopilot_code_for_phase_2
