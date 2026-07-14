@@ -539,13 +539,6 @@
       "hard_block": false
     },
     {
-      "slug": "hook__mem-recall-inject__UserPromptSubmit",
-      "name": "mem-recall-inject",
-      "mono": "mem-recall-inject",
-      "event": "UserPromptSubmit",
-      "hard_block": false
-    },
-    {
       "slug": "hook__mem-turn-nudge__UserPromptSubmit",
       "name": "mem-turn-nudge",
       "mono": "mem-turn-nudge",

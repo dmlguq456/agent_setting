@@ -28,7 +28,7 @@ PROFILE_CONFIG = {
 
 EXTRA_AGENTS = {
     "memory-scout": {
-        "description": "Read-only memory scout for recall-first deep memory reconnaissance.",
+        "description": "Read-only memory scout for agent-initiated deep memory reconnaissance.",
         "model": "gpt-5.6-luna",
         "reasoning": "low",
         "sandbox": "read-only",

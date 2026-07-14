@@ -19,3 +19,9 @@
 - [ ] Translate non-installer runtime scripts and keep tests synchronized
 - [x] Regenerate affected projections and rerun the full regression suite
 - [x] Commit and push the continued Englishization phase
+- [x] Establish agent-owned semantic memory judgment in core and spec
+- [x] Retire automatic prompt classification and recall injection across adapters
+- [x] Remove the semantic `mem recall --auto` engine and update focused tests
+- [x] Englishize affected memory hooks and documentation
+- [x] Regenerate projections and run the full regression suite
+- [x] Commit and push the memory-boundary phase

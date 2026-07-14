@@ -16,7 +16,7 @@ OUT = ROOT / "adapters" / "opencode" / "agents"
 
 EXTRA_AGENTS = {
     "memory-scout": {
-        "description": "Read-only memory scout for recall-first deep memory reconnaissance.",
+        "description": "Read-only memory scout for agent-initiated deep memory reconnaissance.",
         "instructions": """You are the OpenCode-native memory-scout custom agent.
 This is adapter-owned output generated from `core/MEMORY.md` §7.4, not a non-OpenCode Agent copy.
 

@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Unified Memory System — `mem`  (DB-as-SoT 재구현)
+"""Unified Memory System — `mem`.
 
 SQLite `memory.db` (WAL) 가 진실원천(SoT). 기존 markdown-SoT 를 완전 대체.
 텍스트 덤프 mirror (`dump.jsonl`) = git 추적 대상. FTS5 (unicode61 + trigram CJK) 내장.
 spec: <agent-home>/.agent_reports/spec/prd.md (legacy: .claude_reports/spec/prd.md).
 
-설계 불변식:
-  - SQLite DB 가 진실원천. dump.jsonl 은 결정론적 텍스트 mirror.
-  - 기억 저장 = 자동(품질필터만, 사람 승인 게이트 없음).
-  - 외부 의존 0 (stdlib: sqlite3/argparse/json/hashlib/...). rg 있으면 회상 가속.
+Design boundary:
+  - SQLite is the source of truth; dump.jsonl is a deterministic text mirror.
+  - Agents make semantic memory decisions. This module enforces mechanical
+    storage, retrieval, scope, lifecycle, telemetry, and recovery contracts.
+  - No external Python dependencies; rg accelerates session retrieval when present.
 """
-import argparse, datetime, hashlib, json, math, os, re, sqlite3, subprocess, sys, time, unicodedata
+import argparse, datetime, hashlib, json, os, re, sqlite3, subprocess, sys
 from collections import namedtuple
 from pathlib import Path
 
@@ -56,8 +57,6 @@ RECORD_COLS = ("id", "tier", "scope", "type", "cwd_origin", "created", "updated"
                "expires", "source", "tags", "links", "body", "strength", "last_accessed",
                "injection_flag", "delivery_state")
 DELIVERY_STATES = ("ordinary", "pending", "consumed")
-RECALL_AUTO_LIMIT = 3
-RECALL_AUTO_MAX_CHARS = 1200
 RECALL_EVENTS = Path(os.environ.get(
     "MEM_RECALL_EVENTS",
     Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
@@ -943,20 +942,6 @@ def _has_cjk(s):
     return bool(re.search(r"[　-鿿가-힯]", s))
 
 
-_AUTO_STOPWORDS = frozenset({
-    "그리고", "그러면", "그래서", "그런데", "근데", "뭔가", "그냥", "이거", "저거",
-    "여기", "아래", "위에", "지금", "오늘", "현재", "관련", "대해", "대한", "통해",
-    "있는", "없는", "있어", "없어", "하는", "해서", "하면", "되는", "되어", "같은",
-    "같아", "같지가", "것", "거", "잘", "좀", "더", "정도", "말이지", "혹시", "필요",
-    "상황", "작업", "agent", "에이전트", "code", "코드", "please", "this", "that", "with",
-    "from", "have", "what", "when", "where", "about", "into", "then", "just", "current",
-})
-_AUTO_KO_SUFFIXES = tuple(sorted(
-    set(_KO_PARTICLES) | {"쪽", "도록", "이라서", "라서", "이라", "라고", "인데", "하고",
-                          "하게", "해서", "하면", "되는", "되어", "있어", "같아"},
-    key=len, reverse=True))
-
-
 def _visibility_clause(alias="r", all_projects=False):
     """Shared read fence: flagged rows never surface; default is current project + global."""
     prefix = f"{alias}." if alias else ""
@@ -981,50 +966,6 @@ def _touch_records(ids):
     finally:
         if con is not None:
             con.close()
-
-
-def _auto_terms(query):
-    text = unicodedata.normalize("NFKC", query or "").lower()
-    raw = re.findall(r"[a-z0-9가-힣][a-z0-9가-힣_./:@+-]*", text)
-    out = []
-    for token in raw:
-        token = token.strip("._/:@+-")
-        if not token or token in _AUTO_STOPWORDS:
-            continue
-        if _has_cjk(token):
-            # 조사 뒤 의미 suffix가 겹치는 형태(메모리쪽을 → 메모리)를 최대 2단계 정규화.
-            for _ in range(2):
-                stripped = False
-                for suffix in _AUTO_KO_SUFFIXES:
-                    if token.endswith(suffix) and len(token) - len(suffix) >= 2:
-                        token = token[:-len(suffix)]
-                        stripped = True
-                        break
-                if not stripped:
-                    break
-            if len(token) < 2 or token in _AUTO_STOPWORDS:
-                continue
-        elif len(token) < 3 and not any(ch.isdigit() for ch in token):
-            continue
-        if token not in out:
-            out.append(token)
-        if len(out) >= 8:
-            break
-    return out
-
-
-def _term_match(term, body):
-    normalized = unicodedata.normalize("NFKC", body or "").lower()
-    compact = re.sub(r"[^a-z0-9가-힣_./:@+-]+", "", normalized)
-    identifier = bool(re.search(r"[_./:@+-]|\d", term))
-    if term in normalized or term in compact:
-        return True, True, identifier or len(term) >= (3 if _has_cjk(term) else 6)
-    if _has_cjk(term) and len(term) >= 4:
-        grams = {term[i:i + 3] for i in range(len(term) - 2)}
-        ratio = sum(g in compact for g in grams) / max(1, len(grams))
-        if ratio >= 0.67:
-            return True, False, len(term) >= 5
-    return False, False, False
 
 
 def _append_recall_event(event):
@@ -1084,99 +1025,9 @@ def _append_write_event(action, rid, tier=None, scope=None, rtype=None, actor=No
         pass
 
 
-def auto_recall(query, limit=RECALL_AUTO_LIMIT, touch=True, json_output=False):
-    started = time.monotonic()
-    terms = _auto_terms(query)
-    candidates = []
-    raw_candidate_count = 0
-    reject_reason = "no-terms" if not terms else "no-candidates"
-    if DB.exists() and terms:
-        con = get_con()
-        try:
-            fence, params = _visibility_clause("", all_projects=False)
-            rows = list(db_iter_records(
-                con, f"{fence} AND (expires IS NULL OR expires>=? OR delivery_state='pending')",
-                [*params, today()]))
-        finally:
-            con.close()
-        doc_freq = {term: 0 for term in terms}
-        matches_by_id = {}
-        for meta, body in rows:
-            details = {}
-            for term in terms:
-                matched, exact, specific = _term_match(term, body)
-                if matched:
-                    doc_freq[term] += 1
-                    details[term] = (exact, specific)
-            if details:
-                matches_by_id[meta["id"]] = (meta, body, details)
-        total_docs = max(1, len(rows))
-        effective = [term for term in terms
-                     if doc_freq[term] and (doc_freq[term] <= max(8, math.ceil(total_docs * 0.45))
-                                            or bool(re.search(r"[_./:@+-]|\d", term)))]
-        for rid, (meta, body, details) in matches_by_id.items():
-            matched = [term for term in effective if term in details]
-            if not matched:
-                continue
-            coverage = len(matched) / max(1, len(effective))
-            rare_specific = any(
-                details[term][0] and details[term][1]
-                and doc_freq[term] <= max(2, math.ceil(total_docs * 0.05))
-                for term in matched)
-            qualified = (len(matched) >= 2 and coverage >= 0.5) or rare_specific
-            if not qualified:
-                continue
-            idf = sum(math.log((total_docs + 1) / (doc_freq[t] + 1)) + 1 for t in matched)
-            score = idf + coverage * 2 + min(meta.get("strength") or 1, 5) * 0.05
-            candidates.append({
-                "id": rid, "tier": meta["tier"], "scope": meta["scope"],
-                "type": meta["type"], "delivery_state": meta.get("delivery_state", "ordinary"),
-                "body": body, "score": round(score, 4),
-                "matched_terms": matched,
-            })
-        raw_candidate_count = len(matches_by_id)
-        candidates.sort(key=lambda item: (-item["score"], item["id"]))
-        reject_reason = "low-confidence" if matches_by_id and not candidates else (
-            "no-candidates" if not candidates else "")
-
-    results = candidates[:max(1, min(limit, 100))]
-    if touch and results:
-        _touch_records([item["id"] for item in results])
-    event = {
-        "at": datetime.datetime.now().isoformat(timespec="seconds"),
-        "event": "auto-recall",
-        "runtime": os.environ.get("MEM_RECALL_RUNTIME", "unknown"),
-        "mode": "automatic",
-        "term_count": len(terms),
-        "candidate_count": raw_candidate_count,
-        "qualified_count": len(candidates),
-        "injected_ids": [item["id"] for item in results] if touch else [],
-        "reject_reason": reject_reason,
-        "latency_ms": round((time.monotonic() - started) * 1000, 2),
-    }
-    _append_recall_event(event)
-    if json_output:
-        payload = dict(event)
-        payload["results"] = results
-        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
-    elif results:
-        lines = ["# Relevant memory (automatic recall)"]
-        for item in results:
-            snippet = _first_line(item["body"]).replace("\n", " ")[:220]
-            rid = item["id"]
-            identifier = f"[pending:{rid}]" if item.get("delivery_state") == "pending" else rid
-            lines.append(
-                f"  [{item['tier']}/{item['scope']}/{item['type']}] {identifier}: {snippet}")
-        block = "\n".join(lines)
-        print(block[:RECALL_AUTO_MAX_CHARS])
-    return results
-
-
 def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
-           full=False, touch=True, auto=False, json_output=False):
+           full=False, touch=True, json_output=False):
     limit = max(1, min(int(limit), 100))
-    if auto:
-        return auto_recall(query, limit=limit, touch=touch, json_output=json_output)
     if not json_output:
         print(f"# recall: \"{query}\"  [tier={tier or '*'} scope={scope or '*'} "
               f"cwd={'현재' if cwd else '전체'}]")
@@ -3472,7 +3323,6 @@ def main():
     r.add_argument("--sessions", action="store_true")
     r.add_argument("--full", action="store_true", help="ranked hit의 전문 출력")
     r.add_argument("--limit", type=_recall_limit, default=20)
-    r.add_argument("--auto", action="store_true", help="prompt용 고신뢰 자동 회상 probe")
     r.add_argument("--json", dest="json_output", action="store_true")
     r.add_argument("--no-touch", action="store_true", help="last_accessed를 갱신하지 않음")
 
@@ -3582,7 +3432,7 @@ def main():
     elif args.cmd == "recall":
         recall(args.query, tier=args.tier, scope=args.scope,
                cwd=not args.all, sessions=args.sessions, limit=args.limit,
-               full=args.full, touch=not args.no_touch, auto=args.auto,
+               full=args.full, touch=not args.no_touch,
                json_output=args.json_output)
     elif args.cmd == "show":
         sys.exit(0 if show_record(args.id, all_projects=args.all) else 1)

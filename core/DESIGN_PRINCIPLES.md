@@ -46,6 +46,8 @@
 
 **anti-pattern (worklog 참사형, 2026-06-22)**: spec이 "의미 판단"을 명시했는데 구현이 그 의미를 토큰 매칭·규칙 스크립트로 *내려버리는* 것. 규칙은 의미를 capture 못 하므로 silent 오작동.
 
+**Memory application (D-40)**: storing, retrieving, promoting, merging, and pruning memory are semantic decisions owned by the acting agent. Deterministic memory code may enforce storage integrity, scope isolation, pending protection, lifecycle mechanics, bounded telemetry, and recovery, but it does not infer relevance from prompt tokens, fixed phrases, content categories, or confidence thresholds.
+
 **검증 절차 (3 step)**:
 
 - **(a)** spec 본문에서 _의미 판단 구간_ 찾기 (키워드 신호: 의미/판단/적절/맥락/contextual/semantic 등).
@@ -209,6 +211,7 @@ per-project 메모는 두 layer 분리.
 | **사용자 수동** | DB working tier — `/post-it` 가 `mem note`/`mem add` 로 author; 5 카테고리(conventions·external resources·open threads·decisions·next session hints)는 `type` taxonomy 로 유지 | `/post-it` (사용자 명시) | 사용자가 박아두려는 conventions / resources / threads / decisions / hints |
 | **자동 학습** | DB working/durable — 외부 distiller 가 세션 delta 를 distill → `mem add` (Cluster C) | **외부 detached distiller** (메인 아님; turn-counter·SessionEnd hook 트리거 — §0.5 판단 외부화) | 재사용 절차·교정·컨벤션·교훈 자동 학습 |
 
+- **Semantic ownership**: the main agent, distiller, or curator decides contextually what to retrieve or mutate. Scripts expose candidates and enforce mechanical safety; they do not replace that judgment with keyword rules or automatic prompt classification.
 - 내장 file 메모리(`<agent-home>/projects/*/memory/`)는 **직접 write hard-block**(`builtin-memory-guard.sh`); `mem sync` 는 다른 세션·하네스의 stray write 만 안전망 흡수. 기억 write 경로 = `mem`(DB) 단일.
 - **삭제·prune·consolidate·merge·graduate(비가역) = 세션끝 deep curator** (Cluster E — no-tools + action JSON + script 실행, D-18; concrete runtime mapping 은 adapter 문서가 소유; 비가역삭제 3중방어). N턴 distiller = fast add-only worker. 메인 housekeeping 0. working TTL(21일) = deterministic backstop. (원칙: 추가[가역]=외부 자동 / 정리·삭제[비가역]=세션끝 deep curator.)
 - 세션 주입 = `mem inject --hook` (DB working+durable+profile). 상세 SoT = runtime adapter bootstrap + MEMORY §7.

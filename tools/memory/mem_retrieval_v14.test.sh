@@ -142,11 +142,11 @@ gone="$(python3 -c "import sqlite3;print(sqlite3.connect('$STORE/memory.db').exe
 [ "$survive" = 1 ] && [ "$gone" = 0 ] && ok "lifecycle preserves pending expired and removes ordinary expired" \
   || bad "lifecycle pending=$survive ordinary=$gone"
 
-EXPIRED_AUTO="$(cli recall 'stage-dispatch retrieval handoff 이어서 처리' --auto --limit 3 --no-touch)"
+EXPIRED_RECALL="$(cli recall 'tail-UNIQUE-991' --limit 3 --no-touch)"
 EXPIRED_INJECT="$(MEM_INJECT_MAX_CHARS=8000 MEM_INJECT_MAX_BULLETS=50 MEM_INJECT_MAX_WORKING=50 cli inject)"
-grep -q "\[pending:$RID\]" <<<"$EXPIRED_AUTO" && grep -q "\[pending:$RID\]" <<<"$EXPIRED_INJECT" \
-  && ok "expired pending remains visible to auto recall and injection with actionable id" \
-  || bad "expired pending retrieval auto='$EXPIRED_AUTO' inject='$EXPIRED_INJECT'"
+grep -q "\[pending:$RID\]" <<<"$EXPIRED_RECALL" && grep -q "\[pending:$RID\]" <<<"$EXPIRED_INJECT" \
+  && ok "expired pending remains visible to explicit recall and injection with actionable id" \
+  || bad "expired pending retrieval recall='$EXPIRED_RECALL' inject='$EXPIRED_INJECT'"
 
 cli consume "$RID" >/dev/null
 consumed="$(python3 - "$STORE/memory.db" "$RID" <<'PY'
@@ -183,38 +183,28 @@ cli show legacy_poison --all >/dev/null 2>&1; poison_show=$?
   && ok "legacy graveyard restore recomputes injection quarantine" \
   || bad "legacy restore injection_flag=$poison show_rc=$poison_show"
 
-echo "== high-confidence auto recall + no-touch telemetry =="
+echo "== agent-initiated recall + no-touch telemetry =="
 python3 - "$STORE/memory.db" "$RID" <<'PY'
 import sqlite3,sys
 c=sqlite3.connect(sys.argv[1]); c.execute("update records set last_accessed='2000-01-01' where id=?",(sys.argv[2],)); c.commit(); c.close()
 PY
-AUTO="$(cli recall 'stage-dispatch retrieval handoff 이어서 처리' --auto --limit 3 --no-touch)"
+EXPLICIT="$(cli recall 'tail-UNIQUE-991' --limit 3 --no-touch)"
 KOREAN_ID="$(cli add durable fact '메모리 회상 접근성과 전문 조회 경로를 deterministic하게 보강한다' | sed -n 's/.*→ //p')"
-KOREAN="$(cli recall '근데 메모리쪽을 잘 꺼내쓰도록 되어있어? 뭔가 그러는것 같지가 않아서 말이지' --auto --limit 3 --no-touch)"
-NOISE="$(cli recall '오늘 날씨가 어떤지 잘 알려줘' --auto --limit 3 --no-touch)"
+KOREAN="$(cli recall '메모리 회상 접근성' --limit 3 --no-touch)"
 LA="$(python3 -c "import sqlite3;print(sqlite3.connect('$STORE/memory.db').execute(\"select last_accessed from records where id='$RID'\").fetchone()[0])")"
-grep -q "$RID" <<<"$AUTO" && grep -q "$KOREAN_ID" <<<"$KOREAN" \
-  && [ -z "$NOISE" ] && [ "$LA" = 2000-01-01 ] \
-  && ok "identifier/actual Korean component prompts hit; generic no-op; no-touch preserved" \
-  || bad "auto='$AUTO' korean='$KOREAN' noise='$NOISE' last_accessed=$LA"
-grep -q '"latency_ms"' "$STORE/events.jsonl" && grep -q '"event": "show"' "$STORE/events.jsonl" \
-  && grep -q '"event": "consume"' "$STORE/events.jsonl" && ! grep -q '오늘 날씨' "$STORE/events.jsonl" \
+grep -q "$RID" <<<"$EXPLICIT" && grep -q "$KOREAN_ID" <<<"$KOREAN" \
+  && [ "$LA" = 2000-01-01 ] \
+  && ok "explicit identifier and Korean queries hit while no-touch preserves access time" \
+  || bad "explicit='$EXPLICIT' korean='$KOREAN' last_accessed=$LA"
+grep -q '"event": "explicit-recall"' "$STORE/events.jsonl" && grep -q '"event": "show"' "$STORE/events.jsonl" \
+  && grep -q '"event": "consume"' "$STORE/events.jsonl" && ! grep -q 'tail-UNIQUE-991' "$STORE/events.jsonl" \
   && ok "bounded telemetry distinguishes retrieval/consume without raw prompt" || bad "telemetry contract"
 
-AUTO_PHRASE_JSON="$(cli recall '지난번 stage-dispatch retrieval handoff 이어서 처리' --auto --limit 3 --no-touch --json)"
-AUTO_PLAIN_JSON="$(cli recall 'stage-dispatch retrieval handoff 이어서 처리' --auto --limit 3 --no-touch --json)"
-python3 - "$AUTO_PHRASE_JSON" "$AUTO_PLAIN_JSON" <<'PY'
-import json, sys
-a, b = (json.loads(value) for value in sys.argv[1:])
-valid = (
-    a["mode"] == b["mode"] == "automatic"
-    and [row["id"] for row in a["results"]] == [row["id"] for row in b["results"]]
-)
-raise SystemExit(0 if valid else 1)
-PY
-[ "$?" -eq 0 ] \
-  && ok "natural-language phrasing cannot change auto-recall mode, threshold, or results" \
-  || bad "phrase-dependent auto-recall behavior remains"
+cli recall 'tail-UNIQUE-991' --auto >"$TMP/retired-auto.out" 2>"$TMP/retired-auto.err"
+retired_rc=$?
+[ "$retired_rc" -ne 0 ] && grep -q 'unrecognized arguments: --auto' "$TMP/retired-auto.err" \
+  && ok "semantic auto-recall CLI is retired" \
+  || bad "retired --auto path remains active rc=$retired_rc"
 
 SNAP="$(cli curate-snapshot)"
 grep -q "PROTECTED PENDING" <<<"$SNAP" && grep -q "$PTHREAD" <<<"$SNAP" \

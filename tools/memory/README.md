@@ -1,9 +1,14 @@
-# tools/memory — 통합 기억 시스템 (`mem`)
+# tools/memory — Unified Memory System (`mem`)
 
-Hermes 메모리 벤치마킹의 store/write 층. spec: `<artifact-root>/spec/prd.md` (`.agent_reports` 우선, legacy `.claude_reports` 호환) (Unified Memory System).
+Portable store and retrieval layer. Spec: `<artifact-root>/spec/prd.md` (`.agent_reports` first, legacy `.claude_reports` compatible).
 
-## 한 줄
-흩어진 기억(post-it 단기 · auto-memory 장기 · user_profile 전역)을 **하나의 SQLite store + tier 모델**로 통합. 자동 기록 + FTS 회상. 진실원천은 `memory.db`(DB-SoT), git은 텍스트 덤프(`dump.jsonl`)를 mirror.
+## Boundary
+
+Short-lived post-its, durable learned memory, and the global profile share one
+SQLite store. The acting agent decides contextually what to store, retrieve,
+promote, merge, or prune. Code owns mechanical integrity, scope isolation,
+pending protection, lifecycle execution, bounded telemetry, and recovery.
+`memory.db` is the source of truth; `dump.jsonl` is its text mirror.
 
 ## 구조
 | 층 | 위치 | git | 역할 |
@@ -20,7 +25,6 @@ Hermes 메모리 벤치마킹의 store/write 층. spec: `<artifact-root>/spec/pr
 | `add <tier> <type> "<body>" [--scope] [--tags] [--links] [--source] [--requires-consume]` | 수동 기록 (품질게이트·dedup·injection 통과분 → DB INSERT). `type=handoff` 또는 `--requires-consume`은 pending |
 | `note "<body>" [--type] [--requires-consume]` | working tier 단축 기록. 인계 목적 thread는 `--requires-consume`으로 pending 지정 |
 | `recall "<q>" [--tier] [--scope] [--all] [--sessions] [--full] [--limit 1..100]` | 명시 회상 (FTS5 bm25 + trigram CJK, LIKE fallback, +raw 세션). 기본 limit 20; `--full`은 같은 ranked ID의 snippet을 body 전문으로 교체 |
-| `recall "<prompt>" --auto [--limit 1..100] [--json] [--no-touch]` | 모든 project prompt용 고신뢰 후보 엔진. 저신뢰면 no-hit; `--json`은 hook/telemetry용 구조 출력; `--no-touch`는 후보 점검 시 `last_accessed`를 갱신하지 않음 |
 | `show <id> [--all]` | visibility fence 안의 단일 레코드 metadata+body 전문. 기본 current project+global; 타 project는 `--all`; injection-flagged/비가시 ID는 generic not-found |
 | `consume <id>` | pending handoff/thread를 명시적으로 consumed 전이. 조회·주입은 소비로 간주하지 않음 |
 | `restore <id>` | action/canonical 메타가 보존된 graveyard에서 단일 레코드를 복구 |
@@ -47,12 +51,13 @@ Hermes 메모리 벤치마킹의 store/write 층. spec: `<artifact-root>/spec/pr
 
 > **γ 큐레이터 보안 불변(D-18/D-35)**: 위 5개 변이 서브커맨드(reinforce/merge/prune/graduate/reattribute)는 distiller LLM 이 **직접 실행하지 않는다**. distiller(no-tools)는 action JSON(`{"action":…}`)만 출력하고, `tools/memory/apply-distill-actions.py` 가 파싱·shape 검증·멤버십 게이트 후 이 서브커맨드를 **argv 로** 호출한다. 각 서브커맨드는 자체 화이트리스트 게이트로 현 프로젝트 외(profile·global·타 프로젝트·존재안함) 대상을 거부(비0 exit, 삭제 0). pending은 snapshot 멤버십과 실행시점 DB 이중 가드로 보호하며, prune/merge/delete는 삭제 전 graveyard 백업을 남긴다.
 
-## Retrieval v14 불변식
-- `show`, 명시 recall/full, SessionStart inject, 자동 hook hit는 handoff를 소비하지 않는다. 명시 recall/show는 `last_accessed`만 갱신하고, 후보 probe의 `--no-touch`는 access도 갱신하지 않는다. source upsert/body dedup도 기존 pending을 ordinary로 낮추지 않는다.
-- UserPromptSubmit hook은 tracked/project cwd의 모든 일반 발화를 shared `recall "<prompt>" --auto --limit 3` 엔진에 넘긴다. 2개 이상 distinct match+coverage 또는 rare CJK/identifier exact 같은 고신뢰 hit만 top 3·총 1200자 안에서 주입한다.
-- retrieval telemetry는 raw prompt를 저장하지 않고 `auto-recall`, `explicit-recall`, `show`, `session-inject`, `consume`을 event별로 구분한다. auto에는 runtime/mode/term·candidate·qualified 수/injected IDs/reject reason/latency, 나머지에는 accessed·injected·consumed IDs와 full/session 같은 bounded 속성만 남긴다.
+## Retrieval boundary (D-40)
+- `show`, explicit recall/full, and SessionStart injection do not consume a handoff. Explicit recall/show update `last_accessed` unless `--no-touch` is supplied. Source upsert/body dedup never lowers an existing pending record to ordinary.
+- Prompt-submit hooks do not classify every prompt for recall. The agent chooses when prior context may help, then invokes `recall.sh` or `mem recall`.
+- FTS/BM25 ranking, CJK/identifier tokenization, scope fences, and limits organize results for an agent-chosen query. They do not decide whether recall is relevant.
+- Retrieval telemetry does not store raw prompts and distinguishes `explicit-recall`, `show`, `session-inject`, and `consume`.
 - telemetry 기본 위치는 `$XDG_STATE_HOME/agent-memory/recall-events.jsonl`(미설정 시 `~/.local/state/agent-memory/`)이며 memory git mirror 밖의 local state다. `MEM_RECALL_EVENTS`로 테스트/운영 경로를 바꿀 수 있다.
-- SessionStart 기본 2000자·15 bullet cap은 그대로 유지한다. retrieval 배포 뒤 `probe→qualified→injected→explicit-recall/show→consume` 퍼널로 단순 노출과 실제 재사용률을 분리 관찰한 뒤 별도 조정한다.
+- The SessionStart 2,000-character/15-bullet cap remains.
 
 env override (테스트용): `MEM_STORE` · `MEM_PROJECTS` · `MEM_PROFILE` · `MEM_INJECT_MAX_CHARS` · `MEM_INJECT_MAX_BULLETS` · `MEM_INJECT_MAX_WORKING` · `MEM_INJECT_MAX_DURABLE` · `MEM_INJECT_CLEANUP_LINES` · `MEM_INJECT_SNIPPET_CHARS` · `MEM_DISTILL` · `MEM_DISTILL_ENABLE` · `MEM_DISTILL_WORKER` · `MEM_DISTILL_MODEL` · `MEM_WRITE_EVENTS` · `MEM_ACTOR` · `MEM_SID`.
 
@@ -68,18 +73,22 @@ env override (테스트용): `MEM_STORE` · `MEM_PROJECTS` · `MEM_PROFILE` · `
 - `MEM_INJECT_MAX_CHARS` / `MEM_INJECT_MAX_BULLETS` → SessionStart memory injection hard cap when an adapter enables automatic or opt-in injection. 기본 2000자·15 bullet. 초과분은 본문 주입 대신 생략 요약과 `mem recall` 안내로 전환해 초기 컨텍스트를 보호.
 - `MEM_INJECT_MAX_WORKING` / `MEM_INJECT_MAX_DURABLE` / `MEM_INJECT_CLEANUP_LINES` / `MEM_INJECT_SNIPPET_CHARS` → 위 hard cap 안에서 섹션별 기본 예산을 조정. 기본 working 8, durable 4, cleanup 2줄, snippet 100자.
 - `MEM_DISTILL_ENABLE` → **distiller opt-in 게이트**. `1` 일 때만 `mem-distill-dispatch.sh` 가 실제 분사. 미설정이면 hook 은 no-op. 이유: 매 세션 종료·N턴마다 background LLM 자동 실행(비용·동작 인지) + distiller 가 대화 본문(외부 입력일 수 있음)을 LLM 으로 읽는 신뢰경계 면 → 사용자가 검토 후 활성화. Adapter-native settings own whether this is enabled in a runtime. v8 no-tools 재설계로 acceptance(임의명령 차단 실측)·env-상속 재귀가드·ghost-marker·e2e 검증 통과 후 ENABLE 가능. (`--permission-mode` 는 default 유지 — dontAsk/bypass 는 allow-all 이라 금지.)
-- `MEM_DISTILL` → `1` 이면 `mem-distill-dispatch.sh`·`mem-turn-nudge.sh`·`mem-recall-inject.sh` 세 hook 의 재귀가드가 즉시 exit(distiller 세션의 SessionEnd·UserPromptSubmit 가 다시 분사를 트리거하지 않도록 차단 — v8 세 트리거 가드).
+- `MEM_DISTILL` → `1` keeps distillation lifecycle hooks from recursively launching another worker. `mem-recall-inject.sh` is a deprecated no-op retained only for stale installed projections.
 - `MEM_DISTILL_WORKER` → shared dispatcher 가 호출할 adapter-owned executable. Contract: `<worker> <mode> <model> <prompt-file>`; stdout 은 JSON-lines proposal 이고 no-tools/permission contract 는 adapter worker 가 보장한다.
 - `MEM_DISTILL_MODEL` → distiller 분사 모델 지정. Concrete defaults belong to adapter-native realization docs.
 
-## 자동 write 불변식
-기억 저장 = **자동**(사람 승인 게이트 없음 — "결정은 사용자"는 *세팅 변경*용이지 *기억 기록*용 아님). 안전장치는 자동 필터뿐: 품질게이트(promote/skip) · dedup · injection/secret 가드. 세팅·원칙 변경은 본 모듈 영역 아님(여전히 사람 게이트).
+## Agent-owned semantic judgment
+
+There is no deterministic promote/skip classifier. Main agents, distillers, and
+curators make semantic choices from context. Scripts validate structured
+actions and enforce storage safety; keyword lists, fixed phrases, content
+categories, and confidence thresholds do not substitute for an agent.
 
 ## 운영 계약 (2026-07-10)
 - **저장 구조**: `memory.db` (SQLite WAL) — schema v5 `records` 테이블 16컬럼(기존 v4 15컬럼 + `delivery_state`) + FTS5 unicode61 가상테이블(`records_fts`) + trigram CJK 보조 테이블(`records_trig`). `.index.db` 파생 파일 폐기(DB 내장으로 통합).
 - **git mirror**: `dump.jsonl` — id 정렬, `sort_keys=True`, 레코드당 1줄, NULL은 JSON `null`로 표기(키 누락·빈문자열 금지). 복원: `mem import dump.jsonl`.
 - **하네스 wired**: SessionStart `mem inject --hook` can be a runtime hook/preflight realization, but adapters may keep it opt-in to avoid repeated startup/resume/compact context injection; SessionEnd `mem sync`, and optional SessionEnd `mem-distill-dispatch.sh` are runtime hook/preflight realizations. `sync`는 흡수 + FTS 재구축 + `dump.jsonl` 재export 3단계 수행. `mem-distill-dispatch.sh` 는 빈-delta 조기 exit + detached spawn 으로 SessionEnd 블로킹 없음. **단 distiller 는 `MEM_DISTILL_ENABLE=1` opt-in 전엔 no-op**(기본 비활성 — 비용·신뢰경계 검토 후 사용자가 켬).
-- **recall.sh**: `mem recall` thin wrapper (store FTS5 bm25 + trigram CJK + LIKE fallback + full/limit/auto options).
+- **recall.sh**: `mem recall` thin wrapper (store FTS5 bm25 + trigram CJK + LIKE fallback + full/limit options).
 - **register-postit deprecated**: legacy-migration-only. 현 post-it 경로는 DB working 레코드 직접 write (`mem note`/`mem add`) — `.postit-roots` 레지스트리·`migrate` post-it 소스는 구 markdown 이관 전용.
 - ✅ **live 적용 완료**: `migrate --apply` 로 기존 markdown SoT + auto-memory + post-it → DB 이관 완료. DB-as-SoT 전환 끝 (구 `projects/*/memory/` 는 보존, 추가형).
 

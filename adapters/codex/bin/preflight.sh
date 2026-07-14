@@ -33,7 +33,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh token-budget [cwd] [session-id] [kv|json|hook]
        preflight.sh track [cwd] [session-id]
        preflight.sh memory [cwd]
-       preflight.sh recall <prompt> [cwd] [session-id]
+       preflight.sh recall <query> [cwd] [session-id]
        preflight.sh briefing [cwd]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
@@ -381,13 +381,11 @@ case "$cmd" in
     (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/mem.py" inject)
     ;;
   recall)
-    [ "$#" -ge 2 ] || { echo "codex preflight: recall requires prompt text" >&2; exit 64; }
-    prompt=$2
+    [ "$#" -ge 2 ] || { echo "codex preflight: recall requires a query" >&2; exit 64; }
+    query=$2
     cwd=${3:-$PWD}
-    sid=${4:-default}
-    AGENT_HOME="$AGENT_ROOT" MEM_RECALL_RUNTIME=codex \
-      "$ROOT/hooks/mem-recall-inject.sh" --prompt "$prompt" --cwd "$cwd" \
-      --session-id "$sid" --format text
+    (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" MEM_RECALL_RUNTIME=codex \
+      "$ROOT/tools/memory/recall.sh" "$query")
     ;;
   briefing)
     cwd=${2:-$PWD}

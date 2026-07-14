@@ -1,5 +1,5 @@
 ---
-description: "Read-only memory scout for recall-first deep memory reconnaissance."
+description: "Read-only memory scout for agent-initiated deep memory reconnaissance."
 mode: subagent
 tools:
   task: false

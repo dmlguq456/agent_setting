@@ -25,14 +25,6 @@ def first_string(mapping: dict[str, Any], *keys: str) -> str:
     return ""
 
 
-def nested_mapping(payload: dict[str, Any], *keys: str) -> dict[str, Any]:
-    for key in keys:
-        value = payload.get(key)
-        if isinstance(value, dict):
-            return value
-    return {}
-
-
 def nested_string(payload: dict[str, Any], *keys: str) -> str:
     direct = first_string(payload, *keys)
     if direct:
@@ -43,22 +35,6 @@ def nested_string(payload: dict[str, Any], *keys: str) -> str:
             found = nested_string(value, *keys)
             if found:
                 return found
-    return ""
-
-
-def text_from_value(value: Any) -> str:
-    if isinstance(value, str):
-        return value
-    if isinstance(value, list):
-        return "\n".join(part for item in value if (part := text_from_value(item)))
-    if isinstance(value, dict):
-        direct = first_string(value, "prompt", "message", "user_prompt", "userPrompt", "text")
-        if direct:
-            return direct
-        for key in ("content", "messages", "input", "payload", "event", "data"):
-            text = text_from_value(value.get(key))
-            if text:
-                return text
     return ""
 
 
@@ -80,14 +56,6 @@ def session_id(payload: dict[str, Any]) -> str:
     if not sid and isinstance(session, dict):
         sid = first_string(session, "id")
     return sid or "codex-hook"
-
-
-def prompt_text(payload: dict[str, Any]) -> str:
-    for key in ("prompt", "message", "user_prompt", "userPrompt", "text", "content", "messages", "input", "payload", "event", "data"):
-        text = text_from_value(payload.get(key))
-        if text:
-            return text
-    return ""
 
 
 def run_preflight(*args: str, timeout_seconds: float | None = None) -> str:
@@ -156,14 +124,11 @@ def main() -> int:
     payload = load_payload()
     current_cwd = cwd(payload)
     sid = session_id(payload)
-    prompt = prompt_text(payload)
 
     parts = []
     mode_context = run_preflight("mode", current_cwd, sid)
     if env_truthy("CODEX_MODE_ANCHOR_ALWAYS") or not is_default_tracked_anchor(mode_context):
         parts.append(mode_context)
-    if prompt:
-        parts.append(run_preflight("recall", prompt, current_cwd, sid))
     parts.append(run_preflight("briefing", current_cwd))
     # Phase 1 token self-regulation is transition-only. Normal, unknown,
     # native-owned, and repeated bands return an empty string (zero injection).

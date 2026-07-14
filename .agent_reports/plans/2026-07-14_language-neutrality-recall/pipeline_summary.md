@@ -1,6 +1,15 @@
 # Pipeline summary
 
-Status: phase 2 Englishization in progress.
+Status: phase 4 memory boundary validated; broader Englishization remains in progress.
+
+## Phase 4 memory semantic boundary
+
+- Semantic choices about storing, retrieving, promoting, merging, and pruning
+  memory belong to the acting agent.
+- Deterministic memory code is limited to mechanical integrity, isolation,
+  lifecycle execution, pending protection, bounded telemetry, and recovery.
+- The automatic prompt classifier and recall injection path are retired;
+  explicit multilingual retrieval remains.
 
 This cycle is isolated from the concurrent runtime-activation implementation.
 Its source ownership is language policy, role/mode output contracts, and memory
@@ -15,10 +24,24 @@ recall semantics; installer and root README files are excluded.
 - Active compatibility/Claude Skills and team routers no longer impose Korean
   for chat reports or internal return summaries. Explicit publication and
   target-artifact language contracts remain.
-- Automatic recall no longer recognizes fixed natural-language signal phrases;
-  all eligible prompts use one content-based qualification path.
+- Prompt-submit bridges no longer classify prompts or inject memory. Agents
+  decide contextually when retrieval may help and then invoke explicit recall.
 - Korean users retain CJK tokenization and particle-normalized retrieval. The
   focused retrieval and hook suites pass.
+
+## Phase 4 result
+
+- Removed the semantic `mem recall --auto` implementation and its fixed
+  keyword, score, and threshold machinery.
+- Removed prompt capture and automatic recall injection from Claude Code,
+  Codex, and OpenCode runtime bridges. The old shared hook is a silent,
+  fail-open compatibility shim only.
+- Reframed shared and adapter distillation prompts so the acting agent owns
+  storing, reinforcing, merging, pruning, graduating, and reattribution
+  decisions. Scripts retain mechanical validation, pending protection,
+  transaction safety, recovery, and bounded telemetry.
+- Kept explicit multilingual retrieval intact, including CJK tokenization and
+  Korean particle normalization.
 
 ## Phase 2 Englishization batch
 
@@ -39,10 +62,12 @@ recall semantics; installer and root README files are excluded.
 
 - Manifest and all affected Claude/Codex/OpenCode projection checks: pass.
 - Skill conformance: pass, 26 invocation classifications plus audience-language neutrality.
-- Recall hook regression: 18/18 pass.
+- Retired recall-hook compatibility regression: 4/4 pass.
 - Multilingual retrieval regression: 20/20 pass, including Korean particle normalization.
+- Distillation dispatch regression: 36/36 pass.
+- Distillation lifecycle regression: 37/37 pass; turn-nudge regression: 11/11 pass.
 - Adaptation boundary: pass.
-- Portable guards: pass.
+- Portable guards: 343/343 pass.
 
 ## Phase 3 metadata and runtime-script batch
 

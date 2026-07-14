@@ -431,9 +431,9 @@ else
 fi
 if "$RECALL" --prompt "일반 질문" --cwd "$TMP/flowproj" --format text >/tmp/recall.out 2>/tmp/recall.err \
   && [ ! -s /tmp/recall.out ]; then
-  ok "recall wrapper no-ops when the shared engine finds no qualified result"
+  ok "retired recall hook is a silent compatibility no-op"
 else
-  bad "recall wrapper should no-op when the shared engine finds no qualified result"
+  bad "retired recall hook should remain a silent compatibility no-op"
 fi
 if "$CODEX" recall "전에 결정한 내용 뭐였지" "$TMP/flowproj" >/tmp/recall.out 2>/tmp/recall.err; then
   ok "codex recall wrapper exits cleanly"
@@ -1964,10 +1964,10 @@ fi
 if (cd "$TMP/flowproj" && MEM_STORE="$TMP/codex_hook_mem" python3 "$ROOT/tools/memory/mem.py" add durable thread "지난번 결정론 우선 설계가 핵심이라고 배웠다" >/tmp/codex_nested_prompt_seed.out 2>/tmp/codex_nested_prompt_seed.err) \
   && printf '{"input":{"messages":[{"role":"user","content":[{"type":"text","text":"지난번 결정론 내용을 다시 확인"}]}]},"session_id":"nestedpromptsid","cwd":"%s"}\n' "$TMP/flowproj" \
   | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_nested_prompt_hook.out 2>/tmp/codex_nested_prompt_hook.err \
-  && grep -q '우선 설계가 핵심' /tmp/codex_nested_prompt_hook.out; then
-  ok "codex native prompt hook extracts nested message content for recall"
+  && ! grep -q '우선 설계가 핵심' /tmp/codex_nested_prompt_hook.out; then
+  ok "codex native prompt hook does not classify nested message content for recall"
 else
-  bad "codex native prompt hook should extract nested message content for recall"
+  bad "codex native prompt hook should leave semantic recall to the agent"
 fi
 mkdir -p "$TMP/repo/.agent_reports/spec" "$TMP/codex_marker_home"
 printf 'prd\n' > "$TMP/repo/.agent_reports/spec/prd.md"
@@ -3209,7 +3209,7 @@ fi
 if node --input-type=module >/tmp/opencode_plugin_lifecycle.out 2>/tmp/opencode_plugin_lifecycle.err <<EOF
 import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/flowproj", worktree: "$TMP/flowproj" })
-await plugin["chat.message"]({ sessionID: "oplifecyclesid" }, { parts: [{ type: "text", text: "remember this project context" }] })
+if (plugin["chat.message"]) process.exit(1)
 const output = { system: [] }
 await plugin["experimental.chat.system.transform"]({ sessionID: "oplifecyclesid", model: {} }, output)
 if (!output.system.join("\\n").includes("tracked")) process.exit(1)
@@ -3665,7 +3665,7 @@ fi
 echo "== SD-11b stage-dispatch gate (deny 상향 + opt-out + intensity 불명) =="
 # (i) conductor + standard + code-plan, NO opt-out → HARD DENY (CLI: exit 2, stderr ⛔)
 err=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_SELF_SLUG=cyc "$SDR" --skill code-plan --depth 1 --intensity standard 2>&1 >/dev/null); rc=$?
-if [ "$rc" -eq 2 ] && printf '%s' "$err" | grep -q 'deny' && printf '%s' "$err" | grep -q 'dispatch-headless'; then
+if [ "$rc" -eq 2 ] && printf '%s' "$err" | grep -q 'stage-dispatch denied' && printf '%s' "$err" | grep -q 'dispatch-headless'; then
   ok "SDR hard-denies conductor+standard+code-plan without opt-out (exit 2)"
 else bad "SDR should deny conductor+standard+code-plan (rc=$rc) [$err]"; fi
 # (i-opt) same but STAGE_DISPATCH_INLINE_OK=1 → soft reminder (additionalContext, exit 0)
