@@ -1,0 +1,1 @@
+../../../../tools/install/build-release.py

@@ -264,6 +264,14 @@ def _git(runtime_args: Sequence[str], root: Path) -> Optional[str]:
 
 
 def source_revision(root: Path) -> str:
+    release_marker = root / "RELEASE_VERSION"
+    if release_marker.is_file() and not release_marker.is_symlink():
+        try:
+            version = release_marker.read_text(encoding="utf-8").strip()
+        except OSError:
+            version = ""
+        if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", version):
+            return f"release:{version}:{_tree_digest(root)[:12]}"
     head = _git(["rev-parse", "HEAD"], root)
     if not head:
         return "tree:" + _tree_digest(root)[:20]

@@ -14,7 +14,7 @@
 
 ## 2. Agent Home
 
-The canonical neutral name for the installed harness repository is:
+The canonical neutral name for the installed harness root is:
 
 ```text
 <agent-home>
@@ -24,18 +24,27 @@ Runtime code should resolve it in this order:
 
 1. `AGENT_HOME`
 2. adapter-specific compatibility variables such as `CLAUDE_HOME`
-3. `$HOME/agent_setting` when present
-4. the adapter's legacy default install path, currently `$HOME/.claude` for the Claude Code adapter
+3. `${XDG_DATA_HOME:-$HOME/.local/share}/agent-harness/current` when a managed release is installed
+4. `$HOME/agent_setting` when a linked checkout is present
+5. the adapter's legacy default install path, currently `$HOME/.claude` for the Claude Code adapter
 
 Use `utilities/agent-home.sh` in shell code when a concrete path is needed.
 
-Preferred physical layout:
+Supported physical layouts:
 
 ```text
-$HOME/agent_setting/        # neutral git repo, common core + adapters
+$HOME/.local/share/agent-harness/releases/<version>/  # immutable managed release
+$HOME/.local/share/agent-harness/current              # atomic pointer to active release
+$HOME/agent_setting/                                  # linked maintainer checkout
 $HOME/.claude/              # Claude Code runtime home, mostly runtime-owned
 $HOME/.codex/               # Codex runtime home, mostly runtime-owned
 ```
+
+General-user installation uses a checksum-verified managed release. Maintainer
+development uses a linked checkout. Release updates stage and validate a new
+root before switching `current`; they must not fetch, pull, or rewrite a linked
+checkout. Runtime activation remains local after the release has been
+downloaded, and session reload or restart boundaries remain runtime-specific.
 
 Runtime homes should be adapter projections, not the source repository. Keep credentials, sessions, logs, SQLite state, caches, and other runtime-owned files in the runtime home. Expose the harness into each runtime home with symlinks or adapter-owned bootstrap files.
 

@@ -1,7 +1,7 @@
 # harness-installer — Spec (PRD)
 
-> mode: **cli** (하네스 배포 표면 — managed release + linked maintainer installer) · 작성 2026-07-12 · v1 · v2 (2026-07-13) · v3 (2026-07-13) · **v4 (2026-07-14)**: clone 없는 release bootstrap과 자동 packaged update 추가. 구 버전 = `_internal/versions/v3/prd.md`
-> 컴포넌트: `agent_setting` repo 의 **배포·설치 표면** — 일반 사용자는 검증된 managed release, 유지보수자는 linked checkout으로 Claude Code·Codex·OpenCode를 설치·검증·갱신한다. plugin/marketplace는 선택적 compatibility surface이며 공개 기본 경로가 아니다. `spec/harness-layer-sync/`(내부 canonical 바인딩)와 **형제·interlock** 관계의 독립 청사진 — 이 폴더(`spec/harness-installer/`)가 자체 SoT.
+> mode: **cli** (하네스 배포 표면 — 2-채널 하이브리드 installer) · 작성 2026-07-12 · v1 · v2 (2026-07-13) · **v3 (2026-07-13)**: 공개 진입점 계약 추가 — root README를 human-owned product landing page로 전환하고 `sync-skills` capability를 퇴역. 구 버전 = `_internal/versions/v2/prd.md`
+> 컴포넌트: `agent_setting` repo 의 **배포·설치 표면** — 하네스를 Claude Code·Codex·OpenCode 세 런타임에서 "바로 플러그인 형태로" 설치·검증·갱신하게 한다. `spec/harness-layer-sync/`(내부 canonical 바인딩)와 **형제·interlock** 관계의 독립 청사진 — 이 폴더(`spec/harness-installer/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - research `.agent_reports/research/cross-platform-agent-frameworks/` — `05_deployment.md`(3단 배포 골격·cost model), `06_implementation.md`(채택 후보 1 = GSD hash-manifest), `cards/{gsd,claude-code-official-plugins,multi-harness-projection,claude-flow}.md`
 > - 현행 실측(2026-07-12): `INSTALL_LAYOUT.md`(수동 symlink 레시피 + Migration Order 수동 검증 절차), `adapters/codex/plugin-marketplace/`(Codex plugin 채널 기존재), `adapters/claude/bin/install-windows.sh`(Windows 일회성 installer 선례), `tools/fleet/`(runtime-neutral zero-dep CLI 선례), `tools/build-manifest.py`(`--check` drift 생성기)
@@ -145,64 +145,7 @@ flowchart TD
 - 의미 판단 구간 스캔: installer 동작은 전부 결정론(파일 ops·hash 비교·config merge·check 실행). **충돌 0**.
 - 유일 경계 후보 = OpenCode config merge 의 "충돌" 판정 — **규칙으로 처리**(같은 key 에 다른 값 = 충돌 → 보고·중단, 자동 해석 시도 없음). LLM fallback 불요.
 
-## v4 — clone 없는 release bootstrap과 automatic packaged update
-
-### 기본 사용자 흐름
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/dmlguq456/agent_setting/main/install.sh | sh
-harness runtime doctor --runtime all --strict
-```
-
-bootstrap은 GitHub Release metadata에서 고정 이름 asset `agent-harness.tar.gz`와
-`agent-harness.tar.gz.sha256`을 찾아 checksum을 검증한다. archive는 private staging에서
-안전하게 해제하고 `RELEASE_VERSION`, installer entrypoint, manifest/core surface를 확인한
-뒤 `${XDG_DATA_HOME:-$HOME/.local/share}/agent-harness/releases/<version>`에 publish한다.
-`current`와 `${HARNESS_BIN_DIR:-$HOME/.local/bin}/harness`는 activation 성공 뒤 원자 전환한다.
-SHA-256 sidecar는 전송/asset corruption 검사이며 독립 signature가 아니다. Publisher
-authenticity는 repository의 GitHub Release와 HTTPS account를 trust anchor로 둔다.
-
-### update 분기
-
-- managed distribution state가 있으면 `harness update`는 stable release를 확인한다.
-- managed state가 없으면 기존 hash-manifest drift/reapply 동작을 유지한다.
-- managed updater는 이전 release를 source로 쓰는 packaged runtime만 새 release로 활성화한다.
-- linked/foreign source는 `skipped-linked`/`skipped-foreign`으로 보고하고 Git 명령을 실행하지 않는다.
-- `--version <tag>` 또는 `HARNESS_VERSION`은 release pin이다. 같은 version+checksum은 no-op이다.
-- 실패 시 runtime activation snapshot/이전 release 재활성화와 current/state bytes 복구를 수행한다.
-
-### automatic update
-
-- bootstrap은 기본적으로 Linux systemd user timer 또는 macOS LaunchAgent를 등록한다.
-- `--no-auto-update`/`HARNESS_NO_AUTO_UPDATE=1`로 opt out할 수 있다.
-- `harness auto-update status|enable|disable`은 launcher만 호출하는 user-owned scheduler를 관리한다.
-- scheduler가 없거나 user bus 등록이 실패하면 install 자체는 성공하고 manual fallback과 원인을 출력한다.
-- 자동 update가 runtime-owned credential/session/log/cache/database를 수정하지 않으며 현재 session의 instruction reload를 약속하지 않는다.
-- scheduler unit/plist는 설치 시 HOME/XDG, harness data/state/bin, Codex/Claude runtime
-  home override를 보존한다. Explicit version pin은 distribution state에 남고 `--auto`
-  실행은 pinned status로 끝나며 latest를 받지 않는다.
-
-### release workflow
-
-- tag `v*` push가 deterministic `agent-harness.tar.gz`와 SHA-256 sidecar를 생성한다.
-- workflow는 최소 `contents: write` permission으로 tag를 검증한 뒤 GitHub Release에 두 asset을 게시한다.
-- archive에는 tracked source와 `RELEASE_VERSION`만 포함하며 credential, local state, report cache, Git metadata를 포함하지 않는다.
-
-### README 공개 계약 변경
-
-- 첫 화면은 한 줄 가치 제안 → clone 없는 설치 → 자연어 예시 → 다섯 가지 강점 순서다.
-- 강점은 complete work cycle, cross-runtime contract, inspectable runtime state, selectable profiles, durable memory/guards로 간단히 제시한다.
-- “native first, plugins optional”은 독립 홍보 section에서 제거한다. 중복 discovery와 plugin compatibility 설명은 Runtime support/깊은 문서에 필요한 만큼만 남긴다.
-
-### 보안·회귀 수용 기준
-
-- checksum mismatch, missing asset, traversal, archive 밖 symlink/hardlink, special file을 publish 전에 거부한다.
-- concurrent update는 distribution lock으로 직렬화한다.
-- activation/state commit failure에서 current, distribution state, runtime projections가 이전 version으로 복구된다.
-- updater/scheduler fixture는 isolated HOME/XDG와 local file release metadata만 사용한다.
-- 기존 runtime activation/profile/extension lifecycle, manifest/projection/adaptation/conformance 검사를 회귀한다.
-
-## 열린 결정 (OPEN) — v4 현황
+## 열린 결정 (OPEN) — v3 현황
 
 - ~~INST-OPEN-1~~ **확정(구현 사이클 2, 2026-07-13)**: plugin 탑재 hook 목록 — **채택 2**: `git-state-guard.sh`·`artifact-guard.sh`(self-contained·fail-open 충족) / ~~이월 3~~ **채택 완결(사이클 3, 2026-07-13)**: spec 파이프 3종(`spec-skill-gate`·`spec-read-marker`·`spec-sync-nudge`) — 생성기 `hooks.json` 의 `AGENT_HOME="${CLAUDE_PLUGIN_DATA}"` env-prefix 로 재기준, canonical 무수정 / **제외**: memory(mem-*)·statusline·dispatch·core-first 계열(CLI 설치 전제 상태 의존). 근거 = `plans/2026-07-13_harness-installer-impl2/final_report.md`.
 - ~~INST-OPEN-2~~ **확정(사용자, 2026-07-12)**: CLI 진입 명령 = **`harness`** (fleet 동형 한 단어 + 서브명령, `tools/install/harness.sh` launcher → `~/.local/bin/harness` symlink). PATH 충돌은 install 시 기존 `harness` 명령 존재 검사로 방어.
@@ -213,10 +156,3 @@ authenticity는 repository의 GitHub Release와 HTTPS account를 trust anchor로
 
 - **INST-D-8 (사용자 확정, 2026-07-13)**: root README는 plugin/product landing page 구조의 human-owned 공개 문서다. 세부 내부 지도를 자동 재생성하지 않는다.
 - **INST-D-9 (사용자 확정, 2026-07-13)**: `sync-skills` portable capability와 모든 현역 runtime projection을 퇴역한다. manifest/projection/adaptation/conformance 검사는 각각의 결정론 도구가 계속 소유한다.
-
-## v4 확정 결정
-
-- **INST-D-10 (사용자 확정, 2026-07-14)**: 공개 기본 설치는 clone 없는 managed packaged release다. linked checkout은 maintainer 경로로 유지한다.
-- **INST-D-11 (사용자 확정, 2026-07-14)**: managed release는 supported OS에서 자동 확인·갱신하며 staging/checksum/rollback을 통과하기 전 active pointer를 바꾸지 않는다.
-- **INST-D-12 (사용자 확정, 2026-07-14)**: updater는 linked source에 Git fetch/pull/repoint를 수행하지 않는다.
-- **INST-D-13 (사용자 확정, 2026-07-14)**: README 상단은 plugin 구현 경계 대신 제품 강점을 간결하게 나열한다.

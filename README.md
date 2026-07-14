@@ -1,6 +1,6 @@
 <h1 align="center">Agent Harness</h1>
 
-<p align="center"><strong>Portable workflows. Native runtimes. One local source of truth.</strong></p>
+<p align="center"><strong>One complete agent workflow across Claude Code, Codex, and OpenCode.</strong></p>
 
 <p align="center">A local-first workflow layer for Claude Code, Codex, and OpenCode.</p>
 
@@ -8,7 +8,7 @@
   <img alt="Claude Code: native" src="https://img.shields.io/badge/Claude_Code-native-D97757?style=flat-square">
   <img alt="Codex: native" src="https://img.shields.io/badge/Codex-native-111827?style=flat-square">
   <img alt="OpenCode: native" src="https://img.shields.io/badge/OpenCode-native-2563EB?style=flat-square">
-  <img alt="Installation: local-first" src="https://img.shields.io/badge/installation-local--first-059669?style=flat-square">
+  <img alt="Installation: managed release" src="https://img.shields.io/badge/installation-one--line_release-059669?style=flat-square">
 </p>
 
 <p align="center"><strong>English</strong> · <a href="README.ko.md">한국어</a></p>
@@ -25,46 +25,62 @@ actually discovers.
        plan → execute → test → report + durable evidence
 ```
 
-## At a glance
+## Why Agent Harness
 
-| Complete workflows | Runtime-native delivery | Inspectable state |
-|---|---|---|
-| Connect research, specs, plans, implementation, tests, and reports. | Project shared behavior onto each runtime's native surfaces instead of emulating one vendor. | Verify source, revision, profile, digest, duplicates, freshness, and required session action. |
+- **Finish the whole cycle.** Research, specs, plans, implementation, tests,
+  reports, and durable evidence stay connected.
+- **Keep one contract across three runtimes.** Shared behavior is projected
+  onto the surfaces Claude Code, Codex, and OpenCode actually discover.
+- **Know what is running.** Inspect the active release or checkout, profile,
+  revision, freshness, duplicates, and required session action.
+- **Start small and grow.** Choose `starter`, `builder`, or `full` without
+  forking capabilities or maintaining separate setups.
+- **Carry decisions safely.** Durable memory and executable guards preserve
+  conventions while checking spec, artifact, git, and projection boundaries.
 
 ## Quick start
 
 ### Requirements
 
 - Python 3.10+
-- Git
+- `curl` or `wget`
 - The CLI for each runtime you want to activate
 
 ### Install
 
 ```bash
-git clone https://github.com/dmlguq456/agent_setting.git ~/agent_setting
-cd ~/agent_setting
-
-./tools/install/harness.sh runtime activate \
-  --runtime all \
-  --mode linked \
-  --profile builder
-
-./tools/install/harness.sh runtime doctor --runtime all --strict
+curl -fsSL https://raw.githubusercontent.com/dmlguq456/agent_setting/main/install.sh | sh
+~/.local/bin/harness runtime doctor --runtime all --strict
 ```
 
-After activation, manage the installation through the `harness` command on
-your `PATH`:
+The installer downloads the latest SHA-256 integrity-checked GitHub Release, activates the
+`builder` profile for all three runtimes as immutable packaged bundles, and
+registers a daily user-level update check where the OS supports it. It does not
+touch runtime credentials, sessions, logs, or databases.
+
+Once `~/.local/bin` is on your `PATH`, manage it with:
 
 ```bash
 harness runtime status --runtime all
-harness runtime refresh --runtime all
+harness update
+harness auto-update status
 harness runtime doctor --runtime all --strict
 ```
 
-`builder` is the default profile, so omitting `--profile` activates the same
-configuration. Use `--mode packaged` to deliver an immutable revision to
-another machine. Both modes avoid marketplace and remote-package dependencies.
+`harness update` stages and verifies a new release before switching the active
+pointer, and rolls back on failure. Existing agent sessions still follow their
+runtime-specific re-invocation, new-session, or restart boundary; check
+`runtime status` after an update.
+
+The checksum sidecar detects transfer or asset corruption. Publisher
+authenticity is anchored to the repository's GitHub Release and HTTPS account
+boundary; it is not an independent signature.
+
+To pin a version or disable scheduled checks:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dmlguq456/agent_setting/main/install.sh | sh -s -- --version v1.0.0 --no-auto-update
+```
 
 ## Choose a profile
 
@@ -87,23 +103,6 @@ harness runtime refresh --runtime all --profile full
 Activation records the selected profile, capability, role, and mode lists plus
 the manifest digest. You can verify what is installed from runtime state rather
 than trusting a README description.
-
-## Why Agent Harness
-
-- **Close the whole work cycle.** Research and code generation feed into specs,
-  plans, execution, tests, reports, and durable evidence.
-- **Put contracts before runtimes.** The portable core owns workflow, role,
-  artifact, memory, intensity, and assurance semantics; adapters translate them
-  only into native runtime surfaces.
-- **Expose only what you need.** `starter`, `builder`, and `full` reduce skill
-  metadata and agent discovery in practice, not just on paper.
-- **Inspect installation state.** `status` and `doctor` report the absolute
-  source path, revision, digest, profile, duplicates, freshness, and required
-  session action.
-- **Carry decisions across sessions.** Project working memory, durable memory,
-  and user profiles share one guarded retrieval path.
-- **Make safety executable.** Deterministic guards and tests verify spec
-  grounding, artifact order, git state, and projection drift.
 
 ## Use natural language
 
@@ -150,11 +149,12 @@ See [capabilities/README.md](capabilities/README.md) for every entrypoint and
 | `tools/install/` | Activation lifecycle that leaves runtime-owned state alone |
 | `.agent_reports/` | Project artifacts for specs, plans, test evidence, and handoffs |
 
-`linked` is the maintainer default: repository changes appear immediately on
-the discovery path. `packaged` creates an immutable local bundle and keeps its
-active revision until `runtime refresh`. File visibility and instruction reload
-are separate concerns, so `runtime status` reports whether each runtime needs a
-re-invocation, new session, or restart through `session_action`.
+Managed releases are the general-user default. `linked` remains the maintainer
+mode: checkout changes appear immediately on the discovery path, and the
+release updater never fetches, pulls, or repoints that checkout. File visibility
+and instruction reload are separate concerns, so `runtime status` reports
+whether each runtime needs a re-invocation, new session, or restart through
+`session_action`.
 
 ## Runtime support
 
@@ -169,25 +169,15 @@ unsupported surfaces as `SKIP` with a reason, while credentials, sessions,
 databases, logs, and foreign caches remain outside its ownership. See
 [INSTALL_LAYOUT.md](INSTALL_LAYOUT.md) for the detailed mapping.
 
-## Native first, plugins optional
-
-The default product path is a local native projection. Codex and Claude
-marketplace bundles are optional distribution channels, not prerequisites for
-generation, activation, or a successful doctor run. OpenCode's local guard
-plugin is a native hook bridge, not an external package.
-
-The default installation therefore requires no:
-
-- marketplace registration
-- plugin caches or registries
-- npm package fetching
-- external MCP servers, connectors, or APIs
-- changes to Codex or Claude credentials, sessions, logs, or local databases
-
-Duplicate native and plugin discovery for the same harness is forbidden and
-causes strict doctor checks to fail.
-
 ## Develop the harness
+
+Maintainers can keep a live checkout instead of the managed release:
+
+```bash
+git clone https://github.com/dmlguq456/agent_setting.git ~/agent_setting
+cd ~/agent_setting
+./tools/install/harness.sh runtime activate --runtime all --mode linked --profile builder
+```
 
 After changing a shared definition, refresh every generated projection and
 check for drift:

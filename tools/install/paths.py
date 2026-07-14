@@ -16,10 +16,11 @@ def _absolute_env_path(name, default):
 
 
 def agent_home():
-    """Return the repository root (``AGENT_HOME``).
+    """Return the active harness root (``AGENT_HOME``).
 
-    Use the environment override when set; otherwise find the nearest ancestor
-    containing ``.git``.
+    Use the environment override when set; otherwise find the nearest source
+    root by its portable manifest/core markers. This supports both Git
+    checkouts and extracted managed releases.
     """
     env_home = os.environ.get("AGENT_HOME")
     if env_home:
@@ -27,12 +28,15 @@ def agent_home():
 
     here = Path(__file__).resolve()
     for parent in here.parents:
-        if (parent / ".git").exists():
+        if (
+            (parent / "harness-manifest.json").is_file()
+            and (parent / "core/CORE.md").is_file()
+        ):
             return parent
 
     raise RuntimeError(
         "could not resolve agent_home: AGENT_HOME is unset and "
-        f"no .git directory was found above {here}."
+        f"no harness-manifest.json/core/CORE.md root was found above {here}."
     )
 
 

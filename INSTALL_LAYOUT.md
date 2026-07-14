@@ -1,10 +1,13 @@
 # Install Layout
 
-This harness is runtime-neutral. The git repository should live outside vendor runtime homes, and each runtime home should project the harness through symlinks or adapter bootstrap files.
+This harness is runtime-neutral. Its managed release or maintainer checkout
+lives outside vendor runtime homes, and each runtime home projects that source
+through native discovery paths and adapter bootstrap files.
 
 > **Execution note — use `harness install` / `harness verify`.** This document
 > no longer contains shell recipes to copy or a manual verification battery.
-> `tools/install/harness.sh` automates installation, verification, updates,
+> Root `install.sh` provides the clone-free managed-release path.
+> `tools/install/harness.sh` automates activation, verification, updates,
 > status, and removal through `runtime activate|status|refresh|doctor` and the
 > legacy `install`/`verify`/`update`/`status`/`uninstall` subcommands. The
 > installer PRD at `.agent_reports/spec/harness-installer/prd.md` supersedes
@@ -20,7 +23,9 @@ This harness is runtime-neutral. The git repository should live outside vendor r
 ## Target Layout
 
 ```text
-$HOME/agent_setting/        # canonical git repo: common core + adapters + projections
+$HOME/.local/share/agent-harness/releases/<version>/  # managed immutable release
+$HOME/.local/share/agent-harness/current              # atomic active pointer
+$HOME/agent_setting/                                  # optional maintainer checkout
 $HOME/.claude/              # Claude Code runtime home
 $HOME/.codex/               # Codex runtime home
 $HOME/.config/opencode/     # OpenCode global config home
@@ -36,7 +41,7 @@ the machine-readable source of truth for source root, source/active revision,
 projection digest, discovery paths, duplicates, freshness, and session action.
 
 ```bash
-harness runtime activate --runtime all --mode linked --profile builder --source "$AGENT_HOME"
+curl -fsSL https://raw.githubusercontent.com/dmlguq456/agent_setting/main/install.sh | sh
 harness runtime status --runtime all --json
 harness runtime doctor --runtime all --strict
 ```
@@ -52,10 +57,17 @@ its existing discovery surface.
 | `builder` | 14 | 7 | 26 |
 | `full` | 27 | 8 | 26 |
 
-- `linked` is the maintainer default. It projects one absolute local repo.
-- `packaged` creates an immutable local bundle and changes only after
-  `harness runtime refresh`. It uses the same native discovery paths and never
-  fetches a marketplace or package.
+- Managed `packaged` releases are the general-user default. The release
+  updater verifies an archive in staging, activates only runtimes still bound
+  to the previous managed release, then atomically switches `current`.
+- The SHA-256 sidecar is an integrity/corruption check. Authenticity remains
+  anchored to the repository's GitHub Release and HTTPS publisher account; the
+  sidecar is not an independent signature.
+- `linked` is the maintainer default. It projects one explicit local checkout;
+  managed update never fetches, pulls, or repoints it.
+- A manually activated `packaged` source changes only after `runtime refresh`;
+  a managed release changes through `harness update`. Both use the same native
+  discovery paths.
 - Both modes disable prior harness plugin registry entries and quarantine only
   harness-owned plugin caches so plugin state cannot shadow the selected source.
 - There is no `both` mode. Codex/Claude native+plugin and OpenCode local+npm
@@ -63,6 +75,8 @@ its existing discovery surface.
 - Activation is journaled. A failed operation restores the previous links and
   activation record. Credentials, sessions, logs, DBs, and foreign caches are
   outside the owned write set.
+- File replacement does not imply an already-running agent session reloaded its
+  instructions. `runtime status` and `session_action` remain authoritative.
 
 ## Claude Code Projection
 

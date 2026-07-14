@@ -28,6 +28,7 @@ import verifier
 import bootstrap
 import runtime_activation
 import extensions
+import distribution
 from drivers import get_driver, RUNTIMES
 
 # Exit codes map one-to-one to the PRD CLI table.
@@ -50,7 +51,10 @@ class _UsageExitParser(argparse.ArgumentParser):
 def build_parser():
     p = _UsageExitParser(
         prog="harness",
-        description="agent-harness installer — install/verify/update/status/uninstall (hybrid two-channel model).",
+        description=(
+            "agent-harness installer — managed releases for users, "
+            "linked checkouts for maintainers."
+        ),
     )
     # Common options inherited by all subcommands.
     common = argparse.ArgumentParser(add_help=False)
@@ -77,8 +81,19 @@ def build_parser():
     p_verify = sub.add_parser("verify", parents=[common], help="Run the automated Migration Order checks")
     p_verify.add_argument("target", nargs="?", choices=RUNTIMES, default=None)
 
-    p_update = sub.add_parser("update", parents=[common], help="Pull and reproject, optionally updating plugins")
+    p_update = sub.add_parser(
+        "update",
+        parents=[common],
+        help="Update a managed release or inspect/reapply local projection drift",
+    )
     p_update.add_argument("--reapply", action="store_true", help="Reapply local patches to new files")
+    p_update.add_argument(
+        "--version",
+        default=None,
+        help="Managed release tag, or latest to leave a pin",
+    )
+    p_update.add_argument("--profile", choices=runtime_activation.PROFILES)
+    p_update.add_argument("--auto", action="store_true", help=argparse.SUPPRESS)
 
     sub.add_parser("status", parents=[common], help="Summarize installation channels, versions, and drift")
 
@@ -157,6 +172,12 @@ def build_parser():
     )
     p_extension_remove.add_argument("canonical_id")
     p_extension_remove.add_argument("--json", action="store_true")
+
+    p_auto_update = sub.add_parser(
+        "auto-update", help="Manage the managed-release user scheduler"
+    )
+    p_auto_update.add_argument("operation", choices=["status", "enable", "disable"])
+    p_auto_update.add_argument("--json", action="store_true")
 
     return p
 
@@ -342,6 +363,92 @@ def cmd_verify(args):
 
 
 def cmd_update(args):
+    try:
+        managed = distribution.is_managed()
+    except distribution.DistributionError as exc:
+        return {
+            "runtime": args.runtimes or [],
+            "channel": "managed-release",
+            "checks": [{"id": "update.state", "ok": False, "detail": str(exc)}],
+            "drift": [],
+            "exit": EXIT_FAIL,
+            "lines": [f"update: invalid managed release state: {exc}"],
+        }
+    if managed:
+        incompatible = []
+        if args.dry_run:
+            incompatible.append("--dry-run")
+        if args.scope != "global":
+            incompatible.append(f"--scope {args.scope}")
+        if args.plugin:
+            incompatible.append("--plugin")
+        if incompatible:
+            detail = "unsupported for managed releases: " + ", ".join(incompatible)
+            return {
+                "runtime": args.runtimes or [],
+                "channel": "managed-release",
+                "checks": [{"id": "update.options", "ok": False, "detail": detail}],
+                "drift": [],
+                "exit": EXIT_BLOCKED,
+                "lines": [f"update: blocked: {detail}"],
+            }
+        if args.reapply:
+            return {
+                "runtime": args.runtimes or [],
+                "channel": "managed-release",
+                "checks": [
+                    {
+                        "id": "update.mode",
+                        "ok": False,
+                        "detail": "--reapply is for checkout copy-once drift, not managed releases",
+                    }
+                ],
+                "drift": [],
+                "exit": EXIT_BLOCKED,
+                "lines": [
+                    "update: blocked: --reapply is unavailable for managed releases"
+                ],
+            }
+        try:
+            result = distribution.update(
+                version=args.version,
+                runtimes=args.runtimes,
+                profile=args.profile,
+                automatic=args.auto,
+            )
+        except distribution.DistributionError as exc:
+            return {
+                "runtime": args.runtimes or [],
+                "channel": "managed-release",
+                "checks": [{"id": "update.release", "ok": False, "detail": str(exc)}],
+                "drift": [],
+                "exit": EXIT_FAIL,
+                "lines": [f"update: managed release failed: {exc}"],
+            }
+        lines = [
+            f"update: managed release {result['status']} version={result['version']}"
+        ]
+        for runtime in result.get("runtimes", []):
+            action = result.get("session_action", {}).get(runtime)
+            lines.append(f"updated: {runtime} session_action={action}")
+        for runtime, reason in result.get("skipped", {}).items():
+            lines.append(f"skipped: {runtime} ({reason})")
+        return {
+            "runtime": result.get("runtimes", []),
+            "channel": "managed-release",
+            "release": result,
+            "checks": [
+                {
+                    "id": "update.release",
+                    "ok": True,
+                    "detail": f"{result['status']} {result['version']}",
+                }
+            ],
+            "drift": [],
+            "exit": EXIT_OK,
+            "lines": lines,
+        }
+
     runtimes = resolve_runtimes(args)
     drift = manifest.check_drift(runtimes, scope=args.scope)
     lines = [f"update: runtime={r} reapply={args.reapply}" for r in runtimes]
@@ -682,6 +789,30 @@ def cmd_extension(args):
         }
 
 
+def cmd_auto_update(args):
+    try:
+        result = distribution.auto_update(args.operation)
+    except distribution.DistributionError as exc:
+        return {
+            "operation": args.operation,
+            "scheduler": None,
+            "checks": [{"id": "auto-update", "ok": False, "detail": str(exc)}],
+            "drift": [],
+            "exit": EXIT_FAIL,
+            "lines": [f"auto-update {args.operation}: failed: {exc}"],
+        }
+    return {
+        "operation": args.operation,
+        "scheduler": result,
+        "checks": [{"id": "auto-update", "ok": True, "detail": result["status"]}],
+        "drift": [],
+        "exit": EXIT_OK,
+        "lines": [
+            f"auto-update {args.operation}: {result['status']} ({result['kind']})"
+        ],
+    }
+
+
 COMMANDS = {
     "install": cmd_install,
     "verify": cmd_verify,
@@ -690,6 +821,7 @@ COMMANDS = {
     "uninstall": cmd_uninstall,
     "runtime": cmd_runtime,
     "extension": cmd_extension,
+    "auto-update": cmd_auto_update,
 }
 
 

@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate release inputs
+        run: |
+          python3 -m py_compile tools/install/distribution.py tools/install/installer.py
+          python3 tools/generate.py --check
+          ./tools/install/release-lifecycle.test.sh
+          ./tools/install/profile-activation.test.sh
+          ./tools/install/runtime-activation.test.sh
+          ./tools/install/extension-lifecycle.test.sh
+          ./tools/check-adaptation-boundary.sh
+
+      - name: Build deterministic release assets
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 tools/install/build-release.py --version "$RELEASE_TAG" --output dist
+
+      - name: Publish the verified tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" dist/agent-harness.tar.gz dist/agent-harness.tar.gz.sha256 --verify-tag --generate-notes --title "$RELEASE_TAG"

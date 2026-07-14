@@ -16,6 +16,14 @@ while [ -h "$SOURCE" ]; do
 done
 SCRIPT_DIR=$(CDPATH= cd -P "$(dirname "$SOURCE")" && pwd)
 INSTALLER_PY="$SCRIPT_DIR/installer.py"
+HARNESS_ROOT=$(CDPATH= cd -P "$SCRIPT_DIR/../.." && pwd)
+
+# A managed release has no .git directory. Anchor AGENT_HOME to the launcher
+# source unless the caller deliberately selected another harness root.
+if [ -z "${AGENT_HOME:-}" ]; then
+  AGENT_HOME=$HARNESS_ROOT
+  export AGENT_HOME
+fi
 
 PY=$(command -v python3 || command -v python || true)
 if [ -z "$PY" ]; then echo "harness: python3 is required." >&2; exit 1; fi

@@ -1,12 +1,30 @@
 # Harness Productization — Pipeline Summary
 
-> updated: 2026-07-14 · status: complete · spec v5
+> updated: 2026-07-14 · status: implementation complete · spec v6
 
 ## 결정된 개선 순서
 
 1. **Cross-Runtime Source Activation — complete**: Codex·Claude Code·OpenCode의 active source/revision을 노출하고 linked와 packaged를 배타적으로 운영한다.
 2. **Manifest + Generated Projections + Profiles — complete**: machine metadata를 하나의 manifest로 모으고 starter/builder/full로 runtime discovery 크기를 조절한다.
 3. **Local-First Packs + Optional Extensions — complete**: built-in은 외부 의존 없이 유지하고 외부 skill은 격리된 선택 기능으로만 조합한다.
+4. **Release Bootstrap + Automatic Packaged Updates — complete**: 일반 사용자는 clone 없이 무결성 검사된 release를 설치하고, linked checkout을 건드리지 않는 staged updater로 갱신한다.
+
+## v6 변경
+
+- 일반 사용자 기본을 managed packaged release, 유지보수자 기본을 linked checkout으로 분리했다.
+- GitHub Release archive+SHA-256을 유일한 network delivery boundary로 고정했다.
+- update는 managed packaged source만 교체하고 linked/foreign source와 Git working tree를 건드리지 않는다.
+- systemd user timer/LaunchAgent 자동 확인, staging 검증, multi-runtime rollback, atomic pointer/state commit을 수용 기준으로 추가했다.
+- 공개 README는 plugin 경계 설명을 전면 가치 제안에서 내리고, 한 줄 설치와 다섯 가지 제품 강점을 앞세운다.
+
+## Phase 4 완료 근거
+
+- 실제 working-tree release archive를 격리 HOME에 clone 없이 설치하고 세 runtime packaged activation과 strict doctor를 통과했다.
+- checksum mismatch, traversal, escaping symlink/hardlink, special file, state/lock symlink, invalid state, activation/state commit failure를 거부·rollback했다.
+- linked/foreign source 보존, persistent pin, same-release repair, actual profile drift/rollback, scheduler path/ownership을 fixture로 고정했다.
+- runtime/profile/extension, generated projection, conformance, adaptation boundary, Codex doctor가 모두 통과했다.
+- 독립 보안 리뷰의 모든 HIGH/MEDIUM을 폐쇄했으며 최종 잔여 HIGH/MEDIUM은 0건이다.
+- 첫 public release tag 발행은 main 통합 후의 deployment 단계다.
 
 공개 채택은 내부 작업으로 만들어낼 수 없으므로 이 spec의 자동 검증은 회귀 방지와 재현 가능성만 주장한다.
 

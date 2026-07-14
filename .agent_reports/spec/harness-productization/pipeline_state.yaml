@@ -1,7 +1,7 @@
 project_name: harness-productization
 created: 2026-07-14
 updated: 2026-07-14
-spec_version: 5
+spec_version: 6
 mode:
   - library
   - cli
@@ -17,6 +17,7 @@ phases:
   phase_1_cross_runtime_source_activation: completed
   phase_2_manifest_projections_profiles: completed
   phase_3_local_first_optional_extensions: completed
+  phase_4_release_bootstrap_auto_update: completed
 locked_decisions:
   - phase_1_covers_codex_claude_and_opencode
   - linked_is_the_maintainer_default
@@ -45,5 +46,10 @@ locked_decisions:
   - extension_manifest_and_snapshot_io_are_root_anchored_and_no_follow
   - extension_journal_recovery_uses_raw_registry_bytes_and_generation_cas
   - extension_runtime_roots_are_locked_at_add_time
+  - general_users_install_checksum_verified_managed_releases
+  - maintainers_keep_linked_checkouts
+  - managed_updates_never_fetch_or_repoint_linked_sources
+  - github_releases_are_transport_not_runtime_dependency
+  - automatic_updates_preserve_runtime_session_boundaries
 open_decisions: []
-next_action: maintain_regression_gates_and_collect_external_usage_evidence
+next_action: merge_then_publish_first_v_tag_and_collect_external_usage_evidence

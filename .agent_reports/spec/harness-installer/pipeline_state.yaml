@@ -1,12 +1,14 @@
 project_name: harness-installer
 created: 2026-07-12
 mode: [cli]
-scope_note: "하네스 배포 표면 — 2-채널 하이브리드(런타임 native plugin 채널 + bootstrap installer CLI `harness`). INSTALL_LAYOUT.md 수동 레시피 대체. HLS(harness-layer-sync) interlock — hash-manifest 스키마·GSD 정독 게이트 공유."
+scope_note: "하네스 배포 표면 — managed release(일반 사용자) + linked checkout(maintainer) + 선택적 plugin compatibility. clone 없는 bootstrap, automatic packaged update, INSTALL_LAYOUT 배선을 `harness` CLI가 소유한다."
 phases:
   spec: done                # v1 PRD 확정 (2026-07-12 — 하이브리드 구조·`harness` 명령 사용자 확정, currentness 검증 반영)
   scaffolding: done         # 브랜치 9792fd3 → main 머지 완료(4de50f6, 사용자 신호 2026-07-13)
   dev: done                 # 사이클 1(51/51)+2(53/53)+3(29/29, hook 5종 완결)+quick fix 2건(verify 채널-인지·liveness pid) — 전부 main 머지
-last_updated: 2026-07-13
+  release_delivery: done         # v4 implementation verified; first public tag pending main integration
+last_updated: 2026-07-14
+spec_version: 4
 inputs:
   - .agent_reports/research/cross-platform-agent-frameworks/
   - .agent_reports/analysis_project/harness-alignment/
@@ -24,5 +26,9 @@ decisions_locked:
   - INST-D-7: verify 는 채널-인지 — plugin 채널 미채택 머신에서 plugin check 명시 SKIP(ok), 등록+미설치·drift 는 실패 유지 (parity-loss 원칙)
   - INST-D-8: root README = human-owned product landing page — 가치/설치/사용/런타임 차이를 앞세우고 내부 전수 지도는 canonical deep docs로 위임 (사용자 확정 2026-07-13)
   - INST-D-9: sync-skills portable capability와 현역 runtime projection 퇴역 — prose hash sync 대신 manifest/projection/adaptation/conformance 결정론 검사 유지 (사용자 확정 2026-07-13)
+  - INST-D-10: 일반 사용자 기본은 checksum-verified managed packaged release; linked checkout은 maintainer 경로
+  - INST-D-11: supported OS automatic update + staging/checksum/rollback + atomic pointer
+  - INST-D-12: managed updater는 linked/foreign source를 fetch/pull/repoint하지 않음
+  - INST-D-13: README 상단은 plugin 경계 대신 간결한 제품 강점을 제시
 open:
   - INST-OPEN-4: OpenCode 복수형 migration — 로컬 1.17.13 단수형 정상, drift-watch check 상시 감시, 버전업 시 별도 사이클

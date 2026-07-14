@@ -1,5 +1,15 @@
 # harness-installer — pipeline summary
 
+## v4 (2026-07-14) — clone-free release + automatic packaged update
+
+- snapshot: `_internal/versions/v3/prd.md`. 일반 사용자는 Git clone 대신 GitHub Release archive+SHA-256을 한 줄 bootstrap으로 설치한다.
+- XDG data의 immutable `releases/<version>`과 atomic `current` pointer를 사용하고, runtime은 packaged bundle로 활성화한다.
+- `harness update`는 managed distribution에서 release updater로 분기하되 linked/foreign runtime과 Git checkout을 건드리지 않는다. checkout에서는 기존 drift/reapply 의미를 유지한다.
+- Linux systemd user timer/macOS LaunchAgent 자동 확인, opt-out/pin, safe extraction, activation/state rollback을 구현 계약으로 고정했다.
+- README는 “native first, plugins optional”을 독립 홍보 포인트에서 내리고 clone 없는 설치와 다섯 가지 제품 강점을 앞세운다.
+- 구현 완료: 실제 archive의 세 runtime packaged activation, safe extraction 공격군, pin/scheduler/pointer/profile rollback, 기존 runtime/profile/extension 및 adaptation 회귀가 통과했다. 독립 보안 리뷰 최종 HIGH/MEDIUM은 0건이다.
+- deployment next: main 통합 후 첫 `v*` tag로 GitHub Release asset을 게시한다.
+
 ## v3 (2026-07-13) — 공개 README 표면 + sync-skills 퇴역
 
 - snapshot: `_internal/versions/v2/prd.md`. 사용자 결정: root README를 plugin/product landing page로 전면 개편하고, false-green prose hash 동기화인 `sync-skills` capability를 퇴역한다.
