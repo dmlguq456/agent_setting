@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Managed Agent Harness release installation and automatic updates.
 
-This module is standalone and Python-stdlib-only so install.sh can download and
-execute it before a harness checkout exists. Runtime activation is delegated
-to the verified release after extraction.
+This module is standalone and Python-stdlib-only so the release builder can
+embed it in the same-tag install.sh asset before a harness root exists. Runtime
+activation is delegated to the verified release after extraction.
 """
 
 from __future__ import annotations

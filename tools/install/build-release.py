@@ -16,7 +16,12 @@ from pathlib import Path
 
 
 ARCHIVE_NAME = "agent-harness.tar.gz"
+INSTALLER_NAME = "install.sh"
+INSTALLER_CHECKSUM_NAME = INSTALLER_NAME + ".sha256"
+INSTALLER_MARKER = "__AGENT_HARNESS_DISTRIBUTION_PY_V1__"
+DEFAULT_REPOSITORY = "dmlguq456/agent_setting"
 VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def _run_git(root: Path, *args: str, stdout=None) -> subprocess.CompletedProcess:
@@ -28,7 +33,79 @@ def _run_git(root: Path, *args: str, stdout=None) -> subprocess.CompletedProcess
     )
 
 
-def build(root: Path, version: str, output: Path, ref: str) -> tuple[Path, Path]:
+def _checksum(path: Path, checksum_path: Path) -> None:
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    checksum_path.write_text(f"{digest}  {path.name}\n", encoding="ascii")
+    os.chmod(checksum_path, 0o644)
+
+
+def build_installer(
+    version: str,
+    output: Path,
+    distribution_source: bytes,
+    repository: str = DEFAULT_REPOSITORY,
+) -> tuple[Path, Path]:
+    if not VERSION_RE.fullmatch(version):
+        raise SystemExit(f"invalid release version: {version!r}")
+    if not REPOSITORY_RE.fullmatch(repository):
+        raise SystemExit(f"invalid release repository: {repository!r}")
+    try:
+        source = distribution_source.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise SystemExit("distribution.py must be UTF-8") from exc
+    if f"\n{INSTALLER_MARKER}\n" in f"\n{source}\n":
+        raise SystemExit("distribution.py collides with the installer heredoc marker")
+    if not source.endswith("\n"):
+        source += "\n"
+
+    output.mkdir(parents=True, exist_ok=True)
+    installer_path = output / INSTALLER_NAME
+    checksum_path = output / INSTALLER_CHECKSUM_NAME
+    script = f"""#!/bin/sh
+# Generated release-bound Agent Harness installer.
+# Bootstrap code and archive are both fixed to {repository}@{version}.
+set -eu
+
+RELEASE_VERSION='{version}'
+REPOSITORY='{repository}'
+
+for arg in "$@"; do
+  case "$arg" in
+    --version|--version=*|--repository|--repository=*)
+      echo "agent-harness: this installer is fixed to $REPOSITORY@$RELEASE_VERSION; use the install.sh asset from the requested repository and release tag" >&2
+      exit 64
+      ;;
+  esac
+done
+
+PY=$(command -v python3 || command -v python || true)
+if [ -z "$PY" ]; then
+  echo "agent-harness: Python 3.10+ is required." >&2
+  exit 1
+fi
+
+TMP=$(mktemp -d "${{TMPDIR:-/tmp}}/agent-harness-bootstrap.XXXXXX")
+trap 'rm -rf "$TMP"' EXIT HUP INT TERM
+MODULE="$TMP/distribution.py"
+
+cat > "$MODULE" <<'{INSTALLER_MARKER}'
+{source}{INSTALLER_MARKER}
+
+"$PY" "$MODULE" bootstrap --repository "$REPOSITORY" --version "$RELEASE_VERSION" "$@"
+"""
+    installer_path.write_text(script, encoding="utf-8")
+    os.chmod(installer_path, 0o755)
+    _checksum(installer_path, checksum_path)
+    return installer_path, checksum_path
+
+
+def build(
+    root: Path,
+    version: str,
+    output: Path,
+    ref: str,
+    repository: str = DEFAULT_REPOSITORY,
+) -> tuple[Path, Path, Path, Path]:
     if not VERSION_RE.fullmatch(version):
         raise SystemExit(f"invalid release version: {version!r}")
     _run_git(root, "rev-parse", "--verify", f"{ref}^{{commit}}")
@@ -71,11 +148,16 @@ def build(root: Path, version: str, output: Path, ref: str) -> tuple[Path, Path]
                 for chunk in iter(lambda: source.read(1024 * 1024), b""):
                     compressed.write(chunk)
 
-    digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
-    checksum_path.write_text(f"{digest}  {ARCHIVE_NAME}\n", encoding="ascii")
     os.chmod(archive_path, 0o644)
-    os.chmod(checksum_path, 0o644)
-    return archive_path, checksum_path
+    _checksum(archive_path, checksum_path)
+
+    distribution_source = _run_git(
+        root, "show", f"{ref}:tools/install/distribution.py"
+    ).stdout
+    installer_path, installer_checksum_path = build_installer(
+        version, output, distribution_source, repository
+    )
+    return archive_path, checksum_path, installer_path, installer_checksum_path
 
 
 def main() -> int:
@@ -83,13 +165,17 @@ def main() -> int:
     parser.add_argument("--version", required=True)
     parser.add_argument("--output", default="dist")
     parser.add_argument("--ref", default="HEAD")
+    parser.add_argument(
+        "--repository",
+        default=os.environ.get("GITHUB_REPOSITORY", DEFAULT_REPOSITORY),
+    )
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
-    archive, checksum = build(
-        root, args.version, Path(args.output).resolve(), args.ref
+    assets = build(
+        root, args.version, Path(args.output).resolve(), args.ref, args.repository
     )
-    print(archive)
-    print(checksum)
+    for asset in assets:
+        print(asset)
     return 0
 
 

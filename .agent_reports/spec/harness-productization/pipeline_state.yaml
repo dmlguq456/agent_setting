@@ -1,11 +1,11 @@
 project_name: harness-productization
 created: 2026-07-14
 updated: 2026-07-14
-spec_version: 6
+spec_version: 7
 mode:
   - library
   - cli
-status: completed
+status: in_progress
 source_of_truth: .agent_reports/spec/harness-productization/prd.md
 inputs:
   - .agent_reports/research/cross-platform-agent-frameworks/analysis_summary.md
@@ -51,5 +51,6 @@ locked_decisions:
   - managed_updates_never_fetch_or_repoint_linked_sources
   - github_releases_are_transport_not_runtime_dependency
   - automatic_updates_preserve_runtime_session_boundaries
+  - public_bootstrap_and_archive_share_one_immutable_release_tag
 open_decisions: []
-next_action: merge_then_publish_first_v_tag_and_collect_external_usage_evidence
+next_action: implement_release_bound_bootstrap_then_publish_v1_0_1
