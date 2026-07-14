@@ -1,8 +1,8 @@
 # Harness Productization — PRD
 
 > 유형: component spec · library + CLI
-> 상태: phase 4 implementation complete · v1.0.1 release-bound bootstrap patch in progress
-> 버전: v7 (2026-07-14)
+> 상태: phase 4 implementation complete · first public release pending
+> 버전: v6 (2026-07-14)
 
 ## 0. 한 줄 정의
 
@@ -325,15 +325,12 @@ harness extension remove <external/publisher/skill> [--json]
 
 | 사용자 | 기본 source | 설치 | 갱신 |
 |---|---|---|---|
-| 일반 사용자 | checksum-verified managed release | `curl .../releases/latest/download/install.sh \| sh` | OS user scheduler가 stable release를 확인하고 packaged runtime만 원자 교체 |
+| 일반 사용자 | checksum-verified managed release | `curl .../install.sh \| sh` | OS user scheduler가 stable release를 확인하고 packaged runtime만 원자 교체 |
 | 유지보수자 | explicit local Git checkout | clone 후 `runtime activate --mode linked` | 사용자가 checkout을 직접 갱신; harness는 fetch/pull하지 않음 |
 
 - GitHub Release asset은 고정 이름의 archive와 SHA-256 sidecar를 제공한다.
   Sidecar는 전송/asset corruption을 탐지하며 독립 서명이 아니다. Publisher
   authenticity의 trust anchor는 repository GitHub Release와 HTTPS account 경계다.
-- public installer도 release asset이며, 동일 tag의 distribution module과 exact version을
-  내장한다. `raw main`의 코드와 latest archive를 한 invocation에서 섞지 않는다.
-- root `install.sh`는 과거 raw URL을 위한 latest-release redirect만 수행한다.
 - bootstrap과 updater는 archive 절대 경로, `..` escape, archive 밖 symlink/hardlink,
   special file을 거부하고 private staging에서만 해제한다.
 - managed root는 XDG data 아래 `releases/<version>`에 publish되고 `current` symlink와
@@ -363,7 +360,6 @@ harness extension remove <external/publisher/skill> [--json]
 ### 수용 기준
 
 - fixture release에서 clone 없이 bootstrap→packaged activation→launcher 실행이 통과한다.
-- public installer asset과 archive가 동일 tag임을 검증하고 다른 version override를 거부한다.
 - 같은 version update는 no-op이고 새 version은 staging 검증 뒤 pointer/runtime을 전환한다.
 - checksum mismatch, path traversal, outside symlink, activation failure, state commit failure가
   새 release를 활성 상태로 남기지 않는다.
@@ -419,7 +415,6 @@ Phase 4: release bootstrap → managed packaged update
 22. 유지보수자 기본은 계속 linked checkout이며 release updater는 linked source를 fetch/pull/repoint하지 않는다.
 23. release transport는 GitHub Releases이고 activation core·built-in execution과 network failure domain을 분리한다.
 24. 자동 update는 supported OS user scheduler를 사용하며 새 session/restart 필요성을 숨기지 않는다.
-25. public bootstrap code와 archive는 동일 immutable GitHub repository와 release tag에서 오며 raw main은 public install trust path가 아니다.
 
 ### 열린 결정
 
@@ -436,7 +431,6 @@ Phase 4: release bootstrap → managed packaged update
 | manifest가 또 하나의 중복 source가 됨 | metadata ownership map과 generated-field boundary를 schema에 포함한다. |
 | 외부 skill supply-chain 위험 | offline/local source 우선, inspect-first, provenance pin, 실행 surface 별도 승인을 강제한다. |
 | release archive supply-chain/path escape | GitHub release asset의 SHA-256 sidecar 검증, safe extraction, immutable version root, staged publish를 강제한다. |
-| raw-main bootstrap과 release archive의 버전 mismatch | public installer를 self-contained release asset으로 만들고 exact embedded tag만 설치한다. |
 | 자동 update가 개발 checkout을 덮어씀 | managed state + packaged source match를 동시에 만족하는 runtime만 갱신하고 Git 명령을 금지한다. |
 | update 뒤 현재 session도 갱신됐다고 오인 | activation 결과의 runtime별 `session_action`을 설치·update 출력과 README에 유지한다. |
 
@@ -445,7 +439,6 @@ Phase 4: release bootstrap → managed packaged update
 - Cycle 1 — 완료: 세 runtime activation census, 상태 schema, linked activate/status/doctor, duplicate cleanup, rollback.
 - Cycle 2 — 완료: canonical manifest/generator, generated consumer migration, profile resolver와 quickstart.
 - Cycle 3 — 완료: built-in pack 계약을 사용하는 offline extension lifecycle, provenance/security/parity.
-- Cycle 4 — 완료: clone 없는 release bootstrap, packaged automatic updater, release workflow, 공개 README 단순화, `v1.0.0` 공개.
-- Cycle 4.1 — 진행: bootstrap code/archive 동일-tag 결속과 `v1.0.1` patch release.
+- Cycle 4 — 완료: clone 없는 release bootstrap, packaged automatic updater, release workflow, 공개 README 단순화. 첫 public `v*` tag 발행은 main 통합 뒤 수행한다.
 
 Cycle 3 착수 전 `autopilot-code`가 세 runtime의 현재 extension surface와 local-path security boundary를 공식 문서와 로컬 realization에서 다시 확인하고 이 PRD를 source of truth로 읽어야 한다.

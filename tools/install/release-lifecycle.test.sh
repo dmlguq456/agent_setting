@@ -333,14 +333,29 @@ subprocess.run(["git", "init", "-q"], cwd=fixture, check=True)
 subprocess.run(["git", "config", "user.email", "fixture@example.com"], cwd=fixture, check=True)
 subprocess.run(["git", "config", "user.name", "fixture"], cwd=fixture, check=True)
 (fixture / "README.md").write_text("fixture\n")
+(fixture / "tools/install").mkdir(parents=True)
+(fixture / "tools/install/distribution.py").write_text(
+    "#!/usr/bin/env python3\nprint('fixture distribution')\n"
+)
 (fixture / ".agent_reports").mkdir()
 (fixture / ".agent_reports/cache").write_text("private report cache\n")
 subprocess.run(["git", "add", "."], cwd=fixture, check=True)
 subprocess.run(["git", "commit", "-qm", "fixture"], cwd=fixture, check=True)
-first, _ = build_release.build(fixture, "v3.0.0", tmp / "dist1", "HEAD")
-second, _ = build_release.build(fixture, "v3.0.0", tmp / "dist2", "HEAD")
-assert hashlib.sha256(first.read_bytes()).digest() == hashlib.sha256(second.read_bytes()).digest()
-with tarfile.open(first, "r:gz") as bundle:
+first = build_release.build(fixture, "v3.0.0", tmp / "dist1", "HEAD")
+second = build_release.build(fixture, "v3.0.0", tmp / "dist2", "HEAD")
+for left, right in zip(first, second):
+    assert left.name == right.name
+    assert hashlib.sha256(left.read_bytes()).digest() == hashlib.sha256(right.read_bytes()).digest()
+archive, archive_checksum, release_installer, installer_checksum = first
+assert release_installer.stat().st_mode & 0o111
+installer_text = release_installer.read_text()
+assert "RELEASE_VERSION='v3.0.0'" in installer_text
+assert "REPOSITORY='dmlguq456/agent_setting'" in installer_text
+assert "fixture distribution" in installer_text
+assert "--version \"$RELEASE_VERSION\"" in installer_text
+assert "agent-harness.tar.gz" in archive_checksum.read_text()
+assert "install.sh" in installer_checksum.read_text()
+with tarfile.open(archive, "r:gz") as bundle:
     names = bundle.getnames()
     assert "agent-harness/RELEASE_VERSION" in names
     assert not any(name.startswith("agent-harness/.agent_reports") for name in names)
@@ -351,6 +366,7 @@ PY
 env -u AGENT_HOME "$ROOT/tools/install/harness.sh" --help >/dev/null
 python3 -m py_compile "$ROOT/tools/install/distribution.py" "$ROOT/tools/install/build-release.py" "$ROOT/tools/install/installer.py"
 sh -n "$ROOT/install.sh" "$ROOT/tools/install/harness.sh"
+! grep -Fq "raw.githubusercontent.com" "$ROOT/install.sh"
 echo "ok - release launcher and syntax"
 
 # Build a working-tree release (including the files under test), then exercise
@@ -359,6 +375,7 @@ INTEGRATION="$TMP/integration"
 mkdir -p "$INTEGRATION/assets"
 python3 - "$ROOT" "$INTEGRATION" <<'PY'
 import hashlib
+import importlib.util
 import io
 import json
 from pathlib import Path
@@ -407,6 +424,17 @@ checksum.write_text(digest + "  agent-harness.tar.gz\n")
         }
     )
 )
+spec = importlib.util.spec_from_file_location(
+    "build_release", root / "tools/install/build-release.py"
+)
+build_release = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(build_release)
+build_release.build_installer(
+    "v-integration",
+    target / "assets",
+    (root / "tools/install/distribution.py").read_bytes(),
+    "example/harness",
+)
 PY
 
 HOME="$INTEGRATION/home"
@@ -419,18 +447,43 @@ export HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME HARNESS_BIN_DIR
 export HARNESS_RELEASE_INDEX_URL
 mkdir -p "$HOME"
 
-python3 "$ROOT/tools/install/distribution.py" bootstrap --repository example/harness --no-auto-update --json > "$INTEGRATION/install.json"
+set +e
+"$INTEGRATION/assets/install.sh" --version v-other > "$INTEGRATION/version-override.out" 2>&1
+OVERRIDE_EXIT=$?
+set -e
+[ "$OVERRIDE_EXIT" -eq 64 ]
+
+set +e
+"$INTEGRATION/assets/install.sh" --repository other/harness > "$INTEGRATION/repository-override.out" 2>&1
+REPOSITORY_OVERRIDE_EXIT=$?
+set -e
+[ "$REPOSITORY_OVERRIDE_EXIT" -eq 64 ]
+
+HARNESS_REPOSITORY=other/harness HARNESS_VERSION=v-other "$INTEGRATION/assets/install.sh" --no-auto-update --json > "$INTEGRATION/install.json"
 "$HARNESS_BIN_DIR/harness" runtime doctor --runtime all --strict --json > "$INTEGRATION/doctor.json"
 "$HARNESS_BIN_DIR/harness" update --json > "$INTEGRATION/update.json"
 
 python3 - "$INTEGRATION/install.json" "$INTEGRATION/doctor.json" "$INTEGRATION/update.json" <<'PY'
-import json, sys
+import json, os, sys
 installed = json.load(open(sys.argv[1]))
 doctor = json.load(open(sys.argv[2]))
 updated = json.load(open(sys.argv[3]))
+state = json.load(
+    open(os.path.join(os.environ["XDG_STATE_HOME"], "agent-harness/distribution.json"))
+)
 assert installed["status"] == "installed"
+assert installed["version"] == "v-integration"
+assert state["repository"] == "example/harness"
 assert set(installed["runtimes"]) == {"claude", "codex", "opencode"}
 assert doctor["exit"] == 0
 assert updated["release"]["status"] == "up-to-date"
 PY
-echo "ok - clone-free real release activates and verifies all runtimes"
+
+HARNESS_INSTALL_URL="file://$INTEGRATION/assets/install.sh" "$ROOT/install.sh" --no-auto-update --json > "$INTEGRATION/legacy-redirect.json"
+python3 - "$INTEGRATION/legacy-redirect.json" <<'PY'
+import json, sys
+result = json.load(open(sys.argv[1]))
+assert result["status"] in {"up-to-date", "reconfigured"}
+assert result["version"] == "v-integration"
+PY
+echo "ok - release-bound installer and legacy redirect activate and verify all runtimes"

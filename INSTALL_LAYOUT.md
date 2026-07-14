@@ -6,7 +6,8 @@ through native discovery paths and adapter bootstrap files.
 
 > **Execution note — use `harness install` / `harness verify`.** This document
 > no longer contains shell recipes to copy or a manual verification battery.
-> Root `install.sh` provides the clone-free managed-release path.
+> The public `install.sh` is a self-contained GitHub Release asset. Root
+> `install.sh` only redirects the former raw-main URL to that release path.
 > `tools/install/harness.sh` automates activation, verification, updates,
 > status, and removal through `runtime activate|status|refresh|doctor` and the
 > legacy `install`/`verify`/`update`/`status`/`uninstall` subcommands. The
@@ -41,10 +42,14 @@ the machine-readable source of truth for source root, source/active revision,
 projection digest, discovery paths, duplicates, freshness, and session action.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dmlguq456/agent_setting/main/install.sh | sh
+curl -fsSL https://github.com/dmlguq456/agent_setting/releases/latest/download/install.sh | sh
 harness runtime status --runtime all --json
 harness runtime doctor --runtime all --strict
 ```
+
+The installer embeds distribution logic from the same immutable release tag,
+then downloads that exact tag's archive and SHA-256 sidecar. It never combines
+distribution code from `main` with a separately selected release archive.
 
 `harness-manifest.json` owns the `starter`, `builder`, and `full` profiles and
 their dependency closure. `builder` is the default for new activations. A

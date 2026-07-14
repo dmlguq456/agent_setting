@@ -33,10 +33,11 @@ jobs:
       - name: Build deterministic release assets
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: python3 tools/install/build-release.py --version "$RELEASE_TAG" --output dist
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: python3 tools/install/build-release.py --version "$RELEASE_TAG" --repository "$RELEASE_REPOSITORY" --output dist
 
       - name: Publish the verified tag
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" dist/agent-harness.tar.gz dist/agent-harness.tar.gz.sha256 --verify-tag --generate-notes --title "$RELEASE_TAG"
+        run: gh release create "$RELEASE_TAG" dist/agent-harness.tar.gz dist/agent-harness.tar.gz.sha256 dist/install.sh dist/install.sh.sha256 --verify-tag --generate-notes --title "$RELEASE_TAG"

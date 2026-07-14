@@ -51,12 +51,13 @@ Agent Harness는 지원되는 코딩 에이전트 런타임에서 조사, 계획
 ### 설치
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dmlguq456/agent_setting/main/install.sh | sh
+curl -fsSL https://github.com/dmlguq456/agent_setting/releases/latest/download/install.sh | sh
 ~/.local/bin/harness runtime doctor --runtime all --strict
 ```
 
-installer는 SHA-256 무결성을 확인한 최신 GitHub Release를 내려받고, 세 런타임에
-`builder` profile의 불변 packaged bundle을 활성화합니다. OS가 지원하면
+installer와 distribution logic은 동일한 immutable Release tag에서 오며, 그 exact
+tag의 archive를 SHA-256으로 확인한 뒤 설치합니다. 세 런타임에 `builder`
+profile의 불변 packaged bundle을 활성화하고, OS가 지원하면
 user-level 일일 update 확인도 등록합니다. Runtime credential, session, log,
 database는 건드리지 않습니다.
 
@@ -80,7 +81,7 @@ Checksum sidecar는 전송 또는 asset 손상을 탐지합니다. Publisher 진
 Version 고정 또는 자동 확인 제외:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dmlguq456/agent_setting/main/install.sh | sh -s -- --version v1.0.0 --no-auto-update
+curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v1.0.1/install.sh | sh -s -- --no-auto-update
 ```
 
 ## 프로필 선택

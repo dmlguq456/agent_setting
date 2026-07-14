@@ -49,12 +49,13 @@ actually discovers.
 ### Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dmlguq456/agent_setting/main/install.sh | sh
+curl -fsSL https://github.com/dmlguq456/agent_setting/releases/latest/download/install.sh | sh
 ~/.local/bin/harness runtime doctor --runtime all --strict
 ```
 
-The installer downloads the latest SHA-256 integrity-checked GitHub Release, activates the
-`builder` profile for all three runtimes as immutable packaged bundles, and
+The installer and distribution logic come from the same immutable Release tag;
+that exact tag's SHA-256 integrity-checked archive is then installed. It activates
+the `builder` profile for all three runtimes as immutable packaged bundles and
 registers a daily user-level update check where the OS supports it. It does not
 touch runtime credentials, sessions, logs, or databases.
 
@@ -79,7 +80,7 @@ boundary; it is not an independent signature.
 To pin a version or disable scheduled checks:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dmlguq456/agent_setting/main/install.sh | sh -s -- --version v1.0.0 --no-auto-update
+curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v1.0.1/install.sh | sh -s -- --no-auto-update
 ```
 
 ## Choose a profile

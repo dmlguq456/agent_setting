@@ -1,5 +1,13 @@
 # harness-installer — pipeline summary
 
+## v5 (2026-07-14) — release-bound bootstrap
+
+- snapshot: `_internal/versions/v4/prd.md`. v1.0.0 공개 뒤 발견된 raw-main bootstrap과 release archive의 버전 분리 가능성을 계약 위반으로 분류했다.
+- public one-line install은 `releases/latest/download/install.sh` asset만 실행하고, 이 asset은 같은 tag의 `distribution.py`와 exact release version을 내장한다.
+- version pin은 versioned installer asset URL로 선택하며 latest installer에서 다른 `--version`을 주입하는 경로를 닫는다.
+- root `install.sh`는 legacy raw URL을 release asset으로 넘기는 compatibility redirect만 유지한다.
+- release workflow는 archive/checksum과 self-contained installer/checksum을 한 tag에서 함께 게시한다.
+
 ## v4 (2026-07-14) — clone-free release + automatic packaged update
 
 - snapshot: `_internal/versions/v3/prd.md`. 일반 사용자는 Git clone 대신 GitHub Release archive+SHA-256을 한 줄 bootstrap으로 설치한다.
@@ -8,7 +16,7 @@
 - Linux systemd user timer/macOS LaunchAgent 자동 확인, opt-out/pin, safe extraction, activation/state rollback을 구현 계약으로 고정했다.
 - README는 “native first, plugins optional”을 독립 홍보 포인트에서 내리고 clone 없는 설치와 다섯 가지 제품 강점을 앞세운다.
 - 구현 완료: 실제 archive의 세 runtime packaged activation, safe extraction 공격군, pin/scheduler/pointer/profile rollback, 기존 runtime/profile/extension 및 adaptation 회귀가 통과했다. 독립 보안 리뷰 최종 HIGH/MEDIUM은 0건이다.
-- deployment next: main 통합 후 첫 `v*` tag로 GitHub Release asset을 게시한다.
+- deployment: `v1.0.0` 공개 완료. v5 수정은 `v1.0.1` patch release로 게시한다.
 
 ## v3 (2026-07-13) — 공개 README 표면 + sync-skills 퇴역
 
