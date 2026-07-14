@@ -295,9 +295,11 @@ def install(scope="global", plugin=False, dry_run=False):
 
 
 def checks(scope="global"):
-    """verify 가 실행할 check 함수 목록 (Phase 4.2 no-sync-native/no-preflight 기반 +
-    cycle-2 Phase 3 plugin 채널 3 종 check 추가: sync-native-plugin drift,
-    marketplace source 존재, CLI-gated registration — 모두 read-only)."""
+    """verify 가 실행할 native projection + bootstrap check 목록.
+
+    Marketplace bundle은 명시적 ``install --plugin`` 배포 채널이며 core verify의
+    성공 조건이 아니다.
+    """
     entries = projector.plan(["claude"], scope=scope)["claude"]
 
     check_list = []
@@ -320,8 +322,8 @@ def checks(scope="global"):
 
     check_list.append(
         verifier.check_cmd(
-            "claude.build-manifest-check",
-            ["python3", "tools/build-manifest.py", "--check"],
+            "claude.generated-projections",
+            ["python3", "tools/generate.py", "--check"],
             cwd=agent_home,
         )
     )
@@ -354,116 +356,6 @@ def checks(scope="global"):
         }
 
     check_list.append(_bootstrap_smoke)
-
-    # Phase 3 Step 3.1 — generator drift: adapters/claude/plugin-marketplace/
-    # plugins/agent-harness-claude/ must not be stale vs SoT (skills/agents/
-    # hooks/hooks.json all covered by sync-native-plugin.py's own --check).
-    check_list.append(
-        verifier.check_cmd(
-            "claude.sync-native-plugin",
-            ["python3", "adapters/claude/bin/sync-native-plugin.py", "--check"],
-            cwd=agent_home,
-        )
-    )
-
-    # Step 3.2 — marketplace source presence (mirrors codex.plugin-marketplace-source).
-    check_list.append(
-        verifier.check_file_exists(
-            "claude.plugin-marketplace-source",
-            str(
-                paths.resolve_source(_MARKETPLACE_SOURCE_RELPATH)
-                / ".claude-plugin"
-                / "marketplace.json"
-            ),
-        )
-    )
-
-    # Step 3.3 — CLI-gated, read-only registration check. Never installs during
-    # verify; queries `claude plugin marketplace list --json` / `claude plugin
-    # list --json` (verified live via --help: both support --json, unlike the
-    # mutating `marketplace add`/`install` commands — see dev_logs/step_01).
-    # 채널-인지 (2026-07-13 fix): marketplace 미등록은 plugin 채널을 아예 안 쓰는
-    # dev-only 머신에서 **정상 상태** (PRD §0.5 원칙 1 — 2-채널은 대체가 아니라 병존).
-    # dev 채널(symlink projection) 활성 && marketplace 미등록 = SKIP(ok=True, parity-loss
-    # warning 명시, PRD §"parity-loss warning" — silent drop 금지). marketplace 는
-    # 등록됐는데 plugin 미설치인 경우는 여전히 진짜 실패로 ✗ 유지.
-    def _plugin_registered():
-        if shutil.which("claude") is None:
-            return {
-                "id": "claude.plugin-registered",
-                "ok": True,
-                "detail": "SKIP(claude): plugin registration — claude CLI absent",
-            }
-
-        import json as _json
-
-        try:
-            mp_result = subprocess.run(
-                ["claude", "plugin", "marketplace", "list", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-            return {"id": "claude.plugin-registered", "ok": False, "detail": f"marketplace list 실행 실패: {exc}"}
-        if mp_result.returncode != 0:
-            return {
-                "id": "claude.plugin-registered",
-                "ok": False,
-                "detail": f"marketplace list exit={mp_result.returncode} stderr={mp_result.stderr[:300]!r}",
-            }
-        try:
-            marketplaces = _json.loads(mp_result.stdout)
-        except ValueError:
-            return {"id": "claude.plugin-registered", "ok": False, "detail": f"marketplace list JSON 파싱 실패: {mp_result.stdout[:300]!r}"}
-        marketplace_present = any(m.get("name") == _MARKETPLACE_NAME for m in marketplaces)
-        if not marketplace_present:
-            if _dev_channel_active(scope):
-                return {
-                    "id": "claude.plugin-registered",
-                    "ok": True,
-                    "detail": "SKIP: plugin 채널 미채택 (dev 채널 활성) — marketplace 'agent-harness' 미등록은 정상",
-                }
-            return {
-                "id": "claude.plugin-registered",
-                "ok": False,
-                "detail": f"marketplace {_MARKETPLACE_NAME!r} 미등록 (claude plugin marketplace add 필요)",
-            }
-
-        try:
-            pl_result = subprocess.run(
-                ["claude", "plugin", "list", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-            return {"id": "claude.plugin-registered", "ok": False, "detail": f"plugin list 실행 실패: {exc}"}
-        if pl_result.returncode != 0:
-            return {
-                "id": "claude.plugin-registered",
-                "ok": False,
-                "detail": f"plugin list exit={pl_result.returncode} stderr={pl_result.stderr[:300]!r}",
-            }
-        try:
-            plugins = _json.loads(pl_result.stdout)
-        except ValueError:
-            return {"id": "claude.plugin-registered", "ok": False, "detail": f"plugin list JSON 파싱 실패: {pl_result.stdout[:300]!r}"}
-        plugin_present = any(p.get("id") == _PLUGIN_SPEC for p in plugins)
-        if not plugin_present:
-            return {
-                "id": "claude.plugin-registered",
-                "ok": False,
-                "detail": f"plugin {_PLUGIN_SPEC!r} 미설치 (claude plugin install 필요)",
-            }
-
-        return {
-            "id": "claude.plugin-registered",
-            "ok": True,
-            "detail": f"OK: marketplace {_MARKETPLACE_NAME!r} + plugin {_PLUGIN_SPEC!r} 등록 확인",
-        }
-
-    check_list.append(_plugin_registered)
 
     return check_list
 

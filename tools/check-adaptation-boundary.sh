@@ -163,7 +163,7 @@ check_opencode_forbidden_entries() {
 }
 
 check_required_projection_entries() {
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-hooks codex-config codex-agents; do
     if [ ! -L "codex_setting/$p" ]; then
       fail_msg "codex_setting/$p must be a symlink projection entry"
     fi
@@ -182,7 +182,6 @@ check_codex_projection_targets() {
   check_link_target codex_setting/scaffolds ../adapters/codex/scaffolds
   check_link_target codex_setting/codex-skills ../adapters/codex/skills
   check_link_target codex_setting/codex-modes ../adapters/codex/modes
-  check_link_target codex_setting/codex-plugin-marketplace ../adapters/codex/plugin-marketplace
   check_link_target codex_setting/codex-hooks ../adapters/codex/hooks
   check_link_target codex_setting/codex-config ../adapters/codex/config
   check_link_target codex_setting/codex-agents ../adapters/codex/agents
@@ -480,11 +479,11 @@ check_install_layout_codex_projection() {
 
   if is_mechanized_install_layout; then
     check_mechanized_install_projection codex \
-      "codex.symlink.agent-harness codex.symlink.AGENTS.md codex.symlink.agent-harness-readme.md codex.symlink.agent-core codex.symlink.agent-capabilities codex.symlink.agent-roles codex.symlink.agent-bin codex.symlink.agent-tools codex.symlink.agent-utilities codex.symlink.agent-scaffolds codex.symlink.agent-skills codex.symlink.agent-modes codex.symlink.agent-agents codex.symlink.agent-plugin-marketplace codex.symlink.agent-hooks codex.symlink.agent-config codex.symlink.hooks.json"
+      "codex.symlink.agent-harness codex.symlink.AGENTS.md codex.symlink.agent-harness-readme.md codex.symlink.agent-core codex.symlink.agent-capabilities codex.symlink.agent-roles codex.symlink.agent-bin codex.symlink.agent-tools codex.symlink.agent-utilities codex.symlink.agent-scaffolds codex.symlink.agent-skills codex.symlink.agent-modes codex.symlink.agent-agents codex.symlink.agent-hooks codex.symlink.agent-config codex.symlink.hooks.json"
     return
   fi
 
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-hooks codex-config codex-agents; do
     if ! grep -Fq "\$AGENT_HOME/codex_setting/$p" INSTALL_LAYOUT.md; then
       fail_msg "INSTALL_LAYOUT.md must include Codex projection install step for codex_setting/$p"
     fi
@@ -749,7 +748,7 @@ check_codex_bin_wrappers() {
     fail_msg "codex_setting/bin points to $target; expected ../adapters/codex/bin"
   fi
 
-  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh dispatch-headless.py dispatch-liveness.py dispatch-harvest.py distill-worker.sh sync-native-skills.py sync-native-plugin.py sync-native-agents.py sync-native-modes.py; do
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh dispatch-headless.py dispatch-liveness.py dispatch-harvest.py distill-worker.sh sync-native-skills.py sync-native-agents.py sync-native-modes.py; do
     if [ ! -x "adapters/codex/bin/$p" ]; then
       fail_msg "adapters/codex/bin/$p is missing or not executable"
     fi
@@ -959,10 +958,6 @@ check_codex_bin_wrappers() {
     fail_msg "Codex docs must keep /statusline native and reserve preflight.sh status for harness-specific signals"
   fi
 
-  if ! grep -Fq 'codex_setting/codex-plugin-marketplace' adapters/codex/AGENTS.md; then
-    fail_msg "adapters/codex/AGENTS.md must document the Codex native plugin projection"
-  fi
-
   if ! grep -Fq 'codex_setting/codex-modes' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex native mode projection"
   fi
@@ -1074,7 +1069,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'routing_contract=core/WORKFLOW.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'routing_action=read-workflow-and-select-codex-skill' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'capability_entrypoints=codex-native-skills-plugin' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'capability_entrypoints=codex-native-skills' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'enforced_hooks=structured-write-guards,core-first-guard,posttool-read-markers,posttool-design-check,session-memory,turn-nudge' adapters/codex/bin/preflight.sh; then
     fail_msg "Codex UserPromptSubmit hook must expose a structured workflow/autopilot signal"
   fi
@@ -1207,7 +1202,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'source=loops/drill/README.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'auto_run=unsupported' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'related_capability=autopilot-note' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'native_capability_surface=codex-native-skill-plugin' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'native_capability_surface=codex-native-skills' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'scheduler_surface=external-worklog-board' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'fallback=worklog-board-or-manual-post-it-flow' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must expose Codex loop-info contracts without running loop scripts"
@@ -1220,10 +1215,10 @@ check_codex_bin_wrappers() {
   if grep -Fq 'Codex commands must be expressed as AGENTS instructions or wrapper commands' adapters/codex/ADAPTATION.md; then
     fail_msg "adapters/codex/ADAPTATION.md must describe command-like entries through native Skills/plugins, not stale wrapper-command wording"
   fi
-  if ! grep -Fq 'command-like harness entries use Codex-native Skills and the installable `agent-harness-codex` plugin' adapters/codex/ADAPTATION.md; then
-    fail_msg "adapters/codex/ADAPTATION.md must document native Skills/plugin realization for Claude command non-support"
+  if ! grep -Fq 'command-like harness entries use Codex-native Skills' adapters/codex/ADAPTATION.md; then
+    fail_msg "adapters/codex/ADAPTATION.md must document native Skills realization for Claude command non-support"
   fi
-  if ! grep -Fq '`codex-plugin-marketplace`, `codex-hooks`, selected tools' adapters/codex/ADAPTATION.md; then
+  if ! grep -Fq '`codex-agents`, `codex-hooks`, selected tools' adapters/codex/ADAPTATION.md; then
     fail_msg "adapters/codex/ADAPTATION.md current projection boundary must include codex-hooks"
   fi
   if ! grep -Fq 'not a hook listing or' adapters/codex/ADAPTATION.md \
@@ -1429,7 +1424,7 @@ check_codex_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -1566,7 +1561,7 @@ check_codex_native_skill_projection() {
     fi
   done
 
-  bad=$(rg -n 'adapters/claude|claude_setting|claude_realization|statusline\.sh|settings\.json|CLAUDE\.md|(^|[^[:alnum:]_/.-])skills/' adapters/codex/skills adapters/codex/plugins/agent-harness-codex/skills adapters/codex/bin/capability-map.sh 2>/dev/null || true)
+  bad=$(rg -n 'adapters/claude|claude_setting|claude_realization|statusline\.sh|settings\.json|CLAUDE\.md|(^|[^[:alnum:]_/.-])skills/' adapters/codex/skills adapters/codex/bin/capability-map.sh 2>/dev/null || true)
   if [ -n "$bad" ]; then
     fail_msg "Codex native capability surfaces must not expose Claude-native surfaces:"
     printf '%s\n' "$bad"
@@ -2473,7 +2468,7 @@ check_opencode_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2982,6 +2977,12 @@ check_claude_tool_projection() {
   for p in $(find tools -mindepth 1 ! -path '*/__pycache__' ! -path '*/__pycache__/*' -print); do
     rel=${p#tools/}
     adapter_p=adapters/claude/tools/$rel
+    case "$rel" in
+      generate.py|harness_manifest.py|generated-projections.test.sh|install/profile-activation.test.sh)
+        # Harness-development/profile acceptance tools are intentionally not runtime projections.
+        continue
+        ;;
+    esac
     if is_census_deferred "$adapter_p"; then
       # 동시 세션 소유 subtree: 기존 concrete 계약만 확인 (collapse 강제하지 않음)
       if [ -d "$p" ]; then
@@ -3158,11 +3159,7 @@ check_adaptation_inventory_native_surfaces() {
   if ! grep -Fq 'Codex command-like surface' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'OpenCode native command surface' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'Claude slash commands' core/ADAPTATION_INVENTORY.md; then
-    fail_msg "core/ADAPTATION_INVENTORY.md must distinguish Claude slash commands, Codex command-like Skills/plugins, and OpenCode commands"
-  fi
-  if grep -Fq 'adapters/codex/.agents/plugins/marketplace.json' core/ADAPTATION_INVENTORY.md \
-    || ! grep -Fq 'adapters/codex/plugin-marketplace/.agents/plugins/marketplace.json' core/ADAPTATION_INVENTORY.md; then
-    fail_msg "core/ADAPTATION_INVENTORY.md must point Codex plugin marketplace inventory at adapters/codex/plugin-marketplace, not obsolete adapters/codex/.agents"
+    fail_msg "core/ADAPTATION_INVENTORY.md must distinguish Claude slash commands, Codex command-like Skills, and OpenCode commands"
   fi
   if ! grep -Fq '"claude.compile-smoke"' tools/install/drivers/claude.py \
     || ! grep -Fq "compile(open(f,encoding='utf-8').read(), f, 'exec')" tools/install/drivers/claude.py; then
@@ -3297,11 +3294,11 @@ check_projection_summary_docs() {
   if grep -Fq 'Codex does not currently consume the full harness natively' README.md INSTALL_LAYOUT.md 2>/dev/null; then
     fail_msg "Codex install docs must describe selected native projections instead of implying instruction-only support"
   fi
-  if ! grep -Fq 'native skills·custom agents·modes·hooks' README.md \
-    || ! grep -Fq 'skills/agents/commands/plugins' README.md; then
+  if ! grep -Fq '| Codex | skills, custom agents, modes, hooks |' README.md \
+    || ! grep -Fq '| OpenCode | skills, agents, commands, local guard plugin |' README.md; then
     fail_msg "README.md must summarize Codex and OpenCode native projection surfaces"
   fi
-  if ! grep -Fq 'Codex-native Skills, custom Agents, plugin' INSTALL_LAYOUT.md \
+  if ! grep -Fq 'Codex-native Skills, custom Agents, mode' INSTALL_LAYOUT.md \
     || ! grep -Fq 'hook bridges' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must summarize Codex native projection install surfaces"
   fi
@@ -3320,10 +3317,6 @@ check_capability_catalog() {
     if ! grep -Fq "| \`$slug\` |" capabilities/README.md; then
       fail_msg "capabilities/README.md is missing skill capability: $slug"
     fi
-    if ! grep -Fq "adapters/codex/skills/$slug/SKILL.md" capabilities/README.md \
-      || ! grep -Fq "adapters/codex/plugins/agent-harness-codex/skills/$slug/SKILL.md" capabilities/README.md; then
-      fail_msg "capabilities/README.md must document Codex native projections for $slug"
-    fi
     if ! grep -Fq "adapters/opencode/skills/$slug/SKILL.md" capabilities/README.md \
       || ! grep -Fq "adapters/opencode/commands/$slug.md" capabilities/README.md; then
       fail_msg "capabilities/README.md must document OpenCode native projections for $slug"
@@ -3335,9 +3328,8 @@ check_capability_catalog() {
     if ! grep -Fq "| Codex | Read this spec and run \`adapters/codex/bin/preflight.sh capability-info $slug\`" "capabilities/$slug.md"; then
       fail_msg "capabilities/$slug.md must document Codex capability-info realization"
     fi
-    if ! grep -Fq "adapters/codex/skills/$slug/SKILL.md" "capabilities/$slug.md" \
-      || ! grep -Fq "adapters/codex/plugins/agent-harness-codex/skills/$slug/SKILL.md" "capabilities/$slug.md"; then
-      fail_msg "capabilities/$slug.md must document Codex native Skill and plugin projections"
+    if ! grep -Fq "adapters/codex/skills/$slug/SKILL.md" "capabilities/$slug.md"; then
+      fail_msg "capabilities/$slug.md must document the Codex native Skill projection"
     fi
     if ! grep -Fq "| OpenCode | Read this spec and run \`adapters/opencode/bin/preflight.sh capability-info $slug\`" "capabilities/$slug.md"; then
       fail_msg "capabilities/$slug.md must document OpenCode capability-info realization"
@@ -3718,7 +3710,6 @@ check_codex_forbidden_entries
 check_codex_native_surface_debt
 check_required_projection_entries
 check_codex_projection_targets
-check_codex_plugin_marketplace_projection_boundary
 check_opencode_forbidden_entries
 check_opencode_required_projection_entries
 check_opencode_projection_targets
@@ -3733,7 +3724,6 @@ check_opencode_bin_wrappers
 check_codex_tool_projection
 check_codex_scaffold_projection
 check_codex_native_skill_projection
-check_codex_native_plugin_projection
 check_codex_native_agent_projection
 check_codex_model_pin_role_map_consistency
 check_codex_native_mode_projection

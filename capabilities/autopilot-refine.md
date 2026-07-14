@@ -3,6 +3,7 @@
 This is the portable capability contract for `autopilot-refine`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
@@ -10,7 +11,7 @@ This is the portable capability contract for `autopilot-refine`. It defines runt
 | Group | `entry` |
 | Supported modes | `none` |
 | Portable meaning | 기존 문서·연구 산출물의 정정·갱신. 버전 snapshot과 변경 이력을 보존한다. |
-| Argument shape | `\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]` |
+| Argument shape | `"<prompt>" [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--review-only \| --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]` |
 
 ## Invocation Semantics
 
@@ -43,7 +44,7 @@ Adapters must preserve the portable invariants relevant to this capability:
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/autopilot-refine/SKILL.md` and `skills/autopilot-refine/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-refine/SKILL.md`, while `skills/autopilot-refine/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-refine`. Use `adapters/codex/skills/autopilot-refine/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/autopilot-refine/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/autopilot-refine/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-refine`. Use `adapters/codex/skills/autopilot-refine/SKILL.md` as the native Codex Skill projection; do not consume `skills/autopilot-refine/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info autopilot-refine`. Use `adapters/opencode/skills/autopilot-refine/SKILL.md` and `adapters/opencode/commands/autopilot-refine.md` as native OpenCode projections; do not consume `skills/autopilot-refine/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

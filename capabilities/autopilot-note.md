@@ -3,6 +3,7 @@
 This is the portable capability contract for `autopilot-note`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
@@ -10,7 +11,7 @@ This is the portable capability contract for `autopilot-note`. It defines runtim
 | Group | `entry` |
 | Supported modes | `none` |
 | Portable meaning | 산출물 라우팅/노트화. digest와 triage 제안을 만든다. |
-| Argument shape | `[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]` |
+| Argument shape | `[--scope today\|yesterday\|since <date>\|all] [--target <notes-root>] [--dry-run] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--digest-only] [--triage-only] [--source <list>]` |
 
 ## Invocation Semantics
 
@@ -48,7 +49,7 @@ Adapters must preserve the portable invariants relevant to this capability:
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/autopilot-note/SKILL.md` and `skills/autopilot-note/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-note/SKILL.md`, while `skills/autopilot-note/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-note`. Use `adapters/codex/skills/autopilot-note/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/autopilot-note/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/autopilot-note/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-note`. Use `adapters/codex/skills/autopilot-note/SKILL.md` as the native Codex Skill projection; do not consume `skills/autopilot-note/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info autopilot-note`. Use `adapters/opencode/skills/autopilot-note/SKILL.md` and `adapters/opencode/commands/autopilot-note.md` as native OpenCode projections; do not consume `skills/autopilot-note/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

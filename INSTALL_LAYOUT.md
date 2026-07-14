@@ -12,7 +12,7 @@ This harness is runtime-neutral. The git repository should live outside vendor r
 >
 > **설계 안내 — 이 문서가 유지하는 것은 계약 서술뿐이다.** 무엇이 어디로 매핑되는지,
 > 왜 그렇게 하는지, 어떤 경우가 위험한지만 다룬다. 표면 × 채널 결정 매트릭스와 채널별
-> 상세 스펙의 단일 출처는 PRD `[cli]`·`plugin 채널` 절이고, 아래에는 그 요약과 이
+> 상세 스펙의 단일 출처는 productization PRD의 activation·profile 절이고, 아래에는 그 요약과 이
 > 문서에만 있는 로컬 사실(Windows 구체 경로, fleet 계약)만 남긴다.
 
 ## Target Layout
@@ -34,10 +34,20 @@ the machine-readable source of truth for source root, source/active revision,
 projection digest, discovery paths, duplicates, freshness, and session action.
 
 ```bash
-harness runtime activate --runtime all --mode linked --source "$AGENT_HOME"
+harness runtime activate --runtime all --mode linked --profile builder --source "$AGENT_HOME"
 harness runtime status --runtime all --json
 harness runtime doctor --runtime all --strict
 ```
+
+`harness-manifest.json`이 `starter`/`builder`/`full` profile과 dependency closure를
+소유한다. `builder`가 새 activation의 기본값이며 legacy activation record에 profile이
+없으면 기존 discovery를 보존하기 위해 `full`로 해석한다.
+
+| profile | projected capabilities | projected roles | projected modes |
+|---|---:|---:|---:|
+| `starter` | 6 | 4 | 13 |
+| `builder` | 14 | 7 | 26 |
+| `full` | 27 | 8 | 26 |
 
 - `linked` is the maintainer default. It projects one absolute local repo.
 - `packaged` creates an immutable local bundle and changes only after
@@ -167,8 +177,8 @@ The wrapper owns its provider-specific no-tools restriction. `fleet --json` and
 ## Codex Projection
 
 Keep `$HOME/.codex` runtime-owned. The portable harness projects through a
-stable pointer plus adapter-owned Codex-native Skills, custom Agents, plugin
-marketplace, mode guides, and hook bridges:
+stable pointer plus adapter-owned Codex-native Skills, custom Agents, mode
+guides, and hook bridges:
 
 ```bash
 harness install codex
@@ -256,11 +266,14 @@ harness runtime status --runtime all --json
 harness runtime doctor --runtime all --strict
 ```
 
-`verify` runs each driver's `checks()` list (symlink existence · generator
-`--check` drift · preflight contract assertions · plugin marketplace/
-registration checks · bootstrap load smoke) and reports pass/fail per check —
-this is the full mechanization of what the removed Migration Order section
-ran by hand.
+`verify` follows the selected runtime's active installation contract. When an
+`activation.json` record exists it runs strict activation doctor checks for the
+recorded source, profile, projection, duplicate, and freshness state. Without
+an activation record it preserves the legacy driver's `checks()` list (symlink
+existence · canonical generator drift · preflight assertions · bootstrap load
+smoke). This avoids mixing profile-native plural discovery paths with the old
+installer layout while retaining verification for installations that have not
+migrated to activation yet.
 
 **Contract-level invariants that remain true regardless of implementation**
 (kept as prose, not runnable steps):
@@ -285,11 +298,9 @@ ran by hand.
   the user edited a copied file in place; `update --reapply` backs it up
   under `local-patches/` before reapplying, and a 3-way conflict is reported
   rather than auto-merged.
-- **Plugin registration checks are always read-only.** `verify` never calls
-  a mutating plugin command (`marketplace add`/`plugin install`/`plugin add`)
-  — only read-only list/query subcommands. Runtime-currentness of the exact
-  CLI verbs/flags for each runtime's plugin channel is verified against that
-  runtime's live CLI + current docs before being wired into a driver
-  (`core/ADAPTATION.md` §2.2), not assumed from another adapter.
+- **Marketplace bundles are optional distribution artifacts.** Core generation,
+  activation, `doctor`, and `verify` neither register nor require them. An
+  explicit legacy `install --plugin` flow owns its own runtime-currentness and
+  registration checks; it cannot shadow or duplicate the active native profile.
 
 Do not run drill automatically during migration; it invokes headless runtime sessions and can spend tokens. Run a targeted drill only after `harness verify` reports clean.

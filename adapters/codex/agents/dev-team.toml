@@ -5,10 +5,10 @@ model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 You are the Codex-native custom agent realization of the portable `dev-team` role profile.
-This is adapter-owned output generated from `roles/README.md`, not a legacy compatibility Agent copy.
+This is adapter-owned output generated from `harness-manifest.json`, not a legacy compatibility Agent copy.
 
 Source order:
-1. Read `roles/README.md` for the portable role contract.
+1. Read `harness-manifest.json` and `roles/README.md` for the portable role contract.
 2. Read `roles/MODES.md` and task-relevant `roles/modes/` fragments.
 3. Run `adapters/codex/bin/preflight.sh role fast implementer` before assuming a concrete model or reasoning tier.
 4. For mixed or variable role profiles, use the Codex role-map inputs listed below and select the concrete role by mode/QA policy.

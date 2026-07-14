@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: draft-refine
-description: "초안 정련·다듬기 sub-skill — 편집팀 검수 경유"
-argument-hint: "<strategy or draft name or path>"
+description: "Use when invoking the portable draft-refine capability. 초안 정련·다듬기. memo/review feedback을 문서 전략이나 draft에 반영한다."
+argument-hint: "<strategy or draft name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "초안 정련·다듬기 sub-skill — 편집팀 검수 경유"
+  blurb: "초안 정련·다듬기. memo/review feedback을 문서 전략이나 draft에 반영한다."
 ---
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 review 로그를 `_internal/strategy_reviews/` 또는 `_internal/draft_reviews/`에 기록. 버전 스냅샷은 modern artifact면 `_internal/versions/v{N}/`, legacy artifact면 `_v{N}.md` 형제 (자동 감지).

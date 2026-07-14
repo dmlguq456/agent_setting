@@ -1,7 +1,7 @@
 """drivers — 런타임별 channel driver (PRD "channel drivers" component diagram).
 
-각 driver 는 기존 adapter 실현(adapters/<runtime>/bin/sync-native-*.py, preflight.sh)을
-**호출**한다 — 재구현 금지(PRD §공통 "Module 구조"). 이 패키지는 driver 선택만 맡는다.
+각 driver 는 canonical ``tools/generate.py --check``와 runtime preflight를 호출한다.
+projection 생성 규칙을 driver에서 재구현하지 않으며 이 패키지는 driver 선택만 맡는다.
 """
 from . import claude as _claude
 from . import codex as _codex

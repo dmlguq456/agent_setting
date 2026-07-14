@@ -1,21 +1,32 @@
 # Agent Harness
 
-**자연어 한 줄을 조사·기획·구현·검증까지 이어지는 재현 가능한 작업 흐름으로 바꿉니다.**
+> **Portable workflows. Native runtimes. One local source of truth.**
 
-Agent Harness는 Claude Code, Codex, OpenCode에서 같은 작업 원칙을 쓰기 위한 portable agent harness입니다. 공통 계약은 한곳에서 관리하고, 각 런타임에는 그 런타임이 이해하는 native projection으로 활성화합니다. 제품 전체가 하나의 plugin인 것은 아니며, plugin이나 marketplace는 기본 실행 경로에 필요하지 않습니다.
+Claude Code, Codex, OpenCode에서 조사·기획·구현·검증을 같은 방식으로 끝까지 닫는 로컬 agent harness입니다. 공통 계약은 한 번 정의하고, 각 런타임에는 그 런타임이 실제로 발견하는 skill·agent·hook 표면만 생성해 활성화합니다.
 
-## 빠른 설치
+```text
+"로그인 API를 구현하고 테스트한 뒤 변경 보고서까지 남겨줘."
+                                  ↓
+       plan → execute → test → report + durable evidence
+```
+
+## Quick start
 
 Python 3.10+, Git, 사용할 런타임 CLI가 필요합니다.
 
 ```bash
 git clone https://github.com/dmlguq456/agent_setting.git ~/agent_setting
 cd ~/agent_setting
-./tools/install/harness.sh runtime activate --runtime all --mode linked
+
+./tools/install/harness.sh runtime activate \
+  --runtime all \
+  --mode linked \
+  --profile builder
+
 ./tools/install/harness.sh runtime doctor --runtime all --strict
 ```
 
-설치가 끝나면 PATH의 `harness` 명령으로 상태와 업데이트를 관리할 수 있습니다.
+이후에는 PATH에 설치된 `harness`로 관리합니다.
 
 ```bash
 harness runtime status --runtime all
@@ -23,17 +34,37 @@ harness runtime refresh --runtime all
 harness runtime doctor --runtime all --strict
 ```
 
-다른 머신에 고정 revision을 전달하려면 local packaged mode를 사용합니다. 이 경로도 marketplace나 네트워크를 호출하지 않습니다.
+`builder`가 기본 프로필이라 `--profile`을 생략해도 같은 구성이 활성화됩니다. 다른 머신에 고정 revision을 전달하려면 `--mode packaged`를 사용하세요. 이 경로도 marketplace나 원격 package를 호출하지 않습니다.
+
+## Choose your profile
+
+프로필은 런타임에 노출할 capability와 role의 크기를 정합니다. dependency closure는 자동으로 포함되고, guard·bootstrap·memory-scout 같은 kernel 표면은 모든 프로필에서 유지됩니다.
+
+| 프로필 | 적합한 용도 | Capability | Role | Mode |
+|---|---|---:|---:|---:|
+| `starter` | 핵심 코드 파이프만 가볍게 시작 | 6 | 4 | 13 |
+| `builder` **default** | 소프트웨어 개발 + 분석·운영·기억 | 14 | 7 | 26 |
+| `full` | 연구·문서·디자인까지 전체 harness | 27 | 8 | 26 |
 
 ```bash
-harness runtime activate --runtime all --mode packaged --source ~/agent_setting
+harness runtime activate --runtime codex --mode linked --profile starter
+harness runtime refresh --runtime all --profile full
 ```
 
-`linked`는 maintainer 기본값으로 repo 수정이 discovery path에 즉시 보이고, `packaged`는 `runtime refresh` 전까지 active revision을 바꾸지 않습니다. `native+plugin` 동시 discovery는 금지되며 `runtime doctor --strict`가 중복을 실패로 보고합니다. 자동화에서 구조화 결과가 필요하면 `--json`을 붙이세요. 수동 설치와 소유 경계는 [INSTALL_LAYOUT.md](INSTALL_LAYOUT.md)에 정리되어 있습니다.
+활성화 결과에는 선택된 profile, capability/role/mode 목록, manifest digest가 기록됩니다. 따라서 “무엇이 설치됐는지”를 README가 아니라 런타임 상태로 검증할 수 있습니다.
 
-## 바로 쓰기
+## What makes it different
 
-설치 뒤에는 명령 이름을 외우기보다 원하는 결과를 자연어로 말하면 됩니다.
+- **작업을 끝까지 닫습니다.** 조사나 코드 생성에서 멈추지 않고 spec, plan, 실행, 테스트, 보고를 연결하고 evidence를 남깁니다.
+- **런타임보다 계약이 먼저입니다.** workflow, role, artifact, memory, intensity, QA 의미는 portable core가 소유하고 adapter는 native surface로만 번역합니다.
+- **필요한 만큼만 노출합니다.** `starter`/`builder`/`full`이 skill metadata와 agent discovery 크기를 실제로 줄입니다.
+- **판단 가능한 설치 상태를 제공합니다.** source 절대경로, revision, digest, profile, duplicate, freshness, session action을 `status`와 `doctor`에서 확인합니다.
+- **세션을 넘어 결정이 이어집니다.** project working memory, durable memory, 사용자 profile을 공통 recall 경로로 연결합니다.
+- **안전 규칙을 코드로 검사합니다.** spec grounding, artifact 순서, git 상태, projection drift를 결정론적 guard와 테스트로 검증합니다.
+
+## Use it like this
+
+명령 이름을 외울 필요는 없습니다. 원하는 결과와 제약을 자연어로 말하면 runtime-native skill이 관련 pipeline을 선택합니다.
 
 > “이 저장소를 분석하고 다음 기능을 위한 PRD를 만들어줘.”
 
@@ -45,83 +76,83 @@ harness runtime activate --runtime all --mode packaged --source ~/agent_setting
 
 > “지난 작업 결정을 찾아서 이 프로젝트의 기존 명명 규칙대로 고쳐줘.”
 
-하네스는 현재 저장소와 `.agent_reports/`를 읽어 필요한 capability, role, guard, 검증 단계를 고릅니다. 전체 capability 목록은 [capabilities/README.md](capabilities/README.md)에서 볼 수 있습니다.
+전체 진입점은 [capabilities/README.md](capabilities/README.md), 역할은 [roles/README.md](roles/README.md)에서 확인할 수 있습니다.
 
-## 핵심 효익
-
-- **끝까지 닫히는 작업 흐름** — 조사와 분석에서 spec, plan, 실행, 테스트, 보고까지 산출물이 한 방향으로 이어집니다.
-- **런타임이 바뀌어도 유지되는 계약** — workflow, role, artifact, memory, intensity와 검증 의미는 portable core가 소유하고 runtime adapter는 native surface로 번역합니다.
-- **판단보다 코드로 지키는 안전장치** — artifact 순서, git 상태, spec grounding, projection drift를 hook과 결정론적 검사로 확인합니다.
-- **세션을 넘어가는 작업 기억** — project working memory, durable memory, 사용자 profile을 공통 store와 recall 경로로 연결합니다.
-- **보이는 검증** — active source의 절대경로·revision·digest·중복·session action을 `harness runtime status`와 `doctor`의 exit status로 확인할 수 있습니다.
-
-## 런타임별 배포 차이
-
-세 런타임은 지원하는 확장 표면이 다릅니다. installer가 차이를 숨기지 않고 설치·검증 결과에 `SKIP` 또는 제한 사유를 표시합니다.
-
-| 런타임 | `linked` 기본 | `packaged` 경계 | 권장 진입 |
-|---|---|---|---|
-| **Claude Code** | native skills·agents·commands·hooks를 local repo에 연결 | immutable local bundle을 같은 native 경로에 연결 | `harness runtime activate --runtime claude --mode linked` |
-| **Codex** | native skills·custom agents·modes·hooks를 local repo에 연결 | immutable local bundle을 같은 native 경로에 연결 | `harness runtime activate --runtime codex --mode linked` |
-| **OpenCode** | 복수형 `skills/agents/commands/plugins`를 local repo에 연결 | immutable local bundle을 같은 native 경로에 연결 | `harness runtime activate --runtime opencode --mode linked` |
-
-Plugin은 Phase 1 활성화 형식이 아닙니다. 두 mode 모두 runtime-native discovery만 사용하며, 기존 Codex/Claude harness plugin registry와 cache 및 OpenCode의 명시적 harness npm 항목은 네트워크 호출 없이 비활성화합니다. Claude hook은 기존 `settings.json`의 사용자 키를 보존해 병합합니다. credentials, sessions, DB, logs, foreign cache는 쓰지 않습니다. 세부 지원 범위는 [Claude adapter](adapters/claude/README.md), [Codex adapter](adapters/codex/README.md), [OpenCode adapter](adapters/opencode/README.md)를 참고하세요.
-
-파일 변경이 보이는 것과 현재 대화가 새 instruction을 읽는 것은 별개입니다. `runtime status`의 `freshness`와 runtime별 `session_action`이 재호출·새 세션·restart 필요 여부를 따로 표시합니다.
-
-## 작동 구조
+## How it works
 
 ```text
-자연어 요청
-   ↓
-portable contract
-core/ + capabilities/ + roles/
-   ↓  deterministic generators
-runtime-native projections
-Claude native · Codex native · OpenCode conventions
-   ↓  harness runtime activate / status / doctor
-runtime home + project .agent_reports/
+                       harness-manifest.json
+                    capability · role · profile
+                               │
+             ┌─────────────────┼─────────────────┐
+             │                 │                 │
+      Claude Code native   Codex native    OpenCode native
+      skills / agents      skills / agents  skills / agents
+      hooks / commands     hooks / modes    commands / plugins
+             └─────────────────┼─────────────────┘
+                               │
+              activate · status · refresh · doctor
 ```
 
-- `core/`는 workflow, artifact, QA, memory, git/worktree 같은 portable 규칙을 소유합니다.
-- `capabilities/`와 `roles/`는 “무슨 일을 어떤 역할이 맡는가”를 정의합니다.
-- `adapters/`는 각 런타임의 plugin, skill, agent, mode, hook, config 경계로 투영합니다.
-- `tools/install/`은 설치한 표면만 관리하고 사용자 credentials, sessions, local DB와 기존 config를 보존합니다.
-- root README의 가치 제안·정보 순서·예시는 사람이 소유합니다. 생성 가능한 manifest와 runtime projection만 코드가 생성·검증합니다.
+- `core/` — workflow, artifact, QA, memory, git/worktree 계약
+- `harness-manifest.json` — capability, role, mode, pack, profile의 canonical machine contract
+- `capabilities/`, `roles/` — 사람이 읽는 portable behavior source
+- `adapters/` — 런타임별 native projection과 bridge
+- `tools/install/` — runtime-owned state를 건드리지 않는 activation lifecycle
+- `.agent_reports/` — spec, plan, test evidence, handoff가 쌓이는 project artifact root
 
-## 더 깊이 읽기
+`linked`는 maintainer 기본값으로 repo 변경이 discovery path에 즉시 보입니다. `packaged`는 immutable local bundle을 만들며 `runtime refresh` 전까지 active revision을 유지합니다. 파일 변경이 이미 보이는 것과 현재 대화가 새 instruction을 다시 읽는 것은 별개이므로, `runtime status`가 런타임별 재호출·새 세션·restart 필요 여부를 `session_action`으로 표시합니다.
+
+## Native first, plugins optional
+
+기본 제품 경로는 local native projection입니다. Codex/Claude marketplace bundle은 배포 실험을 위한 선택적 산출물이며 생성, 활성화, doctor의 성공 조건이 아닙니다. OpenCode의 local guard plugin은 외부 package가 아니라 native hook bridge입니다.
+
+이 경계 덕분에 기본 설치는 다음을 요구하지 않습니다.
+
+- marketplace 등록
+- plugin cache 또는 registry
+- npm package fetch
+- 외부 MCP·connector·API
+- Codex/Claude credentials, sessions, logs, local DB 변경
+
+동일 harness의 native+plugin 중복 discovery는 허용하지 않으며 strict doctor가 실패로 처리합니다.
+
+## Runtime support
+
+| 런타임 | `linked` projection | `packaged` projection |
+|---|---|---|
+| Claude Code | skills, agents, commands, hooks | 같은 native surface의 immutable bundle |
+| Codex | skills, custom agents, modes, hooks | 같은 native surface의 immutable bundle |
+| OpenCode | skills, agents, commands, local guard plugin | 같은 native surface의 immutable bundle |
+
+런타임별 지원 차이는 숨기지 않습니다. installer는 미지원 표면을 `SKIP`과 이유로 보고하며, credentials, sessions, DB, logs, foreign cache는 관리 범위 밖에 둡니다. 세부 매핑은 [INSTALL_LAYOUT.md](INSTALL_LAYOUT.md)에서 확인하세요.
+
+## Develop the harness
+
+공통 정의를 바꾼 뒤에는 단일 generator로 모든 core projection을 갱신하고 drift를 확인합니다.
+
+```bash
+python3 tools/generate.py
+python3 tools/generate.py --check
+
+./tools/generated-projections.test.sh
+./tools/install/profile-activation.test.sh
+./tools/install/runtime-activation.test.sh
+./tools/skill-conformance/check.sh
+./tools/check-adaptation-boundary.sh
+adapters/codex/bin/preflight.sh doctor
+```
+
+Marketplace bundle generator는 이 경로에 포함되지 않습니다. root README의 가치 제안과 설명은 사람이 소유하고, machine contract와 runtime projection만 생성합니다.
+
+## Documentation
 
 | 목적 | 문서 |
 |---|---|
-| 전체 흐름을 한 번에 이해 | [MANUAL.md](MANUAL.md) |
-| capability와 role 찾기 | [capabilities/README.md](capabilities/README.md), [roles/README.md](roles/README.md), [roles/MODES.md](roles/MODES.md) |
-| 라우팅과 산출물 규칙 | [core/WORKFLOW.md](core/WORKFLOW.md), [core/CONVENTIONS.md](core/CONVENTIONS.md) |
+| 전체 사용법 | [MANUAL.md](MANUAL.md) |
+| capability와 role | [capabilities/README.md](capabilities/README.md), [roles/README.md](roles/README.md), [roles/MODES.md](roles/MODES.md) |
+| routing과 artifact | [core/WORKFLOW.md](core/WORKFLOW.md), [core/CONVENTIONS.md](core/CONVENTIONS.md) |
 | git, worktree, dispatch | [core/OPERATIONS.md](core/OPERATIONS.md) |
 | memory와 recall | [core/MEMORY.md](core/MEMORY.md) |
-| hook·설계 원칙 | [core/HOOKS.md](core/HOOKS.md), [core/DESIGN_PRINCIPLES.md](core/DESIGN_PRINCIPLES.md) |
-| 설치·runtime projection | [INSTALL_LAYOUT.md](INSTALL_LAYOUT.md) |
-
-## 개발과 검증
-
-정의나 adapter projection을 바꿨다면 해당 생성기를 먼저 실행한 뒤 아래 결정론적 검사를 통과시킵니다.
-
-```bash
-python3 tools/build-manifest.py --check
-
-adapters/claude/bin/sync-native-plugin.py --check
-adapters/codex/bin/sync-native-skills.py --check
-adapters/codex/bin/sync-native-plugin.py --check
-adapters/codex/bin/sync-native-agents.py --check
-adapters/codex/bin/sync-native-modes.py --check
-adapters/opencode/bin/sync-native-skills.py --check
-adapters/opencode/bin/sync-native-commands.py --check
-adapters/opencode/bin/sync-native-agents.py --check
-
-tools/check-adaptation-boundary.sh
-tools/skill-conformance/check.sh
-adapters/codex/bin/preflight.sh doctor
-./tools/install/runtime-activation.test.sh
-./tools/install/harness.sh verify
-```
-
-`sync-native-skills.py` 같은 이름은 native projection generator를 뜻합니다. 사람이 쓴 README prose를 자동 재생성하는 기능이 아닙니다.
+| hook과 설계 원칙 | [core/HOOKS.md](core/HOOKS.md), [core/DESIGN_PRINCIPLES.md](core/DESIGN_PRINCIPLES.md) |
+| 설치와 runtime projection | [INSTALL_LAYOUT.md](INSTALL_LAYOUT.md) |

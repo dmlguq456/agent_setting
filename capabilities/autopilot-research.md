@@ -3,6 +3,7 @@
 This is the portable capability contract for `autopilot-research`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
@@ -10,7 +11,7 @@ This is the portable capability contract for `autopilot-research`. It defines ru
 | Group | `entry` |
 | Supported modes | `academic, technology, market` |
 | Portable meaning | 공통 사전조사. 논문·기술·시장 survey 후 downstream capability로 분기한다. |
-| Argument shape | `<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]` |
+| Argument shape | `<query> [--mode academic\|technology\|market] [--depth shallow\|medium\|deep] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--no-clarify] [--no-figures] [--from search\|analyze\|report]` |
 
 ## Invocation Semantics
 
@@ -102,7 +103,7 @@ Field intelligence ends with recommendations for downstream work:
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/autopilot-research/SKILL.md` and `skills/autopilot-research/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-research/SKILL.md`, while `skills/autopilot-research/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-research`. Use `adapters/codex/skills/autopilot-research/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/autopilot-research/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/autopilot-research/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-research`. Use `adapters/codex/skills/autopilot-research/SKILL.md` as the native Codex Skill projection; do not consume `skills/autopilot-research/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info autopilot-research`. Use `adapters/opencode/skills/autopilot-research/SKILL.md` and `adapters/opencode/commands/autopilot-research.md` as native OpenCode projections; do not consume `skills/autopilot-research/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

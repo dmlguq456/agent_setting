@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: draft-strategy
-description: "문서 전략 초안 작성 — 6 모드(rebuttal·paper·review·report·proposal·presentation) sub-skill"
-argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> <task description>"
+description: "Use when invoking the portable draft-strategy capability. 문서 전략 초안 작성. 자료 기반으로 writing plan을 만든다."
+argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--intensity direct|quick|standard|strong|thorough|adversarial] <task description>"
 metadata:
   group: sub
   fam: sub
-  modes: [rebuttal, paper, review, report, proposal, presentation]
-  blurb: "문서 전략 초안 작성 — 6 모드(rebuttal·paper·review·report·proposal·presentation) sub-skill"
+  modes: ["rebuttal", "paper", "review", "report", "proposal", "presentation"]
+  blurb: "문서 전략 초안 작성. 자료 기반으로 writing plan을 만든다."
 ---
 
 ## Language Rule

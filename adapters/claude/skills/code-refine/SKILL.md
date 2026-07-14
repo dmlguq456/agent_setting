@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: code-refine
-description: "사용자 메모·QA 피드백 반영해 기존 plan 정정 — sub-skill"
-argument-hint: "<plan name or path>"
+description: "Use when invoking the portable code-refine capability. 사용자 메모·plan-check 피드백·검증 실패 메모를 반영해 기존 plan을 정정한다."
+argument-hint: "<plan name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "사용자 메모·QA 피드백 반영해 기존 plan 정정 — sub-skill"
+  blurb: "사용자 메모·plan-check 피드백·검증 실패 메모를 반영해 기존 plan을 정정한다."
 ---
 
 > **Plan Resolution**: `$ARGUMENTS`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다. **단, code-refine 은 `plan.md` 와 `plan_ko.md` 를 _둘 다_ 해석한다** (path swap `plan.md`↔`plan_ko.md`; refine 고유).

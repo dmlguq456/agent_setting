@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Build manifest.json from the Claude adapter projection definitions.
+"""Build compatibility metadata and catalogs from the canonical manifest.
 
-This is an adapter-derived compatibility manifest, not the portable source of
-truth. Portable meaning lives in core/, capabilities/, and roles/.
+`harness-manifest.json` is the versioned portable metadata source of truth.
+`manifest.json`, catalog tables, and per-capability Contract blocks are
+generated compatibility views.
 
-SoT = the adapter definitions themselves:
-  - adapters/claude/skills/*/SKILL.md   frontmatter  (name, argument-hint, metadata:{group,fam,modes,blurb})
-  - adapters/claude/agents/*.md  frontmatter  (name, model, metadata:{modes,blurb})
+Additional adapter/runtime inputs:
   - loops/README.md     "현역" table  + LOOP_LAYER constant
   - adapters/claude/settings.json  Claude adapter hook registration (read-only)
   - TRACKS              documented constant (below), validated against discovered skills
@@ -45,6 +44,8 @@ except ImportError:
     sys.stderr.write("PyYAML required: pip install pyyaml\n")
     sys.exit(2)
 
+import harness_manifest
+
 # realpath (not abspath): this script is executed via the collapsed adapter symlink
 # (adapters/claude/tools/build-manifest.py -> ../../../tools/build-manifest.py). abspath
 # keeps the symlink path, resolving REPO_ROOT to repo/adapters/claude (double-path bug);
@@ -60,8 +61,10 @@ EXEMPTIONS_PATH = os.path.join(REPO_ROOT, "tools", "adaptation-exemptions.tsv")
 SHARED_LAYERS = ("hooks", "utilities", "tools")
 
 # Fixed provenance string — NO date/timestamp (idempotency invariant).
-GENERATED_FROM = ("Claude adapter projection definitions "
-                  "(adapters/claude/skills/*/SKILL.md, adapters/claude/agents/*.md, loops/README.md, adapters/claude/settings.json)")
+GENERATED_FROM = (
+    "harness-manifest.json + adapter-owned hook/loop/track inputs "
+    "(adapters/claude/settings.json, loops/README.md, tools/build-manifest.py)"
+)
 
 # hard_block allowlist = PreToolUse guards only (consumer attempt1 §2.4 / Claude adapter hook settings
 # PreToolUse). herdr-agent-state is also registered on PreToolUse but is a state-marker,
@@ -164,36 +167,41 @@ def parse_frontmatter(path):
 # ---------------------------------------------------------------------------
 # builders
 # ---------------------------------------------------------------------------
-def build_skills():
+def build_skills(canonical):
     rows = []
-    for path in sorted(glob.glob(os.path.join(REPO_ROOT, "adapters", "claude", "skills", "*", "SKILL.md"))):
-        d = os.path.basename(os.path.dirname(path))
-        fm = parse_frontmatter(path)
-        md = fm["metadata"]
+    for identifier, spec in canonical["capabilities"].items():
         rows.append({
-            "slug": "skill__%s" % d,
-            "name": fm.get("name", "") or "",
-            "group": md.get("group", "") or "",
-            "fam": md.get("fam", "") or "",
-            "modes": md.get("modes", []) or [],
-            "blurb": md.get("blurb", "") or "",
-            "argument_hint": fm.get("argument-hint", "") or "",
+            "slug": "skill__%s" % identifier,
+            "name": identifier,
+            "group": spec["group"],
+            "fam": spec["family"],
+            "modes": spec["modes"],
+            "blurb": spec["summary"],
+            "argument_hint": spec["argument_shape"],
         })
     return sorted(rows, key=lambda r: r["slug"])
 
 
-def build_agents():
+def build_agents(canonical):
     rows = []
-    for path in sorted(glob.glob(os.path.join(REPO_ROOT, "adapters", "claude", "agents", "*.md"))):
-        stem = os.path.splitext(os.path.basename(path))[0]
-        fm = parse_frontmatter(path)
-        md = fm["metadata"]
+    for profile, spec in canonical["roles"].items():
         rows.append({
-            "slug": "agent__%s" % stem,
-            "name": fm.get("name", "") or "",
-            "model": fm.get("model", "") or "",
-            "modes": md.get("modes", []) or [],
-            "blurb": md.get("blurb", "") or "",
+            "slug": "agent__%s" % profile,
+            "name": profile,
+            "model": "",
+            "modes": [
+                mode for mode, mode_spec in canonical["modes"].items()
+                if mode_spec["role"] == profile and not mode_spec.get("internal")
+            ],
+            "blurb": spec["responsibility"],
+        })
+    for agent in canonical["kernel"]["agents"]:
+        rows.append({
+            "slug": "agent__%s" % agent,
+            "name": agent,
+            "model": "",
+            "modes": [],
+            "blurb": "Kernel agent active in every product profile.",
         })
     return sorted(rows, key=lambda r: r["slug"])
 
@@ -482,13 +490,139 @@ def adaptation_surface(kind):
     sys.exit(2)
 
 
-def build_manifest():
-    skills = build_skills()
+def _md_cell(value):
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def _replace_section(text, heading, body):
+    pattern = re.compile(r"(?ms)^%s\n.*?(?=^## |\Z)" % re.escape(heading))
+    if not pattern.search(text):
+        raise ValueError("missing generated section %s" % heading)
+    return pattern.sub(body.rstrip() + "\n\n", text, count=1)
+
+
+def _capability_contract(identifier, spec):
+    modes = ", ".join(spec["modes"]) or "none"
+    return """## Contract
+<!-- GENERATED: harness-manifest.json -->
+
+| Field | Value |
+|---|---|
+| Identifier | `%s` |
+| Group | `%s` |
+| Supported modes | `%s` |
+| Portable meaning | %s |
+| Argument shape | `%s` |""" % (
+        identifier,
+        _md_cell(spec["group"]),
+        _md_cell(modes),
+        _md_cell(spec["summary"]),
+        _md_cell(spec["argument_shape"]),
+    )
+
+
+def _capability_catalog(canonical):
+    lines = [
+        "## Catalog",
+        "<!-- GENERATED: harness-manifest.json -->",
+        "",
+        "| Capability | Group | Modes | Portable spec | Portable meaning | Claude realization | Codex realization | OpenCode realization |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for identifier, spec in canonical["capabilities"].items():
+        modes = ", ".join(spec["modes"]) or "-"
+        lines.append(
+            "| `%s` | %s | %s | [`%s.md`](%s.md) | %s | "
+            "`adapters/claude/skills/%s/SKILL.md` | "
+            "`adapters/codex/skills/%s/SKILL.md` | "
+            "`adapters/opencode/skills/%s/SKILL.md`; "
+            "`adapters/opencode/commands/%s.md` |"
+            % (
+                identifier,
+                _md_cell(spec["group"]),
+                _md_cell(modes),
+                identifier,
+                identifier,
+                _md_cell(spec["summary"]),
+                identifier,
+                identifier,
+                identifier,
+                identifier,
+            )
+        )
+    return "\n".join(lines)
+
+
+def _role_catalog(canonical):
+    lines = [
+        "## Role Catalog",
+        "<!-- GENERATED: harness-manifest.json -->",
+        "",
+        "| Role profile | Portable model role | Primary responsibility | Claude realization | Codex realization | OpenCode realization |",
+        "|---|---|---|---|---|---|",
+    ]
+    for profile, spec in canonical["roles"].items():
+        claude_name = "codex-review-team" if profile == "external-adversary" else profile
+        lines.append(
+            "| `%s` | `%s` | %s | "
+            "`adapters/claude/agents/%s.md` | "
+            "`adapters/codex/agents/%s.toml` | "
+            "`adapters/opencode/agents/%s/%s.md` |"
+            % (
+                profile,
+                _md_cell(spec["portable_role"]),
+                _md_cell(spec["responsibility"]),
+                claude_name,
+                profile,
+                profile,
+                profile,
+            )
+        )
+    return "\n".join(lines)
+
+
+def generated_document_outputs(canonical):
+    outputs = {}
+    for identifier, spec in canonical["capabilities"].items():
+        path = os.path.join(REPO_ROOT, "capabilities", "%s.md" % identifier)
+        source = open(path, encoding="utf-8").read()
+        outputs[path] = _replace_section(
+            source, "## Contract", _capability_contract(identifier, spec)
+        )
+
+    capability_readme = os.path.join(REPO_ROOT, "capabilities", "README.md")
+    outputs[capability_readme] = _replace_section(
+        open(capability_readme, encoding="utf-8").read(),
+        "## Catalog",
+        _capability_catalog(canonical),
+    )
+    role_readme = os.path.join(REPO_ROOT, "roles", "README.md")
+    outputs[role_readme] = _replace_section(
+        open(role_readme, encoding="utf-8").read(),
+        "## Role Catalog",
+        _role_catalog(canonical),
+    )
+    return outputs
+
+
+def build_manifest(canonical):
+    skills = build_skills(canonical)
     skill_slugs = {r["slug"] for r in skills}
     return {
         "generated_from": GENERATED_FROM,
+        "canonical_manifest": "harness-manifest.json",
+        "manifest_version": canonical["product"]["manifest_version"],
         "skills": skills,
-        "agents": build_agents(),
+        "agents": build_agents(canonical),
+        "portable_roles": canonical["roles"],
+        "modes": canonical["modes"],
+        "packs": canonical["packs"],
+        "profiles": canonical["profiles"],
+        "resolved_profiles": {
+            name: harness_manifest.resolve_profile(canonical, name)
+            for name in harness_manifest.profile_names(canonical)
+        },
+        "ownership": canonical["ownership"],
         "hooks": build_hooks(),
         "loops": build_loops(),
         "tracks": build_tracks(skill_slugs),
@@ -514,7 +648,9 @@ def main(argv):
         return 0
 
     check = "--check" in argv
-    text = render(build_manifest())
+    canonical = harness_manifest.load()
+    text = render(build_manifest(canonical))
+    document_outputs = generated_document_outputs(canonical)
     if check:
         rc = 0
         existing = ""
@@ -524,6 +660,14 @@ def main(argv):
             sys.stderr.write("manifest drift: manifest.json is out of date — run "
                              "`python3 tools/build-manifest.py`\n")
             rc = 1
+        for path, expected in document_outputs.items():
+            if open(path, encoding="utf-8").read() != expected:
+                sys.stderr.write(
+                    "generated catalog drift: %s is out of date — run "
+                    "`python3 tools/build-manifest.py`\n"
+                    % os.path.relpath(path, REPO_ROOT)
+                )
+                rc = 1
         # HLS-3: --check is the single drill/CI entry point — also verify delta baselines.
         ok, msgs = check_baselines()
         for m in msgs:
@@ -533,6 +677,8 @@ def main(argv):
         if rc == 0:
             print("manifest up-to-date; delta baselines bound")
         return rc
+    for path, expected in document_outputs.items():
+        open(path, "w", encoding="utf-8").write(expected)
     open(MANIFEST_PATH, "w", encoding="utf-8").write(text)
     print("wrote %s" % os.path.relpath(MANIFEST_PATH, REPO_ROOT))
     return 0

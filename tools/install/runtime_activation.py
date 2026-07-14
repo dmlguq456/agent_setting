@@ -16,6 +16,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -24,10 +25,17 @@ from typing import Dict, Iterable, List, Optional, Sequence
 
 import paths
 
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+if str(TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TOOLS_ROOT))
+
+import harness_manifest
+
 
 RUNTIMES = ("claude", "codex", "opencode")
 MODES = ("linked", "packaged")
-SCHEMA = 1
+PROFILES = harness_manifest.profile_names()
+SCHEMA = 2
 
 SESSION_ACTIONS = {
     "codex": {
@@ -74,6 +82,13 @@ def _validate_scope(runtime: str, scope: str) -> None:
             f"project-scoped runtime activation is outside Phase 1 for {runtime}; "
             "use global (legacy project install remains separate)"
         )
+
+
+def validate_scope(runtime: str, scope: str) -> None:
+    """Validate a public activation request without changing runtime state."""
+    if runtime not in RUNTIMES:
+        raise ActivationError(f"unsupported runtime: {runtime}")
+    _validate_scope(runtime, scope)
 
 
 def _utc_now() -> str:
@@ -276,15 +291,91 @@ def _entry(source: Path, dest: Path, surface: str, kind: str = "symlink") -> dic
     }
 
 
-def _children(source: Path, dest: Path, surface: str, pattern: str = "*") -> List[dict]:
+def _children(
+    source: Path,
+    dest: Path,
+    surface: str,
+    pattern: str = "*",
+    allowed: Optional[set[str]] = None,
+) -> List[dict]:
     if not source.is_dir():
         return []
-    return [_entry(item, dest / item.name, surface) for item in sorted(source.glob(pattern))]
+    entries = []
+    for item in sorted(source.glob(pattern)):
+        identifier = item.stem if item.is_file() else item.name
+        if allowed is not None and identifier not in allowed:
+            continue
+        entries.append(_entry(item, dest / item.name, surface))
+    return entries
 
 
-def _linked_entries(runtime: str, source_root: Path, scope: str = "global") -> List[dict]:
+def _mode_entries(
+    source: Path,
+    dest: Path,
+    allowed: Optional[set[str]],
+) -> List[dict]:
+    """Project mode files individually so product profiles constrain discovery."""
+    if not source.is_dir():
+        return []
+    entries = []
+    for item in sorted(source.glob("*/*.md")):
+        identifier = item.relative_to(source).with_suffix("").as_posix()
+        if allowed is not None and identifier not in allowed:
+            continue
+        entries.append(_entry(item, dest / item.relative_to(source), "agent"))
+    return entries
+
+
+def _profile_resolution(source_root: Path, profile: Optional[str]) -> dict:
+    manifest_path = source_root / harness_manifest.MANIFEST_NAME
+    if not manifest_path.is_file():
+        if profile not in (None, "full"):
+            raise ActivationError(
+                f"profile {profile} requires {harness_manifest.MANIFEST_NAME} in source {source_root}"
+            )
+        return {
+            "name": "full",
+            "packs": [],
+            "capabilities": None,
+            "roles": None,
+            "modes": None,
+            "kernel_agents": ["memory-scout"],
+            "digest": "legacy-full",
+            "counts": {"capabilities": None, "roles": None, "modes": None},
+        }
+    try:
+        canonical = harness_manifest.load(manifest_path)
+        return harness_manifest.resolve_profile(canonical, profile)
+    except harness_manifest.ManifestError as exc:
+        raise ActivationError(f"invalid product profile manifest: {exc}") from exc
+
+
+def _profile_sets(
+    resolution: dict,
+) -> tuple[Optional[set[str]], Optional[set[str]], Optional[set[str]], set[str]]:
+    capabilities = resolution.get("capabilities")
+    roles = resolution.get("roles")
+    modes = resolution.get("modes")
+    kernel_agents = set(resolution.get("kernel_agents", []))
+    return (
+        set(capabilities) if capabilities is not None else None,
+        set(roles) if roles is not None else None,
+        set(modes) if modes is not None else None,
+        kernel_agents,
+    )
+
+
+def _linked_entries(
+    runtime: str,
+    source_root: Path,
+    scope: str = "global",
+    resolution: Optional[dict] = None,
+) -> List[dict]:
     home = paths.runtime_home(runtime, scope)
     entries: List[dict] = []
+    capabilities, roles, modes, kernel_agents = _profile_sets(
+        resolution or _profile_resolution(source_root, "full")
+    )
 
     if runtime == "codex":
         fixed = [
@@ -296,12 +387,32 @@ def _linked_entries(runtime: str, source_root: Path, scope: str = "global") -> L
             (source_root / "adapters/codex/bin", home / "agent-bin", "hook_config"),
             (source_root / "adapters/codex/hooks", home / "agent-hooks", "hook_config"),
             (source_root / "adapters/codex/hooks/hooks.json", home / "hooks.json", "hook_config"),
-            (source_root / "adapters/codex/modes", home / "agent-modes", "agent"),
         ]
         entries.extend(_entry(src, dst, surface) for src, dst, surface in fixed)
-        entries.extend(_children(source_root / "adapters/codex/skills", home / "skills", "skill"))
         entries.extend(
-            _children(source_root / "adapters/codex/agents", home / "agents", "agent", "*.toml")
+            _mode_entries(
+                source_root / "adapters/codex/modes",
+                home / "agent-modes",
+                modes,
+            )
+        )
+        entries.extend(
+            _children(
+                source_root / "adapters/codex/skills",
+                home / "skills",
+                "skill",
+                allowed=capabilities,
+            )
+        )
+        allowed_agents = None if roles is None else roles | kernel_agents
+        entries.extend(
+            _children(
+                source_root / "adapters/codex/agents",
+                home / "agents",
+                "agent",
+                "*.toml",
+                allowed=allowed_agents,
+            )
         )
 
     elif runtime == "claude":
@@ -311,16 +422,42 @@ def _linked_entries(runtime: str, source_root: Path, scope: str = "global") -> L
             (source_root / "core", home / "core", "instructions"),
             (source_root / "capabilities", home / "capabilities", "instructions"),
             (source_root / "roles", home / "roles", "instructions"),
-            (source_root / "adapters/claude/agent-modes", home / "agent-modes", "agent"),
             (source_root / "adapters/claude/bin", home / "bin", "hook_config"),
             (source_root / "adapters/claude/tools", home / "tools", "hook_config"),
             (source_root / "adapters/claude/utilities", home / "utilities", "hook_config"),
             (source_root / "adapters/claude/scaffolds", home / "scaffolds", "hook_config"),
         ]
         entries.extend(_entry(src, dst, surface) for src, dst, surface in fixed)
-        entries.extend(_children(source_root / "adapters/claude/skills", home / "skills", "skill"))
         entries.extend(
-            _children(source_root / "adapters/claude/agents", home / "agents", "agent", "*.md")
+            _mode_entries(
+                source_root / "adapters/claude/agent-modes",
+                home / "agent-modes",
+                modes,
+            )
+        )
+        entries.extend(
+            _children(
+                source_root / "adapters/claude/skills",
+                home / "skills",
+                "skill",
+                allowed=capabilities,
+            )
+        )
+        if roles is None:
+            allowed_agents = None
+        else:
+            allowed_agents = set(roles) | kernel_agents
+            if "external-adversary" in allowed_agents:
+                allowed_agents.remove("external-adversary")
+                allowed_agents.add("codex-review-team")
+        entries.extend(
+            _children(
+                source_root / "adapters/claude/agents",
+                home / "agents",
+                "agent",
+                "*.md",
+                allowed=allowed_agents,
+            )
         )
         entries.extend(
             _children(source_root / "adapters/claude/commands", home / "commands", "skill", "*.md")
@@ -339,15 +476,27 @@ def _linked_entries(runtime: str, source_root: Path, scope: str = "global") -> L
         ]
         entries.extend(_entry(src, dst, surface) for src, dst, surface in fixed)
         entries.extend(
-            _children(source_root / "adapters/opencode/skills", home / "skills", "skill")
+            _children(
+                source_root / "adapters/opencode/skills",
+                home / "skills",
+                "skill",
+                allowed=capabilities,
+            )
         )
         agent_root = source_root / "adapters/opencode/agents"
+        allowed_agents = None if roles is None else roles | kernel_agents
         if agent_root.is_dir():
             for item in sorted(agent_root.glob("*/*.md")):
+                if allowed_agents is not None and item.parent.name not in allowed_agents:
+                    continue
                 entries.append(_entry(item, home / "agents" / item.name, "agent"))
         entries.extend(
             _children(
-                source_root / "adapters/opencode/commands", home / "commands", "skill", "*.md"
+                source_root / "adapters/opencode/commands",
+                home / "commands",
+                "skill",
+                "*.md",
+                allowed=capabilities,
             )
         )
         plugin = source_root / "adapters/opencode/plugins/agent-harness-guards.js"
@@ -444,11 +593,17 @@ def _build_bundle(runtime: str, source_root: Path, revision: str, scope: str) ->
 
 
 def _desired_entries(
-    runtime: str, mode: str, source_root: Path, active_root: Path, revision: str, scope: str
+    runtime: str,
+    mode: str,
+    source_root: Path,
+    active_root: Path,
+    revision: str,
+    scope: str,
+    resolution: dict,
 ) -> List[dict]:
     # Both modes use native runtime discovery.  Only the source changes: live
     # repo for linked, immutable local bundle for packaged.
-    return _linked_entries(runtime, active_root, scope)
+    return _linked_entries(runtime, active_root, scope, resolution)
 
 
 def _plugin_roots(runtime: str, scope: str = "global") -> List[Path]:
@@ -1142,6 +1297,13 @@ def _journal_dest_allowed(runtime: str, dest: Path, scope: str) -> bool:
         return False
     if len(relative.parts) == 2 and relative.parts[0] in containers:
         return True
+    if (
+        runtime in {"codex", "claude"}
+        and len(relative.parts) == 3
+        and relative.parts[0] == "agent-modes"
+        and relative.parts[2].endswith(".md")
+    ):
+        return True
     if runtime == "opencode" and relative.parts == (
         "plugins", "agent-harness-guards.js"
     ):
@@ -1498,6 +1660,7 @@ def activate(
     mode: str,
     source: Optional[str] = None,
     scope: str = "global",
+    profile: Optional[str] = None,
 ) -> dict:
     if runtime not in RUNTIMES:
         raise ActivationError(f"unsupported runtime: {runtime}")
@@ -1514,6 +1677,7 @@ def activate(
         )
     source_root = _real_source(source)
     _validate_source_symlinks(source_root)
+    resolution = _profile_resolution(source_root, profile)
     revision = source_revision(source_root)
     previous_path = _state_path(runtime, scope)
     previous = _load_json(previous_path)
@@ -1522,7 +1686,9 @@ def activate(
     if mode == "packaged":
         active_root = _build_bundle(runtime, source_root, revision, scope)
 
-    desired = _desired_entries(runtime, mode, source_root, active_root, revision, scope)
+    desired = _desired_entries(
+        runtime, mode, source_root, active_root, revision, scope, resolution
+    )
     digest = _projection_digest(desired)
     packaged_checksum = _bundle_checksum(active_root) if mode == "packaged" else None
     if mode == "packaged" and packaged_checksum is None:
@@ -1540,6 +1706,12 @@ def activate(
             "runtime": runtime,
             "mode": mode,
             "scope": scope,
+            "profile": resolution["name"],
+            "profile_digest": resolution["digest"],
+            "profile_counts": resolution["counts"],
+            "profile_capabilities": resolution["capabilities"],
+            "profile_roles": resolution["roles"],
+            "profile_modes": resolution["modes"],
             "source_root": str(source_root),
             "source_revision": revision,
             "active_root": str(active_root),
@@ -1585,6 +1757,12 @@ def _status_missing(runtime: str, scope: str) -> dict:
     return {
         "runtime": runtime,
         "mode": None,
+        "profile": None,
+        "profile_digest": None,
+        "profile_counts": None,
+        "profile_capabilities": [],
+        "profile_roles": [],
+        "profile_modes": [],
         "source_root": None,
         "source_revision": None,
         "active_revision": None,
@@ -1594,7 +1772,10 @@ def _status_missing(runtime: str, scope: str) -> dict:
         "freshness": "missing",
         "session_action": SESSION_ACTIONS[runtime],
         "external_dependencies": [],
-        "next_action": f"harness runtime activate --runtime {runtime} --mode linked",
+        "next_action": (
+            f"harness runtime activate --runtime {runtime} --mode linked "
+            f"--profile {harness_manifest.default_profile()}"
+        ),
     }
 
 
@@ -1609,7 +1790,9 @@ def status(runtime: str, scope: str = "global") -> dict:
     source_root = Path(state["source_root"])
     active_root = Path(state.get("active_root") or state["source_root"])
     source_rev = source_revision(source_root) if source_root.exists() else "missing"
+    profile_name = state.get("profile", "full")
     try:
+        resolution = _profile_resolution(source_root, profile_name)
         entries = _desired_entries(
             runtime,
             state["mode"],
@@ -1617,6 +1800,7 @@ def status(runtime: str, scope: str = "global") -> dict:
             active_root,
             state["active_revision"],
             scope,
+            resolution,
         )
         digest = _projection_digest(entries)
         missing, stale = _entries_healthy(entries)
@@ -1631,6 +1815,14 @@ def status(runtime: str, scope: str = "global") -> dict:
             ):
                 missing = True
     except ActivationError:
+        resolution = {
+            "name": profile_name,
+            "digest": state.get("profile_digest"),
+            "counts": state.get("profile_counts"),
+            "capabilities": state.get("profile_capabilities", []),
+            "roles": state.get("profile_roles", []),
+            "modes": state.get("profile_modes", []),
+        }
         entries, digest, missing, stale = [], None, True, False
 
     if runtime == "claude" and not _claude_hooks_healthy(active_root, scope):
@@ -1646,7 +1838,10 @@ def status(runtime: str, scope: str = "global") -> dict:
     duplicates = duplicate_sources(runtime, scope)
     if duplicates:
         freshness = "duplicate"
-        next_action = f"harness runtime activate --runtime {runtime} --mode {state['mode']}"
+        next_action = (
+            f"harness runtime activate --runtime {runtime} --mode {state['mode']} "
+            f"--source {source_root} --profile {profile_name}"
+        )
     elif missing:
         freshness = "missing"
         next_action = f"harness runtime refresh --runtime {runtime}"
@@ -1660,6 +1855,10 @@ def status(runtime: str, scope: str = "global") -> dict:
         freshness = "session-reload-needed"
         action_values = list(SESSION_ACTIONS[runtime].values())
         next_action = "restart-required" if "restart-required" in action_values else "new-session"
+    elif state.get("profile_digest") and resolution["digest"] != state.get("profile_digest"):
+        freshness = "session-reload-needed"
+        action_values = list(SESSION_ACTIONS[runtime].values())
+        next_action = "restart-required" if "restart-required" in action_values else "new-session"
     else:
         freshness = "fresh"
         next_action = "none"
@@ -1667,6 +1866,12 @@ def status(runtime: str, scope: str = "global") -> dict:
     return {
         "runtime": runtime,
         "mode": state["mode"],
+        "profile": resolution["name"],
+        "profile_digest": resolution["digest"],
+        "profile_counts": resolution["counts"],
+        "profile_capabilities": resolution["capabilities"],
+        "profile_roles": resolution["roles"],
+        "profile_modes": resolution["modes"],
         "source_root": str(source_root),
         "source_revision": source_rev,
         "active_revision": state["active_revision"] if state["mode"] == "packaged" else source_rev,
@@ -1682,12 +1887,21 @@ def status(runtime: str, scope: str = "global") -> dict:
     }
 
 
-def refresh(runtime: str, scope: str = "global") -> dict:
+def refresh(
+    runtime: str, scope: str = "global", profile: Optional[str] = None
+) -> dict:
     _validate_scope(runtime, scope)
     state = _load_json(_state_path(runtime, scope))
     if state is None:
         raise ActivationError(f"{runtime} has no activation state")
-    return activate(runtime, state["mode"], state["source_root"], scope)
+    selected_profile = profile or state.get("profile", "full")
+    return activate(
+        runtime,
+        state["mode"],
+        state["source_root"],
+        scope,
+        selected_profile,
+    )
 
 
 def doctor(runtime: str, strict: bool = False, scope: str = "global") -> dict:

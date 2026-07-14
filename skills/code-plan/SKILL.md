@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: code-plan
-description: "코드 분석 후 상세 구현 plan 작성 — 기획팀 경유 sub-skill"
-argument-hint: "<task description>"
+description: "Use when invoking the portable code-plan capability. 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity에서 파생된 rigor에 맞는 plan-check gate를 수행한다."
+argument-hint: "<task description> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "코드 분석 후 상세 구현 plan 작성 — 기획팀 경유 sub-skill"
+  blurb: "코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity에서 파생된 rigor에 맞는 plan-check gate를 수행한다."
 ---
 
 > Caller note: planning benefits from `high` or `xhigh` effort; lower effort may miss call sites in cross-file analysis.

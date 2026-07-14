@@ -10,8 +10,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-ROLES = ROOT / "roles" / "README.md"
 OUT = ROOT / "adapters" / "codex" / "agents"
+sys.path.insert(0, str(ROOT / "tools"))
+
+import harness_manifest
 
 
 PROFILE_CONFIG = {
@@ -201,10 +203,10 @@ def render(profile: str, portable_role: str, responsibility: str) -> str:
         f"Use when delegating work whose primary responsibility is: {responsibility}"
     )
     instructions = f"""You are the Codex-native custom agent realization of the portable `{profile}` role profile.
-This is adapter-owned output generated from `roles/README.md`, not a legacy compatibility Agent copy.
+This is adapter-owned output generated from `harness-manifest.json`, not a legacy compatibility Agent copy.
 
 Source order:
-1. Read `roles/README.md` for the portable role contract.
+1. Read `harness-manifest.json` and `roles/README.md` for the portable role contract.
 2. Read `roles/MODES.md` and task-relevant `roles/modes/` fragments.
 3. Run `adapters/codex/bin/preflight.sh role {mapped_role}` before assuming a concrete model or reasoning tier.
 4. For mixed or variable role profiles, use the Codex role-map inputs listed below and select the concrete role by mode/QA policy.
@@ -253,7 +255,11 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="verify generated projections")
     args = parser.parse_args()
 
-    rows = role_rows(ROLES.read_text(encoding="utf-8"))
+    manifest = harness_manifest.load()
+    rows = [
+        (profile, spec["portable_role"], spec["responsibility"])
+        for profile, spec in manifest["roles"].items()
+    ]
     expected = {OUT / f"{profile}.toml": render(profile, role, responsibility) for profile, role, responsibility in rows}
     for name, spec in EXTRA_AGENTS.items():
         expected[OUT / f"{name}.toml"] = render_extra_agent(name, spec)

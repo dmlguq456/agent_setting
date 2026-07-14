@@ -60,7 +60,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | MCP config | Run `adapters/codex/bin/preflight.sh mcp [--check]`; use Codex native `codex mcp`/config surfaces, not Claude `settings.json` MCP payloads |
 | artifact root | `.agent_reports`, legacy fallback `.claude_reports` only when already present |
 | workflow start cleanup | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]`; run it manually when hooks are unavailable |
-| tracked/untracked signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`, suppresses the default tracked anchor, and emits only non-default mode context such as untracked state (`CODEX_MODE_ANCHOR_ALWAYS=1` restores the tracked anchor). `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` is the richer worker-startup/manual subcommand whose tracked output includes `routing_contract=core/WORKFLOW.md`, `routing_action=read-workflow-and-select-codex-skill`, `capability_entrypoints=codex-native-skills-plugin`, and git dirty/worktree/dead-branch risk fields (re-derived from the harness status snapshot); run it manually or at worker startup, not per turn |
+| tracked/untracked signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]`, suppresses the default tracked anchor, and emits only non-default mode context such as untracked state (`CODEX_MODE_ANCHOR_ALWAYS=1` restores the tracked anchor). `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` is the richer worker-startup/manual subcommand whose tracked output includes `routing_contract=core/WORKFLOW.md`, `routing_action=read-workflow-and-select-codex-skill`, `capability_entrypoints=codex-native-skills`, and git dirty/worktree/dead-branch risk fields (re-derived from the harness status snapshot); run it manually or at worker startup, not per turn |
 | harness status snapshot | Run `adapters/codex/bin/preflight.sh status [cwd] [session-id]` for read-only workflow, artifact, notes, worktree, and git-risk signals, including tracked-dirty vs untracked counts and sibling worktree counts. This does not replace Codex `/statusline` for model/context/token/session fields |
 | token/context pressure | Run `adapters/codex/bin/preflight.sh token-budget [cwd] [session-id] [kv|json|hook]` for exact-session rollout telemetry. `kv`/`json` are read-only; `hook` stores only hashed-session transition state under XDG user state and is bounded by a fail-open timeout. Active context and cumulative session counters remain separate. The UserPromptSubmit bridge emits one <=240-byte directive only when entering `tight`/`critical`; normal, unknown, same-band, and validated-native states are zero-injection. Pressure may shorten output/defer optional extras only and never changes intensity, dispatch/depth, model role, required tools/tests/safety/input, or guards. Native `rollout_budget` remains a separately validated opt-in because it is under-development and Codex 0.144.1 rejects the documented config path; the adapter never edits runtime-owned `$CODEX_HOME/config.toml` |
 | UI boundary | Run `adapters/codex/bin/preflight.sh ui-info` to report the Codex-native UI boundary. Codex `/statusline` and `/title` configure built-in footer/title items; arbitrary Claude-style live statusline scripts are unsupported, so harness signals use `preflight.sh status`. Codex hooks run silently (no `statusMessage` labels), matching Claude Code's quiet hooks. `/statusline` persists choices in runtime-owned `$CODEX_HOME/config.toml`; `codex_setting/codex-config/tui-statusline.toml` records the harness-recommended footer fragment without projecting the full config file. Run `adapters/codex/bin/preflight.sh tui-config` only when explicitly applying that fragment to the runtime-owned config |
@@ -93,7 +93,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | memory recall injection | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh recall <prompt> [cwd] [session-id]` and aggregates matching output into `hookSpecificOutput.additionalContext`; run it manually when hooks are unavailable |
 | oncall briefing injection | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh briefing [cwd]` and aggregates matching output into `hookSpecificOutput.additionalContext`; run it manually when hooks are unavailable |
 | loop guidance | `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` reports whether a loop has a Codex manual contract, unsupported executable projection, or missing native implementation; `note` remains an external scheduler loop while the related `autopilot-note` capability is available on demand through Codex-native Skill/plugin projections |
-| capability mapping | `adapters/codex/bin/preflight.sh capability-info <capability>` reports Codex's native Skill/plugin realization and instruction-only or tool-contract status; root Skill compatibility references are not projected and report `compat_reference=not-projected` |
+| capability mapping | `adapters/codex/bin/preflight.sh capability-info <capability>` reports Codex's native Skill realization and instruction-only or tool-contract status; an optional marketplace copy is informational only, and root Skill compatibility references report `compat_reference=not-projected` |
 | autopilot-code pipeline | `capability-info autopilot-code` and `route autopilot-code` additionally report `stage_graph_contract=core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance`, `plan_policy=direct=no-plan;quick=depth1-one-shot-micro-plan+plan-check-lite;standard+=durable-plan`, the `standard+` `pipeline_contract=code-plan>code-execute>code-test>code-report`, optional `code-refine`, required plan artifacts, role mapping, and the dispatch fallback |
 | model role mapping | `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` resolves portable model roles through Codex adapter environment variables and maps pipeline/profile aliases to Codex-native custom agents |
 | mode mapping | `adapters/codex/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for Codex; tool-contract and unsupported adapter-coupled modes include machine-readable `tool_contract`, optional `tool_contract_check`, `runtime_surface`, and `fallback` fields |
@@ -153,25 +153,22 @@ branches or delete worktrees.
 `adapters/codex/skills/` contains Codex-native Skill projections generated from
 portable `capabilities/*.md` specs:
 
+All core projections are generated and checked through one command:
+
 ```bash
-adapters/codex/bin/sync-native-skills.py --check
+python3 tools/generate.py --check
 ```
 
-Expose them to Codex either by symlinking each generated skill directory into
-`$CODEX_HOME/skills/` (`--skills-mode native`) or through the installable
-`agent-harness-codex` plugin (`--skills-mode plugin`). Use one active discovery
-surface by default; `both` is only for compatibility/debugging because it
-duplicates skill metadata in Codex's initial context. Do not expose root
+Expose them to Codex by activating the selected profile into
+`$CODEX_HOME/skills/`. Do not expose the optional marketplace copy at the same
+time because it duplicates skill metadata in Codex's initial context. Do not expose root
 `skills/` or `adapters/claude/skills/` as Codex native skills.
 
 ## Native Plugin Projection
 
-`adapters/codex/plugins/agent-harness-codex` contains an installable Codex
-plugin generated from the same Codex-native Skill projection:
-
-```bash
-adapters/codex/bin/sync-native-plugin.py --check
-```
+`adapters/codex/plugins/agent-harness-codex` is an optional distribution
+artifact copied from the Codex-native Skill projection. It is deliberately
+outside `tools/generate.py`, runtime activation, `doctor`, and core `verify`.
 
 Expose the repo-local marketplace through `codex_setting/codex-plugin-marketplace`.
 That projection is a dedicated marketplace root, not a link to the entire
@@ -191,9 +188,7 @@ plugin from Claude Skill files.
 `adapters/codex/agents/` contains Codex custom agent TOML projections generated
 from portable role profiles in `roles/README.md`:
 
-```bash
-adapters/codex/bin/sync-native-agents.py --check
-```
+They are covered by `python3 tools/generate.py --check`.
 
 Expose them to Codex by symlinking each generated `*.toml` file into
 `$CODEX_HOME/agents/` for a user/global install, or into project
@@ -237,9 +232,7 @@ also embeds a sanitized projected portable mode contract so Codex sees the
 actual procedure, with non-Codex runtime surfaces rewritten to Codex
 preflight/tool-contract wording.
 
-```bash
-adapters/codex/bin/sync-native-modes.py --check
-```
+They are covered by `python3 tools/generate.py --check`.
 
 `mode-info` reports `native_mode_path=adapters/codex/modes/<family>/<mode>.md`.
 For tool-contract modes, run the reported `tool_contract_check` or report the

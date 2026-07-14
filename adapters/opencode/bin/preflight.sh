@@ -135,10 +135,7 @@ doctor() {
     printf 'runtime_cli=unavailable\n'
   fi
 
-  doctor_check manifest python3 "$ROOT/tools/build-manifest.py" --check || rc=1
-  doctor_check native-skills "$ROOT/adapters/opencode/bin/sync-native-skills.py" --check || rc=1
-  doctor_check native-commands "$ROOT/adapters/opencode/bin/sync-native-commands.py" --check || rc=1
-  doctor_check native-agents "$ROOT/adapters/opencode/bin/sync-native-agents.py" --check || rc=1
+  doctor_check generated-projections python3 "$ROOT/tools/generate.py" --check || rc=1
   doctor_check adaptation-boundary doctor_boundary || rc=1
 
   if [ "$rc" -eq 0 ]; then

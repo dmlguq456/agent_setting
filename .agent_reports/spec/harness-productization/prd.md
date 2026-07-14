@@ -1,8 +1,8 @@
 # Harness Productization — PRD
 
 > 유형: component spec · library + CLI
-> 상태: specified
-> 버전: v3 (2026-07-14)
+> 상태: phase 2 complete
+> 버전: v4 (2026-07-14)
 
 ## 0. 한 줄 정의
 
@@ -181,6 +181,16 @@ freshness, session_action, external_dependencies
 
 generator determinism, sync 소비자 migration, 세 profile isolated install과 golden path가 통과해야 Phase 3를 시작한다.
 
+### 구현 결과 — 2026-07-14
+
+- `harness-manifest.json`이 27 capabilities, 8 portable roles, 26 modes, 5 built-in packs, 3 profiles의 canonical machine contract가 됐다.
+- root `manifest.json`은 generated compatibility view로 남고, core projection은 `python3 tools/generate.py [--check]` 한 경로로 생성·검증한다.
+- 대표 metadata 변경이 Claude Code·Codex·OpenCode native projection과 Claude compatibility reference에 전파되며, 수동 drift와 비결정적 재생성을 acceptance test가 거부한다.
+- `starter`/`builder`/`full`은 각각 6/14/27 capabilities와 4/7/8 roles를 실제 runtime discovery에 노출하며 kernel guard와 `memory-scout`는 항상 유지한다.
+- 새 activation의 기본 profile은 usability smoke 결과 `builder`로 확정했다. profile field가 없는 Phase 1 legacy state는 기존 동작 보존을 위해 `full`로 해석한다.
+- marketplace bundle 생성·등록·cache는 core generator, activation, doctor, verify의 성공 조건에서 제거했다. 명시적 legacy `install --plugin`만 선택 배포 경로로 남는다.
+- isolated HOME의 세 runtime × 세 profile activation, generated drift/determinism, runtime activation 회귀, portable guards, skill conformance, adaptation boundary가 통과했다.
+
 ## 8. Phase 3 — Local-First Packs and Optional Extension Bridge
 
 ### 해결하는 약점
@@ -246,10 +256,13 @@ Phase 3: optional external extension bridge
    local bundle이며 linked와 같은 native discovery surface를 사용한다.
 9. Phase 1 runtime activation은 global-only이며 project scope는 silent fallback 없이
    unsupported로 보고한다.
+10. 신규 activation 기본 profile은 `builder`다. `starter`와 `full`은 명시적으로 선택한다.
+11. canonical machine source는 `harness-manifest.json`이며 root `manifest.json`과 runtime metadata는 generated output이다.
+12. core projection의 단일 build/check entrypoint는 `tools/generate.py`다. marketplace bundle generator는 이 경로 밖에 둔다.
 
-### 구현 착수 시 확정할 결정
+### 열린 결정
 
-- 신규 설치의 실제 기본 profile을 `builder`로 할지 Phase 2 usability smoke에서 확정한다.
+없음. Phase 3의 extension 세부 결정은 Phase 3 cycle에서 해당 범위의 spec 변경으로 연다.
 
 ## 11. 주요 위험과 완화
 
@@ -264,8 +277,8 @@ Phase 3: optional external extension bridge
 
 ## 12. 다음 구현 단위
 
-- Cycle 1: 세 runtime activation census, 상태 schema, linked activate/status/doctor, duplicate cleanup, rollback.
-- Cycle 2: canonical manifest/generator, sync migration, profile resolver와 quickstart.
-- Cycle 3: built-in packs, offline extension lifecycle, provenance/security/parity.
+- Cycle 1 — 완료: 세 runtime activation census, 상태 schema, linked activate/status/doctor, duplicate cleanup, rollback.
+- Cycle 2 — 완료: canonical manifest/generator, generated consumer migration, profile resolver와 quickstart.
+- Cycle 3 — 다음: built-in pack 계약을 사용하는 offline extension lifecycle, provenance/security/parity.
 
-Cycle 1 착수 전 `autopilot-code`가 Codex·Claude Code·OpenCode의 실제 runtime-home과 공식 reload/cache 경계를 다시 확인하고 이 PRD를 source of truth로 읽어야 한다.
+Cycle 3 착수 전 `autopilot-code`가 세 runtime의 현재 extension surface와 local-path security boundary를 공식 문서와 로컬 realization에서 다시 확인하고 이 PRD를 source of truth로 읽어야 한다.

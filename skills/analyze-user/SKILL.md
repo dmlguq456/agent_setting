@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: analyze-user
-description: "Use when building or updating the cross-project user-preference profile. cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출"
+description: "Use when invoking the portable analyze-user capability. cross-project 사용자 성향 프로필 작성·갱신. 코드·작성·분석 패턴을 추출한다."
 argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]"
 metadata:
   group: pre
   fam: pre
-  modes: [init, update]
-  blurb: "cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출"
+  modes: ["init", "update"]
+  blurb: "cross-project 사용자 성향 프로필 작성·갱신. 코드·작성·분석 패턴을 추출한다."
 ---
 
 # analyze-user

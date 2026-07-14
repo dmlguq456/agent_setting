@@ -1,49 +1,42 @@
 # Harness Productization — Pipeline Summary
 
-> updated: 2026-07-14 · status: phase 1 complete · spec v3
+> updated: 2026-07-14 · status: phase 2 complete · spec v4
 
 ## 결정된 개선 순서
 
-1. **Cross-Runtime Source Activation** — Codex·Claude Code·OpenCode 모두에서 active source/revision을 노출하고 linked와 packaged를 배타적으로 운영한다.
-2. **Manifest + Generated Projections + Profiles** — 독립 `sync`를 내부 build/check로 흡수하고 starter/builder/full로 점진 공개한다.
-3. **Local-First Packs + Optional Extensions** — built-in은 외부 의존 없이 유지하고 외부 skill은 격리된 선택 기능으로만 조합한다.
+1. **Cross-Runtime Source Activation — complete**: Codex·Claude Code·OpenCode의 active source/revision을 노출하고 linked와 packaged를 배타적으로 운영한다.
+2. **Manifest + Generated Projections + Profiles — complete**: machine metadata를 하나의 manifest로 모으고 starter/builder/full로 runtime discovery 크기를 조절한다.
+3. **Local-First Packs + Optional Extensions — next**: built-in은 외부 의존 없이 유지하고 외부 skill은 격리된 선택 기능으로만 조합한다.
 
-공개 검증은 내부 작업으로 만들어낼 수 없으므로 top-level 개선 과제에서 제외했다. 이 spec의 test는 회귀 방지와 재현 가능성만 주장한다.
+공개 채택은 내부 작업으로 만들어낼 수 없으므로 이 spec의 자동 검증은 회귀 방지와 재현 가능성만 주장한다.
 
-## v2 변경
+## v4 변경
 
-- repo 수정이 runtime과 현재 session에 자동 반영된다는 전제를 폐기했다.
-- Codex native+plugin 중복, Claude symlink, OpenCode projection 미설치 상태를 하나의 공통 activation 문제로 승격했다.
-- maintainer 경로를 local `linked` mode로 고정하고 plugin/marketplace/network/package manager를 core 전제에서 제거했다.
-- plugin은 immutable `packaged` 배포 adapter로만 남긴다.
+- canonical machine source를 `harness-manifest.json`으로 고정했다.
+- root `manifest.json`, capability/role catalog, runtime metadata를 generated output으로 전환했다.
+- core projection build/check entrypoint를 `tools/generate.py` 하나로 통합했다.
+- `starter` 6 capability/4 role, `builder` 14/7, `full` 27/8의 실제 runtime discovery profile을 구현했다.
+- usability smoke 결과 새 activation 기본값을 `builder`로 확정했다.
+- marketplace bundle을 core generator, activation, doctor, verify에서 분리했다.
+- README를 profile quickstart와 native-first architecture 중심의 제품 페이지로 다시 작성했다.
 
-## v3 변경
+## Phase 2 완료 근거
 
-- 실제 runtime review에서 Codex cache 복사와 Claude cache 복사가 plugin 활성화를 보장하지 않음을 확인했다.
-- 사용자 지시대로 plugin을 Phase 1 활성화 경로에서 완전히 제거했다.
-- `linked`와 `packaged`는 모두 runtime-native discovery를 사용하고, live repo와 checksum 고정 local bundle이라는 source 경계만 달리한다.
-- Claude hooks는 `settings.json` 보존 병합과 tools/utilities projection을 함께 검증하며, 기존 Codex/Claude plugin registry와 cache는 비활성화한다.
+- canonical manifest는 27 capabilities, 8 portable roles, 26 modes, 5 built-in packs, 3 profiles와 generated/manual ownership map을 검증한다.
+- 대표 canonical metadata 변경이 Claude Code·Codex·OpenCode native projection과 Claude compatibility reference에 전파된다.
+- 연속 생성 hash가 같고 generated file 수동 편집은 `--check`에서 실패한다.
+- isolated HOME에서 세 runtime의 starter/builder/full activation과 kernel guard 상시 노출을 검증했다.
+- Phase 1의 linked/packaged immutability, duplicate detection, rollback, runtime-owned state 보존 회귀가 유지된다.
+- portable guard 343건, skill conformance, adaptation boundary, Codex doctor가 통과했다.
+- profile 없는 Phase 1 fixture는 legacy `full` 의미를 유지해 기존 설치 호환성을 보존한다.
 
-## Phase 1 완료 근거
+## 제품 경계
 
-- 기존 installer에 `harness runtime activate|status|refresh|doctor`를 추가했다.
-- 세 runtime 모두 offline linked activation과 checksum 고정 packaged bundle을 같은 native
-  discovery 경로로 활성화한다.
-- plugin registry/cache 중복 제거, config 보존 병합, crash journal, 단일·다중 runtime
-  rollback, foreign-state 보존을 isolated HOME fixture로 검증했다.
-- OpenCode global activation은 공식 plural discovery, JSON/JSONC와 옵션형 plugin entry를
-  검증한다. project activation은 cwd→worktree 다단 config와 project rules 소유권을
-  숨기지 않고 Phase 1 unsupported로 명시한다.
-- portable guard 343건, manifest, adaptation boundary, skill conformance, legacy installer
-  dry-run이 통과했다.
+- core 경로는 local repo, runtime home, Python, Git만 사용하며 marketplace·npm·MCP·connector를 요구하지 않는다.
+- OpenCode guard plugin은 local runtime hook bridge이고 외부 package가 아니다.
+- Codex/Claude marketplace bundle은 명시적 legacy 배포 산출물이며 core 성공 조건이 아니다.
+- linked repo 변경이 discovery path에 보이는 것과 현재 session이 instruction을 다시 읽는 것은 별개이며 `session_action`이 그 차이를 보고한다.
 
-## Spec QA
+## 다음 작업
 
-- 우리가 직접 바꿀 수 있는 약점 3개와 해결 Phase가 1:1 대응한다.
-- 활성 source 확정→generated product surface→선택적 외부 확장의 의존 순서를 명시했다.
-- 기존 installer, sync, skill-design spec과 ownership 경계를 분리했다.
-- 각 Phase에 제품 계약, 범위, 수용 기준, 종료 게이트가 있다.
-
-다음 작업은 [PRD](./prd.md)의 Phase 2
-`Manifest + Generated Projections + Profiles`만 범위로 잡아 `autopilot-code` cycle을
-여는 것이다.
+[PRD](./prd.md)의 Phase 3 `Local-First Packs and Optional Extension Bridge`만 별도 `autopilot-code` cycle로 연다. 기존 built-in pack/profile resolver를 재사용하고, local path extension의 inspect-first·provenance·rollback·parity-loss 계약을 추가한다.

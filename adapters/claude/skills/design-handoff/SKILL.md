@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: design-handoff
-description: "디자인 → 개발 핸드오프 자산·스펙 정리 sub-skill"
+description: "Use when invoking the portable design-handoff capability. 디자인 결과를 개발 handoff용 자산·스펙으로 정리한다."
 argument-hint: "<design path or app path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "디자인 → 개발 핸드오프 자산·스펙 정리 sub-skill"
+  blurb: "디자인 결과를 개발 handoff용 자산·스펙으로 정리한다."
 ---
 
 ## Language Rule

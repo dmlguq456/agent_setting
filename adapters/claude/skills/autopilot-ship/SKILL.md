@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-ship
-description: "Use when preparing an app for deployment or release (hosting/CI/env/domain/migration). 앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트"
+description: "Use when invoking the portable autopilot-ship capability. 앱 배포·출시 준비. build/deploy setup과 ship checklist를 만든다."
 argument-hint: "<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: entry
   fam: app
   modes: []
-  blurb: "앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트"
+  blurb: "앱 배포·출시 준비. build/deploy setup과 ship checklist를 만든다."
 ---
 
 > 산출물 폴더: `<artifact-root>/spec/ship.md` 안 누적 ([CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier).

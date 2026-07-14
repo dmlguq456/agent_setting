@@ -69,6 +69,11 @@ def build_parser():
 
     p_install = sub.add_parser("install", parents=[common], help="dev 머신 projection + runtime-owned 표면 + manifest 기록")
     p_install.add_argument("target", nargs="?", choices=[*RUNTIMES, "all"], default="all")
+    p_install.add_argument(
+        "--profile",
+        choices=runtime_activation.PROFILES,
+        help="linked product profile; explicit use routes install through runtime activation",
+    )
 
     p_verify = sub.add_parser("verify", parents=[common], help="Migration Order 기계화 — check 목록 실행")
     p_verify.add_argument("target", nargs="?", choices=RUNTIMES, default=None)
@@ -107,9 +112,11 @@ def build_parser():
     runtime_common(p_runtime_activate, require_runtime=True)
     p_runtime_activate.add_argument("--mode", choices=runtime_activation.MODES, required=True)
     p_runtime_activate.add_argument("--source", help="local canonical repo (default: AGENT_HOME)")
+    p_runtime_activate.add_argument("--profile", choices=runtime_activation.PROFILES)
 
     p_runtime_refresh = runtime_sub.add_parser("refresh", help="현재 mode를 local source에서 갱신")
     runtime_common(p_runtime_refresh, require_runtime=True)
+    p_runtime_refresh.add_argument("--profile", choices=runtime_activation.PROFILES)
 
     p_runtime_doctor = runtime_sub.add_parser("doctor", help="projection/duplicate/freshness 진단")
     runtime_common(p_runtime_doctor)
@@ -139,6 +146,57 @@ def emit(result, as_json):
 
 def cmd_install(args):
     runtimes = resolve_runtimes(args)
+    if args.profile:
+        if args.plugin:
+            return {
+                "runtime": runtimes,
+                "channel": "linked",
+                "checks": [],
+                "drift": [],
+                "exit": EXIT_BLOCKED,
+                "lines": ["install --profile cannot be combined with the external plugin channel"],
+            }
+        try:
+            for runtime in runtimes:
+                runtime_activation.validate_scope(runtime, args.scope)
+        except runtime_activation.ActivationError as exc:
+            return {
+                "runtime": runtimes,
+                "channel": "linked",
+                "profile": args.profile,
+                "checks": [],
+                "drift": [],
+                "exit": EXIT_BLOCKED,
+                "lines": [f"install --profile: blocked: {exc}"],
+            }
+        if args.dry_run:
+            return {
+                "runtime": runtimes,
+                "channel": "linked",
+                "profile": args.profile,
+                "checks": [],
+                "drift": [],
+                "exit": EXIT_OK,
+                "lines": [
+                    f"install(dry-run): runtime={runtime} mode=linked profile={args.profile}"
+                    for runtime in runtimes
+                ],
+            }
+        runtime_args = argparse.Namespace(
+            runtime=runtimes,
+            runtime_command="activate",
+            source=str(paths.agent_home()),
+            scope=args.scope,
+            json=args.json,
+            mode="linked",
+            profile=args.profile,
+        )
+        result = cmd_runtime(runtime_args)
+        result["channel"] = "linked"
+        result["profile"] = args.profile
+        result["lines"].insert(0, f"install: linked profile={args.profile}")
+        return result
+
     lines = [f"install: runtime={r} scope={args.scope} plugin={args.plugin} dry_run={args.dry_run}" for r in runtimes]
     checks = []
     results = []
@@ -212,8 +270,33 @@ def cmd_verify(args):
     all_checks = []
     ok = True
     for rt in runtimes:
-        driver = get_driver(rt)
-        rt_checks = verifier.run(rt, driver)
+        activation_state = paths.harness_state_dir(rt, args.scope) / "activation.json"
+        if activation_state.exists() or activation_state.is_symlink():
+            try:
+                report = runtime_activation.doctor(rt, strict=True, scope=args.scope)
+                status = report["status"]
+                rt_checks = [
+                    {
+                        "id": f"{rt}.runtime-activation",
+                        "ok": report["ok"],
+                        "detail": (
+                            f"profile={status.get('profile')} "
+                            f"freshness={report['freshness']} "
+                            f"next={report['next_action']}"
+                        ),
+                    }
+                ]
+            except (runtime_activation.ActivationError, OSError, ValueError) as exc:
+                rt_checks = [
+                    {
+                        "id": f"{rt}.runtime-activation",
+                        "ok": False,
+                        "detail": f"activation state invalid: {exc}",
+                    }
+                ]
+        else:
+            driver = get_driver(rt)
+            rt_checks = verifier.run(rt, driver)
         all_checks.extend(rt_checks)
         if any(not c["ok"] for c in rt_checks):
             ok = False
@@ -415,10 +498,16 @@ def cmd_runtime(args):
                     exit_code = EXIT_VERIFY_FAIL
             elif args.runtime_command == "activate":
                 report = runtime_activation.activate(
-                    runtime, args.mode, args.source, args.scope
+                    runtime,
+                    args.mode,
+                    args.source,
+                    args.scope,
+                    getattr(args, "profile", None),
                 )
             elif args.runtime_command == "refresh":
-                report = runtime_activation.refresh(runtime, args.scope)
+                report = runtime_activation.refresh(
+                    runtime, args.scope, getattr(args, "profile", None)
+                )
             elif args.runtime_command == "doctor":
                 report = runtime_activation.doctor(runtime, args.strict, args.scope)
                 if not report["ok"]:
@@ -432,7 +521,9 @@ def cmd_runtime(args):
             if freshness is None and isinstance(report.get("status"), dict):
                 freshness = report["status"].get("freshness")
             lines.append(
-                f"{runtime}: {args.runtime_command} freshness={freshness} "
+                f"{runtime}: {args.runtime_command} profile="
+                f"{report.get('profile') or report.get('status', {}).get('profile')} "
+                f"freshness={freshness} "
                 f"next={report.get('next_action', 'none')}"
             )
     except runtime_activation.ActivationError as exc:

@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/post-it.md`, not a run
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability post-it [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `[show]|add <category> <text>|resolve <hint>|decide <text>|handoff [--no-confirm]|sweep [--no-confirm]|promote [<hint>] [--scope project|user [<aspect>]]`.
+   `[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]`.
 
 Portable contract excerpt:
 

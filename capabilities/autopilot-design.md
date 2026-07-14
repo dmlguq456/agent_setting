@@ -3,6 +3,7 @@
 This is the portable capability contract for `autopilot-design`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
@@ -10,7 +11,7 @@ This is the portable capability contract for `autopilot-design`. It defines runt
 | Group | `entry` |
 | Supported modes | `none` |
 | Portable meaning | 시각 산출물 디자인 파이프. refs→tokens→components→review→handoff를 조율한다. |
-| Argument shape | `<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial]` |
+| Argument shape | `<design task or app path> [--scope ui\|webapp\|slide\|icon\|diagram\|mixed] [--artifact standalone\|project] [--from <phase>] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial]` |
 
 ## Invocation Semantics
 
@@ -43,7 +44,7 @@ Adapters must preserve the portable invariants relevant to this capability:
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/autopilot-design/SKILL.md` and `skills/autopilot-design/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-design/SKILL.md`, while `skills/autopilot-design/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-design`. Use `adapters/codex/skills/autopilot-design/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/autopilot-design/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/autopilot-design/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-design`. Use `adapters/codex/skills/autopilot-design/SKILL.md` as the native Codex Skill projection; do not consume `skills/autopilot-design/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info autopilot-design`. Use `adapters/opencode/skills/autopilot-design/SKILL.md` and `adapters/opencode/commands/autopilot-design.md` as native OpenCode projections; do not consume `skills/autopilot-design/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

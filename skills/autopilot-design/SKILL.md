@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-design
-description: "Use when starting a visual-design pipeline (tokens/components/references/handoff). 시각 산출물 디자인 파이프 entry — 토큰·컴포넌트·레퍼런스·핸드오프 통합"
+description: "Use when invoking the portable autopilot-design capability. 시각 산출물 디자인 파이프. refs→tokens→components→review→handoff를 조율한다."
 argument-hint: "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: entry
   fam: design
   modes: []
-  blurb: "시각 산출물 디자인 파이프 entry — 토큰·컴포넌트·레퍼런스·핸드오프 통합"
+  blurb: "시각 산출물 디자인 파이프. refs→tokens→components→review→handoff를 조율한다."
 ---
 
 > 산출물 폴더:

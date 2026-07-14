@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: code-test
-description: "구현 결과 단계별 검증 — 품질관리팀 test 모드 sub-skill"
-argument-hint: "<plan name, path, or test scope>"
+description: "Use when invoking the portable code-test capability. 구현 결과를 단계별로 검증하고 evidence를 기록한다."
+argument-hint: "<plan name, path, or test scope> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "구현 결과 단계별 검증 — 품질관리팀 test 모드 sub-skill"
+  blurb: "구현 결과를 단계별로 검증하고 evidence를 기록한다."
 ---
 
 > **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Input = `plan/plan.md` verification section + `plan/checklist.md` (resolved below), read from files — never prior-stage conversation. Source is **read-only** here; write class = `test_logs/`·`_internal/test_reviews/` only. 품질관리팀 delegation stays **inside** this session.

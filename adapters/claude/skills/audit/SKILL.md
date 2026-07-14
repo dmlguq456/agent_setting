@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: audit
-description: "Use when doing a post-hoc audit of artifacts/pipeline (drift/consistency/gaps). 산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고"
+description: "Use when invoking the portable audit capability. 산출물·파이프 사후 점검. drift·일관성·누락을 읽기 중심으로 진단한다."
 argument-hint: "<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]"
 metadata:
   group: ops
   fam: ops
   modes: []
-  blurb: "산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고"
+  blurb: "산출물·파이프 사후 점검. drift·일관성·누락을 읽기 중심으로 진단한다."
 ---
 
 # audit

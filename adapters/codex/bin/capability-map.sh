@@ -60,8 +60,7 @@ else
 fi
 if [ -f "$ROOT/$native_plugin_skill_path" ]; then
   native_plugin=1
-  [ "$native_skill" -eq 1 ] && realization="codex-native-skill-plugin"
-  note="Codex has adapter-owned native Skill and plugin projections generated from the portable capability spec. Use them with explicit preflight guards; legacy compatibility references are not native input."
+  note="$note An optional marketplace bundle copy also exists, but it is not part of core activation or verification."
 else
   native_plugin=0
   native_plugin_skill_path=""

@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-refine.md`, 
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability autopilot-refine [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only|--memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]`.
+   `"<prompt>" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]`.
 
 Portable contract excerpt:
 

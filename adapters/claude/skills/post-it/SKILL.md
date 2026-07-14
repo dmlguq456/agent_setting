@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: post-it
-description: "프로젝트·cross-project 기록·handoff — 세션 간 연속성 working 메모"
+description: "Use when invoking the portable post-it capability. 프로젝트·cross-project 기록과 handoff를 working memory로 남긴다."
 argument-hint: "[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]"
 metadata:
   group: ops
   fam: ops
   modes: []
-  blurb: "프로젝트·cross-project 기록·handoff — 세션 간 연속성 working 메모"
+  blurb: "프로젝트·cross-project 기록과 handoff를 working memory로 남긴다."
 ---
 
 ## 목적

@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: design-init
-description: "디자인 MCP·환경 bootstrap + design_state.yaml 생성 sub-skill"
+description: "Use when invoking the portable design-init capability. 디자인 환경과 state를 bootstrap한다."
 argument-hint: "<design task description> [--scope ui|slide|icon|diagram|mixed]"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "디자인 MCP·환경 bootstrap + design_state.yaml 생성 sub-skill"
+  blurb: "디자인 환경과 state를 bootstrap한다."
 ---
 
 ## Language Rule

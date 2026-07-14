@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: analyze-project
-description: "Use when analyzing existing code/papers/docs as structured input for downstream work. 사전조사 분석 — 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로"
+description: "Use when invoking the portable analyze-project capability. 사전 분석. 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로 만든다."
 argument-hint: "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]"
 metadata:
   group: pre
   fam: pre
-  modes: [code, paper, doc]
-  blurb: "사전조사 분석 — 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로"
+  modes: ["code", "paper", "doc"]
+  blurb: "사전 분석. 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로 만든다."
 ---
 
 # analyze-project

@@ -150,8 +150,10 @@ does not merge branches or delete worktrees.
 `adapters/opencode/skills/` contains OpenCode-native Skill projections generated
 from `capabilities/*.md`:
 
+All core projections are generated and checked through one command:
+
 ```bash
-adapters/opencode/bin/sync-native-skills.py --check
+python3 tools/generate.py --check
 ```
 
 Expose them to OpenCode through `opencode_setting/opencode-skills`, not through
@@ -165,9 +167,7 @@ generated from portable role profiles in `roles/README.md`. They declare
 `mode: subagent` and defer concrete model/variant selection to
 `adapters/opencode/bin/preflight.sh role <portable-role>`:
 
-```bash
-adapters/opencode/bin/sync-native-agents.py --check
-```
+They are covered by `python3 tools/generate.py --check`.
 
 Expose them to OpenCode by symlinking each generated `*.md` file into
 `$HOME/.config/opencode/agent/` or a project `.opencode/agent/` directory,
@@ -181,9 +181,7 @@ generated from portable `capabilities/*.md` specs. Each command includes
 OpenCode's `$ARGUMENTS` placeholder so runtime command arguments are visible to
 the portable capability contract:
 
-```bash
-adapters/opencode/bin/sync-native-commands.py --check
-```
+They are covered by `python3 tools/generate.py --check`.
 
 Expose them to OpenCode by symlinking each generated `*.md` file into
 `$HOME/.config/opencode/command/` or a project `.opencode/command/` directory,

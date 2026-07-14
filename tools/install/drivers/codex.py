@@ -195,7 +195,7 @@ def install(scope="global", plugin=False, dry_run=False):
 
 
 def checks(scope="global"):
-    """verify 가 실행할 check 함수 목록 (Phase 4.3 — sync-native + preflight + bootstrap)."""
+    """verify 가 실행할 core projection + preflight + bootstrap check 목록."""
     entries = projector.plan(["codex"], scope=scope)["codex"]
     agent_home = str(paths.agent_home())
 
@@ -209,14 +209,13 @@ def checks(scope="global"):
         check_id = f"codex.symlink.{dest_path.parent.name}.{dest_path.name}"
         check_list.append(verifier.check_symlink(check_id, dest, entry["source"]))
 
-    for name in ("skills", "agents", "modes", "plugin"):
-        check_list.append(
-            verifier.check_cmd(
-                f"codex.sync-native-{name}",
-                ["python3", f"adapters/codex/bin/sync-native-{name}.py", "--check"],
-                cwd=agent_home,
-            )
+    check_list.append(
+        verifier.check_cmd(
+            "codex.generated-projections",
+            ["python3", "tools/generate.py", "--check"],
+            cwd=agent_home,
         )
+    )
 
     check_list.append(
         verifier.check_cmd(
@@ -234,13 +233,6 @@ def checks(scope="global"):
             cwd=agent_home,
         )
     )
-    check_list.append(
-        verifier.check_file_exists(
-            "codex.plugin-marketplace-source",
-            str(paths.resolve_source(_MARKETPLACE_SOURCE_RELPATH) / ".agents" / "plugins" / "marketplace.json"),
-        )
-    )
-
     def _bootstrap_smoke():
         if shutil.which("codex") is None:
             return {

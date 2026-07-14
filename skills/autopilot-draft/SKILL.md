@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-draft
-description: "Use when starting a document draft (paper/slides/prose). 문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태"
+description: "Use when invoking the portable autopilot-draft capability. 문서 초안 파이프. 전략·초안·검증·편집을 거쳐 적용용 문서 artifact를 만든다."
 argument-hint: "<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 metadata:
   group: entry
   fam: doc
-  modes: [paper, presentation, doc]
-  blurb: "문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태"
+  modes: ["paper", "presentation", "doc"]
+  blurb: "문서 초안 파이프. 전략·초안·검증·편집을 거쳐 적용용 문서 artifact를 만든다."
 ---
 
 # autopilot-draft

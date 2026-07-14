@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-lab
-description: "Use when running a quick experiment (training setup or checkpoint eval). 빠른 실험 prototype entry — 학습 세팅(setup)과 ckpt 평가(eval) 앞뒤를 돕는다"
+description: "Use when invoking the portable autopilot-lab capability. 빠른 실험 prototype. 학습 세팅과 ckpt 평가·분석 앞뒤를 돕는다."
 argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
 metadata:
   group: entry
   fam: code
-  modes: [setup, eval]
-  blurb: "빠른 실험 prototype entry — 학습 세팅(setup)과 ckpt 평가(eval) 앞뒤를 돕는다"
+  modes: ["setup", "eval"]
+  blurb: "빠른 실험 prototype. 학습 세팅과 ckpt 평가·분석 앞뒤를 돕는다."
 ---
 
 > 산출물 폴더: `<artifact-root>/experiments/` ([CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier). _RUNLOG timeline 한 자리 + experiment 단위 폴더 누적.

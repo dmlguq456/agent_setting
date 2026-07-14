@@ -1,5 +1,7 @@
 {
-  "generated_from": "Claude adapter projection definitions (adapters/claude/skills/*/SKILL.md, adapters/claude/agents/*.md, loops/README.md, adapters/claude/settings.json)",
+  "generated_from": "harness-manifest.json + adapter-owned hook/loop/track inputs (adapters/claude/settings.json, loops/README.md, tools/build-manifest.py)",
+  "canonical_manifest": "harness-manifest.json",
+  "manifest_version": "1.0.0",
   "skills": [
     {
       "slug": "skill__analyze-project",
@@ -11,7 +13,7 @@
         "paper",
         "doc"
       ],
-      "blurb": "사전조사 분석 — 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로",
+      "blurb": "사전 분석. 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로 만든다.",
       "argument_hint": "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]"
     },
     {
@@ -23,7 +25,7 @@
         "init",
         "update"
       ],
-      "blurb": "cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출",
+      "blurb": "cross-project 사용자 성향 프로필 작성·갱신. 코드·작성·분석 패턴을 추출한다.",
       "argument_hint": "<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]"
     },
     {
@@ -32,7 +34,7 @@
       "group": "ops",
       "fam": "ops",
       "modes": [],
-      "blurb": "산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고",
+      "blurb": "산출물·파이프 사후 점검. drift·일관성·누락을 읽기 중심으로 진단한다.",
       "argument_hint": "<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]"
     },
     {
@@ -41,7 +43,7 @@
       "group": "entry",
       "fam": "doc",
       "modes": [],
-      "blurb": "cheatsheet 초안을 canonical main.tex 에 paste·반영하는 적용 entry",
+      "blurb": "cheatsheet 초안을 실제 source artifact에 적용하고 검증한다.",
       "argument_hint": "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]"
     },
     {
@@ -54,7 +56,7 @@
         "debug",
         "audit"
       ],
-      "blurb": "코드 작업 일반 entry — 라이브러리·연구·앱 모두 커버, spec 컨텍스트 자동 감지",
+      "blurb": "코드 작업 entry. spec 컨텍스트를 감지하고 plan→execute→test→report 흐름을 닫는다.",
       "argument_hint": "--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
     },
     {
@@ -63,7 +65,7 @@
       "group": "entry",
       "fam": "design",
       "modes": [],
-      "blurb": "시각 산출물 디자인 파이프 entry — 토큰·컴포넌트·레퍼런스·핸드오프 통합",
+      "blurb": "시각 산출물 디자인 파이프. refs→tokens→components→review→handoff를 조율한다.",
       "argument_hint": "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
@@ -76,7 +78,7 @@
         "presentation",
         "doc"
       ],
-      "blurb": "문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태",
+      "blurb": "문서 초안 파이프. 전략·초안·검증·편집을 거쳐 적용용 문서 artifact를 만든다.",
       "argument_hint": "<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
     },
     {
@@ -88,7 +90,7 @@
         "setup",
         "eval"
       ],
-      "blurb": "빠른 실험 prototype entry — 학습 세팅(setup)과 ckpt 평가(eval) 앞뒤를 돕는다",
+      "blurb": "빠른 실험 prototype. 학습 세팅과 ckpt 평가·분석 앞뒤를 돕는다.",
       "argument_hint": "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
     },
     {
@@ -97,7 +99,7 @@
       "group": "entry",
       "fam": "ops",
       "modes": [],
-      "blurb": "산출물 라우팅 파이프 entry — 2-Layer 노트화·digest·triage 제안",
+      "blurb": "산출물 라우팅/노트화. digest와 triage 제안을 만든다.",
       "argument_hint": "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]"
     },
     {
@@ -106,7 +108,7 @@
       "group": "entry",
       "fam": "doc",
       "modes": [],
-      "blurb": "기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존",
+      "blurb": "기존 문서·연구 산출물의 정정·갱신. 버전 snapshot과 변경 이력을 보존한다.",
       "argument_hint": "\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
     },
     {
@@ -119,7 +121,7 @@
         "technology",
         "market"
       ],
-      "blurb": "세 family 공통 사전조사 — 논문·기술·시장 survey 후 다운스트림으로 분기하는 entry",
+      "blurb": "공통 사전조사. 논문·기술·시장 survey 후 downstream capability로 분기한다.",
       "argument_hint": "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]"
     },
     {
@@ -128,7 +130,7 @@
       "group": "entry",
       "fam": "app",
       "modes": [],
-      "blurb": "앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트",
+      "blurb": "앱 배포·출시 준비. build/deploy setup과 ship checklist를 만든다.",
       "argument_hint": "<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
@@ -144,7 +146,7 @@
         "research",
         "update"
       ],
-      "blurb": "요구사항·청사진 작성·갱신 entry — prd.md 단일 출처, 모든 spec 변경의 canonical 경로",
+      "blurb": "요구사항·청사진 작성·갱신. `prd.md`를 spec 변경의 단일 경로로 유지한다.",
       "argument_hint": "<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
     },
     {
@@ -153,7 +155,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "plan 단계별 구현 실행 — 개발팀 디스패치 sub-skill",
+      "blurb": "plan 단계별 구현 실행. 개발 role에 작업을 위임하고 execution log를 남긴다.",
       "argument_hint": "<plan name or path>"
     },
     {
@@ -162,8 +164,8 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "코드 분석 후 상세 구현 plan 작성 — 기획팀 경유 sub-skill",
-      "argument_hint": "<task description>"
+      "blurb": "코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity에서 파생된 rigor에 맞는 plan-check gate를 수행한다.",
+      "argument_hint": "<task description> [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
       "slug": "skill__code-refine",
@@ -171,8 +173,8 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "사용자 메모·QA 피드백 반영해 기존 plan 정정 — sub-skill",
-      "argument_hint": "<plan name or path>"
+      "blurb": "사용자 메모·plan-check 피드백·검증 실패 메모를 반영해 기존 plan을 정정한다.",
+      "argument_hint": "<plan name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
       "slug": "skill__code-report",
@@ -180,7 +182,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "코드 작업 사이클 결과 요약·보고 sub-skill",
+      "blurb": "코드 작업 사이클 결과를 사용자-facing 보고서로 조립한다.",
       "argument_hint": "<plan name or path>"
     },
     {
@@ -189,8 +191,8 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "구현 결과 단계별 검증 — 품질관리팀 test 모드 sub-skill",
-      "argument_hint": "<plan name, path, or test scope>"
+      "blurb": "구현 결과를 단계별로 검증하고 evidence를 기록한다.",
+      "argument_hint": "<plan name, path, or test scope> [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
       "slug": "skill__design-components",
@@ -198,7 +200,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "UI 컴포넌트 mockup·구현 sub-skill",
+      "blurb": "UI component/mockup 구현과 preview artifact를 만든다.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -207,7 +209,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "디자인 → 개발 핸드오프 자산·스펙 정리 sub-skill",
+      "blurb": "디자인 결과를 개발 handoff용 자산·스펙으로 정리한다.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -216,7 +218,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "디자인 MCP·환경 bootstrap + design_state.yaml 생성 sub-skill",
+      "blurb": "디자인 환경과 state를 bootstrap한다.",
       "argument_hint": "<design task description> [--scope ui|slide|icon|diagram|mixed]"
     },
     {
@@ -225,7 +227,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "레퍼런스 시각 자료 수집·정리 sub-skill",
+      "blurb": "외부·사용자 reference 시각 자료를 수집하고 brief를 만든다.",
       "argument_hint": "<design task> [--design <path>] [--refs <image paths>] [--no-web]"
     },
     {
@@ -234,7 +236,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "디자인 결과물 6축 비평·토큰 계약 점검 sub-skill",
+      "blurb": "디자인 결과물을 품질·토큰 계약·breakage 관점으로 점검한다.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -243,7 +245,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "디자인 토큰(색·타이포·간격) 정의·생성 sub-skill",
+      "blurb": "색·타이포·간격 등 디자인 토큰을 정의한다.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -252,8 +254,8 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "초안 정련·다듬기 sub-skill — 편집팀 검수 경유",
-      "argument_hint": "<strategy or draft name or path>"
+      "blurb": "초안 정련·다듬기. memo/review feedback을 문서 전략이나 draft에 반영한다.",
+      "argument_hint": "<strategy or draft name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
       "slug": "skill__draft-strategy",
@@ -268,8 +270,8 @@
         "proposal",
         "presentation"
       ],
-      "blurb": "문서 전략 초안 작성 — 6 모드(rebuttal·paper·review·report·proposal·presentation) sub-skill",
-      "argument_hint": "<mode> --inputs <comma-separated-paths> --output <artifact-dir> <task description>"
+      "blurb": "문서 전략 초안 작성. 자료 기반으로 writing plan을 만든다.",
+      "argument_hint": "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--intensity direct|quick|standard|strong|thorough|adversarial] <task description>"
     },
     {
       "slug": "skill__post-it",
@@ -277,112 +279,544 @@
       "group": "ops",
       "fam": "ops",
       "modes": [],
-      "blurb": "프로젝트·cross-project 기록·handoff — 세션 간 연속성 working 메모",
+      "blurb": "프로젝트·cross-project 기록과 handoff를 working memory로 남긴다.",
       "argument_hint": "[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]"
     }
   ],
   "agents": [
     {
-      "slug": "agent__codex-review-team",
-      "name": "codex-review-team",
-      "model": "sonnet",
-      "modes": [
-        "review",
-        "adversarial-review",
-        "task"
-      ],
-      "blurb": "Codex CLI 위임 코드 리뷰 — review·adversarial-review·task 를 QA 포맷으로"
-    },
-    {
       "slug": "agent__design-team",
-      "name": "디자인팀",
-      "model": "opus",
+      "name": "design-team",
+      "model": "",
       "modes": [
-        "maker",
-        "critic",
-        "verifier"
+        "design/critic",
+        "design/maker",
+        "design/verifier"
       ],
-      "blurb": "시각 산출물 라우터 — 만들기(maker)·비평(critic)·독립 검수(verifier)"
+      "blurb": "Visual making, critique, and independent breakage verification"
     },
     {
       "slug": "agent__dev-team",
-      "name": "개발팀",
-      "model": "sonnet",
+      "name": "dev-team",
+      "model": "",
       "modes": [
-        "backend",
-        "frontend",
-        "refactor",
-        "new-lib"
+        "dev/backend",
+        "dev/frontend",
+        "dev/new-lib",
+        "dev/refactor"
       ],
-      "blurb": "코드 작업 라우터 — backend·frontend·refactor·new-lib 페르소나 분기"
+      "blurb": "Implement backend/frontend/refactor/new-lib work through mode personas"
     },
     {
       "slug": "agent__editorial-team",
-      "name": "편집팀",
-      "model": "opus",
+      "name": "editorial-team",
+      "model": "",
       "modes": [
-        "translate",
-        "polish",
-        "review"
+        "editorial/polish",
+        "editorial/review",
+        "editorial/translate"
       ],
-      "blurb": "사용자가 직접 읽는 산출물 점검·수정 — 번역·다듬기·검토"
+      "blurb": "User-facing wording, translation, polish, and review"
+    },
+    {
+      "slug": "agent__external-adversary",
+      "name": "external-adversary",
+      "model": "",
+      "modes": [],
+      "blurb": "Independent hostile review through a different runtime/process"
     },
     {
       "slug": "agent__material-team",
-      "name": "자료팀",
-      "model": "opus",
+      "name": "material-team",
+      "model": "",
       "modes": [
-        "browser-fetch",
-        "pdf-extract",
-        "web-image-search",
-        "figure-gen",
-        "data-script"
+        "material/browser-fetch",
+        "material/data-script",
+        "material/figure-gen",
+        "material/pdf-extract",
+        "material/web-image-search"
       ],
-      "blurb": "자료 수집·시각·분석 라우터 — fetch·PDF·이미지검색·figure·데이터스크립트"
+      "blurb": "Fetch, extract, visualize, and analyze supporting materials"
     },
     {
       "slug": "agent__memory-scout",
       "name": "memory-scout",
-      "model": "haiku",
-      "modes": [
-        "recall"
-      ],
-      "blurb": "읽기 전용 메모리 정찰"
+      "model": "",
+      "modes": [],
+      "blurb": "Kernel agent active in every product profile."
     },
     {
       "slug": "agent__plan-team",
-      "name": "기획팀",
-      "model": "opus",
+      "name": "plan-team",
+      "model": "",
       "modes": [],
-      "blurb": "소스 코드 분석 후 구현 plan 작성·정련 — code-plan·code-refine 경유"
+      "blurb": "Read source and artifacts, produce or refine implementation plans"
     },
     {
       "slug": "agent__qa-team",
-      "name": "품질관리팀",
-      "model": "opus",
+      "name": "qa-team",
+      "model": "",
       "modes": [
-        "code-review",
-        "plan-review",
-        "test",
-        "ml-debug",
-        "data-curate",
-        "security-review"
+        "qa/code-review",
+        "qa/data-curate",
+        "qa/ml-debug",
+        "qa/plan-review",
+        "qa/security-review",
+        "qa/test"
       ],
-      "blurb": "QA 라우터 — 코드·plan 리뷰·test·ML 디버그·데이터 정제·보안 검토"
+      "blurb": "Read-only code, plan, test, ML, data, and security review"
     },
     {
       "slug": "agent__research-team",
-      "name": "연구팀",
-      "model": "opus",
+      "name": "research-team",
+      "model": "",
       "modes": [
-        "plan-review",
-        "research-survey",
-        "fact-check",
-        "claim-verify"
+        "research/claim-verify",
+        "research/fact-check",
+        "research/plan-review",
+        "research/research-survey"
       ],
-      "blurb": "연구 라우터 — plan 리뷰·survey·fact-check·claim-verify"
+      "blurb": "Paper-grounded review, survey, fact-check, and adversarial claim verification"
     }
   ],
+  "portable_roles": {
+    "design-team": {
+      "portable_role": "deep maker plus verifier",
+      "responsibility": "Visual making, critique, and independent breakage verification"
+    },
+    "dev-team": {
+      "portable_role": "fast implementer by default",
+      "responsibility": "Implement backend/frontend/refactor/new-lib work through mode personas"
+    },
+    "editorial-team": {
+      "portable_role": "deep maker / fast reviewer by mode",
+      "responsibility": "User-facing wording, translation, polish, and review"
+    },
+    "external-adversary": {
+      "portable_role": "external adversary plus orchestrator",
+      "responsibility": "Independent hostile review through a different runtime/process"
+    },
+    "material-team": {
+      "portable_role": "deep maker plus fast tool worker",
+      "responsibility": "Fetch, extract, visualize, and analyze supporting materials"
+    },
+    "plan-team": {
+      "portable_role": "deep maker",
+      "responsibility": "Read source and artifacts, produce or refine implementation plans"
+    },
+    "qa-team": {
+      "portable_role": "variable reviewer",
+      "responsibility": "Read-only code, plan, test, ML, data, and security review"
+    },
+    "research-team": {
+      "portable_role": "variable research reviewer",
+      "responsibility": "Paper-grounded review, survey, fact-check, and adversarial claim verification"
+    }
+  },
+  "modes": {
+    "design/_design_rules": {
+      "role": "design-team",
+      "status": "adapter-coupled",
+      "internal": true
+    },
+    "design/critic": {
+      "role": "design-team",
+      "status": "adapter-coupled"
+    },
+    "design/maker": {
+      "role": "design-team",
+      "status": "adapter-coupled"
+    },
+    "design/verifier": {
+      "role": "design-team",
+      "status": "adapter-coupled"
+    },
+    "dev/backend": {
+      "role": "dev-team",
+      "status": "portable-persona"
+    },
+    "dev/frontend": {
+      "role": "dev-team",
+      "status": "portable-persona"
+    },
+    "dev/new-lib": {
+      "role": "dev-team",
+      "status": "portable-persona"
+    },
+    "dev/refactor": {
+      "role": "dev-team",
+      "status": "portable-persona"
+    },
+    "editorial/polish": {
+      "role": "editorial-team",
+      "status": "portable-persona"
+    },
+    "editorial/review": {
+      "role": "editorial-team",
+      "status": "portable-persona"
+    },
+    "editorial/translate": {
+      "role": "editorial-team",
+      "status": "portable-persona"
+    },
+    "material/browser-fetch": {
+      "role": "material-team",
+      "status": "portable-with-tool-contract"
+    },
+    "material/data-script": {
+      "role": "material-team",
+      "status": "portable-with-tool-contract"
+    },
+    "material/figure-gen": {
+      "role": "material-team",
+      "status": "portable-with-tool-contract"
+    },
+    "material/pdf-extract": {
+      "role": "material-team",
+      "status": "portable-with-tool-contract"
+    },
+    "material/web-image-search": {
+      "role": "material-team",
+      "status": "portable-with-tool-contract"
+    },
+    "qa/code-review": {
+      "role": "qa-team",
+      "status": "portable-persona"
+    },
+    "qa/data-curate": {
+      "role": "qa-team",
+      "status": "portable-persona"
+    },
+    "qa/ml-debug": {
+      "role": "qa-team",
+      "status": "portable-persona"
+    },
+    "qa/plan-review": {
+      "role": "qa-team",
+      "status": "portable-persona"
+    },
+    "qa/security-review": {
+      "role": "qa-team",
+      "status": "portable-with-tool-contract"
+    },
+    "qa/test": {
+      "role": "qa-team",
+      "status": "portable-with-tool-contract"
+    },
+    "research/claim-verify": {
+      "role": "research-team",
+      "status": "portable-with-tool-contract"
+    },
+    "research/fact-check": {
+      "role": "research-team",
+      "status": "portable-persona"
+    },
+    "research/plan-review": {
+      "role": "research-team",
+      "status": "portable-persona"
+    },
+    "research/research-survey": {
+      "role": "research-team",
+      "status": "portable-persona"
+    }
+  },
+  "packs": {
+    "core": {
+      "requires": [],
+      "capabilities": [
+        "autopilot-code"
+      ]
+    },
+    "design": {
+      "requires": [],
+      "capabilities": [
+        "autopilot-design"
+      ]
+    },
+    "operations": {
+      "requires": [],
+      "capabilities": [
+        "analyze-user",
+        "audit",
+        "autopilot-note",
+        "post-it"
+      ]
+    },
+    "research-writing": {
+      "requires": [],
+      "capabilities": [
+        "analyze-project",
+        "autopilot-apply",
+        "autopilot-draft",
+        "autopilot-refine",
+        "autopilot-research"
+      ]
+    },
+    "software": {
+      "requires": [
+        "core"
+      ],
+      "capabilities": [
+        "analyze-project",
+        "autopilot-lab",
+        "autopilot-ship",
+        "autopilot-spec"
+      ]
+    }
+  },
+  "profiles": {
+    "builder": {
+      "summary": "Analyze, specify, implement, verify, and retain project memory without the document/design specialist surface.",
+      "packs": [
+        "software",
+        "operations"
+      ]
+    },
+    "full": {
+      "summary": "Expose every built-in capability and portable role.",
+      "packs": [
+        "core",
+        "software",
+        "research-writing",
+        "design",
+        "operations"
+      ],
+      "roles": [
+        "external-adversary"
+      ]
+    },
+    "starter": {
+      "summary": "Run the golden code task with the code pipeline and mandatory kernel guards.",
+      "packs": [
+        "core"
+      ]
+    }
+  },
+  "resolved_profiles": {
+    "builder": {
+      "name": "builder",
+      "packs": [
+        "core",
+        "operations",
+        "software"
+      ],
+      "capabilities": [
+        "analyze-project",
+        "analyze-user",
+        "audit",
+        "autopilot-code",
+        "autopilot-lab",
+        "autopilot-note",
+        "autopilot-ship",
+        "autopilot-spec",
+        "code-execute",
+        "code-plan",
+        "code-refine",
+        "code-report",
+        "code-test",
+        "post-it"
+      ],
+      "roles": [
+        "design-team",
+        "dev-team",
+        "editorial-team",
+        "material-team",
+        "plan-team",
+        "qa-team",
+        "research-team"
+      ],
+      "modes": [
+        "design/_design_rules",
+        "design/critic",
+        "design/maker",
+        "design/verifier",
+        "dev/backend",
+        "dev/frontend",
+        "dev/new-lib",
+        "dev/refactor",
+        "editorial/polish",
+        "editorial/review",
+        "editorial/translate",
+        "material/browser-fetch",
+        "material/data-script",
+        "material/figure-gen",
+        "material/pdf-extract",
+        "material/web-image-search",
+        "qa/code-review",
+        "qa/data-curate",
+        "qa/ml-debug",
+        "qa/plan-review",
+        "qa/security-review",
+        "qa/test",
+        "research/claim-verify",
+        "research/fact-check",
+        "research/plan-review",
+        "research/research-survey"
+      ],
+      "kernel_agents": [
+        "memory-scout"
+      ],
+      "digest": "96c16571d2835703d021d304b6b1848bd5822e7d9dd3b5a2220d5691b3c673ba",
+      "counts": {
+        "capabilities": 14,
+        "roles": 7,
+        "modes": 26
+      }
+    },
+    "full": {
+      "name": "full",
+      "packs": [
+        "core",
+        "design",
+        "operations",
+        "research-writing",
+        "software"
+      ],
+      "capabilities": [
+        "analyze-project",
+        "analyze-user",
+        "audit",
+        "autopilot-apply",
+        "autopilot-code",
+        "autopilot-design",
+        "autopilot-draft",
+        "autopilot-lab",
+        "autopilot-note",
+        "autopilot-refine",
+        "autopilot-research",
+        "autopilot-ship",
+        "autopilot-spec",
+        "code-execute",
+        "code-plan",
+        "code-refine",
+        "code-report",
+        "code-test",
+        "design-components",
+        "design-handoff",
+        "design-init",
+        "design-refs",
+        "design-review",
+        "design-tokens",
+        "draft-refine",
+        "draft-strategy",
+        "post-it"
+      ],
+      "roles": [
+        "design-team",
+        "dev-team",
+        "editorial-team",
+        "external-adversary",
+        "material-team",
+        "plan-team",
+        "qa-team",
+        "research-team"
+      ],
+      "modes": [
+        "design/_design_rules",
+        "design/critic",
+        "design/maker",
+        "design/verifier",
+        "dev/backend",
+        "dev/frontend",
+        "dev/new-lib",
+        "dev/refactor",
+        "editorial/polish",
+        "editorial/review",
+        "editorial/translate",
+        "material/browser-fetch",
+        "material/data-script",
+        "material/figure-gen",
+        "material/pdf-extract",
+        "material/web-image-search",
+        "qa/code-review",
+        "qa/data-curate",
+        "qa/ml-debug",
+        "qa/plan-review",
+        "qa/security-review",
+        "qa/test",
+        "research/claim-verify",
+        "research/fact-check",
+        "research/plan-review",
+        "research/research-survey"
+      ],
+      "kernel_agents": [
+        "memory-scout"
+      ],
+      "digest": "4d6f4c49f75ee6a7680ddbb13567c9b14764310f84a133752ce0a40e20f5954b",
+      "counts": {
+        "capabilities": 27,
+        "roles": 8,
+        "modes": 26
+      }
+    },
+    "starter": {
+      "name": "starter",
+      "packs": [
+        "core"
+      ],
+      "capabilities": [
+        "autopilot-code",
+        "code-execute",
+        "code-plan",
+        "code-refine",
+        "code-report",
+        "code-test"
+      ],
+      "roles": [
+        "dev-team",
+        "editorial-team",
+        "plan-team",
+        "qa-team"
+      ],
+      "modes": [
+        "dev/backend",
+        "dev/frontend",
+        "dev/new-lib",
+        "dev/refactor",
+        "editorial/polish",
+        "editorial/review",
+        "editorial/translate",
+        "qa/code-review",
+        "qa/data-curate",
+        "qa/ml-debug",
+        "qa/plan-review",
+        "qa/security-review",
+        "qa/test"
+      ],
+      "kernel_agents": [
+        "memory-scout"
+      ],
+      "digest": "ca0864a426dea8ae3c55c7f307ed0f1d4c9eb077db0af041a75500477044dec2",
+      "counts": {
+        "capabilities": 6,
+        "roles": 4,
+        "modes": 13
+      }
+    }
+  },
+  "ownership": {
+    "generated": [
+      "manifest.json",
+      "capabilities/README.md#catalog",
+      "roles/README.md#role-catalog",
+      "capabilities/*#capability-contract",
+      "adapters/claude/skills/*/SKILL.md#frontmatter",
+      "adapters/codex/skills/*/SKILL.md",
+      "adapters/codex/agents/*.toml",
+      "adapters/codex/modes/**/*.md",
+      "adapters/opencode/skills/*/SKILL.md",
+      "adapters/opencode/commands/*.md",
+      "adapters/opencode/agents/**/*.md"
+    ],
+    "adapter_owned": [
+      "adapters/claude/skills/*/SKILL.md#body",
+      "adapters/claude/agents/*.md",
+      "adapters/*/bin/*",
+      "adapters/*/hooks/*",
+      "adapters/*/ADAPTATION.md",
+      "runtime-specific fallback and unsupported mappings"
+    ]
+  },
   "hooks": [
     {
       "slug": "hook__herdr-agent-state__PermissionRequest",

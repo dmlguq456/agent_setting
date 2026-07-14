@@ -12,6 +12,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 CAPABILITIES = ROOT / "capabilities"
 OUT = ROOT / "adapters" / "opencode" / "commands"
+sys.path.insert(0, str(ROOT / "tools"))
+
+import harness_manifest
 
 
 def contract_rows(text: str) -> dict[str, str]:
@@ -48,13 +51,10 @@ def markdown_section(text: str, heading: str) -> str:
     return compact("\n".join(body))
 
 
-def render(capability_file: Path) -> tuple[str, str]:
-    slug = capability_file.stem
+def render(identifier: str, spec: dict, capability_file: Path) -> tuple[str, str]:
     source = capability_file.read_text(encoding="utf-8")
-    rows = contract_rows(source)
-    identifier = rows.get("Identifier", f"`{slug}`").strip("`")
-    argument_shape = rows.get("Argument shape", "").strip("`")
-    meaning = compact(rows.get("Portable meaning", identifier))
+    argument_shape = spec["argument_shape"]
+    meaning = compact(spec["summary"])
     invocation_semantics = markdown_section(source, "Invocation Semantics")
     portable_contract = ""
     if invocation_semantics:
@@ -101,10 +101,11 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="verify generated projections")
     args = parser.parse_args()
 
-    capability_files = sorted(p for p in CAPABILITIES.glob("*.md") if p.name != "README.md")
+    manifest = harness_manifest.load()
     expected: dict[Path, str] = {}
-    for capability_file in capability_files:
-        identifier, body = render(capability_file)
+    for identifier, spec in manifest["capabilities"].items():
+        capability_file = CAPABILITIES / f"{identifier}.md"
+        identifier, body = render(identifier, spec, capability_file)
         expected[OUT / f"{identifier}.md"] = body
 
     stale: list[str] = []

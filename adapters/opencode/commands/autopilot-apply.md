@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-apply.md`, n
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability autopilot-apply [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]`.
+   `"<cheatsheet hint / task>" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]`.
 
 Portable contract excerpt:
 

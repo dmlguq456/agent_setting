@@ -436,6 +436,21 @@ test "$(cat "$HOME/.codex/auth.json")" = credential-still-owned \
 rm -rf "$HOME/.codex/.harness/transactions/forged"
 ok "journal recovery rejects non-harness destinations"
 
+# Mode profiles project nested files rather than one top-level directory link;
+# an interrupted transaction at that exact owned depth must remain recoverable.
+mode_link="$HOME/.codex/agent-modes/dev/refactor.md"
+mode_target=$(readlink "$mode_link")
+mkdir -p "$HOME/.codex/.harness/transactions/mode-recovery"
+printf '%s\n' \
+  "{\"schema\":2,\"runtime\":\"codex\",\"status\":\"applying\",\"records\":[{\"dest\":\"$mode_link\",\"state\":\"symlink\",\"backup\":null,\"target\":\"$mode_target\"}]}" \
+  > "$HOME/.codex/.harness/transactions/mode-recovery/journal.json"
+harness runtime activate --runtime codex --mode linked --source "$SRC" --json \
+  >/dev/null || fail "nested mode transaction could not recover"
+test -L "$mode_link" || fail "nested mode recovery lost the projected link"
+test ! -e "$HOME/.codex/.harness/transactions/mode-recovery" \
+  || fail "nested mode recovery left the transaction open"
+ok "journal recovery accepts profile-owned nested mode destinations"
+
 printf '%s\n' backup-victim > "$TMP/backup-victim"
 mkdir -p "$HOME/.codex/.harness/transactions/backup-escape"
 python3 - \

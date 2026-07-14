@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-research
-description: "Use when doing upfront survey research (papers/tech/market) before downstream work. 세 family 공통 사전조사 — 논문·기술·시장 survey 후 다운스트림으로 분기하는 entry"
+description: "Use when invoking the portable autopilot-research capability. 공통 사전조사. 논문·기술·시장 survey 후 downstream capability로 분기한다."
 argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]"
 metadata:
   group: entry
   fam: pre
-  modes: [academic, technology, market]
-  blurb: "세 family 공통 사전조사 — 논문·기술·시장 survey 후 다운스트림으로 분기하는 entry"
+  modes: ["academic", "technology", "market"]
+  blurb: "공통 사전조사. 논문·기술·시장 survey 후 downstream capability로 분기한다."
 ---
 
 # autopilot-research

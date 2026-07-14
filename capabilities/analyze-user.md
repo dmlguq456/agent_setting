@@ -3,6 +3,7 @@
 This is the portable capability contract for `analyze-user`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
@@ -10,7 +11,7 @@ This is the portable capability contract for `analyze-user`. It defines runtime-
 | Group | `pre` |
 | Supported modes | `init, update` |
 | Portable meaning | cross-project 사용자 성향 프로필 작성·갱신. 코드·작성·분석 패턴을 추출한다. |
-| Argument shape | `<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]` |
+| Argument shape | `<aspect> [--source <path>] [--mode init\|update] [--from discover\|analyze\|verify\|qa\|output\|summary] [--user-refine]` |
 
 ## Invocation Semantics
 
@@ -41,7 +42,7 @@ Adapters must preserve the portable invariants relevant to this capability:
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/analyze-user/SKILL.md` and `skills/analyze-user/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/analyze-user/SKILL.md`, while `skills/analyze-user/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info analyze-user`. Use `adapters/codex/skills/analyze-user/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/analyze-user/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/analyze-user/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info analyze-user`. Use `adapters/codex/skills/analyze-user/SKILL.md` as the native Codex Skill projection; do not consume `skills/analyze-user/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info analyze-user`. Use `adapters/opencode/skills/analyze-user/SKILL.md` and `adapters/opencode/commands/analyze-user.md` as native OpenCode projections; do not consume `skills/analyze-user/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[3]
 MODES = ROOT / "roles" / "modes"
 OUT = ROOT / "adapters" / "codex" / "modes"
 MODE_MAP = ROOT / "adapters" / "codex" / "bin" / "mode-map.sh"
+sys.path.insert(0, str(ROOT / "tools"))
+
+import harness_manifest
 
 
 def mode_metadata(mode: str) -> dict[str, str]:
@@ -146,7 +149,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="verify generated projections")
     args = parser.parse_args()
 
-    mode_files = sorted(MODES.glob("*/*.md"))
+    manifest = harness_manifest.load()
+    mode_files = [MODES / f"{mode}.md" for mode in manifest["modes"]]
     expected = dict(render(path) for path in mode_files)
 
     stale: list[str] = []

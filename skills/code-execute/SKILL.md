@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: code-execute
-description: "plan 단계별 구현 실행 — 개발팀 디스패치 sub-skill"
+description: "Use when invoking the portable code-execute capability. plan 단계별 구현 실행. 개발 role에 작업을 위임하고 execution log를 남긴다."
 argument-hint: "<plan name or path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "plan 단계별 구현 실행 — 개발팀 디스패치 sub-skill"
+  blurb: "plan 단계별 구현 실행. 개발 role에 작업을 위임하고 execution log를 남긴다."
 ---
 
 > **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Input = the plan path (args) resolved below; it reads `plan/plan.md` from files, never prior-stage conversation. This is the **only source-mutating stage**; write class = source code + `plan/checklist.md`·`dev_logs/`·`_internal/dev_reviews/`·plan frontmatter `status`. 개발팀 delegation stays **inside** this session (its own in-session parallel dev-team is depth-uncounted).
