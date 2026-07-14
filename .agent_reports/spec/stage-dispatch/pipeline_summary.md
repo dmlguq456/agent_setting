@@ -2,12 +2,14 @@
 
 - **Date**: 2026-07-10
 - **Mode**: library + cli (autopilot 파이프 디스패치 토폴로지 개정 인프라)
-- **Status**: spec done (v7) · deep conductor/model-family routing + Fleet hotfix acceptance specified · implementation pending
+- **Status**: spec done (v8) · canonical artifact root/source-only worker/guarded cleanup specified · implementation in progress
 - **Placement**: 독립 컴포넌트 `spec/stage-dispatch/` — 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 무수정.
 
 ## 배경
 
 사용자 결정(2026-07-10): "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로. 어차피 산출물 기반 소통." → `standard+` 에서 각 sub-skill 스테이지를 별개 headless 세션으로 분사. 사용자 결정(2026-07-13): `direct` 는 depth-0 inline 유지, `quick` 은 단일 depth-1 one-shot capability worker 로 이동, `standard+` 는 기존 depth-1 conductor -> 순차 depth-2 stage-worker topology 유지. v7에서는 standard+ conductor를 high-reasoning/deep orchestration 기본으로 고정하고, planning 계열은 GPT family via Codex + deep maker affinity(비-hard-pin), plan review는 다른 family를 선호하도록 정했다. Codex 공식 manual 근거는 subagent가 main-thread context pollution을 줄이지만 token 비용이 늘고 parallel write-heavy workflow는 충돌·조정비용 주의가 필요하다는 점이다. OpenAI Models의 현재 권장은 GPT-5.6 Sol(`gpt-5.6-sol`)이지만 API alias와 Codex ChatGPT runtime 허용 ID는 같다고 가정하지 않으며 adapter exact-ID probe를 요구한다.
+
+v8은 2026-07-14 사용자 확정사항인 "agent 산출물은 task worktree에 넣지 않는다"를 구현 계약으로 승격한다. linked worktree의 tracked `.agent_reports` snapshot은 write target이 아니며, 모든 worker는 main checkout의 canonical artifact root를 사용한다. 정리는 runtime 종료 이벤트가 아니라 main/orchestrator가 merge·통합 검증·push를 증명한 직후 실행하는 fail-closed state machine이다.
 
 ## Process Log
 | Step | Action | Result | Notes |
@@ -18,6 +20,7 @@
 | 현행 실측 | dispatch-headless.py depth=2/parent/worker_role/게이트 census | — | wrapper 가 **이미 스테이지 분사 골격 지원** → 재작성 불요(§2.4·SD-9) |
 | spec | PRD 작성 (lean) | `prd.md` v1 | SD-1~9 채택 + SD-OPEN-1 open(inline 임계 pilot 계측). 영향 표면 14곳. 구현 2-phase |
 | v7 update | root/component PRD full read + current v6↔`_internal/versions/v6/prd.md` byte compare + official model currentness 확인 | `prd.md` v7 | v6 snapshot cmp=0, 재생성 안 함. SD-21~24 및 pipeline state/summary만 갱신. |
+| v8 update | memory full-body + existing reports/spec + current code + official Codex/Claude/OpenCode runtime surface 대조 | `prd.md` v8 | v7 snapshot. SD-25~30: canonical artifact routing, local-write deny, guarded cleanup. |
 
 ## 채택 결정 (locked)
 - **SD-1~2 (토폴로지·인터페이스)**: depth-1 owner = 얇은 conductor(verdict/게이트만), 스테이지 = depth-2 headless 세션. 인터페이스 = 산출물 파일만, 대화 컨텍스트 전달 금지(산출물 기반 소통). 근거 = 사용자 결정 + research §4-(8) + DESIGN_PRINCIPLES §8 "결과 흐름 file 통해".
@@ -31,6 +34,8 @@
 - **SD-22 (route policy)**: explicit > hard eligibility/tool/runtime/account/limit > stage affinity > maker-checker family diversity > capacity/cost/latency. planning 계열은 deep maker + GPT/Codex affinity(비-hard-pin), plan review는 다른 family 선호. core는 family/role, adapter는 runtime-probed exact model/reasoning 소유.
 - **SD-23 (helper)**: read-only `route-dispatch` 계약. Claude+Codex부터 지원하고 OpenCode는 probe 계약 확정 전 honest unknown. 실제 dispatch/registry/file mutation은 하지 않음.
 - **SD-24 (Fleet acceptance)**: env-marked Codex headless child-hidden, non-code fuzzy `plans`/거짓 `spec:test` 0건, 정상 code stage 표시 유지.
+- **SD-25~27 (artifact ownership)**: worker worktree는 source-only. explicit env 또는 Git primary worktree의 canonical artifact root를 사용하고, dispatch 3종이 최소 외부-write 권한과 함께 전달하며 worker-local artifact 쓰기는 차단한다.
+- **SD-28~30 (cleanup ownership)**: cleanup은 dry-run 기본의 fail-closed state machine이다. merge·integrated verification·push·clean·inactive·unlocked를 모두 증명한 main/orchestrator만 apply하며 branch를 보존한다. runtime lifecycle hook은 destructive trigger가 아니다.
 
 ## 미결 (open — pilot 계측)
 - **SD-OPEN-1**: 마이크로-스테이지 inline 의 손익 임계(어느 스테이지 크기부터 분사가 이득). research 가 per-stage dispatch cost 를 수치화하지 않음 → 추측 금지, Phase 1 pilot 토큰/시간 계측으로 확정.
@@ -42,6 +47,7 @@
 Phase 1(계약문서+wrapper증분+autopilot-code pilot) · Phase 2(autopilot-* 확산+drill 회귀) = 별도 브랜치 구현. pilot 성공 기준 = fleet 스테이지 row·산출물 정상·depth≤2·토큰/시간 계측(SD-OPEN-1 캘리브레이트). 상세 = PRD §12.
 
 ## Version History
+- v8 (2026-07-14): source-only worker worktree + canonical artifact root + guarded automatic cleanup. v7 snapshot = `_internal/versions/v7/prd.md`.
 - v1 (2026-07-10): 초기 PRD. 사용자 결정(스테이지 분사 기본화) + research cross-platform-agent-frameworks §4-(8) + 운영 실증 3종 종합. 2026-07-06 depth 재설계 기본값 반전 명시 기록.
 - v2 (2026-07-10): Phase 2 결정 등재 — autopilot-spec update, v1 snapshot = `_internal/versions/v1/prd.md`.
   - **SD-10** (최우선, 사용자 확인 발견): Phase 1 의 dev-pipeline.md 개정이 반쪽 — 앞머리 계약 블록만 있고 Step 1~7 본문은 in-session "Invoke Skill" 잔존(이중 신호) + 비한정 e.g. escape hatch. 본문 dispatch-first 재작성 + fallback 조건 한정형(direct/quick·headless 불가 런타임) + SKILL.md Stage Graph dispatch 표기.
