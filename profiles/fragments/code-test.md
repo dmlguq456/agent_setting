@@ -6,7 +6,7 @@ and treats **source as read-only**.
 
 ### Sub-skill role + in-session team
 
-- Run `code-test`. Internal parallelism is the in-session **qa-team (품질관리팀)**
+- Run `code-test`. Internal parallelism is the in-session **qa-team**
   in test mode — graduated verification (syntax→import→smoke→functional→integration).
 - Return only a short verdict (top Level reached + pass/fail); the conductor
   reads the test report, not your prose.

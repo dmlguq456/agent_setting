@@ -1,16 +1,16 @@
-# Operations — Git·Worktree·Dispatch·Push 운영 (canonical)
+# Operations — Git, Worktree, Dispatch, and Push (canonical)
 
-> CONVENTIONS.md 에서 분리(2026-06-23, 앞/뒤 2층 재편). git 운영(lock·preflight·worktree dispatch·`<agent-home>` repo push)은 산출물 컨벤션과 결이 달라 별도 파일로. **§ 번호·heading 보존** — SKILL.md·drill·hook 이 `OPERATIONS.md#59-…` 등 anchor 로 인용. git 운영 단일 출처.
+> Split from `CONVENTIONS.md` on 2026-06-23 when front- and back-half contracts were separated. Git operations—locks, preflight, worktree dispatch, and `<agent-home>` pushes—differ from artifact conventions and therefore live here. Preserve section numbers and headings because Skills, drills, and hooks link to anchors such as `OPERATIONS.md#59-…`. This is the single source for git operations.
 
-## §5.8. Pipeline Lock — 공유 artifact root 다중 worktree 가드 (canonical)
+## §5.8. Pipeline Lock — Guarding a Shared Artifact Root Across Worktrees
 
-**왜**: 여러 git worktree 가 _하나의 canonical artifact root_ (`.agent_reports`, legacy `.claude_reports`) 를 symlink 공유할 때(릴리즈 브랜치 클린 유지 위해 산출물은 gitignore), 두 worktree 가 동시에 `spec/` 공유 단일파일(`prd.md`·`pipeline_state.yaml`·`pipeline_summary.md`)을 쓰면 lost-update. `plans/<cycle>/` 는 사이클별 폴더라 경로 분리 → 비경합(lock 불필요).
+When several git worktrees symlink one canonical artifact root—`.agent_reports`, with legacy `.claude_reports` compatibility—simultaneous writes to shared `spec/prd.md`, `pipeline_state.yaml`, or `pipeline_summary.md` can lose updates. `plans/<cycle>/` is path-separated by cycle and does not require this lock.
 
-- **lock 파일**: `<artifact-root>/.pipeline-lock` (공유 트리에 위치 → 모든 worktree 가시). transient — artifact root 자체가 gitignore 라 추적 안 됨.
-- **보호 범위**: `spec/prd.md`·`spec/pipeline_state.yaml`·`spec/pipeline_summary.md` _쓰기_ 구간만. 읽기·plans 쓰기는 비-lock.
-- **stale 무시(override)**: 기록 `at` 이 30 분 초과 OR 기록 worktree == 현재 worktree(재진입/잔존 락) → 통과.
+- **Lock file:** `<artifact-root>/.pipeline-lock`, visible to all worktrees. It is transient because the artifact root is gitignored.
+- **Protected scope:** write sections for the three shared `spec/` files only. Reads and plan writes do not lock.
+- **Stale override:** proceed when the recorded `at` is more than 30 minutes old or the recorded worktree is the current worktree, covering re-entry and a residual lock.
 
-**acquire** — 쓰기 진입 _직전_ (autopilot-spec 의 Step 3 / update mode, autopilot-code 의 pipeline_state·summary 쓰기 / spec-drift update):
+Acquire immediately before `autopilot-spec` Step 3 or update mode, `autopilot-code` state/summary writes, or a spec-drift update:
 
 ```bash
 REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports
@@ -18,110 +18,108 @@ LOCK="$REPORTS_DIR/.pipeline-lock"; NOW=$(date +%s); WT=$(pwd -P)
 if [ -f "$LOCK" ]; then
   LAT=$(sed -n 's/^at=//p' "$LOCK"); LWT=$(sed -n 's/^worktree=//p' "$LOCK"); LBR=$(sed -n 's/^branch=//p' "$LOCK")
   if [ "$LWT" != "$WT" ] && [ $((NOW-${LAT:-0})) -lt 1800 ]; then
-    echo "BLOCKED: '$LBR' ($LWT) 이 $((NOW-LAT))s 전부터 spec 편집 중 — 대기 또는 죽은 락이면 rm $LOCK"; exit 3
-  fi   # same-worktree 또는 stale(>30m) → override 통과
+    echo "BLOCKED: '$LBR' ($LWT) has edited the spec for $((NOW-LAT))s; wait, or remove $LOCK if stale"; exit 3
+  fi
 fi
 printf 'worktree=%s\nbranch=%s\nskill=%s\nat=%s\nat_iso=%s\npid=%s\n' \
   "$WT" "$(git branch --show-current 2>/dev/null)" "${SKILL:-autopilot}" "$NOW" "$(date -Iseconds)" "$$" > "$LOCK"
 ```
 
-`exit 3`(BLOCKED) → 쓰기 _중단_ 하고 "다른 worktree 가 spec 편집 중" 사용자 보고 + 대기/override 판단 요청.
+On exit 3, stop the write, report that another worktree is editing the spec, and ask whether to wait or override a dead lock.
 
-**release** — 파이프 정상 종료 _및_ 중단·에러 시 모두:
+Release after normal completion and on interruption or error:
 
 ```bash
 REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports
 rm -f "$REPORTS_DIR/.pipeline-lock"
 ```
 
-**detect-only** — "지금 spec 수정 중인가?" 단순 조회(메인 Claude 가 spec 손대기 전 확인):
+For a read-only check before touching the spec:
 
 ```bash
 REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports
-[ -f "$REPORTS_DIR/.pipeline-lock" ] && cat "$REPORTS_DIR/.pipeline-lock" || echo "활성 편집 없음"
+[ -f "$REPORTS_DIR/.pipeline-lock" ] && cat "$REPORTS_DIR/.pipeline-lock" || echo "no active edit"
 ```
 
-> 비-worktree(단일 체크아웃) 환경에선 lock 이 항상 same-worktree → 즉시 override, 무해. symlink 공유 worktree 에서만 실질 가드로 작동.
+In a single-checkout environment the lock always belongs to the same worktree and safely overrides. It becomes an effective guard only when symlink-sharing worktrees exist.
 
-### §5.9. Git working-state preflight (worktree·merge 가드, canonical)
+### §5.9. Git Working-State Preflight
 
-**왜**: §5.8 lock 은 artifact root _산출물_ 동시쓰기만 막는다. 정작 _실제 `.git` 워킹트리_ — merge/rebase 진행 중인지, dirty 한지, detached HEAD 인지, 같은 브랜치가 다른 worktree 에 잡혀 있는지 — 는 안 본다. 여러 worktree·브랜치로 작업하다 merge 가 끼면 이 자리를 놓쳐 (반쯤 머지된 트리 위에 commit / detached HEAD 에 commit 유실 / 다른 worktree 가 머지로 바꿔놓은 파일 위에 작업) 사고. 코드 손대는 skill(autopilot-code 가 canonical 소비자)은 **코드 편집 _전_ 1회 + 각 commit/write-back _직전_ 재확인**(= 주기적 체크) 한다.
+The §5.8 lock protects only artifact writes. It does not detect an active merge or rebase, dirty files, detached HEAD, or the same branch in another worktree. A code-mutating capability, canonically `autopilot-code`, checks once before editing and again before every commit or write-back.
 
 ```bash
-# git-state preflight — 코드 편집 전 + 매 commit 직전. STOP 이면 편집·commit 멈추고 사용자 보고
+# Run before code edits and every commit. On STOP, halt and report.
 GD=$(git rev-parse --git-dir 2>/dev/null) || { echo "OK non-git"; return 0 2>/dev/null||exit 0; }
 op=; [ -f "$GD/MERGE_HEAD" ] && op=merge
 { [ -d "$GD/rebase-merge" ] || [ -d "$GD/rebase-apply" ]; } && op=rebase
 [ -f "$GD/CHERRY_PICK_HEAD" ] && op=cherry-pick
 br=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo DETACHED)
 head=$(git rev-parse --short HEAD 2>/dev/null)
-ahead_behind=$(git rev-list --left-right --count @{u}...HEAD 2>/dev/null)  # "behind  ahead"
-# 같은 브랜치를 잡고 있는 다른 worktree
+ahead_behind=$(git rev-list --left-right --count @{u}...HEAD 2>/dev/null)
 elsewhere=$(git worktree list --porcelain 2>/dev/null | awk -v b="$br" '/^worktree /{w=$2} /^branch /{if($2=="refs/heads/"b && w!=ENVIRON["PWD"]) print w}')
-# 브랜치 수명 — 현재 브랜치가 base(기본 브랜치)에 이미 다 반영됐나 (= 끝난 브랜치)
 def=$(git symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@'); def=${def:-main}
 git fetch -q origin "$def" 2>/dev/null
 merged_in=$( [ "$br" != DETACHED ] && [ "$br" != "$def" ] && [ "$(git rev-list --count origin/$def..HEAD 2>/dev/null)" = 0 ] && echo yes )
-if [ -n "$op" ];        then echo "STOP: $op 진행 중 — 해결(또는 --abort) 뒤 진행"; fi
-if [ "$br" = DETACHED ];then echo "STOP: detached HEAD($head) — commit 유실 위험, 브랜치 체크아웃 먼저"; fi
-[ -n "$elsewhere" ] && echo "WARN: 브랜치 '$br' 가 다른 worktree($elsewhere)에도 체크아웃됨"
-[ "${ahead_behind%%	*}" -gt 0 ] 2>/dev/null && echo "WARN: upstream 이 ${ahead_behind%%	*} 커밋 앞섬(머지/리베이스 발생) — 통합 후 진행 권장"
-[ -n "$merged_in" ] && echo "DONE-BRANCH: '$br' 가 origin/$def 에 ahead 0 (머지 완료/끝난 브랜치) — 새 작업은 base 최신에서 새 브랜치로: git switch -c <new-slug> origin/$def"
+if [ -n "$op" ];        then echo "STOP: $op is in progress; resolve it or abort explicitly before continuing"; fi
+if [ "$br" = DETACHED ];then echo "STOP: detached HEAD($head); check out a branch before risking a lost commit"; fi
+[ -n "$elsewhere" ] && echo "WARN: branch '$br' is also checked out at $elsewhere"
+[ "${ahead_behind%%	*}" -gt 0 ] 2>/dev/null && echo "WARN: upstream is ${ahead_behind%%	*} commits ahead; integrate before continuing"
+[ -n "$merged_in" ] && echo "DONE-BRANCH: '$br' is zero commits ahead of origin/$def; start new work from the latest base: git switch -c <new-slug> origin/$def"
 echo "state: branch=$br head=$head base=$def dirty=$(git status --porcelain 2>/dev/null|wc -l|tr -d ' ')"
 ```
 
-- **STOP** (merge/rebase/cherry-pick 진행 중 · detached HEAD) → 편집·commit 멈추고 사용자 보고 + 처리 요청. 자동으로 `--abort`·강제 체크아웃 하지 않는다. **harness**: merge/rebase/cherry-pick 중 편집은 `hooks/git-state-guard.sh` 가 PreToolUse(Edit|Write) 에서 hard deny — ceremony 비경유 직접 편집 경로까지 커버 (drill g2 가 잡은 구멍, 2026-06-11). 탈출구 `$GITDIR/CLAUDE_MERGE_EDIT_OK` 는 _사용자가 충돌 해결을 명시 요청한 경우만_ — Claude 자가 판단 생성 금지 (artifact-guard untracked 와 동일 convention).
-- **WARN** (다른 worktree 동일 브랜치 · upstream 앞섬 · 진입 시 세션 무관 dirty) → 한 줄 알림 후 진행 판단.
-- **DONE-BRANCH (브랜치 수명)** — worktree 에서 판 브랜치가 base 에 머지되면 그 브랜치는 _끝난 것_. ahead 0 인데 그 위에 새 작업을 쌓으면 이미 머지된 죽은 브랜치에 commit 하는 꼴. **새 작업 cycle 진입 시 ahead 0 (+ base 아님 + 이번 작업용 브랜치가 아님) 이면 base 최신에서 새 브랜치를 판다** — `git fetch origin && git switch -c <slug> origin/$def` (worktree 안전 — base 를 체크아웃하지 않아 main worktree 와 충돌 없음). 이미 이번 작업용으로 갓 판 빈 브랜치면 그대로 사용. **직접 편집(비-ceremony)도 동일** — 죽은 브랜치 워킹트리에 미커밋 변경을 띄워두는 것 자체가 부유물 (drill g1, 2026-06-11: 죽은 브랜치 인지하고도 그 자리서 편집).
-- **periodic 재확인**: 진입 시 `head` 를 기억 → 각 commit 직전 재실행해 `head` 가 바뀌었거나(아래서 머지·리베이스됨) 새 `MERGE_HEAD` 가 생겼으면 STOP. 비-worktree·비-git 자리에선 전부 `OK`/무해 통과.
+- **STOP:** halt edits and commits during merge, rebase, cherry-pick, or detached HEAD and ask for handling. Never auto-abort or force-checkout. `hooks/git-state-guard.sh` hard-denies Edit and Write calls during an operation, including direct paths outside ceremony. `$GITDIR/CLAUDE_MERGE_EDIT_OK` is allowed only when the user explicitly requests conflict resolution; an agent must not invent that permission.
+- **WARN:** report one line for the same branch in another worktree, upstream movement, or pre-existing session-independent dirt, then decide how to proceed.
+- **DONE-BRANCH:** after a branch is merged into base it is finished. At a new work cycle, a non-base branch that is zero commits ahead and is not a just-created branch for this task must be replaced with `git fetch origin && git switch -c <slug> origin/$def`. This applies to direct edits too; uncommitted work on a dead branch is already drift.
+- **Periodic recheck:** remember the entry `head`. Before each commit, stop if `head` changed underneath the session or a new `MERGE_HEAD` appeared. Non-git and single-checkout paths pass harmlessly.
 
-### §5.10. 작업 격리·병렬 디스패치 (worktree 정책, canonical)
+### §5.10. Work Isolation and Parallel Dispatch
 
-Adapter/projection changes keep the same core-first source order as other
-portable work: establish and read the governing `core/` contract before adapter
-edits; write/read markers enforce that operational gate but do not replace review.
+Adapter and projection changes follow the same core-first order as other portable work: establish and read the governing `core/` contract before adapter edits. Read and write markers enforce that gate but do not replace review.
 
-**왜**: 사용자가 요구사항을 연속으로 던질 때 main 세션이 한 건씩 직렬 처리하면 느리다. 실작업(편집·테스트·QA)은 worktree 로 격리해 background 병렬, 조정(triage·분사·보고)만 main 이 맡는다. 2026-07-06 토큰 절감 재설계: autopilot pipeline 을 main 이 통째로 직접 들고 가면 context 가 과하게 커지고, 반대로 monolithic skill 로 닫으면 cross-harness 관점을 내부에서 활용하기 어렵다. 따라서 depth 모델을 분리한다. **depth 0** = 사용자-facing main/orchestrator, **depth 1** = capability owner worker(예: `autopilot-code` 전체 파이프 책임), **depth 2** = `standard+` owner 가 여는 bounded sub-worker(계획·검증·관점·적대 리뷰). **direct 는 inline, quick 은 depth-1 one-shot worker, depth 3+ 금지**.
+Actual edits, tests, and QA run in isolated worktrees while the main session handles triage, dispatch, harvest, and reporting. The depth model prevents both an oversized main context and a monolithic worker that cannot use cross-harness perspectives:
 
-`standard+` depth-1 capability owner의 portable role은 `deep orchestrator`다.
-Retained `orchestrator`는 이미 결정된 명령·상태·경로를 조립하는 balanced mechanical
-coordination에만 쓴다; 둘은 alias가 아니다.
+- **depth 0:** user-facing main or orchestrator;
+- **depth 1:** capability owner responsible for the entire pipeline;
+- **depth 2:** bounded planning, verification, perspective, adversarial, or pipeline-stage worker opened by a `standard+` owner;
+- `direct` runs inline, `quick` uses one depth-1 one-shot worker, and depth 3 or greater is forbidden.
 
-**규모 분기** (요청 진입 시 main 이 판정):
+The portable role for a `standard+` depth-1 owner is `deep orchestrator`. The retained `orchestrator` role is balanced mechanical coordination of already decided commands, paths, and states; they are not aliases.
 
-| 규모 | 처리 |
+| Scale | Handling |
 |---|---|
-| 자잘한 단발 (typo·1줄·direct 급) | main 워킹트리에서 바로 (현행) |
-| quick 급 소규모 tracked work | depth-1 one-shot worker + isolated worktree |
-| 본작업 (qa standard 이상 · plan 추적 대상) | **worktree + 작업 브랜치** — base 최신에서 plan slug 브랜치 (§5.9 DONE-BRANCH 연계), mutation 커밋 누적. **기능 추가·모듈 신설·다파일 변경은 규모 판단 없이 무조건 브랜치, 애매해도 브랜치 쪽** (2026-06 drill g3 재발 방지 — main 트리 직접 편집은 typo·1줄급 자잘한 단발로 한정). **`standard+` 다파일·기능 본작업은 headless 분사가 기본(=의무, 재량 아님)** — 아래 "풀 ceremony (headless 분사)"; 경량 팀위임·inline 은 quick·마이크로-스테이지 한정 (2026-07 drill g6 — "필요하면" 조건부가 분사 생략으로 오독되던 자리 명확화). |
-| 병렬 요청 (작업 진행 중 새 독립 요청) | 즉시 새 worktree 로 분사 (아래 규칙) — 앞 job 완료를 기다리지 않는다 |
+| One-off typo, one line, or `direct` work | Work directly in the main working tree |
+| Small tracked `quick` work | Depth-1 one-shot worker in an isolated worktree |
+| Substantive work tracked by a plan | Use a worktree and task branch from the latest base. Features, new modules, and multi-file edits always use a branch; ambiguity resolves toward a branch. Multi-file or feature work at `standard+` must use headless dispatch. Team delegation and inline micro-stages are limited to `quick` and genuinely microscopic stages. |
+| A new independent request while work is active | Dispatch immediately to a new worktree; do not wait for the first job |
 
-**Token-pressure non-interference (2026-07-13 Ponytail follow-up)**:
-observed token/context pressure cannot downshift this table or the dispatch rules
-below. In particular it cannot turn a `standard+` stage worker into inline work,
-remove a required depth, suppress plan/execute/test/report, skip liveness/registry
-handling, or weaken worktree/write/spec/sandbox/approval guards. Unknown or
-exceeded budgets keep the existing pipeline and surface a degraded/unavailable
-signal; they do not redefine partial completion as success. Only unrequested
-optional exploration and user-facing verbosity may be reduced.
+**Token-pressure non-interference:** token or context pressure cannot downshift this table, remove a required stage or depth, skip liveness and registry handling, or weaken worktree, write, spec, sandbox, approval, safety, validation, security, or accessibility guards. Unknown or exceeded budgets preserve the pipeline and surface degraded availability. Only unrequested optional exploration and user-facing verbosity may shrink.
 
-**디스패치 규칙**:
-1. **파일 겹침 triage**: 새 요청이 진행 중 job 과 같은 파일을 건드릴 것으로 추정되면 병렬 금지 — 그 job 뒤에 큐잉 (같은 브랜치에 이어서). 안 겹치면 병렬.
-2. **실행** — worktree 생성 (`git worktree add <path> -b <slug> origin/<base>`, base 선정은 §5.9) 후 두 모드. **`<path>` 명명 규칙 (canonical, 2026-06-12 사용자 확정)**: 형제 디렉토리 `<repo>-wt/<slug>` 로 판다 (예: repo 가 `…/Foo` 면 worktree 는 `…/Foo-wt/<slug>`). Adapter UI/status surface 가 이 규칙을 신호로 삼을 수 있으므로 `<repo>_worktrees/` 같은 변형 금지, **`-wt/` 단일 표준**. (harness: `worktree-path-guard` hook 이 이 경로 컨벤션을 hard 강제 — 내장 worktree 툴(repo 안 기본 경로)과 `<repo>-wt/` 밖 `git worktree add` 를 deny; `.untracked`·비-add 서브커맨드·비-git 은 fail-open. 2026-07-10 drill g3/g6.)
-   - **경량 (팀 위임)**: 팀 에이전트를 `run_in_background` 분사, prompt 에 작업 루트 명시. 검증도 main 이 같은 경로로 QA 팀 spawn. 작은 단위·빠른 회전용.
-   - **quick one-shot**: depth-1 capability owner worker를 한 번 열고 내부 micro-stage 는 worker 세션 안에서만 inline 처리한다. quick 은 depth-2 fan-out 을 열지 않으며, mutation 가능 quick 은 isolated worktree 를 쓴다.
-   - **풀 ceremony (headless 분사)**: worktree 안에서 adapter-specific headless main 을 background 로 실행한다. Headless main 은 _완전한 메인_ 으로 동작해야 하며, 해당 runtime 이 제공하는 팀 분업·hook/preflight·plan 산출물 파이프를 정상 통과해야 한다. 주의: ① runtime별 tool/permission 사전 개방은 adapter가 소유(중간 질문 불가) ② 비용은 adapter realization 별로 명시 ③ main 이 여는 top-level 분사는 **depth 1 capability owner** — 전체 autopilot pipeline 을 책임지고 main 에는 synthesis 만 반환한다. `standard+` 파이프에서 이 depth-1 owner 는 **얇은 conductor** 다 (2026-07-10 stage-dispatch 반전): 각 sub-skill 스테이지(code-plan·execute·test·report)를 자기 세션에서 in-session 팀으로 통째로 들지 않고, **스테이지마다 depth-2 headless 세션으로 분사**하며 conductor 자신은 스테이지 산출물 _본문_ 을 읽지 않고 verdict/status(plan frontmatter, test Level)와 게이트 분기만 쥔다. 세션 간 소통은 오직 산출물 파일(§5.8·아래 job 레지스트리), 대화 컨텍스트 전달 금지 — "산출물 기반 소통". **spec 전제 선보장 (§8.5.4 SD-13)**: conductor 는 스테이지 분사 _전_ 대상 repo 의 spec 전제(artifact root 존재 + `spec/` 존재 또는 `/track` untracked)를 선확인한다 — 스테이지 세션은 풀 ceremony(artifact-guard 생성-순서 게이트 포함)를 받으므로, 전제 미충족을 스테이지 안에서 차단으로 발견하면 재분사 비용, conductor 게이트에서 잡으면 무료. **separability 판정 (§8.7 SD-17, 2026-07-10 사용자 (a))**: 분사 기본은 불변이되, conductor 는 분사 전 분리성을 판정한다 — [스테이지 산출물 계약이 완결적 && 편집 표면이 경계-결합(공유 semantic anchor·boundary assertion 순차 결합) 아님] 이면 separable = 분사 의무. 비분리 판정 시 inline 허용하되 3중 의무: (a) 판정 근거를 `plans/<slug>/_internal/metrics.md` 에 기록 — **기록 없는 inline = 계약 위반**(drill/audit 감사 표면) (b) 분리 가능한 부분(census·독립 파일군)은 in-session 워커 병렬로 (c) 분사-인프라 자기수정은 orchestrator 명시 opt-out(`STAGE_DISPATCH_INLINE_OK`) 경로만. ④ **depth 2 는 `standard+` owner-worker pipeline 의 기본 도구** — 두 용법이 있다: (a) 리뷰 보조 worker(planner/verifier/adversary) — depth 1 owner 가 명시 subdispatch plan 을 세운 뒤 단일 역할로 열고, standard 는 보통 verifier/planner 1개·strong 은 위험 지점 1개·thorough/adversarial 은 다축 perspective/adversary 로 확장하며 **기본 read-only**; (b) **파이프 스테이지-워커** — conductor 가 분사하는 code-plan/execute/test/report 세션으로 `standard+` 기본이며, write 는 **스테이지-워커 클래스별 소유**: code-plan=`plans/<slug>/plan/`+`_internal/plan_reviews/`, code-execute=**소스 코드**+`plans/<slug>/{checklist,dev_logs,_internal/dev_reviews}`+plan status, code-test=`plans/<slug>/{test_logs,_internal/test_reviews}`(소스 read-only), code-report=`final_report.md`+`analysis_project/code/`+`pipeline_summary.md`(lock). 소스 mutation 은 code-execute 단일이라 스테이지 간 소스 경합 없음; 나머지는 `plans/<slug>/` 경로-분리로 비경합. 결과는 짧은 structured summary/verdict; **direct 는 inline, quick 은 depth-1 one-shot worker, depth 3+ 금지** (스테이지 세션은 wrapper 가 막는 depth-3 headless 를 열지 않고 내부 병렬은 in-session 팀만) ⑤ **동시 분사 기본 상한 5대** (사용량 보호 — 초과는 사용자 명시 시만; 3→5 2026-06-22 사용자). 스테이지 분사에선 이 상한을 **`Σ(활성 conductor + 각 conductor 의 활성 스테이지)` ≤ 5** 로 센다 — 한 스테이지 파이프는 순차(plan→execute→test→report)라 conductor 당 보통 활성 스테이지 1개(=2), code-execute 내부 병렬 개발팀은 in-session 이라 미포함; 초과 예상 시 스테이지 분사를 큐잉한다 ⑥ **분사 프롬프트의 capability 호출은 옵션 풀 명시** — capability, mode, qa, intensity, depth, parent, parent_sid 값을 명령행/프롬프트에 드러내 adapter UI·job registry 가 식별 가능하게 한다 ⑦ **dispatch model/effort 선택은 parent orchestrator 책임** — depth 0 main 또는 depth 1 owner 는 작업 난이도와 intensity/QA 수준을 보고 job 별 portable model role 또는 concrete runtime model/effort 를 명시한다. Adapter wrapper 는 선택된 값을 실행 옵션으로 반영하거나, 명시적 inherit 선택만 허용한다. Wrapper 가 임의 기본 모델을 고르거나 현재 interactive session model 을 암묵 상속하면 안 된다. model/effort 뿐 아니라 _하네스 선택_ 도 orchestrator 책임 — 아래 ⑧ 사용량-인지 상호보완 라우팅이 그 선택 계약이다. ⑧ **사용량-인지 상호보완 크로스 하네스 분사** (2026-07-10 SD-16) — 분사는 단일 하네스(Claude)에 고정되지 않는다. Claude·Codex(·OpenCode)는 jobs.log `harness=`/`owner_harness=`/`parent_sid` 로 이미 한 fleet 안에서 연속(위 job 레지스트리)이며, orchestrator(main/conductor)는 분사 _전_ 양 하네스의 사용량/limit 상태를 결정론적으로 조회(adapter realization: `utilities/usage-check.sh` — harness 별 `{ok|limited(reset)|unknown}`)해 **상호보완**적으로 배치한다: **(사용량 보완=failover)** `limited` 하네스는 회피하고 여유 하네스로 우회한다 — Claude 가 막히면 Codex `preflight.sh dispatch` 동형 분사로 우회(그 역도 성립), 둘 다 여유면 분산. **(특성 보완=강점 배치)** 작업 특성별 하네스 적합성으로 배치하고, **검증·리뷰 자리는 maker 와 다른 모델 계열로 교차**(codex-review-team 선례 — 다른 실패 모드 = 리뷰 다양성 이득)를 우선 후보로 둔다; 같은 사이클 안에서 maker 하네스와 checker 하네스를 다르게 두는 조합을 정규 옵션화. **초기 보수 가중 = limit 회피 > 특성 적합 > 분산**(SD-OPEN-3, 계측 후 조정). **분산의 기본 방향 = 명시 override 우선, 기본은 neutral auto**(`HARNESS_CAPACITY_BIAS`, `usage-check.sh` 가 `bias <harness|auto>` 로 출력; 2026-07-13 Codex runtime-currentness 사고로 오래된 Claude Code 한도 > Codex 기본 가정 폐기): override 가 있으면 그 하네스를 주력 후보로 삼고, 없으면 `auto`로 두어 limit 회피·특성 적합·분산을 균형 적용한다. 특정 하네스 우세는 **향후 바뀔 수 있는 가변 전제라 하드코드 금지** — env/설정 한 자리 수정으로만 명시한다. 크로스 하네스 분사도 depth/parent/worker_role/`harness=` 표기는 동일 — fleet 연속성 불변. ⚠️ 사용량 조회 표면 한계: 2026-07 현재 Claude `/usage`·Codex `/status` 는 대화형 슬래시 커맨드뿐(스크립트 가능한 headless 사용량 API 부재 — Codex 는 openai/codex#15281 open feature). `usage-check.sh` 는 공식 표면 대신 jobs.log `dead-*limit*` 마커(⑨) 기반 **보수 조회**이며, `ok`=알려진 차단 없음(가용 보장 아님)·`limited(reset)`=known future reset이 있는 limit 마커(마커 age가 예전 300분 창보다 오래돼도 reset clock 우선, 2026-07-13)·`limited(unknown-reset)`=reset 없는 최근 limit 마커(기본 60분 bounded)·`unknown`=판정 불가. ⑨ **limit-사망 즉시 감지·마감** (2026-07-10 SD-15) — headless 자식이 launch 직후 session/usage limit·auth 로 즉사하면 완료 알림이 오지 않고 jobs.log row 만 `open` 잔존해 liveness SUSPECT 로만 뒤늦게 드러난다. wrapper 는 launch 직후 짧은 워치에서 조기 exit + 로그의 limit/auth 종료 패턴을 감지하면 그 row 를 `done`(pipe 에 `note=dead-<사유>`, 있으면 `reset=<시각>` 추가)으로 즉시 마감하고 사유·reset 을 출력에 표면화한다; dispatch-liveness/dispatch-wait 도 open row 로그의 limit 패턴을 DEAD 판정 근거에 추가하되, 이 로그-패턴 판정은 **앵커링한다 (SD-15b §8.6.1)**: 매치를 로그 _말미_ 의 짧은 단독 CLI 종료 에러 라인(예: "You've hit your session limit · resets 3pm")에 한정하고, **신선 transcript(완주/활성 신호)가 있으면 로그에 limit 을 _논하는_ 보고문이 있어도 DEAD 로 판정하지 않는다** — 정상 완주 conductor 의 limit-주제 최종 보고문을 DEAD 오탐하던 실측(sd15-adapter-parity) 대응. **재시도는 wrapper 가 하지 않는다** — 감지·마감·표면화까지만, 재분사·하네스 우회 판단은 orchestrator 의미 구간(⑧ failover).
-   - **job 레지스트리 (분사 시 의무)**: 모든 하네스의 등록·감시·수확은 **한 canonical jobs.log** 를 사용한다. 명시 `--jobs`가 최우선이고, 없으면 `AGENT_DISPATCH_JOBS`, 둘 다 없을 때만 `<agent-home>/.dispatch/jobs.log`가 fallback이다. 분사 직전 그 경로에 한 줄 append — `<ISO시각>\topen\t<repo>\t<worktree경로>\t<slug>\t<파이프>`. 6필드 형식은 하위호환을 위해 유지하고, `<파이프>` 안에 `capability=...`, `mode=...`, `qa=...`, `intensity=...`, `depth=1|2`, `harness=claude|codex|opencode`, `parent=<parent-slug>`, `parent_sid=<orchestrator-session-id>`, `worker_role=...`, `owner=...`, `owner_harness=...`, `profile=...`, `pid=<자식 프로세스 pid>`(wrapper 가 launch 직후 기록 — liveness 1순위 신호) 같은 key=value metadata 를 넣는다. Cross-harness 분사에서는 `parent_sid`가 depth 0/1 orchestrator session 을 가리켜 fleet 이 Codex→Claude, Claude→Codex 같은 소유 관계를 orphan 이 아니라 parent-child 로 표시하게 한다. 수확·정리 시 해당 줄의 `open` 을 `done` 으로. adapter별 로컬 registry를 동시에 쓰거나 감시/수확이 등록과 다른 기본 경로를 재해석하면 contract 위반이다. 세션이 죽어도 등록부가 남아 당직 7호가 고아 job (open 인데 24h+ 경과 또는 worktree 소멸·유휴) 을 감시한다.
-   - **job 레지스트리 row 형식 하드 계약 (수동 작성·fixture 포함, 2026-07-10 drill g9)**: status 어휘는 live 등록 `open`/`running`, 수확 `done` 으로 고정한다. Fleet collector 는 `open|running` 만 live row 로 파싱하므로 `registered` 같은 대체어를 만들지 않는다. `<파이프>` 의 key=value metadata 는 쉼표(`,`) 구분이며 쌍 사이 공백을 넣지 않는다. 예: `capability=autopilot-code,mode=dev,qa=standard,intensity=thorough,depth=1,harness=codex,parent=<parent-slug>,parent_sid=<sid>,parent_cwd=<cwd>,worker_role=capability-owner,owner=autopilot-code`. 정규 경로는 adapter dispatch wrapper 를 쓰고, wrapper 를 쓸 수 없는 registry 모델링·수동 등록·drill fixture 에서도 이 status/구분자 형식을 그대로 복제한다. **수동으로 row 를 `done` 마감할 때, 특히 limit/usage 사망 마커(`note=dead-*limit*`)는 `reset=<시각>`(리셋 clock 시각, 예 `reset=3pm`) 기입을 의무화한다 (SD-16e §8.6.2)** — `usage-check.sh` 는 reset 경과 시 `ok`(expired)로 해제하는데, `reset=` 이 없으면 해제 시점을 알 수 없어 보수 창(`UNKNOWN_WINDOW_MIN` 기본 60분) 안에서만 `limited(unknown-reset)`로 표기하고 이후 `ok` 로 downgrade 하므로, reset 을 적어 두지 않으면 실제 리셋 시각과 어긋난 차단이 된다.
-   - **관제 안내 (분사 직후 한 줄, 2026-07-02)**: background 분사를 시작하면 사용자에게 `fleet`(크로스-하네스 관제 대시보드, `tools/fleet` — README §관제) 한 줄 안내 — 진행·stage·liveness 를 사용자가 라이브로 보는 표준 창구. jobs.log 등록·argv 옵션 명시(위 ⑤)가 fleet 의 식별 소스이므로 이 레지스트리 규율이 곧 관제 품질이다. 이미 fleet 을 띄워 둔 사용자에겐 반복 안내 불필요.
-   - **stealth-death 가드 (분사 후 대기 자리 — 필수, §0.5 결정론)**: ⚠️ hung/crash 한 adapter-specific headless main 은 _exit 를 안 해 완료 알림이 영영 안 올 수 있다_ → 완료 알림만 믿고 무한 대기하면 silent 하게 시간을 날린다 (2026-06-16 5h 사고). **분사한 background 작업을 기다리는 자리에선 완료 알림에만 의존하지 말고 liveness 를 능동 점검한다**. 먼저 해당 adapter 의 headless contract 가 보고하는 liveness 명령을 쓴다: Codex 는 `adapters/codex/bin/preflight.sh liveness [jobs.log]`, OpenCode 는 `adapters/opencode/bin/preflight.sh liveness [jobs.log]`, Claude/shared projection 은 `bash <agent-home>/utilities/dispatch-liveness.sh`. 세 명령 모두 jobs.log 의 open job 별로 `ALIVE` / `SUSPECT`(hang/death 의심) / `DEAD`(즉사·transcript 부재) / `EXITED`(프로세스 종료·row 미마감 — 보통 정상 완주, dispatch 로그 tail 에서 verdict 수확), exit 3 = 의심·미수확 1+ — 을 제공해야 한다. SUSPECT/DEAD/EXITED 면 알림 기다리지 말고 transcript tail·dispatch 로그로 진단 → 수확 또는 재분사. **신호 서열 (2026-07-13 공유-worktree aliasing 실측 대응)**: ① row 의 `pid=`(wrapper 기록) — `/proc/<pid>` 실존 + cmdline 대조(pid-reuse 가드), transcript 오염 무관 ② fallback(pid 없는 legacy·타 하네스 row) = transcript/DB mtime — 단 같은 worktree 를 공유하는 자식은 conductor 자신의 활동이 transcript 디렉토리를 신선하게 유지해 **이미 종료한 자식을 ALIVE 로 오탐**할 수 있다(수확 지연 ~50분 실측). pgrep 경로매칭은 흔한 path 가 무관 프로세스에 걸려 false-alive → 불채택 (`pid=` 는 경로매칭이 아니라 정확한 자식 pid 기록이라 무관). Workflow 등 harness-native 분사는 알림이 신뢰되지만, adapter-specific headless main 에는 본 가드 적용. "vigilant 하게 기억" 이 아니라 _adapter liveness wrapper 로_ 점검 (§0.5).
-   - **one-shot 대기 계약 (§8.5.7 SD-14)**: adapter headless main(conductor 포함)은 **one-shot 프로세스** — turn 종료 = 프로세스 종료다. background 완료 알림은 그 프로세스가 살아 있을 때만 유효하므로, conductor 는 스테이지 분사 후 **Monitor·완료 알림 대기로 turn 을 끝내지 않는다**; 같은 turn 안에서 `utilities/dispatch-wait.sh`(dispatch-liveness 재사용) 반복 호출로 스테이지 종료를 폴링한 뒤 수확한다. 대기 계약의 결정론 강제는 (a) wrapper depth_note 주입 + (b) conductor Stop hook 게이트(open 자식 row 시 차단) + (c) `dispatch-wait` 헬퍼 3층인데, **(b)는 `claude -p` 에서 Stop hook 이 발화하지 않고(2026-07-10 probe) 오히려 `-p` result 출력을 파손(CC #38651)하므로 Claude adapter 에선 보류** — (a)+(c) 만으로 결정론을 확보한다.
-3. **merge = main/orchestrator 선별 책임** (2026-06-11 사용자 위임 — 수동 메모 (DB profile record `07_coding_convention`)가 source): 사용자 직접 리뷰 없이 main 이 선별 머지한다. **머지 시점 게이트** — (a) 사용자 머지 신호("합쳐"/"머지해") 또는 (b) 병렬 디스패치로 분사한 background job 수확 자리에서만. **자기 turn 의 본작업 브랜치를 같은 turn 에 self-merge 금지** — 브랜치 + 한 줄 보고로 turn 을 끝내고 main ref 는 불변 (§3 후속 단계 자동 진행에 merge-to-main 은 포함되지 않음). 머지 후에도 작업 브랜치는 같은 turn 에 삭제하지 않는다 (롤백 지점). **worktree 디렉토리는 별개** — 수확(머지+통합 빌드 검증) 완료된 worktree 는 다음 자연 휴지(다음 수확 자리·세션 마무리)에 디렉토리만 제거한다 (브랜치 ref 유지, `git worktree remove` 전 자체 dev 서버 등 고아 프로세스 종료 확인 — NFS lock 잔존 방지. 2026-06-12 worktree 9개 적체에서 사용자 지적). **제거 전 gitignored 산출물 구조 의무** — worktree 안 `.agent_reports/plans/` 등 ignored 산출물은 remove 를 막지 않고 디렉토리와 함께 삭제되므로, 제거 전에 main 트리 artifact root 로 복사해 보존한다 (2026-07-10 phase1 plan 소실 사고). 절차 — `git diff main...<branch>` 로 _실내용_ 확인 → 이미 main 에 진전됐거나 회귀·중복이면 머지 안 함 → 충돌은 양쪽 의도를 해석해 해결 (한쪽 자동 채택·`--force` 금지) → _애매하거나 확정본을 되돌리는 자리면 멈추고 질문_ → 빌드 검증 후 커밋. "전부 합쳐" = 전량 머지가 아니라 선별 머지.
-4. **공유 산출물**: artifact root 공유 단일파일 쓰기는 §5.8 lock 경유. `plans/<slug>/` 는 경로 분리라 비경합.
-5. **컨텍스트**: job 조정 기록 누적으로 main 컨텍스트 압박 시 post-it handoff 제안 (글로벌 §2).
+Dispatch rules:
 
-### §5.11. 지침 repo (`<agent-home>`) 커밋·push 정책
+1. **Overlap triage:** if a new request is likely to touch the same files as an active job, queue it behind that job on the same branch. Otherwise it may run in parallel.
+2. **Execution and naming:** create the worktree with `git worktree add <path> -b <slug> origin/<base>` using §5.9 base selection. The sole canonical path is the sibling directory `<repo>-wt/<slug>`, such as `Foo-wt/<slug>` for `Foo`; do not invent `<repo>_worktrees/`. `worktree-path-guard` hard-enforces this naming for `git worktree add`, while untracked mode, non-add subcommands, and non-git contexts fail open.
+   - **Light team delegation:** open a team agent in the background and name the work root in its prompt. The main session opens QA against that same path. Use only for small, fast iterations.
+   - **Quick one-shot:** open one depth-1 owner. Its micro-stages stay inline inside that worker, it opens no depth-2 fan-out, and any mutating quick job uses an isolated worktree.
+   - **Full headless ceremony:** launch an adapter-specific headless main in the worktree. It acts as a complete main for that runtime, including team roles, hooks or preflight, and plan artifacts. The adapter owns noninteractive tool and permission setup and documents its cost realization. The top-level dispatch is a depth-1 capability owner that returns only synthesis to main.
+   - At `standard+`, the depth-1 owner is a thin conductor. It dispatches `code-plan`, `code-execute`, `code-test`, and `code-report` as separate depth-2 headless sessions, reads verdict and status metadata rather than stage bodies, and passes context only through files. Before any stage, it verifies that the artifact root and `spec/` exist or that `/track` has explicitly selected untracked mode.
+   - **Separability under SD-17:** dispatch is mandatory when the stage output contract is complete and its edit surface is not boundary-coupled through shared semantic anchors or sequential boundary assertions. A non-separable stage may run inline only if the reason is recorded in `plans/<slug>/_internal/metrics.md`; missing evidence is a contract violation. Parallelize separable census or independent file groups in-session. Self-modification of dispatch infrastructure additionally requires the orchestrator opt-out `STAGE_DISPATCH_INLINE_OK`.
+   - Depth-2 review helpers are read-only by default. Standard usually opens one verifier or planner; strong adds one worker at the riskiest point; thorough and adversarial expand across perspectives. Stage-worker write ownership is disjoint: `code-plan` owns `plans/<slug>/plan/` and `_internal/plan_reviews/`; `code-execute` alone mutates source and owns checklist, dev logs, dev reviews, and plan status; `code-test` owns test logs and reviews while source stays read-only; `code-report` owns `final_report.md`, `analysis_project/code/`, and the locked pipeline summary.
+   - The default concurrency cap is five. Count `Σ(active conductors + active stage workers per conductor) ≤ 5`; each stage pipeline is sequential, and in-session implementation-team workers do not count. Queue dispatches that would exceed the cap.
+   - Every dispatch prompt exposes capability, mode, QA, intensity, depth, parent slug, parent session ID, worker role, and owner so the adapter UI and registry can identify it.
+   - The parent orchestrator chooses a portable model role or a concrete runtime model and effort for each job, or explicitly inherits settings. Wrappers reflect the choice and must not silently pick a default or inherit the interactive model. The orchestrator also chooses the harness.
+   - **Cross-harness routing under SD-16:** before dispatch, query each harness through `utilities/usage-check.sh`, which reports `ok`, `limited(reset)`, or `unknown`. Avoid a limited harness, distribute when both are available, place work by runtime strengths, and prefer a checker from a different model family than the maker. Initial weighting is limit avoidance, then task fit, then distribution. `HARNESS_CAPACITY_BIAS` may provide an explicit preference; otherwise remain neutral `auto`. Never hardcode a durable claim that one vendor has more capacity. Current interactive `/usage` and `/status` commands are not headless usage APIs, so the helper conservatively derives limits from `jobs.log` death markers; `ok` means no known block, not guaranteed capacity.
+   - **Immediate limit-death handling under SD-15:** wrappers watch briefly after launch. If a child exits immediately on session, usage, or authentication limits, mark its row `done` with `note=dead-<reason>` and, when available, `reset=<time>`. Liveness also recognizes anchored short CLI error lines at the end of logs, but a fresh completion or activity transcript wins over a report that merely discusses limits. Wrappers do not retry; the orchestrator chooses redispatch or failover.
+   - **Canonical job registry:** explicit `--jobs` wins, then `AGENT_DISPATCH_JOBS`, then `<agent-home>/.dispatch/jobs.log`. Every harness registers before launch using six tab-separated fields: `<ISO-time>`, `open`, `<repo>`, `<worktree>`, `<slug>`, and `<pipe>`. The comma-separated `<pipe>` field carries `capability`, `mode`, `qa`, `intensity`, `depth`, `harness`, `parent`, `parent_sid`, `parent_cwd`, `worker_role`, `owner`, `owner_harness`, `profile`, and exact child `pid`. Status words are only `open`, `running`, and `done`; never substitute `registered`. Cross-harness `parent_sid` preserves Fleet parent-child ownership. Manual completion of a limit death must include `reset=<time>` when known so capacity clears at the right time.
+   - **Fleet notice:** after starting background work, tell the user once that Fleet is the live cross-harness dashboard for stage and liveness status. Its quality depends on complete argv and registry metadata; do not repeat the notice when the user already has Fleet open.
+   - **Stealth-death guard:** never wait indefinitely on completion notifications. Use the adapter liveness wrapper: Codex `adapters/codex/bin/preflight.sh liveness [jobs.log]`, OpenCode `adapters/opencode/bin/preflight.sh liveness [jobs.log]`, or Claude/shared `utilities/dispatch-liveness.sh [jobs.log]`. They report `ALIVE`, `SUSPECT`, `DEAD`, or `EXITED`; exit 3 means at least one suspicious or unharvested job. Diagnose through transcript and dispatch-log tails, then harvest or redispatch. Exact recorded `pid` plus `/proc/<pid>/cmdline` is the strongest signal. Transcript or DB mtime is a fallback only because workers sharing a worktree can make each other's directories look fresh; path-based `pgrep` is rejected as false-positive prone.
+   - **One-shot wait contract under SD-14:** a headless main, including a conductor, exits when its turn ends. A conductor therefore must not end a turn waiting for a notification after dispatching a stage. It polls within the same turn through `utilities/dispatch-wait.sh`, then harvests. Enforcement combines injected wrapper guidance and the deterministic wait helper. A Claude Stop-hook gate remains disabled because it does not fire reliably under `claude -p` and can corrupt result output.
+3. **Merge selection belongs to main or the orchestrator:** merge only after an explicit user signal or while harvesting a background job that main dispatched. Do not self-merge the current turn's substantive branch; finish with the branch and a concise report while preserving main. Keep the branch after merge as a rollback point. Remove a harvested worktree directory at the next natural pause only after stopping orphaned processes and copying gitignored artifacts such as `.agent_reports/plans/` back to main's artifact root. Review `git diff main...<branch>`, skip regressions or duplicated work, resolve conflicts by interpreting both intents rather than choosing a side automatically, stop when ambiguity would revert an established result, and verify the integrated build. “Merge everything” means merge all valid work selectively, not blindly accept every diff.
+4. **Shared artifacts:** route writes to shared artifact-root files through the §5.8 lock. `plans/<slug>/` remains path-separated and noncontending.
+5. **Context:** when coordination records pressure the main context, propose a post-it handoff under the global continuity rule.
 
-지침·규칙·hook/preflight·runtime status surfaces 등 `<agent-home>` 파일 수정은 **검증 직후 같은 turn 에 commit + push** — 사용자 별도 신호 불필요 (2026-06-12 사용자 ratify "규칙은 바로 그냥 push 하면 되겠네"). 작업 repo 의 push 는 별개 — deploy 게이트(사용자 신호) 유지.
+### §5.11. Commit and Push Policy for `<agent-home>`
+
+After validating changes to instructions, rules, hooks, preflight, or runtime status surfaces under `<agent-home>`, commit and push them in the same turn without a separate user signal. This policy was ratified on 2026-06-12. A work repository's push is separate and remains subject to its deployment gate.
 
 ---

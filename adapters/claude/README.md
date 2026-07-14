@@ -63,22 +63,22 @@ Keep Claude-owned mutable state in `$HOME/.claude`: credentials, sessions, proje
 
 ## Model Role Mapping
 
-Claude Code adapter 는 기존 운용 품질을 보존하기 위해 `core/CONVENTIONS.md §2` 의 portable role 을 아래처럼 concrete model 로 매핑한다. 공통 문서에는 role name 을 쓰고, Claude Code 전용 frontmatter / Agent 호출에서만 concrete name 을 쓴다.
+The Claude Code adapter maps portable roles from `core/CONVENTIONS.md §2` to concrete models while preserving established operating quality. Shared docs use role names; only Claude-specific frontmatter and Agent calls use concrete model names.
 
-| Portable role | Claude Code mapping | 기존 재현 의미 |
+| Portable role | Claude Code mapping | Reproduced behavior |
 |---|---|---|
-| `fast reviewer` | `sonnet` | coverage, typo, style consistency, cross-ref, structure, verbatim matching 처럼 넓고 비용 효율적인 점검 |
-| `fast fact-checker` | `sonnet` | citation/venue/year/metric/lineage 를 source artifact 와 좁게 대조 |
-| `fast writer` | `sonnet` | 이미 검증된 artifact 를 final report 로 조립 |
+| `fast reviewer` | `sonnet` | Broad cost-efficient coverage, typo, style, cross-reference, structure, and verbatim checks |
+| `fast fact-checker` | `sonnet` | Narrow citation, venue, year, metric, and lineage checks against source artifacts |
+| `fast writer` | `sonnet` | Assemble verified artifacts into a final report |
 | `deep reviewer` | `opus` | methodology, domain expertise, completeness, safety/security, architecture risk |
-| `deep maker` | `opus` | planning, research synthesis, visual/editorial judgment 처럼 생성 자체가 고차 판단을 요구하는 작업 |
-| `deep orchestrator` | `opus` high | `standard+` depth-1 capability owner의 stage gate·failover·evidence 판단 |
-| `fast implementer` | `sonnet` | 기본 코드 구현·리팩터링. 복잡한 API/library 설계는 호출자가 deep role 로 상향 |
-| `orchestrator` | `sonnet` medium | 이미 결정된 호출·경로·상태를 조립하는 balanced mechanical coordination |
-| `external adversary` | Codex CLI (GPT-5) via `codex-review-team` | `intensity=adversarial` 의 독립 hostile review |
-| `external adversary orchestrator` | `sonnet` wrapper | Codex CLI 호출·결과 정리만 담당하고 실제 판단은 external engine 에 위임 |
+| `deep maker` | `opus` | Planning, research synthesis, and visual/editorial work requiring high judgment |
+| `deep orchestrator` | `opus` high | Stage gates, failover, and evidence judgment for standard+ depth-1 ownership |
+| `fast implementer` | `sonnet` | Routine implementation and refactoring; escalate complex API/library design |
+| `orchestrator` | `sonnet` medium | Balanced mechanical coordination of decided calls, paths, and states |
+| `external adversary` | Codex CLI via `codex-review-team` | Independent hostile review for adversarial intensity |
+| `external adversary orchestrator` | `sonnet` wrapper | Invoke and summarize the external engine rather than perform the review |
 
-검증 rigor tier 의 기존 동작은 이 mapping 으로 재현한다 (tier 는 `--intensity` 에서 파생 — CONVENTIONS §1.1, 별도 `--qa` 축 없음): quick/light 는 fast reviewer 중심, standard 는 deep reviewer + fast reviewers, thorough/adversarial 은 deep reviewers + fast reviewers + optional external adversary. Dispatch/headless 분사는 이 표를 기본으로 삼되 wrapper 가 자동 선택하지 않는다. main/orchestrator 가 작업 난이도별로 `--model-role`, concrete `--model --effort`, 또는 명시적 `--inherit-model-settings` 를 job 마다 선택한다.
+This mapping reproduces the intensity-derived rigor tiers from `CONVENTIONS §1.1`; there is no separate `--qa` axis. Wrappers never choose automatically: main or the orchestrator selects `--model-role`, concrete `--model --effort`, or explicit `--inherit-model-settings` for every job.
 
 ## Compatibility
 

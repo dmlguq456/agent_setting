@@ -1,79 +1,80 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-note
-description: "Use when routing artifacts into notes, digests, and triage suggestions."
+description: "Use when invoking the portable autopilot-note capability. Route and note artifacts, producing digests and triage proposals."
 argument-hint: "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]"
 metadata:
   group: entry
   fam: ops
   modes: []
-  blurb: "Route artifacts into notes, digests, and triage suggestions."
+  blurb: "Route and note artifacts, producing digests and triage proposals."
 ---
 
 # autopilot-note
 
-autopilot-note 는 다른 autopilot-* 산출물을 _읽어_ Layer 2 노트 row 로 노트화하고 Layer 1 카드에 연결을 _제안_ 하는 누적·routing entry. 이 파일은 라우터와 호출 계약(자동 라우팅·Mode Forms·Routing Rules·Constraints)만 담고, 데이터 모델·매칭 로직·Stage 오케스트레이션·QA·예시·경계는 필요할 때 아래 reference 를 Read 한다.
+Accumulation and routing entrypoint. Read artifacts from other capabilities, convert each trackable artifact into a Layer 2 note row, and propose links to user-owned Layer 1 cards. This file defines routing, invocation forms, and constraints; load a reference only when its detailed data model or procedure is needed.
 
-> 산출물 폴더 컨벤션: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). Artifact: `<artifact-root>/notes/{date}/` — routing log + digest staging + reviewer logs. 진본 노트는 `<target>/_layer2/notes/<id>.md` (Layer 2), 진본 카드는 `<target>/cards/**.md` (Layer 1) — 둘 다 본 skill 산출물 (`<artifact-root>/notes/`) 과 _분리_. default `<target>` = `/home/nas/user/Uihyeop/notes/` (worklog-board 의 `CARDS_DIR` 부모).
+> **Output convention**: Store run logs, digest staging, and reviewer logs under `<artifact-root>/notes/{date}/` using the [CONVENTIONS §5](../../core/CONVENTIONS.md#5-skill-output-convention--t1t2t3) 3-tier layout. Durable Layer 2 notes live at `<target>/_layer2/notes/<id>.md`; user-owned Layer 1 cards live at `<target>/cards/**.md`. These stores are separate from the run artifact.
 
-## Default Invocation Rule (메인 에이전트 자동 라우팅)
+## Invocation
 
-본 skill 은 runtime adapter bootstrap 의 _ceremony 작은_ 자리(Claude Code: [`CLAUDE.md`](../../adapters/claude/CLAUDE.md) §0) — 컨펌 없이 즉시 invoke. 메인 에이전트가 사용자 발화에 _"산출물 정리" / "오늘 누적" / "다이제스트" / "triage 확인" / "어제부터 변화 노트화"_ 같은 표현 등장 시 자동 호출.
+Route here when the user asks to collect recent artifacts, update the note layer, regenerate a digest, inspect triage, or summarize changes since a date. Scheduled callers may invoke the same idempotent interface; scheduler configuration is outside this skill.
 
-**운영 자리**:
-- **Cron** (사용자 자리) — 매일 새벽 05:00 KST 사용자 crontab 또는 worklog-board server-side scheduler 가 호출. _SKILL 안에 cron 명세 X_ — 본 SKILL 은 _idempotent 호출 가능_ 만 보장.
-- **수동** — `/autopilot-note` slash 또는 자연어 발화. _묶음 정리_ 자리는 `--scope since <date>` + `--intensity standard` 권장. _첫 historical bulk_ 는 `--scope all`.
+- Manual or scheduled default: `--scope today`
+- Multi-day catch-up: `--scope since <date> --intensity standard`
+- Initial historical import: `--scope all`
+- Resolve `<target>` from explicit `--target` first, then the configured `<agent-notes-root>`. If neither exists, report the missing configuration instead of guessing a personal path.
 
-**Idempotency 보장** — 같은 source 가 두 번 들어와도 _노트 중복 X_. note `id` 가 _date + source-path 해시_ 라 같은 source → 같은 id → 갱신/skip (§Stage D).
+Use a deterministic note ID derived from date plus source-path hash. Reprocessing the same source updates or skips the same note rather than creating a duplicate.
 
-## Mode Forms
+## Invocation Forms
 
 | Form | Behavior |
 |---|---|
-| `autopilot-note` (default) | Stage A-F 전체. `--scope today` default. |
-| `autopilot-note --scope yesterday` | 어제 자정 0:00 ~ 오늘 0:00 변화 |
-| `autopilot-note --scope since 2026-05-20` | 명시 시작 이후 모든 변화 |
-| `autopilot-note --scope all` | _첫 실행_ 자리 — 전체 source 스캔, _historical bulk_ |
-| `autopilot-note --dry-run` | Stage A-C 만 (실제 write X). chat 에 routing plan 출력 |
-| `autopilot-note --digest-only` | Stage E 만 (이미 생성된 노트 → 다이제스트 재생성) |
-| `autopilot-note --triage-only` | Stage D 의 신규 L1 카드 제안 자리만 (`/triage` 큐 점검) |
-| `autopilot-note --source plans,experiment` | source 6 갈래 중 명시 자리만 |
-| `autopilot-note --target <notes-root>` | default `/home/nas/user/Uihyeop/notes/` override. 하위 `cards/`·`_layer2/`·`_triage/`·`digests/` 자동 유도 |
-| `autopilot-note --feedback` | **검토함 피드백 간단 처리 모드** (worklog-board prd §16 v50) — `_feedback/` 큐의 pending 의견을 갈래별 라우팅. 아래 §피드백 간단 처리. 가벼운 ceremony(Stage A-F 비적용) — 항목당 가볍게. |
+| `autopilot-note` | Run Stages A-F with `--scope today` |
+| `--scope yesterday` | Process changes from the previous local midnight interval |
+| `--scope since 2026-05-20` | Process changes since the explicit date |
+| `--scope all` | Scan all supported sources for an initial historical import |
+| `--dry-run` | Run Stages A-C, write nothing, and show the routing plan |
+| `--digest-only` | Run Stage E against existing notes |
+| `--triage-only` | Run only the Stage D proposal path for new Layer 1 cards or task links |
+| `--source plans,experiment` | Restrict scanning to the listed source families |
+| `--target <notes-root>` | Override the configured notes root and derive `cards/`, `_layer2/`, `_triage/`, and `digests/` beneath it |
+| `--feedback` | Process pending `_feedback/` items through the lightweight bidirectional feedback flow rather than Stages A-F |
 
-## Routing Rules (5 갈래 — 본 skill 핵심)
+## Routing Rules
 
-| # | 자리 | Trigger | 동작 | 자동 / triage |
+| # | Destination | Trigger | Action | Ownership |
 |---|---|---|---|---|
-| **1** | L2 note row 생성 | 모든 trackable 산출물 | `_layer2/notes/<id>.md` 생성 (노트화 본문 + frontmatter) | **자동** |
-| **2** | note `card_id` → L1 카드 연결 | 1차/2차 매칭 | frontmatter `card_id` set + `routing_status: inbox`(제안) + `routing_confidence`/`routing_reason` ⟨2026-06-10⟩ | **자동(제안)** |
-| **3** | note `backbone_ids`/`task_ids` → L2 카탈로그 연결 (+emerge) | architecture·task 키워드 매칭 / emerge 단서 | frontmatter id list set + 없으면 카탈로그 entry 생성 | **자동 (카탈로그 emerge 포함)** |
-| **4** | 신규 L1 카드 / 기존 task 연결 _제안_ | 매칭 task 없고 새 작업 단위 / 기존 task 강하게 부합 | `_triage/<id>.md` 제안 — ⟨v41/v44⟩ **기본 = task 카드**(`new-card` + `source_note_ids`), ⟨v45⟩ **묶음 우선**(노트당 1제안 금지)·**기존 task 부합 시 `link-note`**(연결만, 생성 0), project 는 보수적 세트 제안 한정 | **triage** (자동생성 X — L1 사용자 소유) |
-| **5** | ambient note | 위 어디에도 확신 없음 | `card_id: null` + `routing_status: inbox` | **자동 (ambient)** |
+| 1 | Layer 2 note row | Every trackable artifact | Create or update `_layer2/notes/<id>.md` with frontmatter and a readable summary | Automatic |
+| 2 | Existing Layer 1 card link | Primary or secondary match | Set proposed `card_id`, `routing_status: inbox`, `routing_confidence`, and `routing_reason` | Automatic proposal |
+| 3 | Layer 2 catalogs | Architecture, task, paper, or emergence evidence | Set `backbone_ids`, `task_ids`, or `paper_id`; create a lightweight catalog entry when needed | Automatic |
+| 4 | New Layer 1 card or existing-task proposal | No task match but a coherent new work unit exists, or an existing task matches strongly | Write a grouped `_triage/<id>.md` `new-card` or `link-note` proposal with `source_note_ids` | User-confirmed triage; never automatic card creation |
+| 5 | Ambient inbox note | No confident destination | Keep `card_id: null` and `routing_status: inbox` | Automatic |
 
-**L2 적재·연결은 자동 _제안_ (#1·#2·#3·#5 — 무인 cron 은 전부 `routing_status: inbox`), L1 신설만 triage (#4)** ⟨2026-06-10⟩ — 에이전트는 _제안_, 확정(`confirmed`)은 worklog-board `/triage` 노트 라우팅에서 사용자 컨펌. 신규 L1 카드 confirm 도 `/triage` UI 가 watcher.
+Layer 2 writes and links are proposals while they remain `routing_status: inbox`. The worklog board's triage flow owns confirmation and any creation of Layer 1 cards.
 
-### Language Rule
-- User-facing output (chat report, digest body, triage-card body, and note body) follows the user's communication language unless an explicit audience or artifact-language requirement overrides it.
-- frontmatter id / slug / file 이름은 영어·소문자·하이픈 (`note-20260609-a1b2c3` / `sr-corrnet` / `sep` / `tf-restormer-icml2026`).
+## Language Rule
+
+Follow an explicit artifact or audience language when provided. Otherwise, write note bodies, digests, triage proposals, and chat reports in the conversation language according to `<agent-home>/roles/response-policy.md`. Keep frontmatter IDs, slugs, and filenames lowercase English with hyphens, such as `note-20260609-a1b2c3`, `sr-corrnet`, `sep`, or `tf-restormer-icml2026`.
 
 ## Constraints
 
-- **L1 카드 불변** — `cards/**.md` frontmatter·본문 안 건드림. 매칭 read + 신규 `_triage/` 제안만. 사용자/UI 가 카드 책임.
-- **L2 note 가 핵심 출력** — 산출물 1개 = note row 1개. 본문은 _노트화_ (원본 산출물 dump 아님 — 읽기 편한 요약).
-- **카탈로그 emerge 는 가볍게** — backbone/task/paper entry 는 _필요 시 자동 생성_, 단 대규모 재구조는 사용자/autopilot-code.
-- **Idempotent** — 같은 source → 같은 note id → 중복 X (`id` + frontmatter `source` + `.last_run.yaml` 다중 layer check).
-- **원본 산출물 불변** — `<artifact-root>/{research,documents,plans,analysis_project}/` + `experiments/` 는 read-only.
-- **신규 L1 카드는 triage 의무** — 자동 생성 X. 사용자 confirm 후 worklog-board UI 가 카드 실제 생성.
-- **ambient 는 임시** — `card_id: null` note 는 자동 적재, 단 사후 사용자 promote 자리 (`/hubs` inbox).
-- **STRUCT halt 자리 없음** — 본 skill 은 _노트화·routing_ 만. 산출물 자체 대규모 변경은 `autopilot-refine` 또는 사용자.
-- **`<target>` default** — `/home/nas/user/Uihyeop/notes/` (worklog-board `CARDS_DIR` 부모). 하위 `cards/`·`_layer2/{backbones,tasks,papers,notes}/`·`_triage/`·`digests/`. 다른 자리는 `--target` flag.
+- **Layer 1 is user-owned**: never modify `cards/**.md`. Read cards for matching and write only `_triage/` proposals.
+- **One artifact, one Layer 2 note**: summarize the artifact for reading; do not dump the full source.
+- **Keep catalog emergence lightweight**: create small backbone, task, or paper entries when justified; route large restructuring elsewhere.
+- **Remain idempotent**: enforce source-to-ID stability through the note ID, frontmatter `source`, and `.last_run.yaml` checks.
+- **Keep source artifacts read-only**: never modify `<artifact-root>/{research,documents,plans,analysis_project}/` or `experiments/`.
+- **Require triage for new Layer 1 cards**: the user or worklog-board UI performs confirmed creation.
+- **Keep ambient notes temporary**: retain unmatched notes in the inbox for later user promotion.
+- **Do not perform structural source edits**: route artifact changes through `autopilot-refine` or the owning capability.
 
 ## Reference Index
 
-| 파일 | 언제 로드 (의무) | 내용 |
+| File | When to load (mandatory) | Content |
 |---|---|---|
-| `references/data-model.md` | 데이터 모델·계약 자리 | 2-Layer 모델(worklog-board PRD §2), note row 스키마(`_layer2/notes/<id>.md`), Position in autopilot family |
-| `references/scope-qa-usage.md` | 입력 source·출력 자리·검증 rigor·경계 판단 시 | Scope(입력 source 6갈래·출력 자리·NOT for), 검증 rigor tier(intensity 파생, default light-tier), Examples, When NOT to use, Post-Run Checklist |
-| `references/feedback-mode.md` | `--feedback` 검토함 양방향 루프 처리 시 (worklog-board prd §16) | 입력·라우팅(proposal/ui-code·위험도 분기)·처리 후·경계 |
-| `references/resolution.md` | Stage A/C 매칭 로직 실행 시 | Source Resolution(Stage A 신규·변경 감지), Target Resolution(Stage C — card_id 1/2/3차·backbone_ids/task_ids/paper_id·intent/work_status) |
-| `references/process.md` | Stage A-F 오케스트레이션 실행 시 (필수) | Stage A(scan)·B(본문 분석)·C(target matching)·C.5(verification)·D(apply)·D.5(편집팀 polish)·E(digest)·F(report) |
+| `references/data-model.md` | When reading or writing model contracts | Two-layer model, note-row schema, and position in the autopilot family |
+| `references/scope-qa-usage.md` | When resolving sources, outputs, rigor, boundaries, or post-run checks | Six input families, output locations, intensity-derived rigor, examples, when-not-to-use guidance, and checklist |
+| `references/feedback-mode.md` | When processing `--feedback` | Feedback inputs, proposal/UI-code routing, risk branches, completion state, and boundaries |
+| `references/resolution.md` | When running Stage A or C matching | Source-change detection and target resolution for cards, backbones, tasks, papers, intent, and work status |
+| `references/process.md` | When running Stages A-F (required) | Scan, analyze, match, verify, apply, `editorial-team` polish, digest, and report |

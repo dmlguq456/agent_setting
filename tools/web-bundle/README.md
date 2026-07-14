@@ -1,36 +1,36 @@
-# web-bundle — production급 단일 HTML 번들 레시피
+# web-bundle — Production-Grade Single-HTML Bundle Recipe
 
-> **무엇**: 멀티파일로 _제대로 빌드_(Vite + TS + Tailwind + shadcn/ui)한 webapp/ui 를 **self-contained 단일 `index.html`** 로 inline. 공개 `web-artifacts-builder` 계열 레시피의 온프레미스 재구현.
-> **왜 별도 경로**: 디자인팀에는 이미 단일파일 산출 2 경로가 있다 — (a) `design-components` Step 4b 의 **CDN standalone**(`https://cdn.tailwindcss.com` + esm.sh, 0-build, _dev-grade_), (b) `convert.mjs bundle`(기존 HTML 의 에셋 inline). 본 레시피는 _세 번째_ — **production-grade 빌드**(실제 Tailwind purge + 진짜 shadcn 컴포넌트 + Radix, CDN 의존 0). 진지한 앱 UI·배포 후보 산출에만.
+> **What it does:** Builds a multi-file web app or UI properly with Vite, TypeScript, Tailwind, and shadcn/ui, then inlines it into one self-contained `index.html`. This is an on-premises realization of the public `web-artifacts-builder` recipe family.
+> **Why this is a separate path:** The design workflow already has two single-file paths: (a) the **CDN standalone** path in `design-components` Step 4b (`https://cdn.tailwindcss.com` + esm.sh, zero build, development grade), and (b) `convert.mjs bundle`, which inlines assets from an existing HTML artifact. This recipe is the third path: a **production-grade build** with real Tailwind purging, real shadcn components, Radix, and no CDN dependency. Use it only for serious app UI and deployment-candidate artifacts.
 
-## 언제 무엇
+## Choosing a Path
 
-| 경로 | 충실도 | 빌드 | 자리 |
+| Path | Fidelity | Build | Use |
 |---|---|---|---|
-| CDN standalone (Step 4b) | dev-grade (CDN Tailwind) | 0 | 빠른 미리보기·mockup·diagram·slide |
-| `convert.mjs bundle` | 기존 산출물 inline | 0 | 이미 만든 preview.html 오프라인화 |
-| **web-bundle (본 레시피)** | **production** (real Tailwind/shadcn) | Vite | 배포 후보 webapp·ui, design-system 정합 필요 |
+| CDN standalone (Step 4b) | Development grade (CDN Tailwind) | None | Fast previews, mockups, diagrams, and slides |
+| `convert.mjs bundle` | Inline an existing artifact | None | Make an existing `preview.html` work offline |
+| **web-bundle (this recipe)** | **Production** (real Tailwind/shadcn) | Vite | Deployment-candidate web apps and UIs that must match the design system |
 
-## 스택 (web-artifacts-builder parity)
+## Stack (`web-artifacts-builder` parity)
 
 React 18 + TypeScript · Vite · Tailwind CSS 3.4.1 · shadcn/ui(40+) · Radix UI · path alias `@/`.
 
-## 절차
+## Procedure
 
 ```bash
-# 1. 프로젝트 (없으면 생성). spec/design 의 tokens.css·tailwind.config.ts 를 그대로 주입.
+# 1. Create the project if needed. Inject tokens.css and tailwind.config.ts from spec/design unchanged.
 npm create vite@latest <name> -- --template react-ts
 cd <name> && npm i && npm i -D tailwindcss@3.4.1 postcss autoprefixer && npx tailwindcss init -p
-#  shadcn/ui: npx shadcn@latest init  → 필요한 컴포넌트만 add
-#  디자인 토큰: design 폴더의 tokens.css / tailwind.config.ts 복사 (design-system 정합)
+#  shadcn/ui: npx shadcn@latest init  → add only the components you need
+#  Design tokens: copy tokens.css / tailwind.config.ts from the design folder
 
-# 2. 단일파일 번들 — vite-plugin-singlefile (모든 JS/CSS inline → dist/index.html 한 파일)
+# 2. Produce one file with vite-plugin-singlefile (all JS/CSS inline → dist/index.html).
 npm i -D vite-plugin-singlefile
-#  vite.config.ts 에 plugin 추가 (아래 snippet)
+#  Add the plugin to vite.config.ts (see the snippet below).
 npx vite build
-#  → dist/index.html = self-contained 단일 파일 (외부 의존 0, 브라우저로 바로 열림)
+#  → dist/index.html is a self-contained file with no external dependencies.
 
-# 3. 디자인 폴더로 산출
+# 3. Copy the output into the design folder.
 cp dist/index.html <design_dir>/05_handoff/exports/<name>.bundle.html
 ```
 
@@ -42,8 +42,8 @@ import { viteSingleFile } from "vite-plugin-singlefile"
 export default defineConfig({ plugins: [react(), viteSingleFile()], build: { cssCodeSplit: false, assetsInlineLimit: 100000000 } })
 ```
 
-> 대안(web-artifacts-builder 원본): Parcel + `parcel-resolver-tspaths` + `html-inline`(`.parcelrc` 로 `@/` alias) — 동일 결과. vite-plugin-singlefile 이 더 단순해 본 레시피의 default.
+> **Alternative used by the original `web-artifacts-builder`:** Parcel + `parcel-resolver-tspaths` + `html-inline`, with the `@/` alias configured in `.parcelrc`. It produces the same result, but `vite-plugin-singlefile` is simpler and is therefore this recipe's default.
 
-## 검증 (필수 — `_design_rules.md` 시각 자가검증 루프)
+## Required Verification
 
-번들 후 **반드시** adapter visual harness 로 `preview(dist/index.html)` → `getConsoleLogs`(에러 0) → `screenshot` → `view_image` 또는 동등 검증을 실행한다. 빌드가 통과해도 _렌더가 깨질 수 있다_ — 본 것으로만 완료.
+After bundling, **always** use the adapter visual harness to run `preview(dist/index.html)` → `getConsoleLogs` (zero errors) → `screenshot` → `view_image`, or an equivalent verification path. A successful build can still render incorrectly; completion requires visual inspection.

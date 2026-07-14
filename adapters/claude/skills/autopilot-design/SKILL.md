@@ -10,160 +10,150 @@ metadata:
   blurb: "Visual-design pipeline coordinating references→tokens→components→review→handoff."
 ---
 
-> 산출물 폴더:
-> - 사용자 직접 호출: `<artifact-root>/designs/<name>/`
-> - autopilot-spec 에서 위임: `<artifact-root>/spec/design/`
+# autopilot-design
+
+> **Output locations**:
+> - Direct invocation: `<artifact-root>/designs/<name>/`
+> - Delegated by `autopilot-spec`: `<artifact-root>/spec/design/`
 >
-> CONVENTIONS.md §5 3-tier — T1: root + design_state.yaml / T2: `00_init/`, `01_refs/`, … / T3: `_internal/` per phase.
+> Follow CONVENTIONS §5: T1 root and `design_state.yaml`; T2 phase directories such as `00_init/` and `01_refs/`; T3 `_internal/` within each phase.
 
-> **역할·소유 (DESIGN_PRINCIPLES §9).** design 이 시각을 _먼저_ 잡고 code 는 _적용만_ 한다 (design = 시각 spec). **토큰은 단일 계약 — design 소유**: 디자인 토큰은 _앱이 실제 import 하는 파일_(globals.css `@theme` / tokens.css) 에만 산다. `designs/`(또는 `spec/design/`) 는 토큰 _사본이 아니라_ refs·mockup·결정 근거·specimen(=decision record, spec/prd 의 "왜" 자리). **빌트앱도 design-first** — mockup 이 아니라 _실제 돌아가는 앱 화면을 Design MCP 로 렌더_ 해서 시각 결정 (롱테일도 design 이 리드). **경계**: 방향·토큰·새 레이아웃·구조 변경=substantial → 본 skill (design-first). 한 요소 색 한 끗=trivial tweak 만 autopilot-code 직접.
+## Ownership Boundary
 
-### Trigger 신호 (자연어 발화 예시)
+Design leads visual decisions; code applies the resulting visual specification (DESIGN_PRINCIPLES §9).
 
-- "디자인 해줘" / "UI 만들어줘" / "컴포넌트 디자인"
-- "이 슬라이드 디자인 정리해줘" / "발표 자료 디자인"
-- "로고 / 아이콘 / 일러스트 만들어줘"
-- "디자인 토큰 정해줘" / "색 팔레트 짜줘"
-- "이 화면 비평해줘" — design-review 만 직접 호출 권장
-- autopilot-spec Phase 2 자동 위임
+- Design tokens have one source of truth: the file imported by the application, such as `globals.css` with `@theme` or `tokens.css`.
+- `designs/` and `spec/design/` hold references, mockups, rationale, and specimens as decision records, not duplicate token sources.
+- For an existing app, render and inspect the real screen rather than relying only on a mockup.
+- Route direction, token, new-layout, and structural visual changes here. Keep only trivial one-property tweaks in `autopilot-code`.
 
-### Default 옵션
+## Invocation
 
-- `--scope`: `mixed` (auto-detect — UI 면 `ui`, 슬라이드면 `slide`, 단일 자산이면 `icon` 등)
-- `--from`: auto-detect (design_state.yaml 있으면 다음 phase 부터)
-- 검증 강도: `--intensity` 에서 파생 (별도 `--qa` 축 없음 — [CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)). default 는 standard-tier
+Use this pipeline for UI or page design, slides, icons, logos, illustrations, design tokens, palettes, or multi-phase visual critique. `autopilot-spec` may delegate its design phase here automatically.
 
-### Override
+Defaults:
 
-- 단일 컴포넌트 — `Agent(디자인팀, mode=maker)` 직접 호출
-- 비평만 — `Agent(디자인팀, mode=critic)` 직접 호출
-- 외부 레퍼런스만 — `Agent(자료팀, mode=web-image-search)` 직접 호출
-- `/autopilot-design <args>` slash 직접 입력 — 컨펌 skip
+- `--scope mixed`; infer a narrower scope from the request and files when clear
+- `--from`: resume after the last completed phase in `design_state.yaml`, otherwise start at `init`
+- `--intensity`: derive verification rigor from intensity; there is no separate `--qa` axis ([CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers))
+
+Direct boundaries:
+
+- One component or asset may go directly to `design-team` in maker mode.
+- Critique-only work may go directly to `design-team` in critic mode.
+- Reference-only collection may go directly to `material-team` in web-image-search mode.
+- An explicit `/autopilot-design <args>` invocation supplies the routing choice directly.
 
 ## Language Rule
-- User-facing output follows the user's communication language; preserve code identifiers and canonical design-token values or names.
 
-## Argument Parsing
+Follow an explicit artifact or audience language when provided. Otherwise, write user-facing output in the conversation language according to `<agent-home>/roles/response-policy.md`. Preserve code identifiers, paths, and canonical token names or values.
 
-### --scope (auto-detect default)
-- `ui` — 프론트 UI 컴포넌트 단위 (버튼·카드·폼 등)
-- `webapp` — _전체 화면·페이지·랜딩_ 합성 (컴포넌트 조합 + 페이지 레이아웃 + 인터랙션 상태). Claude Design 의 "한 장짜리 완성 화면" 자리
-- `slide` — 발표 슬라이드 비주얼
-- `icon` — 아이콘·로고 단일 자산
-- `diagram` — 아키텍처·flow·관계 도식 (mermaid / 직접 SVG / excalidraw)
-- `mixed` — 위 여러 영역 통합
+## Arguments
 
-scope 에 따라 일부 phase auto-skip:
-- `icon`: tokens skip 가능 (단일 자산), components skip
-- `diagram`: tokens·components skip, refs + handoff 중심
+### `--scope` (auto-detected by default)
 
-### --artifact (산출 형태)
-- `project` (default when a stack exists) — 프로젝트의 `components/ui/` + tokens 파일에 통합 (shadcn/Tailwind/Next 전제)
-- `standalone` (default when no stack, or quick 시각 요청) — **자체 완결 단일 HTML preview** (`preview.html`, inline CSS/JS, 필요 시 CDN React·Tailwind). 프로젝트 없이 브라우저로 바로 열림 = Claude Design artifact 패리티. diagram·slide·icon·webapp 빠른 미리보기에 기본 적합
-- auto-detect: cwd 에 `package.json`/`components.json`/`tailwind.config.*` 있으면 `project`, 없으면 `standalone`
+- `ui`: individual frontend components such as buttons, cards, and forms
+- `webapp`: a composed screen, page, or landing experience with layout and interaction states
+- `slide`: presentation visuals
+- `icon`: a single icon, logo, or illustration asset
+- `diagram`: architecture, flow, or relationship diagrams in Mermaid, SVG, or Excalidraw
+- `mixed`: more than one of the above
 
-### --from (auto-detect default)
-- `init` / `refs` / `tokens` / `components` / `review` / `handoff`
-- design_state.yaml 발견 시 마지막 `done` phase 다음부터
+Skip phases only when the scope makes them unnecessary:
 
-### 검증 강도 (intensity 파생)
-검증 rigor 는 별도 `--qa` 축이 아니라 `--intensity` 에서 파생된다 — tier 정의·매핑은 [CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot) 단일 source. 본 skill 적용:
-- quick-tier (`--intensity quick`) — review phase skip
-- standard-tier (default) — 표준 review phase
-- thorough-tier (`--intensity thorough`) — 디자인팀 critic + 외부 레퍼런스 cross-check
+- `icon`: tokens may be unnecessary; skip components when producing a single asset directly
+- `diagram`: normally skip tokens and components, focusing on references, rendering, review, and handoff
 
-## Context Auto-Detection (신규 vs 재호출 자동 분기)
+### `--artifact`
 
-본 skill 은 호출 자리에서 _발화 + cwd_ 검사로 자동 분기 — `--from` 명시 없이도 동작:
+- `project`: integrate into the project's `components/ui/` and token files; prefer when a stack already exists
+- `standalone`: create a self-contained `preview.html` with inline CSS/JS and optional CDN dependencies; prefer when no stack exists or a portable preview is required
+- Auto-detect `project` when cwd contains `package.json`, `components.json`, or `tailwind.config.*`; otherwise use `standalone`
 
-### 1단계 — design_state.yaml 자동 검사
+### `--from`
 
-| 감지 조건 | 처리 |
-|---|---|
-| `<artifact-root>/designs/<name>/design_state.yaml` 또는 `<artifact-root>/spec/design/design_state.yaml` 부재 | **신규 cycle** — Phase 0 (design-init) 부터 처음 |
-| 위 path 존재 | **재호출** — `phases:` read + 발화 의도 분류 후 해당 phase 부터. _토큰 보존 + 새 컴포넌트만 확장_ 자리 자연 |
+Accepted phases: `init`, `refs`, `tokens`, `components`, `review`, `handoff`. When `design_state.yaml` exists, default to the phase after the last `done` entry.
 
-`<name>` 추출 — 발화·cwd. autopilot-spec 의 app mode 자리면 `spec/design/` 우선.
+### Verification Rigor
 
-### 2단계 — 발화 → phase 자동 분류 (재호출 자리)
+- quick-tier: review may be skipped when the selected graph permits
+- standard-tier: run the standard review phase
+- thorough-tier: add `design-team` critic review and external-reference cross-checking
 
-| 발화 신호 | 추론 phase | 흐름 |
-|---|---|---|
-| "환경 다시 점검" / "Figma 연결 다시" | `--from init` (Phase 0) | 환경 점검만 |
-| "레퍼런스 추가" / "이 image 도 참고" | `--from refs` (Phase 1) | refs 보강 |
-| "색 / 폰트 / 간격 토큰 바꾸자" | `--from tokens` (Phase 2) | tokens.css 갱신 + 이후 phase 재 |
-| "새 컴포넌트 X 추가" / "버튼 variant 추가" | `--from components` (Phase 3) | 토큰 보존 + 컴포넌트 확장 (가장 흔한 재호출) |
-| "디자인 비평 다시 받자" / "review 다시" | `--from review` (Phase 4) | critic 만 |
-| "handoff 정리" / "import path 갱신" | `--from handoff` (Phase 5) | handoff.md 갱신 |
+## Context Auto-Detection
 
-### 3단계 — 자동 컨펌 한 화면
+Inspect the request and cwd before choosing a phase.
 
-```
-=== autopilot-design 호출 자리 ===
-대상: <name> (designs/<name>/ 또는 spec/design/)
-산출물: 발견 (last_completed_phase: <phase>) / 부재 (신규 cycle)
-발화: "<사용자 한 줄>"
-→ 추론: <신규 / --from <phase>> 자리
-진행? (진행 / 다른 phase 로 / 새 cycle 로 / 중단)
-```
+1. Find `<artifact-root>/designs/<name>/design_state.yaml` or `<artifact-root>/spec/design/design_state.yaml`.
+2. If neither exists, start a new cycle at `init`.
+3. If state exists, infer the earliest affected phase from the requested change:
+   - environment or integration check → `init`
+   - new or replaced references → `refs`
+   - color, typography, spacing, radius, or shadow changes → `tokens`
+   - new components or variants → `components`
+   - critique-only rerun → `review`
+   - refreshed imports, exports, or reproduction guidance → `handoff`
+4. Honor an explicit `--from <phase>` without re-inferring it.
 
-신규 vs 재호출 분류는 _명시 옵션 없이도_ 동작 — 발화 + cwd 자동 판단. 사용자가 명시적 `--from <phase>` 입력하면 그대로.
+For a resumed cycle, preserve unaffected tokens and artifacts. Reset only downstream phase state.
 
-> **Intake 게이트**: 비주얼 방향성·톤·타깃 디바이스·디자인시스템 유무·브랜드 제약·산출형태가 미명세면 [CONVENTIONS.md §6.6](../../core/CONVENTIONS.md#66-autopilot-intake-gate) 1라운드 질문 먼저 (질문 뱅크는 _design_rules.md 비주얼 기본값·conceptual altitude 재사용). Phase 0 design-init 앞. 명시·재개(--from) 시 skip (별도 flag 불요).
+Before `design-init`, apply the CONVENTIONS §6.6 intake gate when visual direction, tone, target device, design-system status, brand constraints, or artifact form are materially underspecified. Ask one structured round in the conversation language. Skip the intake round for sufficiently explicit requests and resumes.
 
-## Pipeline Overview & Stage-worker mapping
+## Pipeline and Stage Dispatch
 
-> **Stage-dispatch (`standard+`, OPERATIONS §5.10 ③④·SD-1·SD-2)**: for `standard+`, each durable design phase below is dispatched as its own **depth-2 headless session**; the 디자인팀 mode (또는 orchestrator step) named in each phase runs *inside* that stage session. The depth-1 conductor passes only artifact paths and reads verdict/status — never phase bodies or prior-phase conversation (**file-only handoff**: each phase reads its inputs from files — `design_state.yaml` + prior-phase artifacts — never from the conductor's memory of earlier phases). Design phases carry `[CONFIRM Gate]`s — the conductor holds the gate verdict *between* dispatched phases via `design_state.yaml` phase status (다음 phase 는 진행 응답이 기록된 뒤에만 dispatch). `direct/quick` and micro-stages (산출물 없는 확인 스텝) stay inline; stage sessions never re-dispatch (depth 3+ forbidden). Per-pipe body rewrite to imperative dispatch commands is follow-up work — this block only adds the contract + the mapping below.
+For `standard+`, dispatch each durable phase as its own depth-2 headless session under [OPERATIONS §5.10](../../core/OPERATIONS.md#510-work-isolation-and-parallel-dispatch). The depth-1 conductor passes artifact paths and reads verdict/status only. Each phase reconstructs context from `design_state.yaml` and prior artifacts; conversation memory is not a handoff channel. Stage sessions never redispatch.
 
-| stage | in-session team | input artifacts | output artifacts | write class |
+Keep `direct`, `quick`, and artifact-free micro-stages inline. Between dispatched phases, record the confirmation verdict in `design_state.yaml` before launching the next phase.
+
+| Stage | In-session role | Inputs | Outputs | Write class |
 |---|---|---|---|---|
-| Phase 0: design-init (환경 점검 — Figma MCP·shadcn·tokens.css 부재 안내) | orchestrator (환경 프로비저닝, no sub-agent) | design 발화 + cwd | `00_init/environment_check.md`, `design_state.yaml` | init |
-| Phase 1: design-refs (레퍼런스 수집) | orchestrator + `Agent(자료팀, mode=web-image-search)` (외부 검색 시) | 사용자 image / 기존 디자인 자산 / 발화 | `01_refs/brief.md`, `_internal/references/` | refs |
-| Phase 2: design-tokens (color/typography/spacing/radius/shadow — single source) | orchestrator (직접, Design MCP specimen 자가검증 — sub-agent 미위임) | `01_refs/brief.md` + 기존 토큰 파일(있으면) | `02_tokens/tokens.md`, `02_tokens/specimen.html`, `tokens.css`/`tailwind.config.ts` | tokens |
-| Phase 3: design-components (컴포넌트·시각 자산 만들기) | `Agent(디자인팀, mode=maker)` | `02_tokens/tokens.*`, `01_refs/brief.md` | `03_components/` (spec/mockup/code, scope 별 `preview.html`/`slides.html` 등) | components |
-| Phase 4: design-review (비평 — 6축 점검) | `Agent(디자인팀, mode=verifier)` → `Agent(디자인팀, mode=critic)` | `03_components/` 렌더 산출 | `04_review/verifier.md`, `04_review/critique.md` | review (read-only critique — 03_components 산출물 미수정) |
-| Phase 5: design-handoff (코드 위치·import path·재현 가이드) | orchestrator (직접, no sub-agent) | `03_components/`, `04_review/*`, `02_tokens/tokens.*` | `05_handoff/handoff.md`, `05_handoff/exports/` | handoff |
+| Phase 0 `design-init` | orchestrator | Request + cwd | `00_init/environment_check.md`, `design_state.yaml` | init |
+| Phase 1 `design-refs` | orchestrator; `material-team` for external search | User images, existing design assets, request | `01_refs/brief.md`, `_internal/references/` | refs |
+| Phase 2 `design-tokens` | orchestrator | `01_refs/brief.md`, existing token files | `02_tokens/tokens.md`, `02_tokens/specimen.html`, `tokens.css` or `tailwind.config.ts` | tokens |
+| Phase 3 `design-components` | `design-team` maker | `02_tokens/tokens.*`, `01_refs/brief.md` | `03_components/` specs, mockups, code, and previews | components |
+| Phase 4 `design-review` | `design-team` verifier, then critic | Rendered `03_components/` output | `04_review/verifier.md`, `04_review/critique.md` | review; read-only against components |
+| Phase 5 `design-handoff` | orchestrator | Components, reviews, and tokens | `05_handoff/handoff.md`, `05_handoff/exports/` | handoff |
 
-No two stages mutate the same shared file without a lock (mirrors the autopilot-code `pipeline_summary.md` lock exception) — `design_state.yaml` in particular is written by a single phase at a time in sequence (각 phase 는 CONFIRM Gate 통과 후 자기 `phases.<phase>` 항목만 갱신, 동시 쓰기 없음).
+Serialize shared writes. In particular, one phase at a time may update only its own `phases.<phase>` entry in `design_state.yaml` after the preceding confirmation gate.
 
-## Paper architecture figure 정책
+## Paper Architecture Figures
 
-Paper architecture diagram 은 LLM 시각 craft 한계 영역 — 디자인팀은 layout 가이드까지만 산출, 그림 자체는 생성하지 않는다. 상세·범위(2026-05-28 정책) = [references/paper-figure-policy.md](references/paper-figure-policy.md). 다른 scope(ui·webapp·slide·icon·diagram)는 대상 아님 — 아래 시각 검증 루프로 완결.
+For paper architecture figures, produce layout and composition guidance but do not claim that an LLM-authored diagram is publication-ready. Read [references/paper-figure-policy.md](references/paper-figure-policy.md) for the scope and handoff boundary. Other scopes complete through the rendered visual-verification loop below.
 
-## 하네스
+## Visual Harness
 
-시각 피드백 루프(Design MCP·verifier·디자인 규칙·scaffolds·converters·post-write hook) 구성 요소 표 = [references/harness.md](references/harness.md). design-init 이 Design MCP 를 자가 프로비저닝(부재로 멈추지 않음, 스펙 §0.5).
+Read [references/harness.md](references/harness.md) for the visual feedback loop, rendering tools, verifier, design rules, scaffolds, converters, and post-write checks. `design-init` should provision the available visual harness or report its fallback; absence of one integration alone must not stop the cycle.
 
-## 시각 검증 (전 visual phase 공통 — Claude Design parity, 필수)
+## Rendered Visual Verification
 
-components·tokens·review phase 는 **Design MCP 로 렌더해서 본 것** 으로만 완료한다. 좌표·코드·XML valid 는 시각 검증이 아니다 (maker/critic 이 _눈 감고_ 좌표 부르는 실패가 반복됐음).
+Complete token, component, and review phases only after rendering and inspecting the result. Valid coordinates, source code, or XML are not visual evidence.
 
-- **렌더 경로·scope 표·자가비평 루프**(HTML/React·SVG/diagram, 관통·overlap·정렬·위계·잘림, 최대 3-5 회전)는 [_design_rules.md §시각 자가검증 루프](../../roles/modes/design/_design_rules.md) 단일 SoT (maker/critic/verifier 공유) — 로드해 그대로 돈다.
-- **사용자에 렌더 이미지를 보여준다** — 텍스트 보고만으로 완료 X (live-preview 패리티). Design MCP 미부착이면 `sharp`/`rsvg`/`mmdc` 정적 렌더 fallback.
+- Load [the shared design rules](../../roles/modes/design/_design_rules.md) and follow their render, self-critique, and bounded iteration loop for HTML/React, SVG, and diagrams.
+- Inspect overlap, clipping, alignment, hierarchy, contrast, and responsive states relevant to the scope.
+- Show the rendered result to the user; a text-only report is not completion evidence.
+- When the primary visual integration is unavailable, use an available static renderer such as `sharp`, `rsvg`, or `mmdc`, and report the fallback.
 
-각 phase 끝에 **[CONFIRM Gate]** — autopilot-spec 의 4 갈래 응답 패턴 그대로 (발화가 모호하면 메인 에이전트가 옵션 다시 물음, 임의 추측 X): **진행**(다음 phase) / **수정**(현 phase `--user-refine`, v2 작성) / **back-jump**(`--from <phase>`, 하위 phase reset) / **중단**(pipeline 멈춤, `design_state.yaml` 상태 보존).
+At each phase boundary, apply the four-way confirmation contract in the conversation language: continue, revise the current phase, back-jump to an earlier phase and reset downstream state, or stop while preserving `design_state.yaml`. Do not guess when a materially different visual direction remains unresolved.
 
 ## Pipeline Execution
 
-메인 에이전트가 Skill tool 로 각 phase 를 직접 호출한다. invoke 인자·산출 파일 목록 등 실행 상세는 [references/pipeline-execution.md](references/pipeline-execution.md) — 아래는 phase 별 checkable completion criterion([CONFIRM Gate])만 잔류.
+Read [references/pipeline-execution.md](references/pipeline-execution.md) for invocation arguments and exact output lists. The table below defines phase completion gates:
 
-| phase | invoke | [CONFIRM Gate] |
+| Phase | Invoke | Completion gate |
 |---|---|---|
-| 0 design-init | `design-init` | "환경 점검 + Design MCP 프로비저닝 완료. refs 로 진행할까요? (진행 / 수정 / 중단)" |
-| 1 design-refs | `design-refs` | "레퍼런스 정리 완료. tokens 로 진행할까요? (진행 / 수정 — 레퍼런스 추가·교체 / 중단)" |
-| 2 design-tokens | `design-tokens` | "토큰 결정. components 로 진행할까요? (진행 / 수정 — 토큰 조정 / back-jump — refs 로 / 중단)" |
-| 3 design-components | `design-components` | "컴포넌트 완료 (렌더 확인함). review 로 진행할까요? (진행 / 수정 — 컴포넌트 보강 / back-jump — tokens / refs 로 / 중단)" |
-| 4 design-review | `design-review` | "review 통과. handoff 로 진행할까요? (진행 / 수정 — 비평 반영 / back-jump — tokens·components / 중단)" — 🔴/verifier `needs_work` 시 `phases.review: failed` + components 재호출 권장 |
-| 5 design-handoff | `design-handoff` | **[Final Confirm]** "디자인 사이클 완료. (확인 / back-jump — 어느 phase 든 / 중단)" |
+| 0 | `design-init` | Environment checked and visual harness provisioned or fallback recorded; confirm whether to continue to references |
+| 1 | `design-refs` | Reference brief complete; confirm whether to continue to tokens |
+| 2 | `design-tokens` | Tokens and specimen rendered; confirm whether to continue to components |
+| 3 | `design-components` | Components or assets rendered and inspected; confirm whether to continue to review |
+| 4 | `design-review` | Verifier and critic verdicts recorded; on `needs_work`, mark review failed and return to components |
+| 5 | `design-handoff` | Handoff and exports complete; final confirmation may accept, back-jump, or stop |
 
-## Design state 관리
-
-`design_state.yaml`:
+## Design State
 
 ```yaml
 design_name: <name>
 scope: ui  # or webapp/slide/icon/diagram/mixed
-artifact: standalone  # or project (stack 유무로 auto-detect)
+artifact: standalone  # or project; auto-detected from the stack
 created: <date>
 phases:
   init: done
@@ -175,23 +165,26 @@ phases:
 last_updated: <timestamp>
 ```
 
-## Auto-delegation from autopilot-spec
+## Delegation from `autopilot-spec`
 
-autopilot-spec Phase 2 가 `Invoke Skill: autopilot-design --app <name>` 호출 시:
-- 산출물 위치를 `<artifact-root>/spec/design/` 로 자동 설정
-- `--intensity` 옵션은 autopilot-spec 의 그것 상속 (검증 rigor 는 거기서 파생)
-- 완료 후 `phases.design: done` 을 autopilot-spec 의 `pipeline_state.yaml` 에 갱신
+When `autopilot-spec` invokes `autopilot-design --app <name>` in Phase 2:
+
+- write outputs under `<artifact-root>/spec/design/`
+- inherit its `--intensity`, including the derived verification rigor
+- after completion, set `phases.design: done` in the calling pipeline's `pipeline_state.yaml`
 
 ## Return Format
 
-```
+```text
 <output_path> -- ✅ Phase {N} ({phase_name}) completed
 ```
-전체 사이클 완료 시: `<output_path> -- ✅ Design cycle completed (handoff ready)`
 
-## Update memory
+After the full cycle:
 
-- 사용자 디자인 선호 (minimal / dense / playful, 색감, 폰트)
-- 자주 만든 컴포넌트 패턴
-- scope 별 phase auto-skip 판단 기준
-- 외부 레퍼런스 vs 자체 디자인 비중
+```text
+<output_path> -- ✅ Design cycle completed (handoff ready)
+```
+
+## Optional Continuity
+
+The acting agent may retain useful, non-obvious design preferences or recurring patterns through the normal memory path when they are likely to improve future work. Do not turn examples such as density, color, typography, component patterns, or scope-specific phase choices into deterministic storage rules.

@@ -1,26 +1,31 @@
 # code-refine
 
-> 본 README 는 Claude adapter skill 요약. 권위 있는 Claude runtime 동작 명세는 같은 폴더의 `SKILL.md`; portable capability 의미는 `<agent-home>/capabilities/`.
+> This README summarizes the portable capability for users and maintainers. The model-neutral contract lives under `<agent-home>/capabilities/`; `SKILL.md` in this directory provides shared guidance for runtime-specific projections.
 
-## 개요
-사용자 메모/코멘트를 plan에 반영해 업데이트하는 skill (**구현 금지**). 한국어 `plan_ko.md`에 삽입된 메모를 감지하고 영·한 양쪽을 동기화.
+## Overview
 
-## 호출 형식
+Updates an existing plan from user annotations, plan-check feedback, or verification-failure notes without implementing it. The canonical plan remains authoritative; synchronize only companions that already exist or are explicitly required.
+
+## Invocation
+
 ```
 /code-refine <plan name or path>
 ```
 
 ## Plan Resolution
-> `$ARGUMENTS`→plan 경로 해석 단일 authority = [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md). 단, code-refine 은 `plan.md` 와 `plan_ko.md` 를 _둘 다_ resolve (path swap; refine 고유).
 
-## 위임 — 기획팀
+> The single authority for resolving `$ARGUMENTS` to a plan path is [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md). Recognize canonical `plan.md` and an existing companion such as legacy `plan_ko.md`; swap between known companion paths only when both files belong to the same plan.
+
+## Delegation — `기획팀`
+
 ```
-Refine mode. Update an existing plan based on user memos.
+Refine mode. Update an existing implementation plan from user memos, plan-check feedback, or verification-failure notes.
 
-Korean plan file: {$ARGUMENTS}
-English plan file: {with plan_ko.md replaced by plan.md}
+Supplied plan: {$ARGUMENTS}
+Canonical plan: {resolved plan.md path}
+Existing companion plans: {resolved paths, or none}
 
-Read the Korean plan and find all user memos. Formats:
+Read the supplied and canonical plans and identify user annotations. Formats:
 - <!-- memo: ... --> (standard)
 - <!-- ... --> (any HTML comment)
 - // ... (inline)
@@ -28,35 +33,35 @@ Read the Korean plan and find all user memos. Formats:
 - (**...**) (parenthetical)
 Do NOT treat the plan's original author-written prose as a memo.
 
-Re-read source files if needed, update Korean plan in-place, sync changes to English.
+Re-read relevant source files when needed, update the canonical plan in place, and synchronize existing required companions.
 Remove memo comments after incorporating them.
 Return which steps were changed and a brief summary.
 ```
 
 ## Rigor Scaling
-검증 rigor tier 는 plan frontmatter 의 `qa_level` (intensity 에서 파생된 값, [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)) 에서 온다. `--autonomy`는 strip만 (code-refine은 autonomy gating 없음).
 
-| Level | 조건 | 행동 |
+Derive the verification rigor tier from the plan's selected `--intensity` context per [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers). This is an optional correction of a durable plan, not an automatic stage in `direct` or `quick`.
+
+| Rigor | Review after refinement | Correction budget |
 |---|---|---|
-| Light | ≤3 steps 변경, 기계적 | 1× fast reviewer |
-| Standard | 4-10 steps 변경, 로직 변경 | 1× deep reviewer |
-| Thorough | >10 steps 변경, 아키텍처 | 2× 병렬 (A correctness / B completeness) |
-| Adversarial | Cross-variant + external adversary 가용 | Thorough + 1× external adversary |
+| Quick | Direct invocation only: one fast sanity review or self-check | Record residual concerns; no repeated loop |
+| Light | One focused fast review when execution could be affected | One bounded correction for blocking issues |
+| Standard | One lightweight `qa-team` plan-review pass over changed steps | At most one correction |
+| Thorough | Multi-axis review only when selected by `intensity=thorough` | Up to two synthesized corrections |
+| Adversarial | Thorough review plus explicit failure-mode, security, and adversarial critique when available | Fail loudly when explicitly requested and unavailable; otherwise report a fallback to Thorough |
 
-### Thorough — 병렬 2팀
-- Agent A: **correctness** — 수정된 step이 올바른 파일/함수 참조? 의존성 업데이트?
-- Agent B: **completeness** — 변경의 downstream 영향 반영? 누락 step?
-각자 별도 리뷰 파일에 쓰기. ANY 🔴 처리 필수.
+## Selected Post-Refine Review Pass
 
-## Selected Post-Refine Review Pass (caller-selected budget)
-`mkdir -p {log_dir}/plan_reviews` 후:
-- Light/Standard: 1 agent — "Review changed steps. Plan: [path], Changed: [list]. Write to: refine_round_{N}.md"
-- Thorough: 2 agents 병렬 (A/B), 다른 focus + 다른 파일
+Create `{log_dir}/_internal/plan_reviews` and run only the review action selected by the caller's graph:
 
-**verdict 체크**:
-- 🔴 없음 → 종료, 사용자에게 보고
-- 🔴 있음 → 기획팀 재호출 → QA 재호출. 🔴 없거나 최대 라운드까지
-- 3 라운드 후 🔴 잔여 → `## 미해결 이슈`에 추가, 사용자에게 변경 step / 해결·미해결 이슈 보고
+- Light/Standard: one focused review — `Review changed steps. Plan: [path], Changed: [list]. Write to: {log_dir}/_internal/plan_reviews/refine_round_{N}.md`
+- Thorough/Adversarial: the bounded multi-axis or adversarial review selected by intensity
+
+**Verdict handling**:
+
+- No 🔴 → finish and report to the user.
+- Any blocking finding → invoke `기획팀` for no more than the selected correction budget, then rerun only the selected check.
+- Any finding remaining after the budget → add it to the plan's risk or unresolved section, preserving an existing functional compatibility heading such as `## 미해결 이슈`, and report changed steps plus resolved and unresolved issues to the caller.
 
 ---
-*Claude adapter realization: `<agent-home>/adapters/claude/skills/code-refine/SKILL.md`; compatibility reference: `<agent-home>/skills/code-refine/SKILL.md`*
+*Portable capability contract: `<agent-home>/capabilities/code-refine.md`; shared skill guidance: `<agent-home>/skills/code-refine/SKILL.md`.*

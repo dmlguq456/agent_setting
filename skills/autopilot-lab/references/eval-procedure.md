@@ -1,126 +1,72 @@
-## ━━━ eval 모드 ━━━ (학습 후 평가·분석)
+## Eval mode: post-training evaluation and analysis
 
-학습 완료된 ckpt 를 평가·분석한다. 대상은 _직전 setup 실험_ (자동) 또는 `--parent <slug>` (재평가·새 데이터).
+Evaluate a completed checkpoint from the latest setup experiment or from `--parent <slug>` for reevaluation or new data.
 
-> **Stage-dispatch (eval 쪽)** — 계약 본문은 `setup-procedure.md` 상단(§Stage-dispatch 계약) 참조. eval 의 durable 스테이지(E2 실행/E3-2 plot/E3-3 비교)도 `standard+` 자리엔 depth-2 headless 세션으로 dispatch 되며, **file-only handoff** 를 유지한다 — 각 팀은 산출물 경로(metrics.jsonl / REPORT.md / research/)만 입력받고 이전 스테이지 대화 맥락은 참조하지 않는다.
+> **Stage dispatch:** use the contract in `setup-procedure.md`. At standard+, dispatch durable E2 execution, E3-2 plotting, and E3-3 comparison as depth-2 headless sessions with file-only handoff. Each team reads only artifact paths such as `metrics.jsonl`, `REPORT.md`, and research inputs, never earlier conversational context.
 
-#### stage-worker 매핑 (eval)
+#### Eval stage-worker mapping
 
-| stage | in-session team | input artifacts | output artifacts | write class |
+| Stage | In-session team | Input artifacts | Output artifacts | Write class |
 |---|---|---|---|---|
-| E2 실행 | 테스트팀 (functional) | `eval.py` + ckpt | metric 값(run.json best) + `metrics.jsonl` | dispatched (depth-2) |
-| E3-2 plot | 자료팀 (figure-gen) | `metrics.jsonl` | `figures/*.{png,pdf}` | dispatched (depth-2) |
-| E3-3 compare | 연구팀 (research-survey) | `REPORT.md` + `research/`/`analysis_project/paper/` | `REPORT.md` "기존 paper 와의 비교" 섹션 | dispatched (depth-2) |
+| E2 execution | 테스트팀, functional | `eval.py` and checkpoint | Metric values in `run.json best` plus `metrics.jsonl` | Dispatched depth 2 |
+| E3-2 plot | 자료팀, figure-gen | `metrics.jsonl` | `figures/*.{png,pdf}` | Dispatched depth 2 |
+| E3-3 compare | 연구팀, research-survey | `REPORT.md`, `research/`, and `analysis_project/paper/` | Comparison section in `REPORT.md` | Dispatched depth 2 |
 
-> **동시성 가드**: 서로 다른 스테이지가 동일 파일에 락 없이 동시에 쓰지 않는다(필요하면 OPERATIONS §5.8 `.pipeline-lock`) — `autopilot-code` 의 `pipeline_summary.md` 락 취급과 동형. 단 `_RUNLOG.md` 는 **append-only timeline** 이라 예외: S3-2 가 자신의 experiment 줄을 append 하고, E3-4 는 _그 줄만_ 찾아 갱신(새 줄 append 아님) — 다른 실험 줄과 충돌하지 않는다.
+Do not let stages write the same file concurrently without the OPERATIONS §5.8 `.pipeline-lock`. `_RUNLOG.md` is an append-only timeline exception: S3-2 appends the experiment row, and E3-4 updates only that row rather than appending another.
 
-### E1: eval spec (1 화면)
+### E1 — One-screen eval specification
 
-**E1-1. 대상 결정** — `--from`/직전 `_RUNLOG` ⏳ 대기 줄 또는 `--parent` 로 _어떤 실험·ckpt_ 인지 확정. 평가 데이터(기존 test set 또는 새 데이터)·metric 자동 추론.
+**E1-1. Resolve the target.** Use `--from`, the latest pending `_RUNLOG` row, or `--parent` to select the experiment and checkpoint. Infer evaluation data and metrics from the existing test set or new-data request.
 
-**E1-2. 한 화면 컨펌**:
+**E1-2. Confirm in one screen**, localized to the user's communication language:
 
-```
+```text
 === Eval Spec ===
-대상 실험:    <date>_<slug> (또는 parent: <slug>)
-ckpt:        experiments/<slug>/runs/run-001/ckpt/best.pt
-mode:        eval
-평가 데이터:   <기존 test set / 새 데이터 — 재평가 자리>
-metric:      <PSNR / SSIM / SI-SDR / 등>
-비교 대상:    <sibling 실험 / 부모 / paper baseline>
+Experiment:     <date>_<slug> or parent: <slug>
+Checkpoint:     experiments/<slug>/runs/run-001/ckpt/best.pt
+Mode:           eval
+Evaluation data:<existing test set or new data>
+Metrics:        <PSNR, SSIM, SI-SDR, ...>
+Comparison:     <sibling, parent, or paper baseline>
 
-이대로 진행? (진행 / 수정 / 중단)
+Proceed? (continue / revise / stop)
 ```
 
-**E1-3. run.json 출생 (eval-only `--parent` 진입 자리 — 기계판독 짝)** — `experiments/<id>/run.json` 이 _없으면_ 여기서 출생한다 (**file-existence 가드**: setup→eval 정상 사이클은 S3-2 에서 이미 만들었으므로 _재출생·덮어쓰기 X_). `eval --parent` 직접 진입(학습 없이 재평가 — 아래 예시 4)은 S3 를 안 거쳐 run.json 이 안 태어나는 공백을 닫는다 (사람용 거울 = E3-4 의 "⏳ 줄 없으면 새 줄 append" 와 짝). 출생값: `status:"running"`, `skill_mode:"eval"`(= `pipeline_state.mode`), `parent`(`--parent` slug), `started_at`(now, ISO8601), `config_ref`(부모 config 경로 또는 null), `ckpt_path`(평가 대상 ckpt — 예: `experiments/<parent>/runs/run-001/ckpt/best.pt`), `best` _생략_. E3-4 에서 setup run 과 동일하게 `done`+`best`+`ended_at` 갱신 (S3-2 setup 출생과 대칭 — §출력 데이터계약 lifecycle).
+**E1-3. Create `run.json` only for direct eval-only entry.** If `experiments/<id>/run.json` does not exist, create it here; never recreate or overwrite the file born in setup S3-2. For `eval --parent`, write `status: "running"`, `skill_mode: "eval"` from `pipeline_state.mode`, parent slug, current ISO 8601 `started_at`, parent config path or null `config_ref`, and the evaluated parent checkpoint path. Omit `best`. E3-4 updates it to done with `best` and `ended_at`.
 
-### E2: eval 실행 안내
+### E2 — Execution guidance
 
-**E2-1. eval 명령 안내** — scaffold 된 `eval.py` 를 ckpt + 데이터에 실행:
+Run the scaffolded `eval.py` against the checkpoint and data:
 
-```
-실행:
-  cd experiments/<slug>
-  python eval.py --config config.yaml --ckpt runs/run-001/ckpt/best.pt [--data <new_data>]
-```
-
-무거운 평가는 사용자 직접. _가벼운 평가_ (작은 test set) 자리는 사용자 발화 시 테스트팀 자동 실행 가능:
-
-```
-"가볍게 평가 돌려줘" 자리:
-Agent(subagent_type="테스트팀"):
-  "Mode: functional (eval run).
-   target: experiments/<slug>/eval.py + ckpt
-   Return: metric 값 (eval 최종 묶음 — run.json best 로 요약) + per-step stream 경로 (experiments/<slug>/metrics.jsonl)."
+```bash
+cd experiments/<slug>
+python eval.py --config config.yaml --ckpt runs/run-001/ckpt/best.pt [--data <new_data>]
 ```
 
-### E3: 분석 + summary + `_RUNLOG` ✅
+The user runs heavy evaluation. For an explicit lightweight request such as `가볍게 평가 돌려줘`, the test team may execute a small test set. Invoke `Agent(subagent_type="테스트팀")` in functional eval mode with `eval.py` and the checkpoint. It returns final metrics summarized into `run.json best` and the per-step stream path `experiments/<slug>/metrics.jsonl`.
 
-**E3-1. 결과 정리** — 사용자가 "결과 정리해" 발화 또는 메인 에이전트가 eval 종료 보고 인지:
+### E3 — Analysis, report, and completion
 
-```
-=== REPORT draft (→ REPORT.md 로 저장, E3-4) ===
-실험:        {date}_{slug}
-시도:        <spec 의 이번 시도 한 줄>
-결과:        <metric 표 — best / final / 차이>
-ablation:    <표 — 변수 × metric (sibling 실험 비교)>
-부모 대비:    <parent 있으면 — delta>
-관찰:        <2-3 bullet>
-그림:        <figures/*.png 을 REPORT.md 본문에 ![](figures/..) 로 인라인 임베드 — 경로만 적기 X>
-다음 후보:    <한 줄 — 다음 실험 시드>
+**E3-1. Draft the result** when the user asks to organize results or the main agent observes eval completion. Use a localized one-screen preview with experiment, attempted change, best/final/delta metrics, sibling ablation table, parent delta, two or three observations, inline figure paths, and one next candidate. Ask whether to save, revise, or stop.
 
-이대로 저장? (저장 / 수정 / 중단)
-```
+**E3-2. Optional plotting on user request.** For `결과 plot 그려줘` or `ablation 표 정리`, invoke `Agent(subagent_type="자료팀", mode="figure-gen")` with `metrics.jsonl`, the project's figure conventions from memory or existing plots, and output paths under `figures/`.
 
-**E3-2. plot / 시각화 → 자료팀 _figure-gen_ (옵션, 사용자 발화 시)**:
+Embed every generated figure in `REPORT.md` with `![<caption>](figures/<plot>.png)`. Do not merely list the path. Embed it in `STORY.md` too when it directly supports the narrative. Markdown already renders images, so do not create HTML for figures alone. Reserve E3-5 HTML for audio or media playback that Markdown previews cannot handle.
 
-```
-"결과 plot 그려줘" / "ablation 표 정리" 발화 자리:
-Agent(subagent_type="자료팀", mode="figure-gen"):
-  "Mode: figure-gen.
-   target: experiments/{date}_{slug}/metrics.jsonl
-   spec: 사용자 코드베이스의 figure 컨벤션 (project_user_paper_figure_style 메모리 또는 cwd 의 기존 plot 참고)
-   Output: experiments/{date}_{slug}/figures/{plot_name}.{png,pdf}."
-```
+**E3-3. Optional paper comparison at standard+ on user request.** For `결과를 기존 paper 와 비교해줘`, invoke `Agent(subagent_type="연구팀", mode="research-survey")` with `REPORT.md`, `<artifact-root>/research/`, and `analysis_project/paper/`. Compare metrics with published baselines, locate the changed surface in prior work, and explain whether observations support or challenge paper claims. Add a comparison table and a concise audience-language summary under `## 기존 paper 와의 비교` in `REPORT.md`.
 
-> **생성한 figure 는 반드시 `REPORT.md` 본문에 markdown 이미지로 인라인 임베드** (`![<caption>](figures/<plot>.png)`) — `figures/` 에 저장만 하고 경로만 적는 것 **X**. REPORT.md 가 _그림 들어간_ 보고서가 되게 (그림 없는 텍스트 보고서 금지). figure 가 STORY 의 결과 서술과 직결되면 STORY.md 에도 임베드.
-> **이미지 vs 오디오 경계 (보고서 형식 선택의 단일 기준)**: markdown 은 이미지를 인라인 렌더하므로 _그림은 항상 md 임베드로 충분_ — **그림만 있으면 HTML 만들지 말 것**. E3-5 의 HTML 은 _오직 오디오/미디어 재생_ 용 (markdown 이 `<audio>` 재생을 막기 때문). 즉 figure→md 인라인(default) / audio→HTML(E3-5).
+**E3-5. Optional formal report** for `--report`, `보고서 써줘`, `공유용`, or high-stakes publication:
 
-**E3-3. paper 비교 → 연구팀 _research-survey_ (옵션, qa standard+ + 사용자 발화 시)**:
+- **General prose report:** hand off to `autopilot-draft --mode doc` with `summary.md`, `STORY.md`, `figures/`, and run metrics. Draft owns prose generation and produces `documents/{date}_{slug}/`; eval only requests the handoff.
+- **Playback HTML for audio/media experiments:** have the material team generate separated audio, spectrogram segments, and embedded `<audio>`/`<img>` in `experiments/{date}_{slug}/report/report.html`. Markdown previews block `<audio>`, so audio domains default to HTML. Split long audio into pages of bounded segments. When necessary, serve locally through `python -m http.server --bind 0.0.0.0 <port>` and provide the URL.
 
-```
-"결과를 기존 paper 와 비교해줘" 발화 자리:
-Agent(subagent_type="연구팀", mode="research-survey"):
-  "Mode: research-survey (실험 결과 자리).
-   결과: experiments/{date}_{slug}/REPORT.md
-   사전 자료: <artifact-root>/research/ + analysis_project/paper/
+`REPORT.md` remains the default self-contained deliverable. Prose-pipeline output and playback HTML are optional layers; when both exist, let prose link relatively to the HTML comparison.
 
-   비교 axis:
-   - 본 실험의 metric vs 기존 paper baseline
-   - 본 실험의 변경 자리가 paper 어디 자리와 닿나
-   - 본 실험의 관찰이 paper 의 주장·반박과 어떤 자리
+**E3-4. Save and finalize:**
 
-   Return: 비교 표 + 한국어 한 단락 요약 (REPORT.md 에 ## 기존 paper 와의 비교 섹션 추가)."
-```
-
-**E3-5. 정식 보고서 (옵션 — 공유·의사결정용. `--report` / "보고서 써줘"·"공유용" 발화 / high-stakes(논문·외부 공개))**:
-
-`summary.md` 는 _1 화면 실험 기록_ (계보·다음 후보). 그걸 넘어 _공유·의사결정용 정식 문서_ 가 필요하면 본 단계에서 산출. 두 형태 — 실험 성격으로 분기:
-
-- **prose 보고서** (일반 실험) → `autopilot-draft --mode doc` 핸드오프. 입력 = `experiments/{date}_{slug}/{summary.md, STORY.md, figures/}` + runs metrics. 산출은 `documents/{date}_{slug}/` (draft 컨벤션·리뷰·다듬기). eval 은 _요청·핸드오프_ 만 — prose 생성은 draft 가 담당(machinery 중복 방지).
-- **재생 HTML 보고서** (음성·오디오·미디어 실험 — 청취·스펙트로그램·시각 비교가 본질) → `자료팀 figure-gen` 으로 분리음/스펙트로그램 세그먼트 + 임베드 `<audio>`/`<img>` **단일 HTML** 생성 (`experiments/{date}_{slug}/report/report.html`). _markdown `<audio>` 는 VS Code 프리뷰가 차단_ → **audio 도메인은 HTML 기본**. 긴 오디오는 _N분 단위 세그먼트 페이지_ 분할. 필요시 `python -m http.server --bind 0.0.0.0 <port>` 로컬 서빙 + 접속 URL 안내.
-
-기본 deliverable = `REPORT.md`(E3-4, 자체완결 정식 보고서). 본 E3-5(autopilot-draft prose / 재생 HTML)는 그 위에 _외부 공개·의사결정용 doc-pipeline_ 또는 _오디오/미디어 재생_ 이 필요할 때만 추가. 둘 다 필요하면 prose + HTML 병행(prose 가 HTML 비교본을 상대링크).
-
-**E3-4. 저장 — 산출물 갱신** (최종 deliverable = `REPORT.md`):
-
-- `experiments/{date}_{slug}/REPORT.md` — **eval 의 최종 산출물 = 자체완결 정식 보고서.** 구조: _요약(Executive Summary) 맨 위_ → 배경·동기 → 가설 → 방법 → 결과 → 해석 → 결론 → 다음 → 재현. **figure 는 `![](figures/..)` 본문 인라인.** **자체완결 필수** — 실험에서 도입한 조건명·구조명·약자·metric 정의를 _보고서 안에서 풀어_ 대화 맥락 없는 독자도 읽히게(예: "single/multi 같은 게 뭔지 보고서만 봐선 모름"을 차단). 사용자가 볼 것은 흩어두지 말고 _전부 이 한 파일에 통합_ (summary·STORY 요지·metrics·figure 를 여기로).
-- `experiments/{date}_{slug}/summary.md` — RUNLOG/parent auto-read 용 _1줄 인덱스_ (판정 한 줄 + `REPORT.md` 포인터). _사용자 deliverable 아님._
-- `experiments/{date}_{slug}/STORY.md` — narrative 누적 (motivation·이전/부모 정리·이번 시도·결과·다음 후보 한 단락)
-- `<artifact-root>/experiments/_RUNLOG.md` — S3-2 에서 append 한 _해당 실험(date+slug) 줄_ 을 찾아 _상태 ✅ 완료 + 결과·다음_ 으로 **갱신** (새 줄 append X — 한 실험 = 한 줄 유지):
-  ```
-  | 2026-05-26 | lr_sweep | TF_Restormer base, lr 1e-3→3e-4 | ✅ 완료 | val PSNR 28.4→28.7 (+0.3) · 다음: warmup 1k step |
-  ```
-  - 부모 있으면 _시도_ 칸에 `(← <parent_slug>)` 표기. 드물게 ⏳ 줄이 없으면(예: setup 없이 `--from eval` 직접 진입) 새로 append. 중단·실패는 `❌ 중단` 으로 갱신.
-- `experiments/{date}_{slug}/run.json` — **기계판독 manifest 갱신** (S3-2 setup / E1-3 eval-only 에서 출생한 파일을 찾아). `status:"done"`, `ended_at`(now, ISO8601), `best:{name,value,step}`(eval 분석 산물 — `_RUNLOG ✅`·REPORT 와 동일 metric). 중단·실패는 `status:"failed"` + `ended_at`(중단 시각) 기록, `best` _생략_ (`_RUNLOG ❌ 중단` 거울 — §출력 데이터계약 best 부재 규칙). `_RUNLOG.md` 는 이 파일의 사람용 거울.
-- **종료 dispatch (방출만)** — eval 종료 시 `run.json` 의 `best` + parent 대비 delta 를 worklog 결재함/보드가 소비하도록 _방출_. **lab 은 방출만 — 능동 push X** (수신·카드화는 worklog E3, PRD §25.7; loops 결재함 패턴 동형). 소스 = `run.json best:{}` (새 분석 0). (§출력 데이터계약 종료 dispatch)
+- `REPORT.md` is the self-contained final report. Put Executive Summary first, followed by background, hypothesis, method, results, interpretation, conclusion, next steps, and reproduction. Embed figures. Define every condition, structure, acronym, and metric so a reader without the conversation understands it. Consolidate summary, STORY, metrics, and figures here.
+- `summary.md` is only a one-line index for RUNLOG and parent auto-loading, with a verdict and a pointer to `REPORT.md`; it is not the user deliverable.
+- `STORY.md` accumulates motivation, previous or parent context, this attempt, result, and next candidate.
+- Update the existing experiment row in `<artifact-root>/experiments/_RUNLOG.md` from pending to done with result and next step. Do not append a second row. Mark the attempt with `(← <parent_slug>)` when applicable. Append only when an eval-only entry has no existing row. Use failed status for interruption or failure.
+- Update the existing `run.json` to `status: "done"`, current `ended_at`, and `best: {name,value,step}` using the same metric as the report and RUNLOG. On failure, write `status: "failed"` and `ended_at` but omit `best`.
+- Emit `run.json best` and parent delta for worklog consumption. Lab emits only; worklog receives and creates cards. Do not recompute the result or push proactively.

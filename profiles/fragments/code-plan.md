@@ -6,7 +6,7 @@ implementation plan, nothing downstream.
 
 ### Sub-skill role + in-session team
 
-- Run `code-plan`. Internal parallelism is the in-session **plan-team (기획팀)**
+- Run `code-plan`. Internal parallelism is the in-session **plan-team**
   only — read source + prior artifacts and produce/refine the plan document.
 - Return only a short verdict (plan paths + a one-line readiness note); the
   conductor reads the plan file, not your prose.
@@ -15,9 +15,12 @@ implementation plan, nothing downstream.
 
 - **Read** (from files, never prior-stage conversation): the dispatched task,
   the `spec/` blueprint, and any prior `plans/<slug>/` cycles.
-- **Write** (this stage's class only): `plans/<slug>/plan/{plan.md,plan_ko.md}`
-  and `_internal/plan_reviews/`. Do **not** touch source, checklist, dev_logs,
-  test_logs, or report artifacts — those belong to later stages.
+- **Write** (this stage's class only): the canonical
+  `plans/<slug>/plan/plan.md`, any audience-language companion that already
+  exists or was explicitly requested, and `_internal/plan_reviews/`. The legacy
+  Korean compatibility path is `plan_ko.md`; its name does not make it a
+  required output. Do **not** touch source, checklist, dev_logs, test_logs, or
+  report artifacts — those belong to later stages.
 
 ### File-only handoff
 

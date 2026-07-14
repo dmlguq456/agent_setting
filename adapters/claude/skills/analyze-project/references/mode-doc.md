@@ -1,33 +1,32 @@
 # Mode `doc`
 
-Analyzes miscellaneous doc-creation materials (reviewer comments, format templates, past samples, internal notes, mixed reference packs) and produces structured per-task analysis.
+Analyze miscellaneous document-creation material—reviewer comments, format templates, prior samples, internal notes, and mixed reference packs—and produce structured per-task analysis.
 
-## Phase 1: Input Discovery & Classification
+## Phase 1: Discover and Classify Inputs
 
-**Input scope resolution** (in priority order):
-1. **Positional arg 명시**: 그 folder를 input scope로 (외부 폴더 override).
-2. **Default — cwd 자동 발견**: 다음 패턴 grep within cwd + 1-level subdirs:
-   - `docs/` / `reviews/` / `templates/` / `reviewer_comments/` / `format/` / `guidelines/` (sub-folder 통째로)
-   - root에 흩어진 `*.docx` / `*.pdf` (paper로 분류되지 않는 것) / `*_review.md` / `*_template.*` / `*_sample.*`
-3. **Output sub-folder `{name}`**: positional 명시 → 그 folder name (basename) / 자동 발견 → cwd basename 또는 task description-derived
+Resolve input scope in this order:
 
-Read input scope. Classify each file by heuristic:
+1. An explicit positional argument selects that folder, including an external-folder override.
+2. Otherwise scan the current directory and one level below it for `docs/`, `reviews/`, `templates/`, `reviewer_comments/`, `format/`, and `guidelines/`, plus root-level `*.docx`, non-paper `*.pdf`, `*_review.md`, `*_template.*`, and `*_sample.*` files.
+3. Name the output subdirectory from the positional folder basename, the current-directory basename, or the task description.
+
+Classify every file:
 
 | File pattern | Category | Output target |
 |---|---|---|
-| Filename contains `review`/`reviewer`/`comment` OR text contains "Reviewer 1:" / scoring | reviewer comments | `reviewers/` |
-| Filename contains `template`/`format`/`guideline`/`cfp`/`instructions` | format spec | `formats/` |
-| Filename suggests past example (`sample`, `past`, `example`, prior year naming) | sample | `samples/` |
-| PDF with academic structure (abstract/citations) | paper-like | (suggest `--mode paper` instead; or include as `samples/`) |
-| Other (notes, sketches, mixed) | misc | `misc/` |
+| Filename contains `review`, `reviewer`, or `comment`, or body contains reviewer labels or scores | reviewer comments | `reviewers/` |
+| Filename contains `template`, `format`, `guideline`, `cfp`, or `instructions` | format specification | `formats/` |
+| Filename indicates a prior example: `sample`, `past`, `example`, or prior-year naming | sample | `samples/` |
+| PDF has academic structure such as abstract and citations | paper-like | Recommend `--mode paper`, or place under `samples/` |
+| Notes, sketches, or other mixed material | miscellaneous | `misc/` |
 
-If classification is ambiguous → 연구팀에게 위임해 판단.
+If classification remains ambiguous, delegate the judgment to the **research-team**.
 
-## Phase 2: Per-Category Analysis
+## Phase 2: Analyze Each Category
 
-Delegate to 연구팀:
+Delegate to the **research-team** with this prompt:
 
-```
+```text
 Analyze doc-creation materials in this folder: {input_folder}
 Output: <artifact-root>/analysis_project/doc/{name}/
 
@@ -42,15 +41,14 @@ Also write 00_overview.md at root of {name}/:
 - Inventory of all files in the input folder, with classification
 - Key findings per category
 - Cross-references useful for autopilot-draft downstream
-- "intended for mode": likely autopilot-draft mode this material targets (`paper` / `presentation` / `doc` — `doc` 안 intent 라벨: rebuttal / review / report / proposal)
+- "intended for mode": likely autopilot-draft mode this material targets (`paper` / `presentation` / `doc`; for `doc`, label the intent as rebuttal / review / report / proposal)
 
 Use the selected target artifact language for narrative; preserve the source
 language for verbatim quotes. Return ONLY paths + a concise summary.
 ```
 
 ## Phase 3: Verify
-- Confirm all input files are classified (none silently dropped).
-- If classification was ambiguous, prompt user to confirm or override.
-- Logged to `<artifact-root>/analysis_project/doc/{name}/_internal/`.
 
----
+- Confirm that no input file was silently dropped.
+- If classification remains ambiguous, ask the user to confirm or override it.
+- Write logs under `<artifact-root>/analysis_project/doc/{name}/_internal/`.

@@ -70,7 +70,7 @@ def _cycle_layout():
 
 def _layout_mode(w):
     """wide (1-line grid) / narrow (2-line cards) / stack (ultra-narrow, fields stacked
-    vertically — user 2026-07-02: '세로로 나열하는 느낌'). auto: width decides.
+    vertically. Auto lets the terminal width decide.
     F-15a P0-3: <70 stack · <138 narrow (2-line, the PRIMARY layout — most real terminals are
     ≤120 cols) · ≥138 wide (1-line, needs room for the options column too)."""
     if _LAYOUT != "auto":
@@ -99,7 +99,7 @@ _HUE_OF = {
     "g_stale": ("d", _A_D), "g_dead": ("r", _A_B),
     "lvl_g": ("g", 0), "lvl_y": ("y", 0), "lvl_r": ("r", _A_B),
     "grp_live": ("g", 0), "grp_hot": ("g", _A_B), "gate_t": ("g", _A_D), "gate_u": ("y", _A_D),
-    "grp_cool": ("y", _A_D), "grp_cold": ("d", _A_D),   # cooling=dim yellow / cold=dim grey (tint 행 색)
+    "grp_cool": ("y", _A_D), "grp_cold": ("d", _A_D),   # Cooling is dim yellow; cold is dim grey.
     "eff_low": ("d", _A_D), "eff_medium": ("d", 0), "eff_high": ("l", 0),
     "eff_xhigh": ("m", _A_B), "eff_max": ("r", _A_B),
     "h_claude": ("c", _A_D), "h_codex": ("m", _A_D), "h_opencode": ("l", _A_D),
@@ -189,8 +189,8 @@ def _init_colors():
     _COLOR["grp"] = curses.A_BOLD      # group (directory) card title
     _COLOR["grp_live"] = _COLOR.get("green", 0)
     _COLOR["grp_hot"] = _COLOR.get("green", 0) | curses.A_BOLD   # active card title (working)
-    _COLOR["grp_cool"] = _COLOR.get("yellow", 0) | curses.A_DIM  # cooling: 어두운 노랑(●·이름·✓경과시간)
-    _COLOR["grp_cold"] = curses.A_DIM                            # cold(오래된 비활성): 회색 고리 ○
+    _COLOR["grp_cool"] = _COLOR.get("yellow", 0) | curses.A_DIM  # Cooling indicator, name, and elapsed time.
+    _COLOR["grp_cold"] = curses.A_DIM                            # Cold inactive group: grey ring.
     # harness identity = dim colored text (color lives ONLY here for identity)
     for h in ("claude", "codex", "opencode"):
         _COLOR["h_" + h] = _COLOR.get("h_" + h, 0) | curses.A_DIM
@@ -206,7 +206,7 @@ def _init_colors():
     # qa rigor ramp (dispatch tag after the name): quick dim … adversarial bold
     for lvl, it in _QA_INT.items():
         _COLOR["qa_" + lvl] = it
-    # effort ramp v3 (2026-07-03 — user: 노란색 거슬림 + high/xhigh 는 색으로 달라야):
+    # Effort ramp v3: avoid excess yellow while distinguishing high and xhigh.
     # low/medium = no hue (weight only) < high = BLUE < xhigh = MAGENTA (bold) < max = RED
     # (bold, the one true alarm — unchanged). No yellow anywhere in the ramp.
     _COLOR["eff_low"] = curses.A_DIM
@@ -214,11 +214,11 @@ def _init_colors():
     _COLOR["eff_high"] = _COLOR.get("h_opencode", 0) & ~curses.A_DIM   # plain blue
     _COLOR["eff_xhigh"] = (_COLOR.get("h_codex", 0) & ~curses.A_DIM) | curses.A_BOLD  # bold magenta
     _COLOR["eff_max"] = _COLOR.get("red", 0) | curses.A_BOLD
-    # htop chrome (round-4, user: 헤더 행 배경색): the ONE background pair on screen — BLACK on
+    # htop chrome: the one background pair on screen — black on
     # WHITE full-width bars wrapping the board (column-header bar + footer key bar). htop's CYAN
-    # read as 촌스러움 (user 2026-07-02) → neutral white, the design round's V3 alternative.
+    # looked dated, so use neutral white.
     # Structural, one-shot — NOT a per-item classification color, so the fg color-axis budget
-    # ("무지개 노이즈" rule) is untouched. dim is invisible on the bar → keycaps use BOLD.
+    # The no-rainbow-noise rule remains; keycaps use bold because dim vanishes on the bar.
     try:
         curses.init_pair(15, curses.COLOR_BLACK, curses.COLOR_WHITE)
         _COLOR["hdr_bar"] = curses.color_pair(15)
@@ -228,14 +228,14 @@ def _init_colors():
     # bar BLANKS are drawn as white-fg █ blocks on the DEFAULT bg (pair 16), not as bg-colored
     # spaces: ncurses collapses blank runs into ECH/EL erase sequences, and on terminals without
     # working BCE the erased cells come out BLACK — the bar broke between words and after the
-    # text (user 2026-07-02: "헤더 안이어지는데" ×2). A block glyph is a real character, so it is
+    # text. A block glyph is a real character, so it is
     # physically written every time and looks identical to a white background cell.
     try:
         curses.init_pair(16, curses.COLOR_WHITE, bg)
         _COLOR["hdr_blk"] = curses.color_pair(16)
     except Exception:
         _COLOR["hdr_blk"] = 0
-    # round-5 panel tints (herdr 식 은은한 배경, 256-color only): (7 hue × tint level) pairs so
+    # Subtle panel tints in 256-color mode: seven hues by tint level.
     # text keeps its fg INSIDE a tinted band. Greyscale-only backgrounds — no new fg axis.
     # Failure of any init → _TINT_OK False → rail+gap fallback (spec §4, zero regression).
     global _TINT_OK
@@ -248,11 +248,9 @@ def _init_colors():
             # shown to ignore init_color — the green attempt stayed bright, hence the hue move).
             try:
                 if curses.can_change_color():
-                    # ≈ #0e0f21 — slightly darker, desaturated (user 튜닝 이력: #005f00 너무
-                    # 밝음 → #07081a 너무 어두움 → #0f123d 컬러 과함 → 이 값: 회색에 가까운
-                    # 미드나잇, '컬러감은 죽이고')
+                    # Approximately #0e0f21: dark, desaturated, near-grey midnight blue.
                     curses.init_color(17, 55, 60, 130)
-                    # cooling 배경 = 어두운 갈색 (≈#1e130a) — 무시되면 stock 94(#875f00 brown)
+                    # Cooling background is dark brown; stock 94 is the fallback.
                     curses.init_color(94, 120, 75, 38)
             except Exception:
                 pass
@@ -270,7 +268,7 @@ def _init_colors():
         _TINT_OK = False
         _TINT_PAIR.clear()
     # stage breadcrumb — each pipeline stage a DISTINCT color (user); the CURRENT stage is BOLD
-    # (bright, "눈에 띄는"), past/pending stages the same hue but DIM. Palette cycles by stage index.
+    # Bright current stages stand out; past and pending stages use the same hue dimmed.
     _stage_raw = [_hue.get("opencode", 0), _hue.get("claude", 0), _COLOR.get("green", 0),
                   _COLOR.get("yellow", 0), _hue.get("codex", 0)]  # blue · cyan · green · yellow · magenta
     for i, base in enumerate(_stage_raw):
@@ -295,20 +293,19 @@ def _live_key(state):
 # loading axis; stale/dead recede to grey/red. Readable without color.
 _LIVE_GLYPH = {"working": "●", "idle": "●", "blocked": "◑", "done": "✓",
                "stale": "·", "dead": "✕", "queued": "◦", "unknown": "·"}
-_DETACHED_GLYPH = "○"   # ring = 빈 자리(클라이언트 없음); idle 은 꽉 찬 dim-green ●
+_DETACHED_GLYPH = "○"   # Ring means no attached client; idle uses a filled dim-green dot.
 _GLYPH_KEY = {"working": "g_work", "idle": "g_work_off", "blocked": "g_idle", "done": "green",
               "stale": "g_stale", "dead": "g_dead", "queued": "dim", "unknown": "dim"}
 
 # group "cooling" state (user 2026-07-03): a directory with NO active work whose newest session
-# transcript write is within this window reads as "완료 직후 식는 중" — a middle state between hot
+# A recent transcript write reads as cooling after completion, between hot
 # (green ● + green-bold title) and cold (no glyph). It gets a grey ring + time-since-last-activity
 # in the header, so a just-finished repo says "done & waiting", not fully dormant. Tune freely.
 _COOL_WINDOW_MIN = 180
-# shape-size gradient (design r2): 더 최근·활동적일수록 채워진 큰 글리프. 방금 끝난 디렉토리(cooling)
-# = 채운 ● (아직 온기), 오래돼 잠든 디렉토리(cold) = 빈 고리 ○. 활성 working ● 은 녹색이라 회색과 구분.
-_COOL_FILLED = "●"      # cooling(방금 끝남, ≤_COOL_WINDOW_MIN) directory — 채운 원형(회색)
-_COOL_RING = "○"        # cold(오래된 비활성) directory — 고리 원형(회색)
-_COOL_TIME_ICON = "✓"   # 경과시간 프리픽스 — 이 값이 "완료 후 경과시간"임을 표시(done-then-elapsed)
+# Shape-size gradient: recent active states are larger and filled; cold groups use a ring.
+_COOL_FILLED = "●"      # Recently completed directory within the cooling window.
+_COOL_RING = "○"        # Long-inactive directory.
+_COOL_TIME_ICON = "✓"   # Prefix for elapsed time since completion.
 
 
 _BLINK_ON = True     # manual blink phase (toggled ~2 Hz in the live loop) — drives the spinner too
@@ -318,7 +315,7 @@ _SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"   # braille loading spinner — working
 
 def _glyph(state, dim=False):
     """Session/job status glyph. working = braille spinner frame — BRIGHT green for a main
-    session, DIM green for a dispatch job (user 2026-07-03: 스피너 컬러도 메인·분사 구분).
+    session, dim green for a dispatch job so main and dispatch spinners differ.
     idle = dim-green FILLED ●, detached = dim-green ring ○."""
     if state == "working":
         return _SPIN[int(time.time() * 10) % len(_SPIN)], ("g_work_off" if dim else "g_work")
@@ -407,7 +404,7 @@ _GATE_CACHE = {"ts": 0.0, "map": {}}
 def _wt_count(cwd):
     """Linked-worktree count for the repo owning `cwd` — counted from .git/worktrees/ entries
     (pure filesystem, no subprocess; follows a worktree's `gitdir:` file back to the main repo).
-    Surfaces leftover/parallel worktrees that have no live session (user 2026-07-03: wt 개수)."""
+    Surface leftover or parallel worktrees with no live session."""
     d = cwd
     for _ in range(30):
         g = os.path.join(d, ".git")
@@ -483,7 +480,7 @@ def _project_gate(cwd, sid=None):
 #     gauge slot    context % bar      stage breadcrumb (plan › exec › test)  ← "how far along"
 # main↔dispatch weight is carried by the badge (reverse vs dim font), so the identity columns can
 # stay aligned for comparison. Job flow never sits under branch/gate.
-_HW = 16                      # session harness field ("claude code" = 11 chars + 5 gap; user: 조금 더 넓게)
+_HW = 16                      # Session harness field: claude code plus spacing.
 _BRANCH_COL = 48              # absolute col where branch starts (both row types)
 _NAME_COL = 4 + _HW           # absolute col where the NAME starts — SHARED by both row types so
                               # everything from the name onward aligns (session: prefix 4 + harness
@@ -502,7 +499,7 @@ _MW = 23                      # model cell: name + FULL effort word ('Opus 4.8 x
 _EFW = 7                      # effort subfield ("medium"=6 +1 gap) — FIXED width so every row's
                               # effort lands in the same column, under its own 'effort' header
 _CTX_W = 16                   # context gauge (kept wide)
-_CLOCK = ""                   # elapsed time = bare value (1d4h) — ⏱ had width bugs, 'up' read 이상함
+_CLOCK = ""                   # Bare elapsed value; icons caused width and readability issues.
 
 # known pipeline stage sequences → the stage breadcrumb (process viz). Unknown keys/stages fall
 # back to a single lit stage token (never a fabricated track). Keyed by the dispatch `key`.
@@ -540,7 +537,7 @@ def _stage_role_label(worker_role):
         return None, ""
     return label, (":" + suffix if suffix else "")
 
-# plain-text column labels (icons removed per user — "위에 아이콘들은 전부 빼자").
+# Plain-text column labels without decorative icons.
 # 'effort' gets its OWN header over the fixed subcolumn inside the model cell (user 2026-07-02).
 _COL_HEAD = ("    " + "harness".ljust(_HW) + "session".ljust(_NW_S)
              + "branch".ljust(_BRW) + "model".ljust(_MW)
@@ -573,7 +570,7 @@ def _branch_seg(cwd, branch, dim=True):
 
 
 def _eff_key(effort, dim):
-    """Effort heat ramp (restored 2026-07-03 — user: effort 컬러 다시): low/medium recede,
+    """Effort heat ramp: low and medium recede,
     high = yellow, xhigh = bold yellow, max = bold red. Dispatch/stale rows stay flat dim."""
     if dim:
         return "dim"
@@ -581,8 +578,7 @@ def _eff_key(effort, dim):
 
 
 def _model_cell(model, effort, width, dim=False):
-    """model + effort written TOGETHER as one flowing phrase ('Fable 5 xhigh' — user 2026-07-03:
-    항목으로 나누지 말고), padded to `width` as a whole; rides the row's brightness axis."""
+    """Render model and effort together as one flowing phrase, padded to width."""
     name = _clean_model(dash(model)) or "—"
     sfx = effort or ""
     lkey = _model_key(model, dim=dim)
@@ -619,7 +615,7 @@ def _stage_segs(key, stage, working=False):
         # pre-plan boot (live_stage fell back to the argv key) / registry-only rows: show the
         # WHOLE track unlit — the breadcrumb is visible from the first tick and lights up
         # left→right (plan › exec › test) as plans/ artifacts appear. (user 2026-07-02:
-        # "구체적으로 plan → exec → test 순이 떠야하는건데")
+        # Preserve the concrete plan → exec → test sequence.
         out = []
         for i, st in enumerate(seq):
             if i:
@@ -721,7 +717,7 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
         segs.append(("  worktree-gone", "g_dead"))
 
     segs.append((_RFLUSH, None))                                     # ⏱uptime flush right
-    # (cost 표시는 제거 — user 2026-07-02: 금액 관련은 안 떠도 됨)
+    # Cost display intentionally omitted.
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(s.elapsed_min), "dim")]
     return segs
 
@@ -995,7 +991,7 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False):
         l1.append(("  worktree-gone", "g_dead"))
 
     # L2: elapsed time sits UNDER the harness column (fills the old empty indent — user
-    # 2026-07-03: 시간을 harness 아래로), model under the name, gauge right after (no deep
+    # Put time under the harness, model under the name, and gauge immediately after.
     # indent / no far-right flush).
     l2 = [("    ", None), (_pad(fmt_min(s.elapsed_min), _HW), "dim")]
     l2 += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
@@ -1086,7 +1082,7 @@ def _group_key_session(s):
 
 
 def _mem_row(s, layout="wide"):
-    """F-18b: mem-worker 세션의 dim 1-line — 기본 숨김, `a` 토글 시만. 라벨 'mem'."""
+    """Render a dim one-line memory worker, hidden unless ``a`` is toggled."""
     name = _clip_w(s.title or s.slug or (s.harness or "?"), 40)
     seg = [("  🧠 ", "dim"), ("mem ", "dim"),
            (name, "dim"), ("  ", None),
@@ -1206,7 +1202,7 @@ def _sort_group_sessions(ss):
     def k(s):
         r = _LIVE_RANK.get(s.liveness, 9)
         if s.detached and r < 3:
-            r = 3          # detached sinks below working/idle (user 2026-07-03: 제일 아래로)
+            r = 3          # Detached sessions sort below working and idle sessions.
         return (r, -(s.elapsed_min or 0))
     return sorted(ss, key=k)
 
@@ -1280,7 +1276,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # one row used them.
     _seen_glyphs = set()
     # account-level usage — shared per harness/account. ONE LINE PER HARNESS (user 2026-07-01:
-    # "모든 윈도우가 쭉 붙어있다 → 서로 간격 띄우고 게이지 길게"): long gauges, generous gaps, aligned.
+    # Use long gauges, generous gaps, and aligned windows.
     # rate is account-shared → take the FRESHEST session's value per harness (a stale session's
     # per-file rate is old; e.g. a 16-min-old file showed 7d 100% while the live rate was 15%).
     _rl = {}   # harness -> (rl_5h, rl_7d, rl_ms, mtime, rl_rs, rl_windows)
@@ -1291,7 +1287,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _rl[s.harness] = (s.rl_5h, s.rl_7d, s.rl_ms, s.mtime, s.rl_rs,
                                   getattr(s, "rl_windows", None))
     # harnesses with LIVE sessions but no rate source still get a row with an explicit note —
-    # a silently missing row read as a bug (2026-07-02 user: "opencode go 공급자로서 안뜨는거야?").
+    # A silently missing provider row looks like a bug.
     # opencode-go has no usage API (gateway 404s; docs: console-only), so say so on the board.
     _live_h = set(s.harness for s in sessions
                   if s.liveness not in ("stale", "dead") and not s.app_server and not s.is_child
@@ -1333,7 +1329,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                     row.append((" ↻ " + fmt_min(int((rs - now_ts) / 60)), "dim"))
             lines.append(row)
     # fleet pulse — htop's "Tasks: N, M running" analogue: whole-board census + live spend Σ
-    # (round-4b, user: "일단 띄우고 필요없으면 쳐내지뭐"). Counts skip app-server companions.
+    # Show the row by default; counts skip app-server companions.
     _real = [s for s in sessions if not s.app_server and not getattr(s, "mem_worker", False)]
     n_wk = sum(1 for s in _real if s.liveness == "working")
     n_id = sum(1 for s in _real if s.liveness == "idle")
@@ -1349,7 +1345,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     if listed_jobs:
         pulse += [("↳ %d" % len(listed_jobs), "dim"),
                   (" job%s (%d working)" % ("s" if len(listed_jobs) != 1 else "", jw), "dim")]
-    lines.append(pulse)                 # (Σ cost 롤업 제거 — user: 금액 표시 삭제)
+    lines.append(pulse)                 # Aggregate cost rollup intentionally removed.
     _mem_summary = _mem_summary_segs(memory)
     if _mem_summary is not None:
         lines.append(_mem_summary)
@@ -1414,15 +1410,14 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             arow.append(("⚠ " + txt, akey))
         lines.append(arow)
     # usage/intel zone = PLAIN bg + a full-width dim rule below it (user 2026-07-03: intel
-    # 틴트는 활성 카드와 헷갈림 → 틴트 제거, 구분선으로 존 경계) — tint stays directory-only.
+    # Keep tint directory-only so the intelligence zone is not confused with active cards.
     lines.append([(_HFILL, None)])
 
     # header bar REPLACES the `──` zone divider — htop separates meters from the process list
-    # with its bar, not a rule. One blank line above it (user 2026-07-02: header 위에 한칸) so
+    # with its bar, not a rule. Leave one blank line above it so
     # the top intel zone and the bar don't touch. Narrow mode's 2-line cards have no single
     # column mapping → the bar degrades to a zone label + current-mode hint.
-    # column header = PLAIN dim labels, no bar/tint at all (user 2026-07-02: 전체 헤더는 컬러
-    # 빼자) — the tinted panels below carry the block language; the header just names columns.
+    # Column header uses plain dim labels; tinted panels carry the visual grouping.
     lines.append(None)
     _sh = " " * (_INSET + _PAD_IN) if _TINT_OK else ""   # shift matches panel content columns
     if layout != "wide":
@@ -1433,7 +1428,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         # spaces mirror the tint rows' right inset so the label right-aligns with the values.
         lines.append([(_sh + _COL_HEAD, "head"), (_RFLUSH, None),
                       ("time" + " " * (_INSET + _PAD_IN + 1), "head")])
-    lines.append(None)                  # gap below the column header (user: 헤더 한칸 아래 띄우기)
+    lines.append(None)                  # Gap below the column header.
 
     first = True
     folded_groups = []       # dormant dirs — aggregated into ONE line at the bottom (user: the
@@ -1511,15 +1506,14 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         gword, gwkey = _gate_word(ggate, gpipe)
         if not gword:
             # no artifact root at all = outside the pipeline → same word as the exempt state
-            # (user 2026-07-03: untracked 일 때도 라벨을 띄우자 — no more blank gate slots)
+            # Show an explicit untracked label instead of a blank gate slot.
             gword, gwkey = "untracked", "gate_u"
-        # section title — NO indicator glyph at all (2026-07-03 user 이력: ▍ 어색 → dot 은 세션과
-        # 혼동 → "다른 활성 방식"): the TITLE ITSELF carries the active state — green bold name
+        # The section title has no indicator glyph; the title itself carries active state.
         # while the group works, plain bold otherwise. Doubles with the active card tint.
         n_work = sum(1 for s in live_sessions if s.liveness == "working") + \
                  sum(1 for j in group_jobs if j.liveness == "working")
         # cooling (round-6, user 2026-07-03): no active work, but the newest session transcript
-        # write is ≤ _COOL_WINDOW_MIN old → the directory just finished and is "식는 중". A middle
+        # A write within the cooling window indicates a directory that just finished.
         # state between hot (green ●) and cold (no glyph): a grey ring + time-since-done, so a
         # just-finished repo reads as "done & waiting" rather than fully dormant. Sessions linger
         # as idle (still within the 48h live window), so the group is not folded (R4).
@@ -1530,24 +1524,24 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             if 0 <= _age <= _COOL_WINDOW_MIN:
                 _cool_min = int(_age)
         # trailing slash = the universal "this is a directory" marker (ls convention — user
-        # 2026-07-03: 폴더(repo)임을 간단하게), dim so the name stays the focal word.
+        # Keep the folder marker dim so the repository name remains the focal point.
         # The blinking green ● now lives HERE (directory level = "work happening inside") —
         # sessions animate a spinner instead, so the dot no longer collides with row vocabulary.
         head_segs = []
         if n_work:
             head_segs += [("●", "g_work" if _BLINK_ON else "g_work_off"), (" ", None)]
         elif _cool_min is not None:
-            # 방금 끝남 = 채운 ● (회색): 아직 온기 — dead ✕/stale · 와 확실히 구분
+            # Recent completion uses a filled grey dot, distinct from dead and stale.
             head_segs += [(_COOL_FILLED, "grp_cool"), (" ", None)]
         else:
-            # 오래된 비활성 = 고리 ○ (회색): 잠든 디렉토리 (shape-size gradient ● > ○)
+            # Long inactivity uses a grey ring.
             head_segs += [(_COOL_RING, "grp_cold"), (" ", None)]
-        # cooling 디렉토리는 이름도 어두운 노랑(인디케이터 포함 통일) — cold 는 기본 제목색 유지
+        # Cooling names share the dim-yellow indicator color; cold keeps the default title color.
         _name_key = "grp_hot" if n_work else ("grp_cool" if _cool_min is not None else "grp")
         head_segs += [(name, _name_key), ("/", "dim")]
         _nwt = _wt_count(gcwd)
         if _nwt:
-            # statusline 과 같은 표기 (🚧 N = 병렬 작업장·잔존 worktree, §5.10) — 이름 바로 옆
+            # Match statusline notation for parallel or leftover worktrees.
             head_segs += [(" 🚧 %d" % _nwt, "g_idle")]
             _seen_glyphs.add("wt")
         _nmem = mem_by_group.get(name, 0)
@@ -1555,28 +1549,28 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             head_segs += [(" 🧠 %d" % _nmem, "dim")]
             _seen_glyphs.add("mem")
         if _cool_min is not None:
-            # 완료 후 경과시간 (끝나고 대기하는 시간) — ✓ 프리픽스로 "완료 후 경과"임을 명시
+            # Prefix time since completion with a check mark.
             head_segs += [("  ", None), ("%s %s" % (_COOL_TIME_ICON, fmt_min(_cool_min)), "grp_cool")]
         if gword:
             head_segs += [("  ", None), (gword, gwkey)]
-        # group header = the card's TITLE row (user 2026-07-03 pick: 카드 안 타이틀) — first
+        # The group header is the card's first title row.
         # tinted row of the panel, ▍ anchor on the card's padding edge; no floating label.
         _g0 = len(lines)                # panel start (title INCLUDED in the tint range)
         lines.append(head_segs)
         _rail_key = "grp_live" if n_work else "dim"
         if n_work:
-            _body_tint = _TINT_BODY_HOT       # 활성 = midnight-blue 컬러 틴트
+            _body_tint = _TINT_BODY_HOT       # Active: midnight-blue tint.
         elif _cool_min is not None:
-            _body_tint = _TINT_BODY_COOL      # 방금 끝남 = 중간레벨 (활성과 비활성 사이)
+            _body_tint = _TINT_BODY_COOL      # Cooling: middle level between active and inactive.
         else:
-            _body_tint = _TINT_BODY           # 비활성 = 기본 어두운 grey
+            _body_tint = _TINT_BODY           # Inactive: dark grey.
 
         # rows stay tight (no blank line — that spread them too far apart); the mid-line gauge
         # glyph (━/─) is what keeps the stacked context bars from merging into a solid wall.
         _srow = {"wide": None, "narrow": _session_row_2line, "stack": _session_row_stack}[layout]
         _jrow = {"wide": None, "narrow": _dispatch_row_2line, "stack": _dispatch_row_stack}[layout]
         # LIVE main-session lines get bold text (user 2026-07-03, after a whole-row tint-
-        # brightening attempt read as "좌우로 쭉 다 밝아져서 별로" — weight, not background,
+        # Use font weight rather than brightening the entire row background.
         # carries the distinction). Excludes stale/dead/app-server/detached (already faded dim).
         _sess_bold_ids = set()
 
@@ -1629,8 +1623,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         rendered_parent_sids = set()  # ambiguous enrichment must not duplicate a dispatch tree
         for s in _sort_group_sessions(shown):
             if getattr(s, "mem_worker", False):
-                # F-18b: `a` 토글로만 노출되는 dim mem row — 활성 row 렌더러(스타일/기울기/depth
-                # nesting)를 타지 않고 전용 요약 1-line 으로.
+                # Memory rows use a dedicated dim summary and appear only after the ``a`` toggle.
                 lines.extend(_mem_row(s, layout))
                 _seen_glyphs.add("mem")
                 continue
@@ -1669,7 +1662,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             _emit_dispatch_tree(lj, orphan=False)
 
         # group BODY (round-5): every row of the group rides the body tint — the whole directory
-        # is one solid panel, brighter when active (user: 디렉토리 블록 전체에 틴트, 헤더만 X).
+        # The whole directory block is one panel, brighter when active.
         # Fallback (_TINT_OK False → 8-color): the previous ▍ rail marks the block instead.
         for _i in range(_g0, len(lines)):
             ln = lines[_i]
@@ -1689,7 +1682,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 lines[_i] = [(_ROW_BOLD, None)] + list(ln)
         if _TINT_OK:
             # breathing row below the title + bottom padding (title-top padding tried and
-            # removed — user 2026-07-03: 별로) — inserted AFTER the tint loop (one sentinel each).
+            # Insert one sentinel after the tint loop.
             lines.insert(_g0 + 1, [(_body_tint, None), ("  ", None)])
             lines.append([(_body_tint, None), ("  ", None)])
 
@@ -1731,9 +1724,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     if "wt" in _seen_glyphs:
         legend += [("🚧 N", "dim"), (" worktrees   ", "dim")]
     if n_mem_total or "mem" in _seen_glyphs:
-        # 전역 총계 — mem-only 그룹은 fold 되어 header badge 가 안 뜰 수 있으므로 legend 에서
-        # 항상 존재를 노출 (group badge 는 활성 그룹 컨텍스트, 여긴 board 전역). F-19: mem-worker
-        # 세션이 0 이어도 write-events 요약행/alert 가 떴으면 legend 는 여전히 노출한다.
+        # Always expose the board-wide memory total in the legend, even when memory-only groups fold.
         legend += [("🧠 %d" % n_mem_total, "dim"), (" mem   ", "dim")]
     legend += [("~", "dim"), (" derived/inherited value", "dim")]  # F-9(d)
     lines.append(legend)
@@ -1839,28 +1830,27 @@ def _clip_w(s, maxw, ellipsis="…"):
 
 # fill sentinels (3-char \x00<fill>\x00): everything after is right-aligned to the edge; the gap
 # is filled with <fill> — space for _RFLUSH (invisible), ─ for _HFILL (a full-width rule).
-_INSET = 2                  # panel outer margin (cols) — 바깥 여백은 이대로 (user)
-_PAD_IN = 2                 # EXTRA inner padding: tint edge ↔ content (user: 여백을 늘리자)
+_INSET = 2                  # Panel outer margin in columns.
+_PAD_IN = 2                 # Extra inner padding between tint edge and content.
 _RFLUSH = "\x00 \x00"
 _HFILL = "\x00─\x00"
 
 # row-tint sentinels (round-5 — herdr-style panel tints): a LEADING sentinel marks the whole
 # row's background level. b/c = group body/cap · B/C = the ACTIVE-group variants (brighter,
-# user 2026-07-02: 활성 디렉토리 틴트를 더 눈에 띄게) · i = intel zone (usage/pulse/alert).
+# Active directories receive the stronger tint; ``i`` marks the intelligence zone.
 _TINT_BODY, _TINT_CAP = "\x00b\x00", "\x00c\x00"
 _TINT_BODY_HOT, _TINT_CAP_HOT = "\x00B\x00", "\x00C\x00"
-_TINT_BODY_COOL = "\x00k\x00"    # cooling(방금 끝남) body — 중간레벨 (활성 blue 와 비활성 grey 사이)
+_TINT_BODY_COOL = "\x00k\x00"    # Cooling body between active blue and inactive grey.
 _TINT_INTEL = "\x00i\x00"
 _TINT_CHARS = {"b", "c", "B", "C", "k", "i"}
 
 # row-bold marker (user 2026-07-03, after the whole-row tint-brightening attempt was rejected —
-# "좌우로 쭉 다 밝아져서 별로": a MAIN session's rows are entirely BOLD instead — same tint as
+# Main-session rows use bold rather than brightening the entire background.
 # any other row in the card, font weight carries the distinction). Inserted AFTER any tint
 # sentinel (so tint detection in _addline is unaffected) by the group-loop post-pass.
 _ROW_BOLD = "\x00!\x00"
 # 256-color background levels per sentinel char. Base panels = dark GREY (235/238); the
-# ACTIVE-group variants are a dark COLORED tint (user 2026-07-02 최종: 기본은 어둡게, 활성
-# 디렉토리만 컬러 — 미드나잇 블루). 17 = #00005f, the cube's darkest blue: natively subtle
+# Active-group variants use a dark midnight-blue tint. Color 17 is the cube's darkest blue.
 # even where init_color is ignored (green 22 #005f00 read too bright — user ×2).
 _TINT_LVL = {"b": 235, "c": 238, "B": 17, "C": 17, "k": 94, "i": 235}
 
@@ -1884,7 +1874,7 @@ def _addline(stdscr, row, segs, w):
         row_bold = True
         segs = segs[1:]
     # tinted panels are INSET two columns on both sides AND their content shifts inward with
-    # them (user 2026-07-02: 좌우여백이 안 보임 — near-black tint vs default bg alone is
+    # them; near-black tint against the default background alone is
     # imperceptible; the margin must move the content). Band starts at col 2; the row's own
     # leading blanks become inner padding, so text sits at col 4+ while cols 0-1 stay default.
     start_col = _INSET if tint is not None else 0
@@ -1940,7 +1930,7 @@ def _addline(stdscr, row, segs, w):
         elif band and band_lim > endcol:
             # paint the ENTIRE gap to the band edge first, then draw `right` over it — glyph
             # width disagreements (⏱ = 2 cells in our table, 1 by wcwidth/tmux) otherwise leave
-            # an unpainted hole right before the time (user 2026-07-02: 시간 앞 블록 컬러 잘림).
+            # an unpainted hole immediately before the time.
             _draw([(" " * (band_lim - endcol), fill_key)], endcol, lim=band_lim)
         if right:
             _draw(right, rcol, lim=band_lim if band else None)

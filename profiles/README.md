@@ -11,11 +11,11 @@ partial-projection — there is no content fork.
 
 | Profile | Description |
 |---|---|
-| `lab-runner` | 실험 실행 특화 — autopilot-lab 자율 구간 분사용 |
-| `code-plan` | code-plan 스테이지-워커 — autopilot-code Step 2 depth-2 분사용 (기획팀) |
-| `code-execute` | code-execute 스테이지-워커 — autopilot-code Step 3 depth-2 분사용 (개발팀, 유일 소스 변경 스테이지) |
-| `code-test` | code-test 스테이지-워커 — autopilot-code Step 4 depth-2 분사용 (품질관리팀 test, 소스 read-only) |
-| `code-report` | code-report 스테이지-워커 — autopilot-code Step 5 depth-2 분사용 (품질관리팀 fast writer) |
+| `lab-runner` | Specialized experiment runner for autonomous `autopilot-lab` segments |
+| `code-plan` | `code-plan` stage worker for `autopilot-code` Step 2 depth-2 dispatch (planning role) |
+| `code-execute` | `code-execute` stage worker for `autopilot-code` Step 3 depth-2 dispatch (implementation role; the only source-mutating stage) |
+| `code-test` | `code-test` stage worker for `autopilot-code` Step 4 depth-2 dispatch (QA test role; source read-only) |
+| `code-report` | `code-report` stage worker for `autopilot-code` Step 5 depth-2 dispatch (QA fast-writer role) |
 
 ## The three-layer instruction model
 
@@ -24,7 +24,7 @@ See `spec/dispatch-profiles/prd.md` §2 for the full rationale. Summary:
 | Layer | Content | Exposure |
 |---|---|---|
 | **L0 core contract** | `core/` (CORE/CONVENTIONS/OPERATIONS/WORKFLOW) + guard hooks (artifact-guard, git-state-guard, spec-skill-gate, builtin-memory-guard) + git discipline | Always included, unmaskable, for every profile |
-| **L1 orchestration** | Dispatch/harvest/routing/fleet control — the main session's CLAUDE.md body | Main only — masked out of every dispatch profile |
+| **L1 orchestration** | Dispatch/harvest/routing/fleet control — the main session's adapter bootstrap and orchestration body | Main only — masked out of every dispatch profile |
 | **L2 role fragment** | Case-specific specialization (`profiles/fragments/<name>.md`) — experiment-domain rules, studio-style role contracts, doc-tone contracts, etc. | That profile only — masked out of main |
 
 Masking hides *body*, not *existence* — main can always route via this

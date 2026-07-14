@@ -1,212 +1,214 @@
 ## Procedure
 
-> **본 skill 의 default — 중간 컨펌 다회**: spec 자체가 _사용자 의도 결정 자리_ 라 _전반적 상호작용_ 이 본질. Step 1 / 2 / 3a / 3b / 3c / 4a / 4b / 5 자리에 사용자 검토 자리 (총 6-8 자리). 사용자 _빠른 진행_ 발화 ("쭉 진행" / "ok 다 진행" / "다 알아서") 시 _일괄 컨펌_ 으로 자동 축소 (3a-3c 한 묶음 / 4a-4b 한 묶음 → 실제 컨펌 3-4 자리).
+> **Default behavior: multiple intermediate confirmations.** A spec is where user intent is decided, so interaction is essential. Offer review points at Steps 1, 2, 3a, 3b, 3c, 4a, 4b, and 5: usually six to eight confirmations. If the user asks to move quickly—quoted examples include "쭉 진행", "ok 다 진행", and "다 알아서"—collapse them into batch confirmations: group 3a–3c and 4a–4b, leaving three to four confirmation points.
 
-> **동시성 가드 (공유 `<artifact-root>`)**: 쓰기 단계(Step 3 / update mode 의 `prd.md`·`pipeline_state.yaml`·`pipeline_summary.md` 쓰기) 진입 _직전_ `.pipeline-lock` 획득, 파이프 정상·중단 양쪽에서 해제 — 프로토콜·snippet 은 **OPERATIONS.md §5.8**. acquire 가 BLOCKED(`exit 3`, 다른 worktree 가 spec 편집 중) 면 쓰기 멈추고 사용자에 보고 후 대기/override 판단. 본 skill 이 _spec 편집 중_ 임을 가리키는 단일 신호이기도 하다(다른 worktree 의 detect-only 조회 대상).
+> **Concurrency guard for a shared `<artifact-root>`.** Immediately before a write stage—Step 3 or update-mode writes to `prd.md`, `pipeline_state.yaml`, or `pipeline_summary.md`—acquire `.pipeline-lock`. Release it on both normal completion and interruption; the protocol and snippet are defined in **OPERATIONS.md §5.8**. If acquisition is BLOCKED (`exit 3`) because another worktree is editing the spec, stop writing, report it, and decide whether to wait or override. This lock is also the single detect-only signal that this skill is editing a spec.
 
-### Step 1: 정보 수집 + 중간 컨펌
+### Step 1: Collect Information and Confirm
 
-**1-1. 프로젝트 name 추출** — 발화·cwd·기존 `package.json`·`pyproject.toml` 등.
+**1-1. Determine the project name** from the request, cwd, and files such as `package.json` or `pyproject.toml`.
 
-**1-2. mode 자동 추론** — 위 단서 표 적용.
+**1-2. Infer modes automatically** using the signal table in the invocation reference.
 
-**1-3. 기존 자산 분석** — `analyze-project` 산출물 (`<artifact-root>/analysis_project/code/`) 발견 시 자동 인용. 부재 시 cwd 코드 직접 검사. `similar_models.md` / `experiment_conventions.md` 가 있으면 scaffold Phase 0 의 ref source 후보로 기록.
+**1-3. Analyze existing assets.** If `<artifact-root>/analysis_project/code/` exists, cite relevant analyze-project outputs automatically; otherwise inspect the cwd directly. Record `similar_models.md` and `experiment_conventions.md` as possible Phase 0 scaffold inputs when present.
 
-**1-4. autopilot-research 결과 자동 import** — `<artifact-root>/research/` 발견 시 reference 패턴·외부 baseline 인용. `code_resources/` (외부 ref repo) + `07_resources.md` (pre-trained ckpt) 가 scaffold Phase 0 의 외부 ref source 후보.
+**1-4. Import autopilot-research results automatically.** When `<artifact-root>/research/` exists, cite relevant reference patterns and external baselines. Treat `code_resources/` repositories and pretrained-checkpoint entries from `07_resources.md` as external-reference candidates for scaffold Phase 0.
 
-**1-5. (app mode 만) 환경·스택 후보 정리** — Node / pnpm / Docker 확인, 스택 후보 2-3 안.
+**1-5. In `app` mode only, summarize the environment and two or three stack candidates**, including Node, pnpm, and Docker availability.
 
-**1-6. 수집 결과 한 화면 컨펌**:
-
-```
-=== 정보 수집 결과 ===
-프로젝트 name:    <name>
-mode 추론:       <list> (근거: <증거>)
-기존 자산:       analyze-project 산출 <found/not-found> — similar_models / experiment_conventions / code 모듈 분석
-외부 research:   research/<topic>/ 발견 시 — code_resources (외부 ref) + 07_resources (pre-trained ckpt) 인용 자리 N
-(app mode 만) 환경: Node / pnpm / Docker
-
-이 자료들로 진행? (진행 / 수정 — 자료 추가 또는 제외 / 중단)
-```
-
-### Step 2: 한 화면 컨펌
+**1-6. Show one confirmation screen**, rendered naturally in the user's communication language:
 
 ```
-=== Spec 결정 자리 ===
-프로젝트 name:    <name>
-mode (추론):     <mode list> (근거: <증거>)
-사전 자료:       autopilot-research / analyze-project 발견 — 인용 자리 N
+=== Collected information ===
+Project:          <name>
+Inferred modes:   <list> (evidence: <evidence>)
+Existing assets:  analyze-project <found/not-found> — similar_models / experiment_conventions / code-module analysis
+External research:<research/topic> when found — N candidates from code_resources and 07_resources
+(app only) Environment: Node / pnpm / Docker
 
-(app mode 만 추가) 환경 / 스택 후보:
+Proceed with these materials? (proceed / modify — add or remove material / stop)
+```
+
+### Step 2: Confirm the Spec Direction
+
+```
+=== Spec decisions ===
+Project:          <name>
+Inferred modes:   <mode list> (evidence: <evidence>)
+Prior material:   N cited items from autopilot-research / analyze-project
+
+(app only) Environment and stack candidates:
   Node ✓ / pnpm ✓ / Docker ✗
-  스택: 1. Next.js+Prisma+Turso  2. Expo+tRPC  3. SvelteKit+Drizzle
-  → 권장 1순위 (근거: <발화>)
+  Stack: 1. Next.js+Prisma+Turso  2. Expo+tRPC  3. SvelteKit+Drizzle
+  → Recommendation: option 1 (reason: <request evidence>)
 
-이대로 진행? (진행 / 수정 — mode·스택 변경 / 중단)
+Proceed? (proceed / modify — change mode or stack / stop)
 ```
 
-### Step 3: PRD 작성 — 3 자리 분할 (중간 컨펌)
+### Step 3: Author the PRD in Three Reviewed Sections
 
-> **Stage-dispatch 메모**: PRD 작성은 conductor-inline — `spec/prd.md` 를 conductor 가 직접 쓰는 판단 자리라 dispatch 되는 stage-worker 아님. dispatch 되는 유일한 stage 는 scaffold (개발팀 new-lib) — `scaffolding.md` 의 stage-worker 매핑 표 참조.
+> **Stage-dispatch note:** PRD authoring is conductor-inline. The conductor writes `spec/prd.md` at a point that requires its own judgment, so it is not dispatched to a stage worker. The only dispatched stage is scaffold (`개발팀` new-lib); see the stage-worker mapping in `scaffolding.md`.
 
-`spec/prd.md` 를 한 번에 다 쓰지 않고 _3 자리로 분할_ 각자리 사용자 검토. _빠른 진행_ 발화 시 자동 일괄.
+Do not write all of `spec/prd.md` at once. Draft it in three sections and offer review after each. Batch them automatically when the user asks to move quickly.
 
-#### Step 3a: 공통 + 핵심 mode 섹션 작성 → 컨펌
+#### Step 3a: Common Content and the Primary Mode
 
-- _공통_ (module 구조 / 의존성 / 언어·런타임 / License)
-- _핵심 mode 섹션_ (해당 mode 의 첫 번째 — app 의 피처·시나리오·API Contract / library 의 공개 API / api 의 endpoint / cli 의 명령·옵션 / research 의 entry·configs·metric)
+- **Common content**: module structure, dependencies, language/runtime, license
+- **Primary mode section**: the first selected mode—features, scenarios, and API Contract for `app`; public API for `library`; endpoints for `api`; commands/options for `cli`; or entry points, configs, and metrics for `research`
 
 ```
-=== PRD 초안 (공통 + 핵심 mode) ===
-<산출 path>
-주요 결정: <3-5 bullet>
+=== PRD draft: common + primary mode ===
+<output path>
+Key decisions: <3–5 bullets>
 
-이 초안 ok? (진행 / 수정 — 섹션 단위 refine / back-jump Step 2 / 중단)
+Approve this draft? (proceed / modify — refine a section / back-jump to Step 2 / stop)
 ```
 
-#### Step 3b: Architecture Diagrams 작성 → 컨펌
+#### Step 3b: Architecture Diagrams
 
-Component diagram 은 _모든 구조적 mode 1급_ — 각 mode 의 architecture view (아래) 를 기본 포함. Deployment diagram 은 app / api 만 (library/cli 는 package registry 배포라 deployment 자리 없음 — [library] versioning·[cli] 배포 섹션이 대신). 옵션 diagrams (ER / Sequence / Activity / State / Class) 는 사용자 명시 요청 시.
+Treat the Component diagram as first-class for every structural mode, using the mode-specific views below. Create a Deployment diagram only for `app` and `api`; libraries and CLIs use package-registry/versioning or distribution sections instead. Add optional ER, Sequence, Activity, State, or Class diagrams only on explicit request or when the complexity rules below justify them.
 
 ```
 === Architecture Diagrams ===
-Component diagram (mermaid): <요약 — 노드·관계 한 줄>
-(app / api 만) Deployment diagram: <호스팅·DB·외부 service 한 줄>
+Component diagram (Mermaid): <one-line summary of nodes and relationships>
+(app/api only) Deployment diagram: <one-line summary of hosting, database, and external services>
 
-다이어그램 ok? (진행 / 수정 — 노드 추가·제거 / back-jump / 중단)
+Approve the diagrams? (proceed / modify — add or remove nodes / back-jump / stop)
 ```
 
-#### Step 3c: (복합 mode 시) 다른 mode 섹션 작성 → 컨펌
+#### Step 3c: Additional Sections for Combined Modes
 
-복합 mode (예: `research,cli`) 자리에서 _두 번째 mode 섹션_ 추가 작성. 단일 mode 면 본 단계 skip.
-
-```
-=== PRD 추가 mode 섹션 ===
-mode: <두번째>
-주요 결정: <3-5 bullet>
-
-ok? (진행 / 수정 / back-jump Step 3a / 중단)
-```
-
-#### Step 3d: 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
-
-> worklog-board 참사 (2026-06-22) 계기 — spec 이 "의미 판단"을 규칙 스크립트로 떠넘기는 모순을 PRD 작성 시점에 잡는 substep. 상세 정의 = DESIGN_PRINCIPLES §0.7 (재정의 X, 참조).
-
-1. PRD 본문에서 _의미 판단 구간_ grep — 키워드 신호: `의미 / 판단 / 적절 / 맥락 / contextual / semantic / 자연스러운 / 알맞은` 등. 매칭 구간을 list.
-2. 각 구간의 _대응 구현 계획_ 이 그 의미를 **규칙·토큰 매칭으로 떨궜는지** 확인 — spec 이 "의미상 맞는 X"를 요구하는데 구현이 고정 룰·정규식·토큰 일치만으로 대신하려 하면 충돌.
-3. 충돌 시 PRD 에 표시 + 이유 기록 + **3선택** 제시 (① spec 재정의 / ② 구현을 LLM 판단 단계로 / ③ 규칙 뒤 LLM fallback 명시 — §0.7).
+For a combined mode such as `research,cli`, draft the second mode section and confirm it. Skip this step for a single mode.
 
 ```
-=== 의미↔규칙 경계 체크 ===
-의미 판단 구간: <list — PRD line ref>
-충돌: <없음 / N건 — 각 구간 → 규칙 떨굼 여부>
-(충돌 시) 3선택: ① spec 재정의 / ② 구현 LLM 판단 / ③ 규칙 뒤 LLM fallback
+=== Additional PRD mode section ===
+Mode: <second mode>
+Key decisions: <3–5 bullets>
 
-ok? (진행 / 수정 / 중단)
+Approve? (proceed / modify / back-jump to Step 3a / stop)
 ```
 
-PRD 본문 형식 (공통 + mode 별 섹션 + Architecture Diagrams) 는 아래:
+#### Step 3d: Check the Semantic-Judgment Boundary
 
-```markdown
+> Added after the worklog-board incident on 2026-06-22. This substep catches PRDs that demand semantic judgment while delegating it to a deterministic script. **DESIGN_PRINCIPLES §0.7** owns the detailed definition; reference it rather than redefining it.
+
+1. Review the PRD for passages requiring meaning, context, appropriateness, or naturalness. Detect these semantically; terms such as `meaning`, `judgment`, `appropriate`, `contextual`, `semantic`, or `natural` are examples, not a fixed trigger list.
+2. Inspect the corresponding implementation plan. Flag a conflict when the spec asks for semantically appropriate behavior but the implementation reduces it to fixed rules, regexes, or token matching alone.
+3. For each conflict, mark the PRD, record why, and offer three choices from §0.7: ① redefine the spec, ② use an LLM judgment stage, or ③ state an LLM fallback after deterministic rules.
+
+```
+=== Semantic-judgment boundary check ===
+Semantic passages: <list with PRD line references>
+Conflicts: <none / N — each passage and whether it was reduced to rules>
+(when conflicts exist) Choices: ① redefine spec / ② add LLM judgment / ③ deterministic rules + LLM fallback
+
+Approve? (proceed / modify / stop)
+```
+
+Use the following PRD structure. Render descriptive prose in the user's communication language while preserving code identifiers:
+
+````markdown
 # <Project Name> Spec
 
-## 공통
-- Module 구조
-- 의존성
-- 언어·런타임 버전
+## Common
+- Module structure
+- Dependencies
+- Language and runtime versions
 - License
 
-## [app] (해당 mode 만)
-### 피처 목록 (P0/P1/P2)
-### 사용자 시나리오 (3-5개)
-### 비기능 요구
-### 데이터 모델 초안 (entity·관계·migration plan)
-### API Contract (백·프론트 공유 — endpoint·body·error·auth)
-### 화면 흐름 (UI 있을 시)
+## [app] (only when selected)
+### Feature list (P0/P1/P2)
+### User scenarios (3–5)
+### Nonfunctional requirements
+### Initial data model (entities, relationships, migration plan)
+### API Contract (shared by backend and frontend: endpoint, body, error, auth)
+### Screen flow (when a UI exists)
 
-## [library] (해당 mode 만)
-### 공개 API (export 함수·class·type)
-### 사용 예시 (README 자리)
-### 호환성·versioning (semver 정책)
-### Module 구조 (src/{io, core, utils}/ 같은)
+## [library] (only when selected)
+### Public API (exported functions, classes, and types)
+### Usage examples (for README)
+### Compatibility and versioning (semver policy)
+### Module structure, such as src/{io,core,utils}/
 
-## [api] (해당 mode 만)
-### Endpoint (POST /api/X / GET /api/Y / ...)
-### Body / Response shape
-### Error code
+## [api] (only when selected)
+### Endpoints (POST /api/X, GET /api/Y, ...)
+### Body and response shapes
+### Error codes
 ### Auth (token / OAuth / API key)
 ### Rate limiting
 
-## [cli] (해당 mode 만)
-### 명령 (train / eval / serve / ...)
-### 옵션 (--config / --resume / --output / ...)
-### Input/Output 형식
-### Exit code
+## [cli] (only when selected)
+### Commands (train / eval / serve / ...)
+### Options (--config / --resume / --output / ...)
+### Input/output formats
+### Exit codes
 
-## [research] (해당 mode 만)
-### Entry point (train.py / eval.py / 명령 예시)
-### 실험 설정 (configs/*.yaml 구조)
-### 재현 명령 (학습·평가·테스트)
-### 예상 metric (PSNR / Acc / SI-SDR / 등)
-### Baseline 비교
+## [research] (only when selected)
+### Entry points (train.py / eval.py / command examples)
+### Experiment configuration (`configs/*.yaml` structure)
+### Reproduction commands (train / evaluate / test)
+### Expected metrics (PSNR / accuracy / SI-SDR / ...)
+### Baseline comparison
 
-## Architecture Diagrams (Component = 모든 mode 1급 / Deployment = app·api 만)
+## Architecture Diagrams
 
-### Component diagram (mermaid)
-시스템의 _모듈 단위 구성·의존_ 한눈. mode 별 architecture view (각 mode 1급):
-- app: frontend / backend / DB / external service 의 의존
-- api: router / handler / repository / model / external service 의 의존
-- library: 공개 module ↔ 내부 module 의존 그래프 (public surface 가 무엇에 의존하는지 — semver 영향 분석의 시각 근거)
-- cli: 명령·서브명령 트리 + 각 명령이 호출하는 core module
-- research: 데이터 → 전처리 → 모델 → 학습/평가 파이프라인 흐름 (재현 경로의 시각화)
-- 옵션 diagrams (ER / Sequence / Activity / State / Class) 는 복잡 자리만 사용자 명시 요청
+### Component diagram (Mermaid; first-class for every mode)
+Show module-level composition and dependencies at a glance:
+- app: frontend, backend, database, and external-service dependencies
+- api: router, handler, repository, model, and external-service dependencies
+- library: public-to-internal module dependency graph, providing visual evidence for semver impact
+- cli: command/subcommand tree and the core modules each command invokes
+- research: data → preprocessing → model → training/evaluation pipeline
+- Optional diagrams: ER / Sequence / Activity / State / Class, only for complex cases or explicit requests
 
-### Deployment diagram (mermaid, app / api mode 만)
-시스템의 _물리 배포 자리_ 한눈. ship setup 의 시각 형태:
-- 호스팅 (Vercel / Fly / Railway / Cloudflare)
-- DB host (Turso / Supabase / Neon / RDS)
-- 외부 service (Stripe / Auth0 / Cloudflare R2)
+### Deployment diagram (Mermaid; `app` and `api` only)
+Show physical deployment at a glance:
+- Hosting: Vercel / Fly / Railway / Cloudflare
+- Database host: Turso / Supabase / Neon / RDS
+- External services: Stripe / Auth0 / Cloudflare R2
 - CDN
-- CI/CD trigger (GitHub push → provider)
-- 사용자 진입점 (domain)
+- CI/CD trigger: GitHub push → provider
+- User entry point: domain
 
-예 (app mode — 가사관리 앱 자리):
+Example for an app:
+
 ```mermaid
 flowchart LR
-    USER[사용자] --> CDN[Vercel Edge / CDN]
+    USER[User] --> CDN[Vercel Edge / CDN]
     CDN --> APP[Next.js App<br/>Vercel]
     APP --> DB[(Turso libSQL)]
     APP -.optional.-> AUTH[Clerk / Auth0]
     GH[GitHub main] -->|push| APP
 ```
 
-### 옵션 diagrams (사용자 명시 요청 또는 복잡 자리 자동 추론 시만)
-- **ER diagram** — data_model.md 의 시각 보강 (entity 5+ 자리)
-- **Sequence diagram** — 복잡한 인증·트랜잭션·webhook 순서 자리
-- **Activity diagram** — 복잡한 checkout / login flow / research pipeline
-- **State diagram** — 도메인이 상태 모델 강한 자리 (order / payment / 게임 turn)
-- **Class diagram** — library mode 의 공개 API 시각화 (textual 공개 API 로 충분한 자리는 skip)
+### Optional diagrams
+- **ER diagram** — supplements `data_model.md` when there are at least five entities
+- **Sequence diagram** — complex authentication, transactions, or webhook ordering
+- **Activity diagram** — complex checkout, login flow, or research pipeline
+- **State diagram** — state-heavy domains such as order, payment, or game turns
+- **Class diagram** — visualizes a library's public API; skip when the textual API is sufficient
 
-본 옵션 diagrams 는 _기본 생성 X_ — 사용자 명시 요청 (`/autopilot-spec --add-diagram <type>`) 또는 자동 추론 (entity 5+ / 도메인 상태 모델 인지 / 복잡 flow 등) 자리만.
-```
+Do not generate optional diagrams by default. Add them only on an explicit request such as `/autopilot-spec --add-diagram <type>` or a reasoned complexity inference such as five or more entities, a state-heavy domain, or a complex flow.
+````
 
-mode 가 단일이면 _해당 섹션만_, 복수면 _각 섹션 독립_.
+For one mode, include only that mode section. For combined modes, keep each section independent.
 
-### Step 3.5: 묶음 갱신 logic (PRD 변경 자리)
+### Step 3.5: Coupled Updates When the PRD Changes
 
-PRD 의 textual 자리와 Architecture Diagrams 가 _drift 빠지지 않게_ — 변경 발생 자리에서 _영향 받는 모든 자리 한 트랜잭션_ 갱신. 변경 종류 → 영향 매핑:
+Prevent drift between textual PRD content and Architecture Diagrams by updating every affected artifact in one transaction:
 
-| 변경 종류 | 영향 자리 (모두 일관 갱신) |
+| Change | Artifacts that must remain consistent |
 |---|---|
-| 새 API endpoint 추가·body·error 변경 | `spec/api_contract.md` + Component diagram + (옵션) Sequence diagram |
-| 새 DB entity·필드 추가·migration | `spec/data_model.md` + (옵션) ER diagram + Component diagram (backend 자리) |
-| 새 UI 화면·flow 변경 | `spec/ui_flow.md` + (옵션) Activity diagram + Component diagram (frontend 자리) |
-| 새 외부 service 통합 (Stripe / Auth0 / S3 등) | `spec/api_contract.md` (auth) + **Deployment diagram** + `spec/ship.md` + `.env.example` |
-| 스택 교체 (DB·framework 등) | `spec/stack.md` (refine v{N}) + **Component diagram** + **Deployment diagram** |
-| 도메인 상태 모델 추가 (order / payment 등) | `spec/data_model.md` + (옵션) State diagram |
+| Add an API endpoint or change its body/error behavior | `spec/api_contract.md` + Component diagram + optional Sequence diagram |
+| Add a database entity/field or migration | `spec/data_model.md` + optional ER diagram + backend area of the Component diagram |
+| Add or change a UI screen/flow | `spec/ui_flow.md` + optional Activity diagram + frontend area of the Component diagram |
+| Integrate an external service such as Stripe, Auth0, or S3 | Auth section of `spec/api_contract.md` + **Deployment diagram** + `spec/ship.md` + `.env.example` |
+| Replace a stack component such as the database or framework | refined `spec/stack.md` + **Component diagram** + **Deployment diagram** |
+| Add a domain state model such as order or payment | `spec/data_model.md` + optional State diagram |
 
-**호출 자리**:
-- autopilot-spec refine 자리에서 사용자 의도 변경 시 → 영향 자리 자동 list → 사용자 confirm → 일괄 갱신
-- autopilot-code 가 spec 영향 변경 감지 자리에서 → 묶음 갱신 plan 보여주고 사용자 confirm → autopilot-spec back-jump 호출
+**Invocation points**:
 
-**Deployment diagram 의 자동 갱신** — ship 자리 변경 빈도 낮음 (provider 교체·env 추가·domain 연결 자리만). `autopilot-ship` 호출 자리에서 _ship.md + Deployment diagram_ 한 묶음.
+- In autopilot-spec refinement, list all affected artifacts, confirm the intended change, and update them together.
+- When autopilot-code detects a spec-affecting implementation change, show the coupled-update plan, confirm it, and back-jump into autopilot-spec.
+
+**Automatic Deployment-diagram updates** are needed less often: only on changes such as provider replacement, environment additions, or domain connections. When autopilot-ship handles one of these changes, update `ship.md` and the Deployment diagram together.

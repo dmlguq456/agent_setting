@@ -1,13 +1,8 @@
-"""bootstrap.py — installer 의 runtime-neutral 보조 기능 (Phase 6).
+"""Runtime-neutral installer bootstrap helpers.
 
-두 관심사를 다룬다:
-  1. `restore_memory` — mem store 에 `memory.db` 가 없고 `dump.jsonl` 만 있을 때
-     `tools/memory/mem.py import` 를 호출해 복원한다 (idempotent — DB 있으면 스킵).
-  2. `install_launchers` — `~/.local/bin/{harness,fleet}` 심볼릭 링크를 만든다
-     (PATH-collision guard 포함, INST-OPEN-2).
-
-installer.py Phase 5 가 이 모듈의 함수들을 cmd_install 안에서 호출할 예정이지만,
-본 파일 자체는 그 wiring 과 독립적으로 완결된 helper 모듈이다.
+``restore_memory`` imports ``dump.jsonl`` when ``memory.db`` is absent.
+``install_launchers`` creates guarded ``~/.local/bin/{harness,fleet}`` symlinks.
+The helpers remain usable independently of installer command wiring.
 """
 
 import os
@@ -18,10 +13,10 @@ import paths
 
 
 def restore_memory(mem_store=None):
-    """mem store 의 `memory.db` 가 없으면 `dump.jsonl` 로부터 복원을 시도한다.
+    """Restore ``memory.db`` from ``dump.jsonl`` when the database is absent.
 
     Args:
-        mem_store: mem store 디렉터리. None 이면 `MEM_STORE` env, 그것도 없으면
+        mem_store: Store directory. If omitted, use ``MEM_STORE`` and then
             `paths.agent_home() / "memory"`.
 
     Returns:
@@ -56,7 +51,7 @@ def restore_memory(mem_store=None):
     if result.returncode == 0:
         return {"action": "imported", "detail": f"mem import from {dump_path}"}
 
-    # best-effort restore — 실패해도 install 전체를 죽이지 않는다 (mem 복원은 부가 기능).
+    # Best effort: optional memory restoration must not fail the installation.
     return {
         "action": "failed",
         "detail": (
@@ -73,7 +68,7 @@ LAUNCHERS = (
 
 
 def _is_our_symlink(target, source):
-    """target 이 symlink 이고 그 링크 대상이 정확히 source 인지."""
+    """Return whether target is a symlink resolving exactly to source."""
     if not target.is_symlink():
         return False
     try:
@@ -83,11 +78,11 @@ def _is_our_symlink(target, source):
 
 
 def install_launchers(home=None, dry_run=False):
-    """`~/.local/bin/{harness,fleet}` 심볼릭 링크를 만든다 (PATH-collision guard 포함).
+    """Create guarded ``~/.local/bin/{harness,fleet}`` symlinks.
 
     Args:
-        home: 대상 home 디렉터리 (Path). None 이면 `Path.home()`.
-        dry_run: True 면 디스크를 건드리지 않고 계획만 돌려준다.
+        home: Destination home directory, or ``Path.home()`` when omitted.
+        dry_run: Return the plan without modifying disk when true.
 
     Returns:
         list of dict — [{"name", "target", "source", "status"}, ...]
@@ -127,7 +122,7 @@ def install_launchers(home=None, dry_run=False):
                 })
                 continue
 
-            # 존재하지만 우리 심볼릭 링크가 아니다 — foreign 파일/다른 링크는 덮어쓰지 않는다.
+            # Never overwrite a foreign file or symlink.
             results.append({
                 "name": name,
                 "target": str(target),

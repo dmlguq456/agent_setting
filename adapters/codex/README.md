@@ -312,26 +312,22 @@ Further Codex-specific files can be added under `adapters/codex/` and symlinked 
 
 ## Model Role Mapping
 
-Codex adapter 는 `core/CONVENTIONS.md §2` 의 portable role 을 Codex 런타임에서 동등한 capability tier 로 매핑한다. Defaults mirror the generated custom-agent TOML and can still be overridden by environment variables.
+The Codex adapter maps portable roles from `core/CONVENTIONS.md §2` to equivalent runtime capability tiers. Defaults mirror generated custom-agent TOML and remain overridable through environment variables.
 
 | Portable role | Codex adapter expectation |
 |---|---|
-| `fast reviewer` / `fast fact-checker` / `fast writer` / fast tool worker | Luna (`gpt-5.6-luna`) low/medium. surface, coverage, format, verbatim matching 중심 |
+| `fast reviewer` / `fast fact-checker` / `fast writer` / fast tool worker | Luna (`gpt-5.6-luna`) low/medium for surface, coverage, format, and verbatim matching |
 | `fast implementer` | Terra (`gpt-5.6-terra`) medium |
-| `deep reviewer` / `deep maker` / deep editor / `deep orchestrator` | Sol (`gpt-5.6-sol`) high. methodology, domain, architecture, safety 판단 중심 |
-| `external adversary` | 가능하면 primary Codex session 과 다른 모델·설정·프로세스. 없으면 explicit unavailable 로 보고하고 thorough 로 fallback |
+| `deep reviewer` / `deep maker` / deep editor / `deep orchestrator` | Sol (`gpt-5.6-sol`) high for methodology, domain, architecture, and safety judgment |
+| `external adversary` | Prefer a model, configuration, or process different from the primary Codex session; otherwise report unavailable and fall back to thorough |
 | `orchestrator` | balanced mechanical coordination; Terra medium via the named `AGENT_MODEL_BALANCED` override, never Luna |
 
-Codex 쪽 wrapper 는 `AGENT_MODEL_TERRA`, `AGENT_MODEL_LUNA`, `AGENT_MODEL_DEEP`,
-`AGENT_MODEL_BALANCED`, `AGENT_MODEL_EXTERNAL`와 그 대응 reasoning 변수 같은
-환경변수로 이 mapping 을 드러낸다.
+Codex wrappers expose this mapping through `AGENT_MODEL_TERRA`, `AGENT_MODEL_LUNA`, `AGENT_MODEL_DEEP`, `AGENT_MODEL_BALANCED`, `AGENT_MODEL_EXTERNAL`, and matching reasoning variables.
 Compatibility knobs `AGENT_MODEL_FAST`, `AGENT_REASONING_FAST`,
 `AGENT_MODEL_ORCHESTRATOR`, and `AGENT_REASONING_ORCHESTRATOR` remain accepted;
 the named balanced knobs take precedence. `AGENT_REASONING_DEEP` and
 `AGENT_REASONING_EXTERNAL` retain their respective deep/external contracts.
-`CODEX_DISTILL_MODEL` 은 distillation proposal worker 에만 적용되는
-optional override 다. 공통 skill 은 concrete model name 을 요구하지 않고
-role 의미만 요구한다.
+`CODEX_DISTILL_MODEL` is an optional override only for the distillation proposal worker. Shared Skills require role meaning rather than concrete model names.
 
 `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` is the executable mapping
 surface. When no override is configured it reports adapter defaults:

@@ -10,118 +10,91 @@ metadata:
   blurb: "Correct and update existing document/research artifacts while preserving snapshots and change history."
 ---
 
-> **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
+# autopilot-refine
 
-기존 문서·연구 산출물의 정정·갱신 entry. 이 파일은 라우터 — routing 결정(major vs minor, mode form, intensity-파생 rigor)과 stage 개요만 담고, 세부 orchestration·log 형식·detector·예시는 필요할 때 아래 reference를 읽는다.
+Post-creation refinement entrypoint for existing document and research artifacts. Preserve snapshots and change history while correcting or updating content. This file defines major/minor routing, invocation forms, and stage contracts; load a reference only when its detailed procedure is needed.
 
-## Position in autopilot family
+> **Output convention**: Follow [CONVENTIONS §5](../../core/CONVENTIONS.md#5-skill-output-convention--t1t2t3). Store modern document and research snapshots under `_internal/versions/v{N}/`; recognize legacy sibling `_v{N}.md` snapshots when already present.
 
-`autopilot-refine` is the **post-creation iteration** counterpart to the creation pipelines:
-- `autopilot-research` / `autopilot-code` / `autopilot-draft` create artifacts (forward direction).
-- `autopilot-refine` reads and updates existing artifacts (reverse direction).
+## Position in the Autopilot Family
 
-Naming consistency: same `--intensity direct|quick|standard|strong|thorough|adversarial` flag as the rest of the family. `intensity` selects the stage graph; verification rigor is **derived** from that same intensity (CONVENTIONS §1.1) and scales the selected assurance gates — there is no separate `--qa` axis. Routine scoped edits default to the quick path unless the request or caller explicitly escalates intensity.
+- `autopilot-research`, `autopilot-code`, and `autopilot-draft` create artifacts in the forward direction.
+- `autopilot-refine` updates existing artifacts while preserving their lineage.
+- `--intensity` selects the graph and derives verification rigor from CONVENTIONS §1.1. There is no separate `--qa` axis.
+- Routine scoped refinements use the quick path unless scope, risk, or an explicit option requires more.
 
-## Default Invocation Rule (메인 에이전트 자동 라우팅)
+## Routing: Major vs Minor
 
-본 skill 은 runtime adapter bootstrap 의 "autopilot-* 호출 패턴" 컨펌 의무 적용 대상(Claude Code: [`CLAUDE.md`](../../adapters/claude/CLAUDE.md) §0). 메인 에이전트는 사용자가 `<artifact-root>/{documents,research}/*` 하위 artifact에 대해 **major-level 변경**을 prompt로 요청할 때만 `/autopilot-refine` slash command 명시 없이도 옵션 자동 구성 + 자연어 요약 컨펌 거쳐 invoke 한다. 기본은 request shape에서 선택된 `intensity`를 따르고, 검증 rigor 는 그 intensity 에서 파생돼 그래프 안의 assurance budget을 조정한다 (별도 `--qa` 축 없음 — CONVENTIONS §1.1). **minor-level 변경은 직접 Edit + `pipeline_summary.md` 상세 minor log 추가** (refine flow X, 컨펌 자체도 skip — 단순 minor 라 그냥 진행). 누적된 minor는 사용자가 `/audit`을 호출하거나, AUDIT_HINT_THRESHOLD (default 5 minors)를 넘으면 chat alert로 _권장_ 받아 batch 점검한다.
+Limit this capability to `<artifact-root>/research/*` and `<artifact-root>/documents/*`. Use direct editing for ordinary project Markdown, and use `code-refine`, `code-execute`, or `autopilot-code` for plan or code artifacts.
 
-**Scope**: `<artifact-root>/{documents,research}/*` 엄격 한정. project root의 임의 `.md`/`.txt`나 코드 산출물(`<artifact-root>/plans/*`)은 적용 X — 전자는 일반 Edit, 후자는 `/code-refine` 또는 `/autopilot-code`.
+Route a change through the major refinement flow when any of these conditions holds:
 
-### Major vs Minor — 3-criteria 판정
+1. The user explicitly requests a major version, broad rewrite, new refinement cycle, or `/autopilot-refine`.
+2. The change affects roughly 200 or more lines, rewrites a whole section, reclassifies a batch of mutations, or realigns strategy and draft structure.
+3. The user explicitly asks to prepare the artifact for an imminent external review, submission, grant, public rebuttal, or PR review. Do not infer this ceremony from cwd names or stale memory.
 
-**Major** (하나라도 해당 → autopilot-refine 자동 invoke):
+Treat the change as minor by default when it is limited to one mutation, a few cross-references, a caption or table cell, typo or wording polish, one or two missing references, or a figure/asset path correction.
 
-1. **사용자 명시 표현**: "major", "v{N+1}", "/autopilot-refine", "메이저 버전", "전면 재작성", "phase 재시작", "cycle 재진입"
-2. **구조적 대규모 변경**: ≥200 줄 영향 / 전체 section rewrite / mutation tier 재분류 batch / strategy↔draft alignment overhaul
-3. **외부 검토 직전 ceremony**: 사용자 prompt 본문에 verbatim 으로 "camera-ready 마무리" / "submission 직전 finalize" / "external review 전 마지막" / "grant 제출" / "PR open 직전" 표현이 _직접_ 등장한 경우만. cwd 이름 (예: `..._camera_ready/`) · 메모리 맥락 · 작업 디렉토리 신호로 추론 금지 (응답 원칙 §2 정합)
+For a minor change, edit directly and append a detailed entry to `pipeline_summary.md`. Do not create a snapshot; the latest major snapshot remains the audit baseline. When minor entries exceed `AUDIT_HINT_THRESHOLD` (default 5), recommend a batch `/audit` without running it automatically.
 
-**Minor** (default — 위 3-criteria 미해당):
+Explicit options override automatic classification:
 
-- 단일 entry mutation 추가·제거·wording 조정
-- cross-ref 한두 줄 추가/수정
-- caption / table cell / typo / wording polish
-- 사용자가 미리 caption/wording을 본 turn에 명시한 뒤 _그걸 반영해 달라_ 는 요청
-- 누락된 reference 1-2건 보강
-- figure/asset 경로 정정
+- `--intensity standard|strong|thorough|adversarial` enters the refinement flow at that intensity.
+- A clear request for direct edit without versioning or snapshots uses the minor path.
+- `--review-only` inspects and previews without applying.
+- Explicit `/autopilot-refine` enters the refinement flow; default to `quick` when no intensity is supplied.
 
-→ Claude는 **직접 Edit 도구**로 즉시 적용 + `pipeline_summary.md`에 **상세 minor log entry** 추가. snapshot 생성 **X** (last major snapshot이 audit의 baseline).
+Read `references/versioning-and-modes.md` for the exact minor-log format and major-version behavior.
 
-> Minor log entry 형식(반드시 준수)·Major 적용 시 동작·Why this split: `references/versioning-and-modes.md`.
+## Verification Rigor
 
-### Override 1순위 (자동 룰 무시)
+Derive rigor from `--intensity` through [CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers). Review the proposed diff before application.
 
-다음 중 하나라도 prompt에 있으면 위 분기 룰을 건너뛴다:
-
-- 다른 intensity 명시 — `--intensity standard`/`thorough`/`adversarial` (강제 refine, intensity 명시 → rigor 파생)
-- "refine 없이 직접 edit" / "Edit으로 처리" / "versioning 없이" / "snapshot 없이" — 강제 minor 경로
-- `--review-only` — 검수만, 적용 X
-- `/autopilot-refine` slash 명시 invoke — 강제 refine flow (intensity 따로 명시 안 하면 `quick`, rigor 도 quick-tier)
-
-## Scope
-
-- **Targets**: `<artifact-root>/research/*` and `<artifact-root>/documents/*`
-- **NOT for**: `<artifact-root>/plans/*` (code) — use `/code-refine`, `/code-execute`, or `/autopilot-code` instead. Code changes need test-based verification, not diff review.
-- Why this skill exists: the existing `draft-refine` / `code-refine` workflow is file-memo only, which is too heavy for routine prompt-driven edits. `autopilot-refine` is the lightweight default; memo style is reduced to an opt-in fallback.
-
-## Verification rigor (intensity-derived)
-
-검증 rigor 는 별도 `--qa` 축이 아니라 `--intensity` 에서 결정론적으로 파생된다 — 5 단계 tier 정의 + 모델·round 매트릭스는 [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot) 단일 source. 아래 tier 는 각각 intensity `quick`←quick, `direct`←light, `standard`←standard, `thorough`←thorough, `adversarial`←adversarial 에 대응. 본 skill 적용 (proposed diff 에 pre-apply review):
-
-| Rigor tier | Behavior on proposed diff |
+| Rigor tier | Proposed-diff review |
 |---|---|
-| **quick** | Investigate → Stage B.5 (factual + style auto-detector, always on) → diff preview → apply. No internal review loop. Stage B.5 는 cards-grep + regex 만. |
-| **light** | + 2× fast reviewers (다른 axes) single pass. obvious regression catch. |
-| **standard** | + 1× deep reviewer + 2× fast reviewers (다른 axes) + 1× fast fact-checker (parallel, in-artifact ground truth verbatim 대조 — research: `cards/*.md`; doc: `analysis/*.md` + 기존 strategy/draft). round 1. |
-| **thorough** | + 2× deep reviewers + 2× fast reviewers (다른 axes) + 1× fast fact-checker, only when the selected graph includes that review point. round 2. high-stakes refine 용. |
-| **adversarial** | thorough + 1× external adversary (`codex-review-team` in Claude adapter). camera-ready / grant / public rebuttal 같은 외부 strong scrutiny 자리. |
+| **light** (`direct`) | Run the factual/style detector and a sanity check; no independent review loop |
+| **quick** (`quick`) | Investigate, run Stage B.5, preview the diff, and apply; no independent review loop |
+| **standard** | Add one `deep reviewer`, two `fast reviewer` axes, and one `fast fact-checker` against in-artifact ground truth |
+| **thorough** | Add a second `deep reviewer`, retain two fast review axes and fact-checking, and allow a second round when the graph selects it |
+| **adversarial** | Thorough review plus an independent `external adversary` selected through the active adapter |
 
-Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/draft-refine` 사용).
+`--no-fact-check` and `--no-style-audit` are orthogonal opt-outs that disable only their corresponding Stage B.5 aspect. They do not change intensity or other verification.
 
-> The two opt-out flags `--no-fact-check` and `--no-style-audit` are **orthogonal to intensity** — they skip the corresponding Stage B.5 aspect regardless of the derived rigor tier. These are the _only_ disable mechanism per `feedback_factcheck_principles.md` Principle 0.
+This capability performs pre-apply review only. Use `draft-refine` when a separate post-apply review cycle is required.
 
-> `adversarial` tier의 external adversary propagation 세부: `references/versioning-and-modes.md`.
-
-## Mode Forms (orthogonal to intensity)
+## Invocation Forms
 
 | Form | Behavior |
 |---|---|
-| `autopilot-refine "<prompt>"` | **Default (autopilot 정신)**: investigate → diff preview (chat에 출력만) → **자동 apply** + version + log. MECH/SEM 모두 자동. STRUCT만 halt (사용자에게 heavier flow 권장). 사후 검토는 `git diff` + `_internal/versions/v{prev}/` 스냅샷 + `pipeline_summary.md` history. |
-| `autopilot-refine "<prompt>" --confirm` | Diff preview에서 chat-pause + 사용자 confirm 후 apply. _수정 전 검토_ 원할 때 명시. |
-| `autopilot-refine "<prompt>" --review-only` | Investigate + diff preview. No edits, no version, no log. _점검만_ 원할 때. |
-| `autopilot-refine --memo <file> "<prompt or artifact hint>"` | Read memo file as proposal source. Default 동작과 동일 (자동 apply). `--confirm` 추가 가능. |
+| `autopilot-refine "<prompt>"` | Investigate → preview diff → apply MECH/SEM changes → snapshot/version/log. Halt on STRUCT and recommend the heavier owning flow. |
+| `autopilot-refine "<prompt>" --confirm` | Pause after diff preview and apply only after explicit confirmation. |
+| `autopilot-refine "<prompt>" --review-only` | Investigate and preview; make no edit, snapshot, or log entry. |
+| `autopilot-refine --memo <file> "<prompt or artifact hint>"` | Use the memo as proposal input, then follow the default flow; `--confirm` remains available. |
 
-> **Target artifact identification**: prompt에 포함된 키워드로 `<artifact-root>/{research,documents}/*` fuzzy match. 매치 1 → 사용. 다수 → 사용자에게 list 보여주고 선택 요청. 0 → "어느 산출물? prompt에 명시 부탁" 안내.
-
-> Default=자동 apply 근거·STRUCT halt escape hatch·tunable constants(`AUDIT_HINT_THRESHOLD`): `references/versioning-and-modes.md`.
+Resolve the target by fuzzy matching prompt terms against `<artifact-root>/{research,documents}/*`. Use one match, ask the user to choose among multiple matches in the conversation language, and report zero matches with guidance.
 
 ## Language Rule
 
-User-facing artifacts such as pipeline summaries and reports follow the
-audience-language-first rule in `<agent-home>/roles/response-policy.md`. The
-target artifact's existing or explicitly requested language takes precedence;
-this skill imposes no fixed chat locale.
+Preserve the target artifact's existing or explicitly requested language. Otherwise, use the conversation language for user-facing summaries and reports according to `<agent-home>/roles/response-policy.md`. Preserve source quotations, code, paths, identifiers, and citations.
 
-> `<artifact-root>` 해석·치환(`.agent_reports` 우선, legacy `.claude_reports` fallback): [CONVENTIONS §5.1](../../core/CONVENTIONS.md#51-workspace-assumption-전제).
-
----
+Resolve `<artifact-root>` by preferring `.agent_reports` and falling back to legacy `.claude_reports`: [CONVENTIONS §5.1](../../core/CONVENTIONS.md#51-workspace-assumption).
 
 ## Process
 
-target 식별(Artifact Resolution) 후 Stage A→E 로 진행. 각 단계 full orchestration 은 `references/process-stages.md`.
+After artifact resolution, run Stages A-E. Read `references/process-stages.md` for complete orchestration.
 
-- **Artifact Resolution** — prompt 키워드로 `<artifact-root>/{research,documents}/*` fuzzy match, type 감지.
-- **Stage A — Auto-discover structure**: artifact root glob, type별(research: `cards/*`; doc: `strategy/`·`draft/`) 구조 파악, grep으로 affected file 좁히기.
-- **Stage B — Plan changes**: affected file만 read → per-file change list, 각 change를 MECH/SEM/STRUCT 분류. STRUCT면 halt + heavier flow 권장.
-- **Stage B.5 — Factual claim & Style auto-detector**: 모든 change에 항상 실행(quick 포함). cards-grep + regex로 factual claim ground-truth 대조 + style lint → `⚠ Unverified`/`⚠ Style` marker. `--no-fact-check`/`--no-style-audit`로만 개별 opt-out.
-- **Stage C — Diff preview (chat)**: 제안 변경을 chat에 출력. default는 출력만 하고 자동 Stage D. `--confirm`은 chat-pause, `--review-only`는 여기서 종료.
-- **Stage D — Apply**: version 결정 → pre-edit snapshot → Edit 적용 → `pipeline_summary.md` 5-part update(메타·버전 히스토리·변경 사항·minor log migration·in-file changelog) → report.
-- **Stage E — Memo mode (`--memo <file>`)**: 메모 파일을 proposal source로 읽어 Stage B~D 실행.
+1. **Artifact Resolution**: fuzzy-match the target and detect its type.
+2. **Stage A — Discover structure**: inspect the artifact tree, identify `cards/*` for research or `strategy/` and `draft/` for documents, and narrow the affected files with search.
+3. **Stage B — Plan changes**: read only affected files, build a per-file change list, and classify each change as `MECH`, `SEM`, or `STRUCT`. Halt on STRUCT and recommend the owning heavier flow.
+4. **Stage B.5 — Factual and style detectors**: run for every change, including quick. Compare factual claims against artifact-local ground truth and run the style lint. Mark unresolved findings as `⚠ Unverified` or `⚠ Style`. Only the two explicit opt-out flags may skip these checks.
+5. **Stage C — Diff preview**: show the proposed change. Continue automatically by default, pause with `--confirm`, or stop with `--review-only`.
+6. **Stage D — Apply**: choose the version, snapshot before editing, apply the change, and update all five `pipeline_summary.md` sections: metadata, version history, changes, migrated minor log, and in-file changelog.
+7. **Stage E — Memo form**: when `--memo <file>` is present, use the memo as proposal input before running Stages B-D.
 
 ## Reference Index
 
-| 파일 | 언제 로드 (의무) | 내용 |
+| File | When to load (mandatory) | Content |
 |---|---|---|
-| `references/versioning-and-modes.md` | major refine flow 세부 판단 시 | minor log entry 형식, major 적용 동작, why-this-split rationale, adversarial-tier propagation, mode-forms default/STRUCT-halt 근거, tunable constants |
-| `references/process-stages.md` | 실제 실행 orchestration 시 (필수) | artifact resolution, Stage A/B/B.5/C/D/E full orchestration(factual+style auto-detector, diff preview, apply/versioning, memo mode) |
-| `references/examples-and-constraints.md` | invocation 예시·constraints·후속 판단 자리 | invocation examples, constraints(빈칸>잘못 채우기 등), when-not-to-use, post-apply checklist |
+| `references/versioning-and-modes.md` | When deciding or executing a major refinement | Minor-log format, major behavior, split rationale, adversarial propagation, default mode forms, STRUCT halt, and tunable constants |
+| `references/process-stages.md` | During execution (required) | Artifact resolution and complete Stage A-E orchestration, detectors, preview, apply/versioning, and memo form |
+| `references/examples-and-constraints.md` | For invocation examples, constraints, or post-apply decisions | Examples, prefer-gap-over-wrong-fill constraints, when-not-to-use guidance, and checklist |

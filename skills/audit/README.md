@@ -1,48 +1,51 @@
 # audit
 
-> 본 README 는 Claude adapter skill 요약. 권위 있는 Claude runtime 동작 명세는 같은 폴더의 `SKILL.md`; portable capability 의미는 `<agent-home>/capabilities/`.
+> This README summarizes the portable capability for users and maintainers. The model-neutral contract lives under `<agent-home>/capabilities/`; `SKILL.md` in this directory provides shared guidance for runtime-specific projections.
 
-## 개요
-Read-only multi-aspect audit / lint for `<artifact-root>/{plans,research,documents}/*` artifacts. Single global entry — auto-detects artifact type from path prefix (plans=code; research=field-survey; documents=doc deliverable).
+## Overview
 
-Type별 lint aspects:
-- **doc** → facts / style / structure / cross-ref / coverage
-- **research** → cards 정합성 / Tier consistency / coverage / cross-card
-- **plans** → test results / lint / code review / TODO·미구현
+Perform a read-oriented, multi-aspect audit of `<artifact-root>/{plans,research,documents}/*`. One entry point detects artifact type from its path:
 
-doc / research artifact는 추가로 **dual-perspective** 점검:
-- **P1 — vs last major baseline**: `pipeline_summary.md` `## 마이너 변경 로그` + `_internal/versions/v{N}/` 스냅샷 diff. 누적된 minor가 _집합적으로_ artifact를 어디로 drift시켰는지.
-- **P2 — vs universal principles**: 현재 artifact 상태의 aspect-by-aspect 점검 (시점 무관).
-- 두 결과 cross-correlate → P2 finding의 file:line이 P1 minor entry의 Files touched에 매칭되는지 확인 → "최근 도입 (fix 우선순위 高)" vs "기존 잔존" 분류.
+- **documents:** facts, style, structure, cross-reference, and coverage;
+- **research:** card integrity, Tier consistency, coverage, and cross-card references;
+- **plans:** test results, lint, code review, incomplete work, and semantic-deterministic consistency.
 
-기본 `--scope auto`. **Report-only** — 본 skill은 절대 artifact를 수정하지 않습니다. autopilot-refine과 보완 관계 (refine = edit flow, audit = inspect flow).
+Document and research audits use two perspectives:
 
-## Cadence (언제 audit 실행)
+- **P1 — change from the last major baseline:** compare the `pipeline_summary.md` `## 마이너 변경 로그` section and the newest `_internal/versions/v{N}/` snapshot to detect accumulated drift.
+- **P2 — universal principles:** inspect current artifact consistency aspect by aspect.
+- Cross-correlate P2 `file:line` findings with P1 `Files touched` entries to distinguish recently introduced issues from older residue.
 
-- **사용자 명시 `/audit <artifact>`** — 즉시
-- **AUDIT_HINT_THRESHOLD (default 5 minors since last major)** 도달 시 — autopilot-refine 또는 직접 Edit 작업 종료 후 chat alert로 권장 (자동 실행 X)
-- **자동 fix chain dispatch에서 spawned audit** — autopilot-refine 또는 autopilot-code의 fix routing에서
+Default scope is `auto`. The audit itself never edits the artifact. By default it may dispatch the appropriate corrective workflow after reporting; `--report-only` disables that dispatch.
 
-## 호출 형식
-```
+## Cadence
+
+- Explicit `/audit <artifact>` → run immediately.
+- At `AUDIT_HINT_THRESHOLD`, default five minor changes since the last major snapshot → recommend audit after autopilot-refine or a direct edit; do not run automatically.
+- A corrective chain may also dispatch audit from autopilot-refine or autopilot-code.
+
+## Invocation
+
+```text
 /audit <artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]
 ```
 
-- `<artifact_path>` — `<artifact-root>/{documents,research,plans}/{name}` 또는 fuzzy match 가능한 단축명
-- `--scope`: 강조할 측면 (override 1순위). 미명시 시 `auto` — artifact 특성(mode / refine 횟수 / status)을 보고 적절한 aspect 자동 선택
-- `--read-only` (code plan 한정): 테스트 실행 없이 정적 lint만
-- `--report-only`: 점검만, auto-fix dispatch 없이
-- `--no-fact-check`: Stage B.5 fact-check 비활성화
+- `<artifact_path>`: an artifact under `<artifact-root>/{documents,research,plans}/{name}` or a unique fuzzy name.
+- `--scope`: explicit aspect override. `auto` selects aspects from artifact mode, history, and status.
+- `--read-only`: for code plans, do not execute tests; inspect existing evidence only.
+- `--report-only`: write the report without corrective dispatch.
+- `--no-fact-check`: disable fact and coverage checks.
 
-## Auto-fix dispatch (default)
-점검 결과 issue 발견 시 type별로 자동 dispatch:
-- doc / research 산출물 → `autopilot-refine` (갈래 E)
-- plans 산출물 → `autopilot-code --mode dev`
+## Corrective Dispatch
 
-`--report-only` 명시 시 dispatch 없이 보고서만 작성.
+When findings exist and `--report-only` is absent:
 
-## 산출물
-보고서는 artifact root의 `_internal/audit/{YYYY-MM-DD}_{aspect}.md`에 누적.
+- documents and research → `autopilot-refine`;
+- plans → `autopilot-code --mode dev`.
+
+## Output
+
+Append reports under `_internal/audit/{YYYY-MM-DD}_{aspect}.md` in the audited artifact.
 
 ---
-*Claude adapter realization: `<agent-home>/adapters/claude/skills/audit/SKILL.md`; compatibility reference: `<agent-home>/skills/audit/SKILL.md`*
+*Portable capability contract: `<agent-home>/capabilities/audit.md`; shared skill guidance: `<agent-home>/skills/audit/SKILL.md`.*

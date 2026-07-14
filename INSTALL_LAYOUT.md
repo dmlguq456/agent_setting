@@ -2,18 +2,20 @@
 
 This harness is runtime-neutral. The git repository should live outside vendor runtime homes, and each runtime home should project the harness through symlinks or adapter bootstrap files.
 
-> **실행 안내 — `harness install` / `harness verify` 가 담당한다.** 이 문서는 더 이상
-> 복사해서 실행하는 shell 레시피나 수동 검증 절차를 담지 않는다. 설치·검증·갱신·상태·
-> 제거는 모두 `tools/install/harness.sh`
-> (`runtime activate|status|refresh|doctor` 및 legacy
-> `install`/`verify`/`update`/`status`/`uninstall` 서브명령) 가 기계화한다. 수동
-> 레시피는 PRD `.agent_reports/spec/harness-installer/prd.md`
-> (harness-installer cycle 1~2) 로 대체됐다.
+> **Execution note — use `harness install` / `harness verify`.** This document
+> no longer contains shell recipes to copy or a manual verification battery.
+> `tools/install/harness.sh` automates installation, verification, updates,
+> status, and removal through `runtime activate|status|refresh|doctor` and the
+> legacy `install`/`verify`/`update`/`status`/`uninstall` subcommands. The
+> installer PRD at `.agent_reports/spec/harness-installer/prd.md` supersedes
+> the old manual recipes.
 >
-> **설계 안내 — 이 문서가 유지하는 것은 계약 서술뿐이다.** 무엇이 어디로 매핑되는지,
-> 왜 그렇게 하는지, 어떤 경우가 위험한지만 다룬다. 표면 × 채널 결정 매트릭스와 채널별
-> 상세 스펙의 단일 출처는 productization PRD의 activation·profile 절이고, 아래에는 그 요약과 이
-> 문서에만 있는 로컬 사실(Windows 구체 경로, fleet 계약)만 남긴다.
+> **Design note — this document preserves contracts, not procedures.** It
+> explains what maps where, why the mapping exists, and which cases are unsafe.
+> The activation and profile sections of the productization PRD own the full
+> surface-by-channel decision matrix and channel specifications. This page
+> keeps only their summary and local facts that are unique to it, such as
+> concrete Windows paths and the fleet contract.
 
 ## Target Layout
 
@@ -39,9 +41,10 @@ harness runtime status --runtime all --json
 harness runtime doctor --runtime all --strict
 ```
 
-`harness-manifest.json`이 `starter`/`builder`/`full` profile과 dependency closure를
-소유한다. `builder`가 새 activation의 기본값이며 legacy activation record에 profile이
-없으면 기존 discovery를 보존하기 위해 `full`로 해석한다.
+`harness-manifest.json` owns the `starter`, `builder`, and `full` profiles and
+their dependency closure. `builder` is the default for new activations. A
+legacy activation record without a profile is interpreted as `full` to preserve
+its existing discovery surface.
 
 | profile | projected capabilities | projected roles | projected modes |
 |---|---:|---:|---:|
@@ -73,22 +76,24 @@ harness install claude
 
 **Contract, not recipe**:
 
-| 표면 | 배선 | 계약 |
+| Surface | Wiring | Contract |
 |---|---|---|
-| `CLAUDE.md`/`core`/`skills`/`agents`/`hooks`/`tools`/… | symlink | repo 수정이 즉시 반영 — harness-owned, 런타임에서는 read-only |
-| `settings.json`/`keybindings.json` | copy-once + hash-manifest | 한 번만 복사하고 다시는 링크하지 않는다 (↓ 설정 파일) |
-| packaged activation | repo-local immutable bundle → 같은 native surface | plugin registry/cache를 사용하지 않는다 |
+| `CLAUDE.md`/`core`/`skills`/`agents`/`hooks`/`tools`/… | symlink | Repository changes appear immediately; harness-owned and read-only from the runtime |
+| `settings.json`/`keybindings.json` | copy once + hash manifest | Copy once and never link again (see configuration files below) |
+| packaged activation | repo-local immutable bundle → same native surfaces | Does not use plugin registries or caches |
 
-- **설정 파일** — Claude Code 는 `settings.json`/`keybindings.json` 을 in-place 로
-  다시 쓴다 (`/model`, `/config`, in-app keybinding 편집). 이때 atomic write 가
-  symlink 를 일반 파일로 대체하므로, 한 번만 복사하고 다시는 링크하지 않는다 —
-  한 번이라도 링크하면 repo 가 조용히 오염된다. drift 는 `verify` / `update --reapply`
-  가 hash-manifest 로 감지·백업·재적용한다.
-- **runtime activation** — harness hook 항목만 기존 `settings.json`에 중복 없이
-  병합하고, hook이 참조하는 `tools`/`utilities`를 source 또는 immutable bundle에
-  연결한다. 사용자의 다른 settings key는 그대로 유지하며 원본 checksum backup과
-  transaction journal을 남긴다. legacy plugin 생성기는 선택적 배포 산출물일 뿐
-  Phase 1 활성화에는 쓰지 않는다.
+- **Configuration files:** Claude Code rewrites `settings.json` and
+  `keybindings.json` in place through `/model`, `/config`, and in-app keybinding
+  edits. An atomic write replaces a symlink with a regular file, so these files
+  are copied once and never linked. Linking them even once can silently dirty
+  the repository. `verify` and `update --reapply` use the hash manifest to
+  detect, back up, and reapply drift.
+- **Runtime activation:** only harness hook entries are merged into the existing
+  `settings.json`, without duplicates. Referenced `tools` and `utilities` point
+  to either the source or an immutable bundle. Other user settings remain
+  unchanged, while the operation records an original-checksum backup and a
+  transaction journal. The legacy plugin generator is an optional distribution
+  artifact and is not part of Phase 1 activation.
 
 Keep these local to `$HOME/.claude`: `.credentials.json`, `.dispatch/`, `cache/`, `daemon/`, `history.jsonl`, `ide/`, `projects/`, `sessions/`, `session-env/`, `shell-snapshots/`, runtime logs, and other runtime-generated state.
 
@@ -143,10 +148,12 @@ your Git Bash `PATH`) so `fleet` works as a one-word command. Everything else
 
 ## Cross-harness CLI — `fleet`
 
-`fleet` (the cross-harness live dashboard, `tools/fleet/`) is runtime-neutral — it
-observes every harness (Claude Code · Codex · opencode) from the process table and
-on-disk state, so it belongs to no single adapter. The launcher `tools/fleet/fleet.sh`
-runs from the repo directly; to get the one-word `fleet` command, symlink it onto `PATH`:
+`fleet` is a cross-harness live dashboard under `tools/fleet/`. Its observation
+and rendering core reads Claude Code, Codex, and OpenCode state through separate
+collectors, so the dashboard itself belongs to no single adapter. Individual
+collectors and optional enrichment features may still depend on runtime-specific
+state or providers. The launcher `tools/fleet/fleet.sh` runs from the repository
+directly; to get the one-word `fleet` command, symlink it onto `PATH`:
 
 ```bash
 export AGENT_HOME="$HOME/agent_setting"
@@ -158,13 +165,18 @@ No install step at all still works — run it by path: `bash "$AGENT_HOME/tools/
 (or, via the Claude projection above, `bash ~/.claude/tools/fleet/fleet.sh`). Zero-dep
 (stdlib python3 + curses); nothing to build.
 
-Session titles are also cross-harness. Fleet reads Codex's native state DB title with
-the JSONL `thread_name` index as a compatibility fallback, and may
-refresh active Claude/Codex titles into
+Title acquisition is best-effort and runtime-specific. Fleet reads native title
+state where available: for example, Codex's state DB with the JSONL
+`thread_name` index as a compatibility fallback, and OpenCode's session DB.
+The optional live refresher currently supports active Claude Code and Codex
+transcripts and writes Fleet-owned sidecars under
 `${FLEET_TITLE_STATE_DIR:-${XDG_STATE_HOME:-~/.local/state}/agent-fleet/titles}/<harness>/`.
-The default refresher is the existing no-tools Haiku provider. To use a GPT-mini-class
-or other small model, point `FLEET_TITLE_COMMAND` at a no-tools wrapper; the value is
-parsed as an argv template, never through a shell:
+That refresher is not runtime-neutral today: its implementation defaults to the
+Claude CLI with the no-tools `haiku` model as a compatibility provider. This is
+an implementation fallback, not a portable Fleet requirement; when the provider
+is absent or fails, the dashboard continues with native titles or slugs. To use
+another small provider, point `FLEET_TITLE_COMMAND` at a no-tools wrapper. The
+value is parsed as an argv template, never through a shell:
 
 ```bash
 export FLEET_TITLE_MODEL="small-model"
@@ -186,22 +198,24 @@ harness install codex
 
 **Contract, not recipe**:
 
-| 표면 | 배선 | 계약 |
+| Surface | Wiring | Contract |
 |---|---|---|
-| `AGENTS.md`/core/capabilities/roles/bin/tools/utilities/scaffolds | symlink (`agent-*` pointer 이름) | `codex_setting/` 에 생성된 projection 을 경유한다 |
-| Codex-native skills/agents/modes | symlink fan-out (`skills/*`, `agents/*.toml`) | `codex_setting/codex-{skills,agents,modes}` — `capabilities/`·`roles/` 로부터 생성, 재구현 금지 |
-| packaged activation | repo-local immutable bundle → 같은 native surface | plugin marketplace/config/cache를 사용하지 않는다 |
-| hooks | `codex_setting/codex-hooks` → `hooks.json` | adapter-owned hook bridge, `type:"command"` 만 실행 |
-| `/statusline` 대상 `config.toml` | copy 안 함, fragment 만 유지 | `config.toml` 은 runtime-owned (↓ statusline) |
+| `AGENTS.md`/core/capabilities/roles/bin/tools/utilities/scaffolds | symlink using `agent-*` pointer names | Routes through generated projections under `codex_setting/` |
+| Codex-native skills/agents/modes | symlink fan-out (`skills/*`, `agents/*.toml`) | Generated from `capabilities/` and `roles/` into `codex_setting/codex-{skills,agents,modes}`; do not reimplement |
+| packaged activation | repo-local immutable bundle → same native surfaces | Does not use plugin marketplace, config, or cache state |
+| hooks | `codex_setting/codex-hooks` → `hooks.json` | Adapter-owned hook bridge; executes only `type:"command"` entries |
+| `config.toml` used by `/statusline` | not copied; fragment only | `config.toml` remains runtime-owned (see statusline below) |
 
-- **runtime activation** — linked와 packaged 모두 Codex native skills/agents/modes/
-  hooks를 사용한다. 기존 harness plugin enable 항목은 `false`로 보존 수정하고 cache는
-  `.harness/disabled-plugins/`에 격리한다. marketplace 등록과 plugin install은 호출하지
-  않는다.
-- **statusline** — `config.toml` 은 TUI 가 직접 다시 쓰는 runtime-owned 파일이라
-  전체를 projection 하지 않는다. `codex_setting/codex-config/tui-statusline.toml`
-  조각만 유지하고, 적용은 `codex_setting/bin/preflight.sh tui-config` 가 맡는다
-  (`[tui].status_line`·`[tui].status_line_use_colors` 만 갱신).
+- **Runtime activation:** both linked and packaged modes use Codex-native
+  skills, agents, modes, and hooks. Existing harness plugin enable entries are
+  preserved but set to `false`; their caches are isolated under
+  `.harness/disabled-plugins/`. Activation does not register a marketplace or
+  invoke plugin installation.
+- **Statusline:** `config.toml` remains runtime-owned because the TUI rewrites it
+  directly. The harness keeps only
+  `codex_setting/codex-config/tui-statusline.toml`; applying it through
+  `codex_setting/bin/preflight.sh tui-config` updates only
+  `[tui].status_line` and `[tui].status_line_use_colors`.
 
 For a project-scoped install, `harness install codex --scope project` symlinks
 the generated TOML files into the project's `.codex/agents/` directory instead
@@ -230,23 +244,25 @@ harness install opencode
 
 **Contract, not recipe**:
 
-| 표면 | 배선 | 계약 |
+| Surface | Wiring | Contract |
 |---|---|---|
-| `AGENTS.md`/core/capabilities/roles/bin/tools/utilities | symlink (`agent-*` pointer 이름) | `opencode_setting/` 생성 projection 경유 |
-| OpenCode-native skills/agents/commands | symlink fan-out (`skills/*`, `agents/*.md`, `commands/*.md`) | 현재 공식 복수형 discovery 경로 |
-| guard plugin | `opencode_setting/opencode-plugins/agent-harness-guards.js` | JS/TS plugin hook 표면(OpenCode 는 marketplace·번들 포맷이 없다 — plugin 채널 자체가 미존재, installer symlink 가 유일 경로) |
-| `opencode.json`/`opencode.jsonc` `instructions[]`/`plugin[]` | non-destructive merge | 기존 사용자 config 보존, 충돌 시 report 후 중단 (자동 merge 강행 금지) |
+| `AGENTS.md`/core/capabilities/roles/bin/tools/utilities | symlink using `agent-*` pointer names | Routes through generated projections under `opencode_setting/` |
+| OpenCode-native skills/agents/commands | symlink fan-out (`skills/*`, `agents/*.md`, `commands/*.md`) | Uses the current official plural discovery paths |
+| guard plugin | `opencode_setting/opencode-plugins/agent-harness-guards.js` | JS/TS plugin hook surface; OpenCode has no marketplace or bundle format, so installer symlinks are the only channel |
+| `opencode.json`/`opencode.jsonc` `instructions[]`/`plugin[]` | non-destructive merge | Preserves user config; reports conflicts and stops instead of guessing an automatic merge |
 
-`runtime activate`는 공식 복수형 convention 디렉터리를 사용합니다. 기존 legacy
-`harness install opencode` 경로의 단수형 projection은 호환용으로 남지만 active source
-계약에는 사용하지 않습니다. JSON config에 명시된 harness npm plugin은 activation 때
-다른 user key를 보존한 채 제거됩니다. JSONC의 exact harness plugin 항목은 comment 보존
-parser 없이 안전하게 지울 수 없으므로 activation을 변경 전 차단하고 수동 제거 경로를
-보고합니다. project-scoped `runtime activation`은 OpenCode의 cwd→worktree 다단 config와
-project `AGENTS.md` 소유권을 함께 풀어야 하므로 Phase 1에서는 세 runtime 모두
-지원하지 않습니다. `--scope project`는 global home으로 조용히 fallback하지 않고
-명시적으로 실패합니다. 기존 `harness install opencode --scope project` 호환 경로는
-별개이며 active-source 계약으로 간주하지 않습니다.
+`runtime activate` uses the official plural convention directories. Singular
+projections from the legacy `harness install opencode` path remain for
+compatibility but are not part of the active-source contract. Activation
+removes an explicitly configured harness npm plugin from JSON while preserving
+all other user keys. It cannot safely remove the exact plugin entry from JSONC
+without a comment-preserving parser, so it blocks before mutation and reports a
+manual removal path. Project-scoped runtime activation must resolve OpenCode's
+cwd-to-worktree config hierarchy together with project `AGENTS.md` ownership;
+Phase 1 therefore supports it for none of the three runtimes. `--scope project`
+fails explicitly instead of silently falling back to the global home. The
+legacy `harness install opencode --scope project` compatibility path is
+separate and is not considered an active-source installation.
 
 Do not symlink Claude-native surfaces such as `settings.json`, `commands/`,
 `skills/`, `statusline.sh`, or `hooks/` into `$HOME/.config/opencode`.

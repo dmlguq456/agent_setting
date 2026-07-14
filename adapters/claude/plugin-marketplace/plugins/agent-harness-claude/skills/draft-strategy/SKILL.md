@@ -1,63 +1,74 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: draft-strategy
-description: "Create a document strategy for rebuttals, papers, reviews, reports, proposals, or presentations."
-argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> <task description>"
+description: "Use when invoking the portable draft-strategy capability. Create an initial document strategy and evidence-based writing plan."
+argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--intensity direct|quick|standard|strong|thorough|adversarial] <task description>"
 metadata:
   group: sub
   fam: sub
-  modes: [rebuttal, paper, review, report, proposal, presentation]
-  blurb: "Create a source-grounded document strategy."
+  modes: ["rebuttal", "paper", "review", "report", "proposal", "presentation"]
+  blurb: "Create an initial document strategy and evidence-based writing plan."
 ---
 
-## Language Rule
-- User-facing artifacts follow the audience-language-first rule in
-  `<agent-home>/roles/response-policy.md`. The selected strategy's explicit
-  target, venue, audience, and source-artifact language contracts take
-  precedence; this skill imposes no fixed chat locale.
+# draft-strategy
 
-## Argument Parsing
-Parse `$ARGUMENTS`:
-- **mode**: first word — `rebuttal | paper | review | report | proposal | presentation`
-- **--inputs <comma-separated-paths>**: comma-joined list of pre-discovered input paths (from autopilot-draft Pre-flight Step 2 Input Discovery — typically `analysis_project/{paper,doc}/...` and/or `research/{topic}/`). Each path is an artifact directory containing pre-analyzed materials.
-- **--output <dir>**: artifact output directory (`<artifact-root>/documents/{date}_{name}/`)
-- **검증 rigor tier**: `quick | light | standard | thorough | adversarial` — `--intensity` 에서 파생 (autopilot-draft 가 전파). 단일 source: [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot)
-- Remaining text: task description / context
+## Language Rule
+
+Follow an explicit target, venue, audience, or source-artifact language first. Otherwise, write strategy artifacts and user-facing output in the conversation language according to `<agent-home>/roles/response-policy.md`. Preserve quotations, code identifiers, citations, paths, and venue-specific terms when translation would reduce precision.
+
+## Parse Arguments
+
+Parse `$ARGUMENTS` as follows:
+
+- first word, `mode`: `rebuttal | paper | review | report | proposal | presentation`
+- `--inputs <comma-separated-paths>`: pre-discovered artifact directories, usually `analysis_project/{paper,doc}/...` or `research/{topic}/`
+- `--output <dir>`: `<artifact-root>/documents/{date}_{name}/`
+- `--intensity`: derive the `quick | light | standard | thorough | adversarial` verification tier through [CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers)
+- remaining text: task description and context
 
 ## Pre-Check
-- Verify analysis files exist in `{output_dir}/analysis/`:
-  - `material_index.md` (required for all modes)
-  - `reviewer_analysis.md` (required for rebuttal mode)
-  - `ref_analysis.md` (required for paper/review/report/proposal/presentation modes)
-- If missing, report error — autopilot-draft Step 1 should have created these.
+
+Verify the expected analysis files under `{output_dir}/analysis/`:
+
+- every mode: `material_index.md`
+- rebuttal: `reviewer_analysis.md`
+- paper, review, report, proposal, or presentation: `ref_analysis.md`
+
+If a required file is missing, report that `autopilot-draft` Step 1 did not complete; do not invent the analysis.
 
 ## Mode Routing
 
-첫 인자 mode 로 6종 strategy template 중 하나를 선택한다. autopilot-draft 의 form-first 3-mode(paper·presentation·doc) 는 Pre-flight 에서 6-mode 라벨로 변환돼 전달된다 (doc → rebuttal/review/report/proposal, task keyword 매칭; 모호 시 report). 직접 `/draft-strategy` 호출 시는 사용자가 첫 인자로 6-mode 중 하나를 명시.
+Select one strategy template from the first argument:
 
-- **rebuttal** — reviewer 대응 전략 (meta-review → priority matrix → reviewer-by-reviewer)
-- **paper** — 논문 작성 전략 (positioning → contribution → outline → evidence)
-- **review** — peer review 의견서
-- **report** — 보고서 전략 (objective → findings → section plan)
-- **proposal** — 제안서 전략 (problem → approach → work plan → impact)
-- **presentation** — 발표 전략 (audience → core message → slide outline; slide 산출 직접 가이드)
+| Mode | Strategy focus |
+|---|---|
+| `rebuttal` | Meta-review, priority matrix, and reviewer-by-reviewer response |
+| `paper` | Positioning, contribution, outline, and evidence |
+| `review` | Evidence-grounded peer-review response |
+| `report` | Objective, findings, and section plan |
+| `proposal` | Problem, approach, work plan, and impact |
+| `presentation` | Audience, core message, and slide outline |
 
-mode↔autopilot-draft 매핑 표·6종 template 전문·Paragraph Cohesion Pre-Check·Tone Auto-Detection·Slide Format Conventions·Quality Requirements 는 모두 `references/delegate-prompt.md` 에 verbatim 보존.
+`autopilot-draft` maps its form-first `paper`, `presentation`, or `doc` route to these six labels during preflight. A `doc` request maps to rebuttal, review, report, or proposal from task intent, with report as the final fallback. A direct `draft-strategy` invocation must supply one of the six labels.
 
-## Delegation & Flow
+Read [references/delegate-prompt.md](references/delegate-prompt.md) for the complete mode mapping, six templates, paragraph-cohesion precheck, tone detection, slide conventions, and quality requirements.
 
-1. Argument Parsing → Pre-Check (`{output_dir}/analysis/` 파일 존재 검증).
-2. **Delegate**: `references/delegate-prompt.md` 의 전체 프롬프트로 연구팀(research-team) 을 subagent 호출 — agent 가 strategy 파일을 직접 쓰고 경로 + 3-5줄 요약만 반환. orchestrator 는 내용이 아닌 경로·요약만 수신.
-3. **QA**: `references/qa-review.md` 의 QA Scaling(레벨 auto-detect) + Selected Post-Strategy Review Pass(quality reviewer + fact-checker 병렬, max 2 rounds) 수행.
-4. **Mirror** (conditional, default skip): strategy primary language ≠ 사용자 작업 언어일 때만 `references/mirror.md` 의 편집팀 모드 A 호출.
-5. 사용자 보고: strategy path(s) + summary + QA verdict.
+## Flow
+
+1. Parse arguments and verify `{output_dir}/analysis/`.
+2. Load the complete prompt from `references/delegate-prompt.md` and invoke `research-team`. Require it to write the strategy file directly and return only paths plus a 3–5 line summary.
+3. Apply QA scaling and the bounded quality/fact review in `references/qa-review.md`; run the selected reviewers in parallel and allow at most two rounds.
+4. Create a translated companion only when an explicit second-language or external-audience contract requires it. Use `editorial-team` with `references/mirror.md`; do not infer a fixed mirror language from the conversation.
+5. Report strategy paths, compact summary, and QA verdict in the conversation language.
 
 ## Reference Index
 
-| 파일 | 언제 로드 (의무) | 내용 |
+| File | Load when | Contents |
 |---|---|---|
-| `references/delegate-prompt.md` | 연구팀 delegate 프롬프트 구성 시 (필수) | `## Delegate to 연구팀` 전체 — 연구팀 프롬프트(Inputs / Paragraph Cohesion Pre-Check / Mode mapping / Mode-Specific Instructions 6종 template: rebuttal·paper·review·report·proposal·presentation / Tone Auto-Detection / Slide Format Conventions / Quality Requirements) + orchestrator 반환 계약 |
-| `references/qa-review.md` | QA 레벨 스케일링·리뷰 패스 시 | `## QA Scaling`(레벨 표·fast fact-checker 근거) + `## Selected Post-Strategy Review Pass`(reviewer/fact-checker 프롬프트, verdict 분기, max 2 rounds) |
-| `references/mirror.md` | Mirror 생성 시 | `## Mirror Generation`(편집팀 모드 A 조건부 호출, primary-language 판정, 최종 사용자 보고 라인) |
+| `references/delegate-prompt.md` | Building the `research-team` prompt | Inputs, paragraph-cohesion precheck, mode mapping, six strategy templates, tone detection, slide conventions, quality requirements, and return contract |
+| `references/qa-review.md` | Selecting and running QA | Rigor scaling, fast fact-check rationale, reviewer and fact-checker prompts, verdict branches, and two-round cap |
+| `references/mirror.md` | An explicit companion-language artifact is required | `editorial-team` translation procedure, primary-language decision, and final report line |
 
 ## Task
+
 $ARGUMENTS

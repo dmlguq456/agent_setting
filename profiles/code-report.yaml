@@ -1,5 +1,5 @@
 name: code-report
-description: "code-report 스테이지-워커 — autopilot-code Step 5 depth-2 분사용 (품질관리팀 fast writer)"
+description: "code-report stage worker — autopilot-code Step 5 depth-2 delegation (QA fast writer)"
 harness: claude
 model_role: fast writer
 fragments:

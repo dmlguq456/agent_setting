@@ -1,5 +1,5 @@
 name: code-plan
-description: "code-plan 스테이지-워커 — autopilot-code Step 2 depth-2 분사용 (기획팀)"
+description: "code-plan stage worker — autopilot-code Step 2 depth-2 delegation (planning team)"
 harness: claude
 model_role: deep maker
 fragments:

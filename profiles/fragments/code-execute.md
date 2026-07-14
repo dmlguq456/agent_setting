@@ -6,7 +6,7 @@ and is the **only stage that mutates source**.
 
 ### Sub-skill role + in-session team
 
-- Run `code-execute`. Internal parallelism is the in-session **dev-team (개발팀)**
+- Run `code-execute`. Internal parallelism is the in-session **dev-team**
   only — implement the plan's phases/steps and record progress.
 - Return only a short verdict (implemented phase count + plan `status`); the
   conductor reads the checklist/plan, not your prose.

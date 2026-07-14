@@ -3,7 +3,7 @@
 `Session` / `DispatchJob` are the harness-agnostic rows the render layer consumes.
 Collectors fill them; no harness-specific logic lives here. Any field a harness
 cannot provide stays `None` and renders as `—` (an explicit "not available",
-never a blank — PRD §4 결손 칸 규칙).
+never blank, per the PRD missing-cell rule).
 """
 import re
 from dataclasses import dataclass, field, asdict
@@ -94,10 +94,7 @@ def project_of(cwd):
     if not cwd:
         return "(unknown)"
     parts = [p for p in cwd.rstrip("/").split("/") if p]
-    # drill 모의훈련 임시 repo (/tmp/drill-<case>-<rand>/…) → "drill:<case>" 한 그룹으로.
-    # loops 처럼 케이스별 격리 실행이라 basename 'repo' 로 뭉치면 정체 불명 + 동시 실행 시
-    # 'repo/' 가 여러 개 떠 헷갈림 (user 2026-07-04). worktree(-wt)/_worktrees 판정보다 앞 —
-    # 케이스 내부 worktree 도 같은 그룹으로 묶어 한 케이스 = 한 카드.
+    # Group each temporary drill repository and its worktrees as one drill:<case> card.
     if cwd.startswith("/tmp/"):
         for comp in parts:
             m = re.match(r"^drill-(.+)-[^-/]+$", comp)
@@ -156,7 +153,7 @@ class Session:
     liveness: str = "unknown"
     gate: Optional[str] = None          # spec-gate override (tracked/untracked) — demo fixtures; None = compute from cwd
     branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
-    mem_worker: bool = False   # F-18b: memory distiller/curator(MEM_DISTILL) 또는 F-17 refresher(FLEET_TITLE_REFRESH) 세션 — 기본 표시 제외, 🧠N 요약으로만
+    mem_worker: bool = False   # Memory worker or title refresher; summarized and hidden by default.
 
     def to_dict(self):
         return asdict(self)
@@ -190,7 +187,7 @@ class DispatchJob:
     worker_role: Optional[str] = None   # planner/verifier/adversary/etc.
     capability_owner: Optional[str] = None  # owning capability slug/name for sub-workers
     effort: Optional[str] = None        # dispatch runtime effort (pipe `effort=`; None = parent-inherit)
-    model_role: Optional[str] = None    # portable model role (pipe `model_role=`; SD-5 관제)
+    model_role: Optional[str] = None    # Portable model role from pipe model_role=.
 
     def to_dict(self):
         return asdict(self)

@@ -1,293 +1,266 @@
 ## Pipeline
 
-> **Stage-dispatch 계약** (`standard+`, OPERATIONS §5.10 ③④·SD-1·SD-2): `standard+` 에서 아래 각 durable stage 는 독립된 **depth-2 headless session** 으로 dispatch 되고, 각 step 에 명시된 in-session team 은 그 stage session _안에서_ 실행된다. depth-1 conductor 는 artifact path 만 넘기고 verdict/status 만 읽는다 — stage 본문이나 이전 stage 의 대화는 넘기지 않는다 (**file-only handoff**: 각 stage 는 입력을 파일에서 읽는다). `direct/quick` 과 micro-stage 는 inline 유지, stage session 은 재분사하지 않는다 (depth 3+ 금지). depth-gated step (2e/3c) 은 conditional stage — depth 조건 만족 시에만 별도 dispatch. 아래 stage-worker 매핑은 _계약 + 매핑 추가_ 만 — 각 파이프 본문을 imperative dispatch 로 재작성하는 건 후속 작업.
+> **Stage-dispatch contract** (`standard+`, OPERATIONS §5.10 ③④, SD-1, SD-2): dispatch each durable stage as an independent depth-2 headless session. The named team runs inside that stage. The depth-1 conductor passes artifact paths and reads verdicts or status only; each stage reads inputs from files. Keep `direct`, `quick`, and micro-stages inline. Dispatch depth-gated stages only when their depth condition is met. Stage sessions must not redispatch because depth 3+ is forbidden.
 
-#### Stage-worker 매핑 (§6-homolog)
-
-| stage | in-session team | input artifacts | output artifacts | write class |
+| Stage | In-session team | Inputs | Outputs | Write class |
 |---|---|---|---|---|
-| Step 2 (Source Search, 2a-2d) | 연구팀 | `queries`(오케스트레이터 생성), HF `paper_search` 결과(optional) | `_internal/search_results.json` | _internal (raw, T3) |
-| Step 2e (Query Expansion Rounds — **conditional**, depth-gated) | 연구팀 | `_internal/search_results.json`(read) + 새 keyword 기반 `new_queries` | `_internal/search_results.json`(merge 갱신) | _internal (raw, T3, append/merge) |
-| Step 3b (Phase A — Parallel Skimming Batches) | 연구팀 (batch, parallel) | `_internal/search_results.json`, `_internal/browser_extracts/`(자료팀 사전 fetch) | `cards/{paper}.md` | root (deliverable, T1/T2) |
-| Step 3c (Phase B — Reference Chaining — **conditional**, depth-gated) | 연구팀 | `cards/`, `_internal/search_results.json` | `_internal/chaining_results.md` | _internal (raw, T3) |
-| Step 3e (Compile analysis_summary.md) | 연구팀 | `cards/`, `_internal/chaining_results.md`(있으면), `_internal/code_search.md`(있으면) | `analysis_summary.md` | root (deliverable, T1/T2) |
-| Step 4a (Report Generation — [report-generation.md](report-generation.md)) | 연구팀 | `analysis_summary.md`, `_internal/*`, `cards/` | `{00-08}_*.md`(mode-specific report set) | root (deliverable, T1/T2) |
-| Step 4b (QA Loop — [report-generation.md](report-generation.md)) | 연구팀 (quality/fact-check/claim-verify subroles) / codex-review-team (adversarial external) | report set + `cards/` | `_internal/reviews/round_{n}_*.md`, `unresolved.md`(있으면) | _internal (raw, T3) |
+| Step 2: Source Search | 연구팀 | Orchestrator queries, optional HF `paper_search` results | `_internal/search_results.json` | T3 raw |
+| Step 2e: Query Expansion | 연구팀 | Existing search results plus new keyword queries | Merged `_internal/search_results.json` | T3 append/merge |
+| Step 3b: Parallel Skimming | 연구팀, parallel batches | Search results and browser extracts | `cards/{paper}.md` | T1/T2 deliverables |
+| Step 3c: Reference Chaining | 연구팀 | Cards and search results | `_internal/chaining_results.md` | T3 raw |
+| Step 3e: Analysis Summary | 연구팀 | Cards, optional chaining and code search | `analysis_summary.md` | T1/T2 deliverable |
+| Step 4a: [Report Generation](report-generation.md) | 연구팀 | Analysis summary, internal evidence, cards | Mode-specific `{00-08}_*.md` set | T1/T2 deliverables |
+| Step 4b: [QA Loop](report-generation.md) | 연구팀 subroles; external review team in adversarial mode | Reports and cards | `_internal/reviews/*`, optional `unresolved.md` | T3 raw |
 
-> 자료팀 (browser-fetch / web-image-search, Step 3a·3.5) 은 위 stage 들 _안에서_ 일어나는 sub-delegation — 별도 dispatch stage 가 아니다. 두 stage 가 lock 없이 동일 파일에 동시 write 하지 않는다: Step 2e 는 매 라운드 순차 재호출로 `_internal/search_results.json` 을 merge 하고(동시 write 없음), Step 3b 병렬 batch 는 batch 마다 서로 다른 `cards/{paper}.md` 에만 써서 충돌하지 않는다.
+자료팀 browser and image work is subdelegation inside these stages, not another durable stage. Step 2e merges rounds sequentially. Parallel Step 3b batches write distinct card files, so no lock-free concurrent mutation targets the same file.
 
-### Step 1: Input Parsing & Validation
-- Detect query type: keyword, paper title, arXiv ID, PDF path, folder path
-- Resolve `--mode`: explicit flag value, or infer from query keywords (academic / technology / market — see Modes section). Notify user of inferred mode in one line. Multi-match → defer resolution to Step 1.5 Scope Clarification.
-- Auto-detect supplementary input: if `<artifact-root>/analysis_project/paper/` exists in current dir, include as supplementary input for chaining. If user explicitly requested "use my local PDFs" but no `analysis_project/paper/` → suggest running `/analyze-project --mode paper` first.
-- Construct topic name (sanitize: lowercase, hyphens, max 30 chars)
-- Set artifact_dir: `<artifact-root>/research/{topic}/`
-- `mkdir -p {artifact_dir}` (only AFTER validation)
+### Step 1: Parse and validate input
 
-### Step 1.5: Scope Clarification (사전 조율) — skipped if `--no-clarify` or `--from`
-> 이 Step 1.5 는 [CONVENTIONS.md §6.6](../../core/CONVENTIONS.md#66-autopilot-intake-gate) Autopilot Intake Gate 의 연구 트랙 인스턴스 — 4속성 공유, 질문 뱅크는 §6.6 연구 행.
+- Detect keyword, paper title, arXiv ID, PDF path, or folder path.
+- Resolve `--mode` explicitly or infer `academic`, `technology`, or `market` from the request. Report the inference in one line. Defer a multi-match to Step 1.5.
+- If `<artifact-root>/analysis_project/paper/` exists, include it as supplementary chaining input. If the user requests local PDFs but none have been analyzed, recommend `/analyze-project --mode paper`.
+- Build a lowercase, hyphenated topic name of at most 30 characters.
+- Set `artifact_dir = <artifact-root>/research/{topic}/`.
+- Create the directory only after validation succeeds.
 
-**Purpose**: 모호한 query는 mode 선택과 검색 폭을 잘못 잡아 9/7/5개 보고서 출력이 무용지물이 됨. 모호 detection 시 사용자에게 2-4 sharp question을 던진다.
+### Step 1.5: Scope clarification
 
-**Trigger conditions** (any one matches → run):
-- Mode multi-match (≥2 modes 동시 매치)
-- Query 길이 < 50 Korean chars 또는 < 12 English words AND no specific constraint (예: time range, specific platform, target metric)
-- Query에 "조사/분석/survey" 같은 메타 키워드만 있고 구체적 deliverable·범위 없음
+This is the research-track instance of the [Autopilot Intake Gate](../../../core/CONVENTIONS.md#66-autopilot-intake-gate).
 
-**Mode-specific question seed**:
-- `academic`: 조사 깊이(--depth 명시 의도?), 필독 컷오프(citation > N or year ≥ Y), 분야 경계(예: speech only? including audio in general?)
-- `technology`: 대상 표준 그룹/년도, 배포 환경(production/research), vendor 범위, 비교 축(performance/cost/license 우선순위)
-- `market`: 지역/시간 범위, 경쟁자 명시 여부, 의사결정 목적(투자 판단? 진출 결정? competitive intel?)
+Clarify when mode selection or search breadth would materially change the report set, including:
 
-**Skip 조건**:
-- `--no-clarify` 명시
-- `--from <stage>` 재개 (이미 캡처됨)
-- Query 길이 ≥ 50 Korean chars 또는 ≥ 12 English words AND mode 명확
+- Two or more modes match.
+- The query is shorter than about 50 Hangul characters or 12 English words and has no time range, platform, target metric, or comparable constraint.
+- The query contains only meta-intent such as the functional literals `조사`, `분석`, or `survey`, with no deliverable or scope.
 
-**Output**: 사용자 답변을 통합한 refined query를 Step 2로 전달 + `pipeline_state.yaml`의 `clarified_intent` 필드에 한 줄 요약 기록.
+Suggested questions:
 
-**§5 자율 진행**: 질문 던질 때 adapter pause/autonomy rule 적용(Claude Code: [CLAUDE.md](../../adapters/claude/CLAUDE.md) §2) — ScheduleWakeup 15-20분 동시 호출, 답 없으면 mode 추론 결과 + depth medium + 가장 좁은 범위 default 로 자율 진행.
+- `academic`: depth, must-read cutoff, and field boundary.
+- `technology`: standards body and year, deployment context, vendor scope, and priority among performance, cost, and license.
+- `market`: region, time range, named competitors, and decision objective.
 
-### Step 2: Source Search (direct Agent call) — mode-aware
+Skip for `--no-clarify`, `--from <stage>`, or a concrete query with a clear mode. Pass the refined query to Step 2 and record a one-line `clarified_intent` in `pipeline_state.yaml`.
 
-> **Search source selection per mode**:
-> - `academic`: arXiv + Semantic Scholar + OpenAlex + Hugging Face paper_search + Google Scholar (현행)
-> - `technology`: WebSearch (industry blogs, vendor whitepapers) + WebFetch (3GPP/ITU-T/IEEE/W3C standards pages) + arXiv (보조) + Hugging Face (관련 모델)
-> - `market`: WebSearch (analyst content, news, press releases) + WebFetch (company sites, investor pages). **arXiv·Semantic Scholar·OpenAlex 비활성**.
+If a non-blocking clarification receives no answer, use the inferred mode, `depth: medium`, and the narrowest defensible scope, then report that assumption once.
 
-#### Step 2a: 초기 쿼리 확장 (LLM 지식 기반)
-오케스트레이터가 사용자 쿼리로부터 **2~3개 동의어/대체 표현**을 생성한다.
-목적: 같은 분야인데 다른 이름으로 불리는 연구를 첫 검색부터 포함.
-(예: "user-defined keyword spotting" → + "query-by-example KWS", "personalized wake word detection")
-`queries = [original_query, variant_1, variant_2]`
+### Step 2: Source search
 
-> Step 2e의 **논문 기반 확장**과 다름: 2a는 LLM 사전 지식으로 동의어 생성, 2e는 실제 발견된 논문에서 새 키워드 추출.
+Select sources by mode:
 
-#### Step 2b: HF MCP Pre-Fetch
-Before invoking the agent, attempt HF `paper_search` for all queries:
-- For each query in `queries`: call `paper_search` and collect results
-- If successful: store combined as `hf_results_json`
-- If MCP unavailable or fails: `hf_results_json = null`, note in pipeline log
+- `academic`: arXiv, Semantic Scholar, OpenAlex, Hugging Face `paper_search`, and Google Scholar.
+- `technology`: industry and vendor sources, standards pages from bodies such as 3GPP, ITU-T, IEEE, and W3C, supporting arXiv work, and relevant Hugging Face models.
+- `market`: analyst material, news, press releases, company sites, and investor pages. Disable arXiv, Semantic Scholar, and OpenAlex by default.
 
-#### Step 2c: Invoke Agent
+#### Step 2a: Initial query expansion
+
+Generate two or three synonyms or alternative expressions from the user query so adjacent terminology is included in the first search. For example, expand “user-defined keyword spotting” with “query-by-example KWS” and “personalized wake word detection.”
+
+```text
+queries = [original_query, variant_1, variant_2]
 ```
+
+This differs from Step 2e: Step 2a uses prior semantic knowledge; Step 2e extracts terminology from discovered sources.
+
+#### Step 2b: Hugging Face prefetch
+
+Attempt `paper_search` for every query before invoking 연구팀. Store combined results as `hf_results_json`; set it to null and log the failure when unavailable.
+
+#### Step 2c: Invoke 연구팀
+
+```text
 Agent(subagent_type="연구팀"):
   "Research survey mode: Paper search.
    Queries: {queries_list}
    Original query: {original_query}
    Query type: {detected_type}
    Output directory: {artifact_dir}
-   **Routing**: All raw metadata files (search_results.json, phase_a_*.json, access_classification.json, browser_extracts/) → write to `{artifact_dir}/_internal/`. T1/T2 deliverables (cards/, chapter .md files, analysis_summary.md) → root `{artifact_dir}/`. mkdir -p `_internal` before first write if absent.
-   Max results per source per query: 10
-   {If analysis_project/paper/ available: 'Supplementary local paper analysis: {artifact_dir}/../analysis_project/paper/'}
-   {If hf_results_json: 'HF paper_search results (pre-fetched): {hf_results_json}'}
-   Timeout rule: If any single source takes >3 minutes, skip it and proceed to the next.
+   Route raw metadata to `{artifact_dir}/_internal/` and deliverable cards,
+   chapter files, and analysis_summary.md to `{artifact_dir}/`.
+   Max results per source per query: 10.
+   Supplementary local paper analysis: {analysis_project_path_if_any}
+   HF results: {hf_results_json_if_any}
+   Skip a source that exceeds three minutes.
 
-   ## search_results.json Schema
+   Write `_internal/search_results.json` with this schema:
    {
-     "query": "string", "date": "YYYY-MM-DD", "sources_used": ["string"],
-     "total_papers": int,
-     "papers": [{"title": "string (required)", "authors": ["string"],
-       "year": int|null, "citation_count": int|null,
-       "discovery_count": int (required, >=1), "sources": ["string"],
-       "arxiv_id": string|null, "oa_url": string|null,
-       "openalex_id": string|null, "referenced_works": ["string"]|null,
-       "venue": string|null, "venue_tier": int|null (1-4), "raw_type": string|null,
-       "url": string|null (landing page URL from any source — used by 자료팀 for paywall access)}]
+     \"query\": \"string\", \"date\": \"YYYY-MM-DD\", \"sources_used\": [\"string\"],
+     \"total_papers\": int,
+     \"papers\": [{
+       \"title\": \"string\", \"authors\": [\"string\"],
+       \"year\": int|null, \"citation_count\": int|null,
+       \"discovery_count\": int, \"sources\": [\"string\"],
+       \"arxiv_id\": string|null, \"oa_url\": string|null,
+       \"openalex_id\": string|null, \"referenced_works\": [\"string\"]|null,
+       \"venue\": string|null, \"venue_tier\": int|null,
+       \"raw_type\": string|null, \"url\": string|null
+     }]
    }
 
-   ## Google Scholar HTML Parsing Patterns
-   - Split blocks: <div class='gs_r gs_or gs_scl'>
-   - Title: strip tags from <h3> content
-   - Year: , (\d{4})\s*[-–] pattern (leading comma required)
-   - Citation: >Cited by (\d+)< pattern
+   Google Scholar parsing:
+   - block: <div class='gs_r gs_or gs_scl'>
+   - title: stripped <h3> content
+   - year: , (\\d{4})\\s*[-–]
+   - citations: >Cited by (\\d+)<
 
-   Follow your Role 2a procedure. Return file paths plus a 3-5 line summary in the user's communication language."
+   Return paths and a three-to-five-line summary in the user's communication language."
 ```
 
-#### Step 2d: Post-Search Validation
-1. Read `{artifact_dir}/_internal/search_results.json`
-2. Verify valid JSON — if parse fails, re-invoke Agent once: "Your search_results.json was invalid. Fix and rewrite."
-3. Verify `papers` array non-empty, each paper has `title`
-4. If still fails after retry: pipeline_summary(failed) → STOP
-5. If `total_papers == 0`: pipeline_summary(failed, "검색 결과 0건") → STOP
+#### Step 2d: Validate search output
 
-**Error handling**: If Agent call fails or returns no output → pipeline_summary(failed) → STOP.
+1. Parse `_internal/search_results.json`.
+2. On invalid JSON, invoke the agent once more to repair the file.
+3. Require a non-empty `papers` array and a title for every paper.
+4. Stop with a failed pipeline summary if repair fails.
+5. Stop when `total_papers == 0`, recording a localized equivalent of “zero search results.”
 
-#### Step 2e: Query Expansion Rounds (depth-gated)
-발견된 논문의 제목/키워드에서 새로운 검색어를 추출하여 추가 검색 라운드를 실행한다.
+Stop similarly when the agent call itself fails or returns no output.
 
-**라운드 제어** (depth 파라미터):
-- `shallow`: 추가 라운드 없음 (Round 1만)
-- `medium`: 최대 1회 추가 라운드 (Round 1 → keyword 추출 → Round 2)
-- `deep`: 최대 2회 추가 라운드 (Round 1 → Round 2 → Round 3)
+#### Step 2e: Expand from discovered terminology
 
-**각 라운드 절차**:
-1. 오케스트레이터가 `search_results.json`의 논문 제목들을 읽고, 빈출 키워드/새로운 용어를 추출
-   (예: Round 1에서 "query-by-example", "metric learning", "prototypical network"가 반복 등장)
-2. 기존 쿼리에 없는 새 키워드로 2~3개 추가 쿼리 생성
-3. 새 쿼리만으로 연구팀 재호출 (기존 쿼리 재검색 안 함):
-   ```
+Depth controls additional rounds:
+
+- `shallow`: no expansion.
+- `medium`: at most one extra round.
+- `deep`: at most two extra rounds.
+
+For each round:
+
+1. Read paper titles and extract recurring or newly introduced terms.
+2. Create two or three queries absent from the existing query set.
+3. Invoke 연구팀 on only the new queries in merge mode:
+
+   ```text
    Agent(subagent_type="연구팀"):
      "Research survey mode: Paper search.
       Queries: {new_queries_only}
-      Original query: {original_query} (for context, do NOT re-search)
+      Original query: {original_query}; context only, do not search it again.
       Output directory: {artifact_dir}
-      **Routing**: raw metadata → `{artifact_dir}/_internal/` (search_results.json, etc.).
-      Max results per source per query: 10
-      MERGE mode: append to existing _internal/search_results.json — update discovery_count for duplicates, add new papers.
-      ..."
+      MERGE mode: append to `_internal/search_results.json`, increment
+      discovery_count for duplicates, and add new papers."
    ```
-4. 병합 후 Post-Search Validation 재실행
-5. 새 논문이 3편 미만이면 → 라운드 종료 (수렴)
 
-**수렴 조건** (일찍 끝나는 경우):
-- 추가 라운드에서 새 논문 < 3편 → 더 이상 확장하지 않음
-- 새 키워드를 추출할 수 없음 (기존 쿼리와 동일) → 종료
+4. Revalidate the merged file.
+5. Stop early when fewer than three new papers appear or no genuinely new term can be extracted.
 
-Auto-proceed after expansion rounds (no user gate).
+Continue automatically after expansion.
 
-### Step 3: Source Analysis (direct Agent calls) — mode-aware
+### Step 3: Source analysis
 
-> **Phase activation per mode**:
-> - `academic`: Phase A (skim) + B (reference chaining) + C (code/model search) — 모두 활성
-> - `technology`: Phase A (full skim of standards + whitepapers) — 활성. Phase B (reference chaining) — **비활성** (academic citation graph가 의미 약함). Phase C — 활성 (open-source 구현체 탐색)
-> - `market`: Phase A (skim of market reports + news) — 활성. Phase B / C — **비활성**
+Activate phases by mode:
 
-#### Step 3a: Playwright Pre-Check + 자료팀 Pre-Fetch
+- `academic`: skimming, reference chaining, and code/model search.
+- `technology`: full skimming and code/model search; disable academic reference chaining.
+- `market`: skimming only; disable reference chaining and code/model search.
+
+#### Step 3a: Browser precheck and prefetch
+
+Use the runtime's browser-fetch preflight contract. When rendered browser access is available, identify records with neither `arxiv_id` nor `oa_url` and ask 자료팀 to prefetch their landing pages into `_internal/browser_extracts/{filename}.txt`.
+
+```text
+Agent(subagent_type="자료팀"):
+  "Mode: browser-fetch
+   URLs: {paywall_url_list}
+   Output directory: {artifact_dir}
+   Write extracted text to `_internal/browser_extracts/`.
+   Return successes and failures."
 ```
-Bash: python3 -c "from playwright.async_api import async_playwright; print('OK')"
-Bash: ls ~/.cache/ms-playwright/chromium_headless_shell-*/ > /dev/null 2>&1 && echo 'BROWSER_OK'
-```
-Set `playwright_available = true/false`.
 
-If `playwright_available == true`:
-  Read `_internal/search_results.json` and identify paywall papers (no arXiv ID AND no oa_url → likely paywall).
-  If paywall papers exist, invoke 자료팀 to pre-fetch their content:
-  ```
-  Agent(subagent_type="자료팀"):
-    "Mode: browser-fetch
-     URLs: {paywall_url_list}
-     Output directory: {artifact_dir}
-     Extract full text from each URL. Write to `_internal/browser_extracts/{filename}.txt` (T3 raw metadata).
-     Return summary of successes and failures."
-  ```
-  The extracted texts will be available for 연구팀 to Read during Phase A skimming.
-  If 자료팀 fails or playwright unavailable: proceed without — 연구팀 will fall through to abstract-only.
+If browser access or prefetch fails, continue with abstract-only analysis.
 
-#### Step 3b: Phase A — Parallel Skimming Batches
-Read `_internal/search_results.json`. Classify each paper's access type FIRST:
-- **accessible**: has `arxiv_id` OR `oa_url` OR matching file in `_internal/browser_extracts/`
-- **paywall-only**: no `arxiv_id`, no `oa_url`, no browser extract → abstract/metadata only
+#### Step 3b: Parallel skimming batches
 
-Construct batches (accessible papers only get full-read treatment):
-- Full-read accessible (citations > 10 AND not null AND accessible): 1 paper per Agent call
-- Abstract-only (citations <= 10 OR null OR paywall-only): up to 10 per Agent call
-- **Exception**: `discovery_count >= 3` AND accessible → upgrade to full-read (1 per call)
-- **Paywall-only papers**: always go in abstract-only batches regardless of citation count
-  (attempting WebFetch on paywall sites causes timeout/hang — never do this)
+Classify access before batching:
 
-For each batch:
-```
+- `accessible`: has an `arxiv_id`, `oa_url`, or browser extract.
+- `paywall-only`: none of the above; use metadata and abstract only.
+
+Batching:
+
+- Accessible and more than ten citations: one paper per full-read call.
+- Ten or fewer citations, unknown citations, or paywall-only: up to ten papers per abstract-only call.
+- `discovery_count >= 3` plus accessible: upgrade to a one-paper full read.
+- Never repeatedly fetch a paywall-only source.
+
+```text
 Agent(subagent_type="연구팀"):
   "Research survey mode: Paper analysis.
    Papers: {batch_json}
    Output directory: {artifact_dir}
-   Supplementary inputs (if any): `{artifact_dir}/../analysis_project/paper/` (use if exists, otherwise none)
-   Browser extracts: {artifact_dir}/_internal/browser_extracts/ (pre-fetched by 자료팀, if available)
-
-   Per-paper timeout: 60s. Batch budget: 10min. WebFetch 3xx loop / empty response → skip.
-   Paywall / Access priority / browser_extracts handling: per your Role 2b 본문 (paywall fast-detect + 60s timeout + 5-tier access ladder + 자료팀 분리 원칙) — single source 거기.
-
-   Follow your Role 2b procedure. Return file paths plus a summary in the user's communication language."
+   Supplementary input: {analysis_project_path_if_any}
+   Browser extracts: {artifact_dir}/_internal/browser_extracts/
+   Per-paper timeout: 60 seconds. Batch budget: 10 minutes.
+   Skip redirect loops or empty responses.
+   Return paths and a summary in the user's communication language."
 ```
-Launch batches in parallel. **Error handling**: Individual batch failure → log and continue. Total failure (0 batches succeed) → pipeline_summary(failed) → STOP.
 
-#### Step 3c: Phase B — Reference Chaining (depth-gated)
-If `depth == shallow`: SKIP Phase B entirely.
-```
+Launch independent batches in parallel. Log an individual failure and continue; stop only when no batch succeeds.
+
+#### Step 3c: Reference chaining
+
+Skip at `shallow` or in modes where citation-graph chaining is disabled.
+
+```text
 Agent(subagent_type="연구팀"):
   "Research survey mode: Reference chaining.
    Paper cards: {artifact_dir}/cards/
    Search results: {artifact_dir}/_internal/search_results.json
    Depth: {depth}
-   Output: {artifact_dir}/_internal/chaining_results.md
-   Follow your Role 2b reference chaining procedure. Return file paths plus a summary in the user's communication language."
+   Output: {artifact_dir}/_internal/chaining_results.md"
 ```
 
-**Loopback control** (orchestrator responsibility):
-1. Parse `chaining_results.md` → extract papers with `reference_frequency >= 2`
-2. If new papers exist AND loopback_count < limit (medium: 1, deep: 2):
-   - Construct Phase A batches for new papers only (top 10)
-   - Invoke additional skimming Agent calls
-   - Increment loopback_count
-   - Re-invoke Phase B for further chaining
-3. When limit reached or no new papers → proceed to Phase C
+Extract papers with `reference_frequency >= 2`. If new papers exist and the loopback limit is not reached, skim the top ten new papers and rerun chaining. Limits: one loop at `medium`, two at `deep`.
 
-#### Step 3d: Phase C — Code & Model Search
-```
+#### Step 3d: Code and model search
+
+```text
 Agent(subagent_type="연구팀"):
   "Research survey mode: Code and model search.
    Paper cards: {artifact_dir}/cards/
    Output: {artifact_dir}/code_resources/
-   Aggregate: {artifact_dir}/_internal/code_search.md
-   Follow your Role 2c procedure. Return file paths plus a summary in the user's communication language."
+   Aggregate: {artifact_dir}/_internal/code_search.md"
 ```
 
-#### Step 3e: Compile analysis_summary.md
-```
+#### Step 3e: Compile the analysis summary
+
+```text
 Agent(subagent_type="연구팀"):
   "Research survey mode: Compile analysis summary.
-   Compile from: cards/, _internal/chaining_results.md (if exists), _internal/code_search.md (if exists).
-   Set phase flags: chaining_available, code_search_available.
+   Inputs: cards/, optional _internal/chaining_results.md,
+   optional _internal/code_search.md.
+   Set chaining_available and code_search_available.
    Output: {artifact_dir}/analysis_summary.md
-   Return the file path plus a summary in the user's communication language."
+   Return the path and a summary in the user's communication language."
 ```
 
-#### Step 3 Status Check
-Read `{artifact_dir}/analysis_summary.md`.
-- Not exists or 0 papers → pipeline_summary(failed) → STOP
-- Depth-aware: `shallow` + `chaining_available == false` + `code_search_available == true` → **done** (intentional skip)
-- Otherwise partial flags → **partial**, warn user, proceed
+Require a non-empty `analysis_summary.md`. At `shallow`, disabled chaining is an intentional success. For other missing optional phases, mark the run partial, warn, and continue.
 
-### Step 3.5: Web Figure Extraction (옵션, accessible paper 대상)
+### Step 3.5: Optional web figure extraction
 
-Phase A skimming 직후 cards/{paper}.md가 작성되면, _accessible 분류_ paper의 figure를 web에서 자동 추출.
+After cards are written, extract figures only for accessible papers. Skip paywall-only papers, `quick` intensity, or `--no-figures`.
 
-**Scope**:
-- 대상 = `accessible` 분류 paper (Step 3b 정의: `arxiv_id` OR `oa_url` OR `_internal/browser_extracts/{filename}.txt` 존재)
-- paywall-only paper는 skip (figure도 마찬가지로 접근 불가)
-
-**Procedure** (자료팀 호출):
-```
+```text
 Agent(subagent_type="자료팀"):
-  Mode: web-image-search
-  Paper list: [{arxiv_id, paper_id (cards filename without .md), title}, ...]
-  Output dir: {artifact_dir}/figures/
-  Workflow per paper:
-    1. ar5iv URL 시도: https://ar5iv.labs.arxiv.org/html/{arxiv_id}
-       → WebFetch 또는 Playwright로 HTML 페이지 fetch (5s timeout)
-       → BeautifulSoup 또는 정규식으로 <img src="..."> 또는 <figure> 태그 파싱
-       → 각 figure URL을 image binary 다운로드 (정상 figure만, 아이콘/로고 제외 — 200×200 minimum)
-       → save as {paper_id}_fig{N}.png
-    2. ar5iv 실패 시 (페이지 없음 또는 figure 0개) → arxiv-vanity fallback (https://www.arxiv-vanity.com/papers/{arxiv_id}/)
-    3. 둘 다 실패 시 → arxiv PDF fallback: https://arxiv.org/pdf/{arxiv_id}
-       → wget/curl로 PDF 다운로드 (_internal/raw_pdfs/ 임시 저장) → pdfimages -png 추출 → {paper_id}_fig{N}.png
-       → PDF 임시 파일 삭제 (token/storage 절감)
-    4. 모두 실패 시 → 해당 paper figure 0개로 기록
-  Output:
-    - {artifact_dir}/figures/{paper_id}_fig*.png (paper마다 N개)
-    - {artifact_dir}/figures/figure_index.md (paper × figure path 매핑)
+  "Mode: web-image-search
+   Papers: [{arxiv_id, paper_id, title}, ...]
+   Output: {artifact_dir}/figures/
+
+   Per paper:
+   1. Try https://ar5iv.labs.arxiv.org/html/{arxiv_id}; parse <img> or
+      <figure>, and retain meaningful images at least 200x200 pixels.
+   2. Fall back to https://www.arxiv-vanity.com/papers/{arxiv_id}/.
+   3. Fall back to https://arxiv.org/pdf/{arxiv_id}; temporarily download,
+      extract raster images, then delete the PDF.
+   4. Record zero figures if every path fails.
+
+   Write `{paper_id}_fig{N}.png` and `figure_index.md`."
 ```
 
-**cards 갱신**: 각 cards/{paper}.md 헤더 frontmatter 또는 `## Reference` 섹션 직후에 `**Figures**: ../figures/{paper_id}_fig1.png · ../figures/{paper_id}_fig2.png ...` 한 줄 추가. figure 0개면 `**Figures**: (none extracted)` 표시.
+Add one functional card field after frontmatter or `## Reference`:
 
-**Caveats**:
-- ar5iv는 _대부분의 arxiv paper 지원_이지만 _최근 2024-26 paper 일부_는 지원 안 됨 — PDF fallback 자동 발동.
-- Vector figure는 ar5iv에서 SVG/PNG로 자동 raster 변환되어 양호. PDF fallback은 raster figure만 (vector PDF figure는 미인식).
-- _저작권_: 학술 paper figure 인용은 _발표·문서 fair use_ 영역. 본 추출 결과는 _연구 reference_로만 사용, 외부 배포 시 출처 명시 필요.
-- 추출 figure 품질 변동 — 사용자 polish 또는 직접 캡처가 더 적합한 경우 다수.
+```markdown
+**Figures**: ../figures/{paper_id}_fig1.png · ../figures/{paper_id}_fig2.png
+```
 
-**Skipping**:
-- intensity `quick` 에서는 Step 3.5 자동 skip (fastest path 우선).
-- `--no-figures` flag 명시 시 skip.
+Use `**Figures**: (none extracted)` when no figure was obtained.
+
+ar5iv does not cover every recent paper. Its HTML usually preserves vector figures better than the PDF raster fallback. Treat extracted figures as research references, preserve attribution for external distribution, and expect occasional manual recropping or replacement.

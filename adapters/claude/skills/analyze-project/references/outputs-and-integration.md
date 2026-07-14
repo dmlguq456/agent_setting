@@ -1,75 +1,73 @@
-# Standard output structure (per mode)
+# Standard Output Structure
 
-## code
-```
+## Code
+
+```text
 analysis_project/code/
-├── 00_overview.md or topic_*.md   [T1] 모듈별 분석
-├── interface_reference 통합        [T1]
-├── experiment_conventions.md       [T1] lab 사전 자료 — 모델 폴더 / config / prefix / preferred layer
-├── experiment_readiness.md         [T1] lab 사전 자료 — 실험 ready 점검 (model 분리·train/eval 분리·seed 등)
-├── cleanup_candidates.md           [T1] lab 사전 자료 — unused / dead branch / 주석 자국
-├── similar_models.md               [T1] lab 사전 자료 — 모델 간 유사도 (lab --ref 추천 source)
+├── 00_overview.md or topic_*.md   [T1] module analysis
+├── integrated interface_reference [T1]
+├── experiment_conventions.md       [T1] lab input: model folders, config, prefixes, preferred layers
+├── experiment_readiness.md         [T1] lab input: experiment-readiness checks
+├── cleanup_candidates.md           [T1] lab input: unused code, dead branches, stale comments
+├── similar_models.md               [T1] lab input: model similarity and `--ref` suggestions
 └── _internal/                      [T3]
-    └── reviews/                    QA log
+    └── reviews/                    QA logs
 ```
 
-## paper
-```
+## Paper
+
+```text
 analysis_project/paper/
-├── 00_overview_and_constraints.md  [T1] 통합 overview
-├── per-paper analysis (*.md)        [T1·T2] paper별
+├── 00_overview_and_constraints.md  [T1] integrated overview
+├── per-paper analysis (*.md)        [T1/T2]
 └── _internal/                       [T3]
 ```
 
-## doc
-```
+## Document
+
+```text
 analysis_project/doc/{name}/
-├── 00_overview.md                   [T1] 인벤토리 + 분류 + 대상 mode
-├── reviewers/                       [T2] reviewer별 breakdown
-├── formats/                         [T2] template/guideline 추출
-├── samples/                         [T2] past examples 핵심
-├── misc/                            [T2] 기타 free-form 요약
-└── _internal/                       [T3] raw scan, QA reviews
+├── 00_overview.md                   [T1] inventory, classification, and target mode
+├── reviewers/                       [T2] per-reviewer breakdown
+├── formats/                         [T2] extracted templates and guidelines
+├── samples/                         [T2] patterns from prior examples
+├── misc/                            [T2] other summaries
+└── _internal/                       [T3] raw scans and QA reviews
 ```
 
----
+# Cross-Skill Integration
 
-# Cross-skill integration
+`analyze-project` outputs are durable assets consumed implicitly by downstream autopilot Skills:
 
-`analyze-project`의 산출물은 _영속 자산_으로 후속 autopilot-* skill이 implicit으로 읽음:
+- `autopilot-code` reads `analysis_project/code/` during module mapping. It also uses `cleanup_candidates.md` and `experiment_readiness.md` for experiment-readiness cleanup and refactoring.
+- `autopilot-lab` reads `experiment_conventions.md`, `experiment_readiness.md`, `cleanup_candidates.md`, and `similar_models.md` at every Step 0. Project-local layer, prefix, and config patterns take priority. If absent, lab performs a lightweight scan, asks the user to confirm, and stores the results here.
+- `autopilot-draft` resolves sources by form-first mode:
+  - `paper` → `analysis_project/paper/`.
+  - `presentation` → `analysis_project/paper/` plus matching `analysis_project/doc/{name}/formats/`.
+  - `doc`, rebuttal response → matching `reviewers/` plus `analysis_project/paper/`, both required.
+  - `doc`, peer review → matching `formats/`, required; fail if absent.
+  - `doc`, report, proposal, or generic prose → matching `formats/`, optional.
+- `autopilot-research` primarily searches externally but may use owned material under `analysis_project/paper/`.
 
-- `autopilot-code`는 `analysis_project/code/`를 자동 인지 (code-plan에서 모듈 매핑 참조). `cleanup_candidates.md` / `experiment_readiness.md` 가 있으면 _실험 ready 정리 자리_ (cleanup + refactor + ready 정돈) input 으로 자동 사용.
-- `autopilot-lab` 은 `analysis_project/code/` 의 _4 종 실험 자료_ (`experiment_conventions.md` / `experiment_readiness.md` / `cleanup_candidates.md` / `similar_models.md`) 를 매번 Step 0 에서 read — 사용자 코드베이스의 layer / prefix / config 패턴 1순위 준수. 자료 부재 시 lab 가 lightweight scan 으로 추출 후 사용자 컨펌 → 본 폴더에 저장.
-- `autopilot-draft`는 form-first 3-mode (paper / presentation / doc) 에 따라:
-  - `paper` → `analysis_project/paper/` (academic body 본문)
-  - `presentation` → `analysis_project/paper/` + `analysis_project/doc/{matching}/formats/` (slide template)
-  - `doc` → task description intent 키워드별:
-    - rebuttal-response intent (응답·OpenReview·reviewer) → `analysis_project/doc/{matching}/reviewers/` + `analysis_project/paper/` (REQUIRED)
-    - peer review intent (심사·review form) → `analysis_project/doc/{matching}/formats/` (REQUIRED — 부재 시 hard-fail)
-    - report · proposal · generic prose intent → `analysis_project/doc/{matching}/formats/` (optional)
-- `autopilot-research`는 자체 외부 검색 위주이지만, 보유 자료가 있으면 `analysis_project/paper/` 인지 가능
+Inputs are discovered from durable `<artifact-root>/analysis_project/*` and `research/*` artifacts. The family does not require flags pointing directly to external folders.
 
-모든 입력은 `analysis_project/*` 또는 `research/*` 같은 `<artifact-root>/` 하위 영속 산출물에서 자동 발견. family 전체가 외부 폴더를 직접 가리키는 flag 없음.
+## Typical Workflow
 
-## Typical workflow
-
-**원칙**: 분석 대상 자료(PDFs / reviewer comments / templates 등)를 _프로젝트 dir 안에_ 둔 뒤 `cd <project>` 후 호출. positional 인자 없이도 자동 발견.
+Place source material inside the project, enter the project directory, and invoke without a positional argument when auto-discovery is sufficient.
 
 ```bash
-cd <project_root>     # 자료를 프로젝트에 가져다 둔 후
+cd <project_root>
 
-# 1. 사전 분석 — positional 없이 (cwd 자동 발견)
-/analyze-project --mode code        # 코드베이스
-/analyze-project --mode paper       # cwd + papers/ / refs/ / pdfs/ 자동 grep
-/analyze-project --mode doc         # cwd + docs/ / reviews/ / templates/ / reviewer_comments/ 자동 발견
+/analyze-project --mode code
+/analyze-project --mode paper
+/analyze-project --mode doc
 
-# 1b. 또는 외부 폴더 override (rare)
-/analyze-project --mode doc ~/external_patent_folder/   # positional = 외부 path
+# Rare external-folder override
+/analyze-project --mode doc ~/external_patent_folder/
 
-# 2. 후속 작업 (input은 자동 인지)
 /autopilot-code --mode dev "<task>"
 /autopilot-draft "<task>" --mode presentation
 /autopilot-research <topic>
 /autopilot-refine "<prompt>"
-/autopilot-lab "<실험 한 줄>"        # ← code mode 의 4 종 실험 자료 자동 read
+/autopilot-lab "<one-line experiment>"
 ```

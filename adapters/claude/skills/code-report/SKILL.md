@@ -10,131 +10,110 @@ metadata:
   blurb: "Assemble code-cycle results into a user-facing report."
 ---
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Inputs = plan·checklist·dev_logs·test_logs·`_internal/*_reviews/`·`pipeline_summary.md` (files) — a dispatched session does **not** carry in-session orchestration memory, so it reconciles against those artifacts (see step 2 below). Write class = `final_report.md`·`analysis_project/code/*.md`·`pipeline_summary.md` (via §5.8 lock). 품질관리팀 delegation stays **inside** this session.
+# code-report
 
-> **Plan Resolution**: `$ARG`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated depth-2 stage worker dispatched by the `autopilot-code` conductor. Read the plan, checklist, `dev_logs/`, `test_logs/`, `_internal/*_reviews/`, and `pipeline_summary.md` from disk; never assume prior-stage conversation is available. The write class is `final_report.md`, `<artifact-root>/analysis_project/code/*.md`, and lock-protected `pipeline_summary.md`. Any `qa-team` or `editorial-team` delegation remains inside this stage session.
 
-> **Language Rule**: user-facing artifacts follow the audience and artifact
-> language contract in
-> [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
+> **Plan resolution**: Treat [arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) as the single authority for resolving `$ARG`.
 
-## Model & QA Policy
+> **Language rule**: Follow the audience and artifact language contract in [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md). The report template must be localized to the selected artifact language rather than fixed to the language of this skill file.
 
-**Writer: always fast writer.** The final report is a synthesis over artifacts that were already verified by prior pipeline stages (plan reviews in code-plan/code-refine, code reviews in code-execute phase gates, test reviews in code-test). The code-report content itself does NOT require a QA/review pass — inaccuracies (line-number drift, outdated follow-ups) are user-facing and can be corrected on read, without affecting the committed code. Spending deep reviewer / external adversary budget here is wasted. Claude adapter maps fast writer to sonnet.
+## Writer and QA Policy
 
-| Level | Auto-detect condition | Action |
-|---|---|---|
-| **Light** | ≤5 steps, single variant | 1× fast writer writes the report |
-| **Standard** | 6-15 steps, moderate scope | 1× fast writer writes the report |
-| **Thorough** | >15 steps, cross-variant, or architectural | 1× fast writer writes the report |
-| **Adversarial** | Cross-variant / shared modules / >20 steps | 1× fast writer writes the report |
+Use one portable `fast writer` at every rigor tier. Prior stages already review the plan, implementation, and tests; this stage synthesizes their artifacts. The incoming intensity-derived rigor or plan-frontmatter `qa_level` is context only. It does not change the writer role, add parallel writers, or open a report-review loop.
 
-The rigor tier (derived from intensity, logged as the plan frontmatter `qa_level` field) flows in for context logging only — in code-report it affects **only the prompt's context**, not the model role or any post-write review. No external adversary review of the report. No parallel writers. No review loop.
+| Rigor | Report action |
+|---|---|
+| Light | One fast writer |
+| Standard | One fast writer |
+| Thorough | One fast writer |
+| Adversarial | One fast writer; no external-adversary review of report prose |
 
-## Delegate to 품질관리팀
-Invoke the **qa-team** (품질관리팀) agent as fast writer (Claude adapter: `model: "sonnet"`, all levels) as a subagent with the following prompt:
+## Generate the Report
 
-```
+Invoke `qa-team` with the portable `fast writer` profile and this task:
+
+```text
 Generate a final change report.
 
-Plan file: {$ARG} (resolved via Plan Resolution — 위 pointer 의 authority 절차)
-Log directory: {task root folder — grandparent of plan/plan.md}
-Korean plan: {same directory as plan.md}/plan_ko.md
+Plan file: {$ARG}, resolved through the plan-resolution contract
+Log directory: {task root above plan/plan.md}
+Existing audience-language companion plan: {path or none}
 Report output: {log_directory}/final_report.md
+Artifact language: {explicit audience/artifact language, otherwise conversation language}
 Date: {YYYY-MM-DD}
 
-Follow these instructions:
+Inputs:
+1. Canonical plan and any existing required companion
+2. plan/checklist.md
+3. dev_logs/step_*.md and test_logs/
+4. _internal/{plan_reviews,dev_reviews,test_reviews}/
+5. pipeline_summary.md when present
 
-## Inputs
-1. **Plan file**: the English plan
-2. **Log directory**: Contains plan/ (plan.md, plan_ko.md, checklist.md) [T1], dev_logs/ (step_*.md) [T2], test_logs/ [T2], _internal/{plan_reviews,dev_reviews,test_reviews}/ [T3]
-3. **Korean plan** (_ko.md): for section titles and user-facing descriptions
+Procedure:
+1. Read the plan for goals, current state, and change intent.
+2. Read the checklist for successful, failed, and skipped steps.
+3. Read all development logs and extract each old → new change, Decision rationale, modified file, and result.
+4. Read implementation and test reviews; record findings, resolutions, and unresolved items.
+5. Update <artifact-root>/analysis_project/code/ for successful steps only when that directory already exists. Map each source file to the best existing topic document. Common mappings include:
+   - model/module → model_modules.md or the matching topic
+   - network/backbone → network_modules.md
+   - loss/objective → loss_functions.md
+   - data pipeline → dataset_pipeline.md
+   - training entrypoint → engine_training.md
+   - inference entrypoint → engine_inference.md
+   - utility → utilities.md
+   - architecture/config/data flow/cross-variant → architecture.md
+   - project structure, document table, or file rename → the existing project bootstrap document, including CLAUDE.md only when it is the project's intended target
+   Update Interface Reference signatures, callers, and line numbers. Verify every class/function line number against post-edit source. If analysis_project/code/ is absent, skip and recommend `analyze-project --mode code` once.
+6. Confirm documentation writes with:
+   git diff --stat -- <artifact-root>/analysis_project/code/ CLAUDE.md
+   Report a documentation update only when the relevant diff proves it happened. If the expected diff is empty, re-read and correct the update.
+7. Read pipeline_summary.md. Summarize its Decision Points in section 4.5. If no events exist, write the natural equivalent of "No autonomous decision events (clean run)" in the selected artifact language.
+8. Synthesize causes, effects, and durable lessons; do not merely enumerate steps.
 
-## Procedure
-1. Read the plan file to understand the goal, current state analysis, and change plan.
-2. Read the checklist (plan/checklist.md) to identify which steps succeeded, failed, or were skipped.
-3. Read all step log files (dev_logs/step_*.md) to extract every code change (old → new) with its Decision rationale, files modified, and what each change accomplished.
-4. Read QA review files (`_internal/dev_reviews/phase_*.md`) to extract issues found and how they were resolved.
-5. **Documentation Update**: Update `<artifact-root>/analysis_project/code/` for successfully completed steps only (produced/maintained by `/analyze-project --mode code`). Topic-based file mapping is project-specific — pick the existing topic doc that best matches each changed file. Common patterns:
-   - Model / module files → `model_modules.md` (or matching topic doc)
-   - Network / backbone files → `network_modules.md`
-   - Loss / objective files → `loss_functions.md`
-   - Data pipeline files → `dataset_pipeline.md`
-   - Training entry points → `engine_training.md`
-   - Inference entry points → `engine_inference.md`
-   - Utility files → `utilities.md`
-   - Overall design, config, data flow, cross-variant → `architecture.md`
-   - Project structure, doc table, file renames → `CLAUDE.md`
-   Update Interface Reference tables (signatures, callers, line numbers). Skip if no steps succeeded. If the project does not yet have an `analysis_project/code/` directory, skip this step and recommend the user run `/analyze-project --mode code` once to bootstrap the topic docs.
-   **Verification**: Verify every class/function line number in the Interface Reference table against the **post-edit** source (use Grep or a fresh Read of the file *after* your own Step 5 edits complete). Line numbers from pre-edit reads, the plan, or dev logs may be stale.
-6. **Confirm doc changes are real**: After step 5, run `git diff --stat -- <artifact-root>/analysis_project/code/ CLAUDE.md` to confirm that documentation files were actually modified. If the diff is empty but you expected changes, something went wrong — re-read and re-edit the files. Report a doc update only after `git diff` confirms it.
-7. **Read pipeline_summary.md** (log_directory/pipeline_summary.md) if it exists. Extract the Decision Points table for section 4.5. If the file does not exist or the table is empty, write "자율 판단 이벤트 없음 (클린 실행)" for section 4.5.
-8. Synthesize the information into a report. Do NOT just list changes — explain the reasoning and connect them to the bigger picture.
+Report structure:
 
-## Report Structure
+# Change Report: {task name}
+- **Date**: {YYYY-MM-DD} | **Plan**: {plan path} | **Status**: ✅/⚠️/❌
 
-```
-# 변경 보고서: {task name}
-- **일시**: {YYYY-MM-DD} | **플랜**: {plan path} | **상태**: ✅/⚠️/❌
-
-## 1. 변경 개요          — what was done and why (3-5 sentences)
-## 2. 핵심 변경 사항     — grouped by logical category (not step number)
+## 1. Change Overview
+## 2. Key Changes
    ### 2.N {category} — {file/module}
-   - **변경 내용** / **변경 이유** / **핵심 원리** / **영향 범위**
-## 3. 설계 인사이트      — key takeaways for future work
-## 4. QA 리뷰 요약       — 발견된 이슈 / 해결 방법 / 미해결
-## 4.5 자율 판단 기록    — pipeline_summary.md의 Decision Points 테이블을 서사적 요약으로 합성. 자율 판단 이벤트가 없으면 "자율 판단 이벤트 없음 (클린 실행)"
-## 5. 실패/스킵된 단계   — explain why, or "전체 단계 성공 ✅"
-## 6. 향후 참고사항      — watch-outs and potential follow-ups
+   - Change / Reason / Principle / Impact
+## 3. Design Insights
+## 4. QA Summary
+## 4.5 Decision Record
+## 5. Failed or Skipped Steps
+## 6. Follow-Ups
+
+Localize headings naturally. Preserve code identifiers, paths, commands, numbers, and technical terms where translation would reduce precision. Aim for 1–3 pages: about one page for at most five steps and up to three pages for more than twenty.
+
+Return ONLY the report path and a one-line summary. Do not return the report body.
 ```
 
-## Quality Guidelines
-- Do NOT just summarize — extract insights. Focus on "why" and "what to remember".
-- Be specific about impact — mention exact callers, tensor shapes, or config keys.
-- Connect to project design when relevant.
-- Write the report in the user's communication language unless an explicit audience or artifact-language requirement overrides it. Preserve code identifiers, file paths, and technical terms when translation would reduce precision. Localize the template headings naturally.
-- Aim for 1-3 pages total. Length should scale with change count: small plans (≤5 steps) can be 1 page; large refactors (>20 steps) may need 3.
+## Reconcile the Report
 
-Return ONLY the file path and a one-line summary. Do NOT return the full report content.
+After the writer returns:
+
+1. Read `final_report.md` once.
+2. Cross-check it against the best available cycle evidence. When in-session, current orchestration context may help; in an isolated stage session, rely on the artifact files: checklist marks, `dev_logs/`, `test_logs/test_report.md`, `_internal/*_reviews/`, and `git log` or `git diff <safety-commit>..HEAD`. Artifacts remain authoritative.
+3. Verify step counts, critical-finding rounds, test pass/fail counts, commit hashes, file counts, cited `file.py:NNN` locations, resolved versus pending follow-ups, and plan deviations. Correct report wording or data when evidence disagrees.
+4. If plan-frontmatter `qa_level` is `standard`, `thorough`, or `adversarial`, invoke `editorial-team` once in polish mode on `{log_directory}/final_report.md`. Skip for `quick` and `light`.
+
+Use this editorial instruction:
+
+```text
+Polish {log_directory}/final_report.md in place for natural phrasing, notation consistency, and readable cadence in the selected artifact language.
+Preserve change content, rationale, principles, QA summary, decision record, numbers, file:line references, and decision meaning. Edit wording only.
 ```
 
-## Post-Report — Memory × Report Reconciliation
-After the 품질관리팀 agent returns:
+Do not run a separate report QA pass. Reconciliation is the lightweight accuracy check; code and test assurance remain owned by earlier stages.
 
-1. **Read the produced `final_report.md` once.** The file is short (1-3 pages, ≲1500 tokens) — cheap.
+## Relay
 
-2. **Reconcile against the cycle record.** When you ran in-session, that record is your orchestration memory (subagent returns + your own Bash/Edit/Read calls). When you were **dispatched as a depth-2 stage session** (spec/stage-dispatch), you carry no such memory — reconcile the report against the artifact files instead (`checklist.md` step marks, `dev_logs/`, `test_logs/test_report.md`, `_internal/*_reviews/`, `git log`/`git diff <safety-commit>..HEAD`). Compare the report against that record:
-   - **Numbers**: step counts, 🔴 resolution rounds, test pass/fail counts, commit hashes, file counts.
-   - **Line numbers**: if the report cites `file.py:NNN`, verify you remember the same location (drift is common).
-   - **Status of follow-ups**: report may claim an item is "pending" when memory says it was resolved in a later round.
-   - **Deviations**: did any subagent flag a deviation from the plan that the report missed?
-
-2.5. **Invoke editorial-team with mode B** (polish, in-place — user-facing readability):
-
-   호출 조건 (single source — `adapters/claude/agents/editorial-team.md` 모드 B 호출 조건):
-   - plan frontmatter `qa_level` 가 **standard / thorough / adversarial** 중 하나일 때만 호출. `quick` / `light` 는 _fastest path_ 의도라 skip.
-   - skip 시 곧장 step 3 (relay) 진행.
-
-   ```
-   Agent({
-     subagent_type: "편집팀",
-     prompt: `polish {log_directory}/final_report.md
-   This change report is user-facing. Apply editorial-team mode B for natural phrasing, notation consistency, and readable cadence in the selected language.
-   Preserve change content, rationale, principles, QA summary, decision record, numbers, file:line references, and decision meaning. Edit wording only.`
-   })
-   ```
-
-   편집팀이 in-place Edit 으로 마무리한 뒤 step 3 진행. (단발성 — single-pass, snapshot X.)
-
-3. **Relay a concise brief in the user's communication language** (2-3 paragraphs, not just the file path). The brief should:
-   - State the final status (done/partial/failed) and final commit hash
-   - Highlight 3-5 concrete deliverables / changes
-   - Flag any discrepancies between memory and report explicitly (e.g., "리포트 본문엔 L1195로 기재됐는데 실제 HEAD 기준 L1207 — 리포트 오기")
-   - Suggest obvious next steps
-
-4. **The report gets reconciliation (step 2) only — no separate QA pass.** Inaccuracies are user-facing and can be corrected on read. The reconciliation step (2) is the lightweight safety net.
-
-Rationale: the cycle record (in-session orchestration memory, or the artifact files when dispatched) and the report are two views of the same work; a cheap cross-check between them gives the user a summary that benefits from both — without paying for a full QA/external-adversary pass on the report itself.
+Return a concise 2–3 paragraph brief in the conversation language, not only a path. Include final status and commit hash, 3–5 concrete deliverables, any report/evidence discrepancy, and obvious next steps.
 
 ## Task
+
 Generate report for: $ARG

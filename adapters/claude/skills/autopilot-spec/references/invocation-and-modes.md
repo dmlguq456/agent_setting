@@ -1,121 +1,127 @@
 ## Argument Parsing
 
-### --mode (auto-detect default)
+### `--mode` (auto-detect by default)
 
-| 값 | 의미 |
+| Value | Meaning |
 |---|---|
-| `auto` (default) | 발화·코드 단서로 자동 추론. 단일 또는 복수 mode |
-| `app` | 앱 spec — PRD + 스택 + scaffolding + skeleton |
-| `library` | 라이브러리 spec — 공개 API + 사용 예시 + 호환성·versioning + module 구조 |
-| `api` | API 서비스 spec — endpoint + auth + 데이터 모델 |
-| `cli` | CLI spec — 명령·옵션·input/output |
-| `research` | 연구 코드 spec — entry + configs + 재현 명령 + 예상 metric |
-| `app,library` 등 콤마 | 복수 mode — 한 PRD 안 mode 별 독립 섹션 |
+| `auto` (default) | Infer one or more modes from the request and code signals |
+| `app` | App spec — PRD + stack + scaffolding + skeleton |
+| `library` | Library spec — public API + usage examples + compatibility/versioning + module structure |
+| `api` | API service spec — endpoints + auth + data model |
+| `cli` | CLI spec — commands + options + input/output |
+| `research` | Research-code spec — entry points + configs + reproduction commands + expected metrics |
+| Comma-separated values such as `app,library` | Multiple modes, each with an independent section in one PRD |
 
-### 검증 강도 (intensity 파생)
-- 검증 rigor 는 별도 `--qa` 축이 아니라 `--intensity` 에서 결정론적으로 파생된다 (default standard-tier) — tier 정의·매핑은 [CONVENTIONS.md §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers-intensity-derived-canonical-sot) 단일 source.
-- `--intensity quick` 는 작은 spec tweak·update mode 자리 권장 — refine 단계 skip / 1 라운드 강제. ad-hoc 직접 Edit 대신 quick 으로 돌려 snapshot·log artifact 를 남긴다.
+### Verification rigor (derived from intensity)
 
-### --user-refine
-- PRD 작성 후 사용자 메모 받고 refine loop (`_internal/refine_v{N}.md` 백업)
+- Verification rigor is not an independent `--qa` axis. It is derived deterministically from `--intensity` (standard tier by default); [CONVENTIONS.md §1.1](../../../core/CONVENTIONS.md#11-verification-rigor-tiers) is the single authority for tiers and mappings.
+- Recommend `--intensity quick` for small spec tweaks in update mode. It skips refinement and permits only one round. Run the update path instead of editing ad hoc so required snapshot and log behavior remains intact.
 
-## Mode 자동 추론 단서 (`auto` 기본)
+### `--user-refine`
 
-| 단서 | 추론 mode |
+- After drafting the PRD, collect user notes and run the refinement loop, backing up to `_internal/refine_v{N}.md`.
+
+## Automatic Mode Signals (`auto`)
+
+| Signal | Inferred mode |
 |---|---|
-| `package.json` 의 `bin` 필드 / `setup.py` 의 `entry_points` / `pyproject.toml` 의 `[project.scripts]` | **cli** |
-| `package.json` 의 `main` / `exports` / `pyproject.toml` 의 `[project]` + `__init__.py` 의 명시 export | **library** |
-| `argparse` / `click` / `commander` / `typer` import | **cli** |
-| `configs/*.yaml` + 학습·평가 metric 출력 / `*.ipynb` | **research** |
-| Next.js / Expo / SvelteKit / Astro / Vite + React framework | **app** |
-| FastAPI / Express / Hono + UI 없음 | **api** |
-| 발화 키워드 | 발화 mode |
+| `bin` in `package.json`, `entry_points` in `setup.py`, or `[project.scripts]` in `pyproject.toml` | **cli** |
+| `main`/`exports` in `package.json`, or `[project]` in `pyproject.toml` plus explicit exports in `__init__.py` | **library** |
+| Import of `argparse`, `click`, `commander`, or `typer` | **cli** |
+| `configs/*.yaml` plus training/evaluation metric output, or `*.ipynb` | **research** |
+| Next.js, Expo, SvelteKit, Astro, or Vite with a React framework | **app** |
+| FastAPI, Express, or Hono with no UI | **api** |
+| Request keywords | Mode indicated by the request |
 
-자동 추론 결과는 _컨펌 한 줄_ 로 사용자 확인 후 진행:
+Show a one-screen confirmation in the user's communication language before proceeding:
 
 ```
-=== mode 추론 ===
-- 발화 "정돈·공개" + 기존 코드 분석:
-  · train.py / eval.py + argparse  → cli ✓
-  · configs/ + 학습 metric 출력      → research ✓
-  · models/__init__.py 의 export    → library ✓ (옵션)
+=== Mode inference ===
+- Request "정돈·공개" + existing-code analysis:
+  · train.py / eval.py + argparse   → cli ✓
+  · configs/ + training metrics    → research ✓
+  · exports in models/__init__.py  → library ✓ (optional)
 
-복합 mode: research + cli (+ library 옵션) — 이대로 진행?
-(진행 / 수정 — mode 추가·제거 / 단일 mode 선택 / 중단)
+Combined mode: research + cli (+ optional library). Proceed?
+(proceed / modify — add or remove a mode / choose one mode / stop)
 ```
 
-## Context Auto-Detection (신규 vs 재진입 자동 분기 + 자료 자동 read)
+## Context Auto-Detection
 
-본 skill 은 호출 자리에서 _발화 + cwd_ 검사로 자동 분기 + 다음 자료 자동 read:
+At invocation, inspect the request and cwd to distinguish a new run from re-entry, then load these materials automatically:
 
-| 자료 | 자리 | 우선순위 |
+| Material | Purpose | Priority |
 |---|---|---|
-| `mem profile 07_coding_convention` (`python3 <agent-home>/tools/memory/mem.py profile 07_coding_convention`) | 사용자 cross-project 컨벤션 (model 폴더 / config / prefix / preferred layer / framework) | 2순위 (cross-project default·fallback) |
-| `<artifact-root>/analysis_project/code/experiment_conventions.md` | per-project 컨벤션 (본 프로젝트 실제 자리) | **1순위** (충돌 시 per-project 우선, mem profile 07 은 빈 자리 보강) |
-| `<artifact-root>/analysis_project/code/similar_models.md` | 본 프로젝트 모델 간 유사도 | scaffold Phase 0 의 ref 1순위 후보 |
-| `<artifact-root>/research/<topic>/` | 외부 ref repo 카드 + 07_resources 의 Quick verify | scaffold Phase 0 의 ref 2순위 + Phase 1.5 검증 source |
+| `mem profile 07_coding_convention` (`python3 <agent-home>/tools/memory/mem.py profile 07_coding_convention`) | User's cross-project conventions: model directories, configs, prefixes, preferred layers, frameworks | Second: cross-project default/fallback |
+| `<artifact-root>/analysis_project/code/experiment_conventions.md` | Actual conventions for this project | **First**: wins on conflict; memory profile 07 only fills gaps |
+| `<artifact-root>/analysis_project/code/similar_models.md` | Similarity among models in this project | First reference-source candidate for scaffold Phase 0 |
+| `<artifact-root>/research/<topic>/` | External repository cards and Quick verify commands from `07_resources` | Second reference-source candidate for Phase 0 and verification source for Phase 1.5 |
 
-### 1단계 — pipeline_state.yaml 자동 검사
+### Step 1 — Inspect `pipeline_state.yaml`
 
-| 감지 조건 | 처리 |
+| Detection | Handling |
 |---|---|
-| `<artifact-root>/spec/pipeline_state.yaml` 부재 | **신규** — Step 1 부터 처음. 산출 `spec/` 신설 |
-| `<artifact-root>/spec/pipeline_state.yaml` 존재 | **재진입** — `phases:` 상태 read + 발화 의도 분류 후 해당 step 부터 refine v{N+1} |
+| No `<artifact-root>/spec/pipeline_state.yaml` | **New** — start at Step 1 and create `spec/` |
+| `<artifact-root>/spec/pipeline_state.yaml` exists | **Re-entry** — read `phases:`, classify the request, and resume the relevant step as refinement v{N+1} |
 
-spec 대상 = cwd 의 `<artifact-root>/spec/` (1 repo = 1 spec). 모노레포 예외 (`spec/<component>/` 여럿) 면 발화·cwd 로 대상 component 식별.
+The target is `<artifact-root>/spec/` under the cwd: one repository, one spec. In the monorepo exception with multiple `spec/<component>/` directories, identify the component from the request and cwd.
 
-### 2단계 — 발화 → step 자동 분류 (재진입 자리)
+### Step 2 — Map a Re-Entry Request to a Step
 
-| 발화 신호 | 추론 step | 흐름 |
+The signal strings below are quoted multilingual examples, not fixed trigger phrases. Infer intent semantically.
+
+| Example request | Inferred step | Flow |
 |---|---|---|
-| "스택 바꾸자" / "Vercel 대신 Cloudflare" / "framework 교체" | Step 2 (스택 후보 재선정) | refine v{N+1} + 이후 step 무효화 |
-| "Y endpoint 추가" / "data model 의 X entity 필드 변경" / "ui flow 의 X 화면" | Step 3a (PRD 핵심 mode) | refine + 묶음 갱신 (api_contract / data_model / Component diagram) |
-| "Component diagram 손보자" / "Deployment 자리 추가" | Step 3b (Architecture Diagrams) | refine v{N+1} |
-| "복합 mode 추가 — Y mode 도" / "이 spec 에 cli 도 같이" | Step 3c (복합 mode 다른 섹션) | refine + mode 추가 |
-| "skeleton 다시 — ref 바꾸자" / "ref repo 다른 자리" | Step 4 Phase 0 (ref source) | Phase 1·1.5·2·3 재실행 |
-| "skeleton 의 train.py 수정" / "scaffold 결과 손보자" | Step 4 Phase 2 (개발팀 new-lib) | Phase 2·3 재실행 |
+| "스택 바꾸자" / "Vercel 대신 Cloudflare" / "framework 교체" | Step 2: reselect stack candidates | refinement v{N+1}; invalidate downstream steps |
+| "Y endpoint 추가" / "data model 의 X entity 필드 변경" / "ui flow 의 X 화면" | Step 3a: core PRD mode | refine and update the coupled `api_contract`, `data_model`, and Component diagram |
+| "Component diagram 손보자" / "Deployment 자리 추가" | Step 3b: Architecture Diagrams | refinement v{N+1} |
+| "복합 mode 추가 — Y mode 도" / "이 spec 에 cli 도 같이" | Step 3c: another combined-mode section | refine and add the mode |
+| "skeleton 다시 — ref 바꾸자" / "ref repo 다른 자리" | Step 4 Phase 0: reference source | rerun Phases 1, 1.5, 2, and 3 |
+| "skeleton 의 train.py 수정" / "scaffold 결과 손보자" | Step 4 Phase 2: `개발팀` new-lib | rerun Phases 2 and 3 |
 
-> "Vercel 셋업" / "배포 셋업" / "env 변경" / "도메인 연결" 발화는 본 skill 이 아닌 별도 [`autopilot-ship`](../autopilot-ship/SKILL.md) 으로 라우팅.
+> Requests such as "Vercel 셋업", "배포 셋업", "env 변경", or "도메인 연결" route to the separate [`autopilot-ship`](../../autopilot-ship/SKILL.md) skill.
 
-### 3단계 — 자동 컨펌 한 화면
+### Step 3 — Show One Confirmation Screen
+
+Render this template naturally in the user's communication language:
 
 ```
-=== autopilot-spec 호출 자리 ===
-프로젝트: <name>
-산출물: spec/ (발견 — 기존 spec) 또는 (부재 — 신규)
-phases (재진입 시): spec=done, scaffolding=done, dev=in_progress
-발화: "<사용자 한 줄>"
-→ 추론: <step / 신규> 자리 — refine v{N+1} (재진입 시)
+=== autopilot-spec invocation ===
+Project: <name>
+Output: spec/ (existing spec found) or (missing — new spec)
+Phases on re-entry: spec=done, scaffolding=done, dev=in_progress
+Request: "<user request>"
+→ Inference: <step / new run> — refinement v{N+1} on re-entry
 
-진행? (진행 / 다른 step 으로 / 새 spec 으로 / 중단)
+Proceed? (proceed / choose another step / create a new spec / stop)
 ```
 
-신규 vs 재진입 분류는 _명시 옵션 (`--from`) 없이도_ 동작 — 사용자 발화 + cwd 자동 판단. 사용자가 명시적 `--from <step>` 입력하면 그대로.
+New versus re-entry detection works without an explicit `--from` option by inspecting the request and cwd. Honor an explicit `--from <step>` when supplied.
 
-### update mode — 기존 spec 갱신의 canonical 경로 (first-class)
+### Update Mode — Canonical Path for Existing Specs
 
-본 skill 은 _초기 생성_ 뿐 아니라 _기존 spec 의 update·iteration_ 을 동급 일급 capability 로 담당. **모든 spec 변경 (`prd.md` 갱신) 은 반드시 본 skill 의 update mode 를 거친다** — 사용자 직접 요청이든, autopilot-code 에서 감지된 drift 든, WORKFLOW §7/adapter 사후 수정 흐름이든 무관. `prd.md` 는 _ad-hoc hand-edit 금지_ — update mode 를 거쳐야 버전 snapshot 이 자동 적용되어 drift·휘발 차단.
+This skill treats initial creation and existing-spec updates as equally first-class capabilities. **Every spec change that updates `prd.md` must pass through update mode**, whether requested directly, detected as drift by autopilot-code, or initiated by a WORKFLOW §7/adapter post-run correction. Do not edit `prd.md` ad hoc; update mode preserves versioning and prevents drift or loss.
 
-update mode 가 하는 일 (3 가지, 한 트랜잭션):
+Update mode performs three operations as one transaction:
 
-1. `spec/prd.md` (항상 최신 T1 파일) 를 새 내용으로 갱신.
-2. **덮어쓰기 _전_ 에** 직전 `prd.md` 를 `spec/_internal/versions/v{N}/prd.md` 로 자동 snapshot (autopilot-refine 의 doc versioning 미러 — [CONVENTIONS §5.4.3](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3)). 역할 주체만 autopilot-spec, 대상이 spec.
-3. 변경 narrative 를 `pipeline_summary.md` 에 통합 기록. 영향 받는 인접 파일 (`data_model.md` / `api_contract.md` / `ui_flow.md` / `stack.md`) + Architecture Diagrams 는 위 _Step 3.5 묶음 갱신 logic_ 으로 한 트랜잭션 동기화.
+1. Update `spec/prd.md`, the always-current T1 file.
+2. **Before overwriting it**, snapshot the prior `prd.md` to `spec/_internal/versions/v{N}/prd.md`, mirroring autopilot-refine document versioning per [CONVENTIONS §5.4.3](../../../core/CONVENTIONS.md#5-skill-output-convention--t1t2t3). autopilot-spec owns the operation because the target is a spec.
+3. Record the change narrative in `pipeline_summary.md`. Synchronize affected adjacent files (`data_model.md`, `api_contract.md`, `ui_flow.md`, `stack.md`) and Architecture Diagrams in the same transaction using the Step 3.5 coupled-update logic.
 
-> update mode 는 _별도 mode 라벨_ 이 아니라 **재진입 시 자동 활성** — `pipeline_state.yaml` 존재 자리 (위 Context Auto-Detection) 면 본 경로. mode 5종 (app/library/api/cli/research) 은 _spec 의 종류_, update 는 _기존 spec 갱신 동작_ — 직교. 따라서 update 자리에서도 해당 spec 의 원래 mode 섹션을 그대로 갱신한다.
+> Update mode is not a separate mode label. It activates automatically on re-entry when `pipeline_state.yaml` exists. The five modes (`app`, `library`, `api`, `cli`, `research`) describe the spec type; update describes an operation. They are orthogonal, so update the existing spec's original mode sections.
 
-**사후 수정 (WORKFLOW §7 / adapter bootstrap) drift → 본 경로 라우팅**:
+**Route post-run drift from WORKFLOW §7 or an adapter bootstrap here**:
 
-- autopilot-code 작업 중 spec 영향 변경 (새 endpoint / schema·data-model / entity 의미 / ui-flow / 마이그레이션 / 외부 연동) 감지 시 → autopilot-code 가 update mode back-jump 호출.
-- **drift 가 CLEAR** (변경 의도·범위 명확) → 자율 진행 + 한 줄 보고.
-- **drift 가 AMBIGUOUS** (의도 해석 갈림 / 영향 범위 불명) → 사용자에게 먼저 확인 후 진행 (임의 추측 X).
+- When autopilot-code detects a spec-affecting change—new endpoint, schema/data-model change, changed entity meaning, UI-flow change, migration, or external integration—it back-jumps into update mode.
+- **CLEAR drift** with unambiguous intent and scope: proceed autonomously and report in one line.
+- **AMBIGUOUS drift** with multiple interpretations or unclear impact: ask before proceeding; do not guess.
 
-작은 spec tweak 은 `--intensity quick` 으로 depth-1 one-shot worker 가 inline micro-plan + plan-check-lite + verify-lite만 수행한다. Durable snapshot/log는 spec 영향이 실제로 있고 autopilot-spec update가 `prd.md`를 갱신할 때 남긴다; `--intensity quick`만으로 plan/log/snapshot artifact를 강제하지 않는다.
+For a small spec tweak, `--intensity quick` uses a depth-1 one-shot worker with only an inline micro-plan, plan-check-lite, and verify-lite. Durable snapshots and logs are created only when the update actually changes `prd.md`; quick intensity alone does not force plan, log, or snapshot artifacts.
 
-### refine v{N+1} 버전 관리 (doc 트랙과 동일 원리)
+### Refinement v{N+1} Versioning
 
-위 update mode 의 버전 메커니즘. Spec versioning 은 doc 트랙 ([CONVENTIONS §5.4.3](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) — autopilot-refine 이 doc artifact 에 쓰는 `_internal/versions/v{N}/` 메커니즘 재사용). `prd.md` 가 _항상 최신_ (T1) — 사용자는 최신만 봄.
+This is the update-mode mechanism above. Spec versioning reuses the document-track mechanism in [CONVENTIONS §5.4.3](../../../core/CONVENTIONS.md#5-skill-output-convention--t1t2t3): `prd.md` is always the current T1 file.
 
-- **major 변경 / refine (v{N+1})** — 새 내용으로 `prd.md` 를 덮어쓰기 _전_ 에 직전 `prd.md` 를 `spec/_internal/versions/v{N}/prd.md` 로 자동 snapshot 후 덮어씀 (autopilot-refine 이 doc 에 쓰는 것과 같은 메커니즘 — 역할 주체만 autopilot-spec, 대상이 spec). 변경 narrative 는 `pipeline_summary.md` 에 통합 기록.
-- **minor 편집** — 직접 Edit + `pipeline_summary.md` minor-log (snapshot 없음). 누적 5 → `/audit` chat alert.
-- 사용자 수동 버전 관리 X.
+- **Major change/refinement v{N+1}** — before overwriting `prd.md`, snapshot it to `spec/_internal/versions/v{N}/prd.md`, then write the new content. Record the narrative in `pipeline_summary.md`.
+- **Minor edit** — edit directly and add a minor-log entry to `pipeline_summary.md`; do not snapshot. After five accumulated minor edits, emit an `/audit` chat alert.
+- Do not ask the user to manage versions manually.

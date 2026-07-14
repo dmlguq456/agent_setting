@@ -1,24 +1,10 @@
-"""drivers/claude.py — Claude Code channel driver (PRD "plugin 채널 — Claude Code (신설)").
+"""Claude Code channel driver.
 
-Claude 는 **native runtime** — root 디렉터리(`core/`·`capabilities/`·`roles/`·`skills/`·...)
-자체가 SoT 이고, symlink projection 은 `adapters/claude/bin/sync-native-*.py` 없이도
-성립한다. 단 plugin 채널만은 예외 — Claude plugin cache 는 self-contained 모델이라
-콘텐츠 실물 포함이 필요, 그래서 `adapters/claude/bin/sync-native-plugin.py`(cycle 2 신설,
-Claude 첫 sync-native 생성기)가 `adapters/claude/plugin-marketplace/plugins/
-agent-harness-claude/` 를 채운다. projection 자체는 여전히 순수 symlink +
-`copy_once`(settings.json, keybindings.json) 이며 Windows 분기만
-`adapters/claude/bin/install-windows.sh` 로 위임한다(재구현 금지).
-
-plugin 채널(marketplace 콘텐츠 실물화 + `claude plugin marketplace add`/`plugin install`
-wrapping, `_plugin_action`)은 cycle 2 에서 `drivers/codex.py._plugin_action` 을 미러해
-채운다 — CLI 부재 시 SKIP, dry-run 시 두 명령 문자열만 보고, 성공 시 registered.
-
-싣기 가능(공식 확인, PRD 표 + `_internal/hooks_inventory.md`): skills(27)·agents(9)·
-`hooks/hooks.json`(채택 2 개, git-state-guard/artifact-guard). `.mcp.json`/`bin/` 은
-탑재 대상 없음(부재/비-self-contained, hooks_inventory 조사 결론).
-불가: settings.json 일반 키(`agent`·`subagentStatusLine` 만)·env·permissions·statusline·
-plugin 내 CLAUDE.md — **plugin=True 여도 symlink+copy_once projection 은 항상 병행**
-(INST-D-5, "plugin 이면 symlink 생략"은 명시적 anti-pattern, codex 와 동일 원칙).
+Claude is the native runtime for the root source tree. Its dev channel uses
+symlink projection plus copy-once settings, while the self-contained plugin
+bundle is generated separately. Plugin installation never replaces the dev
+projection because settings, status, memory, and bootstrap surfaces cannot all
+be carried by the plugin.
 """
 
 import os
@@ -39,12 +25,7 @@ _PLUGIN_SPEC = f"agent-harness-claude@{_MARKETPLACE_NAME}"
 
 
 def _dev_channel_active(scope="global"):
-    """dev 채널(symlink projection)이 이미 걸려 있는지 판정 (PRD §0.5 원칙 1 — 2-채널 병존).
-
-    `<runtime_home>/CLAUDE.md` 가 `paths.agent_home()` 안쪽을 가리키는 symlink 이면 dev
-    채널 활성으로 본다. install()/status()/checks() 가 공유하는 단일 판정 지점 — plugin
-    미등록을 dev 채널 정상 상태와 진짜 미설치 drift 로 구분하는 데 쓴다.
-    """
+    """Return whether the dev-channel bootstrap symlink points into agent_home."""
     claude_md = paths.runtime_home(RUNTIME, scope) / "CLAUDE.md"
     if not claude_md.is_symlink():
         return False
@@ -63,14 +44,9 @@ def _dev_channel_active(scope="global"):
 def _plugin_action(dry_run):
     """Phase 2 Step 2.1 — `claude plugin marketplace add`/`plugin install` wrapping.
 
-    `drivers/codex.py._plugin_action` 의 미러. 차이점(로컬 `claude` CLI `--help` +
-    실측으로 확인, runtime-currentness — dev_logs/step_01 참조): `claude plugin
-    marketplace add`/`plugin install` 어느 쪽도 `--json` 플래그가 없다(codex 와 달리) —
-    비대화성은 두 명령 모두 기본 동작으로 이미 보장된다(대화형 프롬프트 없음, 실측
-    `marketplace add` 는 mktemp `CLAUDE_CONFIG_DIR` 하에서 exit 0 로 즉시 완료 확인).
-    marketplace source 는 codex 처럼 별도 `*_setting/` 미러가 아니라 adapters 경로 직접
-    (`resolve_source("adapters/claude/plugin-marketplace")`) — Claude 는 native 라
-    plugin-marketplace 스켈레톤이 이미 adapters 아래 있다.
+    Claude's CLI does not accept Codex's ``--json`` flag for these commands.
+    The marketplace source is the adapter path because Claude is the native
+    source runtime.
     """
     marketplace_source = str(paths.resolve_source(_MARKETPLACE_SOURCE_RELPATH))
     marketplace_cmd = ["claude", "plugin", "marketplace", "add", marketplace_source]
@@ -93,7 +69,7 @@ def _plugin_action(dry_run):
     try:
         mp_result = subprocess.run(marketplace_cmd, capture_output=True, text=True, timeout=60)
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        return {"action": "plugin", "status": "blocked", "detail": f"marketplace add 실행 실패: {exc}"}
+        return {"action": "plugin", "status": "blocked", "detail": f"marketplace add failed: {exc}"}
 
     if mp_result.returncode != 0:
         return {
@@ -105,7 +81,7 @@ def _plugin_action(dry_run):
     try:
         plugin_result = subprocess.run(plugin_cmd, capture_output=True, text=True, timeout=60)
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        return {"action": "plugin", "status": "blocked", "detail": f"plugin install 실행 실패: {exc}"}
+        return {"action": "plugin", "status": "blocked", "detail": f"plugin install failed: {exc}"}
 
     if plugin_result.returncode != 0:
         return {
@@ -122,14 +98,7 @@ def _plugin_action(dry_run):
 
 
 def install(scope="global", plugin=False, dry_run=False):
-    """symlink projection + copy-once runtime-owned 표면 적용 + plugin wrapping.
-
-    Claude 에는 symlink projection 생성기가 없다 — 순수 symlink + copy_once. Windows
-    호스트에서만 `install-windows.sh` 위임 분기가 실행된다. `plugin=True` 는
-    `_plugin_action(dry_run)` 을 호출한다 — symlink+copy_once projection 은 plugin
-    콘텐츠가 못 싣는 표면(settings.json 복사·statusline·mem 복원·CLAUDE.md·launcher)을
-    담당하므로 plugin=True 여도 항상 병행 실행된다(INST-D-5).
-    """
+    """Apply symlinks, copy-once runtime surfaces, and optional plugin wrapping."""
     entries = projector.plan(["claude"], scope=scope)["claude"]
 
     actions = []
@@ -295,10 +264,10 @@ def install(scope="global", plugin=False, dry_run=False):
 
 
 def checks(scope="global"):
-    """verify 가 실행할 native projection + bootstrap check 목록.
+    """Return native-projection and bootstrap checks for ``verify``.
 
-    Marketplace bundle은 명시적 ``install --plugin`` 배포 채널이며 core verify의
-    성공 조건이 아니다.
+    The marketplace bundle is an explicit ``install --plugin`` channel and is
+    not a core verification requirement.
     """
     entries = projector.plan(["claude"], scope=scope)["claude"]
 
@@ -316,7 +285,7 @@ def checks(scope="global"):
             dest = entry["dest"]
             name = Path(dest).name
             check_list.append(verifier.check_file_exists(f"claude.file.{name}", dest))
-        # "skip"/"delegate" 항목은 read-only check 대상이 아님 — 건너뜀.
+        # Skip and delegate entries are not read-only verification targets.
 
     agent_home = str(paths.agent_home())
 
@@ -361,7 +330,7 @@ def checks(scope="global"):
 
 
 def status(scope="global"):
-    """channel·version·drift 요약."""
+    """Summarize channel, version, and drift state."""
     manifest_data = manifest._load_manifest(manifest._manifest_path("claude", scope))
     drift = manifest.check_drift(["claude"], scope=scope)
     dev_channel_active = _dev_channel_active(scope)

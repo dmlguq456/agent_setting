@@ -218,13 +218,13 @@ in `core/CONVENTIONS.md §2`.
 
 | Agent | Portable role | Claude frontmatter | Runtime behavior |
 |---|---|---|---|
-| `기획팀` (plan-team) | deep maker | `opus` | deep maker 단일 |
-| `품질관리팀` (qa-team) | variable reviewer | `opus` | Review modes select fast/deep reviewer combinations by QA level; test/security modes use their own reviewer split |
-| `연구팀` (research-team) | variable research reviewer | `opus` | Default deep maker/reviewer; fact-checker and light QA subroles use fast reviewer/fact-checker |
-| `자료팀` (material-team) | deep maker default, fast tool worker subroles | `opus` | Collection/extraction subroles may use fast tool worker; figure/data synthesis stays deep maker |
-| `개발팀` (dev-team) | fast implementer default | `sonnet` | Default implementation worker; complex API/library design can be escalated to deep maker |
-| `디자인팀` (design-team) | deep maker with fast verifier | `opus` | Maker uses deep maker; critic/verifier split by nuance and mechanicality |
-| `편집팀` (editorial-team) | deep maker/editor with fast reviewer subrole | `opus` | Translate/polish uses deep editor; review uses fast reviewer |
+| `plan-team` | deep maker | `opus` | Deep planning and architecture |
+| `qa-team` | variable reviewer | `opus` | Review modes select fast/deep combinations by derived rigor; test and security own their specialized checks |
+| `research-team` | variable research reviewer | `opus` | Deep maker/reviewer by default; narrow fact and light review use fast roles |
+| `material-team` | deep maker default, fast tool worker subroles | `opus` | Collection and extraction may use fast workers; figure and data synthesis remain deep |
+| `dev-team` | fast implementer default | `sonnet` | Routine implementation; complex API/library design may escalate |
+| `design-team` | deep maker with fast verifier | `opus` | Maker is deep; critic and verifier split by nuance and mechanicality |
+| `editorial-team` | deep maker/editor with fast reviewer subrole | `opus` | Translation and polish are deep editorial work; review is fast |
 | `codex-review-team` | external adversary orchestrator | `sonnet` | Wrapper invokes Codex CLI external review and summarizes the result; the wrapper is not the actual reviewer |
 
 ## Reproduction Contract

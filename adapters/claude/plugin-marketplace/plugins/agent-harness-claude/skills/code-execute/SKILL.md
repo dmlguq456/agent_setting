@@ -1,136 +1,138 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: code-execute
-description: "Execute an implementation plan step by step through development-role dispatch."
+description: "Use when invoking the portable code-execute capability. Execute a plan step by step, delegate implementation to the development role, and record an execution log."
 argument-hint: "<plan name or path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "Execute an implementation plan step by step."
+  blurb: "Execute a plan step by step, delegate implementation to the development role, and record an execution log."
 ---
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Input = the plan path (args) resolved below; it reads `plan/plan.md` from files, never prior-stage conversation. This is the **only source-mutating stage**; write class = source code + `plan/checklist.md`·`dev_logs/`·`_internal/dev_reviews/`·plan frontmatter `status`. 개발팀 delegation stays **inside** this session (its own in-session parallel dev-team is depth-uncounted).
+# code-execute
 
-> **Plan Resolution**: `$ARG`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated depth-2 stage worker dispatched by the `autopilot-code` conductor. Resolve the plan path from arguments, read `plan/plan.md` from disk, and never depend on prior-stage conversation. This is the only source-mutating stage. Its write class is source code, `plan/checklist.md`, `dev_logs/`, `_internal/dev_reviews/`, and plan-frontmatter `status`. Any `dev-team` delegation remains inside this stage session.
 
-> **Language Rule**: user-facing artifacts follow the audience and artifact
-> language contract in
-> [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
+> **Plan resolution**: Treat [arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) as the single authority for resolving `$ARG` to a plan path.
 
-## Commit Message Convention
+> **Language rule**: Follow the audience and artifact language contract in [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md). Do not infer a fixed execution-log or report language from this skill file.
+
+## Commit Messages
+
 - Safety checkpoint: `chore: Safety checkpoint before {plan-name} execution`
-- Success commit: `{type}: {description}\n\n{bullet list of key changes}` — type: `feat`/`fix`/`refactor`/`chore`
+- Success: `{type}: {description}\n\n{bullet list of key changes}`, where type is `feat`, `fix`, `refactor`, or `chore`
 
 ## Git Safety Checkpoint
-Before any code changes, ensure the working tree is clean and up-to-date:
-0. **git working-state 게이트** ([OPERATIONS.md §5.9](../../core/OPERATIONS.md#59-git-working-state-preflight-worktreemerge-가드-canonical)) — 체크포인트 생성 _전_, 그리고 **각 success commit 직전** 재실행. merge/rebase/cherry-pick 진행 중·detached HEAD = STOP(사용자 보고, 자동 abort 안 함); 다른 worktree 동일 브랜치·upstream 앞섬·진입 시 dirty = WARN. 진입 시 `HEAD` 기억 → commit 직전 HEAD 가 바뀌었거나 새 `MERGE_HEAD` 생겼으면(밑에서 머지됨) STOP. worktree 여러 개로 작업하다 merge 끼는 자리를 닫는다.
-1. Run `git fetch && git pull` to sync with the remote.
-   - If pull fails due to merge conflicts: abort the pull (`git merge --abort`), warn the user, and stop. Do NOT proceed with execution.
-2. Run `git status` to check for uncommitted changes.
-3. If there are uncommitted changes:
-   - **먼저 merge/rebase 진행 중인지 확인** — `git rev-parse -q --verify MERGE_HEAD` 성공 또는 `$(git rev-parse --git-dir)/rebase-merge`·`rebase-apply` 존재 시: `git add -A && git commit` 을 **하지 않는다** (반쯤 머지된 트리를 restore point 로 굳히는 사고). STOP 하고 사용자에 보고 (resume·직접 진입으로 step 0 게이트를 건너뛴 자리의 in-place 자기방어).
-   - 진행 중인 머지가 없을 때만: `git add -A && git commit` with a commit message that accurately describes the current uncommitted changes (analyze the diff to write a meaningful message).
-   - This commit serves as a restore point if rollback fails later.
-4. Record the current commit hash: `git rev-parse HEAD` → save as `$SAFETY_COMMIT`.
-   - `$SAFETY_COMMIT` is persisted into the checklist header during Initialization.
+
+Before source changes, establish a recoverable working state.
+
+0. Run the [git working-state preflight](../../core/OPERATIONS.md#59-git-working-state-preflight) before the safety checkpoint and again before every success commit.
+   - Stop and report an active merge, rebase, or cherry-pick, or a detached HEAD. Do not abort it automatically.
+   - Warn about a dirty entry state, an upstream-ahead branch, or the same branch checked out in another worktree.
+   - Record entry `HEAD`. Before committing, stop if `HEAD` changed unexpectedly or a new `MERGE_HEAD` appeared.
+1. Run `git fetch && git pull` when the active workflow authorizes remote synchronization.
+   - If the pull creates conflicts, run `git merge --abort`, report the conflict, and stop execution.
+2. Run `git status` and inspect all uncommitted changes.
+3. If changes exist, first check `git rev-parse -q --verify MERGE_HEAD` and `$(git rev-parse --git-dir)/rebase-merge` or `rebase-apply`.
+   - If any merge or rebase is active, do not run `git add -A && git commit`; stop and report the state.
+   - Otherwise, create an accurately described checkpoint with `git add -A && git commit` only when every included change is understood and in scope. Stop instead of sweeping unrelated user changes into the checkpoint.
+4. Run `git rev-parse HEAD`, save it as `$SAFETY_COMMIT`, and persist it in the checklist header.
 
 ## Initialization
-- Read the plan file at $ARG.
-- The log directory is the task root folder (two levels up from `plan/plan.md`).
-  - Example: `<artifact-root>/plans/2026-03-18_refactor_engine/plan/plan.md` → log dir is `<artifact-root>/plans/2026-03-18_refactor_engine/`
-- **Check for existing log directory** at `{log_dir}`:
-  - If `{log_dir}/plan/checklist.md` already exists with `[x]`/`[FAIL]`/`[SKIP-DEP]` marks: this is a **resume**. Read the checklist, update the `Safety commit:` line with the current `$SAFETY_COMMIT`, and skip all completed steps. Continue from the first `[ ]` step.
-  - Otherwise: this is a **fresh execution**. Proceed to create the log directory and checklist.
-- **Create the log directory** and the checklist:
-  1. `mkdir -p {log_dir}/dev_logs {log_dir}/_internal/dev_reviews`
-  2. Write `{log_dir}/plan/checklist.md` — checklist derived directly from the English plan with the following header and body:
-  ```
-  Safety commit: {$SAFETY_COMMIT}
 
-  Phase A: [description]
-    [ ] Step 1: [file] — [what to change]
-    [ ] Step 2: [file] — [what to change]
-  Phase B: [description]
-    [ ] Step 3: [file] — [what to change]
-  ```
-- Subagents will create their own step log files inside this directory (they have the Write tool).
-- Use this checklist file as the sole tracking document for orchestration.
-  - Mark `[x]` or `[FAIL]` as steps complete or fail.
-  - plan files (English/Korean) 는 실행 중 불변 — checklist 만 추적 갱신.
+1. Read the resolved plan at `$ARG`.
+2. Set `{log_dir}` to the task root two levels above `plan/plan.md`.
+   - Example: `<artifact-root>/plans/2026-03-18_refactor_engine/plan/plan.md` → `<artifact-root>/plans/2026-03-18_refactor_engine/`
+3. Detect resume state.
+   - If `{log_dir}/plan/checklist.md` contains `[x]`, `[FAIL]`, or `[SKIP-DEP]`, update its `Safety commit:` line, skip completed steps, and continue at the first `[ ]` step.
+   - Otherwise create a fresh checklist.
+4. Run `mkdir -p {log_dir}/dev_logs {log_dir}/_internal/dev_reviews` and write `{log_dir}/plan/checklist.md` directly from the canonical plan:
 
-## Rules
-- Read the English checklist file before each step to decide what to do next.
-- Implement all steps in the plan, in order of dependencies.
-- **Delegate implementation to the dev-team (개발팀) agent as a subagent.**
-  - Include "auto mode" in the prompt, and specify files/changes concretely.
-  - Include the dev_logs directory path so the subagent can write its own step log file (e.g., `dev_logs/step_01_model_py.md`).
-  - Launch multiple dev-team (개발팀) subagents in parallel for independent steps.
-- After completing each step:
-  - Mark `[x]` in the English checklist file
-  - Syntax/import verification is handled by the code reviewer during phase review
-- 처리 가능한 모든 step 을 `[x]`/`[FAIL]` 까지 진행한다.
+   ```text
+   Safety commit: {$SAFETY_COMMIT}
+
+   Phase A: [description]
+     [ ] Step 1: [file] — [what to change]
+     [ ] Step 2: [file] — [what to change]
+   Phase B: [description]
+     [ ] Step 3: [file] — [what to change]
+   ```
+
+Use the checklist as the sole orchestration tracker. Keep plan files immutable during execution. Mark each step `[x]`, `[FAIL]`, or `[SKIP-DEP]`.
+
+## Execution Rules
+
+- Read the checklist before every step and execute steps in dependency order.
+- Delegate implementation to `dev-team` in auto mode with concrete file and change instructions.
+- Give each worker `{log_dir}/dev_logs/` and require a step log such as `dev_logs/step_01_model_py.md`.
+- Run independent steps in parallel when the active workflow supports in-session parallel delegation.
+- After a successful step, mark it `[x]`. The phase review owns syntax and import verification.
+- Continue until every processable step has a terminal checklist mark.
 
 ## QA Scaling
-`qa_level` in plan frontmatter overrides auto-detect for ALL phases. Otherwise, detect per phase.
 
-| Level | Auto-detect condition | Action |
+Plan-frontmatter `qa_level` overrides automatic selection for every phase. Otherwise classify each phase by scope.
+
+| Level | Auto-detect condition | Review action |
 |---|---|---|
-| **Quick** | (via `--intensity quick` — inherited from autopilot-code) | 1× fast reviewer (Claude adapter: 품질관리팀 `model: "sonnet"`), single pass; major 🔴 issues are logged but the pipeline does NOT branch to rollback retry — issues propagate to `pipeline_summary.md` Decision Points instead |
-| **Light** | ≤3 units, mechanical, single-variant | 1× fast reviewer |
-| **Standard** | 4–10 units, logic changes, single module | 1× deep reviewer |
-| **Thorough** | >10 units, cross-module/variant, architectural | 2–3× reviewers in parallel: A=correctness (deep), B=consistency (fast), C=safety (deep, >20 files) |
-| **Adversarial** | Cross-variant (SE+SS+CSS), shared modules (utils/, network.py), or >20 files with architectural impact — **AND external adversary available** | Thorough-level 품질관리팀 + 1× external adversary (`codex-review-team` in Claude adapter) in parallel |
+| **Quick** | Inherited `--intensity quick` direct invocation | One fast reviewer, one pass; log major findings without rollback retry and propagate them to `pipeline_summary.md` Decision Points |
+| **Light** | At most 3 mechanical units in one variant | One fast reviewer |
+| **Standard** | 4–10 units or logic changes in one module | One deep reviewer |
+| **Thorough** | More than 10 units, cross-module or cross-variant work, or architectural change | Two or three reviewers in parallel: correctness/deep, consistency/fast, and safety/deep when more than 20 files are involved |
+| **Adversarial** | Cross-variant or shared-module architectural work and an external adversary is available | Thorough review plus one external adversary in parallel |
 
-Thorough mode — A: bugs/logic/signature mismatches (deep); B: naming/conventions/dead code (fast); C: tensor shapes/None edge cases (deep). Each writes to `_internal/dev_reviews/phase_{NN}_{focus}.md`. All 🔴 from ANY agent must be addressed.
+For Thorough review, cover bugs, logic, and signature mismatches; naming, conventions, and dead code; and tensor-shape or `None` edge cases when relevant. Write each result to `_internal/dev_reviews/phase_{NN}_{focus}.md` and address every critical finding.
 
-Adversarial mode — runs all Thorough agents PLUS an additional external adversary in the same parallel batch. Claude adapter uses `codex-review-team`, which runs `adversarial-review --wait --scope auto` and writes adapter-specific external review logs. All 🔴 from ANY agent must be addressed.
+Before selecting Adversarial, use the active adapter's external-adversary availability check. An explicitly requested unavailable adversarial run fails loudly; automatic escalation falls back to Thorough and records the fallback.
 
-**External adversary availability check**: Before selecting Adversarial, run the adapter availability check (Claude adapter: `codex --version`, suppress stderr). If unavailable, fall back to Thorough silently. This check is skipped if `--intensity adversarial` is explicitly specified (fail loudly instead).
+## Change Logs and Phase Review
 
-## Change Log & Phase Review
-- Each 개발팀 subagent writes its own step log file in `{log_dir}/dev_logs/`.
-  - See Initialization section for log directory convention.
-  - The log contains exact old/new per Edit with a `Decision:` field explaining the rationale — the subagent creates this file itself.
-- **When a phase completes**:
-  1. **Assess QA level** from the phase's change scope (files changed, nature of changes) per the QA Scaling table above.
-  2. Invoke 품질관리팀 accordingly:
-     - **Light/Standard**: 1 agent. Prompt must include: the step log file names for THIS phase (in dev_logs/), the log directory path, the list of changed source files, and the review output file name. For Light mode, use fast reviewer (Claude adapter: pass `model: 'sonnet'` when invoking 품질관리팀).
-     - Example: "Review this phase in code review mode. Log dir: [path]. Step logs for this phase: [file list]. Changed source files: [file list]. Write review results to: [path]/_internal/dev_reviews/phase_01.md. Return the file path and a one-line verdict only."
-     - **Thorough**: 2-3 agents in parallel (single message, multiple Agent tool calls). Same base prompt, each with a different focus suffix and output file name. Use fast reviewer for the B (consistency) agent and deep reviewer for A (correctness) and C (safety).
-     - **Adversarial**: same as Thorough, plus 1× external adversary (`codex-review-team` in Claude adapter) in the same parallel batch. External prompt: "Run adversarial-review on the current changes. Write results to: {log_dir}/_internal/dev_reviews/phase_{NN}_external.md (or adapter legacy path). Return the file path and a one-line verdict."
-     - `mkdir -p {log_dir}/_internal/dev_reviews` before first invocation.
-     - The 품질관리팀 reads step logs (including Decision fields) and source files directly, then writes the review report to the specified file.
-  2. **Read the review file** (skill-level read — permitted per DESIGN_PRINCIPLES 3.3) to determine next action:
-     - 🟡 only: log in checklist and continue.
-     - 🔴 minor: fix once via 개발팀 → re-verify (output `phase_{NN}_fix.md`). If still 🔴, treat as major.
-     - 🔴 major: **auto-rollback phase and continue** (no user gating — per the family-wide "no autonomy gating" policy):
-       1. Delegate rollback to 개발팀 — restore every `old_string` from the phase's step logs.
-       2. If rollback fails: read `$SAFETY_COMMIT` from checklist header → `git checkout .` (reverts ALL uncommitted changes including prior phases). Mark ALL steps `[FAIL]` ("Reverted by git checkout due to rollback failure in Phase N"). **Stop and go to Final Report.**
-       3. If rollback succeeded: mark all steps in this phase `[FAIL]` with reason.
-       4. Continue to the next phase. If it depends on the failed phase, mark those steps `[SKIP-DEP]`.
+Each `dev-team` worker writes its own step log under `{log_dir}/dev_logs/`. Record exact old/new edits and a `Decision:` field explaining the rationale.
 
-> Record each rollback decision per the Decision Point Logging Rule. Decisions propagate up to the pipeline skill's pipeline_summary.md.
+At the end of each phase:
 
-- For plans ≤3 steps, skip phase grouping — invoke reviewer once after all steps complete.
-- **On Total Failure** (ALL steps `[FAIL]`/`[SKIP-DEP]` after Plan Status Update): **auto-rollback to safety commit** (no user gating).
-  Read `$SAFETY_COMMIT` → `git diff --name-only $SAFETY_COMMIT HEAD -- ':!<artifact-root>'` → `git checkout $SAFETY_COMMIT -- <changed files>` (preserves `<artifact-root>/`). Verify with `git status`. Note in Final Report.
+1. Select the review level from plan override or phase scope.
+2. Invoke `qa-team` with the phase's step-log paths, `{log_dir}`, changed source files, focus, and output path.
+   - Light/Standard: one reviewer.
+   - Thorough: parallel correctness, consistency, and optional safety reviewers using the portable fast/deep profiles above.
+   - Adversarial: the Thorough batch plus one external adversary.
+   - Require every reviewer to write its report and return only the path and a one-line verdict.
+3. Read the review files and act:
+   - Advisory-only findings: record them in the checklist and continue.
+   - Minor critical finding: have `dev-team` fix it once and re-review to `phase_{NN}_fix.md`; treat a remaining critical finding as major.
+   - Major critical finding: roll back the phase automatically and continue under the family autonomy policy.
+     1. Have `dev-team` restore every `old_string` recorded in the phase logs.
+     2. If rollback fails, read `$SAFETY_COMMIT`, run `git checkout .`, mark all steps `[FAIL]` with `Reverted by git checkout due to rollback failure in Phase N`, and stop at Final Report.
+     3. If rollback succeeds, mark the phase steps `[FAIL]` with the reason.
+     4. Continue to the next independent phase; mark dependent steps `[SKIP-DEP]`.
 
-## Safety Rules (CRITICAL)
-- CRITICAL: Before changing any function signature (args, return type, dict keys, tensor shapes): (1) grep all call sites, (2) update every caller, (3) check implicit contracts (None checks, `.shape` assumptions, dict key access).
-- CRITICAL: If a step causes cascading errors beyond the plan's scope: mark `[FAIL]`, rollback via step log, continue to next step.
-- Do NOT change code outside the plan's scope unless required by a signature change.
+Record every rollback as a Decision Point for the pipeline summary. For plans with at most three steps, skip phase grouping and review once after all steps.
+
+If every step ends as `[FAIL]` or `[SKIP-DEP]`, roll source changes back to the safety commit without touching the artifact root:
+
+```text
+git diff --name-only $SAFETY_COMMIT HEAD -- ':!<artifact-root>'
+git checkout $SAFETY_COMMIT -- <changed files>
+git status
+```
+
+## Critical Safety Rules
+
+- Before changing a function signature, arguments, return type, dictionary keys, or tensor shapes: find all call sites, update every caller, and inspect implicit contracts such as `None` checks, `.shape` assumptions, and key access.
+- If a step causes cascading errors beyond plan scope, mark it `[FAIL]`, roll it back from the step log, and continue only with independent steps.
+- Do not change code outside plan scope except where a required contract change makes a caller update unavoidable.
+
+## Plan Status
+
+- All steps `[x]` → set plan frontmatter `status: done`.
+- Some `[x]` and some `[FAIL]`/`[SKIP-DEP]` → set `status: partial` and list step numbers in `failed_steps`.
+- No `[x]` → set `status: failed` and list every step number in `failed_steps`.
 
 ## Final Report
-After all phases are processed, read the English checklist and report a summary to the user:
-- List only `[FAIL]` and `[SKIP-DEP]` steps with their reasons.
-- If all steps are `[x]`: report success, no need to list individual steps.
-- At the end of the report, recommend the user run `/code-test <plan file path>` to verify functional correctness.
-- This is the only progress report the user sees in standalone invocation. Include FAIL/SKIP-DEP reasons, overall verdict, and next command. For success-only runs a single-line verdict is sufficient; scale length with failure count.
 
-## Plan Status Update
-- When all steps are marked `[x]`: change the English plan's frontmatter `status` to `done`.
-- When some steps are `[x]` and some are `[FAIL]`/`[SKIP-DEP]`: change status to `partial` and add a `failed_steps` field listing the failed step numbers.
-- When ALL steps are `[FAIL]`/`[SKIP-DEP]` (no `[x]` steps): change status to `failed` and add a `failed_steps` field listing all step numbers.
+Read the checklist and report the overall verdict in the selected audience language. List only `[FAIL]` and `[SKIP-DEP]` steps with reasons; when all steps succeeded, a concise success verdict is sufficient. End by recommending `code-test <plan file path>` for functional verification. In a standalone invocation, this is the only user-facing progress report.
 
 ## Task
+
 Execute the plan at: $ARG

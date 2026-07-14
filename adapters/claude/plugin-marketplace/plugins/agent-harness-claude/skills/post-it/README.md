@@ -1,75 +1,81 @@
 # post-it
 
-> 본 README 는 Claude adapter skill 요약. 권위 있는 Claude runtime 동작 명세는 같은 폴더의 `SKILL.md`; portable capability 의미는 `<agent-home>/capabilities/`.
+> This README summarizes the portable capability for users and maintainers. The model-neutral contract lives under `<agent-home>/capabilities/`; `SKILL.md` in this directory provides shared guidance for runtime-specific projections.
 
-## 개요
+## Overview
 
-사용자가 **직접 통제하는** _임시 포스트잇_ 메모리. `<agent-home>/projects/*/memory/`의 자동 메모리와 별개 layer로, 사용자가 명시적으로 `/post-it` 명령을 호출할 때만 변경된다. 세션 종료 시 conversation이 사라지는 휘발성을 메우는 목적.
+A temporary sticky-note memory surface under explicit user control. It is separate from automatic memory under `<agent-home>/projects/*/memory/` and changes only when the user explicitly invokes `/post-it`. It bridges working context that would otherwise disappear between sessions.
 
-**핵심 비유 — 포스트잇.** post-it 은 영구 기록이 아니다. 영구 진실은 산출물(`plans/`·`documents/`·`spec/`·code·git)·구조화 프로필(DB `type=profile` 레코드)에 있고, post-it 은 그 사이를 잇는 휘발성 작업면. 산출물로 _졸업_ 하면 떼어낸다.
+**Core metaphor: a sticky note.** post-it is not a permanent record. Durable truth lives in artifacts (`plans/`, `documents/`, `spec/`, code, and git) or structured DB profile records (`type=profile`). post-it is the temporary working surface between them; remove an entry after it graduates into a durable artifact.
 
-> **불변식 — 사용자는 post-it 을 읽지 않는다.** 에이전트의 세션-간 연속성 작업면이지 사용자 읽기용 문서가 아니다. lean 유지·prune 은 에이전트 책임 (사용자에겐 한 줄 요약만).
+> **Invariant: the user does not read post-it directly.** It is an agent-facing continuity surface, not user documentation. The agent keeps it lean and prunes it, reporting only a one-line summary to the user.
 
-## 생애주기 (모든 엔트리는 졸업하거나 만료)
+## Lifecycle
 
-| 상태 | 의미 | 처리 |
+Every entry eventually graduates or expires.
+
+| State | Meaning | Handling |
 |---|---|---|
-| **graduated** | 산출물·구조화 절에 영구 반영됨 | 만료 (`sweep`/`promote`) |
-| **stale** | 오래된 `[in-progress]`·끝난 hint | 만료 (`sweep`/`resolve`) |
-| **live** | working 레코드에만 있고 유효 | 유지 |
+| **graduated** | Permanently represented in an artifact or structured section | Expire with `sweep` or `promote` |
+| **stale** | Old `[in-progress]` item or completed hint | Expire with `sweep` or `resolve` |
+| **live** | Still valid and present only in a working record | Keep |
 
-## Scope — project vs user
+## Scope — Project vs User
 
-| Scope | 저장 위치 | 갱신 경로 |
+| Scope | Storage | Update path |
 |---|---|---|
-| `project` (default) | DB working tier (`mem note`/`mem add`, cwd-scoped) | `/post-it` — `mem inject` 가 DB working 에서 세션 주입 |
-| `user <aspect>` | DB durable 레코드 (`mem profile <stem>` / `mem add ... --source user-profile:<stem>`) — profile 레코드의 `## 사용자 수동 메모` 블록 | `/post-it --scope user <aspect>` — analyze-user 사이 상시 수동 채널; `mem profile` 호출 시 적재 |
+| `project` (default) | cwd-scoped DB working tier via `mem note`/`mem add` | `/post-it`; `mem inject` loads DB working records into the session |
+| `user <aspect>` | Durable DB profile record via `mem profile <stem>` / `mem add ... --source user-profile:<stem>`, inside the exact legacy block `## 사용자 수동 메모` | `/post-it --scope user <aspect>`; persistent manual channel between analyze-user runs, loaded by `mem profile` |
 
-## 5 카테고리 — type taxonomy (레코드 type 값)
+## Five Record Types
 
-| 카테고리 | type 값 | 내용 예시 |
+| Category | `type` value | Example content |
 |---|---|---|
-| Conventions | `convention` | 영속 규약 (노션 위치, 커밋 메시지 언어 등) |
-| External Resources | `reference` | 외부 링크/경로 (데이터셋, Overleaf 등) |
-| Open Threads | `thread` | `[in-progress YYYY-MM-DD]` — 진행 중 작업 |
-| Decisions | `decision` | `YYYY-MM-DD:` — 의사결정과 사유 |
-| Next Session Hints | `hint` | 다음 세션에 알아야 할 진행 상황·다음 할 일·주의사항 |
+| Conventions | `convention` | Durable conventions such as a Notion location or commit-message language |
+| External Resources | `reference` | External links or paths such as datasets or Overleaf |
+| Open Threads | `thread` | `[in-progress YYYY-MM-DD]` current work |
+| Decisions | `decision` | `YYYY-MM-DD:` decision and rationale |
+| Next Session Hints | `hint` | Progress, next action, and cautions needed by the next session |
 
 ## Sub-Actions
 
-| 명령 | 동작 | Confirm |
+| Command | Action | Confirmation |
 |---|---|---|
-| `/post-it` (또는 `show`) | DB working 레코드 preview (`mem recall --tier working`); 없으면 `add` 안내 | — |
-| `/post-it add <category> <text>` | `mem note "<text>" --type <type>` write. category ∈ {convention, resource, thread, decision} (alias conv/res/th/dec). thread→`[in-progress YYYY-MM-DD]`, decision→`YYYY-MM-DD:` 자동 | **즉시** (`--confirm`) |
-| `/post-it resolve <hint>` | thread 레코드 fuzzy 매칭 + `mem delete <id>` 결정론적 삭제 | preview→confirm (`--no-confirm`) |
-| `/post-it decide <text>` | `mem note "<YYYY-MM-DD: text>" --type decision` write | **즉시** (`--confirm`) |
-| `/post-it sweep` | 산출물(`plans`·`documents`·`spec`·git)과 working 레코드 대조 → graduated·stale flag/만료 | 수동 호출 preview→confirm / 자동(nudge) 확실분 자동+한 줄 보고 |
-| `/post-it promote [--scope user <aspect>]` | profile 레코드 `## 사용자 수동 메모` 항목을 구조화 절로 졸업 (read-modify-write: `mem profile` → splice → `mem add ... --source user-profile:<stem>`) | preview→confirm |
-| `/post-it handoff [--no-confirm]` | sweep 먼저 → conversation review → 5-10 bullet → `mem note --type hint` write | preview→confirm (`--no-confirm`) |
+| `/post-it` or `show` | Preview DB working records with `mem recall --tier working`; suggest `add` if none exist | None |
+| `/post-it add <category> <text>` | Write `mem note "<text>" --type <type>`. `category` is one of convention, resource, thread, decision, with aliases conv/res/th/dec. Automatically prefix threads with `[in-progress YYYY-MM-DD]` and decisions with `YYYY-MM-DD:` | Immediate; use `--confirm` to preview |
+| `/post-it resolve <hint>` | Fuzzy-match a thread record and delete deterministically with `mem delete <id>` | Preview → confirm; override with `--no-confirm` |
+| `/post-it decide <text>` | Write `mem note "<YYYY-MM-DD: text>" --type decision` | Immediate; use `--confirm` to preview |
+| `/post-it sweep` | Compare working records with `plans`, `documents`, `spec`, and git; flag or expire graduated/stale entries | Manual call: preview → confirm. Automatic nudge: prune only certain matches and report one line |
+| `/post-it promote [--scope user <aspect>]` | Graduate an item from `## 사용자 수동 메모` into a structured profile section with read-modify-write: `mem profile` → splice → `mem add ... --source user-profile:<stem>` | Preview → confirm |
+| `/post-it handoff [--no-confirm]` | Sweep first, review the conversation, create 5–10 bullets, then write them with `mem note --type hint` | Preview → confirm; override with `--no-confirm` |
 
-## Confirm 원칙
+## Confirmation Principle
 
-사용자가 직접 적은 텍스트(add/decide)는 즉시; 에이전트가 만들거나 매칭·분류·졸업(resolve/sweep/promote/handoff)하는 건 검토. 단 _사용자는 post-it 을 안 보므로_ 자동 nudge 자리의 sweep 은 확실분만 자동 prune + 한 줄 보고 (줄 단위 검토 강요 X).
+Apply user-authored text immediately for `add` and `decide`. Review agent-generated, matched, classified, or graduated content for `resolve`, `sweep`, `promote`, and `handoff`. Because the user does not read post-it directly, an automatic nudge may prune only certain entries and report one line rather than forcing line-by-line review.
 
-## 간결성 원칙 (working 레코드 작성 시 강제)
+## Concision Rule
 
-세션 주입 시 항상 읽히는 컨텍스트 — **짧고 dense하게.**
-- 한 bullet = 한 줄 (최대 2줄). 명사구·사실 문장. 약어·기호(`→`,`&`,`vs`) 적극.
-- 같은 정보는 한 카테고리에만. thread는 `[상태 YYYY-MM-DD]` 필수, decision는 `YYYY-MM-DD:` 필수.
+Working records are always loaded into session context. Keep them short and dense.
 
-## What this skill is NOT
+- One bullet per line, at most two lines. Prefer noun phrases and factual sentences; use abbreviations and symbols such as `→`, `&`, and `vs`.
+- Store each fact in only one category. Threads require a `[status YYYY-MM-DD]` prefix; decisions require `YYYY-MM-DD:`.
 
-- **자동 메모리 시스템 대체 X** — post-it 은 DB store 의 _working tier 사람-편집 자리_(`mem recall` 한 면에서 검색). 하네스 auto-memory(`projects/*/memory/` → store durable mirror)와 역할이 다르다.
-- **영구 기록 X** — 포스트잇. 영구 진실은 산출물·코드·git·DB type=profile 레코드. 졸업하면 뗀다.
-- **코드/문서 변경 기록 X** — `autopilot-code` plans/ · `autopilot-draft` documents/.
+## What This Skill Is Not
 
-## Auto-memory와의 경계
+- **Not a replacement for automatic memory.** post-it is the human-editable working tier in the DB store, searchable through the same `mem recall` surface. Harness auto-memory mirrors `projects/*/memory/` into durable storage.
+- **Not a permanent record.** Artifacts, code, git, and DB `type=profile` records are durable truth. Remove a sticky note after graduation.
+- **Not a code/document change log.** Those belong under autopilot-code `plans/` or autopilot-draft `documents/`.
 
-store 단일소스 모델에서 두 경로는 같은 `memory.db` 의 다른 면이다.
+## Boundary with Auto-Memory
 
-| 경로 | store 위치 | 갱신 |
+Both paths are separate views of one `memory.db` store.
+
+| Path | Store location | Update |
 |---|---|---|
-| `<agent-home>/projects/*/memory/` (하네스 auto-memory write 면) | SessionEnd `mem sync` → store **durable** mirror | 하네스 자동 write → sync |
-| DB working tier (본 skill — `mem note`/`mem add`) | `memory.db` **working** 레코드 직접 write; git 미러 `dump.jsonl` | 사용자가 `/post-it`로만 |
+| `<agent-home>/projects/*/memory/`, the harness auto-memory write surface | SessionEnd `mem sync` mirrors into the durable store | Harness automatic write → sync |
+| DB working tier used by this skill through `mem note`/`mem add` | Direct `memory.db` working records plus git mirror `dump.jsonl` | Only through user invocation of `/post-it` |
 
-이 레포에만 적용되는 사실 → `--scope project` (DB working) / 사용자·일반 작업 선호 → durable auto-memory 또는 `--scope user` (`mem profile <stem>`). `mem recall` 이 양쪽을 한 면에서 검색.
+Use `--scope project` for facts specific to the current repository. Use durable auto-memory or `--scope user` with `mem profile <stem>` for cross-project user/work preferences. `mem recall` searches both surfaces together.
+
+---
+*Portable capability contract: `<agent-home>/capabilities/post-it.md`; shared skill guidance: `<agent-home>/skills/post-it/SKILL.md`.*

@@ -94,7 +94,7 @@ def _fetch():
 def account_usage():
     """TTL-cached account usage {rl_5h, rl_7d, rl_ms} for the claude account, or None.
 
-    Serve-stale on failure (2026-07-02, user: Fable 사용량이 떴다 안떴다): a single 3s
+    Serve stale data on failure so a single timeout does not make usage flicker:
     timeout used to overwrite last-good with None, blanking the per-model buckets for a
     whole TTL. Now a failed refresh keeps the previous payload up to _STALE_MAX; only a
     15min-long outage drops to None (honest fallback to the tap values)."""
@@ -103,7 +103,7 @@ def account_usage():
         d = _fetch()
         _cache["ts"] = now              # failures throttle too — no retry storm inside the TTL
         if d is not None:
-            # PARTIAL-success carry-forward (2026-07-03, user: fable 이 계속 뜨다 안 뜨다):
+            # Carry prior values forward on partial success to avoid flicker.
             # the endpoint sometimes returns 200 WITHOUT the limits[] array — 5h/7d survive via
             # the top-level fallback but the per-model buckets (and resets) arrive empty and
             # would overwrite last-good as if valid. Carry the previous bucket/reset values

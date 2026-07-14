@@ -1,10 +1,8 @@
-## Pipeline Summary Template (all modes)
+## Pipeline Summary Template
 
-**Write `{log_dir}/pipeline_summary.md` as the FIRST action on reaching any terminal state** (success, partial, failed, stop) — before reporting to the user, on all paths.
+Write `{log_dir}/pipeline_summary.md` as the first action on every terminal state—success, partial, failure, or stop—before reporting to the user.
 
-This is a process log and artifact index — NOT a change analysis (that's code-report's job).
-
-Populate the Decision Points table from in-memory decision records. If none: `| - | No gated decisions triggered | - | - |`.
+This is a process log and artifact index, not change analysis; code-report owns change analysis. Populate Decision Points from recorded pauses. If none, use `| - | No gated decisions triggered | - | - |`.
 
 ```markdown
 # {mode_title}: {task_or_error_name}
@@ -27,27 +25,18 @@ Populate the Decision Points table from in-memory decision records. If none: `| 
 |---|---|---|---|
 ```
 
-### Mode-specific fields
-
 | Field | dev | debug |
 |---|---|---|
-| Title prefix | "Pipeline Summary" | "Debug Pipeline Summary" |
-| Extra header fields | `Plan: {en_plan_path}` | `Error: {msg}` + `Root Cause: {diagnosis}` + `Fix Plan: {path}` + `Attempts: {N}` |
-| Process Log rows | Steps 1-5 + 4R (retry: refine→execute→test) | Steps 1-6 (Step 1=Diagnosis, no row for Step 3) |
-| Artifacts | plan/ (T1), dev_logs/ (T2), test_logs/ (T2), _internal/{plan_reviews,dev_reviews,test_reviews}/ (T3), final_report | same minus research artifacts |
+| Title | `Pipeline Summary` | `Debug Pipeline Summary` |
+| Extra headers | `Plan: {en_plan_path}` | `Error`, `Root Cause`, `Fix Plan`, and `Attempts` |
+| Process rows | Steps 1–5 plus 4R retry | Steps 1–6; Step 1 is diagnosis and Step 3 has no separate row |
+| Artifacts | `plan/`, `dev_logs/`, `test_logs/`, `_internal/{plan_reviews,dev_reviews,test_reviews}/`, final report | Same minus research artifacts |
 
-## Safety Rules
+## Safety
 
-### Common (all modes)
-- If execution fails catastrophically (plan status = `failed`), stop and report to user immediately.
-- Always verify — testing 은 모든 path 에서 실행.
-- QA/verification responsibility follows the selected stage graph: stage-local gates stay small, independent QA runs only when selected, and final verification stays concrete.
-
-### Mode dev
-(No additional mode-specific rules beyond common.)
-
-### Mode debug
-- **Minimal scope**: Fix the bug only. Do not refactor, improve, or clean up surrounding code.
-- **Preserve existing behavior**: The fix should not change behavior for cases that were already working.
-- If the root cause is ambiguous (multiple possible causes), list them and ask the user which to investigate first — this is the only debug-mode pause point.
-- If the root cause is an environment issue (not a code bug), auto-report env fix steps; do not modify code.
+- A catastrophic execution failure, `status: failed`, stops immediately after writing the summary.
+- Run testing on every path.
+- Stage-local checks stay small, independent QA runs only when selected by the graph, and final verification remains concrete.
+- In debug mode, fix only the bug; do not refactor adjacent code or change behavior that already worked.
+- Ask the user only when multiple root causes remain plausible.
+- For environment failures, report environment repair steps and do not edit code.

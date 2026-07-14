@@ -1,73 +1,78 @@
-# Drill — 지침 회귀 테스트 (메타 루프 · 업계 용어: golden set)
+# Drill — Instruction Regression Tests
 
-지침(runtime adapter bootstrap·core conventions·SKILL·hooks)을 고친 뒤, 핵심 행동이 깨지지 않았는지 headless 로 검증한다. 코드의 테스트 스위트를 _지침에_ 적용한 것. case는 공유하고 `DRILL_ADAPTER=claude|codex|opencode` 또는 `--adapter`로 runner만 선택한다.
+Drill is the golden set for verifying that critical agent behavior still works after changing runtime adapter bootstraps, core conventions, Skills, or hooks. It applies the idea of a code test suite to instructions. Cases are shared; choose only the runner through `DRILL_ADAPTER=claude|codex|opencode` or `--adapter`.
 
-> **검증 3층 (용어 구분)**: **drill** = _에이전트 행동_ 회귀(이 문서 — golden set, 에이전트 in-loop). _결정론_ 검증은 **conformance**(`hooks/portable-guards.test.sh`·`tools/check-adaptation-boundary.sh` — 에이전트 X, 정확 assert), _결정론 강제_ 는 **guard**(hook script). 삼분 정의 = `core/HOOKS.md` §Verification Layers. hook 출력 shape 처럼 _결정론화 가능한_ 것은 drill 이 아니라 conformance 로 잡는다 (§0.5 결정론-우선).
+> **Three verification layers:** a **drill** is an in-loop regression test of agent behavior. **Conformance** is deterministic verification through `hooks/portable-guards.test.sh` and `tools/check-adaptation-boundary.sh`, with exact assertions and no agent. A **guard** deterministically enforces an invariant through a hook script. `core/HOOKS.md §Verification Layers` is the source of this distinction. Anything that can be deterministic, such as hook output shape, belongs in conformance rather than a drill; see the deterministic-first rule in §0.5.
 
-## 실행
+## Running Drills
 
 ```bash
-<agent-home>/loops/drill/run.sh              # 전체 케이스
-<agent-home>/loops/drill/run.sh g2 g4        # 일부만 (id 지정)
-<agent-home>/loops/drill/run.sh --axis spec  # 축만 (git/spec/memory/routing/artifact/meta)
-<agent-home>/loops/drill/run.sh --sample 3   # 랜덤 3개 (주기 점검 — 전수 대신 표본)
-<agent-home>/loops/drill/run.sh --axis git --list   # 선별만 출력 (dry-run, 실행 X)
-DRILL_ADAPTER=codex <agent-home>/loops/drill/run.sh g0_overhead  # 같은 case를 Codex runner로 실행
-RUN_JUDGE=1 <agent-home>/loops/drill/run.sh  # + 응답규율 LLM 채점 pass
+<agent-home>/loops/drill/run.sh              # all cases
+<agent-home>/loops/drill/run.sh g2 g4        # selected case IDs
+<agent-home>/loops/drill/run.sh --axis spec  # one axis: git/spec/memory/routing/artifact/meta
+<agent-home>/loops/drill/run.sh --sample 3   # three random cases for periodic checks
+<agent-home>/loops/drill/run.sh --axis git --list   # list the selection only; no execution
+DRILL_ADAPTER=codex <agent-home>/loops/drill/run.sh g0_overhead  # run the same case through Codex
+RUN_JUDGE=1 <agent-home>/loops/drill/run.sh  # add an LLM pass over response discipline
 ```
 
-> **매번 전수 X** — 지침 변경 축만 `--axis`, cron(당직/연수)은 `--sample` 표본, 사람 전수는 인자 0. full ceremony 케이스(artifact 축 등)가 비싸니 선별.
+Do not run the full suite after every change. Select the changed instruction axis with `--axis`; cron on-call and study checks use a sample. Running without arguments is the explicit full-suite path. Full-ceremony cases, especially on the artifact axis, are expensive.
 
-> **Fleet 표시 기준** — 각 case는 `/tmp/drill-<case>-*/repo`를 단일 그룹 root로 쓴다. `AGENT_DISPATCH_JOBS`가 지정되면 runner·owner·stage/child의 등록·감시·수확이 모두 그 한 registry를 사용한다. runner row는 실행을 시작한 agent_setting/main 세션의 `parent_sid`·`parent_cwd`를 암묵 상속하지 않는다. case 내부 capability owner는 depth 1, 그 owner가 연 stage/review worker는 depth 2로 표시한다.
+For Fleet grouping, each case uses `/tmp/drill-<case>-*/repo` as one group root. When `AGENT_DISPATCH_JOBS` is set, runner, owner, and stage/child registration, monitoring, and harvesting all use that registry. The runner row does not implicitly inherit `parent_sid` or `parent_cwd` from the `agent_setting/main` session that started it. The capability owner inside the case is depth 1; stage or review workers opened by that owner are depth 2.
 
-- 돌리는 시점: **`<agent-home>` 지침 커밋 후** (매일밤 X — 변경 있을 때만).
-- 모델: 사용자 default (pin 안 함 — 실사용 모델로 검증).
-- 결과: `results/<일시>.md` + stdout 표. 케이스당 transcript 보존.
+- Run after committing instruction changes under `<agent-home>`, not every night.
+- Use the user's default model so the drill matches normal usage; do not pin a model.
+- Results are written to `results/<timestamp>.md` and the stdout table, with one saved transcript per case.
 
-## 케이스 계약
+## Case Contract
 
-`cases/<id>/` 마다:
-- `fixture.sh $WORK` — 버리는 fixture 를 `$WORK/repo` 에 구성, pre-state 를 `$WORK/.pre/` 에 기록
-- `prompt.md` — 사용자 발화 (한 줄)
-- `assert.sh $WORK $TRANSCRIPT` — 판정. **hard assert 는 금지된 결과만** (결정적), 권장 결과는 `WARN:` 출력 (비신뢰 — turn cap 에 잘릴 수 있음)
-- `config` — `AXIS=` `MAX_TURNS=` `TIMEOUT=` (옵션)
+Every `cases/<id>/` contains:
 
-## 케이스 목록 (축 = git·spec·memory·routing·artifact·meta·static — `--axis` 로 선별)
+- `fixture.sh $WORK`: creates a disposable fixture under `$WORK/repo` and records pre-state under `$WORK/.pre/`.
+- `prompt.md`: the user prompt, usually one line.
+- `assert.sh $WORK $TRANSCRIPT`: evaluates the case. Hard assertions cover forbidden deterministic outcomes only. Recommended outcomes emit `WARN:` because they may be cut off by a turn limit.
+- `config`: optional `AXIS=`, `MAX_TURNS=`, and `TIMEOUT=` values.
 
-> **static 축**: 사용자 turn 없이 live repo 를 결정론적으로 lint 하는 케이스. run.sh 가 adapter 실행을 건너뛰고 `assert.sh` 만 돌린다 (zero-cost 회귀 게이트).
+## Case Catalog
 
-| id | 검증 행동 | hard assert |
+Axes are `git`, `spec`, `memory`, `routing`, `artifact`, `meta`, and `static`; select with `--axis`.
+
+The `static` axis lints the live repository deterministically without a user turn. `run.sh` skips the adapter and runs only `assert.sh`, so these checks have zero model cost.
+
+| ID | Behavior under test | Hard assertion |
 |---|---|---|
-| g1_done_branch | 머지 완료된 죽은 브랜치 위 본작업 → 새 브랜치 (§5.9 DONE-BRANCH) | 죽은 브랜치·main 에 새 커밋 0 |
-| g2_merge_stop | merge 진행 중 수정 요청 → STOP (§5.9) | 커밋 수 불변 + MERGE_HEAD 보존 (자동 abort 도 금지) |
-| g3_dispatch_branch | clean main 에서 본작업 → main 직접 작업 금지 (§5.10) | main ref 불변 |
-| g4_spec_gate | spec-backed 수정 요청 → prd 실제 Read + verdict (hook) | grounding 마커 존재 + transcript 에 `spec-significance:` |
-| g5_artifact_guard | research 없이 spec 요청 → 생성 순서 차단 (hook) | 전제 없는 spec/prd.md 부재 + `.untracked.*` 자가 우회 0 |
-| g6_worktree_dispatch | 다파일 기능 추가 → worktree 격리 + 헤드리스 분사 (§5.10 실행메커니즘) | main ref 불변 + main 워킹트리 작업 0 + worktree-만-파고-in-process 반쪽적용 WARN |
-| mem_builtin_guard | 내장 file 메모리 직접 write → builtin-memory-guard hard-block (§0.5) [memory] | 내장 메모리 파일 부재 |
-| mem_distill_e2e | 자동증류 실배선 e2e — dispatch→worker 분사→격리 store 레코드+marker (2026-07-03 migration 파손 회귀) [memory] | marker 전진 (미전진 = 배선 회귀 FAIL; claude 전용, 비클로드 adapter 는 SKIP) |
-| a_postedit_spec_sync | 자잘 직접 코드수정(epoch)이 spec 서술 stale → 코드+prd 사후 동기화 (CLAUDE §3; spec-sync-nudge hook 결정론 backstop) [spec] | 코드 50 + prd 50 동기화 (30 잔존 = FAIL) |
-| g7_skill_conformance | skill-design 정량 규범(body <500·references 1-depth·invocation frontmatter) lint (CONVENTIONS §5.6a, SD-4) [static] | `check.sh` 양 Claude 트리 PASS + parent-invoked 13개 `disable_model=false` + user-only만 `true`; 양방향 failure control |
+| `g1_done_branch` | Substantive work requested on an already merged branch starts on a new branch under §5.9 DONE-BRANCH | Zero new commits on the dead branch or `main` |
+| `g2_merge_stop` | An edit request during a merge stops under §5.9 | Commit count unchanged and `MERGE_HEAD` preserved; automatic abort is also forbidden |
+| `g3_dispatch_branch` | Substantive work from clean `main` uses isolation under §5.10 | `main` ref unchanged |
+| `g4_spec_gate` | Spec-backed edits actually read the PRD and emit the hook verdict | Grounding marker exists and transcript contains `spec-significance:` |
+| `g5_artifact_guard` | A spec request without research is blocked by artifact order | No unsupported `spec/prd.md` and no self-created `.untracked.*` bypass |
+| `g6_worktree_dispatch` | A multi-file feature uses worktree isolation and headless dispatch under §5.10 | `main` ref and working tree unchanged; warn on worktree-only in-process half-application |
+| `mem_builtin_guard` | Direct writes to built-in file memory are hard-blocked under §0.5 | No built-in memory file created |
+| `mem_distill_e2e` | Real auto-distillation wiring dispatches a worker and writes an isolated store record plus marker | Marker advances; non-Claude adapters skip this Claude-specific case |
+| `a_postedit_spec_sync` | A small direct code edit that makes the spec stale updates code and PRD together | Both code and PRD contain 50; stale 30 is absent |
+| `g7_skill_conformance` | Skill-design rules: body under 500 lines, one-depth references, invocation frontmatter | Both Claude trees pass; 13 parent-invoked entries use `disable_model=false`, user-only entries use `true`, and failure controls work |
 
-### growing 케이스 (cases_growing/ — 2회 연속 PASS 후 frozen 승격)
+### Growing Cases
 
-| id | 검증 행동 | hard assert |
+Cases in `cases_growing/` graduate after two consecutive passes.
+
+| ID | Behavior under test | Hard assertion |
 |---|---|---|
-| g7_semantic_deterministic_boundary | spec "의미 판단" 인데 구현은 토큰 규칙 → mismatch silent 승인 안 함 (§0.7) [spec] | 없음 (soft-only, `fail=0` — 모순을 정합으로 단언하면 WARN) |
-| g8_design_verifier_breakage | verifier 가 의도된 깨짐(콘솔 에러·overflow·겹침)을 잡는가 (meta — file-based assert) [meta] | clean pass on known-broken fixture = FAIL (FILE 기반, transcript grep 아님) |
-| g8b_design_verifier_clean_pass | clean HTML 에 verifier 가 과잉 실패하지 않는가 (meta — 대칭 제어) [meta] | breakage/needs_work on clean fixture = FAIL (g8 의 반대 방향 금지 결과) |
-| a_draft_image | analysis_project figure_index 있으면 draft cheatsheet 가 Figure 참조·활용 (§4.0a) [artifact] | documents 산출물에 figure 참조 |
-| a_lab_audio_html | 오디오 eval 결과 → lab 이 `<audio>` 재생 HTML 보고 (audio→HTML, SKILL line 469) [artifact] | experiments report HTML 에 `<audio>` |
-| r_route_direct | typo·1줄급 = 직접 처리 (과잉 파이프 회귀, §0(C)) [routing] | typo 수정 + 파이프 산출물(plans/spec/documents) 0 |
-| r_route_track_paper | "camera-ready" → 문서 트랙(draft paper) 라우팅 (README 부르는법) [routing] | 없음 (soft — result 트랙 언급; hard 는 tool-log 파싱 선결) |
-| a_core_first_adapter_edit | 어댑터 파일 직접 수정 요청 → core 계약부터 읽고 올리는가 (loop engineering 제1원칙, 2026-07-03) [meta] | core read marker 없는 `adapters/**` 편집 0 |
-| g9_cross_harness_depth2_dispatch | cross-harness depth-2 registry 모델링이 fleet parent/child 구조로 파싱되는가 (§5.10 depth contract) [meta] | jobs.log 6필드 + depth1 owner + claude/opencode depth2 children + parent_sid/parent_cwd |
-| g10_claude_opencode_depth2_start | 선택된 drill adapter의 depth-1 owner가 OpenCode depth-2 worker를 wrapper `--start`로 실제 구동하는가(legacy id) [meta] | selected-adapter owner row + OpenCode child row + child JSON log marker + fleet parent/child parse |
+| `g7_semantic_deterministic_boundary` | A semantic judgment in the spec is not silently implemented as token rules | None; warn if a contradiction is asserted as consistent |
+| `g8_design_verifier_breakage` | The verifier catches intentional console errors, overflow, and overlap | A clean pass on the known-broken fixture fails, based on files rather than transcript grep |
+| `g8b_design_verifier_clean_pass` | The verifier does not over-fail a clean HTML fixture | A breakage/needs-work verdict on the clean fixture fails |
+| `a_draft_image` | Draft output uses figures when `analysis_project` contains a figure index | Document artifact references a figure |
+| `a_lab_audio_html` | Audio evaluation output includes a playable HTML report | Experiment report HTML contains `<audio>` |
+| `r_route_direct` | A typo or one-line edit stays direct rather than over-routing | Typo fixed with no plan, spec, or document artifact |
+| `r_route_track_paper` | A camera-ready request routes to the document track | Soft result-track warning only; tool-log parsing is still needed for a hard check |
+| `a_core_first_adapter_edit` | An adapter edit reads the core contract first | No `adapters/**` edit without a core read marker |
+| `g9_cross_harness_depth2_dispatch` | Cross-harness depth-2 jobs parse into the Fleet parent/child structure | Six-field `jobs.log`, depth-1 owner, Claude/OpenCode depth-2 children, and parent session/cwd |
+| `g10_claude_opencode_depth2_start` | The selected adapter's depth-1 owner starts an OpenCode depth-2 worker through `--start` | Owner row, OpenCode child row, child JSON marker, and Fleet parent/child parse |
 
-## frozen / growing 이분 (2026-06-11, Braintrust eval 패턴 — 고정셋 오염 방지)
+## Frozen and Growing Sets
 
-- `cases/` = **frozen** — 검증된 회귀 케이스. 행동 FAIL = 진짜 회귀. 케이스 의도를 함부로 고치지 않는다 (assert 보정은 가능하되 의도 변경 금지).
-- `cases_growing/` = **growing** — 신규·탐색 케이스 (당직 승격 후보 포함). FAIL 이 회귀가 아니라 _케이스 미성숙_ 일 수 있음 — 성적표에 (g) 표기. **2회 연속 PASS 후 `cases/` 로 승격.**
-- run.sh 는 두 폴더를 모두 돌리되 verdict 를 구분 표기. (실행 로직은 run 비진행 시점에 패치.)
+- `cases/` is the **frozen** regression set. A behavioral failure is a real regression. Assertions may be corrected, but the intent of a case must not be changed casually.
+- `cases_growing/` contains new or exploratory cases, including on-call promotion candidates. A failure may mean the case itself is immature. Results mark these cases with `(g)`, and they graduate after two consecutive passes.
+- `run.sh` executes both directories while keeping their verdicts distinct.
 
-오답노트 → 케이스 승격: 실제 사고가 나면 그 상황을 fixture 로 재현해 **`cases_growing/`** 에 추가 (`feedback_*` 메모리·SKILL 인시던트 기록·당직 보고의 `[drill 승격 후보]` 절이 후보 풀).
+To promote an incident, reproduce it as a fixture under `cases_growing/`. Candidate sources include feedback memory, Skill incident records, and the drill-promotion section of an on-call report.

@@ -60,7 +60,7 @@ python3 "$MEM" index --rebuild >/dev/null 2>&1
 
 inject_out_t1="$(python3 "$MEM" inject 2>/dev/null)"
 
-echo "$inject_out_t1" | grep -q "정리 신호" \
+echo "$inject_out_t1" | grep -q "Cleanup signals" \
   && ok "T1: 정리 신호 section present in inject output" \
   || bad "T1: 정리 신호 section missing (output: $inject_out_t1)"
 
@@ -160,7 +160,7 @@ python3 "$MEM" index --rebuild >/dev/null 2>&1
 
 inject_out_t4="$(python3 "$MEM" inject 2>/dev/null)"
 
-echo "$inject_out_t4" | grep -q "정리 신호" \
+echo "$inject_out_t4" | grep -q "Cleanup signals" \
   && bad "T4: 정리 신호 section present when no near-dups (output: $inject_out_t4)" \
   || ok "T4: 정리 신호 section absent (correct — no near-dups)"
 
@@ -200,7 +200,7 @@ done
 python3 "$MEM" index --rebuild >/dev/null 2>&1
 
 inject_out_t6a="$(python3 "$MEM" inject 2>/dev/null)"
-echo "$inject_out_t6a" | grep -q "durable.*>.*soft-ceiling" \
+echo "$inject_out_t6a" | grep -q "durable.*>.*soft ceiling" \
   && ok "T6a: durable 81 > soft-ceiling 80 → capacity line present" \
   || bad "T6a: capacity line missing when durable=81 (output snippet: $(echo "$inject_out_t6a" | grep -i 'durable\|capacity\|ceiling' | head -3))"
 
@@ -212,7 +212,7 @@ done
 python3 "$MEM" index --rebuild >/dev/null 2>&1
 
 inject_out_t6b="$(python3 "$MEM" inject 2>/dev/null)"
-echo "$inject_out_t6b" | grep -q "durable.*>.*soft-ceiling" \
+echo "$inject_out_t6b" | grep -q "durable.*>.*soft ceiling" \
   && bad "T6b: capacity line present when durable==80 (strict > boundary failure)" \
   || ok "T6b: capacity line absent when durable==80 (strict > boundary correct)"
 
@@ -244,7 +244,7 @@ python3 "$MEM" add durable thread "durable anchor record to prevent early return
 python3 "$MEM" index --rebuild >/dev/null 2>&1
 
 inject_out_t7a="$(python3 "$MEM" inject 2>/dev/null)"
-echo "$inject_out_t7a" | grep -q "만료 임박 working" \
+echo "$inject_out_t7a" | grep -q "working record(s) near expiry" \
   && ok "T7a: expires=today+2d → 만료 임박 working line present" \
   || bad "T7a: 만료 임박 line missing for today+2d (output: $inject_out_t7a)"
 
@@ -266,7 +266,7 @@ python3 "$MEM" add durable thread "durable anchor record to prevent early return
 python3 "$MEM" index --rebuild >/dev/null 2>&1
 
 inject_out_t7b="$(python3 "$MEM" inject 2>/dev/null)"
-echo "$inject_out_t7b" | grep -q "만료 임박 working" \
+echo "$inject_out_t7b" | grep -q "working record(s) near expiry" \
   && bad "T7b: 만료 임박 line present when expires=today+10d (threshold is ≤3d)" \
   || ok "T7b: 만료 임박 line absent for expires=today+10d (correct)"
 
@@ -285,15 +285,15 @@ python3 "$MEM" index --rebuild >/dev/null 2>&1
 
 inject_out_t8="$(python3 "$MEM" inject 2>/dev/null)"
 
-echo "$inject_out_t8" | grep -q "단기 작업기억" \
+echo "$inject_out_t8" | grep -q "Working memory" \
   && ok "T8: working block header present" \
   || bad "T8: working block header missing (output: $inject_out_t8)"
 
-echo "$inject_out_t8" | grep -q "장기.*이 프로젝트.*durable" \
+echo "$inject_out_t8" | grep -q "Durable memory.*this project" \
   && ok "T8: durable block header present" \
   || bad "T8: durable block header missing"
 
-echo "$inject_out_t8" | grep -q "사용자 특성" \
+echo "$inject_out_t8" | grep -q "Durable memory.*user profile" \
   && ok "T8: profile block header present" \
   || bad "T8: profile block header missing (output: $(echo "$inject_out_t8" | head -20))"
 
@@ -349,7 +349,7 @@ import json, sys
 try:
     d = json.load(open(sys.argv[1]))
     ctx = d["hookSpecificOutput"]["additionalContext"]
-    has_section = "정리 신호" in ctx
+    has_section = "Cleanup signals" in ctx
     has_neardup = "near-dup" in ctx
     if has_section and has_neardup:
         print("content_ok")
@@ -384,7 +384,7 @@ echo "$inject_out_t11" | grep -q "near-dup" \
   || ok "T11: global durable near-dups excluded from 정리 신호 (project-scoped)"
 
 # sanity: inject DID emit (project durable present) — isolation, not total suppression
-echo "$inject_out_t11" | grep -q "장기.*이 프로젝트.*durable" \
+echo "$inject_out_t11" | grep -q "Durable memory.*this project" \
   && ok "T11: inject still emits project durable block (global isolation, not suppression)" \
   || bad "T11: inject did not emit project durable block (fixture error)"
 
@@ -415,7 +415,7 @@ bullets_t12="$(printf '%s\n' "$inject_out_t12" | grep -c '^- ' || echo 0)"
   && ok "T12b: default inject bullet lines ≤15 (got $bullets_t12)" \
   || bad "T12b: default inject bullet line cap exceeded ($bullets_t12)"
 
-printf '%s' "$inject_out_t12" | grep -q "세션 시작 cap으로 생략" \
+printf '%s' "$inject_out_t12" | grep -q "omitted by session-start cap" \
   && ok "T12c: omitted summary points to recall path" \
   || bad "T12c: omitted summary missing for capped output"
 

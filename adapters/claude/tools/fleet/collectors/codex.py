@@ -9,8 +9,8 @@ read from the read-only ``threads.title`` state DB with ``session_index.jsonl``
       + payload.rate_limits.{primary,secondary}.used_percent and optional limit_window_seconds
 Model/effort default from ~/.codex/config.toml (top-level model / model_reasoning_effort).
 
-context% mirrors codex's OWN formula (codex-rs protocol.rs, fetched 2026-07-02 — user: fleet 의
-codex context 부정확): tokens_in_context_window() = LAST request's total_tokens, and
+context% mirrors Codex's own formula: tokens_in_context_window() is the last
+request's total_tokens, and
   used% = 100 - percent_of_context_window_remaining
         = round(100 * max(0, last.total_tokens - BASELINE) / (window - BASELINE)),
 BASELINE_TOKENS = 12000 ("prompts, tools and space to call compact") subtracted from BOTH sides
@@ -385,8 +385,8 @@ _ACCT = {"ts": 0.0, "data": None}
 def _api_usage():
     """LIVE account usage via the same endpoint the codex TUI itself uses (`/wham/usage`,
     bundle: account/usage/read) — read-only GET with the user's own OAuth token from auth.json.
-    Rollout samples only update when a session is actually USED (user 2026-07-02: '세션을 켜서
-    한번 써야 업데이트'), so an active probe is the reliable primary source. None on any failure
+    Rollout samples update only when a session is used, so an active probe is
+    the reliable primary source. Return None on any failure
     (expired token, offline, schema change) — the rollout scan below remains the fallback."""
     try:
         with open(os.path.join(_home(), "auth.json")) as f:
@@ -476,9 +476,9 @@ def enrich(sess):
     path = _proc_rollout(sess.pid, sess.cwd, home) or _fallback_rollout(sess, home)
     if not path:
         return                                       # no matching rollout → telemetry stays '—'
-    # app-server 는 이 codex 버전(client-server)에서 세션 본체다. 예전엔 companion 으로 보고
-    # mtime=None 을 강제해 *모든* interactive codex 세션의 working 판정을 죽였다(2026-07-03 회귀).
-    # 실측: app-server leaf 의 /proc/cwd 가 프로젝트 cwd 와 정확히 일치하므로, cwd 로 매칭된
+    # app-server is the session process in this client-server Codex version. Treating it as a
+    # companion once cleared mtime and broke working-state detection. Its /proc/cwd matches the
+    # project cwd, so cwd-matched
     # A UUID comes only from an owned fd or a one-candidate fallback; one newest
     # cwd rollout must never be stamped on every live TUI sharing the repository.
     sess.session_id = _sid(path)

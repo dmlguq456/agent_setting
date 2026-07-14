@@ -1,15 +1,8 @@
-"""drivers/codex.py — Codex channel driver (PRD "plugin 채널 — Codex (승격)").
+"""Codex channel driver.
 
-호출 대상(재구현 금지): `adapters/codex/bin/sync-native-*.py`(agents/skills/modes/plugin),
-`adapters/codex/bin/preflight.sh`. plugin 채널은 기존 `adapters/codex/plugin-marketplace/`
-(`.agents/plugins/marketplace.json`)를 재사용 — installer 는 `codex plugin marketplace add`
-+ `codex plugin add <name>@<marketplace>` 를 wrapping 한다 (Phase 7, INSTALL_LAYOUT.md
-Migration Order 353-357 이 이미 검증한 두 명령 그대로 — CLI 부재 시 SKIP).
-
-⚠️ plugin 이 못 싣는 것(공식 확인, PRD 표): custom agents(`.codex/agents/*.toml`)·prompts·
-config.toml fragment·AGENTS.md — 이들은 plugin 채널과 무관하게 symlink projection 이 계속
-담당한다. 즉 Codex 는 plugin 채널만으로 완결 불가 — `plugin=True` 여도 symlink projection 은
-항상 병행 적용한다("plugin 이면 symlink 생략"은 명시적 anti-pattern, INST-D-5).
+Reuse the generated Codex projections and marketplace bundle. Plugin install is
+optional and never replaces symlinks for custom agents, prompts, configuration,
+or the bootstrap surface.
 """
 
 import os
@@ -33,9 +26,8 @@ _PLUGIN_SPEC = f"agent-harness-codex@{_MARKETPLACE_NAME}"
 def _plugin_action(dry_run):
     """Phase 7 Step 7.1 — `codex plugin marketplace add`/`plugin add` wrapping.
 
-    marketplace source 는 codex_setting/codex-plugin-marketplace (adapters/codex/
-    plugin-marketplace 로 symlink, INSTALL_LAYOUT.md Migration Order 353-357 이 검증한
-    그대로). CLI 부재 시 SKIP — subprocess 를 실행하지 않는다.
+    The marketplace source is ``codex_setting/codex-plugin-marketplace``. Skip
+    without launching a subprocess when the CLI is absent.
     """
     marketplace_source = str(paths.resolve_source(_MARKETPLACE_SOURCE_RELPATH))
     marketplace_cmd = ["codex", "plugin", "marketplace", "add", marketplace_source, "--json"]
@@ -58,7 +50,7 @@ def _plugin_action(dry_run):
     try:
         mp_result = subprocess.run(marketplace_cmd, capture_output=True, text=True, timeout=60)
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        return {"action": "plugin", "status": "blocked", "detail": f"marketplace add 실행 실패: {exc}"}
+        return {"action": "plugin", "status": "blocked", "detail": f"marketplace add failed: {exc}"}
 
     if mp_result.returncode != 0:
         return {
@@ -70,7 +62,7 @@ def _plugin_action(dry_run):
     try:
         plugin_result = subprocess.run(plugin_cmd, capture_output=True, text=True, timeout=60)
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        return {"action": "plugin", "status": "blocked", "detail": f"plugin add 실행 실패: {exc}"}
+        return {"action": "plugin", "status": "blocked", "detail": f"plugin add failed: {exc}"}
 
     if plugin_result.returncode != 0:
         return {
@@ -87,13 +79,7 @@ def _plugin_action(dry_run):
 
 
 def install(scope="global", plugin=False, dry_run=False):
-    """symlink projection(agents .toml 등 plugin 미탑재분) + plugin add wrapping(stub).
-
-    Codex 는 copy_once 파일이 없다 — 순수 symlink projection (fixed symlinks + agents/skills
-    glob fan-out, projector.plan() 이 이미 펼쳐서 준다). `plugin=True` 여도 symlink projection
-    은 항상 적용된다(INST-D-5) — plugin 채널 자체는 Phase 7 에서 real wrapping 으로 채워질
-    자리표시(SKIP)만 낸다.
-    """
+    """Apply the symlink projection and optional plugin wrapper."""
     entries = projector.plan(["codex"], scope=scope)["codex"]
 
     actions = []
@@ -195,7 +181,7 @@ def install(scope="global", plugin=False, dry_run=False):
 
 
 def checks(scope="global"):
-    """verify 가 실행할 core projection + preflight + bootstrap check 목록."""
+    """Return core-projection, preflight, and bootstrap checks."""
     entries = projector.plan(["codex"], scope=scope)["codex"]
     agent_home = str(paths.agent_home())
 
@@ -274,7 +260,7 @@ def checks(scope="global"):
                 return {
                     "id": "codex.bootstrap-smoke",
                     "ok": False,
-                    "detail": f"마커 미발견: {marker!r} (stdout 일부: {result.stdout[:300]!r})",
+                    "detail": f"marker not found: {marker!r} (stdout excerpt: {result.stdout[:300]!r})",
                 }
 
             return {
@@ -291,7 +277,7 @@ def checks(scope="global"):
 
 
 def status(scope="global"):
-    """channel·version·drift·pointer·plugin-marketplace 요약."""
+    """Summarize channel, version, drift, pointer, and marketplace state."""
     manifest_data = manifest._load_manifest(manifest._manifest_path("codex", scope))
     drift = manifest.check_drift(["codex"], scope=scope)
 

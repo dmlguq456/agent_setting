@@ -9,7 +9,8 @@ Task: {task description}
 Date: {YYYY-MM-DD}
 Pre-discovered input paths (from autopilot-draft): {inputs_paths_list}
 Analysis directory: {output_dir}/analysis/
-Save English strategy to: {output_dir}/strategy/strategy.md
+Artifact language: {selected target or audience language}
+Save canonical strategy to: {output_dir}/strategy/strategy.md
 Target venues (for academic modes): NeurIPS, ICML, ICLR, ICASSP, Interspeech, IEEE/ACM T-ASLP
 
 ## Inputs
@@ -38,23 +39,23 @@ This rule applies to **every doc-strategy mode** (rebuttal / paper / review / re
 
 **Why** (2026-05-20 incident, ICML 2026 camera-ready M8 / M9): M8 paste-ready ignored the existing *"we share the same projection layer..."* sentence and appended a separate trailing INSERT, breaking the transition to the next equation block. M9 restated a §3.2 conditional-information-flow paragraph inside §3.3 P2 via cross-ref, increasing verbosity rather than compressing it. The user's explicit feedback was *"그걸 삽입할 단락의 전체 cohesive, coherence를 고려해야하는데"* — every paste-ready mutation must be designed against the target paragraph's full cohesion/coherence, not in isolation. This 4-step pre-check operationalizes that judgment so the failure mode does not repeat across modes.
 
-## Mode mapping — autopilot-draft 3-mode 와의 정합
+## Mode Mapping — Alignment with autopilot-draft's Three Modes
 
-autopilot-draft 의 form-first 3-mode 와 본 sub-skill 의 strategy template 6종 매핑:
+Map autopilot-draft's three form-first modes to this sub-skill's six strategy templates:
 
-| autopilot-draft mode | task description 키워드 (doc intent) | 본 sub-skill mode 라벨 | strategy template 헤더 |
+| autopilot-draft mode | Example task-description terms (document intent) | Sub-skill mode label | Strategy template heading |
 |---|---|---|---|
-| `paper` | (intent 분기 없음) | `paper` | `### If mode = paper` |
-| `presentation` | (intent 분기 없음) | `presentation` | `### If mode = presentation` |
+| `paper` | No intent branch | `paper` | `### If mode = paper` |
+| `presentation` | No intent branch | `presentation` | `### If mode = presentation` |
 | `doc` | rebuttal · 응답 · OpenReview · reviewer · 반박 | `rebuttal` | `### If mode = rebuttal` |
 | `doc` | peer review · 심사 · 검토 의견 | `review` | `### If mode = review` |
 | `doc` | 보고서 · report · 진행 · 결과 · status · 중간보고 | `report` | `### If mode = report` |
 | `doc` | 제안서 · proposal · grant · RFP | `proposal` | `### If mode = proposal` |
-| `doc` | 그 외 (memo · blog · 일반 prose) | `report` (default fallback) | `### If mode = report` |
+| `doc` | Other intent, such as memo · blog · 일반 prose | `report` (default fallback) | `### If mode = report` |
 
-본 매핑은 autopilot-draft Pre-flight Step 2 (Input Discovery) 가 task description keyword 매칭으로 doc intent 라벨 결정 후, 본 sub-skill 의 첫 인자 mode 로 그 라벨을 _직접 mode 라벨로 변환_ 해 전달. autopilot-draft 의 `--mode doc` 자체는 본 sub-skill 에 전달되지 않음 (변환 후 6-mode 중 하나).
+During autopilot-draft Pre-flight Step 2 Input Discovery, infer document intent semantically from the task description, using the multilingual terms above only as examples. Convert that intent directly into one of the six sub-skill mode labels and pass it as the first argument. Do not pass autopilot-draft's raw `--mode doc` after conversion.
 
-직접 `/draft-strategy` 호출 시는 사용자가 첫 인자로 6-mode 중 하나 명시. autopilot-draft 의 doc intent 매핑 keyword 가 모호한 경우 default 는 `report`.
+For direct `/draft-strategy` invocation, the user supplies one of the six modes as the first argument. When autopilot-draft cannot infer a clear document intent, default to `report`.
 
 ## Mode-Specific Instructions
 
@@ -156,11 +157,11 @@ When converting **reviewer concerns / rebuttal materials → paper-body mutation
 
 **Why** (this rule was added 2026-05-19 after the M11 / M15 episode): a previous camera-ready cycle mechanically converted every reviewer concern into a paper-body mutation, producing rebuttal-format tables (e.g., `tab:arch_compare` model comparison) as 🔴 mandatory body inserts. The user explicitly rejected this as "rebuttal자료를 본문에 그대로 가져다 붙이는 게 어색하다 — 자연스럽게 문장으로 녹여 넣을 수 있으면 그렇게 해야지". The natural-integration rule above operationalizes that judgment so future cycles don't repeat the mechanical conversion.
 
-#### Paste-ready cheatsheet 형식 (사용자 영역 vs 추적 영역 분리)
+#### Paste-Ready Cheatsheet Format — Separate User and Tracking Surfaces
 
-paper mode 산출물이 _카드 묶음 cheatsheet_ (camera-ready / major revision / 명시적 `subtype: camera-ready-paste-ready`) 인 경우, draft 본문 형식은 `<agent-home>/adapters/claude/skills/autopilot-draft/SKILL.md` 의 paper mode "Paste-ready cheatsheet 형식 강제" 섹션이 Claude runtime 단일 출처. Strategy 작성 시점에 _향후 draft 의 형식이 그 규칙을 따를 것이라는 점을 전제_ 로 mutation 목록 / paste 순서 / 분기점을 설계.
+When paper mode produces a card-based cheatsheet for camera-ready, major revision, or explicit `subtype: camera-ready-paste-ready`, the paper-mode paste-ready-cheatsheet section of `<agent-home>/adapters/claude/skills/autopilot-draft/SKILL.md` is the single Claude runtime authority for draft-body format. Design the mutation list, paste order, and branch points on the assumption that the later draft will follow that contract.
 
-핵심 — strategy 안 mutation 목록도 _카드 단위_ 로 (한 entry = 위치 한 줄 + paste-ready LaTeX 한 줄 또는 reference + 짧은 이유). Reviewer 매핑 / dependency 표 / Wording invariant 같은 추적용 메타는 strategy 본문에도 _별도 섹션 (§Reviewer mapping / §Dependency map)_ 으로 묶어 본문 흐름과 분리. draft 생성 단계에서 그 추적 섹션은 `_internal/draft_meta.md` 로 옮겨지고 본문 entry 옆에는 안 박힌다.
+Keep the strategy's mutation list card-based: one entry contains one location line, one paste-ready LaTeX line or reference, and a short reason. Group tracking metadata such as reviewer mapping, dependency tables, and wording invariants into separate sections such as §Reviewer mapping and §Dependency map, away from the body flow. During draft generation, move those tracking sections into `_internal/draft_meta.md`; do not place them beside body entries.
 
 ### If mode = review
 ```markdown
@@ -227,7 +228,7 @@ Infer audience tone from the task description and set `tone:` in the strategy fr
 
 | Tone | Detection signals | Style constraints |
 |---|---|---|
-| **administrative** | Task contains Korean keywords "위원회 / 심의 / 사전심의 / 산학협력단 / **정부** / 정부 기관 / 규제 / 검토 요청 / 보고 / 평가단 / 이사회 / 감사 / 사업 보고 / 사후 보고" or English equivalents ("committee / regulatory / **government** / agency review / compliance / board review / pre-screening / audit / status report"); speaker is a student or researcher reporting **upward** to decision-makers (the committee evaluates the speaker; the speaker is NOT pitching to peers or selling). Goal: information presentation + review request, NOT persuasion / sales / investor pitch. | **Plain factual delivery, objective information.** AVOID: marketing superlatives ("genuinely novel", "sole occupied axis", "global rights asset", "world-first"), "X strengths summary" framing, "core message" / "Hook → Call-to-Action" arc, heroic asks ("Approve to secure as global asset"), decision-options box (approve/conditional/hold), animated narrative voice. PREFER: simple fact lists, status updates, calm review request ("검토 부탁드립니다" / "kindly request the committee's review"). Speaker stance: **neutral reporter, not advocate**. |
+| **administrative** | The task semantically indicates an administrative audience. Multilingual examples include "위원회 / 심의 / 사전심의 / 산학협력단 / **정부** / 정부 기관 / 규제 / 검토 요청 / 보고 / 평가단 / 이사회 / 감사 / 사업 보고 / 사후 보고" and "committee / regulatory / **government** / agency review / compliance / board review / pre-screening / audit / status report"; these are examples, not fixed trigger phrases. The speaker is a student or researcher reporting **upward** to decision-makers, not pitching to peers or selling. The goal is information delivery and a review request, not persuasion, sales, or an investor pitch. | **Plain factual delivery, objective information.** AVOID: marketing superlatives ("genuinely novel", "sole occupied axis", "global rights asset", "world-first"), "X strengths summary" framing, "core message" / "Hook → Call-to-Action" arc, heroic asks ("Approve to secure as global asset"), decision-options box (approve/conditional/hold), animated narrative voice. PREFER: simple fact lists, status updates, calm review request ("검토 부탁드립니다" / "kindly request the committee's review"). Speaker stance: **neutral reporter, not advocate**. |
 | **default** | Otherwise — academic conference talk, internal R&D briefing, industry pitch, sales/marketing presentation, investor IR | Existing pitch-deck patterns apply (Hook, Core Message, Story Arc, Call-to-Action, persuasive framing). |
 
 **Why this matters**: Korean administrative presentations (산학협력단 사전심의, 정부 위원회 보고, 규제 기관 사후 보고 등) follow a fundamentally different convention from English-language pitch decks. Without this guard, default LLM patterns lean toward US/English pitch-deck superlatives ("compelling contribution", "single-axis advantage", "secured as a global asset") that are uncomfortable for student presenters and inappropriate for the audience. The same applies to administrative reports/proposals submitted to government agencies or institutional review boards.

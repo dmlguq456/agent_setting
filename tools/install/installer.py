@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-"""installer.py — harness-installer CLI skeleton (`harness` 진입 명령, INST-OPEN-2 확정).
+"""Runtime-neutral ``harness`` installer CLI.
 
-runtime-neutral core (tools/install/, fleet 과 같은 자리 컨벤션). 서브명령 트리:
+Subcommand tree:
   install [claude|codex|opencode|all]
   verify  [runtime]
   update  [--reapply]
   status
   uninstall [runtime]
 
-SoT = .agent_reports/spec/harness-installer/prd.md ([cli] 섹션). 본 파일은 Step 4 scaffold —
-서브명령 파싱·exit code·--json shape 만 확정하고, 실 동작(symlink 실행·hash 기록·drift 판정·
-채널 driver 호출)은 각 모듈 stub 에 TODO 로 위임한다. 구현은 이후 autopilot-code 사이클(plans/).
-
-의존성: python3 stdlib only (zero-pip, fleet 선례). git·각 런타임 CLI 는 verify 단계 한정.
+The installer PRD is the source of truth. This module owns command parsing,
+exit codes, and JSON output while helper modules own projection and drift logic.
+It depends only on the Python standard library.
 """
 import sys
 import os
@@ -31,7 +29,7 @@ import bootstrap
 import runtime_activation
 from drivers import get_driver, RUNTIMES
 
-# exit code 상수 — PRD [cli] "### Exit code" 표와 1:1
+# Exit codes map one-to-one to the PRD CLI table.
 EXIT_OK = 0
 EXIT_FAIL = 1
 EXIT_VERIFY_FAIL = 2
@@ -41,7 +39,7 @@ EXIT_USAGE = 64
 
 
 class _UsageExitParser(argparse.ArgumentParser):
-    """argparse 기본 usage-error exit(2) 대신 PRD exit code 표의 64(usage)로 통일."""
+    """Use the PRD usage exit code 64 instead of argparse's default 2."""
 
     def error(self, message):
         self.print_usage(sys.stderr)
@@ -51,23 +49,23 @@ class _UsageExitParser(argparse.ArgumentParser):
 def build_parser():
     p = _UsageExitParser(
         prog="harness",
-        description="agent-harness installer — install/verify/update/status/uninstall (2-채널 하이브리드).",
+        description="agent-harness installer — install/verify/update/status/uninstall (hybrid two-channel model).",
     )
-    # 공통 옵션 (PRD [cli] "공통 옵션") — 모든 서브명령에 상속
+    # Common options inherited by all subcommands.
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
         "--runtime", action="append", choices=RUNTIMES, dest="runtimes",
-        help="대상 런타임 (반복 가능). 생략 시 서브명령 positional 또는 전체.",
+        help="Target runtime (repeatable); defaults to the positional target or all runtimes.",
     )
     common.add_argument("--scope", choices=["global", "project"], default="global")
-    common.add_argument("--dry-run", action="store_true", help="실행 없이 계획만 출력")
-    common.add_argument("--json", action="store_true", help="기계 출력 (--json shape, fleet 스타일)")
-    common.add_argument("--yes", action="store_true", help="비대화 확인 생략")
-    common.add_argument("--plugin", action="store_true", help="plugin 채널 경로 (marketplace/plugin add wrapping)")
+    common.add_argument("--dry-run", action="store_true", help="Print the plan without applying it")
+    common.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    common.add_argument("--yes", action="store_true", help="Skip interactive confirmation")
+    common.add_argument("--plugin", action="store_true", help="Use the plugin-channel marketplace wrapper")
 
     sub = p.add_subparsers(dest="command", required=True, parser_class=_UsageExitParser)
 
-    p_install = sub.add_parser("install", parents=[common], help="dev 머신 projection + runtime-owned 표면 + manifest 기록")
+    p_install = sub.add_parser("install", parents=[common], help="Install projections, runtime-owned surfaces, and manifests")
     p_install.add_argument("target", nargs="?", choices=[*RUNTIMES, "all"], default="all")
     p_install.add_argument(
         "--profile",
@@ -75,21 +73,21 @@ def build_parser():
         help="linked product profile; explicit use routes install through runtime activation",
     )
 
-    p_verify = sub.add_parser("verify", parents=[common], help="Migration Order 기계화 — check 목록 실행")
+    p_verify = sub.add_parser("verify", parents=[common], help="Run the automated Migration Order checks")
     p_verify.add_argument("target", nargs="?", choices=RUNTIMES, default=None)
 
-    p_update = sub.add_parser("update", parents=[common], help="repo pull 후 재-projection (+ plugin update wrapping)")
-    p_update.add_argument("--reapply", action="store_true", help="local-patches 를 새 파일에 재적용")
+    p_update = sub.add_parser("update", parents=[common], help="Pull and reproject, optionally updating plugins")
+    p_update.add_argument("--reapply", action="store_true", help="Reapply local patches to new files")
 
-    sub.add_parser("status", parents=[common], help="설치 상태 요약 — 채널·버전·drift")
+    sub.add_parser("status", parents=[common], help="Summarize installation channels, versions, and drift")
 
-    p_uninstall = sub.add_parser("uninstall", parents=[common], help="manifest 등재분만 제거 (소유 경계)")
+    p_uninstall = sub.add_parser("uninstall", parents=[common], help="Remove only manifest-owned files")
     p_uninstall.add_argument("target", nargs="?", choices=RUNTIMES, default=None)
 
     # Source → active runtime truth.  These parsers intentionally do not inherit
     # the legacy install channel's --plugin option: linked/packaged are mutually
     # exclusive and both are fully local/offline.
-    p_runtime = sub.add_parser("runtime", help="active source/revision/projection 관리")
+    p_runtime = sub.add_parser("runtime", help="Manage the active source, revision, and projection")
     runtime_sub = p_runtime.add_subparsers(
         dest="runtime_command", required=True, parser_class=_UsageExitParser
     )
@@ -105,20 +103,20 @@ def build_parser():
         parser.add_argument("--scope", choices=["global", "project"], default="global")
         parser.add_argument("--json", action="store_true")
 
-    p_runtime_status = runtime_sub.add_parser("status", help="active source와 freshness 조회")
+    p_runtime_status = runtime_sub.add_parser("status", help="Show the active source and freshness")
     runtime_common(p_runtime_status)
 
-    p_runtime_activate = runtime_sub.add_parser("activate", help="linked/packaged source 활성화")
+    p_runtime_activate = runtime_sub.add_parser("activate", help="Activate a linked or packaged source")
     runtime_common(p_runtime_activate, require_runtime=True)
     p_runtime_activate.add_argument("--mode", choices=runtime_activation.MODES, required=True)
     p_runtime_activate.add_argument("--source", help="local canonical repo (default: AGENT_HOME)")
     p_runtime_activate.add_argument("--profile", choices=runtime_activation.PROFILES)
 
-    p_runtime_refresh = runtime_sub.add_parser("refresh", help="현재 mode를 local source에서 갱신")
+    p_runtime_refresh = runtime_sub.add_parser("refresh", help="Refresh the current mode from its local source")
     runtime_common(p_runtime_refresh, require_runtime=True)
     p_runtime_refresh.add_argument("--profile", choices=runtime_activation.PROFILES)
 
-    p_runtime_doctor = runtime_sub.add_parser("doctor", help="projection/duplicate/freshness 진단")
+    p_runtime_doctor = runtime_sub.add_parser("doctor", help="Diagnose projections, duplicates, and freshness")
     runtime_common(p_runtime_doctor)
     p_runtime_doctor.add_argument("--strict", action="store_true")
 
@@ -126,7 +124,7 @@ def build_parser():
 
 
 def resolve_runtimes(args):
-    """positional target 과 --runtime 반복 옵션을 하나의 대상 목록으로 합친다."""
+    """Combine a positional target and repeated ``--runtime`` options."""
     if args.runtimes:
         return list(args.runtimes)
     target = getattr(args, "target", None)
@@ -319,12 +317,12 @@ def cmd_update(args):
                 {
                     "id": "update.drift",
                     "ok": False,
-                    "detail": f"{len(drift)}개 drift 발견 — --reapply 로 재적용하거나 직접 확인",
+                    "detail": f"found {len(drift)} drift item(s); use --reapply or inspect manually",
                 }
             )
             exit_code = EXIT_DRIFT
         else:
-            checks.append({"id": "update.drift", "ok": True, "detail": "drift 없음"})
+            checks.append({"id": "update.drift", "ok": True, "detail": "no drift"})
             exit_code = EXIT_OK
         return {"runtime": runtimes, "channel": "plugin" if args.plugin else "dev", "checks": checks,
                 "drift": drift, "exit": exit_code, "lines": lines}
@@ -349,22 +347,22 @@ def cmd_update(args):
     for m in result["missing"]:
         lines.append(f"missing: {m['runtime']}/{m['path']}")
 
-    checks.append({"id": "update.reapplied", "ok": True, "detail": f"{len(result['reapplied'])}개 재적용"})
+    checks.append({"id": "update.reapplied", "ok": True, "detail": f"reapplied {len(result['reapplied'])} file(s)"})
     checks.append(
         {
             "id": "update.conflicts",
             "ok": not result["conflicts"],
-            "detail": f"{len(result['conflicts'])}개 충돌",
+            "detail": f"{len(result['conflicts'])} conflict(s)",
         }
     )
     checks.append(
         {
             "id": "update.verify_failed",
             "ok": not result["verify_failed"],
-            "detail": f"{len(result['verify_failed'])}개 verify 실패",
+            "detail": f"{len(result['verify_failed'])} verification failure(s)",
         }
     )
-    checks.append({"id": "update.missing", "ok": True, "detail": f"{len(result['missing'])}개 누락 파일"})
+    checks.append({"id": "update.missing", "ok": True, "detail": f"{len(result['missing'])} missing file(s)"})
 
     exit_code = EXIT_DRIFT if (result["conflicts"] or result["verify_failed"]) else EXIT_OK
     return {"runtime": runtimes, "channel": "plugin" if args.plugin else "dev", "checks": checks,
@@ -394,7 +392,7 @@ def cmd_uninstall(args):
         manifest_data = manifest._load_manifest(manifest_path)
 
         if manifest_data is None:
-            lines.append(f"uninstall: {rt} — manifest 없음, 제거할 것 없음")
+            lines.append(f"uninstall: {rt} — no manifest; nothing to remove")
             checks.append({"id": f"{rt}.uninstall", "ok": True, "detail": "no manifest, nothing to uninstall"})
             continue
 
@@ -415,18 +413,18 @@ def cmd_uninstall(args):
                 {
                     "id": f"{rt}.uninstall",
                     "ok": True,
-                    "detail": f"dry-run: {len(copy_once_dests)}개 copy-once + {len(symlink_dests)}개 symlink 제거 예정",
+                    "detail": f"dry-run: would remove {len(copy_once_dests)} copy-once file(s) and {len(symlink_dests)} symlink(s)",
                 }
             )
             continue
 
-        # 1) 심볼릭 링크 제거 (idempotent — 이미 없으면 조용히 skip).
+        # 1) Remove symlinks idempotently.
         for d in symlink_dests:
             if d.is_symlink():
                 d.unlink()
                 lines.append(f"uninstall: {rt} — removed symlink {d}")
 
-        # 2) copy-once 파일 — 백업 후 제거.
+        # 2) Back up and remove copy-once files.
         for relpath, d in zip(manifest_data.get("files", {}), copy_once_dests):
             if d.exists():
                 backup_path = paths.harness_state_dir(rt, args.scope) / "local-patches" / relpath
@@ -435,7 +433,7 @@ def cmd_uninstall(args):
                 d.unlink()
                 lines.append(f"uninstall: {rt} — removed copy-once file {d} (backed up to {backup_path})")
 
-        # 3) manifest.json 마지막 제거.
+        # 3) Remove manifest.json last.
         if manifest_path.exists():
             manifest_path.unlink()
             lines.append(f"uninstall: {rt} — removed manifest {manifest_path}")
@@ -444,7 +442,7 @@ def cmd_uninstall(args):
             {
                 "id": f"{rt}.uninstall",
                 "ok": True,
-                "detail": f"{len(copy_once_dests)}개 copy-once + {len(symlink_dests)}개 symlink 제거됨",
+                "detail": f"removed {len(copy_once_dests)} copy-once file(s) and {len(symlink_dests)} symlink(s)",
             }
         )
 

@@ -1,124 +1,123 @@
-## Argument Parsing
-Parse `$ARGUMENTS` for optional flags:
+## Argument parsing
 
-- **query**: research topic, paper title, arXiv ID, or PDF path (remaining text after flags)
-- **--mode**: `academic` (default) | `technology` | `market` — investigation type (see Modes below)
-- **--depth**: `shallow` | `medium` (default) | `deep`
-- (no `--refs` flag — local reference materials should be pre-processed via `/analyze-project --mode paper` first → output goes to `<artifact-root>/analysis_project/paper/` which autopilot-research auto-detects)
-- **검증 rigor (intensity-derived — 별도 `--qa` 축 없음)**: `--intensity` selects the stage graph/depth AND deterministically derives verification rigor (CONVENTIONS §1.1); there is no separate `--qa` selector. The derived rigor scales selected report checks. intensity `quick`/`light` keeps the selected gate small and skips the fact-checker; `standard+` runs source/fact-check when claims/citations/cards are in scope and the selected graph calls for it. `adversarial` adds external adversary / **claim-verify** where supported.
-- **--from**: `search` | `analyze` | `report` — resume the pipeline at a specific stage (see Resume below)
-- **--no-clarify**: skip Step 0 Scope Clarification (force-run with current query as-is)
-- **--no-figures**: skip Step 3.5 Web Figure Extraction (figure 자동 추출 단계 건너뜀; cards 본문은 그대로 생성, 단 `**Figures**:` 줄만 누락)
+Parse `$ARGUMENTS` as follows:
+
+- **query:** topic, paper title, arXiv ID, or PDF path left after flags
+- **`--mode`:** `academic` by default, `technology`, or `market`
+- **`--depth`:** `shallow`, `medium` by default, or `deep`
+- There is no `--refs`; preprocess local reference material through `/analyze-project --mode paper`. autopilot-research automatically detects its output under `<artifact-root>/analysis_project/paper/`.
+- **Verification rigor:** `--intensity` selects the stage graph and depth and derives rigor deterministically under CONVENTIONS §1.1. There is no separate `--qa` selector. Quick/light keeps selected checks small and skips fact checking. Standard+ runs source and claim checks when the graph selects them. Adversarial adds an external adversary and claim verification where supported.
+- **`--from`:** `search`, `analyze`, or `report`
+- **`--no-clarify`:** skip scope clarification and use the current query as-is
+- **`--no-figures`:** skip Step 3.5 web figure extraction; cards remain unchanged except that no `**Figures**:` line is added
 
 ## Modes
 
-The mode determines (a) search sources used in Step 2, (b) Phase A/B/C activation in Step 3, and (c) report templates in Step 4. The pipeline structure (search → analyze → report) is the same across modes.
+Mode selects search sources, Phase A/B/C activation, and report templates. All modes retain the search → analyze → report structure.
 
-### `--mode academic` (default)
-**Use when**: 학술 논문 중심 조사 (deep learning method survey, 알고리즘 비교, 분야 trend).
-- **Search sources**: arXiv, Semantic Scholar, OpenAlex, Hugging Face paper_search, Google Scholar
-- **Phases**: A (skimming) + B (reference chaining) + C (code & model search) — 모두 활성
-- **Reports**: 9개 (briefing → landscape → core_papers → baselines → technical_deep_dive → datasets → implementation → resources → reading_guide)
+### `academic` (default)
 
-### `--mode technology`
-**Use when**: 산업 표준·기술 ecosystem 조사 (코덱/프로토콜, 표준 문서, vendor 솔루션 비교, 배포 고려사항).
-- **Search sources**: WebSearch (industry blogs, technical whitepapers, vendor docs), WebFetch (standards orgs: 3GPP / ITU-T / IEEE / W3C), arXiv (보조), Hugging Face (관련 모델)
-- **Phases**: A (full skim of standards + whitepapers) — 활성. B (reference chaining) — 약화 (academic citation 그래프가 의미 약함). C (code search) — 활성 (open-source 구현체).
-- **Reports** (7개):
-  - `00_briefing.md` — Executive briefing
-  - `01_landscape.md` — Technology landscape (categories, players, lineage)
-  - `02_standards.md` — Standards & specs (3GPP/ITU-T/IEEE/RFC numbers, key sections)
-  - `03_vendor_comparison.md` — Vendor / solution comparison (Qualcomm vs Samsung vs Apple vs ...)
-  - `04_technical_deep_dive.md` — Algorithm·protocol details
-  - `05_deployment.md` — Deployment considerations (latency, cost, integration paths)
-  - `06_implementation.md` — Goal-adaptive roadmap (existing template, build/adopt 우선)
-  - `07_resources.md` — Open-source code, model weights, evaluation tools
+Use for paper-centered surveys, method comparisons, and field trends.
 
-### `--mode market`
-**Use when**: 시장 동향·경쟁사·analyst report 조사 (제품/서비스 시장 사이즈, key players, 채택률).
-- **Search sources**: WebSearch (analyst content, news, earnings reports, press releases), WebFetch (company sites, investor pages)
-- **Phases**: A (skim of market reports + news) — 활성. B / C — 비활성 (학술 검색 X, 코드 검색 X).
-- **Reports** (5개):
-  - `00_briefing.md` — Executive briefing
-  - `01_market_overview.md` — Market sizing, segmentation, growth rate
-  - `02_key_players.md` — Competitor profiles, market share, positioning
-  - `03_trends.md` — Trends, drivers, inhibitors, disruptors
-  - `04_opportunities.md` — Opportunity assessment + actionable recommendations
+- Sources: arXiv, Semantic Scholar, OpenAlex, Hugging Face paper search, Google Scholar
+- Phases: A skimming, B reference chaining, and C code/model search
+- Reports: nine files covering briefing, landscape, core papers, baselines, technical deep dive, datasets, implementation, resources, and reading guide
 
-> Mode 미지정 시 query 키워드로 추론 — "논문/algorithm/method/SOTA" → academic, "표준/codec/protocol/3GPP/ITU/chip/MCU" → technology, "market/시장/competitor/analyst" → market.
-> **Fallback**: 어느 키워드도 매치되지 않으면 → `academic` (한 줄 통보: "키워드 매칭 실패 → academic으로 진행. 다른 모드는 --mode 명시").
-> **Multi-match (>=2 modes 동시 매치)**: Step 0 Scope Clarification에서 사용자에게 확정 질문.
+### `technology`
 
-## Decision Defaults (no autonomy gating)
+Use for industry standards, ecosystems, vendor solutions, protocols, and deployment constraints.
 
-The pipeline auto-proceeds with sane defaults. There is no autonomy-level dial. Pause points are limited to:
+- Sources: WebSearch for industry material and white papers; WebFetch for standards organizations such as 3GPP, ITU-T, IEEE, and W3C; arXiv and Hugging Face as supplements
+- Phases: full skimming of standards and white papers; reduced reference chaining; active open-source implementation search
+- Reports: `00_briefing.md`, `01_landscape.md`, `02_standards.md`, `03_vendor_comparison.md`, `04_technical_deep_dive.md`, `05_deployment.md`, `06_implementation.md`, and `07_resources.md`
 
-| Decision Point | Default Behavior |
+### `market`
+
+Use for markets, competitors, analyst reports, products, adoption rates, and company strategy.
+
+- Sources: WebSearch for analyst material, news, earnings, and press releases; WebFetch for company and investor sites
+- Phases: market-report/news skimming only; disable academic reference chaining and code search
+- Reports: `00_briefing.md`, `01_market_overview.md`, `02_key_players.md`, `03_trends.md`, and `04_opportunities.md`
+
+When mode is absent, infer it from query terms. Preserve these multilingual trigger literals for compatibility:
+
+- `논문`, algorithm, method, SOTA → academic
+- `표준`, codec, protocol, 3GPP, ITU, chip, MCU → technology
+- market, `시장`, competitor, analyst → market
+
+If none matches, use academic and report the fallback in one line. If at least two modes match, resolve it in scope clarification.
+
+## Decision defaults
+
+Proceed automatically with sensible defaults; there is no autonomy dial.
+
+| Decision | Default |
 |---|---|
-| Search results review | Auto-proceed. |
-| Query expansion rounds | Auto-proceed. |
-| Phase B loopback | Auto-proceed up to the depth-gated limit. |
-| External material discovery | If `analysis_project/paper/` exists in current dir, auto-include as supplementary input. If user expects external materials but none found → suggest `/analyze-project --mode paper` first. |
-| Search returned 0 papers | Auto-stop with `pipeline_summary(failed)` (no useful continuation possible). |
-| Report generation | Auto-proceed. |
+| Search-results review | Continue automatically |
+| Query-expansion rounds | Continue automatically |
+| Phase B loopback | Continue up to the depth-gated limit |
+| External material | Auto-include `analysis_project/paper/` when present; otherwise suggest `/analyze-project --mode paper` only when the user expects local material |
+| Zero results | Stop with `pipeline_summary(failed)` |
+| Report generation | Continue automatically |
 
-## Context Auto-Detection (신규 vs 재진입 자동 분기)
+## Automatic context detection for new entry or reentry
 
-본 skill 은 호출 자리에서 _발화 + cwd_ 검사로 자동 분기 — `--from` 명시 없이도 동작:
+The skill inspects the request and cwd even without `--from`.
 
-### 1단계 — research/<topic>/ 자동 검사
+### 1. Detect `research/<topic>/`
 
-| 감지 조건 | 처리 |
+| Condition | Route |
 |---|---|
-| `<artifact-root>/research/<topic>/pipeline_state.yaml` 부재 (또는 fuzzy match 0) | **신규** — Step 1 (Input Parsing) 부터 처음 |
-| `<artifact-root>/research/<topic>/pipeline_state.yaml` 존재 (fuzzy match 1+) | **재진입** — `last_completed_stage:` read + 발화 의도 분류 후 해당 stage 부터 |
+| No matching `<artifact-root>/research/<topic>/pipeline_state.yaml` | **New:** begin at input parsing |
+| One or more matching state files | **Reentry:** read `last_completed_stage` and infer the intended stage |
 
-`<topic>` 추출 — 발화 키워드 fuzzy match (예: `"speech enhancement 분야 재조사"` → topic=speech-enhancement). 다중 매치 시 사용자 컨펌.
+Extract `<topic>` by fuzzy-matching request keywords, for example `"speech enhancement 분야 재조사"` → `speech-enhancement`. Ask the user on multiple matches.
 
-### 2단계 — 발화 → stage 자동 분류 (재진입 자리)
+### 2. Infer the stage on reentry
 
-| 발화 신호 | 추론 stage | 흐름 |
+Preserve these quoted multilingual signals:
+
+| Request signal | Inferred stage | Flow |
 |---|---|---|
-| "X 재조사" / "최근 paper 추가" / "search 다시" | `--from search` (Step 2 부터) | 새 쿼리·확장 라운드 + 기존 cards 병합 |
-| "분석 다시" / "Phase B reference chaining 다시" / "card 보강" | `--from analyze` (Step 3 부터) | 기존 search 결과 위 Phase A/B/C 재실행 |
-| "보고서 갱신" / "report 다시" / "06_implementation 자리 수정" | `--from report` (Step 4 부터) | 기존 cards / analysis_summary 위 보고서 재작성 |
+| `X 재조사`, `최근 paper 추가`, `search 다시` | `--from search` | New queries and expansion rounds, merged with existing cards |
+| `분석 다시`, `Phase B reference chaining 다시`, `card 보강` | `--from analyze` | Rerun Phase A/B/C on existing search results |
+| `보고서 갱신`, `report 다시`, `06_implementation 자리 수정` | `--from report` | Regenerate reports from cards and analysis summary |
 
-### 3단계 — 자동 컨펌 한 화면
+### 3. One-screen confirmation
 
+Localize prose to the user's communication language while preserving this information:
+
+```text
+=== autopilot-research invocation ===
+Topic: <name>
+Artifact: research/<name>/ with last_completed_stage, or absent/new
+Request: "<one-line user request>"
+Inferred route: new or --from <stage>
+
+Proceed? (continue / another stage / new topic / stop)
 ```
-=== autopilot-research 호출 자리 ===
-topic: <name>
-산출물: research/<name>/ (발견 — last_completed_stage: <stage>) 또는 (부재 — 신규)
-발화: "<사용자 한 줄>"
-→ 추론: <신규 / --from <stage>> 자리
 
-진행? (진행 / 다른 stage 로 / 새 topic 으로 / 중단)
-```
+An explicit `--from <stage>` always wins. Small cross-artifact corrections belong to `autopilot-refine`; reentry here reruns an entire stage.
 
-신규 vs 재진입 분류는 _명시 옵션 없이도_ 동작 — 발화 + cwd 자동 판단. 사용자가 명시적 `--from <stage>` 입력하면 그대로.
+## Resume with `--from`
 
-> **cross-artifact 정정 자리 (research 산출물의 자잘한 정정)** 는 `autopilot-refine` 의 영역 — 본 skill 의 _재진입_ 은 _stage 단위 재실행_ 자리. 한 두 줄 정정은 autopilot-refine.
+- `search` → Paper Search
+- `analyze` → skimming, chaining, code search, and analysis summary
+- `report` → report generation plus the selected report-check gate
 
-## Resume (`--from`)
+The positional argument may be the artifact directory or a fuzzy-matchable topic. Resolve with `ls -d <artifact-root>/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover query, mode, depth, intensity, and clarified intent; CLI flags override stored values. Resume always skips scope clarification.
 
-`--from <stage>` re-enters an existing artifact directory and runs from that stage onward. Stages:
-- `search` — Step 2 (Paper Search)
-- `analyze` — Step 3 (Phase A skimming + B chaining + C code search + analysis_summary)
-- `report` — Step 4 (Report Generation + selected report-check gate)
+### `pipeline_state.yaml`
 
-When `--from` is used, the positional argument should be either the artifact directory path or a fuzzy-matchable topic name. The orchestrator resolves it via `ls -d <artifact-root>/research/*$ARG* 2>/dev/null`. Read `pipeline_state.yaml` to recover `query`, `mode`, `depth`, `intensity`, `clarified_intent`. CLI flags override stored values. Step 0 Scope Clarification is always skipped on resume (already captured in first run).
-
-### pipeline_state.yaml
-
-Written/updated at `{artifact_dir}/pipeline_state.yaml` after each completed stage:
+Update after each completed stage:
 
 ```yaml
 pipeline: autopilot-research
 query: <original query>
-mode: academic                   # academic | technology | market (resolved at Step 1)
+mode: academic                   # academic | technology | market
 depth: medium
-intensity: standard              # verification rigor derives from this (CONVENTIONS §1.1); no separate qa axis
-clarified_intent: <string or null>    # Step 0 output (if Clarification ran)
-last_completed_stage: analyze    # one of: clarify, search, analyze, report
-artifact_dir: <abs path>
+intensity: standard              # Derives rigor; no separate qa axis
+clarified_intent: <string or null>
+last_completed_stage: analyze    # clarify | search | analyze | report
+artifact_dir: <absolute path>
 ```
