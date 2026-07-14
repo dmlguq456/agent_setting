@@ -2593,10 +2593,13 @@ def curate_artifacts():
 
 
 def promote_candidates():
-    """D-28(Cluster F): durable 의 반복 규칙·교훈(convention/lesson)을 제도화 승격 후보로 출력.
-    아침 데스크(briefing)가 안건으로 제시 → 메인+사용자 논의로 종착지(runtime bootstrap /
-    CONVENTIONS / DESIGN_PRINCIPLES 문서 / hook / drill 케이스) 결정 → 반영·drill 검증 후 메모리에서 prune.
-    사실·결정·이력(fact/decision/project)은 메모리 본령이라 제외 — 반복 규칙·원칙만. read-only."""
+    """Expose visible durable records for agent-owned institutionalization review.
+
+    D-28 uses this read-only view as evidence at the morning desk. Record type
+    and strength are metadata, not semantic gates or automatic promotion rules.
+    The agent decides whether an item belongs in a bootstrap, core document,
+    hook, drill case, or memory only (D-40).
+    """
     if not DB.exists():
         return
     con = get_con()
@@ -2604,19 +2607,19 @@ def promote_candidates():
     try:
         pkey = project_key(Path.cwd())
         rows = list(db_iter_records(
-            con, f"tier='durable' AND type IN ('convention','lesson') "
-            f"AND (cwd_origin=? OR scope='global') AND {clean}", (pkey,)))
+            con, f"tier='durable' AND (cwd_origin=? OR scope='global') AND {clean}",
+            (pkey,)))
     finally:
         con.close()
     if not rows:
         return
-    # strength 높은(자주 재출현=반복) 순 — 반복될수록 제도화 가치 큼
+    # Strength only orders the bounded review view; it does not decide meaning.
     rows.sort(key=lambda mb: -(mb[0].get("strength") or 1))
-    out = ["=== 제도화 승격 후보 (durable convention/lesson — 시스템 구조로 졸업 검토 D-28) ==="]
+    out = ["=== INSTITUTIONALIZATION REVIEW CANDIDATES (visible durable records; D-28/D-40) ==="]
     for meta, body in rows[:8]:
         out.append(f"[{meta['id']}] ({meta.get('type')}, strength={meta.get('strength') or 1}) "
                    f":: {_snap_label(body)}")
-    out.append("=== END 승격 후보 ===")
+    out.append("=== END REVIEW CANDIDATES ===")
     print("\n".join(out))
 
 
@@ -3375,7 +3378,7 @@ def main():
     sub.add_parser("curate-artifacts",
                    help="현 프로젝트 산출물 상태 git·plans·spec (read-only, deep curator 입력 D-27)")
     sub.add_parser("promote-candidates",
-                   help="durable convention/lesson 제도화 승격 후보 (read-only, 아침 데스크 안건 D-28)")
+                   help="visible durable records for agent-owned review (read-only, D-28/D-40)")
 
     sub.add_parser("stats", help="store 통계")
     sub.add_parser("sync", help="projects→store 멱등 mirror + 색인 + dump (SessionEnd)")

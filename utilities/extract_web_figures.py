@@ -1,10 +1,9 @@
 """
-Web-based figure extraction utility — autopilot-research SKILL Step 3.5 또는
-사용자 직접 호출 (`Agent(탐색팀, mode="extract_web_figures")`).
+Web-based figure extraction utility for autopilot-research Step 3.5 or direct callers.
 
-Tier 1: ar5iv (https://ar5iv.labs.arxiv.org/html/{arxiv_id}) — vector→raster 자동
-Tier 2: arxiv-vanity 시도 (Tier 1 실패 시)
-Tier 3: arxiv PDF + pdfimages (Tier 1·2 실패 시)
+Tier 1: ar5iv (https://ar5iv.labs.arxiv.org/html/{arxiv_id}), including vector-to-raster
+Tier 2: arxiv-vanity fallback
+Tier 3: arXiv PDF plus pdfimages fallback
 All fail → record paper as "0 extracted" in figure_index.md
 
 Usage:
@@ -37,7 +36,7 @@ MIN_BYTES = 5_000  # filter tiny placeholders
 
 
 def find_arxiv_id(card_text: str) -> str | None:
-    """카드 본문에서 arxiv_id 추출 — 다양한 패턴 지원."""
+    """Extract an arXiv ID from a card body across supported link patterns."""
     patterns = [
         r"\*\*arXiv\*\*:\s*([0-9]{4}\.[0-9]{4,5})",
         r"\*\*arXiv ID\*\*:\s*([0-9]{4}\.[0-9]{4,5})",
@@ -52,14 +51,14 @@ def find_arxiv_id(card_text: str) -> str | None:
 
 
 def parse_cards(cards_dir: Path) -> list[dict]:
-    """cards/*.md 모두 파싱해서 (paper_id, arxiv_id, title) 추출."""
+    """Parse cards/*.md into (paper_id, arxiv_id, title) records."""
     papers = []
     for f in sorted(cards_dir.glob("*.md")):
         if f.name.startswith("_"):
             continue
         text = f.read_text(encoding="utf-8")
         arxiv_id = find_arxiv_id(text)
-        # title: 첫 H1
+        # Use the first H1 as the title.
         title_match = re.search(r"^# (.+)$", text, re.MULTILINE)
         title = title_match.group(1).strip() if title_match else f.stem
         papers.append({
@@ -84,7 +83,7 @@ def fetch_ar5iv(arxiv_id: str) -> str | None:
 
 
 def parse_figures(html: str, base_url: str) -> list[str]:
-    """HTML에서 figure image URL 추출 (절대 URL)."""
+    """Extract absolute figure image URLs from HTML."""
     soup = BeautifulSoup(html, "html.parser")
     urls = []
     seen = set()
@@ -97,7 +96,7 @@ def parse_figures(html: str, base_url: str) -> list[str]:
                 seen.add(src)
                 urls.append(urllib.parse.urljoin(base_url, src))
 
-    # Strategy 2: 모든 <img> with class hint
+    # Strategy 2: every remaining <img> after asset filtering.
     for img in soup.find_all("img"):
         src = img.get("src")
         if not src or src in seen:
@@ -114,7 +113,7 @@ def parse_figures(html: str, base_url: str) -> list[str]:
 
 
 def download_image(url: str, out_path: Path) -> tuple[bool, int]:
-    """Image binary 다운로드 + size filter. (success, bytes)."""
+    """Download an image and apply the size filter. Return (success, bytes)."""
     try:
         r = requests.get(url, headers=HEADERS, timeout=TIMEOUT, stream=True)
         if r.status_code != 200:
@@ -162,7 +161,7 @@ def extract_pdf_fallback(arxiv_id: str, paper_id: str, out_dir: Path,
 
 def extract_paper(paper: dict, out_dir: Path, tmp_dir: Path,
                   use_pdf: bool = True) -> dict:
-    """단일 paper figure 추출 (3-tier fallback). Returns extraction record."""
+    """Extract figures for one paper through the three-tier fallback."""
     arxiv_id = paper["arxiv_id"]
     paper_id = paper["paper_id"]
     if not arxiv_id:
@@ -188,7 +187,7 @@ def extract_paper(paper: dict, out_dir: Path, tmp_dir: Path,
             return {**paper, "tier_used": "ar5iv",
                     "figures_count": len(figures), "figures": figures}
 
-    # Tier 3: PDF fallback (Tier 2 arxiv-vanity는 deprecated 사이트라 skip)
+    # Tier 3: PDF fallback. Skip the deprecated arxiv-vanity site.
     if use_pdf:
         n = extract_pdf_fallback(arxiv_id, paper_id, out_dir, tmp_dir)
         if n > 0:
@@ -201,7 +200,7 @@ def extract_paper(paper: dict, out_dir: Path, tmp_dir: Path,
 
 
 def write_index(records: list[dict], out_path: Path) -> None:
-    """figure_index.md 작성."""
+    """Write figure_index.md."""
     lines = ["# Figure Index", ""]
     lines.append(f"- Total papers processed: {len(records)}")
     n_with_fig = sum(1 for r in records if r["figures_count"] > 0)

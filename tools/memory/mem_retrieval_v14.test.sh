@@ -200,6 +200,12 @@ grep -q '"event": "explicit-recall"' "$STORE/events.jsonl" && grep -q '"event": 
   && grep -q '"event": "consume"' "$STORE/events.jsonl" && ! grep -q 'tail-UNIQUE-991' "$STORE/events.jsonl" \
   && ok "bounded telemetry distinguishes retrieval/consume without raw prompt" || bad "telemetry contract"
 
+PROMOTION_REVIEW="$(cli promote-candidates)"
+grep -q "$KOREAN_ID" <<<"$PROMOTION_REVIEW" \
+  && grep -q 'visible durable records' <<<"$PROMOTION_REVIEW" \
+  && ok "institutionalization review exposes durable evidence without a semantic type gate" \
+  || bad "promotion review still classifies by fixed record type: $PROMOTION_REVIEW"
+
 cli recall 'tail-UNIQUE-991' --auto >"$TMP/retired-auto.out" 2>"$TMP/retired-auto.err"
 retired_rc=$?
 [ "$retired_rc" -ne 0 ] && grep -q 'unrecognized arguments: --auto' "$TMP/retired-auto.err" \

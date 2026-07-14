@@ -211,8 +211,8 @@ else
   model="${CODEX_DISTILL_MODEL_INCREMENT:-${AGENT_MODEL_FAST:-gpt-5.4-mini}}"
 fi
 
-# hang 가드: codex exec 가 응답 없이 멈추면 무한 대기 — 유한 바운드 필수. curate 는 deep 모델이
-# delta+snapshot+artifacts 로 사고시간이 길어 더 넉넉히(claude 120/600s · opencode 180s 와 동형).
+# Hang guard: bound a silent `codex exec`. Curate receives delta, snapshot, and
+# artifact evidence on a deep model, so it gets a larger timeout budget.
 if [ "$mode" = "curate" ]; then
   timeout_s=${CODEX_DISTILL_TIMEOUT_CURATE:-600}
 else

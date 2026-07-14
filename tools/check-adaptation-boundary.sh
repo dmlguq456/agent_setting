@@ -3761,6 +3761,12 @@ check_language_neutrality_contract() {
     fail_msg "memory semantics must be agent-owned while adapters retain explicit retrieval helpers"
   fi
 
+  promotion_body="$(sed -n '/^def promote_candidates()/,/^# ---------- projection ----------/p' tools/memory/mem.py)"
+  if printf '%s\n' "$promotion_body" | grep -Fq "type IN" \
+    || ! printf '%s\n' "$promotion_body" | grep -Fq 'and strength are metadata, not semantic gates'; then
+    fail_msg "institutionalization review must expose durable evidence without a fixed semantic type gate"
+  fi
+
   for distiller in hooks/mem-distill-dispatch.sh \
     adapters/claude/hooks/mem-distill-dispatch.sh \
     adapters/codex/bin/distill-worker.sh \

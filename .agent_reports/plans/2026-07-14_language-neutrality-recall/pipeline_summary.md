@@ -1,6 +1,6 @@
 # Pipeline summary
 
-Status: phase 4 memory boundary validated; broader Englishization remains in progress.
+Status: phase 5 runtime-prose batch validated; broader Englishization remains in progress.
 
 ## Phase 4 memory semantic boundary
 
@@ -43,6 +43,22 @@ recall semantics; installer and root README files are excluded.
 - Kept explicit multilingual retrieval intact, including CJK tokenization and
   Korean particle normalization.
 
+## Phase 5 runtime-prose result
+
+- Removed the fixed `convention|lesson` filter from `promote-candidates`.
+  Institutionalization review now exposes a bounded view of all visible durable
+  records; record type and strength remain evidence for the agent, not gates.
+- Converted shared and Claude memory lifecycle hooks, briefing context,
+  dispatch liveness/wait, usage checks, workflow signals, legacy index checks,
+  and the web-figure utility to English source prose and diagnostics.
+- Rewrote `tools/memory/README.md` as a fully English operational reference,
+  including the D-40 agent-judgment boundary and the multilingual retrieval
+  contract.
+- The selected production files now contain zero Korean prose lines. Remaining
+  non-installer runtime occurrences are concentrated in `tools/memory/mem.py`;
+  Codex mode-sync strings are compatibility match literals for still-Korean
+  canonical mode fragments.
+
 ## Phase 2 Englishization batch
 
 - Translated all 27 portable capability contracts and their catalog summaries.
@@ -63,11 +79,12 @@ recall semantics; installer and root README files are excluded.
 - Manifest and all affected Claude/Codex/OpenCode projection checks: pass.
 - Skill conformance: pass, 26 invocation classifications plus audience-language neutrality.
 - Retired recall-hook compatibility regression: 4/4 pass.
-- Multilingual retrieval regression: 20/20 pass, including Korean particle normalization.
+- Multilingual retrieval regression: 21/21 pass, including Korean particle normalization and type-neutral promotion review.
 - Distillation dispatch regression: 36/36 pass.
 - Distillation lifecycle regression: 37/37 pass; turn-nudge regression: 11/11 pass.
 - Adaptation boundary: pass.
 - Portable guards: 343/343 pass.
+- Dispatch liveness, wait, concurrency, and usage-check focused suites: pass.
 
 ## Phase 3 metadata and runtime-script batch
 

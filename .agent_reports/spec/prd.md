@@ -188,7 +188,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 
 ## 5.8 Cluster F — 루프↔메모리 환류 + 적극 정리 (v11, 사용자 확정 2026-06-22)
 
-> **계기**: 메모리에 영구 누적되는 데이터를 주기적으로 ① 세팅·하네스·루프 등 시스템 구조로 *제도화* 하고 ② 불필요분을 *적극 정리* 하는 환류 고리 부재 지적(사용자). 조사 결과 — `graduate` 는 working→durable tier 내부 전환뿐(메모리 *밖* 승격 경로 0), curator 정리는 대화+메모리 snapshot 만 보고 *산출물 미대조*, 연수(study) 루프는 도입 후 한 번도 정상 작동 못 함(2026-06-21 401 즉사·hold). 선결 버그(D-29) → 환류 설계(D-25~28). 결정론-first 정합: 트리거·산출물 캡처·prune 실행·graveyard = 코드, opus 판단 = salience·승격 가치만.
+> **계기**: 메모리에 영구 누적되는 데이터를 주기적으로 ① 세팅·하네스·루프 등 시스템 구조로 *제도화* 하고 ② 불필요분을 *적극 정리* 하는 환류 고리 부재 지적(사용자). 조사 결과 — `graduate` 는 working→durable tier 내부 전환뿐(메모리 *밖* 승격 경로 0), curator 정리는 대화+메모리 snapshot 만 보고 *산출물 미대조*, 연수(study) 루프는 도입 후 한 번도 정상 작동 못 함(2026-06-21 401 즉사·hold). 선결 버그(D-29) → 환류 설계(D-25~28). v17 D-40 정합: 트리거·산출물 캡처·action 검증·graveyard = 코드, salience·승격·prune·merge 의미 판단 = acting agent.
 
 ### 5.8.1 D-25 — 루프 자율성 재정의
 - 기존 `loops/README` line 21 "**루프는 일을 하지 않는다** — 삭제·지침 적용은 사용자 결정" 원칙을 **폐기·재정의**. 근거: curator 가 *이미* 무인 prune 중 — 원칙이 이미 반쯤 거짓이었고, 매 건 사용자 사전승인은 비효율(연수·당직 제안이 06-19 이월 누적 실증).
@@ -210,11 +210,11 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - (확인됨) `/clear` 도 SessionEnd reason=`clear` 를 쏘고 우리 hook matcher 가 `*` 라 curator 발동 — 세션 유실 구멍 없음.
 
 ### 5.8.4 D-28 — 메모리 제도화 환류 (승격 채널)
-- durable 의 *반복 규칙·교훈*(convention/lesson type, 조사 시 durable 272 중 ~27건)을 **승격 후보**로 추출 → **아침 논의 안건**으로 제시 → 메인 Claude 와 *대화*로 종착지 결정 → 반영 → **drill 검증 통과 후** 메모리에서 prune.
-- **종착지별 분기**: 반복 행동규칙 → CLAUDE.md/CONVENTIONS/DESIGN_PRINCIPLES(문서) / 기계화돼야 할 교훈 → hook·drill 케이스(코드). "메모리→문서"만이 아니라 *옳은 곳*으로.
-- **정리(prune)와 승격(graduate-out) 구분**: 사실·결정·이력은 메모리에 *남는다*(본령). 반복 규칙·원칙만 승격 대상.
+- **v17 D-40 supersession**: the historical implementation filtered `convention|lesson` records as promotion candidates. That fixed semantic type gate is retired. The read-only projection now exposes a bounded view of all visible durable records; type and strength are evidence only, and the acting agent judges whether any item should be institutionalized.
+- **Destination is contextual**: a useful item may belong in a runtime bootstrap, CONVENTIONS, DESIGN_PRINCIPLES, a hook, a drill case, another artifact, or memory only. No record type automatically selects a destination.
+- **Prune and graduate-out remain separate actions**, but neither is decided by a fixed fact/decision/history versus rule/principle taxonomy. Apply and verify the destination first; then the agent decides whether pruning the memory record is useful.
 - **prune 순서**: 반영·검증 *후*에만 prune (반영 전 삭제 = 영구 소실, graveyard 만으론 부족). "반영 → drill 통과 → prune".
-- **버튼 아니라 논의**: 승격은 "어디에·어떻게·정말 본질인가"를 따져야 하니 yes/no 결재가 아니라 대화. 정리(D-27)=자동/버튼, 승격(D-28)=논의 — 갈래별 채널 분리.
+- **Agent judgment, not a rule button**: institutionalization and cleanup require contextual judgment. Deterministic code may present candidates and enforce recovery/safety; it does not make the semantic decision.
 
 ### 5.8.5 D-29 — 루프 인프라 복원력 (선결 버그, ✅ main `b95b9a9`)
 - ① `loops/lib.sh` PATH 보정 — cron 제한 PATH 가 `/usr/bin/node`(v10) 를 집어 codex hook(.mjs ESM)이 SyntaxError 로 죽던 것 → `~/.local/bin`(v20) 앞세움.
@@ -359,7 +359,7 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
   - **D-25 (루프 자율성 재정의)**: "루프는 일을 하지 않는다" 폐기 → "되돌림 가능+명백 = 무인 직접 처리+전수 보고 / 그 외 = 아침 논의". 가드: 되돌림 보장(graveyard·git)+전수 보고 = "사전 승인"을 "되돌림 가능+사후 통보"로. loops/README·DESIGN_PRINCIPLES·oncall.md 동기화.
   - **D-26 (아침 논의 데스크)**: 당직 이후 cwd==~/.claude 그날 첫 발화 → UserPromptSubmit hook 브리핑 주입(밤 처리 요약+논의 안건). SessionStart 아니라 '그날 첫 상호작용'(세션 유지 환경). '당직 처리해줘' 발화 트리거 승격.
   - **D-27 (curator 산출물 대조 적극 prune)**: SessionEnd opus 입력에 ARTIFACTS(git/plans/spec) DATA 블록 + prune 지침 '적극'. 죽은 working 조기정리(21일 TTL 안 기다림)+명백한 durable 정리. 안전 3겹(snapshot-id 화이트리스트·graveyard·DATA 라벨). /clear 도 SessionEnd 발동(matcher '*') 확인.
-  - **D-28 (제도화 승격 채널)**: durable 반복규칙·교훈 → 아침 논의 안건 → 대화로 종착지(문서/hook/drill) 결정 → 반영 → drill 검증 후 prune. 정리(자동)와 승격(논의) 분리. prune 은 반영·검증 후만(영구소실 방지).
+  - **D-28 (제도화 승격 채널; v17 D-40로 semantic gate 수정)**: bounded visible durable evidence → 아침 논의 안건 → agent가 맥락으로 종착지(문서/hook/drill/기타/메모리 유지) 판단 → 반영·검증 후 prune 여부도 agent가 판단. record type/strength는 자동 승격·정리 규칙이 아님.
   - **D-29 (루프 복원력, ✅ main b95b9a9)**: lib.sh PATH 보정(cron v20 node)·run_claude_retry(401/5xx 재시도, session limit ABORT)·oncall exit code 생존체크.
 - **v13 신규 (Cluster H — memory adapter-parity 불변식, §5.10)**:
   - **D-30 (session-end 2-tier adapter-agnostic)**: increment+curate 2-tier 는 모든 어댑터의 session-end 계약 — 미실현 어댑터는 명시 신고 의무, "matches" 표현은 curate 축 성립 시만 (감사 P-12).
@@ -401,7 +401,7 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
    - ✅ **선결 버그 D-29 머지 완료** (main `b95b9a9`): `loops/lib.sh` 신규 + study/oncall 수정 (cron node PATH·재시도·생존체크).
    - **Phase 1 (D-27 curator 산출물 대조)**: `hooks/mem-distill-dispatch.sh` 에 ARTIFACTS(git log·plans done·spec phase) DATA 블록 캡처·주입 + curate 프롬프트 prune 지침 적극화. mem.py 에 산출물 캡처 헬퍼(`curate-artifacts` 류). 안전 3겹 유지·acceptance 재검증.
    - **Phase 2 (D-26 아침 데스크)**: 신규 `hooks/mem-briefing-inject.sh`(UserPromptSubmit, cwd==~/.claude AND 당직후 그날 첫 발화 게이트 → 밤 처리 요약+논의 안건 inject) + 상태 마커(`.briefing-<date>`) + settings.json 배선. CLAUDE.md '당직 처리' 발화 트리거 → 자동 승격.
-   - **Phase 3 (D-28 승격 채널)**: 승격 후보 추출(durable convention/lesson read-only projection) + 아침 안건 제시 + 종착지 분기(문서/hook/drill) + 반영후 prune 연결(drill 검증 게이트).
+   - **Phase 3 (D-28 승격 채널; v17 D-40 supersession)**: all visible durable records의 bounded read-only evidence + 아침 안건 제시 + agent-owned 종착지·prune 판단. fixed `convention|lesson` type filter는 폐기.
    - **D-25 원칙 문서화**: `loops/README`·`DESIGN_PRINCIPLES`·`oncall.md` "보고만"→"되돌림가능+명백=처리+보고" 동기화. **post-it 역할 재검토(§5.8.6)**: distiller 와 중복 — 별도 결정.
 8. **Cluster H (memory adapter-parity, v13 신규)** — autopilot-code --mode dev, worktree (codex-adapter-parity 감사 Phase 3 과 동일 사이클로 인계 가능):
    - **D-30/D-32**: Codex `distill-worker.sh` 를 portable `mem-distill-dispatch.sh` 계약으로 정렬 — session-end 를 curate mode(+snapshot 캡처·whitelist)로, turn-nudge 는 increment 유지. 불가 시 ADAPTATION 에 "increment-only" disclosure 로 문구 정정 (P-12 overclaim 해소는 두 경로 중 하나 필수).

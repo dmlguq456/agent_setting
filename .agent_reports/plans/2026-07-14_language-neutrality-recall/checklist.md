@@ -25,3 +25,9 @@
 - [x] Englishize affected memory hooks and documentation
 - [x] Regenerate projections and run the full regression suite
 - [x] Commit and push the memory-boundary phase
+- [x] Remove the fixed record-type gate from institutionalization review candidates
+- [x] Englishize memory lifecycle hooks and the active dispatch/workflow utility batch
+- [x] Rewrite `tools/memory/README.md` as an English operational reference
+- [x] Add focused regression for agent-owned promotion review and rerun portable guards
+- [ ] Translate remaining `tools/memory/mem.py` prose/diagnostics and synchronize tests
+- [x] Commit and push the runtime-prose batch
