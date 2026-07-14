@@ -1,7 +1,7 @@
 # Harness Productization — PRD
 
 > 유형: component spec · library + CLI
-> 상태: phase 4 implementation complete · v1.0.1 release-bound bootstrap patch in progress
+> 상태: phase 4 implementation complete · v1.0.1 release-bound bootstrap published
 > 버전: v7 (2026-07-14)
 
 ## 0. 한 줄 정의
@@ -446,6 +446,6 @@ Phase 4: release bootstrap → managed packaged update
 - Cycle 2 — 완료: canonical manifest/generator, generated consumer migration, profile resolver와 quickstart.
 - Cycle 3 — 완료: built-in pack 계약을 사용하는 offline extension lifecycle, provenance/security/parity.
 - Cycle 4 — 완료: clone 없는 release bootstrap, packaged automatic updater, release workflow, 공개 README 단순화, `v1.0.0` 공개.
-- Cycle 4.1 — 진행: bootstrap code/archive 동일-tag 결속과 `v1.0.1` patch release.
+- Cycle 4.1 — 완료: bootstrap code/archive 동일 repository/tag 결속과 `v1.0.1` patch release.
 
 Cycle 3 착수 전 `autopilot-code`가 세 runtime의 현재 extension surface와 local-path security boundary를 공식 문서와 로컬 realization에서 다시 확인하고 이 PRD를 source of truth로 읽어야 한다.

@@ -2,9 +2,9 @@
 
 ## Current state
 
-Implementation, pre-release regression, and deterministic committed-HEAD build
-are complete. The remaining step is to merge, publish `v1.0.1`, and verify the
-public release installer in an isolated HOME.
+Complete. Commit `b85a95d7` was fast-forwarded to `main`, `v1.0.1` published
+four assets, and the public latest installer passed checksum, exact binding,
+all-runtime strict doctor, and managed update verification in an isolated HOME.
 
 ## Contract change
 
