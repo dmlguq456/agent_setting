@@ -123,3 +123,9 @@ Claude Code와 Codex의 동시 진단을 교차검증해 “저장은 되지만 
 - **D-38** `mem log`: 저널 tail 1급 조회(--limit/--action/--tier/--actor/--json). stats(스냅샷)는 불변, log 가 흐름 보완.
 - **D-39** `mem doctor` + oncall 편입: read-only 전수 진단 9항목 + exit code. 새 loop 신설 없음(oncall 항목 1개, D-25 계약). 조치 권한 = D-18 세션끝 opus 큐레이터 불변 — doctor 는 진단·보고까지만.
 - 소비자 연결: fleet `collectors/memory.py`(F-19, read-only 관찰 — fleet F-1 정합) — 저널 포맷 변경 시 양 spec 동기 의무. 구현 = Next 10(autopilot-code, worktree; fleet F-19 는 별도 사이클, 파일 표면 비겹침 병렬 가능).
+
+### v15 → v16 (2026-07-14, update mode — language-neutral recall, snapshot `_internal/versions/v15/`)
+- 고정 자연어 회상 신호어와 signal-dependent `explicit/implicit` confidence 경로를 폐기한다.
+- 모든 eligible project prompt는 동일한 content-based auto-recall threshold를 사용한다.
+- 명시적 회상 의도는 문장 속 phrase가 아니라 `mem recall` CLI/API 호출로만 구분한다.
+- document-frequency·coverage·rare exact term 기반 relevance, raw-prompt-free telemetry, top3/1,200자 cap은 유지한다.

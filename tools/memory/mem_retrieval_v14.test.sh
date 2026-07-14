@@ -201,6 +201,21 @@ grep -q '"latency_ms"' "$STORE/events.jsonl" && grep -q '"event": "show"' "$STOR
   && grep -q '"event": "consume"' "$STORE/events.jsonl" && ! grep -q '오늘 날씨' "$STORE/events.jsonl" \
   && ok "bounded telemetry distinguishes retrieval/consume without raw prompt" || bad "telemetry contract"
 
+AUTO_PHRASE_JSON="$(cli recall '지난번 stage-dispatch retrieval handoff 이어서 처리' --auto --limit 3 --no-touch --json)"
+AUTO_PLAIN_JSON="$(cli recall 'stage-dispatch retrieval handoff 이어서 처리' --auto --limit 3 --no-touch --json)"
+python3 - "$AUTO_PHRASE_JSON" "$AUTO_PLAIN_JSON" <<'PY'
+import json, sys
+a, b = (json.loads(value) for value in sys.argv[1:])
+valid = (
+    a["mode"] == b["mode"] == "automatic"
+    and [row["id"] for row in a["results"]] == [row["id"] for row in b["results"]]
+)
+raise SystemExit(0 if valid else 1)
+PY
+[ "$?" -eq 0 ] \
+  && ok "natural-language phrasing cannot change auto-recall mode, threshold, or results" \
+  || bad "phrase-dependent auto-recall behavior remains"
+
 SNAP="$(cli curate-snapshot)"
 grep -q "PROTECTED PENDING" <<<"$SNAP" && grep -q "$PTHREAD" <<<"$SNAP" \
   && ! grep '^IDS:' <<<"$SNAP" | grep -q "$PTHREAD" && ok "pending visible but excluded from destructive IDS" \

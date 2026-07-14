@@ -103,7 +103,7 @@ Agent(개발팀, mode="new-lib"):
    - ref repo 의 _불필요 자리_ (다른 dataset 전용 / 다른 task / experiment 자국)
    - 라이브러리화·정련 (autopilot-code 영역)
 
-   Return: 생성 파일 list + 한국어 요약."
+   Return: 생성 파일 list + 요약."
 ```
 
 mode 별 scaffold 산출물:

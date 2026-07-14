@@ -54,7 +54,7 @@ mode별 전략 템플릿으로 전략 문서 작성. 자동 발견된 format spe
 - 전략은 구체적·실행 가능
 - academic: venue-specific norms / professional: 업계 best practice
 
-연구팀이 파일 직접 작성. 오케스트레이터는 경로 + 3-5줄 한국어 요약만 받음.
+연구팀이 파일 직접 작성. 오케스트레이터는 경로 + 3-5줄 요약만 받음.
 
 ## QA Scaling
 Quality reviewer + fact-checker는 selected graph/QA budget이 요구할 때만 동작한다.

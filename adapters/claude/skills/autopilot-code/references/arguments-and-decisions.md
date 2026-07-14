@@ -1,5 +1,8 @@
 ## Language Rule
-- All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft). code track 전 스테이지(code-plan·refine·execute·test·report)의 단일 SoT.
+- User-facing artifacts follow `<agent-home>/roles/response-policy.md`:
+  explicit target/audience/artifact language first, then the user's current
+  communication language. This rule is the code track single source for
+  code-plan·refine·execute·test·report; it imposes no fixed chat locale.
 
 ## Argument Parsing
 

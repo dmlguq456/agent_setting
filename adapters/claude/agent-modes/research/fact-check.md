@@ -33,7 +33,7 @@
 
 fast fact-checker mode 라 ~30 most material claims 만. Tier 1 paper / 사용자 prompt 의 key model 우선.
 
-🔴/🟡 mismatch 마다 artifact 의 Korean version 본문에 `<!-- memo: [FACT] section X — claim Y conflicts with source Z -->` inline 메모 작성. 호출자가 review log 로 분리해 dispatch.
+🔴/🟡 mismatch 마다 대상 artifact 본문과 같은 언어로 `<!-- memo: [FACT] section X — claim Y conflicts with source Z -->` inline 메모 작성. 호출자가 review log 로 분리해 dispatch.
 
 ## 호출자 매핑
 

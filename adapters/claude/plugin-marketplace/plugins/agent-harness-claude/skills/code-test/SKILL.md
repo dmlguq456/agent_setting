@@ -13,7 +13,9 @@ metadata:
 
 > **Plan Resolution**: `$ARG`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다. **단, code-test 는 no-match 시 error 대신 인자를 직접 테스트할 파일/디렉터리 경로로 취급한다** (test 스테이지 고유).
 
-> **Language Rule**: 사용자-facing 출력은 자연스러운 한국어. 단일 SoT = [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
+> **Language Rule**: user-facing artifacts follow the audience and artifact
+> language contract in
+> [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
 
 ## Delegate to 품질관리팀 (test 모드)
 Invoke the **품질관리팀** agent in **test mode** (the agent absorbed the former 테스트팀 in 2026-05-22; specify "test 모드" in the prompt so mode dispatch is unambiguous) with the following prompt:

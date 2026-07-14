@@ -431,9 +431,9 @@ else
 fi
 if "$RECALL" --prompt "일반 질문" --cwd "$TMP/flowproj" --format text >/tmp/recall.out 2>/tmp/recall.err \
   && [ ! -s /tmp/recall.out ]; then
-  ok "recall wrapper no-ops without signal word"
+  ok "recall wrapper no-ops when the shared engine finds no qualified result"
 else
-  bad "recall wrapper should no-op without signal word"
+  bad "recall wrapper should no-op when the shared engine finds no qualified result"
 fi
 if "$CODEX" recall "전에 결정한 내용 뭐였지" "$TMP/flowproj" >/tmp/recall.out 2>/tmp/recall.err; then
   ok "codex recall wrapper exits cleanly"

@@ -3708,6 +3708,52 @@ adapters/opencode/AGENTS.md|24576|현재 ~11.8KB; always-load instructions footp
 BYTE_BUDGET_EOF
 }
 
+check_language_neutrality_contract() {
+  if ! grep -Fq '**Audience-language first**' roles/response-policy.md \
+    || ! grep -Fq "default to the language the user is currently using to communicate" roles/response-policy.md; then
+    fail_msg "roles/response-policy.md must define the audience-language-first artifact contract"
+  fi
+  if ! grep -Fq '## 최우선 원칙 — 청중의 언어' adapters/claude/agents/editorial-team.md \
+    || ! grep -Fq '별도의 고정 locale·어미를 강제하지 않는다' adapters/claude/agents/editorial-team.md; then
+    fail_msg "the editorial router must apply the audience-language contract before language-specific style rules"
+  fi
+
+  for bootstrap in adapters/claude/CLAUDE.md adapters/codex/AGENTS.md adapters/opencode/AGENTS.md; do
+    if grep -Fq 'Answer the user in Korean' "$bootstrap"; then
+      fail_msg "$bootstrap must not impose a fixed response locale"
+    fi
+    if ! grep -Eiq 'Audience-language first|청중 언어 우선' "$bootstrap"; then
+      fail_msg "$bootstrap must realize the portable audience-language-first artifact contract"
+    fi
+  done
+
+  if rg -n 'Write in Korean|Korean (plan|version|본문)|한국어 (설명|보고서|변경·산출 요약|변경 요약|요약)|한국어로' \
+    roles/modes adapters/claude/agent-modes >/dev/null 2>&1; then
+    fail_msg "portable and Claude mode contracts must not impose Korean as a fixed output language"
+  fi
+
+  if rg -n -i 'All user-facing output.*Korean|When explaining something to the user.*Korean|Print the error message in Korean|One-line chat alert.*Korean|Return ONLY.*Korean summary|한국어 요약|사용자-facing 출력은 자연스러운 한국어' \
+    skills adapters/claude/skills >/dev/null 2>&1; then
+    fail_msg "skill contracts must not impose Korean as a fixed user-facing or summary locale"
+  fi
+
+  if rg -n -i 'All user-facing output.*Korean|structured Korean (feedback|output)|결과 한국어 재정리' \
+    adapters/claude/agents >/dev/null 2>&1; then
+    fail_msg "Claude agent routers must not impose Korean as a fixed user-facing locale"
+  fi
+
+  if grep -Fq 'concise Korean report' adapters/claude/bin/dispatch-headless.py \
+    || grep -Fq 'concise Korean report' adapters/codex/bin/dispatch-headless.py; then
+    fail_msg "headless worker prompts must not impose a fixed report locale"
+  fi
+
+  if grep -Fq '_RECALL_SIGNAL_WORDS' tools/memory/mem.py \
+    || ! grep -Fq '"mode": "automatic"' tools/memory/mem.py \
+    || ! grep -Fq '특정 자연어 phrase가 mode나 민감도를 바꾸지 않는다' core/MEMORY.md; then
+    fail_msg "automatic recall must use one content-based threshold without fixed natural-language signal phrases"
+  fi
+}
+
 check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_projection_symlinks opencode_setting
@@ -3771,6 +3817,7 @@ check_opencode_mode_map
 check_hook_catalog
 check_parity_loss_explicit_warnings
 check_bootstrap_byte_budget
+check_language_neutrality_contract
 check_legacy_root_links
 warn_concrete_runtime_terms
 

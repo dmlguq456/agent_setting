@@ -35,12 +35,12 @@ if prompt in {"오늘 날씨는 어때요", "generic empty result"}:
     raise SystemExit(0)
 if prompt == "cap fixture":
     payload = "가" * 500
-    print("# 관련 기억 (자동 회상)")
+    print("# Relevant memory (automatic recall)")
     for idx in range(1, 6):
         print(f"  [durable/project/lesson] cap-{idx}: {payload}")
     raise SystemExit(0)
 
-print("# 관련 기억 (자동 회상)")
+print("# Relevant memory (automatic recall)")
 print(f"  [durable/project/lesson] auto-hit: recalled {prompt}")
 PY
 
@@ -92,18 +92,18 @@ json_context_has "$OUT" "stage-dispatch handoff 점검" \
   && ok "T1: Claude payload emits JSON additionalContext" \
   || bad "T1: missing JSON context: $(cat "$OUT")"
 
-echo "== T2: signal-word prompt uses the same auto path =="
+echo "== T2: another project prompt uses the same auto path =="
 OUT="$TMP/t2.out"
 : > "$LOG"
 AGENT_HOME="$HARNESS" MEM_STUB_LOG="$LOG" bash "$HOOK" \
-  --prompt "지난번 stage-dispatch 확인" --cwd "$WORK" --session-id cli-session \
+  --prompt "stage-dispatch 후속 확인" --cwd "$WORK" --session-id cli-session \
   --format text >"$OUT" 2>/dev/null
 rc=$?
 [ "$rc" = 0 ] && ok "T2: exit 0" || bad "T2: exit $rc"
-last_call_matches "지난번 stage-dispatch 확인" "$WORK" \
-  && ok "T2: signal prompt also calls --auto --limit 3" \
-  || bad "T2: signal prompt bypassed shared engine: $(cat "$LOG")"
-grep -q "고신뢰 매칭" "$OUT" && grep -q "지난번 stage-dispatch 확인" "$OUT" \
+last_call_matches "stage-dispatch 후속 확인" "$WORK" \
+  && ok "T2: project prompt also calls --auto --limit 3" \
+  || bad "T2: project prompt bypassed shared engine: $(cat "$LOG")"
+grep -q "고신뢰 매칭" "$OUT" && grep -q "stage-dispatch 후속 확인" "$OUT" \
   && ok "T2: text adapter output contains recalled hit" \
   || bad "T2: text output mismatch: $(cat "$OUT")"
 

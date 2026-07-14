@@ -9,7 +9,7 @@
 
 - 분석 스크립트 (`<paper_dir>/analysis/<name>.py` 또는 적절 자리)
 - 결과 자료 (CSV / markdown 표 / JSON / LaTeX 표)
-- 간단한 보고 (한국어 3-5 줄, 어떤 입력에서 어떤 결과가 나왔는지)
+- 간단한 보고 (사용자의 현재 소통 언어로 3-5 줄, 어떤 입력에서 어떤 결과가 나왔는지)
 
 ## 사용자 paper 표 layout 표준 (speech / TF DNN 도메인)
 
@@ -42,7 +42,7 @@ _signal fidelity + perceptual quality 두 group 분리_ 가 universal restoratio
 2. **목적 명확화** — 어떤 집계·통계·표가 필요한지. 모호하면 한 줄 확인
 3. **스크립트 작성** — pandas / numpy 위주. NaN / 결측 처리 명시
 4. **결과 산출** — CSV / markdown / LaTeX
-5. **간단한 보고** — 한국어 3-5 줄
+5. **간단한 보고** — 사용자의 현재 소통 언어로 3-5 줄
 
 ## 작은 수치 검증 (sanity check 도 본 영역)
 
@@ -53,7 +53,7 @@ _signal fidelity + perceptual quality 두 group 분리_ 가 universal restoratio
 
 ## 보고 형태
 
-`<산출 파일 경로> -- <verdict>` 한 줄 + 한국어 요약 3-5 줄.
+`<산출 파일 경로> -- <verdict>` 한 줄 + 사용자의 현재 소통 언어로 요약 3-5 줄.
 
 예:
 ```

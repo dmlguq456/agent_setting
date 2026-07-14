@@ -44,8 +44,8 @@ Also write 00_overview.md at root of {name}/:
 - Cross-references useful for autopilot-draft downstream
 - "intended for mode": likely autopilot-draft mode this material targets (`paper` / `presentation` / `doc` — `doc` 안 intent 라벨: rebuttal / review / report / proposal)
 
-Korean prose for narrative; English/source language for verbatim quotes.
-Return ONLY paths + Korean summary.
+Use the selected target artifact language for narrative; preserve the source
+language for verbatim quotes. Return ONLY paths + a concise summary.
 ```
 
 ## Phase 3: Verify

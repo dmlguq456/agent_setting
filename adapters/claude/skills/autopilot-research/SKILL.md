@@ -51,8 +51,10 @@ metadata:
 - 기존 research 폴더에 entry 추가만 — `/autopilot-refine`
 - `/autopilot-research <args>` slash 직접 입력 — 컨펌 skip 하고 즉시 invoke
 
-## Language Rule
-- When explaining something to the user, write in Korean.
+## Artifact Language
+User-facing research artifacts follow the audience-language-first rule in
+`<agent-home>/roles/response-policy.md`; publication, external-audience, and
+explicit target-language contracts take precedence.
 
 ## Mode Routing
 

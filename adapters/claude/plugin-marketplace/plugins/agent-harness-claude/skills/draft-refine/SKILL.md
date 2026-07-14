@@ -28,7 +28,10 @@ Resolve `$ARGUMENTS` to document file paths. Detect whether this is a **strategy
    - **No match** → report error
 
 ## Language Rule
-- All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft).
+- User-facing artifacts follow the audience-language-first rule in
+  `<agent-home>/roles/response-policy.md`. Preserve the target artifact's
+  existing language unless the task explicitly changes it; this skill imposes
+  no fixed chat locale.
 
 ## Pre-Refine: Versioning Setup
 

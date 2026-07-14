@@ -21,8 +21,10 @@ metadata:
 > `<artifact-root>` 해석·치환(`.agent_reports` 우선, legacy `.claude_reports` fallback): [CONVENTIONS §5.1](../../core/CONVENTIONS.md#51-workspace-assumption-전제).
 
 ## Language Rule
-- Write documentation files in English (code/paper modes) or Korean+English mixed (doc mode).
-- When explaining something to the user, write in natural Korean (no translationese).
+- Write canonical technical analysis in English for code/paper modes. In doc
+  mode, follow the explicit target audience or artifact language; absent one,
+  use the audience-language-first artifact rule from
+  `<agent-home>/roles/response-policy.md`.
 
 ## Argument Parsing
 

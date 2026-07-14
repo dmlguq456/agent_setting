@@ -10,7 +10,10 @@ metadata:
 ---
 
 ## Language Rule
-- All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft).
+- User-facing artifacts follow the audience-language-first rule in
+  `<agent-home>/roles/response-policy.md`. The selected strategy's explicit
+  target, venue, audience, and source-artifact language contracts take
+  precedence; this skill imposes no fixed chat locale.
 
 ## Argument Parsing
 Parse `$ARGUMENTS`:
@@ -43,7 +46,7 @@ mode↔autopilot-draft 매핑 표·6종 template 전문·Paragraph Cohesion Pre-
 ## Delegation & Flow
 
 1. Argument Parsing → Pre-Check (`{output_dir}/analysis/` 파일 존재 검증).
-2. **Delegate**: `references/delegate-prompt.md` 의 전체 프롬프트로 연구팀(research-team) 을 subagent 호출 — agent 가 strategy 파일을 직접 쓰고 경로 + 3-5줄 한국어 요약만 반환. orchestrator 는 내용이 아닌 경로·요약만 수신.
+2. **Delegate**: `references/delegate-prompt.md` 의 전체 프롬프트로 연구팀(research-team) 을 subagent 호출 — agent 가 strategy 파일을 직접 쓰고 경로 + 3-5줄 요약만 반환. orchestrator 는 내용이 아닌 경로·요약만 수신.
 3. **QA**: `references/qa-review.md` 의 QA Scaling(레벨 auto-detect) + Selected Post-Strategy Review Pass(quality reviewer + fact-checker 병렬, max 2 rounds) 수행.
 4. **Mirror** (conditional, default skip): strategy primary language ≠ 사용자 작업 언어일 때만 `references/mirror.md` 의 편집팀 모드 A 호출.
 5. 사용자 보고: strategy path(s) + summary + QA verdict.

@@ -58,7 +58,10 @@ threshold는 doc/research artifact의 `pipeline_summary.md` `## 마이너 변경
 
 ## Language Rule
 
-All user-facing output (chat report, audit log) in natural **Korean** (no translationese — write Korean natively, don't translate from an English draft).
+User-facing audit artifacts follow the audience-language-first rule in
+`<agent-home>/roles/response-policy.md`. An explicit target artifact, external
+audience, or publication language takes precedence; this skill imposes no fixed
+chat locale.
 
 ## Argument Parsing
 

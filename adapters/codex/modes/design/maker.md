@@ -88,7 +88,7 @@ surfaces rewritten to Codex-native preflight/tool-contract wording.
 ## 출력
 
 - 산출 파일 경로 (.tsx / .css / .svg / .md / 다이어그램 등)
-- 디자인 결정 한국어 요약 3-5 줄 (왜 이 컬러·왜 이 spacing·왜 이 컴포넌트 구조)
+- 디자인 결정 요약 3-5 줄 — 사용자의 현재 소통 언어를 따름 (왜 이 컬러·왜 이 spacing·왜 이 컴포넌트 구조)
 - 의존성 (새 npm 패키지·새 토큰) 명시
 
 ## 협업 경계

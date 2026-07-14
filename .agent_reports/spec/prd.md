@@ -7,6 +7,7 @@
 > · **v13 2026-07-04** (Cluster H — memory 도메인 adapter-parity 불변식: session-end distill 2-tier·MEM_DUMP_PUSH·portable distill dispatcher 계약. 근거 = codex-adapter-parity 감사 P-10·P-12·P-13·P-25·P-36)
 > · **v14 2026-07-10** (Cluster I — retrieval usability: 전문 조회·고신뢰 자동 회상·미소비 handoff 보호·회상 관측성. 근거 = Claude Code/Codex 동시 진단 + 당일 handoff merge 실사고)
 > · **v15 2026-07-11** (Cluster J — 쓰기 관측성·전수 진단: 변이 이벤트 저널 + `mem log` + `mem doctor`. 계기 = fleet 메모리 가시화[agent-fleet-dashboard F-19]의 전제 + 읽기/쓰기 telemetry 비대칭 실측)
+> · **v16 2026-07-14** (언어 중립 자동 회상: 고정 자연어 신호어와 phrase-dependent confidence 폐기. 모든 project prompt에 동일한 content-based threshold 적용)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -126,7 +127,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 > **원칙 정립 (사용자, 2026-06-17)**: 판단 본체(salience 등)는 결정론화 _불가_ — 핵심은 "누가 판단하나". **추가(가역·저위험) 판단 → 외부 싼 에이전트 offload OK / 삭제·정리(비가역·data-loss) 판단 → 메인 클로드 직접.** 결정론 scaffold(트리거·탐지·실행·보안)가 판단을 감싸 신뢰성·재현성을 주되, 판단은 가장 싼 자리에 배치. §0.5 의 정확한 형태. Hermes 도 consolidation 은 메인이 함(capacity-error 강제 트리거) — 같은 자리, 트리거만 다름.
 
 ### 5.6.1 D-15 — recall 자동 사전주입 hook (B1 완성)
-- 현 B1 = instruction(메인이 "회상 신호어 보면 `mem recall`" 을 매번 _판단_). → **UserPromptSubmit hook 으로 결정론화**: 신호어(지난번·예전에·전에·그때·저번에·아까 등) regex 감지 → `mem recall` 실행 → 결과를 additionalContext 로 주입. 메인의 "recall 할까" 단계 제거 → *이미 회상된 맥락 위에서 본 생각만*. additive·read-only 라 hook 적합. 가드: distiller 세션(`MEM_DISTILL=1`) skip, 신호어 없으면 no-op(토큰 절약), recall 결과 비면 주입 안 함.
+- 현 B1 = instruction(메인이 recall 필요 여부를 매번 판단). → **UserPromptSubmit hook 으로 결정론화**: tracked/project cwd의 모든 일반 발화를 shared auto-recall candidate engine으로 평가하고, content evidence가 고신뢰 threshold를 넘은 결과만 additionalContext로 주입한다. 특정 언어·표현을 신호어로 등록하거나 confidence를 완화하는 경로는 두지 않는다. 명시적 회상 의도는 자연어 phrase가 아니라 사용자가 `mem recall`을 호출했는지로만 구분한다. 가드: distiller 세션(`MEM_DISTILL=1`) skip, 결과 없음·저신뢰면 no-op.
 
 ### 5.6.2 D-16 — lifecycle 탐지 → 메인 노출 (consolidation/prune 후보)
 - 현 `lifecycle` 의 durable near-dup `[dup-flag]` 가 SessionEnd `mem sync` 출력으로 흘러 *아무도 안 봐서* 死. → **`mem inject`(세션 시작)에 "정리 후보" 섹션으로 노출** — 메인이 보고 직접 consolidate/prune/graduate (실행=메인, 원칙대로). 탐지(결정론)와 실행(메인 판단) 분리.
@@ -166,7 +167,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - **고아 탐지**: 어떤 live 프로젝트로도 해석 안 되는 cwd_origin → 고아 후보 surface. 기존 cwd_origin 옛경로 → project_key 마이그레이션.
 
 ### 5.7.5 E-4 — recall 엔진 교체 (audit P0 #2 — 死 promise)
-- 현 `recall()` query 통째 단일 phrase FTS → 다단어·NL hit 0. → **multi-term OR + bm25 + top-K** + strength 가중. D-15 recall-inject hook 이 prompt 전체 넘기던 것 → **신호어 strip + 키워드 추출**.
+- 현 `recall()` query 통째 단일 phrase FTS → 다단어·NL hit 0. → **multi-term OR + bm25 + top-K** + strength 가중. D-15 auto-recall은 prompt에서 후보 term을 추출하되 고정 회상 phrase 목록을 사용하지 않고 corpus document-frequency·coverage·identifier/CJK specificity로 저정보 term을 억제한다.
 
 ### 5.7.6 E-5 — 내구성 봉합 (audit P0 #3, dump 버저닝이 삭제 안전망)
 - `mem sync` 에 **dump 자동 commit(+버전 이력 = 잘못된 prune 복구 안전망)**. 현재 push 0 → 머신 손실 시 영구소실 갭.
@@ -250,7 +251,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 
 ## 5.11 Cluster I — 꺼내 쓰는 경로 강화 + 미소비 인계 보호 (v14, 2026-07-10)
 
-> 계기: Claude Code와 Codex의 독립 진단이 같은 병목을 확인했다. 쓰기·세션 주입은 동작하지만 ① 자동 recall은 과거지시 신호어 8개에만 의존해 실제 프로젝트 발화에서 거의 0회, ② SessionStart top-K 밖 working/durable은 recall 없이는 잠김, ③ recall은 12-token snippet만 반환해 전문 확인에 SQLite/dump 우회가 필요, ④ 직전 세션의 canonical handoff와 고유 보강 2건이 curator merge에서 near-duplicate로 오판돼 보강 전문이 사라졌다. agent-memory git `55076af→042d277`에서 보강 2건 삭제와 canonical strength `1→3`이 동시에 발생했고 graveyard 전문이 현 `merge()` 경로와 일치하므로 ④는 prune 추정이 아니라 merge 사고로 확정한다.
+> 계기: Claude Code와 Codex의 독립 진단이 같은 병목을 확인했다. 쓰기·세션 주입은 동작하지만 ① 자동 recall이 고정 과거지시 phrase에 의존해 실제 프로젝트 발화에서 거의 0회였고, ② SessionStart top-K 밖 working/durable은 recall 없이는 잠김, ③ recall은 12-token snippet만 반환해 전문 확인에 SQLite/dump 우회가 필요, ④ 직전 세션의 canonical handoff와 고유 보강 2건이 curator merge에서 near-duplicate로 오판돼 보강 전문이 사라졌다. agent-memory git `55076af→042d277`에서 보강 2건 삭제와 canonical strength `1→3`이 동시에 발생했고 graveyard 전문이 현 `merge()` 경로와 일치하므로 ④는 prune 추정이 아니라 merge 사고로 확정한다. v16은 ①의 잔여 phrase-dependent confidence를 완전히 제거한다.
 
 ### 5.11.1 D-33 — full-body retrieval은 1급 CLI 계약
 - `mem show <id> [--all]`은 visibility fence 안의 단일 레코드 metadata+전문을 원문 줄바꿈 그대로 출력한다. 기본 fence는 현재 project+global이며 `injection_flag` 레코드는 항상 제외한다. 다른 project ID 존재 여부는 generic not-found로 감춰 scope oracle을 만들지 않는다.
@@ -259,7 +260,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 
 ### 5.11.2 D-34 — 모든 프로젝트 발화에 고신뢰 자동 recall probe
 - UserPromptSubmit 공통 hook은 tracked/project cwd의 모든 일반 발화를 공유 `mem.py` 후보 엔진에 probe한다. Bash hook은 runtime payload parsing과 출력 cap만 담당하며 Claude Code·Codex·OpenCode가 같은 엔진/정책을 쓴다.
-- 정규화는 NFKC+lower+구두점 제거, identifier/path/hyphen·CJK term 보존, stopword와 현재 scope document-frequency로 저정보 단어를 억제한다. implicit 자동주입은 `2+ distinct match + coverage` 또는 rare CJK/identifier exact match 같은 고신뢰 조건만 통과하며, 기존 과거지시 신호어는 explicit mode로 recall 민감도를 높이되 generic 단어 단독 hit는 거부한다.
+- 정규화는 NFKC+lower+구두점 제거, identifier/path/hyphen·CJK term 보존, stopword와 현재 scope document-frequency로 저정보 단어를 억제한다. 모든 자동주입은 `2+ distinct match + coverage` 또는 rare CJK/identifier exact match 같은 단일 고신뢰 조건만 통과한다. 특정 자연어 phrase가 mode나 threshold를 바꾸지 않는다.
 - probe는 `last_accessed`를 갱신하지 않는다. 실제 주입된 ID만 access로 기록한다. 자동주입은 top 3, 총 1,200자 cap이며 결과가 없거나 저신뢰면 무출력이다.
 - raw prompt를 저장하지 않는 bounded event telemetry에 runtime/mode/term 수/candidate 수/qualified 수/injected IDs/reject reason/latency를 남겨 trigger hit-rate·정밀도·latency를 재관찰한다.
 
@@ -334,7 +335,7 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
   - **D-14 (no-tools + 스크립트 실행)**: v7 의 `--allowedTools` mem.py-제한이 settings.json blanket `Bash` allow + additive 의미로 **무력**(임의 명령 실행 실측). → distiller LLM 에서 도구를 _전부 제거_(`--disallowedTools`), 구조화 출력(JSON-lines)만 받아 **dispatch 스크립트가 검증 후 `mem add` 직접 실행**. LLM 판단·코드 실행(§0.5). injection 이 속여도 명령 실행 물리 불가. acceptance gate = `date>>file` 류 실측 차단.
 - **v9 신규 (Cluster D — 결정론-first lifecycle, §5.6)**:
   - **원칙**: 추가(가역) 판단 → 외부 에이전트 offload / 삭제·정리(비가역) 판단 → 메인 직접. (Hermes 도 consolidation=메인.)
-  - **D-15 (recall 자동주입 hook)**: B1 instruction → UserPromptSubmit hook(신호어 regex → `mem recall` → additionalContext 주입). 메인의 "recall 할까" 판단 제거.
+  - **D-15 (recall 자동주입 hook)**: B1 instruction → 모든 tracked/project prompt를 동일한 content-based threshold로 평가하는 UserPromptSubmit hook. 고정 자연어 신호어와 phrase-dependent confidence는 없음.
   - **D-16 (정리 후보 메인 노출)**: lifecycle 의 durable near-dup(+옵션 capacity·만료임박 working)를 `mem inject` 에 노출 → 메인이 consolidate/prune/graduate. 死 dup-flag 부활.
   - **D-17 (TTL backstop·삭제=메인)**: distiller add-only 확정. working prune/graduate·durable consolidation=메인. TTL=deterministic 안전망(2차). **→ v10 Cluster E 에서 정정: 삭제=세션끝 opus distiller.**
 - **v10 신규 (Cluster E — 큐레이션 단순화 + audit P0 하드닝, §5.7)**:
@@ -342,7 +343,7 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
   - **D-19 (strength)**: records 에 strength+last_accessed 칼럼. dedup=reinforce(재출현=중요도). exact=script 결정론, fuzzy=script flag→opus 병합. strength→injection·recall 랭킹·decay.
   - **D-20 (폭증 방지)**: add-time dedup(durable snapshot 주입)·durable soft-ceiling 트리거·injection budget strength top-K·cold-decay.
   - **D-21 (project_key robust)**: remote URL→git-common-dir→.claude-project-id 마커→cwd. worktree·이동 오펀 해소. fail-safe·고아 탐지·마이그레이션.
-  - **D-22 (recall 엔진)**: 단일 phrase → multi-term OR+bm25+top-K+strength. recall-inject 신호어 strip.
+  - **D-22 (recall 엔진)**: 단일 phrase → multi-term OR+bm25+top-K+strength. auto-recall은 corpus statistics와 term specificity로 저정보 term을 억제.
   - **D-23 (내구성)**: dump 자동 commit(삭제 복구 안전망)·import 멱등·user_version 게이트·INJECTION_PAT persist(anti-poisoning).
   - **D-24 (E-7 폐기·model-agnostic=D-11)**: 로깅 프록시 redundant 폐기(하네스는 어차피 로그 남김→adapter 만). + graduate(working→durable) opus 가 수행.
 - **v11 신규 (Cluster F — 루프↔메모리 환류, §5.8)**:
@@ -377,12 +378,12 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
    - ✅ **v7 구현·머지 완료** (main `fab5b46`): ① turn-nudge → detached distiller 분사(D-13 외부화) ② D-12·D-13 통일 dispatch·세션 lock ③ 모델 sonnet ④ 재귀가드 turn-counter 확장. 테스트 distill 37+turn-nudge 12+dispatch 17.
    - ✅ **v8 구현·머지·ENABLE 완료** (main `cd9f220`): D-14 no-tools(`--disallowedTools`)+스크립트 mem add 재설계. acceptance(control 생성 vs disallow 차단)·env-상속·ghost-marker·e2e(84줄→6레코드) 검증 후 `MEM_DISTILL_ENABLE=1` 켜짐(신규세션부터 가동).
 5. **Cluster D (결정론-first lifecycle 정비, v9 신규)** — autopilot-code --mode dev, worktree:
-   - **D-15**: `hooks/mem-recall-inject.sh` 신설 + settings.json UserPromptSubmit 배선 — 신호어 regex → `mem recall` → additionalContext 주입(MEM_DISTILL=1 skip, 신호어 없으면/결과 비면 no-op).
+   - **D-15**: `hooks/mem-recall-inject.sh` 신설 + settings.json UserPromptSubmit 배선 — 모든 tracked/project prompt → shared auto-recall → 고신뢰 결과만 additionalContext 주입(MEM_DISTILL=1 skip, 결과 없으면 no-op).
    - **D-16**: `mem inject` 에 "정리 후보" 섹션 — lifecycle 의 durable near-dup(+옵션 capacity·만료임박 working) 노출. `mem lifecycle` 의 dup 탐지 재사용(read-only projection).
    - **D-17**: distiller add-only 유지(무변경). CONVENTIONS §7 + CLAUDE.md §2 에 "add=외부·삭제=메인, working 졸업=메인, TTL=backstop" 명문화.
 6. **Cluster E (큐레이션 단순화 + audit P0 하드닝, v10 신규)** — autopilot-code, worktree, **phase 분할 권장**(한 사이클에 다 X):
    - **Phase E-α (DB 하드닝 기반)**: user_version 마이그레이션 프레임 + strength/last_accessed 칼럼 + project_key(remote→git-common-dir→marker→cwd) + cwd_origin 마이그레이션·고아 탐지. (다발 schema 라 user_version 선행 — audit C5.)
-   - **Phase E-β (recall·내구성)**: recall 엔진 교체(multi-term OR+bm25+top-K+strength, 신호어 strip) + dump 자동 commit·import 멱등·INJECTION_PAT persist.
+   - **Phase E-β (recall·내구성)**: recall 엔진 교체(multi-term OR+bm25+top-K+strength, corpus-based term filtering) + dump 자동 commit·import 멱등·INJECTION_PAT persist.
    - **Phase E-γ (큐레이션 단순화)**: 세션끝 distiller opus 풀 큐레이터(action JSON add/reinforce/merge/prune + script 실행) + N턴 sonnet add-only + 폭증 4겹(durable snapshot 주입·ceiling 트리거·budget·cold-decay) + graduate. 메인 housekeeping 0. v8 no-tools 보안 유지·acceptance 재검증.
    - E-7(프록시) 구현 없음 — D-11 adapter 원칙으로 충분.
 7. **Cluster F (루프↔메모리 환류, v11 신규)** — autopilot-code, worktree, phase 분할:

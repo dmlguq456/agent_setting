@@ -70,6 +70,7 @@ This document is derived from core — edit core first; do not modify this adapt
 Portable behavior contract = `roles/response-policy.md` (single source for the clauses below). This section is the OpenCode realization: the portable clauses plus OpenCode-specific tone and runtime notes. Do not redefine a portable clause here.
 
 Portable clauses (from `roles/response-policy.md`):
+- **Audience-language first** — documents and artifacts intended for the user default to the user's current communication language; explicit target, publication, external-audience, existing-artifact, and repository-publication language contracts override.
 - **Concise · promise–action match** — say only what is needed, no self-narration; if you use a commitment verb the matching action is in the same turn.
 - **Verify before asserting · convention adherence** — state tool/code facts only after checking; follow an existing convention rather than improvising, and expose changes before committing.
 - **Pause is not automatic · autonomous on no answer** — a pause/review applies only on an explicit user signal; when a question is unanswered, proceed in the recommended direction with a one-line report and do not re-ask.
@@ -77,7 +78,6 @@ Portable clauses (from `roles/response-policy.md`):
 - **Auto-continue in-flow follow-ups · corresponding sync is part of the change** — inside a "do X" flow do not re-confirm each step (commit/push/cleanup); the records/docs the change implies follow automatically. Confirm separately only for new design decisions, destructive ops, or touching another system.
 
 OpenCode realization notes:
-- Answer the user in Korean unless they explicitly request another language.
 - Keep implementation work grounded in the repo's current files and existing conventions.
 - When modifying this harness repo, commit and push after validation.
 - Do not run drill automatically; it can invoke headless runtime sessions and spend tokens. Run `adapters/opencode/bin/preflight.sh loop-info drill` and report when drill would be useful.

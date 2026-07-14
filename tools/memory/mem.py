@@ -883,12 +883,6 @@ def index_build(rebuild=False):
 
 # ---------- recall ----------
 
-# 회상 신호어 집합 — hooks/mem-recall-inject.sh L45 PAT 와 동일 리터럴 집합 (개념적 단일출처).
-# 추가 시 hook PAT + 여기 + MEMORY §7.5 를 동시 갱신 (Risk 11).
-_RECALL_SIGNAL_WORDS = frozenset({
-    "지난번", "지난번에", "예전에", "이전에", "전에", "그때", "저번에", "아까",
-})
-
 # 한국어 조사 — suffix-strip 대상 (길이 순 내림차순 정렬 → greedy 매칭)
 _KO_PARTICLES = ("에서", "으로", "한테", "부터", "까지", "은", "는", "이", "가",
                  "을", "를", "에", "와", "과", "도", "만", "의", "로", "께")
@@ -904,15 +898,14 @@ def _tokenize_query(q: str) -> list:
 
     동작:
     1. 공백 분할.
-    2. 회상 신호어(_RECALL_SIGNAL_WORDS) 전체 토큰 제거.
-    3. 한국어 조사 suffix-strip: stem 길이 ≥ 2 일 때만 strip.
-    4. 내부 구두점(하이픈/슬래시/점/언더스코어 …)에서 sub-token 분해 —
+    2. 한국어 조사 suffix-strip: stem 길이 ≥ 2 일 때만 strip.
+    3. 내부 구두점(하이픈/슬래시/점/언더스코어 …)에서 sub-token 분해 —
        "stage-dispatch" → "stage" OR "dispatch". 하이픈 쿼리가 단일 phrase 로
        굳어 인접 매칭만 되던 조용한 miss 를 막고, 공백 쿼리("stage dispatch")와
        동일한 multi-term OR 로 동작한다 (E-4 계약 실현). 다부분 토큰은 원본도
        phrase 로 함께 실어 exact-identifier bm25 랭킹을 보존한다.
-    5. 각 sub-token 을 FTS5-escape: '"tok"' (FTS5 연산자 주입 차단).
-    6. 빈 결과 → [] 반환 (호출자가 _fts_literal phrase fallback).
+    4. 각 sub-token 을 FTS5-escape: '"tok"' (FTS5 연산자 주입 차단).
+    5. 빈 결과 → [] 반환 (호출자가 _fts_literal phrase fallback).
 
     trigram MATCH 는 substring 매칭이므로 tokenize 하지 않는다 — 호출자가 직접
     _fts_literal 를 사용. (unicode61 FTS 전용).
@@ -927,9 +920,6 @@ def _tokenize_query(q: str) -> list:
             tokens.append(escaped)
 
     for tok in q.split():
-        # 회상 신호어 제거
-        if tok in _RECALL_SIGNAL_WORDS:
-            continue
         # 조사 suffix-strip (stem ≥ 2 가드)
         for p in _KO_PARTICLES:
             if tok.endswith(p) and len(tok) - len(p) >= 2:
@@ -999,7 +989,7 @@ def _auto_terms(query):
     out = []
     for token in raw:
         token = token.strip("._/:@+-")
-        if not token or token in _RECALL_SIGNAL_WORDS or token in _AUTO_STOPWORDS:
+        if not token or token in _AUTO_STOPWORDS:
             continue
         if _has_cjk(token):
             # 조사 뒤 의미 suffix가 겹치는 형태(메모리쪽을 → 메모리)를 최대 2단계 정규화.
@@ -1096,9 +1086,6 @@ def _append_write_event(action, rid, tier=None, scope=None, rtype=None, actor=No
 
 def auto_recall(query, limit=RECALL_AUTO_LIMIT, touch=True, json_output=False):
     started = time.monotonic()
-    explicit = any(word in unicodedata.normalize("NFKC", query or "")
-                   for word in _RECALL_SIGNAL_WORDS)
-    mode = "explicit" if explicit else "implicit"
     terms = _auto_terms(query)
     candidates = []
     raw_candidate_count = 0
@@ -1136,13 +1123,7 @@ def auto_recall(query, limit=RECALL_AUTO_LIMIT, touch=True, json_output=False):
                 details[term][0] and details[term][1]
                 and doc_freq[term] <= max(2, math.ceil(total_docs * 0.05))
                 for term in matched)
-            if explicit:
-                qualified = (len(matched) >= 2 and coverage >= 0.4) or rare_specific or any(
-                    details[term][0] and len(term) >= 3
-                    and doc_freq[term] <= max(8, math.ceil(total_docs * 0.2))
-                    for term in matched)
-            else:
-                qualified = (len(matched) >= 2 and coverage >= 0.5) or rare_specific
+            qualified = (len(matched) >= 2 and coverage >= 0.5) or rare_specific
             if not qualified:
                 continue
             idf = sum(math.log((total_docs + 1) / (doc_freq[t] + 1)) + 1 for t in matched)
@@ -1165,7 +1146,7 @@ def auto_recall(query, limit=RECALL_AUTO_LIMIT, touch=True, json_output=False):
         "at": datetime.datetime.now().isoformat(timespec="seconds"),
         "event": "auto-recall",
         "runtime": os.environ.get("MEM_RECALL_RUNTIME", "unknown"),
-        "mode": mode,
+        "mode": "automatic",
         "term_count": len(terms),
         "candidate_count": raw_candidate_count,
         "qualified_count": len(candidates),
@@ -1179,7 +1160,7 @@ def auto_recall(query, limit=RECALL_AUTO_LIMIT, touch=True, json_output=False):
         payload["results"] = results
         print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
     elif results:
-        lines = ["# 관련 기억 (자동 회상)"]
+        lines = ["# Relevant memory (automatic recall)"]
         for item in results:
             snippet = _first_line(item["body"]).replace("\n", " ")[:220]
             rid = item["id"]

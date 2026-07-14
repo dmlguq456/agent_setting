@@ -51,7 +51,7 @@ Validate mode-specific required inputs. If any check fails, **abort immediately*
   - **그 외 의도** (report · mid-report · post-mortem · grant proposal · tech blog · memo) → format spec optional. Absent 시 fallback to generic prose layout. NRF / NSF / 산학협력단 grant 의도면 기관 template 추천 ("`/analyze-project --mode doc <funding_body_template_folder>` 먼저"). 기업 / 기관 internal template 있으면 동일.
 
 **Abort behavior**:
-- Print the error message in Korean to the user.
+- Print a clear error message to the user.
 - Do NOT call `mkdir`, do NOT invoke any sub-skill, do NOT write `pipeline_summary.md`.
 - Exit with status: aborted (pre-flight).
 
@@ -245,7 +245,7 @@ Mode × genre (자연어 task description 으로 결정) default table:
 | mode + genre 의도 | primary language | rationale |
 |---|---|---|
 | `paper` (학술 본문 — submission / camera-ready / major revision full paper) | **English** | venue is English-only; user reviews English source directly |
-| `paper` + task description 에 "camera-ready paste-ready cheatsheet" / "mutation cheatsheet" 같은 _작업 안내문_ 의도 | **Korean** | cheatsheet 자체는 internal work-tool — 사용자가 LaTeX paste 하면서 읽음. 한국어 자연 |
+| `paper` + task description 에 "camera-ready paste-ready cheatsheet" / "mutation cheatsheet" 같은 _작업 안내문_ 의도 | **user communication language** | cheatsheet 자체는 internal work-tool — 사용자가 LaTeX paste 하면서 읽음 |
 | `presentation` (학회 발표 / 세미나 / 강의) | audience-driven | Korean audience → Korean; English conference talk → English (task description 으로 명시) |
 | `doc` + rebuttal-response 의도 | venue-driven (보통 영문) | reviewer 가 venue 언어로 읽음 |
 | `doc` + peer review 작성 의도 | venue-driven (보통 영문) | OpenReview / journal portal 영문 |
@@ -259,7 +259,7 @@ If the user explicitly states the output language in the task description (e.g.,
 - All narrative, headers (H1/H2/H3), 위치/Location lines, reasoning lines, paste sequence list, final verification checklist, every comment outside LaTeX blocks
 - LaTeX blocks themselves stay as-is (English / math content preserved verbatim)
 - For mixed-source content (e.g., a quoted English title in a Korean body), the quote itself stays English but the surrounding prose follows the primary language
-- 연구팀 agent default Language Rule (_user-facing output in Korean_) is **overridden** by this primary-language assignment — if primary is English, output English; if Korean, Korean. The orchestrator's prompt must state the primary language explicitly.
+- The orchestrator's prompt must state the selected primary language explicitly; no agent-level default locale may override this artifact-language assignment.
 
 **Mirror generation** (Step 4-KO — conditional, NOT default):
 - Trigger: primary language ≠ user's working language (e.g., paper body in English, user works in Korean — mirror needed for review).
@@ -309,7 +309,7 @@ This propagation is mandatory: a `tone: administrative` strategy with a heroic-p
     - _peer review 작성 의도_: 80%+ — every required section per the auto-discovered format spec must be filled with concrete claims. Strengths/weaknesses must reference specific paper sections/figures/tables. Score justifications are mandatory.
     - _기술 보고서 / proposal / blog / memo_: 70-80% — all sections with substantive content, no heading-only sections.
 
-Write **only** the English draft. Return ONLY the file path and a 3-5 line Korean summary.
+Write **only** the draft in the selected primary language. Return ONLY the file path and a 3-5 line summary.
 ```
 
 3. **IMPORTANT**: Do NOT read, re-write, or duplicate the draft file yourself. The agent writes it directly.
@@ -335,7 +335,7 @@ When triggered, invoke the **편집팀** (editorial-team) agent in 모드 A (옮
 - report/proposal: 회사·기관·프로젝트·기술 용어는 영어 그대로
 - presentation: 슬라이드의 본문 인용·LaTeX·모델·논문 제목은 원본 언어 그대로
 한 문서 안에서 같은 개념은 같은 표기로 통일.
-완료 시 파일 경로 + 한국어 요약 3-5 줄 + 의도적으로 한 표기 결정 한두 개만 돌려준다.
+완료 시 파일 경로 + 요약 3-5 줄 + 의도적으로 한 표기 결정 한두 개만 돌려준다.
 ```
 
 > **사용자 작업 언어 판정**: orchestrator (메인 에이전트) 가 task description 의 language signal (사용자가 어느 언어로 prompt 를 줬는지, _영문/국문 양쪽_ 같은 명시 단어, venue 정보) 을 보고 판정. 모호하면 Step 0 Scope Clarification 에서 확인 (있으면).
@@ -353,12 +353,12 @@ When triggered, invoke the **편집팀** (editorial-team) agent in 모드 A (옮
    ```
    | Step 4 | draft factual check | auto | {N + K} unverified/conflict + {M} ambiguous in draft — recommend /audit before publish |
    ```
-5. **One-line chat alert** (Korean):
-   ```
-   ⚠ Draft 사실 확인: 미검증 {N}건, 모호 {M}건, 충돌 {K}건 — `/audit {artifact_short_name} --scope facts` 권장 (draft 단계라 facts 측면 명시; 점검만 하려면 `--report-only` 추가, 그렇지 않으면 자동으로 autopilot-refine fix-chain 트리거)
-   ```
+5. **One-line chat alert**: report the unverified, ambiguous, and conflict
+   counts, then recommend `/audit {artifact_short_name} --scope facts`. Mention
+   that `--report-only` requests inspection without the automatic
+   autopilot-refine fix chain.
 
-If N + M + K == 0: emit `✅ Draft 사실 확인: 검증된 클레임 {verified}건, 문제 없음` and log accordingly.
+If N + M + K == 0: emit a concise success alert with the verified claim count and log accordingly.
 
 ### Step 5.5: Editorial polish (편집팀 모드 B — conditional)
 

@@ -42,7 +42,7 @@ surfaces rewritten to Codex-native preflight/tool-contract wording.
 When asked to review a plan:
 
 1. **Read all Knowledge Sources first** (라우터의 Knowledge Sources 섹션 참조). Understand the theoretical basis before reading the plan.
-2. **Read the Korean plan** thoroughly.
+2. **Read the plan in its authored language** thoroughly.
 3. **Classify the task type** before applying review axes (this determines which lens to weight most). Detect by reading the plan's target files / scope statement:
 
    | Task type | Trigger | Primary review axes (audit-aligned, also valid `Focus axis` values) |
@@ -62,7 +62,7 @@ When asked to review a plan:
    - **Do existing callers continue to work?** (e.g., removing a mode breaks anyone scripting `--mode X` invocations.)
    - **Frontmatter format**: name lowercase / description quoted / argument-hint quoted / no extra blank lines / closing `---` on own line, consistent with existing siblings.
 
-5. **Write review memos** directly into the Korean plan file as `<!-- memo: ... -->` comments at the relevant locations. Focus on the axes that match the task type. For meta-skill tasks the memos should explicitly call out _family-level_ concerns even if the plan-local content reads fine.
+5. **Write review memos** directly into the plan file as `<!-- memo: ... -->` comments at the relevant locations, using the plan's authored language unless its contract says otherwise. Focus on the axes that match the task type. For meta-skill tasks the memos should explicitly call out _family-level_ concerns even if the plan-local content reads fine.
 
 **Multi-axis parallel mode** (selected by `intensity=thorough|adversarial`, optionally scaled by `--qa thorough|adversarial`): if the invocation prompt contains `Focus axis: <axis_name>`, **limit review to that single axis only** — do NOT review other axes. The owner dispatches one bounded reviewer/perspective worker per axis and then merges memos. Available axes:
 

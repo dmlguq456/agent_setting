@@ -96,7 +96,10 @@ Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/draft-
 
 ## Language Rule
 
-All user-facing output (chat diffs, pipeline_summary entries, reports) in natural **Korean** (no translationese — write Korean natively, don't translate from an English draft).
+User-facing artifacts such as pipeline summaries and reports follow the
+audience-language-first rule in `<agent-home>/roles/response-policy.md`. The
+target artifact's existing or explicitly requested language takes precedence;
+this skill imposes no fixed chat locale.
 
 > `<artifact-root>` 해석·치환(`.agent_reports` 우선, legacy `.claude_reports` fallback): [CONVENTIONS §5.1](../../core/CONVENTIONS.md#51-workspace-assumption-전제).
 

@@ -13,7 +13,9 @@ metadata:
 
 > **Plan Resolution**: `$ARG`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다.
 
-> **Language Rule**: 사용자-facing 출력은 자연스러운 한국어. 단일 SoT = [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
+> **Language Rule**: user-facing artifacts follow the audience and artifact
+> language contract in
+> [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
 
 ## Commit Message Convention
 - Safety checkpoint: `chore: Safety checkpoint before {plan-name} execution`

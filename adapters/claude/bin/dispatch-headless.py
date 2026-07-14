@@ -260,7 +260,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         + depth_note
         + "\nUser task:\n"
         + f"{task.rstrip()}\n\n"
-        + "Return a concise Korean report with changed files, verification commands/results, "
+        + "Return a concise report with changed files, verification commands/results, "
         "and artifact paths. Leave merge and worktree cleanup to the main orchestrator.\n",
         source,
     )
