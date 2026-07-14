@@ -1,12 +1,12 @@
 ---
 name: autopilot-apply
-description: "Use when applying a finalized cheatsheet draft into the canonical LaTeX source and verifying it compiles. cheatsheet 초안을 canonical main.tex 에 paste·반영하는 적용 entry"
+description: "Use when applying a finalized cheatsheet draft to canonical LaTeX source and verifying compilation."
 argument-hint: "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]"
 metadata:
   group: entry
   fam: doc
   modes: []
-  blurb: "cheatsheet 초안을 canonical main.tex 에 paste·반영하는 적용 entry"
+  blurb: "Apply a finalized cheatsheet to canonical LaTeX source."
 ---
 
 > **산출물 폴더 컨벤션**: 본 skill 은 _<artifact-root>/ 밖의 실제 작업 파일_ 을 편집한다 (예외적). 자기 로그·스냅샷은 cheatsheet artifact 의 `_internal/apply/` 하위에 둔다 ([CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) T3).

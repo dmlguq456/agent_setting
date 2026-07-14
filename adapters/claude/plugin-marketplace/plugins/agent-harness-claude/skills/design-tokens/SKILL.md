@@ -1,12 +1,12 @@
 ---
 name: design-tokens
-description: "디자인 토큰(색·타이포·간격) 정의·생성 sub-skill"
+description: "Define and generate design tokens for color, typography, and spacing."
 argument-hint: "<design path or app path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "디자인 토큰(색·타이포·간격) 정의·생성 sub-skill"
+  blurb: "Define and generate design tokens."
 ---
 
 ## Language Rule

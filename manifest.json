@@ -11,7 +11,7 @@
         "paper",
         "doc"
       ],
-      "blurb": "사전조사 분석 — 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로",
+      "blurb": "Structure primary code, paper, and document sources for downstream work.",
       "argument_hint": "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]"
     },
     {
@@ -23,7 +23,7 @@
         "init",
         "update"
       ],
-      "blurb": "cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출",
+      "blurb": "Build or update a cross-project user-preference profile.",
       "argument_hint": "<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]"
     },
     {
@@ -32,7 +32,7 @@
       "group": "ops",
       "fam": "ops",
       "modes": [],
-      "blurb": "산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고",
+      "blurb": "Audit artifacts and pipelines for drift, inconsistency, and omissions.",
       "argument_hint": "<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]"
     },
     {
@@ -41,7 +41,7 @@
       "group": "entry",
       "fam": "doc",
       "modes": [],
-      "blurb": "cheatsheet 초안을 canonical main.tex 에 paste·반영하는 적용 entry",
+      "blurb": "Apply a finalized cheatsheet to canonical LaTeX source.",
       "argument_hint": "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]"
     },
     {
@@ -54,7 +54,7 @@
         "debug",
         "audit"
       ],
-      "blurb": "코드 작업 일반 entry — 라이브러리·연구·앱 모두 커버, spec 컨텍스트 자동 감지",
+      "blurb": "Route code work through plan, execute, test, and report.",
       "argument_hint": "--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
     },
     {
@@ -63,7 +63,7 @@
       "group": "entry",
       "fam": "design",
       "modes": [],
-      "blurb": "시각 산출물 디자인 파이프 entry — 토큰·컴포넌트·레퍼런스·핸드오프 통합",
+      "blurb": "Run the visual-design pipeline from references through handoff.",
       "argument_hint": "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
@@ -76,7 +76,7 @@
         "presentation",
         "doc"
       ],
-      "blurb": "문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태",
+      "blurb": "Draft papers, presentations, and prose documents.",
       "argument_hint": "<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
     },
     {
@@ -88,7 +88,7 @@
         "setup",
         "eval"
       ],
-      "blurb": "빠른 실험 prototype entry — 학습 세팅(setup)과 ckpt 평가(eval) 앞뒤를 돕는다",
+      "blurb": "Prototype training setups and checkpoint evaluations.",
       "argument_hint": "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
     },
     {
@@ -97,7 +97,7 @@
       "group": "entry",
       "fam": "ops",
       "modes": [],
-      "blurb": "산출물 라우팅 파이프 entry — 2-Layer 노트화·digest·triage 제안",
+      "blurb": "Route artifacts into notes, digests, and triage suggestions.",
       "argument_hint": "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]"
     },
     {
@@ -106,7 +106,7 @@
       "group": "entry",
       "fam": "doc",
       "modes": [],
-      "blurb": "기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존",
+      "blurb": "Refine existing document and research artifacts with version history.",
       "argument_hint": "\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
     },
     {
@@ -119,7 +119,7 @@
         "technology",
         "market"
       ],
-      "blurb": "세 family 공통 사전조사 — 논문·기술·시장 survey 후 다운스트림으로 분기하는 entry",
+      "blurb": "Survey academic, technology, or market sources before routing downstream.",
       "argument_hint": "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]"
     },
     {
@@ -128,8 +128,8 @@
       "group": "entry",
       "fam": "app",
       "modes": [],
-      "blurb": "앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트",
-      "argument_hint": "<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial]"
+      "blurb": "Prepare application deployment and release.",
+      "argument_hint": "<optional task description> [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
       "slug": "skill__autopilot-spec",
@@ -144,8 +144,8 @@
         "research",
         "update"
       ],
-      "blurb": "요구사항·청사진 작성·갱신 entry — prd.md 단일 출처, 모든 spec 변경의 canonical 경로",
-      "argument_hint": "<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
+      "blurb": "Write or update requirements through the canonical PRD.",
+      "argument_hint": "<task description> [--mode auto|app|library|api|cli|research|update (comma-separated)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
     },
     {
       "slug": "skill__code-execute",
@@ -153,7 +153,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "plan 단계별 구현 실행 — 개발팀 디스패치 sub-skill",
+      "blurb": "Execute an implementation plan step by step.",
       "argument_hint": "<plan name or path>"
     },
     {
@@ -162,7 +162,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "코드 분석 후 상세 구현 plan 작성 — 기획팀 경유 sub-skill",
+      "blurb": "Analyze code and create a reviewed implementation plan.",
       "argument_hint": "<task description>"
     },
     {
@@ -171,7 +171,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "사용자 메모·QA 피드백 반영해 기존 plan 정정 — sub-skill",
+      "blurb": "Revise an existing plan from feedback and failure evidence.",
       "argument_hint": "<plan name or path>"
     },
     {
@@ -180,7 +180,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "코드 작업 사이클 결과 요약·보고 sub-skill",
+      "blurb": "Report the results of a completed code-work cycle.",
       "argument_hint": "<plan name or path>"
     },
     {
@@ -189,7 +189,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "구현 결과 단계별 검증 — 품질관리팀 test 모드 sub-skill",
+      "blurb": "Verify implementation results and record evidence.",
       "argument_hint": "<plan name, path, or test scope>"
     },
     {
@@ -198,7 +198,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "UI 컴포넌트 mockup·구현 sub-skill",
+      "blurb": "Implement UI component mockups and previews.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -207,7 +207,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "디자인 → 개발 핸드오프 자산·스펙 정리 sub-skill",
+      "blurb": "Package design assets and specifications for development.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -216,7 +216,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "디자인 MCP·환경 bootstrap + design_state.yaml 생성 sub-skill",
+      "blurb": "Bootstrap the design environment and state.",
       "argument_hint": "<design task description> [--scope ui|slide|icon|diagram|mixed]"
     },
     {
@@ -225,7 +225,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "레퍼런스 시각 자료 수집·정리 sub-skill",
+      "blurb": "Collect and organize visual references.",
       "argument_hint": "<design task> [--design <path>] [--refs <image paths>] [--no-web]"
     },
     {
@@ -234,7 +234,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "디자인 결과물 6축 비평·토큰 계약 점검 sub-skill",
+      "blurb": "Review design quality and token-contract compliance.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -243,7 +243,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "디자인 토큰(색·타이포·간격) 정의·생성 sub-skill",
+      "blurb": "Define and generate design tokens.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -252,7 +252,7 @@
       "group": "sub",
       "fam": "sub",
       "modes": [],
-      "blurb": "초안 정련·다듬기 sub-skill — 편집팀 검수 경유",
+      "blurb": "Refine drafts from memo and review feedback.",
       "argument_hint": "<strategy or draft name or path>"
     },
     {
@@ -268,7 +268,7 @@
         "proposal",
         "presentation"
       ],
-      "blurb": "문서 전략 초안 작성 — 6 모드(rebuttal·paper·review·report·proposal·presentation) sub-skill",
+      "blurb": "Create a source-grounded document strategy.",
       "argument_hint": "<mode> --inputs <comma-separated-paths> --output <artifact-dir> <task description>"
     },
     {
@@ -277,7 +277,7 @@
       "group": "ops",
       "fam": "ops",
       "modes": [],
-      "blurb": "프로젝트·cross-project 기록·handoff — 세션 간 연속성 working 메모",
+      "blurb": "Store project records and handoffs across sessions.",
       "argument_hint": "[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]"
     }
   ],

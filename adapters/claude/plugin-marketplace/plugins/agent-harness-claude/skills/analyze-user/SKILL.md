@@ -1,12 +1,12 @@
 ---
 name: analyze-user
-description: "Use when building or updating the cross-project user-preference profile. cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출"
+description: "Use when building or updating a cross-project user-preference profile from coding, writing, and analysis patterns."
 argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]"
 metadata:
   group: pre
   fam: pre
   modes: [init, update]
-  blurb: "cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출"
+  blurb: "Build or update a cross-project user-preference profile."
 ---
 
 # analyze-user

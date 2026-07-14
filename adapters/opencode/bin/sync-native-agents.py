@@ -30,7 +30,7 @@ This is adapter-owned output generated from `core/MEMORY.md` §7.4, not a non-Op
 6. Cross-check one live file/code fact when the memory result implies an actionable convention.
 
 Output at most 15 lines:
-- verdict: 있음 / 없음 / 애매
+- verdict: found / not-found / ambiguous
 - hits: up to 3 short quotes or paraphrases with record id / session pointer
 - apply: one line telling the main agent what to do now
 - check: one live-code or file cross-check line, or not checked with reason

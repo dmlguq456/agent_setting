@@ -1,9 +1,10 @@
 #!/bin/sh
-# PreToolUse(Edit|Write|MultiEdit|NotebookEdit) — merge/rebase/cherry-pick 진행 중인
-# git repo 의 파일 편집을 DENY (OPERATIONS §5.9 의 edit-time 하드 강제).
-# 직접 편집 경로(ceremony 비경유)도 커버 — golden g2 (2026-06-11) 가 잡은 구멍.
-# 탈출구: 사용자가 _명시적으로_ 충돌 해결을 요청한 경우에만 $GITDIR/CLAUDE_MERGE_EDIT_OK
-# 를 만들고 진행, 작업 후 삭제. Claude 자가 판단 생성 금지 (artifact-guard untracked 와 동일 convention).
+# PreToolUse(Edit|Write|MultiEdit|NotebookEdit): deny file edits while a git
+# repository is merging, rebasing, or cherry-picking (OPERATIONS §5.9).
+# This also covers direct edit paths that bypass workflow ceremony.
+# Escape hatch: only after the user explicitly requests conflict resolution,
+# create $GITDIR/CLAUDE_MERGE_EDIT_OK, perform the work, then delete it. The
+# agent must not create the marker on its own.
 # POSIX sh, no jq. Also supports portable CLI mode:
 #   git-state-guard.sh --file <path>
 
@@ -33,8 +34,8 @@ fi
 [ -z "$fp" ] && exit 0
 
 dir=$(dirname "$fp")
-# dirname 이 아직 없으면 존재하는 최근접 조상으로 올라간다 — merge/rebase 중 없는 하위폴더
-# 신규 write 가 git 판정을 건너뛰고 우회하던 구멍을 메움 (codex #7, 2026-06-22).
+# If dirname does not exist, walk to the nearest existing ancestor so a write
+# to a new subdirectory cannot bypass merge/rebase detection.
 while [ ! -d "$dir" ] && [ "$dir" != "/" ] && [ "$dir" != "." ]; do dir=$(dirname "$dir"); done
 [ -d "$dir" ] || exit 0
 gd=$(git -C "$dir" rev-parse --git-dir 2>/dev/null) || exit 0
@@ -44,15 +45,14 @@ op=""
 [ -f "$gd/MERGE_HEAD" ] && op="merge"
 [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] && op="rebase"
 [ -f "$gd/CHERRY_PICK_HEAD" ] && op="cherry-pick"
-# detached HEAD — 브랜치 없이 커밋에 직접 올라탄 상태. runtime bootstrap/OPERATIONS 가 STOP+hook
-# 강제로 약속한 자리인데 종전 hook 은 안 막았다 (codex #6, 2026-06-22).
+# Detached HEAD means the worktree points directly at a commit without a branch.
 [ -z "$op" ] && ! git -C "$dir" symbolic-ref --quiet HEAD >/dev/null 2>&1 && op="detached-HEAD"
 [ -z "$op" ] && exit 0
 
-# 명시 요청 탈출구
+# Explicit-request escape hatch.
 [ -f "$gd/CLAUDE_MERGE_EDIT_OK" ] && exit 0
 
-reason="$op 진행 중인 repo — 편집·커밋 STOP, 상태 보고가 기본 (OPERATIONS §5.9). 충돌 해소·머지 완결을 임의로 하지 말 것. 사용자가 명시적으로 충돌 해결을 요청한 경우에만 touch $gd/CLAUDE_MERGE_EDIT_OK 후 진행하고 작업 후 삭제."
+reason="$op is in progress in this repository. Stop edits and commits and report the state (OPERATIONS §5.9). Do not resolve conflicts or complete the operation without an explicit user request. After such a request, touch $gd/CLAUDE_MERGE_EDIT_OK, perform the work, then remove the marker."
 if [ "$hook_mode" -eq 1 ]; then
   printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$reason"
   exit 0

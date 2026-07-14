@@ -1,12 +1,12 @@
 ---
 name: post-it
-description: "프로젝트·cross-project 기록·handoff — 세션 간 연속성 working 메모"
+description: "Store project and cross-project records or handoffs in working memory."
 argument-hint: "[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]"
 metadata:
   group: ops
   fam: ops
   modes: []
-  blurb: "프로젝트·cross-project 기록·handoff — 세션 간 연속성 working 메모"
+  blurb: "Store project records and handoffs across sessions."
 ---
 
 ## 목적

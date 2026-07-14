@@ -12,6 +12,9 @@
 - [x] Translate portable capability contracts and generated Codex/OpenCode surfaces
 - [x] Replace fixed Korean-output directives in active compatibility Skills
 - [x] Add deterministic audience-language neutrality conformance coverage
+- [x] Englishize all 26 active Skill frontmatter descriptions, blurbs, and argument hints
+- [x] Englishize the first non-installer runtime-script batch and synchronize projections
+- [x] Commit and push the Skill-metadata and runtime-script batch
 - [ ] Finish English prose conversion across hand-authored Skill bodies and references
 - [ ] Translate non-installer runtime scripts and keep tests synchronized
 - [x] Regenerate affected projections and rerun the full regression suite

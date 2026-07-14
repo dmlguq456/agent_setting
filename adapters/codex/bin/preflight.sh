@@ -269,9 +269,10 @@ case "$cmd" in
     # Recursion guard: skip the whole session-end pipeline when invoked from
     # within a distiller (the codex exec worker exports MEM_DISTILL=1).
     [ "${MEM_DISTILL:-}" = "1" ] && exit 0
-    # SessionEnd sync 계약(core/MEMORY.md §7, D-31) = mem sync + dump.jsonl git mirror
-    # push. MEM_DUMP_PUSH 를 생략하면 Codex 세션 기억이 원격 mirror 에서 drift 한다
-    # (Claude settings.json:136 과 동형). push 는 mem.py 안에서 5s bounded·never-fatal.
+    # SessionEnd sync contract (core/MEMORY.md §7, D-31): mem sync plus a
+    # dump.jsonl git-mirror push. Omitting MEM_DUMP_PUSH lets Codex-session
+    # memory drift from the remote mirror. mem.py bounds the push to five
+    # seconds and treats failure as non-fatal.
     (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" MEM_DUMP_PUSH="${MEM_DUMP_PUSH:-1}" python3 "$ROOT/tools/memory/mem.py" sync)
     # Automatic session-end distillation is enabled: the codex exec read-only
     # sandbox was verified tool-free (adapters/codex/ADAPTATION.md Distillation

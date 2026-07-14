@@ -1,12 +1,12 @@
 ---
 name: design-refs
-description: "레퍼런스 시각 자료 수집·정리 sub-skill"
+description: "Collect and organize visual reference materials."
 argument-hint: "<design task> [--design <path>] [--refs <image paths>] [--no-web]"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "레퍼런스 시각 자료 수집·정리 sub-skill"
+  blurb: "Collect and organize visual references."
 ---
 
 ## Language Rule

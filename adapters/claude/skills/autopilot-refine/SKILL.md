@@ -1,12 +1,12 @@
 ---
 name: autopilot-refine
-description: "Use when correcting or updating an existing document or research artifact. 기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존"
+description: "Use when correcting or updating an existing document or research artifact while preserving version history."
 argument-hint: "\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
 metadata:
   group: entry
   fam: doc
   modes: []
-  blurb: "기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존"
+  blurb: "Refine existing document and research artifacts with version history."
 ---
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.

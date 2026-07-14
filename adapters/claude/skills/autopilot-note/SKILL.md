@@ -1,12 +1,12 @@
 ---
 name: autopilot-note
-description: "Use when routing an artifact into notes (2-layer notification, digest, triage). 산출물 라우팅 파이프 entry — 2-Layer 노트화·digest·triage 제안"
+description: "Use when routing artifacts into notes, digests, and triage suggestions."
 argument-hint: "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]"
 metadata:
   group: entry
   fam: ops
   modes: []
-  blurb: "산출물 라우팅 파이프 entry — 2-Layer 노트화·digest·triage 제안"
+  blurb: "Route artifacts into notes, digests, and triage suggestions."
 ---
 
 # autopilot-note

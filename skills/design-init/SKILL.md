@@ -1,12 +1,12 @@
 ---
 name: design-init
-description: "디자인 MCP·환경 bootstrap + design_state.yaml 생성 sub-skill"
+description: "Bootstrap the design environment and create design_state.yaml."
 argument-hint: "<design task description> [--scope ui|slide|icon|diagram|mixed]"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "디자인 MCP·환경 bootstrap + design_state.yaml 생성 sub-skill"
+  blurb: "Bootstrap the design environment and state."
 ---
 
 ## Language Rule

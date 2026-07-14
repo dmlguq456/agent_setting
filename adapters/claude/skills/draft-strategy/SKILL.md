@@ -1,12 +1,12 @@
 ---
 name: draft-strategy
-description: "문서 전략 초안 작성 — 6 모드(rebuttal·paper·review·report·proposal·presentation) sub-skill"
+description: "Create a document strategy for rebuttals, papers, reviews, reports, proposals, or presentations."
 argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> <task description>"
 metadata:
   group: sub
   fam: sub
   modes: [rebuttal, paper, review, report, proposal, presentation]
-  blurb: "문서 전략 초안 작성 — 6 모드(rebuttal·paper·review·report·proposal·presentation) sub-skill"
+  blurb: "Create a source-grounded document strategy."
 ---
 
 ## Language Rule

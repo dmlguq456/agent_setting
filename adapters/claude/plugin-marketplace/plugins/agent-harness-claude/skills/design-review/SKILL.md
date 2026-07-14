@@ -1,12 +1,12 @@
 ---
 name: design-review
-description: "디자인 결과물 6축 비평·토큰 계약 점검 sub-skill"
+description: "Review design outputs across six quality axes and the token contract."
 argument-hint: "<design path or app path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "디자인 결과물 6축 비평·토큰 계약 점검 sub-skill"
+  blurb: "Review design quality and token-contract compliance."
 ---
 
 ## Language Rule

@@ -1,10 +1,10 @@
 #!/bin/sh
-# PreToolUse(Skill): spec 청사진을 _변경_ 하는 skill(autopilot-code/spec)을 spec-backed cwd에서
-# 호출할 때, 이번 세션에 prd.md를 '실제 Read'(마커 존재)하지 않았으면 DENY.
+# PreToolUse(Skill): when a spec-changing Skill runs in a spec-backed cwd,
+# deny it unless this session has actually read prd.md (marker present).
 # Portable CLI: spec-skill-gate.sh --skill <name> [--cwd <dir>] [--session <id>] [--agent-home <dir>]
-# prd.md가 Read 이후 갱신됐으면(역방향 drift)도 DENY → 재Read 강제.
-# self-report가 아니라 검증 가능한 하드 게이트. POSIX sh, no jq.
-# (autopilot-note 제외 — digest skill 이라 spec 청사진을 안 바꿈. 2026-06-16 audit #16.)
+# Also deny when prd.md changed after that read, forcing a fresh read.
+# This is a verifiable hard gate rather than self-reporting. POSIX sh, no jq.
+# autopilot-note is excluded because digest work does not change the blueprint.
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/../utilities/agent-home.sh")}"
@@ -38,24 +38,24 @@ check_gate() {
 
   case "$skill" in
     autopilot-code|autopilot-spec) ;;
-    *) return 0 ;;   # spec-governed 아닌 capability → 통과
+    *) return 0 ;;   # Capability is not spec-governed.
   esac
 
   find_prd "$cwd"
-  [ -z "$prd" ] && return 0   # spec-backed 아님 → 통과
+  [ -z "$prd" ] && return 0   # Not a spec-backed project.
 
   key=$(printf '%s' "$root" | sed 's#[/ ]#_#g')
   marker="$AGENT_HOME/.spec-grounding/${sid}__${key}"
   cur=$(stat -c %Y "$prd" 2>/dev/null || echo 0)
 
   if [ ! -f "$marker" ]; then
-    reason="spec-backed cwd인데 prd.md를 이번 세션에 Read하지 않음. $prd 를 Read 도구로 직접 읽은 뒤 다시 호출하세요. 코드 주석·brief 인용은 무효 — 실제 Read만 게이트를 통과합니다."
+    reason="This cwd is spec-backed, but prd.md was not read in this session. Read $prd directly with the Read tool, then retry. A code comment or brief quotation does not satisfy the gate."
     return 2
   fi
 
   read_mtime=$(cat "$marker" 2>/dev/null || echo 0)
   if [ "$cur" -gt "$read_mtime" ]; then
-    reason="prd.md가 마지막 Read 이후 갱신됨(역방향 drift). $prd 를 다시 Read한 뒤 호출하세요."
+    reason="prd.md changed after the most recent Read marker. Read $prd again, then retry."
     return 2
   fi
 

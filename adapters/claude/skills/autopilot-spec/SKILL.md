@@ -1,12 +1,12 @@
 ---
 name: autopilot-spec
-description: "Use when writing or updating requirements/blueprint (PRD). 요구사항·청사진 작성·갱신 entry — prd.md 단일 출처, 모든 spec 변경의 canonical 경로"
-argument-hint: "<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
+description: "Use when writing or updating requirements and blueprints through the canonical PRD path."
+argument-hint: "<task description> [--mode auto|app|library|api|cli|research|update (comma-separated)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
 metadata:
   group: entry
   fam: code
   modes: [app, library, api, cli, research, update]
-  blurb: "요구사항·청사진 작성·갱신 entry — prd.md 단일 출처, 모든 spec 변경의 canonical 경로"
+  blurb: "Write or update requirements through the canonical PRD."
 ---
 
 > 산출물 폴더: `<artifact-root>/spec/` (CONVENTIONS.md §5.4.3 3-tier). 숫자 prefix 없는 평이한 이름 — `prd.md` (T1, 항상 최신) · `stack.md` · `design/` · `ship.md` · `pipeline_state.yaml` · `_internal/`.

@@ -1,12 +1,12 @@
 ---
 name: autopilot-draft
-description: "Use when starting a document draft (paper/slides/prose). 문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태"
+description: "Use when starting a document draft for a paper, presentation, or prose document."
 argument-hint: "<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 metadata:
   group: entry
   fam: doc
   modes: [paper, presentation, doc]
-  blurb: "문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태"
+  blurb: "Draft papers, presentations, and prose documents."
 ---
 
 # autopilot-draft

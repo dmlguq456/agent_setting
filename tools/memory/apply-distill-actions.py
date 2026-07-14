@@ -30,8 +30,9 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
     def member(rid):
         return (mode != "curate") or (rid in destructive_ids)
 
-    # D-37: mode=curate 는 D-18 세션끝 opus 큐레이터 실행분 — 저널 actor 를 distiller 와
-    # 구분해 curator 로 결정론 귀속(부모가 MEM_DISTILL=1 로 돌아도 이 자식 호출만 override).
+    # D-37: mode=curate is the D-18 session-end curator path. Attribute its
+    # journal actor deterministically as curator rather than distiller, even
+    # when the parent runs with MEM_DISTILL=1.
     mem_env = os.environ.copy()
     if mode == "curate":
         mem_env["MEM_ACTOR"] = "curator"

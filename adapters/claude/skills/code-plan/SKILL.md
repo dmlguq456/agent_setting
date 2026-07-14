@@ -1,12 +1,12 @@
 ---
 name: code-plan
-description: "코드 분석 후 상세 구현 plan 작성 — 기획팀 경유 sub-skill"
+description: "Analyze code and produce a detailed implementation plan with plan-check review."
 argument-hint: "<task description>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "코드 분석 후 상세 구현 plan 작성 — 기획팀 경유 sub-skill"
+  blurb: "Analyze code and create a reviewed implementation plan."
 ---
 
 > Caller note: planning benefits from `high` or `xhigh` effort; lower effort may miss call sites in cross-file analysis.

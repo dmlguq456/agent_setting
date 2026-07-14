@@ -1,12 +1,12 @@
 ---
 name: code-report
-description: "코드 작업 사이클 결과 요약·보고 sub-skill"
+description: "Assemble code-work cycle results into a user-facing report."
 argument-hint: "<plan name or path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "코드 작업 사이클 결과 요약·보고 sub-skill"
+  blurb: "Report the results of a completed code-work cycle."
 ---
 
 > **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Inputs = plan·checklist·dev_logs·test_logs·`_internal/*_reviews/`·`pipeline_summary.md` (files) — a dispatched session does **not** carry in-session orchestration memory, so it reconciles against those artifacts (see step 2 below). Write class = `final_report.md`·`analysis_project/code/*.md`·`pipeline_summary.md` (via §5.8 lock). 품질관리팀 delegation stays **inside** this session.

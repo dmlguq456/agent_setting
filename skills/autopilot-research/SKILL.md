@@ -1,12 +1,12 @@
 ---
 name: autopilot-research
-description: "Use when doing upfront survey research (papers/tech/market) before downstream work. 세 family 공통 사전조사 — 논문·기술·시장 survey 후 다운스트림으로 분기하는 entry"
+description: "Use when surveying academic, technology, or market sources before downstream work."
 argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]"
 metadata:
   group: entry
   fam: pre
   modes: [academic, technology, market]
-  blurb: "세 family 공통 사전조사 — 논문·기술·시장 survey 후 다운스트림으로 분기하는 entry"
+  blurb: "Survey academic, technology, or market sources before routing downstream."
 ---
 
 # autopilot-research

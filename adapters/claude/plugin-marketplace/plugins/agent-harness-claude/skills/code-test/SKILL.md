@@ -1,12 +1,12 @@
 ---
 name: code-test
-description: "구현 결과 단계별 검증 — 품질관리팀 test 모드 sub-skill"
+description: "Verify implementation results step by step and record evidence."
 argument-hint: "<plan name, path, or test scope>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "구현 결과 단계별 검증 — 품질관리팀 test 모드 sub-skill"
+  blurb: "Verify implementation results and record evidence."
 ---
 
 > **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Input = `plan/plan.md` verification section + `plan/checklist.md` (resolved below), read from files — never prior-stage conversation. Source is **read-only** here; write class = `test_logs/`·`_internal/test_reviews/` only. 품질관리팀 delegation stays **inside** this session.
