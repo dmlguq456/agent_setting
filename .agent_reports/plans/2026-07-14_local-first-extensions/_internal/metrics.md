@@ -74,3 +74,13 @@ Final independent verdict: PASS. Remaining HIGH/MEDIUM findings: 0.
 - independent findings closed: 7;
 - network/marketplace/package-manager mutations: 0;
 - executable extension surfaces activated: 0.
+
+## Upstream integration
+
+- implementation commit pushed: `40dcb585`;
+- integrated main commit: `4e65ef3d` (English language migration);
+- merge commit: `c7a2046a`;
+- merge conflicts: 1 (`tools/install/paths.py`), resolved by retaining the
+  English API text plus Phase 3 absolute XDG/runtime override behavior;
+- post-merge portable guards: 344/344;
+- post-merge independent adaptation negative cases: all pass.

@@ -1,5 +1,5 @@
 ---
-status: verified
+status: completed
 created: 2026-07-14
 spec: .agent_reports/spec/harness-productization/prd.md
 spec_version: 5
@@ -140,7 +140,10 @@ Implementation and final verification are complete. The lifecycle is local-only,
 projects instruction Markdown into immutable snapshots, keeps runtime-specific
 surfaces inactive, and fails closed on untrusted source/state/path transitions.
 The independent implementation review closed all three HIGH and four MEDIUM
-findings. The branch is ready for commit, upstream integration, and push.
+findings. Implementation commit `40dcb585` was pushed, and current `origin/main`
+was integrated by merge commit `c7a2046a` without losing the extension path
+contract. Final reporting and the integration-fixture correction are committed
+and pushed as the cycle closeout.
 
 ## Risk gates
 

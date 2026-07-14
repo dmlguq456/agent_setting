@@ -22,9 +22,16 @@ collisions, remove, and doctor isolation.
 - `python3 tools/generate.py --check` — PASS
 - `sh tools/check-adaptation-boundary.sh` — PASS
 - `bash tools/adaptation-guard.test.sh` — PASS
+- `bash hooks/portable-guards.test.sh` — PASS (344/344)
+- `bash tools/skill-conformance/check.sh` — PASS (26 classifications)
 - `adapters/codex/bin/preflight.sh doctor` — PASS
 
 One early parallel run caused expected false drift because
 `adaptation-guard.test.sh` deliberately mutates generated/adapter files during
 its negative fixtures. It restored the pre-test baseline, and all mutation-
 bearing suites were then rerun sequentially to the PASS results above.
+
+After the final main integration, the English bootstrap compaction exposed an
+upstream weakness in the byte-budget negative fixture: fixed 8KB padding no
+longer crossed the 28,672-byte ceiling. The fixture now derives padding from the
+current bootstrap size, and the full adaptation negative suite passes again.
