@@ -34,3 +34,8 @@ tool cannot edit or activate source, projections, plugins, or settings.
 
 Automatic incident capture, runtime-watch ingestion, UI, authenticated approval,
 source diff application, and activation remain future separately approved work.
+
+## Source
+
+- Implementation commit: `363ab71e`
+- Branch: `proposal-gated-loop` (pushed before main integration)

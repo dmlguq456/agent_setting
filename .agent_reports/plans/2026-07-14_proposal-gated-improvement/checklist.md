@@ -11,4 +11,4 @@
 - [x] Installer/runtime activation regressions pass.
 - [x] Runtime-owned files unchanged.
 - [x] Pipeline summary and final report written.
-- [ ] Commit and push complete.
+- [x] Commit and push complete.
