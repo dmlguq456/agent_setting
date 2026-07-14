@@ -88,12 +88,15 @@ fi
 # §4.7 F-17/F-21 공용 fleet 제목 refresher 트리거 — Claude statusline debounce surface.
 # 조건: (a) sidecar 부재 OR ts>10min AND (b) transcript 가 sidecar ts 이후 자람.
 # 재귀가드: refresher 의 claude -p 는 statusline 미실행 + FLEET_TITLE_REFRESH env 이중.
+# 전역 동시성/rolling-start budget은 refresh_title.py가 모든 진입점에 공통 적용한다.
+# kill switch는 shell에서도 먼저 확인해 비활성 상태에 Python조차 spawn하지 않는다.
 # 반드시 즉시 반환 — 판정은 stat 2회, 실행은 detached setsid.
+title_root="${FLEET_TITLE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/agent-fleet/titles}"
 if [ -n "$S_SID" ] && [ -n "${S_TRANSCRIPT:-}" ] && [ "${FLEET_TITLE_REFRESH:-}" != "1" ] \
+   && [ "${FLEET_TITLE_DISABLE:-}" != "1" ] && [ ! -e "$title_root/.refresh-disabled" ] \
    && [ -f "$S_TRANSCRIPT" ] && command -v python3 >/dev/null 2>&1; then
   refresher="$AGENT_HOME/../agent_setting/tools/fleet/refresh_title.py"   # ↙ 실경로는 §6 note
   [ -f "$refresher" ] || refresher="$(dirname "$AGENT_HOME")/tools/fleet/refresh_title.py"
-  title_root="${FLEET_TITLE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/agent-fleet/titles}"
   title_dir="$title_root/claude"
   sc="$title_dir/$S_SID.json"
   now=$(date +%s)

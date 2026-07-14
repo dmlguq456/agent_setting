@@ -33,8 +33,14 @@ class _ConfigHomeMixin:
         self._tmp = tempfile.TemporaryDirectory()
         self._old_env = os.environ.get("CLAUDE_CONFIG_DIR")
         self._old_title_state = os.environ.get("FLEET_TITLE_STATE_DIR")
+        self._old_safety_env = {key: os.environ.get(key) for key in (
+            "FLEET_TITLE_DISABLE", "FLEET_TITLE_CONCURRENCY", "FLEET_TITLE_MAX_STARTS",
+            "FLEET_TITLE_COMMAND",
+        )}
         os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(self._tmp.name, "claude")
         os.environ["FLEET_TITLE_STATE_DIR"] = os.path.join(self._tmp.name, "state")
+        for key in self._old_safety_env:
+            os.environ.pop(key, None)
 
     def tearDown(self):
         if self._old_env is None:
@@ -45,6 +51,11 @@ class _ConfigHomeMixin:
             os.environ.pop("FLEET_TITLE_STATE_DIR", None)
         else:
             os.environ["FLEET_TITLE_STATE_DIR"] = self._old_title_state
+        for key, value in self._old_safety_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
         self._tmp.cleanup()
 
 
@@ -162,7 +173,7 @@ class PriorityTest(_ConfigHomeMixin, unittest.TestCase):
 class ValidateTitleTest(unittest.TestCase):
 
     def test_validate_len_cap(self):
-        out = rt.validate_title("x" * 60)
+        out = rt.validate_title("x" * 120)
         self.assertEqual(len(out), rt.TITLE_MAXLEN)
 
     def test_validate_newline_strip_takes_first_line(self):
@@ -180,6 +191,137 @@ class ValidateTitleTest(unittest.TestCase):
 
     def test_validate_strips_quotes_and_period(self):
         self.assertEqual(rt.validate_title('"Fix login bug."'), "Fix login bug")
+
+
+class StormGuardTest(_ConfigHomeMixin, unittest.TestCase):
+    """No provider is invoked: detached workers are replaced with inert process stubs."""
+
+    def setUp(self):
+        super().setUp()
+        self.transcript = os.path.join(self._tmp.name, "transcript.jsonl")
+        with open(self.transcript, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"message": "title this session"}) + "\n")
+        os.environ["FLEET_TITLE_COMMAND"] = sys.executable + " -c pass"
+
+    def _fake_spawns(self, sessions):
+        captured = []
+        original = rt.subprocess.Popen
+        rt.subprocess.Popen = lambda argv, **kwargs: captured.append(list(argv)) or object()
+        try:
+            started = rt.schedule_sessions(sessions)
+        finally:
+            rt.subprocess.Popen = original
+        return started, captured
+
+    def _session(self, sid, **flags):
+        session = Session(
+            harness="claude", pid=100, cwd="/repo", session_id=sid, liveness="working",
+            **flags,
+        )
+        session._transcript_path = self.transcript
+        return session
+
+    def test_two_global_slots_bound_two_hundred_session_backlog(self):
+        sessions = [self._session("sid-%03d" % index) for index in range(200)]
+        started, captured = self._fake_spawns(sessions)
+        self.assertEqual(started, rt.DEFAULT_CONCURRENCY)
+        self.assertEqual(len(captured), rt.DEFAULT_CONCURRENCY)
+
+    def test_rolling_start_budget_bounds_sequential_backlog(self):
+        os.environ["FLEET_TITLE_CONCURRENCY"] = "1"
+        os.environ["FLEET_TITLE_MAX_STARTS"] = "3"
+        captured = []
+
+        def fake_popen(argv, **_kwargs):
+            captured.append(list(argv))
+            rt._remove_empty_dir(argv[argv.index("--slotdir") + 1])
+            rt._remove_empty_dir(argv[argv.index("--lockdir") + 1])
+            return object()
+
+        original = rt.subprocess.Popen
+        rt.subprocess.Popen = fake_popen
+        try:
+            results = [rt.maybe_spawn("claude", "seq-%d" % index, self.transcript)
+                       for index in range(20)]
+        finally:
+            rt.subprocess.Popen = original
+        self.assertEqual(sum(results), 3)
+        self.assertEqual(len(captured), 3)
+
+    def test_direct_provider_call_cannot_bypass_start_budget(self):
+        os.environ["FLEET_TITLE_CONCURRENCY"] = "1"
+        os.environ["FLEET_TITLE_MAX_STARTS"] = "1"
+        calls = []
+
+        class _Done:
+            stdout = "Bounded title"
+            returncode = 0
+
+        original = rt.subprocess.run
+        rt.subprocess.run = lambda argv, **kwargs: calls.append(list(argv)) or _Done()
+        try:
+            self.assertEqual(rt.run_worker("prompt"), "Bounded title")
+            self.assertEqual(rt.run_worker("prompt"), "")
+        finally:
+            rt.subprocess.run = original
+        self.assertEqual(len(calls), 1)
+
+    def test_rolling_start_budget_expires(self):
+        os.environ["FLEET_TITLE_MAX_STARTS"] = "1"
+        first = rt._acquire_start_budget(now=1000.0)
+        self.assertIsNotNone(first)
+        self.assertIsNone(rt._acquire_start_budget(now=1001.0))
+        second = rt._acquire_start_budget(now=1000.0 + rt.START_WINDOW_SEC + 1)
+        self.assertIsNotNone(second)
+        self.assertFalse(os.path.exists(first))
+
+    def test_scheduler_never_targets_internal_or_child_sessions(self):
+        sessions = [
+            self._session("normal"),
+            self._session("memory", mem_worker=True),
+            self._session("child", is_child=True),
+            self._session("server", app_server=True),
+        ]
+        seen = []
+        original = rt.maybe_spawn
+        rt.maybe_spawn = lambda harness, sid, transcript: seen.append(sid) or True
+        try:
+            self.assertEqual(rt.schedule_sessions(sessions), 1)
+        finally:
+            rt.maybe_spawn = original
+        self.assertEqual(seen, ["normal"])
+
+    def test_disable_marker_and_environment_fail_closed(self):
+        os.makedirs(rt.disable_marker_path(), exist_ok=True)
+        original = rt.subprocess.Popen
+        rt.subprocess.Popen = lambda *_args, **_kwargs: self.fail("disabled refresh spawned")
+        try:
+            self.assertFalse(rt.maybe_spawn("claude", "disabled", self.transcript))
+            self.assertEqual(rt.run_worker("prompt"), "")
+        finally:
+            rt.subprocess.Popen = original
+        os.rmdir(rt.disable_marker_path())
+        os.environ["FLEET_TITLE_DISABLE"] = "true"
+        self.assertTrue(rt.refresh_disabled())
+
+    def test_zero_and_invalid_limits_are_safe(self):
+        os.environ["FLEET_TITLE_CONCURRENCY"] = "0"
+        self.assertTrue(rt.refresh_disabled())
+        os.environ["FLEET_TITLE_CONCURRENCY"] = "invalid"
+        os.environ["FLEET_TITLE_MAX_STARTS"] = "999999"
+        self.assertEqual(rt.concurrency_limit(), rt.DEFAULT_CONCURRENCY)
+        self.assertEqual(rt.start_limit(), rt.MAX_START_LIMIT)
+
+    def test_stale_slot_is_reclaimed_after_worker_timeout(self):
+        os.environ["FLEET_TITLE_CONCURRENCY"] = "1"
+        first = rt._acquire_slot(now=1000.0)
+        self.assertIsNotNone(first)
+        os.utime(first, (800.0, 800.0))
+        second = rt._acquire_slot(now=1000.0)
+        self.assertIsNotNone(second)
+        self.assertNotEqual(first, second)
+        self.assertFalse(os.path.exists(first))
+        rt._remove_empty_dir(second)
 
 
 class DeltaOffsetTest(_ConfigHomeMixin, unittest.TestCase):
@@ -392,6 +534,15 @@ class TriggerLogicTest(unittest.TestCase):
         self._run(extra_env={"FLEET_TITLE_REFRESH": "1"})
         self.assertFalse(os.path.exists(self.sentinel))
 
+    def test_trigger_kill_switch_marker_prevents_python_spawn(self):
+        os.makedirs(os.path.join(self.root, "title-state", rt.DISABLE_MARKER), exist_ok=True)
+        self._run()
+        self.assertFalse(os.path.exists(self.sentinel))
+
+    def test_trigger_kill_switch_environment_prevents_python_spawn(self):
+        self._run(extra_env={"FLEET_TITLE_DISABLE": "1"})
+        self.assertFalse(os.path.exists(self.sentinel))
+
 
 class ValidatorHardeningTest(unittest.TestCase):
     """2026-07-10 라이브 실측 회귀: raw jsonl 조각이 DATA 로 흘러가 haiku 가 한국어
@@ -403,7 +554,15 @@ class ValidatorHardeningTest(unittest.TestCase):
 
     def test_sentence_over_word_cap_rejected(self):
         self.assertIsNone(rt.validate_title(
-            "this is a very long chatty sentence about the session"))
+            "this is a very long chatty sentence about the current session and its generic status"))
+
+    def test_specific_responsive_title_accepted(self):
+        title = "Make Fleet session names use the available terminal width"
+        self.assertEqual(rt.validate_title(title), title)
+
+    def test_prompt_requests_responsive_length(self):
+        self.assertIn("8-12 words", rt.PROMPT_TEMPLATE)
+        self.assertIn("96 characters", rt.PROMPT_TEMPLATE)
 
     def test_meta_response_rejected(self):
         for s in ("No conversation excerpt provided", "Cannot determine title",

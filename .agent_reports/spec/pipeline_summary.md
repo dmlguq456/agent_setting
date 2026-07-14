@@ -1,8 +1,8 @@
 # Spec Pipeline Summary: memory-store
 
-- **Date**: 2026-06-15
+- **Date**: 2026-06-15 · last updated 2026-07-14 (v18)
 - **Mode**: library + cli
-- **Status**: spec in_progress (PRD 초안, open 결정 대기)
+- **Status**: v18/D-41 implemented and verified; broader memory roadmap remains in progress
 
 ## Process Log
 | Step | Action | Result |
@@ -129,3 +129,10 @@ Claude Code와 Codex의 동시 진단을 교차검증해 “저장은 되지만 
 - 모든 eligible project prompt는 동일한 content-based auto-recall threshold를 사용한다.
 - 명시적 회상 의도는 문장 속 phrase가 아니라 `mem recall` CLI/API 호출로만 구분한다.
 - document-frequency·coverage·rare exact term 기반 relevance, raw-prompt-free telemetry, top3/1,200자 cap은 유지한다.
+
+### v17 → v18 (2026-07-14, update mode — background-model storm containment, snapshot `_internal/versions/v17/`)
+- 사고 실측: mass SessionEnd/distill wave와 별도 Fleet title recursion이 per-session lock만으로는 서로 다른 수백 sid의 모델 호출을 제한하지 못함을 드러냈다. Fleet title chain 216, Claude 계열 프로세스 607까지 증식했다.
+- **D-41**: portable/Claude distill dispatcher의 racy `count → later lock` guard를 fixed-name atomic `mkdir` slot으로 교체한다. concurrency default 2/hard max 4.
+- worker가 끝나도 10분간 유지되는 start leases(default 4/hard max 8)를 추가해, slot이 열릴 때 backlog가 순차 drain되는 지속 토큰 소비를 제한한다.
+- `.distill-disable`을 entry/acquired-boundary에서 재확인하고, stale slot/lock과 expired budget을 회수한다. 12-session concurrent wave + slot-open second wave + kill-switch를 sleeping stub으로 검증하며 live model은 호출하지 않는다.
+- 구현 검증: dispatch suite 39/39, shell syntax, adapter-boundary 통과. canonical/Claude/runtime 세 물리 경로 중 Claude adapter와 runtime copy는 byte-identical하며 canonical delta baseline을 갱신했다. production `.distill-disable`은 유지한다.

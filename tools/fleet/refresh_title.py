@@ -13,6 +13,7 @@ for enforcing its own no-tools contract (for example an API/CLI wrapper around a
 small GPT model). No command is ever evaluated through a shell.
 """
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -22,6 +23,11 @@ import subprocess
 import sys
 import time
 
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX fallback is fail-closed below
+    fcntl = None
+
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
@@ -29,10 +35,17 @@ from fleet import titles  # noqa: E402
 
 DELTA_CAP = 65536
 TEXT_CAP = 2000
-TITLE_MAXLEN = 40
+TITLE_MAXLEN = 96
+TITLE_MAX_WORDS = 12
 MAX_SCAN = 1 << 20
 WORKER_TIMEOUT = 60
 DEBOUNCE_SEC = 600
+DEFAULT_CONCURRENCY = 2
+MAX_CONCURRENCY = 4
+DEFAULT_START_LIMIT = 4
+MAX_START_LIMIT = 16
+START_WINDOW_SEC = 600
+DISABLE_MARKER = ".refresh-disabled"
 MODEL = os.environ.get("FLEET_TITLE_MODEL", "haiku")
 
 _META_RE = re.compile(
@@ -49,9 +62,11 @@ You have no tools; do not attempt shell commands, file operations, or network re
 {delta}
 === END CONVERSATION ===
 
-Output ONLY a title for this work session: English, 4 words or fewer, one line.
-No explanations, no quotes, no trailing period. If the excerpt is unreadable or
-empty, output the single word: untitled."""
+Output ONLY a specific title for this work session: English, one line, ideally
+8-12 words and never more than 96 characters. Use the available length to name
+the concrete work, not a generic category. No explanations, no quotes, no
+trailing period. If the excerpt is unreadable or empty, output the single word:
+untitled."""
 
 
 def _claude_text(data):
@@ -152,7 +167,7 @@ def validate_title(raw):
     if not line:
         return None
     ascii_ratio = sum(1 for ch in line if ord(ch) < 128) / len(line)
-    if ascii_ratio < 0.8 or len(line.split()) > 6 or _META_RE.match(line):
+    if ascii_ratio < 0.8 or len(line.split()) > TITLE_MAX_WORDS or _META_RE.match(line):
         return None
     return line
 
@@ -191,14 +206,187 @@ def _executable_available(argv):
     return os.path.isfile(exe) if os.path.isabs(exe) else shutil.which(exe) is not None
 
 
-def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT):
+def _bounded_env_int(name, default, upper):
+    try:
+        value = int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(0, min(upper, value))
+
+
+def concurrency_limit():
+    """Global provider concurrency, clamped so configuration cannot remove the bound."""
+    return _bounded_env_int("FLEET_TITLE_CONCURRENCY", DEFAULT_CONCURRENCY, MAX_CONCURRENCY)
+
+
+def start_limit():
+    """Global provider starts allowed in one rolling window."""
+    return _bounded_env_int("FLEET_TITLE_MAX_STARTS", DEFAULT_START_LIMIT, MAX_START_LIMIT)
+
+
+def disable_marker_path():
+    return os.path.join(titles.state_root(), DISABLE_MARKER)
+
+
+def refresh_disabled():
+    value = os.environ.get("FLEET_TITLE_DISABLE", "").strip().lower()
+    return (
+        value in ("1", "true", "yes", "on")
+        or concurrency_limit() == 0
+        or start_limit() == 0
+        or os.path.exists(disable_marker_path())
+    )
+
+
+@contextlib.contextmanager
+def _state_guard():
+    """Serialize cross-process slot/budget changes; contention fails closed."""
+    root = titles.state_root()
+    try:
+        os.makedirs(root, exist_ok=True)
+    except OSError:
+        yield False
+        return
+
+    if fcntl is None:
+        lockdir = os.path.join(root, ".refresh-guard.d")
+        try:
+            os.mkdir(lockdir)
+        except OSError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            try:
+                os.rmdir(lockdir)
+            except OSError:
+                pass
+        return
+
+    fd = None
+    try:
+        fd = os.open(os.path.join(root, ".refresh-guard"), os.O_CREAT | os.O_RDWR, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        if fd is not None:
+            os.close(fd)
+        yield False
+        return
+    try:
+        yield True
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+
+def _remove_empty_dir(path):
+    if not path:
+        return
+    try:
+        os.rmdir(path)
+    except OSError:
+        pass
+
+
+def _lease_dirs(root, prefix, now, max_age):
+    """Return live lease dirs after reclaiming abandoned entries under the guard."""
+    try:
+        names = os.listdir(root)
+    except OSError:
+        return []
+    live = []
+    for name in names:
+        if not name.startswith(prefix):
+            continue
+        path = os.path.join(root, name)
+        try:
+            age = now - os.path.getmtime(path)
+        except OSError:
+            continue
+        if age > max_age:
+            _remove_empty_dir(path)
+            if not os.path.exists(path):
+                continue
+        if os.path.isdir(path):
+            live.append(path)
+    return live
+
+
+def _new_lease(root, prefix, now):
+    name = "%s%d-%d-%d" % (prefix, os.getpid(), time.time_ns(), int(now * 1000000))
+    path = os.path.join(root, name)
+    try:
+        os.mkdir(path)
+        os.utime(path, (now, now))
+        return path
+    except OSError:
+        _remove_empty_dir(path)
+        return None
+
+
+def _acquire_slot(now=None):
+    """Claim one global worker slot, reclaiming SIGKILL-orphaned slots."""
+    if refresh_disabled():
+        return None
+    now = time.time() if now is None else now
+    root = os.path.join(titles.state_root(), ".refresh-workers")
+    try:
+        os.makedirs(root, exist_ok=True)
+    except OSError:
+        return None
+    with _state_guard() as acquired:
+        if not acquired:
+            return None
+        live = _lease_dirs(root, "slot-", now, WORKER_TIMEOUT * 2)
+        if len(live) >= concurrency_limit():
+            return None
+        return _new_lease(root, "slot-", now)
+
+
+def _acquire_start_budget(now=None):
+    """Persist one start in a rolling window so a backlog cannot drain unboundedly."""
+    if refresh_disabled():
+        return None
+    now = time.time() if now is None else now
+    root = os.path.join(titles.state_root(), ".refresh-budget")
+    try:
+        os.makedirs(root, exist_ok=True)
+    except OSError:
+        return None
+    with _state_guard() as acquired:
+        if not acquired:
+            return None
+        live = _lease_dirs(root, "start-", now, START_WINDOW_SEC)
+        if len(live) >= start_limit():
+            return None
+        return _new_lease(root, "start-", now)
+
+
+def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT, capacity_held=False):
     """Run the configured title provider with no shell; failures degrade to ``''``."""
+    if refresh_disabled():
+        return ""
     argv = worker_argv(prompt, model=model)
     if not _executable_available(argv):
         return ""
-    env = dict(os.environ)
-    env["FLEET_TITLE_REFRESH"] = "1"
+    owned_slot = None
+    if not capacity_held:
+        owned_slot = _acquire_slot()
+        if not owned_slot:
+            return ""
+        if not _acquire_start_budget():
+            _remove_empty_dir(owned_slot)
+            return ""
     try:
+        # Re-check after capacity acquisition so an operator kill switch wins
+        # immediately before the only token-consuming boundary.
+        if refresh_disabled():
+            return ""
+        env = dict(os.environ)
+        env["FLEET_TITLE_REFRESH"] = "1"
         result = subprocess.run(
             argv,
             capture_output=True,
@@ -211,6 +399,8 @@ def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT):
         return (result.stdout or "") if result.returncode == 0 else ""
     except Exception:
         return ""
+    finally:
+        _remove_empty_dir(owned_slot)
 
 
 def _provider_source():
@@ -219,7 +409,11 @@ def _provider_source():
 
 def maybe_spawn(harness, sid, transcript, now=None, debounce=DEBOUNCE_SEC):
     """Start one detached refresh when state is stale and the transcript grew."""
-    if os.environ.get("FLEET_TITLE_REFRESH") == "1" or harness not in ("claude", "codex"):
+    if (
+        refresh_disabled()
+        or os.environ.get("FLEET_TITLE_REFRESH") == "1"
+        or harness not in ("claude", "codex")
+    ):
         return False
     if not sid or not transcript or not os.path.isfile(transcript):
         return False
@@ -254,6 +448,16 @@ def maybe_spawn(harness, sid, transcript, now=None, debounce=DEBOUNCE_SEC):
     except OSError:
         return False
 
+    slotdir = _acquire_slot(now=now)
+    if not slotdir:
+        _remove_empty_dir(lockdir)
+        return False
+    budget_lease = _acquire_start_budget(now=now)
+    if not budget_lease:
+        _remove_empty_dir(slotdir)
+        _remove_empty_dir(lockdir)
+        return False
+
     env = dict(os.environ)
     env["FLEET_TITLE_REFRESH"] = "1"
     argv = [
@@ -267,6 +471,8 @@ def maybe_spawn(harness, sid, transcript, now=None, debounce=DEBOUNCE_SEC):
         transcript,
         "--lockdir",
         lockdir,
+        "--slotdir",
+        slotdir,
     ]
     try:
         subprocess.Popen(
@@ -279,10 +485,9 @@ def maybe_spawn(harness, sid, transcript, now=None, debounce=DEBOUNCE_SEC):
         )
         return True
     except Exception:
-        try:
-            os.rmdir(lockdir)
-        except OSError:
-            pass
+        _remove_empty_dir(budget_lease)
+        _remove_empty_dir(slotdir)
+        _remove_empty_dir(lockdir)
         return False
 
 
@@ -290,7 +495,12 @@ def schedule_sessions(sessions):
     """Best-effort live fleet scheduler; returns the number of workers started."""
     started = 0
     for session in sessions:
-        if getattr(session, "liveness", None) in ("dead", "stale"):
+        if (
+            getattr(session, "liveness", None) in ("dead", "stale")
+            or getattr(session, "mem_worker", False)
+            or getattr(session, "is_child", False)
+            or getattr(session, "app_server", False)
+        ):
             continue
         if maybe_spawn(
             getattr(session, "harness", ""),
@@ -307,9 +517,21 @@ def main(argv=None):
     parser.add_argument("--sid", required=True)
     parser.add_argument("--transcript", required=True)
     parser.add_argument("--lockdir")
+    parser.add_argument("--slotdir")
     args = parser.parse_args(argv)
 
+    owned_slot = args.slotdir
     try:
+        if refresh_disabled():
+            return 0
+        # Claude statusline is a second ingress path. It owns the per-session lock
+        # in shell, so direct worker launches claim the same global capacity here.
+        if not owned_slot:
+            owned_slot = _acquire_slot()
+            if not owned_slot:
+                return 0
+            if not _acquire_start_budget():
+                return 0
         previous = titles.read(args.sid, harness=args.harness) or {}
         offset = previous.get("offset", 0) if isinstance(previous.get("offset"), int) else 0
         previous_title = previous.get("title", "") if isinstance(previous.get("title"), str) else ""
@@ -326,7 +548,7 @@ def main(argv=None):
             titles.sweep()
             return 0
 
-        output = run_worker(PROMPT_TEMPLATE.format(delta=delta))
+        output = run_worker(PROMPT_TEMPLATE.format(delta=delta), capacity_held=True)
         title = validate_title(output)
         if title and title.lower() == "untitled":
             title = None
@@ -340,11 +562,8 @@ def main(argv=None):
         titles.sweep()
         return 0
     finally:
-        if args.lockdir:
-            try:
-                os.rmdir(args.lockdir)
-            except OSError:
-                pass
+        _remove_empty_dir(owned_slot)
+        _remove_empty_dir(args.lockdir)
 
 
 if __name__ == "__main__":

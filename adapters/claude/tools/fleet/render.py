@@ -488,9 +488,9 @@ _NAME_COL = 4 + _HW           # absolute col where the NAME starts — SHARED by
 _NW_S = _BRANCH_COL - _NAME_COL   # name field (both row types): col 18 → branch 46 = 28
 _NAME2_MAX = 40               # 2-line name zone tail-cut cap (display cells) — no fixed branch
                               # column there, so an unbounded title could push branch off-draw (F-14)
-_TITLE_MAX = 24               # F-16: display-name budget (session title AND dispatch composed
-                              # label+slug) — tighter than the raw name-zone width so a long
-                              # harness ai-title/plan slug doesn't dominate the row
+_TITLE_MAX = 24               # Legacy/fallback title budget and F-15 dispatch-name cap.
+                              # F-22 session rows expand beyond this only when terminal width
+                              # is known; dispatch labels stay compact inside the wider column.
 _OPTW = 18                    # F-15a options column width (dim mode·qa·profile token, sits
                               # between the model cell and the stage breadcrumb — declutters
                               # the name zone, which used to carry this as a parenthetical tag)
@@ -539,9 +539,26 @@ def _stage_role_label(worker_role):
 
 # Plain-text column labels without decorative icons.
 # 'effort' gets its OWN header over the fixed subcolumn inside the model cell (user 2026-07-02).
-_COL_HEAD = ("    " + "harness".ljust(_HW) + "session".ljust(_NW_S)
-             + "branch".ljust(_BRW) + "model".ljust(_MW)
-             + "    context / stage")
+def _wide_name_width(term_width):
+    """Responsive wide-layout name column.
+
+    Reserve every field after the name plus the right-flushed time and panel
+    margins, then give all remaining horizontal slack to the session column.
+    """
+    if not term_width:
+        return _NW_S
+    fixed_row = _NAME_COL + _BRW + _MW + 4 + _CTX_W + 5
+    if _TINT_OK:
+        framing = (_INSET + _PAD_IN) + _INSET + (2 + _PAD_IN) + 6 + 2
+    else:
+        framing = 1 + 6 + 2
+    return max(_NW_S, int(term_width) - fixed_row - framing)
+
+
+def _col_head(name_width):
+    return ("    " + "harness".ljust(_HW) + "session".ljust(name_width)
+            + "branch".ljust(_BRW) + "model".ljust(_MW)
+            + "    context / stage")
 
 
 def _gate_word(gate, pipe):
@@ -660,7 +677,7 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False):
     return _stage_segs(key, stage, working=working)
 
 
-def _session_row(s, narrow, is_parent=False, child_count=0):
+def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
     dim_tel = live in ("stale", "dead") or s.app_server or s.detached
@@ -679,23 +696,37 @@ def _session_row(s, narrow, is_parent=False, child_count=0):
             else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
     segs = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey)]
 
-    # name zone: title-or-slug(focus) + ▾N(dim) + gate tag(dim), padded to the shared branch column.
-    used = 0
+    # F-22: reserve identity suffixes first, then let the title consume the
+    # responsive name column. Calls without a terminal-derived width retain the
+    # legacy 24-cell cap for hermetic/backward-compatible row construction.
+    avail = max(3, name_width or _NW_S)
     name_txt = s.title or slug
-    shown = _clip_w(name_txt, min(_NW_S - 1, _TITLE_MAX))   # F-16: tighter display-name budget
-    segs.append((shown, name_key)); used += _dw(shown)   # display width, not char count (F-14 #4)
-    if is_parent and child_count and used + 3 <= _NW_S:
-        t = " ▾%d" % child_count
-        segs.append((t, "dim")); used += len(t)
+    suffix = []
+    suffix_w = 0
+    if is_parent and child_count:
+        child_tag = " ▾%d" % child_count
+        if _dw(child_tag) < avail:
+            suffix.append((child_tag, "dim"))
+            suffix_w += _dw(child_tag)
     if s.gate:
         gate, pipe = s.gate, False
     else:
         gate, pipe = _gate_info(s.cwd, s.session_id)
     gtag, gk = _gate_tag(gate, pipe)
-    if gtag and used + len(gtag) <= _NW_S:
-        segs.append((gtag, gk)); used += len(gtag)
-    if used < _NW_S:
-        segs.append((" " * (_NW_S - used), None))
+    if gtag and suffix_w + _dw(gtag) < avail:
+        suffix.append((gtag, gk))
+        suffix_w += _dw(gtag)
+    title_budget = max(1, avail - suffix_w)
+    if name_width is None:
+        title_budget = min(title_budget, _TITLE_MAX)
+    shown = _clip_w(name_txt, title_budget)
+    segs.append((shown, name_key))
+    used = _dw(shown)
+    for text, key in suffix:
+        segs.append((text, key))
+        used += _dw(text)
+    if used < avail:
+        segs.append((" " * (avail - used), None))
 
     segs.append(_branch_seg(s.cwd, s.branch, dim=dim_tel))     # main row = bright branch/model
     if dead_stale:
@@ -879,7 +910,7 @@ def _opts_segs(j, qa_text, qa_key):
 
 
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
-                  parent_effort=None, stage_override=None):
+                  parent_effort=None, stage_override=None, name_width=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
       harness  |  [stage label] name  |  branch  |  MODEL  |  options  |  stage breadcrumb
     F-15a: the name zone is identity-only (no more parenthetical mode/qa tag — that moved to
@@ -905,7 +936,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     prefix = _dispatch_prefix(j)
     segs = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None),
             (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim"))]
-    avail = _NW_S
+    avail = max(3, name_width or _NW_S)
     otag = "  (orphan)" if orphan else ""
     label = _dispatch_stage_label(j)
     name_room = min(_TITLE_MAX, max(3, avail - len(otag)))
@@ -961,7 +992,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
 # L1 = identity (dot · harness · name · ▾N · gate · branch) / L2 = telemetry (model · effort ·
 # bracket gauge · cost · ⏱). model keeps its fixed width so gauges align vertically across cards
 # (the nvtop column feel). Same segment parts as the 1-line rows — zero new color keys.
-def _session_row_2line(s, is_parent=False, child_count=0, _split=False):
+def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_width=None):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
     dim_tel = live in ("stale", "dead") or s.app_server or s.detached
@@ -973,22 +1004,32 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False):
     hn = _BADGE_TEXT.get(s.harness, "?")
     hkey = (_BADGE_KEY.get(s.harness, "dim") if dim_tel
             else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
-    l1 = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey),
-          (_clip_w(s.title or slug, min(_NAME2_MAX, _TITLE_MAX)), name_key)]   # F-16
+    l1 = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey)]
+    suffix = []
     if is_parent and child_count:
-        l1.append((" ▾%d" % child_count, "dim"))
+        suffix.append((" ▾%d" % child_count, "dim"))
     gate, pipe = (s.gate, False) if s.gate else _gate_info(s.cwd, s.session_id)
     gtag, gk = _gate_tag(gate, pipe)
     if gtag:
-        l1.append((gtag, gk))
+        suffix.append((gtag, gk))
     br = s.branch or _git_branch(s.cwd)
-    br_seg = ("  " + br, "dim" if dim_tel else "branch_s") if br else None
+    br_seg = ("  " + _clip_w(br, _BRW - 2), "dim" if dim_tel else "branch_s") if br else None
     if not _split and br_seg:
-        l1.append(br_seg)
+        suffix.append(br_seg)
     if s.app_server:
-        l1.append(("  app-server", "dim"))
+        suffix.append(("  app-server", "dim"))
     if s.orphan:
-        l1.append(("  worktree-gone", "g_dead"))
+        suffix.append(("  worktree-gone", "g_dead"))
+    if term_width:
+        # A tinted L1 has 4 left cells (inset+padding) and a 2-cell right
+        # inset. Reserve those six cells plus every suffix before clipping.
+        prefix_w = sum(_dw(text) for text, _key in l1)
+        suffix_w = sum(_dw(text) for text, _key in suffix)
+        title_budget = max(4, int(term_width) - 6 - prefix_w - suffix_w)
+    else:
+        title_budget = min(_NAME2_MAX, _TITLE_MAX)
+    l1.append((_clip_w(s.title or slug, title_budget), name_key))
+    l1.extend(suffix)
 
     # L2: elapsed time sits UNDER the harness column (fills the old empty indent — user
     # Put time under the harness, model under the name, and gauge immediately after.
@@ -1016,10 +1057,10 @@ def _stack_split(l2):
     return len(l2)
 
 
-def _session_row_stack(s, is_parent=False, child_count=0):
+def _session_row_stack(s, is_parent=False, child_count=0, term_width=None):
     """Ultra-narrow card = the 2-line card with ONLY the context gauge pushed to its own line
     (user 2026-07-03): L1 identity / L2 time+model / L3 gauge (aligned under the model)."""
-    l1, l2 = _session_row_2line(s, is_parent, child_count)
+    l1, l2 = _session_row_2line(s, is_parent, child_count, term_width=term_width)
     gi = _stack_split(l2)
     return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
@@ -1222,7 +1263,8 @@ def set_show_all(v):
     _SHOW_ALL = bool(v)
 
 
-def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memory=None):
+def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memory=None,
+                 term_width=None):
     """Return a flat list of segment-lines for the whole screen (None = blank line).
 
     Same contract consumed by BOTH `render_once` (plain, full output) and `_draw` (viewport
@@ -1234,6 +1276,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # F-18b: mem-worker (distiller/curator/F-17 refresher) census — computed on the ORIGINAL
     # session list, before is_child/mem filtering, so folded/mem-only groups still surface a
     # total in the legend even when no group header badge fires.
+    wide_name_width = _wide_name_width(term_width) if layout == "wide" else None
     n_mem_total = sum(1 for s in sessions if getattr(s, "mem_worker", False))
     mem_by_group = {}
     for s in sessions:
@@ -1426,7 +1469,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     else:
         # right-flushed 'time' label sits over the (inset) elapsed-time column — trailing
         # spaces mirror the tint rows' right inset so the label right-aligns with the values.
-        lines.append([(_sh + _COL_HEAD, "head"), (_RFLUSH, None),
+        lines.append([(_sh + _col_head(wide_name_width or _NW_S), "head"), (_RFLUSH, None),
                       ("time" + " " * (_INSET + _PAD_IN + 1), "head")])
     lines.append(None)                  # Gap below the column header.
 
@@ -1596,7 +1639,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 lines.append(_dispatch_row(job, orphan=orphan, parent_model=row_parent_model,
                                            parent_harness=parent_harness,
                                            parent_effort=row_parent_effort, is_last=is_last,
-                                           stage_override=stage_override))
+                                           stage_override=stage_override,
+                                           name_width=wide_name_width))
             for sub in _sort_group_jobs(job_children.get(job.slug, [])):
                 # F-15b P0-2: a depth-2 stage worker that is done/queued/idle is already
                 # absorbed into the conductor's own breadcrumb (✓/dim future segment) — only
@@ -1643,9 +1687,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _seen_glyphs.add("child")
             _n0 = len(lines)
             if _srow:
-                lines.extend(_srow(s, is_parent=bool(nested_n), child_count=nested_n))
+                lines.extend(_srow(s, is_parent=bool(nested_n), child_count=nested_n,
+                                   term_width=term_width))
             else:
-                lines.append(_session_row(s, narrow, is_parent=bool(nested_n), child_count=nested_n))
+                lines.append(_session_row(s, narrow, is_parent=bool(nested_n),
+                                          child_count=nested_n,
+                                          name_width=wide_name_width))
             if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):
                 _sess_bold_ids.update(range(_n0, len(lines)))
             for i, cj in enumerate(kids):
@@ -1766,7 +1813,7 @@ def render_once(collect_all, hfilter, section):
     except Exception:
         tw = 200
     lines = _build_lines(sessions, jobs, section, narrow=False, malformed=malformed,
-                         layout=_layout_mode(tw), memory=mem_snapshot)
+                         layout=_layout_mode(tw), memory=mem_snapshot, term_width=tw)
     out = "\n".join(_plain(l) for l in lines) + "\n"
     # Write UTF-8 bytes directly so the snapshot's box/braille glyphs survive a
     # non-UTF-8 console codepage (e.g. Windows cp949), which would otherwise raise
@@ -1958,7 +2005,7 @@ def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
     stdscr.erase()
     narrow = w < _NARROW_CUTOFF
     lines = _build_lines(sessions, jobs, section, narrow, malformed, layout=_layout_mode(w),
-                         memory=memory)
+                         memory=memory, term_width=w)
     body_h = max(1, h - 1)   # reserve 1 footer row
     _OFFSET = _clamp_offset(_OFFSET, len(lines), body_h)
 

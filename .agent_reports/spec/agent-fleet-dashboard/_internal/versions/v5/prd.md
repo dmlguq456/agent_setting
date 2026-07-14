@@ -1,6 +1,6 @@
 # agent-fleet-dashboard — Spec (PRD)
 
-> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기) · **v6 2026-07-14** (F-22 responsive titles + F-23 recursive-storm containment)
+> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -185,10 +185,12 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **workflow-first 정렬**: 관제의 1차 질문 = "어느 파이프가 어느 스테이지에 있고 어디가 막혔나". conductor row 의 파이프 진행(breadcrumb, SD-F2)이 1급이고, **done 스테이지 자식 row 는 기본 접어 breadcrumb 하이라이트로 흡수**(완료 잡 나열이 세로·가로 노이즈) — 활성(working/미기동)·실패(stale/dead/killed) 스테이지만 자식 row 로 남긴다.
   - **queued 오라벨 해소 (사용자 관찰: "queued 가 계속 뜨는데 작업 중인 건지?")**: 현행 `open`→queued 매핑은 registry-only row 전부에 적용돼, 실제 작업 중인데 proc 매칭이 안 된 row(proc-job 과 registry row 의 slug 불일치, cross-harness 등)도 queued 로 뜬다. 해소: registry-only row 에 **worktree transcript/rollout mtime 기반 liveness 유도**를 적용해 실작업 중이면 working 으로, queued 는 _진짜 미기동_(등록 후 transcript 무활동)만. proc-job ↔ registry row 의 slug 정합(dedup 키) 개선 포함.
   - 디자인팀 critic 을 plan 단계 텍스트 목업 비평에 필수 투입 (UI plan-review 계약) — 잡 다수일 때 세로 폭증·레이아웃별(wide/narrow/stack) 분기까지 비평 범위.
-- **F-16 (세션 표시명: 짧은 영어 기준선, 사용자 요구 2026-07-10 저녁; 고정 폭은 F-22가 대체)**: F-14 의 title 표시가 문장형(한국어)으로 길어 20~24 display cols의 고정 tail-cut과 짧은 영어 sidecar를 도입했다. v6/F-22는 이 고정 폭만 대체하며, 영어·head 보존·native fallback 계약은 유지한다.
+- **F-16 (세션 표시명: 최대한 짧게 + 영어, 사용자 요구 2026-07-10 저녁)**: F-14 의 title 표시가 문장형(한국어)으로 길다.
+  - **짧게**: name zone 의 title 표시 예산을 타이트하게(≈20~24 display cols, tail-cut — F-9 head 보존). 전체 제목은 `--json`·(도입 시) info 표시에서.
+  - **영어**: fleet 은 번역하지 않는다(zero-injection) — 1차 실현 = **F-17 sidecar 제목**(생성 단계에서 짧은 영어 강제, 아래). 보조 = 하네스 `language` 설정(v2.1.176, 미문서 — `en` 적용해둠, 실측 대기). 기존 한국어 ai-title 은 F-17 미적용 세션의 fallback 으로만 클립 표시.
 - **F-17 (라이브 제목 refresher — cross-harness fleet sidecar + no-tools 경량 LLM 워커, 사용자 승인 2026-07-10·공유 확장 2026-07-13)**: 하네스 원본 transcript에 쓰지 않고 **fleet 소유 neutral sidecar**로 진행형 재요약을 제공한다.
   - **sidecar**: `${FLEET_TITLE_STATE_DIR:-${XDG_STATE_HOME:-~/.local/state}/agent-fleet/titles}/<harness>/<sid>.json` — `{title, ts, source, offset}`. `<harness>/<sid>` namespace로 충돌을 막는다. 기존 `~/.claude/.fleet-titles/<sid>.json`은 Claude read-only migration fallback이다. 표시 우선순위 = **fresh sidecar(<24h) → runtime-native title(ai-title/threads.title/thread_name/session.title) → slug**.
-  - **공용 워커**: `tools/fleet/refresh_title.py`가 Claude/Codex transcript delta를 공통 대화 텍스트로 정규화한다. 기본 provider는 기존 `claude -p --model haiku` + 도구 전면 차단이다. `FLEET_TITLE_COMMAND` argv template와 `FLEET_TITLE_MODEL`로 GPT 계열 등 별도 저비용 no-tools wrapper를 교체할 수 있다. shell은 사용하지 않으며 모델 출력은 한 줄 영어 제목 데이터로만 검증한다. v6/F-22부터 넓은 name zone을 활용하도록 8~12단어를 목표로 하고 검증 상한은 12단어·96자다.
+  - **공용 워커**: `tools/fleet/refresh_title.py`가 Claude/Codex transcript delta를 공통 대화 텍스트로 정규화한다. 기본 provider는 기존 `claude -p --model haiku` + 도구 전면 차단이다. `FLEET_TITLE_COMMAND` argv template와 `FLEET_TITLE_MODEL`로 GPT 계열 등 별도 저비용 no-tools wrapper를 교체할 수 있다. shell은 사용하지 않으며 모델 출력은 한 줄 영어 제목(≤4단어, ≤40자) 데이터로만 검증한다.
   - **트리거**: Claude는 statusline debounce를 유지하되 neutral state/공용 워커를 쓴다. Codex는 live fleet loop가 collector가 찾은 rollout을 대상으로 같은 debounce(기본 10분)·`<harness>/<sid>` lock을 적용한다. `--json`, `--once`, demo/test 경로는 worker를 spawn하지 않는다.
   - **하네스 차이**: title provider와 sidecar 계약은 공용이다. native source만 다르다(Claude `ai-title`, Codex `threads.title` + legacy `thread_name`, OpenCode `session.title`). OpenCode는 native title이 충분해 이번 live refresher trigger 대상에서 제외하되 provider 계약을 막지 않는다.
   - **비용·fallback**: provider 실패·미설치·quota 소진은 sidecar 미갱신으로 끝난다. Codex는 state DB/JSONL native title, Claude/OpenCode는 각 native title, 마지막으로 slug가 남으므로 제목이 사라지지 않는다.
@@ -209,19 +211,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **Fallback**: Unknown positive durations render as their actual duration (`12345s`, `90m`, `2w`) rather than a false semantic label. Missing duration plus missing legacy slot renders the normal `—`/no usage row fallback. Expired reset timestamps still zero out stale rollout samples.
   - **Docs/examples**: user-facing examples must say `windows` or duration labels for Codex, not "Codex 5h/7d" as a guarantee. Claude examples may keep 5h/7d where the source remains Claude usage support.
 - **F-21 (Codex title parity + shared provider, 2026-07-13 사용자 요구)**: F-14/F-17의 stale Codex `slug` 폴백을 폐기한다. Codex collector는 최신 versioned state DB의 `threads.title`을 read-only로 읽고 DB/WAL stamp cache를 적용하며, `session_index.jsonl` 최신 `thread_name`은 compatibility fallback으로 병합한다. fresh fleet sidecar가 native title을 이기며, live fleet만 shared refresher를 schedule한다. acceptance = 현재 활성 Codex native title 표시, JSONL fallback, sidecar precedence, Claude legacy fallback, 두 transcript parser, provider shell-free argv, live-only spawn, canonical/Claude mirror parity.
-- **F-22 (세션명이 터미널 가로폭을 채우는 반응형 name zone, 2026-07-14 사용자 요구)**:
-  - **wide**: 터미널 폭에서 branch·model·context·time과 패널 inset을 먼저 예약하고 남는 slack을 세션 name column에 준다. 세션 제목은 이 동적 예산까지 표시하되 child-count와 tracked/untracked 태그 공간을 먼저 보존한다. dispatch 이름은 F-15의 24열 compact 상한을 유지하고 늘어난 name column에는 padding만 추가해 공통 컬럼 정렬을 보존한다.
-  - **narrow/stack**: 현재 터미널 폭과 L1 suffix(child-count·gate·branch·상태 태그)를 기준으로 제목 예산을 계산한다. `_clip_w`의 display-cell/CJK 안전 tail-cut을 계속 사용하며 메타데이터가 화면 밖으로 밀려나지 않는다.
-  - **provider**: sidecar는 렌더러가 각 폭에서 자를 수 있도록 8~12단어, 최대 96자의 구체적인 영어 요약을 저장한다. 기존 짧은 sidecar는 호환하며 다음 debounce 갱신 때 자연스럽게 교체한다.
-  - **acceptance**: 168열 wide에서 세션 제목 예산이 기존 24열보다 커지고 가용 name zone을 사용한다. 60/120/168열에서 행이 터미널 경계를 넘지 않고, branch/model/context/time 및 dispatch 정렬이 유지되며, ASCII와 한글 제목 모두 display-cell 경계에서만 잘린다.
-- **F-23 (제목 생성 재귀 폭풍 봉쇄, 2026-07-14 사고 후 사용자 요구)**:
-  - **사고/원인**: 앞선 distill 큐레이터 폭풍이 남긴 수백 개 내부 세션이 live fleet 수집에 보였고, scheduler가 `mem_worker`/child를 제목 대상에서 제외하지 않아 각 transcript마다 `refresh_title.py → claude -p`를 시작했다. 제목 provider 자체도 세션으로 다시 수집되는 재귀 경로와 전역 상한 없는 백로그 drain이 결합해 title chain 216개, Claude 계열 프로세스 607개까지 증식했다. per-session lock/debounce는 서로 다른 sid 사이의 폭발을 막지 못한다.
-  - **그래프 차단**: live scheduler는 `mem_worker`, `is_child`, `app_server`, dead/stale을 절대 title 대상으로 삼지 않는다. provider/worker는 `FLEET_TITLE_REFRESH=1`을 계속 상속하고 procscan은 이를 `mem_worker`로 태깅한다. Claude statusline도 동일 env 재귀가드와 중앙 worker 안전 계약을 사용한다.
-  - **하드 상한**: fleet state root의 cross-process lease를 사용해 provider 동시 실행 기본 2·하드 최대 4(`FLEET_TITLE_CONCURRENCY`)를 강제한다. 별도 rolling 600초 start budget 기본 4·하드 최대 16(`FLEET_TITLE_MAX_STARTS`)을 영속 적용해 수백 개 backlog가 슬롯 해제 뒤 순차적으로 토큰을 계속 태우는 것도 막는다. 0은 비활성화이며 잘못된 값은 안전 기본값으로 복귀한다.
-  - **kill switch/fail closed**: `FLEET_TITLE_DISABLE=1` 또는 `<title-state-root>/.refresh-disabled`가 있으면 statusline shell, scheduler, worker main, provider 직전 네 경계에서 새 호출을 거부한다. state guard 획득 실패·provider 부재·quota 소진도 sidecar 미갱신으로 끝나며 native title/slug fallback을 유지한다.
-  - **복구**: SIGKILL로 남은 worker slot은 `2 × WORKER_TIMEOUT` 뒤 회수한다. rolling-start lease는 600초 뒤 회수한다. lock/lease 갱신은 cross-process file lock 아래 수행하고 경합 시 fail closed한다.
-  - **acceptance**: provider를 stub한 hermetic test에서 200개 live root session backlog도 동시에 2개보다 많이 spawn하지 않는다. 슬롯을 즉시 반환하는 20개 순차 backlog도 600초당 4개만 시작한다. mem-worker/child/app-server는 0회, kill switch는 모든 진입점 0회, stale slot은 회수된다. live provider smoke는 사고 검증에 사용하지 않는다.
-- **적용 순서(정보 위계, v6 정정)**: §4.6(F-9~F-13)은 표시층(render.py) 한정 — collector 계약·모델 스키마 불변(SD-F4 만 collector). §4.7(F-14~F-23)은 각 항목에 명시된 표면까지 — F-17/F-21 neutral sidecar+shared trigger, F-18 procscan environ 태깅, F-19 신규 collector(`collectors/memory.py`)·`--json` additive `memory` 키, F-20 Codex usage runtime-currentness, F-22 responsive render/provider, F-23 모든 title-provider ingress 안전 경계. 시각 결정이 substantial 해지면 autopilot-design 리드.
+- **적용 순서(정보 위계, v5 정정)**: §4.6(F-9~F-13)은 표시층(render.py) 한정 — collector 계약·모델 스키마 불변(SD-F4 만 collector). §4.7(F-14~F-21)은 각 항목에 명시된 표면까지 — F-17/F-21 neutral sidecar+shared trigger, F-18 procscan environ 태깅, F-19 신규 collector(`collectors/memory.py`)·`--json` additive `memory` 키, F-20 Codex usage runtime-currentness. 시각 결정이 substantial 해지면 autopilot-design 리드.
 - **🧠 글리프 위계 (v3 명문화, audit 정보성 반영)**: 같은 글리프의 두 표면 — 그룹 헤더 `🧠 N` = F-18b mem-*워커 프로세스* 수 / pulse 인접 `🧠 mem …` 행 = F-19 메모리 *이벤트* 집계. 라벨 문맥(`N` vs `mem`)이 구분자 — 새 🧠 표면 추가 시 이 두 의미와 충돌 금지.
 
 ## 5. 능동 변경 — fleet-owned local state write
@@ -361,15 +351,9 @@ flowchart TD
 
 - **F-21 lock**: Codex `threads.title`은 현재 native title 정본이며 `thread_name`은 compatibility fallback이다. title provider/sidecar는 Claude adapter 기능이 아니라 fleet 공용 계약이며, 기본 Haiku no-tools provider는 `FLEET_TITLE_COMMAND`로 다른 저비용 no-tools model wrapper와 교체 가능하다. fresh sidecar → native title → slug 순서와 live-only scheduling을 강제한다.
 
-## 확정 결정 (v6 승격, 2026-07-14 — responsive title F-22 + storm containment F-23)
-
-- **F-22 lock**: 세션 제목의 24열 고정 상한을 폐기하고 터미널 가용폭 기반 예산을 쓴다. 세션만 slack을 사용하고 dispatch compact 상한은 유지한다. sidecar provider는 넓은 행을 활용할 수 있는 최대 12단어·96자의 영어 요약을 생성하며, 모든 레이아웃은 display-cell 안전 클립과 핵심 메타데이터 정렬을 보존한다.
-- **F-23 lock**: 내부 worker를 title target에서 그래프 차단하고, 모든 진입점이 cross-process 동시성 lease(기본 2/최대 4)와 rolling 600초 start budget(기본 4/최대 16), env/state kill switch를 공유한다. 2026-07-14 재귀 title chain 사고는 200-session hermetic 회귀 fixture로 고정하며 live provider를 검증에 호출하지 않는다.
-
 ## Next (구현 순서 — autopilot-code, 본 v2 입력 · v1 순서 1~7 은 완료)
 
 0. ✅ **F-21 cross-harness title parity** — `plans/2026-07-13_fleet-cross-harness-title/`: Codex state DB title + JSONL fallback, neutral sidecar, shared provider/scheduler, cross-harness tests, mirror sync. 구현·검증 완료(`92181b6`).
-0. **F-22/F-23 responsive + bounded session title** — terminal width를 renderer에 전달해 session name zone을 확장하고, provider 제목을 최대 12단어·96자로 늘린다. 이어 internal-session graph cut, concurrency/start budget, kill switch를 적용하고 60/120/168열 및 200-session no-provider storm 회귀와 mirror parity를 검증한다.
 
 `/autopilot-code --mode dev --intensity standard "fleet UI 개선 — PRD v2 §4.5·§4.6"` (worktree 브랜치, depth-1 conductor 분사 + 스테이지 depth-2 분사 — 이 파이프 자체가 SD-F1~F3 의 라이브 검증 fixture 가 된다). 권장 순서:
 1. **SD-F4 pipe tolerant 파싱** (collectors/dispatch.py) — 공백/콤마 혼용 + 미지 key 무시. 기존 tests 에 wild 실측 행(2026-07-09 space-separated) fixture 추가.

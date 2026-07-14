@@ -64,9 +64,30 @@ STORE="${MEM_STORE:-$AGENT_HOME/memory}"
 MEM="${MEM_PY:-$AGENT_HOME/tools/memory/mem.py}"
 mkdir -p "$STORE" 2>/dev/null || true
 
+# Storm guard (2026-07-14 incident): a mass of simultaneous SessionEnds can
+# launch one worker per session with no global bound, exhausting CPU/RAM.
+# Kill switch: `touch $STORE/.distill-disable` halts all new dispatches.
+# Fixed mkdir slots avoid the count-then-create race between concurrent hooks.
+[ -e "$STORE/.distill-disable" ] && exit 0
+case "${MEM_DISTILL_MAX_CONCURRENT:-2}" in
+  ''|*[!0-9]*) _slot_max=2 ;;
+  *) _slot_max="${MEM_DISTILL_MAX_CONCURRENT:-2}" ;;
+esac
+case "${MEM_DISTILL_MAX_STARTS:-4}" in
+  ''|*[!0-9]*) _budget_max=4 ;;
+  *) _budget_max="${MEM_DISTILL_MAX_STARTS:-4}" ;;
+esac
+[ "$_slot_max" -gt 4 ] 2>/dev/null && _slot_max=4
+[ "$_budget_max" -gt 8 ] 2>/dev/null && _budget_max=8
+[ "$_slot_max" -gt 0 ] 2>/dev/null || exit 0
+[ "$_budget_max" -gt 0 ] 2>/dev/null || exit 0
+
 # Entry-time stale GC covers locks and transient captures orphaned by SIGKILL.
 # Verbatim `.distill-out-*` data must not persist beyond the §5.5.5 bound.
-find "$STORE" -maxdepth 1 \( -name '.distill-lock-*' -o -name '.distill-out-*' -o -name '.distill-snapids-*' \) -mmin +60 -delete 2>/dev/null || true
+find "$STORE" -maxdepth 1 \( -name '.distill-lock-*' -o -name '.distill-slot-*' -o -name '.distill-out-*' -o -name '.distill-prompt-*' -o -name '.distill-snapids-*' \) -mmin +60 -delete 2>/dev/null || true
+# Start-budget leases are intentionally not released on worker exit. They bound
+# sustained backlog drain, not just simultaneous processes.
+find "$STORE" -maxdepth 1 -name '.distill-budget-*' -type d -mmin +10 -delete 2>/dev/null || true
 
 # Resolve SID/CWD and select MODE/MODEL (γ D-18):
 #   argument mode (turn counter) → increment / fast add-only worker
@@ -104,6 +125,33 @@ delta=$(python3 "$MEM" distill "$SID" --source "${MEM_SESSION_SOURCE:-claude}" 2
 # lets exactly one racing trigger continue; the child EXIT trap removes it.
 LOCK="$STORE/.distill-lock-$SID"
 mkdir "$LOCK" 2>/dev/null || exit 0
+
+# Atomic cross-session concurrency slots. Every contender races on the same
+# bounded names, so no two hooks can claim one slot.
+SLOT=""
+_i=1
+while [ "$_i" -le "$_slot_max" ]; do
+  _candidate="$STORE/.distill-slot-$_i"
+  if mkdir "$_candidate" 2>/dev/null; then SLOT="$_candidate"; break; fi
+  _i=$((_i + 1))
+done
+[ -n "$SLOT" ] || { rmdir "$LOCK" 2>/dev/null || true; exit 0; }
+
+# Rolling 10-minute start budget. These fixed leases persist after completion,
+# preventing a large backlog from draining sequentially as worker slots reopen.
+BUDGET=""
+_i=1
+while [ "$_i" -le "$_budget_max" ]; do
+  _candidate="$STORE/.distill-budget-$_i"
+  if mkdir "$_candidate" 2>/dev/null; then BUDGET="$_candidate"; break; fi
+  _i=$((_i + 1))
+done
+[ -n "$BUDGET" ] || { rmdir "$SLOT" "$LOCK" 2>/dev/null || true; exit 0; }
+
+# Any failure before the detached child is established rolls back all leases.
+# The successful child replaces this trap and keeps BUDGET until rolling expiry.
+trap 'rmdir "$BUDGET" "$SLOT" "$LOCK" 2>/dev/null || true' EXIT
+[ ! -e "$STORE/.distill-disable" ] || exit 0
 
 # Curate mode captures a project snapshot as untrusted DATA and writes the
 # destructive ID allowlist. PROTECTED PENDING IDs are excluded. The parser
@@ -200,7 +248,7 @@ fi
   OUT="$STORE/.distill-out-$SID"
   PROMPT_FILE="$STORE/.distill-prompt-$SID"
   # Install cleanup before opening output; also remove prompt and membership files.
-  trap 'rmdir "$LOCK" 2>/dev/null || true; rm -f "$OUT" "$PROMPT_FILE" "$SNAPIDS_FILE"' EXIT
+  trap 'rmdir "$SLOT" "$LOCK" 2>/dev/null || true; rm -f "$OUT" "$PROMPT_FILE" "$SNAPIDS_FILE"' EXIT
 
   [ -n "$CWD" ] && cd "$CWD" 2>/dev/null || true
 
@@ -227,4 +275,5 @@ fi
 # subshell gives the parent immediate EOF; setsid only isolates the worker
 # session and is not the mechanism that detaches these FDs.
 ) </dev/null >/dev/null 2>&1 &
+trap - EXIT
 exit 0

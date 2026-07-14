@@ -9,7 +9,6 @@
 > · **v15 2026-07-11** (Cluster J — 쓰기 관측성·전수 진단: 변이 이벤트 저널 + `mem log` + `mem doctor`. 계기 = fleet 메모리 가시화[agent-fleet-dashboard F-19]의 전제 + 읽기/쓰기 telemetry 비대칭 실측)
 > · **v16 2026-07-14** (historical language-neutral automatic recall design, retired in full by v17 D-40)
 > · **v17 2026-07-14** (agent-owned semantic memory judgment: automatic prompt classification/recall injection retired; deterministic code is limited to mechanical safety and retrieval infrastructure)
-> · **v18 2026-07-14** (Cluster L — background-model storm containment: atomic global slots, rolling start budget, kill switch, adapter/runtime projection parity)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -248,7 +247,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - 현황: Claude ✅ / Codex ❌ push 생략 (Phase 3 수정 대상).
 
 ### 5.10.3 D-32 — distill worker 는 portable dispatcher 계약 경유
-- distill worker 는 portable `hooks/mem-distill-dispatch.sh` 의 계약(`MEM_DISTILL_WORKER <mode> <model> <prompt-file>`)을 경유한다. 어댑터가 자체 worker 를 재구현하는 경우에도 **mode/model routing(fast=increment·deep=curate 모델 tier, P-36)·snapshot-id whitelist 안전층(P-25)·per-session lock·재귀가드·D-41 global concurrency/start budget/kill switch** 를 보존할 의무 — increment 프롬프트에 mutation action(prune/merge)을 나열하면서 whitelist 를 우회하는 조합 금지.
+- distill worker 는 portable `hooks/mem-distill-dispatch.sh` 의 계약(`MEM_DISTILL_WORKER <mode> <model> <prompt-file>`)을 경유한다. 어댑터가 자체 worker 를 재구현하는 경우에도 **mode/model routing(fast=increment·deep=curate 모델 tier, P-36)·snapshot-id whitelist 안전층(P-25)·lock·재귀가드** 를 보존할 의무 — increment 프롬프트에 mutation action(prune/merge)을 나열하면서 whitelist 를 우회하는 조합 금지.
 - 현황: Claude ✅ dispatcher 경유 / Codex ❌ 자체 재구현 subset (P-13 — Phase 3 에서 dispatcher 채택 또는 계약 요소 보존 증명).
 
 ## 5.11 Cluster I — 꺼내 쓰는 경로 강화 + 미소비 인계 보호 (v14, 2026-07-10)
@@ -307,16 +306,6 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - Prompt-submit bridges no longer pass every prompt to a recall classifier. `preflight recall <query>`, `tools/memory/recall.sh`, and `mem recall` are explicit agent-invoked retrieval surfaces.
 - Retrieval ranking and multilingual tokenization remain. They rank records for a chosen query; they do not decide whether the agent should query.
 - Regression gates reject active prompt-hook registration of `mem-recall-inject.sh`, active `preflight recall` calls from prompt bridges, and a semantic `mem recall --auto` implementation.
-
-## 5.14 Cluster L — Background-model storm containment (v18, 2026-07-14)
-
-> Incident: a first mass SessionEnd/distill wave and a separate Fleet title-refresh recursion showed that per-session locks and recursion environment markers do not bound work across hundreds of different session IDs. The title chain reached 216 workers and Claude-family process count reached 607 before emergency termination. D-41 covers the memory-dispatch half; agent-fleet-dashboard F-23 covers title refresh.
-
-### 5.14.1 D-41 — Global cost boundary for automatic distillation
-- Every `mem-distill-dispatch.sh` realization keeps the existing per-session lock and `MEM_DISTILL=1` recursion cut, then additionally claims a **fixed-name `mkdir` global slot** before any model worker starts. Default concurrency is 2, hard maximum 4, and `MEM_DISTILL_MAX_CONCURRENT=0` disables starts. Count-then-create is forbidden because simultaneous SessionEnd hooks can all observe the same stale count.
-- A second fixed-name lease pool is a persistent rolling start budget: default 4 and hard maximum 8 starts per 10 minutes (`MEM_DISTILL_MAX_STARTS`; 0 disables). Worker completion releases its concurrency slot but not its start lease. This prevents a large backlog from draining sequentially as slots reopen.
-- `$MEM_STORE/.distill-disable` is the operator kill switch and is checked both at entry and again after leases are acquired. Invalid numeric configuration falls back to safe defaults. Slot/session locks orphaned by SIGKILL are reclaimed by bounded stale GC; start leases expire after 10 minutes. Capacity or guard failure is fail-closed and leaves the distill marker unadvanced for a later safe trigger.
-- The portable dispatcher and adapter realizations must preserve this contract, and physical runtime projections must be hash-verified after installation. Hermetic regression launches 12 distinct session IDs concurrently against a sleeping stub, asserts at most 2 model workers, waits for slots to reopen, then asserts a second wave starts 0 because the rolling budget remains full. The kill-switch case invokes 0 workers. No live model is used for verification.
 
 ## [library] 공개 API (v3 + v4 추가)
 ```
@@ -384,8 +373,6 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
   - **D-39 (`mem doctor` + oncall 편입)**: read-only 전수 진단 9항목(integrity·FTS 정합·schema 불변식·working 비대·stale pending·ceiling·graveyard 정합·dump 신선도·워커 건강) + exit code. 새 loop 없음 — oncall 항목 1개. 조치 권한 = D-18 큐레이터 불변(doctor 는 진단만). 소비자 = fleet F-19·oncall·사용자.
 - **v17 신규 (Cluster K — agent-owned semantic memory judgment, §5.13)**:
   - **D-40**: semantic memory choices belong to the acting agent. Automatic prompt classification and recall injection are retired; deterministic code is limited to storage/retrieval mechanics and safety boundaries. D-15 and the automatic portion of D-34 are historical only.
-- **v18 신규 (Cluster L — background-model storm containment, §5.14)**:
-  - **D-41**: all automatic distill paths share an atomic global concurrency pool(default 2/hard max 4), persistent 10-minute start budget(default 4/hard max 8), `.distill-disable` kill switch, stale-lease recovery, and adapter/runtime hash parity. Per-session locks remain necessary but are explicitly insufficient as a global cost boundary.
 
 ## Next (구현 순서 — autopilot-code, 본 v5 입력)
 1. **Cluster A (파일 메커니즘 제거, Option 2)** 먼저 — 사용자 지적 incoherence 해소:

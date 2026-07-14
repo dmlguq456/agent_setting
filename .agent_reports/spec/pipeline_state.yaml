@@ -5,8 +5,8 @@ scope_note: "통합 기억 시스템 — post-it(단기)·auto-memory(장기)·u
 phases:
   spec: done               # v3 PRD 확정 (D-1~7 lock — DB화·저장소분리·통합강화)
   scaffolding: pending
-  dev: in_progress         # v3 완료(DB화·분리). v4 신규 = Cluster A(profile 완전통합)+B(Hermes port) 구현 대기
-last_updated: 2026-07-14  # v16: fixed recall phrases와 signal-dependent confidence 폐기. snapshot v15
+  dev: in_progress         # v18 D-41 complete (39 dispatch tests); unrelated historical clusters remain tracked
+last_updated: 2026-07-14  # v18: background-model storm containment. snapshot v17
 inputs:
   - .agent_reports/research/hermes-agent/
   - VISION.md
@@ -35,3 +35,5 @@ decisions_locked:
   - D-30~D-32: Cluster H(v13) — memory adapter-parity 불변식: session-end distill 2-tier(increment+curate) adapter-agnostic 계약(미실현=명시 신고 의무)·SessionEnd sync=MEM_DUMP_PUSH 포함·distill worker=portable dispatcher 계약(재구현 시 routing·whitelist·lock·재귀가드 보존). 근거=codex-adapter-parity 감사 P-10·P-12·P-13·P-25·P-36
   - D-33~D-36: Cluster I(v14) — show/recall-full 전문 접근·project prompt 고신뢰 자동 recall(no-touch probe+bounded telemetry)·delivery_state pending/consumed 기반 handoff 파괴 차단+consume/restore·SessionStart cap 유지 후 재관찰
   - D-37~D-39: Cluster J(v15) — 쓰기 이벤트 저널(write-events.jsonl, bounded·fail-open, recall-events 와 읽기/쓰기 대칭)·mem log(저널 tail 1급 조회)·mem doctor(read-only 전수 진단 9항목+exit code, oncall 항목 1개·새 loop 없음, 조치 권한=D-18 큐레이터 불변). 소비자 = fleet F-19(collectors/memory.py read-only 관찰)
+  - D-40: Cluster K(v17) — semantic memory 판단은 acting agent 소유; automatic prompt recall/classification 폐기, 결정론 코드는 mechanical safety/retrieval infrastructure에 한정
+  - D-41: Cluster L(v18) — automatic distill global cost boundary: atomic concurrency slots(default 2/max 4), rolling 10-minute starts(default 4/max 8), .distill-disable, stale recovery, adapter/runtime hash parity

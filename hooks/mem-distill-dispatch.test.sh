@@ -60,6 +60,9 @@ chmod +x "$STUBCAP/claude"
 # ---- fixture jsonl helper: writes a 2-msg session so delta is non-empty (marker unset → full yield) ----
 mkfix() {  # $1=sid
   local sid="$1" enc
+  # Most legacy cases test one independent dispatch contract. Reset the new
+  # rolling budget between those cases; the dedicated storm case below keeps it.
+  rm -rf "$STORE"/.distill-budget-* 2>/dev/null || true
   enc="$PROJ/-home-fake-$sid"; mkdir -p "$enc"
   cat > "$enc/$sid.jsonl" <<JSONL
 {"type":"user","message":{"role":"user","content":"dispatch test prompt $sid"},"uuid":"${sid}u1","timestamp":"t1","isSidechain":false}
@@ -170,6 +173,79 @@ printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"x"}' "
 [ ! -e "$STUBBIN/CLAUDE_CALLED" ] \
   && ok "④ turn-nudge: MEM_DISTILL=1 → sentinel ABSENT (재분사 차단)" \
   || bad "④ turn-nudge: 재귀가드 실패 (sentinel PRESENT)"
+
+# ============================================================
+# S-1 storm guard — atomic global slots + sustained start budget + kill switch
+# ============================================================
+echo "== S-1 storm guard — 12 concurrent sessions stay <=2; later backlog stays blocked =="
+STORMSTORE="$(mktemp -d)"; STORMPROJ="$(mktemp -d)"; STORMSTUB="$(mktemp -d)"
+CLEANUP+=("$STORMSTORE" "$STORMPROJ" "$STORMSTUB")
+STORM_CALLS="$STORMSTORE/calls"
+cat > "$STORMSTUB/claude" <<'STUBEOF'
+#!/bin/sh
+printf '%s\n' "$$" >> "$STORM_CALLS"
+sleep 2
+STUBEOF
+chmod +x "$STORMSTUB/claude"
+
+mkstorm() {  # $1=sid
+  local sid="$1" enc="$STORMPROJ/-home-fake-$1"
+  mkdir -p "$enc"
+  cat > "$enc/$sid.jsonl" <<JSONL
+{"type":"user","message":{"role":"user","content":"storm prompt $sid"},"uuid":"${sid}u1","timestamp":"t1","isSidechain":false}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"storm reply $sid"}]},"uuid":"${sid}a1","timestamp":"t2","isSidechain":false}
+JSONL
+}
+
+for n in $(seq 1 16); do mkstorm "storm$n"; done
+for n in $(seq 1 12); do
+  MEM_STORE="$STORMSTORE" MEM_PROJECTS="$STORMPROJ" MEM_DISTILL_ENABLE=1 \
+    MEM_DISTILL_WORKER="$STORMSTUB/claude" MEM_DISTILL_MAX_CONCURRENT=2 \
+    MEM_DISTILL_MAX_STARTS=2 STORM_CALLS="$STORM_CALLS" \
+    bash "$DISPATCH" distill "storm$n" "/tmp" &
+done
+wait
+for _ in $(seq 1 30); do
+  first_calls="$(wc -l < "$STORM_CALLS" 2>/dev/null || echo 0)"
+  [ "${first_calls:-0}" -ge 1 ] 2>/dev/null && break
+  sleep 0.1
+done
+first_calls="$(wc -l < "$STORM_CALLS" 2>/dev/null || echo 0)"
+if [ "${first_calls:-0}" -ge 1 ] 2>/dev/null && [ "${first_calls:-0}" -le 2 ] 2>/dev/null; then
+  ok "S-1: 12-session concurrent wave invoked at most 2 workers (atomic slots)"
+else
+  bad "S-1: concurrent worker count=${first_calls:-0}, expected 1..2"
+fi
+for _ in $(seq 1 60); do
+  slots="$(find "$STORMSTORE" -maxdepth 1 -name '.distill-slot-*' -type d | wc -l)"
+  [ "$slots" = 0 ] && break
+  sleep 0.1
+done
+
+# Slots are free now, but the persistent 10-minute start leases must reject a
+# second wave. This catches a concurrency-only guard that drains backlog forever.
+for n in $(seq 13 16); do
+  MEM_STORE="$STORMSTORE" MEM_PROJECTS="$STORMPROJ" MEM_DISTILL_ENABLE=1 \
+    MEM_DISTILL_WORKER="$STORMSTUB/claude" MEM_DISTILL_MAX_CONCURRENT=2 \
+    MEM_DISTILL_MAX_STARTS=2 STORM_CALLS="$STORM_CALLS" \
+    bash "$DISPATCH" distill "storm$n" "/tmp" &
+done
+wait
+sleep 0.3
+second_calls="$(wc -l < "$STORM_CALLS" 2>/dev/null || echo 0)"
+[ "$second_calls" = "$first_calls" ] \
+  && ok "S-1: later sequential backlog blocked by rolling start budget" \
+  || bad "S-1: start budget bypassed (first=$first_calls second=$second_calls)"
+
+mkdir -p "$STORMSTORE/.distill-disable"
+MEM_STORE="$STORMSTORE" MEM_PROJECTS="$STORMPROJ" MEM_DISTILL_ENABLE=1 \
+  MEM_DISTILL_WORKER="$STORMSTUB/claude" STORM_CALLS="$STORM_CALLS" \
+  bash "$DISPATCH" distill "storm16" "/tmp"
+sleep 0.2
+kill_calls="$(wc -l < "$STORM_CALLS" 2>/dev/null || echo 0)"
+[ "$kill_calls" = "$second_calls" ] \
+  && ok "S-1: .distill-disable prevents every new worker" \
+  || bad "S-1: kill switch allowed a worker"
 
 # ============================================================
 # ⑥ worker argv capture — mode + model + prompt-file

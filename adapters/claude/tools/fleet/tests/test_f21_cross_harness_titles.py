@@ -28,11 +28,15 @@ class _EnvMixin:
         self.saved = {key: os.environ.get(key) for key in (
             "CODEX_HOME", "CLAUDE_CONFIG_DIR", "FLEET_TITLE_STATE_DIR",
             "FLEET_TITLE_COMMAND", "FLEET_TITLE_MODEL", "FLEET_TITLE_REFRESH",
+            "FLEET_TITLE_DISABLE", "FLEET_TITLE_CONCURRENCY", "FLEET_TITLE_MAX_STARTS",
         )}
         os.environ["CODEX_HOME"] = os.path.join(self.tmp.name, "codex")
         os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(self.tmp.name, "claude")
         os.environ["FLEET_TITLE_STATE_DIR"] = os.path.join(self.tmp.name, "title-state")
-        for key in ("FLEET_TITLE_COMMAND", "FLEET_TITLE_MODEL", "FLEET_TITLE_REFRESH"):
+        for key in (
+            "FLEET_TITLE_COMMAND", "FLEET_TITLE_MODEL", "FLEET_TITLE_REFRESH",
+            "FLEET_TITLE_DISABLE", "FLEET_TITLE_CONCURRENCY", "FLEET_TITLE_MAX_STARTS",
+        ):
             os.environ.pop(key, None)
         codex._TITLE_INDEX.update(stamp=None, map={})
         codex._CFG.update(ts=0.0, model=None, effort=None)
@@ -171,7 +175,9 @@ class CrossHarnessWorkerTest(_EnvMixin, unittest.TestCase):
             rt.subprocess.Popen = original
         self.assertIn("--harness", captured["argv"])
         self.assertIn("codex", captured["argv"])
+        self.assertIn("--slotdir", captured["argv"])
         self.assertTrue(os.path.isdir(titles.lock_path("codex-sid", harness="codex")))
+        self.assertTrue(os.path.isdir(captured["argv"][captured["argv"].index("--slotdir") + 1]))
         self.assertEqual(captured["kwargs"]["env"]["FLEET_TITLE_REFRESH"], "1")
 
     def test_fleet_schedules_only_live_mode(self):

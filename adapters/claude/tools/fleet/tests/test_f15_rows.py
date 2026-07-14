@@ -145,7 +145,7 @@ class WideRowNoParentheticalTagTest(unittest.TestCase):
         job = DispatchJob(key="code", slug="top-conductor", depth=1, liveness="working",
                           mode="dev", qa="standard", qa_source="argv")
         segs = render._dispatch_row(job)
-        name_text = segs[6][0]     # (nm, "name_dim") — after the harness field
+        name_text = next(text for text, key in segs if key == "name_dim")
         self.assertNotIn("(", name_text)
         self.assertNotIn(")", name_text)
 
@@ -250,7 +250,7 @@ class LayoutCutoffTest(unittest.TestCase):
 
 class TitleCapTest(unittest.TestCase):
 
-    def test_session_title_capped_at_title_max(self):
+    def test_session_title_keeps_legacy_cap_without_terminal_width(self):
         long_title = "a" * 60
         sess = Session(harness="claude", pid=1, cwd="", gate="tracked", slug="s",
                        title=long_title, liveness="idle")
@@ -258,12 +258,41 @@ class TitleCapTest(unittest.TestCase):
         name_seg = segs[4][0]
         self.assertLessEqual(render._dw(name_seg), render._TITLE_MAX)
 
-    def test_dispatch_composed_label_plus_slug_capped(self):
+    def test_wide_session_title_expands_with_terminal_width(self):
+        long_title = "responsive session title " * 8
+        sess = Session(harness="codex", pid=1, cwd="", slug="s",
+                       title=long_title, liveness="idle")
+        name_width = render._wide_name_width(168)
+        segs = render._session_row(sess, narrow=False, name_width=name_width)
+        name_text = segs[4][0]
+        self.assertGreater(name_width, render._NW_S)
+        self.assertGreater(render._dw(name_text), render._TITLE_MAX)
+        self.assertLessEqual(render._dw(name_text), name_width)
+
+    def test_wide_session_title_clips_cjk_on_display_cell_boundary(self):
+        sess = Session(harness="codex", pid=1, cwd="", slug="s",
+                       title="반응형세션제목" * 20, liveness="idle")
+        name_width = render._wide_name_width(168)
+        segs = render._session_row(sess, narrow=False, name_width=name_width)
+        name_text = segs[4][0]
+        self.assertLessEqual(render._dw(name_text), name_width)
+        self.assertNotEqual(name_text[-1:], "")
+
+    def test_narrow_session_title_reserves_suffixes(self):
+        sess = Session(harness="codex", pid=1, cwd="", gate="tracked", branch="feature/long",
+                       slug="s", title="responsive session title " * 8, liveness="idle")
+        l1, _l2 = render._session_row_2line(sess, term_width=60)
+        self.assertLessEqual(sum(render._dw(text) for text, _key in l1), 54)
+        text = "".join(part for part, _key in l1)
+        self.assertIn("tracked", text)
+        self.assertIn("feature/long", text)
+
+    def test_dispatch_composed_label_plus_slug_stays_capped_in_wide_column(self):
         job = DispatchJob(key="code-execute", slug="a-very-long-dispatch-session-slug-name",
                           depth=2, parent_slug="p", worker_role="code-execute",
                           liveness="working")
-        segs = render._dispatch_row(job)
-        name_text = segs[6][0]
+        segs = render._dispatch_row(job, name_width=render._wide_name_width(168))
+        name_text = next(text for text, key in segs if key == "name_dim")
         self.assertLessEqual(len(name_text), render._TITLE_MAX)
 
 

@@ -1,8 +1,8 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5)
+- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: implementation done through v5/F-21
+- **Status**: v6/F-22/F-23 implemented and verified; runtime title generation remains operator-disabled
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## Process Log
@@ -57,6 +57,16 @@
 - v3 (2026-07-12): minor 5건(F-14~F-19) 승격 흡수 — §4.7 분리 + audit 🟡 3건 반영(§3 --demo·§9 현행화·글리프 위계). snapshot = `_internal/versions/v2/prd.md`. audit = `_internal/audit/audit_2026-07-12T0910.md`.
 - v4 (2026-07-13): F-20 Codex dynamic usage-window runtime-currentness 계약. snapshot = `_internal/versions/v3/prd.md`.
 - v5 (2026-07-13): F-21 Codex native state DB title + JSONL fallback, cross-harness neutral title sidecar/provider. Claude-only refresher/`slug` fallback 계약 폐기. snapshot = `_internal/versions/v4/prd.md`.
+- v6 (2026-07-14): F-22 terminal-width-responsive session name zone + longer responsive sidecar title contract; F-23 recursive-storm containment. snapshot = `_internal/versions/v5/prd.md`.
+
+## v6 update (2026-07-14) — responsive session title width + recursive-storm containment
+
+- 사용자 요청에 따라 F-16의 20~24열 고정 세션명 상한을 F-22 반응형 계약으로 대체했다.
+- wide는 telemetry/time/inset을 먼저 예약한 뒤 남는 폭을 세션 name column에 주고, narrow/stack은 suffix를 예약한 실제 L1 예산을 사용한다.
+- dispatch 이름은 F-15 compact 상한을 유지해 긴 분사 slug가 다시 지배하지 않으며, sidecar provider는 8~12단어·최대 96자의 구체적인 영어 제목을 저장한다.
+- 같은 날 live Fleet scheduler가 앞선 distill 폭풍의 내부 세션 backlog까지 title 대상으로 삼으면서 provider 세션이 다시 수집되는 재귀 chain이 발생했다(관찰 최대 title chain 216, Claude 계열 프로세스 607). per-session lock은 서로 다른 sid 폭발을 막지 못했다.
+- F-23은 internal/child/app-server graph cut, cross-process provider 동시성 기본 2(하드 최대 4), rolling 600초 start budget 기본 4(하드 최대 16), env/state kill switch, SIGKILL stale-slot 회수를 모든 ingress에 강제한다. 검증은 provider 없는 200-session fixture로만 수행한다.
+- 구현 검증: focused title/render 87 tests, canonical Fleet full suite 236 tests, canonical↔Claude mirror parity, shell syntax, adaptation boundary 통과. live provider smoke는 수행하지 않았고 `<title-state-root>/.refresh-disabled`를 유지한다.
 
 ## v5 implementation closure (2026-07-13)
 

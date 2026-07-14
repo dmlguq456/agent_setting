@@ -8,8 +8,8 @@ inputs:
   - spec/stage-dispatch/prd.md   # v2: SD-3·§9-13 스테이지 row 관제 parity
   - spec/prd.md                  # v3/F-19: Unified Memory System v15 Cluster J (write-events 저널 = F-19 소스)
 phases:
-  spec: done            # PRD v5 (2026-07-13: F-21 Codex state title + JSONL fallback/shared provider; v4 snapshot 보존)
+  spec: done            # PRD v6 (2026-07-14: F-22 responsive width + F-23 recursive-storm containment; v5 snapshot 보존)
   scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
   design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
-  dev: done             # F-21 구현·187 tests·real fleet smoke 완료
-last_updated: 2026-07-13
+  dev: done             # F-22 responsive renderer + F-23 graph-cut/concurrency/rate/kill-switch, Fleet 236 tests verified
+last_updated: 2026-07-14
