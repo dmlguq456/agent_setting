@@ -1,0 +1,11 @@
+mode: library,cli
+phase: complete
+status: complete
+updated: 2026-07-14
+spec_significance: SPEC-SIGNIFICANT
+inputs:
+  - core/WORKFLOW.md
+  - core/MEMORY.md
+  - roles/modes/material/figure-gen.md
+  - roles/modes/qa/test.md
+  - .agent_reports/spec/prd.md

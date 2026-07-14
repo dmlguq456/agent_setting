@@ -104,7 +104,9 @@ generated Python analysis scripts through `adapters/opencode/tools/material/`.
 tool-contract surface:
 `adapters/opencode/bin/preflight.sh figure-gen --check <script.py>` verifies
 generated matplotlib/seaborn figure scripts through
-`adapters/opencode/tools/material/`.
+`adapters/opencode/tools/material/`. Report spectrograms additionally run
+`figure-gen --verify-report <manifest.json> <report.md>` and fail closed on
+metadata, scale, claim-evidence, or hash-bound visual-review drift.
 
 `roles/modes/material/pdf-extract.md` has an OpenCode-owned executable
 tool-contract surface:

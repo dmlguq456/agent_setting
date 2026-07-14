@@ -46,6 +46,7 @@ This document is derived from core — edit core first; do not modify this adapt
 - For `material/browser-fetch` URLs, run `adapters/codex/bin/preflight.sh browser-fetch --check <url>` before treating rendered browser access as satisfying the mode tool contract. Exit 69 means the local Playwright browser stack is unavailable.
 - For `material/data-script` outputs, run `adapters/codex/bin/preflight.sh data-script --check <script.py>` before treating the generated analysis script as satisfying the mode tool contract.
 - For `material/figure-gen` outputs, run `adapters/codex/bin/preflight.sh figure-gen --check <script.py>` before treating a generated matplotlib figure script as satisfying the mode tool contract.
+- For a report spectrogram, also run `adapters/codex/bin/preflight.sh figure-gen --verify-report <manifest.json> <report.md>`; missing or mismatched 48 kHz full-band metadata, claim evidence, or hash-bound visual review blocks completion.
 - For `material/pdf-extract` inputs, run `adapters/codex/bin/preflight.sh pdf-extract --check <file.pdf>` before treating local PDF text extraction as satisfying the mode tool contract. Exit 69 means the local extractor is unavailable.
 - For `material/web-image-search` queries, run `adapters/codex/bin/preflight.sh web-image-search --check <query>` before treating image search as satisfying the mode tool contract. Exit 69 means no provider command is configured.
 - For `qa/security-review`, use the portable read-only mode with Codex file and git diff tools; do not invoke or project Claude `/security-review`.

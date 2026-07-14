@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "profile": "spectrogram-report-48k-full-band",
+  "figure_groups": [
+    {
+      "id": "representative-comparison",
+      "kind": "spectrogram",
+      "png_path": "representative_spectrogram.png",
+      "sample_rate_hz": 48000,
+      "min_hz": 0,
+      "max_hz": 24000,
+      "dynamic_range_db": 80,
+      "shared_scale_per_figure": true,
+      "colormap": "magma-compatible",
+      "panels": [
+        {
+          "id": "reference",
+          "vmin_db": -80,
+          "vmax_db": 0
+        },
+        {
+          "id": "estimate",
+          "vmin_db": -80,
+          "vmax_db": 0
+        }
+      ],
+      "visual_review": {
+        "reviewed_png": "representative_spectrogram.png",
+        "png_sha256": "9bbaec1e1765672283f17f251dd3aef38f027470af1b77f22f3580b31c7172e0",
+        "reviewer": "Codex view_image(original)",
+        "reviewed_at": "2026-07-14T16:22:04+09:00",
+        "evidence": "Final PNG opened at original detail after correcting first-pass label clipping; both panels show 0–24 kHz ticks, one visible colorbar, shared -80..0 dB scale, and readable labels.",
+        "y_axis_0_24khz": true,
+        "ticks_readable": true,
+        "colorbar_present": true,
+        "shared_scale_confirmed": true,
+        "labels_readable": true
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "id": "low-band-metric",
+      "min_hz": 20,
+      "max_hz": 1000
+    }
+  ],
+  "claims": [
+    {
+      "id": "claim-6ea9f977a09126f2",
+      "text": "48 kHz full-band spectrogram",
+      "type": "full_band",
+      "evidence": [
+        {
+          "kind": "figure_group",
+          "id": "representative-comparison"
+        }
+      ]
+    },
+    {
+      "id": "claim-a117fcffa86bcd1e",
+      "text": "이 그림은 전 대역 에너지를 0–24 kHz 범위에서 보여준다.",
+      "type": "full_band",
+      "evidence": [
+        {
+          "kind": "figure_group",
+          "id": "representative-comparison"
+        }
+      ]
+    }
+  ]
+}

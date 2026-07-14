@@ -38,6 +38,7 @@ realization=compat-reference
 requirement=""
 tool_contract=""
 tool_contract_check=""
+report_tool_contract_check=""
 runtime_surface=""
 fallback=""
 note=""
@@ -66,6 +67,7 @@ case "$family" in
       figure-gen)
         tool_contract=figure-gen
         tool_contract_check="adapters/opencode/bin/preflight.sh figure-gen --check <script.py>"
+        report_tool_contract_check="adapters/opencode/bin/preflight.sh figure-gen --verify-report <manifest.json> <report.md>"
         runtime_surface=adapter-owned-figure-gen
         ;;
       pdf-extract)
@@ -85,7 +87,7 @@ case "$family" in
     elif [ "$name" = "data-script" ]; then
       requirement="run the adapter-owned Python data-script launcher for generated analysis scripts, or report unavailable"
     elif [ "$name" = "figure-gen" ]; then
-      requirement="run the adapter-owned matplotlib figure script launcher for generated figure scripts, or report unavailable"
+      requirement="run the adapter-owned matplotlib figure script launcher and, for report spectrograms, its --verify-report semantic gate; otherwise report unavailable"
     elif [ "$name" = "pdf-extract" ]; then
       requirement="run the adapter-owned PDF extraction launcher for PDF inputs, or report unavailable"
     elif [ "$name" = "web-image-search" ]; then
@@ -173,6 +175,9 @@ if [ -n "$tool_contract" ]; then
 fi
 if [ -n "$tool_contract_check" ]; then
   printf 'tool_contract_check=%s\n' "$tool_contract_check"
+fi
+if [ -n "$report_tool_contract_check" ]; then
+  printf 'report_tool_contract_check=%s\n' "$report_tool_contract_check"
 fi
 if [ -n "$runtime_surface" ]; then
   printf 'runtime_surface=%s\n' "$runtime_surface"

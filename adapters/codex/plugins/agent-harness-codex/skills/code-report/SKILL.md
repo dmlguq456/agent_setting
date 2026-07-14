@@ -32,7 +32,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Portable Contract
 
-- Invocation semantics: Generate a detailed change report from plan + dev logs — focuses on key changes, principles, and insights for future reference Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: Generate a detailed change report from plan + dev logs — focuses on key changes, principles, and insights for future reference. When it embeds or cites a generated spectrogram, completion also requires a passing semantic manifest, range-compatible claim evidence, and a hash-current representative PNG review. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 
@@ -47,6 +47,11 @@ In a `standard+` `autopilot-code` stage cycle, `code-report` owns
 shared lock where required). It consumes plan, checklist, development, and test
 evidence but must not rewrite source or another stage's evidence class. This is
 the report half of the stage ownership contract in `core/OPERATIONS.md` §5.10.
+
+When the report references generated spectrograms, consume the semantic
+manifest, verifier result, and representative visual-review evidence from the
+test stage. Do not publish band-sensitive claims or mark the report complete
+when that gate is missing or failing.
 
 ## Role Requirements
 

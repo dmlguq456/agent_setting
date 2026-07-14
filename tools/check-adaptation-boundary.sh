@@ -1170,6 +1170,9 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'preflight.sh figure-gen --check <script.py>' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex material figure-gen tool-contract"
   fi
+  if ! grep -Fq 'figure-gen --verify-report <manifest.json> <report.md>' adapters/codex/AGENTS.md; then
+    fail_msg "adapters/codex/AGENTS.md must document fail-closed report figure QA"
+  fi
   if ! grep -Fq 'preflight.sh pdf-extract --check <file.pdf>' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex material PDF extract tool-contract"
   fi
@@ -1370,6 +1373,8 @@ check_codex_tool_projection() {
     fail_msg "adapters/codex/tools/material/figure-gen.sh must be concrete, not a symlink"
   elif ! check_no_claude_native_refs adapters/codex/tools/material/figure-gen.sh adapters/codex/tools/material/figure-gen.sh; then
     :
+  elif ! grep -Fq -- '--verify-report' adapters/codex/tools/material/figure-gen.sh; then
+    fail_msg "Codex figure-gen launcher must expose report semantic verification"
   fi
 
   if [ ! -x adapters/codex/tools/material/pdf-extract.sh ]; then
@@ -1420,8 +1425,8 @@ check_codex_tool_projection() {
   # top-level tools/* entry must be classified projected or deferred, else fail loud. design-mcp is
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
-  TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
+  TOOL_PROJECTED="memory material figure-semantic-manifest.schema.json figure-semantic-verify.py"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2236,6 +2241,9 @@ check_opencode_bin_wrappers() {
   if ! grep -Fq 'preflight.sh figure-gen --check <script.py>' adapters/opencode/AGENTS.md; then
     fail_msg "adapters/opencode/AGENTS.md must document the OpenCode material figure-gen tool-contract"
   fi
+  if ! grep -Fq 'figure-gen --verify-report <manifest.json> <report.md>' adapters/opencode/AGENTS.md; then
+    fail_msg "adapters/opencode/AGENTS.md must document fail-closed report figure QA"
+  fi
   if ! grep -Fq 'preflight.sh pdf-extract --check <file.pdf>' adapters/opencode/AGENTS.md; then
     fail_msg "adapters/opencode/AGENTS.md must document the OpenCode material PDF extract tool-contract"
   fi
@@ -2414,6 +2422,8 @@ check_opencode_tool_projection() {
     fail_msg "adapters/opencode/tools/material/figure-gen.sh must be concrete, not a symlink"
   elif ! check_no_claude_native_refs adapters/opencode/tools/material/figure-gen.sh adapters/opencode/tools/material/figure-gen.sh; then
     :
+  elif ! grep -Fq -- '--verify-report' adapters/opencode/tools/material/figure-gen.sh; then
+    fail_msg "OpenCode figure-gen launcher must expose report semantic verification"
   fi
 
   if [ ! -x adapters/opencode/tools/material/pdf-extract.sh ]; then
@@ -2464,8 +2474,8 @@ check_opencode_tool_projection() {
   # top-level tools/* entry must be classified projected or deferred, else fail loud. design-mcp is
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
-  TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
+  TOOL_PROJECTED="memory material figure-semantic-manifest.schema.json figure-semantic-verify.py"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -3406,6 +3416,7 @@ check_codex_mode_map() {
         fi
         if [ "$rel" = "material/figure-gen" ]; then
           if ! grep -Fq 'tool_contract_check=adapters/codex/bin/preflight.sh figure-gen --check <script.py>' "$out" \
+            || ! grep -Fq 'report_tool_contract_check=adapters/codex/bin/preflight.sh figure-gen --verify-report <manifest.json> <report.md>' "$out" \
             || ! grep -Fq 'runtime_surface=adapter-owned-figure-gen' "$out"; then
             fail_msg "Codex mode map must report figure-gen contract metadata for $rel"
           fi
@@ -3535,6 +3546,7 @@ check_opencode_mode_map() {
         fi
         if [ "$rel" = "material/figure-gen" ]; then
           if ! grep -Fq 'tool_contract_check=adapters/opencode/bin/preflight.sh figure-gen --check <script.py>' "$out" \
+            || ! grep -Fq 'report_tool_contract_check=adapters/opencode/bin/preflight.sh figure-gen --verify-report <manifest.json> <report.md>' "$out" \
             || ! grep -Fq 'runtime_surface=adapter-owned-figure-gen' "$out"; then
             fail_msg "OpenCode mode map must report figure-gen contract metadata for $rel"
           fi

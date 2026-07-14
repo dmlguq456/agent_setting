@@ -22,12 +22,15 @@ explicitly requested by the user. A request to understand the project, recover
 prior context, resume work, or report current status is read-only orientation,
 not an `analyze-project` trigger.
 
-Before invocation, resolve the existing artifact root and read current
-summaries, state, spec, run logs, and relevant prior analysis according to
-`core/WORKFLOW.md §0.1`. Treat legacy `.claude_reports/` as the existing
-project-state surface when `.agent_reports/` is absent. For orientation, invoke
-no capability and write no artifact; use memory only as a continuity pointer,
-then follow and cross-check relevant paths against artifacts or live code.
+Before invocation, run one targeted, agent-chosen memory recall and read a
+shortened relevant hit in full by record ID. Then resolve `.agent_reports/`,
+falling back to legacy `.claude_reports/` only when the canonical root is
+absent; read the newest report/experiment artifact and current PRD/spec before
+primary code or data, as defined by `core/WORKFLOW.md §0.1`. For orientation,
+invoke no capability and write no artifact. Resolve drift as latest spec or
+user confirmation, durable project fact, latest experiment contract, then
+legacy document, and report the conflict instead of silently selecting an
+older value.
 
 > Caller note: this skill performs deep analysis. Use `high` or `xhigh` effort
 > when the runtime supports it; at lower effort, analysis depth narrows

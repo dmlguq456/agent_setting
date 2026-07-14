@@ -75,6 +75,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh browser-fetch [--check] <url> [--out <dir>]
        preflight.sh data-script [--check] <script.py> [-- args...]
        preflight.sh figure-gen [--check] <script.py> [-- args...]
+       preflight.sh figure-gen --verify-report <manifest.json> <report.md>
        preflight.sh pdf-extract [--check] <file.pdf> [--out <file.txt>]
        preflight.sh web-image-search [--check] <query> [--max-results N] [--out <file>]
        preflight.sh verification-runner [--check] [--timeout seconds] -- <command> [args...]

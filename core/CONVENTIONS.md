@@ -154,6 +154,40 @@ When adding an invariant, add its mechanically expressible portion to determinis
 - Installed runtime surface: `harness verify`
 - Value proposition, information order, and semantic equivalence: human review; no automatic prose fix
 
+### §4.1. Report Figure Evidence Contract
+
+Report spectrograms separate the computation contract from the communication
+contract. A metric may use a narrow analysis interval such as
+`METRIC_BAND_HZ = (20, 1000)` while the report figure independently uses
+`FIGURE_BAND_HZ = (0, 24000)` for 48 kHz audio. Analysis crops and metric helper
+defaults must never flow implicitly into plotting functions; figure-band
+arguments are explicit at the report boundary.
+
+Every report spectrogram has a machine-readable manifest entry with
+`sample_rate_hz`, `min_hz`, `max_hz`, `dynamic_range_db`,
+`shared_scale_per_figure`, and `colormap`. The 48 kHz full-band report profile
+is fail-closed: it requires exactly `sample_rate_hz=48000`, `min_hz=0`,
+`max_hz=24000`, and `shared_scale_per_figure=true`. Missing or mismatched
+metadata prevents completion.
+
+Band-sensitive claims, including full-band, broadband, and high-frequency
+language, must name figure or metric evidence whose recorded range contains the
+claimed range. High-frequency prose must attach an explicit Hz/kHz range to
+the high-frequency term (for example, `high-frequency (8–24 kHz)`) and match
+its manifest range; this avoids trusting an unrelated or unobservable annotation.
+A low-band metric cannot support a full-band claim. The report
+figure verifier scans prose as a discovery backstop and checks the registered
+claim-to-evidence mapping; this deterministic gate does not replace human
+semantic review.
+
+After generation, visually inspect at least one representative PNG per
+spectrogram figure group and record evidence for a 0–24 kHz y-axis, readable
+ticks and labels, a colorbar, and a shared comparison scale. The verifier also
+checks that this evidence is present and positive; it cannot infer visual
+truth from file existence alone. The portable checker is
+`tools/figure-semantic-verify.py`, exposed by runtime-native figure-generation
+tool contracts where supported.
+
 ## §5. Skill Output Convention — T1/T2/T3
 
 Every autopilot capability and `analyze-project` follows this artifact structure. Existing artifacts keep their legacy flat layout; new invocations use this convention.

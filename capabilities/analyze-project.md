@@ -24,6 +24,14 @@ project, recover prior context, resume work, or report status is read-only
 orientation and is not an `analyze-project` trigger by itself. When analysis
 already exists, read it before deciding that reanalysis is needed.
 
+That orientation starts with one targeted, agent-chosen memory recall; reads a
+shortened relevant hit in full by record ID; prefers `.agent_reports/` and uses
+`.claude_reports/` only when the canonical root is absent; then reads the
+newest report/experiment artifact with its current PRD/spec before primary
+code or data. Resolve drift as latest spec or user confirmation, durable
+project fact, latest experiment contract, then legacy document, and report the
+conflict instead of silently selecting the older value.
+
 Three modes are available: code (codebase), paper (academic PDFs), and doc
 (miscellaneous document materials such as reviewer comments, format templates,
 samples, and internal notes). Mode auto-detects between code and doc when
@@ -52,16 +60,18 @@ Adapters must preserve the portable invariants relevant to this capability:
 
 ## Routing Boundary
 
-Before invocation, follow `core/WORKFLOW.md §0.1`: resolve the existing
-artifact root through the adapter status surface and inspect current summaries,
-state, spec, run logs, and relevant prior analysis. Existing
-`.claude_reports/` is the legacy form of the same project-state surface when
-`.agent_reports/` is absent.
+Before invocation, follow `core/WORKFLOW.md §0.1`: run one targeted,
+agent-chosen memory recall and read any shortened relevant hit in full by
+record ID; prefer `.agent_reports/`, falling back to `.claude_reports/` only
+when the canonical root is absent; then inspect the newest report and
+experiment artifacts plus current PRD/spec before checking primary code or
+data. This order is context recovery, not persistent reanalysis.
 
 For read-only orientation, do not invoke this capability and do not create or
-update `analysis_project/`. Memory recall may supplement continuity after the
-artifact read, but relevant memory paths must be followed and checked against
-the current artifact or live code before reporting project state.
+update `analysis_project/`. Follow relevant memory paths and resolve drift with
+this precedence: latest specification or user-confirmed decision, durable
+project fact, latest experiment contract, then legacy document. Report a
+conflict instead of silently combining or selecting the older value.
 
 ## Adapter Realization
 
