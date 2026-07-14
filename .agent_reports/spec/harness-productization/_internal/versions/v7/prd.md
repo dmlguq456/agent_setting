@@ -1,8 +1,8 @@
 # Harness Productization — PRD
 
 > 유형: component spec · library + CLI
-> 상태: phase 4 implementation complete · automatic SemVer release policy implemented
-> 버전: v8 (2026-07-14)
+> 상태: phase 4 implementation complete · v1.0.1 release-bound bootstrap published
+> 버전: v7 (2026-07-14)
 
 ## 0. 한 줄 정의
 
@@ -420,7 +420,6 @@ Phase 4: release bootstrap → managed packaged update
 23. release transport는 GitHub Releases이고 activation core·built-in execution과 network failure domain을 분리한다.
 24. 자동 update는 supported OS user scheduler를 사용하며 새 session/restart 필요성을 숨기지 않는다.
 25. public bootstrap code와 archive는 동일 immutable GitHub repository와 release tag에서 오며 raw main은 public install trust path가 아니다.
-26. release-relevant `main` 변경은 deterministic SemVer policy로 자동 배포한다. 명시적 breaking/feature signal은 major/minor, 나머지 동작 변경은 patch이고 docs/report/CI/test-only는 skip한다.
 
 ### 열린 결정
 
@@ -438,7 +437,6 @@ Phase 4: release bootstrap → managed packaged update
 | 외부 skill supply-chain 위험 | offline/local source 우선, inspect-first, provenance pin, 실행 surface 별도 승인을 강제한다. |
 | release archive supply-chain/path escape | GitHub release asset의 SHA-256 sidecar 검증, safe extraction, immutable version root, staged publish를 강제한다. |
 | raw-main bootstrap과 release archive의 버전 mismatch | public installer를 self-contained release asset으로 만들고 exact embedded tag만 설치한다. |
-| `main`의 배포 동작과 latest release가 다시 분리 | stable tag 이후 release-relevant diff를 매 push 판정하고 검증한 exact commit을 tag+publish하는 단일 직렬 workflow를 사용한다. |
 | 자동 update가 개발 checkout을 덮어씀 | managed state + packaged source match를 동시에 만족하는 runtime만 갱신하고 Git 명령을 금지한다. |
 | update 뒤 현재 session도 갱신됐다고 오인 | activation 결과의 runtime별 `session_action`을 설치·update 출력과 README에 유지한다. |
 
@@ -449,6 +447,5 @@ Phase 4: release bootstrap → managed packaged update
 - Cycle 3 — 완료: built-in pack 계약을 사용하는 offline extension lifecycle, provenance/security/parity.
 - Cycle 4 — 완료: clone 없는 release bootstrap, packaged automatic updater, release workflow, 공개 README 단순화, `v1.0.0` 공개.
 - Cycle 4.1 — 완료: bootstrap code/archive 동일 repository/tag 결속과 `v1.0.1` patch release.
-- Cycle 4.2 — 완료: release-relevant `main` 변경의 deterministic SemVer 판정, 검증 후 tag+release 자동화, 명시적 prerelease override.
 
 Cycle 3 착수 전 `autopilot-code`가 세 runtime의 현재 extension surface와 local-path security boundary를 공식 문서와 로컬 realization에서 다시 확인하고 이 PRD를 source of truth로 읽어야 한다.

@@ -1,6 +1,6 @@
 # harness-installer — Spec (PRD)
 
-> mode: **cli** (하네스 배포 표면 — managed release + linked maintainer installer) · 작성 2026-07-12 · v1 · v2 (2026-07-13) · v3 (2026-07-13) · v4 (2026-07-14) · v5 (2026-07-14) · **v6 (2026-07-14)**: release-relevant `main` 변경을 결정론적 SemVer release로 승격. 구 버전 = `_internal/versions/v5/prd.md`
+> mode: **cli** (하네스 배포 표면 — managed release + linked maintainer installer) · 작성 2026-07-12 · v1 · v2 (2026-07-13) · v3 (2026-07-13) · v4 (2026-07-14) · **v5 (2026-07-14)**: bootstrap 코드와 archive를 동일 release tag에 결속. 구 버전 = `_internal/versions/v4/prd.md`
 > 컴포넌트: `agent_setting` repo 의 **배포·설치 표면** — 일반 사용자는 검증된 managed release, 유지보수자는 linked checkout으로 Claude Code·Codex·OpenCode를 설치·검증·갱신한다. plugin/marketplace는 선택적 compatibility surface이며 공개 기본 경로가 아니다. `spec/harness-layer-sync/`(내부 canonical 바인딩)와 **형제·interlock** 관계의 독립 청사진 — 이 폴더(`spec/harness-installer/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - research `.agent_reports/research/cross-platform-agent-frameworks/` — `05_deployment.md`(3단 배포 골격·cost model), `06_implementation.md`(채택 후보 1 = GSD hash-manifest), `cards/{gsd,claude-code-official-plugins,multi-harness-projection,claude-flow}.md`
@@ -192,18 +192,9 @@ authenticity는 repository의 GitHub Release와 HTTPS account를 trust anchor로
 
 ### release workflow
 
-- `main` push마다 도달 가능한 최고 stable `vMAJOR.MINOR.PATCH` tag와 현재 commit을 비교한다.
-  portable contract/runtime/installer/tool 동작 변경만 release-relevant이고, docs/report/CI/test-only
-  변경은 release를 만들지 않는다.
-- release-relevant commit의 `type!:`/`BREAKING CHANGE:`는 major, `feat:`는 minor,
-  나머지는 patch다. 분류되지 않은 동작 변경도 최소 patch로 fail-safe 한다.
-- release 필요 시 하나의 직렬화된 workflow가 검증과 build를 끝낸 exact commit에 annotated tag를
-  만들고, deterministic `agent-harness.tar.gz`, archive SHA-256 sidecar, 같은 ref의 distribution
-  module을 내장한 `install.sh`, installer SHA-256 sidecar를 같은 실행에서 게시한다.
-- workflow가 `GITHUB_TOKEN`으로 생성한 tag가 별도 workflow를 재귀 실행한다고 가정하지 않는다.
-  직접 push한 valid SemVer tag와 prerelease tag는 maintainer override로 검증·게시한다.
-- workflow는 job에만 최소 `contents: write` permission을 주고 stable tag/assets를 재사용하거나
-  이동하지 않는다. 수정 release는 반드시 새 version이다.
+- tag `v*` push가 deterministic `agent-harness.tar.gz`, archive SHA-256 sidecar,
+  같은 ref의 distribution module을 내장한 `install.sh`, installer SHA-256 sidecar를 생성한다.
+- workflow는 최소 `contents: write` permission으로 tag를 검증한 뒤 GitHub Release에 네 asset을 함께 게시한다.
 - archive에는 tracked source와 `RELEASE_VERSION`만 포함하며 credential, local state, report cache, Git metadata를 포함하지 않는다.
 
 ### README 공개 계약 변경
@@ -224,7 +215,7 @@ authenticity는 repository의 GitHub Release와 HTTPS account를 trust anchor로
 - 동일 ref에서 두 번 빌드한 archive, installer, 두 checksum은 byte-identical하다.
 - 기존 runtime activation/profile/extension lifecycle, manifest/projection/adaptation/conformance 검사를 회귀한다.
 
-## 열린 결정 (OPEN) — v6 현황
+## 열린 결정 (OPEN) — v5 현황
 
 - ~~INST-OPEN-1~~ **확정(구현 사이클 2, 2026-07-13)**: plugin 탑재 hook 목록 — **채택 2**: `git-state-guard.sh`·`artifact-guard.sh`(self-contained·fail-open 충족) / ~~이월 3~~ **채택 완결(사이클 3, 2026-07-13)**: spec 파이프 3종(`spec-skill-gate`·`spec-read-marker`·`spec-sync-nudge`) — 생성기 `hooks.json` 의 `AGENT_HOME="${CLAUDE_PLUGIN_DATA}"` env-prefix 로 재기준, canonical 무수정 / **제외**: memory(mem-*)·statusline·dispatch·core-first 계열(CLI 설치 전제 상태 의존). 근거 = `plans/2026-07-13_harness-installer-impl2/final_report.md`.
 - ~~INST-OPEN-2~~ **확정(사용자, 2026-07-12)**: CLI 진입 명령 = **`harness`** (fleet 동형 한 단어 + 서브명령, `tools/install/harness.sh` launcher → `~/.local/bin/harness` symlink). PATH 충돌은 install 시 기존 `harness` 명령 존재 검사로 방어.
@@ -248,10 +239,3 @@ authenticity는 repository의 GitHub Release와 HTTPS account를 trust anchor로
 - **INST-D-14 (사용자 확정, 2026-07-14)**: 한 설치 invocation의 bootstrap 코드와
   archive는 반드시 같은 immutable GitHub repository와 Release tag에서 온다. `raw main`은 public
   install trust path가 아니며 root shim은 release asset으로만 redirect한다.
-
-## v6 확정 결정
-
-- **INST-D-15 (사용자 확정, 2026-07-14)**: release-relevant `main` 변경은 commit signal과
-  path policy로 major/minor/patch를 결정해 자동 release한다. 문서·보고서·CI·test-only 변경은
-  skip하고, 분류되지 않은 동작 변경은 patch로 승격한다. 명시적 SemVer tag는 prerelease를 포함한
-  maintainer override이며 immutable tag 원칙을 지킨다.

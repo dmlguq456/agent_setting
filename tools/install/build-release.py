@@ -20,7 +20,10 @@ INSTALLER_NAME = "install.sh"
 INSTALLER_CHECKSUM_NAME = INSTALLER_NAME + ".sha256"
 INSTALLER_MARKER = "__AGENT_HARNESS_DISTRIBUTION_PY_V1__"
 DEFAULT_REPOSITORY = "dmlguq456/agent_setting"
-VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+VERSION_RE = re.compile(
+    r"^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
@@ -46,7 +49,10 @@ def build_installer(
     repository: str = DEFAULT_REPOSITORY,
 ) -> tuple[Path, Path]:
     if not VERSION_RE.fullmatch(version):
-        raise SystemExit(f"invalid release version: {version!r}")
+        raise SystemExit(f"release version must be SemVer with a v prefix: {version!r}")
+    prerelease = version.partition("-")[2]
+    if any(part.isdigit() and len(part) > 1 and part.startswith("0") for part in prerelease.split(".")):
+        raise SystemExit(f"numeric prerelease identifiers cannot have leading zeroes: {version!r}")
     if not REPOSITORY_RE.fullmatch(repository):
         raise SystemExit(f"invalid release repository: {repository!r}")
     try:
@@ -107,7 +113,7 @@ def build(
     repository: str = DEFAULT_REPOSITORY,
 ) -> tuple[Path, Path, Path, Path]:
     if not VERSION_RE.fullmatch(version):
-        raise SystemExit(f"invalid release version: {version!r}")
+        raise SystemExit(f"release version must be SemVer with a v prefix: {version!r}")
     _run_git(root, "rev-parse", "--verify", f"{ref}^{{commit}}")
     epoch = int(
         _run_git(root, "show", "-s", "--format=%ct", ref).stdout.decode().strip()

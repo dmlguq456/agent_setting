@@ -1,6 +1,13 @@
 # Harness Productization — Pipeline Summary
 
-> updated: 2026-07-14 · status: release-bound bootstrap published · spec v7
+> updated: 2026-07-14 · status: automatic SemVer release policy implemented · spec v8
+
+## v8 변경
+
+- release-relevant `main` diff를 stable tag 기준으로 판정해 major/minor/patch 또는 skip을 결정한다.
+- explicit breaking/feature commit signal은 major/minor, 나머지 배포 동작 변경은 patch이며 docs/report/CI/test-only 변경은 release를 만들지 않는다.
+- 검증한 exact commit의 annotated tag와 네 asset을 한 직렬 workflow에서 게시해 `main`/release 분리를 자동으로 닫는다.
+- valid SemVer/prerelease tag의 수동 push는 maintainer override로 남기고 immutable tag 원칙을 적용한다.
 
 ## v7 변경
 
