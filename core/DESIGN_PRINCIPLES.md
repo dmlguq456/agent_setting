@@ -66,6 +66,26 @@ Establish the shared contract in core, then derive adapters. A runtime-specific 
 
 ---
 
+## §0.9. Proposal-Gated Improvement — Evidence Is Not Activation
+
+Harness learning and harness mutation are different phases. A loop may capture
+an incident, build a fixture, and draft a candidate, but the active contract
+changes only through the ordinary spec/code/release path.
+
+- Adoption applies to a portable invariant; runtime realizations remain bound
+  to exact runtime, plugin, documentation, and active-provider fingerprints.
+- A fingerprint change invalidates automatic reuse of the realization and
+  requires revalidation, native-supersession, retirement, or human resolution.
+- Generated projections, installed plugin caches, and runtime-owned config are
+  never self-edit targets.
+- The approval and ownership guards are a trust root: a candidate may propose a
+  change to them, but cannot weaken and use the new guard in the same cycle.
+
+This principle narrows D-25 for harness policy: reversibility alone does not
+authorize unattended instruction, adapter, plugin, or setting changes.
+
+---
+
 ## §0.6. Prefer Positive Instructions
 
 Describe the desired behavior rather than accumulating “do not do X” patches. Naming an unwanted behavior can prime it, and repeated hotfix prohibitions create noise while hiding the original cause.

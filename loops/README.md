@@ -22,6 +22,7 @@ The same action → verification → adjustment pattern runs at four timescales:
 Common rules:
 
 - **Loop autonomy (Cluster F D-25, redefined 2026-06-22):** a loop may handle *reversible and unambiguous* work unattended, but must report every action. The two guards are: (1) recovery must be guaranteed through a graveyard, git, or an equivalent path; and (2) every unattended action must appear in the morning briefing. Escalate only work that is difficult to reverse or requires judgment to the morning desk under D-26. This replaces prior approval with reversibility plus retrospective disclosure. The earlier rule that loops could only report or propose is retired; the curator already pruned unattended, and per-item approval was inefficient. Branch merges remain selected by the main agent under `core/OPERATIONS.md §5.10`.
+- **Harness-policy exception:** D-25 never authorizes a loop to edit active instructions, portable/adapter source, generated projections, plugins, or runtime-owned config. Harness improvement follows the proposal and version-bound realization contract in `loops/improvement.md`; adoption remains a separate spec/code/release cycle.
 - Execution traces live in `loops/*.log`, rotate themselves, and are gitignored. They consume subscription usage rather than a separate billing channel.
 - Triggers have three forms: time-based through cron, event-based on demand, and state-based monitoring of an external signal.
 
@@ -49,6 +50,14 @@ The overnight order is 05:03 `note`, then 05:37 `oncall` to avoid overlap. `runt
 | Three worklog-board operations panels: expanded approvals, an operations status strip, and a manual tab at `notes/manual/` | — | A spec update in a separate worklog-board repository session. All data already exists in `notes/oncall`, `notes/study`, `drill/results`, and `.dispatch/jobs.log`; the board only reads and displays it |
 
 The automatic drill-failure diagnosis has graduated from the backlog: `run.sh` writes a diagnosis and fix draft but never applies it. Study can similarly include a critical-item draft. Both stop at the draft until the user signs off.
+
+## Improvement Promotion
+
+Study, runtime-watch, drill diagnosis, and future incident collectors may write
+bounded evidence to the offline proposal inbox. They do not gain an apply
+command by doing so. Portable proposal state and runtime realization state are
+separate, and official runtime/plugin updates require a new realization check.
+See `loops/improvement.md` and `tools/improvement/README.md`.
 
 ## Core/Adapter Split for Loop Runners
 

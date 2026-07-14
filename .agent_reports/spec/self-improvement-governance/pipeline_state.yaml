@@ -1,0 +1,19 @@
+schema: 1
+component: self-improvement-governance
+mode:
+  - library
+  - cli
+phase: implemented
+status: complete
+updated: 2026-07-14
+resume:
+  capability: autopilot-code
+  mode: dev
+  intensity: standard
+  next: keep inactive; future loop wiring requires a new reviewed proposal
+decisions:
+  - proposal and runtime realization states are independent
+  - loops never mutate active source, generated output, plugin cache, or runtime config
+  - proposal inbox lives outside repo and runtime discovery paths
+  - review, terminal decisions, and active realization require human approval reference
+  - runtime or plugin fingerprint changes require revalidation

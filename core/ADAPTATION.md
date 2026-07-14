@@ -16,6 +16,7 @@ Every file in this repo must fall into one category.
 | Compatibility reference | Historical source kept for parity/drift checks after an adapter-owned realization exists. | `skills/` byte-equivalent to `adapters/claude/skills/` | Not projected as portable source; guarded against drift |
 | Compatibility passthrough | Legacy file still consumed directly by a runtime before a true portable/adapted split exists. | Mixed shared hooks or utilities not yet split into invariant + adapter wrapper | Allowed only with an explicit debt note in the adapter |
 | Runtime state | Tool-owned mutable local state. | `<runtime-home>/projects`, credentials, session logs, caches, DB files | Never committed to this repo |
+| Improvement evidence state | Incidents, candidate fixtures, proposal evidence, approval references, and version-bound realization records. It is not active harness source. | `${XDG_STATE_HOME:-~/.local/state}/agent-harness/improvement` | Never projected or runtime-discovered; adopted source changes use a separate spec/code/release cycle |
 | Continuity state | Cross-project agent worklog/notes data that survives sessions but is not harness source. | `<agent-notes-root>/cards`, `_layer2`, `_triage`, `digests`, `oncall`, `study` | Never committed to this repo; may be versioned in a separate notes/data repo |
 | Local board app state | Worklog-board local app workspace, generated output, DB/cache, dispatch logs, and worktrees. | `<worklog-board-app>/.cache`, `.next`, `.dispatch`, `.env*`, `node_modules`, `<worklog-board-app>-wt/` | Never committed to this repo |
 
@@ -75,6 +76,21 @@ instead of inferring from another adapter or from local harness state.
   capability, the implementation plan must include a current-doc citation or
   note, a local runtime/projection check, and a fallback if the feature is
   unavailable, buggy, or unsupported in this adapter.
+
+## 2.3 Proposal-Gated Runtime Improvement
+
+An improvement proposal adopts a portable invariant, not a permanent runtime
+implementation. The evidence loop may observe, reproduce, draft, and compare a
+candidate, but it must not edit active source, generated projections, installed
+plugins, or runtime-owned config. Adoption is a separate spec/code/release
+cycle.
+
+Each runtime realization is version-bound. A runtime, plugin, documentation, or
+active-provider fingerprint change requires revalidation; it does not inherit a
+past approval. If a native feature satisfies the fixture, retire the custom
+realization while preserving the portable invariant and any required fallback.
+Semantic conflicts are reviewed, never auto-merged. The operational state
+contract is `loops/improvement.md`.
 
 ## 3. Portable Role Model
 
