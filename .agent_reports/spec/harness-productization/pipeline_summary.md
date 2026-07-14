@@ -1,13 +1,13 @@
 # Harness Productization — Pipeline Summary
 
-> updated: 2026-07-14 · status: release-bound bootstrap patch in progress · spec v7
+> updated: 2026-07-14 · status: release-bound bootstrap published · spec v7
 
 ## v7 변경
 
 - `v1.0.0` 공개 뒤 public bootstrap이 `raw main`의 distribution code를 읽고 release archive는 별도 latest tag에서 받는 mismatch window를 확인했다.
 - public one-line은 self-contained `install.sh` release asset으로 이동하고, installer와 archive를 같은 immutable tag에 결속한다.
 - root raw-main script는 distribution code를 읽지 않는 release redirect compatibility shim으로 축소한다.
-- 완료 기준은 `v1.0.1` 자산 네 개 게시와 공개 URL 기반 exact-tag 설치 검증이다.
+- `v1.0.1` 자산 네 개 게시와 공개 URL 기반 exact repository/tag 설치 검증을 완료했다.
 
 ## 결정된 개선 순서
 

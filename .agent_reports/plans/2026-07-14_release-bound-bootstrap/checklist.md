@@ -8,4 +8,4 @@
 - [x] README English/Korean and INSTALL_LAYOUT use release URLs.
 - [x] Release workflow publishes all required assets.
 - [x] Security, lifecycle, runtime, profile, extension, generation, and boundary gates pass.
-- [ ] `v1.0.1` public release and isolated install pass.
+- [x] `v1.0.1` public release and isolated install pass.

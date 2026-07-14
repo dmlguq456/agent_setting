@@ -5,7 +5,7 @@ spec_version: 7
 mode:
   - library
   - cli
-status: in_progress
+status: completed
 source_of_truth: .agent_reports/spec/harness-productization/prd.md
 inputs:
   - .agent_reports/research/cross-platform-agent-frameworks/analysis_summary.md
@@ -53,4 +53,4 @@ locked_decisions:
   - automatic_updates_preserve_runtime_session_boundaries
   - public_bootstrap_and_archive_share_one_immutable_release_tag
 open_decisions: []
-next_action: implement_release_bound_bootstrap_then_publish_v1_0_1
+next_action: collect_external_usage_and_failure_evidence
