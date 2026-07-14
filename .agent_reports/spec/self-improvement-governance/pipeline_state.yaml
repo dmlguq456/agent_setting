@@ -3,17 +3,20 @@ component: self-improvement-governance
 mode:
   - library
   - cli
-phase: implemented
+phase: implementation
 status: complete
 updated: 2026-07-14
 resume:
   capability: autopilot-code
   mode: dev
   intensity: standard
-  next: keep inactive; future loop wiring requires a new reviewed proposal
+  next: review proposal IDs produced by future on-call runs; adoption stays a separate cycle
 decisions:
   - proposal and runtime realization states are independent
   - loops never mutate active source, generated output, plugin cache, or runtime config
   - proposal inbox lives outside repo and runtime discovery paths
   - review, terminal decisions, and active realization require human approval reference
   - runtime or plugin fingerprint changes require revalidation
+  - on-call may promote memory-backed incidents only after live corroboration
+  - exact incident keys append recurrence evidence without changing human-owned state
+  - stale recurrence rebases only through current-context-bound reproduction

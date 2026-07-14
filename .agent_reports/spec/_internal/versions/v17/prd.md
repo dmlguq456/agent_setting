@@ -9,7 +9,6 @@
 > · **v15 2026-07-11** (Cluster J — 쓰기 관측성·전수 진단: 변이 이벤트 저널 + `mem log` + `mem doctor`. 계기 = fleet 메모리 가시화[agent-fleet-dashboard F-19]의 전제 + 읽기/쓰기 telemetry 비대칭 실측)
 > · **v16 2026-07-14** (historical language-neutral automatic recall design, retired in full by v17 D-40)
 > · **v17 2026-07-14** (agent-owned semantic memory judgment: automatic prompt classification/recall injection retired; deterministic code is limited to mechanical safety and retrieval infrastructure)
-> · **v18 2026-07-14** (D-41 — agent-backed on-call promotion: memory mutation → full-body read → live corroboration → exact-key improvement proposal)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -308,29 +307,6 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - Retrieval ranking and multilingual tokenization remain. They rank records for a chosen query; they do not decide whether the agent should query.
 - Regression gates reject active prompt-hook registration of `mem-recall-inject.sh`, active `preflight recall` calls from prompt bridges, and a semantic `mem recall --auto` implementation.
 
-## 5.14 Cluster L — On-call improvement promotion (v18, 2026-07-14)
-
-### 5.14.1 D-41 — Memory is a lead; live evidence owns promotion
-
-- The scheduled on-call agent may inspect bounded recent `mem log --json`
-  mutations and read a selected record's full body with `mem show`. The acting
-  agent makes the semantic selection; type, strength, keyword lists, and fixed
-  thresholds do not promote records.
-- A memory record is discovery input, not current truth or sufficient proposal
-  evidence. The agent must corroborate it against current source, tests, loop
-  logs, artifacts, or a local runtime probe before promotion.
-- Corroborated harness incidents may enter the offline improvement inbox from
-  `observed` through at most `proposed`. The agent supplies a stable incident
-  key; deterministic code only performs exact-key deduplication under the inbox
-  lock and appends recurrence evidence without changing proposal state.
-- Review, adoption, terminal decisions, runtime realization, source edits,
-  generated projections, plugins, runtime config, and activation remain outside
-  on-call authority. Recurrence never consumes or prunes the source memory and
-  never reopens a human-owned proposal state.
-- This is scheduled agent-backed judgment under D-40, not a deterministic
-  monitor making a semantic decision. The mechanical layer validates paths,
-  context, evidence bounds, exact identity, locking, and state ceilings only.
-
 ## [library] 공개 API (v3 + v4 추가)
 ```
 mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(dump|profile) / mem_import / mem_migrate / mem_lifecycle / mem_project
@@ -397,8 +373,6 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
   - **D-39 (`mem doctor` + oncall 편입)**: read-only 전수 진단 9항목(integrity·FTS 정합·schema 불변식·working 비대·stale pending·ceiling·graveyard 정합·dump 신선도·워커 건강) + exit code. 새 loop 없음 — oncall 항목 1개. 조치 권한 = D-18 큐레이터 불변(doctor 는 진단만). 소비자 = fleet F-19·oncall·사용자.
 - **v17 신규 (Cluster K — agent-owned semantic memory judgment, §5.13)**:
   - **D-40**: semantic memory choices belong to the acting agent. Automatic prompt classification and recall injection are retired; deterministic code is limited to storage/retrieval mechanics and safety boundaries. D-15 and the automatic portion of D-34 are historical only.
-- **v18 신규 (Cluster L — on-call improvement promotion, §5.14)**:
-  - **D-41**: on-call may inspect recent memory mutations, read selected full records, require live corroboration, and promote exact-key-deduplicated evidence to at most `proposed`. Human-owned proposal states and active settings remain unchanged.
 
 ## Next (구현 순서 — autopilot-code, 본 v5 입력)
 1. **Cluster A (파일 메커니즘 제거, Option 2)** 먼저 — 사용자 지적 incoherence 해소:
@@ -427,7 +401,7 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
    - ✅ **선결 버그 D-29 머지 완료** (main `b95b9a9`): `loops/lib.sh` 신규 + study/oncall 수정 (cron node PATH·재시도·생존체크).
    - **Phase 1 (D-27 curator 산출물 대조)**: `hooks/mem-distill-dispatch.sh` 에 ARTIFACTS(git log·plans done·spec phase) DATA 블록 캡처·주입 + curate 프롬프트 prune 지침 적극화. mem.py 에 산출물 캡처 헬퍼(`curate-artifacts` 류). 안전 3겹 유지·acceptance 재검증.
    - **Phase 2 (D-26 아침 데스크)**: 신규 `hooks/mem-briefing-inject.sh`(UserPromptSubmit, cwd==~/.claude AND 당직후 그날 첫 발화 게이트 → 밤 처리 요약+논의 안건 inject) + 상태 마커(`.briefing-<date>`) + settings.json 배선. CLAUDE.md '당직 처리' 발화 트리거 → 자동 승격.
-   - **Phase 3 (D-28 승격 채널; v17 D-40 supersession, v18 D-41 bridge)**: all visible durable records의 bounded read-only evidence + agent-owned 종착지·prune 판단. Harness incident는 full-body read와 live corroboration 후 offline proposal inbox로 exact-key 승격하며 자동 범위는 `proposed`까지다.
+   - **Phase 3 (D-28 승격 채널; v17 D-40 supersession)**: all visible durable records의 bounded read-only evidence + 아침 안건 제시 + agent-owned 종착지·prune 판단. fixed `convention|lesson` type filter는 폐기.
    - **D-25 원칙 문서화**: `loops/README`·`DESIGN_PRINCIPLES`·`oncall.md` "보고만"→"되돌림가능+명백=처리+보고" 동기화. **post-it 역할 재검토(§5.8.6)**: distiller 와 중복 — 별도 결정.
 8. **Cluster H (memory adapter-parity, v13 신규)** — autopilot-code --mode dev, worktree (codex-adapter-parity 감사 Phase 3 과 동일 사이클로 인계 가능):
    - **D-30/D-32**: Codex `distill-worker.sh` 를 portable `mem-distill-dispatch.sh` 계약으로 정렬 — session-end 를 curate mode(+snapshot 캡처·whitelist)로, turn-nudge 는 increment 유지. 불가 시 ADAPTATION 에 "increment-only" disclosure 로 문구 정정 (P-12 overclaim 해소는 두 경로 중 하나 필수).

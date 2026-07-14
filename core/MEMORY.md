@@ -40,6 +40,14 @@ There is no deterministic promote/skip classifier. The acting agent judges wheth
 
 Purely deterministic monitors may surface candidates but cannot promote, skip, merge, or prune based on semantic rules. A user-directed post-it flow or an agent-backed distiller or curator may perform the mutation. The script then enforces only the mechanical action contract and recovery boundary.
 
+An agent-backed on-call loop may also use bounded recent mutation events as
+incident leads. It must read any selected record in full and corroborate the
+claim against current source, tests, logs, artifacts, or runtime evidence
+before sending it to the offline improvement proposal inbox. The agent chooses
+the incident identity; deterministic code may exact-deduplicate that identity
+and append evidence, but it cannot infer semantic equivalence or advance beyond
+`proposed`. Memory remains unchanged and is never sufficient evidence by itself.
+
 ### §7.4. Recall — On-Demand Retrieval
 
 `mem inject` may provide a bounded SessionStart summary of working, durable, and profile records. The default cap remains 2,000 characters or 15 bullets. When more history could materially help, the agent chooses a query and invokes the read-only retrieval helper. Retrieval is information access, not handoff consumption: `show`, explicit recall/full, and SessionStart injection do not change `delivery_state`; only `mem consume <id>` does. Bounded telemetry distinguishes `explicit-recall`, `show`, `session-inject`, and `consume` without storing raw prompts.

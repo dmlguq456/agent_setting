@@ -129,3 +129,11 @@ Claude Code와 Codex의 동시 진단을 교차검증해 “저장은 되지만 
 - 모든 eligible project prompt는 동일한 content-based auto-recall threshold를 사용한다.
 - 명시적 회상 의도는 문장 속 phrase가 아니라 `mem recall` CLI/API 호출로만 구분한다.
 - document-frequency·coverage·rare exact term 기반 relevance, raw-prompt-free telemetry, top3/1,200자 cap은 유지한다.
+
+### v17 → v18 (2026-07-14, update mode — on-call proposal promotion, snapshot `_internal/versions/v17/`)
+
+- D-40의 agent-owned semantic judgment를 on-call에 적용한다: 최근 memory mutation은 후보 신호이며 full body와 현재 source/log/test/runtime evidence를 함께 읽는다.
+- Live corroboration이 있는 harness incident만 offline improvement inbox로 승격한다.
+- Agent가 incident key를 선택하고 deterministic CLI는 exact match만 deduplicate한다; recurrence는 evidence만 append하고 proposal state를 바꾸지 않는다.
+- On-call 자동 범위는 `proposed`까지이며 review/adoption/activation과 source/runtime mutation은 계속 금지한다.
+- 구현 완료: exact-key 동시 ingest는 하나의 proposal에 직렬화되고, stale recurrence는 current-context-bound reproduction 뒤에만 freshness를 회복한다. 19개 proposal 회귀와 adapter/release 회귀를 통과했다.

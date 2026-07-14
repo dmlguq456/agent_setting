@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import io
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -73,13 +75,14 @@ class ProposalLifecycleTest(unittest.TestCase):
         path.write_text(json.dumps(value), encoding="utf-8")
         return path
 
-    def _observe(self) -> dict:
+    def _observe(self, incident_key: str | None = None, context_path: Path | None = None) -> dict:
         return proposals.observe(
             self.store,
             "Runtime update conflict",
             "A generated skill and plugin cache disagree.",
-            self.context_path,
+            context_path or self.context_path,
             self.evidence,
+            incident_key=incident_key,
         )
 
     def _advance_to_adopted(self) -> dict:
@@ -115,6 +118,182 @@ class ProposalLifecycleTest(unittest.TestCase):
         stored = self.store / record["evidence"][0]["stored_path"]
         self.assertEqual(stored.read_text(encoding="utf-8"), "baseline failed\n")
         self.assertEqual(stored.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(record["ingest_result"], "created")
+
+    def test_named_oncall_collector_requires_incident_key(self) -> None:
+        with self.assertRaises(proposals.ProposalError) as raised:
+            proposals.observe(
+                self.store,
+                "Missing identity",
+                "On-call collectors must choose semantic identity before ingestion.",
+                self.context_path,
+                self.evidence,
+                actor="loop:oncall",
+            )
+        self.assertEqual(raised.exception.reason, "incident-key-required")
+
+    def test_exact_incident_key_appends_recurrence_without_state_change(self) -> None:
+        key = "agent-setting:projection-drift:autopilot-code"
+        first = self._observe(key)
+        second = proposals.observe(
+            self.store,
+            "Same incident, newer context",
+            "A repeated observation must not create another proposal.",
+            self.context_b_path,
+            self.evidence,
+            actor="loop:oncall",
+            incident_key=key,
+        )
+        self.assertEqual(second["id"], first["id"])
+        self.assertEqual(second["ingest_result"], "evidence-appended")
+        self.assertEqual(second["state"], "observed")
+        self.assertEqual(second["occurrences"], 2)
+        self.assertEqual(second["base_fingerprint"], first["base_fingerprint"])
+        self.assertNotEqual(
+            second["latest_observation_fingerprint"], second["base_fingerprint"]
+        )
+        self.assertTrue(second["history"][-1]["context_changed"])
+
+    def test_different_incident_keys_create_distinct_proposals(self) -> None:
+        first = self._observe("agent-setting:incident:a")
+        second = self._observe("agent-setting:incident:b")
+        self.assertNotEqual(first["id"], second["id"])
+        records = proposals.list_records(self.store)
+        self.assertEqual(len(records), 2)
+        self.assertEqual({item["occurrences"] for item in records}, {1})
+
+    def test_concurrent_exact_key_observations_create_one_proposal(self) -> None:
+        command = [
+            sys.executable,
+            str(Path(proposals.__file__).resolve()),
+            "--store",
+            str(self.store),
+            "observe",
+            "--actor",
+            "loop:oncall",
+            "--incident-key",
+            "agent-setting:concurrent-incident",
+            "--title",
+            "Concurrent incident",
+            "--summary",
+            "The inbox lock must serialize exact-key observation.",
+            "--context",
+            str(self.context_path),
+            "--evidence",
+            str(self.evidence),
+        ]
+        workers = [
+            subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for _ in range(2)
+        ]
+        results = [worker.communicate(timeout=10) for worker in workers]
+        for worker, (stdout, stderr) in zip(workers, results):
+            self.assertEqual(worker.returncode, 0, stdout + stderr)
+        records = proposals.list_records(self.store)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["occurrences"], 2)
+
+    def test_ambiguous_exact_key_fails_closed(self) -> None:
+        key = "agent-setting:ambiguous"
+        self._observe(key)
+        second = self._observe()
+        root = proposals.validate_store_path(self.store)
+        duplicate = proposals._load_record(root, second["id"])
+        duplicate["incident_key"] = key
+        proposals._atomic_json(proposals._record_path(root, second["id"]), duplicate)
+        with self.assertRaises(proposals.ProposalError) as raised:
+            self._observe(key)
+        self.assertEqual(raised.exception.reason, "ambiguous-incident-key")
+
+    def test_recurrence_does_not_reopen_adopted_state(self) -> None:
+        key = "agent-setting:adopted-recurrence"
+        record = self._observe(key)
+        proposal_id = record["id"]
+        for state in ("reproduced", "proposed"):
+            proposals.transition(self.store, proposal_id, state, self.evidence)
+        proposals.transition(
+            self.store,
+            proposal_id,
+            "reviewed",
+            self.evidence,
+            self.context_path,
+            "human:owner",
+            "session:review-terminal",
+        )
+        proposals.transition(
+            self.store,
+            proposal_id,
+            "adopted",
+            self.evidence,
+            self.context_path,
+            "human:owner",
+            "session:adopt-terminal",
+        )
+        recurrence = proposals.observe(
+            self.store,
+            "Regression after adoption",
+            "Evidence may accumulate but the decision is not reopened.",
+            self.context_b_path,
+            self.evidence,
+            actor="loop:oncall",
+            incident_key=key,
+        )
+        self.assertEqual(recurrence["state"], "adopted")
+        self.assertEqual(recurrence["history"][-1]["from"], "adopted")
+        self.assertEqual(recurrence["history"][-1]["to"], "adopted")
+
+    def test_stale_recurrence_rebases_only_after_bound_reproduction(self) -> None:
+        key = "agent-setting:runtime-reconciliation"
+        first = self._observe(key)
+        recurrence = proposals.observe(
+            self.store,
+            "Runtime changed",
+            "A fresh reproduction is required before review.",
+            self.context_b_path,
+            self.evidence,
+            actor="loop:oncall",
+            incident_key=key,
+        )
+        self.assertEqual(recurrence["base_fingerprint"], first["base_fingerprint"])
+        self.assertFalse(
+            proposals.check(self.store, first["id"], self.context_b_path)["fresh"]
+        )
+        with self.assertRaisesRegex(proposals.ProposalError, "current context"):
+            proposals.transition(
+                self.store,
+                first["id"],
+                "reproduced",
+                self.evidence,
+                actor="loop:oncall",
+            )
+        reproduced = proposals.transition(
+            self.store,
+            first["id"],
+            "reproduced",
+            self.evidence,
+            context_path=self.context_b_path,
+            actor="loop:oncall",
+        )
+        self.assertTrue(reproduced["history"][-1]["base_rebased"])
+        self.assertTrue(
+            proposals.check(self.store, first["id"], self.context_b_path)["fresh"]
+        )
+        proposals.transition(self.store, first["id"], "proposed", self.evidence)
+        reviewed = proposals.transition(
+            self.store,
+            first["id"],
+            "reviewed",
+            self.evidence,
+            self.context_b_path,
+            "human:owner",
+            "session:review-after-reproduction",
+        )
+        self.assertEqual(reviewed["state"], "reviewed")
 
     def test_read_only_list_does_not_create_store(self) -> None:
         other = self.root / "other-state" / "improvement"
@@ -330,6 +509,19 @@ class ProposalLifecycleTest(unittest.TestCase):
                 ]
             )
         self.assertEqual(code, 4)
+
+
+class OncallPromotionContractTest(unittest.TestCase):
+    def test_oncall_requires_full_read_live_evidence_and_human_ceiling(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        guide = (root / "loops" / "oncall.md").read_text(encoding="utf-8")
+        self.assertIn("mem.py log --limit 100 --json", guide)
+        self.assertIn("mem.py show <id>", guide)
+        self.assertIn("Memory alone is never evidence", guide)
+        self.assertIn("--actor loop:oncall --incident-key <key>", guide)
+        self.assertRegex(guide, r"transition to\s+`proposed`\.\s+Stop there\.")
+        self.assertIn("report the unchanged state", guide)
+        self.assertIn("never supply `human:*` actors", guide)
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ Filenames stay ASCII. Display names may pair a human-readable name with the iden
 
 | Loop | Type | Trigger | Scope | Work | Output | User touchpoint |
 |---|---|---|---|---|---|---|
-| **On-call** (`oncall`) | Time | Cron at 05:37 | Workspaces: repos, artifacts, experiments, loop health, and missing drills | Overnight patrol; detect and report anomalies only | `notes/oncall/<date>.md` | Morning request to process the on-call report |
+| **On-call** (`oncall`) | Time | Cron at 05:37 | Workspaces: repos, artifacts, experiments, recent memory mutations, loop health, and missing drills | Overnight patrol; corroborate at most two memory-backed harness incidents and exact-deduplicate evidence into the proposal inbox, then report | `notes/oncall/<date>.md` plus offline proposal evidence | Review proposal IDs in the morning report; adoption remains separate |
 | **Note** (`note`) | Time | Cron at 05:03 | Previous day's artifacts | Idempotent worklog-board Layer 2 note creation and routing | `notes/_layer2/notes/` plus digest | Worklog-board `/triage` |
 | **Drill** (`drill/`) | Event | `drill/run.sh` after behavioral instruction changes; periodic `--sample 2`; related cases or full run only after major guard/routing changes | Main-agent compliance with instructions | Headless fixture tests and scoring; on failure, automatically draft diagnosis and a proposed fix without applying it | `drill/results/<timestamp>/` plus `<case>.diagnosis.md` | Approve a proposed fix after failure |
 | **Study** (`study`) | Time | Sunday cron at 06:17 | External developments against the current settings | Survey recent agent-engineering work and adapter changes, compare with the harness, and produce proposals only; critical items may include an automatic draft | `notes/study/<date>.md` | Sign off on a proposal, apply it, then run a drill |
@@ -53,7 +53,7 @@ The automatic drill-failure diagnosis has graduated from the backlog: `run.sh` w
 
 ## Improvement Promotion
 
-Study, runtime-watch, drill diagnosis, and future incident collectors may write
+On-call, study, runtime-watch, drill diagnosis, and future incident collectors may write
 bounded evidence to the offline proposal inbox. They do not gain an apply
 command by doing so. Portable proposal state and runtime realization state are
 separate, and official runtime/plugin updates require a new realization check.

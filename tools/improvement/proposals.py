@@ -28,6 +28,8 @@ SCHEMA_VERSION = 1
 MAX_CONTEXT_BYTES = 256 * 1024
 MAX_RECORD_BYTES = 1024 * 1024
 MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
+MAX_EVIDENCE_ITEMS = 128
+MAX_INCIDENT_KEY_LENGTH = 512
 ID_RE = re.compile(r"^imp-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:[a-z0-9._-]*[a-z0-9])?$")
 
@@ -342,6 +344,35 @@ def _validate_actor(actor: str) -> str:
     return actor
 
 
+def _validate_incident_key(incident_key: Optional[str]) -> Optional[str]:
+    if incident_key is None:
+        return None
+    normalized = incident_key.strip()
+    if (
+        not normalized
+        or len(normalized) > MAX_INCIDENT_KEY_LENGTH
+        or "\n" in normalized
+        or "\r" in normalized
+    ):
+        raise ProposalError(
+            "invalid-incident-key",
+            f"incident key must be one line up to {MAX_INCIDENT_KEY_LENGTH} characters",
+        )
+    return normalized
+
+
+def _ensure_evidence_capacity(record: Dict[str, Any]) -> None:
+    evidence = record.get("evidence")
+    history = record.get("history")
+    if not isinstance(evidence, list) or not isinstance(history, list):
+        raise ProposalError("invalid-record", "proposal evidence/history must be lists")
+    if len(evidence) >= MAX_EVIDENCE_ITEMS or len(history) >= MAX_EVIDENCE_ITEMS:
+        raise ProposalError(
+            "proposal-full",
+            f"proposal reached the bounded evidence limit ({MAX_EVIDENCE_ITEMS})",
+        )
+
+
 def _evidence_suffix(path: Path) -> str:
     suffix = path.suffix.lower()
     return suffix if suffix in {".json", ".md", ".txt", ".patch", ".diff", ".log"} else ".bin"
@@ -367,6 +398,24 @@ def _copy_evidence(root: Path, proposal_id: str, source: Path, kind: str) -> Dic
     }
 
 
+def _records_with_incident_key(root: Path, incident_key: str) -> List[Dict[str, Any]]:
+    proposals = root / "proposals"
+    matches: List[Dict[str, Any]] = []
+    for child in sorted(proposals.iterdir(), key=lambda item: item.name):
+        if not child.is_dir() or child.is_symlink() or not ID_RE.fullmatch(child.name):
+            continue
+        record = _load_record(root, child.name)
+        if record.get("incident_key") == incident_key:
+            matches.append(record)
+    return matches
+
+
+def _ingest_result(record: Dict[str, Any], outcome: str) -> Dict[str, Any]:
+    result = dict(record)
+    result["ingest_result"] = outcome
+    return result
+
+
 def observe(
     store: Path,
     title: str,
@@ -374,14 +423,54 @@ def observe(
     context_path: Path,
     evidence_path: Path,
     actor: str = "loop",
+    incident_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     actor = _validate_actor(actor)
+    incident_key = _validate_incident_key(incident_key)
+    if actor.startswith("loop:") and incident_key is None:
+        raise ProposalError(
+            "incident-key-required",
+            "named automated collectors require an exact --incident-key",
+        )
     if not title.strip() or len(title) > 200:
         raise ProposalError("invalid-title", "title must be 1-200 characters")
     if not summary.strip() or len(summary) > 4000:
         raise ProposalError("invalid-summary", "summary must be 1-4000 characters")
     context, fingerprint = load_context(context_path)
     with _mutation_lock(store) as root:
+        if incident_key is not None:
+            matches = _records_with_incident_key(root, incident_key)
+            if len(matches) > 1:
+                raise ProposalError(
+                    "ambiguous-incident-key",
+                    f"multiple proposals share incident key: {incident_key}",
+                )
+            if matches:
+                record = matches[0]
+                _ensure_evidence_capacity(record)
+                evidence = _copy_evidence(
+                    root, record["id"], evidence_path, "incident-recurrence"
+                )
+                now = _utc_now()
+                record["occurrences"] = int(record.get("occurrences", 1)) + 1
+                record["latest_observation_fingerprint"] = fingerprint
+                record["latest_observed_at"] = now
+                record["updated_at"] = now
+                record["evidence"].append(evidence)
+                record["history"].append(
+                    {
+                        "event": "incident-recurrence",
+                        "from": record["state"],
+                        "to": record["state"],
+                        "actor": actor,
+                        "at": now,
+                        "evidence_sha256": evidence["sha256"],
+                        "context_fingerprint": fingerprint,
+                        "context_changed": fingerprint != record["base_fingerprint"],
+                    }
+                )
+                _atomic_json(_record_path(root, record["id"]), record)
+                return _ingest_result(record, "evidence-appended")
         proposal_id = f"imp-{_compact_utc_now()}-{secrets.token_hex(4)}"
         proposal_dir = _proposal_dir(root, proposal_id)
         _ensure_plain_dir(proposal_dir)
@@ -392,11 +481,15 @@ def observe(
             "id": proposal_id,
             "title": title.strip(),
             "summary": summary.strip(),
+            "incident_key": incident_key,
+            "occurrences": 1,
             "state": "observed",
             "created_at": now,
             "updated_at": now,
             "base_context": context,
             "base_fingerprint": fingerprint,
+            "latest_observation_fingerprint": fingerprint,
+            "latest_observed_at": now,
             "evidence": [evidence],
             "realizations": {},
             "history": [
@@ -410,7 +503,7 @@ def observe(
             ],
         }
         _atomic_json(_record_path(root, proposal_id), record)
-        return record
+        return _ingest_result(record, "created")
 
 
 def _fresh(record: Dict[str, Any], context_path: Path) -> Tuple[Dict[str, Any], str]:
@@ -445,7 +538,14 @@ def transition(
             _approval(actor, approval_ref)
         decision_context = None
         decision_fingerprint = None
-        if target in BASE_FRESH_TARGETS:
+        if target == "reproduced" and actor.startswith("loop:") and context_path is None:
+            raise ProposalError(
+                "context-required",
+                "named automated collectors must bind reproduction to current context",
+            )
+        if target == "reproduced" and context_path is not None:
+            decision_context, decision_fingerprint = load_context(context_path)
+        elif target in BASE_FRESH_TARGETS:
             if context_path is None:
                 raise ProposalError("context-required", f"{target} requires --context")
             decision_context, decision_fingerprint = _fresh(record, context_path)
@@ -453,6 +553,7 @@ def transition(
             if context_path is None:
                 raise ProposalError("context-required", f"{target} requires --context")
             decision_context, decision_fingerprint = load_context(context_path)
+        _ensure_evidence_capacity(record)
         evidence = _copy_evidence(root, proposal_id, evidence_path, target)
         now = _utc_now()
         event = {
@@ -467,6 +568,12 @@ def transition(
         if decision_fingerprint:
             event["context_fingerprint"] = decision_fingerprint
             event["context"] = decision_context
+        if target == "reproduced" and decision_fingerprint:
+            event["base_rebased"] = decision_fingerprint != record["base_fingerprint"]
+            record["base_context"] = decision_context
+            record["base_fingerprint"] = decision_fingerprint
+            record["latest_observation_fingerprint"] = decision_fingerprint
+            record["latest_observed_at"] = now
         record["state"] = target
         record["updated_at"] = now
         record["evidence"].append(evidence)
@@ -521,6 +628,7 @@ def realization(
                 raise ProposalError(
                     "context-unchanged", "active realization context has not changed"
                 )
+        _ensure_evidence_capacity(record)
         evidence = _copy_evidence(root, proposal_id, evidence_path, f"realization-{target}")
         now = _utc_now()
         event = {
@@ -615,6 +723,8 @@ def list_records(store: Path, state: Optional[str] = None) -> List[Dict[str, Any
                 {
                     "id": record["id"],
                     "title": record["title"],
+                    "incident_key": record.get("incident_key"),
+                    "occurrences": record.get("occurrences", 1),
                     "state": record["state"],
                     "updated_at": record["updated_at"],
                 }
@@ -633,6 +743,10 @@ def _parser() -> argparse.ArgumentParser:
     observe_parser.add_argument("--context", type=Path, required=True)
     observe_parser.add_argument("--evidence", type=Path, required=True)
     observe_parser.add_argument("--actor", default="loop")
+    observe_parser.add_argument(
+        "--incident-key",
+        help="agent-authored exact identity; a match appends recurrence evidence",
+    )
 
     transition_parser = sub.add_parser("transition", help="advance portable proposal state")
     transition_parser.add_argument("id")
@@ -673,7 +787,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         if args.command == "observe":
             result: Any = observe(
-                store, args.title, args.summary, args.context, args.evidence, args.actor
+                store,
+                args.title,
+                args.summary,
+                args.context,
+                args.evidence,
+                args.actor,
+                args.incident_key,
             )
         elif args.command == "transition":
             result = transition(

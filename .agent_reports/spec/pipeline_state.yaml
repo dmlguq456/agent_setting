@@ -6,7 +6,7 @@ phases:
   spec: done               # v3 PRD 확정 (D-1~7 lock — DB화·저장소분리·통합강화)
   scaffolding: pending
   dev: in_progress         # v3 완료(DB화·분리). v4 신규 = Cluster A(profile 완전통합)+B(Hermes port) 구현 대기
-last_updated: 2026-07-14  # v16: fixed recall phrases와 signal-dependent confidence 폐기. snapshot v15
+last_updated: 2026-07-14  # v18: on-call memory→proposal promotion bridge. snapshot v17
 inputs:
   - .agent_reports/research/hermes-agent/
   - VISION.md
@@ -35,3 +35,5 @@ decisions_locked:
   - D-30~D-32: Cluster H(v13) — memory adapter-parity 불변식: session-end distill 2-tier(increment+curate) adapter-agnostic 계약(미실현=명시 신고 의무)·SessionEnd sync=MEM_DUMP_PUSH 포함·distill worker=portable dispatcher 계약(재구현 시 routing·whitelist·lock·재귀가드 보존). 근거=codex-adapter-parity 감사 P-10·P-12·P-13·P-25·P-36
   - D-33~D-36: Cluster I(v14) — show/recall-full 전문 접근·project prompt 고신뢰 자동 recall(no-touch probe+bounded telemetry)·delivery_state pending/consumed 기반 handoff 파괴 차단+consume/restore·SessionStart cap 유지 후 재관찰
   - D-37~D-39: Cluster J(v15) — 쓰기 이벤트 저널(write-events.jsonl, bounded·fail-open, recall-events 와 읽기/쓰기 대칭)·mem log(저널 tail 1급 조회)·mem doctor(read-only 전수 진단 9항목+exit code, oncall 항목 1개·새 loop 없음, 조치 권한=D-18 큐레이터 불변). 소비자 = fleet F-19(collectors/memory.py read-only 관찰)
+  - D-40: semantic memory judgment belongs to the acting agent; deterministic code owns mechanics only (Cluster K v17)
+  - D-41: on-call may promote memory-derived incidents only after full-body read and live corroboration; exact-key dedup and proposed ceiling (Cluster L v18)
