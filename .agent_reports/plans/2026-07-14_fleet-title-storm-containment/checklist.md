@@ -8,4 +8,4 @@
 - [x] Add hermetic storm regressions without a live provider.
 - [x] Synchronize canonical Fleet mirror and Claude runtime hook copy.
 - [x] Complete adapter-boundary and final runtime verification.
-- [ ] Commit and push the validated change.
+- [x] Commit and push the validated change (`2a664581`).
