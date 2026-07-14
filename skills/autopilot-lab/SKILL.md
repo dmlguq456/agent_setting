@@ -90,6 +90,8 @@ One-shot data conversion, cleanup, or utility scripts are not lab experiments. R
 
 Infer `setup` for requests that define a new training, ablation, loss, model variation, or fine-tuning run. Infer `eval` for requests centered on an existing checkpoint, metrics, result analysis, test data, or paper comparison. Use `--parent` when the request clearly extends or reevaluates an existing experiment.
 
+Routing is semantic ([WORKFLOW §0.2](../../core/WORKFLOW.md#02-semantic-primary-routing)): a request that includes checkpoint reevaluation, new metrics, or new figure/media work keeps this capability primary even when phrased as a report update; refine, spec, draft, and note attach as secondaries. Before long-running eval execution, apply the [WORKFLOW §0.3](../../core/WORKFLOW.md#03-pre-execution-gate-for-long-running-work) pre-execution gate and, at `standard+`, the eval execution topology in `references/eval-procedure.md`.
+
 Defaults:
 
 - `--mode auto`
@@ -103,6 +105,7 @@ Direct boundaries:
 - One-shot conversion or cleanup → `/autopilot-code --intensity quick`
 - Plot-only work → `material-team` in figure-generation mode
 - Productionization, packaging, or broader spec work → `/autopilot-code` or `/autopilot-spec`
+- Document wording/structure-only fixes with no new empirical work → `/autopilot-refine`
 - An explicit `/autopilot-lab <args>` invocation supplies the routing choice directly
 
 ## Language Rule

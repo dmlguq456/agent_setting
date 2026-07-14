@@ -50,6 +50,50 @@ Adapters must preserve the portable invariants relevant to this capability:
 - enforce spec-read gating when this capability changes spec-backed code or specs;
 - use DB memory paths, not runtime-native memory files.
 
+## Mode-Specific Semantics
+
+| Mode | Required coverage |
+|---|---|
+| `setup` | Experiment spec, scaffold, run commands, pending `_RUNLOG` row, birth `run.json`. |
+| `eval` | Eval spec, evaluation execution or guidance, metrics and per-array analysis, figures/media, report, `_RUNLOG` completion, lineage finalization. |
+
+### Eval execution topology (`standard+`)
+
+The separable stages of a `standard+` eval are: (1) context and experiment
+contract, (2) evaluation harness preparation, (3) checkpoint evaluation run,
+(4) metrics and per-array analysis, (5) figures, audio, and playback HTML,
+(6) formal report assembly, (7) independent verification, and (8) spec/note
+sync. Group stages into workers by file ownership and dependency rather than
+opening one session per stage:
+
+| Worker | Owns (write) | Typical stages |
+|---|---|---|
+| eval worker | eval harness, raw metrics (`metrics.jsonl`, `run.json`), `_RUNLOG` row | 2–4 |
+| media worker | `figures/`, audio segments, playback `report/*.html` | 5 |
+| report worker | `REPORT.md`, `STORY.md`, `summary.md` | 6 |
+| verification worker | read-only checks; verdict artifact only | 7 |
+| spec/note sync | `autopilot-spec` update and `autopilot-note`, after results are final | 8 |
+
+The main session or its depth-1 conductor applies the `WORKFLOW §0.3`
+pre-execution gate before the checkpoint evaluation run, dispatches workers
+under `OPERATIONS §5.10`, and stays in the flow: liveness watching and harvest
+are part of the same work, not a fire-and-forget dispatch. Reevaluation always
+uses `--parent <slug>` lineage and the append-only `_RUNLOG`. Running a
+separable stage inline requires the recorded reason in the experiment
+`_RUNLOG` or `_internal/`.
+
+## Routing Boundary
+
+`autopilot-lab` owns new empirical work: training setup, checkpoint
+reevaluation, metric/ablation computation, and experiment figure/media
+generation. Under `WORKFLOW §0.2`, a request containing such work keeps
+`autopilot-lab` as the primary capability even when phrased as a document
+update. `autopilot-refine` corrects existing document surfaces only;
+`autopilot-spec` records evaluation-policy or blueprint changes without
+executing them; formal prose assembly hands off to `autopilot-draft`; final
+routing and registration belong to `autopilot-note`. None of these secondaries
+replaces the lab execution, and lab does not absorb their artifact ownership.
+
 ## Adapter Realization
 
 | Adapter | Realization |

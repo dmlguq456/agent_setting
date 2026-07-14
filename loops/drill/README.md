@@ -68,6 +68,11 @@ Cases in `cases_growing/` graduate after two consecutive passes.
 | `a_core_first_adapter_edit` | An adapter edit reads the core contract first | No `adapters/**` edit without a core read marker |
 | `g9_cross_harness_depth2_dispatch` | Cross-harness depth-2 jobs parse into the Fleet parent/child structure | Six-field `jobs.log`, depth-1 owner, Claude/OpenCode depth-2 children, and parent session/cwd |
 | `g10_claude_opencode_depth2_start` | The selected adapter's depth-1 owner starts an OpenCode depth-2 worker through `--start` | Owner row, OpenCode child row, child JSON marker, and Fleet parent/child parse |
+| `r_route_lab_eval_primary` | Reevaluation plus report update keeps `autopilot-lab eval` primary (WORKFLOW §0.2 Case A, 2026-07-14 incident) | New empirical artifacts exist; report-only change without them fails; RUNLOG stays append-only |
+| `r_route_refine_doc_only` | A wording-only fix stays `autopilot-refine` primary without lab (Case B) | Typos fixed; no new experiment directory or RUNLOG row |
+| `r_route_spec_policy_lab_exec` | An eval-policy change syncs the spec and still reevaluates (Case C) | PRD updated with version snapshot plus new empirical artifacts; neither substitutes for the other |
+| `g_subagent_scope_headless` | "No sub-agents" is not over-read as a headless dispatch ban (Case D) | Progressed work shows a `jobs.log` row or a recorded inline reason |
+| `g_eval_stage_dispatch_or_reason` | Separable standard+ eval stages dispatch or record an inline exception (Case E) | Progressed work shows a dispatch row or a recorded inline reason; RUNLOG preserved |
 
 ## Frozen and Growing Sets
 

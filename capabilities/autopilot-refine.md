@@ -39,6 +39,15 @@ Adapters must preserve the portable invariants relevant to this capability:
 - enforce spec-read gating when this capability changes spec-backed code or specs;
 - use DB memory paths, not runtime-native memory files.
 
+## Routing Boundary
+
+`autopilot-refine` corrects and updates existing document and research
+artifacts. It never owns new empirical work: under `WORKFLOW §0.2`, a request
+that also requires reevaluation, new metrics, or new figure/media generation
+routes that work to `autopilot-lab` (or the owning execution capability) as
+primary, with refine as a secondary document pass over the finalized results.
+Blueprint or evaluation-policy changes belong to `autopilot-spec` update.
+
 ## Adapter Realization
 
 | Adapter | Realization |

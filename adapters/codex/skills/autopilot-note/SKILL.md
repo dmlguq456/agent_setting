@@ -63,6 +63,12 @@ Adapters must preserve the portable invariants relevant to this capability:
 - enforce spec-read gating when this capability changes spec-backed code or specs;
 - use DB memory paths, not runtime-native memory files.
 
+## Routing Boundary
+
+`autopilot-note` registers and routes finished artifacts. Under
+`WORKFLOW §0.2` it is always a secondary, final step and never substitutes for
+the execution capability that produces the results it routes.
+
 
 ## Required Guards
 
