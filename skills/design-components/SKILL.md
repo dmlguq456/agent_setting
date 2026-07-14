@@ -1,17 +1,17 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: design-components
-description: "Use when invoking the portable design-components capability. UI component/mockup 구현과 preview artifact를 만든다."
+description: "Use when invoking the portable design-components capability. Build UI components/mockups and preview artifacts."
 argument-hint: "<design path or app path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "UI component/mockup 구현과 preview artifact를 만든다."
+  blurb: "Build UI components/mockups and preview artifacts."
 ---
 
 ## Language Rule
-- Korean output, English code identifiers.
+- User-facing output follows the user's communication language; preserve code identifiers.
 
 ## Design Resolution
 

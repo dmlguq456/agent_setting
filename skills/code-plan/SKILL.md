@@ -1,20 +1,22 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: code-plan
-description: "Use when invoking the portable code-plan capability. 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity에서 파생된 rigor에 맞는 plan-check gate를 수행한다."
+description: "Use when invoking the portable code-plan capability. Analyze code, write a detailed implementation plan, and run the plan-check gate at the rigor derived from intensity."
 argument-hint: "<task description> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity에서 파생된 rigor에 맞는 plan-check gate를 수행한다."
+  blurb: "Analyze code, write a detailed implementation plan, and run the plan-check gate at the rigor derived from intensity."
 ---
 
 > Caller note: planning benefits from `high` or `xhigh` effort; lower effort may miss call sites in cross-file analysis.
 
 > **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: this stage runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Its only inputs are the task description (args) and the artifact tree (`<artifact-root>/plans/`) — never prior-stage conversation context. Write class: `plan/plan.md`·`plan/plan_ko.md`·`_internal/plan_reviews/`. 기획팀 delegation below stays **inside** this session.
 
-> **Language Rule**: 사용자-facing 출력은 자연스러운 한국어. 단일 SoT = [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
+> **Language Rule**: user-facing artifacts follow the audience and artifact
+> language contract in
+> [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
 
 ## Pre-Check
 Check if a similar plan already exists in `<artifact-root>/plans/`. Behavior depends on plan status:
@@ -38,7 +40,7 @@ Date: {YYYY-MM-DD}
 {If partial: "Failed steps from previous execution: [list from plan frontmatter failed_steps]"}
 
 Read all relevant source files, analyze the current state, and create the plan.
-Write the plan files directly. Return ONLY the file paths and a 3-5 line Korean summary. Do NOT return the plan content itself.
+Write the plan files directly. Return ONLY the file paths and a 3-5 line summary. Do NOT return the plan content itself.
 ```
 
 The agent writes the plan file directly; the orchestrator only receives paths and a summary.
@@ -80,7 +82,7 @@ After the 기획팀 agent returns:
 <agent-home>/adapters/claude/agents/editorial-team.md 의 판교체 회피 절을 강제 적용. 사용자 표기 선호는 `mem profile 02_paper_writing_style` 보조 참조.
 코드 식별자·파일 경로·라이브러리 이름은 영어 그대로, 그 외 일반 표현은 한국어로.
 section 제목 매핑: Goals → 목표, Current State → 현황 분석, Change Plan → 변경 계획, Risks → 리스크, Verification → 검증 방법.
-완료 시 파일 경로 + 한국어 요약 3-5 줄 + 의도적으로 한 표기 결정 한두 개만 돌려준다.
+완료 시 파일 경로 + 요약 3-5 줄 + 의도적으로 한 표기 결정 한두 개만 돌려준다.
 ```
 
 Then report to the user: plan path(s) + summary + QA verdict.

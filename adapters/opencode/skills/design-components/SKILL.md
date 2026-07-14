@@ -1,6 +1,6 @@
 ---
 name: design-components
-description: "Use for design-components: UI component/mockup 구현과 preview artifact를 만든다."
+description: "Use for design-components: Build UI components/mockups and preview artifacts."
 metadata:
   portable_source: capabilities/design-components.md
   adapter: opencode
@@ -31,11 +31,11 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 - Identifier: `design-components`
 - Supported modes: `none`
 - Argument shape: `<design path or app path>`
-- Portable meaning: UI component/mockup 구현과 preview artifact를 만든다.
+- Portable meaning: Build UI components/mockups and preview artifacts.
 
 ## Portable Contract
 
-- Invocation semantics: Component / visual asset creation — invokes 디자인팀 maker mode. Produces shadcn/Tailwind components (ui), composed full-screen pages (webapp), slide visual guides (slide), SVG icons (icon), or mermaid/direct-SVG/excalidraw diagrams (diagram). Every output is rendered and visually self-verified (render → Read → fix loop), and can be emitted as a self-contained single-file HTML preview artifact (--artifact standalone). Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: Component and visual-asset creation through the design role's maker mode. Produce shadcn/Tailwind components (`ui`), composed full-screen pages (`webapp`), slide visual guides (`slide`), SVG icons (`icon`), or Mermaid/direct-SVG/Excalidraw diagrams (`diagram`). Render and visually self-verify every output through a render→read→fix loop. With `--artifact standalone`, emit a self-contained single-file HTML preview. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 ## Required Guards

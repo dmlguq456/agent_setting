@@ -33,7 +33,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh token-budget [cwd] [session-id] [kv|json|hook]
        preflight.sh track [cwd] [session-id]
        preflight.sh memory [cwd]
-       preflight.sh recall <prompt> [cwd] [session-id]
+       preflight.sh recall <query> [cwd] [session-id]
        preflight.sh briefing [cwd]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
@@ -265,9 +265,10 @@ case "$cmd" in
     # Recursion guard: skip the whole session-end pipeline when invoked from
     # within a distiller (the codex exec worker exports MEM_DISTILL=1).
     [ "${MEM_DISTILL:-}" = "1" ] && exit 0
-    # SessionEnd sync 계약(core/MEMORY.md §7, D-31) = mem sync + dump.jsonl git mirror
-    # push. MEM_DUMP_PUSH 를 생략하면 Codex 세션 기억이 원격 mirror 에서 drift 한다
-    # (Claude settings.json:136 과 동형). push 는 mem.py 안에서 5s bounded·never-fatal.
+    # SessionEnd sync contract (core/MEMORY.md §7, D-31): mem sync plus a
+    # dump.jsonl git-mirror push. Omitting MEM_DUMP_PUSH lets Codex-session
+    # memory drift from the remote mirror. mem.py bounds the push to five
+    # seconds and treats failure as non-fatal.
     (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" MEM_DUMP_PUSH="${MEM_DUMP_PUSH:-1}" python3 "$ROOT/tools/memory/mem.py" sync)
     # Automatic session-end distillation is enabled: the codex exec read-only
     # sandbox was verified tool-free (adapters/codex/ADAPTATION.md Distillation
@@ -376,13 +377,11 @@ case "$cmd" in
     (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/mem.py" inject)
     ;;
   recall)
-    [ "$#" -ge 2 ] || { echo "codex preflight: recall requires prompt text" >&2; exit 64; }
-    prompt=$2
+    [ "$#" -ge 2 ] || { echo "codex preflight: recall requires a query" >&2; exit 64; }
+    query=$2
     cwd=${3:-$PWD}
-    sid=${4:-default}
-    AGENT_HOME="$AGENT_ROOT" MEM_RECALL_RUNTIME=codex \
-      "$ROOT/hooks/mem-recall-inject.sh" --prompt "$prompt" --cwd "$cwd" \
-      --session-id "$sid" --format text
+    (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" MEM_RECALL_RUNTIME=codex \
+      "$ROOT/tools/memory/recall.sh" "$query")
     ;;
   briefing)
     cwd=${2:-$PWD}

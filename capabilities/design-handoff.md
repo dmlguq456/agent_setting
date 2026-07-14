@@ -10,7 +10,7 @@ This is the portable capability contract for `design-handoff`. It defines runtim
 | Identifier | `design-handoff` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 디자인 결과를 개발 handoff용 자산·스펙으로 정리한다. |
+| Portable meaning | Package design results as assets and specifications for development handoff. |
 | Argument shape | `<design path or app path>` |
 
 ## Invocation Semantics

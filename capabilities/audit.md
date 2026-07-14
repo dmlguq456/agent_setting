@@ -10,12 +10,21 @@ This is the portable capability contract for `audit`. It defines runtime-neutral
 | Identifier | `audit` |
 | Group | `ops` |
 | Supported modes | `none` |
-| Portable meaning | 산출물·파이프 사후 점검. drift·일관성·누락을 읽기 중심으로 진단한다. |
+| Portable meaning | Read-oriented post-run inspection for artifact drift, inconsistency, and omissions. |
 | Argument shape | `<artifact_path> [--scope auto\|facts\|style\|structure\|cross-ref\|coverage\|all] [--read-only] [--report-only] [--no-fact-check]` |
 
 ## Invocation Semantics
 
-Read-only multi-aspect audit / lint for `<artifact-root>/{plans,research,documents}/*` artifacts. Single global entry — auto-detects artifact type from path prefix (plans=code; research=field-survey; documents=doc deliverable). Per-type lint aspects: doc → facts / style / structure / cross-ref / coverage; research → cards 정합성 / Tier consistency / coverage / cross-card; plans → test results / lint / code review / TODO·미구현. Default `--scope auto` — artifact 특성 기반 자동 선택; 사용자 명시는 1순위 override. Report-only — never modifies the artifact. Complementary to autopilot-refine: refine = edit flow, audit = inspect flow.
+Read-only multi-aspect audit/lint for
+`<artifact-root>/{plans,research,documents}/*` artifacts. A single global entry
+auto-detects artifact type from the path prefix (`plans`=code,
+`research`=field survey, `documents`=document deliverable). Per-type aspects:
+documents use facts/style/structure/cross-reference/coverage; research uses card
+integrity/tier consistency/coverage/cross-card checks; plans use test results,
+lint, code review, TODOs, and unimplemented work. `--scope auto` selects from
+artifact characteristics by default; an explicit user scope overrides it.
+Report only—never modify the artifact. This complements autopilot-refine:
+refine edits, while audit inspects.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 

@@ -46,6 +46,8 @@
 
 **anti-pattern (worklog 참사형, 2026-06-22)**: spec이 "의미 판단"을 명시했는데 구현이 그 의미를 토큰 매칭·규칙 스크립트로 *내려버리는* 것. 규칙은 의미를 capture 못 하므로 silent 오작동.
 
+**Memory application (D-40)**: storing, retrieving, promoting, merging, and pruning memory are semantic decisions owned by the acting agent. Deterministic memory code may enforce storage integrity, scope isolation, pending protection, lifecycle mechanics, bounded telemetry, and recovery, but it does not infer relevance from prompt tokens, fixed phrases, content categories, or confidence thresholds.
+
 **검증 절차 (3 step)**:
 
 - **(a)** spec 본문에서 _의미 판단 구간_ 찾기 (키워드 신호: 의미/판단/적절/맥락/contextual/semantic 등).
@@ -189,11 +191,12 @@ Quality gates live inside the selected stage graph. The orchestrator chooses `in
 
 사용자가 직접 보는 markdown 산출물은 _내용 정확성_ 만 아니라 _읽기 호흡_ 까지 책임진다. 전담 부서 — **편집팀** (editorial-team, deep editor; concrete runtime mapping 은 adapter 문서가 소유).
 
-- 모드 3종: A 옮기기 (영문 ↔ 국문) / B 다듬기 (언어 무관, 판교체 + 영문 어색한 표현 모두) / C 점검만
-- 판교체 회피 — 한국어 산출물에서 영어 어휘를 한국어 어순에 그냥 박지 않는다. 도메인 영어와 정착 외래어만 영어로, 나머지는 한국어로. 매핑 표 — `adapters/claude/agents/editorial-team.md`
+- **Audience-language first** — 사용자에게 직접 향하는 문서·산출물은 사용자가 현재 소통하는 언어를 기본으로 한다. 사용자가 지정한 대상 언어, 출판 venue, 외부 청중, 기존 artifact 언어가 있으면 그 계약이 우선한다. 저장소 자체의 공개 문서는 저장소가 선택한 documentation language를 따른다.
+- 모드 3종: A 옮기기 (source → target language) / B 다듬기 (언어 무관, 어색한 혼용·번역체·표기 불일치 정리) / C 점검만
+- 불필요한 언어 혼용 회피 — 문서의 target language 안에서 자연스럽게 쓸 수 있는 일반 표현을 다른 언어로 무리하게 삽입하지 않는다. 도메인 용어·고유명사·정착 외래어는 보존한다. 매핑 표 — `adapters/claude/agents/editorial-team.md`
 - 적용 범위 — 사용자가 직접 보는 _모든_ .md 산출물 (doc 한정 X). autopilot-code 의 final-report, audit 보고서, autopilot-refine 결과, pipeline_summary 등
 
-**메인 에이전트 응답 자체** 의 메타 원칙은 별개 layer — **2층 위임**이다. (1) _포터블 최소 계약_ = `roles/response-policy.md` (runtime-neutral: 간결·약속-행동 일치·검증 후 단언·컨벤션 준수 · pause 비자동·자율 진행 · 후속 단계 자동). (2) _런타임 구체화·언어 톤_ = runtime adapter bootstrap (Claude Code: `adapters/claude/CLAUDE.md` §0~§3; §0 작업 라우팅 spec-first 파이프 + autopilot-* Pre-check·컨펌 · §1 판교체 회피·한국어 어미 등 언어 고유분 · §2·§3 을 roles/response-policy 위에 구체화). 어댑터는 포터블 절을 _재정의_ 하지 않고 realization 만 얹는다 (b2 옵션 B, 사용자 확정 2026-07-10 · HLS-OPEN-1). 6-1("무조건 브랜치") 운영 안전 규칙은 응답 메타가 아니라 `OPERATIONS.md §5.10` 규모 분기표가 소유.
+**메인 에이전트 응답 자체** 의 메타 원칙은 별개 layer — **2층 위임**이다. (1) _포터블 최소 계약_ = `roles/response-policy.md` (runtime-neutral: audience-language first · 간결·약속-행동 일치·검증 후 단언·컨벤션 준수 · pause 비자동·자율 진행 · 후속 단계 자동). (2) _런타임 구체화_ = runtime adapter bootstrap (작업 라우팅·도구·세션 lifecycle 같은 runtime mechanics만 추가). 어댑터는 고정 locale을 추가하거나 포터블 절을 _재정의_ 하지 않고 realization 만 얹는다. 6-1("무조건 브랜치") 운영 안전 규칙은 응답 메타가 아니라 `OPERATIONS.md §5.10` 규모 분기표가 소유.
 
 **Why**: 산출물 품질만 좋고 응답 / 가독성이 부자연스러우면 사용자 짜증이 누적. 편집팀이 _마지막 한 번_ 의 다듬기를 책임지고, runtime adapter bootstrap 의 응답 원칙이 _매 turn_ 의 메타 self-check.
 
@@ -208,6 +211,7 @@ per-project 메모는 두 layer 분리.
 | **사용자 수동** | DB working tier — `/post-it` 가 `mem note`/`mem add` 로 author; 5 카테고리(conventions·external resources·open threads·decisions·next session hints)는 `type` taxonomy 로 유지 | `/post-it` (사용자 명시) | 사용자가 박아두려는 conventions / resources / threads / decisions / hints |
 | **자동 학습** | DB working/durable — 외부 distiller 가 세션 delta 를 distill → `mem add` (Cluster C) | **외부 detached distiller** (메인 아님; turn-counter·SessionEnd hook 트리거 — §0.5 판단 외부화) | 재사용 절차·교정·컨벤션·교훈 자동 학습 |
 
+- **Semantic ownership**: the main agent, distiller, or curator decides contextually what to retrieve or mutate. Scripts expose candidates and enforce mechanical safety; they do not replace that judgment with keyword rules or automatic prompt classification.
 - 내장 file 메모리(`<agent-home>/projects/*/memory/`)는 **직접 write hard-block**(`builtin-memory-guard.sh`); `mem sync` 는 다른 세션·하네스의 stray write 만 안전망 흡수. 기억 write 경로 = `mem`(DB) 단일.
 - **삭제·prune·consolidate·merge·graduate(비가역) = 세션끝 deep curator** (Cluster E — no-tools + action JSON + script 실행, D-18; concrete runtime mapping 은 adapter 문서가 소유; 비가역삭제 3중방어). N턴 distiller = fast add-only worker. 메인 housekeeping 0. working TTL(21일) = deterministic backstop. (원칙: 추가[가역]=외부 자동 / 정리·삭제[비가역]=세션끝 deep curator.)
 - 세션 주입 = `mem inject --hook` (DB working+durable+profile). 상세 SoT = runtime adapter bootstrap + MEMORY §7.

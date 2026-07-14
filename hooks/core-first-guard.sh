@@ -1,5 +1,5 @@
 #!/bin/sh
-# PreToolUse(Edit/Write): adapters/** 편집 전 이번 세션의 core/*.md 실제 Read 마커를 요구한다.
+# PreToolUse(Edit/Write): require a real core/*.md Read marker before editing adapters/**.
 # Portable CLI: core-first-guard.sh --file <path> [--session <id>] [--agent-home <dir>]
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -68,9 +68,9 @@ check_gate() {
     return 0
   fi
   if [ "$stale" -eq 1 ]; then
-    reason="core 먼저: 마지막 core/*.md Read 이후 core 문서가 갱신되었습니다. 관련 core 계약 문서를 다시 Read한 뒤 adapters/** 를 수정하세요."
+    reason="Core-first gate: core documentation changed after the latest core/*.md Read. Read the relevant core contract again before editing adapters/**."
   else
-    reason="core 먼저: adapters/** 편집 전 관련 core 계약 문서(CORE.md/DESIGN_PRINCIPLES.md/ADAPTATION.md 또는 해당 계약의 core/*.md)를 실제 Read한 뒤 core 수정 선행 여부를 확인하세요."
+    reason="Core-first gate: before editing adapters/**, read the relevant core contract (CORE.md, DESIGN_PRINCIPLES.md, ADAPTATION.md, or the applicable core/*.md) and determine whether core must change first."
   fi
   return 2
 }

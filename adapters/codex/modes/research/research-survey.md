@@ -201,7 +201,7 @@ Generate **mode-specific** structured reports to the output directory. The orche
 - `chaining_available == false` → relationship diagram shows "레퍼런스 체이닝 미완료", use cards' Connections field
 - `code_search_available == false` → "코드 검색 미완료" notice, include code info from paper cards
 
-**Quality requirements**: No fabricated citations/URLs/metrics. Write in Korean; code identifiers and paper titles in English.
+**Quality requirements**: No fabricated citations/URLs/metrics. Write in the user's current communication language unless a publication, external-audience, or artifact contract specifies another language; preserve code identifiers and paper titles in their canonical form.
 
 **QA cooperation**: If re-invoked with "Fix these 🔴 issues: ...", fix only the listed issues.
 

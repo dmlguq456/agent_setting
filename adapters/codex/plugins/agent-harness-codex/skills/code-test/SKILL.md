@@ -1,6 +1,6 @@
 ---
 name: code-test
-description: "Use for code-test: 구현 결과를 단계별로 검증하고 evidence를 기록한다."
+description: "Use for code-test: Verify implementation results in stages and record evidence."
 ---
 
 # code-test
@@ -28,7 +28,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Identifier: `code-test`
 - Supported modes: `none`
 - Argument shape: `<plan name, path, or test scope> [--intensity direct|quick|standard|strong|thorough|adversarial]`
-- Portable meaning: 구현 결과를 단계별로 검증하고 evidence를 기록한다.
+- Portable meaning: Verify implementation results in stages and record evidence.
 
 ## Portable Contract
 

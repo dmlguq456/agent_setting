@@ -1,13 +1,13 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: post-it
-description: "Use when invoking the portable post-it capability. 프로젝트·cross-project 기록과 handoff를 working memory로 남긴다."
+description: "Use when invoking the portable post-it capability. Store project/cross-project notes and handoffs in working memory."
 argument-hint: "[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]"
 metadata:
   group: ops
   fam: ops
   modes: []
-  blurb: "프로젝트·cross-project 기록과 handoff를 working memory로 남긴다."
+  blurb: "Store project/cross-project notes and handoffs in working memory."
 ---
 
 ## 목적
@@ -38,8 +38,8 @@ metadata:
 | `references/nudge-and-boundaries.md` | 자동 기록 자리·auto-memory 경계·write 전 Writing Style 판단 시 | Proactive nudge(자동 기록 트리거·자동 기록 모델), What this skill is NOT, Auto-memory와의 경계, Writing Style(간결성 원칙) |
 
 ## Language Rule
-- 사용자 대화는 한국어.
-- working 레코드 본문은 사용자 언어 그대로 (한·영 혼용 OK).
+- User conversation follows the user's communication language.
+- Working-record bodies preserve the language used by the user; mixed-language content is valid.
 
 ## Task
 

@@ -1,13 +1,13 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-ship
-description: "Use when invoking the portable autopilot-ship capability. 앱 배포·출시 준비. build/deploy setup과 ship checklist를 만든다."
-argument-hint: "<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial]"
+description: "Use when invoking the portable autopilot-ship capability. Prepare application deployment/release setup and a ship checklist."
+argument-hint: "<task description (optional)> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: entry
   fam: app
   modes: []
-  blurb: "앱 배포·출시 준비. build/deploy setup과 ship checklist를 만든다."
+  blurb: "Prepare application deployment/release setup and a ship checklist."
 ---
 
 > 산출물 폴더: `<artifact-root>/spec/ship.md` 안 누적 ([CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier).
@@ -62,7 +62,7 @@ metadata:
 발화 → 자리 분류와 실제 배포 명령 실행 경계는 [Step 2](#step-2-자리-분기-발화-기반) 적용.
 
 ## Language Rule
-- Think in English internally. Write user-facing output in Korean.
+- User-facing output follows the user's communication language unless an explicit audience or artifact-language requirement overrides it.
 
 ## Procedure
 

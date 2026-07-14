@@ -1,20 +1,22 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: code-test
-description: "Use when invoking the portable code-test capability. 구현 결과를 단계별로 검증하고 evidence를 기록한다."
+description: "Use when invoking the portable code-test capability. Verify implementation results in stages and record evidence."
 argument-hint: "<plan name, path, or test scope> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "구현 결과를 단계별로 검증하고 evidence를 기록한다."
+  blurb: "Verify implementation results in stages and record evidence."
 ---
 
 > **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Input = `plan/plan.md` verification section + `plan/checklist.md` (resolved below), read from files — never prior-stage conversation. Source is **read-only** here; write class = `test_logs/`·`_internal/test_reviews/` only. 품질관리팀 delegation stays **inside** this session.
 
 > **Plan Resolution**: `$ARG`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다. **단, code-test 는 no-match 시 error 대신 인자를 직접 테스트할 파일/디렉터리 경로로 취급한다** (test 스테이지 고유).
 
-> **Language Rule**: 사용자-facing 출력은 자연스러운 한국어. 단일 SoT = [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
+> **Language Rule**: user-facing artifacts follow the audience and artifact
+> language contract in
+> [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
 
 ## Delegate to 품질관리팀 (test 모드)
 Invoke the **품질관리팀** agent in **test mode** (the agent absorbed the former 테스트팀 in 2026-05-22; specify "test 모드" in the prompt so mode dispatch is unambiguous) with the following prompt:

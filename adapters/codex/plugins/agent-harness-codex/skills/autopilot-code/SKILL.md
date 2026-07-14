@@ -1,6 +1,6 @@
 ---
 name: autopilot-code
-description: "Use for autopilot-code: 코드 작업 entry. spec 컨텍스트를 감지하고 plan→execute→test→report 흐름을 닫는다."
+description: "Use for autopilot-code: Code-work entrypoint that detects spec context and closes the plan→execute→test→report loop."
 ---
 
 # autopilot-code
@@ -28,11 +28,11 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Identifier: `autopilot-code`
 - Supported modes: `dev, debug, audit`
 - Argument shape: `--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]`
-- Portable meaning: 코드 작업 entry. spec 컨텍스트를 감지하고 plan→execute→test→report 흐름을 닫는다.
+- Portable meaning: Code-work entrypoint that detects spec context and closes the plan→execute→test→report loop.
 
 ## Portable Contract
 
-- Invocation semantics: _코드 작업 일반_ entry — 라이브러리·연구 코드·앱 모두 커버. 신규·기존 코드 무관 (cwd 자동 감지). dev (기능 추가·신규) / debug (진단·수정) 두 mode. spec/ 컨텍스트 발견 시 spec 자동 Read + spec mode 별 분기: app mode → 디자인팀 critic + DB migration 안전 + push 자동 deploy. library mode → 공개 API 일관성 점검. cli mode → 명령·옵션 일관성. research mode → 재현성·configs·metric 검증. 코드 외 결정 (PRD·스택·skeleton·ship setup) 은 autopilot-spec 영역. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: General code-work entrypoint for libraries, research code, and applications, whether new or existing; it detects the cwd automatically. It supports `dev` (features/new work) and `debug` (diagnosis/fixes). When `spec/` exists, read it and branch by spec mode: app adds design critique, migration safety, and push/deploy handling; library checks public API consistency; CLI checks command and option consistency; research checks reproducibility, configs, and metrics. Non-code decisions such as PRDs, stack selection, skeletons, and ship setup belong to autopilot-spec. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 

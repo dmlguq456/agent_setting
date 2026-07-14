@@ -1,5 +1,5 @@
 ---
-description: "Run the portable design-init capability through the OpenCode adapter. Meaning: 디자인 환경과 state를 bootstrap한다."
+description: "Run the portable design-init capability through the OpenCode adapter. Meaning: Bootstrap the design environment and state."
 ---
 
 Use the OpenCode adapter realization of portable capability `design-init`.

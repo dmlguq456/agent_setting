@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Unified Memory System — `mem`  (DB-as-SoT 재구현)
+"""Unified Memory System — `mem`.
 
 SQLite `memory.db` (WAL) 가 진실원천(SoT). 기존 markdown-SoT 를 완전 대체.
 텍스트 덤프 mirror (`dump.jsonl`) = git 추적 대상. FTS5 (unicode61 + trigram CJK) 내장.
 spec: <agent-home>/.agent_reports/spec/prd.md (legacy: .claude_reports/spec/prd.md).
 
-설계 불변식:
-  - SQLite DB 가 진실원천. dump.jsonl 은 결정론적 텍스트 mirror.
-  - 기억 저장 = 자동(품질필터만, 사람 승인 게이트 없음).
-  - 외부 의존 0 (stdlib: sqlite3/argparse/json/hashlib/...). rg 있으면 회상 가속.
+Design boundary:
+  - SQLite is the source of truth; dump.jsonl is a deterministic text mirror.
+  - Agents make semantic memory decisions. This module enforces mechanical
+    storage, retrieval, scope, lifecycle, telemetry, and recovery contracts.
+  - No external Python dependencies; rg accelerates session retrieval when present.
 """
-import argparse, datetime, hashlib, json, math, os, re, sqlite3, subprocess, sys, time, unicodedata
+import argparse, datetime, hashlib, json, os, re, sqlite3, subprocess, sys
 from collections import namedtuple
 from pathlib import Path
 
@@ -56,8 +57,6 @@ RECORD_COLS = ("id", "tier", "scope", "type", "cwd_origin", "created", "updated"
                "expires", "source", "tags", "links", "body", "strength", "last_accessed",
                "injection_flag", "delivery_state")
 DELIVERY_STATES = ("ordinary", "pending", "consumed")
-RECALL_AUTO_LIMIT = 3
-RECALL_AUTO_MAX_CHARS = 1200
 RECALL_EVENTS = Path(os.environ.get(
     "MEM_RECALL_EVENTS",
     Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
@@ -883,12 +882,6 @@ def index_build(rebuild=False):
 
 # ---------- recall ----------
 
-# 회상 신호어 집합 — hooks/mem-recall-inject.sh L45 PAT 와 동일 리터럴 집합 (개념적 단일출처).
-# 추가 시 hook PAT + 여기 + MEMORY §7.5 를 동시 갱신 (Risk 11).
-_RECALL_SIGNAL_WORDS = frozenset({
-    "지난번", "지난번에", "예전에", "이전에", "전에", "그때", "저번에", "아까",
-})
-
 # 한국어 조사 — suffix-strip 대상 (길이 순 내림차순 정렬 → greedy 매칭)
 _KO_PARTICLES = ("에서", "으로", "한테", "부터", "까지", "은", "는", "이", "가",
                  "을", "를", "에", "와", "과", "도", "만", "의", "로", "께")
@@ -904,15 +897,14 @@ def _tokenize_query(q: str) -> list:
 
     동작:
     1. 공백 분할.
-    2. 회상 신호어(_RECALL_SIGNAL_WORDS) 전체 토큰 제거.
-    3. 한국어 조사 suffix-strip: stem 길이 ≥ 2 일 때만 strip.
-    4. 내부 구두점(하이픈/슬래시/점/언더스코어 …)에서 sub-token 분해 —
+    2. 한국어 조사 suffix-strip: stem 길이 ≥ 2 일 때만 strip.
+    3. 내부 구두점(하이픈/슬래시/점/언더스코어 …)에서 sub-token 분해 —
        "stage-dispatch" → "stage" OR "dispatch". 하이픈 쿼리가 단일 phrase 로
        굳어 인접 매칭만 되던 조용한 miss 를 막고, 공백 쿼리("stage dispatch")와
        동일한 multi-term OR 로 동작한다 (E-4 계약 실현). 다부분 토큰은 원본도
        phrase 로 함께 실어 exact-identifier bm25 랭킹을 보존한다.
-    5. 각 sub-token 을 FTS5-escape: '"tok"' (FTS5 연산자 주입 차단).
-    6. 빈 결과 → [] 반환 (호출자가 _fts_literal phrase fallback).
+    4. 각 sub-token 을 FTS5-escape: '"tok"' (FTS5 연산자 주입 차단).
+    5. 빈 결과 → [] 반환 (호출자가 _fts_literal phrase fallback).
 
     trigram MATCH 는 substring 매칭이므로 tokenize 하지 않는다 — 호출자가 직접
     _fts_literal 를 사용. (unicode61 FTS 전용).
@@ -927,9 +919,6 @@ def _tokenize_query(q: str) -> list:
             tokens.append(escaped)
 
     for tok in q.split():
-        # 회상 신호어 제거
-        if tok in _RECALL_SIGNAL_WORDS:
-            continue
         # 조사 suffix-strip (stem ≥ 2 가드)
         for p in _KO_PARTICLES:
             if tok.endswith(p) and len(tok) - len(p) >= 2:
@@ -951,20 +940,6 @@ def _tokenize_query(q: str) -> list:
 
 def _has_cjk(s):
     return bool(re.search(r"[　-鿿가-힯]", s))
-
-
-_AUTO_STOPWORDS = frozenset({
-    "그리고", "그러면", "그래서", "그런데", "근데", "뭔가", "그냥", "이거", "저거",
-    "여기", "아래", "위에", "지금", "오늘", "현재", "관련", "대해", "대한", "통해",
-    "있는", "없는", "있어", "없어", "하는", "해서", "하면", "되는", "되어", "같은",
-    "같아", "같지가", "것", "거", "잘", "좀", "더", "정도", "말이지", "혹시", "필요",
-    "상황", "작업", "agent", "에이전트", "code", "코드", "please", "this", "that", "with",
-    "from", "have", "what", "when", "where", "about", "into", "then", "just", "current",
-})
-_AUTO_KO_SUFFIXES = tuple(sorted(
-    set(_KO_PARTICLES) | {"쪽", "도록", "이라서", "라서", "이라", "라고", "인데", "하고",
-                          "하게", "해서", "하면", "되는", "되어", "있어", "같아"},
-    key=len, reverse=True))
 
 
 def _visibility_clause(alias="r", all_projects=False):
@@ -993,56 +968,14 @@ def _touch_records(ids):
             con.close()
 
 
-def _auto_terms(query):
-    text = unicodedata.normalize("NFKC", query or "").lower()
-    raw = re.findall(r"[a-z0-9가-힣][a-z0-9가-힣_./:@+-]*", text)
-    out = []
-    for token in raw:
-        token = token.strip("._/:@+-")
-        if not token or token in _RECALL_SIGNAL_WORDS or token in _AUTO_STOPWORDS:
-            continue
-        if _has_cjk(token):
-            # 조사 뒤 의미 suffix가 겹치는 형태(메모리쪽을 → 메모리)를 최대 2단계 정규화.
-            for _ in range(2):
-                stripped = False
-                for suffix in _AUTO_KO_SUFFIXES:
-                    if token.endswith(suffix) and len(token) - len(suffix) >= 2:
-                        token = token[:-len(suffix)]
-                        stripped = True
-                        break
-                if not stripped:
-                    break
-            if len(token) < 2 or token in _AUTO_STOPWORDS:
-                continue
-        elif len(token) < 3 and not any(ch.isdigit() for ch in token):
-            continue
-        if token not in out:
-            out.append(token)
-        if len(out) >= 8:
-            break
-    return out
-
-
-def _term_match(term, body):
-    normalized = unicodedata.normalize("NFKC", body or "").lower()
-    compact = re.sub(r"[^a-z0-9가-힣_./:@+-]+", "", normalized)
-    identifier = bool(re.search(r"[_./:@+-]|\d", term))
-    if term in normalized or term in compact:
-        return True, True, identifier or len(term) >= (3 if _has_cjk(term) else 6)
-    if _has_cjk(term) and len(term) >= 4:
-        grams = {term[i:i + 3] for i in range(len(term) - 2)}
-        ratio = sum(g in compact for g in grams) / max(1, len(grams))
-        if ratio >= 0.67:
-            return True, False, len(term) >= 5
-    return False, False, False
-
-
 def _append_recall_event(event):
     """Bounded, raw-prompt-free observability. Telemetry failure never breaks a prompt hook."""
     try:
         RECALL_EVENTS.parent.mkdir(parents=True, exist_ok=True)
         if RECALL_EVENTS.exists() and RECALL_EVENTS.stat().st_size > 256 * 1024:
-            lines = RECALL_EVENTS.read_text(encoding="utf-8").splitlines()[-500:]
+            lines = RECALL_EVENTS.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines()[-500:]
             RECALL_EVENTS.write_text("\n".join(lines) + "\n", encoding="utf-8")
         with RECALL_EVENTS.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event, sort_keys=True, ensure_ascii=False) + "\n")
@@ -1086,7 +1019,9 @@ def _append_write_event(action, rid, tier=None, scope=None, rtype=None, actor=No
         }
         WRITE_EVENTS.parent.mkdir(parents=True, exist_ok=True)
         if WRITE_EVENTS.exists() and WRITE_EVENTS.stat().st_size > 256 * 1024:
-            lines = WRITE_EVENTS.read_text(encoding="utf-8").splitlines()[-500:]
+            lines = WRITE_EVENTS.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines()[-500:]
             WRITE_EVENTS.write_text("\n".join(lines) + "\n", encoding="utf-8")
         with WRITE_EVENTS.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event, sort_keys=True, ensure_ascii=False) + "\n")
@@ -1094,108 +1029,9 @@ def _append_write_event(action, rid, tier=None, scope=None, rtype=None, actor=No
         pass
 
 
-def auto_recall(query, limit=RECALL_AUTO_LIMIT, touch=True, json_output=False):
-    started = time.monotonic()
-    explicit = any(word in unicodedata.normalize("NFKC", query or "")
-                   for word in _RECALL_SIGNAL_WORDS)
-    mode = "explicit" if explicit else "implicit"
-    terms = _auto_terms(query)
-    candidates = []
-    raw_candidate_count = 0
-    reject_reason = "no-terms" if not terms else "no-candidates"
-    if DB.exists() and terms:
-        con = get_con()
-        try:
-            fence, params = _visibility_clause("", all_projects=False)
-            rows = list(db_iter_records(
-                con, f"{fence} AND (expires IS NULL OR expires>=? OR delivery_state='pending')",
-                [*params, today()]))
-        finally:
-            con.close()
-        doc_freq = {term: 0 for term in terms}
-        matches_by_id = {}
-        for meta, body in rows:
-            details = {}
-            for term in terms:
-                matched, exact, specific = _term_match(term, body)
-                if matched:
-                    doc_freq[term] += 1
-                    details[term] = (exact, specific)
-            if details:
-                matches_by_id[meta["id"]] = (meta, body, details)
-        total_docs = max(1, len(rows))
-        effective = [term for term in terms
-                     if doc_freq[term] and (doc_freq[term] <= max(8, math.ceil(total_docs * 0.45))
-                                            or bool(re.search(r"[_./:@+-]|\d", term)))]
-        for rid, (meta, body, details) in matches_by_id.items():
-            matched = [term for term in effective if term in details]
-            if not matched:
-                continue
-            coverage = len(matched) / max(1, len(effective))
-            rare_specific = any(
-                details[term][0] and details[term][1]
-                and doc_freq[term] <= max(2, math.ceil(total_docs * 0.05))
-                for term in matched)
-            if explicit:
-                qualified = (len(matched) >= 2 and coverage >= 0.4) or rare_specific or any(
-                    details[term][0] and len(term) >= 3
-                    and doc_freq[term] <= max(8, math.ceil(total_docs * 0.2))
-                    for term in matched)
-            else:
-                qualified = (len(matched) >= 2 and coverage >= 0.5) or rare_specific
-            if not qualified:
-                continue
-            idf = sum(math.log((total_docs + 1) / (doc_freq[t] + 1)) + 1 for t in matched)
-            score = idf + coverage * 2 + min(meta.get("strength") or 1, 5) * 0.05
-            candidates.append({
-                "id": rid, "tier": meta["tier"], "scope": meta["scope"],
-                "type": meta["type"], "delivery_state": meta.get("delivery_state", "ordinary"),
-                "body": body, "score": round(score, 4),
-                "matched_terms": matched,
-            })
-        raw_candidate_count = len(matches_by_id)
-        candidates.sort(key=lambda item: (-item["score"], item["id"]))
-        reject_reason = "low-confidence" if matches_by_id and not candidates else (
-            "no-candidates" if not candidates else "")
-
-    results = candidates[:max(1, min(limit, 100))]
-    if touch and results:
-        _touch_records([item["id"] for item in results])
-    event = {
-        "at": datetime.datetime.now().isoformat(timespec="seconds"),
-        "event": "auto-recall",
-        "runtime": os.environ.get("MEM_RECALL_RUNTIME", "unknown"),
-        "mode": mode,
-        "term_count": len(terms),
-        "candidate_count": raw_candidate_count,
-        "qualified_count": len(candidates),
-        "injected_ids": [item["id"] for item in results] if touch else [],
-        "reject_reason": reject_reason,
-        "latency_ms": round((time.monotonic() - started) * 1000, 2),
-    }
-    _append_recall_event(event)
-    if json_output:
-        payload = dict(event)
-        payload["results"] = results
-        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
-    elif results:
-        lines = ["# 관련 기억 (자동 회상)"]
-        for item in results:
-            snippet = _first_line(item["body"]).replace("\n", " ")[:220]
-            rid = item["id"]
-            identifier = f"[pending:{rid}]" if item.get("delivery_state") == "pending" else rid
-            lines.append(
-                f"  [{item['tier']}/{item['scope']}/{item['type']}] {identifier}: {snippet}")
-        block = "\n".join(lines)
-        print(block[:RECALL_AUTO_MAX_CHARS])
-    return results
-
-
 def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
-           full=False, touch=True, auto=False, json_output=False):
+           full=False, touch=True, json_output=False):
     limit = max(1, min(int(limit), 100))
-    if auto:
-        return auto_recall(query, limit=limit, touch=touch, json_output=json_output)
     if not json_output:
         print(f"# recall: \"{query}\"  [tier={tier or '*'} scope={scope or '*'} "
               f"cwd={'현재' if cwd else '전체'}]")
@@ -2761,10 +2597,13 @@ def curate_artifacts():
 
 
 def promote_candidates():
-    """D-28(Cluster F): durable 의 반복 규칙·교훈(convention/lesson)을 제도화 승격 후보로 출력.
-    아침 데스크(briefing)가 안건으로 제시 → 메인+사용자 논의로 종착지(runtime bootstrap /
-    CONVENTIONS / DESIGN_PRINCIPLES 문서 / hook / drill 케이스) 결정 → 반영·drill 검증 후 메모리에서 prune.
-    사실·결정·이력(fact/decision/project)은 메모리 본령이라 제외 — 반복 규칙·원칙만. read-only."""
+    """Expose visible durable records for agent-owned institutionalization review.
+
+    D-28 uses this read-only view as evidence at the morning desk. Record type
+    and strength are metadata, not semantic gates or automatic promotion rules.
+    The agent decides whether an item belongs in a bootstrap, core document,
+    hook, drill case, or memory only (D-40).
+    """
     if not DB.exists():
         return
     con = get_con()
@@ -2772,19 +2611,19 @@ def promote_candidates():
     try:
         pkey = project_key(Path.cwd())
         rows = list(db_iter_records(
-            con, f"tier='durable' AND type IN ('convention','lesson') "
-            f"AND (cwd_origin=? OR scope='global') AND {clean}", (pkey,)))
+            con, f"tier='durable' AND (cwd_origin=? OR scope='global') AND {clean}",
+            (pkey,)))
     finally:
         con.close()
     if not rows:
         return
-    # strength 높은(자주 재출현=반복) 순 — 반복될수록 제도화 가치 큼
+    # Strength only orders the bounded review view; it does not decide meaning.
     rows.sort(key=lambda mb: -(mb[0].get("strength") or 1))
-    out = ["=== 제도화 승격 후보 (durable convention/lesson — 시스템 구조로 졸업 검토 D-28) ==="]
+    out = ["=== INSTITUTIONALIZATION REVIEW CANDIDATES (visible durable records; D-28/D-40) ==="]
     for meta, body in rows[:8]:
         out.append(f"[{meta['id']}] ({meta.get('type')}, strength={meta.get('strength') or 1}) "
                    f":: {_snap_label(body)}")
-    out.append("=== END 승격 후보 ===")
+    out.append("=== END REVIEW CANDIDATES ===")
     print("\n".join(out))
 
 
@@ -3491,7 +3330,6 @@ def main():
     r.add_argument("--sessions", action="store_true")
     r.add_argument("--full", action="store_true", help="ranked hit의 전문 출력")
     r.add_argument("--limit", type=_recall_limit, default=20)
-    r.add_argument("--auto", action="store_true", help="prompt용 고신뢰 자동 회상 probe")
     r.add_argument("--json", dest="json_output", action="store_true")
     r.add_argument("--no-touch", action="store_true", help="last_accessed를 갱신하지 않음")
 
@@ -3544,7 +3382,7 @@ def main():
     sub.add_parser("curate-artifacts",
                    help="현 프로젝트 산출물 상태 git·plans·spec (read-only, deep curator 입력 D-27)")
     sub.add_parser("promote-candidates",
-                   help="durable convention/lesson 제도화 승격 후보 (read-only, 아침 데스크 안건 D-28)")
+                   help="visible durable records for agent-owned review (read-only, D-28/D-40)")
 
     sub.add_parser("stats", help="store 통계")
     sub.add_parser("sync", help="projects→store 멱등 mirror + 색인 + dump (SessionEnd)")
@@ -3601,7 +3439,7 @@ def main():
     elif args.cmd == "recall":
         recall(args.query, tier=args.tier, scope=args.scope,
                cwd=not args.all, sessions=args.sessions, limit=args.limit,
-               full=args.full, touch=not args.no_touch, auto=args.auto,
+               full=args.full, touch=not args.no_touch,
                json_output=args.json_output)
     elif args.cmd == "show":
         sys.exit(0 if show_record(args.id, all_projects=args.all) else 1)

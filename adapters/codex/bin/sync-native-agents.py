@@ -30,7 +30,7 @@ PROFILE_CONFIG = {
 
 EXTRA_AGENTS = {
     "memory-scout": {
-        "description": "Read-only memory scout for recall-first deep memory reconnaissance.",
+        "description": "Read-only memory scout for agent-initiated deep memory reconnaissance.",
         "model": "gpt-5.6-luna",
         "reasoning": "low",
         "sandbox": "read-only",
@@ -46,7 +46,7 @@ Contract:
 6. Cross-check one live file/code fact when the memory result implies an actionable convention.
 
 Output at most 15 lines:
-- verdict: 있음 / 없음 / 애매
+- verdict: found / not-found / ambiguous
 - hits: up to 3 short quotes or paraphrases with record id / session pointer
 - apply: one line telling the main agent what to do now
 - check: one live-code or file cross-check line, or not checked with reason

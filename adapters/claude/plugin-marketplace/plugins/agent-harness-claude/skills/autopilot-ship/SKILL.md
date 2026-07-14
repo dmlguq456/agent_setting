@@ -1,12 +1,12 @@
 ---
 name: autopilot-ship
-description: "Use when preparing an app for deployment or release (hosting/CI/env/domain/migration). 앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트"
-argument-hint: "<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial]"
+description: "Use when preparing an application for deployment or release across hosting, CI, environment, domain, and migration work."
+argument-hint: "<optional task description> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: entry
   fam: app
   modes: []
-  blurb: "앱 배포·출시 준비 entry — 빌드·배포 setup 과 ship 체크리스트"
+  blurb: "Prepare application deployment and release."
 ---
 
 > 산출물 폴더: `<artifact-root>/spec/ship.md` 안 누적 ([CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier).
@@ -61,7 +61,7 @@ metadata:
 발화 → 자리 분류와 실제 배포 명령 실행 경계는 [Step 2](#step-2-자리-분기-발화-기반) 적용.
 
 ## Language Rule
-- Think in English internally. Write user-facing output in Korean.
+- User-facing output follows the user's communication language unless an explicit audience or artifact-language requirement overrides it.
 
 ## Procedure
 

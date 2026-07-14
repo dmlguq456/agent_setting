@@ -65,7 +65,7 @@ surfaces rewritten to Codex-native preflight/tool-contract wording.
 
 ## 출력
 
-- 직접 호출: 한국어 설명 + 사용 예시 코드 + 단위 테스트 위치
+- 직접 호출: 사용자의 현재 소통 언어로 설명 + 사용 예시 코드 + 단위 테스트 위치
 - skill auto mode 호출: step log + `{log_path} -- ✅ Done`
 
 ## Update agent memory

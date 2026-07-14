@@ -1,13 +1,13 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-lab
-description: "Use when invoking the portable autopilot-lab capability. 빠른 실험 prototype. 학습 세팅과 ckpt 평가·분석 앞뒤를 돕는다."
+description: "Use when invoking the portable autopilot-lab capability. Rapid experiment prototyping around training setup and checkpoint evaluation/analysis."
 argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
 metadata:
   group: entry
   fam: code
   modes: ["setup", "eval"]
-  blurb: "빠른 실험 prototype. 학습 세팅과 ckpt 평가·분석 앞뒤를 돕는다."
+  blurb: "Rapid experiment prototyping around training setup and checkpoint evaluation/analysis."
 ---
 
 > 산출물 폴더: `<artifact-root>/experiments/` ([CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) 3-tier). _RUNLOG timeline 한 자리 + experiment 단위 폴더 누적.
@@ -138,7 +138,9 @@ metadata:
 - `/autopilot-lab <args>` slash 직접 입력 — 컨펌 skip
 
 ## Language Rule
-- All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft).
+- User-facing artifacts follow the audience-language-first rule in
+  `<agent-home>/roles/response-policy.md`; this skill imposes no fixed chat
+  locale.
 - Code identifiers, layer names, config keys stay in English.
 
 ## Argument Parsing

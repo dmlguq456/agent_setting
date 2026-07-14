@@ -1015,7 +1015,6 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'run_preflight("session-end"' adapters/codex/hooks/sessionend-lifecycle.py \
     || grep -Fq 'sys.stdout.write(result.stdout)' adapters/codex/hooks/sessionend-lifecycle.py \
     || ! grep -Fq 'run_preflight("mode"' adapters/codex/hooks/userprompt-lifecycle.py \
-    || ! grep -Fq 'run_preflight("recall"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'run_preflight("briefing"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'run_preflight("token-budget"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'timeout_seconds=token_budget_timeout()' adapters/codex/hooks/userprompt-lifecycle.py \
@@ -1047,9 +1046,9 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'hookSpecificOutput.additionalContext' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex lifecycle hooks must prove silent defaults plus opt-in/non-default additionalContext paths in portable guards"
   fi
-  if ! grep -Fq 'def text_from_value' adapters/codex/hooks/userprompt-lifecycle.py \
-    || ! grep -Fq '"content", "messages", "input", "payload", "event", "data"' adapters/codex/hooks/userprompt-lifecycle.py; then
-    fail_msg "Codex UserPromptSubmit bridge must extract prompt text from nested runtime payloads"
+  if grep -Fq 'def text_from_value' adapters/codex/hooks/userprompt-lifecycle.py \
+    || grep -Fq 'def prompt_text' adapters/codex/hooks/userprompt-lifecycle.py; then
+    fail_msg "Codex UserPromptSubmit bridge must not extract prompt text for semantic recall classification"
   fi
   if [ ! -f tools/fleet/token_budget.py ] \
     || [ ! -f utilities/token-budget.py ] \
@@ -2716,9 +2715,9 @@ check_opencode_native_plugin_projection() {
   if ! grep -Fq '"tool.execute.after"' "$plugin"; then
     fail_msg "$plugin must use OpenCode tool.execute.after hook for design checks"
   fi
-  if ! grep -Fq '"chat.message"' "$plugin" \
-    || ! grep -Fq '"experimental.chat.system.transform"' "$plugin"; then
-    fail_msg "$plugin must use OpenCode prompt lifecycle plugin hooks"
+  if ! grep -Fq '"experimental.chat.system.transform"' "$plugin" \
+    || grep -Fq '"chat.message"' "$plugin"; then
+    fail_msg "$plugin must use the OpenCode system transform without capturing prompt text for semantic recall"
   fi
   if ! grep -Fq 'adapters", "opencode", "bin", "preflight.sh' "$plugin"; then
     fail_msg "$plugin must bridge to the OpenCode preflight wrapper"
@@ -2732,7 +2731,7 @@ check_opencode_native_plugin_projection() {
     || grep -Fq 'AGENT_HOME: process.env.AGENT_HOME || root' "$plugin"; then
     fail_msg "$plugin must validate AGENT_HOME and pass the selected harness root to preflight"
   fi
-  for p in 'collectPreflight("start"' 'collectPreflight("memory"' 'collectPreflight("mode"' 'collectPreflight("recall"' 'collectPreflight("briefing"'; do
+  for p in 'collectPreflight("start"' 'collectPreflight("memory"' 'collectPreflight("mode"' 'collectPreflight("briefing"'; do
     if ! grep -Fq "$p" "$plugin"; then
       fail_msg "$plugin must bridge OpenCode lifecycle context through $p"
     fi
@@ -3267,7 +3266,7 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'OpenCode exits 69 until `OPENCODE_DISTILL_ENABLE=1`' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must describe adapter distill-propose tool-contract boundaries"
   fi
-  if ! grep -Fq 'adapter-owned SessionEnd/UserPromptSubmit realization 은 기본 ON 으로 승격할 수 있으며 명시적 opt-out env 를 제공해야 한다' core/MEMORY.md \
+  if ! grep -Fq 'SessionEnd and turn-counter triggers may launch a no-tools distiller agent' core/MEMORY.md \
     || ! grep -Fq 'Codex adapter-owned `session-end` and' core/HOOKS.md \
     || ! grep -Fq 'read-only `codex exec` tool-free proof' core/HOOKS.md \
     || ! grep -Fq 'verified automatic distill worker' adapters/codex/ADAPTATION.md \
@@ -3700,6 +3699,77 @@ adapters/opencode/AGENTS.md|24576|현재 ~11.8KB; always-load instructions footp
 BYTE_BUDGET_EOF
 }
 
+check_language_neutrality_contract() {
+  if ! grep -Fq '**Audience-language first**' roles/response-policy.md \
+    || ! grep -Fq "default to the language the user is currently using to communicate" roles/response-policy.md; then
+    fail_msg "roles/response-policy.md must define the audience-language-first artifact contract"
+  fi
+  if ! grep -Fq '## 최우선 원칙 — 청중의 언어' adapters/claude/agents/editorial-team.md \
+    || ! grep -Fq '별도의 고정 locale·어미를 강제하지 않는다' adapters/claude/agents/editorial-team.md; then
+    fail_msg "the editorial router must apply the audience-language contract before language-specific style rules"
+  fi
+
+  for bootstrap in adapters/claude/CLAUDE.md adapters/codex/AGENTS.md adapters/opencode/AGENTS.md; do
+    if grep -Fq 'Answer the user in Korean' "$bootstrap"; then
+      fail_msg "$bootstrap must not impose a fixed response locale"
+    fi
+    if ! grep -Eiq 'Audience-language first|청중 언어 우선' "$bootstrap"; then
+      fail_msg "$bootstrap must realize the portable audience-language-first artifact contract"
+    fi
+  done
+
+  if rg -n 'Write in Korean|Korean (plan|version|본문)|한국어 (설명|보고서|변경·산출 요약|변경 요약|요약)|한국어로' \
+    roles/modes adapters/claude/agent-modes >/dev/null 2>&1; then
+    fail_msg "portable and Claude mode contracts must not impose Korean as a fixed output language"
+  fi
+
+  if rg -n -i 'All user-facing output.*Korean|When explaining something to the user.*Korean|Print the error message in Korean|One-line chat alert.*Korean|Return ONLY.*Korean summary|한국어 요약|사용자-facing 출력은 자연스러운 한국어' \
+    skills adapters/claude/skills >/dev/null 2>&1; then
+    fail_msg "skill contracts must not impose Korean as a fixed user-facing or summary locale"
+  fi
+
+  if rg -n -i 'All user-facing output.*Korean|structured Korean (feedback|output)|결과 한국어 재정리' \
+    adapters/claude/agents >/dev/null 2>&1; then
+    fail_msg "Claude agent routers must not impose Korean as a fixed user-facing locale"
+  fi
+
+  if grep -Fq 'concise Korean report' adapters/claude/bin/dispatch-headless.py \
+    || grep -Fq 'concise Korean report' adapters/codex/bin/dispatch-headless.py; then
+    fail_msg "headless worker prompts must not impose a fixed report locale"
+  fi
+
+  if grep -Fq 'def auto_recall' tools/memory/mem.py \
+    || grep -Fq '"--auto"' tools/memory/mem.py \
+    || grep -Fq 'mem-recall-inject.sh' adapters/claude/settings.json \
+    || grep -Fq 'run_preflight("recall"' adapters/codex/hooks/userprompt-lifecycle.py \
+    || grep -Fq 'collectPreflight("recall"' adapters/opencode/plugins/agent-harness-guards.js; then
+    fail_msg "active runtimes must leave semantic memory recall to the agent"
+  fi
+
+  if ! grep -Fq 'The agent decides contextually what is worth storing, retrieving, promoting, merging, or pruning.' core/MEMORY.md \
+    || ! grep -Fq 'Memory application (D-40)' core/DESIGN_PRINCIPLES.md \
+    || ! grep -Fq 'tools/memory/recall.sh' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'tools/memory/recall.sh' adapters/opencode/bin/preflight.sh; then
+    fail_msg "memory semantics must be agent-owned while adapters retain explicit retrieval helpers"
+  fi
+
+  promotion_body="$(sed -n '/^def promote_candidates()/,/^# ---------- projection ----------/p' tools/memory/mem.py)"
+  if printf '%s\n' "$promotion_body" | grep -Fq "type IN" \
+    || ! printf '%s\n' "$promotion_body" | grep -Fq 'and strength are metadata, not semantic gates'; then
+    fail_msg "institutionalization review must expose durable evidence without a fixed semantic type gate"
+  fi
+
+  for distiller in hooks/mem-distill-dispatch.sh \
+    adapters/claude/hooks/mem-distill-dispatch.sh \
+    adapters/codex/bin/distill-worker.sh \
+    adapters/opencode/bin/distill-worker.sh; do
+    if ! grep -Fq 'fixed categories, keywords, scores, or' "$distiller" \
+      || ! grep -Fq 'Type is a descriptive label, not a semantic gate.' "$distiller"; then
+      fail_msg "$distiller must leave semantic store/curation choices to the distiller agent"
+    fi
+  done
+}
+
 check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_projection_symlinks opencode_setting
@@ -3761,6 +3831,7 @@ check_opencode_mode_map
 check_hook_catalog
 check_parity_loss_explicit_warnings
 check_bootstrap_byte_budget
+check_language_neutrality_contract
 check_legacy_root_links
 warn_concrete_runtime_terms
 

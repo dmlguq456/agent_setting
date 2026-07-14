@@ -1,17 +1,19 @@
 ---
 name: code-refine
-description: "사용자 메모·QA 피드백 반영해 기존 plan 정정 — sub-skill"
+description: "Revise an existing plan using user notes, QA feedback, and verification failures."
 argument-hint: "<plan name or path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "사용자 메모·QA 피드백 반영해 기존 plan 정정 — sub-skill"
+  blurb: "Revise an existing plan from feedback and failure evidence."
 ---
 
 > **Plan Resolution**: `$ARGUMENTS`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다. **단, code-refine 은 `plan.md` 와 `plan_ko.md` 를 _둘 다_ 해석한다** (path swap `plan.md`↔`plan_ko.md`; refine 고유).
 
-> **Language Rule**: 사용자-facing 출력은 자연스러운 한국어. 단일 SoT = [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
+> **Language Rule**: user-facing artifacts follow the audience and artifact
+> language contract in
+> [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
 
 ## Delegate to 기획팀
 Invoke the **plan-team** (기획팀) agent as a subagent with the following prompt:

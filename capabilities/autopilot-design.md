@@ -10,7 +10,7 @@ This is the portable capability contract for `autopilot-design`. It defines runt
 | Identifier | `autopilot-design` |
 | Group | `entry` |
 | Supported modes | `none` |
-| Portable meaning | 시각 산출물 디자인 파이프. refs→tokens→components→review→handoff를 조율한다. |
+| Portable meaning | Visual-design pipeline coordinating references→tokens→components→review→handoff. |
 | Argument shape | `<design task or app path> [--scope ui\|webapp\|slide\|icon\|diagram\|mixed] [--artifact standalone\|project] [--from <phase>] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial]` |
 
 ## Invocation Semantics

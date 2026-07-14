@@ -1,12 +1,12 @@
 ---
 name: post-it
-description: "프로젝트·cross-project 기록·handoff — 세션 간 연속성 working 메모"
+description: "Store project and cross-project records or handoffs in working memory."
 argument-hint: "[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]"
 metadata:
   group: ops
   fam: ops
   modes: []
-  blurb: "프로젝트·cross-project 기록·handoff — 세션 간 연속성 working 메모"
+  blurb: "Store project records and handoffs across sessions."
 ---
 
 ## 목적
@@ -37,8 +37,8 @@ metadata:
 | `references/nudge-and-boundaries.md` | 자동 기록 자리·auto-memory 경계·write 전 Writing Style 판단 시 | Proactive nudge(자동 기록 트리거·자동 기록 모델), What this skill is NOT, Auto-memory와의 경계, Writing Style(간결성 원칙) |
 
 ## Language Rule
-- 사용자 대화는 한국어.
-- working 레코드 본문은 사용자 언어 그대로 (한·영 혼용 OK).
+- User conversation follows the user's communication language.
+- Working-record bodies preserve the language used by the user; mixed-language content is valid.
 
 ## Task
 

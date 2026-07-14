@@ -1,5 +1,5 @@
 ---
-description: "Run the portable code-test capability through the OpenCode adapter. Meaning: 구현 결과를 단계별로 검증하고 evidence를 기록한다."
+description: "Run the portable code-test capability through the OpenCode adapter. Meaning: Verify implementation results in stages and record evidence."
 ---
 
 Use the OpenCode adapter realization of portable capability `code-test`.

@@ -1,5 +1,5 @@
 ---
-description: "Run the portable design-handoff capability through the OpenCode adapter. Meaning: 디자인 결과를 개발 handoff용 자산·스펙으로 정리한다."
+description: "Run the portable design-handoff capability through the OpenCode adapter. Meaning: Package design results as assets and specifications for development handoff."
 ---
 
 Use the OpenCode adapter realization of portable capability `design-handoff`.

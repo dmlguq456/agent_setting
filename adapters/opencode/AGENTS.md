@@ -50,8 +50,8 @@ This document is derived from core — edit core first; do not modify this adapt
 - Before claiming full design/autopilot-design support, run `adapters/opencode/bin/preflight.sh visual-harness <file.html>` and inspect the reported screenshot. Exit 69 means the local Playwright-backed checker is unavailable.
 - After actually reading `<artifact-root>/spec/prd.md` or `core/*.md`, run `adapters/opencode/bin/preflight.sh read <file> [session-id]`; before spec-changing capability work, run `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]`.
 - OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh start [cwd] [session-id]` and `adapters/opencode/bin/preflight.sh memory [cwd]` once per session; run them manually when plugins are unavailable.
-- OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]`, tracked/project-only `adapters/opencode/bin/preflight.sh recall "<prompt>" [cwd] [session-id]` high-confidence auto recall, and `adapters/opencode/bin/preflight.sh briefing [cwd]`; run them manually when plugins are unavailable.
-- For memory behavior, apply `core/MEMORY.md` §7.4 recall-first: before style, format, naming, figure/table/report-layout, or prior-convention decisions, run `adapters/opencode/bin/preflight.sh recall "<query>" [cwd]` or `tools/memory/recall.sh` directly. For deep memory-scout work, use the same read-only procedure and return the fixed <=15 line verdict; no memory or file writes. When recall or injection exposes `[pending:<id>]`, read the full obligation, apply and verify it, then run `python3 tools/memory/mem.py consume <id>`; retrieval alone never consumes it.
+- OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]` and `adapters/opencode/bin/preflight.sh briefing [cwd]`; it does not classify prompts for memory recall. Run the helpers manually when plugins are unavailable.
+- Memory semantics belong to the acting agent. When prior context may materially improve the current judgment, choose a query and run `adapters/opencode/bin/preflight.sh recall "<query>" [cwd]` or `tools/memory/recall.sh`. Do not substitute fixed phrases, topic lists, or thresholds for that decision. For deep memory-scout work, use the same read-only procedure and return a <=15-line verdict; no memory or file writes. When retrieval exposes `[pending:<id>]`, read the full obligation, apply and verify it, then run `python3 tools/memory/mem.py consume <id>`; retrieval alone never consumes it.
 - Use `adapters/opencode/bin/preflight.sh status [cwd] [session-id]` when you need a read-only harness snapshot for workflow, artifact, notes, worktree, and git-risk signals. Keep OpenCode native UI/config responsible for model, context, and session fields.
 - Use `adapters/opencode/bin/preflight.sh doctor` for a quick adapter readiness check covering manifest freshness, native projections, and boundary rules.
 - Use `adapters/opencode/bin/preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` before following a loop guide; do not run Claude-coupled loop scripts as OpenCode-native executables.
@@ -70,6 +70,7 @@ This document is derived from core — edit core first; do not modify this adapt
 Portable behavior contract = `roles/response-policy.md` (single source for the clauses below). This section is the OpenCode realization: the portable clauses plus OpenCode-specific tone and runtime notes. Do not redefine a portable clause here.
 
 Portable clauses (from `roles/response-policy.md`):
+- **Audience-language first** — documents and artifacts intended for the user default to the user's current communication language; explicit target, publication, external-audience, existing-artifact, and repository-publication language contracts override.
 - **Concise · promise–action match** — say only what is needed, no self-narration; if you use a commitment verb the matching action is in the same turn.
 - **Verify before asserting · convention adherence** — state tool/code facts only after checking; follow an existing convention rather than improvising, and expose changes before committing.
 - **Pause is not automatic · autonomous on no answer** — a pause/review applies only on an explicit user signal; when a question is unanswered, proceed in the recommended direction with a one-line report and do not re-ask.
@@ -77,7 +78,6 @@ Portable clauses (from `roles/response-policy.md`):
 - **Auto-continue in-flow follow-ups · corresponding sync is part of the change** — inside a "do X" flow do not re-confirm each step (commit/push/cleanup); the records/docs the change implies follow automatically. Confirm separately only for new design decisions, destructive ops, or touching another system.
 
 OpenCode realization notes:
-- Answer the user in Korean unless they explicitly request another language.
 - Keep implementation work grounded in the repo's current files and existing conventions.
 - When modifying this harness repo, commit and push after validation.
 - Do not run drill automatically; it can invoke headless runtime sessions and spend tokens. Run `adapters/opencode/bin/preflight.sh loop-info drill` and report when drill would be useful.

@@ -1,17 +1,17 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: design-review
-description: "Use when invoking the portable design-review capability. 디자인 결과물을 품질·토큰 계약·breakage 관점으로 점검한다."
+description: "Use when invoking the portable design-review capability. Review design output for quality, token-contract compliance, and breakage."
 argument-hint: "<design path or app path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "디자인 결과물을 품질·토큰 계약·breakage 관점으로 점검한다."
+  blurb: "Review design output for quality, token-contract compliance, and breakage."
 ---
 
 ## Language Rule
-- Korean output.
+- User-facing output follows the user's communication language unless the target audience requires another language.
 
 ## Design Resolution
 

@@ -1,0 +1,33 @@
+# Checklist
+
+- [x] Snapshot v15 memory PRD and record v16 decision
+- [x] Add audience-language-first portable contract
+- [x] Remove fixed Korean bootstrap/headless output mandates
+- [x] Remove fixed Korean output mandates from active Skills and team routers
+- [x] Remove fixed recall signal words and phrase-dependent confidence
+- [x] Update focused tests and telemetry contract
+- [x] Regenerate runtime projections
+- [x] Run regression gates and record evidence
+- [x] Commit and push the isolated branch
+- [x] Translate portable capability contracts and generated Codex/OpenCode surfaces
+- [x] Replace fixed Korean-output directives in active compatibility Skills
+- [x] Add deterministic audience-language neutrality conformance coverage
+- [x] Englishize all 26 active Skill frontmatter descriptions, blurbs, and argument hints
+- [x] Englishize the first non-installer runtime-script batch and synchronize projections
+- [x] Commit and push the Skill-metadata and runtime-script batch
+- [ ] Finish English prose conversion across hand-authored Skill bodies and references
+- [ ] Translate non-installer runtime scripts and keep tests synchronized
+- [x] Regenerate affected projections and rerun the full regression suite
+- [x] Commit and push the continued Englishization phase
+- [x] Establish agent-owned semantic memory judgment in core and spec
+- [x] Retire automatic prompt classification and recall injection across adapters
+- [x] Remove the semantic `mem recall --auto` engine and update focused tests
+- [x] Englishize affected memory hooks and documentation
+- [x] Regenerate projections and run the full regression suite
+- [x] Commit and push the memory-boundary phase
+- [x] Remove the fixed record-type gate from institutionalization review candidates
+- [x] Englishize memory lifecycle hooks and the active dispatch/workflow utility batch
+- [x] Rewrite `tools/memory/README.md` as an English operational reference
+- [x] Add focused regression for agent-owned promotion review and rerun portable guards
+- [ ] Translate remaining `tools/memory/mem.py` prose/diagnostics and synchronize tests
+- [x] Commit and push the runtime-prose batch

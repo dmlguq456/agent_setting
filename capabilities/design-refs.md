@@ -10,12 +10,14 @@ This is the portable capability contract for `design-refs`. It defines runtime-n
 | Identifier | `design-refs` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 외부·사용자 reference 시각 자료를 수집하고 brief를 만든다. |
+| Portable meaning | Collect external and user-provided visual references and create a brief. |
 | Argument shape | `<design task> [--design <path>] [--refs <image paths>] [--no-web]` |
 
 ## Invocation Semantics
 
-Reference collection and brief — gathers user-provided images, external web references (via 자료팀 web-image-search), existing design system assets. Writes a brief that informs subsequent phases.
+Reference collection and briefing: gather user-provided images, external web
+references through the material role's web-image-search mode, and existing
+design-system assets. Write a brief that informs subsequent phases.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 

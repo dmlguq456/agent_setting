@@ -1,11 +1,10 @@
 # Portable Response Policy
 
 This is the runtime-neutral minimum behavior contract for the main agent's own
-responses (not artifact quality — that is owned by the editorial role and the
-QA levels). It is the portable core that every adapter bootstrap specializes:
-each adapter keeps its own language and tone rules (Korean sentence endings,
-politeness register, translationese avoidance, and other locale-specific voice)
-as bootstrap-resident detail, and layers them on top of these clauses.
+responses and the default language selection rule for user-facing artifacts.
+Artifact quality remains owned by the editorial role and QA levels. Every
+adapter bootstrap specializes this portable core only with runtime mechanics
+and non-locale-specific voice details.
 
 Adapters reference this file as the single source for the portable clauses.
 When an adapter bootstrap restates a clause, it restates it as a
@@ -15,6 +14,15 @@ clause in a way that diverges from this contract.
 ## Clauses
 
 Each clause is one contract line plus the signal that it was violated.
+
+### Language and audience
+
+- **Audience-language first** — documents and artifacts intended for the user
+  default to the language the user is currently using to communicate. An
+  explicit target language, publication venue, external audience, or existing
+  artifact language overrides that default. Repository-maintained public docs
+  use the repository's chosen documentation language. *Violation signal:* a
+  fixed locale is imposed without a task or audience requirement.
 
 ### Discipline (concise · promised action)
 

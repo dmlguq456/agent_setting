@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# MEMORY.md 인덱스 drift 점검 (+ --fix: 누락 포인터 append) — T1 인덱스 보강 (2026-06-15)
-# NOTE(2026-06-15): store FTS5 색인은 'mem index' 가 관할. 본 스크립트는 legacy projects/<cwd>/memory/ 의 MEMORY.md *텍스트 인덱스* 점검 전용(별개 대상). store 색인 점검 아님.
+# Check legacy MEMORY.md text-index drift; --fix appends missing pointers.
+# The store FTS5 index belongs to `mem index`. This script only checks the
+# separate legacy `projects/<cwd>/memory/MEMORY.md` text index.
 #
-# auto-memory 의 cwd 마다 MEMORY.md 인덱스가 얇아(파일은 있는데 인덱스 누락) recall 이
-# 약해지는 문제를 잡는다. 기본은 _report_ — 누락·고아 줄만 보고. --fix 는 _append-only_:
-# frontmatter(name/description)에서 누락 포인터만 추가, 기존 큐레이션 줄은 절대 건드리지 않음.
+# Detect files missing from the index and index entries whose targets are gone.
+# Report-only by default. --fix is append-only and derives new pointers from
+# frontmatter name/description without modifying existing curated lines.
 #
-# 사용:
-#   index-check.sh                 # 현 cwd 메모리 인덱스 점검 (report)
-#   index-check.sh <memory_dir>    # 특정 메모리 dir 점검
-#   index-check.sh [dir] --fix     # 누락 포인터 append (additive)
+# Usage:
+#   index-check.sh                 # inspect the current cwd memory index
+#   index-check.sh <memory_dir>    # inspect a specific memory directory
+#   index-check.sh [dir] --fix     # append missing pointers
 set -u
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/../../utilities/agent-home.sh")}"
@@ -21,14 +22,14 @@ done
 if [ -z "$DIR" ]; then
   enc=$(printf '%s' "$PWD" | sed 's#[/._]#-#g'); DIR="$ROOT/$enc/memory"
 fi
-[ -d "$DIR" ] || { echo "메모리 dir 없음: $DIR"; exit 0; }
+[ -d "$DIR" ] || { echo "memory directory not found: $DIR"; exit 0; }
 IDX="$DIR/MEMORY.md"
 
 echo "# index-check: $DIR"
-[ -f "$IDX" ] || echo "(MEMORY.md 없음 — --fix 시 헤더+포인터 생성)"
+[ -f "$IDX" ] || echo "(MEMORY.md not found; --fix will create a header and pointers)"
 
 missing=0
-# 정방향: 메모리 파일이 인덱스에 없음
+# Forward check: a memory file is missing from the index.
 for f in "$DIR"/*.md; do
   [ -e "$f" ] || continue
   b=$(basename "$f")
@@ -37,7 +38,7 @@ for f in "$DIR"/*.md; do
   name=$(awk -F': *' '/^name:/{print $2; exit}' "$f" 2>/dev/null)
   desc=$(awk -F': *' '/^description:/{print $2; exit}' "$f" 2>/dev/null)
   [ -z "$name" ] && name="$b"
-  line="- [${name}](${b}) — ${desc:-(설명 없음)}"
+  line="- [${name}](${b}) — ${desc:-(no description)}"
   if [ "$FIX" -eq 1 ]; then
     [ -f "$IDX" ] || printf '# MEMORY.md — index\n\n' > "$IDX"
     printf '%s\n' "$line" >> "$IDX"; echo "[append] $b"
@@ -47,17 +48,17 @@ for f in "$DIR"/*.md; do
   missing=$((missing+1))
 done
 
-# 역방향: 인덱스가 가리키는데 파일이 없음 (고아 줄 — 보고만, 자동 제거 X)
+# Reverse check: an index entry points to a missing file. Report only.
 orphan=0
 if [ -f "$IDX" ]; then
   while IFS= read -r ref; do
-    [ -f "$DIR/$ref" ] || { echo "[orphan] 인덱스가 가리키는 파일 없음: $ref"; orphan=$((orphan+1)); }
+    [ -f "$DIR/$ref" ] || { echo "[orphan] index target is missing: $ref"; orphan=$((orphan+1)); }
   done < <(grep -oE '\(([A-Za-z0-9._-]+\.md)\)' "$IDX" 2>/dev/null | tr -d '()' | sort -u)
 fi
 
 if [ "$missing" -eq 0 ] && [ "$orphan" -eq 0 ]; then
-  echo "인덱스 정합 — 누락 0, 고아 0"
+  echo "index consistent — 0 missing, 0 orphaned"
 else
-  [ "$missing" -gt 0 ] && { [ "$FIX" -eq 1 ] && echo "→ $missing 줄 append 완료" || echo "→ $missing 줄 누락 (append: --fix)"; }
-  [ "$orphan" -gt 0 ] && echo "→ $orphan 고아 줄 (직접 정리 권장 — 자동 제거 안 함)"
+  [ "$missing" -gt 0 ] && { [ "$FIX" -eq 1 ] && echo "→ appended $missing entries" || echo "→ $missing entries missing (append with --fix)"; }
+  [ "$orphan" -gt 0 ] && echo "→ $orphan orphaned entries (manual cleanup recommended; never auto-removed)"
 fi

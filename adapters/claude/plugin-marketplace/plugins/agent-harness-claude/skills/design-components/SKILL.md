@@ -1,16 +1,16 @@
 ---
 name: design-components
-description: "UI 컴포넌트 mockup·구현 sub-skill"
+description: "Implement UI component mockups and preview artifacts."
 argument-hint: "<design path or app path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "UI 컴포넌트 mockup·구현 sub-skill"
+  blurb: "Implement UI component mockups and previews."
 ---
 
 ## Language Rule
-- Korean output, English code identifiers.
+- User-facing output follows the user's communication language; preserve code identifiers.
 
 ## Design Resolution
 

@@ -1,5 +1,5 @@
 ---
-description: "Run the portable draft-refine capability through the OpenCode adapter. Meaning: 초안 정련·다듬기. memo/review feedback을 문서 전략이나 draft에 반영한다."
+description: "Run the portable draft-refine capability through the OpenCode adapter. Meaning: Refine a draft by applying memo/review feedback to a document strategy or draft."
 ---
 
 Use the OpenCode adapter realization of portable capability `draft-refine`.

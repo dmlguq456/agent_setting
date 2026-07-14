@@ -10,7 +10,7 @@ This is the portable capability contract for `analyze-project`. It defines runti
 | Identifier | `analyze-project` |
 | Group | `pre` |
 | Supported modes | `code, paper, doc` |
-| Portable meaning | 사전 분석. 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로 만든다. |
+| Portable meaning | Upfront analysis that structures primary code, paper, and document materials for downstream work. |
 | Argument shape | `[--mode code\|paper\|doc] [<scope/target/input-folder>] [--skip-qa]` |
 
 ## Invocation Semantics

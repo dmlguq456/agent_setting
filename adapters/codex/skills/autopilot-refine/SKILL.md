@@ -1,6 +1,6 @@
 ---
 name: autopilot-refine
-description: "Use for autopilot-refine: 기존 문서·연구 산출물의 정정·갱신. 버전 snapshot과 변경 이력을 보존한다."
+description: "Use for autopilot-refine: Correct and update existing document/research artifacts while preserving snapshots and change history."
 ---
 
 # autopilot-refine
@@ -28,7 +28,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Identifier: `autopilot-refine`
 - Supported modes: `none`
 - Argument shape: `"<prompt>" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]`
-- Portable meaning: 기존 문서·연구 산출물의 정정·갱신. 버전 snapshot과 변경 이력을 보존한다.
+- Portable meaning: Correct and update existing document/research artifacts while preserving snapshots and change history.
 
 ## Portable Contract
 

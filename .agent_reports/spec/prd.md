@@ -3,10 +3,12 @@
 > mode: **library + cli** · 작성 2026-06-15 · v3(DB화·저장소분리) · v4(결정론-우선 원칙·Hermes port) · v5(Option 2 — user_profile·post-it 파일 메커니즘 제거, DB 단일 store, sub-agent DB 직접 읽기) · v6(Cluster C — 세션 자동 distillation: orchestration raw log → tier 메모리, "기억해둬" 수동 의존 제거) · v7(D-13 외부 분사화 + distiller sonnet + D-14 권한 하드닝 시도) · v8(D-14 권한 allowlist 무력 → no-tools+스크립트 실행 재설계) · v9(Cluster D — 결정론-first lifecycle 정비) · **v10 2026-06-17** (Cluster E — 큐레이션 단순화[세션끝 opus 풀 큐레이터, 메인 housekeeping 0] + audit P0 하드닝[strength·project_key·recall엔진·내구성])
 > 입력: `research/hermes-agent/{03_memory_system,04_benchmark_gap,07_security,08_source_grounded}.md` · 기존 `tools/memory/*` · `skills/{post-it,analyze-user}/` · `user_profile/`
 > · **v11 2026-06-22** (Cluster F — 루프↔메모리 환류: 루프 자율성 재정의·아침 논의 데스크·curator 산출물 대조 적극 prune·메모리 제도화 승격 채널 + 선결 버그 복원력)
-> · **v12 2026-07-03** (Cluster G — recall-first 반사: 창작·스타일·형식 결정 전 능동 recall, 심층 memory-scout 위임, core-first adapter guard 와 결합)
+> · **v12 2026-07-03** (Cluster G — recall-first guidance and memory-scout; semantic recall mandate superseded by v17 D-40, core-first adapter guard retained)
 > · **v13 2026-07-04** (Cluster H — memory 도메인 adapter-parity 불변식: session-end distill 2-tier·MEM_DUMP_PUSH·portable distill dispatcher 계약. 근거 = codex-adapter-parity 감사 P-10·P-12·P-13·P-25·P-36)
-> · **v14 2026-07-10** (Cluster I — retrieval usability: 전문 조회·고신뢰 자동 회상·미소비 handoff 보호·회상 관측성. 근거 = Claude Code/Codex 동시 진단 + 당일 handoff merge 실사고)
+> · **v14 2026-07-10** (Cluster I — retrieval usability and pending protection; automatic recall portion retired by v17 D-40)
 > · **v15 2026-07-11** (Cluster J — 쓰기 관측성·전수 진단: 변이 이벤트 저널 + `mem log` + `mem doctor`. 계기 = fleet 메모리 가시화[agent-fleet-dashboard F-19]의 전제 + 읽기/쓰기 telemetry 비대칭 실측)
+> · **v16 2026-07-14** (historical language-neutral automatic recall design, retired in full by v17 D-40)
+> · **v17 2026-07-14** (agent-owned semantic memory judgment: automatic prompt classification/recall injection retired; deterministic code is limited to mechanical safety and retrieval infrastructure)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -39,7 +41,7 @@
 - **D1**: SoT = 로컬 `memory.db`(SQLite WAL, FTS5 내장). git = `dump.jsonl`(결정론적 텍스트 mirror, 레코드당 1줄·id 정렬·sort_keys). 바이너리 .db 비추적. 복원 = `mem import`.
 - **D2**: 위치↔스코프 분리 — 단일 DB + `cwd_origin` 컬럼 (필터).
 - **D3 → Cluster A로 격상** (§4): user_profile 통합 깊이.
-- **D4**: 자동 write (기억 한정, 사람 게이트 없음, 품질필터·dedup·injection 가드만 — 전부 코드).
+- **D4 (revised by D-40)**: an agent-backed write does not require a separate human approval gate. The agent makes the semantic choice; code enforces action shape, exact deduplication, scope, and injection/secret safety.
 - **D5**: lifecycle — working 자동만료/졸업, durable consolidate. gc만 사람 게이트.
 - **D6**: 자체 하네스 — SessionStart `mem inject --hook` + SessionEnd `mem sync`.
 - **D7 → Cluster A로 격상** (§4): 통합 깊이.
@@ -126,7 +128,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 > **원칙 정립 (사용자, 2026-06-17)**: 판단 본체(salience 등)는 결정론화 _불가_ — 핵심은 "누가 판단하나". **추가(가역·저위험) 판단 → 외부 싼 에이전트 offload OK / 삭제·정리(비가역·data-loss) 판단 → 메인 클로드 직접.** 결정론 scaffold(트리거·탐지·실행·보안)가 판단을 감싸 신뢰성·재현성을 주되, 판단은 가장 싼 자리에 배치. §0.5 의 정확한 형태. Hermes 도 consolidation 은 메인이 함(capacity-error 강제 트리거) — 같은 자리, 트리거만 다름.
 
 ### 5.6.1 D-15 — recall 자동 사전주입 hook (B1 완성)
-- 현 B1 = instruction(메인이 "회상 신호어 보면 `mem recall`" 을 매번 _판단_). → **UserPromptSubmit hook 으로 결정론화**: 신호어(지난번·예전에·전에·그때·저번에·아까 등) regex 감지 → `mem recall` 실행 → 결과를 additionalContext 로 주입. 메인의 "recall 할까" 단계 제거 → *이미 회상된 맥락 위에서 본 생각만*. additive·read-only 라 hook 적합. 가드: distiller 세션(`MEM_DISTILL=1`) skip, 신호어 없으면 no-op(토큰 절약), recall 결과 비면 주입 안 함.
+- Historical decision, **retired by D-40**. The UserPromptSubmit classifier treated semantic relevance as a deterministic token/threshold problem. Current adapters expose explicit retrieval, and the acting agent decides when memory is relevant.
 
 ### 5.6.2 D-16 — lifecycle 탐지 → 메인 노출 (consolidation/prune 후보)
 - 현 `lifecycle` 의 durable near-dup `[dup-flag]` 가 SessionEnd `mem sync` 출력으로 흘러 *아무도 안 봐서* 死. → **`mem inject`(세션 시작)에 "정리 후보" 섹션으로 노출** — 메인이 보고 직접 consolidate/prune/graduate (실행=메인, 원칙대로). 탐지(결정론)와 실행(메인 판단) 분리.
@@ -166,7 +168,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - **고아 탐지**: 어떤 live 프로젝트로도 해석 안 되는 cwd_origin → 고아 후보 surface. 기존 cwd_origin 옛경로 → project_key 마이그레이션.
 
 ### 5.7.5 E-4 — recall 엔진 교체 (audit P0 #2 — 死 promise)
-- 현 `recall()` query 통째 단일 phrase FTS → 다단어·NL hit 0. → **multi-term OR + bm25 + top-K** + strength 가중. D-15 recall-inject hook 이 prompt 전체 넘기던 것 → **신호어 strip + 키워드 추출**.
+- 현 `recall()` query 통째 단일 phrase FTS → 다단어·NL hit 0. → **multi-term OR + bm25 + top-K** + strength 가중. Ranking and multilingual tokenization remain retrieval infrastructure after an agent initiates a query; they do not classify whether a prompt should trigger recall (D-40).
 
 ### 5.7.6 E-5 — 내구성 봉합 (audit P0 #3, dump 버저닝이 삭제 안전망)
 - `mem sync` 에 **dump 자동 commit(+버전 이력 = 잘못된 prune 복구 안전망)**. 현재 push 0 → 머신 손실 시 영구소실 갭.
@@ -186,7 +188,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 
 ## 5.8 Cluster F — 루프↔메모리 환류 + 적극 정리 (v11, 사용자 확정 2026-06-22)
 
-> **계기**: 메모리에 영구 누적되는 데이터를 주기적으로 ① 세팅·하네스·루프 등 시스템 구조로 *제도화* 하고 ② 불필요분을 *적극 정리* 하는 환류 고리 부재 지적(사용자). 조사 결과 — `graduate` 는 working→durable tier 내부 전환뿐(메모리 *밖* 승격 경로 0), curator 정리는 대화+메모리 snapshot 만 보고 *산출물 미대조*, 연수(study) 루프는 도입 후 한 번도 정상 작동 못 함(2026-06-21 401 즉사·hold). 선결 버그(D-29) → 환류 설계(D-25~28). 결정론-first 정합: 트리거·산출물 캡처·prune 실행·graveyard = 코드, opus 판단 = salience·승격 가치만.
+> **계기**: 메모리에 영구 누적되는 데이터를 주기적으로 ① 세팅·하네스·루프 등 시스템 구조로 *제도화* 하고 ② 불필요분을 *적극 정리* 하는 환류 고리 부재 지적(사용자). 조사 결과 — `graduate` 는 working→durable tier 내부 전환뿐(메모리 *밖* 승격 경로 0), curator 정리는 대화+메모리 snapshot 만 보고 *산출물 미대조*, 연수(study) 루프는 도입 후 한 번도 정상 작동 못 함(2026-06-21 401 즉사·hold). 선결 버그(D-29) → 환류 설계(D-25~28). v17 D-40 정합: 트리거·산출물 캡처·action 검증·graveyard = 코드, salience·승격·prune·merge 의미 판단 = acting agent.
 
 ### 5.8.1 D-25 — 루프 자율성 재정의
 - 기존 `loops/README` line 21 "**루프는 일을 하지 않는다** — 삭제·지침 적용은 사용자 결정" 원칙을 **폐기·재정의**. 근거: curator 가 *이미* 무인 prune 중 — 원칙이 이미 반쯤 거짓이었고, 매 건 사용자 사전승인은 비효율(연수·당직 제안이 06-19 이월 누적 실증).
@@ -208,11 +210,11 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - (확인됨) `/clear` 도 SessionEnd reason=`clear` 를 쏘고 우리 hook matcher 가 `*` 라 curator 발동 — 세션 유실 구멍 없음.
 
 ### 5.8.4 D-28 — 메모리 제도화 환류 (승격 채널)
-- durable 의 *반복 규칙·교훈*(convention/lesson type, 조사 시 durable 272 중 ~27건)을 **승격 후보**로 추출 → **아침 논의 안건**으로 제시 → 메인 Claude 와 *대화*로 종착지 결정 → 반영 → **drill 검증 통과 후** 메모리에서 prune.
-- **종착지별 분기**: 반복 행동규칙 → CLAUDE.md/CONVENTIONS/DESIGN_PRINCIPLES(문서) / 기계화돼야 할 교훈 → hook·drill 케이스(코드). "메모리→문서"만이 아니라 *옳은 곳*으로.
-- **정리(prune)와 승격(graduate-out) 구분**: 사실·결정·이력은 메모리에 *남는다*(본령). 반복 규칙·원칙만 승격 대상.
+- **v17 D-40 supersession**: the historical implementation filtered `convention|lesson` records as promotion candidates. That fixed semantic type gate is retired. The read-only projection now exposes a bounded view of all visible durable records; type and strength are evidence only, and the acting agent judges whether any item should be institutionalized.
+- **Destination is contextual**: a useful item may belong in a runtime bootstrap, CONVENTIONS, DESIGN_PRINCIPLES, a hook, a drill case, another artifact, or memory only. No record type automatically selects a destination.
+- **Prune and graduate-out remain separate actions**, but neither is decided by a fixed fact/decision/history versus rule/principle taxonomy. Apply and verify the destination first; then the agent decides whether pruning the memory record is useful.
 - **prune 순서**: 반영·검증 *후*에만 prune (반영 전 삭제 = 영구 소실, graveyard 만으론 부족). "반영 → drill 통과 → prune".
-- **버튼 아니라 논의**: 승격은 "어디에·어떻게·정말 본질인가"를 따져야 하니 yes/no 결재가 아니라 대화. 정리(D-27)=자동/버튼, 승격(D-28)=논의 — 갈래별 채널 분리.
+- **Agent judgment, not a rule button**: institutionalization and cleanup require contextual judgment. Deterministic code may present candidates and enforce recovery/safety; it does not make the semantic decision.
 
 ### 5.8.5 D-29 — 루프 인프라 복원력 (선결 버그, ✅ main `b95b9a9`)
 - ① `loops/lib.sh` PATH 보정 — cron 제한 PATH 가 `/usr/bin/node`(v10) 를 집어 codex hook(.mjs ESM)이 SyntaxError 로 죽던 것 → `~/.local/bin`(v20) 앞세움.
@@ -223,11 +225,11 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - 신규 테이블·칼럼 **없음**. curator 입력 ARTIFACTS 블록은 dispatch 스크립트가 기계 캡처(코드, §0.5). 신규 상태파일: 아침 브리핑 날짜 마커(`memory/.briefing-<date>` 류) + 승격 후보 추출은 read-only projection. 신규 컴포넌트: `loops/lib.sh`(✅ 머지) + 아침 데스크 UserPromptSubmit hook(D-26).
 - **post-it 역할 재검토(열림)**: distiller 자동화로 `/post-it` 의 '수동 기억' 용도가 distiller 와 상당 부분 겹침(Cluster C 가 "기억해둬 수동 의존 제거"가 목적이었음). distiller 의 *명시 override·핸드오프 채널*로 재포지셔닝하거나 deprecate 검토 — v11 범위 밖, 별도 결정.
 
-## 5.9 Cluster G — recall-first 반사 + core-first guard (v12, 사용자 확정 2026-07-03)
+## 5.9 Cluster G — historical recall-first guidance + core-first guard (v12; recall mandate superseded by D-40)
 
 > 계기: SR_CorrNet_DSC 보고서용 spectrogram 스타일을 기존 메모리 컨벤션(48kHz 풀밴드·ylim 0~24kHz)과 다르게 즉흥 생성한 사고, 그리고 이를 고치며 adapter 를 core 보다 먼저 고친 순서 위반. 둘 다 "생각으로 기억"할 일이 아니라 하네스 원칙과 guard 로 닫는다.
 
-- **recall-first**: 과거 결정·교정·컨벤션뿐 아니라 산출물 스타일·형식 신규 결정 자리에서도 작업 전 recall 을 1차 행동으로 수행한다. miss 비용은 낮고 컨벤션 위반 재작업 비용이 높다.
+- **Recall guidance (superseded by D-40)**: v12 prescribed topic-based recall before several classes of work. v17 removes that semantic rule; the agent now decides contextually whether prior memory would materially help.
 - **memory-scout**: 인라인 1~2쿼리를 넘는 심층 탐색은 read-only memory-scout capability 로 분리한다. 다각 쿼리 → cross-cwd → raw 세션 순으로 확장하고, 결과는 15줄 이하 verdict/record id/적용 지침으로 반환한다. 쓰기 명령은 전면 금지한다.
 - **core-first adapter guard**: adapter 편집 전 실제 `core/*.md` read marker 를 요구한다. hard gate 는 검증 가능한 read marker 와 stale 여부만 강제하고, "core 를 먼저 수정했는가"는 `core/DESIGN_PRINCIPLES.md` 제1원칙과 drill 이 보완한다.
 
@@ -250,18 +252,17 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 
 ## 5.11 Cluster I — 꺼내 쓰는 경로 강화 + 미소비 인계 보호 (v14, 2026-07-10)
 
-> 계기: Claude Code와 Codex의 독립 진단이 같은 병목을 확인했다. 쓰기·세션 주입은 동작하지만 ① 자동 recall은 과거지시 신호어 8개에만 의존해 실제 프로젝트 발화에서 거의 0회, ② SessionStart top-K 밖 working/durable은 recall 없이는 잠김, ③ recall은 12-token snippet만 반환해 전문 확인에 SQLite/dump 우회가 필요, ④ 직전 세션의 canonical handoff와 고유 보강 2건이 curator merge에서 near-duplicate로 오판돼 보강 전문이 사라졌다. agent-memory git `55076af→042d277`에서 보강 2건 삭제와 canonical strength `1→3`이 동시에 발생했고 graveyard 전문이 현 `merge()` 경로와 일치하므로 ④는 prune 추정이 아니라 merge 사고로 확정한다.
+> 계기: Claude Code와 Codex의 독립 진단이 같은 병목을 확인했다. 쓰기·세션 주입은 동작하지만 ① 자동 recall이 고정 과거지시 phrase에 의존해 실제 프로젝트 발화에서 거의 0회였고, ② SessionStart top-K 밖 working/durable은 recall 없이는 잠김, ③ recall은 12-token snippet만 반환해 전문 확인에 SQLite/dump 우회가 필요, ④ 직전 세션의 canonical handoff와 고유 보강 2건이 curator merge에서 near-duplicate로 오판돼 보강 전문이 사라졌다. agent-memory git `55076af→042d277`에서 보강 2건 삭제와 canonical strength `1→3`이 동시에 발생했고 graveyard 전문이 현 `merge()` 경로와 일치하므로 ④는 prune 추정이 아니라 merge 사고로 확정한다. v16은 ①의 잔여 phrase-dependent confidence를 완전히 제거한다.
 
 ### 5.11.1 D-33 — full-body retrieval은 1급 CLI 계약
 - `mem show <id> [--all]`은 visibility fence 안의 단일 레코드 metadata+전문을 원문 줄바꿈 그대로 출력한다. 기본 fence는 현재 project+global이며 `injection_flag` 레코드는 항상 제외한다. 다른 project ID 존재 여부는 generic not-found로 감춰 scope oracle을 만들지 않는다.
 - `mem recall "<query>" [--full] [--limit N]`을 추가한다. ordinary 레코드의 flag 없는 기존 출력은 byte-compatible하게 유지하고, `--full`은 같은 ranked ID의 snippet만 전문으로 교체한다. pending 결과는 소비 workflow를 발화할 수 있도록 `[pending:<id>]`를 식별자로 출력한다. `limit`은 1~100, 기본 20.
 - `show`·명시 recall은 `last_accessed`를 갱신하지만 **읽기 자체를 handoff 소비로 간주하지 않는다**. memory-scout는 DB 우회 대신 show/full을 사용한다.
 
-### 5.11.2 D-34 — 모든 프로젝트 발화에 고신뢰 자동 recall probe
-- UserPromptSubmit 공통 hook은 tracked/project cwd의 모든 일반 발화를 공유 `mem.py` 후보 엔진에 probe한다. Bash hook은 runtime payload parsing과 출력 cap만 담당하며 Claude Code·Codex·OpenCode가 같은 엔진/정책을 쓴다.
-- 정규화는 NFKC+lower+구두점 제거, identifier/path/hyphen·CJK term 보존, stopword와 현재 scope document-frequency로 저정보 단어를 억제한다. implicit 자동주입은 `2+ distinct match + coverage` 또는 rare CJK/identifier exact match 같은 고신뢰 조건만 통과하며, 기존 과거지시 신호어는 explicit mode로 recall 민감도를 높이되 generic 단어 단독 hit는 거부한다.
-- probe는 `last_accessed`를 갱신하지 않는다. 실제 주입된 ID만 access로 기록한다. 자동주입은 top 3, 총 1,200자 cap이며 결과가 없거나 저신뢰면 무출력이다.
-- raw prompt를 저장하지 않는 bounded event telemetry에 runtime/mode/term 수/candidate 수/qualified 수/injected IDs/reject reason/latency를 남겨 trigger hit-rate·정밀도·latency를 재관찰한다.
+### 5.11.2 D-34 — historical automatic recall probe (retired by D-40)
+- The v14/v16 prompt classifier is removed from active adapters and from `mem.py`. It was deterministic and language-neutral, but it still attempted to answer the semantic question “is prior memory relevant now?” with token statistics and thresholds.
+- `mem recall --auto` is retired. The former hook remains only as a fail-open compatibility no-op for stale runtime projections.
+- Explicit retrieval keeps FTS/BM25 ranking, CJK/identifier tokenization, scope fences, result limits, and bounded access telemetry. These mechanisms organize results only after the agent chooses to search.
 
 ### 5.11.3 D-35 — delivery state와 파괴 경로 fail-closed
 - schema v5에 `delivery_state TEXT NOT NULL DEFAULT 'ordinary'`를 추가한다(`ordinary|pending|consumed`). 새 `type=handoff`는 자동 `pending`; 인계 목적 thread는 `--requires-consume`로 pending을 명시한다. v4→v5 및 구 dump import는 기존 `type=hint|handoff` 또는 body `^HANDOFF`를 fail-safe하게 pending으로 backfill한다.
@@ -270,8 +271,8 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - graveyard는 `_deleted_at`, `_action`, `_canonical` 메타를 보존하고 `mem restore <id>` 단건 복구를 제공한다. pipeline/post-it 자동 consume은 handoff ID가 명시 입력되고 성공 산출물이 의무 반영을 증명할 때만 허용한다.
 
 ### 5.11.4 D-36 — SessionStart cap은 retrieval 개선 뒤 재관찰
-- 현 top-K/문자 cap 자체는 이번 단계에서 확대하지 않는다. 병목은 cap보다 생략분에 접근하는 recall 경로다. D-33~35 배포 뒤 telemetry로 `probe→qualified→injected→explicit show/consume` 퍼널과 omitted memory 재사용률을 관찰한 뒤 cap을 별도 결정한다.
-- Codex SessionStart memory inject opt-in과 adapter별 lifecycle 차이는 유지하되, prompt recall 정책·전문 조회·pending 보호는 runtime에 무관한 공유 계약이다.
+- 현 top-K/문자 cap 자체는 이번 단계에서 확대하지 않는다. D-40 이후 관측은 explicit recall/show/consume과 SessionStart injection에 한정한다.
+- Codex SessionStart memory inject opt-in과 adapter별 lifecycle 차이는 유지한다. Explicit retrieval, full-body access, and pending protection remain runtime-neutral; automatic prompt recall policy is retired by D-40.
 
 ## 5.12 Cluster J — 쓰기 관측성 + 전수 진단 (v15, 사용자 확정 2026-07-11)
 
@@ -297,16 +298,25 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - 신규 테이블·칼럼 **없음** — 저널은 XDG state jsonl 1개, doctor 는 read-only 조회.
 - 소비자: fleet `collectors/memory.py`(agent-fleet-dashboard F-19 — read-only tail 관찰; 저널은 memory 시스템이 자기 목적으로 남기는 로그라 fleet F-1 zero-injection 과 정합) + oncall(doctor) + 사용자(`mem log`). 저널 포맷 변경 시 양 spec 동기 의무.
 
+## 5.13 Cluster K — Agent-owned semantic memory judgment (v17, 2026-07-14)
+
+### 5.13.1 D-40 — Semantic decisions stay with an agent
+- The acting agent—main, distiller, or curator—decides contextually what to store, retrieve, promote, merge, or prune. The contract does not encode fixed signal phrases, mandatory recall topics, promote/skip categories, semantic confidence thresholds, or keyword classifiers as substitutes for that judgment.
+- Deterministic code owns mechanical integrity only: schema and action validation, scope/visibility isolation, pending protection, transaction boundaries, lifecycle scheduling, bounded output/telemetry, no-tools execution, and graveyard/dump recovery.
+- Prompt-submit bridges no longer pass every prompt to a recall classifier. `preflight recall <query>`, `tools/memory/recall.sh`, and `mem recall` are explicit agent-invoked retrieval surfaces.
+- Retrieval ranking and multilingual tokenization remain. They rank records for a chosen query; they do not decide whether the agent should query.
+- Regression gates reject active prompt-hook registration of `mem-recall-inject.sh`, active `preflight recall` calls from prompt bridges, and a semantic `mem recall --auto` implementation.
+
 ## [library] 공개 API (v3 + v4 추가)
 ```
 mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(dump|profile) / mem_import / mem_migrate / mem_lifecycle / mem_project
 + (B2) turn-counter state (hook이 갱신, mem이 읽어 nudge 판정)
-+ (I) mem_show / mem_consume / mem_restore / mem_auto_recall_probe
++ (I) mem_show / mem_consume / mem_restore
 + (J) mem_log / mem_doctor (+ 내부: write-event append 훅 — 전 변이 경로 공용)
 ```
 
 ## [cli] `mem` 명령
-v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 body를 결정론적으로 출력 — sub-agent·CLAUDE.md 트리거의 user_profile 파일 Read 대체). **v14 신규 `mem show <id>`, `mem recall --full [--limit N]`, `mem recall --auto --json --no-touch`, `mem consume <id>`, `mem restore <id>`**. **v15 신규 `mem log [--limit/--action/--tier/--actor/--json]`, `mem doctor`** (§5.12). `export --target profile`은 on-demand 사람 열람 캐시용으로만(SoT 아님, sync/analyze-user 자동 wiring 불필요 — 파일 없음). `register-postit`·`.postit-roots`는 **폐기**(post-it.md 파일 제거). B2 turn-counter는 hook+state.
+v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 body를 결정론적으로 출력 — sub-agent·CLAUDE.md 트리거의 user_profile 파일 Read 대체). **v14 신규 `mem show <id>`, `mem recall --full [--limit N]`, `mem consume <id>`, `mem restore <id>`**. **v17 retires `mem recall --auto`** because recall relevance is an agent judgment (D-40). **v15 신규 `mem log [--limit/--action/--tier/--actor/--json]`, `mem doctor`** (§5.12). `export --target profile`은 on-demand 사람 열람 캐시용으로만(SoT 아님, sync/analyze-user 자동 wiring 불필요 — 파일 없음). `register-postit`·`.postit-roots`는 **폐기**(post-it.md 파일 제거). B2 turn-counter는 hook+state.
 
 ## 데이터 모델
 기존 records v4 15컬럼에 v14 `delivery_state`를 추가한 schema v5. `records_fts` FTS5 + trigram 보조 + `idx_records_scope`; `dump.jsonl` 결정론적 export/import는 delivery_state를 round-trip하고 구 dump는 heuristic backfill한다. profile = type=profile 레코드(body=aspect 전문), source=`user-profile:<stem>` (A2 파일명 도출 근거).
@@ -314,7 +324,7 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
 ## Non-goals
 - 외부 메모리 서비스(Honcho/Turso/libSQL 원격) — **로컬 only**.
 - **profile cold-start 자동화** — 정체성 corpus의 deliberate seed는 사람이(garbage-in·consent 경계). 단 steady-state drift는 자동(B 연계).
-- 세팅·원칙 자동 변경 — 기억만 자동.
+- Memory does not automatically rewrite settings or governing principles. Automated memory mutations still require an agent-backed semantic decision plus mechanical validation.
 
 ## 확정 결정 (사용자 lock 2026-06-15)
 - v3: D-1~D-7 (삭제정책·post-it alias·user_profile view·hook·SoT=SQLite·저장소분리·통합깊이).
@@ -334,7 +344,7 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
   - **D-14 (no-tools + 스크립트 실행)**: v7 의 `--allowedTools` mem.py-제한이 settings.json blanket `Bash` allow + additive 의미로 **무력**(임의 명령 실행 실측). → distiller LLM 에서 도구를 _전부 제거_(`--disallowedTools`), 구조화 출력(JSON-lines)만 받아 **dispatch 스크립트가 검증 후 `mem add` 직접 실행**. LLM 판단·코드 실행(§0.5). injection 이 속여도 명령 실행 물리 불가. acceptance gate = `date>>file` 류 실측 차단.
 - **v9 신규 (Cluster D — 결정론-first lifecycle, §5.6)**:
   - **원칙**: 추가(가역) 판단 → 외부 에이전트 offload / 삭제·정리(비가역) 판단 → 메인 직접. (Hermes 도 consolidation=메인.)
-  - **D-15 (recall 자동주입 hook)**: B1 instruction → UserPromptSubmit hook(신호어 regex → `mem recall` → additionalContext 주입). 메인의 "recall 할까" 판단 제거.
+  - **D-15 (recall 자동주입 hook)**: B1 instruction → 모든 tracked/project prompt를 동일한 content-based threshold로 평가하는 UserPromptSubmit hook. 고정 자연어 신호어와 phrase-dependent confidence는 없음.
   - **D-16 (정리 후보 메인 노출)**: lifecycle 의 durable near-dup(+옵션 capacity·만료임박 working)를 `mem inject` 에 노출 → 메인이 consolidate/prune/graduate. 死 dup-flag 부활.
   - **D-17 (TTL backstop·삭제=메인)**: distiller add-only 확정. working prune/graduate·durable consolidation=메인. TTL=deterministic 안전망(2차). **→ v10 Cluster E 에서 정정: 삭제=세션끝 opus distiller.**
 - **v10 신규 (Cluster E — 큐레이션 단순화 + audit P0 하드닝, §5.7)**:
@@ -342,25 +352,27 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
   - **D-19 (strength)**: records 에 strength+last_accessed 칼럼. dedup=reinforce(재출현=중요도). exact=script 결정론, fuzzy=script flag→opus 병합. strength→injection·recall 랭킹·decay.
   - **D-20 (폭증 방지)**: add-time dedup(durable snapshot 주입)·durable soft-ceiling 트리거·injection budget strength top-K·cold-decay.
   - **D-21 (project_key robust)**: remote URL→git-common-dir→.claude-project-id 마커→cwd. worktree·이동 오펀 해소. fail-safe·고아 탐지·마이그레이션.
-  - **D-22 (recall 엔진)**: 단일 phrase → multi-term OR+bm25+top-K+strength. recall-inject 신호어 strip.
+  - **D-22 (recall engine)**: single phrase → multi-term OR+bm25+top-K+strength. The historical automatic relevance classifier is retired by D-40; ranking remains for explicit queries.
   - **D-23 (내구성)**: dump 자동 commit(삭제 복구 안전망)·import 멱등·user_version 게이트·INJECTION_PAT persist(anti-poisoning).
   - **D-24 (E-7 폐기·model-agnostic=D-11)**: 로깅 프록시 redundant 폐기(하네스는 어차피 로그 남김→adapter 만). + graduate(working→durable) opus 가 수행.
 - **v11 신규 (Cluster F — 루프↔메모리 환류, §5.8)**:
   - **D-25 (루프 자율성 재정의)**: "루프는 일을 하지 않는다" 폐기 → "되돌림 가능+명백 = 무인 직접 처리+전수 보고 / 그 외 = 아침 논의". 가드: 되돌림 보장(graveyard·git)+전수 보고 = "사전 승인"을 "되돌림 가능+사후 통보"로. loops/README·DESIGN_PRINCIPLES·oncall.md 동기화.
   - **D-26 (아침 논의 데스크)**: 당직 이후 cwd==~/.claude 그날 첫 발화 → UserPromptSubmit hook 브리핑 주입(밤 처리 요약+논의 안건). SessionStart 아니라 '그날 첫 상호작용'(세션 유지 환경). '당직 처리해줘' 발화 트리거 승격.
   - **D-27 (curator 산출물 대조 적극 prune)**: SessionEnd opus 입력에 ARTIFACTS(git/plans/spec) DATA 블록 + prune 지침 '적극'. 죽은 working 조기정리(21일 TTL 안 기다림)+명백한 durable 정리. 안전 3겹(snapshot-id 화이트리스트·graveyard·DATA 라벨). /clear 도 SessionEnd 발동(matcher '*') 확인.
-  - **D-28 (제도화 승격 채널)**: durable 반복규칙·교훈 → 아침 논의 안건 → 대화로 종착지(문서/hook/drill) 결정 → 반영 → drill 검증 후 prune. 정리(자동)와 승격(논의) 분리. prune 은 반영·검증 후만(영구소실 방지).
+  - **D-28 (제도화 승격 채널; v17 D-40로 semantic gate 수정)**: bounded visible durable evidence → 아침 논의 안건 → agent가 맥락으로 종착지(문서/hook/drill/기타/메모리 유지) 판단 → 반영·검증 후 prune 여부도 agent가 판단. record type/strength는 자동 승격·정리 규칙이 아님.
   - **D-29 (루프 복원력, ✅ main b95b9a9)**: lib.sh PATH 보정(cron v20 node)·run_claude_retry(401/5xx 재시도, session limit ABORT)·oncall exit code 생존체크.
 - **v13 신규 (Cluster H — memory adapter-parity 불변식, §5.10)**:
   - **D-30 (session-end 2-tier adapter-agnostic)**: increment+curate 2-tier 는 모든 어댑터의 session-end 계약 — 미실현 어댑터는 명시 신고 의무, "matches" 표현은 curate 축 성립 시만 (감사 P-12).
   - **D-31 (dump mirror push 계약)**: SessionEnd sync = `mem.py sync` + `MEM_DUMP_PUSH=1` — 어댑터 생략 시 원격 mirror drift (감사 P-10).
   - **D-32 (portable dispatcher 계약)**: distill worker 는 `mem-distill-dispatch.sh` 계약 경유 — 재구현 시 mode/model routing·snapshot whitelist·lock·재귀가드 보존 의무 (감사 P-13·P-25·P-36).
 - **v14 신규 (Cluster I — retrieval usability, §5.11)**:
-  - **D-33~D-36**: `show`/`recall --full` 전문 접근, project prompt 고신뢰 auto-recall+bounded event telemetry, `delivery_state` 기반 미소비 handoff 파괴 차단+consume/restore, cap 유지 후 퍼널 재관찰.
+  - **D-33~D-36**: `show`/`recall --full` access, bounded retrieval telemetry, and `delivery_state`-based pending handoff protection. The automatic recall portion is retired by D-40.
 - **v15 신규 (Cluster J — 쓰기 관측성+전수 진단, §5.12)**:
   - **D-37 (쓰기 이벤트 저널)**: 전 변이 경로 → write-events.jsonl (XDG state, bounded 256KB/500줄, **fail-open** — graveyard 는 fail-closed 불변). D-34 recall-events 와 읽기/쓰기 대칭.
   - **D-38 (`mem log`)**: 저널 tail 1급 조회 (--limit/--action/--tier/--actor/--json, 기본 20건). stats 는 불변(스냅샷), log 는 흐름.
   - **D-39 (`mem doctor` + oncall 편입)**: read-only 전수 진단 9항목(integrity·FTS 정합·schema 불변식·working 비대·stale pending·ceiling·graveyard 정합·dump 신선도·워커 건강) + exit code. 새 loop 없음 — oncall 항목 1개. 조치 권한 = D-18 큐레이터 불변(doctor 는 진단만). 소비자 = fleet F-19·oncall·사용자.
+- **v17 신규 (Cluster K — agent-owned semantic memory judgment, §5.13)**:
+  - **D-40**: semantic memory choices belong to the acting agent. Automatic prompt classification and recall injection are retired; deterministic code is limited to storage/retrieval mechanics and safety boundaries. D-15 and the automatic portion of D-34 are historical only.
 
 ## Next (구현 순서 — autopilot-code, 본 v5 입력)
 1. **Cluster A (파일 메커니즘 제거, Option 2)** 먼저 — 사용자 지적 incoherence 해소:
@@ -377,19 +389,19 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
    - ✅ **v7 구현·머지 완료** (main `fab5b46`): ① turn-nudge → detached distiller 분사(D-13 외부화) ② D-12·D-13 통일 dispatch·세션 lock ③ 모델 sonnet ④ 재귀가드 turn-counter 확장. 테스트 distill 37+turn-nudge 12+dispatch 17.
    - ✅ **v8 구현·머지·ENABLE 완료** (main `cd9f220`): D-14 no-tools(`--disallowedTools`)+스크립트 mem add 재설계. acceptance(control 생성 vs disallow 차단)·env-상속·ghost-marker·e2e(84줄→6레코드) 검증 후 `MEM_DISTILL_ENABLE=1` 켜짐(신규세션부터 가동).
 5. **Cluster D (결정론-first lifecycle 정비, v9 신규)** — autopilot-code --mode dev, worktree:
-   - **D-15**: `hooks/mem-recall-inject.sh` 신설 + settings.json UserPromptSubmit 배선 — 신호어 regex → `mem recall` → additionalContext 주입(MEM_DISTILL=1 skip, 신호어 없으면/결과 비면 no-op).
+   - **D-15 (historical, retired by D-40)**: the automatic prompt-recall hook is no longer registered.
    - **D-16**: `mem inject` 에 "정리 후보" 섹션 — lifecycle 의 durable near-dup(+옵션 capacity·만료임박 working) 노출. `mem lifecycle` 의 dup 탐지 재사용(read-only projection).
    - **D-17**: distiller add-only 유지(무변경). CONVENTIONS §7 + CLAUDE.md §2 에 "add=외부·삭제=메인, working 졸업=메인, TTL=backstop" 명문화.
 6. **Cluster E (큐레이션 단순화 + audit P0 하드닝, v10 신규)** — autopilot-code, worktree, **phase 분할 권장**(한 사이클에 다 X):
    - **Phase E-α (DB 하드닝 기반)**: user_version 마이그레이션 프레임 + strength/last_accessed 칼럼 + project_key(remote→git-common-dir→marker→cwd) + cwd_origin 마이그레이션·고아 탐지. (다발 schema 라 user_version 선행 — audit C5.)
-   - **Phase E-β (recall·내구성)**: recall 엔진 교체(multi-term OR+bm25+top-K+strength, 신호어 strip) + dump 자동 commit·import 멱등·INJECTION_PAT persist.
+   - **Phase E-β (recall·내구성)**: recall 엔진 교체(multi-term OR+bm25+top-K+strength, corpus-based term filtering) + dump 자동 commit·import 멱등·INJECTION_PAT persist.
    - **Phase E-γ (큐레이션 단순화)**: 세션끝 distiller opus 풀 큐레이터(action JSON add/reinforce/merge/prune + script 실행) + N턴 sonnet add-only + 폭증 4겹(durable snapshot 주입·ceiling 트리거·budget·cold-decay) + graduate. 메인 housekeeping 0. v8 no-tools 보안 유지·acceptance 재검증.
    - E-7(프록시) 구현 없음 — D-11 adapter 원칙으로 충분.
 7. **Cluster F (루프↔메모리 환류, v11 신규)** — autopilot-code, worktree, phase 분할:
    - ✅ **선결 버그 D-29 머지 완료** (main `b95b9a9`): `loops/lib.sh` 신규 + study/oncall 수정 (cron node PATH·재시도·생존체크).
    - **Phase 1 (D-27 curator 산출물 대조)**: `hooks/mem-distill-dispatch.sh` 에 ARTIFACTS(git log·plans done·spec phase) DATA 블록 캡처·주입 + curate 프롬프트 prune 지침 적극화. mem.py 에 산출물 캡처 헬퍼(`curate-artifacts` 류). 안전 3겹 유지·acceptance 재검증.
    - **Phase 2 (D-26 아침 데스크)**: 신규 `hooks/mem-briefing-inject.sh`(UserPromptSubmit, cwd==~/.claude AND 당직후 그날 첫 발화 게이트 → 밤 처리 요약+논의 안건 inject) + 상태 마커(`.briefing-<date>`) + settings.json 배선. CLAUDE.md '당직 처리' 발화 트리거 → 자동 승격.
-   - **Phase 3 (D-28 승격 채널)**: 승격 후보 추출(durable convention/lesson read-only projection) + 아침 안건 제시 + 종착지 분기(문서/hook/drill) + 반영후 prune 연결(drill 검증 게이트).
+   - **Phase 3 (D-28 승격 채널; v17 D-40 supersession)**: all visible durable records의 bounded read-only evidence + 아침 안건 제시 + agent-owned 종착지·prune 판단. fixed `convention|lesson` type filter는 폐기.
    - **D-25 원칙 문서화**: `loops/README`·`DESIGN_PRINCIPLES`·`oncall.md` "보고만"→"되돌림가능+명백=처리+보고" 동기화. **post-it 역할 재검토(§5.8.6)**: distiller 와 중복 — 별도 결정.
 8. **Cluster H (memory adapter-parity, v13 신규)** — autopilot-code --mode dev, worktree (codex-adapter-parity 감사 Phase 3 과 동일 사이클로 인계 가능):
    - **D-30/D-32**: Codex `distill-worker.sh` 를 portable `mem-distill-dispatch.sh` 계약으로 정렬 — session-end 를 curate mode(+snapshot 캡처·whitelist)로, turn-nudge 는 increment 유지. 불가 시 ADAPTATION 에 "increment-only" disclosure 로 문구 정정 (P-12 overclaim 해소는 두 경로 중 하나 필수).
@@ -397,7 +409,7 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
    - **D-32 안전층**: increment 프롬프트의 mutation action 나열 제거 또는 snapshot whitelist 적용 (P-25) + per-mode 모델 tier (P-36).
 9. **Cluster I (retrieval usability, v14 신규)** — autopilot-code, worktree, standard QA:
    - **D-33**: show/full/limit + visibility fence + memory-scout/README 동기화.
-   - **D-34**: shared auto-recall candidate engine, no-touch probe, high-confidence hook injection, bounded privacy-preserving telemetry, runtime parity 회귀.
+   - **D-34 (historical, retired by D-40)**: automatic prompt classification removed; explicit retrieval and bounded access telemetry remain.
    - **D-35**: schema v5 migration/import, consume/restore, pending fail-closed gates(prune/merge/delete/lifecycle+curator snapshot), 실사고 fixture 회귀.
    - **D-36**: SessionStart cap 유지, 배포 후 recall funnel 재관찰.
 10. **Cluster J (쓰기 관측성+전수 진단, v15 신규)** — autopilot-code, worktree, standard QA: **D-37 저널**(mem.py 변이 경로 공용 append 훅 + rotation, fail-open) → **D-38 `mem log`** → **D-39 `mem doctor`** + `loops/oncall.md` 항목 1개. fleet F-19(agent-fleet-dashboard spec §4.6)가 저널 포맷을 소비 — 포맷 변경 시 양 spec 동기. F-19 구현은 fleet 사이클 별도(파일 표면 비겹침 — 병렬 가능, 저널 부재 시 graveyard-only degrade 계약).

@@ -67,39 +67,39 @@ Review code from these perspectives:
 
 ## Output Format
 
-Always organize results in the following order and format. Write in Korean.
+Always organize results in the following order and format. Use the user's current communication language unless the reviewed project or output contract specifies another language. Localize the template labels to that selected language.
 
 ```
-## 📋 코드 리뷰 결과
+## 📋 Code Review Results
 
-**검토 대상**: (list of changed files)
-**변경 요약**: (1-2 sentences describing what changed)
+**Reviewed files**: (list of changed files)
+**Change summary**: (1-2 sentences describing what changed)
 
 ---
 
-### 🔴 꼭 수정해야 하는 문제
+### 🔴 Must-fix issues
 
 Per item:
 - **file:line** — problem description
-  - 왜 문제인지:
-  - 수정 방향:
+  - Why it matters:
+  - Suggested fix:
 
-(If none: "발견된 문제 없음 ✅")
+(If none: "No issues found ✅")
 
 ---
 
-### 🟡 수정하면 좋은 문제
+### 🟡 Suggested improvements
 
 Per item:
 - **file:line** — problem description
-  - 왜 문제인지:
-  - 수정 방향:
+  - Why it matters:
+  - Suggested fix:
 
-(If none: "발견된 문제 없음 ✅")
+(If none: "No issues found ✅")
 
 ---
 
-### 🟢 지금은 괜찮은 점
+### 🟢 What is already solid
 
 - Specifically praise good parts and good pattern usage.
 ```

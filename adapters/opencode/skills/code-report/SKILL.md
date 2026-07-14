@@ -1,6 +1,6 @@
 ---
 name: code-report
-description: "Use for code-report: 코드 작업 사이클 결과를 사용자-facing 보고서로 조립한다."
+description: "Use for code-report: Assemble code-cycle results into a user-facing report."
 metadata:
   portable_source: capabilities/code-report.md
   adapter: opencode
@@ -31,7 +31,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 - Identifier: `code-report`
 - Supported modes: `none`
 - Argument shape: `<plan name or path>`
-- Portable meaning: 코드 작업 사이클 결과를 사용자-facing 보고서로 조립한다.
+- Portable meaning: Assemble code-cycle results into a user-facing report.
 
 ## Portable Contract
 

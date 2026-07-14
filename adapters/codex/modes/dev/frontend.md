@@ -66,7 +66,7 @@ surfaces rewritten to Codex-native preflight/tool-contract wording.
 
 ## 출력
 
-- 직접 호출: 한국어 설명 + 컴포넌트 위치 + 검증 가이드 (`preview_screenshot` 결과 포함 권장)
+- 직접 호출: 사용자의 현재 소통 언어로 설명 + 컴포넌트 위치 + 검증 가이드 (`preview_screenshot` 결과 포함 권장)
 - skill auto mode 호출: step log + `{log_path} -- ✅ Done`
 
 ## Update agent memory

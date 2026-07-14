@@ -1,13 +1,13 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-draft
-description: "Use when invoking the portable autopilot-draft capability. 문서 초안 파이프. 전략·초안·검증·편집을 거쳐 적용용 문서 artifact를 만든다."
+description: "Use when invoking the portable autopilot-draft capability. Document-drafting pipeline that produces an applicable artifact through strategy, drafting, verification, and editing."
 argument-hint: "<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 metadata:
   group: entry
   fam: doc
   modes: ["paper", "presentation", "doc"]
-  blurb: "문서 초안 파이프. 전략·초안·검증·편집을 거쳐 적용용 문서 artifact를 만든다."
+  blurb: "Document-drafting pipeline that produces an applicable artifact through strategy, drafting, verification, and editing."
 ---
 
 # autopilot-draft
@@ -62,7 +62,7 @@ autopilot-draft 의 산출물은 _최종 문서 그 자체_ 가 아니라, 사�
 - `/autopilot-draft <args>` slash 직접 입력 — 컨펌 skip 하고 즉시 invoke
 
 ## Language Rule
-- Write user-facing output in Korean. (Material analysis results and pipeline_summary.md are written directly in the artifacts — no separate user output needed for those steps.)
+- User-facing output follows the user's communication language unless an explicit audience or artifact-language requirement overrides it. (Material analysis results and `pipeline_summary.md` are written directly in the artifacts, so those steps need no separate user output.)
 
 > `<artifact-root>` 해석·치환(`.agent_reports` 우선, legacy `.claude_reports` fallback): [CONVENTIONS §5.1](../../core/CONVENTIONS.md#51-workspace-assumption-전제).
 

@@ -10,12 +10,20 @@ This is the portable capability contract for `autopilot-research`. It defines ru
 | Identifier | `autopilot-research` |
 | Group | `entry` |
 | Supported modes | `academic, technology, market` |
-| Portable meaning | 공통 사전조사. 논문·기술·시장 survey 후 downstream capability로 분기한다. |
+| Portable meaning | Shared upfront research that surveys academic, technology, or market sources before downstream routing. |
 | Argument shape | `<query> [--mode academic\|technology\|market] [--depth shallow\|medium\|deep] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--no-clarify] [--no-figures] [--from search\|analyze\|report]` |
 
 ## Invocation Semantics
 
-Research survey pipeline — _세 family 의 공통 사전_ entry. academic (논문 survey·trend·필드 정리) / technology (라이브러리·프로젝트·스택·코드 baseline 비교) / market (시장·경쟁·reference 앱·UX 패턴) 3 mode. 다운스트림 매핑: academic → autopilot-draft (paper/presentation) + autopilot-code (academic baseline 코드) | technology → autopilot-code (라이브러리·연구 baseline 위) + autopilot-spec (스택·reference 패턴) | market → autopilot-draft (proposal/report) + autopilot-spec (reference 앱 UX). Field intelligence only — 실제 문서·코드·앱 생성은 다운스트림 skill 이 담당.
+Shared research-survey entrypoint with three modes: academic (papers, trends,
+and field mapping), technology (libraries, projects, stacks, and code
+baselines), and market (market/competitor/reference-app/UX patterns).
+Downstream routing: academic → autopilot-draft for papers/presentations and
+autopilot-code for academic baselines; technology → autopilot-code for library
+or research implementation and autopilot-spec for stack/reference decisions;
+market → autopilot-draft for proposals/reports and autopilot-spec for
+reference-app UX. This capability produces field intelligence only; downstream
+skills create actual documents, code, or applications.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 

@@ -1,12 +1,12 @@
 ---
 name: draft-refine
-description: "초안 정련·다듬기 sub-skill — 편집팀 검수 경유"
+description: "Refine a draft by applying memo and review feedback with editorial review."
 argument-hint: "<strategy or draft name or path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "초안 정련·다듬기 sub-skill — 편집팀 검수 경유"
+  blurb: "Refine drafts from memo and review feedback."
 ---
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 본 skill은 review 로그를 `_internal/strategy_reviews/` 또는 `_internal/draft_reviews/`에 기록. 버전 스냅샷은 modern artifact면 `_internal/versions/v{N}/`, legacy artifact면 `_v{N}.md` 형제 (자동 감지).
@@ -28,7 +28,10 @@ Resolve `$ARGUMENTS` to document file paths. Detect whether this is a **strategy
    - **No match** → report error
 
 ## Language Rule
-- All user-facing output in natural Korean (no translationese — write Korean natively, don't translate from an English draft).
+- User-facing artifacts follow the audience-language-first rule in
+  `<agent-home>/roles/response-policy.md`. Preserve the target artifact's
+  existing language unless the task explicitly changes it; this skill imposes
+  no fixed chat locale.
 
 ## Pre-Refine: Versioning Setup
 

@@ -1,13 +1,13 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-apply
-description: "Use when invoking the portable autopilot-apply capability. cheatsheet 초안을 실제 source artifact에 적용하고 검증한다."
+description: "Use when invoking the portable autopilot-apply capability. Apply a cheatsheet draft to the real source artifact and verify the result."
 argument-hint: "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]"
 metadata:
   group: entry
   fam: doc
   modes: []
-  blurb: "cheatsheet 초안을 실제 source artifact에 적용하고 검증한다."
+  blurb: "Apply a cheatsheet draft to the real source artifact and verify the result."
 ---
 
 > **산출물 폴더 컨벤션**: 본 skill 은 _<artifact-root>/ 밖의 실제 작업 파일_ 을 편집한다 (예외적). 자기 로그·스냅샷은 cheatsheet artifact 의 `_internal/apply/` 하위에 둔다 ([CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) T3).
@@ -72,7 +72,7 @@ family 를 _계획·생성_ vs _실제 대상에 적용+검증_ 으로 나누면
 > **빌드 출력은 로컬 temp 로 (`$BUILD_OUT`)** — Preflight 에서 run 당 한 번 `BUILD_OUT=$(mktemp -d /tmp/lw-apply.XXXXXX)` 생성하고, 이 skill 의 _모든_ 컴파일(baseline / compile gate / latexdiff)에 `-outdir="$BUILD_OUT"` 를 동일하게 넘긴다. 이유: ① source 가 NAS/네트워크 마운트일 때 빌드 I/O 를 로컬 디스크로 빼 속도 회복 ② 사용자 repo 폴더에 `main.aux`/`.pdf` 등 빌드 산출물을 흩뿌리지 않음(repo 비오염). baseline 과 gate 가 _같은_ outdir 을 써야 에러 증가분 비교가 유효하다. 컴파일 에러 판정은 stdout/log 로 하므로 outdir 위치와 무관. latexdiff 결과 PDF 만 `$BUILD_OUT` 에서 `_internal/apply/latexdiff.pdf` 로 복사.
 
 ## Language Rule
-사용자 향 출력 (chat 요약, diff 안내, report) 은 자연스러운 **한국어** (번역체 회피 — 영어 초안을 옮기지 말고 처음부터 한국어로).
+User-facing output (chat summary, diff guidance, and report) follows the user's communication language unless an explicit audience or artifact-language requirement overrides it. Write directly in the selected language rather than translating mechanically.
 
 ---
 
@@ -111,7 +111,7 @@ mutation 을 cheatsheet 순서대로 적용. **각 mutation 하나당 git commit
 
 직접 merge 하지 않는다 — branch 위 결과를 사용자에게 넘기고, 사용자의 `git merge` 가 곧 checkpoint (옛 paste 자리).
 
-report (≤8줄, 한국어):
+Report (at most 8 lines, in the selected user-facing language):
 ```
 ✓ autopilot-apply — {cheatsheet 식별} → {source}
 • branch: apply/{name} (base {short-hash})

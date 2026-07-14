@@ -10,7 +10,7 @@ This is the portable capability contract for `design-init`. It defines runtime-n
 | Identifier | `design-init` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 디자인 환경과 state를 bootstrap한다. |
+| Portable meaning | Bootstrap the design environment and state. |
 | Argument shape | `<design task description> [--scope ui\|slide\|icon\|diagram\|mixed]` |
 
 ## Invocation Semantics

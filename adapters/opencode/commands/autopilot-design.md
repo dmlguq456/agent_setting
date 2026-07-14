@@ -1,5 +1,5 @@
 ---
-description: "Run the portable autopilot-design capability through the OpenCode adapter. Meaning: 시각 산출물 디자인 파이프. refs→tokens→components→review→handoff를 조율한다."
+description: "Run the portable autopilot-design capability through the OpenCode adapter. Meaning: Visual-design pipeline coordinating references→tokens→components→review→handoff."
 ---
 
 Use the OpenCode adapter realization of portable capability `autopilot-design`.
