@@ -111,23 +111,15 @@ Precedence, highest first:
 6. A secondary capability must never substitute for the primary execution
    capability, and the primary never absorbs a secondary's artifact ownership.
 
-Worked examples:
+| Request shape | Primary | Secondary |
+|---|---|---|
+| "Reevaluate the model on a new test set and update the report" | `autopilot-lab --mode eval` | refine/draft document pass; `autopilot-spec` on policy change; `autopilot-note` |
+| "Fix only the typos and sentences in REPORT.md" | `autopilot-refine` | — |
+| "Change the evaluation mixing policy to unscaled and reevaluate" | `autopilot-lab --mode eval` | `autopilot-spec` update; neither replaces the other |
 
-- "Reevaluate the existing model on a new test set and update the report" →
-  primary `autopilot-lab --mode eval`; refine/draft for the document pass,
-  `autopilot-spec` when the evaluation policy changed, and `autopilot-note`
-  are secondary.
-- "Fix only the typos and sentences in REPORT.md" → primary `autopilot-refine`;
-  `autopilot-lab` is not involved.
-- "Change the evaluation mixing policy to unscaled and reevaluate" → blueprint
-  sync through `autopilot-spec` update plus execution through
-  `autopilot-lab --mode eval`; neither replaces the other.
-
-This section was added after a 2026-07-14 incident where a checkpoint
-reevaluation with report regeneration was routed to `autopilot-refine` as
-primary because the surface artifact — "update the existing report" — was
-mistaken for the work nature, and the entire evaluation then ran inline in the
-main session.
+Added after a 2026-07-14 incident where a checkpoint reevaluation with report
+regeneration was routed to `autopilot-refine` as primary from its surface
+artifact and the entire evaluation ran inline in the main session.
 
 ### 0.3. Pre-Execution Gate for Long-Running Work
 
