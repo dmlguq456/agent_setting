@@ -12,6 +12,11 @@ Run graduated dynamic verification with stop-on-failure semantics.
 4. **Functional:** run executable commands from the plan's verification section. Skip explicitly when no plan or runnable command exists.
 5. **Integration:** run the relevant project-level command or test group.
 5b. **Behavioral runtime observation:** for a user-facing surface, launch the real application and exercise the changed path. Tests and imports do not substitute for observing behavior.
+5c. **Report-figure semantics:** when a report contains spectrogram figures,
+run `tools/figure-semantic-verify.py` against the report and figure manifest.
+Treat missing metadata, a non-24 kHz maximum for the 48 kHz full-band profile,
+an unsupported full-band/high-frequency/broadband claim, or missing visual
+review evidence as a failure, not a skip.
 
 Observe the actual surface: terminal command for CLI/TUI, socket request and response for API, screenshot for GUI, public package export for a library, agent execution for prompts, or workflow run for CI. Follow internal changes to the caller-facing boundary. Prefer adapter-provided verifier/run handles; otherwise use README, Makefile, or package metadata within a bounded cold-start effort.
 

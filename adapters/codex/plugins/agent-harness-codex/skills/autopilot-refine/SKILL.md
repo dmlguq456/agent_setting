@@ -27,7 +27,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 - Identifier: `autopilot-refine`
 - Supported modes: `none`
-- Argument shape: `\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only|--memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]`
+- Argument shape: `"<prompt>" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]`
 - Portable meaning: Correct and update existing document/research artifacts while preserving snapshots and change history.
 
 ## Portable Contract

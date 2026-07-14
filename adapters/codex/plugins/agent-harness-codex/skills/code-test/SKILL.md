@@ -32,7 +32,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Portable Contract
 
-- Invocation semantics: Run graduated verification after `code-execute` or on demand to verify code correctness. Intensity-derived rigor scales final verification and test-adequacy review; it does not force a separate parallel QA loop by itself. The capability resolves a plan path, changed-file list, or test scope, runs the applicable test levels, stops on the first failing level, and records durable evidence before reporting a verdict. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: Run graduated verification after `code-execute` or on demand to verify code correctness. Intensity-derived rigor scales final verification and test-adequacy review; it does not force a separate parallel QA loop by itself. The capability resolves a plan path, changed-file list, or test scope, runs the applicable test levels, stops on the first failing level, and records durable evidence before reporting a verdict. When the verification target includes a report spectrogram, the graduated levels include the fail-closed figure semantic verifier against its manifest and report. Missing exact 48 kHz full-band metadata, range-compatible claims, shared-scale evidence, or a hash-current visual review is a failed level. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 
@@ -101,6 +101,8 @@ Additional test-entry gates:
 2. Select the applicable graduated levels from `roles/modes/qa/test.md`:
    syntax, import, smoke, functional, integration, and behavioral runtime
    observation for user-facing surfaces.
+   If changed outputs include a spectrogram report, also run the fail-closed
+   figure semantic verifier against its manifest and report.
 3. Run each applicable level in order and stop on the first failure.
 4. Record commands, outputs or excerpts, skips, blockers, and the first
    actionable failure in `test_logs/`.

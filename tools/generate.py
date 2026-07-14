@@ -18,9 +18,11 @@ ROOT = Path(__file__).resolve().parents[1]
 GENERATORS = [
     ("manifest-and-catalogs", "tools/build-manifest.py"),
     ("claude-skill-metadata", "adapters/claude/bin/sync-native-metadata.py"),
+    ("claude-plugin", "adapters/claude/bin/sync-native-plugin.py"),
     ("codex-skills", "adapters/codex/bin/sync-native-skills.py"),
     ("codex-agents", "adapters/codex/bin/sync-native-agents.py"),
     ("codex-modes", "adapters/codex/bin/sync-native-modes.py"),
+    ("codex-plugin", "adapters/codex/bin/sync-native-plugin.py"),
     ("opencode-skills", "adapters/opencode/bin/sync-native-skills.py"),
     ("opencode-commands", "adapters/opencode/bin/sync-native-commands.py"),
     ("opencode-agents", "adapters/opencode/bin/sync-native-agents.py"),

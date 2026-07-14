@@ -10,6 +10,7 @@
 | Step 4.1: Draft Generation | 연구팀 | Strategy, Style Guide, analysis, discovered inputs | `draft/draft.md` | draft |
 | Step 5.5: Editorial Polish | 편집팀 mode B | Primary draft and optional mirror | Same files, polished in place | draft, sequential single writer |
 | Step 4b: Post-draft Factual Detector | Orchestrator | Primary draft and optional mirror | Decision Points row | inline micro-stage |
+| Step 4c: Report Figure Semantic Gate | Orchestrator/QA | Spectrogram report, JSON manifest, generated PNG | Fail-closed verifier result and visual-review evidence | inline micro-stage |
 
 Never let two stages mutate the same file concurrently. Step 4.1 writes `draft.md`; Step 5.5 may polish it later in sequence.
 
@@ -308,6 +309,23 @@ Run this inline at every intensity.
 5. Report counts in one line and recommend `/audit {artifact_short_name} --scope facts`. Explain that `--report-only` requests inspection without an automatic refinement chain.
 
 When every claim verifies, report the verified count and log the clean result.
+
+### Step 4c: Report figure semantic gate
+
+Run this inline whenever a draft embeds a generated spectrogram. Skip only
+when the draft contains no generated spectrogram.
+
+1. Require the versioned manifest defined by `core/CONVENTIONS.md §4.1`.
+2. Run `python3 <agent-home>/tools/figure-semantic-verify.py --manifest
+   <manifest.json> --report <draft-or-report.md>` or the adapter-native
+   `figure-gen --verify-report` wrapper.
+3. Treat exit 2 as QA failure and exit 64/66/69 as blocked/unavailable. Do not
+   finalize or publish when required metadata, exact 48 kHz 0–24 kHz range,
+   shared panel scales, registered range-compatible claims, or a hash-current
+   representative PNG review is absent.
+4. Record the command, exit status, manifest path, PNG hash, and visual-review
+   evidence. File existence, dimensions, count, and link checks do not satisfy
+   this gate.
 
 ### Step 5.5: Editorial polish
 

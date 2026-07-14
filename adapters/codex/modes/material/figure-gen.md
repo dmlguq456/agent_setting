@@ -16,9 +16,10 @@ inventory. It is adapter-owned output, not a legacy runtime mode copy.
 - Realization: `portable-with-tool-contract`
 - Tool Contract: `figure-gen`
 - Tool Contract Check: `adapters/codex/bin/preflight.sh figure-gen --check <script.py>`
+- Report Tool Contract Check: `adapters/codex/bin/preflight.sh figure-gen --verify-report <manifest.json> <report.md>`
 - Runtime Surface: `adapter-owned-figure-gen`
 - Fallback: `satisfy-tool-contract-or-report-unavailable`
-- Requirement: run the adapter-owned matplotlib figure script launcher for generated figure scripts, or report unavailable
+- Requirement: run the adapter-owned matplotlib figure script launcher and, for report spectrograms, its --verify-report semantic gate; otherwise report unavailable
 - Note: Codex may use the persona only after satisfying or explicitly downgrading the named tool contract.
 
 ## Use
@@ -63,6 +64,30 @@ Create reproducible matplotlib or seaborn figures for papers and presentations. 
 - Do not resample merely to make comparison panels uniform; sample rate is meaningful context.
 - Within one comparison group, share `vmin` and `vmax` across every spectrogram so intensity is comparable. Separate figures may use different ranges.
 - Use `mem profile 01_paper_figure_style` for panel and label preferences when that context is relevant; an explicit current-turn instruction overrides it.
+
+### Metric and Display Bands
+
+- Declare analysis and presentation ranges separately, for example
+  `METRIC_BAND_HZ = (20, 1000)` and `FIGURE_BAND_HZ = (0, 24000)` for a
+  48 kHz full-band report. A metric crop is never a plotting default.
+- Plot functions receive an explicit figure band. Changing a metric band must
+  not change the report figure band; preserve this with a regression test.
+- Every report spectrogram writes a semantic manifest entry containing
+  `sample_rate_hz`, `min_hz`, `max_hz`, `dynamic_range_db`,
+  `shared_scale_per_figure`, and `colormap`.
+- For the `spectrogram-report-48k-full-band` profile, run
+  `tools/figure-semantic-verify.py --manifest <manifest.json> --report
+  <report.md>`. It fails closed unless the metadata is exactly 48000 Hz,
+  0–24000 Hz, and shared scale is true, and unless band-sensitive report claims
+  have range-compatible evidence.
+- A high-frequency claim attaches its explicit Hz/kHz interval to the term in
+  report prose (for example, `high-frequency (8–24 kHz)`) and records the
+  identical interval in `claimed_band_hz`; the verifier parses and compares
+  them.
+- Visually inspect at least one representative PNG after generation. Record
+  whether the y-axis spans 0–24 kHz, ticks and labels are readable, a colorbar
+  is present, and comparison panels share a scale. File existence and pixel
+  dimensions are not visual evidence.
 
 ## Script Convention
 

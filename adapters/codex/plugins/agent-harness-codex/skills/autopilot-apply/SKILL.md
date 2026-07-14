@@ -27,7 +27,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 - Identifier: `autopilot-apply`
 - Supported modes: `none`
-- Argument shape: `\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]`
+- Argument shape: `"<cheatsheet hint / task>" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]`
 - Portable meaning: Apply a cheatsheet draft to the real source artifact and verify the result.
 
 ## Portable Contract

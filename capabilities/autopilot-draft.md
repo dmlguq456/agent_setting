@@ -31,6 +31,12 @@ Mode conventions live under `## Mode-Specific Conventions` (common plus paper,
 presentation, or doc). Presentation mode produces Markdown only; PPTX export is
 unsupported, so use PowerPoint directly.
 
+When a draft contains generated spectrograms, finalization requires the report
+figure evidence contract in `core/CONVENTIONS.md §4.1`: a semantic manifest,
+the fail-closed verifier result, claim-to-range evidence, and at least one
+recorded representative PNG review. A file/count/link-only check cannot satisfy
+this gate.
+
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 ## Artifact Ownership

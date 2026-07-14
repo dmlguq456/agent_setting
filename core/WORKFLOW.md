@@ -21,23 +21,37 @@ current state, or report status is orientation when it does not also ask for a
 new analysis or a modification. These examples describe intent; they are not a
 keyword classifier.
 
-Read-only orientation invokes no capability and writes no artifact:
+Read-only orientation invokes no capability and writes no artifact. Recover
+context in this order:
 
-1. Use the adapter status surface to determine tracked state and resolve the
-   artifact root. Prefer an existing `.agent_reports/`; when it is absent,
-   treat an existing legacy `.claude_reports/` as the same project-state
-   surface rather than as a lower-value input.
-2. Read existing state before a broad source census: relevant
-   `pipeline_summary.md` and `pipeline_state.yaml`, the current
-   `spec/prd.md`, `experiments/_RUNLOG.md`, and the recent
-   `summary.md`, `REPORT.md`, or `STORY.md` files that identify the
-   active work. Read only the subset needed to orient.
-3. Use memory recall after project artifacts when cross-session continuity
-   could materially help. Memory is a continuity and navigation layer: follow
-   relevant file or artifact pointers and cross-check their targets. Current
-   artifacts and live code override stale memory when they conflict.
-4. Inspect raw source and logs only when the existing state leaves a material
-   question unanswered.
+1. Choose one targeted memory query from the task and recall it before broad
+   discovery. This is an agent judgment for orientation, not a prompt-keyword
+   classifier. A shortened, ellipsized, or otherwise insufficient hit is only
+   an index: read the full body by record ID before using it as evidence.
+2. Use the adapter status surface to determine tracked state and resolve the
+   artifact root. Prefer an existing `.agent_reports/`; only when it is absent,
+   use an existing legacy `.claude_reports/` as the project-state surface.
+3. Read existing state before a broad source census: the newest relevant
+   `pipeline_summary.md`, `pipeline_state.yaml`, `summary.md`, `REPORT.md`, or
+   `STORY.md`; the latest experiment contract and `experiments/_RUNLOG.md`;
+   and the current `spec/prd.md` or task-specific specification. Read only the
+   subset needed to orient, and follow any relevant pointers from memory.
+4. Inspect primary code, data, and raw logs only when recovered contracts leave
+   a material question unanswered or must be checked against live behavior.
+
+Resolve conflicts with this evidence precedence:
+
+```text
+latest specification or user-confirmed decision
+  > durable project fact
+  > latest experiment contract
+  > legacy document
+```
+
+Live primary behavior is validation evidence, not permission to silently
+rewrite an explicit current contract. When a lower-priority source differs,
+report the drift and identify both sources; do not merge their meanings or
+quietly choose the legacy value.
 
 `analyze-project` becomes eligible only when no usable analysis exists,
 existing analysis is demonstrably stale for the requested downstream work, or

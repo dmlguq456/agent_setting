@@ -134,7 +134,9 @@ generated Python analysis scripts through `adapters/codex/tools/material/`.
 surface:
 `adapters/codex/bin/preflight.sh figure-gen --check <script.py>` verifies
 generated matplotlib/seaborn figure scripts through
-`adapters/codex/tools/material/`.
+`adapters/codex/tools/material/`. Report spectrograms additionally run
+`figure-gen --verify-report <manifest.json> <report.md>` and fail closed on
+metadata, scale, claim-evidence, or hash-bound visual-review drift.
 
 `roles/modes/material/pdf-extract.md` has a Codex-owned executable
 tool-contract surface:
