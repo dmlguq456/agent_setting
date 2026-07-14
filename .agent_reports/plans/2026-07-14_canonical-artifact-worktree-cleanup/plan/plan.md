@@ -1,6 +1,6 @@
 ---
 title: Canonical artifact root and guarded worktree cleanup
-status: in_progress
+status: completed
 intensity: strong
 spec: ../../../spec/stage-dispatch/prd.md
 ---
