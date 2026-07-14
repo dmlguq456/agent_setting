@@ -1,6 +1,7 @@
 project_name: harness-productization
 created: 2026-07-14
 updated: 2026-07-14
+spec_version: 2
 mode:
   - library
   - cli
@@ -13,17 +14,22 @@ inputs:
   - .agent_reports/spec/harness-layer-sync/prd.md
   - .agent_reports/spec/skill-design-refactor/prd.md
 phases:
-  phase_1_canonical_manifest_projections: pending
-  phase_2_progressive_profiles: blocked_by_phase_1
-  phase_3_external_skill_bridge: blocked_by_phase_2
+  phase_1_cross_runtime_source_activation: pending
+  phase_2_manifest_projections_profiles: blocked_by_phase_1
+  phase_3_local_first_optional_extensions: blocked_by_phase_2
 locked_decisions:
+  - phase_1_covers_codex_claude_and_opencode
+  - linked_is_the_maintainer_default
+  - plugins_are_optional_distribution_artifacts
+  - native_and_plugin_discovery_cannot_be_active_together
+  - core_activation_has_no_network_or_package_manager_dependency
   - kernel_guards_are_always_on
   - generated_projections_are_not_sources_of_truth
   - profiles_compose_packs_without_forking_capabilities
   - external_skills_never_auto_promote_to_core
   - phases_execute_in_order
 open_decisions:
-  - canonical_manifest_physical_format
+  - runtime_activation_cli_module_location
+  - packaged_bundle_format
   - new_install_default_profile
-  - first_external_format_adapter
 next_action: run_autopilot_code_for_phase_1
