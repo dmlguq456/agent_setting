@@ -163,7 +163,7 @@ check_opencode_forbidden_entries() {
 }
 
 check_required_projection_entries() {
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-hooks codex-config codex-agents; do
     if [ ! -L "codex_setting/$p" ]; then
       fail_msg "codex_setting/$p must be a symlink projection entry"
     fi
@@ -182,7 +182,6 @@ check_codex_projection_targets() {
   check_link_target codex_setting/scaffolds ../adapters/codex/scaffolds
   check_link_target codex_setting/codex-skills ../adapters/codex/skills
   check_link_target codex_setting/codex-modes ../adapters/codex/modes
-  check_link_target codex_setting/codex-plugin-marketplace ../adapters/codex/plugin-marketplace
   check_link_target codex_setting/codex-hooks ../adapters/codex/hooks
   check_link_target codex_setting/codex-config ../adapters/codex/config
   check_link_target codex_setting/codex-agents ../adapters/codex/agents
@@ -481,11 +480,11 @@ check_install_layout_codex_projection() {
 
   if is_mechanized_install_layout; then
     check_mechanized_install_projection codex \
-      "codex.symlink.agent-harness codex.symlink.AGENTS.md codex.symlink.agent-harness-readme.md codex.symlink.agent-core codex.symlink.agent-capabilities codex.symlink.agent-roles codex.symlink.agent-bin codex.symlink.agent-tools codex.symlink.agent-utilities codex.symlink.agent-scaffolds codex.symlink.agent-skills codex.symlink.agent-modes codex.symlink.agent-agents codex.symlink.agent-plugin-marketplace codex.symlink.agent-hooks codex.symlink.agent-config codex.symlink.hooks.json"
+      "codex.symlink.agent-harness codex.symlink.AGENTS.md codex.symlink.agent-harness-readme.md codex.symlink.agent-core codex.symlink.agent-capabilities codex.symlink.agent-roles codex.symlink.agent-bin codex.symlink.agent-tools codex.symlink.agent-utilities codex.symlink.agent-scaffolds codex.symlink.agent-skills codex.symlink.agent-modes codex.symlink.agent-agents codex.symlink.agent-hooks codex.symlink.agent-config codex.symlink.hooks.json"
     return
   fi
 
-  for p in AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents; do
+  for p in AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-hooks codex-config codex-agents; do
     if ! grep -Fq "\$AGENT_HOME/codex_setting/$p" INSTALL_LAYOUT.md; then
       fail_msg "INSTALL_LAYOUT.md must include Codex projection install step for codex_setting/$p"
     fi
@@ -750,7 +749,7 @@ check_codex_bin_wrappers() {
     fail_msg "codex_setting/bin points to $target; expected ../adapters/codex/bin"
   fi
 
-  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh dispatch-headless.py dispatch-liveness.py dispatch-harvest.py distill-worker.sh sync-native-skills.py sync-native-plugin.py sync-native-agents.py sync-native-modes.py; do
+  for p in preflight.sh role-map.sh capability-map.sh mode-map.sh dispatch-headless.py dispatch-liveness.py dispatch-harvest.py distill-worker.sh sync-native-skills.py sync-native-agents.py sync-native-modes.py; do
     if [ ! -x "adapters/codex/bin/$p" ]; then
       fail_msg "adapters/codex/bin/$p is missing or not executable"
     fi
@@ -960,10 +959,6 @@ check_codex_bin_wrappers() {
     fail_msg "Codex docs must keep /statusline native and reserve preflight.sh status for harness-specific signals"
   fi
 
-  if ! grep -Fq 'codex_setting/codex-plugin-marketplace' adapters/codex/AGENTS.md; then
-    fail_msg "adapters/codex/AGENTS.md must document the Codex native plugin projection"
-  fi
-
   if ! grep -Fq 'codex_setting/codex-modes' adapters/codex/AGENTS.md; then
     fail_msg "adapters/codex/AGENTS.md must document the Codex native mode projection"
   fi
@@ -1021,7 +1016,6 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'run_preflight("session-end"' adapters/codex/hooks/sessionend-lifecycle.py \
     || grep -Fq 'sys.stdout.write(result.stdout)' adapters/codex/hooks/sessionend-lifecycle.py \
     || ! grep -Fq 'run_preflight("mode"' adapters/codex/hooks/userprompt-lifecycle.py \
-    || ! grep -Fq 'run_preflight("recall"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'run_preflight("briefing"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'token_budget_context(current_cwd, sid)' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'record_accounting(sid, event, adapter="codex")' adapters/codex/hooks/userprompt-lifecycle.py \
@@ -1054,9 +1048,9 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'hookSpecificOutput.additionalContext' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex lifecycle hooks must prove silent defaults plus opt-in/non-default additionalContext paths in portable guards"
   fi
-  if ! grep -Fq 'def text_from_value' adapters/codex/hooks/userprompt-lifecycle.py \
-    || ! grep -Fq '"content", "messages", "input", "payload", "event", "data"' adapters/codex/hooks/userprompt-lifecycle.py; then
-    fail_msg "Codex UserPromptSubmit bridge must extract prompt text from nested runtime payloads"
+  if grep -Fq 'def text_from_value' adapters/codex/hooks/userprompt-lifecycle.py \
+    || grep -Fq 'def prompt_text' adapters/codex/hooks/userprompt-lifecycle.py; then
+    fail_msg "Codex UserPromptSubmit bridge must not extract prompt text for semantic recall classification"
   fi
   if [ ! -f tools/fleet/token_budget.py ] \
     || [ ! -f tools/fleet/token_accounting.py ] \
@@ -1087,7 +1081,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'routing_contract=core/WORKFLOW.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'routing_action=read-workflow-and-select-codex-skill' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'capability_entrypoints=codex-native-skills-plugin' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'capability_entrypoints=codex-native-skills' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'enforced_hooks=structured-write-guards,core-first-guard,posttool-read-markers,posttool-design-check,session-memory,turn-nudge' adapters/codex/bin/preflight.sh; then
     fail_msg "Codex UserPromptSubmit hook must expose a structured workflow/autopilot signal"
   fi
@@ -1220,7 +1214,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'source=loops/drill/README.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'auto_run=unsupported' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'related_capability=autopilot-note' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'native_capability_surface=codex-native-skill-plugin' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'native_capability_surface=codex-native-skills' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'scheduler_surface=external-worklog-board' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'fallback=worklog-board-or-manual-post-it-flow' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must expose Codex loop-info contracts without running loop scripts"
@@ -1233,10 +1227,10 @@ check_codex_bin_wrappers() {
   if grep -Fq 'Codex commands must be expressed as AGENTS instructions or wrapper commands' adapters/codex/ADAPTATION.md; then
     fail_msg "adapters/codex/ADAPTATION.md must describe command-like entries through native Skills/plugins, not stale wrapper-command wording"
   fi
-  if ! grep -Fq 'command-like harness entries use Codex-native Skills and the installable `agent-harness-codex` plugin' adapters/codex/ADAPTATION.md; then
-    fail_msg "adapters/codex/ADAPTATION.md must document native Skills/plugin realization for Claude command non-support"
+  if ! grep -Fq 'command-like harness entries use Codex-native Skills' adapters/codex/ADAPTATION.md; then
+    fail_msg "adapters/codex/ADAPTATION.md must document native Skills realization for Claude command non-support"
   fi
-  if ! grep -Fq '`codex-plugin-marketplace`, `codex-hooks`, selected tools' adapters/codex/ADAPTATION.md; then
+  if ! grep -Fq '`codex-agents`, `codex-hooks`, selected tools' adapters/codex/ADAPTATION.md; then
     fail_msg "adapters/codex/ADAPTATION.md current projection boundary must include codex-hooks"
   fi
   if ! grep -Fq 'not a hook listing or' adapters/codex/ADAPTATION.md \
@@ -1442,7 +1436,7 @@ check_codex_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -1513,9 +1507,9 @@ check_codex_native_skill_projection() {
     return
   fi
 
-  if ! adapters/codex/bin/sync-native-skills.py --check >/tmp/codex-sync-skills.out 2>/tmp/codex-sync-skills.err; then
+  if ! adapters/codex/bin/sync-native-skills.py --check >/tmp/codex-native-skills.out 2>/tmp/codex-native-skills.err; then
     fail_msg "Codex native skill projections are stale; run adapters/codex/bin/sync-native-skills.py"
-    cat /tmp/codex-sync-skills.err
+    cat /tmp/codex-native-skills.err
   fi
 
   for f in capabilities/*.md; do
@@ -1579,7 +1573,7 @@ check_codex_native_skill_projection() {
     fi
   done
 
-  bad=$(rg -n 'adapters/claude|claude_setting|claude_realization|statusline\.sh|settings\.json|CLAUDE\.md|(^|[^[:alnum:]_/.-])skills/' adapters/codex/skills adapters/codex/plugins/agent-harness-codex/skills adapters/codex/bin/capability-map.sh 2>/dev/null || true)
+  bad=$(rg -n 'adapters/claude|claude_setting|claude_realization|statusline\.sh|settings\.json|CLAUDE\.md|(^|[^[:alnum:]_/.-])skills/' adapters/codex/skills adapters/codex/bin/capability-map.sh 2>/dev/null || true)
   if [ -n "$bad" ]; then
     fail_msg "Codex native capability surfaces must not expose Claude-native surfaces:"
     printf '%s\n' "$bad"
@@ -2486,7 +2480,7 @@ check_opencode_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material"
-  TOOL_DEFERRED="build-manifest.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh design-mcp skill-conformance web-bundle fleet profile install"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2512,9 +2506,9 @@ check_opencode_native_skill_projection() {
     return
   fi
 
-  if ! adapters/opencode/bin/sync-native-skills.py --check >/tmp/opencode-sync-skills.out 2>/tmp/opencode-sync-skills.err; then
+  if ! adapters/opencode/bin/sync-native-skills.py --check >/tmp/opencode-native-skills.out 2>/tmp/opencode-native-skills.err; then
     fail_msg "OpenCode native skill projections are stale; run adapters/opencode/bin/sync-native-skills.py"
-    cat /tmp/opencode-sync-skills.err
+    cat /tmp/opencode-native-skills.err
   fi
 
   for f in capabilities/*.md; do
@@ -2734,9 +2728,9 @@ check_opencode_native_plugin_projection() {
   if ! grep -Fq '"tool.execute.after"' "$plugin"; then
     fail_msg "$plugin must use OpenCode tool.execute.after hook for design checks"
   fi
-  if ! grep -Fq '"chat.message"' "$plugin" \
-    || ! grep -Fq '"experimental.chat.system.transform"' "$plugin"; then
-    fail_msg "$plugin must use OpenCode prompt lifecycle plugin hooks"
+  if ! grep -Fq '"experimental.chat.system.transform"' "$plugin" \
+    || grep -Fq '"chat.message"' "$plugin"; then
+    fail_msg "$plugin must use the OpenCode system transform without capturing prompt text for semantic recall"
   fi
   if ! grep -Fq 'adapters", "opencode", "bin", "preflight.sh' "$plugin"; then
     fail_msg "$plugin must bridge to the OpenCode preflight wrapper"
@@ -2750,7 +2744,7 @@ check_opencode_native_plugin_projection() {
     || grep -Fq 'AGENT_HOME: process.env.AGENT_HOME || root' "$plugin"; then
     fail_msg "$plugin must validate AGENT_HOME and pass the selected harness root to preflight"
   fi
-  for p in 'collectPreflight("start"' 'collectPreflight("memory"' 'collectPreflight("mode"' 'collectPreflight("recall"' 'collectPreflight("briefing"'; do
+  for p in 'collectPreflight("start"' 'collectPreflight("memory"' 'collectPreflight("mode"' 'collectPreflight("briefing"'; do
     if ! grep -Fq "$p" "$plugin"; then
       fail_msg "$plugin must bridge OpenCode lifecycle context through $p"
     fi
@@ -2792,9 +2786,9 @@ check_claude_skill_projection() {
     fi
   done
 
-  diff_out=$(diff -qr --exclude=.sync_state.json skills adapters/claude/skills 2>/dev/null || true)
+  diff_out=$(diff -qr skills adapters/claude/skills 2>/dev/null || true)
   if [ -n "$diff_out" ]; then
-    fail_msg "skills/ compatibility refs must stay byte-equivalent to adapters/claude/skills/ except .sync_state.json:"
+    fail_msg "skills/ compatibility refs must stay byte-equivalent to adapters/claude/skills/:"
     printf '%s\n' "$diff_out"
   fi
 }
@@ -2995,6 +2989,12 @@ check_claude_tool_projection() {
   for p in $(find tools -mindepth 1 ! -path '*/__pycache__' ! -path '*/__pycache__/*' -print); do
     rel=${p#tools/}
     adapter_p=adapters/claude/tools/$rel
+    case "$rel" in
+      generate.py|harness_manifest.py|generated-projections.test.sh|install/profile-activation.test.sh)
+        # Harness-development/profile acceptance tools are intentionally not runtime projections.
+        continue
+        ;;
+    esac
     if is_census_deferred "$adapter_p"; then
       # 동시 세션 소유 subtree: 기존 concrete 계약만 확인 (collapse 강제하지 않음)
       if [ -d "$p" ]; then
@@ -3171,11 +3171,7 @@ check_adaptation_inventory_native_surfaces() {
   if ! grep -Fq 'Codex command-like surface' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'OpenCode native command surface' core/ADAPTATION_INVENTORY.md \
     || ! grep -Fq 'Claude slash commands' core/ADAPTATION_INVENTORY.md; then
-    fail_msg "core/ADAPTATION_INVENTORY.md must distinguish Claude slash commands, Codex command-like Skills/plugins, and OpenCode commands"
-  fi
-  if grep -Fq 'adapters/codex/.agents/plugins/marketplace.json' core/ADAPTATION_INVENTORY.md \
-    || ! grep -Fq 'adapters/codex/plugin-marketplace/.agents/plugins/marketplace.json' core/ADAPTATION_INVENTORY.md; then
-    fail_msg "core/ADAPTATION_INVENTORY.md must point Codex plugin marketplace inventory at adapters/codex/plugin-marketplace, not obsolete adapters/codex/.agents"
+    fail_msg "core/ADAPTATION_INVENTORY.md must distinguish Claude slash commands, Codex command-like Skills, and OpenCode commands"
   fi
   if ! grep -Fq '"claude.compile-smoke"' tools/install/drivers/claude.py \
     || ! grep -Fq "compile(open(f,encoding='utf-8').read(), f, 'exec')" tools/install/drivers/claude.py; then
@@ -3283,7 +3279,7 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'OpenCode exits 69 until `OPENCODE_DISTILL_ENABLE=1`' core/ADAPTATION_INVENTORY.md; then
     fail_msg "core/ADAPTATION_INVENTORY.md must describe adapter distill-propose tool-contract boundaries"
   fi
-  if ! grep -Fq 'adapter-owned SessionEnd/UserPromptSubmit realization 은 기본 ON 으로 승격할 수 있으며 명시적 opt-out env 를 제공해야 한다' core/MEMORY.md \
+  if ! grep -Fq 'SessionEnd and turn-counter triggers may launch a no-tools distiller agent' core/MEMORY.md \
     || ! grep -Fq 'Codex adapter-owned `session-end` and' core/HOOKS.md \
     || ! grep -Fq 'read-only `codex exec` tool-free proof' core/HOOKS.md \
     || ! grep -Fq 'verified automatic distill worker' adapters/codex/ADAPTATION.md \
@@ -3310,11 +3306,11 @@ check_projection_summary_docs() {
   if grep -Fq 'Codex does not currently consume the full harness natively' README.md INSTALL_LAYOUT.md 2>/dev/null; then
     fail_msg "Codex install docs must describe selected native projections instead of implying instruction-only support"
   fi
-  if ! grep -Fq 'native skills/plugin/agents/hooks' README.md \
-    || ! grep -Fq 'native skills/commands/agents/plugin' README.md; then
+  if ! grep -Fq '| Codex | skills, custom agents, modes, hooks |' README.md \
+    || ! grep -Fq '| OpenCode | skills, agents, commands, local guard plugin |' README.md; then
     fail_msg "README.md must summarize Codex and OpenCode native projection surfaces"
   fi
-  if ! grep -Fq 'Codex-native Skills, custom Agents, plugin' INSTALL_LAYOUT.md \
+  if ! grep -Fq 'Codex-native Skills, custom Agents, mode' INSTALL_LAYOUT.md \
     || ! grep -Fq 'hook bridges' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must summarize Codex native projection install surfaces"
   fi
@@ -3333,10 +3329,6 @@ check_capability_catalog() {
     if ! grep -Fq "| \`$slug\` |" capabilities/README.md; then
       fail_msg "capabilities/README.md is missing skill capability: $slug"
     fi
-    if ! grep -Fq "adapters/codex/skills/$slug/SKILL.md" capabilities/README.md \
-      || ! grep -Fq "adapters/codex/plugins/agent-harness-codex/skills/$slug/SKILL.md" capabilities/README.md; then
-      fail_msg "capabilities/README.md must document Codex native projections for $slug"
-    fi
     if ! grep -Fq "adapters/opencode/skills/$slug/SKILL.md" capabilities/README.md \
       || ! grep -Fq "adapters/opencode/commands/$slug.md" capabilities/README.md; then
       fail_msg "capabilities/README.md must document OpenCode native projections for $slug"
@@ -3348,9 +3340,8 @@ check_capability_catalog() {
     if ! grep -Fq "| Codex | Read this spec and run \`adapters/codex/bin/preflight.sh capability-info $slug\`" "capabilities/$slug.md"; then
       fail_msg "capabilities/$slug.md must document Codex capability-info realization"
     fi
-    if ! grep -Fq "adapters/codex/skills/$slug/SKILL.md" "capabilities/$slug.md" \
-      || ! grep -Fq "adapters/codex/plugins/agent-harness-codex/skills/$slug/SKILL.md" "capabilities/$slug.md"; then
-      fail_msg "capabilities/$slug.md must document Codex native Skill and plugin projections"
+    if ! grep -Fq "adapters/codex/skills/$slug/SKILL.md" "capabilities/$slug.md"; then
+      fail_msg "capabilities/$slug.md must document the Codex native Skill projection"
     fi
     if ! grep -Fq "| OpenCode | Read this spec and run \`adapters/opencode/bin/preflight.sh capability-info $slug\`" "capabilities/$slug.md"; then
       fail_msg "capabilities/$slug.md must document OpenCode capability-info realization"
@@ -3721,6 +3712,77 @@ adapters/opencode/AGENTS.md|24576|현재 ~11.8KB; always-load instructions footp
 BYTE_BUDGET_EOF
 }
 
+check_language_neutrality_contract() {
+  if ! grep -Fq '**Audience-language first**' roles/response-policy.md \
+    || ! grep -Fq "default to the language the user is currently using to communicate" roles/response-policy.md; then
+    fail_msg "roles/response-policy.md must define the audience-language-first artifact contract"
+  fi
+  if ! grep -Fq '## 최우선 원칙 — 청중의 언어' adapters/claude/agents/editorial-team.md \
+    || ! grep -Fq '별도의 고정 locale·어미를 강제하지 않는다' adapters/claude/agents/editorial-team.md; then
+    fail_msg "the editorial router must apply the audience-language contract before language-specific style rules"
+  fi
+
+  for bootstrap in adapters/claude/CLAUDE.md adapters/codex/AGENTS.md adapters/opencode/AGENTS.md; do
+    if grep -Fq 'Answer the user in Korean' "$bootstrap"; then
+      fail_msg "$bootstrap must not impose a fixed response locale"
+    fi
+    if ! grep -Eiq 'Audience-language first|청중 언어 우선' "$bootstrap"; then
+      fail_msg "$bootstrap must realize the portable audience-language-first artifact contract"
+    fi
+  done
+
+  if rg -n 'Write in Korean|Korean (plan|version|본문)|한국어 (설명|보고서|변경·산출 요약|변경 요약|요약)|한국어로' \
+    roles/modes adapters/claude/agent-modes >/dev/null 2>&1; then
+    fail_msg "portable and Claude mode contracts must not impose Korean as a fixed output language"
+  fi
+
+  if rg -n -i 'All user-facing output.*Korean|When explaining something to the user.*Korean|Print the error message in Korean|One-line chat alert.*Korean|Return ONLY.*Korean summary|한국어 요약|사용자-facing 출력은 자연스러운 한국어' \
+    skills adapters/claude/skills >/dev/null 2>&1; then
+    fail_msg "skill contracts must not impose Korean as a fixed user-facing or summary locale"
+  fi
+
+  if rg -n -i 'All user-facing output.*Korean|structured Korean (feedback|output)|결과 한국어 재정리' \
+    adapters/claude/agents >/dev/null 2>&1; then
+    fail_msg "Claude agent routers must not impose Korean as a fixed user-facing locale"
+  fi
+
+  if grep -Fq 'concise Korean report' adapters/claude/bin/dispatch-headless.py \
+    || grep -Fq 'concise Korean report' adapters/codex/bin/dispatch-headless.py; then
+    fail_msg "headless worker prompts must not impose a fixed report locale"
+  fi
+
+  if grep -Fq 'def auto_recall' tools/memory/mem.py \
+    || grep -Fq '"--auto"' tools/memory/mem.py \
+    || grep -Fq 'mem-recall-inject.sh' adapters/claude/settings.json \
+    || grep -Fq 'run_preflight("recall"' adapters/codex/hooks/userprompt-lifecycle.py \
+    || grep -Fq 'collectPreflight("recall"' adapters/opencode/plugins/agent-harness-guards.js; then
+    fail_msg "active runtimes must leave semantic memory recall to the agent"
+  fi
+
+  if ! grep -Fq 'The agent decides contextually what is worth storing, retrieving, promoting, merging, or pruning.' core/MEMORY.md \
+    || ! grep -Fq 'Memory application (D-40)' core/DESIGN_PRINCIPLES.md \
+    || ! grep -Fq 'tools/memory/recall.sh' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'tools/memory/recall.sh' adapters/opencode/bin/preflight.sh; then
+    fail_msg "memory semantics must be agent-owned while adapters retain explicit retrieval helpers"
+  fi
+
+  promotion_body="$(sed -n '/^def promote_candidates()/,/^# ---------- projection ----------/p' tools/memory/mem.py)"
+  if printf '%s\n' "$promotion_body" | grep -Fq "type IN" \
+    || ! printf '%s\n' "$promotion_body" | grep -Fq 'and strength are metadata, not semantic gates'; then
+    fail_msg "institutionalization review must expose durable evidence without a fixed semantic type gate"
+  fi
+
+  for distiller in hooks/mem-distill-dispatch.sh \
+    adapters/claude/hooks/mem-distill-dispatch.sh \
+    adapters/codex/bin/distill-worker.sh \
+    adapters/opencode/bin/distill-worker.sh; do
+    if ! grep -Fq 'fixed categories, keywords, scores, or' "$distiller" \
+      || ! grep -Fq 'Type is a descriptive label, not a semantic gate.' "$distiller"; then
+      fail_msg "$distiller must leave semantic store/curation choices to the distiller agent"
+    fi
+  done
+}
+
 check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_projection_symlinks opencode_setting
@@ -3731,7 +3793,6 @@ check_codex_forbidden_entries
 check_codex_native_surface_debt
 check_required_projection_entries
 check_codex_projection_targets
-check_codex_plugin_marketplace_projection_boundary
 check_opencode_forbidden_entries
 check_opencode_required_projection_entries
 check_opencode_projection_targets
@@ -3746,7 +3807,6 @@ check_opencode_bin_wrappers
 check_codex_tool_projection
 check_codex_scaffold_projection
 check_codex_native_skill_projection
-check_codex_native_plugin_projection
 check_codex_native_agent_projection
 check_codex_model_pin_role_map_consistency
 check_codex_native_mode_projection
@@ -3784,6 +3844,7 @@ check_opencode_mode_map
 check_hook_catalog
 check_parity_loss_explicit_warnings
 check_bootstrap_byte_budget
+check_language_neutrality_contract
 check_legacy_root_links
 warn_concrete_runtime_terms
 

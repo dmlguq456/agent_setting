@@ -1,5 +1,11 @@
 # harness-installer — pipeline summary
 
+## v3 (2026-07-13) — 공개 README 표면 + sync-skills 퇴역
+
+- snapshot: `_internal/versions/v2/prd.md`. 사용자 결정: root README를 plugin/product landing page로 전면 개편하고, false-green prose hash 동기화인 `sync-skills` capability를 퇴역한다.
+- 공개 문서 계약: 가치 제안 → 설치 → 바로 쓰기 → 핵심 기능 → 런타임별 배포 차이 → 구조 → deep docs/검증. 제품 전체는 portable harness이며, Claude/Codex native plugin과 OpenCode installer projection의 차이를 숨기지 않는다.
+- 검증 소유권: manifest·native projection·adaptation boundary·skill conformance·installer verify는 결정론 도구가 유지한다. README prose는 human-owned review 대상이다. 근거는 `_internal/readme-reference-brief.md`.
+
 ## v2 (2026-07-13) — spec update (구현 사이클 1·2 반영)
 
 - snapshot: `_internal/versions/v1/prd.md`. 변경: INST-OPEN-1 확정(hook 채택 2·이월 3·제외 기록), INST-OPEN-3 완료(INSTALL_LAYOUT 514→250줄), INST-OPEN-4 만 잔존(drift-watch 상시 감시로 강등), [cli] verify 절에 채널-인지 계약 추가(실측 오탐 → quick fix 사이클 `harness-installer-fix-verify-gate` 와 동기).

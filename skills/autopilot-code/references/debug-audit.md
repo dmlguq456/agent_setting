@@ -10,7 +10,7 @@ Do NOT delegate this step. You (the main Claude) perform the diagnosis directly.
    - Environment (missing files, wrong config state, missing dependencies)
    - Data (corrupted checkpoint, wrong format, missing keys)
    - Interaction (code is correct individually but breaks when combined)
-4. **Report diagnosis to user** in Korean:
+4. **Report the diagnosis** in the user's communication language:
    ```
    ## 진단 결과
    - **에러**: {error type and message}

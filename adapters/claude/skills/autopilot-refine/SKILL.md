@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-refine
-description: "Use when correcting or updating an existing document or research artifact. 기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존"
+description: "Use when invoking the portable autopilot-refine capability. Correct and update existing document/research artifacts while preserving snapshots and change history."
 argument-hint: "\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
 metadata:
   group: entry
   fam: doc
   modes: []
-  blurb: "기존 문서·연구 산출물의 정정·갱신 entry — 버전 snapshot 보존"
+  blurb: "Correct and update existing document/research artifacts while preserving snapshots and change history."
 ---
 
 > **산출물 폴더 컨벤션**: [CONVENTIONS.md §5](../../core/CONVENTIONS.md#5-skill-output-convention-3-tier-t1t2t3) (3-tier). 버전 스냅샷은 `_internal/versions/v{N}/` (modern, research·doc 공통) 또는 `_v{N}.md` 형제 (legacy doc). 자동 감지.
@@ -96,7 +97,10 @@ Pre-apply review 만 — post-apply review 는 본 skill 범위 아님 (`/draft-
 
 ## Language Rule
 
-All user-facing output (chat diffs, pipeline_summary entries, reports) in natural **Korean** (no translationese — write Korean natively, don't translate from an English draft).
+User-facing artifacts such as pipeline summaries and reports follow the
+audience-language-first rule in `<agent-home>/roles/response-policy.md`. The
+target artifact's existing or explicitly requested language takes precedence;
+this skill imposes no fixed chat locale.
 
 > `<artifact-root>` 해석·치환(`.agent_reports` 우선, legacy `.claude_reports` fallback): [CONVENTIONS §5.1](../../core/CONVENTIONS.md#51-workspace-assumption-전제).
 

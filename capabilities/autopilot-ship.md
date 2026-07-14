@@ -3,18 +3,26 @@
 This is the portable capability contract for `autopilot-ship`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
 | Identifier | `autopilot-ship` |
 | Group | `entry` |
 | Supported modes | `none` |
-| Portable meaning | 앱 배포·출시 준비. build/deploy setup과 ship checklist를 만든다. |
-| Argument shape | `<task description (선택)> [--intensity direct|quick|standard|strong|thorough|adversarial]` |
+| Portable meaning | Prepare application deployment/release setup and a ship checklist. |
+| Argument shape | `<task description (optional)> [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial]` |
 
 ## Invocation Semantics
 
-_앱 배포 셋업_ entry — 이미 `spec/` 가 잡혀 있고 기능 어느 정도 완성된 자리에서 첫 ship setup·env·domain·migration deploy 안내. 호스팅 선정 (Vercel / Fly / Railway / Cloudflare / EAS) + CI/CD 파일 + `.env.example` + 도메인 가이드 + deploy_record. 실제 배포 명령은 사용자 직접 실행 — 본 skill 은 _안내만_. autopilot-spec 의 _초기 spec·skeleton_ 자리와 작업 본질 분리. 재호출 가능 (env 변경·domain 추가·migration 운영 배포 자리).
+Application deployment-setup entrypoint for projects with an existing `spec/`
+and substantially complete functionality. Guide the first ship setup,
+environment, domain, and migration deployment; select hosting (Vercel, Fly,
+Railway, Cloudflare, or EAS); create CI/CD files, `.env.example`, domain guidance,
+and a deployment record. The user runs real deployment commands; this skill
+provides guidance only. Keep it distinct from autopilot-spec's initial
+spec/skeleton work. It may be rerun for environment changes, added domains, or
+production migration deployment.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
@@ -43,7 +51,7 @@ Adapters must preserve the portable invariants relevant to this capability:
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/autopilot-ship/SKILL.md` and `skills/autopilot-ship/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-ship/SKILL.md`, while `skills/autopilot-ship/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-ship`. Use `adapters/codex/skills/autopilot-ship/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/autopilot-ship/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/autopilot-ship/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-ship`. Use `adapters/codex/skills/autopilot-ship/SKILL.md` as the native Codex Skill projection; do not consume `skills/autopilot-ship/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info autopilot-ship`. Use `adapters/opencode/skills/autopilot-ship/SKILL.md` and `adapters/opencode/commands/autopilot-ship.md` as native OpenCode projections; do not consume `skills/autopilot-ship/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

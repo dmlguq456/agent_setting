@@ -1,12 +1,12 @@
 ---
 name: analyze-project
-description: "Use when analyzing existing code/papers/docs as structured input for downstream work. 사전조사 분석 — 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로"
+description: "Use when analyzing existing code, papers, or documents into structured downstream input."
 argument-hint: "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]"
 metadata:
   group: pre
   fam: pre
   modes: [code, paper, doc]
-  blurb: "사전조사 분석 — 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로"
+  blurb: "Structure primary code, paper, and document sources for downstream work."
 ---
 
 # analyze-project
@@ -21,8 +21,10 @@ metadata:
 > `<artifact-root>` 해석·치환(`.agent_reports` 우선, legacy `.claude_reports` fallback): [CONVENTIONS §5.1](../../core/CONVENTIONS.md#51-workspace-assumption-전제).
 
 ## Language Rule
-- Write documentation files in English (code/paper modes) or Korean+English mixed (doc mode).
-- When explaining something to the user, write in natural Korean (no translationese).
+- Write canonical technical analysis in English for code/paper modes. In doc
+  mode, follow the explicit target audience or artifact language; absent one,
+  use the audience-language-first artifact rule from
+  `<agent-home>/roles/response-policy.md`.
 
 ## Argument Parsing
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-# PostToolUse(Read): core/*.md를 실제로 Read하면 세션 마커를 남긴다.
+# PostToolUse(Read): write a session marker after core/*.md is actually read.
 # Portable CLI: core-read-marker.sh --file <core-doc.md> [--session <id>] [--agent-home <dir>]
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

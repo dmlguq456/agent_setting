@@ -66,7 +66,7 @@ alive_n=$(printf '%s\n' "$live" | grep -c 'ALIVE')
 # (3) dispatch-wait 다중-자식: 실행 중 → 자식 3개 보고, exit 2(재호출).
 wout=$(AGENT_HOME="$AH" CLAUDE_CONFIG_DIR="$RT" DISPATCH_RUNTIME_ROOT="$RT" \
   sh "$WAIT" --parent "$PARENT" --jobs "$jobs" --interval 1 --max 2 2>&1 || true)
-echo "$wout" | grep -Eq '자식 3개' && ok "(3a) dispatch-wait reports 3 children (다중-자식 대기 의미론)" \
+echo "$wout" | grep -Eq '3 children' && ok "(3a) dispatch-wait reports 3 children (다중-자식 대기 의미론)" \
   || bad "(3a) wait did not report 3 children. wout=[$wout]"
 
 # 워커 종료 대기 후 (3b) exit 0.
@@ -77,7 +77,7 @@ sleep $((SLEEP + 2))
 # 수동 마감해 dispatch-wait exit 0 경로를 확인.
 awk -F'\t' -v p="parent=$PARENT" 'BEGIN{OFS="\t"} $2=="open" && $6 ~ p {$2="done"} {print}' "$jobs" > "$jobs.tmp" && mv "$jobs.tmp" "$jobs"
 wout2=$(AGENT_HOME="$AH" sh "$WAIT" --parent "$PARENT" --jobs "$jobs" --max 2 2>&1 || true)
-echo "$wout2" | grep -q '수확 가능 (exit 0)' && ok "(3b) all children done → dispatch-wait exit 0 (수확)" \
+echo "$wout2" | grep -q 'ready to harvest (exit 0)' && ok "(3b) all children done → dispatch-wait exit 0 (수확)" \
   || bad "(3b) wait did not report harvest-ready. wout2=[$wout2]"
 
 # (4) Σ 상한: wrapper 가 5대 분사도 막지 않음(강제는 orchestrator 큐잉). 계약대로 실측 기록.

@@ -3,14 +3,15 @@
 This is the portable capability contract for `code-test`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
 | Identifier | `code-test` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 구현 결과를 단계별로 검증하고 evidence를 기록한다. |
-| Argument shape | `<plan name, path, or test scope> [--intensity direct|quick|standard|strong|thorough|adversarial]` |
+| Portable meaning | Verify implementation results in stages and record evidence. |
+| Argument shape | `<plan name, path, or test scope> [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial]` |
 
 ## Invocation Semantics
 
@@ -114,7 +115,7 @@ they must mark the executable tool contract as unsupported or unavailable.
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/code-test/SKILL.md` and `skills/code-test/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/code-test/SKILL.md`, while `skills/code-test/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info code-test`. Use `adapters/codex/skills/code-test/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/code-test/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/code-test/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info code-test`. Use `adapters/codex/skills/code-test/SKILL.md` as the native Codex Skill projection; do not consume `skills/code-test/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info code-test`. Use `adapters/opencode/skills/code-test/SKILL.md` and `adapters/opencode/commands/code-test.md` as native OpenCode projections; do not consume `skills/code-test/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

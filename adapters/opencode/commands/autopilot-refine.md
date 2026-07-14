@@ -1,5 +1,5 @@
 ---
-description: "Run the portable autopilot-refine capability through the OpenCode adapter. Meaning: 기존 문서·연구 산출물의 정정·갱신. 버전 snapshot과 변경 이력을 보존한다."
+description: "Run the portable autopilot-refine capability through the OpenCode adapter. Meaning: Correct and update existing document/research artifacts while preserving snapshots and change history."
 ---
 
 Use the OpenCode adapter realization of portable capability `autopilot-refine`.
@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-refine.md`, 
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability autopilot-refine [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only|--memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]`.
+   `"<prompt>" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]`.
 
 Portable contract excerpt:
 

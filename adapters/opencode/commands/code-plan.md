@@ -1,5 +1,5 @@
 ---
-description: "Run the portable code-plan capability through the OpenCode adapter. Meaning: 코드 분석 후 상세 구현 plan을 작성하고 선택된 intensity에서 파생된 rigor에 맞는 plan-check gate를 수행한다."
+description: "Run the portable code-plan capability through the OpenCode adapter. Meaning: Analyze code, write a detailed implementation plan, and run the plan-check gate at the rigor derived from intensity."
 ---
 
 Use the OpenCode adapter realization of portable capability `code-plan`.

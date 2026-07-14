@@ -68,7 +68,7 @@ Hard Constraints (must NOT be changed):
 For each major component, verify alignment and document discrepancies or code-only features.
 
 Write in English. Code identifiers stay as-is.
-Return ONLY the list of created/updated file paths and a brief Korean summary.
+Return ONLY the list of created/updated file paths and a brief summary.
 ```
 
 ## Post-Analysis

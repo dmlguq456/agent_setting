@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: "Use for design-review: 디자인 결과물을 품질·토큰 계약·breakage 관점으로 점검한다."
+description: "Use for design-review: Review design output for quality, token-contract compliance, and breakage."
 ---
 
 # design-review
@@ -28,11 +28,11 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Identifier: `design-review`
 - Supported modes: `none`
 - Argument shape: `<design path or app path>`
-- Portable meaning: 디자인 결과물을 품질·토큰 계약·breakage 관점으로 점검한다.
+- Portable meaning: Review design output for quality, token-contract compliance, and breakage.
 
 ## Portable Contract
 
-- Invocation semantics: Visual review — two gates. (1) verifier (디자인팀 verifier mode, separate context, adapter visual harness) screens for breakage — console errors, layout collapse, intent mismatch — and must pass before critique. (2) critic (디자인팀 critic mode) gives a 6-axis quality critique (hierarchy, alignment, accessibility, responsiveness, UX flow, tone). Both render through the adapter-provided visual harness and inspect the image. Read-only — no auto-fix. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: Visual review with two gates. First, a verifier in a separate context uses the adapter visual harness to screen for console errors, layout collapse, and intent mismatch; it must pass before critique. Second, a critic evaluates hierarchy, alignment, accessibility, responsiveness, UX flow, and tone. Both gates render through the adapter-provided visual harness and inspect the image. Read only; never auto-fix. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 

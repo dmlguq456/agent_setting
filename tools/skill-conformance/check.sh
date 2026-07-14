@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Deterministic skill-design conformance gate.
 # Combines scan.sh observations with the explicit invocation classification
-# registry so g7/sync-skills cannot silently accept a forbidden frontmatter flip.
+# registry so deterministic checks and drill g7 cannot silently accept a forbidden frontmatter flip.
 set -uo pipefail
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
+ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
+if [ -z "$ROOT" ]; then
+  ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
+fi
 SCAN="$SCRIPT_DIR/scan.sh"
 DEFAULT_POLICY="$SCRIPT_DIR/invocation-policy.tsv"
 POLICY="${SKILL_INVOCATION_POLICY:-$DEFAULT_POLICY}"
@@ -118,9 +121,19 @@ for skills_dir in "$@"; do
       fail=1
     fi
   done < <(printf '%s\n' "$body" | awk -F'\t' '$4=="true"{print $1}')
+
+  # User-facing language follows the portable audience-language contract.
+  # Reject fixed Korean-output directives while allowing conditional Korean
+  # mirrors, examples, tokenization fixtures, and existing schema literals.
+  fixed_language_re='Korean output|output in Korean|in Korean:[[:space:]]*$|Print to user \(Korean\)|print to chat \(Korean\)|Korean summary|Korean brief|보고는 한국어로|사용자 대화는 한국어|사용자 출력은 자연스러운 한국어'
+  while IFS= read -r hit; do
+    [ -z "$hit" ] && continue
+    echo "FAIL: fixed user-facing language directive: $hit"
+    fail=1
+  done < <(grep -RInE --include='*.md' "$fixed_language_re" "$skills_dir" 2>/dev/null || true)
 done
 
 if [ "$fail" -eq 0 ]; then
-  echo "PASS: skill conformance (structure + invocation policy ${#policy_names[@]} classifications)"
+  echo "PASS: skill conformance (structure + invocation policy ${#policy_names[@]} classifications + audience-language neutrality)"
 fi
 exit "$fail"

@@ -1,8 +1,8 @@
 #!/bin/sh
-# PostToolUse(Read): prd.md를 실제로 Read하면 세션 마커를 떨군다.
+# PostToolUse(Read): write a session marker after prd.md is actually read.
 # Portable CLI: spec-read-marker.sh --file <prd.md> [--session <id>] [--agent-home <dir>]
-# 이 마커가 spec-skill-gate.sh의 통과 증거(= '인용'이 아닌 '실제 Read').
-# 마커 내용 = prd.md mtime(Read 시점) → 이후 drift 비교용. POSIX sh, no jq.
+# spec-skill-gate.sh uses the marker as evidence of a real read, not a quotation.
+# The marker stores prd.md mtime at read time for later drift comparison. POSIX sh, no jq.
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/../utilities/agent-home.sh")}"

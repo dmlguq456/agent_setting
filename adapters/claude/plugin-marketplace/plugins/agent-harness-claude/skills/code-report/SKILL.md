@@ -1,19 +1,21 @@
 ---
 name: code-report
-description: "코드 작업 사이클 결과 요약·보고 sub-skill"
+description: "Assemble code-work cycle results into a user-facing report."
 argument-hint: "<plan name or path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "코드 작업 사이클 결과 요약·보고 sub-skill"
+  blurb: "Report the results of a completed code-work cycle."
 ---
 
 > **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Inputs = plan·checklist·dev_logs·test_logs·`_internal/*_reviews/`·`pipeline_summary.md` (files) — a dispatched session does **not** carry in-session orchestration memory, so it reconciles against those artifacts (see step 2 below). Write class = `final_report.md`·`analysis_project/code/*.md`·`pipeline_summary.md` (via §5.8 lock). 품질관리팀 delegation stays **inside** this session.
 
 > **Plan Resolution**: `$ARG`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다.
 
-> **Language Rule**: 사용자-facing 출력은 자연스러운 한국어. 단일 SoT = [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
+> **Language Rule**: user-facing artifacts follow the audience and artifact
+> language contract in
+> [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
 
 ## Model & QA Policy
 
@@ -89,7 +91,7 @@ Follow these instructions:
 - Do NOT just summarize — extract insights. Focus on "why" and "what to remember".
 - Be specific about impact — mention exact callers, tensor shapes, or config keys.
 - Connect to project design when relevant.
-- Write the report in Korean. Code identifiers, file paths, and technical terms stay in English.
+- Write the report in the user's communication language unless an explicit audience or artifact-language requirement overrides it. Preserve code identifiers, file paths, and technical terms when translation would reduce precision. Localize the template headings naturally.
 - Aim for 1-3 pages total. Length should scale with change count: small plans (≤5 steps) can be 1 page; large refactors (>20 steps) may need 3.
 
 Return ONLY the file path and a one-line summary. Do NOT return the full report content.
@@ -106,7 +108,7 @@ After the 품질관리팀 agent returns:
    - **Status of follow-ups**: report may claim an item is "pending" when memory says it was resolved in a later round.
    - **Deviations**: did any subagent flag a deviation from the plan that the report missed?
 
-2.5. **Invoke 편집팀 with mode B** (polish, in-place — 사용자 영역 한국어 가독성):
+2.5. **Invoke editorial-team with mode B** (polish, in-place — user-facing readability):
 
    호출 조건 (single source — `adapters/claude/agents/editorial-team.md` 모드 B 호출 조건):
    - plan frontmatter `qa_level` 가 **standard / thorough / adversarial** 중 하나일 때만 호출. `quick` / `light` 는 _fastest path_ 의도라 skip.
@@ -116,14 +118,14 @@ After the 품질관리팀 agent returns:
    Agent({
      subagent_type: "편집팀",
      prompt: `polish {log_directory}/final_report.md
-   사용자가 직접 읽는 변경 보고서다. 편집팀 모드 B 다듬기 — 판교체 정리·표기 일관성·호흡.
-   보존: 변경 내용·변경 이유·핵심 원리·QA 리뷰 요약·자율 판단 기록 본문 (수치·file:line·decision 본문). 다듬기 대상: 한국어 wording 만.`
+   This change report is user-facing. Apply editorial-team mode B for natural phrasing, notation consistency, and readable cadence in the selected language.
+   Preserve change content, rationale, principles, QA summary, decision record, numbers, file:line references, and decision meaning. Edit wording only.`
    })
    ```
 
    편집팀이 in-place Edit 으로 마무리한 뒤 step 3 진행. (단발성 — single-pass, snapshot X.)
 
-3. **Relay a concise Korean brief to the user** (2-3 paragraphs, NOT just the file path). The brief should:
+3. **Relay a concise brief in the user's communication language** (2-3 paragraphs, not just the file path). The brief should:
    - State the final status (done/partial/failed) and final commit hash
    - Highlight 3-5 concrete deliverables / changes
    - Flag any discrepancies between memory and report explicitly (e.g., "리포트 본문엔 L1195로 기재됐는데 실제 HEAD 기준 L1207 — 리포트 오기")

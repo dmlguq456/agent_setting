@@ -51,4 +51,4 @@ Router(`../SKILL.md`)에서 참조되는 invocation 예시, apply 시 지켜야 
 After successful apply, suggest to user:
 1. If `Downstream sync needed: Yes` → run `/autopilot-refine "{dependent_artifact_name} pipeline_summary v{N} 반영"` for each dependent artifact.
 2. Optionally `git add -A && git commit -m "autopilot-refine: {prompt summary}"` if artifact is under git.
-3. Run `/sync-skills` if this SKILL.md was just updated (rare — only when user iterates on the skill itself).
+3. If this skill contract changed, regenerate affected native projections and run `tools/skill-conformance/check.sh` plus `tools/check-adaptation-boundary.sh`.

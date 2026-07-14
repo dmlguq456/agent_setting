@@ -1,16 +1,16 @@
 ---
 name: design-handoff
-description: "디자인 → 개발 핸드오프 자산·스펙 정리 sub-skill"
+description: "Package design results as development-handoff assets and specifications."
 argument-hint: "<design path or app path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "디자인 → 개발 핸드오프 자산·스펙 정리 sub-skill"
+  blurb: "Package design assets and specifications for development."
 ---
 
 ## Language Rule
-- Korean output, English code/path identifiers.
+- User-facing output follows the user's communication language; preserve code and path identifiers.
 
 ## Design Resolution
 

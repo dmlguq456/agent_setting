@@ -1,6 +1,6 @@
 ---
 name: autopilot-design
-description: "Use for autopilot-design: 시각 산출물 디자인 파이프. refs→tokens→components→review→handoff를 조율한다."
+description: "Use for autopilot-design: Visual-design pipeline coordinating references→tokens→components→review→handoff."
 ---
 
 # autopilot-design
@@ -28,7 +28,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Identifier: `autopilot-design`
 - Supported modes: `none`
 - Argument shape: `<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial]`
-- Portable meaning: 시각 산출물 디자인 파이프. refs→tokens→components→review→handoff를 조율한다.
+- Portable meaning: Visual-design pipeline coordinating references→tokens→components→review→handoff.
 
 ## Portable Contract
 

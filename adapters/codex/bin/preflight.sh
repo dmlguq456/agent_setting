@@ -33,7 +33,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh token-budget [cwd] [session-id] [kv|json|hook]
        preflight.sh track [cwd] [session-id]
        preflight.sh memory [cwd]
-       preflight.sh recall <prompt> [cwd] [session-id]
+       preflight.sh recall <query> [cwd] [session-id]
        preflight.sh briefing [cwd]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
@@ -129,11 +129,7 @@ doctor() {
     printf 'runtime_cli=unavailable\n'
   fi
 
-  doctor_check manifest python3 "$ROOT/tools/build-manifest.py" --check || rc=1
-  doctor_check native-skills "$ROOT/adapters/codex/bin/sync-native-skills.py" --check || rc=1
-  doctor_check native-plugin "$ROOT/adapters/codex/bin/sync-native-plugin.py" --check || rc=1
-  doctor_check native-agents "$ROOT/adapters/codex/bin/sync-native-agents.py" --check || rc=1
-  doctor_check native-modes "$ROOT/adapters/codex/bin/sync-native-modes.py" --check || rc=1
+  doctor_check generated-projections python3 "$ROOT/tools/generate.py" --check || rc=1
   doctor_check native-subagents "$0" subagent-info --check || rc=1
   doctor_check hook-bridges python3 -c 'import pathlib, sys; [compile(pathlib.Path(p).read_text(encoding="utf-8"), p, "exec") for p in sys.argv[1:]]' \
     "$ROOT/adapters/codex/hooks/sessionstart-lifecycle.py" \
@@ -270,9 +266,10 @@ case "$cmd" in
     # Recursion guard: skip the whole session-end pipeline when invoked from
     # within a distiller (the codex exec worker exports MEM_DISTILL=1).
     [ "${MEM_DISTILL:-}" = "1" ] && exit 0
-    # SessionEnd sync 계약(core/MEMORY.md §7, D-31) = mem sync + dump.jsonl git mirror
-    # push. MEM_DUMP_PUSH 를 생략하면 Codex 세션 기억이 원격 mirror 에서 drift 한다
-    # (Claude settings.json:136 과 동형). push 는 mem.py 안에서 5s bounded·never-fatal.
+    # SessionEnd sync contract (core/MEMORY.md §7, D-31): mem sync plus a
+    # dump.jsonl git-mirror push. Omitting MEM_DUMP_PUSH lets Codex-session
+    # memory drift from the remote mirror. mem.py bounds the push to five
+    # seconds and treats failure as non-fatal.
     (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" MEM_DUMP_PUSH="${MEM_DUMP_PUSH:-1}" python3 "$ROOT/tools/memory/mem.py" sync)
     # Automatic session-end distillation is enabled: the codex exec read-only
     # sandbox was verified tool-free (adapters/codex/ADAPTATION.md Distillation
@@ -323,7 +320,7 @@ case "$cmd" in
       printf 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work\n'
       printf 'routing_contract=core/WORKFLOW.md\n'
       printf 'routing_action=read-workflow-and-select-codex-skill\n'
-      printf 'capability_entrypoints=codex-native-skills-plugin\n'
+      printf 'capability_entrypoints=codex-native-skills\n'
     fi
     printf 'enforced_hooks=structured-write-guards,core-first-guard,posttool-read-markers,posttool-design-check,session-memory,turn-nudge\n'
     printf 'hook_boundary=shell-read-write-targeted-detection-explicit-preflight-fallback\n'
@@ -381,13 +378,11 @@ case "$cmd" in
     (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/mem.py" inject)
     ;;
   recall)
-    [ "$#" -ge 2 ] || { echo "codex preflight: recall requires prompt text" >&2; exit 64; }
-    prompt=$2
+    [ "$#" -ge 2 ] || { echo "codex preflight: recall requires a query" >&2; exit 64; }
+    query=$2
     cwd=${3:-$PWD}
-    sid=${4:-default}
-    AGENT_HOME="$AGENT_ROOT" MEM_RECALL_RUNTIME=codex \
-      "$ROOT/hooks/mem-recall-inject.sh" --prompt "$prompt" --cwd "$cwd" \
-      --session-id "$sid" --format text
+    (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" MEM_RECALL_RUNTIME=codex \
+      "$ROOT/tools/memory/recall.sh" "$query")
     ;;
   briefing)
     cwd=${2:-$PWD}
@@ -654,7 +649,7 @@ title_command=/title
 hook_status_messages=available-after-hook-trust
 harness_status_surface=adapter-owned-preflight-status
 harness_status_command=adapters/codex/bin/preflight.sh status [cwd] [session-id]
-autopilot_entrypoints=codex-native-skills-plugin
+autopilot_entrypoints=codex-native-skills
 autopilot_auto_routing=instruction-guided-not-claude-slash-router
 subagent_surface=codex-native-subagents
 subagent_auto_spawn=explicit-or-main-dispatched
@@ -766,7 +761,7 @@ runtime_surface=missing-native-loop
 trigger=external-scheduler
 related_capability=autopilot-note
 capability_check=adapters/codex/bin/preflight.sh capability-info autopilot-note
-native_capability_surface=codex-native-skill-plugin
+native_capability_surface=codex-native-skills
 scheduler_surface=external-worklog-board
 action=not-implemented-in-repo
 fallback=worklog-board-or-manual-post-it-flow

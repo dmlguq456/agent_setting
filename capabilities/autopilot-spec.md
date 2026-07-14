@@ -3,18 +3,28 @@
 This is the portable capability contract for `autopilot-spec`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
 | Identifier | `autopilot-spec` |
 | Group | `entry` |
 | Supported modes | `app, library, api, cli, research, update` |
-| Portable meaning | 요구사항·청사진 작성·갱신. `prd.md`를 spec 변경의 단일 경로로 유지한다. |
-| Argument shape | `<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]` |
+| Portable meaning | Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path. |
+| Argument shape | `<task description> [--mode auto\|app\|library\|api\|cli\|research\|update (comma-separated for multiple)] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--user-refine]` |
 
 ## Invocation Semantics
 
-_요구사항·청사진 작성·갱신_ 의 일반화 entry — 신규 의도, 기존 코드 정돈·공개 준비, 그리고 기존 spec 의 update·iteration (prd.md 갱신) 자리 모두. mode 5종 (app / library / api / cli / research) + 다중 + auto + update mode (기존 prd.md 갱신 — 모든 spec 변경의 canonical 경로, 버전 snapshot 자동). PRD 구조 = 공통 + mode 별 독립 섹션. autopilot-research / analyze-project 결과 자동 인용. analyze-project 의 _신규 의도 → 청사진_ 대칭 자리. 실제 코드 작업은 autopilot-code 가 담당 (spec/ 컨텍스트 자동 감지).
+General entrypoint for creating and updating requirements and blueprints: new
+intent, cleanup/public-release preparation for existing code, and iteration of
+an existing spec through `prd.md`. It supports app, library, API, CLI, and
+research modes; multiple modes; auto detection; and update mode. Update mode
+edits the existing `prd.md`, the canonical path for every spec change, and
+automatically snapshots the previous version. PRDs contain common sections plus
+independent per-mode sections. Automatically cite autopilot-research and
+analyze-project outputs. This is the blueprint counterpart to analyze-project's
+new-intent analysis. Actual code work belongs to autopilot-code, which detects
+`spec/` context automatically.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
@@ -100,7 +110,7 @@ Composite modes are valid. Keep shared decisions in the common PRD section and e
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/autopilot-spec/SKILL.md` and `skills/autopilot-spec/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-spec/SKILL.md`, while `skills/autopilot-spec/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-spec`. Use `adapters/codex/skills/autopilot-spec/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/autopilot-spec/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/autopilot-spec/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-spec`. Use `adapters/codex/skills/autopilot-spec/SKILL.md` as the native Codex Skill projection; do not consume `skills/autopilot-spec/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info autopilot-spec`. Use `adapters/opencode/skills/autopilot-spec/SKILL.md` and `adapters/opencode/commands/autopilot-spec.md` as native OpenCode projections; do not consume `skills/autopilot-spec/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

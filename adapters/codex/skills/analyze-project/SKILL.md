@@ -1,6 +1,6 @@
 ---
 name: analyze-project
-description: "Use for analyze-project: 사전 분석. 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로 만든다."
+description: "Use for analyze-project: Upfront analysis that structures primary code, paper, and document materials for downstream work."
 ---
 
 # analyze-project
@@ -28,7 +28,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Identifier: `analyze-project`
 - Supported modes: `code, paper, doc`
 - Argument shape: `[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]`
-- Portable meaning: 사전 분석. 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로 만든다.
+- Portable meaning: Upfront analysis that structures primary code, paper, and document materials for downstream work.
 
 ## Portable Contract
 

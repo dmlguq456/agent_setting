@@ -63,7 +63,7 @@ Agent(subagent_type="연구팀"):
    - 예상 metric 범위가 직전 baseline 대비 합리적?
 
    메모: experiment_spec.md 안에 `<!-- review: ... -->` 형태로.
-   Return: 메모 추가된 파일 + 한국어 요약 한 줄."
+   Return: 메모 추가된 파일 + 요약 한 줄."
 ```
 
 quick / light 자리는 본 review skip.
@@ -108,7 +108,7 @@ Agent(subagent_type="개발팀", mode="new-lib"):
    - ref/부모 모델 폴더의 _이미 사용 중인 layer_ 변경
    - 라이브러리화·정련 (이건 autopilot-code 영역)
 
-   Return: 생성 파일 list + 한국어 요약 (어떤 자리 변형했는지)."
+   Return: 생성 파일 list + 요약 (어떤 자리 변형했는지)."
 ```
 
 **S2-3. 한 화면 컨펌**:

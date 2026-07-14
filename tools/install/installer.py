@@ -28,6 +28,7 @@ import projector
 import manifest
 import verifier
 import bootstrap
+import runtime_activation
 from drivers import get_driver, RUNTIMES
 
 # exit code 상수 — PRD [cli] "### Exit code" 표와 1:1
@@ -68,6 +69,11 @@ def build_parser():
 
     p_install = sub.add_parser("install", parents=[common], help="dev 머신 projection + runtime-owned 표면 + manifest 기록")
     p_install.add_argument("target", nargs="?", choices=[*RUNTIMES, "all"], default="all")
+    p_install.add_argument(
+        "--profile",
+        choices=runtime_activation.PROFILES,
+        help="linked product profile; explicit use routes install through runtime activation",
+    )
 
     p_verify = sub.add_parser("verify", parents=[common], help="Migration Order 기계화 — check 목록 실행")
     p_verify.add_argument("target", nargs="?", choices=RUNTIMES, default=None)
@@ -79,6 +85,42 @@ def build_parser():
 
     p_uninstall = sub.add_parser("uninstall", parents=[common], help="manifest 등재분만 제거 (소유 경계)")
     p_uninstall.add_argument("target", nargs="?", choices=RUNTIMES, default=None)
+
+    # Source → active runtime truth.  These parsers intentionally do not inherit
+    # the legacy install channel's --plugin option: linked/packaged are mutually
+    # exclusive and both are fully local/offline.
+    p_runtime = sub.add_parser("runtime", help="active source/revision/projection 관리")
+    runtime_sub = p_runtime.add_subparsers(
+        dest="runtime_command", required=True, parser_class=_UsageExitParser
+    )
+
+    def runtime_common(parser, *, require_runtime=False):
+        parser.add_argument(
+            "--runtime",
+            action="append" if require_runtime else "store",
+            choices=[*RUNTIMES, "all"],
+            required=require_runtime,
+            default=None if require_runtime else "all",
+        )
+        parser.add_argument("--scope", choices=["global", "project"], default="global")
+        parser.add_argument("--json", action="store_true")
+
+    p_runtime_status = runtime_sub.add_parser("status", help="active source와 freshness 조회")
+    runtime_common(p_runtime_status)
+
+    p_runtime_activate = runtime_sub.add_parser("activate", help="linked/packaged source 활성화")
+    runtime_common(p_runtime_activate, require_runtime=True)
+    p_runtime_activate.add_argument("--mode", choices=runtime_activation.MODES, required=True)
+    p_runtime_activate.add_argument("--source", help="local canonical repo (default: AGENT_HOME)")
+    p_runtime_activate.add_argument("--profile", choices=runtime_activation.PROFILES)
+
+    p_runtime_refresh = runtime_sub.add_parser("refresh", help="현재 mode를 local source에서 갱신")
+    runtime_common(p_runtime_refresh, require_runtime=True)
+    p_runtime_refresh.add_argument("--profile", choices=runtime_activation.PROFILES)
+
+    p_runtime_doctor = runtime_sub.add_parser("doctor", help="projection/duplicate/freshness 진단")
+    runtime_common(p_runtime_doctor)
+    p_runtime_doctor.add_argument("--strict", action="store_true")
 
     return p
 
@@ -104,6 +146,57 @@ def emit(result, as_json):
 
 def cmd_install(args):
     runtimes = resolve_runtimes(args)
+    if args.profile:
+        if args.plugin:
+            return {
+                "runtime": runtimes,
+                "channel": "linked",
+                "checks": [],
+                "drift": [],
+                "exit": EXIT_BLOCKED,
+                "lines": ["install --profile cannot be combined with the external plugin channel"],
+            }
+        try:
+            for runtime in runtimes:
+                runtime_activation.validate_scope(runtime, args.scope)
+        except runtime_activation.ActivationError as exc:
+            return {
+                "runtime": runtimes,
+                "channel": "linked",
+                "profile": args.profile,
+                "checks": [],
+                "drift": [],
+                "exit": EXIT_BLOCKED,
+                "lines": [f"install --profile: blocked: {exc}"],
+            }
+        if args.dry_run:
+            return {
+                "runtime": runtimes,
+                "channel": "linked",
+                "profile": args.profile,
+                "checks": [],
+                "drift": [],
+                "exit": EXIT_OK,
+                "lines": [
+                    f"install(dry-run): runtime={runtime} mode=linked profile={args.profile}"
+                    for runtime in runtimes
+                ],
+            }
+        runtime_args = argparse.Namespace(
+            runtime=runtimes,
+            runtime_command="activate",
+            source=str(paths.agent_home()),
+            scope=args.scope,
+            json=args.json,
+            mode="linked",
+            profile=args.profile,
+        )
+        result = cmd_runtime(runtime_args)
+        result["channel"] = "linked"
+        result["profile"] = args.profile
+        result["lines"].insert(0, f"install: linked profile={args.profile}")
+        return result
+
     lines = [f"install: runtime={r} scope={args.scope} plugin={args.plugin} dry_run={args.dry_run}" for r in runtimes]
     checks = []
     results = []
@@ -177,8 +270,33 @@ def cmd_verify(args):
     all_checks = []
     ok = True
     for rt in runtimes:
-        driver = get_driver(rt)
-        rt_checks = verifier.run(rt, driver)
+        activation_state = paths.harness_state_dir(rt, args.scope) / "activation.json"
+        if activation_state.exists() or activation_state.is_symlink():
+            try:
+                report = runtime_activation.doctor(rt, strict=True, scope=args.scope)
+                status = report["status"]
+                rt_checks = [
+                    {
+                        "id": f"{rt}.runtime-activation",
+                        "ok": report["ok"],
+                        "detail": (
+                            f"profile={status.get('profile')} "
+                            f"freshness={report['freshness']} "
+                            f"next={report['next_action']}"
+                        ),
+                    }
+                ]
+            except (runtime_activation.ActivationError, OSError, ValueError) as exc:
+                rt_checks = [
+                    {
+                        "id": f"{rt}.runtime-activation",
+                        "ok": False,
+                        "detail": f"activation state invalid: {exc}",
+                    }
+                ]
+        else:
+            driver = get_driver(rt)
+            rt_checks = verifier.run(rt, driver)
         all_checks.extend(rt_checks)
         if any(not c["ok"] for c in rt_checks):
             ok = False
@@ -333,12 +451,123 @@ def cmd_uninstall(args):
     return {"runtime": runtimes, "channel": "dev", "checks": checks, "drift": [], "exit": EXIT_OK, "lines": lines}
 
 
+def _runtime_targets(value):
+    values = value if isinstance(value, list) else [value]
+    if not values or "all" in values:
+        return list(runtime_activation.RUNTIMES)
+    result = []
+    for runtime in values:
+        if runtime not in result:
+            result.append(runtime)
+    return result
+
+
+def _runtime_emit_shape(command, reports, exit_code, lines):
+    if len(reports) == 1:
+        result = dict(reports[0])
+        result.update({"command": command, "exit": exit_code, "lines": lines})
+        return result
+    return {
+        "command": command,
+        "runtimes": reports,
+        "exit": exit_code,
+        "lines": lines,
+    }
+
+
+def cmd_runtime(args):
+    targets = _runtime_targets(args.runtime)
+    reports = []
+    lines = []
+    exit_code = EXIT_OK
+    snapshots = []
+
+    try:
+        if args.runtime_command in {"activate", "refresh"} and len(targets) > 1:
+            source = args.source if args.runtime_command == "activate" else None
+            for runtime in targets:
+                snapshots.append(
+                    runtime_activation.capture_runtime_state(runtime, source, args.scope)
+                )
+        for runtime in targets:
+            if args.runtime_command == "status":
+                report = runtime_activation.status(runtime, args.scope)
+                if report["freshness"] in {
+                    "missing", "cache-stale", "duplicate", "unsupported"
+                }:
+                    exit_code = EXIT_VERIFY_FAIL
+            elif args.runtime_command == "activate":
+                report = runtime_activation.activate(
+                    runtime,
+                    args.mode,
+                    args.source,
+                    args.scope,
+                    getattr(args, "profile", None),
+                )
+            elif args.runtime_command == "refresh":
+                report = runtime_activation.refresh(
+                    runtime, args.scope, getattr(args, "profile", None)
+                )
+            elif args.runtime_command == "doctor":
+                report = runtime_activation.doctor(runtime, args.strict, args.scope)
+                if not report["ok"]:
+                    exit_code = EXIT_VERIFY_FAIL
+            else:
+                raise runtime_activation.ActivationError(
+                    f"unknown runtime command: {args.runtime_command}"
+                )
+            reports.append(report)
+            freshness = report.get("freshness")
+            if freshness is None and isinstance(report.get("status"), dict):
+                freshness = report["status"].get("freshness")
+            lines.append(
+                f"{runtime}: {args.runtime_command} profile="
+                f"{report.get('profile') or report.get('status', {}).get('profile')} "
+                f"freshness={freshness} "
+                f"next={report.get('next_action', 'none')}"
+            )
+    except runtime_activation.ActivationError as exc:
+        rollback_errors = []
+        for snapshot in reversed(snapshots):
+            try:
+                runtime_activation.restore_runtime_state(snapshot)
+            except Exception as rollback_exc:
+                rollback_errors.append(str(rollback_exc))
+        for report in reports:
+            report["rolled_back"] = True
+        if snapshots:
+            lines.append("runtime invocation rolled back across all selected runtimes")
+        if rollback_errors:
+            lines.append("rollback errors: " + "; ".join(rollback_errors))
+        lines.append(f"runtime {args.runtime_command}: blocked: {exc}")
+        for snapshot in snapshots:
+            runtime_activation.discard_runtime_state(snapshot)
+        return _runtime_emit_shape(
+            args.runtime_command,
+            reports + [{"error": str(exc)}],
+            EXIT_BLOCKED,
+            lines,
+        )
+    except Exception:
+        for snapshot in reversed(snapshots):
+            runtime_activation.restore_runtime_state(snapshot)
+        for snapshot in snapshots:
+            runtime_activation.discard_runtime_state(snapshot)
+        raise
+
+    for snapshot in snapshots:
+        runtime_activation.discard_runtime_state(snapshot)
+
+    return _runtime_emit_shape(args.runtime_command, reports, exit_code, lines)
+
+
 COMMANDS = {
     "install": cmd_install,
     "verify": cmd_verify,
     "update": cmd_update,
     "status": cmd_status,
     "uninstall": cmd_uninstall,
+    "runtime": cmd_runtime,
 }
 
 

@@ -1,5 +1,5 @@
 ---
-description: "Run the portable analyze-project capability through the OpenCode adapter. Meaning: 사전 분석. 코드·논문·문서 primary 자료를 구조화해 다운스트림 입력으로 만든다."
+description: "Run the portable analyze-project capability through the OpenCode adapter. Meaning: Upfront analysis that structures primary code, paper, and document materials for downstream work."
 ---
 
 Use the OpenCode adapter realization of portable capability `analyze-project`.

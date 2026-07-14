@@ -6,7 +6,7 @@
    - `<artifact-root>/research/*` → **research** type (field survey)
    - `<artifact-root>/documents/*` → **documents** type (doc strategy + draft)
    - Other → error: "audit은 <artifact-root>/{plans,research,documents}/* 산출물 전용. resolved path: {path}"
-3. Print one-line to user (Korean): `Type 인식: {type} — {artifact short name}`.
+3. Print one line in the user's communication language: `Detected type: {type} — {artifact short name}` (localize the label naturally).
 
 ### Stage B — Determine effective scope
 

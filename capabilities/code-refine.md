@@ -3,14 +3,15 @@
 This is the portable capability contract for `code-refine`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
 | Identifier | `code-refine` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 사용자 메모·plan-check 피드백·검증 실패 메모를 반영해 기존 plan을 정정한다. |
-| Argument shape | `<plan name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]` |
+| Portable meaning | Revise an existing plan using user notes, plan-check feedback, and verification-failure notes. |
+| Argument shape | `<plan name or path> [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial]` |
 
 ## Invocation Semantics
 
@@ -46,7 +47,7 @@ Adapters must preserve the portable invariants relevant to this capability:
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/code-refine/SKILL.md` and `skills/code-refine/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/code-refine/SKILL.md`, while `skills/code-refine/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info code-refine`. Use `adapters/codex/skills/code-refine/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/code-refine/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/code-refine/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info code-refine`. Use `adapters/codex/skills/code-refine/SKILL.md` as the native Codex Skill projection; do not consume `skills/code-refine/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info code-refine`. Use `adapters/opencode/skills/code-refine/SKILL.md` and `adapters/opencode/commands/code-refine.md` as native OpenCode projections; do not consume `skills/code-refine/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

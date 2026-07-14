@@ -1,5 +1,5 @@
 ---
-description: "Run the portable code-execute capability through the OpenCode adapter. Meaning: plan 단계별 구현 실행. 개발 role에 작업을 위임하고 execution log를 남긴다."
+description: "Run the portable code-execute capability through the OpenCode adapter. Meaning: Execute a plan step by step, delegate implementation to the development role, and record an execution log."
 ---
 
 Use the OpenCode adapter realization of portable capability `code-execute`.

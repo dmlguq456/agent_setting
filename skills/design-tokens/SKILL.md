@@ -1,16 +1,17 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: design-tokens
-description: "디자인 토큰(색·타이포·간격) 정의·생성 sub-skill"
+description: "Use when invoking the portable design-tokens capability. Define design tokens such as color, typography, and spacing."
 argument-hint: "<design path or app path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "디자인 토큰(색·타이포·간격) 정의·생성 sub-skill"
+  blurb: "Define design tokens such as color, typography, and spacing."
 ---
 
 ## Language Rule
-- Korean output, English token names (color hex, font family names, spacing units).
+- User-facing output follows the user's communication language; preserve token values and canonical token names.
 
 ## Design Resolution
 

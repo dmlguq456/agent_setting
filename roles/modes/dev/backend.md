@@ -37,7 +37,7 @@
 
 ## 출력
 
-- 직접 호출: 한국어 설명 + 변경 요약 + 검증 가이드
+- 직접 호출: 사용자의 현재 소통 언어로 설명 + 변경 요약 + 검증 가이드
 - skill auto mode 호출: step log 작성 후 `{log_path} -- ✅ Done` 한 줄
 
 ## Update agent memory

@@ -10,13 +10,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-ROLES = ROOT / "roles" / "README.md"
 OUT = ROOT / "adapters" / "opencode" / "agents"
+sys.path.insert(0, str(ROOT / "tools"))
+
+import harness_manifest
 
 
 EXTRA_AGENTS = {
     "memory-scout": {
-        "description": "Read-only memory scout for recall-first deep memory reconnaissance.",
+        "description": "Read-only memory scout for agent-initiated deep memory reconnaissance.",
         "instructions": """You are the OpenCode-native memory-scout custom agent.
 This is adapter-owned output generated from `core/MEMORY.md` §7.4, not a non-OpenCode Agent copy.
 
@@ -30,7 +32,7 @@ This is adapter-owned output generated from `core/MEMORY.md` §7.4, not a non-Op
 6. Cross-check one live file/code fact when the memory result implies an actionable convention.
 
 Output at most 15 lines:
-- verdict: 있음 / 없음 / 애매
+- verdict: found / not-found / ambiguous
 - hits: up to 3 short quotes or paraphrases with record id / session pointer
 - apply: one line telling the main agent what to do now
 - check: one live-code or file cross-check line, or not checked with reason
@@ -116,11 +118,12 @@ permission:
 ---
 
 You are the OpenCode-native realization of the portable `{profile}` role
-profile. This is adapter-owned output generated from `roles/README.md`, not a non-OpenCode Agent copy.
+profile. This is adapter-owned output generated from `harness-manifest.json`, not a non-OpenCode Agent copy.
 
 ## Source
 
-- Portable source: `roles/README.md`
+- Portable metadata source: `harness-manifest.json`
+- Portable behavior source: `roles/README.md`
 - Mode inventory: `roles/MODES.md`
 - Runtime role mapper: `adapters/opencode/bin/preflight.sh role {mapped_role}`
 - Runtime mode mapper: `adapters/opencode/bin/preflight.sh mode-info <family/mode>`
@@ -168,7 +171,11 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="verify generated projections")
     args = parser.parse_args()
 
-    rows = role_rows(ROLES.read_text(encoding="utf-8"))
+    manifest = harness_manifest.load()
+    rows = [
+        (profile, spec["portable_role"], spec["responsibility"])
+        for profile, spec in manifest["roles"].items()
+    ]
     expected = {OUT / profile / f"{profile}.md": render(profile, role, responsibility) for profile, role, responsibility in rows}
     for name, spec in EXTRA_AGENTS.items():
         expected[OUT / name / f"{name}.md"] = render_extra_agent(name, spec)

@@ -31,10 +31,11 @@ QA_FROM_INTENSITY = {
     "adversarial": "adversarial",
 }
 
-# SD-15 (OPERATIONS §5.10 ⑨): limit/auth 즉사 패턴. wrapper 가 launch 직후 조기 exit 를 잡을 때,
-# 그리고 dispatch-liveness.sh / dispatch-wait.sh 가 open row 로그를 DEAD 로 판정할 때 공유하는
-# 종료-사유 어휘. (reason, 소문자 substring 정규식) — 첫 매치가 사유. shell 쪽 동일 목록은
-# utilities/dispatch-liveness.sh 의 LIMIT_RE 가 대응(두 런타임 경계라 의도적 복제, 동기 유지).
+# SD-15 (OPERATIONS §5.10 ⑨): immediate limit/auth failure patterns shared
+# between launch-time early-exit detection and the liveness/wait DEAD verdict.
+# Each tuple is (reason, lowercase substring regex); the first match wins.
+# utilities/dispatch-liveness.sh intentionally duplicates the list as LIMIT_RE
+# across the Python/shell runtime boundary; keep the two synchronized.
 DEATH_PATTERNS = [
     ("session-limit", r"hit your (?:session|usage) limit|session limit reached"),
     ("usage-limit", r"usage limit reached|weekly limit|rate limit(?:ed)?|\b429\b"),
@@ -260,7 +261,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         + depth_note
         + "\nUser task:\n"
         + f"{task.rstrip()}\n\n"
-        + "Return a concise Korean report with changed files, verification commands/results, "
+        + "Return a concise report with changed files, verification commands/results, "
         "and artifact paths. Leave merge and worktree cleanup to the main orchestrator.\n",
         source,
     )
@@ -357,11 +358,11 @@ def annotate_job_row(jobs: Path, slug: str, worktree: str, extra_kv: str) -> boo
     """Append `,<extra_kv>` to the pipe column of this dispatch's open row.
 
     Same match keys and flock discipline as close_job_row. Used right after
-    launch to record the child pid (`pid=<n>`, OPERATIONS §5.10 job 레지스트리)
+    launch to record the child pid (`pid=<n>`, OPERATIONS §5.10 job registry)
     so dispatch-liveness judges the child by process instead of transcript
     mtime — a conductor sharing the child's worktree keeps the transcript
     directory fresh and masks an exited child behind ALIVE (shared-worktree
-    aliasing, 2026-07-13 실측).
+    aliasing, observed 2026-07-13).
     """
     if not jobs.is_file():
         return False
@@ -565,9 +566,9 @@ def main(argv: list[str]) -> int:
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
         proc = subprocess.Popen(["sh", "-c", command], env=env, start_new_session=True)
-        # 공유-worktree aliasing 대응 (OPERATIONS §5.10 신호 서열 ①): 자식 pid 를 row 에
-        # 기록해 liveness 가 process 신호로 판정하게 한다 — transcript mtime 은 같은
-        # worktree 의 conductor 활동에 오염될 수 있다 (2026-07-13 실측).
+        # Shared-worktree aliasing (OPERATIONS §5.10 signal order ①): record
+        # the child pid so liveness can use a process signal. Conductor activity
+        # in the same worktree can contaminate transcript mtime.
         annotate_job_row(jobs, args.slug, args.worktree, f"pid={proc.pid}")
         args.child_pid = proc.pid
         # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a limit/auth early death so

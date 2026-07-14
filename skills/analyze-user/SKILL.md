@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: analyze-user
-description: "Use when building or updating the cross-project user-preference profile. cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출"
+description: "Use when invoking the portable analyze-user capability. Create or update a cross-project user-preference profile from coding, writing, and analysis patterns."
 argument-hint: "<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]"
 metadata:
   group: pre
   fam: pre
-  modes: [init, update]
-  blurb: "cross-project 사용자 성향 프로필 작성·갱신 — 코드·작성·분석 패턴 추출"
+  modes: ["init", "update"]
+  blurb: "Create or update a cross-project user-preference profile from coding, writing, and analysis patterns."
 ---
 
 # analyze-user
@@ -42,13 +43,11 @@ cross-project 사용자 성향 프로필 entry. 사용자의 과거 산출물(fi
 - 한 aspect 의 한 자리만 수정 — `/post-it --scope user <aspect>` 를 통해 DB 레코드 body 갱신. 파일 직접 Edit 아님 (SoT 는 DB). `## 사용자 수동 메모` 절은 사용자 영역이므로 `/post-it --scope user <aspect>` 경유.
 - `/analyze-user <args>` slash 직접 입력 — 컨펌 skip 즉시 invoke.
 
-> 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰 안내로 자동 반영.
-
 ## Language Rule
 
-- All user-facing output and 산출물 (DB profile 레코드 body) 본문 in 자연스러운 **한국어** (번역체 회피).
-- 코드·파일 경로·식별자·도메인 표현은 영어 그대로.
-- 어미 톤 — chat 응답은 대화체, user_profile 본문은 _평어 단정형_ (보고서 톤 — `~다 / ~이다`).
+- User-facing output and artifact prose (including the DB profile-record body) follow the user's communication language unless an explicit audience or artifact-language requirement overrides it.
+- Preserve code, file paths, identifiers, and domain expressions when translation would reduce precision.
+- Match chat tone to the conversation; keep the user-profile body concise, declarative, and report-like in the selected language.
 
 ## Core Invariants
 

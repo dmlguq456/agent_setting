@@ -36,19 +36,19 @@ if [ "$rc" -eq 0 ]; then ok "missing jobs.log → exit 0 (harvest)"; else bad "m
 : > "$jobs"
 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-10T00:00:00" "done" "repo" "$tmp/wt/c1" "child1" "capability=code-plan,parent=conf" >> "$jobs"
 out=$(AGENT_HOME="$agent_home" sh "$WAIT" --jobs "$jobs" --parent conf 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '열린 자식 없음'; then
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'no open children'; then
   ok "no open children for parent → exit 0"
 else bad "done-only children expected 0 got $rc [$out]"; fi
 
 # --- Case 0b2: --jobs 생략 시 shared registry env를 사용 ---
 out=$(AGENT_HOME="$agent_home" AGENT_DISPATCH_JOBS="$jobs" sh "$WAIT" --parent conf 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '열린 자식 없음'; then
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'no open children'; then
   ok "AGENT_DISPATCH_JOBS selects the shared registry when --jobs is omitted"
 else bad "shared registry done-only children expected 0 got $rc [$out]"; fi
 
 # --- Case 0b2: --jobs 생략 시 shared registry env를 사용 ---
 out=$(AGENT_HOME="$agent_home" AGENT_DISPATCH_JOBS="$jobs" sh "$WAIT" --parent conf 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '열린 자식 없음'; then
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'no open children'; then
   ok "AGENT_DISPATCH_JOBS selects the shared registry when --jobs is omitted"
 else bad "shared registry done-only children expected 0 got $rc [$out]"; fi
 
@@ -64,7 +64,7 @@ if [ "$rc" -eq 0 ]; then ok "open child with different parent → exit 0 (not mi
 mk_transcript "$tmp/wt/alive"
 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-10T00:00:00" "open" "repo" "$tmp/wt/alive" "alivec" "capability=code-execute,parent=conf" >> "$jobs"
 out=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" sh "$WAIT" --jobs "$jobs" --parent conf --interval 1 --max 0 2>&1); rc=$?
-if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q '재호출'; then
+if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'call again'; then
   ok "alive open child, max reached → exit 2 (re-call)"
 else bad "alive child expected 2 got $rc [$out]"; fi
 

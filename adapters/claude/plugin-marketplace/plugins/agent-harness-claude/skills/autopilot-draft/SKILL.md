@@ -1,12 +1,12 @@
 ---
 name: autopilot-draft
-description: "Use when starting a document draft (paper/slides/prose). 문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태"
+description: "Use when starting a document draft for a paper, presentation, or prose document."
 argument-hint: "<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
 metadata:
   group: entry
   fam: doc
   modes: [paper, presentation, doc]
-  blurb: "문서 초안 파이프 entry — paper(LaTeX)·슬라이드·prose 세 출력 형태"
+  blurb: "Draft papers, presentations, and prose documents."
 ---
 
 # autopilot-draft
@@ -60,10 +60,8 @@ autopilot-draft 의 산출물은 _최종 문서 그 자체_ 가 아니라, 사�
 - 작은 minor-level 수정 — `/autopilot-refine` 자동 라우팅 분기 (직접 Edit 경로)
 - `/autopilot-draft <args>` slash 직접 입력 — 컨펌 skip 하고 즉시 invoke
 
-> 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰 안내로 자동 반영.
-
 ## Language Rule
-- Write user-facing output in Korean. (Material analysis results and pipeline_summary.md are written directly in the artifacts — no separate user output needed for those steps.)
+- User-facing output follows the user's communication language unless an explicit audience or artifact-language requirement overrides it. (Material analysis results and `pipeline_summary.md` are written directly in the artifacts, so those steps need no separate user output.)
 
 > `<artifact-root>` 해석·치환(`.agent_reports` 우선, legacy `.claude_reports` fallback): [CONVENTIONS §5.1](../../core/CONVENTIONS.md#51-workspace-assumption-전제).
 

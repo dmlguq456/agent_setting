@@ -1,25 +1,22 @@
 #!/usr/bin/env sh
-# dispatch-wait — SD-14 one-shot 대기 계약 헬퍼 (OPERATIONS §5.10 one-shot 대기 계약).
-#   문제: adapter headless main(conductor 포함)은 one-shot 프로세스 — turn 종료 = 프로세스 종료.
-#   따라서 스테이지를 분사한 conductor 는 완료 알림 대기로 turn 을 끝낼 수 없고(알림은 죽은
-#   프로세스에 안 옴), 같은 turn 안에서 스테이지 종료를 능동 폴링해야 한다.
-#   본 헬퍼는 liveness 를 재구현하지 않고 dispatch-liveness.sh 를 재사용해 판정만 감싼다.
+# dispatch-wait — SD-14 one-shot wait-contract helper (OPERATIONS §5.10).
+#   A headless main/conductor is a one-shot process, so ending the turn also
+#   ends the process. After dispatching a stage, the conductor must poll for
+#   completion in the same turn instead of ending on a notification wait.
+#   This helper wraps dispatch-liveness.sh rather than reimplementing it.
 #
-#   사용: dispatch-wait.sh [--parent <self-slug>] [--jobs <path>] [--interval <s>] [--max <s>]
-#     --parent  내 slug (AGENT_DISPATCH_SELF_SLUG). 주면 jobs.log 의 open row 중 parent=<slug>
-#               자식만 대상으로 판정. 생략하면 모든 open row.
-#     --jobs    jobs.log 경로 (default $AGENT_HOME/.dispatch/jobs.log, liveness 와 동일 해석).
-#     --interval 폴 간격초 (default 20).
-#     --max     이 한 호출의 최대 대기초 (default 120, 상한 600 — 단일 Bash timeout 존중).
+#   Usage: dispatch-wait.sh [--parent <self-slug>] [--jobs <path>] [--interval <s>] [--max <s>]
+#     --parent  Limit open rows to children with parent=<slug>; otherwise use all.
+#     --jobs    jobs.log path (default: $AGENT_HOME/.dispatch/jobs.log).
+#     --interval Poll interval in seconds (default 20).
+#     --max     Maximum wait for this call (default 120, capped at 600).
 #
-#   exit 0 = 대상 자식이 모두 종료(open 아님) → 수확하라.
-#   exit 2 = 아직 살아있음, --max 도달 → 재호출하라(반복-호출 폴 형태; conductor 의 다음 Bash 가 이어감).
-#   exit 3 = SUSPECT/DEAD/EXITED 자식 있음 → 대기 금지, transcript tail·dispatch 로그로 진단→수확/재분사.
-#            (EXITED = wrapper 기록 pid 종료 + row 미마감 — 보통 정상 완주라 로그 tail 에서 verdict 수확.)
-#   각 iteration 한 줄 status 출력. background/nohup 없음(스테이지-워커 의무 — 동기 폴만).
-#   SD-15 (OPERATIONS §5.10 ⑨): DEAD 판정은 dispatch-liveness 재사용이라, 자식 dispatch
-#   로그의 limit/auth 즉사 패턴도 자동으로 exit 3 근거가 된다(transcript-mtime 단독 의존 탈피).
-set -u   # POSIX sh(dash)에는 pipefail 없음 — liveness 재사용이라 pipe 상태 의존 없음.
+#   exit 0: all target children are closed; harvest them.
+#   exit 2: children remain alive at --max; call again.
+#   exit 3: a child is SUSPECT/DEAD/EXITED; diagnose, then harvest or redispatch.
+#   Each iteration emits one status line. No background/nohup waits are used.
+#   Reusing liveness also incorporates anchored limit/auth death evidence (SD-15).
+set -u   # POSIX sh/dash has no pipefail; this wrapper does not depend on pipelines.
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/agent-home.sh")}"
@@ -40,19 +37,18 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$JOBS" ] || JOBS="${AGENT_DISPATCH_JOBS:-$AGENT_HOME/.dispatch/jobs.log}"
-# 상한 클램프: 단일 Bash timeout 안에 끝나도록.
+# Clamp to a single shell-call timeout budget.
 [ "$MAX" -gt 600 ] 2>/dev/null && MAX=600
 [ "$INTERVAL" -ge 1 ] 2>/dev/null || INTERVAL=20
 
-# jobs.log 없으면 대기할 자식도 없음 → 수확 가능.
+# Without jobs.log there are no children to wait for.
 if [ ! -f "$JOBS" ]; then
-  echo "(jobs.log 없음: $JOBS) — 열린 자식 없음"
+  echo "(jobs.log not found: $JOBS) — no open children"
   exit 0
 fi
 
-# open 자식 row 추출: --parent 주면 pipe 의 parent=<slug> 키가 정확히 일치하는 자식만.
-# slug 별 "최종 상태" 기준 — 수확이 in-place flip 이 아니라 done row *append* 로 기록되는
-# 패턴(fleet last-occurrence-wins 와 동일)에서도 이미 닫힌 자식을 open 으로 오인하지 않는다.
+# Select open child rows. With --parent, require an exact parent=<slug> field.
+# Use the last status per slug so append-only done rows close earlier open rows.
 open_children() {
   awk -F'\t' -v slug="$PARENT" '
     NF==6 {
@@ -68,18 +64,18 @@ open_children() {
 elapsed=0
 while :; do
   rows=$(open_children)
-  # 빈 문자열이면 grep -c 가 아니라 직접 카운트 (빈 줄 오탐 방지)
+  # Handle an empty string directly to avoid counting a phantom blank row.
   if [ -z "$rows" ]; then
     if [ -n "$PARENT" ]; then
-      echo "✓ parent=$PARENT 의 열린 자식 없음 — 수확 가능 (exit 0)"
+      echo "✓ parent=$PARENT has no open children — ready to harvest (exit 0)"
     else
-      echo "✓ 열린 자식 없음 — 수확 가능 (exit 0)"
+      echo "✓ no open children — ready to harvest (exit 0)"
     fi
     exit 0
   fi
   n=$(printf '%s\n' "$rows" | grep -c .)
 
-  # 대상 자식만 담은 임시 jobs 로 liveness 재사용 (exit 3 이 내 자식만 반영하도록).
+  # Reuse liveness with only the selected children so exit 3 stays scoped.
   tmp=$(mktemp)
   printf '%s\n' "$rows" > "$tmp"
   live_out=$(AGENT_HOME="$AGENT_HOME" "$LIVENESS" "$tmp" 2>&1)
@@ -87,17 +83,17 @@ while :; do
   rm -f "$tmp"
 
   if [ "$live_rc" -eq 3 ]; then
-    echo "⚠️ SUSPECT/DEAD 자식 있음 (open $n) — 대기 금지, 진단하라 (exit 3)"
+    echo "⚠️ SUSPECT/DEAD child detected (open $n) — stop waiting and diagnose (exit 3)"
     printf '%s\n' "$live_out"
     exit 3
   fi
 
   if [ "$elapsed" -ge "$MAX" ]; then
-    echo "… 자식 $n개 아직 실행 중 (${elapsed}s 폴, max ${MAX}s 도달) — 재호출하라 (exit 2)"
+    echo "… $n children still running after ${elapsed}s (max ${MAX}s) — call again (exit 2)"
     exit 2
   fi
 
-  echo "… 자식 $n개 ALIVE — ${INTERVAL}s 후 재폴 (경과 ${elapsed}s/${MAX}s)"
+  echo "… $n children ALIVE — poll again in ${INTERVAL}s (elapsed ${elapsed}s/${MAX}s)"
   sleep "$INTERVAL"
   elapsed=$((elapsed + INTERVAL))
 done

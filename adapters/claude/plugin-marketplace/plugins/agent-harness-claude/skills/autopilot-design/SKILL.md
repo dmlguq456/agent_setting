@@ -1,12 +1,12 @@
 ---
 name: autopilot-design
-description: "Use when starting a visual-design pipeline (tokens/components/references/handoff). 시각 산출물 디자인 파이프 entry — 토큰·컴포넌트·레퍼런스·핸드오프 통합"
+description: "Use when starting a visual-design pipeline spanning references, tokens, components, review, and handoff."
 argument-hint: "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: entry
   fam: design
   modes: []
-  blurb: "시각 산출물 디자인 파이프 entry — 토큰·컴포넌트·레퍼런스·핸드오프 통합"
+  blurb: "Run the visual-design pipeline from references through handoff."
 ---
 
 > 산출물 폴더:
@@ -40,7 +40,7 @@ metadata:
 - `/autopilot-design <args>` slash 직접 입력 — 컨펌 skip
 
 ## Language Rule
-- Korean output, English code identifiers, English design tokens (color names, font families).
+- User-facing output follows the user's communication language; preserve code identifiers and canonical design-token values or names.
 
 ## Argument Parsing
 

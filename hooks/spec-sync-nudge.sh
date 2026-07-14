@@ -1,29 +1,28 @@
 #!/usr/bin/env bash
-# spec-sync-nudge — PostToolUse(Edit|Write|MultiEdit) 사후 동기화 nudge.
-#   spec-backed 프로젝트에서 소스 파일 직접 편집이 spec 서술을 stale 하게 만들 수 있을 때,
-#   편집으로 *사라진 토큰*(값·식별자)을 spec/*.md 에서 grep 해 히트를 additionalContext 로
-#   메인에 사전주입한다. CLAUDE §3 "대응 동기화는 변경의 일부" 를 결정론 hook 이 뒷받침 —
-#   메인이 "spec 도 고쳐야 하나?" 판단을 잊어도 drift 후보가 눈앞에 놓인다.
-#   drill a_postedit_spec_sync 의 결정론 backstop (HOOKS.md design-bias: 출력 shape 은 conformance).
+# spec-sync-nudge — post-edit synchronization nudge for Edit|Write|MultiEdit.
+# In a spec-backed project, direct source edits can stale spec prose. Search
+# spec/*.md for values or identifiers removed by the edit and inject matching
+# lines as additionalContext. This deterministically supports the contract that
+# corresponding synchronization is part of the change.
 #
-#   Guards (모두 clean no-op exit 0 — never-block 불변식):
-#     - MEM_DISTILL=1 → distiller 세션 재귀 차단 (세 메모리 hook 과 동일 가드)
+#   Guards (all clean no-op status 0; never blocking):
+#     - MEM_DISTILL=1 → prevent recursion in distiller sessions
 #     - SPEC_SYNC_NUDGE=0 → per-shell opt-out
 #     - hook_event_name ≠ PostToolUse → no-op
-#     - spec-backed(.agent_reports|.claude_reports /spec/pipeline_state.yaml) 아님 → no-op
-#     - 편집 파일이 spec 디렉토리 자체 → no-op (spec 편집은 대상 아님)
-#     - 사라진 토큰 없음 / spec 히트 없음 → no-op (압도적 다수 정상 경로)
+#     - not spec-backed → no-op
+#     - edited file is inside the spec directory → no-op
+#     - no removed token or no spec hit → no-op
 #
-#   Read-only 불변식: DB·파일 write 0. additionalContext 만 emit — 메인 상태 무변경.
+#   Read-only invariant: no DB or file writes; emit additionalContext only.
 #
-#   Cap (context blowup 방지):
-#     SPEC_SYNC_HITS   (default 8)  — 주입 최대 히트 줄 수
-#     SPEC_SYNC_TOKENS (default 12) — 검사 최대 사라진-토큰 수
+#   Caps:
+#     SPEC_SYNC_HITS   (default 8)  — maximum injected hit lines
+#     SPEC_SYNC_TOKENS (default 12) — maximum removed tokens examined
 #
 #   Portable CLI:
 #     spec-sync-nudge.sh --file <path> [--old <s>] [--new <s>] [--cwd <dir>] [--format text|claude-json]
-#   인자 없으면 stdin 에서 PostToolUse hook JSON 을 읽어 claude-json 출력.
-#   등록은 adapter hook 설정이 담당한다 (matcher Edit|Write|MultiEdit, timeout 10).
+#   With no arguments, read PostToolUse JSON from stdin and emit Claude JSON.
+#   Adapter hook configuration owns registration.
 set -euo pipefail
 HOOK_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)"
 AGENT_HOME="${AGENT_HOME:-$("$HOOK_DIR/../utilities/agent-home.sh")}"
@@ -37,12 +36,12 @@ Without arguments, reads Claude PostToolUse hook JSON from stdin and emits Claud
 EOF
 }
 
-# 재귀가드 (불변식): distiller 세션이면 trigger X, stdin drain 후 즉시 exit 0.
+# Recursion guard: in a distiller session, drain stdin and exit 0.
 [ "${MEM_DISTILL:-}" = "1" ] && { cat >/dev/null 2>&1; exit 0; }
 # per-shell opt-out.
 [ "${SPEC_SYNC_NUDGE:-1}" = "0" ] && { cat >/dev/null 2>&1; exit 0; }
 
-# 핵심 로직 = portable python (regex/glob/JSON escaping 안전). CLI/stdin 두 모드.
+# Core logic uses portable Python for safe regex, glob, and JSON escaping.
 NUDGE_PY='
 import os, sys, json, re, glob
 
@@ -91,21 +90,20 @@ spec_dir = find_spec_dir(file_path)
 if not spec_dir:
     sys.exit(0)
 
-# 편집 파일이 spec 디렉토리 자체 → 대상 아님
+# Spec-directory edits are not candidates.
 try:
     if os.path.commonpath([os.path.abspath(file_path), os.path.abspath(spec_dir)]) == os.path.abspath(spec_dir):
         sys.exit(0)
 except ValueError:
     pass
 
-# prose/문서 편집은 대상 아님 — spec drift 의 핵심은 code/config 값 변경이다.
-# 문서 워딩 reword 로 흔한 단어(runtime/bootstrap 등)를 지우면 무관한 spec 산문과
-# 오탐 매칭됨(실관찰). spec 자체도 .md 지만 위 spec-dir 스킵이 이미 걸러낸다.
+# Prose edits are not candidates; code/config value changes are the signal.
+# Common prose words create unrelated spec matches.
 PROSE_EXT = {".md", ".markdown", ".mdx", ".rst", ".txt", ".adoc", ".org"}
 if os.path.splitext(file_path)[1].lower() in PROSE_EXT:
     sys.exit(0)
 
-# 사라진 토큰: old 에 있고 new 에 없는 값/식별자
+# Removed tokens: values or identifiers present in old but absent from new.
 TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}|\d+(?:\.\d+)?")
 STOP = {"def","for","pass","return","self","the","and","not","import","from","class",
         "true","false","none","null","eof","this","that","with","print","range","function"}
@@ -115,8 +113,9 @@ maxtok = int(os.environ.get("SPEC_SYNC_TOKENS", "12"))
 for t in TOKEN_RE.findall(old or ""):
     if t in new_set or t in seen or t.lower() in STOP:
         continue
-    # alpha 식별자는 code-like(대문자·숫자·`_` 포함)만 후보 — 흔한 소문자 산문 단어 배제(오탐 억제).
-    # 숫자·버전 토큰(30·512·1e-4 형태)은 항상 후보 (config 값 drift 의 주 신호).
+    # Alphabetic identifiers must look code-like (uppercase, digits, or `_`)
+    # to exclude ordinary lowercase prose. Numeric/version tokens are always
+    # candidates because they are a primary config-drift signal.
     if t[:1].isalpha():
         if len(t) < 3:
             continue
@@ -128,7 +127,7 @@ for t in TOKEN_RE.findall(old or ""):
 if not removed:
     sys.exit(0)
 
-# spec markdown (prd.md + design/*.md 등), _internal 스냅샷 제외
+# Spec markdown (prd.md, design/*.md, etc.); exclude _internal snapshots.
 md = [f for f in glob.glob(os.path.join(spec_dir, "**", "*.md"), recursive=True)
       if "_internal" not in os.path.relpath(f, spec_dir).split(os.sep)]
 md.sort()
@@ -159,8 +158,8 @@ rows = []
 for rel, ln, tok, text in hits:
     snip = text if len(text) <= 120 else text[:117] + "..."
     rows.append("  {}:{}  «{}»  {}".format(rel, ln, tok, snip))
-body = ("# \U0001f517 spec 동기화 nudge — 방금 편집이 아래 spec 서술과 어긋날 수 있음\n"
-        "편집으로 사라진 값/식별자가 spec 에 아직 남아 있습니다. 대응 동기화(변경의 일부)를 검토하세요:\n"
+body = ("# \U0001f517 Spec synchronization nudge — the edit may conflict with the spec lines below\n"
+        "Values or identifiers removed by the edit still appear in the spec. Review the corresponding synchronization as part of this change:\n"
         + "\n".join(rows))
 
 if FMT == "text":

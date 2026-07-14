@@ -3,18 +3,26 @@
 This is the portable capability contract for `autopilot-code`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
 | Identifier | `autopilot-code` |
 | Group | `entry` |
 | Supported modes | `dev, debug, audit` |
-| Portable meaning | 코드 작업 entry. spec 컨텍스트를 감지하고 plan→execute→test→report 흐름을 닫는다. |
-| Argument shape | `--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]` |
+| Portable meaning | Code-work entrypoint that detects spec context and closes the plan→execute→test→report loop. |
+| Argument shape | `--mode dev\|debug <task/plan/error description> [--from <step>] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--user-refine]` |
 
 ## Invocation Semantics
 
-_코드 작업 일반_ entry — 라이브러리·연구 코드·앱 모두 커버. 신규·기존 코드 무관 (cwd 자동 감지). dev (기능 추가·신규) / debug (진단·수정) 두 mode. spec/ 컨텍스트 발견 시 spec 자동 Read + spec mode 별 분기: app mode → 디자인팀 critic + DB migration 안전 + push 자동 deploy. library mode → 공개 API 일관성 점검. cli mode → 명령·옵션 일관성. research mode → 재현성·configs·metric 검증. 코드 외 결정 (PRD·스택·skeleton·ship setup) 은 autopilot-spec 영역.
+General code-work entrypoint for libraries, research code, and applications,
+whether new or existing; it detects the cwd automatically. It supports `dev`
+(features/new work) and `debug` (diagnosis/fixes). When `spec/` exists, read it
+and branch by spec mode: app adds design critique, migration safety, and
+push/deploy handling; library checks public API consistency; CLI checks command
+and option consistency; research checks reproducibility, configs, and metrics.
+Non-code decisions such as PRDs, stack selection, skeletons, and ship setup
+belong to autopilot-spec.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
@@ -115,7 +123,7 @@ When no spec exists, infer mode lightly from project files, report the inference
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/autopilot-code/SKILL.md` and `skills/autopilot-code/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-code/SKILL.md`, while `skills/autopilot-code/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-code`. Use `adapters/codex/skills/autopilot-code/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/autopilot-code/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-code`. Use `adapters/codex/skills/autopilot-code/SKILL.md` as the native Codex Skill projection; do not consume `skills/autopilot-code/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info autopilot-code`. Use `adapters/opencode/skills/autopilot-code/SKILL.md` and `adapters/opencode/commands/autopilot-code.md` as native OpenCode projections; do not consume `skills/autopilot-code/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

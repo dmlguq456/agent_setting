@@ -61,7 +61,6 @@ _CODEX_FIXED_SYMLINKS = [
     ("agent-skills", "codex_setting/codex-skills"),
     ("agent-modes", "codex_setting/codex-modes"),
     ("agent-agents", "codex_setting/codex-agents"),
-    ("agent-plugin-marketplace", "codex_setting/codex-plugin-marketplace"),
     ("agent-hooks", "codex_setting/codex-hooks"),
     ("agent-config", "codex_setting/codex-config"),
     ("hooks.json", "codex_setting/codex-hooks/hooks.json"),

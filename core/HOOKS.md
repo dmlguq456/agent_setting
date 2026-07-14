@@ -51,7 +51,8 @@ preflight doctor path, without blurring the conformance/drill distinction above.
 | workflow tracked signal | `utilities/workflow-guard-hook.sh` | `portable-check` | Surface tracked/untracked mode and clean stale flags. | Run `utilities/workflow-guard-hook.sh --event prompt [--cwd <dir>] [--session <id>] [--format text]` before prompt handling, and `--event start` for stale flag GC. |
 | workflow mode toggle | `utilities/workflow-toggle.sh` | `portable-check` | Toggle or set the session-scoped `.untracked[.<session>]` escape-hatch flag under the artifact root. | Expose an adapter-native toggle surface; Codex uses `adapters/codex/bin/preflight.sh track [cwd] [session-id]`, Claude uses `/track`. |
 | memory injection | `tools/memory/mem.py inject` | `portable-check` | Inject relevant DB memory at session start. | Run `tools/memory/mem.py inject` for text output, or `tools/memory/mem.py inject --hook` when the runtime accepts Claude-style `additionalContext`; adapters may keep automatic session-start injection opt-in when the runtime can fire start events on resume or compact. |
-| memory recall injection | `hooks/mem-recall-inject.sh` | `portable-check` | Recall signal words trigger DB recall and context injection. | Run `hooks/mem-recall-inject.sh --prompt <text> [--cwd <dir>] [--format text]` before prompt handling, or attach it to a prompt-submit event. |
+| agent-initiated memory retrieval | `tools/memory/recall.sh`, `tools/memory/mem.py recall` | `portable-check` | The acting agent decides when prior context is relevant, then invokes scoped retrieval. Ranking and limits organize results after that decision; prompt-submit hooks do not classify every prompt or inject threshold-qualified hits. | Expose an explicit adapter-native helper. Keep retrieval project-scoped by default and widen scope only when the agent chooses to do so. |
+| retired automatic recall shim | `hooks/mem-recall-inject.sh` | `portable-check` | Compatibility no-op for stale installed projections. It drains an old prompt payload, emits no context, and exits successfully. | Do not register it in current prompt hooks; expose the explicit retrieval helper above. |
 | memory distillation trigger | `hooks/mem-turn-nudge.sh`, `hooks/mem-distill-dispatch.sh` | `adapter-coupled-automation` | Periodically distill session deltas into DB memory through a no-tools worker. The shared dispatcher uses `MEM_DISTILL_WORKER=<executable>` with `<mode> <model> <prompt-file>` arguments. | Provide session transcript source (`mem.py distill --source <adapter>`), detached worker invocation, and no-tools/action contract before automatic memory mutation. |
 | oncall briefing injection | `hooks/mem-briefing-inject.sh` | `portable-check` | On the dedicated agent desk, inject daily oncall report once per day. | Run `hooks/mem-briefing-inject.sh --cwd <dir> [--format text]` before prompt handling, or attach it to a prompt-submit event. |
 | worklog state signal | `utilities/agent-worklog-state.sh` | `portable-check` | Surface configured `<agent-notes-root>` / `<worklog-board-app>` inventory without mutating data. | Run `utilities/agent-worklog-state.sh [cwd]` or an adapter wrapper before worklog-board or agent-notes work. |
@@ -97,8 +98,8 @@ track [cwd] [session-id]` to toggle the same session-scoped workflow bypass flag
 without relying on a Claude slash command. Use `adapters/codex/bin/preflight.sh
 memory [cwd]` for plain-text memory injection; Codex automatic SessionStart
 context is opt-in via `CODEX_SESSION_MEMORY_INJECT=1`.
-Use `adapters/codex/bin/preflight.sh recall <prompt> [cwd]` to run the same
-recall-signal injection logic without Claude hook JSON.
+Use `adapters/codex/bin/preflight.sh recall <query> [cwd]` when the agent
+chooses to retrieve memory explicitly; it is not a prompt-hook classifier.
 Use `adapters/codex/bin/preflight.sh briefing [cwd]` to surface the same
 daily oncall briefing without Claude hook JSON.
 Use `adapters/codex/bin/preflight.sh worklog [cwd]` to inspect the configured

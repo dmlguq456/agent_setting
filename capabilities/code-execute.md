@@ -3,13 +3,14 @@
 This is the portable capability contract for `code-execute`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
 | Identifier | `code-execute` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | plan 단계별 구현 실행. 개발 role에 작업을 위임하고 execution log를 남긴다. |
+| Portable meaning | Execute a plan step by step, delegate implementation to the development role, and record an execution log. |
 | Argument shape | `<plan name or path>` |
 
 ## Invocation Semantics
@@ -41,7 +42,7 @@ Adapters must preserve the portable invariants relevant to this capability:
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/code-execute/SKILL.md` and `skills/code-execute/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/code-execute/SKILL.md`, while `skills/code-execute/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info code-execute`. Use `adapters/codex/skills/code-execute/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/code-execute/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/code-execute/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info code-execute`. Use `adapters/codex/skills/code-execute/SKILL.md` as the native Codex Skill projection; do not consume `skills/code-execute/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info code-execute`. Use `adapters/opencode/skills/code-execute/SKILL.md` and `adapters/opencode/commands/code-execute.md` as native OpenCode projections; do not consume `skills/code-execute/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

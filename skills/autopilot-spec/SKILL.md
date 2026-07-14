@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-spec
-description: "Use when writing or updating requirements/blueprint (PRD). 요구사항·청사진 작성·갱신 entry — prd.md 단일 출처, 모든 spec 변경의 canonical 경로"
-argument-hint: "<task description> [--mode auto|app|library|api|cli|research|update (콤마로 다중)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
+description: "Use when invoking the portable autopilot-spec capability. Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path."
+argument-hint: "<task description> [--mode auto|app|library|api|cli|research|update (comma-separated for multiple)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
 metadata:
   group: entry
   fam: code
-  modes: [app, library, api, cli, research, update]
-  blurb: "요구사항·청사진 작성·갱신 entry — prd.md 단일 출처, 모든 spec 변경의 canonical 경로"
+  modes: ["app", "library", "api", "cli", "research", "update"]
+  blurb: "Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path."
 ---
 
 > 산출물 폴더: `<artifact-root>/spec/` (CONVENTIONS.md §5.4.3 3-tier). 숫자 prefix 없는 평이한 이름 — `prd.md` (T1, 항상 최신) · `stack.md` · `design/` · `ship.md` · `pipeline_state.yaml` · `_internal/`.
@@ -75,8 +76,8 @@ metadata:
 - `/autopilot-spec <args>` slash 직접 입력 — 컨펌 skip
 
 ## Language Rule
-- Think in English internally. Write user-facing output in Korean.
-- Code identifiers, file paths, technical terms stay in English.
+- User-facing output follows the user's communication language unless an explicit audience or artifact-language requirement overrides it.
+- Preserve code identifiers, file paths, and technical terms as written when translation would reduce precision.
 
 ## Spec 변경 canonical 경로·게이트 (개요)
 

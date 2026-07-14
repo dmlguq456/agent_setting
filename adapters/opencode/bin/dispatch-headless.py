@@ -31,7 +31,7 @@ QA_FROM_INTENSITY = {
     "adversarial": "adversarial",
 }
 
-# SD-15 (OPERATIONS §5.10 ⑨): limit/auth 즉사 패턴 — homomorphic port of the Claude
+# SD-15 (OPERATIONS §5.10 ⑨): immediate limit/auth failure patterns — homomorphic port of the Claude
 # wrapper's DEATH_PATTERNS. `opencode run --format json` surfaces provider limit/auth
 # failures as text/JSON in the log; a raw tail substring scan matches either. Runtime-
 # currentness (2026-07, anomalyco/opencode#8203·#11104·#34886·#15890): OpenCode prints

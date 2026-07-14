@@ -1,19 +1,22 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: code-execute
-description: "plan 단계별 구현 실행 — 개발팀 디스패치 sub-skill"
+description: "Use when invoking the portable code-execute capability. Execute a plan step by step, delegate implementation to the development role, and record an execution log."
 argument-hint: "<plan name or path>"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "plan 단계별 구현 실행 — 개발팀 디스패치 sub-skill"
+  blurb: "Execute a plan step by step, delegate implementation to the development role, and record an execution log."
 ---
 
 > **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: runs either in-session (Skill tool) or as its own depth-2 headless session dispatched by the autopilot-code conductor. Input = the plan path (args) resolved below; it reads `plan/plan.md` from files, never prior-stage conversation. This is the **only source-mutating stage**; write class = source code + `plan/checklist.md`·`dev_logs/`·`_internal/dev_reviews/`·plan frontmatter `status`. 개발팀 delegation stays **inside** this session (its own in-session parallel dev-team is depth-uncounted).
 
 > **Plan Resolution**: `$ARG`→plan 경로 해석은 [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) 단일 authority — 로드해 그 절차대로 해석한다.
 
-> **Language Rule**: 사용자-facing 출력은 자연스러운 한국어. 단일 SoT = [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
+> **Language Rule**: user-facing artifacts follow the audience and artifact
+> language contract in
+> [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md).
 
 ## Commit Message Convention
 - Safety checkpoint: `chore: Safety checkpoint before {plan-name} execution`

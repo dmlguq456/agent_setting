@@ -3,14 +3,15 @@
 This is the portable capability contract for `draft-refine`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
 | Identifier | `draft-refine` |
 | Group | `sub` |
 | Supported modes | `none` |
-| Portable meaning | 초안 정련·다듬기. memo/review feedback을 문서 전략이나 draft에 반영한다. |
-| Argument shape | `<strategy or draft name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]` |
+| Portable meaning | Refine a draft by applying memo/review feedback to a document strategy or draft. |
+| Argument shape | `<strategy or draft name or path> [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial]` |
 
 ## Invocation Semantics
 
@@ -41,7 +42,7 @@ Adapters must preserve the portable invariants relevant to this capability:
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/draft-refine/SKILL.md` and `skills/draft-refine/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/draft-refine/SKILL.md`, while `skills/draft-refine/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info draft-refine`. Use `adapters/codex/skills/draft-refine/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/draft-refine/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/draft-refine/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info draft-refine`. Use `adapters/codex/skills/draft-refine/SKILL.md` as the native Codex Skill projection; do not consume `skills/draft-refine/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info draft-refine`. Use `adapters/opencode/skills/draft-refine/SKILL.md` and `adapters/opencode/commands/draft-refine.md` as native OpenCode projections; do not consume `skills/draft-refine/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

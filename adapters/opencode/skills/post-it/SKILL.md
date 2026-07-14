@@ -1,6 +1,6 @@
 ---
 name: post-it
-description: "Use for post-it: 프로젝트·cross-project 기록과 handoff를 working memory로 남긴다."
+description: "Use for post-it: Store project/cross-project notes and handoffs in working memory."
 metadata:
   portable_source: capabilities/post-it.md
   adapter: opencode
@@ -30,8 +30,8 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 - Identifier: `post-it`
 - Supported modes: `none`
-- Argument shape: `[show]|add <category> <text>|resolve <hint>|decide <text>|handoff [--no-confirm]|sweep [--no-confirm]|promote [<hint>] [--scope project|user [<aspect>]]`
-- Portable meaning: 프로젝트·cross-project 기록과 handoff를 working memory로 남긴다.
+- Argument shape: `[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]`
+- Portable meaning: Store project/cross-project notes and handoffs in working memory.
 
 ## Portable Contract
 

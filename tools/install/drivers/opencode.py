@@ -263,7 +263,7 @@ def install(scope="global", plugin=False, dry_run=False):
 
 
 def checks(scope="global"):
-    """verify 가 실행할 check 함수 목록 (Phase 4.4)."""
+    """verify 가 실행할 core projection + preflight check 목록."""
     entries = projector.plan(["opencode"], scope=scope)["opencode"]
 
     check_list = []
@@ -281,14 +281,13 @@ def checks(scope="global"):
 
     agent_home = str(paths.agent_home())
 
-    for name in ("skills", "agents", "commands"):
-        check_list.append(
-            verifier.check_cmd(
-                f"opencode.sync-native-{name}",
-                ["python3", f"adapters/opencode/bin/sync-native-{name}.py", "--check"],
-                cwd=agent_home,
-            )
+    check_list.append(
+        verifier.check_cmd(
+            "opencode.generated-projections",
+            ["python3", "tools/generate.py", "--check"],
+            cwd=agent_home,
         )
+    )
 
     check_list.append(
         verifier.check_cmd(

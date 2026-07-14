@@ -1,12 +1,12 @@
 ---
 name: autopilot-research
-description: "Use when doing upfront survey research (papers/tech/market) before downstream work. 세 family 공통 사전조사 — 논문·기술·시장 survey 후 다운스트림으로 분기하는 entry"
+description: "Use when surveying academic, technology, or market sources before downstream work."
 argument-hint: "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]"
 metadata:
   group: entry
   fam: pre
   modes: [academic, technology, market]
-  blurb: "세 family 공통 사전조사 — 논문·기술·시장 survey 후 다운스트림으로 분기하는 entry"
+  blurb: "Survey academic, technology, or market sources before routing downstream."
 ---
 
 # autopilot-research
@@ -51,10 +51,10 @@ metadata:
 - 기존 research 폴더에 entry 추가만 — `/autopilot-refine`
 - `/autopilot-research <args>` slash 직접 입력 — 컨펌 skip 하고 즉시 invoke
 
-> 본 섹션은 `/sync-skills` 가 `<agent-home>/README.md` 운영 룰 안내로 자동 반영.
-
-## Language Rule
-- When explaining something to the user, write in Korean.
+## Artifact Language
+User-facing research artifacts follow the audience-language-first rule in
+`<agent-home>/roles/response-policy.md`; publication, external-audience, and
+explicit target-language contracts take precedence.
 
 ## Mode Routing
 

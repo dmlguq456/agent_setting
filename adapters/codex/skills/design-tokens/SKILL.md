@@ -1,6 +1,6 @@
 ---
 name: design-tokens
-description: "Use for design-tokens: 색·타이포·간격 등 디자인 토큰을 정의한다."
+description: "Use for design-tokens: Define design tokens such as color, typography, and spacing."
 ---
 
 # design-tokens
@@ -28,7 +28,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Identifier: `design-tokens`
 - Supported modes: `none`
 - Argument shape: `<design path or app path>`
-- Portable meaning: 색·타이포·간격 등 디자인 토큰을 정의한다.
+- Portable meaning: Define design tokens such as color, typography, and spacing.
 
 ## Portable Contract
 

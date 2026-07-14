@@ -1,0 +1,39 @@
+project_name: harness-productization
+created: 2026-07-14
+updated: 2026-07-14
+spec_version: 4
+mode:
+  - library
+  - cli
+status: phase_2_complete
+source_of_truth: .agent_reports/spec/harness-productization/prd.md
+inputs:
+  - .agent_reports/research/cross-platform-agent-frameworks/analysis_summary.md
+  - .agent_reports/research/cross-platform-agent-frameworks/06_implementation.md
+  - .agent_reports/spec/harness-installer/prd.md
+  - .agent_reports/spec/harness-layer-sync/prd.md
+  - .agent_reports/spec/skill-design-refactor/prd.md
+phases:
+  phase_1_cross_runtime_source_activation: completed
+  phase_2_manifest_projections_profiles: completed
+  phase_3_local_first_optional_extensions: pending
+locked_decisions:
+  - phase_1_covers_codex_claude_and_opencode
+  - linked_is_the_maintainer_default
+  - plugins_are_outside_phase_1_activation
+  - native_and_plugin_discovery_cannot_be_active_together
+  - core_activation_has_no_network_or_package_manager_dependency
+  - kernel_guards_are_always_on
+  - generated_projections_are_not_sources_of_truth
+  - profiles_compose_packs_without_forking_capabilities
+  - external_skills_never_auto_promote_to_core
+  - phases_execute_in_order
+  - runtime_cli_extends_the_existing_installer
+  - packaged_uses_checksum_pinned_native_local_bundles
+  - phase_1_runtime_activation_is_global_only
+  - builder_is_the_default_profile
+  - harness_manifest_is_the_canonical_machine_source
+  - core_projection_uses_one_generator_entrypoint
+  - marketplace_bundles_are_outside_core_checks
+open_decisions: []
+next_action: run_autopilot_code_for_phase_3

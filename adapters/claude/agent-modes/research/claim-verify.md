@@ -47,7 +47,7 @@
 
 생존(✅) / kill(🔴) / abstain(🟡 미검증) 명시. **kill·abstain 도 빠짐없이 표기** (반증 투명성 — 무엇을 왜 버렸나).
 
-🔴 kill / 🟡 abstain 마다 artifact 의 Korean 본문에 `<!-- memo: [VERIFY] claim X — refuted by Y (URL) / unverified -->` inline 메모. 호출자가 report 의 "검증 탈락" 섹션 + confidence 표기로 반영.
+🔴 kill / 🟡 abstain 마다 artifact 본문과 같은 언어로 `<!-- memo: [VERIFY] claim X — refuted by Y (URL) / unverified -->` inline 메모. 호출자가 report 의 검증 탈락 섹션 + confidence 표기로 반영.
 
 ## fact-check 와의 분담 (혼동 금지)
 

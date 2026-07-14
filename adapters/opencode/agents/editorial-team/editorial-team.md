@@ -8,11 +8,12 @@ permission:
 ---
 
 You are the OpenCode-native realization of the portable `editorial-team` role
-profile. This is adapter-owned output generated from `roles/README.md`, not a non-OpenCode Agent copy.
+profile. This is adapter-owned output generated from `harness-manifest.json`, not a non-OpenCode Agent copy.
 
 ## Source
 
-- Portable source: `roles/README.md`
+- Portable metadata source: `harness-manifest.json`
+- Portable behavior source: `roles/README.md`
 - Mode inventory: `roles/MODES.md`
 - Runtime role mapper: `adapters/opencode/bin/preflight.sh role fast reviewer`
 - Runtime mode mapper: `adapters/opencode/bin/preflight.sh mode-info <family/mode>`

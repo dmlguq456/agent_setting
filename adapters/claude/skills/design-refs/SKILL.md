@@ -1,16 +1,17 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: design-refs
-description: "레퍼런스 시각 자료 수집·정리 sub-skill"
+description: "Use when invoking the portable design-refs capability. Collect external and user-provided visual references and create a brief."
 argument-hint: "<design task> [--design <path>] [--refs <image paths>] [--no-web]"
 metadata:
   group: sub
   fam: sub
   modes: []
-  blurb: "레퍼런스 시각 자료 수집·정리 sub-skill"
+  blurb: "Collect external and user-provided visual references and create a brief."
 ---
 
 ## Language Rule
-- Korean output.
+- User-facing output follows the user's communication language unless the target audience requires another language.
 
 ## Design Resolution
 

@@ -3,18 +3,34 @@
 This is the portable capability contract for `autopilot-note`. It defines runtime-neutral meaning and adapter obligations. It is not a Claude Skill file.
 
 ## Contract
+<!-- GENERATED: harness-manifest.json -->
 
 | Field | Value |
 |---|---|
 | Identifier | `autopilot-note` |
 | Group | `entry` |
 | Supported modes | `none` |
-| Portable meaning | 산출물 라우팅/노트화. digest와 triage 제안을 만든다. |
-| Argument shape | `[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]` |
+| Portable meaning | Route and note artifacts, producing digests and triage proposals. |
+| Argument shape | `[--scope today\|yesterday\|since <date>\|all] [--target <notes-root>] [--dry-run] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--digest-only] [--triage-only] [--source <list>]` |
 
 ## Invocation Semantics
 
-Autopilot family — periodic + on-demand 산출물 routing pipeline (2-Layer 모델). Scans `<artifact-root>/{research,documents,plans,analysis_project}/` + `experiments/` + `git log` for artifacts changed since last run, then turns each into a **Layer 2 산출물 노트** under `<agent-notes-root>/_layer2/notes/<id>.md` and links it to the user's **Layer 1** board cards under `<agent-notes-root>/cards/`. 5-way routing — create L2 note row (auto), link note `card_id` → existing L1 card (auto-PROPOSE as `routing_status: inbox` with `routing_confidence`/`routing_reason`; unattended cron NEVER auto-confirms — user confirms in `/triage`), link `backbone_ids`/`task_ids` → L2 catalog (auto, emerge if needed), propose new L1 card (triage), park as ambient `card_id: null` note (auto fallback). Daily digest accumulates at `<agent-notes-root>/digests/YYYY-MM-DD.md`. Idempotent — same source processed twice never duplicates a note. Routine cron defaults to `quick` intensity and its derived verification rigor. Escalate intensity to `standard+` for weekly bulk consolidation, Notion migration, or pre-handoff cleanup. Source 6 includes Notion mirror (Phase 3, gated).
+Autopilot-family periodic and on-demand artifact-routing pipeline using a
+two-layer model. Scan
+`<artifact-root>/{research,documents,plans,analysis_project}/`, `experiments/`,
+and `git log` for changes since the previous run. Convert each item into a
+**Layer 2 artifact note** at `<agent-notes-root>/_layer2/notes/<id>.md` and link
+it to the user's **Layer 1** cards under `<agent-notes-root>/cards/`. Five-way
+routing creates an L2 row automatically; proposes linking `card_id` to an
+existing L1 card as `routing_status: inbox` with confidence/reason (unattended
+cron never confirms; the user confirms in `/triage`); links
+`backbone_ids`/`task_ids` to the L2 catalog, creating entries when necessary;
+proposes a new L1 card during triage; or parks an ambient `card_id: null` note as
+the fallback. Append daily digests to
+`<agent-notes-root>/digests/YYYY-MM-DD.md`. Processing is idempotent. Routine
+cron uses `quick` intensity and its derived rigor; use `standard+` for weekly
+bulk consolidation, Notion migration, or pre-handoff cleanup. Source 6 is the
+gated Phase 3 Notion mirror.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
@@ -48,7 +64,7 @@ Adapters must preserve the portable invariants relevant to this capability:
 | Adapter | Realization |
 |---|---|
 | Claude Code | `adapters/claude/skills/autopilot-note/SKILL.md` and `skills/autopilot-note/SKILL.md` are byte-identical (enforced by `check-adaptation-boundary.sh`'s `diff -qr`); the only difference is the runtime discovery path — Claude Code discovers `adapters/claude/skills/autopilot-note/SKILL.md`, while `skills/autopilot-note/SKILL.md` remains the compatibility reference kept for parity/drift checks. |
-| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-note`. Use `adapters/codex/skills/autopilot-note/SKILL.md` and `adapters/codex/plugins/agent-harness-codex/skills/autopilot-note/SKILL.md` as native Codex Skill/plugin projections; do not consume `skills/autopilot-note/SKILL.md` or Claude command files as native Codex configuration. |
+| Codex | Read this spec and run `adapters/codex/bin/preflight.sh capability-info autopilot-note`. Use `adapters/codex/skills/autopilot-note/SKILL.md` as the native Codex Skill projection; do not consume `skills/autopilot-note/SKILL.md` or Claude command files as native Codex configuration. |
 | OpenCode | Read this spec and run `adapters/opencode/bin/preflight.sh capability-info autopilot-note`. Use `adapters/opencode/skills/autopilot-note/SKILL.md` and `adapters/opencode/commands/autopilot-note.md` as native OpenCode projections; do not consume `skills/autopilot-note/SKILL.md` or Claude command files as native OpenCode configuration. |
 
 ## Compatibility Reference

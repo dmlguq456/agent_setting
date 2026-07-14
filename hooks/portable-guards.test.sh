@@ -431,9 +431,9 @@ else
 fi
 if "$RECALL" --prompt "일반 질문" --cwd "$TMP/flowproj" --format text >/tmp/recall.out 2>/tmp/recall.err \
   && [ ! -s /tmp/recall.out ]; then
-  ok "recall wrapper no-ops without signal word"
+  ok "retired recall hook is a silent compatibility no-op"
 else
-  bad "recall wrapper should no-op without signal word"
+  bad "retired recall hook should remain a silent compatibility no-op"
 fi
 if "$CODEX" recall "전에 결정한 내용 뭐였지" "$TMP/flowproj" >/tmp/recall.out 2>/tmp/recall.err; then
   ok "codex recall wrapper exits cleanly"
@@ -534,7 +534,7 @@ if "$CODEX" prompt-signal "$TMP/flowproj" testsid >/tmp/codex_prompt_signal_trac
   && grep -q '^autopilot_route=autopilot-required-for-spec-and-nontrivial-work$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^routing_contract=core/WORKFLOW.md$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^routing_action=read-workflow-and-select-codex-skill$' /tmp/codex_prompt_signal_tracked.out \
-  && grep -q '^capability_entrypoints=codex-native-skills-plugin$' /tmp/codex_prompt_signal_tracked.out \
+  && grep -q '^capability_entrypoints=codex-native-skills$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^hook_event=UserPromptSubmit$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^hook_scope=runtime-hook$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^hook_boundary=shell-read-write-targeted-detection-explicit-preflight-fallback$' /tmp/codex_prompt_signal_tracked.out; then
@@ -941,20 +941,20 @@ if AGENT_DISPATCH_JOBS="$TMP/claude-env-jobs.log" \
 else
   bad "claude dispatch wrapper should use the selected shared registry"
 fi
-if CODEX_THREAD_ID=codex-parent python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --worktree "$TMP/repo" --slug claude-owned --capability sync-skills --mode ops/verification --qa standard --intensity thorough --depth 1 --worker-role verifier --owner sync-skills --model-role "fast reviewer" --prompt-text "verify" --jobs "$TMP/claude-owned.log" --log-dir "$TMP/claude-owned-logs" >/tmp/claude_owned.out 2>/tmp/claude_owned.err \
+if CODEX_THREAD_ID=codex-parent python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --worktree "$TMP/repo" --slug claude-owned --capability audit --mode ops/verification --qa standard --intensity thorough --depth 1 --worker-role verifier --owner audit --model-role "fast reviewer" --prompt-text "verify" --jobs "$TMP/claude-owned.log" --log-dir "$TMP/claude-owned-logs" >/tmp/claude_owned.out 2>/tmp/claude_owned.err \
   && grep -q '^intensity=thorough$' /tmp/claude_owned.out \
   && grep -q '^depth=1$' /tmp/claude_owned.out \
   && grep -q '^parent_session_id=codex-parent$' /tmp/claude_owned.out \
   && grep -q '^worker_role=verifier$' /tmp/claude_owned.out \
-  && grep -q '^owner=sync-skills$' /tmp/claude_owned.out \
+  && grep -q '^owner=audit$' /tmp/claude_owned.out \
   && grep -q '^owner_harness=codex$' /tmp/claude_owned.out \
-  && grep -q $'open\t.*/repo\t.*/repo\tclaude-owned\tcapability=sync-skills,mode=ops/verification,qa=standard,intensity=thorough,depth=1,harness=claude,parent_sid=codex-parent,worker_role=verifier,owner=sync-skills,owner_harness=codex,model_source=role,model_role=fast reviewer,model=sonnet,effort=medium' "$TMP/claude-owned.log" \
+  && grep -q $'open\t.*/repo\t.*/repo\tclaude-owned\tcapability=audit,mode=ops/verification,qa=standard,intensity=thorough,depth=1,harness=claude,parent_sid=codex-parent,worker_role=verifier,owner=audit,owner_harness=codex,model_source=role,model_role=fast reviewer,model=sonnet,effort=medium' "$TMP/claude-owned.log" \
   && grep -q 'parent_session_id: codex-parent' "$TMP/claude-owned-logs/claude-owned.claude.prompt.txt"; then
   ok "claude dispatch wrapper records cross-harness ownership metadata"
 else
   bad "claude dispatch wrapper should record cross-harness ownership metadata"
 fi
-if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug claude-bad-depth --capability sync-skills --mode ops/verification --qa standard --intensity standard --depth 2 --model-role "fast reviewer" --prompt-text "verify" --jobs "$TMP/claude-bad-depth.log" >/tmp/claude_bad_depth.out 2>/tmp/claude_bad_depth.err; then
+if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug claude-bad-depth --capability audit --mode ops/verification --qa standard --intensity standard --depth 2 --model-role "fast reviewer" --prompt-text "verify" --jobs "$TMP/claude-bad-depth.log" >/tmp/claude_bad_depth.out 2>/tmp/claude_bad_depth.err; then
   bad "claude dispatch wrapper should reject depth-2 without parent"
 else
   rc=$?
@@ -1147,7 +1147,7 @@ if "$CODEX" ui-info >/tmp/codex_ui.out 2>/tmp/codex_ui.err \
   && grep -q '^statusline_custom_dynamic_fields=unsupported$' /tmp/codex_ui.out \
   && grep -q '^statusline_fragment=codex_setting/codex-config/tui-statusline.toml$' /tmp/codex_ui.out \
   && grep -q '^harness_status_surface=adapter-owned-preflight-status$' /tmp/codex_ui.out \
-  && grep -q '^autopilot_entrypoints=codex-native-skills-plugin$' /tmp/codex_ui.out \
+  && grep -q '^autopilot_entrypoints=codex-native-skills$' /tmp/codex_ui.out \
   && grep -q '^autopilot_auto_routing=instruction-guided-not-claude-slash-router$' /tmp/codex_ui.out \
   && grep -q '^subagent_auto_spawn=explicit-or-main-dispatched$' /tmp/codex_ui.out \
   && grep -q '^subagent_feature_check=adapters/codex/bin/preflight.sh subagent-info --check$' /tmp/codex_ui.out; then
@@ -1235,7 +1235,7 @@ if "$CODEX" loop-info note >/tmp/codex_loop_note.out 2>/tmp/codex_loop_note.err 
   && grep -q '^status=unsupported$' /tmp/codex_loop_note.out \
   && grep -q '^runtime_surface=missing-native-loop$' /tmp/codex_loop_note.out \
   && grep -q '^related_capability=autopilot-note$' /tmp/codex_loop_note.out \
-  && grep -q '^native_capability_surface=codex-native-skill-plugin$' /tmp/codex_loop_note.out \
+  && grep -q '^native_capability_surface=codex-native-skills$' /tmp/codex_loop_note.out \
   && grep -q '^scheduler_surface=external-worklog-board$' /tmp/codex_loop_note.out \
   && grep -q '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/codex_loop_note.out; then
   ok "codex loop wrapper marks missing note loop unsupported"
@@ -1358,9 +1358,7 @@ if "$CODEX" capability-info autopilot-code >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^adapter=codex$' /tmp/cap.out \
   && grep -q '^native_skill=1$' /tmp/cap.out \
   && grep -q '^native_skill_path=adapters/codex/skills/autopilot-code/SKILL.md$' /tmp/cap.out \
-  && grep -q '^native_plugin=1$' /tmp/cap.out \
-  && grep -q '^native_plugin_skill_path=adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md$' /tmp/cap.out \
-  && grep -q '^realization=codex-native-skill-plugin$' /tmp/cap.out \
+  && grep -q '^realization=codex-native-skill$' /tmp/cap.out \
   && grep -q '^compat_reference=not-projected$' /tmp/cap.out \
   && ! grep -q '^compat_reference=skills/' /tmp/cap.out \
   && grep -q '^status=instruction-only$' /tmp/cap.out \
@@ -1369,14 +1367,13 @@ if "$CODEX" capability-info autopilot-code >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^artifact_contract=plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/$' /tmp/cap.out \
   && grep -q '^role_contract=planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team$' /tmp/cap.out \
   && grep -Fq 'dispatch_contract=preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --depth 1|2 [--parent <slug>]' /tmp/cap.out; then
-  ok "codex capability wrapper reports native skill and plugin realization"
+  ok "codex capability wrapper reports native skill realization"
 else
-  bad "codex capability wrapper should report native skill and plugin realization"
+  bad "codex capability wrapper should report native skill realization"
 fi
 if "$CODEX" capability-info code-test >/tmp/cap_code_test.out 2>/tmp/cap_code_test.err \
   && grep -q '^capability=code-test$' /tmp/cap_code_test.out \
   && grep -q '^native_skill=1$' /tmp/cap_code_test.out \
-  && grep -q '^native_plugin=1$' /tmp/cap_code_test.out \
   && grep -q '^status=tool-contract$' /tmp/cap_code_test.out \
   && grep -q '^tool_contract=verification-runner$' /tmp/cap_code_test.out \
   && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh verification-runner --check -- <command>$' /tmp/cap_code_test.out \
@@ -1384,8 +1381,7 @@ if "$CODEX" capability-info code-test >/tmp/cap_code_test.out 2>/tmp/cap_code_te
   && grep -q '^artifact_contract=plans/<date>_<slug>:test_logs/,_internal/test_reviews/;handoff=code-report$' /tmp/cap_code_test.out \
   && grep -Fq '`code-report` alone updates `pipeline_summary.md`' "$ROOT/capabilities/code-test.md" \
   && grep -q '^role_contract=verification=qa-team,review=qa-team$' /tmp/cap_code_test.out \
-  && grep -q 'graduated verification' "$ROOT/adapters/codex/skills/code-test/SKILL.md" \
-  && grep -q 'verification-runner' "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/code-test/SKILL.md"; then
+  && grep -q 'graduated verification' "$ROOT/adapters/codex/skills/code-test/SKILL.md"; then
   ok "codex code-test capability reports verification-runner contract"
 else
   bad "codex code-test capability should report verification-runner contract"
@@ -1393,8 +1389,7 @@ fi
 if "$CODEX" capability-info design-review >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^capability=design-review$' /tmp/cap.out \
   && grep -q '^native_skill=1$' /tmp/cap.out \
-  && grep -q '^native_plugin=1$' /tmp/cap.out \
-  && grep -q '^realization=codex-native-skill-plugin$' /tmp/cap.out \
+  && grep -q '^realization=codex-native-skill$' /tmp/cap.out \
   && grep -q '^status=tool-contract$' /tmp/cap.out \
   && grep -q '^tool_contract=visual-harness$' /tmp/cap.out \
   && grep -q '^tool_contract_check=adapters/codex/bin/preflight.sh visual-harness <file.html>$' /tmp/cap.out \
@@ -1993,10 +1988,10 @@ fi
 if (cd "$TMP/flowproj" && MEM_STORE="$TMP/codex_hook_mem" python3 "$ROOT/tools/memory/mem.py" add durable thread "지난번 결정론 우선 설계가 핵심이라고 배웠다" >/tmp/codex_nested_prompt_seed.out 2>/tmp/codex_nested_prompt_seed.err) \
   && printf '{"input":{"messages":[{"role":"user","content":[{"type":"text","text":"지난번 결정론 내용을 다시 확인"}]}]},"session_id":"nestedpromptsid","cwd":"%s"}\n' "$TMP/flowproj" \
   | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_nested_prompt_hook.out 2>/tmp/codex_nested_prompt_hook.err \
-  && grep -q '우선 설계가 핵심' /tmp/codex_nested_prompt_hook.out; then
-  ok "codex native prompt hook extracts nested message content for recall"
+  && ! grep -q '우선 설계가 핵심' /tmp/codex_nested_prompt_hook.out; then
+  ok "codex native prompt hook does not classify nested message content for recall"
 else
-  bad "codex native prompt hook should extract nested message content for recall"
+  bad "codex native prompt hook should leave semantic recall to the agent"
 fi
 mkdir -p "$TMP/repo/.agent_reports/spec" "$TMP/codex_marker_home"
 printf 'prd\n' > "$TMP/repo/.agent_reports/spec/prd.md"
@@ -3238,7 +3233,7 @@ fi
 if node --input-type=module >/tmp/opencode_plugin_lifecycle.out 2>/tmp/opencode_plugin_lifecycle.err <<EOF
 import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/flowproj", worktree: "$TMP/flowproj" })
-await plugin["chat.message"]({ sessionID: "oplifecyclesid" }, { parts: [{ type: "text", text: "remember this project context" }] })
+if (plugin["chat.message"]) process.exit(1)
 const output = { system: [] }
 await plugin["experimental.chat.system.transform"]({ sessionID: "oplifecyclesid", model: {} }, output)
 if (!output.system.join("\\n").includes("tracked")) process.exit(1)
@@ -3694,7 +3689,7 @@ fi
 echo "== SD-11b stage-dispatch gate (deny 상향 + opt-out + intensity 불명) =="
 # (i) conductor + standard + code-plan, NO opt-out → HARD DENY (CLI: exit 2, stderr ⛔)
 err=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_SELF_SLUG=cyc "$SDR" --skill code-plan --depth 1 --intensity standard 2>&1 >/dev/null); rc=$?
-if [ "$rc" -eq 2 ] && printf '%s' "$err" | grep -q 'deny' && printf '%s' "$err" | grep -q 'dispatch-headless'; then
+if [ "$rc" -eq 2 ] && printf '%s' "$err" | grep -q 'stage-dispatch denied' && printf '%s' "$err" | grep -q 'dispatch-headless'; then
   ok "SDR hard-denies conductor+standard+code-plan without opt-out (exit 2)"
 else bad "SDR should deny conductor+standard+code-plan (rc=$rc) [$err]"; fi
 # (i-opt) same but STAGE_DISPATCH_INLINE_OK=1 → soft reminder (additionalContext, exit 0)

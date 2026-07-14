@@ -1,7 +1,7 @@
 #!/bin/sh
 # Stop: SD-14b conductor Stop gate — block turn-end while the conductor still
 # has open depth-2 stage children (deterministic backstop for the one-shot wait
-# contract, OPERATIONS §5.10 one-shot 대기 계약).
+# contract and the OPERATIONS §5.10 one-shot waiting contract).
 #
 #   ┌─────────────────────────────────────────────────────────────────────┐
 #   │ UNREGISTERED / HELD as of 2026-07-10 probe.                          │
@@ -82,9 +82,9 @@ decide() { # $1=self_slug $2=jobs $3=stop_active
   rm -f "$tmp"
 
   if [ "$live_rc" -eq 3 ]; then
-    block_json "스테이지 자식이 SUSPECT/DEAD — 대기 금지. transcript tail·dispatch 로그로 진단 → 수확 또는 재분사 → jobs.log row 정리 후 종료."
+    block_json "A stage child is SUSPECT/DEAD. Do not wait. Diagnose with the transcript tail and dispatch log, then harvest or redispatch it, clean up the jobs.log row, and only then finish."
   else
-    block_json "열린 스테이지 자식 ${n}개가 아직 실행 중 — turn 을 끝내지 말고 dispatch-wait 로 폴링 후 수확하세요."
+    block_json "${n} stage child job(s) are still running. Do not end the turn; poll with dispatch-wait and harvest them first."
   fi
   return 0
 }

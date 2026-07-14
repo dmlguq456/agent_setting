@@ -1,12 +1,13 @@
 ---
+# GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: audit
-description: "Use when doing a post-hoc audit of artifacts/pipeline (drift/consistency/gaps). 산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고"
+description: "Use when invoking the portable audit capability. Read-oriented post-run inspection for artifact drift, inconsistency, and omissions."
 argument-hint: "<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]"
 metadata:
   group: ops
   fam: ops
   modes: []
-  blurb: "산출물·파이프 사후 점검 — drift·일관성·누락 진단 보고"
+  blurb: "Read-oriented post-run inspection for artifact drift, inconsistency, and omissions."
 ---
 
 # audit
@@ -58,7 +59,10 @@ threshold는 doc/research artifact의 `pipeline_summary.md` `## 마이너 변경
 
 ## Language Rule
 
-All user-facing output (chat report, audit log) in natural **Korean** (no translationese — write Korean natively, don't translate from an English draft).
+User-facing audit artifacts follow the audience-language-first rule in
+`<agent-home>/roles/response-policy.md`. An explicit target artifact, external
+audience, or publication language takes precedence; this skill imposes no fixed
+chat locale.
 
 ## Argument Parsing
 

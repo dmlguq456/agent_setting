@@ -1,0 +1,1921 @@
+#!/usr/bin/env python3
+"""Cross-runtime source activation for Codex, Claude Code, and OpenCode.
+
+The activation layer is deliberately offline.  It reads one explicit local
+source, writes only harness discovery paths plus ``<runtime-home>/.harness``,
+and never invokes a runtime CLI, marketplace, package manager, Git fetch, MCP,
+or connector.  A small operation journal restores the previous projection on
+any failure.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Sequence
+
+import paths
+
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+if str(TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TOOLS_ROOT))
+
+import harness_manifest
+
+
+RUNTIMES = ("claude", "codex", "opencode")
+MODES = ("linked", "packaged")
+PROFILES = harness_manifest.profile_names()
+SCHEMA = 2
+
+SESSION_ACTIONS = {
+    "codex": {
+        "instructions": "new-session",
+        "skill": "auto-detect-reinvoke",
+        "agent": "new-session",
+        "hook_config": "new-session",
+    },
+    "claude": {
+        "instructions": "new-session",
+        "skill": "reinvoke",
+        "agent": "new-session",
+        "hook_config": "new-session",
+    },
+    "opencode": {
+        "instructions": "restart-required",
+        "skill": "restart-required",
+        "agent": "restart-required",
+        "hook_config": "restart-required",
+    },
+}
+
+_IGNORE_NAMES = {
+    ".git",
+    ".dispatch",
+    ".agent_reports",
+    ".claude_reports",
+    ".harness",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+}
+
+
+class ActivationError(RuntimeError):
+    """A safe, user-facing activation failure."""
+
+
+def _validate_scope(runtime: str, scope: str) -> None:
+    if scope not in {"global", "project"}:
+        raise ActivationError(f"unsupported activation scope: {scope}")
+    if scope == "project":
+        raise ActivationError(
+            f"project-scoped runtime activation is outside Phase 1 for {runtime}; "
+            "use global (legacy project install remains separate)"
+        )
+
+
+def validate_scope(runtime: str, scope: str) -> None:
+    """Validate a public activation request without changing runtime state."""
+    if runtime not in RUNTIMES:
+        raise ActivationError(f"unsupported runtime: {runtime}")
+    _validate_scope(runtime, scope)
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _atomic_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, sort_keys=True, ensure_ascii=False, indent=2)
+            handle.write("\n")
+        os.replace(tmp_name, path)
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+
+
+def _atomic_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        os.replace(tmp_name, path)
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+
+
+def _load_json(path: Path) -> Optional[dict]:
+    if not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ActivationError(f"invalid activation state: {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ActivationError(f"invalid activation state object: {path}")
+    return data
+
+
+def _state_path(runtime: str, scope: str = "global") -> Path:
+    return paths.harness_state_dir(runtime, scope) / "activation.json"
+
+
+def _ensure_runtime_destination(runtime: str, dest: Path, scope: str) -> None:
+    """Reject lexical or symlink-parent escapes from the selected runtime home."""
+    home = paths.runtime_home(runtime, scope)
+    try:
+        dest.relative_to(home)
+    except ValueError as exc:
+        raise ActivationError(f"destination escapes runtime home: {dest}") from exc
+    try:
+        resolved_home = home.resolve(strict=False)
+        resolved_parent = dest.parent.resolve(strict=False)
+    except RuntimeError as exc:
+        raise ActivationError(f"destination path contains a symlink cycle: {dest}") from exc
+    try:
+        resolved_parent.relative_to(resolved_home)
+    except ValueError as exc:
+        raise ActivationError(f"destination parent escapes runtime home: {dest}") from exc
+
+
+def _validate_state_dir(runtime: str, scope: str) -> None:
+    state_dir = paths.harness_state_dir(runtime, scope)
+    if state_dir.is_symlink():
+        raise ActivationError(f"harness state directory must not be a symlink: {state_dir}")
+    if _state_path(runtime, scope).is_symlink():
+        raise ActivationError(
+            f"activation state must not be a symlink: {_state_path(runtime, scope)}"
+        )
+    for name in ("transactions", "bundles", "config-backups", "disabled-plugins"):
+        child = state_dir / name
+        if child.is_symlink():
+            raise ActivationError(f"harness state subdirectory must not be a symlink: {child}")
+    _ensure_runtime_destination(runtime, state_dir / "activation.json", scope)
+
+
+def _real_source(source: Optional[str]) -> Path:
+    root = Path(source).expanduser() if source else paths.agent_home()
+    try:
+        root = root.resolve(strict=True)
+    except OSError as exc:
+        raise ActivationError(f"source does not exist: {root}") from exc
+    if not root.is_dir():
+        raise ActivationError(f"source is not a directory: {root}")
+    return root
+
+
+def _sha_path(
+    path: Path, digest: "hashlib._Hash", label: str, stack: Optional[set] = None
+) -> None:
+    stack = set() if stack is None else stack
+    try:
+        resolved_key = str(path.resolve(strict=False))
+    except RuntimeError:
+        digest.update(b"C\0" + label.encode() + b"\0")
+        return
+    if resolved_key in stack:
+        digest.update(b"C\0" + label.encode() + b"\0")
+        return
+    stack.add(resolved_key)
+    if path.is_symlink():
+        digest.update(b"L\0" + label.encode() + b"\0" + os.readlink(path).encode())
+        try:
+            target = path.resolve(strict=False)
+        except RuntimeError:
+            digest.update(b"C\0" + label.encode() + b"\0")
+            stack.remove(resolved_key)
+            return
+        if target.exists():
+            _sha_path(target, digest, label + "@target", stack)
+        stack.remove(resolved_key)
+        return
+    if path.is_file():
+        digest.update(b"F\0" + label.encode() + b"\0")
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(65536), b""):
+                digest.update(chunk)
+        stack.remove(resolved_key)
+        return
+    if path.is_dir():
+        digest.update(b"D\0" + label.encode() + b"\0")
+        for child in sorted(path.iterdir(), key=lambda item: item.name):
+            if child.name in _IGNORE_NAMES:
+                continue
+            _sha_path(child, digest, f"{label}/{child.name}", stack)
+    stack.remove(resolved_key)
+
+
+def _digest_paths(items: Iterable[Path]) -> str:
+    digest = hashlib.sha256()
+    seen = set()
+    for item in sorted((Path(p) for p in items), key=lambda p: str(p)):
+        key = str(item.resolve(strict=False))
+        if key in seen:
+            continue
+        seen.add(key)
+        if item.exists() or item.is_symlink():
+            _sha_path(item, digest, item.name)
+        else:
+            digest.update(b"M\0" + str(item).encode())
+    return digest.hexdigest()
+
+
+def _tree_digest(root: Path) -> str:
+    digest = hashlib.sha256()
+    if root.is_dir():
+        for child in sorted(root.iterdir(), key=lambda item: item.name):
+            if child.name in _IGNORE_NAMES:
+                continue
+            _sha_path(child, digest, child.name)
+    elif root.exists() or root.is_symlink():
+        _sha_path(root, digest, root.name)
+    else:
+        digest.update(b"M\0" + str(root).encode())
+    return digest.hexdigest()
+
+
+def _git(runtime_args: Sequence[str], root: Path) -> Optional[str]:
+    try:
+        result = subprocess.run(
+            ["git", *runtime_args], cwd=str(root), capture_output=True, text=True, timeout=10
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def source_revision(root: Path) -> str:
+    head = _git(["rev-parse", "HEAD"], root)
+    if not head:
+        return "tree:" + _tree_digest(root)[:20]
+    dirty = _git(["status", "--porcelain=v1", "--untracked-files=all"], root) or ""
+    if not dirty:
+        return head
+    digest = hashlib.sha256(dirty.encode())
+    for line in dirty.splitlines():
+        rel = line[3:].split(" -> ")[-1]
+        candidate = root / rel
+        if candidate.exists() and candidate.is_file():
+            try:
+                digest.update(candidate.read_bytes())
+            except OSError:
+                pass
+    return f"{head}+dirty:{digest.hexdigest()[:12]}"
+
+
+def _entry(source: Path, dest: Path, surface: str, kind: str = "symlink") -> dict:
+    return {
+        "source": str(source),
+        "dest": str(dest),
+        "surface": surface,
+        "kind": kind,
+    }
+
+
+def _children(
+    source: Path,
+    dest: Path,
+    surface: str,
+    pattern: str = "*",
+    allowed: Optional[set[str]] = None,
+) -> List[dict]:
+    if not source.is_dir():
+        return []
+    entries = []
+    for item in sorted(source.glob(pattern)):
+        identifier = item.stem if item.is_file() else item.name
+        if allowed is not None and identifier not in allowed:
+            continue
+        entries.append(_entry(item, dest / item.name, surface))
+    return entries
+
+
+def _mode_entries(
+    source: Path,
+    dest: Path,
+    allowed: Optional[set[str]],
+) -> List[dict]:
+    """Project mode files individually so product profiles constrain discovery."""
+    if not source.is_dir():
+        return []
+    entries = []
+    for item in sorted(source.glob("*/*.md")):
+        identifier = item.relative_to(source).with_suffix("").as_posix()
+        if allowed is not None and identifier not in allowed:
+            continue
+        entries.append(_entry(item, dest / item.relative_to(source), "agent"))
+    return entries
+
+
+def _profile_resolution(source_root: Path, profile: Optional[str]) -> dict:
+    manifest_path = source_root / harness_manifest.MANIFEST_NAME
+    if not manifest_path.is_file():
+        if profile not in (None, "full"):
+            raise ActivationError(
+                f"profile {profile} requires {harness_manifest.MANIFEST_NAME} in source {source_root}"
+            )
+        return {
+            "name": "full",
+            "packs": [],
+            "capabilities": None,
+            "roles": None,
+            "modes": None,
+            "kernel_agents": ["memory-scout"],
+            "digest": "legacy-full",
+            "counts": {"capabilities": None, "roles": None, "modes": None},
+        }
+    try:
+        canonical = harness_manifest.load(manifest_path)
+        return harness_manifest.resolve_profile(canonical, profile)
+    except harness_manifest.ManifestError as exc:
+        raise ActivationError(f"invalid product profile manifest: {exc}") from exc
+
+
+def _profile_sets(
+    resolution: dict,
+) -> tuple[Optional[set[str]], Optional[set[str]], Optional[set[str]], set[str]]:
+    capabilities = resolution.get("capabilities")
+    roles = resolution.get("roles")
+    modes = resolution.get("modes")
+    kernel_agents = set(resolution.get("kernel_agents", []))
+    return (
+        set(capabilities) if capabilities is not None else None,
+        set(roles) if roles is not None else None,
+        set(modes) if modes is not None else None,
+        kernel_agents,
+    )
+
+
+def _linked_entries(
+    runtime: str,
+    source_root: Path,
+    scope: str = "global",
+    resolution: Optional[dict] = None,
+) -> List[dict]:
+    home = paths.runtime_home(runtime, scope)
+    entries: List[dict] = []
+    capabilities, roles, modes, kernel_agents = _profile_sets(
+        resolution or _profile_resolution(source_root, "full")
+    )
+
+    if runtime == "codex":
+        fixed = [
+            (source_root, home / "agent-harness", "instructions"),
+            (source_root / "adapters/codex/AGENTS.md", home / "AGENTS.md", "instructions"),
+            (source_root / "core", home / "agent-core", "instructions"),
+            (source_root / "capabilities", home / "agent-capabilities", "instructions"),
+            (source_root / "roles", home / "agent-roles", "instructions"),
+            (source_root / "adapters/codex/bin", home / "agent-bin", "hook_config"),
+            (source_root / "adapters/codex/hooks", home / "agent-hooks", "hook_config"),
+            (source_root / "adapters/codex/hooks/hooks.json", home / "hooks.json", "hook_config"),
+        ]
+        entries.extend(_entry(src, dst, surface) for src, dst, surface in fixed)
+        entries.extend(
+            _mode_entries(
+                source_root / "adapters/codex/modes",
+                home / "agent-modes",
+                modes,
+            )
+        )
+        entries.extend(
+            _children(
+                source_root / "adapters/codex/skills",
+                home / "skills",
+                "skill",
+                allowed=capabilities,
+            )
+        )
+        allowed_agents = None if roles is None else roles | kernel_agents
+        entries.extend(
+            _children(
+                source_root / "adapters/codex/agents",
+                home / "agents",
+                "agent",
+                "*.toml",
+                allowed=allowed_agents,
+            )
+        )
+
+    elif runtime == "claude":
+        fixed = [
+            (source_root, home / "agent-harness", "instructions"),
+            (source_root / "adapters/claude/CLAUDE.md", home / "CLAUDE.md", "instructions"),
+            (source_root / "core", home / "core", "instructions"),
+            (source_root / "capabilities", home / "capabilities", "instructions"),
+            (source_root / "roles", home / "roles", "instructions"),
+            (source_root / "adapters/claude/bin", home / "bin", "hook_config"),
+            (source_root / "adapters/claude/tools", home / "tools", "hook_config"),
+            (source_root / "adapters/claude/utilities", home / "utilities", "hook_config"),
+            (source_root / "adapters/claude/scaffolds", home / "scaffolds", "hook_config"),
+        ]
+        entries.extend(_entry(src, dst, surface) for src, dst, surface in fixed)
+        entries.extend(
+            _mode_entries(
+                source_root / "adapters/claude/agent-modes",
+                home / "agent-modes",
+                modes,
+            )
+        )
+        entries.extend(
+            _children(
+                source_root / "adapters/claude/skills",
+                home / "skills",
+                "skill",
+                allowed=capabilities,
+            )
+        )
+        if roles is None:
+            allowed_agents = None
+        else:
+            allowed_agents = set(roles) | kernel_agents
+            if "external-adversary" in allowed_agents:
+                allowed_agents.remove("external-adversary")
+                allowed_agents.add("codex-review-team")
+        entries.extend(
+            _children(
+                source_root / "adapters/claude/agents",
+                home / "agents",
+                "agent",
+                "*.md",
+                allowed=allowed_agents,
+            )
+        )
+        entries.extend(
+            _children(source_root / "adapters/claude/commands", home / "commands", "skill", "*.md")
+        )
+        entries.extend(
+            _children(source_root / "adapters/claude/hooks", home / "hooks", "hook_config")
+        )
+
+    elif runtime == "opencode":
+        fixed = [
+            (source_root, home / "agent-harness", "instructions"),
+            (source_root / "adapters/opencode/AGENTS.md", home / "AGENTS.md", "instructions"),
+            (source_root / "core", home / "agent-core", "instructions"),
+            (source_root / "capabilities", home / "agent-capabilities", "instructions"),
+            (source_root / "roles", home / "agent-roles", "instructions"),
+        ]
+        entries.extend(_entry(src, dst, surface) for src, dst, surface in fixed)
+        entries.extend(
+            _children(
+                source_root / "adapters/opencode/skills",
+                home / "skills",
+                "skill",
+                allowed=capabilities,
+            )
+        )
+        agent_root = source_root / "adapters/opencode/agents"
+        allowed_agents = None if roles is None else roles | kernel_agents
+        if agent_root.is_dir():
+            for item in sorted(agent_root.glob("*/*.md")):
+                if allowed_agents is not None and item.parent.name not in allowed_agents:
+                    continue
+                entries.append(_entry(item, home / "agents" / item.name, "agent"))
+        entries.extend(
+            _children(
+                source_root / "adapters/opencode/commands",
+                home / "commands",
+                "skill",
+                "*.md",
+                allowed=capabilities,
+            )
+        )
+        plugin = source_root / "adapters/opencode/plugins/agent-harness-guards.js"
+        entries.append(_entry(plugin, home / "plugins/agent-harness-guards.js", "hook_config"))
+    else:
+        raise ActivationError(f"unsupported runtime: {runtime}")
+
+    existing = [entry for entry in entries if Path(entry["source"]).exists()]
+    required_surfaces = {"instructions", "skill", "agent", "hook_config"}
+    present_surfaces = {entry["surface"] for entry in existing}
+    missing = sorted(required_surfaces - present_surfaces)
+    if missing:
+        raise ActivationError(
+            f"source {source_root} lacks {runtime} activation surfaces: {','.join(missing)}"
+        )
+    return existing
+
+
+def _bundle_ignore(_directory: str, names: List[str]) -> set:
+    return {name for name in names if name in _IGNORE_NAMES}
+
+
+def _validate_source_symlinks(source_root: Path) -> None:
+    """Activation sources may keep relative in-repo links, never outside links."""
+    for directory, dirnames, filenames in os.walk(source_root, followlinks=False):
+        dirnames[:] = [name for name in dirnames if name not in _IGNORE_NAMES]
+        for name in list(dirnames) + filenames:
+            item = Path(directory) / name
+            if not item.is_symlink():
+                continue
+            raw = os.readlink(item)
+            if os.path.isabs(raw):
+                raise ActivationError(f"activation source has absolute symlink: {item} -> {raw}")
+            try:
+                target = item.resolve(strict=False)
+            except RuntimeError as exc:
+                raise ActivationError(f"activation source has a symlink cycle: {item}") from exc
+            try:
+                target.relative_to(source_root)
+            except ValueError as exc:
+                raise ActivationError(
+                    f"activation source symlink escapes source root: {item} -> {raw}"
+                ) from exc
+
+
+def _build_bundle(runtime: str, source_root: Path, revision: str, scope: str) -> Path:
+    if "+dirty:" in revision:
+        raise ActivationError("packaged activation refuses a dirty git source")
+    state_dir = paths.harness_state_dir(runtime, scope)
+    _validate_source_symlinks(source_root)
+    key = re.sub(r"[^A-Za-z0-9._-]+", "-", revision)[:48]
+    key += "-" + _tree_digest(source_root)[:12]
+    bundle = state_dir / "bundles" / key
+    bundle_source = bundle / "source"
+    metadata_path = bundle / "bundle.json"
+    if metadata_path.exists() and bundle_source.is_dir():
+        metadata = _load_json(metadata_path) or {}
+        actual_checksum = _tree_digest(bundle_source)
+        if (
+            metadata.get("source_revision") == revision
+            and metadata.get("checksum") == actual_checksum
+        ):
+            return bundle_source
+
+    staging = state_dir / "bundles" / (".staging-" + uuid.uuid4().hex)
+    staging_source = staging / "source"
+    staging.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copytree(
+            source_root,
+            staging_source,
+            symlinks=True,
+            ignore=_bundle_ignore,
+        )
+        _atomic_json(
+            staging / "bundle.json",
+            {
+                "schema": SCHEMA,
+                "runtime": runtime,
+                "source_root": str(source_root),
+                "source_revision": revision,
+                "checksum": _tree_digest(staging_source),
+                "created_at": _utc_now(),
+                "external_dependencies": [],
+            },
+        )
+        if bundle.exists():
+            shutil.rmtree(bundle)
+        os.replace(staging, bundle)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return bundle_source
+
+
+def _desired_entries(
+    runtime: str,
+    mode: str,
+    source_root: Path,
+    active_root: Path,
+    revision: str,
+    scope: str,
+    resolution: dict,
+) -> List[dict]:
+    # Both modes use native runtime discovery.  Only the source changes: live
+    # repo for linked, immutable local bundle for packaged.
+    return _linked_entries(runtime, active_root, scope, resolution)
+
+
+def _plugin_roots(runtime: str, scope: str = "global") -> List[Path]:
+    home = paths.runtime_home(runtime, scope)
+    if runtime == "codex":
+        marker, expected = ".codex-plugin/plugin.json", "agent-harness-codex"
+    elif runtime == "claude":
+        marker, expected = ".claude-plugin/plugin.json", "agent-harness-claude"
+    else:
+        return []
+    roots = []
+    cache = home / "plugins/cache"
+    if not cache.is_dir():
+        return roots
+    for manifest in cache.glob(f"**/{marker}"):
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if data.get("name") == expected:
+            roots.append(manifest.parent.parent)
+    return sorted(set(roots), key=lambda item: str(item))
+
+
+def _native_present(runtime: str, scope: str = "global") -> bool:
+    home = paths.runtime_home(runtime, scope)
+    state = _load_json(_state_path(runtime, scope))
+    if state:
+        for item in state.get("owned_paths", []):
+            dest = Path(item.get("dest", ""))
+            if dest.is_symlink() and item.get("surface") in {
+                "instructions", "skill", "agent", "hook_config"
+            }:
+                return True
+    candidates = []
+    if runtime == "codex":
+        candidates.extend((home / "skills").glob("*"))
+        candidates.extend((home / "agents").glob("*.toml"))
+    elif runtime == "claude":
+        candidates.extend((home / "skills").glob("*"))
+        candidates.extend((home / "agents").glob("*.md"))
+    elif runtime == "opencode":
+        candidates.extend((home / "skills").glob("*"))
+        candidates.append(home / "plugins/agent-harness-guards.js")
+    for candidate in candidates:
+        if not candidate.is_symlink():
+            continue
+        target = str(candidate.resolve(strict=False))
+        if "agent_setting" in target or "agent-harness" in target:
+            return True
+    return False
+
+
+def _opencode_config_paths(scope: str = "global") -> List[Path]:
+    result = []
+    directory = paths.runtime_home("opencode", scope)
+    for name in ("opencode.jsonc", "opencode.json"):
+        config = directory / name
+        if config.is_symlink():
+            raise ActivationError(f"runtime config must not be a symlink: {config}")
+        result.append(config)
+    return result
+
+
+def _opencode_npm_present(scope: str = "global") -> bool:
+    for config in _opencode_config_paths(scope):
+        if not config.is_file():
+            continue
+        data = _read_opencode_config(config)
+        for key in ("plugin", "plugins"):
+            values = data.get(key)
+            if isinstance(values, list) and any(
+                _is_harness_npm_plugin_entry(value) for value in values
+            ):
+                return True
+    return False
+
+
+def _opencode_jsonc_harness_present(scope: str = "global") -> bool:
+    for config in _opencode_config_paths(scope):
+        if config.suffix != ".jsonc" or not config.is_file():
+            continue
+        data = _read_opencode_config(config)
+        for key in ("plugin", "plugins"):
+            values = data.get(key)
+            if isinstance(values, list) and any(
+                _is_harness_npm_plugin_entry(value) for value in values
+            ):
+                return True
+    return False
+
+
+def _jsonc_without_comments(text: str) -> str:
+    """Remove JSONC comments without interpreting comment text as config."""
+    output: List[str] = []
+    index = 0
+    in_string = False
+    escaped = False
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            output.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            output.append(char)
+            index += 1
+            continue
+        if char == "/" and index + 1 < len(text) and text[index + 1] == "/":
+            output.extend((" ", " "))
+            index += 2
+            while index < len(text) and text[index] not in "\r\n":
+                output.append(" ")
+                index += 1
+            continue
+        if char == "/" and index + 1 < len(text) and text[index + 1] == "*":
+            output.extend((" ", " "))
+            index += 2
+            closed = False
+            while index < len(text):
+                if text[index] == "*" and index + 1 < len(text) and text[index + 1] == "/":
+                    output.extend((" ", " "))
+                    index += 2
+                    closed = True
+                    break
+                output.append(text[index] if text[index] in "\r\n" else " ")
+                index += 1
+            if not closed:
+                raise ActivationError("invalid OpenCode JSONC: unterminated block comment")
+            continue
+        output.append(char)
+        index += 1
+    return "".join(output)
+
+
+def _json_without_trailing_commas(text: str) -> str:
+    output: List[str] = []
+    index = 0
+    in_string = False
+    escaped = False
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            output.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            output.append(char)
+            index += 1
+            continue
+        if char == ",":
+            lookahead = index + 1
+            while lookahead < len(text) and text[lookahead].isspace():
+                lookahead += 1
+            if lookahead < len(text) and text[lookahead] in "]}":
+                index += 1
+                continue
+        output.append(char)
+        index += 1
+    return "".join(output)
+
+
+def _read_opencode_config(config: Path) -> dict:
+    try:
+        text = config.read_text(encoding="utf-8")
+        if config.suffix == ".jsonc":
+            text = _json_without_trailing_commas(_jsonc_without_comments(text))
+        data = json.loads(text)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ActivationError(f"invalid OpenCode config: {config}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ActivationError(f"invalid OpenCode config object: {config}")
+    return data
+
+
+def _opencode_plugin_name(value) -> Optional[str]:
+    if isinstance(value, str):
+        return value
+    if (
+        isinstance(value, list)
+        and len(value) == 2
+        and isinstance(value[0], str)
+        and isinstance(value[1], dict)
+    ):
+        return value[0]
+    return None
+
+
+def _is_harness_npm_plugin_entry(value) -> bool:
+    name = _opencode_plugin_name(value)
+    return name is not None and _is_harness_npm_plugin(name)
+
+
+def _is_harness_npm_plugin(value: str) -> bool:
+    token = value.rstrip("/").rsplit("/", 1)[-1].lower()
+    return bool(re.match(r"^agent-harness(?:-opencode)?(?:@[^/]*)?$", token))
+
+
+def _config_backup(runtime: str, scope: str, path: Path, original: bytes) -> dict:
+    digest = hashlib.sha256(original).hexdigest()
+    backup = (
+        paths.harness_state_dir(runtime, scope)
+        / "config-backups"
+        / f"{path.name}.{digest}"
+    )
+    if not backup.exists():
+        _atomic_bytes(backup, original)
+    return {"path": str(backup), "sha256": digest}
+
+
+def _config_path(runtime: str, scope: str, *parts: str) -> Path:
+    path = paths.runtime_home(runtime, scope).joinpath(*parts)
+    _ensure_runtime_destination(runtime, path, scope)
+    if path.is_symlink():
+        raise ActivationError(f"runtime config must not be a symlink: {path}")
+    return path
+
+
+def _ensure_owned_destination(runtime: str, dest: Path, scope: str) -> None:
+    _ensure_runtime_destination(runtime, dest, scope)
+
+
+def _codex_plugin_ranges(lines: List[str]) -> List[tuple[int, int]]:
+    header = re.compile(r'^\s*\[plugins\."?([^"\]]+)"?\]\s*(?:#.*)?$')
+    table = re.compile(r"^\s*\[")
+    starts = []
+    for index, line in enumerate(lines):
+        match = header.match(line.rstrip("\r\n"))
+        if match and match.group(1).split("@", 1)[0] == "agent-harness-codex":
+            starts.append(index)
+    ranges = []
+    for start in starts:
+        end = len(lines)
+        for index in range(start + 1, len(lines)):
+            if table.match(lines[index]):
+                end = index
+                break
+        ranges.append((start, end))
+    return ranges
+
+
+def _codex_plugin_active(scope: str = "global") -> bool:
+    config = _config_path("codex", scope, "config.toml")
+    if not config.is_file():
+        return False
+    try:
+        lines = config.read_text(encoding="utf-8").splitlines(keepends=True)
+    except (OSError, UnicodeDecodeError):
+        return False
+    enabled = re.compile(r"^\s*enabled\s*=\s*(true|false)\b", re.IGNORECASE)
+    for start, end in _codex_plugin_ranges(lines):
+        values = [enabled.match(lines[index]) for index in range(start + 1, end)]
+        values = [match.group(1).lower() for match in values if match]
+        if not values or values[-1] == "true":
+            return True
+    return False
+
+
+def _disable_codex_plugin(scope: str = "global") -> Optional[dict]:
+    config = _config_path("codex", scope, "config.toml")
+    if not config.is_file():
+        return None
+    original = config.read_bytes()
+    try:
+        lines = original.decode("utf-8").splitlines(keepends=True)
+    except UnicodeDecodeError as exc:
+        raise ActivationError(f"Codex config is not UTF-8: {config}") from exc
+    ranges = _codex_plugin_ranges(lines)
+    if not ranges:
+        return None
+    enabled = re.compile(
+        r"^(\s*enabled\s*=\s*)(true|false)(\s*(?:#.*)?(?:\r?\n)?)$",
+        re.IGNORECASE,
+    )
+    changed = False
+    offset = 0
+    for raw_start, raw_end in ranges:
+        start, end = raw_start + offset, raw_end + offset
+        found = False
+        for index in range(start + 1, end):
+            match = enabled.match(lines[index])
+            if not match:
+                continue
+            found = True
+            if match.group(2).lower() != "false":
+                lines[index] = f"{match.group(1)}false{match.group(3)}"
+                changed = True
+        if not found:
+            lines.insert(end, "enabled = false\n")
+            offset += 1
+            changed = True
+    if not changed:
+        return None
+    _atomic_bytes(config, "".join(lines).encode("utf-8"))
+    return {
+        "kind": "codex-plugin-disabled",
+        "path": str(config),
+        "disabled": ["agent-harness-codex"],
+        "backup": _config_backup("codex", scope, config, original),
+    }
+
+
+def _claude_plugins_path(scope: str = "global") -> Path:
+    return _config_path("claude", scope, "plugins", "installed_plugins.json")
+
+
+def _claude_plugin_active(scope: str = "global") -> bool:
+    registry = _claude_plugins_path(scope)
+    if registry.is_file():
+        try:
+            data = json.loads(registry.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            data = None
+        plugins = data.get("plugins", {}) if isinstance(data, dict) else {}
+        if isinstance(plugins, dict) and any(
+            key.split("@", 1)[0] == "agent-harness-claude" for key in plugins
+        ):
+            return True
+    settings = _config_path("claude", scope, "settings.json")
+    if not settings.is_file():
+        return False
+    try:
+        data = json.loads(settings.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    enabled = data.get("enabledPlugins", {}) if isinstance(data, dict) else {}
+    return isinstance(enabled, dict) and any(
+        key.split("@", 1)[0] == "agent-harness-claude" and value is not False
+        for key, value in enabled.items()
+    )
+
+
+def _disable_claude_plugin(scope: str = "global") -> Optional[dict]:
+    registry = _claude_plugins_path(scope)
+    if not registry.is_file():
+        return None
+    original = registry.read_bytes()
+    try:
+        data = json.loads(original.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ActivationError(f"invalid Claude plugin registry: {registry}") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("plugins", {}), dict):
+        raise ActivationError(f"invalid Claude plugin registry object: {registry}")
+    plugins = data.setdefault("plugins", {})
+    removed = [
+        key for key in plugins if key.split("@", 1)[0] == "agent-harness-claude"
+    ]
+    if not removed:
+        return None
+    for key in removed:
+        del plugins[key]
+    _atomic_json(registry, data)
+    return {
+        "kind": "claude-plugin-disabled",
+        "path": str(registry),
+        "disabled": removed,
+        "backup": _config_backup("claude", scope, registry, original),
+    }
+
+
+def _claude_hook_source(active_root: Path) -> Path:
+    source = active_root / "adapters/claude/settings.json"
+    if not source.is_file():
+        raise ActivationError(f"Claude hook settings source missing: {source}")
+    return source
+
+
+def _read_json_object(path: Path, label: str) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ActivationError(f"invalid {label}: {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ActivationError(f"invalid {label} object: {path}")
+    return data
+
+
+def _merge_claude_hooks(
+    active_root: Path, previous: Optional[dict], scope: str = "global"
+) -> dict:
+    source = _read_json_object(_claude_hook_source(active_root), "Claude hook source")
+    source_hooks = source.get("hooks")
+    if not isinstance(source_hooks, dict) or not source_hooks:
+        raise ActivationError("Claude hook source has no hooks object")
+    config = _config_path("claude", scope, "settings.json")
+    original = config.read_bytes() if config.exists() else None
+    data = _read_json_object(config, "Claude settings") if config.exists() else {}
+    enabled_plugins = data.get("enabledPlugins")
+    if enabled_plugins is not None and not isinstance(enabled_plugins, dict):
+        raise ActivationError(f"Claude settings enabledPlugins is not an object: {config}")
+    disabled_plugins = []
+    if isinstance(enabled_plugins, dict):
+        for key, value in list(enabled_plugins.items()):
+            if key.split("@", 1)[0] == "agent-harness-claude" and value is not False:
+                enabled_plugins[key] = False
+                disabled_plugins.append(key)
+    hooks = data.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        raise ActivationError(f"Claude settings hooks is not an object: {config}")
+    changed = bool(disabled_plugins)
+    added = 0
+    previous_hooks = {}
+    if previous:
+        previous_hooks = previous.get("managed_config", {}).get("claude_hooks", {})
+        if not previous_hooks and previous.get("active_root"):
+            try:
+                old_source = _read_json_object(
+                    _claude_hook_source(Path(previous["active_root"])),
+                    "previous Claude hook source",
+                )
+                previous_hooks = old_source.get("hooks", {})
+            except ActivationError:
+                previous_hooks = {}
+    if isinstance(previous_hooks, dict):
+        for event, old_entries in previous_hooks.items():
+            current = hooks.get(event)
+            if not isinstance(current, list) or not isinstance(old_entries, list):
+                continue
+            old = {json.dumps(item, sort_keys=True) for item in old_entries}
+            kept = [item for item in current if json.dumps(item, sort_keys=True) not in old]
+            if len(kept) != len(current):
+                hooks[event] = kept
+                changed = True
+    for event, entries in source_hooks.items():
+        if not isinstance(entries, list):
+            raise ActivationError(f"Claude hook source event is not a list: {event}")
+        current = hooks.setdefault(event, [])
+        if not isinstance(current, list):
+            raise ActivationError(f"Claude settings hook event is not a list: {event}")
+        known = {json.dumps(item, sort_keys=True) for item in current}
+        for item in entries:
+            marker = json.dumps(item, sort_keys=True)
+            if marker in known:
+                continue
+            current.append(item)
+            known.add(marker)
+            added += 1
+            changed = True
+    if changed:
+        _atomic_json(config, data)
+    return {
+        "kind": "claude-hooks-merged",
+        "path": str(config),
+        "disabled": disabled_plugins,
+        "added": added,
+        "managed": source_hooks,
+        "backup": (
+            _config_backup("claude", scope, config, original)
+            if changed and original is not None
+            else None
+        ),
+    }
+
+
+def _claude_hooks_healthy(active_root: Path, scope: str = "global") -> bool:
+    try:
+        source = _read_json_object(_claude_hook_source(active_root), "Claude hook source")
+        config = _read_json_object(
+            _config_path("claude", scope, "settings.json"), "Claude settings"
+        )
+    except ActivationError:
+        return False
+    expected = source.get("hooks")
+    actual = config.get("hooks")
+    if not isinstance(expected, dict) or not isinstance(actual, dict):
+        return False
+    for event, entries in expected.items():
+        if not isinstance(entries, list) or not isinstance(actual.get(event), list):
+            return False
+        present = {json.dumps(item, sort_keys=True) for item in actual[event]}
+        if any(json.dumps(item, sort_keys=True) not in present for item in entries):
+            return False
+    return True
+
+
+def _disable_opencode_npm(scope: str = "global") -> List[dict]:
+    """Remove only explicit agent-harness npm entries from JSON config.
+
+    JSONC is intentionally read-only because stdlib cannot preserve comments.
+    The caller receives the original bytes for transaction rollback; removed
+    entries are recorded under the harness-owned state directory.
+    """
+    changes = []
+    for config in _opencode_config_paths(scope):
+        if config.suffix != ".json" or not config.is_file():
+            continue
+        original = config.read_bytes()
+        data = _read_opencode_config(config)
+        removed = []
+        changed = False
+        for key in ("plugin", "plugins"):
+            values = data.get(key)
+            if not isinstance(values, list):
+                continue
+            keep = []
+            for value in values:
+                if _is_harness_npm_plugin_entry(value):
+                    removed.append(_opencode_plugin_name(value))
+                    changed = True
+                else:
+                    keep.append(value)
+            data[key] = keep
+        if not changed:
+            continue
+        _atomic_json(config, data)
+        changes.append(
+            {
+                "kind": "opencode-plugin-disabled",
+                "path": str(config),
+                "disabled": removed,
+                "backup": _config_backup("opencode", scope, config, original),
+            }
+        )
+    return changes
+
+
+def _runtime_config_paths(runtime: str, scope: str = "global") -> List[Path]:
+    if runtime == "codex":
+        return [_config_path(runtime, scope, "config.toml")]
+    if runtime == "claude":
+        return [
+            _config_path(runtime, scope, "settings.json"),
+            _claude_plugins_path(scope),
+        ]
+    return _opencode_config_paths(scope)
+
+
+def _prepare_runtime_config(
+    runtime: str, active_root: Path, previous: Optional[dict], scope: str = "global"
+) -> List[dict]:
+    if runtime == "codex":
+        changes = [_disable_codex_plugin(scope)]
+    elif runtime == "claude":
+        changes = [
+            _merge_claude_hooks(active_root, previous, scope),
+            _disable_claude_plugin(scope),
+        ]
+    else:
+        changes = _disable_opencode_npm(scope)
+    return [change for change in changes if change]
+
+
+def duplicate_sources(runtime: str, scope: str = "global") -> List[str]:
+    native = _native_present(runtime, scope)
+    if runtime == "codex":
+        return ["native+plugin"] if native and _codex_plugin_active(scope) else []
+    if runtime == "claude":
+        return ["native+plugin"] if native and _claude_plugin_active(scope) else []
+    local_plugin = (paths.runtime_home(runtime, scope) / "plugins/agent-harness-guards.js").exists()
+    return ["local+npm"] if local_plugin and _opencode_npm_present(scope) else []
+
+
+def _remove_path(path: Path) -> None:
+    if path.is_symlink() or path.is_file():
+        path.unlink(missing_ok=True)
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+
+def _safe_existing_dest(
+    dest: Path, kind: str, owned: set, allowed_link_roots: Sequence[Path]
+) -> None:
+    if not (dest.exists() or dest.is_symlink()):
+        return
+    if str(dest) in owned:
+        return
+    if dest.is_symlink():
+        target = dest.resolve(strict=False)
+        for root in allowed_link_roots:
+            try:
+                target.relative_to(root.resolve(strict=False))
+                return
+            except ValueError:
+                continue
+        raise ActivationError(f"foreign destination symlink collision: {dest} -> {target}")
+    if kind == "copytree":
+        marker_names = (".codex-plugin", ".claude-plugin")
+        if dest.is_dir() and any((dest / marker).is_dir() for marker in marker_names):
+            return
+    raise ActivationError(f"destination collision; refusing to overwrite: {dest}")
+
+
+def _snapshot_record(dest: Path, backup_root: Path, index: int) -> dict:
+    record = {"dest": str(dest), "state": "missing", "backup": None, "target": None}
+    if dest.is_symlink():
+        record.update(state="symlink", target=os.readlink(dest))
+    elif dest.exists():
+        backup = backup_root / str(index)
+        record.update(state="moved", backup=str(backup))
+    return record
+
+
+def _copy_snapshot(dest: Path, backup_root: Path, index: int) -> dict:
+    if not dest.exists() and not dest.is_symlink():
+        return {"dest": str(dest), "state": "missing-copy", "backup": None, "target": None}
+    if dest.is_symlink():
+        return {
+            "dest": str(dest),
+            "state": "symlink-copy",
+            "backup": None,
+            "target": os.readlink(dest),
+        }
+    backup = backup_root / f"protected-{index}"
+    backup.parent.mkdir(parents=True, exist_ok=True)
+    if dest.is_dir():
+        shutil.copytree(dest, backup, symlinks=True)
+    else:
+        shutil.copy2(dest, backup)
+    return {"dest": str(dest), "state": "copied", "backup": str(backup), "target": None}
+
+
+def _restore(records: List[dict]) -> None:
+    for record in reversed(records):
+        dest = Path(record["dest"])
+        state = record["state"]
+        if state == "moved" and not Path(record["backup"]).exists():
+            # Journal was flushed before the move and the process died between
+            # those two operations.  The original destination is still intact.
+            continue
+        _remove_path(dest)
+        if state in {"symlink", "symlink-copy"}:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.symlink_to(record["target"])
+        elif state == "moved":
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(record["backup"], str(dest))
+        elif state == "copied":
+            backup = Path(record["backup"])
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if backup.is_dir():
+                shutil.copytree(backup, dest, symlinks=True)
+            else:
+                shutil.copy2(backup, dest)
+
+
+def _write_journal(path: Path, runtime: str, status_value: str, records: List[dict]) -> None:
+    _atomic_json(
+        path,
+        {
+            "schema": SCHEMA,
+            "runtime": runtime,
+            "status": status_value,
+            "records": records,
+            "updated_at": _utc_now(),
+        },
+    )
+
+
+def _journal_dest_allowed(runtime: str, dest: Path, scope: str) -> bool:
+    home = paths.runtime_home(runtime, scope)
+    if dest in {*_runtime_config_paths(runtime, scope), _state_path(runtime, scope)}:
+        return True
+    exact = {
+        "codex": {
+            "agent-harness", "AGENTS.md", "agent-core", "agent-capabilities",
+            "agent-roles", "agent-bin", "agent-hooks", "hooks.json", "agent-modes",
+        },
+        "claude": {
+            "agent-harness", "CLAUDE.md", "core", "capabilities", "roles",
+            "agent-modes", "bin", "tools", "utilities", "scaffolds",
+        },
+        "opencode": {
+            "agent-harness", "AGENTS.md", "agent-core", "agent-capabilities",
+            "agent-roles",
+        },
+    }[runtime]
+    if dest.parent == home and dest.name in exact:
+        return True
+    containers = {
+        "codex": {"skills", "agents"},
+        "claude": {"skills", "agents", "commands", "hooks"},
+        "opencode": {"skills", "agents", "commands"},
+    }[runtime]
+    try:
+        relative = dest.relative_to(home)
+    except ValueError:
+        return False
+    if len(relative.parts) == 2 and relative.parts[0] in containers:
+        return True
+    if (
+        runtime in {"codex", "claude"}
+        and len(relative.parts) == 3
+        and relative.parts[0] == "agent-modes"
+        and relative.parts[2].endswith(".md")
+    ):
+        return True
+    if runtime == "opencode" and relative.parts == (
+        "plugins", "agent-harness-guards.js"
+    ):
+        return True
+    expected_plugin = {
+        "codex": "agent-harness-codex",
+        "claude": "agent-harness-claude",
+    }.get(runtime)
+    if expected_plugin:
+        plugin_cache = home / "plugins" / "cache"
+        try:
+            plugin_relative = dest.relative_to(plugin_cache)
+        except ValueError:
+            return False
+        return expected_plugin in plugin_relative.parts
+    return False
+
+
+def _recover_transactions(runtime: str, scope: str = "global") -> None:
+    tx_parent = paths.harness_state_dir(runtime, scope) / "transactions"
+    if not tx_parent.is_dir():
+        return
+    for tx_root in sorted(tx_parent.iterdir(), key=lambda item: item.name):
+        if not tx_root.is_dir() or tx_root.is_symlink():
+            raise ActivationError(f"invalid activation transaction directory: {tx_root}")
+        journal_path = tx_root / "journal.json"
+        journal = _load_json(journal_path)
+        if journal is None:
+            # A process can die after mkdir and before the first atomic journal
+            # replace.  An empty directory has no operation to recover; any
+            # other journal-less contents remain suspicious and block.
+            if not any(tx_root.iterdir()):
+                tx_root.rmdir()
+                continue
+            raise ActivationError(f"activation transaction lacks journal: {tx_root}")
+        if journal.get("runtime") != runtime or not isinstance(journal.get("records"), list):
+            raise ActivationError(f"invalid activation transaction journal: {journal_path}")
+        records = journal["records"]
+        for record in records:
+            dest = Path(record.get("dest", ""))
+            _ensure_owned_destination(runtime, dest, scope)
+            if not _journal_dest_allowed(runtime, dest, scope):
+                raise ActivationError(f"transaction destination is not harness-owned: {dest}")
+            state_value = record.get("state")
+            if state_value not in {"missing", "symlink", "moved", "missing-copy", "copied"}:
+                raise ActivationError(f"invalid transaction record state: {state_value}")
+            backup = record.get("backup")
+            if backup:
+                try:
+                    backup_root = (tx_root / "backup").resolve(strict=False)
+                    resolved_backup = Path(backup).resolve(strict=False)
+                    resolved_backup.relative_to(backup_root)
+                except (ValueError, RuntimeError) as exc:
+                    raise ActivationError(
+                        f"transaction backup escapes journal root: {backup}"
+                    ) from exc
+                if state_value == "copied" and not resolved_backup.exists():
+                    raise ActivationError(f"transaction config backup is missing: {backup}")
+        if journal.get("status") != "committed":
+            _restore(records)
+        shutil.rmtree(tx_root)
+
+
+def _trusted_owned(
+    runtime: str, state: Optional[dict], desired: List[dict], scope: str
+) -> set:
+    """Treat activation.json as untrusted input before using deletion paths."""
+    if not state:
+        return set()
+    allowed = {item["dest"] for item in desired}
+    roots = []
+    for key in ("source_root", "active_root"):
+        value = state.get(key)
+        if value:
+            roots.append(Path(value))
+    for root in roots:
+        try:
+            allowed.update(item["dest"] for item in _linked_entries(runtime, root, scope))
+        except ActivationError:
+            pass
+
+    home = paths.runtime_home(runtime, scope)
+    plugin_prefixes = {
+        "codex": home / "plugins/cache/agent-harness/agent-harness-codex",
+        "claude": home / "plugins/cache/agent-harness/agent-harness-claude",
+    }
+    trusted = set()
+    for item in state.get("owned_paths", []):
+        value = item.get("dest")
+        if not value:
+            continue
+        dest = Path(value)
+        _ensure_runtime_destination(runtime, dest, scope)
+        if value in allowed:
+            trusted.add(value)
+            continue
+        if item.get("kind") == "symlink" and dest.is_symlink():
+            raw_target = Path(os.readlink(dest))
+            target = raw_target if raw_target.is_absolute() else dest.parent / raw_target
+            try:
+                resolved_target = target.resolve(strict=False)
+            except RuntimeError:
+                resolved_target = None
+            if resolved_target is not None and _journal_dest_allowed(runtime, dest, scope):
+                for root in roots:
+                    try:
+                        resolved_target.relative_to(root.resolve(strict=False))
+                        trusted.add(value)
+                        break
+                    except (ValueError, RuntimeError):
+                        continue
+            if value in trusted:
+                continue
+        prefix = plugin_prefixes.get(runtime)
+        if item.get("kind") == "copytree" and prefix is not None:
+            try:
+                dest.relative_to(prefix)
+            except ValueError:
+                continue
+            trusted.add(value)
+    return trusted
+
+
+def _apply_transaction(
+    runtime: str,
+    desired: List[dict],
+    previous: Optional[dict],
+    mode: str,
+    scope: str,
+    source_roots: Sequence[Path] = (),
+    protected_paths: Sequence[Path] = (),
+    commit_callback=None,
+) -> List[dict]:
+    state_dir = paths.harness_state_dir(runtime, scope)
+    tx_root = state_dir / "transactions" / uuid.uuid4().hex
+    backup_root = tx_root / "backup"
+    owned = _trusted_owned(runtime, previous, desired, scope)
+    desired_by_dest = {entry["dest"]: entry for entry in desired}
+    removal = [Path(item) for item in owned if item not in desired_by_dest]
+
+    # Plugins are outside both activation modes.  Existing harness caches are
+    # retained under .harness/disabled-plugins, while registry entries are
+    # disabled by the protected config transaction.
+    quarantine = _plugin_roots(runtime, scope)
+    allowed_link_roots = list(source_roots)
+    if previous:
+        for key in ("source_root", "active_root"):
+            if previous.get(key):
+                allowed_link_roots.append(Path(previous[key]))
+
+    changed: List[dict] = []
+    snapshots: List[dict] = []
+    seen = set()
+    fail_after = int(os.environ.get("HARNESS_RUNTIME_FAIL_AFTER", "0") or "0")
+    operation_count = 0
+    journal_path = tx_root / "journal.json"
+    tx_root.mkdir(parents=True, exist_ok=True)
+    _write_journal(journal_path, runtime, "preparing", snapshots)
+
+    try:
+        for dest in protected_paths:
+            _ensure_owned_destination(runtime, dest, scope)
+            record = _copy_snapshot(dest, backup_root, len(snapshots))
+            snapshots.append(record)
+            _write_journal(journal_path, runtime, "preparing", snapshots)
+
+        for dest in removal + quarantine + [Path(item["dest"]) for item in desired]:
+            key = str(dest)
+            if key in seen:
+                continue
+            seen.add(key)
+            _ensure_owned_destination(runtime, dest, scope)
+            kind = desired_by_dest.get(key, {}).get("kind", "remove")
+            quarantine_owned = owned | {str(path) for path in quarantine}
+            _safe_existing_dest(dest, kind, quarantine_owned, allowed_link_roots)
+            record = _snapshot_record(dest, backup_root, len(snapshots))
+            snapshots.append(record)
+            _write_journal(journal_path, runtime, "preparing", snapshots)
+            if record["state"] == "moved":
+                Path(record["backup"]).parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(dest), record["backup"])
+
+        _write_journal(journal_path, runtime, "applying", snapshots)
+
+        for dest in removal + quarantine:
+            _remove_path(dest)
+            operation_count += 1
+            if fail_after and operation_count >= fail_after:
+                raise ActivationError(f"injected failure after operation {operation_count}")
+
+        for item in desired:
+            source = Path(item["source"])
+            dest = Path(item["dest"])
+            _remove_path(dest)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if item["kind"] == "copytree":
+                shutil.copytree(source, dest, symlinks=False)
+            else:
+                dest.symlink_to(source, target_is_directory=source.is_dir())
+            changed.append(dict(item))
+            operation_count += 1
+            if fail_after and operation_count >= fail_after:
+                raise ActivationError(f"injected failure after operation {operation_count}")
+
+        disabled = []
+        disabled_root = state_dir / "disabled-plugins" / uuid.uuid4().hex
+        for record in snapshots:
+            if record["dest"] not in {str(path) for path in quarantine}:
+                continue
+            if record["state"] == "moved":
+                disabled_root.mkdir(parents=True, exist_ok=True)
+                target = disabled_root / Path(record["dest"]).name
+                backup = Path(record["backup"])
+                if backup.is_dir():
+                    shutil.copytree(backup, target)
+                else:
+                    shutil.copy2(backup, target)
+                disabled.append(str(target))
+            elif record["state"] == "symlink":
+                disabled.append(f"symlink:{record['target']}")
+        if disabled:
+            changed.append(
+                {
+                    "source": "runtime-plugin-cache",
+                    "dest": str(disabled_root),
+                    "surface": "disabled-plugin",
+                    "kind": "quarantine",
+                    "disabled": disabled,
+                }
+            )
+
+        owned_entries = [item for item in changed if item.get("kind") != "quarantine"]
+        if commit_callback is not None:
+            commit_callback(owned_entries)
+        _write_journal(journal_path, runtime, "committed", snapshots)
+    except Exception:
+        _restore(snapshots)
+        shutil.rmtree(tx_root, ignore_errors=True)
+        raise
+
+    shutil.rmtree(tx_root, ignore_errors=True)
+    return [item for item in changed if item.get("kind") != "quarantine"]
+
+
+def _projection_digest(entries: List[dict]) -> str:
+    return _digest_paths(Path(item["source"]) for item in entries)
+
+
+def capture_runtime_state(
+    runtime: str, source: Optional[str] = None, scope: str = "global"
+) -> dict:
+    """Capture the bounded activation surface for invocation-level rollback."""
+    if runtime not in RUNTIMES:
+        raise ActivationError(f"unsupported runtime: {runtime}")
+    _validate_scope(runtime, scope)
+    _validate_state_dir(runtime, scope)
+    _recover_transactions(runtime, scope)
+    state = _load_json(_state_path(runtime, scope))
+    roots: List[Path] = []
+    if source:
+        roots.append(_real_source(source))
+    if state:
+        for key in ("source_root", "active_root"):
+            if state.get(key):
+                roots.append(Path(state[key]))
+    try:
+        roots.append(paths.agent_home().resolve(strict=True))
+    except (OSError, RuntimeError):
+        pass
+
+    discovery = set()
+    for root in roots:
+        try:
+            discovery.update(Path(item["dest"]) for item in _linked_entries(runtime, root, scope))
+        except ActivationError:
+            continue
+
+    snapshot_root = Path(tempfile.mkdtemp(prefix=f"harness-{runtime}-rollback-"))
+    backup_root = snapshot_root / "backup"
+    records: List[dict] = []
+    full_copy_paths = [
+        paths.harness_state_dir(runtime, scope),
+        *_runtime_config_paths(runtime, scope),
+        *_plugin_roots(runtime, scope),
+    ]
+    seen = set()
+    try:
+        for dest in full_copy_paths:
+            key = str(dest)
+            if key in seen:
+                continue
+            seen.add(key)
+            _ensure_owned_destination(runtime, dest, scope)
+            records.append(_copy_snapshot(dest, backup_root, len(records)))
+        for dest in sorted(discovery, key=lambda item: str(item)):
+            key = str(dest)
+            if key in seen:
+                continue
+            seen.add(key)
+            _ensure_runtime_destination(runtime, dest, scope)
+            if dest.exists() and not dest.is_symlink():
+                # A regular foreign destination makes activation block before
+                # mutation, so it does not need a potentially unbounded copy.
+                continue
+            records.append(_copy_snapshot(dest, backup_root, len(records)))
+    except Exception:
+        shutil.rmtree(snapshot_root, ignore_errors=True)
+        raise
+    return {"runtime": runtime, "scope": scope, "root": str(snapshot_root), "records": records}
+
+
+def restore_runtime_state(snapshot: dict) -> None:
+    runtime = snapshot["runtime"]
+    scope = snapshot["scope"]
+    for record in snapshot["records"]:
+        _ensure_owned_destination(runtime, Path(record["dest"]), scope)
+    _restore(snapshot["records"])
+
+
+def discard_runtime_state(snapshot: dict) -> None:
+    shutil.rmtree(snapshot["root"], ignore_errors=True)
+
+
+def _entries_healthy(entries: List[dict]) -> tuple[bool, bool]:
+    missing = False
+    stale = False
+    for item in entries:
+        source = Path(item["source"])
+        dest = Path(item["dest"])
+        if not (dest.exists() or dest.is_symlink()):
+            missing = True
+            continue
+        if item.get("kind") == "copytree":
+            if _tree_digest(dest) != _tree_digest(source):
+                stale = True
+        elif not dest.is_symlink() or dest.resolve(strict=False) != source.resolve(strict=False):
+            stale = True
+    return missing, stale
+
+
+def _bundle_checksum(active_root: Path) -> Optional[str]:
+    metadata_path = active_root.parent / "bundle.json"
+    if not metadata_path.is_file() or not active_root.is_dir():
+        return None
+    metadata = _load_json(metadata_path) or {}
+    expected = metadata.get("checksum")
+    if not isinstance(expected, str):
+        return None
+    return expected if _tree_digest(active_root) == expected else None
+
+
+def activate(
+    runtime: str,
+    mode: str,
+    source: Optional[str] = None,
+    scope: str = "global",
+    profile: Optional[str] = None,
+) -> dict:
+    if runtime not in RUNTIMES:
+        raise ActivationError(f"unsupported runtime: {runtime}")
+    if mode not in MODES:
+        raise ActivationError(f"unsupported activation mode: {mode}")
+
+    _validate_scope(runtime, scope)
+    _validate_state_dir(runtime, scope)
+    _recover_transactions(runtime, scope)
+    if runtime == "opencode" and _opencode_jsonc_harness_present(scope):
+        raise ActivationError(
+            "OpenCode JSONC contains an enabled harness npm plugin; remove that exact "
+            "plugin entry before native activation (comments are not rewritten automatically)"
+        )
+    source_root = _real_source(source)
+    _validate_source_symlinks(source_root)
+    resolution = _profile_resolution(source_root, profile)
+    revision = source_revision(source_root)
+    previous_path = _state_path(runtime, scope)
+    previous = _load_json(previous_path)
+
+    active_root = source_root
+    if mode == "packaged":
+        active_root = _build_bundle(runtime, source_root, revision, scope)
+
+    desired = _desired_entries(
+        runtime, mode, source_root, active_root, revision, scope, resolution
+    )
+    digest = _projection_digest(desired)
+    packaged_checksum = _bundle_checksum(active_root) if mode == "packaged" else None
+    if mode == "packaged" and packaged_checksum is None:
+        raise ActivationError(f"packaged bundle checksum mismatch: {active_root}")
+
+    def commit_state(owned):
+        config_changes = _prepare_runtime_config(runtime, active_root, previous, scope)
+        disabled = [
+            item
+            for change in config_changes
+            for item in change.get("disabled", [])
+        ]
+        state = {
+            "schema": SCHEMA,
+            "runtime": runtime,
+            "mode": mode,
+            "scope": scope,
+            "profile": resolution["name"],
+            "profile_digest": resolution["digest"],
+            "profile_counts": resolution["counts"],
+            "profile_capabilities": resolution["capabilities"],
+            "profile_roles": resolution["roles"],
+            "profile_modes": resolution["modes"],
+            "source_root": str(source_root),
+            "source_revision": revision,
+            "active_root": str(active_root),
+            "active_revision": revision,
+            "bundle_checksum": packaged_checksum,
+            "activated_projection_digest": digest,
+            "owned_paths": owned,
+            "discovery_paths": [item["dest"] for item in owned],
+            "session_action": SESSION_ACTIONS[runtime],
+            "external_dependencies": [],
+            "disabled_external_entries": disabled,
+            "config_backups": [
+                change["backup"] for change in config_changes if change.get("backup")
+            ],
+            "managed_config": {
+                "claude_hooks": next(
+                    (
+                        change["managed"]
+                        for change in config_changes
+                        if change.get("kind") == "claude-hooks-merged"
+                    ),
+                    {},
+                )
+            },
+            "activated_at": _utc_now(),
+        }
+        _atomic_json(previous_path, state)
+
+    _apply_transaction(
+        runtime,
+        desired,
+        previous,
+        mode,
+        scope,
+        source_roots=(source_root, active_root),
+        protected_paths=(*_runtime_config_paths(runtime, scope), previous_path),
+        commit_callback=commit_state,
+    )
+    return status(runtime, scope)
+
+
+def _status_missing(runtime: str, scope: str) -> dict:
+    return {
+        "runtime": runtime,
+        "mode": None,
+        "profile": None,
+        "profile_digest": None,
+        "profile_counts": None,
+        "profile_capabilities": [],
+        "profile_roles": [],
+        "profile_modes": [],
+        "source_root": None,
+        "source_revision": None,
+        "active_revision": None,
+        "projection_digest": None,
+        "discovery_paths": [],
+        "duplicate_sources": duplicate_sources(runtime, scope),
+        "freshness": "missing",
+        "session_action": SESSION_ACTIONS[runtime],
+        "external_dependencies": [],
+        "next_action": (
+            f"harness runtime activate --runtime {runtime} --mode linked "
+            f"--profile {harness_manifest.default_profile()}"
+        ),
+    }
+
+
+def status(runtime: str, scope: str = "global") -> dict:
+    if runtime not in RUNTIMES:
+        raise ActivationError(f"unsupported runtime: {runtime}")
+    _validate_scope(runtime, scope)
+    state = _load_json(_state_path(runtime, scope))
+    if state is None:
+        return _status_missing(runtime, scope)
+
+    source_root = Path(state["source_root"])
+    active_root = Path(state.get("active_root") or state["source_root"])
+    source_rev = source_revision(source_root) if source_root.exists() else "missing"
+    profile_name = state.get("profile", "full")
+    try:
+        resolution = _profile_resolution(source_root, profile_name)
+        entries = _desired_entries(
+            runtime,
+            state["mode"],
+            source_root,
+            active_root,
+            state["active_revision"],
+            scope,
+            resolution,
+        )
+        digest = _projection_digest(entries)
+        missing, stale = _entries_healthy(entries)
+        desired_destinations = {item["dest"] for item in entries}
+        for item in state.get("owned_paths", []):
+            dest = Path(item.get("dest", ""))
+            if (
+                item.get("kind") == "symlink"
+                and str(dest) not in desired_destinations
+                and dest.is_symlink()
+                and _journal_dest_allowed(runtime, dest, scope)
+            ):
+                missing = True
+    except ActivationError:
+        resolution = {
+            "name": profile_name,
+            "digest": state.get("profile_digest"),
+            "counts": state.get("profile_counts"),
+            "capabilities": state.get("profile_capabilities", []),
+            "roles": state.get("profile_roles", []),
+            "modes": state.get("profile_modes", []),
+        }
+        entries, digest, missing, stale = [], None, True, False
+
+    if runtime == "claude" and not _claude_hooks_healthy(active_root, scope):
+        missing = True
+    bundle_stale = False
+    if state.get("mode") == "packaged":
+        current_bundle_checksum = _bundle_checksum(active_root)
+        bundle_stale = (
+            current_bundle_checksum is None
+            or current_bundle_checksum != state.get("bundle_checksum")
+        )
+
+    duplicates = duplicate_sources(runtime, scope)
+    if duplicates:
+        freshness = "duplicate"
+        next_action = (
+            f"harness runtime activate --runtime {runtime} --mode {state['mode']} "
+            f"--source {source_root} --profile {profile_name}"
+        )
+    elif missing:
+        freshness = "missing"
+        next_action = f"harness runtime refresh --runtime {runtime}"
+    elif stale or bundle_stale:
+        freshness = "cache-stale"
+        next_action = f"harness runtime refresh --runtime {runtime}"
+    elif state["mode"] == "packaged" and source_rev != state["active_revision"]:
+        freshness = "source-ahead"
+        next_action = f"harness runtime refresh --runtime {runtime}"
+    elif digest != state.get("activated_projection_digest"):
+        freshness = "session-reload-needed"
+        action_values = list(SESSION_ACTIONS[runtime].values())
+        next_action = "restart-required" if "restart-required" in action_values else "new-session"
+    elif state.get("profile_digest") and resolution["digest"] != state.get("profile_digest"):
+        freshness = "session-reload-needed"
+        action_values = list(SESSION_ACTIONS[runtime].values())
+        next_action = "restart-required" if "restart-required" in action_values else "new-session"
+    else:
+        freshness = "fresh"
+        next_action = "none"
+
+    return {
+        "runtime": runtime,
+        "mode": state["mode"],
+        "profile": resolution["name"],
+        "profile_digest": resolution["digest"],
+        "profile_counts": resolution["counts"],
+        "profile_capabilities": resolution["capabilities"],
+        "profile_roles": resolution["roles"],
+        "profile_modes": resolution["modes"],
+        "source_root": str(source_root),
+        "source_revision": source_rev,
+        "active_revision": state["active_revision"] if state["mode"] == "packaged" else source_rev,
+        "active_root": str(active_root),
+        "bundle_checksum": state.get("bundle_checksum"),
+        "projection_digest": digest,
+        "discovery_paths": [item["dest"] for item in entries],
+        "duplicate_sources": duplicates,
+        "freshness": freshness,
+        "session_action": SESSION_ACTIONS[runtime],
+        "external_dependencies": [],
+        "next_action": next_action,
+    }
+
+
+def refresh(
+    runtime: str, scope: str = "global", profile: Optional[str] = None
+) -> dict:
+    _validate_scope(runtime, scope)
+    state = _load_json(_state_path(runtime, scope))
+    if state is None:
+        raise ActivationError(f"{runtime} has no activation state")
+    selected_profile = profile or state.get("profile", "full")
+    return activate(
+        runtime,
+        state["mode"],
+        state["source_root"],
+        scope,
+        selected_profile,
+    )
+
+
+def doctor(runtime: str, strict: bool = False, scope: str = "global") -> dict:
+    report = status(runtime, scope)
+    hard = {"missing", "cache-stale", "duplicate", "unsupported"}
+    if strict:
+        hard.add("source-ahead")
+    ok = report["freshness"] not in hard
+    return {
+        "runtime": runtime,
+        "ok": ok,
+        "strict": strict,
+        "freshness": report["freshness"],
+        "duplicate_sources": report["duplicate_sources"],
+        "next_action": report["next_action"],
+        "status": report,
+    }

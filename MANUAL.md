@@ -46,7 +46,7 @@
 자연어 발화
    │  (메인 에이전트가 라우팅)
    ▼
-skills/ (28)  ──호출──►  roles/ (8)         ◄── 팀별 모드(roles/modes/)
+skills/ (27)  ──호출──►  roles/ (8)         ◄── 팀별 모드(roles/modes/)
                        └ Claude adapter: adapters/claude/agents/
    │  파이프라인          기획·개발·품질·연구·자료·디자인·편집·external adversary
    ▼
@@ -58,7 +58,7 @@ skills/ (28)  ──호출──►  roles/ (8)         ◄── 팀별 모드(
 세션 밖:  loops/ (당직·연수·모의훈련·일지) ──점검·정리──┘
 ```
 
-- **skills** = 동사(일하기). autopilot-\* 10(추적형 파이프) + 사전분석 2(analyze-project/-user) + code·draft·design 가족 + 운영 3(audit·post-it·sync-skills).
+- **skills** = 동사(일하기). autopilot-\* 10(추적형 파이프) + 사전분석 2(analyze-project/-user) + code·draft·design 가족 + 운영 2(audit·post-it).
 - **roles** = skill 이 일을 맡기는 팀 의미(개발·품질관리·연구·자료·디자인·편집 등). Claude Code 에서는 `adapters/claude/agents/`가 이를 native Agent 파일로 실현한다. 모드 페르소나는 `roles/modes/`.
 - **hooks** = 결정론 가드. 에이전트 판단 대신 코드가 강제한다 — 생성 순서·git 상태·spec 게이트·메모리 write 경로.
 - **memory** = 단기(working)·장기(durable)·프로필을 하나의 DB(`memory.db`)로 묶어 세션 시작에 주입하고 종료에 회수한다.

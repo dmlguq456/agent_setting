@@ -17,7 +17,6 @@ const designPattern = /(designs?\/|\/design\/|spec\/design|preview\.html$|slides
 // spec-backed cwd. Mirrors Claude's PreToolUse[Skill] spec-skill-gate scope.
 const specGovernedCapabilities = new Set(["autopilot-code", "autopilot-spec"])
 const seenLifecycle = new Set()
-const promptBySession = new Map()
 
 function baseDir(ctx) {
   return ctx.worktree || ctx.directory || process.cwd()
@@ -142,15 +141,6 @@ function collectPreflight(command, args) {
   return [result.stdout, result.stderr].filter(Boolean).join("\n").trim()
 }
 
-function textFromParts(parts) {
-  if (!Array.isArray(parts)) return ""
-  return parts
-    .filter((part) => part && part.type === "text" && typeof part.text === "string")
-    .map((part) => part.text)
-    .join("\n")
-    .trim()
-}
-
 function appendContext(output, text) {
   if (!text) return
   if (!Array.isArray(output.system)) output.system = []
@@ -178,10 +168,6 @@ export const AgentHarnessGuards = async (ctx) => {
       touchHeartbeat(dispatchSlug())
     }
   },
-  "chat.message": async (input, output) => {
-    const prompt = textFromParts(output.parts)
-    if (prompt) promptBySession.set(input.sessionID || "opencode-plugin", prompt)
-  },
   "experimental.chat.system.transform": async (input, output) => {
     const sid = input.sessionID || "opencode-plugin"
     const cwd = baseDir(ctx)
@@ -192,8 +178,6 @@ export const AgentHarnessGuards = async (ctx) => {
     }
     appendContext(output, collectPreflight("prompt-signal", [cwd, sid]))
     appendContext(output, collectPreflight("mode", [cwd, sid]))
-    const prompt = promptBySession.get(sid) || ""
-    if (prompt) appendContext(output, collectPreflight("recall", [prompt, cwd, sid]))
     appendContext(output, collectPreflight("briefing", [cwd]))
   },
   "command.execute.before": async (input, output) => {

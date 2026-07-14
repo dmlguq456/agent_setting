@@ -263,7 +263,7 @@ git-risk aggregate is injected per turn. The structured
 `prompt-signal` subcommand (worker-startup/manual, not a per-turn hook call) reports
 `routing_contract=core/WORKFLOW.md`,
 `routing_action=read-workflow-and-select-codex-skill`, and
-`capability_entrypoints=codex-native-skills-plugin` for tracked work. The `PermissionRequest`
+`capability_entrypoints=codex-native-skills` for tracked work. The `PermissionRequest`
 bridge is a registered no-op that emits nothing; harness monitoring is owned by
 Codex native `/statusline` while Codex owns approval and sandbox
 decisions. The write bridge registers
@@ -334,7 +334,7 @@ Codex must not consume these Claude-native files as native configuration:
 | Claude-native surface | Codex status |
 |---|---|
 | `adapters/claude/settings.json` | Not consumable; Codex needs wrapper/preflight equivalents |
-| `adapters/claude/commands/` | Not consumable; command-like harness entries use Codex-native Skills and the installable `agent-harness-codex` plugin |
+| `adapters/claude/commands/` | Not consumable; command-like harness entries use Codex-native Skills |
 | `skills/*/SKILL.md` | Compatibility reference only; Codex should start from `capabilities/README.md` |
 | `adapters/claude/statusline.sh` | Not consumable; input schema is Claude statusline JSON |
 | `adapters/claude/track-toggle.sh` | Do not consume; portable semantics live in `utilities/workflow-toggle.sh`, and Codex exposes them through `preflight.sh track` |
@@ -396,7 +396,7 @@ Codex-native counterpart today.
 | token/context pressure | `preflight.sh token-budget [cwd] [session-id] [kv|json|hook]` reads an exact Codex rollout session and keeps active context, exact directive bytes, and cumulative raw counters separate. `kv`/`json` are read-only L2 accounting diagnostics. Unknown/degraded signals fail open. `hook` remains transition-only and byte-identical; its parent lifecycle is the single exactly-once accounting authority for success/timeout/error and writes only a bounded content-free sha256-session aggregate under XDG state. `utilities/token-budget-experiment.py` is an explicit isolated `offline-forecast-v1` replay/evaluator: production hooks/preflight do not import or activate it, its maximum verdict is `eligible_for_user_review`, adoption stays `pending_user_decision`, and it never writes config. Native rollout-budget ownership requires `AGENT_TOKEN_BUDGET_NATIVE_VALIDATED=1` only after feature + no-side-effect config probes pass; local Codex 0.144.3 reports the feature under development and disabled, so exact-session rollout observation remains the fallback. The adapter never writes `$CODEX_HOME/config.toml` |
 | workflow toggle | Run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly requests tracked/untracked mode switching |
 | memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text memory injection; Codex SessionStart hook emission is opt-in via `CODEX_SESSION_MEMORY_INJECT=1` |
-| memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd] [session-id]` before prompt handling when no automatic prompt hook is attached |
+| memory recall | The agent decides contextually when memory may help, then runs `adapters/codex/bin/preflight.sh recall <query> [cwd] [session-id]`. No automatic prompt classifier is attached |
 | oncall briefing | Run `adapters/codex/bin/preflight.sh briefing [cwd]` before prompt handling on the dedicated agent desk |
 | loop guidance | Run `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` before following loop guides; Codex reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts. The `note` loop is an external scheduler/worklog-board contract; use the related `autopilot-note` Skill/plugin projection only for on-demand note routing |
 | memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`. The user-facing `distill-propose` stays an explicit opt-in preview (reports `status=tool-contract`, exits 69 until `CODEX_DISTILL_ENABLE=1`). Automatic session-end and turn-nudge distillation is enabled by default: the `codex exec --sandbox read-only` worker is verified tool-free (see Distillation Boundary) and applies through `apply-distill-actions.py`; the Stop hook schedules session-end distillation detached to avoid foreground hook timeouts; opt out with `CODEX_DISTILL_ENABLE=0` |
@@ -454,7 +454,7 @@ projection is a static default, not a validated model-tier equivalence.
 
 `codex_setting/` should remain minimal and explicit. It may expose `AGENTS.md`,
 `README.md`, `core/`, `capabilities/`, `roles/`, `bin/`, `codex-skills`,
-`codex-agents`, `codex-plugin-marketplace`, `codex-hooks`, selected tools, and selected utilities, but must not expose Claude-native
+`codex-agents`, `codex-hooks`, selected tools, and selected utilities, but must not expose Claude-native
 `settings.json`, `commands/`, root `skills/`, `hooks/`, or `statusline.sh` as if Codex
 could consume them.
 

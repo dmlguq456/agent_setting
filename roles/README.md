@@ -9,21 +9,18 @@ meaning, then map each role to their own model, tool, and delegation mechanism
 through adapter-owned wrappers or native agent surfaces.
 
 ## Role Catalog
+<!-- GENERATED: harness-manifest.json -->
 
 | Role profile | Portable model role | Primary responsibility | Claude realization | Codex realization | OpenCode realization |
 |---|---|---|---|---|---|
+| `design-team` | `deep maker plus verifier` | Visual making, critique, and independent breakage verification | `adapters/claude/agents/design-team.md` | `adapters/codex/agents/design-team.toml` | `adapters/opencode/agents/design-team/design-team.md` |
+| `dev-team` | `fast implementer by default` | Implement backend/frontend/refactor/new-lib work through mode personas | `adapters/claude/agents/dev-team.md` | `adapters/codex/agents/dev-team.toml` | `adapters/opencode/agents/dev-team/dev-team.md` |
+| `editorial-team` | `deep maker / fast reviewer by mode` | User-facing wording, translation, polish, and review | `adapters/claude/agents/editorial-team.md` | `adapters/codex/agents/editorial-team.toml` | `adapters/opencode/agents/editorial-team/editorial-team.md` |
+| `external-adversary` | `external adversary plus orchestrator` | Independent hostile review through a different runtime/process | `adapters/claude/agents/codex-review-team.md` | `adapters/codex/agents/external-adversary.toml` | `adapters/opencode/agents/external-adversary/external-adversary.md` |
+| `material-team` | `deep maker plus fast tool worker` | Fetch, extract, visualize, and analyze supporting materials | `adapters/claude/agents/material-team.md` | `adapters/codex/agents/material-team.toml` | `adapters/opencode/agents/material-team/material-team.md` |
 | `plan-team` | `deep maker` | Read source and artifacts, produce or refine implementation plans | `adapters/claude/agents/plan-team.md` | `adapters/codex/agents/plan-team.toml` | `adapters/opencode/agents/plan-team/plan-team.md` |
-| `dev-team` | `fast implementer` by default | Implement backend/frontend/refactor/new-lib work through mode personas | `adapters/claude/agents/dev-team.md` | `adapters/codex/agents/dev-team.toml` | `adapters/opencode/agents/dev-team/dev-team.md` |
-| `qa-team` | variable reviewer | Read-only code, plan, test, ML, data, and security review | `adapters/claude/agents/qa-team.md` | `adapters/codex/agents/qa-team.toml` | `adapters/opencode/agents/qa-team/qa-team.md` |
-| `research-team` | variable research reviewer | Paper-grounded review, survey, fact-check, and adversarial claim verification | `adapters/claude/agents/research-team.md` | `adapters/codex/agents/research-team.toml` | `adapters/opencode/agents/research-team/research-team.md` |
-| `material-team` | `deep maker` plus fast tool worker | Fetch, extract, visualize, and analyze supporting materials | `adapters/claude/agents/material-team.md` | `adapters/codex/agents/material-team.toml` | `adapters/opencode/agents/material-team/material-team.md` |
-| `design-team` | `deep maker` plus verifier | Visual making, critique, and independent breakage verification | `adapters/claude/agents/design-team.md` | `adapters/codex/agents/design-team.toml` | `adapters/opencode/agents/design-team/design-team.md` |
-| `editorial-team` | `deep maker` / `fast reviewer` by mode | User-facing wording, translation, polish, and review | `adapters/claude/agents/editorial-team.md` | `adapters/codex/agents/editorial-team.toml` | `adapters/opencode/agents/editorial-team/editorial-team.md` |
-| `external-adversary` | `external adversary` plus orchestrator | Independent hostile review through a different runtime/process | `adapters/claude/agents/codex-review-team.md` | `adapters/codex/agents/external-adversary.toml` | `adapters/opencode/agents/external-adversary/external-adversary.md` |
-
-Codex and OpenCode native agent files are generated adapter-owned projections
-from this table. They are not copies of Claude Agent frontmatter, and they must
-not expose Claude agent files as native runtime input.
+| `qa-team` | `variable reviewer` | Read-only code, plan, test, ML, data, and security review | `adapters/claude/agents/qa-team.md` | `adapters/codex/agents/qa-team.toml` | `adapters/opencode/agents/qa-team/qa-team.md` |
+| `research-team` | `variable research reviewer` | Paper-grounded review, survey, fact-check, and adversarial claim verification | `adapters/claude/agents/research-team.md` | `adapters/codex/agents/research-team.toml` | `adapters/opencode/agents/research-team/research-team.md` |
 
 ## Adapter Requirements
 

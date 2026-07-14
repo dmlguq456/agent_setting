@@ -1,0 +1,1 @@
+../../../../tools/install/runtime_activation.py

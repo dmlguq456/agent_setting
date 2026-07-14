@@ -31,7 +31,7 @@ QA_FROM_INTENSITY = {
 }
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
 
-# SD-15 (OPERATIONS §5.10 ⑨): limit/auth 즉사 패턴 — homomorphic port of the Claude
+# SD-15 (OPERATIONS §5.10 ⑨): immediate limit/auth failure patterns — homomorphic port of the Claude
 # wrapper's DEATH_PATTERNS. codex exec surfaces provider limit/auth failures as JSON
 # events (`--json`), but a raw tail substring scan still matches the text inside those
 # events, so no JSON parsing is needed (same as the Claude tail scan). Runtime-currentness
@@ -285,7 +285,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"{execution_contract}"
         "User task:\n"
         f"{task.rstrip()}\n\n"
-        "Return a concise Korean report with changed files, verification commands, artifact paths, and any blocked/unsupported Codex tool contracts. "
+        "Return a concise report with changed files, verification commands, artifact paths, and any blocked/unsupported Codex tool contracts. "
         "Leave merge and worktree cleanup to the main orchestrator.\n",
         source,
     )

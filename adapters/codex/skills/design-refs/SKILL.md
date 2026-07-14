@@ -1,6 +1,6 @@
 ---
 name: design-refs
-description: "Use for design-refs: 외부·사용자 reference 시각 자료를 수집하고 brief를 만든다."
+description: "Use for design-refs: Collect external and user-provided visual references and create a brief."
 ---
 
 # design-refs
@@ -28,11 +28,11 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Identifier: `design-refs`
 - Supported modes: `none`
 - Argument shape: `<design task> [--design <path>] [--refs <image paths>] [--no-web]`
-- Portable meaning: 외부·사용자 reference 시각 자료를 수집하고 brief를 만든다.
+- Portable meaning: Collect external and user-provided visual references and create a brief.
 
 ## Portable Contract
 
-- Invocation semantics: Reference collection and brief — gathers user-provided images, external web references (via 자료팀 web-image-search), existing design system assets. Writes a brief that informs subsequent phases. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
+- Invocation semantics: Reference collection and briefing: gather user-provided images, external web references through the material role's web-image-search mode, and existing design-system assets. Write a brief that informs subsequent phases. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 

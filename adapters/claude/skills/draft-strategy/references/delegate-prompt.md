@@ -282,7 +282,7 @@ When the strategy includes a slide-by-slide outline (presentation mode Section 4
 ## Quality Requirements
 Every reviewer point must appear in rebuttal strategy (missing a point is a critical error). Severity classification must be justified. All citations must reference actual materials in the discovered input paths (analysis_project/{paper,doc}/, research/{topic}/) — do NOT fabricate. Strategy must be actionable with specific plans, not vague advice. For academic modes (rebuttal/paper/review): apply venue-specific norms (e.g., NeurIPS rebuttal length limits, ICASSP culture). For professional modes (report/proposal/presentation): apply industry best practices relevant to the domain.
 
-Write the strategy file directly. Return ONLY the file path and a 3-5 line Korean summary of the strategy. Do NOT return the strategy content itself.
+Write the strategy file directly. Return ONLY the file path and a 3-5 line summary of the strategy. Do NOT return the strategy content itself.
 ````
 
 The agent writes the strategy file directly; the orchestrator only receives paths and a summary.

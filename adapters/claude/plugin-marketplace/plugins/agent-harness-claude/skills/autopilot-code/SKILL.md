@@ -1,12 +1,12 @@
 ---
 name: autopilot-code
-description: "Use when starting or routing any code task (library/research/app). 코드 작업 일반 entry — 라이브러리·연구·앱 모두 커버, spec 컨텍스트 자동 감지"
+description: "Use when starting or routing a code task across library, research, or application work."
 argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
 metadata:
   group: entry
   fam: code
   modes: [dev, debug, audit]
-  blurb: "코드 작업 일반 entry — 라이브러리·연구·앱 모두 커버, spec 컨텍스트 자동 감지"
+  blurb: "Route code work through plan, execute, test, and report."
 ---
 
 # autopilot-code
@@ -19,7 +19,7 @@ metadata:
 - spec이 있으면 코드 편집 전 `spec-significance`를 한 줄로 판정한다. spec-significant 변경은 `autopilot-spec` update를 먼저 거친다.
 - git/worktree 상태는 진입 시와 durable write-back/commit 직전에 재확인한다. merge/rebase/detached/head 변경은 중단한다.
 - QA는 stage마다 무조건 병렬화하지 않는다. `plan-check`와 최종 `code-test`는 intensity에서 파생된 rigor(CONVENTIONS §1.1)에 맞춰 커진다.
-- 보고는 한국어로 한다.
+- User-facing reports follow the user's communication language unless an explicit audience, publication, or artifact-language requirement overrides it.
 
 ## Reference Index
 

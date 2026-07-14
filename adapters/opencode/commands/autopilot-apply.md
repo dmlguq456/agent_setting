@@ -1,5 +1,5 @@
 ---
-description: "Run the portable autopilot-apply capability through the OpenCode adapter. Meaning: cheatsheet 초안을 실제 source artifact에 적용하고 검증한다."
+description: "Run the portable autopilot-apply capability through the OpenCode adapter. Meaning: Apply a cheatsheet draft to the real source artifact and verify the result."
 ---
 
 Use the OpenCode adapter realization of portable capability `autopilot-apply`.
@@ -16,7 +16,7 @@ This is adapter-owned output generated from `capabilities/autopilot-apply.md`, n
 4. Before spec-changing work, run
    `adapters/opencode/bin/preflight.sh capability autopilot-apply [cwd] [session-id]`.
 5. If the command receives arguments, map them to the portable argument shape:
-   `\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]`.
+   `"<cheatsheet hint / task>" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]`.
 
 Portable contract excerpt:
 

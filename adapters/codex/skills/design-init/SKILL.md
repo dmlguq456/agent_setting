@@ -1,6 +1,6 @@
 ---
 name: design-init
-description: "Use for design-init: 디자인 환경과 state를 bootstrap한다."
+description: "Use for design-init: Bootstrap the design environment and state."
 ---
 
 # design-init
@@ -28,7 +28,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Identifier: `design-init`
 - Supported modes: `none`
 - Argument shape: `<design task description> [--scope ui|slide|icon|diagram|mixed]`
-- Portable meaning: 디자인 환경과 state를 bootstrap한다.
+- Portable meaning: Bootstrap the design environment and state.
 
 ## Portable Contract
 
