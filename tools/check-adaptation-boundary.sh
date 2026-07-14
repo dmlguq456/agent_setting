@@ -3277,8 +3277,8 @@ check_projection_summary_docs() {
   if grep -Fq 'Codex does not currently consume the full harness natively' README.md INSTALL_LAYOUT.md 2>/dev/null; then
     fail_msg "Codex install docs must describe selected native projections instead of implying instruction-only support"
   fi
-  if ! grep -Fq '| Codex | skills, custom agents, modes, hooks |' README.md \
-    || ! grep -Fq '| OpenCode | skills, agents, commands, local guard plugin |' README.md; then
+  if ! grep -Fq '| Codex | Skills, custom agents, modes, and hooks |' README.md \
+    || ! grep -Fq '| OpenCode | Skills, agents, commands, and local guard plugin |' README.md; then
     fail_msg "README.md must summarize Codex and OpenCode native projection surfaces"
   fi
   if ! grep -Fq 'Codex-native Skills, custom Agents, mode' INSTALL_LAYOUT.md \
@@ -3675,12 +3675,25 @@ BYTE_BUDGET_EOF
 }
 
 check_language_neutrality_contract() {
-  # Scope this prose gate to user-facing root documentation. Hangul in explicit
-  # multilingual retrieval fixtures, tokenizer data, and drill/test corpora is
-  # functional data and is intentionally outside this check.
-  root_doc_hangul=$(rg -n '[가-힣]' README.md MANUAL.md INSTALL_LAYOUT.md 2>/dev/null || true)
+  # README.md is the canonical English landing page. Its one exact Korean label
+  # is the language switch to the companion translation; all other root-doc
+  # prose remains English. Hangul in explicit multilingual retrieval fixtures,
+  # tokenizer data, and drill/test corpora is functional data and intentionally
+  # outside this check.
+  english_switch='<p align="center"><strong>English</strong> · <a href="README.ko.md">한국어</a></p>'
+  korean_switch='<p align="center"><a href="README.md">English</a> · <strong>한국어</strong></p>'
+  if [ ! -f README.ko.md ] \
+    || ! grep -Fxq "$english_switch" README.md \
+    || ! grep -Fxq "$korean_switch" README.ko.md \
+    || ! grep -Fq '유지보수 기준인 [README.md](README.md)의 한국어 번역' README.ko.md; then
+    fail_msg "the bilingual README entrypoints must keep reciprocal language switches and mark README.md as canonical"
+  fi
+
+  readme_hangul=$(grep -Fvx "$english_switch" README.md 2>/dev/null | rg -n '[가-힣]' 2>/dev/null || true)
+  other_root_hangul=$(rg -n '[가-힣]' MANUAL.md INSTALL_LAYOUT.md 2>/dev/null || true)
+  root_doc_hangul=$(printf '%s\n%s\n' "$readme_hangul" "$other_root_hangul" | sed '/^$/d')
   if [ -n "$root_doc_hangul" ]; then
-    fail_msg "README.md, MANUAL.md, and INSTALL_LAYOUT.md must not contain Hangul prose:"
+    fail_msg "the canonical English README body, MANUAL.md, and INSTALL_LAYOUT.md must not contain Hangul prose:"
     printf '%s\n' "$root_doc_hangul"
   fi
 

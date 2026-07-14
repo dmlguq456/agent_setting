@@ -1,12 +1,23 @@
-# Agent Harness
+<h1 align="center">Agent Harness</h1>
 
-> **Portable workflows. Native runtimes. One local source of truth.**
+<p align="center"><strong>Portable workflows. Native runtimes. One local source of truth.</strong></p>
 
-Agent Harness is a local system for closing research, planning, implementation,
-and verification work consistently across Claude Code, Codex, and OpenCode. It
-is **not a setup for any single runtime**: shared contracts are defined once,
-then projected only onto the native skill, agent, hook, and command surfaces
-that each runtime actually discovers.
+<p align="center">A local-first workflow layer for Claude Code, Codex, and OpenCode.</p>
+
+<p align="center">
+  <img alt="Claude Code: native" src="https://img.shields.io/badge/Claude_Code-native-D97757?style=flat-square">
+  <img alt="Codex: native" src="https://img.shields.io/badge/Codex-native-111827?style=flat-square">
+  <img alt="OpenCode: native" src="https://img.shields.io/badge/OpenCode-native-2563EB?style=flat-square">
+  <img alt="Installation: local-first" src="https://img.shields.io/badge/installation-local--first-059669?style=flat-square">
+</p>
+
+<p align="center"><strong>English</strong> · <a href="README.ko.md">한국어</a></p>
+
+Agent Harness closes research, planning, implementation, and verification work
+consistently across supported coding-agent runtimes. It is **not a setup for a
+single runtime**. Shared contracts are defined once, then projected only onto
+the native skill, agent, hook, mode, and command surfaces that each runtime
+actually discovers.
 
 ```text
 "Implement and test the login API, then leave a change report."
@@ -14,9 +25,21 @@ that each runtime actually discovers.
        plan → execute → test → report + durable evidence
 ```
 
+## At a glance
+
+| Complete workflows | Runtime-native delivery | Inspectable state |
+|---|---|---|
+| Connect research, specs, plans, implementation, tests, and reports. | Project shared behavior onto each runtime's native surfaces instead of emulating one vendor. | Verify source, revision, profile, digest, duplicates, freshness, and required session action. |
+
 ## Quick start
 
-You need Python 3.10+, Git, and the CLI for each runtime you plan to use.
+### Requirements
+
+- Python 3.10+
+- Git
+- The CLI for each runtime you want to activate
+
+### Install
 
 ```bash
 git clone https://github.com/dmlguq456/agent_setting.git ~/agent_setting
@@ -31,7 +54,7 @@ cd ~/agent_setting
 ```
 
 After activation, manage the installation through the `harness` command on
-your `PATH`.
+your `PATH`:
 
 ```bash
 harness runtime status --runtime all
@@ -41,11 +64,11 @@ harness runtime doctor --runtime all --strict
 
 `builder` is the default profile, so omitting `--profile` activates the same
 configuration. Use `--mode packaged` to deliver an immutable revision to
-another machine. This path also avoids marketplaces and remote packages.
+another machine. Both modes avoid marketplace and remote-package dependencies.
 
-## Choose your profile
+## Choose a profile
 
-Profiles control how many capabilities and roles are exposed to a runtime.
+Profiles control how many capabilities and roles each runtime discovers.
 Dependency closure is included automatically, while kernel surfaces such as
 guards, bootstrap instructions, and `memory-scout` remain available in every
 profile.
@@ -61,33 +84,33 @@ harness runtime activate --runtime codex --mode linked --profile starter
 harness runtime refresh --runtime all --profile full
 ```
 
-Activation records the selected profile, capability/role/mode lists, and
-manifest digest. You can therefore verify what is installed from runtime state
-instead of trusting a README description.
+Activation records the selected profile, capability, role, and mode lists plus
+the manifest digest. You can verify what is installed from runtime state rather
+than trusting a README description.
 
-## What makes it different
+## Why Agent Harness
 
-- **It closes the whole work cycle.** Research and code generation feed into
-  specs, plans, execution, tests, reports, and durable evidence.
-- **Contracts come before runtimes.** The portable core owns workflow, role,
-  artifact, memory, intensity, and QA semantics; adapters translate them only
-  into native runtime surfaces.
-- **It exposes only what you need.** `starter`, `builder`, and `full` reduce
-  skill metadata and agent discovery in practice, not just on paper.
-- **Installation state is inspectable.** `status` and `doctor` report the
-  absolute source path, revision, digest, profile, duplicates, freshness, and
-  required session action.
-- **Decisions survive sessions.** Project working memory, durable memory, and
-  user profiles share one recall path.
-- **Safety rules are executable.** Deterministic guards and tests verify spec
+- **Close the whole work cycle.** Research and code generation feed into specs,
+  plans, execution, tests, reports, and durable evidence.
+- **Put contracts before runtimes.** The portable core owns workflow, role,
+  artifact, memory, intensity, and assurance semantics; adapters translate them
+  only into native runtime surfaces.
+- **Expose only what you need.** `starter`, `builder`, and `full` reduce skill
+  metadata and agent discovery in practice, not just on paper.
+- **Inspect installation state.** `status` and `doctor` report the absolute
+  source path, revision, digest, profile, duplicates, freshness, and required
+  session action.
+- **Carry decisions across sessions.** Project working memory, durable memory,
+  and user profiles share one guarded retrieval path.
+- **Make safety executable.** Deterministic guards and tests verify spec
   grounding, artifact order, git state, and projection drift.
 
-## Use it like this
+## Use natural language
 
 You do not need to memorize command names. Describe the outcome and constraints
-in your natural communication language; runtime-native skills select the
-relevant pipeline, and user-facing output follows the conversation language
-unless you specify a different audience or artifact language.
+in your natural communication language. Runtime-native skills select the
+relevant pipeline, and user-facing output follows the conversation, audience,
+or artifact language instead of inheriting the language of this README.
 
 > “Analyze this repository and create a PRD for the next feature.”
 
@@ -99,7 +122,7 @@ unless you specify a different audience or artifact language.
 
 > “Find the previous decision and apply this project's existing naming convention.”
 
-See [capabilities/README.md](capabilities/README.md) for all entrypoints and
+See [capabilities/README.md](capabilities/README.md) for every entrypoint and
 [roles/README.md](roles/README.md) for the portable role model.
 
 ## How it works
@@ -118,14 +141,14 @@ See [capabilities/README.md](capabilities/README.md) for all entrypoints and
               activate · status · refresh · doctor
 ```
 
-- `core/` — workflow, artifact, QA, memory, and git/worktree contracts
-- `harness-manifest.json` — canonical machine contract for capabilities, roles,
-  modes, packs, and profiles
-- `capabilities/`, `roles/` — human-readable portable behavior sources
-- `adapters/` — native projections and bridges for each runtime
-- `tools/install/` — activation lifecycle that leaves runtime-owned state alone
-- `.agent_reports/` — project artifact root for specs, plans, test evidence, and
-  handoffs
+| Layer | Responsibility |
+|---|---|
+| `core/` | Workflow, artifact, assurance, memory, and git/worktree contracts |
+| `harness-manifest.json` | Canonical machine contract for capabilities, roles, modes, packs, and profiles |
+| `capabilities/`, `roles/` | Human-readable portable behavior sources |
+| `adapters/` | Native projections and bridges for each runtime |
+| `tools/install/` | Activation lifecycle that leaves runtime-owned state alone |
+| `.agent_reports/` | Project artifacts for specs, plans, test evidence, and handoffs |
 
 `linked` is the maintainer default: repository changes appear immediately on
 the discovery path. `packaged` creates an immutable local bundle and keeps its
@@ -133,41 +156,41 @@ active revision until `runtime refresh`. File visibility and instruction reload
 are separate concerns, so `runtime status` reports whether each runtime needs a
 re-invocation, new session, or restart through `session_action`.
 
+## Runtime support
+
+| Runtime | `linked` projection | `packaged` projection |
+|---|---|---|
+| Claude Code | Skills, agents, commands, and hooks | Immutable bundle of the same native surfaces |
+| Codex | Skills, custom agents, modes, and hooks | Immutable bundle of the same native surfaces |
+| OpenCode | Skills, agents, commands, and local guard plugin | Immutable bundle of the same native surfaces |
+
+Runtime differences are reported rather than hidden. The installer marks
+unsupported surfaces as `SKIP` with a reason, while credentials, sessions,
+databases, logs, and foreign caches remain outside its ownership. See
+[INSTALL_LAYOUT.md](INSTALL_LAYOUT.md) for the detailed mapping.
+
 ## Native first, plugins optional
 
 The default product path is a local native projection. Codex and Claude
-marketplace bundles are optional distribution experiments, not prerequisites
-for generation, activation, or a successful doctor run. OpenCode's local guard
+marketplace bundles are optional distribution channels, not prerequisites for
+generation, activation, or a successful doctor run. OpenCode's local guard
 plugin is a native hook bridge, not an external package.
 
-As a result, the default installation does not require:
+The default installation therefore requires no:
 
 - marketplace registration
 - plugin caches or registries
 - npm package fetching
 - external MCP servers, connectors, or APIs
-- changes to Codex/Claude credentials, sessions, logs, or local databases
+- changes to Codex or Claude credentials, sessions, logs, or local databases
 
 Duplicate native and plugin discovery for the same harness is forbidden and
 causes strict doctor checks to fail.
 
-## Runtime support
-
-| Runtime | `linked` projection | `packaged` projection |
-|---|---|---|
-| Claude Code | skills, agents, commands, hooks | Immutable bundle of the same native surfaces |
-| Codex | skills, custom agents, modes, hooks | Immutable bundle of the same native surfaces |
-| OpenCode | skills, agents, commands, local guard plugin | Immutable bundle of the same native surfaces |
-
-Runtime differences are reported, not hidden. The installer marks unsupported
-surfaces as `SKIP` with a reason, while credentials, sessions, databases, logs,
-and foreign caches remain outside its ownership. See
-[INSTALL_LAYOUT.md](INSTALL_LAYOUT.md) for the detailed mapping.
-
 ## Develop the harness
 
-After changing a shared definition, use the single generator to refresh every
-core projection and check for drift.
+After changing a shared definition, refresh every generated projection and
+check for drift:
 
 ```bash
 python3 tools/generate.py
@@ -190,9 +213,9 @@ projections are generated.
 | Purpose | Document |
 |---|---|
 | Complete usage guide | [MANUAL.md](MANUAL.md) |
+| Installation and runtime projections | [INSTALL_LAYOUT.md](INSTALL_LAYOUT.md) |
 | Capabilities and roles | [capabilities/README.md](capabilities/README.md), [roles/README.md](roles/README.md), [roles/MODES.md](roles/MODES.md) |
 | Routing and artifacts | [core/WORKFLOW.md](core/WORKFLOW.md), [core/CONVENTIONS.md](core/CONVENTIONS.md) |
 | Git, worktrees, and dispatch | [core/OPERATIONS.md](core/OPERATIONS.md) |
 | Memory and recall | [core/MEMORY.md](core/MEMORY.md) |
 | Hooks and design principles | [core/HOOKS.md](core/HOOKS.md), [core/DESIGN_PRINCIPLES.md](core/DESIGN_PRINCIPLES.md) |
-| Installation and runtime projections | [INSTALL_LAYOUT.md](INSTALL_LAYOUT.md) |
