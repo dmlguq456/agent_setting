@@ -1,0 +1,29 @@
+project_name: harness-productization
+created: 2026-07-14
+updated: 2026-07-14
+mode:
+  - library
+  - cli
+status: specified
+source_of_truth: .agent_reports/spec/harness-productization/prd.md
+inputs:
+  - .agent_reports/research/cross-platform-agent-frameworks/analysis_summary.md
+  - .agent_reports/research/cross-platform-agent-frameworks/06_implementation.md
+  - .agent_reports/spec/harness-installer/prd.md
+  - .agent_reports/spec/harness-layer-sync/prd.md
+  - .agent_reports/spec/skill-design-refactor/prd.md
+phases:
+  phase_1_canonical_manifest_projections: pending
+  phase_2_progressive_profiles: blocked_by_phase_1
+  phase_3_external_skill_bridge: blocked_by_phase_2
+locked_decisions:
+  - kernel_guards_are_always_on
+  - generated_projections_are_not_sources_of_truth
+  - profiles_compose_packs_without_forking_capabilities
+  - external_skills_never_auto_promote_to_core
+  - phases_execute_in_order
+open_decisions:
+  - canonical_manifest_physical_format
+  - new_install_default_profile
+  - first_external_format_adapter
+next_action: run_autopilot_code_for_phase_1
