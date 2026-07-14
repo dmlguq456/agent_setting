@@ -1,5 +1,13 @@
 # harness-installer — pipeline summary
 
+## v6 (2026-07-14) — deterministic SemVer release policy
+
+- snapshot: `_internal/versions/v5/prd.md`. `main`과 배포 release가 다시 분리되지 않도록 release-relevant 변경을 자동 판정한다.
+- `type!:`/`BREAKING CHANGE:`는 major, `feat:`는 minor, 그 밖의 동작 변경은 patch이며 docs/report/CI/test-only 변경은 skip한다.
+- 하나의 직렬화된 workflow가 검증한 exact commit에 tag를 만들고 네 release asset을 바로 게시한다. 자동 생성 tag의 재귀 workflow 실행에 의존하지 않는다.
+- 명시적으로 push한 valid SemVer/prerelease tag는 maintainer override로 유지하고 기존 tag나 asset을 교체하지 않는다.
+- deployment: 첫 `main` 자동 판정이 accumulated feature work를 minor로 분류해 `v1.1.0`을 게시했고, exact tag target과 네 public asset/checksum을 검증했다.
+
 ## v5 (2026-07-14) — release-bound bootstrap
 
 - snapshot: `_internal/versions/v4/prd.md`. v1.0.0 공개 뒤 발견된 raw-main bootstrap과 release archive의 버전 분리 가능성을 계약 위반으로 분류했다.

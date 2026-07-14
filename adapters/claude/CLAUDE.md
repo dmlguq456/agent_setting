@@ -54,11 +54,15 @@ The capability that created an artifact owns its revisions:
 | `experiments/` | `autopilot-lab` | `_RUNLOG.md` |
 | Profile DB records | `analyze-user` / `post-it --scope user` | Record changelog |
 
+Primary capability selection is semantic (`WORKFLOW §0.2`): new empirical work — checkpoint reevaluation, new metrics, figure/media generation — keeps `autopilot-lab` primary even when the request is phrased as a document update; refine, spec, draft, and note attach as secondaries and never replace the execution primary. Before long-running, GPU-bound, or bulk-generation execution, answer the `WORKFLOW §0.3` pre-execution gate.
+
 In a spec-backed cwd, read `prd.md`, pipeline state, and recent plans before work; then check spec drift and route through the appropriate intensity. Spec read markers and capability gates enforce this path.
 
 When a user invokes an autopilot entry naturally, infer options from prompt, cwd, and artifacts, summarize the choice once where the capability requires confirmation, then invoke. Direct slash invocation already supplies intent. High-risk work may route to stronger intensity; rigor derives from intensity and there is no separate user-facing QA axis.
 
 Work isolation follows `OPERATIONS §5.10`: only a typo or one-line direct edit belongs in main. Quick tracked work uses a depth-1 one-shot worker in an isolated worktree. Standard+ features, new modules, and multi-file changes use a task branch and headless depth-1 conductor; it dispatches plan, execute, test, and report as depth-2 file-only stage sessions. Depth 3 or greater is forbidden. Use liveness and `dispatch-wait` rather than trusting notifications. Task worktrees are source-only: `dispatch-headless.py` resolves the primary checkout's canonical artifact root, injects `AGENT_ARTIFACT_ROOT`, and passes exactly that path through Claude `--add-dir`; worker-local artifact snapshots are write-denied. Main selects and harvests merges only after user signal or a dispatched-job harvest, then runs `adapters/claude/bin/worktree-cleanup.sh --check` and `--apply` only after integrated verification and push. SessionEnd is not a cleanup authority.
+
+The main session is the context owner, router, orchestrator, and final integrator (`OPERATIONS §5.10` main-session role contract); separable `standard+` stages go to registered worker sessions, and an inline run of separable work records its reason. A "no sub-agents" restriction covers the Agent tool's native delegation, not registered headless worker dispatch — extend it to both surfaces only when the user names both or runtime evidence verifiably restricts both.
 
 Use `deep orchestrator` for the standard+ conductor. Retain `orchestrator` for already decided mechanical coordination. Planning and architecture may prefer an eligible GPT-family deep maker without hard pinning; use deterministic dispatch-route traces and current capacity.
 

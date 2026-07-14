@@ -327,6 +327,17 @@ spec = importlib.util.spec_from_file_location(
 )
 build_release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build_release)
+for invalid_version in ("v-integration", "v1.0.0-01"):
+    try:
+        build_release.build_installer(
+            invalid_version,
+            tmp / "invalid-version",
+            b"print('fixture')\n",
+        )
+    except SystemExit:
+        pass
+    else:
+        raise AssertionError(f"invalid release version accepted: {invalid_version}")
 fixture = tmp / "git-fixture"
 fixture.mkdir()
 subprocess.run(["git", "init", "-q"], cwd=fixture, check=True)
@@ -405,7 +416,7 @@ with tarfile.open(archive, "w:gz") as bundle:
         source = root / relative
         if source.exists() or source.is_symlink():
             bundle.add(source, arcname="agent-harness/" + relative, recursive=False)
-    marker = b"v-integration\n"
+    marker = b"v0.0.0-integration\n"
     info = tarfile.TarInfo("agent-harness/RELEASE_VERSION")
     info.mode = 0o644
     info.size = len(marker)
@@ -416,7 +427,7 @@ checksum.write_text(digest + "  agent-harness.tar.gz\n")
 (target / "release.json").write_text(
     json.dumps(
         {
-            "tag_name": "v-integration",
+            "tag_name": "v0.0.0-integration",
             "assets": [
                 {"name": "agent-harness.tar.gz", "browser_download_url": archive.as_uri()},
                 {"name": "agent-harness.tar.gz.sha256", "browser_download_url": checksum.as_uri()},
@@ -430,7 +441,7 @@ spec = importlib.util.spec_from_file_location(
 build_release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build_release)
 build_release.build_installer(
-    "v-integration",
+    "v0.0.0-integration",
     target / "assets",
     (root / "tools/install/distribution.py").read_bytes(),
     "example/harness",
@@ -472,7 +483,7 @@ state = json.load(
     open(os.path.join(os.environ["XDG_STATE_HOME"], "agent-harness/distribution.json"))
 )
 assert installed["status"] == "installed"
-assert installed["version"] == "v-integration"
+assert installed["version"] == "v0.0.0-integration"
 assert state["repository"] == "example/harness"
 assert set(installed["runtimes"]) == {"claude", "codex", "opencode"}
 assert doctor["exit"] == 0
@@ -484,6 +495,6 @@ python3 - "$INTEGRATION/legacy-redirect.json" <<'PY'
 import json, sys
 result = json.load(open(sys.argv[1]))
 assert result["status"] in {"up-to-date", "reconfigured"}
-assert result["version"] == "v-integration"
+assert result["version"] == "v0.0.0-integration"
 PY
 echo "ok - release-bound installer and legacy redirect activate and verify all runtimes"

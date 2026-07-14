@@ -101,7 +101,7 @@ Additional spec-entry gates:
 
 ## Routing Boundary
 
-`autopilot-spec` decides what should exist and records the blueprint. Actual implementation, refactoring, debugging, and test repair are `autopilot-code` work. Visual artifact production is `autopilot-design`; deployment execution is `autopilot-ship`.
+`autopilot-spec` decides what should exist and records the blueprint. Actual implementation, refactoring, debugging, and test repair are `autopilot-code` work. Visual artifact production is `autopilot-design`; deployment execution is `autopilot-ship`. A change to evaluation policy or another blueprint surface is spec-sync only: under `WORKFLOW §0.2` it never substitutes for the reevaluation or implementation that applies it, which stays with `autopilot-lab` or `autopilot-code`.
 
 ## Mode-Specific Semantics
 

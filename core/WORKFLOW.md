@@ -88,6 +88,62 @@ its existing legacy artifact root and memory-linked artifacts were read.
 
 This document plus the runtime adapter bootstrap is the routing source of truth. Violation signals include ad-hoc artifact edits, code before its gates, or updating an artifact through a capability that does not own it.
 
+### 0.2. Semantic Primary Routing
+
+Choose the primary capability from the core new work the request performs, not
+from the artifact the user names or the surface verb such as "update", "fix",
+or "정리". A request that ends in "update the report" still has its primary
+decided by what must newly happen before any report can change.
+
+Precedence, highest first:
+
+1. New empirical work — training, checkpoint reevaluation or analysis,
+   metric or ablation computation, plot/figure generation, or audio/media
+   artifact generation — makes `autopilot-lab` the primary capability
+   (`eval` for checkpoint-centered work, `setup` for new training).
+2. With no new empirical work, correcting only the wording, structure, or
+   errors of an existing document makes `autopilot-refine` the primary.
+3. A change to requirements, evaluation policy, or any blueprint surface adds
+   `autopilot-spec` update as a secondary spec-sync step; it never replaces
+   the execution primary.
+4. Formal report prose assembly routes through `autopilot-draft` or the owning
+   capability's draft handoff as a secondary step.
+5. Final artifact routing and note registration is `autopilot-note`, always
+   secondary and last.
+6. A secondary capability must never substitute for the primary execution
+   capability, and the primary never absorbs a secondary's artifact ownership.
+
+| Request shape | Primary | Secondary |
+|---|---|---|
+| "Reevaluate the model on a new test set and update the report" | `autopilot-lab --mode eval` | refine/draft document pass; `autopilot-spec` on policy change; `autopilot-note` |
+| "Fix only the typos and sentences in REPORT.md" | `autopilot-refine` | — |
+| "Change the evaluation mixing policy to unscaled and reevaluate" | `autopilot-lab --mode eval` | `autopilot-spec` update; neither replaces the other |
+
+Added after a 2026-07-14 incident where a checkpoint reevaluation with report
+regeneration was routed to `autopilot-refine` as primary from its surface
+artifact and the entire evaluation ran inline in the main session.
+
+### 0.3. Pre-Execution Gate for Long-Running Work
+
+Before starting a long-running command, GPU or checkpoint evaluation, bulk
+figure/media generation, or a full report regeneration, the main session
+answers this gate; it does not enter long-running execution inline without it:
+
+1. What is the semantic primary capability under §0.2?
+2. Does the work create new empirical output?
+3. Is the intensity `standard+`?
+4. Are two or more separable stages present under `OPERATIONS §5.10`
+   separability?
+5. If main intends to run anything inline, which recorded exception applies?
+6. Have native sub-agent limits and headless worker limits been checked as
+   separate surfaces (`OPERATIONS §5.10` delegation surfaces)?
+7. Does the plan preserve existing experiment lineage and the append-only
+   `_RUNLOG`?
+
+A gate answer that selects dispatch follows `OPERATIONS §5.10` registry and
+liveness rules; an inline answer for `standard+` separable work requires the
+recorded reason.
+
 ## 1. Four Tracks
 
 ```text
@@ -124,7 +180,7 @@ Only `direct` has no plan. Every other autopilot graph includes a plan check, bu
 | Visual assets and design | — | `autopilot-design` for a new design-first cycle | Substantial direction, token, layout, structure, or built-app design evolution goes through `autopilot-design`, updating the token contract and code from a real render. Only a trivial tweak goes directly through `autopilot-code`. Design tokens are the single contract under `DESIGN_PRINCIPLES §9`. |
 | User profile | — | `analyze-user init` | `analyze-user update` |
 
-One-line edits, renames, cleanup, and one-off reviews that need no plan or log may bypass autopilot and use direct editing or the implementation role. Use autopilot only when work needs tracking or accumulated artifacts. `DESIGN_PRINCIPLES §4` and each capability's quick tier define minor versus major.
+One-line edits, renames, cleanup, and one-off reviews that need no plan or log may bypass autopilot and use direct editing or the implementation role. Use autopilot only when work needs tracking or accumulated artifacts. `DESIGN_PRINCIPLES §4` and each capability's quick tier define minor versus major. When one request spans several rows of this map, resolve the primary with the §0.2 semantic precedence.
 
 ## 3. `autopilot-spec` Modes
 
@@ -169,7 +225,7 @@ The user supplies one entrypoint; internal routing is automatic. Portable model 
 | `autopilot-code` in app mode | General code flow plus design critique at plan review and after render, DB migration safety, and automatic deploy after an authorized push |
 | `autopilot-draft` | Material figure/data/reference work, writing implementation, editorial polish, and research fact-check |
 | `autopilot-refine` | Reuse the draft roles plus editorial review |
-| `autopilot-lab` | Setup uses research plan review, implementation scaffold, and QA smoke tests. Evaluation uses functional QA, figure generation, and research survey. The actual long-running training run is asynchronous and human-gated through RUNLOG ⏳ rather than a stage-worker dispatch. |
+| `autopilot-lab` | Setup uses research plan review, implementation scaffold, and QA smoke tests. Evaluation uses functional QA, figure generation, and research survey; at `standard+`, checkpoint evaluation, media generation, report assembly, and independent verification dispatch as stage workers under the eval execution topology in `capabilities/autopilot-lab.md`. The actual long-running training run is asynchronous and human-gated through RUNLOG ⏳ rather than a stage-worker dispatch. |
 | `analyze-user` | Cross-project material collection plus editorial review |
 
 For every durable stage at `standard+`, use an independent headless session under `OPERATIONS §5.10`; the named team roles run inside that session, and the depth-1 conductor passes only artifact paths. Direct stays depth 0 and quick stays a depth-1 one-shot.

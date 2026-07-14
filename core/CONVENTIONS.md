@@ -123,6 +123,7 @@ For standard+ code stage dispatch, choose explicitly: code-plan uses deep maker;
 8. New or strengthened instructions, rules, and hooks preserve why, including the motivating incident and date, inline or in the commit message. Drills are the strongest executable preservation of intent.
 9. Never reduce a semantic requirement to token or regex rules without verifying that meaning is preserved; see `DESIGN_PRINCIPLES §0.7`.
 10. Token pressure is orthogonal to intensity and cannot reduce graph, depth, dispatch, model role, assurance, required guards, or input context.
+11. Primary routing is semantic (`WORKFLOW §0.2`): new empirical work keeps the execution capability primary, and secondary capabilities never substitute for it. Native sub-agent restrictions and registered headless-dispatch restrictions are separate delegation surfaces (`OPERATIONS §5.10`); extending one to the other requires verified runtime evidence, and the fallback is inline execution with the reason recorded.
 
 Token-budget accounting is observation, not attribution. Hook invocations,
 zero/emission outcomes, exact inserted-directive UTF-8 bytes, and monotonic

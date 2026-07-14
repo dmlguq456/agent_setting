@@ -205,6 +205,7 @@ projections are generated.
 |---|---|
 | Complete usage guide | [MANUAL.md](MANUAL.md) |
 | Installation and runtime projections | [INSTALL_LAYOUT.md](INSTALL_LAYOUT.md) |
+| Release criteria and SemVer automation | [RELEASE_POLICY.md](RELEASE_POLICY.md) |
 | Capabilities and roles | [capabilities/README.md](capabilities/README.md), [roles/README.md](roles/README.md), [roles/MODES.md](roles/MODES.md) |
 | Routing and artifacts | [core/WORKFLOW.md](core/WORKFLOW.md), [core/CONVENTIONS.md](core/CONVENTIONS.md) |
 | Git, worktrees, and dispatch | [core/OPERATIONS.md](core/OPERATIONS.md) |

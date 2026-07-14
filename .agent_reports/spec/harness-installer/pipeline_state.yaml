@@ -6,9 +6,9 @@ phases:
   spec: done                # v1 PRD 확정 (2026-07-12 — 하이브리드 구조·`harness` 명령 사용자 확정, currentness 검증 반영)
   scaffolding: done         # 브랜치 9792fd3 → main 머지 완료(4de50f6, 사용자 신호 2026-07-13)
   dev: done                 # 사이클 1(51/51)+2(53/53)+3(29/29, hook 5종 완결)+quick fix 2건(verify 채널-인지·liveness pid) — 전부 main 머지
-  release_delivery: done         # v5 release-bound bootstrap published and verified as v1.0.1
+  release_delivery: done         # v6 automatic SemVer policy published and verified as v1.1.0
 last_updated: 2026-07-14
-spec_version: 5
+spec_version: 6
 inputs:
   - .agent_reports/research/cross-platform-agent-frameworks/
   - .agent_reports/analysis_project/harness-alignment/
@@ -31,5 +31,6 @@ decisions_locked:
   - INST-D-12: managed updater는 linked/foreign source를 fetch/pull/repoint하지 않음
   - INST-D-13: README 상단은 plugin 경계 대신 간결한 제품 강점을 제시
   - INST-D-14: bootstrap code와 archive는 동일 immutable release tag에 결속; raw main은 public install trust path가 아님
+  - INST-D-15: release-relevant main 변경은 deterministic SemVer policy로 자동 release; docs/report/CI/test-only는 skip, unclassified behavior는 patch
 open:
   - INST-OPEN-4: OpenCode 복수형 migration — 로컬 1.17.13 단수형 정상, drift-watch check 상시 감시, 버전업 시 별도 사이클
