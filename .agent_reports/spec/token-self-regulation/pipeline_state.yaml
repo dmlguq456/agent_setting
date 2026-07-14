@@ -26,16 +26,18 @@ phases:
   phase_2_spec:
     status: done
   phase_2_implementation:
-    status: pending
+    status: done
   phase_2_verification:
-    status: pending
+    status: done
   phase_3_contract:
     status: done
     production_dynamic_enabled: false
   phase_3_offline_candidate:
-    status: pending
+    status: done
   phase_3_paired_experiment:
-    status: pending
+    status: pending-real-evidence
+    runner_and_synthetic_fixture_verification: done
+    real_complete_triplets: 0
   phase_3_adoption:
     status: blocked-on-evidence-and-explicit-user-decision
 decisions_locked:
@@ -59,10 +61,10 @@ adoption_gate:
   explicit_user_decision_required: true
   current_decision: pending_user_decision
 resume:
-  next_capability: autopilot-code
-  next_scope: phase-2-accounting-then-phase-3-isolated-evaluator
+  next_capability: autopilot-lab
+  next_scope: collect-real-paired-control-static-dynamic-evidence
   production_dynamic_enabled: false
-  commit_push_by_this_worker: false
+  commit_push_by_this_worker: true
 unsupported_contracts:
   - >-
     Codex flat spec-read preflight currently does not recognize the component

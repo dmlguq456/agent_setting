@@ -2,13 +2,28 @@
 
 - **Date**: 2026-07-13
 - **Current version**: v2
-- **Status**: Phase 2–3 blueprint updated; implementation/experiment pending
+- **Status**: Phase 2 implementation and Phase 3 isolated tooling complete; real experiment/adoption pending
 - **Placement**: component SoT under `spec/token-self-regulation/`
 - **Production policy**: v1 static transition-only; dynamic disabled
 
 ## v2 update — Phase 2 accounting and Phase 3 isolated adoption gate
 
 기존 v1을 `_internal/versions/v1/prd.md`로 exact snapshot한 뒤 PRD를 update mode로 갱신했다.
+
+## v2 implementation completion
+
+- Phase 2 content-free bounded accounting, exact delivered-byte ownership,
+  monotonic counter observations, JSON/KV diagnostics, and fail-open lifecycle
+  integration are implemented and verified.
+- Phase 3 frozen offline candidate, strict unique-workload triplet evaluator,
+  deterministic bootstrap gates, and explicit isolated CLI are implemented.
+- Final verification passed Phase 2 21, Phase 3 10, Fleet 221, portable guards
+  344/0, adaptation/boundary/manifest/doctor/diff, mirror/projection checks, and
+  independent re-review.
+- Candidate SHA-256 is
+  `11288b737241598dcf585eb762cfc033f3cbcca70eee6ff583cb6065f6de3606`.
+- Synthetic fixtures remain non-evidentiary. Real paired sample count is zero;
+  production dynamic stays disabled and adoption remains blocked.
 
 ### Phase 2
 
@@ -45,7 +60,9 @@ input/transcript/artifact pruning·요약, RL/online learning, model/reasoning e
 
 ## Resume
 
-다음 구현 entry는 `autopilot-code`다. 먼저 Phase 2 accounting/store/hook integration을 구현·검증하고, 그 증거 위에서 Phase 3 candidate와 isolated evaluator를 만든다. production dynamic policy는 별도 v3 adoption spec 전까지 disabled다.
+다음 entry는 `autopilot-lab`이다. 고정 계약으로 real paired
+control/static/dynamic evidence를 수집한다. production dynamic policy는
+별도 adoption 결정과 후속 spec/code cycle 전까지 disabled다.
 
 ## v1 history — Phase 0–1
 

@@ -1942,6 +1942,35 @@ if printf '{"prompt":"plain prompt","session_id":"%s","cwd":"%s"}\n' "$budget_si
 else
   bad "codex prompt hook should keep same-band token budget reinjection at zero bytes"
 fi
+codex_accounting_dir="$TMP/codex_budget_state/agent-harness/token-budget/accounting"
+if CODEX_HOME="$TMP/codex_hook_home/.codex" XDG_STATE_HOME="$TMP/codex_budget_state" "$budget_preflight" token-budget "$TMP/flowproj" "$budget_sid" kv >"$TMP/codex_budget_accounting_kv.out" 2>"$TMP/codex_budget_accounting_kv.err" \
+  && grep -q '^accounting.hook_invocations=2$' "$TMP/codex_budget_accounting_kv.out" \
+  && python3 - "$codex_accounting_dir" "$budget_sid" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+directory = pathlib.Path(sys.argv[1])
+digest = hashlib.sha256(sys.argv[2].encode()).hexdigest()[:32]
+path = directory / f"{digest}.json"
+raw = path.read_text(encoding="utf-8")
+data = json.loads(raw)
+assert path.stat().st_size <= 8192
+assert data["session_digest"] == digest and sys.argv[2] not in raw
+assert data["hook_invocations"] == data["zero_injections"] + data["emissions"] == 2
+assert data["emissions"] == 1 and data["zero_reason_counts"]["same_band"] == 1
+assert data["directive_utf8_bytes_total"] == 154
+assert data["observed_session_token_samples"] == 2
+assert data["observed_session_token_delta_monotonic"] == 0
+assert "TOKEN_BUDGET=" not in raw
+assert "directive_exact_tokens" not in data
+PY
+then
+  ok "codex prompt hook records exact content-free accounting and exposes it read-only in kv"
+else
+  bad "codex prompt hook should record bounded exact accounting without diagnostic reinjection"
+fi
 if "$TOGGLE" --cwd "$TMP/flowproj" --session promptlifecyclesid --set untracked >/tmp/codex_prompt_toggle.out 2>/tmp/codex_prompt_toggle.err \
   && printf '{"prompt":"remember this project context","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
   | MEM_NUDGE_INTERVAL=1 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook.out 2>/tmp/codex_prompt_hook.err \
@@ -2351,78 +2380,78 @@ else
 fi
 RPHOME="$TMP/codex-runtime-home"
 rm -rf "$RPHOME"; mkdir -p "$RPHOME"
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/tmp/codex_rp0.out 2>/tmp/codex_rp0.err; then
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >"$TMP/codex_rp0.out" 2>"$TMP/codex_rp0.err"; then
   bad "codex check-runtime-projection should fail on an unwired home"
 else
-  grep -q '^status=failed' /tmp/codex_rp0.out && ok "codex check-runtime-projection reports an unwired home as failed" || bad "codex check-runtime-projection unwired output wrong"
+  grep -q '^status=failed' "$TMP/codex_rp0.out" && ok "codex check-runtime-projection reports an unwired home as failed" || bad "codex check-runtime-projection unwired output wrong"
 fi
-if python3 "$ROOT/tools/context-footprint.py" --root "$ROOT" --skip-runtime --skip-hooks >/tmp/context_footprint.out 2>/tmp/context_footprint.err \
-  && grep -q '^context_footprint_report=1' /tmp/context_footprint.out \
-  && grep -q '^surface=codex-plugin ' /tmp/context_footprint.out \
-  && grep -q '^surface=claude ' /tmp/context_footprint.out \
-  && grep -q '^status=ok' /tmp/context_footprint.out; then
+if python3 "$ROOT/tools/context-footprint.py" --root "$ROOT" --skip-runtime --skip-hooks >"$TMP/context_footprint.out" 2>"$TMP/context_footprint.err" \
+  && grep -q '^context_footprint_report=1' "$TMP/context_footprint.out" \
+  && grep -q '^surface=codex-plugin ' "$TMP/context_footprint.out" \
+  && grep -q '^surface=claude ' "$TMP/context_footprint.out" \
+  && grep -q '^status=ok' "$TMP/context_footprint.out"; then
   ok "context-footprint reports bootstrap and skill metadata without runtime hooks"
 else
   bad "context-footprint should report deterministic metadata footprint"
 fi
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >/tmp/codex_rp1.out 2>/tmp/codex_rp1.err \
-  && grep -q '^status=ok' /tmp/codex_rp1.out \
-  && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/tmp/codex_rp2.out 2>/tmp/codex_rp2.err \
-  && grep -q '^check=agent-harness:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=agent-harness-readme:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=agent-capabilities:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=agent-roles:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=agent-bin:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=agent-tools:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=agent-utilities:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=agent-config:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=agent-scaffolds:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=hook-trust:review-needed' /tmp/codex_rp2.out \
-  && grep -q '^check=hooks-json:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=skill-link:autopilot-code:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=skill-discovery:native' /tmp/codex_rp2.out \
-  && grep -q '^check=skills-linked:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=agent-link:plan-team.toml:ok' /tmp/codex_rp2.out \
-  && grep -q '^check=agents-linked:ok' /tmp/codex_rp2.out \
-  && grep -q '^status=ok' /tmp/codex_rp2.out; then
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >"$TMP/codex_rp1.out" 2>"$TMP/codex_rp1.err" \
+  && grep -q '^status=ok' "$TMP/codex_rp1.out" \
+  && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >"$TMP/codex_rp2.out" 2>"$TMP/codex_rp2.err" \
+  && grep -q '^check=agent-harness:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=agent-harness-readme:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=agent-capabilities:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=agent-roles:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=agent-bin:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=agent-tools:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=agent-utilities:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=agent-config:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=agent-scaffolds:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=hook-trust:review-needed' "$TMP/codex_rp2.out" \
+  && grep -q '^check=hooks-json:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=skill-link:autopilot-code:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=skill-discovery:native' "$TMP/codex_rp2.out" \
+  && grep -q '^check=skills-linked:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=agent-link:plan-team.toml:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=agents-linked:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^status=ok' "$TMP/codex_rp2.out"; then
   ok "codex install-runtime-projection wires the home and the checker passes"
 else
   bad "codex install-runtime-projection + checker should wire and validate the runtime home"
 fi
 RPPLUGIN="$TMP/codex-runtime-home-plugin"
 rm -rf "$RPPLUGIN"; mkdir -p "$RPPLUGIN"
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPPLUGIN" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" --install-plugin >/tmp/codex_rp_plugin_install.out 2>/tmp/codex_rp_plugin_install.err \
-  && grep -q '^skills_mode=plugin' /tmp/codex_rp_plugin_install.out \
-  && grep -q '^skills_linked=0' /tmp/codex_rp_plugin_install.out \
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPPLUGIN" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" --install-plugin >"$TMP/codex_rp_plugin_install.out" 2>"$TMP/codex_rp_plugin_install.err" \
+  && grep -q '^skills_mode=plugin' "$TMP/codex_rp_plugin_install.out" \
+  && grep -q '^skills_linked=0' "$TMP/codex_rp_plugin_install.out" \
   && [ ! -e "$RPPLUGIN/skills/autopilot-code" ] \
-  && AGENT_HOME="$ROOT" CODEX_HOME="$RPPLUGIN" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/tmp/codex_rp_plugin.out 2>/tmp/codex_rp_plugin.err \
-  && grep -q '^check=skill-link:autopilot-code:absent' /tmp/codex_rp_plugin.out \
-  && grep -q '^check=skill-discovery:plugin' /tmp/codex_rp_plugin.out \
-  && grep -q '^check=skills-linked:skipped reason=plugin-skill-discovery' /tmp/codex_rp_plugin.out \
-  && grep -q '^check=plugin:ok' /tmp/codex_rp_plugin.out \
-  && grep -q '^status=ok' /tmp/codex_rp_plugin.out; then
+  && AGENT_HOME="$ROOT" CODEX_HOME="$RPPLUGIN" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >"$TMP/codex_rp_plugin.out" 2>"$TMP/codex_rp_plugin.err" \
+  && grep -q '^check=skill-link:autopilot-code:absent' "$TMP/codex_rp_plugin.out" \
+  && grep -q '^check=skill-discovery:plugin' "$TMP/codex_rp_plugin.out" \
+  && grep -q '^check=skills-linked:skipped reason=plugin-skill-discovery' "$TMP/codex_rp_plugin.out" \
+  && grep -q '^check=plugin:ok' "$TMP/codex_rp_plugin.out" \
+  && grep -q '^status=ok' "$TMP/codex_rp_plugin.out"; then
   ok "codex install-runtime-projection supports plugin-only skill discovery"
 else
   bad "codex install-runtime-projection should support plugin-only skill discovery"
 fi
 RPBAD="$TMP/codex-runtime-home-bad"
 rm -rf "$RPBAD"; mkdir -p "$RPBAD"
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPBAD" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >/tmp/codex_rp_bad_install.out 2>/tmp/codex_rp_bad_install.err \
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPBAD" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >"$TMP/codex_rp_bad_install.out" 2>"$TMP/codex_rp_bad_install.err" \
   && ln -sfn "$TMP" "$RPBAD/skills/autopilot-code" \
   && ln -sfn "$TMP" "$RPBAD/agents/plan-team.toml" \
-  && ! AGENT_HOME="$ROOT" CODEX_HOME="$RPBAD" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/tmp/codex_rp_bad.out 2>/tmp/codex_rp_bad.err \
-  && grep -q '^check=skill-link:autopilot-code:failed' /tmp/codex_rp_bad.out \
-  && grep -q '^check=agent-link:plan-team.toml:failed' /tmp/codex_rp_bad.out \
-  && grep -q '^status=failed' /tmp/codex_rp_bad.out; then
+  && ! AGENT_HOME="$ROOT" CODEX_HOME="$RPBAD" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >"$TMP/codex_rp_bad.out" 2>"$TMP/codex_rp_bad.err" \
+  && grep -q '^check=skill-link:autopilot-code:failed' "$TMP/codex_rp_bad.out" \
+  && grep -q '^check=agent-link:plan-team.toml:failed' "$TMP/codex_rp_bad.out" \
+  && grep -q '^status=failed' "$TMP/codex_rp_bad.out"; then
   ok "codex check-runtime-projection rejects miswired skill and agent links"
 else
   bad "codex check-runtime-projection should reject miswired skill and agent links"
 fi
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection >/tmp/codex_rp3.out 2>/tmp/codex_rp3.err \
-  && grep -q '^check=agent-capabilities:ok' /tmp/codex_rp3.out \
-  && grep -q '^check=agent-tools:ok' /tmp/codex_rp3.out \
-  && grep -q '^check=agent-config:ok' /tmp/codex_rp3.out \
-  && grep -q '^status=ok' /tmp/codex_rp3.out; then
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection >"$TMP/codex_rp3.out" 2>"$TMP/codex_rp3.err" \
+  && grep -q '^check=agent-capabilities:ok' "$TMP/codex_rp3.out" \
+  && grep -q '^check=agent-tools:ok' "$TMP/codex_rp3.out" \
+  && grep -q '^check=agent-config:ok' "$TMP/codex_rp3.out" \
+  && grep -q '^status=ok' "$TMP/codex_rp3.out"; then
   ok "codex preflight runtime-projection validates installed runtime wiring"
 else
   bad "codex preflight runtime-projection should validate installed runtime wiring"
@@ -2442,22 +2471,22 @@ trusted_hash = "sha256:test"
 [hooks.state."$RPHOME/hooks.json:post_tool_use:0:0"]
 trusted_hash = "sha256:test"
 EOF
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection >/tmp/codex_rp_stop_trust.out 2>/tmp/codex_rp_stop_trust.err \
-  && grep -q '^check=hook-trust:review-needed missing=stop$' /tmp/codex_rp_stop_trust.out \
-  && grep -q '^status=ok' /tmp/codex_rp_stop_trust.out; then
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection >"$TMP/codex_rp_stop_trust.out" 2>"$TMP/codex_rp_stop_trust.err" \
+  && grep -q '^check=hook-trust:review-needed missing=stop$' "$TMP/codex_rp_stop_trust.out" \
+  && grep -q '^status=ok' "$TMP/codex_rp_stop_trust.out"; then
   ok "codex runtime-projection requires distinct Stop hook trust"
 else
   bad "codex runtime-projection should require distinct Stop hook trust"
 fi
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection --require-hook-trust >/tmp/codex_rp_strict_missing.out 2>/tmp/codex_rp_strict_missing.err; then
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection --require-hook-trust >"$TMP/codex_rp_strict_missing.out" 2>"$TMP/codex_rp_strict_missing.err"; then
   bad "codex strict runtime-projection should fail when hook trust is missing"
 else
-  grep -q '^check=hook-trust:review-needed missing=stop$' /tmp/codex_rp_strict_missing.out && ok "codex strict runtime-projection requires complete hook trust" || bad "codex strict runtime-projection missing trust output wrong"
+  grep -q '^check=hook-trust:review-needed missing=stop$' "$TMP/codex_rp_strict_missing.out" && ok "codex strict runtime-projection requires complete hook trust" || bad "codex strict runtime-projection missing trust output wrong"
 fi
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_REQUIRE_HOOK_TRUST=1 CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection >/tmp/codex_rp_trust.out 2>/tmp/codex_rp_trust.err; then
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_REQUIRE_HOOK_TRUST=1 CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection >"$TMP/codex_rp_trust.out" 2>"$TMP/codex_rp_trust.err"; then
   bad "codex runtime-projection should fail when hook trust is required but missing"
 else
-  grep -q '^check=hook-trust:review-needed' /tmp/codex_rp_trust.out && ok "codex runtime-projection can require hook trust" || bad "codex runtime-projection required hook trust output wrong"
+  grep -q '^check=hook-trust:review-needed' "$TMP/codex_rp_trust.out" && ok "codex runtime-projection can require hook trust" || bad "codex runtime-projection required hook trust output wrong"
 fi
 cat > "$RPHOME/config.toml" <<EOF
 [hooks.state]
@@ -2474,25 +2503,25 @@ trusted_hash = "sha256:test"
 [hooks.state."$RPHOME/hooks.json:stop:0:0"]
 trusted_hash = "sha256:test"
 EOF
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection --require-hook-trust >/tmp/codex_rp_stop_alias.out 2>/tmp/codex_rp_stop_alias.err \
-  && grep -q '^check=hook-trust:ok session_end=stop-alias$' /tmp/codex_rp_stop_alias.out \
-  && grep -q '^status=ok' /tmp/codex_rp_stop_alias.out; then
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection --require-hook-trust >"$TMP/codex_rp_stop_alias.out" 2>"$TMP/codex_rp_stop_alias.err" \
+  && grep -q '^check=hook-trust:ok session_end=stop-alias$' "$TMP/codex_rp_stop_alias.out" \
+  && grep -q '^status=ok' "$TMP/codex_rp_stop_alias.out"; then
   ok "codex runtime-projection accepts Stop trust as SessionEnd alias"
 else
   bad "codex runtime-projection should accept Stop trust as SessionEnd alias"
 fi
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime >/tmp/codex_doctor_runtime.out 2>/tmp/codex_doctor_runtime.err \
-  && grep -q '^check=runtime-projection:ok' /tmp/codex_doctor_runtime.out \
-  && grep -q '^check=native-subagents:ok' /tmp/codex_doctor_runtime.out \
-  && grep -q '^status=ok' /tmp/codex_doctor_runtime.out; then
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime >"$TMP/codex_doctor_runtime.out" 2>"$TMP/codex_doctor_runtime.err" \
+  && grep -q '^check=runtime-projection:ok' "$TMP/codex_doctor_runtime.out" \
+  && grep -q '^check=native-subagents:ok' "$TMP/codex_doctor_runtime.out" \
+  && grep -q '^status=ok' "$TMP/codex_doctor_runtime.out"; then
   ok "codex doctor --runtime includes runtime projection validation"
 else
   bad "codex doctor --runtime should include runtime projection validation"
 fi
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime-strict >/tmp/codex_doctor_runtime_strict.out 2>/tmp/codex_doctor_runtime_strict.err \
-  && grep -q '^check=runtime-projection:ok' /tmp/codex_doctor_runtime_strict.out \
-  && grep -q '^check=native-subagents:ok' /tmp/codex_doctor_runtime_strict.out \
-  && grep -q '^status=ok' /tmp/codex_doctor_runtime_strict.out; then
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime-strict >"$TMP/codex_doctor_runtime_strict.out" 2>"$TMP/codex_doctor_runtime_strict.err" \
+  && grep -q '^check=runtime-projection:ok' "$TMP/codex_doctor_runtime_strict.out" \
+  && grep -q '^check=native-subagents:ok' "$TMP/codex_doctor_runtime_strict.out" \
+  && grep -q '^status=ok' "$TMP/codex_doctor_runtime_strict.out"; then
   ok "codex doctor --runtime-strict requires and accepts complete hook trust"
 else
   bad "codex doctor --runtime-strict should require and accept complete hook trust"

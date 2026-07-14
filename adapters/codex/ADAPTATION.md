@@ -244,9 +244,16 @@ compact; `CODEX_SESSION_MEMORY_INJECT=1` restores `memory` output as
 message/content payloads, then calls `mode`, suppresses the default tracked anchor, preserves
 non-default mode context such as untracked state, plus `recall` and `briefing`
 when they have content, a transition-only `token-budget ... hook` response, and
-the `turn-nudge` side effect. Token-budget output is empty for normal, unknown,
-repeated-band, and validated-native states; only entry into `tight`/`critical`
-adds one compact directive. The directive can shorten output and defer optional
+the `turn-nudge` side effect. Token-budget output is byte-identical to Phase 1:
+it is empty for normal, unknown, repeated-band, degraded/failure, and
+validated-native states; only entry into `tight`/`critical` adds one compact
+directive. The parent lifecycle records exactly one content-free receipt-derived
+outcome after observing success, timeout, and process failure. Accounting uses a
+sha256 session digest, bounded XDG aggregate, bounded stale-safe lock, atomic
+replace, and 8 KiB/file / 256 files / 2 MiB oldest-first pruning; every failure
+is silent and fail-open. Exact inserted bytes and monotonic exact-session runtime
+counter deltas remain separate non-billing observations, with no tokenizer
+estimate absent exact runtime/model/version provenance. The directive can shorten output and defer optional
 extras, but core/CONVENTIONS.md §1.2 forbids changing intensity, dispatch/depth,
 model role, required tools/tests, safety/validation/security/error handling/
 accessibility, input context, or guards. It emits
@@ -386,7 +393,7 @@ Codex-native counterpart today.
 | spec read gate | Auto-enforced through Codex hooks: `PostToolUse[Read]` records actual `prd.md` reads, and `PreToolUse` write guard hard-denies an ungrounded write to a spec-changing artifact (`plans/*` or a `spec/` blueprint) — Codex's interception equivalent of Claude's `PreToolUse[Skill]` gate (no skill event exists). Manual fallbacks: `preflight.sh read <prd.md>` after reads, `preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
 | workflow start cleanup | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]`; run it manually when no automatic hook is attached |
 | workflow signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` per turn; `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` is the worker-startup/manual subcommand carrying the full routing contract; run them manually when no automatic hook is attached |
-| token/context pressure | `preflight.sh token-budget [cwd] [session-id] [kv|json|hook]` reads an exact Codex rollout session and keeps active context separate from cumulative raw counters. `kv`/`json` are read-only. Unknown/degraded signals fail open. `hook` is transition-only, bounded by a fail-open timeout, and stores only hashed-session state under XDG user state, not the repo or runtime config. Native rollout-budget ownership requires `AGENT_TOKEN_BUDGET_NATIVE_VALIDATED=1` only after feature + no-side-effect config probes pass; local Codex 0.144.1 fails that probe, so rollout JSON observation is the default. The adapter never writes `$CODEX_HOME/config.toml` |
+| token/context pressure | `preflight.sh token-budget [cwd] [session-id] [kv|json|hook]` reads an exact Codex rollout session and keeps active context, exact directive bytes, and cumulative raw counters separate. `kv`/`json` are read-only L2 accounting diagnostics. Unknown/degraded signals fail open. `hook` remains transition-only and byte-identical; its parent lifecycle is the single exactly-once accounting authority for success/timeout/error and writes only a bounded content-free sha256-session aggregate under XDG state. `utilities/token-budget-experiment.py` is an explicit isolated `offline-forecast-v1` replay/evaluator: production hooks/preflight do not import or activate it, its maximum verdict is `eligible_for_user_review`, adoption stays `pending_user_decision`, and it never writes config. Native rollout-budget ownership requires `AGENT_TOKEN_BUDGET_NATIVE_VALIDATED=1` only after feature + no-side-effect config probes pass; local Codex 0.144.3 reports the feature under development and disabled, so exact-session rollout observation remains the fallback. The adapter never writes `$CODEX_HOME/config.toml` |
 | workflow toggle | Run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly requests tracked/untracked mode switching |
 | memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text memory injection; Codex SessionStart hook emission is opt-in via `CODEX_SESSION_MEMORY_INJECT=1` |
 | memory recall | Run `adapters/codex/bin/preflight.sh recall <prompt> [cwd] [session-id]` before prompt handling when no automatic prompt hook is attached |

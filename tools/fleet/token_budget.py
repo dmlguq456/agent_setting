@@ -22,6 +22,21 @@ DEFAULT_TIGHT_PCT = 70
 DEFAULT_CRITICAL_PCT = 85
 DEFAULT_MAX_AGE_SECONDS = 86_400
 
+DIRECTIVE_IDS = {
+    "tight": "tight-v1",
+    "critical": "critical-v1",
+}
+DIRECTIVE_TEXTS = {
+    "tight-v1": (
+        "TOKEN_BUDGET=tight: concise output; defer optional extras only. "
+        "Keep required work, intensity/dispatch, tools, tests, safety, and input context unchanged."
+    ),
+    "critical-v1": (
+        "TOKEN_BUDGET=critical: minimal concise output; defer optional extras only. "
+        "Keep required work, intensity/dispatch, tools, tests, safety, and input context unchanged."
+    ),
+}
+
 _SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$")
 
 
@@ -81,6 +96,13 @@ def policy_band(context_used_pct, tight_pct=DEFAULT_TIGHT_PCT,
     if context_used_pct >= tight_pct:
         return "tight"
     return "normal"
+
+
+def directive_for_band(band: str) -> tuple[Optional[str], str]:
+    """Return the frozen directive id/text pair for a pressure band."""
+
+    directive_id = DIRECTIVE_IDS.get(band)
+    return directive_id, DIRECTIVE_TEXTS.get(directive_id, "")
 
 
 def telemetry_from_explicit(*, adapter="portable", session_id=None,

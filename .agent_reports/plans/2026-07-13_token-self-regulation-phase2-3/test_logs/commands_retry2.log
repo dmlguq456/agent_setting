@@ -1,0 +1,93 @@
+Token Self-Regulation Phase 2/3 — code-test retry 2 command log
+session=codex-headless qa=thorough intensity=thorough depth=2 retry=2
+runner=$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner
+rule=fresh matrix from item 1; portable guard invoked exactly once; source read-only
+
+[contract-check] exit=0 status=ok
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --check -- python3 -c 'print(1)'
+
+[1 AST] exit=0 duration=<0.1s status=PASS files=8
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 60 -- python3 -c '<AST parse>' <8 plan-section-8 Python files>
+
+[2 focused-phase2] exit=0 duration=6.617s status=PASS tests=16
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 120 -- python3 -m unittest -v tools.fleet.tests.test_token_budget
+
+[3 focused-phase3] exit=0 duration=2.427s status=PASS tests=8
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 180 -- python3 -m unittest -v tools.fleet.tests.test_token_experiment
+
+[4 fleet-discovery] exit=0 duration=13.002s status=PASS tests=214
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 300 -- python3 -m unittest discover -s tools/fleet/tests -p 'test_*.py'
+
+[5 public-cli-observation] exit=0 duration=0.749s status=PASS
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 300 -- python3 - <<'PY'
+embedded read-only script invoked replay twice and evaluate twice; it built 30
+synthetic control/static/dynamic triplets in a TemporaryDirectory and asserted
+byte identity, non-evidentiary fixtures, production false, all G1-G6 gates,
+verdict cap, pending adoption, bootstrap settings, and exact bytes/emissions.
+PY
+manifest_sha256=5238ea5073cbebefaf0ef9fee9d09750775e0420ed96b5141839682d61942424
+replay_sha256=6b4df8c857121dc93e31aefb71082ee81b2b876546ab26b5337d12cd9a771314
+evaluate_sha256=1ca0899497a4f5dab0c33781178a26e23431bcd21fc97b8871ee93d2e8128a96
+complete_triplets=30 verdict=eligible_for_user_review adoption_decision=pending_user_decision production_dynamic_enabled=0
+bootstrap_resamples=10000 bootstrap_seed=20260713
+directive_utf8_bytes_by_arm=control:0,static:4620,dynamic:4620
+emissions_by_arm=control:0,static:30,dynamic:30
+
+[6 portable-guards] exit=0 observed_duration≈133s status=PASS PASS=344 FAIL=0
+initial invocation only; complete output captured at
+/tmp/token-self-regulation-retry2-portable-guards.F7ByaV.log and the same
+process was polled until completion.
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 300 -- bash hooks/portable-guards.test.sh
+capture_isolation=cycle-local-$TMP fixed_global_captures=0
+
+[7 adaptation-guard] exit=0 observed_duration≈116s status=PASS
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 180 -- bash tools/adaptation-guard.test.sh
+summary=all negative tests passed; baseline restored; final guard green
+
+[8 adaptation-boundary] exit=0 duration=22.255s status=PASS
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 300 -- bash tools/check-adaptation-boundary.sh
+summary=OK: adaptation boundary checks passed; documented warning count=56
+
+[9 manifest-check] exit=0 duration=0.029s status=PASS
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 120 -- python3 tools/build-manifest.py --check
+summary=manifest up-to-date; delta baselines bound
+
+[10 doctor] exit=0 duration=22.951s status=PASS
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 180 -- $AGENT_HOME/adapters/codex/bin/preflight.sh doctor
+summary=all repository readiness checks ok; runtime projection skipped
+
+[11 doctor-runtime] exit=0 duration=27.156s status=PASS
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 300 -- $AGENT_HOME/adapters/codex/bin/preflight.sh doctor --runtime
+summary=all doctor checks ok including runtime projection
+
+[12 runtime-projection] exit=0 duration=3.374s status=PASS
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 180 -- $AGENT_HOME/adapters/codex/bin/preflight.sh runtime-projection
+summary=status=ok hook-trust=ok session_end=stop-alias skills_projected=27 skills_linked=28 agents_projected=9 agents_linked=9
+boundary=read-only installed-main wiring evidence; uninstalled worktree diff not exercised
+
+[13 git-diff-check] exit=0 duration=<0.1s status=PASS
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 60 -- git diff --check
+
+[14 production-dynamic-absent] exit=0 duration=<0.1s status=PASS paths=4 needles=3 matches=0
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 60 -- python3 -c '<four-path, three-needle absence assertion>'
+
+[15 manifest-mirror-projection-opencode] intended-contract status=PASS
+The initial matrix script exited 1 only after candidate/fixture hash, complete
+35-file Fleet/Claude byte parity, and Codex symlink assertions passed. Its added
+per-document assertion incorrectly required every OpenCode document to contain
+both literal strings "Phase 2" and "Phase 3"; ADAPTATION.md expresses Phase 3
+as the projected CLI/dynamic-policy boundary. This was a verifier assertion
+selection error, not a source failure; the full item was not rerun.
+candidate_code_sha256=e9fb3cfed40f99953bdc4b75b57d95e42d79a571f311b525d8f5dbb698a0c5ae
+fixture_set_sha256=e0158bb7f8e24f5f6fc2d40fea0d6b04f872f194dd61ff947eaa86e6b7ab959e
+canonical_claude_mirror_files=35 parity=1
+codex_projection_symlink=../../../utilities/token-budget-experiment.py status=ok
+
+[15 diagnostic-a] exit=1 duration=0.071s classification=non-substantive assertion-selection error
+The first narrow diagnostic repeated an exact-phrase variant of the same mistake.
+
+[15 diagnostic-b] exit=0 duration=<0.1s status=PASS
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 60 -- bash -c '<cycle-local capture and adapter-specific OpenCode defer assertions>'
+summary=portable_guard_cycle_tmp=1 fixed_global_captures=0 opencode_projection_absent=1 defer_docs=3/3
+
+FINAL_VERDICT=READY_FOR_CODE_REPORT

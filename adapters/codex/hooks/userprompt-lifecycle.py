@@ -8,6 +8,8 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,19 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "adapters" / "codex" / "bin" / "preflight.sh"
 DEFAULT_TRACKED_ANCHOR = "🧭 📌tracked"
+TOOLS = ROOT / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+from fleet.token_accounting import record_accounting  # noqa: E402
+from fleet.token_budget import DIRECTIVE_TEXTS  # noqa: E402
+
+
+@dataclass
+class PreflightResult:
+    stdout: str = ""
+    returncode: int = 0
+    timed_out: bool = False
 
 
 def first_string(mapping: dict[str, Any], *keys: str) -> str:
@@ -90,9 +105,12 @@ def prompt_text(payload: dict[str, Any]) -> str:
     return ""
 
 
-def run_preflight(*args: str, timeout_seconds: float | None = None) -> str:
+def run_preflight_result(*args: str, timeout_seconds: float | None = None,
+                         env_extra: dict[str, str] | None = None) -> PreflightResult:
     env = os.environ.copy()
     env.setdefault("AGENT_HOME", str(ROOT))
+    if env_extra:
+        env.update(env_extra)
     if timeout_seconds is not None:
         process = subprocess.Popen(
             [str(PREFLIGHT), *args], cwd=str(ROOT), env=env, text=True,
@@ -110,10 +128,10 @@ def run_preflight(*args: str, timeout_seconds: float | None = None) -> str:
             except (OSError, ProcessLookupError):
                 pass
             process.communicate()
-            return ""
+            return PreflightResult(returncode=process.returncode or -9, timed_out=True)
         if stderr:
             sys.stderr.write(stderr)
-        return stdout
+        return PreflightResult(stdout=stdout, returncode=process.returncode)
     result = subprocess.run(
         [str(PREFLIGHT), *args],
         cwd=str(ROOT),
@@ -125,7 +143,11 @@ def run_preflight(*args: str, timeout_seconds: float | None = None) -> str:
     )
     if result.stderr:
         sys.stderr.write(result.stderr)
-    return result.stdout
+    return PreflightResult(stdout=result.stdout, returncode=result.returncode)
+
+
+def run_preflight(*args: str, timeout_seconds: float | None = None) -> str:
+    return run_preflight_result(*args, timeout_seconds=timeout_seconds).stdout
 
 
 def env_truthy(name: str) -> bool:
@@ -152,6 +174,98 @@ def emit_context(event_name: str, parts: list[str]) -> None:
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event_name, "additionalContext": context}}, ensure_ascii=False))
 
 
+def load_token_receipt(path: Path) -> dict[str, Any] | None:
+    try:
+        if path.stat().st_size > 2048:
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(value, dict) or value.get("receipt_version") != 1:
+        return None
+    if value.get("outcome") not in {"zero", "emission"}:
+        return None
+    sample = value.get("session_total_tokens")
+    if sample is not None and (not isinstance(sample, int) or isinstance(sample, bool) or sample < 0):
+        return None
+    return value
+
+
+def token_budget_context(current_cwd: str, sid: str) -> str:
+    """Run Phase 1 output and record one Phase 2 outcome without changing bytes."""
+
+    temporary: tempfile.TemporaryDirectory[str] | None = None
+    receipt_path: Path | None = None
+    contribution = ""
+    event: dict[str, Any] = {
+        "outcome": "zero", "zero_reason": "timeout_or_error",
+        "directive_id": None, "directive_utf8_bytes": 0,
+        "session_total_tokens": None,
+    }
+    try:
+        try:
+            temporary = tempfile.TemporaryDirectory(prefix="codex-token-budget-")
+            receipt_path = Path(temporary.name) / "result.json"
+        except OSError:
+            # Receipt infrastructure is optional and must not change Phase 1 output.
+            temporary = None
+            receipt_path = None
+        env_extra = (
+            {"AGENT_TOKEN_BUDGET_RESULT_PATH": str(receipt_path)}
+            if receipt_path is not None else None
+        )
+        try:
+            result = run_preflight_result(
+                "token-budget", current_cwd, sid, "hook",
+                timeout_seconds=token_budget_timeout(), env_extra=env_extra,
+            )
+        except (OSError, ValueError, TypeError):
+            result = PreflightResult(returncode=-1)
+        receipt = (
+            load_token_receipt(receipt_path)
+            if receipt_path is not None and result.returncode == 0 and not result.timed_out
+            else None
+        )
+        delivered = next(
+            ((directive_id, text) for directive_id, text in DIRECTIVE_TEXTS.items()
+             if result.stdout == text + "\n"),
+            None,
+        ) if result.returncode == 0 and not result.timed_out else None
+        if delivered is not None:
+            directive_id, contribution = delivered
+            expected_bytes = len(contribution.encode("utf-8"))
+            if (receipt is not None and receipt.get("outcome") == "emission"
+                    and receipt.get("directive_id") == directive_id
+                    and receipt.get("directive_utf8_bytes") == expected_bytes):
+                event = receipt
+            else:
+                event = {
+                    "outcome": "emission", "zero_reason": None,
+                    "directive_id": directive_id,
+                    "directive_utf8_bytes": expected_bytes,
+                    "session_total_tokens": None,
+                }
+        elif (result.returncode == 0 and not result.timed_out and result.stdout == ""
+              and receipt is not None and receipt.get("outcome") == "zero"
+              and receipt.get("zero_reason") in {
+                  "normal", "unknown", "native", "same_band", "degraded"}
+              and receipt.get("directive_id") is None
+              and receipt.get("directive_utf8_bytes") == 0):
+            event = receipt
+    finally:
+        try:
+            record_accounting(sid, event, adapter="codex")
+        except Exception:
+            # Accounting is an observational side effect and never owns output.
+            pass
+        if temporary is not None:
+            try:
+                temporary.cleanup()
+            except OSError:
+                pass
+    return contribution
+
+
 def main() -> int:
     payload = load_payload()
     current_cwd = cwd(payload)
@@ -167,8 +281,7 @@ def main() -> int:
     parts.append(run_preflight("briefing", current_cwd))
     # Phase 1 token self-regulation is transition-only. Normal, unknown,
     # native-owned, and repeated bands return an empty string (zero injection).
-    parts.append(run_preflight("token-budget", current_cwd, sid, "hook",
-                               timeout_seconds=token_budget_timeout()))
+    parts.append(token_budget_context(current_cwd, sid))
     run_preflight("turn-nudge", current_cwd, sid)
     emit_context("UserPromptSubmit", parts)
     return 0

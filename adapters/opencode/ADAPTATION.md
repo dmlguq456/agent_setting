@@ -385,6 +385,12 @@ registry from `open` to `done`; it never performs merge or worktree cleanup. Do
 not project material/design helpers such as `extract_web_figures.py` until an
 OpenCode capability uses them directly.
 
+Token self-regulation v2 remains deferred for OpenCode: no automatic Phase 2
+hook accounting, no projected `token-budget-experiment.py`, and no production
+dynamic-policy import, activation flag, or config mutation. Portable Fleet
+modules and the Codex realization may be used as implementation references, but
+they are not OpenCode runtime support.
+
 ### SD-15 limit-death detection (OPERATIONS §5.10 ⑨) — parity: partial (disclosed)
 
 `adapters/opencode/bin/dispatch-headless.py` ports the Claude wrapper's SD-15 early-limit-death

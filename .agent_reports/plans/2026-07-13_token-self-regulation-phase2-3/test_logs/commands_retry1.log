@@ -1,0 +1,149 @@
+Token Self-Regulation Phase 2/3 — code-test retry 1 command log
+session=codex-headless qa=thorough intensity=thorough depth=2 retry=1
+runner=$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner
+rule=fresh matrix from item 1; each matrix item invoked once; stop on first substantive failure
+
+[contract-check] exit=0 duration=not-reported status=ok
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --check -- python3 -c 'print(1)'
+
+[1 AST] exit=0 duration=<1s status=PASS
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 60 -- python3 -c 'import ast,pathlib,sys; [ast.parse(pathlib.Path(p).read_text(encoding="utf-8"), filename=p) for p in sys.argv[1:]]' tools/fleet/token_budget.py tools/fleet/token_accounting.py tools/fleet/token_experiment.py utilities/token-budget.py utilities/token-budget-experiment.py adapters/codex/hooks/userprompt-lifecycle.py tools/fleet/tests/test_token_budget.py tools/fleet/tests/test_token_experiment.py
+
+[2 focused-phase2] exit=0 duration=6.437s status=PASS tests=16
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 120 -- python3 -m unittest -v tools.fleet.tests.test_token_budget
+
+[3 focused-phase3] exit=0 duration=2.283s status=PASS tests=8
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 180 -- python3 -m unittest -v tools.fleet.tests.test_token_experiment
+
+[4 fleet-discovery] exit=0 duration=12.944s status=PASS tests=214
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 300 -- python3 -m unittest discover -s tools/fleet/tests -p 'test_*.py'
+
+[5 public-cli-observation] exit=0 duration=0.855s status=PASS
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 300 -- python3 - <<'PY'
+import hashlib
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from tools.fleet.token_experiment import ARMS, config_fingerprint, manifest_sha256
+
+root = Path.cwd()
+fixture = root / "tools/fleet/tests/fixtures/token_experiment"
+manifest_path = fixture / "manifest.json"
+replay_path = fixture / "replay.json"
+cli = root / "utilities/token-budget-experiment.py"
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest_hash = manifest_sha256(manifest)
+
+replay_cmd = [sys.executable, str(cli), "replay", "--manifest", str(manifest_path), "--input", str(replay_path)]
+replay_a = subprocess.run(replay_cmd, check=True, capture_output=True).stdout
+replay_b = subprocess.run(replay_cmd, check=True, capture_output=True).stdout
+assert replay_a == replay_b
+replay_result = json.loads(replay_a)
+assert replay_result["synthetic_non_evidentiary"] is True
+assert replay_result["production_enabled"] is False
+
+workloads = []
+for index in range(30):
+    workload_id = f"synthetic-{index:03d}"
+    declaration = {
+        "experiment_id": "synthetic-cli-smoke",
+        "workload_id": workload_id,
+        "stratum": "code",
+        "prompt_sha256": "1" * 64,
+        "artifact_bundle_sha256": "2" * 64,
+        "rubric_version": "rubric-v1",
+        "rubric_sha256": "3" * 64,
+        "required_checks": ["required-v1"],
+        "safety_checks": ["safety-v1"],
+        "model_id": "synthetic-model",
+        "runtime_id": "synthetic-runtime",
+        "runtime_config_sha256": "4" * 64,
+        "reasoning_effort": "high",
+        "intensity": "thorough",
+        "dispatch_depth": 2,
+        "qa_contract": "thorough-code",
+        "seed": None,
+        "arm_order": list(ARMS),
+    }
+    fingerprint = config_fingerprint(declaration)
+    deltas = {"control": 120, "static": 100, "dynamic": 80}
+    results = []
+    for arm in ARMS:
+        emissions = 0 if arm == "control" else 1
+        results.append({
+            "experiment_id": declaration["experiment_id"],
+            "workload_id": workload_id,
+            "arm": arm,
+            "manifest_sha256": manifest_hash,
+            "config_fingerprint": fingerprint,
+            "status": "complete",
+            "exclusion_reason": None,
+            "session_counter_status": "observed",
+            "session_total_tokens_start": 1000,
+            "session_total_tokens_end": 1000 + deltas[arm],
+            "session_token_delta": deltas[arm],
+            "hook_invocations": 2,
+            "zero_injections": 2 - emissions,
+            "emissions": emissions,
+            "directive_utf8_bytes_total": 0 if arm == "control" else 154,
+            "directive_exact_tokens": None,
+            "exact_tokenizer_provenance": None,
+            "required_checks_pass": True,
+            "safety_checks_pass": True,
+            "hard_regression": False,
+            "quality_score": 0.9,
+            "quality_evaluator_id": "frozen-rubric-v1",
+        })
+    workloads.append({"declaration": declaration, "results": results})
+payload = {"experiment_id": "synthetic-cli-smoke", "workloads": workloads}
+
+with tempfile.TemporaryDirectory(prefix="token-experiment-cli-") as tmp:
+    input_path = Path(tmp) / "synthetic-evaluate.json"
+    input_path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    evaluate_cmd = [sys.executable, str(cli), "evaluate", "--manifest", str(manifest_path), "--input", str(input_path)]
+    evaluate_a = subprocess.run(evaluate_cmd, check=True, capture_output=True).stdout
+    evaluate_b = subprocess.run(evaluate_cmd, check=True, capture_output=True).stdout
+
+assert evaluate_a == evaluate_b
+evaluation = json.loads(evaluate_a)
+assert evaluation["complete_triplets"] == 30
+assert evaluation["verdict"] == "eligible_for_user_review"
+assert evaluation["adoption_decision"] == "pending_user_decision"
+assert evaluation["production_dynamic_enabled"] is False
+assert all(value == "pass" for value in evaluation["gates"].values())
+assert evaluation["bootstrap"] == {"resamples": 10000, "seed": 20260713}
+assert evaluation["metrics"]["directive_utf8_bytes_by_arm"] == {"control": 0, "static": 4620, "dynamic": 4620}
+assert evaluation["metrics"]["emissions_by_arm"] == {"control": 0, "static": 30, "dynamic": 30}
+print("replay_sha256=" + hashlib.sha256(replay_a).hexdigest())
+print("evaluate_sha256=" + hashlib.sha256(evaluate_a).hexdigest())
+print("replay_byte_identical=1 evaluate_byte_identical=1")
+print("fixtures_synthetic_non_evidentiary=1 adoption_decision=pending_user_decision production_dynamic_enabled=0")
+print("complete_triplets=30 verdict=eligible_for_user_review bootstrap_resamples=10000 bootstrap_seed=20260713")
+print("directive_utf8_bytes_by_arm=control:0,static:4620,dynamic:4620 emissions_by_arm=control:0,static:30,dynamic:30")
+PY
+summary replay_sha256=6b4df8c857121dc93e31aefb71082ee81b2b876546ab26b5337d12cd9a771314
+summary evaluate_sha256=1ca0899497a4f5dab0c33781178a26e23431bcd21fc97b8871ee93d2e8128a96
+summary replay_byte_identical=1 evaluate_byte_identical=1 fixtures_synthetic_non_evidentiary=1
+summary complete_triplets=30 verdict=eligible_for_user_review adoption_decision=pending_user_decision production_dynamic_enabled=0
+
+[6 portable-guards] exit=1 duration=143s status=FAIL PASS=342 FAIL=2
+initial invocation only; complete runner output captured at /tmp/token-self-regulation-retry1-portable-guards.zfi5fp.log
+$AGENT_HOME/adapters/codex/bin/preflight.sh verification-runner --timeout 300 -- bash hooks/portable-guards.test.sh
+evidence BAD codex check-runtime-projection should reject miswired skill and agent links
+evidence BAD codex doctor --runtime should include runtime projection validation
+evidence PASS=342 FAIL=2 status=failed exit_code=1
+diagnostic fixed /tmp/codex_rp_bad.out and /tmp/codex_doctor_runtime.out contained /home/Uihyeop/agent_setting-wt/language-neutrality paths, not this assigned worktree
+
+[7 adaptation-guard] NOT_RUN reason=stop-on-first-substantive-failure-at-6
+[8 adaptation-boundary] NOT_RUN reason=stop-on-first-substantive-failure-at-6
+[9 manifest-check] NOT_RUN reason=stop-on-first-substantive-failure-at-6
+[10 doctor] NOT_RUN reason=stop-on-first-substantive-failure-at-6
+[11 doctor-runtime] NOT_RUN reason=stop-on-first-substantive-failure-at-6
+[12 runtime-projection] NOT_RUN reason=stop-on-first-substantive-failure-at-6
+[13 git-diff-check] NOT_RUN reason=stop-on-first-substantive-failure-at-6
+[14 production-dynamic-absent-scan] NOT_RUN reason=stop-on-first-substantive-failure-at-6
+[15 manifest-mirror-projection-opencode-checks] NOT_RUN reason=stop-on-first-substantive-failure-at-6
+
+FINAL_VERDICT=RETURN_TO_CODE_EXECUTE

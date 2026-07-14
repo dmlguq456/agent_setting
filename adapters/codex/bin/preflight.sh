@@ -145,6 +145,7 @@ doctor() {
     "$ROOT/adapters/codex/hooks/posttooluse-read-marker.py" || rc=1
   doctor_check token-budget python3 "$ROOT/utilities/token-budget.py" \
     --adapter portable --active-context-tokens 1 --context-window 100 --format json || rc=1
+  doctor_check token-budget-experiment python3 "$ROOT/utilities/token-budget-experiment.py" --help || rc=1
   doctor_check adaptation-boundary doctor_boundary || rc=1
   if [ "$runtime_check" -eq 1 ]; then
     if [ "$require_hook_trust" -eq 1 ]; then

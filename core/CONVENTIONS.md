@@ -123,6 +123,25 @@ unsupported, native-owned, and repeated same-band states contribute zero prompt
 bytes. Runtime-owned token-budget configuration remains read-only unless the user
 explicitly selects a separately verified native opt-in path.
 
+Token-budget accounting is observation, not attribution. Hook invocations,
+zero/emission outcomes, exact inserted-directive UTF-8 bytes, and monotonic
+exact-session runtime counter deltas remain separate fields; none may be named
+or derived as savings, billing cost, or ROI. Directive token counts remain
+unknown unless an exact tokenizer for the actual payload is recorded with
+runtime/model/version provenance. Accounting state must be content-free,
+hashed by session, atomically updated under a bounded lock, bounded to 8 KiB per
+file / 256 files / 2 MiB total with oldest-first aggregate pruning, and always
+fail open without changing hook output. L2 diagnostics are on-demand only.
+
+Dynamic token-pressure policy is an isolated experiment surface. Production
+reinjection remains the static transition-only policy; production hooks and
+runtime config must not import, activate, or fit an offline candidate. Paired
+control/static/dynamic evaluation keeps input, model effort, intensity,
+dispatch/depth, QA, required checks, and safety gates identical, performs no
+input pruning or online/RL fitting, and may return at most
+`eligible_for_user_review`. Adoption requires explicit user review and a later
+spec/code cycle.
+
 ## §2. Model Role 표기 (canonical)
 
 공통 계약은 concrete model name 이 아니라 _model role_ 을 쓴다. Vendor-specific model names 는 adapter 구현값이다. 새 cross-tool 문서·skill·README 는 아래 role 을 먼저 쓰고, concrete 재현값은 adapter 문서에서 mapping 한다.

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import sys
@@ -23,21 +22,20 @@ from fleet.token_budget import (  # noqa: E402
     DEFAULT_MAX_AGE_SECONDS,
     DEFAULT_TIGHT_PCT,
     TokenTelemetry,
+    directive_for_band,
     policy_band,
     telemetry_from_codex_session,
     telemetry_from_explicit,
 )
+from fleet.token_accounting import read_accounting, session_digest  # noqa: E402
 
 
-DIRECTIVES = {
-    "tight": (
-        "TOKEN_BUDGET=tight: concise output; defer optional extras only. "
-        "Keep required work, intensity/dispatch, tools, tests, safety, and input context unchanged."
-    ),
-    "critical": (
-        "TOKEN_BUDGET=critical: minimal concise output; defer optional extras only. "
-        "Keep required work, intensity/dispatch, tools, tests, safety, and input context unchanged."
-    ),
+DEGRADED_REASONS = {
+    "stale-signal",
+    "malformed-token-count",
+    "ambiguous-session",
+    "session-counter-decreased",
+    "rollout-unreadable",
 }
 
 
@@ -109,18 +107,20 @@ def state_path(args) -> Path | None:
     base = Path(args.state_dir) if args.state_dir else Path(
         os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state"
     ) / "agent-harness" / "token-budget"
-    digest = hashlib.sha256(args.session_id.encode("utf-8", "replace")).hexdigest()[:32]
+    digest = session_digest(args.session_id)
     return base / (digest + ".json")
 
 
-def read_state(path: Path | None) -> dict:
+def read_state(path: Path | None) -> dict | None:
     if path is None:
         return {}
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except FileNotFoundError:
         return {}
-    return value if isinstance(value, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def write_state(path: Path, state: dict) -> None:
@@ -188,8 +188,13 @@ def policy_result(args, telemetry: TokenTelemetry) -> dict:
     previous = args.previous_session_total_tokens
     if previous is None:
         stored = read_state(state_path(args))
-        stored_total = stored.get("session_total_tokens")
-        previous = stored_total if isinstance(stored_total, int) else None
+        if stored is None:
+            telemetry.status = "degraded"
+            telemetry.reason = "malformed-transition-state"
+            state, source = "unknown", "none"
+        else:
+            stored_total = stored.get("session_total_tokens")
+            previous = stored_total if isinstance(stored_total, int) else None
     current = telemetry.session_total_tokens
     if previous is not None and current is not None and current < previous:
         telemetry.status = "degraded"
@@ -201,45 +206,98 @@ def policy_result(args, telemetry: TokenTelemetry) -> dict:
     return result
 
 
-def hook_output(args, result: dict) -> str:
+def zero_reason(result: dict) -> str:
+    if result.get("policy_state") == "native":
+        return "native"
+    if result.get("status") == "degraded" or result.get("reason") in DEGRADED_REASONS:
+        return "degraded"
+    if result.get("policy_state") == "unknown":
+        return "unknown"
+    if result.get("policy_state") == "normal":
+        return "normal"
+    return "same_band"
+
+
+def receipt(result: dict, *, directive_id=None, directive="", reason=None) -> dict:
+    return {
+        "receipt_version": 1,
+        "outcome": "emission" if directive else "zero",
+        "zero_reason": None if directive else reason,
+        "directive_id": directive_id if directive else None,
+        "directive_utf8_bytes": len(directive.encode("utf-8")),
+        "session_total_tokens": (
+            result.get("session_total_tokens")
+            if isinstance(result.get("session_total_tokens"), int) else None
+        ),
+    }
+
+
+def hook_output(args, result: dict) -> tuple[str, dict]:
     path = state_path(args)
     if path is None or result["policy_state"] == "unknown":
-        return ""
+        return "", receipt(result, reason=zero_reason(result))
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         lock_context = TransitionLock(path)
         lock_context.__enter__()
     except (OSError, TimeoutError):
-        return ""
+        return "", receipt(result, reason="degraded")
     try:
         previous = read_state(path)
+        if previous is None:
+            return "", receipt(result, reason="degraded")
         current_total = result.get("session_total_tokens")
         previous_total = previous.get("session_total_tokens")
         if (isinstance(current_total, int) and isinstance(previous_total, int)
                 and current_total < previous_total):
-            return ""
+            return "", receipt(result, reason="degraded")
         band = result["policy_state"]
         previous_band = previous.get("band")
         state = {"band": band}
         if isinstance(current_total, int):
             state["session_total_tokens"] = current_total
         write_state(path, state)
-        if band in DIRECTIVES and band != previous_band:
-            return DIRECTIVES[band]
-        return ""
+        directive_id, directive = directive_for_band(band)
+        if directive and band != previous_band:
+            return directive, receipt(result, directive_id=directive_id, directive=directive)
+        return "", receipt(result, reason=zero_reason(result))
     except OSError:
-        return ""
+        return "", receipt(result, reason="degraded")
     finally:
         lock_context.__exit__(None, None, None)
 
 
-def print_kv(result: dict) -> None:
+def write_receipt(path_value: str, value: dict) -> bool:
+    path = Path(path_value)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, name = tempfile.mkstemp(prefix=".token-budget-result-", dir=str(path.parent))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(value, handle, sort_keys=True, separators=(",", ":"))
+                handle.write("\n")
+            os.replace(name, path)
+        finally:
+            try:
+                os.unlink(name)
+            except FileNotFoundError:
+                pass
+        return True
+    except OSError:
+        return False
+
+
+def print_kv(result: dict, prefix="") -> None:
     for key, value in result.items():
+        name = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            print_kv(value, name)
+            continue
         if value is None:
             value = "unknown"
         elif isinstance(value, bool):
             value = "1" if value else "0"
-        print(f"{key}={value}")
+        print(f"{name}={value}")
 
 
 def main() -> int:
@@ -252,10 +310,20 @@ def main() -> int:
     except ValueError as exc:
         parser().error(str(exc))
     if args.format == "hook":
-        directive = hook_output(args, result)
+        directive, private_receipt = hook_output(args, result)
+        receipt_path = os.environ.get("AGENT_TOKEN_BUDGET_RESULT_PATH")
+        if receipt_path:
+            write_receipt(receipt_path, private_receipt)
         if directive:
             print(directive)
         return 0
+    # L2 diagnostics use the raw id only as a private lookup key. Never echo it.
+    result.pop("session_id", None)
+    if args.session_id:
+        accounting = read_accounting(
+            args.session_id, adapter=args.adapter, state_dir=args.state_dir)
+        if accounting is not None:
+            result["accounting"] = accounting
     if args.format == "json":
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     else:
