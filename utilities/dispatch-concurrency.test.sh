@@ -45,9 +45,12 @@ for r in $roles; do
   i=$((i + 1))
   wt="$tmp/wt/w$i"; mkdir -p "$wt"
   ( cd "$wt" && git init -q && git -c user.email=a@b -c user.name=a commit -q --allow-empty -m x )
-  AGENT_HOME="$AH" CLAUDE_CONFIG_DIR="$RT" PATH="$bin:$PATH" python3 "$WRAP" --start \
+  AGENT_HOME="$AH" AGENT_DISPATCH_JOBS="$AH/.dispatch/jobs.log" \
+    CLAUDE_CONFIG_DIR="$RT" PATH="$bin:$PATH" python3 "$WRAP" --start \
     --worktree "$wt" --slug "thr-$r" --capability autopilot-code --mode dev --qa thorough \
     --intensity thorough --depth 2 --parent "$PARENT" --worker-role "$r" --owner autopilot-code \
+    --parent-harness claude --parent-transport subprocess --parent-sandbox fixture \
+    --launch-authority conductor --nested-eligibility supported --eligibility-source concurrency-fixture \
     --model sonnet --effort medium --early-exit-watch 0 >/dev/null 2>&1
 done
 jobs="$AH/.dispatch/jobs.log"

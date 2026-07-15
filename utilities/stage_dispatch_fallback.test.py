@@ -10,10 +10,14 @@ class FallbackTest(unittest.TestCase):
   self.tmp=tempfile.TemporaryDirectory(); base=Path(self.tmp.name); self.repo=base/"repo"; self.repo.mkdir()
   subprocess.run(["git","init","-q",str(self.repo)],check=True); subprocess.run(["git","-C",str(self.repo),"config","user.email","fixture@example.com"],check=True); subprocess.run(["git","-C",str(self.repo),"config","user.name","Fixture"],check=True)
   (self.repo/"x").write_text("x"); subprocess.run(["git","-C",str(self.repo),"add","x"],check=True); subprocess.run(["git","-C",str(self.repo),"commit","-qm","init"],check=True)
-  self.art=base/".agent_reports"; self.art.mkdir(); self.jobs=base/"jobs.log"
- def tearDown(self): self.tmp.cleanup()
+  self.art=base/".agent_reports"; self.art.mkdir(); self.jobs=base/"jobs.log"; self.broker=base/"broker"
+  ensured=subprocess.run([sys.executable,str(ROOT/"utilities/dispatch-broker.py"),"ensure","--root",str(self.broker),"--jobs",str(self.jobs)],text=True,capture_output=True,check=True)
+  self.broker_meta=dict(line.split("=",1) for line in ensured.stdout.splitlines() if "=" in line)
+ def tearDown(self):
+  subprocess.run([sys.executable,str(ROOT/"utilities/dispatch-broker.py"),"stop","--root",str(self.broker),"--jobs",str(self.jobs)],text=True,capture_output=True,check=False)
+  self.tmp.cleanup()
  def tuple(self,child,status,authority="conductor"):
-  return {"parent_harness":"codex","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":child,"launch_authority":authority,"status":status,"probe_source":"fixture","probe_time":"2026-07-15T00:00:00Z","failure_class":"network-operation-not-permitted" if status!="supported" else ""}
+  return {"parent_harness":"codex","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":child,"launch_authority":authority,"status":status,"probe_source":"fixture","probe_time":"2026-07-15T00:00:00Z","failure_class":"network-operation-not-permitted" if status!="supported" else "","broker_root":str(self.broker),"broker_instance":self.broker_meta["broker_instance"]}
  def route(self,native="unsupported",same_status="unsupported"):
   gate={"spec_read":{"satisfied":True,"source":"fixture"},"drift_verdict":"within-spec","workflow_mode":"tracked","artifact_guard":{"satisfied":True,"source":"fixture"}}
   evidence={"tuples":[self.tuple("codex",same_status),self.tuple("claude","supported","ancestor-broker")],"native_subagent":[{"harness":"codex","status":native,"check_source":"fixture"}]}
@@ -21,7 +25,7 @@ class FallbackTest(unittest.TestCase):
   path=Path(self.tmp.name)/"route.json"; path.write_text(json.dumps(route),encoding="utf-8"); return path
  def run_chain(self,path,*extra):
   cmd=[sys.executable,str(ROOT/"utilities/stage-dispatch-fallback.py"),"--route",str(path),"--node","plan","--slug","fallback-plan","--parent","owner","--mode","dev/backend","--model-role","deep maker","--jobs",str(self.jobs),"--dry-run",*extra]
-  env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(self.art)}
+  env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(self.art),"AGENT_DISPATCH_JOBS":str(self.jobs),"AGENT_DISPATCH_BROKER_ROOT":str(self.broker),"AGENT_DISPATCH_BROKER_INSTANCE":self.broker_meta["broker_instance"]}
   return subprocess.run(cmd,text=True,capture_output=True,env=env)
  def test_cross_harness_precedes_inline(self):
   result=self.run_chain(self.route())

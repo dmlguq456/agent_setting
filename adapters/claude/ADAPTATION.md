@@ -261,3 +261,13 @@ verify through the runtime path above.
 - **Parity gap/fallback:** SessionEnd cannot prove merge or push and never
   deletes worktrees. Main uses `bin/worktree-cleanup.sh` after integrated
   verification and push.
+
+## SD-51~53 harness-neutral launch broker — realized
+
+Claude native subagents are not treated as recursively nestable. Before a
+standard+ depth-1 launch, the wrapper prepares the shared deterministic
+depth-0 broker and injects its immutable root/instance/jobs binding. A Claude
+conductor submits both Claude and Codex depth-2 headless attempts through the
+same declarative broker protocol; the target wrapper runs under the broker OS
+process while jobs metadata retains logical `depth=2,parent=<conductor>`.
+Direct recursive execution stays disabled by default.

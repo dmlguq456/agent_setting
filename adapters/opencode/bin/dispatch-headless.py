@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
     ensure_global_registry_writable,
+    ensure_launch_broker,
     new_attempt_id,
     resolve_global_registry,
     validate_nested_eligibility,
@@ -145,6 +146,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--prompt-text")
     p.add_argument("--jobs")
     p.add_argument("--attempt-id")
+    p.add_argument("--broker-request-id")
     p.add_argument("--fallback-ordinal", type=int, default=0)
     p.add_argument("--launch-authority", choices=("conductor", "ancestor-broker"), default="conductor")
     p.add_argument("--parent-harness", default=os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS") or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "opencode")
@@ -306,7 +308,7 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
             f"- Run adapters/opencode/bin/preflight.sh qa-policy {args.qa} code and obey assurance_scope, stage_graph_selector, reviewer_counts, and independent delegation policy before claiming QA coverage.\n"
             "- Plan-check is required for quick+ but stays small; do not run independent QA after every stage by default.\n"
             "- standard+ may use bounded depth-2 planner/verifier workers when separable; thorough/adversarial expands to multi-axis/adversary workers. Synthesize short reports; depth 3+ is forbidden.\n"
-            "- For routed depth-2 launches, use adapters/opencode/bin/preflight.sh dispatch-chain; unchanged same-harness retries and cycle-local registry overrides are forbidden.\n"
+            "- For routed depth-2 launches, use adapters/opencode/bin/preflight.sh dispatch-chain. Every same/cross-harness headless target uses the inherited depth-0 broker binding; recursive adapter CLI launch, unchanged retries, and cycle-local registry overrides are forbidden.\n"
         )
     if args.route_file:
         extra += (
@@ -387,6 +389,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     pipe += f",artifact_root={args.artifact_root}"
     if args.attempt_id:
         pipe += f",attempt_id={args.attempt_id},launch_authority={args.launch_authority},fallback_ordinal={args.fallback_ordinal}"
+    if args.broker_request_id:
+        pipe += f",broker_request_id={args.broker_request_id}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     # SD-15: serialize with the same flock close_job_row uses so a concurrent close
     # (row-rewrite) and this append cannot interleave and drop rows.
@@ -630,6 +634,12 @@ def main(argv: list[str]) -> int:
             ensure_global_registry_writable(jobs)
     except DispatchContractError as e:
         return fail(e.reason, 73, detail=e.detail, child_spawned="0")
+    try:
+        broker = ensure_launch_broker(
+            agent_home, jobs, depth=args.depth, action=action, intensity=args.intensity
+        )
+    except DispatchContractError as e:
+        return fail(e.reason, 76, detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = prompt(args)
     prompt_path = log_dir / f"{args.slug}.opencode.prompt.txt"
@@ -680,6 +690,13 @@ def main(argv: list[str]) -> int:
             # secondary alive signal independent of the OpenCode SQLite mtime.
             "OPENCODE_DISPATCH_SLUG": args.slug,
         }
+        if broker:
+            dispatch_env.update({
+                "AGENT_DISPATCH_BROKER_ROOT": str(broker.root),
+                "AGENT_DISPATCH_BROKER_INSTANCE": broker.instance_id,
+                "AGENT_DISPATCH_BROKER_PID": str(broker.pid),
+                "AGENT_DISPATCH_BROKER_START_TICKS": broker.start_ticks,
+            })
         try:
             proc = subprocess.Popen([sys.executable, str(governor), "--root", str(governor_root), "run", "--class", "dispatch", "--", "sh", "-c", command], start_new_session=True, env=dispatch_env)
         except OSError as exc:
@@ -721,8 +738,11 @@ def main(argv: list[str]) -> int:
     print(f"model={settings['model']}")
     print(f"variant={settings['variant']}")
     print(f"job_registry={jobs}")
+    print(f"broker_root={broker.root if broker else os.environ.get('AGENT_DISPATCH_BROKER_ROOT', '-')}")
+    print(f"broker_instance={broker.instance_id if broker else os.environ.get('AGENT_DISPATCH_BROKER_INSTANCE', '-')}")
     print(f"registry_authority={registry.source}")
     print(f"attempt_id={args.attempt_id or '-'}")
+    print(f"broker_request_id={args.broker_request_id or '-'}")
     print(f"launch_authority={args.launch_authority}")
     print(f"fallback_ordinal={args.fallback_ordinal}")
     print(f"registered={1 if action in ('register', 'start') else 0}")

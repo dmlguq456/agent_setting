@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, tempfile, unittest
+import os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
 P=Path(__file__).with_name("dispatch_contract.py")
@@ -28,6 +28,15 @@ class DispatchContractTest(unittest.TestCase):
   with self.assertRaises(D.DispatchContractError) as caught:
    D.validate_nested_eligibility(depth=2,action="start",parent_harness="codex",parent_transport="headless",parent_sandbox="workspace-write",child_harness="codex",launch_authority="conductor",status="unknown",source="fixture")
   self.assertEqual(caught.exception.reason,"nested-child-spawn-unknown")
+ def test_depth0_prepares_broker_and_worker_cannot_replace_it(self):
+  with tempfile.TemporaryDirectory() as td:
+   root=Path(td); jobs=root/"jobs.log"; broker=root/"broker"
+   selection=D.ensure_launch_broker(root,jobs,depth=1,action="start",intensity="strong",environ={"AGENT_DISPATCH_BROKER_ROOT":str(broker)})
+   self.assertIsNotNone(selection); self.assertEqual(selection.jobs,jobs.resolve()); self.assertTrue(selection.instance_id.startswith("brk-"))
+   with self.assertRaises(D.DispatchContractError) as caught:
+    D.ensure_launch_broker(root,jobs,depth=1,action="start",intensity="strong",environ={"AGENT_SESSION_ROLE":"worker","AGENT_DISPATCH_BROKER_ROOT":str(root/"other")})
+   self.assertEqual(caught.exception.reason,"broker-ensure-worker-forbidden")
+   subprocess.run([sys.executable,str(P.with_name("dispatch-broker.py")),"stop","--root",str(broker),"--jobs",str(jobs)],env={**os.environ,"AGENT_HOME":str(root)},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=False)
  def test_legacy_reconcile_is_idempotent(self):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); local=root/"local.log"; global_jobs=root/"global.log"

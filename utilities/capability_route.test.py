@@ -7,7 +7,7 @@ class TestRoute(unittest.TestCase):
  def dispatch(self,*rows):
   return {"tuples":list(rows),"native_subagent":[{"harness":"codex","status":"supported","check_source":"fixture-native-check"}]}
  def nested(self,parent="codex",child="codex",authority="conductor",status="supported",failure=""):
-  return {"parent_harness":parent,"parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":child,"launch_authority":authority,"status":status,"probe_source":"fixture-probe","probe_time":"2026-07-15T00:00:00Z","failure_class":failure}
+  return {"parent_harness":parent,"parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":child,"launch_authority":authority,"status":status,"probe_source":"fixture-probe","probe_time":"2026-07-15T00:00:00Z","failure_class":failure,"broker_root":"/tmp/fixture-broker","broker_instance":"brk-fixture"}
  def args(self,**kw):
   gate={"spec_read":{"satisfied":True,"source":"canonical-prd-sha256"},"drift_verdict":"within-spec","workflow_mode":"tracked","artifact_guard":{"satisfied":True,"source":"conductor-prechecked"}}
   d=dict(capability="autopilot-code",capability_mode="dev",requested_intensity="direct",cwd=R.ROOT,artifact_root=R.ROOT,predicates=ALL,transport="inline-fallback",inline_reason="atomic-direct",tracking="tracked",tracked_gate_evidence=gate); d.update(kw); return d
@@ -45,6 +45,24 @@ class TestRoute(unittest.TestCase):
   R.verify_route(route,R.ROOT)
  def test_unknown_nested_tuple_fails_closed(self):
   evidence=self.dispatch(self.nested(status="unknown",failure="unprobed-tuple"))
-  with self.assertRaisesRegex(ValueError,"no supported nested headless"):
+  with self.assertRaisesRegex(ValueError,"no supported depth-0 launch broker"):
    R.compile_route(**self.args(requested_intensity="standard",predicates=[],signals=["shared-contract"],transport="headless",inline_reason=None,dispatch_evidence=evidence))
+ def test_v12_route_binds_broker_and_legacy_v11_route_still_verifies(self):
+  evidence=self.dispatch(self.nested(authority="ancestor-broker",status="supported"))
+  route=R.compile_route(**self.args(requested_intensity="strong",predicates=[],signals=["shared-contract"],transport="headless",inline_reason=None,dispatch_evidence=evidence))
+  self.assertEqual(route["broker_contract_version"],1); R.verify_route(route,R.ROOT)
+  missing=json.loads(json.dumps(route));
+  for node in missing["nodes"]:
+   for hop in node.get("dispatch_fallback",[]):
+    for row in hop.get("candidates",[]): row.pop("broker_instance",None)
+  missing["route_hash"]=R.route_hash(missing); missing["route_id"]="rt-"+missing["route_hash"].split(":",1)[1][:16]
+  with self.assertRaisesRegex(ValueError,"supported depth-0 broker tuple"): R.verify_route(missing,R.ROOT)
+  legacy=json.loads(json.dumps(route)); legacy.pop("broker_contract_version",None)
+  for row in legacy["dispatch_evidence"]["tuples"]:
+   row.pop("broker_root",None); row.pop("broker_instance",None)
+  for node in legacy["nodes"]:
+   for hop in node.get("dispatch_fallback",[]):
+    for row in hop.get("candidates",[]): row.pop("broker_root",None); row.pop("broker_instance",None)
+  legacy["route_hash"]=R.route_hash(legacy); legacy["route_id"]="rt-"+legacy["route_hash"].split(":",1)[1][:16]
+  R.verify_route(legacy,R.ROOT)
 if __name__=="__main__": unittest.main()
