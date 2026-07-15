@@ -17,6 +17,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import (  # noqa: E402
+    DispatchContractError,
+    ensure_global_registry_writable,
+    new_attempt_id,
+    resolve_global_registry,
+    validate_nested_eligibility,
+)
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
 # `--qa` is no longer a user-facing axis; optional, derived from --intensity when omitted.
@@ -41,6 +49,7 @@ INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "advers
 # shell/other-adapter counterparts (dispatch-liveness.py LIMIT_RE) keep the same list —
 # intentional cross-runtime duplication, keep in sync.
 DEATH_PATTERNS = [
+    ("network-operation-not-permitted", r"operation not permitted|network is unreachable|network access denied"),
     ("session-limit", r"hit your (?:session|usage) limit|session limit reached"),
     ("usage-limit", r"usage[_ ]limit[_ ]reached|usage limit reached|weekly limit|"
      r"rate limit(?:ed)?|provider rate limit|exceeded retry limit|\b429\b"),
@@ -108,6 +117,15 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--prompt-file")
     p.add_argument("--prompt-text")
     p.add_argument("--jobs")
+    p.add_argument("--attempt-id")
+    p.add_argument("--fallback-ordinal", type=int, default=0)
+    p.add_argument("--launch-authority", choices=("conductor", "ancestor-broker"), default="conductor")
+    p.add_argument("--parent-harness", default=os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS") or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "codex")
+    p.add_argument("--parent-transport", default=os.environ.get("AGENT_DISPATCH_CURRENT_TRANSPORT") or "unknown")
+    p.add_argument("--parent-sandbox", default=os.environ.get("AGENT_DISPATCH_CURRENT_SANDBOX") or "unknown")
+    p.add_argument("--nested-eligibility", choices=("supported", "unsupported", "unknown"), default="unknown")
+    p.add_argument("--eligibility-source", default="")
+    p.add_argument("--eligibility-failure-class", default="")
     p.add_argument("--log-dir")
     p.add_argument(
         "--sandbox",
@@ -271,6 +289,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
             "- Plan-check is required for quick+ but stays small: requirements coverage, over/under-scoping, executable verification, and missed spec-significant risk. Do not run independent QA after every stage by default.\n"
             "- When the selected graph calls for independent plan review, run $AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/plan-review and $AGENT_HOME/adapters/codex/bin/preflight.sh role verification before claiming that review.\n"
             "- Pipeline intensity controls ceremony. For standard+ intensity, a depth-1 capability owner should dispatch bounded depth-2 planner/verifier workers when the task is separable; thorough/adversarial expands this to multi-axis/adversary workers. Synthesize short reports; depth 3+ is forbidden.\n"
+            "- Depth-2 launch recovery: consume the route node's checked fallback with $AGENT_HOME/adapters/codex/bin/preflight.sh dispatch-chain. Do not retry an unchanged same-harness failure or bypass cross-harness/ancestor-broker evaluation. Use only inherited $AGENT_DISPATCH_JOBS; cycle-local jobs files are non-authoritative.\n"
             "- Implementation: run $AGENT_HOME/adapters/codex/bin/preflight.sh role implementation for standard+ implementation stages and obey the requested development mode.\n"
             "- Testing: run $AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/test when concrete verification commands are used, satisfy the reported verification-runner contract, and record evidence under test_logs/ for standard+ work cycles.\n"
             "- Reporting: direct returns a concise report; quick returns its concise report from the depth-1 one-shot worker; standard+ runs $AGENT_HOME/adapters/codex/bin/preflight.sh role report, then writes or updates pipeline_summary.md with changed files, verification commands/results, artifact paths, and unsupported Codex tool contracts.\n"
@@ -383,6 +402,13 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
         pipe += f",owner_harness={args.owner_harness}"
+    if args.depth >= 2:
+        pipe += (
+            f",parent_harness={args.parent_harness},parent_transport={args.parent_transport}"
+            f",parent_sandbox={args.parent_sandbox},child_harness=codex"
+            f",nested_eligibility={args.nested_eligibility},eligibility_source={args.eligibility_source}"
+            f",eligibility_failure_class={args.eligibility_failure_class or '-'}"
+        )
     for key in ("route_file", "route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate"):
         value = getattr(args, key)
         if value:
@@ -394,13 +420,15 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     if args.profile:
         pipe += f",profile={args.profile}"
     pipe += f",artifact_root={args.artifact_root}"
+    if args.attempt_id:
+        pipe += f",attempt_id={args.attempt_id},launch_authority={args.launch_authority},fallback_ordinal={args.fallback_ordinal}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     with jobs_lock(jobs):
         with jobs.open("a", encoding="utf-8") as f:
             f.write(f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}\n")
 
 
-def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str) -> bool:
+def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str, attempt_id: str | None = None) -> bool:
     """SD-15: flip this dispatch's own open row to done with a dead-<reason> note.
 
     Matches by (slug, worktree, status==open) under the same flock the writer uses,
@@ -422,6 +450,8 @@ def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str)
             ts, status, repo, wt, row_slug, pipe = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
             if status != "open" or row_slug != slug or wt != worktree:
                 continue
+            if attempt_id and f"attempt_id={attempt_id}" not in pipe.split(","):
+                continue
             pipe += f",note=dead-{reason}"
             if reset:
                 pipe += f",reset={reset}"
@@ -431,6 +461,34 @@ def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str)
         if changed:
             jobs.write_text("".join(lines), encoding="utf-8")
         return changed
+
+
+def annotate_job_row(jobs: Path, slug: str, worktree: str, extra_kv: str, attempt_id: str | None = None) -> bool:
+    """Attach launch identity to the exact open attempt row."""
+    if not jobs.is_file():
+        return False
+    with jobs_lock(jobs):
+        lines = jobs.read_text(encoding="utf-8").splitlines(keepends=True)
+        for i, line in enumerate(lines):
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 6:
+                continue
+            ts, status, repo, wt, row_slug, pipe = parts[:6]
+            if status != "open" or row_slug != slug or wt != worktree:
+                continue
+            if attempt_id and f"attempt_id={attempt_id}" not in pipe.split(","):
+                continue
+            lines[i] = f"{ts}\t{status}\t{repo}\t{wt}\t{row_slug}\t{pipe},{extra_kv}\n"
+            jobs.write_text("".join(lines), encoding="utf-8")
+            return True
+    return False
+
+
+def process_start_ticks(pid: int) -> str:
+    try:
+        return (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8").split()[21]
+    except (OSError, IndexError):
+        return ""
 
 
 def write_reset_cache(agent_home: Path, harness: str, reason: str, reset: str) -> None:
@@ -473,7 +531,12 @@ def watch_early_death(
         tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
     except OSError:
         return None
-    return scan_death(tail)
+    death = scan_death(tail)
+    if death:
+        return death
+    if proc.returncode:
+        return f"launch-exit-{proc.returncode}", ""
+    return None
 
 
 def resolve_agent_home() -> Path:
@@ -628,6 +691,15 @@ def main(argv: list[str]) -> int:
     rc = validate_dispatch_inputs(args)
     if rc != 0:
         return rc
+    try:
+        validate_nested_eligibility(
+            depth=args.depth, action=action, parent_harness=args.parent_harness,
+            parent_transport=args.parent_transport, parent_sandbox=args.parent_sandbox,
+            child_harness="codex", launch_authority=args.launch_authority,
+            status=args.nested_eligibility, source=args.eligibility_source,
+        )
+    except DispatchContractError as e:
+        return fail(e.reason, 69, detail=e.detail)
     rc = validate_route_record(args)
     if rc != 0:
         return rc
@@ -681,8 +753,14 @@ def main(argv: list[str]) -> int:
         runtime_home_projection = ensure_runtime_home_projection(worktree)
 
     agent_home = resolve_agent_home()
-    jobs_override = args.jobs or os.environ.get("AGENT_DISPATCH_JOBS")
-    jobs = Path(jobs_override) if jobs_override else agent_home / ".dispatch" / "jobs.log"
+    try:
+        registry = resolve_global_registry(agent_home, args.jobs, args.depth, action)
+        jobs = registry.path
+        args.attempt_id = new_attempt_id(args.attempt_id) if action in ("register", "start") else args.attempt_id
+        if action in ("register", "start"):
+            ensure_global_registry_writable(jobs)
+    except DispatchContractError as e:
+        return fail(e.reason, 73, detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = dispatch_prompt(args)
     prompt_path = log_dir / f"{args.slug}.codex.prompt.txt"
@@ -720,17 +798,30 @@ def main(argv: list[str]) -> int:
             "AGENT_ROUTE_ID": args.route_id or "",
             "AGENT_ROUTE_NODE": args.route_node or "",
             "AGENT_MODEL_GOVERNOR_ROOT": str(governor_root),
+            "AGENT_DISPATCH_JOBS": str(jobs),
+            "AGENT_DISPATCH_CURRENT_HARNESS": "codex",
+            "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
+            "AGENT_DISPATCH_CURRENT_SANDBOX": args.sandbox,
         }
         if profile_home is not None:
             dispatch_env["CODEX_HOME"] = str(profile_home)
-        proc = subprocess.Popen([sys.executable, str(governor), "--root", str(governor_root), "run", "--class", "dispatch", "--", "sh", "-c", command], start_new_session=True, env=dispatch_env)
+        try:
+            proc = subprocess.Popen([sys.executable, str(governor), "--root", str(governor_root), "run", "--class", "dispatch", "--", "sh", "-c", command], start_new_session=True, env=dispatch_env)
+        except OSError as exc:
+            close_job_row(jobs, args.slug, args.worktree, "launch-error", "", args.attempt_id)
+            return fail("child-launch-failed", 70, detail=str(exc), attempt_id=args.attempt_id)
+        start_ticks = process_start_ticks(proc.pid)
+        launch_identity = f"pid={proc.pid}" + (f",pid_start={start_ticks}" if start_ticks else "")
+        annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
+        args.child_pid = proc.pid
+        args.child_pid_start = start_ticks
         # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a limit/auth early death so a
         # limit-killed launch closes its own row now instead of lingering `open` until
         # liveness SUSPECT catches it minutes later.
         death = watch_early_death(proc, log_path, args.early_exit_watch)
         if death:
             reason, reset = death
-            close_job_row(jobs, args.slug, args.worktree, reason, reset)
+            close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
             write_reset_cache(agent_home, "codex", reason, reset)
             args.early_death = (reason, reset)
 
@@ -762,9 +853,15 @@ def main(argv: list[str]) -> int:
     print(f"profile={args.profile or '-'}")
     print(f"runtime_home_projection={runtime_home_projection or '-'}")
     print(f"job_registry={jobs}")
+    print(f"registry_authority={registry.source}")
+    print(f"attempt_id={args.attempt_id or '-'}")
+    print(f"launch_authority={args.launch_authority}")
+    print(f"fallback_ordinal={args.fallback_ordinal}")
     print(f"registry_lock={jobs}.lock")
     print(f"registered={1 if action in ('register', 'start') else 0}")
     print(f"started={1 if action == 'start' else 0}")
+    print(f"child_pid={getattr(args, 'child_pid', None) or '-'}")
+    print(f"child_pid_start={getattr(args, 'child_pid_start', None) or '-'}")
     print(f"require_hook_trust={1 if args.require_hook_trust else 0}")
     early_death = getattr(args, "early_death", None)
     if early_death:

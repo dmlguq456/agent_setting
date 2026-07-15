@@ -140,6 +140,19 @@ if [ -d /proc ]; then
   fi
   kill "$pidG" 2>/dev/null; wait "$pidG" 2>/dev/null
 
+  # --- Case G2: Codex row validates the codex cmdline and recorded start ticks.
+  bash -c 'exec -a codex sleep 30' & pidG2=$!
+  startG2=$(awk '{print $22}' "/proc/$pidG2/stat")
+  jobsG2="$agent_home/.dispatch/jobs.log"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-15T00:00:00" "open" "agent_setting" "$tmp/wt/codex-pid" "codexpid" "capability=x,harness=codex,pid=$pidG2,pid_start=$startG2" > "$jobsG2"
+  outG2=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" "$jobsG2" 2>&1); rcG2=$?
+  if [ "$rcG2" -eq 0 ] && printf '%s' "$outG2" | grep -q 'ALIVE.*harness=codex'; then
+    ok "Codex live pid + matching start ticks → ALIVE(pid)"
+  else
+    bad "expected Codex ALIVE(pid); got rc=$rcG2 out=[$outG2]"
+  fi
+  kill "$pidG2" 2>/dev/null; wait "$pidG2" 2>/dev/null
+
   # --- Case H (본 수정의 회귀 핵심): pid 종료 + *신선* transcript → EXITED, exit 3.
   #     구버전은 conductor 활동이 만든 신선 transcript 때문에 ALIVE 오탐(수확 ~50분 지연 실측).
   sleep 0.1 & pidH=$!; wait "$pidH" 2>/dev/null   # 즉시 종료한 pid 확보
@@ -167,6 +180,17 @@ if [ -d /proc ]; then
   fi
 else
   echo "skip - /proc 없음: pid 신호 케이스 G/H/I 생략 (fallback 경로는 A~F 가 커버)"
+fi
+
+# --- Case J (O1): PID-less Codex legacy row uses the active wrapper JSONL, not Claude projects/.
+jobsJ="$agent_home/.dispatch/jobs.log"
+: > "$logs/codexlegacy.codex.jsonl"
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-15T00:00:00" "open" "agent_setting" "$tmp/wt/codex-legacy" "codexlegacy" "capability=x,harness=codex" > "$jobsJ"
+outJ=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" "$jobsJ" 2>&1); rcJ=$?
+if [ "$rcJ" -eq 0 ] && printf '%s' "$outJ" | grep -q 'ALIVE.*Codex dispatch log'; then
+  ok "PID-less Codex row uses fresh .codex.jsonl fallback (O1 false-DEAD closed)"
+else
+  bad "expected Codex log fallback ALIVE; got rc=$rcJ out=[$outJ]"
 fi
 
 if [ "$fails" -eq 0 ]; then

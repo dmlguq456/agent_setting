@@ -10,6 +10,12 @@ TOPO = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(TOPO)
 ORDER = {"direct":0,"quick":1,"standard":2,"strong":3,"thorough":4,"adversarial":5}
 TRACKING = {"tracked", "untracked"}
 GATE_FIELDS = {"spec_read", "drift_verdict", "workflow_mode", "artifact_guard"}
+NESTED_STATUSES = {"supported", "unsupported", "unknown"}
+NESTED_FIELDS = {
+    "parent_harness", "parent_transport", "parent_sandbox", "child_harness",
+    "launch_authority", "status", "probe_source", "probe_time", "failure_class",
+}
+FALLBACK_ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
 
 def canonical(payload):
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",",":")).encode()
@@ -42,10 +48,55 @@ def _scope_touches_spec(scope):
     root=scope[:-3] if scope.endswith("/**") else scope
     return root=="spec" or root.startswith("spec/")
 
+def _validate_dispatch_evidence(evidence):
+    if not isinstance(evidence,dict): raise ValueError("checked dispatch evidence required")
+    tuples=evidence.get("tuples")
+    if not isinstance(tuples,list) or not tuples: raise ValueError("nested eligibility tuples required")
+    normalized=[]
+    for row in tuples:
+        if not isinstance(row,dict) or not NESTED_FIELDS.issubset(row):
+            raise ValueError("nested eligibility tuple fields missing")
+        if row["status"] not in NESTED_STATUSES: raise ValueError("invalid nested eligibility status")
+        if row["launch_authority"] not in ("conductor","ancestor-broker"):
+            raise ValueError("invalid nested launch authority")
+        if not row["probe_source"] or not row["probe_time"]:
+            raise ValueError("nested eligibility checked source/time required")
+        normalized.append({key:row[key] for key in sorted(NESTED_FIELDS)})
+    native=evidence.get("native_subagent",[])
+    if not isinstance(native,list): raise ValueError("native_subagent evidence must be a list")
+    for row in native:
+        if not isinstance(row,dict) or row.get("status") not in NESTED_STATUSES or not row.get("harness") or not row.get("check_source"):
+            raise ValueError("invalid native subagent evidence")
+    return {"tuples":normalized,"native_subagent":native}
+
+def _fallback_chain(evidence):
+    evidence=_validate_dispatch_evidence(evidence)
+    tuples=evidence["tuples"]
+    same=[row for row in tuples if row["child_harness"]==row["parent_harness"]]
+    cross=[row for row in tuples if row["child_harness"]!=row["parent_harness"]]
+    same.sort(key=lambda row:(row["launch_authority"]!="conductor",row["child_harness"]))
+    cross.sort(key=lambda row:(row["launch_authority"]!="conductor",row["child_harness"]))
+    if not any(row["status"]=="supported" for row in same+cross):
+        raise ValueError("no supported nested headless tuple or ancestor broker")
+    return [
+        {"ordinal":1,"hop":"same-harness-headless","candidates":same},
+        {"ordinal":2,"hop":"cross-harness-headless","candidates":cross},
+        {"ordinal":3,"hop":"native-subagent","candidates":evidence["native_subagent"],"fleet_visibility":"degraded"},
+        {"ordinal":4,"hop":"inline","status":"eligible-after-prior-hop-exhaustion","reason_enum":"runtime-unavailable","fleet_visibility":"none"},
+    ]
+
+def _verify_fallback_chain(node):
+    chain=node.get("dispatch_fallback")
+    if not isinstance(chain,list) or [row.get("hop") for row in chain] != FALLBACK_ORDER:
+        raise ValueError(f"depth-2 node {node.get('id')} missing ordered dispatch fallback")
+    if not any(candidate.get("status")=="supported" for row in chain[:2] for candidate in row.get("candidates",[])):
+        raise ValueError(f"depth-2 node {node.get('id')} lacks supported headless launch tuple")
+    return chain
+
 def compile_route(capability, capability_mode, requested_intensity, cwd, artifact_root,
                   predicates=(), signals=(), transport="inline-fallback",
                   transport_evidence="caller-selected", inline_reason=None,
-                  tracking="tracked", tracked_gate_evidence=None):
+                  tracking="tracked", tracked_gate_evidence=None, dispatch_evidence=None):
     cwd=Path(cwd).resolve(strict=True); artifact=Path(artifact_root).resolve()
     if not cwd.is_absolute() or not artifact.is_absolute(): raise ValueError("cwd and artifact root must be absolute")
     registry=TOPO.load_registry(); TOPO.validate_registry(registry)
@@ -75,12 +126,19 @@ def compile_route(capability, capability_mode, requested_intensity, cwd, artifac
         gates=["quick-complete"]
         selection_basis=[{"axis":"direct-predicate-gap","signal":p,"source":"compiler"} for p in sorted(known_pred-set(predicates))]
     else:
-        nodes=recipe["standard_plus"]["nodes"]; gates=recipe["completion_gates"]
+        nodes=json.loads(json.dumps(recipe["standard_plus"]["nodes"])); gates=recipe["completion_gates"]
         selection_basis=[{"axis":"promotion","signal":s,"source":"caller"} for s in signals]
     if transport=="inline-fallback":
         if inline_reason not in registry["inline_reasons"]: raise ValueError("structured inline_reason required")
     elif inline_reason is not None: raise ValueError("inline_reason only applies to inline-fallback")
     evidence=_validate_tracking_evidence(tracking, tracked_gate_evidence)
+    checked_dispatch=None
+    if effective not in ("direct","quick") and transport=="headless":
+        checked_dispatch=_validate_dispatch_evidence(dispatch_evidence)
+        chain=_fallback_chain(checked_dispatch)
+        for node in nodes:
+            if node.get("depth")==2:
+                node["dispatch_fallback"]=json.loads(json.dumps(chain))
     spec_touch=any(_scope_touches_spec(scope) for node in nodes for scope in node["write_scope"])
     payload={
       "schema_version":1,"capability":capability,"capability_mode":capability_mode,
@@ -95,7 +153,8 @@ def compile_route(capability, capability_mode, requested_intensity, cwd, artifac
                    "escalation_basis":[{"signal":s,"source":"caller"} for s in signals],
                    "transport":transport,"transport_evidence":transport_evidence,"inline_reason":inline_reason},
       "nodes":nodes,"completion_gates":gates,"human_gates":recipe["human_gates"],
-      "resume_retry_boundaries":recipe["resume_retry_boundaries"]}
+      "resume_retry_boundaries":recipe["resume_retry_boundaries"],
+      "dispatch_evidence":checked_dispatch}
     digest=route_hash(payload); payload["route_hash"]=digest; payload["route_id"]="rt-"+digest.split(":",1)[1][:16]
     return payload
 
@@ -112,6 +171,10 @@ def verify_route(route, expected_cwd=None):
         raise ValueError("tracking cannot be an escalation basis")
     spec_touch=any(_scope_touches_spec(scope) for node in route.get("nodes",[]) for scope in node.get("write_scope",[]))
     if bool(route.get("spec_touch")) != spec_touch: raise ValueError("spec_touch declaration mismatch")
+    if route.get("effective_intensity") not in ("direct","quick") and route.get("selection",{}).get("transport")=="headless":
+        _validate_dispatch_evidence(route.get("dispatch_evidence"))
+        for node in route.get("nodes",[]):
+            if node.get("depth")==2: _verify_fallback_chain(node)
     return route
 
 def write_once(path, payload):
@@ -130,6 +193,7 @@ def main():
     c.add_argument("--predicate",action="append",default=[]); c.add_argument("--signal",action="append",default=[])
     c.add_argument("--transport",default="inline-fallback"); c.add_argument("--transport-evidence",default="caller-selected")
     c.add_argument("--inline-reason"); c.add_argument("--tracking",choices=sorted(TRACKING),required=True)
+    c.add_argument("--dispatch-evidence",help="JSON file with checked nested tuples/native evidence")
     c.add_argument("--spec-read",required=True); c.add_argument("--drift-verdict",required=True)
     c.add_argument("--workflow-mode",choices=sorted(TRACKING),required=True); c.add_argument("--artifact-guard",required=True)
     c.add_argument("--output")
@@ -141,7 +205,8 @@ def main():
         gate={"spec_read":{"satisfied":a.spec_read.lower() not in ("0","false","no"),"source":a.spec_read},
               "drift_verdict":a.drift_verdict,"workflow_mode":a.workflow_mode,
               "artifact_guard":{"satisfied":a.artifact_guard.lower() not in ("0","false","no"),"source":a.artifact_guard}}
-        route=compile_route(a.capability,a.capability_mode,a.intensity,a.cwd,a.artifact_root,a.predicate,a.signal,a.transport,a.transport_evidence,a.inline_reason,a.tracking,gate)
+        dispatch_evidence=json.loads(Path(a.dispatch_evidence).read_text()) if a.dispatch_evidence else None
+        route=compile_route(a.capability,a.capability_mode,a.intensity,a.cwd,a.artifact_root,a.predicate,a.signal,a.transport,a.transport_evidence,a.inline_reason,a.tracking,gate,dispatch_evidence)
         if a.output: write_once(a.output,route)
         print(json.dumps(route,sort_keys=True))
     else:

@@ -543,8 +543,8 @@ shared `utilities/` directory. The current allowlist is:
 - `workflow-guard-hook.sh`
 - `workflow-toggle.sh`
 
-Do not project the shared `dispatch-liveness.sh`; it assumes Claude
-`projects/<encoded-cwd>/*.jsonl`. Codex uses the adapter-owned
+Do not project the shared `dispatch-liveness.sh`; it is the cross-harness
+registry/wait fallback, while Codex uses the adapter-owned
 `adapters/codex/bin/dispatch-liveness.py`, exposed as
 `adapters/codex/bin/preflight.sh liveness [jobs.log]`, and maps open dispatch
 jobs to `~/.codex/sessions/**/*.jsonl` by transcript `cwd`. Codex harvest is
@@ -569,6 +569,17 @@ retry exhaustion (openai/codex#9148·#12677), so the launch early-exit-watch axi
 runtime-currentness patterns (`exceeded retry limit`, `usage_limit_reached`, `429`) are
 best-effort per 2026-07 issue evidence, conservative and kept in sync with the shared list.
 Conformance: `adapters/codex/bin/dispatch-headless.sd15.test.sh`.
+
+### SD-48~50 nested dispatch recovery — realized
+
+Depth-2 starts require checked tuple evidence and an inherited canonical
+`AGENT_DISPATCH_JOBS`; noncanonical nested `--jobs` and unwritable global
+registries fail before spawn. Rows carry attempt identity, launch authority,
+fallback ordinal, and tuple evidence. `nested-headless` keeps the observed
+Codex-in-Codex workspace-write tuple unsupported, while `dispatch-chain`
+enforces same-harness → cross-harness/broker → native → inline ordering.
+Codex launches also attach `pid` and `/proc` start ticks; the shared liveness
+fallback recognizes `.codex.jsonl`, closing the v10 O1 false-DEAD gap.
 
 ## Distillation Boundary
 

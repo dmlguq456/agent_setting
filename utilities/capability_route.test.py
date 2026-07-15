@@ -4,6 +4,10 @@ from pathlib import Path
 P=Path(__file__).with_name("capability-route.py"); S=importlib.util.spec_from_file_location("route",P); R=importlib.util.module_from_spec(S); S.loader.exec_module(R)
 ALL=["atomic-outcome","known-scope","no-shared-contract","no-resource-run","no-artifact-handoff","no-independent-verifier","focused-verification"]
 class TestRoute(unittest.TestCase):
+ def dispatch(self,*rows):
+  return {"tuples":list(rows),"native_subagent":[{"harness":"codex","status":"supported","check_source":"fixture-native-check"}]}
+ def nested(self,parent="codex",child="codex",authority="conductor",status="supported",failure=""):
+  return {"parent_harness":parent,"parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":child,"launch_authority":authority,"status":status,"probe_source":"fixture-probe","probe_time":"2026-07-15T00:00:00Z","failure_class":failure}
  def args(self,**kw):
   gate={"spec_read":{"satisfied":True,"source":"canonical-prd-sha256"},"drift_verdict":"within-spec","workflow_mode":"tracked","artifact_guard":{"satisfied":True,"source":"conductor-prechecked"}}
   d=dict(capability="autopilot-code",capability_mode="dev",requested_intensity="direct",cwd=R.ROOT,artifact_root=R.ROOT,predicates=ALL,transport="inline-fallback",inline_reason="atomic-direct",tracking="tracked",tracked_gate_evidence=gate); d.update(kw); return d
@@ -28,4 +32,19 @@ class TestRoute(unittest.TestCase):
   with tempfile.TemporaryDirectory() as td:
    p=Path(td)/"route.json"; a=R.compile_route(**self.args()); R.write_once(p,a); R.write_once(p,a)
    a["effective_intensity"]="quick"; self.assertRaises(ValueError,R.write_once,p,a)
+ def test_nested_surface_and_fallback_order(self):
+  evidence=self.dispatch(
+   self.nested(status="unsupported",failure="network-operation-not-permitted"),
+   self.nested(child="claude",authority="ancestor-broker",status="supported"),
+  )
+  route=R.compile_route(**self.args(requested_intensity="strong",predicates=[],signals=["shared-contract"],transport="headless",inline_reason=None,dispatch_evidence=evidence))
+  chain=route["nodes"][0]["dispatch_fallback"]
+  self.assertEqual([row["hop"] for row in chain],R.FALLBACK_ORDER)
+  self.assertEqual(chain[0]["candidates"][0]["status"],"unsupported")
+  self.assertEqual(chain[1]["candidates"][0]["child_harness"],"claude")
+  R.verify_route(route,R.ROOT)
+ def test_unknown_nested_tuple_fails_closed(self):
+  evidence=self.dispatch(self.nested(status="unknown",failure="unprobed-tuple"))
+  with self.assertRaisesRegex(ValueError,"no supported nested headless"):
+   R.compile_route(**self.args(requested_intensity="standard",predicates=[],signals=["shared-contract"],transport="headless",inline_reason=None,dispatch_evidence=evidence))
 if __name__=="__main__": unittest.main()
