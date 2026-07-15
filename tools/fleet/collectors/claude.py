@@ -33,16 +33,21 @@ def _mtime(path):
 
 
 def _newest_transcript_path(home, cwd, sid):
-    """Transcript path for liveness/title extraction: prefer `<sid>.jsonl`, else the
-    newest .jsonl in the project dir. Shared by mtime and ai-title lookups so both use
-    the same resolved path (one os.listdir scan, not two)."""
+    """Transcript path for liveness/title extraction: `<sid>.jsonl` when the session id
+    is known, else the newest .jsonl in the project dir. Shared by mtime and ai-title
+    lookups so both use the same resolved path (one os.listdir scan, not two).
+
+    A known sid whose transcript is MISSING returns None instead of falling back:
+    borrowing the newest neighbor .jsonl stamps another same-cwd session's fresh
+    mtime/title onto this row (observed 2026-07-15: a 33h-old orphaned Orca-relay
+    session rendered as just-active with a stolen title). mtime then degrades to
+    the session file's statusUpdatedAt in enrich()."""
     if not cwd:
         return None
     proj = os.path.join(home, "projects", _enc_cwd(cwd))
     if sid:
         p = os.path.join(proj, sid + ".jsonl")
-        if _mtime(p) is not None:
-            return p
+        return p if _mtime(p) is not None else None
     best, best_m = None, None
     try:
         for name in os.listdir(proj):

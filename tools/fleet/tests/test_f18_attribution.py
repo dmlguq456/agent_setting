@@ -5,6 +5,7 @@ Runnable directly or via `python3 -m unittest fleet.tests.test_f18_attribution -
 """
 import os
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -13,6 +14,7 @@ if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
 from fleet import render                       # noqa: E402
+from fleet.collectors import claude as claude_collector  # noqa: E402
 from fleet.collectors import codex, dispatch, procscan  # noqa: E402
 from fleet.model import DispatchJob, Session, project_of    # noqa: E402
 
@@ -226,6 +228,90 @@ class DrillReconcileTest(unittest.TestCase):
                            source="proc")
         jobs = dispatch._reconcile_drill_rows([registry, proc])
         self.assertEqual(len(jobs), 2)
+
+
+class OrcaRelayDetachTest(unittest.TestCase):
+    """Orca relay panes with no connected client → detached (third detached signal).
+
+    Observed 2026-07-15: a closed remote client left a 33h claude "Sonnet 5" and an
+    untitled codex TUI alive under `relay.js --detached`; both rendered as active idle
+    top-level sessions."""
+
+    def _scan_one(self, environ, dead):
+        ps_line = "123\tclaude\t00:05\t/usr/bin/claude"
+        with mock.patch.object(procscan, "_ps_lines", return_value=[ps_line]), \
+             mock.patch.object(procscan, "_read_cwd", return_value=("/home/u/proj", False)), \
+             mock.patch.object(procscan, "_pid_ttys", return_value={}), \
+             mock.patch.object(procscan, "_detached_ttys", return_value=set()), \
+             mock.patch.object(procscan, "_is_detached", return_value=False), \
+             mock.patch.object(procscan, "_orca_dead_socks",
+                               side_effect=lambda socks: {s for s in socks if s in dead}), \
+             mock.patch.object(procscan, "read_environ", return_value=environ):
+            sessions = procscan.scan()
+        self.assertEqual(len(sessions), 1)
+        return sessions[0]
+
+    def test_disconnected_relay_marks_detached(self):
+        s = self._scan_one({"ORCA_RELAY_SOCKET_PATH": "/tmp/r.sock"}, dead={"/tmp/r.sock"})
+        self.assertTrue(s.detached)
+
+    def test_connected_relay_stays_attached(self):
+        s = self._scan_one({"ORCA_RELAY_SOCKET_PATH": "/tmp/r.sock"}, dead=set())
+        self.assertFalse(s.detached)
+
+    def test_non_orca_session_unaffected(self):
+        s = self._scan_one({}, dead={"/tmp/r.sock"})
+        self.assertFalse(s.detached)
+
+    def test_dead_socks_parses_ss_established_output(self):
+        fake = mock.Mock(stdout="u_str ESTAB 0 0 /tmp/live.sock 123 * 456\n")
+        with mock.patch.object(procscan.subprocess, "run", return_value=fake):
+            self.assertEqual(procscan._orca_dead_socks({"/tmp/live.sock", "/tmp/dead.sock"}),
+                             {"/tmp/dead.sock"})
+
+    def test_dead_socks_fails_open_when_ss_unavailable(self):
+        with mock.patch.object(procscan.subprocess, "run", side_effect=OSError):
+            self.assertEqual(procscan._orca_dead_socks({"/tmp/x.sock"}), set())
+
+    def test_dead_socks_empty_input_probes_nothing(self):
+        with mock.patch.object(procscan.subprocess, "run",
+                               side_effect=AssertionError("must not probe")) :
+            self.assertEqual(procscan._orca_dead_socks(set()), set())
+
+
+class ClaudeTranscriptAttributionTest(unittest.TestCase):
+    """A known sid whose transcript is missing must not borrow a neighbor's .jsonl —
+    the stolen mtime/title painted a dead same-cwd session as just-active."""
+
+    def _proj(self, home, cwd="/w/repo"):
+        proj = os.path.join(home, "projects", claude_collector._enc_cwd(cwd))
+        os.makedirs(proj, exist_ok=True)
+        return proj
+
+    def test_known_sid_missing_transcript_returns_none(self):
+        with tempfile.TemporaryDirectory() as home:
+            proj = self._proj(home)
+            with open(os.path.join(proj, "neighbor.jsonl"), "w") as f:
+                f.write("{}\n")
+            self.assertIsNone(claude_collector._newest_transcript_path(home, "/w/repo", "sid-a"))
+
+    def test_known_sid_with_transcript_returns_it(self):
+        with tempfile.TemporaryDirectory() as home:
+            proj = self._proj(home)
+            own = os.path.join(proj, "sid-a.jsonl")
+            with open(own, "w") as f:
+                f.write("{}\n")
+            self.assertEqual(claude_collector._newest_transcript_path(home, "/w/repo", "sid-a"), own)
+
+    def test_unknown_sid_still_falls_back_to_newest(self):
+        with tempfile.TemporaryDirectory() as home:
+            proj = self._proj(home)
+            older, newer = os.path.join(proj, "a.jsonl"), os.path.join(proj, "b.jsonl")
+            for p in (older, newer):
+                with open(p, "w") as f:
+                    f.write("{}\n")
+            os.utime(older, (1, 1))
+            self.assertEqual(claude_collector._newest_transcript_path(home, "/w/repo", None), newer)
 
 
 if __name__ == "__main__":

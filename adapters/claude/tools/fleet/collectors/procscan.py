@@ -94,9 +94,33 @@ def _detached_ttys():
     return det
 
 
+def _orca_dead_socks(socks):
+    """Subset of Orca relay socket paths that currently have NO established client.
+
+    Sessions spawned through the Orca remote relay (`relay.js --detached`) carry
+    ORCA_RELAY_SOCKET_PATH in their environ. The relay keeps panes alive after the
+    remote client disconnects, so a closed remote tab leaves a live harness process
+    on a pty no terminal owns (observed 2026-07-15: a 33h-old claude and codex pair
+    rendered as active idle sessions). A relay socket with zero connected peers in
+    `ss -x` means no client is attached to ANY of its panes → those sessions are
+    detached (reconnectable — same vocabulary as a detached tmux session). Per-tab
+    liveness is invisible from outside the relay, so a connected client marks all
+    of its relay's panes attached. Fail open: if `ss` is missing or errors, nothing
+    is marked."""
+    socks = {s for s in socks if s}
+    if not socks:
+        return set()
+    try:
+        out = subprocess.run(["ss", "-x"], capture_output=True, text=True, timeout=2).stdout
+    except Exception:
+        return set()
+    return {s for s in socks if s not in out}
+
+
 def _is_detached(tty, app_server, det_ttys):
     """A session no one is attached to — NOT tmux-specific (user 2026-07-02: sessions can just be
-    run directly). Two general signals:
+    run directly). Two general signals (a third, Orca relay panes with no connected
+    client, is applied post-loop in scan() via _orca_dead_socks):
       · no controlling terminal (tty '?'/'-') → run in the background / detached from any terminal.
         (app-server companions ALSO have no tty but are services, not sessions → excluded.)
       · a tmux pane whose session has 0 attached clients → detached tmux session.
@@ -185,6 +209,7 @@ def scan(harness_filter=None):
         # session existence from on-disk state (see _scan_disk).
         return _scan_disk(harness_filter)
     sessions = []
+    orca_panes = []                      # (Session, ORCA_RELAY_SOCKET_PATH) rows
     pid_tty = _pid_ttys()
     det_ttys = _detached_ttys()
     for line in _ps_lines():
@@ -220,7 +245,7 @@ def scan(harness_filter=None):
         # Tag memory workers and title refreshers to prevent inherited cwd/env misattribution.
         mem_worker = env.get("MEM_DISTILL") == "1" or env.get("FLEET_TITLE_REFRESH") == "1"
         detached = _is_detached(pid_tty.get(pid), app_server, det_ttys)
-        sessions.append(Session(
+        sess = Session(
             harness=comm,
             pid=pid,
             cwd=cwd,
@@ -231,5 +256,15 @@ def scan(harness_filter=None):
             elapsed_min=etime_to_min(etime),
             slug=os.path.basename(cwd.rstrip("/")) if cwd else None,
             mem_worker=mem_worker,
-        ))
+        )
+        sessions.append(sess)
+        orca_sock = env.get("ORCA_RELAY_SOCKET_PATH")
+        if orca_sock:
+            orca_panes.append((sess, orca_sock))
+    # Third detached signal: Orca relay panes whose relay has no connected client
+    # (one ss probe per scan tick, mirroring the single tmux probe above).
+    dead_socks = _orca_dead_socks({s for _, s in orca_panes})
+    for sess, sock in orca_panes:
+        if sock in dead_socks:
+            sess.detached = True
     return sessions
