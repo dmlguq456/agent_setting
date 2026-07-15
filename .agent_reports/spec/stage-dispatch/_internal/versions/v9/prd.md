@@ -1,6 +1,6 @@
 # stage-dispatch — Spec (PRD)
 
-> mode: **library + cli** (하네스 인프라 — 스테이지 분사 계약 문서 + dispatch wrapper·jobs.log·fleet 관제) · 작성 2026-07-10 · v1 · **v2 2026-07-10** (Phase 2 결정 등재 — SD-10~13·SD-OPEN-2. Phase 1 main 머지 5b7cf33 반영: 계약 12표면 개정 + wrapper depth-aware + pilot 계측 plan 218s/execute 255s/test 46s/report 28s·conductor 프롬프트 ~2KB 일정) · **v6 2026-07-13** (사용자 승인 topology 변경: `quick` = depth-1 one-shot capability worker, depth-2 금지, headless 우선/Fleet 표시) · **v7 2026-07-13** (standard+ conductor deep orchestration 기본·family/role 기반 route-dispatch 계약·Fleet hotfix 수용 기준) · **v8 2026-07-14** (source-only worker worktree·canonical artifact root·merge/push 후 fail-closed cleanup) · **v9 2026-07-15** (capability-specific topology registry·route record·promotion signals·detached/governor/smoke/report/parity 계약) · **v10 2026-07-15** (tracked×dispatch 축 분리 — Tracking 다섯째 독립 축·worker manifest-consumer 계약·guard↔topology 정합성 validator·공유 tracked 표면 병렬 계약)
+> mode: **library + cli** (하네스 인프라 — 스테이지 분사 계약 문서 + dispatch wrapper·jobs.log·fleet 관제) · 작성 2026-07-10 · v1 · **v2 2026-07-10** (Phase 2 결정 등재 — SD-10~13·SD-OPEN-2. Phase 1 main 머지 5b7cf33 반영: 계약 12표면 개정 + wrapper depth-aware + pilot 계측 plan 218s/execute 255s/test 46s/report 28s·conductor 프롬프트 ~2KB 일정) · **v6 2026-07-13** (사용자 승인 topology 변경: `quick` = depth-1 one-shot capability worker, depth-2 금지, headless 우선/Fleet 표시) · **v7 2026-07-13** (standard+ conductor deep orchestration 기본·family/role 기반 route-dispatch 계약·Fleet hotfix 수용 기준) · **v8 2026-07-14** (source-only worker worktree·canonical artifact root·merge/push 후 fail-closed cleanup) · **v9 2026-07-15** (capability-specific topology registry·route record·promotion signals·detached/governor/smoke/report/parity 계약)
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - **사용자 결정 (2026-07-10 확정)**: "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로 했으면 한다. 어차피 산출물 기반 소통인데." — 입도 = sub-skill 스테이지 단위, 적용 = `standard+`, 이는 2026-07-06 depth 재설계 기본값의 명시적 반전.
@@ -13,8 +13,6 @@
 > - research `.agent_reports/research/cross-platform-agent-frameworks/` — `analysis_summary.md` §4-(8)(fresh-context-per-agent + file-state 지배 관용구), `cards/gsd.md`(fresh-context subagent per stage·`.planning/` file-state·two-stage routing·size-budget), `06_implementation.md`(파일-복제 회피·parity 정직성).
 > - 운영 실증 (2026-07-10, 이 결정의 직접 계기): ① in-session Task 서브에이전트 = jobs.log 미등록 → fleet 관제에 스테이지 진행 불가시 ② in-session 서브에이전트는 hook ceremony(가드·spec 게이트) 미수령 ③ owner 단일 세션 = 스테이지 누적 컨텍스트 비대.
 > - 현행 계약 실측 (2026-07-10, 본 워크트리): `core/OPERATIONS.md §5.10`·`§5.8`, `core/CONVENTIONS.md §1`·`§2`, `core/WORKFLOW.md §1.1`·`§5`, `core/DESIGN_PRINCIPLES.md §8`, `skills/autopilot-code/references/{dev-pipeline,context-and-guards}.md` + sub-skills, `adapters/claude/bin/dispatch-headless.py`, `adapters/{claude,codex,opencode}` bootstrap §0(C)/AGENTS.md.
-> - **진단 입력 (2026-07-15, v10)**: `../../plans/2026-07-15_capability-routing-topology/_internal/tracked-dispatch-conflict-diagnosis.md` — main 세션 분석 + Codex 교차 진단 통합(인용 근거는 현행 소스 실측 검증). tracked(산출물 차원 불변식)와 분사(실행 차원 토폴로지)는 직교 계약이나, ① tracked→intensity/dispatch 축 결합(`WORKFLOW.md:165`·`CONVENTIONS.md:26-33`) ② tracked 집행 장치(hook·read marker·routing reminder)의 세션 지역성이 충돌 원천. 마찰면 F1~F7 중 D1~D4가 미반영 delta.
-> - **사용자 결정 (2026-07-15 v10 확정)**: Tracking 축 분리는 채택하되 quick 경계는 **현행 유지(옵션 (a))** — 애매한 작업은 inline이 아니라 quick depth-1로 기운다(메인 컨텍스트 보호 우선). Codex inline 권고(옵션 (b) — 명확한 독립 작업 패키지 없으면 inline)는 기각. 2026-07-13 SD-18 결정의 재확정.
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`). 지침 파일(core/adapters/skills) 자체는 본 spec 이 수정하지 않는다 — 방향만 확정.
 
 ## 0. 한 줄
@@ -635,50 +633,8 @@ Claude, Codex, OpenCode는 sibling realization이며 각 adapter의 capability-i
 
 registry/compiler는 report-only로 시작하고 capability feature flag와 low-level compatibility window를 둔다. code pilot 뒤 lab eval, design/draft/research, transactional capabilities, apply/lab setup 순으로 one-shot+standard+ 실제 route를 검증한다. false positive 시 capability flag만 rollback하고 registry/route trace는 보존한다. source implementation, adapter projection, deployment는 후속 `autopilot-code`/`autopilot-ship` 작업이며 본 v9 transaction은 spec artifact만 변경한다.
 
-## 13.2 v10 — tracked×dispatch 축 분리와 route-scope 집행 (2026-07-15)
-
-> 근거: `../../plans/2026-07-15_capability-routing-topology/_internal/tracked-dispatch-conflict-diagnosis.md`. tracked 강제는 **산출물 차원의 불변식**(무엇이 존재해야 하고, 어떤 순서로, 누가 소유하는가)이고 분사는 **실행 차원의 토폴로지**(어느 세션이 어떤 write scope로 실행하는가)로, 본질적 상충이 없는 직교 계약이다. 현행 충돌의 뿌리는 ① tracked 여부가 intensity/dispatch escalation에 결합됨 ② tracked 집행 장치(hook·read marker·routing reminder)가 세션 단위라 분사가 실행을 여러 세션으로 쪼갤 때 투영 유실(marker) 또는 중복 발화(guard 재적용·재라우팅)함. v10은 tracked 약화가 아니라 (a) Tracking 축 분리 (b) tracked 집행의 세션 스코프→route 스코프 승격으로 닫는다. 진단 F6(depth-2 code 중심)·F7(transaction back-jump)은 v9 SD-36~38이 이미 답이므로 추가 결정 없음, F3(guard 뒤늦은 발화)은 SD-45에 흡수.
-
-### 13.2.1 SD-44 — Tracking 다섯째 독립 축과 quick 경계 재확정 (진단 D1, 사용자 확정 2026-07-15)
-
-- **Tracking = 다섯째 독립 축**: v9 SD-32의 네 축(intensity/execution_topology/worker_kind/transport)에 `tracking`을 다섯째 독립 필드로 추가한다. tracked 여부는 **산출물 계약**(산출물 필요 여부·생성 순서·소유 capability·검증 계약)만 결정하고, 분사 여부·규모는 route record의 promotion signals(SD-35)와 separability(SD-17)가 결정한다. 한 축의 값으로 다른 축을 추정하지 않는다는 SD-32 원칙이 tracking에도 적용된다.
-- **tracked→escalation 결합 문구 제거**: `WORKFLOW.md:165` "Small localized *tracked* change → quick", `OPERATIONS.md:109` "Small tracked quick work → Depth-1 one-shot worker" 류 — "tracked라는 사실"을 dispatch 강도의 근거로 쓰는 문구를 promotion/separability 신호 기반 문구로 대체한다(구현 phase surface census 대상). tracked 사실 단독은 route record의 escalation 근거 필드에 올 수 없다.
-- **quick 경계는 현행 유지 (사용자 선택 (a), 2026-07-15)**: direct all-predicate 미달이지만 명확한 독립 작업 패키지도 아닌 애매한 작업은 **quick depth-1 one-shot으로 기운다** — 메인 컨텍스트 보호 우선. SD-18(2026-07-13)·SD-31(v9)과 정합. Codex 권고(명확한 독립 작업 패키지가 있을 때만 depth-1, 아니면 inline — dispatch 오버헤드 절감 우선)는 **기각**: 기존 사용자 결정과 충돌하며, 오버헤드 절감보다 main context 보호가 우선한다는 판단의 재확정.
-- **선택 근거 기록 의무**: direct/quick/standard+ 선택의 근거 신호(어느 축·어느 signal)를 route record에 남긴다.
-
-### 13.2.2 SD-45 — worker manifest-consumer 계약 (진단 D2, F3 흡수)
-
-- **worker는 라우팅을 재선택하지 않는다**: capability/intensity/topology 결정과 route record 발행(SD-34)은 main/conductor가 소유한다. worker의 계약 = ① route record hash 검증 ② 배정된 node scope만 실행 ③ 증거·결과 반환. worker가 record와 다른 capability/intensity로 재해석·재선택하면 계약 위반.
-- **tracked gate 통과 증거의 record 운반**: route record 필수 필드에 tracked gate 증거 4종 — spec-read 여부, drift verdict, tracked/untracked mode, artifact-guard 전제 충족(SD-13 conductor 선보장 결과) — 을 추가한다. 세션 지역적 read marker 재취득의 기본 대체 경로이며, worker가 실제로 prd.md를 새로 읽은 경우의 marker 기록은 유지한다. (근거 실측: v9 process log "Codex root/core read-marker persistence was unavailable under worker sandbox, so instruction-only fallback used" — 세션 스코프 집행 장치가 분사에서 투영되지 않는 사례.)
-- **worker 부트스트랩 축소**: required bootstrap의 `status → prompt-signal → mode → route` 재실행(`dispatch-headless.py` 및 codex/opencode preflight 동형)을 "재라우팅"에서 **"record 검증 + 안전 확인(absolute cwd·canonical artifact root·git state)" 전용**으로 축소한다. 3어댑터 동형 적용.
-- **F3 구조 원인의 봉합**: 판단 시점(main)과 집행 시점(worker)의 분리로 artifact-guard가 worker 레벨에서 뒤늦게 발화하던 경로(SD-13 실측)는, gate 전제 충족 증거가 record에 실려 worker 시작 전에 검증되므로 구조적으로 닫힌다.
-
-### 13.2.3 SD-46 — guard↔topology 정합성 validator (진단 D3)
-
-- **validator 항목 추가**: SD-33 validator 검사 목록에 **artifact-guard 생성 순서 규칙 ↔ stage `write_scope` 정합성**을 fail-closed 항목으로 추가한다 — `spec/**` write를 선언한 node는 그 capability가 spec의 sole-update-path 소유자(`autopilot-spec`)이거나 conductor 선보장 gate(SD-13)를 선언해야 한다. registry가 허용한 write를 guard가 막는 조합이 validation 시점에 드러나야 하며 runtime까지 잠복하면 안 된다.
-- **runtime 충돌의 structured failure**: 그럼에도 runtime에서 guard가 route-승인된 write를 차단하면 조용한 실패가 아니라 **structured failure + route record 참조**를 낸다(SD-42 cwd mismatch와 동형 의미론).
-
-### 13.2.4 SD-47 — 공유 tracked 표면의 병렬 mutation 계약 (진단 D4)
-
-- **직렬화 지점 명시**: `plans/<slug>/`는 경로 분리로 무경합이지만 `spec/` 3-file transaction(`prd.md`·`pipeline_state.yaml`·`pipeline_summary.md`)과 `_internal/versions/v{N}` 버전 체인은 **본질적 직렬화 지점**이다. §5.8 lock의 보호 범위를 spec-transaction 전체(snapshot→prd→state→summary 원자 시퀀스)로 명시하고, 버전 체인 갱신(snapshot 생성 포함)은 lock 보유 중에만 수행한다.
-- **경합 규칙 = 대기, 재시도 아님**: 선점 실패(BLOCKED)면 동일 버전 번호 재선점을 시도하지 않는다 — 대기 후 최신 상태를 다시 읽고 **다음 버전 번호**로 진입한다. 두 세션이 같은 `v{N}` snapshot을 만드는 경로를 계약으로 차단한다.
-- **lock 밖 위험의 선실행 가드**: §5.8 lock은 artifact write만 보호하고 merge/rebase·dirty·동일 branch를 감지하지 않는다(`OPERATIONS.md:57`, §5.9 별도 가드). 병렬 분사 사이클이 spec에 닿으면 route record에 spec-touch를 선언하고 conductor가 §5.9 git-state 가드를 spec-transaction 전에 선실행한다. "소스는 격리됐지만 추적 상태는 충돌"하는 경로(v8 source-only worktree가 소스 축에서 닫은 것의 tracked-표면 판)를 계약으로 닫는다. 현행의 사람-중재 직렬화(plan §10 "parity merge 후 rebase 전에는 수정하지 않는다")를 계약 규칙으로 승격.
-
-### 13.2.5 v10 acceptance criteria
-
-1. (SD-44) route record에 tracking이 독립 필드로 기록되고, escalation 근거 필드에 tracked 사실 단독이 올 수 없다. direct all-predicate/ambiguous→quick/promotion-any→standard+ property test는 v9 기준 그대로 통과한다(quick 경계 불변 증명).
-2. (SD-44) tracked→escalation 결합 문구(`WORKFLOW.md:165`·`OPERATIONS.md:109` 류)가 promotion/separability 신호 기반 문구로 대체된다 — 구현 phase surface census에서 잔존 0건.
-3. (SD-45) route record hash 불일치 또는 배정 node scope 밖 실행을 worker가 거부하고, tracked gate 증거 4종(spec-read·drift verdict·tracked/untracked mode·guard 전제)이 record에 없으면 tracked 대상 worker가 시작하지 않는다.
-4. (SD-45) worker bootstrap이 capability/intensity/topology 재선택을 수행하지 않음을 3어댑터 fixture로 각각 독립 검증한다(SD-43 sibling 원칙 — 한 어댑터 PASS를 타 어댑터 proxy로 쓰지 않음).
-5. (SD-46) `spec/**` write를 선언했으나 sole-update-path 소유자도 선보장 gate도 아닌 recipe negative fixture가 validator에서 fail-closed로 거부된다. runtime guard 차단은 structured failure + route id 참조를 낸다.
-6. (SD-47) 두 세션 동시 spec-transaction fixture에서 후행 세션이 BLOCKED 후 대기→최신 재독→다음 버전 번호로 진입하고, 동일 `v{N}` snapshot 이중 생성이 0건이다. spec-touch 선언 없는 spec write는 structured failure다.
-
-### 13.2.6 rollout boundary
-
-v9 rollout boundary(§13.1.15)를 계승한다 — registry/compiler report-only 시작, capability feature flag, false positive 시 flag만 rollback. SD-44 문구 census와 SD-46 validator 항목은 Phase 1(registry/validator), SD-45 record 필드·worker 계약은 Phase 2(route compiler·transport) 범위에 흡수된다. SD-47은 core `OPERATIONS.md §5.8` 계약 개정이므로 core-first 순서를 따른다. source implementation은 후속 `autopilot-code` 작업이며 본 v10 transaction은 spec artifact만 변경한다.
-
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
-- **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화). **v6 추가**: quick depth-2 금지, quick jobs.log child-row 부재, mutation quick isolated worktree 는 결정론 gate 대상. **v7 추가**: hard eligibility 기반 후보 제거·adapter exact-ID probe·reason trace 필드·helper read-only·Fleet env child-hidden/metadata-exact 분류는 결정론 테스트 대상. **v8 추가**: canonical path 해석·worker-local artifact write 차단·cleanup eligibility·registry 직렬화는 모두 deterministic fail-closed 규칙이다. **v10 추가**: route record hash/scope 검증·tracked gate 증거 4종 필드 존재 검사·guard↔write_scope validator 항목·spec-transaction lock 시퀀스와 버전 경합 대기 규칙은 전부 결정론 검사 대상이다.
-- **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김. **v6 추가**: headless 실패 시 native subagent 로 충분한지, 또는 inline fallback 으로 낮출지의 fallback reason 작성은 runtime 상태 해석이므로 의미 판단으로 남긴다. **v7 추가**: stage affinity와 family diversity의 품질 판단은 의미 구간이지만, 그 적용 순서와 후보 탈락 사유는 helper가 구조화한다. **v10 추가**: "산출물을 추적할 가치가 있는가"(tracking)와 "분사할 실익이 있는가"(promotion/separability)는 각각 의미 판단으로 남되, 두 판단을 하나로 동일시하지 않는 것이 SD-44의 축 분리다 — record는 판단 결과와 근거 신호만 구조화한다.
+- **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화). **v6 추가**: quick depth-2 금지, quick jobs.log child-row 부재, mutation quick isolated worktree 는 결정론 gate 대상. **v7 추가**: hard eligibility 기반 후보 제거·adapter exact-ID probe·reason trace 필드·helper read-only·Fleet env child-hidden/metadata-exact 분류는 결정론 테스트 대상. **v8 추가**: canonical path 해석·worker-local artifact write 차단·cleanup eligibility·registry 직렬화는 모두 deterministic fail-closed 규칙이다.
+- **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김. **v6 추가**: headless 실패 시 native subagent 로 충분한지, 또는 inline fallback 으로 낮출지의 fallback reason 작성은 runtime 상태 해석이므로 의미 판단으로 남긴다. **v7 추가**: stage affinity와 family diversity의 품질 판단은 의미 구간이지만, 그 적용 순서와 후보 탈락 사유는 helper가 구조화한다.
 - **충돌**: 없음 — 반전의 핵심 우려(현행 "상태 재발굴·연속성 상실")를 §0.5 계약 완결성 의무 + §8 inline 경계로 규칙화해 흡수했다. 우려를 사람 vigilance 로 남기지 않고 "산출물이 상태를 완전히 담는가"라는 검증 가능한 규칙으로 전환한 것이 이 경계 존중. per-stage cost 는 추측으로 규칙화하지 않고 계측(SD-OPEN-1)으로 미룬 것도 동일.

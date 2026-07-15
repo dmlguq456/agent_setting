@@ -2,7 +2,7 @@
 
 - **Date**: 2026-07-10
 - **Mode**: library + cli (autopilot 파이프 디스패치 토폴로지 개정 인프라)
-- **Status**: spec + implementation done (v9) · capability-specific topology/route/resource/completion/parity contract implemented and verified
+- **Status**: spec v10 (tracked×dispatch 축 분리 — SD-44~47 spec-only) · v9 구현 완료(26497cd0), v10 구현은 capability-routing-topology plan Phase 1~2 + core §5.8 개정으로 이월
 - **Placement**: 독립 컴포넌트 `spec/stage-dispatch/` — 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 무수정.
 
 ## 배경
@@ -25,6 +25,7 @@ v9은 2026-07-15 사용자 결정을 고정한다. substantive tracked work의 d
 | v8 update | memory full-body + existing reports/spec + current code + official Codex/Claude/OpenCode runtime surface 대조 | `prd.md` v8 | v7 snapshot. SD-25~30: canonical artifact routing, local-write deny, guarded cleanup. |
 | v9 update | current v8 PRD/state/summary + capability-routing-topology plan/checklist/metrics/plan-check + current core/capability/mode contracts read | `prd.md` v9 | v8 snapshot once. SD-31~43 and 10 acceptance groups; no source edits. Codex root/core read-marker persistence was unavailable under worker sandbox, so instruction-only fallback used. |
 | v9 implementation | topology registry/compiler, route-bound dispatch/completion, governor/resource lifecycle, smoke/report gates, cwd/nudge fixes, sibling projections | source commit `26497cd0` | portable guard 357/357, generated projections, routing, adaptation, context and focused unit suites passed. |
+| v10 update | tracked-dispatch-conflict-diagnosis.md + plan.md + current v9 PRD 대조, D1 옵션 2개 사용자 제시 → (a) 확정 | `prd.md` v10 | v9 snapshot cmp=0. SD-44~47 + acceptance 6항. spec artifact only — 소스 무변. |
 
 ## 채택 결정 (locked)
 - **SD-1~2 (토폴로지·인터페이스)**: depth-1 owner = 얇은 conductor(verdict/게이트만), 스테이지 = depth-2 headless 세션. 인터페이스 = 산출물 파일만, 대화 컨텍스트 전달 금지(산출물 기반 소통). 근거 = 사용자 결정 + research §4-(8) + DESIGN_PRINCIPLES §8 "결과 흐름 file 통해".
@@ -43,6 +44,7 @@ v9은 2026-07-15 사용자 결정을 고정한다. substantive tracked work의 d
 - **SD-31~35 (routing semantics)**: main orchestration-only 경계, atomic direct, one-shot quick, capability-specific standard+, four independent axes, `capabilities/topologies.json`, immutable route record, bounded-work promotion signals.
 - **SD-36~38 (capability/parity ownership)**: apply/code/design/draft/lab setup+eval/note/refine/research/ship/spec mapping. transactional single writer 유지. portable meaning은 core/capabilities, runtime mechanics는 각 sibling adapter가 독립 소유·검증.
 - **SD-39~43 (operability/completion/lightweight)**: detached run identity+reattach, atomic global spawn governor, mandatory hash-bound smoke, one report manifest, absolute cwd/spec-nudge matching, topology on-demand+strict footprint budget.
+- **SD-44~47 (tracked×dispatch orthogonality, v10)**: Tracking 다섯째 독립 축(tracked=산출물 계약만, 분사=promotion/separability 신호, quick 경계 현행 유지 — 사용자 (a)), worker manifest-consumer 계약(재라우팅 금지 + tracked gate 증거 4종 record 운반 + bootstrap 축소), guard↔write_scope 정합성 validator(fail-closed + runtime structured failure), 공유 tracked 표면 병렬 계약(spec-transaction lock 원자 시퀀스 + 버전 경합 대기 규칙).
 
 ## 미결 (open — pilot 계측)
 - **SD-OPEN-1**: 마이크로-스테이지 inline 의 손익 임계(어느 스테이지 크기부터 분사가 이득). research 가 per-stage dispatch cost 를 수치화하지 않음 → 추측 금지, Phase 1 pilot 토큰/시간 계측으로 확정.
@@ -54,6 +56,12 @@ v9은 2026-07-15 사용자 결정을 고정한다. substantive tracked work의 d
 운영 관찰에서 promotion signal, route fallback, governor start budget, capability별 DAG의 false-positive/false-negative를 수집한다. report-only rollout과 adapter별 runtime transport pilot을 거쳐 enforcement 승격 여부를 별도 판단한다. 자동 drill은 실행하지 않는다.
 
 ## Version History
+- v10 (2026-07-15): tracked×dispatch 축 분리 — autopilot-spec update, v9 snapshot = `_internal/versions/v9/prd.md` (cmp=0 확인). 입력 = `plans/2026-07-15_capability-routing-topology/_internal/tracked-dispatch-conflict-diagnosis.md`(main+Codex 교차 진단 통합).
+  - **SD-44 (진단 D1, 사용자 확정)**: Tracking을 SD-32 네 축에 더한 다섯째 독립 축으로 — tracked는 산출물 계약(필요·순서·소유·검증)만 결정하고 분사는 promotion(SD-35)/separability(SD-17) 신호가 결정. tracked→escalation 결합 문구(`WORKFLOW.md:165`·`OPERATIONS.md:109` 류) 제거. **quick 경계는 옵션 2개 제시 후 사용자 선택 (a) = 현행 유지** — 애매하면 quick depth-1(메인 컨텍스트 보호 우선, SD-18 재확정), Codex inline 권고 기각.
+  - **SD-45 (진단 D2+F3)**: worker manifest-consumer 계약 — worker는 라우팅 재선택 금지, route record hash 검증+배정 node scope 실행+증거 반환만. tracked gate 증거 4종(spec-read·drift verdict·tracked/untracked mode·artifact-guard 전제)을 record 필수 필드로 운반(세션 지역 read marker의 분사-투영 실패 실측 대응). bootstrap `status/prompt-signal/mode/route` 재실행은 record 검증+안전 확인 전용으로 축소, 3어댑터 동형.
+  - **SD-46 (진단 D3)**: guard↔topology 정합성 validator — `spec/**` write 선언 node는 sole-update-path 소유자 또는 conductor 선보장 gate 필요(fail-closed). runtime guard 차단은 structured failure + route record 참조.
+  - **SD-47 (진단 D4)**: 공유 tracked 표면 병렬 계약 — spec 3-file transaction + `versions/v{N}` 체인은 §5.8 lock 보유 중 원자 시퀀스로만. 경합 = 대기 후 최신 재독·다음 버전 진입(동일 v{N} 이중 snapshot 차단). spec-touch route 선언 + §5.9 가드 선실행.
+  - 진단 F6/F7은 v9 SD-36~38이 기존 답(추가 결정 없음), F2 일부·F3은 SD-45에 흡수. acceptance 6항 등재. spec artifact only — 소스 무변.
 - v9 (2026-07-15): capability-specific routing topology. v8 snapshot = `_internal/versions/v8/prd.md`. SD-31~43: main/direct/quick/standard+ boundary, four axes, topology registry+validator+route record, 10 capability/11 mode mappings, transactional single writer, runtime boundary, detached/global governor/smoke/report/cwd/nudge/lightweight sibling parity. Source files unchanged.
 - v8 (2026-07-14): source-only worker worktree + canonical artifact root + guarded automatic cleanup. v7 snapshot = `_internal/versions/v7/prd.md`.
 - v1 (2026-07-10): 초기 PRD. 사용자 결정(스테이지 분사 기본화) + research cross-platform-agent-frameworks §4-(8) + 운영 실증 3종 종합. 2026-07-06 depth 재설계 기본값 반전 명시 기록.
