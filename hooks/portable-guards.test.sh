@@ -35,6 +35,12 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 export AGENT_HOME="$TMP/agent_home"
 unset AGENT_DISPATCH_PARENT_SESSION_ID AGENT_DISPATCH_OWNER_HARNESS CODEX_THREAD_ID
+# D-42 hermeticity: a live main or worker session must not leak session identity
+# or worker markers into fixtures — every case sets its own markers inline.
+unset CLAUDE_CODE_SESSION_ID CODEX_SESSION_ID \
+  AGENT_SESSION_ROLE AGENT_DISPATCH_CHILD AGENT_DISPATCH_DEPTH \
+  CLAUDE_CODE_CHILD_SESSION OPENCODE_DISPATCH_SLUG FLEET_TITLE_REFRESH \
+  MEM_DISTILL MEM_DISTILL_ENABLE
 DIRECT_DISPATCH_HOME="$ROOT"
 [ -f "$HOME/agent_setting/core/CORE.md" ] && DIRECT_DISPATCH_HOME="$HOME/agent_setting"
 
