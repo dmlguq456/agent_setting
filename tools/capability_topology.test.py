@@ -21,5 +21,16 @@ class TestTopology(unittest.TestCase):
         r=copy.deepcopy(self.r); d=next(x for x in r["recipes"] if x["capability"]=="autopilot-design"); d["standard_plus"]["nodes"][0]["write_scope"]=["design/**"]; self.assertRaises(T.TopologyError,T.validate_registry,r)
     def test_concurrent_overlap(self):
         r=copy.deepcopy(self.r); d=next(x for x in r["recipes"] if x["capability"]=="autopilot-design"); d["standard_plus"]["nodes"][1]["depends_on"]=[]; d["standard_plus"]["nodes"][1]["write_scope"]=["shards/refs/**"]; self.assertRaisesRegex(T.TopologyError,"overlap",T.validate_registry,r)
+    def test_spec_scope_requires_owner_or_precondition(self):
+        r=copy.deepcopy(self.r); code=next(x for x in r["recipes"] if x["capability"]=="autopilot-code")
+        code["standard_plus"]["nodes"][1]["write_scope"]=["spec/**"]
+        self.assertRaisesRegex(T.TopologyError,"spec write scope requires",T.validate_registry,r)
+        code["standard_plus"]["nodes"][1]["guard_preconditions"]=["artifact-order-prechecked"]
+        T.validate_registry(r)
+    def test_tracking_and_rollout_schema_fail_closed(self):
+        r=copy.deepcopy(self.r); r["tracking_values"]=["tracked"]
+        self.assertRaisesRegex(T.TopologyError,"tracking_values",T.validate_registry,r)
+        r=copy.deepcopy(self.r); r["rollout"]["route_compiler"]="enforced"
+        self.assertRaisesRegex(T.TopologyError,"report-only",T.validate_registry,r)
 
 if __name__ == "__main__": unittest.main()

@@ -51,6 +51,25 @@ def _overlap(a, b):
     return a == b or a.startswith(b + "/") or b.startswith(a + "/")
 
 
+def _touches_artifact(scope, artifact):
+    root = _scope_root(scope)
+    return root == artifact or root.startswith(artifact + "/")
+
+
+def _validate_guard_scope(recipe, scopes, preconditions, registry, node_id):
+    declared = set(preconditions or [])
+    unknown = declared - set(registry["guard_preconditions"])
+    if unknown:
+        raise TopologyError(f"{recipe['capability']}:{node_id}: unknown guard preconditions {sorted(unknown)}")
+    if any(_touches_artifact(scope, "spec") for scope in scopes):
+        owner = registry["artifact_owners"].get("spec")
+        if recipe["capability"] != owner and "artifact-order-prechecked" not in declared:
+            raise TopologyError(
+                f"{recipe['capability']}:{node_id}: spec write scope requires sole owner "
+                "or artifact-order-prechecked"
+            )
+
+
 def _validate_recipe(recipe, registry):
     required = {"capability", "modes", "topology_class", "direct_predicates", "promotion_signals",
                 "quick", "standard_plus", "completion_gates", "human_gates", "resume_retry_boundaries"}
@@ -61,6 +80,7 @@ def _validate_recipe(recipe, registry):
     if quick.get("owner_depth") != 1 or quick.get("max_depth") != 1:
         raise TopologyError(f"{recipe['capability']}: quick topology must be depth 1")
     for scope in quick.get("write_scope", []): _scope_root(scope)
+    _validate_guard_scope(recipe, quick.get("write_scope", []), quick.get("guard_preconditions", []), registry, "quick")
     graph = recipe["standard_plus"]
     if graph.get("owner_depth") != 1:
         raise TopologyError(f"{recipe['capability']}: owner depth must be 1")
@@ -86,6 +106,7 @@ def _validate_recipe(recipe, registry):
             raise TopologyError(f"{recipe['capability']}:{node['id']}: unknown dependency")
         scopes = node["write_scope"]
         for scope in scopes: _scope_root(scope)
+        _validate_guard_scope(recipe, scopes, node.get("guard_preconditions", []), registry, node["id"])
         if node["kind"] == "review-worker" and any(not (s.startswith("reviews/") or s.startswith("_internal/")) for s in scopes):
             raise TopologyError(f"{recipe['capability']}:{node['id']}: reviewer may write isolated verdicts only")
         if node["kind"] == "map-worker" and any(not s.startswith("shards/") for s in scopes):
@@ -114,6 +135,18 @@ def _validate_recipe(recipe, registry):
 
 
 def validate_registry(registry, manifest=None):
+    if registry.get("tracking_values") != ["tracked", "untracked"]:
+        raise TopologyError("tracking_values must declare tracked and untracked independently")
+    if set(registry.get("tracked_gate_evidence", [])) != {
+        "spec_read", "drift_verdict", "workflow_mode", "artifact_guard"
+    }:
+        raise TopologyError("tracked_gate_evidence must contain the four SD-45 fields")
+    if "artifact-order-prechecked" not in registry.get("guard_preconditions", []):
+        raise TopologyError("artifact-order-prechecked guard precondition missing")
+    if registry.get("artifact_owners", {}).get("spec") != "autopilot-spec":
+        raise TopologyError("spec sole-update-path owner must be autopilot-spec")
+    if registry.get("rollout", {}).get("route_compiler") != "report-only":
+        raise TopologyError("route compiler rollout must remain report-only")
     actual, expected = recipe_keys(registry), expected_recipe_keys(manifest)
     if actual != expected:
         raise TopologyError(f"coverage mismatch missing={sorted(expected-actual)} extra={sorted(actual-expected)}")

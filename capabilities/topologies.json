@@ -4,6 +4,11 @@
   "execution_topologies": ["inline", "one-shot-owner", "transactional-owner", "map-reduce", "staged", "staged+resource"],
   "worker_kinds": ["capability-owner", "pipeline-stage", "review-worker", "map-worker", "resource-runner"],
   "transports": ["headless", "native-subagent", "detached-process", "inline-fallback"],
+  "tracking_values": ["tracked", "untracked"],
+  "tracked_gate_evidence": ["spec_read", "drift_verdict", "workflow_mode", "artifact_guard"],
+  "guard_preconditions": ["artifact-order-prechecked"],
+  "artifact_owners": {"spec": "autopilot-spec"},
+  "rollout": {"route_compiler": "report-only", "legacy_low_level_dispatch": true},
   "inline_reasons": ["atomic-direct", "nonseparable-transaction", "runtime-unavailable", "dispatch-infra-self-modification", "user-restricted"],
   "gate_command": "python3 utilities/capability-route.py complete --route <route> --node <node> --evidence <path>",
   "recipes": [

@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""Validate an immutable route before a worker starts; never re-route it."""
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location("capability_route", ROOT / "utilities" / "capability-route.py")
+ROUTE = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(ROUTE)
+
+
+class WorkerRouteError(ValueError):
+    def __init__(self, reason: str, detail: str, route_id: str = "unknown"):
+        super().__init__(detail); self.reason = reason; self.route_id = route_id
+
+
+def _fail(reason: str, detail: str, route_id: str = "unknown") -> WorkerRouteError:
+    return WorkerRouteError(reason, detail, route_id)
+
+
+def _git_state(cwd: Path) -> dict[str, str]:
+    probe = subprocess.run(["git", "-C", str(cwd), "rev-parse", "--git-dir"], text=True, capture_output=True)
+    if probe.returncode != 0:
+        return {"repository": "non-git", "operation": "none", "branch": "non-git", "head": "unversioned"}
+    git_dir = Path(probe.stdout.strip())
+    if not git_dir.is_absolute(): git_dir = cwd / git_dir
+    operation = "none"
+    if (git_dir / "MERGE_HEAD").exists(): operation = "merge"
+    elif (git_dir / "rebase-merge").exists() or (git_dir / "rebase-apply").exists(): operation = "rebase"
+    elif (git_dir / "CHERRY_PICK_HEAD").exists(): operation = "cherry-pick"
+    branch = subprocess.run(["git", "-C", str(cwd), "symbolic-ref", "--quiet", "--short", "HEAD"], text=True, capture_output=True).stdout.strip() or "DETACHED"
+    head_probe = subprocess.run(["git", "-C", str(cwd), "rev-parse", "HEAD"], text=True, capture_output=True)
+    head = head_probe.stdout.strip() if head_probe.returncode == 0 else "unversioned"
+    if operation != "none": raise _fail("unsafe-git-operation", operation)
+    if branch == "DETACHED": raise _fail("unsafe-git-state", "detached HEAD")
+    if not head: raise _fail("unsafe-git-state", "HEAD cannot be resolved")
+    return {"repository": "git", "operation": operation, "branch": branch, "head": head}
+
+
+def _scopes(value: str | None) -> list[str]:
+    return sorted(part for part in (value or "").split(";") if part)
+
+
+def validate_route_contract(route_path: str | Path, node_id: str, cwd: str | Path,
+                            artifact_root: str | Path, capability: str | None = None,
+                            intensity: str | None = None, write_scope: str | None = None,
+                            route_id: str | None = None, route_hash: str | None = None,
+                            registry_digest: str | None = None) -> tuple[dict, dict, dict]:
+    path = Path(route_path)
+    if not path.is_absolute() or not path.is_file():
+        raise _fail("route-record-missing", f"route path must be an existing absolute file: {path}")
+    try: raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc: raise _fail("route-record-invalid", str(exc)) from exc
+    rid = raw.get("route_id", "unknown")
+    try: route = ROUTE.verify_route(raw, cwd)
+    except (ValueError, KeyError) as exc: raise _fail("route-verification-failed", str(exc), rid) from exc
+    actual_cwd = Path(cwd)
+    actual_root = Path(artifact_root)
+    if not actual_cwd.is_absolute(): raise _fail("cwd-not-absolute", str(actual_cwd), rid)
+    if not actual_root.is_absolute(): raise _fail("artifact-root-not-absolute", str(actual_root), rid)
+    if actual_cwd.resolve() != Path(route["cwd"]).resolve(): raise _fail("route-cwd-mismatch", str(actual_cwd), rid)
+    if actual_root.resolve() != Path(route["artifact_root"]).resolve(): raise _fail("route-artifact-root-mismatch", str(actual_root), rid)
+    node = next((row for row in route["nodes"] if row["id"] == node_id), None)
+    if node is None: raise _fail("route-node-mismatch", node_id, rid)
+    checks = (("route-id-mismatch", route_id, route["route_id"]),
+              ("route-hash-mismatch", route_hash, route["route_hash"]),
+              ("registry-digest-mismatch", registry_digest, route["registry_digest"]),
+              ("capability-reselection", capability, route["capability"]),
+              ("intensity-reselection", intensity, route["effective_intensity"]))
+    for reason, observed, expected in checks:
+        if observed is not None and observed != expected: raise _fail(reason, f"expected={expected} observed={observed}", rid)
+    if write_scope is not None and _scopes(write_scope) != sorted(node["write_scope"]):
+        raise _fail("route-node-scope-mismatch", f"expected={sorted(node['write_scope'])} observed={_scopes(write_scope)}", rid)
+    if route["tracking"] == "tracked":
+        gate = route["tracked_gate_evidence"]
+        if not gate["spec_read"]["satisfied"] or not gate["artifact_guard"]["satisfied"]:
+            raise _fail("tracked-gate-evidence-missing", "spec_read/artifact_guard not satisfied", rid)
+        if gate["workflow_mode"] != "tracked": raise _fail("tracked-mode-mismatch", gate["workflow_mode"], rid)
+    git = _git_state(actual_cwd)
+    if git["head"] != route["source_commit"]:
+        raise _fail("route-source-commit-mismatch", f"expected={route['source_commit']} observed={git['head']}", rid)
+    return route, node, git
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(); parser.add_argument("command", choices=("validate",))
+    parser.add_argument("--route", required=True); parser.add_argument("--node", required=True)
+    parser.add_argument("--cwd", required=True); parser.add_argument("--artifact-root", required=True)
+    parser.add_argument("--capability"); parser.add_argument("--intensity"); parser.add_argument("--write-scope")
+    parser.add_argument("--route-id"); parser.add_argument("--route-hash"); parser.add_argument("--registry-digest")
+    args = parser.parse_args()
+    try:
+        route, node, git = validate_route_contract(args.route, args.node, args.cwd, args.artifact_root,
+            args.capability, args.intensity, args.write_scope, args.route_id, args.route_hash, args.registry_digest)
+    except WorkerRouteError as exc:
+        print(json.dumps({"status":"blocked","reason":exc.reason,"detail":str(exc),"route_id":exc.route_id,"route_file":args.route}, sort_keys=True), file=sys.stderr)
+        return 65
+    print(json.dumps({"status":"ok","action":"consume-route-only","route_id":route["route_id"],
+          "node_id":node["id"],"tracking":route["tracking"],"cwd":route["cwd"],
+          "artifact_root":route["artifact_root"],"git":git}, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__": raise SystemExit(main())

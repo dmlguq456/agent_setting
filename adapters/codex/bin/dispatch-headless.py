@@ -94,6 +94,7 @@ def parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--worker-role")
     p.add_argument("--owner", dest="capability_owner")
+    p.add_argument("--route-file")
     p.add_argument("--route-id")
     p.add_argument("--route-hash")
     p.add_argument("--route-node")
@@ -275,6 +276,18 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
             "- Reporting: direct returns a concise report; quick returns its concise report from the depth-1 one-shot worker; standard+ runs $AGENT_HOME/adapters/codex/bin/preflight.sh role report, then writes or updates pipeline_summary.md with changed files, verification commands/results, artifact paths, and unsupported Codex tool contracts.\n"
             "- Do not claim independent QA delegation if no separate Codex agent/headless pass actually ran; report inline fallback explicitly.\n"
         )
+    if args.route_file:
+        route_bootstrap = (
+            f"- Validate and consume the assigned route only: $AGENT_HOME/adapters/codex/bin/preflight.sh worker-route --route {args.route_file} --node {args.route_node} --cwd {args.worktree} --artifact-root {args.artifact_root} --capability {args.capability} --intensity {args.intensity} --write-scope '{args.write_scope}' --route-id {args.route_id} --route-hash {args.route_hash} --registry-digest {args.registry_digest}.\n"
+            "- Do not rerun status -> prompt-signal -> mode -> route and do not reselect capability, intensity, or topology. The validator owns route hash/node/scope, tracked evidence, absolute cwd/canonical root, and git-state safety.\n"
+        )
+    else:
+        route_bootstrap = (
+            "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh status . codex-headless and inspect workflow, artifact, git, worktree, and headless-job risk fields.\n"
+            "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh prompt-signal . codex-headless to mirror the Codex UserPromptSubmit routing signal.\n"
+            "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh mode . codex-headless to mirror the tracked/untracked workflow guard.\n"
+            f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh route {args.capability} . codex-headless.\n"
+        )
     return (
         "You are a Codex headless worker launched by the portable agent harness.\n"
         "Follow the Codex adapter contract before doing task work.\n\n"
@@ -282,10 +295,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         "- This process is AGENT_SESSION_ROLE=worker. Main-only hook lifecycle (automatic memory/briefing/turn-nudge/session-end curator/title/token context) is disabled; deterministic safety, routing, handoff, liveness, and verification remain active.\n"
         "- Resolve harness files through $AGENT_HOME; the target project need not contain an adapters/ directory.\n"
         "- Read $AGENT_HOME/adapters/codex/AGENTS.md first.\n"
-        "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh status . codex-headless and inspect workflow, artifact, git, worktree, and headless-job risk fields.\n"
-        "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh prompt-signal . codex-headless to mirror the Codex UserPromptSubmit routing signal.\n"
-        "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh mode . codex-headless to mirror the tracked/untracked workflow guard.\n"
-        f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh route {args.capability} . codex-headless.\n"
+        f"{route_bootstrap}"
         f"- Read $AGENT_HOME/adapters/codex/skills/{args.capability}/SKILL.md when present.\n"
         f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh mode-info {args.mode} and read the reported native_mode_path under $AGENT_HOME when present.\n"
         f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh qa-policy {args.qa} {track} and obey the reported reviewer, external-adversary, and fallback policy.\n"
@@ -373,7 +383,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
         pipe += f",owner_harness={args.owner_harness}"
-    for key in ("route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate"):
+    for key in ("route_file", "route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate"):
         value = getattr(args, key)
         if value:
             pipe += f",{key}={value}"
@@ -564,6 +574,31 @@ def validate_dispatch_inputs(args: argparse.Namespace) -> int:
     return 0
 
 
+def validate_route_record(args: argparse.Namespace) -> int:
+    routed = any((args.route_id, args.route_hash, args.route_node, args.registry_digest))
+    if routed and not args.route_file:
+        return fail("route-record-required", 65, route_id=args.route_id or "-")
+    if not args.route_file:
+        return 0
+    required = ("route_id", "route_hash", "route_node", "registry_digest", "write_scope")
+    missing = [name for name in required if not getattr(args, name)]
+    if missing:
+        return fail("route-metadata-missing", 65, fields=",".join(missing))
+    command = [sys.executable, str(ROOT / "utilities" / "worker-route-guard.py"), "validate",
+        "--route", args.route_file, "--node", args.route_node, "--cwd", args.worktree,
+        "--artifact-root", args.artifact_root, "--capability", args.capability,
+        "--intensity", args.intensity, "--write-scope", args.write_scope,
+        "--route-id", args.route_id, "--route-hash", args.route_hash,
+        "--registry-digest", args.registry_digest]
+    result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode:
+        if result.stdout: print(result.stdout, end="")
+        if result.stderr: print(result.stderr, end="", file=sys.stderr)
+        return fail("worker-route-validation-failed", result.returncode, route_file=args.route_file)
+    args.route_validation = result.stdout.strip()
+    return 0
+
+
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
     if not Path(args.worktree).is_absolute():
@@ -591,6 +626,9 @@ def main(argv: list[str]) -> int:
     except ValueError as e:
         return fail("artifact-root-resolution-failed", 64, detail=str(e), worktree=args.worktree)
     rc = validate_dispatch_inputs(args)
+    if rc != 0:
+        return rc
+    rc = validate_route_record(args)
     if rc != 0:
         return rc
     try:
@@ -678,6 +716,9 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
             "AGENT_ARTIFACT_ROOT": args.artifact_root,
+            "AGENT_ROUTE_FILE": args.route_file or "",
+            "AGENT_ROUTE_ID": args.route_id or "",
+            "AGENT_ROUTE_NODE": args.route_node or "",
             "AGENT_MODEL_GOVERNOR_ROOT": str(governor_root),
         }
         if profile_home is not None:
@@ -710,6 +751,8 @@ def main(argv: list[str]) -> int:
     print(f"worker_role={args.worker_role or '-'}")
     print(f"owner={args.capability_owner or '-'}")
     print(f"owner_harness={args.owner_harness or '-'}")
+    print(f"route_file={args.route_file or '-'}")
+    print(f"route_validation={getattr(args, 'route_validation', None) or '-'}")
     settings = args.resolved_model_settings
     print(f"model_source={settings['source']}")
     print(f"model_role={settings['role']}")

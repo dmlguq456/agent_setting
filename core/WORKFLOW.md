@@ -162,8 +162,8 @@ Autopilot entrypoints choose `intensity`; verification rigor is derived from it 
 | Request shape | Default | Routing |
 |---|---|---|
 | One-off answer, typo, rename, or explicit no-artifact work | `direct` | No plan stage, plan check, or durable plan |
-| Small localized tracked change or minor document edit | `quick` | Depth-1 one-shot owner with orient-lite, micro-plan, plan-check-lite, focused verification, and concise report; no depth 2 |
-| Routine tracked code, doc, spec, or design work | `standard` | Durable plan/checklist; thin depth-1 conductor dispatches plan, execute, test, and report as separate depth-2 headless stages with file-only handoff, and may open a bounded verifier or planner when separable |
+| Small localized change that misses at least one atomic-direct predicate and has no promotion signal | `quick` | Depth-1 one-shot owner with orient-lite, micro-plan, plan-check-lite, focused verification, and concise report; no depth 2 |
+| Work with a promotion signal or separable durable stages | `standard` | Durable plan/checklist; thin depth-1 conductor dispatches capability-defined stages with file-only handoff and may open a bounded verifier or planner when separable |
 | Important multi-file or risk-bearing work | `strong` | Standard stage dispatch plus one depth-2 check at the riskiest point |
 | Complex cross-domain or cross-harness work | `thorough` | Bounded depth-2 perspective and verifier workers |
 | High-stakes, irreversible, security, or external-facing work | `adversarial` | Thorough plus an explicit adversary, failure-mode, or security pass |

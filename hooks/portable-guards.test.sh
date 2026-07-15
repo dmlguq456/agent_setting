@@ -40,6 +40,7 @@ unset AGENT_DISPATCH_PARENT_SESSION_ID AGENT_DISPATCH_OWNER_HARNESS CODEX_THREAD
 # or worker markers into fixtures — every case sets its own markers inline.
 unset CLAUDE_CODE_SESSION_ID CODEX_SESSION_ID \
   AGENT_SESSION_ROLE AGENT_DISPATCH_CHILD AGENT_DISPATCH_DEPTH \
+  AGENT_ARTIFACT_ROOT AGENT_ROUTE_FILE AGENT_ROUTE_ID AGENT_ROUTE_NODE \
   CLAUDE_CODE_CHILD_SESSION OPENCODE_DISPATCH_SLUG FLEET_TITLE_REFRESH \
   MEM_DISTILL MEM_DISTILL_ENABLE
 DIRECT_DISPATCH_HOME="$ROOT"
@@ -51,6 +52,24 @@ if "$ART" --file "$TMP/proj/.agent_reports/spec/prd.md" >/tmp/art.out 2>/tmp/art
   bad "new spec without research should fail"
 else
   [ "$?" -eq 2 ] && ok "new spec without research exits 2" || bad "new spec wrong exit"
+fi
+printf '{"route_id":"rt-fixture","spec_touch":false,"nodes":[{"id":"execute","write_scope":["source/**"]}]}\n' > "$TMP/route-no-spec.json"
+if AGENT_ROUTE_FILE="$TMP/route-no-spec.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUTE_NODE=execute \
+  "$ART" --file "$TMP/proj/.agent_reports/spec/prd.md" >/tmp/art_route.out 2>/tmp/art_route.err; then
+  bad "route without spec_touch should fail"
+else
+  [ "$?" -eq 2 ] && grep -q 'spec-touch-not-declared-or-outside-node-scope' /tmp/art_route.err \
+    && grep -q 'rt-fixture' /tmp/art_route.err && ok "spec-touch omission is a route-addressed structured failure" \
+    || bad "spec-touch omission missing structured route failure"
+fi
+printf '{"route_id":"rt-fixture","spec_touch":true,"nodes":[{"id":"prd-transaction","write_scope":["spec/**"]}]}\n' > "$TMP/route-spec.json"
+if AGENT_ROUTE_FILE="$TMP/route-spec.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUTE_NODE=prd-transaction \
+  "$ART" --file "$TMP/proj/.agent_reports/spec/prd.md" >/tmp/art_route_guard.out 2>/tmp/art_route_guard.err; then
+  bad "route-approved spec creation without upstream evidence should fail"
+else
+  [ "$?" -eq 2 ] && grep -q 'artifact-order-guard-blocked' /tmp/art_route_guard.err \
+    && grep -q 'rt-fixture' /tmp/art_route_guard.err && ok "artifact guard collision reports structured route reference" \
+    || bad "artifact guard collision missing structured route reference"
 fi
 mkdir -p "$TMP/proj/.agent_reports/research/seed"
 if "$ART" --file "$TMP/proj/.agent_reports/spec/prd.md" --session test >/tmp/art.out 2>/tmp/art.err; then
@@ -1008,7 +1027,7 @@ else
   bad "claude dispatch wrapper should inherit model settings only on request"
 fi
 if AGENT_DISPATCH_JOBS="$TMP/claude-env-jobs.log" \
-  python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --worktree "$TMP/repo" --slug claude-env-jobs --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --inherit-model-settings >/tmp/claude_env_jobs.out 2>/tmp/claude_env_jobs.err \
+  python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --worktree "$TMP/repo" --slug claude-env-jobs --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --inherit-model-settings --log-dir "$TMP/claude-env-logs" >/tmp/claude_env_jobs.out 2>/tmp/claude_env_jobs.err \
   && grep -q "^job_registry=$TMP/claude-env-jobs.log$" /tmp/claude_env_jobs.out \
   && grep -q $'open\t.*/repo\t.*/repo\tclaude-env-jobs\t' "$TMP/claude-env-jobs.log"; then
   ok "claude dispatch wrapper uses the selected shared registry"
