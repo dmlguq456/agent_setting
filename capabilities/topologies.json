@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "intensities": ["direct", "quick", "standard", "strong", "thorough", "adversarial"],
+  "execution_topologies": ["inline", "one-shot-owner", "transactional-owner", "map-reduce", "staged", "staged+resource"],
+  "worker_kinds": ["capability-owner", "pipeline-stage", "review-worker", "map-worker", "resource-runner"],
+  "transports": ["headless", "native-subagent", "detached-process", "inline-fallback"],
+  "inline_reasons": ["atomic-direct", "nonseparable-transaction", "runtime-unavailable", "dispatch-infra-self-modification", "user-restricted"],
+  "gate_command": "python3 utilities/capability-route.py complete --route <route> --node <node> --evidence <path>",
+  "recipes": [
+    {
+      "capability": "autopilot-apply", "modes": ["default"], "topology_class": "staged",
+      "direct_predicates": ["atomic-outcome", "known-scope", "no-shared-contract", "no-resource-run", "no-artifact-handoff", "no-independent-verifier", "focused-verification"],
+      "promotion_signals": ["shared-contract", "independent-verifier", "human-gate", "stage-resume"],
+      "quick": {"owner_depth": 1, "max_depth": 1, "topology": "one-shot-owner", "worker_kind": "capability-owner", "write_scope": ["target-artifact", "apply-log/**"]},
+      "standard_plus": {"owner_depth": 1, "topology": "staged", "nodes": [
+        {"id": "apply", "kind": "pipeline-stage", "depth": 2, "depends_on": [], "role": "fast implementer", "inputs": ["cheatsheet", "target-artifact"], "outputs": ["applied-artifact", "apply-log"], "write_scope": ["target-artifact", "apply-log/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "apply-hash"},
+        {"id": "verify", "kind": "review-worker", "depth": 2, "depends_on": ["apply"], "role": "fast reviewer", "inputs": ["applied-artifact", "apply-log"], "outputs": ["reviews/apply-verdict.json"], "write_scope": ["reviews/apply/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "apply-verify"},
+        {"id": "handback", "kind": "capability-owner", "depth": 1, "depends_on": ["verify"], "role": "deep orchestrator", "inputs": ["reviews/apply-verdict.json"], "outputs": ["handback.json"], "write_scope": ["handback.json"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "apply-handback"}
+      ]},
+      "completion_gates": ["apply-hash", "apply-verify", "apply-handback"], "human_gates": ["explicit-handback"], "resume_retry_boundaries": ["apply", "verify"]
+    },
+    {
+      "capability": "autopilot-code", "modes": ["audit", "debug", "dev"], "topology_class": "staged",
+      "direct_predicates": ["atomic-outcome", "known-scope", "no-shared-contract", "no-resource-run", "no-artifact-handoff", "no-independent-verifier", "focused-verification"],
+      "promotion_signals": ["multi-write-scope", "shared-contract", "public-api", "schema-change", "independent-verifier", "stage-resume", "multi-runtime-parity"],
+      "quick": {"owner_depth": 1, "max_depth": 1, "topology": "one-shot-owner", "worker_kind": "capability-owner", "write_scope": ["source-scoped", "plans/<cycle>/**"]},
+      "standard_plus": {"owner_depth": 1, "topology": "staged", "nodes": [
+        {"id": "plan", "kind": "pipeline-stage", "depth": 2, "depends_on": [], "role": "deep maker", "inputs": ["task", "spec", "source"], "outputs": ["plan.md", "checklist.md"], "write_scope": ["plan/**", "_internal/plan_reviews/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "code-plan"},
+        {"id": "execute", "kind": "pipeline-stage", "depth": 2, "depends_on": ["plan"], "role": "fast implementer", "inputs": ["plan.md", "checklist.md"], "outputs": ["source-diff", "dev_logs/**"], "write_scope": ["source/**", "checklist.md", "dev_logs/**", "_internal/dev_reviews/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "code-execute"},
+        {"id": "test", "kind": "pipeline-stage", "depth": 2, "depends_on": ["execute"], "role": "deep reviewer", "inputs": ["plan.md", "checklist.md", "source-diff"], "outputs": ["test_logs/**"], "write_scope": ["test_logs/**", "_internal/test_reviews/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "code-test"},
+        {"id": "report", "kind": "pipeline-stage", "depth": 2, "depends_on": ["test"], "role": "fast writer", "inputs": ["plan.md", "checklist.md", "dev_logs/**", "test_logs/**"], "outputs": ["pipeline_summary.md", "final_report.md"], "write_scope": ["pipeline_summary.md", "final_report.md", "analysis_project/code/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "code-report"}
+      ]},
+      "completion_gates": ["code-plan", "code-execute", "code-test", "code-report"], "human_gates": [], "resume_retry_boundaries": ["plan", "execute", "test", "report"]
+    },
+    {
+      "capability": "autopilot-design", "modes": ["default"], "topology_class": "staged",
+      "direct_predicates": ["atomic-outcome", "known-scope", "no-shared-contract", "no-resource-run", "no-artifact-handoff", "no-independent-verifier", "focused-verification"],
+      "promotion_signals": ["multi-write-scope", "artifact-fanout", "bulk-generation", "independent-verifier"],
+      "quick": {"owner_depth": 1, "max_depth": 1, "topology": "one-shot-owner", "worker_kind": "capability-owner", "write_scope": ["design-scoped/**"]},
+      "standard_plus": {"owner_depth": 1, "topology": "staged", "nodes": [
+        {"id": "refs", "kind": "map-worker", "depth": 2, "depends_on": [], "role": "deep maker", "inputs": ["design-task", "references"], "outputs": ["shards/reference-brief.json"], "write_scope": ["shards/refs/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "design-refs"},
+        {"id": "build", "kind": "pipeline-stage", "depth": 2, "depends_on": ["refs"], "role": "deep maker", "inputs": ["shards/reference-brief.json", "design-contract"], "outputs": ["tokens", "components", "render"], "write_scope": ["design/**", "tokens/**", "components/**"], "resource_class": "bulk-generation", "transport": ["headless", "inline-fallback"], "completion_gate": "design-build"},
+        {"id": "visual-review", "kind": "review-worker", "depth": 2, "depends_on": ["build"], "role": "deep reviewer", "inputs": ["render", "tokens", "components"], "outputs": ["reviews/visual-verdict.json"], "write_scope": ["reviews/visual/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "design-review"},
+        {"id": "handoff", "kind": "pipeline-stage", "depth": 2, "depends_on": ["visual-review"], "role": "fast writer", "inputs": ["reviews/visual-verdict.json", "tokens", "components"], "outputs": ["handoff/**"], "write_scope": ["handoff/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "design-handoff"}
+      ]},
+      "completion_gates": ["design-refs", "design-build", "design-review", "design-handoff"], "human_gates": ["direction-confirmation"], "resume_retry_boundaries": ["refs", "build", "visual-review", "handoff"]
+    },
+    {
+      "capability": "autopilot-draft", "modes": ["doc", "paper", "presentation"], "topology_class": "staged",
+      "direct_predicates": ["atomic-outcome", "known-scope", "no-shared-contract", "no-resource-run", "no-artifact-handoff", "no-independent-verifier", "focused-verification"],
+      "promotion_signals": ["artifact-fanout", "multi-write-scope", "independent-verifier", "claim-verification"],
+      "quick": {"owner_depth": 1, "max_depth": 1, "topology": "one-shot-owner", "worker_kind": "capability-owner", "write_scope": ["documents/<cycle>/**"]},
+      "standard_plus": {"owner_depth": 1, "topology": "staged", "nodes": [
+        {"id": "material-strategy", "kind": "pipeline-stage", "depth": 2, "depends_on": [], "role": "deep maker", "inputs": ["task", "normalized-material"], "outputs": ["evidence-map", "strategy"], "write_scope": ["analysis/**", "strategy/**", "assets/source/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "draft-strategy"},
+        {"id": "draft-production", "kind": "pipeline-stage", "depth": 2, "depends_on": ["material-strategy"], "role": "deep maker", "inputs": ["evidence-map", "strategy"], "outputs": ["draft/**"], "write_scope": ["draft/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "draft-production"},
+        {"id": "review-refine", "kind": "review-worker", "depth": 2, "depends_on": ["draft-production"], "role": "deep reviewer", "inputs": ["draft/**", "evidence-map"], "outputs": ["reviews/draft-verdict.json"], "write_scope": ["reviews/draft/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "draft-review"},
+        {"id": "finalize", "kind": "pipeline-stage", "depth": 2, "depends_on": ["review-refine"], "role": "fast writer", "inputs": ["draft/**", "reviews/draft-verdict.json"], "outputs": ["final-artifact", "pipeline_summary.md"], "write_scope": ["final/**", "pipeline_summary.md"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "draft-finalize"}
+      ]},
+      "completion_gates": ["draft-strategy", "draft-production", "draft-review", "draft-finalize"], "human_gates": ["user-refine-disposition"], "resume_retry_boundaries": ["material-strategy", "draft-production", "review-refine", "finalize"]
+    },
+    {
+      "capability": "autopilot-lab", "modes": ["setup"], "topology_class": "staged+resource",
+      "direct_predicates": ["atomic-outcome", "known-scope", "no-shared-contract", "no-resource-run", "no-artifact-handoff", "no-independent-verifier", "focused-verification"],
+      "promotion_signals": ["resource-run", "session-independent-lifecycle", "smoke-required", "human-gate", "stage-resume"],
+      "quick": {"owner_depth": 1, "max_depth": 1, "topology": "one-shot-owner", "worker_kind": "capability-owner", "write_scope": ["experiments/<cycle>/**"]},
+      "standard_plus": {"owner_depth": 1, "topology": "staged+resource", "nodes": [
+        {"id": "scaffold", "kind": "pipeline-stage", "depth": 2, "depends_on": [], "role": "fast implementer", "inputs": ["setup-contract", "reference-model"], "outputs": ["experiment-scaffold", "config"], "write_scope": ["experiment-scaffold/**", "config/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "lab-scaffold"},
+        {"id": "smoke", "kind": "review-worker", "depth": 2, "depends_on": ["scaffold"], "role": "deep reviewer", "inputs": ["experiment-scaffold", "config"], "outputs": ["reviews/smoke-attestation.json"], "write_scope": ["reviews/smoke/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "hash-bound-smoke"},
+        {"id": "full-run", "kind": "resource-runner", "depends_on": ["smoke"], "role": "orchestrator", "inputs": ["reviews/smoke-attestation.json", "config"], "outputs": ["run.json", "logs/**"], "write_scope": ["run.json", "logs/**", "checkpoints/**"], "resource_class": "long-running", "transport": ["detached-process"], "completion_gate": "authorized-full-run"}
+      ]},
+      "completion_gates": ["lab-scaffold", "hash-bound-smoke", "authorized-full-run"], "human_gates": ["full-run-authorization"], "resume_retry_boundaries": ["scaffold", "smoke", "full-run"]
+    },
+    {
+      "capability": "autopilot-lab", "modes": ["eval"], "topology_class": "staged+resource",
+      "direct_predicates": ["atomic-outcome", "known-scope", "no-shared-contract", "no-resource-run", "no-artifact-handoff", "no-independent-verifier", "focused-verification"],
+      "promotion_signals": ["resource-run", "gpu", "bulk-generation", "artifact-fanout", "independent-verifier", "stage-resume", "spec-sync"],
+      "quick": {"owner_depth": 1, "max_depth": 1, "topology": "one-shot-owner", "worker_kind": "capability-owner", "write_scope": ["experiments/<cycle>/**"]},
+      "standard_plus": {"owner_depth": 1, "topology": "staged+resource", "nodes": [
+        {"id": "eval-run", "kind": "resource-runner", "depends_on": [], "role": "orchestrator", "inputs": ["checkpoint", "eval-spec", "smoke-attestation"], "outputs": ["run.json", "raw-results/**"], "write_scope": ["run.json", "raw-results/**", "logs/**"], "resource_class": "gpu", "transport": ["detached-process"], "completion_gate": "hash-bound-eval"},
+        {"id": "metrics", "kind": "pipeline-stage", "depth": 2, "depends_on": ["eval-run"], "role": "fast implementer", "inputs": ["raw-results/**", "run.json"], "outputs": ["metrics.jsonl", "summary-stats.json"], "write_scope": ["metrics.jsonl", "summary-stats.json"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "lab-metrics"},
+        {"id": "media", "kind": "pipeline-stage", "depth": 2, "depends_on": ["metrics"], "role": "deep maker", "inputs": ["raw-results/**", "summary-stats.json"], "outputs": ["media/**", "report_manifest.json"], "write_scope": ["media/**", "report_manifest.json"], "resource_class": "bulk-generation", "transport": ["headless", "inline-fallback"], "completion_gate": "lab-media"},
+        {"id": "report", "kind": "pipeline-stage", "depth": 2, "depends_on": ["media"], "role": "fast writer", "inputs": ["metrics.jsonl", "summary-stats.json", "report_manifest.json"], "outputs": ["REPORT.md", "report.html"], "write_scope": ["REPORT.md", "report.html"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "lab-report"},
+        {"id": "independent-verify", "kind": "review-worker", "depth": 2, "depends_on": ["report"], "role": "deep reviewer", "inputs": ["REPORT.md", "report.html", "report_manifest.json"], "outputs": ["reviews/eval-verdict.json"], "write_scope": ["reviews/eval/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "lab-independent-verify"},
+        {"id": "sync", "kind": "capability-owner", "depth": 1, "depends_on": ["independent-verify"], "role": "deep orchestrator", "inputs": ["reviews/eval-verdict.json"], "outputs": ["spec-note-sync.json"], "write_scope": ["spec-note-sync.json"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "lab-sync"}
+      ]},
+      "completion_gates": ["hash-bound-eval", "lab-metrics", "lab-media", "lab-report", "lab-independent-verify", "lab-sync"], "human_gates": [], "resume_retry_boundaries": ["eval-run", "metrics", "media", "report", "independent-verify", "sync"]
+    },
+    {
+      "capability": "autopilot-note", "modes": ["default"], "topology_class": "map-reduce",
+      "direct_predicates": ["atomic-outcome", "known-scope", "no-shared-contract", "no-resource-run", "no-artifact-handoff", "no-independent-verifier", "focused-verification"],
+      "promotion_signals": ["source-fanout", "artifact-fanout", "multi-runtime-parity", "independent-verifier"],
+      "quick": {"owner_depth": 1, "max_depth": 1, "topology": "one-shot-owner", "worker_kind": "capability-owner", "write_scope": ["notes/**", "digest/**", "routing-log/**"]},
+      "standard_plus": {"owner_depth": 1, "topology": "map-reduce", "nodes": [
+        {"id": "scan", "kind": "map-worker", "depth": 2, "depends_on": [], "role": "fast reviewer", "inputs": ["source-set"], "outputs": ["shards/source-coverage/**"], "write_scope": ["shards/source-coverage/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "note-scan"},
+        {"id": "route-apply", "kind": "capability-owner", "depth": 1, "depends_on": ["scan"], "role": "deep orchestrator", "inputs": ["shards/source-coverage/**"], "outputs": ["notes/**", "digest/**", "routing-log/**"], "write_scope": ["notes/**", "digest/**", "routing-log/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "note-single-writer"}
+      ]},
+      "completion_gates": ["note-scan", "note-single-writer"], "human_gates": [], "resume_retry_boundaries": ["scan", "route-apply"]
+    },
+    {
+      "capability": "autopilot-refine", "modes": ["default"], "topology_class": "transactional-owner",
+      "direct_predicates": ["atomic-outcome", "known-scope", "no-shared-contract", "no-resource-run", "no-artifact-handoff", "no-independent-verifier", "focused-verification"],
+      "promotion_signals": ["snapshot-required", "independent-verifier", "claim-verification", "shared-contract"],
+      "quick": {"owner_depth": 1, "max_depth": 1, "topology": "one-shot-owner", "worker_kind": "capability-owner", "write_scope": ["target-artifact", "_internal/versions/**"]},
+      "standard_plus": {"owner_depth": 1, "topology": "transactional-owner", "nodes": [
+        {"id": "review", "kind": "review-worker", "depth": 2, "depends_on": [], "role": "deep reviewer", "inputs": ["target-artifact", "source-evidence"], "outputs": ["reviews/refine-verdict.json"], "write_scope": ["reviews/refine/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "refine-review"},
+        {"id": "transaction", "kind": "capability-owner", "depth": 1, "depends_on": ["review"], "role": "deep maker", "inputs": ["target-artifact", "reviews/refine-verdict.json"], "outputs": ["snapshot", "diff-preview", "revised-artifact"], "write_scope": ["target-artifact", "_internal/versions/**", "changelog/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "refine-transaction"}
+      ]},
+      "completion_gates": ["refine-review", "refine-transaction"], "human_gates": ["preview-disposition"], "resume_retry_boundaries": ["review", "transaction"]
+    },
+    {
+      "capability": "autopilot-research", "modes": ["academic", "market", "technology"], "topology_class": "map-reduce",
+      "direct_predicates": ["atomic-outcome", "known-scope", "no-shared-contract", "no-resource-run", "no-artifact-handoff", "no-independent-verifier", "focused-verification"],
+      "promotion_signals": ["source-fanout", "artifact-fanout", "claim-verification", "independent-verifier"],
+      "quick": {"owner_depth": 1, "max_depth": 1, "topology": "one-shot-owner", "worker_kind": "capability-owner", "write_scope": ["research/<topic>/**"]},
+      "standard_plus": {"owner_depth": 1, "topology": "map-reduce", "nodes": [
+        {"id": "retrieval", "kind": "map-worker", "depth": 2, "depends_on": [], "role": "fast reviewer", "inputs": ["query", "source-policy"], "outputs": ["shards/retrieval/**"], "write_scope": ["shards/retrieval/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "research-retrieval"},
+        {"id": "synthesis", "kind": "pipeline-stage", "depth": 2, "depends_on": ["retrieval"], "role": "deep maker", "inputs": ["shards/retrieval/**"], "outputs": ["analysis_summary.md", "cards/**"], "write_scope": ["analysis_summary.md", "cards/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "research-synthesis"},
+        {"id": "report", "kind": "pipeline-stage", "depth": 2, "depends_on": ["synthesis"], "role": "fast writer", "inputs": ["analysis_summary.md", "cards/**"], "outputs": ["report/**"], "write_scope": ["report/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "research-report"},
+        {"id": "claim-verify", "kind": "review-worker", "depth": 2, "depends_on": ["report"], "role": "deep reviewer", "inputs": ["report/**", "cards/**"], "outputs": ["reviews/claim-verdict.json"], "write_scope": ["reviews/claims/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "research-claims"}
+      ]},
+      "completion_gates": ["research-retrieval", "research-synthesis", "research-report", "research-claims"], "human_gates": [], "resume_retry_boundaries": ["retrieval", "synthesis", "report", "claim-verify"]
+    },
+    {
+      "capability": "autopilot-ship", "modes": ["default"], "topology_class": "transactional-owner",
+      "direct_predicates": ["atomic-outcome", "known-scope", "no-shared-contract", "no-resource-run", "no-artifact-handoff", "no-independent-verifier", "focused-verification"],
+      "promotion_signals": ["external-facing-gate", "security-review", "human-gate", "multi-runtime-parity"],
+      "quick": {"owner_depth": 1, "max_depth": 1, "topology": "one-shot-owner", "worker_kind": "capability-owner", "write_scope": ["release-config/**", "ship-checklist"]},
+      "standard_plus": {"owner_depth": 1, "topology": "transactional-owner", "nodes": [
+        {"id": "release-setup", "kind": "capability-owner", "depth": 1, "depends_on": [], "role": "deep orchestrator", "inputs": ["ship-contract", "source"], "outputs": ["release-config/**", "ship-checklist"], "write_scope": ["release-config/**", "ship-checklist"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "ship-setup"},
+        {"id": "security-review", "kind": "review-worker", "depth": 2, "depends_on": ["release-setup"], "role": "deep reviewer", "inputs": ["release-config/**", "ship-checklist"], "outputs": ["reviews/security-verdict.json"], "write_scope": ["reviews/security/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "ship-security"},
+        {"id": "release-review", "kind": "review-worker", "depth": 2, "depends_on": ["release-setup"], "role": "fast reviewer", "inputs": ["release-config/**", "ship-checklist"], "outputs": ["reviews/release-verdict.json"], "write_scope": ["reviews/release/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "ship-release"}
+      ]},
+      "completion_gates": ["ship-setup", "ship-security", "ship-release"], "human_gates": ["deploy-authorization"], "resume_retry_boundaries": ["release-setup", "security-review", "release-review"]
+    },
+    {
+      "capability": "autopilot-spec", "modes": ["api", "app", "cli", "library", "research", "update"], "topology_class": "transactional-owner",
+      "direct_predicates": ["atomic-outcome", "known-scope", "no-shared-contract", "no-resource-run", "no-artifact-handoff", "no-independent-verifier", "focused-verification"],
+      "promotion_signals": ["shared-contract", "public-api", "schema-change", "research-needed", "independent-verifier", "multi-runtime-parity"],
+      "quick": {"owner_depth": 1, "max_depth": 1, "topology": "one-shot-owner", "worker_kind": "capability-owner", "write_scope": ["spec/prd.md", "spec/pipeline_state.yaml", "spec/pipeline_summary.md"]},
+      "standard_plus": {"owner_depth": 1, "topology": "transactional-owner", "nodes": [
+        {"id": "research", "kind": "map-worker", "depth": 2, "depends_on": [], "role": "deep maker", "inputs": ["intent", "prior-evidence"], "outputs": ["shards/spec-research/**"], "write_scope": ["shards/spec-research/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "spec-research"},
+        {"id": "review", "kind": "review-worker", "depth": 2, "depends_on": ["research"], "role": "deep reviewer", "inputs": ["intent", "shards/spec-research/**"], "outputs": ["reviews/spec-verdict.json"], "write_scope": ["reviews/spec/**"], "resource_class": "normal", "transport": ["headless", "native-subagent", "inline-fallback"], "completion_gate": "spec-review"},
+        {"id": "prd-transaction", "kind": "capability-owner", "depth": 1, "depends_on": ["review"], "role": "deep maker", "inputs": ["intent", "shards/spec-research/**", "reviews/spec-verdict.json"], "outputs": ["spec/prd.md", "spec/pipeline_state.yaml", "spec/pipeline_summary.md", "version-snapshot"], "write_scope": ["spec/prd.md", "spec/pipeline_state.yaml", "spec/pipeline_summary.md", "spec/_internal/versions/**"], "resource_class": "normal", "transport": ["headless", "inline-fallback"], "completion_gate": "spec-atomic-transaction"}
+      ]},
+      "completion_gates": ["spec-research", "spec-review", "spec-atomic-transaction"], "human_gates": ["intent-confirmation"], "resume_retry_boundaries": ["research", "review", "prd-transaction"]
+    }
+  ]
+}

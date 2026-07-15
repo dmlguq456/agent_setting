@@ -12,6 +12,7 @@ This is the portable capability contract for `autopilot-lab`. It defines runtime
 | Supported modes | `setup, eval` |
 | Portable meaning | Rapid experiment prototyping around training setup and checkpoint evaluation/analysis. |
 | Argument shape | `<task description> [--mode setup\|eval\|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--report] [--from spec\|scaffold\|run\|eval\|summary]` |
+| Execution topology | `staged+resource`; registry `capabilities/topologies.json` |
 
 ## Invocation Semantics
 
@@ -83,6 +84,14 @@ separable stage inline requires the recorded reason in the experiment
 `_RUNLOG` or `_internal/`.
 
 ## Routing Boundary
+
+Full-run entry is gated by a current hash-bound smoke attestation and detached
+resource-run identity. Evaluation reports use one `report_manifest.json`
+validated by `tools/report-manifest-verify.py` for Markdown and HTML outputs,
+48 kHz/full-band media, summary statistics, hashes, 1:1
+audio/waveform/spectrogram/playback sets, and visual evidence. The legacy
+figure-semantic verifier remains a compatibility checker, not a second report
+manifest.
 
 `autopilot-lab` owns new empirical work: training setup, checkpoint
 reevaluation, metric/ablation computation, and experiment figure/media

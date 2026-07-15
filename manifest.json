@@ -1,6 +1,12 @@
 {
   "generated_from": "harness-manifest.json + adapter-owned hook/loop/track inputs (adapters/claude/settings.json, loops/README.md, tools/build-manifest.py)",
   "canonical_manifest": "harness-manifest.json",
+  "topology_registry": {
+    "source": "capabilities/topologies.json",
+    "digest": "sha256:ca7e86030e59e9990db02ca8f375cf95f4de7d723df6d58cd8f4493454ce002f",
+    "capabilities": 10,
+    "recipes": 22
+  },
   "manifest_version": "1.0.0",
   "skills": [
     {

@@ -12,6 +12,7 @@ This is the portable capability contract for `autopilot-code`. It defines runtim
 | Supported modes | `dev, debug, audit` |
 | Portable meaning | Code-work entrypoint that detects spec context and closes the plan→execute→test→report loop. |
 | Argument shape | `--mode dev\|debug <task/plan/error description> [--from <step>] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--user-refine]` |
+| Execution topology | `staged`; registry `capabilities/topologies.json` |
 
 ## Invocation Semantics
 

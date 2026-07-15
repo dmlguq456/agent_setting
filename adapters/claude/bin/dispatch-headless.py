@@ -89,6 +89,12 @@ def parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--worker-role")
     p.add_argument("--owner", dest="capability_owner")
+    p.add_argument("--route-id")
+    p.add_argument("--route-hash")
+    p.add_argument("--route-node")
+    p.add_argument("--registry-digest")
+    p.add_argument("--write-scope")
+    p.add_argument("--completion-gate")
     p.add_argument(
         "--owner-harness",
         default=os.environ.get("AGENT_DISPATCH_OWNER_HARNESS")
@@ -334,6 +340,10 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
         pipe += f",owner_harness={args.owner_harness}"
+    for key in ("route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate"):
+        value = getattr(args, key)
+        if value:
+            pipe += f",{key}={value}"
     settings = args.resolved_model_settings
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},effort={settings['effort']}"
     if args.profile:
@@ -488,6 +498,9 @@ def build_home_gate(agent_home: Path, profile: str, extra: list[str], reason: st
 
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
+    if not Path(args.worktree).is_absolute():
+        return fail("worktree-must-be-absolute", 64, worktree=args.worktree)
+    args.worktree = str(Path(args.worktree).resolve())
     action = "start" if args.start else "register" if args.register else "dry-run"
     worktree = Path(args.worktree)
     if not worktree.is_dir():
@@ -572,6 +585,15 @@ def main(argv: list[str]) -> int:
     if action in ("register", "start"):
         # Register before launch so harvest can always reclaim the home even
         # if the launch itself never comes up.
+        if action == "start":
+            governor = ROOT / "utilities" / "model-worker-governor.py"
+            governor_root = Path(
+                os.environ.get("AGENT_MODEL_GOVERNOR_ROOT")
+                or Path(args.artifact_root) / ".runtime" / "model-worker-governor"
+            )
+            gate = subprocess.run([sys.executable, str(governor), "--root", str(governor_root), "check", "--class", "dispatch"])
+            if gate.returncode != 0:
+                return fail("model-worker-governor-denied", 75)
         append_job(jobs, args)
 
     if action == "start":
@@ -592,10 +614,11 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
             "AGENT_ARTIFACT_ROOT": args.artifact_root,
+            "AGENT_MODEL_GOVERNOR_ROOT": str(governor_root),
         })
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
-        proc = subprocess.Popen(["sh", "-c", command], env=env, start_new_session=True)
+        proc = subprocess.Popen([sys.executable, str(governor), "--root", str(governor_root), "run", "--class", "dispatch", "--", "sh", "-c", command], env=env, start_new_session=True)
         # Shared-worktree aliasing (OPERATIONS §5.10 signal order ①): record
         # the child pid so liveness can use a process signal. Conductor activity
         # in the same worktree can contaminate transcript mtime.

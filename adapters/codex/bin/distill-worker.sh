@@ -230,7 +230,8 @@ fi
 # --ask-for-approval (top-level flag only); the read-only sandbox alone is the contract.
 # Wrapped in `if` (not bare, set -e) so a timeout/kill doesn't crash session-end — a
 # failed exec skips apply+advance, leaving the delta for the next session (no data loss).
-if AGENT_SESSION_ROLE=worker MEM_DISTILL=1 $timeout_cmd codex exec \
+if AGENT_SESSION_ROLE=worker MEM_DISTILL=1 python3 "$ROOT/utilities/model-worker-governor.py" \
+  run --class distill -- $timeout_cmd codex exec \
   --cd "$cwd" \
   --sandbox read-only \
   --ephemeral \

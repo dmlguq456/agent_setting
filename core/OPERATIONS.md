@@ -163,3 +163,8 @@ Dispatch rules:
 After validating changes to instructions, rules, hooks, preflight, or runtime status surfaces under `<agent-home>`, commit and push them in the same turn without a separate user signal. This policy was ratified on 2026-06-12. A work repository's push is separate and remains subject to its deployment gate.
 
 ---
+# Governed workers and detached resources
+
+All repo-launched model-backed workers pass through `utilities/model-worker-governor.py`, which applies a global cap, per-class caps, rolling start budget, kill switch, and PID/starttime stale-lease cleanup. Its shared state lives under the canonical artifact root so the main checkout and linked workers use one writable governor. Admission checks do not consume the rolling start budget, and a launched worker inherits the same governor root before it can dispatch a child. This does not modify runtime-owned native subagent limits.
+
+Registered model-backed jobs remain owned by the dispatching session even when the runtime launcher uses a background OS process. The main or depth-1 conductor launches, polls, harvests, and integrates the job in the same task flow; an absent OS parent does not grant an independent lifecycle or permit the orchestrator to end early. Only long-running non-model resource jobs use the independent `utilities/resource-runner.py` lifecycle. Reattachment and signals for those resource jobs require PID, process start time, process group, command identity, absolute cwd, log, and run-registry identity rather than PID alone.

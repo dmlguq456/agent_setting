@@ -108,6 +108,12 @@ def parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--worker-role")
     p.add_argument("--owner", dest="capability_owner")
+    p.add_argument("--route-id")
+    p.add_argument("--route-hash")
+    p.add_argument("--route-node")
+    p.add_argument("--registry-digest")
+    p.add_argument("--write-scope")
+    p.add_argument("--completion-gate")
     p.add_argument(
         "--owner-harness",
         default=os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "opencode",
@@ -331,6 +337,10 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
         pipe += f",owner_harness={args.owner_harness}"
+    for key in ("route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate"):
+        value = getattr(args, key)
+        if value:
+            pipe += f",{key}={value}"
     settings = args.resolved_model_settings
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},variant={settings['variant']}"
     pipe += f",artifact_root={args.artifact_root}"
@@ -497,6 +507,9 @@ def validate_dispatch_metadata(args: argparse.Namespace) -> int:
 
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
+    if not Path(args.worktree).is_absolute():
+        return fail("worktree-must-be-absolute", 64, worktree=args.worktree)
+    args.worktree = str(Path(args.worktree).resolve())
     action = "start" if args.start else "register" if args.register else "dry-run"
     worktree = Path(args.worktree)
     if not worktree.is_dir():
@@ -538,9 +551,18 @@ def main(argv: list[str]) -> int:
         prompt_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         prompt_path.write_text(prompt_text, encoding="utf-8")
+        if action == "start":
+            governor = ROOT / "utilities" / "model-worker-governor.py"
+            governor_root = Path(
+                os.environ.get("AGENT_MODEL_GOVERNOR_ROOT")
+                or Path(args.artifact_root) / ".runtime" / "model-worker-governor"
+            )
+            gate = subprocess.run([sys.executable, str(governor), "--root", str(governor_root), "check", "--class", "dispatch"])
+            if gate.returncode != 0:
+                return fail("model-worker-governor-denied", 75)
         append_job(jobs, args)
     if action == "start":
-        proc = subprocess.Popen(["sh", "-c", command], start_new_session=True, env={
+        proc = subprocess.Popen([sys.executable, str(governor), "--root", str(governor_root), "run", "--class", "dispatch", "--", "sh", "-c", command], start_new_session=True, env={
             **os.environ,
             "AGENT_SESSION_ROLE": "worker",
             "AGENT_DISPATCH_CHILD": "1",
@@ -552,6 +574,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
             "AGENT_ARTIFACT_ROOT": args.artifact_root,
+            "AGENT_MODEL_GOVERNOR_ROOT": str(governor_root),
             "OPENCODE_CONFIG_CONTENT": args.opencode_config_content,
             # Headless liveness contract: the OpenCode runtime child exposes
             # the dispatch slug to the plugin, which records a plugin-load

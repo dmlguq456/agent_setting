@@ -104,7 +104,12 @@ if os.path.splitext(file_path)[1].lower() in PROSE_EXT:
     sys.exit(0)
 
 # Removed tokens: values or identifiers present in old but absent from new.
-TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}|\d+(?:\.\d+)?")
+TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:[A-Z][A-Z0-9_]*-\d+|v\d+(?:\.\d+)*|"
+    r"\d+(?:\.\d+)?\s*(?:kHz|Hz|MHz|GHz|ms|s|GB|MB)|"
+    r"[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:[A-Za-z_][A-Za-z0-9_.-]*|\d+(?:\.\d+)?)|"
+    r"[A-Za-z_][A-Za-z0-9_]{2,})(?![A-Za-z0-9_])"
+)
 STOP = {"def","for","pass","return","self","the","and","not","import","from","class",
         "true","false","none","null","eof","this","that","with","print","range","function"}
 new_set = set(TOKEN_RE.findall(new or ""))
@@ -113,13 +118,13 @@ maxtok = int(os.environ.get("SPEC_SYNC_TOKENS", "12"))
 for t in TOKEN_RE.findall(old or ""):
     if t in new_set or t in seen or t.lower() in STOP:
         continue
-    # Alphabetic identifiers must look code-like (uppercase, digits, or `_`)
-    # to exclude ordinary lowercase prose. Numeric/version tokens are always
-    # candidates because they are a primary config-drift signal.
+    structured = ("=" in t or "-" in t or
+                  re.fullmatch(r"v\d+(?:\.\d+)*", t) or
+                  re.fullmatch(r"\d+(?:\.\d+)?\s*(?:kHz|Hz|MHz|GHz|ms|s|GB|MB)", t))
     if t[:1].isalpha():
-        if len(t) < 3:
+        if len(t) < 3 and not structured:
             continue
-        if t.islower() and "_" not in t and not any(c.isdigit() for c in t):
+        if not structured and t.islower() and "_" not in t and not any(c.isdigit() for c in t):
             continue
     seen.add(t); removed.append(t)
     if len(removed) >= maxtok:

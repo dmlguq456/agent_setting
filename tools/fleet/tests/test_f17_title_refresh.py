@@ -35,12 +35,13 @@ class _ConfigHomeMixin:
         self._old_title_state = os.environ.get("FLEET_TITLE_STATE_DIR")
         self._old_safety_env = {key: os.environ.get(key) for key in (
             "FLEET_TITLE_DISABLE", "FLEET_TITLE_CONCURRENCY", "FLEET_TITLE_MAX_STARTS",
-            "FLEET_TITLE_COMMAND",
+            "FLEET_TITLE_COMMAND", "AGENT_MODEL_GOVERNOR_ROOT",
         )}
         os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(self._tmp.name, "claude")
         os.environ["FLEET_TITLE_STATE_DIR"] = os.path.join(self._tmp.name, "state")
         for key in self._old_safety_env:
             os.environ.pop(key, None)
+        os.environ["AGENT_MODEL_GOVERNOR_ROOT"] = os.path.join(self._tmp.name, "governor")
 
     def tearDown(self):
         if self._old_env is None:

@@ -1,0 +1,1 @@
+../../../tools/smoke_attestation.test.py

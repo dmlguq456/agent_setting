@@ -52,6 +52,7 @@ HOOK_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ADAPTER_DIR="$(CDPATH= cd -P -- "$HOOK_DIR/.." && pwd)"
 AGENT_HOME="${AGENT_HOME:-$("$HOOK_DIR/../utilities/agent-home.sh")}"
 APPLIER="${MEM_APPLIER:-$HOOK_DIR/../tools/memory/apply-distill-actions.py}"
+GOVERNOR="${MODEL_WORKER_GOVERNOR:-$HOOK_DIR/../utilities/model-worker-governor.py}"
 
 # D-42: automatic distillation belongs to the interactive main session only.
 # Any portable or adapter-specific worker evidence wins; keep this before store
@@ -266,7 +267,9 @@ fi
 
   # M1: absorb nonzero worker status so parse/advance always run. Only the model
   # role differs between increment and curate modes; the call site is shared.
-  MEM_DISTILL=1 "$WORKER_PATH" "$MODE" "$DISTILL_MODEL" "$PROMPT_FILE" \
+  MEM_DISTILL=1 python3 "$GOVERNOR" \
+    run --class distill -- \
+    "$WORKER_PATH" "$MODE" "$DISTILL_MODEL" "$PROMPT_FILE" \
     > "$OUT" 2>/dev/null </dev/null || true
 
   # Parse, validate, and apply action JSON with shell=False and argv-only values.

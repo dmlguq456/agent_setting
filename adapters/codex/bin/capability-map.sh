@@ -149,3 +149,7 @@ if [ -n "$tool_contract" ]; then
   fi
 fi
 printf 'note=%s\n' "$note"
+if python3 "$ROOT/tools/capability_topology.py" summary --capability "$cap" >/tmp/codex-capability-topology.$$ 2>/dev/null; then
+  cat /tmp/codex-capability-topology.$$
+  rm -f /tmp/codex-capability-topology.$$
+fi

@@ -44,6 +44,24 @@ _loop_agent_home() {
   printf '%s\n' "${CLAUDE_HOME:-$HOME/.claude}"
 }
 
+_loop_governor_path() {
+  local agent_home src dir root
+  agent_home="$(_loop_agent_home)"
+  if [ -f "$agent_home/utilities/model-worker-governor.py" ]; then
+    printf '%s\n' "$agent_home/utilities/model-worker-governor.py"
+    return 0
+  fi
+  src="${BASH_SOURCE[0]:-$0}"
+  dir=$(CDPATH= cd -- "$(dirname -- "$src")" && pwd)
+  root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$root" ] && [ -f "$root/utilities/model-worker-governor.py" ]; then
+    printf '%s\n' "$root/utilities/model-worker-governor.py"
+    return 0
+  fi
+  printf 'model-worker governor unavailable for loop runner\n' >&2
+  return 69
+}
+
 _loop_jobs_path() {
   if [ -n "${AGENT_DISPATCH_JOBS:-}" ]; then
     printf '%s\n' "$AGENT_DISPATCH_JOBS"
@@ -280,12 +298,13 @@ _loop_run_claude() {
   local pf=$1 repo=$2 to=$3 maxturns=$4 j=$5 t=$6
   local bin="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
   local agent_home="$(_loop_agent_home)"
-  local runtime_rc parse_rc
+  local governor runtime_rc parse_rc
+  governor=$(_loop_governor_path) || return $?
   export AGENT_HOME="$agent_home"
   local settings="${DRILL_CLAUDE_SETTINGS:-$AGENT_HOME/adapters/claude/settings.json}"
   local settings_arg=()
   [ -f "$settings" ] && settings_arg=(--settings "$settings")
-  ( cd "$repo" && AGENT_HOME="$agent_home" AGENT_SESSION_ROLE=worker timeout "$to" "$bin" -p "$(cat "$pf")" \
+  ( cd "$repo" && AGENT_HOME="$agent_home" AGENT_SESSION_ROLE=worker python3 "$governor" run --class loop -- timeout "$to" "$bin" -p "$(cat "$pf")" \
       "${settings_arg[@]}" --allowedTools "$DRILL_CLAUDE_TOOLS" --output-format json ${maxturns:+--max-turns "$maxturns"} ) \
       > "$j" 2>"${j%.json}.stderr.txt"
   runtime_rc=$?
@@ -308,7 +327,8 @@ _loop_run_codex() {
   local bin="${CODEX_BIN:-codex}"
   local agent_home="$(_loop_agent_home)"
   local work_root dispatch_root spec_marker_root core_marker_root codex_sandbox runtime_home runtime_link
-  local sandbox_args=() runtime_rc parse_rc
+  local sandbox_args=() governor runtime_rc parse_rc
+  governor=$(_loop_governor_path) || return $?
   work_root=$(CDPATH= cd -- "$repo/.." && pwd)
   dispatch_root=$(dirname -- "$(_loop_jobs_path)")
   spec_marker_root="$agent_home/.spec-grounding"
@@ -343,7 +363,7 @@ _loop_run_codex() {
       return 64
       ;;
   esac
-  ( cd "$repo" && AGENT_HOME="$agent_home" AGENT_SESSION_ROLE=worker timeout "$to" "$bin" exec --cd "$repo" \
+  ( cd "$repo" && AGENT_HOME="$agent_home" AGENT_SESSION_ROLE=worker python3 "$governor" run --class loop -- timeout "$to" "$bin" exec --cd "$repo" \
       "${sandbox_args[@]}" \
       --skip-git-repo-check --json - < "$pf" ) \
       > "$j" 2>"${j%.json}.stderr.txt"
@@ -382,10 +402,11 @@ _loop_run_opencode() {
   local pf=$1 repo=$2 to=$3 maxturns=$4 j=$5 t=$6
   local bin="${OPENCODE_BIN:-opencode}"
   local agent_home="$(_loop_agent_home)"
-  local runtime_rc parse_rc
+  local governor runtime_rc parse_rc
+  governor=$(_loop_governor_path) || return $?
   command -v "$bin" >/dev/null 2>&1 || bin="$HOME/.opencode/bin/opencode"
   local model_arg=(); [ -n "${OPENCODE_LOOP_MODEL:-}" ] && model_arg=(-m "$OPENCODE_LOOP_MODEL")
-  ( cd "$repo" && AGENT_HOME="$agent_home" AGENT_SESSION_ROLE=worker timeout "$to" "$bin" run --dir "$repo" --format json "${model_arg[@]}" "$(cat "$pf")" ) \
+  ( cd "$repo" && AGENT_HOME="$agent_home" AGENT_SESSION_ROLE=worker python3 "$governor" run --class loop -- timeout "$to" "$bin" run --dir "$repo" --format json "${model_arg[@]}" "$(cat "$pf")" ) \
       > "$j" 2>"${j%.json}.stderr.txt"
   runtime_rc=$?
   python3 - "$j" "$t" <<'PY'

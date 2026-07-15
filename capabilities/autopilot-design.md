@@ -12,6 +12,7 @@ This is the portable capability contract for `autopilot-design`. It defines runt
 | Supported modes | `none` |
 | Portable meaning | Visual-design pipeline coordinating references→tokens→components→review→handoff. |
 | Argument shape | `<design task or app path> [--scope ui\|webapp\|slide\|icon\|diagram\|mixed] [--artifact standalone\|project] [--from <phase>] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial]` |
+| Execution topology | `staged`; registry `capabilities/topologies.json` |
 
 ## Invocation Semantics
 
