@@ -13,6 +13,7 @@ _TOOLS_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
+from fleet import model                        # noqa: E402
 from fleet import render                       # noqa: E402
 from fleet.collectors import claude as claude_collector  # noqa: E402
 from fleet.collectors import codex, dispatch, procscan  # noqa: E402
@@ -182,7 +183,15 @@ class DrillCaseExtractionTest(unittest.TestCase):
 
 
 class DrillReconcileTest(unittest.TestCase):
-    """F-18a: registry row(정본) + proc drill loop job → 1행 병합."""
+    """F-18a: registry row(정본) + proc drill loop job → 1행 병합.
+
+    F-25 이후 병합은 **증거 병합**이고 최종 판정은 단일 분류기(model.classify_job)가 내린다.
+    따라서 흡수 결과는 `_reconcile_drill_rows` 직후의 `.liveness` 가 아니라 분류기를 통과시킨
+    상태로 단언한다 — 같은 행동(live proc = ground truth)을 종단으로 검증한다.
+    """
+
+    def setUp(self):
+        model.reset_state_tracker()
 
     def test_merges_matching_case_and_absorbs_proc_liveness(self):
         registry = DispatchJob(key="drill", slug="drill-claude-CASE-20260711160000-12345",
@@ -195,7 +204,10 @@ class DrillReconcileTest(unittest.TestCase):
         self.assertEqual(len(jobs), 1)
         self.assertIs(jobs[0], registry)
         self.assertEqual(jobs[0].pid, 999)
-        self.assertEqual(jobs[0].liveness, "working")
+        self.assertEqual(jobs[0]._proc_liveness, "working")     # tier-2 증거로 흡수됨
+        # 분류기가 tier-2 증거를 mtime 유도값보다 우선해 working 을 낸다.
+        self.assertEqual(dispatch._dispatch_liveness(jobs[0], now=0), "working")
+        self.assertEqual(jobs[0].state_evidence["tier"], 2)
 
     def test_case_mismatch_keeps_both_rows(self):
         registry = DispatchJob(key="drill", slug="drill-claude-CASEA-20260711160000-12345",
@@ -217,7 +229,8 @@ class DrillReconcileTest(unittest.TestCase):
         jobs = dispatch._reconcile_drill_rows([registry, proc])
         self.assertEqual(jobs, [registry])
         self.assertEqual(registry.pid, 777)
-        self.assertEqual(registry.liveness, "working")
+        self.assertEqual(registry._proc_liveness, "working")     # tier-2 증거로 흡수됨
+        self.assertEqual(dispatch._dispatch_liveness(registry, now=0), "working")
 
     def test_registry_cwd_not_tmp_drill_skips_merge(self):
         registry = DispatchJob(key="drill", slug="drill-claude-CASE-20260711160000-12345",

@@ -163,4 +163,12 @@ def collect_all(harness_filter=None, jobs_path=None):
     except Exception:
         pass
 
+    # F-25: drop cross-tick hysteresis entries for rows that no longer exist. Runs after
+    # BOTH sessions and jobs are classified — sweeping earlier would evict live job keys.
+    try:
+        from .. import model
+        model.tracker_sweep()
+    except Exception:
+        pass
+
     return sessions, jobs

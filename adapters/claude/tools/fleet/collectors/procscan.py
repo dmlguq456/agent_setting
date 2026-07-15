@@ -42,6 +42,78 @@ def read_environ(pid):
     return env
 
 
+def read_proc_start(pid):
+    """/proc/<pid>/stat field 22 (starttime, clock ticks since boot) as a str, else None.
+
+    This is the PID-reuse guard: pid alone is not an identity, (pid, start-time) is. The
+    claude registry stores the same value as `procStart`, so the two compare directly.
+    Field 22 is counted from field 1, and comm (field 2) is parenthesized and may itself
+    contain spaces/parens — so split AFTER the last ')' and index from there.
+    Windows / unreadable /proc → None (tolerate: callers treat None as "no evidence").
+    """
+    try:
+        with open("/proc/%s/stat" % pid) as f:
+            data = f.read()
+    except (OSError, ValueError):
+        return None
+    try:
+        rest = data[data.rindex(")") + 1:].split()
+        return rest[19]           # field 22 = index 19 after (pid, comm) are consumed
+    except (ValueError, IndexError):
+        return None
+
+
+_PROVENANCE_COMMS = (
+    ("herdr", "herdr"),
+    ("tmux", "terminal"), ("sshd", "terminal"), ("login", "terminal"),
+    ("bash", "terminal"), ("zsh", "terminal"),
+)
+
+
+def _ppid_of(pid):
+    try:
+        with open("/proc/%s/stat" % pid) as f:
+            data = f.read()
+        return int(data[data.rindex(")") + 1:].split()[1])   # field 4 = ppid
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _comm_of(pid):
+    try:
+        with open("/proc/%s/comm" % pid) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def provenance(pid, max_depth=6):
+    """Best-effort launcher lineage: 'herdr' | 'terminal' | 'vscode' | 'worker' | None.
+
+    Walks up to `max_depth` ancestors matching /proc/<ppid>/comm. Misattribution is worse
+    than absence (PRD F-26): anything unrecognized returns None and renders no tag at all.
+    """
+    env = read_environ(pid)
+    if env.get("AGENT_SESSION_ROLE", "").lower() == "worker":
+        return "worker"
+    cur, seen = _ppid_of(pid), set()
+    for _ in range(max_depth):
+        if not cur or cur in seen or cur <= 1:
+            return None
+        seen.add(cur)
+        comm = (_comm_of(cur) or "").lower()
+        for needle, tag in _PROVENANCE_COMMS:
+            if needle in comm:
+                return tag
+        if comm in ("code", "node"):
+            # vscode-server only — a bare node parent is not evidence of an editor.
+            args = " ".join(read_environ(cur).get("_", "").split())
+            if "vscode-server" in args or "vscode" in args:
+                return "vscode"
+        cur = _ppid_of(cur)
+    return None
+
+
 def _ps_lines():
     # COLUMNS pinned huge: Claude Code injects terminal width into the statusline env and
     # ps truncates args= to COLUMNS, which would break argv matching downstream
@@ -256,6 +328,7 @@ def scan(harness_filter=None):
             elapsed_min=etime_to_min(etime),
             slug=os.path.basename(cwd.rstrip("/")) if cwd else None,
             mem_worker=mem_worker,
+            proc_start=read_proc_start(pid),      # tier-2 identity half — see read_proc_start
         )
         sessions.append(sess)
         orca_sock = env.get("ORCA_RELAY_SOCKET_PATH")

@@ -59,8 +59,8 @@ def dash(v, fmt=None):
     return fmt(v) if fmt else str(v)
 
 
-# 4-state herdr vocabulary (+ stale/dead) — single source for render coloring.
-LIVENESS_STATES = ("working", "idle", "blocked", "done", "stale", "dead", "unknown")
+# 4-state herdr vocabulary (+ stale/dead/unused) — single source for render coloring.
+LIVENESS_STATES = ("working", "idle", "unused", "blocked", "done", "stale", "dead", "unknown")
 
 
 def project_of(cwd):
@@ -151,6 +151,16 @@ class Session:
     status: Optional[str] = None        # raw harness status (claude idle/shell/busy)
     mtime: Optional[float] = None       # newest transcript/db mtime (epoch sec) for liveness
     liveness: str = "unknown"
+    # --- F-25/F-26 registry first-class fields (all Optional → absent harness = None) ---
+    proc_start: Optional[str] = None       # ACTUAL /proc/<pid>/stat field 22 (clock ticks, str)
+    registry_proc_start: Optional[str] = None  # registry's procStart CLAIM — mismatch vs
+                                           # proc_start = the pid was recycled (PID-reuse guard)
+    started_at: Optional[float] = None     # registry startedAt (epoch sec)
+    updated_at: Optional[float] = None     # registry updatedAt (epoch sec)
+    registry_name: Optional[str] = None    # registry `name` — explicit name chain link (slug also carries it)
+    kind: Optional[str] = None             # registry `kind` (interactive/...)
+    provenance: Optional[str] = None       # best-effort launcher lineage: herdr|terminal|vscode|worker
+    state_evidence: Optional[dict] = None  # F-25 classifier verdict + inputs (additive; --json via asdict)
     gate: Optional[str] = None          # spec-gate override (tracked/untracked) — demo fixtures; None = compute from cwd
     branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
     mem_worker: bool = False   # Memory worker or title refresher; summarized and hidden by default.
@@ -167,6 +177,9 @@ class DispatchJob:
     mode: Optional[str] = None          # --mode value
     qa: Optional[str] = None            # --qa value
     pid: Optional[int] = None           # dispatch process pid (proc-scanned jobs) — for own model/env lookup
+    proc_start: Optional[str] = None    # /proc/<pid>/stat field 22 — the other half of the pid's
+                                        # identity. F-27 refuses to signal without it, so a job row
+                                        # is only a kill target when this is filled alongside pid.
     model: Optional[str] = None         # dispatch runtime model (own statusline if resolvable; else parent's, filled at render)
     elapsed_min: Optional[int] = None
     slug: str = ""
@@ -188,6 +201,290 @@ class DispatchJob:
     capability_owner: Optional[str] = None  # owning capability slug/name for sub-workers
     effort: Optional[str] = None        # dispatch runtime effort (pipe `effort=`; None = parent-inherit)
     model_role: Optional[str] = None    # Portable model role from pipe model_role=.
+    state_evidence: Optional[dict] = None  # F-25 classifier verdict + inputs (additive; --json via asdict)
 
     def to_dict(self):
         return asdict(self)
+
+
+# =============================================================================
+# F-25 — single state classifier (PRD v8 §4.8). The ONLY place a fleet liveness
+# string is decided. Collectors gather evidence; they do not judge.
+#
+# Source priority (plan §2.1) — a lower tier NEVER beats a higher tier when they
+# contradict. A lower tier may only judge when the higher tier is SILENT, or
+# refine a higher-tier verdict WITHIN THE SAME AXIS (§2.2):
+#   tier 1  explicit registry declaration (jobs.log status / sessions/<pid>.json)
+#   tier 2  strong process evidence (exact pid + start-time, fd ownership, env, orphan cwd)
+#   tier 3  mtime heuristics (transcript/rollout/db recency) — derived, shown with `~`
+# =============================================================================
+
+# --- F-25 state model constants (single block; PRD v8 §4.8) ---
+SESSION_WORK_SEC       = 60      # absorbed from liveness.py `age_min < 1.0`
+SESSION_STALE_MIN      = 48 * 60 # absorbed from liveness.py STALE_MIN
+JOB_STALE_MIN          = 15      # absorbed from dispatch.py _job_liveness(stale_min=15)
+JOB_QUEUED_GRACE_MIN   = 15      # absorbed from dispatch.py _QUEUED_GRACE_MIN
+UNUSED_ACTIVITY_MS     = 2000    # §2.2: updatedAt-startedAt at or below this = never prompted
+                                 # (measured: the pid 1168514 ghost sits at 119ms)
+
+# Downgrade dwell — a threshold must hold CONTINUOUSLY this long before the state drops.
+# Upgrades (activity resumed) and strong evidence (dead/killed) are immediate (0).
+# ★ Applies to tier-3 (mtime-derived) transitions ONLY — see HYST_APPLIES_TO_TIER.
+HYST_DOWNGRADE_DWELL_SEC = {
+    ("working", "idle"):   90,   # tick=2s → 45 ticks. Absorbs mtime 60s-boundary flapping.
+    ("working", "stale"):  300,
+    ("idle",    "stale"):  300,
+    ("working", "queued"): 300,
+    # The two 0-entries below are belt-and-braces documentation, not live config: both are
+    # already settled earlier in settle() — idle→unused by the equal-rank fast path (idle and
+    # unused both rank 4, so it is not a downgrade), and queued→dead by HYST_IMMEDIATE_STATES.
+    # They are listed so the table reads as a complete statement of intent.
+    ("idle",    "unused"):  0,   # unused rests on registry evidence, not time decay → immediate
+    ("queued",  "dead"):    0,   # strong evidence
+}
+HYST_IMMEDIATE_STATES = ("dead", "killed", "done")   # never delayed
+HYST_APPLIES_TO_TIER  = (3,)     # ★ dwell only for tier-3 derivations; tier-1/2 = immediate
+
+# Downgrade ordering. Pairs absent from HYST_DOWNGRADE_DWELL_SEC settle immediately.
+_STATE_RANK = {"working": 5, "idle": 4, "unused": 4, "blocked": 4, "queued": 3,
+               "stale": 2, "dead": 1, "killed": 1, "done": 1, "unknown": 0}
+
+
+class StateTracker:
+    """Cross-tick memory backing the hysteresis dwell.
+
+    Owned by model.py (not the render loop) because --json / --once / live all funnel
+    through collect_all(); parking it beside the classifier is the only placement that
+    behaves identically on all three paths.
+
+    Keys: session ("s", harness, pid, proc_start) — proc_start is what makes this
+    PID-reuse-proof; job ("j", slug).
+
+    `prev` means "the previous SETTLE for this key", which is the previous tick only because
+    each key is settled at most once per tick. Two settles of one key in a single tick would
+    manufacture a dwell out of a first observation. That cannot currently happen — sessions
+    key on (pid, proc_start) and jobs are deduped by slug before classification
+    (dispatch.py `_scan_jobs_log` skips slugs already seen as proc rows, and the drill
+    reconcile passes track=False for the row it drops) — so the invariant holds structurally.
+    If a second same-tick settle ever becomes reachable, this is where the guard belongs.
+    """
+
+    def __init__(self):
+        self._store = {}
+        self._seen = set()
+
+    def settle(self, key, state, tier, now, desc=None):
+        """(effective_state, hysteresis|None, effective_tier, effective_desc).
+
+        `desc` is the (source, rule) pair describing THIS tick's verdict. When a dwell holds
+        the old state, the old state's own descriptors are returned too — otherwise the
+        evidence would claim `working` while its `rule` read "no activity within 60s", and
+        F-25's entire purpose is evidence you can actually audit.
+        """
+        self._seen.add(key)
+        prev = self._store.get(key)
+        if prev is None:
+            # First observation — nothing to hold back against. --once/--json land here
+            # every time, which is exactly why hysteresis is a no-op on snapshot paths.
+            self._store[key] = {"state": state, "since": now, "pending": None,
+                                "tier": tier, "desc": desc}
+            return state, None, tier, desc
+        if state == prev["state"]:
+            prev.update({"pending": None, "tier": tier, "desc": desc})
+            return state, None, tier, desc
+        if (state in HYST_IMMEDIATE_STATES or tier not in HYST_APPLIES_TO_TIER
+                or _STATE_RANK.get(state, 0) >= _STATE_RANK.get(prev["state"], 0)):
+            # Strong evidence, a higher-tier truth, or an upgrade → land it now.
+            prev.update({"state": state, "since": now, "pending": None,
+                         "tier": tier, "desc": desc})
+            return state, None, tier, desc
+        dwell = HYST_DOWNGRADE_DWELL_SEC.get((prev["state"], state), 0)
+        if dwell <= 0:
+            prev.update({"state": state, "since": now, "pending": None,
+                         "tier": tier, "desc": desc})
+            return state, None, tier, desc
+        pending = prev.get("pending")
+        if not pending or pending[0] != state:
+            # Target changed mid-dwell (A→B held, now A→C) → restart the clock against C.
+            prev["pending"] = (state, now)
+            pending = prev["pending"]
+        elapsed = now - pending[1]
+        if elapsed >= dwell:
+            prev.update({"state": state, "since": now, "pending": None,
+                         "tier": tier, "desc": desc})
+            return state, None, tier, desc
+        # Hold the old state. Report the held state's OWN tier/rule, and record the verdict
+        # being suppressed under `hysteresis` so nothing is hidden.
+        sup_source, sup_rule = desc if desc else (None, None)
+        hyst = {"pending": state, "dwell_sec": dwell, "elapsed_sec": round(elapsed, 1),
+                "suppressed_tier": tier, "suppressed_source": sup_source,
+                "suppressed_rule": sup_rule}
+        return prev["state"], hyst, prev.get("tier", tier), prev.get("desc", desc)
+
+    def sweep(self):
+        """Drop keys not seen this tick (unbounded-growth guard). Call once per tick."""
+        for key in [k for k in self._store if k not in self._seen]:
+            del self._store[key]
+        self._seen.clear()
+
+    def reset(self):
+        self._store.clear()
+        self._seen.clear()
+
+
+_TRACKER = StateTracker()
+
+
+def tracker_sweep():
+    _TRACKER.sweep()
+
+
+def reset_state_tracker():
+    """Test hermeticity: clear cross-tick memory so dwell never leaks between cases."""
+    _TRACKER.reset()
+
+
+def _evidence(state, tier, source, rule, inputs, raw_status=None, hysteresis=None):
+    # `inputs` is copied: evidence is a snapshot of the tick that produced it, and the
+    # caller's dict must not be able to mutate a verdict after the fact.
+    return {"state": state, "tier": tier, "source": source, "rule": rule,
+            "derived": tier == 3, "inputs": dict(inputs), "raw_status": raw_status,
+            "hysteresis": hysteresis}
+
+
+def _settle(key, state, tier, now, source, rule):
+    """Tracker hand-off shared by both classifiers → (state, tier, (source, rule), hysteresis)."""
+    state, hyst, tier, desc = _TRACKER.settle(key, state, tier, now, (source, rule))
+    return state, tier, desc, hyst
+
+
+def _session_status_state(status):
+    """tier-1 registry status → activity-axis state. None = registry is silent."""
+    if status == "busy":
+        return "working"
+    if status in ("idle", "shell"):
+        return "idle"
+    return None
+
+
+def _is_unused(state, ev_in):
+    """§2.2 — `unused` refines `idle` on the inactivity-history axis using the SAME
+    tier-1 registry evidence (startedAt/updatedAt) that declared `idle`, so the
+    "lower tier never beats higher tier" invariant holds.
+
+    Hard guard: `busy` is NEVER narrowed to unused (that would cross axes), and
+    tier-3 mtime alone can never mint an unused (registry evidence is mandatory).
+    All three conditions must hold; any one absent → stay `idle` (tolerate).
+    """
+    if state != "idle" or ev_in.get("transcript"):
+        return False
+    act = ev_in.get("activity_ms")
+    return act is not None and act <= UNUSED_ACTIVITY_MS
+
+
+def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
+    """(state, evidence). ev_in = collected evidence, never a live probe (hermetic).
+
+    Recognized keys: pid_alive, proc_start_match, orphan, status, mtime, transcript,
+    started_at, updated_at, activity_ms, harness, pid, proc_start, fd_owner, is_worker.
+    """
+    def out(state, tier, source, rule):
+        if key is None:
+            return state, _evidence(state, tier, source, rule, ev_in,
+                                    raw_status=ev_in.get("status"))
+        state, tier, (source, rule), hyst = _settle(key, state, tier, now, source, rule)
+        return state, _evidence(state, tier, source, rule, ev_in,
+                                raw_status=ev_in.get("status"), hysteresis=hyst)
+
+    # --- tier 2: existence axis terminates everything. A vanished process is not a
+    # contradiction of the registry's activity claim — it ends the row. ---
+    if not ev_in.get("pid_alive", True):
+        return out("dead", 2, "proc", "pid not alive")
+    if ev_in.get("proc_start_match") is False:
+        # registry procStart != /proc/<pid>/stat field 22 → the pid was recycled; every
+        # registry claim about it is about a DIFFERENT process → discard, fail closed.
+        return out("dead", 2, "proc", "start-time mismatch (pid reuse) — registry evidence discarded")
+    if ev_in.get("orphan"):
+        return out("stale", 2, "proc", "orphan cwd (deleted worktree)")
+
+    status = ev_in.get("status")
+    st = _session_status_state(status)
+    m = ev_in.get("mtime")
+
+    if m is None:
+        # No recency signal at all → lean on the registry, else idle.
+        if st:
+            if _is_unused(st, ev_in):
+                return out("unused", 1, "claude-registry",
+                           "idle refined to unused (no transcript, updatedAt≈startedAt)")
+            return out(st, 1, "claude-registry", "registry status=%s" % status)
+        return out("idle", 3, "mtime", "no mtime and no registry status")
+
+    age_min = (now - m) / 60.0
+    if age_min > stale_min:
+        # Inactivity-history axis (§2.2, same axis as unused): silent past the session
+        # window. Preserves the pre-F-25 ordering — status never rescued a 48h-silent row.
+        return out("stale", 3, "mtime", "no activity for > %d min" % stale_min)
+    if st:
+        if _is_unused(st, ev_in):
+            return out("unused", 1, "claude-registry",
+                       "idle refined to unused (no transcript, updatedAt≈startedAt)")
+        return out(st, 1, "claude-registry", "registry status=%s" % status)
+    # codex/opencode expose no status field → recency heuristic (fresh write == working)
+    if age_min * 60.0 < SESSION_WORK_SEC:
+        return out("working", 3, "mtime", "activity within %ds" % SESSION_WORK_SEC)
+    return out("idle", 3, "mtime", "no activity within %ds" % SESSION_WORK_SEC)
+
+
+def classify_job(ev_in, now, key=None):
+    """(state, evidence) for a dispatch job. ev_in keys: source, key, is_loop, harness,
+    status (raw jobs.log word), elapsed_min, transcript (tier-3 signal string), proc_liveness.
+    """
+    raw = ev_in.get("status")
+
+    def out(state, tier, source, rule):
+        if key is None:
+            return state, _evidence(state, tier, source, rule, ev_in, raw_status=raw)
+        state, tier, (source, rule), hyst = _settle(key, state, tier, now, source, rule)
+        return state, _evidence(state, tier, source, rule, ev_in, raw_status=raw,
+                                hysteresis=hyst)
+
+    # tier-2: a live loop process IS the evidence (dispatch.py:305 contract).
+    if ev_in.get("source") == "proc" and ev_in.get("is_loop"):
+        return out("working", 2, "proc", "loop process alive")
+
+    # tier-1: terminal registry words. NOTE these are unreachable through collect() —
+    # dispatch.py filters terminal rows BEFORE classification and that filter is
+    # invariant (plan §2.3). This is a vocabulary contract so the render layer can
+    # never reinterpret a raw word; it is exercised by calling classify_job() directly.
+    if raw == "done":
+        return out("done", 1, "registry", "jobs.log status=done")
+    if raw == "killed":
+        return out("killed", 1, "registry", "jobs.log status=killed")
+    if raw == "cancelled":
+        # fleet's job vocabulary has no `cancelled`; `killed` carries the same
+        # "terminated by outside intervention" axis. The distinction survives in raw_status.
+        return out("killed", 1, "registry", "jobs.log status=cancelled → killed (raw preserved)")
+
+    t = ev_in.get("transcript")
+    if t == "unknown":
+        state, tier, rule = "unknown", 3, "no cwd to resolve a transcript"
+    elif t == "working":
+        state, tier, rule = "working", 3, "transcript within %d min" % JOB_STALE_MIN
+    elif t == "stale":
+        state, tier, rule = "stale", 3, "transcript older than %d min" % JOB_STALE_MIN
+    else:
+        # transcript absent. tier-1 `open` × tier-3 absence cross-rule (F-15c).
+        if (ev_in.get("source") == "jobs" and raw == "open"
+                and (ev_in.get("elapsed_min") or 0) <= JOB_QUEUED_GRACE_MIN):
+            state, tier, rule = "queued", 3, (
+                "registry open with no transcript yet, within %d min grace" % JOB_QUEUED_GRACE_MIN)
+        else:
+            state, tier, rule = "dead", 3, "no transcript"
+
+    # tier-2 override: F-18a drill correlation merged a live proc row's evidence onto
+    # this canonical registry row. A live process outranks a mtime-derived verdict.
+    pl = ev_in.get("proc_liveness")
+    if pl in ("working", "idle") and state in ("queued", "stale", "dead", "unknown"):
+        return out(pl, 2, "proc", "live correlated process (F-18a) outranks mtime derivation")
+    return out(state, tier, "mtime", rule)

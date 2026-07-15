@@ -22,6 +22,7 @@ import sqlite3
 import time
 from datetime import datetime, timezone
 
+from .. import model
 from ..model import DispatchJob, etime_to_min
 from . import procscan
 
@@ -296,23 +297,50 @@ def _opencode_job_liveness(cwd, now, stale_min=15, slug=None):
     return "dead"
 
 
-_QUEUED_GRACE_MIN = 15   # F-15c: an `open` registry row with no transcript yet, within this
-                          # startup grace window, is genuinely "not started" (queued) rather
-                          # than dead — past the window with still no transcript, it's dead.
+# F-15c: an `open` registry row with no transcript yet, within this startup grace window,
+# is genuinely "not started" (queued) rather than dead — past the window with still no
+# transcript, it's dead. Canonical value lives in model.JOB_QUEUED_GRACE_MIN (F-25 removed
+# the constant duplication); re-exported here for existing callers.
+_QUEUED_GRACE_MIN = model.JOB_QUEUED_GRACE_MIN
 
 
-def _dispatch_liveness(job, now):
-    if job.source == "proc" and job.key in _LOOP_KEYS:
-        return "working"
+def _job_transcript_signal(job, now):
+    """tier-3 evidence only: what the transcript/rollout/db mtime says, per harness.
+    Returns working | stale | dead | unknown. No judgment — that is classify_job's job."""
     if job.harness == "codex":
         return _codex_job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
     if job.harness == "opencode":
         return _opencode_job_liveness(job.cwd, now, slug=job.slug)
-    live = _job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
-    if (live == "dead" and job.source == "jobs" and job.status == "open"
-            and (job.elapsed_min or 0) <= _QUEUED_GRACE_MIN):
-        return "queued"
-    return live
+    return _job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
+
+
+def _dispatch_liveness(job, now, track=True):
+    """Job → state string. Signature/return preserved; the verdict now comes from the
+    single F-25 classifier. Stamps `job.state_evidence` as a side effect.
+
+    track=False skips the cross-tick tracker (and thus hysteresis): used when the call is
+    only deriving EVIDENCE for another row, so a row that is about to be dropped never
+    leaves a tracker entry behind.
+    """
+    is_loop = job.source == "proc" and job.key in _LOOP_KEYS
+    ev_in = {
+        "source": job.source,
+        "key": job.key,
+        "is_loop": is_loop,
+        "harness": job.harness,
+        "status": job.status,
+        "elapsed_min": job.elapsed_min,
+        "slug": job.slug,
+        "pid": job.pid,
+        # A loop proc row is decided by tier-2 evidence; skip the mtime probe entirely
+        # (it was never consulted on that path pre-F-25 either).
+        "transcript": None if is_loop else _job_transcript_signal(job, now),
+        "proc_liveness": getattr(job, "_proc_liveness", None),
+    }
+    state, evidence = model.classify_job(ev_in, now,
+                                         key=("j", job.slug) if track else None)
+    job.state_evidence = evidence
+    return state
 
 
 # --- jobs.log path ---
@@ -729,6 +757,7 @@ def _scan_processes():
                 parent_sid=parent_sid, parent_slug=parent_slug, is_child=is_child,
                 qa_source=qsrc, source="proc", harness="claude",
                 pid=int(pid_s) if pid_s.isdigit() else None,
+                proc_start=procscan.read_proc_start(pid_s) if pid_s.isdigit() else None,
                 model=_claude_job_model(pid_s, jcwd), depth=depth,
                 intensity=env.get("AGENT_DISPATCH_INTENSITY"),
                 worker_role=env.get("AGENT_DISPATCH_WORKER_ROLE"),
@@ -763,7 +792,9 @@ def _scan_processes():
                 elapsed_min=etime_to_min(etime), slug=current_case or key, cwd=jcwd,
                 parent_sid=parent_sid, parent_cwd=parent_cwd, parent_slug=parent_slug,
                 is_child=is_child, source="proc", harness="claude" if env.get("CLAUDECODE") or "claude" in args else None,
-                pid=int(pid_s) if pid_s.isdigit() else None, worker_role=current_case,
+                pid=int(pid_s) if pid_s.isdigit() else None,
+                proc_start=procscan.read_proc_start(pid_s) if pid_s.isdigit() else None,
+                worker_role=current_case,
                 capability_owner=key,
                 effort=env.get("AGENT_DISPATCH_EFFORT"),
                 model_role=env.get("AGENT_DISPATCH_MODEL_ROLE"),
@@ -879,11 +910,15 @@ def _jobs_log_fields(paths):
     return fields_by_slug
 
 
-def _reconcile_drill_rows(jobs):
+def _reconcile_drill_rows(jobs, now=None):
     """Merge duplicate registry and process rows for the same drill run.
 
-    Keep the registry row, absorb process PID and liveness as ground truth, and
-    never write the registry.
+    Keep the registry row, absorb the process PID and its liveness as tier-2 EVIDENCE,
+    and never write the registry.
+
+    F-25: this used to overwrite `r.liveness` directly, which made it a second, competing
+    classifier. It now stashes the proc row's state as `_proc_liveness` evidence and the
+    single classifier (model.classify_job) decides — same outcome, one decision point.
     """
     # Index registry drill rows by validated case.
     reg_by_case = {}
@@ -915,13 +950,22 @@ def _reconcile_drill_rows(jobs):
             r = reg_by_runner_pid.get(p.pid)
         if r is None:
             continue
-        # Absorb process liveness and PID into the canonical registry row.
+        # Absorb process PID and liveness into the canonical registry row as evidence.
         if r.pid is None:
             r.pid = p.pid
+            r.proc_start = p.proc_start      # pid and its start-time travel together, always
         if r.elapsed_min is None:
             r.elapsed_min = p.elapsed_min
-        if p.liveness in ("working", "idle") and r.liveness in ("queued", "stale", "dead", "unknown"):
-            r.liveness = p.liveness                  # live proc = ground truth
+        # Reconciliation runs BEFORE the classify loop (so there is exactly one place a
+        # liveness is assigned), which means a proc row normally has no state yet — derive
+        # it here. A caller that already classified (or a test that pins one) is honored.
+        pl = p.liveness
+        if pl in (None, "unknown"):
+            # track=False: this row is about to be dropped, so it must not occupy a
+            # tracker slot (and its verdict is evidence, not a rendered state).
+            pl = _dispatch_liveness(p, time.time() if now is None else now, track=False)
+        if pl in ("working", "idle"):
+            r._proc_liveness = pl                    # tier-2 evidence; classify_job weighs it
         drop.add(id(p))
     if not drop:
         return jobs
@@ -974,13 +1018,16 @@ def collect(jobs_path=None, harness_filter=None):
             if pid and pid not in consumed:
                 j.harness = "claude"
                 j.pid = pid
+                j.proc_start = procscan.read_proc_start(pid)   # identity, not just a number
                 consumed.add(pid)
                 j.model = _claude_job_model(str(pid), j.cwd)
                 j.stage = live_stage(j.cwd, j.slug, j.key, j.capability_owner, j.worker_role)
     now = time.time()
+    # F-18a correlation merges proc evidence onto canonical registry rows BEFORE
+    # classification, so every row is decided exactly once, by the single classifier.
+    jobs = _reconcile_drill_rows(jobs, now)
     for j in jobs:
         j.liveness = _dispatch_liveness(j, now)
-    jobs = _reconcile_drill_rows(jobs)
     # F-15c(a): a registry-only row (source="jobs") that turns out to be genuinely working
     # re-derives its breadcrumb from the real plan artifacts instead of the raw jobs.log
     # status word ("open"/"running") — otherwise a live job with real progress shows a
