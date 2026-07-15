@@ -2,7 +2,7 @@
 
 - **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec v8 done (관제 신뢰성·세션 제어·분사 정책 연동) — F-25~F-27 구현은 별도 autopilot-code 사이클, F-28은 stage-dispatch v9 착륙 후
+- **Status**: spec v8 done + **F-25~F-27 구현 완료·머지** (2026-07-15, 테스트 416) — 잔여: F-29 구현, F-28(stage-dispatch v9 대기). audit 2026-07-15T1734: v9 major 흡수 권고
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## Process Log
@@ -103,3 +103,10 @@
 - 2026-07-15 (v8 minor #3): **F-29 (native 서브 에이전트 호출 관측)** 추가 — 사용자 확정("서브 에이전트 호출 현황도 fleet에"). enrichment 전용(proc 백본 비대상), 소스 = OpenCode DB parent_id/agent(실측)·Claude transcript isSidechain+tool_use 짝·Codex threads probe 필요. 세션 밑 `└⚡` 서브 행 + `⚡N` 배지, 활성만 기본 표시, pulse 카운트 분리. 구현 = v8 사이클 수확 후 후속.
 - 2026-07-15 (v8 minor #1): **제목 provider 길이 축소 소급 동기** — 사용자 요청("요약을 좀 더 짧게")으로 코드가 먼저 4~8단어·64자로 변경됨(`80c492e9`, refresh_title.py). spec F-17/F-22의 "8~12단어·96자" 문구를 소급 동기. spec-first 순서 위반의 사후 교정 기록.
 - 2026-07-15 (v8 minor #2): **F-22 wide name zone 고정 상한 복원** — 사용자 피드백("session 길이를 맞춤형으로 늘린 건 오히려 별로"). wide 레이아웃 세션 제목 컬럼에 고정 상한(기본 40 display cols) 도입, slack 재배분 폐지. narrow/stack 예산·안전 클립·dispatch compact 상한 불변. 구현 = v8 구현 사이클에 편입.
+
+## v8 implementation closure (2026-07-15)
+
+- `plans/2026-07-15_fleet-v8-reliability` 사이클(conductor 분사, plan→exec→test→report 완주)로 F-25 단일 상태 분류기(state_evidence·hysteresis), F-26 레지스트리 1급(unused `◌`·provenance), F-22 minor(40열 캡), F-27 세션 제어(s/x 커서·kill·action log) 구현. 테스트 247→416, 회귀 0, main 머지 `fleet-v8-reliability` 브랜치 보존.
+- harvest 후속 처리: 위험 재현 절차 철회 주석(plan.md, 안전 위반 자진 신고 대응), unused stale 면제(minor #4), kill 키 spec 동기(minor #5), cross-harness orphan 래퍼 정합(minor #6).
+- 사용자 눈 검사 잔여: `◌` 글리프 폰트 렌더 / kill 조작 체감 → "마우스로 처리" 방향 접수(2026-07-15), v9 재설계 입력.
+- audit `_internal/audit/audit_2026-07-15T1734.md`: 🔴 1(본 동기로 해소) / 🟡 2(어휘 매핑 표·§10 다이어그램 — v9 흡수 대상).
