@@ -258,6 +258,12 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **소비 계약**: dispatch가 pipe 필드에 `route=<record path>`(또는 `route_hash=`)를 실으면 fleet은 read-only 파싱해 topology class·node graph·stage 진행·완료 게이트를 표시한다. record 부재·파싱 실패 = 현행 pipe 휴리스틱 fallback(회귀 없음 원칙). fleet은 route record를 절대 쓰지 않는다.
   - **추가 관제 표면(소스 착륙 후 단계 적용)**: ① detached resource-runner run registry(장기 GPU/학습 잡) — 세션과 구분되는 resource-runner 행으로 표시, 재부착 상태 노출 ② model-worker-governor lease 현황 — pulse 인접 1행(`⚙ governor <active>/<cap>`, healthy 무음 원칙 적용 가능).
   - **의존·순서**: stage-dispatch v9 구현(topology registry → route compiler)이 선행한다(타 세션 진행 중). v8은 소비 계약만 고정하고, fleet 측 구현은 registry/route record 착륙 후의 별도 phase다. 저널/record 포맷 변경 시 양 spec 동기 의무(F-19 선례).
+- **F-29 (native 서브 에이전트 호출 관측 — v8 minor #3, 사용자 확정 2026-07-15)**: 메인/분사 세션 외에 runtime-native 서브 에이전트(Claude Agent 도구, Codex `agents.max_threads`, OpenCode subagent)의 호출 현황을 표시한다.
+  - **위상**: 서브 에이전트는 별도 OS 프로세스가 아니므로 proc 백본 비대상 — **enrichment 전용**. 세션 존재 판정에 절대 관여하지 않는다.
+  - **소스(하네스별)**: OpenCode = DB `session.parent_id`+`agent` 컬럼(2026-07-15 실측 확인 — 가장 완전, 토큰·비용 포함) / Claude = 세션 transcript의 `isSidechain: true` 라인 + Agent tool_use↔tool_result 짝짓기로 타입·시작·종료 유도(제목/liveness가 이미 읽는 tail 재사용, mtime 키 캐시) / Codex = state DB threads 표면 probe 후 확정 — 확정 전에는 honest 결손(`—`), 추측 표시 금지.
+  - **표시**: 세션 행 아래 `└⚡<agent-type> ⏳<경과>` 서브 행 — 분사 잡 `└▸🚀`와 글리프로 구분. 완료분은 기본 숨김, 활성만 표시 + 세션 행에 `⚡N` 카운트 배지, `a` 토글 시 최근 완료분 dim 노출. fleet pulse의 세션/잡 카운트에 혼입 금지(F-18 계열 — 별도 집계).
+  - **불변식**: zero-injection(read-only) 유지, `--json` additive(신규 `subagents` 키), 소스 부재·파싱 실패 = 서브 행 생략(회귀 없음).
+  - **구현**: v8 사이클(`fleet-v8-reliability`) 수확 후 후속 단계.
 
 ## 5. 능동 변경 — fleet-owned local state write
 
