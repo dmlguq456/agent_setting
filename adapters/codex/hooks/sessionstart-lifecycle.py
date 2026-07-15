@@ -77,6 +77,18 @@ def env_truthy(name: str) -> bool:
     return os.environ.get(name, "").lower() in {"1", "true", "yes", "on"}
 
 
+def is_worker_session() -> bool:
+    return (
+        os.environ.get("AGENT_SESSION_ROLE", "").lower() == "worker"
+        or os.environ.get("AGENT_DISPATCH_CHILD") == "1"
+        or bool(os.environ.get("AGENT_DISPATCH_DEPTH"))
+        or os.environ.get("CLAUDE_CODE_CHILD_SESSION") == "1"
+        or bool(os.environ.get("OPENCODE_DISPATCH_SLUG"))
+        or os.environ.get("FLEET_TITLE_REFRESH") == "1"
+        or os.environ.get("MEM_DISTILL") == "1"
+    )
+
+
 def emit_context(event_name: str, parts: list[str]) -> None:
     context = "\n".join(part.strip() for part in parts if part.strip())
     if not context:
@@ -91,7 +103,7 @@ def main() -> int:
 
     run_preflight("start", current_cwd, sid)
     parts = []
-    if env_truthy("CODEX_SESSION_MEMORY_INJECT"):
+    if not is_worker_session() and env_truthy("CODEX_SESSION_MEMORY_INJECT"):
         parts.append(run_preflight("memory", current_cwd))
     emit_context("SessionStart", parts)
     return 0

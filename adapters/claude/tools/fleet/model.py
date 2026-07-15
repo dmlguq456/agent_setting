@@ -122,7 +122,7 @@ class Session:
     cwd: str = ""
     orphan: bool = False               # /proc/<pid>/cwd had ' (deleted)' (worktree gone)
     app_server: bool = False           # codex app-server companion (procscan-detected — see collectors/procscan.py)
-    is_child: bool = False             # headless dispatch child (CLAUDE_CODE_CHILD_SESSION=1) — shown as a dispatch row under its parent, not as a top-level session
+    is_child: bool = False             # worker/headless child marker — shown as a dispatch row under its parent, not as a top-level session
     detached: bool = False             # running in a tmux session with no client attached (backgrounded) — distinct from idle
     elapsed_min: int = 0               # ps etime
     # --- enrichment (None = harness doesn't expose it → render '—') ---
@@ -173,7 +173,7 @@ class DispatchJob:
     cwd: str = ""
     parent_sid: Optional[str] = None    # spawning parent session id (CLAUDE_CODE_SESSION_ID from environ)
     parent_cwd: Optional[str] = None    # fallback parent cwd when runtime session id is unavailable/mismatched
-    is_child: bool = False              # headless child marker (CLAUDE_CODE_CHILD_SESSION=1)
+    is_child: bool = False              # portable/adapter worker marker
     harness: Optional[str] = None       # claude | codex | opencode — dispatch runtime (None = unknown / jobs.log-only)
     qa_source: Optional[str] = None     # provenance of effective qa: argv | jobslog | plan | default
     source: str = "proc"                # proc | jobs

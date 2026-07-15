@@ -95,8 +95,24 @@ def hook_event(payload: dict[str, Any]) -> str:
     return nested_string(payload, "hook_event_name", "hookEventName", "event_name", "eventName")
 
 
+def is_worker_session() -> bool:
+    return (
+        os.environ.get("AGENT_SESSION_ROLE", "").lower() == "worker"
+        or os.environ.get("AGENT_DISPATCH_CHILD") == "1"
+        or bool(os.environ.get("AGENT_DISPATCH_DEPTH"))
+        or os.environ.get("CLAUDE_CODE_CHILD_SESSION") == "1"
+        or bool(os.environ.get("OPENCODE_DISPATCH_SLUG"))
+        or os.environ.get("FLEET_TITLE_REFRESH") == "1"
+        or os.environ.get("MEM_DISTILL") == "1"
+    )
+
+
 def main() -> int:
     payload = load_payload()
+    # Worker shutdown owns no automatic sync or curator lifecycle. Return before
+    # the Stop bridge can detach another process (D-42).
+    if is_worker_session():
+        return 0
     event_cwd = cwd(payload)
     event_session_id = session_id(payload)
     if hook_event(payload).lower() == "stop":

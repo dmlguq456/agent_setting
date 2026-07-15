@@ -39,6 +39,18 @@ function dispatchSlug() {
   return process.env.OPENCODE_DISPATCH_SLUG || ""
 }
 
+function isWorkerSession() {
+  return (
+    (process.env.AGENT_SESSION_ROLE || "").toLowerCase() === "worker" ||
+    process.env.AGENT_DISPATCH_CHILD === "1" ||
+    Boolean(process.env.AGENT_DISPATCH_DEPTH) ||
+    process.env.CLAUDE_CODE_CHILD_SESSION === "1" ||
+    Boolean(process.env.OPENCODE_DISPATCH_SLUG) ||
+    process.env.FLEET_TITLE_REFRESH === "1" ||
+    process.env.MEM_DISTILL === "1"
+  )
+}
+
 function touchHeartbeat(slug) {
   if (!slug) return
   try {
@@ -161,7 +173,7 @@ export const AgentHarnessGuards = async (ctx) => {
     // Claude SessionEnd + codex session-end detached distiller.
     if (event && event.type === "session.idle") {
       const sid = (event.properties && event.properties.sessionID) || "opencode-plugin"
-      spawnDetached("session-end", [baseDir(ctx), sid])
+      if (!isWorkerSession()) spawnDetached("session-end", [baseDir(ctx), sid])
       // Liveness side-channel: touch the heartbeat for the active dispatch slug
       // so dispatch-liveness.py can detect stale/crashed headless sessions even
       // when the OpenCode SQLite session mtime is inconclusive.
@@ -171,6 +183,15 @@ export const AgentHarnessGuards = async (ctx) => {
   "experimental.chat.system.transform": async (input, output) => {
     const sid = input.sessionID || "opencode-plugin"
     const cwd = baseDir(ctx)
+    if (isWorkerSession()) {
+      // Dispatch prompts own explicit status/prompt-signal/mode bootstrap. Keep
+      // only deterministic start cleanup; memory/briefing/context stay main-only.
+      if (!seenLifecycle.has(sid)) {
+        seenLifecycle.add(sid)
+        collectPreflight("start", [cwd, sid])
+      }
+      return
+    }
     if (!seenLifecycle.has(sid)) {
       seenLifecycle.add(sid)
       appendContext(output, collectPreflight("start", [cwd, sid]))

@@ -168,11 +168,11 @@ EOF
 # (recursion safety); the distiller agent disables every tool (no-tools safety).
 timeout_s=${OPENCODE_DISTILL_TIMEOUT:-180}
 if [ -n "${OPENCODE_DISTILL_MODEL:-}" ]; then
-  MEM_DISTILL=1 timeout "$timeout_s" "$OPENCODE_BIN" run --pure \
+  AGENT_SESSION_ROLE=worker MEM_DISTILL=1 timeout "$timeout_s" "$OPENCODE_BIN" run --pure \
     --dir "$workdir" --agent distiller --format default \
     -m "$OPENCODE_DISTILL_MODEL" < "$prompt_file" > "$out_file" 2>/dev/null || true
 else
-  MEM_DISTILL=1 timeout "$timeout_s" "$OPENCODE_BIN" run --pure \
+  AGENT_SESSION_ROLE=worker MEM_DISTILL=1 timeout "$timeout_s" "$OPENCODE_BIN" run --pure \
     --dir "$workdir" --agent distiller --format default \
     < "$prompt_file" > "$out_file" 2>/dev/null || true
 fi

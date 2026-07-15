@@ -1,6 +1,6 @@
 # agent-fleet-dashboard — Spec (PRD)
 
-> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기) · **v6 2026-07-14** (F-22 responsive titles + F-23 recursive-storm containment)
+> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기) · **v6 2026-07-14** (F-22 responsive titles + F-23 recursive-storm containment) · **v7 2026-07-15** (F-24 portable worker attribution + unique Codex rollout ownership)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -216,12 +216,16 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **acceptance**: 168열 wide에서 세션 제목 예산이 기존 24열보다 커지고 가용 name zone을 사용한다. 60/120/168열에서 행이 터미널 경계를 넘지 않고, branch/model/context/time 및 dispatch 정렬이 유지되며, ASCII와 한글 제목 모두 display-cell 경계에서만 잘린다.
 - **F-23 (제목 생성 재귀 폭풍 봉쇄, 2026-07-14 사고 후 사용자 요구)**:
   - **사고/원인**: 앞선 distill 큐레이터 폭풍이 남긴 수백 개 내부 세션이 live fleet 수집에 보였고, scheduler가 `mem_worker`/child를 제목 대상에서 제외하지 않아 각 transcript마다 `refresh_title.py → claude -p`를 시작했다. 제목 provider 자체도 세션으로 다시 수집되는 재귀 경로와 전역 상한 없는 백로그 drain이 결합해 title chain 216개, Claude 계열 프로세스 607개까지 증식했다. per-session lock/debounce는 서로 다른 sid 사이의 폭발을 막지 못한다.
-  - **그래프 차단**: live scheduler는 `mem_worker`, `is_child`, `app_server`, dead/stale을 절대 title 대상으로 삼지 않는다. provider/worker는 `FLEET_TITLE_REFRESH=1`을 계속 상속하고 procscan은 이를 `mem_worker`로 태깅한다. Claude statusline도 동일 env 재귀가드와 중앙 worker 안전 계약을 사용한다.
+  - **그래프 차단**: live scheduler는 `mem_worker`, `is_child`, `app_server`, dead/stale을 절대 title 대상으로 삼지 않는다. provider/worker는 `AGENT_SESSION_ROLE=worker`와 `FLEET_TITLE_REFRESH=1`을 계속 상속하고 procscan은 전자를 child, 후자를 `mem_worker`로 태깅한다. Claude statusline도 동일 env 재귀가드와 중앙 worker 안전 계약을 사용한다.
   - **하드 상한**: fleet state root의 cross-process lease를 사용해 provider 동시 실행 기본 2·하드 최대 4(`FLEET_TITLE_CONCURRENCY`)를 강제한다. 별도 rolling 600초 start budget 기본 4·하드 최대 16(`FLEET_TITLE_MAX_STARTS`)을 영속 적용해 수백 개 backlog가 슬롯 해제 뒤 순차적으로 토큰을 계속 태우는 것도 막는다. 0은 비활성화이며 잘못된 값은 안전 기본값으로 복귀한다.
   - **kill switch/fail closed**: `FLEET_TITLE_DISABLE=1` 또는 `<title-state-root>/.refresh-disabled`가 있으면 statusline shell, scheduler, worker main, provider 직전 네 경계에서 새 호출을 거부한다. state guard 획득 실패·provider 부재·quota 소진도 sidecar 미갱신으로 끝나며 native title/slug fallback을 유지한다.
   - **복구**: SIGKILL로 남은 worker slot은 `2 × WORKER_TIMEOUT` 뒤 회수한다. rolling-start lease는 600초 뒤 회수한다. lock/lease 갱신은 cross-process file lock 아래 수행하고 경합 시 fail closed한다.
   - **acceptance**: provider를 stub한 hermetic test에서 200개 live root session backlog도 동시에 2개보다 많이 spawn하지 않는다. 슬롯을 즉시 반환하는 20개 순차 backlog도 600초당 4개만 시작한다. mem-worker/child/app-server는 0회, kill switch는 모든 진입점 0회, stale slot은 회수된다. live provider smoke는 사고 검증에 사용하지 않는다.
-- **적용 순서(정보 위계, v6 정정)**: §4.6(F-9~F-13)은 표시층(render.py) 한정 — collector 계약·모델 스키마 불변(SD-F4 만 collector). §4.7(F-14~F-23)은 각 항목에 명시된 표면까지 — F-17/F-21 neutral sidecar+shared trigger, F-18 procscan environ 태깅, F-19 신규 collector(`collectors/memory.py`)·`--json` additive `memory` 키, F-20 Codex usage runtime-currentness, F-22 responsive render/provider, F-23 모든 title-provider ingress 안전 경계. 시각 결정이 substantial 해지면 autopilot-design 리드.
+- **F-24 (portable worker 귀속 + Codex 세션 ID 단일 소유, 2026-07-15)**:
+  - 모든 repo-owned background launcher의 `AGENT_SESSION_ROLE=worker`를 procscan/dispatch collector가 `is_child`의 강한 증거로 사용한다. title/distill의 `mem_worker` 분류는 유지하되, 일반 loop/cron/dispatch worker도 main title scheduler의 대상이 되지 않는다.
+  - Codex는 같은 cwd의 두 TUI 중 한 프로세스만 rollout fd를 소유할 수 있다. collector tick 시작 시 모든 `/proc/<pid>/fd` 기반 강한 rollout 소유권을 먼저 예약하고, fd가 없는 row의 cwd/start-time fallback은 예약된 sid를 절대 재사용하지 않는다. 따라서 한 sid/title이 두 PID에 동시에 찍히지 않는다. 식별 불충분 row는 `session_id/title=None`으로 정직하게 degrade하며 살아 있는 프로세스를 숨기지는 않는다.
+  - acceptance: 같은 cwd의 fd-owner + fd-less TUI fixture에서 owner만 sid/title을 얻고, worker marker는 child로 분류되어 title scheduler에서 제외된다. live `--json` snapshot에서도 동일 sid 중복이 없어야 한다.
+- **적용 순서(정보 위계, v7 정정)**: §4.6(F-9~F-13)은 표시층(render.py) 한정 — collector 계약·모델 스키마 불변(SD-F4 만 collector). §4.7(F-14~F-24)은 각 항목에 명시된 표면까지 — F-17/F-21 neutral sidecar+shared trigger, F-18/F-24 procscan environ 태깅·Codex identity ownership, F-19 신규 collector(`collectors/memory.py`)·`--json` additive `memory` 키, F-20 Codex usage runtime-currentness, F-22 responsive render/provider, F-23 모든 title-provider ingress 안전 경계. 시각 결정이 substantial 해지면 autopilot-design 리드.
 - **🧠 글리프 위계 (v3 명문화, audit 정보성 반영)**: 같은 글리프의 두 표면 — 그룹 헤더 `🧠 N` = F-18b mem-*워커 프로세스* 수 / pulse 인접 `🧠 mem …` 행 = F-19 메모리 *이벤트* 집계. 라벨 문맥(`N` vs `mem`)이 구분자 — 새 🧠 표면 추가 시 이 두 의미와 충돌 금지.
 
 ## 5. 능동 변경 — fleet-owned local state write
@@ -365,6 +369,10 @@ flowchart TD
 
 - **F-22 lock**: 세션 제목의 24열 고정 상한을 폐기하고 터미널 가용폭 기반 예산을 쓴다. 세션만 slack을 사용하고 dispatch compact 상한은 유지한다. sidecar provider는 넓은 행을 활용할 수 있는 최대 12단어·96자의 영어 요약을 생성하며, 모든 레이아웃은 display-cell 안전 클립과 핵심 메타데이터 정렬을 보존한다.
 - **F-23 lock**: 내부 worker를 title target에서 그래프 차단하고, 모든 진입점이 cross-process 동시성 lease(기본 2/최대 4)와 rolling 600초 start budget(기본 4/최대 16), env/state kill switch를 공유한다. 2026-07-14 재귀 title chain 사고는 200-session hermetic 회귀 fixture로 고정하며 live provider를 검증에 호출하지 않는다.
+
+## 확정 결정 (v7 승격, 2026-07-15 — worker attribution + Codex identity ownership)
+
+- **F-24 lock**: `AGENT_SESSION_ROLE=worker`는 cross-harness child 귀속의 portable 강한 표식이다. Codex rollout fd 소유권을 tick prepass에서 먼저 예약해 same-cwd fallback이 이미 소유된 sid를 복제하지 못하게 한다. 불확실한 PID는 unknown으로 남기며 live row 자체는 보존한다.
 
 ## Next (구현 순서 — autopilot-code, 본 v2 입력 · v1 순서 1~7 은 완료)
 

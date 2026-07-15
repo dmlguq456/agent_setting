@@ -7,6 +7,19 @@
 
 set -eu
 
+# Registered/background workers have their own Fleet/dispatch liveness and must
+# never overwrite the interactive main pane's state (D-42).
+if [ "${AGENT_SESSION_ROLE:-}" = "worker" ] \
+  || [ "${AGENT_DISPATCH_CHILD:-}" = "1" ] \
+  || [ -n "${AGENT_DISPATCH_DEPTH:-}" ] \
+  || [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] \
+  || [ -n "${OPENCODE_DISPATCH_SLUG:-}" ] \
+  || [ "${FLEET_TITLE_REFRESH:-}" = "1" ] \
+  || [ "${MEM_DISTILL:-}" = "1" ]; then
+  cat >/dev/null 2>&1
+  exit 0
+fi
+
 action="${1:-}"
 hook_input_file="$(mktemp "${TMPDIR:-/tmp}/herdr-claude-hook.XXXXXX")" || exit 0
 trap 'rm -f "$hook_input_file"' EXIT HUP INT TERM

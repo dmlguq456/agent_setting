@@ -175,6 +175,48 @@ printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"x"}' "
   || bad "④ turn-nudge: 재귀가드 실패 (sentinel PRESENT)"
 
 # ============================================================
+# D-42 main/worker boundary — every compatibility marker fails closed
+# ============================================================
+echo "== D-42 worker boundary — all worker markers skip before state/model work =="
+worker_case=0
+for assignment in \
+  "AGENT_SESSION_ROLE=worker" \
+  "AGENT_DISPATCH_CHILD=1" \
+  "AGENT_DISPATCH_DEPTH=1" \
+  "CLAUDE_CODE_CHILD_SESSION=1" \
+  "OPENCODE_DISPATCH_SLUG=worker-slug" \
+  "FLEET_TITLE_REFRESH=1"; do
+  worker_case=$((worker_case + 1))
+  workersid="worker-boundary-$worker_case"
+  mkfix "$workersid"
+  rm -f "$STUBBIN/CLAUDE_CALLED"
+  rm -rf "$STORE/.distill-lock-$workersid" "$STORE/.distill-state-$workersid"
+  rc_worker=0
+  env "$assignment" MEM_DISTILL_ENABLE=1 PATH="$STUBBIN:$PATH" \
+    bash "$DISPATCH" distill "$workersid" "/tmp" || rc_worker=$?
+  if [ "$rc_worker" = "0" ] \
+    && [ ! -e "$STUBBIN/CLAUDE_CALLED" ] \
+    && [ ! -e "$STORE/.distill-lock-$workersid" ] \
+    && [ ! -e "$STORE/.distill-state-$workersid" ]; then
+    ok "D-42 portable dispatcher: $assignment → silent no-op before state/model"
+  else
+    bad "D-42 portable dispatcher: $assignment escaped worker boundary"
+  fi
+done
+
+adapter_sid="worker-boundary-claude-adapter"
+mkfix "$adapter_sid"
+rm -f "$STUBBIN/CLAUDE_CALLED"
+AGENT_SESSION_ROLE=worker MEM_DISTILL_ENABLE=1 PATH="$STUBBIN:$PATH" \
+  bash "$CLAUDE_DISPATCH" distill "$adapter_sid" "/tmp"
+if [ ! -e "$STUBBIN/CLAUDE_CALLED" ] \
+  && [ ! -e "$STORE/.distill-lock-$adapter_sid" ]; then
+  ok "D-42 Claude adapter dispatcher: portable worker marker no-ops"
+else
+  bad "D-42 Claude adapter dispatcher escaped portable worker marker"
+fi
+
+# ============================================================
 # S-1 storm guard — atomic global slots + sustained start budget + kill switch
 # ============================================================
 echo "== S-1 storm guard — 12 concurrent sessions stay <=2; later backlog stays blocked =="

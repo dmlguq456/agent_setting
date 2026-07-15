@@ -309,6 +309,18 @@ class CwdFallbackEnrichmentTest(unittest.TestCase):
         self.assertEqual(jobs, [])
         m_readlink.assert_not_called()
 
+    def test_portable_worker_marker_marks_unregistered_loop_as_child(self):
+        ps_lines = ["1002 bash 00:57 bash /home/u/.claude/loops/study.sh"]
+        with mock.patch("fleet.collectors.procscan._ps_lines", return_value=ps_lines), \
+             mock.patch("fleet.collectors.dispatch.os.readlink", return_value="/home/u/agent_setting"), \
+             mock.patch("fleet.collectors.procscan.read_environ", return_value={
+                 "AGENT_SESSION_ROLE": "worker",
+                 "CLAUDECODE": "1",
+             }):
+            jobs = dispatch._scan_processes()
+        self.assertEqual(len(jobs), 1)
+        self.assertTrue(jobs[0].is_child)
+
     def test_proc_scanned_drill_loop_surfaces_parent_and_current_case(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_path = os.path.join(tmp, "drill-post-phase2.log")

@@ -10,6 +10,7 @@
 > · **v16 2026-07-14** (historical language-neutral automatic recall design, retired in full by v17 D-40)
 > · **v17 2026-07-14** (agent-owned semantic memory judgment: automatic prompt classification/recall injection retired; deterministic code is limited to mechanical safety and retrieval infrastructure)
 > · **v18 2026-07-14** (Cluster L — background-model storm containment: atomic global slots, rolling start budget, kill switch, adapter/runtime projection parity)
+> · **v19 2026-07-15** (D-42 — main-session-only model lifecycle and explicit worker bootstrap boundary)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -318,6 +319,13 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - `$MEM_STORE/.distill-disable` is the operator kill switch and is checked both at entry and again after leases are acquired. Invalid numeric configuration falls back to safe defaults. Slot/session locks orphaned by SIGKILL are reclaimed by bounded stale GC; start leases expire after 10 minutes. Capacity or guard failure is fail-closed and leaves the distill marker unadvanced for a later safe trigger.
 - The portable dispatcher and adapter realizations must preserve this contract, and physical runtime projections must be hash-verified after installation. Hermetic regression launches 12 distinct session IDs concurrently against a sleeping stub, asserts at most 2 model workers, waits for slots to reopen, then asserts a second wave starts 0 because the rolling budget remains full. The kill-switch case invokes 0 workers. No live model is used for verification.
 
+### 5.14.2 D-42 — Main-session-only model lifecycle and worker bootstrap
+- Only an interactive, user-facing main session owns automatic model-backed lifecycle work: SessionStart memory injection, prompt-time briefing/turn-nudge, SessionEnd sync+curation, Fleet title summarization, and main-pane status publication. Registered headless dispatches, loop/drill runs, title workers, distillers/curators, and runtime-native subagents are workers and never trigger another automatic model session.
+- `AGENT_SESSION_ROLE=worker` is the portable launch marker. Adapter compatibility markers (`AGENT_DISPATCH_CHILD=1`, nonempty `AGENT_DISPATCH_DEPTH`, `CLAUDE_CODE_CHILD_SESSION=1`, nonempty `OPENCODE_DISPATCH_SLUG`, `FLEET_TITLE_REFRESH=1`, and `MEM_DISTILL=1`) also force worker behavior. A main marker or default must never override any worker marker.
+- Worker bootstrap retains deterministic safety and task-contract surfaces: write/core/spec/artifact/worktree/permission guards, capability/mode/QA routing, explicit status/prompt-signal calls, file-only handoff, liveness, and verification. It omits automatic memory injection, briefing, turn counters, SessionEnd sync/curation, title generation, token-budget commentary, and interactive-pane state publication. Memory recall remains an explicit acting-agent decision.
+- Every repo-owned background model launcher and all three dispatch wrappers set the portable worker marker before process creation. Runtime hooks and preflight session-end/turn-nudge commands enforce the same boundary independently so a stale wrapper or inherited compatibility environment fails closed. Worker lifecycle hooks are silent no-ops and do not advance counters, markers, stamps, or memory state.
+- Regression is hermetic and uses no live model: worker-marker cases assert zero worker invocations and zero lifecycle state writes; main-session cases preserve current behavior; runtime projection and physical Claude hook copies are hash-checked after activation.
+
 ## [library] 공개 API (v3 + v4 추가)
 ```
 mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(dump|profile) / mem_import / mem_migrate / mem_lifecycle / mem_project
@@ -386,6 +394,8 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
   - **D-40**: semantic memory choices belong to the acting agent. Automatic prompt classification and recall injection are retired; deterministic code is limited to storage/retrieval mechanics and safety boundaries. D-15 and the automatic portion of D-34 are historical only.
 - **v18 신규 (Cluster L — background-model storm containment, §5.14)**:
   - **D-41**: all automatic distill paths share an atomic global concurrency pool(default 2/hard max 4), persistent 10-minute start budget(default 4/hard max 8), `.distill-disable` kill switch, stale-lease recovery, and adapter/runtime hash parity. Per-session locks remain necessary but are explicitly insufficient as a global cost boundary.
+- **v19 신규 (D-42 — main/worker lifecycle boundary, §5.14)**:
+  - **D-42**: automatic model-backed lifecycle belongs only to the interactive main session. All dispatch/title/distill/loop workers export `AGENT_SESSION_ROLE=worker`; compatibility markers also fail closed. Workers keep deterministic safety and task routing but never inject memory/briefing, increment distill counters, run SessionEnd sync/curation, summarize titles, publish main-pane state, or emit token-budget context.
 
 ## Next (구현 순서 — autopilot-code, 본 v5 입력)
 1. **Cluster A (파일 메커니즘 제거, Option 2)** 먼저 — 사용자 지적 incoherence 해소:

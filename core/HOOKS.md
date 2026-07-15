@@ -53,7 +53,7 @@ preflight doctor path, without blurring the conformance/drill distinction above.
 | memory injection | `tools/memory/mem.py inject` | `portable-check` | Inject relevant DB memory at session start. | Run `tools/memory/mem.py inject` for text output, or `tools/memory/mem.py inject --hook` when the runtime accepts Claude-style `additionalContext`; adapters may keep automatic session-start injection opt-in when the runtime can fire start events on resume or compact. |
 | agent-initiated memory retrieval | `tools/memory/recall.sh`, `tools/memory/mem.py recall` | `portable-check` | The acting agent decides when prior context is relevant, then invokes scoped retrieval. Ranking and limits organize results after that decision; prompt-submit hooks do not classify every prompt or inject threshold-qualified hits. | Expose an explicit adapter-native helper. Keep retrieval project-scoped by default and widen scope only when the agent chooses to do so. |
 | retired automatic recall shim | `hooks/mem-recall-inject.sh` | `portable-check` | Compatibility no-op for stale installed projections. It drains an old prompt payload, emits no context, and exits successfully. | Do not register it in current prompt hooks; expose the explicit retrieval helper above. |
-| memory distillation trigger | `hooks/mem-turn-nudge.sh`, `hooks/mem-distill-dispatch.sh` | `adapter-coupled-automation` | Periodically distill session deltas into DB memory through a no-tools worker. The shared dispatcher uses `MEM_DISTILL_WORKER=<executable>` with `<mode> <model> <prompt-file>` arguments. | Provide session transcript source (`mem.py distill --source <adapter>`), detached worker invocation, and no-tools/action contract before automatic memory mutation. |
+| memory distillation trigger | `hooks/mem-turn-nudge.sh`, `hooks/mem-distill-dispatch.sh` | `adapter-coupled-automation` | On an interactive main session only, periodically distill session deltas into DB memory through a no-tools worker. `AGENT_SESSION_ROLE=worker` and adapter compatibility markers make both hooks silent no-ops before counters, locks, or model calls. The shared dispatcher uses `MEM_DISTILL_WORKER=<executable>` with `<mode> <model> <prompt-file>` arguments. | Provide session transcript source (`mem.py distill --source <adapter>`), detached worker invocation, no-tools/action contract, and the same main/worker gate before automatic memory mutation. Deterministic safety hooks remain active in workers. |
 | oncall briefing injection | `hooks/mem-briefing-inject.sh` | `portable-check` | On the dedicated agent desk, inject daily oncall report once per day. | Run `hooks/mem-briefing-inject.sh --cwd <dir> [--format text]` before prompt handling, or attach it to a prompt-submit event. |
 | worklog state signal | `utilities/agent-worklog-state.sh` | `portable-check` | Surface configured `<agent-notes-root>` / `<worklog-board-app>` inventory without mutating data. | Run `utilities/agent-worklog-state.sh [cwd]` or an adapter wrapper before worklog-board or agent-notes work. |
 | runtime hook output protocol | adapter hook bridges | `adapter-payload-wrapper` | Hook stdout must match the owning runtime's hook protocol exactly. Context-injection hooks emit the runtime's structured context object; side-effect-only lifecycle hooks keep stdout empty unless that runtime explicitly accepts a structured success object. Portable helper text is never forwarded as raw hook stdout. | Each adapter must document its hook output contract, test the exact stdout shape for every native hook bridge, and route diagnostic/helper text to logs or stderr only when the runtime accepts it. |
@@ -113,10 +113,13 @@ is a manual preview surface and does not auto-apply unless the apply and
 contract-accepted env gates are explicit. Codex adapter-owned `session-end` and
 `turn-nudge` paths are the verified automatic realization: after the documented
 read-only `codex exec` tool-free proof, they default to automatic apply and opt
-out with `CODEX_DISTILL_ENABLE=0`.
+out with `CODEX_DISTILL_ENABLE=0`. They run only for an interactive main;
+dispatch/title/distill/loop workers make both paths silent no-ops under D-42.
 Use `adapters/opencode/bin/preflight.sh distill-delta <session-id>` for
 OpenCode transcript extraction through `opencode export`. OpenCode's no-tools
 worker contract is verified (`opencode run --pure --agent <distiller>` with all
 tools disabled), so `distill-propose` runs the worker and the plugin
 `event`/`session.idle` trigger auto-distills via `preflight.sh session-end`
-(debounced, enabled by default; opt out `OPENCODE_DISTILL_ENABLE=0`).
+(debounced, enabled by default for main sessions; opt out
+`OPENCODE_DISTILL_ENABLE=0`). Worker sessions keep plugin write/read guards and
+liveness heartbeats but skip automatic memory context and session-idle distill.

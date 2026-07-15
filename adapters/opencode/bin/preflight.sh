@@ -18,6 +18,16 @@ agent_home() {
 
 AGENT_ROOT=$(agent_home)
 
+is_worker_session() {
+  [ "${AGENT_SESSION_ROLE:-}" = "worker" ] \
+    || [ "${AGENT_DISPATCH_CHILD:-}" = "1" ] \
+    || [ -n "${AGENT_DISPATCH_DEPTH:-}" ] \
+    || [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] \
+    || [ -n "${OPENCODE_DISPATCH_SLUG:-}" ] \
+    || [ "${FLEET_TITLE_REFRESH:-}" = "1" ] \
+    || [ "${MEM_DISTILL:-}" = "1" ]
+}
+
 opencode_config_content_has_opencode_skills() {
   content=$1
   if [ -z "$content" ]; then
@@ -683,10 +693,9 @@ EOF
   session-end)
     cwd=${2:-$PWD}
     sid=${3:-opencode}
-    # Recursion guard: skip when invoked from within a distiller worker (the
-    # `opencode run` worker exports MEM_DISTILL=1, and a --pure worker would not
-    # load the plugin anyway). Mirrors the codex session-end guard.
-    [ "${MEM_DISTILL:-}" = "1" ] && exit 0
+    # D-42 defense in depth: workers never create a debounce stamp, sync, or
+    # start another distiller from session.idle/session-end.
+    is_worker_session && exit 0
     # Debounce: the OpenCode plugin fires this on session.idle, which occurs after
     # every turn. Rate-limit per session so a long TUI session triggers at most
     # one worker per OPENCODE_DISTILL_MIN_INTERVAL seconds (default 600).

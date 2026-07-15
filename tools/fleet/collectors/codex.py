@@ -37,6 +37,7 @@ _SID_RE = re.compile(r"-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 _INDEX = {"ts": 0.0, "map": None}          # cwd → rollout paths (newest first)
 _INDEX_TTL = 1.5
 _FALLBACK_CLAIMS = {"ts": 0.0, "sids": set()}  # session ids assigned without a proc fd
+_PROC_PATHS = {}                                  # pid -> rollout reserved at collect tick start
 _CFG = {"ts": 0.0, "model": None, "effort": None}
 _TITLE_INDEX = {"stamp": None, "map": {}}      # native state stamps -> sid: title
 
@@ -258,6 +259,32 @@ def _fallback_rollout(sess, home):
     return path
 
 
+def prepare_tick(sessions):
+    """Reserve proc-owned rollouts before any same-cwd fallback attribution.
+
+    A rollout can be visible only on a newer Codex process while an older TUI in
+    the same cwd has no open transcript fd. Enrichment is PID-ordered, so without
+    a prepass the older row can claim the newer process's sole fallback candidate
+    and both rows display one session id/title. Reserve every owned fd first.
+    """
+    home = _home()
+    paths = {}
+    claimed = set()
+    for sess in sessions:
+        if getattr(sess, "harness", None) != "codex" or not getattr(sess, "cwd", None):
+            continue
+        path = _proc_rollout(sess.pid, sess.cwd, home)
+        if not path:
+            continue
+        paths[sess.pid] = path
+        sid = _sid(path)
+        if sid:
+            claimed.add(sid)
+    _PROC_PATHS.clear()
+    _PROC_PATHS.update(paths)
+    _FALLBACK_CLAIMS.update(ts=time.time(), sids=claimed)
+
+
 def _tail_token_count(path, chunk=65536):
     """Last '"token_count"' line within the file's trailing `chunk` bytes."""
     try:
@@ -473,7 +500,7 @@ def enrich(sess):
         sess.effort = effort
     if not sess.cwd:
         return
-    path = _proc_rollout(sess.pid, sess.cwd, home) or _fallback_rollout(sess, home)
+    path = _PROC_PATHS.get(sess.pid) or _proc_rollout(sess.pid, sess.cwd, home) or _fallback_rollout(sess, home)
     if not path:
         return                                       # no matching rollout → telemetry stays '—'
     # app-server is the session process in this client-server Codex version. Treating it as a

@@ -285,7 +285,7 @@ _loop_run_claude() {
   local settings="${DRILL_CLAUDE_SETTINGS:-$AGENT_HOME/adapters/claude/settings.json}"
   local settings_arg=()
   [ -f "$settings" ] && settings_arg=(--settings "$settings")
-  ( cd "$repo" && AGENT_HOME="$agent_home" timeout "$to" "$bin" -p "$(cat "$pf")" \
+  ( cd "$repo" && AGENT_HOME="$agent_home" AGENT_SESSION_ROLE=worker timeout "$to" "$bin" -p "$(cat "$pf")" \
       "${settings_arg[@]}" --allowedTools "$DRILL_CLAUDE_TOOLS" --output-format json ${maxturns:+--max-turns "$maxturns"} ) \
       > "$j" 2>"${j%.json}.stderr.txt"
   runtime_rc=$?
@@ -343,7 +343,7 @@ _loop_run_codex() {
       return 64
       ;;
   esac
-  ( cd "$repo" && AGENT_HOME="$agent_home" timeout "$to" "$bin" exec --cd "$repo" \
+  ( cd "$repo" && AGENT_HOME="$agent_home" AGENT_SESSION_ROLE=worker timeout "$to" "$bin" exec --cd "$repo" \
       "${sandbox_args[@]}" \
       --skip-git-repo-check --json - < "$pf" ) \
       > "$j" 2>"${j%.json}.stderr.txt"
@@ -385,7 +385,7 @@ _loop_run_opencode() {
   local runtime_rc parse_rc
   command -v "$bin" >/dev/null 2>&1 || bin="$HOME/.opencode/bin/opencode"
   local model_arg=(); [ -n "${OPENCODE_LOOP_MODEL:-}" ] && model_arg=(-m "$OPENCODE_LOOP_MODEL")
-  ( cd "$repo" && AGENT_HOME="$agent_home" timeout "$to" "$bin" run --dir "$repo" --format json "${model_arg[@]}" "$(cat "$pf")" ) \
+  ( cd "$repo" && AGENT_HOME="$agent_home" AGENT_SESSION_ROLE=worker timeout "$to" "$bin" run --dir "$repo" --format json "${model_arg[@]}" "$(cat "$pf")" ) \
       > "$j" 2>"${j%.json}.stderr.txt"
   runtime_rc=$?
   python3 - "$j" "$t" <<'PY'

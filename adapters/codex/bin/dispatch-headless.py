@@ -273,6 +273,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         "You are a Codex headless worker launched by the portable agent harness.\n"
         "Follow the Codex adapter contract before doing task work.\n\n"
         "Required bootstrap:\n"
+        "- This process is AGENT_SESSION_ROLE=worker. Main-only hook lifecycle (automatic memory/briefing/turn-nudge/session-end curator/title/token context) is disabled; deterministic safety, routing, handoff, liveness, and verification remain active.\n"
         "- Resolve harness files through $AGENT_HOME; the target project need not contain an adapters/ directory.\n"
         "- Read $AGENT_HOME/adapters/codex/AGENTS.md first.\n"
         "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh status . codex-headless and inspect workflow, artifact, git, worktree, and headless-job risk fields.\n"
@@ -645,6 +646,7 @@ def main(argv: list[str]) -> int:
     if action == "start":
         dispatch_env = {
             **os.environ,
+            "AGENT_SESSION_ROLE": "worker",
             "AGENT_DISPATCH_CHILD": "1",
             "AGENT_DISPATCH_DEPTH": str(args.depth),
             "AGENT_DISPATCH_INTENSITY": args.intensity,

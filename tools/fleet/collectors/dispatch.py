@@ -721,7 +721,7 @@ def _scan_processes():
             parent_sid = env.get("AGENT_DISPATCH_PARENT_SESSION_ID") or env.get("CLAUDE_CODE_SESSION_ID")
             parent_slug = env.get("AGENT_DISPATCH_PARENT_SLUG")
             depth = _parse_depth(env.get("AGENT_DISPATCH_DEPTH"))
-            is_child = env.get("CLAUDE_CODE_CHILD_SESSION") == "1" or bool(parent_slug or parent_sid)
+            is_child = env.get("AGENT_SESSION_ROLE", "").lower() == "worker" or env.get("CLAUDE_CODE_CHILD_SESSION") == "1" or bool(parent_slug or parent_sid)
             q, qsrc = effective_qa(qa, None, jcwd, slug, key)
             jobs.append(DispatchJob(
                 key=key, stage=live_stage(jcwd, slug, key), mode=mode, qa=q,
@@ -757,7 +757,7 @@ def _scan_processes():
             parent_sid = env.get("AGENT_DISPATCH_PARENT_SESSION_ID") or env.get("CLAUDE_CODE_SESSION_ID")
             parent_slug = env.get("AGENT_DISPATCH_PARENT_SLUG")
             parent_cwd = env.get("AGENT_DISPATCH_PARENT_CWD") or (env.get("PWD") if parent_sid else None)
-            is_child = env.get("CLAUDE_CODE_CHILD_SESSION") == "1" or bool(parent_slug or parent_sid)
+            is_child = env.get("AGENT_SESSION_ROLE", "").lower() == "worker" or env.get("CLAUDE_CODE_CHILD_SESSION") == "1" or bool(parent_slug or parent_sid)
             jobs.append(DispatchJob(
                 key=key, stage="running", mode="loop/%s" % key,
                 elapsed_min=etime_to_min(etime), slug=current_case or key, cwd=jcwd,

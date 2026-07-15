@@ -102,6 +102,29 @@ run UserPromptSubmit 'trigger gc' >/dev/null
 [ ! -e "$old" ] && ok "stale (>3d) state file GC'd" || bad "stale state file should be deleted"
 [ -e "$TMP/.turn-state-$SID" ] && ok "fresh state file preserved by GC" || bad "fresh state file wrongly deleted"
 
+echo "== T8: D-42 worker markers return before counter/state creation =="
+worker_case=0
+for assignment in \
+  "AGENT_SESSION_ROLE=worker" \
+  "AGENT_DISPATCH_CHILD=1" \
+  "AGENT_DISPATCH_DEPTH=1" \
+  "CLAUDE_CODE_CHILD_SESSION=1" \
+  "OPENCODE_DISPATCH_SLUG=worker-slug" \
+  "FLEET_TITLE_REFRESH=1" \
+  "MEM_DISTILL=1"; do
+  worker_case=$((worker_case + 1))
+  worker_sid="worker-nudge-$worker_case"
+  worker_state="$TMP/.turn-state-$worker_sid"
+  rm -f "$worker_state"
+  worker_out="$(printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"x"}' "$worker_sid" \
+    | env "$assignment" MEM_STORE="$TMP" MEM_NUDGE_INTERVAL=1 bash "$HOOK")"
+  if [ -z "$worker_out" ] && [ ! -e "$worker_state" ]; then
+    ok "T8: $assignment → silent no-op, no counter state"
+  else
+    bad "T8: $assignment must return before counter state"
+  fi
+done
+
 echo
 echo "RESULT: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = "0" ]

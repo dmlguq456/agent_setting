@@ -280,6 +280,10 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         )
     return (
         "Run the requested portable harness work.\n"
+        "This process is AGENT_SESSION_ROLE=worker. Main-only automatic memory, "
+        "briefing, turn-nudge/session-end curator, title, token-context, and pane "
+        "publication lifecycle is disabled; deterministic safety, routing, handoff, "
+        "liveness, and verification remain active.\n"
         f"capability={args.capability}\nmode={args.mode}\nqa={args.qa}\n"
         f"intensity={args.intensity}\ndepth={args.depth}\nparent={args.parent_slug or '-'}\n"
         f"parent_session_id={args.parent_session_id or '-'}\n"
@@ -538,6 +542,7 @@ def main(argv: list[str]) -> int:
     if action == "start":
         proc = subprocess.Popen(["sh", "-c", command], start_new_session=True, env={
             **os.environ,
+            "AGENT_SESSION_ROLE": "worker",
             "AGENT_DISPATCH_CHILD": "1",
             "AGENT_DISPATCH_DEPTH": str(args.depth),
             "AGENT_DISPATCH_INTENSITY": args.intensity,

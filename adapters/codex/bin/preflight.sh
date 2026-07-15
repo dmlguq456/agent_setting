@@ -18,6 +18,16 @@ agent_home() {
 
 AGENT_ROOT=$(agent_home)
 
+is_worker_session() {
+  [ "${AGENT_SESSION_ROLE:-}" = "worker" ] \
+    || [ "${AGENT_DISPATCH_CHILD:-}" = "1" ] \
+    || [ -n "${AGENT_DISPATCH_DEPTH:-}" ] \
+    || [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] \
+    || [ -n "${OPENCODE_DISPATCH_SLUG:-}" ] \
+    || [ "${FLEET_TITLE_REFRESH:-}" = "1" ] \
+    || [ "${MEM_DISTILL:-}" = "1" ]
+}
+
 usage() {
   cat <<'EOF'
 usage: preflight.sh write <file> [session-id]
@@ -265,9 +275,8 @@ case "$cmd" in
   session-end)
     cwd=${2:-$PWD}
     sid=${3:-codex}
-    # Recursion guard: skip the whole session-end pipeline when invoked from
-    # within a distiller (the codex exec worker exports MEM_DISTILL=1).
-    [ "${MEM_DISTILL:-}" = "1" ] && exit 0
+    # D-42 defense in depth: worker exit owns no sync/curator lifecycle.
+    is_worker_session && exit 0
     # SessionEnd sync contract (core/MEMORY.md §7, D-31): mem sync plus a
     # dump.jsonl git-mirror push. Omitting MEM_DUMP_PUSH lets Codex-session
     # memory drift from the remote mirror. mem.py bounds the push to five
@@ -331,7 +340,8 @@ case "$cmd" in
   turn-nudge)
     cwd=${2:-$PWD}
     sid=${3:-codex}
-    [ "${MEM_DISTILL:-}" = "1" ] && exit 0
+    # Return before creating or advancing any worker turn state (D-42).
+    is_worker_session && exit 0
     [ -n "$sid" ] && [ "$sid" != "default" ] || exit 0
     interval=${MEM_NUDGE_INTERVAL:-10}
     case "$interval" in (*[!0-9]*|"") interval=10 ;; esac

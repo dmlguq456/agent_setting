@@ -179,6 +179,7 @@ class CrossHarnessWorkerTest(_EnvMixin, unittest.TestCase):
         self.assertTrue(os.path.isdir(titles.lock_path("codex-sid", harness="codex")))
         self.assertTrue(os.path.isdir(captured["argv"][captured["argv"].index("--slotdir") + 1]))
         self.assertEqual(captured["kwargs"]["env"]["FLEET_TITLE_REFRESH"], "1")
+        self.assertEqual(captured["kwargs"]["env"]["AGENT_SESSION_ROLE"], "worker")
 
     def test_fleet_schedules_only_live_mode(self):
         session = Session(harness="codex", pid=1, cwd="/repo", session_id="sid", liveness="working")

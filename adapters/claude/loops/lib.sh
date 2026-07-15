@@ -22,12 +22,12 @@ run_claude_retry() {
     fi
     case "$LOOP_ADAPTER" in
       codex)
-        out="$(timeout "$to" "${CODEX_BIN:-codex}" exec --sandbox workspace-write --skip-git-repo-check - < "$pf" 2>&1)" ;;
+        out="$(AGENT_SESSION_ROLE=worker timeout "$to" "${CODEX_BIN:-codex}" exec --sandbox workspace-write --skip-git-repo-check - < "$pf" 2>&1)" ;;
       opencode)
         _ocbin="${OPENCODE_BIN:-opencode}"; command -v "$_ocbin" >/dev/null 2>&1 || _ocbin="$HOME/.opencode/bin/opencode"
-        out="$(timeout "$to" "$_ocbin" run "$(cat "$pf")" 2>&1)" ;;
+        out="$(AGENT_SESSION_ROLE=worker timeout "$to" "$_ocbin" run "$(cat "$pf")" 2>&1)" ;;
       *)
-        out="$(timeout "$to" "$HOME/.local/bin/claude" -p "$(cat "$pf")" "$@" 2>&1)" ;;
+        out="$(AGENT_SESSION_ROLE=worker timeout "$to" "$HOME/.local/bin/claude" -p "$(cat "$pf")" "$@" 2>&1)" ;;
     esac
     rc=$?
     printf '%s\n' "$out"

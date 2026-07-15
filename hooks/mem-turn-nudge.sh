@@ -9,10 +9,18 @@ set -euo pipefail
 HOOK_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)"
 AGENT_HOME="${AGENT_HOME:-$("$HOOK_DIR/../utilities/agent-home.sh")}"
 
-# Recursion guard (spec v7 §5.5): distiller sessions never re-dispatch.
-# Place this before stdin parsing. Draining stdin avoids SIGPIPE/nonzero exits
-# in pipefail callers; the normal path consumes stdin below.
-[ "${MEM_DISTILL:-}" = "1" ] && { cat >/dev/null 2>&1; exit 0; }
+# D-42 main/worker boundary. Place this before stdin parsing and every counter
+# write. Draining stdin avoids SIGPIPE/nonzero exits in pipefail callers.
+if [ "${AGENT_SESSION_ROLE:-}" = "worker" ] \
+  || [ "${AGENT_DISPATCH_CHILD:-}" = "1" ] \
+  || [ -n "${AGENT_DISPATCH_DEPTH:-}" ] \
+  || [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] \
+  || [ -n "${OPENCODE_DISPATCH_SLUG:-}" ] \
+  || [ "${FLEET_TITLE_REFRESH:-}" = "1" ] \
+  || [ "${MEM_DISTILL:-}" = "1" ]; then
+  cat >/dev/null 2>&1
+  exit 0
+fi
 
 input=$(cat 2>/dev/null || true)
 eval "$(printf '%s' "$input" | python3 -c '

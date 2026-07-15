@@ -386,6 +386,7 @@ def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT, capacity_held=False):
         if refresh_disabled():
             return ""
         env = dict(os.environ)
+        env["AGENT_SESSION_ROLE"] = "worker"
         env["FLEET_TITLE_REFRESH"] = "1"
         result = subprocess.run(
             argv,
@@ -459,6 +460,7 @@ def maybe_spawn(harness, sid, transcript, now=None, debounce=DEBOUNCE_SEC):
         return False
 
     env = dict(os.environ)
+    env["AGENT_SESSION_ROLE"] = "worker"
     env["FLEET_TITLE_REFRESH"] = "1"
     argv = [
         sys.executable,

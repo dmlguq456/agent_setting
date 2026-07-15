@@ -122,6 +122,18 @@ def env_truthy(name: str) -> bool:
     return os.environ.get(name, "").lower() in {"1", "true", "yes", "on"}
 
 
+def is_worker_session() -> bool:
+    return (
+        os.environ.get("AGENT_SESSION_ROLE", "").lower() == "worker"
+        or os.environ.get("AGENT_DISPATCH_CHILD") == "1"
+        or bool(os.environ.get("AGENT_DISPATCH_DEPTH"))
+        or os.environ.get("CLAUDE_CODE_CHILD_SESSION") == "1"
+        or bool(os.environ.get("OPENCODE_DISPATCH_SLUG"))
+        or os.environ.get("FLEET_TITLE_REFRESH") == "1"
+        or os.environ.get("MEM_DISTILL") == "1"
+    )
+
+
 def token_budget_timeout() -> float:
     try:
         value = float(os.environ.get("CODEX_TOKEN_BUDGET_HOOK_TIMEOUT_SECONDS", "1.0"))
@@ -236,6 +248,11 @@ def token_budget_context(current_cwd: str, sid: str) -> str:
 
 def main() -> int:
     payload = load_payload()
+    # Dispatch prompts carry their own explicit status/prompt-signal/mode
+    # bootstrap. Main-only briefing, token context, and turn-nudge would be
+    # duplicate context and can recursively create model work (D-42).
+    if is_worker_session():
+        return 0
     current_cwd = cwd(payload)
     sid = session_id(payload)
 

@@ -70,12 +70,22 @@ def collect_all(harness_filter=None, jobs_path=None):
 
     # --- per-harness passive enrichment (each enricher self-resolves its home from env) ---
     enrichers = {}
+    modules = {}
     for name in ("claude", "codex", "opencode"):
         try:
             mod = importlib.import_module("." + name, __package__)
+            modules[name] = mod
             enrichers[name] = mod.enrich
         except Exception:
             pass
+    # Reserve strong process-owned identities before any PID-ordered fallback.
+    # Codex uses this to prevent one same-cwd rollout from labeling two TUIs.
+    try:
+        prepare = getattr(modules.get("codex"), "prepare_tick", None)
+        if prepare:
+            prepare(sessions)
+    except Exception:
+        pass
     for s in sessions:
         fn = enrichers.get(s.harness)
         if fn:

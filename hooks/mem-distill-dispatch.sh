@@ -51,8 +51,18 @@ HOOK_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 AGENT_HOME="${AGENT_HOME:-$("$HOOK_DIR/../utilities/agent-home.sh")}"
 APPLIER="${MEM_APPLIER:-$HOOK_DIR/../tools/memory/apply-distill-actions.py}"
 
-# Recursion guard: a distiller session never launches another distiller.
-[ "${MEM_DISTILL:-}" = "1" ] && exit 0
+# D-42: automatic distillation belongs to the interactive main session only.
+# Any portable or adapter-specific worker evidence wins; keep this before store
+# creation, counters, leases, transcript reads, and model boundaries.
+if [ "${AGENT_SESSION_ROLE:-}" = "worker" ] \
+  || [ "${AGENT_DISPATCH_CHILD:-}" = "1" ] \
+  || [ -n "${AGENT_DISPATCH_DEPTH:-}" ] \
+  || [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] \
+  || [ -n "${OPENCODE_DISPATCH_SLUG:-}" ] \
+  || [ "${FLEET_TITLE_REFRESH:-}" = "1" ] \
+  || [ "${MEM_DISTILL:-}" = "1" ]; then
+  exit 0
+fi
 
 # Opt-in gate: remain a no-op until explicitly enabled (see R1 above).
 [ "${MEM_DISTILL_ENABLE:-}" = "1" ] || exit 0

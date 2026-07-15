@@ -422,6 +422,7 @@ class SecurityTest(_ConfigHomeMixin, unittest.TestCase):
             self.assertIn(tool, blocked)
         self.assertEqual(len(rt.DISALLOWED_TOOLS.split()), 11)
         self.assertEqual(captured["env"]["FLEET_TITLE_REFRESH"], "1")
+        self.assertEqual(captured["env"]["AGENT_SESSION_ROLE"], "worker")
 
     def test_validate_caps_injected_long_string(self):
         payload = "rm -rf / ; " * 20

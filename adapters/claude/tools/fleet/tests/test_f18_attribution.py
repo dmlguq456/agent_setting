@@ -50,6 +50,7 @@ class ProcscanTaggingTest(unittest.TestCase):
         self.assertFalse(s.mem_worker)
 
     def test_cross_harness_dispatch_markers_hide_children_but_not_ordinary_codex(self):
+        self.assertTrue(self._scan_one({"AGENT_SESSION_ROLE": "worker"}).is_child)
         s = self._scan_one({"AGENT_DISPATCH_CHILD": "1"})
         self.assertTrue(s.is_child)
         self.assertTrue(self._scan_one({"AGENT_DISPATCH_DEPTH": "2"}).is_child)
@@ -66,6 +67,18 @@ class CodexRolloutAttributionTest(unittest.TestCase):
              mock.patch.object(codex.time, "time", return_value=1720828860):
             codex._FALLBACK_CLAIMS.update(ts=0, sids=set())
             self.assertEqual([codex._fallback_rollout(s, "/home/codex") for s in sessions], [None, None])
+
+    def test_prepare_tick_reserves_owned_rollout_before_pid_ordered_fallback(self):
+        older = Session(harness="codex", pid=10, cwd="/work/repo", elapsed_min=1)
+        owner = Session(harness="codex", pid=20, cwd="/work/repo", elapsed_min=1)
+        path = "/r/rollout-2026-07-15T00-00-00-11111111-1111-1111-1111-111111111111.jsonl"
+        with mock.patch.object(codex, "_proc_rollout", side_effect=lambda pid, cwd, home: path if pid == 20 else None), \
+             mock.patch.object(codex, "_index", return_value={"/work/repo": [path]}), \
+             mock.patch.object(codex, "_rollout_meta", return_value={"timestamp": "2026-07-15T00:00:00Z"}), \
+             mock.patch.object(codex.time, "time", return_value=1784073600):
+            codex.prepare_tick([older, owner])
+            self.assertIsNone(codex._fallback_rollout(older, "/home/codex"))
+            self.assertEqual(codex._PROC_PATHS[20], path)
 
     def test_root_rollout_beats_open_subagent_rollout(self):
         fd_links = {"3": "/home/codex/sessions/a/rollout-2026-07-13T00-00-00-11111111-1111-1111-1111-111111111111.jsonl",

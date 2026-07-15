@@ -2139,6 +2139,26 @@ if printf '%s\n' "$codex_qualified_patch_payload" \
 else
   bad "codex native hook projection should block qualified apply_patch writes"
 fi
+codex_freeform_patch_payload=$(python3 - "$TMP/runtime/projects/abc/memory/FREEFORM.md" "$TMP/runtime" <<'PY'
+import json
+import sys
+
+print(json.dumps({
+  "tool_name": "apply_patch",
+  "tool_input": f"*** Begin Patch\n*** Add File: {sys.argv[1]}\n+blocked\n*** End Patch\n",
+  "session_id": "testsid",
+  "cwd": sys.argv[2],
+}))
+PY
+)
+if printf '%s\n' "$codex_freeform_patch_payload" \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_freeform_patch_block.out 2>/tmp/codex_freeform_patch_block.err \
+  && grep -q '"decision": "block"' /tmp/codex_freeform_patch_block.out \
+  && grep -q 'memory' /tmp/codex_freeform_patch_block.out; then
+  ok "codex native hook projection parses freeform tool_input strings"
+else
+  bad "codex native hook projection should parse freeform apply_patch input"
+fi
 mkdir -p "$TMP/repo/spec/design"
 printf '<!doctype html><title>ok</title>\n' > "$TMP/repo/spec/design/preview.html"
 if printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/spec/design/preview.html" "$TMP/repo" \
@@ -2427,6 +2447,54 @@ if MEM_DISTILL=1 CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/store_sess
   ok "codex session-end no-ops under MEM_DISTILL=1 recursion guard"
 else
   bad "codex session-end must no-op under MEM_DISTILL=1 recursion guard"
+fi
+# D-42: every worker path returns before sync/store/model work. Test both the
+# preflight defense and the native SessionEnd/UserPrompt/SessionStart bridges.
+if AGENT_SESSION_ROLE=worker CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/store_session_end_worker" \
+  PATH="$TMP/stubbin:$PATH" CODEX_STUB_ARGV="$TMP/codex_argv_se_worker" \
+  "$CODEX" session-end "$TMP/flowproj" codexsid >/tmp/codex_se_worker.out 2>/tmp/codex_se_worker.err \
+  && [ ! -e "$TMP/store_session_end_worker" ] \
+  && [ ! -e "$TMP/codex_argv_se_worker" ]; then
+  ok "codex preflight session-end no-ops before state/model work for workers"
+else
+  bad "codex preflight session-end must be main-session-only"
+fi
+if printf '{"hook_event_name":"SessionEnd","session_id":"codex-worker-hook","cwd":"%s"}\n' "$TMP/flowproj" \
+  | AGENT_SESSION_ROLE=worker MEM_STORE="$TMP/store_session_end_hook_worker" \
+    python3 "$ROOT/adapters/codex/hooks/sessionend-lifecycle.py" \
+  && [ ! -e "$TMP/store_session_end_hook_worker" ]; then
+  ok "codex native SessionEnd bridge returns silently for workers"
+else
+  bad "codex native SessionEnd bridge must not detach worker lifecycle"
+fi
+codex_worker_prompt_out="$(printf '{"hook_event_name":"UserPromptSubmit","session_id":"codex-worker-prompt","cwd":"%s"}\n' "$TMP/flowproj" \
+  | AGENT_SESSION_ROLE=worker MEM_STORE="$TMP/store_prompt_worker" \
+    python3 "$ROOT/adapters/codex/hooks/userprompt-lifecycle.py" 2>/tmp/codex_worker_prompt.err)"
+if [ -z "$codex_worker_prompt_out" ] && [ ! -e "$TMP/store_prompt_worker" ]; then
+  ok "codex native UserPromptSubmit bridge injects no main context for workers"
+else
+  bad "codex worker prompt bridge must be context/state free"
+fi
+codex_worker_start_out="$(printf '{"hook_event_name":"SessionStart","session_id":"codex-worker-start","cwd":"%s"}\n' "$TMP/flowproj" \
+  | AGENT_SESSION_ROLE=worker CODEX_SESSION_MEMORY_INJECT=1 MEM_STORE="$TMP/store_start_worker" \
+    python3 "$ROOT/adapters/codex/hooks/sessionstart-lifecycle.py" 2>/tmp/codex_worker_start.err)"
+if [ -z "$codex_worker_start_out" ]; then
+  ok "codex native SessionStart skips opt-in memory context for workers"
+else
+  bad "codex worker SessionStart must not inject memory context"
+fi
+if grep -Fq '"AGENT_SESSION_ROLE": "worker"' "$ROOT/adapters/claude/bin/dispatch-headless.py" \
+  && grep -Fq '"AGENT_SESSION_ROLE": "worker"' "$ROOT/adapters/codex/bin/dispatch-headless.py" \
+  && grep -Fq '"AGENT_SESSION_ROLE": "worker"' "$ROOT/adapters/opencode/bin/dispatch-headless.py" \
+  && grep -Fq 'AGENT_SESSION_ROLE=worker' "$ROOT/adapters/claude/bin/mem-distill-worker.sh" \
+  && grep -Fq 'AGENT_SESSION_ROLE=worker' "$ROOT/adapters/codex/bin/distill-worker.sh" \
+  && grep -Fq 'AGENT_SESSION_ROLE=worker' "$ROOT/adapters/opencode/bin/distill-worker.sh" \
+  && grep -Fq 'AGENT_SESSION_ROLE=worker' "$ROOT/loops/lib.sh" \
+  && grep -Fq 'AGENT_SESSION_ROLE=worker' "$ROOT/loops/lib-runner.sh" \
+  && grep -Fq 'env["AGENT_SESSION_ROLE"] = "worker"' "$ROOT/tools/fleet/refresh_title.py"; then
+  ok "all repo-owned dispatch/title/distill/loop model launchers mark workers"
+else
+  bad "every background model launcher must export AGENT_SESSION_ROLE=worker"
 fi
 RPHOME="$TMP/codex-runtime-home"
 rm -rf "$RPHOME"; mkdir -p "$RPHOME"
@@ -3298,6 +3366,42 @@ then
   ok "opencode native plugin prompt lifecycle bridges to preflight"
 else
   bad "opencode native plugin prompt lifecycle should bridge to preflight"
+fi
+OPENCODE_WORKER_ROOT="$TMP/opencode_worker_root"
+mkdir -p "$OPENCODE_WORKER_ROOT/core" "$OPENCODE_WORKER_ROOT/adapters/opencode/bin"
+printf 'worker fixture\n' > "$OPENCODE_WORKER_ROOT/core/CORE.md"
+cat > "$OPENCODE_WORKER_ROOT/adapters/opencode/bin/preflight.sh" <<EOF
+#!/usr/bin/env sh
+printf '%s\n' "\$*" >> "$OPENCODE_WORKER_ROOT/calls"
+case "\${1:-}" in
+  write) exit 73 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$OPENCODE_WORKER_ROOT/adapters/opencode/bin/preflight.sh"
+if AGENT_HOME="$OPENCODE_WORKER_ROOT" AGENT_SESSION_ROLE=worker \
+  node --input-type=module >/tmp/opencode_plugin_worker.out 2>/tmp/opencode_plugin_worker.err <<EOF
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+const plugin = await AgentHarnessGuards({ directory: "$TMP/flowproj", worktree: "$TMP/flowproj" })
+const output = { system: [] }
+await plugin["experimental.chat.system.transform"]({ sessionID: "op-worker", model: {} }, output)
+if (output.system.length !== 0) process.exit(1)
+await plugin.event({ event: { type: "session.idle", properties: { sessionID: "op-worker" } } })
+try {
+  await plugin["tool.execute.before"]({ tool: "write", sessionID: "op-worker" }, { args: { filePath: "$TMP/flowproj/f" } })
+  process.exit(1)
+} catch {}
+EOF
+then
+  if grep -q '^start ' "$OPENCODE_WORKER_ROOT/calls" \
+    && grep -q '^write ' "$OPENCODE_WORKER_ROOT/calls" \
+    && ! grep -Eq '^(memory|briefing|prompt-signal|mode|session-end) ' "$OPENCODE_WORKER_ROOT/calls"; then
+    ok "opencode worker plugin skips main lifecycle while retaining write guards"
+  else
+    bad "opencode worker plugin must separate lifecycle from safety guards"
+  fi
+else
+  bad "opencode worker plugin must separate lifecycle from safety guards"
 fi
 if node --input-type=module >/tmp/opencode_plugin_hook_block.out 2>/tmp/opencode_plugin_hook_block.err <<EOF
 import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"

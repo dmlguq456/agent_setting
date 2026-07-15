@@ -30,8 +30,17 @@ Without arguments, reads Claude hook JSON from stdin and emits Claude hook JSON.
 EOF
 }
 
-# Recursion guard: drain stdin and exit in distiller sessions.
-[ "${MEM_DISTILL:-}" = "1" ] && { cat >/dev/null 2>&1; exit 0; }
+# D-42: the morning desk is main-session context, never worker bootstrap.
+if [ "${AGENT_SESSION_ROLE:-}" = "worker" ] \
+  || [ "${AGENT_DISPATCH_CHILD:-}" = "1" ] \
+  || [ -n "${AGENT_DISPATCH_DEPTH:-}" ] \
+  || [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] \
+  || [ -n "${OPENCODE_DISPATCH_SLUG:-}" ] \
+  || [ "${FLEET_TITLE_REFRESH:-}" = "1" ] \
+  || [ "${MEM_DISTILL:-}" = "1" ]; then
+  cat >/dev/null 2>&1
+  exit 0
+fi
 
 EVENT="UserPromptSubmit"
 CWD=""

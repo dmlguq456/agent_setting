@@ -910,6 +910,13 @@
       "hard_block": false
     },
     {
+      "slug": "hook__-c__SessionEnd",
+      "name": "-c",
+      "mono": "-c",
+      "event": "SessionEnd",
+      "hard_block": false
+    },
+    {
       "slug": "hook__herdr-agent-state__SessionEnd",
       "name": "herdr-agent-state release",
       "mono": "herdr-agent-state",
@@ -924,23 +931,16 @@
       "hard_block": false
     },
     {
-      "slug": "hook__mem.py__SessionEnd",
-      "name": "mem.py sync",
-      "mono": "mem.py",
-      "event": "SessionEnd",
+      "slug": "hook__-c__SessionStart",
+      "name": "-c",
+      "mono": "-c",
+      "event": "SessionStart",
       "hard_block": false
     },
     {
       "slug": "hook__herdr-agent-state__SessionStart",
       "name": "herdr-agent-state idle",
       "mono": "herdr-agent-state",
-      "event": "SessionStart",
-      "hard_block": false
-    },
-    {
-      "slug": "hook__mem.py__SessionStart",
-      "name": "mem.py inject",
-      "mono": "mem.py",
       "event": "SessionStart",
       "hard_block": false
     },

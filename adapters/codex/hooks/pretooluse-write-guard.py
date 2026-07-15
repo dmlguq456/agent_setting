@@ -110,9 +110,25 @@ def is_shell_tool(name: str) -> bool:
 
 
 def patch_text(payload: dict[str, Any], args: dict[str, Any]) -> str:
-    return first_string(args, "patch", "patchText", "patch_text", "input") or first_string(
-        payload, "patch", "patchText", "patch_text", "input", "text"
+    direct = first_string(args, "patch", "patchText", "patch_text", "input") or first_string(
+        payload, "patch", "patchText", "patch_text", "input", "text", "tool_input", "toolInput"
     )
+    if direct:
+        return direct
+
+    # Freeform tool transports may wrap the raw patch below one or more
+    # provider-owned envelope objects. Search mappings/lists only for an
+    # unmistakable apply_patch payload instead of guessing a target path.
+    pending: list[Any] = list(payload.values())
+    while pending:
+        value = pending.pop()
+        if isinstance(value, str) and "*** Begin Patch" in value:
+            return value
+        if isinstance(value, dict):
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    return ""
 
 
 def shell_command(payload: dict[str, Any], args: dict[str, Any]) -> str:

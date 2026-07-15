@@ -64,6 +64,8 @@ Work isolation follows `OPERATIONS §5.10`: only a typo or one-line direct edit 
 
 The main session is the context owner, router, orchestrator, and final integrator (`OPERATIONS §5.10` main-session role contract); separable `standard+` stages go to registered worker sessions, and an inline run of separable work records its reason. A "no sub-agents" restriction covers the Agent tool's native delegation, not registered headless worker dispatch — extend it to both surfaces only when the user names both or runtime evidence verifiably restricts both.
 
+Registered headless, loop/drill, Fleet title, and distill/curator processes export `AGENT_SESSION_ROLE=worker`. Worker bootstrap keeps deterministic write/core/spec/artifact/worktree/permission guards and explicit task routing, but main-only automatic lifecycle is disabled: memory injection, briefing, turn-nudge/distill, SessionEnd sync/curation, Fleet title recursion, token context, and Herdr main-pane publication. Any legacy worker marker also fails closed; worker SessionEnd is a silent no-op.
+
 Use `deep orchestrator` for the standard+ conductor. Retain `orchestrator` for already decided mechanical coordination. Planning and architecture may prefer an eligible GPT-family deep maker without hard pinning; use deterministic dispatch-route traces and current capacity.
 
 ### 1. Communication Discipline

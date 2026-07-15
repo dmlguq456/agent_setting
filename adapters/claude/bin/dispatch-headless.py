@@ -272,6 +272,11 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         header = "You are a Claude headless worker launched by the portable agent harness.\n\n"
     return (
         header
+        + "Worker lifecycle boundary: AGENT_SESSION_ROLE=worker disables automatic "
+        "memory injection, briefing, turn-nudge/distill, SessionEnd sync/curation, "
+        "Fleet title summarization, and interactive-pane publication. Deterministic "
+        "safety, task routing, handoff, liveness, and verification guards remain active. "
+        "Use memory recall only when the task context requires it.\n\n"
         + metadata
         + "\n"
         + depth_note
@@ -572,6 +577,7 @@ def main(argv: list[str]) -> int:
     if action == "start":
         env = {**os.environ}
         env.update({
+            "AGENT_SESSION_ROLE": "worker",
             "CLAUDE_CODE_CHILD_SESSION": "1",
             "AGENT_DISPATCH_CHILD": "1",
             "AGENT_DISPATCH_DEPTH": str(args.depth),

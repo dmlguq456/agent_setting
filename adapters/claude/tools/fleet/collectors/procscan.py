@@ -214,7 +214,7 @@ def scan(harness_filter=None):
         # Cross-runtime headless child marker (SD-24). Unreadable environ fails open:
         # a process is never hidden merely from argv/PPID/cwd resemblance.
         env = read_environ(pid)                       # Read once and reuse.
-        is_child = bool(env.get("AGENT_DISPATCH_DEPTH")) or env.get("AGENT_DISPATCH_CHILD") == "1" or (
+        is_child = env.get("AGENT_SESSION_ROLE", "").lower() == "worker" or bool(env.get("AGENT_DISPATCH_DEPTH")) or env.get("AGENT_DISPATCH_CHILD") == "1" or (
             comm == "claude" and env.get("CLAUDE_CODE_CHILD_SESSION") == "1"
         )
         # Tag memory workers and title refreshers to prevent inherited cwd/env misattribution.
