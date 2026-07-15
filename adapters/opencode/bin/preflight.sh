@@ -736,6 +736,10 @@ EOF
     shift
     exec python3 "$ROOT/utilities/capability-route.py" compile "$@"
     ;;
+  worker-route)
+    shift
+    exec python3 "$ROOT/utilities/worker-route-guard.py" validate "$@"
+    ;;
   dispatch-node)
     shift
     exec python3 "$ROOT/utilities/dispatch-node.py" --adapter opencode "$@"

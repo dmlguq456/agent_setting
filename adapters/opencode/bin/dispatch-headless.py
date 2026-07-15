@@ -108,6 +108,7 @@ def parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--worker-role")
     p.add_argument("--owner", dest="capability_owner")
+    p.add_argument("--route-file")
     p.add_argument("--route-id")
     p.add_argument("--route-hash")
     p.add_argument("--route-node")
@@ -284,6 +285,12 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
             "- Plan-check is required for quick+ but stays small; do not run independent QA after every stage by default.\n"
             "- standard+ may use bounded depth-2 planner/verifier workers when separable; thorough/adversarial expands to multi-axis/adversary workers. Synthesize short reports; depth 3+ is forbidden.\n"
         )
+    if args.route_file:
+        extra += (
+            "\nRoute bootstrap: consume the immutable record already validated by the wrapper. "
+            "Do not rerun status -> prompt-signal -> mode -> route and do not reselect capability, "
+            f"intensity, or topology; use adapters/opencode/bin/preflight.sh worker-route only for a safety recheck (route={args.route_file}, node={args.route_node}).\n"
+        )
     return (
         "Run the requested portable harness work.\n"
         "This process is AGENT_SESSION_ROLE=worker. Main-only automatic memory, "
@@ -337,7 +344,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
         pipe += f",owner_harness={args.owner_harness}"
-    for key in ("route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate"):
+    for key in ("route_file", "route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate"):
         value = getattr(args, key)
         if value:
             pipe += f",{key}={value}"
@@ -505,6 +512,27 @@ def validate_dispatch_metadata(args: argparse.Namespace) -> int:
     return 0
 
 
+def validate_route_record(args: argparse.Namespace) -> int:
+    routed=any((args.route_id,args.route_hash,args.route_node,args.registry_digest))
+    if routed and not args.route_file: return fail("route-record-required",65,route_id=args.route_id or "-")
+    if not args.route_file: return 0
+    required=("route_id","route_hash","route_node","registry_digest","write_scope")
+    missing=[name for name in required if not getattr(args,name)]
+    if missing: return fail("route-metadata-missing",65,fields=",".join(missing))
+    command=[sys.executable,str(ROOT/"utilities"/"worker-route-guard.py"),"validate",
+        "--route",args.route_file,"--node",args.route_node,"--cwd",args.worktree,
+        "--artifact-root",args.artifact_root,"--capability",args.capability,
+        "--intensity",args.intensity,"--write-scope",args.write_scope,
+        "--route-id",args.route_id,"--route-hash",args.route_hash,
+        "--registry-digest",args.registry_digest]
+    result=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    if result.returncode:
+        if result.stdout: print(result.stdout,end="")
+        if result.stderr: print(result.stderr,end="",file=sys.stderr)
+        return fail("worker-route-validation-failed",result.returncode,route_file=args.route_file)
+    args.route_validation=result.stdout.strip(); return 0
+
+
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
     if not Path(args.worktree).is_absolute():
@@ -522,6 +550,9 @@ def main(argv: list[str]) -> int:
     except ValueError as e:
         return fail("artifact-root-access-config-failed", 64, detail=str(e), worktree=args.worktree)
     rc = validate_dispatch_metadata(args)
+    if rc != 0:
+        return rc
+    rc = validate_route_record(args)
     if rc != 0:
         return rc
     try:
@@ -574,6 +605,9 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
             "AGENT_ARTIFACT_ROOT": args.artifact_root,
+            "AGENT_ROUTE_FILE": args.route_file or "",
+            "AGENT_ROUTE_ID": args.route_id or "",
+            "AGENT_ROUTE_NODE": args.route_node or "",
             "AGENT_MODEL_GOVERNOR_ROOT": str(governor_root),
             "OPENCODE_CONFIG_CONTENT": args.opencode_config_content,
             # Headless liveness contract: the OpenCode runtime child exposes
@@ -610,6 +644,8 @@ def main(argv: list[str]) -> int:
     print(f"worker_role={args.worker_role or '-'}")
     print(f"owner={args.capability_owner or '-'}")
     print(f"owner_harness={args.owner_harness or '-'}")
+    print(f"route_file={args.route_file or '-'}")
+    print(f"route_validation={getattr(args, 'route_validation', None) or '-'}")
     print(f"agent={args.agent}")
     settings = args.resolved_model_settings
     print(f"model_source={settings['source']}")

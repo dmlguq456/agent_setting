@@ -16,6 +16,17 @@ set -euo pipefail
 fp=""
 sid=""
 toggle_label="${ARTIFACT_GUARD_TOGGLE_LABEL:-/track}"
+route_file="${AGENT_ROUTE_FILE:-}"
+route_id="${AGENT_ROUTE_ID:-unknown}"
+route_node="${AGENT_ROUTE_NODE:-}"
+
+route_failure(){
+  reason=$1
+  python3 - "$reason" "$route_id" "$route_file" "${fp:-}" <<'PY' >&2
+import json,sys
+print(json.dumps({"status":"blocked","reason":sys.argv[1],"route_id":sys.argv[2],"route_file":sys.argv[3],"target":sys.argv[4]},sort_keys=True))
+PY
+}
 
 if [ "$#" -gt 0 ]; then
   while [ "$#" -gt 0 ]; do
@@ -68,23 +79,27 @@ case "$fp" in
 esac
 if [ -n "$local_project" ]; then
   canonical=$("$ARTIFACT_ROOT_RESOLVER" "$local_project" 2>/dev/null) || {
+    [ -z "$route_file" ] || route_failure "canonical-artifact-root-unresolved"
     echo "⛔ Cannot resolve the canonical artifact root; artifact writes fail closed: $fp" >&2
     exit 2
   }
   if [ -d "$local_artifact" ]; then
     local_artifact=$(CDPATH= cd -- "$local_artifact" 2>/dev/null && pwd -P) || {
+      [ -z "$route_file" ] || route_failure "artifact-target-normalization-failed"
       echo "⛔ Cannot normalize artifact write target: $fp" >&2
       exit 2
     }
   else
     local_parent=$(dirname "$local_artifact")
     local_parent=$(CDPATH= cd -- "$local_parent" 2>/dev/null && pwd -P) || {
+      [ -z "$route_file" ] || route_failure "artifact-target-normalization-failed"
       echo "⛔ Cannot normalize artifact write target: $fp" >&2
       exit 2
     }
     local_artifact="$local_parent/$(basename "$local_artifact")"
   fi
   if [ "$local_artifact" != "$canonical" ]; then
+    [ -z "$route_file" ] || route_failure "canonical-artifact-root-mismatch"
     printf '⛔ Task worktrees are source-only; agent artifacts must use the canonical root.\n   requested=%s\n   canonical=%s\n' "$fp" "$canonical" >&2
     exit 2
   fi
@@ -97,6 +112,31 @@ root=$local_project
 [ -z "$root" ] && exit 0
 cr=$canonical
 
+# A route-backed spec write must declare spec_touch and assign a spec scope to
+# the active node. This is checked before the creation-order rule so a late
+# guard collision is route-addressable rather than a silent generic denial.
+case "$fp" in
+  "$cr"/spec/*)
+    if [ -n "$route_file" ]; then
+      if ! python3 - "$route_file" "$route_id" "$route_node" <<'PY'
+import json,sys
+from pathlib import Path
+try:
+    route=json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    node=next(row for row in route["nodes"] if row["id"]==sys.argv[3])
+    roots=[scope[:-3] if scope.endswith("/**") else scope for scope in node["write_scope"]]
+    ok=route.get("route_id")==sys.argv[2] and route.get("spec_touch") is True and any(root=="spec" or root.startswith("spec/") for root in roots)
+except Exception:
+    ok=False
+raise SystemExit(0 if ok else 1)
+PY
+      then
+        route_failure "spec-touch-not-declared-or-outside-node-scope"
+        exit 2
+      fi
+    fi ;;
+esac
+
 # ---- ⚡untracked bypass (per-session flag isolates concurrent sessions) ----
 flagbase="$cr/.untracked"; [ -d "$cr" ] || flagbase="$root/.untracked"
 [ -n "$sid" ] && flag="$flagbase.$sid" || flag="$flagbase"
@@ -105,7 +145,7 @@ flagbase="$cr/.untracked"; [ -d "$cr" ] || flagbase="$root/.untracked"
 # ---- Existence helpers ----
 has_spec(){ [ -f "$cr/spec/pipeline_state.yaml" ] || ls "$cr"/spec/*/pipeline_state.yaml >/dev/null 2>&1; }
 has_research(){ ls -A "$cr/research" >/dev/null 2>&1 || ls -A "$cr/analysis_project" >/dev/null 2>&1; }
-block(){ printf '───────────────────────────────────────────\n⛔ %s\n   %s\n───────────────────────────────────────────\n   Bypass: %s → ⚡untracked (this session only)\n' "$1" "$2" "$toggle_label" >&2; exit 2; }
+block(){ [ -z "$route_file" ] || route_failure "artifact-order-guard-blocked"; printf '───────────────────────────────────────────\n⛔ %s\n   %s\n───────────────────────────────────────────\n   Bypass: %s → ⚡untracked (this session only)\n' "$1" "$2" "$toggle_label" >&2; exit 2; }
 
 base=$(basename "$fp")
 

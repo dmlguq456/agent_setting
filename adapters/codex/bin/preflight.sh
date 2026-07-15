@@ -260,6 +260,10 @@ case "$cmd" in
     "$0" capability-info "$name"
     "$0" capability "$name" "$cwd" "$sid"
     ;;
+  worker-route)
+    shift
+    exec python3 "$ROOT/utilities/worker-route-guard.py" validate "$@"
+    ;;
   dispatch-node)
     shift
     exec python3 "$ROOT/utilities/dispatch-node.py" --adapter codex "$@"

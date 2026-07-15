@@ -9,37 +9,29 @@ Every project has one canonical artifact root—`.agent_reports`, with legacy
 `utilities/artifact-root.sh <cwd>`. Linked task worktrees are source-only:
 their tracked artifact snapshots are read-only, while all workers share the
 primary checkout's canonical root through `AGENT_ARTIFACT_ROOT`. Simultaneous
-writes to shared `spec/prd.md`, `pipeline_state.yaml`, or
-`pipeline_summary.md` can lose updates. `plans/<cycle>/` is path-separated by
+writes to shared `spec/prd.md`, `pipeline_state.yaml`,
+`pipeline_summary.md`, or the `_internal/versions/v{N}/` chain can lose updates
+or allocate the same version twice. `plans/<cycle>/` is path-separated by
 cycle and does not require this lock.
 
-- **Lock file:** `<artifact-root>/.pipeline-lock`, visible to all worktrees. It is transient because the artifact root is gitignored.
-- **Protected scope:** write sections for the three shared `spec/` files only. Reads and plan writes do not lock.
-- **Stale override:** proceed when the recorded `at` is more than 30 minutes old or the recorded worktree is the current worktree, covering re-entry and a residual lock.
+- **Lock file:** `<artifact-root>/.pipeline-lock`, visible to all worktrees. The holder keeps an OS advisory lock for the full transaction, so process exit releases ownership without a stale-age override.
+- **Protected scope:** the complete spec transaction is one atomic sequence while the lock is held: re-read latest state → allocate and create the next `_internal/versions/v{N}/` snapshot → update `prd.md` → update `pipeline_state.yaml` → update `pipeline_summary.md`. Reads outside a transaction and path-separated plan writes do not lock.
+- **Route declaration:** a route that can touch any `spec/**` path declares `spec_touch=true`. Before lock acquisition the conductor runs §5.9 git-state checks. Missing declaration or a route/node scope mismatch is a structured failure tied to the route id.
+- **Contention:** a nonblocking acquisition first reports `BLOCKED`, then waits. After acquiring it re-reads the latest spec and version chain and enters the next version. It never retries a previously computed `v{N}` and never overwrites an existing snapshot.
 
-Acquire immediately before `autopilot-spec` Step 3 or update mode, `autopilot-code` state/summary writes, or a spec-drift update:
-
-```bash
-REPORTS_DIR=$("${AGENT_HOME:-$HOME/agent_setting}/utilities/artifact-root.sh" "$PWD") || exit
-LOCK="$REPORTS_DIR/.pipeline-lock"; NOW=$(date +%s); WT=$(pwd -P)
-if [ -f "$LOCK" ]; then
-  LAT=$(sed -n 's/^at=//p' "$LOCK"); LWT=$(sed -n 's/^worktree=//p' "$LOCK"); LBR=$(sed -n 's/^branch=//p' "$LOCK")
-  if [ "$LWT" != "$WT" ] && [ $((NOW-${LAT:-0})) -lt 1800 ]; then
-    echo "BLOCKED: '$LBR' ($LWT) has edited the spec for $((NOW-LAT))s; wait, or remove $LOCK if stale"; exit 3
-  fi
-fi
-printf 'worktree=%s\nbranch=%s\nskill=%s\nat=%s\nat_iso=%s\npid=%s\n' \
-  "$WT" "$(git branch --show-current 2>/dev/null)" "${SKILL:-autopilot}" "$NOW" "$(date -Iseconds)" "$$" > "$LOCK"
-```
-
-On exit 3, stop the write, report that another worktree is editing the spec, and ask whether to wait or override a dead lock.
-
-Release after normal completion and on interruption or error:
+Acquire immediately before `autopilot-spec` Step 3 or update mode, `autopilot-code` state/summary writes, or a spec-drift update. The helper holds the lock around the supplied transaction command and exports `AGENT_SPEC_NEXT_VERSION` only after the latest version is re-read under lock:
 
 ```bash
 REPORTS_DIR=$("${AGENT_HOME:-$HOME/agent_setting}/utilities/artifact-root.sh" "$PWD") || exit
-rm -f "$REPORTS_DIR/.pipeline-lock"
+python3 "${AGENT_HOME:-$HOME/agent_setting}/utilities/spec-transaction.py" run \
+  --artifact-root "$REPORTS_DIR" --worktree "$(pwd -P)" \
+  --route "$ROUTE_RECORD" --node "$ROUTE_NODE" --wait-timeout 600 -- \
+  sh ./the-owning-capability-transaction.sh
 ```
+
+Exit 3 means the bounded wait expired; report the current owner and leave every spec surface unchanged. Do not delete the lock or reuse the version number.
+
+The helper releases automatically after normal completion, interruption, or error. The transaction command must fail before its first canonical write if all four output paths cannot be completed.
 
 For a read-only check before touching the spec:
 
@@ -48,9 +40,9 @@ REPORTS_DIR=$("${AGENT_HOME:-$HOME/agent_setting}/utilities/artifact-root.sh" "$
 [ -f "$REPORTS_DIR/.pipeline-lock" ] && cat "$REPORTS_DIR/.pipeline-lock" || echo "no active edit"
 ```
 
-In a single-checkout environment the lock always belongs to the same worktree
-and safely overrides. With linked worktrees, the canonical resolver makes the
-same lock visible without replacing a tracked directory with a symlink.
+In a single-checkout environment the same helper and sequence still apply.
+With linked worktrees, the canonical resolver makes one lock visible without
+replacing a tracked directory with a symlink.
 
 ### §5.9. Git Working-State Preflight
 
@@ -106,8 +98,8 @@ The portable role for a `standard+` depth-1 owner is `deep orchestrator`. The re
 | Scale | Handling |
 |---|---|
 | One-off typo, one line, or `direct` work | Work directly in the main working tree |
-| Small tracked `quick` work | Depth-1 one-shot worker in an isolated worktree |
-| Substantive work tracked by a plan | Use a worktree and task branch from the latest base. Features, new modules, and multi-file edits always use a branch; ambiguity resolves toward a branch. Multi-file or feature work at `standard+` must use headless dispatch. Team delegation and inline micro-stages are limited to `quick` and genuinely microscopic stages. |
+| Small work routed to `quick` because atomic-direct predicates are incomplete and no promotion signal is present | Depth-1 one-shot worker in an isolated worktree |
+| Work promoted to `standard+` by durable scope, shared-contract, resource, resume, verifier, or separability signals | Use a worktree and task branch from the latest base. Features, new modules, and multi-file edits always use a branch; ambiguity resolves toward a branch. Separable multi-file or feature work at `standard+` must use headless dispatch. Team delegation and inline micro-stages are limited to `quick` and genuinely microscopic stages. |
 | A new independent request while work is active | Dispatch immediately to a new worktree; do not wait for the first job |
 
 **Token-pressure non-interference:** token or context pressure cannot downshift this table, remove a required stage or depth, skip liveness and registry handling, or weaken worktree, write, spec, sandbox, approval, safety, validation, security, or accessibility guards. Unknown or exceeded budgets preserve the pipeline and surface degraded availability. Only unrequested optional exploration and user-facing verbosity may shrink.
