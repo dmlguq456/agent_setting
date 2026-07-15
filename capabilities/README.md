@@ -5,14 +5,11 @@ capability means, what artifacts it owns, and which portable roles it may use.
 It is not a Claude Skill registry. Per-capability contracts live in
 `capabilities/<capability>.md`; this README is the catalog index.
 
-Claude Code realizes these capabilities through adapter-owned concrete Skill
-files under `adapters/claude/skills/*/SKILL.md`. Historical
-`skills/*/SKILL.md` files remain compatibility references while portable
-contracts move into this directory.
-Codex and OpenCode adapters start from this catalog, then consult
-adapter-native instructions only for runtime mechanics. Codex realizes
-capabilities through generated native Skill projections; OpenCode
-realizes them through generated native Skill and command projections.
+Claude, Codex, and OpenCode realize this catalog as sibling adapter outputs;
+none is the source or completion proxy for another. Claude owns concrete Skill
+files under `adapters/claude/skills/`, Codex owns generated native Skill/plugin
+projections, and OpenCode owns generated native Skill/command projections.
+Historical `skills/` files remain Claude compatibility references only.
 
 ## Capability Contract
 

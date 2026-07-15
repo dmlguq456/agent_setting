@@ -1,6 +1,6 @@
 ---
 name: autopilot-apply
-description: "Use for autopilot-apply: Apply a cheatsheet draft to the real source artifact and verify the result."
+description: "Use when needed: Apply a cheatsheet draft to the real source artifact and verify the result."
 metadata:
   portable_source: capabilities/autopilot-apply.md
   adapter: opencode

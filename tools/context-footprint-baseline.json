@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-07-15",
+  "measurement": "UTF-8 bytes for bootstrap; normalized name+description+relative-path characters for metadata regression; characters for hook stdout",
+  "surfaces": {
+    "bootstrap:claude": 4632,
+    "bootstrap:codex": 7646,
+    "bootstrap:opencode": 6045,
+    "metadata:claude": 4729,
+    "metadata:codex-local": 3655,
+    "metadata:codex-plugin": 4195,
+    "metadata:opencode": 3655,
+    "hook:codex-mode": 149,
+    "hook:codex-recall-neutral": 97,
+    "hook:codex-recall-signal": 98,
+    "hook:codex-briefing-default": 0,
+    "hook:codex-token-unknown": 0,
+    "hook:codex-token-repeated": 0,
+    "hook:codex-userprompt-default": 0
+  }
+}

@@ -1,6 +1,6 @@
 ---
 name: autopilot-code
-description: "Use for autopilot-code: Code-work entrypoint that detects spec context and closes the plan→execute→test→report loop."
+description: "Use when needed: Code-work entrypoint that detects spec context and closes the plan→execute→test→report loop."
 metadata:
   portable_source: capabilities/autopilot-code.md
   adapter: opencode

@@ -1428,7 +1428,7 @@ check_codex_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material figure-semantic-manifest.schema.json figure-semantic-verify.py"
-  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2477,7 +2477,7 @@ check_opencode_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material figure-semantic-manifest.schema.json figure-semantic-verify.py"
-  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2983,7 +2983,7 @@ check_claude_tool_projection() {
     rel=${p#tools/}
     adapter_p=adapters/claude/tools/$rel
     case "$rel" in
-      generate.py|harness_manifest.py|generated-projections.test.sh|install/profile-activation.test.sh|release|release/*)
+      generate.py|harness_manifest.py|generated-projections.test.sh|context-footprint-baseline.json|install/profile-activation.test.sh|release|release/*)
         # Harness-development, profile acceptance, and repository release
         # automation tools are intentionally not runtime projections.
         continue
@@ -3669,7 +3669,7 @@ allowedTools(opencode)|adapters/opencode/ADAPTATION.md|allowedTools` is unsuppor
 PARITY_LOSS_EOF
 }
 
-# HLS-9 guards adapter bootstrap byte budgets against silent runtime truncation.
+# HLS-9 guards always-loaded adapter bootstrap budgets and context drift.
 check_bootstrap_byte_budget() {
   # Each row is file|byte-limit|rationale.
   while IFS='|' read -r _bf _cap _why; do
@@ -3683,10 +3683,35 @@ check_bootstrap_byte_budget() {
       fail_msg "bootstrap byte-budget: $_bf is $_sz bytes, over the $_cap-byte ceiling ($_why). Trim it or raise the ceiling with a documented reason (HLS-9/§6.2)"
     fi
   done <<'BYTE_BUDGET_EOF'
-adapters/claude/CLAUDE.md|28672|approximately 22.8KB plus 25 percent headroom
-adapters/codex/AGENTS.md|32768|Codex project_doc_max_bytes default truncation boundary
-adapters/opencode/AGENTS.md|24576|approximately 11.8KB with ample always-loaded headroom
+adapters/claude/CLAUDE.md|16384|portable active-context budget (ADAPTATION §6.1)
+adapters/codex/AGENTS.md|16384|portable active-context budget (ADAPTATION §6.1)
+adapters/opencode/AGENTS.md|16384|portable active-context budget (ADAPTATION §6.1)
 BYTE_BUDGET_EOF
+}
+
+check_sibling_adapter_contract() {
+  if ! grep -Fq 'Sibling-Adapter Completion' core/ADAPTATION.md \
+    || ! grep -Fq 'reference implementation or parent of another adapter' core/ADAPTATION.md \
+    || ! grep -Fq 'report `GREEN` only after all' core/ADAPTATION.md \
+    || ! grep -Fq 'Active Context Budget' core/ADAPTATION.md \
+    || ! grep -Fq 'at most `16,384` UTF-8 bytes' core/ADAPTATION.md \
+    || ! grep -Fq 'at least 30' core/ADAPTATION.md; then
+    fail_msg "core/ADAPTATION.md must own sibling-adapter completion and active-context budgets"
+  fi
+
+  for bootstrap in adapters/claude/CLAUDE.md adapters/codex/AGENTS.md adapters/opencode/AGENTS.md; do
+    if ! grep -Fq 'siblings' "$bootstrap" \
+      || ! grep -Fq 'core/capabilities/roles' "$bootstrap"; then
+      fail_msg "$bootstrap must realize the portable sibling-adapter hierarchy"
+    fi
+  done
+
+  if [ ! -f tools/context-footprint-baseline.json ] \
+    || ! grep -Fq '"schema": 1' tools/context-footprint-baseline.json \
+    || ! grep -Fq 'MAX_BASELINE_GROWTH = 1.05' tools/context-footprint.py \
+    || ! grep -Fq 'SKILL_METADATA_BUDGET = 7_000' tools/context-footprint.py; then
+    fail_msg "context footprint baseline and absolute/regression budgets must be versioned"
+  fi
 }
 
 check_language_neutrality_contract() {
@@ -3843,6 +3868,7 @@ check_opencode_mode_map
 check_hook_catalog
 check_parity_loss_explicit_warnings
 check_bootstrap_byte_budget
+check_sibling_adapter_contract
 check_language_neutrality_contract
 check_legacy_root_links
 warn_concrete_runtime_terms

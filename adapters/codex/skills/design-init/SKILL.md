@@ -1,6 +1,6 @@
 ---
 name: design-init
-description: "Use for design-init: Bootstrap the design environment and state."
+description: "Use when needed: Bootstrap the design environment and state."
 ---
 
 # design-init

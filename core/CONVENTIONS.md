@@ -296,6 +296,12 @@ This section applies to orchestrator-level capabilities that create artifact dir
 
 `tools/skill-conformance/check.sh` compares scanner output with the invocation registry and must pass before merge. `disable-model-invocation: true` is a hard boundary that also blocks programmatic Skill calls and subagent preload, not a recommendation-strength knob. `user-invocable: false` controls menu exposure separately. `tools/skill-conformance/invocation-policy.tsv` is the deterministic registry; the 13 current parent-invoked sub-Skills must remain model-invoked. `DESIGN_PRINCIPLES §10` owns the qualitative design tenets.
 
+The conformance gate enumerates the portable capability domain and checks every
+active Claude, Codex, and OpenCode Skill realization. Runtime-specific
+frontmatter is interpreted by an explicit adapter rule; it never permits one
+adapter's successful scan to stand in for another. Bootstrap, discovery, and
+hook budgets are separate and canonical in `ADAPTATION §6.1`.
+
 ### §5.7. Backward-Compatible Detection
 
 ```bash

@@ -1,6 +1,6 @@
 ---
 name: autopilot-spec
-description: "Use for autopilot-spec: Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path."
+description: "Use when needed: Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path."
 ---
 
 # autopilot-spec

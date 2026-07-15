@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 ADAPTER = ROOT / "adapters" / "codex"
 PLUGIN_NAME = "agent-harness-codex"
+PLUGIN_VERSION = "0.1.0+codex.20260715015036"
 PLUGIN_ROOT = ADAPTER / "plugins" / PLUGIN_NAME
 MARKETPLACE_ROOT = ADAPTER / "plugin-marketplace"
 MARKETPLACE = MARKETPLACE_ROOT / ".agents" / "plugins" / "marketplace.json"
@@ -27,7 +28,7 @@ VALIDATOR = Path.home() / ".codex" / "skills" / ".system" / "plugin-creator" / "
 def plugin_json() -> dict:
     return {
         "name": PLUGIN_NAME,
-        "version": "0.1.0",
+        "version": PLUGIN_VERSION,
         "description": "Codex-native plugin projection for the portable agent harness.",
         "author": {
             "name": "agent_setting",

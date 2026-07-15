@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: "Use for design-review: Review design output for quality, token-contract compliance, and breakage."
+description: "Use when needed: Review design output for quality, token-contract compliance, and breakage."
 metadata:
   portable_source: capabilities/design-review.md
   adapter: opencode

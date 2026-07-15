@@ -1,6 +1,6 @@
 ---
 name: code-test
-description: "Use for code-test: Verify implementation results in stages and record evidence."
+description: "Use when needed: Verify implementation results in stages and record evidence."
 metadata:
   portable_source: capabilities/code-test.md
   adapter: opencode

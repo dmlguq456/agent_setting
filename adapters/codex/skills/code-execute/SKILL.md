@@ -1,6 +1,6 @@
 ---
 name: code-execute
-description: "Use for code-execute: Execute a plan step by step, delegate implementation to the development role, and record an execution log."
+description: "Use when needed: Execute a plan step by step, delegate implementation to the development role, and record an execution log."
 ---
 
 # code-execute

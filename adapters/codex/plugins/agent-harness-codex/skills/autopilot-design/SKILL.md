@@ -1,6 +1,6 @@
 ---
 name: autopilot-design
-description: "Use for autopilot-design: Visual-design pipeline coordinating references→tokens→components→review→handoff."
+description: "Use when needed: Visual-design pipeline coordinating references→tokens→components→review→handoff."
 ---
 
 # autopilot-design

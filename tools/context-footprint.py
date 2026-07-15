@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Report early-context footprint for the portable agent harness.
 
-This is a deterministic audit helper, not a failing CI gate by default. It counts
-bootstrap files, active skill metadata surfaces, duplicate Codex skill exposure,
-representative hook outputs, and the largest Skill bodies.
+This is a deterministic audit helper. It counts bootstrap bytes, active Skill
+metadata surfaces, duplicate discovery, representative hook outputs, baseline
+regression, and the largest Skill bodies. ``--strict`` makes every budget or
+baseline warning fail.
 """
 from __future__ import annotations
 
@@ -17,8 +18,15 @@ import tempfile
 from pathlib import Path
 from typing import Iterable
 
-CODEX_BUDGET = 8000
-CLAUDE_BUDGET = 10000
+BOOTSTRAP_BUDGET = 16_384
+SKILL_METADATA_BUDGET = 7_000
+MAX_BASELINE_GROWTH = 1.05
+ZERO_INJECTION_SAMPLES = {
+    "codex-userprompt-default",
+    "codex-briefing-default",
+    "codex-token-unknown",
+    "codex-token-repeated",
+}
 
 
 def chars(path: Path) -> int:
@@ -28,11 +36,35 @@ def chars(path: Path) -> int:
         return 0
 
 
-def skill_meta(base: Path, prefix: str = "") -> tuple[int, int, set[str]]:
-    total = 0
+def utf8_bytes(path: Path) -> int:
+    try:
+        return len(path.read_bytes())
+    except FileNotFoundError:
+        return 0
+
+
+def load_baseline(path: Path) -> dict[str, int]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != 1 or not isinstance(data.get("surfaces"), dict):
+        raise ValueError("baseline must use schema=1 and contain a surfaces object")
+    values: dict[str, int] = {}
+    for key, value in data["surfaces"].items():
+        if not isinstance(key, str) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"invalid baseline surface: {key}={value!r}")
+        values[key] = value
+    return values
+
+
+def skill_meta(
+    base: Path, prefix: str = "", selected: set[str] | None = None,
+) -> tuple[int, int, int, set[str]]:
+    normalized_total = 0
+    local_path_total = 0
     count = 0
     names: set[str] = set()
     for skill in sorted(base.glob("*/SKILL.md")):
+        if selected is not None and skill.parent.name not in selected:
+            continue
         text = skill.read_text(encoding="utf-8", errors="ignore")
         name_match = re.search(r"^name:\s*(.+)$", text, re.M)
         desc_match = re.search(r"^description:\s*(.+)$", text, re.M)
@@ -42,8 +74,13 @@ def skill_meta(base: Path, prefix: str = "") -> tuple[int, int, set[str]]:
         desc = desc_match.group(1).strip().strip('"')
         names.add(name)
         count += 1
-        total += len(prefix + name) + len(desc) + len(str(skill))
-    return total, count, names
+        # Baseline the controllable payload with a relative path so checkout
+        # location does not look like source regression. Separately retain the
+        # concrete local path cost for the absolute discovery-surface budget.
+        common = len(prefix + name) + len(desc)
+        normalized_total += common + len(str(skill.relative_to(base)))
+        local_path_total += common + len(str(skill))
+    return normalized_total, local_path_total, count, names
 
 
 def skill_body_sizes(paths: Iterable[Path]) -> list[tuple[int, str]]:
@@ -54,7 +91,10 @@ def skill_body_sizes(paths: Iterable[Path]) -> list[tuple[int, str]]:
     return sorted(rows, reverse=True)
 
 
-def run_capture(args: list[str], cwd: Path, env: dict[str, str] | None = None, timeout: int = 10) -> tuple[int, str]:
+def run_capture(
+    args: list[str], cwd: Path, env: dict[str, str] | None = None,
+    timeout: int = 10, stdin: str | None = None,
+) -> tuple[int, str]:
     merged = os.environ.copy()
     if env:
         merged.update(env)
@@ -66,6 +106,7 @@ def run_capture(args: list[str], cwd: Path, env: dict[str, str] | None = None, t
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            input=stdin,
             timeout=timeout,
             check=False,
         )
@@ -74,13 +115,31 @@ def run_capture(args: list[str], cwd: Path, env: dict[str, str] | None = None, t
         return 69, str(exc)
 
 
-def plugin_installed(root: Path, codex_home: Path | None, timeout: int) -> bool | None:
+def plugin_install(
+    root: Path, codex_home: Path | None, timeout: int,
+) -> tuple[bool | None, Path | None]:
     if codex_home is None:
-        return None
+        return None, None
     rc, out = run_capture(["codex", "plugin", "list", "--json"], root, {"CODEX_HOME": str(codex_home)}, timeout)
     if rc != 0:
-        return None
-    return "agent-harness-codex" in out
+        return None, None
+    try:
+        installed = json.loads(out).get("installed", [])
+    except (AttributeError, json.JSONDecodeError):
+        return None, None
+    for item in installed:
+        if not isinstance(item, dict) or item.get("name") != "agent-harness-codex":
+            continue
+        if not item.get("installed") or not item.get("enabled"):
+            return False, None
+        marketplace = item.get("marketplaceName")
+        version = item.get("version")
+        if isinstance(marketplace, str) and isinstance(version, str):
+            skills = codex_home / "plugins" / "cache" / marketplace / "agent-harness-codex" / version / "skills"
+            if skills.is_dir():
+                return True, skills
+        return True, None
+    return False, None
 
 
 def harness_native_skill_links(root: Path, codex_home: Path | None) -> set[str]:
@@ -111,16 +170,26 @@ def hook_samples(root: Path, timeout: int) -> list[tuple[str, int, int]]:
     env = {"AGENT_HOME": str(root)}
     samples: list[tuple[str, int, int]] = []
     commands = [
-        ("codex-mode", [str(root / "adapters/codex/bin/preflight.sh"), "mode", str(root), "footprint-sample"]),
-        ("codex-recall-neutral", [str(root / "adapters/codex/bin/preflight.sh"), "recall", "오늘 작업", str(root)]),
-        ("codex-recall-signal", [str(root / "adapters/codex/bin/preflight.sh"), "recall", "지난번 작업", str(root)]),
-        ("codex-briefing-default", [str(root / "adapters/codex/bin/preflight.sh"), "briefing", str(root)]),
+        ("codex-mode", [str(root / "adapters/codex/bin/preflight.sh"), "mode", str(root), "footprint-sample"], None),
+        ("codex-recall-neutral", [str(root / "adapters/codex/bin/preflight.sh"), "recall", "오늘 작업", str(root)], None),
+        ("codex-recall-signal", [str(root / "adapters/codex/bin/preflight.sh"), "recall", "지난번 작업", str(root)], None),
+        ("codex-briefing-default", [str(root / "adapters/codex/bin/preflight.sh"), "briefing", str(root)], None),
+        ("codex-token-unknown", [str(root / "adapters/codex/bin/preflight.sh"), "token-budget", str(root), "footprint-unknown", "hook"], None),
+        ("codex-token-repeated", [str(root / "adapters/codex/bin/preflight.sh"), "token-budget", str(root), "footprint-unknown", "hook"], None),
+        (
+            "codex-userprompt-default",
+            [sys.executable, str(root / "adapters/codex/hooks/userprompt-lifecycle.py")],
+            json.dumps({"cwd": str(root), "session_id": "footprint-userprompt"}),
+        ),
     ]
     with tempfile.TemporaryDirectory(prefix="context-footprint-mem-") as tmp:
         sample_env = dict(env)
         sample_env["MEM_STORE"] = tmp
-        for label, cmd in commands:
-            rc, out = run_capture(cmd, root, sample_env, timeout)
+        sample_env["XDG_STATE_HOME"] = tmp
+        sample_env["CODEX_MODE_ANCHOR_ALWAYS"] = "0"
+        sample_env["CODEX_DISTILL_ENABLE"] = "0"
+        for label, cmd, stdin in commands:
+            rc, out = run_capture(cmd, root, sample_env, timeout, stdin)
             samples.append((label, rc, len(out)))
     return samples
 
@@ -133,11 +202,17 @@ def main() -> int:
     parser.add_argument("--skip-hooks", action="store_true", help="do not run hook/preflight samples")
     parser.add_argument("--timeout", type=int, default=10)
     parser.add_argument("--strict", action="store_true", help="exit 1 when warnings are present")
+    parser.add_argument(
+        "--baseline",
+        default="tools/context-footprint-baseline.json",
+        help="checked surface baseline, relative to root by default",
+    )
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
     codex_home = None if args.skip_runtime else Path(args.codex_home).expanduser().resolve()
     warnings: list[str] = []
+    surfaces: dict[str, int] = {}
 
     print("context_footprint_report=1")
     print(f"root={root}")
@@ -149,45 +224,76 @@ def main() -> int:
     ]
     print("\n[bootstrap]")
     for path in bootstraps:
-        print(f"chars={chars(path)} path={path.relative_to(root)}")
+        label = path.parent.name
+        size_bytes = utf8_bytes(path)
+        size_chars = chars(path)
+        surfaces[f"bootstrap:{label}"] = size_bytes
+        print(f"surface={label} bytes={size_bytes} chars={size_chars} path={path.relative_to(root)}")
+        if size_bytes > BOOTSTRAP_BUDGET:
+            warnings.append(f"{label} bootstrap {size_bytes} > {BOOTSTRAP_BUDGET} bytes")
 
     print("\n[skill-metadata]")
-    codex_local, codex_local_count, codex_local_names = skill_meta(root / "adapters/codex/skills")
-    codex_plugin, codex_plugin_count, codex_plugin_names = skill_meta(
+    codex_local, codex_local_path, codex_local_count, codex_local_names = skill_meta(root / "adapters/codex/skills")
+    codex_plugin, codex_plugin_path, codex_plugin_count, codex_plugin_names = skill_meta(
         root / "adapters/codex/plugins/agent-harness-codex/skills", "agent-harness-codex:"
     )
-    opencode, opencode_count, _ = skill_meta(root / "adapters/opencode/skills")
-    claude, claude_count, _ = skill_meta(root / "adapters/claude/skills")
-    print(f"surface=codex-local items={codex_local_count} chars={codex_local}")
-    print(f"surface=codex-plugin items={codex_plugin_count} chars={codex_plugin}")
-    print(f"surface=opencode items={opencode_count} chars={opencode}")
-    print(f"surface=claude items={claude_count} chars={claude}")
+    opencode, opencode_path, opencode_count, _ = skill_meta(root / "adapters/opencode/skills")
+    claude, claude_path, claude_count, _ = skill_meta(root / "adapters/claude/skills")
+    print(f"surface=codex-local items={codex_local_count} baseline_chars={codex_local} local_path_chars={codex_local_path}")
+    print(f"surface=codex-plugin items={codex_plugin_count} baseline_chars={codex_plugin} local_path_chars={codex_plugin_path}")
+    print(f"surface=opencode items={opencode_count} baseline_chars={opencode} local_path_chars={opencode_path}")
+    print(f"surface=claude items={claude_count} baseline_chars={claude} local_path_chars={claude_path}")
+    surfaces.update({
+        "metadata:codex-local": codex_local,
+        "metadata:codex-plugin": codex_plugin,
+        "metadata:opencode": opencode,
+        "metadata:claude": claude,
+    })
+    for label, size in (
+        ("codex-local", codex_local),
+        ("codex-plugin", codex_plugin),
+        ("opencode", opencode),
+        ("claude", claude),
+    ):
+        if size > SKILL_METADATA_BUDGET:
+            warnings.append(f"{label} skill metadata {size} > {SKILL_METADATA_BUDGET}")
 
-    plugin_state = plugin_installed(root, codex_home, args.timeout) if codex_home else None
+    plugin_state, installed_plugin_skills = plugin_install(root, codex_home, args.timeout) if codex_home else (None, None)
     native_links = harness_native_skill_links(root, codex_home)
     if codex_home:
         active = 0
+        active_local_path = 0
         active_labels: list[str] = []
         if native_links:
-            active += codex_local
+            native_active, native_active_path, _, _ = skill_meta(
+                codex_home / "skills", selected=native_links
+            )
+            active += native_active
+            active_local_path += native_active_path
             active_labels.append("native")
         if plugin_state is True:
             active += codex_plugin
+            if installed_plugin_skills is None:
+                warnings.append("codex active plugin cache path unavailable for exact metadata measurement")
+                active_local_path += codex_plugin_path
+            else:
+                _, installed_path_chars, _, _ = skill_meta(installed_plugin_skills, "agent-harness-codex:")
+                active_local_path += installed_path_chars
             active_labels.append("plugin")
         if not active_labels:
             active_labels.append("none-or-unknown")
         overlap = sorted(native_links & codex_plugin_names) if plugin_state is True else []
         print(f"codex_home={codex_home}")
-        print(f"codex_active_surfaces={'+'.join(active_labels)} chars={active} duplicate_names={len(overlap)}")
-        if active > CODEX_BUDGET:
-            warnings.append(f"codex active skill metadata {active} > {CODEX_BUDGET}")
+        print(
+            f"codex_active_surfaces={'+'.join(active_labels)} "
+            f"baseline_chars={active} runtime_path_chars={active_local_path} duplicate_names={len(overlap)}"
+        )
+        if active_local_path > SKILL_METADATA_BUDGET:
+            warnings.append(f"codex active skill metadata {active_local_path} > {SKILL_METADATA_BUDGET}")
         if overlap:
             warnings.append(f"codex duplicate skill names active={len(overlap)}")
     else:
         print("codex_active_surfaces=skipped")
-
-    if claude > CLAUDE_BUDGET:
-        warnings.append(f"claude skill metadata {claude} > {CLAUDE_BUDGET}")
 
     print("\n[hook-samples]")
     if args.skip_hooks:
@@ -195,8 +301,35 @@ def main() -> int:
     else:
         for label, rc, size in hook_samples(root, args.timeout):
             print(f"sample={label} exit={rc} chars={size}")
-            if label == "codex-briefing-default" and size > 0:
-                warnings.append("briefing default emitted context outside explicit briefing desk")
+            surfaces[f"hook:{label}"] = size
+            if rc != 0:
+                warnings.append(f"{label} hook sample exited {rc}")
+            if label in ZERO_INJECTION_SAMPLES and size > 0:
+                warnings.append(f"{label} ordinary/unknown/repeated hook sample emitted {size} chars")
+
+    print("\n[baseline]")
+    baseline_path = Path(args.baseline)
+    if not baseline_path.is_absolute():
+        baseline_path = root / baseline_path
+    try:
+        baseline = load_baseline(baseline_path)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"status=missing-or-invalid path={baseline_path} reason={exc}")
+        warnings.append(f"context footprint baseline unavailable: {baseline_path}")
+    else:
+        print(f"status=loaded path={baseline_path} surfaces={len(baseline)} max_growth={MAX_BASELINE_GROWTH:.2f}")
+        for key, current in sorted(surfaces.items()):
+            if key not in baseline:
+                warnings.append(f"surface missing from context footprint baseline: {key}")
+                continue
+            previous = baseline[key]
+            limit = int(previous * MAX_BASELINE_GROWTH)
+            print(f"surface={key} baseline={previous} current={current} limit={limit}")
+            if current > limit:
+                warnings.append(f"{key} footprint regression {current} > {limit} (baseline {previous})")
+        for key in sorted(set(baseline) - set(surfaces)):
+            if not (args.skip_hooks and key.startswith("hook:")):
+                warnings.append(f"baseline surface was not measured: {key}")
 
     print("\n[largest-skill-bodies]")
     for size, path in skill_body_sizes([

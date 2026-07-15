@@ -1,124 +1,67 @@
-# CLAUDE.md — Claude Code Adapter Bootstrap
+# CLAUDE.md — Claude Adapter Bootstrap
 
-> Loaded automatically at session start. This is the Claude Code adapter for the shared agent harness, not a standalone or portable source of truth. `core/CORE.md` owns model- and tool-neutral behavior; this file and `adapters/claude/settings.json` own Claude Code realization. Edit core first, then derive this adapter.
-
-The harness is not limited to Claude Code, Codex, or any one runtime.
+This is the Claude Code adapter bootstrap, not the portable source of truth.
+The semantic hierarchy is `core/capabilities/roles -> {Claude, Codex, OpenCode}`;
+the three adapters are siblings. Edit portable sources first.
 
 ## Source Order
 
-1. Read `core/CORE.md` for the portable contract.
-2. Read `core/WORKFLOW.md` on demand for routing and tracked work.
-3. Read `core/CONVENTIONS.md` for intensity, roles, artifacts, and invariants.
-4. Read `core/OPERATIONS.md` for git, worktree, dispatch, merge, and push.
-5. Read `core/MEMORY.md` for agent-owned memory judgment and guarded mechanics.
-6. Read capabilities and roles relevant to the task. Treat this adapter's Skills, Agents, modes, hooks, and commands as Claude-specific realizations.
+Read `core/CORE.md` first; load the remaining documents only when the task
+touches the named domain.
 
-## Workflow Map
+1. `core/CORE.md`
+2. `core/WORKFLOW.md` for routing and tracked work
+3. `core/CONVENTIONS.md` for intensity, QA, roles, artifacts, and Skill rules
+4. `core/OPERATIONS.md` for git, worktrees, locks, and dispatch
+5. `core/MEMORY.md` for memory
+6. `capabilities/README.md`, `roles/README.md`, and `roles/MODES.md` for task behavior
 
-- Documents: `analyze-project` / `autopilot-research` → `autopilot-draft` → `autopilot-refine` ↻ → `autopilot-apply`
-- Research and experiments: `analyze-project` / `autopilot-research` → `autopilot-spec` ↻ → `autopilot-code` ↻ → `autopilot-lab` ↻
-- Applications: `autopilot-spec` ↻ → `autopilot-design` → `autopilot-code` ↻ → `autopilot-ship` ↻
-- Libraries and CLIs: `analyze-project` → `autopilot-spec` ↻ → `autopilot-code` ↻
-- Post-work: read-only `audit` and corrective `autopilot-refine`; cross-project `analyze-user` and `post-it --scope user`
+## Runtime Router
 
-Read `~/.claude/core/WORKFLOW.md` when making a routing decision. The mode signal from `workflow-guard-hook` is the anchor: tracked follows the contract, explicit untracked is exempt. The hook provides runtime state, not the routing body. Do not load the user-facing README as agent instructions.
+- Treat `AGENT_HOME` as the installed harness root.
+- Resolve the canonical artifact root with `utilities/artifact-root.sh`; linked worktrees write the primary checkout's `.agent_reports/`, and legacy `.claude_reports/` is only a fallback.
+- Use portable model roles, never vendor model names, in shared artifacts.
+- Claude-native Skills, Agents, modes, hooks, commands, and settings live under `adapters/claude/`; `skills/` is a compatibility mirror.
+- Before adapter edits, read the governing core contract and run the applicable write guard. Before spec changes, read the current PRD and use the spec capability gate.
+- Run deterministic guards directly when hook execution is unavailable or untrusted.
+- Task-specific detail is progressively disclosed through the selected Skill and adapter README/ADAPTATION docs; do not preload unrelated procedures.
 
-## Runtime Currentness
+## Routing and Execution
 
-For questions or edits concerning Claude Code or another runtime's agents, subagents, hooks, Skills, settings, model/reasoning, permissions, headless dispatch, or adapter parity, verify current official documentation before asserting behavior. Use community evidence only as secondary material. Separate what the product supports, what this adapter projects, and what parity gaps remain.
+Select the primary capability semantically per `core/WORKFLOW.md §0.2` (WORKFLOW §0.2) and answer the pre-execution gate in §0.3 when applicable. Read-only orientation and targeted memory recall do not themselves invoke a capability. For spec-backed work, satisfy the spec-read gate before mutation.
 
-## Response and Routing Policy
+`autopilot-code` follows the portable intensity graph:
 
-`roles/response-policy.md` is the single source for portable response clauses. This section realizes them for Claude Code without imposing a locale.
+- `direct`: inline, no durable plan.
+- `quick`: one depth-1 one-shot worker with micro-plan, plan-check-lite, focused verification, and concise report.
+- `standard+`: `code-plan -> code-execute -> code-test -> code-report`, optional `code-refine`, file-only handoff, and the dispatch/fallback rules in `core/OPERATIONS.md §5.10`.
 
-### 0. Route Through the Tracked Contract
+Keep native agents distinct from registered headless worker dispatch; a restriction on one surface never silently extends to the other. Preserve model role, intensity, depth, required tools/tests, safety, and validation when falling back. Do not run drill automatically.
 
-Every tracked task first passes through `WORKFLOW §2`. Direct tools, plugins, and built-in Skills are used only where that router places them.
+## Runtime Lifecycle
 
-Artifact order is one-way:
+Claude hooks realize portable invariants for workflow signals, write/spec/core gates, memory, and design checks. Use explicit wrappers when a hook cannot be trusted. Main-session memory lifecycle and distillation do not run for workers. Session end never owns destructive worktree cleanup.
 
-```text
-research / analyze-project → autopilot-spec → autopilot-code
-research / analyze-project → autopilot-draft → autopilot-refine
-```
+Use `statusline.sh` only for runtime status. Harness detail remains available through the adapter tools and docs. Runtime-owned credentials, sessions, logs, caches, databases, and config stay outside this repo.
 
-Code requires spec; spec requires research or analysis. A one-off throwaway is the narrow exception, and repeated work graduates. `artifact-guard.sh` hard-enforces creation order only; it does not distinguish direct edits from an owning capability. Explicit `/track` untracked mode is user-owned and must not be enabled by the agent merely to escape a gate.
+## Context and Memory
 
-The capability that created an artifact owns its revisions:
+Memory semantics belong to the acting agent. When prior context may materially help, choose a targeted query through `tools/memory/recall.sh`; retrieve full pending obligations before applying and consuming them.
 
-| Artifact | Update path | Version record |
-|---|---|---|
-| `spec/` | `autopilot-spec` update | `_internal/versions/v{N}/` |
-| `plans/` and code work | `autopilot-code` | Repeated `plans/<date>_<slug>/` cycles |
-| `documents/` | `autopilot-draft` / `autopilot-refine` | `_internal/versions/v{N}/` |
-| `experiments/` | `autopilot-lab` | `_RUNLOG.md` |
-| Profile DB records | `analyze-user` / `post-it --scope user` | Record changelog |
+Context pressure is orthogonal to quality and stage graph. Ordinary hook states stay silent. Static bytes, code lines, and directive counts are footprint measures, not token or billing savings. `core/ADAPTATION.md §6.1` owns budgets; real savings claims require paired production sessions.
 
-Primary capability selection is semantic (`WORKFLOW §0.2`): new empirical work — checkpoint reevaluation, new metrics, figure/media generation — keeps `autopilot-lab` primary even when the request is phrased as a document update; refine, spec, draft, and note attach as secondaries and never replace the execution primary. Before long-running, GPU-bound, or bulk-generation execution, answer the `WORKFLOW §0.3` pre-execution gate.
+## Response Policy
 
-In a spec-backed cwd, read `prd.md`, pipeline state, and recent plans before work; then check spec drift and route through the appropriate intensity. Spec read markers and capability gates enforce this path.
+Portable behavior contract = `roles/response-policy.md`.
 
-When a user invokes an autopilot entry naturally, infer options from prompt, cwd, and artifacts, summarize the choice once where the capability requires confirmation, then invoke. Direct slash invocation already supplies intent. High-risk work may route to stronger intensity; rigor derives from intensity and there is no separate user-facing QA axis.
+- **Audience-language first** — user artifacts default to the user's current communication language unless a stronger audience or repository contract applies.
+- Keep responses concise and match promises with same-turn action.
+- Verify before asserting and follow existing conventions.
+- Ask only for genuinely non-obvious or destructive choices; proceed with the recommended reversible path when no answer is needed.
+- In an active “do X” flow, implied records, validation, commit, and push follow without repeated confirmation.
 
-Work isolation follows `OPERATIONS §5.10`: only a typo or one-line direct edit belongs in main. Quick tracked work uses a depth-1 one-shot worker in an isolated worktree. Standard+ features, new modules, and multi-file changes use a task branch and headless depth-1 conductor; it dispatches plan, execute, test, and report as depth-2 file-only stage sessions. Depth 3 or greater is forbidden. Use liveness and `dispatch-wait` rather than trusting notifications. Task worktrees are source-only: `dispatch-headless.py` resolves the primary checkout's canonical artifact root, injects `AGENT_ARTIFACT_ROOT`, and passes exactly that path through Claude `--add-dir`; worker-local artifact snapshots are write-denied. Main selects and harvests merges only after user signal or a dispatched-job harvest, then runs `adapters/claude/bin/worktree-cleanup.sh --check` and `--apply` only after integrated verification and push. SessionEnd is not a cleanup authority.
+Claude-specific realization: keep work grounded in current files, expose changes before committing, and commit/push validated harness changes.
 
-The main session is the context owner, router, orchestrator, and final integrator (`OPERATIONS §5.10` main-session role contract); separable `standard+` stages go to registered worker sessions, and an inline run of separable work records its reason. A "no sub-agents" restriction covers the Agent tool's native delegation, not registered headless worker dispatch — extend it to both surfaces only when the user names both or runtime evidence verifiably restricts both.
+## Compatibility Boundary
 
-Registered headless, loop/drill, Fleet title, and distill/curator processes export `AGENT_SESSION_ROLE=worker`. Worker bootstrap keeps deterministic write/core/spec/artifact/worktree/permission guards and explicit task routing, but main-only automatic lifecycle is disabled: memory injection, briefing, turn-nudge/distill, SessionEnd sync/curation, Fleet title recursion, token context, and Herdr main-pane publication. Any legacy worker marker also fails closed; worker SessionEnd is a silent no-op.
-
-Use `deep orchestrator` for the standard+ conductor. Retain `orchestrator` for already decided mechanical coordination. Planning and architecture may prefer an eligible GPT-family deep maker without hard pinning; use deterministic dispatch-route traces and current capacity.
-
-### 1. Communication Discipline
-
-- **Audience-language first:** respond and write user-facing artifacts in the language the user is currently using unless an explicit target language, venue, external audience, or existing artifact language overrides it. Public repository docs follow the repository's documentation language.
-- Be concise and avoid narrating routine process.
-- A commitment such as “I’ll fix it” must have the matching action in the same turn.
-- Verify mechanisms, tool behavior, and code facts before asserting them.
-- Read and follow existing definitions and conventions rather than improvising substitutes. Expose a convention change before committing it.
-- For artifact-backed design-history questions, read both current code and relevant spec/plan artifacts and report drift.
-
-### 2. Pause and Autonomy
-
-- Pause flags such as `--user-refine` require an explicit user signal. Importance alone does not add a pause.
-- When a non-blocking question receives no answer, proceed with the recommended option and report one line; do not repeat the question.
-- Do not ask about obvious, already agreed, or already instructed steps. Ask only for genuinely non-obvious design, format, destructive, or large-scope decisions.
-- Broken, placeholder, or partial input does not block a reversible requested artifact. Create the recommended structure, mark the degraded state, and place any question after the result.
-- Align non-obvious direction upfront, then execute without repeated mid-stream confirmation.
-- Memory semantics belong to the agent. Use `mem` as the single DB write path, and let deterministic code enforce only scope, schema, pending protection, and recovery. Direct built-in file-memory writes are hard-blocked.
-
-### 3. Follow Through
-
-Inside an explicit workflow, continue through routine stage, commit, push, save, and cleanup steps without asking again, subject to the separate deployment and destructive-operation gates. Updates implied by a change—docs, records, comments, and commit messages—are part of that change. Ask before the change if a new design decision, destructive action, or another system requires authority.
-
-## Sources of Truth
-
-- Portable behavior: `core/*.md` and `roles/response-policy.md`
-- Runtime Skill catalog: `~/.claude/skills/*/SKILL.md`
-- Runtime Agent profiles and modes: `~/.claude/agents/`, `~/.claude/agent-modes/`
-- User-facing product guide: `~/.claude/README.md`
-- Memory source of truth: `<agent-home>/memory/memory.db`, accessed through `mem`; details in `core/MEMORY.md`
-- User profiles: DB `type=profile` records read through `mem profile <aspect>`
-
-## Domain Triggers
-
-| Trigger | Read or invoke | Note |
-|---|---|---|
-| Major document/research revision | Routing §0 plus `autopilot-refine` | Minor edits update directly and log; five accumulated minors trigger audit |
-| Intensity, model role, artifact, or family-wide flags | `core/CONVENTIONS.md` | Core wins on drift |
-| Spec-backed follow-up | Routing §0 plus `WORKFLOW §7` | Understand artifacts, check spec drift, then use the code pipeline |
-| User-facing wording | Editorial role | Polish final user-facing prose at the selected rigor; instruction files themselves are exempt from a mandatory editorial sub-call |
-| Style, naming, analysis, or prior-convention decision | Agent-chosen recall and relevant `mem profile` | Read only when prior context can materially help; current-turn user instructions win |
-| Instruction changes | Relevant deterministic checks; drill only when behavioral regression coverage is useful | Do not run costly headless drills automatically |
-| On-call report handling | Latest configured on-call report | Handle reversible, unambiguous items with disclosure; discuss judgment-heavy items |
-
-## Artifact and Skill Rules
-
-All Skills assume project-root execution. Prefer `.agent_reports/`, using `.claude_reports/` only as an existing legacy fallback. Folder rules live in `CONVENTIONS §5`, track routing in `WORKFLOW`, and scope in each capability contract. Do not duplicate those definitions here.
-
-Common mistakes include recursively invoking a sub-Skill already active in the pipeline, confusing research/doc/plan artifact roots, generating presentation formats not requested by the capability, and escalating a small task into thorough or adversarial intensity without risk justification.
-
-## Maintenance
-
-Keep this bootstrap compact. Update it only when source-of-truth locations, domain triggers, or Claude-specific realizations of the portable response contract change. Artifact paths and scope boundaries belong in core and capability sources.
-
-Behavioral rules belong in instruction sources, not memory. Project-scoped continuity, decisions, and handoffs belong to `/post-it`; cross-project user preferences belong to a profile record when contextually useful. Memory remains infrastructure for agent judgment rather than a deterministic policy engine.
+Codex and OpenCode files are sibling implementation references, never Claude bootstrap input. Portable meaning comes from `core/`, `capabilities/`, and `roles/`; map that meaning to Claude-native runtime surfaces.

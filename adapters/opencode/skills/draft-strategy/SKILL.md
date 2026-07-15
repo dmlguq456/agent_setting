@@ -1,6 +1,6 @@
 ---
 name: draft-strategy
-description: "Use for draft-strategy: Create an initial document strategy and evidence-based writing plan."
+description: "Use when needed: Create an initial document strategy and evidence-based writing plan."
 metadata:
   portable_source: capabilities/draft-strategy.md
   adapter: opencode

@@ -1,6 +1,6 @@
 ---
 name: design-components
-description: "Use for design-components: Build UI components/mockups and preview artifacts."
+description: "Use when needed: Build UI components/mockups and preview artifacts."
 ---
 
 # design-components

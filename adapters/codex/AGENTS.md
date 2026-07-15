@@ -1,111 +1,123 @@
 # AGENTS.md — Codex Adapter Bootstrap
 
-This file maps the shared agent harness onto Codex-style sessions. It is an adapter bootstrap, not the portable source of truth.
-
-This document is derived from core — edit core first; do not modify this adapter ahead of the core contract.
+This is a Codex adapter router, not the portable source of truth. The semantic
+hierarchy is `core/capabilities/roles -> {Claude, Codex, OpenCode}`; adapters
+are siblings and none is another's reference implementation. Edit core first.
 
 ## Source Order
 
-1. Read `core/CORE.md` for the model-neutral harness contract.
-2. For routing and tracked work, read `core/WORKFLOW.md`.
-3. For QA levels, model roles, artifact layout, and cross-doc invariants, read `core/CONVENTIONS.md`.
-4. For git/worktree/dispatch rules, read `core/OPERATIONS.md`.
-5. For memory behavior, read `core/MEMORY.md`.
-6. For task-specific behavior, read `capabilities/README.md`, `roles/README.md`, and `roles/MODES.md` first. Use Claude Skill, Agent, or mode files only as compatibility references.
+Read `core/CORE.md` first; load the remaining documents only when the task
+touches the named domain.
 
-## Runtime Currentness
+1. `core/CORE.md`
+2. `core/WORKFLOW.md` for routing and tracked work
+3. `core/CONVENTIONS.md` for intensity, QA, roles, artifacts, and Skill rules
+4. `core/OPERATIONS.md` for git, worktrees, locks, and dispatch
+5. `core/MEMORY.md` for memory
+6. `capabilities/README.md`, `roles/README.md`, and `roles/MODES.md`
 
-- For Claude Code or Codex runtime-surface questions or projection edits (agents/subagents, hooks, skills, settings/config, model/reasoning, permissions, headless/dispatch, or adapter parity), verify current official documentation first and then inspect local adapter realization.
-- Use recent community posts, GitHub issues, and examples only as secondary evidence for real-world gaps or practices; label them as non-authoritative.
-- Do not infer product capability from this harness projection alone. State separately: what the runtime supports, what this adapter currently projects, and what parity gaps remain versus the compared adapter.
-- Any modification plan for those surfaces must include current-doc evidence, a local runtime/projection check, and a fallback for unsupported or buggy behavior.
+For runtime-surface or parity changes, verify current official Codex/Claude
+documentation, then inspect the local realization. Separate runtime support,
+local projection, and parity gaps; plan a checked fallback.
 
 ## Runtime Mapping
 
-- Treat `AGENT_HOME` as the installed harness root.
-- Use the canonical artifact root from `utilities/artifact-root.sh`. In a linked task worktree, this is the primary checkout's `.agent_reports/`; the worker-local tracked snapshot is read-only. Read legacy `.claude_reports/` only when it exists at the canonical root and `.agent_reports/` does not.
-- Use portable model roles from `core/CONVENTIONS.md`; do not treat Claude model names such as `sonnet` or `opus` as portable semantics.
-- Use `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` to resolve both model roles and pipeline role profiles such as `planning`, `implementation`, `verification`, and `report`.
-- Before treating a capability as supported, run `adapters/codex/bin/preflight.sh capability-info <capability>` and follow the reported Codex realization.
-- Treat Codex-native skills under `adapters/codex/skills/` and the installable plugin under `adapters/codex/plugins/agent-harness-codex/` as generated adapter output from `capabilities/`; do not load Claude Skill files as native Codex skills.
-- Treat Codex custom agents under `adapters/codex/agents/*.toml` as generated adapter output from `roles/` plus adapter-owned special agents such as `memory-scout`; do not load Claude Agent files as native Codex agents. Codex custom agents may carry `model`, `model_reasoning_effort`, and `sandbox_mode`, but parity with Claude Code Agent frontmatter still requires runtime verification.
-- Expose Codex custom agents through `codex_setting/codex-agents`.
-- Expose the installable Codex plugin through `codex_setting/codex-plugin-marketplace`, not by copying Claude Skill or command files.
-- Expose Codex mode guides through `codex_setting/codex-modes`.
-- Treat command-like capability entrypoints as Codex-native Skills/plugin output, not deprecated custom prompt files or Claude slash commands.
-- Before using a `roles/modes/` fragment, run `adapters/codex/bin/preflight.sh mode-info <family/mode>` and obey portable/tool-contract/unsupported status plus any named `tool_contract`, `tool_contract_check`, `runtime_surface`, and `fallback`.
-- Read the reported `native_mode_path` under `adapters/codex/modes/` before applying a mode persona.
-- For `design/*` modes, satisfy `adapters/codex/bin/preflight.sh visual-harness <file.html>` before claiming rendered visual verification.
-- Use `<agent-home>/scaffolds/` for reusable design scaffold assets; this resolves through `codex_setting/scaffolds` to the Codex-owned scaffold projection, not Claude Design MCP paths.
-- Run deterministic guard scripts directly when Codex hooks are unavailable or untrusted.
-- Expose Codex hook bridges through `codex_setting/codex-hooks`; do not project Claude `settings.json` or hook payloads.
-- Use `adapters/codex/bin/preflight.sh permissions` to inspect the Codex approval/sandbox contract; do not port Claude `allowedTools`.
-- Use `adapters/codex/bin/preflight.sh mcp [--check]` to inspect Codex's native MCP surface; do not copy Claude `settings.json` MCP registrations or project `tools/design-mcp` wholesale.
-- Before edits, run `adapters/codex/bin/preflight.sh write <file> [session-id]`.
-- Before editing `adapters/**`, that write wrapper enforces the core-first gate; after actually reading `core/*.md`, run `adapters/codex/bin/preflight.sh read <core-doc.md> [session-id]` so the marker exists.
-- For `material/browser-fetch` URLs, run `adapters/codex/bin/preflight.sh browser-fetch --check <url>` before treating rendered browser access as satisfying the mode tool contract. Exit 69 means the local Playwright browser stack is unavailable.
-- For `material/data-script` outputs, run `adapters/codex/bin/preflight.sh data-script --check <script.py>` before treating the generated analysis script as satisfying the mode tool contract.
-- For `material/figure-gen` outputs, run `adapters/codex/bin/preflight.sh figure-gen --check <script.py>` before treating a generated matplotlib figure script as satisfying the mode tool contract.
-- For a report spectrogram, also run `adapters/codex/bin/preflight.sh figure-gen --verify-report <manifest.json> <report.md>`; missing or mismatched 48 kHz full-band metadata, claim evidence, or hash-bound visual review blocks completion.
-- For `material/pdf-extract` inputs, run `adapters/codex/bin/preflight.sh pdf-extract --check <file.pdf>` before treating local PDF text extraction as satisfying the mode tool contract. Exit 69 means the local extractor is unavailable.
-- For `material/web-image-search` queries, run `adapters/codex/bin/preflight.sh web-image-search --check <query>` before treating image search as satisfying the mode tool contract. Exit 69 means no provider command is configured.
-- For `qa/security-review`, use the portable read-only mode with Codex file and git diff tools; do not invoke or project Claude `/security-review`.
-- For `qa/test` verification commands, run `adapters/codex/bin/preflight.sh verification-runner --timeout <seconds> -- <command> [args...]` and report the captured exit status.
-- For QA level routing, run `adapters/codex/bin/preflight.sh qa-policy <level> [code|research|doc|general]` and obey the reported reviewer, external-adversary, and fallback policy before claiming independent QA delegation.
-- After design HTML writes, run `adapters/codex/bin/preflight.sh design <file>`.
-- Before claiming full design/autopilot-design support, run `adapters/codex/bin/preflight.sh visual-harness <file.html>` and inspect the reported screenshot. Exit 69 means the local Playwright-backed checker is unavailable.
-- After actually reading `<artifact-root>/spec/prd.md` or `core/*.md`, run `adapters/codex/bin/preflight.sh read <file> [session-id]`; before spec-changing capability work, run `adapters/codex/bin/preflight.sh capability <name> [cwd] [session-id]`.
-- Shell/Bash/`functions.exec_command` reads and writes have targeted hook coverage for obvious write redirects, common mutation commands (`tee`, `touch`, `cp`, `mv`, `rm`, `install`, `rsync`), `dd of=...`, `sed -i`, direct `spec/prd.md` / `core/*.md` reads, and design HTML save paths. Before target-ambiguous shell I/O touches guarded paths, run the matching explicit `preflight.sh write`, `preflight.sh read`, or `preflight.sh design` wrapper.
-- Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]` as a silent side effect for stale workflow cleanup. It does not inject memory by default because Codex `SessionStart` can fire on startup, resume, clear, and compact; set `CODEX_SESSION_MEMORY_INJECT=1` or run `adapters/codex/bin/preflight.sh memory [cwd]` manually when session-start memory context is explicitly needed.
-- On an interactive main only, Codex `SessionEnd` runs `adapters/codex/bin/preflight.sh session-end [cwd] [session-id]` for memory sync plus automatic distillation (enabled by default; opt out with `CODEX_DISTILL_ENABLE=0`). Main `Stop` launches the same session-end lifecycle in a detached background process and exits 0 with silent stdout so turn-scoped Stop hook timeouts are not consumed by distillation. `AGENT_SESSION_ROLE=worker` or any compatibility worker marker makes both the hook bridge and preflight command return silently before sync, state, or model work.
-- On an interactive main, the Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` and `adapters/codex/bin/preflight.sh briefing [cwd]` when they have content; it does not classify prompts for memory recall. Set `CODEX_MODE_ANCHOR_ALWAYS=1` to restore the default tracked anchor. The `adapters/codex/bin/preflight.sh turn-nudge [cwd] [session-id]` side effect runs every main prompt. Worker bridges inject nothing and do not advance counters because dispatch prompts own explicit `status`/`prompt-signal`/`mode` bootstrap. `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` remains a worker-startup/manual subcommand that includes git dirty/worktree/dead-branch risks, not a per-turn injection.
-- Use `adapters/codex/bin/preflight.sh token-budget [cwd] [session-id] [kv|json|hook]` for exact-session token/context telemetry. `kv`/`json` are read-only L2 diagnostics; `hook` preserves the Phase 1 directive bytes while its parent lifecycle records one content-free hashed-session outcome under bounded XDG state (8 KiB/file, 256 files, 2 MiB, oldest-first, fail-open). The UserPromptSubmit bridge adds its compact directive only on a `tight`/`critical` band transition; normal, unknown, repeated-band, and validated-native states inject zero bytes. Exact directive bytes and monotonic runtime counters stay separate and are never token/billing savings estimates. Token pressure changes output verbosity/optional extras only — it never reduces intensity, dispatch/depth, model role, required tools/tests, safety/validation/security/error handling/accessibility, input context, or guards. `utilities/token-budget-experiment.py` is an explicit production-disabled replay/evaluator only; production hooks/preflight do not import or activate its dynamic candidate, and adoption remains pending user review. Codex `rollout_budget` is under-development and local 0.144.3 keeps it disabled, so native ownership requires a separately validated explicit opt-in; never edit runtime-owned `$CODEX_HOME/config.toml` automatically.
-- Codex `PermissionRequest` hook bridge is a registered no-op that emits nothing; harness monitoring is owned by Codex native `/statusline`, and Codex owns approval and sandbox decisions.
-- Use `adapters/codex/bin/preflight.sh status [cwd] [session-id]` when you need a read-only harness snapshot for workflow, artifact, notes, worktree, and git-risk signals — an on-demand/worker-startup lookup, not an automatic per-turn injection. Keep Codex `/statusline` responsible for model, context, token, limit, and session footer fields.
-- Use `adapters/codex/bin/preflight.sh ui-info` to inspect the Codex UI boundary. Codex supports native `/statusline` and `/title` built-in item configuration, but not a Claude-style arbitrary live statusline script; harness-specific signals stay in `preflight.sh status` output. Codex hooks run silently with no `statusMessage` labels, matching Claude Code's quiet hooks. `/statusline` persists user choices in `$CODEX_HOME/config.toml`; keep that file runtime-owned and use `codex_setting/codex-config/tui-statusline.toml` only as the harness-recommended fragment. Run `adapters/codex/bin/preflight.sh tui-config` only when you explicitly want to apply that fragment to the runtime-owned config file.
-- Use `adapters/codex/bin/preflight.sh subagent-info --check` before claiming Codex subagent delegation parity; Codex subagents are native, explicit workflows backed by `multi_agent` and projected custom agents under `$CODEX_HOME/agents`. Report both support and parity limits: custom agent TOML supports model/reasoning/sandbox config, but discovery, UI, approval inheritance, and noninteractive/headless behavior remain runtime-verified surfaces.
-- Use `adapters/codex/bin/preflight.sh doctor` for a quick adapter readiness check covering manifest freshness, native projections, hook bridge syntax, and boundary rules. Use `adapters/codex/bin/preflight.sh doctor --runtime` or `adapters/codex/bin/preflight.sh runtime-projection` when you also need to verify the installed `$CODEX_HOME` wiring; use `doctor --runtime-strict` or `runtime-projection --require-hook-trust` when complete hook trust must be proven.
-- Use `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` before following a loop guide; do not run Claude-coupled loop scripts as Codex-native executables.
-- Use `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly wants to toggle the tracked/untracked workflow escape hatch.
-- Use `adapters/codex/bin/preflight.sh worklog [cwd]` before worklog-board or agent-notes work to inspect configured notes/app paths without mutating data.
-- Codex dispatch injects `AGENT_ARTIFACT_ROOT`, adds exactly that canonical path through `--add-dir`, and records it in jobs metadata. After main merges, verifies the integrated tree, and pushes the integration ref, run `adapters/codex/bin/preflight.sh worktree-cleanup --check --worktree <path>` and then `--apply` when eligible. It preserves the branch and blocks dirty, unmerged, locked, active, or unpushed worktrees. SessionEnd/Stop is never a destructive-cleanup authority.
-- Use `adapters/codex/bin/preflight.sh headless [--check] [--require-hook-trust] <worktree>` before any Codex headless dispatch. Use `adapters/codex/bin/preflight.sh dispatch --dry-run|--register|--start [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <quick|light|standard|thorough|adversarial> [--intensity <direct|quick|standard|strong|thorough|adversarial>] [--depth 1|2] [--parent <slug>] [--parent-session-id <session>] [--worker-role <role>] [--owner <capability>]` to build/register/start the headless command. The wrapper keeps the active `CODEX_HOME` for auth/runtime projection, but it does not pick a default model. The main/orchestrator must choose per job with `--model-role <portable-role>`, `--model <model> --reasoning <effort>`, or explicit `--inherit-model-settings`; `standard+` depth-1 capability owners default to `deep orchestrator`, retained `orchestrator` is balanced/mechanical only, and planning/architecture prefers eligible Codex/GPT `deep maker` without hard-pinning. Run `utilities/dispatch-route.sh` for the deterministic cross-harness candidate and trace. Simple jobs should be downshifted by that main-session decision, not by wrapper hardcoding. The wrapper still sets noninteractive approval with `-c approval_policy=...` unless approval inheritance is explicit. The dispatch wrapper validates `capability-info`, `mode-info`, and the portable QA level before writing `.dispatch/jobs.log`; registry writes and harvest rewrites are serialized with a `.lock` file. `--register` and `--start` materialize the Codex harness prompt before appending the registry row, and the prompt includes the Codex bootstrap, `status`, `prompt-signal`, `mode`, capability/mode checks, pipeline role profile checks, spec-read/capability/write gates, and a Claude-native surface ban. Use `--require-hook-trust` when launch must fail unless all Codex hook trust records are present; missing trust fails before registry writes. Do not launch headless work unless the job is main-dispatched depth 1, or depth 2 dispatched by a depth 1 capability owner under `standard+` intensity with `--parent`; every job must be registered in `.dispatch/jobs.log` and monitored with `adapters/codex/bin/preflight.sh liveness [jobs.log]` while waiting. Depth-2 has two regular uses (2026-07-10 stage-dispatch, `core/OPERATIONS.md §5.10 ③④`): bounded review sub-workers, and — the `standard+` default — **pipeline stage-workers** where the depth-1 conductor dispatches each sub-skill stage (`--worker-role code-plan|code-execute|code-test|code-report`) as its own session with file-only handoff and class-scoped writes (only code-execute mutates source). `direct` stays inline; `quick` is a depth-1 one-shot worker; micro-stages stay inline; stage sessions never re-dispatch (depth 3+ forbidden). Exception to the stage-dispatch default = **separability judgment** (SD-17, `core/OPERATIONS.md §5.10 ③`): non-separable, boundary-coupled edits may run inline only with the reasoning recorded in `plans/<slug>/_internal/metrics.md` (an unrecorded inline run is a contract violation), separable parts still parallelized in-session, and dispatch-infra self-modification gated by the explicit orchestrator opt-out. The depth-1 conductor is a one-shot process — after dispatching a stage it must not end the turn on a notification wait; it polls the registered stage with `adapters/codex/bin/preflight.sh liveness [jobs.log]` in the same turn and harvests, re-dispatching on SUSPECT/DEAD (SD-14 parity). After main-session harvest, use `adapters/codex/bin/preflight.sh harvest --slug <slug> --mark-done` only to update the registry; merges and cleanup remain main/orchestrator responsibilities.
-- Treat autopilot entrypoints as Codex-native Skills/plugin guidance. Codex may implicitly select matching Skills, but there is no Claude slash-command router; for spec-backed work, satisfy the spec-read/capability gates and use the relevant `autopilot-*` Skill or explicit headless dispatch path.
-- Select the primary capability semantically per `core/WORKFLOW.md §0.2`: new empirical work (checkpoint reevaluation, new metrics, figure/media generation) keeps `autopilot-lab` primary even when the request is phrased as a report update, and refine/spec/draft/note attach as secondaries that never replace the execution primary. Answer the `core/WORKFLOW.md §0.3` pre-execution gate before long-running, GPU-bound, or bulk-generation execution; at `standard+`, follow the eval execution topology in `capabilities/autopilot-lab.md` and dispatch separable stages instead of running them inline in the main session, recording any inline exception in the experiment `_RUNLOG`/`_internal` or plan metrics per `core/OPERATIONS.md §5.10`.
-- For `autopilot-code`, `capability-info` and `route` print the portable pipeline contract (`code-plan>code-execute>code-test>code-report` for `standard+`), optional `code-refine`, stage graph/intensity policy, required `standard+` plan artifacts, role mapping, and dispatch fallback; `direct` has no plan stage and `quick` is a depth-1 one-shot worker that uses micro-plan plus plan-check-lite before claiming the cycle is complete.
-- Treat Codex subagents as native subagent workflows, and keep them distinct from registered headless worker sessions (`codex exec` through `preflight.sh dispatch`) per `core/OPERATIONS.md §5.10` delegation surfaces: a user or policy restriction on one surface never silently extends to the other. Codex's explicit-spawn policy for native subagents does not ban registered headless dispatch. Use native subagents when the user explicitly asks for parallel/subagent work, when the main session dispatches depth-one headless work, or when a depth-one capability owner dispatches bounded depth-two workers; run `adapters/codex/bin/preflight.sh subagent-info --check` before claiming runtime support, and do not promise Claude-style automatic background delegation from UI state alone. Before claiming both surfaces are restricted, cite current official Codex documentation plus `subagent-info --check` and `headless --check` output; only then fall back inline with the reason recorded in plan metrics or the experiment `_RUNLOG`/`_internal`.
-- Memory semantics belong to the acting agent. When prior context may materially improve the current judgment, choose a query and run `adapters/codex/bin/preflight.sh recall "<query>" [cwd]` or `tools/memory/recall.sh`. Do not substitute fixed phrases, topic lists, or thresholds for that decision. For deep work, use the projected read-only `memory-scout` custom agent when subagents are available, otherwise follow the same procedure inline; return a <=15-line verdict and do not write memory or files. When retrieval exposes `[pending:<id>]`, read the full obligation, apply and verify it, then run `python3 tools/memory/mem.py consume <id>`; retrieval alone never consumes it.
-- For `research/claim-verify`, run `adapters/codex/bin/preflight.sh claim-verify --check <claim>` before treating adversarial external verification as satisfying the mode tool contract. Exit 69 means no external verification provider is configured.
-- Use `adapters/codex/bin/preflight.sh distill-delta <session-id>` to inspect Codex transcript deltas. The user-facing `adapters/codex/bin/preflight.sh distill-propose <session-id> [cwd]` stays an explicit preview: it reports `status=tool-contract` and exits 69 until `CODEX_DISTILL_ENABLE=1`. The adapter-owned main-session `session-end` and `turn-nudge` paths apply distillation automatically by default — the read-only `codex exec` worker is verified tool-free — so opt out with `CODEX_DISTILL_ENABLE=0`. Dispatch/title/distill/loop workers export `AGENT_SESSION_ROLE=worker`; automatic memory lifecycle is disabled while deterministic safety/task guards remain active.
-- Use `adapters/codex/bin/install-runtime-projection.sh [--install-plugin] [--skills-mode native|plugin|both]` to wire `$CODEX_HOME` (default `$HOME/.codex`) to the harness projection (`agent-*` pointers for bootstrap, common docs, capabilities, roles, bin/tools/utilities, scaffolds, hooks, selected native skill discovery, native agents/modes/plugin marketplace, `hooks.json`, native agent symlinks, and the read-only `agent-config` fragment pointer); it is idempotent and never touches Codex credentials, sessions, logs, caches, `config.toml`, or DBs. Default skill discovery is native symlinks; with `--install-plugin`, default skill discovery is plugin-only to avoid duplicate skill metadata. Use `adapters/codex/bin/check-runtime-projection.sh`, `adapters/codex/bin/preflight.sh runtime-projection`, or `adapters/codex/bin/preflight.sh doctor --runtime` for read-only `status=ok|failed` validation of that wiring, including the selected skill discovery mode and exact per-agent symlink targets. If `check=hook-trust:review-needed` appears, run `/hooks` in Codex and trust the changed harness hooks; `check=hook-trust:ok session_end=stop-alias` means Codex trusted `Stop`, which runs the same session-end bridge as `SessionEnd`; use `adapters/codex/bin/preflight.sh runtime-projection --require-hook-trust` or `adapters/codex/bin/preflight.sh doctor --runtime-strict` when hook trust should fail the check.
-- Treat `codex_setting/tools` as a selective memory/material/QA/design tool projection. Do not assume every shared tool is Codex-supported.
-- Treat `codex_setting/utilities` as a selective utility projection. Do not assume every shared utility is Codex-supported.
-- Keep Codex-owned credentials, sessions, logs, caches, and local databases outside the harness repo.
+- `AGENT_HOME` is the installed harness root. Resolve artifacts through `utilities/artifact-root.sh`; linked worktrees write the primary checkout's `.agent_reports/`.
+- Portable model roles remain vendor-neutral. Resolve them with `preflight.sh role <portable-role|role-profile|pipeline-stage>`.
+- Capabilities come from `capabilities/`; Codex-native generated Skills/plugin, agents, and modes live under `adapters/codex/`. Expose them through `codex_setting/codex-plugin-marketplace`, `codex_setting/codex-agents`, and `codex_setting/codex-modes`.
+- Hooks are Codex bridges under `codex_setting/codex-hooks`; never project Claude settings, commands, hooks, or allowedTools.
+- Before using a capability or mode, run `adapters/codex/bin/preflight.sh capability-info <capability>` or `preflight.sh mode-info <family/mode>` and obey named `tool_contract`, `tool_contract_check`, `runtime_surface`, and `fallback`.
+- Before edits run `preflight.sh write <file> [session-id]`. Read the governing core file first for `adapters/**`; mark actual core/spec reads with `preflight.sh read <file> [session-id]`. Run `preflight.sh capability <name> [cwd] [session-id]` for spec changes.
+- Shell/Bash/`functions.exec_command` reads and writes have targeted hook coverage; use explicit read/write/design preflight for ambiguous guarded I/O.
+
+Detailed lifecycle and edge-case contracts live in `adapters/codex/README.md`
+and `ADAPTATION.md`; command output is authoritative for current support.
+
+## Command Surface
+
+| Need | Command |
+|---|---|
+| lifecycle | `preflight.sh start`, `preflight.sh session-end`, `preflight.sh mode`, `preflight.sh prompt-signal`, `preflight.sh turn-nudge` |
+| workflow/context | `preflight.sh status`, `preflight.sh track`, `preflight.sh briefing`, `preflight.sh worklog` |
+| memory | `preflight.sh memory`, `preflight.sh recall`, `preflight.sh distill-delta`, `preflight.sh distill-propose` |
+| token/UI | `preflight.sh token-budget`, `preflight.sh ui-info`, `preflight.sh tui-config` |
+| delegation/QA | `preflight.sh subagent-info --check`, `preflight.sh qa-policy <level> [code|research|doc|general]` |
+| readiness/loops | `preflight.sh doctor [--runtime]`, `preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` |
+| install | `install-runtime-projection.sh [--install-plugin] [--skills-mode native|plugin|both]`, `check-runtime-projection.sh`, `preflight.sh runtime-projection --require-hook-trust` |
+
+Keep Codex `/statusline` responsible for model, context, token, limit, and session footer fields. `preflight.sh status` is an on-demand harness snapshot, including git dirty/worktree/dead-branch risks. Runtime config remains user-owned; `session_end=stop-alias` is only a projection-check status.
+The recommended footer fragment is `codex_setting/codex-config/tui-statusline.toml`; apply it only through explicit `preflight.sh tui-config`.
+
+## Tool Contracts
+
+Before claiming support, run the relevant check:
+
+- `preflight.sh visual-harness <file.html>`
+- `preflight.sh browser-fetch --check <url>`
+- `preflight.sh data-script --check <script.py>`
+- `preflight.sh figure-gen --check <script.py>`
+- `figure-gen --verify-report <manifest.json> <report.md>`
+- `preflight.sh pdf-extract --check <file.pdf>`
+- `preflight.sh web-image-search --check <query>`
+- `preflight.sh verification-runner --timeout <seconds> -- <command>`
+- `preflight.sh claim-verify --check <claim>`
+- `preflight.sh permissions` and `preflight.sh mcp [--check]`
+
+Exit 69 means the local tool contract is unavailable; use the reported fallback
+or mark the adapter row unverified/unsupported. Never borrow a Claude-native
+tool to claim Codex parity.
+
+## Dispatch
+
+Select the primary capability semantically per `core/WORKFLOW.md §0.2` and use
+its §0.3 pre-execution gate when applicable.
+
+Check `preflight.sh headless [--check] [--require-hook-trust] <worktree>`.
+Launch only registered jobs through
+`preflight.sh dispatch --dry-run|--register|--start [--require-hook-trust]`
+with explicit worktree, slug, capability, mode, QA, intensity, depth, parent,
+worker role, owner, and model choice/inheritance. Monitor with
+`preflight.sh liveness [jobs.log]`; harvest with `preflight.sh harvest`.
+
+`standard+` uses a depth-1 capability owner and, when separable, depth-2
+`code-plan -> code-execute -> code-test -> code-report` stage workers.
+`direct` is inline; `quick` is one depth-1 one-shot worker. Depth 3 is
+forbidden. Record an inline exception in plan metrics. After integration,
+verification, and push, use `preflight.sh worktree-cleanup --check` before
+`--apply`; SessionEnd/Stop never cleans worktrees.
+
+For `autopilot-code`, `capability-info` and `route` print the portable pipeline contract (`code-plan>code-execute>code-test>code-report` for `standard+`).
+Use native subagents only after `preflight.sh subagent-info --check`; native
+subagents and registered headless workers remain distinct. A restriction on
+one surface never silently extends to the other.
+
+## Memory and Context
+
+Memory semantics belong to the acting agent. Use a targeted `preflight.sh recall
+"<query>" [cwd]`; retrieve a full pending obligation before applying and
+consuming it. Workers do not run main memory lifecycle.
+
+`preflight.sh token-budget` exposes exact-session telemetry. The normal, unknown, repeated-band, and validated-native states inject zero bytes; a verified
+tight/critical transition may emit one directive of at most 240 UTF-8 bytes.
+Pressure changes optional response prose only—never intensity, dispatch/depth,
+model role, required input, tools/tests, safety, validation, or guards.
+`token-budget-experiment.py` is production-disabled; static bytes and counters
+are not token, billing, savings, cost, or ROI estimates. Native budget config is
+read-only unless the user explicitly opts into a separately validated feature.
+
+Do not run drill automatically. Do not edit runtime-owned credentials, sessions,
+logs, caches, databases, or `$CODEX_HOME/config.toml`.
 
 ## Response Policy
 
-Portable behavior contract = `roles/response-policy.md` (single source for the clauses below). This section is the Codex realization: the portable clauses plus Codex-specific tone and runtime notes. Do not redefine a portable clause here.
+Portable behavior contract = `roles/response-policy.md`.
 
-Portable clauses (from `roles/response-policy.md`):
-- **Audience-language first** — documents and artifacts intended for the user default to the user's current communication language; explicit target, publication, external-audience, existing-artifact, and repository-publication language contracts override.
-- **Concise · promise–action match** — say only what is needed, no self-narration; if you use a commitment verb the matching action is in the same turn.
-- **Verify before asserting · convention adherence** — state tool/code facts only after checking; follow an existing convention rather than improvising, and expose changes before committing.
-- **Pause is not automatic · autonomous on no answer** — a pause/review applies only on an explicit user signal; when a question is unanswered, proceed in the recommended direction with a one-line report and do not re-ask.
-- **Do not ask what is certain · sync then execute** — reserve questions for genuinely non-obvious design/format/destructive decisions; align intent upfront, then run without mid-stream confirms.
-- **Auto-continue in-flow follow-ups · corresponding sync is part of the change** — inside a "do X" flow do not re-confirm each step (commit/push/cleanup); the records/docs the change implies follow automatically. Confirm separately only for new design decisions, destructive ops, or touching another system.
-
-Codex realization notes:
-- Keep implementation work grounded in the repo's current files and existing conventions.
-- When modifying this harness repo, commit and push after validation.
-- Do not run drill automatically; it can invoke headless runtime sessions and spend tokens. Run `adapters/codex/bin/preflight.sh loop-info drill` and report when drill would be useful.
+- **Audience-language first** — user artifacts default to the user's current communication language unless a stronger audience/repository contract applies.
+- Keep responses concise, match promises with same-turn action, verify before asserting, and follow current conventions.
+- Ask only for genuinely non-obvious or destructive choices. Continue reversible in-flow work and its implied validation, records, commit, and push.
 
 ## Compatibility Boundary
 
-Claude Code files are implementation references, not Codex bootstrap files:
-
-- `adapters/claude/CLAUDE.md`
-- `adapters/claude/settings.json`
-- `adapters/claude/commands/`
-- `adapters/claude/statusline.sh`
-
-When porting behavior, copy the invariant from `core/` first, then map it to Codex tools, approval behavior, and session lifecycle.
+Claude/OpenCode files are sibling references, not Codex bootstrap input. Portable
+meaning comes from `core/`, `capabilities/`, and `roles/`; map it to Codex
+tools, approval, sandbox, lifecycle, and discovery.
