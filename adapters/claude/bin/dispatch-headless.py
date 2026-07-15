@@ -96,6 +96,10 @@ def parser() -> argparse.ArgumentParser:
         or os.environ.get("CODEX_THREAD_ID")
         or os.environ.get("CLAUDE_CODE_SESSION_ID"),
     )
+    p.add_argument(
+        "--parent-cwd",
+        default=os.environ.get("AGENT_DISPATCH_PARENT_CWD") or None,
+    )
     p.add_argument("--worker-role")
     p.add_argument("--owner", dest="capability_owner")
     p.add_argument("--route-file")
@@ -363,6 +367,10 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",parent={args.parent_slug}"
     if args.parent_session_id:
         pipe += f",parent_sid={args.parent_session_id}"
+    if args.parent_slug or args.parent_session_id:
+        # OPERATIONS §5.10 pipe contract lists parent_cwd; without it a cross-harness
+        # child whose parent_sid is synthetic can never nest in Fleet (2026-07-15).
+        pipe += f",parent_cwd={os.path.realpath(args.parent_cwd or os.getcwd())}"
     if args.worker_role:
         pipe += f",worker_role={args.worker_role}"
     if args.capability_owner:
@@ -687,6 +695,7 @@ def main(argv: list[str]) -> int:
             "CLAUDE_CODE_CHILD_SESSION": "1",
             "AGENT_DISPATCH_CHILD": "1",
             "AGENT_DISPATCH_DEPTH": str(args.depth),
+            "AGENT_DISPATCH_PARENT_CWD": (os.path.realpath(args.parent_cwd or os.getcwd()) if (args.parent_slug or args.parent_session_id) else ""),
             "AGENT_DISPATCH_INTENSITY": args.intensity,
             # This session's own slug — the conductor Stop gate / dispatch-wait
             # identify "open child rows whose parent= equals MY slug" and cannot
