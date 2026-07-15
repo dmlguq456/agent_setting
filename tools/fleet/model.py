@@ -423,7 +423,14 @@ def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
     age_min = (now - m) / 60.0
     if age_min > stale_min:
         # Inactivity-history axis (§2.2, same axis as unused): silent past the session
-        # window. Preserves the pre-F-25 ordering — status never rescued a 48h-silent row.
+        # window. Preserves the pre-F-25 ordering — status never rescued a 48h-silent row —
+        # EXCEPT the unused ghost shape: its mtime is frozen at spawn by definition, so the
+        # window would auto-hide exactly the rows F-26 exists to surface. While the process
+        # is alive an unused ghost stays `unused` (user decision 2026-07-15); death still
+        # terminates it via the tier-2 existence axis above.
+        if st and _is_unused(st, ev_in):
+            return out("unused", 1, "claude-registry",
+                       "unused exempt from the stale window (mtime frozen at spawn)")
         return out("stale", 3, "mtime", "no activity for > %d min" % stale_min)
     if st:
         if _is_unused(st, ev_in):

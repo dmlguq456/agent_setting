@@ -141,6 +141,23 @@ class GhostClassificationTest(unittest.TestCase):
         s = self._ghost_session(updated_at=1784083189.482 + 5.0)   # 5s of activity
         self.assertEqual(self._classify(s), "idle")
 
+    def test_old_ghost_stays_unused_past_the_stale_window(self):
+        """User decision 2026-07-15: an unused ghost's mtime is frozen at spawn, so the
+        stale window would auto-hide it after 48h — exactly the row F-26 exists to show.
+        Alive ghost stays `unused` regardless of age; death still ends it (tier 2)."""
+        three_days = 3 * 24 * 3600.0
+        s = self._ghost_session()
+        self.assertEqual(self._classify(s, now=1784083189.601 + three_days), "unused")
+        self.assertEqual(s.state_evidence["tier"], 1)
+
+    def test_old_prompted_session_still_goes_stale(self):
+        """The exemption is unused-only — a USED session silent past the window keeps
+        the pre-F-25 ordering (status never rescues a 48h-silent row)."""
+        three_days = 3 * 24 * 3600.0
+        s = self._ghost_session(updated_at=1784083250.0, _has_transcript=True,
+                                mtime=1784083250.0)
+        self.assertEqual(self._classify(s, now=1784083250.0 + three_days), "stale")
+
 
 class UnusedGlyphContractTest(unittest.TestCase):
     """The glyph table's own contract: readable WITHOUT color."""
