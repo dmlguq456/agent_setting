@@ -1,9 +1,9 @@
 project_name: stage-dispatch
 component: stage-dispatch          # autopilot 파이프 디스패치 토폴로지 개정 (repo spec/prd.md = Unified Memory System, spec/harness-layer-sync·dispatch-profiles·agent-fleet-dashboard 무관)
 created: 2026-07-10
-version: 11
+version: 12
 mode: [library, cli]              # library(스테이지 분사 계약·오케스트레이션) + cli(dispatch wrapper·jobs.log·fleet 관제) — infra
-scope_note: "depth-0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic inline, quick=단일 depth-1 one-shot(depth-2 금지), standard+=capability-specific recipe. intensity/execution_topology/worker_kind/transport/tracking 다섯 축은 독립이며 worker worktree는 source-only. v11은 nested child-spawn eligibility를 root headless/native subagent와 분리하고, 모든 launch attempt의 canonical global registry 및 same→cross-harness→native→inline checked fallback을 고정한다."
+scope_note: "depth-0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic inline, quick=단일 depth-1 one-shot(depth-2 금지), standard+=capability-specific recipe. intensity/execution_topology/worker_kind/transport/tracking 다섯 축은 독립이며 worker worktree는 source-only. v12는 logical depth와 OS launch authority를 분리해 모든 depth-2 headless launch를 harness-neutral depth-0 broker protocol로 정규화하고 Claude/Codex 4개 parent→child 조합을 동일 계약으로 지원한다."
 inputs:
   - '사용자 결정 2026-07-10: "스킬 단위 처리 분사를 기본 지침으로. 어차피 산출물 기반 소통." (입도=sub-skill, 적용=standard+)'
   - '사용자 결정 2026-07-13: direct depth-0 inline 유지, quick depth-1 one-shot capability worker 승격(depth-2 금지), standard+ 기존 stage-dispatch 유지'
@@ -24,12 +24,15 @@ inputs:
   - '사용자 결정 2026-07-15 (v10): Tracking 축 분리 채택, quick 경계는 현행 유지(옵션 (a) — 애매하면 quick depth-1, 메인 컨텍스트 보호 우선, SD-18 재확정). Codex inline 권고 기각'
   - '운영 진단 2026-07-15 (v11): plans/2026-07-15_stage-dispatch-v10/_internal/codex-nested-dispatch-diagnosis.md + conductor transcript + cycle/global jobs registry — Codex nested headless 6회 실패, explicit cycle-local --jobs로 Fleet 우회, cross-harness hop 없이 inline 하강'
   - '공식 Codex manual currentness 2026-07-15: native agents.max_depth와 codex exec automation은 별도 surface; workspace-write network default off 및 spawned subprocess 적용; nested codex exec 지원 보장은 없음'
+  - '사용자 결정 2026-07-15 (v12): Claude/Codex를 depth-1·depth-2에 자유롭게 배치. runtime recursion 차이가 topology 의미를 바꾸지 않도록 4개 조합을 공통 호환 구조로 구현'
+  - '공식 Claude/Codex currentness 2026-07-15 (v12): Claude native subagent도 직접 nested spawn 불가; Codex native depth와 codex exec는 별도 surface. portable recursion 보장 없음 → depth-0 external broker 표준화'
+  - 'v11 구현 갭 2026-07-15: ancestor-broker row/readiness는 있으나 stage-dispatch-fallback.py가 caller에서 target wrapper를 subprocess.run; 실제 request handoff/broker process/lifecycle 부재'
 phases:
-  spec: done              # PRD v11 — nested eligibility/global attempt registry/cross-harness fallback(SD-48~50). v10 snapshot = _internal/versions/v10/
+  spec: done              # PRD v12 — harness-neutral depth-0 broker protocol + 4개 Claude/Codex placement(SD-51~53). v11 snapshot = _internal/versions/v11/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: done               # v10 수확 후 별도 stage-dispatch-v11 cycle에서 SD-48~50 + O1/SD-15 구현·main merge·통합 검증 완료
-last_updated: 2026-07-15  # v11 implementation complete — source 298bc043, main merge 7c293fd6
+  dev: pending            # v12 spec commit 후 별도 stage-dispatch-v12-broker worktree/cycle에서 구현·4조합 검증
+last_updated: 2026-07-15  # v12 spec locked; implementation pending
 decisions_locked:
   - 'SD-1: depth-1 owner = 얇은 conductor, 스테이지(plan/execute/test/report) = depth-2 headless 세션 (conductor 는 verdict/게이트만, 스테이지 본문 미독)'
   - 'SD-2: 인터페이스 = 산출물 파일만, 세션 간 대화 컨텍스트 전달 금지, 계약 완결성 의무 (산출물 기반 소통 명문화)'
@@ -84,7 +87,12 @@ decisions_locked:
   - 'SD-48: nested child-spawn eligibility는 (parent harness/transport/sandbox, child harness, launch authority)별 checked hard eligibility. root headless/native subagent 지원으로 추정 금지; unsupported/unknown이면 eligible conductor 또는 prebound ancestor broker/fallback을 route에 결합 (v11, I1)'
   - 'SD-49: production registered dispatch의 모든 실제 launch attempt는 inherited canonical global registry에 spawn 전 기록. cycle-local은 audit mirror만; noncanonical child --jobs/global unwritable은 fail-closed, legacy local rows는 idempotent reconcile (v11, I2 원인=explicit local --jobs)'
   - 'SD-50: standard+ stage fallback = same-harness headless → cross-harness headless(필요 시 depth-0 launch broker) → native subagent → inline enum+evidence. 동일 failure class 무변경 재시도와 cross-harness hop 생략 금지 (v11, I3)'
+  - 'SD-51: 모든 logical depth-2 headless launch의 표준 OS authority는 depth-0 deterministic broker. conductor는 target harness와 무관하게 declarative request+same-turn wait만 수행하며 logical depth/parent와 OS ancestry를 분리 (v12)'
+  - 'SD-52: broker request는 versioned declarative envelope, canonical endpoint/jobs, atomic queued→claimed→running→terminal state, request idempotency, PID/start-tick+heartbeat/lease+fencing, attempt reconciliation을 강제. missing/stale broker는 caller-local fallback 없이 fail-closed (v12)'
+  - 'SD-53: Claude→Claude, Claude→Codex, Codex→Claude, Codex→Codex가 동일 broker protocol을 사용. route layer가 fallback 후보를 선택하고 broker는 재라우팅하지 않으며 runtime recursion은 optional checked executor일 뿐 portable 전제가 아님 (v12)'
 decisions_open:
   - 'SD-OPEN-1: 마이크로-스테이지 inline 손익 임계(어느 스테이지 크기부터 분사 이득). Phase 1 pilot 1표본 확보 — Phase 2 계측 누적만, 확정은 표본 축적 후'
   - 'SD-OPEN-2: 스테이지 SessionEnd mem curator 기동 영향 — 관찰만(계측 로그 기록), 개입은 증거 후 (v2)'
   - 'SD-OPEN-3: 상호보완 라우팅 가중 정책 — 초기 ''limit 회피 > 특성 적합 > 분산'' + 한도 비대칭 기본값(Claude>Codex, 가변 — 설정값으로 선언, 하드코드 금지), 편중·교차 리뷰 효과 계측 후 조정 (v3)'
+  - 'O2/v13 후보: linked-worktree worker가 sandbox 밖 Git common-dir index.lock을 만들 수 없어 commit 불가. v12 구현 제외; worker no-commit + prepared commit message/evidence → depth-0 main harvest/commit 계약 평가'
+  - 'O3/v13 후보: dispatch 인프라 자기수정으로 route compiler input digest가 바뀌어 completion stale-digest. v12 구현 제외; evidence-bearing orchestrator override vs compile-time digest pin+drift record 비교'
