@@ -2,7 +2,7 @@
 
 - **Date**: 2026-07-10
 - **Mode**: library + cli (autopilot 파이프 디스패치 토폴로지 개정 인프라)
-- **Status**: v12 spec locked — SD-51~53 harness-neutral depth-0 broker·durable lifecycle·Claude/Codex 4조합, implementation pending
+- **Status**: v12 implemented — SD-51~53 harness-neutral depth-0 broker·durable lifecycle·Claude/Codex 4조합 merged and verified
 - **Placement**: 독립 컴포넌트 `spec/stage-dispatch/` — 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 무수정.
 
 ## 배경
@@ -66,7 +66,7 @@ v12는 v11 구현의 남은 의미 갭을 닫는다. 현재 `ancestor-broker`는
 현행 `context-and-guards.md:51` 은 스테이지 분사를 "상태 재발굴 + 연속성 상실 = worst of both"로 금지. 본 spec 은 이를 §0.5 계약 완결성 의무(산출물이 상태를 완전히 담으면 재발굴=파일로드·연속성=파일매체) + §8 마이크로-스테이지 inline 경계로 규칙화해 흡수. research §4-(8)이 "fresh-context+file-state가 context rot 방지 지배 관용구"임을 확증해 반전을 근거화.
 
 ## Next
-v12 spec commit 후 최신 main에서 별도 `stage-dispatch-v12-broker` worktree/cycle을 만든다. deterministic broker/client부터 구현하고 shared fallback helper와 3 adapter preflight/projection을 연결한 뒤 Claude/Codex 4개 placement, broker crash/idempotency/fail-closed, sibling 회귀를 검증한다. O2/O3는 이 cycle에서 구현하지 않는다.
+v12 구현은 source `8897bf76`, main merge `70bac6ef`로 완료했다. 다음 spec 판단은 O2의 worker no-commit/main harvest 계약과 O3의 evidence-bearing override 대 digest pin+drift record 비교이며, 둘 다 v13 후보일 뿐 자동 구현하지 않는다.
 
 ## Version History
 - v12 (2026-07-15): harness-neutral depth-0 launch broker — autopilot-spec update, v11 snapshot = `_internal/versions/v11/prd.md` (update 직전 cmp=0).
@@ -74,6 +74,7 @@ v12 spec commit 후 최신 main에서 별도 `stage-dispatch-v12-broker` worktre
   - **SD-52**: versioned request envelope, canonical endpoint/jobs, atomic state machine, idempotency, PID/start-tick·heartbeat/lease·fencing, attempt reconciliation, missing/stale fail-closed.
   - **SD-53**: Claude→Claude·Claude→Codex·Codex→Claude·Codex→Codex 동일 protocol. runtime native recursion은 optional checked executor이며 portable 전제가 아님.
   - **범위 분리**: O2(worker commit 불가)와 O3(self-modification stale-digest)는 v13 후보로 유지하고 v12 source 범위에서 제외.
+  - **구현 완료**: source `8897bf76`, main merge `70bac6ef`. broker protocol 10/10, portable guards 359/359, adaptation boundary·manifest·installed Codex runtime projection PASS. claim/post-registry crash의 fenced recovery와 네 placement 모두 중복 launch 0건으로 검증.
 - v11 (2026-07-15): nested stage-dispatch resilience — autopilot-spec update, v10 snapshot = `_internal/versions/v10/prd.md` (update 직전 cmp=0).
   - **I2 원인 확정**: transcript의 최초 dry-run·6개 start·wait·harvest가 모두 cycle `_internal/jobs.log`를 explicit `--jobs`로 지정. global write 시도/permission error는 0건이므로 sandbox write failure가 아니라 의도적 local registry 선택. SD-14b의 parent-child 발견 불일치가 아니라 explicit override의 registry authority 갭으로 판정.
   - **SD-48 (I1)**: parent harness/transport/sandbox·child harness·launch authority별 nested eligibility를 hard eligibility로. root headless/native subagent 지원에서 추정 금지, 필요 시 depth-0 broker가 logical depth-2 child를 launch.

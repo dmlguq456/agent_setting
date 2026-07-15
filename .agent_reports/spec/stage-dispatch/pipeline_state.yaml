@@ -31,8 +31,8 @@ phases:
   spec: done              # PRD v12 — harness-neutral depth-0 broker protocol + 4개 Claude/Codex placement(SD-51~53). v11 snapshot = _internal/versions/v11/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: pending            # v12 spec commit 후 별도 stage-dispatch-v12-broker worktree/cycle에서 구현·4조합 검증
-last_updated: 2026-07-15  # v12 spec locked; implementation pending
+  dev: done               # SD-51~53 broker 구현·Claude/Codex 4조합·crash/idempotency·통합 검증 완료 (source 8897bf76, main 70bac6ef)
+last_updated: 2026-07-15  # v12 implementation merged; portable guards 359/359
 decisions_locked:
   - 'SD-1: depth-1 owner = 얇은 conductor, 스테이지(plan/execute/test/report) = depth-2 headless 세션 (conductor 는 verdict/게이트만, 스테이지 본문 미독)'
   - 'SD-2: 인터페이스 = 산출물 파일만, 세션 간 대화 컨텍스트 전달 금지, 계약 완결성 의무 (산출물 기반 소통 명문화)'
