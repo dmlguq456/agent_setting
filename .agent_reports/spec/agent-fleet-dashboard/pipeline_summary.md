@@ -131,3 +131,11 @@
 | update | v9 snapshot → `_internal/versions/v9/prd.md`, prd.md v10 | §4.9 신설(F-28a~c·F-30 설계), 확정 결정 v10, Next v10 순서 |
 
 - v9 구현 사이클 완료 반영(마우스 kill·서브에이전트 관측·폭 상한, 468 tests). 글리프 이탈 1건을 독립 검증이 되돌린 사례 기록은 plans/2026-07-15_fleet-v9-mouse-subagent/final_report.md.
+
+## v10 implementation closure (2026-07-16)
+
+- `plans/2026-07-15_fleet-v10-process-view` 사이클(conductor 분사, plan→execute→test→report 완주)로 F-28a route record tolerant 소비(`route.py` 신설, write API 없음), F-28b record 기반 breadcrumb(하드코딩 3단 → 실제 노드 이름·순서, "record는 레일, 점등은 실측"), F-30 처리-과정 뷰(`p` 키/`--view process` — DAG fan-out/fan-in·노드→세션→서브에이전트 중첩·마우스 접기), F-28c governor lease 관측(`collectors/governor.py`, 죽은 lease·PID 재사용 배제) 구현. 테스트 468→519, 회귀 0, main 머지 943b6aba.
+- 검증이 잡은 잠복 결함 2건: 종단 행 증거 스캔이 `route_file` 미탑재 → 완료 route가 "no route record"로 오탐(tolerant fallback이 결손을 은폐); 동일 가정("살아 있는 잡만 보면 된다")의 두 번째 위치에서 중복 카드. 모두 live 실측으로 수정 확인(heuristic 5→0), mutation 테스트로 회귀 테스트 실효성 검증.
+- 정직한 결손(구현하지 않기로 결정): completion gate 통과 표시(`—` — 통과 증거가 시스템에 부재, dispatch 규약 변경 필요), run registry 관측(canonical 경로 부재 — "없다"가 아니라 "찾을 수 없다"). 이월 = `plans/2026-07-15_fleet-v10-process-view/_internal/carryover.md`.
+- 별건 인프라 발견 2건(fleet 범위 밖, 상위 보고): dispatch 브로커 head-of-line blocking(`dispatch-broker.py:510` 전역 락 하 동기 실행 — 실측 12분 전 fabric 차단), immutable route record가 mutable `broker_instance` 고정(브로커 롤오버 시 ordinal-1 hop 영구 불가 — 이 사이클 자신이 ordinal-3 폴백으로 열화 수행).
+- 판단 대기: `--view` CLI 표면 유지 여부(spec은 `p`만 확정), gate 통과 마커 규약(stage-dispatch 계약 변경), 브로커 HOL blocking 우선순위.
