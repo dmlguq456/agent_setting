@@ -96,7 +96,11 @@ _HUE_OF = {
     "qa_quick": ("d", _A_D), "qa_light": ("d", _A_D), "qa_standard": ("d", 0),
     "qa_thorough": ("d", _A_B), "qa_adversarial": ("d", _A_B),
     "g_work": ("g", _A_B), "g_work_off": ("g", _A_D), "g_idle": ("y", 0),
-    "g_stale": ("d", _A_D), "g_dead": ("r", _A_B),
+    "g_stale": ("d", _A_D), "g_dead": ("r", _A_B), "g_unused": ("y", _A_D),
+    # Badge text, NOT the glyph: plain yellow so it separates from the dim-yellow `untracked`
+    # gate tag it sits directly against (they otherwise merge into one dim-yellow phrase).
+    # The glyph keeps g_unused (dim) so the ●>○>◌ ink-weight gradient still reads.
+    "g_unused_b": ("y", 0),
     "lvl_g": ("g", 0), "lvl_y": ("y", 0), "lvl_r": ("r", _A_B),
     "grp_live": ("g", 0), "grp_hot": ("g", _A_B), "gate_t": ("g", _A_D), "gate_u": ("y", _A_D),
     "grp_cool": ("y", _A_D), "grp_cold": ("d", _A_D),   # Cooling is dim yellow; cold is dim grey.
@@ -158,6 +162,10 @@ def _init_colors():
     _COLOR["g_idle"] = _COLOR.get("yellow", 0)
     _COLOR["g_stale"] = curses.A_DIM
     _COLOR["g_dead"] = _COLOR.get("red", 0) | curses.A_BOLD
+    # unused (F-26): dim yellow — distinct from idle's dim GREEN (live-but-quiet) and from
+    # stale's colorless dim. The shape carries the meaning on its own; color only reinforces.
+    _COLOR["g_unused"] = _COLOR.get("yellow", 0) | curses.A_DIM
+    _COLOR["g_unused_b"] = _COLOR.get("yellow", 0)
     # level bars (ctx / usage): green <50 / yellow <80 / red ≥80 (red bold = alarm)
     _COLOR["lvl_g"] = _COLOR.get("green", 0)
     _COLOR["lvl_y"] = _COLOR.get("yellow", 0)
@@ -225,6 +233,19 @@ def _init_colors():
     except Exception:
         _COLOR["hdr_bar"] = curses.A_REVERSE
     _COLOR["hdr_key"] = _COLOR["hdr_bar"] | curses.A_BOLD
+    # F-27 warning bar: the SAME structural bar as hdr_bar, in red. It exists because a footer
+    # warning must still BE a bar — reusing the body glyph role `g_dead` for a footer head made
+    # the row fail _addline's bar test, so the two warning prompts lost their band and rendered
+    # as a red-text/black-tail fragment while the benign prompt got a clean full-width bar. That
+    # inverts the hierarchy the double-confirm ladder depends on: the live-session prompt must
+    # read as MORE serious, not like a render glitch.
+    try:
+        curses.init_pair(17, curses.COLOR_WHITE, curses.COLOR_RED)
+        _COLOR["hdr_warn"] = curses.color_pair(17) | curses.A_BOLD
+    except Exception:
+        _COLOR["hdr_warn"] = curses.A_REVERSE | curses.A_BOLD
+    # The one key the user must press, advertised on top of the red bar.
+    _COLOR["hdr_warn_key"] = _COLOR["hdr_warn"] | curses.A_REVERSE
     # bar BLANKS are drawn as white-fg █ blocks on the DEFAULT bg (pair 16), not as bg-colored
     # spaces: ncurses collapses blank runs into ECH/EL erase sequences, and on terminals without
     # working BCE the erased cells come out BLACK — the bar broke between words and after the
@@ -284,17 +305,23 @@ def _attr(key):
 
 
 def _live_key(state):
-    return {"working": "g_work", "idle": "g_work_off", "stale": "g_stale",
-            "dead": "g_dead"}.get(state, "dim")
+    return {"working": "g_work", "idle": "g_work_off", "unused": "g_unused",
+            "stale": "g_stale", "dead": "g_dead"}.get(state, "dim")
 
 
 # status dot — SHAPE+SIZE gradient (design r2, a11y): the less active the state, the smaller
 # the glyph. Working uses a bright green spinner; live idle/detached use the same dim-green
 # loading axis; stale/dead recede to grey/red. Readable without color.
-_LIVE_GLYPH = {"working": "●", "idle": "●", "blocked": "◑", "done": "✓",
+# F-26 `unused` = ◌ (U+25CC DOTTED CIRCLE). Shape gradient reads ● (filled) > ○ (ring) >
+# ◌ (dotted ring = never filled), which is exactly the "started but never prompted" meaning.
+# ○ was NOT available: _DETACHED_GLYPH already owns it, and detached (attach axis) vs unused
+# (activity-history axis) are unrelated — separating them by color alone would break the
+# "Readable without color" contract this table is built on.
+_LIVE_GLYPH = {"working": "●", "idle": "●", "unused": "◌", "blocked": "◑", "done": "✓",
                "stale": "·", "dead": "✕", "queued": "◦", "unknown": "·"}
 _DETACHED_GLYPH = "○"   # Ring means no attached client; idle uses a filled dim-green dot.
-_GLYPH_KEY = {"working": "g_work", "idle": "g_work_off", "blocked": "g_idle", "done": "green",
+_GLYPH_KEY = {"working": "g_work", "idle": "g_work_off", "unused": "g_unused",
+              "blocked": "g_idle", "done": "green",
               "stale": "g_stale", "dead": "g_dead", "queued": "dim", "unknown": "dim"}
 
 # group "cooling" state (user 2026-07-03): a directory with NO active work whose newest session
@@ -488,6 +515,17 @@ _NAME_COL = 4 + _HW           # absolute col where the NAME starts — SHARED by
 _NW_S = _BRANCH_COL - _NAME_COL   # name field (both row types): col 18 → branch 46 = 28
 _NAME2_MAX = 40               # 2-line name zone tail-cut cap (display cells) — no fixed branch
                               # column there, so an unbounded title could push branch off-draw (F-14)
+_NAME_GAP = 1                 # Cells inside the name zone reserved as a guaranteed separator
+                              # before the branch column. Without it a name+suffix that exactly
+                              # fills the zone renders as "trackedmain" — the padding below only
+                              # fires on `used < avail`. Latent pre-v8 (a 77-cell zone was rarely
+                              # filled); the 40-cell cap makes filling it the common case.
+_NAME_WIDE_MAX = 40           # F-22 minor (v8): FIXED upper bound for the wide-layout name zone.
+                              # Adjust here and nowhere else. Without it the zone absorbed ALL
+                              # remaining slack (measured: 168 cols → 77, 200 → 109), which
+                              # stretched the name so far that branch/model/context drifted out
+                              # of comfortable scan range. Slack past this cap is NOT
+                              # redistributed to other columns — it stays as end-of-row padding.
 _TITLE_MAX = 24               # Legacy/fallback title budget and F-15 dispatch-name cap.
                               # F-22 session rows expand beyond this only when terminal width
                               # is known; dispatch labels stay compact inside the wider column.
@@ -546,11 +584,14 @@ _STAGE_RESERVE = 22           # trailing room for the dispatch stage breadcrumb 
 
 
 def _wide_name_width(term_width):
-    """Responsive wide-layout name column.
+    """Responsive wide-layout name column, between _NW_S and _NAME_WIDE_MAX.
 
     Reserve every field after the name plus the right-flushed time and panel
     margins — including trailing breadcrumb room (_STAGE_RESERVE) — then give
-    the remaining horizontal slack to the session column.
+    the remaining horizontal slack to the session column, but only up to
+    _NAME_WIDE_MAX (F-22 minor, v8). Leftover slack past the cap is deliberately
+    left as end-of-row padding rather than being handed to another column: the
+    point is a stable, predictable name zone, not a wider one.
     """
     if not term_width:
         return _NW_S
@@ -559,7 +600,7 @@ def _wide_name_width(term_width):
         framing = (_INSET + _PAD_IN) + _INSET + (2 + _PAD_IN) + 6 + 2
     else:
         framing = 1 + 6 + 2
-    return max(_NW_S, int(term_width) - fixed_row - framing)
+    return max(_NW_S, min(_NAME_WIDE_MAX, int(term_width) - fixed_row - framing))
 
 
 def _col_head(name_width):
@@ -684,6 +725,30 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False):
     return _stage_segs(key, stage, working=working)
 
 
+def _session_name(s):
+    """The session name chain, made explicit (F-26): AI/sidecar title → registry name → slug
+    → cwd basename. `registry_name` is a real link in this chain, not decoration: a session
+    that has never been prompted has no title, and without the registry name it would render
+    as an anonymous cwd basename — which is exactly how the ghost session hid."""
+    slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
+    return s.title or getattr(s, "registry_name", None) or slug
+
+
+def _unused_badge(s, compact=False):
+    """`unused <age>` — F-26's first-class signal (prd.md:248). Says the session was started
+    and never prompted, and for how long it has sat that way. Age comes from the process, not
+    the registry clock (the registry's updatedAt froze at startup — that IS the finding).
+
+    compact drops the age. Two of F-26's requirements collide on a tight row: the badge is
+    specified as `unused <경과>` (prd.md:248) but prd.md:247 also demands no anonymous rows,
+    and the badge is what starves the name. The age is the recoverable half — every layout
+    already carries elapsed time in its own time cell — so it yields first, and only when the
+    name would otherwise be clipped."""
+    if compact:
+        return " unused"
+    return " unused %s" % fmt_min(s.elapsed_min if s.elapsed_min is not None else None)
+
+
 def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
@@ -707,7 +772,7 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
     # responsive name column. Calls without a terminal-derived width retain the
     # legacy 24-cell cap for hermetic/backward-compatible row construction.
     avail = max(3, name_width or _NW_S)
-    name_txt = s.title or slug
+    name_txt = _session_name(s)
     suffix = []
     suffix_w = 0
     if is_parent and child_count:
@@ -715,6 +780,15 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
         if _dw(child_tag) < avail:
             suffix.append((child_tag, "dim"))
             suffix_w += _dw(child_tag)
+    # F-26: the unused badge outranks the gate/provenance tags — it is the whole reason the
+    # row is surfaced, so it is the last identity tag to drop, not the first.
+    unused_at = None
+    if live == "unused":
+        ub = _unused_badge(s)
+        if suffix_w + _dw(ub) < avail:
+            unused_at = len(suffix)
+            suffix.append((ub, "g_unused_b"))
+            suffix_w += _dw(ub)
     if s.gate:
         gate, pipe = s.gate, False
     else:
@@ -723,7 +797,22 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
     if gtag and suffix_w + _dw(gtag) < avail:
         suffix.append((gtag, gk))
         suffix_w += _dw(gtag)
-    title_budget = max(1, avail - suffix_w)
+    # Degradation ladder, tightest-last (the F-22 40-cell cap makes this reachable at every
+    # width, so it cannot be left to chance): provenance drops first, then the badge's age,
+    # and only then does the name itself clip. The name is what identifies the row — F-26
+    # exists to stop anonymous rows (prd.md:247), so it yields last.
+    prov = getattr(s, "provenance", None)
+    if prov:
+        ptag = " %s" % prov
+        # best-effort by contract → only shown when the name keeps its full width anyway.
+        if avail - suffix_w - _dw(ptag) - _NAME_GAP >= _dw(name_txt):
+            suffix.append((ptag, "dim"))
+            suffix_w += _dw(ptag)
+    if unused_at is not None and avail - suffix_w - _NAME_GAP < _dw(name_txt):
+        short = (_unused_badge(s, compact=True), "g_unused_b")
+        suffix_w -= _dw(suffix[unused_at][0]) - _dw(short[0])
+        suffix[unused_at] = short
+    title_budget = max(1, avail - suffix_w - _NAME_GAP)
     if name_width is None:
         title_budget = min(title_budget, _TITLE_MAX)
     shown = _clip_w(name_txt, title_budget)
@@ -1015,10 +1104,21 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_wid
     suffix = []
     if is_parent and child_count:
         suffix.append((" ▾%d" % child_count, "dim"))
+    unused_at = None
+    if live == "unused":                       # F-26 parity with the wide row
+        unused_at = len(suffix)
+        suffix.append((_unused_badge(s), "g_unused_b"))
     gate, pipe = (s.gate, False) if s.gate else _gate_info(s.cwd, s.session_id)
     gtag, gk = _gate_tag(gate, pipe)
     if gtag:
         suffix.append((gtag, gk))
+    # provenance is optional here (unlike gate): in the narrow/stack layouts every suffix cell
+    # is taken straight out of the name, so a 9-cell tag can clip a real name down to "age…".
+    # A name the user can read outranks knowing who launched it — drop the tag instead.
+    # Position is fixed here (identity tags, before branch) to match the wide row; whether it
+    # is actually inserted is decided below, once the name's budget is known.
+    prov_seg = (" %s" % s.provenance, "dim") if getattr(s, "provenance", None) else None
+    prov_pos = len(suffix)
     br = s.branch or _git_branch(s.cwd)
     br_seg = ("  " + _clip_w(br, _BRW - 2), "dim" if dim_tel else "branch_s") if br else None
     if not _split and br_seg:
@@ -1027,15 +1127,29 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_wid
         suffix.append(("  app-server", "dim"))
     if s.orphan:
         suffix.append(("  worktree-gone", "g_dead"))
+    name_txt = _session_name(s)
     if term_width:
         # A tinted L1 has 4 left cells (inset+padding) and a 2-cell right
         # inset. Reserve those six cells plus every suffix before clipping.
         prefix_w = sum(_dw(text) for text, _key in l1)
+        avail = int(term_width) - 6 - prefix_w
         suffix_w = sum(_dw(text) for text, _key in suffix)
-        title_budget = max(4, int(term_width) - 6 - prefix_w - suffix_w)
+        # Shed the badge's age before shedding the name (see _unused_badge). L2 carries the
+        # elapsed time directly beneath, so nothing is lost — it is the same value twice.
+        if unused_at is not None and avail - suffix_w < _dw(name_txt):
+            short = (_unused_badge(s, compact=True), "g_unused_b")
+            suffix_w -= _dw(suffix[unused_at][0]) - _dw(short[0])
+            suffix[unused_at] = short
+        # Add provenance only if the name still gets its full width afterwards.
+        if prov_seg and avail - suffix_w - _dw(prov_seg[0]) >= _dw(name_txt):
+            suffix.insert(prov_pos, prov_seg)
+            suffix_w += _dw(prov_seg[0])
+        title_budget = max(4, avail - suffix_w)
     else:
+        if prov_seg:
+            suffix.insert(prov_pos, prov_seg)
         title_budget = min(_NAME2_MAX, _TITLE_MAX)
-    l1.append((_clip_w(s.title or slug, title_budget), name_key))
+    l1.append((_clip_w(name_txt, title_budget), name_key))
     l1.extend(suffix)
 
     # L2: elapsed time sits UNDER the harness column (fills the old empty indent — user
@@ -1260,6 +1374,52 @@ def _sort_group_jobs(js):
 
 
 _SHOW_ALL = False   # --all: reveal stale/dead/app_server sessions (folded by default per group)
+
+# F-27 selectable-row stash. `_build_lines` returns a flat segment-line list and knows nothing
+# about which SESSION/JOB produced which line — but a kill cursor must target a row, not a
+# screen line. Stashed on the module (same pattern as _TOGGLE_ROWS) instead of changing the
+# return signature, so render_once and every existing caller are untouched.
+# Reset at the top of _build_lines, before any early return, so a stale map can never be read.
+_SELECTABLE = []
+
+
+def _selectable_session(s):
+    """Kill-eligible session rows, per prd.md:253's two grades (and nothing else).
+
+    Grade 1 (single confirm): unused / stale / dead — a row that is demonstrably not doing
+    work. Plus an idle WORKER child (a leftover headless session).
+    Grade 2 (warning + double confirm): working, or a registry that says busy.
+
+    A plain interactive `idle` session is deliberately NOT selectable: it is somebody's live
+    session sitting between prompts, and it appears in neither grade of the spec's list.
+    """
+    if getattr(s, "app_server", False):
+        return False
+    if s.liveness in ("unused", "stale", "dead", "working"):
+        return True
+    if s.liveness == "idle" and (getattr(s, "is_child", False)
+                                 or getattr(s, "mem_worker", False)):
+        return True
+    return s.status == "busy"
+
+
+def _select_entry(s, line_idx):
+    return {"line": line_idx, "kind": "session", "pid": s.pid,
+            "proc_start": getattr(s, "proc_start", None),
+            "sid": s.session_id, "state": s.liveness,
+            "status": s.status, "cwd": s.cwd, "slug": s.slug,
+            "label": _session_name(s), "harness": s.harness, "source": None,
+            "is_worker": bool(getattr(s, "is_child", False)
+                              or getattr(s, "mem_worker", False))}
+
+
+def _select_entry_job(j, line_idx):
+    return {"line": line_idx, "kind": "job", "pid": j.pid,
+            "proc_start": getattr(j, "proc_start", None),
+            "sid": None, "state": j.liveness, "status": j.status,
+            "cwd": j.cwd, "slug": j.slug,
+            "label": j.slug or j.key, "harness": j.harness, "source": j.source,
+            "is_worker": bool(getattr(j, "is_child", False))}
 _FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: depth-2 stage-worker
                                                                 # rows folded into the conductor
                                                                 # breadcrumb unless working/stale/dead
@@ -1274,12 +1434,16 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                  term_width=None):
     """Return a flat list of segment-lines for the whole screen (None = blank line).
 
+    Side effect: refreshes the module-level `_SELECTABLE` stash (F-27) — see its definition.
+
     Same contract consumed by BOTH `render_once` (plain, full output) and `_draw` (viewport
     slices this same list) — `_OFFSET` must never be read here (see module docstring).
 
     `memory` = F-19 collectors.memory.collect() result (or None — panel/alerts simply omitted;
     tests default to None so every pre-F-19 call site keeps working unchanged).
     """
+    global _SELECTABLE
+    _SELECTABLE = []     # reset before any early return — a stale target map must never survive
     # F-18b: mem-worker (distiller/curator/F-17 refresher) census — computed on the ORIGINAL
     # session list, before is_child/mem filtering, so folded/mem-only groups still surface a
     # total in the legend even when no group header badge fires.
@@ -1383,6 +1547,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     _real = [s for s in sessions if not s.app_server and not getattr(s, "mem_worker", False)]
     n_wk = sum(1 for s in _real if s.liveness == "working")
     n_id = sum(1 for s in _real if s.liveness == "idle")
+    n_un = sum(1 for s in _real if s.liveness == "unused")
     n_dt = sum(1 for s in _real if s.detached and s.liveness not in ("stale", "dead"))
     listed_jobs = jobs if _SHOW_ALL else [j for j in jobs if j.liveness != "dead"]
     jw = sum(1 for j in listed_jobs if j.liveness == "working")
@@ -1390,6 +1555,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     pulse = [("  fleet ", "head"),
              (spin + " %d" % n_wk, "g_work"), (" working   ", "dim"),
              ("● %d" % n_id, "g_work_off"), (" idle   ", "dim")]
+    # F-26: only when there IS one — a healthy board stays quiet (F-12 contract).
+    if n_un:
+        pulse += [(_LIVE_GLYPH["unused"] + " %d" % n_un, "g_unused"), (" unused   ", "dim")]
     if n_dt:
         pulse += [(_DETACHED_GLYPH + " %d" % n_dt, "g_work_off"), (" detached   ", "dim")]
     if listed_jobs:
@@ -1639,6 +1807,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             same_runtime = not job.harness or not parent_harness or job.harness == parent_harness
             row_parent_model = parent_model if same_runtime else None
             row_parent_effort = parent_effort if same_runtime else None
+            # F-27: a job row is a target only with an exact pid to verify (prd.md:253).
+            if job.pid:
+                _SELECTABLE.append(_select_entry_job(job, len(lines)))
             if _jrow:
                 lines.extend(_jrow(job, orphan=orphan, parent_model=row_parent_model,
                                    parent_effort=row_parent_effort, stage_override=stage_override))
@@ -1688,11 +1859,15 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _seen_glyphs.add("stale")
             elif s.liveness == "dead":
                 _seen_glyphs.add("dead")
+            elif s.liveness == "unused":
+                _seen_glyphs.add("unused")
             if s.detached and s.liveness not in ("stale", "dead"):
                 _seen_glyphs.add("detached")
             if nested_n:
                 _seen_glyphs.add("child")
             _n0 = len(lines)
+            if _selectable_session(s):
+                _SELECTABLE.append(_select_entry(s, _n0))    # F-27 target map
             if _srow:
                 lines.extend(_srow(s, is_parent=bool(nested_n), child_count=nested_n,
                                    term_width=term_width))
@@ -1765,6 +1940,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         ("  ", None), ("⠹", "g_work"), (" working   ", "dim"),
         ("●", "g_work_off"), (" idle   ", "dim"),
     ]
+    if "unused" in _seen_glyphs:
+        legend += [(_LIVE_GLYPH["unused"], "g_unused"), (" unused   ", "dim")]
     if "detached" in _seen_glyphs:
         legend += [(_DETACHED_GLYPH, "g_work_off"), (" detached   ", "dim")]
     if "stale" in _seen_glyphs:
@@ -1886,6 +2063,10 @@ def _clip_w(s, maxw, ellipsis="…"):
 # is filled with <fill> — space for _RFLUSH (invisible), ─ for _HFILL (a full-width rule).
 _INSET = 2                  # Panel outer margin in columns.
 _PAD_IN = 2                 # Extra inner padding between tint edge and content.
+# Roles that make a line a full-width chrome BAR. A line is a bar when its FIRST segment says
+# so — so any new bar variant must be registered here or the band silently never paints.
+_BAR_ROLES = ("hdr_bar", "hdr_warn")
+
 _RFLUSH = "\x00 \x00"
 _HFILL = "\x00─\x00"
 
@@ -1971,10 +2152,12 @@ def _addline(stdscr, row, segs, w):
     endcol = _draw(left, start_col)
     # band lines (htop WHITE bars = full width · round-5 tint panels = inset cards) paint their
     # background across; tint rows stop at w-1 so the right margin stays on the default bg.
-    bar = bool(segs) and segs[0][1] == "hdr_bar"
+    bar = bool(segs) and segs[0][1] in _BAR_ROLES
     band = bar or tint is not None
     band_lim = w if bar else (w - _INSET)
-    fill_key = "hdr_bar" if bar else None      # tint rows fill with the default-hue tint pair
+    # The bar inherits its color from the leading role, so a warning bar paints red across the
+    # full width exactly as the normal bar paints white — same structure, different severity.
+    fill_key = segs[0][1] if bar else None     # tint rows fill with the default-hue tint pair
     if fillch is not None:              # right may be EMPTY (a bare full-width rule line) — the
         rw = sum(_dw(t) for t, _ in right)   # fill itself must still draw (bug: divider invisible)
         rpad = (2 + _PAD_IN) if tint is not None else 0   # right-flushed text sits in from the band edge
@@ -1995,9 +2178,320 @@ def _addline(stdscr, row, segs, w):
 _OFFSET = 0                 # scroll offset — READ only in _draw (see module docstring)
 _TOGGLE_ROWS = {}            # screen_y -> True, reset at the top of every _draw (mouse click map)
 
+# --- F-27 selection mode (see _SELECTABLE stash contract in _build_lines) ---
+# A MODED cursor, not a bare ↑↓ cursor: ↑↓ is already bound to scroll (a v2 contract, spec
+# §3 key table), so taking it would regress scrolling for everyone who never kills anything.
+# `s`/`x` enter, ↑↓/jk then move the cursor, Esc/s leave. Only the "enter" key differs from
+# spec F-27's wording; the operating model (row cursor, ↑↓ move, x kill, confirm) is intact.
+_SELECT_MODE = False
+# The cursor is an IDENTITY (pid, proc_start), not a list index and not a screen row. An index
+# silently re-aims when the board rebuilds under it: rows come and go every tick, so index 0
+# can mean a different session one tick later — the user aims at A and the prompt names B.
+# Anchoring on identity means a rebuild either finds the same target or finds nothing (and the
+# selection drops), which are both honest outcomes.
+_CURSOR_ID = None            # (pid, proc_start) | None
+_PROMPT = None               # None | {"stage": confirm|confirm2|escalate, "entry": {...}}
+_PENDING_KILL = None         # {"entry":..., "since": ts} — SIGTERM sent, grace running
+_LAST_ACTION = None          # transient footer feedback string
+
 
 def _clamp_offset(off, total, body_h):
     return max(0, min(off, max(0, total - body_h)))
+
+
+# ---------------------------------------------------------------------------
+# F-27 selection mode helpers. Kept out of _loop so they are testable without curses.
+# ---------------------------------------------------------------------------
+
+def _live_targets():
+    """Selectable rows minus the ones that may never be signalled. The exclusion runs HERE,
+    before anything can be selected — so fleet itself, its ancestry, and the driving session
+    are never even reachable by a prompt (prd.md:253)."""
+    from . import control
+    out = []
+    for e in _SELECTABLE:
+        if not e.get("pid"):
+            continue
+        try:
+            if control.is_excluded(e["pid"]):
+                continue
+        except Exception:
+            continue                     # unresolvable → not a target (fail closed)
+        out.append(e)
+    return out
+
+
+def _entry_id(e):
+    return (e.get("pid"), e.get("proc_start"))
+
+
+def _cursor_index(targets):
+    """Where the cursor identity currently sits, or None if that target is gone."""
+    if _CURSOR_ID is None:
+        return None
+    for i, e in enumerate(targets):
+        if _entry_id(e) == _CURSOR_ID:
+            return i
+    return None
+
+
+def _enter_select(targets):
+    global _SELECT_MODE, _CURSOR_ID
+    if not targets:
+        return False
+    _SELECT_MODE = True
+    if _cursor_index(targets) is None:
+        _CURSOR_ID = _entry_id(targets[0])
+    return True
+
+
+def _exit_select():
+    global _SELECT_MODE, _PROMPT
+    _SELECT_MODE = False
+    _PROMPT = None
+
+
+def reset_selection():
+    """Public: drop all selection/prompt state (tests + fleet.py belt-and-suspenders)."""
+    global _SELECT_MODE, _CURSOR_ID, _PROMPT, _PENDING_KILL, _LAST_ACTION
+    _SELECT_MODE = False
+    _CURSOR_ID = None
+    _PROMPT = None
+    _PENDING_KILL = None
+    _LAST_ACTION = None
+
+
+def _prompt_segs(prompt, width=None):
+    """The confirmation bar. Always names the exact target and always shows the keys.
+
+    A prompt is a safety affordance, not decoration: the footer is clipped at the terminal
+    edge, so on a narrow screen the full phrasing would lose its tail — and the tail is where
+    the keys are. ("press Y (capital) to kill" is 117 cells; at 60 the user would be asked to
+    confirm without being told how.) Below the fit threshold every prompt therefore switches
+    to a terse form that keeps the two things the user cannot act without: WHICH target, and
+    WHICH keys. The pid is what survives on the identity side — it is unambiguous where a
+    clipped name is not.
+    """
+    from . import control
+    e = prompt["entry"]
+    stage = prompt["stage"]
+    who = "%s [pid %s] %s" % (e.get("label") or "?", e.get("pid"), e.get("state"))
+
+    def pick(*variants):
+        """First variant that fits. The ladder always ends in a pid-only form that fits any
+        sane terminal, so a prompt can never be silently clipped."""
+        for segs in variants:
+            if width is None or sum(_dw(t) for t, _k in segs) <= width:
+                return segs
+        return variants[-1]
+
+    if stage == "escalate":
+        # SIGKILL — the one signal a process cannot refuse. It shares the warning bar with the
+        # live-kill prompts: it is at least as destructive, so it may not read calmer than they do.
+        return pick(
+            [(" ⚠ SIGTERM ignored for %ds — send SIGKILL to " % control.KILL_GRACE_SEC, "hdr_warn"),
+             (who, "hdr_warn_key"), ("? press ", "hdr_warn"),
+             ("Y", "hdr_warn_key"), (" (capital) · ", "hdr_warn"),
+             ("Esc", "hdr_warn_key"), (" no", "hdr_warn")],
+            [(" ⚠ SIGKILL ", "hdr_warn"), (who, "hdr_warn_key"), ("? ", "hdr_warn"),
+             ("Y", "hdr_warn_key"), ("/", "hdr_warn"), ("Esc", "hdr_warn_key")],
+            [(" ⚠ SIGKILL pid %s? " % e.get("pid"), "hdr_warn"),
+             ("Y", "hdr_warn_key"), ("/", "hdr_warn"), ("Esc", "hdr_warn_key")])
+    if stage == "confirm2":
+        return pick(
+            [(" ⚠ LIVE session — confirm again: ", "hdr_warn"),
+             (who, "hdr_warn_key"),
+             (" — press ", "hdr_warn"), ("Y", "hdr_warn_key"),
+             (" (capital) to kill · ", "hdr_warn"),
+             ("Esc", "hdr_warn_key"), (" cancel", "hdr_warn")],
+            [(" ⚠ LIVE — ", "hdr_warn"), (who, "hdr_warn_key"), (" — ", "hdr_warn"),
+             ("Y", "hdr_warn_key"), (" kills · ", "hdr_warn"),
+             ("Esc", "hdr_warn_key"), (" no", "hdr_warn")],
+            [(" ⚠ LIVE pid %s — " % e.get("pid"), "hdr_warn"),
+             ("Y", "hdr_warn_key"), (" kills · ", "hdr_warn"),
+             ("Esc", "hdr_warn_key"), (" no", "hdr_warn")])
+
+    warn = control.requires_double_confirm(e.get("state"), e.get("status"))
+    if warn:
+        return pick(
+            [(" ⚠ this session is WORKING — kill ", "hdr_warn"), (who, "hdr_warn_key"),
+             ("? ", "hdr_warn"), ("y", "hdr_warn_key"), (" yes · ", "hdr_warn"),
+             ("Esc", "hdr_warn_key"), (" cancel", "hdr_warn")],
+            [(" ⚠ WORKING — kill ", "hdr_warn"), (who, "hdr_warn_key"), ("? ", "hdr_warn"),
+             ("y", "hdr_warn_key"), ("/", "hdr_warn"), ("Esc", "hdr_warn_key")],
+            [(" ⚠ kill pid %s (working)? " % e.get("pid"), "hdr_warn"),
+             ("y", "hdr_warn_key"), ("/", "hdr_warn"), ("Esc", "hdr_warn_key")])
+    # Benign target (unused/stale/dead). The middle rung matters: the full form overshoots 60
+    # by ~3 cells, and dropping straight to pid-only would throw the NAME away while leaving
+    # ~27 cells unused. Trim the decoration, keep the identity.
+    return pick(
+        [(" kill ", "hdr_bar"), (who, "hdr_key"), ("? ", "hdr_bar"),
+         ("y", "hdr_key"), (" yes · ", "hdr_bar"), ("Esc", "hdr_key"), (" cancel", "hdr_bar")],
+        [(" kill ", "hdr_bar"), (who, "hdr_key"), ("? ", "hdr_bar"),
+         ("y", "hdr_key"), ("/", "hdr_bar"), ("Esc", "hdr_key")],
+        [(" kill pid %s (%s)? " % (e.get("pid"), e.get("state") or "?"), "hdr_bar"),
+         ("y", "hdr_key"), ("/", "hdr_bar"), ("Esc", "hdr_key")])
+
+
+_ESC = 27
+
+
+def _set_action(msg):
+    global _LAST_ACTION
+    _LAST_ACTION = msg
+
+
+def _handle_select_key(ch):
+    """Selection-mode keys. True = handled here (do not fall through to scroll)."""
+    global _CURSOR_ID, _PROMPT
+    targets = _live_targets()
+    if ch in (_ESC, ord("s"), ord("S")):
+        _exit_select()
+        return True
+    if not targets:
+        _exit_select()
+        return True
+    i = _cursor_index(targets)
+    if i is None:
+        # The target under the cursor vanished (it finished, or it was killed). Re-anchor at
+        # the top rather than guessing which row "replaced" it.
+        _CURSOR_ID = _entry_id(targets[0])
+        i = 0
+        if ch in (ord("x"), ord("X")):
+            return True                  # swallow this press: do not aim `x` at a row the
+                                         # user never chose
+    if ch in (curses.KEY_UP, ord("k")):
+        _CURSOR_ID = _entry_id(targets[max(0, i - 1)])
+        return True
+    if ch in (curses.KEY_DOWN, ord("j")):
+        _CURSOR_ID = _entry_id(targets[min(len(targets) - 1, i + 1)])
+        return True
+    if ch in (ord("x"), ord("X")):
+        _PROMPT = {"stage": "confirm", "entry": targets[i]}
+        return True
+    return False        # q / r / a / w still work from selection mode
+
+
+def _handle_prompt_key(ch):
+    """Confirmation keys. The ONLY path in fleet that reaches control.kill_target."""
+    global _PROMPT, _PENDING_KILL
+    from . import control
+    prompt, entry = _PROMPT, _PROMPT["entry"]
+    stage = prompt["stage"]
+
+    if ch in (_ESC, ord("n"), ord("N")):
+        _PROMPT = None
+        if stage == "escalate":
+            _PENDING_KILL = None        # user declined SIGKILL → stop asking
+        _set_action("cancelled")
+        return
+    if ch == -1:
+        return                          # timeout tick, not a keypress — keep asking
+
+    if stage == "confirm":
+        if ch != ord("y"):
+            return                      # any other key is NOT consent
+        if control.requires_double_confirm(entry.get("state"), entry.get("status")):
+            _PROMPT = {"stage": "confirm2", "entry": entry}   # live target → ask again
+            return
+        _PROMPT = None
+        _do_kill(entry, "single")
+        return
+    if stage == "confirm2":
+        # Deliberately a DIFFERENT key from stage 1: holding `y` cannot walk through both.
+        if ch != ord("Y"):
+            return
+        _PROMPT = None
+        _do_kill(entry, "double")
+        return
+    if stage == "escalate":
+        # Capital `Y`, like confirm2 and for the same reason: SIGKILL is the most destructive
+        # act here, so it must not be reachable by the same keystroke that started the SIGTERM.
+        if ch != ord("Y"):
+            return
+        _PROMPT = None
+        r = control.kill_target(entry["pid"], entry.get("proc_start"), entry.get("sid"),
+                                entry.get("state"), "escalated",
+                                registry_status=entry.get("status"),
+                                is_worker=entry.get("is_worker", False),
+                                kind=entry.get("kind", "session"))
+        _PENDING_KILL = None
+        _set_action("SIGKILL %s: %s" % (entry.get("label"), r))
+
+
+def _do_kill(entry, approval):
+    """SIGTERM + start the grace window. Never escalates on its own."""
+    global _PENDING_KILL
+    from . import control
+    r = control.kill_target(entry["pid"], entry.get("proc_start"), entry.get("sid"),
+                            entry.get("state"), approval,
+                            registry_status=entry.get("status"),
+                            is_worker=entry.get("is_worker", False),
+                            kind=entry.get("kind", "session"))
+    _set_action("SIGTERM %s: %s" % (entry.get("label"), r))
+    if r == "ok":
+        _PENDING_KILL = {"entry": entry, "since": time.time()}
+        _close_job_row_if_registry(entry)
+
+
+def _close_job_row_if_registry(entry):
+    """prd.md:255 — after a successful kill of a registry JOB row, close it. Sessions never
+    touch the registry."""
+    from . import control
+    if entry.get("kind") != "job" or entry.get("source") != "jobs":
+        return
+    if entry.get("status") != "open" or not entry.get("slug"):
+        return
+    try:
+        from .collectors import dispatch as _dispatch
+        for jobs_path in _dispatch._candidate_jobs_paths(None):
+            if control.close_registry_row(jobs_path, entry["slug"], entry.get("cwd") or ""):
+                control.log_action(action="close_row", pid=entry.get("pid"), sid=None,
+                                   state=entry.get("state"), approval="single",
+                                   result="ok", reason=entry["slug"])
+                return
+    except Exception:
+        pass
+
+
+def _poll_pending_kill():
+    """Non-blocking grace check, called once per wake so the curses loop never stalls.
+
+    When the grace expires and the target is still alive, this does NOT escalate — it raises
+    a fresh prompt. Automatic escalation is exactly what prd.md:253 forbids.
+    """
+    global _PENDING_KILL, _PROMPT
+    from . import control
+    if not _PENDING_KILL or _PROMPT is not None:
+        return
+    entry = _PENDING_KILL["entry"]
+    if time.time() - _PENDING_KILL["since"] < control.KILL_GRACE_SEC:
+        return
+    if not control.verify_target(entry["pid"], entry.get("proc_start")):
+        _PENDING_KILL = None            # gone (or no longer provably the same process) → done
+        _set_action("%s terminated" % entry.get("label"))
+        return
+    _PROMPT = {"stage": "escalate", "entry": entry}
+
+
+def _footer_segs(select_mode, parts):
+    if select_mode:
+        return [(" ", "hdr_bar"),
+                ("↑↓/jk", "hdr_key"), (" move · ", "hdr_bar"),
+                ("x", "hdr_key"), (" kill · ", "hdr_bar"),
+                ("Esc", "hdr_key"), (" cancel · ", "hdr_bar"),
+                ("q", "hdr_key"), (" quit", "hdr_bar"),
+                (_RFLUSH, None), (" ".join(parts) + " " if parts else "", "hdr_bar")]
+    wlbl = "wide/narrow/stack" if _LAYOUT == "auto" else ("%s!" % _LAYOUT)
+    return [(" ", "hdr_bar"),
+            ("q", "hdr_key"), (" quit · ", "hdr_bar"),
+            ("r", "hdr_key"), (" refresh · ", "hdr_bar"),
+            ("a", "hdr_key"), (" all · ", "hdr_bar"),
+            ("w", "hdr_key"), (" " + wlbl + " · ", "hdr_bar"),
+            ("jk", "hdr_key"), (" scroll · ", "hdr_bar"),
+            ("s", "hdr_key"), (" select · ", "hdr_bar"),
+            ("g/G", "hdr_key"), (" top/end", "hdr_bar"),
+            (_RFLUSH, None), (" ".join(parts) + " " if parts else "", "hdr_bar")]
 
 
 def reset_scroll():
@@ -2006,7 +2500,7 @@ def reset_scroll():
 
 
 def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
-    global _OFFSET, _TOGGLE_ROWS
+    global _OFFSET, _TOGGLE_ROWS, _CURSOR_ID
     _TOGGLE_ROWS = {}    # reset before any early-return so a stale map never survives a click
     h, w = stdscr.getmaxyx()
     stdscr.erase()
@@ -2014,6 +2508,21 @@ def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
     lines = _build_lines(sessions, jobs, section, narrow, malformed, layout=_layout_mode(w),
                          memory=memory, term_width=w)
     body_h = max(1, h - 1)   # reserve 1 footer row
+
+    # F-27: the cursor tracks a ROW, so the viewport follows it (not the reverse). Done before
+    # the offset clamp so a cursor scrolled off-screen pulls the view back to itself.
+    cur_line = None
+    targets = _live_targets() if _SELECT_MODE else []
+    if _SELECT_MODE and targets:
+        i = _cursor_index(targets)
+        if i is None:                    # the selected row is gone → re-anchor, never re-aim
+            i = 0
+            _CURSOR_ID = _entry_id(targets[0])
+        cur_line = targets[i]["line"]
+        if cur_line < _OFFSET:
+            _OFFSET = cur_line
+        elif cur_line >= _OFFSET + body_h:
+            _OFFSET = cur_line - body_h + 1
     _OFFSET = _clamp_offset(_OFFSET, len(lines), body_h)
 
     visible = lines[_OFFSET: _OFFSET + body_h]
@@ -2024,6 +2533,8 @@ def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
                 "hidden" in segs[0][0] or "folded" in segs[0][0]):
             _TOGGLE_ROWS[row] = True
         row += 1
+    if cur_line is not None and _OFFSET <= cur_line < _OFFSET + body_h:
+        _highlight_row(stdscr, cur_line - _OFFSET, w)
 
     above = _OFFSET
     below = max(0, len(lines) - body_h - _OFFSET)
@@ -2034,18 +2545,21 @@ def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
         parts.append("↓%d" % below)
     # htop F-key bar (round-4): CYAN full-width, keycaps BOLD (dim is invisible on CYAN), the
     # scroll indicator rides the right edge. `w` cycles layout auto → narrow → wide.
-    wlbl = "wide/narrow/stack" if _LAYOUT == "auto" else ("%s!" % _LAYOUT)
-    fsegs = [(" ", "hdr_bar"),
-             ("q", "hdr_key"), (" quit · ", "hdr_bar"),
-             ("r", "hdr_key"), (" refresh · ", "hdr_bar"),
-             ("a", "hdr_key"), (" all · ", "hdr_bar"),
-             ("w", "hdr_key"), (" " + wlbl + " · ", "hdr_bar"),
-             ("jk", "hdr_key"), (" scroll · ", "hdr_bar"),
-             ("g/G", "hdr_key"), (" top/end", "hdr_bar"),
-             (_RFLUSH, None), (" ".join(parts) + " " if parts else "", "hdr_bar")]
+    # A pending confirmation OWNS the footer: while it is up, the only thing that matters is
+    # the decision in front of the user.
+    fsegs = _prompt_segs(_PROMPT, w) if _PROMPT else _footer_segs(_SELECT_MODE, parts)
     _addline(stdscr, h - 1, fsegs, w)
     stdscr.noutrefresh()
     curses.doupdate()
+
+
+def _highlight_row(stdscr, y, w):
+    """Reverse-video the cursor row. Painted over the already-drawn line so the row keeps its
+    own colors and nothing about row assembly has to know about selection."""
+    try:
+        stdscr.chgat(y, 0, w, curses.A_REVERSE)
+    except Exception:
+        pass
 
 
 def _loop(stdscr, collect_all, hfilter, section, interval):
@@ -2075,6 +2589,25 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
             return 0
         h, w = stdscr.getmaxyx()
         body_h = max(1, h - 1)
+        # --- F-27: a pending confirmation swallows ALL keys. Nothing else can happen while
+        # the user is being asked, and only an explicit yes proceeds. ---
+        if _PROMPT is not None:
+            _handle_prompt_key(ch)
+            _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
+            continue
+        if _SELECT_MODE:
+            if _handle_select_key(ch):
+                _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
+                continue
+        elif ch in (ord("s"), ord("S"), ord("x"), ord("X")):
+            # Enter selection mode. `x` doubles as the enter shortcut so the "press x to kill"
+            # intent works from a cold start; it selects, it never kills on the first press.
+            if not _enter_select(_live_targets()):
+                _set_action("no selectable rows")
+            _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
+            continue
+
+        # --- base mode: scroll keys UNCHANGED (F-27 regression budget = 0) ---
         if ch in (curses.KEY_UP, ord("k")):
             _OFFSET -= 1
         elif ch in (curses.KEY_DOWN, ord("j")):
@@ -2108,6 +2641,7 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
             malformed = _malformed()
             mem_snapshot = _collect_memory()
             last = now
+        _poll_pending_kill()     # F-27 grace window — non-blocking; may raise a re-prompt
         _BLINK_ON = (int(now * 2) % 2 == 0)     # ~2 Hz working-dot blink (manual — A_BLINK unreliable)
         # redraw every wake (covers KEY_RESIZE, blink and tick) — _draw clamps _OFFSET internally.
         _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)

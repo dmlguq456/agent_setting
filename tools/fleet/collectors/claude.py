@@ -190,22 +190,55 @@ def _apply_statusline(sess, d):
         sess.cost = cv
 
 
+def read_registry(pid, home=None):
+    """~/.claude/sessions/<pid>.json → dict, or None.
+
+    F-26 promotes this file from an incidental status lookup to a first-class tier-1
+    source: it is the runtime declaring its own identity, name, and activity window.
+    Tolerant by contract — a session file written milliseconds ago may not carry
+    `status`/`updatedAt` yet, and a missing/corrupt file is simply silence (None).
+    """
+    try:
+        with open(os.path.join(home or _home(), "sessions", "%d.json" % int(pid))) as f:
+            d = json.load(f)
+    except Exception:
+        return None
+    return d if isinstance(d, dict) else None
+
+
+def _ms_to_sec(v):
+    """registry epoch-ms → epoch-sec; anything non-numeric (or bool) → None."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    return v / 1000.0
+
+
+def _apply_registry(sess, sj):
+    """Load every tier-1 registry field onto the Session. Each key is independently
+    optional: a fresh row carrying only pid/sessionId must not lose the ones it has."""
+    sess.session_id = sj.get("sessionId") or sess.session_id
+    sess.status = sj.get("status")                # idle | shell | busy | (absent → None)
+    name = sj.get("name")
+    if name:
+        sess.slug = name                          # friendly name disambiguates same-cwd sessions
+        sess.registry_name = name                 # explicit link in the name chain (F-26)
+    kind = sj.get("kind")
+    if isinstance(kind, str):
+        sess.kind = kind
+    ps = sj.get("procStart")
+    if ps is not None and not isinstance(ps, bool):
+        sess.registry_proc_start = str(ps)        # compared against /proc in the classifier
+    sess.started_at = _ms_to_sec(sj.get("startedAt"))
+    sess.updated_at = _ms_to_sec(sj.get("updatedAt"))
+
+
 def enrich(sess):
     home = _home()
 
-    # 1) native per-pid status file
-    sj = None
-    try:
-        with open(os.path.join(home, "sessions", "%d.json" % sess.pid)) as f:
-            sj = json.load(f)
-    except Exception:
-        sj = None
-    if isinstance(sj, dict):
-        sess.session_id = sj.get("sessionId") or sess.session_id
-        sess.status = sj.get("status")            # idle | shell | busy
-        name = sj.get("name")
-        if name:                                   # friendly name disambiguates same-cwd sessions
-            sess.slug = name
+    # 1) native per-pid registry file — tier-1 source (F-26)
+    sj = read_registry(sess.pid, home)
+    if sj is not None:
+        _apply_registry(sess, sj)
 
     # 2) per-session statusline tap (§5) — telemetry; absent → '—'
     sid = sess.session_id
@@ -222,11 +255,17 @@ def enrich(sess):
     path = _newest_transcript_path(home, sess.cwd, sid)
     if path:
         sess._transcript_path = path              # ephemeral: live title scheduler, not --json
+    # Transcript presence is the §2.2 `unused` refinement input: a session that has NEVER
+    # been prompted has no transcript at all. Ephemeral (leading underscore) — evidence for
+    # the classifier, not a --json field.
+    sess._has_transcript = bool(path)
     m = _mtime(path) if path else None
     if m is None and isinstance(sj, dict):
         su = sj.get("statusUpdatedAt") or sj.get("updatedAt")
         if isinstance(su, (int, float)):
             m = su / 1000.0                        # ms → s
+            # This mtime is the registry's own clock, not real activity — a tier-3 stand-in.
+            sess._mtime_from_registry = True
     sess.mtime = m
     # 3a) A fresh neutral sidecar overrides the AI title; failures pass through safely.
     from fleet import titles                      # Deferred import; no cycle, standard library only.
@@ -237,4 +276,17 @@ def enrich(sess):
         t = _tail_ai_title(path)
         if t:
             sess.title = t
-    # Otherwise render falls back from a missing title to the slug.
+    # Otherwise render falls back from a missing title to the registry name, then the slug.
+
+    # 4) provenance (F-26) — resolved LAST, and only for a session that has no title. A titled
+    # session already says what it is; "who launched this?" is only an open question for a row
+    # with no self-description (the never-prompted ghost being the motivating case). Gating on
+    # title also keeps the tag off every ordinary row, where it would just eat the name zone.
+    # Best-effort by contract: any failure leaves None and renders no tag (PRD F-26 —
+    # misattribution is worse than absence).
+    if sess.provenance is None and not sess.title:
+        from . import procscan
+        try:
+            sess.provenance = procscan.provenance(sess.pid)
+        except Exception:
+            sess.provenance = None
