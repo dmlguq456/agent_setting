@@ -95,7 +95,8 @@
 ## Next
 `/autopilot-code --mode dev --intensity standard "fleet 관제 신뢰성·세션 제어 — PRD v8 §4.8 F-25→F-26→F-27"` (worktree, conductor 분사). F-28 구현은 stage-dispatch v9 registry/route record 착륙 후 별도 phase.
 
-## Minor-log (v8 기준 — 누적 5/5 ⚠️ 컨벤션상 /audit 점검 권장 시점)
+## Minor-log (v8 기준 — 누적 6/5 ⚠️ /audit 점검 권장 초과 — 다음 major에서 흡수 요망)
+- 2026-07-15 (v8 minor #6): **cross-harness 분사 orphan 오귀속 해소** — 사용자 관찰("codex가 분사시킨 세션이 orphan으로 빠짐"). 원인 = 3어댑터 래퍼가 §5.10 pipe 계약의 parent_cwd를 전부 누락(계약 위반) + Codex는 실제 세션 id를 env로 못 얻어 합성 parent_sid만 기록. 수정 = 래퍼 3종이 parent 문맥 존재 시 parent_cwd 기록/env 주입(fleet 읽기 측 cwd-매칭 nest는 기존 코드 재사용, 신규 휴리스틱 0). SD-15 conformance 3종 PASS.
 - 2026-07-15 (v8 minor #5): **v8 구현 후속 spec 동기 2건** — (a) kill 조작 키 확정: `↑↓` 직접 진입 원안이 스크롤 바인딩과 충돌해 `s`/`x` 진입→`↑↓`/`jk` 이동→`Esc` 해제로 구현·사용자 확인. (b) §9 모듈 트리에 `control.py` 등재 + `model.py` 설명 현행화. 근거 = fleet-v8-reliability final report follow-up #4·#5.
 - 2026-07-15 (v8 minor #4): **unused의 stale 창 면제** — 사용자 결정. 유령 세션은 mtime이 스폰 시각 고정이라 48h 창이 F-26 목적을 자동 무력화 → 살아있는 한 `unused` 유지, 종료는 존재 축 담당. 면제는 unused 한정(사용 세션의 침묵→stale 불변). 구현 = main 직접(commit 참조), 테스트 2건 신설(416 OK).
 
