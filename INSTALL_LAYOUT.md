@@ -113,6 +113,17 @@ harness install claude
   unchanged, while the operation records an original-checksum backup and a
   transaction journal. The legacy plugin generator is an optional distribution
   artifact and is not part of Phase 1 activation.
+- **Hook coexistence semantics** (`runtime_activation.py` merge contract):
+  pre-existing user hook entries are preserved verbatim and keep their array
+  position; harness entries are appended after them within each event, so on
+  a shared event the user's hooks run first. Duplicate detection and managed
+  ownership both use exact-JSON entry match: re-activation removes only the
+  entries the previous activation recorded as managed, then appends the
+  current source's entries. Consequently, hand-editing a harness-managed
+  entry orphans it — the edited copy no longer matches, survives the next
+  re-activation, and the fresh harness entry lands beside it as a
+  near-duplicate. Keep customizations in separate user-owned entries instead
+  of editing managed ones.
 
 Keep these local to `$HOME/.claude`: `.credentials.json`, `.dispatch/`, `cache/`, `daemon/`, `history.jsonl`, `ide/`, `projects/`, `sessions/`, `session-env/`, `shell-snapshots/`, runtime logs, and other runtime-generated state.
 
