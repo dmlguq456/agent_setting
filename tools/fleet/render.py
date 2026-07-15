@@ -498,7 +498,7 @@ _BRW = 14                     # ⎇branch field (always ≥1 trailing space so i
 _MW = 23                      # model cell: name + FULL effort word ('Opus 4.8 xhigh' — no abbrev)
 _EFW = 7                      # effort subfield ("medium"=6 +1 gap) — FIXED width so every row's
                               # effort lands in the same column, under its own 'effort' header
-_CTX_W = 16                   # context gauge (kept wide)
+_CTX_W = 24                   # context gauge (kept wide; 16→24 2026-07-15 user: 진행이 안 보임)
 _CLOCK = ""                   # Bare elapsed value; icons caused width and readability issues.
 
 # known pipeline stage sequences → the stage breadcrumb (process viz). Unknown keys/stages fall
@@ -1037,10 +1037,10 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_wid
     l2 = [("    ", None), (_pad(fmt_min(s.elapsed_min), _HW), "dim")]
     l2 += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
     if s.ctx_pct is not None and not dim_tel:
-        l2 += [("[", "dim")] + _gauge_segs(s.ctx_pct, 12) + \
+        l2 += [("[", "dim")] + _gauge_segs(s.ctx_pct, 18) + \
               [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct)), ("]", "dim")]
     else:
-        l2 += [("[", "dim"), ("·" * 12, "dim"),
+        l2 += [("[", "dim"), ("·" * 18, "dim"),
                (" %3s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim"), ("]", "dim")]
     if _split:
         return l1, l2, br_seg
