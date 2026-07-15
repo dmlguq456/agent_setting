@@ -9,6 +9,7 @@ PASS:
 - Detached process start/status/stop with current smoke attestation.
 - Full portable guard integration after rebase: `PASS=357 FAIL=0`.
 - Final branch state is clean and pushed at `26497cd0`.
+- Integrated `main` repeated the full portable guard (`PASS=357 FAIL=0`) and all focused generator/routing/topology/governor/resource/smoke/report/context/adaptation checks before push.
 
 Diagnostic-only limitation:
 

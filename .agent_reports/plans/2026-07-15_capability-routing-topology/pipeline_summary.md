@@ -36,4 +36,6 @@ Verification evidence is in `test_logs/verification-summary.md`; implementation 
 ## Integration status
 
 - The main orchestrator rebased the worktree onto `origin/main@e7a43a65`, resolved the final shared-governor test isolation regressions, and pushed commit `26497cd0` to `origin/capability-routing-topology`.
-- The branch remains separate from `main`; no runtime-owned Codex configuration or installed projection was changed.
+- After explicit user authorization, the source branch and canonical v9 spec artifacts were integrated into `main` by merge commit `cdf24f27`.
+- Integrated verification repeated the full portable guard (`PASS=357 FAIL=0`) plus generated projection, Skill, routing, topology, governor, resource, smoke, report, strict context, adaptation-boundary, and diff checks.
+- No runtime-owned Codex configuration or installed projection was changed.

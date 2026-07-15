@@ -44,3 +44,4 @@
 - [x] Global spawn cap 50-attempt stress test green
 - [x] Projection/adaptation/Fleet regression green
 - [x] Main orchestrator rebased, amended, and pushed commit `26497cd0` to `origin/capability-routing-topology`
+- [x] User-authorized integration merged into `main` as `cdf24f27`; integrated portable and focused regression suites green

@@ -7,3 +7,4 @@
 - Source-writing implementation used the approved inline reason `dispatch-infra-self-modification` because nested dispatch could not initialize safely in the worker sandbox.
 - Main-session integration rebased onto current `origin/main`, made the shared governor state hermetic in portable guards, and taught loop runners to resolve the governor from the loaded harness when an isolated `AGENT_HOME` lacks utilities.
 - Final source commit: `26497cd0`, pushed to `origin/capability-routing-topology`.
+- Canonical v9 artifacts were committed on `main` as `4c162a62`; user-authorized source integration completed as merge commit `cdf24f27`.
