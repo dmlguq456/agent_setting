@@ -12,4 +12,4 @@
 - [x] Run existing regressions and adaptation boundary checks.
 - [x] Synchronize cycle report and spec pipeline state.
 - [x] Record O2/O3 as v12 spec-decision proposals only.
-- [ ] Commit, integrate, verify main, push, and guarded-cleanup check.
+- [x] Commit, integrate, verify main, push, and guarded-cleanup check.

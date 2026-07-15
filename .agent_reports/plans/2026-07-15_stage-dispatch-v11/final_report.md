@@ -9,6 +9,8 @@ stage-dispatch를 복구한다.
 
 - 구현 커밋: `298bc043`
 - main merge: `7c293fd6`
+- delivery: main `58b80db9`까지 push 후 cleanup gate `eligible`, v11
+  worktree 제거 완료(branch 보존).
 - 검증: portable guards `359/359`, topology `8/8`, adaptation boundary와
   manifest check PASS, 세 어댑터 SD-15/SD-45 및 v11 fixture PASS.
 
