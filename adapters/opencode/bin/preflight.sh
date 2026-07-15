@@ -170,28 +170,32 @@ opencode_runtime_projection_check() {
     printf 'check=failed\nreason=opencode-agent-harness-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$harness"
     return 69
   fi
-  if [ ! -f "$opencode_home/agent/qa-team.md" ]; then
-    printf 'check=failed\nreason=opencode-native-agents-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$opencode_home/agent/qa-team.md"
+  native_agent="$opencode_home/agents/qa-team.md"
+  [ -f "$native_agent" ] || native_agent="$opencode_home/agent/qa-team.md"
+  if [ ! -f "$native_agent" ]; then
+    printf 'check=failed\nreason=opencode-native-agents-missing\nopencode_home=%s\nexpected=%s|%s\n' "$opencode_home" "$opencode_home/agents/qa-team.md" "$opencode_home/agent/qa-team.md"
     return 69
   fi
-  if [ ! -f "$opencode_home/command/autopilot-code.md" ]; then
-    printf 'check=failed\nreason=opencode-native-commands-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$opencode_home/command/autopilot-code.md"
+  native_command="$opencode_home/commands/autopilot-code.md"
+  [ -f "$native_command" ] || native_command="$opencode_home/command/autopilot-code.md"
+  if [ ! -f "$native_command" ]; then
+    printf 'check=failed\nreason=opencode-native-commands-missing\nopencode_home=%s\nexpected=%s|%s\n' "$opencode_home" "$opencode_home/commands/autopilot-code.md" "$opencode_home/command/autopilot-code.md"
     return 69
   fi
   if [ ! -f "$opencode_home/plugins/agent-harness-guards.js" ]; then
     printf 'check=failed\nreason=opencode-native-plugin-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$opencode_home/plugins/agent-harness-guards.js"
     return 69
   fi
-  if [ ! -d "$opencode_home/agent-skills" ] && ! opencode_config_content_has_opencode_skills "${OPENCODE_CONFIG_CONTENT:-}"; then
-    printf 'check=failed\nreason=opencode-native-skills-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$opencode_home/agent-skills"
+  if [ ! -d "$opencode_home/skills" ] && [ ! -d "$opencode_home/agent-skills" ] && ! opencode_config_content_has_opencode_skills "${OPENCODE_CONFIG_CONTENT:-}"; then
+    printf 'check=failed\nreason=opencode-native-skills-missing\nopencode_home=%s\nexpected=%s|%s\n' "$opencode_home" "$opencode_home/skills" "$opencode_home/agent-skills"
     return 69
   fi
   if rg -q 'adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|track-toggle\.sh|agent-modes|allowedTools|/\.claude/' \
-    "$opencode_home/agent/qa-team.md" "$opencode_home/command/autopilot-code.md" "$opencode_home/plugins/agent-harness-guards.js" 2>/dev/null; then
+    "$native_agent" "$native_command" "$opencode_home/plugins/agent-harness-guards.js" 2>/dev/null; then
     printf 'check=failed\nreason=opencode-runtime-projection-exposes-claude-surface\nopencode_home=%s\n' "$opencode_home"
     return 69
   fi
-  printf 'runtime_projection=ok\nopencode_home=%s\n' "$opencode_home"
+  printf 'runtime_projection=ok\nopencode_home=%s\nnative_agent=%s\nnative_command=%s\n' "$opencode_home" "$native_agent" "$native_command"
   return 0
 }
 

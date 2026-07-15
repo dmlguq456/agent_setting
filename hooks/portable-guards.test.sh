@@ -2899,21 +2899,24 @@ else
     bad "opencode headless wrapper should report missing worktree"
   fi
 fi
-mkdir -p "$TMP/opencode_headless_home/.config/opencode/agent" \
-  "$TMP/opencode_headless_home/.config/opencode/command" \
+mkdir -p "$TMP/opencode_headless_home/.config/opencode/agents" \
+  "$TMP/opencode_headless_home/.config/opencode/commands" \
+  "$TMP/opencode_headless_home/.config/opencode/skills" \
   "$TMP/opencode_headless_home/.config/opencode/plugins"
 ln -s "$ROOT" "$TMP/opencode_headless_home/.config/opencode/agent-harness"
-ln -s "$ROOT/opencode_setting/opencode-skills" "$TMP/opencode_headless_home/.config/opencode/agent-skills"
-ln -s "$ROOT/opencode_setting/opencode-agents/qa-team/qa-team.md" "$TMP/opencode_headless_home/.config/opencode/agent/qa-team.md"
-ln -s "$ROOT/opencode_setting/opencode-commands/autopilot-code.md" "$TMP/opencode_headless_home/.config/opencode/command/autopilot-code.md"
+ln -s "$ROOT/opencode_setting/opencode-skills/autopilot-code" "$TMP/opencode_headless_home/.config/opencode/skills/autopilot-code"
+ln -s "$ROOT/opencode_setting/opencode-agents/qa-team/qa-team.md" "$TMP/opencode_headless_home/.config/opencode/agents/qa-team.md"
+ln -s "$ROOT/opencode_setting/opencode-commands/autopilot-code.md" "$TMP/opencode_headless_home/.config/opencode/commands/autopilot-code.md"
 ln -s "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js" "$TMP/opencode_headless_home/.config/opencode/plugins/agent-harness-guards.js"
 if HOME="$TMP/opencode_headless_home" XDG_CONFIG_HOME="$TMP/opencode_headless_home/.config" \
   "$OPENCODE" headless --check "$TMP/repo" >/tmp/opencode_headless_check.out 2>/tmp/opencode_headless_check.err \
   && grep -q '^runtime_projection=ok$' /tmp/opencode_headless_check.out \
+  && grep -q '/agents/qa-team.md$' /tmp/opencode_headless_check.out \
+  && grep -q '/commands/autopilot-code.md$' /tmp/opencode_headless_check.out \
   && grep -q '^check=ok$' /tmp/opencode_headless_check.out; then
-  ok "opencode headless check validates runtime projection"
+  ok "opencode headless check validates plural native runtime projection"
 else
-  bad "opencode headless check should validate runtime projection"
+  bad "opencode headless check should validate plural native runtime projection"
 fi
 mkdir -p "$TMP/opencode_headless_config_home/.config/opencode/agent" \
   "$TMP/opencode_headless_config_home/.config/opencode/command" \

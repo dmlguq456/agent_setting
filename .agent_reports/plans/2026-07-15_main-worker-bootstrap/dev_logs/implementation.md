@@ -14,3 +14,6 @@
 - Fleet Codex 수집기는 tick 시작 시 `/proc/<pid>/fd`의 rollout 소유권을 먼저
   예약해 같은 cwd의 fd-less TUI가 동일 sid/title을 훔치지 못하게 했다.
 - 구현 중 발견한 Codex freeform `apply_patch` hook envelope 파싱 누락도 보완했다.
+- 최종 runtime check에서 OpenCode checker가 legacy singular discovery 경로만
+  요구하는 false failure를 발견했다. 공식 plural 경로를 우선하고 singular를
+  compatibility fallback으로 유지하도록 수정했다.
