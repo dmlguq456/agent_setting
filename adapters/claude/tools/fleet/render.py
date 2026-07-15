@@ -539,15 +539,22 @@ def _stage_role_label(worker_role):
 
 # Plain-text column labels without decorative icons.
 # 'effort' gets its OWN header over the fixed subcolumn inside the model cell (user 2026-07-02).
+_STAGE_RESERVE = 22           # trailing room for the dispatch stage breadcrumb after the
+                              # options column (plan › exec › test ≈ 18 + gap) — without this
+                              # the name column absorbs all slack and the breadcrumb clips at
+                              # the panel edge (user 2026-07-15: 분사 세션 단계가 잘림)
+
+
 def _wide_name_width(term_width):
     """Responsive wide-layout name column.
 
     Reserve every field after the name plus the right-flushed time and panel
-    margins, then give all remaining horizontal slack to the session column.
+    margins — including trailing breadcrumb room (_STAGE_RESERVE) — then give
+    the remaining horizontal slack to the session column.
     """
     if not term_width:
         return _NW_S
-    fixed_row = _NAME_COL + _BRW + _MW + 4 + _CTX_W + 5
+    fixed_row = _NAME_COL + _BRW + _MW + 4 + _CTX_W + 5 + _STAGE_RESERVE
     if _TINT_OK:
         framing = (_INSET + _PAD_IN) + _INSET + (2 + _PAD_IN) + 6 + 2
     else:
