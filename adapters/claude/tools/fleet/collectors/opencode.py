@@ -16,6 +16,8 @@ import os
 import sqlite3
 import time
 
+from ..model import SubAgent
+
 _COLS = ("id, slug, agent, model, cost, tokens_input, tokens_output, tokens_reasoning, "
          "time_updated, parent_id")
 
@@ -105,12 +107,39 @@ def _last_request_context(con, sid):
     return None
 
 
+def _child_sessions(con, sid):
+    """F-29 (v9, prd.md:292 source #1 — already SELECTing agent/parent_id, previously
+    discarded at the `_query` filter). None on any read failure (honest gap, not a guess);
+    [] when the query succeeds and finds no children.
+
+    No completion signal exists in this schema (unlike claude's tool_use/tool_result
+    pairing) — every row found here is reported active=True; that is not a guess, it is
+    the absence of evidence to the contrary, and the absence renders as '—'-adjacent
+    (nothing hidden) rather than a fabricated 'done'.
+    """
+    try:
+        rows = con.execute(
+            "SELECT id, agent, time_updated FROM session WHERE parent_id=? "
+            "ORDER BY time_updated DESC", (sid,),
+        ).fetchall()
+    except Exception:
+        return None
+    out = []
+    for _cid, agent, tupd in rows:
+        out.append(SubAgent(agent_type=agent or None, active=True,
+                            started_at=(tupd / 1000.0) if isinstance(tupd, (int, float))
+                                      else None,
+                            source="opencode-db"))
+    return out
+
+
 def enrich(sess):
     db = _db()
     if not sess.cwd or not os.path.exists(db):
         return
     con = None
     last_ctx = None
+    subagents = None
     try:
         con = sqlite3.connect("file:%s?mode=ro" % db, uri=True, timeout=1.0)
         row = _query(con.cursor(), sess.cwd)
@@ -123,6 +152,11 @@ def enrich(sess):
                     sess.title = str(tr[0]).strip()
             except Exception:
                 pass   # older DB without a title column → title stays None (tolerant, F-3)
+            # R3-2: only query children when `row` is genuinely top-level (parent_id IS NULL,
+            # row[-1] here) — the `_query` fallback clause can hand back a CHILD session, and
+            # querying ITS children would surface grandchildren under the wrong parent.
+            if row[-1] is None:
+                subagents = _child_sessions(con, row[0])
     except Exception:
         return
     finally:
@@ -131,6 +165,7 @@ def enrich(sess):
     if not row:
         return
     sid, slug, agent, model_j, cost, ti, to, tr, tupd, _parent = row
+    sess.subagents = subagents
     if sid:
         sess.session_id = sid
     if slug:

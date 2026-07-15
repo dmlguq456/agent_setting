@@ -164,6 +164,26 @@ class Session:
     gate: Optional[str] = None          # spec-gate override (tracked/untracked) — demo fixtures; None = compute from cwd
     branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
     mem_worker: bool = False   # Memory worker or title refresher; summarized and hidden by default.
+    # F-29 (v9, prd.md:290-295) — enrichment ONLY, never a session-existence signal (prd.md:291).
+    # None = source absent/unconfirmed (honest gap, prd.md:292's "no guessing"); [] = source
+    # checked, no sub-agents running.
+    subagents: Optional[list] = None
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class SubAgent:
+    """F-29 (v9) — one sub-agent/child-session row observed under a parent Session.
+
+    additive-only: this dataclass and `Session.subagents` are the entire F-29 surface; no
+    existing Session/DispatchJob field changes shape (prd.md:294 zero-regression contract).
+    """
+    agent_type: Optional[str] = None    # harness-reported sub-agent/type label; None = unknown
+    active: bool = True                 # False = completed (dim, hidden unless `a` toggled)
+    started_at: Optional[float] = None  # epoch sec, when available
+    source: Optional[str] = None        # opencode-db | claude-sidechain — provenance for audits
 
     def to_dict(self):
         return asdict(self)

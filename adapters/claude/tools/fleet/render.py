@@ -654,11 +654,38 @@ def _model_cell(model, effort, width, dim=False):
     return [(_pad(name[: width - 1], width), lkey)]
 
 
-def _stage_segs(key, stage, working=False):
+_STAGE_ZONE_MAX = 30          # D3 (v9) — one constant, one place, same idiom as
+                               # _NAME_WIDE_MAX(:523)/_DISPATCH_NAME_MAX(:887)/_PROFILE_MAX(:944).
+                               # 168-col zero-overflow was previously incidental (a measured
+                               # 5-cell slack, not a bound): a longer conductor/qa label or a
+                               # further-along stage re-broke it. Real current max observed is
+                               # 24 ("code: plan › exec › test") — 30 leaves headroom without
+                               # regressing anything currently on screen.
+
+
+def _drop_past_stages(items, cur_i, max_width):
+    """SD-F2 (prd.md:164) — a breadcrumb's information value is "where now", not "where
+    I've been": fold PAST stages (i < cur_i) first, earliest first, so the active stage (and
+    anything after it) survives longest. Whole-component drop (a stage + its separator, F-9(c)
+    idiom) — never a mid-token tail-cut."""
+    items = list(items)
+    def width():
+        w = sum(_dw(t) for _i, t, _k in items)
+        return w + max(0, len(items) - 1) * 3   # " › " separators, _dw == 3
+    while width() > max_width and items and items[0][0] < cur_i:
+        items = items[1:]
+    return items
+
+
+def _stage_segs(key, stage, working=False, max_width=None):
     """Process viz — the pipeline lifecycle as a breadcrumb: each stage a DISTINCT color, the rest
     of the sequence the same hue but DIM. The CURRENT stage is bold/bright and, when the job is
     actively `working`, BLINKS in sync with the working dot (shared `_BLINK_ON`, ~2 Hz) so the eye
-    is drawn to where work is happening right now. Unknown pipeline/stage → a single lit token."""
+    is drawn to where work is happening right now. Unknown pipeline/stage → a single lit token.
+
+    `max_width` (D3, v9): when given and the full breadcrumb would exceed it, past stages fold
+    via `_drop_past_stages` before anything is emitted — the cap lives in the assembly, not as
+    a post-hoc truncation, so a dropped stage never leaves a half-drawn ✓ or separator."""
     def _cur_key(i):
         # working → pulse on/off with the dot; idle/other → steady bright
         if working and not _BLINK_ON:
@@ -667,14 +694,19 @@ def _stage_segs(key, stage, working=False):
     seq = _PIPE_STAGES.get(key)
     if seq and stage in seq:
         cur_i = seq.index(stage)
-        out = []
+        items = []
         for i, st in enumerate(seq):
-            if i:
-                out.append((" › ", "dim"))
             # P1-5: a stage BEFORE the current one is done — a bright ✓ marker makes the
             # "past stages are folded into this breadcrumb" contract visible (F-15b).
             label = st + ("✓" if i < cur_i else "")
-            out.append((label, _cur_key(i) if st == stage else "stg%d_off" % (i % 5)))
+            items.append((i, label, _cur_key(i) if st == stage else "stg%d_off" % (i % 5)))
+        if max_width is not None:
+            items = _drop_past_stages(items, cur_i, max_width)
+        out = []
+        for n, (_i, label, key_) in enumerate(items):
+            if n:
+                out.append((" › ", "dim"))
+            out.append((label, key_))
         return out
     if seq and stage in ("", key, "open", "running"):
         # pre-plan boot (live_stage fell back to the argv key) / registry-only rows: show the
@@ -721,8 +753,16 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False):
         # uses) to humanize it instead of leaking the raw capability token onto the board.
         role_label, role_suffix = _stage_role_label(key)
         prefix_text = (role_label + role_suffix) if role_label else key
-        return [(prefix_text + ": ", "name_dim")] + _stage_segs(key, stage, working=working)
-    return _stage_segs(key, stage, working=working)
+        prefix_seg = (prefix_text + ": ", "name_dim")
+        body = _stage_segs(key, stage, working=working,
+                           max_width=max(0, _STAGE_ZONE_MAX - _dw(prefix_seg[0])))
+        segs = [prefix_seg] + body
+        if sum(_dw(t) for t, _k in segs) > _STAGE_ZONE_MAX:
+            # F-9(c): past stages already folded as far as they can (SD-F2 keeps the active
+            # stage) — the next whole component to drop is the role-label prefix itself.
+            return body
+        return segs
+    return _stage_segs(key, stage, working=working, max_width=_STAGE_ZONE_MAX)
 
 
 def _session_name(s):
@@ -780,6 +820,15 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
         if _dw(child_tag) < avail:
             suffix.append((child_tag, "dim"))
             suffix_w += _dw(child_tag)
+    # F-29 (v9) — same suffix-reservation discipline as the child-count badge above; the
+    # subagent count is a structural fact about this row (prd.md:293), so it reserves its
+    # cell before the name zone consumes leftover width.
+    n_sub = _active_subagent_count(s)
+    if n_sub:
+        sub_tag = " %s%d" % (_ICON_SUBAGENT, n_sub)
+        if suffix_w + _dw(sub_tag) < avail:
+            suffix.append((sub_tag, "dim"))
+            suffix_w += _dw(sub_tag)
     # F-26: the unused badge outranks the gate/provenance tags — it is the whole reason the
     # row is surfaced, so it is the last identity tag to drop, not the first.
     unused_at = None
@@ -1424,6 +1473,39 @@ _FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: dep
                                                                 # rows folded into the conductor
                                                                 # breadcrumb unless working/stale/dead
 
+# F-29 (v9, prd.md:290-295) — sub-agent observation rows. `⚡` is the PRD-specified glyph and
+# fleet never renders it elsewhere: the spec gate draws words only (`_gate_word` -> "untracked"),
+# so the `⚡untracked` badge lives on statusline/hooks, a different surface. Reads distinctly from
+# dispatch's `🚀`/`↳` so the two nested-row kinds never visually merge. Single point of
+# ASCII-degrade if double-width alignment ever breaks in a real terminal.
+_ICON_SUBAGENT = "⚡"
+
+
+def _active_subagent_count(s):
+    subs = getattr(s, "subagents", None) or []
+    return sum(1 for sa in subs if getattr(sa, "active", True))
+
+
+def _subagent_elapsed_min(sa):
+    started = getattr(sa, "started_at", None)
+    if not started:
+        return None
+    return max(0, int((time.time() - started) / 60))
+
+
+def _subagent_row(sa, is_last=True):
+    """`├⚡<agent-type> ⏳<elapsed>` / `└⚡…` for the last one — distinct glyph from
+    dispatch's `└▸🚀` (prd.md:293). `├`/`└` (design critic step3 §2) reads 2+ stacked
+    sub-agents as one connected group under the parent, not independent branches. Active
+    rows render bright; the caller only emits a completed (inactive) row at all when
+    `_SHOW_ALL` (F-18b dim-row convention — completed sub-agents are hidden by default)."""
+    branch = "└" if is_last else "├"
+    label = sa.agent_type or "agent"
+    elapsed = _subagent_elapsed_min(sa)
+    tail = "  ⏳%s" % fmt_min(elapsed) if elapsed is not None else ""
+    key = "name_idle" if sa.active else "dim"
+    return [("     %s%s%s%s" % (branch, _ICON_SUBAGENT, label, tail), key)]
+
 
 def set_show_all(v):
     global _SHOW_ALL
@@ -1865,6 +1947,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _seen_glyphs.add("detached")
             if nested_n:
                 _seen_glyphs.add("child")
+            if getattr(s, "subagents", None):
+                _seen_glyphs.add("subagent")
             _n0 = len(lines)
             if _selectable_session(s):
                 _SELECTABLE.append(_select_entry(s, _n0))    # F-27 target map
@@ -1877,6 +1961,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                                           name_width=wide_name_width))
             if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):
                 _sess_bold_ids.update(range(_n0, len(lines)))
+            # F-29 (v9) — sub-agent rows, directly under the parent session's own row(s).
+            # Active always shown; completed only surface with `a` (F-18b dim-row convention).
+            shown_subs = [sa for sa in (getattr(s, "subagents", None) or [])
+                         if sa.active or _SHOW_ALL]
+            for i, sa in enumerate(shown_subs):
+                lines.append(_subagent_row(sa, is_last=(i == len(shown_subs) - 1)))
             for i, cj in enumerate(kids):
                 _emit_dispatch_tree(cj, parent_model=s.model, parent_harness=s.harness,
                                     parent_effort=s.effort, orphan=False,
@@ -1950,6 +2040,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         legend += [("✕", "g_dead"), (" dead     ", "dim")]
     if "child" in _seen_glyphs:
         legend += [("▾N", "dim"), (" child jobs   ", "dim")]
+    if "subagent" in _seen_glyphs:
+        legend += [("%sN" % _ICON_SUBAGENT, "dim"), (" sub-agents   ", "dim")]
     if jobs:
         legend += [("↳", "dim"), (" dispatch   ", "dim")]
     if "wt" in _seen_glyphs:
@@ -2177,6 +2269,15 @@ def _addline(stdscr, row, segs, w):
 
 _OFFSET = 0                 # scroll offset — READ only in _draw (see module docstring)
 _TOGGLE_ROWS = {}            # screen_y -> True, reset at the top of every _draw (mouse click map)
+_CLICK_ROWS = {}             # screen_y -> _SELECTABLE entry (F-27 v9 row click map, §4.2.1 —
+                              # filled from _SELECTABLE, NOT _live_targets(): base mode's first
+                              # click would otherwise never see a target, and gating on
+                              # _live_targets() would call control.is_excluded() at ~10fps)
+_PROMPT_HITS = []             # [(screen_y, x0, x1, "kill"|"cancel")] — footer button hitboxes.
+                              # Reset+rebuilt every _draw call (§4.4.1): a click 2 that lands
+                              # before the next _draw must never see a stale (pre-transition)
+                              # map, or the confirm→confirm2 coordinate inversion (§4.4) is
+                              # silently defeated.
 
 # --- F-27 selection mode (see _SELECTABLE stash contract in _build_lines) ---
 # A MODED cursor, not a bare ↑↓ cursor: ↑↓ is already bound to scroll (a v2 contract, spec
@@ -2225,6 +2326,21 @@ def _entry_id(e):
     return (e.get("pid"), e.get("proc_start"))
 
 
+def _click_target_excluded(e):
+    """§4.2.1 — the mouse path's exclusion check. `_CLICK_ROWS` is filled from `_SELECTABLE`
+    (unfiltered), so exclusion is applied HERE, once, at click time — not every tick. The
+    render.py:2207 contract ("filtered before a prompt") still holds: a click IS the selection
+    attempt, so an excluded row is refused before it can ever reach `_PROMPT`."""
+    from . import control
+    pid = e.get("pid")
+    if not pid:
+        return True
+    try:
+        return control.is_excluded(pid)
+    except Exception:
+        return True                      # unresolvable → fail closed, same as _live_targets()
+
+
 def _cursor_index(targets):
     """Where the cursor identity currently sits, or None if that target is gone."""
     if _CURSOR_ID is None:
@@ -2261,6 +2377,65 @@ def reset_selection():
     _LAST_ACTION = None
 
 
+def _prompt_button_segs(stage, key):
+    """[cancel]/[kill] click segments, in stage order (§4.4 coordinate inversion).
+
+    confirm         → cancel-LEFT, kill-RIGHT
+    confirm2/escalate → REVERSED: kill-LEFT, cancel-RIGHT
+
+    The reversal is what makes a same-spot double-click fail-safe: confirm's [kill] (right)
+    becomes confirm2's [cancel] (right) — the second click of a reflexive double-click lands
+    on cancel, never on kill. See §4.4.1 for the staleness invariant this depends on."""
+    kill_label = "[KILL]" if stage in ("confirm2", "escalate") else "[kill]"
+    kill_seg = (kill_label, key)
+    cancel_seg = ("[cancel]", key)
+    if stage in ("confirm2", "escalate"):
+        return [(" ", key), kill_seg, (" ", key), cancel_seg]
+    return [(" ", key), cancel_seg, (" ", key), kill_seg]
+
+
+def _prompt_variants(text_variants, stage, key):
+    """Expand each text rung into a with-buttons rung, followed by a keyboard-only fallback
+    at the SAME text width (buttons dropped). §4.5: when the buttons don't fit, the keyboard
+    hint (and the name, if this rung still carries it) must not be sacrificed just to keep a
+    click target — keyboard stays primary (prd.md:88·280). The final rung is never followed
+    by a fallback: the narrowest rung is the guaranteed-fit floor and always carries buttons.
+    """
+    btn = _prompt_button_segs(stage, key)
+    out = []
+    last = len(text_variants) - 1
+    for i, segs in enumerate(text_variants):
+        out.append(list(segs) + btn)
+        if i < last:
+            out.append(list(segs))
+    return out
+
+
+def _prompt_hit_boxes(fsegs, row, width):
+    """Click x-ranges for [kill]/[KILL]/[cancel] segments in fsegs, mirroring _addline's
+    per-cell clip (:2126). A segment counts only if it was drawn WHOLE — a hitbox for a
+    button that got clipped off the edge of the terminal must never survive (§4.5)."""
+    hits = []
+    col = 0
+    edge = max(0, width - 1) if width else 0
+    for text, _style in fsegs:
+        if col >= edge:
+            break
+        avail = edge - col
+        pw = 0
+        for ch in text:
+            cw = _cw(ch)
+            if pw + cw > avail:
+                break
+            pw += cw
+        stripped = text.strip()
+        if stripped in ("[kill]", "[KILL]", "[cancel]") and pw == _dw(text):
+            action = "cancel" if stripped == "[cancel]" else "kill"
+            hits.append((row, col, col + pw, action))
+        col += pw
+    return hits
+
+
 def _prompt_segs(prompt, width=None):
     """The confirmation bar. Always names the exact target and always shows the keys.
 
@@ -2288,7 +2463,7 @@ def _prompt_segs(prompt, width=None):
     if stage == "escalate":
         # SIGKILL — the one signal a process cannot refuse. It shares the warning bar with the
         # live-kill prompts: it is at least as destructive, so it may not read calmer than they do.
-        return pick(
+        return pick(*_prompt_variants([
             [(" ⚠ SIGTERM ignored for %ds — send SIGKILL to " % control.KILL_GRACE_SEC, "hdr_warn"),
              (who, "hdr_warn_key"), ("? press ", "hdr_warn"),
              ("Y", "hdr_warn_key"), (" (capital) · ", "hdr_warn"),
@@ -2296,9 +2471,10 @@ def _prompt_segs(prompt, width=None):
             [(" ⚠ SIGKILL ", "hdr_warn"), (who, "hdr_warn_key"), ("? ", "hdr_warn"),
              ("Y", "hdr_warn_key"), ("/", "hdr_warn"), ("Esc", "hdr_warn_key")],
             [(" ⚠ SIGKILL pid %s? " % e.get("pid"), "hdr_warn"),
-             ("Y", "hdr_warn_key"), ("/", "hdr_warn"), ("Esc", "hdr_warn_key")])
+             ("Y", "hdr_warn_key"), ("/", "hdr_warn"), ("Esc", "hdr_warn_key")],
+        ], stage, "hdr_warn_key"))
     if stage == "confirm2":
-        return pick(
+        return pick(*_prompt_variants([
             [(" ⚠ LIVE session — confirm again: ", "hdr_warn"),
              (who, "hdr_warn_key"),
              (" — press ", "hdr_warn"), ("Y", "hdr_warn_key"),
@@ -2309,28 +2485,31 @@ def _prompt_segs(prompt, width=None):
              ("Esc", "hdr_warn_key"), (" no", "hdr_warn")],
             [(" ⚠ LIVE pid %s — " % e.get("pid"), "hdr_warn"),
              ("Y", "hdr_warn_key"), (" kills · ", "hdr_warn"),
-             ("Esc", "hdr_warn_key"), (" no", "hdr_warn")])
+             ("Esc", "hdr_warn_key"), (" no", "hdr_warn")],
+        ], stage, "hdr_warn_key"))
 
     warn = control.requires_double_confirm(e.get("state"), e.get("status"))
     if warn:
-        return pick(
+        return pick(*_prompt_variants([
             [(" ⚠ this session is WORKING — kill ", "hdr_warn"), (who, "hdr_warn_key"),
              ("? ", "hdr_warn"), ("y", "hdr_warn_key"), (" yes · ", "hdr_warn"),
              ("Esc", "hdr_warn_key"), (" cancel", "hdr_warn")],
             [(" ⚠ WORKING — kill ", "hdr_warn"), (who, "hdr_warn_key"), ("? ", "hdr_warn"),
              ("y", "hdr_warn_key"), ("/", "hdr_warn"), ("Esc", "hdr_warn_key")],
             [(" ⚠ kill pid %s (working)? " % e.get("pid"), "hdr_warn"),
-             ("y", "hdr_warn_key"), ("/", "hdr_warn"), ("Esc", "hdr_warn_key")])
+             ("y", "hdr_warn_key"), ("/", "hdr_warn"), ("Esc", "hdr_warn_key")],
+        ], "confirm", "hdr_warn_key"))
     # Benign target (unused/stale/dead). The middle rung matters: the full form overshoots 60
     # by ~3 cells, and dropping straight to pid-only would throw the NAME away while leaving
     # ~27 cells unused. Trim the decoration, keep the identity.
-    return pick(
+    return pick(*_prompt_variants([
         [(" kill ", "hdr_bar"), (who, "hdr_key"), ("? ", "hdr_bar"),
          ("y", "hdr_key"), (" yes · ", "hdr_bar"), ("Esc", "hdr_key"), (" cancel", "hdr_bar")],
         [(" kill ", "hdr_bar"), (who, "hdr_key"), ("? ", "hdr_bar"),
          ("y", "hdr_key"), ("/", "hdr_bar"), ("Esc", "hdr_key")],
         [(" kill pid %s (%s)? " % (e.get("pid"), e.get("state") or "?"), "hdr_bar"),
-         ("y", "hdr_key"), ("/", "hdr_bar"), ("Esc", "hdr_key")])
+         ("y", "hdr_key"), ("/", "hdr_bar"), ("Esc", "hdr_key")],
+    ], "confirm", "hdr_key"))
 
 
 _ESC = 27
@@ -2370,6 +2549,92 @@ def _handle_select_key(ch):
         _PROMPT = {"stage": "confirm", "entry": targets[i]}
         return True
     return False        # q / r / a / w still work from selection mode
+
+
+def _handle_base_key(ch, body_h):
+    """Base-mode keys (scroll/a/w). True = handled. Kept out of _loop so scroll can be
+    tested without curses — the F-27 regression budget is 0 and an untestable budget is
+    not a budget."""
+    global _OFFSET
+    if ch in (curses.KEY_UP, ord("k")):
+        _OFFSET -= 1
+    elif ch in (curses.KEY_DOWN, ord("j")):
+        _OFFSET += 1
+    elif ch == curses.KEY_PPAGE:
+        _OFFSET -= body_h
+    elif ch == curses.KEY_NPAGE:
+        _OFFSET += body_h
+    elif ch in (curses.KEY_HOME, ord("g")):
+        _OFFSET = 0
+    elif ch in (curses.KEY_END, ord("G")):
+        _OFFSET = 1 << 30    # clamp in _draw resolves this to maxoff
+    elif ch in (ord("a"), ord("A")):
+        set_show_all(not _SHOW_ALL)
+    elif ch in (ord("w"), ord("W")):
+        _cycle_layout()
+    else:
+        return False
+    return True
+
+
+def _getmouse_xy():
+    """Extract getmouse() coords, or (None, None) on failure. A bare `except: my = None`
+    (the pre-v9 shape) still calls the mouse handler with a stale/unbound `mx` from a PRIOR
+    getmouse() (or unbound entirely on the first call) → NameError crashes the TUI. Returning
+    a matched pair makes "couldn't read the event" and "read it" mutually exclusive states."""
+    try:
+        _, mx, my, _mz, _bstate = curses.getmouse()
+    except Exception:
+        return None, None
+    return mx, my
+
+
+def _handle_mouse(mx, my):
+    """Mouse is the FIRST-CLASS F-27 path (prd.md:279). Returns True = handled.
+
+    Precedence, in order — each rung is a different mode, and a click means a different
+    thing in each:
+      1. _PROMPT up  → only the [kill]/[cancel] hit-boxes act. A click anywhere ELSE on
+         screen is swallowed (NOT a cancel): a stray click must never resolve a kill
+         prompt in either direction. This mirrors _handle_prompt_key's "any other key is
+         NOT consent" (render.py:2393).
+      2. my in _TOGGLE_ROWS → the existing `+N hidden`/`folded` toggle. Checked before the
+         row map because a toggle row is not a selectable row; the two maps never overlap.
+      3. my in _CLICK_ROWS  → row click:
+           · same identity as _CURSOR_ID → kill REQUEST → _PROMPT = {"stage": "confirm"}
+           · different row              → move selection (_CURSOR_ID = id, _SELECT_MODE = True)
+      4. otherwise → click outside any row → _exit_select()  (deselect, prd.md:279)
+
+    The kill/cancel hit-boxes do not call control.kill_target directly — they replay the
+    matching keyboard keystroke through _handle_prompt_key, so the mouse and keyboard share
+    the exact same one decision path (§4.1: "kill 결정 경로는 하나").
+    """
+    global _CURSOR_ID, _SELECT_MODE, _PROMPT
+    if _PROMPT is not None:
+        for row, x0, x1, action in _PROMPT_HITS:
+            if my == row and x0 <= mx < x1:
+                if action == "kill":
+                    _handle_prompt_key(ord("y") if _PROMPT["stage"] == "confirm" else ord("Y"))
+                else:
+                    _handle_prompt_key(_ESC)
+                break
+        return True                      # rung 1: every other click while prompted is swallowed
+    if my in _TOGGLE_ROWS:
+        set_show_all(not _SHOW_ALL)
+        return True
+    if my in _CLICK_ROWS:
+        entry = _CLICK_ROWS[my]
+        reclick = _SELECT_MODE and _entry_id(entry) == _CURSOR_ID
+        if _click_target_excluded(entry):
+            return True                  # excluded rows are unreachable by click (§4.2.1)
+        if reclick:
+            _PROMPT = {"stage": "confirm", "entry": entry}
+        else:
+            _SELECT_MODE = True
+            _CURSOR_ID = _entry_id(entry)
+        return True
+    _exit_select()
+    return True
 
 
 def _handle_prompt_key(ch):
@@ -2474,7 +2739,14 @@ def _poll_pending_kill():
     _PROMPT = {"stage": "escalate", "entry": entry}
 
 
-def _footer_segs(select_mode, parts):
+_MOUSE_HINT_MIN_WIDTH = 100   # R2-3: mouse is opt-in (needs `set -g mouse on` in tmux); only
+                              # advertise it where there is slack to spare — keyboard stays
+                              # primary and unconditional (prd.md:88·280).
+
+
+def _footer_segs(select_mode, parts, width=None):
+    hint = [("click", "hdr_key"), (" row · ", "hdr_bar")] \
+        if width is not None and width >= _MOUSE_HINT_MIN_WIDTH else []
     if select_mode:
         return [(" ", "hdr_bar"),
                 ("↑↓/jk", "hdr_key"), (" move · ", "hdr_bar"),
@@ -2487,7 +2759,7 @@ def _footer_segs(select_mode, parts):
             ("q", "hdr_key"), (" quit · ", "hdr_bar"),
             ("r", "hdr_key"), (" refresh · ", "hdr_bar"),
             ("a", "hdr_key"), (" all · ", "hdr_bar"),
-            ("w", "hdr_key"), (" " + wlbl + " · ", "hdr_bar"),
+            ("w", "hdr_key"), (" " + wlbl + " · ", "hdr_bar")] + hint + [
             ("jk", "hdr_key"), (" scroll · ", "hdr_bar"),
             ("s", "hdr_key"), (" select · ", "hdr_bar"),
             ("g/G", "hdr_key"), (" top/end", "hdr_bar"),
@@ -2500,8 +2772,14 @@ def reset_scroll():
 
 
 def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
-    global _OFFSET, _TOGGLE_ROWS, _CURSOR_ID
-    _TOGGLE_ROWS = {}    # reset before any early-return so a stale map never survives a click
+    global _OFFSET, _TOGGLE_ROWS, _CLICK_ROWS, _PROMPT_HITS, _CURSOR_ID
+    # reset before any early-return so a stale map never survives a click (§4.1 pattern) —
+    # _PROMPT_HITS in particular must never carry the PRIOR stage's coordinates into this
+    # draw (§4.4.1): that staleness is exactly what would defeat the confirm→confirm2
+    # coordinate inversion.
+    _TOGGLE_ROWS = {}
+    _CLICK_ROWS = {}
+    _PROMPT_HITS = []
     h, w = stdscr.getmaxyx()
     stdscr.erase()
     narrow = w < _NARROW_CUTOFF
@@ -2525,6 +2803,10 @@ def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
             _OFFSET = cur_line - body_h + 1
     _OFFSET = _clamp_offset(_OFFSET, len(lines), body_h)
 
+    # F-27 v9 (§4.2.1): the click map is built from _SELECTABLE, NOT _live_targets() — see the
+    # module-level _CLICK_ROWS comment for why (base-mode first click / per-tick cost).
+    _sel_by_line = {e["line"]: e for e in _SELECTABLE}
+
     visible = lines[_OFFSET: _OFFSET + body_h]
     row = 0
     for segs in visible:
@@ -2532,6 +2814,10 @@ def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
         if segs is not None and len(segs) == 1 and (
                 "hidden" in segs[0][0] or "folded" in segs[0][0]):
             _TOGGLE_ROWS[row] = True
+        else:
+            entry = _sel_by_line.get(_OFFSET + row)
+            if entry is not None:
+                _CLICK_ROWS[row] = entry
         row += 1
     if cur_line is not None and _OFFSET <= cur_line < _OFFSET + body_h:
         _highlight_row(stdscr, cur_line - _OFFSET, w)
@@ -2547,8 +2833,10 @@ def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
     # scroll indicator rides the right edge. `w` cycles layout auto → narrow → wide.
     # A pending confirmation OWNS the footer: while it is up, the only thing that matters is
     # the decision in front of the user.
-    fsegs = _prompt_segs(_PROMPT, w) if _PROMPT else _footer_segs(_SELECT_MODE, parts)
+    fsegs = _prompt_segs(_PROMPT, w) if _PROMPT else _footer_segs(_SELECT_MODE, parts, w)
     _addline(stdscr, h - 1, fsegs, w)
+    if _PROMPT:
+        _PROMPT_HITS = _prompt_hit_boxes(fsegs, h - 1, w)
     stdscr.noutrefresh()
     curses.doupdate()
 
@@ -2592,7 +2880,17 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
         # --- F-27: a pending confirmation swallows ALL keys. Nothing else can happen while
         # the user is being asked, and only an explicit yes proceeds. ---
         if _PROMPT is not None:
-            _handle_prompt_key(ch)
+            # §4.4.1 — _handle_mouse MUST be called from inside this block (not before it with
+            # its own `continue`): the _draw two lines below is what repopulates _PROMPT_HITS
+            # for the CURRENT stage before the next getch can land a click. Placing the mouse
+            # call ahead of this block would let a click 2 read a stale (pre-transition) map
+            # and silently defeat the confirm→confirm2 coordinate inversion (§4.4).
+            if ch == curses.KEY_MOUSE:
+                mx, my = _getmouse_xy()
+                if mx is not None:
+                    _handle_mouse(mx, my)
+            else:
+                _handle_prompt_key(ch)
             _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
             continue
         if _SELECT_MODE:
@@ -2608,29 +2906,12 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
             continue
 
         # --- base mode: scroll keys UNCHANGED (F-27 regression budget = 0) ---
-        if ch in (curses.KEY_UP, ord("k")):
-            _OFFSET -= 1
-        elif ch in (curses.KEY_DOWN, ord("j")):
-            _OFFSET += 1
-        elif ch == curses.KEY_PPAGE:
-            _OFFSET -= body_h
-        elif ch == curses.KEY_NPAGE:
-            _OFFSET += body_h
-        elif ch in (curses.KEY_HOME, ord("g")):
-            _OFFSET = 0
-        elif ch in (curses.KEY_END, ord("G")):
-            _OFFSET = 1 << 30    # clamp in _draw resolves this to maxoff
-        elif ch in (ord("a"), ord("A")):
-            set_show_all(not _SHOW_ALL)
-        elif ch in (ord("w"), ord("W")):
-            _cycle_layout()
+        if _handle_base_key(ch, body_h):
+            pass
         elif ch == curses.KEY_MOUSE:
-            try:
-                _, mx, my, _mz, _bstate = curses.getmouse()
-            except Exception:
-                my = None
-            if my is not None and my in _TOGGLE_ROWS:
-                set_show_all(not _SHOW_ALL)
+            mx, my = _getmouse_xy()
+            if mx is not None:
+                _handle_mouse(mx, my)
         # KEY_RESIZE: no special handling needed — _draw's clamp re-clamps against the new
         # body_h below; do NOT reset _OFFSET here (would destroy scroll position).
 

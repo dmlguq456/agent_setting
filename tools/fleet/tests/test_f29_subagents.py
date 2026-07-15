@@ -1,0 +1,256 @@
+"""F-29 (v9) — sub-agent observation (prd.md:290-295).
+
+Enrichment ONLY: every test in NoRegressionTest exists to pin prd.md:291's "never touches
+session-existence" contract. Fixtures are a throwaway sqlite DB (OpenCode) and throwaway
+jsonl transcripts (Claude) — no real opencode/claude state is ever touched.
+"""
+import json
+import os
+import sqlite3
+import sys
+import tempfile
+import unittest
+from unittest import mock
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+
+from fleet import render                                          # noqa: E402
+from fleet.collectors import claude, opencode                     # noqa: E402
+from fleet.model import Session, SubAgent                         # noqa: E402
+
+
+class OpenCodeSubagentTest(unittest.TestCase):
+    """Temp sqlite DB fixture — real opencode.db never touched."""
+
+    def _db(self, tmp, rows, with_agent_col=True, table_extra=""):
+        path = os.path.join(tmp, "opencode.db")
+        con = sqlite3.connect(path)
+        cols = ["id TEXT", "slug TEXT"]
+        if with_agent_col:
+            cols.append("agent TEXT")
+        cols += ["model TEXT", "cost REAL", "tokens_input INT", "tokens_output INT",
+                "tokens_reasoning INT", "time_updated INT", "parent_id TEXT",
+                "directory TEXT", "title TEXT"]
+        con.execute("CREATE TABLE session (%s)" % ", ".join(cols))
+        for r in rows:
+            keys = list(r.keys())
+            con.execute("INSERT INTO session (%s) VALUES (%s)" %
+                       (", ".join(keys), ", ".join("?" for _ in keys)),
+                       [r[k] for k in keys])
+        con.commit()
+        con.close()
+        return path
+
+    def test_child_rows_become_subagents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._db(tmp, [
+                {"id": "parent1", "slug": "p", "agent": None, "directory": "/x",
+                 "time_updated": 1000, "parent_id": None},
+                {"id": "child1", "slug": "c1", "agent": "explore", "directory": "/x",
+                 "time_updated": 2000, "parent_id": "parent1"},
+            ])
+            con = sqlite3.connect(db)
+            subs = opencode._child_sessions(con, "parent1")
+            con.close()
+            self.assertEqual(len(subs), 1)
+            self.assertEqual(subs[0].agent_type, "explore")
+
+    def test_agent_column_maps_to_type(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._db(tmp, [
+                {"id": "parent1", "slug": "p", "agent": None, "directory": "/x",
+                 "time_updated": 1000, "parent_id": None},
+                {"id": "child1", "slug": "c1", "agent": "code-reviewer", "directory": "/x",
+                 "time_updated": 2000, "parent_id": "parent1"},
+            ])
+            con = sqlite3.connect(db)
+            subs = opencode._child_sessions(con, "parent1")
+            con.close()
+            self.assertEqual(subs[0].agent_type, "code-reviewer")
+            self.assertEqual(subs[0].source, "opencode-db")
+
+    def test_absent_parent_id_yields_no_subagents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._db(tmp, [
+                {"id": "solo1", "slug": "solo", "agent": None, "directory": "/x",
+                 "time_updated": 1000, "parent_id": None},
+            ])
+            con = sqlite3.connect(db)
+            subs = opencode._child_sessions(con, "solo1")
+            con.close()
+            self.assertEqual(subs, [])
+
+    def test_db_without_agent_column_degrades_to_none(self):
+        """tolerant (F-3) — an older DB schema must never crash enrich(), and subagents
+        stays the honest None (not []): the source itself is unconfirmed, not empty."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._db(tmp, [
+                {"id": "parent1", "slug": "p", "directory": "/x",
+                 "time_updated": 1000, "parent_id": None},
+            ], with_agent_col=False)
+            with mock.patch.dict(os.environ, {"OPENCODE_DB": db}):
+                sess = Session(harness="opencode", pid=1, cwd="/x")
+                opencode.enrich(sess)
+            self.assertIsNone(sess.subagents)
+
+    def test_enrich_wires_subagents_end_to_end(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._db(tmp, [
+                {"id": "parent1", "slug": "p", "agent": None, "directory": "/x",
+                 "time_updated": 1000, "parent_id": None},
+                {"id": "child1", "slug": "c1", "agent": "explore", "directory": "/x",
+                 "time_updated": 2000, "parent_id": "parent1"},
+            ])
+            with mock.patch.dict(os.environ, {"OPENCODE_DB": db}):
+                sess = Session(harness="opencode", pid=1, cwd="/x")
+                opencode.enrich(sess)
+            self.assertEqual(len(sess.subagents), 1)
+            self.assertEqual(sess.subagents[0].agent_type, "explore")
+
+
+def _tool_use_line(tid, agent_type, ts="2026-07-15T10:00:00Z"):
+    return {"type": "assistant", "isSidechain": False, "timestamp": ts,
+            "message": {"role": "assistant", "content": [
+                {"type": "tool_use", "id": tid, "name": "Task",
+                 "input": {"subagent_type": agent_type}}]}}
+
+
+def _tool_result_line(tid, ts="2026-07-15T10:05:00Z"):
+    return {"type": "user", "isSidechain": False, "timestamp": ts,
+            "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": tid, "content": "done"}]}}
+
+
+def _write_transcript(path, lines):
+    with open(path, "w", encoding="utf-8") as f:
+        for ln in lines:
+            f.write(json.dumps(ln) + "\n")
+
+
+class ClaudeSidechainTest(unittest.TestCase):
+    """Temp jsonl transcript fixture — real ~/.claude never touched."""
+
+    def setUp(self):
+        claude._SUBAGENT_CACHE.clear()
+
+    def test_sidechain_lines_pair_tool_use_and_tool_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            _write_transcript(path, [
+                _tool_use_line("t1", "explore"),
+                _tool_result_line("t1"),
+            ])
+            subs = claude._tail_subagents(path)
+            self.assertEqual(len(subs), 1)
+            self.assertFalse(subs[0].active, "paired tool_use/tool_result = completed")
+
+    def test_unpaired_tool_use_counts_as_active(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            _write_transcript(path, [_tool_use_line("t1", "code-reviewer")])
+            subs = claude._tail_subagents(path)
+            self.assertEqual(len(subs), 1)
+            self.assertTrue(subs[0].active)
+            self.assertEqual(subs[0].agent_type, "code-reviewer")
+
+    def test_malformed_lines_are_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write('{"type":"assistant","message":{"content":[{"type":"tool_use"\n')
+                f.write("not even json at all\n")
+                f.write(json.dumps(_tool_use_line("t2", "explore")) + "\n")
+            subs = claude._tail_subagents(path)
+            self.assertEqual(len(subs), 1)
+            self.assertEqual(subs[0].agent_type, "explore")
+
+    def test_cache_keyed_on_mtime_and_size(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            _write_transcript(path, [_tool_use_line("t1", "explore")])
+            first = claude._tail_subagents(path)
+            self.assertEqual(len(first), 1)
+            st = os.stat(path)
+            claude._SUBAGENT_CACHE[path] = (st.st_mtime, st.st_size, [])   # poison the cache
+            cached = claude._tail_subagents(path)
+            self.assertEqual(cached, [], "재읽기 없이 (mtime,size) 캐시를 그대로 반환해야 함")
+
+
+class NoRegressionTest(unittest.TestCase):
+    """prd.md:291/293/294 — enrichment cannot touch existence, pulse, or --json shape."""
+
+    def setUp(self):
+        render.reset_selection()
+
+    def _rows(self, subagents=None):
+        s = Session(harness="claude", pid=90001, cwd="/x", slug="a",
+                   liveness="working", title="live", elapsed_min=5)
+        s.proc_start = "111"
+        s.subagents = subagents
+        return [s]
+
+    def test_source_absent_omits_subrow_entirely(self):
+        lines = render._build_lines(self._rows(subagents=None), [], section="fleet",
+                                    narrow=False, malformed=0, term_width=168)
+        joined = "\n".join("".join(t for t, _k in ln) for ln in lines if ln)
+        self.assertNotIn(render._ICON_SUBAGENT, joined)
+
+    def test_stacked_subagent_rows_use_connected_tree_branches(self):
+        """design critic step3 §2 — 2+ rows read as ONE connected group (├…├…└), not
+        independent branches (all-└)."""
+        subs = [SubAgent(agent_type="explore", active=True),
+               SubAgent(agent_type="code-reviewer", active=True),
+               SubAgent(agent_type="fact-check", active=True)]
+        lines = render._build_lines(self._rows(subagents=subs), [], section="fleet",
+                                    narrow=False, malformed=0, term_width=168)
+        sub_lines = [ln for ln in lines if ln and len(ln) == 1
+                    and render._ICON_SUBAGENT in ln[0][0]]
+        self.assertEqual(len(sub_lines), 3)
+        texts = [ln[0][0] for ln in sub_lines]
+        self.assertTrue(texts[0].strip().startswith("├"))
+        self.assertTrue(texts[1].strip().startswith("├"))
+        self.assertTrue(texts[2].strip().startswith("└"))
+
+    def test_parse_failure_omits_subrow_entirely(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "opencode.db")
+            con = sqlite3.connect(db)
+            con.execute("CREATE TABLE session (id TEXT)")   # missing every expected column
+            con.commit()
+            con.close()
+            with mock.patch.dict(os.environ, {"OPENCODE_DB": db}):
+                sess = Session(harness="opencode", pid=1, cwd="/x")
+                opencode.enrich(sess)          # must not raise
+            self.assertIsNone(sess.subagents)
+
+    def test_subagents_never_enter_pulse_counts(self):
+        active = [SubAgent(agent_type="explore", active=True)]
+        with_subs = self._rows(subagents=active)
+        without_subs = self._rows(subagents=None)
+        lines_with = render._build_lines(with_subs, [], section="fleet", narrow=False,
+                                         malformed=0, term_width=168)
+        lines_without = render._build_lines(without_subs, [], section="fleet", narrow=False,
+                                            malformed=0, term_width=168)
+        pulse_with = "".join(t for t, _k in lines_with[1])
+        pulse_without = "".join(t for t, _k in lines_without[1])
+        self.assertEqual(pulse_with, pulse_without,
+                         "서브에이전트 존재가 fleet pulse 줄을 바꿨다")
+
+    def test_session_existence_unaffected_by_subagents(self):
+        """prd.md:291 — classify_session doesn't even see the field; subagents lives on
+        Session AFTER classification, purely as enrichment."""
+        import inspect
+        from fleet import model
+        self.assertNotIn("subagents", inspect.getsource(model.classify_session))
+
+    def test_json_key_is_additive(self):
+        plain = Session(harness="claude", pid=1, cwd="/x").to_dict()
+        self.assertIn("subagents", plain)
+        self.assertIsNone(plain["subagents"])
+        # every other key from a bare Session must still be there — additive, not replaced.
+        self.assertIn("pid", plain)
+        self.assertIn("liveness", plain)
+
+
+if __name__ == "__main__":
+    unittest.main()
