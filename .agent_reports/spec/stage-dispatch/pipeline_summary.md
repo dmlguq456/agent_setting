@@ -2,7 +2,7 @@
 
 - **Date**: 2026-07-10
 - **Mode**: library + cli (autopilot 파이프 디스패치 토폴로지 개정 인프라)
-- **Status**: spec v10 (tracked×dispatch 축 분리 — SD-44~47 spec-only) · v9 구현 완료(26497cd0), v10 구현은 capability-routing-topology plan Phase 1~2 + core §5.8 개정으로 이월
+- **Status**: spec v11 (nested eligibility·global attempt registry·cross-harness fallback — SD-48~50 spec-only) · v10 구현 cycle `stage-dispatch-v10` 진행 중, v11 구현은 v10 수확·main merge 후 별도 cycle로 이월
 - **Placement**: 독립 컴포넌트 `spec/stage-dispatch/` — 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 무수정.
 
 ## 배경
@@ -12,6 +12,10 @@
 v8은 2026-07-14 사용자 확정사항인 "agent 산출물은 task worktree에 넣지 않는다"를 구현 계약으로 승격한다. linked worktree의 tracked `.agent_reports` snapshot은 write target이 아니며, 모든 worker는 main checkout의 canonical artifact root를 사용한다. 정리는 runtime 종료 이벤트가 아니라 main/orchestrator가 merge·통합 검증·push를 증명한 직후 실행하는 fail-closed state machine이다.
 
 v9은 2026-07-15 사용자 결정을 고정한다. substantive tracked work의 depth-0 main은 orchestration/integration만 수행하고, direct는 atomic inline, quick은 depth-1 one-shot/no-depth2, standard+는 capability별 recipe다. intensity, execution topology, worker kind, transport를 분리하고 `capabilities/topologies.json` + validator + immutable route record를 machine SoT로 정한다. spec/refine/note/ship의 single-writer transaction을 보존하며 detached jobs, global spawn governor, hash-bound smoke, single-manifest report completion, absolute cwd, spec-nudge structured-token matching, on-demand/lightweight sibling parity를 같은 acceptance contract에 묶었다.
+
+v10은 tracking을 다섯째 독립 축으로 분리하고 worker manifest-consumer, guard↔topology validator, spec transaction 직렬화 계약을 추가했다. 해당 구현 cycle은 `stage-dispatch-v10` branch/worktree에서 진행 중이다.
+
+v11은 그 Codex conductor의 첫 depth-2 code-plan에서 관측된 세 갭을 닫는다. nested `codex exec`는 총 6회 network `Operation not permitted`로 실패했고, transcript는 최초 dry-run부터 cycle-local `--jobs`를 명시해 global Fleet registry를 우회했으며, same-harness 실패 뒤 cross-harness stage 없이 inline으로 내려갔다. I2 직접 원인은 sandbox write failure가 아니라 explicit local registry 선택으로 확정했다. 공식 Codex manual은 native subagent nesting과 `codex exec` automation을 각각 문서화하지만 sandbox 안 nested `codex exec` 성공을 보장하지 않으므로, v11은 parent transport/sandbox별 checked eligibility와 ancestor launch broker를 별도 계약으로 둔다.
 
 ## Process Log
 | Step | Action | Result | Notes |
@@ -26,6 +30,7 @@ v9은 2026-07-15 사용자 결정을 고정한다. substantive tracked work의 d
 | v9 update | current v8 PRD/state/summary + capability-routing-topology plan/checklist/metrics/plan-check + current core/capability/mode contracts read | `prd.md` v9 | v8 snapshot once. SD-31~43 and 10 acceptance groups; no source edits. Codex root/core read-marker persistence was unavailable under worker sandbox, so instruction-only fallback used. |
 | v9 implementation | topology registry/compiler, route-bound dispatch/completion, governor/resource lifecycle, smoke/report gates, cwd/nudge fixes, sibling projections | source commit `26497cd0` | portable guard 357/357, generated projections, routing, adaptation, context and focused unit suites passed. |
 | v10 update | tracked-dispatch-conflict-diagnosis.md + plan.md + current v9 PRD 대조, D1 옵션 2개 사용자 제시 → (a) 확정 | `prd.md` v10 | v9 snapshot cmp=0. SD-44~47 + acceptance 6항. spec artifact only — 소스 무변. |
+| v11 update | codex-nested-dispatch 진단 + conductor transcript + cycle/global jobs registry + 공식 Codex manual 대조 | `prd.md` v11 | v10 snapshot cmp=0. I2=explicit local `--jobs` 확정, 실제 시도 6건 정정. SD-48~50 + acceptance 8항. spec/진단만 변경, 소스 무변. |
 
 ## 채택 결정 (locked)
 - **SD-1~2 (토폴로지·인터페이스)**: depth-1 owner = 얇은 conductor(verdict/게이트만), 스테이지 = depth-2 headless 세션. 인터페이스 = 산출물 파일만, 대화 컨텍스트 전달 금지(산출물 기반 소통). 근거 = 사용자 결정 + research §4-(8) + DESIGN_PRINCIPLES §8 "결과 흐름 file 통해".
@@ -45,6 +50,7 @@ v9은 2026-07-15 사용자 결정을 고정한다. substantive tracked work의 d
 - **SD-36~38 (capability/parity ownership)**: apply/code/design/draft/lab setup+eval/note/refine/research/ship/spec mapping. transactional single writer 유지. portable meaning은 core/capabilities, runtime mechanics는 각 sibling adapter가 독립 소유·검증.
 - **SD-39~43 (operability/completion/lightweight)**: detached run identity+reattach, atomic global spawn governor, mandatory hash-bound smoke, one report manifest, absolute cwd/spec-nudge matching, topology on-demand+strict footprint budget.
 - **SD-44~47 (tracked×dispatch orthogonality, v10)**: Tracking 다섯째 독립 축(tracked=산출물 계약만, 분사=promotion/separability 신호, quick 경계 현행 유지 — 사용자 (a)), worker manifest-consumer 계약(재라우팅 금지 + tracked gate 증거 4종 record 운반 + bootstrap 축소), guard↔write_scope 정합성 validator(fail-closed + runtime structured failure), 공유 tracked 표면 병렬 계약(spec-transaction lock 원자 시퀀스 + 버전 경합 대기 규칙).
+- **SD-48~50 (nested dispatch resilience, v11)**: root/native와 분리된 nested child-spawn hard eligibility + logical depth를 보존하는 ancestor launch broker, 모든 실제 launch attempt의 canonical global registry 선등록·legacy reconcile, standard+ fallback `same-harness headless → cross-harness headless → native subagent → inline(enum+evidence)`.
 
 ## 미결 (open — pilot 계측)
 - **SD-OPEN-1**: 마이크로-스테이지 inline 의 손익 임계(어느 스테이지 크기부터 분사가 이득). research 가 per-stage dispatch cost 를 수치화하지 않음 → 추측 금지, Phase 1 pilot 토큰/시간 계측으로 확정.
@@ -53,9 +59,15 @@ v9은 2026-07-15 사용자 결정을 고정한다. substantive tracked work의 d
 현행 `context-and-guards.md:51` 은 스테이지 분사를 "상태 재발굴 + 연속성 상실 = worst of both"로 금지. 본 spec 은 이를 §0.5 계약 완결성 의무(산출물이 상태를 완전히 담으면 재발굴=파일로드·연속성=파일매체) + §8 마이크로-스테이지 inline 경계로 규칙화해 흡수. research §4-(8)이 "fresh-context+file-state가 context rot 방지 지배 관용구"임을 확증해 반전을 근거화.
 
 ## Next
-운영 관찰에서 promotion signal, route fallback, governor start budget, capability별 DAG의 false-positive/false-negative를 수집한다. report-only rollout과 adapter별 runtime transport pilot을 거쳐 enforcement 승격 여부를 별도 판단한다. 자동 drill은 실행하지 않는다.
+먼저 진행 중인 v10 cycle을 수확·main merge한다. 그 뒤 최신 main에서 별도 v11 autopilot-code cycle을 열어 SD-48~50을 구현·검증한다. 현재 세션은 dispatch-headless 3종·preflight·core source를 수정하지 않는다. 구현 시 공식 runtime currentness와 adapter별 nested probe를 재확인하며 자동 drill은 실행하지 않는다.
 
 ## Version History
+- v11 (2026-07-15): nested stage-dispatch resilience — autopilot-spec update, v10 snapshot = `_internal/versions/v10/prd.md` (update 직전 cmp=0).
+  - **I2 원인 확정**: transcript의 최초 dry-run·6개 start·wait·harvest가 모두 cycle `_internal/jobs.log`를 explicit `--jobs`로 지정. global write 시도/permission error는 0건이므로 sandbox write failure가 아니라 의도적 local registry 선택. SD-14b의 parent-child 발견 불일치가 아니라 explicit override의 registry authority 갭으로 판정.
+  - **SD-48 (I1)**: parent harness/transport/sandbox·child harness·launch authority별 nested eligibility를 hard eligibility로. root headless/native subagent 지원에서 추정 금지, 필요 시 depth-0 broker가 logical depth-2 child를 launch.
+  - **SD-49 (I2)**: production attempt는 spawn 전 canonical global registry에 stable attempt identity로 기록. local-only 금지, global unwritable fail-closed, legacy local row idempotent reconcile.
+  - **SD-50 (I3)**: checked fallback chain을 same-harness→cross-harness→native→inline으로 고정하고, 동일 failure class의 무변경 반복·cross-harness hop 생략을 금지.
+  - 구현 경계: active v10 branch/worktree의 dispatch-headless 3종·preflight와 충돌하므로 source 구현은 v10 수확·merge 후 별도 cycle로 이월.
 - v10 (2026-07-15): tracked×dispatch 축 분리 — autopilot-spec update, v9 snapshot = `_internal/versions/v9/prd.md` (cmp=0 확인). 입력 = `plans/2026-07-15_capability-routing-topology/_internal/tracked-dispatch-conflict-diagnosis.md`(main+Codex 교차 진단 통합).
   - **SD-44 (진단 D1, 사용자 확정)**: Tracking을 SD-32 네 축에 더한 다섯째 독립 축으로 — tracked는 산출물 계약(필요·순서·소유·검증)만 결정하고 분사는 promotion(SD-35)/separability(SD-17) 신호가 결정. tracked→escalation 결합 문구(`WORKFLOW.md:165`·`OPERATIONS.md:109` 류) 제거. **quick 경계는 옵션 2개 제시 후 사용자 선택 (a) = 현행 유지** — 애매하면 quick depth-1(메인 컨텍스트 보호 우선, SD-18 재확정), Codex inline 권고 기각.
   - **SD-45 (진단 D2+F3)**: worker manifest-consumer 계약 — worker는 라우팅 재선택 금지, route record hash 검증+배정 node scope 실행+증거 반환만. tracked gate 증거 4종(spec-read·drift verdict·tracked/untracked mode·artifact-guard 전제)을 record 필수 필드로 운반(세션 지역 read marker의 분사-투영 실패 실측 대응). bootstrap `status/prompt-signal/mode/route` 재실행은 record 검증+안전 확인 전용으로 축소, 3어댑터 동형.

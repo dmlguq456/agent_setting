@@ -1,9 +1,9 @@
 project_name: stage-dispatch
 component: stage-dispatch          # autopilot 파이프 디스패치 토폴로지 개정 (repo spec/prd.md = Unified Memory System, spec/harness-layer-sync·dispatch-profiles·agent-fleet-dashboard 무관)
 created: 2026-07-10
-version: 10
+version: 11
 mode: [library, cli]              # library(스테이지 분사 계약·오케스트레이션) + cli(dispatch wrapper·jobs.log·fleet 관제) — infra
-scope_note: "depth-0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic inline, quick=단일 depth-1 one-shot(depth-2 금지), standard+=capability-specific recipe(모든 entry가 depth-2를 갖지 않음). intensity/execution_topology/worker_kind/transport/tracking 다섯 축은 독립이며(v10 — tracked는 산출물 계약만, 분사는 promotion/separability 신호가 결정) worker worktree는 source-only."
+scope_note: "depth-0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic inline, quick=단일 depth-1 one-shot(depth-2 금지), standard+=capability-specific recipe. intensity/execution_topology/worker_kind/transport/tracking 다섯 축은 독립이며 worker worktree는 source-only. v11은 nested child-spawn eligibility를 root headless/native subagent와 분리하고, 모든 launch attempt의 canonical global registry 및 same→cross-harness→native→inline checked fallback을 고정한다."
 inputs:
   - '사용자 결정 2026-07-10: "스킬 단위 처리 분사를 기본 지침으로. 어차피 산출물 기반 소통." (입도=sub-skill, 적용=standard+)'
   - '사용자 결정 2026-07-13: direct depth-0 inline 유지, quick depth-1 one-shot capability worker 승격(depth-2 금지), standard+ 기존 stage-dispatch 유지'
@@ -22,12 +22,14 @@ inputs:
   - 'plans/2026-07-15_capability-routing-topology/{plan.md,checklist.md,_internal/metrics.md,_internal/plan_check.md}: four axes, capability mappings, registry/route/detached/governor/smoke/report/parity design and recorded Codex runtime evidence'
   - '진단 2026-07-15 (v10): plans/2026-07-15_capability-routing-topology/_internal/tracked-dispatch-conflict-diagnosis.md — tracked(산출물 불변식)×분사(실행 토폴로지) 직교, 충돌 뿌리 = 축 결합 + 집행 장치 세션 지역성, 미반영 delta D1~D4'
   - '사용자 결정 2026-07-15 (v10): Tracking 축 분리 채택, quick 경계는 현행 유지(옵션 (a) — 애매하면 quick depth-1, 메인 컨텍스트 보호 우선, SD-18 재확정). Codex inline 권고 기각'
+  - '운영 진단 2026-07-15 (v11): plans/2026-07-15_stage-dispatch-v10/_internal/codex-nested-dispatch-diagnosis.md + conductor transcript + cycle/global jobs registry — Codex nested headless 6회 실패, explicit cycle-local --jobs로 Fleet 우회, cross-harness hop 없이 inline 하강'
+  - '공식 Codex manual currentness 2026-07-15: native agents.max_depth와 codex exec automation은 별도 surface; workspace-write network default off 및 spawned subprocess 적용; nested codex exec 지원 보장은 없음'
 phases:
-  spec: done              # PRD v10 — tracked×dispatch 축 분리(SD-44~47). v9 snapshot = _internal/versions/v9/
+  spec: done              # PRD v11 — nested eligibility/global attempt registry/cross-harness fallback(SD-48~50). v10 snapshot = _internal/versions/v10/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: done               # v9 구현 완료(26497cd0). v10 SD-44~47은 미구현 — capability-routing-topology plan Phase 1~2 + core §5.8 개정으로 이월
-last_updated: 2026-07-15  # v10 — tracked×dispatch axis separation, spec artifact only
+  dev: in_progress        # v10 SD-44~47 cycle(stage-dispatch-v10) 진행 중. v11 SD-48~50 구현은 v10 수확·main merge 후 별도 autopilot-code cycle로 이월
+last_updated: 2026-07-15  # v11 — nested stage-dispatch resilience, spec artifact only
 decisions_locked:
   - 'SD-1: depth-1 owner = 얇은 conductor, 스테이지(plan/execute/test/report) = depth-2 headless 세션 (conductor 는 verdict/게이트만, 스테이지 본문 미독)'
   - 'SD-2: 인터페이스 = 산출물 파일만, 세션 간 대화 컨텍스트 전달 금지, 계약 완결성 의무 (산출물 기반 소통 명문화)'
@@ -79,6 +81,9 @@ decisions_locked:
   - 'SD-45: worker manifest-consumer 계약 — worker는 capability/intensity/topology 재선택 금지, route record hash 검증 + 배정 node scope 실행 + 증거 반환만. tracked gate 증거 4종(spec-read·drift verdict·mode·guard 전제)을 record 필수 필드로 운반. bootstrap 재실행은 record 검증+안전 확인 전용으로 축소, 3어댑터 동형 (v10, 진단 D2+F3)'
   - 'SD-46: guard↔topology 정합성 validator — spec/** write 선언 node는 sole-update-path 소유자이거나 conductor 선보장 gate 필요(fail-closed). runtime guard 차단은 structured failure + route record 참조 (v10, 진단 D3)'
   - 'SD-47: 공유 tracked 표면 병렬 계약 — spec 3-file transaction과 versions/v{N} 체인은 §5.8 lock 보유 중에만 원자 시퀀스로. 경합 = 대기 후 최신 재독·다음 버전(재시도 금지, 동일 v{N} 이중 snapshot 차단). spec-touch 선언 + §5.9 가드 선실행 (v10, 진단 D4)'
+  - 'SD-48: nested child-spawn eligibility는 (parent harness/transport/sandbox, child harness, launch authority)별 checked hard eligibility. root headless/native subagent 지원으로 추정 금지; unsupported/unknown이면 eligible conductor 또는 prebound ancestor broker/fallback을 route에 결합 (v11, I1)'
+  - 'SD-49: production registered dispatch의 모든 실제 launch attempt는 inherited canonical global registry에 spawn 전 기록. cycle-local은 audit mirror만; noncanonical child --jobs/global unwritable은 fail-closed, legacy local rows는 idempotent reconcile (v11, I2 원인=explicit local --jobs)'
+  - 'SD-50: standard+ stage fallback = same-harness headless → cross-harness headless(필요 시 depth-0 launch broker) → native subagent → inline enum+evidence. 동일 failure class 무변경 재시도와 cross-harness hop 생략 금지 (v11, I3)'
 decisions_open:
   - 'SD-OPEN-1: 마이크로-스테이지 inline 손익 임계(어느 스테이지 크기부터 분사 이득). Phase 1 pilot 1표본 확보 — Phase 2 계측 누적만, 확정은 표본 축적 후'
   - 'SD-OPEN-2: 스테이지 SessionEnd mem curator 기동 영향 — 관찰만(계측 로그 기록), 개입은 증거 후 (v2)'

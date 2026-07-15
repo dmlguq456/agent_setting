@@ -7,8 +7,8 @@
 
 ## 1. 사실 (실측, 2026-07-15)
 
-1. depth-1 Codex conductor는 code-plan stage를 **depth-2 headless로 5회 시도**했다(`stage-dispatch-v10-code-plan` ~ `-r5`). route_id/hash/node/write_scope/completion_gate 메타데이터는 전부 정확했다.
-2. **5회 전부 실패**: `codex-headless-network-operation-not-permitted` — conductor 자신이 `codex exec` workspace sandbox 안에서 돌 때, 중첩 `codex exec` 자식의 network가 `Operation not permitted`로 차단된다. 초기에는 runtime home read-only, isolated runtime으로 thread 기동까지는 성공했으나 headless response websocket/API에서 차단.
+1. depth-1 Codex conductor는 code-plan stage를 **depth-2 headless로 총 6회 시도**했다(최초 `stage-dispatch-v10-code-plan` + 재시도 `-r2`~`-r6`). route_id/hash/node/write_scope/completion_gate 메타데이터는 전부 정확했다.
+2. **6회 전부 실패**: `codex-headless-network-operation-not-permitted` — conductor 자신이 `codex exec` workspace sandbox 안에서 돌 때, 중첩 `codex exec` 자식의 network가 `Operation not permitted`로 차단된다. 초기에는 runtime home read-only, isolated runtime으로 thread 기동까지는 성공했으나 headless response websocket/API에서 차단.
 3. conductor는 **계약된 fallback을 정확히 밟았다**: SD-34 inline enum `runtime-unavailable` + evidence를 `_internal/metrics.md`에 기록, structured failure JSON(`failed-code-plan-{network,runtime}.json`)에 route 참조 보존, 이후 inline capability-owner로 계속. 무단 inline("예외 차용" 위반 패턴)이 아니다.
 
 ## 2. 이슈 3건 (해결 대상)
@@ -19,11 +19,13 @@
 - 결과: Codex conductor를 선택하면 standard+ stage-dispatch가 사실상 항상 inline fallback으로 하강한다. v9 구현 사이클(`capability-routing-topology-impl`, 동일 codex conductor)도 전역 jobs.log에 depth-2 row가 없어 같은 경로였을 것으로 추정 — **재발 2회째**.
 - 수정 방향 후보: SD-22 우선순위 2단계(hard eligibility)에 "nested child-spawn capability"를 probe 항목으로 추가 — standard+ conductor 후보 선정 시 자식 launch 가능 여부가 하네스 선택을 결정해야 함. main(depth-0)이 conductor 하네스를 고를 때 이 신호를 소비.
 
-### I2. 실패 시도 row가 전역 registry에 없음 — Fleet 불가시
+### I2. 실패 시도 row가 전역 registry에 없음 — Fleet 불가시 (원인 확정)
 
-- 5회 시도 row가 전역 `.dispatch/jobs.log`가 아니라 cycle `_internal/jobs.log`에 기록됐다. Fleet에는 스테이지 시도·실패가 전혀 보이지 않았다.
-- 원인 미확정: conductor가 의도적으로 `--jobs`를 로컬로 준 것인지, sandbox에서 전역 registry 경로가 쓰기 불가라 우회한 것인지, SD-14(b) 전제 ②의 worktree-local registry 갭 계열인지 — **conductor transcript(`.dispatch/logs/stage-dispatch-v10.codex.jsonl`)로 확인 필요**.
-- 수정 방향 후보: 시도(실패 포함) row의 전역 registry 기록 보장, 또는 로컬 기록 시 harvest 단계에서 전역으로 화해(reconcile)하는 계약.
+- 6회 시도 row가 전역 `.dispatch/jobs.log`가 아니라 cycle `_internal/jobs.log`에 기록됐다. Fleet에는 스테이지 시도·실패가 전혀 보이지 않았고, 전역 registry에는 depth-1 `stage-dispatch-v10` conductor row만 존재한다.
+- **판정 = 의도적 `--jobs` 로컬 지정.** transcript에서 최초 dry-run부터 실제 start, `dispatch-wait`, `harvest`, `-r2`~`-r6` 재시도까지 모두 `--jobs /home/Uihyeop/agent_setting/.agent_reports/plans/2026-07-15_stage-dispatch-v10/_internal/jobs.log`를 명시했다. 명시 `--jobs`가 registry 선택 우선순위 1위라 전역 기본값은 한 번도 선택되지 않았다.
+- **sandbox 쓰기 불가가 직접 원인이라는 증거는 없다.** 전역 registry 쓰기를 시도했다가 실패한 기록이나 permission error가 없고, 최초 dry-run 이전부터 로컬 경로를 선택했다. 따라서 “전역 쓰기 실패 후 우회”로 판정할 수 없다. 전역 경로가 중첩 sandbox에서 실제 writable인지 여부는 I1 probe의 별도 검증 항목이다.
+- **SD-14b와의 관계**: 과거 SD-14b의 `AGENT_HOME` fallback/parent-child registry 발견 불일치가 재발한 것은 아니다. 이번 cycle 경로는 worktree snapshot이 아니라 main canonical artifact root 아래이며 parent의 wait/harvest도 같은 명시 경로를 일관되게 사용했다. 다만 explicit override가 Fleet의 authoritative 전역 registry를 우회할 수 있다는 더 일반적인 **registry authority 갭**이 드러났다.
+- **확정 수정 방향**: 등록형 model dispatch의 모든 launch attempt(실패 포함)는 canonical global registry에 반드시 먼저 기록한다. cycle-local registry는 선택적 audit mirror일 수 있으나 단독 authoritative sink가 될 수 없다. noncanonical `--jobs`는 global dual-write/동일 attempt identity를 강제하거나 launch 전 fail-closed하고, legacy local row는 harvest에서 idempotent하게 global로 reconcile한다.
 
 ### I3. fallback 사슬에 cross-harness 자식 단계가 없음
 
@@ -40,6 +42,6 @@
 
 - `plans/2026-07-15_stage-dispatch-v10/_internal/metrics.md` — inline exception `runtime-unavailable` + evidence
 - `plans/2026-07-15_stage-dispatch-v10/_internal/failed-code-plan-{network,runtime}.json` — structured failure + route 참조
-- `plans/2026-07-15_stage-dispatch-v10/_internal/jobs.log` — depth-2 시도 5 row (route 메타 포함)
-- `.dispatch/logs/stage-dispatch-v10.codex.jsonl` — conductor transcript (I2 원인 확인용)
+- `plans/2026-07-15_stage-dispatch-v10/_internal/jobs.log` — depth-2 시도 6 row (최초 1 + 재시도 5, route 메타 포함)
+- `.dispatch/logs/stage-dispatch-v10.codex.jsonl` — 최초 dry-run부터 `-r6`까지 동일 cycle-local `--jobs`를 명시한 conductor transcript
 - `.dispatch/jobs.log` — 전역 registry에는 depth-1 conductor row만 존재
