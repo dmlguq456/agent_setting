@@ -1,6 +1,6 @@
 # agent-fleet-dashboard — Spec (PRD)
 
-> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기) · **v6 2026-07-14** (F-22 responsive titles + F-23 recursive-storm containment) · **v7 2026-07-15** (F-24 portable worker attribution + unique Codex rollout ownership) · **v8 2026-07-15** (F-25~F-28 — 상태 판정 단일 모델·interactive 세션 레지스트리 1급·제한적 세션 제어[Non-goal 반전]·분사 정책 연동 계약. 근거 = 사용자 결정 4건: "fleet 직접 세션 제어"·"반쪽짜리 해소, 전향적 확장"·"버그가 아니라 판정 기준 자체가 불안정"·"분사 정책과 연동되는 가장 중요한 UI") · **v9 2026-07-15** (minor 6건 흡수 + audit 🟡 2건 해소[어휘 매핑 표·§10 다이어그램] + F-27 마우스 1급 재설계 + F-30 종착 비전 등재 "dispatch·서브에이전트 처리 과정 시각화". 근거 = `_internal/audit/audit_2026-07-15T1734.md` + 사용자 방향 2건) · **v10 2026-07-15** (F-28 구현 확정 + F-30 처리-과정 뷰 설계 확정 — 전제였던 stage-dispatch topology registry·route record·broker가 v11 구현으로 main 착륙[`f5f3949f`], 실측 record 스키마 기반)
+> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기) · **v6 2026-07-14** (F-22 responsive titles + F-23 recursive-storm containment) · **v7 2026-07-15** (F-24 portable worker attribution + unique Codex rollout ownership) · **v8 2026-07-15** (F-25~F-28 — 상태 판정 단일 모델·interactive 세션 레지스트리 1급·제한적 세션 제어[Non-goal 반전]·분사 정책 연동 계약. 근거 = 사용자 결정 4건: "fleet 직접 세션 제어"·"반쪽짜리 해소, 전향적 확장"·"버그가 아니라 판정 기준 자체가 불안정"·"분사 정책과 연동되는 가장 중요한 UI") · **v9 2026-07-15** (minor 6건 흡수 + audit 🟡 2건 해소[어휘 매핑 표·§10 다이어그램] + F-27 마우스 1급 재설계 + F-30 종착 비전 등재 "dispatch·서브에이전트 처리 과정 시각화". 근거 = `_internal/audit/audit_2026-07-15T1734.md` + 사용자 방향 2건)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -293,22 +293,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **표시**: 세션 행 아래 `└⚡<agent-type> ⏳<경과>` 서브 행 — 분사 잡 `└▸🚀`와 글리프로 구분. 완료분은 기본 숨김, 활성만 표시 + 세션 행에 `⚡N` 카운트 배지, `a` 토글 시 최근 완료분 dim 노출. fleet pulse의 세션/잡 카운트에 혼입 금지(F-18 계열 — 별도 집계).
   - **불변식**: zero-injection(read-only) 유지, `--json` additive(신규 `subagents` 키), 소스 부재·파싱 실패 = 서브 행 생략(회귀 없음).
   - **구현**: v8 사이클(`fleet-v8-reliability`) 수확 완료 → **v9 구현 사이클 스코프에 편입**.
-- **F-30 (종착 비전 — dispatch·서브에이전트 처리 과정 시각화, 사용자 방향 2026-07-15)**: "이후에 내가 진짜 원하는 건 dispatch 구조 및 서브에이전트 구조의 **처리 과정을 시각화**해서 보는 것." 행 나열이 아니라 오케스트레이션의 흐름 — conductor→stage 전이, 부모→서브에이전트 fan-out, 파이프라인 진행 — 을 과정으로 보이게 한다. 이 비전이 F-28(capability별 실제 topology DAG의 canonical 소비)·F-29(서브에이전트 관측)의 우선순위 근거다.
-
-## 4.9 [v10 신설] 처리-과정 시각화 — F-28 구현 확정 + F-30 뷰 설계
-
-> 전제 충족(2026-07-15): stage-dispatch topology registry(`capabilities/topologies.json`) + immutable route record + dispatch broker가 main에 착륙(`f5f3949f`, PRD v11). 실측 record 스키마(schema_version 1): `capability/execution_topology/tracked_gate_evidence/nodes[]{id,kind,depth,depends_on,role,inputs,outputs,write_scope,resource_class,completion_gate,dispatch_fallback}/completion_gates/human_gates/route_hash/route_id` — jobs.log pipe에 `route_file=/route_id=/route_hash=`로 링크됨.
-
-- **F-28a (route record 소비 — 구현 확정)**: dispatch collector가 pipe의 `route_file`을 read-only 로드해 `route_hash` 검증 후 잡에 부착한다. **tolerant 필수**: record는 `/tmp` 등 휘발 위치에 있을 수 있다 — 파일 부재·파싱 실패·hash 불일치는 조용히 기존 pipe 휴리스틱 fallback(회귀 없음, F-28 v8 계약 그대로). record에는 절대 쓰지 않고, mtime 키 캐시로 tick당 재파싱을 막는다. `--json`에 `route` 키 additive(요약: capability/topology/nodes 진행/route_id).
-- **F-28b (route-aware breadcrumb)**: conductor·stage 행의 stage breadcrumb을 고정 `_PIPE_STAGES` 하드코딩 대신 **record의 `nodes[].id` + `depends_on` DAG**에서 생성 — 임의 capability 파이프(lab eval, research 등)가 code 4단 강제 없이 자기 모양대로 표시된다. 노드 점등 = 해당 depth-2 자식 행 실측 우선(SD-F2 원칙 불변), record 없는 잡은 기존 breadcrumb 유지.
-- **F-30 (처리-과정 뷰 — 전용 모드, 설계 확정)**:
-  - **진입**: 전용 키 `p`(process) 토글 — 기존 `w` 레이아웃 cycle과 직교(그룹 뷰 ↔ 과정 뷰 전환). footer 키 바에 표기.
-  - **단위**: 카드 1장 = 활성 route 1개 (프로젝트 그룹 대신 파이프라인 중심 재그룹).
-  - **카드 구성**: L1 = `[capability·mode·intensity] <route_id 단축> — <n/m nodes> ⏳<경과>`; L2 = DAG 가로 흐름 `plan ✓12m › exec ● 8m (opus·high) › test ○ › report ○` — 노드별 상태 글리프(✓ 완료 / ● 활성+경과+모델 / ○ 미기동 / ✕ 실패)와 completion gate 통과 여부. `depends_on`이 병렬인 노드는 세로 분기(들여쓴 병렬 행)로.
-  - **자식 연결**: 활성 노드 아래 그 노드를 실행 중인 세션 행(축약형)과 그 서브에이전트 `└⚡`(F-29 재사용)를 중첩 — "누가 지금 어느 단계를 어떤 모델로" 한눈에.
-  - **마우스**: 노드/카드 클릭 = 접기·펼치기, 세션 축약행 클릭 = 선택(F-27 문법 재사용). 완료 route는 기본 1행 접힘, 실패 노드 포함 route는 자동 펼침 + 적색 강조.
-  - **결손 원칙 불변**: record 없는 잡은 과정 뷰에서 pipe 휴리스틱 요약 카드로 degrade(빈칸 아님), `tracked_gate_evidence`는 `a` 토글 상세에서만 dim 노출.
-- **F-28c (detached run·governor lease — 조건부)**: run registry·governor lease 소스는 이번 착륙 범위에 없을 수 있다 — 구현 사이클이 소스 실재를 probe하고, 부재 시 정직하게 스킵(스코프 이월 기록). 실재 시 pulse 인접 1행(`⚙ governor n/cap`)과 resource-runner 행을 v8 계약대로 표시.
+- **F-30 (종착 비전 — dispatch·서브에이전트 처리 과정 시각화, 사용자 방향 2026-07-15)**: "이후에 내가 진짜 원하는 건 dispatch 구조 및 서브에이전트 구조의 **처리 과정을 시각화**해서 보는 것." 행 나열이 아니라 오케스트레이션의 흐름 — conductor→stage 전이, 부모→서브에이전트 fan-out, 파이프라인 진행 — 을 과정으로 보이게 한다. 이 비전이 F-28(capability별 실제 topology DAG의 canonical 소비)·F-29(서브에이전트 관측)의 우선순위 근거다. 완전한 처리-과정 뷰(전용 워크플로우 뷰 모드 등)의 설계는 stage-dispatch v9 topology registry/route record 착륙 후 F-28 구현과 함께 확정한다 — v9에서는 방향만 등재하고 조기 설계를 고정하지 않는다.
 
 ## 5. 능동 변경 — fleet-owned local state write
 
@@ -475,18 +460,12 @@ flowchart TD
 - **F-27 v9 (마우스 1급)**: 행 클릭 선택 → 재클릭 kill 요청 → `[kill]`/`[cancel]` 클릭 확정. 키보드 s/x 경로는 폴백 유지. 안전 계약(확인 게이트·start-time 재검증·working 이중 확인·action log·자동 제어 0) 불변. 근거 = 사용자 "그냥 마우스로 처리가 되는게 좋을것 같긴해"(2026-07-15).
 - **F-30 (종착 비전)**: dispatch·서브에이전트 **처리 과정의 시각화**가 fleet의 목표 상태 — F-28/F-29 우선순위 근거로 등재, 전용 뷰 설계는 topology registry 착륙 후.
 
-## 확정 결정 (v10 승격, 2026-07-15 — 처리-과정 시각화 설계 확정)
-
-- **F-28a~c lock**: route record read-only·tolerant 소비(`route_file`+`route_hash`, /tmp 휘발 대비 fallback 회귀 없음), route-aware breadcrumb(DAG 기반 — code 4단 하드코딩 탈피, 자식 실측 우선 불변), detached run·governor는 소스 probe 후 조건부.
-- **F-30 lock (과정 뷰)**: `p` 토글 전용 모드, 카드=route 1개, DAG 가로 흐름 + 병렬 세로 분기, 노드 상태 글리프(✓/●/○/✕), 활성 노드 아래 세션·서브에이전트 중첩, 마우스 접기/펼치기(F-27 문법), 완료 접힘·실패 자동 펼침, record 부재 degrade 카드. 실측 스키마(schema_version 1) 기준 — 스키마 변경 시 stage-dispatch spec과 동기 의무(F-19 선례).
-
 ## Next (구현 순서 — autopilot-code, 본 v2 입력 · v1 순서 1~7 은 완료)
 
 0. ✅ **F-21 cross-harness title parity** — `plans/2026-07-13_fleet-cross-harness-title/`: Codex state DB title + JSONL fallback, neutral sidecar, shared provider/scheduler, cross-harness tests, mirror sync. 구현·검증 완료(`92181b6`).
 0. **F-22/F-23 responsive + bounded session title** — terminal width를 renderer에 전달해 session name zone을 확장하고, provider 제목을 최대 12단어·96자로 늘린다. 이어 internal-session graph cut, concurrency/start budget, kill switch를 적용하고 60/120/168열 및 200-session no-provider storm 회귀와 mirror parity를 검증한다.
 0. ✅ **v8 구현 완료** (2026-07-15, `plans/2026-07-15_fleet-v8-reliability`, 테스트 416) — F-25 상태 분류기·F-26 레지스트리 1급·F-22 minor·F-27 키보드 kill.
-0. ✅ **v9 구현 완료** (2026-07-15, `plans/2026-07-15_fleet-v9-mouse-subagent`, 테스트 468) — F-27 마우스·F-29 서브에이전트·stage zone 폭 상한·스크롤 회귀 테스트.
-0. **v10 구현 순서 (autopilot-code, 별도 사이클)** — ① F-28a route record 소비(collector, tolerant+캐시+`--json route`) ② F-28b route-aware breadcrumb(DAG 생성, 자식 실측 점등) ③ F-30 과정 뷰(`p` 토글, route 카드, 병렬 분기, 마우스 접기, degrade 카드) ④ F-28c 소스 probe(run registry·governor — 부재 시 이월 기록). 검증: 실제 route record 픽스처(agent-note d1 실측 스키마) + 합성 다-capability DAG 픽스처, 60/120/168열 렌더 + 디자인 critic, 전체 tests 회귀(468+), mirror parity, `--json` additive 보증. 실세션 스폰·signal 금지(픽스처만).
+0. **v9 구현 순서 (autopilot-code, 별도 사이클)** — ① F-27 마우스 1급 재설계(행 클릭 선택→재클릭 kill→클릭 확정, 키보드 폴백 유지, 안전 acceptance 재검증) ② F-29 서브에이전트 관측(OpenCode DB `parent_id/agent` → Claude transcript sidechain → Codex threads probe 순, `└⚡` 서브 행 + `⚡N` 배지, `--json` additive `subagents`) ③ 잔여 후속 — dispatch stage zone 폭 상한(v8 사이클 D3), 스크롤 회귀 테스트 신설. F-28/F-30은 stage-dispatch v9 topology registry 착륙 대기. 각 단계는 `--once`/`--json` smoke + 전체 tests 회귀(416+) + mirror parity + 디자인 critic 렌더 비평 유지.
 
 `/autopilot-code --mode dev --intensity standard "fleet UI 개선 — PRD v2 §4.5·§4.6"` (worktree 브랜치, depth-1 conductor 분사 + 스테이지 depth-2 분사 — 이 파이프 자체가 SD-F1~F3 의 라이브 검증 fixture 가 된다). 권장 순서:
 1. **SD-F4 pipe tolerant 파싱** (collectors/dispatch.py) — 공백/콤마 혼용 + 미지 key 무시. 기존 tests 에 wild 실측 행(2026-07-09 space-separated) fixture 추가.

@@ -2,7 +2,7 @@
 
 - **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec **v9 done** (minor 6건 흡수·audit 🟡 2건 해소·F-27 마우스 재설계·F-30 비전) — v9 구현 사이클 착수: 마우스 kill + F-29 + 잔여 후속. F-28/F-30 뷰는 stage-dispatch v9 대기
+- **Status**: spec **v10 done** (F-28 구현 확정 + F-30 과정 뷰 설계 — topology/route 착륙으로 전제 충족) — v9 구현 완료(테스트 468) · v10 구현 사이클 착수
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## Process Log
@@ -59,6 +59,7 @@
 - v5 (2026-07-13): F-21 Codex native state DB title + JSONL fallback, cross-harness neutral title sidecar/provider. Claude-only refresher/`slug` fallback 계약 폐기. snapshot = `_internal/versions/v4/prd.md`.
 - v6 (2026-07-14): F-22 terminal-width-responsive session name zone + longer responsive sidecar title contract; F-23 recursive-storm containment. snapshot = `_internal/versions/v5/prd.md`.
 - v7 (2026-07-15): F-24 portable worker attribution(`AGENT_SESSION_ROLE=worker`) + Codex rollout fd 소유권 단일화. snapshot = `_internal/versions/v6/prd.md`. (본 항목은 v8 update 시점 소급 기록 — v7 사이클이 summary 동기를 누락.)
+- v10 (2026-07-15): F-28a~c 구현 확정(route record tolerant 소비·route-aware breadcrumb·조건부 run/governor) + F-30 처리-과정 뷰 설계 확정(`p` 토글·route 카드·DAG 흐름·마우스 접기). 전제 = stage-dispatch v11 구현 착륙(`f5f3949f`), 실측 record 스키마 기반. snapshot = `_internal/versions/v9/prd.md`.
 - v9 (2026-07-15): minor 6건 흡수(취소선 정리·minor-log 리셋) + audit 🟡 2건 해소(F-25 규범 매핑 표 삽입·§10 control.py 노드) + F-27 마우스 1급 재설계(행 클릭·클릭 확정, 키보드 폴백) + F-30 종착 비전 등재(dispatch·서브에이전트 처리 과정 시각화). snapshot = `_internal/versions/v8/prd.md`. audit = `_internal/audit/audit_2026-07-15T1734.md`.
 - v8 (2026-07-15): F-25 상태 판정 단일 모델(소스 우선순위·hysteresis·state_evidence) + F-26 interactive 세션 레지스트리 1급(unused 배지·provenance) + F-27 제한적 세션 제어(kill+정리, Non-goal 부분 반전, 사용자 확인) + F-28 분사 정책 연동 계약 선고정(route record/topology 소비, 구현 후행). §0.5 경계 개정(자동 제어 0·사용자 개시 제어만). snapshot = `_internal/versions/v7/prd.md`.
 
@@ -121,3 +122,12 @@
 
 - 사용자 방향 2건 반영: "그냥 마우스로 처리"(kill 조작) / "dispatch·서브에이전트 처리 과정 시각화가 진짜 목표"(F-30).
 - 구현 사이클(v9): ① F-27 마우스 ② F-29 서브에이전트 관측 ③ stage zone 폭 상한·스크롤 회귀 테스트.
+
+## v10 update (2026-07-15) — 처리-과정 시각화 설계 확정
+
+| Step | Action | Result |
+|---|---|---|
+| 전제 확인 | topology registry·capability-route.py·broker 실재 + 실 route record(agent-note d1) 스키마 실측 | schema_version 1, nodes DAG·gate 증거·route_hash 링크 확인 |
+| update | v9 snapshot → `_internal/versions/v9/prd.md`, prd.md v10 | §4.9 신설(F-28a~c·F-30 설계), 확정 결정 v10, Next v10 순서 |
+
+- v9 구현 사이클 완료 반영(마우스 kill·서브에이전트 관측·폭 상한, 468 tests). 글리프 이탈 1건을 독립 검증이 되돌린 사례 기록은 plans/2026-07-15_fleet-v9-mouse-subagent/final_report.md.
