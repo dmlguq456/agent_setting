@@ -14,7 +14,7 @@ phases:
   spec: done              # PRD v2 + runtime amendment — live 트리 정정 + invocation 계약 반영
   scaffolding: n/a        # 기존 skills/ 리팩터 — 신규 scaffold 없음
   design: n/a             # instruction 파일 리팩터 — 시각 UI 없음
-  dev: in_progress        # v3 reopened: portable-first parity + three-adapter footprint/conformance implementation
+  dev: done               # v3 GREEN: portable-first parity + three-adapter active profile/footprint/conformance verified
 spec_version: v3
 back_jump:
   - from: dev
