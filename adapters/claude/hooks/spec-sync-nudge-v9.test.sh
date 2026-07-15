@@ -1,0 +1,1 @@
+../../../hooks/spec-sync-nudge-v9.test.sh

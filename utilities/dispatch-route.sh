@@ -30,6 +30,10 @@ usage_script="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/usage-check.sh"
 if [ -n "$jobs" ]; then usage=$($usage_script --harness all --jobs "$jobs"); else usage=$($usage_script --harness all); fi
 state() { printf '%s\n' "$usage" | awk -v h="$1" '$1==h {print $2}'; }
 bias=$(printf '%s\n' "$usage" | awk '$1=="bias" {print $2; exit}')
+# usage-check reports auto when neither known family has a capacity preference.
+# Treat that neutral state as the stable compatibility tie-break, not an
+# adapter name.
+[ "$bias" != auto ] || bias=claude
 family_of() { [ "$1" = codex ] && printf gpt || printf claude; }
 eligible() { s=$(state "$1"); [ "$s" != limited ] && [ "${s#limited(}" = "$s" ]; }
 

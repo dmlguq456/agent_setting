@@ -50,6 +50,10 @@ Pipeline intensity follows `core/CONVENTIONS.md §1`: `direct` has no plan stage
 
 ## Guard Requirements
 
+When a draft consumes lab media, it consumes the shared
+`report_manifest.json` and preserves its Markdown/HTML link and summary-stat
+bindings. It does not create a second media manifest.
+
 Adapters must preserve the portable invariants relevant to this capability:
 
 - resolve artifact root through `utilities/artifact-root.sh` or equivalent logic;

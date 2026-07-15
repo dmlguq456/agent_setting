@@ -45,6 +45,7 @@ except ImportError:
     sys.exit(2)
 
 import harness_manifest
+import capability_topology
 
 # realpath (not abspath): this script is executed via the collapsed adapter symlink
 # (adapters/claude/tools/build-manifest.py -> ../../../tools/build-manifest.py). abspath
@@ -502,6 +503,11 @@ def _replace_section(text, heading, body):
 
 def _capability_contract(identifier, spec):
     modes = ", ".join(spec["modes"]) or "none"
+    topology = ""
+    if spec["group"] == "entry":
+        summary = capability_topology.capability_summary(capability_topology.load_registry(), identifier)
+        topology = "\n| Execution topology | `%s`; registry `%s` |" % (
+            ", ".join(summary["topology_classes"]), "capabilities/topologies.json")
     return """## Contract
 <!-- GENERATED: harness-manifest.json -->
 
@@ -511,12 +517,13 @@ def _capability_contract(identifier, spec):
 | Group | `%s` |
 | Supported modes | `%s` |
 | Portable meaning | %s |
-| Argument shape | `%s` |""" % (
+| Argument shape | `%s` |%s""" % (
         identifier,
         _md_cell(spec["group"]),
         _md_cell(modes),
         _md_cell(spec["summary"]),
         _md_cell(spec["argument_shape"]),
+        topology,
     )
 
 
@@ -607,9 +614,17 @@ def generated_document_outputs(canonical):
 def build_manifest(canonical):
     skills = build_skills(canonical)
     skill_slugs = {r["slug"] for r in skills}
+    topology_registry = capability_topology.load_registry()
+    topology_validation = capability_topology.validate_registry(topology_registry, canonical)
     return {
         "generated_from": GENERATED_FROM,
         "canonical_manifest": "harness-manifest.json",
+        "topology_registry": {
+            "source": "capabilities/topologies.json",
+            "digest": topology_validation["registry_digest"],
+            "capabilities": topology_validation["capabilities"],
+            "recipes": topology_validation["recipes"],
+        },
         "manifest_version": canonical["product"]["manifest_version"],
         "skills": skills,
         "agents": build_agents(canonical),

@@ -246,6 +246,10 @@ case "$cmd" in
     "$ROOT/hooks/spec-read-marker.sh" --file "$file" --session "$sid"
     ;;
   route)
+    if [ "${2:-}" = "--capability" ]; then
+      shift
+      exec python3 "$ROOT/utilities/capability-route.py" compile "$@"
+    fi
     [ "$#" -ge 2 ] || { echo "codex preflight: route requires a capability name" >&2; exit 64; }
     name=$2
     cwd=${3:-$PWD}
@@ -255,6 +259,10 @@ case "$cmd" in
     "$0" mode "$cwd" "$sid"
     "$0" capability-info "$name"
     "$0" capability "$name" "$cwd" "$sid"
+    ;;
+  dispatch-node)
+    shift
+    exec python3 "$ROOT/utilities/dispatch-node.py" --adapter codex "$@"
     ;;
   capability|skill)
     [ "$#" -ge 2 ] || { echo "codex preflight: $cmd requires a capability name" >&2; exit 64; }

@@ -14,6 +14,8 @@ LOOP_ADAPTER="${LOOP_ADAPTER:-claude}"
 run_claude_retry() {
   local to="$1" pf="$2"; shift 2
   local max=3 attempt rc out
+  local agent_home="${AGENT_HOME:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
+  local governor="$agent_home/utilities/model-worker-governor.py"
   local backoff=(0 30 120)   # Delay before each attempt; first attempt starts immediately.
   for ((attempt = 1; attempt <= max; attempt++)); do
     if [ "${backoff[attempt-1]}" -gt 0 ]; then
@@ -22,12 +24,12 @@ run_claude_retry() {
     fi
     case "$LOOP_ADAPTER" in
       codex)
-        out="$(AGENT_SESSION_ROLE=worker timeout "$to" "${CODEX_BIN:-codex}" exec --sandbox workspace-write --skip-git-repo-check - < "$pf" 2>&1)" ;;
+        out="$(AGENT_SESSION_ROLE=worker python3 "$governor" run --class loop -- timeout "$to" "${CODEX_BIN:-codex}" exec --sandbox workspace-write --skip-git-repo-check - < "$pf" 2>&1)" ;;
       opencode)
         _ocbin="${OPENCODE_BIN:-opencode}"; command -v "$_ocbin" >/dev/null 2>&1 || _ocbin="$HOME/.opencode/bin/opencode"
-        out="$(AGENT_SESSION_ROLE=worker timeout "$to" "$_ocbin" run "$(cat "$pf")" 2>&1)" ;;
+        out="$(AGENT_SESSION_ROLE=worker python3 "$governor" run --class loop -- timeout "$to" "$_ocbin" run "$(cat "$pf")" 2>&1)" ;;
       *)
-        out="$(AGENT_SESSION_ROLE=worker timeout "$to" "$HOME/.local/bin/claude" -p "$(cat "$pf")" "$@" 2>&1)" ;;
+        out="$(AGENT_SESSION_ROLE=worker python3 "$governor" run --class loop -- timeout "$to" "$HOME/.local/bin/claude" -p "$(cat "$pf")" "$@" 2>&1)" ;;
     esac
     rc=$?
     printf '%s\n' "$out"

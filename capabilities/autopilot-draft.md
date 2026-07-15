@@ -12,6 +12,7 @@ This is the portable capability contract for `autopilot-draft`. It defines runti
 | Supported modes | `paper, presentation, doc` |
 | Portable meaning | Document-drafting pipeline that produces an applicable artifact through strategy, drafting, verification, and editing. |
 | Argument shape | `<task description> [--mode paper\|presentation\|doc] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--user-refine] [--no-clarify] [--from analyze\|strategy\|strategy-refine\|draft\|draft-refine\|finalize]` |
+| Execution topology | `staged`; registry `capabilities/topologies.json` |
 
 ## Invocation Semantics
 
@@ -50,6 +51,10 @@ Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concre
 Pipeline intensity follows `core/CONVENTIONS.md §1`: `direct` has no plan stage or durable plan artifact; `quick` is a depth-1 one-shot worker with its inline micro-plan plus plan-check-lite; `standard+` uses the capability's durable work-cycle plan when applicable. `plan-check` is required for every non-`direct` graph, but independent QA is not repeated after every stage by default. Verification rigor for plan-check, selected independent reviews, and final verify is derived from intensity; it does not name a model or introduce a separate stage graph.
 
 ## Guard Requirements
+
+When a draft consumes lab media, it consumes the shared
+`report_manifest.json` and preserves its Markdown/HTML link and summary-stat
+bindings. It does not create a second media manifest.
 
 Adapters must preserve the portable invariants relevant to this capability:
 

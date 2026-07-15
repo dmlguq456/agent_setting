@@ -58,12 +58,14 @@ echo "$out" | grep -q 'early_death=session-limit' \
 
 # --- Case: clean fast exit does NOT close row ---
 out=$(launch "#!/bin/sh
+echo \"governor=\$AGENT_MODEL_GOVERNOR_ROOT\"
 echo ok done
 exit 0" clean1 4)
 echo "$out" | grep -q 'early_death=-' \
   && awk -F'\t' '$5=="clean1"{print $2}' "$AH/.dispatch/jobs.log" | grep -qx open \
+  && grep -q '/.agent_reports/.runtime/model-worker-governor' "$AH/.dispatch/logs/clean1.claude.log" \
   && ok "clean fast exit → row stays open (normal harvest owns it)" \
-  || bad "clean exit wrongly closed. out=[$out]"
+  || bad "clean exit or inherited governor root invalid. out=[$out]"
 
 echo "— dispatch-headless SD-15 conformance: $([ $fails -eq 0 ] && echo PASS || echo "FAIL ($fails)")"
 exit $fails

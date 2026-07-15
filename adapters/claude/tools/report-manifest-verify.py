@@ -1,0 +1,1 @@
+../../../tools/report-manifest-verify.py

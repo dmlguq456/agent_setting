@@ -60,6 +60,14 @@ Adapters must preserve the portable invariants relevant to this capability:
 
 ## Routing Boundary
 
+Full-run entry is gated by a current hash-bound smoke attestation and detached
+resource-run identity. Evaluation reports use one `report_manifest.json`
+validated by `tools/report-manifest-verify.py` for Markdown and HTML outputs,
+48 kHz/full-band media, summary statistics, hashes, 1:1
+audio/waveform/spectrogram/playback sets, and visual evidence. The legacy
+figure-semantic verifier remains a compatibility checker, not a second report
+manifest.
+
 `autopilot-lab` owns new empirical work: training setup, checkpoint
 reevaluation, metric/ablation computation, and experiment figure/media
 generation. Under `WORKFLOW §0.2`, a request containing such work keeps

@@ -34,6 +34,7 @@ bad() { FAIL=$((FAIL+1)); printf '  BAD %s\n' "$1"; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 export AGENT_HOME="$TMP/agent_home"
+export AGENT_MODEL_GOVERNOR_ROOT="$TMP/model-worker-governor"
 unset AGENT_DISPATCH_PARENT_SESSION_ID AGENT_DISPATCH_OWNER_HARNESS CODEX_THREAD_ID
 # D-42 hermeticity: a live main or worker session must not leak session identity
 # or worker markers into fixtures — every case sets its own markers inline.
@@ -187,14 +188,26 @@ echo "== spec sync nudge CLI =="
 SSNPROJ="$TMP/ssnproj"
 mkdir -p "$SSNPROJ/.agent_reports/spec"
 printf 'project_name: demo\nmode: [research]\n' > "$SSNPROJ/.agent_reports/spec/pipeline_state.yaml"
-printf '# Demo Spec\n- 학습 epoch: **30** (기본값)\n- optimizer: Adam\n' > "$SSNPROJ/.agent_reports/spec/prd.md"
-printf 'EPOCHS = 30\n' > "$SSNPROJ/train.py"
+printf '# Demo Spec\n- requirement: SD-31\n- schema_version=1\n- sample rate: 48 kHz\n- optimizer: Adam\n' > "$SSNPROJ/.agent_reports/spec/prd.md"
+printf 'schema_version=1\n' > "$SSNPROJ/train.py"
 # ① removed value still described in spec → nudge surfaces the stale spec line
-if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/train.py" --old 'EPOCHS = 30' --new 'EPOCHS = 50' --cwd "$SSNPROJ" >/tmp/ssn.out 2>/tmp/ssn.err \
-  && grep -q 'spec/prd.md' /tmp/ssn.out && grep -q '30' /tmp/ssn.out; then
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/train.py" --old 'schema_version=1' --new 'schema_version=2' --cwd "$SSNPROJ" >/tmp/ssn.out 2>/tmp/ssn.err \
+  && grep -q 'spec/prd.md' /tmp/ssn.out && grep -q 'schema_version=1' /tmp/ssn.out; then
   ok "spec sync nudge surfaces stale spec line for a removed value"
 else
   bad "spec sync nudge should surface the stale spec line"
+fi
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/train.py" --old 'shape = «3» and rank = «1»' --new 'shape = «4» and rank = «2»' --cwd "$SSNPROJ" >/tmp/ssn7.out 2>/tmp/ssn7.err \
+  && [ ! -s /tmp/ssn7.out ]; then
+  ok "spec sync nudge ignores standalone numeric tokens"
+else
+  bad "spec sync nudge should ignore standalone numeric tokens"
+fi
+if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/train.py" --old 'SD-31 uses 48 kHz' --new 'SD-32 uses 44 kHz' --cwd "$SSNPROJ" >/tmp/ssn8.out 2>/tmp/ssn8.err \
+  && grep -q 'SD-31' /tmp/ssn8.out && grep -q '48 kHz' /tmp/ssn8.out; then
+  ok "spec sync nudge retains requirement and unit identifiers"
+else
+  bad "spec sync nudge should retain requirement and unit identifiers"
 fi
 # ② removed token absent from spec → silent no-op (empty stdout)
 if AGENT_HOME="$ROOT" bash "$SSN" --file "$SSNPROJ/train.py" --old 'zqx_unique_token' --new 'other' --cwd "$SSNPROJ" >/tmp/ssn2.out 2>/tmp/ssn2.err \
@@ -2440,7 +2453,9 @@ fi
 if CODEX_SESSIONS="$TMP/codex_sessions" MEM_STORE="$TMP/store_session_end" \
   PATH="$TMP/stubbin:$PATH" CODEX_STUB_ARGV="$TMP/codex_argv_se" \
   "$CODEX" session-end "$TMP/flowproj" codexsid >/tmp/codex_se.out 2>/tmp/codex_se.err \
-  && MEM_STORE="$TMP/store_session_end" python3 "$ROOT/tools/memory/mem.py" stats 2>/dev/null | grep -q 'total: 1'; then
+  && MEM_STORE="$TMP/store_session_end" python3 "$ROOT/tools/memory/mem.py" \
+    recall 'stub codex distill memory record' --all --full --no-touch 2>/dev/null \
+    | grep -q 'stub codex distill memory record'; then
   ok "codex session-end auto-distills and applies by default"
 else
   bad "codex session-end should auto-distill and apply by default"

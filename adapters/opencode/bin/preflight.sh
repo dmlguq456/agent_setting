@@ -728,6 +728,18 @@ EOF
     shift
     "$ROOT/adapters/opencode/bin/role-map.sh" "$@"
     ;;
+  route)
+    if [ "${2:-}" != "--capability" ]; then
+      echo "opencode preflight: route requires --capability option form" >&2
+      exit 64
+    fi
+    shift
+    exec python3 "$ROOT/utilities/capability-route.py" compile "$@"
+    ;;
+  dispatch-node)
+    shift
+    exec python3 "$ROOT/utilities/dispatch-node.py" --adapter opencode "$@"
+    ;;
   capability-info)
     [ "$#" -eq 2 ] || { echo "opencode preflight: capability-info requires one capability" >&2; exit 64; }
     "$ROOT/adapters/opencode/bin/capability-map.sh" "$2"

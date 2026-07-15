@@ -14,6 +14,7 @@ small GPT model). No command is ever evaluated through a shell.
 """
 import argparse
 import contextlib
+import importlib.util
 import json
 import os
 import re
@@ -22,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 try:
     import fcntl
@@ -380,6 +382,8 @@ def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT, capacity_held=False):
         if not _acquire_start_budget():
             _remove_empty_dir(owned_slot)
             return ""
+    governor_token = None
+    governor_module = None
     try:
         # Re-check after capacity acquisition so an operator kill switch wins
         # immediately before the only token-consuming boundary.
@@ -388,6 +392,14 @@ def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT, capacity_held=False):
         env = dict(os.environ)
         env["AGENT_SESSION_ROLE"] = "worker"
         env["FLEET_TITLE_REFRESH"] = "1"
+        agent_home = Path(env.get("AGENT_HOME") or Path(__file__).resolve().parents[2])
+        governor = agent_home / "utilities" / "model-worker-governor.py"
+        spec = importlib.util.spec_from_file_location("model_worker_governor", governor)
+        if spec is None or spec.loader is None:
+            return ""
+        governor_module = importlib.util.module_from_spec(spec); spec.loader.exec_module(governor_module)
+        governor_root = governor_module.default_root()
+        governor_token = governor_module.acquire(governor_root, "title")
         result = subprocess.run(
             argv,
             capture_output=True,
@@ -401,6 +413,8 @@ def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT, capacity_held=False):
     except Exception:
         return ""
     finally:
+        if governor_token and governor_module:
+            governor_module.release(governor_root, governor_token)
         _remove_empty_dir(owned_slot)
 
 

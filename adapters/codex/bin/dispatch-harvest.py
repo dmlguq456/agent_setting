@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from contextlib import contextmanager
 import fcntl
 import os
@@ -22,6 +23,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--worktree")
     p.add_argument("--status", choices=("open", "done", "all"), default="open")
     p.add_argument("--mark-done", action="store_true")
+    p.add_argument("--completion", help="hash-bound completion marker for routed rows")
     p.add_argument("--keep-home", action="store_true")
     return p
 
@@ -111,6 +113,15 @@ def main(argv: list[str]) -> int:
                 matched += 1
                 matched_jobs.append(fields.copy())
                 if args.mark_done and fields[1] == "open":
+                    metadata = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
+                    if metadata.get("route_id"):
+                        if not args.completion or not Path(args.completion).is_file():
+                            print("check=failed\nreason=route-completion-required")
+                            return 65
+                        completion = json.loads(Path(args.completion).read_text(encoding="utf-8"))
+                        if (completion.get("route_id") != metadata.get("route_id") or completion.get("route_hash") != metadata.get("route_hash") or completion.get("node_id") != metadata.get("route_node")):
+                            print("check=failed\nreason=stale-route-completion")
+                            return 65
                     if not args.keep_home:
                         slug = fields[4]
                         profile_name = None

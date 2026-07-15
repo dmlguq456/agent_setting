@@ -105,7 +105,7 @@ At the same point, create `experiments/{date}_{slug}/run.json` with `status: "ru
 | 2026-05-26 | lr_sweep | TF_Restormer base, lr 1e-3→3e-4 | ⏳ 대기 | — |
 ```
 
-**S3-3. Optional smoke run on user request.** For a request such as `smoke 1 epoch 돌려봐`, invoke `Agent(subagent_type="테스트팀")` in smoke mode for one epoch or the minimum batch. Validate data loading, forward/backward, loss, and optimizer step, not convergence. Return pass/fail, first-epoch loss, and duration.
+**S3-3. Mandatory hash-bound smoke before full-run entry.** Run one epoch or the minimum batch through `tools/smoke-attestation.py attest`, binding the exact config, source, input/checkpoint signature, working directory, and command. Validate data loading, forward/backward, loss, and optimizer step, not convergence. A detached full run must verify that attestation immediately before launch and reject missing, failed, or stale hashes. If a one-batch probe is impossible, the capability registry must name the bounded substitute; there is no free-form skip.
 
 **S3-4. Escalate convergence failures on user request.** For prompts such as `loss 가 안 떨어져`, `NaN`, or `수렴 이상`, invoke `Agent(subagent_type="품질관리팀", mode="ml-debug")`. Provide the experiment directory, symptom, available logs, and `experiment_spec.md`. Check data shape/range/NaN/balance, model initialization/freezing/gradient flow, loss scale/sign/stability, optimizer learning rate/weight decay/warmup, and batch/device/mixed precision. Return the one or two most likely causes plus commands that distinguish them.
 
