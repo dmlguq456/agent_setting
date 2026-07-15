@@ -45,3 +45,23 @@
 - `plans/2026-07-15_stage-dispatch-v10/_internal/jobs.log` — depth-2 시도 6 row (최초 1 + 재시도 5, route 메타 포함)
 - `.dispatch/logs/stage-dispatch-v10.codex.jsonl` — 최초 dry-run부터 `-r6`까지 동일 cycle-local `--jobs`를 명시한 conductor transcript
 - `.dispatch/jobs.log` — 전역 registry에는 depth-1 conductor row만 존재
+
+## 5. v10 수확 추가 관찰 (2026-07-15, main orchestrator — I1~I3와 별건)
+
+v10 사이클 수확(merge `f5f3949f`) 과정에서 실측된 추가 갭 3건. O1은 within-spec 구현 완결(신규 SD 불요), O2·O3은 spec 판단 사안.
+
+### O1. liveness false-DEAD — codex row의 pid 부재 + Claude-전용 transcript fallback (within-spec)
+
+- 실측: 정상 작동 중인 codex conductor를 `dispatch-liveness.sh`가 DEAD로 판정 — "no session transcript (`~/.claude/projects/...`)". Fleet에도 죽음으로 표시.
+- 원인 2중: ① codex `dispatch-headless.py`가 jobs row에 `pid=`를 기록하지 않아 1차 신호(wrapper-recorded PID, `dispatch-liveness.sh:58`) 불가 ② transcript-mtime fallback(`:75-90`)이 Claude runtime 경로(`$RUNTIME_ROOT/projects/<enc_cwd>`)만 조회 — `harness=codex` row의 실제 증거 `.dispatch/logs/<slug>.codex.jsonl`(당시 1.4MB 활성 성장)을 안 봄.
+- 수정 방향: (a) codex wrapper가 launch 시 `pid=`(+start time) 기록 (b) liveness fallback을 harness-aware로 — codex row는 wrapper log jsonl mtime을 transcript 등가물로. **SD-15 기존 계약("wrapper 로그를 liveness 판정 근거에 추가")의 codex 구현 완결 — 신규 SD 불요.** 대상 파일이 v11 구현 표면(adapters wrapper)과 겹치므로 v11 사이클에 흡수 권장.
+
+### O2. linked worktree에서 conductor가 커밋 불가 (spec 판단 사안)
+
+- 실측: conductor `git add`가 `/home/Uihyeop/agent_setting/.git/worktrees/<slug>/index.lock` read-only로 실패 — linked worktree의 git metadata가 main checkout `.git/` 아래 있어 sandbox(worktree cwd + artifact root만 writable) 밖. 30파일 변경이 unstaged로 남았고 main이 준비된 메시지(`_internal/commit-message.txt`)로 대리 커밋했다.
+- 방향 후보: (a) "worker는 커밋하지 않는다 — prepared commit message + main 수확 커밋"을 계약으로 승격(이번 사례의 사실상 동작; sandbox 개방 불요) (b) wrapper가 `.git/worktrees/<slug>/`만 최소 개방(위험 검토 필요). (a) 권장.
+
+### O3. 자기수정 사이클의 route-completion stale-digest (spec 판단 사안)
+
+- 실측: merge 전 컴파일된 route record(rt-fda0402b)가 merge 후 `capability-route.py complete`에서 "stale registry digest"로 거부 — 사이클 자신이 `topologies.json`을 수정해 digest가 바뀜. v10 신규 route-completion 가드(`dispatch-harvest.py` route_id row는 completion marker 필수)는 정상 발동. main이 SD-11b(c) 취지(자기수정 = orchestrator 명시 경로)로 marker를 수동 발행해 마감(`_internal/route-completion.json`).
+- 방향 후보: `complete`에 orchestrator explicit override(사유·증거 필수) 또는 compile-시점 digest pinning + drift 기록. dispatch-infra 자기수정 사이클에서 반드시 재발하는 전환 케이스 — 계약 자리는 SD-34/SD-49 인접, v12 후보.
