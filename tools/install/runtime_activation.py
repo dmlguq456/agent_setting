@@ -681,23 +681,54 @@ def _native_harness_target(runtime: str, candidate: Path) -> bool:
             "codex": (
                 ("adapters", "codex", "skills"),
                 ("adapters", "codex", "agents"),
+                ("adapters", "codex", "modes"),
                 ("codex_setting", "codex-skills"),
                 ("codex_setting", "codex-agents"),
+                ("codex_setting", "codex-modes"),
             ),
             "claude": (
                 ("adapters", "claude", "skills"),
                 ("adapters", "claude", "agents"),
+                ("adapters", "claude", "agent-modes"),
                 ("claude_setting", "skills"),
                 ("claude_setting", "agents"),
             ),
             "opencode": (
                 ("adapters", "opencode", "skills"),
+                ("adapters", "opencode", "agents"),
+                ("adapters", "opencode", "commands"),
                 ("adapters", "opencode", "plugins"),
             ),
         }[runtime]
         if any(relative[: len(prefix)] == prefix for prefix in allowed):
             return True
     return False
+
+
+def _discovered_harness_links(runtime: str, scope: str = "global") -> set[Path]:
+    """Find bounded native links left by this or an older harness installer."""
+    home = paths.runtime_home(runtime, scope)
+    patterns = {
+        "codex": ("skills/*", "agents/*.toml", "agent-modes/*/*.md"),
+        "claude": ("skills/*", "agents/*.md", "agent-modes/*/*.md"),
+        "opencode": ("skills/*", "agents/*.md", "commands/*.md"),
+    }[runtime]
+    found: set[Path] = set()
+    for pattern in patterns:
+        for candidate in home.glob(pattern):
+            if candidate.is_symlink() and _native_harness_target(runtime, candidate):
+                found.add(candidate)
+    return found
+
+
+def _unexpected_harness_links(
+    runtime: str, desired: List[dict], scope: str = "global"
+) -> List[Path]:
+    desired_paths = {Path(item["dest"]) for item in desired}
+    return sorted(
+        _discovered_harness_links(runtime, scope) - desired_paths,
+        key=lambda item: str(item),
+    )
 
 
 def _opencode_config_paths(scope: str = "global") -> List[Path]:
@@ -1414,8 +1445,14 @@ def _trusted_owned(
     runtime: str, state: Optional[dict], desired: List[dict], scope: str
 ) -> set:
     """Treat activation.json as untrusted input before using deletion paths."""
+    # Profile activation adopts only links that resolve to a canonical harness
+    # manifest. This lets a refresh remove stale native links left by the
+    # legacy all-skills installer without touching user-owned entries.
+    trusted = {
+        str(path) for path in _discovered_harness_links(runtime, scope)
+    }
     if not state:
-        return set()
+        return trusted
     allowed = {item["dest"] for item in desired}
     roots = []
     for key in ("source_root", "active_root"):
@@ -1433,7 +1470,6 @@ def _trusted_owned(
         "codex": home / "plugins/cache/agent-harness/agent-harness-codex",
         "claude": home / "plugins/cache/agent-harness/agent-harness-claude",
     }
-    trusted = set()
     for item in state.get("owned_paths", []):
         value = item.get("dest")
         if not value:
@@ -1847,6 +1883,7 @@ def status(runtime: str, scope: str = "global") -> dict:
         )
         digest = _projection_digest(entries)
         missing, stale = _entries_healthy(entries)
+        unexpected = _unexpected_harness_links(runtime, entries, scope)
         desired_destinations = {item["dest"] for item in entries}
         for item in state.get("owned_paths", []):
             dest = Path(item.get("dest", ""))
@@ -1866,7 +1903,7 @@ def status(runtime: str, scope: str = "global") -> dict:
             "roles": state.get("profile_roles", []),
             "modes": state.get("profile_modes", []),
         }
-        entries, digest, missing, stale = [], None, True, False
+        entries, digest, missing, stale, unexpected = [], None, True, False, []
 
     if runtime == "claude" and not _claude_hooks_healthy(active_root, scope):
         missing = True
@@ -1879,6 +1916,10 @@ def status(runtime: str, scope: str = "global") -> dict:
         )
 
     duplicates = duplicate_sources(runtime, scope)
+    duplicates.extend(
+        f"profile-extra:{path.relative_to(paths.runtime_home(runtime, scope))}"
+        for path in unexpected
+    )
     if duplicates:
         freshness = "duplicate"
         next_action = (

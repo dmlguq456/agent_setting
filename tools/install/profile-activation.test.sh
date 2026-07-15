@@ -100,6 +100,19 @@ assert "--profile full" in row["next_action"], row
 assert f"--source {sys.argv[1]}" in row["next_action"], row
 PY
 
+# A profile reports and removes an untracked native link left by an older
+# all-capabilities installer, while preserving unrelated user entries.
+ln -s "$ROOT/adapters/codex/agents/external-adversary.toml" \
+  "$HOME/.codex/agents/legacy-external.toml"
+printf '%s\n' 'user-owned' > "$HOME/.codex/agents/user-owned.toml"
+harness runtime status --runtime codex --json > "$TMP/profile-extra.json" || true
+python3 - "$TMP/profile-extra.json" <<'PY'
+import json, sys
+row=json.load(open(sys.argv[1]))
+assert row["freshness"] == "duplicate", row
+assert "profile-extra:agents/legacy-external.toml" in row["duplicate_sources"], row
+PY
+
 # A source with the canonical manifest but no explicit flag selects builder.
 harness runtime activate --runtime codex --mode linked --source "$ROOT" --json > "$TMP/default.json"
 python3 - "$TMP/default.json" <<'PY'
@@ -108,6 +121,10 @@ row=json.load(open(sys.argv[1]))
 assert row["profile"] == "builder", row
 assert row["profile_counts"]["capabilities"] == 14, row
 PY
+test ! -e "$HOME/.codex/agents/legacy-external.toml" \
+  || fail "profile refresh retained a legacy harness agent"
+test -f "$HOME/.codex/agents/user-owned.toml" \
+  || fail "profile refresh removed a user-owned agent"
 
 # Installer --profile is an explicit alias to linked activation, never plugin.
 harness install opencode --profile starter --json > "$TMP/install-profile.json"
