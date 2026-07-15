@@ -1,6 +1,6 @@
 {
   "name": "agent-harness-codex",
-  "version": "0.1.0",
+  "version": "0.1.0+codex.20260715015036",
   "description": "Codex-native plugin projection for the portable agent harness.",
   "author": {
     "name": "agent_setting"

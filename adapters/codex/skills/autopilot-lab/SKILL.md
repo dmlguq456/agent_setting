@@ -1,6 +1,6 @@
 ---
 name: autopilot-lab
-description: "Use for autopilot-lab: Rapid experiment prototyping around training setup and checkpoint evaluation/analysis."
+description: "Use when needed: Rapid experiment prototyping around training setup and checkpoint evaluation/analysis."
 ---
 
 # autopilot-lab

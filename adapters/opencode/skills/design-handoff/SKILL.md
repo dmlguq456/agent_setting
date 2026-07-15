@@ -1,6 +1,6 @@
 ---
 name: design-handoff
-description: "Use for design-handoff: Package design results as assets and specifications for development handoff."
+description: "Use when needed: Package design results as assets and specifications for development handoff."
 metadata:
   portable_source: capabilities/design-handoff.md
   adapter: opencode

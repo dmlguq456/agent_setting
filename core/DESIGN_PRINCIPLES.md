@@ -60,6 +60,7 @@ Run this review while authoring at `autopilot-spec` Step 3d, after completion in
 Establish the shared contract in core, then derive adapters. A runtime-specific improvement must first be expressed or confirmed in the model-neutral `core/` contract, then mapped into each adapter surface.
 
 - Adapters map runtimes; core owns meaning. Adapter-first edits cause behavior to diverge across Claude, Codex, and OpenCode and erase intent during the next port.
+- Claude, Codex, and OpenCode are sibling realizations. No adapter may serve as another adapter's semantic source or completion proxy; an unverified sibling keeps the shared change partial.
 - Read the relevant core document, update the contract or confirm that it already covers the behavior, then edit bootstrap, hook, or projection files.
 - `core-read-marker` and `core-first-guard` mechanically require a session read marker before `adapters/**` edits. They verify the read, while this principle and drills verify that core actually led the change.
 - The motivating incident was a 2026-07-03 adapter recall edit made before the core contract and then reverted.
@@ -218,6 +219,8 @@ Efficiency is not corner cutting. Reduce duplicated orchestrator reasoning, not 
 - Pass results through files and return only verdict tokens.
 - At `standard+`, extend this file-only principle from in-session agent handoff to depth-2 headless stage handoff. Each plan, execute, test, and report stage writes a complete artifact for the next stage. The depth-1 owner remains a thin conductor that reads status and verdicts rather than bodies. If a file cannot carry the required context, improve the artifact schema instead of passing conversation history.
 - Waiting and harvesting are part of the deterministic flow: conductors poll through `dispatch-wait`, while semantic interpretation remains only for a dead stage. `OPERATIONS §5.10` owns the runtime details.
+- Reduce fixed input before squeezing output: keep always-loaded bootstraps as routers, expose Skill detail progressively, prevent duplicate discovery, and keep ordinary hooks silent. `ADAPTATION §6.1` owns the measurable budgets.
+- Treat footprint reduction as a static result until paired real-session measurement proves token or cost savings. Never trade intensity, model role, required context, tools, tests, or safety for a smaller counter.
 
 ---
 
@@ -244,6 +247,7 @@ Four design levers:
 4. **Pruning:** collapse cross-Skill duplication into one source plus pointers. Repeated prose drifts and sediments; pointers retain filename, timing, and obligation.
 
 Quantitative limits for line count, reference depth, and frontmatter live only in `CONVENTIONS §5.6a`.
+Cross-adapter completion and active-context budgets live only in `ADAPTATION §2.0` and `§6.1`.
 
 ## Appendix — Decision History
 

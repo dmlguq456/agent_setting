@@ -1,6 +1,6 @@
 ---
 name: autopilot-draft
-description: "Use for autopilot-draft: Document-drafting pipeline that produces an applicable artifact through strategy, drafting, verification, and editing."
+description: "Use when needed: Document-drafting pipeline that produces an applicable artifact through strategy, drafting, verification, and editing."
 ---
 
 # autopilot-draft

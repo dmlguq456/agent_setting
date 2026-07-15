@@ -1,6 +1,6 @@
 ---
 name: analyze-project
-description: "Use for analyze-project: Creates or refreshes persistent analysis from primary code, paper, or document materials when analysis is absent, stale, or explicitly requested; not for read-only context recovery."
+description: "Use when needed: Creates or refreshes persistent analysis from primary code, paper, or document materials when analysis is absent, stale, or explicitly requested; not for read-only context recovery."
 ---
 
 # analyze-project

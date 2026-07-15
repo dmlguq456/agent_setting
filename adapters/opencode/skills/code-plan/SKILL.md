@@ -1,6 +1,6 @@
 ---
 name: code-plan
-description: "Use for code-plan: Analyze code, write a detailed implementation plan, and run the plan-check gate at the rigor derived from intensity."
+description: "Use when needed: Analyze code, write a detailed implementation plan, and run the plan-check gate at the rigor derived from intensity."
 metadata:
   portable_source: capabilities/code-plan.md
   adapter: opencode

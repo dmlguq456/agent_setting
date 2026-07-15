@@ -31,6 +31,25 @@ An adapter must not claim support for a surface unless it provides one of:
 Plain symlinks are acceptable only as a projection mechanism. They are not proof
 that adaptation is complete.
 
+### 2.0. Sibling-Adapter Completion
+
+`core/`, `capabilities/`, and `roles/` are the semantic source. Claude, Codex,
+OpenCode, and future adapters are sibling realizations below that source; no
+adapter is the reference implementation or parent of another adapter.
+
+A shared change follows one transaction:
+
+1. update or confirm the portable invariant;
+2. generate or edit every applicable sibling realization;
+3. verify each runtime's active discovery surface and required fallback;
+4. report the overall result as `PARTIAL` while any applicable row is deferred,
+   unsupported without fallback, or unverified; report `GREEN` only after all
+   applicable rows pass.
+
+Generated output is not exempt from semantic, discovery, or footprint checks.
+Runtime syntax may differ, but observable behavior, quality floors, and failure
+reporting must remain equivalent.
+
 ## 2.1 Runtime Distribution Seam
 
 Installing or exposing the harness in a runtime is its own adaptation seam. A
@@ -185,3 +204,30 @@ hook events, tools, utilities, and scaffolds. Any intentional exclusion from
 projection belongs in an explicit exemption or name-mapping list next to the
 guard, never as a silent omission, so every excluded entry is a declared
 decision rather than an accidental leak.
+
+### 6.1. Active Context Budget
+
+Progressive disclosure applies to runtime bootstraps and discovery metadata,
+not only Skill bodies. The bootstrap is a router: source order, hard invariants,
+and runtime entrypoints stay resident; detailed lifecycle explanations,
+examples, and edge cases live in adapter README/ADAPTATION documents or command
+help loaded on demand.
+
+- Each always-loaded adapter bootstrap is at most `16,384` UTF-8 bytes.
+- Each active Skill metadata discovery surface is at most `7,000` characters,
+  including its concrete local Skill paths. Regression baselines normalize
+  those paths relative to the surface root so checkout location is not source
+  growth.
+- Activating two surfaces with the same Skill names is a duplicate-discovery
+  failure, not extra assurance.
+- A stored surface baseline rejects growth greater than five percent unless the
+  same change records a reviewed rationale and updates the budget.
+- Ordinary, unknown, and repeated hook states inject zero bytes. A verified
+  pressure-band transition may emit one compact directive of at most 240 UTF-8
+  bytes.
+
+These are footprint controls, not token or billing estimators. Static bytes,
+code lines, directive counts, and monotonic runtime counters must not be
+converted into savings claims. A production savings claim requires at least 30
+paired real sessions and separates input, cache creation, output, and billable
+cost. Synthetic fixtures prove regression behavior only.

@@ -1,6 +1,6 @@
 ---
 name: post-it
-description: "Use for post-it: Store project/cross-project notes and handoffs in working memory."
+description: "Use when needed: Store project/cross-project notes and handoffs in working memory."
 metadata:
   portable_source: capabilities/post-it.md
   adapter: opencode

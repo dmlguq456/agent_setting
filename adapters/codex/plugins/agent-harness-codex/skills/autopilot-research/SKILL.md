@@ -1,6 +1,6 @@
 ---
 name: autopilot-research
-description: "Use for autopilot-research: Shared upfront research that surveys academic, technology, or market sources before downstream routing."
+description: "Use when needed: Shared upfront research that surveys academic, technology, or market sources before downstream routing."
 ---
 
 # autopilot-research

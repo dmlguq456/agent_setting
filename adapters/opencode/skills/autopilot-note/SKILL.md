@@ -1,6 +1,6 @@
 ---
 name: autopilot-note
-description: "Use for autopilot-note: Route and note artifacts, producing digests and triage proposals."
+description: "Use when needed: Route and note artifacts, producing digests and triage proposals."
 metadata:
   portable_source: capabilities/autopilot-note.md
   adapter: opencode

@@ -72,9 +72,9 @@ cp -p "$TMP/tools-adaptation-exemptions-tsv.bak" tools/adaptation-exemptions.tsv
 # --- Case 3: bootstrap byte-budget over ceiling → red ---
 backup adapters/claude/CLAUDE.md
 # Size the padding from the current bootstrap so prose compaction cannot make
-# this negative fixture silently fall below the 28,672-byte ceiling.
+# this negative fixture silently fall below the 16,384-byte ceiling.
 bootstrap_size=$(wc -c < "$TMP/adapters-claude-CLAUDE-md.bak" | tr -d ' ')
-padding_size=$((28672 - bootstrap_size + 1))
+padding_size=$((16384 - bootstrap_size + 1))
 [ "$padding_size" -gt 0 ] || padding_size=1
 { cat "$TMP/adapters-claude-CLAUDE-md.bak"; head -c "$padding_size" /dev/zero | tr '\0' 'x'; } > adapters/claude/CLAUDE.md
 out=$(run_guard); rc=$?

@@ -1,6 +1,6 @@
 ---
 name: audit
-description: "Use for audit: Read-oriented post-run inspection for artifact drift, inconsistency, and omissions."
+description: "Use when needed: Read-oriented post-run inspection for artifact drift, inconsistency, and omissions."
 metadata:
   portable_source: capabilities/audit.md
   adapter: opencode

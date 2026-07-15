@@ -1,6 +1,6 @@
 ---
 name: draft-refine
-description: "Use for draft-refine: Refine a draft by applying memo/review feedback to a document strategy or draft."
+description: "Use when needed: Refine a draft by applying memo/review feedback to a document strategy or draft."
 metadata:
   portable_source: capabilities/draft-refine.md
   adapter: opencode

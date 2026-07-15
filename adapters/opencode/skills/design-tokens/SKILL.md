@@ -1,6 +1,6 @@
 ---
 name: design-tokens
-description: "Use for design-tokens: Define design tokens such as color, typography, and spacing."
+description: "Use when needed: Define design tokens such as color, typography, and spacing."
 metadata:
   portable_source: capabilities/design-tokens.md
   adapter: opencode

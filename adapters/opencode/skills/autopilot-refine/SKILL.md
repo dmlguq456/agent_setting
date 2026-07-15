@@ -1,6 +1,6 @@
 ---
 name: autopilot-refine
-description: "Use for autopilot-refine: Correct and update existing document/research artifacts while preserving snapshots and change history."
+description: "Use when needed: Correct and update existing document/research artifacts while preserving snapshots and change history."
 metadata:
   portable_source: capabilities/autopilot-refine.md
   adapter: opencode

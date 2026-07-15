@@ -1,6 +1,6 @@
 ---
 name: code-report
-description: "Use for code-report: Assemble code-cycle results into a user-facing report."
+description: "Use when needed: Assemble code-cycle results into a user-facing report."
 ---
 
 # code-report

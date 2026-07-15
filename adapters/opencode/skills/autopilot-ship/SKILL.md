@@ -1,6 +1,6 @@
 ---
 name: autopilot-ship
-description: "Use for autopilot-ship: Prepare application deployment/release setup and a ship checklist."
+description: "Use when needed: Prepare application deployment/release setup and a ship checklist."
 metadata:
   portable_source: capabilities/autopilot-ship.md
   adapter: opencode

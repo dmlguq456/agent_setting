@@ -65,7 +65,7 @@ def render(identifier: str, spec: dict, capability_file: Path) -> tuple[str, str
 - Invocation semantics: {invocation_semantics}
 """
     meaning_sentence = meaning if meaning.endswith((".", "!", "?")) else f"{meaning}."
-    description = compact(f"Use for {identifier}: {meaning_sentence}")
+    description = compact(f"Use when needed: {meaning_sentence}")
 
     body = f"""---
 name: {identifier}

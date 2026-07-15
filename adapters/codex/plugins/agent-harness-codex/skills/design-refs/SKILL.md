@@ -1,6 +1,6 @@
 ---
 name: design-refs
-description: "Use for design-refs: Collect external and user-provided visual references and create a brief."
+description: "Use when needed: Collect external and user-provided visual references and create a brief."
 ---
 
 # design-refs

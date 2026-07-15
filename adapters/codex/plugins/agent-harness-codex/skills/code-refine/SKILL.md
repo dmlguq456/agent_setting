@@ -1,6 +1,6 @@
 ---
 name: code-refine
-description: "Use for code-refine: Revise an existing plan using user notes, plan-check feedback, and verification-failure notes."
+description: "Use when needed: Revise an existing plan using user notes, plan-check feedback, and verification-failure notes."
 ---
 
 # code-refine

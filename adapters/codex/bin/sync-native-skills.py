@@ -102,7 +102,7 @@ def render(identifier: str, spec: dict, capability_file: Path) -> tuple[str, str
 """
     projected_details = portable_sections(source)
     meaning_sentence = meaning if meaning.endswith((".", "!", "?")) else f"{meaning}."
-    description = compact(f"Use for {identifier}: {meaning_sentence}")
+    description = compact(f"Use when needed: {meaning_sentence}")
 
     body = f"""---
 name: {identifier}

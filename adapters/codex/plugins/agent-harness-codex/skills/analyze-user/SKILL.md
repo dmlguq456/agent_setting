@@ -1,6 +1,6 @@
 ---
 name: analyze-user
-description: "Use for analyze-user: Create or update a cross-project user-preference profile from coding, writing, and analysis patterns."
+description: "Use when needed: Create or update a cross-project user-preference profile from coding, writing, and analysis patterns."
 ---
 
 # analyze-user
