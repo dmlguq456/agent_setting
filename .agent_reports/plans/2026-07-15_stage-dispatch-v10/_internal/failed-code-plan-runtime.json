@@ -1,0 +1,7 @@
+{
+  "route_id": "rt-fda0402b695fb63c",
+  "route_hash": "sha256:fda0402b695fb63c34f7de4ce74e0073b672765440842b8541ebb17507fa1713",
+  "node_id": "plan",
+  "status": "failed",
+  "reason": "codex-runtime-home-read-only"
+}
