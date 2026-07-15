@@ -30,6 +30,7 @@ Conductor는 target CLI/wrapper를 직접 재귀 실행하지 않는다. Route l
 ## Evidence
 
 - Source commit: `8897bf76`; main integration: `70bac6ef`.
+- Report/spec state commit and main push: `d24e0af8`; guarded source worktree cleanup completed with the branch preserved.
 - Broker protocol tests: 10/10.
 - Portable guards: 359/359.
 - Adaptation boundary, manifest, dispatch concurrency/liveness/wait, and installed Codex runtime projection: PASS.

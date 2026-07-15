@@ -1,6 +1,6 @@
 # stage-dispatch v12 broker — Pipeline Summary
 
-- Status: implementation and integrated verification complete; push/cleanup pending
+- Status: complete — implemented, integrated, pushed, and worktree cleaned
 - Spec: stage-dispatch PRD v12, SD-51~53
 - Source branch: `stage-dispatch-v12-broker`
 - Source worktree: `/home/Uihyeop/agent_setting-wt/stage-dispatch-v12-broker`
@@ -21,7 +21,7 @@
 - [x] implementation plan and plan-check.
 - [x] implementation.
 - [x] verification.
-- [ ] push and guarded cleanup.
+- [x] push and guarded cleanup.
 
 ## Deferred spec judgment
 

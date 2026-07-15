@@ -7,7 +7,7 @@
 - [x] Wire preflight/lifecycle readiness and immutable endpoint/jobs binding.
 - [x] Add 4-placement and fault/idempotency tests.
 - [x] Run focused and repository parity checks; fix regressions.
-- [ ] Commit branch, merge to main, verify integrated tree, push, and clean worktree.
+- [x] Commit branch, merge to main, verify integrated tree, push, and clean worktree.
 - [x] Complete dev/test logs and pipeline summary.
 
 ## Out of scope

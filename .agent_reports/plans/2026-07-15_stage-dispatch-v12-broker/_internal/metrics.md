@@ -9,3 +9,5 @@
 - main integration commit: `70bac6ef`
 - verification: broker 10/10; portable guards 359/359; adaptation boundary/runtime projection PASS
 - independent reviewer: not used and not claimed (session native-subagent policy)
+- main push: `origin/main` through `d24e0af8`
+- guarded cleanup: eligible then removed; branch preserved
