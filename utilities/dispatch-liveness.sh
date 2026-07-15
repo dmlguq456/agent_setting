@@ -5,13 +5,13 @@
 #   watch them (OPERATIONS §5.10).
 #
 #   Primary signal: the wrapper-recorded `pid=` exists under /proc and its
-#   command line matches Claude. PID state avoids shared-worktree transcript
+#   command line matches the row harness. PID state avoids shared-worktree transcript
 #   aliasing, where conductor activity can keep an already-finished child's
 #   transcript directory fresh. A dead PID on an open row is EXITED and needs
 #   harvesting.
 #
-#   Fallback signal for legacy or other-runtime rows without a PID: session
-#   transcript mtime under `projects/<encoded-cwd>/*.jsonl`. Path-based pgrep is
+#   Fallback signal for PID-less rows is harness-aware: Claude session transcript,
+#   Codex wrapper JSONL, or OpenCode heartbeat/JSONL mtime. Path-based pgrep is
 #   intentionally not used because common paths produce false-alive matches.
 #
 #   Run while waiting after dispatch. SUSPECT/DEAD/EXITED requires transcript
@@ -31,7 +31,7 @@ LOG_DIR="$AGENT_HOME/.dispatch/logs"
 # SD-15: if an open job log ends with a limit/auth fatal pattern, use that as
 # the DEAD reason. Keep this deliberate duplicate synchronized with
 # dispatch-headless.py DEATH_PATTERNS.
-LIMIT_RE='hit your (session|usage) limit|session limit reached|usage limit reached|weekly limit|rate limit|[^0-9]429[^0-9]|invalid api key|authentication_error|not logged in|please run /login|unauthorized|[^0-9]401[^0-9]|credit balance is too low|insufficient (credit|quota|funds)'
+LIMIT_RE='operation not permitted|network is unreachable|network access denied|hit your (session|usage) limit|session limit reached|usage limit reached|weekly limit|rate limit|[^0-9]429[^0-9]|invalid api key|authentication_error|not logged in|please run /login|unauthorized|[^0-9]401[^0-9]|credit balance is too low|insufficient (credit|quota|funds)'
 
 # SD-15b: anchor log-pattern death detection to a few short trailing lines.
 # Scanning a large tail caused false DEAD verdicts when a successful report only
@@ -39,7 +39,7 @@ LIMIT_RE='hit your (session|usage) limit|session limit reached|usage limit reach
 scan_log_death() {  # $1=slug; print the matching log path and return 0.
   _slug=$1
   [ -n "$_slug" ] || return 1
-  for lf in "$LOG_DIR/${_slug}."*.log; do
+  for lf in "$LOG_DIR/${_slug}."*.log "$LOG_DIR/${_slug}."*.jsonl; do
     [ -f "$lf" ] || continue
     # Inspect the last three non-empty lines and accept only terse (≤200) matches.
     hit=$(tail -n 40 "$lf" 2>/dev/null | awk 'NF' | tail -n 3 \
@@ -57,11 +57,23 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   open_n=$((open_n + 1))
   # Primary signal: wrapper-recorded PID, independent of transcript aliasing.
   pid=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^pid=//p' | head -1)
+  pid_start=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^pid_start=//p' | head -1)
+  harness=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^harness=//p' | head -1)
+  [ -n "$harness" ] || harness="claude"
   [ -d /proc ] || pid=""   # Fall back to transcript mtime without /proc.
-  if [ -n "$pid" ] && [ -d "/proc/$pid" ] \
-     && tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q 'claude'; then
-    echo "ALIVE      ${slug:-?}  (pid $pid running)"
-    alive=$((alive + 1)); continue
+  if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
+    cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
+    actual_start=$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true)
+    identity_ok=0
+    case "$harness" in
+      codex)    printf '%s' "$cmdline" | grep -q 'codex' && identity_ok=1 ;;
+      opencode) printf '%s' "$cmdline" | grep -q 'opencode' && identity_ok=1 ;;
+      claude|*) printf '%s' "$cmdline" | grep -q 'claude' && identity_ok=1 ;;
+    esac
+    if [ "$identity_ok" -eq 1 ] && { [ -z "$pid_start" ] || [ "$pid_start" = "$actual_start" ]; }; then
+      echo "ALIVE      ${slug:-?}  (pid $pid running; harness=$harness)"
+      alive=$((alive + 1)); continue
+    fi
   fi
   if [ -n "$pid" ]; then
     # Dead PID + open row is an unharvested completion or failure.
@@ -72,22 +84,40 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
     fi
     suspect=$((suspect + 1)); continue
   fi
-  # Fallback signal: transcript mtime for PID-less legacy/other-runtime rows.
-  enc=$(printf '%s' "${wt:-}" | sed 's#[/._]#-#g')
-  name=""
-  case "$pipe" in *profile=*) name=${pipe##*profile=}; name=${name%%,*};; esac
-  if [ -n "$name" ]; then
-    dir="$AGENT_HOME/.dispatch/homes/${slug}.${name}/projects/$enc"
-  else
-    dir="$PROJ/$enc"
-  fi
-  newest=$(ls -t "$dir"/*.jsonl 2>/dev/null | head -1)
+  # Harness-aware fallback for PID-less legacy rows.
+  evidence_label="transcript"
+  case "$harness" in
+    codex)
+      dir="$LOG_DIR"
+      newest="$LOG_DIR/${slug}.codex.jsonl"
+      [ -f "$newest" ] || newest=""
+      evidence_label="Codex dispatch log"
+      ;;
+    opencode)
+      dir="$LOG_DIR"
+      newest="$LOG_DIR/${slug}.heartbeat"
+      [ -f "$newest" ] || newest="$LOG_DIR/${slug}.opencode.jsonl"
+      [ -f "$newest" ] || newest=""
+      evidence_label="OpenCode heartbeat/log"
+      ;;
+    *)
+      enc=$(printf '%s' "${wt:-}" | sed 's#[/._]#-#g')
+      name=""
+      case "$pipe" in *profile=*) name=${pipe##*profile=}; name=${name%%,*};; esac
+      if [ -n "$name" ]; then
+        dir="$AGENT_HOME/.dispatch/homes/${slug}.${name}/projects/$enc"
+      else
+        dir="$PROJ/$enc"
+      fi
+      newest=$(ls -t "$dir"/*.jsonl 2>/dev/null | head -1)
+      ;;
+  esac
   if [ -z "$newest" ]; then
     # No transcript means the worker died before launch or never started.
     if log_hit=$(scan_log_death "$slug"); then
       echo "⚠️ DEAD     ${slug:-?}  — trailing limit/auth log pattern ($log_hit)  [open: $ts]"
     else
-      echo "⚠️ DEAD     ${slug:-?}  — no session transcript ($dir)  [open: $ts]"
+      echo "⚠️ DEAD     ${slug:-?}  — no $evidence_label ($dir)  [open: $ts]"
     fi
     suspect=$((suspect + 1)); continue
   fi
@@ -95,14 +125,14 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   age=$(( (now - mt) / 60 ))
   if [ "$age" -le "$STALE_MIN" ]; then
     # Fresh transcript evidence excludes a DEAD verdict from log prose.
-    echo "ALIVE      ${slug:-?}  (transcript updated ${age}m ago)"
+    echo "ALIVE      ${slug:-?}  ($evidence_label updated ${age}m ago)"
     alive=$((alive + 1))
   else
     # A stale transcript is a hang or post-failure stop; attach a fatal log reason when present.
     if log_hit=$(scan_log_death "$slug"); then
       echo "⚠️ DEAD     ${slug:-?}  — trailing limit/auth log pattern ($log_hit)  [open: $ts]"
     else
-      echo "⚠️ SUSPECT  ${slug:-?}  — transcript stalled for ${age}m (possible hang/death)  [open: $ts]"
+      echo "⚠️ SUSPECT  ${slug:-?}  — $evidence_label stalled for ${age}m (possible hang/death)  [open: $ts]"
     fi
     suspect=$((suspect + 1))
   fi

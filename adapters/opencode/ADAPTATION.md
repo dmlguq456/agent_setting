@@ -387,8 +387,8 @@ entire shared `utilities/` directory. The current allowlist is:
 - `workflow-guard-hook.sh`
 - `workflow-toggle.sh`
 
-Do not project the shared `dispatch-liveness.sh`; it assumes Claude
-`projects/<encoded-cwd>/*.jsonl`. OpenCode uses the adapter-owned
+Do not project the shared `dispatch-liveness.sh`; it is the cross-harness
+registry/wait fallback, while OpenCode uses the adapter-owned
 `adapters/opencode/bin/dispatch-liveness.py`, exposed as
 `adapters/opencode/bin/preflight.sh liveness [jobs.log]`, and maps open
 dispatch jobs to `~/.local/share/opencode/opencode.db` sessions by
@@ -425,6 +425,13 @@ launch watch; hang-on-limit → liveness log scan. (Claude and Codex realize bot
 their runtimes exit on limit.) Patterns are conservative per 2026-07 issue evidence
 (#8203·#34886·#15890) and kept in sync with the shared list. Conformance (incl. the hang case):
 `adapters/opencode/bin/dispatch-headless.sd15.test.sh`.
+
+### SD-48~50 nested dispatch recovery — realized
+
+OpenCode independently enforces checked depth-2 tuple evidence and the
+inherited canonical global attempt registry. Its preflight exposes
+`nested-headless` and the portable ordered `dispatch-chain`; unsupported or
+unknown tuples remain explicit rather than borrowing another adapter's PASS.
 
 ## Distillation Boundary
 

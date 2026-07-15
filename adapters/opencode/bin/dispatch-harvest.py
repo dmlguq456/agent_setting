@@ -11,11 +11,14 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import DispatchContractError, reconcile_local_registry  # noqa: E402
 
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--jobs")
+    p.add_argument("--reconcile-local", help="legacy cycle-local registry to reconcile first")
     p.add_argument("--slug")
     p.add_argument("--worktree")
     p.add_argument("--status", choices=("open", "done", "all"), default="open")
@@ -35,6 +38,7 @@ def emit_header(args: argparse.Namespace, jobs: Path, matched: int, marked_done:
     print(f"matched={matched}")
     print(f"marked_done={marked_done}")
     print(f"malformed={malformed}")
+    print(f"reconciled={getattr(args, 'reconciled', 0)}")
     print("merge_action=unsupported")
     print("cleanup_action=guarded-separate-step")
     print("cleanup_command=adapters/opencode/bin/preflight.sh worktree-cleanup --check --worktree <path>")
@@ -72,6 +76,13 @@ def main(argv: list[str]) -> int:
     agent_home = resolve_agent_home()
     jobs_override = args.jobs or os.environ.get("AGENT_DISPATCH_JOBS")
     jobs = Path(jobs_override) if jobs_override else agent_home / ".dispatch" / "jobs.log"
+    args.reconciled = 0
+    if args.reconcile_local:
+        try:
+            args.reconciled, _ = reconcile_local_registry(jobs.resolve(), Path(args.reconcile_local).resolve())
+        except DispatchContractError as exc:
+            print(f"check=failed\nreason={exc.reason}\ndetail={exc.detail}")
+            return 73
     if not jobs.exists():
         emit_header(args, jobs, 0, 0, 0)
         return 0

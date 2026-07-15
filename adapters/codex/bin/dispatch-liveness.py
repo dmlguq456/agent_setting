@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[3]
 # have missed it, or the child died — or hung, OpenCode #8203 — after launch). Kept in
 # sync with dispatch-headless.py DEATH_PATTERNS (intentional cross-runtime duplication).
 LIMIT_RE = re.compile(
+    r"operation not permitted|network is unreachable|network access denied|"
     r"hit your (session|usage) limit|session limit reached|usage[_ ]limit[_ ]reached|"
     r"usage limit reached|weekly limit|rate limit(ed)?|provider rate limit|"
     r"exceeded retry limit|[^0-9]429[^0-9]|invalid api key|authentication_error|"
@@ -99,6 +100,28 @@ def parse_profile(pipe: str) -> str | None:
         return None
     name = pipe.split("profile=")[-1].split(",")[0].strip()
     return name or None
+
+
+def parse_metadata(pipe: str) -> dict[str, str]:
+    return dict(part.split("=", 1) for part in pipe.split(",") if "=" in part)
+
+
+def recorded_process_alive(metadata: dict[str, str]) -> tuple[bool, str]:
+    pid = metadata.get("pid", "")
+    if not pid.isdigit() or not Path("/proc").is_dir():
+        return False, ""
+    proc = Path("/proc") / pid
+    if not proc.is_dir():
+        return False, pid
+    try:
+        cmdline = (proc / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+        actual_start = (proc / "stat").read_text(encoding="utf-8").split()[21]
+    except (OSError, IndexError):
+        return False, pid
+    expected_start = metadata.get("pid_start")
+    if "codex" not in cmdline or (expected_start and expected_start != actual_start):
+        return False, pid
+    return True, pid
 
 
 def sessions_dir_for(pipe: str, slug: str, agent_home: Path, default_sessions: Path) -> Path:
@@ -204,6 +227,20 @@ def main(argv: list[str]) -> int:
                 continue
             open_n += 1
             label = slug or "?"
+            metadata = parse_metadata(pipe)
+            process_alive, recorded_pid = recorded_process_alive(metadata)
+            if process_alive:
+                print(f"ALIVE    {label} (recorded pid {recorded_pid} running)")
+                alive += 1
+                continue
+            if recorded_pid:
+                log_hit = log_shows_limit(agent_home, slug)
+                if log_hit is not None:
+                    print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
+                else:
+                    print(f"EXITED   {label} - recorded pid {recorded_pid} ended or identity changed [open: {ts}]")
+                suspect += 1
+                continue
             # Profile jobs live under their isolated home. Non-profile nested workers
             # may inherit a conductor's worktree-local CODEX_HOME, so inspect both that
             # deterministic projection and the caller's default session store.
@@ -211,6 +248,10 @@ def main(argv: list[str]) -> int:
                 pipe, slug, agent_home, default_sessions, worktree
             )
             transcript = locate_latest_for_worktree_dirs(sessions_dirs, worktree)
+            if transcript is None:
+                wrapper_log = agent_home / ".dispatch" / "logs" / f"{slug}.codex.jsonl"
+                if wrapper_log.is_file():
+                    transcript = wrapper_log
             if transcript is None:
                 # No transcript — a launch that died before writing, or never came up. SD-15b:
                 # consult the anchored log scan to name a limit/auth death; else generic DEAD.

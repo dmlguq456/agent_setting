@@ -18,6 +18,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import (  # noqa: E402
+    DispatchContractError,
+    ensure_global_registry_writable,
+    new_attempt_id,
+    resolve_global_registry,
+    validate_nested_eligibility,
+)
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
@@ -42,6 +50,7 @@ QA_FROM_INTENSITY = {
 # early-exit watch (which requires the child to exit) only catches the clean-exit path;
 # hang-on-limit is caught later by dispatch-liveness.py's log scan (both share this list).
 DEATH_PATTERNS = [
+    ("network-operation-not-permitted", r"operation not permitted|network is unreachable|network access denied"),
     ("session-limit", r"hit your (?:session|usage) limit|session limit reached"),
     ("usage-limit", r"usage[_ ]limit[_ ]reached|usage limit reached|weekly limit|"
      r"rate limit(?:ed)?|provider rate limit|exceeded retry limit|\b429\b"),
@@ -131,6 +140,15 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--prompt-file")
     p.add_argument("--prompt-text")
     p.add_argument("--jobs")
+    p.add_argument("--attempt-id")
+    p.add_argument("--fallback-ordinal", type=int, default=0)
+    p.add_argument("--launch-authority", choices=("conductor", "ancestor-broker"), default="conductor")
+    p.add_argument("--parent-harness", default=os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS") or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "opencode")
+    p.add_argument("--parent-transport", default=os.environ.get("AGENT_DISPATCH_CURRENT_TRANSPORT") or "unknown")
+    p.add_argument("--parent-sandbox", default=os.environ.get("AGENT_DISPATCH_CURRENT_SANDBOX") or "unknown")
+    p.add_argument("--nested-eligibility", choices=("supported", "unsupported", "unknown"), default="unknown")
+    p.add_argument("--eligibility-source", default="")
+    p.add_argument("--eligibility-failure-class", default="")
     p.add_argument("--log-dir")
     p.add_argument(
         "--early-exit-watch",
@@ -284,6 +302,7 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
             f"- Run adapters/opencode/bin/preflight.sh qa-policy {args.qa} code and obey assurance_scope, stage_graph_selector, reviewer_counts, and independent delegation policy before claiming QA coverage.\n"
             "- Plan-check is required for quick+ but stays small; do not run independent QA after every stage by default.\n"
             "- standard+ may use bounded depth-2 planner/verifier workers when separable; thorough/adversarial expands to multi-axis/adversary workers. Synthesize short reports; depth 3+ is forbidden.\n"
+            "- For routed depth-2 launches, use adapters/opencode/bin/preflight.sh dispatch-chain; unchanged same-harness retries and cycle-local registry overrides are forbidden.\n"
         )
     if args.route_file:
         extra += (
@@ -344,6 +363,13 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
         pipe += f",owner_harness={args.owner_harness}"
+    if args.depth >= 2:
+        pipe += (
+            f",parent_harness={args.parent_harness},parent_transport={args.parent_transport}"
+            f",parent_sandbox={args.parent_sandbox},child_harness=opencode"
+            f",nested_eligibility={args.nested_eligibility},eligibility_source={args.eligibility_source}"
+            f",eligibility_failure_class={args.eligibility_failure_class or '-'}"
+        )
     for key in ("route_file", "route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate"):
         value = getattr(args, key)
         if value:
@@ -351,6 +377,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     settings = args.resolved_model_settings
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},variant={settings['variant']}"
     pipe += f",artifact_root={args.artifact_root}"
+    if args.attempt_id:
+        pipe += f",attempt_id={args.attempt_id},launch_authority={args.launch_authority},fallback_ordinal={args.fallback_ordinal}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     # SD-15: serialize with the same flock close_job_row uses so a concurrent close
     # (row-rewrite) and this append cannot interleave and drop rows.
@@ -359,7 +387,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
             f.write(f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}\n")
 
 
-def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str) -> bool:
+def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str, attempt_id: str | None = None) -> bool:
     """SD-15: flip this dispatch's own open row to done with a dead-<reason> note.
 
     Matches by (slug, worktree, status==open) under the same flock append_job uses.
@@ -379,6 +407,8 @@ def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str)
                 continue
             ts, status, repo, wt, row_slug, pipe = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
             if status != "open" or row_slug != slug or wt != worktree:
+                continue
+            if attempt_id and f"attempt_id={attempt_id}" not in pipe.split(","):
                 continue
             pipe += f",note=dead-{reason}"
             if reset:
@@ -430,7 +460,12 @@ def watch_early_death(
         tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
     except OSError:
         return None
-    return scan_death(tail)
+    death = scan_death(tail)
+    if death:
+        return death
+    if proc.returncode:
+        return f"launch-exit-{proc.returncode}", ""
+    return None
 
 
 def resolve_agent_home() -> Path:
@@ -552,6 +587,15 @@ def main(argv: list[str]) -> int:
     rc = validate_dispatch_metadata(args)
     if rc != 0:
         return rc
+    try:
+        validate_nested_eligibility(
+            depth=args.depth, action=action, parent_harness=args.parent_harness,
+            parent_transport=args.parent_transport, parent_sandbox=args.parent_sandbox,
+            child_harness="opencode", launch_authority=args.launch_authority,
+            status=args.nested_eligibility, source=args.eligibility_source,
+        )
+    except DispatchContractError as e:
+        return fail(e.reason, 69, detail=e.detail)
     rc = validate_route_record(args)
     if rc != 0:
         return rc
@@ -570,8 +614,14 @@ def main(argv: list[str]) -> int:
             return rc
 
     agent_home = resolve_agent_home()
-    jobs_override = args.jobs or os.environ.get("AGENT_DISPATCH_JOBS")
-    jobs = Path(jobs_override) if jobs_override else agent_home / ".dispatch" / "jobs.log"
+    try:
+        registry = resolve_global_registry(agent_home, args.jobs, args.depth, action)
+        jobs = registry.path
+        args.attempt_id = new_attempt_id(args.attempt_id) if action in ("register", "start") else args.attempt_id
+        if action in ("register", "start"):
+            ensure_global_registry_writable(jobs)
+    except DispatchContractError as e:
+        return fail(e.reason, 73, detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = prompt(args)
     prompt_path = log_dir / f"{args.slug}.opencode.prompt.txt"
@@ -593,7 +643,7 @@ def main(argv: list[str]) -> int:
                 return fail("model-worker-governor-denied", 75)
         append_job(jobs, args)
     if action == "start":
-        proc = subprocess.Popen([sys.executable, str(governor), "--root", str(governor_root), "run", "--class", "dispatch", "--", "sh", "-c", command], start_new_session=True, env={
+        dispatch_env = {
             **os.environ,
             "AGENT_SESSION_ROLE": "worker",
             "AGENT_DISPATCH_CHILD": "1",
@@ -609,6 +659,10 @@ def main(argv: list[str]) -> int:
             "AGENT_ROUTE_ID": args.route_id or "",
             "AGENT_ROUTE_NODE": args.route_node or "",
             "AGENT_MODEL_GOVERNOR_ROOT": str(governor_root),
+            "AGENT_DISPATCH_JOBS": str(jobs),
+            "AGENT_DISPATCH_CURRENT_HARNESS": "opencode",
+            "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
+            "AGENT_DISPATCH_CURRENT_SANDBOX": "adapter-default",
             "OPENCODE_CONFIG_CONTENT": args.opencode_config_content,
             # Headless liveness contract: the OpenCode runtime child exposes
             # the dispatch slug to the plugin, which records a plugin-load
@@ -616,13 +670,18 @@ def main(argv: list[str]) -> int:
             # session.idle event. dispatch-liveness.py inspects both as a
             # secondary alive signal independent of the OpenCode SQLite mtime.
             "OPENCODE_DISPATCH_SLUG": args.slug,
-        })
+        }
+        try:
+            proc = subprocess.Popen([sys.executable, str(governor), "--root", str(governor_root), "run", "--class", "dispatch", "--", "sh", "-c", command], start_new_session=True, env=dispatch_env)
+        except OSError as exc:
+            close_job_row(jobs, args.slug, args.worktree, "launch-error", "", args.attempt_id)
+            return fail("child-launch-failed", 70, detail=str(exc), attempt_id=args.attempt_id)
         # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a clean-exit limit/auth death.
         # A hang-on-limit (#8203) escapes this watch and is caught by liveness log scan.
         death = watch_early_death(proc, log_path, args.early_exit_watch)
         if death:
             reason, reset = death
-            close_job_row(jobs, args.slug, args.worktree, reason, reset)
+            close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
             write_reset_cache(agent_home, "opencode", reason, reset)
             args.early_death = (reason, reset)
 
@@ -653,6 +712,10 @@ def main(argv: list[str]) -> int:
     print(f"model={settings['model']}")
     print(f"variant={settings['variant']}")
     print(f"job_registry={jobs}")
+    print(f"registry_authority={registry.source}")
+    print(f"attempt_id={args.attempt_id or '-'}")
+    print(f"launch_authority={args.launch_authority}")
+    print(f"fallback_ordinal={args.fallback_ordinal}")
     print(f"registered={1 if action in ('register', 'start') else 0}")
     print(f"started={1 if action == 'start' else 0}")
     early_death = getattr(args, "early_death", None)

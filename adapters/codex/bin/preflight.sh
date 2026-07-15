@@ -50,10 +50,12 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh tui-config
        preflight.sh subagent-info [--check]
        preflight.sh headless [--check] [--require-hook-trust] <worktree>
+       preflight.sh nested-headless --parent-harness <h> --parent-transport <t> --parent-sandbox <s> --child-harness <h> --launch-authority <authority> --worktree <path> [--json]
        preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--intensity <level>] [--depth 1|2] [--parent <slug>] [--worker-role <role>] [--owner <capability>] (--model-role <role>|--model <model> --reasoning <effort>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
+       preflight.sh dispatch-chain --route <route.json> --node <id> --slug <slug> --parent <slug> --mode <mode> [--model-role <role>] [--dry-run|--register|--start]
        preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]
        preflight.sh liveness [jobs.log]
-       preflight.sh harvest [--jobs <jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
+       preflight.sh harvest [--jobs <jobs.log>] [--reconcile-local <legacy-jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
        preflight.sh worktree-cleanup [--check|--apply] (--worktree <path>|--all-eligible [--repo <path>]) [--integration-ref <ref>] [--jobs <jobs.log>]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
@@ -484,7 +486,10 @@ model_selection_policy=main-orchestrator-must-select-per-job
 model_selection_surface=--model-role <portable-role>|--model <model> --reasoning <effort>|--inherit-model-settings
 runtime_projection_requires=agent-harness,AGENTS.md,hooks.json,native-skills,native-agents,native-modes
 runtime_projection_strict_requires=complete-codex-hook-trust
-job_registry=<agent-home>/.dispatch/jobs.log
+job_registry=<agent-home>/.dispatch/jobs.log (immutable AGENT_DISPATCH_JOBS for descendants)
+nested_eligibility_check=adapters/codex/bin/preflight.sh nested-headless --parent-harness <h> --parent-transport <t> --parent-sandbox <s> --child-harness <h> --launch-authority <a> --worktree <path>
+fallback_chain=same-harness-headless,cross-harness-headless,native-subagent,inline
+fallback_runner=adapters/codex/bin/preflight.sh dispatch-chain --route <route> --node <node> --dry-run|--register|--start
 liveness_surface=codex-session-jsonl-mtime
 liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]
 harvest_check=adapters/codex/bin/preflight.sh harvest [--jobs jobs.log] [--slug slug] [--mark-done]
@@ -494,7 +499,7 @@ worker_startup_signal=status,prompt-signal,mode
 worker_startup_signal_contract=preflight.sh status . codex-headless; preflight.sh prompt-signal . codex-headless; preflight.sh mode . codex-headless
 constraints=main-or-owner-dispatched,max-depth-2-for-standard-plus-owner,register-open-job,explicit-capability-mode-qa-intensity-depth-parent-parent_sid,transcript-liveness-required
 claude_headless=unsupported
-fallback=manual-main-session-or-report-unavailable
+fallback=checked-dispatch-chain-or-structured-degradation
 EOF
     if [ "$check_only" -eq 0 ]; then
       exit 0
@@ -519,6 +524,10 @@ EOF
     fi
     printf 'check=ok\nworktree=%s\n' "$worktree"
     ;;
+  nested-headless)
+    shift
+    python3 "$ROOT/utilities/nested-dispatch-eligibility.py" "$@"
+    ;;
   liveness)
     jobs=${2:-${AGENT_DISPATCH_JOBS:-"$AGENT_ROOT/.dispatch/jobs.log"}}
     AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$jobs"
@@ -534,6 +543,10 @@ EOF
   dispatch)
     shift
     AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/dispatch-headless.py" "$@"
+    ;;
+  dispatch-chain)
+    shift
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/stage-dispatch-fallback.py" "$@"
     ;;
   qa-policy)
     [ "$#" -ge 2 ] || { echo "codex preflight: qa-policy requires a QA level" >&2; exit 64; }

@@ -23,6 +23,7 @@ cases = {
   "Error: usage_limit_reached, resets at 5:30pm": ("usage-limit", "5:30pm"),
   "exceeded retry limit, last status: 429 Too Many Requests": ("usage-limit", ""),
   "invalid api key provided": ("auth", ""),
+  "websocket connect failed: Operation not permitted": ("network-operation-not-permitted", ""),
   "all good, work complete": None,
 }
 bad = 0
@@ -69,6 +70,12 @@ def launch(slug, body, watch):
 
 print(launch("limit1", "echo \"You've hit your session limit · resets 3pm\"; exit 1", 6))
 print(launch("clean1", "echo ok done; exit 0", 4))
+wt = "/wt/pidrow"; row("pidrow", wt)
+proc = subprocess.Popen(["bash", "-c", "exec -a codex sleep 5"])
+start = dh.process_start_ticks(proc.pid)
+ok = dh.annotate_job_row(jobs, "pidrow", wt, f"pid={proc.pid},pid_start={start}")
+proc.terminate(); proc.wait()
+print("PID_ANNOTATED" if ok and f"pid={proc.pid},pid_start={start}" in jobs.read_text() else "PID_MISSING")
 PY
 )
 
@@ -77,6 +84,10 @@ echo "$drive" | grep -q 'early_death=session-limit:3pm' \
   && ok "limit-death → row done,note=dead-session-limit,reset=3pm" \
   || bad "limit-death row not closed. drive=[$drive] jobs=[$(cat "$AH/.dispatch/jobs.log")]"
 [ -f "$AH/.dispatch/usage-reset.codex" ] && ok "reset cache written" || bad "no reset cache"
+
+echo "$drive" | grep -q 'PID_ANNOTATED' \
+  && ok "Codex wrapper records pid and process start ticks on the open row (O1)" \
+  || bad "Codex pid annotation missing. drive=[$drive]"
 
 echo "$drive" | grep -q 'early_death=-' \
   && awk -F'\t' '$5=="clean1"{print $2}' "$AH/.dispatch/jobs.log" | grep -qx open \
