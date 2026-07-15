@@ -245,11 +245,11 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-26 (interactive 세션 레지스트리 1급 소스화 — 유령 세션 가시성)**:
   - `~/.claude/sessions/<pid>.json`(pid·session_id·name·status·startedAt·kind)을 fallback에서 **1급 enrichment 계약**으로 승격. Codex/OpenCode의 동형 레지스트리는 실측 후 tolerant 추가(부재 = 기존 경로, 회귀 없음).
   - **이름 fallback 사슬 확장**: fresh sidecar → runtime-native title → **세션 레지스트리 `name`**(예: `agent-setting-17`) → 합성 slug. 이름 없는 익명 행을 제거한다.
-  - **`unused` 배지**: transcript 부재 + 시작 이후 무활동(레지스트리 `updatedAt`≈`startedAt`) 세션은 idle과 구분되는 `unused <경과>` 상태로 표시 — 프롬프트가 한 번도 제출되지 않은 유령 세션의 1급 신호(F-27 정리 후보의 기본 대상).
+  - **`unused` 배지**: transcript 부재 + 시작 이후 무활동(레지스트리 `updatedAt`≈`startedAt`) 세션은 idle과 구분되는 `unused <경과>` 상태로 표시 — 프롬프트가 한 번도 제출되지 않은 유령 세션의 1급 신호(F-27 정리 후보의 기본 대상). **[v8 minor #4, 사용자 결정 2026-07-15]** unused는 stale 창(48h) **면제** — mtime이 스폰 시각에 고정되는 형태라 창 적용 시 F-26의 목적이 자동 무력화됨. 프로세스가 살아있는 한 계속 `unused`로 노출하고, 종료는 존재 축(tier 2 dead)이 담당한다. 면제는 unused 형태 한정 — 사용된 세션의 48h 침묵→stale 순서는 불변.
   - **provenance 태깅(best-effort)**: 부모 프로세스 계보로 출처를 추정해 dim 태그(`herdr`/`terminal`/`vscode`/`worker`)로 표시. 판별 실패 시 조용히 생략(오귀속보다 결손).
 - **F-27 (제한적 세션 제어 — Non-goal 반전, 범위=kill+정리만, 사용자 확정 2026-07-15)**:
   - **반전 폭**: kill과 유령/stale 정리만. **attach·resume은 여전히 Non-goal**(herdr·tmux 영역). 자동 제어는 없다 — §0.5 v8 경계 개정 참조.
-  - **조작 모델**: 행 선택 커서(신규 라이브 키: `↑↓` 선택 모드 진입/이동, `x` = kill 요청) → 대상 요약과 함께 확인 프롬프트. 기본 허용 대상 = `unused`/`stale`/`dead`/idle worker 세션과 registry 잡의 exact pid; `working`/`busy` 세션은 경고 + 이중 확인.
+  - **조작 모델 [v8 minor #5 구현 확정, 사용자 확인 2026-07-15]**: 모드 있는 커서 — `s` 또는 `x`로 선택 모드 진입 → `↑↓`/`jk` 이동 → `x` = kill 요청 → `Esc` 해제. (`↑↓` 직접 진입 원안은 기존 스크롤 바인딩(§3 키 표)과 충돌해 폐기 — 스크롤 회귀 0 우선.) kill 요청 시 대상 요약과 함께 확인 프롬프트. 기본 허용 대상 = `unused`/`stale`/`dead`/idle worker 세션과 registry 잡의 exact pid; `working`/`busy` 세션은 경고 + 이중 확인.
   - **안전 계약**: 시그널 전 exact pid + `/proc` start-time 재검증(PID 재사용 방지, F-24·liveness 동형). SIGTERM 기본, 미종료 시 명시 재확인 후 SIGKILL 에스컬레이션. fleet 자신·현재 조작 중인 메인 세션은 대상 제외.
   - **행위 기록**: 모든 제어 행위는 fleet 소유 `action log`(XDG state jsonl, bounded rotation — 제목 sidecar·write-events 저널 동형)에 `ts/action/pid/sid/state/승인 방식`으로 append. 관제 도구가 자기 행위를 스스로 관측 대상으로 남긴다.
   - **registry 마감**: kill 성공한 registry 잡의 row는 `done,note=fleet-kill`로 마감한다 — F-18의 "registry 무write" 불변식에 대한 **명시적 단일 예외**(SD-15 `close_job_row` 동형 경로 재사용, 임의 write 아님).
@@ -313,7 +313,8 @@ tools/fleet/
     memory.py       # (v3/F-19) write-events 저널 + graveyard tail read-only 관찰
     usage_api.py    # (v2 F-1 확장) 하네스 계정 usage API read-only
   render.py         # curses 레이아웃(그룹 카드 + dispatch 트리 + mem 패널), 결손칸 —, 색
-  model.py          # Session/DispatchJob dataclass (하네스 무관 정규화 스키마)
+  model.py          # Session/DispatchJob dataclass + (v8/F-25) 단일 상태 분류기·state_evidence
+  control.py        # (v8/F-27) verify_target/kill_target/close_registry_row + action log
   titles.py         # (v5/F-21) neutral <harness>/<sid> sidecar + Claude legacy fallback
   refresh_title.py  # (v5/F-21) cross-harness transcript parser + pluggable no-tools title provider/scheduler
   demo.py           # --demo/FLEET_DEMO fixture 병합 (§3)

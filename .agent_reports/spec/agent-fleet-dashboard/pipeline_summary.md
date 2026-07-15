@@ -95,7 +95,10 @@
 ## Next
 `/autopilot-code --mode dev --intensity standard "fleet 관제 신뢰성·세션 제어 — PRD v8 §4.8 F-25→F-26→F-27"` (worktree, conductor 분사). F-28 구현은 stage-dispatch v9 registry/route record 착륙 후 별도 phase.
 
-## Minor-log (v8 기준 — 누적 3/5)
+## Minor-log (v8 기준 — 누적 5/5 ⚠️ 컨벤션상 /audit 점검 권장 시점)
+- 2026-07-15 (v8 minor #5): **v8 구현 후속 spec 동기 2건** — (a) kill 조작 키 확정: `↑↓` 직접 진입 원안이 스크롤 바인딩과 충돌해 `s`/`x` 진입→`↑↓`/`jk` 이동→`Esc` 해제로 구현·사용자 확인. (b) §9 모듈 트리에 `control.py` 등재 + `model.py` 설명 현행화. 근거 = fleet-v8-reliability final report follow-up #4·#5.
+- 2026-07-15 (v8 minor #4): **unused의 stale 창 면제** — 사용자 결정. 유령 세션은 mtime이 스폰 시각 고정이라 48h 창이 F-26 목적을 자동 무력화 → 살아있는 한 `unused` 유지, 종료는 존재 축 담당. 면제는 unused 한정(사용 세션의 침묵→stale 불변). 구현 = main 직접(commit 참조), 테스트 2건 신설(416 OK).
+
 - 2026-07-15 (v8 minor #3): **F-29 (native 서브 에이전트 호출 관측)** 추가 — 사용자 확정("서브 에이전트 호출 현황도 fleet에"). enrichment 전용(proc 백본 비대상), 소스 = OpenCode DB parent_id/agent(실측)·Claude transcript isSidechain+tool_use 짝·Codex threads probe 필요. 세션 밑 `└⚡` 서브 행 + `⚡N` 배지, 활성만 기본 표시, pulse 카운트 분리. 구현 = v8 사이클 수확 후 후속.
 - 2026-07-15 (v8 minor #1): **제목 provider 길이 축소 소급 동기** — 사용자 요청("요약을 좀 더 짧게")으로 코드가 먼저 4~8단어·64자로 변경됨(`80c492e9`, refresh_title.py). spec F-17/F-22의 "8~12단어·96자" 문구를 소급 동기. spec-first 순서 위반의 사후 교정 기록.
 - 2026-07-15 (v8 minor #2): **F-22 wide name zone 고정 상한 복원** — 사용자 피드백("session 길이를 맞춤형으로 늘린 건 오히려 별로"). wide 레이아웃 세션 제목 컬럼에 고정 상한(기본 40 display cols) 도입, slack 재배분 폐지. narrow/stack 예산·안전 클립·dispatch compact 상한 불변. 구현 = v8 구현 사이클에 편입.
