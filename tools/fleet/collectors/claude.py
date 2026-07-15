@@ -10,9 +10,12 @@ Two on-disk sources per session:
 Liveness signal = newest transcript mtime (projects/<enc-cwd>/*.jsonl), falling back to
 sessions/<pid>.json statusUpdatedAt.
 """
+import datetime
 import json
 import os
 import re
+
+from ..model import SubAgent
 
 
 def _home():
@@ -125,6 +128,95 @@ def _tail_ai_title(path, chunk=8192, max_scan=None):
         title = None
     _TITLE_CACHE[path] = (st.st_mtime, st.st_size, title)
     return title
+
+
+_SUBAGENT_CACHE = {}   # path -> (mtime, size, [SubAgent,...]) — separate from _TITLE_CACHE;
+                        # same (mtime, size) key pattern, independent invalidation.
+
+
+def _ts_to_epoch(ts):
+    if not isinstance(ts, str):
+        return None
+    try:
+        return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return None
+
+
+def _tail_subagents(path, chunk=8192, max_scan=None):
+    """Sub-agent rows from Task tool_use/tool_result pairing (prd.md:292 Claude source,
+    `isSidechain: true` marks the spawned sub-agent's own turns; the pairing itself lives
+    on the Task tool_use/tool_result pair in the PARENT thread). Grows backward exactly
+    like `_tail_ai_title` — same window, same guarantee (R3-1): if a tool_use is inside the
+    scanned window, any tool_result answering it is necessarily ALSO inside it (an
+    append-only log only grows forward), so "unpaired tool_use" found here is structurally
+    ACTIVE, never a scan-window artifact. The converse (a tool_result whose tool_use fell
+    outside the window) is silently dropped — that pairing describes a COMPLETED sub-agent,
+    which is hidden by default anyway (prd.md:293), so missing it costs nothing.
+
+    Tolerant by contract (F-3): any malformed line is skipped. Returns None only when the
+    file itself cannot be read (honest "no source", prd.md:292 — never a guess).
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    cached = _SUBAGENT_CACHE.get(path)
+    if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
+        return cached[2]
+    sz = st.st_size
+    limit = sz if max_scan is None else min(sz, max_scan)
+    window = chunk
+    calls = {}      # tool_use_id -> SubAgent
+    resolved = set()
+    while True:
+        start = max(0, sz - window)
+        try:
+            with open(path, "rb") as f:
+                f.seek(start)
+                data = f.read().decode("utf-8", "replace")
+        except OSError:
+            return None
+        lines = data.splitlines()
+        if start > 0 and lines:
+            lines = lines[1:]           # drop the partial first line
+        for ln in lines:
+            if "tool_use" not in ln and "tool_result" not in ln:
+                continue
+            try:
+                d = json.loads(ln)
+            except Exception:
+                continue
+            msg = d.get("message") if isinstance(d, dict) else None
+            content = msg.get("content") if isinstance(msg, dict) else None
+            if not isinstance(content, list):
+                continue
+            for c in content:
+                if not isinstance(c, dict):
+                    continue
+                if c.get("type") == "tool_use" and c.get("name") == "Task":
+                    tid = c.get("id")
+                    if not tid or tid in calls:
+                        continue
+                    inp = c.get("input") if isinstance(c.get("input"), dict) else {}
+                    calls[tid] = SubAgent(agent_type=inp.get("subagent_type"), active=True,
+                                          started_at=_ts_to_epoch(d.get("timestamp")),
+                                          source="claude-sidechain")
+                elif c.get("type") == "tool_result":
+                    tid = c.get("tool_use_id")
+                    if tid:
+                        resolved.add(tid)
+        if window >= limit:
+            break
+        window = min(window * 8, limit)
+    out = []
+    for tid, sa in calls.items():
+        if tid in resolved:
+            sa.active = False
+        out.append(sa)
+    out.sort(key=lambda sa: sa.started_at or 0, reverse=True)
+    _SUBAGENT_CACHE[path] = (st.st_mtime, st.st_size, out)
+    return out
 
 
 def _apply_statusline(sess, d):
@@ -259,6 +351,10 @@ def enrich(sess):
     # been prompted has no transcript at all. Ephemeral (leading underscore) — evidence for
     # the classifier, not a --json field.
     sess._has_transcript = bool(path)
+    if path:
+        subs = _tail_subagents(path)
+        if subs is not None:
+            sess.subagents = subs
     m = _mtime(path) if path else None
     if m is None and isinstance(sj, dict):
         su = sj.get("statusUpdatedAt") or sj.get("updatedAt")
