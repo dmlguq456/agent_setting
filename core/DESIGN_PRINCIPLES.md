@@ -31,6 +31,15 @@ Mechanize what is genuinely deterministic through hooks, scripts, gates, and DB 
 - Examples include routing state machines, artifact/git/lock guards, schema and scope checks, pending protection, turn-counter nudges, and machine-checkable QA criteria.
 - The anti-pattern is delegating a mechanical invariant to “the agent will decide each time.” The opposite anti-pattern is encoding semantic relevance as token rules merely because code can match text.
 
+Mechanization is not a license to expand the harness. Resolve each issue at the
+smallest appropriate layer; before adding an instruction, gate, command,
+schema, registry, or other global device, simplify or extend an existing
+surface. Add a new device only after repeated evidence and an explicit check
+that existing mechanisms cannot solve the problem. When a runtime lacks the
+needed mechanic, mark it unsupported and give a checked fallback instead of
+simulating parity. Keep each semantic rule in one owning document; adapters map
+runtime mechanics and point back rather than duplicating it.
+
 This section follows only §0 in priority. True semantic judgment is the explicit exception; §0.7 verifies that boundary.
 
 ---

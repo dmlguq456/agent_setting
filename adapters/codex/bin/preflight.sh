@@ -799,6 +799,10 @@ official_sources=openai-codex-pricing,openai-codex-changelog,openai-codex-rate-c
 local_projection_checks=codex-runtime-projection,usage-check,cli-version
 executable_projection=portable-shell-probe
 probe=loops/runtime-watch.sh --probe
+background_output_auto_resume=unsupported
+completion_delivery=native-scheduled-follow-up-if-exposed-else-current-turn-wait-poll
+completion_delivery_unavailable=state-automatic-follow-up-impossible
+detached_completion_promise=forbidden
 fallback=read-source-and-run-probe-or-report-unavailable
 note=Runtime-watch separates official runtime support, local adapter projection, parity gap, and fallback. It must not auto-edit policy.
 EOF

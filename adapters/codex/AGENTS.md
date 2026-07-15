@@ -48,6 +48,12 @@ and `ADAPTATION.md`; command output is authoritative for current support.
 Keep Codex `/statusline` responsible for model, context, token, limit, and session footer fields. `preflight.sh status` is an on-demand harness snapshot, including git dirty/worktree/dead-branch risks. Runtime config remains user-owned; `session_end=stop-alias` is only a projection-check status.
 The recommended footer fragment is `codex_setting/codex-config/tui-statusline.toml`; apply it only through explicit `preflight.sh tui-config`.
 
+Long-running completion delivery is governed by `preflight.sh loop-info
+runtime-watch`; background shell output alone does not resume a completed Codex
+turn. Obey its native scheduled follow-up, current-turn wait/poll, or explicit
+automatic-follow-up-impossible fallback instead of ending with a detached
+completion promise.
+
 ## Tool Contracts
 
 Before claiming support, run the relevant check:

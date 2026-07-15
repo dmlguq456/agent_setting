@@ -1201,6 +1201,10 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'source=loops/runtime-watch.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'action=deterministic-probe-and-proposal-report-only' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'auto_edit=unsupported' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'background_output_auto_resume=unsupported' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'completion_delivery=native-scheduled-follow-up-if-exposed-else-current-turn-wait-poll' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'completion_delivery_unavailable=state-automatic-follow-up-impossible' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'detached_completion_promise=forbidden' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'source=loops/drill/README.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'auto_run=unsupported' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'related_capability=autopilot-note' adapters/codex/bin/preflight.sh \
@@ -1210,7 +1214,8 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/bin/preflight.sh must expose Codex loop-info contracts without running loop scripts"
   fi
   if ! grep -Fq 'loop-info <oncall|note|study|drill|runtime-watch>' adapters/codex/README.md \
-    || ! grep -Fq 'preflight.sh loop-info <loop>' adapters/codex/ADAPTATION.md; then
+    || ! grep -Fq 'preflight.sh loop-info <loop>' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'background shell output alone does not resume a completed Codex' adapters/codex/AGENTS.md; then
     fail_msg "Codex docs must document loop-info support/fallback contracts"
   fi
 
@@ -3690,7 +3695,10 @@ BYTE_BUDGET_EOF
 }
 
 check_sibling_adapter_contract() {
-  if ! grep -Fq 'Sibling-Adapter Completion' core/ADAPTATION.md \
+  if ! grep -Fq 'smallest appropriate layer' core/DESIGN_PRINCIPLES.md \
+    || ! grep -Fq 'repeated evidence and an explicit check' core/DESIGN_PRINCIPLES.md \
+    || ! grep -Fq 'one owning document' core/DESIGN_PRINCIPLES.md \
+    || ! grep -Fq 'Sibling-Adapter Completion' core/ADAPTATION.md \
     || ! grep -Fq 'reference implementation or parent of another adapter' core/ADAPTATION.md \
     || ! grep -Fq 'report `GREEN` only after all' core/ADAPTATION.md \
     || ! grep -Fq 'Active Context Budget' core/ADAPTATION.md \
