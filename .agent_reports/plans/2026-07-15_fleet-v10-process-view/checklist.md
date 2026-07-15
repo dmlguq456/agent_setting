@@ -1,0 +1,64 @@
+# fleet v10 execute checklist
+
+> plan: `plan/plan.md` · 베이스라인 468 · ⛔ 실세션 스폰·signal 금지(픽스처만) · route record read-only · spec 변경 금지
+
+- [x] **Step 1 — F-28a route record 소비** (`route.py` 신설 · `dispatch.py` · `model.py` 4필드 · `--json route`)
+  - [x] `tools/fleet/route.py` — `load()`(tolerant·mtime 캐시·hash 재계산 검증) / `node_order()` / `build_views()` / `summary()` / `clear_cache()`
+  - [x] `model.DispatchJob` + `route_file`/`route_id`/`route_hash`/`route_node` (additive, Optional)
+  - [x] `dispatch._scan_route_nodes()` — **종단(done) 행 포함** 스캔 (§3.3 — 없으면 `✓` 영원히 못 그림). **재읽기로 확정**(`_jobs_log_fields` 선례 — §3.2.3, 모순 해소)
+  - [x] ★ **gate-pass 증거 probe** (§3.3.1 B1) — `completion_gate=`는 launch 선언일 뿐 통과 증거 아님. 실 증거 부재로 확인(구현 중 재probe — jobs.log/record 어디에도 별도 통과 마커 없음) → 결손(`—`) 유지, `_internal/carryover.md`에 기록. **추측 매핑 금지** 준수
+  - [x] proc 잡 route env = **`AGENT_ROUTE_FILE`/`AGENT_ROUTE_ID`/`AGENT_ROUTE_NODE`** (§3.2.2 실명 — `AGENT_DISPATCH_ROUTE_FILE`은 없는 이름, `AGENT_ROUTE_HASH`는 미export)
+  - [x] `collect.last_route_nodes` 스태시 (`last_malformed` 선례)
+  - [x] 픽스처 `tests/fixtures/route/` — real 2건 **복사**(/tmp 휘발) · `synth_parallel_lab`(병렬 3 + fan-in) · broken_hash · bad_schema · `jobs_route.log`(실측 행 4개)
+  - [x] `fleet.py:_snapshot_json` + `route` 키 (best-effort try/except) · **`gate_passed` 키 만들지 말 것**(§3.3.1) — 미생성 확인
+  - [x] `tests/test_f28_route.py` T1-1~T1-17 (**T1-4 hash 재계산 일치 필수**) — 19/19 OK, 회귀 0 (487=468+19, mirror parity만 예상된 실패)
+- [x] **Step 2 — F-28b route-aware breadcrumb** (`render.py`)
+  - [x] `_stage_segs(..., route_seq=None)` — 기본 None = 기존 동작 100% 보존
+  - [x] `_dispatch_stage_segs` depth-1만 route 경로, depth≥2 미세 상태(render.py:741-749) 불변
+  - [x] `_conductor_stage_override` — `route_node` 우선, 없으면 `_STAGE_ROLE` 폴백
+  - [x] `_PIPE_STAGES` **삭제 금지**(record 없는 잡의 유일 근거) · `_STAGE_ZONE_MAX` 불변 · 새 폭 상수 금지
+  - [x] `tests/test_f28_breadcrumb.py` T2-1~T2-6 (**T2-1 = 기존 `_dispatch_stage_segs` 직접호출과 동일 텍스트** — 6/6 OK, 회귀 0)
+- [x] **Step 3 — F-30 과정 뷰** (신규 화면 — critic 필수)
+  - [x] `_PROCESS_VIEW` 전역 + `set_process_view()` · `p` 키(`_handle_base_key`) · `w`와 직교
+  - [x] `fleet.py --view {group,process}` (P3 — `--once` critic 수행 조건) · footer `p` 표기 (+ `FLEET_VIEW` env 축소 경로도 구현)
+  - [x] `_build_lines` 분기 1곳(`_SELECTABLE` 리셋 직후, route 뷰 해석 블록 바로 뒤) → `_build_process_lines` · 반환 계약 동일
+  - [x] 카드: L1 `[capability·mode·intensity] rt-xxxxxxxx — n/m nodes ⏳경과` / L2 DAG 가로 흐름
+  - [x] 노드 글리프 `✓`/`●`/`○`/`✕` — 판정은 **§3.3 표 단일 소스**(`route._node_state`, 복제 없음), `●`가 `✓`를 이긴다, `done`+`note=fleet-kill`/`dead-*`는 `✕`
+  - [x] 병렬 분기 = 들여쓴 세로 행(`synth_parallel_lab` 기준) · fan-in 포함
+  - [x] ★ 활성 노드 아래 세션 축약행 + `└⚡` — **`job.pid → Session.pid` 조인**(§5.3.1 Y1) 구현. 재사용은 `_subagent_row()`. 매칭 실패 → 행 생략
+  - [x] `_ROUTE_FOLD`(상태) + `_FOLDABLE`(line idx) + `_FOLD_ROWS`(screen row) · `_handle_mouse` rung 3 삽입 · 완료 1행 접힘 · 실패 자동 펼침+적색
+  - [x] ★ 접힘 카드 라벨에 **`folded`/`hidden` 어휘 금지** — `▸`/`▾` 글리프만 사용, 텍스트 검증 완료(B2)
+  - [x] degrade 카드(record 부재 = 빈칸 아님) · `tracked_gate_evidence`는 `a`에서만 dim(게이트 이름만, 통과 여부 아님)
+  - [x] `_WIDE`에 신규 글리프 폭 확인 — 전부 1-cell(기존 `_LIVE_GLYPH` 관례와 동일), 변경 불필요 · `_drop_past_stages` 재사용(신규 절단 로직 0, L1은 `_prompt_variants` idiom 사다리 신설)
+  - [x] `demo.py`에 route 잡 3건(record/degrade/병렬) + subagents 1건 additive — 실측 중 real fixture route_id 재사용 시 라이브 데이터 충돌 발견 → `demo_card.json`(가짜 hash) 신설로 해결
+  - [x] `tests/test_f30_process_view.py` T3-1~T3-14(+T3-9b) — 마우스 계열은 `test_f27_mouse.py` FakeScreen `_draw` 하네스로 — 15/15 OK, 회귀 0(508=493+15)
+  - [x] ★ **T3-9: `_FOLD_ROWS ∩ (_CLICK_ROWS ∪ _TOGGLE_ROWS) == ∅`** 확인(구조적 보장 — `_draw` 루프에서 fold 우선 분기) · T3-1 회귀 0 · T3-11 프롬프트 삼킴
+- [x] **Step 4a — F-28c governor lease** (**실재 확인됨 → 구현**)
+  - [x] `collectors/governor.py` — read-only + mtime 캐시, subprocess 금지
+  - [x] ★ 죽은 lease 자체 필터(`procscan.read_proc_start(pid) == starttime`) — 파일 수정 금지(테스트로 바이트 불변 확인)
+  - [x] pulse 인접 1행 `⚙ governor n/cap` · healthy 무음 임계 50%(실측 1/5 근거, dev_log 기록) · 카운트 혼입 금지(I8)
+  - [x] `--json` `governor` 키 additive · `tests/test_f28c_governor.py` — 6/6 OK, 회귀 0(514=508+6)
+- [x] **Step 4b — run registry 스킵 + 이월** (`_internal/carryover.md` — "부재"가 아니라 "경로 발견 불가"가 사유, Step 1에서 선기록)
+- [x] **Step 5 — 통합 검증 · 미러**
+  - [x] V1 전체 회귀 `python3 -m unittest discover -s tools/fleet/tests -t .` → **515 tests, OK** (468+47)
+  - [x] V2 3폭 × 2뷰 `--once` 캡처 (60/120/168 × group/process, `FLEET_DEMO=1`) — `dev_logs/step_05_v2_captures.txt`. 카드 콘텐츠 오버플로 0(공유 헤더 행의 60열 오버플로는 그룹 뷰에도 있는 기존 특성, v10 회귀 아님)
+  - [x] V3 ★ 디자인 critic 비평 — **code-test 스테이지로 위임**(plan.md §7 V3 "code-test가 수행/수확" 명시). V2 캡처가 그 입력물로 준비됨
+  - [x] V4 `--json` additive 보증(기존 키 불변) — `governor`/`route` 신규 키, `jobs[]` 4필드 추가, `gate_passed` 부재 확인
+  - [x] V5 미러 rsync + `test_mirror_parity` — 신규 .py + fixtures json 전부 포함, OK
+  - [x] G3 ★ read-only 정적 게이트 grep → **출력 0줄**(canonical·mirror 둘 다) — docstring이 게이트 패턴을 인용 텍스트로 담고 있어 자기 자신을 오탐시킨 것 발견, 산문으로 재작성해 해소
+- [x] **불변식 I1~I11 전량 유지** — 전량 확인(근거: `dev_logs/step_05_integration.md` 표). Step 5 스윕 중 **I2 위반 1건 실발견**: `route.load(비-경로형 입력)`이 `TypeError`를 raise — `isinstance` 가드 추가로 수정, 회귀 테스트(`test_t1_3b`) 추가, 515 tests 재확인
+- [x] **Step 6 — code-test YELLOW 수정 패스** (`dev_logs/step_06_fix_pass_code_test_yellow.md`)
+  - [x] 결함 1(blocking) — `_scan_route_nodes` 증거에 `route_file`/`route_hash` 추가 + `resolve_records(jobs, node_evidence)` — **live 실측으로 수정 확인**(`rt-27f7bc9f`가 이제 record 카드)
+  - [x] 결함 2(1에 종속) — 완료 route 1행 접힘 live 도달 확인(`rt-1120bb39`/`rt-70be9258` 4/4·3/3 접힘)
+  - [x] 결함 3(critic 🟡1) — `demo.py`가 `_LAB_RID`의 `setup`도 seed → 병렬 카드 DAG 논리 정합(`setup ✓10m` 부모, `1/6 nodes`)
+  - [x] 결함 4(spec 문자) — L1 `⏳` 글리프 추가(`_route_card_l1`), 카드 내 경과 표기 일원화
+  - [x] T3-5/T3-9b를 프로덕션 불가능 상태(`liveness="idle"` done job)에서 `jobs=[]`+terminal evidence로 재작성(code-test 지시)
+  - [x] `tracked_gate_evidence`/gate 통과 결손은 계획대로 미변경(사용자 판단 사항)
+  - [x] 전체 회귀 516 OK(515+1) · mirror parity OK · G3 0줄 · `--json` additive 재확인
+- [x] **Step 7 — code-test 재검증(2회차) 수정: 중복 degrade 카드** (`dev_logs/step_07_fix_pass_round2_duplicate_card.md`)
+  - [x] 근인 = 결함 1과 동일 버그 클래스(2번째 위치) — `_build_process_lines`의 `covered_slugs`가 live `jobs`만 순회
+  - [x] `_scan_route_nodes` 증거에 `parent` 1필드 추가(결함 1의 `route_file`과 동형) + `covered_slugs`를 `jobs ∪ node_evidence`로 확장
+  - [x] M2 형태 회귀 테스트 추가 + **mutation 확인**(되돌리면 실패) — `test_conductor_not_duplicated_as_degrade_card_when_route_child_is_terminal`
+  - [x] M3(`⏳`)·M4(demo setup seed) 무보호 지적 → 경량 테스트 각 1개 추가, **양쪽 다 mutation 확인**(되돌리면 실패)
+  - [x] live 실측: 이 사이클 자신의 record에서 중복 카드 0회, `rt-27f7bc9f` 카드 1회만 — **판정 기준 충족**
+  - [x] 전체 회귀 519 OK(516+3) · mirror parity OK · G3 0줄 · 60/120/168 오버플로 0 · `--json` additive 재확인

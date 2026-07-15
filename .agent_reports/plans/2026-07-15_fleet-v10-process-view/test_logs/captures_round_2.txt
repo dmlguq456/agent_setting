@@ -1,0 +1,231 @@
+=============== process 60 LIVE ===============
+  fleet ⠋ 2 working   ● 6 idle   ○ 2 detached   ↳ 2 jobs (2 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 2h26m
+─────
+
+  PROCESS VIEW   p group view  
+
+  ▸ [code·dev·standard] rt-1120bb39 — 4/4 nodes
+
+  ▾ [code·dev] rt-27f7bc9f — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ○ › test ○ › report ○
+
+  ▾ [code·dev·standard] rt-41eef22d — 2/4 nodes
+    plan ✓ › execute ✓ › test ● (gpt-5.6-sol) › report ○
+     └▸🚀 v94-reading-face-d2-test-r1  codex  gpt-5.6-sol
+
+  ▾ [spec·update·standard] rt-5e123969 — 2/3 nodes
+    research ✓ › review ○ › prd-transaction ✓
+
+  ▸ [spec·update·standard] rt-70be9258 — 3/3 nodes
+
+  ▾ [code·dev] rt-9ff8199b — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ✕ › test ✕ › report ✕
+
+  ▾ [code·dev] fleet-v10-process-view — no route record
+    plan › exec › test
+=============== process 60 DEMO ===============
+  fleet ⠼ 5 working   ● 10 idle   ○ 3 detached   ↳ 18 jobs (14 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 2h26m
+─────
+
+  PROCESS VIEW   p group view  
+
+  ▸ [code·dev·standard] rt-1120bb39 — 4/4 nodes
+
+  ▾ [code·dev] rt-27f7bc9f — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ○ › test ○ › report ○
+
+  ▾ [code·dev·standard] rt-2f5c79f5 — 1/4 nodes  ⏳15m
+    execute ● 8m (Opus 4.8·high) › test ○ › report ○
+     └▸🚀 demo-route-c…  claude code  Opus 4.8  (high)  ⏳8m
+     └⚡explore  ⏳2m
+
+  ▾ [code·dev·standard] rt-41eef22d — 2/4 nodes
+    plan ✓ › execute ✓ › test ● (gpt-5.6-sol) › report ○
+     └▸🚀 v94-reading-face-d2-test-r1  codex  gpt-5.6-sol
+
+  ▾ [spec·update·standard] rt-5e123969 — 2/3 nodes
+    research ✓ › review ○ › prd-transaction ✓
+
+  ▾ [lab·eval] rt-6f5423d0 — 1/6 nodes  ⏳10m ⚠ failed node
+    setup ✓10m
+      ├ eval-asr ● 9m (Sonnet 5·medium)
+      ├ eval-sep ✕ 3m
+      └ eval-vad ○
+    › aggregate ○ › report ○
+     └▸🚀 demo-lab-c…  claude code  Sonnet 5  (medium)  ⏳9m
+
+  ▸ [spec·update·standard] rt-70be9258 — 3/3 nodes
+
+  ▾ [code·dev] rt-9ff8199b — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ✕ › test ✕ › report ✕
+
+  ▾ [spec·dev] demo-degrade-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] demo-feat-x — no route record
+    plan✓ › exec › test
+
+  ▾ [review·debug] demo-review — no route record
+    plan✓ › exec✓ › test
+
+  ▾ [spec·dev] demo-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] fleet-v10-process-view — no route record
+    plan › exec › test
+=============== process 120 LIVE ===============
+  fleet ⠧ 2 working   ● 6 idle   ○ 2 detached   ↳ 2 jobs (2 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 2h26m
+─────
+
+  PROCESS VIEW   p group view  
+
+  ▸ [code·dev·standard] rt-1120bb39 — 4/4 nodes
+
+  ▾ [code·dev·standard] rt-27f7bc9f — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ○ › test ○ › report ○
+
+  ▾ [code·dev·standard] rt-41eef22d — 2/4 nodes
+    plan ✓ › execute ✓ › test ● (gpt-5.6-sol) › report ○
+     └▸🚀 v94-reading-face-d2-test-r1  codex  gpt-5.6-sol
+
+  ▾ [spec·update·standard] rt-5e123969 — 2/3 nodes
+    research ✓ › review ○ › prd-transaction ✓
+
+  ▸ [spec·update·standard] rt-70be9258 — 3/3 nodes
+
+  ▾ [code·dev·standard] rt-9ff8199b — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ✕ › test ✕ › report ✕
+
+  ▾ [code·dev] fleet-v10-process-view — no route record
+    plan › exec › test
+=============== process 120 DEMO ===============
+  fleet ⠼ 5 working   ● 10 idle   ○ 3 detached   ↳ 18 jobs (14 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 2h26m
+─────
+
+  PROCESS VIEW   p group view  
+
+  ▸ [code·dev·standard] rt-1120bb39 — 4/4 nodes
+
+  ▾ [code·dev·standard] rt-27f7bc9f — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ○ › test ○ › report ○
+
+  ▾ [code·dev·standard] rt-2f5c79f5 — 1/4 nodes  ⏳15m
+    plan ✓15m › execute ● 8m (Opus 4.8·high) › test ○ › report ○
+     └▸🚀 demo-route-conductor-execute  claude code  Opus 4.8  (high)  ⏳8m
+     └⚡explore  ⏳2m
+
+  ▾ [code·dev·standard] rt-41eef22d — 2/4 nodes
+    plan ✓ › execute ✓ › test ● (gpt-5.6-sol) › report ○
+     └▸🚀 v94-reading-face-d2-test-r1  codex  gpt-5.6-sol
+
+  ▾ [spec·update·standard] rt-5e123969 — 2/3 nodes
+    research ✓ › review ○ › prd-transaction ✓
+
+  ▾ [lab·eval·standard] rt-6f5423d0 — 1/6 nodes  ⏳10m ⚠ failed node
+    setup ✓10m
+      ├ eval-asr ● 9m (Sonnet 5·medium)
+      ├ eval-sep ✕ 3m
+      └ eval-vad ○
+    › aggregate ○ › report ○
+     └▸🚀 demo-lab-conductor-eval-asr  claude code  Sonnet 5  (medium)  ⏳9m
+
+  ▸ [spec·update·standard] rt-70be9258 — 3/3 nodes
+
+  ▾ [code·dev·standard] rt-9ff8199b — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ✕ › test ✕ › report ✕
+
+  ▾ [spec·dev] demo-degrade-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] demo-feat-x — no route record
+    plan✓ › exec › test
+
+  ▾ [review·debug] demo-review — no route record
+    plan✓ › exec✓ › test
+
+  ▾ [spec·dev] demo-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] fleet-v10-process-view — no route record
+    plan › exec › test
+=============== process 168 LIVE ===============
+  fleet ⠇ 2 working   ● 6 idle   ○ 2 detached   ↳ 2 jobs (2 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 2h26m
+─────
+
+  PROCESS VIEW   p group view  
+
+  ▸ [code·dev·standard] rt-1120bb39 — 4/4 nodes
+
+  ▾ [code·dev·standard] rt-27f7bc9f — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ○ › test ○ › report ○
+
+  ▾ [code·dev·standard] rt-41eef22d — 2/4 nodes
+    plan ✓ › execute ✓ › test ● (gpt-5.6-sol) › report ○
+     └▸🚀 v94-reading-face-d2-test-r1  codex  gpt-5.6-sol
+
+  ▾ [spec·update·standard] rt-5e123969 — 2/3 nodes
+    research ✓ › review ○ › prd-transaction ✓
+
+  ▸ [spec·update·standard] rt-70be9258 — 3/3 nodes
+
+  ▾ [code·dev·standard] rt-9ff8199b — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ✕ › test ✕ › report ✕
+
+  ▾ [code·dev] fleet-v10-process-view — no route record
+    plan › exec › test
+=============== process 168 DEMO ===============
+  fleet ⠹ 5 working   ● 10 idle   ○ 3 detached   ↳ 18 jobs (14 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 2h26m
+─────
+
+  PROCESS VIEW   p group view  
+
+  ▸ [code·dev·standard] rt-1120bb39 — 4/4 nodes
+
+  ▾ [code·dev·standard] rt-27f7bc9f — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ○ › test ○ › report ○
+
+  ▾ [code·dev·standard] rt-2f5c79f5 — 1/4 nodes  ⏳15m
+    plan ✓15m › execute ● 8m (Opus 4.8·high) › test ○ › report ○
+     └▸🚀 demo-route-conductor-execute  claude code  Opus 4.8  (high)  ⏳8m
+     └⚡explore  ⏳2m
+
+  ▾ [code·dev·standard] rt-41eef22d — 2/4 nodes
+    plan ✓ › execute ✓ › test ● (gpt-5.6-sol) › report ○
+     └▸🚀 v94-reading-face-d2-test-r1  codex  gpt-5.6-sol
+
+  ▾ [spec·update·standard] rt-5e123969 — 2/3 nodes
+    research ✓ › review ○ › prd-transaction ✓
+
+  ▾ [lab·eval·standard] rt-6f5423d0 — 1/6 nodes  ⏳10m ⚠ failed node
+    setup ✓10m
+      ├ eval-asr ● 9m (Sonnet 5·medium)
+      ├ eval-sep ✕ 3m
+      └ eval-vad ○
+    › aggregate ○ › report ○
+     └▸🚀 demo-lab-conductor-eval-asr  claude code  Sonnet 5  (medium)  ⏳9m
+
+  ▸ [spec·update·standard] rt-70be9258 — 3/3 nodes
+
+  ▾ [code·dev·standard] rt-9ff8199b — 0/4 nodes ⚠ failed node
+    plan ✕ › execute ✕ › test ✕ › report ✕
+
+  ▾ [spec·dev] demo-degrade-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] demo-feat-x — no route record
+    plan✓ › exec › test
+
+  ▾ [review·debug] demo-review — no route record
+    plan✓ › exec✓ › test
+
+  ▾ [spec·dev] demo-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] fleet-v10-process-view — no route record
+    plan › exec › test

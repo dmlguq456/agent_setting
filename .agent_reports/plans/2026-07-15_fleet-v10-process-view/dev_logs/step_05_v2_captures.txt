@@ -1,0 +1,219 @@
+=== group   60 ===
+  usage claude code   5h [━───────  15%]   7d [━━━─────  38%]
+        codex         7d [━━──────  23%] ↻ 6d8h
+  fleet ⠏ 1 working   ● 5 idle   ↳ 2 jobs (1 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 1h43m
+  alert ⚠ stale fleet-v10-process-v…
+─────
+
+  SESSIONS   stack · press w to cycle  
+
+● agent-note/ 🚧 1  tracked
+▍ ⠏ codex           Fix a11y focus lint… tracked  main
+▍   8h20m           gpt-5.6-sol (xhigh)    
+▍                   [━━━━━━━━━━━━──────  64%]
+▍ ● claude code     Connection indicato… tracked  main
+▍   15h36m          Fable 5 (xhigh)        
+▍                   [━━━━━━━━━─────────  52%]
+
+● agent_setting/ 🚧 3  ✓ 8m  tracked
+▍ ● claude code     Process flow vis… ▾1 tracked  main
+▍   12h18m          Fable 5 (xhigh)        
+▍                   [──────────────────   0%]
+▍ ↳ · claude code   fleet-v10-process…  fleet-v10-process-view
+▍   —               opus (high)                dev·std/conductor/qa:~std  
+▍                   code: plan › exec › test
+▍ ● codex           v12 stage-dispatch … tracked  main
+▍   9h35m           gpt-5.6-sol (xhigh)    
+▍                   [━━━━━━━━━━━───────  62%]
+
+● SR_CorrNet_DSC/ 🚧 1  ✓ 37m  tracked
+▍ ● claude code     M3_3 M4_1 SNR robus… tracked  main
+▍   15h42m          Fable 5 (xhigh)        
+▍                   [━━━━━━━━━━────────  53%]
+
+○ personal_homepage/ 🚧 1  tracked
+▍ ● codex           Search Console GitH… tracked  main
+▍   9h19m           gpt-5.6-sol (xhigh)    
+▍                   [━━━━━━────────────  34%]
+
+  ⠹ working   ● idle   · stale   ▾N child jobs   ↳ dispatch   🚧 N worktrees   🧠 0 mem   ~ derived/inherited value
+
+=== process 60 ===
+  fleet ⠹ 4 working   ● 11 idle   ○ 3 detached   ↳ 18 jobs (13 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 1h43m
+─────
+
+  PROCESS VIEW   p group view  
+
+  ▾ [code·dev·standard] rt-2f5c79f5 — 1/4 nodes  15m
+    execute ● 8m (Opus 4.8·high) › test ○ › report ○
+     └▸🚀 demo-route-c…  claude code  Opus 4.8  (high)  ⏳8m
+     └⚡explore  ⏳2m
+
+  ▾ [code·dev·standard] rt-41eef22d — 2/4 nodes
+    plan ✓ › execute ● (gpt-5.6-sol) › test ✓ › report ○
+     └▸🚀 v94-reading-face-d2-execute-r1  codex  gpt-5.6-sol
+
+  ▾ [lab·eval] rt-6f5423d0 — 0/6 nodes  9m ⚠ failed node
+    setup ○
+      ├ eval-asr ● 9m (Sonnet 5·medium)
+      ├ eval-sep ✕ 3m
+      └ eval-vad ○
+    › aggregate ○ › report ○
+     └▸🚀 demo-lab-c…  claude code  Sonnet 5  (medium)  ⏳9m
+
+  ▾ [spec·dev] demo-degrade-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] demo-feat-x — no route record
+    plan✓ › exec › test
+
+  ▾ [review·debug] demo-review — no route record
+    plan✓ › exec✓ › test
+
+  ▾ [spec·dev] demo-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] fleet-v10-process-view — no route record
+    plan › exec › test
+
+=== group   120 ===
+  usage claude code   5h [━───────  15%]   7d [━━━─────  38%]
+        codex         7d [━━──────  23%] ↻ 6d8h
+  fleet ⠦ 1 working   ● 5 idle   ↳ 2 jobs (1 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 1h43m
+  alert ⚠ stale fleet-v10-process-v…
+─────
+
+  SESSIONS   narrow · press w to cycle  
+
+● agent-note/ 🚧 1  tracked
+▍ ⠦ codex           Fix a11y focus lint test coverage tracked  main
+▍   8h20m           gpt-5.6-sol (xhigh)    [━━━━━━━━━━━━──────  65%]
+▍ ● claude code     Connection indicator semantic decomposition tracked  main
+▍   15h36m          Fable 5 (xhigh)        [━━━━━━━━━─────────  52%]
+
+● agent_setting/ 🚧 3  ✓ 8m  tracked
+▍ ● claude code     Process flow visualization for fleet v10 ▾1 tracked  main
+▍   12h18m          Fable 5 (xhigh)        [──────────────────   0%]
+▍ ↳ · claude code   fleet-v10-process…  fleet-v10-process-view
+▍   —               opus (high)                dev·std/conductor/qa:~std  code: plan › exec › test
+▍ ● codex           v12 stage-dispatch completion audit tracked  main
+▍   9h35m           gpt-5.6-sol (xhigh)    [━━━━━━━━━━━───────  62%]
+
+● SR_CorrNet_DSC/ 🚧 1  ✓ 37m  tracked
+▍ ● claude code     M3_3 M4_1 SNR robustness epoch sweep tracked  main
+▍   15h42m          Fable 5 (xhigh)        [━━━━━━━━━━────────  53%]
+
+○ personal_homepage/ 🚧 1  tracked
+▍ ● codex           Search Console GitHub Pages indexing fix tracked  main
+▍   9h19m           gpt-5.6-sol (xhigh)    [━━━━━━────────────  34%]
+
+  ⠹ working   ● idle   · stale   ▾N child jobs   ↳ dispatch   🚧 N worktrees   🧠 0 mem   ~ derived/inherited value
+
+=== process 120 ===
+  fleet ⠋ 4 working   ● 11 idle   ○ 3 detached   ↳ 18 jobs (13 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 1h44m
+─────
+
+  PROCESS VIEW   p group view  
+
+  ▾ [code·dev·standard] rt-2f5c79f5 — 1/4 nodes  15m
+    plan ✓15m › execute ● 8m (Opus 4.8·high) › test ○ › report ○
+     └▸🚀 demo-route-conductor-execute  claude code  Opus 4.8  (high)  ⏳8m
+     └⚡explore  ⏳2m
+
+  ▾ [code·dev·standard] rt-41eef22d — 2/4 nodes
+    plan ✓ › execute ● (gpt-5.6-sol) › test ✓ › report ○
+     └▸🚀 v94-reading-face-d2-execute-r1  codex  gpt-5.6-sol
+
+  ▾ [lab·eval·standard] rt-6f5423d0 — 0/6 nodes  9m ⚠ failed node
+    setup ○
+      ├ eval-asr ● 9m (Sonnet 5·medium)
+      ├ eval-sep ✕ 3m
+      └ eval-vad ○
+    › aggregate ○ › report ○
+     └▸🚀 demo-lab-conductor-eval-asr  claude code  Sonnet 5  (medium)  ⏳9m
+
+  ▾ [spec·dev] demo-degrade-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] demo-feat-x — no route record
+    plan✓ › exec › test
+
+  ▾ [review·debug] demo-review — no route record
+    plan✓ › exec✓ › test
+
+  ▾ [spec·dev] demo-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] fleet-v10-process-view — no route record
+    plan › exec › test
+
+=== group   168 ===
+  usage claude code   5h [━━──────────  15%]   7d [━━━━━───────  38%]
+        codex         7d [━━━─────────  23%] ↻ 6d8h
+  fleet ⠹ 1 working   ● 5 idle   ↳ 2 jobs (1 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 1h44m
+  alert ⚠ stale fleet-v10-process-v…
+─────
+
+    harness         session                                 branch        model                      context / stage   time     
+
+● agent-note/ 🚧 1  tracked
+▍ ⠹ codex           Fix a11y focus lint test cover… tracked main          gpt-5.6-sol (xhigh)        ━━━━━━━━━━━━━━━━────────  65%    8h20m
+▍ ● claude code     Connection indicator semantic … tracked main          Fable 5 (xhigh)            ━━━━━━━━━━━━────────────  52%   15h36m
+
+● agent_setting/ 🚧 3  ✓ 8m  tracked
+▍ ● claude code     Process flow visualization … ▾1 tracked main          Fable 5 (xhigh)            ────────────────────────   0%   12h18m
+▍ ↳ · claude code   fleet-v10-process-view                  fleet-v10-pro     last seen —        —
+▍ ● codex           v12 stage-dispatch completion … tracked main          gpt-5.6-sol (xhigh)        ━━━━━━━━━━━━━━━─────────  62%    9h35m
+
+● SR_CorrNet_DSC/ 🚧 1  ✓ 37m  tracked
+▍ ● claude code     M3_3 M4_1 SNR robustness epoch… tracked main          Fable 5 (xhigh)            ━━━━━━━━━━━━━───────────  53%   15h42m
+
+○ personal_homepage/ 🚧 1  tracked
+▍ ● codex           Search Console GitHub Pages in… tracked main          gpt-5.6-sol (xhigh)        ━━━━━━━━────────────────  34%    9h19m
+
+  ⠹ working   ● idle   · stale   ▾N child jobs   ↳ dispatch   🚧 N worktrees   🧠 0 mem   ~ derived/inherited value
+
+=== process 168 ===
+  fleet ⠦ 4 working   ● 11 idle   ○ 3 detached   ↳ 18 jobs (13 working)
+  🧠 mem  +0 added(0w·0d) · 0 expired · 0 pruned · last distill 1h44m
+─────
+
+  PROCESS VIEW   p group view  
+
+  ▾ [code·dev·standard] rt-2f5c79f5 — 1/4 nodes  15m
+    plan ✓15m › execute ● 8m (Opus 4.8·high) › test ○ › report ○
+     └▸🚀 demo-route-conductor-execute  claude code  Opus 4.8  (high)  ⏳8m
+     └⚡explore  ⏳2m
+
+  ▾ [code·dev·standard] rt-41eef22d — 2/4 nodes
+    plan ✓ › execute ● (gpt-5.6-sol) › test ✓ › report ○
+     └▸🚀 v94-reading-face-d2-execute-r1  codex  gpt-5.6-sol
+
+  ▾ [lab·eval·standard] rt-6f5423d0 — 0/6 nodes  9m ⚠ failed node
+    setup ○
+      ├ eval-asr ● 9m (Sonnet 5·medium)
+      ├ eval-sep ✕ 3m
+      └ eval-vad ○
+    › aggregate ○ › report ○
+     └▸🚀 demo-lab-conductor-eval-asr  claude code  Sonnet 5  (medium)  ⏳9m
+
+  ▾ [spec·dev] demo-degrade-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] demo-feat-x — no route record
+    plan✓ › exec › test
+
+  ▾ [review·debug] demo-review — no route record
+    plan✓ › exec✓ › test
+
+  ▾ [spec·dev] demo-spec — no route record
+    spec✓ › design › dev
+
+  ▾ [code·dev] fleet-v10-process-view — no route record
+    plan › exec › test
+
