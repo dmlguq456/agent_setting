@@ -706,6 +706,78 @@ def _loop_current_case(args):
     return None
 
 
+def _iso_to_epoch(ts):
+    """ISO8601 jobs.log timestamp -> epoch seconds (float) | None. Sibling of
+    `_iso_elapsed_min` (:806) but returns the raw instant instead of a pre-computed elapsed —
+    route.py's `build_views` takes `now` as an argument (purity, §3.3), so the elapsed-minutes
+    math for a route-node's `done` row happens there, not here."""
+    try:
+        dt = datetime.fromisoformat((ts or "").strip())
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
+def _scan_route_nodes(paths):
+    """{route_id: {node_id: {...}}} — F-28a (§3.3): unlike `_scan_jobs_log`, this pass keeps
+    TERMINAL rows (done/killed/cancelled). A route node that just finished has no live job row
+    left (`_scan_jobs_log` drops terminal rows before classification, dispatch.py:845-846), so
+    without this separate pass a completed node could never render `✓` (plan §3.3's "설계상 가장
+    놓치기 쉬운 지점"). Rereads the same jobs.log files (§3.2.3 — `_jobs_log_fields` precedent,
+    not a new I/O pattern); last-occurrence-wins per (route_id, route_node), same reconciliation
+    idiom as `_scan_jobs_log`'s per-slug dedup."""
+    result = {}
+    if isinstance(paths, (str, bytes, os.PathLike)):
+        paths = [paths]
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                rows = f.read().splitlines()
+        except OSError:
+            continue
+        for line in rows:
+            if not line.strip():
+                continue
+            fields = line.split("\t")
+            if len(fields) != 6:
+                continue
+            ts, status, _repo, _worktree, slug, pipe = fields
+            meta = _parse_pipe_meta(pipe or "")
+            route_id = meta.get("route_id")
+            route_node = meta.get("route_node")
+            if not route_id or not route_node:
+                continue
+            pid_s = meta.get("pid")
+            result.setdefault(route_id, {})[route_node] = {
+                "status": status, "slug": slug, "ts": _iso_to_epoch(ts),
+                "pid": int(pid_s) if (pid_s or "").isdigit() else None,
+                "harness": _infer_harness(meta, slug),
+                "model": meta.get("model"),
+                "effort": meta.get("effort") or meta.get("reasoning"),
+                "completion_gate": meta.get("completion_gate"),
+                "note": meta.get("note"),
+                # code-test verification.md §10 — a route whose only surviving field trace is
+                # a TERMINAL row (every carrying job already finished) still names its record's
+                # path; without it here, route.resolve_records() has no way to find that record
+                # once no LIVE job carries route_file anymore, and a fully-finished (or
+                # stage-gap) route silently degrades despite its record being perfectly valid.
+                "route_file": meta.get("route_file"),
+                "route_hash": meta.get("route_hash"),
+                # code-test verification_round_2.md §10 — same bug class, second location:
+                # render.py's degrade-pool `covered_slugs` excludes a route's own depth-1
+                # conductor from the degrade pool by matching a LIVE child's `parent_slug`. Once
+                # that child goes terminal it vanishes from live `jobs` (same mechanism as
+                # route_file above) and the conductor stops being excluded — its bare slug then
+                # re-appears as a contradicting "no route record" card next to its own real
+                # record card. `parent` (== `_scan_jobs_log`'s `parent_slug`, same pipe field,
+                # already parsed) is the terminal-surviving half of that same fact.
+                "parent": meta.get("parent") or meta.get("parent_slug"),
+            }
+    return result
+
+
 # --- source (a): process scan (uncapped, no related() filter) ---
 def _scan_processes():
     jobs = []
@@ -764,6 +836,12 @@ def _scan_processes():
                 capability_owner=env.get("AGENT_DISPATCH_OWNER"),
                 effort=env.get("AGENT_DISPATCH_EFFORT"),
                 model_role=env.get("AGENT_DISPATCH_MODEL_ROLE"),
+                route_file=env.get("AGENT_ROUTE_FILE") or None,
+                route_id=env.get("AGENT_ROUTE_ID") or None,
+                route_node=env.get("AGENT_ROUTE_NODE") or None,
+                # AGENT_ROUTE_HASH is not exported by the headless launcher (§3.2.2) — a proc
+                # job's route_hash stays None; integrity still rests on the record's own
+                # recomputed hash (route.py P1), so this is not a weaker check.
             ))
         elif loop:
             key = loop.group(1)
@@ -877,6 +955,8 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None):
             intensity=meta.get("intensity"), worker_role=worker_role,
             capability_owner=meta.get("owner") or meta.get("capability_owner"),
             effort=meta.get("effort"), model_role=meta.get("model_role"),
+            route_file=meta.get("route_file"), route_id=meta.get("route_id"),
+            route_hash=meta.get("route_hash"), route_node=meta.get("route_node"),
         ))
     return jobs, malformed
 
@@ -1037,7 +1117,14 @@ def collect(jobs_path=None, harness_filter=None):
             j.stage = live_stage(j.cwd, j.slug, j.key, j.capability_owner, j.worker_role)
     # stash malformed count on the module for the render header (optional signal)
     collect.last_malformed = malformed
+    # F-28a (§3.3) — terminal route-node evidence, stashed the same way `last_malformed` is
+    # (module attribute, not a return-signature change — every existing caller stays untouched).
+    try:
+        collect.last_route_nodes = _scan_route_nodes(paths)
+    except Exception:
+        collect.last_route_nodes = {}
     return jobs
 
 
 collect.last_malformed = 0
+collect.last_route_nodes = {}

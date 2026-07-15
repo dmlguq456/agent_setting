@@ -48,6 +48,11 @@ def parse_args(argv):
                    help="include stale/dead sessions in the fleet list (hidden by default)")
     p.add_argument("--demo", action="store_true",
                    help="render synthetic fixture data (all harnesses + states) for rendering checks")
+    p.add_argument("--view", choices=["group", "process"], default=None,
+                   help="F-30 (v10): initial view — group (default, per-project) or process "
+                        "(per-route pipeline cards). Additive; the live TUI's `p` key toggles "
+                        "the same state either way (plan §P3 — this is --once's ONLY entry "
+                        "point into the process view, since `p` is a curses-live-only key).")
     return p.parse_args(argv)   # argparse exits 2 on bad args (matches PRD §3 exit codes)
 
 
@@ -90,7 +95,42 @@ def _snapshot_json(sessions, jobs):
     mem = _collect_memory()
     if mem is not None:
         out["memory"] = mem
+    out["route"] = _collect_route(jobs)
+    gov = _collect_governor()
+    if gov is not None:
+        out["governor"] = gov
     return json.dumps(out, ensure_ascii=False, indent=2)
+
+
+def _collect_governor():
+    """F-28c (prd.md:288/311) — best-effort, additive `governor` key. `None` (source absent) =
+    key omitted entirely, same convention `memory` already uses just above."""
+    try:
+        if __package__ in (None, ""):
+            from fleet.collectors import governor
+        else:
+            from .collectors import governor
+        return governor.collect()
+    except Exception:
+        return None
+
+
+def _collect_route(jobs):
+    """F-28a (prd.md:302) — best-effort, additive `route` key. `route.py` itself never raises,
+    but this stays wrapped (the `mem` precedent just above) so a future regression there can
+    never break `--json` (§3.4)."""
+    try:
+        if __package__ in (None, ""):
+            from fleet import route as routemod
+            from fleet.collectors import dispatch as _dispatch
+        else:
+            from . import route as routemod
+            from .collectors import dispatch as _dispatch
+        node_evidence = getattr(_dispatch.collect, "last_route_nodes", {})
+        views = routemod.collect_views(jobs, node_evidence)
+        return routemod.summary(views)
+    except Exception:
+        return []
 
 
 def main(argv=None):
@@ -125,6 +165,13 @@ def main(argv=None):
         return 1
 
     render.set_show_all(args.show_all)
+    # F-30 (v10, plan §P3/§9): --view is additive and honors the SAME single _PROCESS_VIEW
+    # state the `p` key flips — never a second decision path. FLEET_VIEW env is the reduction
+    # fallback the plan reserves in case --view itself is judged out of scope later (§9 note 1);
+    # both stay best-effort no-ops when unset (default = the pre-v10 group view).
+    view = args.view or os.environ.get("FLEET_VIEW")
+    if view:
+        render.set_process_view(view == "process")
     if args.once:
         return render.render_once(collector, hfilter, args.section)
     render.reset_scroll()   # fresh launch starts scrolled to top (belt-and-suspenders)

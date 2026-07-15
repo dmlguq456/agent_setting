@@ -677,7 +677,41 @@ def _drop_past_stages(items, cur_i, max_width):
     return items
 
 
-def _stage_segs(key, stage, working=False, max_width=None):
+def _route_stage_segs(route_seq, working, max_width):
+    """F-28b route-aware breadcrumb (prd.md:303). `route_seq` = [(node_id, state), ...] in the
+    route's own DAG order (flattened level order — route.py's `view["nodes"]` is already in
+    that order, one entry per node). `state` comes from `route.py`'s §3.3 single judge
+    (active/done/failed/pending) — this function ONLY renders what was already decided
+    (SD-F2: node lit-ness is the child's live evidence, never re-derived here)."""
+    def _cur_key(i):
+        if working and not _BLINK_ON:
+            return "stg%d_off" % (i % 5)
+        return "stg%d_on" % (i % 5)
+    cur_i = next((i for i, (_nid, st) in enumerate(route_seq) if st == "active"), None)
+    if cur_i is None:
+        done_idx = [i for i, (_nid, st) in enumerate(route_seq) if st == "done"]
+        cur_i = min((done_idx[-1] + 1) if done_idx else 0, max(0, len(route_seq) - 1))
+    items = []
+    for i, (nid, st) in enumerate(route_seq):
+        if st == "failed":
+            items.append((i, nid + "✕", "lvl_r"))
+        elif st == "done":
+            items.append((i, nid + "✓", "stg%d_off" % (i % 5)))
+        elif st == "active":
+            items.append((i, nid, _cur_key(i)))
+        else:
+            items.append((i, nid, "stg%d_off" % (i % 5)))
+    if max_width is not None:
+        items = _drop_past_stages(items, cur_i, max_width)
+    out = []
+    for n, (_i, label, key_) in enumerate(items):
+        if n:
+            out.append((" › ", "dim"))
+        out.append((label, key_))
+    return out
+
+
+def _stage_segs(key, stage, working=False, max_width=None, route_seq=None):
     """Process viz — the pipeline lifecycle as a breadcrumb: each stage a DISTINCT color, the rest
     of the sequence the same hue but DIM. The CURRENT stage is bold/bright and, when the job is
     actively `working`, BLINKS in sync with the working dot (shared `_BLINK_ON`, ~2 Hz) so the eye
@@ -685,7 +719,15 @@ def _stage_segs(key, stage, working=False, max_width=None):
 
     `max_width` (D3, v9): when given and the full breadcrumb would exceed it, past stages fold
     via `_drop_past_stages` before anything is emitted — the cap lives in the assembly, not as
-    a post-hoc truncation, so a dropped stage never leaves a half-drawn ✓ or separator."""
+    a post-hoc truncation, so a dropped stage never leaves a half-drawn ✓ or separator.
+
+    `route_seq` (F-28b, v10): when given (a resolved route's node list — see
+    `_route_stage_segs`), it REPLACES `_PIPE_STAGES.get(key)` entirely — record-derived nodes,
+    not the hardcoded 3-stage table. `None` (the default) is the entire pre-v10 behavior,
+    unchanged (prd.md:303 — record-less jobs keep the existing breadcrumb)."""
+    if route_seq is not None:
+        return _route_stage_segs(route_seq, working, max_width)
+
     def _cur_key(i):
         # working → pulse on/off with the dot; idle/other → steady bright
         if working and not _BLINK_ON:
@@ -733,7 +775,7 @@ def _stage_segs(key, stage, working=False, max_width=None):
     return [("—", "dim")]
 
 
-def _dispatch_stage_segs(j, key, stage, slug_name, working=False):
+def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None):
     depth = max(1, int(getattr(j, "depth", 1) or 1))
     intensity = getattr(j, "intensity", None) or ""
     if depth == 1 and intensity == "quick":
@@ -741,12 +783,18 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False):
     if depth >= 2:
         # P0-1: a depth-2 stage worker never repeats its parent conductor's full
         # breadcrumb — its identity already rode the name zone (label above); this slot
-        # is its own micro-status only.
+        # is its own micro-status only. route_seq is a depth-1 CONDUCTOR concern only —
+        # never consulted here, unconditionally (F-28b plan §4.2, unchanged from pre-v10).
         if j.liveness == "working":
             return [("running", "stg0_on" if _BLINK_ON else "stg0_off")]
         if stage and stage not in ("open", "running"):
             return [(stage, "stg0_off")]
         return []
+    if route_seq:
+        # F-28b (v10): a resolved route replaces the whole breadcrumb — record nodes are the
+        # real pipeline shape, not a role-label prefix over the hardcoded 3-stage table.
+        return _stage_segs(key, stage, working=working, max_width=_STAGE_ZONE_MAX,
+                           route_seq=route_seq)
     if key and key != slug_name:
         # SD-F1: a depth-2 stage worker's `key` IS its capability (code-plan/code-execute/
         # code-test/code-report) — reuse _stage_role_label (same helper the F-13 legend
@@ -1055,7 +1103,7 @@ def _opts_segs(j, qa_text, qa_key):
 
 
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
-                  parent_effort=None, stage_override=None, name_width=None):
+                  parent_effort=None, stage_override=None, name_width=None, route_seq=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
       harness  |  [stage label] name  |  branch  |  MODEL  |  options  |  stage breadcrumb
     F-15a: the name zone is identity-only (no more parenthetical mode/qa tag — that moved to
@@ -1126,7 +1174,8 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
             segs.append((" " * (_OPTW - optw), None))
 
         segs.append(("  ", None))
-        segs += _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"))
+        segs += _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"),
+                                     route_seq=route_seq)
 
     segs.append((_RFLUSH, None))
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
@@ -1235,15 +1284,17 @@ def _session_row_stack(s, is_parent=False, child_count=0, term_width=None):
     return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
-def _dispatch_row_stack(j, orphan=False, parent_model=None, parent_effort=None, stage_override=None):
+def _dispatch_row_stack(j, orphan=False, parent_model=None, parent_effort=None, stage_override=None,
+                        route_seq=None):
     l1, l2 = _dispatch_row_2line(j, orphan=orphan, parent_model=parent_model,
-                                 parent_effort=parent_effort, stage_override=stage_override)
+                                 parent_effort=parent_effort, stage_override=stage_override,
+                                 route_seq=route_seq)
     gi = _stack_split(l2)
     return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
 
 
 def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, _split=False,
-                        stage_override=None):
+                        stage_override=None, route_seq=None):
     """F-15a narrow card — L1 = identity ONLY (stage label + slug, no mode/qa tag); L2 =
     elapsed · model · options (relocated from L1) · breadcrumb/micro-status."""
     key = j.key or "?"
@@ -1281,7 +1332,8 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     if optw < _OPTW:
         l2.append((" " * (_OPTW - optw), None))
     l2.append(("  ", None))
-    l2 += _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"))
+    l2 += _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"),
+                               route_seq=route_seq)
     if _split:
         return l1, l2, br_seg
     return l1, l2
@@ -1300,6 +1352,58 @@ def _mem_row(s, layout="wide"):
            ((s.harness or "—"), "dim"), ("  ", None),
            (fmt_min(s.elapsed_min), "dim")]
     return [seg]
+
+
+_GOVERNOR_QUIET_FRACTION = 0.5   # F-28c "healthy 무음" (prd.md:288/311, plan §6a) — hide the row
+                                  # below half the cap. Real observed live state (this cycle):
+                                  # 1 active lease / cap 5 = 20% — comfortably below half, so a
+                                  # single background lease (the normal steady-state) stays
+                                  # silent; the row only earns its place once congestion is
+                                  # actually worth a glance.
+
+
+def _governor_segs():
+    """`  ⚙ governor N/cap` — F-28c (prd.md:288/311). Pulse-ADJACENT, never merged into the
+    pulse row's own session/job counts (I8 — this is a wholly separate line/collector). `None`
+    (source absent OR healthy-quiet) = caller omits the row entirely, same "zero lines when
+    healthy" contract the alert strip already uses."""
+    try:
+        from .collectors import governor
+        g = governor.collect()
+    except Exception:
+        g = None
+    if not g:
+        return None
+    active, cap = g.get("active", 0), g.get("cap", 0)
+    if cap <= 0 or active < cap * _GOVERNOR_QUIET_FRACTION:
+        return None
+    return [("  ⚙ ", "dim"), ("governor %d/%d" % (active, cap), "dim")]
+
+
+def _pulse_segs(sessions, jobs):
+    """`  fleet ⠙ N working   ● N idle ...` — whole-board census. Extracted (F-30, v10) so both
+    the group view and the process view (§5.1) render the EXACT same row — one source, shared
+    by the header helper contract §5.2 asks for, instead of two independently-drifting copies."""
+    _real = [s for s in sessions if not s.app_server and not getattr(s, "mem_worker", False)]
+    n_wk = sum(1 for s in _real if s.liveness == "working")
+    n_id = sum(1 for s in _real if s.liveness == "idle")
+    n_un = sum(1 for s in _real if s.liveness == "unused")
+    n_dt = sum(1 for s in _real if s.detached and s.liveness not in ("stale", "dead"))
+    listed_jobs = jobs if _SHOW_ALL else [j for j in jobs if j.liveness != "dead"]
+    jw = sum(1 for j in listed_jobs if j.liveness == "working")
+    spin = _SPIN[int(time.time() * 10) % len(_SPIN)]
+    pulse = [("  fleet ", "head"),
+             (spin + " %d" % n_wk, "g_work"), (" working   ", "dim"),
+             ("● %d" % n_id, "g_work_off"), (" idle   ", "dim")]
+    # F-26: only when there IS one — a healthy board stays quiet (F-12 contract).
+    if n_un:
+        pulse += [(_LIVE_GLYPH["unused"] + " %d" % n_un, "g_unused"), (" unused   ", "dim")]
+    if n_dt:
+        pulse += [(_DETACHED_GLYPH + " %d" % n_dt, "g_work_off"), (" detached   ", "dim")]
+    if listed_jobs:
+        pulse += [("↳ %d" % len(listed_jobs), "dim"),
+                  (" job%s (%d working)" % ("s" if len(listed_jobs) != 1 else "", jw), "dim")]
+    return pulse
 
 
 def _mem_summary_segs(memory):
@@ -1512,6 +1616,376 @@ def set_show_all(v):
     _SHOW_ALL = bool(v)
 
 
+# --- F-30 (v10, prd.md:304-310) — process view: pipeline-centric regrouping, `p` toggle ---
+_PROCESS_VIEW = False        # False = group view (default, unchanged) | True = process view
+_ROUTE_FOLD = {}             # {card_key: bool} — True = explicitly folded. User action ONLY;
+                             # default fold state (§5.4 table) is computed fresh every build and
+                             # never written here (so a card that becomes newly-failed re-expands
+                             # on its own unless the user folded it by hand).
+_FOLDABLE = []                # [{"line": idx, "card_key": ...}] — line-index map, `_build_process_
+                              # lines` fills it fresh every call (`_SELECTABLE` precedent, F-27).
+
+
+def set_process_view(v):
+    global _PROCESS_VIEW
+    _PROCESS_VIEW = bool(v)
+
+
+def _route_node_text(n):
+    """(text, color_key) for one DAG node in a card's L2 flow (§5.3). State comes straight from
+    `route.py`'s §3.3 judge — this only formats it. `●` nodes carry model/effort (prd.md:307 —
+    "전 노드에 달면 줄이 터진다", so only the active one does)."""
+    st = n["state"]
+    nid = n["id"]
+    elapsed = n.get("elapsed_min")
+    if st == "done":
+        tail = fmt_min(elapsed) if elapsed is not None else ""
+        return "%s ✓%s" % (nid, tail), "dim"
+    if st == "active":
+        tail = (" " + fmt_min(elapsed)) if elapsed is not None else ""
+        extra = ""
+        model = _clean_model(dash(n.get("model"))) if n.get("model") else None
+        if model and model != "—":
+            extra = " (%s%s)" % (model, ("·" + n["effort"]) if n.get("effort") else "")
+        return "%s ●%s%s" % (nid, tail, extra), ("g_work" if _BLINK_ON else "g_work_off")
+    if st == "failed":
+        tail = (" " + fmt_min(elapsed)) if elapsed is not None else ""
+        return "%s ✕%s" % (nid, tail), "lvl_r"
+    return "%s ○" % nid, "dim"
+
+
+def _route_card_l2(view, max_width=None):
+    """DAG lines for a card's body (§5.3/§5.5). A level with ONE node joins the horizontal
+    flow (`plan ✓12m › execute ● 8m ...`); a level with 2+ nodes (fan-out) breaks into indented
+    `├`/`└` tree rows (prd.md:307's "세로 분기"), and the flow resumes with a leading `›` after.
+    `max_width`, when given, folds PAST (already-flowed) nodes first via the SAME
+    `_drop_past_stages` the breadcrumb uses (§5.5 — no new cropping logic), independently per
+    contiguous flow run (a run never spans a fan-out break)."""
+    levels = {}
+    for n in view.get("nodes") or []:
+        levels.setdefault(n["level"], []).append(n)
+    ordered = [levels[k] for k in sorted(levels)]
+    out_lines = []
+    flow_nodes = []   # [(text, key)] accumulated for the current contiguous flow run
+
+    def _flush(prefix_needed):
+        if not flow_nodes:
+            return
+        items = [(i, t, k) for i, (t, k) in enumerate(flow_nodes)]
+        if max_width is not None:
+            cur_i = next((i for i, (_t, k) in enumerate(flow_nodes) if k != "dim"), 0)
+            items = _drop_past_stages(items, cur_i, max_width)
+        segs = []
+        for pos, (_i, text, key) in enumerate(items):
+            if pos == 0:
+                if prefix_needed:
+                    segs.append(("› ", "dim"))
+            else:
+                segs.append((" › ", "dim"))
+            segs.append((text, key))
+        out_lines.append(segs)
+        flow_nodes.clear()
+
+    need_prefix = False
+    for level in ordered:
+        if len(level) == 1:
+            flow_nodes.append(_route_node_text(level[0]))
+        else:
+            _flush(need_prefix)
+            need_prefix = False
+            for bi, n in enumerate(level):
+                branch = "└" if bi == len(level) - 1 else "├"
+                text, key = _route_node_text(n)
+                out_lines.append([("  " + branch + " ", "dim"), (text, key)])
+            need_prefix = True
+    _flush(need_prefix)
+    return out_lines
+
+
+def _route_job_row(job, max_width=None):
+    """The active node's owning job, one compact row (prd.md:308's `└▸🚀 <slug> <harness>
+    <model> ⏳<elapsed>` shape) — NOT the group view's full `_dispatch_row` grid (a route card
+    is not a project group; its columns don't line up with one, and forcing them to would need
+    a second name-width negotiation this view doesn't have). `max_width` (§5.5): the slug is
+    the one field with no fixed budget elsewhere, so it yields first — same "the variable-width
+    field clips, the fixed-shape fields never do" idiom as `_compact_dispatch_name`."""
+    hn = _BADGE_TEXT.get(job.harness, "—") if job.harness else "—"
+    model_txt = _clean_model(dash(job.model)) or "—"
+    eff = ("(%s)" % job.effort) if job.effort else ""
+    tail = "⏳%s" % fmt_min(job.elapsed_min) if job.elapsed_min is not None else ""
+    prefix = "     └▸🚀 "
+    slug = job.slug or job.key or "?"
+    fixed_bits = [b for b in (hn, model_txt, eff, tail) if b]
+    if max_width is not None:
+        fixed_w = _dw(prefix) + (2 * len(fixed_bits)) + sum(_dw(b) for b in fixed_bits)
+        slug = _clip_w(slug, max(4, max_width - fixed_w))
+    bits = [b for b in (slug, hn, model_txt, eff, tail) if b]
+    return [(prefix + "  ".join(bits), "name_dim")]
+
+
+def _route_card_l1(tag_bits, rid, done, total, route_elapsed, any_failed, arrow, term_width):
+    """§5.5's L1 width ladder — "60열: L1 태그가 이미 20열이다 → intensity를 먼저 떨어뜨리는
+    사다리" — same pick-first-fit idiom as `_prompt_variants` (render.py, F-27): try progressively
+    shorter tag/detail combinations, keep the first that fits `term_width`. `tag_bits` drops
+    right-to-left (intensity, then mode, capability always survives — it's the identity)."""
+    def build(tags, show_elapsed, show_failed):
+        segs = [("  " + arrow + " ", "dim"), ("[%s] " % "·".join(tags), "name_dim"),
+                (rid, "lvl_r" if any_failed else "dim"),
+                (" — %d/%d nodes" % (done, total), "dim")]
+        if show_elapsed and route_elapsed is not None:
+            # design_review_round_1.md 🟡2 / prd.md:307 literal ("<n/m nodes> ⏳<경과>") — the
+            # bare `_CLOCK` convention (session/dispatch GRID rows, render.py:540) is the wrong
+            # precedent here: `_route_job_row` already established "⏳" as THIS card's own
+            # elapsed glyph (the child row below reads `⏳8m`), so the L1 header must match it —
+            # a bare "  15m" both drops the spec's glyph AND reads as a stray number glued onto
+            # "n/m nodes" (the exact critic misreading).
+            segs += [("  ⏳", "dim"), (fmt_min(route_elapsed), "dim")]
+        if show_failed and any_failed:
+            segs.append((" ⚠ failed node", "lvl_r"))
+        return segs
+
+    ladder = [tag_bits]
+    for n in range(len(tag_bits) - 1, 0, -1):
+        ladder.append(tag_bits[:n])
+    variants = [(ladder[0], True, True)]
+    for tags in ladder[1:]:
+        variants.append((tags, True, True))
+    variants.append((ladder[-1], False, False))
+    for tags, show_elapsed, show_failed in variants:
+        segs = build(tags, show_elapsed, show_failed)
+        if term_width is None or sum(_dw(t) for t, _k in segs) <= term_width:
+            return segs
+    return build(ladder[-1], False, False)
+
+
+def _route_card(view, session_by_pid, term_width, now):
+    """One F-30 card. Returns (out_lines, meta) — meta = {"card_key", "fold_line" (index into
+    out_lines of the header row), "job_rows": [(index_into_out_lines, DispatchJob), ...]}. The
+    caller (`_build_process_lines`) owns translating these to ABSOLUTE line indices for
+    `_FOLDABLE`/`_SELECTABLE` — this function stays a pure line-list builder (no module-global
+    writes), so it is directly unit-testable."""
+    nodes = view.get("nodes") or []
+    done = sum(1 for n in nodes if n["state"] == "done")
+    total = len(nodes)
+    any_failed = any(n["state"] == "failed" for n in nodes)
+    all_done = total > 0 and done == total
+    elapsed_candidates = [n["elapsed_min"] for n in nodes if n.get("elapsed_min") is not None]
+    route_elapsed = max(elapsed_candidates) if elapsed_candidates else None
+
+    cap = view.get("capability") or "?"
+    try:
+        from .collectors import dispatch as _dispatch_mod
+        cap = _dispatch_mod._strip_autopilot_prefix(cap) or cap
+    except Exception:
+        pass
+    tag_bits = [cap]
+    if view.get("capability_mode"):
+        tag_bits.append(view["capability_mode"])
+    if view.get("effective_intensity"):
+        tag_bits.append(view["effective_intensity"])
+    rid_full = view.get("route_id") or "?"
+    # §5.3 L1 spec: "route_id 단축 = rt- + 앞 8자" — the full value stays available in --json
+    # (route.summary()'s route_id is never shortened); only the card label abbreviates.
+    rid = (rid_full if not rid_full.startswith("rt-") or len(rid_full) <= 11
+          else rid_full[:11])
+
+    card_key = view["key"]
+    # §5.4 default fold table: failed → auto-expand (handled by simply never defaulting to
+    # folded when any_failed); all-done → 1-line fold; otherwise (active) → expand. A prior
+    # EXPLICIT user fold (_ROUTE_FOLD) always wins over this default (user intent > default).
+    default_fold = all_done and not any_failed
+    folded = _ROUTE_FOLD.get(card_key, default_fold)
+    # ★ collapse/expand glyph only — NEVER the words "folded"/"hidden" (§5.4 B2): `_draw`'s
+    # existing single-segment-row substring check would silently hijack this row into
+    # `_TOGGLE_ROWS` (the `a`-toggle map) instead of `_FOLD_ROWS`.
+    arrow = "▸" if folded else "▾"
+
+    l1 = _route_card_l1(tag_bits, rid, done, total, route_elapsed, any_failed, arrow, term_width)
+
+    out = [l1]
+    if folded:
+        return out, {"card_key": card_key, "fold_line": 0, "job_rows": [], "folded": folded}
+
+    max_width = max(20, term_width - 6) if term_width else None
+    for l2_line in _route_card_l2(view, max_width):
+        out.append([("    ", None)] + l2_line)
+
+    job_rows = []
+    active_nodes = sorted((n for n in nodes if n["state"] == "active" and n.get("job") is not None),
+                          key=lambda n: (n["level"], n["id"]))
+    for n in active_nodes:
+        job = n["job"]
+        out.append(_route_job_row(job, max_width=term_width))
+        job_rows.append((len(out) - 1, job))
+        sess = session_by_pid.get(job.pid) if job.pid else None
+        subs = ([sa for sa in (getattr(sess, "subagents", None) or []) if sa.active or _SHOW_ALL]
+                if sess is not None else [])
+        for i, sa in enumerate(subs):
+            out.append(_subagent_row(sa, is_last=(i == len(subs) - 1)))
+
+    if _SHOW_ALL:
+        # prd.md:310 — completion-gate NAMES only (never a pass/fail verdict — §3.3.1, no such
+        # evidence exists), and only behind the `a` toggle, never on the base screen.
+        gate_names = [n.get("gate") for n in nodes if n.get("gate")]
+        if gate_names:
+            out.append([("      gates: " + ", ".join(gate_names), "dim")])
+
+    return out, {"card_key": card_key, "fold_line": 0, "job_rows": job_rows, "folded": folded}
+
+
+def _degrade_candidates(jobs, covered_slugs=()):
+    """Depth-1 jobs on a recognizable `_PIPE_STAGES` pipeline with NO resolved route_id — the
+    degrade card's population (prd.md:310 — record absence is a summary card, never a blank).
+    Deliberately excludes: depth-2 stage workers (those nest under their conductor's card, same
+    as the group view); any job that already has a route_id itself (that route already has a
+    real card, even if the record failed to load — route.py's `_heuristic_view` covers that
+    case inside `route_views_by_id`, not here); and `covered_slugs` — the depth-1 CONDUCTOR of a
+    route whose route_id lives on one of ITS children (§3.2 — the route link is attached to the
+    stage worker, not the top job) would otherwise show up a SECOND time as a bare degrade card
+    right next to its own real route card."""
+    pool = jobs if _SHOW_ALL else [j for j in jobs if j.liveness != "dead"]
+    seen = set()
+    out = []
+    for j in pool:
+        if getattr(j, "route_id", None):
+            continue
+        if max(1, int(getattr(j, "depth", 1) or 1)) != 1:
+            continue
+        if j.key not in _PIPE_STAGES:
+            continue
+        if j.slug in covered_slugs:
+            continue
+        if j.slug in seen:
+            continue
+        seen.add(j.slug)
+        out.append(j)
+    out.sort(key=lambda j: j.slug or "")
+    return out
+
+
+def _degrade_card(job, term_width):
+    """§5.3's degrade card — `source: heuristic`, existing `_PIPE_STAGES` breadcrumb, no DAG
+    (there is no record to derive one from). No job-row entry (the card key IS the job)."""
+    cap = job.key or "?"
+    tag_bits = [cap]
+    if job.mode:
+        tag_bits.append(job.mode)
+    tag = "·".join(tag_bits)
+    card_key = job.slug or job.key or "?"
+    folded = _ROUTE_FOLD.get(card_key, False)
+    arrow = "▸" if folded else "▾"
+    slug = job.slug or "?"
+    if term_width is not None:
+        fixed_w = _dw("  " + arrow + " ") + _dw("[%s] " % tag) + _dw(" — no route record")
+        slug = _clip_w(slug, max(4, term_width - fixed_w))
+    l1 = [("  " + arrow + " ", "dim"), ("[%s] " % tag, "name_dim"),
+          (slug, "dim"), (" — no route record", "dim")]
+    out = [l1]
+    if folded:
+        return out, {"card_key": card_key, "fold_line": 0, "job_rows": [], "folded": folded}
+    breadcrumb = _stage_segs(job.key, job.stage or "", working=(job.liveness == "working"),
+                             max_width=_STAGE_ZONE_MAX)
+    out.append([("    ", None)] + breadcrumb)
+    return out, {"card_key": card_key, "fold_line": 0, "job_rows": [], "folded": folded}
+
+
+def _build_process_lines(sessions, jobs, route_views_by_id, malformed, memory, term_width, layout,
+                         node_evidence=None):
+    """F-30 (prd.md:304-310) — the process view: one card per ACTIVE route (pipeline-centric
+    regrouping) instead of the group view's per-project regrouping. Returns the SAME flat
+    segment-line contract as `_build_lines` ([[(text,key),...]|None]) — `_draw`/`render_once`/
+    scroll/`_clamp_offset` are all reused unmodified (§5.2). Side effect: refreshes the
+    module-level `_FOLDABLE` stash (`_SELECTABLE` precedent, F-27) and appends to the (already
+    freshly-reset, by `_build_lines`) `_SELECTABLE`.
+
+    `node_evidence` (code-test verification_round_2.md §10): the SAME terminal-row evidence
+    defect 1's fix threads into route resolution — the covered-conductor exclusion below has the
+    identical "a route's only surviving trace may be terminal, not live" problem defect 1 fixed
+    for record lookup, and needs the identical fix for the SAME reason."""
+    global _FOLDABLE
+    _FOLDABLE = []
+    lines = [_pulse_segs(sessions, jobs)]
+    _governor = _governor_segs()
+    if _governor is not None:
+        lines.append(_governor)
+    _mem_summary = _mem_summary_segs(memory)
+    if _mem_summary is not None:
+        lines.append(_mem_summary)
+    if malformed:
+        lines.append([("  +%d malformed jobs.log rows skipped" % malformed, "dim")])
+    lines.append([(_HFILL, None)])
+    lines.append(None)
+    lines.append([("  PROCESS VIEW", "head"), (_RFLUSH, None), ("p group view  ", "head")])
+    lines.append(None)
+
+    session_by_pid = {s.pid: s for s in sessions if s.pid}
+    now = time.time()
+
+    real_views = sorted((v for v in route_views_by_id.values() if v.get("nodes")),
+                        key=lambda v: v.get("route_id") or "")
+    # A depth-1 conductor whose CHILD carries the route_id (§3.2 — the env/pipe route link is
+    # attached to the stage worker, not the top job) already has a real card via that child;
+    # exclude its own bare slug from the degrade pool so it never shows up a second time.
+    # ★ code-test verification_round_2.md §10 — `jobs` (live only) under-covers the SAME way
+    # defect 1's `resolve_records` did: once the route-carrying child goes terminal
+    # (done/killed/cancelled), `_scan_jobs_log` drops its row before a live DispatchJob is ever
+    # built for it, so `jobs` alone can never see that child's `parent_slug` again — the
+    # conductor stops being excluded and a valid record's OWN conductor re-appears as a
+    # contradicting "no route record" card 2 lines below its real one. `node_evidence`'s
+    # `parent` field (dispatch.py's `_scan_route_nodes`, same pipe row already parsed) is the
+    # terminal-surviving half of this same fact.
+    covered_slugs = {getattr(j, "parent_slug", None) for j in jobs
+                     if getattr(j, "route_id", None) in route_views_by_id
+                     and getattr(j, "parent_slug", None)}
+    for rid, nodes in (node_evidence or {}).items():
+        if rid not in route_views_by_id:
+            continue
+        for node_ev in (nodes or {}).values():
+            parent = (node_ev or {}).get("parent")
+            if parent:
+                covered_slugs.add(parent)
+    degrade_jobs = _degrade_candidates(jobs, covered_slugs)
+
+    if not real_views and not degrade_jobs:
+        # prd.md:310 — an honest "nothing is running" statement, never a blank screen.
+        lines.append([("  no active route", "dim")])
+        return lines
+
+    seen_keys = set()
+    first = True
+    for view in real_views:
+        if not first:
+            lines.append(None)
+        first = False
+        base = len(lines)
+        card_lines, meta = _route_card(view, session_by_pid, term_width, now)
+        lines.extend(card_lines)
+        _FOLDABLE.append({"line": base + meta["fold_line"], "card_key": meta["card_key"],
+                          "folded": meta["folded"]})
+        for rel_idx, job in meta["job_rows"]:
+            if job.pid:
+                _SELECTABLE.append(_select_entry_job(job, base + rel_idx))
+        seen_keys.add(meta["card_key"])
+
+    for job in degrade_jobs:
+        if not first:
+            lines.append(None)
+        first = False
+        base = len(lines)
+        card_lines, meta = _degrade_card(job, term_width)
+        lines.extend(card_lines)
+        _FOLDABLE.append({"line": base + meta["fold_line"], "card_key": meta["card_key"],
+                          "folded": meta["folded"]})
+        seen_keys.add(meta["card_key"])
+
+    # StateTracker.sweep() precedent — a card key not seen this tick must not leak its fold
+    # flag into a future, unrelated card that happens to reuse the same route_id/slug.
+    for k in [k for k in _ROUTE_FOLD if k not in seen_keys]:
+        del _ROUTE_FOLD[k]
+
+    return lines
+
+
 def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memory=None,
                  term_width=None):
     """Return a flat list of segment-lines for the whole screen (None = blank line).
@@ -1526,6 +2000,30 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     """
     global _SELECTABLE
     _SELECTABLE = []     # reset before any early return — a stale target map must never survive
+    # F-28b/F-30 (v10) — resolve every route referenced by `jobs` ONCE per build (not per row).
+    # Best-effort: any failure here must never break the group view — record-less/failed-load
+    # jobs simply keep their pre-v10 breadcrumb (prd.md:303). `route.load()` is itself
+    # mtime-cached, so repeated ticks re-parse only a route file whose inode actually changed.
+    _route_views_by_id = {}
+    _node_evidence = {}
+    try:
+        from .collectors import dispatch as _dispatch_mod
+        from . import route as _route_mod
+        _node_evidence = getattr(_dispatch_mod.collect, "last_route_nodes", {}) or {}
+        for _v in _route_mod.collect_views(jobs, _node_evidence):
+            _route_views_by_id[_v["route_id"]] = _v
+    except Exception:
+        _route_views_by_id = {}
+        _node_evidence = {}
+    if _PROCESS_VIEW:
+        # F-30 (§5.2) — the ONE branch point, right after the _SELECTABLE reset and the route
+        # resolution both views need. `_build_process_lines` honors the exact same return
+        # contract ([[(text,key),...]|None]) so _draw/render_once/scroll/_clamp_offset are all
+        # reused unmodified below this branch. `_node_evidence` is threaded through too (code-test
+        # verification_round_2.md §10) — the degrade-pool's covered-conductor exclusion needs it,
+        # the same way route resolution itself needed it for defect 1.
+        return _build_process_lines(sessions, jobs, _route_views_by_id, malformed, memory,
+                                    term_width, layout, node_evidence=_node_evidence)
     # F-18b: mem-worker (distiller/curator/F-17 refresher) census — computed on the ORIGINAL
     # session list, before is_child/mem filtering, so folded/mem-only groups still surface a
     # total in the legend even when no group header badge fires.
@@ -1625,27 +2123,14 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                     row.append((" ↻ " + fmt_min(int((rs - now_ts) / 60)), "dim"))
             lines.append(row)
     # fleet pulse — htop's "Tasks: N, M running" analogue: whole-board census + live spend Σ
-    # Show the row by default; counts skip app-server companions.
+    # Show the row by default; counts skip app-server companions. Extracted into _pulse_segs
+    # (F-30, v10) so the process view (§5.1) shares this EXACT row instead of a second copy.
+    # `_real` stays a LOCAL here too — the alert strip below (ctx_items) still needs it.
     _real = [s for s in sessions if not s.app_server and not getattr(s, "mem_worker", False)]
-    n_wk = sum(1 for s in _real if s.liveness == "working")
-    n_id = sum(1 for s in _real if s.liveness == "idle")
-    n_un = sum(1 for s in _real if s.liveness == "unused")
-    n_dt = sum(1 for s in _real if s.detached and s.liveness not in ("stale", "dead"))
-    listed_jobs = jobs if _SHOW_ALL else [j for j in jobs if j.liveness != "dead"]
-    jw = sum(1 for j in listed_jobs if j.liveness == "working")
-    spin = _SPIN[int(time.time() * 10) % len(_SPIN)]
-    pulse = [("  fleet ", "head"),
-             (spin + " %d" % n_wk, "g_work"), (" working   ", "dim"),
-             ("● %d" % n_id, "g_work_off"), (" idle   ", "dim")]
-    # F-26: only when there IS one — a healthy board stays quiet (F-12 contract).
-    if n_un:
-        pulse += [(_LIVE_GLYPH["unused"] + " %d" % n_un, "g_unused"), (" unused   ", "dim")]
-    if n_dt:
-        pulse += [(_DETACHED_GLYPH + " %d" % n_dt, "g_work_off"), (" detached   ", "dim")]
-    if listed_jobs:
-        pulse += [("↳ %d" % len(listed_jobs), "dim"),
-                  (" job%s (%d working)" % ("s" if len(listed_jobs) != 1 else "", jw), "dim")]
-    lines.append(pulse)                 # Aggregate cost rollup intentionally removed.
+    lines.append(_pulse_segs(sessions, jobs))  # Aggregate cost rollup intentionally removed.
+    _governor = _governor_segs()               # F-28c — pulse-adjacent, never merged into pulse
+    if _governor is not None:                  # counts (I8); None = source absent or quiet.
+        lines.append(_governor)
     _mem_summary = _mem_summary_segs(memory)
     if _mem_summary is not None:
         lines.append(_mem_summary)
@@ -1880,6 +2365,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             # worker, not its static argv/plan-derived `stage`. `job_children` is the
             # enclosing closure dict, so this is readable before the row renders.
             stage_override = _conductor_stage_override(job)
+            # F-28b (v10) — a resolved route (found via a depth-2 CHILD's route_id, since the
+            # env/pipe route link is attached to the stage worker, not the depth-1 conductor
+            # row itself — dispatch.py §3.2) replaces the hardcoded `_PIPE_STAGES` breadcrumb.
+            route_seq = _conductor_route_seq(job)
             if job.liveness == "stale":
                 _seen_glyphs.add("stale")
             elif job.liveness == "dead":
@@ -1894,13 +2383,14 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _SELECTABLE.append(_select_entry_job(job, len(lines)))
             if _jrow:
                 lines.extend(_jrow(job, orphan=orphan, parent_model=row_parent_model,
-                                   parent_effort=row_parent_effort, stage_override=stage_override))
+                                   parent_effort=row_parent_effort, stage_override=stage_override,
+                                   route_seq=route_seq))
             else:
                 lines.append(_dispatch_row(job, orphan=orphan, parent_model=row_parent_model,
                                            parent_harness=parent_harness,
                                            parent_effort=row_parent_effort, is_last=is_last,
                                            stage_override=stage_override,
-                                           name_width=wide_name_width))
+                                           name_width=wide_name_width, route_seq=route_seq))
             for sub in _sort_group_jobs(job_children.get(job.slug, [])):
                 # F-15b P0-2: a depth-2 stage worker that is done/queued/idle is already
                 # absorbed into the conductor's own breadcrumb (✓/dim future segment) — only
@@ -1914,8 +2404,15 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                                     parent_effort=parent_effort, orphan=False)
 
         def _conductor_stage_override(job):
-            kids = [(k, _stage_role_label(getattr(k, "worker_role", None))[0])
-                    for k in job_children.get(job.slug, []) if getattr(k, "depth", 1) == 2]
+            # F-28b (§4.2): a route-carrying active child names its OWN node id (the real
+            # pipeline node, e.g. "eval-asr") — that outranks the `_STAGE_ROLE` role-label
+            # lookup, which only knows the fixed code-plan/-execute/-test/-report vocabulary.
+            depth2 = [k for k in job_children.get(job.slug, []) if getattr(k, "depth", 1) == 2]
+            active_routed = [k for k in depth2
+                             if k.liveness == "working" and getattr(k, "route_node", None)]
+            if active_routed:
+                return active_routed[0].route_node
+            kids = [(k, _stage_role_label(getattr(k, "worker_role", None))[0]) for k in depth2]
             kids = [(k, label) for k, label in kids if label is not None]
             if not kids:
                 return None
@@ -1923,6 +2420,21 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             if active:
                 return active[0]
             return job.stage
+
+        def _conductor_route_seq(job):
+            """[(node_id, state), ...] | None — resolved via a depth-2 CHILD's route_id (the
+            depth-1 conductor row itself rarely carries route_id — dispatch.py attaches the
+            env/pipe route link to the stage WORKER, §3.2). `None` means "no resolved route",
+            the pre-v10 breadcrumb path (record-less or a load failure — tolerant, prd.md:303)."""
+            depth2 = [k for k in job_children.get(job.slug, []) if getattr(k, "depth", 1) == 2]
+            rid = next((getattr(k, "route_id", None) for k in depth2
+                       if getattr(k, "route_id", None)), None) or getattr(job, "route_id", None)
+            if not rid:
+                return None
+            view = _route_views_by_id.get(rid)
+            if not view or not view.get("nodes"):
+                return None
+            return [(n["id"], n["state"]) for n in view["nodes"]]
 
         rendered_parent_sids = set()  # ambiguous enrichment must not duplicate a dispatch tree
         for s in _sort_group_sessions(shown):
@@ -2273,6 +2785,9 @@ _CLICK_ROWS = {}             # screen_y -> _SELECTABLE entry (F-27 v9 row click 
                               # filled from _SELECTABLE, NOT _live_targets(): base mode's first
                               # click would otherwise never see a target, and gating on
                               # _live_targets() would call control.is_excluded() at ~10fps)
+_FOLD_ROWS = {}               # screen_y -> card_key (F-30, v10) — filled from `_FOLDABLE` the
+                              # same way `_CLICK_ROWS` is filled from `_SELECTABLE`. Reset at the
+                              # top of every `_draw`, same as `_TOGGLE_ROWS`/`_CLICK_ROWS`.
 _PROMPT_HITS = []             # [(screen_y, x0, x1, "kill"|"cancel")] — footer button hitboxes.
                               # Reset+rebuilt every _draw call (§4.4.1): a click 2 that lands
                               # before the next _draw must never see a stale (pre-transition)
@@ -2572,6 +3087,10 @@ def _handle_base_key(ch, body_h):
         set_show_all(not _SHOW_ALL)
     elif ch in (ord("w"), ord("W")):
         _cycle_layout()
+    elif ch in (ord("p"), ord("P")):
+        # F-30 (prd.md:305) — process view toggle. Deliberately orthogonal to `w` (layout
+        # cycle keeps working inside the process view, same as the group view).
+        set_process_view(not _PROCESS_VIEW)
     else:
         return False
     return True
@@ -2600,10 +3119,15 @@ def _handle_mouse(mx, my):
          NOT consent" (render.py:2393).
       2. my in _TOGGLE_ROWS → the existing `+N hidden`/`folded` toggle. Checked before the
          row map because a toggle row is not a selectable row; the two maps never overlap.
-      3. my in _CLICK_ROWS  → row click:
+      3. my in _FOLD_ROWS   → F-30 (v10) card/node fold-toggle — `_ROUTE_FOLD[card_key]` flips.
+         Inserted here (its own rung, between the `a`-toggle and the F-27 row map) so a fold
+         click can never be misread as either — I7/§5.4 B2: `_FOLD_ROWS` is disjoint from BOTH
+         `_CLICK_ROWS` and `_TOGGLE_ROWS` by construction (`_draw` builds them from disjoint
+         line sets, see its row loop).
+      4. my in _CLICK_ROWS  → row click:
            · same identity as _CURSOR_ID → kill REQUEST → _PROMPT = {"stage": "confirm"}
            · different row              → move selection (_CURSOR_ID = id, _SELECT_MODE = True)
-      4. otherwise → click outside any row → _exit_select()  (deselect, prd.md:279)
+      5. otherwise → click outside any row → _exit_select()  (deselect, prd.md:279)
 
     The kill/cancel hit-boxes do not call control.kill_target directly — they replay the
     matching keyboard keystroke through _handle_prompt_key, so the mouse and keyboard share
@@ -2621,6 +3145,13 @@ def _handle_mouse(mx, my):
         return True                      # rung 1: every other click while prompted is swallowed
     if my in _TOGGLE_ROWS:
         set_show_all(not _SHOW_ALL)
+        return True
+    if my in _FOLD_ROWS:
+        entry = _FOLD_ROWS[my]
+        # Invert whatever was ACTUALLY drawn (entry["folded"] is the resolved state — default
+        # OR a prior explicit choice, §5.4), never a re-guessed default — otherwise a card whose
+        # default happens to be folded would need two clicks before anything visibly moves.
+        _ROUTE_FOLD[entry["card_key"]] = not entry["folded"]
         return True
     if my in _CLICK_ROWS:
         entry = _CLICK_ROWS[my]
@@ -2744,9 +3275,19 @@ _MOUSE_HINT_MIN_WIDTH = 100   # R2-3: mouse is opt-in (needs `set -g mouse on` i
                               # primary and unconditional (prd.md:88·280).
 
 
+_PROCESS_HINT_MIN_WIDTH = 80  # F-30 (v10) — the base footer is already tight at 60 cols (§5.1
+                              # "60열 footer가 이미 빡빡하다"); this one short segment gets its
+                              # own (lower than the mouse hint's 100) width floor rather than
+                              # sharing _MOUSE_HINT_MIN_WIDTH, which is about a DIFFERENT
+                              # capability (mouse opt-in) and would tie the two together for no
+                              # reason.
+
+
 def _footer_segs(select_mode, parts, width=None):
     hint = [("click", "hdr_key"), (" row · ", "hdr_bar")] \
         if width is not None and width >= _MOUSE_HINT_MIN_WIDTH else []
+    p_hint = [("p", "hdr_key"), (" %s · " % ("group" if _PROCESS_VIEW else "process"), "hdr_bar")] \
+        if width is None or width >= _PROCESS_HINT_MIN_WIDTH else []
     if select_mode:
         return [(" ", "hdr_bar"),
                 ("↑↓/jk", "hdr_key"), (" move · ", "hdr_bar"),
@@ -2759,7 +3300,7 @@ def _footer_segs(select_mode, parts, width=None):
             ("q", "hdr_key"), (" quit · ", "hdr_bar"),
             ("r", "hdr_key"), (" refresh · ", "hdr_bar"),
             ("a", "hdr_key"), (" all · ", "hdr_bar"),
-            ("w", "hdr_key"), (" " + wlbl + " · ", "hdr_bar")] + hint + [
+            ("w", "hdr_key"), (" " + wlbl + " · ", "hdr_bar")] + p_hint + hint + [
             ("jk", "hdr_key"), (" scroll · ", "hdr_bar"),
             ("s", "hdr_key"), (" select · ", "hdr_bar"),
             ("g/G", "hdr_key"), (" top/end", "hdr_bar"),
@@ -2772,13 +3313,14 @@ def reset_scroll():
 
 
 def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
-    global _OFFSET, _TOGGLE_ROWS, _CLICK_ROWS, _PROMPT_HITS, _CURSOR_ID
+    global _OFFSET, _TOGGLE_ROWS, _CLICK_ROWS, _FOLD_ROWS, _PROMPT_HITS, _CURSOR_ID
     # reset before any early-return so a stale map never survives a click (§4.1 pattern) —
     # _PROMPT_HITS in particular must never carry the PRIOR stage's coordinates into this
     # draw (§4.4.1): that staleness is exactly what would defeat the confirm→confirm2
     # coordinate inversion.
     _TOGGLE_ROWS = {}
     _CLICK_ROWS = {}
+    _FOLD_ROWS = {}
     _PROMPT_HITS = []
     h, w = stdscr.getmaxyx()
     stdscr.erase()
@@ -2806,12 +3348,23 @@ def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
     # F-27 v9 (§4.2.1): the click map is built from _SELECTABLE, NOT _live_targets() — see the
     # module-level _CLICK_ROWS comment for why (base-mode first click / per-tick cost).
     _sel_by_line = {e["line"]: e for e in _SELECTABLE}
+    # F-30 (v10, §5.4 Y2): same idiom, from `_FOLDABLE` (line-index map `_build_process_lines`
+    # fills) to `_FOLD_ROWS` (screen-row map, offset-applied here — `_FOLDABLE` itself is only
+    # ever line indices, exactly like `_SELECTABLE`).
+    _fold_by_line = {e["line"]: e for e in _FOLDABLE}
 
     visible = lines[_OFFSET: _OFFSET + body_h]
     row = 0
     for segs in visible:
         _addline(stdscr, row, segs, w)
-        if segs is not None and len(segs) == 1 and (
+        fold_entry = _fold_by_line.get(_OFFSET + row)
+        if fold_entry is not None:
+            # ★ I7/§5.4 B2: a foldable row is decided FIRST and unconditionally — it never also
+            # falls into the `_TOGGLE_ROWS` substring check below, even if its text happened to
+            # contain "hidden"/"folded" (the card-label ban in _route_card/_degrade_card is the
+            # other half of this invariant; this is the structural half).
+            _FOLD_ROWS[row] = fold_entry
+        elif segs is not None and len(segs) == 1 and (
                 "hidden" in segs[0][0] or "folded" in segs[0][0]):
             _TOGGLE_ROWS[row] = True
         else:

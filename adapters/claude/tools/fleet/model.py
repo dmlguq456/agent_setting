@@ -222,6 +222,15 @@ class DispatchJob:
     effort: Optional[str] = None        # dispatch runtime effort (pipe `effort=`; None = parent-inherit)
     model_role: Optional[str] = None    # Portable model role from pipe model_role=.
     state_evidence: Optional[dict] = None  # F-25 classifier verdict + inputs (additive; --json via asdict)
+    # F-28a (v10, prd.md:302) — immutable route-record link, read-only. route_file is the
+    # record's on-disk path (may be /tmp and already gone by the time fleet reads it — tolerant,
+    # never an error); route_hash is absent for proc jobs (AGENT_ROUTE_HASH is not exported,
+    # plan §3.2.2) so integrity still rests on the record's own recomputed hash (route.py P1).
+    route_file: Optional[str] = None    # pipe route_file= / env AGENT_ROUTE_FILE
+    route_id: Optional[str] = None      # pipe route_id= / env AGENT_ROUTE_ID
+    route_hash: Optional[str] = None    # pipe route_hash= (jobs.log rows only)
+    route_node: Optional[str] = None    # pipe route_node= / env AGENT_ROUTE_NODE — the node
+                                        # this job is executing
 
     def to_dict(self):
         return asdict(self)

@@ -4,13 +4,61 @@ Covers all three harnesses, every liveness state, tracked/untracked gate, git br
 dispatch under a parent, depth-2 subdispatch, an orphan, a loop, varied models/effort — so the render layer can be
 exercised without waiting for real live processes. Merged INTO live data by fleet.py's --demo
 path. gate/branch are set explicitly here (fake cwds are not real repos).
+
+F-30 (v10): also seeds 3 route-carrying jobs (a resolved record, a fan-out/fan-in parallel
+record, and a record-less "degrade" job) + 1 subagent-bearing session — without these, `--view
+process`/`p` renders "no active route" against demo data and the V3 design critic capture would
+be reviewing a blank screen (plan §5, checklist Y4). The route fixtures referenced here are the
+SAME files `tests/fixtures/route/` ships (this module is a mirrored fixture module, so the
+relative path resolves identically in both `tools/fleet/` and the adapter mirror).
 """
+import os
 import time
 
-from .model import Session, DispatchJob
+from .model import Session, DispatchJob, SubAgent
+
+_ROUTE_FIXDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "tests", "fixtures", "route")
+_DEMO_CARD_ROUTE = os.path.join(_ROUTE_FIXDIR, "demo_card.json")
+_DEMO_CARD_RID = "rt-2f5c79f591479409"   # fabricated content -> hash cannot collide with a real record
+_LAB_ROUTE = os.path.join(_ROUTE_FIXDIR, "synth_parallel_lab.json")
+_LAB_RID = "rt-6f5423d05eaf3189"
+
+
+def _seed_route_evidence():
+    """Best-effort: stamps synthetic done evidence so the process view has at least one ✓ node
+    to show (§5.3's "n/m nodes" progress) without a real jobs.log row backing it. Merges (never
+    overwrites) — a live `dispatch.collect()` call on the same tick keeps its own real evidence
+    for real route_ids.
+
+    ★ design_review_round_1.md priority-🟡1: the parallel-lab card's `setup` node MUST be seeded
+    too — its fan-out children (eval-asr/eval-sep below) are `active`/`failed`, and a node
+    cannot logically be `pending` (unstarted) while its OWN dependents are already running or
+    failed. Leaving `setup` unseeded drew an impossible DAG (`setup ○` with live/failed
+    children) on F-30's own marquee demo screen — fixed by seeding `setup` done here, exactly
+    like `plan` is seeded for the resolved-record card."""
+    try:
+        from .collectors import dispatch
+        existing = dict(getattr(dispatch.collect, "last_route_nodes", None) or {})
+        existing.setdefault(_DEMO_CARD_RID, {}).setdefault("plan", {
+            "status": "done", "slug": "demo-route-conductor-plan", "ts": time.time() - 900,
+            "pid": None, "harness": "claude", "model": "opus", "effort": "high",
+            "completion_gate": "code-plan", "note": None,
+            "route_file": _DEMO_CARD_ROUTE, "route_hash": None,
+        })
+        existing.setdefault(_LAB_RID, {}).setdefault("setup", {
+            "status": "done", "slug": "demo-lab-conductor-setup", "ts": time.time() - 600,
+            "pid": None, "harness": "claude", "model": "opus", "effort": "high",
+            "completion_gate": "lab-setup", "note": None,
+            "route_file": _LAB_ROUTE, "route_hash": None,
+        })
+        dispatch.collect.last_route_nodes = existing
+    except Exception:
+        pass
 
 
 def collect(harness_filter=None):
+    _seed_route_evidence()
     S, J = Session, DispatchJob
     sessions = [
         # --- project 'demo-app' (tracked) ---
@@ -49,6 +97,16 @@ def collect(harness_filter=None):
           ctx_pct=18, rl_5h=25, rl_7d=15, cost=4.20, elapsed_min=160,
           gate="tracked", branch="feat/shipped", liveness="idle",
           mtime=time.time() - 92 * 60),
+        # --- F-30 (v10): the depth-2 "execute" stage worker of the resolved-record route card
+        # below IS this session (same pid, is_child — headless `claude -p` stage workers show
+        # as BOTH a job and a session, §5.3.1). Its subagents prove the pid-join independent of
+        # the group view's own is_child filtering (this session is invisible there by design).
+        S(harness="claude", pid=95001, cwd="/home/demo/route-app-wt/execute",
+          session_id="demo-route-execute", slug="demo-route-conductor-execute",
+          model="Opus 4.8", effort="high", is_child=True, elapsed_min=8, liveness="working",
+          gate="tracked", branch="v10-execute",
+          subagents=[SubAgent(agent_type="explore", active=True, started_at=time.time() - 120,
+                              source="claude-sidechain")]),
     ]
     jobs = [
         # nested under the demo-app claude parent (demo-claude-1)
@@ -101,6 +159,32 @@ def collect(harness_filter=None):
           branch="orphan", liveness="stale"),
         # loop
         J(key="oncall", elapsed_min=12, slug="oncall", cwd="", parent_sid=None, liveness="working"),
+        # --- F-30 (v10) route cards: 1 resolved record (plan✓ via _seed_route_evidence, execute
+        # active — pid=95001 joins the session above), 1 fan-out/fan-in parallel record with a
+        # FAILED branch (eval-sep), 1 record-less "degrade" pipeline (§5.3's honest-gap card).
+        J(key="code", slug="demo-route-conductor", cwd="/home/demo/route-app",
+          liveness="working", depth=1, capability_owner="autopilot-code"),
+        J(key="code-execute", mode="dev", harness="claude", model="Opus 4.8", effort="high",
+          elapsed_min=8, slug="demo-route-conductor-execute",
+          cwd="/home/demo/route-app-wt/execute", parent_slug="demo-route-conductor",
+          is_child=True, depth=2, liveness="working", pid=95001,
+          route_id=_DEMO_CARD_RID, route_file=_DEMO_CARD_ROUTE, route_node="execute"),
+        J(key="lab", slug="demo-lab-conductor", cwd="/home/demo/lab-project",
+          liveness="working", depth=1, capability_owner="autopilot-lab"),
+        J(key="lab-eval", mode="eval", harness="claude", model="Sonnet 5", effort="medium",
+          elapsed_min=9, slug="demo-lab-conductor-eval-asr",
+          cwd="/home/demo/lab-project-wt/eval-asr", parent_slug="demo-lab-conductor",
+          is_child=True, depth=2, liveness="working",
+          route_id=_LAB_RID, route_file=_LAB_ROUTE, route_node="eval-asr"),
+        J(key="lab-eval", mode="eval", harness="claude", model="Sonnet 5", effort="medium",
+          elapsed_min=3, slug="demo-lab-conductor-eval-sep",
+          cwd="/home/demo/lab-project-wt/eval-sep", parent_slug="demo-lab-conductor",
+          is_child=True, depth=2, liveness="stale",
+          route_id=_LAB_RID, route_file=_LAB_ROUTE, route_node="eval-sep"),
+        # record-less "degrade" pipeline — no route_id at all (§5.3 "no route record" card).
+        J(key="spec", stage="design", mode="dev", qa="standard", qa_source="argv",
+          harness="opencode", model="glm-5.2", elapsed_min=14, slug="demo-degrade-spec",
+          cwd="/home/demo/degrade-project", liveness="working", depth=1),
     ]
     if harness_filter:
         sessions = [s for s in sessions if s.harness in harness_filter]
