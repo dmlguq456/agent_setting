@@ -13,6 +13,13 @@ if [ -f "$LOOP_DIR/.hold" ]; then _h=$(cat "$LOOP_DIR/.hold" 2>/dev/null); _t=$(
   fi;
 fi
 
+# NAS mount guard (2026-07-15 incident): if /home/nas is not mounted, the mkdir
+# below would create shadow dirs on the root fs and cd would "succeed" against
+# an empty tree. Fail loudly instead; the retry lands after remount.
+if ! mountpoint -q /home/nas; then
+  echo "[oncall] SKIP: /home/nas not mounted — exit 1 $(date -Iseconds)" >> "$LOG" 2>/dev/null || true
+  exit 1
+fi
 mkdir -p /home/nas/user/Uihyeop/notes/oncall
 
 {
