@@ -1,6 +1,6 @@
 # agent-fleet-dashboard — Spec (PRD)
 
-> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기) · **v6 2026-07-14** (F-22 responsive titles + F-23 recursive-storm containment) · **v7 2026-07-15** (F-24 portable worker attribution + unique Codex rollout ownership) · **v8 2026-07-15** (F-25~F-28 — 상태 판정 단일 모델·interactive 세션 레지스트리 1급·제한적 세션 제어[Non-goal 반전]·분사 정책 연동 계약. 근거 = 사용자 결정 4건: "fleet 직접 세션 제어"·"반쪽짜리 해소, 전향적 확장"·"버그가 아니라 판정 기준 자체가 불안정"·"분사 정책과 연동되는 가장 중요한 UI") · **v9 2026-07-15** (minor 6건 흡수 + audit 🟡 2건 해소[어휘 매핑 표·§10 다이어그램] + F-27 마우스 1급 재설계 + F-30 종착 비전 등재 "dispatch·서브에이전트 처리 과정 시각화". 근거 = `_internal/audit/audit_2026-07-15T1734.md` + 사용자 방향 2건)
+> mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기) · **v6 2026-07-14** (F-22 responsive titles + F-23 recursive-storm containment) · **v7 2026-07-15** (F-24 portable worker attribution + unique Codex rollout ownership) · **v8 2026-07-15** (F-25~F-28 — 상태 판정 단일 모델·interactive 세션 레지스트리 1급·제한적 세션 제어[Non-goal 반전]·분사 정책 연동 계약. 근거 = 사용자 결정 4건: "fleet 직접 세션 제어"·"반쪽짜리 해소, 전향적 확장"·"버그가 아니라 판정 기준 자체가 불안정"·"분사 정책과 연동되는 가장 중요한 UI")
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -138,7 +138,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 [Claude] <slug> 🛰️  ✨<model> …  <liveness>          ← 자식을 분사한 부모 세션 (command-center 🛰️)
   └▸🚀<pipe-key>▸<stage>  (<mode>·<qa>)  ⏳<elapsed>  <liveness>  <slug>
 ```
-- **부모 링크 = 프로세스 env** (실측, `/proc/<pid>/environ`): `CLAUDE_CODE_SESSION_ID` = 그 잡을 분사한 부모 세션 id → 화면의 `Session.session_id` 와 매칭해 그 밑에 nest. `CLAUDE_CODE_CHILD_SESSION=1` = 헤드리스 자식 표식(argv `-p` 추측 대체). environ read 는 동일 user 만(충족) — 실패 시 graceful(orphan fallback). env가 없는 codex/opencode 분사는 registry `parent_cwd` → 화면 세션 cwd 매칭으로 nest한다(v9 흡수 — v8 minor #6: 세 어댑터 래퍼가 §5.10 pipe 계약의 `parent_cwd`를 부모 문맥 존재 시 기록하도록 정합 수정; 수정 전 기록 행은 잡 종료까지 orphan 유지).
+- **부모 링크 = 프로세스 env** (실측, `/proc/<pid>/environ`): `CLAUDE_CODE_SESSION_ID` = 그 잡을 분사한 부모 세션 id → 화면의 `Session.session_id` 와 매칭해 그 밑에 nest. `CLAUDE_CODE_CHILD_SESSION=1` = 헤드리스 자식 표식(argv `-p` 추측 대체). environ read 는 동일 user 만(충족) — 실패 시 graceful(orphan fallback). ~~codex/opencode 분사엔 이 env 가 없어 대부분 orphan.~~ **[v8 minor #6, 2026-07-15]** 세 어댑터 dispatch 래퍼가 §5.10 pipe 계약의 `parent_cwd`를 기록하도록 정합 수정(부모 문맥 있을 때만) — 합성 `parent_sid`뿐인 codex/opencode 분사도 registry `parent_cwd` → 화면 세션 cwd 매칭으로 nest된다. 수정 전에 이미 기록된 행은 잡 종료까지 orphan 유지(소급 없음).
 - **아이콘(R5)**: 자식을 ≥1개 가진 부모 세션 앞에 command-center `🛰️`, 각 자식 잡 앞에 launch `🚀`. 자식 없는 일반 세션엔 붙이지 않음. double-width 정렬이 깨지면 render.py 의 `_ICON_PARENT`/`_ICON_CHILD` 한 곳에서 ASCII(`⌘`/`▸`)로 degrade.
 - **orphan 규칙(R2)**: 부모 세션이 화면에 alive 인 동안만 nest. 부모가 죽거나(프로세스·화면 소멸) 화면 밖·env 없음이면 그 잡을 **프로젝트 레벨 orphan 으로 승격**(사라지지 않게) + `(orphan)` 마커. cron loops(oncall/note/study/drill) 는 애초에 부모 없음이 정상 → loops/프로젝트 레벨 flat(orphan 마커 없음). `--section dispatch`(세션 숨김) 에선 nest 앵커가 없어 전 잡이 flat 표시되며 이때 `(orphan)` 마커는 억제(의도적 off 이지 진짜 orphan 아님).
 - **qa 실측 레이어드 fallback(R3)**: effective qa = argv `--qa` → jobs.log pipe 의 `qa=` 구조필드(신형 `capability=…,mode=…,qa=…` codex 형식) → 잡 산출물 `plans/*_<slug>/pipeline_state.yaml` 의 `qa_level` 실측 → CONVENTIONS §1.4 capability→default 맵 순. 명시값(argv)이 아닌 유도값(2~4)은 dim + `~` 접두(예 `~thorough`)로 구분 — argv 텍스트 오탐 방지 위해 `--qa` 파싱은 `[a-z]+` + valid-level 화이트리스트로 좁힘. mode·stage 도 동류로 잡 산출물(`live_stage`) 우선.
@@ -190,7 +190,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-16 (세션 표시명: 짧은 영어 기준선, 사용자 요구 2026-07-10 저녁; 고정 폭은 F-22가 대체)**: F-14 의 title 표시가 문장형(한국어)으로 길어 20~24 display cols의 고정 tail-cut과 짧은 영어 sidecar를 도입했다. v6/F-22는 이 고정 폭만 대체하며, 영어·head 보존·native fallback 계약은 유지한다.
 - **F-17 (라이브 제목 refresher — cross-harness fleet sidecar + no-tools 경량 LLM 워커, 사용자 승인 2026-07-10·공유 확장 2026-07-13)**: 하네스 원본 transcript에 쓰지 않고 **fleet 소유 neutral sidecar**로 진행형 재요약을 제공한다.
   - **sidecar**: `${FLEET_TITLE_STATE_DIR:-${XDG_STATE_HOME:-~/.local/state}/agent-fleet/titles}/<harness>/<sid>.json` — `{title, ts, source, offset}`. `<harness>/<sid>` namespace로 충돌을 막는다. 기존 `~/.claude/.fleet-titles/<sid>.json`은 Claude read-only migration fallback이다. 표시 우선순위 = **fresh sidecar(<24h) → runtime-native title(ai-title/threads.title/thread_name/session.title) → slug**.
-  - **공용 워커**: `tools/fleet/refresh_title.py`가 Claude/Codex transcript delta를 공통 대화 텍스트로 정규화한다. 기본 provider는 기존 `claude -p --model haiku` + 도구 전면 차단이다. `FLEET_TITLE_COMMAND` argv template와 `FLEET_TITLE_MODEL`로 GPT 계열 등 별도 저비용 no-tools wrapper를 교체할 수 있다. shell은 사용하지 않으며 모델 출력은 한 줄 영어 제목 데이터로만 검증한다. 제목은 4~8단어를 목표로 하고 검증 상한은 8단어·64자다(v9 흡수 — v8 minor #1, 코드 `80c492e9` 동기; 이전 8~12단어·96자 계약은 사용자 피드백 "반응형 확장이 오히려 별로"로 폐기).
+  - **공용 워커**: `tools/fleet/refresh_title.py`가 Claude/Codex transcript delta를 공통 대화 텍스트로 정규화한다. 기본 provider는 기존 `claude -p --model haiku` + 도구 전면 차단이다. `FLEET_TITLE_COMMAND` argv template와 `FLEET_TITLE_MODEL`로 GPT 계열 등 별도 저비용 no-tools wrapper를 교체할 수 있다. shell은 사용하지 않으며 모델 출력은 한 줄 영어 제목 데이터로만 검증한다. ~~v6/F-22부터 넓은 name zone을 활용하도록 8~12단어를 목표로 하고 검증 상한은 12단어·96자다.~~ **[v8 minor 2026-07-15]** 사용자 피드백("반응형 확장이 오히려 별로")으로 목표 4~8단어·검증 상한 8단어·64자로 축소 — 코드 선반영 `80c492e9` 소급 동기.
   - **트리거**: Claude는 statusline debounce를 유지하되 neutral state/공용 워커를 쓴다. Codex는 live fleet loop가 collector가 찾은 rollout을 대상으로 같은 debounce(기본 10분)·`<harness>/<sid>` lock을 적용한다. `--json`, `--once`, demo/test 경로는 worker를 spawn하지 않는다.
   - **하네스 차이**: title provider와 sidecar 계약은 공용이다. native source만 다르다(Claude `ai-title`, Codex `threads.title` + legacy `thread_name`, OpenCode `session.title`). OpenCode는 native title이 충분해 이번 live refresher trigger 대상에서 제외하되 provider 계약을 막지 않는다.
   - **비용·fallback**: provider 실패·미설치·quota 소진은 sidecar 미갱신으로 끝난다. Codex는 state DB/JSONL native title, Claude/OpenCode는 각 native title, 마지막으로 slug가 남으므로 제목이 사라지지 않는다.
@@ -214,7 +214,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-22 (세션명이 터미널 가로폭을 채우는 반응형 name zone, 2026-07-14 사용자 요구)**:
   - **wide**: 터미널 폭에서 branch·model·context·time과 패널 inset을 먼저 예약하고 남는 slack을 세션 name column에 준다. 세션 제목은 이 동적 예산까지 표시하되 child-count와 tracked/untracked 태그 공간을 먼저 보존한다. dispatch 이름은 F-15의 24열 compact 상한을 유지하고 늘어난 name column에는 padding만 추가해 공통 컬럼 정렬을 보존한다.
   - **narrow/stack**: 현재 터미널 폭과 L1 suffix(child-count·gate·branch·상태 태그)를 기준으로 제목 예산을 계산한다. `_clip_w`의 display-cell/CJK 안전 tail-cut을 계속 사용하며 메타데이터가 화면 밖으로 밀려나지 않는다.
-  - **provider**: sidecar는 4~8단어·최대 64자의 구체적인 영어 요약을 저장한다(v9 흡수 — v8 minor #1). 기존 sidecar는 호환하며 다음 debounce 갱신 때 자연스럽게 교체한다.
+  - **provider**: ~~sidecar는 렌더러가 각 폭에서 자를 수 있도록 8~12단어, 최대 96자의 구체적인 영어 요약을 저장한다.~~ **[v8 minor 2026-07-15]** 4~8단어·최대 64자로 축소(`80c492e9` 소급 동기). 기존 sidecar는 호환하며 다음 debounce 갱신 때 자연스럽게 교체한다.
   - **[v8 minor 2026-07-15 — wide name zone 고정 상한 복원]**: F-22의 "터미널 slack을 세션 name column에 전부 준다" 계약은 **회귀로 판정**(사용자 피드백: "session 길이를 맞춤형으로 늘린 건 오히려 별로"). wide 레이아웃의 세션 제목 컬럼은 **고정 상한(기본 40 display cols, 상수 한곳에서 조정)**을 넘지 않으며, 남는 slack은 name column에 재배분하지 않는다. narrow/stack의 suffix-예약 예산 계산, display-cell/CJK 안전 tail-cut, dispatch compact 상한(F-15 24열)은 그대로 유지. F-22의 acceptance 중 "168열에서 예산이 24열보다 커진다"는 "40열 상한까지만 커진다"로 대체.
   - **acceptance**: 168열 wide에서 세션 제목 예산이 기존 24열보다 커지고 가용 name zone을 사용한다. 60/120/168열에서 행이 터미널 경계를 넘지 않고, branch/model/context/time 및 dispatch 정렬이 유지되며, ASCII와 한글 제목 모두 display-cell 경계에서만 잘린다.
 - **F-23 (제목 생성 재귀 폭풍 봉쇄, 2026-07-14 사고 후 사용자 요구)**:
@@ -238,33 +238,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-25 (세션·잡 상태 판정의 단일 상태 모델)** ★ v8 핵심 — "기준 불안정" 해소.
   - **문제**: 상태 판정이 층층이 쌓인 사고별 휴리스틱에 분산돼 있다 — proc scan, transcript/rollout mtime 창(15min), slug 상관 dedup(F-18a), `open`→queued 매핑과 worktree mtime 유도(F-15), env 마커(F-18b/F-24), rollout fd 소유권(F-24). 각각은 정당하나 **우선순위·충돌 규칙이 코드 암묵**이라 같은 세션이 tick마다 다른 기준으로 분류될 수 있고, 사용자는 "왜 이 상태인가"를 검증할 수 없다.
   - **계약**: 단일 분류기(`model.py` 소유)가 모든 세션/잡의 상태를 결정한다. 입력 소스 우선순위를 규범으로 고정: **(1) 명시 registry 상태**(jobs.log status, `~/.claude/sessions` status) > **(2) 강한 프로세스 증거**(exact pid + `/proc` start-time, rollout fd 소유권, `AGENT_SESSION_ROLE` 등 env 마커) > **(3) mtime 휴리스틱**(최후, 유도값 표시 `~` 접두 유지). 하위 소스는 상위 소스와 모순될 때 절대 이기지 못한다.
-  - **어휘 정합 — 규범 매핑 표 [v9 삽입, audit 🟡 해소]**: 표시층은 아래 표를 임의 재해석하지 않는다. 구현 상수는 `model.py` 한곳(`SESSION_WORK_SEC=60s`, `SESSION_STALE_MIN=48h`, `JOB_STALE_MIN=15min`, `UNUSED_ACTIVITY_MS=2000ms`).
-
-    **세션** (위 tier 우선순위 하에서):
-
-    | 입력 증거 | tier | 상태 |
-    |---|---|---|
-    | pid 사망 · registry procStart ≠ `/proc` start-time (PID 재사용) | 2 | `dead` (즉시, hysteresis 없음) |
-    | cwd symlink `(deleted)` (worktree 소멸) | 2 | `stale` |
-    | registry `status=busy` | 1 | `working` |
-    | registry `status=idle/shell` + transcript 부재 + `updatedAt-startedAt ≤ 2000ms` | 1 | `unused` — **stale 창 면제**(mtime이 스폰 시각 고정이므로; 살아있는 한 유지, v8 minor #4) |
-    | registry `status=idle/shell` (사용 이력 있음) | 1 | `idle` |
-    | transcript 침묵 > 48h (registry busy/idle이어도) | 3 | `stale` — **하위 tier가 상위를 이기는 유일한 규범 예외**(48h 침묵 세션을 working으로 보이는 것이 더 나쁨; v8 사이클 D1 명문화). unused는 면제 |
-    | transcript 활동 < 60s | 3 | `working` |
-    | 그 외 | 3 | `idle` |
-
-    **잡** (jobs.log 원어휘 → 표시, OPERATIONS §5.10 status는 불변):
-
-    | jobs.log | 표시 | 비고 |
-    |---|---|---|
-    | `open` (미기동) | `queued` | 진짜 미기동만 (F-15) |
-    | `open` + worktree transcript/rollout 활동 | `working` | 유도값 — `~` 접두 (F-15) |
-    | `running` | `working` | |
-    | `done` | `done` | |
-    | `killed` / `cancelled` | `killed` | cancelled는 어휘 통합, raw는 evidence에 보존 |
-    | (liveness 유도) 15min 침묵 / pid 사망 | `stale` / `dead` | dispatch는 `--all` 무관 항상 노출 |
-
-    **hysteresis**: 하향 전이(`working→stale`, `idle→stale`)는 tier-3 유도에만 300초 dwell 적용, 상향(활동 재개)과 `dead/killed/done`은 즉시. tier-1 명시 선언은 dwell로 지연되지 않는다.
+  - **어휘 정합**: 세션 = `working/idle/unused/stale/dead`, 잡 = `queued/working/done/stale/dead/killed`. jobs.log 원어휘(`open/running/done/killed/cancelled`, OPERATIONS §5.10)와의 매핑 표를 spec 규범으로 명문화 — 표시층이 임의 재해석하지 않는다.
   - **플래핑 방지 hysteresis**: 상태 하향 전이(working→idle, idle→stale)는 임계 시간 지속 시에만, 상향 전이(활동 재개)는 즉시. 임계값은 상수 한곳(`model.py`)에 모으고 tick 간 직전 상태를 참조해 경계 진동을 흡수한다.
   - **판정 근거 노출**: `--json`의 각 row에 `state_evidence`(판정 소스·근거 요약) 필드를 additive로 추가 — "왜 이 상태인가"를 기계·사람 모두 검증 가능하게. 관측된 불안정 사례는 픽스처로 고정해 회귀를 막는다.
   - **재배치**: F-15 queued 유도·F-18 상관 dedup·F-24 fd 소유권은 폐기가 아니라 이 분류기의 **입력 계층으로 재배치**된다 — 독립 패치 층으로 남기지 않는다.
@@ -275,10 +249,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **provenance 태깅(best-effort)**: 부모 프로세스 계보로 출처를 추정해 dim 태그(`herdr`/`terminal`/`vscode`/`worker`)로 표시. 판별 실패 시 조용히 생략(오귀속보다 결손).
 - **F-27 (제한적 세션 제어 — Non-goal 반전, 범위=kill+정리만, 사용자 확정 2026-07-15)**:
   - **반전 폭**: kill과 유령/stale 정리만. **attach·resume은 여전히 Non-goal**(herdr·tmux 영역). 자동 제어는 없다 — §0.5 v8 경계 개정 참조.
-  - **조작 모델 [v9 개정 — 마우스 1급, 사용자 방향 2026-07-15 "그냥 마우스로 처리"]**: v8의 키보드 선택 모드(s/x 커서)를 사용자가 "별로"로 평가 → 마우스를 1차 경로로 재설계한다.
-    - **마우스(1급)**: 행 클릭 = 해당 행 선택(하이라이트, 선택 모드 진입과 동일 상태) → 선택된 행 재클릭 = kill 요청 → 확인 프롬프트의 `[kill]`/`[cancel]` 클릭 타깃으로 확정/취소. 다른 행 클릭 = 선택 이동, 행 밖 클릭 = 해제. 기존 `+N hidden` 클릭 토글과 같은 `_TOGGLE_ROWS`/mouse mask 기제 재사용, tmux `set -g mouse on` opt-in 전제와 §3 트레이드오프(터미널 네이티브 클릭-복사 차단) 불변.
-    - **키보드(폴백)**: v8의 `s`/`x` 진입 → `↑↓`/`jk` 이동 → `x` 요청 → `Esc` 해제 경로를 no-mouse 환경·접근성 폴백으로 유지. 확인 프롬프트는 y/n 키 병행.
-    - kill 요청 시 대상 요약과 함께 확인 프롬프트. 기본 허용 대상 = `unused`/`stale`/`dead`/idle worker 세션과 registry 잡의 exact pid; `working`/`busy` 세션은 경고 + 이중 확인. (안전 계약·행위 기록·registry 마감은 아래 항 불변.)
+  - **조작 모델 [v8 minor #5 구현 확정, 사용자 확인 2026-07-15]**: 모드 있는 커서 — `s` 또는 `x`로 선택 모드 진입 → `↑↓`/`jk` 이동 → `x` = kill 요청 → `Esc` 해제. (`↑↓` 직접 진입 원안은 기존 스크롤 바인딩(§3 키 표)과 충돌해 폐기 — 스크롤 회귀 0 우선.) kill 요청 시 대상 요약과 함께 확인 프롬프트. 기본 허용 대상 = `unused`/`stale`/`dead`/idle worker 세션과 registry 잡의 exact pid; `working`/`busy` 세션은 경고 + 이중 확인.
   - **안전 계약**: 시그널 전 exact pid + `/proc` start-time 재검증(PID 재사용 방지, F-24·liveness 동형). SIGTERM 기본, 미종료 시 명시 재확인 후 SIGKILL 에스컬레이션. fleet 자신·현재 조작 중인 메인 세션은 대상 제외.
   - **행위 기록**: 모든 제어 행위는 fleet 소유 `action log`(XDG state jsonl, bounded rotation — 제목 sidecar·write-events 저널 동형)에 `ts/action/pid/sid/state/승인 방식`으로 append. 관제 도구가 자기 행위를 스스로 관측 대상으로 남긴다.
   - **registry 마감**: kill 성공한 registry 잡의 row는 `done,note=fleet-kill`로 마감한다 — F-18의 "registry 무write" 불변식에 대한 **명시적 단일 예외**(SD-15 `close_job_row` 동형 경로 재사용, 임의 write 아님).
@@ -292,8 +263,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **소스(하네스별)**: OpenCode = DB `session.parent_id`+`agent` 컬럼(2026-07-15 실측 확인 — 가장 완전, 토큰·비용 포함) / Claude = 세션 transcript의 `isSidechain: true` 라인 + Agent tool_use↔tool_result 짝짓기로 타입·시작·종료 유도(제목/liveness가 이미 읽는 tail 재사용, mtime 키 캐시) / Codex = state DB threads 표면 probe 후 확정 — 확정 전에는 honest 결손(`—`), 추측 표시 금지.
   - **표시**: 세션 행 아래 `└⚡<agent-type> ⏳<경과>` 서브 행 — 분사 잡 `└▸🚀`와 글리프로 구분. 완료분은 기본 숨김, 활성만 표시 + 세션 행에 `⚡N` 카운트 배지, `a` 토글 시 최근 완료분 dim 노출. fleet pulse의 세션/잡 카운트에 혼입 금지(F-18 계열 — 별도 집계).
   - **불변식**: zero-injection(read-only) 유지, `--json` additive(신규 `subagents` 키), 소스 부재·파싱 실패 = 서브 행 생략(회귀 없음).
-  - **구현**: v8 사이클(`fleet-v8-reliability`) 수확 완료 → **v9 구현 사이클 스코프에 편입**.
-- **F-30 (종착 비전 — dispatch·서브에이전트 처리 과정 시각화, 사용자 방향 2026-07-15)**: "이후에 내가 진짜 원하는 건 dispatch 구조 및 서브에이전트 구조의 **처리 과정을 시각화**해서 보는 것." 행 나열이 아니라 오케스트레이션의 흐름 — conductor→stage 전이, 부모→서브에이전트 fan-out, 파이프라인 진행 — 을 과정으로 보이게 한다. 이 비전이 F-28(capability별 실제 topology DAG의 canonical 소비)·F-29(서브에이전트 관측)의 우선순위 근거다. 완전한 처리-과정 뷰(전용 워크플로우 뷰 모드 등)의 설계는 stage-dispatch v9 topology registry/route record 착륙 후 F-28 구현과 함께 확정한다 — v9에서는 방향만 등재하고 조기 설계를 고정하지 않는다.
+  - **구현**: v8 사이클(`fleet-v8-reliability`) 수확 후 후속 단계.
 
 ## 5. 능동 변경 — fleet-owned local state write
 
@@ -382,9 +352,6 @@ flowchart TD
     TW -.writes fleet state.-> TS["XDG agent-fleet/titles/&lt;harness&gt;/&lt;sid&gt;.json"]
     TS --> CL
     TS --> CXP
-    TUI -.사용자 개시 kill · F-27.-> CTL["control.py — 유일한 signal/write 예외 (§0.5 v8 경계)"]
-    CTL -.action log.-> AL["XDG agent-fleet/actions jsonl"]
-    CTL -."done,note=fleet-kill row 마감".-> JL
 ```
 
 ## 11. MVP 경계
@@ -400,7 +367,7 @@ flowchart TD
 ## Non-goals
 
 - 하네스 TUI·hook·프로세스에 주입(§0.5) — 오직 관찰. (v8: 사용자 개시 kill/정리 시그널은 주입이 아니라 제어 — §0.5 경계 개정 참조.)
-- 세션 attach·resume — herdr/tmux 영역. (kill·유령/stale 정리는 v8 F-27로 도입 — 사용자 개시 + 확인 게이트 한정. 자동 제어(fleet 자체 판단 kill)는 계속 Non-goal.)
+- ~~세션 제어(kill·attach·resume) — herdr/tmux 영역, 우리는 모니터.~~ **v8 부분 반전(F-27)**: kill·유령/stale 정리는 사용자 개시 + 확인 게이트 하에 도입. **attach·resume은 계속 Non-goal**(herdr/tmux 영역). 자동 제어(fleet 자체 판단 kill)도 계속 Non-goal.
 - 원격·웹 대시보드 — 로컬 터미널 only.
 - 새 telemetry 파이프 신설 — 하네스가 이미 남긴 것만 읽음. (fleet 소유 action log는 telemetry 파이프가 아니라 자기 행위 기록 — 제목 sidecar 동렬.)
 
@@ -452,20 +419,11 @@ flowchart TD
 - **F-27 lock (제한적 세션 제어)**: 범위 = kill+정리만(사용자 확인 — attach/resume 비대상 유지). 행 선택+확인 게이트, exact pid+start-time 재검증, SIGTERM→명시 SIGKILL, action log 기록, kill 성공 시 registry row `done,note=fleet-kill` 마감(무write 불변식의 명시 단일 예외). 자동 제어 0.
 - **F-28 lock (분사 정책 연동)**: 타이밍 = "계약 선고정, 구현 후행"(사용자 확인). route record/topology registry 착륙 후 pipe 휴리스틱을 canonical record 소비로 대체, 부재 시 fallback 회귀 없음. detached run registry·governor lease 관측은 소스 착륙 후 단계 적용.
 
-## 확정 결정 (v9 승격, 2026-07-15 — minor 흡수 + audit 해소 + 마우스 재설계 + 종착 비전)
-
-- **minor 6건 흡수**: v8 minor #1~#6(제목 4~8단어·64자 / name zone 40열 캡 / F-29 등재 / unused stale 면제 / kill 키 확정·§9 등재 / parent_cwd 래퍼 정합)을 본문으로 정리(취소선 제거), minor-log 리셋. 근거 = `_internal/audit/audit_2026-07-15T1734.md` (🟢 12 — 전 계약 코드 실재 확인).
-- **F-25 규범 매핑 표 삽입** (audit 🟡-1 해소): 세션/잡 상태 표 + "48h 침묵이 registry 명시를 이기는 유일 예외"(v8 사이클 D1) 명문화. 구현 상수는 `model.py` 한곳.
-- **§10 다이어그램 갱신** (audit 🟡-2 해소): `control.py` signal/write 예외 노드 + action log + registry row 마감 경로.
-- **F-27 v9 (마우스 1급)**: 행 클릭 선택 → 재클릭 kill 요청 → `[kill]`/`[cancel]` 클릭 확정. 키보드 s/x 경로는 폴백 유지. 안전 계약(확인 게이트·start-time 재검증·working 이중 확인·action log·자동 제어 0) 불변. 근거 = 사용자 "그냥 마우스로 처리가 되는게 좋을것 같긴해"(2026-07-15).
-- **F-30 (종착 비전)**: dispatch·서브에이전트 **처리 과정의 시각화**가 fleet의 목표 상태 — F-28/F-29 우선순위 근거로 등재, 전용 뷰 설계는 topology registry 착륙 후.
-
 ## Next (구현 순서 — autopilot-code, 본 v2 입력 · v1 순서 1~7 은 완료)
 
 0. ✅ **F-21 cross-harness title parity** — `plans/2026-07-13_fleet-cross-harness-title/`: Codex state DB title + JSONL fallback, neutral sidecar, shared provider/scheduler, cross-harness tests, mirror sync. 구현·검증 완료(`92181b6`).
 0. **F-22/F-23 responsive + bounded session title** — terminal width를 renderer에 전달해 session name zone을 확장하고, provider 제목을 최대 12단어·96자로 늘린다. 이어 internal-session graph cut, concurrency/start budget, kill switch를 적용하고 60/120/168열 및 200-session no-provider storm 회귀와 mirror parity를 검증한다.
-0. ✅ **v8 구현 완료** (2026-07-15, `plans/2026-07-15_fleet-v8-reliability`, 테스트 416) — F-25 상태 분류기·F-26 레지스트리 1급·F-22 minor·F-27 키보드 kill.
-0. **v9 구현 순서 (autopilot-code, 별도 사이클)** — ① F-27 마우스 1급 재설계(행 클릭 선택→재클릭 kill→클릭 확정, 키보드 폴백 유지, 안전 acceptance 재검증) ② F-29 서브에이전트 관측(OpenCode DB `parent_id/agent` → Claude transcript sidechain → Codex threads probe 순, `└⚡` 서브 행 + `⚡N` 배지, `--json` additive `subagents`) ③ 잔여 후속 — dispatch stage zone 폭 상한(v8 사이클 D3), 스크롤 회귀 테스트 신설. F-28/F-30은 stage-dispatch v9 topology registry 착륙 대기. 각 단계는 `--once`/`--json` smoke + 전체 tests 회귀(416+) + mirror parity + 디자인 critic 렌더 비평 유지.
+0. **v8 구현 순서 (autopilot-code, 별도 사이클)** — ① F-25 상태 분류기 + 픽스처(최우선 — 이후 항목의 기반) ② F-26 레지스트리 1급 + unused/provenance ③ F-27 선택 커서 + kill/정리 + action log(안전 acceptance: start-time 불일치 거부·working 이중 확인·자동 제어 0 실측) ④ F-28은 stage-dispatch v9 registry/route record 착륙 후 별도 phase. 각 단계는 `--once`/`--json` smoke + 기존 247 tests 회귀 + mirror parity를 유지한다.
 
 `/autopilot-code --mode dev --intensity standard "fleet UI 개선 — PRD v2 §4.5·§4.6"` (worktree 브랜치, depth-1 conductor 분사 + 스테이지 depth-2 분사 — 이 파이프 자체가 SD-F1~F3 의 라이브 검증 fixture 가 된다). 권장 순서:
 1. **SD-F4 pipe tolerant 파싱** (collectors/dispatch.py) — 공백/콤마 혼용 + 미지 key 무시. 기존 tests 에 wild 실측 행(2026-07-09 space-separated) fixture 추가.

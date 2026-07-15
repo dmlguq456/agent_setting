@@ -8,8 +8,8 @@ inputs:
   - spec/stage-dispatch/prd.md   # v2: SD-3·§9-13 스테이지 row 관제 parity
   - spec/prd.md                  # v3/F-19: Unified Memory System v15 Cluster J (write-events 저널 = F-19 소스)
 phases:
-  spec: done            # PRD v8 (2026-07-15: F-25 상태 판정 단일 모델 + F-26 세션 레지스트리 1급 + F-27 제한적 세션 제어[Non-goal 부분 반전] + F-28 분사 정책 연동 계약; v7 snapshot 보존)
+  spec: done            # PRD v9 (2026-07-15: minor 6건 흡수 + 규범 매핑 표 + F-27 마우스 1급 + F-30 시각화 비전; v8 snapshot 보존)
   scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
   design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
-  dev: pending          # v8 구현 미착수 — F-25→F-26→F-27 순 autopilot-code 사이클, F-28은 stage-dispatch v9 착륙 후 (v7까지의 dev는 done)
+  dev: in_progress      # v8분 done(테스트 416) → v9 사이클 착수: F-27 마우스 + F-29 + 잔여 후속. F-28/F-30 뷰는 stage-dispatch v9 대기
 last_updated: 2026-07-15
