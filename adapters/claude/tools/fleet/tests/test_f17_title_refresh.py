@@ -559,12 +559,12 @@ class ValidatorHardeningTest(unittest.TestCase):
             "this is a very long chatty sentence about the current session and its generic status"))
 
     def test_specific_responsive_title_accepted(self):
-        title = "Make Fleet session names use the available terminal width"
+        title = "Shorten Fleet session title length caps"
         self.assertEqual(rt.validate_title(title), title)
 
     def test_prompt_requests_responsive_length(self):
-        self.assertIn("8-12 words", rt.PROMPT_TEMPLATE)
-        self.assertIn("96 characters", rt.PROMPT_TEMPLATE)
+        self.assertIn("4-8 words", rt.PROMPT_TEMPLATE)
+        self.assertIn("64 characters", rt.PROMPT_TEMPLATE)
 
     def test_meta_response_rejected(self):
         for s in ("No conversation excerpt provided", "Cannot determine title",

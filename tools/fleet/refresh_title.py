@@ -37,8 +37,8 @@ from fleet import titles  # noqa: E402
 
 DELTA_CAP = 65536
 TEXT_CAP = 2000
-TITLE_MAXLEN = 96
-TITLE_MAX_WORDS = 12
+TITLE_MAXLEN = 64
+TITLE_MAX_WORDS = 8
 MAX_SCAN = 1 << 20
 WORKER_TIMEOUT = 60
 DEBOUNCE_SEC = 600
@@ -65,7 +65,7 @@ You have no tools; do not attempt shell commands, file operations, or network re
 === END CONVERSATION ===
 
 Output ONLY a specific title for this work session: English, one line, ideally
-8-12 words and never more than 96 characters. Use the available length to name
+4-8 words and never more than 64 characters. Use the available length to name
 the concrete work, not a generic category. No explanations, no quotes, no
 trailing period. If the excerpt is unreadable or empty, output the single word:
 untitled."""
