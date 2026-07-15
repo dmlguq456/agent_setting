@@ -27,6 +27,7 @@ Tag a reproducible runtime-behavior violation—such as a commit during merge, w
 
 ## Report
 
-- Write a concise report to `/home/nas/user/Uihyeop/notes/oncall/<YYYY-MM-DD>.md` in the user's established communication language. Use one or two lines per item, include repository path and branch, and add one recommended action.
-- Always write the heartbeat file, even when there are no findings. Use an equivalent of `# Overnight Patrol — <date>\nNo anomalies; all 12 checks passed.` in that communication language. A missing file indicates loop failure, not a clean patrol.
+- Write a concise report to `/home/nas/user/Uihyeop/notes/oncall/<YYYY-MM-DD>.md` in the user's established communication language.
+- **One finding = one `## ` heading block** (worklog approvals contract, 2026-07-15): the approvals queue splits reports on exactly-two-hash headings and tracks each block's lifecycle via ✅/❌ markers written back onto the heading line. Findings outside a `## ` block never surface as actionable items. Format: `## <one-line finding — include repository path and branch>` followed by one or two body lines ending with one recommended action. Do not pre-mark headings; markers are written by the approval flow.
+- Always write the heartbeat file, even when there are no findings. Use an equivalent of `# Overnight Patrol — <date>\nNo anomalies; all 12 checks passed.` in that communication language, with **no `## ` headings** so a clean patrol contributes zero queue items. A missing file indicates loop failure, not a clean patrol.
 - Report facts only. Do not invent numbers or exaggerate; omission is better than a false entry.
