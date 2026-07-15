@@ -2,7 +2,7 @@ project_name: skill-design-refactor
 component: skill-design-refactor   # 별도 컴포넌트 (repo spec/prd.md = Unified Memory System, 무관)
 created: 2026-07-13
 mode: [library]
-scope_note: "28스킬 Pocock 4축 진단(skill_design_audit)의 정합 튜닝 refactor — Cluster 2(cross-skill SoT 통합) → Cluster 3(sprawl 추출) → Cluster 1(invocation runtime 검증·분류 확정). 4축+Predictability 적극 표준 채택, 하네스가 원칙보다 나간 지점(auto-activation hook 우회)은 유지."
+scope_note: "Pocock 4축을 portable-first sibling-adapter 계약으로 재정렬하고 Claude/Codex/OpenCode 활성 표면의 semantic parity와 context budget을 함께 닫는다. 품질·안전 하향 없이 bootstrap/discovery/repeated injection을 절감한다."
 inputs:
   - analysis_project/code/skill_design_audit.md           # 28스킬×4축 verdict·Step7 P1~P8·§6 Cluster 매핑
   - analysis_project/code/skill_design_audit_per_skill.md  # file:line 근거 (Plan Resolution 복제·flip 검증 대상)
@@ -14,15 +14,15 @@ phases:
   spec: done              # PRD v2 + runtime amendment — live 트리 정정 + invocation 계약 반영
   scaffolding: n/a        # 기존 skills/ 리팩터 — 신규 scaffold 없음
   design: n/a             # instruction 파일 리팩터 — 시각 UI 없음
-  dev: done               # Pocock 범위 최종 완료: P4 ship trigger, P8 positive steering, capability --qa cleanup, skill-conformance projection/state closure
-spec_version: v2          # v2 active PRD에 C1 runtime 결과를 within-spec amendment로 반영
+  dev: in_progress        # v3 reopened: portable-first parity + three-adapter footprint/conformance implementation
+spec_version: v3
 back_jump:
   - from: dev
     to: spec
     date: 2026-07-13
     reason: "BLOCKING_FINDING — audit/PRD v1 이 legacy root skills/ 를 대상으로 삼았으나 live Claude source 는 adapters/claude/skills/*/SKILL.md. main 기준 두 트리 동일 확인돼 audit 진단 재사용, 대상 경로만 정정 + 미러 불변식(SD-11) 추가."
     done_before_halt: "CORE(CORE-1~4)+Cluster2(C2-1~5) root skills/ 편집 완료·커밋 cd48b25 — 재개 시 adapters 트리로 미러 적용이 첫 항목"
-last_updated: 2026-07-13  # Pocock finalization; Ponytail·Codex depth-2/liveness는 별도 범위
+last_updated: 2026-07-15
 decisions_locked:
   - SD-1: 실행 순서 Cluster 2(SoT) → 3(sprawl) → 1(invocation 검증 후)
   - SD-2: Plan Resolution SoT = autopilot-code 단일 authority, 5개 pointer (grep "keep in sync"=0)
@@ -34,7 +34,12 @@ decisions_locked:
   - SD-8: references/ 추출 시 1-depth 불변(scan.sh 재확인), autopilot-design 우선
   - SD-9: 다운스트림 = /autopilot-code --mode refactor (plans/ 누적), PRD 버전 = _internal/versions/v{N}/
   - SD-10: 진단 §5 강점 4종 회귀 금지 — refactor 후 audit rubric 재적용(drill)
-  - SD-11 (v2): 편집 대상 = adapters/claude/skills (live realization SoT), root skills/ = 미러. 양 트리 동일 적용·완료 grep 양 트리, diff -rq 차이는 .sync_state.json 만 허용. 각 Cluster capabilities/*.md 계약 drift 점검(어긋나면 표면화, 자동수정 금지)
+  - SD-11 (v3 supersedes v2): 의미 정본 = core/capabilities/roles; Claude/Codex/OpenCode는 동급 sibling realization; root skills는 Claude compatibility mirror
+  - SD-12: adapter 간 상하관계 금지; 공유 변경은 portable-first 후 세 realization 동시 검증
+  - SD-13: 하나라도 deferred/unverified면 전체 PARTIAL; 세 runtime active surface+fallback+footprint 검증 때만 GREEN
+  - SD-14: bootstrap <=16384 bytes/adapter, active skill metadata <=7000 chars/surface, duplicate activation 0
+  - SD-15: normal/unknown/repeated hook injection 0 bytes; validated tight/critical transition만 1회 <=240 UTF-8 bytes; quality floor 불변
+  - SD-16: baseline 대비 >5% footprint 회귀 실패; production paired n>=30 전 절감률 주장 금지
 open_decisions: []   # 전부 resolved (아래)
 decisions_resolved:
   - D1: runtime gate 결과 확정 — slash 호출만 생존, parent Skill-tool·실파이프는 차단. 13개는 parent-invoked로 model invocation 유지

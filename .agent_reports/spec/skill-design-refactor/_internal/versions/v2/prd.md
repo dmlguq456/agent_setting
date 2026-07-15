@@ -3,14 +3,13 @@
 > mode: **library** · component spec (repo 루트 spec = unified-memory-system, 무관) · 작성 2026-07-13 v1
 > · **v2 2026-07-13** (편집 대상 = live 트리 `adapters/claude/skills/` 정정 + root `skills/` = 미러 불변식. back-jump 사유: dev Cluster 2 실행 중 `BLOCKING_FINDING.md` — audit/PRD v1 이 legacy root `skills/` 를 대상으로 삼았으나 live Claude source 는 `adapters/claude/skills/*/SKILL.md`. 단 main 기준 두 트리 내용 동일이 확인돼(§1.5) audit 진단·file:line 근거는 live 에 유효 — 재감사 불요, 대상 경로만 정정.)
 > · **runtime amendment 2026-07-13** (C1 runtime gate 결과 반영: `disable-model-invocation`은 context 최적화 힌트가 아니라 programmatic Skill 호출·subagent preload를 막는 hard boundary. manual-only와 parent-invoked를 분리하고 13개 parent-invoked는 model-invoked 유지.)
-> · **v3 2026-07-15** (portable-first sibling-adapter parity + context budget. v2의 Claude realization SoT/완료 판정을 폐기하고 `core/`·`capabilities/`·`roles/`를 의미 정본으로 복원. Claude·Codex·OpenCode는 동급 realization이며 하나라도 미검증이면 전체 상태는 PARTIAL.)
 > 입력: `analysis_project/code/skill_design_audit.md`(28스킬×4축 진단·Step7 P1~P8·§6 Cluster 인계) · `skill_design_audit_per_skill.md`(file:line 근거) · `research/skill-design-principles/`(00_briefing·02_standards·04_technical_deep_dive·cards — Pocock 4축 SoT)
 > 본 문서는 청사진(PRD). 구현은 `/autopilot-code --mode refactor` (산출물 `plans/`).
 > **방향(사용자 확정 2026-07-13)**: Pocock 4축(Invocation/Information Hierarchy/Steering/Pruning) + root virtue **Predictability** 를 보수적 cherry-pick 이 아니라 **적극 표준 채택**. 단 하네스가 원칙보다 더 나간 지점(auto-activation hook 우회 등)은 **유지가 기본** — 원칙 쪽 회귀 금지, 충돌은 §Decision 에 명시.
 
 ## 0. 한 줄
 
-28스킬 진단이 제기한 Invocation·Pruning gap을 Pocock 4축으로 정합 튜닝하되, 원칙의 채택 단위는 Claude Skill 트리가 아니라 portable capability 계약이다. 모든 공유 변경은 **portable source → Claude/Codex/OpenCode 동급 realization → 활성 표면·fallback·context footprint 검증** 순서로 닫는다. C1 실측 결과 13개 parent/pipeline 호출 대상은 model-invoked를 유지한다.
+28스킬 진단(`skill_design_audit.md` §4 P1~P8)이 제기한 두 gap — **Invocation systemic**(13개 sub-skill의 호출 성격 미검증) + **Pruning 중복**(cross-skill SoT 물리 복제·장문 sprawl) — 을 Pocock 4축을 정식 설계 계약으로 앉힌 위에서 **Cluster 2(SoT 통합·즉시) → Cluster 3(sprawl 추출) → Cluster 1(invocation runtime 검증·분류 확정)** 순서로 정합 튜닝한다. C1 실측 결과 13개는 parent/pipeline 호출 대상이므로 model-invoked 유지가 올바른 계약이다.
 
 ## 1. 배경 — 진단이 수렴한 것
 
@@ -30,33 +29,24 @@ audit `skill_design_audit.md` §0 verdict 분포:
 
 **표준 채택 posture(사용자 확정)**: 4축 + Predictability 를 적극 표준으로 채택한다. 근거 — 04_technical_deep_dive 가 4원칙 모두를 단일 물리 근거(attention budget + context rot)로 환원했고(04 "메커니즘 근거 표"), 진단이 이 rubric 으로 28스킬 전수 스캔에 성공(00_briefing Key finding #2). 채택 대상은 정량 규범(hard scan)과 4축 tenet(설계 계약) 둘 다.
 
-## 1.5 Portable-first sibling-adapter invariant (v3 — SD-11~SD-16)
+## 1.5 편집 대상 트리 정정 + 미러 불변식 (v2 신규 — SD-11)
 
-v2가 `adapters/claude/skills/`를 “realization SoT”로 부른 것은 활성 Claude 경로를 legacy `skills/`보다 우선한다는 뜻에는 맞았지만, 공유 의미의 계층으로는 틀렸다. v3는 다음 계층만 허용한다.
+> **back-jump 사유**: dev Cluster 2 실행 완료 후 SD-6 sync-skills 게이트에서 발견(`_internal/../BLOCKING_FINDING.md`). v1 은 audit 을 그대로 인계해 root `skills/*/SKILL.md` 를 편집 대상으로 지정했으나, **live Claude 런타임 source 는 `adapters/claude/skills/*/SKILL.md`** 다 — `sync-skills` SKILL.md :20("root skills/ 는 historical compatibility reference, runtime source 아님")·`tools/build-manifest.py` :169 glob(adapters 트리만 대상)이 SoT.
 
-```text
-core / capabilities / roles          # portable semantic source
-        ├── adapters/claude           # sibling realization
-        ├── adapters/codex            # sibling realization
-        └── adapters/opencode         # sibling realization
-```
+**핵심 정정 (main 세션 직접 확인 2026-07-13, 재검증 불요)**:
 
-1. 공유 의미·호출 그래프·품질·안전·비용 불변식은 `core/`, `capabilities/`, `roles/`에서 먼저 변경한다. 어떤 어댑터도 다른 어댑터의 reference implementation이나 상위 계층이 아니다.
-2. Claude concrete Skill, Codex generated Skill/plugin, OpenCode generated Skill/command는 같은 portable contract의 동급 realization이다. runtime 문법과 지원 상태는 달라도 관찰 가능한 결과와 fallback은 같아야 한다.
-3. `skills/`는 Claude realization의 compatibility mirror일 뿐 portable source가 아니다. 생성물이거나 미러라는 이유로 parity·footprint 검증에서 제외하지 않는다.
-4. 공유 변경의 완료 상태는 어댑터별 `supported | fallback | unsupported | unverified`와 활성 runtime 표면을 기록한다. 하나라도 `unverified`이거나 필요한 fallback이 없으면 전체는 **PARTIAL**이다. 세 어댑터의 활성 표면·fallback·footprint가 모두 검증되어야 **GREEN**이다.
-5. 어댑터 전용 변경은 runtime mechanics에만 허용한다. portable 의미에 영향이 생기면 같은 변경에서 portable source로 승격하고 세 sibling realization을 재생성·재검증한다.
+1. **live source = `adapters/claude/skills/*/SKILL.md`** (realization SoT). manifest.json/doctor/parity 파이프라인이 읽는 유일 트리. root `skills/` 편집만으론 실제 스킬 동작에 영향 0 → PRD 목적(Predictability·context 절약) 미달성.
+2. **main 기준 root `skills/` ≡ `adapters/claude/skills/` (내용 동일)** — `diff -rq` 차이 = `skills/.sync_state.json` 1개뿐. 따라서 audit(skill_design_audit) 의 진단·file:line 근거는 **live 트리에 그대로 유효 — 재감사 불요**. (BLOCKING_FINDING 의 "이미 divergent" 는 _이 브랜치 자체가_ root 만 편집(`cd48b25`)해 만든 차이의 오독. main 에선 동일.)
+3. root `skills/` 는 sync-skills 계약대로 **compatibility mirror 로 유지** — deprecate 는 이번 scope 밖.
 
-### 1.5.1 Savings and context-efficiency contract
+**미러 불변식(모든 Cluster 적용)**: 모든 편집의 **정본 대상 = `adapters/claude/skills/*/SKILL.md`** (+ `adapters/claude/skills/*/README.md`·`references/`). root `skills/` 는 **미러 동기화 의무** — 동일 편집을 양 트리에 동일 적용한다. **완료 기준 grep 은 양 트리(`skills/` + `adapters/claude/skills/`) 대상**으로 확인한다. (편집 후 두 트리는 `.sync_state.json` 외 diff 0 이어야 한다 — SD-11.)
 
-Pocock/Ponytail 절감은 품질 하향이 아니라 고정 입력·중복 discovery·반복 주입을 줄이는 계약으로 적용한다.
+### 1.5.1 capabilities/ 계약 drift 체크 (v2 신규 — 각 Cluster 단계)
 
-- **Bootstrap**: 세 always-loaded bootstrap 각각 `16,384 bytes` 이하. bootstrap은 source order, 핵심 invariant, runtime router만 보유하고 상세 CLI/edge-case 설명은 adapter README·ADAPTATION 또는 command help로 progressive disclosure한다.
-- **Skill discovery**: 활성 metadata surface당 `7,000 chars` 이하. 동일 skill의 native+plugin 중복 활성은 실패한다.
-- **Hook injection**: normal/unknown/repeated state는 0 bytes. 검증된 tight/critical band transition만 1회 `≤240 UTF-8 bytes`; 주입량을 token·청구액 절감으로 환산하지 않는다.
-- **Regression**: 저장된 surface baseline보다 `>5%` 증가하면 명시적 근거와 예산 갱신 없이 실패한다. 절대 상한과 회귀 상한 중 더 엄격한 값을 적용한다.
-- **Quality floor**: intensity, dispatch/depth, model role, 필수 도구·테스트, 안전·검증·접근성·오류처리, 필요한 input context는 절감 수단으로 하향하지 않는다.
-- **Savings claim**: production real-session paired experiment `n≥30` 전에는 정적 footprint 감소만 보고한다. synthetic fixture는 회귀 검증에는 쓸 수 있지만 절감률 증거가 아니다. input/cache-create/output/billable cost를 분리하며 코드 라인·bytes·directive count를 토큰 또는 비용으로 바꾸지 않는다.
+`adapters/claude/skills/*/SKILL.md` 는 portable `capabilities/*.md` 계약의 Claude realization 이다(`capabilities/README.md`: "Claude Code realizes these capabilities through adapter-owned concrete Skill files"). 따라서 각 Cluster 편집 시 **해당 스킬의 SKILL.md 변경이 대응 `capabilities/<name>.md` 계약 서술과 어긋나는지 확인**한다:
+
+- **어긋나지 않으면**: 진행(대부분의 SoT pointer 화·sprawl 추출은 realization 디테일이라 portable 계약 불변).
+- **어긋나면**: **자동 수정 금지** — "계약 갱신 항목"으로 plan 에 표면화(capabilities 계약은 별도 결정 대상). 특히 Cluster 1 invocation 분류는 capability 의 호출 그래프와 직접 맞닿으므로 manual-only/parent-invoked 판정마다 capabilities 계약 정합을 명시 점검.
 
 ## 2. 설계 계약의 앉을 자리 (필수 §1)
 
@@ -126,13 +116,14 @@ audit §6 매핑 그대로: **Cluster1=P1+P4+P7, Cluster2=P2+P5, Cluster3=P3+P6*
 - **P7(post-it wording)**: `post-it/SKILL.md:14` "호출할 때만 변경" wording ↔ 실제 model-invoked+proactive-nudge 계약 불일치를 문구 완화 or disable flag 로 정합(audit P7).
 - **P4(entry-router 트리거)**: §Decision 참조 — 별도 정책 결정 항목.
 
-## 4. Cross-harness projection and completion (v3)
+## 4. Cross-harness projection 영향 (필수 §3)
 
-- portable capability 목록을 source domain으로 열거하고 Claude/Codex/OpenCode의 native realization을 모두 검사한다. 고정된 수동 목록은 신규 capability 누락을 감추므로 완료 증거가 아니다.
-- generator는 `capabilities/`에서 세 sibling adapter로 투영한다. Claude concrete Skill을 Codex/OpenCode 생성 입력으로 사용하지 않는다. Claude compatibility mirror는 별도 byte-parity로만 검증한다.
-- `skill-conformance`는 세 adapter의 활성 Skill tree를 모두 검사한다. runtime별 frontmatter 차이는 adapter mapping으로 해석하되, Invocation/Information Hierarchy/Steering/Pruning 결과와 portable source pointer는 공통으로 확인한다.
-- `context-footprint --strict`는 bootstrap, metadata discovery, duplicate exposure, hook injection, absolute budget, baseline regression을 함께 검사한다.
-- adapter doctor/projection check는 각 runtime별 지원·fallback·discoverability를 증명한다. 로컬 runtime 검증이 불가능하면 해당 row와 전체 결과는 PARTIAL이며 다른 adapter의 성공으로 대체하지 않는다.
+`skills/` 수정(특히 frontmatter invocation 변경, references/ 신설)은 **Codex/OpenCode adapter projection 과 한 몸**이다 — `sync-skills` 스킬이 `manifest.json` 을 재생성하고, adapter 하위 skill 미러를 갱신한다(기억: manifest.json = agent_setting/ 최상단 인덱스, 6키 skills(28)/agents(9)…).
+
+- **각 Cluster 완료 시 `sync-skills` 실행 의무**: (Cluster 2) pointer 교체·공유 reference 신설 → skill 본문 변경 → 미러 재투영. (Cluster 3) references/ 신설 → adapter skill 디렉터리 파일 투영 갱신. (Cluster 1) invocation registry/checker와 관련 adapter/plugin 문서를 동기화하고 manifest·mirror를 재검증.
+- **parity mirror 영향**: parity 미러 불변식(기억 durable, 2026-07-06 실측) — tools/*·frozen 케이스 변경 시 adapters/claude 하위 concrete 미러 byte-identical 동기화 필수, 누락 시 derived 가드(`check_claude_loop_projection`·`check_claude_tool_projection`)가 FAIL. skills/ 변경도 동형으로 3-harness(claude/codex/opencode) 1:1:1 매핑(기억: doctor check skills 28/commands 28/agents 9)을 유지해야 한다.
+- **README 대시보드 갱신**: `sync-skills` 가 README.md 워크플로우 대시보드를 자동 갱신(CLAUDE.md "워크플로우 맵: sync-skills 자동"). Cluster 별 완료 후 대시보드 재생성으로 parity 반영.
+- **검증**: 각 Cluster merge 전 adapter `doctor`/`check-runtime-projection` 통과 확인(dispatch-profiles 선례 §6 "활성 게이트" 패턴 승계).
 
 ## 5. 버전 트래킹 & 다운스트림 인계 (필수 §4)
 
@@ -163,17 +154,12 @@ audit §6 매핑 그대로: **Cluster1=P1+P4+P7, Cluster2=P2+P5, Cluster3=P3+P6*
 - **SD-3**: 설계 계약 = 정량 규범 CONVENTIONS / 4축 tenet DESIGN_PRINCIPLES 분할 + 상호 포인터.
 - **SD-4**: 정량 규범 강제 = `check.sh`(scan 관측 + invocation registry) + g7 failure control(결정론 우선).
 - **SD-5** (runtime amendment): invocation 분류 = manual-only만 `disable-model-invocation: true`; parent/pipeline/preload는 model-invoked 유지. 현재 13개 parent-invoked는 registry + `check.sh` + g7로 `false`를 강제한다.
-- **SD-6**: Cross-harness — 각 Cluster 완료 시 portable source에서 세 sibling adapter를 재생성하고 adapter doctor/parity/context-footprint를 검증한다.
+- **SD-6**: Cross-harness — 각 Cluster 완료 시 sync-skills 실행 + adapter doctor/parity mirror 검증 의무.
 - **SD-7**: 원칙-하네스 충돌 3건(auto-activation hook 우회·한국어 blurb·hook 라우팅) 유지 — 원칙 회귀 금지.
 - **SD-8**: references/ 추출 시 1-depth 불변(scan.sh 재확인). autopilot-design 우선.
 - **SD-9**: 다운스트림 = `/autopilot-code --mode refactor`, plans/ 누적. PRD 버전 = `_internal/versions/v{N}/`.
 - **SD-10**: 진단 §5 강점 4종(Predictability 골격·강한 pointer·정량 규범·no-op 청결) 회귀 금지 — refactor 후 audit rubric 재적용(drill).
-- **SD-11** (v3 supersedes v2): 의미 정본 = `core/`·`capabilities/`·`roles/`; Claude/Codex/OpenCode는 동급 sibling realization. `skills/`는 Claude compatibility mirror다.
-- **SD-12**: 어떤 adapter도 다른 adapter의 구현 원본·완료 대리자가 아니다. 공유 변경은 portable-first 후 세 realization을 같은 cycle에서 검증한다.
-- **SD-13**: 전체 완료 = 세 runtime active surface + fallback + context footprint 검증. 하나라도 deferred/unverified면 PARTIAL, 모두 증명되어야 GREEN.
-- **SD-14**: bootstrap ≤16,384 bytes/adapter, active skill metadata ≤7,000 chars/surface, duplicate activation 0.
-- **SD-15**: normal/unknown/repeated hook injection 0 bytes; validated tight/critical transition만 1회 ≤240 UTF-8 bytes. 품질·안전·검증 하향 금지.
-- **SD-16**: baseline 대비 >5% footprint 회귀는 실패. 절감률 주장은 production paired n≥30과 input/cache/output/cost 분리 측정 전에는 금지.
+- **SD-11** (v2): **편집 대상 = `adapters/claude/skills/` (live realization SoT)**, root `skills/` = 미러 — 모든 편집을 양 트리에 동일 적용, 완료 기준 grep 은 **양 트리** 대상. 두 트리 `diff -rq` 차이는 **`.sync_state.json` 만 허용**(mirror-parity). 근거: `sync-skills` SKILL.md :20·`tools/build-manifest.py` :169(adapters 트리만 glob). audit file:line 근거는 main 기준 두 트리 동일이라 그대로 유효(재감사 불요). 각 Cluster 편집 시 대응 `capabilities/*.md` 계약 drift 점검(§1.5.1) — 어긋나면 계약 갱신 항목 표면화, 자동 수정 금지.
 
 ## 8. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
