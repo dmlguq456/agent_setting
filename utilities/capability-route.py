@@ -15,6 +15,7 @@ NESTED_FIELDS = {
     "parent_harness", "parent_transport", "parent_sandbox", "child_harness",
     "launch_authority", "status", "probe_source", "probe_time", "failure_class",
 }
+BROKER_FIELDS = {"broker_root", "broker_instance"}
 FALLBACK_ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
 
 def canonical(payload):
@@ -61,7 +62,11 @@ def _validate_dispatch_evidence(evidence):
             raise ValueError("invalid nested launch authority")
         if not row["probe_source"] or not row["probe_time"]:
             raise ValueError("nested eligibility checked source/time required")
-        normalized.append({key:row[key] for key in sorted(NESTED_FIELDS)})
+        normalized_row={key:row[key] for key in sorted(NESTED_FIELDS)}
+        for key in BROKER_FIELDS:
+            if key in row:
+                normalized_row[key]=row[key]
+        normalized.append(normalized_row)
     native=evidence.get("native_subagent",[])
     if not isinstance(native,list): raise ValueError("native_subagent evidence must be a list")
     for row in native:
@@ -74,10 +79,14 @@ def _fallback_chain(evidence):
     tuples=evidence["tuples"]
     same=[row for row in tuples if row["child_harness"]==row["parent_harness"]]
     cross=[row for row in tuples if row["child_harness"]!=row["parent_harness"]]
-    same.sort(key=lambda row:(row["launch_authority"]!="conductor",row["child_harness"]))
-    cross.sort(key=lambda row:(row["launch_authority"]!="conductor",row["child_harness"]))
-    if not any(row["status"]=="supported" for row in same+cross):
-        raise ValueError("no supported nested headless tuple or ancestor broker")
+    same.sort(key=lambda row:(row["launch_authority"]!="ancestor-broker",row["child_harness"]))
+    cross.sort(key=lambda row:(row["launch_authority"]!="ancestor-broker",row["child_harness"]))
+    if not any(
+        row["status"]=="supported" and row["launch_authority"]=="ancestor-broker"
+        and row.get("broker_root") and row.get("broker_instance")
+        for row in same+cross
+    ):
+        raise ValueError("no supported depth-0 launch broker tuple")
     return [
         {"ordinal":1,"hop":"same-harness-headless","candidates":same},
         {"ordinal":2,"hop":"cross-harness-headless","candidates":cross},
@@ -85,12 +94,16 @@ def _fallback_chain(evidence):
         {"ordinal":4,"hop":"inline","status":"eligible-after-prior-hop-exhaustion","reason_enum":"runtime-unavailable","fleet_visibility":"none"},
     ]
 
-def _verify_fallback_chain(node):
+def _verify_fallback_chain(node, require_broker_binding=False):
     chain=node.get("dispatch_fallback")
     if not isinstance(chain,list) or [row.get("hop") for row in chain] != FALLBACK_ORDER:
         raise ValueError(f"depth-2 node {node.get('id')} missing ordered dispatch fallback")
-    if not any(candidate.get("status")=="supported" for row in chain[:2] for candidate in row.get("candidates",[])):
-        raise ValueError(f"depth-2 node {node.get('id')} lacks supported headless launch tuple")
+    if not any(
+        candidate.get("status")=="supported" and candidate.get("launch_authority")=="ancestor-broker"
+        and (not require_broker_binding or (candidate.get("broker_root") and candidate.get("broker_instance")))
+        for row in chain[:2] for candidate in row.get("candidates",[])
+    ):
+        raise ValueError(f"depth-2 node {node.get('id')} lacks supported depth-0 broker tuple")
     return chain
 
 def compile_route(capability, capability_mode, requested_intensity, cwd, artifact_root,
@@ -154,7 +167,8 @@ def compile_route(capability, capability_mode, requested_intensity, cwd, artifac
                    "transport":transport,"transport_evidence":transport_evidence,"inline_reason":inline_reason},
       "nodes":nodes,"completion_gates":gates,"human_gates":recipe["human_gates"],
       "resume_retry_boundaries":recipe["resume_retry_boundaries"],
-      "dispatch_evidence":checked_dispatch}
+      "dispatch_evidence":checked_dispatch,
+      "broker_contract_version":1 if checked_dispatch is not None else None}
     digest=route_hash(payload); payload["route_hash"]=digest; payload["route_id"]="rt-"+digest.split(":",1)[1][:16]
     return payload
 
@@ -174,7 +188,7 @@ def verify_route(route, expected_cwd=None):
     if route.get("effective_intensity") not in ("direct","quick") and route.get("selection",{}).get("transport")=="headless":
         _validate_dispatch_evidence(route.get("dispatch_evidence"))
         for node in route.get("nodes",[]):
-            if node.get("depth")==2: _verify_fallback_chain(node)
+            if node.get("depth")==2: _verify_fallback_chain(node, route.get("broker_contract_version")==1)
     return route
 
 def write_once(path, payload):

@@ -7,6 +7,8 @@ from dataclasses import dataclass
 import fcntl
 import os
 from pathlib import Path
+import subprocess
+import sys
 import uuid
 
 
@@ -28,6 +30,15 @@ class RegistrySelection:
     path: Path
     source: str
     inherited: bool
+
+
+@dataclass(frozen=True)
+class BrokerSelection:
+    root: Path
+    instance_id: str
+    pid: int
+    start_ticks: str
+    jobs: Path
 
 
 def _absolute(path: str | Path, field: str) -> Path:
@@ -95,6 +106,78 @@ def ensure_global_registry_writable(path: Path) -> None:
             fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
     except OSError as exc:
         raise DispatchContractError("global-registry-unwritable", f"{path}: {exc}") from exc
+
+
+def ensure_launch_broker(
+    agent_home: Path,
+    jobs: Path,
+    *,
+    depth: int,
+    action: str,
+    intensity: str,
+    environ: dict[str, str] | os._Environ[str] | None = None,
+) -> BrokerSelection | None:
+    """Prepare the SD-51 depth-0 broker before a standard+ conductor starts.
+
+    Nested workers may consume an inherited binding but cannot create or replace
+    it.  Quick depth-1 one-shot workers have no depth-2 stages and do not need a
+    broker.
+    """
+
+    if action != "start" or depth != 1 or intensity not in {"standard", "strong", "thorough", "adversarial"}:
+        return None
+    env = os.environ if environ is None else environ
+    if env.get("AGENT_SESSION_ROLE") == "worker" or env.get("AGENT_DISPATCH_CHILD") == "1":
+        raise DispatchContractError("broker-ensure-worker-forbidden", "only depth 0 may prepare the launch broker")
+    root = _absolute(
+        env.get("AGENT_DISPATCH_BROKER_ROOT") or str(agent_home / ".dispatch" / "broker"),
+        "agent-dispatch-broker-root",
+    )
+    command = [
+        sys.executable,
+        str(Path(__file__).resolve().with_name("dispatch-broker.py")),
+        "ensure",
+        "--root",
+        str(root),
+        "--jobs",
+        str(jobs),
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=10,
+            env={**env, "AGENT_HOME": str(agent_home)},
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise DispatchContractError("broker-unavailable", str(exc)) from exc
+    fields = dict(
+        line.split("=", 1)
+        for line in result.stdout.splitlines()
+        if "=" in line
+    )
+    if result.returncode or fields.get("check") != "ok":
+        reason = fields.get("reason", "broker-unavailable")
+        detail = fields.get("detail") or result.stderr.strip() or result.stdout.strip()
+        raise DispatchContractError(reason, detail)
+    try:
+        selection = BrokerSelection(
+            root=Path(fields["broker_root"]).resolve(strict=False),
+            instance_id=fields["broker_instance"],
+            pid=int(fields["broker_pid"]),
+            start_ticks=fields["broker_start_ticks"],
+            jobs=Path(fields["broker_jobs"]).resolve(strict=False),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise DispatchContractError("broker-response-invalid", result.stdout.strip()) from exc
+    if selection.jobs != jobs.resolve(strict=False):
+        raise DispatchContractError(
+            "broker-jobs-mismatch",
+            f"expected={jobs.resolve(strict=False)} observed={selection.jobs}",
+        )
+    return selection
 
 
 def validate_nested_eligibility(

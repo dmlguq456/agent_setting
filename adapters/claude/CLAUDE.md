@@ -36,6 +36,13 @@ Select the primary capability semantically per `core/WORKFLOW.md §0.2` (WORKFLO
 - `quick`: one depth-1 one-shot worker with micro-plan, plan-check-lite, focused verification, and concise report.
 - `standard+`: `code-plan -> code-execute -> code-test -> code-report`, optional `code-refine`, file-only handoff, and the dispatch/fallback rules in `core/OPERATIONS.md §5.10`.
 
+Before compiling a standard+ route, depth 0 runs
+`python3 "$AGENT_HOME/utilities/dispatch-broker.py" ensure --jobs "${AGENT_DISPATCH_JOBS:-$AGENT_HOME/.dispatch/jobs.log}"`
+and binds the reported broker root/instance to the conductor. The dispatch
+wrapper repeats this idempotently before start. Every same/cross-harness
+depth-2 headless target then uses `stage-dispatch-fallback.py`; Claude native
+subagents and recursive adapter CLI launch are not portable substitutes.
+
 Keep native agents distinct from registered headless worker dispatch; a restriction on one surface never silently extends to the other. Preserve model role, intensity, depth, required tools/tests, safety, and validation when falling back. Do not run drill automatically.
 
 ## Runtime Lifecycle

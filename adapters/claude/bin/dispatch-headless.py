@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
     ensure_global_registry_writable,
+    ensure_launch_broker,
     new_attempt_id,
     resolve_global_registry,
     validate_nested_eligibility,
@@ -118,6 +119,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--prompt-text")
     p.add_argument("--jobs")
     p.add_argument("--attempt-id")
+    p.add_argument("--broker-request-id")
     p.add_argument("--fallback-ordinal", type=int, default=0)
     p.add_argument("--launch-authority", choices=("conductor", "ancestor-broker"), default="conductor")
     p.add_argument("--parent-harness", default=os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS") or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "claude")
@@ -273,7 +275,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
             "depth-2 session with file-only handoff. thorough/adversarial expands review to "
             "multi-axis or adversary workers. Direct/quick stay inline unless explicitly escalated; "
                 "depth 3+ is forbidden. "
-                "For routed depth-2 launches, run utilities/stage-dispatch-fallback.py against the assigned route node so same-harness, cross-harness/ancestor-broker, native, and inline hops stay ordered. Reuse only inherited AGENT_DISPATCH_JOBS. "
+                "For routed depth-2 launches, run utilities/stage-dispatch-fallback.py against the assigned route node. Every same/cross-harness headless target goes through the inherited depth-0 broker binding; do not recursively start adapter CLIs. Keep native/inline hops ordered and reuse only inherited AGENT_DISPATCH_JOBS. "
             "You are a one-shot process: ending your turn ends the process, and background "
             "completion notifications never arrive after that. After dispatching a stage, do NOT "
             "end the turn on a Monitor/notification wait — poll within the same turn using "
@@ -395,6 +397,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     pipe += f",artifact_root={args.artifact_root}"
     if args.attempt_id:
         pipe += f",attempt_id={args.attempt_id},launch_authority={args.launch_authority},fallback_ordinal={args.fallback_ordinal}"
+    if args.broker_request_id:
+        pipe += f",broker_request_id={args.broker_request_id}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     with jobs_lock(jobs):
         with jobs.open("a", encoding="utf-8") as f:
@@ -645,6 +649,12 @@ def main(argv: list[str]) -> int:
             ensure_global_registry_writable(jobs)
     except DispatchContractError as e:
         return fail(e.reason, 73, detail=e.detail, child_spawned="0")
+    try:
+        broker = ensure_launch_broker(
+            agent_home, jobs, depth=args.depth, action=action, intensity=args.intensity
+        )
+    except DispatchContractError as e:
+        return fail(e.reason, 76, detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     home_root = agent_home / ".dispatch" / "homes"
     instance_dir = home_root / f"{args.slug}.{args.profile}" if args.profile else None
@@ -716,6 +726,13 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
             "AGENT_DISPATCH_CURRENT_SANDBOX": "adapter-default",
         })
+        if broker:
+            env.update({
+                "AGENT_DISPATCH_BROKER_ROOT": str(broker.root),
+                "AGENT_DISPATCH_BROKER_INSTANCE": broker.instance_id,
+                "AGENT_DISPATCH_BROKER_PID": str(broker.pid),
+                "AGENT_DISPATCH_BROKER_START_TICKS": broker.start_ticks,
+            })
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
         try:
@@ -765,8 +782,11 @@ def main(argv: list[str]) -> int:
     print(f"profile={args.profile or '-'}")
     print(f"instance_home={instance_dir if instance_dir else '-'}")
     print(f"job_registry={jobs}")
+    print(f"broker_root={broker.root if broker else os.environ.get('AGENT_DISPATCH_BROKER_ROOT', '-')}")
+    print(f"broker_instance={broker.instance_id if broker else os.environ.get('AGENT_DISPATCH_BROKER_INSTANCE', '-')}")
     print(f"registry_authority={registry.source}")
     print(f"attempt_id={args.attempt_id or '-'}")
+    print(f"broker_request_id={args.broker_request_id or '-'}")
     print(f"launch_authority={args.launch_authority}")
     print(f"fallback_ordinal={args.fallback_ordinal}")
     print(f"registry_lock={jobs}.lock")

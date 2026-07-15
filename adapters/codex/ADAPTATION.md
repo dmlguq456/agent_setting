@@ -581,6 +581,18 @@ enforces same-harness → cross-harness/broker → native → inline ordering.
 Codex launches also attach `pid` and `/proc` start ticks; the shared liveness
 fallback recognizes `.codex.jsonl`, closing the v10 O1 false-DEAD gap.
 
+### SD-51~53 harness-neutral launch broker — realized
+
+`preflight.sh broker ensure|status|stop` exposes the deterministic shared
+broker lifecycle. A standard+ depth-1 wrapper prepares the broker before
+`codex exec` and passes an immutable broker root/instance/jobs binding into the
+conductor. `dispatch-chain` submits both Codex and Claude depth-2 targets as
+versioned declarative requests; it never starts a target adapter in the
+conductor process. Request state is atomic and idempotent, uses PID/start-tick
+plus heartbeat/fencing identity, and reconciles an already registered attempt
+after broker restart rather than launching it twice. Direct Codex-in-Codex
+execution remains a distinct, disabled-by-default executor surface.
+
 ## Distillation Boundary
 
 Claude's adapter runs a detached `claude -p` worker with tool use denied by

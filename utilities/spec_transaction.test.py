@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def load(name,path):
  spec=importlib.util.spec_from_file_location(name,path); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod
 R=load("route",ROOT/"utilities/capability-route.py")
-DISPATCH={"tuples":[{"parent_harness":"codex","parent_transport":"headless","parent_sandbox":"fixture","child_harness":"codex","launch_authority":"conductor","status":"supported","probe_source":"fixture","probe_time":"2026-07-15T00:00:00Z","failure_class":""}],"native_subagent":[]}
+DISPATCH={"tuples":[{"parent_harness":"codex","parent_transport":"headless","parent_sandbox":"fixture","child_harness":"codex","launch_authority":"ancestor-broker","status":"supported","probe_source":"fixture","probe_time":"2026-07-15T00:00:00Z","failure_class":"","broker_root":"/tmp/fixture-broker","broker_instance":"brk-fixture"}],"native_subagent":[]}
 
 class SpecTransactionTest(unittest.TestCase):
  def test_blocked_wait_reread_next_version(self):

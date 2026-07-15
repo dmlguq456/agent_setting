@@ -76,6 +76,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh permissions
        preflight.sh headless [--check] <worktree>
        preflight.sh nested-headless --parent-harness <h> --parent-transport <t> --parent-sandbox <s> --child-harness <h> --launch-authority <authority> --worktree <path> [--json]
+       preflight.sh broker <ensure|status|stop> --jobs <jobs.log> [--root <broker-root>]
        preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--intensity <level>] [--depth 1|2] [--parent <slug>] [--worker-role <role>] [--owner <capability>] [--agent <agent>] (--model-role <role>|--model <model> --variant <variant>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>] [--log-dir <dir>]
        preflight.sh dispatch-chain --route <route.json> --node <id> --slug <slug> --parent <slug> --mode <mode> [--model-role <role>] [--dry-run|--register|--start]
        preflight.sh liveness [jobs.log]
@@ -362,6 +363,7 @@ job_registry=<agent-home>/.dispatch/jobs.log (immutable AGENT_DISPATCH_JOBS for 
 nested_eligibility_check=adapters/opencode/bin/preflight.sh nested-headless --parent-harness <h> --parent-transport <t> --parent-sandbox <s> --child-harness <h> --launch-authority <a> --worktree <path>
 fallback_chain=same-harness-headless,cross-harness-headless,native-subagent,inline
 fallback_runner=adapters/opencode/bin/preflight.sh dispatch-chain --route <route> --node <node> --dry-run|--register|--start
+broker_lifecycle=adapters/opencode/bin/preflight.sh broker ensure|status|stop --jobs <canonical-jobs> [--root <broker-root>]
 liveness_surface=opencode-sqlite-session-mtime+plugin-heartbeat
 liveness_heartbeat=<agent-home>/.dispatch/logs/<slug>.heartbeat
 liveness_plugin_load_marker=<agent-home>/.dispatch/plugin-load.<slug>.mark
@@ -393,6 +395,10 @@ EOF
   nested-headless)
     shift
     python3 "$ROOT/utilities/nested-dispatch-eligibility.py" "$@"
+    ;;
+  broker)
+    shift
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/dispatch-broker.py" "$@"
     ;;
   liveness)
     jobs=${2:-${AGENT_DISPATCH_JOBS:-"$AGENT_ROOT/.dispatch/jobs.log"}}

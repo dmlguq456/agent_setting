@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
     ensure_global_registry_writable,
+    ensure_launch_broker,
     new_attempt_id,
     resolve_global_registry,
     validate_nested_eligibility,
@@ -122,6 +123,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--prompt-text")
     p.add_argument("--jobs")
     p.add_argument("--attempt-id")
+    p.add_argument("--broker-request-id")
     p.add_argument("--fallback-ordinal", type=int, default=0)
     p.add_argument("--launch-authority", choices=("conductor", "ancestor-broker"), default="conductor")
     p.add_argument("--parent-harness", default=os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS") or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "codex")
@@ -293,7 +295,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
             "- Plan-check is required for quick+ but stays small: requirements coverage, over/under-scoping, executable verification, and missed spec-significant risk. Do not run independent QA after every stage by default.\n"
             "- When the selected graph calls for independent plan review, run $AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/plan-review and $AGENT_HOME/adapters/codex/bin/preflight.sh role verification before claiming that review.\n"
             "- Pipeline intensity controls ceremony. For standard+ intensity, a depth-1 capability owner should dispatch bounded depth-2 planner/verifier workers when the task is separable; thorough/adversarial expands this to multi-axis/adversary workers. Synthesize short reports; depth 3+ is forbidden.\n"
-            "- Depth-2 launch recovery: consume the route node's checked fallback with $AGENT_HOME/adapters/codex/bin/preflight.sh dispatch-chain. Do not retry an unchanged same-harness failure or bypass cross-harness/ancestor-broker evaluation. Use only inherited $AGENT_DISPATCH_JOBS; cycle-local jobs files are non-authoritative.\n"
+            "- Depth-2 launch recovery: consume the route node's checked fallback with $AGENT_HOME/adapters/codex/bin/preflight.sh dispatch-chain. Every same/cross-harness headless target uses the inherited depth-0 broker binding; do not recursively start adapter CLIs. Do not retry an unchanged failure. Use only inherited $AGENT_DISPATCH_JOBS; cycle-local jobs files are non-authoritative.\n"
             "- Implementation: run $AGENT_HOME/adapters/codex/bin/preflight.sh role implementation for standard+ implementation stages and obey the requested development mode.\n"
             "- Testing: run $AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/test when concrete verification commands are used, satisfy the reported verification-runner contract, and record evidence under test_logs/ for standard+ work cycles.\n"
             "- Reporting: direct returns a concise report; quick returns its concise report from the depth-1 one-shot worker; standard+ runs $AGENT_HOME/adapters/codex/bin/preflight.sh role report, then writes or updates pipeline_summary.md with changed files, verification commands/results, artifact paths, and unsupported Codex tool contracts.\n"
@@ -430,6 +432,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     pipe += f",artifact_root={args.artifact_root}"
     if args.attempt_id:
         pipe += f",attempt_id={args.attempt_id},launch_authority={args.launch_authority},fallback_ordinal={args.fallback_ordinal}"
+    if args.broker_request_id:
+        pipe += f",broker_request_id={args.broker_request_id}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     with jobs_lock(jobs):
         with jobs.open("a", encoding="utf-8") as f:
@@ -769,6 +773,12 @@ def main(argv: list[str]) -> int:
             ensure_global_registry_writable(jobs)
     except DispatchContractError as e:
         return fail(e.reason, 73, detail=e.detail, child_spawned="0")
+    try:
+        broker = ensure_launch_broker(
+            agent_home, jobs, depth=args.depth, action=action, intensity=args.intensity
+        )
+    except DispatchContractError as e:
+        return fail(e.reason, 76, detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = dispatch_prompt(args)
     prompt_path = log_dir / f"{args.slug}.codex.prompt.txt"
@@ -812,6 +822,13 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
             "AGENT_DISPATCH_CURRENT_SANDBOX": args.sandbox,
         }
+        if broker:
+            dispatch_env.update({
+                "AGENT_DISPATCH_BROKER_ROOT": str(broker.root),
+                "AGENT_DISPATCH_BROKER_INSTANCE": broker.instance_id,
+                "AGENT_DISPATCH_BROKER_PID": str(broker.pid),
+                "AGENT_DISPATCH_BROKER_START_TICKS": broker.start_ticks,
+            })
         if profile_home is not None:
             dispatch_env["CODEX_HOME"] = str(profile_home)
         try:
@@ -862,8 +879,11 @@ def main(argv: list[str]) -> int:
     print(f"profile={args.profile or '-'}")
     print(f"runtime_home_projection={runtime_home_projection or '-'}")
     print(f"job_registry={jobs}")
+    print(f"broker_root={broker.root if broker else os.environ.get('AGENT_DISPATCH_BROKER_ROOT', '-')}")
+    print(f"broker_instance={broker.instance_id if broker else os.environ.get('AGENT_DISPATCH_BROKER_INSTANCE', '-')}")
     print(f"registry_authority={registry.source}")
     print(f"attempt_id={args.attempt_id or '-'}")
+    print(f"broker_request_id={args.broker_request_id or '-'}")
     print(f"launch_authority={args.launch_authority}")
     print(f"fallback_ordinal={args.fallback_ordinal}")
     print(f"registry_lock={jobs}.lock")

@@ -3,9 +3,9 @@
   "recorded_at": "2026-07-15",
   "measurement": "UTF-8 bytes for bootstrap; normalized name+description+relative-path characters for metadata regression; characters for hook stdout",
   "surfaces": {
-    "bootstrap:claude": 4632,
-    "bootstrap:codex": 7646,
-    "bootstrap:opencode": 6045,
+    "bootstrap:claude": 5105,
+    "bootstrap:codex": 8316,
+    "bootstrap:opencode": 6389,
     "metadata:claude": 4729,
     "metadata:codex-local": 3655,
     "metadata:codex-plugin": 4195,
