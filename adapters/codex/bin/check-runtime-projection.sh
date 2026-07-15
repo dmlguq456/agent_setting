@@ -30,6 +30,25 @@ printf 'codex_home=%s\n' "$CODEX_HOME"
 
 real() { readlink -f "$1" 2>/dev/null || true; }
 
+# The portable runtime activator projects a selected product profile. Its
+# activation record is authoritative for per-file Skills, agents, and modes;
+# the legacy installer instead projects the complete compatibility trees.
+profile_state="$CODEX_HOME/.harness/activation.json"
+profile_managed=0
+profile_name=
+if [ -f "$profile_state" ]; then
+  profile_name=$(python3 - "$profile_state" "$AGENT_HOME" <<'PY' 2>/dev/null || true
+import json, pathlib, sys
+state = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+source = pathlib.Path(state.get("source_root", "")).resolve()
+expected = pathlib.Path(sys.argv[2]).resolve()
+if state.get("runtime") == "codex" and source == expected and state.get("profile"):
+    print(state["profile"])
+PY
+  )
+  [ -n "$profile_name" ] && profile_managed=1
+fi
+
 expect_link() {  # <linkpath> <expected-target> <checkname>
   lp=$1; exp=$2; name=$3
   if [ -L "$lp" ] && [ -n "$(real "$lp")" ] && [ "$(real "$lp")" = "$(real "$exp")" ]; then
@@ -42,20 +61,33 @@ expect_link() {  # <linkpath> <expected-target> <checkname>
 
 expect_link "$CODEX_HOME/agent-harness"            "$AGENT_HOME"                  agent-harness
 expect_link "$CODEX_HOME/AGENTS.md"                "$S/AGENTS.md"                 agents-md
-expect_link "$CODEX_HOME/agent-harness-readme.md"  "$S/README.md"                 agent-harness-readme
 expect_link "$CODEX_HOME/agent-core"               "$S/core"                      agent-core
 expect_link "$CODEX_HOME/agent-capabilities"       "$S/capabilities"              agent-capabilities
 expect_link "$CODEX_HOME/agent-roles"              "$S/roles"                     agent-roles
 expect_link "$CODEX_HOME/agent-bin"                "$S/bin"                       agent-bin
-expect_link "$CODEX_HOME/agent-tools"              "$S/tools"                     agent-tools
-expect_link "$CODEX_HOME/agent-utilities"          "$S/utilities"                 agent-utilities
-expect_link "$CODEX_HOME/agent-scaffolds"          "$S/scaffolds"                 agent-scaffolds
-expect_link "$CODEX_HOME/agent-skills"             "$S/codex-skills"              agent-skills
-expect_link "$CODEX_HOME/agent-agents"             "$S/codex-agents"              agent-agents
-expect_link "$CODEX_HOME/agent-modes"              "$S/codex-modes"               agent-modes
 expect_link "$CODEX_HOME/agent-hooks"              "$S/codex-hooks"               agent-hooks
-expect_link "$CODEX_HOME/agent-config"             "$S/codex-config"              agent-config
-expect_link "$CODEX_HOME/agent-plugin-marketplace" "$S/codex-plugin-marketplace" agent-plugin-marketplace
+if [ "$profile_managed" -eq 1 ]; then
+  for name in agent-harness-readme agent-tools agent-utilities agent-scaffolds agent-skills agent-agents agent-config agent-plugin-marketplace; do
+    printf 'check=%s:skipped reason=profile-managed\n' "$name"
+  done
+  printf 'check=agent-modes:ok reason=profile-managed-per-file profile=%s\n' "$profile_name"
+  if "$AGENT_HOME/tools/install/harness.sh" runtime doctor --runtime codex --strict --json >/dev/null 2>&1; then
+    printf 'check=profile-activation:ok profile=%s\n' "$profile_name"
+  else
+    printf 'check=profile-activation:failed profile=%s\n' "$profile_name"
+    fails=$((fails + 1))
+  fi
+else
+  expect_link "$CODEX_HOME/agent-harness-readme.md"  "$S/README.md"                 agent-harness-readme
+  expect_link "$CODEX_HOME/agent-tools"              "$S/tools"                     agent-tools
+  expect_link "$CODEX_HOME/agent-utilities"          "$S/utilities"                 agent-utilities
+  expect_link "$CODEX_HOME/agent-scaffolds"          "$S/scaffolds"                 agent-scaffolds
+  expect_link "$CODEX_HOME/agent-skills"             "$S/codex-skills"              agent-skills
+  expect_link "$CODEX_HOME/agent-agents"             "$S/codex-agents"              agent-agents
+  expect_link "$CODEX_HOME/agent-modes"              "$S/codex-modes"               agent-modes
+  expect_link "$CODEX_HOME/agent-config"             "$S/codex-config"              agent-config
+  expect_link "$CODEX_HOME/agent-plugin-marketplace" "$S/codex-plugin-marketplace" agent-plugin-marketplace
+fi
 
 hook_trust_check() {
   cfg="$CODEX_HOME/config.toml"
@@ -176,6 +208,12 @@ detect_plugin_state
 # Codex skill discovery may be native symlinks or the installable plugin. A
 # count-only check can miss stale or wrong targets, so every projected skill is
 # classified before selecting the active discovery surface.
+if [ "$profile_managed" -eq 1 ]; then
+  linked_skills=$(find "$CODEX_HOME/skills" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
+  printf 'skills_linked=%s plugin_state=%s profile=%s\n' "$linked_skills" "$plugin_state" "$profile_name"
+  printf 'check=skill-discovery:native profile=%s\n' "$profile_name"
+  printf 'check=skills-linked:ok reason=profile-activation-verified\n'
+else
 projected_skills=$(find -L "$S/codex-skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 linked_skills=$(find "$CODEX_HOME/skills" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
 printf 'skills_projected=%s skills_linked=%s plugin_state=%s\n' "$projected_skills" "$linked_skills" "$plugin_state"
@@ -229,9 +267,15 @@ else
   printf 'check=skills-linked:failed reason=partial-native-skill-links\n'
   fails=$((fails + 1))
 fi
+fi
 
 # Native agent links: every projected custom-agent TOML must be linked to the
 # matching adapter-owned file.
+if [ "$profile_managed" -eq 1 ]; then
+  linked_agents=$(find "$CODEX_HOME/agents" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
+  printf 'agents_linked=%s profile=%s\n' "$linked_agents" "$profile_name"
+  printf 'check=agents-linked:ok reason=profile-activation-verified\n'
+else
 projected_agents=$(find -L "$S/codex-agents" -mindepth 1 -maxdepth 1 -type f -name '*.toml' 2>/dev/null | wc -l | tr -d ' ')
 linked_agents=$(find "$CODEX_HOME/agents" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
 printf 'agents_projected=%s agents_linked=%s\n' "$projected_agents" "$linked_agents"
@@ -252,6 +296,7 @@ if [ "$agent_link_fails" -eq 0 ] && [ "$projected_agents" -gt 0 ]; then
 else
   printf 'check=agents-linked:failed reason=harness-agents-not-linked-or-miswired\n'
   fails=$((fails + 1))
+fi
 fi
 
 # Bootstrap discovery (soft): requires the codex CLI. Headless preflight may
