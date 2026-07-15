@@ -395,6 +395,35 @@ def jobs_lock(jobs: Path):
             fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
+def _effective_parent_cwd(args):
+    """Where the DISPATCHING session lives — not merely where the wrapper ran.
+
+    Orchestrators routinely `cd` into the task worktree before dispatching, so a raw
+    getcwd() records the child's own worktree — a path that can never anchor the
+    parent session row in Fleet (observed: codex depth-1 dispatches stayed orphan,
+    2026-07-16). When the launch cwd sits inside the task worktree and that worktree
+    is linked, back-map to the primary checkout instead; explicit --parent-cwd or
+    AGENT_DISPATCH_PARENT_CWD still wins via args.parent_cwd.
+    """
+    cwd = os.path.realpath(args.parent_cwd or os.getcwd())
+    try:
+        wt = os.path.realpath(args.worktree)
+    except (OSError, TypeError):
+        return cwd
+    if args.parent_cwd is None and (cwd == wt or cwd.startswith(wt + os.sep)):
+        try:
+            out = subprocess.check_output(
+                ["git", "-C", wt, "worktree", "list", "--porcelain"],
+                text=True, stderr=subprocess.DEVNULL)
+            first = next((ln.split(" ", 1)[1] for ln in out.splitlines()
+                          if ln.startswith("worktree ")), None)
+            if first and os.path.realpath(first) != wt:
+                return os.path.realpath(first)
+        except (OSError, subprocess.SubprocessError, IndexError):
+            pass
+    return cwd
+
+
 def append_job(jobs: Path, args: argparse.Namespace) -> None:
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
     pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth},harness=codex"
@@ -405,7 +434,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     if args.parent_slug or args.parent_session_id:
         # OPERATIONS §5.10 pipe contract lists parent_cwd; without it a cross-harness
         # child whose parent_sid is synthetic can never nest in Fleet (2026-07-15).
-        pipe += f",parent_cwd={os.path.realpath(args.parent_cwd or os.getcwd())}"
+        pipe += f",parent_cwd={_effective_parent_cwd(args)}"
     if args.worker_role:
         pipe += f",worker_role={args.worker_role}"
     if args.capability_owner:
@@ -808,7 +837,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_INTENSITY": args.intensity,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
             "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
-            "AGENT_DISPATCH_PARENT_CWD": (os.path.realpath(args.parent_cwd or os.getcwd()) if (args.parent_slug or args.parent_session_id) else ""),
+            "AGENT_DISPATCH_PARENT_CWD": (_effective_parent_cwd(args) if (args.parent_slug or args.parent_session_id) else ""),
             "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
