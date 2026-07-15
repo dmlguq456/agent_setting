@@ -1,8 +1,8 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6)
+- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: v6/F-22/F-23 implemented and verified; runtime title generation remains operator-disabled
+- **Status**: spec v8 done (관제 신뢰성·세션 제어·분사 정책 연동) — F-25~F-27 구현은 별도 autopilot-code 사이클, F-28은 stage-dispatch v9 착륙 후
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## Process Log
@@ -58,6 +58,8 @@
 - v4 (2026-07-13): F-20 Codex dynamic usage-window runtime-currentness 계약. snapshot = `_internal/versions/v3/prd.md`.
 - v5 (2026-07-13): F-21 Codex native state DB title + JSONL fallback, cross-harness neutral title sidecar/provider. Claude-only refresher/`slug` fallback 계약 폐기. snapshot = `_internal/versions/v4/prd.md`.
 - v6 (2026-07-14): F-22 terminal-width-responsive session name zone + longer responsive sidecar title contract; F-23 recursive-storm containment. snapshot = `_internal/versions/v5/prd.md`.
+- v7 (2026-07-15): F-24 portable worker attribution(`AGENT_SESSION_ROLE=worker`) + Codex rollout fd 소유권 단일화. snapshot = `_internal/versions/v6/prd.md`. (본 항목은 v8 update 시점 소급 기록 — v7 사이클이 summary 동기를 누락.)
+- v8 (2026-07-15): F-25 상태 판정 단일 모델(소스 우선순위·hysteresis·state_evidence) + F-26 interactive 세션 레지스트리 1급(unused 배지·provenance) + F-27 제한적 세션 제어(kill+정리, Non-goal 부분 반전, 사용자 확인) + F-28 분사 정책 연동 계약 선고정(route record/topology 소비, 구현 후행). §0.5 경계 개정(자동 제어 0·사용자 개시 제어만). snapshot = `_internal/versions/v7/prd.md`.
 
 ## v6 update (2026-07-14) — responsive session title width + recursive-storm containment
 
@@ -76,3 +78,19 @@
   shell-free custom wrapper supported.
 - verification: fleet suite 187/187, syntax/compile, `--json`/`--once` real smoke,
   canonical/Claude mirror parity. Adaptation-boundary comparison added zero new failures.
+
+## v8 update (2026-07-15) — 관제 신뢰성 + 세션 제어 + 분사 정책 연동
+
+| Step | Action | Result |
+|---|---|---|
+| 실측 | herdr 유령 세션(pid 1168514) fleet `--json` 대조 — proc 백본은 잡지만 title None 익명 idle 행 | 가시성 갭 확정(이름·unused·provenance 부재) |
+| 실측 | `--once` 3회 crash 0 + 전체 스위트 247 tests OK | "버그"가 아니라 판정 기준 층위 문제로 진단 확정 |
+| 진단 | 상태 판정 휴리스틱 층(F-15/F-18/F-24 + mtime 창) 우선순위 암묵 → 사용자 체감 "기준 불안정" | F-25 단일 상태 모델로 재설계 결정 |
+| 사용자 확인 | 제어 범위 / 상태 모델 접근 / 연동 타이밍 3문 | kill+정리만 · 전면 재설계 · 계약 선고정+구현 후행 |
+| update | v7 snapshot → `_internal/versions/v7/prd.md`, prd.md v8 | §4.8 신설(F-25~F-28), §0.5 경계 개정, Non-goals 부분 반전, 확정 결정 v8 블록, Next 구현 순서 |
+
+- 계기: 사용자 결정 4건(2026-07-15) — 직접 세션 제어 / 반쪽짜리 해소·전향적 확장 / 판정 기준 불안정 / 분사 정책 연동 1급 UI.
+- 타 세션 조율: stage-dispatch PRD v10 작업(별도 세션 진행 중)과 파일 표면 비겹침 확인 — F-28은 그 결과물(route record/topology registry)의 소비 계약만 선고정.
+
+## Next
+`/autopilot-code --mode dev --intensity standard "fleet 관제 신뢰성·세션 제어 — PRD v8 §4.8 F-25→F-26→F-27"` (worktree, conductor 분사). F-28 구현은 stage-dispatch v9 registry/route record 착륙 후 별도 phase.
