@@ -970,6 +970,11 @@ def _append_write_event(action, rid, tier=None, scope=None, rtype=None, actor=No
             "type": rtype,
             "actor": actor or _write_actor(),
             "sid": os.environ.get("MEM_SID", ""),
+            # Repo attribution for the fleet per-repo mem rows (F-19, 2026-07-16): the
+            # mutating process's cwd, overridable via MEM_CWD when a worker mutates on
+            # behalf of another checkout. Honest value only — consumers group it through
+            # project_of() and silently skip events where it is absent/empty.
+            "cwd": os.environ.get("MEM_CWD") or os.getcwd(),
             "snippet": snip,
         }
         WRITE_EVENTS.parent.mkdir(parents=True, exist_ok=True)
