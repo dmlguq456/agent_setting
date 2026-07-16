@@ -146,7 +146,7 @@ if [ -d /proc ]; then
   jobsG2="$agent_home/.dispatch/jobs.log"
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-15T00:00:00" "open" "agent_setting" "$tmp/wt/codex-pid" "codexpid" "capability=x,harness=codex,pid=$pidG2,pid_start=$startG2" > "$jobsG2"
   outG2=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" "$jobsG2" 2>&1); rcG2=$?
-  if [ "$rcG2" -eq 0 ] && printf '%s' "$outG2" | grep -q 'ALIVE.*harness=codex'; then
+  if [ "$rcG2" -eq 0 ] && printf '%s' "$outG2" | grep -q 'ALIVE.*harness=codex.*classifier=tools.fleet.model.classify_attempt_evidence'; then
     ok "Codex live pid + matching start ticks → ALIVE(pid)"
   else
     bad "expected Codex ALIVE(pid); got rc=$rcG2 out=[$outG2]"

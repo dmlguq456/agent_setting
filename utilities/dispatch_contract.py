@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
+from typing import Callable
 
 
 ELIGIBILITY = {"supported", "unsupported", "unknown"}
@@ -277,7 +278,14 @@ def _atomic_registry_replace(jobs: Path, lines: list[str]) -> None:
             pass
 
 
-def claim_attempt_row(jobs: Path, attempt_id: str, row: str, *, launch: bool = False) -> bool:
+def claim_attempt_row(
+    jobs: Path,
+    attempt_id: str,
+    row: str,
+    *,
+    launch: bool = False,
+    exclusive_metadata: dict[str, str] | None = None,
+) -> bool:
     """Atomically register ``attempt_id`` and claim its launch at most once.
 
     A prior ``--register`` row may transition from ``launch_claimed=0`` to 1 on
@@ -303,6 +311,18 @@ def claim_attempt_row(jobs: Path, attempt_id: str, row: str, *, launch: bool = F
                 lines[index] = "\t".join(fields)
                 _atomic_registry_replace(jobs, lines)
                 return True
+        if exclusive_metadata:
+            for existing in lines:
+                fields = existing.split("\t")
+                if len(fields) != 6:
+                    continue
+                metadata = dict(
+                    part.split("=", 1)
+                    for part in fields[5].split(",")
+                    if "=" in part
+                )
+                if all(metadata.get(key) == value for key, value in exclusive_metadata.items()):
+                    return False
         row_fields = row.rstrip("\n").split("\t")
         if len(row_fields) != 6:
             raise DispatchContractError("invalid-registry-row", "expected six tab-separated fields")
@@ -326,6 +346,104 @@ def _row_identity(fields: list[str]) -> tuple[str, ...] | None:
     if route_id and route_node and parent:
         return ("legacy", route_id, route_node, parent, fields[4])
     return None
+
+
+def close_attempt_row(
+    jobs: Path,
+    attempt_id: str,
+    note: str,
+    *,
+    evidence: dict[str, str] | None = None,
+) -> bool:
+    """Close one exact SD-49 attempt atomically and idempotently."""
+    if not attempt_id or not note:
+        raise DispatchContractError("attempt-close-invalid", "attempt_id and note are required")
+    ensure_global_registry_writable(jobs)
+    lock_path = Path(f"{jobs}.lock")
+    with lock_path.open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        for index, line in enumerate(lines):
+            fields = line.split("\t")
+            if len(fields) != 6 or fields[1] not in {"open", "running"}:
+                continue
+            metadata = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
+            if metadata.get("attempt_id") != attempt_id:
+                continue
+            fields[1] = "done"
+            additions = [f"note={note}"]
+            for key, value in sorted((evidence or {}).items()):
+                if value not in (None, ""):
+                    additions.append(f"{key}={str(value).replace(',', ';')}")
+            fields[5] += "," + ",".join(additions)
+            lines[index] = "\t".join(fields)
+            _atomic_registry_replace(jobs, lines)
+            return True
+    return False
+
+
+def close_attempt_row_if(
+    jobs: Path,
+    attempt_id: str,
+    note: str,
+    predicate: Callable[[list[str]], bool],
+    *,
+    evidence: dict[str, str] | None = None,
+) -> bool:
+    """Revalidate and close one exact attempt inside the SD-49 lock.
+
+    Reconciliation decisions depend on mutable process, worktree, marker and
+    heartbeat evidence.  A read-then-``close_attempt_row`` sequence leaves a
+    race between the decision and mutation.  This primitive re-reads the row
+    and invokes the caller's safety predicate while the canonical registry is
+    locked; a changed or newly-live row is therefore left untouched.
+    """
+    if not attempt_id or not note:
+        raise DispatchContractError("attempt-close-invalid", "attempt_id and note are required")
+    ensure_global_registry_writable(jobs)
+    with Path(f"{jobs}.lock").open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        for index, line in enumerate(lines):
+            fields = line.split("\t")
+            if len(fields) != 6 or fields[1] not in {"open", "running"}:
+                continue
+            metadata = dict(
+                part.split("=", 1) for part in fields[5].split(",") if "=" in part
+            )
+            if metadata.get("attempt_id") != attempt_id or not predicate(fields.copy()):
+                continue
+            fields[1] = "done"
+            additions = [f"note={note}"]
+            for key, value in sorted((evidence or {}).items()):
+                if value not in (None, ""):
+                    additions.append(f"{key}={str(value).replace(',', ';')}")
+            fields[5] += "," + ",".join(additions)
+            lines[index] = "\t".join(fields)
+            _atomic_registry_replace(jobs, lines)
+            return True
+    return False
+
+
+def annotate_attempt_row(jobs: Path, attempt_id: str, values: dict[str, str]) -> bool:
+    """Append bounded metadata to one exact attempt under the SD-49 lock."""
+    ensure_global_registry_writable(jobs)
+    with Path(f"{jobs}.lock").open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        for index, line in enumerate(lines):
+            fields = line.split("\t")
+            if len(fields) != 6:
+                continue
+            metadata = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
+            if metadata.get("attempt_id") != attempt_id:
+                continue
+            additions = [f"{key}={str(value).replace(',', ';')}" for key, value in sorted(values.items())]
+            fields[5] += "," + ",".join(additions)
+            lines[index] = "\t".join(fields)
+            _atomic_registry_replace(jobs, lines)
+            return True
+    return False
 
 
 def reconcile_local_registry(global_jobs: Path, local_jobs: Path) -> tuple[int, int]:

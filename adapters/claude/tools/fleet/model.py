@@ -5,6 +5,8 @@ Collectors fill them; no harness-specific logic lives here. Any field a harness
 cannot provide stays `None` and renders as `—` (an explicit "not available",
 never blank, per the PRD missing-cell rule).
 """
+import hashlib
+import json
 import re
 from dataclasses import dataclass, field, asdict
 from typing import Optional
@@ -61,6 +63,12 @@ def dash(v, fmt=None):
 
 # 4-state herdr vocabulary (+ stale/dead/unused) — single source for render coloring.
 LIVENESS_STATES = ("working", "idle", "unused", "blocked", "done", "stale", "dead", "unknown")
+
+# Stable public name consumed by Fleet, the progress watchdog, liveness and
+# registry reconciliation.  Keeping the exact-attempt verdict here prevents
+# each surface from growing a subtly different PID/start-time classifier.
+ATTEMPT_CLASSIFIER_SOURCE = "tools.fleet.model.classify_attempt_evidence"
+PROGRESS_PHASES = ("launch", "analysis", "tool", "file-write", "test", "artifact", "terminal")
 
 
 def project_of(cwd):
@@ -399,6 +407,70 @@ def _session_status_state(status):
     return None
 
 
+def deterministic_progress_fingerprint(ev_in):
+    """Hash only bounded, attempt-scoped progress evidence.
+
+    Transcript text/mtime and speech are deliberately excluded.  Callers may
+    pass a registry transition, heartbeat, tool call, file/artifact signature,
+    or test result.  The normalized JSON digest is stable across processes.
+    """
+    scoped = {
+        "attempt_id": ev_in.get("attempt_id"),
+        "route_id": ev_in.get("route_id"),
+        "route_node": ev_in.get("route_node"),
+        "registry_transition": ev_in.get("registry_transition"),
+        "heartbeat": ev_in.get("heartbeat"),
+        "tool": ev_in.get("tool"),
+        "file_signature": ev_in.get("file_signature"),
+        "artifact_signature": ev_in.get("artifact_signature"),
+        "test_result": ev_in.get("test_result"),
+    }
+    present = {key: value for key, value in scoped.items() if value not in (None, "", {})}
+    if not any(key in present for key in (
+        "registry_transition", "heartbeat", "tool", "file_signature",
+        "artifact_signature", "test_result",
+    )):
+        return ""
+    payload = json.dumps(present, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def classify_attempt_evidence(ev_in, now=None):
+    """Pure F-25 exact-attempt verdict shared by all dispatch surfaces.
+
+    Return ``None`` for legacy rows lacking both identity halves.  Otherwise
+    return an auditable verdict containing exact PID/start and deterministic
+    progress evidence.  This function never reads the process table itself.
+    """
+    if ev_in.get("pid") is None or not ev_in.get("proc_start"):
+        return None
+    if ev_in.get("pid_alive") is False:
+        state, rule = "dead", "recorded attempt pid is not alive"
+    elif ev_in.get("proc_start_match") is False:
+        state, rule = "dead", "recorded attempt start-time mismatch (pid reuse)"
+    elif ev_in.get("pid_alive") is True and ev_in.get("proc_start_match") is True:
+        state, rule = "working", "recorded attempt pid/start-time is live"
+    else:
+        state, rule = "unknown", "exact attempt identity is not currently verifiable"
+    return {
+        "state": state,
+        "tier": 2,
+        "source": "proc",
+        "rule": rule,
+        "classifier_source": ATTEMPT_CLASSIFIER_SOURCE,
+        "attempt_id": ev_in.get("attempt_id"),
+        "route_id": ev_in.get("route_id"),
+        "route_node": ev_in.get("route_node"),
+        "pid": ev_in.get("pid"),
+        "proc_start": ev_in.get("proc_start"),
+        "actual_proc_start": ev_in.get("actual_proc_start"),
+        "heartbeat": ev_in.get("heartbeat"),
+        "registry_transition": ev_in.get("registry_transition"),
+        "progress_fingerprint": deterministic_progress_fingerprint(ev_in),
+        "observed_at": now,
+    }
+
+
 def _is_unused(state, ev_in):
     """§2.2 — `unused` refines `idle` on the inactivity-history axis using the SAME
     tier-1 registry evidence (startedAt/updatedAt) that declared `idle`, so the
@@ -510,13 +582,12 @@ def classify_job(ev_in, now, key=None):
     # process proves the attempt is still alive; a missing/reused process terminates
     # that exact attempt immediately.  Legacy rows without both identity halves keep
     # the mtime fallback below.
-    if ev_in.get("pid") is not None and ev_in.get("proc_start"):
-        if ev_in.get("pid_alive") is False:
-            return out("dead", 2, "proc", "recorded attempt pid is not alive")
-        if ev_in.get("proc_start_match") is False:
-            return out("dead", 2, "proc", "recorded attempt start-time mismatch (pid reuse)")
-        if ev_in.get("pid_alive") is True and ev_in.get("proc_start_match") is True:
-            return out("working", 2, "proc", "recorded attempt pid/start-time is live")
+    exact = classify_attempt_evidence(ev_in, now)
+    if exact and exact["state"] != "unknown":
+        state, evidence = out(exact["state"], exact["tier"], exact["source"], exact["rule"])
+        evidence["classifier_source"] = exact["classifier_source"]
+        evidence["attempt"] = exact
+        return state, evidence
 
     t = ev_in.get("transcript")
     if t == "unknown":

@@ -8,6 +8,7 @@ from contextlib import contextmanager
 import fcntl
 import os
 import re
+import signal
 import shlex
 import shutil
 import subprocess
@@ -21,6 +22,7 @@ sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
     claim_attempt_row,
+    close_attempt_row,
     completion_marker_gate,
     ensure_global_registry_writable,
     new_attempt_id,
@@ -53,6 +55,7 @@ QA_FROM_INTENSITY = {
 # utilities/dispatch-liveness.sh intentionally duplicates the list as LIMIT_RE
 # across the Python/shell runtime boundary; keep the two synchronized.
 DEATH_PATTERNS = [
+    ("capacity", r"(?:selected\s+)?model\b.{0,80}\b(?:is\s+)?at capacity\b"),
     ("network-operation-not-permitted", r"operation not permitted|network is unreachable|network access denied"),
     ("session-limit", r"hit your (?:session|usage) limit|session limit reached"),
     ("usage-limit", r"usage limit reached|weekly limit|rate limit(?:ed)?|\b429\b"),
@@ -82,6 +85,17 @@ def scan_death(text: str) -> tuple[str, str] | None:
     m = _RESET_RE.search(text)
     reset = re.sub(r"\s+", "", m.group(1)) if m else ""
     return reason, reset
+
+
+def scan_anchored_death(text: str) -> tuple[str, str] | None:
+    """Inspect only terse terminal CLI lines, never completion-report prose."""
+    for line in [line.strip() for line in text.splitlines() if line.strip()][-3:]:
+        if len(line) > 200:
+            continue
+        death = scan_death(line)
+        if death:
+            return death
+    return None
 
 
 def parser() -> argparse.ArgumentParser:
@@ -129,6 +143,10 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--attempt-id")
     p.add_argument("--broker-request-id")
     p.add_argument("--fallback-ordinal", type=int, default=0)
+    p.add_argument("--capacity-retry", type=int, choices=(0, 1), default=0)
+    p.add_argument("--prior-attempt-id")
+    p.add_argument("--cooled-model")
+    p.add_argument("--selection-source")
     p.add_argument("--launch-authority", choices=("conductor", "ancestor-broker"), default="conductor")
     p.add_argument("--parent-harness", default=os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS") or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "claude")
     p.add_argument("--parent-transport", default=os.environ.get("AGENT_DISPATCH_CURRENT_TRANSPORT") or "unknown")
@@ -260,6 +278,21 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         if args.profile
         else "profile=-"
     )
+    heartbeat = ""
+    if args.attempt_id and args.route_id and args.route_node:
+        base = (
+            f"python3 {shlex.quote(str(ROOT / 'utilities/dispatch-progress.py'))} heartbeat "
+            f"--attempt-id {shlex.quote(args.attempt_id)} "
+            f"--route-id {shlex.quote(args.route_id)} "
+            f"--route-node {shlex.quote(args.route_node)} "
+            "--jobs \"$AGENT_DISPATCH_JOBS\""
+        )
+        heartbeat = (
+            "Stage progress contract (SD-58):\n"
+            f"- Emit analysis on entry: {base} --phase analysis --kind registry --evidence analysis-entered\n"
+            "- After a real tool call, write, test, or artifact update, run the same command with phase tool|file-write|test|artifact and kind tool|file|test|artifact plus a deterministic id/signature.\n"
+            "- Repeated prose or an unchanged phase/evidence pair is not progress. Emit terminal only after the assigned artifact is durable.\n\n"
+        )
     return (
         f"{bootstrap}\n"
         "Dispatch metadata:\n"
@@ -283,6 +316,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         "- The wrapper validates route/scope and the masked profile before launch. Re-run route validation only for a safety recheck.\n"
         f"- Read only the exposed {args.assigned_contract} Skill, named artifacts, and selected specialization. General Claude custom subagents may still inherit project CLAUDE.md; do not manually load a full harness bootstrap.\n"
         "- Owner workers use the inherited registry, launch checked adapter wrappers directly, poll in this turn, harvest artifacts, and close rows; stage/review/support workers do not dispatch.\n\n"
+        f"{heartbeat}"
         "Assignment:\n"
         f"{task.rstrip()}\n\n"
         "End with the kernel's exact three-line handoff and nothing after it.\n",
@@ -386,11 +420,21 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     pipe += f",artifact_root={args.artifact_root}"
     if args.attempt_id:
         pipe += f",attempt_id={args.attempt_id},launch_authority={args.launch_authority},fallback_ordinal={args.fallback_ordinal}"
+    if args.capacity_retry:
+        pipe += (
+            f",capacity_retry=1,prior_attempt_id={args.prior_attempt_id}"
+            f",cooled_model={args.cooled_model},selection_source={args.selection_source}"
+        )
     if args.broker_request_id:
         pipe += f",broker_request_id={args.broker_request_id}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     row = f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}"
-    return claim_attempt_row(jobs, args.attempt_id, row, launch=args.action == "start")
+    exclusive = ({"route_id": args.route_id, "route_node": args.route_node,
+                  "capacity_retry": "1"} if args.capacity_retry else None)
+    return claim_attempt_row(
+        jobs, args.attempt_id, row, launch=args.action == "start",
+        exclusive_metadata=exclusive,
+    )
 
 
 def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str, attempt_id: str | None = None) -> bool:
@@ -401,6 +445,11 @@ def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str,
     note=dead-<reason>[,reset=<reset>] to the pipe column (kv style). Idempotent:
     returns False if no matching open row is found.
     """
+    if attempt_id:
+        evidence = {"reset": reset} if reset else {}
+        if reason == "capacity":
+            evidence.update(failure_class="capacity", detected_by="anchored-early-exit")
+        return close_attempt_row(jobs, attempt_id, f"dead-{reason}", evidence=evidence)
     if not jobs.is_file():
         return False
     with jobs_lock(jobs):
@@ -418,6 +467,8 @@ def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str,
             if attempt_id and f"attempt_id={attempt_id}" not in pipe.split(","):
                 continue
             pipe += f",note=dead-{reason}"
+            if reason == "capacity":
+                pipe += ",failure_class=capacity,detected_by=anchored-early-exit"
             if reset:
                 pipe += f",reset={reset}"
             lines[i] = f"{ts}\tdone\t{repo}\t{wt}\t{row_slug}\t{pipe}\n"
@@ -464,6 +515,21 @@ def process_start_ticks(pid: int) -> str:
         return ""
 
 
+def seed_launch_heartbeat(args: argparse.Namespace, jobs: Path, pid: int, start: str) -> str:
+    if not (args.attempt_id and args.route_id and args.route_node):
+        return "not-route-bound"
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "utilities/dispatch-progress.py"), "heartbeat",
+         "--attempt-id", args.attempt_id, "--route-id", args.route_id,
+         "--route-node", args.route_node, "--jobs", str(jobs),
+         "--phase", "launch", "--kind", "registry",
+         "--evidence", f"pid={pid};start={start or '-'}"],
+        cwd=ROOT, text=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return "ok" if result.returncode == 0 else "failed"
+
+
 def write_reset_cache(agent_home: Path, harness: str, reason: str, reset: str) -> None:
     """SD-15↔SD-16: cache the last known limit reset for usage-check.sh to read.
 
@@ -484,9 +550,10 @@ def watch_early_death(
 ) -> tuple[str, str] | None:
     """SD-15: poll a just-launched child for a limit/auth early death.
 
-    Returns (reason, reset) if the child exits within watch_secs AND its log tail
-    matches a DEATH_PATTERN; otherwise None (still running, or exited cleanly with
-    no limit signal — normal harvest owns those). Polls in 0.5s steps.
+    Returns (reason, reset) if the child exits within watch_secs and its log tail
+    matches a DEATH_PATTERN. SD-59 capacity is the one proactive exception: an
+    anchored live capacity line interrupts the exact process group for failover.
+    Otherwise returns None. Polls in 0.5s steps.
     """
     if watch_secs <= 0:
         return None
@@ -494,6 +561,18 @@ def watch_early_death(
     while time.monotonic() < deadline:
         if proc.poll() is not None:
             break
+        try:
+            live_tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+        except OSError:
+            live_tail = ""
+        live_death = scan_anchored_death(live_tail)
+        if live_death and live_death[0] == "capacity":
+            try:
+                os.killpg(proc.pid, signal.SIGINT)
+                proc.wait(timeout=2)
+            except (ProcessLookupError, subprocess.TimeoutExpired):
+                pass
+            return live_death
         time.sleep(0.5)
     if proc.poll() is None:
         return None  # still alive past the watch window — not an early death
@@ -501,7 +580,7 @@ def watch_early_death(
         tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
     except OSError:
         return None
-    death = scan_death(tail)
+    death = scan_anchored_death(tail)
     if death:
         return death
     if proc.returncode:
@@ -580,6 +659,10 @@ def validate_route_record(args: argparse.Namespace) -> int:
 
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
+    if args.capacity_retry and not all(
+        (args.prior_attempt_id, args.cooled_model, args.selection_source)
+    ):
+        return fail("capacity-retry-evidence-missing", 64, child_spawned="0")
     if not Path(args.worktree).is_absolute():
         return fail("worktree-must-be-absolute", 64, worktree=args.worktree)
     args.worktree = str(Path(args.worktree).resolve())
@@ -730,7 +813,15 @@ def main(argv: list[str]) -> int:
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
         try:
-            proc = subprocess.Popen([sys.executable, str(governor), "--root", str(governor_root), "run", "--class", "dispatch", "--", "sh", "-c", command], env=env, start_new_session=True)
+            proc = subprocess.Popen(
+                [sys.executable, str(governor), "--root", str(governor_root),
+                 "run", "--class", "dispatch", "--", "sh", "-c", command],
+                env=env,
+                start_new_session=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         except OSError as exc:
             close_job_row(jobs, args.slug, args.worktree, "launch-error", "", args.attempt_id)
             return fail("child-launch-failed", 70, detail=str(exc), attempt_id=args.attempt_id)
@@ -742,6 +833,7 @@ def main(argv: list[str]) -> int:
         annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
         args.child_pid = proc.pid
         args.child_pid_start = start_ticks
+        args.launch_heartbeat = seed_launch_heartbeat(args, jobs, proc.pid, start_ticks)
         # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a limit/auth early death so
         # a limit-killed launch closes its own row now instead of lingering `open`
         # until liveness SUSPECT catches it minutes later.
@@ -749,7 +841,8 @@ def main(argv: list[str]) -> int:
         if death:
             reason, reset = death
             close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
-            write_reset_cache(agent_home, "claude", reason, reset)
+            if reason != "capacity":
+                write_reset_cache(agent_home, "claude", reason, reset)
             args.early_death = (reason, reset)
 
     print("adapter=claude")
@@ -791,6 +884,7 @@ def main(argv: list[str]) -> int:
     print(f"started={1 if action == 'start' and args.attempt_claimed else 0}")
     print(f"child_pid={getattr(args, 'child_pid', None) or '-'}")
     print(f"child_pid_start={getattr(args, 'child_pid_start', None) or '-'}")
+    print(f"launch_heartbeat={getattr(args, 'launch_heartbeat', 'not-started')}")
     early_death = getattr(args, "early_death", None)
     if early_death:
         reason, reset = early_death

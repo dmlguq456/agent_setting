@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -96,6 +97,32 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                 self.assertIn("blocker: none | <one line>", prompt)
                 self.assertNotIn("Read $AGENT_HOME/adapters/codex/AGENTS.md first", prompt)
                 self.assertNotIn("Return a concise report with changed files", prompt)
+
+    def test_route_bound_stage_prompts_name_deterministic_heartbeat_consumer(self):
+        for harness, (wrapper, model, _suffix) in ADAPTERS.items():
+            with self.subTest(harness=harness):
+                spec=importlib.util.spec_from_file_location(f"dispatch_{harness}",wrapper)
+                module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+                args=module.parser().parse_args([
+                    "--worktree","/work/repo","--slug","stage","--capability","code-test",
+                    "--mode","dev/backend","--intensity","standard","--depth","2",
+                    "--parent","owner","--worker-role","code-test","--prompt-text","TASK",*model,
+                ])
+                args.attempt_id="att-promptheartbeat01";args.route_id="rt-prompt";args.route_node="test"
+                args.artifact_root="/artifacts"
+                render=module.prompt if harness=="opencode" else module.dispatch_prompt
+                prompt,_=render(args)
+                self.assertIn("Stage progress contract (SD-58)",prompt)
+                self.assertIn("att-promptheartbeat01",prompt)
+                self.assertIn("rt-prompt",prompt)
+                self.assertIn("--phase analysis",prompt)
+                self.assertIn("unchanged phase/evidence pair is not progress",prompt)
+                heartbeat_path=(
+                    ROOT/"utilities/dispatch-progress.py"
+                    if harness=="claude"
+                    else ROOT/f"adapters/{harness}/bin/preflight.sh"
+                )
+                self.assertIn(str(heartbeat_path),prompt)
 
 
 if __name__ == "__main__":

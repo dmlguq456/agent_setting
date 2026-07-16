@@ -19,6 +19,7 @@ import importlib.util, sys
 spec = importlib.util.spec_from_file_location("dh", sys.argv[1])
 dh = importlib.util.module_from_spec(spec); spec.loader.exec_module(dh)
 cases = {
+  "Selected model is at capacity": ("capacity", ""),
   "You've hit your session limit · resets 3pm": ("session-limit", "3pm"),
   "Error: usage_limit_reached, resets at 5:30pm": ("usage-limit", "5:30pm"),
   "exceeded retry limit, last status: 429 Too Many Requests": ("usage-limit", ""),
@@ -31,6 +32,9 @@ for text, want in cases.items():
     got = dh.scan_death(text)
     if got != want:
         print(f"MISMATCH {text!r}: got {got} want {want}"); bad += 1
+prose = "The implementation discusses Selected model is at capacity handling " + ("x" * 180)
+if dh.scan_anchored_death(prose) is not None:
+    print("MISMATCH capacity report prose was treated as terminal"); bad += 1
 print("SCAN_OK" if bad == 0 else "SCAN_FAIL")
 PY
 )
@@ -79,25 +83,29 @@ AH = Path(sys.argv[2])
 jobs = AH / ".dispatch" / "jobs.log"
 logs = AH / ".dispatch" / "logs"
 
-def row(slug, wt):
-    pipe = f"capability=code-plan,mode=dev,qa=standard,intensity=standard,depth=2,harness=codex,parent=cx,worker_role=code-plan,owner=autopilot-code"
+def row(slug, wt, attempt=""):
+    pipe = f"capability=code-plan,mode=dev,qa=standard,intensity=standard,depth=2,harness=codex,parent=cx,worker_role=code-plan,owner=autopilot-code,model=gpt-5.6-sol"
+    if attempt:
+        pipe += f",attempt_id={attempt}"
     with jobs.open("a", encoding="utf-8") as f:
         f.write(f"2026-07-10T00:00:00Z\topen\t/repo\t{wt}\t{slug}\t{pipe}\n")
 
-def launch(slug, body, watch):
+def launch(slug, body, watch, attempt=""):
     wt = f"/wt/{slug}"
-    row(slug, wt)
+    row(slug, wt, attempt)
     log_path = logs / f"{slug}.codex.jsonl"
     proc = subprocess.Popen(["sh", "-c", f"( {body} ) >> {log_path} 2>&1"], start_new_session=True)
     death = dh.watch_early_death(proc, log_path, watch)
     if death:
         reason, reset = death
-        dh.close_job_row(jobs, slug, wt, reason, reset)
-        dh.write_reset_cache(AH, "codex", reason, reset)
+        dh.close_job_row(jobs, slug, wt, reason, reset, attempt or None)
+        if reason != "capacity":
+            dh.write_reset_cache(AH, "codex", reason, reset)
         return f"early_death={reason}:{reset}"
     return "early_death=-"
 
 print(launch("limit1", "echo \"You've hit your session limit · resets 3pm\"; exit 1", 6))
+print(launch("capacity1", "echo 'Selected model is at capacity'; exit 1", 4, "att-capacity0001"))
 print(launch("clean1", "echo ok done; exit 0", 4))
 wt = "/wt/pidrow"; row("pidrow", wt)
 proc = subprocess.Popen(["bash", "-c", "exec -a codex sleep 5"])
@@ -113,6 +121,11 @@ echo "$drive" | grep -q 'early_death=session-limit:3pm' \
   && ok "limit-death → row done,note=dead-session-limit,reset=3pm" \
   || bad "limit-death row not closed. drive=[$drive] jobs=[$(cat "$AH/.dispatch/jobs.log")]"
 [ -f "$AH/.dispatch/usage-reset.codex" ] && ok "reset cache written" || bad "no reset cache"
+
+echo "$drive" | grep -q 'early_death=capacity:' \
+  && grep -q $'\tdone\t.*capacity1.*attempt_id=att-capacity0001.*note=dead-capacity.*failure_class=capacity' "$AH/.dispatch/jobs.log" \
+  && ok "capacity death closes the exact attempt as dead-capacity" \
+  || bad "capacity row not closed exactly. drive=[$drive] jobs=[$(cat "$AH/.dispatch/jobs.log")]"
 
 echo "$drive" | grep -q 'PID_ANNOTATED' \
   && ok "Codex wrapper records pid and process start ticks on the open row (O1)" \

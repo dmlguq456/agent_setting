@@ -28,7 +28,7 @@ from fleet.collectors import claude    # noqa: E402
 from fleet.collectors import opencode  # noqa: E402
 from fleet import render             # noqa: E402
 from fleet import collectors as fleet_collectors  # noqa: E402
-from fleet.model import DispatchJob, Session  # noqa: E402
+from fleet.model import ATTEMPT_CLASSIFIER_SOURCE, DispatchJob, Session  # noqa: E402
 
 
 class RenderDispatchPresentationTest(unittest.TestCase):
@@ -645,6 +645,27 @@ class CodexAttemptIdentityTest(unittest.TestCase):
 
         self.assertEqual(state, "working")
         self.assertEqual(job.state_evidence["tier"], 2)
+        self.assertEqual(job.state_evidence["classifier_source"], ATTEMPT_CLASSIFIER_SOURCE)
+        self.assertEqual(job.state_evidence["attempt"]["attempt_id"], "att-0123456789abcdef")
+
+    def test_attempt_heartbeat_is_exposed_through_the_same_classifier(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            heartbeat_dir=os.path.join(tmp,".dispatch","heartbeats");os.makedirs(heartbeat_dir)
+            attempt="att-heartbeat00001"
+            with open(os.path.join(heartbeat_dir,attempt+".json"),"w",encoding="utf-8") as out:
+                json.dump({"phase":"test","sequence":4,"evidence_digest":"d","updated_at":900},out)
+            job=DispatchJob(key="code-test",slug="heartbeat",cwd="/work/wt",source="jobs",
+                            status="open",harness="codex",pid=4242,proc_start="777",
+                            attempt_id=attempt,route_id="rt-a",route_node="test")
+            with mock.patch.object(dispatch,"_registry_home",return_value=tmp),\
+                 mock.patch.object(dispatch,"_job_transcript_signal",return_value="stale"),\
+                 mock.patch("fleet.collectors.dispatch.os.path.exists",return_value=True),\
+                 mock.patch.object(dispatch.procscan,"read_proc_start",return_value="777"):
+                state=dispatch._dispatch_liveness(job,now=1000.0,track=False)
+        self.assertEqual(state,"working")
+        self.assertEqual(job.state_evidence["classifier_source"],ATTEMPT_CLASSIFIER_SOURCE)
+        self.assertEqual(job.state_evidence["attempt"]["heartbeat"]["sequence"],4)
+        self.assertTrue(job.state_evidence["attempt"]["progress_fingerprint"])
 
     def test_legacy_row_without_process_identity_keeps_rollout_fallback(self):
         job = DispatchJob(key="code-test", slug="legacy", cwd="/work/wt",

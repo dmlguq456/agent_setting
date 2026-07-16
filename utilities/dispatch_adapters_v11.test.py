@@ -55,8 +55,19 @@ class AdapterV11Test(unittest.TestCase):
    self.assertEqual(result.returncode,0,result.stdout+result.stderr)
    self.assertIn("nested_headless_network=1",result.stdout)
    self.assertIn("sandbox_workspace_write.network_access=true",result.stdout)
+   self.assertIn(f"--add-dir {ROOT / '.dispatch'}",result.stdout)
    self.assertIn("nested_codex_home=",result.stdout)
    self.assertIn("broker_lifecycle=retired",result.stdout)
+ def test_background_governor_does_not_hold_orchestrator_capture_pipes(self):
+  for harness in ADAPTERS:
+   with self.subTest(harness=harness):
+    source=(ROOT/f"adapters/{harness}/bin/dispatch-headless.py").read_text(encoding="utf-8")
+    start=source.index("proc = subprocess.Popen")
+    end=source.index("except OSError",start)
+    launch=source[start:end]
+    self.assertIn("stdin=subprocess.DEVNULL",launch)
+    self.assertIn("stdout=subprocess.DEVNULL",launch)
+    self.assertIn("stderr=subprocess.DEVNULL",launch)
  def test_nested_codex_home_links_auth_but_keeps_mutable_state_local(self):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); source=root/"source"; source.mkdir(); worktree=root/"worktree"; worktree.mkdir()
@@ -69,6 +80,7 @@ class AdapterV11Test(unittest.TestCase):
    self.assertEqual((home/"auth.json").resolve(),(source/"auth.json").resolve())
    self.assertTrue((home/"config.toml").is_symlink())
    self.assertTrue((home/"agent-harness").is_symlink())
+   self.assertEqual((home/"agent-harness").resolve(),wrapper.resolve_agent_home().resolve())
    self.assertEqual(home.parent,worktree/".dispatch")
  def test_concurrent_codex_start_launches_exactly_one_child(self):
   with tempfile.TemporaryDirectory() as td:
