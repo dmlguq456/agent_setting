@@ -302,7 +302,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-28a (route record 소비 — 구현 확정)**: dispatch collector가 pipe의 `route_file`을 read-only 로드해 `route_hash` 검증 후 잡에 부착한다. **tolerant 필수**: record는 `/tmp` 등 휘발 위치에 있을 수 있다 — 파일 부재·파싱 실패·hash 불일치는 조용히 기존 pipe 휴리스틱 fallback(회귀 없음, F-28 v8 계약 그대로). record에는 절대 쓰지 않고, mtime 키 캐시로 tick당 재파싱을 막는다. `--json`에 `route` 키 additive(요약: capability/topology/nodes 진행/route_id).
 - **F-28b (route-aware breadcrumb)**: conductor·stage 행의 stage breadcrumb을 고정 `_PIPE_STAGES` 하드코딩 대신 **record의 `nodes[].id` + `depends_on` DAG**에서 생성 — 임의 capability 파이프(lab eval, research 등)가 code 4단 강제 없이 자기 모양대로 표시된다. 노드 점등 = 해당 depth-2 자식 행 실측 우선(SD-F2 원칙 불변), record 없는 잡은 기존 breadcrumb 유지.
 - **F-30 (처리-과정 뷰 — 전용 모드, 설계 확정)**:
-  - **진입**: 전용 키 `p`(process) 토글 — 기존 `w` 레이아웃 cycle과 직교(그룹 뷰 ↔ 과정 뷰 전환). footer 키 바에 표기.
+  - **진입**: 전용 키 `p`(process) 토글 — 기존 `w` 레이아웃 cycle과 직교(그룹 뷰 ↔ 과정 뷰 전환). footer 키 바에 표기. 비대화식 투영 = `--view {group,process}` CLI 플래그 + `FLEET_VIEW` env — `p` 토글과 같은 전역 상태 하나를 공유하며 별도 코드 경로를 만들지 않는다(v10 구현이 3폭 캡처·디자인 비평 등 비대화식 검증용으로 추가, 2026-07-16 사용자 확정 minor).
   - **단위**: 카드 1장 = 활성 route 1개 (프로젝트 그룹 대신 파이프라인 중심 재그룹).
   - **카드 구성**: L1 = `[capability·mode·intensity] <route_id 단축> — <n/m nodes> ⏳<경과>`; L2 = DAG 가로 흐름 `plan ✓12m › exec ● 8m (opus·high) › test ○ › report ○` — 노드별 상태 글리프(✓ 완료 / ● 활성+경과+모델 / ○ 미기동 / ✕ 실패)와 completion gate 통과 여부. `depends_on`이 병렬인 노드는 세로 분기(들여쓴 병렬 행)로.
   - **자식 연결**: 활성 노드 아래 그 노드를 실행 중인 세션 행(축약형)과 그 서브에이전트 `└⚡`(F-29 재사용)를 중첩 — "누가 지금 어느 단계를 어떤 모델로" 한눈에.

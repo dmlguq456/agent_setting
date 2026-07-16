@@ -139,3 +139,5 @@
 - 정직한 결손(구현하지 않기로 결정): completion gate 통과 표시(`—` — 통과 증거가 시스템에 부재, dispatch 규약 변경 필요), run registry 관측(canonical 경로 부재 — "없다"가 아니라 "찾을 수 없다"). 이월 = `plans/2026-07-15_fleet-v10-process-view/_internal/carryover.md`.
 - 별건 인프라 발견 2건(fleet 범위 밖, 상위 보고): dispatch 브로커 head-of-line blocking(`dispatch-broker.py:510` 전역 락 하 동기 실행 — 실측 12분 전 fabric 차단), immutable route record가 mutable `broker_instance` 고정(브로커 롤오버 시 ordinal-1 hop 영구 불가 — 이 사이클 자신이 ordinal-3 폴백으로 열화 수행).
 - 판단 대기: `--view` CLI 표면 유지 여부(spec은 `p`만 확정), gate 통과 마커 규약(stage-dispatch 계약 변경), 브로커 HOL blocking 우선순위.
+
+- 2026-07-16 (v10 minor #1): **F-30 비대화식 투영 확정** — v10 구현이 검증 목적으로 추가한 `--view {group,process}` CLI + `FLEET_VIEW` env를 사용자 확정으로 등재. `p` 토글과 전역 상태 하나를 공유(별도 코드 경로 없음). 판단 대기 3건 중 1건 해소("전부다 작업 해줘").
