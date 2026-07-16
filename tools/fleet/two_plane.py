@@ -150,7 +150,8 @@ def _agents_strip(prefix, agents):
 
 
 def _dispatch_line(connector, harness, cap_key, cap_slug, title, contract, elapsed_str, desc_w,
-                   stg_key=_STAGE_PLAIN[1], mode="dev", live="working"):
+                   stg_key=_STAGE_PLAIN[1], mode="dev", live="working",
+                   model=None, effort=None):
     """`↳ ▸ <harness plain-hue text> 🔧 <capability>·<mode> ⎇ <slug> "<title>" (<contract>) <elapsed>`
     — session-child spawn arrow, no rail lattice (grammar #3, round-2). Harness text uses the
     BRIGHT `hb_*` key (never the dispatch row's dim `h_*`) — a spawned entity's identity is
@@ -168,15 +169,20 @@ def _dispatch_line(connector, harness, cap_key, cap_slug, title, contract, elaps
     # idle/dead/stale fall through `_glyph`'s existing vocabulary. This restores the original
     # board's animation that r2's bold-removal accidentally dropped.
     gch, gkey = r._glyph(live, dim=True)
-    # r9 (user: "모드·intensity·bootstrap 표시가 흩어져 있는 것도 별로") — ONE parenthetical,
-    # directly after the key (the `opus (high)` idiom), carrying every classification token
-    # (mode·intensity·role[·model·effort]); nothing else on the row is a contract fact.
+    # r9 (user) — ONE parenthetical directly after the key (the `opus (high)` idiom) carrying
+    # the classification tokens (mode·intensity·role). r10 (user): the MODEL is a first-class
+    # fact on every spawned session — same `_model_cell` vocabulary as the session grid
+    # (fam-colored name + effort-heat suffix), never a lowercase token buried in the contract.
     segs = [(connector, "dim"), (gch + " ", gkey), ("▸ ", stg_key),
             (r._BADGE_TEXT.get(harness, harness) + "  ", hb_key),
-            ("🔧 ", None), (cap_key, stg_key), (" (" + contract + ")", "dim"),
-            (" ⎇ " + cap_slug + "  ", "dim"),
-            (r._clip_w('"%s"' % title, desc_w), None),
-            ("  " + elapsed_str, "dim")]
+            ("🔧 ", None), (cap_key, stg_key), (" (" + contract + ")", "dim")]
+    if model:
+        name = r._clean_model(r.dash(model)) or "—"
+        segs += [("  " + name, r._model_key(model)),
+                 (" (" + (effort or "?") + ")", r._eff_key(effort or "", False))]
+    segs += [(" ⎇ " + cap_slug + "  ", "dim"),
+             (r._clip_w('"%s"' % title, desc_w) if title else "", None),
+             ("  " + elapsed_str, "dim")]
     return segs
 
 
@@ -255,7 +261,8 @@ def build_lines(term_width, layout):
                                          ("Explore", "✓", "4m04s", False)]))
     g1.append(_dispatch_line(_ARROW_PREFIX, "claude", "code", "usage-accuracy",
                              "usage 소스 신뢰 규칙 구현", "dev·thr·owner", "⏳ 20m",
-                             desc_w, stg_key=_STAGE_PLAIN[1]))
+                             desc_w, stg_key=_STAGE_PLAIN[1],
+                             model="Opus 4.8", effort="high"))
     g1.append(_canvas_line(_NODE_IND, [
         {"label": "plan", "state": "done", "time": "12m"},
         {"label": "exec", "state": "active", "time": "8m"},
@@ -265,20 +272,18 @@ def build_lines(term_width, layout):
     # depth-2 stage workers: rail rows one arrow level deeper (r4) — identity is the SD-F1
     # human stage label + ⎇ slug; contract = bootstrap type; worker facts = model·effort.
     # Their ⚡ rows attribute positionally (nested beneath their own worker row, no @tag).
-    _sp, _spk = r._glyph("working", dim=True)
-    g1.append([(_D2_PREFIX, "dim"), (_sp + " ", _spk), ("▸ ", _STAGE_PLAIN[1]),
-               (r._BADGE_TEXT["claude"] + "  ", "hb_claude"),
-               ("🔧 exec", _STAGE_PLAIN[1]), (" ⎇ usage-accuracy  ", "dim"),
-               ("(stage·haiku·med)", "dim"), ("  8m", "dim")])
+    g1.append(_dispatch_line(_D2_PREFIX, "claude", "exec", "usage-accuracy", None,
+                             "stage", "8m", desc_w, stg_key=_STAGE_PLAIN[1],
+                             model="haiku", effort="medium"))
     g1.append(_agents_strip(_D2_AGENT_IND, [("개발팀", "●", "1m12s", True)]))
-    g1.append([(_D2_PREFIX, "dim"), (_sp + " ", _spk), ("▸ ", _STAGE_PLAIN[1]),
-               (r._BADGE_TEXT["claude"] + "  ", "hb_claude"),
-               ("🔧 exec:B", _STAGE_PLAIN[1]), (" ⎇ usage-accuracy  ", "dim"),
-               ("(stage·sonnet·med)", "dim"), ("  3m", "dim")])
+    g1.append(_dispatch_line(_D2_PREFIX, "claude", "exec:B", "usage-accuracy", None,
+                             "stage", "3m", desc_w, stg_key=_STAGE_PLAIN[1],
+                             model="sonnet", effort="medium"))
     g1.append(_agents_strip(_D2_AGENT_IND, [("Explore", "✓", "48s", False)]))
     g1.append(_dispatch_line(_ARROW_PREFIX, "codex", "code", "rate-window",
-                             "rate-window 헤더 재검증", "dev·quick·quick_owner·gpt·med", "4m",
-                             desc_w, stg_key=_STAGE_PLAIN[0]))
+                             "rate-window 헤더 재검증", "dev·quick·quick_owner", "4m",
+                             desc_w, stg_key=_STAGE_PLAIN[0],
+                             model="gpt-5.5", effort="medium"))
     g1.extend(_session_lines(s_codex, layout, term_width, wide_name_width))
     # r5 (user) — the card's mem zone sits BELOW a subtle in-band divider: a dim rule ON the
     # tint (never a chrome bar, never an untinted gap — the band itself must stay continuous).
@@ -327,4 +332,9 @@ def build_lines(term_width, layout):
                   ("▸", "dim"), (" pipeline   ", "dim"),
                   ("✓", "dim"), (" done   ", "dim"),
                   ("○", "dim"), (" pending", "dim")])
+    # r10 (user) — spell the contract vocabulary out; the parenthetical alone is opaque.
+    lines.append([("  🔧 (mode·intensity·role)", "dim"),
+                  ("   mode dev|debug|audit", "dim"),
+                  ("  ·  intensity direct|quick|standard|thorough|adversarial", "dim"),
+                  ("  ·  role owner|quick_owner|stage|review|support", "dim")])
     return lines
