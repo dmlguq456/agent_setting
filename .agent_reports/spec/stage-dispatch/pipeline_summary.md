@@ -132,3 +132,13 @@ v12 구현은 source `8897bf76`, main merge `70bac6ef`로 완료했다. 다음 s
   - **Currentness**: 공식 Models는 GPT-5.6 Sol을 권장하고 exact ID=`gpt-5.6-sol`, API alias=`gpt-5.6`으로 게시. parent Codex ChatGPT surface는 alias를 거부하고 현 환경 exact ID를 지원했으므로 adapter probe 성공 exact ID만 선택하고 clean fallback.
   - **SD-23**: read-only `route-dispatch` helper(Claude+Codex, OpenCode honest unknown).
   - **SD-24**: Fleet env-child-hidden + non-code stage fuzzy-match 차단 수용 기준.
+
+## v13 update (2026-07-16) — broker 동시성·record-identity 결합 해제·통과 marker
+
+| Step | Action | Result |
+|---|---|---|
+| 계기 확인 | fleet v10 사이클 실측 3건 (final_report §5 + carryover) — HOL 12분 차단·rollover 열화·marker 0건 | 사용자 확정: 3건 전부 계약+구현 |
+| update | v12 snapshot → `_internal/versions/v12/prd.md`, prd.md v13 | §13.5 신설(SD-54 접수·실행 락 분리 / SD-55 broker_contract_version 2 — record는 broker_root만, instance는 hop 시점 ensure / SD-56 completion marker 의무 + 후속 노드 launch gate), §14 경계 v13 추가, O2/O3/O4 → v14 후보 |
+
+- 설계 핵심: SD-54는 동시성 상한을 broker에 넣지 않고 SD-40 governor 소유를 유지(이중 상한 금지). SD-55는 identity 검증을 제거하는 게 아니라 불변 record에서 실시간 hop으로 이동. SD-56은 통과 판정(의미 구간)을 대체하지 않고 판정 결과만 결정론화하며, 강제 장치 = 후속 노드 `--start`의 선행 marker gate(문서 vigilance 재발 방지).
+- 구현 = 별도 `stage-dispatch-v13` autopilot-code 사이클 (dispatch-broker.py / capability-route.py + stage-dispatch-fallback.py / wrapper 3종 + dispatch-node.py + 스테이지 문서 + fixture). merge 후 live broker는 in-flight 0 시점에 shutdown→ensure 롤오버.

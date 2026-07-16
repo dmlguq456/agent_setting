@@ -1,7 +1,7 @@
 project_name: stage-dispatch
 component: stage-dispatch          # autopilot 파이프 디스패치 토폴로지 개정 (repo spec/prd.md = Unified Memory System, spec/harness-layer-sync·dispatch-profiles·agent-fleet-dashboard 무관)
 created: 2026-07-10
-version: 12
+version: 13
 mode: [library, cli]              # library(스테이지 분사 계약·오케스트레이션) + cli(dispatch wrapper·jobs.log·fleet 관제) — infra
 scope_note: "depth-0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic inline, quick=단일 depth-1 one-shot(depth-2 금지), standard+=capability-specific recipe. intensity/execution_topology/worker_kind/transport/tracking 다섯 축은 독립이며 worker worktree는 source-only. v12는 logical depth와 OS launch authority를 분리해 모든 depth-2 headless launch를 harness-neutral depth-0 broker protocol로 정규화하고 Claude/Codex 4개 parent→child 조합을 동일 계약으로 지원한다."
 inputs:
@@ -27,12 +27,14 @@ inputs:
   - '사용자 결정 2026-07-15 (v12): Claude/Codex를 depth-1·depth-2에 자유롭게 배치. runtime recursion 차이가 topology 의미를 바꾸지 않도록 4개 조합을 공통 호환 구조로 구현'
   - '공식 Claude/Codex currentness 2026-07-15 (v12): Claude native subagent도 직접 nested spawn 불가; Codex native depth와 codex exec는 별도 surface. portable recursion 보장 없음 → depth-0 external broker 표준화'
   - 'v11 구현 갭 2026-07-15: ancestor-broker row/readiness는 있으나 stage-dispatch-fallback.py가 caller에서 target wrapper를 subprocess.run; 실제 request handoff/broker process/lifecycle 부재'
+  - 'v12 운영 실측 2026-07-15~16 (v13 계기): fleet v10 사이클 — broker 전역 락 하 동기 실행(HOL 12분 차단·대기 6), rollover로 record 고정 broker_instance 사멸(ordinal-3 열화), completion marker 호출 0건(gate 통과 증거 부재)'
+  - '사용자 결정 2026-07-16 (v13): 3건 전부 계약 확정 + 구현 착수'
 phases:
-  spec: done              # PRD v12 — harness-neutral depth-0 broker protocol + 4개 Claude/Codex placement(SD-51~53). v11 snapshot = _internal/versions/v11/
+  spec: done              # PRD v13 — broker 동시성 분리·record-identity 결합 해제·completion marker 의무화(SD-54~56). v12 snapshot = _internal/versions/v12/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: done               # SD-51~53 broker 구현·Claude/Codex 4조합·crash/idempotency·통합 검증 완료 (source 8897bf76, main 70bac6ef)
-last_updated: 2026-07-15  # v12 implementation merged; portable guards 359/359
+  dev: in_progress        # v12분 done(SD-51~53, main 70bac6ef) → v13 사이클 착수: SD-54 broker 동시성 + SD-55 contract v2 + SD-56 marker 배선
+last_updated: 2026-07-16  # v13 spec transaction; v12 implementation merged(portable guards 359/359)
 decisions_locked:
   - 'SD-1: depth-1 owner = 얇은 conductor, 스테이지(plan/execute/test/report) = depth-2 headless 세션 (conductor 는 verdict/게이트만, 스테이지 본문 미독)'
   - 'SD-2: 인터페이스 = 산출물 파일만, 세션 간 대화 컨텍스트 전달 금지, 계약 완결성 의무 (산출물 기반 소통 명문화)'
@@ -90,9 +92,13 @@ decisions_locked:
   - 'SD-51: 모든 logical depth-2 headless launch의 표준 OS authority는 depth-0 deterministic broker. conductor는 target harness와 무관하게 declarative request+same-turn wait만 수행하며 logical depth/parent와 OS ancestry를 분리 (v12)'
   - 'SD-52: broker request는 versioned declarative envelope, canonical endpoint/jobs, atomic queued→claimed→running→terminal state, request idempotency, PID/start-tick+heartbeat/lease+fencing, attempt reconciliation을 강제. missing/stale broker는 caller-local fallback 없이 fail-closed (v12)'
   - 'SD-53: Claude→Claude, Claude→Codex, Codex→Claude, Codex→Codex가 동일 broker protocol을 사용. route layer가 fallback 후보를 선택하고 broker는 재라우팅하지 않으며 runtime recursion은 optional checked executor일 뿐 portable 전제가 아님 (v12)'
+  - 'SD-54: broker request 접수·검증·claim은 short critical section, target 실행 생애는 전역 락 비보유 — request 병렬 실행. request_id 직렬화는 per-request lease/status로; 동시성 상한은 SD-40 governor 소유 유지 (v13, HOL 해소)'
+  - 'SD-55: route record dispatch_evidence는 stable broker_root만 고정(broker_contract_version 2); mutable instance는 hop 시점 ensure로 해석. v1 record는 소급 없이 기존 열화 거동 유지 (v13)'
+  - 'SD-56: 스테이지 통과 판정 직후 capability-route.py complete 의무 호출 — canonical <agent-home>/.dispatch/completion/<route_id>/<node_id>.json, 후속 노드 --start는 선행 marker gate(fail-closed). marker 부재=무주장 (v13)'
 decisions_open:
   - 'SD-OPEN-1: 마이크로-스테이지 inline 손익 임계(어느 스테이지 크기부터 분사 이득). Phase 1 pilot 1표본 확보 — Phase 2 계측 누적만, 확정은 표본 축적 후'
   - 'SD-OPEN-2: 스테이지 SessionEnd mem curator 기동 영향 — 관찰만(계측 로그 기록), 개입은 증거 후 (v2)'
   - 'SD-OPEN-3: 상호보완 라우팅 가중 정책 — 초기 ''limit 회피 > 특성 적합 > 분산'' + 한도 비대칭 기본값(Claude>Codex, 가변 — 설정값으로 선언, 하드코드 금지), 편중·교차 리뷰 효과 계측 후 조정 (v3)'
-  - 'O2/v13 후보: linked-worktree worker가 sandbox 밖 Git common-dir index.lock을 만들 수 없어 commit 불가. v12 구현 제외; worker no-commit + prepared commit message/evidence → depth-0 main harvest/commit 계약 평가'
-  - 'O3/v13 후보: dispatch 인프라 자기수정으로 route compiler input digest가 바뀌어 completion stale-digest. v12 구현 제외; evidence-bearing orchestrator override vs compile-time digest pin+drift record 비교'
+  - 'O2/v14 후보(이월): linked-worktree worker commit 불가 — worker no-commit + prepared commit → depth-0 harvest/commit 계약 평가'
+  - 'O3/v14 후보(이월): route compiler input digest 자기수정 경합 — orchestrator override vs digest pin+drift record 비교'
+  - 'O4/v14 후보: resource-runner canonical registry 경로 확정 (fleet 과정-뷰 F-28c 재개 조건)'
