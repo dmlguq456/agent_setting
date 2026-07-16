@@ -469,6 +469,77 @@ class DispatchBrokerTest(unittest.TestCase):
                 text=True, capture_output=True, check=False, env=env,
             )
 
+    def test_resubmit_while_running_with_registry_row_is_inflight(self):
+        # SD-54 §1.3e / plan-check B3: SD-52 writes the registry row BEFORE spawn,
+        # so a resubmit of a still-running request WILL find a row. The inflight
+        # check must therefore precede the registry reconcile -- otherwise the
+        # resubmit reconciles against that row and terminates the request while
+        # its target is still executing (terminal immutability + AC2 both break).
+        # Reverting the order leaves every other fixture green, so this one is the
+        # only guard.
+        home = self.base / "b3-home"
+        (home / "core").mkdir(parents=True)
+        (home / "core" / "CORE.md").write_text("fixture\n", encoding="utf-8")
+        adapter_dir = home / "adapters" / "claude" / "bin"
+        adapter_dir.mkdir(parents=True)
+        script = adapter_dir / "dispatch-headless.py"
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "import argparse, os, time\n"
+            "from pathlib import Path\n"
+            "p=argparse.ArgumentParser()\n"
+            "p.add_argument('--slug'); p.add_argument('--jobs'); p.add_argument('--attempt-id', dest='att')\n"
+            "a,_=p.parse_known_args()\n"
+            # the canonical spawn-time row -- exactly what makes the B3 race reachable
+            "row='2026-07-16T00:00:00Z\\trunning\\t2\\towner\\t'+a.slug+'\\tattempt_id='+a.att+',note=live'\n"
+            "Path(a.jobs).parent.mkdir(parents=True, exist_ok=True)\n"
+            "with open(a.jobs,'a') as fh: fh.write(row+'\\n')\n"
+            "art=Path(os.environ['AGENT_ARTIFACT_ROOT'])\n"
+            "(art/('started-'+a.slug+'.marker')).write_text('1')\n"
+            "time.sleep(6)\n"
+            "(art/('done-'+a.slug+'.marker')).write_text('1')\n",
+            encoding="utf-8",
+        )
+        os.chmod(script, 0o755)
+        broker_root = self.base / "b3-broker"
+        env = dict(os.environ)
+        for key in ("AGENT_SESSION_ROLE", "AGENT_DISPATCH_CHILD", "AGENT_DISPATCH_BROKER_INSTANCE",
+                    "AGENT_DISPATCH_BROKER_ROOT", "AGENT_DISPATCH_JOBS"):
+            env.pop(key, None)
+        env["AGENT_HOME"] = str(home)
+        ensured = subprocess.run(
+            [sys.executable, str(ROOT / "utilities/dispatch-broker.py"), "ensure",
+             "--root", str(broker_root), "--jobs", str(self.jobs)],
+            text=True, capture_output=True, check=True, env=env,
+        )
+        meta = dict(line.split("=", 1) for line in ensured.stdout.splitlines() if "=" in line)
+        try:
+            request = self.fixture_broker_request("b3", broker_root, meta["broker_instance"])
+            results = {}
+            first = threading.Thread(target=lambda: results.__setitem__(
+                "first", self.submit_to(request, broker_root, meta["broker_instance"])))
+            first.start()
+            started = self.artifact / "started-b3.marker"
+            deadline = time.monotonic() + 15
+            while not started.exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertTrue(started.exists(), "target never started")
+            time.sleep(0.4)  # let the row land
+
+            second = self.submit_to(request, broker_root, meta["broker_instance"])
+            reply = json.loads(second.stdout)
+            # the target must still be running -- otherwise this asserts nothing
+            self.assertFalse((self.artifact / "done-b3.marker").exists())
+            self.assertFalse(reply.get("ok"), reply)
+            self.assertEqual(reply.get("reason"), "broker-request-inflight", reply)
+            first.join(timeout=30)
+        finally:
+            subprocess.run(
+                [sys.executable, str(ROOT / "utilities/dispatch-broker.py"), "stop",
+                 "--root", str(broker_root), "--jobs", str(self.jobs)],
+                text=True, capture_output=True, check=False, env=env,
+            )
+
     def test_slow_target_does_not_block_other_requests(self):
         # SD-54 acceptance ①: a slow target must not block a second,
         # independent request from launching, running, and completing.
