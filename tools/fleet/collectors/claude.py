@@ -133,6 +133,12 @@ def _tail_ai_title(path, chunk=8192, max_scan=None):
 _SUBAGENT_CACHE = {}   # path -> (mtime, size, [SubAgent,...]) — separate from _TITLE_CACHE;
                         # same (mtime, size) key pattern, independent invalidation.
 
+# Async Agent lifecycle markers (see _tail_subagents docstring). The ack text and the
+# notification tag are harness-emitted fixed phrases; ids are compared verbatim.
+_ASYNC_LAUNCH_MARK = "Async agent launched successfully"
+_ASYNC_AGENT_ID_RE = re.compile(r"agentId:\s*([A-Za-z0-9_-]+)")
+_TASK_NOTIF_ID_RE = re.compile(r"<task-id>([A-Za-z0-9_-]+)</task-id>")
+
 
 def _ts_to_epoch(ts):
     if not isinstance(ts, str):
@@ -144,15 +150,25 @@ def _ts_to_epoch(ts):
 
 
 def _tail_subagents(path, chunk=8192, max_scan=None):
-    """Sub-agent rows from Task tool_use/tool_result pairing (prd.md:292 Claude source,
+    """Sub-agent rows from Task/Agent tool_use/tool_result pairing (prd.md:292 Claude source,
     `isSidechain: true` marks the spawned sub-agent's own turns; the pairing itself lives
-    on the Task tool_use/tool_result pair in the PARENT thread). Grows backward exactly
+    on the tool_use/tool_result pair in the PARENT thread — current runtimes emit the
+    tool_use name as "Agent"; "Task" is kept for older transcript compatibility). Grows backward exactly
     like `_tail_ai_title` — same window, same guarantee (R3-1): if a tool_use is inside the
     scanned window, any tool_result answering it is necessarily ALSO inside it (an
     append-only log only grows forward), so "unpaired tool_use" found here is structurally
     ACTIVE, never a scan-window artifact. The converse (a tool_result whose tool_use fell
     outside the window) is silently dropped — that pairing describes a COMPLETED sub-agent,
     which is hidden by default anyway (prd.md:293), so missing it costs nothing.
+
+    ASYNC agents (user 2026-07-16: the active ● state never showed live): a background
+    Agent launch answers its tool_use IMMEDIATELY with a launch acknowledgment
+    ("Async agent launched successfully … agentId: <id>") while the agent keeps running —
+    that ack is NOT completion. Such a call stays ACTIVE until a `<task-notification>`
+    carrying the same id as `<task-id>` appears later in the transcript (the harness
+    injects it when the agent stops). The R3-1 window guarantee carries over: the
+    notification can only appear AFTER the tool_use, so it is inside any window that
+    contains the tool_use.
 
     Tolerant by contract (F-3): any malformed line is skipped. Returns None only when the
     file itself cannot be read (honest "no source", prd.md:292 — never a guess).
@@ -169,6 +185,8 @@ def _tail_subagents(path, chunk=8192, max_scan=None):
     window = chunk
     calls = {}      # tool_use_id -> SubAgent
     resolved = set()
+    async_ids = {}  # tool_use_id -> background agentId (launch ack seen, not completion)
+    notified = set()  # agentIds whose stop notification has appeared
     while True:
         start = max(0, sz - window)
         try:
@@ -181,6 +199,8 @@ def _tail_subagents(path, chunk=8192, max_scan=None):
         if start > 0 and lines:
             lines = lines[1:]           # drop the partial first line
         for ln in lines:
+            if "task-notification" in ln and "<task-id>" in ln:
+                notified.update(_TASK_NOTIF_ID_RE.findall(ln))
             if "tool_use" not in ln and "tool_result" not in ln:
                 continue
             try:
@@ -194,7 +214,7 @@ def _tail_subagents(path, chunk=8192, max_scan=None):
             for c in content:
                 if not isinstance(c, dict):
                     continue
-                if c.get("type") == "tool_use" and c.get("name") == "Task":
+                if c.get("type") == "tool_use" and c.get("name") in ("Task", "Agent"):
                     tid = c.get("id")
                     if not tid or tid in calls:
                         continue
@@ -204,14 +224,27 @@ def _tail_subagents(path, chunk=8192, max_scan=None):
                                           source="claude-sidechain")
                 elif c.get("type") == "tool_result":
                     tid = c.get("tool_use_id")
-                    if tid:
-                        resolved.add(tid)
+                    if not tid:
+                        continue
+                    blob = c.get("content")
+                    text = blob if isinstance(blob, str) else (json.dumps(blob) if blob else "")
+                    if _ASYNC_LAUNCH_MARK in text:
+                        m = _ASYNC_AGENT_ID_RE.search(text)
+                        if m:
+                            async_ids[tid] = m.group(1)   # launch ack ≠ completion
+                            continue
+                        # marker without a parseable id: untrackable — fall through to the
+                        # pre-async pairing (completed) rather than showing active forever.
+                    resolved.add(tid)
         if window >= limit:
             break
         window = min(window * 8, limit)
     out = []
     for tid, sa in calls.items():
-        if tid in resolved:
+        aid = async_ids.get(tid)
+        if aid is not None:
+            sa.active = aid not in notified
+        elif tid in resolved:
             sa.active = False
         out.append(sa)
     out.sort(key=lambda sa: sa.started_at or 0, reverse=True)

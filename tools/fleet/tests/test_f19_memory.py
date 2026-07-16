@@ -55,9 +55,11 @@ class _TmpStoreCase(unittest.TestCase):
         return self.store / "deleted-records.jsonl"
 
 
-def _event(ts, action, tier="working", rtype="fact", actor="manual", snippet="x"):
-    return json.dumps({"ts": ts, "action": action, "id": "id1", "tier": tier, "scope": "project",
-                        "type": rtype, "actor": actor, "sid": "", "snippet": snippet})
+def _event(ts, action, tier="working", rtype="fact", actor="manual", snippet="x", **extra):
+    d = {"ts": ts, "action": action, "id": "id1", "tier": tier, "scope": "project",
+         "type": rtype, "actor": actor, "sid": "", "snippet": snippet}
+    d.update(extra)
+    return json.dumps(d)
 
 
 def _grave(deleted_at, action):
@@ -137,6 +139,44 @@ class JournalParseTest(_TmpStoreCase):
         _write_lines(self.journal, [_event("2026-07-11T09:00:00", "add", actor="distiller")])
         result = memcol.collect(now=now)
         self.assertFalse(result["alerts"]["distill_stale"])
+
+
+class RepoGroupingTest(_TmpStoreCase):
+    """F-19 repo extension (2026-07-16) — additive `by_repo`, honest-omission when the
+    journal carries neither `cwd` nor `project`."""
+
+    def test_no_cwd_or_project_field_yields_empty_by_repo(self):
+        now = datetime.datetime(2026, 7, 16, 12, 0, 0)
+        _write_lines(self.journal, [_event("2026-07-16T09:00:00", "add")])
+        result = memcol.collect(now=now)
+        self.assertEqual(result["by_repo"], {}, "추측 금지 — 필드 부재는 정직 생략")
+
+    def test_cwd_field_groups_via_project_of(self):
+        now = datetime.datetime(2026, 7, 16, 12, 0, 0)
+        _write_lines(self.journal, [
+            _event("2026-07-16T09:00:00", "add", cwd="/home/demo/agent_setting"),
+            _event("2026-07-16T09:05:00", "lifecycle-expire", cwd="/home/demo/agent_setting"),
+            _event("2026-07-16T09:10:00", "add", cwd="/home/demo/worklog-board"),
+        ])
+        result = memcol.collect(now=now)
+        self.assertEqual(set(result["by_repo"].keys()), {"agent_setting", "worklog-board"})
+        self.assertEqual(len(result["by_repo"]["agent_setting"]), 2)
+        # most-recent-first within a repo
+        self.assertEqual(result["by_repo"]["agent_setting"][0]["action"], "lifecycle-expire")
+
+    def test_literal_project_field_is_used_directly(self):
+        now = datetime.datetime(2026, 7, 16, 12, 0, 0)
+        _write_lines(self.journal, [_event("2026-07-16T09:00:00", "add", project="myrepo")])
+        result = memcol.collect(now=now)
+        self.assertEqual(set(result["by_repo"].keys()), {"myrepo"})
+
+    def test_yesterday_events_excluded_from_by_repo(self):
+        now = datetime.datetime(2026, 7, 16, 12, 0, 0)
+        _write_lines(self.journal, [
+            _event("2026-07-15T09:00:00", "add", cwd="/home/demo/agent_setting"),
+        ])
+        result = memcol.collect(now=now)
+        self.assertEqual(result["by_repo"], {})
 
 
 class DurableOverTest(_TmpStoreCase):
@@ -239,6 +279,83 @@ class RenderIntegrationTest(unittest.TestCase):
         lines = render._build_lines([], [], section="fleet", narrow=False, malformed=0,
                                     layout="wide", memory=snap)
         self.assertIn("distill stale", self._text(lines))
+
+
+class RepoRowsRenderTest(unittest.TestCase):
+    """F-19 repo rows (2026-07-16) — per-group card bottom divider + today mem events."""
+
+    def tearDown(self):
+        render.set_show_all(False)
+
+    def _text(self, lines):
+        return "\n".join("".join(t for t, _k in ln) for ln in lines if ln)
+
+    def _session(self, cwd="/home/demo/agent_setting", sid="s1",
+                title="fleet UI two-plane demo"):
+        from fleet.model import Session
+        return Session(harness="claude", pid=1, cwd=cwd, session_id=sid, slug="x",
+                       title=title, liveness="idle")
+
+    def _memory(self, by_repo):
+        return {
+            "journal_available": True, "graveyard_available": True,
+            "today": {"added_working": 0, "added_durable": 0, "added": 0,
+                      "expired": 0, "pruned": 0},
+            "last_distill_min": None, "recent": [],
+            "by_repo": by_repo,
+            "alerts": {"durable_over": [], "distill_stale": False},
+        }
+
+    def test_repo_with_events_shows_divider_and_rows(self):
+        memory = self._memory({"agent_setting": [
+            {"ts": "2026-07-16T14:02:00", "action": "add", "tier": "durable",
+             "type": "project", "actor": "distiller", "sid": "s1", "snippet": "hello world"},
+        ]})
+        lines = render._build_lines([self._session()], [], section="fleet", narrow=False,
+                                    malformed=0, layout="wide", memory=memory, term_width=168)
+        text = self._text(lines)
+        self.assertIn("hello world", text)
+        self.assertIn("fleet UI two-plane demo", text)   # sid resolved to source session title
+        self.assertIn("14:02", text)
+        self.assertIn("─", text)   # in-band divider
+
+    def test_repo_without_events_is_completely_silent(self):
+        memory = self._memory({})
+        lines = render._build_lines([self._session()], [], section="fleet", narrow=False,
+                                    malformed=0, layout="wide", memory=memory, term_width=168)
+        self.assertNotIn("🧠", self._text(lines))
+
+    def test_unresolvable_sid_omits_title_not_the_row(self):
+        memory = self._memory({"agent_setting": [
+            {"ts": "2026-07-16T13:47:00", "action": "prune", "tier": "working",
+             "type": "expired", "actor": "curator", "sid": "unknown-sid", "snippet": "gone"},
+        ]})
+        lines = render._build_lines([self._session()], [], section="fleet", narrow=False,
+                                    malformed=0, layout="wide", memory=memory, term_width=168)
+        text = self._text(lines)
+        self.assertIn("gone", text)
+        self.assertNotIn("⟵", text, "resolve 불가한 sid는 출처 태그 자체를 생략")
+
+    def test_add_action_sign_is_green_expire_falls_back_to_dim(self):
+        rows = render._mem_repo_rows([
+            {"ts": "2026-07-16T14:02:00", "action": "add", "tier": "durable",
+             "type": "project", "actor": "distiller", "sid": None, "snippet": "a"},
+            {"ts": "2026-07-16T13:47:00", "action": "lifecycle-expire", "tier": "working",
+             "type": "fact", "actor": "curator", "sid": None, "snippet": "b"},
+        ], {})
+        add_sign = next(k for t, k in rows[0] if t == "+")
+        expire_sign = next(k for t, k in rows[1] if t == "−")
+        self.assertEqual(add_sign, "lvl_g")
+        self.assertEqual(expire_sign, "dim")
+
+    def test_other_groups_repo_events_do_not_leak_into_this_card(self):
+        memory = self._memory({"worklog-board": [
+            {"ts": "2026-07-16T14:02:00", "action": "add", "tier": "working",
+             "type": "fact", "actor": "manual", "sid": None, "snippet": "wrong card"},
+        ]})
+        lines = render._build_lines([self._session()], [], section="fleet", narrow=False,
+                                    malformed=0, layout="wide", memory=memory, term_width=168)
+        self.assertNotIn("wrong card", self._text(lines))
 
 
 if __name__ == "__main__":

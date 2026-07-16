@@ -507,12 +507,20 @@ def _project_gate(cwd, sid=None):
 #     gauge slot    context % bar      stage breadcrumb (plan › exec › test)  ← "how far along"
 # main↔dispatch weight is carried by the badge (reverse vs dim font), so the identity columns can
 # stay aligned for comparison. Job flow never sits under branch/gate.
-_HW = 16                      # Session harness field: claude code plus spacing.
-_BRANCH_COL = 48              # absolute col where branch starts (both row types)
-_NAME_COL = 4 + _HW           # absolute col where the NAME starts — SHARED by both row types so
-                              # everything from the name onward aligns (session: prefix 4 + harness
-                              # 14; dispatch: prefix 6 + harness 12 — deeper indent, narrower harness)
-_NW_S = _BRANCH_COL - _NAME_COL   # name field (both row types): col 18 → branch 46 = 28
+_HW = 16                      # Bare harness-badge width — narrow/stack L1 badges and the
+                              # dispatch-prefix budget math still use this unmerged value.
+_HMW = 32                     # F-4 (v11, 사용자 확정 2026-07-16): WIDE-layout harness field with
+                              # model/effort folded in as a parenthetical ('claude code (Fable 5
+                              # · xhigh)') — replaces the separate model column (_MW) on the wide
+                              # session/dispatch rows only; narrow/stack keep _HW plus their own
+                              # L2 model cell, unchanged.
+_NAME_COL = 4 + _HMW          # absolute col where the NAME starts on a WIDE row — SHARED by both
+                              # row types so everything from the name onward aligns (session:
+                              # prefix 4 + harness-model _HMW; dispatch: prefix 6 + harness-model
+                              # narrowed by 2 — deeper indent, same total).
+_NW_S = 28                    # wide-layout name field width (both row types) — a fixed constant
+                              # (previously derived from a hardcoded branch column) so growing
+                              # _NAME_COL above for the harness/model merge never shrinks it.
 _NAME2_MAX = 40               # 2-line name zone tail-cut cap (display cells) — no fixed branch
                               # column there, so an unbounded title could push branch off-draw (F-14)
 _NAME_GAP = 1                 # Cells inside the name zone reserved as a guaranteed separator
@@ -583,29 +591,58 @@ _STAGE_RESERVE = 22           # trailing room for the dispatch stage breadcrumb 
                               # the panel edge (user 2026-07-15: 분사 세션 단계가 잘림)
 
 
+def _wide_slack(term_width):
+    """Terminal slack available to the wide-layout name column past its fixed
+    columns and framing, or None when `term_width` is unknown (hermetic callers).
+    Shared by `_wide_name_width` and `_wide_ctx_width` below so the fixed_row/
+    framing reservation is computed in exactly one place (user 2026-07-16: the
+    ctx-gauge width ask reuses the same reservation math F-22's name-cap already
+    established, rather than duplicating it)."""
+    if not term_width:
+        return None
+    # F-4 (v11): no more separate model column (_MW) — model/effort now ride inside
+    # _NAME_COL's harness-model field (_HMW), so the column merge's freed width flows
+    # straight into this reservation and out to the name/ctx-gauge slack below.
+    fixed_row = _NAME_COL + _BRW + 4 + _CTX_W + 5 + _STAGE_RESERVE
+    if _TINT_OK:
+        framing = (_INSET + _PAD_IN) + _INSET + (2 + _PAD_IN) + 6 + 2
+    else:
+        framing = 1 + 6 + 2
+    return int(term_width) - fixed_row - framing
+
+
 def _wide_name_width(term_width):
     """Responsive wide-layout name column, between _NW_S and _NAME_WIDE_MAX.
 
     Reserve every field after the name plus the right-flushed time and panel
     margins — including trailing breadcrumb room (_STAGE_RESERVE) — then give
     the remaining horizontal slack to the session column, but only up to
-    _NAME_WIDE_MAX (F-22 minor, v8). Leftover slack past the cap is deliberately
-    left as end-of-row padding rather than being handed to another column: the
-    point is a stable, predictable name zone, not a wider one.
+    _NAME_WIDE_MAX (F-22 minor, v8). Leftover slack past the cap flows to the
+    ctx gauge instead (`_wide_ctx_width`) rather than sitting as blank padding.
     """
-    if not term_width:
+    raw = _wide_slack(term_width)
+    if raw is None:
         return _NW_S
-    fixed_row = _NAME_COL + _BRW + _MW + 4 + _CTX_W + 5 + _STAGE_RESERVE
-    if _TINT_OK:
-        framing = (_INSET + _PAD_IN) + _INSET + (2 + _PAD_IN) + 6 + 2
-    else:
-        framing = 1 + 6 + 2
-    return max(_NW_S, min(_NAME_WIDE_MAX, int(term_width) - fixed_row - framing))
+    return max(_NW_S, min(_NAME_WIDE_MAX, raw))
+
+
+def _wide_ctx_width(term_width):
+    """Wide-layout ctx-gauge width: once the name column hits its _NAME_WIDE_MAX
+    cap, the remaining terminal slack widens the gauge instead of being left as
+    blank padding before the time column (user 2026-07-16: "context window의
+    길이를 더 늘려서 맞춰주고") — every row's gauge then ends at the same column
+    for a given terminal width, so the right edges line up across rows."""
+    raw = _wide_slack(term_width)
+    if raw is None:
+        return _CTX_W
+    return _CTX_W + max(0, raw - _NAME_WIDE_MAX)
 
 
 def _col_head(name_width):
-    return ("    " + "harness".ljust(_HW) + "session".ljust(name_width)
-            + "branch".ljust(_BRW) + "model".ljust(_MW)
+    # F-4 (v11): the model/effort header folds into the harness column now that the row
+    # content does too — no more separate "model" header between branch and the gauge.
+    return ("    " + "harness (model·effort)".ljust(_HMW) + "session".ljust(name_width)
+            + "branch".ljust(_BRW)
             + "    context / stage")
 
 
@@ -652,6 +689,38 @@ def _model_cell(model, effort, width, dim=False):
         pad = max(0, width - len(name) - len(sfx) - 3)
         return [(name, lkey), (" (" + sfx + ")", _eff_key(sfx, dim)), (" " * pad, None)]
     return [(_pad(name[: width - 1], width), lkey)]
+
+
+def _harness_model_cell(harness, model, effort, width, hkey, dim=False, unknown="?"):
+    """F-4 (v11, 사용자 확정 2026-07-16) — WIDE-layout harness field with model/effort folded
+    in as a parenthetical: 'claude code (Fable 5·xhigh)'. The harness text keeps its
+    existing hb_*/h_* badge color (`hkey`); the parenthetical reuses `_model_cell`'s
+    family/effort colors and the flush '·' stays dim (user 2026-07-16: the spaced
+    ' · ' read too wide — the freed cells go to the model name). No model value ->
+    the parenthetical is omitted entirely (honest gap, F-3), matching a dead/stale row that
+    has no live telemetry to show. Always returns segments summing to exactly `width` cells
+    (long names/ids clip the same way `_model_cell` already did, never overflow) — the last
+    cell is always left as guaranteed padding so a maxed-out clip never runs the closing `)`
+    straight into the name column (the `_NAME_GAP` collision, same idiom, new spot)."""
+    hn = _BADGE_TEXT.get(harness, unknown) if harness else unknown
+    segs = [(hn, hkey)]
+    used = len(hn)
+    name = _clean_model(dash(model)) if model else None
+    if name and name != "—":
+        room = width - used - 4          # " (" prefix + trailing ")" + 1 guaranteed gap
+        eff = effort or ""
+        if eff and room > len(eff) + 1:
+            nm = name[: max(1, room - len(eff) - 1)]
+            segs += [(" (", "dim"), (nm, _model_key(model, dim=dim)),
+                     ("·", "dim"), (eff, _eff_key(eff, dim)), (")", "dim")]
+            used += 2 + len(nm) + 1 + len(eff) + 1
+        elif room > 0:
+            nm = name[: max(1, room)]
+            segs += [(" (", "dim"), (nm, _model_key(model, dim=dim)), (")", "dim")]
+            used += 2 + len(nm) + 1
+    if used < width:
+        segs.append((" " * (width - used), None))
+    return segs
 
 
 _STAGE_ZONE_MAX = 30          # D3 (v9) — one constant, one place, same idiom as
@@ -837,7 +906,7 @@ def _unused_badge(s, compact=False):
     return " unused %s" % fmt_min(s.elapsed_min if s.elapsed_min is not None else None)
 
 
-def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
+def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx_width=None):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
     dim_tel = live in ("stale", "dead") or s.app_server or s.detached
@@ -847,14 +916,16 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
     gch, gkey = _glyph(live)
     if s.detached and live not in ("stale", "dead"):
         gch, gkey = _DETACHED_GLYPH, "g_work_off"   # detached: loading axis, dim-green
-    hn = _BADGE_TEXT.get(s.harness, "?")
-
     # main↔spawned weight = font-color intensity (no bg fill — the reverse badge read as weird):
     # a live top-level session gets the BRIGHT harness color; muted (stale/dead/app-server) drops
     # to dim. Dispatch rows use the DIM harness color (see _dispatch_row).
     hkey = (_BADGE_KEY.get(s.harness, "dim") if dim_tel
             else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
-    segs = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey)]
+    # F-4 (v11): harness field carries model/effort as a parenthetical — a dead/stale row has
+    # no live telemetry to show (F-13), so it renders the bare harness name only.
+    segs = [("  ", None), (gch, gkey), (" ", None)]
+    segs += _harness_model_cell(s.harness, None if dead_stale else s.model,
+                                None if dead_stale else s.effort, _HMW, hkey, dim=dim_tel)
 
     # F-22: reserve identity suffixes first, then let the title consume the
     # responsive name column. Calls without a terminal-derived width retain the
@@ -868,15 +939,6 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
         if _dw(child_tag) < avail:
             suffix.append((child_tag, "dim"))
             suffix_w += _dw(child_tag)
-    # F-29 (v9) — same suffix-reservation discipline as the child-count badge above; the
-    # subagent count is a structural fact about this row (prd.md:293), so it reserves its
-    # cell before the name zone consumes leftover width.
-    n_sub = _active_subagent_count(s)
-    if n_sub:
-        sub_tag = " %s%d" % (_ICON_SUBAGENT, n_sub)
-        if suffix_w + _dw(sub_tag) < avail:
-            suffix.append((sub_tag, "dim"))
-            suffix_w += _dw(sub_tag)
     # F-26: the unused badge outranks the gate/provenance tags — it is the whole reason the
     # row is surfaced, so it is the last identity tag to drop, not the first.
     unused_at = None
@@ -927,14 +989,17 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
         # read as broken telemetry rather than "this session stopped". One `last seen <age>` cell
         # replaces the whole model+gauge zone (LIVE rows keep the explicit "—" convention, F-3).
         age_min = int((time.time() - s.mtime) / 60) if s.mtime else (s.elapsed_min or 0)
-        segs += [(" " * _MW, None), ("    ", None), ("last seen %s" % fmt_min(age_min), "dim")]
+        segs += [("    ", None), ("last seen %s" % fmt_min(age_min), "dim")]
     else:
-        segs += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
-        # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate from effort
+        # STATUS-ZONE — ctx gauge (mid-line ━/─, level color). model/effort now live in the
+        # harness field (F-4); `ctx_width` (F-22-adjacent, user 2026-07-16) lets wide-layout
+        # callers widen the gauge into the slack the column merge freed up; legacy/hermetic
+        # callers keep _CTX_W.
+        cw = ctx_width or _CTX_W
         if s.ctx_pct is not None and not dim_tel:
-            segs += [("    ", None)] + _gauge_segs(s.ctx_pct, _CTX_W) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
+            segs += [("    ", None)] + _gauge_segs(s.ctx_pct, cw) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
         else:
-            segs += [("    ", None), ("─" * _CTX_W, "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
+            segs += [("    ", None), ("─" * cw, "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
     if s.app_server:
         segs.append(("  app-server", "dim"))
     if s.orphan:
@@ -944,32 +1009,6 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
     # Cost display intentionally omitted.
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(s.elapsed_min), "dim")]
     return segs
-
-
-def _mq_tag(mode, qa_text, qa_key, profile=None):
-    """The `(mode · qa:<level> · profile)` tag shown after a dispatch name (mode dim, qa in its rigor
-    color, profile dim, middle dot). Returns (segments, display_width). Empty (mode, qa_text
-    and profile all absent) → ([], 0)."""
-    if not mode and not qa_text and not profile:
-        return [], 0
-    out = [(" (", "dim")]
-    w = 2
-    has_prev = False
-    if mode:
-        out.append((mode, "dim")); w += len(mode)
-        has_prev = True
-    if qa_text:
-        if has_prev:
-            out.append(("·", "dim")); w += 1        # flush middle dot (tighter than ' · ')
-        qa_label = "qa:" + qa_text
-        out.append((qa_label, qa_key)); w += len(qa_label)
-        has_prev = True
-    if profile:
-        if has_prev:
-            out.append(("·", "dim")); w += 1
-        out.append((profile, "dim")); w += len(profile)
-    out.append((")", "dim")); w += 1
-    return out, w
 
 
 _DISPATCH_NAME_MAX = 18
@@ -984,8 +1023,11 @@ def _compact_dispatch_name(name, max_width=_DISPATCH_NAME_MAX):
 
 
 def _dispatch_prefix(j):
+    # Every depth fans out with the same ↳ spawn arrow, nested two cells deeper per level
+    # (user 2026-07-16: depth-2 rows lost their arrow when they were indent-only). The
+    # prefix width stays depth*2, so the harness-field narrowing math is unchanged.
     depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
-    return "↳ " if depth == 1 else "  " * depth
+    return "  " * (depth - 1) + "↳ "
 
 
 _LEVEL_SHORT = {
@@ -1028,7 +1070,7 @@ def _short_role(value):
     label, suffix = _stage_role_label(value)
     if label is not None:
         # stage suffix (":phase-A") rides along as part of the same dim profile tag — the
-        # whole tag already renders "dim" (see _mq_tag), so no separate color key is needed.
+        # whole tag already renders "dim" (see _opts_segs), so no separate color key is needed.
         return _compact_dispatch_name(label + suffix, 14)
     m = _G_CASE_PREFIX.match(value)
     role = _ROLE_SHORT.get(value) or (m.group(1) if m else value.replace("-", "_"))
@@ -1038,25 +1080,23 @@ def _short_role(value):
 _PROFILE_MAX = 28
 
 
-def _dispatch_role_suffix(j, check_text=None, max_width=None):
+def _dispatch_role_suffix(j, max_width=None):
+    # qa is data-only now (kept in --json): the retired qa axis left the display entirely
+    # (user 2026-07-16 — rigor derives from intensity, CONVENTIONS §1.1).
     raw_role = getattr(j, "worker_role", None)
     if getattr(j, "key", None) in _LOOPS_KEYS and raw_role == getattr(j, "slug", None):
         raw_role = None
     role = _short_role(raw_role)
     intensity = _short_level(getattr(j, "intensity", None))
-    check = _short_level(check_text)
     parts = []
     if intensity:
         parts.append(("intensity", intensity))
     if role:
         parts.append(("role", role))
-    if check:
-        parts.append(("qa", "qa:" + check))
     if max_width is not None:
-        # F-9(c) width-drop priority: qa first, then intensity, then role — mode isn't part of
-        # this suffix (owned by _mq_tag's own mode segment). Drops whole components instead of
-        # silently tail-cutting the joined string (which used to chop qa:thorough mid-word).
-        for kind in ("qa", "intensity", "role"):
+        # F-9(c) width-drop priority: intensity before role. Drops whole components instead
+        # of silently tail-cutting the joined string (which used to chop words mid-token).
+        for kind in ("intensity", "role"):
             joined = "/".join(t for _k, t in parts)
             if len(joined) <= max_width:
                 break
@@ -1064,10 +1104,10 @@ def _dispatch_role_suffix(j, check_text=None, max_width=None):
     return "/".join(t for _k, t in parts)
 
 
-def _dispatch_profile(j, check_text=None):
+def _dispatch_profile(j):
     profile = getattr(j, "profile", None)
     budget = _PROFILE_MAX - (len(profile) + 1 if profile else 0)
-    role_suffix = _dispatch_role_suffix(j, check_text, max_width=max(0, budget))
+    role_suffix = _dispatch_role_suffix(j, max_width=max(0, budget))
     if role_suffix:
         profile = (profile + "/" + role_suffix) if profile else role_suffix
     return _compact_dispatch_name(profile, _PROFILE_MAX) if profile else None
@@ -1085,12 +1125,12 @@ def _dispatch_stage_label(j):
     return label + suffix
 
 
-def _opts_segs(j, qa_text, qa_key):
-    """F-15a options column — the job's (mode · qa · profile) dial, relocated OUT of the name
+def _opts_segs(j):
+    """F-15a options column — the job's (mode · profile) dial, relocated OUT of the name
     zone into its own dim slot between the model cell and the stage breadcrumb (P0-1/R2: the
-    name zone is identity-only now). Reuses `_mq_tag`'s content, just without the enclosing
-    parens (this is a column, not an inline tag) and without a leading name to hang off of."""
-    profile = _dispatch_profile(j, qa_text)
+    name zone is identity-only now). qa left this dial with the retired qa axis (user
+    2026-07-16 — rigor derives from intensity, CONVENTIONS §1.1)."""
+    profile = _dispatch_profile(j)
     parts = []
     w = 0
     if j.mode:
@@ -1105,30 +1145,38 @@ def _opts_segs(j, qa_text, qa_key):
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
                   parent_effort=None, stage_override=None, name_width=None, route_seq=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
-      harness  |  [stage label] name  |  branch  |  MODEL  |  options  |  stage breadcrumb
+      harness (model · effort)  |  [stage label] name  |  branch  |  options  |  stage breadcrumb
+    F-4 (v11): model/effort fold into the harness field (no more separate model column).
     F-15a: the name zone is identity-only (no more parenthetical mode/qa tag — that moved to
-    its own options column after the model cell). A depth-2 stage worker's identity is its
-    stage label + slug (P0-1); its breadcrumb slot shows its own micro-status instead of
-    repeating the parent conductor's full breadcrumb.
+    its own options column). A depth-2 stage worker's identity is its stage label + slug
+    (P0-1); its breadcrumb slot shows its own micro-status instead of repeating the parent
+    conductor's full breadcrumb.
     """
     key = j.key or "?"
     depth = max(1, int(getattr(j, "depth", 1) or 1))
     stage = stage_override if stage_override is not None else (j.stage or "")
-    qa_base = j.qa or ""
-    qa_text = ""
-    if j.qa:
-        qa_text = ("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa
-    slug_name = j.slug or key
+    # The dispatched session's own haiku sidecar title is its identity when present
+    # (user 2026-07-16: the summary agent attaches to every dispatched session); the
+    # slug stays the fallback — same title → name → slug chain as session rows.
+    slug_name = getattr(j, "title", None) or j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
-    hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
-    qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
+    dead_stale_j = j.liveness in ("dead", "stale")
+    # SD-F3: the job's own effort is first-class; when it's absent (proc-scan rows — env
+    # doesn't export it yet), fall back to the parent's effort, shown plain (user
+    # 2026-07-16: the `~` derived-value marker is retired — qa left the display with the
+    # retired qa axis at the same time). A dead/stale row has no live telemetry (F-13).
+    eff = None if dead_stale_j else (j.effort or parent_effort or None)
 
     # DIFFERENTIAL indent (harness 2 cols deeper than a session) with a ↳ spawn arrow off the
     # parent's dot column (user pick over ├─/└─ tree bars); the harness field is narrowed by 2 so
-    # the NAME still lands at the shared _NAME_COL — name onward aligns with sessions. DIM = spawned.
+    # the NAME still lands at the shared _NAME_COL — name onward aligns with sessions. DIM =
+    # spawned. F-4 (v11): the widened field also carries the job's own model/effort as a
+    # parenthetical (SD-F3).
     prefix = _dispatch_prefix(j)
-    segs = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None),
-            (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim"))]
+    segs = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None)]
+    segs += _harness_model_cell(j.harness, None if dead_stale_j else (j.model or parent_model),
+                                eff, max(1, _HMW - len(prefix)),
+                                _BADGE_KEY.get(j.harness, "dim"), dim=True, unknown="—")
     avail = max(3, name_width or _NW_S)
     otag = "  (orphan)" if orphan else ""
     label = _dispatch_stage_label(j)
@@ -1159,16 +1207,10 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         segs.append(("    ", None))
         segs.append(("last seen %s" % fmt_min(j.elapsed_min), "dim"))
     else:
-        # model slot → the job's OWN main model (dim family color) + effort. SD-F3: the job's own
-        # effort is first-class; when it's absent (proc-scan rows — env doesn't export it yet),
-        # fall back to the parent's effort marked with the derived-value `~` prefix (legend F-9d).
-        eff = j.effort or (("~" + parent_effort) if parent_effort else None)
-        segs += _model_cell(j.model or parent_model, eff, _MW, dim=True)
-
         # F-15a options column (fixed-ish gap, dim mode/qa/profile) — a declutter move OUT of
-        # the name zone, not a new axis.
+        # the name zone, not a new axis. model/effort now live in the harness field (F-4/SD-F3).
         segs.append(("    ", None))
-        opt_segs, optw = _opts_segs(j, qa_text, qa_key)
+        opt_segs, optw = _opts_segs(j)
         segs += opt_segs
         if optw < _OPTW:
             segs.append((" " * (_OPTW - optw), None))
@@ -1299,12 +1341,12 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     elapsed · model · options (relocated from L1) · breadcrumb/micro-status."""
     key = j.key or "?"
     depth = max(1, int(getattr(j, "depth", 1) or 1))
-    slug_name = j.slug or key
+    # The dispatched session's own haiku sidecar title is its identity when present
+    # (user 2026-07-16: the summary agent attaches to every dispatched session); the
+    # slug stays the fallback — same title → name → slug chain as session rows.
+    slug_name = getattr(j, "title", None) or j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
-    qa_base = j.qa or ""
-    qa_text = (("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa) if j.qa else ""
-    qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
 
     prefix = _dispatch_prefix(j)
     label = _dispatch_stage_label(j)
@@ -1323,11 +1365,11 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
         l1.append(br_seg)
 
     stage = stage_override if stage_override is not None else (j.stage or "")
-    eff = j.effort or (("~" + parent_effort) if parent_effort else None)
+    eff = j.effort or parent_effort or None
     l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
     l2 += _model_cell(j.model or parent_model, eff, _MW, dim=True)
     l2.append(("    ", None))
-    opt_segs, optw = _opts_segs(j, qa_text, qa_key)
+    opt_segs, optw = _opts_segs(j)
     l2 += opt_segs
     if optw < _OPTW:
         l2.append((" " * (_OPTW - optw), None))
@@ -1449,6 +1491,54 @@ def _mem_event_rows(memory, limit=8):
                (e.get("actor") or "?", "dim")]
         if snip:
             seg += [("  ", None), (_clip_w(snip, 60), "dim")]
+        rows.append(seg)
+    return rows
+
+
+_MEM_DIVIDER_MARGIN = 12   # in-band card-bottom divider inset (both sides), matches the
+                            # discarded two-plane demo's r5 rule — a dim `─` ON the tint, not
+                            # a full-width chrome bar (F-19 repo rows, 사용자 확정 2026-07-16)
+_MEM_REPO_ROW_LIMIT = 2
+_MEM_REPO_TITLE_W = 22
+
+
+def _mem_divider(term_width=None):
+    """One dim in-band rule above a group card's per-repo mem rows — the tint prefix is
+    applied by the caller's existing group-body tint loop (F-19 repo rows)."""
+    return [(" ", None), ("─" * max(8, (term_width or 78) - _MEM_DIVIDER_MARGIN), "dim")]
+
+
+def _mem_repo_rows(events, sid_titles, limit=_MEM_REPO_ROW_LIMIT):
+    """F-19 repo rows — a group card's own today-mem events, most-recent-first, dim:
+    `🧠 HH:MM ± tier/type actor ⟵ <source session title> "snippet"`. `+` (add) is green,
+    `−` (expire/prune) falls back to dim (the engine's only red key is bold-only, and bold
+    is reserved for the main-session row — round-2 precedent in the discarded two-plane
+    demo). The source session title is shown only when the journal `sid` resolves against a
+    currently-known session (honest omission otherwise, F-3)."""
+    if not events:
+        return []
+    from .collectors.memory import ADDED_ACTIONS, EXPIRED_ACTIONS, PRUNED_ACTIONS
+    rows = []
+    for e in events[:limit]:
+        ts = e.get("ts") or "—"
+        if "T" in ts:
+            ts = ts.split("T", 1)[1][:5]        # HH:MM
+        action = e.get("action")
+        if action in ADDED_ACTIONS:
+            sign, sign_key = "+", "lvl_g"
+        elif action in EXPIRED_ACTIONS or action in PRUNED_ACTIONS:
+            sign, sign_key = "−", "dim"
+        else:
+            sign, sign_key = "·", "dim"
+        tier_type = "%s/%s" % (e.get("tier") or "-", e.get("type") or "-")
+        seg = [("  🧠 ", "dim"), (ts + " ", "dim"), (sign, sign_key),
+               (" %s " % tier_type, "dim"), ((e.get("actor") or "?") + " ", "dim")]
+        title = sid_titles.get(e.get("sid")) if e.get("sid") else None
+        if title:
+            seg.append(("⟵ " + _clip_w(title, _MEM_REPO_TITLE_W) + "  ", "dim"))
+        snip = e.get("snippet")
+        if snip:
+            seg.append(('"%s"' % _clip_w(snip, 60), "dim"))
         rows.append(seg)
     return rows
 
@@ -1583,11 +1673,11 @@ _FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: dep
 # dispatch's `🚀`/`↳` so the two nested-row kinds never visually merge. Single point of
 # ASCII-degrade if double-width alignment ever breaks in a real terminal.
 _ICON_SUBAGENT = "⚡"
-
-
-def _active_subagent_count(s):
-    subs = getattr(s, "subagents", None) or []
-    return sum(1 for sa in subs if getattr(sa, "active", True))
+_SUBAGENT_IND = "  "   # session-child indent: pure inset, no connector glyph — shallower
+                       # than a dispatch row's own "  ↳ " prefix (F-29 v11, prd.md:290-295
+                       # vocabulary unchanged, display replaced — 사용자 확정 2026-07-16;
+                       # the per-session ⚡N name-zone badge this used to pair with is retired
+                       # as redundant now that the strip is always inline under the row).
 
 
 def _subagent_elapsed_min(sa):
@@ -1597,18 +1687,22 @@ def _subagent_elapsed_min(sa):
     return max(0, int((time.time() - started) / 60))
 
 
-def _subagent_row(sa, is_last=True):
-    """`├⚡<agent-type> ⏳<elapsed>` / `└⚡…` for the last one — distinct glyph from
-    dispatch's `└▸🚀` (prd.md:293). `├`/`└` (design critic step3 §2) reads 2+ stacked
-    sub-agents as one connected group under the parent, not independent branches. Active
-    rows render bright; the caller only emits a completed (inactive) row at all when
-    `_SHOW_ALL` (F-18b dim-row convention — completed sub-agents are hidden by default)."""
-    branch = "└" if is_last else "├"
-    label = sa.agent_type or "agent"
-    elapsed = _subagent_elapsed_min(sa)
-    tail = "  ⏳%s" % fmt_min(elapsed) if elapsed is not None else ""
-    key = "name_idle" if sa.active else "dim"
-    return [("     %s%s%s%s" % (branch, _ICON_SUBAGENT, label, tail), key)]
+def _subagent_strip(subs):
+    """One horizontal strip per session: `⚡ <type> <glyph> <elapsed> · <type> <glyph>
+    <elapsed> …` — replaces the old one-row-per-subagent `├⚡`/`└⚡` stack (adopted from the
+    discarded two-plane demo's `_agents_strip`, prd.md:290-295). Active entries render
+    normal weight (● + elapsed); completed entries dim (✓ + elapsed) — the caller only
+    passes completed entries at all when `_SHOW_ALL` (F-18b dim-row convention)."""
+    segs = [(_SUBAGENT_IND, None), (_ICON_SUBAGENT + " ", "dim")]
+    for i, sa in enumerate(subs):
+        if i:
+            segs.append((" · ", "dim"))
+        label = sa.agent_type or "agent"
+        elapsed = _subagent_elapsed_min(sa)
+        tail = fmt_min(elapsed) if elapsed is not None else "—"
+        glyph = "●" if sa.active else "✓"
+        segs.append(("%s %s %s" % (label, glyph, tail), None if sa.active else "dim"))
+    return [segs]
 
 
 def set_show_all(v):
@@ -1840,8 +1934,8 @@ def _route_card(view, session_by_pid, term_width, now):
         sess = session_by_pid.get(job.pid) if job.pid else None
         subs = ([sa for sa in (getattr(sess, "subagents", None) or []) if sa.active or _SHOW_ALL]
                 if sess is not None else [])
-        for i, sa in enumerate(subs):
-            out.append(_subagent_row(sa, is_last=(i == len(subs) - 1)))
+        if subs:
+            out.extend(_subagent_strip(subs))
 
     if _SHOW_ALL:
         # prd.md:310 — completion gates stay behind the `a` toggle, never on the base screen.
@@ -2084,12 +2178,18 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # session list, before is_child/mem filtering, so folded/mem-only groups still surface a
     # total in the legend even when no group header badge fires.
     wide_name_width = _wide_name_width(term_width) if layout == "wide" else None
+    wide_ctx_width = _wide_ctx_width(term_width) if layout == "wide" else None
     n_mem_total = sum(1 for s in sessions if getattr(s, "mem_worker", False))
     mem_by_group = {}
     for s in sessions:
         if getattr(s, "mem_worker", False):
             gk_mem = _group_key_session(s)
             mem_by_group[gk_mem] = mem_by_group.get(gk_mem, 0) + 1
+    # F-19 repo rows: session-id -> display title, resolved on the ORIGINAL (unfiltered) list
+    # so a mem event's source session still resolves even after mem-worker/child filtering
+    # below drops it from the visible rows.
+    sid_titles = {s.session_id: (s.title or s.slug) for s in sessions
+                  if s.session_id and (s.title or s.slug)}
     # headless dispatch children are shown as dispatch rows under their parent — never as
     # top-level sessions (the same headless process would otherwise double-show as session+job).
     # mem-worker sessions are excluded from grouping/census by default (F-18b) — they inherit
@@ -2529,15 +2629,16 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             else:
                 lines.append(_session_row(s, narrow, is_parent=bool(nested_n),
                                           child_count=nested_n,
-                                          name_width=wide_name_width))
+                                          name_width=wide_name_width,
+                                          ctx_width=wide_ctx_width))
             if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):
                 _sess_bold_ids.update(range(_n0, len(lines)))
             # F-29 (v9) — sub-agent rows, directly under the parent session's own row(s).
             # Active always shown; completed only surface with `a` (F-18b dim-row convention).
             shown_subs = [sa for sa in (getattr(s, "subagents", None) or [])
                          if sa.active or _SHOW_ALL]
-            for i, sa in enumerate(shown_subs):
-                lines.append(_subagent_row(sa, is_last=(i == len(shown_subs) - 1)))
+            if shown_subs:
+                lines.extend(_subagent_strip(shown_subs))
             for i, cj in enumerate(kids):
                 _emit_dispatch_tree(cj, parent_model=s.model, parent_harness=s.harness,
                                     parent_effort=s.effort, orphan=False,
@@ -2550,6 +2651,14 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             _emit_dispatch_tree(oj, orphan=show_sessions)
         for lj in _sort_group_jobs(loops_jobs):
             _emit_dispatch_tree(lj, orphan=False)
+
+        # F-19 repo rows (사용자 확정 2026-07-16): this card's own today-mem events, below a
+        # subtle in-band divider — entirely silent when the repo has none (healthy-silent,
+        # §4.7 F-19 convention). Rides the same body-tint loop below, unmodified.
+        repo_events = (memory or {}).get("by_repo", {}).get(name) if memory else None
+        if repo_events:
+            lines.append(_mem_divider(term_width))
+            lines.extend(_mem_repo_rows(repo_events, sid_titles))
 
         # group BODY (round-5): every row of the group rides the body tint — the whole directory
         # The whole directory block is one panel, brighter when active.
@@ -2612,7 +2721,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     if "child" in _seen_glyphs:
         legend += [("▾N", "dim"), (" child jobs   ", "dim")]
     if "subagent" in _seen_glyphs:
-        legend += [("%sN" % _ICON_SUBAGENT, "dim"), (" sub-agents   ", "dim")]
+        legend += [(_ICON_SUBAGENT, "dim"), (" sub-agent   ", "dim")]
     if jobs:
         legend += [("↳", "dim"), (" dispatch   ", "dim")]
     if "wt" in _seen_glyphs:
@@ -2620,7 +2729,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     if n_mem_total or "mem" in _seen_glyphs:
         # Always expose the board-wide memory total in the legend, even when memory-only groups fold.
         legend += [("🧠 %d" % n_mem_total, "dim"), (" mem   ", "dim")]
-    legend += [("~", "dim"), (" derived/inherited value", "dim")]  # F-9(d)
+    # F-9(d) `~ derived/inherited value` retired with the marker itself (user 2026-07-16:
+    # inherited effort now shows plain — the tilde read as noise).
     lines.append(legend)
 
     return lines

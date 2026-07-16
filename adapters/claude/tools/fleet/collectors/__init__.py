@@ -60,6 +60,36 @@ def _mark_dispatch_child_sessions(sessions, jobs):
             break
 
 
+def _adopt_child_titles(sessions, jobs):
+    """Copy an enriched child session's title onto the dispatch row representing it.
+
+    Dispatch rows are the only surface where a child session is visible (is_child rows
+    are hidden), so without this join the haiku sidecar title a child earns (the title
+    refresher schedules children like main sessions) would never render. pid equality is
+    the strong join (a claude/codex proc job's pid IS the runtime leaf pid procscan saw);
+    harness+cwd is the fallback for jobs.log rows that never learned the pid, and it
+    refuses ambiguous matches (F-26: misattribution is worse than absence).
+    """
+    titled = [s for s in sessions
+              if getattr(s, 'is_child', False) and getattr(s, 'title', None)]
+    if not titled:
+        return
+    by_pid = {s.pid: s.title for s in titled if getattr(s, 'pid', None)}
+    by_cwd = {}
+    for s in titled:
+        if s.cwd:
+            key = (s.harness, os.path.realpath(s.cwd))
+            by_cwd[key] = None if key in by_cwd else s.title   # two children, one cwd → refuse
+    for j in jobs:
+        if getattr(j, 'title', None):
+            continue
+        title = by_pid.get(getattr(j, 'pid', None))
+        if not title and getattr(j, 'cwd', None) and getattr(j, 'harness', None):
+            title = by_cwd.get((j.harness, os.path.realpath(j.cwd)))
+        if title:
+            j.title = title
+
+
 def collect_all(harness_filter=None, jobs_path=None):
     """Return (sessions, jobs).
 
@@ -160,6 +190,11 @@ def collect_all(harness_filter=None, jobs_path=None):
 
     try:
         _mark_dispatch_child_sessions(sessions, jobs)
+    except Exception:
+        pass
+
+    try:
+        _adopt_child_titles(sessions, jobs)
     except Exception:
         pass
 

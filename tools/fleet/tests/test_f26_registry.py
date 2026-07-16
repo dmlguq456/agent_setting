@@ -357,8 +357,16 @@ class DegradationLadderTest(unittest.TestCase):
             s = self._ghost(registry_name=name)
             nw = render._wide_name_width(168)
             segs = render._session_row(s, narrow=False, name_width=nw)
+            # Skip past the prefix (gap, glyph, gap) + the harness(+model) field — F-4 (v11)
+            # guarantees that field sums to EXACTLY _HMW cells, but it may now be split across
+            # several segments (harness text, optional "(model · effort)" parenthetical,
+            # padding) instead of the old single padded segment.
+            i, consumed = 3, 0
+            while consumed < render._HMW:
+                consumed += render._dw(segs[i][0])
+                i += 1
             zone = 0
-            for t, k in segs[4:]:                  # after prefix (gap, glyph, gap, harness)
+            for t, k in segs[i:]:
                 if k == "branch_s":
                     break
                 zone += render._dw(t)

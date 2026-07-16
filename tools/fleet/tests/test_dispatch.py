@@ -47,25 +47,23 @@ class RenderDispatchPresentationTest(unittest.TestCase):
 
         self.assertEqual(text.count("gpt-5.6-sol"), 1)
 
-    def test_depth_two_prefix_indents_without_repeated_arrow(self):
+    def test_depth_two_prefix_nests_the_spawn_arrow_deeper(self):
+        # user 2026-07-16: every depth fans out with the same ↳ arrow, two cells deeper
+        # per level — an indent-only depth-2 row read as unanchored. Widths stay depth*2.
         top = DispatchJob(key="code", slug="top", depth=1)
         nested = DispatchJob(key="code", slug="nested", depth=2)
 
         self.assertEqual(render._dispatch_prefix(top), "↳ ")
-        self.assertEqual(render._dispatch_prefix(nested), "    ")
-        self.assertNotIn("↳", render._dispatch_prefix(nested))
+        self.assertEqual(render._dispatch_prefix(nested), "  ↳ ")
+        self.assertEqual(len(render._dispatch_prefix(nested)), 4)
 
-    def test_dispatch_tag_labels_path_before_assurance(self):
+    def test_dispatch_role_suffix_has_no_qa_token(self):
+        # qa axis retired (CONVENTIONS §1.1) — the options dial shows intensity/role only.
         job = DispatchJob(key="plan", worker_role="planner", intensity="thorough")
-        tag, _width = render._mq_tag(
-            "review", None, "qa_standard", profile=render._dispatch_role_suffix(job, "~standard")
-        )
-        text = "".join(part for part, _key in tag)
+        suffix = render._dispatch_role_suffix(job)
 
-        self.assertEqual(text, " (review·thr/planner/qa:~std)")
-        self.assertNotIn("path:", text)
-        self.assertNotIn("role:", text)
-        self.assertNotIn("check:", text)
+        self.assertEqual(suffix, "thr/planner")
+        self.assertNotIn("qa:", suffix)
 
     def test_dispatch_two_line_compacts_long_session_name(self):
         job = DispatchJob(
