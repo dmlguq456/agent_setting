@@ -93,20 +93,73 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         self.assertNotIn("⚡2", text)
 
     def test_subagent_rows_use_no_connector_and_show_status_glyph(self):
-        # grammar #2 — inset next to the spine, no ├─/└─ connector of their own.
+        # grammar #2 — pure indent, no connector of its own (no tree lattice ever reached here).
         text = _joined(self._lines(120))
         self.assertIn("⚡ Explore", text)
         self.assertIn("● 2m51s", text)
         self.assertIn("✓ 4m04s", text)
 
-    def test_dispatch_rows_use_rail_connectors_and_capability_glyph(self):
-        # grammar #3 — ├─▸ / └─▸ rail connectors, 🔧 capability glyph, job-contract parenthetical.
+    def test_dispatch_rows_use_the_spawn_arrow_and_capability_glyph(self):
+        # grammar #3, round-2 — the ├─/└─ tree lattice is retired in favor of the session-child
+        # ↳ spawn arrow (matches render.py's own real dispatch-row convention), 🔧 capability
+        # glyph, job-contract parenthetical.
         text = _joined(self._lines(120))
-        self.assertIn("├─▸", text)
-        self.assertIn("└─▸", text)
+        self.assertIn("↳ ▸ claude code", text)
+        self.assertIn("↳ ▸ codex", text)
         self.assertIn("🔧 code", text)
         self.assertIn("(thr · ~thorough)", text)
         self.assertIn("(quick · gpt·med)", text)
+
+    def test_no_tree_lattice_survives_in_this_view(self):
+        # round-2 (user-confirmed) — the vertical spine and rail connectors are fully retired;
+        # only the ↳ spawn arrow and the canvas's own `└ exec:B` worker sub-row remain.
+        text = _joined(self._lines(120))
+        self.assertNotIn("│", text)
+        self.assertNotIn("├─", text)
+        self.assertNotIn("└─", text)
+
+    def test_kind_glyph_column_aligns_across_ascii_and_cjk_agent_types(self):
+        # round-2 — `agent_type` is padded by DISPLAY width (not Python char count), so a
+        # Korean agent_type ("개발팀", 6 cells) and an ASCII one ("Explore", 10 cells padded)
+        # both land their desc-quote at the same column.
+        lines = self._lines(120)
+
+        def _dw(s):
+            return sum(render._cw(c) for c in s)
+
+        def _quote_col(snippet):
+            for ln in lines:
+                if not ln:
+                    continue
+                s = "".join(t for t, _k in ln)
+                if snippet in s:
+                    return _dw(s[:s.index('"')])
+            self.fail("row containing %r not found" % snippet)
+
+        self.assertEqual(_quote_col("파서 구현"), _quote_col("스키마 사전 조사"))
+        self.assertEqual(_quote_col("제목 파이프라인"), _quote_col("렌더 구조"))
+
+    def test_node_anchored_status_column_aligns_across_siblings(self):
+        # round-2 — the @<node> tag and the trailing status glyph both land in the same column
+        # for sibling node-anchored ⚡ rows, regardless of anchor text length ("exec" vs "exec:B").
+        lines = self._lines(120)
+
+        def _dw(s):
+            return sum(render._cw(c) for c in s)
+
+        def _cols(snippet):
+            for ln in lines:
+                if not ln:
+                    continue
+                s = "".join(t for t, _k in ln)
+                if snippet in s:
+                    at_col = _dw(s[:s.index("@")])
+                    glyph_col = min(_dw(s[:s.index(g, s.index("@"))])
+                                    for g in ("●", "✓") if g in s[s.index("@"):])
+                    return at_col, glyph_col
+            self.fail("row containing %r not found" % snippet)
+
+        self.assertEqual(_cols("파서 구현"), _cols("스키마 사전 조사"))
 
     def test_canvas_breadcrumb_uses_the_existing_separator(self):
         # grammar #4 — stage canvas below the conductor, joined by the existing ' › ' breadcrumb.
@@ -159,6 +212,50 @@ class BuildLinesModuleTest(unittest.TestCase):
         pulse_text = "".join(t for t, _k in render._pulse_segs(sessions, jobs))
         n_working = sum(1 for s in sessions if s.liveness == "working")
         self.assertIn("%d working" % n_working, pulse_text)
+
+
+class BoldScopeTest(unittest.TestCase):
+    """round-2 (user-confirmed) — bold is reserved for the main-session row (`_ROW_BOLD`)
+    alone. Every other bold source this view used to carry (canvas active node, dispatch
+    ▸/🔧, group header name+glyph) now resolves to a plain (non-bold, non-dim) engine color
+    key instead of the bold one — checked at the color_key level, since these tests run
+    headless (no curses attrs to inspect)."""
+
+    def _line_containing(self, lines, snippet):
+        for ln in lines:
+            if not ln:
+                continue
+            if any(snippet in t for t, _k in ln):
+                return ln
+        self.fail("no row contains %r" % snippet)
+
+    def test_canvas_active_node_uses_a_plain_stage_hue_not_the_bold_engine_one(self):
+        lines = two_plane.build_lines(120, "wide")
+        ln = self._line_containing(lines, "exec ● 8m")
+        keys = [k for _t, k in ln]
+        self.assertNotIn("stg1_on", keys)
+        self.assertIn("fam_opus", keys)
+
+    def test_dispatch_rows_use_plain_stage_hues_not_bold_ones(self):
+        lines = two_plane.build_lines(120, "wide")
+        keys = set()
+        for snippet in ("usage-accuracy", "rate-window"):
+            keys.update(k for _t, k in self._line_containing(lines, snippet))
+        self.assertNotIn("stg0_on", keys)
+        self.assertNotIn("stg1_on", keys)
+        self.assertIn("fam_opus", keys)   # usage-accuracy (cyan, was stg1_on)
+        self.assertIn("eff_high", keys)   # rate-window (blue, was stg0_on)
+
+    def test_group_header_name_and_glyph_drop_bold_but_keep_hue(self):
+        lines = two_plane.build_lines(120, "wide")
+        active = self._line_containing(lines, "agent_setting")
+        active_key = dict(active)["agent_setting"]
+        self.assertEqual(active_key, "grp_live")           # was "grp_hot" (bold green)
+        self.assertNotIn("g_work", [k for _t, k in active])  # blink-on frame no longer bold
+
+        cold = self._line_containing(lines, "worklog-board")
+        cold_key = dict(cold)["worklog-board"]
+        self.assertIsNone(cold_key)                        # was "grp" (bold, no hue)
 
 
 if __name__ == "__main__":
