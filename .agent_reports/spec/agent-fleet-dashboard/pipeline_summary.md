@@ -142,3 +142,4 @@
 
 - 2026-07-16 (v10 minor #1): **F-30 비대화식 투영 확정** — v10 구현이 검증 목적으로 추가한 `--view {group,process}` CLI + `FLEET_VIEW` env를 사용자 확정으로 등재. `p` 토글과 전역 상태 하나를 공유(별도 코드 경로 없음). 판단 대기 3건 중 1건 해소("전부다 작업 해줘").
 - 2026-07-16 (v10 minor #2): **F-30 gate 통과 표시 재개** — stage-dispatch v13(SD-56)이 completion marker를 실사용 착륙(저장소 최초 4건), v10 carryover §1의 재개 조건 충족. 증거 소스 = canonical `.dispatch/completion/<route_id>/<node_id>.json`, 판정 = marker 존재+route_id/hash 일치, 부재 = 무주장. 구현 = quick 사이클 분사.
+- 2026-07-16 (v10 minor #3): **claude 사용량 소스 신뢰 규칙 개정** — 실측: OAuth usage 엔드포인트가 200 성공에 전 버킷 0%를 반환(계정은 Max 20x, 같은 시각 신선한 statusline tap은 5h 2%/7d 43%)해 "authoritative 무조건 덮어쓰기"(collectors/__init__.py)가 진짜 값을 0으로 가림. 규칙: ① API 응답이 전-버킷 0이고 신선(≤5분) tap에 양수 값이 있으면 그 응답을 suspect로 보고 덮어쓰지 않음(성공-제로≠증거, v10 tolerant 교훈의 usage 판) ② tap 집계는 "최신 세션 1개"가 아니라 신선 tap들의 창구별 max — 모델-스코프 세션 분화 실측(Fable 세션 7d 0% vs opus 세션 43%, 5h resets_at도 상이)으로 freshest-pick이 tick마다 요동 ③ 소스 전무 시 기존 표시 불변.
