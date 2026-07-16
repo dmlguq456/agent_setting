@@ -794,7 +794,7 @@ conductor는 same-harness 실패 후 cross-harness 평가를 건너뛰고 inline
 ### 13.5.2 SD-55 — immutable route record와 mutable broker identity의 결합 해제
 
 - route record의 dispatch_evidence tuple은 **stable identity만** 고정한다: `broker_root`(+ `launch_authority=ancestor-broker`). `broker_instance`·PID·start ticks 같은 rollover마다 바뀌는 identity는 record에 넣지 않는다. 이 계약은 `broker_contract_version: 2`로 선언한다.
-- hop 시점 instance 해석: client(stage-dispatch-fallback)는 request 제출 직전 record의 `broker_root`에 대해 `dispatch-broker.py ensure`를 idempotent 실행해 **live instance**를 확보하고, envelope에는 그 시점의 live instance를 넣는다. broker의 envelope↔현재 instance 대조(SD-52)는 그대로다. 즉 identity 검증은 사라지지 않고 **record(불변)에서 hop(실시간)으로 이동**한다.
+- hop 시점 instance 해석: client(stage-dispatch-fallback)는 request 제출 직전 record의 `broker_root`에 대해 `dispatch-broker.py status`(ping 검증 포함, 비생성 조회)를 실행해 **live instance**를 확보하고, envelope에는 그 시점의 live instance를 넣는다. broker 부재/사망이면 v12 계약대로 structured `broker-unavailable` fail-closed다 — 워커 컨텍스트는 `ensure`(생성)를 호출할 수 없고 broker 준비는 depth-0의 몫이므로, hop 해석은 조회만 수행한다(2026-07-16 구현 실측으로 문언 정정, v13 minor #1). broker의 envelope↔현재 instance 대조(SD-52)는 그대로다. 즉 identity 검증은 사라지지 않고 **record(불변)에서 hop(실시간)으로 이동**한다.
 - 하위호환: `broker_contract_version: 1` record는 기존 검증 규칙(tuple에 instance 포함)과 기존 거동(rollover 시 fallback 열화)을 그대로 유지하며 소급 변환하지 않는다 — v1 record의 열화는 계약이 예비한 fallback의 정상 소비다. 신규 compile부터 v2를 생성한다.
 - acceptance: ① broker rollover(restart) fixture에서 v2 record의 ordinal-1 hop이 새 instance로 성공하고 fallback 하강 0건, record hash는 rollover 전후 불변. ② v1 record fixture는 기존 verify/fallback 거동 그대로(회귀 0). ③ ensure가 broker를 못 세우는 fixture는 v12 계약대로 structured `broker-unavailable` fail-closed.
 

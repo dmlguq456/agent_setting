@@ -33,8 +33,8 @@ phases:
   spec: done              # PRD v13 — broker 동시성 분리·record-identity 결합 해제·completion marker 의무화(SD-54~56). v12 snapshot = _internal/versions/v12/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: in_progress        # v12분 done(SD-51~53, main 70bac6ef) → v13 사이클 착수: SD-54 broker 동시성 + SD-55 contract v2 + SD-56 marker 배선
-last_updated: 2026-07-16  # v13 spec transaction; v12 implementation merged(portable guards 359/359)
+  dev: done               # v13분 done(SD-54~56, merge 61d70ec4 + B3 가드 b02e3d20): broker 병렬화·contract v2·marker 배선. live broker 롤오버 완료(v13 코드, brk-9a671735). 이월: quick/inline 문서 배선, guard-on-primary 위험
+last_updated: 2026-07-16  # v13 implementation merged; portable guards 359/359 (clean-worktree 기준)
 decisions_locked:
   - 'SD-1: depth-1 owner = 얇은 conductor, 스테이지(plan/execute/test/report) = depth-2 headless 세션 (conductor 는 verdict/게이트만, 스테이지 본문 미독)'
   - 'SD-2: 인터페이스 = 산출물 파일만, 세션 간 대화 컨텍스트 전달 금지, 계약 완결성 의무 (산출물 기반 소통 명문화)'
