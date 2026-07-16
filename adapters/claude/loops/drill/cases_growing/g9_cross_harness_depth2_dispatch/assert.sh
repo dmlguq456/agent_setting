@@ -65,6 +65,7 @@ CASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 HARNESS_ROOT=$(git -C "$CASE_DIR" rev-parse --show-toplevel 2>/dev/null || pwd)
 PYTHONPATH="$HARNESS_ROOT/tools" REPO="$REPO" JOBS="$JOBS" python3 - <<'PY' || fail=1
 import os
+import re
 from fleet.collectors import dispatch
 
 repo = os.environ["REPO"]
@@ -125,12 +126,19 @@ expect(
     intensity="thorough",
     depth="1",
     harness="codex",
-    parent_sid="drill-parent-session",
     worker_role="capability-owner",
     owner="autopilot-code",
     owner_harness="codex",
     model="gpt-5.4-mini",
     reasoning="medium",
+)
+# Owner is depth-1 and gets rebound to the real Codex thread id at launch, so it
+# is checked only for a well-formed SID (best-effort match, not exact equality);
+# both depth-2 children still assert exact drill-parent-session below.
+owner_sid = owner["meta"].get("parent_sid")
+require(
+    bool(owner_sid) and re.fullmatch(r"[A-Za-z0-9_.:-]+", owner_sid or ""),
+    f"xh-depth2-owner parent_sid not a well-formed SID: {owner_sid!r}",
 )
 
 claude = one("xh-depth2-claude-verifier")
@@ -179,7 +187,7 @@ fleet_owner = [
     and j.harness == "codex"
     and j.worker_role == "capability-owner"
     and j.capability_owner == "autopilot-code"
-    and j.parent_sid == "drill-parent-session"
+    and j.parent_sid and re.fullmatch(r"[A-Za-z0-9_.:-]+", j.parent_sid)
 ]
 children = [j for j in jobs if j.parent_slug == "xh-depth2-owner" and j.depth == 2]
 harnesses = {j.harness for j in children}

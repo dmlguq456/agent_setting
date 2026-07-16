@@ -20,6 +20,15 @@ case "$family" in ''|claude|gpt|unknown) ;; *) echo "dispatch-route: unknown fam
 case "$maker_family" in ''|claude|gpt|unknown) ;; *) echo "dispatch-route: unknown maker family: $maker_family" >&2; exit 64;; esac
 case "$adapter:$family" in claude:gpt|codex:claude|opencode:claude|opencode:gpt) echo 'dispatch-route: adapter/family conflict' >&2; exit 64;; esac
 
+# SD-66: profiles/dispatch-defaults.yaml is the user-declared source for
+# stage-affinity (SD-22 cascade step 3). Validate unconditionally so a
+# malformed config fails loud even when an explicit --adapter/--family
+# already decides this call; resolution honors DISPATCH_DEFAULTS_CONFIG for
+# fixtures via utilities/dispatch-defaults.py.
+defaults_script="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/dispatch-defaults.py"
+python3 "$defaults_script" validate >/dev/null || { echo 'dispatch-route: invalid dispatch-defaults config' >&2; exit 64; }
+config_affinity=$(python3 "$defaults_script" affinity --capability "$capability" --stage "$stage")
+
 case "$stage" in
   plan|planning|architecture|decomposition) default_role='deep maker'; affinity=codex;;
   *review*|*test*|checker) default_role='deep reviewer'; affinity=diverse;;
@@ -37,15 +46,38 @@ bias=$(printf '%s\n' "$usage" | awk '$1=="bias" {print $2; exit}')
 family_of() { [ "$1" = codex ] && printf gpt || printf claude; }
 eligible() { s=$(state "$1"); [ "$s" != limited ] && [ "${s#limited(}" = "$s" ]; }
 
-if [ "$adapter" = opencode ] || [ "$family" = unknown ]; then
+# Explicit --adapter opencode always routes here. A config affinity of
+# "opencode" (SD-66) is honored the same way, but only when the caller left
+# --adapter/--family unset: explicit choice still outranks config.
+effective_adapter=$adapter
+if [ -z "$effective_adapter" ] && [ -z "$family" ] && [ "$config_affinity" = opencode ]; then
+  effective_adapter=opencode
+fi
+if [ "$effective_adapter" = opencode ] || [ "$family" = unknown ]; then
   echo status=unknown; echo adapter=opencode; echo family=unknown; echo "role=$role"; echo exact_model_id=unknown; echo reasoning=unknown
-  echo trace.1=explicit=${adapter:-none};eligibility=opencode-runtime-inventory-unknown
+  echo "trace.1=explicit=${adapter:-none};config_affinity=${config_affinity};eligibility=opencode-runtime-inventory-unknown"
   echo unknown=opencode-runtime-model-inventory-unavailable
   exit 0
 fi
 
 choose=$adapter
 [ -n "$choose" ] || case "$family" in gpt) choose=codex;; claude) choose=claude;; esac
+# SD-22 cascade: explicit adapter/family already resolved above; next comes
+# the validated config affinity, then the existing stage-heuristic/bias
+# fallback. Config never yields "opencode" here (handled above) and never
+# introduces opencode into automatic diverse/neutral resolution.
+if [ -z "$choose" ]; then
+  case "$config_affinity" in
+    claude|codex) choose=$config_affinity;;
+    diverse)
+      case "$maker_family" in
+        claude) choose=codex;;
+        gpt) choose=claude;;
+        *) choose=${bias:-claude};;
+      esac
+      ;;
+  esac
+fi
 if [ -z "$choose" ]; then
   case "$affinity:$maker_family" in
     codex:*) choose=codex;;
