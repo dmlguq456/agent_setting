@@ -1,9 +1,9 @@
 # Entry Skill Layer — code-test retry r4 verification matrix
 
-Date: 2026-07-16  
-Stage: `code-test` retry after `dev_logs/code-execute-correction-r4.md`  
+Date: 2026-07-16
+Stage: `code-test` retry after `dev_logs/code-execute-correction-r4.md`
 Source: read-only verification of the uncommitted diff from
-`23c86beaa613571a583f65e869da6b72013a2ad4`  
+`23c86beaa613571a583f65e869da6b72013a2ad4`
 Verdict: **FAIL**
 
 ## Assurance and runtime contract

@@ -1,8 +1,8 @@
 # Entry Skill Layer — code-test verification matrix
 
-Date: 2026-07-16  
-Stage: `code-test`  
-Source: uncommitted diff from `23c86beaa613571a583f65e869da6b72013a2ad4`  
+Date: 2026-07-16
+Stage: `code-test`
+Source: uncommitted diff from `23c86beaa613571a583f65e869da6b72013a2ad4`
 Verdict: **FAIL**
 
 ## Assurance and runtime contract

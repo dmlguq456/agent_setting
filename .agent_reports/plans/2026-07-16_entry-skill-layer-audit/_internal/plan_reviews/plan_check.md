@@ -1,8 +1,8 @@
 # Plan Check Evidence
 
-Date: 2026-07-16  
-Plan: `plans/2026-07-16_entry-skill-layer-audit/plan.md`  
-QA policy: `thorough code`  
+Date: 2026-07-16
+Plan: `plans/2026-07-16_entry-skill-layer-audit/plan.md`
+QA policy: `thorough code`
 spec-significance: within-spec
 
 ## Assurance status

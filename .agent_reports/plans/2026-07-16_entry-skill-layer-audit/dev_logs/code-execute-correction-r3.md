@@ -1,7 +1,7 @@
 # Code-execute correction pass — entry Skill layer
 
-Date: 2026-07-16  
-Stage: `code-execute` correction pass  
+Date: 2026-07-16
+Stage: `code-execute` correction pass
 Worktree: `/home/Uihyeop/agent_setting-wt/entry-skill-layer-audit`
 
 ## Corrections

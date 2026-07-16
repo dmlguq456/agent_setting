@@ -1,8 +1,8 @@
 # 엔트리 Skill 계층 감사·정비 최종 보고서
 
-상태: **완료**  
-기준 커밋: `23c86bea`  
-source 커밋: `22b9fe1b`  
+상태: **완료**
+기준 커밋: `23c86bea`
+source 커밋: `22b9fe1b`
 primary capability: `autopilot-code` · `dev/thorough`
 
 ## 결과
