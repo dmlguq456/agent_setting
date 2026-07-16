@@ -1,0 +1,24 @@
+project_name: browser-acceptance
+component: browser-acceptance      # 실행 중 앱의 브라우저 acceptance 검증 공통 primitive 라이브러리 (tools/browser-acceptance/)
+created: 2026-07-16
+version: 1
+mode: [library]
+scope_note: "QA/verification worker용 주입식 CJS primitive — mount wait·scoped query·disclosure open·console·scoped Axe·evidence JSON. 판정은 의미 구간에 남기고 증거 수집만 결정론화. design-mcp(로컬 HTML hook)와 용도 분리, stage-dispatch와 표면 비공유."
+inputs:
+  - '운영 진단 2026-07-16 (사용자 보고 항목 6): D3 도구-실수 4계열(top-level await·미개방 disclosure·whole-page selector·mount 미대기) + 수용 기준 원문'
+  - '현행 도구 census 2026-07-16: design-mcp console-check는 로컬 HTML 전용, playwright ^1.49.0 해석 fallback 재사용, 중복 재발명 없음'
+phases:
+  spec: done              # PRD v1 — BA-1~6
+  scaffolding: n/a        # lean — 단일 라이브러리 디렉토리
+  design: n/a
+  dev: in_progress        # tools/browser-acceptance/ v1 + fake-page 단위 테스트. 실브라우저 통합 acceptance는 첫 소비 앱 사이클 회수 조건(BA-5)
+last_updated: 2026-07-16
+decisions_locked:
+  - 'BA-1: CJS-safe entry — .cjs, top-level await 금지, async는 함수 내부만'
+  - 'BA-2: 0-dependency 주입식 — page/axe 소스 호출자 주입, 해석 헬퍼는 cwd node_modules → design-mcp 순 fallback 후 명시 오류'
+  - 'BA-3: primitive 6종 — gotoAndWaitMount / scoped / openDisclosure / captureConsole / runScopedAxe / writeEvidence'
+  - 'BA-4: 단일 result.json 스키마 + 결정론 verdict 집계(오류 0=PASS), check 구성은 호출자 소유'
+  - 'BA-5: fake-page node --test 필수 게이트 + 실브라우저 통합은 첫 소비 사이클에서 회수(명시 이월)'
+  - 'BA-6: dispatch/stage 계약과 표면 비공유, 로컬 HTML 검사는 design-mcp 소관 유지'
+decisions_open:
+  - 'BA-OPEN-1: 실브라우저 통합 acceptance 회수 — 첫 소비 앱 사이클에서 6 primitive 완주 증거를 본 spec에 기록'
