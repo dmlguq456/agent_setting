@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Compile, verify, and complete immutable capability routes."""
 from __future__ import annotations
-import argparse, hashlib, importlib.util, json, os, subprocess, sys
+import argparse, hashlib, importlib.util, json, os, subprocess, sys, uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("capability_topology", ROOT/"tools/capability_topology.py")
 TOPO = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(TOPO)
+sys.path.insert(0, str(ROOT/"utilities"))
+from dispatch_contract import resolve_agent_home
 ORDER = {"direct":0,"quick":1,"standard":2,"strong":3,"thorough":4,"adversarial":5}
 TRACKING = {"tracked", "untracked"}
 GATE_FIELDS = {"spec_read", "drift_verdict", "workflow_mode", "artifact_guard"}
@@ -15,7 +17,9 @@ NESTED_FIELDS = {
     "parent_harness", "parent_transport", "parent_sandbox", "child_harness",
     "launch_authority", "status", "probe_source", "probe_time", "failure_class",
 }
-BROKER_FIELDS = {"broker_root", "broker_instance"}
+BROKER_FIELDS = {"broker_root", "broker_instance"}  # v1 only
+BROKER_FIELDS_V2 = {"broker_root"}
+BROKER_CONTRACT_VERSION = 2
 FALLBACK_ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
 
 def canonical(payload):
@@ -49,10 +53,11 @@ def _scope_touches_spec(scope):
     root=scope[:-3] if scope.endswith("/**") else scope
     return root=="spec" or root.startswith("spec/")
 
-def _validate_dispatch_evidence(evidence):
+def _validate_dispatch_evidence(evidence, contract_version=BROKER_CONTRACT_VERSION):
     if not isinstance(evidence,dict): raise ValueError("checked dispatch evidence required")
     tuples=evidence.get("tuples")
     if not isinstance(tuples,list) or not tuples: raise ValueError("nested eligibility tuples required")
+    broker_fields = BROKER_FIELDS_V2 if contract_version==2 else BROKER_FIELDS
     normalized=[]
     for row in tuples:
         if not isinstance(row,dict) or not NESTED_FIELDS.issubset(row):
@@ -63,9 +68,17 @@ def _validate_dispatch_evidence(evidence):
         if not row["probe_source"] or not row["probe_time"]:
             raise ValueError("nested eligibility checked source/time required")
         normalized_row={key:row[key] for key in sorted(NESTED_FIELDS)}
-        for key in BROKER_FIELDS:
-            if key in row:
-                normalized_row[key]=row[key]
+        if contract_version==2:
+            if row.get("launch_authority")=="ancestor-broker" and row.get("status")=="supported" and not row.get("broker_root"):
+                raise ValueError("v2 dispatch evidence requires broker_root")
+            if row.get("broker_root"):
+                normalized_row["broker_root"]=row["broker_root"]
+            # broker_instance is mutable rollover identity -- v2 strips it
+            # even if the caller's probe output still carries one.
+        else:
+            for key in BROKER_FIELDS:
+                if key in row:
+                    normalized_row[key]=row[key]
         normalized.append(normalized_row)
     native=evidence.get("native_subagent",[])
     if not isinstance(native,list): raise ValueError("native_subagent evidence must be a list")
@@ -74,18 +87,25 @@ def _validate_dispatch_evidence(evidence):
             raise ValueError("invalid native subagent evidence")
     return {"tuples":normalized,"native_subagent":native}
 
-def _fallback_chain(evidence):
-    evidence=_validate_dispatch_evidence(evidence)
+def _fallback_chain(evidence, contract_version=BROKER_CONTRACT_VERSION):
+    evidence=_validate_dispatch_evidence(evidence, contract_version)
     tuples=evidence["tuples"]
     same=[row for row in tuples if row["child_harness"]==row["parent_harness"]]
     cross=[row for row in tuples if row["child_harness"]!=row["parent_harness"]]
     same.sort(key=lambda row:(row["launch_authority"]!="ancestor-broker",row["child_harness"]))
     cross.sort(key=lambda row:(row["launch_authority"]!="ancestor-broker",row["child_harness"]))
-    if not any(
-        row["status"]=="supported" and row["launch_authority"]=="ancestor-broker"
-        and row.get("broker_root") and row.get("broker_instance")
-        for row in same+cross
-    ):
+    if contract_version==2:
+        has_broker=any(
+            row["status"]=="supported" and row["launch_authority"]=="ancestor-broker" and row.get("broker_root")
+            for row in same+cross
+        )
+    else:
+        has_broker=any(
+            row["status"]=="supported" and row["launch_authority"]=="ancestor-broker"
+            and row.get("broker_root") and row.get("broker_instance")
+            for row in same+cross
+        )
+    if not has_broker:
         raise ValueError("no supported depth-0 launch broker tuple")
     return [
         {"ordinal":1,"hop":"same-harness-headless","candidates":same},
@@ -94,16 +114,23 @@ def _fallback_chain(evidence):
         {"ordinal":4,"hop":"inline","status":"eligible-after-prior-hop-exhaustion","reason_enum":"runtime-unavailable","fleet_visibility":"none"},
     ]
 
-def _verify_fallback_chain(node, require_broker_binding=False):
+def _verify_fallback_chain(node, contract_version=None):
     chain=node.get("dispatch_fallback")
     if not isinstance(chain,list) or [row.get("hop") for row in chain] != FALLBACK_ORDER:
         raise ValueError(f"depth-2 node {node.get('id')} missing ordered dispatch fallback")
-    if not any(
-        candidate.get("status")=="supported" and candidate.get("launch_authority")=="ancestor-broker"
-        and (not require_broker_binding or (candidate.get("broker_root") and candidate.get("broker_instance")))
-        for row in chain[:2] for candidate in row.get("candidates",[])
-    ):
-        raise ValueError(f"depth-2 node {node.get('id')} lacks supported depth-0 broker tuple")
+    candidates=[candidate for row in chain[:2] for candidate in row.get("candidates",[])]
+    supported=[c for c in candidates if c.get("status")=="supported" and c.get("launch_authority")=="ancestor-broker"]
+    if contract_version==1:
+        if not any(c.get("broker_root") and c.get("broker_instance") for c in supported):
+            raise ValueError(f"depth-2 node {node.get('id')} lacks supported depth-0 broker tuple")
+    elif contract_version==2:
+        if not any(c.get("broker_root") for c in supported):
+            raise ValueError(f"depth-2 node {node.get('id')} lacks supported depth-0 broker tuple")
+        if any(c.get("broker_instance") for c in supported):
+            raise ValueError(f"depth-2 node {node.get('id')} v2 candidate must not carry broker_instance")
+    else:
+        if not supported:
+            raise ValueError(f"depth-2 node {node.get('id')} lacks supported depth-0 broker tuple")
     return chain
 
 def compile_route(capability, capability_mode, requested_intensity, cwd, artifact_root,
@@ -147,8 +174,8 @@ def compile_route(capability, capability_mode, requested_intensity, cwd, artifac
     evidence=_validate_tracking_evidence(tracking, tracked_gate_evidence)
     checked_dispatch=None
     if effective not in ("direct","quick") and transport=="headless":
-        checked_dispatch=_validate_dispatch_evidence(dispatch_evidence)
-        chain=_fallback_chain(checked_dispatch)
+        checked_dispatch=_validate_dispatch_evidence(dispatch_evidence, BROKER_CONTRACT_VERSION)
+        chain=_fallback_chain(checked_dispatch, BROKER_CONTRACT_VERSION)
         for node in nodes:
             if node.get("depth")==2:
                 node["dispatch_fallback"]=json.loads(json.dumps(chain))
@@ -168,7 +195,7 @@ def compile_route(capability, capability_mode, requested_intensity, cwd, artifac
       "nodes":nodes,"completion_gates":gates,"human_gates":recipe["human_gates"],
       "resume_retry_boundaries":recipe["resume_retry_boundaries"],
       "dispatch_evidence":checked_dispatch,
-      "broker_contract_version":1 if checked_dispatch is not None else None}
+      "broker_contract_version":BROKER_CONTRACT_VERSION if checked_dispatch is not None else None}
     digest=route_hash(payload); payload["route_hash"]=digest; payload["route_id"]="rt-"+digest.split(":",1)[1][:16]
     return payload
 
@@ -186,9 +213,9 @@ def verify_route(route, expected_cwd=None):
     spec_touch=any(_scope_touches_spec(scope) for node in route.get("nodes",[]) for scope in node.get("write_scope",[]))
     if bool(route.get("spec_touch")) != spec_touch: raise ValueError("spec_touch declaration mismatch")
     if route.get("effective_intensity") not in ("direct","quick") and route.get("selection",{}).get("transport")=="headless":
-        _validate_dispatch_evidence(route.get("dispatch_evidence"))
+        _validate_dispatch_evidence(route.get("dispatch_evidence"), route.get("broker_contract_version"))
         for node in route.get("nodes",[]):
-            if node.get("depth")==2: _verify_fallback_chain(node, route.get("broker_contract_version")==1)
+            if node.get("depth")==2: _verify_fallback_chain(node, route.get("broker_contract_version"))
     return route
 
 def write_once(path, payload):
@@ -199,6 +226,46 @@ def write_once(path, payload):
         if path.read_text(encoding="utf-8") != data: raise ValueError("immutable route already exists with different content")
         return
     with os.fdopen(fd,"w",encoding="utf-8") as fh: fh.write(data); fh.flush(); os.fsync(fh.fileno())
+
+def completion_dir(route_id):
+    return resolve_agent_home()/".dispatch"/"completion"/route_id
+
+def atomic_write(path, payload):
+    path=Path(path); path.parent.mkdir(parents=True,exist_ok=True)
+    data=json.dumps(payload,indent=2,ensure_ascii=False)+"\n"
+    temp=path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    fd=os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(fd,"w",encoding="utf-8") as fh: fh.write(data); fh.flush(); os.fsync(fh.fileno())
+    os.replace(temp,path)
+
+def write_completion_marker(route, node, node_id, evidence):
+    directory=completion_dir(route["route_id"])
+    canonical_path=directory/f"{node_id}.json"
+    sha=hashlib.sha256(evidence.read_bytes()).hexdigest()
+    if canonical_path.is_file():
+        existing=json.loads(canonical_path.read_text(encoding="utf-8"))
+        if existing.get("evidence",{}).get("sha256")==sha:
+            return existing
+    history=sorted(directory.glob(f"{node_id}.*.json")) if directory.is_dir() else []
+    sequence=len(history)+1
+    marker={
+        "route_id":route["route_id"],"route_hash":route["route_hash"],
+        "registry_digest":route["registry_digest"],"node_id":node_id,
+        "completion_gate":node["completion_gate"],
+        "evidence":{"path":str(evidence),"sha256":sha},
+        "sequence":sequence,
+    }
+    from datetime import datetime, timezone
+    marker["completed_at"]=datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+    while True:
+        history_path=directory/f"{node_id}.{sequence}.json"
+        try:
+            write_once(history_path, marker)
+        except ValueError:
+            sequence+=1; marker["sequence"]=sequence; continue
+        break
+    atomic_write(canonical_path, marker)
+    return marker
 
 def main():
     p=argparse.ArgumentParser(); sub=p.add_subparsers(dest="command",required=True)
@@ -233,10 +300,8 @@ def main():
             else:
                 evidence=Path(a.evidence).resolve()
                 if not evidence.is_file(): raise SystemExit("completion evidence missing")
-                marker={"route_id":route["route_id"],"route_hash":route["route_hash"],"registry_digest":route["registry_digest"],
-                        "node_id":a.node,"completion_gate":node["completion_gate"],
-                        "evidence":{"path":str(evidence),"sha256":hashlib.sha256(evidence.read_bytes()).hexdigest()}}
-                write_once(a.output or evidence.with_suffix(evidence.suffix+".completion.json"),marker)
+                marker=write_completion_marker(route, node, a.node, evidence)
+                if a.output: atomic_write(a.output, marker)
                 print(json.dumps(marker,sort_keys=True))
 
 if __name__=="__main__":

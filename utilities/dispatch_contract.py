@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import fcntl
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -14,6 +15,34 @@ import uuid
 
 ELIGIBILITY = {"supported", "unsupported", "unknown"}
 LAUNCH_AUTHORITIES = {"conductor", "ancestor-broker"}
+_MODULE_ROOT = Path(__file__).resolve().parents[1]
+
+
+def resolve_agent_home() -> Path:
+    """Validated AGENT_HOME resolution shared by writers and readers of
+    dispatch state that must agree on one root (jobs.log, completion markers).
+
+    Mirrors adapters/claude/bin/dispatch-headless.py:546-558's preference
+    order. A naive `os.environ.get("AGENT_HOME", ROOT)` falls back to the
+    caller's own worktree when AGENT_HOME is unset, which previously split
+    the global registry between the wrapper (writer, worktree-relative) and
+    the liveness/Stop readers (agent-home-relative) -- SD-14b(2). Every
+    consumer that must land in the SAME directory as another process has to
+    go through this one function, not re-derive its own fallback.
+    """
+
+    def _valid(candidate: str | None) -> bool:
+        return bool(candidate) and (Path(candidate) / "core" / "CORE.md").is_file()
+
+    for candidate in (
+        os.environ.get("AGENT_HOME"),
+        os.environ.get("CLAUDE_HOME"),
+        str(Path.home() / "agent_setting"),
+        str(Path.home() / ".claude"),
+    ):
+        if _valid(candidate):
+            return Path(candidate)
+    return _MODULE_ROOT
 
 
 class DispatchContractError(ValueError):
@@ -213,6 +242,47 @@ def validate_nested_eligibility(
         raise DispatchContractError("nested-eligibility-evidence-missing", ",".join(missing))
     if action == "start" and status != "supported":
         raise DispatchContractError(f"nested-child-spawn-{status}", source or "no checked evidence")
+
+
+def completion_marker_gate(
+    route_file: str | None,
+    route_node: str | None,
+    action: str,
+    agent_home: Path,
+) -> None:
+    """SD-56 decision gate: a record-bound ``--start`` must not spawn a node
+    whose ``depends_on`` predecessors have no completion marker.
+
+    ``agent_home`` is an explicit argument, not re-read from the environment,
+    so the writer (capability-route.py complete) and every reader (this gate,
+    called once per wrapper) are structurally forced to agree on one root.
+    """
+
+    if action != "start":
+        return
+    if not route_file:
+        return
+    route = json.loads(Path(route_file).read_text(encoding="utf-8"))
+    if route.get("broker_contract_version") != 2:
+        return
+    node = next((row for row in route.get("nodes", []) if row.get("id") == route_node), None)
+    if node is None:
+        return
+    missing = []
+    for dep in node.get("depends_on", []):
+        marker_path = Path(agent_home) / ".dispatch" / "completion" / route["route_id"] / f"{dep}.json"
+        if not marker_path.is_file():
+            missing.append(dep)
+            continue
+        try:
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            missing.append(dep)
+            continue
+        if marker.get("route_id") != route["route_id"] or marker.get("route_hash") != route["route_hash"]:
+            missing.append(dep)
+    if missing:
+        raise DispatchContractError("completion-marker-missing", ",".join(missing))
 
 
 def new_attempt_id(value: str | None = None) -> str:

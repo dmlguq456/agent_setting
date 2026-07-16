@@ -232,6 +232,7 @@ def validate_route(request: dict) -> tuple[dict, dict]:
     hop = next((row for row in node.get("dispatch_fallback", []) if int(row.get("ordinal", 0)) == ordinal), None)
     if not hop or hop.get("hop") not in {"same-harness-headless", "cross-harness-headless"}:
         raise BrokerError("broker-route-mismatch", "fallback_ordinal")
+    contract = route.get("broker_contract_version")
     candidate = next(
         (
             row for row in hop.get("candidates", [])
@@ -240,7 +241,7 @@ def validate_route(request: dict) -> tuple[dict, dict]:
             and row.get("child_harness") == request["target_harness"]
             and row.get("launch_authority") == request["requested_launch_authority"]
             and row.get("broker_root") == request["broker_root"]
-            and row.get("broker_instance") == request["broker_instance"]
+            and (contract == 2 or row.get("broker_instance") == request["broker_instance"])
         ),
         None,
     )
@@ -382,9 +383,17 @@ class BrokerServer:
         self.pid = os.getpid()
         self.start_ticks = process_start_ticks(self.pid)
         self.stop_event = threading.Event()
-        self.request_guard = threading.Lock()
+        self.locks_guard = threading.Lock()
+        self.request_locks: dict[str, threading.Lock] = {}
         self.meta_guard = threading.Lock()
         self.sock: socket.socket | None = None
+
+    def request_lock(self, request_id: str) -> threading.Lock:
+        with self.locks_guard:
+            lock = self.request_locks.get(request_id)
+            if lock is None:
+                lock = self.request_locks[request_id] = threading.Lock()
+            return lock
 
     def meta(self, state: str = "running") -> dict:
         return {
@@ -441,39 +450,61 @@ class BrokerServer:
         recovered = self.transition(state, "done", response=response, recovered_at=utcnow())
         return {"ok": True, "state": recovered}
 
+    def renew_lease(self, request_id: str, stop_event: threading.Event) -> None:
+        interval = max(0.5, self.stale_seconds / 3.0)
+        while not stop_event.wait(interval):
+            with self.request_lock(request_id):
+                path = self.request_path(request_id)
+                if not path.is_file():
+                    return
+                state = read_json(path)
+                if state.get("status") in TERMINAL or state.get("broker_instance") != self.instance_id:
+                    return
+                state["lease_expires_epoch"] = time.time() + self.stale_seconds
+                state["updated_at"] = utcnow()
+                atomic_json(path, state)
+
     def process_request(self, request: dict) -> dict:
-        with self.request_guard:
-            request_id = str(request.get("request_id", ""))
-            prior_recovery = (
-                bool(self.predecessor_instance)
-                and request.get("broker_instance") == self.predecessor_instance
-                and bool(REQUEST_ID_RE.fullmatch(request_id))
-                and self.request_path(request_id).is_file()
-            )
-            allowed_instances = {self.instance_id}
-            if prior_recovery:
-                allowed_instances.add(self.predecessor_instance)
-            normalized = validate_request(
-                request,
-                self.jobs,
-                self.root,
-                self.instance_id,
-                allowed_broker_instances=allowed_instances,
-            )
-            digest = "sha256:" + hashlib.sha256(canonical(normalized)).hexdigest()
-            path = self.request_path(normalized["request_id"])
+        request_id = str(request.get("request_id", ""))
+        prior_recovery = (
+            bool(self.predecessor_instance)
+            and request.get("broker_instance") == self.predecessor_instance
+            and bool(REQUEST_ID_RE.fullmatch(request_id))
+            and self.request_path(request_id).is_file()
+        )
+        allowed_instances = {self.instance_id}
+        if prior_recovery:
+            allowed_instances.add(self.predecessor_instance)
+        normalized = validate_request(
+            request,
+            self.jobs,
+            self.root,
+            self.instance_id,
+            allowed_broker_instances=allowed_instances,
+        )
+        digest = "sha256:" + hashlib.sha256(canonical(normalized)).hexdigest()
+        path = self.request_path(normalized["request_id"])
+
+        with self.request_lock(normalized["request_id"]):
             if path.is_file():
                 state = read_json(path)
                 if state.get("request_hash") != digest:
                     raise BrokerError("broker-request-id-conflict", normalized["request_id"])
                 if state.get("status") in TERMINAL:
                     return {"ok": True, "state": state, "duplicate": True}
-                row = registry_attempt(self.jobs, state["attempt_id"])
-                if row is not None:
-                    return self.recovered_response(state, row)
+                # inflight check first: while this instance still renews the
+                # lease for a running target, a resubmit must be rejected
+                # outright rather than reconciled against the registry.
                 lease = float(state.get("lease_expires_epoch", 0.0) or 0.0)
                 if state.get("broker_instance") == self.instance_id and lease > time.time():
                     raise BrokerError("broker-request-inflight", normalized["request_id"])
+                # registry reconcile is for fenced recovery only (predecessor
+                # instance or an expired lease) -- never for a live inflight
+                # request, or a resubmit could observe the spawn-time registry
+                # row and terminate the request while the target is still running.
+                row = registry_attempt(self.jobs, state["attempt_id"])
+                if row is not None:
+                    return self.recovered_response(state, row)
                 state["recovered_after_fence"] = True
                 state["prior_lease_expires_epoch"] = lease
             else:
@@ -507,19 +538,33 @@ class BrokerServer:
                 "AGENT_DISPATCH_BROKER_INSTANCE": self.instance_id,
                 "AGENT_DISPATCH_LAUNCH_AUTHORITY": "ancestor-broker",
             }
+
+        renew_stop = threading.Event()
+        renewer = threading.Thread(
+            target=self.renew_lease, args=(normalized["request_id"], renew_stop), daemon=True
+        )
+        renewer.start()
+        try:
             result = subprocess.run(command, cwd=ROOT, env=env, text=True, capture_output=True, check=False)
-            response = {
-                "returncode": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "attempt_id": normalized["attempt_id"],
-                "broker_pid": self.pid,
-                "broker_start_ticks": self.start_ticks,
-                "broker_instance": self.instance_id,
-                "recovered_from_registry": False,
-            }
-            terminal = "done" if result.returncode == 0 else "failed"
-            state = self.transition(state, terminal, response=response, terminal_at=utcnow())
+        finally:
+            renew_stop.set()
+            renewer.join(timeout=2.0)
+        response = {
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "attempt_id": normalized["attempt_id"],
+            "broker_pid": self.pid,
+            "broker_start_ticks": self.start_ticks,
+            "broker_instance": self.instance_id,
+            "recovered_from_registry": False,
+        }
+        terminal = "done" if result.returncode == 0 else "failed"
+        with self.request_lock(normalized["request_id"]):
+            current = read_json(path)
+            if current.get("status") in TERMINAL:
+                return {"ok": True, "state": current}
+            state = self.transition(current, terminal, response=response, terminal_at=utcnow())
             return {"ok": True, "state": state}
 
     def handle(self, conn: socket.socket) -> None:

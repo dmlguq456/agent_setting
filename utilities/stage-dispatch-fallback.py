@@ -81,7 +81,37 @@ def request_identity(args: argparse.Namespace, route: dict, node: dict, row: dic
     return "req-" + digest[:32], "att-" + digest[32:]
 
 
-def broker_envelope(args: argparse.Namespace, route: dict, node: dict, row: dict, ordinal: int) -> dict:
+def broker_env(contract: int | None) -> dict:
+    """v2 hop resolves the live instance at submit time, so an inherited
+    AGENT_DISPATCH_BROKER_INSTANCE from a pre-rollover conductor is stale
+    evidence, not authority.  v1 keeps trusting it (SD-55 backward compat)."""
+    if contract != 2:
+        return dict(os.environ)
+    return {k: v for k, v in os.environ.items() if k != "AGENT_DISPATCH_BROKER_INSTANCE"}
+
+
+def resolve_live_instance(broker_root: Path, jobs: Path) -> str:
+    """v2 hop: resolve the live broker instance at submit time.
+
+    status-only: a healthy broker (including a post-rollover instance) answers
+    without depth-0 authority.  We never run `ensure` here -- the contractual
+    caller is a depth-1 worker, where ensure is always refused
+    (dispatch-broker.py:604), so ensure would add no capability to the real
+    caller while creating a broker as a side effect in the very contexts that
+    must fail closed (SD-52 / v12 AC3).
+    """
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "utilities/dispatch-broker.py"), "status",
+         "--root", str(broker_root), "--jobs", str(jobs)],
+        cwd=ROOT, text=True, capture_output=True, check=False, env=broker_env(2),
+    )
+    if result.returncode:
+        return ""
+    fields = dict(l.split("=", 1) for l in result.stdout.splitlines() if "=" in l)
+    return fields.get("broker_instance", "")
+
+
+def broker_envelope(args: argparse.Namespace, route: dict, node: dict, row: dict, ordinal: int, live_instance: str | None = None) -> dict:
     request_id, attempt_id = request_identity(args, route, node, row, ordinal)
     envelope = {
         "schema_version": 1,
@@ -116,7 +146,7 @@ def broker_envelope(args: argparse.Namespace, route: dict, node: dict, row: dict
         "probe_source": row["probe_source"],
         "probe_failure_class": row.get("failure_class") or "",
         "broker_root": row["broker_root"],
-        "broker_instance": row["broker_instance"],
+        "broker_instance": live_instance or row["broker_instance"],
     }
     optional = {
         "prompt_file": str(args.prompt_file) if args.prompt_file else "",
@@ -127,13 +157,13 @@ def broker_envelope(args: argparse.Namespace, route: dict, node: dict, row: dict
     return envelope
 
 
-def submit_broker(args: argparse.Namespace, envelope: dict) -> tuple[dict | None, str, str]:
+def submit_broker(args: argparse.Namespace, envelope: dict, broker_root: Path, contract: int | None) -> tuple[dict | None, str, str]:
     command = [
         sys.executable,
         str(ROOT / "utilities/dispatch-broker.py"),
         "request",
         "--root",
-        str(args.broker_root),
+        str(broker_root),
         "--jobs",
         str(args.jobs),
         "--timeout",
@@ -143,6 +173,7 @@ def submit_broker(args: argparse.Namespace, envelope: dict) -> tuple[dict | None
         command,
         cwd=ROOT,
         text=True,
+        env=broker_env(contract),
         input=json.dumps(envelope, ensure_ascii=False),
         capture_output=True,
         check=False,
@@ -173,10 +204,12 @@ def main() -> int:
     action.add_argument("--register", dest="action", action="store_const", const="register")
     action.add_argument("--start", dest="action", action="store_const", const="start")
     args = p.parse_args()
+    explicit_broker_root = args.broker_root is not None
     try:
         route, node = load_node(args.route.resolve(), args.node)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         return fail("invalid-fallback-route", 65, detail=str(exc))
+    contract = route.get("broker_contract_version")
     inherited_jobs = os.environ.get("AGENT_DISPATCH_JOBS")
     args.jobs = (args.jobs or Path(inherited_jobs or ROOT / ".dispatch/jobs.log")).resolve()
     if inherited_jobs and args.jobs != Path(inherited_jobs).resolve():
@@ -187,8 +220,9 @@ def main() -> int:
         args.broker_root
         or Path(os.environ.get("AGENT_DISPATCH_BROKER_ROOT", Path(os.environ.get("AGENT_HOME", ROOT)) / ".dispatch/broker"))
     ).resolve()
-    if not os.environ.get("AGENT_DISPATCH_BROKER_INSTANCE"):
-        return fail("broker-binding-unset", 76, broker_root=str(args.broker_root), child_spawned="0")
+    if contract != 2:
+        if not os.environ.get("AGENT_DISPATCH_BROKER_INSTANCE"):
+            return fail("broker-binding-unset", 76, broker_root=str(args.broker_root), child_spawned="0")
     prior_failures = registry_failures(args.jobs, route["route_id"], node["id"])
     failed_tuples = set(args.failed_tuple) | set(prior_failures)
     attempts: list[str] = []
@@ -208,12 +242,26 @@ def main() -> int:
                     )
                     attempts.append(f"{ordinal}:{tuple_key}:skipped-{skip_reason}")
                     continue
-                envelope = broker_envelope(args, route, node, row, ordinal)
-                reply, raw_stdout, raw_stderr = submit_broker(args, envelope)
+                if contract == 2:
+                    row_root = Path(row["broker_root"]).resolve()
+                    if explicit_broker_root and args.broker_root != row_root:
+                        return fail(
+                            "broker-root-mismatch", 76,
+                            expected=str(row_root), observed=str(args.broker_root), child_spawned="0",
+                        )
+                    submit_root = row_root
+                    live_instance = resolve_live_instance(submit_root, args.jobs)
+                    if not live_instance:
+                        return fail("broker-unavailable", 76, broker_root=str(submit_root), child_spawned="0")
+                else:
+                    submit_root = args.broker_root
+                    live_instance = None
+                envelope = broker_envelope(args, route, node, row, ordinal, live_instance=live_instance)
+                reply, raw_stdout, raw_stderr = submit_broker(args, envelope, submit_root, contract)
                 if not reply or not reply.get("ok"):
                     reason = (reply or {}).get("reason", "broker-unavailable")
                     detail = (reply or {}).get("detail") or raw_stderr.strip() or raw_stdout.strip()
-                    return fail(reason, 76, detail=detail, broker_root=str(args.broker_root), child_spawned="0")
+                    return fail(reason, 76, detail=detail, broker_root=str(submit_root), child_spawned="0")
                 state = reply.get("state", {})
                 response = state.get("response", {})
                 result_code = int(response.get("returncode", 76))
@@ -227,7 +275,9 @@ def main() -> int:
                     print(f"child_harness={row['child_harness']}")
                     print("launch_authority=ancestor-broker")
                     print(f"requested_launch_authority={row['launch_authority']}")
-                    print(f"broker_root={args.broker_root}")
+                    print(f"broker_root={submit_root}")
+                    if contract == 2:
+                        print("broker_instance_source=live-status")
                     print(f"broker_instance={response.get('broker_instance', '-')}")
                     print(f"broker_pid={response.get('broker_pid', '-')}")
                     print(f"request_id={envelope['request_id']}")
