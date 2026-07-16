@@ -81,10 +81,13 @@ def _pad_dw(s, w):
 # already uses for depth-1 dispatch rows (see render.py's "user pick over ├─/└─ tree bars"
 # comment) — no vertical spine (`│`) survives anywhere in this view. Same-level child rows
 # share one indent constant so their leading glyph lands in the same column.
-_ARROW_PREFIX = "   ↳ "      # dispatch (▸) rows — arrow + space, ▸ lands at column 5
+_ARROW_PREFIX = "   ↳ "      # depth-1 dispatch (▸) rows — arrow + space, ▸ lands at column 5
 _AGENT_IND = "     "         # session's own ⚡ sub-agent rows — ⚡ also lands at column 5
-_NODE_IND = " " * 8          # canvas row + its node-anchored ⚡ children (nested under ▸)
-_SUBNODE_IND = " " * 10      # canvas' own `└ exec:B …` worker sub-row, one level under _NODE_IND
+_NODE_IND = " " * 8          # conductor's canvas summary row (SD-F2 breadcrumb, nested under ▸)
+_D2_PREFIX = "      ↳ "     # depth-2 stage-worker rows — one arrow level deeper (r4: an entity
+                             # is a rail row like every other spawned session, never a fused node;
+                             # existing fleet grammar = deeper ↳, user-confirmed)
+_D2_AGENT_IND = " " * 10     # a depth-2 worker's own ⚡ rows — positional attribution, no @tag
 
 # Stage palette in its PLAIN (non-bold) intensity — reused engine keys, not new table entries
 # (round-2, user-confirmed): bold is reserved for the main-session row (_ROW_BOLD) alone, so
@@ -248,16 +251,25 @@ def build_lines(term_width, layout):
                              desc_w, stg_key=_STAGE_PLAIN[1]))
     g1.append(_canvas_line(_NODE_IND, [
         {"label": "plan", "state": "done", "time": "12m"},
-        {"label": "exec", "state": "active", "time": "8m", "meta": "(claude·haiku·med)"},
+        {"label": "exec", "state": "active", "time": "8m"},
         {"label": "test", "state": "pending"},
         {"label": "report", "state": "pending"},
     ]))
-    g1.append([(_SUBNODE_IND, None), ("└ ", "dim"),
-               ("exec:B ● 3m", _STAGE_PLAIN[1]), (" (claude·sonnet·med)", "dim")])
-    g1.append(_agent_line(_NODE_IND, "개발팀", "usage tap freshness 파서 구현",
-                          "●", "1m12s", True, desc_w, anchor="exec"))
-    g1.append(_agent_line(_NODE_IND, "Explore", "usage tap 스키마 사전 조사",
-                          "✓", "48s", False, desc_w, anchor="exec:B"))
+    # depth-2 stage workers: rail rows one arrow level deeper (r4) — identity is the SD-F1
+    # human stage label + ⎇ slug; contract = bootstrap type; worker facts = model·effort.
+    # Their ⚡ rows attribute positionally (nested beneath their own worker row, no @tag).
+    g1.append([(_D2_PREFIX, "dim"), ("▸ ", _STAGE_PLAIN[1]),
+               (r._BADGE_TEXT["claude"] + "  ", "hb_claude"),
+               ("🔧 exec", _STAGE_PLAIN[1]), (" ⎇ usage-accuracy  ", "dim"),
+               ("(stage · haiku·med)", "dim"), ("  ● 8m", None)])
+    g1.append(_agent_line(_D2_AGENT_IND, "개발팀", "usage tap freshness 파서 구현",
+                          "●", "1m12s", True, desc_w))
+    g1.append([(_D2_PREFIX, "dim"), ("▸ ", _STAGE_PLAIN[1]),
+               (r._BADGE_TEXT["claude"] + "  ", "hb_claude"),
+               ("🔧 exec:B", _STAGE_PLAIN[1]), (" ⎇ usage-accuracy  ", "dim"),
+               ("(stage · sonnet·med)", "dim"), ("  ● 3m", None)])
+    g1.append(_agent_line(_D2_AGENT_IND, "Explore", "usage tap 스키마 사전 조사",
+                          "✓", "48s", False, desc_w))
     g1.append(None)
     g1.append(_dispatch_line(_ARROW_PREFIX, "codex", "code", "rate-window",
                              "rate-window 헤더 재검증", "(quick · quick_owner · gpt·med)", "● 4m",

@@ -145,40 +145,34 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         self.assertEqual(_quote_col("파서 구현"), _quote_col("스키마 사전 조사"))
         self.assertEqual(_quote_col("제목 파이프라인"), _quote_col("렌더 구조"))
 
-    def test_node_anchored_status_column_aligns_across_siblings(self):
-        # round-2 — the @<node> tag and the trailing status glyph both land in the same column
-        # for sibling node-anchored ⚡ rows, regardless of anchor text length ("exec" vs "exec:B").
-        lines = self._lines(120)
-
-        def _dw(s):
-            return sum(render._cw(c) for c in s)
-
-        def _cols(snippet):
-            for ln in lines:
-                if not ln:
-                    continue
-                s = "".join(t for t, _k in ln)
-                if snippet in s:
-                    at_col = _dw(s[:s.index("@")])
-                    glyph_col = min(_dw(s[:s.index(g, s.index("@"))])
-                                    for g in ("●", "✓") if g in s[s.index("@"):])
-                    return at_col, glyph_col
-            self.fail("row containing %r not found" % snippet)
-
-        self.assertEqual(_cols("파서 구현"), _cols("스키마 사전 조사"))
-
     def test_canvas_breadcrumb_uses_the_existing_separator(self):
         # grammar #4 — stage canvas below the conductor, joined by the existing ' › ' breadcrumb.
+        # r4: the canvas is the conductor's SUMMARY only (SD-F2) — worker facts live on the
+        # depth-2 rail rows below, so the active node carries no (harness·model·effort) meta.
         text = _joined(self._lines(120))
         self.assertIn("plan ✓12m › exec ● 8m", text)
         self.assertIn("test ○ › report ○", text)
-        self.assertIn("exec:B ● 3m", text)
 
-    def test_node_anchored_subagents_carry_an_at_tag(self):
-        # grammar #5 — depth-2 worker sub-agents tagged back to their canvas node.
-        text = _joined(self._lines(120))
-        self.assertIn("@exec", text)
-        self.assertIn("@exec:B", text)
+    def test_depth2_stage_workers_are_rail_rows_not_fused_nodes(self):
+        # r4 (user-confirmed) — a depth-2 stage worker is an ENTITY, so it gets the existing
+        # fleet grammar: a spawn arrow one level deeper than its conductor, with the SD-F1
+        # human stage label + ⎇ slug identity, bootstrap type, and its own worker facts.
+        lines = self._lines(120)
+        text = _joined(lines)
+        self.assertIn("🔧 exec ⎇ usage-accuracy", text)
+        self.assertIn("🔧 exec:B ⎇ usage-accuracy", text)
+        self.assertIn("(stage · haiku·med)", text)
+        self.assertIn("(stage · sonnet·med)", text)
+        # positional attribution replaced the @<node> tag entirely
+        self.assertNotIn("@exec", text)
+        # the depth-2 arrow is strictly deeper than the depth-1 arrow
+        def arrow_col(snippet):
+            for ln in lines:
+                if ln and snippet in "".join(t for t, _k in ln):
+                    s = "".join(t for t, _k in ln)
+                    return s.index("↳")
+            self.fail("row containing %r not found" % snippet)
+        self.assertGreater(arrow_col("🔧 exec ⎇"), arrow_col("🔧 code·dev"))
 
     def test_mem_events_are_scoped_under_their_own_group(self):
         # grammar #6 — per-repo mem events, not a board-wide dump.
