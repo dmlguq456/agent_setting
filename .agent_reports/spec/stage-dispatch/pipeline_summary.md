@@ -142,3 +142,11 @@ v12 구현은 source `8897bf76`, main merge `70bac6ef`로 완료했다. 다음 s
 
 - 설계 핵심: SD-54는 동시성 상한을 broker에 넣지 않고 SD-40 governor 소유를 유지(이중 상한 금지). SD-55는 identity 검증을 제거하는 게 아니라 불변 record에서 실시간 hop으로 이동. SD-56은 통과 판정(의미 구간)을 대체하지 않고 판정 결과만 결정론화하며, 강제 장치 = 후속 노드 `--start`의 선행 marker gate(문서 vigilance 재발 방지).
 - 구현 = 별도 `stage-dispatch-v13` autopilot-code 사이클 (dispatch-broker.py / capability-route.py + stage-dispatch-fallback.py / wrapper 3종 + dispatch-node.py + 스테이지 문서 + fixture). merge 후 live broker는 in-flight 0 시점에 shutdown→ensure 롤오버.
+
+## v13 implementation closure (2026-07-16)
+
+- `plans/2026-07-16_stage-dispatch-v13` 사이클(conductor 분사, plan→execute→test→report 완주, opus/high)로 SD-54 broker 접수·실행 락 분리(per-request lease + 갱신 스레드 + reconcile-전-inflight 순서), SD-55 `broker_contract_version: 2`(record는 broker_root만, hop 시점 status 조회), SD-56 completion marker 배선(canonical `.dispatch/completion/<route_id>/<node_id>.json` + wrapper 3종 선행 marker gate) 구현. acceptance 10/10, mutation test 3계열 확증, main merge 61d70ec4.
+- 사이클 자신이 SD-54 결함을 재실증(스테이지 분사마다 client broker-timeout 오탐, registry 교차확인으로 진행)했고, **저장소 사상 최초의 completion marker 4건**(rt-5fd84b9bcf8a799c plan/execute/test/report)을 남김.
+- harvest 후속: ① 검증 F1(B3 조기-종결 경합의 회귀 가드 부재) — 검증자가 작성·양방향 확인한 fixture를 merge 전 반영(b02e3d20, 15/15). ② §13.5.2 문언 정정 minor #1(`ensure`→`status` 조회 — 워커는 ensure 금지, 구현 실측). ③ live broker 롤오버 완료 — 계약 경로(implementation-mismatch 회전)로 v13 코드 브로커(brk-9a6717359ce14394bb24ad6990ab3fd9)가 canonical registry에 기동, in-flight 0 확인.
+- 병행 발견·수정 2건(v13 산물 아님): ⓐ entry-router 개편(585c742b, 타 세션)이 portable 가드 2건 기대치 미동기 — 점진 공개 계약에 맞게 재배선(52b652ea 직전 커밋). ⓑ preflight doctor boundary lock이 SIGKILL 누수 시 전역 doctor 실패 — 소유자 생존 회수 추가(52b652ea). 최종 검증 = clean worktree에서 **portable guards 359/359** + broker/route/marker 스위트 전부 OK.
+- 운영 소견(이월): primary checkout에서 portable-guards 실행은 live broker 회전을 유발할 수 있음(wrapper-start 가드의 ensure가 fixture jobs로 회전 시도) — 검증은 clean worktree 표준. merge 후 신규 standard+ route는 gate 활성 — conductor의 `capability-route.py complete` 호출 의무(F4) 인지 필요.

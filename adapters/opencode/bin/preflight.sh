@@ -125,16 +125,25 @@ doctor_boundary() {
   lock="${TMPDIR:-/tmp}/agent-setting-adaptation-boundary.lock"
   tries=0
   while ! mkdir "$lock" 2>/dev/null; do
+    # a SIGKILLed holder (e.g. an outer CLI timeout) leaks the sentinel and
+    # would wedge every later doctor run globally -- reclaim when the
+    # recorded owner is gone or never recorded its pid.
+    owner="$(cat "$lock/pid" 2>/dev/null || true)"
+    if [ -z "$owner" ] || ! kill -0 "$owner" 2>/dev/null; then
+      rm -rf "$lock" 2>/dev/null || true
+      continue
+    fi
     tries=$((tries + 1))
     if [ "$tries" -ge 100 ]; then
       return 1
     fi
     sleep 0.1
   done
-  trap 'rmdir "$lock" 2>/dev/null || true' EXIT HUP INT TERM
+  printf '%s' "$$" > "$lock/pid"
+  trap 'rm -rf "$lock" 2>/dev/null || true' EXIT HUP INT TERM
   "$ROOT/tools/check-adaptation-boundary.sh"
   rc=$?
-  rmdir "$lock" 2>/dev/null || true
+  rm -rf "$lock" 2>/dev/null || true
   trap - EXIT HUP INT TERM
   return "$rc"
 }

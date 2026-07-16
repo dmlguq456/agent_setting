@@ -305,6 +305,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **진입**: 전용 키 `p`(process) 토글 — 기존 `w` 레이아웃 cycle과 직교(그룹 뷰 ↔ 과정 뷰 전환). footer 키 바에 표기. 비대화식 투영 = `--view {group,process}` CLI 플래그 + `FLEET_VIEW` env — `p` 토글과 같은 전역 상태 하나를 공유하며 별도 코드 경로를 만들지 않는다(v10 구현이 3폭 캡처·디자인 비평 등 비대화식 검증용으로 추가, 2026-07-16 사용자 확정 minor).
   - **단위**: 카드 1장 = 활성 route 1개 (프로젝트 그룹 대신 파이프라인 중심 재그룹).
   - **카드 구성**: L1 = `[capability·mode·intensity] <route_id 단축> — <n/m nodes> ⏳<경과>`; L2 = DAG 가로 흐름 `plan ✓12m › exec ● 8m (opus·high) › test ○ › report ○` — 노드별 상태 글리프(✓ 완료 / ● 활성+경과+모델 / ○ 미기동 / ✕ 실패)와 completion gate 통과 여부. `depends_on`이 병렬인 노드는 세로 분기(들여쓴 병렬 행)로.
+  - **gate 통과 증거 소스 (2026-07-16 확정, v10 minor #2 — 재개 조건 충족)**: v10 구현은 통과 증거 부재로 정직 결손(`—`) 처리했다(carryover §1). stage-dispatch v13(SD-56)이 canonical marker `.dispatch/<agent-home 기준>/completion/<route_id>/<node_id>.json`을 실사용으로 착륙시켜 재개 조건이 충족됐다. 판정 규칙: **marker 존재 + record의 route_id/route_hash 일치 = 통과**(별도 gate 표식, 상태 글리프와 독립 차원). marker 부재 = "무주장"(실패·미통과로 표시 금지, F-28 tolerant 원칙 불변). read-only, mtime 캐시, 이력 파일 중 최신만 authoritative.
   - **자식 연결**: 활성 노드 아래 그 노드를 실행 중인 세션 행(축약형)과 그 서브에이전트 `└⚡`(F-29 재사용)를 중첩 — "누가 지금 어느 단계를 어떤 모델로" 한눈에.
   - **마우스**: 노드/카드 클릭 = 접기·펼치기, 세션 축약행 클릭 = 선택(F-27 문법 재사용). 완료 route는 기본 1행 접힘, 실패 노드 포함 route는 자동 펼침 + 적색 강조.
   - **결손 원칙 불변**: record 없는 잡은 과정 뷰에서 pipe 휴리스틱 요약 카드로 degrade(빈칸 아님), `tracked_gate_evidence`는 `a` 토글 상세에서만 dim 노출.
