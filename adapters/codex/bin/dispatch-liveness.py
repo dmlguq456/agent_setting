@@ -11,12 +11,18 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
+from tools.fleet.model import (  # noqa: E402
+    ATTEMPT_CLASSIFIER_SOURCE,
+    classify_attempt_evidence,
+)
 
 # SD-15 (OPERATIONS §5.10 ⑨): if an open row's dispatch log shows a limit/auth death
 # pattern, judge it DEAD regardless of transcript mtime (the wrapper's launch watch may
 # have missed it, or the child died — or hung, OpenCode #8203 — after launch). Kept in
 # sync with dispatch-headless.py DEATH_PATTERNS (intentional cross-runtime duplication).
 LIMIT_RE = re.compile(
+    r"(?:selected\s+)?model\b.{0,80}\b(?:is\s+)?at capacity\b|"
     r"operation not permitted|network is unreachable|network access denied|"
     r"hit your (session|usage) limit|session limit reached|usage[_ ]limit[_ ]reached|"
     r"usage limit reached|weekly limit|rate limit(ed)?|provider rate limit|"
@@ -106,22 +112,26 @@ def parse_metadata(pipe: str) -> dict[str, str]:
     return dict(part.split("=", 1) for part in pipe.split(",") if "=" in part)
 
 
-def recorded_process_alive(metadata: dict[str, str]) -> tuple[bool, str]:
+def recorded_attempt_state(metadata: dict[str, str], now: float) -> dict | None:
     pid = metadata.get("pid", "")
-    if not pid.isdigit() or not Path("/proc").is_dir():
-        return False, ""
+    expected = metadata.get("pid_start", "")
+    if not pid.isdigit() or not expected:
+        return None
     proc = Path("/proc") / pid
-    if not proc.is_dir():
-        return False, pid
+    alive = False
+    actual = ""
     try:
-        cmdline = (proc / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
         actual_start = (proc / "stat").read_text(encoding="utf-8").split()[21]
+        actual = actual_start
+        alive = True
     except (OSError, IndexError):
-        return False, pid
-    expected_start = metadata.get("pid_start")
-    if "codex" not in cmdline or (expected_start and expected_start != actual_start):
-        return False, pid
-    return True, pid
+        pass
+    return classify_attempt_evidence({
+        "pid": int(pid), "proc_start": expected, "actual_proc_start": actual,
+        "pid_alive": alive, "proc_start_match": bool(alive and actual == expected),
+        "attempt_id": metadata.get("attempt_id"), "route_id": metadata.get("route_id"),
+        "route_node": metadata.get("route_node"),
+    }, now)
 
 
 def sessions_dir_for(pipe: str, slug: str, agent_home: Path, default_sessions: Path) -> Path:
@@ -228,17 +238,17 @@ def main(argv: list[str]) -> int:
             open_n += 1
             label = slug or "?"
             metadata = parse_metadata(pipe)
-            process_alive, recorded_pid = recorded_process_alive(metadata)
-            if process_alive:
-                print(f"ALIVE    {label} (recorded pid {recorded_pid} running)")
+            exact = recorded_attempt_state(metadata, now)
+            if exact and exact["state"] == "working":
+                print(f"ALIVE    {label} (recorded pid {exact['pid']} running; classifier={ATTEMPT_CLASSIFIER_SOURCE})")
                 alive += 1
                 continue
-            if recorded_pid:
+            if exact and exact["state"] == "dead":
                 log_hit = log_shows_limit(agent_home, slug)
                 if log_hit is not None:
                     print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
                 else:
-                    print(f"EXITED   {label} - recorded pid {recorded_pid} ended or identity changed [open: {ts}]")
+                    print(f"EXITED   {label} - recorded pid {exact['pid']} ended or identity changed; classifier={ATTEMPT_CLASSIFIER_SOURCE} [open: {ts}]")
                 suspect += 1
                 continue
             # Profile jobs live under their isolated home. Non-profile nested workers
@@ -279,6 +289,7 @@ def main(argv: list[str]) -> int:
                 suspect += 1
 
     print(f"open {open_n} ; alive {alive} ; suspect/dead {suspect}")
+    print(f"classifier_source={ATTEMPT_CLASSIFIER_SOURCE}")
     if suspect:
         print("SUSPECT/DEAD: inspect Codex transcript and dispatch log, then harvest or redispatch.")
         return 3

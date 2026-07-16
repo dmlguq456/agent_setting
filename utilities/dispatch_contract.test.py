@@ -68,6 +68,26 @@ class DispatchContractTest(unittest.TestCase):
     with self.assertRaises(OSError): D.claim_attempt_row(jobs,attempt,row,launch=True)
    self.assertEqual(jobs.read_text(),before)
    self.assertFalse(list(Path(td).glob(".jobs.log.claim-*")))
+ def test_capacity_retry_claim_is_exclusive_per_route_node(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   code=("import sys;from pathlib import Path;sys.path.insert(0,sys.argv[1]);"
+         "import dispatch_contract as D;a=sys.argv[3];"
+         "row=f'2026-07-16T00:00:00Z\\topen\\t/r\\t/w\\ts\\troute_id=r,route_node=n,attempt_id={a},capacity_retry=1';"
+         "print(int(D.claim_attempt_row(Path(sys.argv[2]),a,row,launch=True,exclusive_metadata={'route_id':'r','route_node':'n','capacity_retry':'1'})))")
+   procs=[subprocess.Popen([sys.executable,"-c",code,str(P.parent),str(jobs),f"att-capacity{i:04d}"],text=True,stdout=subprocess.PIPE) for i in range(8)]
+   winners=[p.communicate(timeout=10)[0].strip() for p in procs]
+   self.assertEqual(winners.count("1"),1,winners)
+   self.assertEqual(len(jobs.read_text().splitlines()),1)
+ def test_conditional_close_revalidates_under_lock(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log";attempt="att-revalidate001"
+   row=f"2026-07-16T00:00:00Z\topen\t/r\t/w\ts\troute_id=r,route_node=n,attempt_id={attempt}"
+   self.assertTrue(D.claim_attempt_row(jobs,attempt,row))
+   self.assertFalse(D.close_attempt_row_if(jobs,attempt,"dead-test",lambda _fields:False))
+   self.assertIn("\topen\t",jobs.read_text())
+   self.assertTrue(D.close_attempt_row_if(jobs,attempt,"dead-test",lambda _fields:True))
+   self.assertIn("note=dead-test",jobs.read_text())
  def test_legacy_reconcile_is_idempotent(self):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); local=root/"local.log"; global_jobs=root/"global.log"

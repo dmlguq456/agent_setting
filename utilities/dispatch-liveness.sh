@@ -31,7 +31,7 @@ LOG_DIR="$AGENT_HOME/.dispatch/logs"
 # SD-15: if an open job log ends with a limit/auth fatal pattern, use that as
 # the DEAD reason. Keep this deliberate duplicate synchronized with
 # dispatch-headless.py DEATH_PATTERNS.
-LIMIT_RE='operation not permitted|network is unreachable|network access denied|hit your (session|usage) limit|session limit reached|usage limit reached|weekly limit|rate limit|[^0-9]429[^0-9]|invalid api key|authentication_error|not logged in|please run /login|unauthorized|[^0-9]401[^0-9]|credit balance is too low|insufficient (credit|quota|funds)'
+LIMIT_RE='selected model is at capacity|model is at capacity|operation not permitted|network is unreachable|network access denied|hit your (session|usage) limit|session limit reached|usage limit reached|weekly limit|rate limit|[^0-9]429[^0-9]|invalid api key|authentication_error|not logged in|please run /login|unauthorized|[^0-9]401[^0-9]|credit balance is too low|insufficient (credit|quota|funds)'
 
 # SD-15b: anchor log-pattern death detection to a few short trailing lines.
 # Scanning a large tail caused false DEAD verdicts when a successful report only
@@ -61,6 +61,24 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   harness=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^harness=//p' | head -1)
   [ -n "$harness" ] || harness="claude"
   [ -d /proc ] || pid=""   # Fall back to transcript mtime without /proc.
+  if [ -n "$pid" ] && [ -n "$pid_start" ]; then
+    exact=$(python3 "$SCRIPT_DIR/dispatch-registry.py" attempt-state \
+      --pid "$pid" --pid-start "$pid_start" 2>/dev/null || true)
+    exact_state=$(printf '%s\n' "$exact" | sed -n 's/^state=//p' | head -1)
+    classifier=$(printf '%s\n' "$exact" | sed -n 's/^classifier_source=//p' | head -1)
+    if [ "$exact_state" = "working" ]; then
+      echo "ALIVE      ${slug:-?}  (pid $pid running; harness=$harness; classifier=$classifier)"
+      alive=$((alive + 1)); continue
+    fi
+    if [ "$exact_state" = "dead" ]; then
+      if log_hit=$(scan_log_death "$slug"); then
+        echo "⚠️ DEAD     ${slug:-?}  — trailing limit/auth log pattern ($log_hit)  [open: $ts]"
+      else
+        echo "⚠️ EXITED   ${slug:-?}  — pid $pid ended or identity changed; classifier=$classifier  [open: $ts]"
+      fi
+      suspect=$((suspect + 1)); continue
+    fi
+  fi
   if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
     cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
     actual_start=$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true)

@@ -11,12 +11,18 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
+from tools.fleet.model import (  # noqa: E402
+    ATTEMPT_CLASSIFIER_SOURCE,
+    classify_attempt_evidence,
+)
 
 # SD-15 (OPERATIONS §5.10 ⑨): if an open row's dispatch log shows a limit/auth death
 # pattern, judge it DEAD regardless of the SQLite session mtime — this is the axis that
 # catches OpenCode's hang-on-limit (#8203), which the wrapper's launch watch cannot.
 # Kept in sync with dispatch-headless.py DEATH_PATTERNS (intentional duplication).
 LIMIT_RE = re.compile(
+    r"(?:selected\s+)?model\b.{0,80}\b(?:is\s+)?at capacity\b|"
     r"hit your (session|usage) limit|session limit reached|usage[_ ]limit[_ ]reached|"
     r"usage limit reached|weekly limit|rate limit(ed)?|provider rate limit|"
     r"exceeded retry limit|[^0-9]429[^0-9]|invalid api key|authentication_error|"
@@ -146,6 +152,25 @@ def plugin_loaded_for_slug(agent_home: Path, slug: str) -> bool:
     return (agent_home / ".dispatch" / f"plugin-load.{slug}.mark").is_file()
 
 
+def exact_attempt_state(pipe: str, now: float) -> dict | None:
+    metadata = dict(part.split("=", 1) for part in pipe.split(",") if "=" in part)
+    raw, expected = metadata.get("pid", ""), metadata.get("pid_start", "")
+    if not raw.isdigit() or not expected:
+        return None
+    actual = ""; alive = False
+    try:
+        actual = (Path("/proc") / raw / "stat").read_text(encoding="utf-8").split()[21]
+        alive = True
+    except (OSError, IndexError):
+        pass
+    return classify_attempt_evidence({
+        "pid": int(raw), "proc_start": expected, "actual_proc_start": actual,
+        "pid_alive": alive, "proc_start_match": bool(alive and actual == expected),
+        "attempt_id": metadata.get("attempt_id"), "route_id": metadata.get("route_id"),
+        "route_node": metadata.get("route_node"),
+    }, now)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) > 2 or (len(argv) == 2 and argv[1] in {"-h", "--help"}):
         return usage()
@@ -176,11 +201,24 @@ def main(argv: list[str]) -> int:
             parts = raw.split("\t")
             while len(parts) < 6:
                 parts.append("")
-            ts, status, _repo, worktree, slug, _pipe = parts[:6]
+            ts, status, _repo, worktree, slug, pipe = parts[:6]
             if status != "open":
                 continue
             open_n += 1
             label = slug or "?"
+            exact = exact_attempt_state(pipe, now)
+            if exact and exact["state"] == "working":
+                print(f"ALIVE    {label} (recorded pid {exact['pid']} running; classifier={ATTEMPT_CLASSIFIER_SOURCE})")
+                alive += 1
+                continue
+            if exact and exact["state"] == "dead":
+                log_hit = log_shows_limit(agent_home, slug)
+                if log_hit is not None:
+                    print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
+                else:
+                    print(f"EXITED   {label} - recorded pid {exact['pid']} ended or identity changed; classifier={ATTEMPT_CLASSIFIER_SOURCE} [open: {ts}]")
+                suspect += 1
+                continue
             match = locate_latest_for_worktree(con, worktree)
             if match is None:
                 # No SQLite session for this worktree. Fall back to the heartbeat
@@ -239,6 +277,7 @@ def main(argv: list[str]) -> int:
                     suspect += 1
 
     print(f"open {open_n} ; alive {alive} ; suspect/dead {suspect}")
+    print(f"classifier_source={ATTEMPT_CLASSIFIER_SOURCE}")
     if suspect:
         print("SUSPECT/DEAD: inspect OpenCode session export/DB and dispatch log, then harvest or redispatch.")
         return 3

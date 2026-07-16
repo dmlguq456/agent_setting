@@ -16,7 +16,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def auth_check(child_harness: str) -> tuple[bool, str]:
+def auth_check(child_harness: str, worktree: str | Path | None = None) -> tuple[bool, str]:
     """Check that the target CLI has a usable local authentication profile.
 
     This deliberately avoids printing command output because auth status may
@@ -40,8 +40,14 @@ def auth_check(child_harness: str) -> tuple[bool, str]:
         return False, "unknown-harness"
     if shutil.which(command[0]) is None:
         return False, "command-unavailable"
-    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
-    if result.returncode != 0 or not accepted(result.stdout):
+    # A nested workspace-write owner may execute only from its checked
+    # worktree.  Running the auth probe from the primary checkout falsely
+    # reported auth-unavailable even though the projected CODEX_HOME was valid.
+    cwd = Path(worktree).resolve() if worktree else ROOT
+    result = subprocess.run(command, cwd=cwd, text=True, capture_output=True, check=False)
+    if result.returncode != 0 or not (
+        accepted(result.stdout) or accepted(result.stderr)
+    ):
         return False, "auth-unavailable"
     return True, ""
 
@@ -49,7 +55,7 @@ def auth_check(child_harness: str) -> tuple[bool, str]:
 def command_check(child_harness: str, worktree: str) -> tuple[str, str, str]:
     if not Path(worktree).is_dir():
         return "unsupported", "direct-command-check", "worktree-not-found"
-    authenticated, auth_failure = auth_check(child_harness)
+    authenticated, auth_failure = auth_check(child_harness, worktree)
     if not authenticated:
         return "unsupported", "direct-auth-check", auth_failure
     if child_harness == "codex":
@@ -62,7 +68,7 @@ def command_check(child_harness: str, worktree: str) -> tuple[str, str, str]:
         return "unsupported", "direct-command-check", "command-unavailable"
     else:
         return "unknown", "unsupported-child-harness", "unknown-harness"
-    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    result = subprocess.run(command, cwd=worktree, text=True, capture_output=True, check=False)
     if result.returncode == 0:
         return "supported", "direct-auth+headless-check", ""
     detail = (result.stdout + "\n" + result.stderr).strip().replace("\n", ";")
