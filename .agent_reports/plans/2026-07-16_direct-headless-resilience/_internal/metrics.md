@@ -20,3 +20,7 @@
   source revision `5fbace3e` before final artifact commit.
 - Source commits: `821405f3`, `3b9622a2`, `f59163e8`.
 - Main merges: `7480c5bc`, `8d51304d`, `5fbace3e`.
+- Artifact completion commit: `32d399a1` plus the final cleanup-status update.
+- Push: `origin/main` advanced through the completion artifacts.
+- Cleanup: `direct-headless-resilience` and `broker-retirement` removed as
+  eligible; dirty `fleet-depth2-retry-liveness` preserved without mutation.

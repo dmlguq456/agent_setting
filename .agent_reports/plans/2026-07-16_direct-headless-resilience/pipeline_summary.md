@@ -10,5 +10,6 @@ overall verdict: **PASS**
 | `code-test` | PASS | Focused suites, 569 Fleet tests, three adapters, parity, guards, boundary, verifier, and recursive smoke passed. |
 | `code-report` | PASS | Canonical plan, implementation, verification, smoke, transfer, and final records updated. |
 
-Source is merged on `main`; runtime projections are fresh. The remaining owner
-closeout is the artifact commit, push, and cleanup of eligible task worktrees.
+Source and artifacts are merged and pushed on `main`; runtime projections are
+fresh. Eligible direct-headless and broker-retirement worktrees were removed;
+the dirty predecessor Fleet worktree was preserved.

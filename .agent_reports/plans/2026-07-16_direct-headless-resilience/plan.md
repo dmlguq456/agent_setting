@@ -66,5 +66,6 @@ implementation: direct headless only; broker lifecycle remains retired
   heartbeat at root; terminal heartbeat becomes `done`, while stale/mismatched
   evidence falls back without probing an unrelated host PID.
 - Focused, full Fleet, mirror, portable guard, adaptation-boundary, and runtime
-  projection checks passed. Source was merged to `main`; final artifact commit,
-  push, and eligible worktree cleanup are owner completion actions.
+  projection checks passed. Source and artifacts were merged/pushed on `main`.
+  The direct-headless and broker-retirement worktrees were eligible and removed;
+  the dirty predecessor Fleet worktree was deliberately preserved.

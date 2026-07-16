@@ -42,10 +42,12 @@ presentation and adds no broker-like authority.
 ## Integration
 
 Source commits `821405f3`, `3b9622a2`, and `f59163e8` were merged into `main`
-as `7480c5bc`, `8d51304d`, and `5fbace3e`. Claude, Codex, and OpenCode linked
-runtime projections were refreshed and reported fresh with no duplicate
-sources. Final artifact commit, push, and eligible worktree cleanup complete
-the owner closeout after this report is staged.
+as `7480c5bc`, `8d51304d`, and `5fbace3e`; completion artifacts were committed
+as `32d399a1` and this final cleanup-status update. `origin/main` was pushed.
+Claude, Codex, and OpenCode linked runtime projections were refreshed and
+reported fresh with no duplicate sources. The eligible direct-headless and
+broker-retirement worktrees were removed. The older
+`fleet-depth2-retry-liveness` worktree was dirty and was preserved unchanged.
 
 No runtime-owned credentials, sessions, databases, or user configuration were
 edited.

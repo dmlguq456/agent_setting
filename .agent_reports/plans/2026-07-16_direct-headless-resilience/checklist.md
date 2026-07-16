@@ -39,4 +39,4 @@
 - [x] Real recursive Codex headless smoke passes with zero broker path use.
 - [x] Independent verifier reports PASS with all five repros closed.
 - [x] Source commits merged to `main` and runtime projections refreshed.
-- [ ] Final artifact commit, push, and eligible worktree cleanup (owner closeout).
+- [x] Final artifact commit, push, and eligible worktree cleanup.
