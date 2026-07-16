@@ -100,6 +100,27 @@ class RenderDispatchPresentationTest(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertEqual(match.group(1), "runtime-watch")
 
+    def test_shared_cwd_requires_exact_parent_session_id(self):
+        sessions = [
+            Session(harness="codex", pid=1, cwd="/work/repo",
+                    session_id="codex-thread", slug="repo", liveness="working"),
+            Session(harness="claude", pid=2, cwd="/work/repo",
+                    session_id="claude-thread", slug="repo", liveness="idle"),
+        ]
+
+        def rendered(parent_sid):
+            job = DispatchJob(key="code", slug="owner", cwd="/work/owner-wt",
+                              parent_sid=parent_sid, parent_cwd="/work/repo", is_child=True,
+                              harness="codex", mode="debug", qa="standard",
+                              qa_source="jobslog", liveness="working")
+            lines = render._build_lines(sessions, [job], section="both", narrow=False,
+                                        malformed=0, layout="wide")
+            return "\n".join("".join(part for part, _key in line)
+                             for line in lines if line)
+
+        self.assertNotIn("(orphan)", rendered("codex-thread"))
+        self.assertIn("(orphan)", rendered("synthetic-thread"))
+
 
 
 
