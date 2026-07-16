@@ -1,0 +1,463 @@
+{
+  "schema_version": 1,
+  "capability": "autopilot-code",
+  "capability_mode": "dev",
+  "requested_intensity": "thorough",
+  "effective_intensity": "thorough",
+  "execution_topology": "staged",
+  "owner_depth": 1,
+  "tracking": "tracked",
+  "tracked_gate_evidence": {
+    "spec_read": {
+      "satisfied": true,
+      "source": "/home/Uihyeop/agent_setting/.agent_reports/spec/skill-design-refactor/prd.md"
+    },
+    "drift_verdict": "within-spec",
+    "workflow_mode": "tracked",
+    "artifact_guard": {
+      "satisfied": true,
+      "source": "existing-spec"
+    }
+  },
+  "spec_touch": false,
+  "cwd": "/home/Uihyeop/agent_setting-wt/entry-skill-layer-audit",
+  "artifact_root": "/home/Uihyeop/agent_setting/.agent_reports",
+  "source_commit": "23c86beaa613571a583f65e869da6b72013a2ad4",
+  "registry_digest": "sha256:161b5539ad48dfd354aae3605daf27a9203ec3a676b450ba27b4856bfcea03c1",
+  "selection": {
+    "direct_predicates": [],
+    "promotion_signals": [
+      {
+        "signal": "independent-verifier",
+        "source": "caller"
+      },
+      {
+        "signal": "multi-runtime-parity",
+        "source": "caller"
+      },
+      {
+        "signal": "multi-write-scope",
+        "source": "caller"
+      }
+    ],
+    "selection_basis": [
+      {
+        "axis": "promotion",
+        "signal": "independent-verifier",
+        "source": "caller"
+      },
+      {
+        "axis": "promotion",
+        "signal": "multi-runtime-parity",
+        "source": "caller"
+      },
+      {
+        "axis": "promotion",
+        "signal": "multi-write-scope",
+        "source": "caller"
+      }
+    ],
+    "escalation_basis": [
+      {
+        "signal": "independent-verifier",
+        "source": "caller"
+      },
+      {
+        "signal": "multi-runtime-parity",
+        "source": "caller"
+      },
+      {
+        "signal": "multi-write-scope",
+        "source": "caller"
+      }
+    ],
+    "transport": "headless",
+    "transport_evidence": "broker-status+headless-check",
+    "inline_reason": null
+  },
+  "nodes": [
+    {
+      "id": "plan",
+      "kind": "pipeline-stage",
+      "depth": 2,
+      "depends_on": [],
+      "role": "deep maker",
+      "inputs": [
+        "task",
+        "spec",
+        "source"
+      ],
+      "outputs": [
+        "plan.md",
+        "checklist.md"
+      ],
+      "write_scope": [
+        "plan/**",
+        "_internal/plan_reviews/**"
+      ],
+      "resource_class": "normal",
+      "transport": [
+        "headless",
+        "inline-fallback"
+      ],
+      "completion_gate": "code-plan",
+      "dispatch_fallback": [
+        {
+          "ordinal": 1,
+          "hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "ancestor-broker",
+              "parent_harness": "codex",
+              "parent_sandbox": "danger-full-access",
+              "parent_transport": "headless",
+              "probe_source": "depth-0-broker:brk-9a6717359ce14394bb24ad6990ab3fd9+headless-check",
+              "probe_time": "2026-07-16T04:41:16.265056Z",
+              "status": "supported",
+              "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker"
+            },
+            {
+              "child_harness": "codex",
+              "failure_class": "unprobed-tuple",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "danger-full-access",
+              "parent_transport": "headless",
+              "probe_source": "no-context-matched-probe",
+              "probe_time": "2026-07-16T04:41:16.349156Z",
+              "status": "unknown"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "hop": "cross-harness-headless",
+          "candidates": []
+        },
+        {
+          "ordinal": 3,
+          "hop": "native-subagent",
+          "candidates": [
+            {
+              "harness": "codex",
+              "status": "supported",
+              "check_source": "preflight.sh subagent-info --check"
+            }
+          ],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ]
+    },
+    {
+      "id": "execute",
+      "kind": "pipeline-stage",
+      "depth": 2,
+      "depends_on": [
+        "plan"
+      ],
+      "role": "fast implementer",
+      "inputs": [
+        "plan.md",
+        "checklist.md"
+      ],
+      "outputs": [
+        "source-diff",
+        "dev_logs/**"
+      ],
+      "write_scope": [
+        "source/**",
+        "checklist.md",
+        "dev_logs/**",
+        "_internal/dev_reviews/**"
+      ],
+      "resource_class": "normal",
+      "transport": [
+        "headless",
+        "inline-fallback"
+      ],
+      "completion_gate": "code-execute",
+      "dispatch_fallback": [
+        {
+          "ordinal": 1,
+          "hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "ancestor-broker",
+              "parent_harness": "codex",
+              "parent_sandbox": "danger-full-access",
+              "parent_transport": "headless",
+              "probe_source": "depth-0-broker:brk-9a6717359ce14394bb24ad6990ab3fd9+headless-check",
+              "probe_time": "2026-07-16T04:41:16.265056Z",
+              "status": "supported",
+              "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker"
+            },
+            {
+              "child_harness": "codex",
+              "failure_class": "unprobed-tuple",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "danger-full-access",
+              "parent_transport": "headless",
+              "probe_source": "no-context-matched-probe",
+              "probe_time": "2026-07-16T04:41:16.349156Z",
+              "status": "unknown"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "hop": "cross-harness-headless",
+          "candidates": []
+        },
+        {
+          "ordinal": 3,
+          "hop": "native-subagent",
+          "candidates": [
+            {
+              "harness": "codex",
+              "status": "supported",
+              "check_source": "preflight.sh subagent-info --check"
+            }
+          ],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ]
+    },
+    {
+      "id": "test",
+      "kind": "pipeline-stage",
+      "depth": 2,
+      "depends_on": [
+        "execute"
+      ],
+      "role": "deep reviewer",
+      "inputs": [
+        "plan.md",
+        "checklist.md",
+        "source-diff"
+      ],
+      "outputs": [
+        "test_logs/**"
+      ],
+      "write_scope": [
+        "test_logs/**",
+        "_internal/test_reviews/**"
+      ],
+      "resource_class": "normal",
+      "transport": [
+        "headless",
+        "native-subagent",
+        "inline-fallback"
+      ],
+      "completion_gate": "code-test",
+      "dispatch_fallback": [
+        {
+          "ordinal": 1,
+          "hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "ancestor-broker",
+              "parent_harness": "codex",
+              "parent_sandbox": "danger-full-access",
+              "parent_transport": "headless",
+              "probe_source": "depth-0-broker:brk-9a6717359ce14394bb24ad6990ab3fd9+headless-check",
+              "probe_time": "2026-07-16T04:41:16.265056Z",
+              "status": "supported",
+              "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker"
+            },
+            {
+              "child_harness": "codex",
+              "failure_class": "unprobed-tuple",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "danger-full-access",
+              "parent_transport": "headless",
+              "probe_source": "no-context-matched-probe",
+              "probe_time": "2026-07-16T04:41:16.349156Z",
+              "status": "unknown"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "hop": "cross-harness-headless",
+          "candidates": []
+        },
+        {
+          "ordinal": 3,
+          "hop": "native-subagent",
+          "candidates": [
+            {
+              "harness": "codex",
+              "status": "supported",
+              "check_source": "preflight.sh subagent-info --check"
+            }
+          ],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "kind": "pipeline-stage",
+      "depth": 2,
+      "depends_on": [
+        "test"
+      ],
+      "role": "fast writer",
+      "inputs": [
+        "plan.md",
+        "checklist.md",
+        "dev_logs/**",
+        "test_logs/**"
+      ],
+      "outputs": [
+        "pipeline_summary.md",
+        "final_report.md"
+      ],
+      "write_scope": [
+        "pipeline_summary.md",
+        "final_report.md",
+        "analysis_project/code/**"
+      ],
+      "resource_class": "normal",
+      "transport": [
+        "headless",
+        "inline-fallback"
+      ],
+      "completion_gate": "code-report",
+      "dispatch_fallback": [
+        {
+          "ordinal": 1,
+          "hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "ancestor-broker",
+              "parent_harness": "codex",
+              "parent_sandbox": "danger-full-access",
+              "parent_transport": "headless",
+              "probe_source": "depth-0-broker:brk-9a6717359ce14394bb24ad6990ab3fd9+headless-check",
+              "probe_time": "2026-07-16T04:41:16.265056Z",
+              "status": "supported",
+              "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker"
+            },
+            {
+              "child_harness": "codex",
+              "failure_class": "unprobed-tuple",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "danger-full-access",
+              "parent_transport": "headless",
+              "probe_source": "no-context-matched-probe",
+              "probe_time": "2026-07-16T04:41:16.349156Z",
+              "status": "unknown"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "hop": "cross-harness-headless",
+          "candidates": []
+        },
+        {
+          "ordinal": 3,
+          "hop": "native-subagent",
+          "candidates": [
+            {
+              "harness": "codex",
+              "status": "supported",
+              "check_source": "preflight.sh subagent-info --check"
+            }
+          ],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ]
+    }
+  ],
+  "completion_gates": [
+    "code-plan",
+    "code-execute",
+    "code-test",
+    "code-report"
+  ],
+  "human_gates": [],
+  "resume_retry_boundaries": [
+    "plan",
+    "execute",
+    "test",
+    "report"
+  ],
+  "dispatch_evidence": {
+    "tuples": [
+      {
+        "child_harness": "codex",
+        "failure_class": "",
+        "launch_authority": "ancestor-broker",
+        "parent_harness": "codex",
+        "parent_sandbox": "danger-full-access",
+        "parent_transport": "headless",
+        "probe_source": "depth-0-broker:brk-9a6717359ce14394bb24ad6990ab3fd9+headless-check",
+        "probe_time": "2026-07-16T04:41:16.265056Z",
+        "status": "supported",
+        "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker"
+      },
+      {
+        "child_harness": "codex",
+        "failure_class": "unprobed-tuple",
+        "launch_authority": "conductor",
+        "parent_harness": "codex",
+        "parent_sandbox": "danger-full-access",
+        "parent_transport": "headless",
+        "probe_source": "no-context-matched-probe",
+        "probe_time": "2026-07-16T04:41:16.349156Z",
+        "status": "unknown"
+      }
+    ],
+    "native_subagent": [
+      {
+        "harness": "codex",
+        "status": "supported",
+        "check_source": "preflight.sh subagent-info --check"
+      }
+    ]
+  },
+  "broker_contract_version": 2,
+  "route_hash": "sha256:598d435deeb0cb811f6f72dcba6dd856f529a8a80c784589e77101a09ad19e0f",
+  "route_id": "rt-598d435deeb0cb81"
+}

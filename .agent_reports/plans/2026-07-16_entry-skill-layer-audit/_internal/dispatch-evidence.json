@@ -1,0 +1,34 @@
+{
+  "tuples": [
+    {
+      "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker",
+      "child_harness": "codex",
+      "failure_class": "",
+      "launch_authority": "ancestor-broker",
+      "parent_harness": "codex",
+      "parent_sandbox": "danger-full-access",
+      "parent_transport": "headless",
+      "probe_source": "depth-0-broker:brk-9a6717359ce14394bb24ad6990ab3fd9+headless-check",
+      "probe_time": "2026-07-16T04:41:16.265056Z",
+      "status": "supported"
+    },
+    {
+      "child_harness": "codex",
+      "failure_class": "unprobed-tuple",
+      "launch_authority": "conductor",
+      "parent_harness": "codex",
+      "parent_sandbox": "danger-full-access",
+      "parent_transport": "headless",
+      "probe_source": "no-context-matched-probe",
+      "probe_time": "2026-07-16T04:41:16.349156Z",
+      "status": "unknown"
+    }
+  ],
+  "native_subagent": [
+    {
+      "harness": "codex",
+      "status": "supported",
+      "check_source": "preflight.sh subagent-info --check"
+    }
+  ]
+}
