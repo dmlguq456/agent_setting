@@ -49,13 +49,15 @@ class RenderDispatchPresentationTest(unittest.TestCase):
 
     def test_depth_two_prefix_nests_the_spawn_arrow_deeper(self):
         # user 2026-07-16: every depth fans out with the same ↳ arrow, two cells deeper
-        # per level — an indent-only depth-2 row read as unanchored. Widths stay depth*2.
+        # per level, and the ladder starts one level in ("분사 세션의 화살표를 좀 더
+        # 들여쓰자") — the depth-1 arrow sits under the parent's text, not on its glyph
+        # column. Widths are (depth+1)*2.
         top = DispatchJob(key="code", slug="top", depth=1)
         nested = DispatchJob(key="code", slug="nested", depth=2)
 
-        self.assertEqual(render._dispatch_prefix(top), "↳ ")
-        self.assertEqual(render._dispatch_prefix(nested), "  ↳ ")
-        self.assertEqual(len(render._dispatch_prefix(nested)), 4)
+        self.assertEqual(render._dispatch_prefix(top), "  ↳ ")
+        self.assertEqual(render._dispatch_prefix(nested), "    ↳ ")
+        self.assertEqual(len(render._dispatch_prefix(nested)), 6)
 
     def test_dispatch_role_suffix_has_no_qa_token(self):
         # qa axis retired (CONVENTIONS §1.1) — the options dial shows intensity/role only.

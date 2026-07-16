@@ -324,12 +324,15 @@ class NoRegressionTest(unittest.TestCase):
             render.set_show_all(False)
 
     def test_strip_indent_is_a_deep_pure_inset(self):
-        """`_SUBAGENT_IND` stays a pure inset (spaces only, no connector) and lands WELL past
-        a dispatch row's full "  ↳ " prefix (사용자 2026-07-16 '들여쓰기 레벨을 충분히
-        안쪽으로' — both the 2-cell and 4-cell insets read as siblings, not children)."""
+        """`_SUBAGENT_IND` stays a pure inset (spaces only, no connector) and lands past the
+        depth-1 dispatch ARROW column (사용자 2026-07-16 '들여쓰기 레벨을 충분히 안쪽으로'
+        — both the 2-cell and 4-cell insets read as siblings, not children). The arrow
+        ladder itself has since moved a level in too ('분사 세션의 화살표를 좀 더
+        들여쓰자'), so the anchor is the arrow's column, not the full prefix end."""
         self.assertEqual(render._SUBAGENT_IND.strip(), "")
-        self.assertGreaterEqual(len(render._SUBAGENT_IND), len("  " + render._dispatch_prefix(
-            type("J", (), {"depth": 1})())) + 2)
+        d1_arrow_col = len("  ") + render._dispatch_prefix(
+            type("J", (), {"depth": 1})()).index("↳")
+        self.assertGreaterEqual(len(render._SUBAGENT_IND), d1_arrow_col + 2)
 
     def test_strip_depth_pushes_the_inset_further_inward(self):
         """A dispatch-owned strip (depth ≥ 1) indents 2 more cells per level than a

@@ -1024,10 +1024,12 @@ def _compact_dispatch_name(name, max_width=_DISPATCH_NAME_MAX):
 
 def _dispatch_prefix(j):
     # Every depth fans out with the same ↳ spawn arrow, nested two cells deeper per level
-    # (user 2026-07-16: depth-2 rows lost their arrow when they were indent-only). The
-    # prefix width stays depth*2, so the harness-field narrowing math is unchanged.
+    # (user 2026-07-16: depth-2 rows lost their arrow when they were indent-only), and the
+    # whole ladder starts one level in — the depth-1 arrow sits UNDER its parent session's
+    # text, not on the session's own glyph column (user 2026-07-16 "분사 세션의 화살표를
+    # 좀 더 들여쓰자"). Width = (depth+1)*2; the harness field absorbs it (_HMW - len).
     depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
-    return "  " * (depth - 1) + "↳ "
+    return "  " * depth + "↳ "
 
 
 _LEVEL_SHORT = {
