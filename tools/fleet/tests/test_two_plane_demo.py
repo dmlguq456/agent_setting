@@ -104,15 +104,15 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         # ↳ spawn arrow (matches render.py's own real dispatch-row convention), 🔧 capability
         # glyph, job-contract parenthetical.
         text = _joined(self._lines(120))
-        self.assertIn("↳ ▸ claude code", text)
-        self.assertIn("↳ ▸ codex", text)
+        self.assertIn("▸ claude code", text); self.assertIn("↳ ", text)
+        self.assertIn("▸ codex", text)
         self.assertIn("🔧 code", text)
-        self.assertIn("(thr · owner)", text)
-        self.assertIn("(quick · quick_owner · gpt·med)", text)
+        self.assertIn("(dev·thr·owner)", text)
+        self.assertIn("(dev·quick·quick_owner·gpt·med)", text)
         # r3 — qa retired as a separate axis (CONVENTIONS §1.1): no derived-qa token anywhere.
         self.assertNotIn("~thorough", text)
         # r3 — mode restored (parity) and the slug marked as a branch/worktree name.
-        self.assertIn("code·dev", text)
+        self.assertNotIn("code (dev) ", text)
         self.assertIn("⎇ usage-accuracy", text)
         self.assertIn("⎇ rate-window", text)
 
@@ -164,8 +164,8 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         text = _joined(lines)
         self.assertIn("🔧 exec ⎇ usage-accuracy", text)
         self.assertIn("🔧 exec:B ⎇ usage-accuracy", text)
-        self.assertIn("(stage · haiku·med)", text)
-        self.assertIn("(stage · sonnet·med)", text)
+        self.assertIn("(stage·haiku·med)", text)
+        self.assertIn("(stage·sonnet·med)", text)
         # positional attribution replaced the @<node> tag entirely
         self.assertNotIn("@exec", text)
         # the depth-2 arrow is strictly deeper than the depth-1 arrow
@@ -175,7 +175,7 @@ class TwoPlaneGrammarTest(unittest.TestCase):
                     s = "".join(t for t, _k in ln)
                     return s.index("↳")
             self.fail("row containing %r not found" % snippet)
-        self.assertGreater(arrow_col("🔧 exec ⎇"), arrow_col("🔧 code·dev"))
+        self.assertGreater(arrow_col("🔧 exec ⎇"), arrow_col("🔧 code (dev·thr·owner)"))
 
     def test_mem_events_are_scoped_under_their_own_group(self):
         # grammar #6 — per-repo mem events, not a board-wide dump.
