@@ -115,10 +115,24 @@ def _tool_use_line(tid, agent_type, ts="2026-07-15T10:00:00Z", name="Task"):
                  "input": {"subagent_type": agent_type}}]}}
 
 
-def _tool_result_line(tid, ts="2026-07-15T10:05:00Z"):
+def _tool_result_line(tid, ts="2026-07-15T10:05:00Z", content="done"):
     return {"type": "user", "isSidechain": False, "timestamp": ts,
             "message": {"role": "user", "content": [
-                {"type": "tool_result", "tool_use_id": tid, "content": "done"}]}}
+                {"type": "tool_result", "tool_use_id": tid, "content": content}]}}
+
+
+def _async_ack_line(tid, agent_id, ts="2026-07-15T10:00:01Z"):
+    """The harness's immediate answer to a background Agent launch — NOT completion."""
+    return _tool_result_line(tid, ts=ts, content=(
+        "Async agent launched successfully. agentId: %s (internal ID)." % agent_id))
+
+
+def _task_notification_line(agent_id, ts="2026-07-15T10:07:00Z"):
+    """The user-turn stop notification the harness injects when a background agent ends."""
+    return {"type": "user", "isSidechain": False, "timestamp": ts,
+            "message": {"role": "user", "content":
+                "<task-notification><task-id>%s</task-id>"
+                "<status>completed</status></task-notification>" % agent_id}}
 
 
 def _write_transcript(path, lines):
@@ -180,6 +194,55 @@ class ClaudeSidechainTest(unittest.TestCase):
             self.assertEqual(len(subs), 2)
             self.assertFalse(subs[0].active)
             self.assertFalse(subs[1].active)
+
+    def test_async_launch_ack_keeps_the_agent_active(self):
+        """Background agents answer their tool_use IMMEDIATELY with a launch ack while the
+        agent keeps running — pairing alone misread every async agent as completed on the
+        spot, so the active ● state never showed live (user 2026-07-16)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            _write_transcript(path, [
+                _tool_use_line("t1", "explore", name="Agent"),
+                _async_ack_line("t1", "a1b2c3d4e5"),
+            ])
+            subs = claude._tail_subagents(path)
+            self.assertEqual(len(subs), 1)
+            self.assertTrue(subs[0].active, "launch ack ≠ completion")
+
+    def test_async_agent_completes_on_task_notification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            _write_transcript(path, [
+                _tool_use_line("t1", "explore", name="Agent"),
+                _async_ack_line("t1", "a1b2c3d4e5"),
+                _task_notification_line("a1b2c3d4e5"),
+            ])
+            subs = claude._tail_subagents(path)
+            self.assertEqual(len(subs), 1)
+            self.assertFalse(subs[0].active)
+
+    def test_foreign_notification_does_not_complete_the_agent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            _write_transcript(path, [
+                _tool_use_line("t1", "explore", name="Agent"),
+                _async_ack_line("t1", "a1b2c3d4e5"),
+                _task_notification_line("other-task-id"),
+            ])
+            subs = claude._tail_subagents(path)
+            self.assertTrue(subs[0].active)
+
+    def test_async_ack_without_id_falls_back_to_completed(self):
+        # Untrackable launch (marker but no parseable agentId) fails toward the pre-async
+        # pairing — completed — rather than showing an active row forever.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            _write_transcript(path, [
+                _tool_use_line("t1", "explore", name="Agent"),
+                _tool_result_line("t1", content="Async agent launched successfully."),
+            ])
+            subs = claude._tail_subagents(path)
+            self.assertFalse(subs[0].active)
 
     def test_malformed_lines_are_skipped(self):
         with tempfile.TemporaryDirectory() as tmp:
