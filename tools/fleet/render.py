@@ -583,24 +583,48 @@ _STAGE_RESERVE = 22           # trailing room for the dispatch stage breadcrumb 
                               # the panel edge (user 2026-07-15: 분사 세션 단계가 잘림)
 
 
+def _wide_slack(term_width):
+    """Terminal slack available to the wide-layout name column past its fixed
+    columns and framing, or None when `term_width` is unknown (hermetic callers).
+    Shared by `_wide_name_width` and `_wide_ctx_width` below so the fixed_row/
+    framing reservation is computed in exactly one place (user 2026-07-16: the
+    ctx-gauge width ask reuses the same reservation math F-22's name-cap already
+    established, rather than duplicating it)."""
+    if not term_width:
+        return None
+    fixed_row = _NAME_COL + _BRW + _MW + 4 + _CTX_W + 5 + _STAGE_RESERVE
+    if _TINT_OK:
+        framing = (_INSET + _PAD_IN) + _INSET + (2 + _PAD_IN) + 6 + 2
+    else:
+        framing = 1 + 6 + 2
+    return int(term_width) - fixed_row - framing
+
+
 def _wide_name_width(term_width):
     """Responsive wide-layout name column, between _NW_S and _NAME_WIDE_MAX.
 
     Reserve every field after the name plus the right-flushed time and panel
     margins — including trailing breadcrumb room (_STAGE_RESERVE) — then give
     the remaining horizontal slack to the session column, but only up to
-    _NAME_WIDE_MAX (F-22 minor, v8). Leftover slack past the cap is deliberately
-    left as end-of-row padding rather than being handed to another column: the
-    point is a stable, predictable name zone, not a wider one.
+    _NAME_WIDE_MAX (F-22 minor, v8). Leftover slack past the cap flows to the
+    ctx gauge instead (`_wide_ctx_width`) rather than sitting as blank padding.
     """
-    if not term_width:
+    raw = _wide_slack(term_width)
+    if raw is None:
         return _NW_S
-    fixed_row = _NAME_COL + _BRW + _MW + 4 + _CTX_W + 5 + _STAGE_RESERVE
-    if _TINT_OK:
-        framing = (_INSET + _PAD_IN) + _INSET + (2 + _PAD_IN) + 6 + 2
-    else:
-        framing = 1 + 6 + 2
-    return max(_NW_S, min(_NAME_WIDE_MAX, int(term_width) - fixed_row - framing))
+    return max(_NW_S, min(_NAME_WIDE_MAX, raw))
+
+
+def _wide_ctx_width(term_width):
+    """Wide-layout ctx-gauge width: once the name column hits its _NAME_WIDE_MAX
+    cap, the remaining terminal slack widens the gauge instead of being left as
+    blank padding before the time column (user 2026-07-16: "context window의
+    길이를 더 늘려서 맞춰주고") — every row's gauge then ends at the same column
+    for a given terminal width, so the right edges line up across rows."""
+    raw = _wide_slack(term_width)
+    if raw is None:
+        return _CTX_W
+    return _CTX_W + max(0, raw - _NAME_WIDE_MAX)
 
 
 def _col_head(name_width):
@@ -837,7 +861,7 @@ def _unused_badge(s, compact=False):
     return " unused %s" % fmt_min(s.elapsed_min if s.elapsed_min is not None else None)
 
 
-def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
+def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx_width=None):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
     dim_tel = live in ("stale", "dead") or s.app_server or s.detached
@@ -868,15 +892,6 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
         if _dw(child_tag) < avail:
             suffix.append((child_tag, "dim"))
             suffix_w += _dw(child_tag)
-    # F-29 (v9) — same suffix-reservation discipline as the child-count badge above; the
-    # subagent count is a structural fact about this row (prd.md:293), so it reserves its
-    # cell before the name zone consumes leftover width.
-    n_sub = _active_subagent_count(s)
-    if n_sub:
-        sub_tag = " %s%d" % (_ICON_SUBAGENT, n_sub)
-        if suffix_w + _dw(sub_tag) < avail:
-            suffix.append((sub_tag, "dim"))
-            suffix_w += _dw(sub_tag)
     # F-26: the unused badge outranks the gate/provenance tags — it is the whole reason the
     # row is surfaced, so it is the last identity tag to drop, not the first.
     unused_at = None
@@ -930,11 +945,14 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None):
         segs += [(" " * _MW, None), ("    ", None), ("last seen %s" % fmt_min(age_min), "dim")]
     else:
         segs += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
-        # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate from effort
+        # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate
+        # from effort. `ctx_width` (F-22-adjacent, user 2026-07-16) lets wide-layout callers
+        # widen the gauge into otherwise-blank slack; legacy/hermetic callers keep _CTX_W.
+        cw = ctx_width or _CTX_W
         if s.ctx_pct is not None and not dim_tel:
-            segs += [("    ", None)] + _gauge_segs(s.ctx_pct, _CTX_W) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
+            segs += [("    ", None)] + _gauge_segs(s.ctx_pct, cw) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
         else:
-            segs += [("    ", None), ("─" * _CTX_W, "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
+            segs += [("    ", None), ("─" * cw, "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
     if s.app_server:
         segs.append(("  app-server", "dim"))
     if s.orphan:
@@ -1453,6 +1471,54 @@ def _mem_event_rows(memory, limit=8):
     return rows
 
 
+_MEM_DIVIDER_MARGIN = 12   # in-band card-bottom divider inset (both sides), matches the
+                            # discarded two-plane demo's r5 rule — a dim `─` ON the tint, not
+                            # a full-width chrome bar (F-19 repo rows, 사용자 확정 2026-07-16)
+_MEM_REPO_ROW_LIMIT = 2
+_MEM_REPO_TITLE_W = 22
+
+
+def _mem_divider(term_width=None):
+    """One dim in-band rule above a group card's per-repo mem rows — the tint prefix is
+    applied by the caller's existing group-body tint loop (F-19 repo rows)."""
+    return [(" ", None), ("─" * max(8, (term_width or 78) - _MEM_DIVIDER_MARGIN), "dim")]
+
+
+def _mem_repo_rows(events, sid_titles, limit=_MEM_REPO_ROW_LIMIT):
+    """F-19 repo rows — a group card's own today-mem events, most-recent-first, dim:
+    `🧠 HH:MM ± tier/type actor ⟵ <source session title> "snippet"`. `+` (add) is green,
+    `−` (expire/prune) falls back to dim (the engine's only red key is bold-only, and bold
+    is reserved for the main-session row — round-2 precedent in the discarded two-plane
+    demo). The source session title is shown only when the journal `sid` resolves against a
+    currently-known session (honest omission otherwise, F-3)."""
+    if not events:
+        return []
+    from .collectors.memory import ADDED_ACTIONS, EXPIRED_ACTIONS, PRUNED_ACTIONS
+    rows = []
+    for e in events[:limit]:
+        ts = e.get("ts") or "—"
+        if "T" in ts:
+            ts = ts.split("T", 1)[1][:5]        # HH:MM
+        action = e.get("action")
+        if action in ADDED_ACTIONS:
+            sign, sign_key = "+", "lvl_g"
+        elif action in EXPIRED_ACTIONS or action in PRUNED_ACTIONS:
+            sign, sign_key = "−", "dim"
+        else:
+            sign, sign_key = "·", "dim"
+        tier_type = "%s/%s" % (e.get("tier") or "-", e.get("type") or "-")
+        seg = [("  🧠 ", "dim"), (ts + " ", "dim"), (sign, sign_key),
+               (" %s " % tier_type, "dim"), ((e.get("actor") or "?") + " ", "dim")]
+        title = sid_titles.get(e.get("sid")) if e.get("sid") else None
+        if title:
+            seg.append(("⟵ " + _clip_w(title, _MEM_REPO_TITLE_W) + "  ", "dim"))
+        snip = e.get("snippet")
+        if snip:
+            seg.append(('"%s"' % _clip_w(snip, 60), "dim"))
+        rows.append(seg)
+    return rows
+
+
 def _mem_alert_bucket(memory):
     """F-19 alert-strip bucket — durable soft-ceiling + distill-silence, appended LAST in the
     dead > stale > ctx > mem priority order (§4.6)."""
@@ -1583,11 +1649,11 @@ _FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: dep
 # dispatch's `🚀`/`↳` so the two nested-row kinds never visually merge. Single point of
 # ASCII-degrade if double-width alignment ever breaks in a real terminal.
 _ICON_SUBAGENT = "⚡"
-
-
-def _active_subagent_count(s):
-    subs = getattr(s, "subagents", None) or []
-    return sum(1 for sa in subs if getattr(sa, "active", True))
+_SUBAGENT_IND = "  "   # session-child indent: pure inset, no connector glyph — shallower
+                       # than a dispatch row's own "  ↳ " prefix (F-29 v11, prd.md:290-295
+                       # vocabulary unchanged, display replaced — 사용자 확정 2026-07-16;
+                       # the per-session ⚡N name-zone badge this used to pair with is retired
+                       # as redundant now that the strip is always inline under the row).
 
 
 def _subagent_elapsed_min(sa):
@@ -1597,18 +1663,22 @@ def _subagent_elapsed_min(sa):
     return max(0, int((time.time() - started) / 60))
 
 
-def _subagent_row(sa, is_last=True):
-    """`├⚡<agent-type> ⏳<elapsed>` / `└⚡…` for the last one — distinct glyph from
-    dispatch's `└▸🚀` (prd.md:293). `├`/`└` (design critic step3 §2) reads 2+ stacked
-    sub-agents as one connected group under the parent, not independent branches. Active
-    rows render bright; the caller only emits a completed (inactive) row at all when
-    `_SHOW_ALL` (F-18b dim-row convention — completed sub-agents are hidden by default)."""
-    branch = "└" if is_last else "├"
-    label = sa.agent_type or "agent"
-    elapsed = _subagent_elapsed_min(sa)
-    tail = "  ⏳%s" % fmt_min(elapsed) if elapsed is not None else ""
-    key = "name_idle" if sa.active else "dim"
-    return [("     %s%s%s%s" % (branch, _ICON_SUBAGENT, label, tail), key)]
+def _subagent_strip(subs):
+    """One horizontal strip per session: `⚡ <type> <glyph> <elapsed> · <type> <glyph>
+    <elapsed> …` — replaces the old one-row-per-subagent `├⚡`/`└⚡` stack (adopted from the
+    discarded two-plane demo's `_agents_strip`, prd.md:290-295). Active entries render
+    normal weight (● + elapsed); completed entries dim (✓ + elapsed) — the caller only
+    passes completed entries at all when `_SHOW_ALL` (F-18b dim-row convention)."""
+    segs = [(_SUBAGENT_IND, None), (_ICON_SUBAGENT + " ", "dim")]
+    for i, sa in enumerate(subs):
+        if i:
+            segs.append((" · ", "dim"))
+        label = sa.agent_type or "agent"
+        elapsed = _subagent_elapsed_min(sa)
+        tail = fmt_min(elapsed) if elapsed is not None else "—"
+        glyph = "●" if sa.active else "✓"
+        segs.append(("%s %s %s" % (label, glyph, tail), None if sa.active else "dim"))
+    return [segs]
 
 
 def set_show_all(v):
@@ -1840,8 +1910,8 @@ def _route_card(view, session_by_pid, term_width, now):
         sess = session_by_pid.get(job.pid) if job.pid else None
         subs = ([sa for sa in (getattr(sess, "subagents", None) or []) if sa.active or _SHOW_ALL]
                 if sess is not None else [])
-        for i, sa in enumerate(subs):
-            out.append(_subagent_row(sa, is_last=(i == len(subs) - 1)))
+        if subs:
+            out.extend(_subagent_strip(subs))
 
     if _SHOW_ALL:
         # prd.md:310 — completion gates stay behind the `a` toggle, never on the base screen.
@@ -2084,12 +2154,18 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # session list, before is_child/mem filtering, so folded/mem-only groups still surface a
     # total in the legend even when no group header badge fires.
     wide_name_width = _wide_name_width(term_width) if layout == "wide" else None
+    wide_ctx_width = _wide_ctx_width(term_width) if layout == "wide" else None
     n_mem_total = sum(1 for s in sessions if getattr(s, "mem_worker", False))
     mem_by_group = {}
     for s in sessions:
         if getattr(s, "mem_worker", False):
             gk_mem = _group_key_session(s)
             mem_by_group[gk_mem] = mem_by_group.get(gk_mem, 0) + 1
+    # F-19 repo rows: session-id -> display title, resolved on the ORIGINAL (unfiltered) list
+    # so a mem event's source session still resolves even after mem-worker/child filtering
+    # below drops it from the visible rows.
+    sid_titles = {s.session_id: (s.title or s.slug) for s in sessions
+                  if s.session_id and (s.title or s.slug)}
     # headless dispatch children are shown as dispatch rows under their parent — never as
     # top-level sessions (the same headless process would otherwise double-show as session+job).
     # mem-worker sessions are excluded from grouping/census by default (F-18b) — they inherit
@@ -2529,15 +2605,16 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             else:
                 lines.append(_session_row(s, narrow, is_parent=bool(nested_n),
                                           child_count=nested_n,
-                                          name_width=wide_name_width))
+                                          name_width=wide_name_width,
+                                          ctx_width=wide_ctx_width))
             if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):
                 _sess_bold_ids.update(range(_n0, len(lines)))
             # F-29 (v9) — sub-agent rows, directly under the parent session's own row(s).
             # Active always shown; completed only surface with `a` (F-18b dim-row convention).
             shown_subs = [sa for sa in (getattr(s, "subagents", None) or [])
                          if sa.active or _SHOW_ALL]
-            for i, sa in enumerate(shown_subs):
-                lines.append(_subagent_row(sa, is_last=(i == len(shown_subs) - 1)))
+            if shown_subs:
+                lines.extend(_subagent_strip(shown_subs))
             for i, cj in enumerate(kids):
                 _emit_dispatch_tree(cj, parent_model=s.model, parent_harness=s.harness,
                                     parent_effort=s.effort, orphan=False,
@@ -2550,6 +2627,14 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             _emit_dispatch_tree(oj, orphan=show_sessions)
         for lj in _sort_group_jobs(loops_jobs):
             _emit_dispatch_tree(lj, orphan=False)
+
+        # F-19 repo rows (사용자 확정 2026-07-16): this card's own today-mem events, below a
+        # subtle in-band divider — entirely silent when the repo has none (healthy-silent,
+        # §4.7 F-19 convention). Rides the same body-tint loop below, unmodified.
+        repo_events = (memory or {}).get("by_repo", {}).get(name) if memory else None
+        if repo_events:
+            lines.append(_mem_divider(term_width))
+            lines.extend(_mem_repo_rows(repo_events, sid_titles))
 
         # group BODY (round-5): every row of the group rides the body tint — the whole directory
         # The whole directory block is one panel, brighter when active.
@@ -2612,7 +2697,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     if "child" in _seen_glyphs:
         legend += [("▾N", "dim"), (" child jobs   ", "dim")]
     if "subagent" in _seen_glyphs:
-        legend += [("%sN" % _ICON_SUBAGENT, "dim"), (" sub-agents   ", "dim")]
+        legend += [(_ICON_SUBAGENT, "dim"), (" sub-agent   ", "dim")]
     if jobs:
         legend += [("↳", "dim"), (" dispatch   ", "dim")]
     if "wt" in _seen_glyphs:

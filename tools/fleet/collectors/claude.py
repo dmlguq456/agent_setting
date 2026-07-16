@@ -144,9 +144,10 @@ def _ts_to_epoch(ts):
 
 
 def _tail_subagents(path, chunk=8192, max_scan=None):
-    """Sub-agent rows from Task tool_use/tool_result pairing (prd.md:292 Claude source,
+    """Sub-agent rows from Task/Agent tool_use/tool_result pairing (prd.md:292 Claude source,
     `isSidechain: true` marks the spawned sub-agent's own turns; the pairing itself lives
-    on the Task tool_use/tool_result pair in the PARENT thread). Grows backward exactly
+    on the tool_use/tool_result pair in the PARENT thread — current runtimes emit the
+    tool_use name as "Agent"; "Task" is kept for older transcript compatibility). Grows backward exactly
     like `_tail_ai_title` — same window, same guarantee (R3-1): if a tool_use is inside the
     scanned window, any tool_result answering it is necessarily ALSO inside it (an
     append-only log only grows forward), so "unpaired tool_use" found here is structurally
@@ -194,7 +195,7 @@ def _tail_subagents(path, chunk=8192, max_scan=None):
             for c in content:
                 if not isinstance(c, dict):
                     continue
-                if c.get("type") == "tool_use" and c.get("name") == "Task":
+                if c.get("type") == "tool_use" and c.get("name") in ("Task", "Agent"):
                     tid = c.get("id")
                     if not tid or tid in calls:
                         continue

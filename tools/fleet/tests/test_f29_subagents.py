@@ -108,10 +108,10 @@ class OpenCodeSubagentTest(unittest.TestCase):
             self.assertEqual(sess.subagents[0].agent_type, "explore")
 
 
-def _tool_use_line(tid, agent_type, ts="2026-07-15T10:00:00Z"):
+def _tool_use_line(tid, agent_type, ts="2026-07-15T10:00:00Z", name="Task"):
     return {"type": "assistant", "isSidechain": False, "timestamp": ts,
             "message": {"role": "assistant", "content": [
-                {"type": "tool_use", "id": tid, "name": "Task",
+                {"type": "tool_use", "id": tid, "name": name,
                  "input": {"subagent_type": agent_type}}]}}
 
 
@@ -152,6 +152,34 @@ class ClaudeSidechainTest(unittest.TestCase):
             self.assertEqual(len(subs), 1)
             self.assertTrue(subs[0].active)
             self.assertEqual(subs[0].agent_type, "code-reviewer")
+
+    def test_current_runtime_agent_tool_name_is_matched(self):
+        """claude.py:197 matched tool_use name == "Task" only; current runtimes emit
+        "Agent" instead, so this collector counted 0 sub-agents against every live
+        transcript until fixed — regression fixture for that drift."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            _write_transcript(path, [_tool_use_line("t1", "explore", name="Agent")])
+            subs = claude._tail_subagents(path)
+            self.assertEqual(len(subs), 1)
+            self.assertTrue(subs[0].active)
+            self.assertEqual(subs[0].agent_type, "explore")
+
+    def test_task_and_agent_names_both_pair_with_tool_result(self):
+        """Old ("Task") and current ("Agent") transcripts must both resolve to completed
+        when a tool_result answers them — compatibility, not an either/or switch."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            _write_transcript(path, [
+                _tool_use_line("t1", "explore", name="Task"),
+                _tool_result_line("t1"),
+                _tool_use_line("t2", "code-reviewer", name="Agent", ts="2026-07-15T10:01:00Z"),
+                _tool_result_line("t2", ts="2026-07-15T10:06:00Z"),
+            ])
+            subs = claude._tail_subagents(path)
+            self.assertEqual(len(subs), 2)
+            self.assertFalse(subs[0].active)
+            self.assertFalse(subs[1].active)
 
     def test_malformed_lines_are_skipped(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -195,21 +223,62 @@ class NoRegressionTest(unittest.TestCase):
         joined = "\n".join("".join(t for t, _k in ln) for ln in lines if ln)
         self.assertNotIn(render._ICON_SUBAGENT, joined)
 
-    def test_stacked_subagent_rows_use_connected_tree_branches(self):
-        """design critic step3 §2 — 2+ rows read as ONE connected group (├…├…└), not
-        independent branches (all-└)."""
+    def test_subagents_render_as_one_horizontal_strip_row(self):
+        """F-29 v11 (사용자 확정 2026-07-16) — 2+ sub-agents render as ONE horizontal strip
+        row per session (`⚡ type ● elapsed · type ● elapsed …`), replacing the old
+        one-row-per-subagent ├⚡/└⚡ stack."""
         subs = [SubAgent(agent_type="explore", active=True),
                SubAgent(agent_type="code-reviewer", active=True),
                SubAgent(agent_type="fact-check", active=True)]
         lines = render._build_lines(self._rows(subagents=subs), [], section="fleet",
                                     narrow=False, malformed=0, term_width=168)
-        sub_lines = [ln for ln in lines if ln and len(ln) == 1
-                    and render._ICON_SUBAGENT in ln[0][0]]
-        self.assertEqual(len(sub_lines), 3)
-        texts = [ln[0][0] for ln in sub_lines]
-        self.assertTrue(texts[0].strip().startswith("├"))
-        self.assertTrue(texts[1].strip().startswith("├"))
-        self.assertTrue(texts[2].strip().startswith("└"))
+        sub_lines = [ln for ln in lines
+                    if ln and "explore" in "".join(t for t, _k in ln)]
+        self.assertEqual(len(sub_lines), 1, "3개 서브에이전트가 한 줄 스트립이어야 함")
+        text = "".join(t for t, _k in sub_lines[0])
+        self.assertIn("explore", text)
+        self.assertIn("code-reviewer", text)
+        self.assertIn("fact-check", text)
+        self.assertIn(" · ", text, "가로 나열은 가운뎃점으로 구분")
+        self.assertNotIn("├", text)
+        self.assertNotIn("└", text)
+
+    def test_strip_hides_completed_by_default_shows_with_show_all(self):
+        subs = [SubAgent(agent_type="explore", active=True),
+               SubAgent(agent_type="fact-check", active=False)]
+        try:
+            lines = render._build_lines(self._rows(subagents=subs), [], section="fleet",
+                                        narrow=False, malformed=0, term_width=168)
+            text = "".join("".join(t for t, _k in ln) for ln in lines if ln)
+            self.assertIn("explore", text)
+            self.assertNotIn("fact-check", text)
+            render.set_show_all(True)
+            lines = render._build_lines(self._rows(subagents=subs), [], section="fleet",
+                                        narrow=False, malformed=0, term_width=168)
+            text = "".join("".join(t for t, _k in ln) for ln in lines if ln)
+            self.assertIn("fact-check", text)
+        finally:
+            render.set_show_all(False)
+
+    def test_strip_indent_is_shallower_than_a_dispatch_row(self):
+        """`_SUBAGENT_IND` must stay a pure inset, no connector, and land shallower than a
+        dispatch row's own "  ↳ " prefix (사용자 확정 2026-07-16)."""
+        self.assertLess(len(render._SUBAGENT_IND), len("  " + render._dispatch_prefix(
+            type("J", (), {"depth": 1})())))
+
+    def test_no_subagent_count_badge_on_the_session_name_row(self):
+        """The ⚡N name-zone badge is retired — the strip is inline under the row, so a
+        second count on the name line would be redundant (사용자 확정 2026-07-16)."""
+        subs = [SubAgent(agent_type="explore", active=True),
+               SubAgent(agent_type="code-reviewer", active=True)]
+        lines = render._build_lines(self._rows(subagents=subs), [], section="fleet",
+                                    narrow=False, malformed=0, term_width=168)
+        name_lines = [ln for ln in lines
+                     if ln and any(k == "name_work" for _t, k in ln)]
+        self.assertEqual(len(name_lines), 1)
+        name_text = "".join(t for t, _k in name_lines[0])
+        self.assertNotIn("⚡2", name_text)
+        self.assertNotIn(render._ICON_SUBAGENT, name_text)
 
     def test_parse_failure_omits_subrow_entirely(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -100,6 +100,24 @@ def _is_today(ts, midnight):
     return dt is not None and dt >= midnight
 
 
+def _repo_key(event):
+    """Grouping key for F-19 per-repo rows (prd.md §4.7 F-19 extension, 사용자 확정
+    2026-07-16). Only trusts fields the journal actually carries — `cwd` (mapped through
+    the same `project_of` grouping key the board's own cwd-project cards use) or a literal
+    `project` field. Neither exists in the current write-events.jsonl schema (D-37); this
+    is forward-compatible plumbing that degrades to no grouping (honest omission, F-3) until
+    a journal writer starts emitting one of them — never a guess."""
+    cwd = event.get("cwd")
+    if isinstance(cwd, str) and cwd:
+        try:
+            from ..model import project_of
+            return project_of(cwd)
+        except Exception:
+            return None
+    project = event.get("project")
+    return project if isinstance(project, str) and project else None
+
+
 def _durable_over(soft_ceiling=DOCTOR_DURABLE_SOFT_CEILING):
     """D-39 ⑥ durable soft-ceiling check, read-only — [(cwd_origin, count), ...] over ceiling.
     Any DB access failure (absent/locked/corrupt) degrades to []."""
@@ -159,6 +177,7 @@ def collect(now=None):
             last_distill_min = max(0, int((now - dt).total_seconds() // 60))
 
     recent = []
+    by_repo = {}
     if journal_ok:
         for e in events[-RECENT_LIMIT:][::-1]:
             recent.append({
@@ -166,6 +185,19 @@ def collect(now=None):
                 "type": e.get("type"), "actor": e.get("actor"), "sid": e.get("sid"),
                 "snippet": e.get("snippet"),
             })
+        # F-19 repo extension: today's events, grouped by repo when the journal row names
+        # one (see `_repo_key`) — additive, most-recent-first per repo.
+        for e in today_events:
+            rk = _repo_key(e)
+            if not rk:
+                continue
+            by_repo.setdefault(rk, []).append({
+                "ts": e.get("ts"), "action": e.get("action"), "tier": e.get("tier"),
+                "type": e.get("type"), "actor": e.get("actor"), "sid": e.get("sid"),
+                "snippet": e.get("snippet"),
+            })
+        for rk in by_repo:
+            by_repo[rk].sort(key=lambda x: x.get("ts") or "", reverse=True)
 
     durable_over = _durable_over()
     distill_stale = last_distill_min is not None and last_distill_min > DISTILL_STALE_MIN
@@ -182,6 +214,7 @@ def collect(now=None):
         },
         "last_distill_min": last_distill_min,
         "recent": recent,
+        "by_repo": by_repo,
         "alerts": {
             "durable_over": durable_over,
             "distill_stale": distill_stale,
