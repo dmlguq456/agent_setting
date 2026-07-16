@@ -37,4 +37,60 @@ class WorkerRouteGuardTest(unittest.TestCase):
    with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx: G.validate_route_contract(path,"execute",repo,repo)
    self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
 
+ def _lineage_repo(self,td):
+  repo=Path(td)/"repo"; repo.mkdir(); subprocess.run(["git","init","-q",str(repo)],check=True)
+  subprocess.run(["git","-C",str(repo),"config","user.email","fixture@example.com"],check=True); subprocess.run(["git","-C",str(repo),"config","user.name","Fixture"],check=True)
+  (repo/"x").write_text("a"); subprocess.run(["git","-C",str(repo),"add","x"],check=True); subprocess.run(["git","-C",str(repo),"commit","-qm","a"],check=True)
+  gate={"spec_read":{"satisfied":True,"source":"prd"},"drift_verdict":"within-spec","workflow_mode":"tracked","artifact_guard":{"satisfied":True,"source":"conductor"}}
+  route=R.compile_route("autopilot-code","dev","strong",repo,repo,signals=["shared-contract"],transport="headless",tracking="tracked",tracked_gate_evidence=gate,dispatch_evidence=DISPATCH)
+  path=Path(td)/"route.json"; path.write_text(json.dumps(route))
+  return repo,route,path
+
+ def test_post_execute_descendant_head_passes(self):
+  # SD-65 (a): a node depending on execute (test/report) accepts a HEAD that is
+  # a first-parent descendant of source_commit -- execute's own commit advanced HEAD.
+  with tempfile.TemporaryDirectory() as td:
+   repo,route,path=self._lineage_repo(td)
+   (repo/"x").write_text("b"); subprocess.run(["git","-C",str(repo),"commit","-am","b","-q"],check=True)
+   _,node,_=G.validate_route_contract(path,"test",repo,repo)
+   self.assertEqual(node["id"],"test")
+   _,node,_=G.validate_route_contract(path,"report",repo,repo)
+   self.assertEqual(node["id"],"report")
+
+ def test_post_execute_diverged_head_rejected(self):
+  # SD-65 (b): a rewritten (amended) root commit produces a HEAD unrelated to
+  # route["source_commit"] -- not an ancestor at all -- and stays fail-closed
+  # even for a post-execute node.
+  with tempfile.TemporaryDirectory() as td:
+   repo,route,path=self._lineage_repo(td)
+   subprocess.run(["git","-C",str(repo),"commit","--amend","-qm","a-rewritten"],check=True)
+   with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx: G.validate_route_contract(path,"test",repo,repo)
+   self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
+
+ def test_pre_mutation_node_moved_head_rejected(self):
+  # SD-65 (c): the plan node precedes execute (the first mutation node) and keeps the
+  # exact-match requirement even though HEAD is a descendant of source_commit.
+  with tempfile.TemporaryDirectory() as td:
+   repo,route,path=self._lineage_repo(td)
+   (repo/"x").write_text("b"); subprocess.run(["git","-C",str(repo),"commit","-am","b","-q"],check=True)
+   with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx: G.validate_route_contract(path,"plan",repo,repo)
+   self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
+
+ def test_execute_node_itself_moved_head_rejected(self):
+  # SD-65: the first mutation node (execute) is grouped with the pre-mutation nodes --
+  # it must still observe HEAD == source_commit before it starts mutating.
+  with tempfile.TemporaryDirectory() as td:
+   repo,route,path=self._lineage_repo(td)
+   (repo/"x").write_text("b"); subprocess.run(["git","-C",str(repo),"commit","-am","b","-q"],check=True)
+   with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx: G.validate_route_contract(path,"execute",repo,repo)
+   self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
+
+ def test_non_git_cwd_boundary_unchanged(self):
+  # SD-65 (d): non-git cwd keeps existing non-git handling (head="unversioned"),
+  # which never equals a real source_commit and never matches the mutating-scope path.
+  with tempfile.TemporaryDirectory() as td:
+   nongit=Path(td)/"nongit"; nongit.mkdir()
+   state=G._git_state(nongit)
+   self.assertEqual(state,{"repository":"non-git","operation":"none","branch":"non-git","head":"unversioned"})
+
 if __name__=="__main__": unittest.main()

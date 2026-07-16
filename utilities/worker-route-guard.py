@@ -46,6 +46,35 @@ def _scopes(value: str | None) -> list[str]:
     return sorted(part for part in (value or "").split(";") if part)
 
 
+# topologies.json write_scope vocabulary realized: these are the only scopes that
+# name the versioned worktree/target file being edited in place (git-committed),
+# as opposed to artifact-root outputs (reviews/**, dev_logs/**, plan/**, ...).
+def _worktree_mutating_scope(scope: str) -> bool:
+    if scope in ("target-artifact", "source-scoped"): return True
+    root = scope[:-3] if scope.endswith("/**") else scope
+    return root == "source"
+
+
+def _post_mutation_node(nodes: list[dict], node_id: str) -> bool:
+    by_id = {row["id"]: row for row in nodes}
+    mutating_ids = {row["id"] for row in nodes if any(_worktree_mutating_scope(s) for s in row.get("write_scope", []))}
+    seen: set[str] = set()
+    stack = list(by_id.get(node_id, {}).get("depends_on", []))
+    while stack:
+        dep = stack.pop()
+        if dep in seen: continue
+        seen.add(dep)
+        if dep in mutating_ids: return True
+        stack.extend(by_id.get(dep, {}).get("depends_on", []))
+    return False
+
+
+def _is_first_parent_descendant(cwd: Path, source_commit: str, head: str) -> bool:
+    result = subprocess.run(["git", "-C", str(cwd), "rev-list", "--first-parent", head], text=True, capture_output=True)
+    if result.returncode != 0: return False
+    return source_commit in result.stdout.split()
+
+
 def validate_route_contract(route_path: str | Path, node_id: str, cwd: str | Path,
                             artifact_root: str | Path, capability: str | None = None,
                             intensity: str | None = None, write_scope: str | None = None,
@@ -83,7 +112,10 @@ def validate_route_contract(route_path: str | Path, node_id: str, cwd: str | Pat
         if gate["workflow_mode"] != "tracked": raise _fail("tracked-mode-mismatch", gate["workflow_mode"], rid)
     git = _git_state(actual_cwd)
     if git["head"] != route["source_commit"]:
-        raise _fail("route-source-commit-mismatch", f"expected={route['source_commit']} observed={git['head']}", rid)
+        lineage_ok = (_post_mutation_node(route["nodes"], node_id)
+                      and _is_first_parent_descendant(actual_cwd, route["source_commit"], git["head"]))
+        if not lineage_ok:
+            raise _fail("route-source-commit-mismatch", f"expected={route['source_commit']} observed={git['head']}", rid)
     return route, node, git
 
 
