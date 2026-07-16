@@ -189,7 +189,7 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         for i, ln in enumerate(lines):
             if not ln:
                 continue
-            s = "".join(t for t, _k in ln)
+            s = "".join(t for t, _k in ln if not render._is_fill(t))
             if idx_rule is None and s.strip() and set(s.strip()) == {"─"}:
                 self.assertEqual(ln[0][0], render._TINT_BODY_HOT)   # on the band, not chrome
                 idx_rule = i
