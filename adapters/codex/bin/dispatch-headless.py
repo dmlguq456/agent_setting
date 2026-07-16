@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
+    anchored_capacity_failure,
     claim_attempt_row,
     close_attempt_row,
     completion_marker_gate,
@@ -99,6 +100,8 @@ def scan_anchored_death(text: str) -> tuple[str, str] | None:
             continue
         death = scan_death(line)
         if death:
+            if death[0] == "capacity" and not anchored_capacity_failure(line):
+                continue
             return death
     return None
 
@@ -404,11 +407,11 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         "--add-dir",
         args.artifact_root,
     ]
-    if args.nested_headless_network:
+    if args.nested_headless_network or (args.depth == 2 and args.route_id and args.attempt_id):
         # A depth-1 conductor must update the canonical attempt registry and
         # materialize child prompt/transcript files under <agent-home>/.dispatch.
-        # The artifact root alone does not make that sibling directory writable
-        # inside Codex's workspace-write sandbox.
+        # A route-bound depth-2 stage needs the same narrow writable root for
+        # its own SD-58 heartbeat. Network remains owner-only below.
         cmd += ["--add-dir", str(args.agent_home / ".dispatch")]
     cmd += ["--sandbox", args.sandbox]
     if args.nested_headless_network:
@@ -510,7 +513,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         pipe += f",approval={args.approval}"
     if args.profile:
         pipe += f",profile={args.profile}"
-    pipe += f",artifact_root={args.artifact_root}"
+    pipe += f",artifact_root={args.artifact_root},log_file={args.log_path}"
     if args.attempt_id:
         pipe += f",attempt_id={args.attempt_id},launch_authority={args.launch_authority},fallback_ordinal={args.fallback_ordinal}"
     if args.capacity_retry:
@@ -986,7 +989,10 @@ def main(argv: list[str]) -> int:
         except DispatchContractError as e:
             return fail(e.reason, 73, detail=e.detail, child_spawned="0")
     prompt_path = log_dir / f"{args.slug}.codex.prompt.txt"
-    log_path = log_dir / f"{args.slug}.codex.jsonl"
+    log_name = (f"{args.slug}.{args.attempt_id}.codex.jsonl"
+                if args.route_id and args.attempt_id else f"{args.slug}.codex.jsonl")
+    log_path = log_dir / log_name
+    args.log_path = log_path
     command = shell_command(args, prompt_path, log_path)
 
     if action in ("register", "start"):

@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
+    anchored_capacity_failure,
     claim_attempt_row,
     close_attempt_row,
     completion_marker_gate,
@@ -94,6 +95,8 @@ def scan_anchored_death(text: str) -> tuple[str, str] | None:
             continue
         death = scan_death(line)
         if death:
+            if death[0] == "capacity" and not anchored_capacity_failure(line):
+                continue
             return death
     return None
 
@@ -417,7 +420,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},effort={settings['effort']}"
     if args.profile:
         pipe += f",profile={args.profile}"
-    pipe += f",artifact_root={args.artifact_root}"
+    pipe += f",artifact_root={args.artifact_root},log_file={args.log_path}"
     if args.attempt_id:
         pipe += f",attempt_id={args.attempt_id},launch_authority={args.launch_authority},fallback_ordinal={args.fallback_ordinal}"
     if args.capacity_retry:
@@ -742,7 +745,10 @@ def main(argv: list[str]) -> int:
 
     prompt_text, prompt_source = dispatch_prompt(args)
     prompt_path = log_dir / f"{args.slug}.claude.prompt.txt"
-    log_path = log_dir / f"{args.slug}.claude.log"
+    log_name = (f"{args.slug}.{args.attempt_id}.claude.log"
+                if args.route_id and args.attempt_id else f"{args.slug}.claude.log")
+    log_path = log_dir / log_name
+    args.log_path = log_path
     command = shell_command(args, prompt_path, log_path)
 
     if action in ("register", "start"):

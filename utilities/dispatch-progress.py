@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 import fcntl
+import glob
 import json
 import hashlib
 import os
@@ -23,6 +24,7 @@ from tools.fleet.model import (  # noqa: E402
 )
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
+    anchored_capacity_failure,
     close_attempt_row_if,
     resolve_agent_home,
 )
@@ -105,20 +107,70 @@ def proc_evidence(metadata):
             "pid_alive": alive, "proc_start_match": bool(alive and expected == actual)}
 
 
-def scoped_file_signature(metadata):
+def scoped_file_signature(metadata, worktree=""):
     """Bounded signature of declared write-scope paths; never reads file prose."""
     entries = []
-    for raw in metadata.get("write_scope", "").split(";"):
-        path = Path(raw)
-        if not path.is_absolute() or not path.exists():
+    roots = []
+    for raw_root in (worktree, metadata.get("artifact_root", "")):
+        root = Path(raw_root)
+        if root.is_absolute() and root not in roots:
+            roots.append(root)
+    declared = metadata.get("write_scope", "").split(";")
+    route_file = Path(metadata.get("route_file", ""))
+    if route_file.is_absolute() and route_file.is_file():
+        cycle_root = route_file.parent.parent if route_file.parent.name == "_internal" else route_file.parent
+        if cycle_root not in roots:
+            roots.append(cycle_root)
+        try:
+            route = json.loads(route_file.read_text(encoding="utf-8"))
+            node = next((item for item in route.get("nodes", [])
+                         if item.get("id") == metadata.get("route_node")), {})
+            declared.extend(str(item) for item in node.get("outputs", []))
+        except (OSError, TypeError, ValueError):
+            pass
+    for raw in declared:
+        raw = raw.strip()
+        if not raw:
             continue
-        candidates = [path] if path.is_file() else (item for item in path.rglob("*") if item.is_file())
-        for item in candidates:
-            try:
-                stat = item.stat()
-            except OSError:
-                continue
-            entries.append((str(item), stat.st_size, stat.st_mtime_ns))
+        relative = not Path(raw).is_absolute()
+        if relative and ".." in Path(raw).parts:
+            continue
+        patterns = [raw] if not relative else [str(root / raw) for root in roots]
+        for pattern in patterns:
+            candidates = glob.iglob(pattern, recursive=True) if glob.has_magic(pattern) else iter((pattern,))
+            for candidate in candidates:
+                item = Path(candidate)
+                if item.is_dir() and not glob.has_magic(pattern):
+                    nested = item.rglob("*")
+                else:
+                    nested = (item,)
+                for item in nested:
+                    if not item.is_file():
+                        continue
+                    if relative:
+                        try:
+                            resolved = item.resolve(strict=False)
+                            inside = False
+                            for root in roots:
+                                try:
+                                    resolved.relative_to(root.resolve(strict=False))
+                                    inside = True
+                                    break
+                                except ValueError:
+                                    continue
+                            if not inside:
+                                continue
+                        except OSError:
+                            continue
+                    try:
+                        stat = item.stat()
+                    except OSError:
+                        continue
+                    entries.append((str(item), stat.st_size, stat.st_mtime_ns))
+                    if len(entries) >= 256:
+                        break
+                if len(entries) >= 256:
+                    break
             if len(entries) >= 256:
                 break
         if len(entries) >= 256:
@@ -136,7 +188,7 @@ def inspect(args, now):
         "route_id": args.route_id, "route_node": args.route_node,
         "registry_transition": {"status": fields[1], "note": metadata.get("note", "")},
         "artifact_signature": metadata.get("artifact_sha256") or None,
-        "file_signature": scoped_file_signature(metadata),
+        "file_signature": scoped_file_signature(metadata, fields[3]),
         "heartbeat": read_json(heartbeat) or None,
     }, now)
     if verdict is None:
@@ -170,6 +222,28 @@ def heartbeat(args, now):
         return value
 
 
+def capacity_log_evidence(home, slug, metadata):
+    """Return a bounded log path only for an anchored terminal capacity line."""
+    log_dir = home / ".dispatch" / "logs"
+    exact = Path(metadata.get("log_file", ""))
+    paths = [exact] if exact.is_absolute() else sorted(log_dir.glob(f"{slug}.*"))
+    for path in paths:
+        if not path.is_file():
+            continue
+        try:
+            with path.open("rb") as handle:
+                try:
+                    handle.seek(-8192, os.SEEK_END)
+                except OSError:
+                    handle.seek(0)
+                tail = handle.read().decode("utf-8", errors="replace")
+        except OSError:
+            continue
+        if anchored_capacity_failure(tail):
+            return path
+    return None
+
+
 def watchdog(args, now):
     fields, metadata = require_row(args)
     verdict = inspect(args, now)
@@ -181,11 +255,65 @@ def watchdog(args, now):
         "registry_transition": {
             "status": fields[1], "note": metadata.get("note", ""),
         },
-        "file_signature": scoped_file_signature(metadata),
+        "file_signature": scoped_file_signature(metadata, fields[3]),
         "artifact_signature": metadata.get("artifact_sha256") or None,
     })
     with locked(lock_path):
         state = read_json(wd_path)
+        capacity_path = capacity_log_evidence(args.agent_home, fields[4], metadata)
+        if metadata.get("note") == "dead-capacity" or capacity_path is not None:
+            closed = metadata.get("note") == "dead-capacity"
+            exact = inspect(args, now)
+            if not closed and not args.apply:
+                state.update({"action": "would-close-capacity", "failure_class": "capacity",
+                              "capacity_log": str(capacity_path or ""), "observed_at": now})
+                write_json(wd_path, state)
+                return state
+            if not closed and exact["state"] == "working" and exact.get("pid"):
+                try:
+                    os.killpg(int(exact["pid"]), signal.SIGINT)
+                except ProcessLookupError:
+                    pass
+                except PermissionError:
+                    state.update({"action": "fail-closed-capacity-signal-denied",
+                                  "observed_at": now})
+                    write_json(wd_path, state)
+                    return state
+
+            if not closed:
+                def still_exact(row_fields):
+                    row_meta = meta(row_fields[5])
+                    return bool(
+                        row_fields[1] in {"open", "running"}
+                        and row_meta.get("route_id") == args.route_id
+                        and row_meta.get("route_node") == args.route_node
+                        and row_meta.get("pid") == metadata.get("pid")
+                        and row_meta.get("pid_start") == metadata.get("pid_start")
+                    )
+
+                closed = close_attempt_row_if(
+                    args.jobs, args.attempt_id, "dead-capacity", still_exact,
+                    evidence={"failure_class": "capacity",
+                              "detected_by": "progress-watchdog",
+                              "capacity_log": str(capacity_path or "")},
+                )
+                if not closed:
+                    refreshed = exact_row(args.jobs, args.attempt_id)
+                    closed = bool(refreshed and refreshed[1].get("note") == "dead-capacity")
+            if not closed:
+                state.update({"action": "fail-closed-capacity-identity",
+                              "observed_at": now})
+                write_json(wd_path, state)
+                return state
+            state.update({"schema_version": 1, "attempt_id": args.attempt_id,
+                          "route_id": args.route_id, "route_node": args.route_node,
+                          "classifier_source": ATTEMPT_CLASSIFIER_SOURCE,
+                          "action": "dead-capacity", "terminal_action": "dead-capacity",
+                          "failure_class": "capacity", "model": metadata.get("model", "unknown"),
+                          "capacity_log": str(capacity_path or ""), "observed_at": now,
+                          "fingerprint": fingerprint})
+            write_json(wd_path, state)
+            return state
         if state.get("terminal_action"):
             return state
         previous = state.get("fingerprint", "")

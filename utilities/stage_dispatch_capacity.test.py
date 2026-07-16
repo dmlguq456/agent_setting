@@ -68,4 +68,11 @@ class CapacityTest(unittest.TestCase):
   with mock.patch.object(F,"wrapper_command") as command:
    state,_,reason=F.capacity_retry(self.args,self.route,self.node,self.row,1,self.failed,[])
   self.assertEqual((state,reason),("descend","capacity-alternative-cooled"));command.assert_not_called()
+ def test_watchdog_capacity_is_routed_into_failover(self):
+  seed=subprocess.CompletedProcess([],0,stdout="check=ok\n",stderr="")
+  observed=subprocess.CompletedProcess([],0,stdout="action=dead-capacity\nterminal_action=dead-capacity\nfailure_class=capacity\nmodel=gpt-5.6-sol\n",stderr="")
+  self.args.action="start";self.args.progress_window_seconds=10
+  with mock.patch.object(F.subprocess,"run",side_effect=[seed,observed]):
+   state,fields=F.watch_launched_attempt(self.args,self.route,self.node,"att-late-capacity",{"child_pid":"1","child_pid_start":"1"})
+  self.assertEqual(state,"capacity");self.assertEqual(fields["failure_class"],"capacity")
 if __name__=="__main__":unittest.main()

@@ -20,7 +20,12 @@
 set -uo pipefail
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/agent-home.sh")}"
-JOBS="${1:-${AGENT_DISPATCH_JOBS:-$AGENT_HOME/.dispatch/jobs.log}}"
+if [ "$#" -gt 0 ] && [ "${1#--}" = "$1" ]; then
+  JOBS=$1
+  shift
+else
+  JOBS=${AGENT_DISPATCH_JOBS:-$AGENT_HOME/.dispatch/jobs.log}
+fi
 STALE_MIN="${DISPATCH_STALE_MIN:-15}"   # Suspect hang/death after N quiet minutes.
 # Runtime root (HLS-6): session transcripts/state live under the runtime, not
 # the harness source repository. Claude defaults to CLAUDE_CONFIG_DIR; other
@@ -31,7 +36,8 @@ LOG_DIR="$AGENT_HOME/.dispatch/logs"
 # SD-15: if an open job log ends with a limit/auth fatal pattern, use that as
 # the DEAD reason. Keep this deliberate duplicate synchronized with
 # dispatch-headless.py DEATH_PATTERNS.
-LIMIT_RE='selected model is at capacity|model is at capacity|operation not permitted|network is unreachable|network access denied|hit your (session|usage) limit|session limit reached|usage limit reached|weekly limit|rate limit|[^0-9]429[^0-9]|invalid api key|authentication_error|not logged in|please run /login|unauthorized|[^0-9]401[^0-9]|credit balance is too low|insufficient (credit|quota|funds)'
+LIMIT_RE='operation not permitted|network is unreachable|network access denied|hit your (session|usage) limit|session limit reached|usage limit reached|weekly limit|rate limit|[^0-9]429[^0-9]|invalid api key|authentication_error|not logged in|please run /login|unauthorized|[^0-9]401[^0-9]|credit balance is too low|insufficient (credit|quota|funds)'
+CAPACITY_RE='^(error[[:space:]]*[:\-][[:space:]]*)?(selected[[:space:]]+)?model([[:space:]]+[A-Za-z0-9._:/-]+)?[[:space:]]+(is[[:space:]]+)?at[[:space:]]+capacity[.!]?$'
 
 # SD-15b: anchor log-pattern death detection to a few short trailing lines.
 # Scanning a large tail caused false DEAD verdicts when a successful report only
@@ -42,14 +48,23 @@ scan_log_death() {  # $1=slug; print the matching log path and return 0.
   for lf in "$LOG_DIR/${_slug}."*.log "$LOG_DIR/${_slug}."*.jsonl; do
     [ -f "$lf" ] || continue
     # Inspect the last three non-empty lines and accept only terse (≤200) matches.
-    hit=$(tail -n 40 "$lf" 2>/dev/null | awk 'NF' | tail -n 3 \
-      | grep -Ei "$LIMIT_RE" | awk 'length($0) <= 200 { print; exit }')
+    lines=$(tail -n 40 "$lf" 2>/dev/null | awk 'NF' | tail -n 3)
+    hit=$(printf '%s\n' "$lines" | grep -Ei "$LIMIT_RE" | awk 'length($0) <= 200 { print; exit }')
+    [ -n "$hit" ] || hit=$(printf '%s\n' "$lines" | grep -Ei "$CAPACITY_RE" | awk 'length($0) <= 200 { print; exit }')
     [ -n "$hit" ] && { printf '%s' "$lf"; return 0; }
   done
   return 1
 }
 
 [ -f "$JOBS" ] || { echo "(jobs.log not found: $JOBS)"; exit 0; }
+SOURCE_JOBS=$JOBS
+CURRENT_JOBS=$(mktemp)
+trap 'rm -f "$CURRENT_JOBS"' EXIT
+if ! python3 "$SCRIPT_DIR/dispatch-registry.py" liveness --jobs "$SOURCE_JOBS" "$@" > "$CURRENT_JOBS"; then
+  echo "dispatch-liveness: current-view filtering failed" >&2
+  exit 69
+fi
+JOBS=$CURRENT_JOBS
 
 now=$(date +%s); alive=0; suspect=0; open_n=0
 while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do

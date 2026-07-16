@@ -292,9 +292,7 @@ def watch_launched_attempt(args, route, node, attempt_id, launch_fields):
         cwd=ROOT, text=True, capture_output=True, check=False, env=direct_env())
     if seed.returncode:
         return "fail-closed", output_fields(seed.stdout + seed.stderr)
-    last = {}
-    for _window in range(max(1, args.watchdog_max_windows)):
-        time.sleep(max(0.0, args.progress_window_seconds))
+    def observe():
         result = subprocess.run(common[:2] + ["watchdog"] + common[2:] +
             ["--progress-window-seconds", str(args.progress_window_seconds),
              "--watchdog-max-windows", "2", "--apply"], cwd=ROOT, text=True,
@@ -302,10 +300,30 @@ def watch_launched_attempt(args, route, node, attempt_id, launch_fields):
         last = output_fields(result.stdout + result.stderr)
         if result.returncode or last.get("action", "").startswith("fail-closed"):
             return "fail-closed", last
+        if last.get("terminal_action") == "dead-capacity":
+            return "capacity", last
         if last.get("terminal_action") == "dead-no-progress":
             return "fallback", last
         if last.get("terminal_action") in {"process-exited", "registry-terminal"}:
             return "terminal", last
+        return "observed", last
+
+    # Establish a file/heartbeat fingerprint before the first deadline. This
+    # prevents a write made during the first window from being mistaken for the
+    # baseline, and also catches a capacity death that happened just after the
+    # wrapper's short early-exit watch.
+    state, last = observe()
+    if state != "observed":
+        return state, last
+
+    window = max(0.1, float(args.progress_window_seconds))
+    deadline = time.monotonic() + window * max(1, args.watchdog_max_windows)
+    poll = min(1.0, max(0.1, window / 10.0))
+    while time.monotonic() < deadline:
+        time.sleep(poll)
+        state, last = observe()
+        if state != "observed":
+            return state, last
     return "observed", last
 
 
@@ -385,6 +403,8 @@ def capacity_retry(
             )
             attempts.append(f"{ordinal}:{tuple_key(row)}:capacity-watchdog-{watch_state}")
             if watch_state == "fallback":
+                return "descend", watch_fields, retry_output
+            if watch_state == "capacity":
                 return "descend", watch_fields, retry_output
             if watch_state == "fail-closed":
                 return "fail-closed", watch_fields, "capacity-watchdog-fail-closed"
@@ -522,24 +542,28 @@ def main() -> int:
                         if watch_state == "fallback":
                             failed_tuples.add(key)
                             continue
+                        if watch_state == "capacity":
+                            early = "capacity"
+                            fields = {**fields, **watch_fields, "early_death": "capacity"}
                         if watch_state == "fail-closed":
                             return fail("progress-watchdog-fail-closed", 76,
                                         attempt_id=attempt_id,
                                         watchdog_action=watch_fields.get("action", "unknown"),
                                         attempt_trace="|".join(attempts))
-                    print("check=ok")
-                    print(f"selected_hop={hop['hop']}")
-                    print(f"fallback_ordinal={ordinal}")
-                    print(f"child_harness={row['child_harness']}")
-                    print("launch_authority=conductor")
-                    print("broker_lifecycle=retired")
-                    print(f"attempt_id={attempt_id}")
-                    print(f"job_registry={args.jobs}")
-                    print("attempt_trace=" + "|".join(attempts))
-                    print("prior_attempt_ids=" + ",".join(x for values in prior_failures.values() for x in values))
-                    if output:
-                        print(output)
-                    return 0
+                    if early != "capacity":
+                        print("check=ok")
+                        print(f"selected_hop={hop['hop']}")
+                        print(f"fallback_ordinal={ordinal}")
+                        print(f"child_harness={row['child_harness']}")
+                        print("launch_authority=conductor")
+                        print("broker_lifecycle=retired")
+                        print(f"attempt_id={attempt_id}")
+                        print(f"job_registry={args.jobs}")
+                        print("attempt_trace=" + "|".join(attempts))
+                        print("prior_attempt_ids=" + ",".join(x for values in prior_failures.values() for x in values))
+                        if output:
+                            print(output)
+                        return 0
                 if early == "capacity":
                     failed = {
                         **fields, "attempt_id": attempt_id,
