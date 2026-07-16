@@ -323,10 +323,12 @@ class NoRegressionTest(unittest.TestCase):
         finally:
             render.set_show_all(False)
 
-    def test_strip_indent_is_shallower_than_a_dispatch_row(self):
-        """`_SUBAGENT_IND` must stay a pure inset, no connector, and land shallower than a
-        dispatch row's own "  ↳ " prefix (사용자 확정 2026-07-16)."""
-        self.assertLess(len(render._SUBAGENT_IND), len("  " + render._dispatch_prefix(
+    def test_strip_indent_is_a_deep_pure_inset(self):
+        """`_SUBAGENT_IND` stays a pure inset (spaces only, no connector) and lands at least
+        as deep as a dispatch row's full "  ↳ " prefix (사용자 2026-07-16 '좀 더 들여쓰기' —
+        the earlier shallower-than-dispatch contract read as a sibling, not a child)."""
+        self.assertEqual(render._SUBAGENT_IND.strip(), "")
+        self.assertGreaterEqual(len(render._SUBAGENT_IND), len("  " + render._dispatch_prefix(
             type("J", (), {"depth": 1})())))
 
     def test_no_subagent_count_badge_on_the_session_name_row(self):

@@ -1673,11 +1673,11 @@ _FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: dep
 # dispatch's `🚀`/`↳` so the two nested-row kinds never visually merge. Single point of
 # ASCII-degrade if double-width alignment ever breaks in a real terminal.
 _ICON_SUBAGENT = "⚡"
-_SUBAGENT_IND = "  "   # session-child indent: pure inset, no connector glyph — shallower
-                       # than a dispatch row's own "  ↳ " prefix (F-29 v11, prd.md:290-295
-                       # vocabulary unchanged, display replaced — 사용자 확정 2026-07-16;
-                       # the per-session ⚡N name-zone badge this used to pair with is retired
-                       # as redundant now that the strip is always inline under the row).
+_SUBAGENT_IND = "    "  # session-child indent: pure inset, no connector glyph, as deep as a
+                        # dispatch row's full "  ↳ " prefix so ⚡ lands on the depth-2 arrow
+                        # column (사용자 2026-07-16 "좀 더 들여쓰기" — the original 2-cell inset
+                        # read as a sibling of the session, not its child). The per-session ⚡N
+                        # name-zone badge this used to pair with stays retired (strip is inline).
 
 
 def _subagent_elapsed_min(sa):
