@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+import importlib.util
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+from unittest import mock
+
+ROOT = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location("progress", ROOT / "utilities/dispatch-progress.py")
+P = importlib.util.module_from_spec(spec); spec.loader.exec_module(P)
+from tools.fleet import model
+
+
+class ProgressTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.base = Path(self.tmp.name)
+        self.jobs = self.base / "jobs.log"; self.home = self.base / "home"
+        self.proc = subprocess.Popen(["sleep", "60"], start_new_session=True)
+        start = (Path("/proc") / str(self.proc.pid) / "stat").read_text().split()[21]
+        self.attempt = "att-0123456789abcdef"
+        self.scope=self.base/"scope";self.scope.mkdir()
+        pipe = f"capability=code-test,route_id=rt-1,route_node=test,attempt_id={self.attempt},pid={self.proc.pid},pid_start={start},write_scope={self.scope}"
+        self.jobs.write_text(f"2026-07-16T00:00:00Z\topen\t/repo\t{self.base}\tstage\t{pipe}\n")
+
+    def tearDown(self):
+        if self.proc.poll() is None: self.proc.kill()
+        self.proc.wait(); self.tmp.cleanup()
+
+    def args(self, **kw):
+        values = dict(jobs=self.jobs, agent_home=self.home, attempt_id=self.attempt,
+                      route_id="rt-1", route_node="test", phase="launch", kind="registry",
+                      evidence="pid-annotated", progress_window_seconds=10,
+                      watchdog_max_windows=2, apply=False)
+        values.update(kw); return type("Args", (), values)()
+
+    def test_warning_then_exact_interrupt(self):
+        P.heartbeat(self.args(), 0)
+        first = P.watchdog(self.args(), 10)
+        self.assertEqual((first["warning"], first["action"]), (1, "warning"))
+        second = P.watchdog(self.args(apply=True), 20)
+        self.assertEqual(second["terminal_action"], "dead-no-progress")
+        self.proc.wait(timeout=3)
+        self.assertIn("note=dead-no-progress", self.jobs.read_text())
+
+    def test_speech_is_not_progress_and_heartbeat_resets(self):
+        P.heartbeat(self.args(), 0)
+        P.watchdog(self.args(), 10)
+        (self.home / "speech.log").parent.mkdir(parents=True, exist_ok=True)
+        (self.home / "speech.log").write_text("still working")
+        self.assertEqual(P.watchdog(self.args(), 20)["quiet_windows"], 2)
+        reset = P.heartbeat(self.args(phase="tool", kind="tool", evidence="call-1"), 21)
+        self.assertEqual(reset["sequence"], 2)
+        self.assertEqual(P.watchdog(self.args(), 21)["quiet_windows"], 0)
+
+    def test_pid_reuse_fails_closed_and_single_classifier(self):
+        text = self.jobs.read_text().replace("pid_start=", "pid_start=999")
+        self.jobs.write_text(text)
+        self.assertEqual(P.inspect(self.args(), 0)["state"], "dead")
+        self.assertIs(P.classify_attempt_evidence, model.classify_attempt_evidence)
+        self.assertEqual(P.ATTEMPT_CLASSIFIER_SOURCE, model.ATTEMPT_CLASSIFIER_SOURCE)
+
+    def test_signal_denied_fails_closed_without_closing_live_row(self):
+        P.heartbeat(self.args(), 0)
+        P.watchdog(self.args(), 10)
+        with mock.patch.object(P.os, "killpg", side_effect=PermissionError):
+            state = P.watchdog(self.args(apply=True), 20)
+        self.assertEqual(state["action"], "fail-closed-signal-denied")
+        row = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("\topen\t", row)
+        self.assertNotIn("note=dead-no-progress", row)
+
+    def test_scoped_file_change_resets_quiet_counter(self):
+        P.heartbeat(self.args(), 0)
+        self.assertEqual(P.watchdog(self.args(), 10)["quiet_windows"], 1)
+        (self.scope/"result.txt").write_text("durable result")
+        state=P.watchdog(self.args(), 20)
+        self.assertEqual(state["quiet_windows"],0)
+        self.assertEqual(state["action"],"observe")
+
+    def test_relative_glob_and_route_cycle_output_are_real_progress(self):
+        cycle = self.base / "artifacts" / "plans" / "cycle"
+        internal = cycle / "_internal"; internal.mkdir(parents=True)
+        route = {"nodes": [{"id": "test", "outputs": ["plan.md"]}]}
+        route_file = internal / "route.json"; route_file.write_text(__import__("json").dumps(route))
+        text = self.jobs.read_text().replace(
+            f"write_scope={self.scope}",
+            f"write_scope=scope/**,artifact_root={self.base / 'artifacts'},route_file={route_file}",
+        )
+        self.jobs.write_text(text)
+        P.heartbeat(self.args(), 0)
+        self.assertEqual(P.watchdog(self.args(), 0)["quiet_windows"], 0)
+        self.assertEqual(P.watchdog(self.args(), 10)["quiet_windows"], 1)
+        (self.scope / "relative.txt").write_text("progress")
+        self.assertEqual(P.watchdog(self.args(), 20)["quiet_windows"], 0)
+        self.assertEqual(P.watchdog(self.args(), 30)["quiet_windows"], 1)
+        (cycle / "plan.md").write_text("durable plan")
+        self.assertEqual(P.watchdog(self.args(), 40)["quiet_windows"], 0)
+
+    def test_delayed_capacity_line_closes_exact_attempt(self):
+        P.heartbeat(self.args(), 0)
+        P.watchdog(self.args(apply=True), 0)
+        logs = self.home / ".dispatch" / "logs"; logs.mkdir(parents=True)
+        (logs / "stage.codex.jsonl").write_text("Selected model is at capacity\n")
+        state = P.watchdog(self.args(apply=True), 1)
+        self.assertEqual(state["terminal_action"], "dead-capacity")
+        self.proc.wait(timeout=3)
+        self.assertIn("note=dead-capacity", self.jobs.read_text())
+
+    def test_capacity_scan_is_bound_to_the_exact_attempt_log(self):
+        logs = self.home / ".dispatch" / "logs"; logs.mkdir(parents=True)
+        old_log = logs / "stage.att-old.codex.jsonl"
+        exact_log = logs / "stage.att-current.codex.jsonl"
+        old_log.write_text("Selected model is at capacity\n")
+        exact_log.write_text("normal startup\n")
+        self.jobs.write_text(self.jobs.read_text().replace(
+            f"write_scope={self.scope}", f"write_scope={self.scope},log_file={exact_log}"))
+        P.heartbeat(self.args(), 0)
+        state = P.watchdog(self.args(apply=True), 0)
+        self.assertEqual(state["action"], "observe")
+        self.assertIn("\topen\t", self.jobs.read_text())
+
+    def test_natural_process_exit_is_terminal_not_identity_failure(self):
+        P.heartbeat(self.args(),0);self.proc.terminate();self.proc.wait(timeout=3)
+        state=P.watchdog(self.args(),10)
+        self.assertEqual(state["terminal_action"],"process-exited")
+        self.assertNotIn("fail-closed",state["action"])
+
+    def test_codex_preflight_projects_stage_heartbeat(self):
+        command=[str(ROOT/"adapters/codex/bin/preflight.sh"),"stage-heartbeat",
+         "--attempt-id",self.attempt,"--route-id","rt-1","--route-node","test",
+         "--jobs",str(self.jobs),"--agent-home",str(self.home),"--phase","analysis",
+         "--kind","registry","--evidence","analysis-entered"]
+        result=subprocess.run(command,text=True,capture_output=True,env={**os.environ,"AGENT_HOME":str(ROOT)})
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual(P.inspect(self.args(),1)["classifier_source"],model.ATTEMPT_CLASSIFIER_SOURCE)
+
+
+if __name__ == "__main__": unittest.main()

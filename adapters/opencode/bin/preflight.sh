@@ -79,7 +79,10 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh broker <status|stop> --jobs <jobs.log> [--root <broker-root>]  # legacy drain only
        preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--intensity <level>] [--depth 1|2] [--parent <slug>] [--worker-role <role>] [--owner <capability>] [--agent <agent>] (--model-role <role>|--model <model> --variant <variant>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>] [--log-dir <dir>]
        preflight.sh dispatch-chain --route <route.json> --node <id> --slug <slug> --parent <slug> --mode <mode> [--model-role <role>] [--dry-run|--register|--start]
-       preflight.sh liveness [jobs.log]
+       preflight.sh stage-heartbeat --attempt-id <id> --route-id <id> --route-node <id> --jobs <jobs.log> --phase <phase> --kind <kind> --evidence <ref>
+       preflight.sh dispatch-current --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--all]
+       preflight.sh dispatch-reconcile --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--apply]
+       preflight.sh liveness [jobs.log] [--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>] [--all]
        preflight.sh harvest [--jobs <jobs.log>] [--reconcile-local <legacy-jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
        preflight.sh worktree-cleanup [--check|--apply] (--worktree <path>|--all-eligible [--repo <path>]) [--integration-ref <ref>] [--jobs <jobs.log>]
        preflight.sh mcp [--check]
@@ -415,8 +418,13 @@ EOF
     AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/dispatch-broker.py" "$@"
     ;;
   liveness)
-    jobs=${2:-${AGENT_DISPATCH_JOBS:-"$AGENT_ROOT/.dispatch/jobs.log"}}
-    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/opencode/bin/dispatch-liveness.py" "$jobs"
+    shift
+    jobs=${AGENT_DISPATCH_JOBS:-"$AGENT_ROOT/.dispatch/jobs.log"}
+    if [ "$#" -gt 0 ] && [ "${1#--}" = "$1" ]; then jobs=$1; shift; fi
+    current_jobs=$(mktemp)
+    trap 'rm -f "$current_jobs"' EXIT
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/dispatch-registry.py" liveness --jobs "$jobs" "$@" > "$current_jobs" || exit $?
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/opencode/bin/dispatch-liveness.py" "$current_jobs"
     ;;
   harvest)
     shift
@@ -433,6 +441,18 @@ EOF
   dispatch-chain)
     shift
     AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/stage-dispatch-fallback.py" "$@"
+    ;;
+  stage-heartbeat)
+    shift
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/dispatch-progress.py" heartbeat "$@"
+    ;;
+  dispatch-current)
+    shift
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/dispatch-registry.py" current "$@"
+    ;;
+  dispatch-reconcile)
+    shift
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/dispatch-registry.py" reconcile "$@"
     ;;
   qa-policy)
     [ "$#" -ge 2 ] || { echo "opencode preflight: qa-policy requires a QA level" >&2; exit 64; }

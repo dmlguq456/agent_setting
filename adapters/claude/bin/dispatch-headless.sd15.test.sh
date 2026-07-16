@@ -16,6 +16,7 @@ import importlib.util, sys
 spec = importlib.util.spec_from_file_location("dh", sys.argv[1])
 dh = importlib.util.module_from_spec(spec); spec.loader.exec_module(dh)
 cases = {
+  "Selected model is at capacity": ("capacity", ""),
   "You've hit your session limit · resets 3pm": ("session-limit", "3pm"),
   "Error: usage limit reached, resets at 5:30pm": ("usage-limit", "5:30pm"),
   "invalid api key provided": ("auth", ""),
@@ -26,6 +27,14 @@ for text, want in cases.items():
     got = dh.scan_death(text)
     if got != want:
         print(f"MISMATCH {text!r}: got {got} want {want}"); bad += 1
+prose = "The implementation discusses Selected model is at capacity handling " + ("x" * 180)
+if dh.scan_anchored_death(prose) is not None:
+    print("MISMATCH capacity report prose was treated as terminal"); bad += 1
+short_prose = "Handled Selected model is at capacity errors."
+if dh.scan_anchored_death(short_prose) is not None:
+    print("MISMATCH short capacity report prose was treated as terminal"); bad += 1
+if dh.scan_anchored_death('{"type":"error","message":"Selected model is at capacity"}') != ("capacity", ""):
+    print("MISMATCH structured terminal capacity event was missed"); bad += 1
 print("SCAN_OK" if bad == 0 else "SCAN_FAIL")
 PY
 )
@@ -57,6 +66,17 @@ echo "$out" | grep -q 'early_death=session-limit' \
   && ok "limit-death → row done,note=dead-session-limit,reset=3pm" \
   || bad "limit-death row not closed. out=[$out] jobs=[$(cat "$AH/.dispatch/jobs.log")]"
 [ -f "$AH/.dispatch/usage-reset.claude" ] && ok "reset cache written" || bad "no reset cache"
+
+# --- Case: capacity is a distinct exact-row failure class and does not update usage reset.
+before_reset=$(cat "$AH/.dispatch/usage-reset.claude")
+out=$(launch "#!/bin/sh
+echo 'Selected model is at capacity'
+exit 1" capacity1 4)
+echo "$out" | grep -q 'early_death=capacity' \
+  && grep -q $'\tdone\t.*capacity1.*model=sonnet.*note=dead-capacity.*failure_class=capacity' "$AH/.dispatch/jobs.log" \
+  && [ "$(cat "$AH/.dispatch/usage-reset.claude")" = "$before_reset" ] \
+  && ok "capacity death → exact row dead-capacity without usage-reset pollution" \
+  || bad "capacity death contract failed. out=[$out]"
 
 # --- Case: clean fast exit does NOT close row ---
 out=$(launch "#!/bin/sh

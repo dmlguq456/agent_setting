@@ -33,7 +33,7 @@ class FallbackTest(unittest.TestCase):
   self.assertIn("launch_authority=conductor",result.stdout); self.assertIn("broker_lifecycle=retired",result.stdout)
  def test_failed_same_and_cross_degrade_in_order(self):
   path=self.route(native="supported"); same="codex/headless/workspace-write/codex/conductor"; cross="codex/headless/workspace-write/claude/conductor"
-  result=self.run_chain(path,"--failed-tuple",same,"--failed-tuple",cross); self.assertEqual(result.returncode,78,result.stdout+result.stderr); self.assertIn("selected_hop=native-subagent",result.stdout)
+  result=self.run_chain(path,"--failed-tuple",same,"--failed-tuple",cross); self.assertEqual(result.returncode,79,result.stdout+result.stderr); self.assertIn("skipped-child-proof-missing",result.stdout); self.assertIn("selected_hop=inline",result.stdout)
   route=json.loads(path.read_text()); route["dispatch_evidence"]["native_subagent"][0]["status"]="unsupported"
   for node in route["nodes"]: node["dispatch_fallback"][2]["candidates"][0]["status"]="unsupported"
   route["route_hash"]=R.route_hash(route); route["route_id"]="rt-"+route["route_hash"].split(":",1)[1][:16]; path.write_text(json.dumps(route))
@@ -61,5 +61,19 @@ class FallbackTest(unittest.TestCase):
     for row in hop.get("candidates",[]): row["launch_authority"]="ancestor-broker"; row["broker_root"]="/tmp/legacy"
   route["route_hash"]=R.route_hash(route); route["route_id"]="rt-"+route["route_hash"].split(":",1)[1][:16]; path.write_text(json.dumps(route))
   result=self.run_chain(path); self.assertEqual(result.returncode,76,result.stdout+result.stderr); self.assertIn("reason=legacy-broker-route-read-only",result.stdout)
+ def test_native_hop_accepts_only_a_live_route_owned_exact_child(self):
+  path=self.route(native="supported");route=json.loads(path.read_text());attempt="att-nativeproof001"
+  proc=subprocess.Popen(["sleep","30"])
+  try:
+   start=(Path("/proc")/str(proc.pid)/"stat").read_text().split()[21]
+   pipe=(f"route_id={route['route_id']},route_node=plan,attempt_id={attempt},"
+         f"pid={proc.pid},pid_start={start}")
+   self.jobs.write_text(f"2026-07-16T00:00:00Z\topen\t/repo\t{self.repo}\tnative\t{pipe}\n")
+   same="codex/headless/workspace-write/codex/conductor";cross="codex/headless/workspace-write/claude/conductor"
+   result=self.run_chain(path,"--failed-tuple",same,"--failed-tuple",cross,"--native-attempt-id",attempt)
+   self.assertEqual(result.returncode,78,result.stdout+result.stderr)
+   self.assertIn("child_proof=registry-exact-pid",result.stdout)
+  finally:
+   proc.terminate();proc.wait()
 
 if __name__=="__main__": unittest.main()

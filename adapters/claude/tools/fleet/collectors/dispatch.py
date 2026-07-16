@@ -314,6 +314,24 @@ def _job_transcript_signal(job, now):
     return _job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
 
 
+def _attempt_heartbeat(attempt_id):
+    """Read the bounded SD-58 record for one exact attempt, if present."""
+    if not attempt_id:
+        return None
+    path = os.path.join(
+        _registry_home(), ".dispatch", "heartbeats",
+        str(attempt_id).replace("/", "_") + ".json",
+    )
+    try:
+        if os.path.getsize(path) > 8192:
+            return None
+        with open(path, encoding="utf-8") as handle:
+            value = json.load(handle)
+        return value if isinstance(value, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
 def _dispatch_liveness(job, now, track=True):
     """Job → state string. Signature/return preserved; the verdict now comes from the
     single F-25 classifier. Stamps `job.state_evidence` as a side effect.
@@ -325,12 +343,14 @@ def _dispatch_liveness(job, now, track=True):
     is_loop = job.source == "proc" and job.key in _LOOP_KEYS
     pid_alive = None
     proc_start_match = None
+    actual_proc_start = None
     if job.pid is not None:
         proc_path = "/proc/%s" % job.pid
         pid_alive = os.path.exists(proc_path)
         if pid_alive and job.proc_start:
             observed_start = procscan.read_proc_start(job.pid)
             if observed_start is not None:
+                actual_proc_start = str(observed_start)
                 proc_start_match = str(observed_start) == str(job.proc_start)
     ev_in = {
         "source": job.source,
@@ -342,8 +362,15 @@ def _dispatch_liveness(job, now, track=True):
         "slug": job.slug,
         "pid": job.pid,
         "proc_start": job.proc_start,
+        "pid_scope": job.pid_scope,
+        "actual_proc_start": actual_proc_start,
         "pid_alive": pid_alive,
         "proc_start_match": proc_start_match,
+        "attempt_id": job.attempt_id,
+        "route_id": job.route_id,
+        "route_node": job.route_node,
+        "registry_transition": {"status": job.status},
+        "heartbeat": _attempt_heartbeat(job.attempt_id),
         # A loop proc row is decided by tier-2 evidence; skip the mtime probe entirely
         # (it was never consulted on that path pre-F-25 either).
         "transcript": None if is_loop else _job_transcript_signal(job, now),
@@ -975,6 +1002,7 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
             is_child=bool(parent_slug or parent_sid or parent_cwd), qa_source=qsrc, source="jobs", status=status,
             harness=harness, model=meta.get("model"),
             pid=registry_pid, proc_start=meta.get("pid_start") or meta.get("proc_start"),
+            pid_scope=meta.get("pid_scope"),
             profile=meta.get("profile"), depth=_parse_depth(meta.get("depth")),
             intensity=meta.get("intensity"), worker_role=worker_role,
             capability_owner=meta.get("owner") or meta.get("capability_owner"),

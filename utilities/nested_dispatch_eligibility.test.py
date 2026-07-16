@@ -30,6 +30,14 @@ class NestedEligibilityTest(unittest.TestCase):
              mock.patch.object(N.subprocess, "run", return_value=result):
             self.assertEqual(N.auth_check("codex"), (False, "auth-unavailable"))
 
+    def test_nested_auth_probe_runs_inside_checked_worktree(self):
+        result = mock.Mock(returncode=0, stdout="", stderr="Logged in using ChatGPT\n")
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.object(N.shutil, "which", return_value="/bin/codex"), \
+             mock.patch.object(N.subprocess, "run", return_value=result) as run:
+            self.assertEqual(N.auth_check("codex", worktree), (True, ""))
+        self.assertEqual(run.call_args.kwargs["cwd"], Path(worktree).resolve())
+
     def test_codex_owner_requires_network_profile_before_command_check(self):
         with tempfile.TemporaryDirectory() as worktree, \
              mock.patch.dict(os.environ, {}, clear=True), \

@@ -6,17 +6,26 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import anchored_capacity_failure  # noqa: E402
+from tools.fleet.model import (  # noqa: E402
+    ATTEMPT_CLASSIFIER_SOURCE,
+    classify_attempt_evidence,
+)
 
 # SD-15 (OPERATIONS §5.10 ⑨): if an open row's dispatch log shows a limit/auth death
 # pattern, judge it DEAD regardless of transcript mtime (the wrapper's launch watch may
 # have missed it, or the child died — or hung, OpenCode #8203 — after launch). Kept in
 # sync with dispatch-headless.py DEATH_PATTERNS (intentional cross-runtime duplication).
 LIMIT_RE = re.compile(
+    r"(?:selected\s+)?model\b.{0,80}\b(?:is\s+)?at capacity\b|"
     r"operation not permitted|network is unreachable|network access denied|"
     r"hit your (session|usage) limit|session limit reached|usage[_ ]limit[_ ]reached|"
     r"usage limit reached|weekly limit|rate limit(ed)?|provider rate limit|"
@@ -54,7 +63,8 @@ def log_shows_limit(agent_home: Path, slug: str) -> Path | None:
             continue
         nonempty = [ln for ln in tail.splitlines() if ln.strip()]
         for ln in nonempty[-3:]:
-            if len(ln) <= 200 and LIMIT_RE.search(ln):
+            match = LIMIT_RE.search(ln) if len(ln) <= 200 else None
+            if match and ("capacity" not in match.group(0).lower() or anchored_capacity_failure(ln)):
                 return lf
     return None
 
@@ -106,22 +116,53 @@ def parse_metadata(pipe: str) -> dict[str, str]:
     return dict(part.split("=", 1) for part in pipe.split(",") if "=" in part)
 
 
-def recorded_process_alive(metadata: dict[str, str]) -> tuple[bool, str]:
-    pid = metadata.get("pid", "")
-    if not pid.isdigit() or not Path("/proc").is_dir():
-        return False, ""
-    proc = Path("/proc") / pid
-    if not proc.is_dir():
-        return False, pid
+def current_job_lines(jobs: Path) -> list[str]:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "utilities/dispatch-registry.py"),
+         "liveness", "--jobs", str(jobs)],
+        text=True, capture_output=True, check=False,
+    )
+    if result.returncode:
+        raise RuntimeError((result.stderr or result.stdout).strip() or "current-view-failed")
+    return result.stdout.splitlines()
+
+
+def attempt_heartbeat(agent_home: Path, metadata: dict[str, str]) -> dict | None:
+    attempt = metadata.get("attempt_id", "").replace("/", "_")
+    if not attempt:
+        return None
+    path = agent_home / ".dispatch" / "heartbeats" / f"{attempt}.json"
     try:
-        cmdline = (proc / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+        if path.stat().st_size > 8192:
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def recorded_attempt_state(metadata: dict[str, str], now: float, agent_home: Path) -> dict | None:
+    pid = metadata.get("pid", "")
+    expected = metadata.get("pid_start", "")
+    if not pid.isdigit() or not expected:
+        return None
+    proc = Path("/proc") / pid
+    alive = False
+    actual = ""
+    try:
         actual_start = (proc / "stat").read_text(encoding="utf-8").split()[21]
+        actual = actual_start
+        alive = True
     except (OSError, IndexError):
-        return False, pid
-    expected_start = metadata.get("pid_start")
-    if "codex" not in cmdline or (expected_start and expected_start != actual_start):
-        return False, pid
-    return True, pid
+        pass
+    return classify_attempt_evidence({
+        "pid": int(pid), "proc_start": expected, "actual_proc_start": actual,
+        "pid_alive": alive, "proc_start_match": bool(alive and actual == expected),
+        "pid_scope": metadata.get("pid_scope"),
+        "attempt_id": metadata.get("attempt_id"), "route_id": metadata.get("route_id"),
+        "route_node": metadata.get("route_node"),
+        "heartbeat": attempt_heartbeat(agent_home, metadata),
+    }, now)
 
 
 def sessions_dir_for(pipe: str, slug: str, agent_home: Path, default_sessions: Path) -> Path:
@@ -214,8 +255,12 @@ def main(argv: list[str]) -> int:
 
     now = time.time()
     open_n = alive = suspect = 0
-    with jobs.open(encoding="utf-8") as f:
-        for raw in f:
+    try:
+        rows = current_job_lines(jobs)
+    except RuntimeError as exc:
+        print(f"liveness current-view failed: {exc}", file=sys.stderr)
+        return 69
+    for raw in rows:
             raw = raw.rstrip("\n")
             if not raw:
                 continue
@@ -228,17 +273,23 @@ def main(argv: list[str]) -> int:
             open_n += 1
             label = slug or "?"
             metadata = parse_metadata(pipe)
-            process_alive, recorded_pid = recorded_process_alive(metadata)
-            if process_alive:
-                print(f"ALIVE    {label} (recorded pid {recorded_pid} running)")
+            exact = recorded_attempt_state(metadata, now, agent_home)
+            if exact and exact["state"] == "working":
+                detail = ("namespace-local exact heartbeat" if exact.get("pid_scope") == "namespace-local"
+                          else f"recorded pid {exact['pid']} running")
+                print(f"ALIVE    {label} ({detail}; classifier={ATTEMPT_CLASSIFIER_SOURCE})")
                 alive += 1
                 continue
-            if recorded_pid:
+            if exact and exact["state"] == "dead":
                 log_hit = log_shows_limit(agent_home, slug)
                 if log_hit is not None:
                     print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
                 else:
-                    print(f"EXITED   {label} - recorded pid {recorded_pid} ended or identity changed [open: {ts}]")
+                    print(f"EXITED   {label} - recorded pid {exact['pid']} ended or identity changed; classifier={ATTEMPT_CLASSIFIER_SOURCE} [open: {ts}]")
+                suspect += 1
+                continue
+            if exact and exact["state"] == "done":
+                print(f"COMPLETED {label} - namespace-local terminal heartbeat awaits registry reconciliation [open: {ts}]")
                 suspect += 1
                 continue
             # Profile jobs live under their isolated home. Non-profile nested workers
@@ -279,6 +330,7 @@ def main(argv: list[str]) -> int:
                 suspect += 1
 
     print(f"open {open_n} ; alive {alive} ; suspect/dead {suspect}")
+    print(f"classifier_source={ATTEMPT_CLASSIFIER_SOURCE}")
     if suspect:
         print("SUSPECT/DEAD: inspect Codex transcript and dispatch log, then harvest or redispatch.")
         return 3

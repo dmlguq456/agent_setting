@@ -55,8 +55,31 @@ class AdapterV11Test(unittest.TestCase):
    self.assertEqual(result.returncode,0,result.stdout+result.stderr)
    self.assertIn("nested_headless_network=1",result.stdout)
    self.assertIn("sandbox_workspace_write.network_access=true",result.stdout)
+   self.assertIn(f"--add-dir {ROOT / '.dispatch'}",result.stdout)
    self.assertIn("nested_codex_home=",result.stdout)
    self.assertIn("broker_lifecycle=retired",result.stdout)
+ def test_route_bound_depth_two_codex_gets_heartbeat_scope_without_network(self):
+  spec=importlib.util.spec_from_file_location("codex_dispatch_scope",ROOT/"adapters/codex/bin/dispatch-headless.py")
+  wrapper=importlib.util.module_from_spec(spec);spec.loader.exec_module(wrapper)
+  args=type("Args",(),{
+   "worktree":"/work/repo","artifact_root":"/artifacts","nested_headless_network":False,
+   "agent_home":ROOT,"depth":2,"route_id":"rt-1","attempt_id":"att-stage-1",
+   "sandbox":"workspace-write","resolved_model_settings":{"source":"inherit"},"approval":"inherit"})()
+  command=wrapper.shell_command(args,Path("/prompt"),Path("/log"))
+  self.assertIn(f"--add-dir {ROOT / '.dispatch'}",command)
+  self.assertNotIn("network_access=true",command)
+ def test_background_governor_does_not_hold_orchestrator_capture_pipes(self):
+  for harness in ADAPTERS:
+   with self.subTest(harness=harness):
+    source=(ROOT/f"adapters/{harness}/bin/dispatch-headless.py").read_text(encoding="utf-8")
+    start=source.index("proc = subprocess.Popen")
+    end=source.index("except OSError",start)
+    launch=source[start:end]
+    self.assertIn("stdin=subprocess.DEVNULL",launch)
+    self.assertIn("stdout=subprocess.DEVNULL",launch)
+    self.assertIn("stderr=subprocess.DEVNULL",launch)
+    self.assertIn('pid_scope=namespace-local',source)
+    self.assertIn('os.environ.get("AGENT_DISPATCH_CHILD") == "1"',source)
  def test_nested_codex_home_links_auth_but_keeps_mutable_state_local(self):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); source=root/"source"; source.mkdir(); worktree=root/"worktree"; worktree.mkdir()
@@ -69,6 +92,7 @@ class AdapterV11Test(unittest.TestCase):
    self.assertEqual((home/"auth.json").resolve(),(source/"auth.json").resolve())
    self.assertTrue((home/"config.toml").is_symlink())
    self.assertTrue((home/"agent-harness").is_symlink())
+   self.assertEqual((home/"agent-harness").resolve(),wrapper.resolve_agent_home().resolve())
    self.assertEqual(home.parent,worktree/".dispatch")
  def test_concurrent_codex_start_launches_exactly_one_child(self):
   with tempfile.TemporaryDirectory() as td:
@@ -83,7 +107,8 @@ class AdapterV11Test(unittest.TestCase):
    argv=["dispatch-headless.py",*command[2:]]
    env={**os.environ,"PATH":str(fakebin)+os.pathsep+os.environ.get("PATH",""),
         "AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
-        "AGENT_DISPATCH_JOBS":str(jobs),"FAKE_CHILD_COUNT":str(count)}
+        "AGENT_DISPATCH_JOBS":str(jobs),"AGENT_DISPATCH_CHILD":"1",
+        "FAKE_CHILD_COUNT":str(count)}
    codes=[]
    def invoke(): codes.append(wrapper.main(argv))
    with mock.patch.dict(os.environ,env,clear=True), \
@@ -100,5 +125,6 @@ class AdapterV11Test(unittest.TestCase):
    self.assertEqual(count.read_text(encoding="utf-8").splitlines(),["child"])
    self.assertEqual(len(jobs.read_text(encoding="utf-8").splitlines()),1)
    self.assertIn("launch_claimed=1",jobs.read_text(encoding="utf-8"))
+   self.assertIn("pid_scope=namespace-local",jobs.read_text(encoding="utf-8"))
 
 if __name__=="__main__": unittest.main()

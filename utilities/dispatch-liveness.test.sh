@@ -146,12 +146,27 @@ if [ -d /proc ]; then
   jobsG2="$agent_home/.dispatch/jobs.log"
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-15T00:00:00" "open" "agent_setting" "$tmp/wt/codex-pid" "codexpid" "capability=x,harness=codex,pid=$pidG2,pid_start=$startG2" > "$jobsG2"
   outG2=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" "$jobsG2" 2>&1); rcG2=$?
-  if [ "$rcG2" -eq 0 ] && printf '%s' "$outG2" | grep -q 'ALIVE.*harness=codex'; then
+  if [ "$rcG2" -eq 0 ] && printf '%s' "$outG2" | grep -q 'ALIVE.*harness=codex.*classifier=tools.fleet.model.classify_attempt_evidence'; then
     ok "Codex live pid + matching start ticks → ALIVE(pid)"
   else
     bad "expected Codex ALIVE(pid); got rc=$rcG2 out=[$outG2]"
   fi
   kill "$pidG2" 2>/dev/null; wait "$pidG2" 2>/dev/null
+
+  # --- Case G3: depth-2 namespace-local PID is resolved by its exact fresh heartbeat.
+  attemptG3="att-namespace-live"; routeG3="rt-namespace"; nodeG3="test"
+  mkdir -p "$agent_home/.dispatch/heartbeats"
+  printf '{"attempt_id":"%s","route_id":"%s","route_node":"%s","phase":"tool","sequence":3,"updated_at":%s}\n' \
+    "$attemptG3" "$routeG3" "$nodeG3" "$(date +%s)" > "$agent_home/.dispatch/heartbeats/$attemptG3.json"
+  jobsG3="$agent_home/.dispatch/jobs.log"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-16T00:00:00" "open" "agent_setting" "$tmp/wt/namespace" "namespacepid" \
+    "capability=x,harness=codex,pid=437,pid_start=1,pid_scope=namespace-local,attempt_id=$attemptG3,route_id=$routeG3,route_node=$nodeG3" > "$jobsG3"
+  outG3=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" "$jobsG3" 2>&1); rcG3=$?
+  if [ "$rcG3" -eq 0 ] && printf '%s' "$outG3" | grep -q 'ALIVE.*namespace-local exact heartbeat'; then
+    ok "namespace-local depth-2 pid uses exact fresh heartbeat instead of root /proc"
+  else
+    bad "expected namespace-local exact heartbeat ALIVE; got rc=$rcG3 out=[$outG3]"
+  fi
 
   # --- Case H (본 수정의 회귀 핵심): pid 종료 + *신선* transcript → EXITED, exit 3.
   #     구버전은 conductor 활동이 만든 신선 transcript 때문에 ALIVE 오탐(수확 ~50분 지연 실측).

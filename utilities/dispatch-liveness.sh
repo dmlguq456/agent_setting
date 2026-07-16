@@ -20,7 +20,12 @@
 set -uo pipefail
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/agent-home.sh")}"
-JOBS="${1:-${AGENT_DISPATCH_JOBS:-$AGENT_HOME/.dispatch/jobs.log}}"
+if [ "$#" -gt 0 ] && [ "${1#--}" = "$1" ]; then
+  JOBS=$1
+  shift
+else
+  JOBS=${AGENT_DISPATCH_JOBS:-$AGENT_HOME/.dispatch/jobs.log}
+fi
 STALE_MIN="${DISPATCH_STALE_MIN:-15}"   # Suspect hang/death after N quiet minutes.
 # Runtime root (HLS-6): session transcripts/state live under the runtime, not
 # the harness source repository. Claude defaults to CLAUDE_CONFIG_DIR; other
@@ -32,6 +37,7 @@ LOG_DIR="$AGENT_HOME/.dispatch/logs"
 # the DEAD reason. Keep this deliberate duplicate synchronized with
 # dispatch-headless.py DEATH_PATTERNS.
 LIMIT_RE='operation not permitted|network is unreachable|network access denied|hit your (session|usage) limit|session limit reached|usage limit reached|weekly limit|rate limit|[^0-9]429[^0-9]|invalid api key|authentication_error|not logged in|please run /login|unauthorized|[^0-9]401[^0-9]|credit balance is too low|insufficient (credit|quota|funds)'
+CAPACITY_RE='^(error[[:space:]]*[:\-][[:space:]]*)?(selected[[:space:]]+)?model([[:space:]]+[A-Za-z0-9._:/-]+)?[[:space:]]+(is[[:space:]]+)?at[[:space:]]+capacity[.!]?$'
 
 # SD-15b: anchor log-pattern death detection to a few short trailing lines.
 # Scanning a large tail caused false DEAD verdicts when a successful report only
@@ -42,14 +48,23 @@ scan_log_death() {  # $1=slug; print the matching log path and return 0.
   for lf in "$LOG_DIR/${_slug}."*.log "$LOG_DIR/${_slug}."*.jsonl; do
     [ -f "$lf" ] || continue
     # Inspect the last three non-empty lines and accept only terse (≤200) matches.
-    hit=$(tail -n 40 "$lf" 2>/dev/null | awk 'NF' | tail -n 3 \
-      | grep -Ei "$LIMIT_RE" | awk 'length($0) <= 200 { print; exit }')
+    lines=$(tail -n 40 "$lf" 2>/dev/null | awk 'NF' | tail -n 3)
+    hit=$(printf '%s\n' "$lines" | grep -Ei "$LIMIT_RE" | awk 'length($0) <= 200 { print; exit }')
+    [ -n "$hit" ] || hit=$(printf '%s\n' "$lines" | grep -Ei "$CAPACITY_RE" | awk 'length($0) <= 200 { print; exit }')
     [ -n "$hit" ] && { printf '%s' "$lf"; return 0; }
   done
   return 1
 }
 
 [ -f "$JOBS" ] || { echo "(jobs.log not found: $JOBS)"; exit 0; }
+SOURCE_JOBS=$JOBS
+CURRENT_JOBS=$(mktemp)
+trap 'rm -f "$CURRENT_JOBS"' EXIT
+if ! python3 "$SCRIPT_DIR/dispatch-registry.py" liveness --jobs "$SOURCE_JOBS" "$@" > "$CURRENT_JOBS"; then
+  echo "dispatch-liveness: current-view filtering failed" >&2
+  exit 69
+fi
+JOBS=$CURRENT_JOBS
 
 now=$(date +%s); alive=0; suspect=0; open_n=0
 while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
@@ -58,9 +73,47 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   # Primary signal: wrapper-recorded PID, independent of transcript aliasing.
   pid=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^pid=//p' | head -1)
   pid_start=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^pid_start=//p' | head -1)
+  pid_scope=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^pid_scope=//p' | head -1)
+  attempt_id=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^attempt_id=//p' | head -1)
+  route_id=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^route_id=//p' | head -1)
+  route_node=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^route_node=//p' | head -1)
   harness=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^harness=//p' | head -1)
   [ -n "$harness" ] || harness="claude"
   [ -d /proc ] || pid=""   # Fall back to transcript mtime without /proc.
+  if [ -n "$pid" ] && [ -n "$pid_start" ]; then
+    exact_args=(attempt-state --pid "$pid" --pid-start "$pid_start")
+    [ -n "$pid_scope" ] && exact_args+=(--pid-scope "$pid_scope")
+    [ -n "$attempt_id" ] && exact_args+=(--attempt "$attempt_id")
+    [ -n "$route_id" ] && exact_args+=(--route "$route_id")
+    [ -n "$route_node" ] && exact_args+=(--node "$route_node")
+    exact=$(python3 "$SCRIPT_DIR/dispatch-registry.py" "${exact_args[@]}" --agent-home "$AGENT_HOME" 2>/dev/null || true)
+    exact_state=$(printf '%s\n' "$exact" | sed -n 's/^state=//p' | head -1)
+    classifier=$(printf '%s\n' "$exact" | sed -n 's/^classifier_source=//p' | head -1)
+    if [ "$exact_state" = "working" ]; then
+      if [ "$pid_scope" = "namespace-local" ]; then
+        echo "ALIVE      ${slug:-?}  (namespace-local exact heartbeat; harness=$harness; classifier=$classifier)"
+      else
+        echo "ALIVE      ${slug:-?}  (pid $pid running; harness=$harness; classifier=$classifier)"
+      fi
+      alive=$((alive + 1)); continue
+    fi
+    if [ "$exact_state" = "dead" ]; then
+      if log_hit=$(scan_log_death "$slug"); then
+        echo "⚠️ DEAD     ${slug:-?}  — trailing limit/auth log pattern ($log_hit)  [open: $ts]"
+      else
+        echo "⚠️ EXITED   ${slug:-?}  — pid $pid ended or identity changed; classifier=$classifier  [open: $ts]"
+      fi
+      suspect=$((suspect + 1)); continue
+    fi
+    if [ "$exact_state" = "done" ]; then
+      echo "⚠️ COMPLETED ${slug:-?}  — namespace-local terminal heartbeat awaits registry reconciliation  [open: $ts]"
+      suspect=$((suspect + 1)); continue
+    fi
+    # A namespace-local PID cannot be checked from the root namespace. If its exact
+    # heartbeat is no longer fresh, continue with the harness transcript fallback
+    # instead of probing an unrelated host PID with the same numeric value.
+    [ "$pid_scope" = "namespace-local" ] && pid=""
+  fi
   if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
     cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
     actual_start=$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true)
