@@ -12,6 +12,7 @@ This is the portable capability contract for `audit`. It defines runtime-neutral
 | Supported modes | `none` |
 | Portable meaning | Read-oriented post-run inspection for artifact drift, inconsistency, and omissions. |
 | Argument shape | `<artifact_path> [--scope auto\|facts\|style\|structure\|cross-ref\|coverage\|all] [--read-only] [--report-only] [--no-fact-check]` |
+| Entry load phase | `post-approval`; owner contract `capabilities/audit.md` |
 
 ## Invocation Semantics
 

@@ -15,179 +15,32 @@ metadata:
 
 # autopilot-design
 
-> **Output locations**:
-> - Direct invocation: `<artifact-root>/designs/<name>/`
-> - Delegated by `autopilot-spec`: `<artifact-root>/spec/design/`
->
-> Follow CONVENTIONS §5: T1 root and `design_state.yaml`; T2 phase directories such as `00_init/` and `01_refs/`; T3 `_internal/` within each phase.
+This is a compact pre-approval entry router. Its manifest-owned frontmatter is
+the authoritative discovery metadata; it intentionally contains no execution
+procedure.
 
-## Ownership Boundary
+## Pre-approval boundary
 
-Design leads visual decisions; code applies the resulting visual specification (DESIGN_PRINCIPLES §9).
+Use only this router, `harness-manifest.json`, and `core/WORKFLOW.md §0.2` to
+propose a route. Present the one-time confirmation in `core/WORKFLOW.md §0.4`
+unless the same route and scope are already approved. Do not load references
+before approval.
 
-- Design tokens have one source of truth: the file imported by the application, such as `globals.css` with `@theme` or `tokens.css`.
-- `designs/` and `spec/design/` hold references, mockups, rationale, and specimens as decision records, not duplicate token sources.
-- For an existing app, render and inspect the real screen rather than relying only on a mockup.
-- Route direction, token, new-layout, and structural visual changes here. Keep only trivial one-property tweaks in `autopilot-code`.
+## Post-approval owner contract
 
-## Invocation
+After approval, direct/quick sessions and the `standard+` depth-1 owner load
+`capabilities/autopilot-design.md`, then use the Reference Index below. Assigned
+stage workers load only their assigned stage contracts.
 
-Use this pipeline for UI or page design, slides, icons, logos, illustrations, design tokens, palettes, or multi-phase visual critique. `autopilot-spec` may delegate its design phase here automatically.
+## Reference Index
 
-Defaults:
-
-- `--scope mixed`; infer a narrower scope from the request and files when clear
-- `--from`: resume after the last completed phase in `design_state.yaml`, otherwise start at `init`
-- `--intensity`: derive verification rigor from intensity; there is no separate `--qa` axis ([CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers))
-
-Direct boundaries:
-
-- One component or asset may go directly to `design-team` in maker mode.
-- Critique-only work may go directly to `design-team` in critic mode.
-- Reference-only collection may go directly to `material-team` in web-image-search mode.
-- An explicit `/autopilot-design <args>` invocation supplies the routing choice directly.
-
-## Language Rule
-
-Follow an explicit artifact or audience language when provided. Otherwise, write user-facing output in the conversation language according to `<agent-home>/roles/response-policy.md`. Preserve code identifiers, paths, and canonical token names or values.
-
-## Arguments
-
-### `--scope` (auto-detected by default)
-
-- `ui`: individual frontend components such as buttons, cards, and forms
-- `webapp`: a composed screen, page, or landing experience with layout and interaction states
-- `slide`: presentation visuals
-- `icon`: a single icon, logo, or illustration asset
-- `diagram`: architecture, flow, or relationship diagrams in Mermaid, SVG, or Excalidraw
-- `mixed`: more than one of the above
-
-Skip phases only when the scope makes them unnecessary:
-
-- `icon`: tokens may be unnecessary; skip components when producing a single asset directly
-- `diagram`: normally skip tokens and components, focusing on references, rendering, review, and handoff
-
-### `--artifact`
-
-- `project`: integrate into the project's `components/ui/` and token files; prefer when a stack already exists
-- `standalone`: create a self-contained `preview.html` with inline CSS/JS and optional CDN dependencies; prefer when no stack exists or a portable preview is required
-- Auto-detect `project` when cwd contains `package.json`, `components.json`, or `tailwind.config.*`; otherwise use `standalone`
-
-### `--from`
-
-Accepted phases: `init`, `refs`, `tokens`, `components`, `review`, `handoff`. When `design_state.yaml` exists, default to the phase after the last `done` entry.
-
-### Verification Rigor
-
-- quick-tier: review may be skipped when the selected graph permits
-- standard-tier: run the standard review phase
-- thorough-tier: add `design-team` critic review and external-reference cross-checking
-
-## Context Auto-Detection
-
-Inspect the request and cwd before choosing a phase.
-
-1. Find `<artifact-root>/designs/<name>/design_state.yaml` or `<artifact-root>/spec/design/design_state.yaml`.
-2. If neither exists, start a new cycle at `init`.
-3. If state exists, infer the earliest affected phase from the requested change:
-   - environment or integration check → `init`
-   - new or replaced references → `refs`
-   - color, typography, spacing, radius, or shadow changes → `tokens`
-   - new components or variants → `components`
-   - critique-only rerun → `review`
-   - refreshed imports, exports, or reproduction guidance → `handoff`
-4. Honor an explicit `--from <phase>` without re-inferring it.
-
-For a resumed cycle, preserve unaffected tokens and artifacts. Reset only downstream phase state.
-
-Before `design-init`, apply the CONVENTIONS §6.6 intake gate when visual direction, tone, target device, design-system status, brand constraints, or artifact form are materially underspecified. Ask one structured round in the conversation language. Skip the intake round for sufficiently explicit requests and resumes.
-
-## Pipeline and Stage Dispatch
-
-For `standard+`, dispatch each durable phase as its own depth-2 headless session under [OPERATIONS §5.10](../../core/OPERATIONS.md#510-work-isolation-and-parallel-dispatch). The depth-1 conductor passes artifact paths and reads verdict/status only. Each phase reconstructs context from `design_state.yaml` and prior artifacts; conversation memory is not a handoff channel. Stage sessions never redispatch.
-
-Keep `direct`, `quick`, and artifact-free micro-stages inline. Between dispatched phases, record the confirmation verdict in `design_state.yaml` before launching the next phase.
-
-| Stage | In-session role | Inputs | Outputs | Write class |
-|---|---|---|---|---|
-| Phase 0 `design-init` | orchestrator | Request + cwd | `00_init/environment_check.md`, `design_state.yaml` | init |
-| Phase 1 `design-refs` | orchestrator; `material-team` for external search | User images, existing design assets, request | `01_refs/brief.md`, `_internal/references/` | refs |
-| Phase 2 `design-tokens` | orchestrator | `01_refs/brief.md`, existing token files | `02_tokens/tokens.md`, `02_tokens/specimen.html`, `tokens.css` or `tailwind.config.ts` | tokens |
-| Phase 3 `design-components` | `design-team` maker | `02_tokens/tokens.*`, `01_refs/brief.md` | `03_components/` specs, mockups, code, and previews | components |
-| Phase 4 `design-review` | `design-team` verifier, then critic | Rendered `03_components/` output | `04_review/verifier.md`, `04_review/critique.md` | review; read-only against components |
-| Phase 5 `design-handoff` | orchestrator | Components, reviews, and tokens | `05_handoff/handoff.md`, `05_handoff/exports/` | handoff |
-
-Serialize shared writes. In particular, one phase at a time may update only its own `phases.<phase>` entry in `design_state.yaml` after the preceding confirmation gate.
-
-## Paper Architecture Figures
-
-For paper architecture figures, produce layout and composition guidance but do not claim that an LLM-authored diagram is publication-ready. Read [references/paper-figure-policy.md](references/paper-figure-policy.md) for the scope and handoff boundary. Other scopes complete through the rendered visual-verification loop below.
-
-## Visual Harness
-
-Read [references/harness.md](references/harness.md) for the visual feedback loop, rendering tools, verifier, design rules, scaffolds, converters, and post-write checks. `design-init` should provision the available visual harness or report its fallback; absence of one integration alone must not stop the cycle.
-
-## Rendered Visual Verification
-
-Complete token, component, and review phases only after rendering and inspecting the result. Valid coordinates, source code, or XML are not visual evidence.
-
-- Load [the shared design rules](../../roles/modes/design/_design_rules.md) and follow their render, self-critique, and bounded iteration loop for HTML/React, SVG, and diagrams.
-- Inspect overlap, clipping, alignment, hierarchy, contrast, and responsive states relevant to the scope.
-- Show the rendered result to the user; a text-only report is not completion evidence.
-- When the primary visual integration is unavailable, use an available static renderer such as `sharp`, `rsvg`, or `mmdc`, and report the fallback.
-
-At each phase boundary, apply the four-way confirmation contract in the conversation language: continue, revise the current phase, back-jump to an earlier phase and reset downstream state, or stop while preserving `design_state.yaml`. Do not guess when a materially different visual direction remains unresolved.
-
-## Pipeline Execution
-
-Read [references/pipeline-execution.md](references/pipeline-execution.md) for invocation arguments and exact output lists. The table below defines phase completion gates:
-
-| Phase | Invoke | Completion gate |
+| File | Load when | Obligation |
 |---|---|---|
-| 0 | `design-init` | Environment checked and visual harness provisioned or fallback recorded; confirm whether to continue to references |
-| 1 | `design-refs` | Reference brief complete; confirm whether to continue to tokens |
-| 2 | `design-tokens` | Tokens and specimen rendered; confirm whether to continue to components |
-| 3 | `design-components` | Components or assets rendered and inspected; confirm whether to continue to review |
-| 4 | `design-review` | Verifier and critic verdicts recorded; on `needs_work`, mark review failed and return to components |
-| 5 | `design-handoff` | Handoff and exports complete; final confirmation may accept, back-jump, or stop |
+| [`references/owner-execution.md`](references/owner-execution.md) | After approval, by the selected direct/quick session or depth-1 owner | Read the complete execution procedure before material work. This is the router's only post-approval reference edge. |
 
-## Design State
+## Guard pointer
 
-```yaml
-design_name: <name>
-scope: ui  # or webapp/slide/icon/diagram/mixed
-artifact: standalone  # or project; auto-detected from the stack
-created: <date>
-phases:
-  init: done
-  refs: done
-  tokens: done
-  components: done
-  review: done
-  handoff: pending
-last_updated: <timestamp>
-```
-
-## Delegation from `autopilot-spec`
-
-When `autopilot-spec` invokes `autopilot-design --app <name>` in Phase 2:
-
-- write outputs under `<artifact-root>/spec/design/`
-- inherit its `--intensity`, including the derived verification rigor
-- after completion, set `phases.design: done` in the calling pipeline's `pipeline_state.yaml`
-
-## Return Format
-
-```text
-<output_path> -- ✅ Phase {N} ({phase_name}) completed
-```
-
-After the full cycle:
-
-```text
-<output_path> -- ✅ Design cycle completed (handoff ready)
-```
-
-## Optional Continuity
-
-The acting agent may retain useful, non-obvious design preferences or recurring patterns through the normal memory path when they are likely to improve future work. Do not turn examples such as density, color, typography, component patterns, or scope-specific phase choices into deterministic storage rules.
+Follow the portable artifact, worktree, role, and verification guards in the
+selected owner contract. Runtime projections must report unsupported mechanics
+and must not claim physical instruction masking, token, billing, or cost
+savings without verified evidence.

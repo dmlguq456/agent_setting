@@ -92,7 +92,7 @@ If no memo exists, continue to Step 4. When resuming from `strategy-refine`, ski
 
 Apply this step to `paper`, `presentation`, and `doc`.
 
-For paper mode, run the baseline gate in `conventions/paper.md` §3.6 before any axis review: sentence-level grammar, mechanical LaTeX integrity, semantic asset identity, and the one-build visual/layout check when reviewing the user's own paper. Review depth does not compensate for skipping this gate.
+For paper mode, run the baseline gate in `convention-paper.md` §3.6 before any axis review: sentence-level grammar, mechanical LaTeX integrity, semantic asset identity, and the one-build visual/layout check when reviewing the user's own paper. Review depth does not compensate for skipping this gate.
 
 Resolve:
 

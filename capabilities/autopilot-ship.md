@@ -13,6 +13,7 @@ This is the portable capability contract for `autopilot-ship`. It defines runtim
 | Portable meaning | Prepare application deployment/release setup and a ship checklist. |
 | Argument shape | `<task description (optional)> [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial]` |
 | Execution topology | `transactional-owner`; registry `capabilities/topologies.json` |
+| Entry load phase | `post-approval`; owner contract `capabilities/autopilot-ship.md` |
 
 ## Invocation Semantics
 

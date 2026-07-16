@@ -13,6 +13,7 @@ This is the portable capability contract for `autopilot-apply`. It defines runti
 | Portable meaning | Apply a cheatsheet draft to the real source artifact and verify the result. |
 | Argument shape | `"<cheatsheet hint / task>" [--target latex] [--source <path-to-real-source>] [--isolation branch\|worktree] [--from preflight\|apply\|verify\|handback]` |
 | Execution topology | `staged`; registry `capabilities/topologies.json` |
+| Entry load phase | `post-approval`; owner contract `capabilities/autopilot-apply.md` |
 
 ## Invocation Semantics
 

@@ -252,10 +252,10 @@ An administrative strategy paired with a heroic-pitch draft is a critical mismat
 
 #### Required convention files
 
-- [Common rules](../conventions/common.md)
-- [Paper](../conventions/paper.md)
-- [Presentation](../conventions/presentation.md)
-- [Document prose](../conventions/doc.md)
+- [Common rules](convention-common.md)
+- [Paper](convention-paper.md)
+- [Presentation](convention-presentation.md)
+- [Document prose](convention-doc.md)
 
 These four files are the source of truth for drafting, refinement, and audit. Do not depend on an unrelated external conventions folder.
 

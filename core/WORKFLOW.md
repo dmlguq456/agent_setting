@@ -195,6 +195,12 @@ sessions read the detail they need after approval. If a runtime automatically
 injects a selected Skill body into main, do not duplicate that read; record the
 runtime limitation rather than claiming total-token savings.
 
+Entry routers therefore have two deterministic load phases: manifest-owned
+metadata before approval, then the selected portable owner contract after
+approval. A router may expose one direct owner-reference index, but no
+pre-approval reference may contain execution procedure. The confirmation is
+one-time for an unchanged approved route and scope.
+
 ## 1. Four Tracks
 
 ```text

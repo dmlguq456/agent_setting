@@ -13,6 +13,7 @@ This is the portable capability contract for `autopilot-lab`. It defines runtime
 | Portable meaning | Rapid experiment prototyping around training setup and checkpoint evaluation/analysis. |
 | Argument shape | `<task description> [--mode setup\|eval\|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--report] [--from spec\|scaffold\|run\|eval\|summary]` |
 | Execution topology | `staged+resource`; registry `capabilities/topologies.json` |
+| Entry load phase | `post-approval`; owner contract `capabilities/autopilot-lab.md` |
 
 ## Invocation Semantics
 

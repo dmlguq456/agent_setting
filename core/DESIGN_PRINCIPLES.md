@@ -117,6 +117,13 @@ Describe the desired behavior rather than accumulating “do not do X” patches
 
 This role separation is distinct from the T1/T2/T3 artifact visibility tiers in §4.
 
+Primary entry capabilities add a load-phase boundary to that separation. A
+compact pre-approval router exposes only manifest-owned routing metadata and a
+single owner edge. After route approval, the selected capability owner loads
+the portable owner contract and materializes the stage graph; an assigned
+stage worker loads only its stage contract. Parent-invoked and model-support
+Skills are not primary-router candidates.
+
 ```text
 Orchestrator → Agent: file paths plus a one-line task directive
 Agent → Orchestrator: file path plus a one-line verdict token

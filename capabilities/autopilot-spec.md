@@ -13,6 +13,7 @@ This is the portable capability contract for `autopilot-spec`. It defines runtim
 | Portable meaning | Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path. |
 | Argument shape | `<task description> [--mode auto\|app\|library\|api\|cli\|research\|update (comma-separated for multiple)] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--user-refine]` |
 | Execution topology | `transactional-owner`; registry `capabilities/topologies.json` |
+| Entry load phase | `post-approval`; owner contract `capabilities/autopilot-spec.md` |
 
 ## Invocation Semantics
 

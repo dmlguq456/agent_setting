@@ -13,6 +13,7 @@ This is the portable capability contract for `autopilot-note`. It defines runtim
 | Portable meaning | Route and note artifacts, producing digests and triage proposals. |
 | Argument shape | `[--scope today\|yesterday\|since <date>\|all] [--target <notes-root>] [--dry-run] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--digest-only] [--triage-only] [--source <list>]` |
 | Execution topology | `map-reduce`; registry `capabilities/topologies.json` |
+| Entry load phase | `post-approval`; owner contract `capabilities/autopilot-note.md` |
 
 ## Invocation Semantics
 

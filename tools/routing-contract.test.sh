@@ -35,18 +35,18 @@ need capabilities/autopilot-spec.md   'never substitutes'        'autopilot-spec
 need capabilities/autopilot-note.md   '## Routing Boundary'      'autopilot-note Routing Boundary 존재'
 
 # 3. generated Codex projection 이 topology 를 실어 나르는가 (파리티 갭 회귀)
-need adapters/codex/skills/autopilot-lab/SKILL.md 'Eval execution topology' 'Codex lab projection 에 eval topology 투영됨'
-need adapters/codex/skills/autopilot-refine/SKILL.md 'Routing Boundary'     'Codex refine projection 에 Routing Boundary 투영됨'
+need adapters/codex/skills/autopilot-lab/SKILL.md 'capabilities/autopilot-lab.md' 'Codex lab projection 에 owner pointer 존재'
+need adapters/codex/skills/autopilot-refine/SKILL.md 'capabilities/autopilot-refine.md' 'Codex refine projection 에 owner pointer 존재'
 
 # 4. adapter bootstraps
-need adapters/claude/CLAUDE.md  'WORKFLOW §0.2'                    'Claude bootstrap semantic routing 실현'
+need adapters/claude/CLAUDE.md  'core/WORKFLOW.md §0.2'            'Claude bootstrap semantic routing 실현'
 need adapters/claude/CLAUDE.md  'headless worker dispatch'         'Claude bootstrap delegation-surface 실현'
 need adapters/codex/AGENTS.md   'core/WORKFLOW.md §0.2'            'Codex bootstrap semantic routing 실현'
 need adapters/codex/AGENTS.md   'never silently extends'           'Codex bootstrap delegation-surface 실현'
 need adapters/opencode/AGENTS.md 'core/WORKFLOW.md §0.2'           'OpenCode bootstrap semantic routing 실현'
 
 # 5. Claude skill realization
-need skills/autopilot-lab/SKILL.md 'WORKFLOW §0.2'                 'lab SKILL semantic routing 참조'
+need skills/autopilot-lab/SKILL.md 'core/WORKFLOW.md §0.2'         'lab SKILL semantic routing 참조'
 need skills/autopilot-lab/references/eval-procedure.md 'pre-execution gate' 'lab eval-procedure gate 참조'
 
 # 6. 행동 드릴 fixture 존재 (Cases A–E)

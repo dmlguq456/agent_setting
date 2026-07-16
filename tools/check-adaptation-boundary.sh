@@ -1422,7 +1422,7 @@ check_codex_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material figure-semantic-manifest.schema.json figure-semantic-verify.py"
-  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py sync-skill-invocation-policy.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py sync-skill-invocation-policy.py sync-entry-skill-layer.py entry-skill-layer.test.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2485,7 +2485,7 @@ check_opencode_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material figure-semantic-manifest.schema.json figure-semantic-verify.py"
-  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py sync-skill-invocation-policy.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py sync-skill-invocation-policy.py sync-entry-skill-layer.py entry-skill-layer.test.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -3005,7 +3005,7 @@ check_claude_tool_projection() {
     rel=${p#tools/}
     adapter_p=adapters/claude/tools/$rel
     case "$rel" in
-      generate.py|harness_manifest.py|sync-skill-invocation-policy.py|generated-projections.test.sh|context-footprint-baseline.json|install/profile-activation.test.sh|release|release/*)
+      generate.py|harness_manifest.py|sync-skill-invocation-policy.py|sync-entry-skill-layer.py|entry-skill-layer.test.py|generated-projections.test.sh|context-footprint-baseline.json|install/profile-activation.test.sh|release|release/*)
         # Harness-development, profile acceptance, and repository release
         # automation tools are intentionally not runtime projections.
         continue

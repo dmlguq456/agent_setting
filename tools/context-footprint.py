@@ -21,6 +21,8 @@ from typing import Iterable
 BOOTSTRAP_BUDGET = 16_384
 WORKER_BOOTSTRAP_BUDGET = 4_096
 SKILL_METADATA_BUDGET = 7_000
+ENTRY_ROUTER_BUDGET = 4_096
+ENTRY_ROUTER_TOTAL_BUDGET = 53_248
 MAX_BASELINE_GROWTH = 1.05
 ZERO_INJECTION_SAMPLES = {
     "codex-userprompt-default",
@@ -90,6 +92,15 @@ def skill_body_sizes(paths: Iterable[Path]) -> list[tuple[int, str]]:
         for skill in sorted(base.glob("*/SKILL.md")):
             rows.append((chars(skill), str(skill)))
     return sorted(rows, reverse=True)
+
+
+def entry_routers(root: Path) -> list[str]:
+    manifest = json.loads((root / "harness-manifest.json").read_text(encoding="utf-8"))
+    entries = sorted(name for name, spec in manifest["capabilities"].items()
+                     if spec["invocation"]["class"] == "entry-router")
+    if len(entries) != 13:
+        raise ValueError(f"expected exactly 13 entry routers, got {len(entries)}")
+    return entries
 
 
 def run_capture(
@@ -276,6 +287,22 @@ def main() -> int:
     ):
         if size > SKILL_METADATA_BUDGET:
             warnings.append(f"{label} skill metadata {size} > {SKILL_METADATA_BUDGET}")
+
+    print("\n[entry-router-bodies]")
+    for label, base in (
+        ("canonical", root / "skills"),
+        ("claude", root / "adapters/claude/skills"),
+        ("claude-plugin", root / "adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills"),
+        ("codex", root / "adapters/codex/skills"),
+        ("opencode", root / "adapters/opencode/skills"),
+    ):
+        sizes = [utf8_bytes(base / name / "SKILL.md") for name in entry_routers(root)]
+        total, maximum = sum(sizes), max(sizes)
+        surfaces[f"entry-router:{label}:total"] = total
+        surfaces[f"entry-router:{label}:max"] = maximum
+        print(f"surface={label} entries={len(sizes)} bytes={total} max={maximum}")
+        if total > ENTRY_ROUTER_TOTAL_BUDGET or maximum > ENTRY_ROUTER_BUDGET:
+            warnings.append(f"{label} entry router bytes total={total} max={maximum} exceed budget")
 
     plugin_state, installed_plugin_skills = plugin_install(root, codex_home, args.timeout) if codex_home else (None, None)
     native_links = harness_native_skill_links(root, codex_home)

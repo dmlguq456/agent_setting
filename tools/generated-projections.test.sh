@@ -58,6 +58,7 @@ grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/opencode/skills/autopilot-cod
 cp "$TMP/harness-manifest.json" "$MANIFEST"
 python3 "$ROOT/tools/generate.py" >/dev/null
 python3 "$ROOT/tools/generate.py" --check >/dev/null
+python3 "$ROOT/tools/entry-skill-layer.test.py" >/dev/null
 
 find "$ROOT/capabilities" "$ROOT/adapters/claude/skills" "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude" "$ROOT/adapters/codex/skills" "$ROOT/adapters/codex/agents" "$ROOT/adapters/codex/modes" "$ROOT/adapters/codex/plugins/agent-harness-codex" "$ROOT/adapters/opencode/skills" "$ROOT/adapters/opencode/commands" "$ROOT/adapters/opencode/agents" -type f -print | sort | xargs sha256sum > "$TMP/first.sha"
 sha256sum "$ROOT/tools/skill-conformance/invocation-policy.tsv" >> "$TMP/first.sha"
@@ -146,7 +147,15 @@ for projected in \
   }
 done
 grep -Fq 'agent-chosen memory recall' "$ROOT/capabilities/analyze-project.md"
-grep -Fq 'agent-chosen memory recall' "$ROOT/adapters/claude/skills/analyze-project/SKILL.md"
+for owner in \
+  "$ROOT/skills/analyze-project/references/owner-execution.md" \
+  "$ROOT/adapters/claude/skills/analyze-project/references/owner-execution.md" \
+  "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills/analyze-project/references/owner-execution.md"; do
+  grep -Fq 'agent-chosen memory recall' "$owner" || {
+    echo "not ok - post-approval owner contract missing from $owner" >&2
+    exit 1
+  }
+done
 grep -Fq 'five-field confirmation card' "$ROOT/adapters/codex/skills/analyze-project/SKILL.md"
 grep -Fq 'five-field confirmation card' "$ROOT/adapters/opencode/skills/analyze-project/SKILL.md"
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Generate the manifest-owned frontmatter of Claude-native Skills.
+"""Generate manifest-owned frontmatter of Claude-native Skills.
 
-Claude Skill procedure bodies remain adapter-owned. Only the frontmatter block
-through the second `---` delimiter is generated from `harness-manifest.json`.
+Entry router bodies and owner references are projected by
+``tools/sync-entry-skill-layer.py`` from canonical ``skills/`` before this
+metadata pass; this generator remains responsible only for frontmatter.
 """
 
 from __future__ import annotations

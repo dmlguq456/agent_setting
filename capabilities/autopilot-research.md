@@ -13,6 +13,7 @@ This is the portable capability contract for `autopilot-research`. It defines ru
 | Portable meaning | Shared upfront research that surveys academic, technology, or market sources before downstream routing. |
 | Argument shape | `<query> [--mode academic\|technology\|market] [--depth shallow\|medium\|deep] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--no-clarify] [--no-figures] [--from search\|analyze\|report]` |
 | Execution topology | `map-reduce`; registry `capabilities/topologies.json` |
+| Entry load phase | `post-approval`; owner contract `capabilities/autopilot-research.md` |
 
 ## Invocation Semantics
 

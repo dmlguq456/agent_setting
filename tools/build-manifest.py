@@ -507,10 +507,13 @@ def _replace_section(text, heading, body):
 def _capability_contract(identifier, spec):
     modes = ", ".join(spec["modes"]) or "none"
     topology = ""
+    entry_layer = ""
     if spec["group"] == "entry":
         summary = capability_topology.capability_summary(capability_topology.load_registry(), identifier)
         topology = "\n| Execution topology | `%s`; registry `%s` |" % (
             ", ".join(summary["topology_classes"]), "capabilities/topologies.json")
+    if spec["invocation"]["class"] == "entry-router":
+        entry_layer = "\n| Entry load phase | `post-approval`; owner contract `capabilities/%s.md` |" % identifier
     return """## Contract
 <!-- GENERATED: harness-manifest.json -->
 
@@ -526,7 +529,7 @@ def _capability_contract(identifier, spec):
         _md_cell(modes),
         _md_cell(spec["summary"]),
         _md_cell(spec["argument_shape"]),
-        topology,
+        topology + entry_layer,
     )
 
 

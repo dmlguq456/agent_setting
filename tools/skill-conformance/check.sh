@@ -189,6 +189,12 @@ EOF
 done
 
 if [ "$fail" -eq 0 ]; then
+  if ! PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tools/entry-skill-layer.test.py"; then
+    fail=1
+  fi
+fi
+
+if [ "$fail" -eq 0 ]; then
   echo "PASS: skill conformance (portable domain + four Skill trees + manifest-generated invocation policy ${#policy_names[@]} classifications + routing boundaries + audience-language neutrality)"
 fi
 exit "$fail"

@@ -3,7 +3,7 @@
 > This is the single source of truth for operational rules and definitions across the autopilot family. `DESIGN_PRINCIPLES.md` owns architectural design such as orchestrator, Skill, and agent separation; this document owns QA definitions, portable model roles, artifact conventions, and family-wide flags.
 >
 > Runtime adapter bootstraps list this file as a source of truth. The main agent reads it when QA, model-role, artifact, or family-wide flag work needs the definitions.
->
+
 > `tools/build-manifest.py --check` and adapter `sync-native-* --check` verify manifests and projections; `tools/check-adaptation-boundary.sh` verifies adapter boundaries; `tools/skill-conformance/check.sh` verifies quantitative Skill rules; and `harness verify` checks installed surfaces. Human review owns semantic prose consistency.
 
 ---
@@ -293,6 +293,12 @@ This section applies to orchestrator-level capabilities that create artifact dir
 | `SKILL.md` body | Under 500 lines | `body_lines`, `line_ok` |
 | `references/` | One level, no nested directories | `ref_dir`, `ref_depth_ok` |
 | Invocation frontmatter | Manual-only uses `disable-model-invocation: true`; parent/pipeline or subagent-preloaded Skills remain model-invoked; entry routers remain model-invoked and include a concrete English “Use when” trigger plus a “Not for” boundary | `disable_model`, `invocation`, `use_when` |
+
+The 13 manifest `entry-router` Skills are compact pre-approval routers. Each
+router is limited to 4,096 UTF-8 bytes, their aggregate is limited to 53,248
+bytes, and its single `## Reference Index` exposes exactly one post-approval
+owner edge. Procedure detail belongs in that one-level owner reference. Report
+static bytes only; do not infer token, billing, cost, savings, or ROI.
 
 `harness-manifest.json` owns each capability's invocation class, positive
 trigger, and exclusion boundary. `tools/skill-conformance/invocation-policy.tsv`

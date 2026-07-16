@@ -159,6 +159,8 @@ def validate(data: dict, root: Path = ROOT) -> None:
         if invocation_class == "entry-router":
             _expect(use_when.startswith("Use when "),
                     f"entry-router {identifier} use_when must start with 'Use when '")
+            _expect((root / "capabilities" / f"{identifier}.md").is_file(),
+                    f"entry-router {identifier} must declare a portable owner contract")
         elif invocation_class == "parent-invoked":
             _expect(use_when.startswith("Use only when "),
                     f"parent-invoked {identifier} use_when must start with 'Use only when '")

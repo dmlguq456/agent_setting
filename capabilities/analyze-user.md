@@ -12,6 +12,7 @@ This is the portable capability contract for `analyze-user`. It defines runtime-
 | Supported modes | `init, update` |
 | Portable meaning | Create or update a cross-project user-preference profile from coding, writing, and analysis patterns. |
 | Argument shape | `<aspect> [--source <path>] [--mode init\|update] [--from discover\|analyze\|verify\|qa\|output\|summary] [--user-refine]` |
+| Entry load phase | `post-approval`; owner contract `capabilities/analyze-user.md` |
 
 ## Invocation Semantics
 

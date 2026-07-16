@@ -6,7 +6,7 @@ Parse `$ARGUMENTS` into the output form, flags, and remaining task description.
 
 The optional mode is form-first:
 
-- `paper` — A LaTeX academic deliverable expressed as a paste-ready cheatsheet draft. Here *draft* means a card-based mutation or edit plan that the user can paste into LaTeX, not unconstrained blank-page prose. `autopilot-apply` applies it to `main.tex`. For new papers, each entry supplies a new body block. For camera-ready and major revisions, each entry modifies an existing baseline and must follow anchor and natural-integration rules in `conventions/paper.md`.
+- `paper` — A LaTeX academic deliverable expressed as a paste-ready cheatsheet draft. Here *draft* means a card-based mutation or edit plan that the user can paste into LaTeX, not unconstrained blank-page prose. `autopilot-apply` applies it to `main.tex`. For new papers, each entry supplies a new body block. For camera-ready and major revisions, each entry modifies an existing baseline and must follow anchor and natural-integration rules in `convention-paper.md`.
 - `presentation` — Slide-by-slide Markdown for conference talks, seminars, lectures, or cheatsheet variants. PPTX export is not supported; the user transfers the content into PowerPoint. Enforce 16:9 content limits.
 - `doc` — Word, HWP, or Markdown prose for reports, post-mortems, proposals, rebuttals, peer reviews, technical articles, or institutional memos. Adapt tone, tense, structure, and artifact language to the genre and audience.
 

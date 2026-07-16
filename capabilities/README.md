@@ -23,6 +23,13 @@ Each capability has:
 - required role families;
 - adapter realization notes.
 
+For each manifest `entry-router`, discovery and execution are separate
+surfaces. The compact pre-approval router carries routing metadata; after
+approval, the selected portable capability contract and its one owner
+reference govern execution. Assigned stage workers read only their stage
+contracts. Parent-invoked and model-support capabilities never enter the
+primary-router candidate set.
+
 Autopilot entry capabilities additionally follow `core/CONVENTIONS.md §1`:
 
 - `intensity` is the primary stage-graph selector;

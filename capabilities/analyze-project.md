@@ -12,6 +12,7 @@ This is the portable capability contract for `analyze-project`. It defines runti
 | Supported modes | `code, paper, doc` |
 | Portable meaning | Creates or refreshes persistent analysis from primary code, paper, or document materials when analysis is absent, stale, or explicitly requested; not for read-only context recovery. |
 | Argument shape | `[--mode code\|paper\|doc] [<scope/target/input-folder>] [--skip-qa]` |
+| Entry load phase | `post-approval`; owner contract `capabilities/analyze-project.md` |
 
 ## Invocation Semantics
 
