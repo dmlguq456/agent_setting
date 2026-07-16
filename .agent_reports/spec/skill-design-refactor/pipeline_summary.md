@@ -1,6 +1,6 @@
 # Skill-Design Refactor — Pipeline Summary
 
-## 2026-07-16 · v5 implementation started
+## 2026-07-16 · v5 GREEN
 
 v4의 main-context ownership을 worker 입출력까지 확장한다. portable worker
 bootstrap은 one kernel + exactly one type + assigned contract이며, worker의
@@ -13,6 +13,12 @@ Claude masked profile은 하네스 조립 입력을 실제로 줄이고, Codex/O
 자동 상속하는 부분은 physical masking으로 주장하지 않고 checked fallback으로
 기록한다. 정적 bootstrap bytes만 측정하며 total-token/cost 절감률은 주장하지
 않는다.
+
+공통 kernel은 1,571 bytes이고 type 포함 입력은 support 1,862, review 1,878,
+stage 1,906, owner 2,028 bytes다. custom prompt wrapping, route consumer,
+artifact-root shadow guard, profile activation/build, three adapter dispatch,
+generated projections, Skill conformance, adapter boundary, Codex/OpenCode
+runtime doctor, strict context footprint가 통과했다.
 
 ## 2026-07-16 · v4 GREEN
 

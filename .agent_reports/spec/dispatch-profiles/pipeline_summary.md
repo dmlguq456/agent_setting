@@ -1,6 +1,6 @@
 # dispatch-profiles — pipeline summary
 
-## 2026-07-16 · v2 implementation started
+## 2026-07-16 · v2 GREEN
 
 v1의 masked config-home과 expose subset은 유지하되 모든 worker가 네 core
 문서를 읽던 L0 계약은 폐기했다. dispatcher가 portable minimal kernel과 정확히
@@ -11,6 +11,11 @@ specialization만 더한다. 상세 evidence는 artifact에 남고 registered wo
 runtime 자동 `CLAUDE.md`/`AGENTS.md` 상속은 profile masking과 분리해 fallback으로
 기록한다. 검증은 builder/profile, three-dispatcher custom prompt, boundary,
 static footprint를 같은 cycle에서 닫는다.
+
+여섯 profile 선언이 모두 typed builder check를 통과했고, code-test instance
+smoke에서 attach CLAUDE.md가 `worker-type: stage`를 기록하면서 blanket core-read
+문구를 포함하지 않음을 확인했다. three-dispatcher custom prompt, profile
+activation, generated projections, adapter boundary, strict footprint가 PASS다.
 
 ## 2026-07-02 · spec v1 (autopilot-spec, qa=standard)
 

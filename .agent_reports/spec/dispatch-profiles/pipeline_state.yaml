@@ -11,14 +11,14 @@ phases:
   spec: done              # PRD v2 typed worker-bootstrap amendment
   scaffolding: n/a        # autopilot-code 가 v1 에서 직접 완성 (templates+profiles 포함)
   design: n/a             # 터미널 도구 — 시각 UI 없음
-  dev: in_progress        # typed dispatcher/profile realization
-  verification: pending  # profile checks + three dispatchers + boundary + footprint
+  dev: done               # typed dispatcher/profile realization
+  verification: done     # profile checks + three dispatchers + boundary + footprint PASS
 spec_version: v2
-result: PARTIAL
+result: GREEN
 last_updated: 2026-07-16
 decisions_locked:
   - DP-1: 마스킹 = 심링크 부분 투영, 내용 fork 금지 (조립 bootstrap 만 생성 파일)
-  - DP-2: L0(core+guards) 하드 포함 — 선언 표면에 미노출
+  - DP-2 (v1, superseded by DP-13): L0(core+guards) 하드 포함 — 선언 표면에 미노출
   - DP-3: profiles/ = top-level harness-scoped 선언 (portable 경계 의도된 예외, model_role XOR model)
   - DP-4: per-dispatch ephemeral home 인스턴스 homes/<slug>.<name>/ (harvest 시 제거)
   - DP-5: jobs.log pipe += profile= (3 reader 후방호환 검증)

@@ -1,6 +1,6 @@
 ---
 title: Worker bootstrap isolation v5
-status: in_progress
+status: complete
 capability: autopilot-code
 mode: refactor
 intensity: strong

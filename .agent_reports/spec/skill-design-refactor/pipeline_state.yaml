@@ -14,10 +14,10 @@ phases:
   spec: done              # PRD v5 — minimal worker kernel + typed overlay + fixed handoff
   scaffolding: n/a        # 기존 skills/ 리팩터 — 신규 scaffold 없음
   design: n/a             # instruction 파일 리팩터 — 시각 UI 없음
-  dev: in_progress        # core-first worker bootstrap + three sibling runtime realization
-  verification: pending   # renderer/profile/dispatcher/boundary/context-footprint
+  dev: done               # core-first worker bootstrap + three sibling runtime realization
+  verification: done      # renderer/profile/dispatcher/boundary/context-footprint PASS
 spec_version: v5
-result: PARTIAL
+result: GREEN
 back_jump:
   - from: dev
     to: spec
