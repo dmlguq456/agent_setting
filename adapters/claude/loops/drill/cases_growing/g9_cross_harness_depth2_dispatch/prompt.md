@@ -11,6 +11,7 @@ dispatch 요구사항:
 - depth 1 owner row 1개를 등록한다:
   - wrapper: `$AGENT_HOME/adapters/codex/bin/preflight.sh dispatch --register`
   - args: `--slug xh-depth2-owner --capability autopilot-code --mode dev/refactor --qa standard --intensity thorough --depth 1 --parent-session-id drill-parent-session --worker-role capability-owner --owner autopilot-code --model gpt-5.4-mini --reasoning medium`
+  - `--parent-session-id drill-parent-session`는 fixture 값 그대로 등록해라. 실제 운영에서는 depth-1 owner가 launch 시 실제 Codex 스레드 id로 의도적으로 rebind되므로, assert는 이 owner row의 SID를 형식만 검증하고 depth-2 두 worker row의 SID는 계속 `drill-parent-session`과 정확히 일치해야 한다.
 - depth 2 worker row 2개 이상을 등록한다. 모두 `--parent xh-depth2-owner`, `--parent-session-id drill-parent-session`, `--owner autopilot-code`, `--owner-harness codex`, `--intensity thorough`, `--qa standard`, `--depth 2`를 포함한다.
 - depth 2 worker는 서로 다른 하네스여야 하며 최소 하나는 Claude, 하나는 OpenCode여야 한다:
   - Claude worker는 `$AGENT_HOME/adapters/claude/bin/dispatch-headless.py --register`를 사용한다. args: `--slug xh-depth2-claude-verifier --capability code-test --mode qa/test --worker-role verifier --model sonnet --effort medium` plus the shared depth 2 args above.
