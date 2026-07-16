@@ -25,16 +25,40 @@ mark_read() {
     *) fp="$PWD/$fp" ;;
   esac
 
+  slug=""
   case "$fp" in
     */.agent_reports/spec/prd.md) ;;
     */.claude_reports/spec/prd.md) ;;
-    *) return 0 ;;
+    *)
+      # Structural depth check for a one-level sub-spec: .../<agent-reports-dir>/spec/<slug>/prd.md.
+      # A `case` glob's `*` matches `/`, so a literal pattern here would also swallow
+      # spec/<slug>/_internal/versions/v1/prd.md; walk dirname() instead.
+      [ "$(basename "$fp")" = prd.md ] || return 0
+      d1=$(dirname "$fp")
+      d2=$(dirname "$d1")
+      d3=$(dirname "$d2")
+      [ "$(basename "$d2")" = spec ] || return 0
+      case "$(basename "$d3")" in
+        .agent_reports|.claude_reports) ;;
+        *) return 0 ;;
+      esac
+      slug=$(basename "$d1")
+      [ "$slug" = "_internal" ] && return 0
+      ;;
   esac
   [ -f "$fp" ] || return 0
 
-  file_root=$(dirname "$(dirname "$(dirname "$fp")")")
+  if [ -z "$slug" ]; then
+    file_root=$(dirname "$(dirname "$(dirname "$fp")")")
+  else
+    file_root=$(dirname "$d3")
+  fi
   canonical=$("$ARTIFACT_ROOT_RESOLVER" "$file_root" 2>/dev/null) || return 0
-  canonical_prd="$canonical/spec/prd.md"
+  if [ -z "$slug" ]; then
+    canonical_prd="$canonical/spec/prd.md"
+  else
+    canonical_prd="$canonical/spec/$slug/prd.md"
+  fi
   canonical_parent=$(dirname "$canonical_prd")
   canonical_parent=$(CDPATH= cd -- "$canonical_parent" 2>/dev/null && pwd -P) || return 0
   canonical_prd="$canonical_parent/$(basename "$canonical_prd")"
@@ -47,8 +71,15 @@ mark_read() {
   key=$(printf '%s' "$root" | sed 's#[/ ]#_#g')
   mtime=$(stat -c %Y "$fp" 2>/dev/null || echo 0)
 
+  if [ -z "$slug" ]; then
+    marker_name="${sid}__${key}"
+  else
+    slug_key=$(printf '%s' "$slug" | sed 's#[/ ]#_#g')
+    marker_name="${sid}__${key}__${slug_key}"
+  fi
+
   mkdir -p "$AGENT_HOME/.spec-grounding"
-  printf '%s\n' "$mtime" > "$AGENT_HOME/.spec-grounding/${sid}__${key}"
+  printf '%s\n' "$mtime" > "$AGENT_HOME/.spec-grounding/${marker_name}"
 }
 
 if [ "$#" -gt 0 ]; then
