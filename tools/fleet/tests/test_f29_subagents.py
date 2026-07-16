@@ -324,12 +324,48 @@ class NoRegressionTest(unittest.TestCase):
             render.set_show_all(False)
 
     def test_strip_indent_is_a_deep_pure_inset(self):
-        """`_SUBAGENT_IND` stays a pure inset (spaces only, no connector) and lands at least
-        as deep as a dispatch row's full "  ↳ " prefix (사용자 2026-07-16 '좀 더 들여쓰기' —
-        the earlier shallower-than-dispatch contract read as a sibling, not a child)."""
+        """`_SUBAGENT_IND` stays a pure inset (spaces only, no connector) and lands WELL past
+        a dispatch row's full "  ↳ " prefix (사용자 2026-07-16 '들여쓰기 레벨을 충분히
+        안쪽으로' — both the 2-cell and 4-cell insets read as siblings, not children)."""
         self.assertEqual(render._SUBAGENT_IND.strip(), "")
         self.assertGreaterEqual(len(render._SUBAGENT_IND), len("  " + render._dispatch_prefix(
-            type("J", (), {"depth": 1})())))
+            type("J", (), {"depth": 1})())) + 2)
+
+    def test_strip_depth_pushes_the_inset_further_inward(self):
+        """A dispatch-owned strip (depth ≥ 1) indents 2 more cells per level than a
+        session-owned one, so the strip always reads inside its OWN owner row."""
+        sub = [SubAgent(agent_type="explore", active=True)]
+        session_lead = render._subagent_strip(sub, depth=0)[0][0][0]
+        d1_lead = render._subagent_strip(sub, depth=1)[0][0][0]
+        d2_lead = render._subagent_strip(sub, depth=2)[0][0][0]
+        self.assertEqual(len(d1_lead), len(session_lead) + 2)
+        self.assertEqual(len(d2_lead), len(session_lead) + 4)
+
+    def test_dispatch_row_carries_its_child_sessions_strip(self):
+        """서브 세션(분사 자식)의 서브에이전트도 뜬다 (사용자 2026-07-16): the hidden child
+        session's subagents re-attach as a strip under the dispatch row that represents
+        it, joined by pid — same join as title adoption."""
+        from fleet.model import DispatchJob
+        parent = Session(harness="claude", pid=1, cwd="/x", session_id="parent-sid",
+                         slug="x", liveness="working", title="parent")
+        child = Session(harness="claude", pid=42, cwd="/x/wt", slug="wt",
+                        liveness="working", is_child=True)
+        child.subagents = [SubAgent(agent_type="fact-check", active=True)]
+        job = DispatchJob(key="autopilot-code", slug="wt", cwd="/x/wt", harness="claude",
+                          pid=42, is_child=True, parent_sid="parent-sid",
+                          liveness="working")
+        lines = render._build_lines([parent, child], [job], section="both",
+                                    narrow=False, malformed=0, term_width=168)
+        strip = [ln for ln in lines
+                 if ln and render._ICON_SUBAGENT in "".join(t for t, _k in ln)
+                 and "fact-check" in "".join(t for t, _k in ln)]
+        self.assertEqual(len(strip), 1)
+        text = "".join(t for t, _k in strip[0] if not render._is_fill(t))
+        lead = text[:text.index(render._ICON_SUBAGENT)].lstrip("▍")
+        self.assertEqual(lead.strip(), "")
+        # depth-1 strip = _SUBAGENT_IND + 2, minus the one indent cell the group tint
+        # rail (▍) consumes when it is prepended to every card row.
+        self.assertGreaterEqual(len(lead), len(render._SUBAGENT_IND) + 1)
 
     def test_no_subagent_count_badge_on_the_session_name_row(self):
         """The ⚡N name-zone badge is retired — the strip is inline under the row, so a

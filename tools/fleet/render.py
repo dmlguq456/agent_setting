@@ -1673,11 +1673,13 @@ _FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: dep
 # dispatch's `🚀`/`↳` so the two nested-row kinds never visually merge. Single point of
 # ASCII-degrade if double-width alignment ever breaks in a real terminal.
 _ICON_SUBAGENT = "⚡"
-_SUBAGENT_IND = "    "  # session-child indent: pure inset, no connector glyph, as deep as a
-                        # dispatch row's full "  ↳ " prefix so ⚡ lands on the depth-2 arrow
-                        # column (사용자 2026-07-16 "좀 더 들여쓰기" — the original 2-cell inset
-                        # read as a sibling of the session, not its child). The per-session ⚡N
-                        # name-zone badge this used to pair with stays retired (strip is inline).
+_SUBAGENT_IND = "      "  # strip indent: pure inset, no connector glyph, 6 cells for a
+                          # session-owned strip — well past the depth-2 arrow column so the
+                          # strip reads as INSIDE the row above, never as a sibling (사용자
+                          # 2026-07-16 "들여쓰기 레벨을 충분히 안쪽으로"; the 2-cell then 4-cell
+                          # insets both read too shallow). Dispatch-owned strips add 2 more
+                          # cells per depth (see _subagent_strip). The per-session ⚡N
+                          # name-zone badge this used to pair with stays retired.
 
 
 def _subagent_elapsed_min(sa):
@@ -1687,13 +1689,19 @@ def _subagent_elapsed_min(sa):
     return max(0, int((time.time() - started) / 60))
 
 
-def _subagent_strip(subs):
-    """One horizontal strip per session: `⚡ <type> <glyph> <elapsed> · <type> <glyph>
-    <elapsed> …` — replaces the old one-row-per-subagent `├⚡`/`└⚡` stack (adopted from the
-    discarded two-plane demo's `_agents_strip`, prd.md:290-295). Active entries render
-    normal weight (● + elapsed); completed entries dim (✓ + elapsed) — the caller only
-    passes completed entries at all when `_SHOW_ALL` (F-18b dim-row convention)."""
-    segs = [(_SUBAGENT_IND, None), (_ICON_SUBAGENT + " ", "dim")]
+def _subagent_strip(subs, depth=0):
+    """One horizontal strip per OWNER ROW (session or dispatch job): `⚡<type> <glyph>
+    <elapsed> · <type> <glyph> <elapsed> …` — replaces the old one-row-per-subagent
+    `├⚡`/`└⚡` stack (adopted from the discarded two-plane demo's `_agents_strip`,
+    prd.md:290-295). ⚡ sits flush against the first label (the double-width glyph plus a
+    space read as a hole — 사용자 2026-07-16), and the elapsed tail is set off by a double
+    space and always dim, floating it apart from the identity the way the clock column
+    separates from session rows. Active entries render normal weight (●); completed
+    entries fully dim (✓) — the caller only passes completed entries at all when
+    `_SHOW_ALL` (F-18b dim-row convention). `depth` = the owning dispatch row's depth
+    (0 for a session row): each level pushes the strip 2 more cells inward so it stays
+    visibly inside its own owner (사용자 2026-07-16 "서브 세션에 서브 에이전트도")."""
+    segs = [(_SUBAGENT_IND + "  " * max(0, depth), None), (_ICON_SUBAGENT, "dim")]
     for i, sa in enumerate(subs):
         if i:
             segs.append((" · ", "dim"))
@@ -1701,7 +1709,8 @@ def _subagent_strip(subs):
         elapsed = _subagent_elapsed_min(sa)
         tail = fmt_min(elapsed) if elapsed is not None else "—"
         glyph = "●" if sa.active else "✓"
-        segs.append(("%s %s %s" % (label, glyph, tail), None if sa.active else "dim"))
+        segs.append(("%s %s" % (label, glyph), None if sa.active else "dim"))
+        segs.append(("  " + tail, "dim"))
     return [segs]
 
 
@@ -2190,6 +2199,11 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # below drops it from the visible rows.
     sid_titles = {s.session_id: (s.title or s.slug) for s in sessions
                   if s.session_id and (s.title or s.slug)}
+    # F-29 — a dispatched child session's own sub-agents survive the is_child filter below:
+    # they re-attach as a strip under the dispatch row representing the child (pid join,
+    # the same join title adoption uses — 사용자 2026-07-16 "서브 세션에 서브 에이전트도").
+    child_subs_by_pid = {s.pid: s.subagents for s in sessions
+                         if getattr(s, "is_child", False) and getattr(s, "subagents", None)}
     # headless dispatch children are shown as dispatch rows under their parent — never as
     # top-level sessions (the same headless process would otherwise double-show as session+job).
     # mem-worker sessions are excluded from grouping/census by default (F-18b) — they inherit
@@ -2550,6 +2564,14 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                                            parent_effort=row_parent_effort, is_last=is_last,
                                            stage_override=stage_override,
                                            name_width=wide_name_width, route_seq=route_seq))
+            # F-29 — the child session's own sub-agents, one strip directly under the
+            # dispatch row that represents it (depth-indented; active always, completed
+            # only with `a` — the same convention as session-owned strips above).
+            job_subs = child_subs_by_pid.get(job.pid) if job.pid else None
+            shown_job_subs = [sa for sa in (job_subs or []) if sa.active or _SHOW_ALL]
+            if shown_job_subs:
+                lines.extend(_subagent_strip(
+                    shown_job_subs, depth=max(1, int(getattr(job, "depth", 1) or 1))))
             for sub in _sort_group_jobs(job_children.get(job.slug, [])):
                 # F-15b P0-2: a depth-2 stage worker that is done/queued/idle is already
                 # absorbed into the conductor's own breadcrumb (✓/dim future segment) — only
