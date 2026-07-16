@@ -137,3 +137,10 @@ Claude Code와 Codex의 동시 진단을 교차검증해 “저장은 되지만 
 - Agent가 incident key를 선택하고 deterministic CLI는 exact match만 deduplicate한다; recurrence는 evidence만 append하고 proposal state를 바꾸지 않는다.
 - On-call 자동 범위는 `proposed`까지이며 review/adoption/activation과 source/runtime mutation은 계속 금지한다.
 - 구현 완료: exact-key 동시 ingest는 하나의 proposal에 직렬화되고, stale recurrence는 current-context-bound reproduction 뒤에만 freshness를 회복한다. 19개 proposal 회귀와 adapter/release 회귀를 통과했다.
+
+### v18 → v19 (2026-07-14, update mode — daily curator backstop, snapshot `_internal/versions/v18/`)
+
+- Session-end deep curator를 primary owner로 유지하고, on-call runner가 최근 write-event window를 같은 guarded curator engine으로 하루 한 번 catch-up한다.
+- Cursor는 calendar date나 worktree path가 아니라 stable project key별 XDG state이며 worker·전체 사전검증·apply·strict mirror sync 성공 뒤에만 전진한다. Journal rotation gap도 명시적으로 멈춘다.
+- Daily prune/graduate는 recent focus ID로 제한하고, merge는 focus ID를 최소 하나 포함하면서 모든 ID가 기존 destructive snapshot allowlist에 있어야 한다. Add/reinforce/delete/consume/reattribute와 pending/global/profile/other-project 접근은 금지한다.
+- 모든 action/failure를 bounded receipt로 남겨 morning report가 전수 공개한다. Proposal promotion state와 daily memory maintenance state는 서로 전이시키지 않는다.

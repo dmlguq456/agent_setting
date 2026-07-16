@@ -32,13 +32,18 @@ Filenames stay ASCII. Display names may pair a human-readable name with the iden
 
 | Loop | Type | Trigger | Scope | Work | Output | User touchpoint |
 |---|---|---|---|---|---|---|
-| **On-call** (`oncall`) | Time | Cron at 05:37 | Workspaces: repos, artifacts, experiments, recent memory mutations, loop health, and missing drills | Overnight patrol; corroborate at most two memory-backed harness incidents and exact-deduplicate evidence into the proposal inbox, then report | `notes/oncall/<date>.md` plus offline proposal evidence | Review proposal IDs in the morning report; adoption remains separate |
+| **On-call** (`oncall`) | Time | Cron at 05:37 | Workspaces: repos, artifacts, experiments, recent memory mutations, loop health, and missing drills | Run the D-42 project-cursored daily curator catch-up, then patrol; corroborate at most two memory-backed harness incidents and exact-deduplicate evidence into the proposal inbox | `notes/oncall/<date>.md`, bounded curator receipt, plus offline proposal evidence | Review curator actions/failures and proposal IDs; adoption remains separate |
 | **Note** (`note`) | Time | Cron at 05:03 | Previous day's artifacts | Idempotent worklog-board Layer 2 note creation and routing | `notes/_layer2/notes/` plus digest | Worklog-board `/triage` |
 | **Drill** (`drill/`) | Event | `drill/run.sh` after behavioral instruction changes; periodic `--sample 2`; related cases or full run only after major guard/routing changes | Main-agent compliance with instructions | Headless fixture tests and scoring; on failure, automatically draft diagnosis and a proposed fix without applying it | `drill/results/<timestamp>/` plus `<case>.diagnosis.md` | Approve a proposed fix after failure |
 | **Study** (`study`) | Time | Sunday cron at 06:17 | External developments against the current settings | Survey recent agent-engineering work and adapter changes, compare with the harness, and produce proposals only; critical items may include an automatic draft | `notes/study/<date>.md` | Sign off on a proposal, apply it, then run a drill |
 | **Runtime watch** (`runtime-watch`) | State | At most daily, or manually after a runtime-currentness event | Official Codex and Claude Code facts against local adapter projections | Fingerprint authoritative sources and probe local CLI/projection/usage helpers; report or propose only, with no policy auto-edits | `notes/runtime-watch/<date>.md` | Propose an `autopilot-spec`/`autopilot-code` cycle when change is detected |
 
-The overnight order is 05:03 `note`, then 05:37 `oncall` to avoid overlap. `runtime-watch` is state-based and manual rather than mandatory every day because it checks network and policy currentness; this follows the 2026-07-13 Codex-window currentness incident.
+The overnight order is 05:03 `note`, then 05:37 `oncall` to avoid overlap. On-call runs the session-end curator's guarded engine as a catch-up before its report agent; per-project XDG cursors advance only after strict application and mirror closeout, and the morning report discloses every action or failure. `runtime-watch` is state-based and manual rather than mandatory every day because it checks network and policy currentness; this follows the 2026-07-13 Codex-window currentness incident.
+
+The scheduled executable currently realizes the daily curator through Claude's
+portable worker contract. If `LOOP_ADAPTER` selects a runtime without that
+contract, the runner leaves affected project cursors unchanged and records an
+unsupported-worker failure instead of silently falling back to another runtime.
 
 ## Backlog
 

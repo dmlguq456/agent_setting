@@ -1,0 +1,1 @@
+../../../../tools/memory/daily-curator.test.sh

@@ -11,7 +11,7 @@ Design boundary:
     storage, retrieval, scope, lifecycle, telemetry, and recovery contracts.
   - No external Python dependencies; rg accelerates session retrieval when present.
 """
-import argparse, datetime, hashlib, json, os, re, sqlite3, subprocess, sys
+import argparse, datetime, hashlib, json, os, re, sqlite3, subprocess, sys, tempfile
 from collections import namedtuple
 from pathlib import Path
 
@@ -74,11 +74,14 @@ else:
         Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
         / "agent-memory" / "write-events.jsonl"
     )
+WRITE_EVENTS_WATERMARK = Path(os.environ.get(
+    "MEM_WRITE_EVENTS_WATERMARK", str(WRITE_EVENTS) + ".watermark.json"))
 WRITE_ACTORS = ("manual", "distiller", "curator", "lifecycle", "sync", "restore")
 # Doctor thresholds mirror the cleanup-candidate defaults.
 DOCTOR_DURABLE_SOFT_CEILING = 80
 DOCTOR_WORKING_BLOAT_CEILING = 150
 DOCTOR_WORKER_STALE_DAYS = 7
+DAILY_CURATOR_MAX_BODY_CHARS = 8000
 
 
 def artifact_root(cwd: Path) -> Path:
@@ -144,32 +147,42 @@ def _head_unpushed(repo):
     return cnt not in ("", "0")   # An ahead commit is unpushed and safe to amend.
 
 
-def _commit_dump():
+def _commit_dump(strict=False):
     """Commit the synchronized dump without touching unrelated changes.
 
     Amend only an unpushed auto-sync commit. Pushing is opt-in through
-    ``MEM_DUMP_PUSH=1``. All failures are non-fatal.
+    ``MEM_DUMP_PUSH=1``. Return false on a bounded git failure; ordinary sync
+    remains fail-open while strict sync propagates it.
     """
     if os.environ.get("MEM_DUMP_COMMIT") == "0":
-        return  # Explicit escape hatch.
+        return True  # Explicit escape hatch.
     repo = DUMP.parent  # STORE; dump.jsonl lives in the agent-memory repo working tree
     if not _git_out(["rev-parse", "--is-inside-work-tree"], repo):
-        return  # Non-git store: no-op.
+        return True  # Non-git store: no-op.
     # Stage only dump.jsonl; never touch databases, backups, or unrelated files.
-    _git_out(["add", "--", DUMP.name], repo)
+    if _git_rc(["add", "--", DUMP.name], repo) != 0:
+        return False
     # Skip the commit when the staged dump is unchanged.
     if _git_rc(["diff", "--cached", "--quiet", "--", DUMP.name], repo) == 0:
-        return  # nothing staged → no commit
+        # A prior bounded push may have failed after the commit. Retry even when
+        # the current export has no diff so strict daily closeout cannot advance
+        # its cursor ahead of the remote recovery mirror.
+        if os.environ.get("MEM_DUMP_PUSH") == "1":
+            return _git_rc(["push"], repo) == 0
+        return True
     msg = f"{AUTO_DUMP_MSG_PREFIX} ({datetime.datetime.now().isoformat(timespec='seconds')})"
     # Amend only when HEAD is both an auto-sync commit and still unpushed.
     head_msg = _git_out(["log", "-1", "--format=%s"], repo)   # Empty for a fresh repository.
     is_auto = head_msg.startswith(AUTO_DUMP_MSG_PREFIX)
     if is_auto and _head_unpushed(repo):
-        _git_out(["commit", "--amend", "-m", msg, "--", DUMP.name], repo)   # Rolling single commit.
+        commit_rc = _git_rc(["commit", "--amend", "-m", msg, "--", DUMP.name], repo)
     else:
-        _git_out(["commit", "-m", msg, "--", DUMP.name], repo)              # New commit.
+        commit_rc = _git_rc(["commit", "-m", msg, "--", DUMP.name], repo)
+    if commit_rc != 0:
+        return False
     if os.environ.get("MEM_DUMP_PUSH") == "1":
-        _git_out(["push"], repo)
+        return _git_rc(["push"], repo) == 0
+    return True
 
 
 def _norm_remote(url):
@@ -977,6 +990,49 @@ def _append_write_event(action, rid, tier=None, scope=None, rtype=None, actor=No
             lines = WRITE_EVENTS.read_text(
                 encoding="utf-8", errors="replace"
             ).splitlines()[-500:]
+            earliest = None
+            for line in lines:
+                try:
+                    candidate = json.loads(line).get("ts")
+                    datetime.datetime.fromisoformat(candidate)
+                    earliest = candidate
+                    break
+                except (AttributeError, TypeError, ValueError, json.JSONDecodeError):
+                    continue
+            watermark = {
+                "schema": 1,
+                "rotated_at": event["ts"],
+                "earliest_retained_ts": earliest,
+                "gap_unknown": earliest is None,
+            }
+            fd = None
+            tmp = None
+            try:
+                WRITE_EVENTS_WATERMARK.parent.mkdir(parents=True, exist_ok=True)
+                fd, tmp = tempfile.mkstemp(
+                    prefix=WRITE_EVENTS_WATERMARK.name + ".",
+                    dir=WRITE_EVENTS_WATERMARK.parent,
+                )
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fd = None
+                    json.dump(watermark, fh, sort_keys=True, ensure_ascii=False)
+                    fh.write("\n")
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                os.replace(tmp, WRITE_EVENTS_WATERMARK)
+            except OSError:
+                try:
+                    if fd is not None:
+                        os.close(fd)
+                    if tmp is not None:
+                        os.unlink(tmp)
+                except (OSError, TypeError):
+                    pass
+                # Preserve the unrotated journal when its gap watermark cannot
+                # be made durable. Growth is safer than silent event loss.
+                with WRITE_EVENTS.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(event, sort_keys=True, ensure_ascii=False) + "\n")
+                return
             WRITE_EVENTS.write_text("\n".join(lines) + "\n", encoding="utf-8")
         with WRITE_EVENTS.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event, sort_keys=True, ensure_ascii=False) + "\n")
@@ -2447,6 +2503,137 @@ def curate_snapshot():
     print("\n".join(out))
 
 
+def _parse_event_time(value, label):
+    """Parse the local, offset-free timestamp format used by write telemetry."""
+    try:
+        parsed = datetime.datetime.fromisoformat(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be an ISO-8601 timestamp") from exc
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone().replace(tzinfo=None)
+    return parsed
+
+
+def curate_recent(since, until, limit=100, json_output=False):
+    """Return current-project records touched by recent manual/distiller events.
+
+    The write journal supplies sub-day ordering that the date-only ``updated``
+    column cannot. Events are only discovery pointers: every ID is re-read from
+    the DB and fenced to the current project, non-pending delivery state, and
+    non-injection records before it becomes a daily-curator focus ID.
+    """
+    since_dt = _parse_event_time(since, "since")
+    until_dt = _parse_event_time(until, "until")
+    if since_dt >= until_dt:
+        raise ValueError("since must be earlier than until")
+
+    journal_gap = False
+    earliest_retained = None
+    if WRITE_EVENTS_WATERMARK.exists():
+        try:
+            watermark = json.loads(WRITE_EVENTS_WATERMARK.read_text(encoding="utf-8"))
+            earliest_retained = watermark.get("earliest_retained_ts")
+            if (watermark.get("schema") != 1 or watermark.get("gap_unknown")
+                    or not earliest_retained):
+                journal_gap = True
+            else:
+                journal_gap = since_dt < _parse_event_time(
+                    earliest_retained, "earliest retained event timestamp")
+        except (OSError, json.JSONDecodeError, ValueError, AttributeError):
+            journal_gap = True
+
+    latest = {}
+    scanned = 0
+    if WRITE_EVENTS.exists():
+        try:
+            with WRITE_EVENTS.open(encoding="utf-8", errors="replace") as fh:
+                for raw in fh:
+                    try:
+                        event = json.loads(raw)
+                        ts = _parse_event_time(event.get("ts"), "event timestamp")
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+                    if not (since_dt < ts <= until_dt):
+                        continue
+                    if event.get("actor") not in ("manual", "distiller"):
+                        continue
+                    rid = event.get("id")
+                    if not isinstance(rid, str) or not rid:
+                        continue
+                    scanned += 1
+                    old = latest.get(rid)
+                    if old is None or ts > old[0]:
+                        latest[rid] = (ts, event.get("action") or "unknown")
+        except OSError:
+            latest = {}
+
+    pkey = project_key(Path.cwd())
+    records = []
+    total = 0
+    oversized_ids = []
+    if DB.exists() and latest:
+        con = get_con()
+        try:
+            for rid, (ts, action) in sorted(latest.items(), key=lambda item: (item[1][0], item[0])):
+                safe_cols = ", ".join(
+                    "CASE WHEN length(body)<=? THEN body ELSE '' END" if col == "body" else col
+                    for col in RECORD_COLS)
+                row = con.execute(
+                    f"SELECT {safe_cols}, length(body) FROM records "
+                    "WHERE id=? AND scope='project' AND cwd_origin=? "
+                    "AND delivery_state!='pending' "
+                    "AND (injection_flag=0 OR injection_flag IS NULL)",
+                    (DAILY_CURATOR_MAX_BODY_CHARS, rid, pkey),
+                ).fetchone()
+                if row is None:
+                    continue
+                meta, body = _row_to_meta(row[:-1])
+                body_len = row[-1] or 0
+                total += 1
+                if body_len > DAILY_CURATOR_MAX_BODY_CHARS:
+                    if len(oversized_ids) < 20:
+                        oversized_ids.append(meta["id"])
+                    continue
+                if len(records) >= limit:
+                    continue
+                records.append({
+                    "id": meta["id"],
+                    "tier": meta.get("tier"),
+                    "type": meta.get("type"),
+                    "delivery_state": meta.get("delivery_state"),
+                    "event_ts": ts.isoformat(timespec="seconds"),
+                    "event_action": action,
+                    "body": body,
+                })
+        finally:
+            con.close()
+
+    payload = {
+        "schema": 1,
+        "project_key": pkey,
+        "since": since_dt.isoformat(timespec="seconds"),
+        "until": until_dt.isoformat(timespec="seconds"),
+        "events_scanned": scanned,
+        "journal_gap": journal_gap,
+        "earliest_retained_ts": earliest_retained,
+        "count": total,
+        "truncated": total > limit,
+        "oversized": bool(oversized_ids),
+        "oversized_ids": oversized_ids[:20],
+        "records": records,
+    }
+    if json_output:
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+    else:
+        print(f"# recent curator focus: {pkey} ({payload['since']}, {payload['until']}]")
+        for rec in payload["records"]:
+            print(f"[{rec['id']}] {rec['event_ts']} {rec['event_action']} "
+                  f"{rec['tier']}/{rec['type']} :: {_snap_label(rec['body'])}")
+        if payload["truncated"]:
+            print(f"[overflow] {total} records exceeds limit {limit}")
+    return payload
+
+
 def curate_artifacts():
     """Build read-only artifact state for the session-end curator."""
     import subprocess
@@ -3148,30 +3335,48 @@ def inject(max_working=None, max_durable=None, hook=False):
 
 
 # ---------- sync ----------
-def sync():
-    """SessionEnd migration, lifecycle, FTS rebuild, and dump export."""
+def sync(mirror_only=False, strict=False):
+    """Synchronize memory state and its deterministic dump mirror.
+
+    ``mirror_only`` is the daily-curator closeout: semantic actions already ran,
+    so it rebuilds indexes and mirrors the DB without re-running migration or
+    lifecycle expiry. ``strict`` reports index/export exceptions to the caller
+    so a daily cursor never advances ahead of its recovery mirror.
+    """
     print("# sync (projects → store mirror)")
     n = 0
-    try:
-        n = migrate(apply=True)
-    except Exception as e:
-        sys.stderr.write(f"[sync] migrate failed; continuing: {e}\n")
-    try:
-        lifecycle(apply=True)
-    except Exception as e:
-        sys.stderr.write(f"[sync] lifecycle failed; continuing: {e}\n")
+    ok = True
+    if not mirror_only:
+        try:
+            n = migrate(apply=True)
+        except Exception as e:
+            ok = False
+            sys.stderr.write(f"[sync] migrate failed; continuing: {e}\n")
+        try:
+            lifecycle(apply=True)
+        except Exception as e:
+            ok = False
+            sys.stderr.write(f"[sync] lifecycle failed; continuing: {e}\n")
     try:
         index_build(rebuild=True)
     except Exception as e:
+        ok = False
         sys.stderr.write(f"[sync] index failed: {e}\n")
     try:
         export_dump()
     except Exception as e:
+        ok = False
         sys.stderr.write(f"[sync] export failed; continuing: {e}\n")
     try:
-        _commit_dump()
+        commit_ok = _commit_dump(strict=strict)
+        if strict and not commit_ok:
+            ok = False
+            sys.stderr.write("[sync] dump commit/push failed\n")
     except Exception as e:
+        ok = False
         sys.stderr.write(f"[sync] dump commit failed; continuing: {e}\n")
+    if strict and not ok:
+        return None
     return n
 
 
@@ -3262,15 +3467,26 @@ def main():
     ra = sub.add_parser("reattribute", help="Reattribute an orphan record to the current project")
     ra.add_argument("id")
 
+    sub.add_parser("project-key", help="Print the stable current project identity")
     sub.add_parser("curate-snapshot",
                    help="Read-only current-project durable/working snapshot and signals")
+    cr = sub.add_parser("curate-recent",
+                        help="Read-only current-project focus from a write-event time window")
+    cr.add_argument("--since", required=True, help="Exclusive ISO-8601 lower bound")
+    cr.add_argument("--until", required=True, help="Inclusive ISO-8601 upper bound")
+    cr.add_argument("--limit", type=_recall_limit, default=100)
+    cr.add_argument("--json", dest="json_output", action="store_true")
     sub.add_parser("curate-artifacts",
                    help="Read-only current-project git, plan, and spec artifact state")
     sub.add_parser("promote-candidates",
                    help="visible durable records for agent-owned review (read-only, D-28/D-40)")
 
     sub.add_parser("stats", help="Show store statistics")
-    sub.add_parser("sync", help="Idempotently mirror projects into the store, index, and dump")
+    sy = sub.add_parser("sync", help="Idempotently mirror projects into the store, index, and dump")
+    sy.add_argument("--mirror-only", action="store_true",
+                    help="Rebuild indexes/dump without migration or lifecycle expiry")
+    sy.add_argument("--strict", action="store_true",
+                    help="Exit nonzero if a synchronization stage fails")
 
     ij = sub.add_parser("inject", help="Build the SessionStart injection block")
     ij.add_argument("--hook", action="store_true", help="SessionStart additionalContext JSON")
@@ -3355,8 +3571,17 @@ def main():
         sys.exit(0 if graduate(args.id, to=args.to) else 1)
     elif args.cmd == "reattribute":
         sys.exit(0 if reattribute(args.id) else 1)
+    elif args.cmd == "project-key":
+        print(project_key(Path.cwd()))
     elif args.cmd == "curate-snapshot":
         curate_snapshot()
+    elif args.cmd == "curate-recent":
+        try:
+            curate_recent(args.since, args.until, limit=args.limit,
+                          json_output=args.json_output)
+        except ValueError as exc:
+            print(f"[curate-recent] {exc}", file=sys.stderr)
+            sys.exit(64)
     elif args.cmd == "curate-artifacts":
         curate_artifacts()
     elif args.cmd == "promote-candidates":
@@ -3364,7 +3589,9 @@ def main():
     elif args.cmd == "stats":
         stats()
     elif args.cmd == "sync":
-        sync()
+        result = sync(mirror_only=args.mirror_only, strict=args.strict)
+        if args.strict and result is None:
+            sys.exit(1)
     elif args.cmd == "inject":
         inject(hook=args.hook)
     elif args.cmd == "register-postit":

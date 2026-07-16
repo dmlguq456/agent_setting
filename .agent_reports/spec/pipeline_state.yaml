@@ -6,7 +6,7 @@ phases:
   spec: done               # v3 PRD 확정 (D-1~7 lock — DB화·저장소분리·통합강화)
   scaffolding: pending
   dev: in_progress         # v3 완료(DB화·분리). v4 신규 = Cluster A(profile 완전통합)+B(Hermes port) 구현 대기
-last_updated: 2026-07-14  # v18: on-call memory→proposal promotion bridge. snapshot v17
+last_updated: 2026-07-14  # v19: daily on-call curator backstop. snapshot v18
 inputs:
   - .agent_reports/research/hermes-agent/
   - VISION.md
@@ -37,3 +37,4 @@ decisions_locked:
   - D-37~D-39: Cluster J(v15) — 쓰기 이벤트 저널(write-events.jsonl, bounded·fail-open, recall-events 와 읽기/쓰기 대칭)·mem log(저널 tail 1급 조회)·mem doctor(read-only 전수 진단 9항목+exit code, oncall 항목 1개·새 loop 없음, 조치 권한=D-18 큐레이터 불변). 소비자 = fleet F-19(collectors/memory.py read-only 관찰)
   - D-40: semantic memory judgment belongs to the acting agent; deterministic code owns mechanics only (Cluster K v17)
   - D-41: on-call may promote memory-derived incidents only after full-body read and live corroboration; exact-key dedup and proposed ceiling (Cluster L v18)
+  - D-42: session-end curator remains primary; on-call runs a project-key-cursored daily catch-up over recent manual/distiller events with focus-ID gates, strict apply+mirror closeout, and bounded receipts (Cluster M v19)

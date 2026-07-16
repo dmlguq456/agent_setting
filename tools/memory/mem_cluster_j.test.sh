@@ -199,6 +199,15 @@ LINES_AFTER="$(event_count)"
   || bad "rotation 미작동: 줄수=$LINES_AFTER"
 [ "$(last_event_field id)" != "" ] && [ "$(events | tail -1 | grep -c 'rotation trigger')" = 1 ] \
   && ok "rotation: 최신 이벤트 보존" || bad "rotation: 최신 이벤트 유실"
+if python3 - "$MEM_WRITE_EVENTS.watermark.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+assert d["schema"] == 1 and "earliest_retained_ts" in d and "gap_unknown" in d
+PY
+then ok "rotation: daily cursor gap watermark persisted before truncation"
+else bad "rotation: gap watermark missing or malformed"
+fi
+rm -f "$MEM_WRITE_EVENTS.watermark.json"
 
 # =====================================================================
 echo "== D-38: mem log 필터 =="

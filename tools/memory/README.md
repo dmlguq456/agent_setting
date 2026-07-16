@@ -48,15 +48,17 @@ python3 <agent-home>/tools/memory/mem.py <command>
 | `export [--target dump\|profile] [--apply]` | Export `dump.jsonl` or an on-demand human-readable profile cache. Profile export is dry-run unless `--apply` is supplied. |
 | `import <dump.jsonl>` | Recreate the DB exactly from a dump: delete existing records, replay the mirror, and rebuild FTS in the same connection. |
 | `project [--cwd]` | Build the compatibility projection. Session context uses `inject`, not this command. |
+| `project-key` | Print the stable current-project identity used for scope and daily cursors. Read-only and does not seed a repository marker. |
 | `migrate [--apply]` | Idempotently migrate legacy auto-memory, post-it, and Markdown source files. Dry-run by default. |
 | `lifecycle [--apply]` | Apply working expiry and expose durable duplicate/capacity candidates. Pending delivery records remain protected. |
 | `stats` | Print a grouped store snapshot. |
 | `log [--limit 20] [--action] [--tier] [--actor] [--json]` | Read the bounded write-event timeline (D-38), complementing the `stats` snapshot. |
 | `doctor` | Run nine read-only checks covering integrity, FTS/schema invariants, working growth, stale pending, durable capacity, graveyard/dump consistency, and worker health. Exit 0 is clean, 1 is WARN, and 2 is FAIL. |
 | `inject [--hook]` | Build bounded SessionStart context from working, durable, and profile records. Defaults to 2,000 characters and 15 bullets; `--hook` emits `additionalContext` JSON. |
-| `sync` | Absorb stray projection writes, rebuild FTS5, and re-export `dump.jsonl` at SessionEnd. |
+| `sync [--mirror-only] [--strict]` | Absorb stray projection writes, rebuild FTS5, and re-export `dump.jsonl` at SessionEnd. Daily closeout uses `--mirror-only --strict` after semantic actions, without rerunning lifecycle expiry. |
 | `distill <sid> [--advance]` | Print normalized transcript text after the shared session marker and optionally advance that marker. |
 | `curate-snapshot` | Print a read-only current-project snapshot, mechanical signals, and destructive `IDS:` membership. Pending records appear under `PROTECTED PENDING` but never in destructive IDs. |
+| `curate-recent --since <ts> --until <ts> [--limit 1..100] [--json]` | Resolve manual/distiller write events in `(since, until]` to current, non-pending, unflagged records in the current project. This supplies D-42 focus IDs without touching access state. |
 | `curate-artifacts` | Print read-only git, plan, and spec evidence for the curator agent. |
 | `promote-candidates` | Print a bounded view of visible durable records for agent-owned institutionalization review. Type and strength are metadata, not semantic gates. |
 | `reinforce <id>` | Increment strength and update access time within the current-project whitelist. |
@@ -75,6 +77,22 @@ checks snapshot membership, and calls `mem.py` with argv-only values. Each
 command also enforces its own project whitelist. Pending records are protected
 both in snapshot membership and through a transaction-time DB check. Prune,
 merge, and delete retain recoverable graveyard data.
+
+Daily mode adds a second mechanical set: `focus IDs`. Prune/graduate must be
+both a snapshot member and a recent focus ID; merge participants must all be
+snapshot members and at least one must be a focus ID. Daily mode rejects add,
+reinforce, delete, consume, and reattribute. `daily-curator.py` stores project-key cursors
+and its last bounded receipt under `$XDG_STATE_HOME/agent-memory/`; it advances a
+cursor only after the worker output passes a full validation-only pass, action
+application, and strict mirror sync. Mixed valid/invalid output therefore cannot
+partially mutate memory. A rotated write journal carries an earliest-retained
+watermark; an older cursor fails as `journal-gap` for explicit operator review.
+Deep-worker launches default to eight per run and are bounded by
+`MEM_DAILY_CURATOR_MAX_WORKERS`/`--max-workers`; over-budget projects fail closed
+without advancing their cursor.
+The scheduled on-call executable currently supplies the Claude adapter's
+portable worker; another loop adapter must implement the same worker contract or
+the receipt fails closed as unsupported without advancing its project cursor.
 
 These safeguards validate operations; they do not decide meaning. Main agents,
 distillers, and curators make contextual decisions about whether any action is
@@ -101,7 +119,9 @@ and confidence thresholds never substitute for that judgment.
 
 - Every mutation appends one bounded `write-events.jsonl` entry with
   `ts/action/id/tier/scope/type/actor/sid/snippet`. Rotation keeps at most the
-  recent 500 lines within a 256 KiB bound. This local telemetry is not mirrored.
+  recent 500 lines within a 256 KiB bound and durably writes
+  `write-events.jsonl.watermark.json` first so daily cursors can detect a lost
+  interval. This local telemetry is not mirrored.
 - Journal precedence is `MEM_WRITE_EVENTS`, then a path beside an overridden
   `MEM_STORE`, then `$XDG_STATE_HOME/agent-memory/write-events.jsonl`.
 - Telemetry is fail-open; a logging failure never blocks a mutation. Graveyard

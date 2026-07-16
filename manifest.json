@@ -1014,8 +1014,8 @@
       "mono": "oncall",
       "type": "time",
       "schedule": "Cron at 05:37",
-      "blurb": "Overnight patrol; corroborate at most two memory-backed harness incidents and exact-deduplicate evidence into the proposal inbox, then report",
-      "output_path": "`notes/oncall/<date>.md` plus offline proposal evidence",
+      "blurb": "Run the D-42 project-cursored daily curator catch-up, then patrol; corroborate at most two memory-backed harness incidents and exact-deduplicate evidence into the proposal inbox",
+      "output_path": "`notes/oncall/<date>.md`, bounded curator receipt, plus offline proposal evidence",
       "layer": "L3"
     },
     {

@@ -10,7 +10,6 @@
 > · **v16 2026-07-14** (historical language-neutral automatic recall design, retired in full by v17 D-40)
 > · **v17 2026-07-14** (agent-owned semantic memory judgment: automatic prompt classification/recall injection retired; deterministic code is limited to mechanical safety and retrieval infrastructure)
 > · **v18 2026-07-14** (D-41 — agent-backed on-call promotion: memory mutation → full-body read → live corroboration → exact-key improvement proposal)
-> · **v19 2026-07-14** (D-42 — daily on-call curator backstop: recent-event focus, project cursor, same guarded curator engine, full action receipt)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -293,7 +292,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 ### 5.12.3 D-39 — `mem doctor` (read-only 전수 진단) + oncall 편입
 - 서브커맨드 1개, 전 항목 결정론 체크·read-only·수정 0: ① `PRAGMA integrity_check` ② records↔FTS 카운트 정합 ③ schema 불변식(tier/delivery_state enum·working 의 expires 존재) ④ working 비대 ⑤ stale pending(pending 21일+ 미소비) ⑥ durable soft-ceiling 초과 ⑦ graveyard↔DB 정합(graveyard 의 삭제 id 가 DB 에 생존 시 위반) ⑧ dump.jsonl 신선도(마지막 sync 반영 vs DB max(updated)) ⑨ 워커 건강(프로젝트별 마지막 distill/curate 시각 — 저널 기반, 활성 프로젝트 장기 무소식 = silent-death 신호).
 - 출력: 항목별 OK/WARN/FAIL + exit code(0 clean / 1 warn / 2 fail) — oncall·스크립트 기계 소비.
-- **oncall 항목 1개 추가, 새 loop 신설 없음** — D-25 계약대로 doctor 자체는 read-only 진단+보고(아침 브리핑 편입). **조치 권한 불변**: 삭제·consolidate·merge = D-18 deep curator 소유 — v19 D-42는 같은 guarded curator의 일일 catch-up을 추가할 뿐 doctor에 수정 권한을 주지 않는다.
+- **oncall 항목 1개 추가, 새 loop 신설 없음** — D-25 계약대로 read-only 진단+보고(아침 브리핑 편입). **조치 권한 불변**: 삭제·consolidate·merge = D-18 세션끝 opus 큐레이터 소유 — doctor 발견은 아침 논의 안건·큐레이터 입력으로만 흐른다(doctor 는 진단, 고치는 손은 기존 소유자).
 - `tools/memory/index-check.sh`(legacy 파일 인덱스 대상)와 별개 — doctor 는 store(DB) 대상.
 
 ### 5.12.4 데이터 모델·컴포넌트 영향
@@ -332,53 +331,16 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
   monitor making a semantic decision. The mechanical layer validates paths,
   context, evidence bounds, exact identity, locking, and state ceilings only.
 
-## 5.15 Cluster M — Daily curator backstop (v19, 2026-07-14)
-
-### 5.15.1 D-42 — Session-end primary, on-call catch-up
-
-- The session-end deep curator remains the primary owner of semantic memory
-  cleanup. The daily on-call runner invokes the same no-tools worker,
-  snapshot/action validator, project mutation gates, graveyard, and dump mirror
-  path only as a catch-up backstop for records changed since that project's last
-  successful daily cursor.
-- Cursor scope is stable `project_key`, not a calendar date or worktree path.
-  The orchestrator reads the bounded write-event journal and advances a
-  project's cursor only after the worker, a full validation-before-application
-  pass, action application, and strict mirror sync succeed. Journal rotation
-  durably records its earliest retained timestamp first; a cursor predating it
-  fails as `journal-gap` instead of silently skipping events. A no-change scan
-  is a successful no-op. Failed, oversized, unsupported, gap-detected, or
-  over-budget runs leave the cursor unchanged and appear in the morning report.
-- The recent-event set contains current, non-pending, unflagged project records
-  whose `manual` or `distiller` event timestamp is inside the closed scan
-  window. Full current-project memory and artifacts are context only. In daily
-  mode, prune/graduate must target a recent ID; a merge must contain
-  at least one recent ID and all participants must remain in the normal
-  destructive snapshot allowlist. Daily mode cannot add, reinforce, delete,
-  consume, reattribute, or touch pending, global/profile, other-project, or
-  nonexistent records.
-- Project discovery is bounded to configured roots plus the harness repository.
-  Deep-worker launches are capped per run; over-budget projects retain their
-  cursor for a later retry rather than causing unbounded spend.
-  The local XDG cursor/report is operational state, not memory SoT, proposal
-  evidence, source, runtime config, or a generated projection. Every attempted
-  project and every applied action is recorded in a bounded receipt consumed by
-  the on-call morning report.
-- This maintenance authority does not extend D-41. Curator output can change
-  memory only; it cannot edit instructions, source, adapters, generated
-  projections, plugins, runtime-owned config, proposal state, or activation.
-
 ## [library] 공개 API (v3 + v4 추가)
 ```
 mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(dump|profile) / mem_import / mem_migrate / mem_lifecycle / mem_project
 + (B2) turn-counter state (hook이 갱신, mem이 읽어 nudge 판정)
 + (I) mem_show / mem_consume / mem_restore
 + (J) mem_log / mem_doctor (+ 내부: write-event append 훅 — 전 변이 경로 공용)
-+ (M) mem_project_key / mem_curate_recent + daily-curator project cursor/receipt
 ```
 
 ## [cli] `mem` 명령
-v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 body를 결정론적으로 출력 — sub-agent·CLAUDE.md 트리거의 user_profile 파일 Read 대체). **v14 신규 `mem show <id>`, `mem recall --full [--limit N]`, `mem consume <id>`, `mem restore <id>`**. **v17 retires `mem recall --auto`** because recall relevance is an agent judgment (D-40). **v15 신규 `mem log [--limit/--action/--tier/--actor/--json]`, `mem doctor`** (§5.12). **v19 신규 `mem project-key`, `mem curate-recent --since/--until/--limit --json`, `mem sync --mirror-only --strict`** (§5.15). `export --target profile`은 on-demand 사람 열람 캐시용으로만(SoT 아님, sync/analyze-user 자동 wiring 불필요 — 파일 없음). `register-postit`·`.postit-roots`는 **폐기**(post-it.md 파일 제거). B2 turn-counter는 hook+state.
+v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 body를 결정론적으로 출력 — sub-agent·CLAUDE.md 트리거의 user_profile 파일 Read 대체). **v14 신규 `mem show <id>`, `mem recall --full [--limit N]`, `mem consume <id>`, `mem restore <id>`**. **v17 retires `mem recall --auto`** because recall relevance is an agent judgment (D-40). **v15 신규 `mem log [--limit/--action/--tier/--actor/--json]`, `mem doctor`** (§5.12). `export --target profile`은 on-demand 사람 열람 캐시용으로만(SoT 아님, sync/analyze-user 자동 wiring 불필요 — 파일 없음). `register-postit`·`.postit-roots`는 **폐기**(post-it.md 파일 제거). B2 turn-counter는 hook+state.
 
 ## 데이터 모델
 기존 records v4 15컬럼에 v14 `delivery_state`를 추가한 schema v5. `records_fts` FTS5 + trigram 보조 + `idx_records_scope`; `dump.jsonl` 결정론적 export/import는 delivery_state를 round-trip하고 구 dump는 heuristic backfill한다. profile = type=profile 레코드(body=aspect 전문), source=`user-profile:<stem>` (A2 파일명 도출 근거).
@@ -432,13 +394,11 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
 - **v15 신규 (Cluster J — 쓰기 관측성+전수 진단, §5.12)**:
   - **D-37 (쓰기 이벤트 저널)**: 전 변이 경로 → write-events.jsonl (XDG state, bounded 256KB/500줄, **fail-open** — graveyard 는 fail-closed 불변). D-34 recall-events 와 읽기/쓰기 대칭.
   - **D-38 (`mem log`)**: 저널 tail 1급 조회 (--limit/--action/--tier/--actor/--json, 기본 20건). stats 는 불변(스냅샷), log 는 흐름.
-  - **D-39 (`mem doctor` + oncall 편입)**: read-only 전수 진단 9항목(integrity·FTS 정합·schema 불변식·working 비대·stale pending·ceiling·graveyard 정합·dump 신선도·워커 건강) + exit code. 새 loop 없음 — oncall 항목 1개. 조치 권한 = D-18 큐레이터 불변(doctor 는 진단만; v19 D-42 catch-up은 별도). 소비자 = fleet F-19·oncall·사용자.
+  - **D-39 (`mem doctor` + oncall 편입)**: read-only 전수 진단 9항목(integrity·FTS 정합·schema 불변식·working 비대·stale pending·ceiling·graveyard 정합·dump 신선도·워커 건강) + exit code. 새 loop 없음 — oncall 항목 1개. 조치 권한 = D-18 큐레이터 불변(doctor 는 진단만). 소비자 = fleet F-19·oncall·사용자.
 - **v17 신규 (Cluster K — agent-owned semantic memory judgment, §5.13)**:
   - **D-40**: semantic memory choices belong to the acting agent. Automatic prompt classification and recall injection are retired; deterministic code is limited to storage/retrieval mechanics and safety boundaries. D-15 and the automatic portion of D-34 are historical only.
 - **v18 신규 (Cluster L — on-call improvement promotion, §5.14)**:
   - **D-41**: on-call may inspect recent memory mutations, read selected full records, require live corroboration, and promote exact-key-deduplicated evidence to at most `proposed`. Human-owned proposal states and active settings remain unchanged.
-- **v19 신규 (Cluster M — daily curator backstop, §5.15)**:
-  - **D-42**: session-end curator remains primary; on-call runs the same guarded curator as a project-key-cursored catch-up over recent `manual|distiller` events. Daily prune/graduate are focus-ID limited, merge must include a focus ID, add/reinforce and pending/global/profile/other-project mutations remain blocked, mixed output is validated before any mutation, journal gaps stop the cursor, cursor advances only after apply+strict-mirror success, and every result is receipted.
 
 ## Next (구현 순서 — autopilot-code, 본 v5 입력)
 1. **Cluster A (파일 메커니즘 제거, Option 2)** 먼저 — 사용자 지적 incoherence 해소:

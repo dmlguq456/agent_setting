@@ -1,6 +1,8 @@
 # Overnight Patrol — Inspection, Evidence Promotion, and Reporting
 
-The on-call loop inspects and reports. Its only additional mutation is bounded
+The on-call report agent inspects and reports. Before it starts, the loop runner
+may invoke the D-42 daily memory curator catch-up and write its XDG receipt. The
+report agent does not rerun or bypass that curator. Its only mutation is bounded
 evidence ingestion through `tools/improvement/proposals.py`; it must not edit,
 commit, push, install, activate, or directly write proposal records, source,
 generated projections, plugins, runtime config, or memory. Temporary context
@@ -24,7 +26,18 @@ disclosure; everything else requires user discussion under D-25 and
 6. **Note-loop health and success:** if the latest `=== note run` in `<agent-home>/loops/note.log` is more than 26 hours old, report a likely cron, authentication, or timeout failure. Also inspect its exit state: `=== exit N ===` with nonzero N, or a failure marker such as `401`, `invalid authentication`, `SyntaxError`, `=== FAILED after`, or `=== ABORT:`, is actionable even if the run is recent.
 7. **Study-loop health and success:** if the latest `=== study run` in `<agent-home>/loops/study.log` is more than eight days old, report a likely failure for the weekly Sunday job. Apply the same nonzero-exit and failure-marker checks as the note loop. This prevents recurrence of the 2026-06-21 incident in which study failed immediately with 401 but a timestamp-only check missed it.
 8. **Dispatch jobs:** list every open entry in `<agent-home>/.dispatch/jobs.log`, the registry defined by `core/OPERATIONS.md §5.10`. Flag a likely orphan when its worktree path no longer exists or the job is older than 24 hours. Flag likely lack of progress when the worktree exists but neither commits nor artifact-root `plans/*/dev_logs` changed in the last 24 hours. Report only; process termination and worktree cleanup require a separate decision.
-9. **Memory-to-proposal promotion:** use recent memory mutations only as
+9. **Daily memory curator receipt:** read
+   `${MEM_DAILY_CURATOR_REPORT:-${XDG_STATE_HOME:-$HOME/.local/state}/agent-memory/daily-curator-last.json}`.
+   The runner has already used the session-end curator's no-tools worker,
+   snapshot/action validator, project gates, graveyard, and mirror sync as a
+   catch-up over each project's `(last_success, run_start]` write-event window.
+   Report every nonempty action receipt with project path, action, and target ID;
+   report failed, overflow, journal-gap, validation, timeout, busy,
+   worker-budget, or unsupported-worker phases because
+   their project cursor remains unchanged for retry. Say nothing for successful
+   no-change projects. Do not rerun the curator or take direct corrective action.
+   Session-end remains primary; daily curation is only the D-42 backstop.
+10. **Memory-to-proposal promotion:** use recent memory mutations only as
    discovery leads for harness, instruction, loop, or runtime-adapter incidents.
    Run `python3 <agent-home>/tools/memory/mem.py log --limit 100 --json`, apply
    agent judgment to timestamps and content, and select at most one or two
@@ -60,9 +73,9 @@ disclosure; everything else requires user discussion under D-25 and
    runtime/plugin changes, and never supply `human:*` actors or approval
    references. If recurrence lands on a reviewed or terminal proposal, append
    evidence only and report the unchanged state.
-10. **Retired check:** do not scan post-it files with regex. The removed `post-it.md` model is obsolete. Session-end `mem sync` and `mem lifecycle --apply` own working-tier expiration, currently at `WORKING_TTL_DAYS=21`; durable consolidation candidates belong to memory lifecycle reporting rather than an on-call reimplementation.
-11. **Complete memory-store diagnosis under D-39:** run `python3 <agent-home>/tools/memory/mem.py doctor`. It performs nine read-only deterministic checks: integrity, FTS consistency, schema invariants, working-tier size, stale pending records, durable soft ceiling, graveyard consistency, dump freshness, and worker health. Say nothing on exit 0. Copy `[WARN]` or `[FAIL]` items into the report on exits 1 or 2. Do not take corrective action; deletion, consolidation, merge, and graduation remain owned by the session-end curator under D-18. This is distinct from the legacy file-index checker `tools/memory/index-check.sh`.
-12. **Runtime-watch freshness:** check syntax for `<agent-home>/loops/runtime-watch.sh` and the newest report time under `/home/nas/user/Uihyeop/notes/runtime-watch/`. If no report exists within seven days or a recent runtime-policy change is plausible, recommend `runtime-watch --run`. On-call must not itself run network probes, drills, headless sessions, or policy edits. Route interpretation of official primary sources and policy changes into a separate `autopilot-spec`/`autopilot-code` cycle.
+11. **Retired check:** do not scan post-it files with regex. The removed `post-it.md` model is obsolete. Session-end `mem sync` and `mem lifecycle --apply` own working-tier expiration, currently at `WORKING_TTL_DAYS=21`; durable consolidation candidates belong to memory lifecycle reporting rather than an on-call reimplementation.
+12. **Complete memory-store diagnosis under D-39:** run `python3 <agent-home>/tools/memory/mem.py doctor`. It performs nine read-only deterministic checks: integrity, FTS consistency, schema invariants, working-tier size, stale pending records, durable soft ceiling, graveyard consistency, dump freshness, and worker health. Say nothing on exit 0. Copy `[WARN]` or `[FAIL]` items into the report on exits 1 or 2. Do not take corrective action; semantic deletion, consolidation, merge, and graduation remain owned by the D-18 curator, with D-42 only adding the guarded daily catch-up already run by the loop runner. This is distinct from the legacy file-index checker `tools/memory/index-check.sh`.
+13. **Runtime-watch freshness:** check syntax for `<agent-home>/loops/runtime-watch.sh` and the newest report time under `/home/nas/user/Uihyeop/notes/runtime-watch/`. If no report exists within seven days or a recent runtime-policy change is plausible, recommend `runtime-watch --run`. On-call must not itself run network probes, drills, headless sessions, or policy edits. Route interpretation of official primary sources and policy changes into a separate `autopilot-spec`/`autopilot-code` cycle.
 
 ## Drill-Promotion Tags
 
@@ -75,5 +88,8 @@ Tag a reproducible runtime-behavior violation—such as a commit during merge, w
   item report proposal ID, state, `ingest_result` (`created` or
   `evidence-appended`), live corroboration, and the next human decision. Never
   copy a full memory body into the report.
-- Always write the heartbeat file, even when there are no findings. Use an equivalent of `# Overnight Patrol — <date>\nNo anomalies; all 12 checks passed.` in that communication language. A missing file indicates loop failure, not a clean patrol.
+- Add a `Memory curation` section only when the daily receipt contains applied
+  actions or a failure. List every action by project/action/target ID and every
+  failed phase; never copy full record bodies.
+- Always write the heartbeat file, even when there are no findings. Use an equivalent of `# Overnight Patrol — <date>\nNo anomalies; all 13 checks passed.` in that communication language. A missing file indicates loop failure, not a clean patrol.
 - Report facts only. Do not invent numbers or exaggerate; omission is better than a false entry.
