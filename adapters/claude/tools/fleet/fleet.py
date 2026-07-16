@@ -46,8 +46,10 @@ def parse_args(argv):
                    help="emit collected state as JSON to stdout")
     p.add_argument("--all", dest="show_all", action="store_true",
                    help="include stale/dead sessions in the fleet list (hidden by default)")
-    p.add_argument("--demo", action="store_true",
-                   help="render synthetic fixture data (all harnesses + states) for rendering checks")
+    p.add_argument("--demo", nargs="?", const=True, default=False, metavar="MODE",
+                   help="render synthetic fixture data (all harnesses + states) for rendering "
+                        "checks; MODE=two-plane renders the two-plane process-view demo screen "
+                        "instead (additive — bare --demo is unchanged)")
     p.add_argument("--view", choices=["group", "process"], default=None,
                    help="F-30 (v10): initial view — group (default, per-project) or process "
                         "(per-route pipeline cards). Additive; the live TUI's `p` key toggles "
@@ -137,6 +139,8 @@ def main(argv=None):
     args = parse_args(argv if argv is not None else sys.argv[1:])
     hfilter = _harness_filter(args.harness)
 
+    two_plane_demo = args.demo == "two-plane"
+
     collector = collect_all
     if args.demo or os.environ.get("FLEET_DEMO"):   # flag OR env (env works through any launcher/alias)
         if __package__ in (None, ""):
@@ -165,6 +169,7 @@ def main(argv=None):
         return 1
 
     render.set_show_all(args.show_all)
+    render.set_two_plane_demo(two_plane_demo)   # additive; default False leaves every path unchanged
     # F-30 (v10, plan §P3/§9): --view is additive and honors the SAME single _PROCESS_VIEW
     # state the `p` key flips — never a second decision path. FLEET_VIEW env is the reduction
     # fallback the plan reserves in case --view itself is judged out of scope later (§9 note 1);

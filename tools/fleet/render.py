@@ -1616,6 +1616,17 @@ def set_show_all(v):
     _SHOW_ALL = bool(v)
 
 
+# --- two-plane demo (v10, additive, demo-only) — see two_plane.py for the fixture + builder.
+# Gated behind `--demo two-plane`; False (default) leaves every existing render path byte-for-
+# byte unchanged (fleet.py's `--demo` alone / no flag never touches this).
+_TWO_PLANE_DEMO = False
+
+
+def set_two_plane_demo(v):
+    global _TWO_PLANE_DEMO
+    _TWO_PLANE_DEMO = bool(v)
+
+
 # --- F-30 (v10, prd.md:304-310) — process view: pipeline-centric regrouping, `p` toggle ---
 _PROCESS_VIEW = False        # False = group view (default, unchanged) | True = process view
 _ROUTE_FOLD = {}             # {card_key: bool} — True = explicitly folded. User action ONLY;
@@ -2029,6 +2040,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     """
     global _SELECTABLE
     _SELECTABLE = []     # reset before any early return — a stale target map must never survive
+    if _TWO_PLANE_DEMO:
+        # demo-only two-plane fixture screen — self-contained, ignores sessions/jobs/section/
+        # memory/malformed entirely (its own fixture supplies everything). The ONE branch point,
+        # ahead of the process-view branch below, same idiom that branch already uses.
+        from . import two_plane as _tp
+        return _tp.build_lines(term_width, layout)
     # F-28b/F-30 (v10) — resolve every route referenced by `jobs` ONCE per build (not per row).
     # Best-effort: any failure here must never break the group view — record-less/failed-load
     # jobs simply keep their pre-v10 breadcrumb (prd.md:303). `route.load()` is itself
