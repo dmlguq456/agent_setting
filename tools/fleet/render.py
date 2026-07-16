@@ -1631,27 +1631,38 @@ def set_process_view(v):
     _PROCESS_VIEW = bool(v)
 
 
+_GATE_MARK = " ⊸"   # prd.md:308 — completion-gate PASSED. Never rendered for no-claim/absent.
+
+
 def _route_node_text(n):
-    """(text, color_key) for one DAG node in a card's L2 flow (§5.3). State comes straight from
-    `route.py`'s §3.3 judge — this only formats it. `●` nodes carry model/effort (prd.md:307 —
-    "전 노드에 달면 줄이 터진다", so only the active one does)."""
+    """(text, color_key, mark) for one DAG node in a card's L2 flow (§5.3). State comes straight
+    from `route.py`'s §3.3 judge — this only formats it. `●` nodes carry model/effort (prd.md:307
+    — "전 노드에 달면 줄이 터진다", so only the active one does).
+
+    `mark` is `_GATE_MARK` or "" and the caller emits it as its OWN segment in `gate_t` (the
+    green-dim key the spec-gate word already uses), never folded into `text`: prd.md:308 makes
+    gate-passed a dimension INDEPENDENT of the ✓●○✕ state glyph, and most passed nodes are
+    `done` (= all-dim) nodes, where a dim mark would melt into the node's own dim phrase — the
+    exact merge render.py:101 warns about. `gate_passed` is True|None only, so there is no
+    "not passed" mark to render: absence of evidence draws nothing."""
     st = n["state"]
     nid = n["id"]
     elapsed = n.get("elapsed_min")
+    mark = _GATE_MARK if n.get("gate_passed") else ""
     if st == "done":
         tail = fmt_min(elapsed) if elapsed is not None else ""
-        return "%s ✓%s" % (nid, tail), "dim"
+        return "%s ✓%s" % (nid, tail), "dim", mark
     if st == "active":
         tail = (" " + fmt_min(elapsed)) if elapsed is not None else ""
         extra = ""
         model = _clean_model(dash(n.get("model"))) if n.get("model") else None
         if model and model != "—":
             extra = " (%s%s)" % (model, ("·" + n["effort"]) if n.get("effort") else "")
-        return "%s ●%s%s" % (nid, tail, extra), ("g_work" if _BLINK_ON else "g_work_off")
+        return "%s ●%s%s" % (nid, tail, extra), ("g_work" if _BLINK_ON else "g_work_off"), mark
     if st == "failed":
         tail = (" " + fmt_min(elapsed)) if elapsed is not None else ""
-        return "%s ✕%s" % (nid, tail), "lvl_r"
-    return "%s ○" % nid, "dim"
+        return "%s ✕%s" % (nid, tail), "lvl_r", mark
+    return "%s ○" % nid, "dim", mark
 
 
 def _route_card_l2(view, max_width=None):
@@ -1671,18 +1682,24 @@ def _route_card_l2(view, max_width=None):
     def _flush(prefix_needed):
         if not flow_nodes:
             return
-        items = [(i, t, k) for i, (t, k) in enumerate(flow_nodes)]
+        # The gate mark rides INSIDE the width-accounting text (`t + m`) so `_drop_past_stages`
+        # folds against the node's real drawn width, then is peeled back off at emit time to get
+        # its own color — the mark must never be the thing that overflows a 60-column card.
+        items = [(i, t + m, k) for i, (t, k, m) in enumerate(flow_nodes)]
         if max_width is not None:
-            cur_i = next((i for i, (_t, k) in enumerate(flow_nodes) if k != "dim"), 0)
+            cur_i = next((i for i, (_t, k, _m) in enumerate(flow_nodes) if k != "dim"), 0)
             items = _drop_past_stages(items, cur_i, max_width)
         segs = []
-        for pos, (_i, text, key) in enumerate(items):
+        for pos, (i, _combined, key) in enumerate(items):
+            text, _key, mark = flow_nodes[i]
             if pos == 0:
                 if prefix_needed:
                     segs.append(("› ", "dim"))
             else:
                 segs.append((" › ", "dim"))
             segs.append((text, key))
+            if mark:
+                segs.append((mark, "gate_t"))
         out_lines.append(segs)
         flow_nodes.clear()
 
@@ -1695,8 +1712,11 @@ def _route_card_l2(view, max_width=None):
             need_prefix = False
             for bi, n in enumerate(level):
                 branch = "└" if bi == len(level) - 1 else "├"
-                text, key = _route_node_text(n)
-                out_lines.append([("  " + branch + " ", "dim"), (text, key)])
+                text, key, mark = _route_node_text(n)
+                row = [("  " + branch + " ", "dim"), (text, key)]
+                if mark:
+                    row.append((mark, "gate_t"))
+                out_lines.append(row)
             need_prefix = True
     _flush(need_prefix)
     return out_lines
@@ -1824,11 +1844,20 @@ def _route_card(view, session_by_pid, term_width, now):
             out.append(_subagent_row(sa, is_last=(i == len(subs) - 1)))
 
     if _SHOW_ALL:
-        # prd.md:310 — completion-gate NAMES only (never a pass/fail verdict — §3.3.1, no such
-        # evidence exists), and only behind the `a` toggle, never on the base screen.
-        gate_names = [n.get("gate") for n in nodes if n.get("gate")]
-        if gate_names:
-            out.append([("      gates: " + ", ".join(gate_names), "dim")])
+        # prd.md:310 — completion gates stay behind the `a` toggle, never on the base screen.
+        # Each name carries `⊸` iff a canonical marker PROVES it passed (prd.md:308, v10 minor
+        # #2 — the evidence source the v10 cycle had to leave as an honest gap). A gate with no
+        # marker prints its bare name: no-claim, NOT a failure mark.
+        gate_bits = [(n["gate"], bool(n.get("gate_passed"))) for n in nodes if n.get("gate")]
+        if gate_bits:
+            segs = [("      gates: ", "dim")]
+            for i, (name, passed) in enumerate(gate_bits):
+                if i:
+                    segs.append((", ", "dim"))
+                segs.append((name, "dim"))
+                if passed:
+                    segs.append((_GATE_MARK, "gate_t"))
+            out.append(segs)
 
     return out, {"card_key": card_key, "fold_line": 0, "job_rows": job_rows, "folded": folded}
 

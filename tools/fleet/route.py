@@ -13,6 +13,12 @@ Zero-dep stdlib only. **NEVER writes** — this module contains no file-write ca
 
 Contract:
   load(path, expect_hash=None, expect_id=None)  -> record dict | None, never raises.
+  gate_mark(record, node_id)                     -> True | None — completion-marker verdict
+                                                     (prd.md:308). NEVER False: marker absence
+                                                     is "no claim", not "not passed".
+  resolve_gate_marks(records)                    -> {route_id: {node_id: True}} — the second
+                                                     impure entry point (sibling of
+                                                     resolve_records); build_views stays PURE.
   route_hash(record)                             -> "sha256:..." (utilities/capability-route.py
                                                      :21-26 reproduced verbatim, P1).
   node_order(record)                             -> [[node_id, ...], ...] Kahn levels.
@@ -21,9 +27,12 @@ Contract:
                                                      seen on a live job OR in terminal-row
                                                      evidence — a route with no live job left
                                                      still resolves via node_evidence).
-  build_views(jobs, node_evidence, records, now) -> [view, ...] — PURE (no I/O, no clock read);
+  build_views(jobs, node_evidence, records, now, gate_marks=None)
+                                                 -> [view, ...] — PURE (no I/O, no clock read);
                                                      `now` is always an argument, never sampled
                                                      internally, so it is hermetically testable.
+                                                     `gate_marks` is optional so every existing
+                                                     4-positional caller is unaffected.
   collect_views(jobs, node_evidence, now=None)   -> [view, ...] — convenience wrapper:
                                                      resolve_records() + build_views().
   summary(views)                                 -> --json-shaped list (drops internal refs).
@@ -35,7 +44,8 @@ import json
 import os
 import time
 
-_CACHE = {}   # {abspath: (mtime, size, record|None)}
+_CACHE = {}          # {abspath: (mtime, size, record|None)}
+_MARKER_CACHE = {}   # {abspath: (mtime, size, marker|None)} — same shape, separate namespace
 
 
 # --- hashing (P1 — utilities/capability-route.py:21-26, reproduced exactly) ---
@@ -49,8 +59,9 @@ def route_hash(record):
 
 
 def clear_cache():
-    """Test hermeticity: drop the mtime+size cache (model.reset_state_tracker() precedent)."""
+    """Test hermeticity: drop the mtime+size caches (model.reset_state_tracker() precedent)."""
     _CACHE.clear()
+    _MARKER_CACHE.clear()
 
 
 def _load_uncached(abspath):
@@ -110,6 +121,129 @@ def load(path, expect_hash=None, expect_id=None):
     if expect_id is not None and record.get("route_id") != expect_id:
         return None
     return record
+
+
+# --- completion gate markers (prd.md:308, v10 minor #2 — read-only) ---
+def _completion_home():
+    """Agent home holding `.dispatch/completion/`. Reproduces `collectors/dispatch._registry_home`
+    (AGENT_HOME → CLAUDE_HOME → $HOME/agent_setting if a dir → ~/.claude) rather than importing
+    it: route.py has no collectors dependency today (it is a peer of model.py, imported BY
+    dispatch.py's consumers), and one four-line resolver is cheaper than inverting that edge.
+    Kept in sync with `utilities/capability-route.py:230 completion_dir()`, the writer."""
+    h = os.environ.get("AGENT_HOME") or os.environ.get("CLAUDE_HOME")
+    if h:
+        return h
+    cand = os.path.expanduser("~/agent_setting")
+    if os.path.isdir(cand):
+        return cand
+    return os.path.expanduser("~/.claude")
+
+
+def _load_marker_uncached(abspath):
+    try:
+        with open(abspath, encoding="utf-8") as f:
+            marker = json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    if not isinstance(marker, dict):
+        return None
+    if not isinstance(marker.get("route_id"), str) or not isinstance(marker.get("route_hash"), str):
+        return None
+    return marker
+    # NOTE: `sequence`/`completed_at`/`schema_version` are deliberately NOT required. The
+    # repo's first real markers (.dispatch/completion/rt-5fd84b9bcf8a799c/, SD-56) carry only
+    # route_id/route_hash/registry_digest/node_id/completion_gate/evidence — demanding the
+    # writer's optional fields would reject the very evidence this feature exists to read.
+
+
+def _load_marker(abspath):
+    """marker dict | None. Never raises — mtime+size cached exactly like load()'s record cache."""
+    try:
+        st = os.stat(abspath)
+        key = (st.st_mtime, st.st_size)
+    except (OSError, TypeError, ValueError):
+        return None
+    cached = _MARKER_CACHE.get(abspath)
+    if cached is not None and (cached[0], cached[1]) == key:
+        return cached[2]
+    marker = _load_marker_uncached(abspath)
+    _MARKER_CACHE[abspath] = (key[0], key[1], marker)
+    return marker
+
+
+def _latest_marker_path(directory, node_id):
+    """The one authoritative marker file for a node, or None.
+
+    `capability-route.py:241 write_completion_marker` writes an append-only history
+    (`<node_id>.<seq>.json`) and then atomically replaces the canonical `<node_id>.json` with
+    the newest of them — so canonical, when present, IS the latest and no glob is needed
+    (prd.md:308 "이력 파일 중 최신만 authoritative"). The history scan is the fallback for the
+    torn window between those two writes (history landed, canonical replace not yet done),
+    where the highest sequence is the latest."""
+    canonical = os.path.join(directory, node_id + ".json")
+    if os.path.isfile(canonical):
+        return canonical
+    best = None
+    try:
+        entries = os.listdir(directory)
+    except OSError:
+        return None
+    prefix = node_id + "."
+    for name in entries:
+        if not name.startswith(prefix) or not name.endswith(".json"):
+            continue
+        middle = name[len(prefix):-len(".json")]
+        if not middle.isdigit():
+            continue
+        seq = int(middle)
+        if best is None or seq > best[0]:
+            best = (seq, os.path.join(directory, name))
+    return best[1] if best else None
+
+
+def gate_mark(record, node_id, home=None):
+    """`True` if this node's completion gate is PROVEN passed, else `None` — never `False`.
+
+    prd.md:308: "marker 존재 + record의 route_id/route_hash 일치 = 통과 / marker 부재 =
+    무주장(실패·미통과로 표시 금지)". Every other failure mode (route_id mismatch, route_hash
+    mismatch, garbage json, unreadable dir) collapses to that same no-claim `None` — a marker
+    we cannot tie to THIS record is not counter-evidence, it is silence."""
+    if not isinstance(record, dict) or not isinstance(node_id, str) or not node_id:
+        return None
+    route_id = record.get("route_id")
+    route_hash_val = record.get("route_hash")
+    if not isinstance(route_id, str) or not isinstance(route_hash_val, str):
+        return None
+    if os.sep in node_id or (os.altsep and os.altsep in node_id):
+        return None   # a node id is an identifier, never a path — refuse to traverse
+    directory = os.path.join(home or _completion_home(), ".dispatch", "completion", route_id)
+    path = _latest_marker_path(directory, node_id)
+    if not path:
+        return None
+    marker = _load_marker(path)
+    if marker is None:
+        return None
+    if marker.get("route_id") != route_id or marker.get("route_hash") != route_hash_val:
+        return None
+    return True
+
+
+def resolve_gate_marks(records, home=None):
+    """{route_id: {node_id: True}} — the second impure entry point (sibling of resolve_records).
+    Only PASSED nodes appear; a missing key is the no-claim default, so callers never have to
+    distinguish "absent" from "False" (there is no False)."""
+    marks = {}
+    for rid, record in (records or {}).items():
+        per_node = {}
+        for n in (record.get("nodes") or []):
+            if not isinstance(n, dict):
+                continue
+            nid = n.get("id")
+            if isinstance(nid, str) and gate_mark(record, nid, home=home):
+                per_node[nid] = True
+        if per_node:
+            marks[rid] = per_node
+    return marks
 
 
 # --- DAG (Step 2/3 shared source) ---
@@ -195,10 +329,11 @@ def _heuristic_view(route_id, route_jobs):
             "nodes": [], "key": route_id}
 
 
-def _record_view(record, route_id, route_jobs, ev_by_node, now):
+def _record_view(record, route_id, route_jobs, ev_by_node, now, gate_marks_for_route=None):
     levels = node_order(record)
     node_by_id = {n["id"]: n for n in (record.get("nodes") or [])
                   if isinstance(n, dict) and isinstance(n.get("id"), str)}
+    marks = gate_marks_for_route or {}
     nodes = []
     done = 0
     for level_i, level in enumerate(levels):
@@ -209,7 +344,13 @@ def _record_view(record, route_id, route_jobs, ev_by_node, now):
                 done += 1
             nodes.append({
                 "id": nid, "depends_on": list(rn.get("depends_on") or []), "level": level_i,
-                "state": st["state"], "gate": rn.get("completion_gate"), "note": st["note"],
+                "state": st["state"], "gate": rn.get("completion_gate"),
+                # True | None — a DIMENSION SEPARATE from `state` (prd.md:308). `state` says what
+                # the runner is doing; `gate_passed` says whether the completion gate is proven
+                # passed. They are not derivable from each other: a `done` node with no marker
+                # stays no-claim, and a marker outlives the job row that produced it.
+                "gate_passed": marks.get(nid) or None,
+                "note": st["note"],
                 "elapsed_min": st["elapsed_min"], "model": st["model"], "harness": st["harness"],
                 "effort": st["effort"], "pid": st["pid"], "job": st["job"],
             })
@@ -220,13 +361,17 @@ def _record_view(record, route_id, route_jobs, ev_by_node, now):
             "progress": {"done": done, "total": len(nodes)}, "nodes": nodes, "key": route_id}
 
 
-def build_views(jobs, node_evidence, records, now):
-    """PURE — jobs/node_evidence/records/now are the entire input; no file I/O, no clock read.
+def build_views(jobs, node_evidence, records, now, gate_marks=None):
+    """PURE — jobs/node_evidence/records/now/gate_marks are the entire input; no file I/O, no
+    clock read. `gate_marks` (resolve_gate_marks()'s output) is optional and defaults to "no
+    marks resolved" = every node no-claim, which is exactly the honest answer for a caller that
+    never looked.
     One view per distinct route_id referenced by `jobs` (via job.route_id); a job without a
     route_id contributes nothing (prd.md:302 — record-less jobs keep the existing breadcrumb,
     they never enter the route summary)."""
     node_evidence = node_evidence or {}
     records = records or {}
+    gate_marks = gate_marks or {}
     by_route = {}
     order = []
     for j in jobs:
@@ -252,7 +397,8 @@ def build_views(jobs, node_evidence, records, now):
         if record is None:
             views.append(_heuristic_view(rid, route_jobs))
         else:
-            views.append(_record_view(record, rid, route_jobs, node_evidence.get(rid) or {}, now))
+            views.append(_record_view(record, rid, route_jobs, node_evidence.get(rid) or {}, now,
+                                      gate_marks.get(rid)))
     return views
 
 
@@ -312,7 +458,7 @@ def collect_views(jobs, node_evidence=None, now=None):
     now = time.time() if now is None else now
     node_evidence = node_evidence or {}
     records = resolve_records(jobs, node_evidence)
-    return build_views(jobs, node_evidence, records, now)
+    return build_views(jobs, node_evidence, records, now, resolve_gate_marks(records))
 
 
 def summary(views):
@@ -324,7 +470,8 @@ def summary(views):
         if not v.get("route_id"):
             continue
         nodes = [{"id": n["id"], "depends_on": n.get("depends_on") or [], "level": n.get("level"),
-                  "state": n.get("state"), "gate": n.get("gate"), "note": n.get("note"),
+                  "state": n.get("state"), "gate": n.get("gate"),
+                  "gate_passed": n.get("gate_passed"), "note": n.get("note"),
                   "elapsed_min": n.get("elapsed_min"), "model": n.get("model"),
                   "harness": n.get("harness"), "effort": n.get("effort")}
                  for n in v.get("nodes") or []]
