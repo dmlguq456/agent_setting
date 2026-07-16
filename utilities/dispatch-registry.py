@@ -38,7 +38,7 @@ def read_rows(jobs):
         if len(fields) != 6: continue
         rows.append({"order": order, "timestamp": fields[0], "status": fields[1],
                      "repo": fields[2], "worktree": fields[3], "slug": fields[4],
-                     "pipe": fields[5], "meta": parse_meta(fields[5])})
+                     "pipe": fields[5], "meta": parse_meta(fields[5]), "raw": line})
     return rows
 
 
@@ -162,6 +162,16 @@ def emit_current(rows, args):
     print(json.dumps(payload, sort_keys=True)); return 0
 
 
+def emit_liveness(rows, args):
+    """Emit a TSV view with superseded route/node attempts folded by default."""
+    selected = [row for row in rows if matches(row, args)]
+    if not args.all:
+        selected = current(selected)
+    for row in selected:
+        print(row["raw"])
+    return 0
+
+
 def reconcile(rows, args):
     selected = [row for row in rows if matches(row, args)]
     newest = {}
@@ -212,7 +222,7 @@ def reconcile(rows, args):
 
 
 def main(argv):
-    p = argparse.ArgumentParser(description=__doc__); p.add_argument("operation", choices=("current", "reconcile", "attempt-state"))
+    p = argparse.ArgumentParser(description=__doc__); p.add_argument("operation", choices=("current", "liveness", "reconcile", "attempt-state"))
     p.add_argument("--jobs", type=Path); p.add_argument("--global-jobs", type=Path); p.add_argument("--local-jobs", type=Path)
     p.add_argument("--session"); p.add_argument("--route")
     p.add_argument("--node"); p.add_argument("--attempt"); p.add_argument("--job"); p.add_argument("--all", action="store_true")
@@ -243,10 +253,14 @@ def main(argv):
     if not args.jobs:
         print("check=failed\nreason=jobs-required"); return 64
     args.jobs = args.jobs.resolve()
-    if not any((args.session, args.route, args.node, args.attempt, args.job)):
+    if args.operation != "liveness" and not any((args.session, args.route, args.node, args.attempt, args.job)):
         print("check=failed\nreason=current-filter-required"); return 64
     rows = read_rows(args.jobs)
-    return emit_current(rows, args) if args.operation == "current" else reconcile(rows, args)
+    if args.operation == "current":
+        return emit_current(rows, args)
+    if args.operation == "liveness":
+        return emit_liveness(rows, args)
+    return reconcile(rows, args)
 
 
 if __name__ == "__main__": raise SystemExit(main(sys.argv))

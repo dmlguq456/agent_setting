@@ -58,7 +58,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh dispatch-current --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--all]
        preflight.sh dispatch-reconcile --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--apply]
        preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]
-       preflight.sh liveness [jobs.log]
+       preflight.sh liveness [jobs.log] [--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>] [--all]
        preflight.sh harvest [--jobs <jobs.log>] [--reconcile-local <legacy-jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
        preflight.sh worktree-cleanup [--check|--apply] (--worktree <path>|--all-eligible [--repo <path>]) [--integration-ref <ref>] [--jobs <jobs.log>]
        preflight.sh mcp [--check]
@@ -551,8 +551,13 @@ EOF
     AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/dispatch-broker.py" "$@"
     ;;
   liveness)
-    jobs=${2:-${AGENT_DISPATCH_JOBS:-"$AGENT_ROOT/.dispatch/jobs.log"}}
-    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$jobs"
+    shift
+    jobs=${AGENT_DISPATCH_JOBS:-"$AGENT_ROOT/.dispatch/jobs.log"}
+    if [ "$#" -gt 0 ] && [ "${1#--}" = "$1" ]; then jobs=$1; shift; fi
+    current_jobs=$(mktemp)
+    trap 'rm -f "$current_jobs"' EXIT
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/dispatch-registry.py" liveness --jobs "$jobs" "$@" > "$current_jobs" || exit $?
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/dispatch-liveness.py" "$current_jobs"
     ;;
   harvest)
     shift

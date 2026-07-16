@@ -22,7 +22,7 @@ class ProgressTest(unittest.TestCase):
         self.attempt = "att-0123456789abcdef"
         self.scope=self.base/"scope";self.scope.mkdir()
         pipe = f"capability=code-test,route_id=rt-1,route_node=test,attempt_id={self.attempt},pid={self.proc.pid},pid_start={start},write_scope={self.scope}"
-        self.jobs.write_text(f"2026-07-16T00:00:00Z\topen\t/repo\t/wt\tstage\t{pipe}\n")
+        self.jobs.write_text(f"2026-07-16T00:00:00Z\topen\t/repo\t{self.base}\tstage\t{pipe}\n")
 
     def tearDown(self):
         if self.proc.poll() is None: self.proc.kill()
@@ -78,6 +78,48 @@ class ProgressTest(unittest.TestCase):
         state=P.watchdog(self.args(), 20)
         self.assertEqual(state["quiet_windows"],0)
         self.assertEqual(state["action"],"observe")
+
+    def test_relative_glob_and_route_cycle_output_are_real_progress(self):
+        cycle = self.base / "artifacts" / "plans" / "cycle"
+        internal = cycle / "_internal"; internal.mkdir(parents=True)
+        route = {"nodes": [{"id": "test", "outputs": ["plan.md"]}]}
+        route_file = internal / "route.json"; route_file.write_text(__import__("json").dumps(route))
+        text = self.jobs.read_text().replace(
+            f"write_scope={self.scope}",
+            f"write_scope=scope/**,artifact_root={self.base / 'artifacts'},route_file={route_file}",
+        )
+        self.jobs.write_text(text)
+        P.heartbeat(self.args(), 0)
+        self.assertEqual(P.watchdog(self.args(), 0)["quiet_windows"], 0)
+        self.assertEqual(P.watchdog(self.args(), 10)["quiet_windows"], 1)
+        (self.scope / "relative.txt").write_text("progress")
+        self.assertEqual(P.watchdog(self.args(), 20)["quiet_windows"], 0)
+        self.assertEqual(P.watchdog(self.args(), 30)["quiet_windows"], 1)
+        (cycle / "plan.md").write_text("durable plan")
+        self.assertEqual(P.watchdog(self.args(), 40)["quiet_windows"], 0)
+
+    def test_delayed_capacity_line_closes_exact_attempt(self):
+        P.heartbeat(self.args(), 0)
+        P.watchdog(self.args(apply=True), 0)
+        logs = self.home / ".dispatch" / "logs"; logs.mkdir(parents=True)
+        (logs / "stage.codex.jsonl").write_text("Selected model is at capacity\n")
+        state = P.watchdog(self.args(apply=True), 1)
+        self.assertEqual(state["terminal_action"], "dead-capacity")
+        self.proc.wait(timeout=3)
+        self.assertIn("note=dead-capacity", self.jobs.read_text())
+
+    def test_capacity_scan_is_bound_to_the_exact_attempt_log(self):
+        logs = self.home / ".dispatch" / "logs"; logs.mkdir(parents=True)
+        old_log = logs / "stage.att-old.codex.jsonl"
+        exact_log = logs / "stage.att-current.codex.jsonl"
+        old_log.write_text("Selected model is at capacity\n")
+        exact_log.write_text("normal startup\n")
+        self.jobs.write_text(self.jobs.read_text().replace(
+            f"write_scope={self.scope}", f"write_scope={self.scope},log_file={exact_log}"))
+        P.heartbeat(self.args(), 0)
+        state = P.watchdog(self.args(apply=True), 0)
+        self.assertEqual(state["action"], "observe")
+        self.assertIn("\topen\t", self.jobs.read_text())
 
     def test_natural_process_exit_is_terminal_not_identity_failure(self):
         P.heartbeat(self.args(),0);self.proc.terminate();self.proc.wait(timeout=3)

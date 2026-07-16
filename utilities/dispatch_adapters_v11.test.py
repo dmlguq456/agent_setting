@@ -58,6 +58,16 @@ class AdapterV11Test(unittest.TestCase):
    self.assertIn(f"--add-dir {ROOT / '.dispatch'}",result.stdout)
    self.assertIn("nested_codex_home=",result.stdout)
    self.assertIn("broker_lifecycle=retired",result.stdout)
+ def test_route_bound_depth_two_codex_gets_heartbeat_scope_without_network(self):
+  spec=importlib.util.spec_from_file_location("codex_dispatch_scope",ROOT/"adapters/codex/bin/dispatch-headless.py")
+  wrapper=importlib.util.module_from_spec(spec);spec.loader.exec_module(wrapper)
+  args=type("Args",(),{
+   "worktree":"/work/repo","artifact_root":"/artifacts","nested_headless_network":False,
+   "agent_home":ROOT,"depth":2,"route_id":"rt-1","attempt_id":"att-stage-1",
+   "sandbox":"workspace-write","resolved_model_settings":{"source":"inherit"},"approval":"inherit"})()
+  command=wrapper.shell_command(args,Path("/prompt"),Path("/log"))
+  self.assertIn(f"--add-dir {ROOT / '.dispatch'}",command)
+  self.assertNotIn("network_access=true",command)
  def test_background_governor_does_not_hold_orchestrator_capture_pipes(self):
   for harness in ADAPTERS:
    with self.subTest(harness=harness):

@@ -30,6 +30,11 @@ for text, want in cases.items():
 prose = "The implementation discusses Selected model is at capacity handling " + ("x" * 180)
 if dh.scan_anchored_death(prose) is not None:
     print("MISMATCH capacity report prose was treated as terminal"); bad += 1
+short_prose = "Handled Selected model is at capacity errors."
+if dh.scan_anchored_death(short_prose) is not None:
+    print("MISMATCH short capacity report prose was treated as terminal"); bad += 1
+if dh.scan_anchored_death('{"type":"error","message":"Selected model is at capacity"}') != ("capacity", ""):
+    print("MISMATCH structured terminal capacity event was missed"); bad += 1
 print("SCAN_OK" if bad == 0 else "SCAN_FAIL")
 PY
 )

@@ -6,12 +6,15 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import anchored_capacity_failure  # noqa: E402
 from tools.fleet.model import (  # noqa: E402
     ATTEMPT_CLASSIFIER_SOURCE,
     classify_attempt_evidence,
@@ -60,7 +63,8 @@ def log_shows_limit(agent_home: Path, slug: str) -> Path | None:
             continue
         nonempty = [ln for ln in tail.splitlines() if ln.strip()]
         for ln in nonempty[-3:]:
-            if len(ln) <= 200 and LIMIT_RE.search(ln):
+            match = LIMIT_RE.search(ln) if len(ln) <= 200 else None
+            if match and ("capacity" not in match.group(0).lower() or anchored_capacity_failure(ln)):
                 return lf
     return None
 
@@ -110,6 +114,17 @@ def parse_profile(pipe: str) -> str | None:
 
 def parse_metadata(pipe: str) -> dict[str, str]:
     return dict(part.split("=", 1) for part in pipe.split(",") if "=" in part)
+
+
+def current_job_lines(jobs: Path) -> list[str]:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "utilities/dispatch-registry.py"),
+         "liveness", "--jobs", str(jobs)],
+        text=True, capture_output=True, check=False,
+    )
+    if result.returncode:
+        raise RuntimeError((result.stderr or result.stdout).strip() or "current-view-failed")
+    return result.stdout.splitlines()
 
 
 def recorded_attempt_state(metadata: dict[str, str], now: float) -> dict | None:
@@ -224,8 +239,12 @@ def main(argv: list[str]) -> int:
 
     now = time.time()
     open_n = alive = suspect = 0
-    with jobs.open(encoding="utf-8") as f:
-        for raw in f:
+    try:
+        rows = current_job_lines(jobs)
+    except RuntimeError as exc:
+        print(f"liveness current-view failed: {exc}", file=sys.stderr)
+        return 69
+    for raw in rows:
             raw = raw.rstrip("\n")
             if not raw:
                 continue

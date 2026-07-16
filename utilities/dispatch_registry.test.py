@@ -38,6 +38,15 @@ class RegistryTest(unittest.TestCase):
   current=json.loads(self.invoke("current","--route","r3").stdout);history=json.loads(self.invoke("current","--route","r3","--all").stdout)
   self.assertEqual([row["slug"] for row in current["rows"]],["new"])
   self.assertEqual([row["slug"] for row in history["rows"]],["old","new"])
+ def test_preflight_liveness_ignores_superseded_open_attempt(self):
+  start=(Path("/proc")/str(self.proc.pid)/"stat").read_text().split()[21]
+  with self.jobs.open("a") as out:
+   out.write("2026-07-16T00:00:03Z\topen\t/r\t/w\told-dead\troute_id=r4,route_node=test,attempt_id=att-old-dead,pid=99999997,pid_start=1,harness=codex\n")
+   out.write(f"2026-07-16T00:00:04Z\topen\t/r\t/w\tnew-live\troute_id=r4,route_node=test,attempt_id=att-new-live,pid={self.proc.pid},pid_start={start},harness=codex\n")
+  pre=ROOT/"adapters/codex/bin/preflight.sh"
+  result=subprocess.run([str(pre),"liveness",str(self.jobs),"--route","r4"],capture_output=True,text=True,env={**os.environ,"AGENT_HOME":str(ROOT)})
+  self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+  self.assertIn("new-live",result.stdout);self.assertNotIn("old-dead",result.stdout)
 
 
 class MixedRegistryTest(unittest.TestCase):
