@@ -89,6 +89,14 @@ _D2_PREFIX = "      ↳ "     # depth-2 stage-worker rows — one arrow level de
                              # existing fleet grammar = deeper ↳, user-confirmed)
 _D2_AGENT_IND = " " * 10     # a depth-2 worker's own ⚡ rows — positional attribution, no @tag
 
+# ▸ row sub-grid (r11): fixed columns from 🔧 onward, any depth — the arrow indent is
+# absorbed by the harness field (original dispatch-row alignment rule).
+_FKEY_COL = 24               # column where 🔧 lands on EVERY ▸ row (deep enough that even the
+                             # deepest arrow prefix + full badge text fits to its left)
+_FKEY_W = 32                 # key + (contract) zone width (fits the longest quick contract)
+_FMODEL_W = 17               # model cell width (grid `_model_cell` idiom)
+_FSLUG_W = 19                # ⎇ slug zone width
+
 # Stage palette in its PLAIN (non-bold) intensity — reused engine keys, not new table entries
 # (round-2, user-confirmed): bold is reserved for the main-session row (_ROW_BOLD) alone, so
 # every stage-colored cell in this view (canvas active node, ▸ row's 🔧/glyph) uses the plain
@@ -169,20 +177,39 @@ def _dispatch_line(connector, harness, cap_key, cap_slug, title, contract, elaps
     # idle/dead/stale fall through `_glyph`'s existing vocabulary. This restores the original
     # board's animation that r2's bold-removal accidentally dropped.
     gch, gkey = r._glyph(live, dim=True)
-    # r9 (user) — ONE parenthetical directly after the key (the `opus (high)` idiom) carrying
-    # the classification tokens (mode·intensity·role). r10 (user): the MODEL is a first-class
-    # fact on every spawned session — same `_model_cell` vocabulary as the session grid
-    # (fam-colored name + effort-heat suffix), never a lowercase token buried in the contract.
-    segs = [(connector, "dim"), (gch + " ", gkey), ("▸ ", stg_key),
-            (r._BADGE_TEXT.get(harness, harness) + "  ", hb_key),
-            ("🔧 ", None), (cap_key, stg_key), (" (" + contract + ")", "dim")]
+    # r11 (user: "그전에는 테이블마냥 각이라도 맞았는데") — the ORIGINAL dispatch-row rule,
+    # applied to this plane: a deeper arrow indent is ABSORBED by the harness field so every
+    # column from 🔧 onward lands at the same absolute position on every ▸ row, any depth
+    # (mirrors render.py's "harness field is narrowed … so the NAME still lands at the shared
+    # _NAME_COL"). Fixed sub-grid: 🔧 at _FKEY_COL · key+contract zone _FKEY_W · model cell
+    # _FMODEL_W (the grid's `_model_cell` idiom, first-class — r10) · ⎇ slug _FSLUG_W · title ·
+    # elapsed right-flushed like the grid's time column.
+    segs = [(connector, "dim"), (gch + " ", gkey), ("▸ ", stg_key)]
+    used = r._dw(connector) + 2 + 2
+    segs.append((_pad_dw(r._BADGE_TEXT.get(harness, harness),
+                         max(r._dw(r._BADGE_TEXT.get(harness, harness)) + 1,
+                             _FKEY_COL - used)), hb_key))
+    zone_pad = max(0, _FKEY_W - r._dw(cap_key) - r._dw(contract) - 3)
+    segs += [(cap_key, stg_key), (" (" + contract + ")", "dim"),
+             (" " * zone_pad, None)]
     if model:
         name = r._clean_model(r.dash(model)) or "—"
-        segs += [("  " + name, r._model_key(model)),
-                 (" (" + (effort or "?") + ")", r._eff_key(effort or "", False))]
-    segs += [(" ⎇ " + cap_slug + "  ", "dim"),
-             (r._clip_w('"%s"' % title, desc_w) if title else "", None),
-             ("  " + elapsed_str, "dim")]
+        cell = name + " (" + (effort or "?") + ")"
+        segs += [(name, r._model_key(model)),
+                 (" (" + (effort or "?") + ")", r._eff_key(effort or "", False)),
+                 (" " * max(0, _FMODEL_W - r._dw(cell)), None)]
+    else:
+        segs.append((" " * _FMODEL_W, None))
+    # r12 (user: "usage-accuracy는 뭔데?") — the slug is the task branch/worktree name; it
+    # identifies the PLACE once, on the conductor row. depth-2 rows inherit the same worktree,
+    # so repeating it three times only obscured what it was.
+    if cap_slug:
+        segs.append((_pad_dw("⎇ " + cap_slug, _FSLUG_W), "dim"))
+    elif title:
+        segs.append((" " * _FSLUG_W, None))
+    if title:
+        segs.append((r._clip_w('"%s"' % title, desc_w), None))
+    segs += [(r._RFLUSH, None), (elapsed_str + " ", "dim")]
     return segs
 
 
@@ -209,7 +236,9 @@ def _canvas_line(indent, nodes):
             if n.get("meta"):
                 segs.append((" " + n["meta"], "dim"))
         else:
-            segs.append((n["label"] + " ○", off))
+            # r11 (user) — pending stages carry NO glyph: the dim label alone reads as
+            # "not started"; the ○ added nothing.
+            segs.append((n["label"], off))
     return segs
 
 
@@ -272,11 +301,11 @@ def build_lines(term_width, layout):
     # depth-2 stage workers: rail rows one arrow level deeper (r4) — identity is the SD-F1
     # human stage label + ⎇ slug; contract = bootstrap type; worker facts = model·effort.
     # Their ⚡ rows attribute positionally (nested beneath their own worker row, no @tag).
-    g1.append(_dispatch_line(_D2_PREFIX, "claude", "exec", "usage-accuracy", None,
+    g1.append(_dispatch_line(_D2_PREFIX, "claude", "exec", None, None,
                              "stage", "8m", desc_w, stg_key=_STAGE_PLAIN[1],
                              model="haiku", effort="medium"))
     g1.append(_agents_strip(_D2_AGENT_IND, [("개발팀", "●", "1m12s", True)]))
-    g1.append(_dispatch_line(_D2_PREFIX, "claude", "exec:B", "usage-accuracy", None,
+    g1.append(_dispatch_line(_D2_PREFIX, "claude", "exec:B", None, None,
                              "stage", "3m", desc_w, stg_key=_STAGE_PLAIN[1],
                              model="sonnet", effort="medium"))
     g1.append(_agents_strip(_D2_AGENT_IND, [("Explore", "✓", "48s", False)]))
@@ -288,14 +317,18 @@ def build_lines(term_width, layout):
     # r5 (user) — the card's mem zone sits BELOW a subtle in-band divider: a dim rule ON the
     # tint (never a chrome bar, never an untinted gap — the band itself must stay continuous).
     g1.append([(" ", None), ("─" * max(8, term_width - 12), "dim")])
+    # r12 (user) — each mem event names its SOURCE session (the one whose distill/curation
+    # produced it), dim-clipped so it reads as provenance, not a second title.
     g1.append([(" \U0001f9e0 ", "dim"), ("14:02 ", "dim"), ("+", "lvl_g"),
-               (" durable/project ", "dim"), ("distiller  ", "dim"),
+               (" durable/project ", "dim"), ("distiller ", "dim"),
+               ("⟵ " + r._clip_w("fleet UI two-plane demo", 22) + "  ", "dim"),
                ("\"fleet 두-평면 문법 확정 — 자식 행은 세션 그리드에서 탈퇴\"", "dim")])
     # "−" was "lvl_r" (bold red) — the engine has no plain (non-bold) red hue in its table
     # (red is reserved as its "one true alarm", always bold by design), so this bespoke
     # +/− pair falls back to "dim" rather than inventing a new table entry (round-2).
     g1.append([(" \U0001f9e0 ", "dim"), ("13:47 ", "dim"), ("−", "dim"),
-               (" working/expired ", "dim"), ("curator    ", "dim"),
+               (" working/expired ", "dim"), ("curator   ", "dim"),
+               ("⟵ " + r._clip_w("usage probe rate-window", 22) + "  ", "dim"),
                ("\"usage 주간 카운터 가설 폐기 (43%는 mtime-신선 tap 오판)\"", "dim")])
 
     # in-card blank separators stay ON the tint band — an untinted (None) blank row splits the
@@ -331,9 +364,9 @@ def build_lines(term_width, layout):
                   ("⚡", "dim"), (" sub-agent   ", "dim"),
                   ("▸", "dim"), (" pipeline   ", "dim"),
                   ("✓", "dim"), (" done   ", "dim"),
-                  ("○", "dim"), (" pending", "dim")])
+                  ("·", "dim"), (" pending = dim label", "dim")])
     # r10 (user) — spell the contract vocabulary out; the parenthetical alone is opaque.
-    lines.append([("  🔧 (mode·intensity·role)", "dim"),
+    lines.append([("  (mode·intensity·role)", "dim"),
                   ("   mode dev|debug|audit", "dim"),
                   ("  ·  intensity direct|quick|standard|thorough|adversarial", "dim"),
                   ("  ·  role owner|quick_owner|stage|review|support", "dim")])

@@ -106,7 +106,7 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         text = _joined(self._lines(120))
         self.assertIn("▸ claude code", text); self.assertIn("↳ ", text)
         self.assertIn("▸ codex", text)
-        self.assertIn("🔧 code", text)
+        self.assertIn("code (dev·thr·owner)", text)
         self.assertIn("(dev·thr·owner)", text)
         self.assertIn("(dev·quick·quick_owner)", text)
         # r10 — model is FIRST-CLASS on spawned rows, same _model_cell idiom as the grid
@@ -159,7 +159,8 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         # depth-2 rail rows below, so the active node carries no (harness·model·effort) meta.
         text = _joined(self._lines(120))
         self.assertIn("plan ✓12m › exec ● 8m", text)
-        self.assertIn("test ○ › report ○", text)
+        self.assertIn("› test › report", text)
+        self.assertNotIn("test ○", text)
 
     def test_depth2_stage_workers_are_rail_rows_not_fused_nodes(self):
         # r4 (user-confirmed) — a depth-2 stage worker is an ENTITY, so it gets the existing
@@ -168,9 +169,9 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         lines = self._lines(120)
         text = _joined(lines)
         self.assertIn("⎇ usage-accuracy", text)
-        self.assertIn("🔧 exec:B (stage)", text)
-        self.assertIn("🔧 exec (stage)", text)
-        self.assertIn("🔧 exec:B (stage)", text)
+        self.assertIn("exec:B (stage)", text)
+        self.assertIn("exec (stage)", text)
+        self.assertIn("exec:B (stage)", text)
         # positional attribution replaced the @<node> tag entirely
         self.assertNotIn("@exec", text)
         # the depth-2 arrow is strictly deeper than the depth-1 arrow
@@ -180,7 +181,7 @@ class TwoPlaneGrammarTest(unittest.TestCase):
                     s = "".join(t for t, _k in ln)
                     return s.index("↳")
             self.fail("row containing %r not found" % snippet)
-        self.assertGreater(arrow_col("🔧 exec (stage)"), arrow_col("🔧 code (dev·thr·owner)"))
+        self.assertGreater(arrow_col("exec (stage)"), arrow_col("code (dev·thr·owner)"))
 
     def test_mem_events_are_scoped_under_their_own_group(self):
         # grammar #6 — per-repo mem events, not a board-wide dump.
