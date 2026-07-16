@@ -134,19 +134,18 @@ def _session_lines(s, layout, term_width, wide_name_width):
     return lines
 
 
-def _agent_line(prefix, agent_type, desc, glyph, elapsed_str, active, desc_w, anchor=None):
-    """`⚡ <agent-type> "<desc>" <glyph> <elapsed>` — no connector, pure indent (grammar #2, the
-    tree lattice never reached this row kind — only the spine it sat beside is gone now).
-    Active = normal weight; completed = dim (grammar #8 — dim is completed/inactive ONLY, never
-    used to mute a live row). `agent_type`/desc/anchor are padded to fixed DISPLAY widths
-    (`_pad_dw`, CJK-aware) so the desc/anchor/status columns line up across sibling rows even
-    when one carries a Korean agent_type ("개발팀") and another an ASCII one ("Explore")."""
-    key = None if active else "dim"
-    quoted = _pad_dw(r._clip_w('"%s"' % desc, desc_w), desc_w)
-    segs = [(prefix, "dim"), ("⚡ ", key), (_pad_dw(agent_type, 10), key), (quoted, key)]
-    if anchor:
-        segs.append((" @" + _pad_dw(anchor, 8), "stg1_off"))
-    segs.append((" %s %s" % (glyph, elapsed_str), key))
+def _agents_strip(prefix, agents):
+    """One HORIZONTAL strip for a parent's sub-agents (r7, user: "한두 단어 수준으로 횡으로
+    나열") — `⚡ <type> <glyph> <elapsed> · <type> <glyph> <elapsed> …`. Type only (one-two
+    words), no description; the richer per-agent facts (description/prompt/tokens) stay in
+    collector data for a selection/toggle detail surface, not this strip. Active entries are
+    normal weight, completed ones dim (grammar #8)."""
+    segs = [(prefix, "dim"), ("⚡ ", None)]
+    for i, (agent_type, glyph, elapsed_str, active) in enumerate(agents):
+        if i:
+            segs.append((" · ", "dim"))
+        segs.append(("%s %s %s" % (agent_type, glyph, elapsed_str),
+                     None if active else "dim"))
     return segs
 
 
@@ -240,12 +239,8 @@ def build_lines(term_width, layout):
     g1 = [[("●", "lvl_g" if r._BLINK_ON else "g_work_off"),
            (" ", None), ("agent_setting", "grp_live"), ("/", "dim")]]
     g1.extend(_session_lines(s_main, layout, term_width, wide_name_width))
-    g1.append(_agent_line(_AGENT_IND, "Explore",
-                          "fleet 제목 파이프라인 조사 — refresh 대상 필터·sidecar 소스 확인",
-                          "●", "2m51s", True, desc_w))
-    g1.append(_agent_line(_AGENT_IND, "Explore", "렌더 구조·stage 존·mem 표시 조사",
-                          "✓", "4m04s", False, desc_w))
-    g1.append(None)
+    g1.append(_agents_strip(_AGENT_IND, [("Explore", "●", "2m51s", True),
+                                         ("Explore", "✓", "4m04s", False)]))
     g1.append(_dispatch_line(_ARROW_PREFIX, "claude", "code", "usage-accuracy",
                              "usage 소스 신뢰 규칙 구현", "(thr · owner)", "⏳ 20m",
                              desc_w, stg_key=_STAGE_PLAIN[1]))
@@ -262,19 +257,15 @@ def build_lines(term_width, layout):
                (r._BADGE_TEXT["claude"] + "  ", "hb_claude"),
                ("🔧 exec", _STAGE_PLAIN[1]), (" ⎇ usage-accuracy  ", "dim"),
                ("(stage · haiku·med)", "dim"), ("  ● 8m", None)])
-    g1.append(_agent_line(_D2_AGENT_IND, "개발팀", "usage tap freshness 파서 구현",
-                          "●", "1m12s", True, desc_w))
+    g1.append(_agents_strip(_D2_AGENT_IND, [("개발팀", "●", "1m12s", True)]))
     g1.append([(_D2_PREFIX, "dim"), ("▸ ", _STAGE_PLAIN[1]),
                (r._BADGE_TEXT["claude"] + "  ", "hb_claude"),
                ("🔧 exec:B", _STAGE_PLAIN[1]), (" ⎇ usage-accuracy  ", "dim"),
                ("(stage · sonnet·med)", "dim"), ("  ● 3m", None)])
-    g1.append(_agent_line(_D2_AGENT_IND, "Explore", "usage tap 스키마 사전 조사",
-                          "✓", "48s", False, desc_w))
-    g1.append(None)
+    g1.append(_agents_strip(_D2_AGENT_IND, [("Explore", "✓", "48s", False)]))
     g1.append(_dispatch_line(_ARROW_PREFIX, "codex", "code", "rate-window",
                              "rate-window 헤더 재검증", "(quick · quick_owner · gpt·med)", "● 4m",
                              desc_w, stg_key=_STAGE_PLAIN[0]))
-    g1.append(None)
     g1.extend(_session_lines(s_codex, layout, term_width, wide_name_width))
     # r5 (user) — the card's mem zone sits BELOW a subtle in-band divider: a dim rule ON the
     # tint (never a chrome bar, never an untinted gap — the band itself must stay continuous).

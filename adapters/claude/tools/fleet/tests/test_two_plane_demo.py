@@ -124,26 +124,29 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         self.assertNotIn("├─", text)
         self.assertNotIn("└─", text)
 
-    def test_kind_glyph_column_aligns_across_ascii_and_cjk_agent_types(self):
-        # round-2 — `agent_type` is padded by DISPLAY width (not Python char count), so a
-        # Korean agent_type ("개발팀", 6 cells) and an ASCII one ("Explore", 10 cells padded)
-        # both land their desc-quote at the same column.
+    def test_subagents_render_as_one_horizontal_strip(self):
+        # r7 (user) — sub-agents collapse to ONE horizontal strip per parent: type only
+        # (one-two words) + status glyph + elapsed, ` · ` separated; descriptions moved off
+        # the board (they remain collector data for a detail surface).
         lines = self._lines(120)
+        text = _joined(lines)
+        self.assertIn("⚡ Explore ● 2m51s · Explore ✓ 4m04s", text)
+        self.assertIn("⚡ 개발팀 ● 1m12s", text)
+        self.assertIn("⚡ Explore ✓ 48s", text)
+        # no per-agent quoted description rows remain
+        self.assertNotIn("제목 파이프라인 조사", text)
+        self.assertNotIn("파서 구현", text)
 
-        def _dw(s):
-            return sum(render._cw(c) for c in s)
-
-        def _quote_col(snippet):
-            for ln in lines:
-                if not ln:
-                    continue
-                s = "".join(t for t, _k in ln)
-                if snippet in s:
-                    return _dw(s[:s.index('"')])
-            self.fail("row containing %r not found" % snippet)
-
-        self.assertEqual(_quote_col("파서 구현"), _quote_col("스키마 사전 조사"))
-        self.assertEqual(_quote_col("제목 파이프라인"), _quote_col("렌더 구조"))
+    def test_dispatch_rows_sit_tight_against_their_session(self):
+        # r7 (user: "분사 세션은 메인 세션이랑 여백을 없애고") + the engine's own "rows stay
+        # tight" rule — no blank separator rows between a session block and its ↳ rows.
+        lines = two_plane.build_lines(120, "wide")
+        def txt(ln):
+            return "".join(t for t, _k in ln if not render._is_fill(t)) if ln else ""
+        for i, ln in enumerate(lines):
+            if "↳" in txt(ln):
+                self.assertTrue(txt(lines[i - 1]).strip(),
+                                "blank row directly above a ↳ row at %d" % i)
 
     def test_canvas_breadcrumb_uses_the_existing_separator(self):
         # grammar #4 — stage canvas below the conductor, joined by the existing ' › ' breadcrumb.
