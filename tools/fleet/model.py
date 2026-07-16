@@ -234,6 +234,9 @@ class DispatchJob:
     attempt_id: Optional[str] = None    # canonical registry attempt identity (SD-49)
     registry_order: Optional[int] = None  # append order in canonical jobs.log
     registry_priority: Optional[int] = None  # 0 canonical; larger values are legacy fallbacks
+    title: Optional[str] = None         # the child session's own sidecar title, adopted in
+                                        # collect_all (F-14 reach into dispatch rows) — None
+                                        # keeps the slug as the row identity
 
     def to_dict(self):
         return asdict(self)

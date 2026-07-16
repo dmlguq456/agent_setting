@@ -1183,7 +1183,10 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     qa_text = ""
     if j.qa:
         qa_text = ("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa
-    slug_name = j.slug or key
+    # The dispatched session's own haiku sidecar title is its identity when present
+    # (user 2026-07-16: the summary agent attaches to every dispatched session); the
+    # slug stays the fallback — same title → name → slug chain as session rows.
+    slug_name = getattr(j, "title", None) or j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
     dead_stale_j = j.liveness in ("dead", "stale")
@@ -1366,7 +1369,10 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     elapsed · model · options (relocated from L1) · breadcrumb/micro-status."""
     key = j.key or "?"
     depth = max(1, int(getattr(j, "depth", 1) or 1))
-    slug_name = j.slug or key
+    # The dispatched session's own haiku sidecar title is its identity when present
+    # (user 2026-07-16: the summary agent attaches to every dispatched session); the
+    # slug stays the fallback — same title → name → slug chain as session rows.
+    slug_name = getattr(j, "title", None) or j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
     qa_base = j.qa or ""
