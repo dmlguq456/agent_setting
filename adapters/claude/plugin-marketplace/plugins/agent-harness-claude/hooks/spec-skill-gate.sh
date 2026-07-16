@@ -21,7 +21,7 @@ EOF
 
 find_prd() {
   dir=$1
-  prd=""
+  candidates=""
   root=""
   while [ ! -d "$dir" ]; do
     parent=$(dirname "$dir")
@@ -30,10 +30,26 @@ find_prd() {
   done
   dir=$(CDPATH= cd -- "$dir" && pwd -P)
   artifact_root=$("$ARTIFACT_ROOT_RESOLVER" "$dir" 2>/dev/null) || return 0
+
   if [ -f "$artifact_root/spec/prd.md" ]; then
-    prd="$artifact_root/spec/prd.md"
-    root=$(dirname "$artifact_root")
+    candidates="$artifact_root/spec/prd.md"
   fi
+
+  for d in "$artifact_root"/spec/*/; do
+    [ -d "$d" ] || continue
+    d="${d%/}"
+    slug=$(basename "$d")
+    [ "$slug" = "_internal" ] && continue
+    [ -f "$d/prd.md" ] || continue
+    if [ -z "$candidates" ]; then
+      candidates="$d/prd.md"
+    else
+      candidates="$candidates
+$d/prd.md"
+    fi
+  done
+
+  [ -n "$candidates" ] && root=$(dirname "$artifact_root")
 }
 
 check_gate() {
@@ -51,24 +67,65 @@ check_gate() {
   esac
 
   find_prd "$cwd"
-  [ -z "$prd" ] && return 0   # Not a spec-backed project.
+  [ -z "$candidates" ] && return 0   # Not a spec-backed project.
 
   key=$(printf '%s' "$root" | sed 's#[/ ]#_#g')
-  marker="$AGENT_HOME/.spec-grounding/${sid}__${key}"
-  cur=$(stat -c %Y "$prd" 2>/dev/null || echo 0)
 
-  if [ ! -f "$marker" ]; then
-    reason="This cwd is spec-backed, but prd.md was not read in this session. Read $prd directly with the Read tool, then retry. A code comment or brief quotation does not satisfy the gate."
+  any_marker=0
+  unsatisfied=""
+  total=0
+  IFS_OLD=$IFS
+  IFS='
+'
+  for candidate in $candidates; do
+    IFS=$IFS_OLD
+    total=$((total + 1))
+    parent=$(dirname "$candidate")
+    parent_base=$(basename "$parent")
+    if [ "$parent_base" = spec ]; then
+      marker_name="${sid}__${key}"
+    else
+      slug_key=$(printf '%s' "$parent_base" | sed 's#[/ ]#_#g')
+      marker_name="${sid}__${key}__${slug_key}"
+    fi
+    marker="$AGENT_HOME/.spec-grounding/${marker_name}"
+    cur=$(stat -c %Y "$candidate" 2>/dev/null || echo 0)
+    if [ -f "$marker" ]; then
+      any_marker=1
+      read_mtime=$(cat "$marker" 2>/dev/null || echo 0)
+      if [ "$cur" -le "$read_mtime" ]; then
+        IFS=$IFS_OLD
+        return 0   # This candidate is satisfied — ANY satisfied candidate passes the gate.
+      fi
+    fi
+    if [ -z "$unsatisfied" ]; then
+      unsatisfied="$candidate"
+    else
+      unsatisfied="$unsatisfied
+$candidate"
+    fi
+    IFS='
+'
+  done
+  IFS=$IFS_OLD
+
+  if [ "$total" -eq 1 ]; then
+    prd="$candidates"
+    if [ "$any_marker" -eq 1 ]; then
+      reason="prd.md changed after the most recent Read marker. Read $prd again, then retry."
+    else
+      reason="This cwd is spec-backed, but prd.md was not read in this session. Read $prd directly with the Read tool, then retry. A code comment or brief quotation does not satisfy the gate."
+    fi
     return 2
   fi
 
-  read_mtime=$(cat "$marker" 2>/dev/null || echo 0)
-  if [ "$cur" -gt "$read_mtime" ]; then
-    reason="prd.md changed after the most recent Read marker. Read $prd again, then retry."
-    return 2
+  list=$(printf '%s' "$unsatisfied" | tr '\n' ',' | sed 's/,/, /g')
+  if [ "$any_marker" -eq 1 ]; then
+    reason="One or more governing spec candidates changed after the most recent Read marker: $list. Read the one governing the declared work scope again, then retry. A code comment or brief quotation does not satisfy the gate."
+  else
+    reason="This cwd is spec-backed, but no governing spec candidate was read in this session: $list. Read the one governing the declared work scope directly with the Read tool, then retry. A code comment or brief quotation does not satisfy the gate."
   fi
-
-  return 0
+  return 2
 }
 
 deny_json() {
