@@ -18,3 +18,20 @@
 
 - `plans/2026-07-16_fleet-depth2-retry-liveness`의 broker 복구 항목(구현 §3)도 같은 이유로 무효화 — F-25 attempt identity·newest-attempt 항목은 v15 SD-63(하나의 logical stage, 하나의 attempt identity)과 정합해 그 사이클/후속에서 처리.
 - 사용자 개선 순서 2(watchdog)·3(capacity)·7(registry)은 v15 direct headless 구현 완료 후 SD-58~60 기반 후속 사이클로 진행.
+
+## 후속 완료 기록 — 2026-07-16
+
+- 후속 사이클 `plans/2026-07-16_direct-headless-resilience`에서 broker와
+  독립적인 SD-58, SD-59, SD-60 구현을 완료했다.
+- SD-58은 direct wrapper/stage heartbeat와 동기식 watchdog으로 구현했으며
+  resident watcher나 broker 대체 authority를 추가하지 않았다.
+- SD-59는 wrapper의 capacity 탐지/기록과 conductor의 1회 대체 모델 선택으로
+  구현했다. wrapper는 모델을 선택하지 않는다.
+- SD-60은 canonical registry의 selected current view와 locked exact
+  reconciliation으로 구현했다.
+- `fleet-depth2-retry-liveness`의 F-25 attempt identity·newest-attempt 항목은
+  존속·완료됐고, broker stop/ensure 복구 및 broker fixture 항목은 계속 무효다.
+- 실제 Codex headless 재귀 smoke는
+  `root -> depth-1 owner -> depth-2 stage`로 통과했으며 결과에
+  `selected_hop=same-harness-headless`, `launch_authority=conductor`,
+  `broker_lifecycle=retired`가 기록됐다.
