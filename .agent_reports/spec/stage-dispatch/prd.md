@@ -867,6 +867,7 @@ conductor는 same-harness 실패 후 cross-harness 평가를 건너뛰고 inline
 ### 13.7.2 SD-62 — Codex recursive headless profile
 
 - native subagent와 nested `codex exec`는 별도 surface다. v15의 Codex depth-1 standard+ owner는 filesystem sandbox를 `workspace-write`로 유지하면서 `sandbox_workspace_write.network_access=true`를 명시한 **network-enabled conductor profile**로 시작한다. 이 권한은 child flag가 parent sandbox를 탈출하는 것이 아니라 depth-0 launcher가 parent 실행 경계를 사전에 선택하는 것이다.
+- nested `codex exec`는 parent sandbox 안에서 자신의 runtime state를 쓸 수 있어야 한다. launcher는 owner worktree 아래 전용 `CODEX_HOME`을 만들고 runtime projection을 설치한 뒤, 현재 home의 `auth.json`과 `config.toml`은 복사·수정하지 않고 read-only source를 가리키는 symlink로만 제공한다. credential/session/cache를 worker-local home으로 복제하거나 shared runtime-owned 파일을 변경하는 것은 금지한다.
 - network-enabled 표면은 owner/conductor에만 적용한다. depth-2 stage/review/support worker에는 자동 전파하지 않으며, 그 worker가 depth-3을 열 수 없다는 기존 gate를 유지한다. wrapper는 `AGENT_NESTED_HEADLESS_NETWORK=1`을 owner 환경에 기록하고 route eligibility probe는 이 checked evidence를 사용한다.
 - Claude Code는 기존 direct `claude -p` 분사 경로를 유지한다. cross-harness direct는 child CLI·auth·parent network가 모두 checked일 때만 supported다. unknown/unsupported는 child 0으로 다음 hop에 내려간다.
 
