@@ -27,6 +27,12 @@ from dispatch_contract import (  # noqa: E402
     resolve_global_registry,
     validate_nested_eligibility,
 )
+from worker_bootstrap import (  # noqa: E402
+    assigned_contract,
+    profile_worker_type,
+    render_worker_bootstrap,
+    resolve_worker_type,
+)
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
@@ -103,6 +109,7 @@ def parser() -> argparse.ArgumentParser:
         default=os.environ.get("AGENT_DISPATCH_PARENT_CWD") or None,
     )
     p.add_argument("--worker-role")
+    p.add_argument("--worker-type", choices=("owner", "stage", "review", "support"))
     p.add_argument("--owner", dest="capability_owner")
     p.add_argument("--route-file")
     p.add_argument("--route-id")
@@ -234,13 +241,35 @@ def resolve_artifact_root(worktree: str) -> str:
 
 def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
     task, source = task_prompt(args)
-    metadata = (
+    args.worker_type = resolve_worker_type(
+        explicit=args.worker_type,
+        depth=args.depth,
+        worker_role=args.worker_role,
+        route_node=args.route_node,
+        profile_type=profile_worker_type(ROOT, args.profile),
+    )
+    bootstrap = render_worker_bootstrap(ROOT, args.worker_type)
+    args.assigned_contract = assigned_contract(
+        capability=args.capability,
+        worker_type=args.worker_type,
+        worker_role=args.worker_role,
+        route_node=args.route_node,
+    )
+    profile_note = (
+        f"masked specialization profile={args.profile}; its CLAUDE.md contains only the runtime attach layer and selected specialization"
+        if args.profile
+        else "profile=-"
+    )
+    return (
+        f"{bootstrap}\n"
         "Dispatch metadata:\n"
         f"- capability: {args.capability}\n"
         f"- mode: {args.mode}\n"
         f"- qa: {args.qa}\n"
         f"- intensity: {args.intensity}\n"
         f"- depth: {args.depth}\n"
+        f"- worker_type: {args.worker_type}\n"
+        f"- assigned_contract: {args.assigned_contract}\n"
         f"- parent: {args.parent_slug or '-'}\n"
         f"- parent_session_id: {args.parent_session_id or '-'}\n"
         f"- worker_role: {args.worker_role or '-'}\n"
@@ -248,86 +277,15 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- owner_harness: {args.owner_harness or '-'}\n"
         f"- worktree: {args.worktree}\n"
         f"- artifact_root: {args.artifact_root}\n"
-    )
-    if args.depth >= 2:
-        role = (args.worker_role or "").strip()
-        if role.startswith("code-") or role in {"code-plan", "code-execute", "code-test", "code-report"}:
-            depth_note = (
-                "Depth contract: you are a depth-2 pipeline stage-worker "
-                f"('{role}') dispatched by a depth-1 conductor (2026-07-10 stage-dispatch). "
-                "Read your inputs only from the artifact files named in the task (never from "
-                "prior-stage conversation); write only your stage's artifact class; source is "
-                "mutated by code-execute alone. Do NOT open further headless dispatch (depth 3+ "
-                "is forbidden) — internal parallelism uses in-session teams. Return only a short "
-                "structured verdict/summary; the conductor reads your artifacts, not your prose.\n"
-            )
-        else:
-            depth_note = (
-                "Depth contract: you are a depth-2 review sub-worker dispatched by a depth-1 "
-                "owner. Stay within your single assigned role, default to read-only unless the "
-                "task grants scoped write, and return a short structured summary. Do NOT open "
-                "further headless dispatch; depth 3+ is forbidden.\n"
-            )
-    else:
-            depth_note = (
-                "Depth contract: depth 1 is a capability-owner worker. It should open bounded depth-2 "
-            "sub-workers for separable standard+ work; for standard+ pipelines it acts as a thin "
-            "conductor that dispatches each stage (code-plan/execute/test/report) as its own "
-            "depth-2 session with file-only handoff. thorough/adversarial expands review to "
-            "multi-axis or adversary workers. Direct/quick stay inline unless explicitly escalated; "
-                "depth 3+ is forbidden. "
-                "For routed depth-2 launches, run utilities/stage-dispatch-fallback.py against the assigned route node. Every same/cross-harness headless target goes through the inherited depth-0 broker binding; do not recursively start adapter CLIs. Keep native/inline hops ordered and reuse only inherited AGENT_DISPATCH_JOBS. "
-            "You are a one-shot process: ending your turn ends the process, and background "
-            "completion notifications never arrive after that. After dispatching a stage, do NOT "
-            "end the turn on a Monitor/notification wait — poll within the same turn using "
-            "utilities/dispatch-wait.sh (which reuses dispatch-liveness) until the stage row "
-            "leaves 'open', then harvest its artifact verdict and dispatch the next stage. On "
-            "SUSPECT/DEAD, diagnose and re-dispatch rather than waiting. After harvesting a "
-            "stage (including a DEAD one you re-dispatched), you MUST update its jobs.log row "
-            "from 'open' to 'done' in place (OPERATIONS §5.10 registry duty) — rows left open "
-            "orphan the pipe for fleet/oncall and block dispatch-wait for your own next stage "
-            "(2026-07-11 drill g_stage_dispatch HARD-5 finding).\n"
-        )
-    if args.profile:
-        # Unlike the codex wrapper, do not force a preflight/bootstrap chain
-        # here: CLAUDE_CONFIG_DIR already points at this dispatch's masked
-        # profile home, which loads the L0 core contract and this profile's
-        # role fragment (profiles/fragments/<name>.md) on its own. Keep the
-        # prompt minimal — task + depth-1 reminder + report request.
-        header = (
-            "You are a Claude headless worker launched by the portable agent harness "
-            f"under masked profile '{args.profile}'.\n"
-            "CLAUDE_CONFIG_DIR already points at this profile's masked home — its own "
-            "bootstrap covers the L0 core contract and this profile's role fragment. "
-            "There is no orchestration section in that bootstrap; do not look for one.\n\n"
-        )
-    else:
-        header = "You are a Claude headless worker launched by the portable agent harness.\n\n"
-    route_note = ""
-    if args.route_file:
-        route_note = (
-            "Route bootstrap: consume the immutable record already validated by the wrapper. "
-            "Do not rerun status -> prompt-signal -> mode -> route and do not reselect capability, "
-            "intensity, or topology. Re-run only adapters/claude/bin/capability-route.py worker-route if a safety "
-            f"recheck is needed (route={args.route_file}, node={args.route_node}).\n\n"
-        )
-    return (
-        header
-        + "Worker lifecycle boundary: AGENT_SESSION_ROLE=worker disables automatic "
-        "memory injection, briefing, turn-nudge/distill, SessionEnd sync/curation, "
-        "Fleet title summarization, and interactive-pane publication. Deterministic "
-        "safety, task routing, handoff, liveness, and verification guards remain active. "
-        "Use memory recall only when the task context requires it.\n\n"
-        + metadata
-        + "\n"
-        + route_note
-        + depth_note
-        + "\nUser task:\n"
-        + f"{task.rstrip()}\n\n"
-        + "Return a concise report with changed files, verification commands/results, "
-        "and artifact paths. Write every durable agent artifact only under artifact_root; "
-        "the task worktree's tracked .agent_reports/.claude_reports snapshot is read-only "
-        "shadow state. Leave merge and guarded worktree cleanup to the main orchestrator.\n",
+        f"- route_state: {'consume the immutable record already validated by the wrapper' if args.route_file else 'validated dispatch metadata'}\n"
+        f"- {profile_note}\n\n"
+        "Claude realization:\n"
+        "- The wrapper validates route/scope and the masked profile before launch. Re-run route validation only for a safety recheck.\n"
+        f"- Read only the exposed {args.assigned_contract} Skill, named artifacts, and selected specialization. General Claude custom subagents may still inherit project CLAUDE.md; do not manually load a full harness bootstrap.\n"
+        "- Owner workers use the inherited registry/broker, poll in this turn, harvest artifacts, and close rows; stage/review/support workers do not dispatch.\n\n"
+        "Assignment:\n"
+        f"{task.rstrip()}\n\n"
+        "End with the kernel's exact three-line handoff and nothing after it.\n",
         source,
     )
 
@@ -405,6 +363,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",parent_cwd={_effective_parent_cwd(args)}"
     if args.worker_role:
         pipe += f",worker_role={args.worker_role}"
+    pipe += f",worker_type={args.worker_type}"
     if args.capability_owner:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
@@ -751,6 +710,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
             "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
             "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
+            "AGENT_DISPATCH_WORKER_TYPE": args.worker_type,
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
             "AGENT_ARTIFACT_ROOT": args.artifact_root,
@@ -807,6 +767,7 @@ def main(argv: list[str]) -> int:
     print(f"parent={args.parent_slug or '-'}")
     print(f"parent_session_id={args.parent_session_id or '-'}")
     print(f"worker_role={args.worker_role or '-'}")
+    print(f"worker_type={args.worker_type}")
     print(f"owner={args.capability_owner or '-'}")
     print(f"owner_harness={args.owner_harness or '-'}")
     print(f"route_file={args.route_file or '-'}")

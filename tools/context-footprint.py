@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Iterable
 
 BOOTSTRAP_BUDGET = 16_384
+WORKER_BOOTSTRAP_BUDGET = 4_096
 SKILL_METADATA_BUDGET = 7_000
 MAX_BASELINE_GROWTH = 1.05
 ZERO_INJECTION_SAMPLES = {
@@ -231,6 +232,24 @@ def main() -> int:
         print(f"surface={label} bytes={size_bytes} chars={size_chars} path={path.relative_to(root)}")
         if size_bytes > BOOTSTRAP_BUDGET:
             warnings.append(f"{label} bootstrap {size_bytes} > {BOOTSTRAP_BUDGET} bytes")
+
+    print("\n[worker-bootstrap]")
+    kernel = root / "roles" / "worker-bootstrap.md"
+    kernel_bytes = utf8_bytes(kernel)
+    surfaces["worker-bootstrap:kernel"] = kernel_bytes
+    print(f"surface=kernel bytes={kernel_bytes} path={kernel.relative_to(root)}")
+    for worker_type in ("owner", "stage", "review", "support"):
+        fragment = root / "roles" / "worker-types" / f"{worker_type}.md"
+        combined = kernel_bytes + 2 + utf8_bytes(fragment)
+        surfaces[f"worker-bootstrap:{worker_type}"] = combined
+        print(
+            f"surface={worker_type} bytes={combined} "
+            f"fragment={fragment.relative_to(root)}"
+        )
+        if combined > WORKER_BOOTSTRAP_BUDGET:
+            warnings.append(
+                f"{worker_type} worker bootstrap {combined} > {WORKER_BOOTSTRAP_BUDGET} bytes"
+            )
 
     print("\n[skill-metadata]")
     codex_local, codex_local_path, codex_local_count, codex_local_names = skill_meta(root / "adapters/codex/skills")

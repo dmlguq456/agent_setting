@@ -1,6 +1,7 @@
 name: lab-runner
 description: "Experiment-execution specialist — delegated autonomous segments of autopilot-lab"
 harness: claude
+worker_type: stage
 model_role: fast implementer
 effort: medium
 fragments:

@@ -26,6 +26,16 @@ Native guard plugin projection is materialized under `adapters/opencode/plugins/
 Capability support still keeps explicit `preflight.sh` wrappers as fallback for
 guards and tool-contract reporting.
 
+## Worker bootstrap boundary
+
+Headless dispatch wraps generated and caller-supplied assignments with the
+portable kernel and exactly one worker type. It keeps verbose evidence in the
+artifact and returns only `artifact` / `verdict` / `blocker`. The wrapper does
+not manually load the full adapter bootstrap. Because a verified runtime switch
+for physical project-instruction masking is not part of this adapter contract,
+OpenCode reports prompt isolation as the checked fallback rather than claiming
+full masking.
+
 ## Entry Points
 
 | Surface | File |

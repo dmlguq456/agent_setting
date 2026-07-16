@@ -1,6 +1,7 @@
 name: c1-gate
 description: "skill-design-refactor C1 trial-flip isolated runtime probe"
 harness: claude
+worker_type: support
 model_role: fast reviewer
 fragments: []
 expose:

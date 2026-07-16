@@ -11,6 +11,17 @@ hyphens, and underscores but accepts no undocumented role aliases.
 This adapter preserves the previous Claude Code setting behavior while moving
 runtime-specific files out of the common root.
 
+## Worker bootstrap realization (2026-07-16)
+
+The wrapper renders `roles/worker-bootstrap.md` plus one deterministic worker
+type before the assignment. A masked profile adds only its attach layer and
+selected specialization. Changed files, commands, logs, and findings remain in
+the canonical artifact; the child returns only artifact path, verdict, and a
+one-line blocker. Official Claude Code behavior loads the `CLAUDE.md` memory
+hierarchy into ordinary custom subagents and provides no per-agent switch for
+that input, so the adapter claims masked profile projection, not universal
+physical instruction masking.
+
 ## Native Claude Surfaces
 
 | Claude runtime surface | Adapter source | Projection |

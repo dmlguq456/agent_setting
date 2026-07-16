@@ -21,6 +21,14 @@ wholesale.
 - **Parity gap/fallback:** `session.idle` never deletes worktrees. Main uses
   `preflight.sh worktree-cleanup` after integrated verification and push.
 
+## Worker bootstrap realization (2026-07-16)
+
+The OpenCode wrapper now renders the portable minimal kernel plus one worker
+type around both generated and custom assignments. It does not add the full
+main bootstrap or return a prose report; details stay in the artifact and the
+terminal envelope is three lines. Project instruction auto-load is not treated
+as physically masked until an official, locally verified disable surface exists.
+
 ## Design Principle
 
 Start from the portable invariant in `core/`, then map it onto OpenCode-native

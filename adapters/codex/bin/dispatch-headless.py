@@ -27,6 +27,12 @@ from dispatch_contract import (  # noqa: E402
     resolve_global_registry,
     validate_nested_eligibility,
 )
+from worker_bootstrap import (  # noqa: E402
+    assigned_contract,
+    profile_worker_type,
+    render_worker_bootstrap,
+    resolve_worker_type,
+)
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
 # `--qa` is no longer a user-facing axis; optional, derived from --intensity when omitted.
@@ -108,6 +114,7 @@ def parser() -> argparse.ArgumentParser:
         default=os.environ.get("AGENT_DISPATCH_PARENT_CWD") or None,
     )
     p.add_argument("--worker-role")
+    p.add_argument("--worker-type", choices=("owner", "stage", "review", "support"))
     p.add_argument("--owner", dest="capability_owner")
     p.add_argument("--route-file")
     p.add_argument("--route-id")
@@ -284,70 +291,52 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
 
 def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
     task, source = task_prompt(args)
-    track = qa_track(args.capability)
-    execution_contract = ""
-    if args.capability == "autopilot-code":
-        execution_contract = (
-            "\nAutopilot-code execution contract:\n"
-            "- Before code edits, emit a `spec-significance` verdict.\n"
-            "- Select the stage graph from `intensity` before using QA. `direct` has no code-plan/plan-check/durable plan artifact; `quick` is a depth-1 one-shot worker that uses an inline micro-plan plus plan-check-lite and focused verification; `standard+` uses owner-plan plus optional bounded depth2 verifier/planner, synth, then the durable code-execute -> code-test -> code-report loop. Canonical standard+ pipeline: code-plan -> code-execute -> code-test -> code-report.\n"
-            "- For each durable sub-step that is actually used, read the matching $AGENT_HOME/adapters/codex/skills/<step>/SKILL.md when present and run $AGENT_HOME/adapters/codex/bin/preflight.sh capability-info <step>.\n"
-            "- Pipeline role profiles: for standard+ stages, run $AGENT_HOME/adapters/codex/bin/preflight.sh role planning, role implementation, role verification, and role report to map stages to Codex-native agents.\n"
-            "- Plan-check is required for quick+ but stays small: requirements coverage, over/under-scoping, executable verification, and missed spec-significant risk. Do not run independent QA after every stage by default.\n"
-            "- When the selected graph calls for independent plan review, run $AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/plan-review and $AGENT_HOME/adapters/codex/bin/preflight.sh role verification before claiming that review.\n"
-            "- Pipeline intensity controls ceremony. For standard+ intensity, a depth-1 capability owner should dispatch bounded depth-2 planner/verifier workers when the task is separable; thorough/adversarial expands this to multi-axis/adversary workers. Synthesize short reports; depth 3+ is forbidden.\n"
-            "- Depth-2 launch recovery: consume the route node's checked fallback with $AGENT_HOME/adapters/codex/bin/preflight.sh dispatch-chain. Every same/cross-harness headless target uses the inherited depth-0 broker binding; do not recursively start adapter CLIs. Do not retry an unchanged failure. Use only inherited $AGENT_DISPATCH_JOBS; cycle-local jobs files are non-authoritative.\n"
-            "- Implementation: run $AGENT_HOME/adapters/codex/bin/preflight.sh role implementation for standard+ implementation stages and obey the requested development mode.\n"
-            "- Testing: run $AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/test when concrete verification commands are used, satisfy the reported verification-runner contract, and record evidence under test_logs/ for standard+ work cycles.\n"
-            "- Reporting: direct returns a concise report; quick returns its concise report from the depth-1 one-shot worker; standard+ runs $AGENT_HOME/adapters/codex/bin/preflight.sh role report, then writes or updates pipeline_summary.md with changed files, verification commands/results, artifact paths, and unsupported Codex tool contracts.\n"
-            "- Do not claim independent QA delegation if no separate Codex agent/headless pass actually ran; report inline fallback explicitly.\n"
-        )
-    if args.route_file:
-        route_bootstrap = (
-            f"- Validate and consume the assigned route only: $AGENT_HOME/adapters/codex/bin/preflight.sh worker-route --route {args.route_file} --node {args.route_node} --cwd {args.worktree} --artifact-root {args.artifact_root} --capability {args.capability} --intensity {args.intensity} --write-scope '{args.write_scope}' --route-id {args.route_id} --route-hash {args.route_hash} --registry-digest {args.registry_digest}.\n"
-            "- Do not rerun status -> prompt-signal -> mode -> route and do not reselect capability, intensity, or topology. The validator owns route hash/node/scope, tracked evidence, absolute cwd/canonical root, and git-state safety.\n"
-        )
-    else:
-        route_bootstrap = (
-            "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh status . codex-headless and inspect workflow, artifact, git, worktree, and headless-job risk fields.\n"
-            "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh prompt-signal . codex-headless to mirror the Codex UserPromptSubmit routing signal.\n"
-            "- Run $AGENT_HOME/adapters/codex/bin/preflight.sh mode . codex-headless to mirror the tracked/untracked workflow guard.\n"
-            f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh route {args.capability} . codex-headless.\n"
-        )
+    args.worker_type = resolve_worker_type(
+        explicit=args.worker_type,
+        depth=args.depth,
+        worker_role=args.worker_role,
+        route_node=args.route_node,
+        profile_type=profile_worker_type(ROOT, args.profile),
+    )
+    bootstrap = render_worker_bootstrap(ROOT, args.worker_type)
+    args.assigned_contract = assigned_contract(
+        capability=args.capability,
+        worker_type=args.worker_type,
+        worker_role=args.worker_role,
+        route_node=args.route_node,
+    )
+    route_state = (
+        "consume the assigned route only (wrapper-validated immutable record)"
+        if args.route_file
+        else "validated dispatch metadata"
+    )
     return (
-        "You are a Codex headless worker launched by the portable agent harness.\n"
-        "Follow the Codex adapter contract before doing task work.\n\n"
-        "Required bootstrap:\n"
-        "- This process is AGENT_SESSION_ROLE=worker. Main-only hook lifecycle (automatic memory/briefing/turn-nudge/session-end curator/title/token context) is disabled; deterministic safety, routing, handoff, liveness, and verification remain active.\n"
-        "- Resolve harness files through $AGENT_HOME; the target project need not contain an adapters/ directory.\n"
-        "- Read $AGENT_HOME/adapters/codex/AGENTS.md first.\n"
-        f"{route_bootstrap}"
-        f"- Read $AGENT_HOME/adapters/codex/skills/{args.capability}/SKILL.md when present.\n"
-        f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh mode-info {args.mode} and read the reported native_mode_path under $AGENT_HOME when present.\n"
-        f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh qa-policy {args.qa} {track} and obey the reported reviewer, external-adversary, and fallback policy.\n"
-        "- If you actually read .agent_reports/spec/prd.md or legacy .claude_reports/spec/prd.md, run $AGENT_HOME/adapters/codex/bin/preflight.sh read <prd.md> codex-headless after the read.\n"
-        "- Before edits, run $AGENT_HOME/adapters/codex/bin/preflight.sh write <file> codex-headless.\n"
-        "- Do not use adapters/claude, claude_setting, Claude slash commands, or Claude hook/statusline files as Codex-native input.\n\n"
+        f"{bootstrap}\n"
         "Dispatch metadata:\n"
         f"- capability: {args.capability}\n"
         f"- mode: {args.mode}\n"
         f"- qa: {args.qa}\n"
         f"- intensity: {args.intensity}\n"
         f"- depth: {args.depth}\n"
+        f"- worker_type: {args.worker_type}\n"
+        f"- assigned_contract: {args.assigned_contract}\n"
         f"- parent: {args.parent_slug or '-'}\n"
         f"- parent_session_id: {args.parent_session_id or '-'}\n"
         f"- worker_role: {args.worker_role or '-'}\n"
         f"- owner: {args.capability_owner or '-'}\n"
         f"- owner_harness: {args.owner_harness or '-'}\n"
-        f"- worktree: {args.worktree}\n\n"
-        f"- artifact_root: {args.artifact_root}\n\n"
-        f"{execution_contract}"
-        "User task:\n"
+        f"- worktree: {args.worktree}\n"
+        f"- artifact_root: {args.artifact_root}\n"
+        f"- route_state: {route_state}\n\n"
+        "Codex realization:\n"
+        f"- Read only $AGENT_HOME/adapters/codex/skills/{args.assigned_contract}/SKILL.md and the native mode path reported for {args.mode}.\n"
+        f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh qa-policy {args.qa} {qa_track(args.capability)} and keep its required assurance in the artifact.\n"
+        "- The wrapper already validated capability, mode, QA, artifact root, and any route record. Re-run worker-route only for a safety recheck.\n"
+        "- Before each edit run $AGENT_HOME/adapters/codex/bin/preflight.sh write <file> codex-headless; preserve required test and tool-contract checks in the artifact.\n"
+        "- Codex may still auto-discover project AGENTS.md; do not explicitly load the full harness adapter bootstrap or another runtime's adapter.\n\n"
+        "Assignment:\n"
         f"{task.rstrip()}\n\n"
-        "Return a concise report with changed files, verification commands, artifact paths, and any blocked/unsupported Codex tool contracts. "
-        "Write every durable agent artifact only under artifact_root; the task worktree's "
-        "tracked .agent_reports/.claude_reports snapshot is read-only shadow state. "
-        "Leave merge and guarded worktree cleanup to the main orchestrator.\n",
+        "End with the kernel's exact three-line handoff and nothing after it.\n",
         source,
     )
 
@@ -438,6 +427,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",parent_cwd={_effective_parent_cwd(args)}"
     if args.worker_role:
         pipe += f",worker_role={args.worker_role}"
+    pipe += f",worker_type={args.worker_type}"
     if args.capability_owner:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
@@ -846,6 +836,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
             "AGENT_DISPATCH_PARENT_CWD": (_effective_parent_cwd(args) if (args.parent_slug or args.parent_session_id) else ""),
             "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
+            "AGENT_DISPATCH_WORKER_TYPE": args.worker_type,
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
             "AGENT_ARTIFACT_ROOT": args.artifact_root,
@@ -902,6 +893,7 @@ def main(argv: list[str]) -> int:
     print(f"parent={args.parent_slug or '-'}")
     print(f"parent_session_id={args.parent_session_id or '-'}")
     print(f"worker_role={args.worker_role or '-'}")
+    print(f"worker_type={args.worker_type}")
     print(f"owner={args.capability_owner or '-'}")
     print(f"owner_harness={args.owner_harness or '-'}")
     print(f"route_file={args.route_file or '-'}")

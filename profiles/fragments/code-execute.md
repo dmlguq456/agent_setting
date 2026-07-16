@@ -8,8 +8,8 @@ and is the **only stage that mutates source**.
 
 - Run `code-execute`. Internal parallelism is the in-session **dev-team**
   only — implement the plan's phases/steps and record progress.
-- Return only a short verdict (implemented phase count + plan `status`); the
-  conductor reads the checklist/plan, not your prose.
+- Put implemented phase count and plan `status` in the checklist/plan; the
+  terminal response uses only the kernel's three-line handoff.
 
 ### Input / output artifact class (OPERATIONS §5.10 ④)
 

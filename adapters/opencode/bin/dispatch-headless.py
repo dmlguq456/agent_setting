@@ -28,6 +28,11 @@ from dispatch_contract import (  # noqa: E402
     resolve_global_registry,
     validate_nested_eligibility,
 )
+from worker_bootstrap import (  # noqa: E402
+    assigned_contract,
+    render_worker_bootstrap,
+    resolve_worker_type,
+)
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
@@ -122,6 +127,7 @@ def parser() -> argparse.ArgumentParser:
         default=os.environ.get("AGENT_DISPATCH_PARENT_CWD") or None,
     )
     p.add_argument("--worker-role")
+    p.add_argument("--worker-type", choices=("owner", "stage", "review", "support"))
     p.add_argument("--owner", dest="capability_owner")
     p.add_argument("--route-file")
     p.add_argument("--route-id")
@@ -256,6 +262,16 @@ def resolve_artifact_root(worktree: str) -> str:
     return value
 
 
+def qa_track(capability: str) -> str:
+    if capability.startswith("code-") or capability == "autopilot-code":
+        return "code"
+    if capability == "autopilot-research" or capability.startswith("analyze-"):
+        return "research"
+    if capability in {"autopilot-draft", "autopilot-refine"} or capability.startswith("draft-"):
+        return "doc"
+    return "general"
+
+
 def scoped_external_directory_config(artifact_root: str) -> str:
     raw = os.environ.get("OPENCODE_CONFIG_CONTENT", "").strip()
     try:
@@ -298,40 +314,52 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         raise ValueError("--prompt-file and --prompt-text are mutually exclusive")
     if args.prompt_file:
         path = Path(args.prompt_file)
-        return path.read_text(encoding="utf-8"), str(path)
-    if args.prompt_text:
-        return args.prompt_text, "inline"
-    extra = ""
-    if args.capability == "autopilot-code":
-        extra = (
-            "\nAutopilot-code execution contract:\n"
-            "- Choose the stage graph from intensity before QA. direct has no plan stage; quick is a depth-1 one-shot worker that uses micro-plan plus plan-check-lite and focused verification; standard+ uses owner-plan plus optional bounded depth2 verifier/planner, synth, and durable execute/test/report.\n"
-            f"- Run adapters/opencode/bin/preflight.sh qa-policy {args.qa} code and obey assurance_scope, stage_graph_selector, reviewer_counts, and independent delegation policy before claiming QA coverage.\n"
-            "- Plan-check is required for quick+ but stays small; do not run independent QA after every stage by default.\n"
-            "- standard+ may use bounded depth-2 planner/verifier workers when separable; thorough/adversarial expands to multi-axis/adversary workers. Synthesize short reports; depth 3+ is forbidden.\n"
-            "- For routed depth-2 launches, use adapters/opencode/bin/preflight.sh dispatch-chain. Every same/cross-harness headless target uses the inherited depth-0 broker binding; recursive adapter CLI launch, unchanged retries, and cycle-local registry overrides are forbidden.\n"
-        )
-    if args.route_file:
-        extra += (
-            "\nRoute bootstrap: consume the immutable record already validated by the wrapper. "
-            "Do not rerun status -> prompt-signal -> mode -> route and do not reselect capability, "
-            f"intensity, or topology; use adapters/opencode/bin/preflight.sh worker-route only for a safety recheck (route={args.route_file}, node={args.route_node}).\n"
-        )
+        task, source = path.read_text(encoding="utf-8"), str(path)
+    elif args.prompt_text:
+        task, source = args.prompt_text, "inline"
+    else:
+        task, source = "Run the requested portable harness work.", "generated"
+    args.worker_type = resolve_worker_type(
+        explicit=args.worker_type,
+        depth=args.depth,
+        worker_role=args.worker_role,
+        route_node=args.route_node,
+        profile_type=None,
+    )
+    bootstrap = render_worker_bootstrap(ROOT, args.worker_type)
+    args.assigned_contract = assigned_contract(
+        capability=args.capability,
+        worker_type=args.worker_type,
+        worker_role=args.worker_role,
+        route_node=args.route_node,
+    )
     return (
-        "Run the requested portable harness work.\n"
-        "This process is AGENT_SESSION_ROLE=worker. Main-only automatic memory, "
-        "briefing, turn-nudge/session-end curator, title, token-context, and pane "
-        "publication lifecycle is disabled; deterministic safety, routing, handoff, "
-        "liveness, and verification remain active.\n"
-        f"capability={args.capability}\nmode={args.mode}\nqa={args.qa}\n"
-        f"intensity={args.intensity}\ndepth={args.depth}\nparent={args.parent_slug or '-'}\n"
-        f"parent_session_id={args.parent_session_id or '-'}\n"
-        f"worktree={args.worktree}\n"
-        f"artifact_root={args.artifact_root}\n"
-        "Write every durable agent artifact only under artifact_root; the task "
-        "worktree's tracked .agent_reports/.claude_reports snapshot is read-only shadow state.\n"
-        f"{extra}",
-        "generated",
+        f"{bootstrap}\n"
+        "Dispatch metadata:\n"
+        f"- capability: {args.capability}\n"
+        f"- mode: {args.mode}\n"
+        f"- qa: {args.qa}\n"
+        f"- intensity: {args.intensity}\n"
+        f"- depth: {args.depth}\n"
+        f"- worker_type: {args.worker_type}\n"
+        f"- assigned_contract: {args.assigned_contract}\n"
+        f"- parent: {args.parent_slug or '-'}\n"
+        f"- parent_session_id: {args.parent_session_id or '-'}\n"
+        f"- worker_role: {args.worker_role or '-'}\n"
+        f"- owner: {args.capability_owner or '-'}\n"
+        f"- owner_harness: {args.owner_harness or '-'}\n"
+        f"- worktree: {args.worktree}\n"
+        f"- artifact_root: {args.artifact_root}\n"
+        f"- route_state: {'consume the immutable record already validated by the wrapper' if args.route_file else 'validated dispatch metadata'}\n\n"
+        "OpenCode realization:\n"
+        "- The wrapper already validated capability, mode, QA, artifact-root access, and any route record. Use worker-route only for a safety recheck.\n"
+        f"- Run adapters/opencode/bin/preflight.sh qa-policy {args.qa} {qa_track(args.capability)} and keep its required assurance in the artifact.\n"
+        f"- Read only the assigned {args.assigned_contract} Skill/mode and named artifact inputs. Project instruction auto-load is not treated as physically masked; do not manually load a full harness bootstrap.\n"
+        "- Preserve the reported QA/tool contracts in the artifact and use the inherited dispatch broker only when the owner fragment applies.\n\n"
+        "Assignment:\n"
+        f"{task.rstrip()}\n\n"
+        "End with the kernel's exact three-line handoff and nothing after it.\n",
+        source,
     )
 
 def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -> str:
@@ -399,6 +427,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
         pipe += f",parent_cwd={_effective_parent_cwd(args)}"
     if args.worker_role:
         pipe += f",worker_role={args.worker_role}"
+    pipe += f",worker_type={args.worker_type}"
     if args.capability_owner:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
@@ -708,6 +737,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
             "AGENT_DISPATCH_PARENT_CWD": (_effective_parent_cwd(args) if (args.parent_slug or args.parent_session_id) else ""),
             "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
+            "AGENT_DISPATCH_WORKER_TYPE": args.worker_type,
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
             "AGENT_ARTIFACT_ROOT": args.artifact_root,
@@ -764,6 +794,7 @@ def main(argv: list[str]) -> int:
     print(f"parent={args.parent_slug or '-'}")
     print(f"parent_session_id={args.parent_session_id or '-'}")
     print(f"worker_role={args.worker_role or '-'}")
+    print(f"worker_type={args.worker_type}")
     print(f"owner={args.capability_owner or '-'}")
     print(f"owner_harness={args.owner_harness or '-'}")
     print(f"route_file={args.route_file or '-'}")

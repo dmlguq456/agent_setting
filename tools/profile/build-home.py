@@ -3,11 +3,10 @@
 profiles/<name>.yaml declaration (spec/dispatch-profiles/prd.md §4.1).
 
 The home is a symlink partial-projection of the single repo source — no
-content fork. L0 (core/ + guard hooks) is a generator-owned hard include,
-never a declaration field (DP-2). The bootstrap file handed to the dispatch
-session is a plain concat of `profiles/templates/bootstrap-<harness>.md`
-followed by each `fragments:` file in declared order (DP-10) — no marker
-tagging, no parsing of existing CLAUDE.md/AGENTS.md.
+content fork. Core and guard files remain available for deterministic checks,
+but the bootstrap input is only the runtime attach template plus the selected
+specialization fragments. The dispatch prompt owns the canonical worker kernel
+and exactly one declared worker type.
 
 Usage:
   python3 tools/profile/build-home.py <name> --check
@@ -30,6 +29,7 @@ except ImportError:
     sys.exit(1)
 
 VALID_HARNESSES = {"claude", "codex", "opencode"}
+VALID_WORKER_TYPES = {"owner", "stage", "review", "support"}
 BOOTSTRAP_FILENAME = {"claude": "CLAUDE.md", "codex": "AGENTS.md"}
 
 
@@ -88,7 +88,7 @@ def validate_declaration(agent_home, decl_path, data):
     """
     errors = []
 
-    for field in ("name", "description", "harness"):
+    for field in ("name", "description", "harness", "worker_type"):
         if not data.get(field):
             errors.append(f"missing required field: {field}")
 
@@ -96,6 +96,12 @@ def validate_declaration(agent_home, decl_path, data):
     if harness is not None and harness not in VALID_HARNESSES:
         errors.append(
             f"invalid harness: {harness!r} (must be one of {sorted(VALID_HARNESSES)})"
+        )
+
+    worker_type = data.get("worker_type")
+    if worker_type is not None and worker_type not in VALID_WORKER_TYPES:
+        errors.append(
+            f"invalid worker_type: {worker_type!r} (must be one of {sorted(VALID_WORKER_TYPES)})"
         )
 
     has_model_role = bool(data.get("model_role"))
@@ -134,10 +140,10 @@ def validate_declaration(agent_home, decl_path, data):
             sys.stderr.write(f"build-home: {decl_path}: {e}\n")
         sys.exit(1)
 
-    return harness, fragments, expose
+    return harness, worker_type, fragments, expose
 
 
-def assemble_bootstrap(agent_home, name, harness, fragments):
+def assemble_bootstrap(agent_home, name, harness, worker_type, fragments):
     """Plain concat: header + bootstrap-<harness>.md template + each
     fragment file in declared order. No transformation. Missing template or
     fragment -> fail loud, exit 1 (this is where an unimplemented harness
@@ -148,7 +154,9 @@ def assemble_bootstrap(agent_home, name, harness, fragments):
         sys.stderr.write(f"build-home: missing template {template_path}\n")
         sys.exit(1)
 
-    pieces = [f"<!-- generated-from: profiles/{name}.yaml — do not edit -->"]
+    pieces = [
+        f"<!-- generated-from: profiles/{name}.yaml — do not edit; worker-type: {worker_type} -->"
+    ]
     pieces.append(template_path.read_text(encoding="utf-8").rstrip("\n"))
     for frag in fragments:
         frag_path = agent_home / frag
@@ -183,9 +191,9 @@ def link(target, linkpath):
     return True
 
 
-def build_instance(agent_home, name, harness, fragments, expose, slug, home_root):
+def build_instance(agent_home, name, harness, worker_type, fragments, expose, slug, home_root):
     # Fail fast on template/fragment problems before touching the filesystem.
-    bootstrap_text = assemble_bootstrap(agent_home, name, harness, fragments)
+    bootstrap_text = assemble_bootstrap(agent_home, name, harness, worker_type, fragments)
 
     instance_dir = home_root / f"{slug}.{name}"
     instance_dir.mkdir(parents=True, exist_ok=True)
@@ -265,31 +273,31 @@ def build_instance(agent_home, name, harness, fragments, expose, slug, home_root
 
 def do_check(agent_home, name):
     decl_path, data = load_declaration(agent_home, name)
-    harness, fragments, expose = validate_declaration(agent_home, decl_path, data)
+    harness, worker_type, fragments, expose = validate_declaration(agent_home, decl_path, data)
 
     # Template + fragment existence, and fail-loud on an unimplemented
     # harness template (e.g. opencode in v1), happen inside assemble.
-    first = assemble_bootstrap(agent_home, name, harness, fragments)
+    first = assemble_bootstrap(agent_home, name, harness, worker_type, fragments)
 
     # v1 ships no persisted instance to diff against (homes are ephemeral
     # and not created by --check), so drift is confirmed by reassembling
     # the same inputs a second time and requiring byte-identical output.
-    second = assemble_bootstrap(agent_home, name, harness, fragments)
+    second = assemble_bootstrap(agent_home, name, harness, worker_type, fragments)
     if first != second:
         sys.stderr.write(
             f"build-home: --check drift — bootstrap reassembly is not deterministic for {name}\n"
         )
         sys.exit(2)
 
-    print(f"check=ok name={name} harness={harness} fragments={len(fragments)}")
+    print(f"check=ok name={name} harness={harness} worker_type={worker_type} fragments={len(fragments)}")
     sys.exit(0)
 
 
 def do_instance(agent_home, name, slug, home_root):
     decl_path, data = load_declaration(agent_home, name)
-    harness, fragments, expose = validate_declaration(agent_home, decl_path, data)
+    harness, worker_type, fragments, expose = validate_declaration(agent_home, decl_path, data)
     instance_dir, link_count = build_instance(
-        agent_home, name, harness, fragments, expose, slug, home_root
+        agent_home, name, harness, worker_type, fragments, expose, slug, home_root
     )
     print(f"instance={instance_dir} harness={harness} links={link_count}")
     sys.exit(0)
@@ -331,9 +339,9 @@ def main():
     # No action requested — validate only, same declaration/template checks
     # as --check, without the determinism re-check ceremony.
     decl_path, data = load_declaration(agent_home, args.name)
-    harness, fragments, _expose = validate_declaration(agent_home, decl_path, data)
-    assemble_bootstrap(agent_home, args.name, harness, fragments)
-    print(f"declaration=ok name={args.name} harness={harness}")
+    harness, worker_type, fragments, _expose = validate_declaration(agent_home, decl_path, data)
+    assemble_bootstrap(agent_home, args.name, harness, worker_type, fragments)
+    print(f"declaration=ok name={args.name} harness={harness} worker_type={worker_type}")
     sys.exit(0)
 
 

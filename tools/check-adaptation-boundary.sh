@@ -323,6 +323,7 @@ check_non_claude_adapter_symlink_boundaries() {
         adapters/codex/utilities/dispatch-route.sh:../../../utilities/dispatch-route.sh|\
         adapters/codex/utilities/token-budget.py:../../../utilities/token-budget.py|\
         adapters/codex/utilities/token-budget-experiment.py:../../../utilities/token-budget-experiment.py|\
+        adapters/codex/utilities/worker_bootstrap.py:../../../utilities/worker_bootstrap.py|\
         adapters/opencode/tools/memory/apply-distill-actions.py:../../../../tools/memory/apply-distill-actions.py|\
         adapters/opencode/utilities/agent-worklog-state.sh:../../../utilities/agent-worklog-state.sh|\
         adapters/opencode/utilities/artifact-root.sh:../../../utilities/artifact-root.sh|\
@@ -330,7 +331,8 @@ check_non_claude_adapter_symlink_boundaries() {
         adapters/opencode/utilities/workflow-guard-hook.sh:../../../utilities/workflow-guard-hook.sh|\
         adapters/opencode/utilities/workflow-toggle.sh:../../../utilities/workflow-toggle.sh|\
         adapters/opencode/utilities/worktree-cleanup.py:../../../utilities/worktree-cleanup.py|\
-        adapters/opencode/utilities/dispatch-route.sh:../../../utilities/dispatch-route.sh)
+        adapters/opencode/utilities/dispatch-route.sh:../../../utilities/dispatch-route.sh|\
+        adapters/opencode/utilities/worker_bootstrap.py:../../../utilities/worker_bootstrap.py)
           ;;
         *)
           fail_msg "$link points to $target; $adapter adapter symlinks must be explicitly allowlisted portable projections"
@@ -798,10 +800,11 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'liveness_surface=codex-session-jsonl-mtime' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'harvest_check=adapters/codex/bin/preflight.sh harvest' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'dispatch_prompt_contract=codex-harness-autopilot-prompt' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'dispatch_prompt_contract=portable-typed-worker-bootstrap' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'worker_handoff=artifact,verdict,blocker' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'dispatch_input_validation=capability-info,mode-info,qa-level' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'worker_startup_signal=status,prompt-signal,mode' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'worker_startup_signal_contract=preflight.sh status . codex-headless; preflight.sh prompt-signal . codex-headless; preflight.sh mode . codex-headless' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'worker_startup_signal=wrapper-validated-metadata-or-immutable-route' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'physical_project_agents_masking=unsupported-runtime-auto-discovery-may-remain' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'check-runtime-projection.sh' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY=1' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'claude_headless=unsupported' adapters/codex/bin/preflight.sh; then
@@ -814,30 +817,16 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'invalid-dispatch-mode' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'invalid-dispatch-qa' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'quick,light,standard,thorough,adversarial' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'Read $AGENT_HOME/adapters/codex/AGENTS.md first' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh status . codex-headless' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh prompt-signal . codex-headless' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh mode . codex-headless' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh route {args.capability} . codex-headless' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh mode-info {args.mode}' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh qa-policy {args.qa} {track}' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'Autopilot-code execution contract' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'code-plan -> code-execute -> code-test -> code-report' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'role planning, role implementation, role verification, and role report' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/plan-review' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh mode-info qa/test' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh role verification' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh role implementation' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq '$AGENT_HOME/adapters/codex/bin/preflight.sh role report' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'render_worker_bootstrap' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'resolve_worker_type' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq -- '--worker-type' adapters/codex/bin/dispatch-headless.py \
+    || ! grep -Fq 'End with the kernel' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'prompt_path.write_text(prompt_text, encoding="utf-8")' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'pipeline_summary.md' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'Do not claim independent QA delegation' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'Do not use adapters/claude' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'fcntl.flock' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'registry_lock={jobs}.lock' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'fcntl.flock' adapters/codex/bin/dispatch-harvest.py \
     || ! grep -Fq 'registry_lock={jobs}.lock' adapters/codex/bin/dispatch-harvest.py; then
-    fail_msg "adapters/codex/bin/dispatch-headless.py must validate dispatch inputs and wrap worker prompts with Codex harness bootstrap/preflight gates"
+    fail_msg "adapters/codex/bin/dispatch-headless.py must validate dispatch inputs and wrap assignments with the portable typed worker bootstrap"
   fi
   if ! grep -Fq 'native Skills, native Agents, and native Modes' adapters/codex/README.md \
     || ! grep -Fq 'native Skills, native Agents, and native Modes' adapters/codex/ADAPTATION.md \
@@ -847,8 +836,8 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'missing hook trust fails before registry writes' adapters/codex/README.md \
     || ! grep -Fq 'registry writes and harvest rewrites are serialized with a `.lock` file' adapters/codex/README.md \
     || ! grep -Fq 'registry writes and harvest rewrites are serialized with a `.lock` file' adapters/codex/ADAPTATION.md \
-    || ! grep -Fq 'Codex harness prompt' adapters/codex/README.md \
-    || ! grep -Fq 'Codex harness prompt' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'minimal typed worker prompt' adapters/codex/README.md \
+    || ! grep -Fq 'portable kernel, one worker type' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'validates `capability-info`, `mode-info`, and the portable QA level before writing `.dispatch/jobs.log`' adapters/codex/README.md \
     || ! grep -Fq 'validates `capability-info`, `mode-info`, and the portable QA level before writing `.dispatch/jobs.log`' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex headless docs must include native mode projection in runtime projection checks"
@@ -1260,7 +1249,7 @@ check_codex_utility_projection() {
     fail_msg "adapters/codex/utilities/agent-home.sh must support the Codex runtime agent-harness pointer"
   fi
 
-  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py token-budget.py token-budget-experiment.py; do
+  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py token-budget.py token-budget-experiment.py worker_bootstrap.py; do
     if [ ! -L "adapters/codex/utilities/$p" ]; then
       fail_msg "adapters/codex/utilities/$p must be a selective portable utility projection"
       continue
@@ -1271,7 +1260,7 @@ check_codex_utility_projection() {
     fi
   done
 
-  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh -o -name token-budget.py -o -name token-budget-experiment.py \) -print 2>/dev/null || true)
+  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh -o -name token-budget.py -o -name token-budget-experiment.py -o -name worker_bootstrap.py \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/codex/utilities contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -1286,8 +1275,8 @@ check_codex_utility_projection() {
   # codex-adapter-parity audit P-40 (2026-07-04): derived under-projection completeness pair — every
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
-  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py dispatch-route.sh token-budget.py token-budget-experiment.py"
-  UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch-registry.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py nested-dispatch-eligibility.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py"
+  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py dispatch-route.sh token-budget.py token-budget-experiment.py worker_bootstrap.py"
+  UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch-registry.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py nested-dispatch-eligibility.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -2145,9 +2134,11 @@ check_opencode_bin_wrappers() {
     || ! grep -Fq 'invalid-dispatch-capability' adapters/opencode/bin/dispatch-headless.py \
     || ! grep -Fq 'invalid-dispatch-mode' adapters/opencode/bin/dispatch-headless.py \
     || ! grep -Fq 'invalid-dispatch-qa' adapters/opencode/bin/dispatch-headless.py \
-    || ! grep -Fq 'preflight.sh qa-policy {args.qa} code' adapters/opencode/bin/dispatch-headless.py \
+    || ! grep -Fq 'render_worker_bootstrap' adapters/opencode/bin/dispatch-headless.py \
+    || ! grep -Fq 'resolve_worker_type' adapters/opencode/bin/dispatch-headless.py \
+    || ! grep -Fq -- '--worker-type' adapters/opencode/bin/dispatch-headless.py \
     || ! grep -Fq 'prompt_path.write_text(prompt_text, encoding="utf-8")' adapters/opencode/bin/dispatch-headless.py; then
-    fail_msg "adapters/opencode/bin/dispatch-headless.py must validate inputs, materialize register prompts, and surface QA policy"
+    fail_msg "adapters/opencode/bin/dispatch-headless.py must validate inputs and materialize typed worker prompts"
   fi
 
   if ! grep -Fq -- '--event start' adapters/opencode/bin/preflight.sh; then
@@ -2329,7 +2320,7 @@ check_opencode_utility_projection() {
     fail_msg "adapters/opencode/utilities/agent-home.sh must support the OpenCode runtime agent-harness pointer"
   fi
 
-  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py; do
+  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py worker_bootstrap.py; do
     if [ ! -L "adapters/opencode/utilities/$p" ]; then
       fail_msg "adapters/opencode/utilities/$p must be a selective portable utility projection"
       continue
@@ -2340,7 +2331,7 @@ check_opencode_utility_projection() {
     fi
   done
 
-  extra=$(find adapters/opencode/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh \) -print 2>/dev/null || true)
+  extra=$(find adapters/opencode/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh -o -name worker_bootstrap.py \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/opencode/utilities contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -2355,8 +2346,8 @@ check_opencode_utility_projection() {
   # codex-adapter-parity audit P-40 (2026-07-04): derived under-projection completeness pair — every
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
-  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py dispatch-route.sh"
-  UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py token-budget.py token-budget-experiment.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch-registry.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py nested-dispatch-eligibility.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py"
+  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py dispatch-route.sh worker_bootstrap.py"
+  UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py token-budget.py token-budget-experiment.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch-registry.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py nested-dispatch-eligibility.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -3748,6 +3739,59 @@ check_sibling_adapter_contract() {
   fi
 }
 
+check_worker_bootstrap_contract() {
+  if [ ! -f roles/worker-bootstrap.md ] \
+    || ! grep -Fq 'artifact: <canonical path | ->' roles/worker-bootstrap.md \
+    || ! grep -Fq 'verdict: PASS | FAIL | BLOCKED' roles/worker-bootstrap.md \
+    || ! grep -Fq 'blocker: none | <one line>' roles/worker-bootstrap.md; then
+    fail_msg "roles/worker-bootstrap.md must own the exact portable three-line handoff"
+  fi
+
+  for worker_type in owner stage review support; do
+    fragment="roles/worker-types/$worker_type.md"
+    if [ ! -f "$fragment" ] || ! grep -Fq '# Worker Type:' "$fragment"; then
+      fail_msg "missing portable worker-type fragment: $fragment"
+    fi
+    if ! grep -Fq "worker_type: $worker_type" profiles/*.yaml 2>/dev/null; then
+      # Not every type needs a current profile, but each declared profile must be typed;
+      # owner/review currently route through generated prompts rather than a profile.
+      [ "$worker_type" = owner ] || [ "$worker_type" = review ] || \
+        fail_msg "profile declarations must expose their worker type"
+    fi
+  done
+
+  for profile in profiles/*.yaml; do
+    if ! grep -Eq '^worker_type: (owner|stage|review|support)$' "$profile"; then
+      fail_msg "$profile must declare exactly one valid worker_type"
+    fi
+  done
+
+  for adapter in codex claude opencode; do
+    dispatcher="adapters/$adapter/bin/dispatch-headless.py"
+    if ! grep -Fq 'render_worker_bootstrap' "$dispatcher" \
+      || ! grep -Fq 'resolve_worker_type' "$dispatcher" \
+      || ! grep -Fq -- '--worker-type' "$dispatcher" \
+      || ! grep -Fq 'AGENT_DISPATCH_WORKER_TYPE' "$dispatcher"; then
+      fail_msg "$dispatcher must render and register one portable worker type"
+    fi
+    if grep -Fq 'Return a concise report with changed files' "$dispatcher"; then
+      fail_msg "$dispatcher must keep verbose worker evidence in artifacts"
+    fi
+  done
+
+  if grep -Fq 'Read $AGENT_HOME/adapters/codex/AGENTS.md first' adapters/codex/bin/dispatch-headless.py \
+    || grep -Fq 'Read the four core documents' profiles/templates/bootstrap-claude.md \
+    || grep -Fq 'Read the four core documents' profiles/templates/bootstrap-codex.md; then
+    fail_msg "worker bootstraps must not explicitly preload the full main bootstrap"
+  fi
+
+  if [ ! -f utilities/worker_bootstrap.test.py ] \
+    || [ ! -f utilities/worker_dispatch_prompt.test.py ] \
+    || ! grep -Fq 'worker-bootstrap:kernel' tools/context-footprint-baseline.json; then
+    fail_msg "worker bootstrap renderer, dispatch prompt, and footprint evidence must be versioned"
+  fi
+}
+
 check_language_neutrality_contract() {
   # README.md is the canonical English landing page. Its one exact Korean label
   # is the language switch to the companion translation; all other root-doc
@@ -3903,6 +3947,7 @@ check_hook_catalog
 check_parity_loss_explicit_warnings
 check_bootstrap_byte_budget
 check_sibling_adapter_contract
+check_worker_bootstrap_contract
 check_language_neutrality_contract
 check_legacy_root_links
 warn_concrete_runtime_terms
