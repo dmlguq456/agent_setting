@@ -1,0 +1,11 @@
+{
+  "route_id": "rt-5fd84b9bcf8a799c",
+  "route_hash": "sha256:5fd84b9bcf8a799cdf306ef8e90eef6261b919925d03c8c5da4d2c1744779243",
+  "registry_digest": "sha256:161b5539ad48dfd354aae3605daf27a9203ec3a676b450ba27b4856bfcea03c1",
+  "node_id": "report",
+  "completion_gate": "code-report",
+  "evidence": {
+    "path": "/home/Uihyeop/agent_setting/.agent_reports/plans/2026-07-16_stage-dispatch-v13/final_report.md",
+    "sha256": "50892b96d6aaf23aa6b27e467d38a9f921d1cf61ef6d3e2d907026c7c6cf1fec"
+  }
+}
