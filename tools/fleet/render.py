@@ -641,7 +641,7 @@ def _wide_ctx_width(term_width):
 def _col_head(name_width):
     # F-4 (v11): the model/effort header folds into the harness column now that the row
     # content does too — no more separate "model" header between branch and the gauge.
-    return ("    " + "harness (model · effort)".ljust(_HMW) + "session".ljust(name_width)
+    return ("    " + "harness (model·effort)".ljust(_HMW) + "session".ljust(name_width)
             + "branch".ljust(_BRW)
             + "    context / stage")
 
@@ -693,9 +693,10 @@ def _model_cell(model, effort, width, dim=False):
 
 def _harness_model_cell(harness, model, effort, width, hkey, dim=False, unknown="?"):
     """F-4 (v11, 사용자 확정 2026-07-16) — WIDE-layout harness field with model/effort folded
-    in as a parenthetical: 'claude code (Fable 5 · xhigh)'. The harness text keeps its
+    in as a parenthetical: 'claude code (Fable 5·xhigh)'. The harness text keeps its
     existing hb_*/h_* badge color (`hkey`); the parenthetical reuses `_model_cell`'s
-    family/effort colors and ' · ' stays dim — same palette, new position. No model value ->
+    family/effort colors and the flush '·' stays dim (user 2026-07-16: the spaced
+    ' · ' read too wide — the freed cells go to the model name). No model value ->
     the parenthetical is omitted entirely (honest gap, F-3), matching a dead/stale row that
     has no live telemetry to show. Always returns segments summing to exactly `width` cells
     (long names/ids clip the same way `_model_cell` already did, never overflow) — the last
@@ -708,11 +709,11 @@ def _harness_model_cell(harness, model, effort, width, hkey, dim=False, unknown=
     if name and name != "—":
         room = width - used - 4          # " (" prefix + trailing ")" + 1 guaranteed gap
         eff = effort or ""
-        if eff and room > len(eff) + 3:
-            nm = name[: max(1, room - len(eff) - 3)]
+        if eff and room > len(eff) + 1:
+            nm = name[: max(1, room - len(eff) - 1)]
             segs += [(" (", "dim"), (nm, _model_key(model, dim=dim)),
-                     (" · ", "dim"), (eff, _eff_key(eff, dim)), (")", "dim")]
-            used += 2 + len(nm) + 3 + len(eff) + 1
+                     ("·", "dim"), (eff, _eff_key(eff, dim)), (")", "dim")]
+            used += 2 + len(nm) + 1 + len(eff) + 1
         elif room > 0:
             nm = name[: max(1, room)]
             segs += [(" (", "dim"), (nm, _model_key(model, dim=dim)), (")", "dim")]
@@ -1010,32 +1011,6 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
     return segs
 
 
-def _mq_tag(mode, qa_text, qa_key, profile=None):
-    """The `(mode · qa:<level> · profile)` tag shown after a dispatch name (mode dim, qa in its rigor
-    color, profile dim, middle dot). Returns (segments, display_width). Empty (mode, qa_text
-    and profile all absent) → ([], 0)."""
-    if not mode and not qa_text and not profile:
-        return [], 0
-    out = [(" (", "dim")]
-    w = 2
-    has_prev = False
-    if mode:
-        out.append((mode, "dim")); w += len(mode)
-        has_prev = True
-    if qa_text:
-        if has_prev:
-            out.append(("·", "dim")); w += 1        # flush middle dot (tighter than ' · ')
-        qa_label = "qa:" + qa_text
-        out.append((qa_label, qa_key)); w += len(qa_label)
-        has_prev = True
-    if profile:
-        if has_prev:
-            out.append(("·", "dim")); w += 1
-        out.append((profile, "dim")); w += len(profile)
-    out.append((")", "dim")); w += 1
-    return out, w
-
-
 _DISPATCH_NAME_MAX = 18
 
 
@@ -1048,8 +1023,11 @@ def _compact_dispatch_name(name, max_width=_DISPATCH_NAME_MAX):
 
 
 def _dispatch_prefix(j):
+    # Every depth fans out with the same ↳ spawn arrow, nested two cells deeper per level
+    # (user 2026-07-16: depth-2 rows lost their arrow when they were indent-only). The
+    # prefix width stays depth*2, so the harness-field narrowing math is unchanged.
     depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
-    return "↳ " if depth == 1 else "  " * depth
+    return "  " * (depth - 1) + "↳ "
 
 
 _LEVEL_SHORT = {
@@ -1092,7 +1070,7 @@ def _short_role(value):
     label, suffix = _stage_role_label(value)
     if label is not None:
         # stage suffix (":phase-A") rides along as part of the same dim profile tag — the
-        # whole tag already renders "dim" (see _mq_tag), so no separate color key is needed.
+        # whole tag already renders "dim" (see _opts_segs), so no separate color key is needed.
         return _compact_dispatch_name(label + suffix, 14)
     m = _G_CASE_PREFIX.match(value)
     role = _ROLE_SHORT.get(value) or (m.group(1) if m else value.replace("-", "_"))
@@ -1102,25 +1080,23 @@ def _short_role(value):
 _PROFILE_MAX = 28
 
 
-def _dispatch_role_suffix(j, check_text=None, max_width=None):
+def _dispatch_role_suffix(j, max_width=None):
+    # qa is data-only now (kept in --json): the retired qa axis left the display entirely
+    # (user 2026-07-16 — rigor derives from intensity, CONVENTIONS §1.1).
     raw_role = getattr(j, "worker_role", None)
     if getattr(j, "key", None) in _LOOPS_KEYS and raw_role == getattr(j, "slug", None):
         raw_role = None
     role = _short_role(raw_role)
     intensity = _short_level(getattr(j, "intensity", None))
-    check = _short_level(check_text)
     parts = []
     if intensity:
         parts.append(("intensity", intensity))
     if role:
         parts.append(("role", role))
-    if check:
-        parts.append(("qa", "qa:" + check))
     if max_width is not None:
-        # F-9(c) width-drop priority: qa first, then intensity, then role — mode isn't part of
-        # this suffix (owned by _mq_tag's own mode segment). Drops whole components instead of
-        # silently tail-cutting the joined string (which used to chop qa:thorough mid-word).
-        for kind in ("qa", "intensity", "role"):
+        # F-9(c) width-drop priority: intensity before role. Drops whole components instead
+        # of silently tail-cutting the joined string (which used to chop words mid-token).
+        for kind in ("intensity", "role"):
             joined = "/".join(t for _k, t in parts)
             if len(joined) <= max_width:
                 break
@@ -1128,10 +1104,10 @@ def _dispatch_role_suffix(j, check_text=None, max_width=None):
     return "/".join(t for _k, t in parts)
 
 
-def _dispatch_profile(j, check_text=None):
+def _dispatch_profile(j):
     profile = getattr(j, "profile", None)
     budget = _PROFILE_MAX - (len(profile) + 1 if profile else 0)
-    role_suffix = _dispatch_role_suffix(j, check_text, max_width=max(0, budget))
+    role_suffix = _dispatch_role_suffix(j, max_width=max(0, budget))
     if role_suffix:
         profile = (profile + "/" + role_suffix) if profile else role_suffix
     return _compact_dispatch_name(profile, _PROFILE_MAX) if profile else None
@@ -1149,12 +1125,12 @@ def _dispatch_stage_label(j):
     return label + suffix
 
 
-def _opts_segs(j, qa_text, qa_key):
-    """F-15a options column — the job's (mode · qa · profile) dial, relocated OUT of the name
+def _opts_segs(j):
+    """F-15a options column — the job's (mode · profile) dial, relocated OUT of the name
     zone into its own dim slot between the model cell and the stage breadcrumb (P0-1/R2: the
-    name zone is identity-only now). Reuses `_mq_tag`'s content, just without the enclosing
-    parens (this is a column, not an inline tag) and without a leading name to hang off of."""
-    profile = _dispatch_profile(j, qa_text)
+    name zone is identity-only now). qa left this dial with the retired qa axis (user
+    2026-07-16 — rigor derives from intensity, CONVENTIONS §1.1)."""
+    profile = _dispatch_profile(j)
     parts = []
     w = 0
     if j.mode:
@@ -1179,21 +1155,17 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     key = j.key or "?"
     depth = max(1, int(getattr(j, "depth", 1) or 1))
     stage = stage_override if stage_override is not None else (j.stage or "")
-    qa_base = j.qa or ""
-    qa_text = ""
-    if j.qa:
-        qa_text = ("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa
     # The dispatched session's own haiku sidecar title is its identity when present
     # (user 2026-07-16: the summary agent attaches to every dispatched session); the
     # slug stays the fallback — same title → name → slug chain as session rows.
     slug_name = getattr(j, "title", None) or j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
-    qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
     dead_stale_j = j.liveness in ("dead", "stale")
     # SD-F3: the job's own effort is first-class; when it's absent (proc-scan rows — env
-    # doesn't export it yet), fall back to the parent's effort marked with the derived-value
-    # `~` prefix (legend F-9d). A dead/stale row has no live telemetry to show (F-13).
-    eff = None if dead_stale_j else (j.effort or (("~" + parent_effort) if parent_effort else None))
+    # doesn't export it yet), fall back to the parent's effort, shown plain (user
+    # 2026-07-16: the `~` derived-value marker is retired — qa left the display with the
+    # retired qa axis at the same time). A dead/stale row has no live telemetry (F-13).
+    eff = None if dead_stale_j else (j.effort or parent_effort or None)
 
     # DIFFERENTIAL indent (harness 2 cols deeper than a session) with a ↳ spawn arrow off the
     # parent's dot column (user pick over ├─/└─ tree bars); the harness field is narrowed by 2 so
@@ -1238,7 +1210,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         # F-15a options column (fixed-ish gap, dim mode/qa/profile) — a declutter move OUT of
         # the name zone, not a new axis. model/effort now live in the harness field (F-4/SD-F3).
         segs.append(("    ", None))
-        opt_segs, optw = _opts_segs(j, qa_text, qa_key)
+        opt_segs, optw = _opts_segs(j)
         segs += opt_segs
         if optw < _OPTW:
             segs.append((" " * (_OPTW - optw), None))
@@ -1375,9 +1347,6 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     slug_name = getattr(j, "title", None) or j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
-    qa_base = j.qa or ""
-    qa_text = (("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa) if j.qa else ""
-    qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
 
     prefix = _dispatch_prefix(j)
     label = _dispatch_stage_label(j)
@@ -1396,11 +1365,11 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
         l1.append(br_seg)
 
     stage = stage_override if stage_override is not None else (j.stage or "")
-    eff = j.effort or (("~" + parent_effort) if parent_effort else None)
+    eff = j.effort or parent_effort or None
     l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
     l2 += _model_cell(j.model or parent_model, eff, _MW, dim=True)
     l2.append(("    ", None))
-    opt_segs, optw = _opts_segs(j, qa_text, qa_key)
+    opt_segs, optw = _opts_segs(j)
     l2 += opt_segs
     if optw < _OPTW:
         l2.append((" " * (_OPTW - optw), None))
@@ -2760,7 +2729,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     if n_mem_total or "mem" in _seen_glyphs:
         # Always expose the board-wide memory total in the legend, even when memory-only groups fold.
         legend += [("🧠 %d" % n_mem_total, "dim"), (" mem   ", "dim")]
-    legend += [("~", "dim"), (" derived/inherited value", "dim")]  # F-9(d)
+    # F-9(d) `~ derived/inherited value` retired with the marker itself (user 2026-07-16:
+    # inherited effort now shows plain — the tilde read as noise).
     lines.append(legend)
 
     return lines

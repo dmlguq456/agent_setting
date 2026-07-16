@@ -27,7 +27,7 @@ class HarnessModelCellTest(unittest.TestCase):
     def test_model_and_effort_render_as_parenthetical(self):
         segs = render._harness_model_cell("claude", "Fable 5", "xhigh", 32, "hb_claude")
         text = "".join(t for t, _k in segs)
-        self.assertIn("claude code (Fable 5 · xhigh)", text)
+        self.assertIn("claude code (Fable 5·xhigh)", text)
         self.assertEqual(self._sum(segs), 32)
 
     def test_model_without_effort_omits_the_separator(self):
@@ -61,7 +61,7 @@ class HarnessModelCellTest(unittest.TestCase):
 class ColumnHeaderTest(unittest.TestCase):
     def test_header_shows_merged_harness_model_label(self):
         head = render._col_head(28)
-        self.assertIn("harness (model · effort)", head)
+        self.assertIn("harness (model·effort)", head)
         self.assertNotIn("model".ljust(render._MW), head)
 
 
@@ -80,7 +80,7 @@ class SessionRowMergeTest(unittest.TestCase):
         s = self._session()
         segs = render._session_row(s, narrow=False, name_width=40)
         text = "".join(t for t, _k in segs)
-        self.assertIn("claude code (Fable 5 · xhigh)", text)
+        self.assertIn("claude code (Fable 5·xhigh)", text)
 
     def test_no_separate_model_cell_survives_on_the_row(self):
         """The old bare `Fable 5 (xhigh)` model-cell phrasing (no leading harness text right
@@ -126,13 +126,16 @@ class DispatchRowMergeTest(unittest.TestCase):
         j = self._job()
         segs = render._dispatch_row(j, name_width=40)
         text = "".join(t for t, _k in segs)
-        self.assertIn("claude code (Opus 4.8 · high)", text)
+        self.assertIn("claude code (Opus 4.8·high)", text)
 
-    def test_dispatch_row_falls_back_to_parent_effort_with_tilde(self):
+    def test_dispatch_row_falls_back_to_parent_effort_shown_plain(self):
+        # user 2026-07-16: the `~` derived-value marker is retired — inherited effort
+        # renders exactly like an owned one.
         j = self._job(effort=None)
         segs = render._dispatch_row(j, name_width=40, parent_effort="xhigh")
         text = "".join(t for t, _k in segs)
-        self.assertIn("~xhigh", text)
+        self.assertIn("·xhigh", text)
+        self.assertNotIn("~xhigh", text)
 
     def test_dead_dispatch_row_shows_bare_harness_only(self):
         j = self._job(liveness="dead")
