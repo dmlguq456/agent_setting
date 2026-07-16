@@ -883,6 +883,8 @@ def main(argv: list[str]) -> int:
             return fail("child-launch-failed", 70, detail=str(exc), attempt_id=args.attempt_id)
         start_ticks = process_start_ticks(proc.pid)
         launch_identity = f"pid={proc.pid}" + (f",pid_start={start_ticks}" if start_ticks else "")
+        if args.depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
+            launch_identity += ",pid_scope=namespace-local"
         annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
         args.child_pid = proc.pid
         args.child_pid_start = start_ticks

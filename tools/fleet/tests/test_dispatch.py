@@ -606,7 +606,7 @@ class CodexAttemptIdentityTest(unittest.TestCase):
                 f.write(
                     "2026-07-16T00:00:00+00:00\topen\trepo\t%s\tretry-r5\t"
                     "capability=autopilot-code,harness=codex,depth=2,"
-                    "route_id=rt-a,route_node=test,pid=4242,pid_start=777,"
+                    "route_id=rt-a,route_node=test,pid=4242,pid_start=777,pid_scope=namespace-local,"
                     "attempt_id=att-0123456789abcdef\n" % tmp
                 )
             rows, malformed = dispatch._scan_jobs_log(jobs_log, set())
@@ -615,6 +615,7 @@ class CodexAttemptIdentityTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].pid, 4242)
         self.assertEqual(rows[0].proc_start, "777")
+        self.assertEqual(rows[0].pid_scope, "namespace-local")
         self.assertEqual(rows[0].attempt_id, "att-0123456789abcdef")
         self.assertEqual(rows[0].registry_order, 0)
 
@@ -666,6 +667,67 @@ class CodexAttemptIdentityTest(unittest.TestCase):
         self.assertEqual(job.state_evidence["classifier_source"],ATTEMPT_CLASSIFIER_SOURCE)
         self.assertEqual(job.state_evidence["attempt"]["heartbeat"]["sequence"],4)
         self.assertTrue(job.state_evidence["attempt"]["progress_fingerprint"])
+
+    def test_namespace_local_pid_uses_exact_fresh_heartbeat(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            heartbeat_dir = os.path.join(tmp, ".dispatch", "heartbeats")
+            os.makedirs(heartbeat_dir)
+            attempt = "att-namespace-fresh"
+            with open(os.path.join(heartbeat_dir, attempt + ".json"), "w", encoding="utf-8") as out:
+                json.dump({"attempt_id": attempt, "route_id": "rt-a", "route_node": "test",
+                           "phase": "tool", "sequence": 3, "updated_at": 990}, out)
+            job = DispatchJob(key="code-test", slug="namespace", cwd="/work/wt", source="jobs",
+                              status="open", harness="codex", pid=437, proc_start="777",
+                              pid_scope="namespace-local", attempt_id=attempt,
+                              route_id="rt-a", route_node="test")
+            with mock.patch.object(dispatch, "_registry_home", return_value=tmp), \
+                 mock.patch.object(dispatch, "_job_transcript_signal", return_value="stale"), \
+                 mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=False):
+                state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
+
+        self.assertEqual(state, "working")
+        self.assertEqual(job.state_evidence["attempt"]["source"], "heartbeat")
+        self.assertEqual(job.state_evidence["attempt"]["pid_scope"], "namespace-local")
+
+    def test_namespace_local_terminal_heartbeat_is_done(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            heartbeat_dir = os.path.join(tmp, ".dispatch", "heartbeats")
+            os.makedirs(heartbeat_dir)
+            attempt = "att-namespace-terminal"
+            with open(os.path.join(heartbeat_dir, attempt + ".json"), "w", encoding="utf-8") as out:
+                json.dump({"attempt_id": attempt, "route_id": "rt-a", "route_node": "test",
+                           "phase": "terminal", "sequence": 4, "updated_at": 995}, out)
+            job = DispatchJob(key="code-test", slug="namespace", cwd="/work/wt", source="jobs",
+                              status="open", harness="codex", pid=437, proc_start="777",
+                              pid_scope="namespace-local", attempt_id=attempt,
+                              route_id="rt-a", route_node="test")
+            with mock.patch.object(dispatch, "_registry_home", return_value=tmp), \
+                 mock.patch.object(dispatch, "_job_transcript_signal", return_value="working"), \
+                 mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=False):
+                state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
+
+        self.assertEqual(state, "done")
+        self.assertIn("terminal heartbeat", job.state_evidence["attempt"]["rule"])
+
+    def test_namespace_local_stale_heartbeat_falls_back_without_host_pid_death(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            heartbeat_dir = os.path.join(tmp, ".dispatch", "heartbeats")
+            os.makedirs(heartbeat_dir)
+            attempt = "att-namespace-stale"
+            with open(os.path.join(heartbeat_dir, attempt + ".json"), "w", encoding="utf-8") as out:
+                json.dump({"attempt_id": attempt, "route_id": "rt-a", "route_node": "test",
+                           "phase": "tool", "sequence": 2, "updated_at": 1}, out)
+            job = DispatchJob(key="code-test", slug="namespace", cwd="/work/wt", source="jobs",
+                              status="open", harness="codex", pid=437, proc_start="777",
+                              pid_scope="namespace-local", attempt_id=attempt,
+                              route_id="rt-a", route_node="test")
+            with mock.patch.object(dispatch, "_registry_home", return_value=tmp), \
+                 mock.patch.object(dispatch, "_job_transcript_signal", return_value="working"), \
+                 mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=False):
+                state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
+
+        self.assertEqual(state, "working")
+        self.assertEqual(job.state_evidence["tier"], 3)
 
     def test_legacy_row_without_process_identity_keeps_rollout_fallback(self):
         job = DispatchJob(key="code-test", slug="legacy", cwd="/work/wt",

@@ -208,6 +208,8 @@ class DispatchJob:
     proc_start: Optional[str] = None    # /proc/<pid>/stat field 22 — the other half of the pid's
                                         # identity. F-27 refuses to signal without it, so a job row
                                         # is only a kill target when this is filled alongside pid.
+    pid_scope: Optional[str] = None     # namespace-local for depth-2 launches whose recorded PID
+                                        # is only meaningful inside the capability-owner namespace.
     model: Optional[str] = None         # dispatch runtime model (own statusline if resolvable; else parent's, filled at render)
     elapsed_min: Optional[int] = None
     slug: str = ""
@@ -264,6 +266,7 @@ SESSION_WORK_SEC       = 60      # absorbed from liveness.py `age_min < 1.0`
 SESSION_STALE_MIN      = 48 * 60 # absorbed from liveness.py STALE_MIN
 JOB_STALE_MIN          = 15      # absorbed from dispatch.py _job_liveness(stale_min=15)
 JOB_QUEUED_GRACE_MIN   = 15      # absorbed from dispatch.py _QUEUED_GRACE_MIN
+ATTEMPT_HEARTBEAT_LIVE_SEC = JOB_STALE_MIN * 60
 UNUSED_ACTIVITY_MS     = 2000    # §2.2: updatedAt-startedAt at or below this = never prompted
                                  # (measured: the pid 1168514 ghost sits at 119ms)
 
@@ -435,6 +438,24 @@ def deterministic_progress_fingerprint(ev_in):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _matching_attempt_heartbeat(ev_in):
+    """Return a structurally valid heartbeat for this exact route attempt."""
+    heartbeat = ev_in.get("heartbeat")
+    identity = ("attempt_id", "route_id", "route_node")
+    if not isinstance(heartbeat, dict) or any(not ev_in.get(key) for key in identity):
+        return None
+    if any(heartbeat.get(key) != ev_in.get(key) for key in identity):
+        return None
+    if heartbeat.get("phase") not in PROGRESS_PHASES:
+        return None
+    try:
+        if int(heartbeat.get("sequence", 0)) <= 0 or float(heartbeat.get("updated_at", 0)) <= 0:
+            return None
+    except (TypeError, ValueError):
+        return None
+    return heartbeat
+
+
 def classify_attempt_evidence(ev_in, now=None):
     """Pure F-25 exact-attempt verdict shared by all dispatch surfaces.
 
@@ -444,24 +465,41 @@ def classify_attempt_evidence(ev_in, now=None):
     """
     if ev_in.get("pid") is None or not ev_in.get("proc_start"):
         return None
-    if ev_in.get("pid_alive") is False:
+    heartbeat = _matching_attempt_heartbeat(ev_in)
+    pid_scope = ev_in.get("pid_scope")
+    if pid_scope == "namespace-local":
+        if heartbeat and heartbeat.get("phase") == "terminal":
+            state, source = "done", "heartbeat"
+            rule = "namespace-local attempt emitted an exact terminal heartbeat"
+        elif heartbeat and now is not None and now - float(heartbeat["updated_at"]) <= ATTEMPT_HEARTBEAT_LIVE_SEC:
+            state, source = "working", "heartbeat"
+            rule = "namespace-local attempt has a fresh exact heartbeat"
+        else:
+            state, source = "unknown", "heartbeat"
+            rule = "namespace-local attempt has no fresh exact heartbeat"
+    elif ev_in.get("pid_alive") is False:
+        source = "proc"
         state, rule = "dead", "recorded attempt pid is not alive"
     elif ev_in.get("proc_start_match") is False:
+        source = "proc"
         state, rule = "dead", "recorded attempt start-time mismatch (pid reuse)"
     elif ev_in.get("pid_alive") is True and ev_in.get("proc_start_match") is True:
+        source = "proc"
         state, rule = "working", "recorded attempt pid/start-time is live"
     else:
+        source = "proc"
         state, rule = "unknown", "exact attempt identity is not currently verifiable"
     return {
         "state": state,
         "tier": 2,
-        "source": "proc",
+        "source": source,
         "rule": rule,
         "classifier_source": ATTEMPT_CLASSIFIER_SOURCE,
         "attempt_id": ev_in.get("attempt_id"),
         "route_id": ev_in.get("route_id"),
         "route_node": ev_in.get("route_node"),
         "pid": ev_in.get("pid"),
+        "pid_scope": pid_scope,
         "proc_start": ev_in.get("proc_start"),
         "actual_proc_start": ev_in.get("actual_proc_start"),
         "heartbeat": ev_in.get("heartbeat"),

@@ -47,6 +47,22 @@ class RegistryTest(unittest.TestCase):
   result=subprocess.run([str(pre),"liveness",str(self.jobs),"--route","r4"],capture_output=True,text=True,env={**os.environ,"AGENT_HOME":str(ROOT)})
   self.assertEqual(result.returncode,0,result.stdout+result.stderr)
   self.assertIn("new-live",result.stdout);self.assertNotIn("old-dead",result.stdout)
+ def test_namespace_local_attempt_state_uses_exact_heartbeat(self):
+  heartbeat_dir=self.base/".dispatch/heartbeats";heartbeat_dir.mkdir(parents=True)
+  attempt="att-namespace-state";route="r-namespace";node="test"
+  heartbeat={"attempt_id":attempt,"route_id":route,"route_node":node,
+             "phase":"tool","sequence":3,"updated_at":time.time()}
+  (heartbeat_dir/f"{attempt}.json").write_text(json.dumps(heartbeat))
+  args=("attempt-state","--pid","437","--pid-start","1","--pid-scope","namespace-local",
+        "--attempt",attempt,"--route",route,"--node",node)
+  live=self.invoke(*args);self.assertEqual(live.returncode,0,live.stdout+live.stderr);self.assertIn("state=working",live.stdout)
+  heartbeat["phase"]="terminal";(heartbeat_dir/f"{attempt}.json").write_text(json.dumps(heartbeat))
+  done=self.invoke(*args);self.assertEqual(done.returncode,0,done.stdout+done.stderr);self.assertIn("state=done",done.stdout)
+  with self.jobs.open("a") as out:
+   out.write(f"2026-07-16T00:00:05Z\topen\t/r\t/w\tnamespace\troute_id={route},route_node={node},attempt_id={attempt},pid=437,pid_start=1,pid_scope=namespace-local\n")
+  applied=self.invoke("reconcile","--attempt",attempt,"--apply")
+  record=json.loads(applied.stdout);self.assertEqual(record["closed"],1);self.assertEqual(record["decisions"][0]["category"],"terminal-heartbeat")
+  self.assertIn("note=completed-terminal-heartbeat",self.jobs.read_text())
 
 
 class MixedRegistryTest(unittest.TestCase):

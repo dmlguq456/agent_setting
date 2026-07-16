@@ -153,6 +153,21 @@ if [ -d /proc ]; then
   fi
   kill "$pidG2" 2>/dev/null; wait "$pidG2" 2>/dev/null
 
+  # --- Case G3: depth-2 namespace-local PID is resolved by its exact fresh heartbeat.
+  attemptG3="att-namespace-live"; routeG3="rt-namespace"; nodeG3="test"
+  mkdir -p "$agent_home/.dispatch/heartbeats"
+  printf '{"attempt_id":"%s","route_id":"%s","route_node":"%s","phase":"tool","sequence":3,"updated_at":%s}\n' \
+    "$attemptG3" "$routeG3" "$nodeG3" "$(date +%s)" > "$agent_home/.dispatch/heartbeats/$attemptG3.json"
+  jobsG3="$agent_home/.dispatch/jobs.log"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-16T00:00:00" "open" "agent_setting" "$tmp/wt/namespace" "namespacepid" \
+    "capability=x,harness=codex,pid=437,pid_start=1,pid_scope=namespace-local,attempt_id=$attemptG3,route_id=$routeG3,route_node=$nodeG3" > "$jobsG3"
+  outG3=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" "$jobsG3" 2>&1); rcG3=$?
+  if [ "$rcG3" -eq 0 ] && printf '%s' "$outG3" | grep -q 'ALIVE.*namespace-local exact heartbeat'; then
+    ok "namespace-local depth-2 pid uses exact fresh heartbeat instead of root /proc"
+  else
+    bad "expected namespace-local exact heartbeat ALIVE; got rc=$rcG3 out=[$outG3]"
+  fi
+
   # --- Case H (본 수정의 회귀 핵심): pid 종료 + *신선* transcript → EXITED, exit 3.
   #     구버전은 conductor 활동이 만든 신선 transcript 때문에 ALIVE 오탐(수확 ~50분 지연 실측).
   sleep 0.1 & pidH=$!; wait "$pidH" 2>/dev/null   # 즉시 종료한 pid 확보
