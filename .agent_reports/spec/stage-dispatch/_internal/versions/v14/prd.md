@@ -1,7 +1,6 @@
 # stage-dispatch — Spec (PRD)
 
 > mode: **library + cli** (하네스 인프라 — 스테이지 분사 계약 문서 + dispatch wrapper·jobs.log·fleet 관제) · 작성 2026-07-10 · v1 · **v2 2026-07-10** (Phase 2 결정 등재 — SD-10~13·SD-OPEN-2. Phase 1 main 머지 5b7cf33 반영: 계약 12표면 개정 + wrapper depth-aware + pilot 계측 plan 218s/execute 255s/test 46s/report 28s·conductor 프롬프트 ~2KB 일정) · **v6 2026-07-13** (사용자 승인 topology 변경: `quick` = depth-1 one-shot capability worker, depth-2 금지, headless 우선/Fleet 표시) · **v7 2026-07-13** (standard+ conductor deep orchestration 기본·family/role 기반 route-dispatch 계약·Fleet hotfix 수용 기준) · **v8 2026-07-14** (source-only worker worktree·canonical artifact root·merge/push 후 fail-closed cleanup) · **v9 2026-07-15** (capability-specific topology registry·route record·promotion signals·detached/governor/smoke/report/parity 계약) · **v10 2026-07-15** (tracked×dispatch 축 분리 — Tracking 다섯째 독립 축·worker manifest-consumer 계약·guard↔topology 정합성 validator·공유 tracked 표면 병렬 계약) · **v11 2026-07-15** (중첩 stage-dispatch 복원력 — nested child-spawn hard eligibility·canonical global attempt registry·cross-harness stage fallback 사슬) · **v12 2026-07-15** (하네스 중립 depth-0 launch broker — 공통 요청·lifecycle·4조합 배치 계약) · **v13 2026-07-16** (broker 접수·실행 동시성 분리 — HOL blocking 해소·route record broker-identity 결합 해제(contract v2)·completion gate 통과 marker 의무화) · **v14 2026-07-16** (운영 병목 해소 1차 — broker 생존증거 위계·sandbox-독립 도달성(SD-57), worker 진행 감시(SD-58, O5 흡수), capacity failover(SD-59), registry reconciliation(SD-60))
-> · **v15 2026-07-16** (broker retirement — 신규 route의 direct headless 기본화·Codex network-enabled conductor profile·단일 attempt identity·v1/v2 read-only migration)
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - **사용자 결정 (2026-07-10 확정)**: "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로 했으면 한다. 어차피 산출물 기반 소통인데." — 입도 = sub-skill 스테이지 단위, 적용 = `standard+`, 이는 2026-07-06 depth 재설계 기본값의 명시적 반전.
@@ -25,8 +24,6 @@
 > - **사용자 결정 (2026-07-16 v13 확정)**: 위 3건 전부 계약 확정 + 구현 착수 ("전부다 작업 해줘").
 > - **운영 진단 (2026-07-16 v14)**: 사용자 보고 — v94-reading-face standard+ 사이클(D3~D5)에서 ① root에서 정상 기동된 broker가 depth-1 owner에서 `broker-unavailable`로 재현되고 local conductor fallback도 `network-operation-not-permitted`로 막혀 등록형 plan→execute→test→report 연결을 포기(native/inline 하강), ② plan·execute·report worker가 "분석 완료/편집 시작" 발화 후 수분간 파일 변경·실행 0(재촉/follow-up 후에도 동일 — 최대 운영 시간 손실원), ③ test worker 2개가 "Selected model is at capacity"로 연속 즉사 + 재분사도 동일 모델 재선택, ④ preflight에 현재 작업과 무관한 open row 다수 잔존. 개선 순서 사용자 확정: 1 broker 도달성 → 2 progress watchdog → 3 capacity failover → 4 shell 이식성(core 규약 소관) → 5 worktree build isolation(core 규약 소관) → 6 browser harness(별도 spec 소관) → 7 registry 위생.
 > - **코드 원인 실측 (2026-07-16 v14, 본 repo)**: ①의 뿌리 = `dispatch-broker.py broker_status()`의 `/proc/<pid>/stat` 단일 하드 게이트 — PID 네임스페이스 격리 sandbox에서 항상 실패하며 socket ping은 그 뒤에 배치되어 실행되지 않는다. `ensure`도 같은 오판(산 broker를 사망 판정) 후 flock을 획득하지 못하는 serve를 반복 spawn해 `broker-start-timeout`. fleet-depth2-retry-liveness 준비 실측(pid 1057841/12701276 — heartbeat·socket 갱신 중에도 caller `/proc` 검증 불가)과 일치.
-> - **사용자 결정 (2026-07-16 v15 확정)**: native subagent와 별도 `codex exec` 재귀 headless를 구분한다. `codex exec`는 subprocess이므로 parent sandbox가 network/auth/file 경계를 허용하면 중첩 실행 가능하고, 2026-07-15 실패는 `workspace-write + network-off` tuple의 실패이지 Codex headless의 보편적 금지가 아니다. broker가 만든 Fleet 중복·stale·fencing·retry 상태면이 효익보다 크므로 기본 경로에서 폐기한다.
-> - **공식 Codex currentness (2026-07-16 v15 재확인)**: 공식 Non-interactive mode는 `codex exec`를 자동화용 독립 CLI로, Sandboxing 문서는 spawned command/subprocess가 parent의 OS sandbox 경계를 상속하며 `workspace-write` network가 기본 off임을 명시한다. 따라서 nested Codex headless는 `agents.max_depth`와 무관한 subprocess surface이고, parent conductor profile이 network를 명시적으로 열어야 한다.
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`). 지침 파일(core/adapters/skills) 자체는 본 spec 이 수정하지 않는다 — 방향만 확정.
 
 ## 0. 한 줄
@@ -853,47 +850,8 @@ conductor는 same-harness 실패 후 cross-harness 평가를 건너뛰고 inline
 - 본 v14 spec commit 뒤: SD-57 = `broker-nested-reachability` 사이클(`utilities/dispatch-broker.py`+`utilities/stage-dispatch-fallback.py`+Claude adapter 미러+deterministic fixture) 즉시 착수(사용자 개선 순서 1). SD-58~60 = 후속 사이클(사용자 순서 2·3·7). SD-58은 `plans/2026-07-16_fleet-depth2-retry-liveness`의 registry attempt identity 보존(F-25 연계)과 결합해 진행하고, 그 플랜의 broker 복구 항목(fenced socket recovery)은 SD-57 사이클이 흡수한다.
 - live broker 롤오버는 v13 절차 재사용: 구현 merge 후 in-flight 0 시점에 shutdown→ensure.
 
-## 13.7 v15 — broker retirement와 direct nested headless (2026-07-16)
-
-> v12~v14의 broker 계약은 특정 sandbox 실패를 모든 runtime placement에 일반화해 만든 우회였다. 실제 운영에서 broker 자체가 PID namespace, socket reachability, heartbeat, fencing, request lease, rollover, retry reconciliation이라는 별도 분산 상태를 만들었고 Fleet의 한 logical stage를 여러 상태면으로 증식시켰다. v15부터 broker는 신규 topology의 launch authority가 아니다.
-
-### 13.7.1 SD-61 — 신규 route의 launch authority는 conductor direct
-
-- 신규 route는 `dispatch_contract_version: 3`을 기록하고 headless 후보의 `launch_authority=conductor`만 허용한다. route compile은 broker tuple·root·instance를 요구하거나 기록하지 않는다.
-- checked fallback은 `same-harness direct headless → cross-harness direct headless → native subagent → inline`이다. 첫 두 hop은 route node의 target adapter wrapper를 **호출자 프로세스에서 one-shot으로 실행**하며 daemon, socket, heartbeat, request state, lease, fencing을 만들지 않는다.
-- wrapper는 기존 canonical registry·model governor·worktree·completion marker·early-death 계약을 그대로 소유한다. logical `depth=2,parent=<conductor>`는 OS ancestry와 별개라는 기존 의미를 유지하되, 실제 launch authority도 더 이상 가장하지 않는다.
-- `dispatch_contract_version: 1|2` route는 hash verify와 historical Fleet read만 지원한다. 신규 compile 금지, broker auto-ensure/rollover 금지, 실행 재개 시 v3 route를 다시 compile한다.
-
-### 13.7.2 SD-62 — Codex recursive headless profile
-
-- native subagent와 nested `codex exec`는 별도 surface다. v15의 Codex depth-1 standard+ owner는 filesystem sandbox를 `workspace-write`로 유지하면서 `sandbox_workspace_write.network_access=true`를 명시한 **network-enabled conductor profile**로 시작한다. 이 권한은 child flag가 parent sandbox를 탈출하는 것이 아니라 depth-0 launcher가 parent 실행 경계를 사전에 선택하는 것이다.
-- network-enabled 표면은 owner/conductor에만 적용한다. depth-2 stage/review/support worker에는 자동 전파하지 않으며, 그 worker가 depth-3을 열 수 없다는 기존 gate를 유지한다. wrapper는 `AGENT_NESTED_HEADLESS_NETWORK=1`을 owner 환경에 기록하고 route eligibility probe는 이 checked evidence를 사용한다.
-- Claude Code는 기존 direct `claude -p` 분사 경로를 유지한다. cross-harness direct는 child CLI·auth·parent network가 모두 checked일 때만 supported다. unknown/unsupported는 child 0으로 다음 hop에 내려간다.
-
-### 13.7.3 SD-63 — 하나의 logical stage, 하나의 attempt identity
-
-- direct chain은 `(route_id, route_node, slug, parent, target_harness, fallback_ordinal)`에서 안정적인 `attempt_id`를 도출해 dry-run/register/start가 같은 identity를 공유하게 한다. broker request id는 생성·기록하지 않는다.
-- wrapper의 registry claim은 lock 아래 `attempt_id` exact match로 check+append를 원자화한다. 동일 attempt가 이미 claim되었으면 open row와 child를 추가하지 않고 기존 identity를 반환한다.
-- Fleet current view는 exact `attempt_id + pid + process start`를 강한 identity로 사용한다. 종료된 retry는 default body에서 접고 `--all`/alert history로만 남긴다. cwd transcript mtime은 process identity가 없는 legacy row의 tier-3 fallback일 뿐이다.
-
-### 13.7.4 migration과 제거 경계
-
-- v15 구현에서 broker 신규 생성 경로(`ensure_launch_broker`, wrapper env projection, route broker requirement, dispatch-chain broker submit)를 제거한다. preflight의 broker lifecycle command와 `dispatch-broker.py`는 v1/v2 artifact 진단·명시적 stop을 위한 한 release compatibility surface로만 남기고 `retired=1`을 표시한다.
-- live broker는 신규 request를 받지 않는다. in-flight 0을 확인한 뒤 stop하며 request state는 audit history로 보존한다. 삭제 작업이 새 daemon/supervisor/spool을 만들면 계약 위반이다.
-- SD-57의 broker reachability/spool 구현은 취소한다. SD-58 progress watchdog, SD-59 capacity failover, SD-60 registry hygiene 중 broker-independent 부분은 direct wrapper/Fleet 후속으로 유지한다.
-
-### 13.7.5 acceptance
-
-1. broker process/socket/meta가 전혀 없는 fixture에서 v3 same-harness와 cross-harness direct dry-run/register/start가 wrapper를 정확히 한 번 호출한다.
-2. Codex owner command는 standard+ depth-1일 때만 network-enabled marker/config를 가지며 depth-2에는 없다.
-3. 동일 v3 start를 동시에 두 번 호출해 registry attempt와 child launch가 하나뿐이다.
-4. v3 route JSON과 jobs row에 `broker_root`, `broker_instance`, `broker_request_id`, `ancestor-broker`가 없다.
-5. v1/v2 route verify와 Fleet fixture parsing은 유지되지만 신규 compile과 wrapper start는 broker를 생성하지 않는다.
-6. 기존 route/dispatch/wrapper/Fleet/adaptation suite에서 broker-only 기대를 제외한 회귀 0, live smoke에서 Fleet depth-2 row 중복 0.
-
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
 - **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화). **v6 추가**: quick depth-2 금지, quick jobs.log child-row 부재, mutation quick isolated worktree 는 결정론 gate 대상. **v7 추가**: hard eligibility 기반 후보 제거·adapter exact-ID probe·reason trace 필드·helper read-only·Fleet env child-hidden/metadata-exact 분류는 결정론 테스트 대상. **v8 추가**: canonical path 해석·worker-local artifact write 차단·cleanup eligibility·registry 직렬화는 모두 deterministic fail-closed 규칙이다. **v10 추가**: route record hash/scope 검증·tracked gate 증거 4종 필드 존재 검사·guard↔write_scope validator 항목·spec-transaction lock 시퀀스와 버전 경합 대기 규칙은 전부 결정론 검사 대상이다. **v11 추가**: nested eligibility tuple/status, immutable global registry path, attempt-first row identity, no-change retry 금지, fallback hop 순서·broker parent linkage는 결정론 validator/fixture 대상이다. **v12 추가**: broker endpoint/identity·request schema/idempotency·atomic state transition·fencing/lease·spawn 전 registry·4조합 logical parent 보존은 결정론 protocol/fixture 대상이다. **v13 추가**: per-request lease 직렬화·전역 락 비보유 실행·record v2 필드 규칙(stable identity만)·hop 시점 ensure 해석·completion marker 존재/필드/경로 검사·후속 노드 launch의 선행 marker gate는 전부 결정론 검사 대상이다. **v14 추가**: 생존증거 위계(exact-proc/flock 프로브/fenced ping+heartbeat) 판정 순서·spool publish/consume 원자성과 idempotency·발화-비인정 liveness 신호 집합·capacity failure class 감지와 모델 cooldown·registry reconcile 안전 게이트와 현재-작업 필터는 전부 결정론 검사 대상이다.
-- **v15 규칙 전환**: v3 direct-only candidate 검증·stable attempt derivation·registry claim check+append·owner-only network marker·broker field 부재가 새 결정론 gate다. v12~v14의 broker reachability/spool 규칙은 historical이며 신규 route에 적용하지 않는다.
 - **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김. **v6 추가**: headless 실패 시 native subagent 로 충분한지, 또는 inline fallback 으로 낮출지의 fallback reason 작성은 runtime 상태 해석이므로 의미 판단으로 남긴다. **v7 추가**: stage affinity와 family diversity의 품질 판단은 의미 구간이지만, 그 적용 순서와 후보 탈락 사유는 helper가 구조화한다. **v10 추가**: "산출물을 추적할 가치가 있는가"(tracking)와 "분사할 실익이 있는가"(promotion/separability)는 각각 의미 판단으로 남되, 두 판단을 하나로 동일시하지 않는 것이 SD-44의 축 분리다 — record는 판단 결과와 근거 신호만 구조화한다. **v11 추가**: eligible 후보가 여러 개일 때 role affinity·family diversity로 어느 cross-harness를 고를지와 새로운 failure class의 의미 해석은 판단 구간이지만, 지원 여부·hop 순서·row 기록은 규칙 구간이다. **v13 추가**: "스테이지 산출물이 계약상 완전한가"의 통과 판정은 conductor의 의미 판단으로 남긴다 — SD-56은 그 판단을 대체하지 않고 판단 결과를 marker로 결정론화하며, marker 부재를 실패로 해석하지 않는 것도 의미 구간의 존중이다. **v14 추가**: 무진행 worker에 대한 최종 interrupt vs 계속 대기, 그리고 재분사 시 이어쓰기/재시작 선택은 conductor 의미 판단으로 남긴다 — SD-58은 경고·차단의 발동 조건과 인정 가능한 liveness 신호 집합만 결정론화한다. capacity failover에서 "어느 대체 모델인가"의 품질 판단도 SD-22 affinity 의미 구간이며, SD-59는 재시도 횟수·cooldown·증거 기록만 규칙화한다.
 - **충돌**: 없음 — 반전의 핵심 우려(현행 "상태 재발굴·연속성 상실")를 §0.5 계약 완결성 의무 + §8 inline 경계로 규칙화해 흡수했다. 우려를 사람 vigilance 로 남기지 않고 "산출물이 상태를 완전히 담는가"라는 검증 가능한 규칙으로 전환한 것이 이 경계 존중. per-stage cost 는 추측으로 규칙화하지 않고 계측(SD-OPEN-1)으로 미룬 것도 동일.

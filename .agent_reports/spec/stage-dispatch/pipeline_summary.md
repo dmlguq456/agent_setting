@@ -161,3 +161,11 @@ v12 구현은 source `8897bf76`, main merge `70bac6ef`로 완료했다. 다음 s
 
 - 설계 핵심: SD-57은 fail-closed를 약화하지 않는다 — ticks 불일치=확정 사망 유지, `/proc` 부재만 unverifiable로 재분류해 파일 기반 증거(flock 프로브·heartbeat)와 fenced ping으로 판별. spool은 transport 추가일 뿐 authority/준비 의무/워커 ensure 금지 불변. SD-58~60은 계약만 등재(구현 후속 사이클), 진단 항목 4·5(shell 이식성·worktree build isolation)는 core 규약, 6(browser harness)은 별도 spec으로 명시 라우팅.
 - 구현 = SD-57부터 별도 `broker-nested-reachability` autopilot-code 사이클(dispatch-broker.py + stage-dispatch-fallback.py + Claude adapter 미러 + deterministic fixture). `plans/2026-07-16_fleet-depth2-retry-liveness`의 broker 복구 항목은 이 사이클이 흡수하고, 나머지(F-25 attempt identity·newest-attempt 선택)는 SD-58 사이클과 연계.
+
+## v15 update (2026-07-16) — broker retirement + direct recursive headless
+
+- 사용자 정정으로 native subagent와 별도 `codex exec` subprocess를 분리했다. 공식 Codex 계약상 spawned command는 parent sandbox를 상속하며 workspace-write network는 기본 off이므로, 7월 15일 실패는 특정 network-off tuple의 실패이지 nested Codex headless의 보편적 금지가 아니다.
+- SD-61: 신규 route schema `dispatch_contract_version: 3`, broker tuple/identity 없이 conductor direct same/cross-harness headless를 기본 경로로 확정. v1/v2는 read-only migration.
+- SD-62: Codex depth-1 standard+ owner에만 explicit network-enabled workspace-write profile과 `AGENT_NESTED_HEADLESS_NETWORK=1` evidence를 부여. child가 parent sandbox를 확장하지 않는다.
+- SD-63: route/node/slug/parent/target/ordinal 기반 stable attempt identity와 registry lock 아래 atomic claim. broker request identity 제거, Fleet는 attempt+pid+start identity를 current row의 강한 증거로 사용.
+- 구현 경계: wrapper broker auto-ensure/env 제거, stage-dispatch-fallback direct adapter 호출, capability-route v3, dynamic eligibility, Fleet retry identity. broker utility는 한 release의 진단/stop compatibility만 유지하며 새 daemon/spool은 만들지 않는다.
