@@ -310,6 +310,11 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - **마우스**: 노드/카드 클릭 = 접기·펼치기, 세션 축약행 클릭 = 선택(F-27 문법 재사용). 완료 route는 기본 1행 접힘, 실패 노드 포함 route는 자동 펼침 + 적색 강조.
   - **결손 원칙 불변**: record 없는 잡은 과정 뷰에서 pipe 휴리스틱 요약 카드로 degrade(빈칸 아님), `tracked_gate_evidence`는 `a` 토글 상세에서만 dim 노출.
 - **F-28c (detached run·governor lease — 조건부)**: run registry·governor lease 소스는 이번 착륙 범위에 없을 수 있다 — 구현 사이클이 소스 실재를 probe하고, 부재 시 정직하게 스킵(스코프 이월 기록). 실재 시 pulse 인접 1행(`⚙ governor n/cap`)과 resource-runner 행을 v8 계약대로 표시.
+- **F-31 (분사 세션 rolling 요약 관측 — v10 minor #4, 사용자 확정 2026-07-16)**: 실행 중 분사 세션마다 "지금 무엇을 하는 중"인지 1~2줄 rolling 요약을 유지해 세션 행 아래 dim 서브 행(및 과정 뷰 활성 노드 카드)에 노출한다 — F-30이 상태(글리프·DAG)를 보여준다면 F-31은 내용을 보완한다.
+  - **소스**: 세션 transcript jsonl delta(F-29·제목 tail과 같은 read-only 관용구; codex/opencode는 각 adapter 로그·DB). `claude -p` stdout 로그는 메시지 경계에서만 갱신되므로 소스로 쓰지 않는다(실측 2026-07-16).
+  - **구조(§0.5 결정론 분리)**: watcher 코드 = 관측 대상 발견(jobs.log attempt identity)–delta cursor(마지막 처리 uuid, distill 공유 marker 관용구)–케이던스(N초/K events, delta 없으면 무발화)–governor 등록(v18 storm containment: global slot·rolling budget·kill switch)–피드 append(JSONL: ts/slug/attempt_id/summary/cursor). 모델 = cheap-tier **no-tools** 요약 워커: delta 텍스트를 프롬프트 데이터로 주입(D-14 관용구 — 출력은 명령이 아니라 데이터), 1~2줄 요약 JSON만 stdout.
+  - **불변식**: 요약은 표시 전용 — liveness·상태 분류에 절대 불개입(F-25·SD-58 단일 분류 소스 원칙), zero-injection(실행 세션 개입 없음), `--json` additive(`summaries` 키), summarizer 자신은 관측·재귀 대상 제외, 피드 부재·파싱 실패 = 서브 행 생략(F-28 tolerant). 비용 상한(케이던스·delta 크기 cap·요약 길이 cap)은 구현이 수치로 확정하고 실측 기록.
+  - **구현**: 별도 autopilot-code 사이클(watcher 유틸 + render 소비). 완료 기준 = 실사이클 1개에서 이벤트→표시 지연과 토큰 비용 실측.
 
 ## 5. 능동 변경 — fleet-owned local state write
 
