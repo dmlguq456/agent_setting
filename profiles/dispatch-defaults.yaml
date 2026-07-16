@@ -1,0 +1,99 @@
+# dispatch-defaults.yaml — SD-66 user-declared harness defaults.
+#
+# This is the sole user-facing surface for stage 3 (stage affinity) of the
+# SD-22 selector cascade in core/OPERATIONS.md §5.10: explicit --adapter /
+# --family and hard eligibility (usage limits, runtime/account support)
+# always win over any value here; the orchestrator may still deviate from a
+# configured affinity when it records a reason (this file is a soft default,
+# never a pin); any cell this file omits stays fully discretionary under the
+# existing neutral/bias behavior. Parsed and validated only by
+# utilities/dispatch-defaults.py — no PyYAML/yq dependency.
+#
+# Schema (narrow subset, parsed by utilities/dispatch-defaults.py):
+#   schema_version: <int>
+#   depth1_owner: [<harness>, ...]     # concrete harnesses only, no "diverse"
+#   opencode:
+#     relief_only: true                # OpenCode never a neutral/diverse default
+#   capabilities:
+#     <capability-name>:
+#       <canonical-topology-node-id>: <claude|codex|opencode|diverse>
+#
+# Value vocabulary for a capability/stage cell: claude | codex | opencode |
+# diverse (pick a harness different from the maker) | unspecified (omit the
+# key — orchestrator discretion, current behavior). Harness names only —
+# never a concrete model id or reasoning/effort value; that stays owned by
+# the adapter model-map contract (SD-22 family/role split).
+
+schema_version: 1
+
+# depth-1 owner: capability-owner harnesses the main session (depth-0) may
+# pick from when it opens a standard+ conductor. Concrete harnesses only.
+depth1_owner: [claude, codex]
+
+# OpenCode is relief-only: it is never an automatic neutral/diverse
+# candidate. It participates only via an explicit --adapter opencode, an
+# explicit config cell set to "opencode", or another documented
+# user/orchestrator-approved relief path — all still subject to runtime
+# eligibility. Target load share is roughly 1-2% of dispatched work.
+opencode:
+  relief_only: true
+
+capabilities:
+  # autopilot-code: canonical topology node ids are plan, execute, test,
+  # report (capabilities/topologies.json). PRD prose names "exec"/"review";
+  # execute below realizes prose "exec" and test realizes the reviewer
+  # stage. plan is intentionally omitted (discretionary); a literal
+  # exec/review key fails validation against the topology registry.
+  autopilot-code:
+    execute: codex
+    test: diverse
+    report: claude
+    # plan:  # omitted — discretionary, no shipped default
+
+  # Coordinate inventory for other registered capabilities. All left
+  # commented (parse-neutral scaffold, not empty keys) — no default is
+  # shipped for these yet. Uncomment and set a value only after the same
+  # spec/PRD review this file's autopilot-code defaults went through.
+  # autopilot-apply:
+  #   apply:
+  #   verify:
+  #   handback:
+  # autopilot-design:
+  #   refs:
+  #   build:
+  #   visual-review:
+  #   handoff:
+  # autopilot-draft:
+  #   material-strategy:
+  #   draft-production:
+  #   review-refine:
+  #   finalize:
+  # autopilot-lab:
+  #   scaffold:
+  #   smoke:
+  #   full-run:
+  #   eval-run:
+  #   metrics:
+  #   media:
+  #   report:
+  #   independent-verify:
+  #   sync:
+  # autopilot-note:
+  #   scan:
+  #   route-apply:
+  # autopilot-refine:
+  #   review:
+  #   transaction:
+  # autopilot-research:
+  #   retrieval:
+  #   synthesis:
+  #   report:
+  #   claim-verify:
+  # autopilot-ship:
+  #   release-setup:
+  #   security-review:
+  #   release-review:
+  # autopilot-spec:
+  #   research:
+  #   review:
+  #   prd-transaction:
