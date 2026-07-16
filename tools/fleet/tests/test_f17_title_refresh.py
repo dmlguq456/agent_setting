@@ -276,7 +276,9 @@ class StormGuardTest(_ConfigHomeMixin, unittest.TestCase):
         self.assertIsNotNone(second)
         self.assertFalse(os.path.exists(first))
 
-    def test_scheduler_never_targets_internal_or_child_sessions(self):
+    def test_scheduler_targets_children_but_never_internal_sessions(self):
+        # Dispatched children are first-class title targets (user 2026-07-16);
+        # only fleet-internal workers (mem/title refreshers, app-servers) stay out.
         sessions = [
             self._session("normal"),
             self._session("memory", mem_worker=True),
@@ -287,10 +289,10 @@ class StormGuardTest(_ConfigHomeMixin, unittest.TestCase):
         original = rt.maybe_spawn
         rt.maybe_spawn = lambda harness, sid, transcript: seen.append(sid) or True
         try:
-            self.assertEqual(rt.schedule_sessions(sessions), 1)
+            self.assertEqual(rt.schedule_sessions(sessions), 2)
         finally:
             rt.maybe_spawn = original
-        self.assertEqual(seen, ["normal"])
+        self.assertEqual(seen, ["normal", "child"])
 
     def test_disable_marker_and_environment_fail_closed(self):
         os.makedirs(rt.disable_marker_path(), exist_ok=True)
