@@ -84,18 +84,18 @@ def _pad_dw(s, w):
 _ARROW_PREFIX = "   ↳ "      # depth-1 dispatch (▸) rows — arrow + space, ▸ lands at column 5
 _AGENT_IND = "     "         # session's own ⚡ sub-agent rows — ⚡ also lands at column 5
 _NODE_IND = " " * 8          # conductor's canvas summary row (SD-F2 breadcrumb, nested under ▸)
-_D2_PREFIX = "      ↳ "     # depth-2 stage-worker rows — one arrow level deeper (r4: an entity
-                             # is a rail row like every other spawned session, never a fused node;
-                             # existing fleet grammar = deeper ↳, user-confirmed)
+_D2_PREFIX = "    ↳ "       # depth-2 stage-worker rows — one arrow level deeper (r4: an entity
+                             # is a rail row like every other spawned session, never a fused node)
 _D2_AGENT_IND = " " * 10     # a depth-2 worker's own ⚡ rows — positional attribution, no @tag
 
-# ▸ row sub-grid (r11): fixed columns from 🔧 onward, any depth — the arrow indent is
-# absorbed by the harness field (original dispatch-row alignment rule).
-_FKEY_COL = 24               # column where 🔧 lands on EVERY ▸ row (deep enough that even the
-                             # deepest arrow prefix + full badge text fits to its left)
-_FKEY_W = 32                 # key + (contract) zone width (fits the longest quick contract)
-_FMODEL_W = 17               # model cell width (grid `_model_cell` idiom)
-_FSLUG_W = 19                # ⎇ slug zone width
+# r13 (user: "세션 명부터 브랜치 모델명까지 전부 라인 맞춰") — dispatch rows JOIN the session
+# grid's own columns 1:1, the original `_dispatch_row` design ("mirroring the session columns
+# 1:1: harness | name | branch | MODEL | …"). The arrow indent is absorbed by the harness
+# field so name/branch/model land at the SAME absolute columns as session rows, any depth.
+_TP_NAME_COL = 20            # engine session rows: 2 + glyph + 1 + _HW(16) = 20
+_TP_NAME_W = 28              # engine _NW_S name zone
+_TP_BR_W = 14                # engine _BRW branch cell
+_TP_MODEL_W = 23             # engine _MW model cell
 
 # Stage palette in its PLAIN (non-bold) intensity — reused engine keys, not new table entries
 # (round-2, user-confirmed): bold is reserved for the main-session row (_ROW_BOLD) alone, so
@@ -159,7 +159,7 @@ def _agents_strip(prefix, agents):
 
 def _dispatch_line(connector, harness, cap_key, cap_slug, title, contract, elapsed_str, desc_w,
                    stg_key=_STAGE_PLAIN[1], mode="dev", live="working",
-                   model=None, effort=None):
+                   model=None, effort=None, name_w=None):
     """`↳ ▸ <harness plain-hue text> 🔧 <capability>·<mode> ⎇ <slug> "<title>" (<contract>) <elapsed>`
     — session-child spawn arrow, no rail lattice (grammar #3, round-2). Harness text uses the
     BRIGHT `hb_*` key (never the dispatch row's dim `h_*`) — a spawned entity's identity is
@@ -184,42 +184,54 @@ def _dispatch_line(connector, harness, cap_key, cap_slug, title, contract, elaps
     # _NAME_COL"). Fixed sub-grid: 🔧 at _FKEY_COL · key+contract zone _FKEY_W · model cell
     # _FMODEL_W (the grid's `_model_cell` idiom, first-class — r10) · ⎇ slug _FSLUG_W · title ·
     # elapsed right-flushed like the grid's time column.
-    segs = [(connector, "dim"), (gch + " ", gkey), ("▸ ", stg_key)]
-    used = r._dw(connector) + 2 + 2
-    segs.append((_pad_dw(r._BADGE_TEXT.get(harness, harness),
-                         max(r._dw(r._BADGE_TEXT.get(harness, harness)) + 1,
-                             _FKEY_COL - used)), hb_key))
-    zone_pad = max(0, _FKEY_W - r._dw(cap_key) - r._dw(contract) - 3)
-    segs += [(cap_key, stg_key), (" (" + contract + ")", "dim"),
-             (" " * zone_pad, None)]
+    segs = [(connector, "dim"), (gch + " ", gkey)]
+    used = r._dw(connector) + 2
+    badge = r._BADGE_TEXT.get(harness, harness)
+    segs.append((_pad_dw(badge, max(r._dw(badge) + 1, _TP_NAME_COL - used)), hb_key))
+    # NAME zone (shared session column): the derived title for depth-1 jobs, the SD-F1 stage
+    # label + bootstrap type for depth-2 workers (r13 — key/contract moved off this row to the
+    # canvas line, colon-joined, so the name zone is free for identity like a session row).
+    nw = name_w or _TP_NAME_W
+    if title:
+        nm = r._clip_w('"%s"' % title, nw - 1)
+        segs.append((_pad_dw(nm, nw), None))
+    else:
+        segs += [(cap_key, stg_key),
+                 (_pad_dw(" (" + contract + ")", nw - r._dw(cap_key)), "dim")]
+    # BRANCH column (shared): ⎇ slug = the job's task branch/worktree, once, on the conductor
+    # row (r12); depth-2 rows inherit the same worktree so the cell stays empty. Long slugs
+    # clip exactly like the engine's own branch cell (`(br or "—")[:_BRW-1]` padded to _BRW).
+    segs.append((_pad_dw(r._clip_w("⎇ " + cap_slug, _TP_BR_W - 1), _TP_BR_W) if cap_slug
+                 else " " * _TP_BR_W, "dim" if cap_slug else None))
+    # MODEL column (shared): the grid's `_model_cell` idiom, first-class (r10).
     if model:
         name = r._clean_model(r.dash(model)) or "—"
         cell = name + " (" + (effort or "?") + ")"
         segs += [(name, r._model_key(model)),
                  (" (" + (effort or "?") + ")", r._eff_key(effort or "", False)),
-                 (" " * max(0, _FMODEL_W - r._dw(cell)), None)]
+                 (" " * max(1, _TP_MODEL_W - r._dw(cell)), None)]
     else:
-        segs.append((" " * _FMODEL_W, None))
-    # r12 (user: "usage-accuracy는 뭔데?") — the slug is the task branch/worktree name; it
-    # identifies the PLACE once, on the conductor row. depth-2 rows inherit the same worktree,
-    # so repeating it three times only obscured what it was.
-    if cap_slug:
-        segs.append((_pad_dw("⎇ " + cap_slug, _FSLUG_W), "dim"))
-    elif title:
-        segs.append((" " * _FSLUG_W, None))
-    if title:
-        segs.append((r._clip_w('"%s"' % title, desc_w), None))
+        segs.append((" " * _TP_MODEL_W, None))
+    # options slot (original column order: … MODEL | options | …): only jobs whose contract
+    # has no canvas line to live on (quick one-shots) carry it here.
+    if title and contract and cap_key:
+        segs.append((cap_key + " (" + contract + ")", "dim"))
     segs += [(r._RFLUSH, None), (elapsed_str + " ", "dim")]
     return segs
 
 
-def _canvas_line(indent, nodes):
+def _canvas_line(indent, nodes, key=None, contract=None, key_hue=_STAGE_PLAIN[1]):
     """The stage canvas — one row below the conductor, stages joined by the existing breadcrumb
     separator ` › ` (grammar #4), each stage its own STG hue. Active nodes use the PLAIN
     (non-bold) `_STAGE_PLAIN` hue rather than the engine's bold `stgN_on` — bold is reserved for
     the main-session row alone (round-2, user-confirmed). Done/pending keep the existing dim
-    `stgN_off` unchanged."""
+    `stgN_off` unchanged.
+    r13 (user) — the capability key + contract lead this line, colon-joined, the ORIGINAL
+    conductor-breadcrumb form (`code: plan › exec › test`): `code (dev·thr·owner): plan …`."""
     segs = [(indent, "dim")]
+    if key:
+        segs += [(key, key_hue),
+                 (" (" + contract + ")" if contract else "", "dim"), (": ", "dim")]
     for i, n in enumerate(nodes):
         if i:
             segs.append((" › ", "dim"))
@@ -288,31 +300,33 @@ def build_lines(term_width, layout):
     g1.extend(_session_lines(s_main, layout, term_width, wide_name_width))
     g1.append(_agents_strip(_AGENT_IND, [("Explore", "●", "2m51s", True),
                                          ("Explore", "✓", "4m04s", False)]))
-    g1.append(_dispatch_line(_ARROW_PREFIX, "claude", "code", "usage-accuracy",
-                             "usage 소스 신뢰 규칙 구현", "dev·thr·owner", "⏳ 20m",
+    g1.append(_dispatch_line(_ARROW_PREFIX, "claude", None, "usage-accuracy",
+                             "usage 소스 신뢰 규칙 구현", None, "⏳ 20m",
                              desc_w, stg_key=_STAGE_PLAIN[1],
-                             model="Opus 4.8", effort="high"))
+                             model="Opus 4.8", effort="high",
+                             name_w=wide_name_width))
     g1.append(_canvas_line(_NODE_IND, [
         {"label": "plan", "state": "done", "time": "12m"},
         {"label": "exec", "state": "active", "time": "8m"},
         {"label": "test", "state": "pending"},
         {"label": "report", "state": "pending"},
-    ]))
+    ], key="code", contract="dev·thr·owner"))
     # depth-2 stage workers: rail rows one arrow level deeper (r4) — identity is the SD-F1
     # human stage label + ⎇ slug; contract = bootstrap type; worker facts = model·effort.
     # Their ⚡ rows attribute positionally (nested beneath their own worker row, no @tag).
     g1.append(_dispatch_line(_D2_PREFIX, "claude", "exec", None, None,
                              "stage", "8m", desc_w, stg_key=_STAGE_PLAIN[1],
-                             model="haiku", effort="medium"))
+                             model="haiku", effort="medium", name_w=wide_name_width))
     g1.append(_agents_strip(_D2_AGENT_IND, [("개발팀", "●", "1m12s", True)]))
     g1.append(_dispatch_line(_D2_PREFIX, "claude", "exec:B", None, None,
                              "stage", "3m", desc_w, stg_key=_STAGE_PLAIN[1],
-                             model="sonnet", effort="medium"))
+                             model="sonnet", effort="medium", name_w=wide_name_width))
     g1.append(_agents_strip(_D2_AGENT_IND, [("Explore", "✓", "48s", False)]))
     g1.append(_dispatch_line(_ARROW_PREFIX, "codex", "code", "rate-window",
                              "rate-window 헤더 재검증", "dev·quick·quick_owner", "4m",
                              desc_w, stg_key=_STAGE_PLAIN[0],
-                             model="gpt-5.5", effort="medium"))
+                             model="gpt-5.5", effort="medium",
+                             name_w=wide_name_width))
     g1.extend(_session_lines(s_codex, layout, term_width, wide_name_width))
     # r5 (user) — the card's mem zone sits BELOW a subtle in-band divider: a dim rule ON the
     # tint (never a chrome bar, never an untinted gap — the band itself must stay continuous).
@@ -347,7 +361,7 @@ def build_lines(term_width, layout):
     # "grp" (bold, no hue) → None: no color to keep here, only the bold to drop (round-2).
     g2 = [[("○", "grp_cold"), (" ", None), ("worklog-board", None), ("/", "dim")]]
     g2.extend(_session_lines(s_worklog, layout, term_width, wide_name_width))
-    g2.append([("   ▸ ", "dim"), (r._BADGE_TEXT.get("claude", "claude") + "  ", "h_claude"),
+    g2.append([("   · ", "dim"), (r._BADGE_TEXT.get("claude", "claude") + "  ", "h_claude"),
                ("loop:note ", "dim"), (r._clip_w('"오전 수집분 다이제스트"', desc_w), "dim"),
                ("  queued · next 18m", "dim")])
     g2.insert(1, [("  ", None)])

@@ -104,8 +104,10 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         # ↳ spawn arrow (matches render.py's own real dispatch-row convention), 🔧 capability
         # glyph, job-contract parenthetical.
         text = _joined(self._lines(120))
-        self.assertIn("▸ claude code", text); self.assertIn("↳ ", text)
-        self.assertIn("▸ codex", text)
+        # r13 — the ▸ glyph is retired (never an original element; ↳ already marks a
+        # spawned entity), and rows join the session grid columns 1:1.
+        self.assertGreaterEqual(text.count("↳"), 4)
+        self.assertNotIn("▸ claude code", text)
         self.assertIn("code (dev·thr·owner)", text)
         self.assertIn("(dev·thr·owner)", text)
         self.assertIn("(dev·quick·quick_owner)", text)
@@ -118,7 +120,7 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         self.assertNotIn("~thorough", text)
         # r3 — mode restored (parity) and the slug marked as a branch/worktree name.
         self.assertNotIn("code (dev) ", text)
-        self.assertIn("⎇ usage-accuracy", text)
+        self.assertIn("⎇ usage-accu", text)
         self.assertIn("⎇ rate-window", text)
 
     def test_no_tree_lattice_survives_in_this_view(self):
@@ -168,7 +170,8 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         # human stage label + ⎇ slug identity, bootstrap type, and its own worker facts.
         lines = self._lines(120)
         text = _joined(lines)
-        self.assertIn("⎇ usage-accuracy", text)
+        # branch cell clips long slugs exactly like the engine (_BRW-1 + ellipsis)
+        self.assertIn("⎇ usage-accu", text)
         self.assertIn("exec:B (stage)", text)
         self.assertIn("exec (stage)", text)
         self.assertIn("exec:B (stage)", text)
@@ -181,7 +184,7 @@ class TwoPlaneGrammarTest(unittest.TestCase):
                     s = "".join(t for t, _k in ln)
                     return s.index("↳")
             self.fail("row containing %r not found" % snippet)
-        self.assertGreater(arrow_col("exec (stage)"), arrow_col("code (dev·thr·owner)"))
+        self.assertGreater(arrow_col("exec (stage)"), arrow_col("usage 소스 신뢰"))
 
     def test_mem_events_are_scoped_under_their_own_group(self):
         # grammar #6 — per-repo mem events, not a board-wide dump.
@@ -283,7 +286,7 @@ class BoldScopeTest(unittest.TestCase):
         for ln in lines:
             if not ln:
                 continue
-            if any(snippet in t for t, _k in ln):
+            if snippet in "".join(t for t, _k in ln):
                 return ln
         self.fail("no row contains %r" % snippet)
 
@@ -295,14 +298,16 @@ class BoldScopeTest(unittest.TestCase):
         self.assertIn("fam_opus", keys)
 
     def test_dispatch_rows_use_plain_stage_hues_not_bold_ones(self):
+        # r13 — the capability key now leads the CANVAS line (`code (…): plan › …`), in the
+        # plain stage hue; depth-2 stage labels keep theirs on their own rows. Nothing in the
+        # process plane may use the engine's bold stgN_on pair.
         lines = two_plane.build_lines(120, "wide")
         keys = set()
-        for snippet in ("usage-accuracy", "rate-window"):
+        for snippet in ("code (dev·thr·owner)", "exec (stage)"):
             keys.update(k for _t, k in self._line_containing(lines, snippet))
         self.assertNotIn("stg0_on", keys)
         self.assertNotIn("stg1_on", keys)
-        self.assertIn("fam_opus", keys)   # usage-accuracy (cyan, was stg1_on)
-        self.assertIn("eff_high", keys)   # rate-window (blue, was stg0_on)
+        self.assertIn("fam_opus", keys)   # plain cyan (was stg1_on)
 
     def test_group_header_name_and_glyph_drop_bold_but_keep_hue(self):
         lines = two_plane.build_lines(120, "wide")
