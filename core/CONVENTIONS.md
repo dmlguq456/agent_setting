@@ -210,6 +210,27 @@ and a newline-expansion static scan both produced false verification verdicts.
   byte-identical output when executed by sh, bash, and zsh
   (`utilities/verify-files.test.sh` is the reference pattern).
 
+### §4.3. Worktree Build Residue Hygiene
+
+A build run inside a linked worktree must not leave untracked artifacts that
+pollute `git status` and block guarded cleanup. Grounded by the 2026-07-16
+diagnosis where dependency-tracing stubs appeared under a worktree on every
+webpack build and required manual deletion before cleanup.
+
+- The essential fix belongs to the project's build configuration (for
+  example, pinning the dependency-tracing root to the primary checkout so
+  stubs are never written into the worktree). Prefer it whenever available.
+- The deterministic defense layer is `utilities/worktree-residue.py`. The
+  project declares residue globs in `<worktree>/.agent-build-residue` (or the
+  orchestrator passes `--glob`); `--check` reports, `--clean` removes.
+- The helper is fail-closed: only untracked, non-ignored, pattern-matched,
+  worktree-contained paths are removable; symlinks are unlinked and never
+  followed; zero patterns refuses to clean; every removal is appended to
+  `<agent-home>/.dispatch/build-residue.jsonl`.
+- `--clean` is an explicit orchestrator action run before
+  `worktree-cleanup.py`; it does not change guarded-cleanup eligibility
+  semantics, it only replaces the manual deletion step.
+
 ## §5. Skill Output Convention — T1/T2/T3
 
 Every autopilot capability and `analyze-project` follows this artifact structure. Existing artifacts keep their legacy flat layout; new invocations use this convention.
