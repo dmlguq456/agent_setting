@@ -890,6 +890,15 @@ conductor는 same-harness 실패 후 cross-harness 평가를 건너뛰고 inline
 4. v3 route JSON과 jobs row에 `broker_root`, `broker_instance`, `broker_request_id`, `ancestor-broker`가 없다.
 5. v1/v2 route verify와 Fleet fixture parsing은 유지되지만 신규 compile과 wrapper start는 broker를 생성하지 않는다.
 6. 기존 route/dispatch/wrapper/Fleet/adaptation suite에서 broker-only 기대를 제외한 회귀 0, live smoke에서 Fleet depth-2 row 중복 0.
+### 13.7.6 v15 minor #1 — 운영 실측 3건: conductor 고아 파이프라인·route 증거 전달·source_commit pin (2026-07-16)
+
+> 근거: `plans/2026-07-16_spec-gate-multi-spec` 사이클 실측 — ① r1 conductor(claude -p·opus)가 one-shot 폴링 지침에도 배경 대기 후 턴 종료로 사망, plan 워커만 고아 생존(depth-0 수동 복구·재분사) ② dispatch-node.py가 record의 eligibility 증거를 wrapper로 전달하지 않아 `nested-eligibility-evidence-missing` fail-closed ③ r2 conductor는 SD-14 완주했으나 worker-route-guard의 `head == source_commit` 정확 일치가 execute의 계약상 커밋과 모순 — test/report 분사가 구조적으로 거부(BLOCKED), same/cross-harness hop 동일 사유 실패.
+
+- **SD-64 — conductor 고아 파이프라인의 결정론 감지·재개**: ① 감지 = conductor attempt identity 사망(exact pid+start) ∧ route 미완(completion marker 부재 노드 잔존) ∧ open/live 자식 또는 미기동 후속 노드 — F-25/SD-58과 단일 분류 소스로 판정하고, SD-60 reconcile 확장으로 고아 행 자동 표기(`note=dead-parent-orphaned`) + depth-0 표면(liveness/preflight/Fleet alert) 노출. ② 재개 = replacement conductor가 route record + completion marker에서 재개(SD-56이 재개 지점을 결정론화), marker 있는 노드 재실행 금지. 재개 여부·시점은 depth-0 의미 판단으로 남긴다(자동 재분사 금지). ③ SD-14(b) in-session Stop-hook 게이트는 `-p` 미발화 실측대로 held 유지 — 결정론 장치는 사후(post-exit) 감지로 이동한다. 지침 강화(r2)로 1회 완주했으나 지침만으로 재발 방지를 주장하지 않는다.
+- **SD-65 — post-execute 노드의 source_commit 계보 검증**: worker-route-guard `route-source-commit-mismatch`의 정확 일치 검사를 노드 위상으로 분리한다 — 첫 mutation 노드(execute) 이전 노드는 현행 정확 일치 유지, 이후 노드는 `HEAD == source_commit ∨ HEAD가 source_commit의 후손(같은 route cwd, first-parent 계보)`을 허용한다. 발산·무관 HEAD·merge/rebase 진행 상태는 기존대로 fail-closed. route 위조·재컴파일 우회는 계속 금지 — 가드가 검증할 불변식은 "route가 결합한 작업 계보 위에 있는가"이지 "컴파일 순간에 멈춰 있는가"가 아니다.
+- **v15 구현 흡수(신규 SD 없음)**: dispatch-node.py(node materializer)가 record `dispatch_evidence`의 checked tuple을 wrapper 인자로 결정론 전달한다 — 소비자가 증거를 수동 재전달하는 현행은 SD-45 manifest-consumer 취지 위반. SD-61 direct 전환 구현에서 함께 처리.
+- acceptance(계약 수준): ① 고아 fixture(conductor 사망 + marker 미완 + 자식 잔존)에서 자동 표기·depth-0 표면 노출·재개 지점(marker 경계) 보고. ② execute 커밋 후손 HEAD에서 test/report 분사 통과, 발산 HEAD fail-closed 유지. ③ dispatch-node 경유 분사가 추가 인자 없이 eligibility 검증 통과.
+
 
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 

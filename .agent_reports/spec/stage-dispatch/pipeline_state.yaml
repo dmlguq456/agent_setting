@@ -32,6 +32,7 @@ inputs:
   - '운영 진단 2026-07-16 (v14): 사용자 보고 — v94-reading-face standard+ 사이클 ① depth-1 owner broker-unavailable 재현 + conductor fallback network-operation-not-permitted(등록형 스테이지 연결 포기) ② worker 발화 후 수분 무진행(최대 시간 손실원) ③ test worker 2연속 model-capacity 즉사 + 동일 모델 재선택 ④ 무관 open row 잔존. 개선 순서 확정: 1 도달성 → 2 watchdog → 3 capacity → 7 registry (4·5=core 규약, 6=별도 spec 라우팅)'
   - '코드 원인 실측 2026-07-16 (v14): broker_status()의 /proc 단일 하드 게이트가 PID-네임스페이스 격리 sandbox에서 socket ping 도달 전 fail — 산 broker의 broker-unavailable 오판 + ensure의 flock-상실 spawn 루프(broker-start-timeout). fleet-depth2 준비 실측(pid 1057841/12701276)과 일치'
   - '사용자 결정 2026-07-16 (v15): native subagent와 recursive codex exec를 구분. nested headless는 parent sandbox가 network/auth를 허용하면 가능; broker가 야기한 중복·stale·fencing 상태면 때문에 기본 경로에서 폐기'
+  - '운영 실측 2026-07-16 (v15 minor #1): plans/2026-07-16_spec-gate-multi-spec — r1 conductor 배경 대기 턴 종료 사망(지침-단독 불충분 실증), dispatch-node eligibility 증거 미전달 fail-closed, r2 BLOCKED(source_commit 정확 일치 × execute 커밋 계약 모순)'
 phases:
   spec: done              # PRD v15 — broker retirement(SD-61~63), direct nested headless, single attempt identity. v14 snapshot = _internal/versions/v14/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
@@ -103,6 +104,8 @@ decisions_locked:
   - 'SD-58: liveness 증거 = 결정론 신호만(파일 write·tool-call/registry 전이·단계 heartbeat), progress 발화 불인정. deadline 내 첫 write 부재=경고, 2연속 무진행=자동 interrupt+SD-50 fallback. native hop은 child 생성 실증 없으면 실패로 닫음(O5 흡수) (v14, 진단 2 — 구현 후속)'
   - 'SD-59: capacity failure class 감지 → dead-capacity 즉시 마감(SD-15 확장) → 동일 prompt/ownership 유지 대체 모델/inheritance profile 1회 자동 재시도 → 재실패 시 SD-50 하강. 직전 capacity 모델 route-node cooldown, 모델 선택 주체는 orchestrator/route layer 유지 (v14, 진단 3 — 구현 후속)'
   - 'SD-60: registry 자동 reconcile(죽은 exact PID·병합 branch·stale row 구분, SD-29/49 안전 게이트 재사용, F-25와 단일 분류 소스) + 현재 session/route 필터 상태 출력 (v14, 진단 7 — 구현 후속)'
+  - 'SD-64: conductor 고아 파이프라인 결정론 감지(attempt 사망∧completion marker 미완∧자식/후속 잔존, F-25/SD-58 단일 소스)·SD-60 확장 자동 표기·depth-0 표면 노출. 재개는 record+marker에서 결정론화, 재분사 여부는 depth-0 의미 판단. Stop-hook은 held 유지(사후 감지로 이동) (v15 minor #1)'
+  - 'SD-65: post-execute 노드 HEAD 검증 = source_commit 자신 또는 후손(같은 route cwd·first-parent), 이전 노드는 정확 일치 유지. 발산·무관 HEAD·merge 상태 fail-closed 불변 (v15 minor #1)'
 decisions_open:
   - 'SD-OPEN-1: 마이크로-스테이지 inline 손익 임계(어느 스테이지 크기부터 분사 이득). Phase 1 pilot 1표본 확보 — Phase 2 계측 누적만, 확정은 표본 축적 후'
   - 'SD-OPEN-2: 스테이지 SessionEnd mem curator 기동 영향 — 관찰만(계측 로그 기록), 개입은 증거 후 (v2)'

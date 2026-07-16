@@ -169,3 +169,5 @@ v12 구현은 source `8897bf76`, main merge `70bac6ef`로 완료했다. 다음 s
 - SD-62: Codex depth-1 standard+ owner에만 explicit network-enabled workspace-write profile과 `AGENT_NESTED_HEADLESS_NETWORK=1` evidence를 부여. child가 parent sandbox를 확장하지 않는다.
 - SD-63: route/node/slug/parent/target/ordinal 기반 stable attempt identity와 registry lock 아래 atomic claim. broker request identity 제거, Fleet는 attempt+pid+start identity를 current row의 강한 증거로 사용.
 - 구현 경계: wrapper broker auto-ensure/env 제거, stage-dispatch-fallback direct adapter 호출, capability-route v3, dynamic eligibility, Fleet retry identity. broker utility는 한 release의 진단/stop compatibility만 유지하며 새 daemon/spool은 만들지 않는다.
+
+- v15 minor #1 (2026-07-16): 운영 실측 3건 등재 — SD-64(conductor 고아 파이프라인 감지·재개: attempt 사망∧marker 미완∧자식 잔존 → SD-60 확장 자동 표기 + depth-0 표면, 재개는 record+marker로 결정론화하되 재분사 판단은 depth-0), SD-65(post-execute 노드 HEAD는 source_commit 후손 허용 — 정확 일치가 execute 커밋 계약과 모순, 실측 BLOCKED), dispatch-node eligibility 증거 전달 갭은 v15 구현 흡수. 근거 = plans/2026-07-16_spec-gate-multi-spec (r1 조기 종료 / r2 BLOCKED).

@@ -189,6 +189,48 @@ truth from file existence alone. The portable checker is
 `tools/figure-semantic-verify.py`, exposed by runtime-native figure-generation
 tool contracts where supported.
 
+### §4.2. Verification Command Shell Portability
+
+Verification and scan commands must not depend on the invoking login shell's
+dialect. The interactive default here is zsh: it does not word-split unquoted
+variable expansions, so a newline-joined file list silently collapses into one
+path, and Bash-only builtins (`mapfile`/`readarray`, `<<<` here-strings) fail
+outright. Grounded by the 2026-07-16 diagnosis where a worker's `mapfile` lint
+and a newline-expansion static scan both produced false verification verdicts.
+
+- Pass file lists null-delimited — `find … -print0 | xargs -0 …` — or through
+  the canonical helper `utilities/verify-files.sh` (POSIX sh, safe under
+  direct zsh/bash execution, deterministic C-locale order, prune/name-glob
+  filters, xargs exit-status propagation).
+- Do not use Bash-only syntax in inline tool calls or in snippets that agents
+  copy into their shell. A script that genuinely needs Bash declares a
+  `#!/usr/bin/env bash` (or `/bin/bash`) shebang and is executed, never
+  sourced into the calling shell.
+- A multi-file verification helper must pass an explicit dual-shell smoke:
+  byte-identical output when executed by sh, bash, and zsh
+  (`utilities/verify-files.test.sh` is the reference pattern).
+
+### §4.3. Worktree Build Residue Hygiene
+
+A build run inside a linked worktree must not leave untracked artifacts that
+pollute `git status` and block guarded cleanup. Grounded by the 2026-07-16
+diagnosis where dependency-tracing stubs appeared under a worktree on every
+webpack build and required manual deletion before cleanup.
+
+- The essential fix belongs to the project's build configuration (for
+  example, pinning the dependency-tracing root to the primary checkout so
+  stubs are never written into the worktree). Prefer it whenever available.
+- The deterministic defense layer is `utilities/worktree-residue.py`. The
+  project declares residue globs in `<worktree>/.agent-build-residue` (or the
+  orchestrator passes `--glob`); `--check` reports, `--clean` removes.
+- The helper is fail-closed: only untracked, non-ignored, pattern-matched,
+  worktree-contained paths are removable; symlinks are unlinked and never
+  followed; zero patterns refuses to clean; every removal is appended to
+  `<agent-home>/.dispatch/build-residue.jsonl`.
+- `--clean` is an explicit orchestrator action run before
+  `worktree-cleanup.py`; it does not change guarded-cleanup eligibility
+  semantics, it only replaces the manual deletion step.
+
 ## §5. Skill Output Convention — T1/T2/T3
 
 Every autopilot capability and `analyze-project` follows this artifact structure. Existing artifacts keep their legacy flat layout; new invocations use this convention.

@@ -356,6 +356,94 @@ else
   bad "canonical spec marker should satisfy relative linked-worktree gate"
 fi
 
+echo "== spec read gate: multi-spec candidate set =="
+mkdir -p "$TMP/multispec/.agent_reports/spec/alpha/_internal/versions/v1" \
+  "$TMP/multispec/.agent_reports/spec/beta"
+printf 'root prd\n' > "$TMP/multispec/.agent_reports/spec/prd.md"
+printf 'alpha prd\n' > "$TMP/multispec/.agent_reports/spec/alpha/prd.md"
+printf 'beta prd\n' > "$TMP/multispec/.agent_reports/spec/beta/prd.md"
+printf 'internal snapshot prd\n' > "$TMP/multispec/.agent_reports/spec/alpha/_internal/versions/v1/prd.md"
+
+# a. sub-spec read passes the gate
+if "$MARK" --file "$TMP/multispec/.agent_reports/spec/alpha/prd.md" --session msubsid \
+  && "$SPEC" --skill autopilot-code --cwd "$TMP/multispec" --session msubsid; then
+  ok "sub-spec prd read satisfies multi-spec gate"
+else
+  bad "sub-spec prd read should satisfy multi-spec gate"
+fi
+
+# b. reading an _internal snapshot writes no marker and does not satisfy the gate
+"$MARK" --file "$TMP/multispec/.agent_reports/spec/alpha/_internal/versions/v1/prd.md" --session msinternalsid
+if ls "$AGENT_HOME/.spec-grounding/msinternalsid__"* >/dev/null 2>&1; then
+  bad "_internal snapshot read should not write a marker"
+else
+  ok "_internal snapshot read writes no marker"
+fi
+if "$SPEC" --skill autopilot-code --cwd "$TMP/multispec" --session msinternalsid >/tmp/ms_internal.out 2>/tmp/ms_internal.err; then
+  bad "_internal snapshot read should not satisfy the gate"
+else
+  [ "$?" -eq 2 ] && ok "_internal snapshot read leaves gate denied" || bad "_internal snapshot deny wrong exit"
+fi
+
+# c. no read at all: deny, enumerate every candidate path + the governing-scope phrase
+if "$SPEC" --skill autopilot-code --cwd "$TMP/multispec" --session msnoreadsid >/tmp/ms_noread.out 2>/tmp/ms_noread.err; then
+  bad "unread multi-spec project should deny"
+else
+  if [ "$?" -eq 2 ] \
+    && grep -qF "$TMP/multispec/.agent_reports/spec/prd.md" /tmp/ms_noread.err \
+    && grep -qF "$TMP/multispec/.agent_reports/spec/alpha/prd.md" /tmp/ms_noread.err \
+    && grep -qF "$TMP/multispec/.agent_reports/spec/beta/prd.md" /tmp/ms_noread.err \
+    && grep -qF "Read the one governing the declared work scope" /tmp/ms_noread.err; then
+    ok "unread multi-spec project lists every candidate and the governing-scope phrase"
+  else
+    bad "unread multi-spec project deny message incomplete"
+  fi
+fi
+
+# d. sub-spec drift: read alpha, pass, drift, deny, re-read, pass
+if "$MARK" --file "$TMP/multispec/.agent_reports/spec/alpha/prd.md" --session msdriftsid \
+  && "$SPEC" --skill autopilot-code --cwd "$TMP/multispec" --session msdriftsid; then
+  ok "fresh sub-spec read passes before drift"
+else
+  bad "fresh sub-spec read should pass before drift"
+fi
+sleep 1
+printf 'alpha prd updated\n' > "$TMP/multispec/.agent_reports/spec/alpha/prd.md"
+if "$SPEC" --skill autopilot-code --cwd "$TMP/multispec" --session msdriftsid >/tmp/ms_drift.out 2>/tmp/ms_drift.err; then
+  bad "drifted sub-spec candidate should deny"
+else
+  [ "$?" -eq 2 ] && ok "drifted sub-spec candidate denies" || bad "drifted sub-spec candidate wrong exit"
+fi
+if "$MARK" --file "$TMP/multispec/.agent_reports/spec/alpha/prd.md" --session msdriftsid \
+  && "$SPEC" --skill autopilot-code --cwd "$TMP/multispec" --session msdriftsid; then
+  ok "re-read after drift passes again"
+else
+  bad "re-read after drift should pass again"
+fi
+
+# e. root-only deny message parity, fresh session id (no marker at all under this sid)
+if "$SPEC" --skill autopilot-code --cwd "$TMP/specproj" --session msparitysid >/tmp/ms_parity.out 2>/tmp/ms_parity.err; then
+  bad "fresh-session root-only project should deny"
+else
+  if [ "$?" -eq 2 ] \
+    && grep -qF "This cwd is spec-backed, but prd.md was not read in this session. Read $TMP/specproj/.agent_reports/spec/prd.md directly with the Read tool, then retry. A code comment or brief quotation does not satisfy the gate." /tmp/ms_parity.err; then
+    ok "root-only single-candidate deny message matches byte-for-byte parity"
+  else
+    bad "root-only single-candidate deny message should match today's exact text"
+  fi
+fi
+
+# f. legacy .claude_reports sub-spec variant, in its own fixture (resolver prefers .agent_reports when both exist)
+mkdir -p "$TMP/legacyspec/.claude_reports/spec/gamma"
+printf 'legacy root prd\n' > "$TMP/legacyspec/.claude_reports/spec/prd.md"
+printf 'legacy gamma prd\n' > "$TMP/legacyspec/.claude_reports/spec/gamma/prd.md"
+if "$MARK" --file "$TMP/legacyspec/.claude_reports/spec/gamma/prd.md" --session mslegacysid \
+  && "$SPEC" --skill autopilot-code --cwd "$TMP/legacyspec" --session mslegacysid; then
+  ok "legacy .claude_reports sub-spec read satisfies gate"
+else
+  bad "legacy .claude_reports sub-spec read should satisfy gate"
+fi
+
 echo "== core-first adapter edit gate CLI =="
 mkdir -p "$TMP/coreproj/core" "$TMP/coreproj/adapters/codex"
 (
