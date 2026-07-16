@@ -2,7 +2,7 @@
 
 - **Date**: 2026-07-10
 - **Mode**: library + cli (autopilot 파이프 디스패치 토폴로지 개정 인프라)
-- **Status**: v12 implemented — SD-51~53 harness-neutral depth-0 broker·durable lifecycle·Claude/Codex 4조합 merged and verified
+- **Status**: v14 registered — 운영 병목 1차(SD-57 도달성·SD-58 진행 감시·SD-59 capacity failover·SD-60 registry 위생); SD-57 구현 착수. v13(SD-54~56)은 implemented·rolled over
 - **Placement**: 독립 컴포넌트 `spec/stage-dispatch/` — 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 무수정.
 
 ## 배경
@@ -150,3 +150,14 @@ v12 구현은 source `8897bf76`, main merge `70bac6ef`로 완료했다. 다음 s
 - harvest 후속: ① 검증 F1(B3 조기-종결 경합의 회귀 가드 부재) — 검증자가 작성·양방향 확인한 fixture를 merge 전 반영(b02e3d20, 15/15). ② §13.5.2 문언 정정 minor #1(`ensure`→`status` 조회 — 워커는 ensure 금지, 구현 실측). ③ live broker 롤오버 완료 — 계약 경로(implementation-mismatch 회전)로 v13 코드 브로커(brk-9a6717359ce14394bb24ad6990ab3fd9)가 canonical registry에 기동, in-flight 0 확인.
 - 병행 발견·수정 2건(v13 산물 아님): ⓐ entry-router 개편(585c742b, 타 세션)이 portable 가드 2건 기대치 미동기 — 점진 공개 계약에 맞게 재배선(52b652ea 직전 커밋). ⓑ preflight doctor boundary lock이 SIGKILL 누수 시 전역 doctor 실패 — 소유자 생존 회수 추가(52b652ea). 최종 검증 = clean worktree에서 **portable guards 359/359** + broker/route/marker 스위트 전부 OK.
 - 운영 소견(이월): primary checkout에서 portable-guards 실행은 live broker 회전을 유발할 수 있음(wrapper-start 가드의 ensure가 fixture jobs로 회전 시도) — 검증은 clean worktree 표준. merge 후 신규 standard+ route는 gate 활성 — conductor의 `capability-route.py complete` 호출 의무(F4) 인지 필요.
+
+## v14 update (2026-07-16) — 운영 병목 해소 1차: 중첩 도달성·진행 감시·capacity failover·registry 위생
+
+| Step | Action | Result |
+|---|---|---|
+| 계기 확인 | 사용자 운영 진단 7건(v94-reading-face standard+ 사이클 D3~D5) + 본 repo fleet-depth2 준비 실측 — P0 2건(owner broker-unavailable·worker 무진행), P1 2건(capacity 즉사·shell 이식성), P1/P2 3건 | 사용자 확정: 개선 순서 1→2→3→…→7, "작업 개시" |
+| 원인 실측 | `broker_status()`의 `/proc/<pid>/stat` 단일 하드 게이트(dispatch-broker.py) — PID-네임스페이스 격리 sandbox에서 socket ping 도달 전 fail; ensure는 flock-상실 serve 반복 spawn → broker-start-timeout | 산 broker(heartbeat·socket 정상, pid 1057841)의 broker-unavailable 오판을 코드 수준으로 확정 |
+| update | v13 snapshot → `_internal/versions/v13/prd.md`, prd.md v14 | §13.6 신설(SD-57 생존증거 위계+file-spool transport / SD-58 발화-불인정 liveness+watchdog, O5 흡수 / SD-59 capacity failover+model cooldown / SD-60 registry reconcile+현재-작업 필터), §14 경계 v14 추가 |
+
+- 설계 핵심: SD-57은 fail-closed를 약화하지 않는다 — ticks 불일치=확정 사망 유지, `/proc` 부재만 unverifiable로 재분류해 파일 기반 증거(flock 프로브·heartbeat)와 fenced ping으로 판별. spool은 transport 추가일 뿐 authority/준비 의무/워커 ensure 금지 불변. SD-58~60은 계약만 등재(구현 후속 사이클), 진단 항목 4·5(shell 이식성·worktree build isolation)는 core 규약, 6(browser harness)은 별도 spec으로 명시 라우팅.
+- 구현 = SD-57부터 별도 `broker-nested-reachability` autopilot-code 사이클(dispatch-broker.py + stage-dispatch-fallback.py + Claude adapter 미러 + deterministic fixture). `plans/2026-07-16_fleet-depth2-retry-liveness`의 broker 복구 항목은 이 사이클이 흡수하고, 나머지(F-25 attempt identity·newest-attempt 선택)는 SD-58 사이클과 연계.
