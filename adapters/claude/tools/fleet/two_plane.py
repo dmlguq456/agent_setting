@@ -148,16 +148,23 @@ def _agent_line(prefix, agent_type, desc, glyph, elapsed_str, active, desc_w, an
 
 
 def _dispatch_line(connector, harness, cap_key, cap_slug, title, contract, elapsed_str, desc_w,
-                   stg_key=_STAGE_PLAIN[1]):
-    """`↳ ▸ <harness plain-hue text> 🔧 <capability> · <slug> "<title>" (<job contract>) <elapsed>`
+                   stg_key=_STAGE_PLAIN[1], mode="dev"):
+    """`↳ ▸ <harness plain-hue text> 🔧 <capability>·<mode> ⎇ <slug> "<title>" (<contract>) <elapsed>`
     — session-child spawn arrow, no rail lattice (grammar #3, round-2). Harness text uses the
     BRIGHT `hb_*` key (never the dispatch row's dim `h_*`) — a spawned entity's identity is
     still legible, only completed rows dim. `stg_key` is one of the plain (non-bold) `_STAGE_PLAIN`
-    hues — bold is reserved for the main-session row alone (round-2, user-confirmed)."""
+    hues — bold is reserved for the main-session row alone (round-2, user-confirmed).
+    r3: `·<mode>` restores the existing options-column mode field (dev|debug|audit — parity),
+    `⎇ <slug>` marks the slug as the task branch/worktree name (user: bare "usage-accuracy" was
+    unreadable), and the contract carries NO qa level — qa was retired as a separate axis
+    (CONVENTIONS §1.1: rigor derives from intensity). The contract DOES carry the registry's
+    `worker_role` (owner/quick_owner/review/support — the depth-1 bootstrap type evidence);
+    stage workers surface as canvas nodes instead of rows, so `pipeline_stage` never appears."""
     hb_key = "hb_" + harness if harness in r._BADGE_TEXT else "hb_other"
     segs = [(connector, "dim"), ("▸ ", stg_key),
             (r._BADGE_TEXT.get(harness, harness) + "  ", hb_key),
-            ("🔧 ", None), (cap_key, stg_key), (" · " + cap_slug + "  ", "dim"),
+            ("🔧 ", None), (cap_key, stg_key), ("·" + mode + " ", "dim"),
+            ("⎇ " + cap_slug + "  ", "dim"),
             (r._clip_w('"%s"' % title, desc_w), None),
             (" " + contract, "dim"), ("  " + elapsed_str, "dim")]
     return segs
@@ -237,7 +244,7 @@ def build_lines(term_width, layout):
                           "✓", "4m04s", False, desc_w))
     g1.append(None)
     g1.append(_dispatch_line(_ARROW_PREFIX, "claude", "code", "usage-accuracy",
-                             "usage 소스 신뢰 규칙 구현", "(thr · ~thorough)", "⏳ 20m",
+                             "usage 소스 신뢰 규칙 구현", "(thr · owner)", "⏳ 20m",
                              desc_w, stg_key=_STAGE_PLAIN[1]))
     g1.append(_canvas_line(_NODE_IND, [
         {"label": "plan", "state": "done", "time": "12m"},
@@ -253,7 +260,7 @@ def build_lines(term_width, layout):
                           "✓", "48s", False, desc_w, anchor="exec:B"))
     g1.append(None)
     g1.append(_dispatch_line(_ARROW_PREFIX, "codex", "code", "rate-window",
-                             "rate-window 헤더 재검증", "(quick · gpt·med)", "● 4m",
+                             "rate-window 헤더 재검증", "(quick · quick_owner · gpt·med)", "● 4m",
                              desc_w, stg_key=_STAGE_PLAIN[0]))
     g1.append(None)
     g1.extend(_session_lines(s_codex, layout, term_width, wide_name_width))
@@ -267,8 +274,11 @@ def build_lines(term_width, layout):
                (" working/expired ", "dim"), ("curator    ", "dim"),
                ("\"usage 주간 카운터 가설 폐기 (43%는 mtime-신선 tap 오판)\"", "dim")])
 
+    # in-card blank separators stay ON the tint band — an untinted (None) blank row splits the
+    # card into visual fragments (user: "분사 세션을 틴트로 갈라버리면 어쩌냐"). Only the
+    # BETWEEN-cards gap below stays untinted.
     for ln in g1:
-        lines.append(None if ln is None else [(r._TINT_BODY_HOT, None)] + ln)
+        lines.append([(r._TINT_BODY_HOT, None)] + (ln if ln is not None else []))
     lines.append(None)
 
     # ==== group 2: worklog-board (inactive) ====
@@ -279,7 +289,7 @@ def build_lines(term_width, layout):
                ("loop:note ", "dim"), (r._clip_w('"오전 수집분 다이제스트"', desc_w), "dim"),
                ("  queued · next 18m", "dim")])
     for ln in g2:
-        lines.append(None if ln is None else [(r._TINT_BODY, None)] + ln)
+        lines.append([(r._TINT_BODY, None)] + (ln if ln is not None else []))
 
     # ---- legend (same vocabulary the standard board's legend uses) ----
     # "g_work" (bold) → "lvl_g" (plain green, round-2): this legend row is this view's own,

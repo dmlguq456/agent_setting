@@ -107,8 +107,14 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         self.assertIn("↳ ▸ claude code", text)
         self.assertIn("↳ ▸ codex", text)
         self.assertIn("🔧 code", text)
-        self.assertIn("(thr · ~thorough)", text)
-        self.assertIn("(quick · gpt·med)", text)
+        self.assertIn("(thr · owner)", text)
+        self.assertIn("(quick · quick_owner · gpt·med)", text)
+        # r3 — qa retired as a separate axis (CONVENTIONS §1.1): no derived-qa token anywhere.
+        self.assertNotIn("~thorough", text)
+        # r3 — mode restored (parity) and the slug marked as a branch/worktree name.
+        self.assertIn("code·dev", text)
+        self.assertIn("⎇ usage-accuracy", text)
+        self.assertIn("⎇ rate-window", text)
 
     def test_no_tree_lattice_survives_in_this_view(self):
         # round-2 (user-confirmed) — the vertical spine and rail connectors are fully retired;
@@ -212,6 +218,36 @@ class BuildLinesModuleTest(unittest.TestCase):
         pulse_text = "".join(t for t, _k in render._pulse_segs(sessions, jobs))
         n_working = sum(1 for s in sessions if s.liveness == "working")
         self.assertIn("%d working" % n_working, pulse_text)
+
+    def test_card_tint_is_continuous(self):
+        """r3 (user: "분사 세션을 틴트로 갈라버리면 어쩌냐") — every row INSIDE a group card,
+        including blank separators, carries that card's tint sentinel; an untinted blank
+        would split the card's band into visual fragments. Only between-card gaps are None."""
+        lines = two_plane.build_lines(168, "wide")
+        def tint_of(ln):
+            if not ln:
+                return None
+            t = ln[0][0]
+            return t if t in (render._TINT_BODY_HOT, render._TINT_BODY) else None
+        # walk each card: from its first tinted row to its last, no None and no tint change
+        i = 0
+        cards = 0
+        while i < len(lines):
+            t = tint_of(lines[i])
+            if t is None:
+                i += 1
+                continue
+            j = i
+            last = i
+            while j < len(lines) and tint_of(lines[j]) == t:
+                last = j
+                j += 1
+            for k in range(i, last + 1):
+                self.assertEqual(tint_of(lines[k]), t,
+                                 "card tint broken at line %d" % k)
+            cards += 1
+            i = j
+        self.assertEqual(cards, 2)   # agent_setting (hot) + worklog-board (body)
 
 
 class BoldScopeTest(unittest.TestCase):
