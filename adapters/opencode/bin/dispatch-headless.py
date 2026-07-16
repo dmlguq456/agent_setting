@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
+    completion_marker_gate,
     ensure_global_registry_writable,
     ensure_launch_broker,
     new_attempt_id,
@@ -606,7 +607,12 @@ def validate_route_record(args: argparse.Namespace) -> int:
         if result.stdout: print(result.stdout,end="")
         if result.stderr: print(result.stderr,end="",file=sys.stderr)
         return fail("worker-route-validation-failed",result.returncode,route_file=args.route_file)
-    args.route_validation=result.stdout.strip(); return 0
+    args.route_validation=result.stdout.strip()
+    try:
+        completion_marker_gate(args.route_file, args.route_node, args.action, args.agent_home)
+    except DispatchContractError as e:
+        return fail(e.reason, 65, detail=e.detail, child_spawned="0")
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -615,6 +621,8 @@ def main(argv: list[str]) -> int:
         return fail("worktree-must-be-absolute", 64, worktree=args.worktree)
     args.worktree = str(Path(args.worktree).resolve())
     action = "start" if args.start else "register" if args.register else "dry-run"
+    args.action = action
+    args.agent_home = resolve_agent_home()
     worktree = Path(args.worktree)
     if not worktree.is_dir():
         return fail("worktree-not-found", 66, worktree=args.worktree)
@@ -654,7 +662,7 @@ def main(argv: list[str]) -> int:
         if rc != 0:
             return rc
 
-    agent_home = resolve_agent_home()
+    agent_home = args.agent_home
     try:
         registry = resolve_global_registry(agent_home, args.jobs, args.depth, action)
         jobs = registry.path

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Materialize a registry route node onto existing adapter dispatch wrappers."""
-import argparse, json, subprocess, sys
+import argparse, json, os, subprocess, sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 ROLE_MODE={"deep maker":"dev/refactor","fast implementer":"dev/backend","deep reviewer":"qa/test","fast reviewer":"qa/review","fast writer":"docs/writing","deep orchestrator":"ops/orchestration","orchestrator":"ops/orchestration"}
@@ -10,6 +10,7 @@ def main():
  node=next((x for x in route["nodes"] if x["id"]==a.node),None)
  if not node: raise SystemExit("unknown route node")
  if node["kind"]=="resource-runner": print("resource_runner="+str(ROOT/"utilities/resource-runner.py")+"\nroute_node="+a.node); return
+ print("completion_marker="+str(Path(os.environ.get("AGENT_HOME", ROOT))/".dispatch/completion"/route["route_id"]/(node["id"]+".json")))
  wrapper=ROOT/"adapters"/a.adapter/"bin"/"dispatch-headless.py"
  argv=[sys.executable,str(wrapper),"--"+a.action,"--worktree",route["cwd"],"--slug",a.slug,"--capability",route["capability"],"--mode",ROLE_MODE.get(node.get("role"),"ops/orchestration"),"--qa",a.qa,"--intensity",route["effective_intensity"],"--depth",str(node.get("depth",1)),"--worker-role",node["kind"],"--owner",route["capability"],"--route-file",str(Path(a.route).resolve()),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node",node["id"],"--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--prompt-text",a.prompt_text]
  if node.get("depth")==2:

@@ -23,6 +23,21 @@ sh <agent-home>/utilities/dispatch-wait.sh --parent <conductor-slug>
 
 After harvest, change the stage row from `open` to `done` before dispatching the next stage. An open harvested row orphans the pipe and keeps Fleet and dispatch-wait active.
 
+After judging a stage's artifact contract complete, write its completion marker before
+dispatching the next stage:
+
+```bash
+python3 <agent-home>/utilities/capability-route.py complete \
+  --route <route-file> --node <node-id> --evidence <stage terminal artifact>
+```
+
+The marker lands at `<agent-home>/.dispatch/completion/<route_id>/<node_id>.json`. Evidence is
+the stage's contractual terminal artifact (`plan/plan.md`, the final dev log, the test verdict,
+`final_report.md`). The pass judgement stays semantic and belongs to the conductor; the marker
+only makes its *result* deterministic. A record-bound `--start` for a node whose `depends_on`
+markers are absent fails closed with `completion-marker-missing` and spawns nothing. Marker
+absence is *no claim*, never a failure.
+
 #### Closed Inline Fallback
 
 Run standard+ stages in-session only when:

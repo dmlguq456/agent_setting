@@ -50,11 +50,18 @@ class TestRoute(unittest.TestCase):
  def test_v12_route_binds_broker_and_legacy_v11_route_still_verifies(self):
   evidence=self.dispatch(self.nested(authority="ancestor-broker",status="supported"))
   route=R.compile_route(**self.args(requested_intensity="strong",predicates=[],signals=["shared-contract"],transport="headless",inline_reason=None,dispatch_evidence=evidence))
-  self.assertEqual(route["broker_contract_version"],1); R.verify_route(route,R.ROOT)
+  # SD-55: new compiles are v2 by default -- stable identity (broker_root)
+  # only, no broker_instance (mutable rollover identity is resolved at hop
+  # time, not baked into the immutable record).
+  self.assertEqual(route["broker_contract_version"],2); R.verify_route(route,R.ROOT)
+  for row in route["dispatch_evidence"]["tuples"]: self.assertNotIn("broker_instance",row)
+  for node in route["nodes"]:
+   for hop in node.get("dispatch_fallback",[])[:2]:
+    for row in hop.get("candidates",[]): self.assertNotIn("broker_instance",row)
   missing=json.loads(json.dumps(route));
   for node in missing["nodes"]:
    for hop in node.get("dispatch_fallback",[]):
-    for row in hop.get("candidates",[]): row.pop("broker_instance",None)
+    for row in hop.get("candidates",[]): row.pop("broker_root",None)
   missing["route_hash"]=R.route_hash(missing); missing["route_id"]="rt-"+missing["route_hash"].split(":",1)[1][:16]
   with self.assertRaisesRegex(ValueError,"supported depth-0 broker tuple"): R.verify_route(missing,R.ROOT)
   legacy=json.loads(json.dumps(route)); legacy.pop("broker_contract_version",None)
@@ -65,4 +72,35 @@ class TestRoute(unittest.TestCase):
     for row in hop.get("candidates",[]): row.pop("broker_root",None); row.pop("broker_instance",None)
   legacy["route_hash"]=R.route_hash(legacy); legacy["route_id"]="rt-"+legacy["route_hash"].split(":",1)[1][:16]
   R.verify_route(legacy,R.ROOT)
+ def test_v1_record_keeps_instance_binding_rules(self):
+  # Fixture (5): a v1 record is hand-constructed from a v2 compile (compile
+  # only produces v2 now) by re-injecting the mutable broker_instance and
+  # setting broker_contract_version back to 1, then re-hashing -- mirrors
+  # what an old pre-SD-55 record on disk looks like. v1 verify/fallback
+  # rules (tuple.broker_instance required) must hold unchanged (regression 0).
+  evidence=self.dispatch(self.nested(authority="ancestor-broker",status="supported"))
+  v2=R.compile_route(**self.args(requested_intensity="strong",predicates=[],signals=["shared-contract"],transport="headless",inline_reason=None,dispatch_evidence=evidence))
+  v1=json.loads(json.dumps(v2)); v1["broker_contract_version"]=1
+  for row in v1["dispatch_evidence"]["tuples"]:
+   if row.get("launch_authority")=="ancestor-broker": row["broker_instance"]="brk-fixture"
+  for node in v1["nodes"]:
+   for hop in node.get("dispatch_fallback",[]):
+    for row in hop.get("candidates",[]):
+     if row.get("launch_authority")=="ancestor-broker": row["broker_instance"]="brk-fixture"
+  v1["route_hash"]=R.route_hash(v1); v1["route_id"]="rt-"+v1["route_hash"].split(":",1)[1][:16]
+  R.verify_route(v1,R.ROOT)
+  missing_instance=json.loads(json.dumps(v1))
+  for node in missing_instance["nodes"]:
+   for hop in node.get("dispatch_fallback",[]):
+    for row in hop.get("candidates",[]): row.pop("broker_instance",None)
+  missing_instance["route_hash"]=R.route_hash(missing_instance); missing_instance["route_id"]="rt-"+missing_instance["route_hash"].split(":",1)[1][:16]
+  with self.assertRaisesRegex(ValueError,"supported depth-0 broker tuple"): R.verify_route(missing_instance,R.ROOT)
+  # a v2 record whose candidate carries an instance is rejected too (§2.4d).
+  tainted=json.loads(json.dumps(v2))
+  for node in tainted["nodes"]:
+   for hop in node.get("dispatch_fallback",[]):
+    for row in hop.get("candidates",[]):
+     if row.get("launch_authority")=="ancestor-broker": row["broker_instance"]="brk-fixture"
+  tainted["route_hash"]=R.route_hash(tainted); tainted["route_id"]="rt-"+tainted["route_hash"].split(":",1)[1][:16]
+  with self.assertRaisesRegex(ValueError,"must not carry broker_instance"): R.verify_route(tainted,R.ROOT)
 if __name__=="__main__": unittest.main()
