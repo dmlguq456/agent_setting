@@ -36,6 +36,35 @@ PY
 )
 echo "$u" | grep -q SCAN_OK && ok "scan_death patterns (codex 429/usage_limit_reached) + reset" || bad "scan_death: $u"
 
+# A depth-1 Codex owner belongs to the actual caller thread even when an older
+# conductor passes a synthetic id. Depth-2 ownership remains broker-explicit.
+parent=$(CODEX_THREAD_ID=real-thread python3 - "$WRAP" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("dh", sys.argv[1])
+dh = importlib.util.module_from_spec(spec); spec.loader.exec_module(dh)
+
+d1 = dh.parser().parse_args([
+    "--worktree", "/work/repo", "--slug", "owner", "--capability", "autopilot-code",
+    "--mode", "debug", "--depth", "1", "--parent", "synthetic-owner",
+    "--parent-session-id", "synthetic-thread",
+])
+dh._bind_runtime_parent(d1)
+print(f"D1={d1.parent_session_id}:{d1.parent_slug or '-'}")
+
+d2 = dh.parser().parse_args([
+    "--worktree", "/work/repo", "--slug", "stage", "--capability", "code-plan",
+    "--mode", "debug", "--depth", "2", "--parent", "real-owner",
+    "--parent-session-id", "owner-thread",
+])
+dh._bind_runtime_parent(d2)
+print(f"D2={d2.parent_session_id}:{d2.parent_slug or '-'}")
+PY
+)
+echo "$parent" | grep -q '^D1=real-thread:-$' \
+  && echo "$parent" | grep -q '^D2=owner-thread:real-owner$' \
+  && ok "depth-1 binds actual Codex thread; depth-2 keeps broker parent" \
+  || bad "runtime parent binding: $parent"
+
 command -v git >/dev/null || { echo "(git 없음 — skip launch cases)"; exit $fails; }
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 AH="$tmp/agent_setting"; mkdir -p "$AH/.dispatch/logs"

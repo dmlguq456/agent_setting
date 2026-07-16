@@ -171,6 +171,26 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
+def _bind_runtime_parent(args: argparse.Namespace) -> None:
+    """Bind a depth-1 Codex dispatch to the actual calling runtime session.
+
+    Callers historically supplied a synthetic ``--parent-session-id``. That
+    overrides the parser's CODEX_THREAD_ID default and Fleet cannot repair the
+    relationship from cwd when multiple interactive sessions share one repo.
+    Depth-2 workers keep their explicit broker/owner envelope; the legacy force
+    switch remains available when a checked fallback intentionally rebinds it.
+    """
+    force_current = os.environ.get("CODEX_DISPATCH_PARENT_CURRENT_FORCE") == "1"
+    current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
+    if args.depth == 1:
+        if current_thread:
+            args.parent_session_id = current_thread
+        if current_thread or force_current:
+            args.parent_slug = None
+    elif force_current and current_thread:
+        args.parent_session_id = current_thread
+
+
 def fail(reason: str, code: int, **fields: str) -> int:
     print("check=failed")
     print(f"reason={reason}")
@@ -708,12 +728,7 @@ def main(argv: list[str]) -> int:
         if forced_sandbox not in ("read-only", "workspace-write", "danger-full-access"):
             return fail("invalid-forced-dispatch-sandbox", 64, sandbox=forced_sandbox)
         args.sandbox = forced_sandbox
-    if os.environ.get("CODEX_DISPATCH_PARENT_CURRENT_FORCE") == "1":
-        current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
-        if current_thread:
-            args.parent_session_id = current_thread
-        if args.depth == 1:
-            args.parent_slug = None
+    _bind_runtime_parent(args)
     action = "start" if args.start else "register" if args.register else "dry-run"
     args.action = action
     args.agent_home = resolve_agent_home()
