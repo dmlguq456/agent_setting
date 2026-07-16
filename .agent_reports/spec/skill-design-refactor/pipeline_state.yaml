@@ -2,7 +2,7 @@ project_name: skill-design-refactor
 component: skill-design-refactor   # 별도 컴포넌트 (repo spec/prd.md = Unified Memory System, 무관)
 created: 2026-07-13
 mode: [library]
-scope_note: "Pocock 4축을 portable-first sibling-adapter 계약으로 재정렬하고, v4에서 model proposal → user confirmation → owner/worker execution을 추가한다. main session context 보존을 최우선으로 하며 품질·안전 하향 없이 routing visibility와 progressive disclosure를 강화한다."
+scope_note: "v5는 v4 entry confirmation과 main-context ownership을 worker bootstrap까지 확장한다. worker는 최소 kernel+one type+assigned contract만 소비하고 artifact/verdict/blocker만 반환하며, runtime 자동 instruction 상속은 masking 한계로 분리 보고한다."
 inputs:
   - analysis_project/code/skill_design_audit.md           # 28스킬×4축 verdict·Step7 P1~P8·§6 Cluster 매핑
   - analysis_project/code/skill_design_audit_per_skill.md  # file:line 근거 (Plan Resolution 복제·flip 검증 대상)
@@ -11,13 +11,13 @@ inputs:
   - research/skill-design-principles/04_technical_deep_dive.md  # 4축 메커니즘(attention budget 근거)
   - _internal/skill_design_audit/scan.sh (audit T3, 기존)   # 정량 규범 전수 스캔 — lint 승격 재사용
 phases:
-  spec: done              # PRD v4 — entry confirmation + main-context priority + routing metadata SoT
+  spec: done              # PRD v5 — minimal worker kernel + typed overlay + fixed handoff
   scaffolding: n/a        # 기존 skills/ 리팩터 — 신규 scaffold 없음
   design: n/a             # instruction 파일 리팩터 — 시각 UI 없음
-  dev: done               # v4 core-first contract + manifest/generator/projection/conformance implementation
-  verification: done      # three projections + boundary + active runtime + context footprint PASS
-spec_version: v4
-result: GREEN
+  dev: in_progress        # core-first worker bootstrap + three sibling runtime realization
+  verification: pending   # renderer/profile/dispatcher/boundary/context-footprint
+spec_version: v5
+result: PARTIAL
 back_jump:
   - from: dev
     to: spec
@@ -51,6 +51,12 @@ decisions_locked:
   - SD-23: primary candidate set = entry-router only
   - SD-24: generic/circular trigger descriptions fail conformance
   - SD-25: core-first then three sibling runtime projections in one cycle
+  - SD-26: worker input = one kernel + exactly one type + assigned contract
+  - SD-27: worker return = artifact/verdict/blocker exact three-line envelope
+  - SD-28: worker output is machine handoff; user explanation belongs to main
+  - SD-29: lifecycle suppression, prompt isolation, physical masking are separate claims
+  - SD-30: safety/scope/route/verification/depth/model contracts are not pruning targets
+  - SD-31: static bootstrap bytes only; no aggregate token/cost savings claim
 open_decisions: []
 decisions_resolved:
   - D1: runtime gate 결과 확정 — slash 호출만 생존, parent Skill-tool·실파이프는 차단. 13개는 parent-invoked로 model invocation 유지

@@ -1,5 +1,19 @@
 # Skill-Design Refactor — Pipeline Summary
 
+## 2026-07-16 · v5 implementation started
+
+v4의 main-context ownership을 worker 입출력까지 확장한다. portable worker
+bootstrap은 one kernel + exactly one type + assigned contract이며, worker의
+마지막 출력은 `artifact/verdict/blocker` 세 줄로 고정한다. changed files,
+commands, logs, reasoning은 artifact에 남겨 main이 verbose body를 다시 받지
+않는다.
+
+Claude masked profile은 하네스 조립 입력을 실제로 줄이고, Codex/OpenCode는
+명시적 full-bootstrap read를 제거한다. 다만 runtime이 project instruction을
+자동 상속하는 부분은 physical masking으로 주장하지 않고 checked fallback으로
+기록한다. 정적 bootstrap bytes만 측정하며 total-token/cost 절감률은 주장하지
+않는다.
+
 ## 2026-07-16 · v4 GREEN
 
 primary entry routing을 `model proposal → user confirmation → capability-owned
