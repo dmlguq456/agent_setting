@@ -73,16 +73,28 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   # Primary signal: wrapper-recorded PID, independent of transcript aliasing.
   pid=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^pid=//p' | head -1)
   pid_start=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^pid_start=//p' | head -1)
+  pid_scope=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^pid_scope=//p' | head -1)
+  attempt_id=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^attempt_id=//p' | head -1)
+  route_id=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^route_id=//p' | head -1)
+  route_node=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^route_node=//p' | head -1)
   harness=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^harness=//p' | head -1)
   [ -n "$harness" ] || harness="claude"
   [ -d /proc ] || pid=""   # Fall back to transcript mtime without /proc.
   if [ -n "$pid" ] && [ -n "$pid_start" ]; then
-    exact=$(python3 "$SCRIPT_DIR/dispatch-registry.py" attempt-state \
-      --pid "$pid" --pid-start "$pid_start" 2>/dev/null || true)
+    exact_args=(attempt-state --pid "$pid" --pid-start "$pid_start")
+    [ -n "$pid_scope" ] && exact_args+=(--pid-scope "$pid_scope")
+    [ -n "$attempt_id" ] && exact_args+=(--attempt "$attempt_id")
+    [ -n "$route_id" ] && exact_args+=(--route "$route_id")
+    [ -n "$route_node" ] && exact_args+=(--node "$route_node")
+    exact=$(python3 "$SCRIPT_DIR/dispatch-registry.py" "${exact_args[@]}" --agent-home "$AGENT_HOME" 2>/dev/null || true)
     exact_state=$(printf '%s\n' "$exact" | sed -n 's/^state=//p' | head -1)
     classifier=$(printf '%s\n' "$exact" | sed -n 's/^classifier_source=//p' | head -1)
     if [ "$exact_state" = "working" ]; then
-      echo "ALIVE      ${slug:-?}  (pid $pid running; harness=$harness; classifier=$classifier)"
+      if [ "$pid_scope" = "namespace-local" ]; then
+        echo "ALIVE      ${slug:-?}  (namespace-local exact heartbeat; harness=$harness; classifier=$classifier)"
+      else
+        echo "ALIVE      ${slug:-?}  (pid $pid running; harness=$harness; classifier=$classifier)"
+      fi
       alive=$((alive + 1)); continue
     fi
     if [ "$exact_state" = "dead" ]; then
@@ -93,6 +105,14 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
       fi
       suspect=$((suspect + 1)); continue
     fi
+    if [ "$exact_state" = "done" ]; then
+      echo "⚠️ COMPLETED ${slug:-?}  — namespace-local terminal heartbeat awaits registry reconciliation  [open: $ts]"
+      suspect=$((suspect + 1)); continue
+    fi
+    # A namespace-local PID cannot be checked from the root namespace. If its exact
+    # heartbeat is no longer fresh, continue with the harness transcript fallback
+    # instead of probing an unrelated host PID with the same numeric value.
+    [ "$pid_scope" = "namespace-local" ] && pid=""
   fi
   if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
     cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)

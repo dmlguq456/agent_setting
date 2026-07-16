@@ -127,7 +127,21 @@ def current_job_lines(jobs: Path) -> list[str]:
     return result.stdout.splitlines()
 
 
-def recorded_attempt_state(metadata: dict[str, str], now: float) -> dict | None:
+def attempt_heartbeat(agent_home: Path, metadata: dict[str, str]) -> dict | None:
+    attempt = metadata.get("attempt_id", "").replace("/", "_")
+    if not attempt:
+        return None
+    path = agent_home / ".dispatch" / "heartbeats" / f"{attempt}.json"
+    try:
+        if path.stat().st_size > 8192:
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def recorded_attempt_state(metadata: dict[str, str], now: float, agent_home: Path) -> dict | None:
     pid = metadata.get("pid", "")
     expected = metadata.get("pid_start", "")
     if not pid.isdigit() or not expected:
@@ -144,8 +158,10 @@ def recorded_attempt_state(metadata: dict[str, str], now: float) -> dict | None:
     return classify_attempt_evidence({
         "pid": int(pid), "proc_start": expected, "actual_proc_start": actual,
         "pid_alive": alive, "proc_start_match": bool(alive and actual == expected),
+        "pid_scope": metadata.get("pid_scope"),
         "attempt_id": metadata.get("attempt_id"), "route_id": metadata.get("route_id"),
         "route_node": metadata.get("route_node"),
+        "heartbeat": attempt_heartbeat(agent_home, metadata),
     }, now)
 
 
@@ -257,9 +273,11 @@ def main(argv: list[str]) -> int:
             open_n += 1
             label = slug or "?"
             metadata = parse_metadata(pipe)
-            exact = recorded_attempt_state(metadata, now)
+            exact = recorded_attempt_state(metadata, now, agent_home)
             if exact and exact["state"] == "working":
-                print(f"ALIVE    {label} (recorded pid {exact['pid']} running; classifier={ATTEMPT_CLASSIFIER_SOURCE})")
+                detail = ("namespace-local exact heartbeat" if exact.get("pid_scope") == "namespace-local"
+                          else f"recorded pid {exact['pid']} running")
+                print(f"ALIVE    {label} ({detail}; classifier={ATTEMPT_CLASSIFIER_SOURCE})")
                 alive += 1
                 continue
             if exact and exact["state"] == "dead":
@@ -268,6 +286,10 @@ def main(argv: list[str]) -> int:
                     print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
                 else:
                     print(f"EXITED   {label} - recorded pid {exact['pid']} ended or identity changed; classifier={ATTEMPT_CLASSIFIER_SOURCE} [open: {ts}]")
+                suspect += 1
+                continue
+            if exact and exact["state"] == "done":
+                print(f"COMPLETED {label} - namespace-local terminal heartbeat awaits registry reconciliation [open: {ts}]")
                 suspect += 1
                 continue
             # Profile jobs live under their isolated home. Non-profile nested workers

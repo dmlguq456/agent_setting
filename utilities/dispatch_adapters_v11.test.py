@@ -78,6 +78,8 @@ class AdapterV11Test(unittest.TestCase):
     self.assertIn("stdin=subprocess.DEVNULL",launch)
     self.assertIn("stdout=subprocess.DEVNULL",launch)
     self.assertIn("stderr=subprocess.DEVNULL",launch)
+    self.assertIn('pid_scope=namespace-local',source)
+    self.assertIn('os.environ.get("AGENT_DISPATCH_CHILD") == "1"',source)
  def test_nested_codex_home_links_auth_but_keeps_mutable_state_local(self):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); source=root/"source"; source.mkdir(); worktree=root/"worktree"; worktree.mkdir()
@@ -105,7 +107,8 @@ class AdapterV11Test(unittest.TestCase):
    argv=["dispatch-headless.py",*command[2:]]
    env={**os.environ,"PATH":str(fakebin)+os.pathsep+os.environ.get("PATH",""),
         "AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
-        "AGENT_DISPATCH_JOBS":str(jobs),"FAKE_CHILD_COUNT":str(count)}
+        "AGENT_DISPATCH_JOBS":str(jobs),"AGENT_DISPATCH_CHILD":"1",
+        "FAKE_CHILD_COUNT":str(count)}
    codes=[]
    def invoke(): codes.append(wrapper.main(argv))
    with mock.patch.dict(os.environ,env,clear=True), \
@@ -122,5 +125,6 @@ class AdapterV11Test(unittest.TestCase):
    self.assertEqual(count.read_text(encoding="utf-8").splitlines(),["child"])
    self.assertEqual(len(jobs.read_text(encoding="utf-8").splitlines()),1)
    self.assertIn("launch_claimed=1",jobs.read_text(encoding="utf-8"))
+   self.assertIn("pid_scope=namespace-local",jobs.read_text(encoding="utf-8"))
 
 if __name__=="__main__": unittest.main()

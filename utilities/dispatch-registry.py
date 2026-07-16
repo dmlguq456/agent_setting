@@ -61,7 +61,21 @@ def current(rows):
     return passthrough + sorted(newest.values(), key=lambda row: row["order"])
 
 
-def proc_inputs(row):
+def attempt_heartbeat(home, meta):
+    attempt = (meta.get("attempt_id") or "").replace("/", "_")
+    if home is None or not attempt:
+        return None
+    path = home / ".dispatch" / "heartbeats" / f"{attempt}.json"
+    try:
+        if path.stat().st_size > 8192:
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def proc_inputs(row, home=None):
     meta = row["meta"]; raw = meta.get("pid", "")
     pid = int(raw) if raw.isdigit() else None; expected = meta.get("pid_start", "")
     actual = ""; alive = False
@@ -71,8 +85,10 @@ def proc_inputs(row):
         except (OSError, IndexError): pass
     return {"pid": pid, "proc_start": expected, "actual_proc_start": actual,
             "pid_alive": alive, "proc_start_match": bool(alive and expected == actual),
+            "pid_scope": meta.get("pid_scope"),
             "attempt_id": meta.get("attempt_id"), "route_id": meta.get("route_id"),
-            "route_node": meta.get("route_node")}
+            "route_node": meta.get("route_node"),
+            "heartbeat": attempt_heartbeat(home, meta)}
 
 
 def timestamp(value):
@@ -135,8 +151,9 @@ def terminal_marker(row, home):
 
 def classify(row, args, newest_orders):
     if row["status"] not in OPEN: return "terminal", "already-terminal", None
-    exact = classify_attempt_evidence(proc_inputs(row), args.now)
+    exact = classify_attempt_evidence(proc_inputs(row, args.agent_home), args.now)
     if exact and exact["state"] == "working": return "active", exact["rule"], None
+    if exact and exact["state"] == "done": return "terminal-heartbeat", exact["rule"], "completed-terminal-heartbeat"
     if exact and exact["state"] == "dead": return "exact-dead", exact["rule"], "dead-exact-pid"
     meta = row["meta"]
     key = (meta.get("route_id"), meta.get("route_node"))
@@ -228,17 +245,21 @@ def main(argv):
     p.add_argument("--node"); p.add_argument("--attempt"); p.add_argument("--job"); p.add_argument("--all", action="store_true")
     p.add_argument("--apply", action="store_true"); p.add_argument("--audit", type=Path); p.add_argument("--integration-ref")
     p.add_argument("--agent-home", type=Path); p.add_argument("--now", type=float, default=time.time(), help=argparse.SUPPRESS)
-    p.add_argument("--pid", type=int); p.add_argument("--pid-start")
+    p.add_argument("--pid", type=int); p.add_argument("--pid-start"); p.add_argument("--pid-scope")
     args = p.parse_args(argv[1:]); args.agent_home = (args.agent_home or resolve_agent_home()).resolve()
     if args.operation == "attempt-state":
         if args.pid is None or not args.pid_start:
             print("check=failed\nreason=exact-identity-required"); return 64
-        row = {"meta": {"pid": str(args.pid), "pid_start": args.pid_start}}
-        verdict = classify_attempt_evidence(proc_inputs(row), args.now)
+        row = {"meta": {"pid": str(args.pid), "pid_start": args.pid_start,
+                        "pid_scope": args.pid_scope, "attempt_id": args.attempt,
+                        "route_id": args.route, "route_node": args.node}}
+        verdict = classify_attempt_evidence(proc_inputs(row, args.agent_home), args.now)
         if verdict is None:
             print("check=failed\nreason=exact-identity-required"); return 65
         print("check=ok")
         print(f"state={verdict['state']}")
+        print(f"source={verdict['source']}")
+        print(f"rule={verdict['rule']}")
         print(f"classifier_source={verdict['classifier_source']}")
         print(f"pid={verdict['pid']}")
         print(f"proc_start={verdict['proc_start']}")
