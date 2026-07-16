@@ -102,3 +102,4 @@ decisions_open:
   - 'O2/v14 후보(이월): linked-worktree worker commit 불가 — worker no-commit + prepared commit → depth-0 harvest/commit 계약 평가'
   - 'O3/v14 후보(이월): route compiler input digest 자기수정 경합 — orchestrator override vs digest pin+drift record 비교'
   - 'O4/v14 후보: resource-runner canonical registry 경로 확정 (fleet 과정-뷰 F-28c 재개 조건)'
+  - 'O5/v14 후보: native fallback의 무자식 진행 — 2026-07-16 실측(v94-reading-face-d3-owner-r3): broker 인스턴스 사멸 후 native fallback이 child를 만들지 못한 채 빈 wait 3회. checked 폴백이 준비 상태를 합성하면 안 된다는 SD-50/53 원칙의 native surface 구멍; child 생성 실증(row/pid) 없으면 해당 hop을 실패로 닫는 계약 필요'
