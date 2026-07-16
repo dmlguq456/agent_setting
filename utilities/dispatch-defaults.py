@@ -21,7 +21,10 @@ class DefaultsConfigError(Exception):
 
 
 def _repo_root():
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # realpath, not abspath: the helper is projected into
+    # adapters/<harness>/utilities/ as a symlink, and the shipped config and
+    # topology registry live only at the real repo root.
+    return os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
 def default_config_path():

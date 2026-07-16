@@ -8,8 +8,27 @@ route() { AGENT_HOME="$tmp" "$root/utilities/dispatch-route.sh" --jobs "$jobs" "
 assert() { printf '%s\n' "$1" | grep -qx "$2"; }
 assert_not() { printf '%s\n' "$1" | grep -qx "$2" && { echo "unexpected match: $2" >&2; exit 1; }; return 0; }
 
+# Fixture config is exported before ANY route() call so no block consumes the
+# shipped profiles/dispatch-defaults.yaml (suite isolation, SD-66).
+cfg="$tmp/dispatch-defaults.yaml"
+cat > "$cfg" <<'EOF'
+schema_version: 1
+depth1_owner: [claude, codex]
+opencode:
+  relief_only: true
+capabilities:
+  autopilot-code:
+    execute: codex
+    test: diverse
+    report: claude
+  autopilot-apply:
+    apply: opencode
+EOF
+export DISPATCH_DEFAULTS_CONFIG="$cfg"
+
 # ---- role-only, argument/conflict, explicit OpenCode, usage/eligibility,
-#      exact model mapping, and trace behavior (unchanged by SD-66) ----
+#      exact model mapping, and trace behavior (unchanged by SD-66; these calls
+#      pass no --capability, so the fixture config supplies no affinity here) ----
 out=$(route --stage plan); assert "$out" 'adapter=codex'; assert "$out" 'role=deep maker'
 out=$(route --stage plan --adapter claude); assert "$out" 'adapter=claude'
 out=$(route --stage report); assert "$out" 'adapter=claude'
@@ -29,21 +48,7 @@ out=$(route --stage report); assert "$out" 'trace.1=explicit=none;family=none;el
 : > "$jobs"
 
 # ---- SD-66: profiles/dispatch-defaults.yaml fixture-config coverage ----
-cfg="$tmp/dispatch-defaults.yaml"
-cat > "$cfg" <<'EOF'
-schema_version: 1
-depth1_owner: [claude, codex]
-opencode:
-  relief_only: true
-capabilities:
-  autopilot-code:
-    execute: codex
-    test: diverse
-    report: claude
-  autopilot-apply:
-    apply: opencode
-EOF
-export DISPATCH_DEFAULTS_CONFIG="$cfg"
+# (fixture created and exported at the top of this suite)
 
 # Configured value is honored for an addressable, populated cell.
 out=$(route --capability autopilot-code --stage execute); assert "$out" 'adapter=codex'

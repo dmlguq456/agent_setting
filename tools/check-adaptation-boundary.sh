@@ -321,6 +321,7 @@ check_non_claude_adapter_symlink_boundaries() {
         adapters/codex/utilities/workflow-toggle.sh:../../../utilities/workflow-toggle.sh|\
         adapters/codex/utilities/worktree-cleanup.py:../../../utilities/worktree-cleanup.py|\
         adapters/codex/utilities/dispatch-route.sh:../../../utilities/dispatch-route.sh|\
+        adapters/codex/utilities/dispatch-defaults.py:../../../utilities/dispatch-defaults.py|\
         adapters/codex/utilities/token-budget.py:../../../utilities/token-budget.py|\
         adapters/codex/utilities/token-budget-experiment.py:../../../utilities/token-budget-experiment.py|\
         adapters/codex/utilities/worker_bootstrap.py:../../../utilities/worker_bootstrap.py|\
@@ -332,6 +333,7 @@ check_non_claude_adapter_symlink_boundaries() {
         adapters/opencode/utilities/workflow-toggle.sh:../../../utilities/workflow-toggle.sh|\
         adapters/opencode/utilities/worktree-cleanup.py:../../../utilities/worktree-cleanup.py|\
         adapters/opencode/utilities/dispatch-route.sh:../../../utilities/dispatch-route.sh|\
+        adapters/opencode/utilities/dispatch-defaults.py:../../../utilities/dispatch-defaults.py|\
         adapters/opencode/utilities/worker_bootstrap.py:../../../utilities/worker_bootstrap.py)
           ;;
         *)
@@ -1260,7 +1262,7 @@ check_codex_utility_projection() {
     fi
   done
 
-  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh -o -name token-budget.py -o -name token-budget-experiment.py -o -name worker_bootstrap.py \) -print 2>/dev/null || true)
+  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh -o -name dispatch-defaults.py -o -name token-budget.py -o -name token-budget-experiment.py -o -name worker_bootstrap.py \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/codex/utilities contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -1275,7 +1277,7 @@ check_codex_utility_projection() {
   # codex-adapter-parity audit P-40 (2026-07-04): derived under-projection completeness pair — every
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
-  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py dispatch-route.sh token-budget.py token-budget-experiment.py worker_bootstrap.py"
+  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py token-budget.py token-budget-experiment.py worker_bootstrap.py"
   UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py"
   utility_count=0
   for f in utilities/*; do
@@ -2331,7 +2333,7 @@ check_opencode_utility_projection() {
     fi
   done
 
-  extra=$(find adapters/opencode/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh -o -name worker_bootstrap.py \) -print 2>/dev/null || true)
+  extra=$(find adapters/opencode/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh -o -name dispatch-defaults.py -o -name worker_bootstrap.py \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/opencode/utilities contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -2346,7 +2348,7 @@ check_opencode_utility_projection() {
   # codex-adapter-parity audit P-40 (2026-07-04): derived under-projection completeness pair — every
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
-  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py dispatch-route.sh worker_bootstrap.py"
+  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py worker_bootstrap.py"
   UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py token-budget.py token-budget-experiment.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py"
   utility_count=0
   for f in utilities/*; do
@@ -3761,6 +3763,9 @@ check_worker_bootstrap_contract() {
   done
 
   for profile in profiles/*.yaml; do
+    # profiles/dispatch-defaults.yaml is the SD-66 harness-default policy file,
+    # not a worker profile; it declares no worker_type by contract.
+    [ "$profile" = "profiles/dispatch-defaults.yaml" ] && continue
     if ! grep -Eq '^worker_type: (owner|stage|review|support)$' "$profile"; then
       fail_msg "$profile must declare exactly one valid worker_type"
     fi
