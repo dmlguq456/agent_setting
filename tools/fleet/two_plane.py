@@ -276,6 +276,9 @@ def build_lines(term_width, layout):
                              desc_w, stg_key=_STAGE_PLAIN[0]))
     g1.append(None)
     g1.extend(_session_lines(s_codex, layout, term_width, wide_name_width))
+    # r5 (user) — the card's mem zone sits BELOW a subtle in-band divider: a dim rule ON the
+    # tint (never a chrome bar, never an untinted gap — the band itself must stay continuous).
+    g1.append([(" ", None), ("─" * max(8, term_width - 12), "dim")])
     g1.append([(" \U0001f9e0 ", "dim"), ("14:02 ", "dim"), ("+", "lvl_g"),
                (" durable/project ", "dim"), ("distiller  ", "dim"),
                ("\"fleet 두-평면 문법 확정 — 자식 행은 세션 그리드에서 탈퇴\"", "dim")])

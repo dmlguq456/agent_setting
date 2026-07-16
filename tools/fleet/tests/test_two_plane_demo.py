@@ -180,6 +180,25 @@ class TwoPlaneGrammarTest(unittest.TestCase):
         self.assertIn("durable/project", text)
         self.assertIn("working/expired", text)
 
+    def test_mem_zone_sits_below_a_subtle_in_band_divider(self):
+        # r5 (user) — a dim rule ON the tint separates the card's mem zone from its rows;
+        # it lives inside the band (tint sentinel present) and directly precedes the first
+        # mem event row.
+        lines = two_plane.build_lines(120, "wide")
+        idx_rule = idx_mem = None
+        for i, ln in enumerate(lines):
+            if not ln:
+                continue
+            s = "".join(t for t, _k in ln)
+            if idx_rule is None and s.strip() and set(s.strip()) == {"─"}:
+                self.assertEqual(ln[0][0], render._TINT_BODY_HOT)   # on the band, not chrome
+                idx_rule = i
+            if idx_mem is None and "14:02" in s:
+                idx_mem = i
+        self.assertIsNotNone(idx_rule)
+        self.assertIsNotNone(idx_mem)
+        self.assertEqual(idx_mem, idx_rule + 1)
+
     def test_branch_cell_carries_the_new_glyph(self):
         # grammar #7 — ⎇ glyph is new to THIS view only (asserted separately below).
         text = _joined(self._lines(120))
