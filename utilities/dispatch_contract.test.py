@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os, subprocess, sys, tempfile, unittest
+from unittest import mock
 from pathlib import Path
 
 P=Path(__file__).with_name("dispatch_contract.py")
@@ -28,15 +29,45 @@ class DispatchContractTest(unittest.TestCase):
   with self.assertRaises(D.DispatchContractError) as caught:
    D.validate_nested_eligibility(depth=2,action="start",parent_harness="codex",parent_transport="headless",parent_sandbox="workspace-write",child_harness="codex",launch_authority="conductor",status="unknown",source="fixture")
   self.assertEqual(caught.exception.reason,"nested-child-spawn-unknown")
- def test_depth0_prepares_broker_and_worker_cannot_replace_it(self):
+ def test_launch_broker_is_retired(self):
   with tempfile.TemporaryDirectory() as td:
-   root=Path(td); jobs=root/"jobs.log"; broker=root/"broker"
-   selection=D.ensure_launch_broker(root,jobs,depth=1,action="start",intensity="strong",environ={"AGENT_DISPATCH_BROKER_ROOT":str(broker)})
-   self.assertIsNotNone(selection); self.assertEqual(selection.jobs,jobs.resolve()); self.assertTrue(selection.instance_id.startswith("brk-"))
+   root=Path(td); jobs=root/"jobs.log"
    with self.assertRaises(D.DispatchContractError) as caught:
-    D.ensure_launch_broker(root,jobs,depth=1,action="start",intensity="strong",environ={"AGENT_SESSION_ROLE":"worker","AGENT_DISPATCH_BROKER_ROOT":str(root/"other")})
-   self.assertEqual(caught.exception.reason,"broker-ensure-worker-forbidden")
-   subprocess.run([sys.executable,str(P.with_name("dispatch-broker.py")),"stop","--root",str(broker),"--jobs",str(jobs)],env={**os.environ,"AGENT_HOME":str(root)},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=False)
+    D.ensure_launch_broker(root,jobs,depth=1,action="start",intensity="strong")
+   self.assertEqual(caught.exception.reason,"launch-broker-retired")
+ def test_atomic_attempt_claim_is_exact_and_idempotent(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"; attempt="att-123456789abc"; prefix="att-123456789abc-extra"
+   row=f"2026-07-16T00:00:00Z\topen\t/repo\t/wt\tstage\tcapability=code-plan,attempt_id={prefix}"
+   self.assertTrue(D.claim_attempt_row(jobs,prefix,row))
+   exact=f"2026-07-16T00:00:01Z\topen\t/repo\t/wt\tstage\tcapability=code-plan,attempt_id={attempt}"
+   self.assertTrue(D.claim_attempt_row(jobs,attempt,exact))
+   self.assertFalse(D.claim_attempt_row(jobs,attempt,exact))
+   self.assertTrue(D.claim_attempt_row(jobs,attempt,exact,launch=True))
+   self.assertFalse(D.claim_attempt_row(jobs,attempt,exact,launch=True))
+   self.assertIn("launch_claimed=1",jobs.read_text())
+   self.assertEqual(len(jobs.read_text().splitlines()),2)
+ def test_concurrent_attempt_claim_has_one_winner(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"; attempt="att-concurrent1234"
+   code=("import sys;from pathlib import Path;sys.path.insert(0,sys.argv[1]);"
+         "import dispatch_contract as D;"
+         "print(int(D.claim_attempt_row(Path(sys.argv[2]),sys.argv[3],sys.argv[4],launch=True)))")
+   row=f"2026-07-16T00:00:00Z\topen\t/repo\t/wt\tstage\tcapability=code-plan,attempt_id={attempt}"
+   procs=[subprocess.Popen([sys.executable,"-c",code,str(P.parent),str(jobs),attempt,row],text=True,stdout=subprocess.PIPE) for _ in range(8)]
+   winners=[p.communicate(timeout=10)[0].strip() for p in procs]
+   self.assertEqual(winners.count("1"),1,winners)
+   self.assertEqual(len(jobs.read_text().splitlines()),1)
+ def test_register_to_start_transition_is_crash_atomic(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"; attempt="att-crashatomic123"
+   row=f"2026-07-16T00:00:00Z\topen\t/repo\t/wt\tstage\tcapability=code-plan,attempt_id={attempt}"
+   self.assertTrue(D.claim_attempt_row(jobs,attempt,row))
+   before=jobs.read_text()
+   with mock.patch.object(D.os,"replace",side_effect=OSError("fixture-crash")):
+    with self.assertRaises(OSError): D.claim_attempt_row(jobs,attempt,row,launch=True)
+   self.assertEqual(jobs.read_text(),before)
+   self.assertFalse(list(Path(td).glob(".jobs.log.claim-*")))
  def test_legacy_reconcile_is_idempotent(self):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); local=root/"local.log"; global_jobs=root/"global.log"

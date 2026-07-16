@@ -2015,6 +2015,32 @@ def _build_process_lines(sessions, jobs, route_views_by_id, malformed, memory, t
     return lines
 
 
+def _current_attempt_jobs(jobs):
+    """Hide superseded exact route attempts unless full history is requested."""
+    if _SHOW_ALL:
+        return jobs
+    latest_attempt = {}
+    for index, job in enumerate(jobs):
+        key = (getattr(job, "route_id", None), getattr(job, "route_node", None))
+        if not all(key) or not getattr(job, "attempt_id", None):
+            continue
+        rank = (
+            -(getattr(job, "registry_priority", None)
+              if getattr(job, "registry_priority", None) is not None else 0),
+            getattr(job, "registry_order", None) if getattr(job, "registry_order", None) is not None else -1,
+            -(getattr(job, "elapsed_min", None) if getattr(job, "elapsed_min", None) is not None else 10**9),
+            index,
+        )
+        if key not in latest_attempt or rank > latest_attempt[key][0]:
+            latest_attempt[key] = (rank, job)
+    return [
+        job for job in jobs
+        if not (getattr(job, "route_id", None) and getattr(job, "route_node", None)
+                and getattr(job, "attempt_id", None)
+                and latest_attempt.get((job.route_id, job.route_node), (None, job))[1] is not job)
+    ]
+
+
 def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memory=None,
                  term_width=None):
     """Return a flat list of segment-lines for the whole screen (None = blank line).
@@ -2044,6 +2070,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     except Exception:
         _route_views_by_id = {}
         _node_evidence = {}
+    display_jobs = _current_attempt_jobs(jobs)
     if _PROCESS_VIEW:
         # F-30 (§5.2) — the ONE branch point, right after the _SELECTABLE reset and the route
         # resolution both views need. `_build_process_lines` honors the exact same return
@@ -2051,7 +2078,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         # reused unmodified below this branch. `_node_evidence` is threaded through too (code-test
         # verification_round_2.md §10) — the degrade-pool's covered-conductor exclusion needs it,
         # the same way route resolution itself needed it for defect 1.
-        return _build_process_lines(sessions, jobs, _route_views_by_id, malformed, memory,
+        return _build_process_lines(sessions, display_jobs, _route_views_by_id, malformed, memory,
                                     term_width, layout, node_evidence=_node_evidence)
     # F-18b: mem-worker (distiller/curator/F-17 refresher) census — computed on the ORIGINAL
     # session list, before is_child/mem filtering, so folded/mem-only groups still surface a
@@ -2078,8 +2105,11 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         if s.session_id:
             session_groups[s.session_id] = gk
     job_groups = {}
-    top_jobs = [j for j in jobs if not (getattr(j, "parent_slug", None) and getattr(j, "depth", 1) >= 2)]
-    depth_jobs = [j for j in jobs if getattr(j, "parent_slug", None) and getattr(j, "depth", 1) >= 2]
+    # A route node has one current attempt. Keep older exact attempts in the alert
+    # census/history, but suppress their rows by default so retries do not appear as
+    # concurrent Fleet sessions. ``a`` restores the complete attempt history.
+    top_jobs = [j for j in display_jobs if not (getattr(j, "parent_slug", None) and getattr(j, "depth", 1) >= 2)]
+    depth_jobs = [j for j in display_jobs if getattr(j, "parent_slug", None) and getattr(j, "depth", 1) >= 2]
     for j in top_jobs + depth_jobs:
         gk = _group_key_job(j, session_groups=session_groups, job_groups=job_groups)
         groups.setdefault(gk, {"sessions": [], "jobs": []})["jobs"].append(j)
@@ -2156,7 +2186,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # (F-30, v10) so the process view (§5.1) shares this EXACT row instead of a second copy.
     # `_real` stays a LOCAL here too — the alert strip below (ctx_items) still needs it.
     _real = [s for s in sessions if not s.app_server and not getattr(s, "mem_worker", False)]
-    lines.append(_pulse_segs(sessions, jobs))  # Aggregate cost rollup intentionally removed.
+    lines.append(_pulse_segs(sessions, display_jobs))  # Aggregate cost rollup intentionally removed.
     _governor = _governor_segs()               # F-28c — pulse-adjacent, never merged into pulse
     if _governor is not None:                  # counts (I8); None = source absent or quiet.
         lines.append(_governor)

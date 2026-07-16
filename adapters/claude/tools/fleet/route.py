@@ -284,7 +284,12 @@ def _node_state(node_id, route_jobs, ev_by_node, now):
     live = [j for j in route_jobs if getattr(j, "route_node", None) == node_id]
     active = [j for j in live if j.liveness == "working"]
     if active:
-        j = active[0]
+        j = max(active, key=lambda row: (
+            -(getattr(row, "registry_priority", None)
+              if getattr(row, "registry_priority", None) is not None else 0),
+            getattr(row, "registry_order", None) if getattr(row, "registry_order", None) is not None else -1,
+            -(getattr(row, "elapsed_min", None) if getattr(row, "elapsed_min", None) is not None else 10**9),
+        ))
         return {"state": "active", "elapsed_min": j.elapsed_min, "model": j.model,
                 "harness": j.harness, "effort": j.effort, "pid": j.pid, "note": None, "job": j}
     failed_live = [j for j in live if j.liveness in ("stale", "dead")]
@@ -294,7 +299,12 @@ def _node_state(node_id, route_jobs, ev_by_node, now):
     ev_status = ev.get("status")
     if failed_live or ev_status in ("killed", "cancelled") or (ev_status == "done" and fail_note):
         if failed_live:
-            j = failed_live[0]
+            j = max(failed_live, key=lambda row: (
+                -(getattr(row, "registry_priority", None)
+                  if getattr(row, "registry_priority", None) is not None else 0),
+                getattr(row, "registry_order", None) if getattr(row, "registry_order", None) is not None else -1,
+                -(getattr(row, "elapsed_min", None) if getattr(row, "elapsed_min", None) is not None else 10**9),
+            ))
             return {"state": "failed", "elapsed_min": j.elapsed_min, "model": j.model,
                     "harness": j.harness, "effort": j.effort, "pid": j.pid,
                     "note": note, "job": j}

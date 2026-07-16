@@ -30,7 +30,7 @@ def _default_root():
     """Mirrors utilities/model-worker-governor.py:24-33 `default_root()` MINUS the
     `artifact-root.sh` subprocess fallback (module docstring — no subprocess per tick). The
     env-var and $AGENT_ARTIFACT_ROOT branches cover every real launch path this repo uses
-    (dispatch-broker ensure always sets AGENT_ARTIFACT_ROOT); the subprocess branch is a
+    (dispatch wrappers always set AGENT_ARTIFACT_ROOT); the subprocess branch is a
     last-resort CLI convenience governor.py itself needs for ad-hoc invocation, not fleet."""
     explicit = os.environ.get("AGENT_MODEL_GOVERNOR_ROOT")
     if explicit:

@@ -77,11 +77,11 @@ through `preflight.sh dispatch --dry-run|--register|--start` with explicit
 worktree, slug, capability, mode, QA, intensity, depth, parent, worker role,
 owner, agent, and model/variant choice or inheritance. Monitor
 `preflight.sh liveness [jobs.log]`; harvest via `preflight.sh harvest`.
-Before a standard+ conductor starts, depth 0 prepares the shared non-model
-broker through `preflight.sh broker ensure --jobs <canonical-jobs>`; the wrapper
-does this idempotently on `--start`. Conductors use `dispatch-chain`, which sends
-all same/cross-harness depth-2 targets through that broker rather than recursively
-starting adapter CLIs.
+Conductors use `dispatch-chain` to invoke checked same/cross-harness depth-2
+adapter wrappers directly. Dispatch contract v3 atomically claims one stable
+attempt row before spawn and starts no child for a duplicate claim. Broker v1/v2
+routes are read-only migration inputs; the retired broker exposes only legacy
+`status`/`stop`.
 
 `standard+` uses a depth-1 capability owner and separable depth-2
 `code-plan -> code-execute -> code-test -> code-report` workers. `direct` is

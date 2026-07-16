@@ -48,18 +48,17 @@ class CompletionMarkerTest(unittest.TestCase):
     def compile_route(self):
         rows = [
             {
-                "parent_harness": "claude",
+                "parent_harness": harness,
                 "parent_transport": "headless",
                 "parent_sandbox": "fixture",
-                "child_harness": "claude",
-                "launch_authority": "ancestor-broker",
+                "child_harness": harness,
+                "launch_authority": "conductor",
                 "status": "supported",
-                "probe_source": "fixture-broker",
-                "probe_time": "2026-07-15T00:00:00Z",
+                "probe_source": f"{harness}-fixture",
+                "probe_time": "2026-07-16T00:00:00Z",
                 "failure_class": "",
-                "broker_root": str(self.base / "broker"),
-                "broker_instance": "brk-" + "f" * 32,
             }
+            for harness in ADAPTERS
         ]
         evidence = {"tuples": rows, "native_subagent": []}
         gate = {
@@ -75,28 +74,27 @@ class CompletionMarkerTest(unittest.TestCase):
         )
 
     def as_v2(self, route):
-        # Hand-forced v2 shape: strip mutable broker_instance from the
-        # evidence and every candidate (mirrors what SD-55's compile_route
-        # will do natively), then re-hash. completion_marker_gate only reads
-        # `broker_contract_version`, so this exercises the gate independent
-        # of SD-55's own compile-time behavior.
+        # Hand-forced historical v2 shape for the read-only compatibility
+        # boundary. New register/start operations must reject it.
         forced = copy.deepcopy(route)
+        forced.pop("dispatch_contract_version", None)
         forced["broker_contract_version"] = 2
         for row in forced.get("dispatch_evidence", {}).get("tuples", []):
+            row["launch_authority"] = "ancestor-broker"
+            row["broker_root"] = str(self.base / "broker")
             row.pop("broker_instance", None)
         for node in forced.get("nodes", []):
             for hop in node.get("dispatch_fallback", []):
                 for candidate in hop.get("candidates", []):
+                    candidate["launch_authority"] = "ancestor-broker"
+                    candidate["broker_root"] = str(self.base / "broker")
                     candidate.pop("broker_instance", None)
         forced["route_hash"] = ROUTE.route_hash(forced)
         forced["route_id"] = "rt-" + forced["route_hash"].split(":", 1)[1][:16]
         return forced
 
     def as_v1(self, route):
-        # Hand-forced v1 shape (compile_route defaults to v2 as of SD-55) --
-        # needed by the negative fixture that documents v1 records are not
-        # subject to the completion-marker gate (§13.5.3 acceptance 5).
-        forced = copy.deepcopy(route)
+        forced = self.as_v2(route)
         forced["broker_contract_version"] = 1
         for row in forced.get("dispatch_evidence", {}).get("tuples", []):
             if row.get("launch_authority") == "ancestor-broker":
@@ -169,8 +167,8 @@ class CompletionMarkerTest(unittest.TestCase):
 
     # fixture 7 -------------------------------------------------------------
     def test_start_without_dependency_marker_fails_closed(self):
-        route = self.as_v2(self.compile_route())
-        route_path = self.write_route(route, "route-v2.json")
+        route = self.compile_route()
+        route_path = self.write_route(route, "route-v3.json")
         for harness in ADAPTERS:
             with self.subTest(harness=harness):
                 command = self.wrapper_command(harness, "start", route_path, route, "execute")
@@ -195,17 +193,22 @@ class CompletionMarkerTest(unittest.TestCase):
 
     # fixture 8 -------------------------------------------------------------
     def test_marker_absence_is_not_a_failure(self):
-        # (a) v1 record + --start, no marker anywhere -> gate must not fire.
-        v1_route = self.as_v1(self.compile_route())
-        self.assertEqual(v1_route.get("broker_contract_version"), 1)
-        v1_path = self.write_route(v1_route, "route-v1.json")
-        for harness in ADAPTERS:
-            with self.subTest(harness=harness, phase="v1"):
-                command = self.wrapper_command(harness, "start", v1_path, v1_route, "execute")
-                result = subprocess.run(command, text=True, capture_output=True, env=self.base_env())
-                self.assertNotIn("reason=completion-marker-missing", result.stdout)
+        # (a) Historical v1/v2 records remain inspectable, but may not create
+        # new registry rows or children after broker retirement.
+        for version, legacy_route in ((1, self.as_v1(self.compile_route())), (2, self.as_v2(self.compile_route()))):
+            self.assertEqual(legacy_route.get("broker_contract_version"), version)
+            legacy_path = self.write_route(legacy_route, f"route-v{version}.json")
+            for action in ("register", "start"):
+                for harness in ADAPTERS:
+                    with self.subTest(harness=harness, phase=f"v{version}-{action}"):
+                        command = self.wrapper_command(harness, action, legacy_path, legacy_route, "execute")
+                        result = subprocess.run(command, text=True, capture_output=True, env=self.base_env())
+                        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                        self.assertIn("legacy-broker-route-read-only", result.stdout + result.stderr)
+                        self.assertNotIn("reason=completion-marker-missing", result.stdout)
 
-        # (b) record-unbound --start (no --route-file at all) -> gate must
+        # (b) Record-unbound --start (no --route-file at all) -> the route
+        # completion-marker gate does not apply.
         # not fire either (no route to evaluate depends_on against).
         for harness in ADAPTERS:
             with self.subTest(harness=harness, phase="unbound"):

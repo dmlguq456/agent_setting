@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
+    claim_attempt_row,
     completion_marker_gate,
     ensure_global_registry_writable,
-    ensure_launch_broker,
     new_attempt_id,
     resolve_global_registry,
     validate_nested_eligibility,
@@ -282,7 +282,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         "Claude realization:\n"
         "- The wrapper validates route/scope and the masked profile before launch. Re-run route validation only for a safety recheck.\n"
         f"- Read only the exposed {args.assigned_contract} Skill, named artifacts, and selected specialization. General Claude custom subagents may still inherit project CLAUDE.md; do not manually load a full harness bootstrap.\n"
-        "- Owner workers use the inherited registry/broker, poll in this turn, harvest artifacts, and close rows; stage/review/support workers do not dispatch.\n\n"
+        "- Owner workers use the inherited registry, launch checked adapter wrappers directly, poll in this turn, harvest artifacts, and close rows; stage/review/support workers do not dispatch.\n\n"
         "Assignment:\n"
         f"{task.rstrip()}\n\n"
         "End with the kernel's exact three-line handoff and nothing after it.\n",
@@ -350,7 +350,7 @@ def _effective_parent_cwd(args):
     return cwd
 
 
-def append_job(jobs: Path, args: argparse.Namespace) -> None:
+def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
     pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth},harness=claude"
     if args.parent_slug:
@@ -389,9 +389,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     if args.broker_request_id:
         pipe += f",broker_request_id={args.broker_request_id}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    with jobs_lock(jobs):
-        with jobs.open("a", encoding="utf-8") as f:
-            f.write(f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}\n")
+    row = f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}"
+    return claim_attempt_row(jobs, args.attempt_id, row, launch=args.action == "start")
 
 
 def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str, attempt_id: str | None = None) -> bool:
@@ -456,6 +455,13 @@ def annotate_job_row(jobs: Path, slug: str, worktree: str, extra_kv: str, attemp
             jobs.write_text("".join(lines), encoding="utf-8")
             return True
     return False
+
+
+def process_start_ticks(pid: int) -> str:
+    try:
+        return (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8").split()[21]
+    except (OSError, IndexError):
+        return ""
 
 
 def write_reset_cache(agent_home: Path, harness: str, reason: str, reset: str) -> None:
@@ -579,6 +585,8 @@ def main(argv: list[str]) -> int:
     args.worktree = str(Path(args.worktree).resolve())
     action = "start" if args.start else "register" if args.register else "dry-run"
     args.action = action
+    if args.broker_request_id or args.launch_authority == "ancestor-broker":
+        return fail("launch-broker-retired", 76, child_spawned="0")
     args.agent_home = resolve_agent_home()
     worktree = Path(args.worktree)
     if not worktree.is_dir():
@@ -645,12 +653,6 @@ def main(argv: list[str]) -> int:
             ensure_global_registry_writable(jobs)
     except DispatchContractError as e:
         return fail(e.reason, 73, detail=e.detail, child_spawned="0")
-    try:
-        broker = ensure_launch_broker(
-            agent_home, jobs, depth=args.depth, action=action, intensity=args.intensity
-        )
-    except DispatchContractError as e:
-        return fail(e.reason, 76, detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     home_root = agent_home / ".dispatch" / "homes"
     instance_dir = home_root / f"{args.slug}.{args.profile}" if args.profile else None
@@ -692,10 +694,12 @@ def main(argv: list[str]) -> int:
             gate = subprocess.run([sys.executable, str(governor), "--root", str(governor_root), "check", "--class", "dispatch"])
             if gate.returncode != 0:
                 return fail("model-worker-governor-denied", 75)
-        append_job(jobs, args)
+        args.attempt_claimed = append_job(jobs, args)
+    else:
+        args.attempt_claimed = False
 
-    if action == "start":
-        env = {**os.environ}
+    if action == "start" and args.attempt_claimed:
+        env = {key: value for key, value in os.environ.items() if not key.startswith("AGENT_DISPATCH_BROKER_")}
         env.update({
             "AGENT_SESSION_ROLE": "worker",
             "CLAUDE_CODE_CHILD_SESSION": "1",
@@ -723,13 +727,6 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
             "AGENT_DISPATCH_CURRENT_SANDBOX": "adapter-default",
         })
-        if broker:
-            env.update({
-                "AGENT_DISPATCH_BROKER_ROOT": str(broker.root),
-                "AGENT_DISPATCH_BROKER_INSTANCE": broker.instance_id,
-                "AGENT_DISPATCH_BROKER_PID": str(broker.pid),
-                "AGENT_DISPATCH_BROKER_START_TICKS": broker.start_ticks,
-            })
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
         try:
@@ -740,8 +737,11 @@ def main(argv: list[str]) -> int:
         # Shared-worktree aliasing (OPERATIONS §5.10 signal order ①): record
         # the child pid so liveness can use a process signal. Conductor activity
         # in the same worktree can contaminate transcript mtime.
-        annotate_job_row(jobs, args.slug, args.worktree, f"pid={proc.pid}", args.attempt_id)
+        start_ticks = process_start_ticks(proc.pid)
+        launch_identity = f"pid={proc.pid}" + (f",pid_start={start_ticks}" if start_ticks else "")
+        annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
         args.child_pid = proc.pid
+        args.child_pid_start = start_ticks
         # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a limit/auth early death so
         # a limit-killed launch closes its own row now instead of lingering `open`
         # until liveness SUSPECT catches it minutes later.
@@ -780,17 +780,17 @@ def main(argv: list[str]) -> int:
     print(f"profile={args.profile or '-'}")
     print(f"instance_home={instance_dir if instance_dir else '-'}")
     print(f"job_registry={jobs}")
-    print(f"broker_root={broker.root if broker else os.environ.get('AGENT_DISPATCH_BROKER_ROOT', '-')}")
-    print(f"broker_instance={broker.instance_id if broker else os.environ.get('AGENT_DISPATCH_BROKER_INSTANCE', '-')}")
+    print("broker_lifecycle=retired")
     print(f"registry_authority={registry.source}")
     print(f"attempt_id={args.attempt_id or '-'}")
-    print(f"broker_request_id={args.broker_request_id or '-'}")
     print(f"launch_authority={args.launch_authority}")
     print(f"fallback_ordinal={args.fallback_ordinal}")
     print(f"registry_lock={jobs}.lock")
-    print(f"registered={1 if action in ('register', 'start') else 0}")
-    print(f"started={1 if action == 'start' else 0}")
+    print(f"duplicate_attempt={0 if args.attempt_claimed or action == 'dry-run' else 1}")
+    print(f"registered={1 if args.attempt_claimed else 0}")
+    print(f"started={1 if action == 'start' and args.attempt_claimed else 0}")
     print(f"child_pid={getattr(args, 'child_pid', None) or '-'}")
+    print(f"child_pid_start={getattr(args, 'child_pid_start', None) or '-'}")
     early_death = getattr(args, "early_death", None)
     if early_death:
         reason, reset = early_death

@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import uuid
 
 
@@ -146,67 +147,19 @@ def ensure_launch_broker(
     intensity: str,
     environ: dict[str, str] | os._Environ[str] | None = None,
 ) -> BrokerSelection | None:
-    """Prepare the SD-51 depth-0 broker before a standard+ conductor starts.
+    """Reject production launch-broker creation after dispatch contract v3.
 
-    Nested workers may consume an inherited binding but cannot create or replace
-    it.  Quick depth-1 one-shot workers have no depth-2 stages and do not need a
-    broker.
+    The callable remains for one compatibility release so an overlooked caller
+    fails closed with a stable reason instead of silently resurrecting the
+    resident broker. Diagnostic ``status``/``stop`` remain in dispatch-broker.py.
     """
 
     if action != "start" or depth != 1 or intensity not in {"standard", "strong", "thorough", "adversarial"}:
         return None
-    env = os.environ if environ is None else environ
-    if env.get("AGENT_SESSION_ROLE") == "worker" or env.get("AGENT_DISPATCH_CHILD") == "1":
-        raise DispatchContractError("broker-ensure-worker-forbidden", "only depth 0 may prepare the launch broker")
-    root = _absolute(
-        env.get("AGENT_DISPATCH_BROKER_ROOT") or str(agent_home / ".dispatch" / "broker"),
-        "agent-dispatch-broker-root",
+    raise DispatchContractError(
+        "launch-broker-retired",
+        "dispatch contract v3 launches checked headless adapters directly from the conductor",
     )
-    command = [
-        sys.executable,
-        str(Path(__file__).resolve().with_name("dispatch-broker.py")),
-        "ensure",
-        "--root",
-        str(root),
-        "--jobs",
-        str(jobs),
-    ]
-    try:
-        result = subprocess.run(
-            command,
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=10,
-            env={**env, "AGENT_HOME": str(agent_home)},
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise DispatchContractError("broker-unavailable", str(exc)) from exc
-    fields = dict(
-        line.split("=", 1)
-        for line in result.stdout.splitlines()
-        if "=" in line
-    )
-    if result.returncode or fields.get("check") != "ok":
-        reason = fields.get("reason", "broker-unavailable")
-        detail = fields.get("detail") or result.stderr.strip() or result.stdout.strip()
-        raise DispatchContractError(reason, detail)
-    try:
-        selection = BrokerSelection(
-            root=Path(fields["broker_root"]).resolve(strict=False),
-            instance_id=fields["broker_instance"],
-            pid=int(fields["broker_pid"]),
-            start_ticks=fields["broker_start_ticks"],
-            jobs=Path(fields["broker_jobs"]).resolve(strict=False),
-        )
-    except (KeyError, TypeError, ValueError) as exc:
-        raise DispatchContractError("broker-response-invalid", result.stdout.strip()) from exc
-    if selection.jobs != jobs.resolve(strict=False):
-        raise DispatchContractError(
-            "broker-jobs-mismatch",
-            f"expected={jobs.resolve(strict=False)} observed={selection.jobs}",
-        )
-    return selection
 
 
 def validate_nested_eligibility(
@@ -258,12 +211,17 @@ def completion_marker_gate(
     called once per wrapper) are structurally forced to agree on one root.
     """
 
-    if action != "start":
-        return
     if not route_file:
         return
     route = json.loads(Path(route_file).read_text(encoding="utf-8"))
-    if route.get("broker_contract_version") != 2:
+    contract_version = route.get("dispatch_contract_version") or route.get("broker_contract_version")
+    contract_version = contract_version or 1
+    if action in {"register", "start"} and contract_version != 3:
+        raise DispatchContractError(
+            "legacy-broker-route-read-only",
+            f"dispatch contract v{contract_version} cannot register or start workers",
+        )
+    if action != "start" or contract_version != 3:
         return
     node = next((row for row in route.get("nodes", []) if row.get("id") == route_node), None)
     if node is None:
@@ -294,7 +252,66 @@ def new_attempt_id(value: str | None = None) -> str:
 
 
 def row_has_attempt(pipe: str, attempt_id: str) -> bool:
-    return f"attempt_id={attempt_id}" in ("," + pipe + ",")
+    metadata = dict(part.split("=", 1) for part in pipe.split(",") if "=" in part)
+    return metadata.get("attempt_id") == attempt_id
+
+
+def _atomic_registry_replace(jobs: Path, lines: list[str]) -> None:
+    """Replace the registry after fsync without exposing a truncated file."""
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{jobs.name}.claim-", dir=str(jobs.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as registry:
+            registry.write("\n".join(lines) + "\n")
+            registry.flush()
+            os.fsync(registry.fileno())
+        os.replace(tmp_name, jobs)
+        dir_fd = os.open(str(jobs.parent), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    finally:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
+
+
+def claim_attempt_row(jobs: Path, attempt_id: str, row: str, *, launch: bool = False) -> bool:
+    """Atomically register ``attempt_id`` and claim its launch at most once.
+
+    A prior ``--register`` row may transition from ``launch_claimed=0`` to 1 on
+    the first ``--start``. Concurrent starts serialize on the same lock; callers
+    must not spawn a child when this returns ``False``.
+    """
+
+    if not attempt_id:
+        raise DispatchContractError("attempt-id-required", "registered dispatches require an attempt id")
+    ensure_global_registry_writable(jobs)
+    lock_path = Path(f"{jobs}.lock")
+    with lock_path.open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        for index, existing in enumerate(lines):
+            fields = existing.split("\t")
+            if len(fields) == 6 and row_has_attempt(fields[5], attempt_id):
+                metadata = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
+                if not launch or metadata.get("launch_claimed") == "1" or fields[1] != "open":
+                    return False
+                pipe = ",".join(part for part in fields[5].split(",") if not part.startswith("launch_claimed="))
+                fields[5] = pipe + ",launch_claimed=1"
+                lines[index] = "\t".join(fields)
+                _atomic_registry_replace(jobs, lines)
+                return True
+        row_fields = row.rstrip("\n").split("\t")
+        if len(row_fields) != 6:
+            raise DispatchContractError("invalid-registry-row", "expected six tab-separated fields")
+        row_fields[5] += f",launch_claimed={1 if launch else 0}"
+        with jobs.open("a", encoding="utf-8") as registry:
+            registry.write("\t".join(row_fields) + "\n")
+            registry.flush()
+            os.fsync(registry.fileno())
+        return True
 
 
 def _row_identity(fields: list[str]) -> tuple[str, ...] | None:

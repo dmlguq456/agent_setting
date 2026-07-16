@@ -21,9 +21,9 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
+    claim_attempt_row,
     completion_marker_gate,
     ensure_global_registry_writable,
-    ensure_launch_broker,
     new_attempt_id,
     resolve_global_registry,
     validate_nested_eligibility,
@@ -355,7 +355,7 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         "- The wrapper already validated capability, mode, QA, artifact-root access, and any route record. Use worker-route only for a safety recheck.\n"
         f"- Run adapters/opencode/bin/preflight.sh qa-policy {args.qa} {qa_track(args.capability)} and keep its required assurance in the artifact.\n"
         f"- Read only the assigned {args.assigned_contract} Skill/mode and named artifact inputs. Project instruction auto-load is not treated as physically masked; do not manually load a full harness bootstrap.\n"
-        "- Preserve the reported QA/tool contracts in the artifact and use the inherited dispatch broker only when the owner fragment applies.\n\n"
+        "- Preserve the reported QA/tool contracts in the artifact; owner workers launch checked adapter wrappers directly.\n\n"
         "Assignment:\n"
         f"{task.rstrip()}\n\n"
         "End with the kernel's exact three-line handoff and nothing after it.\n",
@@ -413,7 +413,7 @@ def _effective_parent_cwd(args):
     return cwd
 
 
-def append_job(jobs: Path, args: argparse.Namespace) -> None:
+def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     jobs.parent.mkdir(parents=True, exist_ok=True)
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
     pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth},harness=opencode"
@@ -451,11 +451,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     if args.broker_request_id:
         pipe += f",broker_request_id={args.broker_request_id}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    # SD-15: serialize with the same flock close_job_row uses so a concurrent close
-    # (row-rewrite) and this append cannot interleave and drop rows.
-    with jobs_lock(jobs):
-        with jobs.open("a", encoding="utf-8") as f:
-            f.write(f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}\n")
+    row = f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}"
+    return claim_attempt_row(jobs, args.attempt_id, row, launch=args.action == "start")
 
 
 def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str, attempt_id: str | None = None) -> bool:
@@ -490,6 +487,34 @@ def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str,
         if changed:
             jobs.write_text("".join(lines), encoding="utf-8")
         return changed
+
+
+def annotate_job_row(jobs: Path, slug: str, worktree: str, extra_kv: str, attempt_id: str | None = None) -> bool:
+    """Attach launch identity to the exact open attempt row."""
+    if not jobs.is_file():
+        return False
+    with jobs_lock(jobs):
+        lines = jobs.read_text(encoding="utf-8").splitlines(keepends=True)
+        for i, line in enumerate(lines):
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 6:
+                continue
+            ts, status, repo, wt, row_slug, pipe = parts[:6]
+            if status != "open" or row_slug != slug or wt != worktree:
+                continue
+            if attempt_id and f"attempt_id={attempt_id}" not in pipe.split(","):
+                continue
+            lines[i] = f"{ts}\t{status}\t{repo}\t{wt}\t{row_slug}\t{pipe},{extra_kv}\n"
+            jobs.write_text("".join(lines), encoding="utf-8")
+            return True
+    return False
+
+
+def process_start_ticks(pid: int) -> str:
+    try:
+        return (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8").split()[21]
+    except (OSError, IndexError):
+        return ""
 
 
 def write_reset_cache(agent_home: Path, harness: str, reason: str, reset: str) -> None:
@@ -651,6 +676,8 @@ def main(argv: list[str]) -> int:
     args.worktree = str(Path(args.worktree).resolve())
     action = "start" if args.start else "register" if args.register else "dry-run"
     args.action = action
+    if args.broker_request_id or args.launch_authority == "ancestor-broker":
+        return fail("launch-broker-retired", 76, child_spawned="0")
     args.agent_home = resolve_agent_home()
     worktree = Path(args.worktree)
     if not worktree.is_dir():
@@ -700,12 +727,6 @@ def main(argv: list[str]) -> int:
             ensure_global_registry_writable(jobs)
     except DispatchContractError as e:
         return fail(e.reason, 73, detail=e.detail, child_spawned="0")
-    try:
-        broker = ensure_launch_broker(
-            agent_home, jobs, depth=args.depth, action=action, intensity=args.intensity
-        )
-    except DispatchContractError as e:
-        return fail(e.reason, 76, detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = prompt(args)
     prompt_path = log_dir / f"{args.slug}.opencode.prompt.txt"
@@ -725,10 +746,12 @@ def main(argv: list[str]) -> int:
             gate = subprocess.run([sys.executable, str(governor), "--root", str(governor_root), "check", "--class", "dispatch"])
             if gate.returncode != 0:
                 return fail("model-worker-governor-denied", 75)
-        append_job(jobs, args)
-    if action == "start":
+        args.attempt_claimed = append_job(jobs, args)
+    else:
+        args.attempt_claimed = False
+    if action == "start" and args.attempt_claimed:
         dispatch_env = {
-            **os.environ,
+            **{key: value for key, value in os.environ.items() if not key.startswith("AGENT_DISPATCH_BROKER_")},
             "AGENT_SESSION_ROLE": "worker",
             "AGENT_DISPATCH_CHILD": "1",
             "AGENT_DISPATCH_DEPTH": str(args.depth),
@@ -757,18 +780,16 @@ def main(argv: list[str]) -> int:
             # secondary alive signal independent of the OpenCode SQLite mtime.
             "OPENCODE_DISPATCH_SLUG": args.slug,
         }
-        if broker:
-            dispatch_env.update({
-                "AGENT_DISPATCH_BROKER_ROOT": str(broker.root),
-                "AGENT_DISPATCH_BROKER_INSTANCE": broker.instance_id,
-                "AGENT_DISPATCH_BROKER_PID": str(broker.pid),
-                "AGENT_DISPATCH_BROKER_START_TICKS": broker.start_ticks,
-            })
         try:
             proc = subprocess.Popen([sys.executable, str(governor), "--root", str(governor_root), "run", "--class", "dispatch", "--", "sh", "-c", command], start_new_session=True, env=dispatch_env)
         except OSError as exc:
             close_job_row(jobs, args.slug, args.worktree, "launch-error", "", args.attempt_id)
             return fail("child-launch-failed", 70, detail=str(exc), attempt_id=args.attempt_id)
+        start_ticks = process_start_ticks(proc.pid)
+        launch_identity = f"pid={proc.pid}" + (f",pid_start={start_ticks}" if start_ticks else "")
+        annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
+        args.child_pid = proc.pid
+        args.child_pid_start = start_ticks
         # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a clean-exit limit/auth death.
         # A hang-on-limit (#8203) escapes this watch and is caught by liveness log scan.
         death = watch_early_death(proc, log_path, args.early_exit_watch)
@@ -806,15 +827,16 @@ def main(argv: list[str]) -> int:
     print(f"model={settings['model']}")
     print(f"variant={settings['variant']}")
     print(f"job_registry={jobs}")
-    print(f"broker_root={broker.root if broker else os.environ.get('AGENT_DISPATCH_BROKER_ROOT', '-')}")
-    print(f"broker_instance={broker.instance_id if broker else os.environ.get('AGENT_DISPATCH_BROKER_INSTANCE', '-')}")
+    print("broker_lifecycle=retired")
     print(f"registry_authority={registry.source}")
     print(f"attempt_id={args.attempt_id or '-'}")
-    print(f"broker_request_id={args.broker_request_id or '-'}")
     print(f"launch_authority={args.launch_authority}")
     print(f"fallback_ordinal={args.fallback_ordinal}")
-    print(f"registered={1 if action in ('register', 'start') else 0}")
-    print(f"started={1 if action == 'start' else 0}")
+    print(f"duplicate_attempt={0 if args.attempt_claimed or action == 'dry-run' else 1}")
+    print(f"registered={1 if args.attempt_claimed else 0}")
+    print(f"started={1 if action == 'start' and args.attempt_claimed else 0}")
+    print(f"child_pid={getattr(args, 'child_pid', None) or '-'}")
+    print(f"child_pid_start={getattr(args, 'child_pid_start', None) or '-'}")
     early_death = getattr(args, "early_death", None)
     if early_death:
         reason, reset = early_death

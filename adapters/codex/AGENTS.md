@@ -88,11 +88,11 @@ Launch only registered jobs through
 with explicit worktree, slug, capability, mode, QA, intensity, depth, parent,
 worker role, owner, and model choice/inheritance. Monitor with
 `preflight.sh liveness [jobs.log]`; harvest with `preflight.sh harvest`.
-Before a standard+ conductor starts, depth 0 prepares the shared non-model
-broker through `preflight.sh broker ensure --jobs <canonical-jobs>`; the wrapper
-does this idempotently on `--start`. Conductors use `dispatch-chain`, which sends
-all same/cross-harness depth-2 targets through that broker rather than recursively
-starting adapter CLIs.
+Conductors use `dispatch-chain` to invoke checked same/cross-harness depth-2
+adapter wrappers directly. Dispatch contract v3 atomically claims one stable
+attempt row before spawn and starts no child for a duplicate claim. A standard+
+Codex depth-1 owner receives workspace-write network access for this purpose;
+depth-2 workers do not. The retired broker exposes only legacy `status`/`stop`.
 
 `standard+` uses a depth-1 capability owner and, when separable, depth-2
 `code-plan -> code-execute -> code-test -> code-report` stage workers.

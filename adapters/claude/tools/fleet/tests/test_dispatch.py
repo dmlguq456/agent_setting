@@ -596,6 +596,170 @@ class CodexJobLivenessPathTest(unittest.TestCase):
         ])
 
 
+class CodexAttemptIdentityTest(unittest.TestCase):
+    """Exact registry identity outranks another retry's cwd-wide rollout mtime."""
+
+    def test_scan_preserves_pid_start_and_attempt_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_log = os.path.join(tmp, "jobs.log")
+            with open(jobs_log, "w", encoding="utf-8") as f:
+                f.write(
+                    "2026-07-16T00:00:00+00:00\topen\trepo\t%s\tretry-r5\t"
+                    "capability=autopilot-code,harness=codex,depth=2,"
+                    "route_id=rt-a,route_node=test,pid=4242,pid_start=777,"
+                    "attempt_id=att-0123456789abcdef\n" % tmp
+                )
+            rows, malformed = dispatch._scan_jobs_log(jobs_log, set())
+
+        self.assertEqual(malformed, 0)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].pid, 4242)
+        self.assertEqual(rows[0].proc_start, "777")
+        self.assertEqual(rows[0].attempt_id, "att-0123456789abcdef")
+        self.assertEqual(rows[0].registry_order, 0)
+
+    def test_exited_retries_cannot_share_fresh_rollout_liveness(self):
+        jobs = [
+            DispatchJob(key="code-test", slug="test-r%d" % retry, cwd="/work/wt",
+                        source="jobs", status="open", harness="codex", depth=2,
+                        route_id="rt-a", route_node="test", pid=4200 + retry,
+                        proc_start=str(700 + retry),
+                        attempt_id="att-%016x" % retry)
+            for retry in range(2, 6)
+        ]
+        with mock.patch.object(dispatch, "_job_transcript_signal", return_value="working"), \
+             mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=False):
+            states = [dispatch._dispatch_liveness(job, now=1000.0, track=False) for job in jobs]
+
+        self.assertEqual(states, ["dead"] * 4)
+        self.assertTrue(all(job.state_evidence["tier"] == 2 for job in jobs))
+
+    def test_matching_attempt_identity_beats_stale_rollout(self):
+        job = DispatchJob(key="code-test", slug="test-r5", cwd="/work/wt",
+                          source="jobs", status="open", harness="codex", pid=4242,
+                          proc_start="777", attempt_id="att-0123456789abcdef")
+        with mock.patch.object(dispatch, "_job_transcript_signal", return_value="stale"), \
+             mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=True), \
+             mock.patch.object(dispatch.procscan, "read_proc_start", return_value="777"):
+            state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
+
+        self.assertEqual(state, "working")
+        self.assertEqual(job.state_evidence["tier"], 2)
+
+    def test_legacy_row_without_process_identity_keeps_rollout_fallback(self):
+        job = DispatchJob(key="code-test", slug="legacy", cwd="/work/wt",
+                          source="jobs", status="open", harness="codex")
+        with mock.patch.object(dispatch, "_job_transcript_signal", return_value="working"):
+            state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
+
+        self.assertEqual(state, "working")
+        self.assertEqual(job.state_evidence["tier"], 3)
+
+    def test_latest_retry_owns_route_node_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_log = os.path.join(tmp, "jobs.log")
+            with open(jobs_log, "w", encoding="utf-8") as f:
+                for retry in range(2, 6):
+                    f.write(
+                        "2026-07-16T00:0%d:00+00:00\topen\trepo\t%s\ttest-r%d\t"
+                        "capability=autopilot-code,harness=codex,depth=2,"
+                        "route_id=rt-a,route_node=test,attempt_id=att-%016x\n"
+                        % (retry, tmp, retry, retry)
+                    )
+
+            evidence = dispatch._scan_route_nodes([jobs_log])
+
+        self.assertEqual(evidence["rt-a"]["test"]["slug"], "test-r5")
+
+    def test_default_render_hides_superseded_dead_retries(self):
+        jobs = [
+            DispatchJob(key="code-test", slug="test-r%d" % retry, cwd="/work/wt",
+                        source="jobs", status="open", harness="codex", depth=2,
+                        route_id="rt-a", route_node="test",
+                        liveness="working" if retry == 5 else "dead")
+            for retry in range(2, 6)
+        ]
+        render.set_show_all(False)
+        lines = render._build_lines([], jobs, section="dispatch", narrow=False,
+                                    malformed=0, layout="wide")
+        text = "\n".join("".join(part for part, _key in line) for line in lines if line)
+        body = "\n".join(line for line in text.splitlines() if "alert" not in line)
+
+        self.assertIn("test-r5", body)
+        for retry in range(2, 5):
+            self.assertNotIn("test-r%d" % retry, body)
+        self.assertIn("3 dead jobs", text)  # history remains visible as a diagnostic summary
+
+    def test_default_render_hides_older_working_attempt(self):
+        older = DispatchJob(key="code-test", slug="test-r4", cwd="/work/wt",
+                            source="jobs", status="open", harness="codex", depth=2,
+                            route_id="rt-a", route_node="test", liveness="working",
+                            attempt_id="att-0000000000000004", registry_order=4)
+        newest = DispatchJob(key="code-test", slug="test-r5", cwd="/work/wt",
+                             source="jobs", status="open", harness="codex", depth=2,
+                             route_id="rt-a", route_node="test", liveness="working",
+                             attempt_id="att-0000000000000005", registry_order=5)
+        render.set_show_all(False)
+        lines = render._build_lines([], [older, newest], section="dispatch", narrow=False,
+                                    malformed=0, layout="wide")
+        text = "\n".join("".join(part for part, _key in line) for line in lines if line)
+        self.assertIn("test-r5", text)
+        self.assertNotIn("test-r4", text)
+
+    def test_canonical_registry_attempt_beats_later_legacy_file_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            current = os.path.join(tmp, "current.jobs.log")
+            legacy = os.path.join(tmp, "legacy.jobs.log")
+            with open(current, "w", encoding="utf-8") as f:
+                f.write(
+                    "2026-07-16T01:00:00+00:00\topen\trepo\t%s\ttest-current\t"
+                    "capability=autopilot-code,harness=codex,route_id=rt-a,"
+                    "route_node=test,attempt_id=att-current000001\n" % tmp
+                )
+            with open(legacy, "w", encoding="utf-8") as f:
+                for index in range(20):
+                    f.write(
+                        "2026-07-15T00:%02d:00+00:00\tdone\trepo\t%s\tlegacy-%d\t"
+                        "capability=autopilot-code\n" % (index, tmp, index)
+                    )
+                f.write(
+                    "2026-07-15T02:00:00+00:00\topen\trepo\t%s\ttest-legacy\t"
+                    "capability=autopilot-code,harness=codex,route_id=rt-a,"
+                    "route_node=test,attempt_id=att-legacy0000001\n" % tmp
+                )
+            with mock.patch.object(dispatch, "_candidate_jobs_paths", return_value=[current, legacy]), \
+                 mock.patch.object(dispatch, "_scan_processes", return_value=[]), \
+                 mock.patch.object(dispatch, "_dispatch_liveness", return_value="working"):
+                jobs = dispatch.collect()
+
+        visible = render._current_attempt_jobs(jobs)
+        self.assertEqual([job.slug for job in visible], ["test-current"])
+        self.assertEqual({job.slug: job.registry_priority for job in jobs}, {
+            "test-current": 0,
+            "test-legacy": 1,
+        })
+
+    def test_canonical_terminal_evidence_beats_legacy_registry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            current = os.path.join(tmp, "current.jobs.log")
+            legacy = os.path.join(tmp, "legacy.jobs.log")
+            with open(current, "w", encoding="utf-8") as f:
+                f.write(
+                    "2026-07-16T01:00:00+00:00\tdone\trepo\t-\ttest-current\t"
+                    "route_id=rt-a,route_node=test,note=current\n"
+                )
+            with open(legacy, "w", encoding="utf-8") as f:
+                f.write(
+                    "2026-07-15T01:00:00+00:00\tkilled\trepo\t-\ttest-legacy\t"
+                    "route_id=rt-a,route_node=test,note=legacy\n"
+                )
+
+            evidence = dispatch._scan_route_nodes([current, legacy])
+
+        self.assertEqual(evidence["rt-a"]["test"]["slug"], "test-current")
+        self.assertEqual(evidence["rt-a"]["test"]["note"], "current")
+
+
 # --- D5: depth-2 registry metadata ---
 class DepthTwoRegistryMetadataTest(unittest.TestCase):
 

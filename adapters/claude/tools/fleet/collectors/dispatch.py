@@ -323,6 +323,15 @@ def _dispatch_liveness(job, now, track=True):
     leaves a tracker entry behind.
     """
     is_loop = job.source == "proc" and job.key in _LOOP_KEYS
+    pid_alive = None
+    proc_start_match = None
+    if job.pid is not None:
+        proc_path = "/proc/%s" % job.pid
+        pid_alive = os.path.exists(proc_path)
+        if pid_alive and job.proc_start:
+            observed_start = procscan.read_proc_start(job.pid)
+            if observed_start is not None:
+                proc_start_match = str(observed_start) == str(job.proc_start)
     ev_in = {
         "source": job.source,
         "key": job.key,
@@ -332,6 +341,9 @@ def _dispatch_liveness(job, now, track=True):
         "elapsed_min": job.elapsed_min,
         "slug": job.slug,
         "pid": job.pid,
+        "proc_start": job.proc_start,
+        "pid_alive": pid_alive,
+        "proc_start_match": proc_start_match,
         # A loop proc row is decided by tier-2 evidence; skip the mtime probe entirely
         # (it was never consulted on that path pre-F-25 either).
         "transcript": None if is_loop else _job_transcript_signal(job, now),
@@ -732,6 +744,7 @@ def _scan_route_nodes(paths):
     if isinstance(paths, (str, bytes, os.PathLike)):
         paths = [paths]
     for path in paths:
+        path_result = {}
         try:
             with open(path, encoding="utf-8", errors="replace") as f:
                 rows = f.read().splitlines()
@@ -750,7 +763,7 @@ def _scan_route_nodes(paths):
             if not route_id or not route_node:
                 continue
             pid_s = meta.get("pid")
-            result.setdefault(route_id, {})[route_node] = {
+            path_result.setdefault(route_id, {})[route_node] = {
                 "status": status, "slug": slug, "ts": _iso_to_epoch(ts),
                 "pid": int(pid_s) if (pid_s or "").isdigit() else None,
                 "harness": _infer_harness(meta, slug),
@@ -775,6 +788,13 @@ def _scan_route_nodes(paths):
                 # already parsed) is the terminal-surviving half of that same fact.
                 "parent": meta.get("parent") or meta.get("parent_slug"),
             }
+        # Candidate paths are precedence-ordered (canonical first). Preserve
+        # last-occurrence-wins inside each file, but never let a later legacy
+        # registry overwrite canonical terminal evidence.
+        for route_id, nodes in path_result.items():
+            target = result.setdefault(route_id, {})
+            for route_node, evidence in nodes.items():
+                target.setdefault(route_node, evidence)
     return result
 
 
@@ -891,7 +911,7 @@ def _iso_elapsed_min(ts):
     return max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 60))
 
 
-def _scan_jobs_log(path, seen_slugs, seen_keys=None):
+def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
     jobs = []
     malformed = 0
     try:
@@ -907,7 +927,7 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None):
     # `done` never cancel the running row — 290h phantom jobs. User report 2026-07-01.)
     latest = {}
     order = []
-    for line in rows:
+    for registry_order, line in enumerate(rows):
         if not line.strip():
             continue
         fields = line.split("\t")
@@ -917,9 +937,10 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None):
         slug = fields[4]
         if slug not in latest:
             order.append(slug)
-        latest[slug] = fields                 # last occurrence = newest status for this slug
+        latest[slug] = (registry_order, fields)  # last occurrence = newest status for this slug
     for slug in order:
-        ts, status, repo, worktree, _slug, pipe = latest[slug]
+        registry_order, fields = latest[slug]
+        ts, status, repo, worktree, _slug, pipe = fields
         if status not in ("open", "running"):
             continue                          # newest state is terminal (done/killed/…) → not live
         cwd = worktree if worktree not in ("-", "(main-tree)") else ""
@@ -945,18 +966,24 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None):
         parent_sid = meta.get("parent_sid") or meta.get("parent_session_id") or None
         parent_cwd = meta.get("parent_cwd") or meta.get("parent_worktree") or None
         harness = _infer_harness(meta, slug)
+        pid_s = meta.get("pid")
+        registry_pid = int(pid_s) if (pid_s or "").isdigit() else None
         jobs.append(DispatchJob(
             key=pname, stage=status, mode=meta.get("mode"), qa=q,
             elapsed_min=_iso_elapsed_min(ts), slug=slug or worktree or repo,
             cwd=cwd, parent_sid=parent_sid, parent_cwd=parent_cwd, parent_slug=parent_slug,
             is_child=bool(parent_slug or parent_sid or parent_cwd), qa_source=qsrc, source="jobs", status=status,
             harness=harness, model=meta.get("model"),
+            pid=registry_pid, proc_start=meta.get("pid_start") or meta.get("proc_start"),
             profile=meta.get("profile"), depth=_parse_depth(meta.get("depth")),
             intensity=meta.get("intensity"), worker_role=worker_role,
             capability_owner=meta.get("owner") or meta.get("capability_owner"),
             effort=meta.get("effort"), model_role=meta.get("model_role"),
             route_file=meta.get("route_file"), route_id=meta.get("route_id"),
             route_hash=meta.get("route_hash"), route_node=meta.get("route_node"),
+            attempt_id=meta.get("attempt_id"),
+            registry_order=registry_order,
+            registry_priority=registry_priority,
         ))
     return jobs, malformed
 
@@ -1061,8 +1088,10 @@ def collect(jobs_path=None, harness_filter=None):
     paths = _candidate_jobs_paths(jobs_path)
     log_jobs = []
     malformed = 0
-    for path in paths:
-        path_jobs, path_malformed = _scan_jobs_log(path, seen, seen_keys)
+    for registry_priority, path in enumerate(paths):
+        path_jobs, path_malformed = _scan_jobs_log(
+            path, seen, seen_keys, registry_priority=registry_priority
+        )
         log_jobs.extend(path_jobs)
         malformed += path_malformed
     jobs = proc_jobs + log_jobs

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute the checked SD-50 fallback order for one immutable route node."""
+"""Execute a checked dispatch-contract-v3 fallback for one route node."""
 
 from __future__ import annotations
 
@@ -24,6 +24,10 @@ def fail(reason: str, code: int, **fields: str) -> int:
     return code
 
 
+def output_fields(output: str) -> dict[str, str]:
+    return dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
+
+
 def load_node(route_path: Path, node_id: str) -> tuple[dict, dict]:
     route = json.loads(route_path.read_text(encoding="utf-8"))
     verify = subprocess.run(
@@ -42,6 +46,12 @@ def load_node(route_path: Path, node_id: str) -> tuple[dict, dict]:
     if not isinstance(chain, list) or [row.get("hop") for row in chain] != ORDER:
         raise ValueError("route node lacks checked ordered fallback")
     return route, node
+
+
+def tuple_key(row: dict) -> str:
+    return "/".join(str(row[key]) for key in (
+        "parent_harness", "parent_transport", "parent_sandbox", "child_harness", "launch_authority"
+    ))
 
 
 def registry_failures(jobs: Path, route_id: str, node_id: str) -> dict[str, list[str]]:
@@ -65,9 +75,23 @@ def registry_failures(jobs: Path, route_id: str, node_id: str) -> dict[str, list
     return failures
 
 
-def request_identity(args: argparse.Namespace, route: dict, node: dict, row: dict, ordinal: int) -> tuple[str, str]:
+def registry_has_attempt(jobs: Path, attempt_id: str) -> bool:
+    if not jobs.is_file():
+        return False
+    for line in jobs.read_text(encoding="utf-8", errors="replace").splitlines():
+        fields = line.split("\t")
+        if len(fields) != 6:
+            continue
+        metadata = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
+        if metadata.get("attempt_id") == attempt_id:
+            return True
+    return False
+
+
+def attempt_identity(args: argparse.Namespace, route: dict, node: dict, row: dict, ordinal: int) -> str:
+    """Stable across dry-run/register/start and concurrent conductor retries."""
+
     payload = {
-        "action": args.action,
         "route_id": route["route_id"],
         "route_node": node["id"],
         "slug": args.slug,
@@ -78,111 +102,74 @@ def request_identity(args: argparse.Namespace, route: dict, node: dict, row: dic
     digest = hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
-    return "req-" + digest[:32], "att-" + digest[32:]
+    return "att-" + digest[:48]
 
 
-def broker_env(contract: int | None) -> dict:
-    """v2 hop resolves the live instance at submit time, so an inherited
-    AGENT_DISPATCH_BROKER_INSTANCE from a pre-rollover conductor is stale
-    evidence, not authority.  v1 keeps trusting it (SD-55 backward compat)."""
-    if contract != 2:
-        return dict(os.environ)
-    return {k: v for k, v in os.environ.items() if k != "AGENT_DISPATCH_BROKER_INSTANCE"}
-
-
-def resolve_live_instance(broker_root: Path, jobs: Path) -> str:
-    """v2 hop: resolve the live broker instance at submit time.
-
-    status-only: a healthy broker (including a post-rollover instance) answers
-    without depth-0 authority.  We never run `ensure` here -- the contractual
-    caller is a depth-1 worker, where ensure is always refused
-    (dispatch-broker.py:604), so ensure would add no capability to the real
-    caller while creating a broker as a side effect in the very contexts that
-    must fail closed (SD-52 / v12 AC3).
-    """
-    result = subprocess.run(
-        [sys.executable, str(ROOT / "utilities/dispatch-broker.py"), "status",
-         "--root", str(broker_root), "--jobs", str(jobs)],
-        cwd=ROOT, text=True, capture_output=True, check=False, env=broker_env(2),
-    )
-    if result.returncode:
-        return ""
-    fields = dict(l.split("=", 1) for l in result.stdout.splitlines() if "=" in l)
-    return fields.get("broker_instance", "")
-
-
-def broker_envelope(args: argparse.Namespace, route: dict, node: dict, row: dict, ordinal: int, live_instance: str | None = None) -> dict:
-    request_id, attempt_id = request_identity(args, route, node, row, ordinal)
-    envelope = {
-        "schema_version": 1,
-        "request_id": request_id,
-        "attempt_id": attempt_id,
-        "action": args.action,
-        "target_harness": row["child_harness"],
-        "worktree": route["cwd"],
-        "artifact_root": route["artifact_root"],
-        "jobs": str(args.jobs),
-        "slug": args.slug,
-        "capability": route["capability"],
-        "mode": args.mode,
-        "intensity": route["effective_intensity"],
-        "depth": 2,
-        "parent": args.parent,
-        "worker_role": args.worker_role or node.get("role", node["id"]),
-        "owner": route["capability"],
-        "model_role": args.model_role or node.get("role", "fast implementer"),
-        "route_file": str(args.route),
-        "route_id": route["route_id"],
-        "route_hash": route["route_hash"],
-        "route_node": node["id"],
-        "registry_digest": route["registry_digest"],
-        "write_scope": ";".join(node.get("write_scope", [])),
-        "completion_gate": node["completion_gate"],
-        "parent_harness": row["parent_harness"],
-        "parent_transport": row["parent_transport"],
-        "parent_sandbox": row["parent_sandbox"],
-        "requested_launch_authority": row["launch_authority"],
-        "fallback_ordinal": ordinal,
-        "probe_source": row["probe_source"],
-        "probe_failure_class": row.get("failure_class") or "",
-        "broker_root": row["broker_root"],
-        "broker_instance": live_instance or row["broker_instance"],
-    }
-    optional = {
-        "prompt_file": str(args.prompt_file) if args.prompt_file else "",
-        "parent_session_id": os.environ.get("AGENT_DISPATCH_PARENT_SESSION_ID", ""),
-        "parent_cwd": os.environ.get("AGENT_DISPATCH_PARENT_CWD", ""),
-    }
-    envelope.update({key: value for key, value in optional.items() if value})
-    return envelope
-
-
-def submit_broker(args: argparse.Namespace, envelope: dict, broker_root: Path, contract: int | None) -> tuple[dict | None, str, str]:
+def wrapper_command(
+    args: argparse.Namespace,
+    route: dict,
+    node: dict,
+    row: dict,
+    ordinal: int,
+    attempt_id: str,
+) -> list[str]:
+    harness = row["child_harness"]
+    wrapper = ROOT / f"adapters/{harness}/bin/dispatch-headless.py"
+    if harness not in {"codex", "claude", "opencode"} or not wrapper.is_file():
+        raise ValueError(f"unsupported child harness: {harness}")
     command = [
         sys.executable,
-        str(ROOT / "utilities/dispatch-broker.py"),
-        "request",
-        "--root",
-        str(broker_root),
-        "--jobs",
-        str(args.jobs),
-        "--timeout",
-        str(args.broker_timeout),
+        str(wrapper),
+        f"--{args.action}",
+        "--worktree", route["cwd"],
+        "--slug", args.slug,
+        "--capability", route["capability"],
+        "--mode", args.mode,
+        "--qa", args.qa,
+        "--intensity", route["effective_intensity"],
+        "--depth", "2",
+        "--parent", args.parent,
+        "--worker-role", args.worker_role or node.get("role", node["id"]),
+        "--owner", route["capability"],
+        "--owner-harness", row["parent_harness"],
+        "--model-role", args.model_role or node.get("role", "fast implementer"),
+        "--route-file", str(args.route),
+        "--route-id", route["route_id"],
+        "--route-hash", route["route_hash"],
+        "--route-node", node["id"],
+        "--registry-digest", route["registry_digest"],
+        "--write-scope", ";".join(node.get("write_scope", [])),
+        "--completion-gate", node["completion_gate"],
+        "--jobs", str(args.jobs),
+        "--attempt-id", attempt_id,
+        "--parent-harness", row["parent_harness"],
+        "--parent-transport", row["parent_transport"],
+        "--parent-sandbox", row["parent_sandbox"],
+        "--launch-authority", "conductor",
+        "--nested-eligibility", "supported",
+        "--eligibility-source", row["probe_source"],
+        "--eligibility-failure-class", row.get("failure_class") or "-",
+        "--fallback-ordinal", str(ordinal),
     ]
-    result = subprocess.run(
-        command,
-        cwd=ROOT,
-        text=True,
-        env=broker_env(contract),
-        input=json.dumps(envelope, ensure_ascii=False),
-        capture_output=True,
-        check=False,
+    optional = (
+        (args.prompt_file, "--prompt-file"),
+        (os.environ.get("AGENT_DISPATCH_PARENT_SESSION_ID"), "--parent-session-id"),
+        (os.environ.get("AGENT_DISPATCH_PARENT_CWD"), "--parent-cwd"),
     )
-    try:
-        reply = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        reply = None
-    return reply, result.stdout, result.stderr
+    for value, flag in optional:
+        if value:
+            command += [flag, str(value)]
+    return command
+
+
+def direct_env() -> dict[str, str]:
+    """Never project a retired broker binding into a direct adapter call."""
+
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("AGENT_DISPATCH_BROKER_")
+    }
 
 
 def main() -> int:
@@ -192,37 +179,39 @@ def main() -> int:
     p.add_argument("--slug", required=True)
     p.add_argument("--parent", required=True)
     p.add_argument("--mode", required=True)
+    p.add_argument("--qa", default="standard")
     p.add_argument("--worker-role")
     p.add_argument("--model-role")
     p.add_argument("--prompt-file", type=Path)
     p.add_argument("--jobs", type=Path)
-    p.add_argument("--broker-root", type=Path)
-    p.add_argument("--broker-timeout", type=float, default=45.0)
+    p.add_argument("--broker-root", type=Path, help=argparse.SUPPRESS)
+    p.add_argument("--broker-timeout", type=float, help=argparse.SUPPRESS)
+    p.add_argument("--direct-timeout", type=float, default=45.0)
     p.add_argument("--failed-tuple", action="append", default=[], help="tuple key already failed without evidence change")
     action = p.add_mutually_exclusive_group(required=True)
     action.add_argument("--dry-run", dest="action", action="store_const", const="dry-run")
     action.add_argument("--register", dest="action", action="store_const", const="register")
     action.add_argument("--start", dest="action", action="store_const", const="start")
     args = p.parse_args()
-    explicit_broker_root = args.broker_root is not None
+
     try:
-        route, node = load_node(args.route.resolve(), args.node)
+        args.route = args.route.resolve()
+        route, node = load_node(args.route, args.node)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         return fail("invalid-fallback-route", 65, detail=str(exc))
-    contract = route.get("broker_contract_version")
+    contract = route.get("dispatch_contract_version") or route.get("broker_contract_version")
+    if contract != 3:
+        return fail("legacy-broker-route-read-only", 76, contract_version=str(contract or 1), child_spawned="0")
+    if args.broker_root is not None or args.broker_timeout is not None:
+        return fail("retired-broker-option", 64, child_spawned="0")
+
     inherited_jobs = os.environ.get("AGENT_DISPATCH_JOBS")
     args.jobs = (args.jobs or Path(inherited_jobs or ROOT / ".dispatch/jobs.log")).resolve()
     if inherited_jobs and args.jobs != Path(inherited_jobs).resolve():
         return fail("noncanonical-nested-jobs", 73, explicit=str(args.jobs), inherited=str(Path(inherited_jobs).resolve()))
     if args.action in {"register", "start"} and not inherited_jobs:
         return fail("global-registry-unset", 73, child_spawned="0")
-    args.broker_root = (
-        args.broker_root
-        or Path(os.environ.get("AGENT_DISPATCH_BROKER_ROOT", Path(os.environ.get("AGENT_HOME", ROOT)) / ".dispatch/broker"))
-    ).resolve()
-    if contract != 2:
-        if not os.environ.get("AGENT_DISPATCH_BROKER_INSTANCE"):
-            return fail("broker-binding-unset", 76, broker_root=str(args.broker_root), child_spawned="0")
+
     prior_failures = registry_failures(args.jobs, route["route_id"], node["id"])
     failed_tuples = set(args.failed_tuple) | set(prior_failures)
     attempts: list[str] = []
@@ -230,58 +219,48 @@ def main() -> int:
         ordinal = int(hop["ordinal"])
         if hop["hop"] in {"same-harness-headless", "cross-harness-headless"}:
             for row in hop.get("candidates", []):
-                tuple_key = "/".join(str(row[key]) for key in (
-                    "parent_harness", "parent_transport", "parent_sandbox", "child_harness", "launch_authority"
-                ))
-                direct_disabled = row.get("launch_authority") != "ancestor-broker"
-                if row.get("status") != "supported" or tuple_key in failed_tuples or direct_disabled:
-                    skip_reason = (
-                        "prior-unchanged-failure" if tuple_key in failed_tuples
-                        else "direct-executor-disabled" if direct_disabled
-                        else row.get("status")
-                    )
-                    attempts.append(f"{ordinal}:{tuple_key}:skipped-{skip_reason}")
+                key = tuple_key(row)
+                unsupported = row.get("status") != "supported" or row.get("launch_authority") != "conductor"
+                if unsupported or key in failed_tuples:
+                    reason = "prior-unchanged-failure" if key in failed_tuples else row.get("failure_class") or row.get("status")
+                    attempts.append(f"{ordinal}:{key}:skipped-{reason}")
                     continue
-                if contract == 2:
-                    row_root = Path(row["broker_root"]).resolve()
-                    if explicit_broker_root and args.broker_root != row_root:
+                attempt_id = attempt_identity(args, route, node, row, ordinal)
+                try:
+                    command = wrapper_command(args, route, node, row, ordinal, attempt_id)
+                    result = subprocess.run(
+                        command,
+                        cwd=ROOT,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                        timeout=args.direct_timeout,
+                        env=direct_env(),
+                    )
+                    output = (result.stdout + result.stderr).strip()
+                    fields = output_fields(output)
+                    early = fields.get("early_death", "-")
+                    attempts.append(f"{ordinal}:{key}:direct:exit-{result.returncode}:attempt-{attempt_id}")
+                except subprocess.TimeoutExpired as exc:
+                    attempts.append(f"{ordinal}:{key}:direct-timeout:attempt-{attempt_id}")
+                    if registry_has_attempt(args.jobs, attempt_id):
                         return fail(
-                            "broker-root-mismatch", 76,
-                            expected=str(row_root), observed=str(args.broker_root), child_spawned="0",
+                            "direct-launch-outcome-unknown", 76,
+                            attempt_id=attempt_id, child_spawned="unknown",
+                            attempt_trace="|".join(attempts),
                         )
-                    submit_root = row_root
-                    live_instance = resolve_live_instance(submit_root, args.jobs)
-                    if not live_instance:
-                        return fail("broker-unavailable", 76, broker_root=str(submit_root), child_spawned="0")
-                else:
-                    submit_root = args.broker_root
-                    live_instance = None
-                envelope = broker_envelope(args, route, node, row, ordinal, live_instance=live_instance)
-                reply, raw_stdout, raw_stderr = submit_broker(args, envelope, submit_root, contract)
-                if not reply or not reply.get("ok"):
-                    reason = (reply or {}).get("reason", "broker-unavailable")
-                    detail = (reply or {}).get("detail") or raw_stderr.strip() or raw_stdout.strip()
-                    return fail(reason, 76, detail=detail, broker_root=str(submit_root), child_spawned="0")
-                state = reply.get("state", {})
-                response = state.get("response", {})
-                result_code = int(response.get("returncode", 76))
-                output = (str(response.get("stdout", "")) + str(response.get("stderr", ""))).strip()
-                attempts.append(f"{ordinal}:{tuple_key}:broker-{response.get('broker_pid', '-')}:exit-{result_code}")
-                early = next((line.split("=", 1)[1] for line in output.splitlines() if line.startswith("early_death=")), "-")
-                if result_code == 0 and early == "-":
+                    continue
+                except (OSError, ValueError) as exc:
+                    attempts.append(f"{ordinal}:{key}:direct-error-{type(exc).__name__}:attempt-{attempt_id}")
+                    continue
+                if result.returncode == 0 and early == "-" and fields.get("check") != "failed":
                     print("check=ok")
                     print(f"selected_hop={hop['hop']}")
                     print(f"fallback_ordinal={ordinal}")
                     print(f"child_harness={row['child_harness']}")
-                    print("launch_authority=ancestor-broker")
-                    print(f"requested_launch_authority={row['launch_authority']}")
-                    print(f"broker_root={submit_root}")
-                    if contract == 2:
-                        print("broker_instance_source=live-status")
-                    print(f"broker_instance={response.get('broker_instance', '-')}")
-                    print(f"broker_pid={response.get('broker_pid', '-')}")
-                    print(f"request_id={envelope['request_id']}")
-                    print(f"attempt_id={response.get('attempt_id', envelope['attempt_id'])}")
+                    print("launch_authority=conductor")
+                    print("broker_lifecycle=retired")
+                    print(f"attempt_id={attempt_id}")
                     print(f"job_registry={args.jobs}")
                     print("attempt_trace=" + "|".join(attempts))
                     print("prior_attempt_ids=" + ",".join(x for values in prior_failures.values() for x in values))

@@ -43,12 +43,12 @@ satisfy the spec-read gate before mutation.
 - `quick`: one depth-1 one-shot worker with micro-plan, plan-check-lite, focused verification, and concise report.
 - `standard+`: `code-plan -> code-execute -> code-test -> code-report`, optional `code-refine`, file-only handoff, and the dispatch/fallback rules in `core/OPERATIONS.md §5.10`.
 
-Before compiling a standard+ route, depth 0 runs
-`python3 "$AGENT_HOME/utilities/dispatch-broker.py" ensure --jobs "${AGENT_DISPATCH_JOBS:-$AGENT_HOME/.dispatch/jobs.log}"`
-and binds the reported broker root/instance to the conductor. The dispatch
-wrapper repeats this idempotently before start. Every same/cross-harness
-depth-2 headless target then uses `stage-dispatch-fallback.py`; Claude native
-subagents and recursive adapter CLI launch are not portable substitutes.
+Every standard+ same/cross-harness depth-2 headless target uses
+`stage-dispatch-fallback.py`, which invokes the checked adapter wrapper directly.
+Dispatch contract v3 atomically claims one stable attempt row before spawn and
+starts no child for a duplicate claim. Broker v1/v2 routes are read-only migration
+inputs; the retired broker exposes only legacy `status`/`stop`. Claude native
+subagents remain distinct from registered recursive headless dispatch.
 
 Keep native agents distinct from registered headless worker dispatch; a restriction on one surface never silently extends to the other. Preserve model role, intensity, depth, required tools/tests, safety, and validation when falling back. Do not run drill automatically.
 

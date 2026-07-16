@@ -441,14 +441,13 @@ inherited canonical global attempt registry. Its preflight exposes
 `nested-headless` and the portable ordered `dispatch-chain`; unsupported or
 unknown tuples remain explicit rather than borrowing another adapter's PASS.
 
-### SD-51~53 harness-neutral launch broker — realized
+### SD-62 direct headless delegation — realized
 
-OpenCode consumes the same vendor-neutral request/lifecycle protocol through
-`preflight.sh broker` and `dispatch-chain`. Its standard+ depth-1 wrapper
-prepares and passes the immutable broker binding, while the broker constructs
-only the allowlisted OpenCode adapter command. OpenCode remains an independent
-target tuple and is not used as a proxy for the required Claude/Codex four-way
-placement matrix.
+OpenCode consumes the v3 direct `dispatch-chain` contract. A conductor invokes
+the checked target adapter itself, while the canonical registry atomically
+claims the stable attempt identity. The retired broker exposes diagnostic
+`status`/`stop` only; v1/v2 broker routes remain inspectable but cannot register
+or start new workers. OpenCode remains an independently checked target tuple.
 
 ## Distillation Boundary
 

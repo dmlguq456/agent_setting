@@ -16,66 +16,73 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def broker_check(child_harness: str, worktree: str) -> tuple[str, str, str, str, str]:
-    agent_home = Path(os.environ.get("AGENT_HOME", ROOT)).resolve()
-    broker_root = Path(os.environ.get("AGENT_DISPATCH_BROKER_ROOT", agent_home / ".dispatch/broker")).resolve()
-    jobs = Path(os.environ.get("AGENT_DISPATCH_JOBS", agent_home / ".dispatch/jobs.log")).resolve()
-    broker = subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "utilities/dispatch-broker.py"),
-            "status",
-            "--root",
-            str(broker_root),
-            "--jobs",
-            str(jobs),
-        ],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if broker.returncode:
-        fields = dict(line.split("=", 1) for line in broker.stdout.splitlines() if "=" in line)
-        return "unsupported", "depth-0-broker-status", fields.get("reason", "broker-unavailable"), str(broker_root), ""
-    broker_fields = dict(line.split("=", 1) for line in broker.stdout.splitlines() if "=" in line)
-    instance = broker_fields.get("broker_instance", "unknown")
+def auth_check(child_harness: str) -> tuple[bool, str]:
+    """Check that the target CLI has a usable local authentication profile.
+
+    This deliberately avoids printing command output because auth status may
+    contain account metadata. A live nested request is still kept as a release
+    smoke test; this gate is the cheap per-route check.
+    """
+    if child_harness == "codex":
+        command = ["codex", "login", "status"]
+        accepted = lambda output: output.lstrip().startswith("Logged in")
+    elif child_harness == "claude":
+        command = ["claude", "auth", "status"]
+        def accepted(output):
+            try:
+                return json.loads(output).get("loggedIn") is True
+            except (ValueError, AttributeError):
+                return False
+    elif child_harness == "opencode":
+        command = ["opencode", "auth", "list"]
+        accepted = lambda output: "\u25cf" in output
+    else:
+        return False, "unknown-harness"
+    if shutil.which(command[0]) is None:
+        return False, "command-unavailable"
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0 or not accepted(result.stdout):
+        return False, "auth-unavailable"
+    return True, ""
+
+
+def command_check(child_harness: str, worktree: str) -> tuple[str, str, str]:
+    if not Path(worktree).is_dir():
+        return "unsupported", "direct-command-check", "worktree-not-found"
+    authenticated, auth_failure = auth_check(child_harness)
+    if not authenticated:
+        return "unsupported", "direct-auth-check", auth_failure
     if child_harness == "codex":
         command = [str(ROOT / "adapters/codex/bin/preflight.sh"), "headless", "--check", worktree]
     elif child_harness == "opencode":
         command = [str(ROOT / "adapters/opencode/bin/preflight.sh"), "headless", "--check", worktree]
     elif child_harness == "claude":
         if shutil.which("claude") and Path(worktree).is_dir():
-            return "supported", f"depth-0-broker:{instance}+command-check", "", str(broker_root), instance
-        return "unsupported", f"depth-0-broker:{instance}+command-check", "command-unavailable", str(broker_root), instance
+            return "supported", "direct-command-check", ""
+        return "unsupported", "direct-command-check", "command-unavailable"
     else:
-        return "unknown", "unsupported-child-harness", "unknown-harness", str(broker_root), instance
+        return "unknown", "unsupported-child-harness", "unknown-harness"
     result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
     if result.returncode == 0:
-        return "supported", f"depth-0-broker:{instance}+headless-check", "", str(broker_root), instance
+        return "supported", "direct-auth+headless-check", ""
     detail = (result.stdout + "\n" + result.stderr).strip().replace("\n", ";")
-    return "unsupported", f"depth-0-broker:{instance}+headless-check", detail or f"exit-{result.returncode}", str(broker_root), instance
+    return "unsupported", "direct-headless-check", detail or f"exit-{result.returncode}"
 
 
 def evaluate(args: argparse.Namespace) -> dict[str, str]:
-    if (
+    if args.launch_authority == "ancestor-broker":
+        status, source, failure = "unsupported", "dispatch-contract-v3", "launch-broker-retired"
+    elif (
         args.parent_harness == "codex"
         and args.parent_transport == "headless"
         and args.parent_sandbox == "workspace-write"
-        and args.child_harness == "codex"
-        and args.launch_authority == "conductor"
+        and os.environ.get("AGENT_NESTED_HEADLESS_NETWORK") != "1"
     ):
-        status, source, failure = (
-            "unsupported",
-            "2026-07-15-stage-dispatch-v10-local-probe",
-            "network-operation-not-permitted",
-        )
-        broker_root, broker_instance = "", ""
-    elif args.launch_authority == "ancestor-broker":
-        status, source, failure, broker_root, broker_instance = broker_check(args.child_harness, args.worktree)
+        status, source, failure = "unsupported", "codex-owner-network-contract", "nested-network-unconfirmed"
     else:
-        status, source, failure = "unknown", "no-context-matched-probe", "unprobed-tuple"
-        broker_root, broker_instance = "", ""
+        status, source, failure = command_check(args.child_harness, args.worktree)
+        if status == "supported" and args.parent_harness == "codex":
+            source = "codex-owner-network-contract+" + source
     return {
         "parent_harness": args.parent_harness,
         "parent_transport": args.parent_transport,
@@ -86,8 +93,6 @@ def evaluate(args: argparse.Namespace) -> dict[str, str]:
         "probe_source": source,
         "probe_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "failure_class": failure,
-        "broker_root": broker_root,
-        "broker_instance": broker_instance,
     }
 
 

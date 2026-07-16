@@ -273,12 +273,10 @@ verify through the runtime path above.
   deletes worktrees. Main uses `bin/worktree-cleanup.sh` after integrated
   verification and push.
 
-## SD-51~53 harness-neutral launch broker — realized
+## SD-62 direct headless delegation — realized
 
-Claude native subagents are not treated as recursively nestable. Before a
-standard+ depth-1 launch, the wrapper prepares the shared deterministic
-depth-0 broker and injects its immutable root/instance/jobs binding. A Claude
-conductor submits both Claude and Codex depth-2 headless attempts through the
-same declarative broker protocol; the target wrapper runs under the broker OS
-process while jobs metadata retains logical `depth=2,parent=<conductor>`.
-Direct recursive execution stays disabled by default.
+Claude conductors launch checked same- or cross-harness depth-2 headless
+adapters directly. The immutable v3 route binds the checked tuple and stable
+attempt identity; register/start are atomically claimed in the canonical
+registry. The retired broker retains diagnostic `status`/`stop` only, and
+historical v1/v2 broker routes are read-only.

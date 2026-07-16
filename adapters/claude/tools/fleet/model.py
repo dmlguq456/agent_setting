@@ -231,6 +231,9 @@ class DispatchJob:
     route_hash: Optional[str] = None    # pipe route_hash= (jobs.log rows only)
     route_node: Optional[str] = None    # pipe route_node= / env AGENT_ROUTE_NODE — the node
                                         # this job is executing
+    attempt_id: Optional[str] = None    # canonical registry attempt identity (SD-49)
+    registry_order: Optional[int] = None  # append order in canonical jobs.log
+    registry_priority: Optional[int] = None  # 0 canonical; larger values are legacy fallbacks
 
     def to_dict(self):
         return asdict(self)
@@ -501,6 +504,19 @@ def classify_job(ev_in, now, key=None):
         # fleet's job vocabulary has no `cancelled`; `killed` carries the same
         # "terminated by outside intervention" axis. The distinction survives in raw_status.
         return out("killed", 1, "registry", "jobs.log status=cancelled → killed (raw preserved)")
+
+    # tier-2: a registry row carrying the canonical (pid, start-time) identity must
+    # never be revived by another retry's cwd-wide transcript activity.  A matching
+    # process proves the attempt is still alive; a missing/reused process terminates
+    # that exact attempt immediately.  Legacy rows without both identity halves keep
+    # the mtime fallback below.
+    if ev_in.get("pid") is not None and ev_in.get("proc_start"):
+        if ev_in.get("pid_alive") is False:
+            return out("dead", 2, "proc", "recorded attempt pid is not alive")
+        if ev_in.get("proc_start_match") is False:
+            return out("dead", 2, "proc", "recorded attempt start-time mismatch (pid reuse)")
+        if ev_in.get("pid_alive") is True and ev_in.get("proc_start_match") is True:
+            return out("working", 2, "proc", "recorded attempt pid/start-time is live")
 
     t = ev_in.get("transcript")
     if t == "unknown":

@@ -17,9 +17,9 @@ NESTED_FIELDS = {
     "parent_harness", "parent_transport", "parent_sandbox", "child_harness",
     "launch_authority", "status", "probe_source", "probe_time", "failure_class",
 }
-BROKER_FIELDS = {"broker_root", "broker_instance"}  # v1 only
-BROKER_FIELDS_V2 = {"broker_root"}
-BROKER_CONTRACT_VERSION = 2
+BROKER_FIELDS = {"broker_root", "broker_instance"}  # historical v1
+BROKER_FIELDS_V2 = {"broker_root"}                   # historical v2
+DISPATCH_CONTRACT_VERSION = 3
 FALLBACK_ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
 
 def canonical(payload):
@@ -53,11 +53,13 @@ def _scope_touches_spec(scope):
     root=scope[:-3] if scope.endswith("/**") else scope
     return root=="spec" or root.startswith("spec/")
 
-def _validate_dispatch_evidence(evidence, contract_version=BROKER_CONTRACT_VERSION):
+def _validate_dispatch_evidence(evidence, contract_version=DISPATCH_CONTRACT_VERSION):
+    contract_version = contract_version or 1
+    if contract_version not in {1, 2, DISPATCH_CONTRACT_VERSION}:
+        raise ValueError(f"unsupported dispatch contract version: {contract_version}")
     if not isinstance(evidence,dict): raise ValueError("checked dispatch evidence required")
     tuples=evidence.get("tuples")
     if not isinstance(tuples,list) or not tuples: raise ValueError("nested eligibility tuples required")
-    broker_fields = BROKER_FIELDS_V2 if contract_version==2 else BROKER_FIELDS
     normalized=[]
     for row in tuples:
         if not isinstance(row,dict) or not NESTED_FIELDS.issubset(row):
@@ -68,7 +70,12 @@ def _validate_dispatch_evidence(evidence, contract_version=BROKER_CONTRACT_VERSI
         if not row["probe_source"] or not row["probe_time"]:
             raise ValueError("nested eligibility checked source/time required")
         normalized_row={key:row[key] for key in sorted(NESTED_FIELDS)}
-        if contract_version==2:
+        if contract_version==DISPATCH_CONTRACT_VERSION:
+            if row["launch_authority"] != "conductor":
+                raise ValueError("v3 dispatch evidence requires conductor launch authority")
+            if any(row.get(key) for key in BROKER_FIELDS):
+                raise ValueError("v3 dispatch evidence must not carry broker fields")
+        elif contract_version==2:
             if row.get("launch_authority")=="ancestor-broker" and row.get("status")=="supported" and not row.get("broker_root"):
                 raise ValueError("v2 dispatch evidence requires broker_root")
             if row.get("broker_root"):
@@ -87,26 +94,33 @@ def _validate_dispatch_evidence(evidence, contract_version=BROKER_CONTRACT_VERSI
             raise ValueError("invalid native subagent evidence")
     return {"tuples":normalized,"native_subagent":native}
 
-def _fallback_chain(evidence, contract_version=BROKER_CONTRACT_VERSION):
+def _fallback_chain(evidence, contract_version=DISPATCH_CONTRACT_VERSION):
+    contract_version = contract_version or 1
     evidence=_validate_dispatch_evidence(evidence, contract_version)
     tuples=evidence["tuples"]
     same=[row for row in tuples if row["child_harness"]==row["parent_harness"]]
     cross=[row for row in tuples if row["child_harness"]!=row["parent_harness"]]
-    same.sort(key=lambda row:(row["launch_authority"]!="ancestor-broker",row["child_harness"]))
-    cross.sort(key=lambda row:(row["launch_authority"]!="ancestor-broker",row["child_harness"]))
-    if contract_version==2:
+    if contract_version==DISPATCH_CONTRACT_VERSION:
+        same=[row for row in same if row["launch_authority"]=="conductor"]
+        cross=[row for row in cross if row["launch_authority"]=="conductor"]
+        has_direct=any(row["status"]=="supported" for row in same+cross)
+        if not has_direct:
+            raise ValueError("no supported direct headless tuple")
+    elif contract_version==2:
         has_broker=any(
             row["status"]=="supported" and row["launch_authority"]=="ancestor-broker" and row.get("broker_root")
             for row in same+cross
         )
+        if not has_broker:
+            raise ValueError("no supported depth-0 launch broker tuple")
     else:
         has_broker=any(
             row["status"]=="supported" and row["launch_authority"]=="ancestor-broker"
             and row.get("broker_root") and row.get("broker_instance")
             for row in same+cross
         )
-    if not has_broker:
-        raise ValueError("no supported depth-0 launch broker tuple")
+        if not has_broker:
+            raise ValueError("no supported depth-0 launch broker tuple")
     return [
         {"ordinal":1,"hop":"same-harness-headless","candidates":same},
         {"ordinal":2,"hop":"cross-harness-headless","candidates":cross},
@@ -115,15 +129,23 @@ def _fallback_chain(evidence, contract_version=BROKER_CONTRACT_VERSION):
     ]
 
 def _verify_fallback_chain(node, contract_version=None):
+    contract_version = contract_version or 1
     chain=node.get("dispatch_fallback")
     if not isinstance(chain,list) or [row.get("hop") for row in chain] != FALLBACK_ORDER:
         raise ValueError(f"depth-2 node {node.get('id')} missing ordered dispatch fallback")
     candidates=[candidate for row in chain[:2] for candidate in row.get("candidates",[])]
-    supported=[c for c in candidates if c.get("status")=="supported" and c.get("launch_authority")=="ancestor-broker"]
-    if contract_version==1:
+    if contract_version==DISPATCH_CONTRACT_VERSION:
+        supported=[c for c in candidates if c.get("status")=="supported" and c.get("launch_authority")=="conductor"]
+        if not supported:
+            raise ValueError(f"depth-2 node {node.get('id')} lacks supported direct headless tuple")
+        if any(c.get("broker_root") or c.get("broker_instance") for c in candidates):
+            raise ValueError(f"depth-2 node {node.get('id')} v3 candidate carries retired broker fields")
+    elif contract_version==1:
+        supported=[c for c in candidates if c.get("status")=="supported" and c.get("launch_authority")=="ancestor-broker"]
         if not any(c.get("broker_root") and c.get("broker_instance") for c in supported):
             raise ValueError(f"depth-2 node {node.get('id')} lacks supported depth-0 broker tuple")
     elif contract_version==2:
+        supported=[c for c in candidates if c.get("status")=="supported" and c.get("launch_authority")=="ancestor-broker"]
         if not any(c.get("broker_root") for c in supported):
             raise ValueError(f"depth-2 node {node.get('id')} lacks supported depth-0 broker tuple")
         if any(c.get("broker_instance") for c in supported):
@@ -174,8 +196,8 @@ def compile_route(capability, capability_mode, requested_intensity, cwd, artifac
     evidence=_validate_tracking_evidence(tracking, tracked_gate_evidence)
     checked_dispatch=None
     if effective not in ("direct","quick") and transport=="headless":
-        checked_dispatch=_validate_dispatch_evidence(dispatch_evidence, BROKER_CONTRACT_VERSION)
-        chain=_fallback_chain(checked_dispatch, BROKER_CONTRACT_VERSION)
+        checked_dispatch=_validate_dispatch_evidence(dispatch_evidence, DISPATCH_CONTRACT_VERSION)
+        chain=_fallback_chain(checked_dispatch, DISPATCH_CONTRACT_VERSION)
         for node in nodes:
             if node.get("depth")==2:
                 node["dispatch_fallback"]=json.loads(json.dumps(chain))
@@ -195,7 +217,7 @@ def compile_route(capability, capability_mode, requested_intensity, cwd, artifac
       "nodes":nodes,"completion_gates":gates,"human_gates":recipe["human_gates"],
       "resume_retry_boundaries":recipe["resume_retry_boundaries"],
       "dispatch_evidence":checked_dispatch,
-      "broker_contract_version":BROKER_CONTRACT_VERSION if checked_dispatch is not None else None}
+      "dispatch_contract_version":DISPATCH_CONTRACT_VERSION if checked_dispatch is not None else None}
     digest=route_hash(payload); payload["route_hash"]=digest; payload["route_id"]="rt-"+digest.split(":",1)[1][:16]
     return payload
 
@@ -213,9 +235,14 @@ def verify_route(route, expected_cwd=None):
     spec_touch=any(_scope_touches_spec(scope) for node in route.get("nodes",[]) for scope in node.get("write_scope",[]))
     if bool(route.get("spec_touch")) != spec_touch: raise ValueError("spec_touch declaration mismatch")
     if route.get("effective_intensity") not in ("direct","quick") and route.get("selection",{}).get("transport")=="headless":
-        _validate_dispatch_evidence(route.get("dispatch_evidence"), route.get("broker_contract_version"))
+        contract_version=route.get("dispatch_contract_version") or route.get("broker_contract_version") or 1
+        checked_dispatch=_validate_dispatch_evidence(route.get("dispatch_evidence"), contract_version)
+        expected_chain=_fallback_chain(checked_dispatch, contract_version)
         for node in route.get("nodes",[]):
-            if node.get("depth")==2: _verify_fallback_chain(node, route.get("broker_contract_version"))
+            if node.get("depth")==2:
+                chain=_verify_fallback_chain(node, contract_version)
+                if chain != expected_chain:
+                    raise ValueError(f"depth-2 node {node.get('id')} dispatch fallback differs from checked evidence")
     return route
 
 def write_once(path, payload):

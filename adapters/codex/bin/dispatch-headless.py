@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
+    claim_attempt_row,
     completion_marker_gate,
     ensure_global_registry_writable,
-    ensure_launch_broker,
     new_attempt_id,
     resolve_global_registry,
     validate_nested_eligibility,
@@ -177,8 +177,8 @@ def _bind_runtime_parent(args: argparse.Namespace) -> None:
     Callers historically supplied a synthetic ``--parent-session-id``. That
     overrides the parser's CODEX_THREAD_ID default and Fleet cannot repair the
     relationship from cwd when multiple interactive sessions share one repo.
-    Depth-2 workers keep their explicit broker/owner envelope; the legacy force
-    switch remains available when a checked fallback intentionally rebinds it.
+    Depth-2 workers keep their explicit conductor/owner envelope; the legacy
+    force switch remains available when a checked fallback intentionally rebinds it.
     """
     force_current = os.environ.get("CODEX_DISPATCH_PARENT_CURRENT_FORCE") == "1"
     current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
@@ -372,6 +372,8 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         "--sandbox",
         args.sandbox,
     ]
+    if args.nested_headless_network:
+        cmd += ["-c", "sandbox_workspace_write.network_access=true"]
     if args.resolved_model_settings["source"] != "inherit":
         model = args.resolved_model_settings["model"]
         reasoning = args.resolved_model_settings["reasoning"]
@@ -434,7 +436,7 @@ def _effective_parent_cwd(args):
     return cwd
 
 
-def append_job(jobs: Path, args: argparse.Namespace) -> None:
+def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
     pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth},harness=codex"
     if args.parent_slug:
@@ -475,9 +477,70 @@ def append_job(jobs: Path, args: argparse.Namespace) -> None:
     if args.broker_request_id:
         pipe += f",broker_request_id={args.broker_request_id}"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    with jobs_lock(jobs):
-        with jobs.open("a", encoding="utf-8") as f:
-            f.write(f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}\n")
+    row = f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}"
+    return claim_attempt_row(jobs, args.attempt_id, row, launch=args.action == "start")
+
+
+def nested_headless_network_enabled(args: argparse.Namespace) -> bool:
+    """Grant network only to a standard+ depth-1 Codex capability owner."""
+
+    return (
+        args.depth == 1
+        and args.worker_type == "owner"
+        and args.intensity in {"standard", "strong", "thorough", "adversarial"}
+        and args.sandbox == "workspace-write"
+    )
+
+
+def prepare_nested_codex_home(worktree: Path, source_home: Path | None = None) -> Path:
+    """Create a writable Codex home inside the owner's sandbox.
+
+    Recursive ``codex exec`` needs to write session/app-server state. Pointing
+    it at the user's normal CODEX_HOME fails under workspace-write even when
+    network is enabled. The projection keeps mutable state inside the owner
+    worktree, links the existing credential/config read-only, and installs only
+    harness-owned runtime links. Credentials are never copied or modified.
+    """
+
+    source = (source_home or Path(os.environ.get("CODEX_HOME", "~/.codex"))).expanduser().resolve()
+    destination = worktree / ".dispatch" / "nested-codex-home"
+    destination.mkdir(parents=True, exist_ok=True)
+    destination.chmod(0o700)
+
+    installer = ROOT / "adapters" / "codex" / "bin" / "install-runtime-projection.sh"
+    env = {**os.environ, "AGENT_HOME": str(ROOT), "CODEX_HOME": str(destination)}
+    result = subprocess.run(
+        [str(installer), "--skills-mode", "native"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise DispatchContractError(
+            "nested-codex-home-projection-failed",
+            (result.stderr or result.stdout).strip() or f"exit-{result.returncode}",
+        )
+
+    auth = source / "auth.json"
+    if not auth.is_file():
+        fallback = Path.home() / ".codex" / "auth.json"
+        auth = fallback if fallback.is_file() else auth
+    if not auth.is_file():
+        raise DispatchContractError("nested-codex-auth-missing", str(auth))
+
+    for name, target in (("auth.json", auth), ("config.toml", source / "config.toml")):
+        if not target.is_file():
+            continue
+        link = destination / name
+        if link.is_symlink():
+            link.unlink()
+        elif link.exists():
+            raise DispatchContractError("nested-codex-home-collision", str(link))
+        link.symlink_to(target)
+    return destination
 
 
 def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str, attempt_id: str | None = None) -> bool:
@@ -731,6 +794,8 @@ def main(argv: list[str]) -> int:
     _bind_runtime_parent(args)
     action = "start" if args.start else "register" if args.register else "dry-run"
     args.action = action
+    if args.broker_request_id or args.launch_authority == "ancestor-broker":
+        return fail("launch-broker-retired", 76, child_spawned="0")
     args.agent_home = resolve_agent_home()
     worktree = Path(args.worktree)
     if not worktree.is_dir():
@@ -814,14 +879,19 @@ def main(argv: list[str]) -> int:
             ensure_global_registry_writable(jobs)
     except DispatchContractError as e:
         return fail(e.reason, 73, detail=e.detail, child_spawned="0")
-    try:
-        broker = ensure_launch_broker(
-            agent_home, jobs, depth=args.depth, action=action, intensity=args.intensity
-        )
-    except DispatchContractError as e:
-        return fail(e.reason, 76, detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = dispatch_prompt(args)
+    args.nested_headless_network = nested_headless_network_enabled(args)
+    args.nested_codex_home = None
+    args.nested_codex_home_path = (
+        worktree / ".dispatch" / "nested-codex-home"
+        if args.nested_headless_network else None
+    )
+    if action == "start" and args.nested_headless_network:
+        try:
+            args.nested_codex_home = prepare_nested_codex_home(worktree)
+        except DispatchContractError as e:
+            return fail(e.reason, 73, detail=e.detail, child_spawned="0")
     prompt_path = log_dir / f"{args.slug}.codex.prompt.txt"
     log_path = log_dir / f"{args.slug}.codex.jsonl"
     command = shell_command(args, prompt_path, log_path)
@@ -839,10 +909,12 @@ def main(argv: list[str]) -> int:
             gate = subprocess.run([sys.executable, str(governor), "--root", str(governor_root), "check", "--class", "dispatch"])
             if gate.returncode != 0:
                 return fail("model-worker-governor-denied", 75)
-        append_job(jobs, args)
-    if action == "start":
+        args.attempt_claimed = append_job(jobs, args)
+    else:
+        args.attempt_claimed = False
+    if action == "start" and args.attempt_claimed:
         dispatch_env = {
-            **os.environ,
+            **{key: value for key, value in os.environ.items() if not key.startswith("AGENT_DISPATCH_BROKER_")},
             "AGENT_SESSION_ROLE": "worker",
             "AGENT_DISPATCH_CHILD": "1",
             "AGENT_DISPATCH_DEPTH": str(args.depth),
@@ -864,14 +936,13 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
             "AGENT_DISPATCH_CURRENT_SANDBOX": args.sandbox,
         }
-        if broker:
-            dispatch_env.update({
-                "AGENT_DISPATCH_BROKER_ROOT": str(broker.root),
-                "AGENT_DISPATCH_BROKER_INSTANCE": broker.instance_id,
-                "AGENT_DISPATCH_BROKER_PID": str(broker.pid),
-                "AGENT_DISPATCH_BROKER_START_TICKS": broker.start_ticks,
-            })
-        if profile_home is not None:
+        if args.nested_headless_network:
+            dispatch_env["AGENT_NESTED_HEADLESS_NETWORK"] = "1"
+        else:
+            dispatch_env.pop("AGENT_NESTED_HEADLESS_NETWORK", None)
+        if args.nested_codex_home is not None:
+            dispatch_env["CODEX_HOME"] = str(args.nested_codex_home)
+        elif profile_home is not None:
             dispatch_env["CODEX_HOME"] = str(profile_home)
         try:
             proc = subprocess.Popen([sys.executable, str(governor), "--root", str(governor_root), "run", "--class", "dispatch", "--", "sh", "-c", command], start_new_session=True, env=dispatch_env)
@@ -922,19 +993,20 @@ def main(argv: list[str]) -> int:
     print(f"profile={args.profile or '-'}")
     print(f"runtime_home_projection={runtime_home_projection or '-'}")
     print(f"job_registry={jobs}")
-    print(f"broker_root={broker.root if broker else os.environ.get('AGENT_DISPATCH_BROKER_ROOT', '-')}")
-    print(f"broker_instance={broker.instance_id if broker else os.environ.get('AGENT_DISPATCH_BROKER_INSTANCE', '-')}")
+    print("broker_lifecycle=retired")
     print(f"registry_authority={registry.source}")
     print(f"attempt_id={args.attempt_id or '-'}")
-    print(f"broker_request_id={args.broker_request_id or '-'}")
     print(f"launch_authority={args.launch_authority}")
     print(f"fallback_ordinal={args.fallback_ordinal}")
     print(f"registry_lock={jobs}.lock")
-    print(f"registered={1 if action in ('register', 'start') else 0}")
-    print(f"started={1 if action == 'start' else 0}")
+    print(f"duplicate_attempt={0 if args.attempt_claimed or action == 'dry-run' else 1}")
+    print(f"registered={1 if args.attempt_claimed else 0}")
+    print(f"started={1 if action == 'start' and args.attempt_claimed else 0}")
     print(f"child_pid={getattr(args, 'child_pid', None) or '-'}")
     print(f"child_pid_start={getattr(args, 'child_pid_start', None) or '-'}")
     print(f"require_hook_trust={1 if args.require_hook_trust else 0}")
+    print(f"nested_headless_network={1 if args.nested_headless_network else 0}")
+    print(f"nested_codex_home={args.nested_codex_home_path or '-'}")
     early_death = getattr(args, "early_death", None)
     if early_death:
         reason, reset = early_death

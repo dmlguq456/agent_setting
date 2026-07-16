@@ -767,6 +767,11 @@ def main() -> int:
     parse_common(stop_p)
     stop_p.add_argument("--timeout", type=float, default=5.0)
     args = parser.parse_args()
+    if args.command in {"ensure", "request", "serve"}:
+        print("check=failed")
+        print("reason=launch-broker-retired")
+        print("detail=dispatch contract v3 permits legacy broker status and stop only")
+        return 76
     root = args.root.expanduser().resolve(strict=False)
     jobs = args.jobs.expanduser().resolve(strict=False)
     try:
@@ -779,6 +784,7 @@ def main() -> int:
             if not reply.get("ok") or reply.get("meta", {}).get("instance_id") != meta.get("instance_id"):
                 raise BrokerError("broker-instance-mismatch", "ping metadata")
             print_meta(meta)
+            print("broker_lifecycle=retired")
             return 0
         if args.command == "serve":
             server = BrokerServer(

@@ -670,10 +670,12 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^claude_headless=unsupported$' /tmp/codex_headless.out \
   && grep -q '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex_headless.out \
   && grep -q '^liveness_check=adapters/codex/bin/preflight.sh liveness \[jobs.log\]$' /tmp/codex_headless.out \
-  && grep -q '^dispatch_prompt_contract=codex-harness-autopilot-prompt$' /tmp/codex_headless.out \
+  && grep -q '^dispatch_prompt_contract=portable-typed-worker-bootstrap$' /tmp/codex_headless.out \
   && grep -q '^dispatch_input_validation=capability-info,mode-info,qa-level,intensity-depth-parent$' /tmp/codex_headless.out \
-  && grep -q '^worker_startup_signal=status,prompt-signal,mode$' /tmp/codex_headless.out \
-  && grep -q '^worker_startup_signal_contract=preflight.sh status . codex-headless; preflight.sh prompt-signal . codex-headless; preflight.sh mode . codex-headless$' /tmp/codex_headless.out \
+  && grep -q '^worker_startup_signal=wrapper-validated-metadata-or-immutable-route$' /tmp/codex_headless.out \
+  && grep -q '^worker_startup_signal_contract=dispatch-wrapper-validates-before-materializing-prompt; worker rechecks only for safety$' /tmp/codex_headless.out \
+  && grep -q '^broker_lifecycle=retired-status-stop-only$' /tmp/codex_headless.out \
+  && grep -q '^launch_authority=conductor$' /tmp/codex_headless.out \
   && grep -q '^constraints=main-or-owner-dispatched,max-depth-2-for-standard-plus-owner,register-open-job,explicit-capability-mode-qa-intensity-depth-parent-parent_sid,transcript-liveness-required$' /tmp/codex_headless.out; then
   ok "codex headless wrapper reports dispatch contract"
 else
@@ -868,7 +870,7 @@ if AGENT_HOME="$TMP/not-agent-home" python3 "$ROOT/adapters/codex/bin/dispatch-h
 else
   bad "codex dispatch script should validate AGENT_HOME"
 fi
-if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-quick-depth1 --capability autopilot-code --mode dev/backend --intensity quick --depth 1 --parent-session-id test-parent --owner-harness codex --prompt-text "quick work" --model gpt-test --reasoning low --jobs "$TMP/codex-quick-depth1.log" >/tmp/codex_quick_depth1.out 2>/tmp/codex_quick_depth1.err   && grep -q '^status=register$' /tmp/codex_quick_depth1.out   && grep -q '^registered=1$' /tmp/codex_quick_depth1.out   && grep -q '^depth=1$' /tmp/codex_quick_depth1.out   && grep -q '^intensity=quick$' /tmp/codex_quick_depth1.out   && grep -q $'open	.*/repo	.*/repo	codex-quick-depth1	capability=autopilot-code,mode=dev/backend,qa=quick,intensity=quick,depth=1,harness=codex,parent_sid=test-parent,parent_cwd=[^,]*,owner_harness=codex,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-quick-depth1.log"; then
+if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-quick-depth1 --capability autopilot-code --mode dev/backend --intensity quick --depth 1 --parent-session-id test-parent --owner-harness codex --prompt-text "quick work" --model gpt-test --reasoning low --jobs "$TMP/codex-quick-depth1.log" >/tmp/codex_quick_depth1.out 2>/tmp/codex_quick_depth1.err   && grep -q '^status=register$' /tmp/codex_quick_depth1.out   && grep -q '^registered=1$' /tmp/codex_quick_depth1.out   && grep -q '^depth=1$' /tmp/codex_quick_depth1.out   && grep -q '^intensity=quick$' /tmp/codex_quick_depth1.out   && grep -q $'open	.*/repo	.*/repo	codex-quick-depth1	capability=autopilot-code,mode=dev/backend,qa=quick,intensity=quick,depth=1,harness=codex,parent_sid=test-parent,parent_cwd=[^,]*,worker_type=owner,owner_harness=codex,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-quick-depth1.log"; then
   ok "codex dispatch wrapper accepts quick depth-1 one-shot jobs"
 else
   bad "codex dispatch wrapper should accept quick depth-1 one-shot jobs"
@@ -884,6 +886,7 @@ else
   fi
 fi
 mkdir -p "$TMP/codex-stubbin"
+printf '{}\n' > "$TMP/codex_headless_home/auth.json"
 cat > "$TMP/codex-stubbin/codex" <<'EOF'
 #!/usr/bin/env sh
 printf '%s\n' "$*" > "$CODEX_STUB_ARGV"
@@ -896,25 +899,14 @@ if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_S
   && [ "$(readlink "$TMP/repo/.dispatch/codex-home")" = "$TMP/codex_headless_home" ] \
   && grep -Fxq "runtime_home_projection=$TMP/repo/.dispatch/codex-home" /tmp/codex_dispatch_start.out \
   && [ -f "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" ] \
-  && grep -q 'Read \$AGENT_HOME/adapters/codex/AGENTS.md first' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'Run \$AGENT_HOME/adapters/codex/bin/preflight.sh status' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh status . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh prompt-signal . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh mode . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh route autopilot-code . codex-headless' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh mode-info dev/backend' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q '^# Portable Worker Kernel$' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q '^# Worker Type: Owner$' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'worker_type: owner' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'assigned_contract: autopilot-code' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'route_state: validated dispatch metadata' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'adapters/codex/skills/autopilot-code/SKILL.md' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'preflight.sh qa-policy standard code' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'Autopilot-code execution contract' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'code-plan -> code-execute -> code-test -> code-report' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'role planning, role implementation, role verification, and role report' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh mode-info qa/plan-review' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh mode-info qa/test' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh role verification' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh role implementation' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh role report' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'pipeline_summary.md' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'Do not claim independent QA delegation' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'Do not use adapters/claude' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
+  && grep -q 'dispatch registered depth-2 stages by invoking the' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
   && grep -q 'nested work' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt"; then
   for _ in $(seq 1 20); do
     [ -f "$TMP/codex-start.argv" ] && break
@@ -954,8 +946,8 @@ if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --c
   && grep -q '^prompt_file=.*/codex-register-logs/codex-dispatch.codex.prompt.txt$' /tmp/codex_dispatch.out \
   && [ -f "$TMP/codex-dispatch.log.lock" ] \
   && [ -f "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" ] \
-  && grep -q 'role planning, role implementation, role verification, and role report' "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" \
-  && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=codex,owner_harness=codex,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
+  && grep -q '^# Worker Type: Owner$' "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" \
+  && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=codex,worker_type=owner,owner_harness=codex,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
   ok "codex dispatch wrapper registers open headless job"
 else
   bad "codex dispatch wrapper should register open headless job"
@@ -975,7 +967,7 @@ fi
 if "$CODEX" harvest --jobs "$TMP/codex-dispatch.log" --slug codex-dispatch --mark-done >/tmp/codex_harvest_done.out 2>/tmp/codex_harvest_done.err \
   && grep -q '^marked_done=1$' /tmp/codex_harvest_done.out \
   && grep -q '^registry_lock=.*/codex-dispatch.log.lock$' /tmp/codex_harvest_done.out \
-  && grep -q $'done\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=codex,owner_harness=codex,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
+  && grep -q $'done\t.*/repo\t.*/repo\tcodex-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=codex,worker_type=owner,owner_harness=codex,model_source=explicit,model_role=-,model=gpt-test,reasoning=low,approval=never' "$TMP/codex-dispatch.log"; then
   ok "codex harvest wrapper marks selected jobs done"
 else
   bad "codex harvest wrapper should mark selected jobs done"
@@ -1041,7 +1033,7 @@ if CODEX_THREAD_ID=codex-parent python3 "$ROOT/adapters/claude/bin/dispatch-head
   && grep -q '^worker_role=verifier$' /tmp/claude_owned.out \
   && grep -q '^owner=audit$' /tmp/claude_owned.out \
   && grep -q '^owner_harness=codex$' /tmp/claude_owned.out \
-  && grep -q $'open\t.*/repo\t.*/repo\tclaude-owned\tcapability=audit,mode=ops/verification,qa=standard,intensity=thorough,depth=1,harness=claude,parent_sid=codex-parent,parent_cwd=[^,]*,worker_role=verifier,owner=audit,owner_harness=codex,model_source=role,model_role=fast reviewer,model=sonnet,effort=medium' "$TMP/claude-owned.log" \
+  && grep -q $'open\t.*/repo\t.*/repo\tclaude-owned\tcapability=audit,mode=ops/verification,qa=standard,intensity=thorough,depth=1,harness=claude,parent_sid=codex-parent,parent_cwd=[^,]*,worker_role=verifier,worker_type=owner,owner=audit,owner_harness=codex,model_source=role,model_role=fast reviewer,model=sonnet,effort=medium' "$TMP/claude-owned.log" \
   && grep -q 'parent_session_id: codex-parent' "$TMP/claude-owned-logs/claude-owned.claude.prompt.txt"; then
   ok "claude dispatch wrapper records cross-harness ownership metadata"
 else
@@ -3062,7 +3054,7 @@ if AGENT_DISPATCH_JOBS="$TMP/opencode-env-jobs.log" \
 else
   bad "opencode dispatch and harvest should use the selected shared registry"
 fi
-if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-quick-depth1 --capability autopilot-code --mode dev/backend --intensity quick --depth 1 --parent-session-id test-parent --owner-harness opencode --prompt-text "quick work" --model provider/test --variant low --jobs "$TMP/opencode-quick-depth1.log" >/tmp/opencode_quick_depth1.out 2>/tmp/opencode_quick_depth1.err   && grep -q '^status=register$' /tmp/opencode_quick_depth1.out   && grep -q '^registered=1$' /tmp/opencode_quick_depth1.out   && grep -q '^depth=1$' /tmp/opencode_quick_depth1.out   && grep -q '^intensity=quick$' /tmp/opencode_quick_depth1.out   && grep -q $'open	.*/repo	.*/repo	opencode-quick-depth1	capability=autopilot-code,mode=dev/backend,qa=quick,intensity=quick,depth=1,harness=opencode,parent_sid=test-parent,parent_cwd=[^,]*,owner_harness=opencode,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-quick-depth1.log"; then
+if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-quick-depth1 --capability autopilot-code --mode dev/backend --intensity quick --depth 1 --parent-session-id test-parent --owner-harness opencode --prompt-text "quick work" --model provider/test --variant low --jobs "$TMP/opencode-quick-depth1.log" >/tmp/opencode_quick_depth1.out 2>/tmp/opencode_quick_depth1.err   && grep -q '^status=register$' /tmp/opencode_quick_depth1.out   && grep -q '^registered=1$' /tmp/opencode_quick_depth1.out   && grep -q '^depth=1$' /tmp/opencode_quick_depth1.out   && grep -q '^intensity=quick$' /tmp/opencode_quick_depth1.out   && grep -q $'open	.*/repo	.*/repo	opencode-quick-depth1	capability=autopilot-code,mode=dev/backend,qa=quick,intensity=quick,depth=1,harness=opencode,parent_sid=test-parent,parent_cwd=[^,]*,worker_type=owner,owner_harness=opencode,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-quick-depth1.log"; then
   ok "opencode dispatch wrapper accepts quick depth-1 one-shot jobs"
 else
   bad "opencode dispatch wrapper should accept quick depth-1 one-shot jobs"
@@ -3081,7 +3073,7 @@ if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-dispat
   && grep -q '^status=register$' /tmp/opencode_dispatch.out \
   && grep -q '^registered=1$' /tmp/opencode_dispatch.out \
   && grep -q '^started=0$' /tmp/opencode_dispatch.out \
-  && grep -q $'open\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=opencode,owner_harness=opencode,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
+  && grep -q $'open\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=opencode,worker_type=owner,owner_harness=opencode,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
   ok "opencode dispatch wrapper registers open headless job"
 else
   bad "opencode dispatch wrapper should register open headless job"
@@ -3092,8 +3084,10 @@ if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-genera
   && grep -q '^prompt_source=generated$' /tmp/opencode_generated_dispatch.out \
   && [ -f "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" ] \
   && grep -q 'qa-policy thorough code' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" \
-  && grep -q 'stage graph from intensity before QA' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" \
-  && grep -q 'bounded depth-2 planner/verifier workers' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt"; then
+  && grep -q '^# Portable Worker Kernel$' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" \
+  && grep -q '^# Worker Type: Owner$' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" \
+  && grep -q 'assigned_contract: autopilot-code' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" \
+  && grep -q 'launch checked adapter wrappers directly' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt"; then
   ok "opencode dispatch wrapper materializes generated register prompt with QA policy"
 else
   bad "opencode dispatch wrapper should materialize generated register prompt with QA policy"
@@ -3111,7 +3105,7 @@ else
 fi
 if "$OPENCODE" harvest --jobs "$TMP/opencode-dispatch.log" --slug opencode-dispatch --mark-done >/tmp/opencode_harvest_done.out 2>/tmp/opencode_harvest_done.err \
   && grep -q '^marked_done=1$' /tmp/opencode_harvest_done.out \
-  && grep -q $'done\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=opencode,owner_harness=opencode,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
+  && grep -q $'done\t.*/repo\t.*/repo\topencode-dispatch\tcapability=autopilot-code,mode=dev/backend,qa=standard,intensity=standard,depth=1,harness=opencode,worker_type=owner,owner_harness=opencode,model_source=explicit,model_role=-,model=provider/test,variant=low' "$TMP/opencode-dispatch.log"; then
   ok "opencode harvest wrapper marks selected jobs done"
 else
   bad "opencode harvest wrapper should mark selected jobs done"

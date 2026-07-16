@@ -587,22 +587,26 @@ Depth-2 starts require checked tuple evidence and an inherited canonical
 `AGENT_DISPATCH_JOBS`; noncanonical nested `--jobs` and unwritable global
 registries fail before spawn. Rows carry attempt identity, launch authority,
 fallback ordinal, and tuple evidence. `nested-headless` keeps the observed
-Codex-in-Codex workspace-write tuple unsupported, while `dispatch-chain`
-enforces same-harness → cross-harness/broker → native → inline ordering.
-Codex launches also attach `pid` and `/proc` start ticks; the shared liveness
-fallback recognizes `.codex.jsonl`, closing the v10 O1 false-DEAD gap.
+Codex-in-Codex workspace-write tuple is supported only when the depth-1 owner
+has the wrapper-projected network contract, while `dispatch-chain` enforces
+same-harness → cross-harness → native → inline ordering. Adapter launches attach
+exact attempt, `pid`, and `/proc` start-tick identity; shared-worktree transcript
+activity cannot revive an exited retry.
 
-### SD-51~53 harness-neutral launch broker — realized
+### SD-51~53 direct headless launch — realized
 
-`preflight.sh broker ensure|status|stop` exposes the deterministic shared
-broker lifecycle. A standard+ depth-1 wrapper prepares the broker before
-`codex exec` and passes an immutable broker root/instance/jobs binding into the
-conductor. `dispatch-chain` submits both Codex and Claude depth-2 targets as
-versioned declarative requests; it never starts a target adapter in the
-conductor process. Request state is atomic and idempotent, uses PID/start-tick
-plus heartbeat/fencing identity, and reconciles an already registered attempt
-after broker restart rather than launching it twice. Direct Codex-in-Codex
-execution remains a distinct, disabled-by-default executor surface.
+Dispatch contract v3 removes the resident launch broker, request spool,
+heartbeat, lease, and fencing identity. `dispatch-chain` invokes the checked
+Codex, Claude, or OpenCode adapter wrapper directly from the conductor. A stable
+attempt identity is claimed under the canonical jobs lock before process spawn;
+a duplicate claim starts zero children. Standard+ depth-1 Codex owners run with
+`sandbox_workspace_write.network_access=true` and
+`AGENT_NESTED_HEADLESS_NETWORK=1`. Their writable worktree-local `CODEX_HOME`
+links the existing auth/config without copying or mutating credentials and
+keeps nested session/app-server state inside the owner sandbox. Depth-2 workers
+do not inherit the network widening.
+Broker v1/v2 records remain readable for migration, and `preflight.sh broker`
+retains only diagnostic `status` and idempotent `stop` during the drain release.
 
 ## Distillation Boundary
 

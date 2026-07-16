@@ -51,7 +51,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh subagent-info [--check]
        preflight.sh headless [--check] [--require-hook-trust] <worktree>
        preflight.sh nested-headless --parent-harness <h> --parent-transport <t> --parent-sandbox <s> --child-harness <h> --launch-authority <authority> --worktree <path> [--json]
-       preflight.sh broker <ensure|status|stop> --jobs <jobs.log> [--root <broker-root>]
+       preflight.sh broker <status|stop> --jobs <jobs.log> [--root <broker-root>]  # legacy drain only
        preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--intensity <level>] [--depth 1|2] [--parent <slug>] [--worker-role <role>] [--owner <capability>] (--model-role <role>|--model <model> --reasoning <effort>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh dispatch-chain --route <route.json> --node <id> --slug <slug> --parent <slug> --mode <mode> [--model-role <role>] [--dry-run|--register|--start]
        preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]
@@ -500,7 +500,8 @@ job_registry=<agent-home>/.dispatch/jobs.log (immutable AGENT_DISPATCH_JOBS for 
 nested_eligibility_check=adapters/codex/bin/preflight.sh nested-headless --parent-harness <h> --parent-transport <t> --parent-sandbox <s> --child-harness <h> --launch-authority <a> --worktree <path>
 fallback_chain=same-harness-headless,cross-harness-headless,native-subagent,inline
 fallback_runner=adapters/codex/bin/preflight.sh dispatch-chain --route <route> --node <node> --dry-run|--register|--start
-broker_lifecycle=adapters/codex/bin/preflight.sh broker ensure|status|stop --jobs <canonical-jobs> [--root <broker-root>]
+broker_lifecycle=retired-status-stop-only
+launch_authority=conductor
 liveness_surface=codex-session-jsonl-mtime
 liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]
 harvest_check=adapters/codex/bin/preflight.sh harvest [--jobs jobs.log] [--slug slug] [--mark-done]
