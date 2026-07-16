@@ -141,3 +141,4 @@
 - 판단 대기: `--view` CLI 표면 유지 여부(spec은 `p`만 확정), gate 통과 마커 규약(stage-dispatch 계약 변경), 브로커 HOL blocking 우선순위.
 
 - 2026-07-16 (v10 minor #1): **F-30 비대화식 투영 확정** — v10 구현이 검증 목적으로 추가한 `--view {group,process}` CLI + `FLEET_VIEW` env를 사용자 확정으로 등재. `p` 토글과 전역 상태 하나를 공유(별도 코드 경로 없음). 판단 대기 3건 중 1건 해소("전부다 작업 해줘").
+- 2026-07-16 (v10 minor #2): **F-30 gate 통과 표시 재개** — stage-dispatch v13(SD-56)이 completion marker를 실사용 착륙(저장소 최초 4건), v10 carryover §1의 재개 조건 충족. 증거 소스 = canonical `.dispatch/completion/<route_id>/<node_id>.json`, 판정 = marker 존재+route_id/hash 일치, 부재 = 무주장. 구현 = quick 사이클 분사.
