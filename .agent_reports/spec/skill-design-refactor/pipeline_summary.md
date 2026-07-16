@@ -1,5 +1,36 @@
 # Skill-Design Refactor — Pipeline Summary
 
+## 2026-07-16 · v4 GREEN
+
+primary entry routing을 `model proposal → user confirmation → capability-owned
+execution`으로 닫았다. `WORKFLOW §0.4`의 agent-filled five-field 카드는 material
+work 전에 한 번만 표시되고, read-only orientation은 제외되며, 이미 승인된
+route/scope는 반복하지 않는다. 승인 후에는 depth-1 owner가 entry contract를,
+depth-2 worker가 stage contract만 읽는다.
+
+`harness-manifest.json` schema 2가 27개 capability의 invocation class와
+`use_when`/`not_for`를 소유한다. 생성 분류는 entry-router 13,
+parent-invoked 13, model-support 1이며 hand-owned TSV는 generated projection으로
+전환됐다. generic/circular trigger와 top-level boundary 누락은 deterministic
+conformance failure다.
+
+Codex/OpenCode generated entry body는 full portable detail을 선행 투영하지
+않는다. 대표적으로 Codex `autopilot-code`는 134줄/9,146자에서
+46줄/2,687자로 줄었고 parent stage detail은 유지됐다. 구체적 trigger/boundary
+때문에 full metadata는 6,019자, active Codex builder metadata는 3,205자로
+증가했으나 7,000자 예산과 duplicate 0을 지켰다. 이는 main-context isolation과
+정적 footprint 결과이며 token·billing·총 작업량 절감률 주장이 아니다.
+
+generated projection, four-tree Skill conformance, strict context footprint,
+clean-worktree adapter boundary, Codex/OpenCode installed runtime projection,
+Claude metadata/plugin freshness가 모두 PASS하여 v4 상태는 GREEN이다.
+
+## 2026-07-16 · v4 implementation started
+
+Pocock의 user control과 harness의 semantic auto-routing을 `model proposal → user confirmation → capability-owned execution`으로 절충했다. 모든 material entry work는 agent-filled five-field 실행 확인을 한 번 거치며, 승인 이후 내부 stage는 재확인 없이 진행한다. read-only orientation/status/explanation은 제외하고 `direct`는 침묵하는 no-route가 아니라 명시적 예외로 표시한다.
+
+최우선 optimization target은 aggregate token이 아니라 depth-0 main session context다. main은 compact entry metadata와 route/state/integration만 소유하고, full capability/Skill detail은 depth-1 owner와 depth-2 worker가 읽는다. v4 dev는 core response/workflow 계약, manifest-owned routing metadata, generated invocation policy, three-adapter metadata projection, conformance 및 active-context verification을 같은 cycle에서 닫는다.
+
 ## 2026-07-15 · v3 GREEN
 
 portable source를 상위 의미 계층으로 복원하고 Claude·Codex·OpenCode를 동급 sibling adapter로 닫았다. 세 런타임은 모두 같은 `builder` 프로필(14 capabilities, 7 portable roles, 26 modes)로 활성화됐고 freshness는 `fresh`, duplicate discovery는 0이다. Codex의 구형 전체 투영 진단도 프로필 인식형으로 전환해 Claude 전체 트리를 암묵적 기준으로 삼지 않는다.

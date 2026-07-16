@@ -1,9 +1,10 @@
 ---
 name: design-review
-description: "Use when needed: Review design output for quality, token-contract compliance, and breakage."
+description: "Use only when autopilot-design dispatches design quality, token-contract, and breakage review. Not for top-level user requests or primary capability routing."
 metadata:
   portable_source: capabilities/design-review.md
   adapter: opencode
+  invocation_class: parent-invoked
 ---
 
 # design-review
@@ -29,6 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `design-review`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<design path or app path>`
 - Portable meaning: Review design output for quality, token-contract compliance, and breakage.

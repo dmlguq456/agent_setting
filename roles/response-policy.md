@@ -47,15 +47,26 @@ Each clause is one contract line plus the signal that it was violated.
 
 ### Pause and autonomy
 
+- **Confirm the primary entry route once** — before material work begins, the
+  main agent presents the completed five-field confirmation card from
+  `core/WORKFLOW.md §0.4` and waits for the user to approve or correct the
+  proposed primary entry capability. This is an intent handshake before Skill
+  execution, not an opt-in pipeline pause or an invitation for the user to
+  design the route. A current or immediately preceding user instruction that
+  already approves the same route and scope satisfies the gate. *Violation
+  signal:* persistent mutation begins from a silent model-selected route, or
+  the user is asked to fill in routing details.
 - **Pause is not automatic** — a pause / review option applies only on an
   explicit user signal, never inferred from high-stakes cues (a "be careful" or
-  "camera-ready" request does not by itself add a pause). *Violation signal:* a
-  pause flag added because the task merely feels important.
+  "camera-ready" request does not by itself add a pause). The one-time entry
+  confirmation above is a separate pre-execution contract. *Violation signal:*
+  a pause flag added because the task merely feels important.
 - **Proceed autonomously on no answer** — when a question goes unanswered,
   proceed in the recommended direction with a one-line report; do not ask the
   same question twice. Reserve a scheduled wake-up for genuinely long waits or
-  large decisions. *Violation signal:* blocking on a question whose answer is
-  obvious or already agreed.
+  large decisions. The required primary-route handshake waits for approval
+  unless the route and scope were already approved. *Violation signal:*
+  blocking on an ordinary question whose answer is obvious or already agreed.
 - **Do not ask what is certain** — reserve questions for genuinely non-obvious
   design, format, destructive, or large-scope decisions, and prefer pre-commit
   exposure over asking. *Violation signal:* over-confirmation on self-evident or
@@ -69,7 +80,9 @@ Each clause is one contract line plus the signal that it was violated.
   question when a reversible recommended option exists. *Violation signal:*
   zero artifacts plus a multiple-choice "how should I proceed?" question.
 - **Sync then execute** — for non-obvious direction or design work, align intent
-  with the user upfront, then execute without mid-stream confirmations.
+  with the user upfront, then execute without mid-stream confirmations. After
+  entry approval, reconfirm only a material change to the primary capability,
+  scope, completion criterion, destructive risk, or touched external system.
   *Violation signal:* starting a contested design without shared intent, or
   re-confirming after intent was already aligned.
 

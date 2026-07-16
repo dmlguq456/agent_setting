@@ -1,6 +1,6 @@
 ---
 name: autopilot-code
-description: "Use when needed: Code-work entrypoint that detects spec context and closes the plan→execute→test→report loop."
+description: "Use when source code must be implemented, debugged, refactored, or code-audited through a plan, execution, test, and report loop. Not for requirements-only changes, new empirical experiments, or document-only editing."
 ---
 
 # autopilot-code
@@ -16,9 +16,10 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Use
 
-1. Read `capabilities/autopilot-code.md` for the runtime-neutral contract.
-2. Run `adapters/codex/bin/preflight.sh capability-info autopilot-code`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-code.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/codex/bin/preflight.sh capability-info autopilot-code` and obey the reported status:
    - `instruction-only`: use this Skill as Codex guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -26,100 +27,11 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 ## Shape
 
 - Identifier: `autopilot-code`
+- Invocation class: `entry-router`
 - Supported modes: `dev, debug, audit`
 - Argument shape: `--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]`
 - Portable meaning: Code-work entrypoint that detects spec context and closes the plan→execute→test→report loop.
 
-## Portable Contract
-
-- Invocation semantics: General code-work entrypoint for libraries, research code, and applications, whether new or existing; it detects the cwd automatically. It supports `dev` (features/new work) and `debug` (diagnosis/fixes). When `spec/` exists, read it and branch by spec mode: app adds design critique, migration safety, and push/deploy handling; library checks public API consistency; CLI checks command and option consistency; research checks reproducibility, configs, and metrics. Non-code decisions such as PRDs, stack selection, skeletons, and ship setup belong to autopilot-spec. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
-
-
-
-## Projected Portable Details
-
-## Artifact Ownership
-
-Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not.
-
-Code work normally writes to `<artifact-root>/plans/<date>_<slug>/`, even when a `spec/` directory exists. `spec/` is the blueprint bucket; `plans/` is the work-cycle bucket.
-
-Artifact intensity policy:
-
-- `direct`: no new plan root, no `plan.md`, and no durable pipeline artifact unless the adapter or current repo policy explicitly requires one;
-- `quick`: no durable `plan.md` by default; record a short summary/evidence only when a work-cycle artifact is already required;
-- `standard+`: create or resume `<artifact-root>/plans/<date>_<slug>/`.
-
-Required public artifacts for `standard+` work cycles:
-
-- `plan.md` at the plan root;
-- `checklist.md` at the plan root when the plan is multi-step;
-- `pipeline_summary.md` at the plan root before completion;
-- `dev_logs/` and `test_logs/` for implementation and verification evidence.
-
-Internal artifacts belong under `_internal/`, including plan reviews, dev reviews, test reviews, retry notes, raw command logs, and model/team deliberation notes.
-
-## Role Requirements
-
-Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concrete model names, subagent frontmatter, and runtime-specific tool lists belong in adapter files.
-
-Minimum role mapping:
-
-- planning: planning role for `code-plan`;
-- implementation: development role for `code-execute`;
-- verification: QA role for `code-test`;
-- review: QA/reviewer role for plan, code, and test review;
-- app UI changes: design role as critic or handoff verifier when design artifacts exist.
-
-Pipeline intensity is the primary ceremony selector for this entrypoint. Use `direct` for inline fixes with no plan stage, `quick` for micro-plan plus plan-check-lite, `standard` for the normal closed loop, `strong` for the normal loop plus one risk-focused independent review, and `standard+` for owner-worker orchestration that should open bounded depth-2 verifier/planner work when separable, with `thorough|adversarial` expanding to multi-perspective or adversary workers. The same intensity determines `plan-check`, selected independent reviews, and `code-test` rigor without introducing a separate user-facing axis or forcing a monolithic full pipeline. Concrete models remain adapter-specific.
-
-## Guard Requirements
-
-Adapters must preserve the portable invariants relevant to this capability:
-
-- resolve artifact root through `utilities/artifact-root.sh` or equivalent logic;
-- in a linked task worktree, treat the local artifact snapshot as read-only and
-  write plans/logs/reports only to the canonical root passed through
-  `AGENT_ARTIFACT_ROOT`;
-- enforce git/worktree safety before edits;
-- enforce artifact ordering before new durable artifacts;
-- enforce spec-read gating when this capability changes spec-backed code or specs;
-- use DB memory paths, not runtime-native memory files.
-
-Additional code-entry gates:
-
-- before any code edit, classify the request against existing `spec/prd.md` when present and emit a one-line `spec-significance` verdict;
-- route `spec-significant` changes through `autopilot-spec` update before implementation unless the user explicitly defers;
-- detect whether `spec/pipeline_state.yaml` has changed since the last relevant plan and re-read newer spec/design artifacts before editing;
-- for app mode, treat design tokens and handoff artifacts as source contracts, not suggestions;
-- for destructive DB/schema/migration work, explain the command and risk, but do not auto-run destructive operations without explicit user approval;
-- for non-trivial feature, multi-file, or module work, use the runtime's isolated-worktree or equivalent dispatch policy from `core/OPERATIONS.md`.
-- after main/orchestrator merges, verifies the integrated tree, and pushes the
-  integration ref, invoke the guarded worktree cleanup check/apply path; never
-  infer cleanup eligibility from a runtime session-end event.
-
-## Portable Procedure
-
-1. Parse arguments and infer `dev`, `debug`, or `audit` when the adapter allows natural-language entry.
-2. Resolve artifact root and create or resume a `plans/<date>_<slug>/` work cycle.
-3. Run git/worktree preflight and remember the starting `HEAD`.
-4. If `spec/` exists, read `spec/prd.md` plus relevant mode contracts before planning.
-5. Emit `spec-significance: within-spec` or `spec-significance: SPEC-SIGNIFICANT (...)`.
-6. Select the stage graph from pipeline intensity, then map common stages to code sub-capabilities. `direct` skips `code-plan`; `quick` runs as a depth-1 one-shot worker with an inline micro-plan and plan-check-lite; `standard+` uses `code-plan`, optional `code-refine`, `code-execute`, `code-test`, and `code-report` according to the selected graph, QA override, and resume point. For `standard+`, a depth-1 capability owner may dispatch bounded depth-2 planner/verifier/adversary workers when the task is separable and must synthesize their short reports before final write-back. `direct` stays inline; `quick` is a depth-1 one-shot worker unless explicitly escalated.
-7. Before each durable write-back or commit, re-run git/worktree safety and stop if `HEAD` or merge state changed unexpectedly.
-8. Record implementation evidence and verification results in `pipeline_summary.md`.
-
-## Mode-Specific Semantics
-
-| Spec mode | Extra requirement |
-|---|---|
-| `app` | Use design handoff and token artifacts when present; UI changes get design review; destructive migration work requires explicit approval. |
-| `library` | Check public API, exports, semver impact, compatibility notes, and examples. |
-| `api` | Check endpoint/body/error/auth/rate-limit contracts and security implications. |
-| `cli` | Check command names, options, input/output formats, and exit codes. |
-| `research` | Check train/eval entry points, configs, seeds, reproducibility commands, and metrics. |
-
-When no spec exists, infer mode lightly from project files, report the inference, and keep the stricter spec-only gates disabled.
 
 
 ## Required Guards

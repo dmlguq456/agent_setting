@@ -35,15 +35,13 @@ fi
 
 declare -a policy_names=()
 declare -A policy_class=()
-parent_count=0
-entry_count=0
 while IFS=$'\t' read -r name class _rest; do
   name=${name%$'\r'}
   class=${class%$'\r'}
   [ -z "$name" ] && continue
   [[ "$name" == \#* ]] && continue
   case "$class" in
-    user-only|parent-invoked|entry-router) ;;
+    user-only|parent-invoked|entry-router|model-support) ;;
     *) echo "FAIL: unknown invocation class '$class' for $name"; fail=1; continue ;;
   esac
   if [ -n "${policy_class[$name]+x}" ]; then
@@ -53,20 +51,15 @@ while IFS=$'\t' read -r name class _rest; do
   fi
   policy_names+=("$name")
   policy_class[$name]="$class"
-  [ "$class" = "parent-invoked" ] && parent_count=$((parent_count + 1))
-  [ "$class" = "entry-router" ] && entry_count=$((entry_count + 1))
 done < "$POLICY"
 
 if [ "${#policy_names[@]}" -eq 0 ]; then
   echo "FAIL: invocation policy has no classified skills: $POLICY"
   exit 1
 fi
-if [ "$POLICY" = "$DEFAULT_POLICY" ] && [ "$parent_count" -ne 13 ]; then
-  echo "FAIL: canonical parent-invoked registry must contain 13 skills (found $parent_count)"
-  fail=1
-fi
-if [ "$POLICY" = "$DEFAULT_POLICY" ] && [ "$entry_count" -ne 13 ]; then
-  echo "FAIL: canonical entry-router registry must contain 13 skills (found $entry_count)"
+if [ "$POLICY" = "$DEFAULT_POLICY" ] && \
+   ! python3 "$ROOT/tools/sync-skill-invocation-policy.py" --check >/dev/null; then
+  echo "FAIL: canonical invocation policy is stale against harness-manifest.json"
   fail=1
 fi
 
@@ -76,6 +69,11 @@ if [ -z "$portable_names" ]; then
   echo "FAIL: portable capability domain is empty: $ROOT/capabilities"
   exit 1
 fi
+policy_names_sorted=$(printf '%s\n' "${policy_names[@]}" | sort)
+missing_policy=$(comm -23 <(printf '%s\n' "$portable_names") <(printf '%s\n' "$policy_names_sorted"))
+extra_policy=$(comm -13 <(printf '%s\n' "$portable_names") <(printf '%s\n' "$policy_names_sorted"))
+[ -n "$missing_policy" ] && { echo "FAIL: portable capabilities missing from invocation policy: $missing_policy"; fail=1; }
+[ -n "$extra_policy" ] && { echo "FAIL: non-portable capabilities in invocation policy: $extra_policy"; fail=1; }
 
 for skills_dir in "$@"; do
   if [ ! -d "$skills_dir" ]; then
@@ -92,7 +90,9 @@ for skills_dir in "$@"; do
   header=$(printf '%s\n' "$tsv" | head -1)
   if [ "$(printf '%s\n' "$header" | cut -f1)" != "name" ] || \
      [ "$(printf '%s\n' "$header" | cut -f4)" != "disable_model" ] || \
-     [ "$(printf '%s\n' "$header" | cut -f6)" != "use_when" ]; then
+     [ "$(printf '%s\n' "$header" | cut -f6)" != "use_when" ] || \
+     [ "$(printf '%s\n' "$header" | cut -f11)" != "not_for" ] || \
+     [ "$(printf '%s\n' "$header" | cut -f12)" != "generic_trigger" ]; then
     echo "FAIL: scan.sh TSV schema drift: $skills_dir"
     fail=1
     continue
@@ -116,6 +116,8 @@ for skills_dir in "$@"; do
   [ -n "$bad_len" ] && { echo "FAIL: SKILL.md >=500 lines in $skills_dir: $bad_len"; fail=1; }
   bad_depth=$(printf '%s\n' "$body" | awk -F'\t' '$9=="N"{print $1}')
   [ -n "$bad_depth" ] && { echo "FAIL: references/ depth >1 in $skills_dir: $bad_depth"; fail=1; }
+  generic=$(printf '%s\n' "$body" | awk -F'\t' '$12=="Y"{print $1}')
+  [ -n "$generic" ] && { echo "FAIL: generic or circular invocation trigger in $skills_dir: $generic"; fail=1; }
 
   for name in "${policy_names[@]}"; do
     row=$(printf '%s\n' "$body" | awk -F'\t' -v n="$name" '$1==n{print; exit}')
@@ -126,6 +128,10 @@ for skills_dir in "$@"; do
     fi
     disable=$(printf '%s\n' "$row" | cut -f4)
     use_when=$(printf '%s\n' "$row" | cut -f6)
+    not_for=$(printf '%s\n' "$row" | cut -f11)
+    use_only_when=$(printf '%s\n' "$row" | cut -f13)
+    top_level_exclusion=$(printf '%s\n' "$row" | cut -f14)
+    primary_exclusion=$(printf '%s\n' "$row" | cut -f15)
     case "${policy_class[$name]}" in
       user-only)
         if [ "$native_generated" -eq 0 ]; then
@@ -134,10 +140,18 @@ for skills_dir in "$@"; do
         ;;
       parent-invoked)
         [ "$disable" = "false" ] || { echo "FAIL: $name is parent-invoked but disable_model=$disable ($skills_dir)"; fail=1; }
+        [ "$use_only_when" = "Y" ] || { echo "FAIL: $name is parent-invoked but internal-stage trigger is missing ($skills_dir)"; fail=1; }
+        [ "$top_level_exclusion" = "Y" ] || { echo "FAIL: $name is parent-invoked but top-level exclusion is missing ($skills_dir)"; fail=1; }
         ;;
       entry-router)
         [ "$disable" = "false" ] || { echo "FAIL: $name is entry-router but disable_model=$disable ($skills_dir)"; fail=1; }
         [ "$use_when" = "Y" ] || { echo "FAIL: $name is entry-router but use_when=$use_when ($skills_dir)"; fail=1; }
+        [ "$not_for" = "Y" ] || { echo "FAIL: $name is entry-router but exclusion boundary is missing ($skills_dir)"; fail=1; }
+        ;;
+      model-support)
+        [ "$disable" = "false" ] || { echo "FAIL: $name is model-support but disable_model=$disable ($skills_dir)"; fail=1; }
+        [ "$use_when" = "Y" ] || { echo "FAIL: $name is model-support but use_when=$use_when ($skills_dir)"; fail=1; }
+        [ "$primary_exclusion" = "Y" ] || { echo "FAIL: $name is model-support but primary-route exclusion is missing ($skills_dir)"; fail=1; }
         ;;
     esac
   done
@@ -175,6 +189,6 @@ EOF
 done
 
 if [ "$fail" -eq 0 ]; then
-  echo "PASS: skill conformance (portable domain + four Skill trees + invocation policy ${#policy_names[@]} classifications + audience-language neutrality)"
+  echo "PASS: skill conformance (portable domain + four Skill trees + manifest-generated invocation policy ${#policy_names[@]} classifications + routing boundaries + audience-language neutrality)"
 fi
 exit "$fail"

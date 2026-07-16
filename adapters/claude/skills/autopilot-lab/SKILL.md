@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-lab
-description: "Use when invoking the portable autopilot-lab capability. Rapid experiment prototyping around training setup and checkpoint evaluation/analysis."
+description: "Use when training setup, checkpoint evaluation, ablation, metric computation, or other new empirical output is required. Not for ordinary production-code changes that create no new experiment or evaluation result."
 argument-hint: "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
 metadata:
   group: entry
   fam: code
+  invocation_class: entry-router
   modes: ["setup", "eval"]
   blurb: "Rapid experiment prototyping around training setup and checkpoint evaluation/analysis."
+  use_when: "Use when training setup, checkpoint evaluation, ablation, metric computation, or other new empirical output is required."
+  not_for: "Not for ordinary production-code changes that create no new experiment or evaluation result."
 ---
 
 # autopilot-lab

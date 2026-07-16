@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-code
-description: "Use when invoking the portable autopilot-code capability. Code-work entrypoint that detects spec context and closes the plan→execute→test→report loop."
+description: "Use when source code must be implemented, debugged, refactored, or code-audited through a plan, execution, test, and report loop. Not for requirements-only changes, new empirical experiments, or document-only editing."
 argument-hint: "--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
 metadata:
   group: entry
   fam: code
+  invocation_class: entry-router
   modes: ["dev", "debug", "audit"]
   blurb: "Code-work entrypoint that detects spec context and closes the plan→execute→test→report loop."
+  use_when: "Use when source code must be implemented, debugged, refactored, or code-audited through a plan, execution, test, and report loop."
+  not_for: "Not for requirements-only changes, new empirical experiments, or document-only editing."
 ---
 
 # autopilot-code

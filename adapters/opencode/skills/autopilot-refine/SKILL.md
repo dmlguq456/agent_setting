@@ -1,9 +1,10 @@
 ---
 name: autopilot-refine
-description: "Use when needed: Correct and update existing document/research artifacts while preserving snapshots and change history."
+description: "Use when an existing document or research artifact needs factual, structural, stylistic, or review-driven correction with history preserved. Not for drafting a new artifact or performing new empirical work required before the document can change."
 metadata:
   portable_source: capabilities/autopilot-refine.md
   adapter: opencode
+  invocation_class: entry-router
 ---
 
 # autopilot-refine
@@ -19,9 +20,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 ## Use
 
-1. Read `capabilities/autopilot-refine.md` for the runtime-neutral contract.
-2. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-refine`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-refine.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-refine` and obey the reported status:
    - `instruction-only`: use this Skill as OpenCode guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -29,13 +31,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `autopilot-refine`
+- Invocation class: `entry-router`
 - Supported modes: `none`
 - Argument shape: `"<prompt>" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]`
 - Portable meaning: Correct and update existing document/research artifacts while preserving snapshots and change history.
-
-## Portable Contract
-
-- Invocation semantics: Autopilot family — post-creation iteration pipeline for research and doc artifacts (NOT code). Prompt-driven: target artifact identified via prompt fuzzy match against `<artifact-root>/{research,documents}/*`, then auto-discovers the artifact's file structure, plans edits, shows a diff preview in chat, and on user confirm applies edits with versioning + integrated history logging in `pipeline_summary.md` (single source of truth — no separate CHANGELOG). Default intensity is `quick` (1-pass review, fastest path); escalate intensity to `standard|strong|thorough|adversarial` for multi-round review, fact-check, or external adversary work. Optional `--memo <file>` falls back to file-memo style for deferred reviews. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 ## Required Guards

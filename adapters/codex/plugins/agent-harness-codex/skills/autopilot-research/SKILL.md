@@ -1,6 +1,6 @@
 ---
 name: autopilot-research
-description: "Use when needed: Shared upfront research that surveys academic, technology, or market sources before downstream routing."
+description: "Use when a task needs a durable survey of new academic, technology, or market evidence before downstream specification or production. Not for repository-only project analysis, a simple factual lookup, or work already grounded by sufficient current evidence."
 ---
 
 # autopilot-research
@@ -16,9 +16,10 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Use
 
-1. Read `capabilities/autopilot-research.md` for the runtime-neutral contract.
-2. Run `adapters/codex/bin/preflight.sh capability-info autopilot-research`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-research.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/codex/bin/preflight.sh capability-info autopilot-research` and obey the reported status:
    - `instruction-only`: use this Skill as Codex guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -26,88 +27,11 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 ## Shape
 
 - Identifier: `autopilot-research`
+- Invocation class: `entry-router`
 - Supported modes: `academic, technology, market`
 - Argument shape: `<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]`
 - Portable meaning: Shared upfront research that surveys academic, technology, or market sources before downstream routing.
 
-## Portable Contract
-
-- Invocation semantics: Shared research-survey entrypoint with three modes: academic (papers, trends, and field mapping), technology (libraries, projects, stacks, and code baselines), and market (market/competitor/reference-app/UX patterns). Downstream routing: academic → autopilot-draft for papers/presentations and autopilot-code for academic baselines; technology → autopilot-code for library or research implementation and autopilot-spec for stack/reference decisions; market → autopilot-draft for proposals/reports and autopilot-spec for reference-app UX. This capability produces field intelligence only; downstream skills create actual documents, code, or applications. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
-
-
-
-## Projected Portable Details
-
-## Artifact Ownership
-
-Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not.
-
-Research work writes to `<artifact-root>/research/<topic>/`.
-
-Required public artifacts:
-
-- `pipeline_state.yaml`: query, mode, depth, intensity, QA override, resume stage, and artifact path;
-- `pipeline_summary.md`: source coverage, findings, QA result, and downstream recommendations;
-- report chapters at the research root, named by mode;
-- `cards/` for paper/project/company/source cards when the mode produces cards;
-- `analysis_summary.md` when the analyze stage produces cross-source synthesis.
-
-Internal artifacts belong under `_internal/`, including raw search metadata, source JSON, browser extracts, reference-chaining logs, code search notes, review records, and retry scratch files.
-
-## Role Requirements
-
-Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concrete model names, subagent frontmatter, and runtime-specific tool lists belong in adapter files.
-
-Minimum role mapping:
-
-- source search and retrieval: research/material role;
-- analysis and synthesis: research role;
-- fact/citation verification: QA or research-review role;
-- editorial cleanup of final chapters: editorial role when available;
-- downstream handoff: planning role for spec/code/draft routing.
-
-Pipeline intensity follows `core/CONVENTIONS.md §1`: `direct` has no plan stage or durable plan artifact; `quick` is a depth-1 one-shot worker with its inline micro-plan plus plan-check-lite; `standard+` uses the capability's durable work-cycle plan when applicable. `plan-check` is required for every non-`direct` graph, but independent QA is not repeated after every stage by default. Verification rigor for plan-check, selected independent reviews, and final verify is derived from intensity; it does not name a model or introduce a separate stage graph.
-
-## Guard Requirements
-
-Adapters must preserve the portable invariants relevant to this capability:
-
-- resolve artifact root through `utilities/artifact-root.sh` or equivalent logic;
-- enforce git/worktree safety before edits;
-- enforce artifact ordering before new durable artifacts;
-- enforce spec-read gating when this capability changes spec-backed code or specs;
-- use DB memory paths, not runtime-native memory files.
-
-Additional research-entry gates:
-
-- ask one scope-clarification round when the query is too broad, too short, or matches multiple modes, unless `--no-clarify` or resume mode is active;
-- keep raw source metadata in `_internal/`; public reports should cite or summarize, not expose noisy scrape output;
-- stop with a failed `pipeline_summary.md` when search returns no useful sources;
-- for `standard` and above, verify card-level facts such as title, venue, year, citation, metric, and quoted claims against sources;
-- for `adversarial`, run an independent contradiction/claim check before finalizing public-facing reports;
-- do not create code, specs, apps, or prose deliverables directly; hand off to downstream capabilities after field intelligence is complete.
-
-## Portable Procedure
-
-1. Parse query, mode, depth, intensity, QA override, optional `--from`, and skip flags.
-2. Resolve or create `<artifact-root>/research/<topic>/`; if resuming, read `pipeline_state.yaml`.
-3. Infer mode when omitted and ask scope clarification when required.
-4. Build search queries, including 2-3 synonym or alternate-phrase expansions.
-5. Search mode-appropriate sources and write raw metadata under `_internal/`.
-6. Analyze results into cards, chaining/code/source summaries, and `analysis_summary.md` as applicable.
-7. Generate mode-specific report chapters.
-8. Run QA verification according to level.
-9. Update `pipeline_state.yaml` after each completed stage and finish with `pipeline_summary.md`.
-
-## Mode-Specific Semantics
-
-| Mode | Search/source emphasis | Public report set |
-|---|---|---|
-| `academic` | Papers, citation graphs, datasets, baselines, implementations, model resources. | briefing, landscape, core papers, baselines, technical deep dive, datasets, implementation, resources, reading guide. |
-| `technology` | Standards, vendor docs, technical whitepapers, OSS implementations, deployment constraints. | briefing, landscape, standards/specs, vendor comparison, technical deep dive, deployment, implementation, resources. |
-| `market` | Analyst/news/company/investor sources, product positioning, adoption and business signals. | briefing, market overview, key players, trends, opportunities. |
-
-Mode inference should report its basis. If multiple modes match, resolve via clarification unless the user explicitly supplied `--mode`.
 
 
 ## Required Guards

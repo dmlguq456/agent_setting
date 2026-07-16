@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-design
-description: "Use when invoking the portable autopilot-design capability. Visual-design pipeline coordinating references→tokens→components→review→handoff."
+description: "Use when a visual product surface needs references, design tokens, components or mockups, review, and development handoff. Not for implementing an already-approved design in code or for document prose work."
 argument-hint: "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: entry
   fam: design
+  invocation_class: entry-router
   modes: []
   blurb: "Visual-design pipeline coordinating references→tokens→components→review→handoff."
+  use_when: "Use when a visual product surface needs references, design tokens, components or mockups, review, and development handoff."
+  not_for: "Not for implementing an already-approved design in code or for document prose work."
 ---
 
 # autopilot-design

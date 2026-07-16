@@ -1,6 +1,6 @@
 ---
 name: draft-refine
-description: "Use when needed: Refine a draft by applying memo/review feedback to a document strategy or draft."
+description: "Use only when autopilot-draft or autopilot-refine dispatches an internal strategy or draft refinement stage. Not for top-level user requests or primary capability routing."
 ---
 
 # draft-refine
@@ -26,6 +26,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 ## Shape
 
 - Identifier: `draft-refine`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<strategy or draft name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]`
 - Portable meaning: Refine a draft by applying memo/review feedback to a document strategy or draft.

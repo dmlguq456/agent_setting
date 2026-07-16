@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-spec
-description: "Use when invoking the portable autopilot-spec capability. Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path."
+description: "Use when product requirements, architecture, evaluation policy, or another blueprint must be created or materially updated before implementation. Not for implementing an already-approved specification or for editing unrelated documents."
 argument-hint: "<task description> [--mode auto|app|library|api|cli|research|update (comma-separated for multiple)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
 metadata:
   group: entry
   fam: code
+  invocation_class: entry-router
   modes: ["app", "library", "api", "cli", "research", "update"]
   blurb: "Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path."
+  use_when: "Use when product requirements, architecture, evaluation policy, or another blueprint must be created or materially updated before implementation."
+  not_for: "Not for implementing an already-approved specification or for editing unrelated documents."
 ---
 
 # autopilot-spec

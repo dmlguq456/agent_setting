@@ -144,6 +144,57 @@ A gate answer that selects dispatch follows `OPERATIONS §5.10` registry and
 liveness rules; an inline answer for `standard+` separable work requires the
 recorded reason.
 
+### 0.4. Primary Entry Confirmation
+
+For material work, the main agent proposes the route and the user confirms the
+intent before capability execution begins. The agent fills every field from
+the request and recovered context; the user reviews a completed proposal rather
+than recalling capability names, invocation syntax, or pipeline options.
+
+Render labels in the user's communication language while preserving these five
+fields and this order. In Korean, the canonical card is:
+
+```text
+[실행 확인]
+
+작업: <무엇을 어떤 결과로 만들지>
+이유: <현재 배경과 작업이 필요한 이유>
+경로: <primary entry capability> · <mode/intensity> — <선택 이유>
+범위: <포함 범위와 중요한 제외 대상>
+완료: <산출물과 검증 기준>
+
+→ 진행 / 수정: <틀린 부분> / 중단
+```
+
+Keep each value to one line. Do not include alternative menus, internal
+sub-Skills, or extended reasoning. The card applies when any of these observable
+conditions holds:
+
+1. source, document, configuration, or a durable artifact will be created or
+   changed;
+2. two or more of research, analysis, implementation, or verification are
+   needed;
+3. the work requires a test, build, deploy, external-system mutation, or
+   separate correctness evidence; or
+4. a tracked project will create or update a capability-owned artifact.
+
+Read-only orientation, status reporting, explanations, and simple factual
+answers are exempt. `direct` is an explicit route shown in the card with its
+reason, not a silent no-route decision. A current or immediately preceding user
+instruction that already approves the same route and scope satisfies the gate;
+do not repeat the card. After approval, capability-owned stages, validation,
+records, commits, dispatch, and handoffs proceed without further confirmation.
+Reconfirm only a material change to the primary capability, scope, completion
+criterion, destructive risk, or touched external system.
+
+Before approval, choose from compact manifest routing metadata and §0.2; do not
+load the full entry Skill body or its references merely to propose a route. At
+`standard+`, the depth-1 owner reads the selected capability contract and each
+depth-2 worker reads only its stage contract. `direct` or `quick` acting
+sessions read the detail they need after approval. If a runtime automatically
+injects a selected Skill body into main, do not duplicate that read; record the
+runtime limitation rather than claiming total-token savings.
+
 ## 1. Four Tracks
 
 ```text
@@ -213,7 +264,9 @@ When a code or intent change affects the spec, update every affected surface in 
 
 ## 5. Entrypoint-to-Worker Routing
 
-The user supplies one entrypoint; internal routing is automatic. Portable model roles come from `CONVENTIONS §2`.
+The main agent proposes one primary entrypoint under §0.2, the user confirms it
+under §0.4, and internal routing is automatic. Portable model roles come from
+`CONVENTIONS §2`.
 
 | Entry | Internal routing |
 |---|---|
@@ -230,7 +283,12 @@ The user supplies one entrypoint; internal routing is automatic. Portable model 
 
 For every durable stage at `standard+`, use an independent headless session under `OPERATIONS §5.10`; the named team roles run inside that session, and the depth-1 conductor passes only artifact paths. Direct stays depth 0 and quick stays a depth-1 one-shot.
 
-Each entrypoint is an explicit unit of intent. The main agent configures options, summarizes them naturally, and offers the four confirmation outcomes where the capability contract requires them: proceed, revise into v2, back-jump, or stop. Ask when intent is genuinely ambiguous rather than guessing. The runtime adapter bootstrap owns concrete invocation syntax.
+Each entrypoint is an explicit unit of intent. The §0.4 confirmation is the
+single top-level route handshake. Capability-local review controls such as
+revise into v2, back-jump, `--confirm`, or `--user-refine` remain opt-in and do
+not repeat that handshake. Ask a separate question only when intent is genuinely
+ambiguous after presenting the completed proposal. The runtime adapter bootstrap
+owns concrete invocation syntax.
 
 ## 6. Artifact Folders
 

@@ -1,6 +1,6 @@
 ---
 name: autopilot-design
-description: "Use when needed: Visual-design pipeline coordinating references→tokens→components→review→handoff."
+description: "Use when a visual product surface needs references, design tokens, components or mockups, review, and development handoff. Not for implementing an already-approved design in code or for document prose work."
 ---
 
 # autopilot-design
@@ -16,9 +16,10 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Use
 
-1. Read `capabilities/autopilot-design.md` for the runtime-neutral contract.
-2. Run `adapters/codex/bin/preflight.sh capability-info autopilot-design`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-design.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/codex/bin/preflight.sh capability-info autopilot-design` and obey the reported status:
    - `instruction-only`: use this Skill as Codex guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -26,37 +27,11 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 ## Shape
 
 - Identifier: `autopilot-design`
+- Invocation class: `entry-router`
 - Supported modes: `none`
 - Argument shape: `<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial]`
 - Portable meaning: Visual-design pipeline coordinating references→tokens→components→review→handoff.
 
-## Portable Contract
-
-- Invocation semantics: Unified design pipeline — orchestrates design-init → design-refs → design-tokens → design-components → design-review → design-handoff. For visual artifacts across UI/UX, slides, diagrams, icons, logos. Can be invoked standalone or auto-delegated from autopilot-spec Phase 2. Distinct from autopilot-draft (text-only documents) — autopilot-design handles visual deliverables. A runtime design harness must render every output for visual self-verification (preview/screenshot/console/eval_js/view_image where supported), run a separate-context verifier gate for console/layout breakage, apply shared design rules and reusable scaffold assets, and support PDF/PPTX/single-HTML bundle export where available. Outputs can be a self-contained single-file HTML preview viewable without any project stack. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
-
-
-
-## Projected Portable Details
-
-## Artifact Ownership
-
-Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not. Capability-specific output placement follows `core/CONVENTIONS.md` section 5 until this spec is expanded with a stricter per-capability artifact map.
-
-## Role Requirements
-
-Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concrete model names, subagent frontmatter, and runtime-specific tool lists belong in adapter files.
-
-Pipeline intensity follows `core/CONVENTIONS.md §1`: `direct` has no plan stage or durable plan artifact; `quick` is a depth-1 one-shot worker with its inline micro-plan plus plan-check-lite; `standard+` uses the capability's durable work-cycle plan when applicable. `plan-check` is required for every non-`direct` graph, but independent QA is not repeated after every stage by default. Verification rigor for plan-check, selected independent reviews, and final verify is derived from intensity; it does not name a model or introduce a separate stage graph.
-
-## Guard Requirements
-
-Adapters must preserve the portable invariants relevant to this capability:
-
-- resolve artifact root through `utilities/artifact-root.sh` or equivalent logic;
-- enforce git/worktree safety before edits;
-- enforce artifact ordering before new durable artifacts;
-- enforce spec-read gating when this capability changes spec-backed code or specs;
-- use DB memory paths, not runtime-native memory files.
 
 
 ## Required Guards

@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATORS = [
+    ("skill-invocation-policy", "tools/sync-skill-invocation-policy.py"),
     ("manifest-and-catalogs", "tools/build-manifest.py"),
     ("claude-skill-metadata", "adapters/claude/bin/sync-native-metadata.py"),
     ("claude-plugin", "adapters/claude/bin/sync-native-plugin.py"),

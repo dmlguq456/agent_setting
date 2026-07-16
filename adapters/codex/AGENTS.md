@@ -76,7 +76,11 @@ tool to claim Codex parity.
 ## Dispatch
 
 Select the primary capability semantically per `core/WORKFLOW.md §0.2` and use
-its §0.3 pre-execution gate when applicable.
+its §0.3 pre-execution gate when applicable. Before material work, propose the
+route with the completed five-field card in §0.4 and wait for approval unless
+the same route and scope are already approved. Route from compact generated
+metadata before approval; load full capability detail in the acting owner or
+worker after approval.
 
 Check `preflight.sh headless [--check] [--require-hook-trust] <worktree>`.
 Launch only registered jobs through

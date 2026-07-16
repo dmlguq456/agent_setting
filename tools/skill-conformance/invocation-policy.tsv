@@ -1,29 +1,30 @@
-# Skill invocation classification registry (CONVENTIONS §5.6a).
+# GENERATED — edit harness-manifest.json, then run tools/generate.py.
 # Columns: skill<TAB>class<TAB>caller/intent
-# Classes: user-only | parent-invoked | entry-router
-analyze-project	entry-router	model-selected project analysis routing
-analyze-user	entry-router	model-selected user analysis routing
-audit	entry-router	model-selected audit routing
-autopilot-apply	entry-router	model-selected cheatsheet application routing
-autopilot-code	entry-router	model-selected code workflow routing
-autopilot-design	entry-router	model-selected design workflow routing
-autopilot-draft	entry-router	model-selected document drafting routing
-autopilot-lab	entry-router	model-selected experiment routing
-autopilot-note	entry-router	model-selected note routing
-autopilot-refine	entry-router	model-selected refinement routing
-autopilot-research	entry-router	model-selected research routing
-autopilot-ship	entry-router	model-selected deployment/release routing
-autopilot-spec	entry-router	model-selected specification routing
-code-execute	parent-invoked	autopilot-code
-code-plan	parent-invoked	autopilot-code
-code-refine	parent-invoked	autopilot-code
-code-report	parent-invoked	autopilot-code
-code-test	parent-invoked	autopilot-code
-design-components	parent-invoked	autopilot-design
-design-handoff	parent-invoked	autopilot-design
-design-init	parent-invoked	autopilot-design
-design-refs	parent-invoked	autopilot-design
-design-review	parent-invoked	autopilot-design
-design-tokens	parent-invoked	autopilot-design
-draft-refine	parent-invoked	autopilot-draft/autopilot-refine
-draft-strategy	parent-invoked	autopilot-draft
+# Classes: user-only | parent-invoked | entry-router | model-support
+analyze-project	entry-router	Use when persistent analysis of code, a paper, or a document must be created or refreshed because it is absent, stale, or explicitly requested. Not for read-only project orientation, context recovery, or status reporting.
+analyze-user	entry-router	Use when durable cross-project user preferences must be inferred from coding, writing, or analysis evidence and stored as a profile. Not for one-project context recovery, casual preference acknowledgment, or ordinary task execution.
+audit	entry-router	Use when completed work or artifacts need a read-oriented inspection for drift, inconsistency, omissions, or unsupported claims. Not for implementing fixes, producing the primary artifact, or replacing execution-stage verification.
+autopilot-apply	entry-router	Use when an approved cheatsheet or patching guide must be applied to the real source artifact and the applied result verified. Not for drafting or refining the cheatsheet, or for unrelated source implementation.
+autopilot-code	entry-router	Use when source code must be implemented, debugged, refactored, or code-audited through a plan, execution, test, and report loop. Not for requirements-only changes, new empirical experiments, or document-only editing.
+autopilot-design	entry-router	Use when a visual product surface needs references, design tokens, components or mockups, review, and development handoff. Not for implementing an already-approved design in code or for document prose work.
+autopilot-draft	entry-router	Use when a new paper, presentation, report, proposal, or other user-facing document must be produced from evidence. Not for correcting only an existing document or for source-code implementation.
+autopilot-lab	entry-router	Use when training setup, checkpoint evaluation, ablation, metric computation, or other new empirical output is required. Not for ordinary production-code changes that create no new experiment or evaluation result.
+autopilot-note	entry-router	Use when existing artifacts must be collected, digested, triaged, or routed into a durable note workflow. Not for storing one scoped memory item or for performing the primary research, code, or document work.
+autopilot-refine	entry-router	Use when an existing document or research artifact needs factual, structural, stylistic, or review-driven correction with history preserved. Not for drafting a new artifact or performing new empirical work required before the document can change.
+autopilot-research	entry-router	Use when a task needs a durable survey of new academic, technology, or market evidence before downstream specification or production. Not for repository-only project analysis, a simple factual lookup, or work already grounded by sufficient current evidence.
+autopilot-ship	entry-router	Use when an application needs deployment or release configuration, readiness verification, and a ship checklist. Not for ordinary feature implementation or an unauthorized production deployment.
+autopilot-spec	entry-router	Use when product requirements, architecture, evaluation policy, or another blueprint must be created or materially updated before implementation. Not for implementing an already-approved specification or for editing unrelated documents.
+code-execute	parent-invoked	Use only when autopilot-code dispatches the implementation stage for an approved plan. Not for top-level user requests or primary capability routing.
+code-plan	parent-invoked	Use only when autopilot-code dispatches the planning and plan-check stage. Not for top-level user requests or primary capability routing.
+code-refine	parent-invoked	Use only when autopilot-code dispatches plan revision after user notes, plan-check feedback, or verification failure. Not for top-level user requests or primary capability routing.
+code-report	parent-invoked	Use only when autopilot-code dispatches the final code-cycle reporting stage. Not for top-level user requests or primary capability routing.
+code-test	parent-invoked	Use only when autopilot-code dispatches implementation verification and evidence recording. Not for top-level user requests or primary capability routing.
+design-components	parent-invoked	Use only when autopilot-design dispatches component, mockup, or preview construction. Not for top-level user requests or primary capability routing.
+design-handoff	parent-invoked	Use only when autopilot-design dispatches the development-handoff packaging stage. Not for top-level user requests or primary capability routing.
+design-init	parent-invoked	Use only when autopilot-design dispatches design environment and state initialization. Not for top-level user requests or primary capability routing.
+design-refs	parent-invoked	Use only when autopilot-design dispatches visual-reference collection and brief creation. Not for top-level user requests or primary capability routing.
+design-review	parent-invoked	Use only when autopilot-design dispatches design quality, token-contract, and breakage review. Not for top-level user requests or primary capability routing.
+design-tokens	parent-invoked	Use only when autopilot-design dispatches design-token definition or revision. Not for top-level user requests or primary capability routing.
+draft-refine	parent-invoked	Use only when autopilot-draft or autopilot-refine dispatches an internal strategy or draft refinement stage. Not for top-level user requests or primary capability routing.
+draft-strategy	parent-invoked	Use only when autopilot-draft dispatches document strategy and evidence-plan creation. Not for top-level user requests or primary capability routing.
+post-it	model-support	Use when the acting agent needs to store, retrieve, resolve, hand off, or promote a scoped working-memory item in support of current work. Not for primary task routing, broad artifact triage, or replacing the capability that owns the current work.

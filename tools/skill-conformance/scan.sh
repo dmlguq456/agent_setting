@@ -6,7 +6,7 @@
 set -euo pipefail
 SKILLS_DIR="${1:-skills}"
 
-printf "name\tbody_lines\tline_ok\tdisable_model\tinvocation\tuse_when\tdesc_has_hangul\tref_dir\tref_depth_ok\tref_files\n"
+printf "name\tbody_lines\tline_ok\tdisable_model\tinvocation\tuse_when\tdesc_has_hangul\tref_dir\tref_depth_ok\tref_files\tnot_for\tgeneric_trigger\tuse_only_when\ttop_level_exclusion\tprimary_exclusion\n"
 
 for f in "$SKILLS_DIR"/*/SKILL.md; do
   name=$(basename "$(dirname "$f")")
@@ -21,6 +21,11 @@ for f in "$SKILLS_DIR"/*/SKILL.md; do
   desc=$(printf '%s\n' "$fm" | awk -F': ' '/^description:/{sub(/^description:[[:space:]]*/,""); print; exit}')
   # "Use when" trigger presence (case-insensitive, English trigger)
   use_when=$(printf '%s\n' "$desc" | grep -iE 'use when' >/dev/null 2>&1 && echo "Y" || echo "N")
+  not_for=$(printf '%s\n' "$desc" | grep -iE 'not for' >/dev/null 2>&1 && echo "Y" || echo "N")
+  generic_trigger=$(printf '%s\n' "$desc" | grep -iE 'use when needed|use when invoking the portable' >/dev/null 2>&1 && echo "Y" || echo "N")
+  use_only_when=$(printf '%s\n' "$desc" | grep -iE 'use only when' >/dev/null 2>&1 && echo "Y" || echo "N")
+  top_level_exclusion=$(printf '%s\n' "$desc" | grep -iE 'not for[^.]*top-level|not for top-level' >/dev/null 2>&1 && echo "Y" || echo "N")
+  primary_exclusion=$(printf '%s\n' "$desc" | grep -iE 'not for[^.]*primary|not for primary' >/dev/null 2>&1 && echo "Y" || echo "N")
   # description contains Hangul (Korean blurb — 3rd-person English norm check)
   desc_hangul=$(printf '%s\n' "$desc" | grep -P '[\x{AC00}-\x{D7A3}]' >/dev/null 2>&1 && echo "Y" || echo "N")
 
@@ -35,6 +40,6 @@ for f in "$SKILLS_DIR"/*/SKILL.md; do
     ref_dir="N"; ref_depth_ok="-"; ref_files="0"
   fi
 
-  printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-    "$name" "$body_lines" "$line_ok" "$disable" "$invocation" "$use_when" "$desc_hangul" "$ref_dir" "$ref_depth_ok" "$ref_files"
+  printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+    "$name" "$body_lines" "$line_ok" "$disable" "$invocation" "$use_when" "$desc_hangul" "$ref_dir" "$ref_depth_ok" "$ref_files" "$not_for" "$generic_trigger" "$use_only_when" "$top_level_exclusion" "$primary_exclusion"
 done

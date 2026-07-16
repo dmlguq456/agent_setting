@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: draft-strategy
-description: "Use when invoking the portable draft-strategy capability. Create an initial document strategy and evidence-based writing plan."
+description: "Use only when autopilot-draft dispatches document strategy and evidence-plan creation. Not for top-level user requests or primary capability routing."
 argument-hint: "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--intensity direct|quick|standard|strong|thorough|adversarial] <task description>"
 metadata:
   group: sub
   fam: sub
+  invocation_class: parent-invoked
   modes: ["rebuttal", "paper", "review", "report", "proposal", "presentation"]
   blurb: "Create an initial document strategy and evidence-based writing plan."
+  use_when: "Use only when autopilot-draft dispatches document strategy and evidence-plan creation."
+  not_for: "Not for top-level user requests or primary capability routing."
 ---
 
 # draft-strategy

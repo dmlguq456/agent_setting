@@ -1,9 +1,10 @@
 ---
 name: analyze-user
-description: "Use when needed: Create or update a cross-project user-preference profile from coding, writing, and analysis patterns."
+description: "Use when durable cross-project user preferences must be inferred from coding, writing, or analysis evidence and stored as a profile. Not for one-project context recovery, casual preference acknowledgment, or ordinary task execution."
 metadata:
   portable_source: capabilities/analyze-user.md
   adapter: opencode
+  invocation_class: entry-router
 ---
 
 # analyze-user
@@ -19,9 +20,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 ## Use
 
-1. Read `capabilities/analyze-user.md` for the runtime-neutral contract.
-2. Run `adapters/opencode/bin/preflight.sh capability-info analyze-user`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/analyze-user.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/opencode/bin/preflight.sh capability-info analyze-user` and obey the reported status:
    - `instruction-only`: use this Skill as OpenCode guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -29,13 +31,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `analyze-user`
+- Invocation class: `entry-router`
 - Supported modes: `init, update`
 - Argument shape: `<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]`
 - Portable meaning: Create or update a cross-project user-preference profile from coding, writing, and analysis patterns.
-
-## Portable Contract
-
-- Invocation semantics: Scan and analyze the user's cross-project artifacts (papers, presentations, reports, code, and memory) in stages, then accumulate general working preferences in DB `type=profile` records (`mem profile <stem>`). This uses the same ceremony level as autopilot entrypoints because every sub-agent treats the resulting profile as a default, so even small errors propagate. The six phases are source discovery, per-aspect analysis, cross-aspect consistency checks, multiple QA gates, artifact creation, and pipeline summary. QA is always adversarial and is not user-adjustable. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 ## Required Guards

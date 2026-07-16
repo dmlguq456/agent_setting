@@ -1,9 +1,10 @@
 ---
 name: autopilot-note
-description: "Use when needed: Route and note artifacts, producing digests and triage proposals."
+description: "Use when existing artifacts must be collected, digested, triaged, or routed into a durable note workflow. Not for storing one scoped memory item or for performing the primary research, code, or document work."
 metadata:
   portable_source: capabilities/autopilot-note.md
   adapter: opencode
+  invocation_class: entry-router
 ---
 
 # autopilot-note
@@ -19,9 +20,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 ## Use
 
-1. Read `capabilities/autopilot-note.md` for the runtime-neutral contract.
-2. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-note`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-note.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-note` and obey the reported status:
    - `instruction-only`: use this Skill as OpenCode guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -29,13 +31,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `autopilot-note`
+- Invocation class: `entry-router`
 - Supported modes: `none`
 - Argument shape: `[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]`
 - Portable meaning: Route and note artifacts, producing digests and triage proposals.
-
-## Portable Contract
-
-- Invocation semantics: Autopilot-family periodic and on-demand artifact-routing pipeline using a two-layer model. Scan `<artifact-root>/{research,documents,plans,analysis_project}/`, `experiments/`, and `git log` for changes since the previous run. Convert each item into a **Layer 2 artifact note** at `<agent-notes-root>/_layer2/notes/<id>.md` and link it to the user's **Layer 1** cards under `<agent-notes-root>/cards/`. Five-way routing creates an L2 row automatically; proposes linking `card_id` to an existing L1 card as `routing_status: inbox` with confidence/reason (unattended cron never confirms; the user confirms in `/triage`); links `backbone_ids`/`task_ids` to the L2 catalog, creating entries when necessary; proposes a new L1 card during triage; or parks an ambient `card_id: null` note as the fallback. Append daily digests to `<agent-notes-root>/digests/YYYY-MM-DD.md`. Processing is idempotent. Routine cron uses `quick` intensity and its derived rigor; use `standard+` for weekly bulk consolidation, Notion migration, or pre-handoff cleanup. Source 6 is the gated Phase 3 Notion mirror. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 ## Required Guards

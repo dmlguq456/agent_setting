@@ -178,6 +178,9 @@ def build_skills(canonical):
             "fam": spec["family"],
             "modes": spec["modes"],
             "blurb": spec["summary"],
+            "invocation_class": spec["invocation"]["class"],
+            "use_when": spec["invocation"]["use_when"],
+            "not_for": spec["invocation"]["not_for"],
             "argument_hint": spec["argument_shape"],
         })
     return sorted(rows, key=lambda r: r["slug"])

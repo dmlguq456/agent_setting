@@ -1,6 +1,6 @@
 ---
 name: audit
-description: "Use when needed: Read-oriented post-run inspection for artifact drift, inconsistency, and omissions."
+description: "Use when completed work or artifacts need a read-oriented inspection for drift, inconsistency, omissions, or unsupported claims. Not for implementing fixes, producing the primary artifact, or replacing execution-stage verification."
 ---
 
 # audit
@@ -16,9 +16,10 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Use
 
-1. Read `capabilities/audit.md` for the runtime-neutral contract.
-2. Run `adapters/codex/bin/preflight.sh capability-info audit`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/audit.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/codex/bin/preflight.sh capability-info audit` and obey the reported status:
    - `instruction-only`: use this Skill as Codex guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -26,35 +27,11 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 ## Shape
 
 - Identifier: `audit`
+- Invocation class: `entry-router`
 - Supported modes: `none`
 - Argument shape: `<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]`
 - Portable meaning: Read-oriented post-run inspection for artifact drift, inconsistency, and omissions.
 
-## Portable Contract
-
-- Invocation semantics: Read-only multi-aspect audit/lint for `<artifact-root>/{plans,research,documents}/*` artifacts. A single global entry auto-detects artifact type from the path prefix (`plans`=code, `research`=field survey, `documents`=document deliverable). Per-type aspects: documents use facts/style/structure/cross-reference/coverage; research uses card integrity/tier consistency/coverage/cross-card checks; plans use test results, lint, code review, TODOs, and unimplemented work. `--scope auto` selects from artifact characteristics by default; an explicit user scope overrides it. Report only—never modify the artifact. This complements autopilot-refine: refine edits, while audit inspects. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
-
-
-
-## Projected Portable Details
-
-## Artifact Ownership
-
-Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not. Capability-specific output placement follows `core/CONVENTIONS.md` section 5 until this spec is expanded with a stricter per-capability artifact map.
-
-## Role Requirements
-
-Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concrete model names, subagent frontmatter, and runtime-specific tool lists belong in adapter files.
-
-## Guard Requirements
-
-Adapters must preserve the portable invariants relevant to this capability:
-
-- resolve artifact root through `utilities/artifact-root.sh` or equivalent logic;
-- enforce git/worktree safety before edits;
-- enforce artifact ordering before new durable artifacts;
-- enforce spec-read gating when this capability changes spec-backed code or specs;
-- use DB memory paths, not runtime-native memory files.
 
 
 ## Required Guards

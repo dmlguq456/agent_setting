@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: code-report
-description: "Use when invoking the portable code-report capability. Assemble code-cycle results into a user-facing report."
+description: "Use only when autopilot-code dispatches the final code-cycle reporting stage. Not for top-level user requests or primary capability routing."
 argument-hint: "<plan name or path>"
 metadata:
   group: sub
   fam: sub
+  invocation_class: parent-invoked
   modes: []
   blurb: "Assemble code-cycle results into a user-facing report."
+  use_when: "Use only when autopilot-code dispatches the final code-cycle reporting stage."
+  not_for: "Not for top-level user requests or primary capability routing."
 ---
 
 # code-report

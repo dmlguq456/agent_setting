@@ -1,6 +1,6 @@
 ---
 name: design-refs
-description: "Use when needed: Collect external and user-provided visual references and create a brief."
+description: "Use only when autopilot-design dispatches visual-reference collection and brief creation. Not for top-level user requests or primary capability routing."
 ---
 
 # design-refs
@@ -26,6 +26,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 ## Shape
 
 - Identifier: `design-refs`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<design task> [--design <path>] [--refs <image paths>] [--no-web]`
 - Portable meaning: Collect external and user-provided visual references and create a brief.

@@ -1,9 +1,10 @@
 ---
 name: code-refine
-description: "Use when needed: Revise an existing plan using user notes, plan-check feedback, and verification-failure notes."
+description: "Use only when autopilot-code dispatches plan revision after user notes, plan-check feedback, or verification failure. Not for top-level user requests or primary capability routing."
 metadata:
   portable_source: capabilities/code-refine.md
   adapter: opencode
+  invocation_class: parent-invoked
 ---
 
 # code-refine
@@ -29,6 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `code-refine`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<plan name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]`
 - Portable meaning: Revise an existing plan using user notes, plan-check feedback, and verification-failure notes.

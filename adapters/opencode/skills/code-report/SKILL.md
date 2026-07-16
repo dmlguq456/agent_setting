@@ -1,9 +1,10 @@
 ---
 name: code-report
-description: "Use when needed: Assemble code-cycle results into a user-facing report."
+description: "Use only when autopilot-code dispatches the final code-cycle reporting stage. Not for top-level user requests or primary capability routing."
 metadata:
   portable_source: capabilities/code-report.md
   adapter: opencode
+  invocation_class: parent-invoked
 ---
 
 # code-report
@@ -29,6 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `code-report`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<plan name or path>`
 - Portable meaning: Assemble code-cycle results into a user-facing report.

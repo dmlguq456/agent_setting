@@ -18,7 +18,17 @@ from typing import Iterable
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_NAME = "harness-manifest.json"
 MANIFEST_PATH = ROOT / MANIFEST_NAME
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+INVOCATION_CLASSES = {
+    "entry-router",
+    "model-support",
+    "parent-invoked",
+    "user-only",
+}
+GENERIC_INVOCATION_PHRASES = (
+    "use when needed",
+    "use when invoking the portable",
+)
 REQUIRED_TOP_LEVEL = {
     "schema_version",
     "product",
@@ -118,11 +128,47 @@ def validate(data: dict, root: Path = ROOT) -> None:
             f"capability {identifier} uses the reserved external extension prefix",
         )
         _expect(isinstance(spec, dict), f"capability {identifier} must be an object")
-        _expect(set(spec) == {"group", "family", "modes", "summary", "argument_shape", "requires"},
+        _expect(set(spec) == {
+                    "group", "family", "modes", "summary", "invocation",
+                    "argument_shape", "requires",
+                },
                 f"capability {identifier} fields do not match schema")
         for field in ("group", "family", "summary", "argument_shape"):
             _expect(isinstance(spec[field], str), f"capability {identifier}.{field} must be a string")
         _expect_string_list(spec["modes"], f"capability {identifier}.modes")
+        invocation = spec["invocation"]
+        _expect(
+            isinstance(invocation, dict)
+            and set(invocation) == {"class", "use_when", "not_for"},
+            f"capability {identifier}.invocation fields do not match schema",
+        )
+        invocation_class = invocation["class"]
+        use_when = invocation["use_when"]
+        not_for = invocation["not_for"]
+        _expect(invocation_class in INVOCATION_CLASSES,
+                f"capability {identifier} has invalid invocation class {invocation_class}")
+        _expect(isinstance(use_when, str) and use_when,
+                f"capability {identifier}.invocation.use_when must be a non-empty string")
+        _expect(isinstance(not_for, str) and not_for,
+                f"capability {identifier}.invocation.not_for must be a non-empty string")
+        lowered = f"{use_when} {not_for}".lower()
+        _expect(not any(phrase in lowered for phrase in GENERIC_INVOCATION_PHRASES),
+                f"capability {identifier} uses a generic or circular invocation trigger")
+        _expect(not_for.startswith("Not for "),
+                f"capability {identifier}.invocation.not_for must start with 'Not for '")
+        if invocation_class == "entry-router":
+            _expect(use_when.startswith("Use when "),
+                    f"entry-router {identifier} use_when must start with 'Use when '")
+        elif invocation_class == "parent-invoked":
+            _expect(use_when.startswith("Use only when "),
+                    f"parent-invoked {identifier} use_when must start with 'Use only when '")
+            _expect("top-level" in not_for.lower(),
+                    f"parent-invoked {identifier} must exclude top-level routing")
+        elif invocation_class == "model-support":
+            _expect(use_when.startswith("Use when "),
+                    f"model-support {identifier} use_when must start with 'Use when '")
+            _expect("primary" in not_for.lower(),
+                    f"model-support {identifier} must exclude primary routing")
         requires = spec["requires"]
         _expect(isinstance(requires, dict) and set(requires) == {"capabilities", "roles"},
                 f"capability {identifier}.requires fields do not match schema")
@@ -141,6 +187,8 @@ def validate(data: dict, root: Path = ROOT) -> None:
     }
     _expect(discovered_capabilities == set(capabilities),
             "capability source set differs from canonical manifest")
+    _expect(any(spec["invocation"]["class"] == "entry-router" for spec in capabilities.values()),
+            "at least one entry-router capability is required")
 
     for role, spec in roles.items():
         _expect(isinstance(spec, dict) and set(spec) == {"portable_role", "responsibility"},

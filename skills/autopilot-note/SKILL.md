@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-note
-description: "Use when invoking the portable autopilot-note capability. Route and note artifacts, producing digests and triage proposals."
+description: "Use when existing artifacts must be collected, digested, triaged, or routed into a durable note workflow. Not for storing one scoped memory item or for performing the primary research, code, or document work."
 argument-hint: "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]"
 metadata:
   group: entry
   fam: ops
+  invocation_class: entry-router
   modes: []
   blurb: "Route and note artifacts, producing digests and triage proposals."
+  use_when: "Use when existing artifacts must be collected, digested, triaged, or routed into a durable note workflow."
+  not_for: "Not for storing one scoped memory item or for performing the primary research, code, or document work."
 ---
 
 # autopilot-note

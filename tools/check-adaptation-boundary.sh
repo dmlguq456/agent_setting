@@ -1433,7 +1433,7 @@ check_codex_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material figure-semantic-manifest.schema.json figure-semantic-verify.py"
-  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py sync-skill-invocation-policy.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -1527,7 +1527,11 @@ check_codex_native_skill_projection() {
     if ! grep -Fq "not a legacy compatibility Skill copy" "$skill"; then
       fail_msg "$skill must state that it is not a legacy compatibility Skill copy"
     fi
-    if ! grep -Fq "Invocation semantics:" "$skill"; then
+    invocation_class=$(awk -F '\t' -v name="$slug" '$1 == name {print $2; exit}' tools/skill-conformance/invocation-policy.tsv)
+    if [ -z "$invocation_class" ]; then
+      fail_msg "$skill has no manifest-generated invocation classification"
+    fi
+    if [ "$invocation_class" != "entry-router" ] && ! grep -Fq "Invocation semantics:" "$skill"; then
       fail_msg "$skill must include the portable invocation semantics excerpt"
     fi
     if ! grep -Fq 'named `tool_contract`' "$skill" \
@@ -1544,7 +1548,17 @@ check_codex_native_skill_projection() {
     if ! grep -Fq "adapters/codex/bin/preflight.sh route $slug [cwd] [session-id]" "$skill"; then
       fail_msg "$skill must include the Codex route wrapper"
     fi
-    if ! grep -Fq '## Projected Portable Details' "$skill" \
+    if [ "$invocation_class" = "entry-router" ]; then
+      if grep -Fq '## Projected Portable Details' "$skill" \
+        || grep -Fq '## Portable Contract' "$skill"; then
+        fail_msg "$skill must keep entry-router procedure detail out of the depth-0 projection"
+      fi
+      if ! grep -Fq 'five-field confirmation card' "$skill" \
+        || ! grep -Fq 'depth-1 owner reads it' "$skill" \
+        || ! grep -Fq 'stage workers read only their assigned contracts' "$skill"; then
+        fail_msg "$skill must project the confirmation and owner/worker context boundary"
+      fi
+    elif ! grep -Fq '## Projected Portable Details' "$skill" \
       || ! grep -Fq '## Artifact Ownership' "$skill" \
       || ! grep -Fq '## Role Requirements' "$skill" \
       || ! grep -Fq '## Guard Requirements' "$skill"; then
@@ -1554,13 +1568,10 @@ check_codex_native_skill_projection() {
       fail_msg "$skill must use Codex Skill frontmatter only, without adapter metadata"
     fi
   done
-  if ! grep -Fq 'spec-significance' adapters/codex/skills/autopilot-code/SKILL.md \
-    || ! grep -Fq 'pipeline_summary.md' adapters/codex/skills/autopilot-code/SKILL.md \
-    || ! grep -Fq 'code-plan' adapters/codex/skills/autopilot-code/SKILL.md \
-    || ! grep -Fq 'code-execute' adapters/codex/skills/autopilot-code/SKILL.md \
-    || ! grep -Fq 'code-test' adapters/codex/skills/autopilot-code/SKILL.md \
-    || ! grep -Fq 'code-report' adapters/codex/skills/autopilot-code/SKILL.md; then
-    fail_msg "Codex autopilot-code skill projection must include portable procedure details"
+  if ! grep -Fq 'five-field confirmation card' adapters/codex/skills/autopilot-code/SKILL.md \
+    || ! grep -Fq 'depth-1 owner reads it' adapters/codex/skills/autopilot-code/SKILL.md \
+    || grep -Fq '## Projected Portable Details' adapters/codex/skills/autopilot-code/SKILL.md; then
+    fail_msg "Codex autopilot-code entry projection must stay compact and delegate contract reading"
   fi
   for skill in adapters/codex/skills/*/SKILL.md; do
     [ -f "$skill" ] || continue
@@ -1620,13 +1631,14 @@ check_codex_native_plugin_projection() {
   if [ ! -f "$plugin_root/skills/autopilot-code/SKILL.md" ]; then
     fail_msg "Codex native plugin must include generated capability skills"
   fi
-  if ! grep -Fq "_RUNLOG" "$plugin_root/skills/autopilot-lab/SKILL.md"; then
-    fail_msg "Codex native plugin skill projection must preserve the autopilot-lab _RUNLOG invariant"
+  if ! grep -Fq 'five-field confirmation card' "$plugin_root/skills/autopilot-lab/SKILL.md" \
+    || grep -Fq '## Projected Portable Details' "$plugin_root/skills/autopilot-lab/SKILL.md"; then
+    fail_msg "Codex native plugin entry Skill must preserve the compact confirmation boundary"
   fi
-  if ! grep -Fq 'spec-significance' "$plugin_root/skills/autopilot-code/SKILL.md" \
-    || ! grep -Fq 'pipeline_summary.md' "$plugin_root/skills/autopilot-code/SKILL.md" \
-    || ! grep -Fq 'code-plan' "$plugin_root/skills/autopilot-code/SKILL.md"; then
-    fail_msg "Codex native plugin autopilot-code skill must include portable procedure details"
+  if ! grep -Fq 'five-field confirmation card' "$plugin_root/skills/autopilot-code/SKILL.md" \
+    || ! grep -Fq 'depth-1 owner reads it' "$plugin_root/skills/autopilot-code/SKILL.md" \
+    || grep -Fq '## Projected Portable Details' "$plugin_root/skills/autopilot-code/SKILL.md"; then
+    fail_msg "Codex native plugin autopilot-code entry projection must stay compact"
   fi
   for skill in "$plugin_root"/skills/*/SKILL.md; do
     [ -f "$skill" ] || continue
@@ -2482,7 +2494,7 @@ check_opencode_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material figure-semantic-manifest.schema.json figure-semantic-verify.py"
-  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py"
+  TOOL_DEFERRED="__pycache__ build-manifest.py generate.py harness_manifest.py sync-skill-invocation-policy.py generated-projections.test.sh figure-semantic-verify.test.py check-adaptation-boundary.sh context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2531,7 +2543,20 @@ check_opencode_native_skill_projection() {
     if ! grep -Fq "not a legacy compatibility Skill copy" "$skill"; then
       fail_msg "$skill must state that it is not a legacy compatibility Skill copy"
     fi
-    if ! grep -Fq "Invocation semantics:" "$skill"; then
+    invocation_class=$(awk -F '\t' -v name="$slug" '$1 == name {print $2; exit}' tools/skill-conformance/invocation-policy.tsv)
+    if [ -z "$invocation_class" ]; then
+      fail_msg "$skill has no manifest-generated invocation classification"
+    fi
+    if [ "$invocation_class" = "entry-router" ]; then
+      if grep -Fq '## Portable Contract' "$skill"; then
+        fail_msg "$skill must keep entry-router procedure detail out of the depth-0 projection"
+      fi
+      if ! grep -Fq 'five-field confirmation card' "$skill" \
+        || ! grep -Fq 'depth-1 owner reads it' "$skill" \
+        || ! grep -Fq 'stage workers read only their assigned contracts' "$skill"; then
+        fail_msg "$skill must project the confirmation and owner/worker context boundary"
+      fi
+    elif ! grep -Fq "Invocation semantics:" "$skill"; then
       fail_msg "$skill must include the portable invocation semantics excerpt"
     fi
     if ! grep -Fq 'named `tool_contract`' "$skill" \
@@ -2697,10 +2722,11 @@ check_opencode_native_command_projection() {
     || ! grep -Fq 'opencode-native-skill-command' adapters/opencode/bin/capability-map.sh; then
     fail_msg "adapters/opencode/bin/capability-map.sh must report OpenCode native command realization"
   fi
-  if ! grep -Fq "_RUNLOG" adapters/opencode/skills/autopilot-lab/SKILL.md \
-    || ! grep -Fq "_RUNLOG" adapters/opencode/commands/autopilot-lab.md \
-    || ! grep -Fq "_RUNLOG" adapters/codex/skills/autopilot-lab/SKILL.md; then
-    fail_msg "native autopilot-lab projections must preserve the portable _RUNLOG invariant"
+  if ! grep -Fq "_RUNLOG" adapters/opencode/commands/autopilot-lab.md \
+    || ! grep -Fq "_RUNLOG" capabilities/autopilot-lab.md \
+    || ! grep -Fq 'five-field confirmation card' adapters/opencode/skills/autopilot-lab/SKILL.md \
+    || ! grep -Fq 'five-field confirmation card' adapters/codex/skills/autopilot-lab/SKILL.md; then
+    fail_msg "native autopilot-lab projections must preserve compact entry routing and owner-readable _RUNLOG detail"
   fi
 }
 
@@ -2988,7 +3014,7 @@ check_claude_tool_projection() {
     rel=${p#tools/}
     adapter_p=adapters/claude/tools/$rel
     case "$rel" in
-      generate.py|harness_manifest.py|generated-projections.test.sh|context-footprint-baseline.json|install/profile-activation.test.sh|release|release/*)
+      generate.py|harness_manifest.py|sync-skill-invocation-policy.py|generated-projections.test.sh|context-footprint-baseline.json|install/profile-activation.test.sh|release|release/*)
         # Harness-development, profile acceptance, and repository release
         # automation tools are intentionally not runtime projections.
         continue

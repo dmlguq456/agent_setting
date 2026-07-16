@@ -1,9 +1,10 @@
 ---
 name: code-execute
-description: "Use when needed: Execute a plan step by step, delegate implementation to the development role, and record an execution log."
+description: "Use only when autopilot-code dispatches the implementation stage for an approved plan. Not for top-level user requests or primary capability routing."
 metadata:
   portable_source: capabilities/code-execute.md
   adapter: opencode
+  invocation_class: parent-invoked
 ---
 
 # code-execute
@@ -29,6 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `code-execute`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<plan name or path>`
 - Portable meaning: Execute a plan step by step, delegate implementation to the development role, and record an execution log.

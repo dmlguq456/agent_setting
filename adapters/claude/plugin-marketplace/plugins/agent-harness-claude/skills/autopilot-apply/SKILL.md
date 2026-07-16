@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-apply
-description: "Use when invoking the portable autopilot-apply capability. Apply a cheatsheet draft to the real source artifact and verify the result."
+description: "Use when an approved cheatsheet or patching guide must be applied to the real source artifact and the applied result verified. Not for drafting or refining the cheatsheet, or for unrelated source implementation."
 argument-hint: "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]"
 metadata:
   group: entry
   fam: doc
+  invocation_class: entry-router
   modes: []
   blurb: "Apply a cheatsheet draft to the real source artifact and verify the result."
+  use_when: "Use when an approved cheatsheet or patching guide must be applied to the real source artifact and the applied result verified."
+  not_for: "Not for drafting or refining the cheatsheet, or for unrelated source implementation."
 ---
 
 # autopilot-apply

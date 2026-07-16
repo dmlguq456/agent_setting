@@ -1,9 +1,10 @@
 ---
 name: design-components
-description: "Use when needed: Build UI components/mockups and preview artifacts."
+description: "Use only when autopilot-design dispatches component, mockup, or preview construction. Not for top-level user requests or primary capability routing."
 metadata:
   portable_source: capabilities/design-components.md
   adapter: opencode
+  invocation_class: parent-invoked
 ---
 
 # design-components
@@ -29,6 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `design-components`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<design path or app path>`
 - Portable meaning: Build UI components/mockups and preview artifacts.

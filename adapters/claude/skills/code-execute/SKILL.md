@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: code-execute
-description: "Use when invoking the portable code-execute capability. Execute a plan step by step, delegate implementation to the development role, and record an execution log."
+description: "Use only when autopilot-code dispatches the implementation stage for an approved plan. Not for top-level user requests or primary capability routing."
 argument-hint: "<plan name or path>"
 metadata:
   group: sub
   fam: sub
+  invocation_class: parent-invoked
   modes: []
   blurb: "Execute a plan step by step, delegate implementation to the development role, and record an execution log."
+  use_when: "Use only when autopilot-code dispatches the implementation stage for an approved plan."
+  not_for: "Not for top-level user requests or primary capability routing."
 ---
 
 # code-execute

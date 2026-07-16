@@ -1,9 +1,10 @@
 ---
 name: autopilot-lab
-description: "Use when needed: Rapid experiment prototyping around training setup and checkpoint evaluation/analysis."
+description: "Use when training setup, checkpoint evaluation, ablation, metric computation, or other new empirical output is required. Not for ordinary production-code changes that create no new experiment or evaluation result."
 metadata:
   portable_source: capabilities/autopilot-lab.md
   adapter: opencode
+  invocation_class: entry-router
 ---
 
 # autopilot-lab
@@ -19,9 +20,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 ## Use
 
-1. Read `capabilities/autopilot-lab.md` for the runtime-neutral contract.
-2. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-lab`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-lab.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-lab` and obey the reported status:
    - `instruction-only`: use this Skill as OpenCode guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -29,13 +31,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `autopilot-lab`
+- Invocation class: `entry-router`
 - Supported modes: `setup, eval`
 - Argument shape: `<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]`
 - Portable meaning: Rapid experiment prototyping around training setup and checkpoint evaluation/analysis.
-
-## Portable Contract
-
-- Invocation semantics: Rapid experiment prototype entrypoint. The user runs heavy training; the lab supports the work before and after it. `setup` prepares an experiment from spec to scaffold and run commands. `eval` analyzes a trained checkpoint through metrics, ablations, paper comparisons, plots, and optional formal reports (prose routes to autopilot-draft; audio/media uses playback HTML). Extension cases use `--parent <slug>` rather than new modes: fine-tuning creates a setup config branch, and reevaluation uses eval. Enforce per-experiment folders, a STORY narrative, and an append-only `_RUNLOG` timeline with pending/completed state and parent links to prevent overwrites and ad hoc loss. Automatically read `experiment_conventions.md` and `similar_models.md` from analyze-project, giving the user's existing layer, prefix, and config patterns priority. Graduate refinement or library work to autopilot-code. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 ## Required Guards

@@ -1,9 +1,10 @@
 ---
 name: post-it
-description: "Use when needed: Store project/cross-project notes and handoffs in working memory."
+description: "Use when the acting agent needs to store, retrieve, resolve, hand off, or promote a scoped working-memory item in support of current work. Not for primary task routing, broad artifact triage, or replacing the capability that owns the current work."
 metadata:
   portable_source: capabilities/post-it.md
   adapter: opencode
+  invocation_class: model-support
 ---
 
 # post-it
@@ -29,6 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `post-it`
+- Invocation class: `model-support`
 - Supported modes: `none`
 - Argument shape: `[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]`
 - Portable meaning: Store project/cross-project notes and handoffs in working memory.

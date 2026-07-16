@@ -1,9 +1,10 @@
 ---
 name: autopilot-research
-description: "Use when needed: Shared upfront research that surveys academic, technology, or market sources before downstream routing."
+description: "Use when a task needs a durable survey of new academic, technology, or market evidence before downstream specification or production. Not for repository-only project analysis, a simple factual lookup, or work already grounded by sufficient current evidence."
 metadata:
   portable_source: capabilities/autopilot-research.md
   adapter: opencode
+  invocation_class: entry-router
 ---
 
 # autopilot-research
@@ -19,9 +20,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 ## Use
 
-1. Read `capabilities/autopilot-research.md` for the runtime-neutral contract.
-2. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-research`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-research.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-research` and obey the reported status:
    - `instruction-only`: use this Skill as OpenCode guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -29,13 +31,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `autopilot-research`
+- Invocation class: `entry-router`
 - Supported modes: `academic, technology, market`
 - Argument shape: `<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]`
 - Portable meaning: Shared upfront research that surveys academic, technology, or market sources before downstream routing.
-
-## Portable Contract
-
-- Invocation semantics: Shared research-survey entrypoint with three modes: academic (papers, trends, and field mapping), technology (libraries, projects, stacks, and code baselines), and market (market/competitor/reference-app/UX patterns). Downstream routing: academic → autopilot-draft for papers/presentations and autopilot-code for academic baselines; technology → autopilot-code for library or research implementation and autopilot-spec for stack/reference decisions; market → autopilot-draft for proposals/reports and autopilot-spec for reference-app UX. This capability produces field intelligence only; downstream skills create actual documents, code, or applications. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 ## Required Guards

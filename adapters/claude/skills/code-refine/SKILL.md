@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: code-refine
-description: "Use when invoking the portable code-refine capability. Revise an existing plan using user notes, plan-check feedback, and verification-failure notes."
+description: "Use only when autopilot-code dispatches plan revision after user notes, plan-check feedback, or verification failure. Not for top-level user requests or primary capability routing."
 argument-hint: "<plan name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: sub
   fam: sub
+  invocation_class: parent-invoked
   modes: []
   blurb: "Revise an existing plan using user notes, plan-check feedback, and verification-failure notes."
+  use_when: "Use only when autopilot-code dispatches plan revision after user notes, plan-check feedback, or verification failure."
+  not_for: "Not for top-level user requests or primary capability routing."
 ---
 
 # code-refine

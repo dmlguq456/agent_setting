@@ -1,9 +1,10 @@
 ---
 name: code-plan
-description: "Use when needed: Analyze code, write a detailed implementation plan, and run the plan-check gate at the rigor derived from intensity."
+description: "Use only when autopilot-code dispatches the planning and plan-check stage. Not for top-level user requests or primary capability routing."
 metadata:
   portable_source: capabilities/code-plan.md
   adapter: opencode
+  invocation_class: parent-invoked
 ---
 
 # code-plan
@@ -29,6 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `code-plan`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<task description> [--intensity direct|quick|standard|strong|thorough|adversarial]`
 - Portable meaning: Analyze code, write a detailed implementation plan, and run the plan-check gate at the rigor derived from intensity.

@@ -1,6 +1,6 @@
 ---
 name: autopilot-spec
-description: "Use when needed: Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path."
+description: "Use when product requirements, architecture, evaluation policy, or another blueprint must be created or materially updated before implementation. Not for implementing an already-approved specification or for editing unrelated documents."
 ---
 
 # autopilot-spec
@@ -16,9 +16,10 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Use
 
-1. Read `capabilities/autopilot-spec.md` for the runtime-neutral contract.
-2. Run `adapters/codex/bin/preflight.sh capability-info autopilot-spec`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-spec.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/codex/bin/preflight.sh capability-info autopilot-spec` and obey the reported status:
    - `instruction-only`: use this Skill as Codex guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -26,94 +27,11 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 ## Shape
 
 - Identifier: `autopilot-spec`
+- Invocation class: `entry-router`
 - Supported modes: `app, library, api, cli, research, update`
 - Argument shape: `<task description> [--mode auto|app|library|api|cli|research|update (comma-separated for multiple)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]`
 - Portable meaning: Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path.
 
-## Portable Contract
-
-- Invocation semantics: General entrypoint for creating and updating requirements and blueprints: new intent, cleanup/public-release preparation for existing code, and iteration of an existing spec through `prd.md`. It supports app, library, API, CLI, and research modes; multiple modes; auto detection; and update mode. Update mode edits the existing `prd.md`, the canonical path for every spec change, and automatically snapshots the previous version. PRDs contain common sections plus independent per-mode sections. Automatically cite autopilot-research and analyze-project outputs. This is the blueprint counterpart to analyze-project's new-intent analysis. Actual code work belongs to autopilot-code, which detects `spec/` context automatically. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
-
-
-
-## Projected Portable Details
-
-## Artifact Ownership
-
-Use the shared artifact root rule: prefer `.agent_reports/`; use legacy `.claude_reports/` only when it already exists and `.agent_reports/` does not.
-
-Spec work writes to `<artifact-root>/spec/`. The canonical current blueprint is always `<artifact-root>/spec/prd.md`.
-
-Required public artifacts:
-
-- `prd.md`: current product/project requirements and mode-specific contract;
-- `pipeline_state.yaml`: current mode, phase status, timestamps, and resume metadata;
-- `pipeline_summary.md`: concise decision log and update narrative;
-- mode-dependent companion files such as `stack.md`, `ship.md`, `data_model.md`, `api_contract.md`, `ui_flow.md`, or `design/`.
-
-Internal artifacts belong under `spec/_internal/`, including old PRD snapshots, drafts, raw notes, review records, and temporary scaffolding decisions.
-
-For update mode, snapshot the previous `prd.md` to `spec/_internal/versions/v{N}/prd.md` before overwriting it, then update `pipeline_summary.md` in the same transaction.
-
-## Role Requirements
-
-Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concrete model names, subagent frontmatter, and runtime-specific tool lists belong in adapter files.
-
-Minimum role mapping:
-
-- requirements planning: planning role;
-- stack/API/data modeling review: planning plus QA review roles;
-- app visual decisions: design role for token, flow, and handoff contracts;
-- research or reference import: research role;
-- final consistency pass: QA role.
-
-Pipeline intensity follows `core/CONVENTIONS.md §1`: `direct` has no plan stage or durable plan artifact; `quick` is a depth-1 one-shot worker with its inline micro-plan plus plan-check-lite; `standard+` uses the capability's durable work-cycle plan when applicable. `plan-check` is required for every non-`direct` graph, but independent QA is not repeated after every stage by default. Verification rigor for plan-check, selected independent reviews, and final verify is derived from intensity; it does not name a model or introduce a separate stage graph.
-
-## Guard Requirements
-
-Adapters must preserve the portable invariants relevant to this capability:
-
-- resolve artifact root through `utilities/artifact-root.sh` or equivalent logic;
-- enforce git/worktree safety before edits;
-- enforce artifact ordering before new durable artifacts;
-- enforce spec-read gating when this capability changes spec-backed code or specs;
-- use DB memory paths, not runtime-native memory files.
-
-Additional spec-entry gates:
-
-- if user input lacks irreversible-decision coverage, ask one structured intake round before drafting;
-- use `update` behavior whenever `spec/pipeline_state.yaml` already exists and the request changes the blueprint;
-- do not hand-edit `prd.md` as an ad hoc side effect of code work;
-- acquire the shared spec/pipeline lock before writing `prd.md`, `pipeline_state.yaml`, or `pipeline_summary.md`;
-- when drift is clear, update the spec and report the drift route; when drift is ambiguous, ask the user before choosing semantics;
-- keep deployment setup and environment/domain rollout work in `autopilot-ship` unless the task is only blueprint definition.
-
-## Portable Procedure
-
-1. Parse the task and resolve mode: `auto`, one or more of `app/library/api/cli/research`, or update of an existing spec.
-2. Resolve artifact root and identify the target `spec/` directory. In monorepos, choose the component spec from cwd and user wording.
-3. Run the intake gate when core irreversible choices are missing.
-4. Import existing analysis and research artifacts when present: `analysis_project/code/`, `analysis_project/paper/`, and `research/<topic>/`.
-5. Draft or update `prd.md` with a common section plus mode-specific sections.
-6. Produce or update companion contracts for the active modes.
-7. Run the configured QA/refine passes.
-8. For update mode, snapshot the old `prd.md`, write the new `prd.md`, update `pipeline_state.yaml`, and append the narrative to `pipeline_summary.md`.
-
-## Routing Boundary
-
-`autopilot-spec` decides what should exist and records the blueprint. Actual implementation, refactoring, debugging, and test repair are `autopilot-code` work. Visual artifact production is `autopilot-design`; deployment execution is `autopilot-ship`. A change to evaluation policy or another blueprint surface is spec-sync only: under `WORKFLOW §0.2` it never substitutes for the reevaluation or implementation that applies it, which stays with `autopilot-lab` or `autopilot-code`.
-
-## Mode-Specific Semantics
-
-| Mode | Required blueprint coverage |
-|---|---|
-| `app` | Feature scenarios, API contract, data model, UI flow, stack, scaffold/skeleton intent, design handoff hooks. |
-| `library` | Public API, exports, examples, compatibility, versioning, module structure. |
-| `api` | Endpoints, request/response bodies, errors, auth, rate limiting, data model. |
-| `cli` | Commands, subcommands, options, input/output format, exit codes. |
-| `research` | Train/eval entry points, configs, seeds, reproduction commands, expected metrics, baselines. |
-
-Composite modes are valid. Keep shared decisions in the common PRD section and each mode's contract in its own section.
 
 
 ## Required Guards

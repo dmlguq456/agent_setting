@@ -1,9 +1,10 @@
 ---
 name: code-test
-description: "Use when needed: Verify implementation results in stages and record evidence."
+description: "Use only when autopilot-code dispatches implementation verification and evidence recording. Not for top-level user requests or primary capability routing."
 metadata:
   portable_source: capabilities/code-test.md
   adapter: opencode
+  invocation_class: parent-invoked
 ---
 
 # code-test
@@ -29,6 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `code-test`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<plan name, path, or test scope> [--intensity direct|quick|standard|strong|thorough|adversarial]`
 - Portable meaning: Verify implementation results in stages and record evidence.

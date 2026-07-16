@@ -92,17 +92,27 @@ def render(identifier: str, spec: dict, capability_file: Path) -> tuple[str, str
     modes = ", ".join(spec["modes"]) or "none"
     argument_shape = spec["argument_shape"]
     meaning = compact(spec["summary"])
+    invocation = spec["invocation"]
+    invocation_class = invocation["class"]
     invocation_semantics = markdown_section(source, "Invocation Semantics")
     portable_contract = ""
-    if invocation_semantics:
+    if invocation_semantics and invocation_class != "entry-router":
         portable_contract = f"""
 ## Portable Contract
 
 - Invocation semantics: {invocation_semantics}
 """
-    projected_details = portable_sections(source)
-    meaning_sentence = meaning if meaning.endswith((".", "!", "?")) else f"{meaning}."
-    description = compact(f"Use when needed: {meaning_sentence}")
+    projected_details = "" if invocation_class == "entry-router" else portable_sections(source)
+    description = compact(f"{invocation['use_when']} {invocation['not_for']}")
+    if invocation_class == "entry-router":
+        use_steps = f"""1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/{identifier}.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/codex/bin/preflight.sh capability-info {identifier}` and obey the reported status:"""
+    else:
+        use_steps = f"""1. Read `capabilities/{identifier}.md` for the runtime-neutral contract.
+2. Run `adapters/codex/bin/preflight.sh capability-info {identifier}`.
+3. Obey the reported status:"""
 
     body = f"""---
 name: {identifier}
@@ -122,9 +132,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 
 ## Use
 
-1. Read `capabilities/{identifier}.md` for the runtime-neutral contract.
-2. Run `adapters/codex/bin/preflight.sh capability-info {identifier}`.
-3. Obey the reported status:
+{use_steps}
    - `instruction-only`: use this Skill as Codex guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -132,6 +140,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 ## Shape
 
 - Identifier: `{identifier}`
+- Invocation class: `{invocation_class}`
 - Supported modes: `{modes}`
 - Argument shape: `{argument_shape}`
 - Portable meaning: {meaning}

@@ -33,13 +33,37 @@ grep -q "GENERATOR_SENTINEL" "$ROOT/adapters/codex/skills/post-it/SKILL.md"
 grep -q "GENERATOR_SENTINEL" "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/post-it/SKILL.md"
 grep -q "GENERATOR_SENTINEL" "$ROOT/adapters/opencode/skills/post-it/SKILL.md"
 
+python3 - "$MANIFEST" <<'PY'
+import json, sys
+path=sys.argv[1]
+data=json.load(open(path))
+data["capabilities"]["autopilot-code"]["invocation"]["use_when"] = (
+    "Use when GENERATOR_ROUTE_SENTINEL source code must change."
+)
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+PY
+
+python3 "$ROOT/tools/generate.py" >/dev/null
+grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/manifest.json"
+grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/tools/skill-conformance/invocation-policy.tsv"
+grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/skills/autopilot-code/SKILL.md"
+grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/claude/skills/autopilot-code/SKILL.md"
+grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills/autopilot-code/SKILL.md"
+grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md"
+grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md"
+grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/opencode/skills/autopilot-code/SKILL.md"
+
 cp "$TMP/harness-manifest.json" "$MANIFEST"
 python3 "$ROOT/tools/generate.py" >/dev/null
 python3 "$ROOT/tools/generate.py" --check >/dev/null
 
 find "$ROOT/capabilities" "$ROOT/adapters/claude/skills" "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude" "$ROOT/adapters/codex/skills" "$ROOT/adapters/codex/agents" "$ROOT/adapters/codex/modes" "$ROOT/adapters/codex/plugins/agent-harness-codex" "$ROOT/adapters/opencode/skills" "$ROOT/adapters/opencode/commands" "$ROOT/adapters/opencode/agents" -type f -print | sort | xargs sha256sum > "$TMP/first.sha"
+sha256sum "$ROOT/tools/skill-conformance/invocation-policy.tsv" >> "$TMP/first.sha"
 python3 "$ROOT/tools/generate.py" >/dev/null
 find "$ROOT/capabilities" "$ROOT/adapters/claude/skills" "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude" "$ROOT/adapters/codex/skills" "$ROOT/adapters/codex/agents" "$ROOT/adapters/codex/modes" "$ROOT/adapters/codex/plugins/agent-harness-codex" "$ROOT/adapters/opencode/skills" "$ROOT/adapters/opencode/commands" "$ROOT/adapters/opencode/agents" -type f -print | sort | xargs sha256sum > "$TMP/second.sha"
+sha256sum "$ROOT/tools/skill-conformance/invocation-policy.tsv" >> "$TMP/second.sha"
 cmp "$TMP/first.sha" "$TMP/second.sha"
 
 cp "$TARGET" "$TMP/generated-skill"
@@ -87,6 +111,29 @@ grep -Fq 'read the full body by record ID' "$ROOT/core/WORKFLOW.md"
 grep -Fq '## Routing Boundary' "$ROOT/capabilities/analyze-project.md"
 grep -Fq 'orientation and is not an `analyze-project` trigger by itself' "$ROOT/capabilities/analyze-project.md"
 grep -Fq 'Pointer follow-through' "$ROOT/core/MEMORY.md"
+grep -Fq '### 0.4. Primary Entry Confirmation' "$ROOT/core/WORKFLOW.md"
+grep -Fq '[실행 확인]' "$ROOT/core/WORKFLOW.md"
+grep -Fq '작업: <무엇을 어떤 결과로 만들지>' "$ROOT/core/WORKFLOW.md"
+grep -Fq '→ 진행 / 수정: <틀린 부분> / 중단' "$ROOT/core/WORKFLOW.md"
+for bootstrap in \
+  "$ROOT/adapters/claude/CLAUDE.md" \
+  "$ROOT/adapters/codex/AGENTS.md" \
+  "$ROOT/adapters/opencode/AGENTS.md"; do
+  grep -Fq 'five-field card in §0.4' "$bootstrap" || {
+    echo "not ok - entry confirmation pointer missing from $bootstrap" >&2
+    exit 1
+  }
+done
+if grep -Fq '## Projected Portable Details' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md"; then
+  echo "not ok - entry-router Codex Skill preloads projected details" >&2
+  exit 1
+fi
+grep -Fq '## Projected Portable Details' "$ROOT/adapters/codex/skills/code-plan/SKILL.md"
+if grep -Fq '## Portable Contract' "$ROOT/adapters/opencode/skills/autopilot-code/SKILL.md"; then
+  echo "not ok - entry-router OpenCode Skill preloads portable details" >&2
+  exit 1
+fi
+grep -Fq '## Portable Contract' "$ROOT/adapters/opencode/skills/code-plan/SKILL.md"
 
 for projected in \
   "$ROOT/skills/analyze-project/SKILL.md" \
@@ -97,11 +144,11 @@ for projected in \
     echo "not ok - orientation exclusion missing from $projected" >&2
     exit 1
   }
-  grep -Fq 'agent-chosen memory recall' "$projected" || {
-    echo "not ok - recall-first orientation missing from $projected" >&2
-    exit 1
-  }
 done
+grep -Fq 'agent-chosen memory recall' "$ROOT/capabilities/analyze-project.md"
+grep -Fq 'agent-chosen memory recall' "$ROOT/adapters/claude/skills/analyze-project/SKILL.md"
+grep -Fq 'five-field confirmation card' "$ROOT/adapters/codex/skills/analyze-project/SKILL.md"
+grep -Fq 'five-field confirmation card' "$ROOT/adapters/opencode/skills/analyze-project/SKILL.md"
 
 for figure_contract in \
   "$ROOT/roles/modes/material/figure-gen.md" \

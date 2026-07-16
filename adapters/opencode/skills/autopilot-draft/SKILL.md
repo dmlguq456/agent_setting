@@ -1,9 +1,10 @@
 ---
 name: autopilot-draft
-description: "Use when needed: Document-drafting pipeline that produces an applicable artifact through strategy, drafting, verification, and editing."
+description: "Use when a new paper, presentation, report, proposal, or other user-facing document must be produced from evidence. Not for correcting only an existing document or for source-code implementation."
 metadata:
   portable_source: capabilities/autopilot-draft.md
   adapter: opencode
+  invocation_class: entry-router
 ---
 
 # autopilot-draft
@@ -19,9 +20,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 ## Use
 
-1. Read `capabilities/autopilot-draft.md` for the runtime-neutral contract.
-2. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-draft`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-draft.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-draft` and obey the reported status:
    - `instruction-only`: use this Skill as OpenCode guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -29,13 +31,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `autopilot-draft`
+- Invocation class: `entry-router`
 - Supported modes: `paper, presentation, doc`
 - Argument shape: `<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]`
 - Portable meaning: Document-drafting pipeline that produces an applicable artifact through strategy, drafting, verification, and editing.
-
-## Portable Contract
-
-- Invocation semantics: Document draft pipeline: analyze → strategy → strategy-refine → draft → draft-refine → finalize. In `paper` mode, “draft” means a **paste-ready cheatsheet draft**: LaTeX-ready cards describing mutations that the user applies to canonical `main.tex` through autopilot-apply, not blank-page body writing. This meaning is unchanged for new and existing papers. Output-form modes are `paper` (LaTeX academic cheatsheet), `presentation` (slide-by-slide PPT markdown), and `doc` (Word/HWP/Markdown prose such as reports, proposals, rebuttals, reviews, blogs, and memos). The mode is form-first; the natural language task describes purpose/genre without a subtype enum. Discover inputs from `<artifact-root>/{analysis_project,research}/*`; preprocess external materials with `/analyze-project --mode {paper|doc}`. Load matching format specs from `analysis_project/doc/{matching}/formats/` without a `--format-ref` flag. Mode conventions live under `## Mode-Specific Conventions` (common plus paper, presentation, or doc). Presentation mode produces Markdown only; PPTX export is unsupported, so use PowerPoint directly. When a draft contains generated spectrograms, finalization requires the report figure evidence contract in `core/CONVENTIONS.md §4.1`: a semantic manifest, the fail-closed verifier result, claim-to-range evidence, and at least one recorded representative PNG review. A file/count/link-only check cannot satisfy this gate. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 ## Required Guards

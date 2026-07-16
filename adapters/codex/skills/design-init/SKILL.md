@@ -1,6 +1,6 @@
 ---
 name: design-init
-description: "Use when needed: Bootstrap the design environment and state."
+description: "Use only when autopilot-design dispatches design environment and state initialization. Not for top-level user requests or primary capability routing."
 ---
 
 # design-init
@@ -26,6 +26,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 ## Shape
 
 - Identifier: `design-init`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<design task description> [--scope ui|slide|icon|diagram|mixed]`
 - Portable meaning: Bootstrap the design environment and state.

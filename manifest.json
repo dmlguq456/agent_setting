@@ -7,7 +7,7 @@
     "capabilities": 10,
     "recipes": 22
   },
-  "manifest_version": "1.0.0",
+  "manifest_version": "1.1.0",
   "skills": [
     {
       "slug": "skill__analyze-project",
@@ -20,6 +20,9 @@
         "doc"
       ],
       "blurb": "Creates or refreshes persistent analysis from primary code, paper, or document materials when analysis is absent, stale, or explicitly requested; not for read-only context recovery.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when persistent analysis of code, a paper, or a document must be created or refreshed because it is absent, stale, or explicitly requested.",
+      "not_for": "Not for read-only project orientation, context recovery, or status reporting.",
       "argument_hint": "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]"
     },
     {
@@ -32,6 +35,9 @@
         "update"
       ],
       "blurb": "Create or update a cross-project user-preference profile from coding, writing, and analysis patterns.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when durable cross-project user preferences must be inferred from coding, writing, or analysis evidence and stored as a profile.",
+      "not_for": "Not for one-project context recovery, casual preference acknowledgment, or ordinary task execution.",
       "argument_hint": "<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]"
     },
     {
@@ -41,6 +47,9 @@
       "fam": "ops",
       "modes": [],
       "blurb": "Read-oriented post-run inspection for artifact drift, inconsistency, and omissions.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when completed work or artifacts need a read-oriented inspection for drift, inconsistency, omissions, or unsupported claims.",
+      "not_for": "Not for implementing fixes, producing the primary artifact, or replacing execution-stage verification.",
       "argument_hint": "<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]"
     },
     {
@@ -50,6 +59,9 @@
       "fam": "doc",
       "modes": [],
       "blurb": "Apply a cheatsheet draft to the real source artifact and verify the result.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when an approved cheatsheet or patching guide must be applied to the real source artifact and the applied result verified.",
+      "not_for": "Not for drafting or refining the cheatsheet, or for unrelated source implementation.",
       "argument_hint": "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]"
     },
     {
@@ -63,6 +75,9 @@
         "audit"
       ],
       "blurb": "Code-work entrypoint that detects spec context and closes the plan→execute→test→report loop.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when source code must be implemented, debugged, refactored, or code-audited through a plan, execution, test, and report loop.",
+      "not_for": "Not for requirements-only changes, new empirical experiments, or document-only editing.",
       "argument_hint": "--mode dev|debug <task/plan/error description> [--from <step>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
     },
     {
@@ -72,6 +87,9 @@
       "fam": "design",
       "modes": [],
       "blurb": "Visual-design pipeline coordinating references→tokens→components→review→handoff.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when a visual product surface needs references, design tokens, components or mockups, review, and development handoff.",
+      "not_for": "Not for implementing an already-approved design in code or for document prose work.",
       "argument_hint": "<design task or app path> [--scope ui|webapp|slide|icon|diagram|mixed] [--artifact standalone|project] [--from <phase>] [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
@@ -85,6 +103,9 @@
         "doc"
       ],
       "blurb": "Document-drafting pipeline that produces an applicable artifact through strategy, drafting, verification, and editing.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when a new paper, presentation, report, proposal, or other user-facing document must be produced from evidence.",
+      "not_for": "Not for correcting only an existing document or for source-code implementation.",
       "argument_hint": "<task description> [--mode paper|presentation|doc] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine] [--no-clarify] [--from analyze|strategy|strategy-refine|draft|draft-refine|finalize]"
     },
     {
@@ -97,6 +118,9 @@
         "eval"
       ],
       "blurb": "Rapid experiment prototyping around training setup and checkpoint evaluation/analysis.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when training setup, checkpoint evaluation, ablation, metric computation, or other new empirical output is required.",
+      "not_for": "Not for ordinary production-code changes that create no new experiment or evaluation result.",
       "argument_hint": "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
     },
     {
@@ -106,6 +130,9 @@
       "fam": "ops",
       "modes": [],
       "blurb": "Route and note artifacts, producing digests and triage proposals.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when existing artifacts must be collected, digested, triaged, or routed into a durable note workflow.",
+      "not_for": "Not for storing one scoped memory item or for performing the primary research, code, or document work.",
       "argument_hint": "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]"
     },
     {
@@ -115,6 +142,9 @@
       "fam": "doc",
       "modes": [],
       "blurb": "Correct and update existing document/research artifacts while preserving snapshots and change history.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when an existing document or research artifact needs factual, structural, stylistic, or review-driven correction with history preserved.",
+      "not_for": "Not for drafting a new artifact or performing new empirical work required before the document can change.",
       "argument_hint": "\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
     },
     {
@@ -128,6 +158,9 @@
         "market"
       ],
       "blurb": "Shared upfront research that surveys academic, technology, or market sources before downstream routing.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when a task needs a durable survey of new academic, technology, or market evidence before downstream specification or production.",
+      "not_for": "Not for repository-only project analysis, a simple factual lookup, or work already grounded by sufficient current evidence.",
       "argument_hint": "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]"
     },
     {
@@ -137,6 +170,9 @@
       "fam": "app",
       "modes": [],
       "blurb": "Prepare application deployment/release setup and a ship checklist.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when an application needs deployment or release configuration, readiness verification, and a ship checklist.",
+      "not_for": "Not for ordinary feature implementation or an unauthorized production deployment.",
       "argument_hint": "<task description (optional)> [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
@@ -153,6 +189,9 @@
         "update"
       ],
       "blurb": "Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path.",
+      "invocation_class": "entry-router",
+      "use_when": "Use when product requirements, architecture, evaluation policy, or another blueprint must be created or materially updated before implementation.",
+      "not_for": "Not for implementing an already-approved specification or for editing unrelated documents.",
       "argument_hint": "<task description> [--mode auto|app|library|api|cli|research|update (comma-separated for multiple)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]"
     },
     {
@@ -162,6 +201,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Execute a plan step by step, delegate implementation to the development role, and record an execution log.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-code dispatches the implementation stage for an approved plan.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<plan name or path>"
     },
     {
@@ -171,6 +213,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Analyze code, write a detailed implementation plan, and run the plan-check gate at the rigor derived from intensity.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-code dispatches the planning and plan-check stage.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<task description> [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
@@ -180,6 +225,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Revise an existing plan using user notes, plan-check feedback, and verification-failure notes.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-code dispatches plan revision after user notes, plan-check feedback, or verification failure.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<plan name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
@@ -189,6 +237,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Assemble code-cycle results into a user-facing report.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-code dispatches the final code-cycle reporting stage.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<plan name or path>"
     },
     {
@@ -198,6 +249,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Verify implementation results in stages and record evidence.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-code dispatches implementation verification and evidence recording.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<plan name, path, or test scope> [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
@@ -207,6 +261,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Build UI components/mockups and preview artifacts.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-design dispatches component, mockup, or preview construction.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -216,6 +273,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Package design results as assets and specifications for development handoff.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-design dispatches the development-handoff packaging stage.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -225,6 +285,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Bootstrap the design environment and state.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-design dispatches design environment and state initialization.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<design task description> [--scope ui|slide|icon|diagram|mixed]"
     },
     {
@@ -234,6 +297,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Collect external and user-provided visual references and create a brief.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-design dispatches visual-reference collection and brief creation.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<design task> [--design <path>] [--refs <image paths>] [--no-web]"
     },
     {
@@ -243,6 +309,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Review design output for quality, token-contract compliance, and breakage.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-design dispatches design quality, token-contract, and breakage review.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -252,6 +321,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Define design tokens such as color, typography, and spacing.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-design dispatches design-token definition or revision.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<design path or app path>"
     },
     {
@@ -261,6 +333,9 @@
       "fam": "sub",
       "modes": [],
       "blurb": "Refine a draft by applying memo/review feedback to a document strategy or draft.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-draft or autopilot-refine dispatches an internal strategy or draft refinement stage.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<strategy or draft name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]"
     },
     {
@@ -277,6 +352,9 @@
         "presentation"
       ],
       "blurb": "Create an initial document strategy and evidence-based writing plan.",
+      "invocation_class": "parent-invoked",
+      "use_when": "Use only when autopilot-draft dispatches document strategy and evidence-plan creation.",
+      "not_for": "Not for top-level user requests or primary capability routing.",
       "argument_hint": "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--intensity direct|quick|standard|strong|thorough|adversarial] <task description>"
     },
     {
@@ -286,6 +364,9 @@
       "fam": "ops",
       "modes": [],
       "blurb": "Store project/cross-project notes and handoffs in working memory.",
+      "invocation_class": "model-support",
+      "use_when": "Use when the acting agent needs to store, retrieve, resolve, hand off, or promote a scoped working-memory item in support of current work.",
+      "not_for": "Not for primary task routing, broad artifact triage, or replacing the capability that owns the current work.",
       "argument_hint": "[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]"
     }
   ],
@@ -803,6 +884,7 @@
   "ownership": {
     "generated": [
       "manifest.json",
+      "tools/skill-conformance/invocation-policy.tsv",
       "capabilities/README.md#catalog",
       "roles/README.md#role-catalog",
       "capabilities/*#capability-contract",

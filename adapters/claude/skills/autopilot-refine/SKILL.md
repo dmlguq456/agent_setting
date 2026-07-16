@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-refine
-description: "Use when invoking the portable autopilot-refine capability. Correct and update existing document/research artifacts while preserving snapshots and change history."
+description: "Use when an existing document or research artifact needs factual, structural, stylistic, or review-driven correction with history preserved. Not for drafting a new artifact or performing new empirical work required before the document can change."
 argument-hint: "\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]"
 metadata:
   group: entry
   fam: doc
+  invocation_class: entry-router
   modes: []
   blurb: "Correct and update existing document/research artifacts while preserving snapshots and change history."
+  use_when: "Use when an existing document or research artifact needs factual, structural, stylistic, or review-driven correction with history preserved."
+  not_for: "Not for drafting a new artifact or performing new empirical work required before the document can change."
 ---
 
 # autopilot-refine

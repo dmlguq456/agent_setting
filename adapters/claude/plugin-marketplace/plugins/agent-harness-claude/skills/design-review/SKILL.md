@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: design-review
-description: "Use when invoking the portable design-review capability. Review design output for quality, token-contract compliance, and breakage."
+description: "Use only when autopilot-design dispatches design quality, token-contract, and breakage review. Not for top-level user requests or primary capability routing."
 argument-hint: "<design path or app path>"
 metadata:
   group: sub
   fam: sub
+  invocation_class: parent-invoked
   modes: []
   blurb: "Review design output for quality, token-contract compliance, and breakage."
+  use_when: "Use only when autopilot-design dispatches design quality, token-contract, and breakage review."
+  not_for: "Not for top-level user requests or primary capability routing."
 ---
 
 # design-review

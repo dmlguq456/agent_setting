@@ -1,6 +1,6 @@
 ---
 name: code-report
-description: "Use when needed: Assemble code-cycle results into a user-facing report."
+description: "Use only when autopilot-code dispatches the final code-cycle reporting stage. Not for top-level user requests or primary capability routing."
 ---
 
 # code-report
@@ -26,6 +26,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 ## Shape
 
 - Identifier: `code-report`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<plan name or path>`
 - Portable meaning: Assemble code-cycle results into a user-facing report.

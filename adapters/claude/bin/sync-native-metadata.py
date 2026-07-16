@@ -28,7 +28,8 @@ def quoted(value: str) -> str:
 
 
 def generated_frontmatter(identifier: str, spec: dict) -> str:
-    description = f"Use when invoking the portable {identifier} capability. {spec['summary']}"
+    invocation = spec["invocation"]
+    description = f"{invocation['use_when']} {invocation['not_for']}"
     modes = json.dumps(spec["modes"], ensure_ascii=False)
     return f"""---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
@@ -38,8 +39,11 @@ argument-hint: {quoted(spec["argument_shape"])}
 metadata:
   group: {spec["group"]}
   fam: {spec["family"]}
+  invocation_class: {invocation["class"]}
   modes: {modes}
   blurb: {quoted(spec["summary"])}
+  use_when: {quoted(invocation["use_when"])}
+  not_for: {quoted(invocation["not_for"])}
 ---"""
 
 

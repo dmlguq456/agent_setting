@@ -1,9 +1,10 @@
 ---
 name: autopilot-spec
-description: "Use when needed: Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path."
+description: "Use when product requirements, architecture, evaluation policy, or another blueprint must be created or materially updated before implementation. Not for implementing an already-approved specification or for editing unrelated documents."
 metadata:
   portable_source: capabilities/autopilot-spec.md
   adapter: opencode
+  invocation_class: entry-router
 ---
 
 # autopilot-spec
@@ -19,9 +20,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 ## Use
 
-1. Read `capabilities/autopilot-spec.md` for the runtime-neutral contract.
-2. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-spec`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-spec.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-spec` and obey the reported status:
    - `instruction-only`: use this Skill as OpenCode guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -29,13 +31,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `autopilot-spec`
+- Invocation class: `entry-router`
 - Supported modes: `app, library, api, cli, research, update`
 - Argument shape: `<task description> [--mode auto|app|library|api|cli|research|update (comma-separated for multiple)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]`
 - Portable meaning: Create or update requirements/blueprints while keeping `prd.md` as the only spec-change path.
-
-## Portable Contract
-
-- Invocation semantics: General entrypoint for creating and updating requirements and blueprints: new intent, cleanup/public-release preparation for existing code, and iteration of an existing spec through `prd.md`. It supports app, library, API, CLI, and research modes; multiple modes; auto detection; and update mode. Update mode edits the existing `prd.md`, the canonical path for every spec change, and automatically snapshots the previous version. PRDs contain common sections plus independent per-mode sections. Automatically cite autopilot-research and analyze-project outputs. This is the blueprint counterpart to analyze-project's new-intent analysis. Actual code work belongs to autopilot-code, which detects `spec/` context automatically. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 ## Required Guards

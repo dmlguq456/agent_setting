@@ -1,6 +1,6 @@
 ---
 name: draft-strategy
-description: "Use when needed: Create an initial document strategy and evidence-based writing plan."
+description: "Use only when autopilot-draft dispatches document strategy and evidence-plan creation. Not for top-level user requests or primary capability routing."
 ---
 
 # draft-strategy
@@ -26,6 +26,7 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 ## Shape
 
 - Identifier: `draft-strategy`
+- Invocation class: `parent-invoked`
 - Supported modes: `rebuttal, paper, review, report, proposal, presentation`
 - Argument shape: `<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--intensity direct|quick|standard|strong|thorough|adversarial] <task description>`
 - Portable meaning: Create an initial document strategy and evidence-based writing plan.

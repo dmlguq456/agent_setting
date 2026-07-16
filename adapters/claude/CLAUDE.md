@@ -28,7 +28,14 @@ touches the named domain.
 
 ## Routing and Execution
 
-Select the primary capability semantically per `core/WORKFLOW.md §0.2` (WORKFLOW §0.2) and answer the pre-execution gate in §0.3 when applicable. Read-only orientation and targeted memory recall do not themselves invoke a capability. For spec-backed work, satisfy the spec-read gate before mutation.
+Select the primary capability semantically per `core/WORKFLOW.md §0.2` and
+answer the pre-execution gate in §0.3 when applicable. Before material work,
+propose the route with the completed five-field card in §0.4 and wait for
+approval unless the same route and scope are already approved. Route from
+compact generated metadata before approval; load full capability detail in the
+acting owner or worker after approval. Read-only orientation and targeted
+memory recall do not themselves invoke a capability. For spec-backed work,
+satisfy the spec-read gate before mutation.
 
 `autopilot-code` follows the portable intensity graph:
 

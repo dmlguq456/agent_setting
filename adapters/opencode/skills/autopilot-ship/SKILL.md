@@ -1,9 +1,10 @@
 ---
 name: autopilot-ship
-description: "Use when needed: Prepare application deployment/release setup and a ship checklist."
+description: "Use when an application needs deployment or release configuration, readiness verification, and a ship checklist. Not for ordinary feature implementation or an unauthorized production deployment."
 metadata:
   portable_source: capabilities/autopilot-ship.md
   adapter: opencode
+  invocation_class: entry-router
 ---
 
 # autopilot-ship
@@ -19,9 +20,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 ## Use
 
-1. Read `capabilities/autopilot-ship.md` for the runtime-neutral contract.
-2. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-ship`.
-3. Obey the reported status:
+1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
+2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-ship.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+4. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-ship` and obey the reported status:
    - `instruction-only`: use this Skill as OpenCode guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.
    - `unsupported`: stop or use the reported `fallback`.
@@ -29,13 +31,10 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `autopilot-ship`
+- Invocation class: `entry-router`
 - Supported modes: `none`
 - Argument shape: `<task description (optional)> [--intensity direct|quick|standard|strong|thorough|adversarial]`
 - Portable meaning: Prepare application deployment/release setup and a ship checklist.
-
-## Portable Contract
-
-- Invocation semantics: Application deployment-setup entrypoint for projects with an existing `spec/` and substantially complete functionality. Guide the first ship setup, environment, domain, and migration deployment; select hosting (Vercel, Fly, Railway, Cloudflare, or EAS); create CI/CD files, `.env.example`, domain guidance, and a deployment record. The user runs real deployment commands; this skill provides guidance only. Keep it distinct from autopilot-spec's initial spec/skeleton work. It may be rerun for environment changes, added domains, or production migration deployment. Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
 
 ## Required Guards

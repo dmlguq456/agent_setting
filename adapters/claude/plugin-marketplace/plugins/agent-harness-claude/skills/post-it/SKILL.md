@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: post-it
-description: "Use when invoking the portable post-it capability. Store project/cross-project notes and handoffs in working memory."
+description: "Use when the acting agent needs to store, retrieve, resolve, hand off, or promote a scoped working-memory item in support of current work. Not for primary task routing, broad artifact triage, or replacing the capability that owns the current work."
 argument-hint: "[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]"
 metadata:
   group: ops
   fam: ops
+  invocation_class: model-support
   modes: []
   blurb: "Store project/cross-project notes and handoffs in working memory."
+  use_when: "Use when the acting agent needs to store, retrieve, resolve, hand off, or promote a scoped working-memory item in support of current work."
+  not_for: "Not for primary task routing, broad artifact triage, or replacing the capability that owns the current work."
 ---
 
 # post-it

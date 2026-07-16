@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-ship
-description: "Use when invoking the portable autopilot-ship capability. Prepare application deployment/release setup and a ship checklist."
+description: "Use when an application needs deployment or release configuration, readiness verification, and a ship checklist. Not for ordinary feature implementation or an unauthorized production deployment."
 argument-hint: "<task description (optional)> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: entry
   fam: app
+  invocation_class: entry-router
   modes: []
   blurb: "Prepare application deployment/release setup and a ship checklist."
+  use_when: "Use when an application needs deployment or release configuration, readiness verification, and a ship checklist."
+  not_for: "Not for ordinary feature implementation or an unauthorized production deployment."
 ---
 
 # autopilot-ship

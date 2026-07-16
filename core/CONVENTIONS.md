@@ -292,9 +292,20 @@ This section applies to orchestrator-level capabilities that create artifact dir
 |---|---|---|
 | `SKILL.md` body | Under 500 lines | `body_lines`, `line_ok` |
 | `references/` | One level, no nested directories | `ref_dir`, `ref_depth_ok` |
-| Invocation frontmatter | Manual-only uses `disable-model-invocation: true`; parent/pipeline or subagent-preloaded Skills remain model-invoked; entry routers remain model-invoked and include an English “Use when” trigger | `disable_model`, `invocation`, `use_when` |
+| Invocation frontmatter | Manual-only uses `disable-model-invocation: true`; parent/pipeline or subagent-preloaded Skills remain model-invoked; entry routers remain model-invoked and include a concrete English “Use when” trigger plus a “Not for” boundary | `disable_model`, `invocation`, `use_when` |
 
-`tools/skill-conformance/check.sh` compares scanner output with the invocation registry and must pass before merge. `disable-model-invocation: true` is a hard boundary that also blocks programmatic Skill calls and subagent preload, not a recommendation-strength knob. `user-invocable: false` controls menu exposure separately. `tools/skill-conformance/invocation-policy.tsv` is the deterministic registry; the 13 current parent-invoked sub-Skills must remain model-invoked. `DESIGN_PRINCIPLES §10` owns the qualitative design tenets.
+`harness-manifest.json` owns each capability's invocation class, positive
+trigger, and exclusion boundary. `tools/skill-conformance/invocation-policy.tsv`
+is a generated registry projection, and `tools/skill-conformance/check.sh`
+compares every adapter realization with it before merge. Generic or circular
+triggers such as `Use when needed` and `Use when invoking the portable ...
+capability` fail conformance. `disable-model-invocation: true` is a hard boundary
+that also blocks programmatic Skill calls and subagent preload, not a
+recommendation-strength knob. `user-invocable: false` controls menu exposure
+separately. The 13 current parent-invoked sub-Skills remain model-invoked but
+identify their owning parent and top-level exclusion; model-support Skills are
+model-visible helpers, not primary entry candidates. `DESIGN_PRINCIPLES §10`
+owns the qualitative design tenets.
 
 The conformance gate enumerates the portable capability domain and checks every
 active Claude, Codex, and OpenCode Skill realization. Runtime-specific

@@ -129,13 +129,18 @@ The no-read rule applies only to the orchestrator. Skills and their agents read 
 
 ## 2. Default Autopilot Behavior
 
-Autopilot members run their pipeline to completion unless the user explicitly requests a pause.
+Autopilot members run their pipeline to completion after the primary entry
+intent is aligned. `WORKFLOW §0.4` owns the one-time route confirmation before
+execution; it is distinct from an internal pipeline pause.
 
 - Enable `--user-refine`, `--confirm`, or an equivalent pause only when the user explicitly asks for it; defaults remain false.
 - Select expensive `thorough` or `adversarial` graphs from explicit signals or high-risk routing. Verification rigor derives from intensity; it is not a separate graph or `--qa` selector.
 - On failure, fail loudly, record unresolved work in `pipeline_summary.md`, and allow the next call to resume with `--from <stage>`.
 
-Adding a cautionary confirmation after the user has already given clear intent delays work and creates follow-up friction. The runtime adapter response policy and each capability's pause-option contract enforce this principle.
+Once the user confirms the proposed route—or has already explicitly approved
+the same route and scope—adding cautionary or stage-by-stage confirmations
+delays work and creates follow-up friction. The portable response policy and
+each capability's pause-option contract enforce this principle.
 
 ---
 
@@ -225,8 +230,17 @@ Efficiency is not corner cutting. Reduce duplicated orchestrator reasoning, not 
 
 - Preserve QA rounds selected by the graph, rich role prompts, and required verification.
 - Remove repeated orchestrator reading and summarization and the accumulation of large result bodies in context.
+- Protect depth-0 context first: before route confirmation, main uses compact
+  entry metadata and the routing map rather than loading full Skill bodies or
+  references. The user receives a completed five-field proposal, which changes
+  the task from route generation to error recognition.
 - Pass results through files and return only verdict tokens.
-- At `standard+`, extend this file-only principle from in-session agent handoff to depth-2 headless stage handoff. Each plan, execute, test, and report stage writes a complete artifact for the next stage. The depth-1 owner remains a thin conductor that reads status and verdicts rather than bodies. If a file cannot carry the required context, improve the artifact schema instead of passing conversation history.
+- At `standard+`, the depth-1 owner reads the selected entry contract and
+  extends file-only handoff to depth-2 stages. Each plan, execute, test, and
+  report worker reads only its stage contract and writes a complete artifact
+  for the next stage. Main retains route, state, artifact paths, and verdicts;
+  the owner remains a thin conductor. If a file cannot carry required context,
+  improve the artifact schema instead of passing conversation history.
 - Waiting and harvesting are part of the deterministic flow: conductors poll through `dispatch-wait`, while semantic interpretation remains only for a dead stage. `OPERATIONS §5.10` owns the runtime details.
 - Reduce fixed input before squeezing output: keep always-loaded bootstraps as routers, expose Skill detail progressively, prevent duplicate discovery, and keep ordinary hooks silent. `ADAPTATION §6.1` owns the measurable budgets.
 - Treat footprint reduction as a static result until paired real-session measurement proves token or cost savings. Never trade intensity, model role, required context, tools, tests, or safety for a smaller counter.
@@ -250,7 +264,17 @@ The root virtue is **predictability**: reproduce the same process, gates, and pr
 
 Four design levers:
 
-1. **Invocation:** a resident description with no reachability gain wastes context, but optimize invocation only after preserving the call graph. Set `disable-model-invocation: true` only for workflows that must begin through explicit user invocation. Sub-Skills called by parents or preloaded into subagents remain model-invoked because the flag blocks programmatic use too. Entrypoint routers remain model-invoked and use clear English “Use when” triggers. Consider orthogonal `user-invocable: false` only to hide menu exposure.
+1. **Invocation:** a resident description with no reachability gain wastes
+   context, but optimize invocation only after preserving the call graph. Set
+   `disable-model-invocation: true` only for workflows that must begin through
+   explicit user invocation. Sub-Skills called by parents or preloaded into
+   subagents remain model-invoked because the flag blocks programmatic use too.
+   Entrypoint routers remain model-invoked: each has a concrete English “Use
+   when” trigger and “Not for” boundary, main proposes one of them from compact
+   metadata, and the user confirms intent before the Skill owns execution.
+   Parent-invoked and model-support Skills remain outside the top-level primary
+   candidate set. Consider orthogonal `user-invocable: false` only to hide menu
+   exposure.
 2. **Information hierarchy:** use three-rung progressive disclosure. Keep only the router, contract, and mapping table in `SKILL.md`; move examples, delegate prompts, templates, and execution detail to one-depth `references/*.md` loaded on demand.
 3. **Steering:** start with one leading-concept line and end with checkable completion. Negative safety gates remain valid steering when they protect destructive or irreversible boundaries.
 4. **Pruning:** collapse cross-Skill duplication into one source plus pointers. Repeated prose drifts and sediments; pointers retain filename, timing, and obligation.

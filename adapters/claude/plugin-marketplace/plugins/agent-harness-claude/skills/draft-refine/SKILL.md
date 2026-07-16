@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: draft-refine
-description: "Use when invoking the portable draft-refine capability. Refine a draft by applying memo/review feedback to a document strategy or draft."
+description: "Use only when autopilot-draft or autopilot-refine dispatches an internal strategy or draft refinement stage. Not for top-level user requests or primary capability routing."
 argument-hint: "<strategy or draft name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]"
 metadata:
   group: sub
   fam: sub
+  invocation_class: parent-invoked
   modes: []
   blurb: "Refine a draft by applying memo/review feedback to a document strategy or draft."
+  use_when: "Use only when autopilot-draft or autopilot-refine dispatches an internal strategy or draft refinement stage."
+  not_for: "Not for top-level user requests or primary capability routing."
 ---
 
 # draft-refine

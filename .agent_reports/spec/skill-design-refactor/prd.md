@@ -4,13 +4,14 @@
 > · **v2 2026-07-13** (편집 대상 = live 트리 `adapters/claude/skills/` 정정 + root `skills/` = 미러 불변식. back-jump 사유: dev Cluster 2 실행 중 `BLOCKING_FINDING.md` — audit/PRD v1 이 legacy root `skills/` 를 대상으로 삼았으나 live Claude source 는 `adapters/claude/skills/*/SKILL.md`. 단 main 기준 두 트리 내용 동일이 확인돼(§1.5) audit 진단·file:line 근거는 live 에 유효 — 재감사 불요, 대상 경로만 정정.)
 > · **runtime amendment 2026-07-13** (C1 runtime gate 결과 반영: `disable-model-invocation`은 context 최적화 힌트가 아니라 programmatic Skill 호출·subagent preload를 막는 hard boundary. manual-only와 parent-invoked를 분리하고 13개 parent-invoked는 model-invoked 유지.)
 > · **v3 2026-07-15** (portable-first sibling-adapter parity + context budget. v2의 Claude realization SoT/완료 판정을 폐기하고 `core/`·`capabilities/`·`roles/`를 의미 정본으로 복원. Claude·Codex·OpenCode는 동급 realization이며 하나라도 미검증이면 전체 상태는 PARTIAL.)
+> · **v4 2026-07-16** (entry-route confirmation + main-context priority. 모델이 primary entry capability를 먼저 제안하고 사용자가 짧게 승인한 뒤 실행한다. 메인은 compact routing metadata와 전체 상태만 소유하고, 선택된 Skill의 세부 계약은 capability owner/stage worker가 읽는다.)
 > 입력: `analysis_project/code/skill_design_audit.md`(28스킬×4축 진단·Step7 P1~P8·§6 Cluster 인계) · `skill_design_audit_per_skill.md`(file:line 근거) · `research/skill-design-principles/`(00_briefing·02_standards·04_technical_deep_dive·cards — Pocock 4축 SoT)
 > 본 문서는 청사진(PRD). 구현은 `/autopilot-code --mode refactor` (산출물 `plans/`).
 > **방향(사용자 확정 2026-07-13)**: Pocock 4축(Invocation/Information Hierarchy/Steering/Pruning) + root virtue **Predictability** 를 보수적 cherry-pick 이 아니라 **적극 표준 채택**. 단 하네스가 원칙보다 더 나간 지점(auto-activation hook 우회 등)은 **유지가 기본** — 원칙 쪽 회귀 금지, 충돌은 §Decision 에 명시.
 
 ## 0. 한 줄
 
-28스킬 진단이 제기한 Invocation·Pruning gap을 Pocock 4축으로 정합 튜닝하되, 원칙의 채택 단위는 Claude Skill 트리가 아니라 portable capability 계약이다. 모든 공유 변경은 **portable source → Claude/Codex/OpenCode 동급 realization → 활성 표면·fallback·context footprint 검증** 순서로 닫는다. C1 실측 결과 13개 parent/pipeline 호출 대상은 model-invoked를 유지한다.
+28스킬 진단이 제기한 Invocation·Pruning gap을 Pocock 4축으로 정합 튜닝하되, 원칙의 채택 단위는 Claude Skill 트리가 아니라 portable capability 계약이다. 모든 공유 변경은 **portable source → Claude/Codex/OpenCode 동급 realization → 활성 표면·fallback·context footprint 검증** 순서로 닫는다. C1 실측 결과 13개 parent/pipeline 호출 대상은 model-invoked를 유지한다. v4부터 primary entry routing은 **model proposal → user confirmation → owner/worker execution**으로 분리하며, 최우선 context 목표는 총 사용량이 아니라 depth-0 main session 보존이다.
 
 ## 1. 배경 — 진단이 수렴한 것
 
@@ -180,3 +181,79 @@ audit §6 매핑 그대로: **Cluster1=P1+P4+P7, Cluster2=P2+P5, Cluster3=P3+P6*
 - **규칙 구간(코드)**: 정량 규범 스캔·invocation registry/checker·`grep` 완료 기준·sync-skills projection·parity mirror 가드 — 전부 결정론(§0.5).
 - **의미 판단 구간(리뷰)**: Step 0·3-6 failure-mode 판정·negation→positive 선별(safety invariant 제외)·"어느 블록이 authority 인가" 지정 — plan-review/audit 자리 LLM 판정.
 - **충돌**: Cluster 1은 호출 그래프 의미 판단을 공식 문서+runtime gate로 매개하고, 확정된 분류만 registry/checker로 규칙화했다. 없음.
+
+## 9. v4 — Entry-route confirmation and main-context isolation
+
+### 9.1 Root contract
+
+Pocock의 user-invoked control과 harness의 model-selected routing을 다음 한 문장으로 절충한다.
+
+> **The agent proposes the route, the user confirms intent, and the selected capability owns execution.**
+
+이 confirmation은 사용자가 스킬 목록·호출법·옵션을 기억하게 하는 intake가 아니다. 메인이 요청을 완성된 실행 제안으로 압축해 사용자의 작업을 생성(recall)에서 오류 확인(recognition)으로 바꾸는 인지부담 완화 장치다. confirmation은 entry capability 내부의 `--confirm`/`--user-refine` pause와 별개인 **main-session pre-execution gate**이며, 한 번 승인된 primary route의 하위 단계는 자동 진행한다.
+
+### 9.2 Fixed confirmation card
+
+```text
+[실행 확인]
+
+작업: <무엇을 어떤 결과로 만들지>
+이유: <현재 배경과 작업이 필요한 이유>
+경로: <primary entry capability> · <mode/intensity> — <선택 이유>
+범위: <포함 범위와 중요한 제외 대상>
+완료: <산출물과 검증 기준>
+
+→ 진행 / 수정: <틀린 부분> / 중단
+```
+
+각 값은 에이전트가 한 줄로 미리 채운다. 대안 목록, 내부 sub-Skill, 장황한 추론은 카드에 넣지 않는다. 사용자는 `진행`, `ㅇㅇ`, `가자`처럼 짧게 승인하거나 틀린 필드만 고칠 수 있다. 현재 또는 직전 turn에서 같은 카드가 이미 승인됐다면 반복하지 않는다.
+
+### 9.3 Applicability and bypass boundary
+
+다음 중 하나라도 해당하면 primary entry route 또는 명시적 direct exception을 카드로 제안하고 승인 전에는 persistent mutation/external action을 시작하지 않는다.
+
+1. source, document, configuration, or durable artifact를 생성·변경한다.
+2. 조사·분석·구현·검증 중 둘 이상의 stage가 필요하다.
+3. test, build, deploy, external system mutation, 또는 별도 correctness evidence가 필요하다.
+4. tracked project에서 capability-owned artifact를 만들거나 갱신한다.
+
+읽기 전용 orientation, 상태 보고, 설명, 단순 사실 답변은 카드 없이 수행한다. `direct`는 침묵하는 no-route가 아니라 카드의 `경로`에 이유와 함께 표시되는 예외다. 이미 승인된 flow는 내부 commit, validation, record sync, dispatch, stage transition마다 재확인하지 않는다. primary capability, material scope, completion criterion, destructive risk, 또는 touched external system이 바뀔 때만 변경분을 다시 제안한다.
+
+### 9.4 Main-context ownership
+
+메인 세션 보호가 총 aggregate token 감소보다 우선한다.
+
+```text
+depth 0 main: compact entry metadata → confirmation → route/state/integration
+depth 1 owner: selected entry contract → stage decomposition → synthesis
+depth 2 worker: stage Skill/reference → artifact + short verdict
+```
+
+- 승인 전 main은 `harness-manifest.json`에서 생성된 compact routing metadata와 `WORKFLOW` routing table만 사용한다. 전체 entry Skill body와 reference를 선행 독해하지 않는다.
+- 승인 후 `standard+`는 owner/worker가 full capability/Skill detail을 읽는다. main은 immutable route, artifact path, status, verdict만 유지한다.
+- `direct`/`quick`처럼 acting session이 실제 executor인 경우에만 그 세션이 필요한 contract를 읽는다.
+- runtime이 선택된 Skill body를 main에 자동 주입하면 지원 한계로 기록하고, main이 같은 portable source/reference를 중복 재독해하지 않는 fallback을 사용한다.
+- worker 격리는 main context 보존 계약이며 총 token·billing 절감 주장이 아니다. 기존 SD-16 measurement boundary를 유지한다.
+
+### 9.5 Routing metadata and conformance
+
+`harness-manifest.json`이 capability별 invocation class, concise `use_when`, and `not_for` routing metadata의 portable source가 된다. `tools/skill-conformance/invocation-policy.tsv`는 그 manifest에서 생성되는 deterministic projection으로 전환한다.
+
+- `entry-router`: user query의 primary 후보. concrete trigger와 boundary를 description 앞부분에 둔다.
+- `parent-invoked`: model-invoked를 유지하지만 description은 internal-stage-only와 owning parent를 명시하며 top-level primary 후보가 아님을 밝힌다.
+- `model-support`: main이 필요 시 제안할 수 있으나 tracked-work primary entry catalog와 분리한다.
+- `user-only`: explicit user invocation만 허용하고 runtime-native invocation control을 적용한다.
+
+Conformance는 단순 `Use when` 문자열 존재가 아니라 generic/circular phrase(`Use when needed`, `Use when invoking the portable … capability`) 부재, registry/manifest parity, entry boundary, parent internal-only 표기를 검사한다. Runtime projection은 name/description만 first-rung으로 노출하고 full procedure는 선택·승인 뒤에 progressive disclosure한다.
+
+### 9.6 New locked decisions
+
+- **SD-17**: primary routing handshake = model proposal → user confirmation → capability-owned execution.
+- **SD-18**: confirmation UI = §9.2 fixed five-field card; agent-filled, one line per field, `진행 / 수정 / 중단` only.
+- **SD-19**: applicability = §9.3 observable work predicates. Read-only orientation/status/explanation are exempt; `direct` is explicit, never silent no-route.
+- **SD-20**: one confirmation per top-level intent. Reconfirm only a material primary/scope/completion/risk/external-system change.
+- **SD-21**: main-session context is the primary optimization target. Full execution detail belongs to depth-1 owner/depth-2 worker; total-token savings remain unclaimed.
+- **SD-22**: manifest owns invocation/routing metadata; invocation-policy TSV becomes generated output.
+- **SD-23**: primary candidate set is `entry-router` only. Parent-invoked and model-support Skills may remain model-visible but cannot be silently promoted to primary.
+- **SD-24**: generic/circular trigger descriptions fail deterministic conformance; each entry has a positive trigger and exclusion boundary.
+- **SD-25**: core response/workflow contract leads; Claude/Codex/OpenCode bootstraps and generated Skill metadata are sibling realizations verified in the same cycle.

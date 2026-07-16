@@ -1,9 +1,10 @@
 ---
 name: design-handoff
-description: "Use when needed: Package design results as assets and specifications for development handoff."
+description: "Use only when autopilot-design dispatches the development-handoff packaging stage. Not for top-level user requests or primary capability routing."
 metadata:
   portable_source: capabilities/design-handoff.md
   adapter: opencode
+  invocation_class: parent-invoked
 ---
 
 # design-handoff
@@ -29,6 +30,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 ## Shape
 
 - Identifier: `design-handoff`
+- Invocation class: `parent-invoked`
 - Supported modes: `none`
 - Argument shape: `<design path or app path>`
 - Portable meaning: Package design results as assets and specifications for development handoff.

@@ -1,13 +1,16 @@
 ---
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: design-handoff
-description: "Use when invoking the portable design-handoff capability. Package design results as assets and specifications for development handoff."
+description: "Use only when autopilot-design dispatches the development-handoff packaging stage. Not for top-level user requests or primary capability routing."
 argument-hint: "<design path or app path>"
 metadata:
   group: sub
   fam: sub
+  invocation_class: parent-invoked
   modes: []
   blurb: "Package design results as assets and specifications for development handoff."
+  use_when: "Use only when autopilot-design dispatches the development-handoff packaging stage."
+  not_for: "Not for top-level user requests or primary capability routing."
 ---
 
 # design-handoff
