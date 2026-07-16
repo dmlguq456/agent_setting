@@ -292,6 +292,11 @@ def build_lines(term_width, layout):
     # in-card blank separators stay ON the tint band — an untinted (None) blank row splits the
     # card into visual fragments (user: "분사 세션을 틴트로 갈라버리면 어쩌냐"). Only the
     # BETWEEN-cards gap below stays untinted.
+    # r6 — mirror the engine's own card-margin rule verbatim (render.py:2573-2576): one tinted
+    # breathing row directly below the group title, one tinted padding row at the card bottom
+    # (title-top padding was tried upstream and rejected).
+    g1.insert(1, [("  ", None)])
+    g1.append([("  ", None)])
     for ln in g1:
         lines.append([(r._TINT_BODY_HOT, None)] + (ln if ln is not None else []))
     lines.append(None)
@@ -303,6 +308,8 @@ def build_lines(term_width, layout):
     g2.append([("   ▸ ", "dim"), (r._BADGE_TEXT.get("claude", "claude") + "  ", "h_claude"),
                ("loop:note ", "dim"), (r._clip_w('"오전 수집분 다이제스트"', desc_w), "dim"),
                ("  queued · next 18m", "dim")])
+    g2.insert(1, [("  ", None)])
+    g2.append([("  ", None)])
     for ln in g2:
         lines.append([(r._TINT_BODY, None)] + (ln if ln is not None else []))
 
