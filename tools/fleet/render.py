@@ -507,12 +507,20 @@ def _project_gate(cwd, sid=None):
 #     gauge slot    context % bar      stage breadcrumb (plan › exec › test)  ← "how far along"
 # main↔dispatch weight is carried by the badge (reverse vs dim font), so the identity columns can
 # stay aligned for comparison. Job flow never sits under branch/gate.
-_HW = 16                      # Session harness field: claude code plus spacing.
-_BRANCH_COL = 48              # absolute col where branch starts (both row types)
-_NAME_COL = 4 + _HW           # absolute col where the NAME starts — SHARED by both row types so
-                              # everything from the name onward aligns (session: prefix 4 + harness
-                              # 14; dispatch: prefix 6 + harness 12 — deeper indent, narrower harness)
-_NW_S = _BRANCH_COL - _NAME_COL   # name field (both row types): col 18 → branch 46 = 28
+_HW = 16                      # Bare harness-badge width — narrow/stack L1 badges and the
+                              # dispatch-prefix budget math still use this unmerged value.
+_HMW = 32                     # F-4 (v11, 사용자 확정 2026-07-16): WIDE-layout harness field with
+                              # model/effort folded in as a parenthetical ('claude code (Fable 5
+                              # · xhigh)') — replaces the separate model column (_MW) on the wide
+                              # session/dispatch rows only; narrow/stack keep _HW plus their own
+                              # L2 model cell, unchanged.
+_NAME_COL = 4 + _HMW          # absolute col where the NAME starts on a WIDE row — SHARED by both
+                              # row types so everything from the name onward aligns (session:
+                              # prefix 4 + harness-model _HMW; dispatch: prefix 6 + harness-model
+                              # narrowed by 2 — deeper indent, same total).
+_NW_S = 28                    # wide-layout name field width (both row types) — a fixed constant
+                              # (previously derived from a hardcoded branch column) so growing
+                              # _NAME_COL above for the harness/model merge never shrinks it.
 _NAME2_MAX = 40               # 2-line name zone tail-cut cap (display cells) — no fixed branch
                               # column there, so an unbounded title could push branch off-draw (F-14)
 _NAME_GAP = 1                 # Cells inside the name zone reserved as a guaranteed separator
@@ -592,7 +600,10 @@ def _wide_slack(term_width):
     established, rather than duplicating it)."""
     if not term_width:
         return None
-    fixed_row = _NAME_COL + _BRW + _MW + 4 + _CTX_W + 5 + _STAGE_RESERVE
+    # F-4 (v11): no more separate model column (_MW) — model/effort now ride inside
+    # _NAME_COL's harness-model field (_HMW), so the column merge's freed width flows
+    # straight into this reservation and out to the name/ctx-gauge slack below.
+    fixed_row = _NAME_COL + _BRW + 4 + _CTX_W + 5 + _STAGE_RESERVE
     if _TINT_OK:
         framing = (_INSET + _PAD_IN) + _INSET + (2 + _PAD_IN) + 6 + 2
     else:
@@ -628,8 +639,10 @@ def _wide_ctx_width(term_width):
 
 
 def _col_head(name_width):
-    return ("    " + "harness".ljust(_HW) + "session".ljust(name_width)
-            + "branch".ljust(_BRW) + "model".ljust(_MW)
+    # F-4 (v11): the model/effort header folds into the harness column now that the row
+    # content does too — no more separate "model" header between branch and the gauge.
+    return ("    " + "harness (model · effort)".ljust(_HMW) + "session".ljust(name_width)
+            + "branch".ljust(_BRW)
             + "    context / stage")
 
 
@@ -676,6 +689,37 @@ def _model_cell(model, effort, width, dim=False):
         pad = max(0, width - len(name) - len(sfx) - 3)
         return [(name, lkey), (" (" + sfx + ")", _eff_key(sfx, dim)), (" " * pad, None)]
     return [(_pad(name[: width - 1], width), lkey)]
+
+
+def _harness_model_cell(harness, model, effort, width, hkey, dim=False, unknown="?"):
+    """F-4 (v11, 사용자 확정 2026-07-16) — WIDE-layout harness field with model/effort folded
+    in as a parenthetical: 'claude code (Fable 5 · xhigh)'. The harness text keeps its
+    existing hb_*/h_* badge color (`hkey`); the parenthetical reuses `_model_cell`'s
+    family/effort colors and ' · ' stays dim — same palette, new position. No model value ->
+    the parenthetical is omitted entirely (honest gap, F-3), matching a dead/stale row that
+    has no live telemetry to show. Always returns segments summing to exactly `width` cells
+    (long names/ids clip the same way `_model_cell` already did, never overflow) — the last
+    cell is always left as guaranteed padding so a maxed-out clip never runs the closing `)`
+    straight into the name column (the `_NAME_GAP` collision, same idiom, new spot)."""
+    hn = _BADGE_TEXT.get(harness, unknown) if harness else unknown
+    segs = [(hn, hkey)]
+    used = len(hn)
+    name = _clean_model(dash(model)) if model else None
+    if name and name != "—":
+        room = width - used - 4          # " (" prefix + trailing ")" + 1 guaranteed gap
+        eff = effort or ""
+        if eff and room > len(eff) + 3:
+            nm = name[: max(1, room - len(eff) - 3)]
+            segs += [(" (", "dim"), (nm, _model_key(model, dim=dim)),
+                     (" · ", "dim"), (eff, _eff_key(eff, dim)), (")", "dim")]
+            used += 2 + len(nm) + 3 + len(eff) + 1
+        elif room > 0:
+            nm = name[: max(1, room)]
+            segs += [(" (", "dim"), (nm, _model_key(model, dim=dim)), (")", "dim")]
+            used += 2 + len(nm) + 1
+    if used < width:
+        segs.append((" " * (width - used), None))
+    return segs
 
 
 _STAGE_ZONE_MAX = 30          # D3 (v9) — one constant, one place, same idiom as
@@ -871,14 +915,16 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
     gch, gkey = _glyph(live)
     if s.detached and live not in ("stale", "dead"):
         gch, gkey = _DETACHED_GLYPH, "g_work_off"   # detached: loading axis, dim-green
-    hn = _BADGE_TEXT.get(s.harness, "?")
-
     # main↔spawned weight = font-color intensity (no bg fill — the reverse badge read as weird):
     # a live top-level session gets the BRIGHT harness color; muted (stale/dead/app-server) drops
     # to dim. Dispatch rows use the DIM harness color (see _dispatch_row).
     hkey = (_BADGE_KEY.get(s.harness, "dim") if dim_tel
             else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
-    segs = [("  ", None), (gch, gkey), (" ", None), (_pad(hn, _HW), hkey)]
+    # F-4 (v11): harness field carries model/effort as a parenthetical — a dead/stale row has
+    # no live telemetry to show (F-13), so it renders the bare harness name only.
+    segs = [("  ", None), (gch, gkey), (" ", None)]
+    segs += _harness_model_cell(s.harness, None if dead_stale else s.model,
+                                None if dead_stale else s.effort, _HMW, hkey, dim=dim_tel)
 
     # F-22: reserve identity suffixes first, then let the title consume the
     # responsive name column. Calls without a terminal-derived width retain the
@@ -942,12 +988,12 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
         # read as broken telemetry rather than "this session stopped". One `last seen <age>` cell
         # replaces the whole model+gauge zone (LIVE rows keep the explicit "—" convention, F-3).
         age_min = int((time.time() - s.mtime) / 60) if s.mtime else (s.elapsed_min or 0)
-        segs += [(" " * _MW, None), ("    ", None), ("last seen %s" % fmt_min(age_min), "dim")]
+        segs += [("    ", None), ("last seen %s" % fmt_min(age_min), "dim")]
     else:
-        segs += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
-        # STATUS-ZONE — ctx gauge (mid-line ━/─, level color); 4-col gap so it reads separate
-        # from effort. `ctx_width` (F-22-adjacent, user 2026-07-16) lets wide-layout callers
-        # widen the gauge into otherwise-blank slack; legacy/hermetic callers keep _CTX_W.
+        # STATUS-ZONE — ctx gauge (mid-line ━/─, level color). model/effort now live in the
+        # harness field (F-4); `ctx_width` (F-22-adjacent, user 2026-07-16) lets wide-layout
+        # callers widen the gauge into the slack the column merge freed up; legacy/hermetic
+        # callers keep _CTX_W.
         cw = ctx_width or _CTX_W
         if s.ctx_pct is not None and not dim_tel:
             segs += [("    ", None)] + _gauge_segs(s.ctx_pct, cw) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
@@ -1123,11 +1169,12 @@ def _opts_segs(j, qa_text, qa_key):
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
                   parent_effort=None, stage_override=None, name_width=None, route_seq=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
-      harness  |  [stage label] name  |  branch  |  MODEL  |  options  |  stage breadcrumb
+      harness (model · effort)  |  [stage label] name  |  branch  |  options  |  stage breadcrumb
+    F-4 (v11): model/effort fold into the harness field (no more separate model column).
     F-15a: the name zone is identity-only (no more parenthetical mode/qa tag — that moved to
-    its own options column after the model cell). A depth-2 stage worker's identity is its
-    stage label + slug (P0-1); its breadcrumb slot shows its own micro-status instead of
-    repeating the parent conductor's full breadcrumb.
+    its own options column). A depth-2 stage worker's identity is its stage label + slug
+    (P0-1); its breadcrumb slot shows its own micro-status instead of repeating the parent
+    conductor's full breadcrumb.
     """
     key = j.key or "?"
     depth = max(1, int(getattr(j, "depth", 1) or 1))
@@ -1138,15 +1185,23 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         qa_text = ("~" + j.qa) if j.qa_source in ("jobslog", "plan", "default") else j.qa
     slug_name = j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
-    hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
     qa_key = "qa_" + qa_base if qa_base in _QA_INT else "dim"
+    dead_stale_j = j.liveness in ("dead", "stale")
+    # SD-F3: the job's own effort is first-class; when it's absent (proc-scan rows — env
+    # doesn't export it yet), fall back to the parent's effort marked with the derived-value
+    # `~` prefix (legend F-9d). A dead/stale row has no live telemetry to show (F-13).
+    eff = None if dead_stale_j else (j.effort or (("~" + parent_effort) if parent_effort else None))
 
     # DIFFERENTIAL indent (harness 2 cols deeper than a session) with a ↳ spawn arrow off the
     # parent's dot column (user pick over ├─/└─ tree bars); the harness field is narrowed by 2 so
-    # the NAME still lands at the shared _NAME_COL — name onward aligns with sessions. DIM = spawned.
+    # the NAME still lands at the shared _NAME_COL — name onward aligns with sessions. DIM =
+    # spawned. F-4 (v11): the widened field also carries the job's own model/effort as a
+    # parenthetical (SD-F3).
     prefix = _dispatch_prefix(j)
-    segs = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None),
-            (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim"))]
+    segs = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None)]
+    segs += _harness_model_cell(j.harness, None if dead_stale_j else (j.model or parent_model),
+                                eff, max(1, _HMW - len(prefix)),
+                                _BADGE_KEY.get(j.harness, "dim"), dim=True, unknown="—")
     avail = max(3, name_width or _NW_S)
     otag = "  (orphan)" if orphan else ""
     label = _dispatch_stage_label(j)
@@ -1177,14 +1232,8 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         segs.append(("    ", None))
         segs.append(("last seen %s" % fmt_min(j.elapsed_min), "dim"))
     else:
-        # model slot → the job's OWN main model (dim family color) + effort. SD-F3: the job's own
-        # effort is first-class; when it's absent (proc-scan rows — env doesn't export it yet),
-        # fall back to the parent's effort marked with the derived-value `~` prefix (legend F-9d).
-        eff = j.effort or (("~" + parent_effort) if parent_effort else None)
-        segs += _model_cell(j.model or parent_model, eff, _MW, dim=True)
-
         # F-15a options column (fixed-ish gap, dim mode/qa/profile) — a declutter move OUT of
-        # the name zone, not a new axis.
+        # the name zone, not a new axis. model/effort now live in the harness field (F-4/SD-F3).
         segs.append(("    ", None))
         opt_segs, optw = _opts_segs(j, qa_text, qa_key)
         segs += opt_segs
