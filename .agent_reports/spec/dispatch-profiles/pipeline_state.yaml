@@ -2,17 +2,20 @@ project_name: dispatch-profiles
 component: dispatch-profiles      # 별도 컴포넌트 (repo spec/prd.md = Unified Memory System, 무관)
 created: 2026-07-02
 mode: [cli]
-scope_note: "headless 분사별 마스킹 config home(프로필) — 3층 지침(L0 core 불변/L1 main 전용/L2 fragment) + harness×model 특화 + Claude dispatch wrapper 신설. 내용 fork 없는 심링크 부분 투영."
+scope_note: "v2는 config-home 부분 투영을 유지하면서 L0 blanket core read를 폐기한다. worker 입력은 minimal kernel+one worker_type+assigned contract+specialization이고, runtime 자동 instruction 상속은 masking 한계로 분리한다."
 inputs:
   - research/cross-platform-agent-setting/00_overview.md   # gsd-core capability 매니페스트·installer 선행 사례
   - 세션 실측 2026-07-02: CLAUDE_CONFIG_DIR (마커 CLAUDE.md 로드·credentials 심링크 auth·상태 격리 3중 확인)
   - repo 현황 조사: codex dispatch-headless.py / jobs.log 6필드 스키마 / roles·capabilities·projection 규약
 phases:
-  spec: done              # PRD v1 + plan-review r1 (B1·M1~M4·m1~m4) 반영 완료
+  spec: done              # PRD v2 typed worker-bootstrap amendment
   scaffolding: n/a        # autopilot-code 가 v1 에서 직접 완성 (templates+profiles 포함)
   design: n/a             # 터미널 도구 — 시각 UI 없음
-  dev: done               # v1 구현 완료 (worktree 분사, merge 76e4ae2) — plans/2026-07-02_dispatch-profiles. opencode P1 대기
-last_updated: 2026-07-02  # v1 merge — 게이트 5종+build-home smoke 통과, 브랜치 정리 완료
+  dev: in_progress        # typed dispatcher/profile realization
+  verification: pending  # profile checks + three dispatchers + boundary + footprint
+spec_version: v2
+result: PARTIAL
+last_updated: 2026-07-16
 decisions_locked:
   - DP-1: 마스킹 = 심링크 부분 투영, 내용 fork 금지 (조립 bootstrap 만 생성 파일)
   - DP-2: L0(core+guards) 하드 포함 — 선언 표면에 미노출
@@ -26,3 +29,8 @@ decisions_locked:
   - DP-10: 층 경계 = 소스 파일 분리 (templates/bootstrap-<harness>.md + fragments concat, CLAUDE.md 파싱 금지)
   - DP-11: home 인덱스 파일 없음 — jobs.log (slug, profile) 결정론 유도
   - DP-12: v1 = claude+codex, opencode P1 (XDG 파일 투영 채널 고정, inline 미사용)
+  - DP-13: blanket core read superseded by minimal kernel + exactly one worker type
+  - DP-14: every profile declares worker_type; dispatcher records it
+  - DP-15: attach template contains runtime attach layer + specialization only
+  - DP-16: lifecycle/prompt/config-home/physical masking support are separate
+  - DP-17: registered worker returns artifact/verdict/blocker only

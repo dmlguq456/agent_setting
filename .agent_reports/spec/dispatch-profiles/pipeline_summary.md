@@ -1,5 +1,17 @@
 # dispatch-profiles — pipeline summary
 
+## 2026-07-16 · v2 implementation started
+
+v1의 masked config-home과 expose subset은 유지하되 모든 worker가 네 core
+문서를 읽던 L0 계약은 폐기했다. dispatcher가 portable minimal kernel과 정확히
+한 `worker_type`을 주입하고, profile은 작은 runtime attach layer와 선택된
+specialization만 더한다. 상세 evidence는 artifact에 남고 registered worker는
+`artifact/verdict/blocker`만 반환한다.
+
+runtime 자동 `CLAUDE.md`/`AGENTS.md` 상속은 profile masking과 분리해 fallback으로
+기록한다. 검증은 builder/profile, three-dispatcher custom prompt, boundary,
+static footprint를 같은 cycle에서 닫는다.
+
 ## 2026-07-02 · spec v1 (autopilot-spec, qa=standard)
 
 **계기**: 사용자 설계 논의 (2026-07-02) — "모든 엔트리 스킬 분사?" → 하이브리드 결론, "분사 케이스별 다이어트+특화 마스킹 가능?" → 부분 투영 확정, "특화 지침을 더 구성하고 main 은 오히려 가리기" → 3층 대칭 모델. "ㅇㅇ 자율적으로 시작해" 로 spec 착수.
