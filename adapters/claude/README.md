@@ -16,6 +16,16 @@ This adapter maps the common agent harness onto Claude Code.
 | Hook scripts | `hooks/`, `utilities/` |
 | Status line | `adapters/claude/statusline.sh` |
 
+## Worker bootstrap boundary
+
+Headless dispatch injects the portable kernel and one worker-type fragment.
+Masked profiles expose only selected Skills/agents, a small runtime attach
+layer, and the selected specialization; they no longer instruct a worker to
+read all four main core documents. Worker detail is artifact-only and the
+return is the fixed `artifact` / `verdict` / `blocker` envelope. Claude custom
+subagents can still inherit the runtime's project/user `CLAUDE.md` hierarchy,
+so that residual runtime input is reported separately from profile masking.
+
 ## Runtime Mapping
 
 | Core Concept | Claude Code Implementation |

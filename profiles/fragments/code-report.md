@@ -8,8 +8,8 @@ updates the code analysis project.
 
 - Run `code-report`. Internal parallelism is the in-session **qa-team**
   as a fast writer — synthesize plan/checklist/dev_logs/test_logs into the report.
-- Return only a short verdict (report path + headline); the conductor reads the
-  report file, not your prose.
+- Put the headline and evidence in the report artifact; the terminal response
+  uses only the kernel's three-line handoff.
 
 ### Input / output artifact class (OPERATIONS §5.10 ④)
 

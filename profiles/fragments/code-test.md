@@ -8,8 +8,8 @@ and treats **source as read-only**.
 
 - Run `code-test`. Internal parallelism is the in-session **qa-team**
   in test mode — graduated verification (syntax→import→smoke→functional→integration).
-- Return only a short verdict (top Level reached + pass/fail); the conductor
-  reads the test report, not your prose.
+- Put top Level reached and pass/fail evidence in the test report; the terminal
+  response uses only the kernel's three-line handoff.
 
 ### Input / output artifact class (OPERATIONS §5.10 ④)
 

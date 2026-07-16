@@ -234,7 +234,10 @@ Efficiency is not corner cutting. Reduce duplicated orchestrator reasoning, not 
   entry metadata and the routing map rather than loading full Skill bodies or
   references. The user receives a completed five-field proposal, which changes
   the task from route generation to error recognition.
-- Pass results through files and return only verdict tokens.
+- Pass results through files and return only the portable three-line worker
+  envelope: artifact path, `PASS|FAIL|BLOCKED`, and a one-line blocker. Changed
+  files, commands, logs, findings, and reasoning stay in the artifact; worker
+  output is a machine handoff, not a user-facing report.
 - At `standard+`, the depth-1 owner reads the selected entry contract and
   extends file-only handoff to depth-2 stages. Each plan, execute, test, and
   report worker reads only its stage contract and writes a complete artifact
@@ -243,6 +246,10 @@ Efficiency is not corner cutting. Reduce duplicated orchestrator reasoning, not 
   improve the artifact schema instead of passing conversation history.
 - Waiting and harvesting are part of the deterministic flow: conductors poll through `dispatch-wait`, while semantic interpretation remains only for a dead stage. `OPERATIONS §5.10` owns the runtime details.
 - Reduce fixed input before squeezing output: keep always-loaded bootstraps as routers, expose Skill detail progressively, prevent duplicate discovery, and keep ordinary hooks silent. `ADAPTATION §6.1` owns the measurable budgets.
+- Worker pruning follows the same rule: one minimal kernel, one worker-type
+  fragment, and only the assigned capability/stage contract. Runtime-owned
+  project-instruction inheritance is reported separately from harness-controlled
+  prompt isolation and is never called physical masking without a verified switch.
 - Treat footprint reduction as a static result until paired real-session measurement proves token or cost savings. Never trade intensity, model role, required context, tools, tests, or safety for a smaller counter.
 
 ---

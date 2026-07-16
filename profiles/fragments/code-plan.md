@@ -8,8 +8,8 @@ implementation plan, nothing downstream.
 
 - Run `code-plan`. Internal parallelism is the in-session **plan-team**
   only — read source + prior artifacts and produce/refine the plan document.
-- Return only a short verdict (plan paths + a one-line readiness note); the
-  conductor reads the plan file, not your prose.
+- Put plan paths and readiness evidence in the plan artifact; the terminal
+  response uses only the kernel's three-line handoff.
 
 ### Input / output artifact class (OPERATIONS §5.10 ④)
 

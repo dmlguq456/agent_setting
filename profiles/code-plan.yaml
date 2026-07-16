@@ -1,6 +1,7 @@
 name: code-plan
 description: "code-plan stage worker — autopilot-code Step 2 depth-2 delegation (planning team)"
 harness: claude
+worker_type: stage
 model_role: deep maker
 fragments:
   - profiles/fragments/code-plan.md

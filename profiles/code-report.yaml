@@ -1,6 +1,7 @@
 name: code-report
 description: "code-report stage worker — autopilot-code Step 5 depth-2 delegation (QA fast writer)"
 harness: claude
+worker_type: stage
 model_role: fast writer
 fragments:
   - profiles/fragments/code-report.md

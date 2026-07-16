@@ -1,6 +1,7 @@
 name: code-test
 description: "code-test stage worker — autopilot-code Step 4 depth-2 delegation (QA testing; source read-only)"
 harness: claude
+worker_type: stage
 model_role: fast reviewer
 fragments:
   - profiles/fragments/code-test.md
