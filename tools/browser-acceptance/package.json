@@ -1,0 +1,10 @@
+{
+  "name": "@agent-harness/browser-acceptance",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Injected-page browser acceptance primitives (spec/browser-acceptance BA-1~6): mount wait, scoped queries, disclosure open, console capture, scoped axe, evidence JSON.",
+  "main": "index.cjs",
+  "scripts": {
+    "test": "node --test test/"
+  }
+}
