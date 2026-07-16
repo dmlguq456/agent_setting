@@ -508,13 +508,18 @@ def maybe_spawn(harness, sid, transcript, now=None, debounce=DEBOUNCE_SEC):
 
 
 def schedule_sessions(sessions):
-    """Best-effort live fleet scheduler; returns the number of workers started."""
+    """Best-effort live fleet scheduler; returns the number of workers started.
+
+    Dispatched child sessions are titled like main sessions (user 2026-07-16:
+    the summary agent attaches to every dispatched session, spending haiku
+    tokens instead of parent context). The refresher's own workers stay out
+    via the mem_worker tag (FLEET_TITLE_REFRESH=1), not via is_child.
+    """
     started = 0
     for session in sessions:
         if (
             getattr(session, "liveness", None) in ("dead", "stale")
             or getattr(session, "mem_worker", False)
-            or getattr(session, "is_child", False)
             or getattr(session, "app_server", False)
         ):
             continue
