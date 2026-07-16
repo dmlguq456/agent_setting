@@ -1671,16 +1671,21 @@ if "$CODEX" verification-runner --timeout 5 -- python3 -c 'print("verify-ok")' >
 else
   bad "codex verification runner should execute explicit commands"
 fi
-if grep -q '## Projected Portable Details' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
-  && grep -q 'preflight.sh status \[cwd\] \[session-id\]' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
-  && grep -q 'spec-significance' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
-  && grep -q 'pipeline_summary.md' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
-  && grep -q 'code-plan' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
-  && grep -q 'code-execute' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
-  && grep -q 'code-test' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
-  && grep -q 'code-report' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
-  && grep -q 'preflight.sh status \[cwd\] \[session-id\]' "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md" \
-  && grep -q 'spec-significance' "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md"; then
+# entry-router redesign (585c742b): the projection routes to the portable
+# contract instead of inlining it -- the procedure must stay reachable through
+# the referenced capability source.
+if grep -q 'core/WORKFLOW.md §0.2' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'capabilities/autopilot-code.md' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'preflight.sh capability-info autopilot-code' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'entry-router' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'capabilities/autopilot-code.md' "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'preflight.sh capability-info autopilot-code' "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'spec-significance' "$ROOT/capabilities/autopilot-code.md" \
+  && grep -q 'pipeline_summary.md' "$ROOT/capabilities/autopilot-code.md" \
+  && grep -q 'code-plan' "$ROOT/capabilities/autopilot-code.md" \
+  && grep -q 'code-execute' "$ROOT/capabilities/autopilot-code.md" \
+  && grep -q 'code-test' "$ROOT/capabilities/autopilot-code.md" \
+  && grep -q 'code-report' "$ROOT/capabilities/autopilot-code.md"; then
   ok "codex native skill projection carries portable autopilot-code procedure"
 else
   bad "codex native skill projection should carry portable autopilot-code procedure"
@@ -1708,7 +1713,7 @@ if command -v codex >/dev/null 2>&1; then
   done
   if CODEX_HOME="$TMP/codex_home" codex debug prompt-input 'autopilot-code' >/tmp/codex_skills.out 2>/tmp/codex_skills.err \
     && grep -q -- '- autopilot-code:' /tmp/codex_skills.out \
-    && grep -q 'Use when needed: Code-work entrypoint' /tmp/codex_skills.out \
+    && grep -q 'Use when source code must be implemented' /tmp/codex_skills.out \
     && ! grep -q '/.claude/skills' /tmp/codex_skills.out; then
     ok "codex native skill projection is discoverable without Claude skill paths"
   else
