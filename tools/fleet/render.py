@@ -509,7 +509,7 @@ def _project_gate(cwd, sid=None):
 # stay aligned for comparison. Job flow never sits under branch/gate.
 _HW = 16                      # Bare harness-badge width — narrow/stack L1 badges and the
                               # dispatch-prefix budget math still use this unmerged value.
-_HMW = 32                     # F-4 (v11, 사용자 확정 2026-07-16): WIDE-layout harness field with
+_HMW = 32                     # F-33 (v11, 사용자 확정 2026-07-16): WIDE-layout harness field with
                               # model/effort folded in as a parenthetical ('claude code (Fable 5
                               # · xhigh)') — replaces the separate model column (_MW) on the wide
                               # session/dispatch rows only; narrow/stack keep _HW plus their own
@@ -600,7 +600,7 @@ def _wide_slack(term_width):
     established, rather than duplicating it)."""
     if not term_width:
         return None
-    # F-4 (v11): no more separate model column (_MW) — model/effort now ride inside
+    # F-33 (v11): no more separate model column (_MW) — model/effort now ride inside
     # _NAME_COL's harness-model field (_HMW), so the column merge's freed width flows
     # straight into this reservation and out to the name/ctx-gauge slack below.
     fixed_row = _NAME_COL + _BRW + 4 + _CTX_W + 5 + _STAGE_RESERVE
@@ -639,7 +639,7 @@ def _wide_ctx_width(term_width):
 
 
 def _col_head(name_width):
-    # F-4 (v11): the model/effort header folds into the harness column now that the row
+    # F-33 (v11): the model/effort header folds into the harness column now that the row
     # content does too — no more separate "model" header between branch and the gauge.
     return ("    " + "harness (model·effort)".ljust(_HMW) + "session".ljust(name_width)
             + "branch".ljust(_BRW)
@@ -692,7 +692,7 @@ def _model_cell(model, effort, width, dim=False):
 
 
 def _harness_model_cell(harness, model, effort, width, hkey, dim=False, unknown="?"):
-    """F-4 (v11, 사용자 확정 2026-07-16) — WIDE-layout harness field with model/effort folded
+    """F-33 (v11, 사용자 확정 2026-07-16) — WIDE-layout harness field with model/effort folded
     in as a parenthetical: 'claude code (Fable 5·xhigh)'. The harness text keeps its
     existing hb_*/h_* badge color (`hkey`); the parenthetical reuses `_model_cell`'s
     family/effort colors and the flush '·' stays dim (user 2026-07-16: the spaced
@@ -921,7 +921,7 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
     # to dim. Dispatch rows use the DIM harness color (see _dispatch_row).
     hkey = (_BADGE_KEY.get(s.harness, "dim") if dim_tel
             else ("hb_" + s.harness if s.harness in _BADGE_TEXT else "hb_other"))
-    # F-4 (v11): harness field carries model/effort as a parenthetical — a dead/stale row has
+    # F-33 (v11): harness field carries model/effort as a parenthetical — a dead/stale row has
     # no live telemetry to show (F-13), so it renders the bare harness name only.
     segs = [("  ", None), (gch, gkey), (" ", None)]
     segs += _harness_model_cell(s.harness, None if dead_stale else s.model,
@@ -1148,7 +1148,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
                   parent_effort=None, stage_override=None, name_width=None, route_seq=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
       harness (model · effort)  |  [stage label] name  |  branch  |  options  |  stage breadcrumb
-    F-4 (v11): model/effort fold into the harness field (no more separate model column).
+    F-33 (v11): model/effort fold into the harness field (no more separate model column).
     F-15a: the name zone is identity-only (no more parenthetical mode/qa tag — that moved to
     its own options column). A depth-2 stage worker's identity is its stage label + slug
     (P0-1); its breadcrumb slot shows its own micro-status instead of repeating the parent
@@ -1172,7 +1172,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     # DIFFERENTIAL indent (harness 2 cols deeper than a session) with a ↳ spawn arrow off the
     # parent's dot column (user pick over ├─/└─ tree bars); the harness field is narrowed by 2 so
     # the NAME still lands at the shared _NAME_COL — name onward aligns with sessions. DIM =
-    # spawned. F-4 (v11): the widened field also carries the job's own model/effort as a
+    # spawned. F-33 (v11): the widened field also carries the job's own model/effort as a
     # parenthetical (SD-F3).
     prefix = _dispatch_prefix(j)
     segs = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None)]

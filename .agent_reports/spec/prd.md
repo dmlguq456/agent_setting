@@ -282,7 +282,7 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 
 ### 5.12.1 D-37 — 쓰기 이벤트 저널 (write-side event telemetry)
 - mem.py 의 **모든 변이 경로**(add/note/consume/reinforce/merge/prune/graduate/reattribute/delete/restore/lifecycle-expire)가 write-events.jsonl 에 1줄 append — 위치·패턴 = D-34 recall-events 와 대칭(`$XDG_STATE_HOME/agent-memory/`, bounded rotation 256KB/최근 500줄, raw 대화·전문 비저장).
-- 레코드: `ts / action / id / tier / scope / type / actor / sid / snippet(≤80자)`. `actor ∈ {manual, distiller, curator, lifecycle, sync, restore}` — apply-distill-actions·hook 경유는 env(`MEM_DISTILL`·mode)로 결정론 판별, 판별 불가면 `manual`.
+- 레코드: `ts / action / id / tier / scope / type / actor / sid / snippet(≤80자) / cwd`. `actor ∈ {manual, distiller, curator, lifecycle, sync, restore}` — apply-distill-actions·hook 경유는 env(`MEM_DISTILL`·mode)로 결정론 판별, 판별 불가면 `manual`. `cwd`(additive 2026-07-16)는 변이 프로세스의 레포 귀속 — `MEM_CWD` env 우선, 프로세스 cwd 폴백; fleet F-19 v11 레포별 카드 행이 `project_of(cwd)`로 소비하며, 필드 없는 구행은 소비자가 정직 생략(포맷 양 spec 동기 조항 이행 기록).
 - **fail-open (graveyard 와 반대 방향, 의도적)**: 저널 append 실패는 쓰기를 막지 않는다 — graveyard(파괴 복구 안전망)=fail-closed 유지, 저널(관측 telemetry)=fail-open. 이중화 아님: 파괴 이벤트는 양쪽에 남되 역할이 다름(복구 vs 관측).
 - dump.jsonl·agent-memory 동기 대상 아님(로컬 관측 데이터).
 

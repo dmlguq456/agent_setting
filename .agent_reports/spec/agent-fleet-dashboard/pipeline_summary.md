@@ -1,8 +1,8 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8)
+- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec **v10 done** (F-28 구현 확정 + F-30 과정 뷰 설계 — topology/route 착륙으로 전제 충족) — v9 구현 완료(테스트 468) · v10 구현 사이클 착수
+- **Status**: spec **v11 done** (두-평면 폐기 후 채택분 소급 등재 — F-19/F-29 개정 + F-32~F-34) — 구현·라이브 검증 완료(테스트 624), 잔여 = F-31 rolling 요약 사이클
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## Process Log
@@ -60,6 +60,7 @@
 - v6 (2026-07-14): F-22 terminal-width-responsive session name zone + longer responsive sidecar title contract; F-23 recursive-storm containment. snapshot = `_internal/versions/v5/prd.md`.
 - v7 (2026-07-15): F-24 portable worker attribution(`AGENT_SESSION_ROLE=worker`) + Codex rollout fd 소유권 단일화. snapshot = `_internal/versions/v6/prd.md`. (본 항목은 v8 update 시점 소급 기록 — v7 사이클이 summary 동기를 누락.)
 - v10 (2026-07-15): F-28a~c 구현 확정(route record tolerant 소비·route-aware breadcrumb·조건부 run/governor) + F-30 처리-과정 뷰 설계 확정(`p` 토글·route 카드·DAG 흐름·마우스 접기). 전제 = stage-dispatch v11 구현 착륙(`f5f3949f`), 실측 record 스키마 기반. snapshot = `_internal/versions/v9/prd.md`.
+- v11 (2026-07-17): 두-평면 실험 폐기 후 채택분 소급 등재 — F-29 표시(가로 스트립·인셋 위계)·수집(Task→Agent·비동기 발사≠완료) 개정, F-19 레포별 카드 행(+D-37 저널 `cwd` 동기), F-17 분사 세션 요약 전면 적용, F-32 분사 행 제목 입양, F-33 harness(model·effort) 통합+ctx 게이지 확장, F-34 표시 문법 정리(qa·`~` 표시 폐기, ↳ 사다리). 구현 선행(2026-07-16 사용자 연쇄 확정, main 착륙 완료)·등재 후행.
 - v9 (2026-07-15): minor 6건 흡수(취소선 정리·minor-log 리셋) + audit 🟡 2건 해소(F-25 규범 매핑 표 삽입·§10 control.py 노드) + F-27 마우스 1급 재설계(행 클릭·클릭 확정, 키보드 폴백) + F-30 종착 비전 등재(dispatch·서브에이전트 처리 과정 시각화). snapshot = `_internal/versions/v8/prd.md`. audit = `_internal/audit/audit_2026-07-15T1734.md`.
 - v8 (2026-07-15): F-25 상태 판정 단일 모델(소스 우선순위·hysteresis·state_evidence) + F-26 interactive 세션 레지스트리 1급(unused 배지·provenance) + F-27 제한적 세션 제어(kill+정리, Non-goal 부분 반전, 사용자 확인) + F-28 분사 정책 연동 계약 선고정(route record/topology 소비, 구현 후행). §0.5 경계 개정(자동 제어 0·사용자 개시 제어만). snapshot = `_internal/versions/v7/prd.md`.
 
@@ -144,3 +145,10 @@
 - 2026-07-16 (v10 minor #2): **F-30 gate 통과 표시 재개** — stage-dispatch v13(SD-56)이 completion marker를 실사용 착륙(저장소 최초 4건), v10 carryover §1의 재개 조건 충족. 증거 소스 = canonical `.dispatch/completion/<route_id>/<node_id>.json`, 판정 = marker 존재+route_id/hash 일치, 부재 = 무주장. 구현 = quick 사이클 분사.
 - 2026-07-16 (v10 minor #3, **철회**): ~~claude 사용량 소스 신뢰 규칙 개정~~ — "OAuth 엔드포인트가 성공-제로로 진짜 값(tap 7d 43%)을 가린다"는 진단으로 quick 사이클(구현·검증 완료, branch 85716394)까지 갔으나, **merge 직후 사용자 재확인 + 재실측으로 진단이 반전**되어 push 전 전량 철회(reset, branch/worktree 제거). 진실: 주간 카운터가 실제로 초기화됐고 API의 0%가 정확했으며, 43%는 **파일 mtime은 신선하지만 내용물(rate_limits)은 초기화 이전 마지막 응답의 낡은 값**인 tap이었다(재실측: API 5h 4%/7d 1% = 활성 세션 tap들과 일치, 43% tap만 outlier). 남는 교훈 2가지를 기록으로 보존: ⓐ statusline tap의 payload 신선도는 파일 mtime으로 판별 불가(tick마다 재기록되나 rate_limits는 마지막 inference 시점) — tap 기반 판단은 이 함정을 전제할 것 ⓑ 철회된 사이클이 관측한 "API 응답 단위 일관성"(부분-양수 응답)은 이제 정상 동작으로 재해석. 사이클 산출물은 `plans/2026-07-16_fleet-usage-accuracy/`에 RETRACTED 표기로 보존.
 - 2026-07-16 (v10 minor #4): **F-31 (분사 세션 rolling 요약 관측)** 추가 — 사용자 확정("엄청 가벼운 에이전트로 로그 요약을 계속… fleet에 반영"). transcript jsonl delta → 결정론 watcher(cursor·케이던스·governor storm containment) → cheap-tier no-tools 요약 워커(D-14 관용구) → 피드 JSONL → 세션 행 dim 서브 행(과정 뷰 카드 재사용). 요약은 표시 전용(F-25/SD-58 분류 불개입)·zero-injection·tolerant. 구현 = 별도 autopilot-code 사이클(지연·토큰 비용 실측이 완료 기준).
+
+## v11 update (2026-07-17) — 두-평면 폐기 + 기존-보드 강화 소급 등재
+
+- **두-평면 실험 폐기 결정 기록**: F-30 방향의 별도 "두-평면 문법" 가안(브랜치 `fleet-two-plane-demo`, HEAD `2fb4bda1`, 13라운드 사용자 반복)을 2026-07-16 사용자가 폐기 — "결국 기존과 비교해서 뭐가 나아진건데 / 시각적으로 하나도 안 들어온다 / 전부 다 버리고 메모리·서브에이전트만 기존 fleet에". 브랜치는 결정 기록으로 보존(머지 금지), 채택분만 기존 보드에 이식.
+- **구현 트레일(전부 main 착륙, 2026-07-16)**: `plans/2026-07-16_fleet-mem-subagent/`(quick 사이클: 스트립·레포 mem·게이지·model 통합) + main 직접 후속 커밋 연쇄(`218752e7` 요약 에이전트 분사 적용, `109f1a27` 제목 입양, `a2dd70d4` 사다리·qa·`~`·구분자, `8e547828` 비동기 판정, `37f60079` 저널 cwd, `f7fcbc00`·`b4c02e9b`·`2c184e4c` 인셋·스트립·사다리 미세 조정 — 사용자 라이브 관찰 연쇄 피드백). 테스트 519→624, 회귀 0, 전 항목 라이브 검증(실 서브에이전트·실 분사·실 mem 이벤트).
+- **진단 교훈 2건**(재발 방지 기록): ⓐ 비동기 Agent 발사는 즉시 launch-ack tool_result가 달린다 — 페어링 기반 활성 판정은 비동기 시대에 구조적으로 0건이 된다(F-29 수집 개정으로 해소). ⓑ "안 보인다" 불만의 원인이 코드가 아니라 관측 표면일 수 있다 — 사용자 TUI가 `--demo`(합성 픽스처 모드)로 떠 있었고, 구코드 프로세스가 하나 더 있었다. 재발 방지: 표시 불만 진단은 `ps`로 대상 프로세스의 시작 시각·플래그 확인부터.
+- **잔여**: F-31(rolling 요약)은 미착수 그대로(F-32 제목 입양이 거친 버전을 선제공). 코드 주석의 임시 명칭 "F-4 (v11)"는 F-33으로 정정 완료.

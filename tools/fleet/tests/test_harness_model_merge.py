@@ -1,4 +1,4 @@
-"""F-4 (v11, 사용자 확정 2026-07-16) — model column retired into the harness field as a
+"""F-33 (v11, 사용자 확정 2026-07-16) — model column retired into the harness field as a
 parenthetical on WIDE session/dispatch rows: 'claude code (Fable 5 · xhigh)'. narrow/stack
 keep their own separate L2 model cell, unchanged (out of scope for this merge).
 """
