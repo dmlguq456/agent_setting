@@ -53,6 +53,15 @@ class FallbackTest(unittest.TestCase):
   pipe=f"capability=autopilot-code,route_id={route['route_id']},route_node=plan,parent=owner,attempt_id=att-prior000000,parent_harness=codex,parent_transport=headless,parent_sandbox=workspace-write,child_harness=codex,launch_authority=conductor,note=dead-network"
   self.jobs.write_text(f"2026-07-16T00:00:00Z\tdone\t/repo\t{self.repo}\tfallback-plan\t{pipe}\n")
   result=self.run_chain(path); self.assertEqual(result.returncode,0,result.stdout+result.stderr); self.assertIn("selected_hop=cross-harness-headless",result.stdout); self.assertIn("skipped-prior-unchanged-failure",result.stdout)
+ def test_invalid_model_role_is_structured_and_preserved(self):
+  path=self.route(same_status="supported")
+  cross="codex/headless/workspace-write/claude/conductor"
+  result=self.run_chain(path,"--model-role","not-a-role","--failed-tuple",cross)
+  self.assertEqual(result.returncode,79,result.stdout+result.stderr)
+  self.assertIn("last_direct_failure_exit=64",result.stdout)
+  self.assertIn("last_direct_failure_reason=invalid-dispatch-model-role",result.stdout)
+  self.assertIn("last_direct_failure_detail=codex model-map: unknown role: not-a-role",result.stdout)
+  self.assertNotIn("Traceback",result.stdout+result.stderr)
  def test_legacy_route_is_read_only(self):
   path=self.route(); route=json.loads(path.read_text()); route["broker_contract_version"]=2; route.pop("dispatch_contract_version")
   for row in route["dispatch_evidence"]["tuples"]: row["launch_authority"]="ancestor-broker"; row["broker_root"]="/tmp/legacy"

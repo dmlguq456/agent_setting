@@ -306,7 +306,13 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
             "--model-role is mutually exclusive with --model and --reasoning",
         )
     if args.model_role:
-        fields = role_map(args.model_role)
+        try:
+            fields = role_map(args.model_role)
+        except ValueError as exc:
+            raise ModelSelectionError(
+                "invalid-dispatch-model-role",
+                str(exc),
+            ) from exc
         model = fields.get("exact_model_id")
         reasoning = fields.get("reasoning")
         if not model or not reasoning:

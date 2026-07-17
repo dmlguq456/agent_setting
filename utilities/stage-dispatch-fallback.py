@@ -28,6 +28,13 @@ def output_fields(output: str) -> dict[str, str]:
     return dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
 
 
+def compact_diagnostic(output: str, limit: int = 1000) -> str:
+    """Keep a bounded wrapper diagnostic on one machine-readable output line."""
+
+    value = "\\n".join(line.strip() for line in output.splitlines() if line.strip())
+    return value[:limit] or "-"
+
+
 def load_node(route_path: Path, node_id: str) -> tuple[dict, dict]:
     route = json.loads(route_path.read_text(encoding="utf-8"))
     verify = subprocess.run(
@@ -465,6 +472,7 @@ def main() -> int:
     prior_failures = registry_failures(args.jobs, route["route_id"], node["id"])
     failed_tuples = set(args.failed_tuple) | set(prior_failures)
     attempts: list[str] = []
+    direct_failures: list[dict[str, str]] = []
     for hop in node["dispatch_fallback"]:
         ordinal = int(hop["ordinal"])
         if hop["hop"] in {"same-harness-headless", "cross-harness-headless"}:
@@ -522,6 +530,13 @@ def main() -> int:
                     fields = output_fields(output)
                     early = fields.get("early_death", "-")
                     attempts.append(f"{ordinal}:{key}:direct:exit-{result.returncode}:attempt-{attempt_id}")
+                    if result.returncode != 0 or fields.get("check") == "failed":
+                        direct_failures.append({
+                            "attempt_id": attempt_id,
+                            "exit": str(result.returncode),
+                            "reason": fields.get("reason") or "wrapper-exit",
+                            "detail": fields.get("detail") or compact_diagnostic(output),
+                        })
                 except subprocess.TimeoutExpired as exc:
                     attempts.append(f"{ordinal}:{key}:direct-timeout:attempt-{attempt_id}")
                     if registry_has_attempt(args.jobs, attempt_id):
@@ -613,6 +628,12 @@ def main() -> int:
             print("fleet_visibility=none")
             print("attempt_trace=" + "|".join(attempts))
             print("prior_attempt_ids=" + ",".join(x for values in prior_failures.values() for x in values))
+            if direct_failures:
+                last = direct_failures[-1]
+                print(f"last_direct_failure_attempt_id={last['attempt_id']}")
+                print(f"last_direct_failure_exit={last['exit']}")
+                print(f"last_direct_failure_reason={last['reason']}")
+                print(f"last_direct_failure_detail={last['detail']}")
             return 79
     return fail("fallback-chain-exhausted", 79, attempt_trace="|".join(attempts))
 
