@@ -89,11 +89,14 @@ last_direct_failure_detail=codex model-map: unknown role: not-a-role
 - Codex SD-15 shell conformance: PASS.
 - Python compile and `git diff --check`: PASS.
 
-A full portable-guards diagnostic run completed at `357 PASS / 11 FAIL`.
-Those failures were existing broad dispatch/harvest/runtime-projection fixture
-assertions across Codex, Claude, and OpenCode; none touched the changed files or
-the new diagnostic test. The focused contracts above are the acceptance
-evidence for this patch.
+A first full portable-guards diagnostic run completed at `357 PASS / 11 FAIL`.
+An isolated rerun on current `main` reduced that to `366 PASS / 2 FAIL`; the
+other nine were transient shared-runtime/concurrent-state observations. The two
+reproducible failures traced to commit `37f60079`, which had replaced the
+Codex/OpenCode neutral memory launchers with full copies of the
+Claude-compatible portable `mem.py`. Commit `7871a8b8` restored the concrete
+adapter launchers. Adaptation boundary, both launchers, generated projections,
+and the complete portable guard now pass at `368 PASS / 0 FAIL`.
 
 ## Controlled negative observations
 
