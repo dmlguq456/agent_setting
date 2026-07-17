@@ -180,7 +180,10 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--parent-harness", default=os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS") or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "opencode")
     p.add_argument("--parent-transport", default=os.environ.get("AGENT_DISPATCH_CURRENT_TRANSPORT") or "unknown")
     p.add_argument("--parent-sandbox", default=os.environ.get("AGENT_DISPATCH_CURRENT_SANDBOX") or "unknown")
-    p.add_argument("--nested-eligibility", choices=("supported", "unsupported", "unknown"), default="unknown")
+    # default None (not "unknown"): an explicitly supplied `--nested-eligibility
+    # unknown` must stay distinguishable from an absent flag — explicit evidence,
+    # even unknown, is never overwritten by the internal probe.
+    p.add_argument("--nested-eligibility", choices=("supported", "unsupported", "unknown"), default=None)
     p.add_argument("--eligibility-source", default="")
     p.add_argument("--eligibility-failure-class", default="")
     p.add_argument("--log-dir")
@@ -475,6 +478,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
             f",parent_sandbox={args.parent_sandbox},child_harness=opencode"
             f",nested_eligibility={args.nested_eligibility},eligibility_source={args.eligibility_source}"
             f",eligibility_failure_class={args.eligibility_failure_class or '-'}"
+            f",eligibility_probe={getattr(args, 'eligibility_probe', None) or '-'}"
         )
     for key in ("route_file", "route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate"):
         value = getattr(args, key)
@@ -724,6 +728,70 @@ def validate_dispatch_metadata(args: argparse.Namespace) -> int:
     return 0
 
 
+def bind_internal_eligibility_probe(args: argparse.Namespace) -> None:
+    """SD-66 fix-forward: run the nested-eligibility probe in-wrapper when a
+    depth-2 ``--start`` carries no explicit evidence, instead of failing
+    closed on missing flags a caller never had reason to supply by hand.
+
+    Triggers only when both evidence options are still at their parser
+    default (``unknown``/empty) and the parent identity needed to run the
+    probe is fully known. Explicit supported/unsupported/unknown/partial
+    evidence, depth-1, and dry-run/register never reach this function's
+    trigger path (callers gate on depth/action before calling it). The probe's
+    own JSON status is trusted only when every identity field it echoes back
+    matches the request; a malformed/mismatched/erroring probe leaves
+    ``nested_eligibility`` at its unknown default so `validate_nested_eligibility`
+    still fails closed. OpenCode config/runtime and hang-on-limit behavior stay
+    inside the probe itself, not here.
+    """
+    if args.depth < 2 or args.action != "start":
+        return
+    if getattr(args, "nested_eligibility_explicit", False):
+        return
+    if args.nested_eligibility != "unknown" or args.eligibility_source:
+        return
+    if not all((args.parent_harness, args.parent_transport, args.parent_sandbox, args.launch_authority)):
+        return
+    if "unknown" in (args.parent_harness, args.parent_transport, args.parent_sandbox):
+        return
+    args.eligibility_probe = "internal"
+    probe = ROOT / "utilities" / "nested-dispatch-eligibility.py"
+    result = subprocess.run(
+        [
+            sys.executable, str(probe),
+            "--parent-harness", args.parent_harness,
+            "--parent-transport", args.parent_transport,
+            "--parent-sandbox", args.parent_sandbox,
+            "--child-harness", "opencode",
+            "--launch-authority", args.launch_authority,
+            "--worktree", args.worktree,
+            "--json",
+        ],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
+    )
+    try:
+        row = json.loads(result.stdout)
+    except (ValueError, TypeError):
+        return
+    if (
+        row.get("parent_harness") != args.parent_harness
+        or row.get("parent_transport") != args.parent_transport
+        or row.get("parent_sandbox") != args.parent_sandbox
+        or row.get("child_harness") != "opencode"
+        or row.get("launch_authority") != args.launch_authority
+        or row.get("status") not in ("supported", "unsupported", "unknown")
+    ):
+        return
+    if row["status"] == "supported" and result.returncode != 0:
+        # A failed probe process cannot mint launch-eligible evidence, even if
+        # its stdout says supported; checked unsupported/unknown results keep
+        # their nonzero-rc path and still fail closed downstream.
+        return
+    args.nested_eligibility = row["status"]
+    args.eligibility_source = row.get("probe_source") or ""
+    args.eligibility_failure_class = row.get("failure_class") or ""
+
+
 def validate_route_record(args: argparse.Namespace) -> int:
     routed=any((args.route_id,args.route_hash,args.route_node,args.registry_digest))
     if routed and not args.route_file: return fail("route-record-required",65,route_id=args.route_id or "-")
@@ -752,6 +820,9 @@ def validate_route_record(args: argparse.Namespace) -> int:
 
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
+    args.nested_eligibility_explicit = args.nested_eligibility is not None
+    if args.nested_eligibility is None:
+        args.nested_eligibility = "unknown"
     if args.capacity_retry and not all(
         (args.prior_attempt_id, args.cooled_model, args.selection_source)
     ):
@@ -777,6 +848,8 @@ def main(argv: list[str]) -> int:
     rc = validate_dispatch_metadata(args)
     if rc != 0:
         return rc
+    args.eligibility_probe = "-"
+    bind_internal_eligibility_probe(args)
     try:
         validate_nested_eligibility(
             depth=args.depth, action=action, parent_harness=args.parent_harness,
@@ -785,7 +858,18 @@ def main(argv: list[str]) -> int:
             status=args.nested_eligibility, source=args.eligibility_source,
         )
     except DispatchContractError as e:
-        return fail(e.reason, 69, detail=e.detail)
+        return fail(
+            e.reason, 69, detail=e.detail,
+            parent_harness=args.parent_harness or "-",
+            parent_transport=args.parent_transport or "-",
+            parent_sandbox=args.parent_sandbox or "-",
+            child_harness="opencode",
+            launch_authority=args.launch_authority,
+            nested_eligibility=args.nested_eligibility,
+            eligibility_source=args.eligibility_source or "-",
+            eligibility_failure_class=args.eligibility_failure_class or "-",
+            eligibility_probe=args.eligibility_probe,
+        )
     rc = validate_route_record(args)
     if rc != 0:
         return rc
@@ -912,6 +996,7 @@ def main(argv: list[str]) -> int:
     print(f"qa={args.qa}")
     print(f"intensity={args.intensity}")
     print(f"depth={args.depth}")
+    print(f"eligibility_probe={getattr(args, 'eligibility_probe', None) or '-'}")
     print(f"parent={args.parent_slug or '-'}")
     print(f"parent_session_id={args.parent_session_id or '-'}")
     print(f"worker_role={args.worker_role or '-'}")
