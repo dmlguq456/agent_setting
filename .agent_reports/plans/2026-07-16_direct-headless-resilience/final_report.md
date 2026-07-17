@@ -38,6 +38,10 @@ presentation and adds no broker-like authority.
 - Independent verifier: PASS, no blocker, five repros closed.
 - Real Codex headless recursion: PASS through `same-harness-headless`,
   `launch_authority=conductor`, `broker_lifecycle=retired`.
+- The 2026-07-17 post-fix runtime smoke additionally proved live
+  `pid_scope=namespace-local` classification, exact terminal reconciliation,
+  zero duplicate stage rows, and structured preservation of direct wrapper
+  failures. See `test_logs/recursive-smoke-2026-07-17.md`.
 
 ## Integration
 
