@@ -135,16 +135,19 @@ def bind_dispatch_evidence(route, node, adapter, adapter_args):
     """
     tuple_row = select_checked_tuple(route, node, adapter)
     record = {flag: str(tuple_row.get(field, "")) for field, flag in EVIDENCE_FLAG_MAP.items()}
-    failure_class = _normalized_failure_class(tuple_row)
-    if failure_class:
-        record[FAILURE_CLASS_FLAG] = failure_class
+    # The failure class is always part of the comparison set, even when the
+    # record's value is empty — otherwise an explicit forged value would slip
+    # past conflict detection. It is only omitted from the *output* when both
+    # sides are empty.
+    record[FAILURE_CLASS_FLAG] = _normalized_failure_class(tuple_row)
     trailing = strip_leading_separator(adapter_args)
     explicit = collect_explicit_evidence(trailing, list(record.keys()))
     extra = []
     for flag, value in record.items():
         seen = explicit.get(flag, [])
         if not seen:
-            extra += [flag, value]
+            if value or flag != FAILURE_CLASS_FLAG:
+                extra += [flag, value]
             continue
         if any(v != value for v in seen):
             raise DispatchNodeError(

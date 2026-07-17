@@ -155,7 +155,10 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--parent-harness", default=os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS") or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "claude")
     p.add_argument("--parent-transport", default=os.environ.get("AGENT_DISPATCH_CURRENT_TRANSPORT") or "unknown")
     p.add_argument("--parent-sandbox", default=os.environ.get("AGENT_DISPATCH_CURRENT_SANDBOX") or "unknown")
-    p.add_argument("--nested-eligibility", choices=("supported", "unsupported", "unknown"), default="unknown")
+    # default None (not "unknown"): an explicitly supplied `--nested-eligibility
+    # unknown` must stay distinguishable from an absent flag — explicit evidence,
+    # even unknown, is never overwritten by the internal probe.
+    p.add_argument("--nested-eligibility", choices=("supported", "unsupported", "unknown"), default=None)
     p.add_argument("--eligibility-source", default="")
     p.add_argument("--eligibility-failure-class", default="")
     p.add_argument("--log-dir")
@@ -651,6 +654,8 @@ def bind_internal_eligibility_probe(args: argparse.Namespace) -> None:
     """
     if args.depth < 2 or args.action != "start":
         return
+    if getattr(args, "nested_eligibility_explicit", False):
+        return
     if args.nested_eligibility != "unknown" or args.eligibility_source:
         return
     if not all((args.parent_harness, args.parent_transport, args.parent_sandbox, args.launch_authority)):
@@ -684,6 +689,11 @@ def bind_internal_eligibility_probe(args: argparse.Namespace) -> None:
         or row.get("launch_authority") != args.launch_authority
         or row.get("status") not in ("supported", "unsupported", "unknown")
     ):
+        return
+    if row["status"] == "supported" and result.returncode != 0:
+        # A failed probe process cannot mint launch-eligible evidence, even if
+        # its stdout says supported; checked unsupported/unknown results keep
+        # their nonzero-rc path and still fail closed downstream.
         return
     args.nested_eligibility = row["status"]
     args.eligibility_source = row.get("probe_source") or ""
@@ -720,6 +730,9 @@ def validate_route_record(args: argparse.Namespace) -> int:
 
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
+    args.nested_eligibility_explicit = args.nested_eligibility is not None
+    if args.nested_eligibility is None:
+        args.nested_eligibility = "unknown"
     if args.capacity_retry and not all(
         (args.prior_attempt_id, args.cooled_model, args.selection_source)
     ):
