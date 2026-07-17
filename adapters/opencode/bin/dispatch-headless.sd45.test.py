@@ -1,8 +1,112 @@
 #!/usr/bin/env python3
-import importlib.util,json,os,subprocess,sys,tempfile,unittest
+import argparse,importlib.util,json,os,subprocess,sys,tempfile,unittest
 from pathlib import Path
+from unittest import mock
 ROOT=Path(__file__).resolve().parents[3]
 S=importlib.util.spec_from_file_location("route",ROOT/"utilities/capability-route.py"); R=importlib.util.module_from_spec(S); S.loader.exec_module(R)
+WH_S=importlib.util.spec_from_file_location("opencode_dispatch_headless",Path(__file__).with_name("dispatch-headless.py")); WH=importlib.util.module_from_spec(WH_S); WH_S.loader.exec_module(WH)
+
+
+def probe_args(**overrides):
+    base = dict(
+        depth=2, action="start", nested_eligibility="unknown", eligibility_source="",
+        eligibility_failure_class="", parent_harness="claude", parent_transport="headless",
+        parent_sandbox="default", launch_authority="conductor", worktree="/tmp/fixture-worktree",
+    )
+    base.update(overrides)
+    return argparse.Namespace(**base)
+
+
+def fake_probe_result(**row):
+    return mock.Mock(stdout=json.dumps(row), returncode=0 if row.get("status") == "supported" else 69)
+
+
+class OpenCodeSD45InternalProbe(unittest.TestCase):
+    def test_absent_evidence_binds_supported_and_marks_internal(self):
+        args = probe_args()
+        row = dict(parent_harness="claude", parent_transport="headless", parent_sandbox="default",
+                   child_harness="opencode", launch_authority="conductor", status="supported",
+                   probe_source="direct-auth+headless-check", failure_class="")
+        with mock.patch.object(WH.subprocess, "run", return_value=fake_probe_result(**row)) as run:
+            WH.bind_internal_eligibility_probe(args)
+        run.assert_called_once()
+        self.assertIn("--child-harness", run.call_args.args[0])
+        self.assertEqual(args.nested_eligibility, "supported")
+        self.assertEqual(args.eligibility_source, "direct-auth+headless-check")
+        self.assertEqual(args.eligibility_probe, "internal")
+        WH.validate_nested_eligibility(
+            depth=args.depth, action=args.action, parent_harness=args.parent_harness,
+            parent_transport=args.parent_transport, parent_sandbox=args.parent_sandbox,
+            child_harness="opencode", launch_authority=args.launch_authority,
+            status=args.nested_eligibility, source=args.eligibility_source,
+        )  # must not raise
+
+    def test_unsupported_probe_result_fails_closed_with_no_launch(self):
+        args = probe_args()
+        row = dict(parent_harness="claude", parent_transport="headless", parent_sandbox="default",
+                   child_harness="opencode", launch_authority="conductor", status="unsupported",
+                   probe_source="direct-headless-check", failure_class="exit-1")
+        with mock.patch.object(WH.subprocess, "run", return_value=fake_probe_result(**row)):
+            WH.bind_internal_eligibility_probe(args)
+        self.assertEqual(args.nested_eligibility, "unsupported")
+        self.assertEqual(args.eligibility_probe, "internal")
+        with self.assertRaises(WH.DispatchContractError) as ctx:
+            WH.validate_nested_eligibility(
+                depth=args.depth, action=args.action, parent_harness=args.parent_harness,
+                parent_transport=args.parent_transport, parent_sandbox=args.parent_sandbox,
+                child_harness="opencode", launch_authority=args.launch_authority,
+                status=args.nested_eligibility, source=args.eligibility_source,
+            )
+        self.assertEqual(ctx.exception.reason, "nested-child-spawn-unsupported")
+
+    def test_explicit_evidence_skips_internal_probe(self):
+        args = probe_args(nested_eligibility="unsupported", eligibility_source="caller-supplied")
+        args.eligibility_probe = "-"
+        with mock.patch.object(WH.subprocess, "run") as run:
+            WH.bind_internal_eligibility_probe(args)
+        run.assert_not_called()
+        self.assertEqual(args.eligibility_probe, "-")
+        self.assertEqual(args.nested_eligibility, "unsupported")
+
+    def test_unknown_parent_identity_skips_probe_and_stays_fail_closed(self):
+        args = probe_args(parent_harness="")
+        args.eligibility_probe = "-"
+        with mock.patch.object(WH.subprocess, "run") as run:
+            WH.bind_internal_eligibility_probe(args)
+        run.assert_not_called()
+        self.assertEqual(args.eligibility_probe, "-")
+        self.assertEqual(args.nested_eligibility, "unknown")
+
+    def test_malformed_json_leaves_unknown_and_fails_closed(self):
+        args = probe_args()
+        with mock.patch.object(WH.subprocess, "run", return_value=mock.Mock(stdout="not json", returncode=1)):
+            WH.bind_internal_eligibility_probe(args)
+        self.assertEqual(args.nested_eligibility, "unknown")
+        self.assertEqual(args.eligibility_probe, "internal")
+
+    def test_identity_mismatched_probe_row_leaves_unknown_and_fails_closed(self):
+        args = probe_args()
+        row = dict(parent_harness="codex", parent_transport="headless", parent_sandbox="default",
+                   child_harness="opencode", launch_authority="conductor", status="supported",
+                   probe_source="direct-auth+headless-check", failure_class="")
+        with mock.patch.object(WH.subprocess, "run", return_value=fake_probe_result(**row)):
+            WH.bind_internal_eligibility_probe(args)
+        self.assertEqual(args.nested_eligibility, "unknown")
+        self.assertEqual(args.eligibility_probe, "internal")
+
+    def test_depth1_never_probes(self):
+        args = probe_args(depth=1)
+        with mock.patch.object(WH.subprocess, "run") as run:
+            WH.bind_internal_eligibility_probe(args)
+        run.assert_not_called()
+
+    def test_register_action_never_probes(self):
+        args = probe_args(action="register")
+        with mock.patch.object(WH.subprocess, "run") as run:
+            WH.bind_internal_eligibility_probe(args)
+        run.assert_not_called()
+
+
 class OpenCodeSD45(unittest.TestCase):
  def test_route_consumer_and_capability_reselection_refusal(self):
   with tempfile.TemporaryDirectory() as td:
