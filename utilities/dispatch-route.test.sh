@@ -163,4 +163,24 @@ export DISPATCH_DEFAULTS_CONFIG="$cfg"
 before=$(sha256sum "$jobs"); route --capability autopilot-code --stage execute >/dev/null; after=$(sha256sum "$jobs"); [ "$before" = "$after" ]
 unset DISPATCH_DEFAULTS_CONFIG
 
+# ---- selector-paths: adapter-projection surface resolves helpers ----
+# Invoking through each adapters/<h>/utilities/ symlink must resolve the
+# internal helpers (dispatch-defaults.py, usage-check.sh, model-map.sh) the
+# same as the real utilities/ path. 'adapter=' is only emitted after model-map
+# resolves, so asserting it proves the repo-root climb (L103-104) is fixed.
+# Fixture isolation preserved via an explicit DISPATCH_DEFAULTS_CONFIG.
+: > "$jobs"
+for h in claude codex opencode; do
+  proj="$root/adapters/$h/utilities/dispatch-route.sh"
+  out=$(DISPATCH_DEFAULTS_CONFIG="$cfg" AGENT_HOME="$tmp" "$proj" --jobs "$jobs" \
+        --stage test --capability autopilot-code --maker-family gpt)
+  assert "$out" 'status=eligible'
+  printf '%s\n' "$out" | grep -q '^adapter=' \
+    || { echo "projection $h did not reach adapter= output" >&2; exit 1; }
+done
+# plan stage once through a projection exercises the codex model-map branch.
+out=$(DISPATCH_DEFAULTS_CONFIG="$cfg" AGENT_HOME="$tmp" \
+      "$root/adapters/claude/utilities/dispatch-route.sh" --jobs "$jobs" --stage plan)
+assert "$out" 'adapter=codex'; assert "$out" 'role=deep maker'
+
 echo 'dispatch-route: PASS'
