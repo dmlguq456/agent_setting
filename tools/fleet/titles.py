@@ -2,7 +2,12 @@
 
 Canonical state:
   <state-root>/<harness>/<sid>.json
-  {"title": str, "ts": float, "source": str, "offset": int}
+  {"title": str, "ts": float, "source": str, "offset": int, "summary": str}
+
+``summary`` is additive (F-16/F-17 merge): the same haiku call that produces the
+title also returns a live one-sentence status, written alongside it. Absent on
+older sidecars and omitted from the written dict when there is nothing to say —
+old readers ignore the unknown key either way.
 
 ``FLEET_TITLE_STATE_DIR`` overrides the state root. Otherwise the XDG state
 location is used: ``${XDG_STATE_HOME:-~/.local/state}/agent-fleet/titles``.
@@ -16,6 +21,7 @@ import tempfile
 import time
 
 _FRESH_SEC = 24 * 3600
+_FRESH_SUMMARY_SEC = 15 * 60   # the live subtitle loses freshness far faster than the title
 _STALE_SWEEP_SEC = 7 * 24 * 3600
 _SAFE_KEY_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
@@ -88,14 +94,40 @@ def fresh_title(sid, now=None, max_age=_FRESH_SEC, harness="claude"):
     return title if isinstance(title, str) and title.strip() else None
 
 
-def write(sid, title, source="refresher", offset=0, now=None, harness="claude"):
-    """Atomically write neutral fleet-owned state. ``title=''`` is allowed."""
+def fresh_summary(sid, harness="claude", now=None, max_age=_FRESH_SUMMARY_SEC):
+    """Return a non-empty live summary only while the sidecar timestamp is fresh.
+
+    Same shape as ``fresh_title`` but with a much shorter default window: the
+    subtitle describes what the session is doing RIGHT NOW, so a 24h-old value
+    (fine for a title) would be actively misleading here.
+    """
+    data = read(sid, harness=harness)
+    if not data:
+        return None
+    ts = data.get("ts")
+    if not isinstance(ts, (int, float)):
+        return None
+    now = time.time() if now is None else now
+    if now - ts > max_age:
+        return None
+    summary = data.get("summary")
+    return summary if isinstance(summary, str) and summary.strip() else None
+
+
+def write(sid, title, source="refresher", offset=0, now=None, harness="claude", summary=None):
+    """Atomically write neutral fleet-owned state. ``title=''`` is allowed.
+
+    ``summary`` is additive and omitted from the written dict when falsy — old
+    readers see the same shape they always have.
+    """
     data = {
         "title": title or "",
         "ts": time.time() if now is None else now,
         "source": source,
         "offset": int(offset),
     }
+    if summary:
+        data["summary"] = summary
     directory = titles_dir(harness)
     os.makedirs(directory, exist_ok=True)
     fd, tmp = tempfile.mkstemp(

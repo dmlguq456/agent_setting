@@ -65,7 +65,9 @@ def collect(harness_filter=None):
         S(harness="claude", pid=90001, cwd="/home/demo/demo-app", session_id="demo-claude-1",
           slug="demo-app-a7", model="Opus 4.8 (1M context)", effort="xhigh",
           ctx_pct=45, rl_5h=33, rl_7d=12, rl_ms=[["fable", 57]], cost=12.30, elapsed_min=95,
-          status="busy", gate="tracked", branch="main", liveness="working"),
+          status="busy", gate="tracked", branch="main", liveness="working",
+          # F-16/F-17 merge demo — the live subtitle row under a session row.
+          summary="지금 render.py 그룹 루프의 틴트 적용 경로를 분석 중"),
         S(harness="codex", pid=90002, cwd="/home/demo/demo-app", session_id="demo-codex-1",
           slug="demo-app", model="gpt-5.5", effort="high",
           ctx_pct=72, rl_5h=94, rl_7d=53, elapsed_min=41,
@@ -114,7 +116,9 @@ def collect(harness_filter=None):
           model="Opus 4.8 (1M context)", elapsed_min=22, slug="demo-feat-x",
           cwd="/home/demo/demo-app-wt/feat-x", parent_sid="demo-claude-1", parent_cwd="/home/demo/demo-app", is_child=True,
           branch="feat-x", liveness="working", depth=1, intensity="adversarial",
-          worker_role="capability-owner", capability_owner="autopilot-code"),
+          worker_role="capability-owner", capability_owner="autopilot-code",
+          # F-16/F-17 merge demo — a dispatch row's own adopted live subtitle.
+          summary="지금 feat-x 브랜치의 테스트 실패를 재현하는 중"),
         # depth-2 workers owned by the autopilot-code capability worker above
         J(key="plan", stage="done", mode="review", qa="adversarial", qa_source="jobslog", harness="codex",
           model="gpt-5.5", elapsed_min=6, slug="demo-feat-x-plan-alt",

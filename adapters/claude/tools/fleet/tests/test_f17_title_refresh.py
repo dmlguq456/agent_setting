@@ -109,6 +109,34 @@ class TitlesHelperTest(_ConfigHomeMixin, unittest.TestCase):
         self.assertFalse(os.path.exists(old_p))
         self.assertTrue(os.path.exists(fresh_p))
 
+    def test_summary_roundtrip(self):
+        titles.write("sidS", "A title", summary="지금 렌더 그룹 루프를 분석 중", now=100.0)
+        d = titles.read("sidS")
+        self.assertEqual(d["summary"], "지금 렌더 그룹 루프를 분석 중")
+
+    def test_summary_omitted_when_none(self):
+        titles.write("sidS2", "A title", now=100.0)
+        d = titles.read("sidS2")
+        self.assertNotIn("summary", d)
+        self.assertIsNone(titles.fresh_summary("sidS2", now=101.0))
+
+    def test_old_sidecar_without_summary_key_is_compatible(self):
+        p = titles.sidecar_path("sidOld")
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump({"title": "Old-shape title", "ts": time.time(), "source": "refresher",
+                      "offset": 0}, f)
+        self.assertEqual(titles.fresh_title("sidOld"), "Old-shape title")
+        self.assertIsNone(titles.fresh_summary("sidOld"))
+
+    def test_fresh_summary_within_fifteen_minute_window(self):
+        titles.write("sidF", "t", summary="working on it", now=1000.0)
+        self.assertEqual(titles.fresh_summary("sidF", now=1000.0 + 14 * 60), "working on it")
+        self.assertIsNone(titles.fresh_summary("sidF", now=1000.0 + 16 * 60))
+
+    def test_fresh_summary_window_is_much_shorter_than_title_window(self):
+        self.assertLess(titles._FRESH_SUMMARY_SEC, titles._FRESH_SEC)
+
 
 class PriorityTest(_ConfigHomeMixin, unittest.TestCase):
 
@@ -192,6 +220,53 @@ class ValidateTitleTest(unittest.TestCase):
 
     def test_validate_strips_quotes_and_period(self):
         self.assertEqual(rt.validate_title('"Fix login bug."'), "Fix login bug")
+
+    def test_validate_clips_at_new_40_char_cap(self):
+        out = rt.validate_title("x" * 41)
+        self.assertEqual(len(out), 40)
+        self.assertEqual(rt.TITLE_MAXLEN, 40)
+
+    def test_validate_rejects_seven_words(self):
+        self.assertIsNone(rt.validate_title("one two three four five six seven"))
+
+    def test_validate_prefers_labeled_title_line(self):
+        out = rt.validate_title("TITLE: Fleet strip revamp\nNOW: writing code")
+        self.assertEqual(out, "Fleet strip revamp")
+
+    def test_validate_bare_line_still_works_without_a_label(self):
+        # A custom/legacy provider that only ever emits a bare title stays supported.
+        self.assertEqual(rt.validate_title("Bare title no label"), "Bare title no label")
+
+
+class ValidateSummaryTest(unittest.TestCase):
+
+    def test_korean_summary_accepted(self):
+        out = rt.validate_summary("지금 render.py 그룹 루프의 틴트 적용 경로를 분석 중")
+        self.assertEqual(out, "지금 render.py 그룹 루프의 틴트 적용 경로를 분석 중")
+
+    def test_meta_response_rejected(self):
+        self.assertIsNone(rt.validate_summary("Cannot determine current activity"))
+        self.assertIsNone(rt.validate_summary("unknown"))
+        self.assertIsNone(rt.validate_summary("Unknown"))
+
+    def test_multiline_rejected(self):
+        self.assertIsNone(rt.validate_summary("Doing thing one\nDoing thing two"))
+
+    def test_empty_rejected(self):
+        self.assertIsNone(rt.validate_summary(""))
+        self.assertIsNone(rt.validate_summary("   \n  "))
+
+    def test_over_length_clips_to_summary_maxlen(self):
+        out = rt.validate_summary("x" * 200)
+        self.assertEqual(len(out), rt.SUMMARY_MAXLEN)
+
+    def test_labeled_line_extraction(self):
+        raw = "TITLE: Fleet strip revamp\nNOW: 지금 그룹 루프를 분석 중"
+        self.assertEqual(rt._labeled_line(raw, rt._NOW_LINE_RE), "지금 그룹 루프를 분석 중")
+        self.assertEqual(rt._labeled_line(raw, rt._TITLE_LINE_RE), "Fleet strip revamp")
+
+    def test_missing_now_line_extracts_nothing(self):
+        self.assertIsNone(rt._labeled_line("TITLE: only a title here", rt._NOW_LINE_RE))
 
 
 class StormGuardTest(_ConfigHomeMixin, unittest.TestCase):
@@ -287,12 +362,30 @@ class StormGuardTest(_ConfigHomeMixin, unittest.TestCase):
         ]
         seen = []
         original = rt.maybe_spawn
-        rt.maybe_spawn = lambda harness, sid, transcript: seen.append(sid) or True
+        rt.maybe_spawn = lambda harness, sid, transcript, debounce=rt.DEBOUNCE_SEC: (
+            seen.append((sid, debounce)) or True)
         try:
             self.assertEqual(rt.schedule_sessions(sessions), 2)
         finally:
             rt.maybe_spawn = original
-        self.assertEqual(seen, ["normal", "child"])
+        self.assertEqual([sid for sid, _debounce in seen], ["normal", "child"])
+
+    def test_child_sessions_use_shorter_debounce(self):
+        # 사용자 확정 2026-07-19: dispatched children move faster than main sessions,
+        # so their title/subtitle debounce is much shorter (150s vs 600s) while the
+        # shared storm-guard budget (concurrency/start limits) stays one pool for both.
+        sessions = [self._session("normal"), self._session("child", is_child=True)]
+        seen = {}
+        original = rt.maybe_spawn
+        rt.maybe_spawn = lambda harness, sid, transcript, debounce=rt.DEBOUNCE_SEC: (
+            seen.__setitem__(sid, debounce) or True)
+        try:
+            rt.schedule_sessions(sessions)
+        finally:
+            rt.maybe_spawn = original
+        self.assertEqual(seen["normal"], rt.DEBOUNCE_SEC)
+        self.assertEqual(seen["child"], rt.CHILD_DEBOUNCE_SEC)
+        self.assertLess(rt.CHILD_DEBOUNCE_SEC, rt.DEBOUNCE_SEC)
 
     def test_disable_marker_and_environment_fail_closed(self):
         os.makedirs(rt.disable_marker_path(), exist_ok=True)
@@ -371,6 +464,52 @@ class DeltaOffsetTest(_ConfigHomeMixin, unittest.TestCase):
             d = titles.read("sidM")
             self.assertEqual(d["title"], "Existing Title")
             self.assertGreater(d["ts"], time.time() - 5)
+
+    def test_main_empty_delta_preserves_previous_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"message": "hi"}) + "\n")
+            size = os.path.getsize(path)
+            titles.write("sidE", "Existing Title", summary="still doing the same thing",
+                         offset=size, now=time.time() - 700)
+            rt.main(["--sid", "sidE", "--transcript", path])
+            d = titles.read("sidE")
+            self.assertEqual(d["title"], "Existing Title")
+            self.assertEqual(d["summary"], "still doing the same thing")
+
+    def test_main_two_line_output_saves_title_and_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"message": "please rename this session"}) + "\n")
+            original = rt.run_worker
+            rt.run_worker = lambda *a, **k: "TITLE: Fleet strip revamp\nNOW: 지금 그룹 루프를 분석 중"
+            try:
+                rt.main(["--sid", "sidTS", "--transcript", path])
+            finally:
+                rt.run_worker = original
+            d = titles.read("sidTS")
+            self.assertEqual(d["title"], "Fleet strip revamp")
+            self.assertEqual(d["summary"], "지금 그룹 루프를 분석 중")
+
+    def test_main_missing_now_line_degrades_to_title_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"message": "please rename this session"}) + "\n")
+            titles.write("sidTO", "Old title", summary="stale status", offset=0,
+                         now=time.time() - 1000)
+            original = rt.run_worker
+            rt.run_worker = lambda *a, **k: "TITLE: New Title Only"
+            try:
+                rt.main(["--sid", "sidTO", "--transcript", path])
+            finally:
+                rt.run_worker = original
+            d = titles.read("sidTO")
+            self.assertEqual(d["title"], "New Title Only")
+            self.assertNotIn("summary", d,
+                             "NOW 파싱 실패는 이전 요약을 이어받지 않는다 (정직 강등, 실황 우선)")
 
 
 class SecurityTest(_ConfigHomeMixin, unittest.TestCase):
@@ -565,8 +704,10 @@ class ValidatorHardeningTest(unittest.TestCase):
         self.assertEqual(rt.validate_title(title), title)
 
     def test_prompt_requests_responsive_length(self):
-        self.assertIn("4-8 words", rt.PROMPT_TEMPLATE)
-        self.assertIn("64 characters", rt.PROMPT_TEMPLATE)
+        # F-16/F-17 merge (2026-07-19): the title shrinks since NOW carries the detail.
+        self.assertIn("3-6 words", rt.PROMPT_TEMPLATE)
+        self.assertIn("40 characters", rt.PROMPT_TEMPLATE)
+        self.assertIn("NOW:", rt.PROMPT_TEMPLATE)
 
     def test_meta_response_rejected(self):
         for s in ("No conversation excerpt provided", "Cannot determine title",

@@ -176,6 +176,9 @@ class Session:
     # None = source absent/unconfirmed (honest gap, prd.md:292's "no guessing"); [] = source
     # checked, no sub-agents running.
     subagents: Optional[list] = None
+    # F-16/F-17 merge (사용자 2026-07-19): live one-sentence status from the same haiku call
+    # that produces the title — None = no fresh sidecar summary (render stays silent, F-13).
+    summary: Optional[str] = None
 
     def to_dict(self):
         return asdict(self)
@@ -247,6 +250,8 @@ class DispatchJob:
     title: Optional[str] = None         # the child session's own sidecar title, adopted in
                                         # collect_all (F-14 reach into dispatch rows) — None
                                         # keeps the slug as the row identity
+    summary: Optional[str] = None       # the child session's own live sidecar summary,
+                                        # adopted the same way as title (F-16/F-17 merge)
 
     def to_dict(self):
         return asdict(self)

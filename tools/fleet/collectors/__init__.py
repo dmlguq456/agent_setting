@@ -61,33 +61,37 @@ def _mark_dispatch_child_sessions(sessions, jobs):
 
 
 def _adopt_child_titles(sessions, jobs):
-    """Copy an enriched child session's title onto the dispatch row representing it.
+    """Copy an enriched child session's title AND live summary onto the dispatch row
+    representing it, via the same join.
 
     Dispatch rows are the only surface where a child session is visible (is_child rows
-    are hidden), so without this join the haiku sidecar title a child earns (the title
-    refresher schedules children like main sessions) would never render. pid equality is
-    the strong join (a claude/codex proc job's pid IS the runtime leaf pid procscan saw);
-    harness+cwd is the fallback for jobs.log rows that never learned the pid, and it
-    refuses ambiguous matches (F-26: misattribution is worse than absence).
+    are hidden), so without this join the haiku sidecar title/summary a child earns (the
+    title refresher schedules children like main sessions) would never render. pid
+    equality is the strong join (a claude/codex proc job's pid IS the runtime leaf pid
+    procscan saw); harness+cwd is the fallback for jobs.log rows that never learned the
+    pid, and it refuses ambiguous matches (F-26: misattribution is worse than absence).
     """
     titled = [s for s in sessions
-              if getattr(s, 'is_child', False) and getattr(s, 'title', None)]
+              if getattr(s, 'is_child', False)
+              and (getattr(s, 'title', None) or getattr(s, 'summary', None))]
     if not titled:
         return
-    by_pid = {s.pid: s.title for s in titled if getattr(s, 'pid', None)}
+    by_pid = {s.pid: s for s in titled if getattr(s, 'pid', None)}
     by_cwd = {}
     for s in titled:
         if s.cwd:
             key = (s.harness, os.path.realpath(s.cwd))
-            by_cwd[key] = None if key in by_cwd else s.title   # two children, one cwd → refuse
+            by_cwd[key] = None if key in by_cwd else s   # two children, one cwd → refuse
     for j in jobs:
-        if getattr(j, 'title', None):
+        source = by_pid.get(getattr(j, 'pid', None))
+        if source is None and getattr(j, 'cwd', None) and getattr(j, 'harness', None):
+            source = by_cwd.get((j.harness, os.path.realpath(j.cwd)))
+        if source is None:
             continue
-        title = by_pid.get(getattr(j, 'pid', None))
-        if not title and getattr(j, 'cwd', None) and getattr(j, 'harness', None):
-            title = by_cwd.get((j.harness, os.path.realpath(j.cwd)))
-        if title:
-            j.title = title
+        if not getattr(j, 'title', None) and getattr(source, 'title', None):
+            j.title = source.title
+        if getattr(source, 'summary', None):
+            j.summary = source.summary
 
 
 def collect_all(harness_filter=None, jobs_path=None):

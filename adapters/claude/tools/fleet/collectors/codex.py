@@ -515,6 +515,7 @@ def enrich(sess):
         native_title = _thread_titles(home).get(sess.session_id)
         sidecar_title = titles.fresh_title(sess.session_id, harness="codex")
         sess.title = sidecar_title or native_title or sess.title
+        sess.summary = titles.fresh_summary(sess.session_id, harness="codex")
     try:
         sess.mtime = os.path.getmtime(path)
     except OSError:

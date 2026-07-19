@@ -1716,6 +1716,23 @@ def _subagent_strip(subs, depth=0):
     return [segs]
 
 
+_SUMMARY_FALLBACK_W = 60   # hermetic/no-terminal-width callers (mirrors the dim-snippet clip
+                           # convention used elsewhere, e.g. the memory-row snippet cells)
+
+
+def _summary_row(summary, depth=0, term_width=None):
+    """One dim subtitle row directly under a session/dispatch row (F-16/F-17 merge,
+    사용자 확정 2026-07-19): the live one-sentence status from the SAME haiku call that
+    produced the title. Pure inset — no connector/icon, `_SUBAGENT_IND` + the same
+    per-depth ladder `_subagent_strip` uses, so it reads as INSIDE its owner row and
+    never collides with the sub-agent strip's own indent. Caller gates presence
+    (summary truthy, row not dead/stale — F-13) and ordering (this row before the
+    owner's `⚡` strip, never after)."""
+    indent = _SUBAGENT_IND + "  " * max(0, depth)
+    maxw = max(1, term_width - _dw(indent)) if term_width else _SUMMARY_FALLBACK_W
+    return [[(indent, None), (_clip_w(summary, maxw), "dim")]]
+
+
 def set_show_all(v):
     global _SHOW_ALL
     _SHOW_ALL = bool(v)
@@ -2566,6 +2583,13 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                                            parent_effort=row_parent_effort, is_last=is_last,
                                            stage_override=stage_override,
                                            name_width=wide_name_width, route_seq=route_seq))
+                # F-16/F-17 merge — the job's own adopted live subtitle, directly under
+                # its row and before its sub-agent strip; silent when absent/dead/stale.
+                job_summary = getattr(job, "summary", None)
+                if job_summary and job.liveness not in ("stale", "dead"):
+                    lines.extend(_summary_row(
+                        job_summary, depth=max(1, int(getattr(job, "depth", 1) or 1)),
+                        term_width=term_width))
             # F-29 — the child session's own sub-agents, one strip directly under the
             # dispatch row that represents it (depth-indented; active always, completed
             # only with `a` — the same convention as session-owned strips above).
@@ -2657,6 +2681,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                                           ctx_width=wide_ctx_width))
             if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):
                 _sess_bold_ids.update(range(_n0, len(lines)))
+            if _srow is None:
+                # F-16/F-17 merge — the session's own live subtitle, directly under its
+                # row and before its sub-agent strip; silent when absent/dead/stale.
+                sess_summary = getattr(s, "summary", None)
+                if sess_summary and s.liveness not in ("stale", "dead"):
+                    lines.extend(_summary_row(sess_summary, term_width=term_width))
             # F-29 (v9) — sub-agent rows, directly under the parent session's own row(s).
             # Active always shown; completed only surface with `a` (F-18b dim-row convention).
             shown_subs = [sa for sa in (getattr(s, "subagents", None) or [])
