@@ -20,12 +20,21 @@ case "$family" in ''|claude|gpt|unknown) ;; *) echo "dispatch-route: unknown fam
 case "$maker_family" in ''|claude|gpt|unknown) ;; *) echo "dispatch-route: unknown maker family: $maker_family" >&2; exit 64;; esac
 case "$adapter:$family" in claude:gpt|codex:claude|opencode:claude|opencode:gpt) echo 'dispatch-route: adapter/family conflict' >&2; exit 64;; esac
 
+# selector-paths: resolve this script's real location so internal helper
+# lookups work when it is invoked through the adapters/<harness>/utilities/
+# symlink projection. readlink -f canonicalizes the symlink to the true
+# utilities/ dir; if readlink lacks -f (non-GNU) it fails and we keep the
+# prior $0-based dirname path.
+real_self=$(readlink -f "$0" 2>/dev/null) || real_self=$0
+self_dir=$(CDPATH= cd -- "$(dirname -- "$real_self")" && pwd)
+repo_root=$(CDPATH= cd -- "$self_dir/.." && pwd)
+
 # SD-66: profiles/dispatch-defaults.yaml is the user-declared source for
 # stage-affinity (SD-22 cascade step 3). Validate unconditionally so a
 # malformed config fails loud even when an explicit --adapter/--family
 # already decides this call; resolution honors DISPATCH_DEFAULTS_CONFIG for
 # fixtures via utilities/dispatch-defaults.py.
-defaults_script="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/dispatch-defaults.py"
+defaults_script="$self_dir/dispatch-defaults.py"
 python3 "$defaults_script" validate >/dev/null || { echo 'dispatch-route: invalid dispatch-defaults config' >&2; exit 64; }
 config_affinity=$(python3 "$defaults_script" affinity --capability "$capability" --stage "$stage")
 
@@ -35,7 +44,7 @@ case "$stage" in
   *) default_role='deep orchestrator'; affinity=neutral;;
 esac
 [ -n "$role" ] || role=$default_role
-usage_script="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/usage-check.sh"
+usage_script="$self_dir/usage-check.sh"
 if [ -n "$jobs" ]; then usage=$($usage_script --harness all --jobs "$jobs"); else usage=$($usage_script --harness all); fi
 state() { printf '%s\n' "$usage" | awk -v h="$1" '$1==h {print $2}'; }
 bias=$(printf '%s\n' "$usage" | awk '$1=="bias" {print $2; exit}')
@@ -100,8 +109,8 @@ if ! eligible "$choose"; then
   fi
 fi
 case "$choose" in
-  codex) map="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/adapters/codex/bin/model-map.sh";;
-  claude) map="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/adapters/claude/bin/model-map.sh";;
+  codex) map="$repo_root/adapters/codex/bin/model-map.sh";;
+  claude) map="$repo_root/adapters/claude/bin/model-map.sh";;
 esac
 mapped=$($map "$role")
 get() { printf '%s\n' "$mapped" | awk -F= -v k="$1" '$1==k {sub(/^[^=]*=/, ""); print; exit}'; }
