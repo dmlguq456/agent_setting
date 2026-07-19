@@ -2,7 +2,7 @@
 
 ### Step 1: Diagnose the Root Cause
 
-The main agent owns the diagnosis. Diagnose an ordinary single-error debug directly without delegation. For a system-level incident — mass or multi-process terminations, cross-session failures, or a cause likely buried inside executed source — prefer dispatching the diagnosis to an eligible GPT-family `deep reviewer` (Codex rescue or headless dispatch, per `CONVENTIONS §2.1`) and verify the returned cause in the main session before Step 2. 2026-07-20 mass-SIGTERM incident: GPT diagnosis located the executed-source `kill(-1)` path faster and more accurately; Claude verified.
+The main agent performs diagnosis directly; do not delegate it.
 
 1. Parse error type, message, traceback, and affected location. Run `git log --oneline -10` and `git diff HEAD~3`; inspect relevant config and checkpoint files.
 2. Follow the call stack and read the affected source and its callers.
