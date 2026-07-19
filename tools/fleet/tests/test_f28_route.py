@@ -276,16 +276,15 @@ class OrphanConductorAnnotationTest(unittest.TestCase):
             with open(jobs_path, "w", encoding="utf-8") as fh:
                 fh.write(
                     "2026-07-19T00:00:00Z\topen\t/r\t/w\towner\t"
-                    "route_id=rt-fleet-orphan,route_file=%s,worker_type=owner,"
-                    "attempt_id=att-fleet-owner,pid=999999996,pid_start=1,depth=1\n" % route_file
+                    "worker_type=owner,attempt_id=att-fleet-owner,"
+                    "pid=999999996,pid_start=1,depth=1\n"
                 )
-                # No pid/pid_start recorded yet: classify_attempt_evidence returns None for
-                # this row (state "unknown"), which still counts as a genuine open/live
-                # dependent per has_orphaned_dependents (a dead pid instead would not).
+                # No pid/pid_start is needed here: the registry contract counts any open
+                # exact child row and preserves it for depth-0 diagnosis.
                 fh.write(
                     "2026-07-19T00:00:01Z\topen\t/r\t/w\tchild\t"
-                    "route_id=rt-fleet-orphan,route_node=execute,attempt_id=att-fleet-child,"
-                    "parent=owner\n"
+                    "route_id=rt-fleet-orphan,route_file=%s,route_node=execute,"
+                    "attempt_id=att-fleet-child,parent=owner\n" % route_file
                 )
             with mock.patch.object(dispatch.procscan, "_ps_lines", return_value=[]), \
                  mock.patch.dict(os.environ, {"AGENT_HOME": home}):

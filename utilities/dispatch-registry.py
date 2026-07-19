@@ -160,28 +160,83 @@ def _marker_backed_repair(row, home):
     meta = row["meta"]
     route_id, node, attempt_id = meta.get("route_id"), meta.get("route_node"), meta.get("attempt_id")
     if not (route_id and node and attempt_id and home): return False
-    linkage_path = home / ".dispatch" / "completion" / route_id / f"{node}.attempt.json"
-    try: linkage = json.loads(linkage_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError): return False
-    if (linkage.get("attempt_id") != attempt_id or linkage.get("route_id") != route_id
-            or linkage.get("node_id") != node):
-        return False
+    safe_attempt = "".join(c if c.isalnum() or c in "._-" else "_" for c in attempt_id)
+    directory = home / ".dispatch" / "completion" / route_id
+    linkage = None
+    # Per-attempt linkage is immutable, so a later retry cannot erase the
+    # repair evidence for an earlier attempt. The canonical sibling remains a
+    # compatibility fallback for markers written before this fix-forward.
+    for linkage_path in (
+        directory / f"{node}.{safe_attempt}.attempt.json",
+        directory / f"{node}.attempt.json",
+    ):
+        try:
+            candidate = json.loads(linkage_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if (candidate.get("attempt_id") == attempt_id
+                and candidate.get("route_id") == route_id
+                and candidate.get("node_id") == node):
+            linkage = candidate
+            break
+    if linkage is None: return False
     marker_path = home / ".dispatch" / "completion" / route_id / f"{node}.json"
     return marker_path.is_file()
 
 
-def route_incomplete(row, home):
+def resolve_owner_route(row, rows=None):
+    """Resolve an owner's immutable route from itself or its registered children.
+
+    Real depth-1 owner rows predate route compilation and therefore normally
+    carry no route_id/route_file. Depth-2 child rows do carry both. Derivation
+    is limited to exact children in the same repo/worktree and fails closed on
+    any disagreement, including disagreement with direct owner metadata.
+    Terminal child rows remain valid provenance for an unstarted successor.
+    """
+    meta = row["meta"]
+    direct_id, direct_file = meta.get("route_id"), meta.get("route_file")
+    candidates = set()
+    if rows is not None:
+        for other in rows:
+            other_meta = other["meta"]
+            if other_meta.get("parent") != row["slug"]: continue
+            if other["repo"] != row["repo"] or other["worktree"] != row["worktree"]: continue
+            child_id, child_file = other_meta.get("route_id"), other_meta.get("route_file")
+            if child_id and child_file:
+                candidates.add((child_id, child_file))
+    if direct_id and direct_file:
+        direct = (direct_id, direct_file)
+        if candidates and candidates != {direct}:
+            return None, None, "route-context-conflict"
+        return direct_id, direct_file, "ok"
+    if direct_id or direct_file:
+        matches = {
+            pair for pair in candidates
+            if (not direct_id or pair[0] == direct_id)
+            and (not direct_file or pair[1] == direct_file)
+        }
+        if len(matches) == 1 and matches == candidates:
+            route_id, route_file = next(iter(matches))
+            return route_id, route_file, "ok"
+        return None, None, "route-context-conflict" if candidates else "no-route"
+    if len(candidates) == 1:
+        route_id, route_file = next(iter(candidates))
+        return route_id, route_file, "ok"
+    return None, None, "route-context-conflict" if candidates else "no-route"
+
+
+def route_incomplete(row, home, rows=None):
     """SD-64/71: route nodes lacking a completion marker for a conductor row's route.
 
     Fails closed (returns an empty set) when the route record cannot be read
     safely, so an unreadable route never itself justifies an orphan claim.
     """
-    meta = row["meta"]
-    route_id = meta.get("route_id")
-    if not route_id or not home: return set(), "no-route"
-    route_file = meta.get("route_file")
+    route_id, route_file, context_status = resolve_owner_route(row, rows)
+    if context_status != "ok" or not home: return set(), context_status
     try:
         record = json.loads(Path(route_file).read_text(encoding="utf-8")) if route_file else None
+        if record and record.get("route_id") not in (None, route_id):
+            return set(), "route-record-mismatch"
         node_ids = [n["id"] for n in record["nodes"]] if record else None
     except (OSError, ValueError, KeyError, TypeError):
         node_ids = None
@@ -193,24 +248,27 @@ def route_incomplete(row, home):
 
 
 def has_orphaned_dependents(row, rows, incomplete_nodes, args):
-    """SD-64/71: a genuine open/live child, or an un-started successor node."""
+    """SD-64/71: any registered open child, or an un-started successor node."""
     if not incomplete_nodes: return False
     slug = row["slug"]
     for other in rows:
         if other is row or other["status"] not in OPEN: continue
         if other["meta"].get("parent") != slug: continue
-        exact = classify_attempt_evidence(proc_inputs(other, args.agent_home), args.now)
-        state = exact["state"] if exact else "unknown"
-        if state in ("working", "unknown"): return True
-    route_id = row["meta"].get("route_id")
-    route_file = row["meta"].get("route_file")
+        if other["repo"] != row["repo"] or other["worktree"] != row["worktree"]: continue
+        return True
+    route_id, route_file, context_status = resolve_owner_route(row, rows)
+    if context_status != "ok": return False
     try:
         record = json.loads(Path(route_file).read_text(encoding="utf-8")) if route_file else None
         depends = {n["id"]: n.get("depends_on", []) for n in record["nodes"]} if record else None
     except (OSError, ValueError, KeyError, TypeError):
         return False
     if depends is None: return False
-    attempted_nodes = {r["meta"].get("route_node") for r in rows if r["meta"].get("route_id") == route_id}
+    attempted_nodes = {
+        r["meta"].get("route_node") for r in rows
+        if r["meta"].get("route_id") == route_id
+        and r["repo"] == row["repo"] and r["worktree"] == row["worktree"]
+    }
     for node_id in incomplete_nodes:
         if node_id in attempted_nodes: continue
         predecessors = depends.get(node_id, [])
@@ -240,8 +298,8 @@ def classify(row, args, newest_orders, rows=None):
             return "marker-backed-stale", "completed-marker-linkage", "completed-marker"
         meta = row["meta"]
         if (rows is not None and meta.get("worker_type") == "owner"
-                and meta.get("route_id") and not meta.get("route_node")):
-            incomplete, record_status = route_incomplete(row, args.agent_home)
+                and not meta.get("route_node")):
+            incomplete, record_status = route_incomplete(row, args.agent_home, rows)
             if record_status == "ok" and incomplete and has_orphaned_dependents(row, rows, incomplete, args):
                 return "orphan", "dead-parent-orphaned", "dead-parent-orphaned"
         return "exact-dead", exact["rule"], "dead-exact-pid"
@@ -332,8 +390,9 @@ def emit_orphan_status(rows, args):
     """SD-64/71: single-attempt orphan verdict for liveness/preflight/Fleet surfaces.
 
     Reuses the same exact-attempt classifier and route_incomplete/
-    has_orphaned_dependents primitives as ``reconcile`` (read-only; never
-    closes a row) so surfaces never re-derive the classification themselves.
+    has_orphaned_dependents primitives as ``reconcile`` so surfaces never
+    re-derive the classification themselves. It is read-only by default;
+    ``--apply`` conditionally closes only a revalidated orphan owner.
     """
     if not args.attempt:
         print("check=failed\nreason=attempt-required"); return 64
@@ -346,13 +405,43 @@ def emit_orphan_status(rows, args):
         if all(key): newest[key] = item["order"]
     category, reason, note = classify(row, args, newest, rows)
     if note == "dead-parent-orphaned":
-        incomplete, _ = route_incomplete(row, args.agent_home)
-        boundary = resume_boundary(row["meta"].get("route_file"), incomplete)
+        route_id, route_file, _ = resolve_owner_route(row, rows)
+        incomplete, _ = route_incomplete(row, args.agent_home, rows)
+        boundary = resume_boundary(route_file, incomplete)
+        closed = False
+        if args.apply and row["meta"].get("attempt_id"):
+            def still_orphan(_fields):
+                fresh_rows = read_rows(args.jobs)
+                fresh = next(
+                    (item for item in fresh_rows
+                     if item["meta"].get("attempt_id") == row["meta"]["attempt_id"]),
+                    None,
+                )
+                if fresh is None:
+                    return False
+                latest = {}
+                for item in fresh_rows:
+                    key = (item["meta"].get("route_id"), item["meta"].get("route_node"))
+                    if all(key): latest[key] = item["order"]
+                _, _, fresh_note = classify(fresh, args, latest, fresh_rows)
+                return fresh_note == "dead-parent-orphaned"
+
+            closed = close_attempt_row_if(
+                args.jobs,
+                row["meta"]["attempt_id"],
+                "dead-parent-orphaned",
+                still_orphan,
+                evidence={
+                    "classifier_source": ATTEMPT_CLASSIFIER_SOURCE,
+                    "reconcile_reason": "post-exit-owner-watch",
+                },
+            )
         print("check=ok\norphan=1")
-        print(f"route_id={row['meta'].get('route_id')}")
+        print(f"route_id={route_id}")
         print(f"resume_boundary={boundary or '-'}")
+        print(f"closed={int(closed)}")
     else:
-        print("check=ok\norphan=0")
+        print("check=ok\norphan=0\nclosed=0")
     return 0
 
 
@@ -370,13 +459,14 @@ def emit_orphan_scan(rows, args):
     for row in rows:
         if row["status"] not in OPEN: continue
         meta = row["meta"]
-        if meta.get("worker_type") != "owner" or not meta.get("route_id") or meta.get("route_node"):
+        if meta.get("worker_type") != "owner" or meta.get("route_node"):
             continue
         _, _, note = classify(row, args, newest, rows)
         if note == "dead-parent-orphaned":
-            incomplete, _ = route_incomplete(row, args.agent_home)
-            boundary = resume_boundary(meta.get("route_file"), incomplete)
-            orphans.append({"attempt_id": meta.get("attempt_id"), "route_id": meta.get("route_id"),
+            route_id, route_file, _ = resolve_owner_route(row, rows)
+            incomplete, _ = route_incomplete(row, args.agent_home, rows)
+            boundary = resume_boundary(route_file, incomplete)
+            orphans.append({"attempt_id": meta.get("attempt_id"), "route_id": route_id,
                             "slug": row["slug"], "resume_boundary": boundary or "-"})
     print(f"check=ok\norphaned_conductor_jobs={len(orphans)}")
     if orphans:

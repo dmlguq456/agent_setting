@@ -23,6 +23,11 @@ EVIDENCE_FLAG_MAP = {
     "probe_source": "--eligibility-source",
 }
 FAILURE_CLASS_FLAG = "--eligibility-failure-class"
+CURRENT_PARENT_ENV = {
+    "parent_harness": "AGENT_DISPATCH_CURRENT_HARNESS",
+    "parent_transport": "AGENT_DISPATCH_CURRENT_TRANSPORT",
+    "parent_sandbox": "AGENT_DISPATCH_CURRENT_SANDBOX",
+}
 
 
 class DispatchNodeError(Exception):
@@ -90,6 +95,44 @@ def select_checked_tuple(route, node, adapter):
     raise DispatchNodeError("dispatch-evidence-no-eligible-fallback", adapter=adapter)
 
 
+def current_parent_identity(environ=None):
+    """Return the actual launching runtime identity exported by its wrapper.
+
+    No variables means a depth-0/manual caller with no runtime identity to
+    validate. A partial identity is never usable evidence and fails closed.
+    """
+    environ = os.environ if environ is None else environ
+    values = {field: environ.get(name) for field, name in CURRENT_PARENT_ENV.items()}
+    if not any(values.values()):
+        return None
+    missing = [CURRENT_PARENT_ENV[field] for field, value in values.items() if not value]
+    if missing:
+        raise DispatchNodeError(
+            "dispatch-evidence-parent-runtime-incomplete",
+            missing=",".join(missing),
+        )
+    return values
+
+
+def validate_parent_identity(tuple_row, parent_identity):
+    """Reject checked evidence compiled for a different actual parent runtime."""
+    if parent_identity is None:
+        return
+    mismatches = {
+        field: (str(tuple_row.get(field, "")), str(parent_identity.get(field, "")))
+        for field in CURRENT_PARENT_ENV
+        if tuple_row.get(field) != parent_identity.get(field)
+    }
+    if mismatches:
+        raise DispatchNodeError(
+            "dispatch-evidence-parent-runtime-mismatch",
+            mismatch=";".join(
+                f"{field}:record={record}:actual={actual}"
+                for field, (record, actual) in mismatches.items()
+            ),
+        )
+
+
 def strip_leading_separator(adapter_args):
     return adapter_args[1:] if adapter_args[:1] == ["--"] else adapter_args
 
@@ -125,7 +168,7 @@ def collect_explicit_evidence(tokens, flags):
     return values
 
 
-def bind_dispatch_evidence(route, node, adapter, adapter_args):
+def bind_dispatch_evidence(route, node, adapter, adapter_args, parent_identity=None):
     """Return the wrapper flags to append for a depth-2 route node's --start.
 
     Never silently overwrites a caller-supplied evidence flag: an explicit
@@ -134,6 +177,7 @@ def bind_dispatch_evidence(route, node, adapter, adapter_args):
     stops before wrapper invocation via `DispatchNodeError`.
     """
     tuple_row = select_checked_tuple(route, node, adapter)
+    validate_parent_identity(tuple_row, parent_identity)
     record = {flag: str(tuple_row.get(field, "")) for field, flag in EVIDENCE_FLAG_MAP.items()}
     # The failure class is always part of the comparison set, even when the
     # record's value is empty — otherwise an explicit forged value would slip
@@ -170,7 +214,10 @@ def main():
   if not a.parent: raise SystemExit("depth-2 route node requires --parent")
   argv += ["--parent",a.parent]
   try:
-   argv += bind_dispatch_evidence(route, node, a.adapter, a.adapter_args)
+   argv += bind_dispatch_evidence(
+       route, node, a.adapter, a.adapter_args,
+       parent_identity=current_parent_identity(),
+   )
   except DispatchNodeError as e:
    print("check=failed"); print(f"reason={e.reason}")
    for k,v in e.fields.items(): print(f"{k}={v}")

@@ -185,6 +185,36 @@ class BindDispatchEvidenceTest(unittest.TestCase):
         extra = N.bind_dispatch_evidence(route, node, "claude", ["--parent-sandbox=default"])
         self.assertNotIn("--parent-sandbox", extra)
 
+    def test_matching_actual_parent_runtime_is_accepted(self):
+        node = make_node()
+        route = make_route(node)
+        actual = {
+            "parent_harness": "claude",
+            "parent_transport": "headless",
+            "parent_sandbox": "default",
+        }
+        extra = N.bind_dispatch_evidence(route, node, "claude", [], parent_identity=actual)
+        self.assertIn("--parent-harness", extra)
+
+    def test_mismatched_actual_parent_runtime_fails_before_wrapper(self):
+        node = make_node()
+        route = make_route(node)
+        actual = {
+            "parent_harness": "codex",
+            "parent_transport": "headless",
+            "parent_sandbox": "workspace-write-network-enabled",
+        }
+        with self.assertRaises(N.DispatchNodeError) as ctx:
+            N.bind_dispatch_evidence(route, node, "claude", [], parent_identity=actual)
+        self.assertEqual(ctx.exception.reason, "dispatch-evidence-parent-runtime-mismatch")
+        self.assertIn("parent_harness:record=claude:actual=codex", ctx.exception.fields["mismatch"])
+
+    def test_partial_actual_parent_runtime_fails_closed(self):
+        with self.assertRaises(N.DispatchNodeError) as ctx:
+            N.current_parent_identity({"AGENT_DISPATCH_CURRENT_HARNESS": "claude"})
+        self.assertEqual(ctx.exception.reason, "dispatch-evidence-parent-runtime-incomplete")
+        self.assertIn("AGENT_DISPATCH_CURRENT_TRANSPORT", ctx.exception.fields["missing"])
+
 
 class MainMaterializationTest(unittest.TestCase):
     def _run_main(self, argv, route):
@@ -201,6 +231,7 @@ class MainMaterializationTest(unittest.TestCase):
             route_path.write_text(json.dumps(route))
             full_argv = ["dispatch-node.py", "--route", str(route_path)] + argv
             with mock.patch.object(sys, "argv", full_argv), \
+                 mock.patch.dict(N.os.environ, {}, clear=True), \
                  mock.patch.object(N.subprocess, "run", side_effect=fake_run):
                 try:
                     N.main()

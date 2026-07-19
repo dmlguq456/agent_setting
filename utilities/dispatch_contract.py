@@ -422,6 +422,46 @@ def close_attempt_row(
     return False
 
 
+def launch_orphan_watch(
+    jobs: Path,
+    agent_home: Path,
+    attempt_id: str,
+    pid: int,
+    pid_start: str,
+) -> int:
+    """Start one exact post-exit owner watcher outside the model governor.
+
+    The watcher is deterministic infrastructure, not a model worker. It only
+    waits for the recorded PID/start identity to end and then asks the shared
+    registry classifier to close a true orphan; it never resumes work.
+    """
+    if not attempt_id or pid <= 0 or not pid_start:
+        raise DispatchContractError(
+            "orphan-watch-identity-invalid",
+            "attempt_id, pid, and pid_start are required",
+        )
+    script = _MODULE_ROOT / "utilities" / "dispatch-orphan-watch.py"
+    try:
+        proc = subprocess.Popen(
+            [
+                sys.executable, str(script),
+                "--jobs", str(Path(jobs).resolve()),
+                "--agent-home", str(Path(agent_home).resolve()),
+                "--attempt-id", attempt_id,
+                "--pid", str(pid),
+                "--pid-start", str(pid_start),
+            ],
+            cwd="/",
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as exc:
+        raise DispatchContractError("orphan-watch-launch-failed", str(exc)) from exc
+    return proc.pid
+
+
 def close_attempt_row_if(
     jobs: Path,
     attempt_id: str,

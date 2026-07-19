@@ -1134,10 +1134,10 @@ def _orphan_registry_module():
 
 def _annotate_orphan_conductors(jobs, now, jobs_path=None):
     """SD-64/71: stamp note/resume_boundary on a dead depth-1 owner row that is a
-    detected orphan (route incomplete + a live/unknown child or a ready
+    detected orphan (route incomplete + a registered open child or a ready
     un-started successor). Read-only — never mutates the registry."""
     dead_owners = [j for j in jobs if j.liveness == "dead" and int(getattr(j, "depth", 1) or 1) == 1
-                   and getattr(j, "route_id", None) and not getattr(j, "route_node", None)
+                   and not getattr(j, "route_node", None)
                    and getattr(j, "attempt_id", None)]
     if not dead_owners:
         return
@@ -1175,8 +1175,9 @@ def _annotate_orphan_conductors(jobs, now, jobs_path=None):
             continue
         if note == "dead-parent-orphaned":
             try:
-                incomplete, _ = registry.route_incomplete(row, args.agent_home)
-                boundary = registry.resume_boundary(row["meta"].get("route_file"), incomplete)
+                _, route_file, _ = registry.resolve_owner_route(row, rows)
+                incomplete, _ = registry.route_incomplete(row, args.agent_home, rows)
+                boundary = registry.resume_boundary(route_file, incomplete)
             except Exception:
                 boundary = None
             j.note = "dead-parent-orphaned"

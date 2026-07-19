@@ -326,10 +326,21 @@ def complete_node(route, node, node_id, evidence, jobs=None, attempt_id=None):
     # SD-70 reconcile repair: written before the row-close attempt so a later
     # dead row can still be matched to this exact attempt even if the close
     # below fails (e.g. jobs registry unwritable at complete-time).
+    attempt_link={
+        "route_id":route["route_id"],"node_id":node_id,"attempt_id":attempt_id,
+        "completion_marker":str(canonical_marker_path),
+    }
+    safe_attempt="".join(c if c.isalnum() or c in "._-" else "_" for c in attempt_id)
+    # The exact linkage is immutable across retries. Keep the canonical latest
+    # sibling for compatibility/readability, but reconciliation consults the
+    # per-attempt record first so a later retry cannot erase earlier evidence.
+    write_once(
+        completion_dir(route["route_id"])/f"{node_id}.{safe_attempt}.attempt.json",
+        attempt_link,
+    )
     atomic_write(
         completion_dir(route["route_id"])/f"{node_id}.attempt.json",
-        {"route_id":route["route_id"],"node_id":node_id,"attempt_id":attempt_id,
-         "completion_marker":str(canonical_marker_path)},
+        attempt_link,
     )
     try:
         closed=close_attempt_row(jobs_path, attempt_id, "completed-marker", evidence=row_evidence)

@@ -144,8 +144,9 @@ class OrphanReconcileTest(unittest.TestCase):
  def tearDown(self): self.tmp.cleanup()
  def mark(self,node_id):
   (self.marker_dir/f"{node_id}.json").write_text(json.dumps({"node_id":node_id}))
- def owner_row(self,slug,attempt_id,pid,pid_start,extra=""):
-  meta=f"route_id={self.route_id},route_file={self.route_file},worker_type=owner,attempt_id={attempt_id},pid={pid},pid_start={pid_start}"
+ def owner_row(self,slug,attempt_id,pid,pid_start,extra="",include_route=True):
+  route_meta=f"route_id={self.route_id},route_file={self.route_file}," if include_route else ""
+  meta=f"{route_meta}worker_type=owner,attempt_id={attempt_id},pid={pid},pid_start={pid_start}"
   if extra: meta+=","+extra
   return f"2026-07-16T00:00:00Z\topen\t/r\t/w\t{slug}\t{meta}"
  def invoke(self,*args):
@@ -168,6 +169,52 @@ class OrphanReconcileTest(unittest.TestCase):
    self.assertIn("\topen\t/r\t/w\tchild\t",text, "a live child must never be closed by the orphan repair")
   finally:
    live.kill();live.wait()
+ def test_real_owner_without_route_derives_from_open_child_and_surfaces_boundary(self):
+  self.mark("plan")
+  rows=[
+   self.owner_row("owner","att-owner-derived",99999990,1,include_route=False),
+   f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\t"
+   f"route_id={self.route_id},route_file={self.route_file},route_node=execute,"
+   "attempt_id=att-child-derived,parent=owner,pid=99999989,pid_start=1",
+  ]
+  self.jobs.write_text("\n".join(rows)+"\n")
+  status=self.invoke("orphan-status","--attempt","att-owner-derived")
+  self.assertEqual(status.returncode,0,status.stdout+status.stderr)
+  self.assertIn("orphan=1",status.stdout);self.assertIn(f"route_id={self.route_id}",status.stdout)
+  self.assertIn("resume_boundary=execute",status.stdout)
+  scan=self.invoke("orphan-scan")
+  self.assertEqual(scan.returncode,0,scan.stdout+scan.stderr)
+  self.assertIn("orphaned_conductor_jobs=1",scan.stdout)
+  applied=json.loads(self.invoke("reconcile","--attempt","att-owner-derived","--apply").stdout)
+  self.assertEqual(applied["decisions"][0]["category"],"orphan")
+  self.assertIn("\topen\t/r\t/w\tchild\t",self.jobs.read_text(),
+                "even an exact-dead child remains open for depth-0 diagnosis")
+ def test_terminal_child_route_context_detects_unstarted_successor(self):
+  self.mark("plan");self.mark("execute")
+  rows=[
+   self.owner_row("owner","att-owner-terminal-child",99999988,1,include_route=False),
+   f"2026-07-16T00:00:01Z\tdone\t/r\t/w\tchild\t"
+   f"route_id={self.route_id},route_file={self.route_file},route_node=execute,"
+   "attempt_id=att-child-terminal,parent=owner,note=completed-marker",
+  ]
+  self.jobs.write_text("\n".join(rows)+"\n")
+  applied=json.loads(self.invoke("reconcile","--attempt","att-owner-terminal-child","--apply").stdout)
+  self.assertEqual(applied["decisions"][0]["category"],"orphan")
+ def test_conflicting_child_route_context_fails_closed(self):
+  other_route=self.base/"other-route.json"
+  other_route.write_text(json.dumps({"route_id":"rt-other","nodes":[{"id":"plan","depends_on":[]}]}))
+  rows=[
+   self.owner_row("owner","att-owner-conflict",99999987,1,include_route=False),
+   f"2026-07-16T00:00:01Z\tdone\t/r\t/w\tchild-a\t"
+   f"route_id={self.route_id},route_file={self.route_file},route_node=plan,"
+   "attempt_id=att-child-a,parent=owner",
+   "2026-07-16T00:00:02Z\topen\t/r\t/w\tchild-b\t"
+   f"route_id=rt-other,route_file={other_route},route_node=plan,"
+   "attempt_id=att-child-b,parent=owner,pid=99999986,pid_start=1",
+  ]
+  self.jobs.write_text("\n".join(rows)+"\n")
+  result=json.loads(self.invoke("reconcile","--attempt","att-owner-conflict").stdout)
+  self.assertNotEqual(result["decisions"][0]["category"],"orphan")
  def test_live_conductor_completed_route_live_child_is_never_orphaned(self):
   for node in ("plan","execute","test","report"): self.mark(node)
   live_owner=subprocess.Popen(["sleep","60"]);owner_start=(Path("/proc")/str(live_owner.pid)/"stat").read_text().split()[21]

@@ -392,6 +392,56 @@ class CompletionMarkerTest(unittest.TestCase):
         self.assertEqual(unrelated_note, "dead-exact-pid")
         self.assertNotEqual(unrelated_note, "completed-marker")
 
+    def test_later_retry_cannot_overwrite_prior_attempt_repair_linkage(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        first_evidence = self.base / "first-plan.md"
+        first_evidence.write_text("first plan\n", encoding="utf-8")
+        missing_jobs = self.base / "missing-dir" / "jobs.log"
+        first = self.complete(
+            route_path, "plan", first_evidence,
+            jobs=missing_jobs, attempt_id="att-prior-link",
+        )
+        self.assertNotEqual(first.returncode, 0)
+        self.assertIn("attempt-row-absent", first.stdout + first.stderr)
+
+        second_evidence = self.base / "second-plan.md"
+        second_evidence.write_text("second plan\n", encoding="utf-8")
+        self.write_row("open", "retry", "att-later-link")
+        second = self.complete(
+            route_path, "plan", second_evidence,
+            jobs=self.jobs, attempt_id="att-later-link",
+        )
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+
+        directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
+        prior_link = json.loads((directory / "plan.att-prior-link.attempt.json").read_text())
+        latest_link = json.loads((directory / "plan.attempt.json").read_text())
+        self.assertEqual(prior_link["attempt_id"], "att-prior-link")
+        self.assertEqual(latest_link["attempt_id"], "att-later-link")
+
+        dead = "pid=999999995,pid_start=1"
+        self.write_row(
+            "open", "prior-stale", "att-prior-link",
+            extra=f"{dead},route_id={route['route_id']},route_node=plan",
+        )
+        registry_spec = importlib.util.spec_from_file_location(
+            "dispatch_registry_retry_link", ROOT / "utilities/dispatch-registry.py")
+        registry = importlib.util.module_from_spec(registry_spec)
+        registry_spec.loader.exec_module(registry)
+        rows = registry.read_rows(self.jobs)
+        prior_row = next(r for r in rows if r["meta"].get("attempt_id") == "att-prior-link")
+        class Args:
+            pass
+        args = Args(); args.agent_home = self.agent_home; args.now = 0.0
+        newest = {}
+        for row in rows:
+            key = (row["meta"].get("route_id"), row["meta"].get("route_node"))
+            if all(key): newest[key] = row["order"]
+        category, _, note = registry.classify(prior_row, args, newest, rows)
+        self.assertEqual(category, "marker-backed-stale")
+        self.assertEqual(note, "completed-marker")
+
 
 if __name__ == "__main__":
     unittest.main()

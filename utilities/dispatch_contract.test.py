@@ -88,6 +88,20 @@ class DispatchContractTest(unittest.TestCase):
    self.assertIn("\topen\t",jobs.read_text())
    self.assertTrue(D.close_attempt_row_if(jobs,attempt,"dead-test",lambda _fields:True))
    self.assertIn("note=dead-test",jobs.read_text())
+ def test_orphan_watch_launch_is_exact_and_detached(self):
+  fake=mock.Mock(pid=4321)
+  with mock.patch.object(D.subprocess,"Popen",return_value=fake) as popen:
+   watcher=D.launch_orphan_watch(
+    Path("/tmp/jobs.log"),Path("/tmp/agent-home"),"att-watch-contract",1234,"5678")
+  self.assertEqual(watcher,4321)
+  argv=popen.call_args.args[0]
+  self.assertIn("dispatch-orphan-watch.py",argv[1])
+  self.assertIn("att-watch-contract",argv)
+  self.assertEqual(popen.call_args.kwargs["cwd"],"/")
+  self.assertTrue(popen.call_args.kwargs["start_new_session"])
+  with self.assertRaises(D.DispatchContractError) as caught:
+   D.launch_orphan_watch(Path("/tmp/jobs.log"),Path("/tmp/home"),"",0,"")
+  self.assertEqual(caught.exception.reason,"orphan-watch-identity-invalid")
  def test_legacy_reconcile_is_idempotent(self):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); local=root/"local.log"; global_jobs=root/"global.log"
