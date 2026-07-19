@@ -50,6 +50,9 @@ QA_FROM_INTENSITY = {
     "adversarial": "adversarial",
 }
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
+# standard+ per OPERATIONS.md §5.10 — the SD-71 top-of-prompt sync-wait clause is
+# scoped to this set for owner (conductor) launches only.
+_STANDARD_PLUS_INTENSITY = {"standard", "strong", "thorough", "adversarial"}
 
 # SD-15 (OPERATIONS §5.10 ⑨): immediate limit/auth failure patterns — homomorphic port of the Claude
 # wrapper's DEATH_PATTERNS. codex exec surfaces provider limit/auth failures as JSON
@@ -414,7 +417,16 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         "- A trusted depth-0/Claude boundary commits after this stage's own PASS gate and confirms diff attribution.\n\n"
         if is_no_commit_stage(args) else ""
     )
+    sync_wait_clause = (
+        "No asynchronous Monitor/wakeup/scheduling waits; poll synchronously with "
+        "utilities/dispatch-wait.sh in the current turn until terminal, then harvest "
+        "(OPERATIONS.md §5.10, SD-71 auxiliary layer only — not a substitute for "
+        "runtime tool policy or post-exit orphan reconcile).\n\n"
+        if args.intensity in _STANDARD_PLUS_INTENSITY and args.worker_type == "owner"
+        else ""
+    )
     return (
+        f"{sync_wait_clause}"
         f"{bootstrap}\n"
         "Dispatch metadata:\n"
         f"- capability: {args.capability}\n"

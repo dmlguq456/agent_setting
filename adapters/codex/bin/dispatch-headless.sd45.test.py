@@ -118,4 +118,49 @@ class CodexSD45(unittest.TestCase):
    bad=args.copy(); bad[bad.index(";".join(node["write_scope"]))]="spec/**"; denied=subprocess.run(bad,text=True,capture_output=True,env=env); self.assertEqual(denied.returncode,65); self.assertIn("route-node-scope-mismatch",denied.stderr)
    legacy=[sys.executable,str(ROOT/"adapters/codex/bin/dispatch-headless.py"),"--dry-run","--worktree",str(repo),"--slug","codex-legacy-scope","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--write-scope","source/**","--model","gpt-test","--reasoning","low"]
    compatible=subprocess.run(legacy,text=True,capture_output=True,env=env); self.assertEqual(compatible.returncode,0,compatible.stderr); self.assertIn("status=dry-run",compatible.stdout)
+
+
+def _prompt_args(**overrides):
+    base = dict(
+        worker_type="owner", intensity="strong", worktree="/tmp/fixture-worktree",
+        route_id=None, route_node=None, attempt_id=None, route_file=None,
+        worker_role=None, profile=None, capability="autopilot-code", mode="dev",
+        qa="thorough", depth=1, parent_slug=None, parent_session_id=None,
+        capability_owner=None, owner_harness=None, write_scope=None,
+        agent_home=Path("/tmp/fixture-agent-home"), artifact_root="/tmp/fixture-artifacts",
+    )
+    base.update(overrides)
+    return argparse.Namespace(**base)
+
+
+class CodexSD71SyncWaitClause(unittest.TestCase):
+    """SD-71: the standard top-of-prompt clause (core/OPERATIONS.md §5.10) is an
+    auxiliary layer only — Codex gets no --disallowedTools equivalent (parity
+    honesty: Codex's fatal-async policy differs and is out of this cycle's
+    proven scope), but the owner prompt clause itself is harness-neutral."""
+
+    def test_owner_prompt_carries_standard_synchronous_wait_clause(self):
+        args = _prompt_args()
+        with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
+            prompt, _source = WH.dispatch_prompt(args)
+        self.assertTrue(prompt.startswith(
+            "No asynchronous Monitor/wakeup/scheduling waits; poll synchronously with"))
+        self.assertIn("dispatch-wait.sh", prompt)
+        self.assertIn("auxiliary layer only", prompt)
+
+    def test_stage_prompt_never_carries_the_clause(self):
+        args = _prompt_args(worker_type=None, intensity="strong", depth=2,
+                            route_id="rt-fixture", route_node="execute", attempt_id="att-fixture",
+                            worker_role="code-execute")
+        with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
+            prompt, _source = WH.dispatch_prompt(args)
+        self.assertNotIn("No asynchronous Monitor/wakeup/scheduling waits", prompt)
+
+    def test_owner_direct_intensity_never_carries_the_clause(self):
+        args = _prompt_args(intensity="direct")
+        with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
+            prompt, _source = WH.dispatch_prompt(args)
+        self.assertNotIn("No asynchronous Monitor/wakeup/scheduling waits", prompt)
+
+
 if __name__=="__main__": unittest.main()

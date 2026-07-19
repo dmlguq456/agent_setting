@@ -118,4 +118,89 @@ class ClaudeSD45(unittest.TestCase):
    broken=json.loads(path.read_text()); del broken["tracked_gate_evidence"]; broken["route_hash"]=R.route_hash(broken); broken["route_id"]="rt-"+broken["route_hash"].split(":",1)[1][:16]; path.write_text(json.dumps(broken)); bad=args.copy(); bad[bad.index(route["route_id"])]=broken["route_id"]; bad[bad.index(route["route_hash"])]=broken["route_hash"]; denied=subprocess.run(bad,text=True,capture_output=True,env=env); self.assertEqual(denied.returncode,65); self.assertIn("tracked gate evidence",denied.stderr)
    legacy=[sys.executable,str(ROOT/"adapters/claude/bin/dispatch-headless.py"),"--dry-run","--worktree",str(repo),"--slug","claude-legacy-scope","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--write-scope","source/**","--model","claude-test","--effort","low"]
    compatible=subprocess.run(legacy,text=True,capture_output=True,env=env); self.assertEqual(compatible.returncode,0,compatible.stderr); self.assertIn("status=dry-run",compatible.stdout)
+
+
+def _shell_command_args(**overrides):
+    base = dict(
+        worker_type="owner", intensity="strong", artifact_root="/tmp/fixture-artifacts",
+        worktree="/tmp/fixture-worktree",
+        resolved_model_settings={"source": "inherit", "role": "-", "model": None, "effort": None},
+    )
+    base.update(overrides)
+    return argparse.Namespace(**base)
+
+
+class ClaudeSD71AsyncDeny(unittest.TestCase):
+    """SD-71: deterministic --disallowedTools deny/fallback for the owner launch only."""
+
+    def test_owner_standard_plus_gets_exactly_the_proven_names_never_bash(self):
+        for intensity in ("standard", "strong", "thorough", "adversarial"):
+            with self.subTest(intensity=intensity):
+                args = _shell_command_args(intensity=intensity)
+                deny = WH._async_deny_tools(args)
+                self.assertEqual(deny, WH.PROVEN_ASYNC_DENY)
+                self.assertNotIn("Bash", deny)
+                command = WH.shell_command(args, Path("/tmp/p.txt"), Path("/tmp/l.log"))
+                self.assertIn("--disallowedTools", command)
+                for name in WH.PROVEN_ASYNC_DENY:
+                    self.assertIn(name, command)
+                self.assertNotIn("--disallowedTools Bash", command)
+
+    def test_stage_worker_gets_no_deny_list(self):
+        args = _shell_command_args(worker_type="stage", intensity="strong")
+        self.assertEqual(WH._async_deny_tools(args), ())
+        command = WH.shell_command(args, Path("/tmp/p.txt"), Path("/tmp/l.log"))
+        self.assertNotIn("--disallowedTools", command)
+
+    def test_owner_direct_or_quick_gets_no_deny_list(self):
+        for intensity in ("direct", "quick"):
+            with self.subTest(intensity=intensity):
+                args = _shell_command_args(worker_type="owner", intensity=intensity)
+                self.assertEqual(WH._async_deny_tools(args), ())
+                command = WH.shell_command(args, Path("/tmp/p.txt"), Path("/tmp/l.log"))
+                self.assertNotIn("--disallowedTools", command)
+
+    def test_empty_proven_names_emits_no_flag(self):
+        args = _shell_command_args()
+        with mock.patch.object(WH, "PROVEN_ASYNC_DENY", ()):
+            self.assertEqual(WH._async_deny_tools(args), ())
+            command = WH.shell_command(args, Path("/tmp/p.txt"), Path("/tmp/l.log"))
+            self.assertNotIn("--disallowedTools", command)
+
+    def test_owner_prompt_carries_standard_synchronous_wait_clause(self):
+        args = _shell_command_args()
+        args.route_id = args.route_node = args.attempt_id = None
+        args.worker_role = None
+        args.profile = None
+        args.parent_slug = args.parent_session_id = args.capability_owner = args.owner_harness = None
+        args.route_file = None
+        args.capability = "autopilot-code"
+        args.mode = "dev"
+        args.qa = "thorough"
+        args.depth = 1
+        task_spec = importlib.util.spec_from_file_location(
+            "claude_dispatch_headless_task", Path(WH.__file__).with_name("dispatch-headless.py"))
+        with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
+            prompt, _source = WH.dispatch_prompt(args)
+        self.assertTrue(prompt.startswith(
+            "No asynchronous Monitor/wakeup/scheduling waits; poll synchronously with"))
+        self.assertIn("dispatch-wait.sh", prompt)
+        self.assertIn("auxiliary layer only", prompt)
+
+    def test_stage_prompt_never_carries_the_clause(self):
+        args = _shell_command_args(worker_type=None, intensity="strong")
+        args.route_id = "rt-fixture"; args.route_node = "execute"; args.attempt_id = "att-fixture"
+        args.worker_role = "code-execute"
+        args.profile = None
+        args.parent_slug = args.parent_session_id = args.capability_owner = args.owner_harness = None
+        args.route_file = None
+        args.capability = "autopilot-code"
+        args.mode = "dev"
+        args.qa = "thorough"
+        args.depth = 2
+        with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
+            prompt, _source = WH.dispatch_prompt(args)
+        self.assertNotIn("No asynchronous Monitor/wakeup/scheduling waits", prompt)
+
+
 if __name__=="__main__": unittest.main()

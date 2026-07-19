@@ -300,7 +300,16 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
             "- After a real tool call, write, test, or artifact update, run the same command with phase tool|file-write|test|artifact and kind tool|file|test|artifact plus a deterministic id/signature.\n"
             "- Repeated prose or an unchanged phase/evidence pair is not progress. Emit terminal only after the assigned artifact is durable.\n\n"
         )
+    sync_wait_clause = (
+        "No asynchronous Monitor/wakeup/scheduling waits; poll synchronously with "
+        "utilities/dispatch-wait.sh in the current turn until terminal, then harvest "
+        "(OPERATIONS.md §5.10, SD-71 auxiliary layer only — not a substitute for "
+        "runtime tool policy or post-exit orphan reconcile).\n\n"
+        if args.intensity in _STANDARD_PLUS_INTENSITY and args.worker_type == "owner"
+        else ""
+    )
     return (
+        f"{sync_wait_clause}"
         f"{bootstrap}\n"
         "Dispatch metadata:\n"
         f"- capability: {args.capability}\n"
@@ -331,6 +340,34 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
     )
 
 
+# SD-71: names proven by the live `claude -p --help`/tool-enumeration probe
+# (_internal/probe_claude_tools.txt, captured 2026-07-19 against Claude Code
+# 2.1.215) to be asynchronous wait/scheduling/notification tools — the exact
+# class the SD-14 one-shot wait contract forbids a conductor from reaching
+# for, since `claude -p` exits at turn end and never receives their later
+# callback. Never includes Bash or any synchronous tool; dispatch-wait.sh
+# stays fully available. Update only from fresh probe evidence, never from
+# assumption.
+PROVEN_ASYNC_DENY = (
+    "Monitor", "ScheduleWakeup", "CronCreate", "CronDelete", "CronList",
+    "PushNotification", "RemoteTrigger",
+)
+
+# standard+ per OPERATIONS.md §5.10 — direct/quick never reach a depth-1 owner
+# conductor prompt in the first place, but this is the literal set the deny
+# list is scoped to.
+_STANDARD_PLUS_INTENSITY = {"standard", "strong", "thorough", "adversarial"}
+
+
+def _async_deny_tools(args: argparse.Namespace) -> tuple[str, ...]:
+    """SD-71: deny proven-fatal async tools for a standard+ owner (conductor) launch only."""
+    if getattr(args, "worker_type", None) != "owner":
+        return ()
+    if getattr(args, "intensity", None) not in _STANDARD_PLUS_INTENSITY:
+        return ()
+    return PROVEN_ASYNC_DENY
+
+
 def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -> str:
     # `claude -p` reads the prompt from stdin when no positional prompt is
     # given and prints the response non-interactively, mirroring the codex
@@ -343,6 +380,9 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
             "--effort",
             args.resolved_model_settings["effort"],
         ]
+    deny = _async_deny_tools(args)
+    if deny:
+        cmd += ["--disallowedTools", ",".join(deny)]
     inner = " ".join(shlex.quote(x) for x in cmd)
     return (
         f"cd {shlex.quote(args.worktree)} && "
