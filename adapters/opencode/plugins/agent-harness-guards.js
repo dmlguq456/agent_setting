@@ -184,21 +184,15 @@ export const AgentHarnessGuards = async (ctx) => {
     const sid = input.sessionID || "opencode-plugin"
     const cwd = baseDir(ctx)
     if (isWorkerSession()) {
-      // Dispatch prompts own explicit status/prompt-signal/mode bootstrap. Keep
-      // only deterministic start cleanup; memory/briefing/context stay main-only.
-      if (!seenLifecycle.has(sid)) {
-        seenLifecycle.add(sid)
-        collectPreflight("start", [cwd, sid])
-      }
+      // Dispatch prompts own explicit status/prompt-signal bootstrap;
+      // memory/briefing/context stay main-only.
       return
     }
     if (!seenLifecycle.has(sid)) {
       seenLifecycle.add(sid)
-      appendContext(output, collectPreflight("start", [cwd, sid]))
       appendContext(output, collectPreflight("memory", [cwd]))
     }
     appendContext(output, collectPreflight("prompt-signal", [cwd, sid]))
-    appendContext(output, collectPreflight("mode", [cwd, sid]))
     appendContext(output, collectPreflight("briefing", [cwd]))
   },
   "command.execute.before": async (input, output) => {

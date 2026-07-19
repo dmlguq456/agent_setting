@@ -483,7 +483,7 @@ Question banks:
 | Library/CLI spec | Public exports, semver policy, command/options, runtime/package manager, compatibility |
 | Design | Visual direction, target device, design-system availability, brand constraints, standalone versus project output |
 
-Code uses the bank for its spec mode. Skip automatically when adapter-native arguments already specify the choice, the user already said it, explicit untracked/throwaway mode applies, or a state file captures it on re-entry. `--no-clarify` exists only for draft and research.
+Code uses the bank for its spec mode. Skip automatically when adapter-native arguments already specify the choice, the user already said it, the work is explicitly throwaway, or a state file captures it on re-entry. `--no-clarify` exists only for draft and research.
 
 If a non-blocking intake question receives no answer, proceed with the recommended default and report one line. Runtime adapters may provide a scheduled wake-up for a genuinely long wait, but ordinary unanswered intake does not pause the pipeline.
 

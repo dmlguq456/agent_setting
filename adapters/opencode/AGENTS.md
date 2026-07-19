@@ -37,7 +37,7 @@ Detailed lifecycle and edge-case contracts live in
 
 | Need | Command |
 |---|---|
-| lifecycle/workflow | `preflight.sh start`, `preflight.sh mode`, `preflight.sh track`, `preflight.sh briefing`, `preflight.sh worklog` |
+| lifecycle/workflow | `preflight.sh prompt-signal`, `preflight.sh briefing`, `preflight.sh worklog` |
 | memory | `preflight.sh memory`, `preflight.sh recall`, `preflight.sh distill-delta`, `preflight.sh distill-propose` |
 | readiness/loops | `preflight.sh status`, `preflight.sh doctor`, `preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` |
 | QA | `preflight.sh qa-policy <level> [code|research|doc|general]` |

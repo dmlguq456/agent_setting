@@ -25,7 +25,6 @@
     "entry-router:codex:max": 2843,
     "entry-router:opencode:total": 33717,
     "entry-router:opencode:max": 2731,
-    "hook:codex-mode": 149,
     "hook:codex-recall-neutral": 97,
     "hook:codex-recall-signal": 98,
     "hook:codex-briefing-default": 0,

@@ -26,7 +26,7 @@ fail_msg() {
   fail=1
 }
 
-CLAUDE_NATIVE_SURFACE_PATTERN='adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|CLAUDE_HOME|track-toggle\.sh|agent-modes|allowedTools|(^|[^[:alnum:]_/.-])skills/|/\.claude/'
+CLAUDE_NATIVE_SURFACE_PATTERN='adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|CLAUDE_HOME|agent-modes|allowedTools|(^|[^[:alnum:]_/.-])skills/|/\.claude/'
 NON_CODEX_DESIGN_SURFACE_PATTERN='Design MCP|mcp__design__|tools/design-mcp|<agent-home>/tools/design-mcp|getConsoleLogs|eval_js|preview\(\{ path \}\)'
 
 # codex-adapter-parity audit P-19 (2026-07-04): module-level derivation of the portable hook-event
@@ -135,7 +135,7 @@ check_projection_entry_allowlist() {
 }
 
 check_codex_forbidden_entries() {
-  for p in CLAUDE.md settings.json keybindings.json commands statusline.sh track-toggle.sh skills agents agent-modes hooks; do
+  for p in CLAUDE.md settings.json keybindings.json commands statusline.sh skills agents agent-modes hooks; do
     if [ -e "codex_setting/$p" ] || [ -L "codex_setting/$p" ]; then
       fail_msg "codex_setting/$p exists; Codex projection must not expose Claude-native surfaces"
     fi
@@ -155,7 +155,7 @@ check_codex_native_surface_debt() {
 }
 
 check_opencode_forbidden_entries() {
-  for p in CLAUDE.md settings.json keybindings.json commands statusline.sh track-toggle.sh skills agents agent-modes hooks; do
+  for p in CLAUDE.md settings.json keybindings.json commands statusline.sh skills agents agent-modes hooks; do
     if [ -e "opencode_setting/$p" ] || [ -L "opencode_setting/$p" ]; then
       fail_msg "opencode_setting/$p exists; OpenCode projection must not expose Claude-native surfaces"
     fi
@@ -268,7 +268,6 @@ check_claude_projection_targets() {
   check_link_target claude_setting/loops ../adapters/claude/loops
   check_link_target claude_setting/manifest.json ../manifest.json
   check_link_target claude_setting/statusline.sh ../adapters/claude/statusline.sh
-  check_link_target claude_setting/track-toggle.sh ../adapters/claude/track-toggle.sh
   check_link_target claude_setting/bin ../adapters/claude/bin
 }
 
@@ -317,8 +316,6 @@ check_non_claude_adapter_symlink_boundaries() {
         adapters/codex/utilities/agent-worklog-state.sh:../../../utilities/agent-worklog-state.sh|\
         adapters/codex/utilities/artifact-root.sh:../../../utilities/artifact-root.sh|\
         adapters/codex/utilities/harness-status.sh:../../../utilities/harness-status.sh|\
-        adapters/codex/utilities/workflow-guard-hook.sh:../../../utilities/workflow-guard-hook.sh|\
-        adapters/codex/utilities/workflow-toggle.sh:../../../utilities/workflow-toggle.sh|\
         adapters/codex/utilities/worktree-cleanup.py:../../../utilities/worktree-cleanup.py|\
         adapters/codex/utilities/dispatch-route.sh:../../../utilities/dispatch-route.sh|\
         adapters/codex/utilities/dispatch-defaults.py:../../../utilities/dispatch-defaults.py|\
@@ -329,8 +326,6 @@ check_non_claude_adapter_symlink_boundaries() {
         adapters/opencode/utilities/agent-worklog-state.sh:../../../utilities/agent-worklog-state.sh|\
         adapters/opencode/utilities/artifact-root.sh:../../../utilities/artifact-root.sh|\
         adapters/opencode/utilities/harness-status.sh:../../../utilities/harness-status.sh|\
-        adapters/opencode/utilities/workflow-guard-hook.sh:../../../utilities/workflow-guard-hook.sh|\
-        adapters/opencode/utilities/workflow-toggle.sh:../../../utilities/workflow-toggle.sh|\
         adapters/opencode/utilities/worktree-cleanup.py:../../../utilities/worktree-cleanup.py|\
         adapters/opencode/utilities/dispatch-route.sh:../../../utilities/dispatch-route.sh|\
         adapters/opencode/utilities/dispatch-defaults.py:../../../utilities/dispatch-defaults.py|\
@@ -486,7 +481,7 @@ check_install_layout_codex_projection() {
   if ! grep -Fq 'ln -sfn "$AGENT_HOME" "$HOME/.codex/agent-harness"' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must install the Codex hook command agent-harness pointer"
   fi
-  if ! grep -Fq "non_claude_runtime_re='adapters/claude|claude_setting|settings\\.json|statusline\\.sh|CLAUDE\\.md|track-toggle\\.sh|agent-modes|allowedTools|/\\.claude/'" INSTALL_LAYOUT.md; then
+  if ! grep -Fq "non_claude_runtime_re='adapters/claude|claude_setting|settings\\.json|statusline\\.sh|CLAUDE\\.md|agent-modes|allowedTools|/\\.claude/'" INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must define a shared non-Claude runtime output deny regex"
   fi
 
@@ -762,9 +757,6 @@ check_codex_bin_wrappers() {
     fi
   done
 
-  if ! grep -Fq 'utilities/workflow-toggle.sh' adapters/codex/bin/preflight.sh; then
-    fail_msg "adapters/codex/bin/preflight.sh must realize workflow toggle through utilities/workflow-toggle.sh"
-  fi
   if ! grep -Fq 'AGENT_ROOT=$(agent_home)' adapters/codex/bin/preflight.sh \
     || ! grep -Fq '[ -f "$AGENT_HOME/core/CORE.md" ]' adapters/codex/bin/preflight.sh \
     || grep -Fq 'AGENT_HOME="${AGENT_HOME:-$ROOT}"' adapters/codex/bin/preflight.sh; then
@@ -845,18 +837,6 @@ check_codex_bin_wrappers() {
     fail_msg "Codex headless docs must include native mode projection in runtime projection checks"
   fi
 
-  if ! grep -Fq -- '--event start' adapters/codex/bin/preflight.sh; then
-    fail_msg "adapters/codex/bin/preflight.sh must expose workflow start cleanup"
-  fi
-
-  if ! grep -Fq -- '--toggle-label "preflight.sh track"' adapters/codex/bin/preflight.sh; then
-    fail_msg "adapters/codex/bin/preflight.sh must adapt workflow signal toggle text"
-  fi
-
-  if ! grep -Fq 'ARTIFACT_GUARD_TOGGLE_LABEL="preflight.sh track"' adapters/codex/bin/preflight.sh; then
-    fail_msg "adapters/codex/bin/preflight.sh must adapt artifact guard toggle text"
-  fi
-
   if ! grep -Fq 'adapter=codex' adapters/codex/bin/role-map.sh; then
     fail_msg "adapters/codex/bin/role-map.sh must report its adapter for machine-readable role mappings"
   fi
@@ -895,15 +875,7 @@ check_codex_bin_wrappers() {
     fi
   done
 
-  if ! grep -Fq 'preflight.sh start' adapters/codex/AGENTS.md; then
-    fail_msg "adapters/codex/AGENTS.md must document the Codex workflow start cleanup wrapper"
-  fi
-
-  if ! grep -Fq 'preflight.sh track' adapters/codex/AGENTS.md; then
-    fail_msg "adapters/codex/AGENTS.md must document the Codex workflow toggle wrapper"
-  fi
-
-  for p in 'preflight.sh start' 'preflight.sh session-end' 'preflight.sh mode' 'preflight.sh prompt-signal' 'preflight.sh turn-nudge' 'preflight.sh token-budget' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh ui-info' 'preflight.sh tui-config' 'preflight.sh subagent-info' 'preflight.sh loop-info' 'preflight.sh qa-policy' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
+  for p in 'preflight.sh session-end' 'preflight.sh prompt-signal' 'preflight.sh turn-nudge' 'preflight.sh token-budget' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh ui-info' 'preflight.sh tui-config' 'preflight.sh subagent-info' 'preflight.sh loop-info' 'preflight.sh qa-policy' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
     if ! grep -Fq "$p" adapters/codex/AGENTS.md; then
       fail_msg "adapters/codex/AGENTS.md must document manual Codex lifecycle wrapper $p"
     fi
@@ -987,14 +959,12 @@ check_codex_bin_wrappers() {
       fail_msg "adapters/codex/hooks/hooks.json must register Codex $event"
     fi
   done
-  if ! grep -Fq 'run_preflight("start"' adapters/codex/hooks/sessionstart-lifecycle.py \
-    || ! grep -Fq 'run_preflight("memory"' adapters/codex/hooks/sessionstart-lifecycle.py \
+  if ! grep -Fq 'run_preflight("memory"' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq 'emit_context(' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq '"SessionStart"' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq 'hookSpecificOutput' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq 'run_preflight("session-end"' adapters/codex/hooks/sessionend-lifecycle.py \
     || grep -Fq 'sys.stdout.write(result.stdout)' adapters/codex/hooks/sessionend-lifecycle.py \
-    || ! grep -Fq 'run_preflight("mode"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'run_preflight("briefing"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'token_budget_context(current_cwd, sid)' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'record_accounting(sid, event, adapter="codex")' adapters/codex/hooks/userprompt-lifecycle.py \
@@ -1009,8 +979,8 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'can opt into session start memory context' hooks/portable-guards.test.sh \
     || ! grep -Fq 'CODEX_SESSION_MEMORY_INJECT=1' hooks/portable-guards.test.sh \
     || ! grep -Fq 'out["hookEventName"]=="SessionStart"' hooks/portable-guards.test.sh \
-    || ! grep -Fq 'suppresses default tracked prompt context' hooks/portable-guards.test.sh \
-    || ! grep -Fq 'injects only non-default prompt context' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'injects no workflow-mode banner (retired)' hooks/portable-guards.test.sh \
+    || ! grep -Fq 'resets the turn-nudge counter on every prompt' hooks/portable-guards.test.sh \
     || ! grep -Fq 'injects token budget only on pressure-band transition' hooks/portable-guards.test.sh \
     || ! grep -Fq 'out["hookEventName"]=="UserPromptSubmit"' hooks/portable-guards.test.sh \
     || ! grep -Fq 'silent success output' hooks/portable-guards.test.sh \
@@ -1021,7 +991,6 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'hook_event=UserPromptSubmit' hooks/portable-guards.test.sh \
     || ! grep -Fq 'runtime_surface=adapter-owned-harness-status' hooks/portable-guards.test.sh \
     || ! grep -Fq 'CODEX_SESSION_MEMORY_INJECT' adapters/codex/hooks/sessionstart-lifecycle.py \
-    || ! grep -Fq 'CODEX_MODE_ANCHOR_ALWAYS' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'hookSpecificOutput.additionalContext' adapters/codex/README.md \
     || ! grep -Fq 'hookSpecificOutput.additionalContext' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex lifecycle hooks must prove silent defaults plus opt-in/non-default additionalContext paths in portable guards"
@@ -1251,7 +1220,7 @@ check_codex_utility_projection() {
     fail_msg "adapters/codex/utilities/agent-home.sh must support the Codex runtime agent-harness pointer"
   fi
 
-  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py token-budget.py token-budget-experiment.py worker_bootstrap.py; do
+  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py token-budget.py token-budget-experiment.py worker_bootstrap.py; do
     if [ ! -L "adapters/codex/utilities/$p" ]; then
       fail_msg "adapters/codex/utilities/$p must be a selective portable utility projection"
       continue
@@ -1262,7 +1231,7 @@ check_codex_utility_projection() {
     fi
   done
 
-  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh -o -name dispatch-defaults.py -o -name token-budget.py -o -name token-budget-experiment.py -o -name worker_bootstrap.py \) -print 2>/dev/null || true)
+  extra=$(find adapters/codex/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh -o -name dispatch-defaults.py -o -name token-budget.py -o -name token-budget-experiment.py -o -name worker_bootstrap.py \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/codex/utilities contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -1277,7 +1246,7 @@ check_codex_utility_projection() {
   # codex-adapter-parity audit P-40 (2026-07-04): derived under-projection completeness pair — every
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
-  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py token-budget.py token-budget-experiment.py worker_bootstrap.py"
+  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py token-budget.py token-budget-experiment.py worker_bootstrap.py"
   UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py"
   utility_count=0
   for f in utilities/*; do
@@ -1532,9 +1501,8 @@ check_codex_native_skill_projection() {
       fail_msg "$skill must instruct Codex to obey capability-info tool contract metadata"
     fi
     if ! grep -Fq 'preflight.sh status [cwd] [session-id]' "$skill" \
-      || ! grep -Fq 'preflight.sh prompt-signal [cwd] [session-id]' "$skill" \
-      || ! grep -Fq 'preflight.sh mode [cwd] [session-id]' "$skill"; then
-      fail_msg "$skill must include Codex status, prompt-signal, and mode workflow guards"
+      || ! grep -Fq 'preflight.sh prompt-signal [cwd] [session-id]' "$skill"; then
+      fail_msg "$skill must include Codex status and prompt-signal workflow guards"
     fi
     if ! grep -Fq "adapters/codex/bin/preflight.sh route $slug [cwd] [session-id]" "$skill"; then
       fail_msg "$skill must include the Codex route wrapper"
@@ -2095,9 +2063,6 @@ check_opencode_bin_wrappers() {
     fi
   done
 
-  if ! grep -Fq 'utilities/workflow-toggle.sh' adapters/opencode/bin/preflight.sh; then
-    fail_msg "adapters/opencode/bin/preflight.sh must realize workflow toggle through utilities/workflow-toggle.sh"
-  fi
   if ! grep -Fq 'AGENT_ROOT=$(agent_home)' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq '[ -f "$AGENT_HOME/core/CORE.md" ]' adapters/opencode/bin/preflight.sh \
     || grep -Fq 'AGENT_HOME="${AGENT_HOME:-$ROOT}"' adapters/opencode/bin/preflight.sh; then
@@ -2143,18 +2108,6 @@ check_opencode_bin_wrappers() {
     fail_msg "adapters/opencode/bin/dispatch-headless.py must validate inputs and materialize typed worker prompts"
   fi
 
-  if ! grep -Fq -- '--event start' adapters/opencode/bin/preflight.sh; then
-    fail_msg "adapters/opencode/bin/preflight.sh must expose workflow start cleanup"
-  fi
-
-  if ! grep -Fq -- '--toggle-label "preflight.sh track"' adapters/opencode/bin/preflight.sh; then
-    fail_msg "adapters/opencode/bin/preflight.sh must adapt workflow signal toggle text"
-  fi
-
-  if ! grep -Fq 'ARTIFACT_GUARD_TOGGLE_LABEL="preflight.sh track"' adapters/opencode/bin/preflight.sh; then
-    fail_msg "adapters/opencode/bin/preflight.sh must adapt artifact guard toggle text"
-  fi
-
   if ! grep -Fq 'adapter=opencode' adapters/opencode/bin/role-map.sh; then
     fail_msg "adapters/opencode/bin/role-map.sh must report its adapter for machine-readable role mappings"
   fi
@@ -2167,20 +2120,7 @@ check_opencode_bin_wrappers() {
     fi
   done
 
-  if ! grep -Fq 'preflight.sh start' adapters/opencode/AGENTS.md; then
-    fail_msg "adapters/opencode/AGENTS.md must document the OpenCode workflow start cleanup wrapper"
-  fi
-
-  if ! grep -Fq 'preflight.sh track' adapters/opencode/AGENTS.md; then
-    fail_msg "adapters/opencode/AGENTS.md must document the OpenCode workflow toggle wrapper"
-  fi
-  if ! grep -Fq 'utilities/workflow-toggle.sh' adapters/opencode/ADAPTATION.md \
-    || ! grep -Fq 'preflight.sh track' adapters/opencode/ADAPTATION.md \
-    || grep -Fq 'Claude session id fallback' adapters/opencode/ADAPTATION.md; then
-    fail_msg "adapters/opencode/ADAPTATION.md must map Claude track-toggle semantics to portable workflow-toggle plus OpenCode preflight track"
-  fi
-
-  for p in 'preflight.sh start' 'preflight.sh mode' 'preflight.sh track' 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
+  for p in 'preflight.sh memory' 'preflight.sh recall' 'preflight.sh briefing' 'preflight.sh worklog' 'preflight.sh distill-delta' 'preflight.sh distill-propose'; do
     if ! grep -Fq "$p" adapters/opencode/AGENTS.md; then
       fail_msg "adapters/opencode/AGENTS.md must document manual OpenCode lifecycle wrapper $p"
     fi
@@ -2322,7 +2262,7 @@ check_opencode_utility_projection() {
     fail_msg "adapters/opencode/utilities/agent-home.sh must support the OpenCode runtime agent-harness pointer"
   fi
 
-  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py worker_bootstrap.py; do
+  for p in artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py worker_bootstrap.py; do
     if [ ! -L "adapters/opencode/utilities/$p" ]; then
       fail_msg "adapters/opencode/utilities/$p must be a selective portable utility projection"
       continue
@@ -2333,7 +2273,7 @@ check_opencode_utility_projection() {
     fi
   done
 
-  extra=$(find adapters/opencode/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name workflow-guard-hook.sh -o -name workflow-toggle.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh -o -name dispatch-defaults.py -o -name worker_bootstrap.py \) -print 2>/dev/null || true)
+  extra=$(find adapters/opencode/utilities -mindepth 1 -maxdepth 1 ! \( -name agent-home.sh -o -name artifact-root.sh -o -name agent-worklog-state.sh -o -name harness-status.sh -o -name worktree-cleanup.py -o -name dispatch-route.sh -o -name dispatch-defaults.py -o -name worker_bootstrap.py \) -print 2>/dev/null || true)
   if [ -n "$extra" ]; then
     fail_msg "adapters/opencode/utilities contains unapproved entries:"
     printf '%s\n' "$extra"
@@ -2348,7 +2288,7 @@ check_opencode_utility_projection() {
   # codex-adapter-parity audit P-40 (2026-07-04): derived under-projection completeness pair — every
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
-  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh workflow-guard-hook.sh workflow-toggle.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py worker_bootstrap.py"
+  UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py worker_bootstrap.py"
   UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py token-budget.py token-budget-experiment.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py"
   utility_count=0
   for f in utilities/*; do
@@ -2765,7 +2705,7 @@ check_opencode_native_plugin_projection() {
     || grep -Fq 'AGENT_HOME: process.env.AGENT_HOME || root' "$plugin"; then
     fail_msg "$plugin must validate AGENT_HOME and pass the selected harness root to preflight"
   fi
-  for p in 'collectPreflight("start"' 'collectPreflight("memory"' 'collectPreflight("mode"' 'collectPreflight("briefing"'; do
+  for p in 'collectPreflight("memory"' 'collectPreflight("prompt-signal"' 'collectPreflight("briefing"'; do
     if ! grep -Fq "$p" "$plugin"; then
       fail_msg "$plugin must bridge OpenCode lifecycle context through $p"
     fi
@@ -2891,12 +2831,6 @@ check_claude_utility_projection() {
     assert_shared_adapter_class utilities "$name"
   done
 
-  # workflow-toggle.sh is collapsed and must resolve byte-identically to canonical.
-  if [ ! -x adapters/claude/utilities/workflow-toggle.sh ]; then
-    fail_msg "adapters/claude/utilities/workflow-toggle.sh must resolve to an executable canonical workflow toggle helper"
-  elif ! cmp -s utilities/workflow-toggle.sh adapters/claude/utilities/workflow-toggle.sh; then
-    fail_msg "adapters/claude/utilities/workflow-toggle.sh must stay byte-equivalent to utilities/workflow-toggle.sh"
-  fi
   for p in dispatch-liveness.sh dispatch-wait.sh; do
     if ! grep -Fq 'AGENT_DISPATCH_JOBS' "utilities/$p"; then
       fail_msg "utilities/$p must honor the shared dispatch registry override"
@@ -3893,7 +3827,7 @@ check_language_neutrality_contract() {
 check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_projection_symlinks opencode_setting
-check_projection_entry_allowlist claude_setting CLAUDE.md README.md agent-modes agents bin commands core hooks keybindings.json loops manifest.json scaffolds settings.json skills statusline.sh tools track-toggle.sh utilities
+check_projection_entry_allowlist claude_setting CLAUDE.md README.md agent-modes agents bin commands core hooks keybindings.json loops manifest.json scaffolds settings.json skills statusline.sh tools utilities
 check_projection_entry_allowlist codex_setting AGENTS.md README.md core capabilities roles bin tools utilities scaffolds codex-skills codex-modes codex-plugin-marketplace codex-hooks codex-config codex-agents
 check_projection_entry_allowlist opencode_setting AGENTS.md README.md core capabilities roles bin tools utilities opencode-skills opencode-agents opencode-commands opencode-plugins
 check_codex_forbidden_entries

@@ -49,14 +49,14 @@ class SessionRowTitleTest(unittest.TestCase):
         return text, segs
 
     def test_session_row_title_present_shows_title_not_slug(self):
-        sess = Session(harness="claude", pid=1, cwd="", gate="tracked",
+        sess = Session(harness="claude", pid=1, cwd="",
                         slug="repo-ab12cd34", title="개발 서버 시작", liveness="idle")
         text, _segs = self._row_text_and_width(sess)
         self.assertIn("개발 서버 시작", text)
         self.assertNotIn("repo-ab12cd34", text)
 
     def test_session_row_title_absent_falls_back_to_slug(self):
-        sess = Session(harness="claude", pid=1, cwd="", gate="tracked",
+        sess = Session(harness="claude", pid=1, cwd="",
                         slug="repo-ab12cd34", title=None, liveness="idle")
         text, _segs = self._row_text_and_width(sess)
         self.assertIn("repo-ab12cd34", text)
@@ -65,7 +65,7 @@ class SessionRowTitleTest(unittest.TestCase):
         # Hangul title (2-cell chars) must not overrun the shared name-zone width — the
         # segment immediately after the name zone (branch) should still start at the
         # expected column when measured in display cells, not char count.
-        sess = Session(harness="claude", pid=1, cwd="", gate="tracked",
+        sess = Session(harness="claude", pid=1, cwd="",
                         slug="s", title="한글제목입니다한글제목입니다한글제목입니다",
                         liveness="idle")
         segs = render._session_row(sess, narrow=False)
@@ -74,7 +74,7 @@ class SessionRowTitleTest(unittest.TestCase):
 
     def test_session_row_2line_title_clipped_to_name2_max(self):
         long_title = "가" * 60     # 60 * 2 = 120 cells, far over _NAME2_MAX
-        sess = Session(harness="claude", pid=1, cwd="", gate="tracked",
+        sess = Session(harness="claude", pid=1, cwd="",
                         slug="s", title=long_title, liveness="idle")
         l1 = render._session_row_2line(sess)[0]
         name_seg = next(t for t, k in l1 if k in ("name_work", "name_dim", "name_idle"))

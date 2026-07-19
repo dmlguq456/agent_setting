@@ -16,7 +16,7 @@ import paths
 _CLAUDE_SYMLINK_NAMES = [
     "CLAUDE.md", "README.md", "core", "commands", "skills", "agents",
     "agent-modes", "hooks", "utilities", "tools", "scaffolds", "loops",
-    "manifest.json", "statusline.sh", "track-toggle.sh",
+    "manifest.json", "statusline.sh",
 ]
 
 _CLAUDE_COPY_ONCE_NAMES = ["settings.json", "keybindings.json"]

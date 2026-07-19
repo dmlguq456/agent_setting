@@ -61,23 +61,6 @@ fi
 printf 'artifact_root_scope=%s\n' "$artifact_scope"
 printf 'artifact_write_target=canonical-only\n'
 
-workflow_state=not-configured
-untracked_flag=""
-if [ -d "$artifact_root" ]; then
-  workflow_state=tracked
-  if [ -f "$artifact_root/.untracked.$sid" ]; then
-    workflow_state=untracked
-    untracked_flag="$artifact_root/.untracked.$sid"
-  elif [ -f "$artifact_root/.untracked" ]; then
-    workflow_state=untracked
-    untracked_flag="$artifact_root/.untracked"
-  fi
-fi
-printf 'workflow_state=%s\n' "$workflow_state"
-if [ -n "$untracked_flag" ]; then
-  printf 'workflow_flag=%s\n' "$untracked_flag"
-fi
-
 if [ -n "$project_root" ]; then
   printf 'git_repo=1\n'
   printf 'git_root=%s\n' "$project_root"

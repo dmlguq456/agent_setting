@@ -85,14 +85,12 @@ jobs/
 # Drill/oncall transient run log
 loops/drill/.oncall-run.log
 .agent_reports/.pipeline-lock
-.agent_reports/.untracked*
 .agent_reports/.runtime/
 .agent_reports/plans/**/_internal/dispatch_logs/
 .agent_reports/plans/**/_internal/dispatch_prompts/
 .agent_reports/plans/**/_internal/jobs.log*
 .agent_reports/plans/**/_internal/model-worker-governor/
 .claude_reports/.pipeline-lock
-.claude_reports/.untracked*
 .claude_reports/.runtime/
 .claude_reports/plans/**/_internal/dispatch_logs/
 .claude_reports/plans/**/_internal/dispatch_prompts/

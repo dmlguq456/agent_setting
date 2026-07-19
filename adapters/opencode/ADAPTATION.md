@@ -210,9 +210,8 @@ injections are auto-applied. The table records the current state.
 | `PreToolUse[Skill]` spec-skill gate (deny) | plugin `command.execute.before` → `preflight capability` (throws) | full — auto enforced (command path) |
 | `PostToolUse[Read]` spec-read marker | plugin `tool.execute.after` on `read` → `preflight read` | full — auto enforced |
 | `PostToolUse` design post-write | plugin `tool.execute.after` → `preflight design` | full — auto enforced |
-| `SessionStart` workflow signal + memory inject | plugin `experimental.chat.system.transform` → `start` / `memory` | full — auto injected |
-| `UserPromptSubmit` workflow signal / recall / briefing | plugin `experimental.chat.system.transform` → `mode` / `recall` / `briefing` | full — auto injected |
-| `/track` toggle | `preflight track` | full — manual both runtimes |
+| `SessionStart`-equivalent memory inject | plugin `experimental.chat.system.transform` (first turn) → `memory` | full — auto injected |
+| `UserPromptSubmit` routing-contract signal / briefing | plugin `experimental.chat.system.transform` → `prompt-signal` / `briefing` | full — auto injected |
 | `SessionEnd` + `UserPromptSubmit` auto-distillation | plugin `event` (`session.idle`) → detached `preflight session-end` → no-tools `opencode run` worker | full — auto applied by default (opt out `OPENCODE_DISTILL_ENABLE=0`) |
 
 Auto-distillation, previously the one functional gap, is now closed (see the
@@ -222,13 +221,13 @@ adapter debt:
 
 1. **No persistent statusline.** OpenCode has a native TUI footer (model,
    context, tokens, session) but no user shell statusline surface. Harness
-   signals (tracked/untracked, git risk, headless jobs) are injected per prompt
+   signals (git risk, headless jobs) are injected per prompt
    through the plugin transform instead of shown persistently. Functional, not a
    persistent display.
 2. **Prompt-lifecycle injection rides an experimental hook.**
    `experimental.chat.system.transform` is in OpenCode's `experimental.*`
    namespace; if OpenCode changes it, lifecycle injection breaks and the
-   explicit preflight wrappers (`start` / `memory` / `mode` / `recall` /
+   explicit preflight wrappers (`memory` / `prompt-signal` /
    `briefing`) remain the manual fallback.
 
 ### Auto-Distillation
@@ -273,7 +272,6 @@ OpenCode must not consume these Claude-native files as native configuration:
 | `adapters/claude/commands/` | Not consumable; OpenCode commands must be expressed as `.opencode/command/<name>.md` or `command:` config entries |
 | `skills/*/SKILL.md` | Compatibility reference only; OpenCode should start from `capabilities/README.md`. The `~/.claude/skills/` autoload path is a compat convenience, not an adapter projection. |
 | `adapters/claude/statusline.sh` | Not consumable; OpenCode has no user shell statusline surface |
-| `adapters/claude/track-toggle.sh` | Do not consume; portable semantics live in `utilities/workflow-toggle.sh`, and OpenCode exposes them through `preflight.sh track` |
 | `adapters/claude/CLAUDE.md` | Reference only; not bootstrap |
 | `adapters/claude/agents/*.md` | Reference only; OpenCode should start from `roles/README.md`. Claude Agent frontmatter is not OpenCode agent frontmatter. |
 | `adapters/claude/hooks/*.sh` | Reference only; OpenCode has no shell hook event schema. Guards run as explicit preflight. |
@@ -290,9 +288,8 @@ Harness-specific status signals need OpenCode-native realization:
 
 | Harness signal | OpenCode direction |
 |---|---|
-| tracked/untracked workflow state | OpenCode plugin system transform runs `preflight.sh mode`; explicit preflight remains fallback when plugins are unavailable or untrusted |
-| workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; keep OpenCode native UI/config for model/context/session fields |
-| tracked/untracked workflow toggle | explicit `preflight.sh track`; do not expose Claude `/track` command files |
+| routing-contract signal | OpenCode plugin system transform runs `preflight.sh prompt-signal`; explicit preflight remains fallback when plugins are unavailable or untrusted |
+| artifact/notes/git-risk snapshot | explicit `preflight.sh status`; keep OpenCode native UI/config for model/context/session fields |
 | artifact root detection | `preflight.sh write` and shared artifact-root helper |
 | headless/autopilot/background jobs | `preflight.sh headless` / `dispatch` / `liveness` / `harvest` provide the tool-contract path over `opencode run`; `preflight.sh status` surfaces in-flight jobs as `headless_open_jobs` / `headless_open_slugs` from the dispatch registry. A native graphical display remains optional polish |
 | sibling `-wt/<slug>` dispatch detection | preserve the worktree naming invariant; choose an OpenCode-native display surface later |
@@ -309,9 +306,7 @@ Harness-specific status signals need OpenCode-native realization:
 | memory write guard | Run `adapters/opencode/bin/preflight.sh write <file> [session-id]` before writes |
 | design post-write verification | Run `adapters/opencode/bin/preflight.sh design <file>` after design HTML writes |
 | spec read gate | OpenCode plugin enforces this automatically: `command.execute.before` runs `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]` (throws to abort `autopilot-code`/`autopilot-spec` when ungrounded) and `tool.execute.after` on a `read` of `prd.md` runs `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]`. Run both manually when plugins are unavailable |
-| workflow start cleanup | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh start [cwd] [session-id]` once per session; run it manually when plugins are unavailable |
-| workflow signal | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]`; no statusline assumption |
-| workflow toggle | Run `adapters/opencode/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly requests tracked/untracked mode switching |
+| routing-contract signal | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh prompt-signal [cwd] [session-id]`; no statusline assumption |
 | memory inject | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh memory [cwd]` once per session; run it manually when plugins are unavailable |
 | memory recall | The agent decides contextually when memory may help, then runs `adapters/opencode/bin/preflight.sh recall <query> [cwd] [session-id]`. The plugin does not capture prompts for recall classification |
 | oncall briefing | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh briefing [cwd]`; run it manually when plugins are unavailable |
@@ -392,8 +387,6 @@ entire shared `utilities/` directory. The current allowlist is:
 - `artifact-root.sh`
 - `agent-worklog-state.sh`
 - `harness-status.sh`
-- `workflow-guard-hook.sh`
-- `workflow-toggle.sh`
 
 Do not project the shared `dispatch-liveness.sh`; it is the cross-harness
 registry/wait fallback, while OpenCode uses the adapter-owned

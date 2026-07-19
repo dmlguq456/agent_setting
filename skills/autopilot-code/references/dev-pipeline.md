@@ -60,7 +60,7 @@ When implementation or reporting requires result plots, experiment-log visualiza
 
 ### Step 1: code-plan
 
-Skip for direct. quick uses an inline micro-plan. For standard+, first verify the SD-13 precondition: the repository has an artifact root and `spec/`, or is explicitly untracked. Then dispatch:
+Skip for direct. quick uses an inline micro-plan. For standard+, first verify the SD-13 precondition: the repository has an artifact root and `spec/`. Then dispatch:
 
 ```bash
 AGENT_HOME=$(utilities/agent-home.sh)

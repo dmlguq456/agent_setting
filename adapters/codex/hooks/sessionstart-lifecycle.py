@@ -48,14 +48,6 @@ def cwd(payload: dict[str, Any]) -> str:
     return nested_string(payload, "cwd", "working_directory", "workingDirectory") or os.getcwd()
 
 
-def session_id(payload: dict[str, Any]) -> str:
-    sid = nested_string(payload, "session_id", "sessionID", "thread_id", "threadID")
-    session = payload.get("session")
-    if not sid and isinstance(session, dict):
-        sid = first_string(session, "id")
-    return sid or "codex-hook"
-
-
 def run_preflight(*args: str) -> str:
     env = os.environ.copy()
     env.setdefault("AGENT_HOME", str(ROOT))
@@ -99,9 +91,7 @@ def emit_context(event_name: str, parts: list[str]) -> None:
 def main() -> int:
     payload = load_payload()
     current_cwd = cwd(payload)
-    sid = session_id(payload)
 
-    run_preflight("start", current_cwd, sid)
     parts = []
     if not is_worker_session() and env_truthy("CODEX_SESSION_MEMORY_INJECT"):
         parts.append(run_preflight("memory", current_cwd))

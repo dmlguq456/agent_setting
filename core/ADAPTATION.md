@@ -171,7 +171,6 @@ Portable hook semantics are named by invariant:
 | spec read gate | Spec-backed work must read the current blueprint before changing code/spec |
 | core first gate | Adapter edits must be grounded in an actual current-session read of the relevant core contract |
 | memory write guard | Runtime-native memory files must not bypass the unified memory store |
-| workflow signal | Surface tracked/untracked mode to the active agent |
 | memory recall/inject/distill | Inject relevant memory and optionally distill session deltas |
 | worklog state signal | Surface the configured notes root and board app status without moving or mutating data |
 

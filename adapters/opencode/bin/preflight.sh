@@ -66,9 +66,6 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh read <file> [session-id]
        preflight.sh capability <name> [cwd] [session-id]
        preflight.sh skill <name> [cwd] [session-id]
-       preflight.sh start [cwd] [session-id]
-       preflight.sh mode [cwd] [session-id]
-       preflight.sh track [cwd] [session-id]
        preflight.sh memory [cwd]
        preflight.sh recall <query> [cwd] [session-id]
        preflight.sh briefing [cwd]
@@ -205,7 +202,7 @@ opencode_runtime_projection_check() {
     printf 'check=failed\nreason=opencode-native-skills-missing\nopencode_home=%s\nexpected=%s|%s\n' "$opencode_home" "$opencode_home/skills" "$opencode_home/agent-skills"
     return 69
   fi
-  if rg -q 'adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|track-toggle\.sh|agent-modes|allowedTools|/\.claude/' \
+  if rg -q 'adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|agent-modes|allowedTools|/\.claude/' \
     "$native_agent" "$native_command" "$opencode_home/plugins/agent-harness-guards.js" 2>/dev/null; then
     printf 'check=failed\nreason=opencode-runtime-projection-exposes-claude-surface\nopencode_home=%s\n' "$opencode_home"
     return 69
@@ -225,7 +222,7 @@ case "$cmd" in
     sid=${3:-opencode}
     "$ROOT/hooks/git-state-guard.sh" --file "$file"
     "$ROOT/hooks/core-first-guard.sh" --file "$file" --session "$sid"
-    ARTIFACT_GUARD_TOGGLE_LABEL="preflight.sh track" "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
+    "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/builtin-memory-guard.sh" --file "$file"
     ;;
   read)
@@ -242,21 +239,10 @@ case "$cmd" in
     sid=${4:-opencode}
     "$ROOT/hooks/spec-skill-gate.sh" --skill "$name" --cwd "$cwd" --session "$sid"
     ;;
-  start)
-    cwd=${2:-$PWD}
-    sid=${3:-opencode}
-    "$ROOT/utilities/workflow-guard-hook.sh" --event start --cwd "$cwd" --session "$sid" --format text
-    ;;
-  mode)
-    cwd=${2:-$PWD}
-    sid=${3:-opencode}
-    "$ROOT/utilities/workflow-guard-hook.sh" --event prompt --cwd "$cwd" --session "$sid" --format text --toggle-label "preflight.sh track"
-    ;;
   prompt-signal)
     cwd=${2:-$PWD}
     sid=${3:-opencode}
     status=$(AGENT_ADAPTER=opencode "$ROOT/utilities/harness-status.sh" "$cwd" "$sid")
-    workflow_state=$(printf '%s\n' "$status" | awk -F= '$1=="workflow_state"{print $2; exit}')
     artifact_root_kind=$(printf '%s\n' "$status" | awk -F= '$1=="artifact_root_kind"{print $2; exit}')
     git_operation=$(printf '%s\n' "$status" | awk -F= '$1=="git_operation"{print $2; exit}')
     headless_open_jobs=$(printf '%s\n' "$status" | awk -F= '$1=="headless_open_jobs"{print $2; exit}')
@@ -264,19 +250,13 @@ case "$cmd" in
     printf 'runtime_surface=opencode-system-transform-hook-signal\n'
     printf 'hook_event=experimental.chat.system.transform\n'
     printf 'hook_scope=runtime-plugin\n'
-    printf 'workflow_state=%s\n' "${workflow_state:-unknown}"
     printf 'artifact_root_kind=%s\n' "${artifact_root_kind:-unknown}"
     printf 'git_operation=%s\n' "${git_operation:-unknown}"
     printf 'headless_open_jobs=%s\n' "${headless_open_jobs:-0}"
-    if [ "${workflow_state:-tracked}" = "untracked" ]; then
-      printf 'autopilot_route=optional-direct-work-allowed\n'
-      printf 'routing_contract=untracked-direct-work\n'
-    else
-      printf 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work\n'
-      printf 'routing_contract=core/WORKFLOW.md\n'
-      printf 'routing_action=read-workflow-and-select-opencode-skill-or-command\n'
-      printf 'capability_entrypoints=opencode-native-skills-commands\n'
-    fi
+    printf 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work\n'
+    printf 'routing_contract=core/WORKFLOW.md\n'
+    printf 'routing_action=read-workflow-and-select-opencode-skill-or-command\n'
+    printf 'capability_entrypoints=opencode-native-skills-commands\n'
     printf 'enforced_hooks=plugin-write-guards,core-first-guard,plugin-command-spec-gate,plugin-read-markers,plugin-design-check,session-memory,prompt-recall,session-idle-distill\n'
     printf 'hook_boundary=plugin-tool-command-event-bridges\n'
     ;;
@@ -296,11 +276,6 @@ subagent_surface=opencode-native-subagents
 subagent_auto_spawn=explicit-or-main-dispatched
 note=OpenCode exposes a native TUI footer (model/context/tokens/session) but no user-customizable shell statusline script; use preflight status for harness-specific signals.
 EOF
-    ;;
-  track)
-    cwd=${2:-$PWD}
-    sid=${3:-opencode}
-    "$ROOT/utilities/workflow-toggle.sh" --cwd "$cwd" --session "$sid"
     ;;
   memory)
     cwd=${2:-$PWD}

@@ -1,5 +1,5 @@
 #!/bin/bash
-# g5b: research/analysis 없는 프로젝트에서 spec 요청 → 생성 순서 게이트 (.agent_reports variant)
+# g5b: 일반 프로젝트에서 spec 요청 → canonical-root 강제 (.agent_reports variant)
 set -eu
 WORK=$1
 mkdir -p "$WORK/.pre" "$WORK/repo/.agent_reports"
