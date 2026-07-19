@@ -100,12 +100,14 @@ class StageZoneCapTest(unittest.TestCase):
         self.assertLessEqual(_segs_width(segs), render._STAGE_ZONE_MAX)
 
     def test_short_rows_are_unaffected(self):
-        """회귀 0 — today's real observed max (24, 'code: plan › exec › test') renders
-        byte-for-byte identical to pre-D3 output (unchanged, no dropping triggered)."""
+        """회귀 0 — a depth-1 row's full breadcrumb (19, 'plan✓ › exec › test') renders
+        without any dropping triggered. 2026-07-20: the 'code: ' entry-skill prefix moved
+        to the options dial (_entry_skill leads _opts_segs), so the breadcrumb is
+        stages-only here; depth-2 stage workers keep their role-label prefix."""
         j = _job(key="code", worker_role="code-execute", stage="exec", slug="s")
         segs = render._dispatch_stage_segs(j, j.key, j.stage, j.slug, working=False)
         joined = "".join(t for t, _k in segs)
-        self.assertEqual(joined, "code: plan✓ › exec › test")
+        self.assertEqual(joined, "plan✓ › exec › test")
 
 
 if __name__ == "__main__":

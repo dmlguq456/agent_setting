@@ -130,12 +130,14 @@ class DispatchRowMergeTest(unittest.TestCase):
 
     def test_dispatch_row_falls_back_to_parent_effort_shown_plain(self):
         # user 2026-07-16: the `~` derived-value marker is retired — inherited effort
-        # renders exactly like an owned one.
+        # renders exactly like an owned one. 2026-07-20: the full model name outranks the
+        # effort word in the narrowed dispatch cell (F-9(c) ladder), so 'xhigh' rides as
+        # its 2-char form here rather than clipping 'Opus 4.8' down to 'Opus 4.'.
         j = self._job(effort=None)
         segs = render._dispatch_row(j, name_width=40, parent_effort="xhigh")
         text = "".join(t for t, _k in segs)
-        self.assertIn("·xhigh", text)
-        self.assertNotIn("~xhigh", text)
+        self.assertIn("Opus 4.8·xh", text)
+        self.assertNotIn("~xh", text)
 
     def test_dead_dispatch_row_shows_bare_harness_only(self):
         j = self._job(liveness="dead")

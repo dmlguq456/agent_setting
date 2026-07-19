@@ -105,6 +105,8 @@ _HUE_OF = {
     "grp_cool": ("y", _A_D), "grp_cold": ("d", _A_D),   # Cooling is dim yellow; cold is dim grey.
     "eff_low": ("d", _A_D), "eff_medium": ("d", 0), "eff_high": ("l", 0),
     "eff_xhigh": ("m", _A_B), "eff_max": ("r", _A_B),
+    "effd_low": ("d", _A_D), "effd_medium": ("d", _A_D), "effd_high": ("l", _A_D),
+    "effd_xhigh": ("m", _A_D), "effd_max": ("r", _A_D),
     "h_claude": ("c", _A_D), "h_codex": ("m", _A_D), "h_opencode": ("l", _A_D),
     "hb_claude": ("c", 0), "hb_codex": ("m", 0), "hb_opencode": ("l", 0), "hb_other": ("d", 0),
     "fam_opus": ("c", 0), "fam_sonnet": ("l", 0), "fam_haiku": ("g", 0),
@@ -221,6 +223,11 @@ def _init_colors():
     _COLOR["eff_high"] = _COLOR.get("h_opencode", 0) & ~curses.A_DIM   # plain blue
     _COLOR["eff_xhigh"] = (_COLOR.get("h_codex", 0) & ~curses.A_DIM) | curses.A_BOLD  # bold magenta
     _COLOR["eff_max"] = _COLOR.get("red", 0) | curses.A_BOLD
+    # dispatch-row effort: the SAME hue ramp at dim weight (user 2026-07-20: 분사 행에도
+    # 컬러 — a flat grey effort read as part of the grey subtitle). Bold is stripped so a
+    # dim row never carries a bolder cell than its parent session's.
+    for _e in ("low", "medium", "high", "xhigh", "max"):
+        _COLOR["effd_" + _e] = (_COLOR.get("eff_" + _e, 0) & ~curses.A_BOLD) | curses.A_DIM
     # htop chrome: the one background pair on screen — black on
     # WHITE full-width bars wrapping the board (column-header bar + footer key bar). htop's CYAN
     # looked dated, so use neutral white.
@@ -371,9 +378,19 @@ def _model_key(model, dim=False):
     return ("famd_" if dim else "fam_") + _model_family(model)
 
 
+# bare model-ROLE tokens (dispatch env exports the portable role, not a concrete model id) →
+# proper-noun display. Family word only — never a fabricated version number (the env doesn't
+# say WHICH opus the harness resolved).
+_ROLE_MODEL_NAME = {"opus": "Opus", "sonnet": "Sonnet", "haiku": "Haiku", "fable": "Fable"}
+
+
 def _clean_model(name):
-    """'Opus 4.8 (1M context)' → 'Opus 4.8' (drop the trailing parenthetical — redundant, ugly when truncated)."""
-    return name.split(" (", 1)[0] if name else name
+    """'Opus 4.8 (1M context)' → 'Opus 4.8' (drop the trailing parenthetical — redundant, ugly
+    when truncated); bare role tokens 'opus'/'sonnet' → 'Opus'/'Sonnet' (user 2026-07-20)."""
+    if not name:
+        return name
+    name = name.split(" (", 1)[0]
+    return _ROLE_MODEL_NAME.get(name.lower(), name)
 
 
 # mid-height bar (━ filled / ─ empty): the glyphs sit at the cell's vertical centre, so gauges on
@@ -542,10 +559,13 @@ def _stage_role_label(worker_role):
 
 # Plain-text column labels without decorative icons.
 # 'effort' gets its OWN header over the fixed subcolumn inside the model cell (user 2026-07-02).
-_STAGE_RESERVE = 22           # trailing room for the dispatch stage breadcrumb after the
-                              # options column (plan › exec › test ≈ 18 + gap) — without this
+_STAGE_RESERVE = 20           # trailing room for the dispatch stage breadcrumb after the
+                              # options column (plan✓ › exec › test = 19 + gap) — without this
                               # the name column absorbs all slack and the breadcrumb clips at
-                              # the panel edge (user 2026-07-15: 분사 세션 단계가 잘림)
+                              # the panel edge (user 2026-07-15: 분사 세션 단계가 잘림).
+                              # 22→20 (2026-07-20): the redundant 'code: ' prefix left the
+                              # breadcrumb (entry skill leads the options column now), so the
+                              # freed cells flow to the name/ctx slack ledger.
 
 
 def _wide_slack(term_width):
@@ -568,31 +588,36 @@ def _wide_slack(term_width):
     return int(term_width) - fixed_row - framing
 
 
-def _wide_name_width(term_width):
-    """Responsive wide-layout name column, between _NW_S and _NAME_WIDE_MAX.
+_CTX_BOOST = 12               # (user 2026-07-20: "context를 좀 더 꽉차게 확장") — the FIRST
+                              # cells of wide-layout slack past the base name column widen the
+                              # ctx gauge, BEFORE the name starts growing toward its F-22 cap.
+                              # At a 160-col terminal this puts the gauge at 36 instead of 30.
 
-    Reserve every field after the name plus the right-flushed time and panel
-    margins — including trailing breadcrumb room (_STAGE_RESERVE) — then give
-    the remaining horizontal slack to the session column, but only up to
-    _NAME_WIDE_MAX (F-22 minor, v8). Leftover slack past the cap flows to the
-    ctx gauge instead (`_wide_ctx_width`) rather than sitting as blank padding.
-    """
+
+def _wide_alloc(term_width):
+    """(name_width, ctx_width) for the wide layout — ONE slack ledger for both
+    columns, so their budgets can never double-spend the same cells. Priority
+    (user 2026-07-20): gauge boost (_CTX_BOOST) → name growth to _NAME_WIDE_MAX
+    (F-22) → everything past the cap back to the gauge (user 2026-07-16: right
+    edges keep lining up per width, no blank padding before the time column)."""
     raw = _wide_slack(term_width)
     if raw is None:
-        return _NW_S
-    return max(_NW_S, min(_NAME_WIDE_MAX, raw))
+        return _NW_S, _CTX_W
+    surplus = max(0, raw - _NW_S)
+    boost = min(_CTX_BOOST, surplus)
+    grow = min(_NAME_WIDE_MAX - _NW_S, surplus - boost)
+    return _NW_S + grow, _CTX_W + boost + (surplus - boost - grow)
+
+
+def _wide_name_width(term_width):
+    """Responsive wide-layout name column, between _NW_S and _NAME_WIDE_MAX
+    (F-22 minor, v8) — see `_wide_alloc` for the slack priority."""
+    return _wide_alloc(term_width)[0]
 
 
 def _wide_ctx_width(term_width):
-    """Wide-layout ctx-gauge width: once the name column hits its _NAME_WIDE_MAX
-    cap, the remaining terminal slack widens the gauge instead of being left as
-    blank padding before the time column (user 2026-07-16: "context window의
-    길이를 더 늘려서 맞춰주고") — every row's gauge then ends at the same column
-    for a given terminal width, so the right edges line up across rows."""
-    raw = _wide_slack(term_width)
-    if raw is None:
-        return _CTX_W
-    return _CTX_W + max(0, raw - _NAME_WIDE_MAX)
+    """Wide-layout ctx-gauge width — see `_wide_alloc` for the slack priority."""
+    return _wide_alloc(term_width)[1]
 
 
 def _col_head(name_width):
@@ -611,10 +636,18 @@ def _branch_seg(cwd, branch, dim=True):
 
 def _eff_key(effort, dim):
     """Effort heat ramp: low and medium recede,
-    high = yellow, xhigh = bold yellow, max = bold red. Dispatch/stale rows stay flat dim."""
+    high = blue, xhigh = bold magenta, max = bold red. Dim rows (dispatch/stale) keep the
+    ramp's HUE at dim weight (user 2026-07-20: 분사 행에도 컬러 — flat grey read as subtitle)."""
+    known = effort in ("low", "medium", "high", "xhigh", "max")
     if dim:
-        return "dim"
-    return ("eff_" + effort) if effort in ("low", "medium", "high", "xhigh", "max") else None
+        return ("effd_" + effort) if known else "dim"
+    return ("eff_" + effort) if known else None
+
+
+# 2-char effort forms — the F-9(c) middle rung in `_harness_model_cell`'s fit ladder: a
+# narrowed dispatch cell shortens the effort word before it would ever clip the model name
+# (user 2026-07-20: 'Opus 4.'/'Sonn' 잘림 대신 풀네임).
+_EFF_SHORT = {"low": "lo", "medium": "md", "high": "hi", "xhigh": "xh", "max": "mx"}
 
 
 def _model_cell(model, effort, width, dim=False):
@@ -646,12 +679,20 @@ def _harness_model_cell(harness, model, effort, width, hkey, dim=False, unknown=
     name = _clean_model(dash(model)) if model else None
     if name and name != "—":
         room = width - used - 4          # " (" prefix + trailing ")" + 1 guaranteed gap
-        eff = effort or ""
-        if eff and room > len(eff) + 1:
-            nm = name[: max(1, room - len(eff) - 1)]
-            segs += [(" (", "dim"), (nm, _model_key(model, dim=dim)),
-                     ("·", "dim"), (eff, _eff_key(eff, dim)), (")", "dim")]
-            used += 2 + len(nm) + 1 + len(eff) + 1
+        # F-9(c) fit ladder (user 2026-07-20: 'Opus 4.'/'Sonn' mid-word clips) — the FULL
+        # model name outranks the effort word: effort shortens to its 2-char form, then
+        # drops whole, before the model name loses a single character. Color keys stay
+        # keyed by the full effort value even when the short form is shown.
+        eff_full = effort or ""
+        eff = eff_full
+        if eff and room < len(name) + 1 + len(eff):
+            eff = _EFF_SHORT.get(eff_full, eff_full)
+        if eff and room < len(name) + 1 + len(eff):
+            eff = ""
+        if eff:
+            segs += [(" (", "dim"), (name, _model_key(model, dim=dim)),
+                     ("·", "dim"), (eff, _eff_key(eff_full, dim)), (")", "dim")]
+            used += 2 + len(name) + 1 + len(eff) + 1
         elif room > 0:
             nm = name[: max(1, room)]
             segs += [(" (", "dim"), (nm, _model_key(model, dim=dim)), (")", "dim")]
@@ -665,9 +706,11 @@ _STAGE_ZONE_MAX = 30          # D3 (v9) — one constant, one place, same idiom 
                                # _NAME_WIDE_MAX(:523)/_DISPATCH_NAME_MAX(:887)/_PROFILE_MAX(:944).
                                # 168-col zero-overflow was previously incidental (a measured
                                # 5-cell slack, not a bound): a longer conductor/qa label or a
-                               # further-along stage re-broke it. Real current max observed is
-                               # 24 ("code: plan › exec › test") — 30 leaves headroom without
-                               # regressing anything currently on screen.
+                               # further-along stage re-broke it. Widest real row since the
+                               # depth-1 entry-skill prefix moved to the options dial
+                               # (2026-07-20) is a prefixed depth-2 stage worker
+                               # ("exec: plan✓ › exec › test" = 25) — 30 keeps headroom
+                               # without regressing anything currently on screen.
 
 
 def _drop_past_stages(items, cur_i, max_width):
@@ -802,10 +845,12 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None
         # real pipeline shape, not a role-label prefix over the hardcoded 3-stage table.
         return _stage_segs(key, stage, working=working, max_width=_STAGE_ZONE_MAX,
                            route_seq=route_seq)
-    if key and key != slug_name:
+    if key and key != slug_name and not _entry_skill(j):
         # SD-F1: a depth-2 stage worker's `key` IS its capability (code-plan/code-execute/
         # code-test/code-report) — reuse _stage_role_label (same helper the F-13 legend
         # uses) to humanize it instead of leaking the raw capability token onto the board.
+        # When `_entry_skill` already leads the options column with this very token (user
+        # 2026-07-20: "code가 표시가 되어있는데"), the prefix is a same-row duplicate — skip.
         role_label, role_suffix = _stage_role_label(key)
         prefix_text = (role_label + role_suffix) if role_label else key
         prefix_seg = (prefix_text + ": ", "name_dim")
@@ -1012,12 +1057,50 @@ def _short_role(value):
 _PROFILE_MAX = 28
 
 
+def _strip_autopilot(name):
+    if name and name.startswith("autopilot-"):
+        return name[len("autopilot-"):]
+    return name
+
+
+def _entry_skill(j):
+    """The depth-1 conductor's ENTRY capability, short form ('autopilot-code' → 'code') —
+    leads the options dial (user 2026-07-20: entry skill 종류가 mode 앞에). None when it
+    would duplicate what the row already says: depth-2 workers carry their stage label in
+    the name zone, and a mode like 'loop/drill' already names its own entry."""
+    if max(1, int(getattr(j, "depth", 1) or 1)) >= 2:
+        return None
+    cap = _strip_autopilot(getattr(j, "capability_owner", None) or "")
+    key = getattr(j, "key", None)
+    skill = cap or (key if key in _PIPE_STAGES else None)
+    if not skill:
+        return None
+    if skill in (getattr(j, "mode", None) or "").split("/"):
+        return None
+    return skill
+
+
 def _dispatch_role_suffix(j, max_width=None):
     # qa is data-only now (kept in --json): the retired qa axis left the display entirely
     # (user 2026-07-16 — rigor derives from intensity, CONVENTIONS §1.1).
     raw_role = getattr(j, "worker_role", None)
     if getattr(j, "key", None) in _LOOPS_KEYS and raw_role == getattr(j, "slug", None):
         raw_role = None
+    # A capability name is not a role (user 2026-07-20: "code가 표시가 되어있는데 굳이
+    # autopilot-code가 왜 표시되는지") — a worker_role that restates the job's own key/
+    # capability_owner drops, and a '<capability>-<role>' composite ('autopilot-code-owner')
+    # keeps only its role tail instead of rendering as 'autopilot_cod…'.
+    if raw_role:
+        bare = _strip_autopilot(raw_role)
+        dups = [d for d in (_strip_autopilot(getattr(j, "capability_owner", None) or "") or None,
+                            getattr(j, "key", None)) if d]
+        if bare in dups:
+            raw_role = None
+        else:
+            for d in dups:
+                if bare.startswith(d + "-"):
+                    raw_role = bare[len(d) + 1:]
+                    break
     role = _short_role(raw_role)
     intensity = _short_level(getattr(j, "intensity", None))
     parts = []
@@ -1065,7 +1148,14 @@ def _opts_segs(j):
     profile = _dispatch_profile(j)
     parts = []
     w = 0
+    # user 2026-07-20: the entry skill LEADS the dial — 'code·dev·strong', not the mode
+    # first with the capability buried (or duplicated) in the role suffix.
+    entry = _entry_skill(j)
+    if entry:
+        parts.append((entry, "name_dim")); w += len(entry)
     if j.mode:
+        if parts:
+            parts.append(("·", "dim")); w += 1
         parts.append((j.mode, "dim")); w += len(j.mode)
     if profile:
         if parts:
@@ -1120,7 +1210,11 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     else:
         nm = _compact_dispatch_name(slug_name, name_room)
     used = len(nm)
-    segs.append((nm, "name_dim"))
+    # user 2026-07-20: 분사 행 제목도 컬러 — the dim HARNESS hue, so the title row stays
+    # dark but no longer reads identical to its grey subtitle line underneath. Dead/stale
+    # rows keep the colorless dim (F-13: no live telemetry, nothing to tint).
+    name_key_j = "name_dim" if dead_stale_j else _BADGE_KEY.get(j.harness, "name_dim")
+    segs.append((nm, name_key_j))
     if otag and used + len(otag) <= avail:
         segs.append((otag, "gate_u")); used += len(otag)
     if used < avail:
@@ -1289,8 +1383,11 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
         shown_name = label + " " + _compact_dispatch_name(slug_name, slug_room)
     else:
         shown_name = _compact_dispatch_name(slug_name)
+    # user 2026-07-20: 분사 행 제목도 컬러 (dim harness hue) — same rule as the wide row.
+    name_key_j = ("name_dim" if j.liveness in ("dead", "stale")
+                  else _BADGE_KEY.get(j.harness, "name_dim"))
     l1 = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None),
-          (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim")), (shown_name, "name_dim")]
+          (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim")), (shown_name, name_key_j)]
     if orphan:
         l1.append(("  (orphan)", "gate_u"))
     br = None if key in _LOOPS_KEYS else (j.branch or _git_branch(j.cwd))
