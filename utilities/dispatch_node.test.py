@@ -266,6 +266,41 @@ class MainMaterializationTest(unittest.TestCase):
         self.assertIn("--parent", argv)
         self.assertIn("owner", argv)
 
+    def test_harness_affinity_field_forwarded_into_wrapper_argv(self):
+        node = make_node()
+        node["harness_affinity"] = "codex"
+        route = make_route(node)
+        argv = self._run_main(
+            ["--node", "execute", "--adapter", "claude", "--slug", "s4", "--parent", "owner"],
+            route,
+        )
+        self.assertIsNotNone(argv)
+        idx = argv.index("--harness-affinity")
+        self.assertEqual(argv[idx + 1], "codex")
+
+    def test_harness_affinity_absent_field_omits_flag(self):
+        node = make_node()
+        self.assertNotIn("harness_affinity", node)
+        route = make_route(node)
+        argv = self._run_main(
+            ["--node", "execute", "--adapter", "claude", "--slug", "s5", "--parent", "owner"],
+            route,
+        )
+        self.assertIsNotNone(argv)
+        self.assertNotIn("--harness-affinity", argv)
+
+    def test_explicit_adapter_differs_from_affinity_launch_still_passes(self):
+        node = make_node()
+        node["harness_affinity"] = "codex"
+        route = make_route(node)
+        argv = self._run_main(
+            ["--node", "execute", "--adapter", "claude", "--slug", "s6", "--parent", "owner"],
+            route,
+        )
+        self.assertIsNotNone(argv)
+        self.assertIn("--harness-affinity", argv)
+        self.assertIn("codex", argv)
+
     def test_depth2_materialization_exits_65_on_missing_evidence(self):
         node = make_node(dispatch_fallback=[
             {"ordinal": 1, "hop": "same-harness-headless", "candidates": [base_tuple("claude")]},

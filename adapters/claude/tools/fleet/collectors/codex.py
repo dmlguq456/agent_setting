@@ -203,13 +203,22 @@ def _is_subagent(meta):
 
 
 def _proc_rollout(pid, cwd, home):
-    """Return the rollout open by this process, preferring root/user over subagent."""
+    """Return the rollout open by this process, preferring root/user over subagent.
+
+    Deliberately NOT pinned to ``home`` (2026-07-19): a dispatched worker runs with a
+    worktree-local ``CODEX_HOME`` (``.dispatch/nested-codex-home``), so its rollout never
+    lives under the fleet process's own home — the old home-prefix filter silently dropped
+    every nested child, which is why they never earned a title/subtitle. The rollout SHAPE
+    (``…/sessions/…/rollout-*.jsonl`` via ``_sid``) plus the session_meta cwd match below
+    is already the ownership proof; the home root added nothing but the false negative.
+    """
     candidates = []
+    unmatched = []
     try:
         names = os.listdir("/proc/%s/fd" % pid)
     except OSError:
         return None
-    sessions_root = os.path.realpath(os.path.join(home, "sessions")) + os.sep
+    sessions_marker = os.sep + "sessions" + os.sep
     wanted_cwd = os.path.realpath(cwd)
     for name in names:
         try:
@@ -219,13 +228,24 @@ def _proc_rollout(pid, cwd, home):
         except OSError:
             continue
         real = os.path.realpath(path)
-        if not real.startswith(sessions_root) or not _sid(real):
+        if sessions_marker not in real or not _sid(real):
             continue
         meta = _rollout_meta(real)
         if os.path.realpath(meta.get("cwd") or "") != wanted_cwd:
+            unmatched.append(real)
             continue
         candidates.append((1 if _is_subagent(meta) else 0, real))
-    return min(candidates, default=(None, None))[1]
+    if candidates:
+        return min(candidates)[1]
+    # No cwd match, but the process holds exactly ONE rollout open: the fd itself is the
+    # ownership proof. This is the `codex exec --cd <worktree>` shape (2026-07-19): the
+    # PROCESS cwd stays where the wrapper launched it while session_meta records the
+    # --cd target, so the equality check above can never match a dispatched worker.
+    # Multiple unmatched rollouts stay refused — an app-server holds many sessions'
+    # files, and guessing among them is the misattribution F-26 forbids.
+    if len(set(unmatched)) == 1:
+        return unmatched[0]
+    return None
 
 
 def _session_created(meta):

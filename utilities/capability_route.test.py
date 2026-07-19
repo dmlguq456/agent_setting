@@ -1,10 +1,70 @@
 #!/usr/bin/env python3
-import importlib.util, json, tempfile, unittest
+import contextlib, importlib.util, json, os, tempfile, unittest
 from pathlib import Path
 
 P=Path(__file__).with_name("capability-route.py")
 S=importlib.util.spec_from_file_location("route",P); R=importlib.util.module_from_spec(S); S.loader.exec_module(R)
 ALL=["atomic-outcome","known-scope","no-shared-contract","no-resource-run","no-artifact-handoff","no-independent-verifier","focused-verification"]
+
+DD_CONFIG_A="""schema_version: 1
+depth1_owner: [claude, codex]
+opencode:
+  relief_only: true
+capabilities:
+  autopilot-code:
+    execute: codex
+    test: diverse
+    report: claude
+"""
+DD_CONFIG_B="""schema_version: 1
+depth1_owner: [claude, codex]
+opencode:
+  relief_only: true
+capabilities:
+  autopilot-code:
+    execute: claude
+    test: diverse
+    report: codex
+"""
+DD_CONFIG_A_COMMENTED="""# scaffold comment only, no semantic change
+schema_version: 1
+depth1_owner: [claude, codex]
+opencode:
+  relief_only: true
+capabilities:
+  autopilot-code:
+    execute: codex
+    test: diverse
+    report: claude
+"""
+DD_CONFIG_CORRUPT="""schema_version: 1
+depth1_owner: [claude, codex]
+opencode:
+  relief_only: true
+capabilities:
+  autopilot-code:
+    execute: gpt
+"""
+
+@contextlib.contextmanager
+def dispatch_defaults_config(text):
+ with tempfile.TemporaryDirectory() as td:
+  p=Path(td)/"dispatch-defaults.yaml"; p.write_text(text)
+  old=os.environ.get("DISPATCH_DEFAULTS_CONFIG")
+  os.environ["DISPATCH_DEFAULTS_CONFIG"]=str(p)
+  try: yield p
+  finally:
+   if old is None: os.environ.pop("DISPATCH_DEFAULTS_CONFIG",None)
+   else: os.environ["DISPATCH_DEFAULTS_CONFIG"]=old
+
+@contextlib.contextmanager
+def dispatch_defaults_config_path(path):
+ old=os.environ.get("DISPATCH_DEFAULTS_CONFIG")
+ os.environ["DISPATCH_DEFAULTS_CONFIG"]=str(path)
+ try: yield
+ finally:
+  if old is None: os.environ.pop("DISPATCH_DEFAULTS_CONFIG",None)
+  else: os.environ["DISPATCH_DEFAULTS_CONFIG"]=old
 
 class TestRoute(unittest.TestCase):
  def dispatch(self,*rows):
@@ -70,5 +130,58 @@ class TestRoute(unittest.TestCase):
     for row in hop.get("candidates",[]): row["broker_instance"]="brk-fixture"
   v1["route_hash"]=R.route_hash(v1); v1["route_id"]="rt-"+v1["route_hash"].split(":",1)[1][:16]
   R.verify_route(v1,R.ROOT)
+ def _standard(self):
+  return R.compile_route(**self.args(signals=["public-api"],inline_reason="dispatch-infra-self-modification"))
+ def test_seal_stamps_valid_affinity_and_digest(self):
+  with dispatch_defaults_config(DD_CONFIG_A):
+   route=self._standard()
+  by_id={n["id"]:n["harness_affinity"] for n in route["nodes"]}
+  self.assertEqual(set(by_id),{"plan","execute","test","report"})
+  for value in by_id.values(): self.assertIn(value,R.VALID_AFFINITY)
+  self.assertEqual(by_id["plan"],"unspecified")
+  self.assertEqual(by_id["execute"],"codex")
+  self.assertEqual(by_id["test"],"diverse")
+  self.assertEqual(by_id["report"],"claude")
+  self.assertIsNotNone(route["dispatch_defaults_digest"])
+ def test_seal_hash_changes_with_config_value_not_formatting(self):
+  with dispatch_defaults_config(DD_CONFIG_A):
+   a=self._standard()
+  with dispatch_defaults_config(DD_CONFIG_B):
+   b=self._standard()
+  self.assertNotEqual(a["route_hash"],b["route_hash"])
+  with dispatch_defaults_config(DD_CONFIG_A_COMMENTED):
+   a2=self._standard()
+  self.assertEqual(a["route_hash"],a2["route_hash"])
+  self.assertEqual(a["dispatch_defaults_digest"],a2["dispatch_defaults_digest"])
+ def test_seal_survives_post_compile_config_change(self):
+  with dispatch_defaults_config(DD_CONFIG_A):
+   route=self._standard()
+  with dispatch_defaults_config(DD_CONFIG_B):
+   R.verify_route(route,R.ROOT)
+ def test_seal_backcompat_old_route_without_fields(self):
+  with dispatch_defaults_config(DD_CONFIG_A):
+   route=self._standard()
+  legacy=json.loads(json.dumps(route))
+  for node in legacy["nodes"]: node.pop("harness_affinity",None)
+  legacy.pop("dispatch_defaults_digest",None)
+  legacy["route_hash"]=R.route_hash(legacy); legacy["route_id"]="rt-"+legacy["route_hash"].split(":",1)[1][:16]
+  R.verify_route(legacy,R.ROOT)
+ def test_seal_forged_vocabulary_fails(self):
+  with dispatch_defaults_config(DD_CONFIG_A):
+   route=self._standard()
+  route["nodes"][0]["harness_affinity"]="gpt"
+  route["route_hash"]=R.route_hash(route); route["route_id"]="rt-"+route["route_hash"].split(":",1)[1][:16]
+  with self.assertRaisesRegex(ValueError,"invalid harness_affinity vocabulary"):
+   R.verify_route(route,R.ROOT)
+ def test_seal_absent_config_all_unspecified_digest_none(self):
+  with tempfile.TemporaryDirectory() as td:
+   with dispatch_defaults_config_path(Path(td)/"does-not-exist.yaml"):
+    route=self._standard()
+  self.assertIsNone(route["dispatch_defaults_digest"])
+  for node in route["nodes"]: self.assertEqual(node["harness_affinity"],"unspecified")
+ def test_seal_corrupt_config_fails_loud(self):
+  with dispatch_defaults_config(DD_CONFIG_CORRUPT):
+   with self.assertRaisesRegex(ValueError,"corrupt dispatch-defaults config"):
+    self._standard()
 
 if __name__=="__main__": unittest.main()

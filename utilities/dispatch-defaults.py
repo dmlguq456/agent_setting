@@ -212,6 +212,14 @@ def query_affinity(config, capability, stage):
     return value
 
 
+def query_stage_affinity(config, capability, stage):
+    """SD-68 record-seal vocabulary: like query_affinity but a missing/unknown
+    cell maps to 'unspecified' (the record-seal word), never 'neutral' (the
+    selector word). Vocabulary ownership stays in this loader module."""
+    value = query_affinity(config, capability, stage)
+    return value if value in AFFINITY_VALUES else "unspecified"
+
+
 def query_owners(config):
     return config.get("depth1_owner", [])
 
