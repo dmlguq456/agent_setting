@@ -34,7 +34,7 @@ After selecting a mode, immediately read `<agent-home>/agent-modes/qa/{mode}.md`
 
 - `code-review`, `plan-review`, and `data-curate`: fast reviewer. Claude adapter default: sonnet.
 - `test`: fast reviewer because execution is primarily deterministic. Claude adapter default: sonnet.
-- `ml-debug`: deep reviewer for diagnosis and hypothesis reasoning. Claude adapter default: opus.
+- `ml-debug`: deep reviewer for diagnosis and hypothesis reasoning; when cross-harness dispatch is eligible, the orchestrator prefers GPT-family affinity for the diagnosis pass and verifies with a different family (`CONVENTIONS §2.1`; 2026-07-20 incident). Claude adapter default: opus.
 - `security-review`: deep reviewer for vulnerability reasoning and exploit-path analysis. Claude adapter default: opus.
 
 > **code-review effort scaling:** low or medium effort yields a small set of high-confidence findings; high through max broadens coverage and may include more uncertainty. Review correctness, reuse, simplification, and efficiency. The user may invoke `/code-review ultra` for the cloud multi-agent tier above the harness's adversarial QA combination of deep reviewers and an external adversary; this router cannot invoke that user-owned escalation itself.
