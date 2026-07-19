@@ -27,6 +27,7 @@ from dispatch_contract import (  # noqa: E402
     close_attempt_row,
     completion_marker_gate,
     ensure_global_registry_writable,
+    launch_orphan_watch,
     new_attempt_id,
     resolve_global_registry,
     validate_nested_eligibility,
@@ -343,29 +344,29 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
 # SD-71: names proven by the live `claude -p --help`/tool-enumeration probe
 # (_internal/probe_claude_tools.txt, captured 2026-07-19 against Claude Code
 # 2.1.215) to be asynchronous wait/scheduling/notification tools — the exact
-# class the SD-14 one-shot wait contract forbids a conductor from reaching
-# for, since `claude -p` exits at turn end and never receives their later
-# callback. Never includes Bash or any synchronous tool; dispatch-wait.sh
-# stays fully available. Update only from fresh probe evidence, never from
-# assumption.
+# class the SD-14 one-shot wait contract forbids any registered `claude -p`
+# launch from reaching, since the process exits at turn end and never receives
+# their later callback. This was first reproduced in a conductor and then in
+# an execute stage. Never includes Bash or any synchronous tool;
+# dispatch-wait.sh stays fully available. Update only from fresh probe
+# evidence, never from assumption.
 PROVEN_ASYNC_DENY = (
     "Monitor", "ScheduleWakeup", "CronCreate", "CronDelete", "CronList",
     "PushNotification", "RemoteTrigger",
 )
 
-# standard+ per OPERATIONS.md §5.10 — direct/quick never reach a depth-1 owner
-# conductor prompt in the first place, but this is the literal set the deny
-# list is scoped to.
+# The injected synchronous-wait prose remains specific to standard+ owners;
+# the runtime deny above is broader because every wrapper launch is one-shot.
 _STANDARD_PLUS_INTENSITY = {"standard", "strong", "thorough", "adversarial"}
 
 
 def _async_deny_tools(args: argparse.Namespace) -> tuple[str, ...]:
-    """SD-71: deny proven-fatal async tools for a standard+ owner (conductor) launch only."""
-    if getattr(args, "worker_type", None) != "owner":
-        return ()
-    if getattr(args, "intensity", None) not in _STANDARD_PLUS_INTENSITY:
-        return ()
+    """SD-71: deny proven-fatal async tools for every one-shot Claude launch."""
     return PROVEN_ASYNC_DENY
+
+
+def _async_wait_policy(args: argparse.Namespace) -> str:
+    return "deny-proven" if _async_deny_tools(args) else "unsupported"
 
 
 def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -> str:
@@ -463,6 +464,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
             pipe += f",{key}={value}"
     settings = args.resolved_model_settings
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},effort={settings['effort']}"
+    pipe += f",async_wait_policy={_async_wait_policy(args)}"
     if args.profile:
         pipe += f",profile={args.profile}"
     pipe += f",artifact_root={args.artifact_root},log_file={args.log_path}"
@@ -965,6 +967,24 @@ def main(argv: list[str]) -> int:
         if args.depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
             launch_identity += ",pid_scope=namespace-local"
         annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
+        if args.depth == 1 and args.worker_type == "owner":
+            try:
+                watcher_pid = launch_orphan_watch(
+                    jobs, agent_home, args.attempt_id, proc.pid, start_ticks or "")
+            except DispatchContractError as exc:
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                close_job_row(
+                    jobs, args.slug, args.worktree,
+                    "orphan-watch-launch-error", "", args.attempt_id)
+                return fail(exc.reason, 70, detail=exc.detail, child_spawned="0")
+            annotate_job_row(
+                jobs, args.slug, args.worktree,
+                f"orphan_watch=post-exit,orphan_watch_pid={watcher_pid}",
+                args.attempt_id,
+            )
         args.child_pid = proc.pid
         args.child_pid_start = start_ticks
         args.launch_heartbeat = seed_launch_heartbeat(args, jobs, proc.pid, start_ticks)

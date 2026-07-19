@@ -114,7 +114,7 @@ class ClaudeSD45(unittest.TestCase):
    art=base/".agent_reports"; art.mkdir(); gate={"spec_read":{"satisfied":True,"source":"claude-fixture"},"drift_verdict":"within-spec","workflow_mode":"tracked","artifact_guard":{"satisfied":True,"source":"claude-fixture"}}
    dispatch={"tuples":[{"parent_harness":"claude","parent_transport":"headless","parent_sandbox":"fixture","child_harness":"claude","launch_authority":"conductor","status":"supported","probe_source":"claude-fixture","probe_time":"2026-07-16T00:00:00Z","failure_class":""}],"native_subagent":[]}; route=R.compile_route("autopilot-code","dev","strong",repo,art,signals=["shared-contract"],transport="headless",tracking="tracked",tracked_gate_evidence=gate,dispatch_evidence=dispatch); path=base/"route.json"; path.write_text(json.dumps(route)); node=next(x for x in route["nodes"] if x["id"]=="execute"); jobs=base/"jobs.log"; logs=base/"logs"
    args=[sys.executable,str(ROOT/"adapters/claude/bin/dispatch-headless.py"),"--register","--worktree",str(repo),"--slug","claude-sd45","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--intensity","strong","--depth","2","--parent","owner","--route-file",str(path),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node","execute","--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--model","claude-test","--effort","low","--jobs",str(jobs),"--log-dir",str(logs)]
-   env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art)}; ok=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(ok.returncode,0,ok.stderr); prompt=(logs/"claude-sd45.claude.prompt.txt").read_text(); self.assertIn("consume the immutable record",prompt); self.assertNotIn("status -> prompt-signal -> mode -> route\n",prompt)
+   env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art)}; ok=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(ok.returncode,0,ok.stderr); prompt=(logs/"claude-sd45.claude.prompt.txt").read_text(); self.assertIn("consume the immutable record",prompt); self.assertNotIn("status -> prompt-signal -> mode -> route\n",prompt); self.assertIn("async_wait_policy=deny-proven",jobs.read_text())
    broken=json.loads(path.read_text()); del broken["tracked_gate_evidence"]; broken["route_hash"]=R.route_hash(broken); broken["route_id"]="rt-"+broken["route_hash"].split(":",1)[1][:16]; path.write_text(json.dumps(broken)); bad=args.copy(); bad[bad.index(route["route_id"])]=broken["route_id"]; bad[bad.index(route["route_hash"])]=broken["route_hash"]; denied=subprocess.run(bad,text=True,capture_output=True,env=env); self.assertEqual(denied.returncode,65); self.assertIn("tracked gate evidence",denied.stderr)
    legacy=[sys.executable,str(ROOT/"adapters/claude/bin/dispatch-headless.py"),"--dry-run","--worktree",str(repo),"--slug","claude-legacy-scope","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--write-scope","source/**","--model","claude-test","--effort","low"]
    compatible=subprocess.run(legacy,text=True,capture_output=True,env=env); self.assertEqual(compatible.returncode,0,compatible.stderr); self.assertIn("status=dry-run",compatible.stdout)
@@ -131,7 +131,7 @@ def _shell_command_args(**overrides):
 
 
 class ClaudeSD71AsyncDeny(unittest.TestCase):
-    """SD-71: deterministic --disallowedTools deny/fallback for the owner launch only."""
+    """SD-71: deterministic --disallowedTools deny/fallback for every one-shot launch."""
 
     def test_owner_standard_plus_gets_exactly_the_proven_names_never_bash(self):
         for intensity in ("standard", "strong", "thorough", "adversarial"):
@@ -146,19 +146,16 @@ class ClaudeSD71AsyncDeny(unittest.TestCase):
                     self.assertIn(name, command)
                 self.assertNotIn("--disallowedTools Bash", command)
 
-    def test_stage_worker_gets_no_deny_list(self):
-        args = _shell_command_args(worker_type="stage", intensity="strong")
-        self.assertEqual(WH._async_deny_tools(args), ())
-        command = WH.shell_command(args, Path("/tmp/p.txt"), Path("/tmp/l.log"))
-        self.assertNotIn("--disallowedTools", command)
-
-    def test_owner_direct_or_quick_gets_no_deny_list(self):
-        for intensity in ("direct", "quick"):
-            with self.subTest(intensity=intensity):
-                args = _shell_command_args(worker_type="owner", intensity=intensity)
-                self.assertEqual(WH._async_deny_tools(args), ())
+    def test_stage_direct_and_quick_launches_get_the_same_runtime_deny(self):
+        cases = (("stage", "strong"), ("owner", "direct"), ("owner", "quick"))
+        for worker_type, intensity in cases:
+            with self.subTest(worker_type=worker_type, intensity=intensity):
+                args = _shell_command_args(worker_type=worker_type, intensity=intensity)
+                self.assertEqual(WH._async_deny_tools(args), WH.PROVEN_ASYNC_DENY)
                 command = WH.shell_command(args, Path("/tmp/p.txt"), Path("/tmp/l.log"))
-                self.assertNotIn("--disallowedTools", command)
+                self.assertIn("--disallowedTools", command)
+                self.assertNotIn("Bash", WH._async_deny_tools(args))
+                self.assertEqual(WH._async_wait_policy(args), "deny-proven")
 
     def test_empty_proven_names_emits_no_flag(self):
         args = _shell_command_args()
@@ -166,6 +163,7 @@ class ClaudeSD71AsyncDeny(unittest.TestCase):
             self.assertEqual(WH._async_deny_tools(args), ())
             command = WH.shell_command(args, Path("/tmp/p.txt"), Path("/tmp/l.log"))
             self.assertNotIn("--disallowedTools", command)
+            self.assertEqual(WH._async_wait_policy(args), "unsupported")
 
     def test_owner_prompt_carries_standard_synchronous_wait_clause(self):
         args = _shell_command_args()

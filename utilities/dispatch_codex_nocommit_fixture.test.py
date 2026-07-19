@@ -129,6 +129,17 @@ class CodexNoCommitFixtureTest(unittest.TestCase):
                           subprocess.run(["git", "-C", str(self.linked), "rev-parse", "HEAD"],
                                          text=True, capture_output=True, check=True).stdout.strip())
 
+    def test_linked_detection_uses_git_topology_not_agent_home_path(self):
+        self.assertTrue(WH._is_linked_worktree(self.linked, self.primary))
+        self.assertFalse(
+            WH._is_linked_worktree(self.primary, ROOT),
+            "an external primary checkout is not a linked worktree merely because it differs from AGENT_HOME",
+        )
+        self.assertTrue(
+            WH._is_linked_worktree(self.base / "not-a-repo", self.primary),
+            "unprovable Git topology must conservatively retain the no-commit boundary",
+        )
+
     def test_source_edit_and_primary_spec_marker_persist_across_boundary(self):
         """(2) a simulated worker's source edit persists in the worktree, and a
         `.spec-grounding/<marker>` write lands in the PRIMARY checkout — the

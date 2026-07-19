@@ -27,6 +27,7 @@ from dispatch_contract import (  # noqa: E402
     close_attempt_row,
     completion_marker_gate,
     ensure_global_registry_writable,
+    launch_orphan_watch,
     new_attempt_id,
     resolve_global_registry,
     validate_nested_eligibility,
@@ -353,9 +354,22 @@ def _worktree_mutating_write_scope(write_scope: str | None) -> bool:
 
 
 def _is_linked_worktree(worktree, agent_home) -> bool:
+    """Identify a real linked worktree from Git metadata, not path inequality."""
     try:
-        return Path(worktree).resolve() != Path(agent_home).resolve()
-    except OSError:
+        root = Path(worktree).resolve()
+        values = []
+        for flag in ("--git-dir", "--git-common-dir"):
+            result = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", flag],
+                text=True, capture_output=True, check=True,
+            )
+            value = Path(result.stdout.strip())
+            values.append(value.resolve() if value.is_absolute() else (root / value).resolve())
+        git_dir, common_dir = values
+        return git_dir != common_dir
+    except (OSError, subprocess.SubprocessError, ValueError):
+        # A mutating stage whose Git topology cannot be proved is treated as
+        # linked/protected, preserving the no-commit safety boundary.
         return True
 
 
@@ -1217,6 +1231,24 @@ def main(argv: list[str]) -> int:
         if args.depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
             launch_identity += ",pid_scope=namespace-local"
         annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
+        if args.depth == 1 and args.worker_type == "owner":
+            try:
+                watcher_pid = launch_orphan_watch(
+                    jobs, agent_home, args.attempt_id, proc.pid, start_ticks or "")
+            except DispatchContractError as exc:
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                close_job_row(
+                    jobs, args.slug, args.worktree,
+                    "orphan-watch-launch-error", "", args.attempt_id)
+                return fail(exc.reason, 70, detail=exc.detail, child_spawned="0")
+            annotate_job_row(
+                jobs, args.slug, args.worktree,
+                f"orphan_watch=post-exit,orphan_watch_pid={watcher_pid}",
+                args.attempt_id,
+            )
         args.child_pid = proc.pid
         args.child_pid_start = start_ticks
         args.launch_heartbeat = seed_launch_heartbeat(args, jobs, proc.pid, start_ticks)
