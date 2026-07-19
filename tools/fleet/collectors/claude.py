@@ -406,6 +406,8 @@ def enrich(sess):
         if t:
             sess.title = t
     # Otherwise render falls back from a missing title to the registry name, then the slug.
+    # 3c) F-16/F-17 merge — live one-sentence subtitle from the same sidecar/haiku call.
+    sess.summary = titles.fresh_summary(sid, harness="claude") if sid else None
 
     # 4) provenance (F-26) — resolved LAST, and only for a session that has no title. A titled
     # session already says what it is; "who launched this?" is only an open question for a row
