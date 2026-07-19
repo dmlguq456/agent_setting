@@ -193,7 +193,7 @@ class SubAgent:
     agent_type: Optional[str] = None    # harness-reported sub-agent/type label; None = unknown
     active: bool = True                 # False = completed (dim, hidden unless `a` toggled)
     started_at: Optional[float] = None  # epoch sec, when available
-    source: Optional[str] = None        # opencode-db | claude-sidechain — provenance for audits
+    source: Optional[str] = None        # opencode-db | claude-sidechain | codex-state-db
 
     def to_dict(self):
         return asdict(self)
