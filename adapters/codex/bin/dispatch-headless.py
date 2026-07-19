@@ -340,6 +340,38 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
     return {"source": "explicit", "role": "-", "model": args.model, "reasoning": args.reasoning}
 
 
+def _worktree_mutating_write_scope(write_scope: str | None) -> bool:
+    if not write_scope:
+        return False
+    return any(
+        part.strip() in ("source/**", "source") or part.strip().startswith("source/")
+        for part in write_scope.split(";")
+    )
+
+
+def _is_linked_worktree(worktree, agent_home) -> bool:
+    try:
+        return Path(worktree).resolve() != Path(agent_home).resolve()
+    except OSError:
+        return True
+
+
+def is_no_commit_stage(args: argparse.Namespace) -> bool:
+    """SD-69: a linked-worktree Codex mutation stage never commits.
+
+    Codex's ``workspace-write`` sandbox keeps ``.git`` and the resolved
+    git-common-dir protected even when other roots are writable, so widening
+    the sandbox to expose Git metadata is never an accepted fix. Such a stage
+    produces source diff, tests, and evidence but does not ``git commit``; a
+    trusted depth-0/Claude boundary commits after the stage's own PASS gate.
+    """
+    return (
+        getattr(args, "worker_type", None) in ("owner", "stage")
+        and _worktree_mutating_write_scope(getattr(args, "write_scope", None))
+        and _is_linked_worktree(args.worktree, args.agent_home)
+    )
+
+
 def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
     task, source = task_prompt(args)
     args.worker_type = resolve_worker_type(
@@ -376,6 +408,12 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
             "- After a real tool call, write, test, or artifact update, run the same command with phase tool|file-write|test|artifact and kind tool|file|test|artifact plus a deterministic id/signature.\n"
             "- Repeated prose or an unchanged phase/evidence pair is not progress. Emit terminal only after the assigned artifact is durable.\n\n"
         )
+    no_commit_clause = (
+        "No-commit worker (SD-69):\n"
+        "- You are a no-commit worker: produce source diff, tests, and evidence; do NOT `git commit`.\n"
+        "- A trusted depth-0/Claude boundary commits after this stage's own PASS gate and confirms diff attribution.\n\n"
+        if is_no_commit_stage(args) else ""
+    )
     return (
         f"{bootstrap}\n"
         "Dispatch metadata:\n"
@@ -401,6 +439,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         "- Before each edit run $AGENT_HOME/adapters/codex/bin/preflight.sh write <file> codex-headless; preserve required test and tool-contract checks in the artifact.\n"
         "- Codex may still auto-discover project AGENTS.md; do not explicitly load the full harness adapter bootstrap or another runtime's adapter.\n\n"
         f"{heartbeat}"
+        f"{no_commit_clause}"
         "Assignment:\n"
         f"{task.rstrip()}\n\n"
         "End with the kernel's exact three-line handoff and nothing after it.\n",
@@ -423,6 +462,16 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         # A route-bound depth-2 stage needs the same narrow writable root for
         # its own SD-58 heartbeat. Network remains owner-only below.
         cmd += ["--add-dir", str(args.agent_home / ".dispatch")]
+    if args.route_id:
+        # SD-69: a route-bound worker needs the exact primary spec-grounding
+        # marker directory writable. Codex's workspace-write sandbox keeps
+        # .git/the resolved git-common-dir protected even under other
+        # writable roots, so this is intentionally narrow — never all of
+        # agent home, and never .git. Codex-only: the Claude wrapper commits
+        # normally from its own worktree and has no equivalent boundary gap.
+        spec_grounding = args.agent_home / ".spec-grounding"
+        spec_grounding.mkdir(mode=0o700, parents=True, exist_ok=True)
+        cmd += ["--add-dir", str(spec_grounding)]
     cmd += ["--sandbox", args.sandbox]
     if args.nested_headless_network:
         cmd += ["-c", "sandbox_workspace_write.network_access=true"]
@@ -534,6 +583,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         )
     if args.broker_request_id:
         pipe += f",broker_request_id={args.broker_request_id}"
+    if is_no_commit_stage(args):
+        pipe += ",no_commit=1"
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     row = f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}"
     exclusive = ({"route_id": args.route_id, "route_node": args.route_node,
