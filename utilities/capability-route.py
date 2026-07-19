@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("capability_topology", ROOT/"tools/capability_topology.py")
 TOPO = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(TOPO)
 sys.path.insert(0, str(ROOT/"utilities"))
-from dispatch_contract import resolve_agent_home
+from dispatch_contract import resolve_agent_home, close_attempt_row, DispatchContractError
 ORDER = {"direct":0,"quick":1,"standard":2,"strong":3,"thorough":4,"adversarial":5}
 TRACKING = {"tracked", "untracked"}
 GATE_FIELDS = {"spec_read", "drift_verdict", "workflow_mode", "artifact_guard"}
@@ -294,6 +294,54 @@ def write_completion_marker(route, node, node_id, evidence):
     atomic_write(canonical_path, marker)
     return marker
 
+def _find_attempt_row_status(jobs, attempt_id):
+    """Return the row status ('open'|'running'|'done') for attempt_id, or None if absent."""
+    if not jobs.is_file(): return None
+    for line in jobs.read_text(encoding="utf-8", errors="replace").splitlines():
+        fields=line.split("\t")
+        if len(fields)!=6: continue
+        metadata=dict(part.split("=",1) for part in fields[5].split(",") if "=" in part)
+        if metadata.get("attempt_id")==attempt_id: return fields[1]
+    return None
+
+def complete_node(route, node, node_id, evidence, jobs=None, attempt_id=None):
+    """Write the completion marker, then (SD-70) idempotently close only the exact attempt row.
+
+    ``jobs``/``attempt_id`` are optional-but-paired: supplying one without the
+    other is a structured error so legacy marker-only callers (unpaired) keep
+    today's behavior. The marker is always written first and is never deleted
+    or rewritten if the row-close step fails afterward.
+    """
+    marker=write_completion_marker(route, node, node_id, evidence)
+    if not jobs and not attempt_id:
+        return marker, None
+    if not jobs or not attempt_id:
+        raise ValueError("complete requires --jobs and --attempt-id together, or neither")
+    jobs_path=Path(jobs)
+    canonical_marker_path=completion_dir(route["route_id"])/f"{node_id}.json"
+    row_evidence={
+        "completion_marker":str(canonical_marker_path),
+        "route_node":node_id,"route_id":route["route_id"],
+    }
+    # SD-70 reconcile repair: written before the row-close attempt so a later
+    # dead row can still be matched to this exact attempt even if the close
+    # below fails (e.g. jobs registry unwritable at complete-time).
+    atomic_write(
+        completion_dir(route["route_id"])/f"{node_id}.attempt.json",
+        {"route_id":route["route_id"],"node_id":node_id,"attempt_id":attempt_id,
+         "completion_marker":str(canonical_marker_path)},
+    )
+    try:
+        closed=close_attempt_row(jobs_path, attempt_id, "completed-marker", evidence=row_evidence)
+    except DispatchContractError as exc:
+        raise ValueError(f"row-close-failed:{exc}") from exc
+    if closed:
+        return marker, {"attempt_id":attempt_id,"status":"closed"}
+    status=_find_attempt_row_status(jobs_path, attempt_id)
+    if status=="done":
+        return marker, {"attempt_id":attempt_id,"status":"already-closed"}
+    raise ValueError(f"attempt-row-absent:{attempt_id}")
+
 def main():
     p=argparse.ArgumentParser(); sub=p.add_subparsers(dest="command",required=True)
     c=sub.add_parser("compile"); c.add_argument("--capability",required=True); c.add_argument("--capability-mode",default="default")
@@ -308,6 +356,8 @@ def main():
     v=sub.add_parser("verify"); v.add_argument("--route",required=True); v.add_argument("--cwd")
     n=sub.add_parser("node"); n.add_argument("--route",required=True); n.add_argument("--node",required=True)
     d=sub.add_parser("complete"); d.add_argument("--route",required=True); d.add_argument("--node",required=True); d.add_argument("--evidence",required=True); d.add_argument("--output")
+    d.add_argument("--jobs",help="canonical registry path (SD-70); pairs with --attempt-id")
+    d.add_argument("--attempt-id",help="exact current attempt id (SD-70); pairs with --jobs")
     a=p.parse_args()
     if a.command=="compile":
         gate={"spec_read":{"satisfied":a.spec_read.lower() not in ("0","false","no"),"source":a.spec_read},
@@ -327,9 +377,10 @@ def main():
             else:
                 evidence=Path(a.evidence).resolve()
                 if not evidence.is_file(): raise SystemExit("completion evidence missing")
-                marker=write_completion_marker(route, node, a.node, evidence)
+                marker,row=complete_node(route, node, a.node, evidence, jobs=a.jobs, attempt_id=a.attempt_id)
                 if a.output: atomic_write(a.output, marker)
                 print(json.dumps(marker,sort_keys=True))
+                if row: print(json.dumps(row,sort_keys=True))
 
 if __name__=="__main__":
     try: main()

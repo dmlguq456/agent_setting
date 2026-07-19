@@ -131,4 +131,77 @@ class MixedRegistryTest(unittest.TestCase):
   self.assertEqual(sum(result["closed"] for result in results),1)
   self.assertEqual(self.jobs.read_text().count("att-race-mixed"),1)
   self.assertEqual(self.jobs.read_text().count("note=dead-exact-pid"),1)
+class OrphanReconcileTest(unittest.TestCase):
+ """SD-64/71 post-exit orphan-conductor reconcile classification."""
+ def setUp(self):
+  self.tmp=tempfile.TemporaryDirectory();self.base=Path(self.tmp.name);self.home=self.base/"home";self.jobs=self.base/"jobs.log"
+  self.route_id="rt-orphan-fixture"
+  route={"route_id":self.route_id,"nodes":[
+   {"id":"plan","depends_on":[]},{"id":"execute","depends_on":["plan"]},
+   {"id":"test","depends_on":["execute"]},{"id":"report","depends_on":["test"]}]}
+  self.route_file=self.base/"route.json";self.route_file.write_text(json.dumps(route))
+  self.marker_dir=self.home/".dispatch/completion"/self.route_id;self.marker_dir.mkdir(parents=True)
+ def tearDown(self): self.tmp.cleanup()
+ def mark(self,node_id):
+  (self.marker_dir/f"{node_id}.json").write_text(json.dumps({"node_id":node_id}))
+ def owner_row(self,slug,attempt_id,pid,pid_start,extra=""):
+  meta=f"route_id={self.route_id},route_file={self.route_file},worker_type=owner,attempt_id={attempt_id},pid={pid},pid_start={pid_start}"
+  if extra: meta+=","+extra
+  return f"2026-07-16T00:00:00Z\topen\t/r\t/w\t{slug}\t{meta}"
+ def invoke(self,*args):
+  return subprocess.run([sys.executable,str(SCRIPT),*args,"--jobs",str(self.jobs),"--agent-home",str(self.home)],capture_output=True,text=True)
+ def test_dead_owner_with_open_child_is_orphaned(self):
+  self.mark("plan")
+  live=subprocess.Popen(["sleep","60"]);start=(Path("/proc")/str(live.pid)/"stat").read_text().split()[21]
+  try:
+   rows=[
+    self.owner_row("owner","att-owner-dead",99999995,1),
+    f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\troute_id={self.route_id},route_node=execute,attempt_id=att-child-live,parent=owner,pid={live.pid},pid_start={start}",
+   ]
+   self.jobs.write_text("\n".join(rows)+"\n")
+   dry=json.loads(self.invoke("reconcile","--attempt","att-owner-dead").stdout)
+   self.assertEqual(dry["decisions"][0]["proposed_note"],"dead-parent-orphaned")
+   applied=json.loads(self.invoke("reconcile","--attempt","att-owner-dead","--apply").stdout)
+   self.assertEqual(applied["closed"],1)
+   text=self.jobs.read_text()
+   self.assertIn("note=dead-parent-orphaned",text)
+   self.assertIn("\topen\t/r\t/w\tchild\t",text, "a live child must never be closed by the orphan repair")
+  finally:
+   live.kill();live.wait()
+ def test_live_conductor_completed_route_live_child_is_never_orphaned(self):
+  for node in ("plan","execute","test","report"): self.mark(node)
+  live_owner=subprocess.Popen(["sleep","60"]);owner_start=(Path("/proc")/str(live_owner.pid)/"stat").read_text().split()[21]
+  live_child=subprocess.Popen(["sleep","60"]);child_start=(Path("/proc")/str(live_child.pid)/"stat").read_text().split()[21]
+  try:
+   rows=[
+    self.owner_row("owner","att-owner-live",live_owner.pid,owner_start),
+    f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\troute_id={self.route_id},route_node=report,attempt_id=att-child-live2,parent=owner,pid={live_child.pid},pid_start={child_start}",
+   ]
+   self.jobs.write_text("\n".join(rows)+"\n")
+   result=json.loads(self.invoke("reconcile","--attempt","att-owner-live").stdout)
+   self.assertEqual(result["decisions"][0]["category"],"active")
+   self.assertIsNone(result["decisions"][0]["proposed_note"])
+  finally:
+   live_owner.kill();live_owner.wait();live_child.kill();live_child.wait()
+ def test_unstarted_successor_with_no_open_child_is_orphaned(self):
+  self.mark("plan");self.mark("execute")  # test/report incomplete; report depends on test (unmarked) so only test is a ready un-started successor
+  rows=[self.owner_row("owner","att-owner-dead2",99999994,1)]
+  self.jobs.write_text("\n".join(rows)+"\n")
+  applied=json.loads(self.invoke("reconcile","--attempt","att-owner-dead2","--apply").stdout)
+  self.assertEqual(applied["decisions"][0]["category"],"orphan")
+  self.assertIn("note=dead-parent-orphaned",self.jobs.read_text())
+ def test_dead_owner_with_completed_route_is_not_orphaned(self):
+  for node in ("plan","execute","test","report"): self.mark(node)
+  rows=[self.owner_row("owner","att-owner-dead3",99999993,1)]
+  self.jobs.write_text("\n".join(rows)+"\n")
+  applied=json.loads(self.invoke("reconcile","--attempt","att-owner-dead3","--apply").stdout)
+  self.assertEqual(applied["decisions"][0]["category"],"exact-dead")
+  self.assertNotEqual(applied["decisions"][0]["proposed_note"],"dead-parent-orphaned")
+ def test_unreadable_route_record_fails_closed(self):
+  rows=[self.owner_row("owner","att-owner-dead4",99999992,1,extra=f"route_file={self.base/'missing.json'}")]
+  self.jobs.write_text("\n".join(rows)+"\n")
+  applied=json.loads(self.invoke("reconcile","--attempt","att-owner-dead4","--apply").stdout)
+  self.assertNotEqual(applied["decisions"][0]["category"],"orphan")
+
+
 if __name__=="__main__":unittest.main()

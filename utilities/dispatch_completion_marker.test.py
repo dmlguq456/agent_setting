@@ -139,12 +139,12 @@ class CompletionMarkerTest(unittest.TestCase):
             "--write-scope", ";".join(node["write_scope"]),
         ] + model
 
-    def complete(self, route_path, node_id, evidence_path):
-        return subprocess.run(
-            [sys.executable, str(ROOT / "utilities/capability-route.py"), "complete",
-             "--route", str(route_path), "--node", node_id, "--evidence", str(evidence_path)],
-            text=True, capture_output=True, env=self.base_env(),
-        )
+    def complete(self, route_path, node_id, evidence_path, jobs=None, attempt_id=None):
+        command = [sys.executable, str(ROOT / "utilities/capability-route.py"), "complete",
+                   "--route", str(route_path), "--node", node_id, "--evidence", str(evidence_path)]
+        if jobs is not None: command += ["--jobs", str(jobs)]
+        if attempt_id is not None: command += ["--attempt-id", attempt_id]
+        return subprocess.run(command, text=True, capture_output=True, env=self.base_env())
 
     # fixture 6 -----------------------------------------------------------
     def test_complete_writes_canonical_marker(self):
@@ -280,6 +280,117 @@ class CompletionMarkerTest(unittest.TestCase):
         self.assertEqual(latest["sequence"], 2)
         import hashlib
         self.assertEqual(latest["evidence"]["sha256"], hashlib.sha256(evidence.read_bytes()).hexdigest())
+
+
+    # SD-70 fixtures -------------------------------------------------------
+    def write_row(self, status, slug, attempt_id, extra=""):
+        line = f"2026-07-19T00:00:00Z\t{status}\t{self.repo}\t{self.repo}\t{slug}\tattempt_id={attempt_id}"
+        if extra: line += "," + extra
+        with self.jobs.open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+
+    def read_row(self, attempt_id):
+        for line in self.jobs.read_text(encoding="utf-8").splitlines():
+            fields = line.split("\t")
+            meta = dict(p.split("=", 1) for p in fields[5].split(",") if "=" in p)
+            if meta.get("attempt_id") == attempt_id:
+                return fields[1], meta
+        return None, None
+
+    def test_complete_with_attempt_closes_only_current_row(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "plan.md"
+        evidence.write_text("plan body\n", encoding="utf-8")
+        self.write_row("done", "prior-blocked", "att-prior", "note=blocked")
+        self.write_row("open", "current", "att-current")
+        self.write_row("open", "live-retry", "att-retry")
+        result = self.complete(route_path, "plan", evidence, jobs=self.jobs, attempt_id="att-current")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        status, meta = self.read_row("att-current")
+        self.assertEqual(status, "done")
+        self.assertEqual(meta.get("note"), "completed-marker")
+        status, meta = self.read_row("att-prior")
+        self.assertEqual(status, "done"); self.assertEqual(meta.get("note"), "blocked")
+        status, _ = self.read_row("att-retry")
+        self.assertEqual(status, "open")
+
+    def test_complete_duplicate_same_attempt_is_idempotent(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "plan.md"
+        evidence.write_text("plan body\n", encoding="utf-8")
+        self.write_row("open", "current", "att-dup")
+        first = self.complete(route_path, "plan", evidence, jobs=self.jobs, attempt_id="att-dup")
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        second = self.complete(route_path, "plan", evidence, jobs=self.jobs, attempt_id="att-dup")
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        rows = [line for line in self.jobs.read_text(encoding="utf-8").splitlines() if "att-dup" in line]
+        self.assertEqual(len(rows), 1)
+        self.assertIn("\tdone\t", rows[0])
+
+    def test_complete_attempt_mismatch_fails_closed_marker_preserved(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "plan.md"
+        evidence.write_text("plan body\n", encoding="utf-8")
+        # no row for this attempt id at all
+        result = self.complete(route_path, "plan", evidence, jobs=self.jobs, attempt_id="att-missing")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("attempt-row-absent", result.stdout + result.stderr)
+        canonical = self.agent_home / ".dispatch" / "completion" / route["route_id"] / "plan.json"
+        self.assertTrue(canonical.is_file(), "marker must be preserved even when the row close fails")
+
+    def test_complete_unwritable_jobs_marker_preserved_then_reconcile_repairs(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "plan.md"
+        evidence.write_text("plan body\n", encoding="utf-8")
+        unwritable_dir = self.base / "readonly"
+        unwritable_dir.mkdir(mode=0o500)
+        unwritable_jobs = unwritable_dir / "jobs.log"
+        try:
+            result = self.complete(route_path, "plan", evidence, jobs=unwritable_jobs, attempt_id="att-unwritable")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("row-close-failed", result.stdout + result.stderr)
+            canonical = self.agent_home / ".dispatch" / "completion" / route["route_id"] / "plan.json"
+            self.assertTrue(canonical.is_file())
+        finally:
+            unwritable_dir.chmod(0o700)
+
+        # Now simulate the same exact attempt landing in the real registry
+        # (as if the launcher retried the write) and confirm reconcile
+        # repairs exactly that stale marker-backed row, never breadth-closing.
+        dead_pid = "pid=999999999,pid_start=123456"
+        linked = f"{dead_pid},route_id={route['route_id']},route_node=plan"
+        self.write_row("open", "current", "att-unwritable", extra=linked)
+        self.write_row("open", "unrelated", "att-unrelated", extra=dead_pid)
+        registry_spec = importlib.util.spec_from_file_location(
+            "dispatch_registry", ROOT / "utilities/dispatch-registry.py")
+        registry = importlib.util.module_from_spec(registry_spec)
+        registry_spec.loader.exec_module(registry)
+        rows = registry.read_rows(self.jobs)
+
+        class Args:
+            pass
+        args = Args()
+        args.agent_home = self.agent_home
+        args.now = 0.0
+        newest = {}
+        for row in rows:
+            key = (row["meta"].get("route_id"), row["meta"].get("route_node"))
+            if all(key): newest[key] = row["order"]
+        current_row = next(r for r in rows if r["meta"].get("attempt_id") == "att-unwritable")
+        category, reason, note = registry.classify(current_row, args, newest, rows)
+        self.assertEqual(note, "completed-marker")
+        self.assertEqual(category, "marker-backed-stale")
+        # The unrelated dead attempt has no marker linkage, so it still
+        # falls through to the pre-existing generic dead-exact-pid path
+        # rather than being folded into the SD-70 completed-marker repair.
+        unrelated_row = next(r for r in rows if r["meta"].get("attempt_id") == "att-unrelated")
+        _, _, unrelated_note = registry.classify(unrelated_row, args, newest, rows)
+        self.assertEqual(unrelated_note, "dead-exact-pid")
+        self.assertNotEqual(unrelated_note, "completed-marker")
 
 
 if __name__ == "__main__":

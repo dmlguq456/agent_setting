@@ -149,12 +149,90 @@ def terminal_marker(row, home):
     return (proved, "stale-terminal-proved" if proved else "stale-terminal-dwell")
 
 
-def classify(row, args, newest_orders):
+def _marker_backed_repair(row, home):
+    """SD-70: was ``complete``'s marker written but its row-close step failed?
+
+    ``complete_node`` (capability-route.py) writes an attempt-linkage sibling
+    file next to the completion marker before attempting the row close, so a
+    later-dead row can be repaired by exact marker linkage rather than folded
+    into the generic dead-exact-pid path.
+    """
+    meta = row["meta"]
+    route_id, node, attempt_id = meta.get("route_id"), meta.get("route_node"), meta.get("attempt_id")
+    if not (route_id and node and attempt_id and home): return False
+    linkage_path = home / ".dispatch" / "completion" / route_id / f"{node}.attempt.json"
+    try: linkage = json.loads(linkage_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError): return False
+    if (linkage.get("attempt_id") != attempt_id or linkage.get("route_id") != route_id
+            or linkage.get("node_id") != node):
+        return False
+    marker_path = home / ".dispatch" / "completion" / route_id / f"{node}.json"
+    return marker_path.is_file()
+
+
+def route_incomplete(row, home):
+    """SD-64/71: route nodes lacking a completion marker for a conductor row's route.
+
+    Fails closed (returns an empty set) when the route record cannot be read
+    safely, so an unreadable route never itself justifies an orphan claim.
+    """
+    meta = row["meta"]
+    route_id = meta.get("route_id")
+    if not route_id or not home: return set(), "no-route"
+    route_file = meta.get("route_file")
+    try:
+        record = json.loads(Path(route_file).read_text(encoding="utf-8")) if route_file else None
+        node_ids = [n["id"] for n in record["nodes"]] if record else None
+    except (OSError, ValueError, KeyError, TypeError):
+        node_ids = None
+    if node_ids is None:
+        return set(), "route-record-unreadable"
+    completion_dir = home / ".dispatch" / "completion" / route_id
+    missing = {node_id for node_id in node_ids if not (completion_dir / f"{node_id}.json").is_file()}
+    return missing, "ok"
+
+
+def has_orphaned_dependents(row, rows, incomplete_nodes, args):
+    """SD-64/71: a genuine open/live child, or an un-started successor node."""
+    if not incomplete_nodes: return False
+    slug = row["slug"]
+    for other in rows:
+        if other is row or other["status"] not in OPEN: continue
+        if other["meta"].get("parent") != slug: continue
+        exact = classify_attempt_evidence(proc_inputs(other, args.agent_home), args.now)
+        state = exact["state"] if exact else "unknown"
+        if state in ("working", "unknown"): return True
+    route_id = row["meta"].get("route_id")
+    route_file = row["meta"].get("route_file")
+    try:
+        record = json.loads(Path(route_file).read_text(encoding="utf-8")) if route_file else None
+        depends = {n["id"]: n.get("depends_on", []) for n in record["nodes"]} if record else None
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    if depends is None: return False
+    attempted_nodes = {r["meta"].get("route_node") for r in rows if r["meta"].get("route_id") == route_id}
+    for node_id in incomplete_nodes:
+        if node_id in attempted_nodes: continue
+        predecessors = depends.get(node_id, [])
+        if all(predecessor not in incomplete_nodes for predecessor in predecessors): return True
+    return False
+
+
+def classify(row, args, newest_orders, rows=None):
     if row["status"] not in OPEN: return "terminal", "already-terminal", None
     exact = classify_attempt_evidence(proc_inputs(row, args.agent_home), args.now)
     if exact and exact["state"] == "working": return "active", exact["rule"], None
     if exact and exact["state"] == "done": return "terminal-heartbeat", exact["rule"], "completed-terminal-heartbeat"
-    if exact and exact["state"] == "dead": return "exact-dead", exact["rule"], "dead-exact-pid"
+    if exact and exact["state"] == "dead":
+        if _marker_backed_repair(row, args.agent_home):
+            return "marker-backed-stale", "completed-marker-linkage", "completed-marker"
+        meta = row["meta"]
+        if (rows is not None and meta.get("worker_type") == "owner"
+                and meta.get("route_id") and not meta.get("route_node")):
+            incomplete, record_status = route_incomplete(row, args.agent_home)
+            if record_status == "ok" and incomplete and has_orphaned_dependents(row, rows, incomplete, args):
+                return "orphan", "dead-parent-orphaned", "dead-parent-orphaned"
+        return "exact-dead", exact["rule"], "dead-exact-pid"
     meta = row["meta"]
     key = (meta.get("route_id"), meta.get("route_node"))
     if all(key) and newest_orders.get(key) == row["order"]:
@@ -197,7 +275,7 @@ def reconcile(rows, args):
         if all(key): newest[key] = row["order"]
     decisions = []
     for row in selected:
-        category, reason, note = classify(row, args, newest)
+        category, reason, note = classify(row, args, newest, rows)
         closed = False
         revalidated = None
         if args.apply and note and row["meta"].get("attempt_id"):
@@ -214,7 +292,7 @@ def reconcile(rows, args):
                 for item in fresh_rows:
                     key = (item["meta"].get("route_id"), item["meta"].get("route_node"))
                     if all(key): latest[key] = item["order"]
-                fresh_category, fresh_reason, fresh_note = classify(fresh, args, latest)
+                fresh_category, fresh_reason, fresh_note = classify(fresh, args, latest, fresh_rows)
                 fresh_decision.update(category=fresh_category, reason=fresh_reason, note=fresh_note)
                 return fresh_note == note and fresh_category == category
 
