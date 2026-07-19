@@ -63,9 +63,6 @@ repeat.
 - **Follow-up changes:** in a spec-backed project, first inspect the existing
   artifacts and check spec drift, then route implementation through
   `autopilot-code` instead of applying an ungrounded edit.
-- **Workflow state:** adapter-native status or reminder surfaces distinguish
-  📌 tracked work from the explicit ⚡ untracked escape hatch. The mechanism is
-  runtime-specific; the meaning is portable.
 
 See [`core/WORKFLOW.md`](core/WORKFLOW.md) for routing rules and
 [`roles/response-policy.md`](roles/response-policy.md) for response behavior.

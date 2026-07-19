@@ -4,7 +4,7 @@ Create or update a product or technical blueprint without implementing the produ
 
 ## Intake Gate
 
-At entry, check whether the request covers the irreversible decisions relevant to the selected mode, such as stack, authentication, database, deployment target, and core entities. If coverage is insufficient, run one structured clarification round with an escape option under CONVENTIONS §6.6 (`<agent-home>/core/CONVENTIONS.md#66-autopilot-intake-gate`). Skip the gate when explicit arguments are already sufficient, the decisions are already stated, the workflow is intentionally untracked or throwaway, or the run is resuming known state. No extra flag is required.
+At entry, check whether the request covers the irreversible decisions relevant to the selected mode, such as stack, authentication, database, deployment target, and core entities. If coverage is insufficient, run one structured clarification round with an escape option under CONVENTIONS §6.6 (`<agent-home>/core/CONVENTIONS.md#66-autopilot-intake-gate`). Skip the gate when explicit arguments are already sufficient, the decisions are already stated, the work is intentionally throwaway, or the run is resuming known state. No extra flag is required.
 
 ## Modes
 
