@@ -1,7 +1,7 @@
 project_name: stage-dispatch
 component: stage-dispatch          # autopilot 파이프 디스패치 토폴로지 개정 (repo spec/prd.md = Unified Memory System, spec/harness-layer-sync·dispatch-profiles·agent-fleet-dashboard 무관)
 created: 2026-07-10
-version: 15
+version: 18
 mode: [library, cli]              # library(스테이지 분사 계약·오케스트레이션) + cli(dispatch wrapper·jobs.log·fleet 관제) — infra
 scope_note: "depth-0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic inline, quick=단일 depth-1 one-shot(depth-2 금지), standard+=capability-specific recipe. v15부터 신규 depth-2 route는 conductor direct headless를 사용하고 broker는 historical v1/v2 compatibility로만 남는다. Codex owner는 명시적 network-enabled workspace-write profile로 nested codex exec를 실행한다."
 inputs:
@@ -34,12 +34,15 @@ inputs:
   - '사용자 결정 2026-07-16 (v15): native subagent와 recursive codex exec를 구분. nested headless는 parent sandbox가 network/auth를 허용하면 가능; broker가 야기한 중복·stale·fencing 상태면 때문에 기본 경로에서 폐기'
   - '운영 실측 2026-07-16 (v15 minor #1): plans/2026-07-16_spec-gate-multi-spec — r1 conductor 배경 대기 턴 종료 사망(지침-단독 불충분 실증), dispatch-node eligibility 증거 미전달 fail-closed, r2 BLOCKED(source_commit 정확 일치 × execute 커밋 계약 모순)'
 phases:
-  spec: done              # PRD v15 — broker retirement(SD-61~63), direct nested headless, single attempt identity. v14 snapshot = _internal/versions/v14/
+  spec: done              # PRD v18 — conductor 생존, Codex no-commit mutation, exact marker↔attempt 결합. v17 snapshot = _internal/versions/v17/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: in_progress        # v15 broker-retirement 사이클: v3 direct route/dispatch, wrapper broker auto-ensure 제거, Codex owner network profile, Fleet exact attempt identity. 기존 SD-57 broker reachability 구현은 취소
-last_updated: 2026-07-16  # v15 registered — broker retirement + direct nested headless 구현 착수
+  dev: in_progress        # v18 구현 사이클: Claude one-shot hardening/Stop probe, SD-64 orphan reconcile, Codex no-commit+spec-grounding, exact marker↔attempt close
+last_updated: 2026-07-19
 decisions_locked:
+  - 'SD-69(v18): Codex linked-worktree mutation stage는 source/evidence를 쓰되 no-commit. protected gitdir을 --add-dir로 우회하지 않고, 권한 있는 depth-0/Claude 경계가 PASS 수확 뒤 commit. primary의 정확한 .spec-grounding만 좁은 writable root로 추가'
+  - 'SD-70(v18): capability-route complete는 canonical jobs+exact current attempt를 받아 marker 직후 해당 row 하나만 idempotent done(note=completed-marker) 처리. breadth-close 금지, marker-first partial failure는 structured nonzero+reconcile 수리'
+  - 'SD-71(v18): verified async wait/scheduling tool만 Claude --disallowedTools로 차단, 2.1.215 -p Stop hook 재검증, SD-64 dead-parent-orphaned post-exit reconcile+liveness/preflight/Fleet 노출. 자동 재개 금지, dispatch-wait prompt는 보조층'
   - 'SD-61~63(v15): 신규 route는 dispatch_contract_version=3 + conductor direct headless. broker 신규 생성/submit 금지, Codex depth-1 standard+ owner만 explicit network-enabled workspace-write, stable attempt identity + atomic registry claim. v1/v2는 read-only migration'
   - 'SD-1: depth-1 owner = 얇은 conductor, 스테이지(plan/execute/test/report) = depth-2 headless 세션 (conductor 는 verdict/게이트만, 스테이지 본문 미독)'
   - 'SD-2: 인터페이스 = 산출물 파일만, 세션 간 대화 컨텍스트 전달 금지, 계약 완결성 의무 (산출물 기반 소통 명문화)'
@@ -110,7 +113,6 @@ decisions_open:
   - 'SD-OPEN-1: 마이크로-스테이지 inline 손익 임계(어느 스테이지 크기부터 분사 이득). Phase 1 pilot 1표본 확보 — Phase 2 계측 누적만, 확정은 표본 축적 후'
   - 'SD-OPEN-2: 스테이지 SessionEnd mem curator 기동 영향 — 관찰만(계측 로그 기록), 개입은 증거 후 (v2)'
   - 'SD-OPEN-3: 상호보완 라우팅 가중 정책 — 초기 ''limit 회피 > 특성 적합 > 분산'' + 한도 비대칭 기본값(Claude>Codex, 가변 — 설정값으로 선언, 하드코드 금지), 편중·교차 리뷰 효과 계측 후 조정 (v3)'
-  - 'O2/v14 후보(이월): linked-worktree worker commit 불가 — worker no-commit + prepared commit → depth-0 harvest/commit 계약 평가'
   - 'O3/v14 후보(이월): route compiler input digest 자기수정 경합 — orchestrator override vs digest pin+drift record 비교'
   - 'O4/v14 후보: resource-runner canonical registry 경로 확정 (fleet 과정-뷰 F-28c 재개 조건)'
   - 'O5: v14 SD-58에 흡수 완료(2026-07-16) — native hop은 child 생성 실증(row/pid/산출물) 없으면 실패로 닫음'

@@ -2,7 +2,7 @@
 
 - **Date**: 2026-07-10
 - **Mode**: library + cli (autopilot 파이프 디스패치 토폴로지 개정 인프라)
-- **Status**: v14 registered — 운영 병목 1차(SD-57 도달성·SD-58 진행 감시·SD-59 capacity failover·SD-60 registry 위생); SD-57 구현 착수. v13(SD-54~56)은 implemented·rolled over
+- **Status**: v18 registered — conductor one-shot hardening·SD-64 orphan reconcile·Codex linked-worktree no-commit mutation·exact completion marker↔attempt row 결합(SD-69~71) 구현 착수
 - **Placement**: 독립 컴포넌트 `spec/stage-dispatch/` — 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 무수정.
 
 ## 배경
@@ -59,16 +59,19 @@ v12는 v11 구현의 남은 의미 갭을 닫는다. 현재 `ancestor-broker`는
 
 ## 미결 (open — pilot 계측)
 - **SD-OPEN-1**: 마이크로-스테이지 inline 의 손익 임계(어느 스테이지 크기부터 분사가 이득). research 가 per-stage dispatch cost 를 수치화하지 않음 → 추측 금지, Phase 1 pilot 토큰/시간 계측으로 확정.
-- **O2 / v13 후보**: linked-worktree worker의 Git common-dir `index.lock` write 불가. `worker no-commit + prepared commit message/evidence → depth-0 main harvest/commit`을 검토하며 v12에는 구현하지 않는다.
 - **O3 / v13 후보**: 자기수정 route-completion stale-digest. evidence-bearing orchestrator override와 compile-time digest pin+drift record를 비교하며 v12에는 구현하지 않는다.
 
 ## 반전의 정당성 (현행 금지 조항 대응)
 현행 `context-and-guards.md:51` 은 스테이지 분사를 "상태 재발굴 + 연속성 상실 = worst of both"로 금지. 본 spec 은 이를 §0.5 계약 완결성 의무(산출물이 상태를 완전히 담으면 재발굴=파일로드·연속성=파일매체) + §8 마이크로-스테이지 inline 경계로 규칙화해 흡수. research §4-(8)이 "fresh-context+file-state가 context rot 방지 지배 관용구"임을 확증해 반전을 근거화.
 
 ## Next
-v12 구현은 source `8897bf76`, main merge `70bac6ef`로 완료했다. 다음 spec 판단은 O2의 worker no-commit/main harvest 계약과 O3의 evidence-bearing override 대 digest pin+drift record 비교이며, 둘 다 v13 후보일 뿐 자동 구현하지 않는다.
+v18 구현 사이클에서 SD-69~71을 source와 deterministic fixtures로 닫는다. O3의 evidence-bearing override 대 digest pin+drift record는 별도 후보로 유지한다.
 
 ## Version History
+- v18 (2026-07-19): conductor 생존·Codex mutation 경계·completion row 위생 — autopilot-spec update, v17 snapshot = `_internal/versions/v17/prd.md`.
+  - **SD-69**: Codex workspace-write의 protected gitdir 때문에 `--add-dir git-common-dir` 안을 기각. linked-worktree Codex mutation은 no-commit worker, 좁은 primary `.spec-grounding` writable root, PASS 수확 뒤 권한 경계 commit으로 결정.
+  - **SD-70**: `capability-route.py complete`가 exact current attempt만 marker와 함께 idempotent 마감하고, partial failure는 marker 보존 + reconcile 수리.
+  - **SD-71**: verified async-tool deny, Claude 2.1.215 `-p` Stop hook 재검증, SD-64 `dead-parent-orphaned` 사후 reconcile·depth-0 표면화, 자동 재개 금지.
 - v12 (2026-07-15): harness-neutral depth-0 launch broker — autopilot-spec update, v11 snapshot = `_internal/versions/v11/prd.md` (update 직전 cmp=0).
   - **SD-51**: logical depth/parent와 OS launch authority 분리. 모든 depth-2 headless target은 depth-0 broker가 시작하고 conductor는 declarative request+same-turn wait만 수행.
   - **SD-52**: versioned request envelope, canonical endpoint/jobs, atomic state machine, idempotency, PID/start-tick·heartbeat/lease·fencing, attempt reconciliation, missing/stale fail-closed.
