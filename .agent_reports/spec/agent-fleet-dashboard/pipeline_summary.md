@@ -2,7 +2,7 @@
 
 - **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec **v11 done** (두-평면 폐기 후 채택분 소급 등재 — F-19/F-29 개정 + F-32~F-34) — 구현·라이브 검증 완료(테스트 624), 잔여 = F-31 rolling 요약 사이클
+- **Status**: spec **v11 done + minor #1** (F-17 제목+부제 통합이 F-31을 대체) — 구현·라이브 검증 완료(테스트 660), 등재-미구현 잔여 없음(F-31 재개 조건만 보존)
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## Process Log
