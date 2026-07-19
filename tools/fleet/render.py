@@ -258,12 +258,13 @@ def _init_colors():
         _COLOR["hdr_blk"] = 0
     # Subtle panel tints in 256-color mode: seven hues by tint level.
     # text keeps its fg INSIDE a tinted band. Greyscale-only backgrounds — no new fg axis.
-    # Failure of any init → _TINT_OK False → rail+gap fallback (spec §4, zero regression).
+    # Failure of any init, or running inside herdr (whose own theme already supplies the pane
+    # surface), → _TINT_OK False → rail+gap fallback (spec §4, zero regression).
     global _TINT_OK
     _TINT_OK = False
     _TINT_PAIR.clear()
     try:
-        if curses.COLORS >= 256:
+        if curses.COLORS >= 256 and not os.environ.get("HERDR_ENV"):
             # deepen the midnight-blue active tint (~#0c0f30) where the terminal honors palette
             # redefinition; ignored → stock 17 (#00005f), already subtle (user's terminal was
             # shown to ignore init_color — the green attempt stayed bright, hence the hue move).
