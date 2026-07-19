@@ -245,5 +245,78 @@ class JsonAdditiveTest(unittest.TestCase):
         self.assertIsNone(out["jobs"][0]["route_file"])
 
 
+class OrphanConductorAnnotationTest(unittest.TestCase):
+    """SD-64/71: Fleet's current-attempt view stamps note/resume_boundary on a
+    dead depth-1 owner row that the shared registry classifier detects as
+    orphaned, reusing dispatch-registry.py's classify() in-process."""
+
+    def setUp(self):
+        route.clear_cache()
+        dispatch.collect.last_route_nodes = {}
+        dispatch._ORPHAN_REGISTRY_MOD = None
+
+    def _write_route(self, td, route_id):
+        record = {"route_id": route_id, "nodes": [
+            {"id": "plan", "depends_on": []}, {"id": "execute", "depends_on": ["plan"]},
+            {"id": "test", "depends_on": ["execute"]}, {"id": "report", "depends_on": ["test"]}]}
+        path = os.path.join(td, "route.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(record, fh)
+        return path
+
+    def test_dead_owner_with_open_child_is_stamped_orphaned(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = os.path.join(td, "home")
+            marker_dir = os.path.join(home, ".dispatch", "completion", "rt-fleet-orphan")
+            os.makedirs(marker_dir)
+            with open(os.path.join(marker_dir, "plan.json"), "w", encoding="utf-8") as fh:
+                json.dump({"node_id": "plan"}, fh)
+            route_file = self._write_route(td, "rt-fleet-orphan")
+            jobs_path = os.path.join(td, "jobs.log")
+            with open(jobs_path, "w", encoding="utf-8") as fh:
+                fh.write(
+                    "2026-07-19T00:00:00Z\topen\t/r\t/w\towner\t"
+                    "worker_type=owner,attempt_id=att-fleet-owner,"
+                    "pid=999999996,pid_start=1,depth=1\n"
+                )
+                # No pid/pid_start is needed here: the registry contract counts any open
+                # exact child row and preserves it for depth-0 diagnosis.
+                fh.write(
+                    "2026-07-19T00:00:01Z\topen\t/r\t/w\tchild\t"
+                    "route_id=rt-fleet-orphan,route_file=%s,route_node=execute,"
+                    "attempt_id=att-fleet-child,parent=owner\n" % route_file
+                )
+            with mock.patch.object(dispatch.procscan, "_ps_lines", return_value=[]), \
+                 mock.patch.dict(os.environ, {"AGENT_HOME": home}):
+                jobs = dispatch.collect(jobs_path=jobs_path)
+            owner = next(j for j in jobs if j.slug == "owner")
+            self.assertEqual(owner.liveness, "dead")
+            self.assertEqual(owner.note, "dead-parent-orphaned")
+            self.assertEqual(owner.resume_boundary, "execute")
+
+    def test_dead_owner_with_completed_route_is_never_stamped(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = os.path.join(td, "home")
+            marker_dir = os.path.join(home, ".dispatch", "completion", "rt-fleet-clean")
+            os.makedirs(marker_dir)
+            for node in ("plan", "execute", "test", "report"):
+                with open(os.path.join(marker_dir, "%s.json" % node), "w", encoding="utf-8") as fh:
+                    json.dump({"node_id": node}, fh)
+            route_file = self._write_route(td, "rt-fleet-clean")
+            jobs_path = os.path.join(td, "jobs.log")
+            with open(jobs_path, "w", encoding="utf-8") as fh:
+                fh.write(
+                    "2026-07-19T00:00:00Z\topen\t/r\t/w\towner-clean\t"
+                    "route_id=rt-fleet-clean,route_file=%s,worker_type=owner,"
+                    "attempt_id=att-fleet-owner-clean,pid=999999994,pid_start=1,depth=1\n" % route_file
+                )
+            with mock.patch.object(dispatch.procscan, "_ps_lines", return_value=[]), \
+                 mock.patch.dict(os.environ, {"AGENT_HOME": home}):
+                jobs = dispatch.collect(jobs_path=jobs_path)
+            owner = next(j for j in jobs if j.slug == "owner-clean")
+            self.assertEqual(owner.liveness, "dead")
+            self.assertIsNone(owner.note)
+
+
 if __name__ == "__main__":
     unittest.main()

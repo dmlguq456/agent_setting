@@ -1128,11 +1128,17 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
 
     segs.append(_branch_seg("" if key in _LOOPS_KEYS else j.cwd, j.branch))  # loop temp repos hide throwaway branches
     if j.liveness == "dead":
-        # P2-11: a dead job's last-known stage replaces the redundant "last seen <age>" (the
-        # time column already shows elapsed) — "dead @exec" tells you WHERE it died.
-        last_stage = stage if stage not in (None, "", "open", "running") else key
         segs.append(("    ", None))
-        segs.append(("dead @%s" % last_stage, "g_dead"))
+        if getattr(j, "note", None) == "dead-parent-orphaned":
+            # SD-64/71: distinct from the generic dead-conductor cell — never blank, and
+            # always names the exact node a depth-0 decision would resume from.
+            boundary = getattr(j, "resume_boundary", None) or "-"
+            segs.append(("⚠ ORPHANED resume=%s" % boundary, "g_dead"))
+        else:
+            # P2-11: a dead job's last-known stage replaces the redundant "last seen <age>"
+            # (the time column already shows elapsed) — "dead @exec" tells you WHERE it died.
+            last_stage = stage if stage not in (None, "", "open", "running") else key
+            segs.append(("dead @%s" % last_stage, "g_dead"))
     elif j.liveness == "stale":
         # F-13: a stale job has no live model/effort/stage worth showing — collapse the whole
         # telemetry zone (model cell + stage breadcrumb) into one `last seen <age>` cell.
