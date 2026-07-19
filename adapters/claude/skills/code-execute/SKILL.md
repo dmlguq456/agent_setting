@@ -122,7 +122,7 @@ git status
 
 ## Critical Safety Rules
 
-- Before changing a function signature, arguments, return type, dictionary keys, or tensor shapes: find all call sites, update every caller, and inspect implicit contracts such as `None` checks, `.shape` assumptions, and key access.
+- Signature-change safety (find every call site, update every caller, inspect implicit contracts) is owned by the dev role contract — `dev-team` common rules and `agent-modes/dev/refactor.md` — and by plan-team call-site coverage; hold workers to it through phase review instead of restating it per step.
 - If a step causes cascading errors beyond plan scope, mark it `[FAIL]`, roll it back from the step log, and continue only with independent steps.
 - Do not change code outside plan scope except where a required contract change makes a caller update unavoidable.
 

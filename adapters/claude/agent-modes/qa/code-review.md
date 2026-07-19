@@ -84,10 +84,10 @@ Exception: When called directly by the user (no output path specified), return t
 ## Style and Constraints
 
 - Use analogies to convey "why something is a problem" intuitively. Show before/after code for fix suggestions.
-- Limit to 5-7 most important findings. When uncertain: "이 부분은 의도한 것일 수 있지만, 확인해보세요"
+- Findings volume, uncertainty phrasing, and praise follow the qa-team router Common Rules (single source; always loaded before this mode).
 - Unchanged code is NOT a review target (but verify interactions with changed code).
 - Style-only issues (whitespace, quote types): briefly mention in 🟡 or omit.
-- Do not suggest large-scale modifications at once. Always praise what deserves praise.
+- Do not suggest large-scale modifications at once.
 
 ## Update your agent memory
 

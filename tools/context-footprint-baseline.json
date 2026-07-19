@@ -1,8 +1,10 @@
 {
   "schema": 1,
-  "recorded_at": "2026-07-16",
-  "measurement": "UTF-8 bytes for bootstrap; normalized name+description+relative-path characters for metadata regression; characters for hook stdout",
+  "recorded_at": "2026-07-20",
+  "measurement": "UTF-8 bytes for bootstrap, worker-bootstrap, and native-bootstrap aggregates; normalized name+description+relative-path characters for metadata regression; characters for hook stdout",
   "surfaces": {
+    "native-bootstrap:agents-total": 52344,
+    "native-bootstrap:agent-modes-total": 119295,
     "bootstrap:claude": 5377,
     "bootstrap:codex": 8605,
     "bootstrap:opencode": 6678,

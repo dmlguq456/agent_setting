@@ -44,12 +44,9 @@ Artifact language: {selected audience or conversation language}
 Date: {YYYY-MM-DD}
 {If a done/failed/partial plan exists: "Reference previous plan: [path], status: [status]"}
 {If partial: "Failed steps from previous execution: [list from plan frontmatter failed_steps]"}
-
-Read all relevant source files, analyze the current state, and create the plan.
-Write the plan file directly. Return ONLY the file path and a 3-5 line summary. Do NOT return the plan content itself.
 ```
 
-The stage orchestrator receives only paths and a compact summary.
+Plan procedure, plan structure, and the single-line return contract are owned by the `plan-team` persona; do not restate them in the prompt. The stage orchestrator receives only the plan-team return line (`{path} -- {verdict}`); plan content stays in the file.
 
 ## Plan-Check Assurance
 

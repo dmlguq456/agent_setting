@@ -2558,6 +2558,7 @@ if python3 "$ROOT/tools/context-footprint.py" --root "$ROOT" --skip-runtime --sk
   && grep -q '^context_footprint_report=1' "$TMP/context_footprint.out" \
   && grep -q '^surface=codex-plugin ' "$TMP/context_footprint.out" \
   && grep -q '^surface=claude ' "$TMP/context_footprint.out" \
+  && grep -q '^surface=native-bootstrap-agents ' "$TMP/context_footprint.out" \
   && grep -q '^status=ok' "$TMP/context_footprint.out"; then
   ok "context-footprint reports bootstrap and skill metadata without runtime hooks"
 else

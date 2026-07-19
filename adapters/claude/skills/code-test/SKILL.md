@@ -52,18 +52,13 @@ Invoke `qa-team` in test mode. Select one prompt form:
 
 ## Test Log Contract
 
-Always include this requirement in the `qa-team` test prompt. Record the exact command, full stdout/stderr or the last 50 lines when long, and a PASS/FAIL verdict with the error reason.
+Always include this requirement in the `qa-team` test prompt:
 
 ```text
 Write a detailed test log to: {log_dir}/test_logs/test_report.md
-
-Format:
-## Level N: [Level Name]
-### Test N.1: [description]
-**Command:** [exact command]
-**Output:** [stdout/stderr]
-**Verdict:** PASS / FAIL — [reason]
 ```
+
+The report structure is owned by the qa test-mode persona (`agent-modes/qa/test.md`): exact command, full stdout/stderr (or the last 50 lines when long), and a per-test PASS/FAIL verdict with the error reason. Do not restate a competing format in the prompt.
 
 Run test commands through the active adapter's bounded verification runner when its contract requires one. Preserve the actual exit status in the log.
 

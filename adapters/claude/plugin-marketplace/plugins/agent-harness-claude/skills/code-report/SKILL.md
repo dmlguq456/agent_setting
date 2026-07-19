@@ -102,14 +102,16 @@ After the writer returns:
 1. Read `final_report.md` once.
 2. Cross-check it against the best available cycle evidence. When in-session, current orchestration context may help; in an isolated stage session, rely on the artifact files: checklist marks, `dev_logs/`, `test_logs/test_report.md`, `_internal/*_reviews/`, and `git log` or `git diff <safety-commit>..HEAD`. Artifacts remain authoritative.
 3. Verify step counts, critical-finding rounds, test pass/fail counts, commit hashes, file counts, cited `file.py:NNN` locations, resolved versus pending follow-ups, and plan deviations. Correct report wording or data when evidence disagrees.
-4. If plan-frontmatter `qa_level` is `standard`, `thorough`, or `adversarial`, invoke `editorial-team` once in polish mode on `{log_directory}/final_report.md`. Skip for `quick` and `light`.
+4. Invoke `editorial-team` once in polish mode on `{log_directory}/final_report.md` when the polish invocation contract selects it — `agent-modes/editorial/polish.md` is the single source for that gating (currently plan-frontmatter `qa_level` standard+).
 
 Use this editorial instruction:
 
 ```text
 Polish {log_directory}/final_report.md in place for natural phrasing, notation consistency, and readable cadence in the selected artifact language.
-Preserve change content, rationale, principles, QA summary, decision record, numbers, file:line references, and decision meaning. Edit wording only.
+Apply your content-boundary contract: edit wording only.
 ```
+
+The must-not-change list (change content, rationale, QA summary, decision record, numbers, `file:line` references, decision meaning) is owned by the `editorial-team` content boundary; do not restate it in the prompt.
 
 Do not run a separate report QA pass. Reconciliation is the lightweight accuracy check; code and test assurance remain owned by earlier stages.
 

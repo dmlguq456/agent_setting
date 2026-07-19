@@ -494,6 +494,6 @@ Draft Step 0 and research Step 1.5 are the existing track-specific instances. Sp
 Unified memory moved to `MEMORY.md` on 2026-06-23 with §7 numbering preserved. That file is the single source.
 # Route, resource, and report invariants
 
-Depth applies only to model-backed agents: quick is depth 1, standard+ has a depth-1 owner and at most depth-2 workers, while resource runners are detached processes with no agent depth. Review workers write isolated verdicts and map workers write isolated shards; one owner performs canonical merges. Completion is route-hash and node-bound, so a stale dispatch row is not completion.
+Depth applies only to registered dispatched agents: quick is depth 1, standard+ has a depth-1 owner and at most depth-2 workers, while resource runners are detached processes with no agent depth and in-session native team subagents are internal parallelism inside their session (§1, `OPERATIONS §5.10` delegation surfaces) that adds no depth. Review workers write isolated verdicts and map workers write isolated shards; one owner performs canonical merges. Completion is route-hash and node-bound, so a stale dispatch row is not completion.
 
 Lab full-run entry requires a current hash-bound smoke attestation. Reports with media use `capabilities/report-manifest.schema.json` as the shared Markdown and HTML manifest: summary statistics occur in both outputs, each audio sample has 1:1 waveform/spectrogram/playback media, hashes and visual evidence are bound, and the house audio parameters are 48 kHz with the full 0–24 kHz band.

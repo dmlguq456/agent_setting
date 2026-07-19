@@ -30,17 +30,10 @@ Supplied plan: {$ARGUMENTS}
 Canonical plan: {resolved plan.md path}
 Existing companion plans: {resolved paths, or none}
 
-Read the supplied and canonical plan files and identify user annotations. Memos may use any of these forms:
-- `<!-- memo: ... -->`
-- `<!-- ... -->` (treat any HTML comment as a user memo)
-- `// ...`
-- `[memo] ...`
-- `(**...**)`
-- another distinct annotation inserted between steps or addressed to the planner
-
-Do not treat original plan prose as a memo. Re-read relevant source files when needed, update the canonical plan in place, synchronize existing required companions, and remove incorporated memo comments.
-Return the changed step numbers, file paths, and a brief summary only.
+Read the supplied and canonical plan files and identify user memos per your refine-mode memo forms; additionally treat any HTML comment as a user memo. Do not treat original plan prose as a memo. Then follow your refine-mode procedure and return format.
 ```
+
+Memo forms, in-place update, companion synchronization, and the single-line return contract are owned by the `plan-team` persona; do not restate them in the prompt.
 
 ## Refine Assurance
 
