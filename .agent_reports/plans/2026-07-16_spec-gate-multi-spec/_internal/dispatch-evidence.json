@@ -1,0 +1,9 @@
+{
+  "tuples": [
+    {"broker_instance": "brk-e1ca7129bef04676aac59547b20e403a", "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker", "child_harness": "claude", "failure_class": "", "launch_authority": "ancestor-broker", "parent_harness": "claude", "parent_sandbox": "default", "parent_transport": "headless", "probe_source": "depth-0-broker:brk-e1ca7129bef04676aac59547b20e403a+command-check", "probe_time": "2026-07-16T06:59:59.279848Z", "status": "supported"},
+    {"broker_instance": "brk-e1ca7129bef04676aac59547b20e403a", "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker", "child_harness": "codex", "failure_class": "", "launch_authority": "ancestor-broker", "parent_harness": "claude", "parent_sandbox": "default", "parent_transport": "headless", "probe_source": "depth-0-broker:brk-e1ca7129bef04676aac59547b20e403a+headless-check", "probe_time": "2026-07-16T07:00:02.052720Z", "status": "supported"}
+  ],
+  "native_subagent": [
+    {"harness": "claude", "status": "supported", "check_source": "claude runtime Agent tool, session-verified 2026-07-16"}
+  ]
+}

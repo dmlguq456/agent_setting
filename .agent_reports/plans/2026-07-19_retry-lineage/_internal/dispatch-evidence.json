@@ -1,0 +1,38 @@
+{
+  "tuples": [
+    {
+      "child_harness": "claude",
+      "failure_class": "",
+      "launch_authority": "conductor",
+      "parent_harness": "claude",
+      "parent_sandbox": "default",
+      "parent_transport": "headless",
+      "probe_source": "direct-command-check",
+      "probe_time": "2026-07-19T04:19:13.459482Z",
+      "status": "supported"
+    },
+    {
+      "child_harness": "codex",
+      "failure_class": "",
+      "launch_authority": "conductor",
+      "parent_harness": "claude",
+      "parent_sandbox": "default",
+      "parent_transport": "headless",
+      "probe_source": "direct-auth+headless-check",
+      "probe_time": "2026-07-19T04:19:16.521727Z",
+      "status": "supported"
+    },
+    {
+      "child_harness": "opencode",
+      "failure_class": "",
+      "launch_authority": "conductor",
+      "parent_harness": "claude",
+      "parent_sandbox": "default",
+      "parent_transport": "headless",
+      "probe_source": "direct-auth+headless-check",
+      "probe_time": "2026-07-19T04:19:17.725400Z",
+      "status": "supported"
+    }
+  ],
+  "native_subagent": []
+}
