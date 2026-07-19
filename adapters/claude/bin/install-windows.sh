@@ -71,27 +71,75 @@ project_file() {
 }
 for name in CLAUDE.md statusline.sh; do project_file "$name"; done
 
+# --- Resolve a REAL python.exe (shared by the hook rewrite and the fleet launcher) ---
+# `python`/`python3` on PATH are WindowsApps app-execution aliases (a pymanager
+# stub) that can crash with "Internal error 0x00000001" and emit a Python
+# traceback; a box may also have several real interpreters (only some with
+# windows-curses). Collect candidates (sys.executable + common install dirs),
+# prefer one that can `import curses` (live fleet TUI), else any that runs.
+_to_unix() { cygpath -u "$1" 2>/dev/null || printf '%s' "$1" | sed -e 's#\\#/#g' -e 's#^\([A-Za-z]\):#/\l\1#'; }
+REAL_PY=""
+{
+  se=$("$PYBIN" -c 'import sys; print(sys.executable)' 2>/dev/null || true)
+  [ -n "$se" ] && printf '%s\n' "$se"
+  ls "$HOME_DIR"/AppData/Local/Python/*/python.exe \
+     "$HOME_DIR"/AppData/Local/Programs/Python/*/python.exe \
+     "$CLAUDE_DIR"/Python/*/python.exe 2>/dev/null
+} | while IFS= read -r cand; do
+  u=$(_to_unix "$cand"); [ -f "$u" ] || continue
+  "$u" -c 'import sys' >/dev/null 2>&1 || continue
+  if "$u" -c 'import curses' >/dev/null 2>&1; then printf 'CURSES\t%s\n' "$u"; else printf 'ANY\t%s\n' "$u"; fi
+done > "$RUN_SETTINGS.pyscan.tmp" 2>/dev/null || true
+REAL_PY=$(awk -F'\t' '$1=="CURSES"{print $2; exit}' "$RUN_SETTINGS.pyscan.tmp" 2>/dev/null)
+[ -z "$REAL_PY" ] && REAL_PY=$(awk -F'\t' '$1=="ANY"{print $2; exit}' "$RUN_SETTINGS.pyscan.tmp" 2>/dev/null)
+rm -f "$RUN_SETTINGS.pyscan.tmp"
+
 # --- 2. Merge harness hooks + statusLine + env into the runtime settings.json ---
 # Preserve every existing runtime key (permissions, plugins, tui, ...). Inject a
-# reliable HOME/CLAUDE_HOME/AGENT_HOME so `$HOME/.claude/...` hook/statusLine
-# commands resolve regardless of the Windows shell's $HOME quirk.
+# reliable HOME so `$HOME/.claude/...` hook/statusLine commands resolve regardless
+# of the Windows shell's $HOME quirk. Do NOT set AGENT_HOME/CLAUDE_HOME here: the
+# memory store lives at ~/agent_setting/memory, and mem.py resolves its agent-home
+# as AGENT_HOME -> CLAUDE_HOME -> ~/agent_setting -> ~/.claude; pinning either to
+# ~/.claude would send mem to the wrong (empty) store. HOME alone fixes the shell
+# path resolution and leaves agent-home auto-detection intact (matches Linux).
 [ -f "$RUN_SETTINGS" ] && cp -n "$RUN_SETTINGS" "$RUN_SETTINGS.pre-harness.bak" 2>/dev/null || true
-"$PYBIN" - "$CANON_SETTINGS" "$RUN_SETTINGS" "$CLAUDE_DIR" "$HOME_DIR" <<'PY'
+"$PYBIN" - "$CANON_SETTINGS" "$RUN_SETTINGS" "$HOME_DIR" "$CLAUDE_DIR" "$REAL_PY" <<'PY'
 import json, os, sys
-canon_p, run_p, cdir, home = sys.argv[1:5]
+canon_p, run_p, home, cdir, realpy = (sys.argv[1:6] + [''])[:5]
 canon = json.load(open(canon_p, encoding='utf-8'))
 run = json.load(open(run_p, encoding='utf-8')) if os.path.exists(run_p) else {}
-run['hooks'] = canon['hooks']
-run['statusLine'] = canon['statusLine']
+
+def fix(cmd):
+    # Make commands independent of the Windows shell's unreliable $HOME: use an
+    # absolute config path, and a real python.exe instead of the crashing
+    # `python3` WindowsApps stub. argv paths survive the bash->exe boundary even
+    # with a non-ASCII username (unlike env values), so this is the safe channel.
+    cmd = cmd.replace('$HOME/.claude', cdir)
+    if realpy:
+        cmd = cmd.replace('python3 ', '"%s" ' % realpy)
+    return cmd
+
+hooks = canon['hooks']
+for arr in hooks.values():
+    for grp in arr:
+        for h in grp.get('hooks', []):
+            if 'command' in h:
+                h['command'] = fix(h['command'])
+run['hooks'] = hooks
+sl = dict(canon['statusLine'])
+if 'command' in sl:
+    sl['command'] = fix(sl['command'])
+run['statusLine'] = sl
+
 env = dict(canon.get('env', {}))
 env.update(run.get('env', {}))          # existing runtime env wins over canonical
+env.pop('AGENT_HOME', None)             # self-heal: an earlier installer set these and
+env.pop('CLAUDE_HOME', None)            # they mis-point mem.py's store home (see comment above)
 env.setdefault('MEM_DISTILL_ENABLE', '1')
-env['HOME'] = home                        # real %USERPROFILE% so $HOME/.claude resolves
-env['CLAUDE_HOME'] = cdir
-env['AGENT_HOME'] = cdir
+env['HOME'] = home                        # real %USERPROFILE% (belt-and-suspenders for scripts using $HOME)
 run['env'] = env
 json.dump(run, open(run_p, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-print('[install-windows] settings.json: wired %d hook events + statusLine + env(HOME/CLAUDE_HOME/AGENT_HOME)' % len(run['hooks']))
+print('[install-windows] settings.json: wired %d hook events + statusLine (absolute paths, real python) + env(HOME)' % len(run['hooks']))
 PY
 
 # --- 3. Restore the local memory DB from the git-tracked dump if it is missing ---
@@ -119,28 +167,6 @@ fi
 # $HOME. fleet.sh itself finds python and fleet.py from its own location.
 LOCAL_BIN="$HOME_DIR/.local/bin"
 mkdir -p "$LOCAL_BIN"
-# Resolve a REAL python.exe. The `python`/`python3` on PATH are WindowsApps
-# app-execution aliases (a pymanager stub) that can crash with
-# "Internal error 0x00000001", and a machine may have several real interpreters
-# (only some with windows-curses). Collect candidates (sys.executable + common
-# install dirs), prefer one that can `import curses` (so the live TUI works),
-# else fall back to any that runs — either way the stub is bypassed.
-_to_unix() { cygpath -u "$1" 2>/dev/null || printf '%s' "$1" | sed -e 's#\\#/#g' -e 's#^\([A-Za-z]\):#/\l\1#'; }
-REAL_PY=""; _any_py=""
-{
-  se=$("$PYBIN" -c 'import sys; print(sys.executable)' 2>/dev/null || true)
-  [ -n "$se" ] && printf '%s\n' "$se"
-  ls "$HOME_DIR"/AppData/Local/Python/*/python.exe \
-     "$HOME_DIR"/AppData/Local/Programs/Python/*/python.exe \
-     "$CLAUDE_DIR"/Python/*/python.exe 2>/dev/null
-} | while IFS= read -r cand; do
-  u=$(_to_unix "$cand"); [ -f "$u" ] || continue
-  "$u" -c 'import sys' >/dev/null 2>&1 || continue
-  if "$u" -c 'import curses' >/dev/null 2>&1; then printf 'CURSES\t%s\n' "$u"; else printf 'ANY\t%s\n' "$u"; fi
-done > "$RUN_SETTINGS.pyscan.tmp" 2>/dev/null || true
-REAL_PY=$(awk -F'\t' '$1=="CURSES"{print $2; exit}' "$RUN_SETTINGS.pyscan.tmp" 2>/dev/null)
-[ -z "$REAL_PY" ] && REAL_PY=$(awk -F'\t' '$1=="ANY"{print $2; exit}' "$RUN_SETTINGS.pyscan.tmp" 2>/dev/null)
-rm -f "$RUN_SETTINGS.pyscan.tmp"
 {
   echo '#!/usr/bin/env bash'
   echo '# fleet launcher (Windows/Git Bash) — generated by install-windows.sh.'

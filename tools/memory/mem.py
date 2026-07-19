@@ -15,7 +15,39 @@ import argparse, datetime, hashlib, json, os, re, sqlite3, subprocess, sys
 from collections import namedtuple
 from pathlib import Path
 
-HOME = Path.home()
+# Force UTF-8 stdout/stderr. On Windows the console codepage is often cp949/cp1252,
+# which cannot encode emoji/box glyphs in memory content; `print(json.dumps(...,
+# ensure_ascii=False))` then raises UnicodeEncodeError and (in the SessionStart
+# inject hook) surfaces as a hook traceback. Linux is already UTF-8 (no-op).
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+
+def _home() -> Path:
+    # On Windows, USERPROFILE is the authoritative user profile. A shell that runs
+    # our hooks (Git Bash) injects a POSIX-style $HOME ('/home/<user>') that both
+    # points at a bogus MSYS tree (wrong/empty memory store) and can make
+    # Path.home() return it or raise RuntimeError. Prefer USERPROFILE so the store
+    # resolves deterministically regardless of the invoking shell's $HOME — this
+    # also guards `mem sync` from exporting an empty dump over the real one.
+    if os.name == "nt":
+        up = os.environ.get("USERPROFILE")
+        if up and Path(up).exists():
+            return Path(up)
+    try:
+        return Path.home()
+    except RuntimeError:
+        for var in ("USERPROFILE", "HOME"):
+            v = os.environ.get(var)
+            if v:
+                return Path(v)
+        drive, path = os.environ.get("HOMEDRIVE", ""), os.environ.get("HOMEPATH", "")
+        return Path(drive + path) if path else Path(".")
+
+
+HOME = _home()
 def default_agent_home() -> Path:
     if os.environ.get("AGENT_HOME"):
         return Path(os.environ["AGENT_HOME"])
