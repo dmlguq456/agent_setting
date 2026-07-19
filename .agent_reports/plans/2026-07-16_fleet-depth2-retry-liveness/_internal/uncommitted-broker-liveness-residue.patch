@@ -1,0 +1,815 @@
+diff --git a/adapters/claude/tools/fleet/collectors/dispatch.py b/adapters/claude/tools/fleet/collectors/dispatch.py
+index 2d9531eb..9dc7f92e 100644
+--- a/adapters/claude/tools/fleet/collectors/dispatch.py
++++ b/adapters/claude/tools/fleet/collectors/dispatch.py
+@@ -323,6 +323,15 @@ def _dispatch_liveness(job, now, track=True):
+     leaves a tracker entry behind.
+     """
+     is_loop = job.source == "proc" and job.key in _LOOP_KEYS
++    pid_alive = None
++    proc_start_match = None
++    if job.pid is not None:
++        proc_path = "/proc/%s" % job.pid
++        pid_alive = os.path.exists(proc_path)
++        if pid_alive and job.proc_start:
++            observed_start = procscan.read_proc_start(job.pid)
++            if observed_start is not None:
++                proc_start_match = str(observed_start) == str(job.proc_start)
+     ev_in = {
+         "source": job.source,
+         "key": job.key,
+@@ -332,6 +341,9 @@ def _dispatch_liveness(job, now, track=True):
+         "elapsed_min": job.elapsed_min,
+         "slug": job.slug,
+         "pid": job.pid,
++        "proc_start": job.proc_start,
++        "pid_alive": pid_alive,
++        "proc_start_match": proc_start_match,
+         # A loop proc row is decided by tier-2 evidence; skip the mtime probe entirely
+         # (it was never consulted on that path pre-F-25 either).
+         "transcript": None if is_loop else _job_transcript_signal(job, now),
+@@ -945,18 +957,22 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None):
+         parent_sid = meta.get("parent_sid") or meta.get("parent_session_id") or None
+         parent_cwd = meta.get("parent_cwd") or meta.get("parent_worktree") or None
+         harness = _infer_harness(meta, slug)
++        pid_s = meta.get("pid")
++        registry_pid = int(pid_s) if (pid_s or "").isdigit() else None
+         jobs.append(DispatchJob(
+             key=pname, stage=status, mode=meta.get("mode"), qa=q,
+             elapsed_min=_iso_elapsed_min(ts), slug=slug or worktree or repo,
+             cwd=cwd, parent_sid=parent_sid, parent_cwd=parent_cwd, parent_slug=parent_slug,
+             is_child=bool(parent_slug or parent_sid or parent_cwd), qa_source=qsrc, source="jobs", status=status,
+             harness=harness, model=meta.get("model"),
++            pid=registry_pid, proc_start=meta.get("pid_start") or meta.get("proc_start"),
+             profile=meta.get("profile"), depth=_parse_depth(meta.get("depth")),
+             intensity=meta.get("intensity"), worker_role=worker_role,
+             capability_owner=meta.get("owner") or meta.get("capability_owner"),
+             effort=meta.get("effort"), model_role=meta.get("model_role"),
+             route_file=meta.get("route_file"), route_id=meta.get("route_id"),
+             route_hash=meta.get("route_hash"), route_node=meta.get("route_node"),
++            attempt_id=meta.get("attempt_id"),
+         ))
+     return jobs, malformed
+ 
+diff --git a/adapters/claude/tools/fleet/model.py b/adapters/claude/tools/fleet/model.py
+index c0515b89..0b62cf0a 100644
+--- a/adapters/claude/tools/fleet/model.py
++++ b/adapters/claude/tools/fleet/model.py
+@@ -231,6 +231,7 @@ class DispatchJob:
+     route_hash: Optional[str] = None    # pipe route_hash= (jobs.log rows only)
+     route_node: Optional[str] = None    # pipe route_node= / env AGENT_ROUTE_NODE — the node
+                                         # this job is executing
++    attempt_id: Optional[str] = None    # canonical registry attempt identity (SD-49)
+ 
+     def to_dict(self):
+         return asdict(self)
+@@ -502,6 +503,19 @@ def classify_job(ev_in, now, key=None):
+         # "terminated by outside intervention" axis. The distinction survives in raw_status.
+         return out("killed", 1, "registry", "jobs.log status=cancelled → killed (raw preserved)")
+ 
++    # tier-2: a registry row carrying the canonical (pid, start-time) identity must
++    # never be revived by another retry's cwd-wide transcript activity.  A matching
++    # process proves the attempt is still alive; a missing/reused process terminates
++    # that exact attempt immediately.  Legacy rows without both identity halves keep
++    # the mtime fallback below.
++    if ev_in.get("pid") is not None and ev_in.get("proc_start"):
++        if ev_in.get("pid_alive") is False:
++            return out("dead", 2, "proc", "recorded attempt pid is not alive")
++        if ev_in.get("proc_start_match") is False:
++            return out("dead", 2, "proc", "recorded attempt start-time mismatch (pid reuse)")
++        if ev_in.get("pid_alive") is True and ev_in.get("proc_start_match") is True:
++            return out("working", 2, "proc", "recorded attempt pid/start-time is live")
++
+     t = ev_in.get("transcript")
+     if t == "unknown":
+         state, tier, rule = "unknown", 3, "no cwd to resolve a transcript"
+diff --git a/adapters/claude/tools/fleet/tests/test_dispatch.py b/adapters/claude/tools/fleet/tests/test_dispatch.py
+index 7b0a8451..3ca5ad36 100644
+--- a/adapters/claude/tools/fleet/tests/test_dispatch.py
++++ b/adapters/claude/tools/fleet/tests/test_dispatch.py
+@@ -596,6 +596,100 @@ class CodexJobLivenessPathTest(unittest.TestCase):
+         ])
+ 
+ 
++class CodexAttemptIdentityTest(unittest.TestCase):
++    """Exact registry identity outranks another retry's cwd-wide rollout mtime."""
++
++    def test_scan_preserves_pid_start_and_attempt_identity(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            jobs_log = os.path.join(tmp, "jobs.log")
++            with open(jobs_log, "w", encoding="utf-8") as f:
++                f.write(
++                    "2026-07-16T00:00:00+00:00\topen\trepo\t%s\tretry-r5\t"
++                    "capability=autopilot-code,harness=codex,depth=2,"
++                    "route_id=rt-a,route_node=test,pid=4242,pid_start=777,"
++                    "attempt_id=att-0123456789abcdef\n" % tmp
++                )
++            rows, malformed = dispatch._scan_jobs_log(jobs_log, set())
++
++        self.assertEqual(malformed, 0)
++        self.assertEqual(len(rows), 1)
++        self.assertEqual(rows[0].pid, 4242)
++        self.assertEqual(rows[0].proc_start, "777")
++        self.assertEqual(rows[0].attempt_id, "att-0123456789abcdef")
++
++    def test_exited_retries_cannot_share_fresh_rollout_liveness(self):
++        jobs = [
++            DispatchJob(key="code-test", slug="test-r%d" % retry, cwd="/work/wt",
++                        source="jobs", status="open", harness="codex", depth=2,
++                        route_id="rt-a", route_node="test", pid=4200 + retry,
++                        proc_start=str(700 + retry),
++                        attempt_id="att-%016x" % retry)
++            for retry in range(2, 6)
++        ]
++        with mock.patch.object(dispatch, "_job_transcript_signal", return_value="working"), \
++             mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=False):
++            states = [dispatch._dispatch_liveness(job, now=1000.0, track=False) for job in jobs]
++
++        self.assertEqual(states, ["dead"] * 4)
++        self.assertTrue(all(job.state_evidence["tier"] == 2 for job in jobs))
++
++    def test_matching_attempt_identity_beats_stale_rollout(self):
++        job = DispatchJob(key="code-test", slug="test-r5", cwd="/work/wt",
++                          source="jobs", status="open", harness="codex", pid=4242,
++                          proc_start="777", attempt_id="att-0123456789abcdef")
++        with mock.patch.object(dispatch, "_job_transcript_signal", return_value="stale"), \
++             mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=True), \
++             mock.patch.object(dispatch.procscan, "read_proc_start", return_value="777"):
++            state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
++
++        self.assertEqual(state, "working")
++        self.assertEqual(job.state_evidence["tier"], 2)
++
++    def test_legacy_row_without_process_identity_keeps_rollout_fallback(self):
++        job = DispatchJob(key="code-test", slug="legacy", cwd="/work/wt",
++                          source="jobs", status="open", harness="codex")
++        with mock.patch.object(dispatch, "_job_transcript_signal", return_value="working"):
++            state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
++
++        self.assertEqual(state, "working")
++        self.assertEqual(job.state_evidence["tier"], 3)
++
++    def test_latest_retry_owns_route_node_evidence(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            jobs_log = os.path.join(tmp, "jobs.log")
++            with open(jobs_log, "w", encoding="utf-8") as f:
++                for retry in range(2, 6):
++                    f.write(
++                        "2026-07-16T00:0%d:00+00:00\topen\trepo\t%s\ttest-r%d\t"
++                        "capability=autopilot-code,harness=codex,depth=2,"
++                        "route_id=rt-a,route_node=test,attempt_id=att-%016x\n"
++                        % (retry, tmp, retry, retry)
++                    )
++
++            evidence = dispatch._scan_route_nodes([jobs_log])
++
++        self.assertEqual(evidence["rt-a"]["test"]["slug"], "test-r5")
++
++    def test_default_render_hides_superseded_dead_retries(self):
++        jobs = [
++            DispatchJob(key="code-test", slug="test-r%d" % retry, cwd="/work/wt",
++                        source="jobs", status="open", harness="codex", depth=2,
++                        route_id="rt-a", route_node="test",
++                        liveness="working" if retry == 5 else "dead")
++            for retry in range(2, 6)
++        ]
++        render.set_show_all(False)
++        lines = render._build_lines([], jobs, section="dispatch", narrow=False,
++                                    malformed=0, layout="wide")
++        text = "\n".join("".join(part for part, _key in line) for line in lines if line)
++        body = "\n".join(line for line in text.splitlines() if "alert" not in line)
++
++        self.assertIn("test-r5", body)
++        for retry in range(2, 5):
++            self.assertNotIn("test-r%d" % retry, body)
++        self.assertIn("3 dead jobs", text)  # history remains visible as a diagnostic summary
++
++
+ # --- D5: depth-2 registry metadata ---
+ class DepthTwoRegistryMetadataTest(unittest.TestCase):
+ 
+diff --git a/tools/fleet/collectors/dispatch.py b/tools/fleet/collectors/dispatch.py
+index 2d9531eb..9dc7f92e 100644
+--- a/tools/fleet/collectors/dispatch.py
++++ b/tools/fleet/collectors/dispatch.py
+@@ -323,6 +323,15 @@ def _dispatch_liveness(job, now, track=True):
+     leaves a tracker entry behind.
+     """
+     is_loop = job.source == "proc" and job.key in _LOOP_KEYS
++    pid_alive = None
++    proc_start_match = None
++    if job.pid is not None:
++        proc_path = "/proc/%s" % job.pid
++        pid_alive = os.path.exists(proc_path)
++        if pid_alive and job.proc_start:
++            observed_start = procscan.read_proc_start(job.pid)
++            if observed_start is not None:
++                proc_start_match = str(observed_start) == str(job.proc_start)
+     ev_in = {
+         "source": job.source,
+         "key": job.key,
+@@ -332,6 +341,9 @@ def _dispatch_liveness(job, now, track=True):
+         "elapsed_min": job.elapsed_min,
+         "slug": job.slug,
+         "pid": job.pid,
++        "proc_start": job.proc_start,
++        "pid_alive": pid_alive,
++        "proc_start_match": proc_start_match,
+         # A loop proc row is decided by tier-2 evidence; skip the mtime probe entirely
+         # (it was never consulted on that path pre-F-25 either).
+         "transcript": None if is_loop else _job_transcript_signal(job, now),
+@@ -945,18 +957,22 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None):
+         parent_sid = meta.get("parent_sid") or meta.get("parent_session_id") or None
+         parent_cwd = meta.get("parent_cwd") or meta.get("parent_worktree") or None
+         harness = _infer_harness(meta, slug)
++        pid_s = meta.get("pid")
++        registry_pid = int(pid_s) if (pid_s or "").isdigit() else None
+         jobs.append(DispatchJob(
+             key=pname, stage=status, mode=meta.get("mode"), qa=q,
+             elapsed_min=_iso_elapsed_min(ts), slug=slug or worktree or repo,
+             cwd=cwd, parent_sid=parent_sid, parent_cwd=parent_cwd, parent_slug=parent_slug,
+             is_child=bool(parent_slug or parent_sid or parent_cwd), qa_source=qsrc, source="jobs", status=status,
+             harness=harness, model=meta.get("model"),
++            pid=registry_pid, proc_start=meta.get("pid_start") or meta.get("proc_start"),
+             profile=meta.get("profile"), depth=_parse_depth(meta.get("depth")),
+             intensity=meta.get("intensity"), worker_role=worker_role,
+             capability_owner=meta.get("owner") or meta.get("capability_owner"),
+             effort=meta.get("effort"), model_role=meta.get("model_role"),
+             route_file=meta.get("route_file"), route_id=meta.get("route_id"),
+             route_hash=meta.get("route_hash"), route_node=meta.get("route_node"),
++            attempt_id=meta.get("attempt_id"),
+         ))
+     return jobs, malformed
+ 
+diff --git a/tools/fleet/model.py b/tools/fleet/model.py
+index c0515b89..0b62cf0a 100644
+--- a/tools/fleet/model.py
++++ b/tools/fleet/model.py
+@@ -231,6 +231,7 @@ class DispatchJob:
+     route_hash: Optional[str] = None    # pipe route_hash= (jobs.log rows only)
+     route_node: Optional[str] = None    # pipe route_node= / env AGENT_ROUTE_NODE — the node
+                                         # this job is executing
++    attempt_id: Optional[str] = None    # canonical registry attempt identity (SD-49)
+ 
+     def to_dict(self):
+         return asdict(self)
+@@ -502,6 +503,19 @@ def classify_job(ev_in, now, key=None):
+         # "terminated by outside intervention" axis. The distinction survives in raw_status.
+         return out("killed", 1, "registry", "jobs.log status=cancelled → killed (raw preserved)")
+ 
++    # tier-2: a registry row carrying the canonical (pid, start-time) identity must
++    # never be revived by another retry's cwd-wide transcript activity.  A matching
++    # process proves the attempt is still alive; a missing/reused process terminates
++    # that exact attempt immediately.  Legacy rows without both identity halves keep
++    # the mtime fallback below.
++    if ev_in.get("pid") is not None and ev_in.get("proc_start"):
++        if ev_in.get("pid_alive") is False:
++            return out("dead", 2, "proc", "recorded attempt pid is not alive")
++        if ev_in.get("proc_start_match") is False:
++            return out("dead", 2, "proc", "recorded attempt start-time mismatch (pid reuse)")
++        if ev_in.get("pid_alive") is True and ev_in.get("proc_start_match") is True:
++            return out("working", 2, "proc", "recorded attempt pid/start-time is live")
++
+     t = ev_in.get("transcript")
+     if t == "unknown":
+         state, tier, rule = "unknown", 3, "no cwd to resolve a transcript"
+diff --git a/tools/fleet/tests/test_dispatch.py b/tools/fleet/tests/test_dispatch.py
+index 7b0a8451..3ca5ad36 100644
+--- a/tools/fleet/tests/test_dispatch.py
++++ b/tools/fleet/tests/test_dispatch.py
+@@ -596,6 +596,100 @@ class CodexJobLivenessPathTest(unittest.TestCase):
+         ])
+ 
+ 
++class CodexAttemptIdentityTest(unittest.TestCase):
++    """Exact registry identity outranks another retry's cwd-wide rollout mtime."""
++
++    def test_scan_preserves_pid_start_and_attempt_identity(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            jobs_log = os.path.join(tmp, "jobs.log")
++            with open(jobs_log, "w", encoding="utf-8") as f:
++                f.write(
++                    "2026-07-16T00:00:00+00:00\topen\trepo\t%s\tretry-r5\t"
++                    "capability=autopilot-code,harness=codex,depth=2,"
++                    "route_id=rt-a,route_node=test,pid=4242,pid_start=777,"
++                    "attempt_id=att-0123456789abcdef\n" % tmp
++                )
++            rows, malformed = dispatch._scan_jobs_log(jobs_log, set())
++
++        self.assertEqual(malformed, 0)
++        self.assertEqual(len(rows), 1)
++        self.assertEqual(rows[0].pid, 4242)
++        self.assertEqual(rows[0].proc_start, "777")
++        self.assertEqual(rows[0].attempt_id, "att-0123456789abcdef")
++
++    def test_exited_retries_cannot_share_fresh_rollout_liveness(self):
++        jobs = [
++            DispatchJob(key="code-test", slug="test-r%d" % retry, cwd="/work/wt",
++                        source="jobs", status="open", harness="codex", depth=2,
++                        route_id="rt-a", route_node="test", pid=4200 + retry,
++                        proc_start=str(700 + retry),
++                        attempt_id="att-%016x" % retry)
++            for retry in range(2, 6)
++        ]
++        with mock.patch.object(dispatch, "_job_transcript_signal", return_value="working"), \
++             mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=False):
++            states = [dispatch._dispatch_liveness(job, now=1000.0, track=False) for job in jobs]
++
++        self.assertEqual(states, ["dead"] * 4)
++        self.assertTrue(all(job.state_evidence["tier"] == 2 for job in jobs))
++
++    def test_matching_attempt_identity_beats_stale_rollout(self):
++        job = DispatchJob(key="code-test", slug="test-r5", cwd="/work/wt",
++                          source="jobs", status="open", harness="codex", pid=4242,
++                          proc_start="777", attempt_id="att-0123456789abcdef")
++        with mock.patch.object(dispatch, "_job_transcript_signal", return_value="stale"), \
++             mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=True), \
++             mock.patch.object(dispatch.procscan, "read_proc_start", return_value="777"):
++            state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
++
++        self.assertEqual(state, "working")
++        self.assertEqual(job.state_evidence["tier"], 2)
++
++    def test_legacy_row_without_process_identity_keeps_rollout_fallback(self):
++        job = DispatchJob(key="code-test", slug="legacy", cwd="/work/wt",
++                          source="jobs", status="open", harness="codex")
++        with mock.patch.object(dispatch, "_job_transcript_signal", return_value="working"):
++            state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
++
++        self.assertEqual(state, "working")
++        self.assertEqual(job.state_evidence["tier"], 3)
++
++    def test_latest_retry_owns_route_node_evidence(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            jobs_log = os.path.join(tmp, "jobs.log")
++            with open(jobs_log, "w", encoding="utf-8") as f:
++                for retry in range(2, 6):
++                    f.write(
++                        "2026-07-16T00:0%d:00+00:00\topen\trepo\t%s\ttest-r%d\t"
++                        "capability=autopilot-code,harness=codex,depth=2,"
++                        "route_id=rt-a,route_node=test,attempt_id=att-%016x\n"
++                        % (retry, tmp, retry, retry)
++                    )
++
++            evidence = dispatch._scan_route_nodes([jobs_log])
++
++        self.assertEqual(evidence["rt-a"]["test"]["slug"], "test-r5")
++
++    def test_default_render_hides_superseded_dead_retries(self):
++        jobs = [
++            DispatchJob(key="code-test", slug="test-r%d" % retry, cwd="/work/wt",
++                        source="jobs", status="open", harness="codex", depth=2,
++                        route_id="rt-a", route_node="test",
++                        liveness="working" if retry == 5 else "dead")
++            for retry in range(2, 6)
++        ]
++        render.set_show_all(False)
++        lines = render._build_lines([], jobs, section="dispatch", narrow=False,
++                                    malformed=0, layout="wide")
++        text = "\n".join("".join(part for part, _key in line) for line in lines if line)
++        body = "\n".join(line for line in text.splitlines() if "alert" not in line)
++
++        self.assertIn("test-r5", body)
++        for retry in range(2, 5):
++            self.assertNotIn("test-r%d" % retry, body)
++        self.assertIn("3 dead jobs", text)  # history remains visible as a diagnostic summary
++
++
+ # --- D5: depth-2 registry metadata ---
+ class DepthTwoRegistryMetadataTest(unittest.TestCase):
+ 
+diff --git a/utilities/dispatch-broker.py b/utilities/dispatch-broker.py
+index 4b0b339d..ccff5867 100755
+--- a/utilities/dispatch-broker.py
++++ b/utilities/dispatch-broker.py
+@@ -135,34 +135,129 @@ def absolute(value: object, field: str, *, must_exist: bool = False) -> Path:
+     return resolved
+ 
+ 
+-def broker_status(root: Path, jobs: Path | None, stale_seconds: float) -> dict:
+-    p = paths(root)
+-    if not p["meta"].is_file():
+-        raise BrokerError("broker-unavailable", f"metadata missing: {p['meta']}")
+-    meta = read_json(p["meta"])
++def _validate_broker_meta(
++    root: Path,
++    meta: dict,
++    jobs: Path | None,
++    stale_seconds: float,
++    *,
++    require_process: bool,
++    honor_expected_instance: bool = True,
++    expected_implementation_digest: str = IMPLEMENTATION_DIGEST,
++) -> dict:
++    """Validate one broker metadata payload without mutating broker state.
++
++    Ordinary status requires a caller-visible exact PID identity.  Fenced control may
++    waive only that visibility check after proving the same instance over its protected
++    Unix socket; all schema, implementation, jobs, socket, token, and freshness checks
++    remain mandatory.
++    """
+     if meta.get("schema_version") != SCHEMA_VERSION:
+         raise BrokerError("broker-version-mismatch", str(meta.get("schema_version")))
+-    if meta.get("implementation_digest") != IMPLEMENTATION_DIGEST:
++    if meta.get("implementation_digest") != expected_implementation_digest:
+         raise BrokerError(
+             "broker-implementation-mismatch",
+-            f"expected={IMPLEMENTATION_DIGEST} observed={meta.get('implementation_digest')}",
++            f"expected={expected_implementation_digest} observed={meta.get('implementation_digest')}",
+         )
+     if jobs is not None and Path(str(meta.get("jobs", ""))).resolve(strict=False) != jobs.resolve(strict=False):
+         raise BrokerError("broker-jobs-mismatch", f"expected={jobs} observed={meta.get('jobs')}")
++    instance_id = str(meta.get("instance_id", ""))
++    if not instance_id or meta.get("fencing_token") != instance_id:
++        raise BrokerError("broker-instance-mismatch", "metadata fencing token")
++    if Path(str(meta.get("socket", ""))).resolve(strict=False) != paths(root)["socket"].resolve(strict=False):
++        raise BrokerError("broker-instance-mismatch", "metadata socket")
+     pid = int(meta.get("pid", 0) or 0)
+     ticks = str(meta.get("start_ticks", ""))
+-    if not process_matches(pid, ticks):
++    if require_process and not process_matches(pid, ticks):
+         raise BrokerError("broker-unavailable", f"pid identity is not live: {pid}/{ticks}")
+     heartbeat = float(meta.get("heartbeat_epoch", 0.0) or 0.0)
+     age = max(0.0, time.time() - heartbeat)
+     if age > stale_seconds:
+         raise BrokerError("broker-stale", f"heartbeat_age={age:.3f}")
+-    expected = os.environ.get("AGENT_DISPATCH_BROKER_INSTANCE")
++    expected = os.environ.get("AGENT_DISPATCH_BROKER_INSTANCE") if honor_expected_instance else None
+     if expected and expected != meta.get("instance_id"):
+         raise BrokerError("broker-instance-mismatch", f"expected={expected} observed={meta.get('instance_id')}")
+     return meta
+ 
+ 
++def broker_status(root: Path, jobs: Path | None, stale_seconds: float) -> dict:
++    p = paths(root)
++    if not p["meta"].is_file():
++        raise BrokerError("broker-unavailable", f"metadata missing: {p['meta']}")
++    return _validate_broker_meta(
++        root, read_json(p["meta"]), jobs, stale_seconds, require_process=True
++    )
++
++
++def fenced_socket_status(
++    root: Path,
++    jobs: Path,
++    stale_seconds: float,
++    timeout: float,
++    *,
++    expected_instance: str | None = None,
++    honor_expected_instance: bool = True,
++    expected_implementation_digest: str | None = None,
++) -> dict:
++    """Prove a broker instance through metadata plus its fenced Unix socket.
++
++    This is a control-only fallback for PID namespace boundaries.  It intentionally does
++    not change ``broker_status``: ordinary status/dispatch still fail closed when the exact
++    PID identity is invisible to the caller.
++    """
++    p = paths(root)
++    if not p["meta"].is_file():
++        raise BrokerError("broker-unavailable", f"metadata missing: {p['meta']}")
++    local_payload = read_json(p["meta"])
++    control_digest = expected_implementation_digest or str(local_payload.get("implementation_digest", ""))
++    if not re.fullmatch(r"sha256:[0-9a-f]{64}", control_digest):
++        raise BrokerError("broker-implementation-mismatch", control_digest or "missing")
++    local = _validate_broker_meta(
++        root,
++        local_payload,
++        jobs,
++        stale_seconds,
++        require_process=False,
++        honor_expected_instance=honor_expected_instance,
++        expected_implementation_digest=control_digest,
++    )
++    if expected_instance and local.get("instance_id") != expected_instance:
++        raise BrokerError(
++            "broker-instance-mismatch",
++            f"expected={expected_instance} observed={local.get('instance_id')}",
++        )
++    reply = connect(root, {"op": "ping"}, min(2.0, timeout))
++    if not reply.get("ok") or not isinstance(reply.get("meta"), dict):
++        raise BrokerError("broker-unavailable", "fenced ping failed")
++    remote = _validate_broker_meta(
++        root,
++        reply["meta"],
++        jobs,
++        stale_seconds,
++        require_process=False,
++        honor_expected_instance=honor_expected_instance,
++        expected_implementation_digest=control_digest,
++    )
++    for field in ("instance_id", "fencing_token", "pid", "start_ticks", "jobs", "socket"):
++        if remote.get(field) != local.get(field):
++            raise BrokerError("broker-instance-mismatch", f"ping metadata field={field}")
++    return remote
++
++
++def broker_lock_available(root: Path) -> bool:
++    """Whether a replacement can acquire the broker's single-instance flock now."""
++    lock = paths(root)["lock"].open("a+", encoding="utf-8")
++    try:
++        try:
++            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
++        except BlockingIOError:
++            return False
++        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
++        return True
++    finally:
++        lock.close()
++
++
+ def response_error(exc: BrokerError) -> dict:
+     return {"ok": False, "reason": exc.reason, "detail": exc.detail}
+ 
+@@ -197,13 +292,19 @@ def send_json(conn: socket.socket, payload: dict) -> None:
+ def registry_attempt(jobs: Path, attempt_id: str) -> dict | None:
+     if not jobs.is_file():
+         return None
++    matched = None
+     for line in jobs.read_text(encoding="utf-8", errors="replace").splitlines():
+         fields = line.split("\t")
+-        if len(fields) != 6 or f"attempt_id={attempt_id}" not in fields[5]:
++        if len(fields) != 6:
+             continue
+         metadata = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
+-        return {"status": fields[1], "slug": fields[4], "metadata": metadata}
+-    return None
++        if metadata.get("attempt_id") != attempt_id:
++            continue
++        # The registry is append-only.  Match the parsed identity exactly and
++        # retain its latest occurrence so a shorter attempt id cannot collide
++        # with a longer id, and a terminal retry row supersedes its open row.
++        matched = {"status": fields[1], "slug": fields[4], "metadata": metadata}
++    return matched
+ 
+ 
+ def validate_route(request: dict) -> tuple[dict, dict]:
+@@ -385,6 +486,12 @@ class BrokerServer:
+         self.stop_event = threading.Event()
+         self.locks_guard = threading.Lock()
+         self.request_locks: dict[str, threading.Lock] = {}
++        # Admission and shutdown share one guard.  Once draining begins, no
++        # handler accepted just before shutdown may start a target; conversely,
++        # an already-running target makes the fenced shutdown fail closed.
++        self.lifecycle_guard = threading.Lock()
++        self.draining = False
++        self.active_requests: dict[str, int] = {}
+         self.meta_guard = threading.Lock()
+         self.sock: socket.socket | None = None
+ 
+@@ -395,6 +502,29 @@ class BrokerServer:
+                 lock = self.request_locks[request_id] = threading.Lock()
+             return lock
+ 
++    def begin_request(self, request_id: str) -> None:
++        with self.lifecycle_guard:
++            if self.draining:
++                raise BrokerError("broker-draining", self.instance_id)
++            self.active_requests[request_id] = self.active_requests.get(request_id, 0) + 1
++
++    def end_request(self, request_id: str) -> None:
++        with self.lifecycle_guard:
++            count = self.active_requests.get(request_id, 0)
++            if count <= 1:
++                self.active_requests.pop(request_id, None)
++            else:
++                self.active_requests[request_id] = count - 1
++
++    def begin_shutdown(self) -> None:
++        with self.lifecycle_guard:
++            self.draining = True
++            if self.active_requests:
++                active = ",".join(sorted(self.active_requests))
++                self.draining = False
++                raise BrokerError("broker-replacement-active", active)
++            self.stop_event.set()
++
+     def meta(self, state: str = "running") -> dict:
+         return {
+             "schema_version": SCHEMA_VERSION,
+@@ -577,12 +707,19 @@ class BrokerServer:
+             if op == "shutdown":
+                 if message.get("instance_id") != self.instance_id:
+                     raise BrokerError("broker-instance-mismatch", "shutdown")
+-                self.stop_event.set()
++                self.begin_shutdown()
+                 send_json(conn, {"ok": True, "state": "stopping"})
+                 return
+             if op != "request" or not isinstance(message.get("request"), dict):
+                 raise BrokerError("broker-request-invalid", "unknown operation")
+-            send_json(conn, self.process_request(message["request"]))
++            request = message["request"]
++            request_id = str(request.get("request_id", "")) or "<invalid>"
++            self.begin_request(request_id)
++            try:
++                response = self.process_request(request)
++            finally:
++                self.end_request(request_id)
++            send_json(conn, response)
+         except BrokerError as exc:
+             send_json(conn, response_error(exc))
+         except Exception as exc:  # keep the broker alive but fail this request closed.
+@@ -673,12 +810,42 @@ def ensure(root: Path, jobs: Path, stale_seconds: float, timeout: float) -> dict
+             predecessor_instance = str(old.get("instance_id", ""))
+             old_pid = int(old.get("pid", 0) or 0)
+             old_ticks = str(old.get("start_ticks", ""))
+-            if process_matches(old_pid, old_ticks):
++            visible_process = process_matches(old_pid, old_ticks)
++            declared_jobs = Path(str(old.get("jobs", ""))).expanduser().resolve(strict=False)
++            responsive = None
++            if old.get("state") != "stopped":
++                try:
++                    responsive = fenced_socket_status(
++                        root,
++                        declared_jobs,
++                        stale_seconds,
++                        timeout,
++                        expected_instance=predecessor_instance,
++                        honor_expected_instance=False,
++                        expected_implementation_digest=str(old.get("implementation_digest", "")),
++                    )
++                except BrokerError:
++                    if visible_process or not broker_lock_available(root):
++                        raise
++            if visible_process or responsive is not None:
+                 active = []
+                 for request_path in paths(root)["requests"].glob("req-*.json"):
+                     request_state = read_json(request_path)
+-                    if request_state.get("status") not in TERMINAL:
+-                        active.append(request_state.get("request_id", request_path.stem))
++                    if request_state.get("status") in TERMINAL:
++                        continue
++                    # Request files survive broker rollovers.  Only leases owned by the
++                    # instance being fenced can block its shutdown; predecessor leftovers
++                    # are audit history, not current work.  A current-instance request whose
++                    # canonical registry attempt is already terminal is likewise complete
++                    # even if a lost response left its broker state at ``running``.
++                    if request_state.get("broker_instance") != predecessor_instance:
++                        continue
++                    registry_row = registry_attempt(
++                        declared_jobs, str(request_state.get("attempt_id", ""))
++                    )
++                    if registry_row is not None and registry_row.get("status") == "done":
++                        continue
++                    active.append(request_state.get("request_id", request_path.stem))
+                 if active:
+                     raise BrokerError("broker-replacement-active", ",".join(sorted(active)))
+                 if old.get("state") == "stopped":
+@@ -690,15 +857,18 @@ def ensure(root: Path, jobs: Path, stale_seconds: float, timeout: float) -> dict
+                 else:
+                     reply = connect(
+                         root,
+-                        {"op": "shutdown", "instance_id": old.get("instance_id")},
++                        {"op": "shutdown", "instance_id": predecessor_instance},
+                         min(2.0, timeout),
+                     )
+                     if not reply.get("ok"):
+                         raise BrokerError("broker-replacement-refused", replacement_reason)
+                     deadline = time.monotonic() + timeout
+-                    while process_matches(old_pid, old_ticks) and time.monotonic() < deadline:
++                    while time.monotonic() < deadline:
++                        process_gone = not visible_process or not process_matches(old_pid, old_ticks)
++                        if process_gone and broker_lock_available(root):
++                            break
+                         time.sleep(0.05)
+-                    if process_matches(old_pid, old_ticks):
++                    else:
+                         raise BrokerError("broker-replacement-timeout", replacement_reason)
+         except BrokerError:
+             raise
+@@ -730,6 +900,20 @@ def ensure(root: Path, jobs: Path, stale_seconds: float, timeout: float) -> dict
+     raise BrokerError("broker-start-timeout", last.detail if last else str(root))
+ 
+ 
++def stop(root: Path, jobs: Path, stale_seconds: float, timeout: float) -> dict:
++    """Request fenced shutdown, tolerating only caller-side PID namespace invisibility."""
++    try:
++        meta = broker_status(root, jobs, stale_seconds)
++    except BrokerError as exc:
++        if exc.reason not in {"broker-unavailable", "broker-implementation-mismatch"}:
++            raise
++        meta = fenced_socket_status(root, jobs, stale_seconds, timeout)
++    reply = connect(root, {"op": "shutdown", "instance_id": meta["instance_id"]}, timeout)
++    if not reply.get("ok"):
++        raise BrokerError(str(reply.get("reason", "broker-stop-failed")), str(reply.get("detail", "")))
++    return meta
++
++
+ def print_meta(meta: dict) -> None:
+     print("check=ok")
+     print(f"broker_root={Path(meta['socket']).parent}")
+@@ -791,8 +975,8 @@ def main() -> int:
+             signal.signal(signal.SIGTERM, lambda *_: server.stop_event.set())
+             signal.signal(signal.SIGINT, lambda *_: server.stop_event.set())
+             return server.serve()
+-        meta = broker_status(root, jobs, args.stale_seconds)
+         if args.command == "request":
++            meta = broker_status(root, jobs, args.stale_seconds)
+             try:
+                 request = json.load(sys.stdin)
+             except json.JSONDecodeError as exc:
+@@ -802,9 +986,7 @@ def main() -> int:
+             if not reply.get("ok"):
+                 return 76
+             return 0
+-        reply = connect(root, {"op": "shutdown", "instance_id": meta["instance_id"]}, args.timeout)
+-        if not reply.get("ok"):
+-            raise BrokerError(str(reply.get("reason", "broker-stop-failed")), str(reply.get("detail", "")))
++        meta = stop(root, jobs, args.stale_seconds, args.timeout)
+         print("check=ok")
+         print("broker_state=stopping")
+         print(f"broker_instance={meta['instance_id']}")
+diff --git a/utilities/dispatch_broker.test.py b/utilities/dispatch_broker.test.py
+index c7656a3a..371897b7 100644
+--- a/utilities/dispatch_broker.test.py
++++ b/utilities/dispatch_broker.test.py
+@@ -11,6 +11,7 @@ import threading
+ import time
+ from types import SimpleNamespace
+ import unittest
++from unittest import mock
+ 
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+@@ -770,6 +771,81 @@ class DispatchBrokerTest(unittest.TestCase):
+         self.assertNotEqual(previous_pid, self.meta["broker_pid"])
+         self.assertEqual(str(replacement_jobs), self.meta["broker_jobs"])
+ 
++    def test_stop_uses_fenced_socket_when_pid_namespace_hides_broker(self):
++        old_pid = int(self.meta["broker_pid"])
++        original_matches = BROKER.process_matches
++
++        def namespace_view(pid, ticks):
++            return False if pid == old_pid else original_matches(pid, ticks)
++
++        with mock.patch.object(BROKER, "process_matches", side_effect=namespace_view):
++            stopped = BROKER.stop(self.broker_root, self.jobs, 15.0, 3.0)
++
++        self.assertEqual(stopped["instance_id"], self.meta["broker_instance"])
++        deadline = time.monotonic() + 3
++        while self.broker_root.joinpath("broker.sock").exists() and time.monotonic() < deadline:
++            time.sleep(0.02)
++        self.assertFalse(self.broker_root.joinpath("broker.sock").exists())
++
++    def test_ensure_replaces_live_socket_when_old_pid_is_namespace_hidden(self):
++        old_pid = int(self.meta["broker_pid"])
++        old_instance = self.meta["broker_instance"]
++        original_matches = BROKER.process_matches
++
++        # A nonterminal request owned by a predecessor instance is retained audit
++        # history and must not make the current broker permanently unreplaceable.
++        BROKER.atomic_json(
++            self.broker_root / "requests" / "req-0000000000000001.json",
++            {
++                "schema_version": 1,
++                "request_id": "req-0000000000000001",
++                "attempt_id": "att-0000000000000001",
++                "status": "running",
++                "broker_instance": "brk-predecessor0001",
++            },
++        )
++
++        def namespace_view(pid, ticks):
++            return False if pid == old_pid else original_matches(pid, ticks)
++
++        with mock.patch.object(BROKER, "process_matches", side_effect=namespace_view):
++            replaced = BROKER.ensure(self.broker_root, self.jobs, 15.0, 5.0)
++
++        self.meta = {
++            "broker_instance": replaced["instance_id"],
++            "broker_pid": str(replaced["pid"]),
++            "broker_start_ticks": str(replaced["start_ticks"]),
++            "broker_jobs": str(replaced["jobs"]),
++        }
++        self.assertNotEqual(replaced["instance_id"], old_instance)
++        self.assertNotEqual(int(replaced["pid"]), old_pid)
++
++    def test_namespace_recovery_does_not_fence_current_active_request(self):
++        old_pid = int(self.meta["broker_pid"])
++        old_instance = self.meta["broker_instance"]
++        original_matches = BROKER.process_matches
++        BROKER.atomic_json(
++            self.broker_root / "requests" / "req-0000000000000002.json",
++            {
++                "schema_version": 1,
++                "request_id": "req-0000000000000002",
++                "attempt_id": "att-0000000000000002",
++                "status": "running",
++                "broker_instance": old_instance,
++            },
++        )
++
++        def namespace_view(pid, ticks):
++            return False if pid == old_pid else original_matches(pid, ticks)
++
++        with mock.patch.object(BROKER, "process_matches", side_effect=namespace_view):
++            with self.assertRaises(BROKER.BrokerError) as caught:
++                BROKER.ensure(self.broker_root, self.jobs, 15.0, 3.0)
++
++        self.assertEqual(caught.exception.reason, "broker-replacement-active")
++        ping = BROKER.fenced_socket_status(self.broker_root, self.jobs, 15.0, 2.0)
++        self.assertEqual(ping["instance_id"], old_instance)
++
+     def test_claim_crash_restarts_only_unregistered_attempt(self):
+         request = self.request("codex", "claude", "claim-crash")
+         normalized = BROKER.validate_request(
