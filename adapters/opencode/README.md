@@ -73,12 +73,10 @@ full masking.
 | MCP config | Run `adapters/opencode/bin/preflight.sh mcp [--check]`; use OpenCode native `opencode mcp`/config surfaces, not Claude `settings.json` MCP payloads |
 | artifact root | primary-checkout canonical `.agent_reports` via `utilities/artifact-root.sh`; linked-worktree snapshots are read-only; legacy fallback only at the canonical root |
 | worktree cleanup | `preflight.sh worktree-cleanup`; dry-run first, apply only after merge + integrated verification + push |
-| workflow start cleanup | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh start [cwd] [session-id]` once per session; run it manually when plugins are unavailable |
-| tracked/untracked signal | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh mode [cwd] [session-id]`; run it manually when plugins are unavailable |
-| harness status snapshot | Run `adapters/opencode/bin/preflight.sh status [cwd] [session-id]` for read-only workflow, artifact, notes, worktree, and git-risk signals. This does not replace OpenCode native model/context/session UI |
+| routing-contract signal | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh prompt-signal [cwd] [session-id]`; run it manually when plugins are unavailable |
+| harness status snapshot | Run `adapters/opencode/bin/preflight.sh status [cwd] [session-id]` for read-only artifact, notes, worktree, and git-risk signals. This does not replace OpenCode native model/context/session UI |
 | token self-regulation v2 | Phase 2 automatic hook accounting and the Phase 3 isolated experiment CLI are deferred. Shared Fleet modules may be inspected as portable source, but OpenCode projects no token-budget utility, production hook, activation flag, or runtime-config mutation |
 | adapter readiness | Run `adapters/opencode/bin/preflight.sh doctor` to check manifest freshness, native projections, and boundary rules in one command |
-| tracked/untracked toggle | Portable `utilities/workflow-toggle.sh`; run `adapters/opencode/bin/preflight.sh track [cwd] [session-id]` only on explicit user request |
 | headless dispatch | Tool-contract check: `adapters/opencode/bin/preflight.sh headless --check <worktree>` verifies the worktree, `opencode run` availability, and installed OpenCode runtime projection (`agent-harness`, native Skills path, native Agents, native Commands, and guard plugin). Use `adapters/opencode/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--agent <agent>] (--model-role <portable-role>|--model <model> --variant <variant>|--inherit-model-settings)` to build the OpenCode command and register open jobs before launch. The wrapper does not choose a default model; main/orchestrator selects per job and simple jobs are downshifted there. `--start` reruns the same runtime projection check before launching. Use `adapters/opencode/bin/preflight.sh liveness [jobs.log]` while waiting on dispatched work; it matches open jobs to OpenCode SQLite sessions by `session.directory` and latest session/message/part update time. Use `adapters/opencode/bin/preflight.sh harvest --slug <slug> --mark-done` after main-session harvest to mark registry rows done only; it does not merge or clean worktrees |
 | QA policy mapping | `adapters/opencode/bin/preflight.sh qa-policy <level> [code|research|doc|general]` maps portable QA levels from `core/CONVENTIONS.md` to OpenCode assurance scope, selected-pass reviewer budgets, external-adversary requirements, max rounds, and inline fallback reporting. `stage_graph_selector=intensity-not-qa` means these budgets do not open stages or depth by themselves |
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/opencode/bin/preflight.sh write <file> [session-id]` before writes |
@@ -145,8 +143,6 @@ docs use:
 - `artifact-root.sh`
 - `agent-worklog-state.sh`
 - `harness-status.sh`
-- `workflow-guard-hook.sh`
-- `workflow-toggle.sh`
 - `dispatch-route.sh` (read-only SD-23 selector; returns model `unknown` until an OpenCode probe exists)
 
 Claude-specific helpers such as the shared `dispatch-liveness.sh` stay out of

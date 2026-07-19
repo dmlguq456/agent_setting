@@ -259,16 +259,13 @@ Codex supports lifecycle hooks through `hooks.json` and inline config. This
 adapter materializes a Codex-native hook projection under `adapters/codex/hooks/`.
 Hook commands enter through `run-hook.sh`, which validates `AGENT_HOME` or the
 Codex harness pointer before executing bridge scripts.
-The `SessionStart` bridge calls `adapters/codex/bin/preflight.sh start` as
-a silent side effect for stale workflow cleanup. It keeps memory injection off by
+The `SessionStart` bridge keeps memory injection off by
 default because Codex `SessionStart` can run on startup, resume, clear, and
 compact; `CODEX_SESSION_MEMORY_INJECT=1` restores `memory` output as
 `hookSpecificOutput.additionalContext`. The `SessionEnd` bridge calls `session-end` for `mem sync` plus the verified automatic distill worker
 (default on; `CODEX_DISTILL_ENABLE=0` opt-out). The `Stop` bridge enters the same lifecycle bridge but detaches
 `session-end` into the background and exits 0 with silent stdout so turn-scoped Stop hook output and timeouts never block on distillation. The
-`UserPromptSubmit` bridge extracts prompt text from top-level and nested
-message/content payloads, then calls `mode`, suppresses the default tracked anchor, preserves
-non-default mode context such as untracked state, plus `recall` and `briefing`
+`UserPromptSubmit` bridge calls `briefing` and `recall`
 when they have content, a transition-only `token-budget ... hook` response, and
 the `turn-nudge` side effect. Token-budget output is byte-identical to Phase 1:
 it is empty for normal, unknown, repeated-band, degraded/failure, and
@@ -283,13 +280,12 @@ estimate absent exact runtime/model/version provenance. The directive can shorte
 extras, but core/CONVENTIONS.md §1.2 forbids changing intensity, dispatch/depth,
 model role, required tools/tests, safety/validation/security/error handling/
 accessibility, input context, or guards. It emits
-`hookSpecificOutput.additionalContext` only when non-default prompt context exists
-(`CODEX_MODE_ANCHOR_ALWAYS=1` restores the tracked anchor); no routing-contract or
-git-risk aggregate is injected per turn. The structured
+`hookSpecificOutput.additionalContext` only when non-default prompt context exists;
+no routing-contract or git-risk aggregate is injected per turn. The structured
 `prompt-signal` subcommand (worker-startup/manual, not a per-turn hook call) reports
 `routing_contract=core/WORKFLOW.md`,
 `routing_action=read-workflow-and-select-codex-skill`, and
-`capability_entrypoints=codex-native-skills` for tracked work. The `PermissionRequest`
+`capability_entrypoints=codex-native-skills`. The `PermissionRequest`
 bridge is a registered no-op that emits nothing; harness monitoring is owned by
 Codex native `/statusline` while Codex owns approval and sandbox
 decisions. The write bridge registers
@@ -363,7 +359,6 @@ Codex must not consume these Claude-native files as native configuration:
 | `adapters/claude/commands/` | Not consumable; command-like harness entries use Codex-native Skills |
 | `skills/*/SKILL.md` | Compatibility reference only; Codex should start from `capabilities/README.md` |
 | `adapters/claude/statusline.sh` | Not consumable; input schema is Claude statusline JSON |
-| `adapters/claude/track-toggle.sh` | Do not consume; portable semantics live in `utilities/workflow-toggle.sh`, and Codex exposes them through `preflight.sh track` |
 | `adapters/claude/CLAUDE.md` | Reference only; not bootstrap |
 | `adapters/claude/agents/*.md` | Reference only; Codex custom agents are generated from `roles/README.md` |
 | `roles/modes/*/*` | Portable source fragments; Codex consumes generated `adapters/codex/modes/*/*.md` guides plus `mode-info` metadata |
@@ -387,12 +382,10 @@ Harness-specific status signals still need Codex-native realization:
 
 | Harness signal | Codex direction |
 |---|---|
-| stale workflow bypass flag cleanup | Codex `SessionStart` hook bridge runs `preflight.sh start`; explicit preflight remains fallback when hooks are unavailable |
-| tracked/untracked workflow state | Codex `UserPromptSubmit` hook bridge runs `preflight.sh mode`, suppresses the default tracked anchor, and emits only non-default mode context such as untracked state (`CODEX_MODE_ANCHOR_ALWAYS=1` restores the tracked anchor); `preflight.sh prompt-signal` (worker-startup/manual subcommand, not a per-turn injection) additionally carries the full routing contract plus git dirty/worktree/dead-branch risk fields from `preflight.sh status`; explicit preflight remains fallback when hooks are unavailable |
-| workflow/artifact/notes/git-risk snapshot | explicit `preflight.sh status`; includes tracked-dirty vs untracked counts and sibling worktree counts; keep Codex `/statusline` for native model/context/token/session fields |
+| routing-contract signal | `preflight.sh prompt-signal` (worker-startup/manual subcommand, not a per-turn injection) carries the full routing contract plus git dirty/worktree/dead-branch risk fields from `preflight.sh status`; explicit preflight remains fallback when hooks are unavailable |
+| artifact/notes/git-risk snapshot | explicit `preflight.sh status`; includes tracked-dirty vs untracked counts and sibling worktree counts; keep Codex `/statusline` for native model/context/token/session fields |
 | UI boundary report | explicit `preflight.sh ui-info`; reports built-in footer/title support, unsupported arbitrary live statusline scripts, Skill/plugin autopilot entrypoints, and explicit/main-dispatched subagent behavior |
 | subagent delegation | explicit `preflight.sh subagent-info --check`; verifies the Codex `multi_agent` runtime feature and projected custom agents before claiming native subagent delegation parity |
-| tracked/untracked toggle | explicit `preflight.sh track`; do not expose Claude `/track` command files |
 | artifact root detection | `preflight.sh write` and shared artifact-root helper |
 | headless/autopilot/background jobs | `preflight.sh headless` / `dispatch` / `liveness` / `harvest` provide the tool-contract path; `preflight.sh status` surfaces in-flight jobs as `headless_open_jobs` / `headless_open_slugs` from the dispatch registry. A Codex-native graphical display remains optional polish |
 | sibling `-wt/<slug>` dispatch detection | preserve the worktree naming invariant; choose a Codex-native display surface later |
@@ -417,10 +410,8 @@ Codex-native counterpart today.
 | memory write guard | Run `adapters/codex/bin/preflight.sh write <file> [session-id]` before writes |
 | design post-write verification | Run `adapters/codex/bin/preflight.sh design <file>` after design HTML writes |
 | spec read gate | Auto-enforced through Codex hooks: `PostToolUse[Read]` records actual `prd.md` reads, and `PreToolUse` write guard hard-denies an ungrounded write to a spec-changing artifact (`plans/*` or a `spec/` blueprint) — Codex's interception equivalent of Claude's `PreToolUse[Skill]` gate (no skill event exists). Manual fallbacks: `preflight.sh read <prd.md>` after reads, `preflight.sh capability <name> [cwd] [session-id]` before spec/code capabilities |
-| workflow start cleanup | Codex `SessionStart` hook bridge runs `adapters/codex/bin/preflight.sh start [cwd] [session-id]`; run it manually when no automatic hook is attached |
-| workflow signal | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh mode [cwd] [session-id]` per turn; `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` is the worker-startup/manual subcommand carrying the full routing contract; run them manually when no automatic hook is attached |
+| routing-contract signal | `adapters/codex/bin/preflight.sh prompt-signal [cwd] [session-id]` is the worker-startup/manual subcommand carrying the full routing contract; run it manually when no automatic hook is attached |
 | token/context pressure | `preflight.sh token-budget [cwd] [session-id] [kv|json|hook]` reads an exact Codex rollout session and keeps active context, exact directive bytes, and cumulative raw counters separate. `kv`/`json` are read-only L2 accounting diagnostics. Unknown/degraded signals fail open. `hook` remains transition-only and byte-identical; its parent lifecycle is the single exactly-once accounting authority for success/timeout/error and writes only a bounded content-free sha256-session aggregate under XDG state. `utilities/token-budget-experiment.py` is an explicit isolated `offline-forecast-v1` replay/evaluator: production hooks/preflight do not import or activate it, its maximum verdict is `eligible_for_user_review`, adoption stays `pending_user_decision`, and it never writes config. Native rollout-budget ownership requires `AGENT_TOKEN_BUDGET_NATIVE_VALIDATED=1` only after feature + no-side-effect config probes pass; local Codex 0.144.3 reports the feature under development and disabled, so exact-session rollout observation remains the fallback. The adapter never writes `$CODEX_HOME/config.toml` |
-| workflow toggle | Run `adapters/codex/bin/preflight.sh track [cwd] [session-id]` only when the user explicitly requests tracked/untracked mode switching |
 | memory inject | Run `adapters/codex/bin/preflight.sh memory [cwd]` for plain-text memory injection; Codex SessionStart hook emission is opt-in via `CODEX_SESSION_MEMORY_INJECT=1` |
 | memory recall | The agent decides contextually when memory may help, then runs `adapters/codex/bin/preflight.sh recall <query> [cwd] [session-id]`. No automatic prompt classifier is attached |
 | oncall briefing | Run `adapters/codex/bin/preflight.sh briefing [cwd]` before prompt handling on the dedicated agent desk |
@@ -551,8 +542,6 @@ shared `utilities/` directory. The current allowlist is:
 - `artifact-root.sh`
 - `agent-worklog-state.sh`
 - `harness-status.sh`
-- `workflow-guard-hook.sh`
-- `workflow-toggle.sh`
 
 Do not project the shared `dispatch-liveness.sh`; it is the cross-harness
 registry/wait fallback, while Codex uses the adapter-owned

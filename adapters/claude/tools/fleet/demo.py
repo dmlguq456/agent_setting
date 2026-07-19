@@ -1,9 +1,9 @@
 """Synthetic fixture for rendering checks (`fleet.py --demo` or FLEET_DEMO=1).
 
-Covers all three harnesses, every liveness state, tracked/untracked gate, git branch, nested
+Covers all three harnesses, every liveness state, git branch, nested
 dispatch under a parent, depth-2 subdispatch, an orphan, a loop, varied models/effort — so the render layer can be
 exercised without waiting for real live processes. Merged INTO live data by fleet.py's --demo
-path. gate/branch are set explicitly here (fake cwds are not real repos).
+path. branch is set explicitly here (fake cwds are not real repos).
 
 F-30 (v10): also seeds 3 route-carrying jobs (a resolved record, a fan-out/fan-in parallel
 record, and a record-less "degrade" job) + 1 subagent-bearing session — without these, `--view
@@ -61,43 +61,43 @@ def collect(harness_filter=None):
     _seed_route_evidence()
     S, J = Session, DispatchJob
     sessions = [
-        # --- project 'demo-app' (tracked) ---
+        # --- project 'demo-app' ---
         S(harness="claude", pid=90001, cwd="/home/demo/demo-app", session_id="demo-claude-1",
           slug="demo-app-a7", model="Opus 4.8 (1M context)", effort="xhigh",
           ctx_pct=45, rl_5h=33, rl_7d=12, rl_ms=[["fable", 57]], cost=12.30, elapsed_min=95,
-          status="busy", gate="tracked", branch="main", liveness="working",
+          status="busy", branch="main", liveness="working",
           # F-16/F-17 merge demo — the live subtitle row under a session row.
           summary="지금 render.py 그룹 루프의 틴트 적용 경로를 분석 중"),
         S(harness="codex", pid=90002, cwd="/home/demo/demo-app", session_id="demo-codex-1",
           slug="demo-app", model="gpt-5.5", effort="high",
           ctx_pct=72, rl_5h=94, rl_7d=53, elapsed_min=41,
-          gate="tracked", branch="feat/streaming", liveness="idle"),
-        # --- project 'demo-lib' (untracked session in a tracked repo) ---
+          branch="feat/streaming", liveness="idle"),
+        # --- project 'demo-lib' ---
         S(harness="opencode", pid=90003, cwd="/home/demo/demo-lib", session_id="demo-oc-1",
           slug="witty-orchid", model="deepseek-v4-pro", effort="high",
           ctx_pct=8, cost=0.05, elapsed_min=16,
-          gate="untracked", branch="wip/experiment", liveness="idle"),
+          branch="wip/experiment", liveness="idle"),
         S(harness="claude", pid=90004, cwd="/home/demo/demo-lib", session_id="demo-claude-2",
           slug="demo-lib-f0", model="Sonnet 5", effort="medium",
           ctx_pct=88, rl_5h=20, rl_7d=40, cost=3.10, elapsed_min=3000,
-          gate="tracked", branch="fix/bug-4821", liveness="stale"),
-        # --- project 'demo-svc' (opencode, low effort, untracked) ---
+          branch="fix/bug-4821", liveness="stale"),
+        # --- project 'demo-svc' (opencode, low effort) ---
         S(harness="opencode", pid=90005, cwd="/home/demo/demo-svc", session_id="demo-oc-2",
           slug="brave-comet", model="glm-5.2", effort="low",
           ctx_pct=31, cost=0.42, elapsed_min=200,
-          gate="untracked", branch="main", liveness="working"),
+          branch="main", liveness="working"),
         # detached tmux session (no client attached) — idle but backgrounded, shown with ◌ not ○
         S(harness="claude", pid=90006, cwd="/home/demo/demo-app", session_id="demo-claude-3",
           slug="demo-app-detach", model="Opus 4.8", effort="high", detached=True,
           ctx_pct=62, rl_5h=40, rl_7d=22, cost=8.40, elapsed_min=720,
-          gate="tracked", branch="fix/night-run", liveness="idle"),
+          branch="fix/night-run", liveness="idle"),
         # --- project 'demo-cool' (cooling) — no active work, last transcript write ~92min ago; the
         # idle session lingers (within the 48h live window) so the group isn't folded, and the
         # The directory header shows a grey ring and time since completion while cooling.
         S(harness="claude", pid=90007, cwd="/home/demo/demo-cool", session_id="demo-claude-cool",
           slug="demo-cool-shipped", model="Opus 4.8", effort="high",
           ctx_pct=18, rl_5h=25, rl_7d=15, cost=4.20, elapsed_min=160,
-          gate="tracked", branch="feat/shipped", liveness="idle",
+          branch="feat/shipped", liveness="idle",
           mtime=time.time() - 92 * 60),
         # --- F-30 (v10): the depth-2 "execute" stage worker of the resolved-record route card
         # below IS this session (same pid, is_child — headless `claude -p` stage workers show
@@ -106,7 +106,7 @@ def collect(harness_filter=None):
         S(harness="claude", pid=95001, cwd="/home/demo/route-app-wt/execute",
           session_id="demo-route-execute", slug="demo-route-conductor-execute",
           model="Opus 4.8", effort="high", is_child=True, elapsed_min=8, liveness="working",
-          gate="tracked", branch="v10-execute",
+          branch="v10-execute",
           subagents=[SubAgent(agent_type="explore", active=True, started_at=time.time() - 120,
                               source="claude-sidechain")]),
     ]

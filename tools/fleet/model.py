@@ -169,7 +169,6 @@ class Session:
     kind: Optional[str] = None             # registry `kind` (interactive/...)
     provenance: Optional[str] = None       # best-effort launcher lineage: herdr|terminal|vscode|worker
     state_evidence: Optional[dict] = None  # F-25 classifier verdict + inputs (additive; --json via asdict)
-    gate: Optional[str] = None          # spec-gate override (tracked/untracked) — demo fixtures; None = compute from cwd
     branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
     mem_worker: bool = False   # Memory worker or title refresher; summarized and hidden by default.
     # F-29 (v9, prd.md:290-295) — enrichment ONLY, never a session-existence signal (prd.md:291).

@@ -252,7 +252,7 @@ class TitleCapTest(unittest.TestCase):
 
     def test_session_title_keeps_legacy_cap_without_terminal_width(self):
         long_title = "a" * 60
-        sess = Session(harness="claude", pid=1, cwd="", gate="tracked", slug="s",
+        sess = Session(harness="claude", pid=1, cwd="", slug="s",
                        title=long_title, liveness="idle")
         segs = render._session_row(sess, narrow=False)
         name_seg = segs[4][0]
@@ -279,12 +279,11 @@ class TitleCapTest(unittest.TestCase):
         self.assertNotEqual(name_text[-1:], "")
 
     def test_narrow_session_title_reserves_suffixes(self):
-        sess = Session(harness="codex", pid=1, cwd="", gate="tracked", branch="feature/long",
+        sess = Session(harness="codex", pid=1, cwd="", branch="feature/long",
                        slug="s", title="responsive session title " * 8, liveness="idle")
         l1, _l2 = render._session_row_2line(sess, term_width=60)
         self.assertLessEqual(sum(render._dw(text) for text, _key in l1), 54)
         text = "".join(part for part, _key in l1)
-        self.assertIn("tracked", text)
         self.assertIn("feature/long", text)
 
     def test_dispatch_composed_label_plus_slug_stays_capped_in_wide_column(self):

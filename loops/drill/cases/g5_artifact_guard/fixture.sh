@@ -1,5 +1,5 @@
 #!/bin/bash
-# g5: research/analysis 없는 프로젝트에서 spec 요청 → 생성 순서 게이트
+# g5: 일반 프로젝트에서 spec 요청 → canonical-root 강제
 set -eu
 WORK=$1
 mkdir -p "$WORK/.pre" "$WORK/repo/.claude_reports"

@@ -1033,13 +1033,6 @@
       "hard_block": false
     },
     {
-      "slug": "hook__workflow-guard-hook__SessionStart",
-      "name": "workflow-guard-hook",
-      "mono": "workflow-guard-hook",
-      "event": "SessionStart",
-      "hard_block": false
-    },
-    {
       "slug": "hook__herdr-agent-state__Stop",
       "name": "herdr-agent-state idle",
       "mono": "herdr-agent-state",
@@ -1064,13 +1057,6 @@
       "slug": "hook__mem-turn-nudge__UserPromptSubmit",
       "name": "mem-turn-nudge",
       "mono": "mem-turn-nudge",
-      "event": "UserPromptSubmit",
-      "hard_block": false
-    },
-    {
-      "slug": "hook__workflow-guard-hook__UserPromptSubmit",
-      "name": "workflow-guard-hook",
-      "mono": "workflow-guard-hook",
       "event": "UserPromptSubmit",
       "hard_block": false
     }

@@ -187,26 +187,11 @@ class UnusedGlyphContractTest(unittest.TestCase):
         self.assertNotEqual(render._HUE_OF["g_unused"], render._HUE_OF["g_work_off"])
         self.assertNotEqual(render._HUE_OF["g_unused"], render._HUE_OF["g_stale"])
 
-    def test_badge_color_separates_from_the_gate_tag_it_abuts(self):
-        """design_critic_step2 §5 — on an untracked row the badge sits directly against
-        ` untracked` (gate_u, dim yellow). Same key would render `unused 3h45m untracked`
-        as one unbroken dim-yellow phrase, erasing the boundary between state and gate."""
-        self.assertNotEqual(render._HUE_OF["g_unused_b"], render._HUE_OF["gate_u"])
-
     def test_glyph_stays_dim_so_the_ink_gradient_survives(self):
         """The badge brightened, the glyph must not: ● > ○ > ◌ is an ink-WEIGHT gradient,
         so the unused glyph has to stay the lightest mark in the table."""
         self.assertEqual(render._GLYPH_KEY["unused"], "g_unused")
         self.assertEqual(render._HUE_OF["g_unused"][1], render._A_DIM)
-
-    def test_untracked_unused_row_uses_two_distinct_keys(self):
-        s = Session(harness="claude", pid=1, cwd="/home/u/p", slug="agent-setting-17",
-                    liveness="unused", elapsed_min=225, gate="untracked")
-        s.registry_name = "agent-setting-17"
-        segs = render._session_row(s, narrow=False, name_width=render._wide_name_width(168))
-        keys = {t.strip(): k for t, k in segs if t.strip() in ("unused 3h45m", "untracked")}
-        self.assertEqual(keys.get("unused 3h45m"), "g_unused_b")
-        self.assertEqual(keys.get("untracked"), "gate_u")
 
 
 class NameChainTest(unittest.TestCase):
@@ -237,8 +222,7 @@ class UnusedRowRenderTest(unittest.TestCase):
 
     def _row(self, name_width=None, **over):
         s = Session(harness="claude", pid=1168514, cwd="/home/Uihyeop/agent_setting",
-                    slug="agent-setting-17", liveness="unused", elapsed_min=225,
-                    gate="tracked")
+                    slug="agent-setting-17", liveness="unused", elapsed_min=225)
         s.registry_name = "agent-setting-17"
         for k, v in over.items():
             setattr(s, k, v)
@@ -297,8 +281,7 @@ class DegradationLadderTest(unittest.TestCase):
 
     def _ghost(self, **over):
         s = Session(harness="claude", pid=1168514, cwd="/home/Uihyeop/agent_setting",
-                    slug="agent-setting-17", liveness="unused", elapsed_min=225,
-                    gate="tracked")
+                    slug="agent-setting-17", liveness="unused", elapsed_min=225)
         s.registry_name = "agent-setting-17"
         s.provenance = "terminal"
         for k, v in over.items():
@@ -311,21 +294,24 @@ class DegradationLadderTest(unittest.TestCase):
             name_width=render._wide_name_width(term_width)))
 
     def test_at_168_the_name_and_badge_survive_and_provenance_yields(self):
-        """The capped 40-cell zone cannot hold name+badge+gate+provenance; the tag goes."""
-        txt = self._wide(168)
-        self.assertIn("agent-setting-17", txt)      # full name — never anonymous
+        """The capped 40-cell zone cannot hold name+badge+provenance; the tag goes."""
+        name = "agent-setting-17-x"          # 18 cells — just past the provenance-fits window
+        s = self._ghost(registry_name=name)
+        txt = "".join(t for t, _k in render._session_row(
+            s, narrow=False, name_width=render._wide_name_width(168)))
+        self.assertIn(name, txt)                     # full name — never anonymous
         self.assertIn("unused 3h45m", txt)          # full badge — prd.md:248 shape
         self.assertNotIn("terminal", txt)           # provenance yielded first
 
     def test_badge_age_yields_before_the_name(self):
         """A name sized into the window where shedding the age is exactly what saves it.
 
-        Zone = 40, gate ` tracked` = 8, gap = 1. Full badge ` unused 3h45m` (13) leaves the
-        name 18 cells; the compact ` unused` (7) leaves it 24. A 22-cell name therefore has
-        to clip with the age present, and survives whole once the age yields.
+        Zone = 40, gap = 1. Full badge ` unused 3h45m` (13) leaves the name 26 cells; the
+        compact ` unused` (7) leaves it 32. A 27-cell name therefore has to clip with the
+        age present, and survives whole once the age yields.
         """
-        name = "agent-setting-17-beta1"           # 22 cells → inside the 19..24 window
-        self.assertEqual(render._dw(name), 22)
+        name = "agent-setting-17-beta123456"     # 27 cells → inside the 27..32 window
+        self.assertEqual(render._dw(name), 27)
         s = self._ghost(registry_name=name, provenance=None)
         segs = render._session_row(s, narrow=False,
                                    name_width=render._wide_name_width(168))

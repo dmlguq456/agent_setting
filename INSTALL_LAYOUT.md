@@ -157,7 +157,7 @@ bash ~/.claude/adapters/claude/bin/install-windows.sh
 2. **`core.symlinks=false`.** A Windows checkout writes repo symlinks out as
    small pointer-TEXT files (content = the link target path), not real files. So
    the entry files the Linux projection step symlinks into the runtime home
-   (`CLAUDE.md`, `statusline.sh`, `track-toggle.sh`) are absent or pointer-text on
+   (`CLAUDE.md`, `statusline.sh`) are absent or pointer-text on
    Windows, and `~/.claude/CLAUDE.md` never loads. The installer copies each from
    its single source of truth (`adapters/claude/<name>`) into the runtime home
    when the target is missing or a pointer — the Windows equivalent of the Linux

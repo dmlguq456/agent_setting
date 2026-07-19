@@ -18,8 +18,6 @@ MARK="$ROOT/hooks/spec-read-marker.sh"
 SPEC="$ROOT/hooks/spec-skill-gate.sh"
 CORE_MARK="$ROOT/hooks/core-read-marker.sh"
 CORE_GUARD="$ROOT/hooks/core-first-guard.sh"
-FLOW="$ROOT/utilities/workflow-guard-hook.sh"
-TOGGLE="$ROOT/utilities/workflow-toggle.sh"
 RECALL="$ROOT/hooks/mem-recall-inject.sh"
 BRIEF="$ROOT/hooks/mem-briefing-inject.sh"
 WTG="$ROOT/hooks/worktree-path-guard.sh"
@@ -48,11 +46,12 @@ DIRECT_DISPATCH_HOME="$ROOT"
 
 echo "== artifact guard CLI =="
 mkdir -p "$TMP/proj/.agent_reports/spec"
-if "$ART" --file "$TMP/proj/.agent_reports/spec/prd.md" >/tmp/art.out 2>/tmp/art.err; then
-  bad "new spec without research should fail"
+if "$ART" --file "$TMP/proj/.agent_reports/spec/prd.md" --session test >/tmp/art.out 2>/tmp/art.err; then
+  ok "spec write with no route declared passes (creation-order gate retired)"
 else
-  [ "$?" -eq 2 ] && ok "new spec without research exits 2" || bad "new spec wrong exit"
+  bad "spec write with no route declared should pass"
 fi
+rm -f "$TMP/proj/.agent_reports/spec/prd.md"
 printf '{"route_id":"rt-fixture","spec_touch":false,"nodes":[{"id":"execute","write_scope":["source/**"]}]}\n' > "$TMP/route-no-spec.json"
 if AGENT_ROUTE_FILE="$TMP/route-no-spec.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUTE_NODE=execute \
   "$ART" --file "$TMP/proj/.agent_reports/spec/prd.md" >/tmp/art_route.out 2>/tmp/art_route.err; then
@@ -65,17 +64,9 @@ fi
 printf '{"route_id":"rt-fixture","spec_touch":true,"nodes":[{"id":"prd-transaction","write_scope":["spec/**"]}]}\n' > "$TMP/route-spec.json"
 if AGENT_ROUTE_FILE="$TMP/route-spec.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUTE_NODE=prd-transaction \
   "$ART" --file "$TMP/proj/.agent_reports/spec/prd.md" >/tmp/art_route_guard.out 2>/tmp/art_route_guard.err; then
-  bad "route-approved spec creation without upstream evidence should fail"
+  ok "route-approved spec_touch write passes with no upstream research (creation-order gate retired)"
 else
-  [ "$?" -eq 2 ] && grep -q 'artifact-order-guard-blocked' /tmp/art_route_guard.err \
-    && grep -q 'rt-fixture' /tmp/art_route_guard.err && ok "artifact guard collision reports structured route reference" \
-    || bad "artifact guard collision missing structured route reference"
-fi
-mkdir -p "$TMP/proj/.agent_reports/research/seed"
-if "$ART" --file "$TMP/proj/.agent_reports/spec/prd.md" --session test >/tmp/art.out 2>/tmp/art.err; then
-  ok "new spec with research passes"
-else
-  bad "new spec with research should pass"
+  bad "route-approved spec_touch write should pass with no upstream research"
 fi
 
 echo "== source-only worktree artifact guard =="
@@ -157,14 +148,12 @@ if "$WTG" --tool Bash --command 'git worktree remove /home/x/repo-wt/slug' --cwd
 else
   bad "worktree guard should leave remove/prune/list alone"
 fi
-# 오차단 금지 ③: ⚡untracked 세션 flag 존재 → 전면 우회.
-: > "$TMP/repo/.untracked.wtgbypass"
-if "$WTG" --tool EnterWorktree --cwd "$TMP/repo" --session wtgbypass >/tmp/wtg.out 2>/tmp/wtg.err; then
-  ok "worktree guard honors ⚡untracked bypass flag"
+# 오차단 금지 ③: WORKTREE_GUARD_BYPASS=1 → 전면 우회.
+if WORKTREE_GUARD_BYPASS=1 "$WTG" --tool EnterWorktree --cwd "$TMP/repo" --session wtgbypass >/tmp/wtg.out 2>/tmp/wtg.err; then
+  ok "worktree guard honors WORKTREE_GUARD_BYPASS=1"
 else
-  bad "worktree guard should bypass under untracked flag"
+  bad "worktree guard should bypass under WORKTREE_GUARD_BYPASS=1"
 fi
-rm -f "$TMP/repo/.untracked.wtgbypass"
 # 오차단 금지 ④: 비-git cwd → 무간섭 (fail-open).
 if "$WTG" --tool EnterWorktree --cwd "$TMP" --session wtgsid >/tmp/wtg.out 2>/tmp/wtg.err; then
   ok "worktree guard fails open outside a git repo"
@@ -533,71 +522,13 @@ else
   fi
 fi
 
-echo "== workflow signal CLI =="
+echo "== workflow lifecycle CLI =="
 mkdir -p "$TMP/flowproj/.agent_reports"
-if "$FLOW" --event prompt --cwd "$TMP/flowproj" --session testsid --format text >/tmp/flow.out 2>/tmp/flow.err \
-  && grep -q 'tracked' /tmp/flow.out; then
-  ok "workflow signal emits tracked text"
-else
-  bad "workflow signal should emit tracked text"
-fi
-oldflag="$TMP/flowproj/.agent_reports/.untracked.oldsid"
-: > "$oldflag"
-touch -d '2026-06-10 00:00:00' "$oldflag"
-if "$CODEX" start "$TMP/flowproj" testsid >/tmp/start.out 2>/tmp/start.err \
-  && [ ! -e "$oldflag" ]; then
-  ok "codex start wrapper cleans stale untracked flags"
-else
-  bad "codex start wrapper should clean stale untracked flags"
-fi
 mkdir -p "$TMP/codex-artifact/.agent_reports/spec"
 if "$CODEX" write "$TMP/codex-artifact/.agent_reports/spec/prd.md" testsid >/tmp/codex-artifact.out 2>/tmp/codex-artifact.err; then
-  bad "codex write wrapper should fail missing research"
+  ok "codex write wrapper allows a spec write with no upstream research (creation-order gate retired)"
 else
-  rc=$?
-  if [ "$rc" -eq 2 ] \
-    && grep -q 'preflight.sh track' /tmp/codex-artifact.err \
-    && ! grep -q '/track' /tmp/codex-artifact.err; then
-    ok "codex write wrapper adapts artifact toggle hint"
-  else
-    bad "codex write wrapper should adapt artifact toggle hint"
-  fi
-fi
-if "$TOGGLE" --cwd "$TMP/flowproj" --session testsid --set untracked >/tmp/toggle.out 2>/tmp/toggle.err \
-  && grep -q 'untracked mode' /tmp/toggle.out \
-  && [ -f "$TMP/flowproj/.agent_reports/.untracked.testsid" ]; then
-  ok "workflow toggle CLI enables untracked mode"
-else
-  bad "workflow toggle CLI should enable untracked mode"
-fi
-if "$TOGGLE" --cwd "$TMP/flowproj" --session testsid --set tracked >/tmp/toggle.out 2>/tmp/toggle.err \
-  && grep -q 'tracked mode' /tmp/toggle.out \
-  && [ ! -f "$TMP/flowproj/.agent_reports/.untracked.testsid" ]; then
-  ok "workflow toggle CLI restores tracked mode"
-else
-  bad "workflow toggle CLI should restore tracked mode"
-fi
-if "$CODEX" track "$TMP/flowproj" testsid >/tmp/track.out 2>/tmp/track.err \
-  && grep -q 'untracked mode' /tmp/track.out \
-  && [ -f "$TMP/flowproj/.agent_reports/.untracked.testsid" ]; then
-  ok "codex track wrapper enables untracked mode"
-else
-  bad "codex track wrapper should enable untracked mode"
-fi
-if "$CODEX" mode "$TMP/flowproj" testsid >/tmp/flow.out 2>/tmp/flow.err \
-  && grep -q 'untracked' /tmp/flow.out \
-  && grep -q 'preflight.sh track' /tmp/flow.out \
-  && ! grep -q '/track' /tmp/flow.out; then
-  ok "codex mode wrapper emits untracked text"
-else
-  bad "codex mode wrapper should emit untracked text"
-fi
-if "$CODEX" track "$TMP/flowproj" testsid >/tmp/track.out 2>/tmp/track.err \
-  && grep -q 'tracked mode' /tmp/track.out \
-  && [ ! -f "$TMP/flowproj/.agent_reports/.untracked.testsid" ]; then
-  ok "codex track wrapper restores tracked mode"
-else
-  bad "codex track wrapper should restore tracked mode"
+  bad "codex write wrapper should allow a spec write with no upstream research"
 fi
 if "$CODEX" memory "$TMP/flowproj" >/tmp/mem_inject.out 2>/tmp/mem_inject.err; then
   ok "codex memory wrapper exits cleanly"
@@ -664,7 +595,6 @@ if AGENT_NOTES_ROOT="$TMP/notes" WORKLOG_BOARD_APP="$TMP/board" WORKLOG_BOARD_WT
   && grep -q '^headless_open_slugs=job-a$' /tmp/codex_status.out \
   && grep -q '^runtime_surface=adapter-owned-harness-status$' /tmp/codex_status.out \
   && grep -q '^artifact_root_exists=1$' /tmp/codex_status.out \
-  && grep -q '^workflow_state=tracked$' /tmp/codex_status.out \
   && grep -q '^git_repo=0$' /tmp/codex_status.out \
   && grep -q "^agent_notes_root=$TMP/notes$" /tmp/codex_status.out \
   && grep -q '^note=read-only snapshot;' /tmp/codex_status.out; then
@@ -711,7 +641,6 @@ else
   bad "codex status should distinguish tracked dirty, untracked files, and sibling worktrees"
 fi
 if "$CODEX" prompt-signal "$TMP/flowproj" testsid >/tmp/codex_prompt_signal_tracked.out 2>/tmp/codex_prompt_signal_tracked.err \
-  && grep -q '^workflow_state=tracked$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^autopilot_route=autopilot-required-for-spec-and-nontrivial-work$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^routing_contract=core/WORKFLOW.md$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^routing_action=read-workflow-and-select-codex-skill$' /tmp/codex_prompt_signal_tracked.out \
@@ -719,9 +648,9 @@ if "$CODEX" prompt-signal "$TMP/flowproj" testsid >/tmp/codex_prompt_signal_trac
   && grep -q '^hook_event=UserPromptSubmit$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^hook_scope=runtime-hook$' /tmp/codex_prompt_signal_tracked.out \
   && grep -q '^hook_boundary=shell-read-write-targeted-detection-explicit-preflight-fallback$' /tmp/codex_prompt_signal_tracked.out; then
-  ok "codex prompt signal carries tracked autopilot routing contract"
+  ok "codex prompt signal carries the autopilot routing contract"
 else
-  bad "codex prompt signal should carry tracked autopilot routing contract"
+  bad "codex prompt signal should carry the autopilot routing contract"
 fi
 if "$CODEX" prompt-signal "$TMP/dirtyrepo" testsid >/tmp/codex_prompt_signal_dirty.out 2>/tmp/codex_prompt_signal_dirty.err \
   && grep -q '^git_dirty_tracked=1$' /tmp/codex_prompt_signal_dirty.out \
@@ -2082,14 +2011,13 @@ if git check-ignore -q "$ROOT/adapters/claude/loops/oncall.log"; then
 else
   bad "adapter loop runtime logs should be ignored"
 fi
-if "$TOGGLE" --cwd "$TMP/flowproj" --session promptlifecyclesid --set tracked >/tmp/codex_prompt_toggle_tracked.out 2>/tmp/codex_prompt_toggle_tracked.err \
-  && printf '{"prompt":"plain prompt","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
+if printf '{"prompt":"plain prompt","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
   | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook_tracked.out 2>/tmp/codex_prompt_hook_tracked.err \
   && [ ! -s /tmp/codex_prompt_hook_tracked.out ] \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_prompt_hook_tracked.out /tmp/codex_prompt_hook_tracked.err; then
-  ok "codex native hook projection suppresses default tracked prompt context"
+  ok "codex native hook projection injects no workflow-mode banner (retired)"
 else
-  bad "codex native hook projection should suppress default tracked prompt context"
+  bad "codex native hook projection should not inject a workflow-mode banner"
 fi
 budget_sid=12345678-1234-1234-1234-123456789abc
 budget_rollout="$TMP/codex_hook_home/.codex/sessions/2026/07/13/rollout-test-$budget_sid.jsonl"
@@ -2107,7 +2035,7 @@ fi
 if printf '{"prompt":"plain prompt","session_id":"%s","cwd":"%s"}\n' "$budget_sid" "$TMP/flowproj" \
   | CODEX_HOME="$TMP/codex_hook_home/.codex" XDG_STATE_HOME="$TMP/codex_budget_state" MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_budget_hook_first.out 2>/tmp/codex_budget_hook_first.err \
   && grep -q 'TOKEN_BUDGET=tight' /tmp/codex_budget_hook_first.out \
-  && python3 -c 'import json,sys; ctx=json.load(open(sys.argv[1],encoding="utf-8"))["hookSpecificOutput"]["additionalContext"]; line=[x for x in ctx.splitlines() if x.startswith("TOKEN_BUDGET=")]; assert len(line)==1; assert len((line[0]+"\n").encode()) <= 240; assert "required work" in line[0] and "tests" in line[0] and "input context unchanged" in line[0]' /tmp/codex_budget_hook_first.out \
+  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); out=d["hookSpecificOutput"]; assert out["hookEventName"]=="UserPromptSubmit"; ctx=out["additionalContext"]; line=[x for x in ctx.splitlines() if x.startswith("TOKEN_BUDGET=")]; assert len(line)==1; assert len((line[0]+"\n").encode()) <= 240; assert "required work" in line[0] and "tests" in line[0] and "input context unchanged" in line[0]' /tmp/codex_budget_hook_first.out \
   && printf '{"prompt":"plain prompt","session_id":"%s","cwd":"%s"}\n' "$budget_sid" "$TMP/flowproj" \
   | CODEX_HOME="$TMP/codex_hook_home/.codex" XDG_STATE_HOME="$TMP/codex_budget_state" MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_budget_hook_repeat.out 2>/tmp/codex_budget_hook_repeat.err \
   && [ ! -s /tmp/codex_budget_hook_repeat.out ]; then
@@ -2144,16 +2072,14 @@ then
 else
   bad "codex prompt hook should record bounded exact accounting without diagnostic reinjection"
 fi
-if "$TOGGLE" --cwd "$TMP/flowproj" --session promptlifecyclesid --set untracked >/tmp/codex_prompt_toggle.out 2>/tmp/codex_prompt_toggle.err \
-  && printf '{"prompt":"remember this project context","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
+if printf '{"prompt":"remember this project context","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
   | MEM_NUDGE_INTERVAL=1 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook.out 2>/tmp/codex_prompt_hook.err \
-  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); out=d["hookSpecificOutput"]; ctx=out["additionalContext"]; assert out["hookEventName"]=="UserPromptSubmit"; assert "untracked" in ctx; assert "autopilot_route=" not in ctx; assert "routing_contract=" not in ctx; assert "git_dirty_tracked=" not in ctx; assert "hook_event=" not in ctx; assert "headless_open_jobs=" not in ctx' /tmp/codex_prompt_hook.out \
-  && grep -q 'untracked' /tmp/codex_prompt_hook.out \
+  && [ ! -s /tmp/codex_prompt_hook.out ] \
   && grep -q '^0$' "$TMP/codex_hook_mem/.codex-turn-state-promptlifecyclesid" \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_prompt_hook.out /tmp/codex_prompt_hook.err; then
-  ok "codex native hook projection injects only non-default prompt context"
+  ok "codex native hook projection resets the turn-nudge counter on every prompt"
 else
-  bad "codex native hook projection should inject only non-default prompt context"
+  bad "codex native hook projection should reset the turn-nudge counter on every prompt"
 fi
 if printf '{"context":{"cwd":"%s","session_id":"permissionsid"}}\n' "$TMP/flowproj" \
   | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/permissionrequest-lifecycle.py" >/tmp/codex_permission_hook.out 2>/tmp/codex_permission_hook.err \
@@ -2886,56 +2812,12 @@ else
   printf '  --  skip opencode plugin bridge (node unavailable)\n'
 fi
 
-echo "== opencode workflow signal CLI =="
-oldflag="$TMP/flowproj/.agent_reports/.untracked.oldopen"
-: > "$oldflag"
-touch -d '2026-06-10 00:00:00' "$oldflag"
-if "$OPENCODE" start "$TMP/flowproj" opencodesid >/tmp/opencode_start.out 2>/tmp/opencode_start.err \
-  && [ ! -e "$oldflag" ]; then
-  ok "opencode start wrapper cleans stale untracked flags"
-else
-  bad "opencode start wrapper should clean stale untracked flags"
-fi
+echo "== opencode workflow lifecycle CLI =="
 mkdir -p "$TMP/opencode-artifact/.agent_reports/spec"
 if "$OPENCODE" write "$TMP/opencode-artifact/.agent_reports/spec/prd.md" opencodesid >/tmp/opencode_artifact.out 2>/tmp/opencode_artifact.err; then
-  bad "opencode write wrapper should fail missing research"
+  ok "opencode write wrapper allows a spec write with no upstream research (creation-order gate retired)"
 else
-  rc=$?
-  if [ "$rc" -eq 2 ] \
-    && grep -q 'preflight.sh track' /tmp/opencode_artifact.err \
-    && ! grep -q '/track' /tmp/opencode_artifact.err; then
-    ok "opencode write wrapper adapts artifact toggle hint"
-  else
-    bad "opencode write wrapper should adapt artifact toggle hint"
-  fi
-fi
-if "$OPENCODE" mode "$TMP/flowproj" opencodesid >/tmp/opencode.out 2>/tmp/opencode.err \
-  && grep -q 'tracked' /tmp/opencode.out; then
-  ok "opencode mode wrapper emits tracked text"
-else
-  bad "opencode mode wrapper should emit tracked text"
-fi
-if "$OPENCODE" track "$TMP/flowproj" opencodesid >/tmp/opencode_track.out 2>/tmp/opencode_track.err \
-  && grep -q 'untracked mode' /tmp/opencode_track.out \
-  && [ -f "$TMP/flowproj/.agent_reports/.untracked.opencodesid" ]; then
-  ok "opencode track wrapper enables untracked mode"
-else
-  bad "opencode track wrapper should enable untracked mode"
-fi
-if "$OPENCODE" mode "$TMP/flowproj" opencodesid >/tmp/opencode.out 2>/tmp/opencode.err \
-  && grep -q 'untracked' /tmp/opencode.out \
-  && grep -q 'preflight.sh track' /tmp/opencode.out \
-  && ! grep -q '/track' /tmp/opencode.out; then
-  ok "opencode mode wrapper emits untracked text"
-else
-  bad "opencode mode wrapper should emit untracked text"
-fi
-if "$OPENCODE" track "$TMP/flowproj" opencodesid >/tmp/opencode_track.out 2>/tmp/opencode_track.err \
-  && grep -q 'tracked mode' /tmp/opencode_track.out \
-  && [ ! -f "$TMP/flowproj/.agent_reports/.untracked.opencodesid" ]; then
-  ok "opencode track wrapper restores tracked mode"
-else
-  bad "opencode track wrapper should restore tracked mode"
+  bad "opencode write wrapper should allow a spec write with no upstream research"
 fi
 if "$OPENCODE" memory "$TMP/flowproj" >/tmp/opencode_mem.out 2>/tmp/opencode_mem.err; then
   ok "opencode memory wrapper exits cleanly"
@@ -2979,7 +2861,6 @@ if AGENT_NOTES_ROOT="$TMP/notes" WORKLOG_BOARD_APP="$TMP/board" WORKLOG_BOARD_WT
   && grep -q '^adapter=opencode$' /tmp/opencode_status.out \
   && grep -q '^runtime_surface=adapter-owned-harness-status$' /tmp/opencode_status.out \
   && grep -q '^artifact_root_exists=1$' /tmp/opencode_status.out \
-  && grep -q '^workflow_state=tracked$' /tmp/opencode_status.out \
   && grep -q '^git_repo=0$' /tmp/opencode_status.out \
   && grep -q "^agent_notes_root=$TMP/notes$" /tmp/opencode_status.out \
   && grep -q '^note=read-only snapshot;' /tmp/opencode_status.out; then
@@ -3489,7 +3370,7 @@ const plugin = await AgentHarnessGuards({ directory: "$TMP/flowproj", worktree: 
 if (plugin["chat.message"]) process.exit(1)
 const output = { system: [] }
 await plugin["experimental.chat.system.transform"]({ sessionID: "oplifecyclesid", model: {} }, output)
-if (!output.system.join("\\n").includes("tracked")) process.exit(1)
+if (!output.system.join("\\n").includes("routing_contract=core/WORKFLOW.md")) process.exit(1)
 if (output.system.join("\\n").includes("adapters/claude") || output.system.join("\\n").includes("statusline.sh")) process.exit(1)
 EOF
 then
@@ -3523,9 +3404,8 @@ try {
 } catch {}
 EOF
 then
-  if grep -q '^start ' "$OPENCODE_WORKER_ROOT/calls" \
-    && grep -q '^write ' "$OPENCODE_WORKER_ROOT/calls" \
-    && ! grep -Eq '^(memory|briefing|prompt-signal|mode|session-end) ' "$OPENCODE_WORKER_ROOT/calls"; then
+  if grep -q '^write ' "$OPENCODE_WORKER_ROOT/calls" \
+    && ! grep -Eq '^(memory|briefing|prompt-signal|start|session-end) ' "$OPENCODE_WORKER_ROOT/calls"; then
     ok "opencode worker plugin skips main lifecycle while retaining write guards"
   else
     bad "opencode worker plugin must separate lifecycle from safety guards"

@@ -36,7 +36,6 @@ so that residual runtime input is reported separately from profile masking.
 | agent home | `$HOME/.claude` by default; overridable with `AGENT_HOME` or `CLAUDE_HOME` |
 | artifact root | primary-checkout canonical `.agent_reports` via `utilities/artifact-root.sh`; linked-worktree snapshots are read-only; legacy fallback only at the canonical root |
 | worktree cleanup | `adapters/claude/bin/worktree-cleanup.sh`; dry-run first, apply only after merge + integrated verification + push |
-| tracked/untracked signal | `workflow-guard-hook.sh` + `adapters/claude/statusline.sh` |
 | artifact-order gate | `hooks/artifact-guard.sh` |
 | spec read gate | `hooks/spec-skill-gate.sh` + `hooks/spec-read-marker.sh` |
 | git safety gate | `hooks/git-state-guard.sh` |
@@ -67,7 +66,6 @@ $HOME/.claude/tools          -> $HOME/agent_setting/claude_setting/tools
 $HOME/.claude/commands       -> $HOME/agent_setting/claude_setting/commands
 $HOME/.claude/bin            -> $HOME/agent_setting/claude_setting/bin
 $HOME/.claude/statusline.sh  -> $HOME/agent_setting/claude_setting/statusline.sh
-$HOME/.claude/track-toggle.sh -> $HOME/agent_setting/claude_setting/track-toggle.sh
 ```
 
 Keep Claude-owned mutable state in `$HOME/.claude`: credentials, sessions, projects, history, shell snapshots, cache, daemon logs, and local DBs. Do not move those into the neutral repo.

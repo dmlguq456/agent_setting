@@ -37,8 +37,8 @@ and `ADAPTATION.md`; command output is authoritative for current support.
 
 | Need | Command |
 |---|---|
-| lifecycle | `preflight.sh start`, `preflight.sh session-end`, `preflight.sh mode`, `preflight.sh prompt-signal`, `preflight.sh turn-nudge` |
-| workflow/context | `preflight.sh status`, `preflight.sh track`, `preflight.sh briefing`, `preflight.sh worklog` |
+| lifecycle | `preflight.sh session-end`, `preflight.sh prompt-signal`, `preflight.sh turn-nudge` |
+| workflow/context | `preflight.sh status`, `preflight.sh briefing`, `preflight.sh worklog` |
 | memory | `preflight.sh memory`, `preflight.sh recall`, `preflight.sh distill-delta`, `preflight.sh distill-propose` |
 | token/UI | `preflight.sh token-budget`, `preflight.sh ui-info`, `preflight.sh tui-config` |
 | delegation/QA | `preflight.sh subagent-info --check`, `preflight.sh qa-policy <level> [code|research|doc|general]` |

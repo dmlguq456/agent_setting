@@ -186,14 +186,6 @@
     ],
     "SessionStart": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/utilities/workflow-guard-hook.sh\""
-          }
-        ]
-      },
-      {
         "matcher": "*",
         "hooks": [
           {
@@ -232,15 +224,6 @@
           {
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/herdr-agent-state.sh\" working",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/utilities/workflow-guard-hook.sh\"",
             "timeout": 10
           }
         ]

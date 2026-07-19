@@ -5,7 +5,7 @@
 #   (a) Built-in EnterWorktree, which creates .claude/worktrees/ inside the
 #       repository. The only standard is the sibling path <repo>-wt/<slug>.
 #   (b) `git worktree add` whose target is outside the <repo>-wt/ pattern.
-# Everything else fails open: the ⚡untracked session flag, canonical sibling
+# Everything else fails open: WORKTREE_GUARD_BYPASS=1, canonical sibling
 # paths, non-add worktree subcommands, non-git cwd, unknown tools, parse
 # failures, and Agent/Workflow worktrees that do not use these tool surfaces.
 # POSIX sh, no jq. Dual mode: hook(stdin JSON) + CLI(--tool/--command/--cwd/--session).
@@ -40,7 +40,7 @@ fi
 # Unknown tool: fail open.
 [ -z "$tool" ] && exit 0
 
-# ---- Project root for display and untracked-flag lookup ----
+# ---- Project root for display ----
 # Prefer cwd, then the hook process cwd. A non-git location fails open.
 if [ -n "$cwd" ]; then
   root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)
@@ -49,12 +49,8 @@ else
 fi
 [ -z "$root" ] && exit 0
 
-# ---- ⚡untracked bypass (same per-session flag as artifact-guard) ----
-if [ -n "$sid" ]; then
-  for base in "$root/.agent_reports/.untracked" "$root/.claude_reports/.untracked" "$root/.untracked"; do
-    [ -f "$base.$sid" ] && exit 0
-  done
-fi
+# ---- explicit env bypass ----
+[ "${WORKTREE_GUARD_BYPASS:-0}" = "1" ] && exit 0
 
 disp_root="$root"
 
@@ -70,7 +66,7 @@ deny() {
 
 case "$tool" in
   EnterWorktree)
-    deny "Built-in EnterWorktree is forbidden because it creates .claude/worktrees/ inside the repository. Use the sibling-directory standard: git worktree add ${disp_root}-wt/<slug> -b <slug> <base>, register jobs.log, then launch headless work inside that worktree (OPERATIONS §5.10 ②③). Bypass: /track (⚡untracked, this session only)."
+    deny "Built-in EnterWorktree is forbidden because it creates .claude/worktrees/ inside the repository. Use the sibling-directory standard: git worktree add ${disp_root}-wt/<slug> -b <slug> <base>, register jobs.log, then launch headless work inside that worktree (OPERATIONS §5.10 ②③). Bypass: WORKTREE_GUARD_BYPASS=1."
     ;;
   Bash)
     # Empty command after parsing: fail open.
@@ -80,7 +76,7 @@ case "$tool" in
     printf '%s' "$cmd" | grep -Eq 'worktree[[:space:]]+add([[:space:]]|$)' || exit 0
     # Canonical sibling path (<repo>-wt/) is the normal dispatch flow.
     printf '%s' "$cmd" | grep -q -- '-wt/' && exit 0
-    deny "The git worktree add target is outside the sibling <repo>-wt/<slug> convention (OPERATIONS §5.10 ②). Use: git worktree add ${disp_root}-wt/<slug> -b <slug> <base>, then register jobs.log. Bypass: /track (⚡untracked, this session only)."
+    deny "The git worktree add target is outside the sibling <repo>-wt/<slug> convention (OPERATIONS §5.10 ②). Use: git worktree add ${disp_root}-wt/<slug> -b <slug> <base>, then register jobs.log. Bypass: WORKTREE_GUARD_BYPASS=1."
     ;;
   *)
     exit 0

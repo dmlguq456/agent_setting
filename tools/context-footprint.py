@@ -182,7 +182,6 @@ def hook_samples(root: Path, timeout: int) -> list[tuple[str, int, int]]:
     env = {"AGENT_HOME": str(root)}
     samples: list[tuple[str, int, int]] = []
     commands = [
-        ("codex-mode", [str(root / "adapters/codex/bin/preflight.sh"), "mode", str(root), "footprint-sample"], None),
         ("codex-recall-neutral", [str(root / "adapters/codex/bin/preflight.sh"), "recall", "오늘 작업", str(root)], None),
         ("codex-recall-signal", [str(root / "adapters/codex/bin/preflight.sh"), "recall", "지난번 작업", str(root)], None),
         ("codex-briefing-default", [str(root / "adapters/codex/bin/preflight.sh"), "briefing", str(root)], None),
@@ -198,7 +197,6 @@ def hook_samples(root: Path, timeout: int) -> list[tuple[str, int, int]]:
         sample_env = dict(env)
         sample_env["MEM_STORE"] = tmp
         sample_env["XDG_STATE_HOME"] = tmp
-        sample_env["CODEX_MODE_ANCHOR_ALWAYS"] = "0"
         sample_env["CODEX_DISTILL_ENABLE"] = "0"
         for label, cmd, stdin in commands:
             rc, out = run_capture(cmd, root, sample_env, timeout, stdin)

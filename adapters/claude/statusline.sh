@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Custom statusline (의존성 없음, python3 로 stdin JSON 파싱).
-# 표시: 디렉토리 │ git 브랜치 │ spec-gate │ context │ 모델·effort + 5h/7d 사용량 (세로선 파티션).
+# 표시: 디렉토리 │ git 브랜치 │ context │ 모델·effort + 5h/7d 사용량 (세로선 파티션).
 # 입력: stdin JSON (Claude Code statusLine schema). 출력: 한 줄.
 # 5h/7d 사용량 = stdin 의 rate_limits.{five_hour,seven_day}.used_percentage — /usage 와 동일한 공식 값.
 # context     = stdin 의 context_window.used_percentage (공식 값) — 부재 시 current_usage/context_window_size, 최후 fallback 만 id "1m" 추측.
@@ -146,21 +146,6 @@ if command -v git >/dev/null 2>&1; then
   fi
 fi
 
-# artifact-guard 상태: 📌tracked(pipeline 강제) ↔ ⚡untracked(ad-hoc 직접편집)
-gate=""; gate_open=0
-d="$S_CWD"
-for _ in $(seq 1 40); do
-  reports_dir=""
-  if [ -d "$d/.agent_reports" ]; then reports_dir=".agent_reports"; elif [ -d "$d/.claude_reports" ]; then reports_dir=".claude_reports"; fi
-  if [ -n "$reports_dir" ]; then
-    if [ -n "$S_SID" ]; then [ -f "$d/$reports_dir/.untracked.$S_SID" ] && gate_open=1; else [ -f "$d/$reports_dir/.untracked" ] && gate_open=1; fi
-    [ "$gate_open" = "1" ] && gate="⚡untracked(ad-hoc)" || gate="📌tracked(pipeline)"
-    break
-  fi
-  [ "$d" = "/" ] && break
-  d=$(dirname "$d")
-done
-
 # ANSI 색 + 퍼센트 색 헬퍼 (녹 <50 / 황 <80 / 적 ≥80)
 DIM=$'\033[2m'; CYAN=$'\033[36m'; YEL=$'\033[33m'; GRN=$'\033[32m'; RED=$'\033[31m'; MAG=$'\033[35m'; RST=$'\033[0m'
 pcol(){ if [ "${1:-0}" -ge 80 ] 2>/dev/null; then printf '%s' "$RED"; elif [ "${1:-0}" -ge 50 ] 2>/dev/null; then printf '%s' "$YEL"; else printf '%s' "$GRN"; fi; }
@@ -292,10 +277,6 @@ print(" \033[1;37m/\033[0m ".join(out))
 latest_oncall=$(ls -t /home/nas/user/Uihyeop/notes/oncall/*.md 2>/dev/null | head -1 || true)
 if [ -n "$latest_oncall" ] && ! grep -qE '✅|이상 없음' "$latest_oncall" 2>/dev/null; then
   segs_arr+=("${YEL}📋당직${RST}")
-fi
-if [ -n "$gate" ]; then
-  [ "$gate_open" = "1" ] && gc="$YEL" || gc="$GRN"
-  segs_arr+=("${gc}${gate}${RST}")
 fi
 # context gauge — mid-line ━/─ (fleet design): filled in the level color, empty track dim
 if [ "${S_CTX}" -ge 0 ] 2>/dev/null; then

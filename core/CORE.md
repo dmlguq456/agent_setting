@@ -143,8 +143,6 @@ research / analysis_project -> spec -> plans
 research / analysis_project -> documents -> refinement
 ```
 
-Tracked mode enforces creation order for new artifacts. Untracked mode is an explicit escape hatch for temporary, direct work.
-
 Each artifact should be changed through the capability that owns it:
 
 | Artifact | Owner |
@@ -168,7 +166,6 @@ Each adapter should provide:
 - hooks or checks for artifact order, git safety, and memory writes;
 - hooks or checks that prevent adapter edits before the relevant core contract
   has actually been read in the current session;
-- a status/reminder surface for tracked vs untracked mode;
 - compatibility with both `.agent_reports/` and `.claude_reports/` until legacy projects are migrated;
 - canonical artifact-root propagation plus a fail-closed guard against writes
   to linked-worktree artifact snapshots;

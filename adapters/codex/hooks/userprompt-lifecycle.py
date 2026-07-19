@@ -16,7 +16,6 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "adapters" / "codex" / "bin" / "preflight.sh"
-DEFAULT_TRACKED_ANCHOR = "🧭 📌tracked"
 TOOLS = ROOT / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
@@ -118,10 +117,6 @@ def run_preflight(*args: str, timeout_seconds: float | None = None) -> str:
     return run_preflight_result(*args, timeout_seconds=timeout_seconds).stdout
 
 
-def env_truthy(name: str) -> bool:
-    return os.environ.get(name, "").lower() in {"1", "true", "yes", "on"}
-
-
 def is_worker_session() -> bool:
     return (
         os.environ.get("AGENT_SESSION_ROLE", "").lower() == "worker"
@@ -140,11 +135,6 @@ def token_budget_timeout() -> float:
     except ValueError:
         value = 1.0
     return min(5.0, max(0.05, value))
-
-
-def is_default_tracked_anchor(text: str) -> bool:
-    stripped = text.strip()
-    return stripped.startswith(DEFAULT_TRACKED_ANCHOR) and "untracked" not in stripped
 
 
 def emit_context(event_name: str, parts: list[str]) -> None:
@@ -257,9 +247,6 @@ def main() -> int:
     sid = session_id(payload)
 
     parts = []
-    mode_context = run_preflight("mode", current_cwd, sid)
-    if env_truthy("CODEX_MODE_ANCHOR_ALWAYS") or not is_default_tracked_anchor(mode_context):
-        parts.append(mode_context)
     parts.append(run_preflight("briefing", current_cwd))
     # Phase 1 token self-regulation is transition-only. Normal, unknown,
     # native-owned, and repeated bands return an empty string (zero injection).

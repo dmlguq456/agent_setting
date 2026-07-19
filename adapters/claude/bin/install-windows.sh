@@ -69,7 +69,7 @@ project_file() {
     cp "$src" "$dst" && log "projected $name from adapters/claude/ -> $CLAUDE_DIR/$name"
   fi
 }
-for name in CLAUDE.md statusline.sh track-toggle.sh; do project_file "$name"; done
+for name in CLAUDE.md statusline.sh; do project_file "$name"; done
 
 # --- 2. Merge harness hooks + statusLine + env into the runtime settings.json ---
 # Preserve every existing runtime key (permissions, plugins, tui, ...). Inject a

@@ -6,9 +6,9 @@
 
 ---
 
-## 0. Invariants — One Router and a Hard Order Gate
+## 0. Invariants — One Router and the Artifact Order Convention
 
-This is the single routing contract for tracked projects that contain `.agent_reports/spec`, with legacy `.claude_reports` compatibility. Explicit untracked mode is exempt. Read it on demand when the adapter's status or reminder surface indicates tracked routing; hooks expose runtime mode state but do not replace or eagerly inject this contract.
+This is the single routing contract for spec-backed projects that contain `.agent_reports/spec`, with legacy `.claude_reports` compatibility. Read it on demand when the adapter's status or reminder surface indicates routing is due; hooks expose runtime state but do not replace or eagerly inject this contract.
 
 Every task first passes through the work-nature map in §2. Direct work, runtime plugins, and built-in Skills are used only where this router places them. Adapter and runtime projection work also remains core-first: establish the portable invariant in `core/`, read its governing document, then change adapter or generated output. A read marker enforces order but is not a substitute for review.
 
@@ -28,11 +28,11 @@ context in this order:
    discovery. This is an agent judgment for orientation, not a prompt-keyword
    classifier. A shortened, ellipsized, or otherwise insufficient hit is only
    an index: read the full body by record ID before using it as evidence.
-2. Use the adapter status surface and `utilities/artifact-root.sh` to determine
-   tracked state and resolve the project-wide canonical artifact root. In a
-   linked worktree, ignore its tracked artifact snapshot and read the primary
-   worktree's canonical root. Prefer canonical `.agent_reports/`; only when it
-   is absent, use an existing legacy `.claude_reports/`.
+2. Use the adapter status surface and `utilities/artifact-root.sh` to resolve
+   the project-wide canonical artifact root. In a linked worktree, ignore its
+   tracked artifact snapshot and read the primary worktree's canonical root.
+   Prefer canonical `.agent_reports/`; only when it is absent, use an existing
+   legacy `.claude_reports/`.
 3. Read existing state before a broad source census: the newest relevant
    `pipeline_summary.md`, `pipeline_state.yaml`, `summary.md`, `REPORT.md`, or
    `STORY.md`; the latest experiment contract and `experiments/_RUNLOG.md`;
@@ -62,7 +62,7 @@ When analysis already exists, read it before deciding that reanalysis is
 needed.
 
 This boundary was strengthened after a 2026-07-14 incident where a context
-recovery request in a tracked project was routed to `analyze-project` before
+recovery request in a spec-backed project was routed to `analyze-project` before
 its existing legacy artifact root and memory-linked artifacts were read.
 
 **Hard artifact order:**
@@ -74,9 +74,9 @@ its existing legacy artifact root and memory-linked artifacts were read.
 
 - **No code without a spec:** if a code request has no `spec/`, run `autopilot-spec` first. A one-off throwaway is the only exception; repeated work graduates to a spec.
 - **No spec without prior evidence:** if neither `research/` nor `analysis_project/` grounds the spec, run `autopilot-research` or `analyze-project` first. Enforce this more strongly in unfamiliar domains and for new intent.
-- **Mechanical enforcement:** `artifact-guard.sh` blocks only invalid creation order—new spec requires research or analysis, new plan requires spec, and new document requires research or analysis. It does not block edits to existing artifacts or source. Convention plus routing reminders cover those paths. Explicit adapter untracked mode bypasses the gate.
+- **Mechanical enforcement:** `artifact-guard.sh` fail-closes writes outside the canonical artifact root and, for a route-backed write under `spec/`, requires the active route to have declared `spec_touch` with a `spec/` write scope. The artifact-creation order above is convention plus routing reminders, not a mechanical block; it does not block edits to existing artifacts or source either way.
 
-**The owning capability also owns revisions.** `artifact-guard.sh` mechanically enforces creation order, while the routing reminder and convention govern edits. Untracked mode is exempt.
+**The owning capability also owns revisions.** The routing reminder and convention govern edits; `artifact-guard.sh` does not track per-artifact edit history.
 
 | Artifact | Sole update path | Version location |
 |---|---|---|
@@ -176,7 +176,7 @@ conditions holds:
    needed;
 3. the work requires a test, build, deploy, external-system mutation, or
    separate correctness evidence; or
-4. a tracked project will create or update a capability-owned artifact.
+4. a spec-backed project will create or update a capability-owned artifact.
 
 Read-only orientation, status reporting, explanations, and simple factual
 answers are exempt. `direct` is an explicit route shown in the card with its

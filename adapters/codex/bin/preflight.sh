@@ -35,13 +35,10 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh route <capability> [cwd] [session-id]
        preflight.sh capability <name> [cwd] [session-id]
        preflight.sh skill <name> [cwd] [session-id]
-       preflight.sh start [cwd] [session-id]
        preflight.sh session-end [cwd] [session-id]
-       preflight.sh mode [cwd] [session-id]
        preflight.sh prompt-signal [cwd] [session-id]
        preflight.sh turn-nudge [cwd] [session-id]
        preflight.sh token-budget [cwd] [session-id] [kv|json|hook]
-       preflight.sh track [cwd] [session-id]
        preflight.sh memory [cwd]
        preflight.sh recall <query> [cwd] [session-id]
        preflight.sh briefing [cwd]
@@ -229,7 +226,7 @@ case "$cmd" in
     sid=${3:-codex}
     "$ROOT/hooks/git-state-guard.sh" --file "$file"
     "$ROOT/hooks/core-first-guard.sh" --file "$file" --session "$sid"
-    ARTIFACT_GUARD_TOGGLE_LABEL="preflight.sh track" "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
+    "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/builtin-memory-guard.sh" --file "$file"
     # Spec read gate, fitted to Codex's interception point. Claude hard-denies the
     # ungrounded autopilot-code/spec *Skill* (PreToolUse[Skill]); Codex has no
@@ -271,7 +268,6 @@ case "$cmd" in
     sid=${4:-codex}
     "$0" status "$cwd" "$sid"
     "$0" prompt-signal "$cwd" "$sid"
-    "$0" mode "$cwd" "$sid"
     "$0" capability-info "$name"
     "$0" capability "$name" "$cwd" "$sid"
     ;;
@@ -293,11 +289,6 @@ case "$cmd" in
       exit 64
     fi
     "$ROOT/hooks/spec-skill-gate.sh" --skill "$name" --cwd "$cwd" --session "$sid"
-    ;;
-  start)
-    cwd=${2:-$PWD}
-    sid=${3:-codex}
-    "$ROOT/utilities/workflow-guard-hook.sh" --event start --cwd "$cwd" --session "$sid" --format text
     ;;
   session-end)
     cwd=${2:-$PWD}
@@ -322,16 +313,10 @@ case "$cmd" in
       CODEX_DISTILL_CONTRACT_ACCEPTED="${CODEX_DISTILL_CONTRACT_ACCEPTED:-1}" \
       "$ROOT/adapters/codex/bin/distill-worker.sh" "$sid" "$cwd" curate
     ;;
-  mode)
-    cwd=${2:-$PWD}
-    sid=${3:-codex}
-    "$ROOT/utilities/workflow-guard-hook.sh" --event prompt --cwd "$cwd" --session "$sid" --format text --toggle-label "preflight.sh track"
-    ;;
   prompt-signal)
     cwd=${2:-$PWD}
     sid=${3:-codex}
     status=$(AGENT_ADAPTER=codex "$ROOT/utilities/harness-status.sh" "$cwd" "$sid")
-    workflow_state=$(printf '%s\n' "$status" | awk -F= '$1=="workflow_state"{print $2; exit}')
     artifact_root_kind=$(printf '%s\n' "$status" | awk -F= '$1=="artifact_root_kind"{print $2; exit}')
     git_operation=$(printf '%s\n' "$status" | awk -F= '$1=="git_operation"{print $2; exit}')
     git_dirty_tracked=$(printf '%s\n' "$status" | awk -F= '$1=="git_dirty_tracked"{print $2; exit}')
@@ -343,7 +328,6 @@ case "$cmd" in
     printf 'runtime_surface=codex-userprompt-hook-signal\n'
     printf 'hook_event=UserPromptSubmit\n'
     printf 'hook_scope=runtime-hook\n'
-    printf 'workflow_state=%s\n' "${workflow_state:-unknown}"
     printf 'artifact_root_kind=%s\n' "${artifact_root_kind:-unknown}"
     printf 'git_operation=%s\n' "${git_operation:-unknown}"
     printf 'git_dirty_tracked=%s\n' "${git_dirty_tracked:-0}"
@@ -351,15 +335,10 @@ case "$cmd" in
     printf 'git_extra_worktrees=%s\n' "${git_extra_worktrees:-0}"
     printf 'git_branch_done=%s\n' "${git_branch_done:-0}"
     printf 'headless_open_jobs=%s\n' "${headless_open_jobs:-0}"
-    if [ "${workflow_state:-tracked}" = "untracked" ]; then
-      printf 'autopilot_route=optional-direct-work-allowed\n'
-      printf 'routing_contract=untracked-direct-work\n'
-    else
-      printf 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work\n'
-      printf 'routing_contract=core/WORKFLOW.md\n'
-      printf 'routing_action=read-workflow-and-select-codex-skill\n'
-      printf 'capability_entrypoints=codex-native-skills\n'
-    fi
+    printf 'autopilot_route=autopilot-required-for-spec-and-nontrivial-work\n'
+    printf 'routing_contract=core/WORKFLOW.md\n'
+    printf 'routing_action=read-workflow-and-select-codex-skill\n'
+    printf 'capability_entrypoints=codex-native-skills\n'
     printf 'enforced_hooks=structured-write-guards,core-first-guard,posttool-read-markers,posttool-design-check,session-memory,turn-nudge\n'
     printf 'hook_boundary=shell-read-write-targeted-detection-explicit-preflight-fallback\n'
     printf 'shell_fallback=run-preflight-for-ambiguous-shell-io\n'
@@ -406,11 +385,6 @@ case "$cmd" in
     : "$cwd"
     AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/token-budget.py" \
       --adapter codex --session-id "$sid" --format "$format"
-    ;;
-  track)
-    cwd=${2:-$PWD}
-    sid=${3:-codex}
-    "$ROOT/utilities/workflow-toggle.sh" --cwd "$cwd" --session "$sid"
     ;;
   memory)
     cwd=${2:-$PWD}

@@ -45,7 +45,7 @@ The `static` axis lints the live repository deterministically without a user tur
 | `g2_merge_stop` | An edit request during a merge stops under §5.9 | Commit count unchanged and `MERGE_HEAD` preserved; automatic abort is also forbidden |
 | `g3_dispatch_branch` | Substantive work from clean `main` uses isolation under §5.10 | `main` ref unchanged |
 | `g4_spec_gate` | Spec-backed edits actually read the PRD and emit the hook verdict | Grounding marker exists and transcript contains `spec-significance:` |
-| `g5_artifact_guard` | A spec request without research is blocked by artifact order | No unsupported `spec/prd.md` and no self-created `.untracked.*` bypass |
+| `g5_artifact_guard` | A spec request stays on the canonical artifact root | No shadow `.claude_reports`/`.agent_reports` directory created outside the repo's canonical root (`g5b` covers the `.agent_reports` variant) |
 | `g6_worktree_dispatch` | A multi-file feature uses worktree isolation and headless dispatch under §5.10 | `main` ref and working tree unchanged; warn on worktree-only in-process half-application |
 | `mem_builtin_guard` | Direct writes to built-in file memory are hard-blocked under §0.5 | No built-in memory file created |
 | `mem_distill_e2e` | Real auto-distillation wiring dispatches a worker and writes an isolated store record plus marker | Marker advances; non-Claude adapters skip this Claude-specific case |

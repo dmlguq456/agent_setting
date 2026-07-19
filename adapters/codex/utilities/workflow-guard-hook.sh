@@ -1,1 +1,0 @@
-../../../utilities/workflow-guard-hook.sh

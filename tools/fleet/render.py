@@ -97,9 +97,8 @@ _HUE_OF = {
     "qa_thorough": ("d", _A_B), "qa_adversarial": ("d", _A_B),
     "g_work": ("g", _A_B), "g_work_off": ("g", _A_D), "g_idle": ("y", 0),
     "g_stale": ("d", _A_D), "g_dead": ("r", _A_B), "g_unused": ("y", _A_D),
-    # Badge text, NOT the glyph: plain yellow so it separates from the dim-yellow `untracked`
-    # gate tag it sits directly against (they otherwise merge into one dim-yellow phrase).
-    # The glyph keeps g_unused (dim) so the ●>○>◌ ink-weight gradient still reads.
+    # Badge text, NOT the glyph: plain yellow, distinct from the dim g_unused glyph so the
+    # ●>○>◌ ink-weight gradient still reads.
     "g_unused_b": ("y", 0),
     "lvl_g": ("g", 0), "lvl_y": ("y", 0), "lvl_r": ("r", _A_B),
     "grp_live": ("g", 0), "grp_hot": ("g", _A_B), "gate_t": ("g", _A_D), "gate_u": ("y", _A_D),
@@ -424,10 +423,6 @@ def _git_branch(cwd):
     return br
 
 
-_GATE_TTL = 3.0
-_GATE_CACHE = {"ts": 0.0, "map": {}}
-
-
 def _wt_count(cwd):
     """Linked-worktree count for the repo owning `cwd` — counted from .git/worktrees/ entries
     (pure filesystem, no subprocess; follows a worktree's `gitdir:` file back to the main repo).
@@ -456,44 +451,6 @@ def _wt_count(cwd):
         return len([n for n in os.listdir(os.path.join(base, "worktrees")) if not n.startswith(".")])
     except OSError:
         return 0
-
-
-def _gate_info(cwd, sid=None):
-    """(gate, pipeline) for a cwd — gate ∈ 'tracked'/'untracked'/None, pipeline = spec/ exists.
-    Walks up to the nearest .agent_reports/.claude_reports. untracked if the GLOBAL `.untracked`
-    marker exists, or (sid given) this session's `.untracked.<sid>` — per-session tracked mode,
-    matching the statusline. pipeline = a `spec/pipeline_state.yaml` under that root (§0 gate).
-    Cached per (cwd,sid) per tick."""
-    if not cwd:
-        return (None, False)
-    now = time.time()
-    if now - _GATE_CACHE["ts"] > _GATE_TTL:
-        _GATE_CACHE.update(ts=now, map={})
-    cache = _GATE_CACHE["map"]
-    ck = (cwd, sid)
-    if ck in cache:
-        return cache[ck]
-    d = cwd
-    result = (None, False)
-    for _ in range(40):
-        for rd in (".agent_reports", ".claude_reports"):
-            base = os.path.join(d, rd)
-            if os.path.isdir(base):
-                untracked = os.path.exists(os.path.join(base, ".untracked")) or \
-                    bool(sid and os.path.exists(os.path.join(base, ".untracked." + sid)))
-                pipe = os.path.exists(os.path.join(base, "spec", "pipeline_state.yaml"))
-                result = ("untracked" if untracked else "tracked", pipe)
-                break
-        if result[0] is not None or d in ("/", ""):
-            break
-        d = os.path.dirname(d)
-    cache[ck] = result
-    return result
-
-
-def _project_gate(cwd, sid=None):
-    """spec-gate word only ('tracked'/'untracked'/None) — thin wrapper over _gate_info."""
-    return _gate_info(cwd, sid)[0]
 
 
 # ---------- row builders (return a single segment-line: [(text, color_key), ...]) ----------
@@ -644,25 +601,6 @@ def _col_head(name_width):
     return ("    " + "harness (model·effort)".ljust(_HMW) + "session".ljust(name_width)
             + "branch".ljust(_BRW)
             + "    context / stage")
-
-
-def _gate_word(gate, pipe):
-    """Binary spec-gate vocabulary — EXACTLY the statusline's 📌tracked / ⚡untracked, nothing
-    else (a third 'spec' state confused the mental model). `pipe` is accepted but not shown.
-      tracked    — under the agent pipeline (no `.untracked` marker)
-      untracked  — a `.untracked` marker is set (⚡, /track) — ad-hoc, bypasses the pipeline
-    Returns (word, color_key); ('', None) when there is no artifact root at all."""
-    if gate == "untracked":
-        return "untracked", "gate_u"
-    if gate == "tracked":
-        return "tracked", "gate_t"
-    return "", None
-
-
-def _gate_tag(gate, pipe):
-    """(text, color_key) for the dim gate tag shown after a session name, or ('', None)."""
-    word, key = _gate_word(gate, pipe)
-    return (" " + word, key) if word else ("", None)
 
 
 def _branch_seg(cwd, branch, dim=True):
@@ -939,7 +877,7 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
         if _dw(child_tag) < avail:
             suffix.append((child_tag, "dim"))
             suffix_w += _dw(child_tag)
-    # F-26: the unused badge outranks the gate/provenance tags — it is the whole reason the
+    # F-26: the unused badge outranks the provenance tag — it is the whole reason the
     # row is surfaced, so it is the last identity tag to drop, not the first.
     unused_at = None
     if live == "unused":
@@ -948,14 +886,6 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
             unused_at = len(suffix)
             suffix.append((ub, "g_unused_b"))
             suffix_w += _dw(ub)
-    if s.gate:
-        gate, pipe = s.gate, False
-    else:
-        gate, pipe = _gate_info(s.cwd, s.session_id)
-    gtag, gk = _gate_tag(gate, pipe)
-    if gtag and suffix_w + _dw(gtag) < avail:
-        suffix.append((gtag, gk))
-        suffix_w += _dw(gtag)
     # Degradation ladder, tightest-last (the F-22 40-cell cap makes this reachable at every
     # width, so it cannot be left to chance): provenance drops first, then the badge's age,
     # and only then does the name itself clip. The name is what identifies the row — F-26
@@ -1250,11 +1180,7 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_wid
     if live == "unused":                       # F-26 parity with the wide row
         unused_at = len(suffix)
         suffix.append((_unused_badge(s), "g_unused_b"))
-    gate, pipe = (s.gate, False) if s.gate else _gate_info(s.cwd, s.session_id)
-    gtag, gk = _gate_tag(gate, pipe)
-    if gtag:
-        suffix.append((gtag, gk))
-    # provenance is optional here (unlike gate): in the narrow/stack layouts every suffix cell
+    # provenance is optional here: in the narrow/stack layouts every suffix cell
     # is taken straight out of the name, so a 9-cell tag can clip a real name down to "age…".
     # A name the user can read outranks knowing who launched it — drop the tag instead.
     # Position is fixed here (identity tags, before branch) to match the wide row; whether it
@@ -1669,11 +1595,9 @@ _FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: dep
                                                                 # rows folded into the conductor
                                                                 # breadcrumb unless working/stale/dead
 
-# F-29 (v9, prd.md:290-295) — sub-agent observation rows. `⚡` is the PRD-specified glyph and
-# fleet never renders it elsewhere: the spec gate draws words only (`_gate_word` -> "untracked"),
-# so the `⚡untracked` badge lives on statusline/hooks, a different surface. Reads distinctly from
-# dispatch's `🚀`/`↳` so the two nested-row kinds never visually merge. Single point of
-# ASCII-degrade if double-width alignment ever breaks in a real terminal.
+# F-29 (v9, prd.md:290-295) — sub-agent observation rows. `⚡` is the PRD-specified glyph.
+# Reads distinctly from dispatch's `🚀`/`↳` so the two nested-row kinds never visually merge.
+# Single point of ASCII-degrade if double-width alignment ever breaks in a real terminal.
 _ICON_SUBAGENT = "⚡"
 _SUBAGENT_IND = "      "  # strip indent: pure inset, no connector glyph, 6 cells for a
                           # session-owned strip — well past the depth-2 arrow column so the
@@ -2479,12 +2403,6 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
 
         gcwd = "" if name == "loops" else (group_sessions[0].cwd if group_sessions else
                 (group_jobs[0].cwd if group_jobs else ""))
-        ggate, gpipe = _gate_info(gcwd)                # project spec-gate (word after the name)
-        gword, gwkey = _gate_word(ggate, gpipe)
-        if not gword:
-            # no artifact root at all = outside the pipeline → same word as the exempt state
-            # Show an explicit untracked label instead of a blank gate slot.
-            gword, gwkey = "untracked", "gate_u"
         # The section title has no indicator glyph; the title itself carries active state.
         # while the group works, plain bold otherwise. Doubles with the active card tint.
         n_work = sum(1 for s in live_sessions if s.liveness == "working") + \
@@ -2528,8 +2446,6 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         if _cool_min is not None:
             # Prefix time since completion with a check mark.
             head_segs += [("  ", None), ("%s %s" % (_COOL_TIME_ICON, fmt_min(_cool_min)), "grp_cool")]
-        if gword:
-            head_segs += [("  ", None), (gword, gwkey)]
         # The group header is the card's first title row.
         # tinted row of the panel, ▍ anchor on the card's padding edge; no floating label.
         _g0 = len(lines)                # panel start (title INCLUDED in the tint range)
@@ -2849,7 +2765,7 @@ def _malformed():
 # display-width aware clipping — emoji/CJK render 2 cells but len()==1, so advancing col by
 # len() drew the next segment 1 col early and overwrote the previous field's last char
 # (e.g. the directory name lost a char after the 📁). Count real cells instead.
-_WIDE = set("🧠✨⏳📁🚀🛰📌⚡📋⚙📊🐛📈🔬💻⏱↻")
+_WIDE = set("🧠✨⏳📁🚀🛰⚡📋⚙📊🐛📈🔬💻⏱↻")
 
 
 def _cw(ch):

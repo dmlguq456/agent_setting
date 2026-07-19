@@ -1,1 +1,0 @@
-../adapters/claude/track-toggle.sh

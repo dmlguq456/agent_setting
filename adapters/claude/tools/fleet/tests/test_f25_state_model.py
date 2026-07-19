@@ -345,7 +345,7 @@ class AdditiveSchemaTest(unittest.TestCase):
                   "active_context_tokens", "context_window_tokens", "session_input_tokens",
                   "session_cached_input_tokens", "session_output_tokens",
                   "session_reasoning_output_tokens", "session_total_tokens", "status",
-                  "mtime", "liveness", "gate", "branch", "mem_worker")
+                  "mtime", "liveness", "branch", "mem_worker")
         d = Session(harness="claude", pid=1).to_dict()
         for f in pre_v8:
             self.assertIn(f, d, "pre-v8 필드 삭제/개명: %s" % f)
