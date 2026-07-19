@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import importlib.util, json, subprocess, tempfile, unittest
+import contextlib, importlib.util, json, os, subprocess, tempfile, unittest
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -84,6 +84,94 @@ class WorkerRouteGuardTest(unittest.TestCase):
    (repo/"x").write_text("b"); subprocess.run(["git","-C",str(repo),"commit","-am","b","-q"],check=True)
    with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx: G.validate_route_contract(path,"execute",repo,repo)
    self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
+
+ def _write_registry_row(self,jobs_path,route_id,node_id,attempt_id,status="done"):
+  pipe=f"route_id={route_id},route_node={node_id},attempt_id={attempt_id}"
+  line="\t".join(["2026-07-19T00:00:00Z",status,"repo","worktree","slug",pipe])
+  with jobs_path.open("a",encoding="utf-8") as fh: fh.write(line+"\n")
+
+ @contextlib.contextmanager
+ def _bound_jobs(self,value):
+  prior=os.environ.get("AGENT_DISPATCH_JOBS")
+  if value is None: os.environ.pop("AGENT_DISPATCH_JOBS",None)
+  else: os.environ["AGENT_DISPATCH_JOBS"]=value
+  try: yield
+  finally:
+   if prior is None: os.environ.pop("AGENT_DISPATCH_JOBS",None)
+   else: os.environ["AGENT_DISPATCH_JOBS"]=prior
+
+ def test_mutation_retry_descendant_with_prior_attempt_passes(self):
+  # A1: execute node, moved HEAD is a first-parent descendant, and a different
+  # prior same-route/execute attempt row qualifies the SD-67 evidence branch.
+  with tempfile.TemporaryDirectory() as td:
+   repo,route,path=self._lineage_repo(td)
+   (repo/"x").write_text("b"); subprocess.run(["git","-C",str(repo),"commit","-am","b","-q"],check=True)
+   jobs=Path(td)/"jobs.log"; jobs.write_text("")
+   self._write_registry_row(jobs,route["route_id"],"execute","att-prior")
+   with self._bound_jobs(str(jobs)):
+    _,node,_=G.validate_route_contract(path,"execute",repo,repo,current_attempt="att-current")
+   self.assertEqual(node["id"],"execute")
+
+ def test_mutation_first_launch_descendant_without_prior_attempt_rejected(self):
+  # A2: same descendant HEAD but no qualifying registry row -- exact-match rejection stands.
+  with tempfile.TemporaryDirectory() as td:
+   repo,route,path=self._lineage_repo(td)
+   (repo/"x").write_text("b"); subprocess.run(["git","-C",str(repo),"commit","-am","b","-q"],check=True)
+   jobs=Path(td)/"jobs.log"; jobs.write_text("")
+   with self._bound_jobs(str(jobs)):
+    with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx:
+     G.validate_route_contract(path,"execute",repo,repo,current_attempt="att-current")
+   self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
+
+ def test_mutation_retry_diverged_head_rejected(self):
+  # A3a: a qualifying registry row cannot authorize an amended/unrelated HEAD.
+  with tempfile.TemporaryDirectory() as td:
+   repo,route,path=self._lineage_repo(td)
+   subprocess.run(["git","-C",str(repo),"commit","--amend","-qm","a-rewritten"],check=True)
+   jobs=Path(td)/"jobs.log"; jobs.write_text("")
+   self._write_registry_row(jobs,route["route_id"],"execute","att-prior")
+   with self._bound_jobs(str(jobs)):
+    with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx:
+     G.validate_route_contract(path,"execute",repo,repo,current_attempt="att-current")
+   self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
+
+ def test_mutation_retry_registry_unavailable_rejected(self):
+  # A3b: unset, missing-file, and unreadable/malformed registry bindings all fail closed.
+  with tempfile.TemporaryDirectory() as td:
+   repo,route,path=self._lineage_repo(td)
+   (repo/"x").write_text("b"); subprocess.run(["git","-C",str(repo),"commit","-am","b","-q"],check=True)
+   with self.subTest("env-unset"), self._bound_jobs(None):
+    with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx:
+     G.validate_route_contract(path,"execute",repo,repo,current_attempt="att-current")
+    self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
+   with self.subTest("missing-file"), self._bound_jobs(str(Path(td)/"absent.log")):
+    with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx:
+     G.validate_route_contract(path,"execute",repo,repo,current_attempt="att-current")
+    self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
+   with self.subTest("relative-path"), self._bound_jobs("relative/jobs.log"):
+    with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx:
+     G.validate_route_contract(path,"execute",repo,repo,current_attempt="att-current")
+    self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
+   malformed=Path(td)/"malformed.log"; malformed.write_text("not-six-fields\tonly-two\n")
+   with self.subTest("malformed-rows"), self._bound_jobs(str(malformed)):
+    with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx:
+     G.validate_route_contract(path,"execute",repo,repo,current_attempt="att-current")
+    self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
+
+ def test_mutation_retry_current_attempt_only_rejected(self):
+  # EX: the only matching row is the current launch's own identity -- self-evidence excluded.
+  with tempfile.TemporaryDirectory() as td:
+   repo,route,path=self._lineage_repo(td)
+   (repo/"x").write_text("b"); subprocess.run(["git","-C",str(repo),"commit","-am","b","-q"],check=True)
+   jobs=Path(td)/"jobs.log"; jobs.write_text("")
+   self._write_registry_row(jobs,route["route_id"],"execute","att-current")
+   with self._bound_jobs(str(jobs)):
+    with self.assertRaisesRegex(G.WorkerRouteError,"expected=.* observed=") as ctx:
+     G.validate_route_contract(path,"execute",repo,repo,current_attempt="att-current")
+    self.assertEqual(ctx.exception.reason,"route-source-commit-mismatch")
+    self._write_registry_row(jobs,route["route_id"],"execute","att-prior")
+    _,node,_=G.validate_route_contract(path,"execute",repo,repo,current_attempt="att-current")
+    self.assertEqual(node["id"],"execute")
 
  def test_non_git_cwd_boundary_unchanged(self):
   # SD-65 (d): non-git cwd keeps existing non-git handling (head="unversioned"),

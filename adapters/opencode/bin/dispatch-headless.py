@@ -805,6 +805,8 @@ def validate_route_record(args: argparse.Namespace) -> int:
         "--intensity",args.intensity,"--write-scope",args.write_scope,
         "--route-id",args.route_id,"--route-hash",args.route_hash,
         "--registry-digest",args.registry_digest]
+    if args.attempt_id:
+        command += ["--current-attempt", args.attempt_id]
     result=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     if result.returncode:
         if result.stdout: print(result.stdout,end="")
