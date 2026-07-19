@@ -215,4 +215,18 @@ if [ -n "$headless_slugs" ]; then
   printf 'headless_open_slugs=%s\n' "$headless_slugs"
 fi
 
+# SD-64/71: orphaned-conductor visibility (dead owner, incomplete route, open
+# child or ready un-started successor). Fail-open to 0 with no registry.
+orphaned_conductor_jobs=0
+orphaned_resume_boundary=""
+if [ -f "$jobs_log" ]; then
+  scan=$(python3 "$self_dir/dispatch-registry.py" orphan-scan --jobs "$jobs_log" --agent-home "$status_home" 2>/dev/null || true)
+  orphaned_conductor_jobs=$(printf '%s\n' "$scan" | awk -F= '$1=="orphaned_conductor_jobs"{print $2; exit}')
+  orphaned_resume_boundary=$(printf '%s\n' "$scan" | awk -F= '$1=="orphaned_resume_boundary"{print $2; exit}')
+fi
+printf 'orphaned_conductor_jobs=%s\n' "${orphaned_conductor_jobs:-0}"
+if [ -n "${orphaned_resume_boundary:-}" ]; then
+  printf 'orphaned_resume_boundary=%s\n' "$orphaned_resume_boundary"
+fi
+
 printf 'note=read-only snapshot; runtime-native status UI remains authoritative for model/context/token/session fields\n'

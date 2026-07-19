@@ -218,6 +218,18 @@ def has_orphaned_dependents(row, rows, incomplete_nodes, args):
     return False
 
 
+def resume_boundary(route_file, incomplete_nodes):
+    """SD-64/71: the first incomplete node in route order, or None if unreadable."""
+    if not route_file or not incomplete_nodes: return None
+    try:
+        record = json.loads(Path(route_file).read_text(encoding="utf-8"))
+        for node in record.get("nodes", []):
+            if node.get("id") in incomplete_nodes: return node["id"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return None
+
+
 def classify(row, args, newest_orders, rows=None):
     if row["status"] not in OPEN: return "terminal", "already-terminal", None
     exact = classify_attempt_evidence(proc_inputs(row, args.agent_home), args.now)
@@ -316,8 +328,65 @@ def reconcile(rows, args):
     print(json.dumps(record, sort_keys=True)); return 0
 
 
+def emit_orphan_status(rows, args):
+    """SD-64/71: single-attempt orphan verdict for liveness/preflight/Fleet surfaces.
+
+    Reuses the same exact-attempt classifier and route_incomplete/
+    has_orphaned_dependents primitives as ``reconcile`` (read-only; never
+    closes a row) so surfaces never re-derive the classification themselves.
+    """
+    if not args.attempt:
+        print("check=failed\nreason=attempt-required"); return 64
+    row = next((r for r in rows if r["meta"].get("attempt_id") == args.attempt), None)
+    if row is None:
+        print("check=ok\norphan=0\nreason=attempt-not-found"); return 0
+    newest = {}
+    for item in rows:
+        key = (item["meta"].get("route_id"), item["meta"].get("route_node"))
+        if all(key): newest[key] = item["order"]
+    category, reason, note = classify(row, args, newest, rows)
+    if note == "dead-parent-orphaned":
+        incomplete, _ = route_incomplete(row, args.agent_home)
+        boundary = resume_boundary(row["meta"].get("route_file"), incomplete)
+        print("check=ok\norphan=1")
+        print(f"route_id={row['meta'].get('route_id')}")
+        print(f"resume_boundary={boundary or '-'}")
+    else:
+        print("check=ok\norphan=0")
+    return 0
+
+
+def emit_orphan_scan(rows, args):
+    """SD-64/71: fail-open registry-wide orphan count for preflight status.
+
+    No filter is required (unlike ``reconcile``) since a status probe does
+    not know a specific route ahead of time; it only ever reads.
+    """
+    newest = {}
+    for item in rows:
+        key = (item["meta"].get("route_id"), item["meta"].get("route_node"))
+        if all(key): newest[key] = item["order"]
+    orphans = []
+    for row in rows:
+        if row["status"] not in OPEN: continue
+        meta = row["meta"]
+        if meta.get("worker_type") != "owner" or not meta.get("route_id") or meta.get("route_node"):
+            continue
+        _, _, note = classify(row, args, newest, rows)
+        if note == "dead-parent-orphaned":
+            incomplete, _ = route_incomplete(row, args.agent_home)
+            boundary = resume_boundary(meta.get("route_file"), incomplete)
+            orphans.append({"attempt_id": meta.get("attempt_id"), "route_id": meta.get("route_id"),
+                            "slug": row["slug"], "resume_boundary": boundary or "-"})
+    print(f"check=ok\norphaned_conductor_jobs={len(orphans)}")
+    if orphans:
+        print(f"orphaned_resume_boundary={orphans[0]['resume_boundary']}")
+        print(json.dumps(orphans, sort_keys=True))
+    return 0
+
+
 def main(argv):
-    p = argparse.ArgumentParser(description=__doc__); p.add_argument("operation", choices=("current", "liveness", "reconcile", "attempt-state"))
+    p = argparse.ArgumentParser(description=__doc__); p.add_argument("operation", choices=("current", "liveness", "reconcile", "attempt-state", "orphan-status", "orphan-scan"))
     p.add_argument("--jobs", type=Path); p.add_argument("--global-jobs", type=Path); p.add_argument("--local-jobs", type=Path)
     p.add_argument("--session"); p.add_argument("--route")
     p.add_argument("--node"); p.add_argument("--attempt"); p.add_argument("--job"); p.add_argument("--all", action="store_true")
@@ -352,13 +421,17 @@ def main(argv):
     if not args.jobs:
         print("check=failed\nreason=jobs-required"); return 64
     args.jobs = args.jobs.resolve()
-    if args.operation != "liveness" and not any((args.session, args.route, args.node, args.attempt, args.job)):
+    if args.operation not in ("liveness", "orphan-scan") and not any((args.session, args.route, args.node, args.attempt, args.job)):
         print("check=failed\nreason=current-filter-required"); return 64
     rows = read_rows(args.jobs)
     if args.operation == "current":
         return emit_current(rows, args)
     if args.operation == "liveness":
         return emit_liveness(rows, args)
+    if args.operation == "orphan-status":
+        return emit_orphan_status(rows, args)
+    if args.operation == "orphan-scan":
+        return emit_orphan_scan(rows, args)
     return reconcile(rows, args)
 
 

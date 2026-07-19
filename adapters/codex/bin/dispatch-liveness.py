@@ -165,6 +165,27 @@ def recorded_attempt_state(metadata: dict[str, str], now: float, agent_home: Pat
     }, now)
 
 
+def orphan_status(agent_home: Path, jobs: Path, attempt_id: str) -> dict | None:
+    """SD-64/71: reuse dispatch-registry.py's own classification (never re-derived)."""
+    if not attempt_id:
+        return None
+    registry = Path(__file__).resolve().parents[3] / "utilities" / "dispatch-registry.py"
+    try:
+        result = subprocess.run(
+            [sys.executable, str(registry), "orphan-status", "--attempt", attempt_id,
+             "--jobs", str(jobs), "--agent-home", str(agent_home)],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    fields = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+    if fields.get("orphan") != "1":
+        return None
+    return {"route_id": fields.get("route_id", "-"), "resume_boundary": fields.get("resume_boundary", "-")}
+
+
 def sessions_dir_for(pipe: str, slug: str, agent_home: Path, default_sessions: Path) -> Path:
     """Resolve the Codex session store for one job.
 
@@ -281,8 +302,12 @@ def main(argv: list[str]) -> int:
                 alive += 1
                 continue
             if exact and exact["state"] == "dead":
-                log_hit = log_shows_limit(agent_home, slug)
-                if log_hit is not None:
+                orphan = orphan_status(agent_home, jobs, metadata.get("attempt_id", ""))
+                log_hit = None if orphan else log_shows_limit(agent_home, slug)
+                if orphan is not None:
+                    print(f"ORPHANED {label} - pipeline orphaned; route={orphan['route_id']}; "
+                          f"resume boundary={orphan['resume_boundary']}; depth-0 decision [open: {ts}]")
+                elif log_hit is not None:
                     print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
                 else:
                     print(f"EXITED   {label} - recorded pid {exact['pid']} ended or identity changed; classifier={ATTEMPT_CLASSIFIER_SOURCE} [open: {ts}]")

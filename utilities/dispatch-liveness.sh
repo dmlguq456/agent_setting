@@ -98,7 +98,19 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
       alive=$((alive + 1)); continue
     fi
     if [ "$exact_state" = "dead" ]; then
-      if log_hit=$(scan_log_death "$slug"); then
+      # SD-64/71: a dead conductor row may be a detected orphan (route
+      # incomplete + an open/live child or a ready un-started successor).
+      # Reuse the registry's own classification rather than re-deriving it.
+      if [ -n "$attempt_id" ]; then
+        orphan_info=$(python3 "$SCRIPT_DIR/dispatch-registry.py" orphan-status --attempt "$attempt_id" --jobs "$SOURCE_JOBS" --agent-home "$AGENT_HOME" 2>/dev/null || true)
+      else
+        orphan_info=""
+      fi
+      if printf '%s\n' "$orphan_info" | grep -q '^orphan=1$'; then
+        orphan_route=$(printf '%s\n' "$orphan_info" | sed -n 's/^route_id=//p')
+        orphan_boundary=$(printf '%s\n' "$orphan_info" | sed -n 's/^resume_boundary=//p')
+        echo "⚠️ ORPHANED ${slug:-?}  — pipeline orphaned; route=$orphan_route; resume boundary=$orphan_boundary; depth-0 decision  [open: $ts]"
+      elif log_hit=$(scan_log_death "$slug"); then
         echo "⚠️ DEAD     ${slug:-?}  — trailing limit/auth log pattern ($log_hit)  [open: $ts]"
       else
         echo "⚠️ EXITED   ${slug:-?}  — pid $pid ended or identity changed; classifier=$classifier  [open: $ts]"

@@ -252,6 +252,10 @@ class DispatchJob:
                                         # keeps the slug as the row identity
     summary: Optional[str] = None       # the child session's own live sidecar summary,
                                         # adopted the same way as title (F-16/F-17 merge)
+    note: Optional[str] = None          # SD-64/71: registry `note=` annotation for this exact
+                                        # attempt (e.g. "dead-parent-orphaned"); None = no note
+    resume_boundary: Optional[str] = None  # SD-64/71: first incomplete route node, set only
+                                        # alongside note == "dead-parent-orphaned"
 
     def to_dict(self):
         return asdict(self)

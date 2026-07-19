@@ -1107,6 +1107,82 @@ def _reconcile_drill_rows(jobs, now=None):
     return [j for j in jobs if id(j) not in drop]
 
 
+_ORPHAN_REGISTRY_MOD = None
+
+
+def _orphan_registry_module():
+    """Lazily load utilities/dispatch-registry.py in-process (SD-64/71).
+
+    Reuses the exact same classify()/route_incomplete()/resume_boundary()
+    primitives dispatch-liveness.sh and preflight.sh status call out to, so
+    Fleet never re-derives the orphan classification on its own. In-process
+    import (not a subprocess) since collect() runs on every Fleet tick.
+    """
+    global _ORPHAN_REGISTRY_MOD
+    if _ORPHAN_REGISTRY_MOD is None:
+        import importlib.util
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "utilities", "dispatch-registry.py")
+        try:
+            spec = importlib.util.spec_from_file_location("_fleet_dispatch_registry", path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        except Exception:
+            mod = False
+        _ORPHAN_REGISTRY_MOD = mod
+    return _ORPHAN_REGISTRY_MOD or None
+
+
+def _annotate_orphan_conductors(jobs, now, jobs_path=None):
+    """SD-64/71: stamp note/resume_boundary on a dead depth-1 owner row that is a
+    detected orphan (route incomplete + a live/unknown child or a ready
+    un-started successor). Read-only — never mutates the registry."""
+    dead_owners = [j for j in jobs if j.liveness == "dead" and int(getattr(j, "depth", 1) or 1) == 1
+                   and getattr(j, "route_id", None) and not getattr(j, "route_node", None)
+                   and getattr(j, "attempt_id", None)]
+    if not dead_owners:
+        return
+    registry = _orphan_registry_module()
+    if registry is None:
+        return
+    paths = _candidate_jobs_paths(jobs_path)
+    jobs_path = next((p for p in paths if p and os.path.isfile(p)), None)
+    if not jobs_path:
+        return
+    try:
+        from pathlib import Path as _Path
+        rows = registry.read_rows(_Path(jobs_path))
+    except Exception:
+        return
+    newest = {}
+    for row in rows:
+        key = (row["meta"].get("route_id"), row["meta"].get("route_node"))
+        if all(key):
+            newest[key] = row["order"]
+
+    class _Args:
+        pass
+
+    args = _Args()
+    args.agent_home = _Path(_registry_home())
+    args.now = now
+    for j in dead_owners:
+        row = next((r for r in rows if r["meta"].get("attempt_id") == j.attempt_id), None)
+        if row is None:
+            continue
+        try:
+            _, _, note = registry.classify(row, args, newest, rows)
+        except Exception:
+            continue
+        if note == "dead-parent-orphaned":
+            try:
+                incomplete, _ = registry.route_incomplete(row, args.agent_home)
+                boundary = registry.resume_boundary(row["meta"].get("route_file"), incomplete)
+            except Exception:
+                boundary = None
+            j.note = "dead-parent-orphaned"
+            j.resume_boundary = boundary or "-"
+
+
 def collect(jobs_path=None, harness_filter=None):
     """Return merged [DispatchJob]. harness_filter does not restrict dispatch — the section
     is cross-harness by design (jobs, not sessions)."""
@@ -1165,6 +1241,7 @@ def collect(jobs_path=None, harness_filter=None):
     jobs = _reconcile_drill_rows(jobs, now)
     for j in jobs:
         j.liveness = _dispatch_liveness(j, now)
+    _annotate_orphan_conductors(jobs, now, jobs_path=jobs_path)
     # F-15c(a): a registry-only row (source="jobs") that turns out to be genuinely working
     # re-derives its breadcrumb from the real plan artifacts instead of the raw jobs.log
     # status word ("open"/"running") — otherwise a live job with real progress shows a
