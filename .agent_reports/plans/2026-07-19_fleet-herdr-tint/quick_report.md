@@ -1,5 +1,15 @@
 # Fleet Herdr Tint — Quick Report
 
+> Status: rolled back on 2026-07-19 after user feedback that the rail fallback made
+> Fleet's visual design worse. The original panel tint design is restored.
+
+## Rollback
+
+- Reverted the `HERDR_ENV` tint-disable condition.
+- Removed the fallback-specific regression tests from the canonical and Claude mirror trees.
+- Kept this report as historical evidence; the implementation described below is no longer active.
+- Post-rollback verification: full Fleet suite 624 passed; mirror parity passed.
+
 ## Route
 
 - Capability: `autopilot-code`
