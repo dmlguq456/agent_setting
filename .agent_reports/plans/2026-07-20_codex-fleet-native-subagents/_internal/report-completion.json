@@ -1,0 +1,13 @@
+{
+  "route_id": "rt-095d82a8da1ac698",
+  "route_hash": "sha256:095d82a8da1ac6980a8a736837a391b796379f74af6a8b64873a0e6fbc03cc60",
+  "registry_digest": "sha256:161b5539ad48dfd354aae3605daf27a9203ec3a676b450ba27b4856bfcea03c1",
+  "node_id": "report",
+  "completion_gate": "code-report",
+  "evidence": {
+    "path": "/home/Uihyeop/agent_setting/.agent_reports/plans/2026-07-20_codex-fleet-native-subagents/pipeline_summary.md",
+    "sha256": "213de93bb0ce0ff3214a1fee54f58fae78dd9691afe3ac93b9f7597af835d903"
+  },
+  "sequence": 4,
+  "completed_at": "2026-07-19T17:55:30.860421Z"
+}

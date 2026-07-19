@@ -1,0 +1,13 @@
+{
+  "route_id": "rt-095d82a8da1ac698",
+  "route_hash": "sha256:095d82a8da1ac6980a8a736837a391b796379f74af6a8b64873a0e6fbc03cc60",
+  "registry_digest": "sha256:161b5539ad48dfd354aae3605daf27a9203ec3a676b450ba27b4856bfcea03c1",
+  "node_id": "execute",
+  "completion_gate": "code-execute",
+  "evidence": {
+    "path": "/home/Uihyeop/agent_setting/.agent_reports/plans/2026-07-20_codex-fleet-native-subagents/dev_logs/implementation.md",
+    "sha256": "85c6491a5d781c984e5aef443d26064d30981b8e5f25c59922ec59def70168a9"
+  },
+  "sequence": 3,
+  "completed_at": "2026-07-19T17:54:29.173384Z"
+}

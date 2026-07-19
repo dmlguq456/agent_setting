@@ -1,0 +1,44 @@
+{
+  "tuples": [
+    {
+      "child_harness": "codex",
+      "failure_class": "",
+      "launch_authority": "conductor",
+      "parent_harness": "codex",
+      "parent_sandbox": "workspace-write",
+      "parent_transport": "headless",
+      "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+      "probe_time": "2026-07-19T17:09:04.554778Z",
+      "status": "supported"
+    },
+    {
+      "child_harness": "claude",
+      "failure_class": "",
+      "launch_authority": "conductor",
+      "parent_harness": "codex",
+      "parent_sandbox": "workspace-write",
+      "parent_transport": "headless",
+      "probe_source": "codex-owner-network-contract+direct-command-check",
+      "probe_time": "2026-07-19T17:09:05.078419Z",
+      "status": "supported"
+    },
+    {
+      "child_harness": "opencode",
+      "failure_class": "auth-unavailable",
+      "launch_authority": "conductor",
+      "parent_harness": "codex",
+      "parent_sandbox": "workspace-write",
+      "parent_transport": "headless",
+      "probe_source": "direct-auth-check",
+      "probe_time": "2026-07-19T17:09:05.831499Z",
+      "status": "unsupported"
+    }
+  ],
+  "native_subagent": [
+    {
+      "harness": "codex",
+      "status": "supported",
+      "check_source": "preflight.sh subagent-info --check; multi_agent enabled"
+    }
+  ]
+}
