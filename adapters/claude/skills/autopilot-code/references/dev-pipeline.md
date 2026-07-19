@@ -112,13 +112,7 @@ For standard+, dispatch with `--capability code-test --worker-role code-test --m
 quick reports verify-lite failure without retry. Other graphs may open at most one pipeline-level retry:
 
 1. Record the verdict; detailed context remains in `test_logs/test_report.md` and `_internal/test_reviews/` for code-refine.
-2. Read `Safety commit: {hash}` from `plan/checklist.md` and restore changed source paths only:
-
-   ```bash
-   git checkout <safety-commit> -- <changed paths>
-   git status
-   ```
-
+2. Same-route in-place retry (SD-67): do not restore or roll back source and never run `git reset --hard`. Redispatch code-execute in place on the unchanged route with a new attempt identity (the prior attempt row is the lineage evidence); `worker-route-guard.py` accepts the resulting moved `HEAD` only when the node is declared in the route's `resume_retry_boundaries`, the bound canonical global registry holds a different prior attempt for the same route/node, and `HEAD` is a first-parent descendant of the route's `source_commit`. Never recompile or re-pin the route to manufacture this evidence.
 3. Append the preserved compatibility memo literal at affected steps:
 
    ```html

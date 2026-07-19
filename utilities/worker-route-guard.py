@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +13,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("capability_route", ROOT / "utilities" / "capability-route.py")
 ROUTE = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(ROUTE)
+FALLBACK_SPEC = importlib.util.spec_from_file_location("stage_dispatch_fallback", ROOT / "utilities" / "stage-dispatch-fallback.py")
+FALLBACK = importlib.util.module_from_spec(FALLBACK_SPEC); FALLBACK_SPEC.loader.exec_module(FALLBACK)
 
 
 class WorkerRouteError(ValueError):
@@ -75,11 +78,29 @@ def _is_first_parent_descendant(cwd: Path, source_commit: str, head: str) -> boo
     return source_commit in result.stdout.split()
 
 
+def _direct_mutation_node(node: dict) -> bool:
+    return any(_worktree_mutating_scope(s) for s in node.get("write_scope", []))
+
+
+def _qualifying_retry_evidence(route_id: str, node_id: str, current_attempt: str | None) -> bool:
+    """SD-67: a different prior global-registry attempt for the same route/node."""
+    jobs_env = os.environ.get("AGENT_DISPATCH_JOBS")
+    if not jobs_env: return False
+    jobs_path = Path(jobs_env)
+    if not jobs_path.is_absolute() or not jobs_path.is_file(): return False
+    try:
+        rows = FALLBACK.registry_rows(jobs_path, route_id, node_id)
+    except (OSError, ValueError):
+        return False
+    return any(row.get("attempt_id") and row.get("attempt_id") != current_attempt for row in rows)
+
+
 def validate_route_contract(route_path: str | Path, node_id: str, cwd: str | Path,
                             artifact_root: str | Path, capability: str | None = None,
                             intensity: str | None = None, write_scope: str | None = None,
                             route_id: str | None = None, route_hash: str | None = None,
-                            registry_digest: str | None = None) -> tuple[dict, dict, dict]:
+                            registry_digest: str | None = None,
+                            current_attempt: str | None = None) -> tuple[dict, dict, dict]:
     path = Path(route_path)
     if not path.is_absolute() or not path.is_file():
         raise _fail("route-record-missing", f"route path must be an existing absolute file: {path}")
@@ -112,9 +133,13 @@ def validate_route_contract(route_path: str | Path, node_id: str, cwd: str | Pat
         if gate["workflow_mode"] != "tracked": raise _fail("tracked-mode-mismatch", gate["workflow_mode"], rid)
     git = _git_state(actual_cwd)
     if git["head"] != route["source_commit"]:
-        lineage_ok = (_post_mutation_node(route["nodes"], node_id)
+        downstream_ok = (_post_mutation_node(route["nodes"], node_id)
                       and _is_first_parent_descendant(actual_cwd, route["source_commit"], git["head"]))
-        if not lineage_ok:
+        mutation_retry_ok = (_direct_mutation_node(node)
+                      and node_id in route.get("resume_retry_boundaries", ())
+                      and _qualifying_retry_evidence(route["route_id"], node_id, current_attempt)
+                      and _is_first_parent_descendant(actual_cwd, route["source_commit"], git["head"]))
+        if not (downstream_ok or mutation_retry_ok):
             raise _fail("route-source-commit-mismatch", f"expected={route['source_commit']} observed={git['head']}", rid)
     return route, node, git
 
@@ -125,10 +150,12 @@ def main() -> int:
     parser.add_argument("--cwd", required=True); parser.add_argument("--artifact-root", required=True)
     parser.add_argument("--capability"); parser.add_argument("--intensity"); parser.add_argument("--write-scope")
     parser.add_argument("--route-id"); parser.add_argument("--route-hash"); parser.add_argument("--registry-digest")
+    parser.add_argument("--current-attempt")
     args = parser.parse_args()
     try:
         route, node, git = validate_route_contract(args.route, args.node, args.cwd, args.artifact_root,
-            args.capability, args.intensity, args.write_scope, args.route_id, args.route_hash, args.registry_digest)
+            args.capability, args.intensity, args.write_scope, args.route_id, args.route_hash, args.registry_digest,
+            args.current_attempt)
     except WorkerRouteError as exc:
         print(json.dumps({"status":"blocked","reason":exc.reason,"detail":str(exc),"route_id":exc.route_id,"route_file":args.route}, sort_keys=True), file=sys.stderr)
         return 65
