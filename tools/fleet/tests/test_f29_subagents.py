@@ -9,13 +9,14 @@ import os
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from fleet import render                                          # noqa: E402
-from fleet.collectors import claude, opencode                     # noqa: E402
+from fleet.collectors import claude, codex, opencode              # noqa: E402
 from fleet.model import Session, SubAgent                         # noqa: E402
 
 
@@ -106,6 +107,277 @@ class OpenCodeSubagentTest(unittest.TestCase):
                 opencode.enrich(sess)
             self.assertEqual(len(sess.subagents), 1)
             self.assertEqual(sess.subagents[0].agent_type, "explore")
+
+
+class CodexSubagentTest(unittest.TestCase):
+    """Temp state DB/rollout fixtures — real Codex runtime state is never written."""
+
+    def setUp(self):
+        codex._SUBAGENT_INDEX.clear()
+        codex._TITLE_INDEX.update(stamp=None, map={})
+        codex._PROC_PATHS.clear()
+
+    def tearDown(self):
+        codex._SUBAGENT_INDEX.clear()
+        codex._TITLE_INDEX.update(stamp=None, map={})
+        codex._PROC_PATHS.clear()
+
+    def _db(self, tmp, edges, children, malformed=False):
+        path = os.path.join(tmp, "state_5.sqlite")
+        con = sqlite3.connect(path)
+        if malformed:
+            con.execute("CREATE TABLE threads (id TEXT PRIMARY KEY)")
+        else:
+            con.execute(
+                "CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT, agent_role TEXT, "
+                "agent_path TEXT, agent_nickname TEXT, thread_source TEXT, source TEXT, "
+                "created_at INTEGER, created_at_ms INTEGER, updated_at INTEGER, "
+                "updated_at_ms INTEGER, rollout_path TEXT)"
+            )
+            con.execute(
+                "CREATE TABLE thread_spawn_edges (parent_thread_id TEXT, "
+                "child_thread_id TEXT, status TEXT)"
+            )
+            for child in children:
+                rollout_path = os.path.join(tmp, child["id"] + ".jsonl")
+                if not child.get("missing_rollout"):
+                    lifecycle = child.get("lifecycle", "task_started")
+                    events = child.get("events")
+                    if events is None:
+                        events = [("task_started", "turn-1")]
+                        if lifecycle != "task_started":
+                            events.append((lifecycle, "turn-1"))
+                    with open(rollout_path, "w", encoding="utf-8") as f:
+                        for event in events:
+                            if isinstance(event, dict):
+                                payload = event
+                            else:
+                                event_type, turn_id = event
+                                payload = {"type": event_type, "turn_id": turn_id}
+                            f.write(json.dumps(
+                                {"type": "event_msg", "payload": payload}) + "\n")
+                        if child.get("trailing_bytes"):
+                            filler = {"type": "event_msg", "payload": {"type": "note",
+                                      "text": "x" * child["trailing_bytes"]}}
+                            f.write(json.dumps(filler) + "\n")
+                        if child.get("partial"):
+                            f.write("[]\n")
+                            f.write('{"type":"event_msg","payload":')
+                    if child.get("stale"):
+                        old = time.time() - 3600
+                        os.utime(rollout_path, (old, old))
+                con.execute(
+                    "INSERT INTO threads (id, agent_role, agent_path, agent_nickname, "
+                    "thread_source, source, created_at, created_at_ms, updated_at, "
+                    "updated_at_ms, rollout_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (child["id"], child.get("agent_role"), child.get("agent_path"),
+                     child.get("agent_nickname"), child.get("thread_source", "subagent"),
+                     child.get("source", json.dumps({"subagent": {"thread_spawn": {
+                         "parent_thread_id": child.get("source_parent") or next(
+                             (p for p, c, _s in edges if c == child["id"]), None)}}})),
+                     child.get("created_at", 100), child.get("created_at_ms"),
+                     child.get("updated_at", int(time.time()) - (3600 if child.get("stale") else 0)),
+                     child.get("updated_at_ms",
+                               int(time.time() * 1000) - (3600000 if child.get("stale") else 0)),
+                     rollout_path),
+                )
+            con.executemany(
+                "INSERT INTO thread_spawn_edges VALUES (?, ?, ?)", edges)
+        con.commit()
+        con.close()
+        return path
+
+    def test_exact_parent_type_and_active_done_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [
+                ("parent", "active-child", "open"),
+                ("parent", "done-child", "open"),
+            ], [
+                {"id": "active-child", "agent_role": "explorer", "agent_path": "/root/a",
+                 "created_at_ms": 123000},
+                {"id": "done-child", "agent_path": "/root/code-review", "created_at": 456,
+                 "lifecycle": "task_complete"},
+            ])
+            mapped = codex._thread_subagents(tmp)
+            self.assertEqual([s.agent_type for s in mapped["parent"]],
+                             ["explorer", "code-review"])
+            self.assertEqual([s.active for s in mapped["parent"]], [True, False])
+            self.assertEqual(mapped["parent"][0].started_at, 123.0)
+            self.assertEqual(mapped["parent"][0].source, "codex-state-db")
+
+    def test_child_is_attached_only_to_its_exact_parent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [("right-parent", "child", "open")],
+                     [{"id": "child", "agent_role": "worker"}])
+            mapped = codex._thread_subagents(tmp)
+            self.assertIn("right-parent", mapped)
+            self.assertNotIn("wrong-parent", mapped)
+
+    def test_latest_lifecycle_is_found_before_a_large_non_lifecycle_tail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [("parent", "child", "open")], [{
+                "id": "child", "lifecycle": "task_complete", "trailing_bytes": 70000,
+            }])
+            self.assertFalse(codex._thread_subagents(tmp)["parent"][0].active)
+
+    def test_matching_abort_is_done(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [("parent", "child", "open")],
+                     [{"id": "child", "lifecycle": "turn_aborted"}])
+            self.assertFalse(codex._thread_subagents(tmp)["parent"][0].active)
+
+    def test_closed_edge_is_done_without_a_rollout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [("parent", "child", "closed")],
+                     [{"id": "child", "missing_rollout": True}])
+            self.assertFalse(codex._thread_subagents(tmp)["parent"][0].active)
+
+    def test_completed_old_turn_then_fresh_new_start_is_active(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [("parent", "child", "open")], [{"id": "child", "events": [
+                ("task_started", "turn-a"), ("task_complete", "turn-a"),
+                ("task_started", "turn-b"),
+            ]}])
+            self.assertTrue(codex._thread_subagents(tmp)["parent"][0].active)
+
+    def test_new_turn_with_matching_completion_is_done(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [("parent", "child", "open")], [{"id": "child", "events": [
+                ("task_started", "turn-a"), ("task_complete", "turn-a"),
+                ("task_started", "turn-b"), ("task_complete", "turn-b"),
+            ]}])
+            self.assertFalse(codex._thread_subagents(tmp)["parent"][0].active)
+
+    def test_stale_unmatched_start_is_omitted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [("parent", "child", "open")],
+                     [{"id": "child", "stale": True}])
+            self.assertNotIn("parent", codex._thread_subagents(tmp))
+
+    def test_mismatched_turn_and_malformed_lifecycle_are_omitted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [
+                ("parent", "mismatched", "open"),
+                ("parent", "malformed", "open"),
+            ], [
+                {"id": "mismatched", "events": [
+                    ("task_started", "turn-a"), ("task_complete", "turn-b")]},
+                {"id": "malformed", "events": [
+                    ("task_started", "turn-a"), {"type": "task_complete"}]},
+            ])
+            self.assertNotIn("parent", codex._thread_subagents(tmp))
+
+    def test_partial_final_json_uses_last_well_formed_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [("parent", "child", "open")],
+                     [{"id": "child", "partial": True}])
+            self.assertTrue(codex._thread_subagents(tmp)["parent"][0].active)
+
+    def test_wal_only_edge_is_visible_and_invalidates_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._db(tmp, [], [])
+            self.assertEqual(codex._thread_subagents(tmp), {})
+            rollout = os.path.join(tmp, "wal-child.jsonl")
+            with open(rollout, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"type": "event_msg", "payload": {
+                    "type": "task_started", "turn_id": "turn-wal"}}) + "\n")
+            con = sqlite3.connect(path)
+            con.execute("PRAGMA journal_mode=WAL")
+            con.execute(
+                "INSERT INTO threads (id, agent_path, thread_source, source, created_at, "
+                "updated_at, updated_at_ms, rollout_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                ("wal-child", "/root/wal-worker", "subagent",
+                 json.dumps({"subagent": {"thread_spawn": {
+                     "parent_thread_id": "parent"}}}), 100, int(time.time()),
+                 int(time.time() * 1000), rollout),
+            )
+            con.execute("INSERT INTO thread_spawn_edges VALUES (?, ?, ?)",
+                        ("parent", "wal-child", "open"))
+            con.commit()
+            try:
+                mapped = codex._thread_subagents(tmp)
+                self.assertEqual(mapped["parent"][0].agent_type, "wal-worker")
+                self.assertTrue(mapped["parent"][0].active)
+            finally:
+                con.close()
+
+    def test_ambiguous_parent_linkage_omits_child(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [
+                ("parent-a", "child", "open"),
+                ("parent-b", "child", "open"),
+            ], [{"id": "child", "agent_role": "worker"}])
+            mapped = codex._thread_subagents(tmp)
+            self.assertNotIn("parent-a", mapped)
+            self.assertNotIn("parent-b", mapped)
+
+    def test_unknown_status_and_non_subagent_thread_are_omitted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [
+                ("parent", "unknown", "mystery"),
+                ("parent", "root-thread", "open"),
+            ], [
+                {"id": "unknown", "agent_role": "worker"},
+                {"id": "root-thread", "thread_source": "user"},
+            ])
+            self.assertEqual(codex._thread_subagents(tmp), {})
+
+    def test_source_parent_mismatch_and_malformed_source_are_omitted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [
+                ("parent", "mismatch", "open"),
+                ("parent", "malformed", "closed"),
+            ], [
+                {"id": "mismatch", "agent_role": "worker", "source_parent": "other"},
+                {"id": "malformed", "agent_role": "explorer", "source": "not-json"},
+            ])
+            self.assertEqual(codex._thread_subagents(tmp), {})
+
+    def test_absent_or_malformed_db_preserves_honest_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(codex._thread_subagents(tmp))
+            codex._SUBAGENT_INDEX.clear()
+            self._db(tmp, [], [], malformed=True)
+            self.assertIsNone(codex._thread_subagents(tmp))
+
+    def test_enrich_wires_subagents_without_changing_session_existence(self):
+        parent = "11111111-1111-1111-1111-111111111111"
+        with tempfile.TemporaryDirectory() as tmp:
+            self._db(tmp, [(parent, "child", "open")],
+                     [{"id": "child", "agent_path": "/root/runtime-probe"}])
+            rollout = os.path.join(tmp, "rollout-2026-07-20T00-00-00-%s.jsonl" % parent)
+            with open(rollout, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"type": "session_meta", "payload": {"cwd": "/x"}}) + "\n")
+            sess = Session(harness="codex", pid=77, cwd="/x")
+            codex._PROC_PATHS[77] = rollout
+            with mock.patch.dict(os.environ, {"CODEX_HOME": tmp}):
+                codex.enrich(sess)
+            self.assertEqual(sess.session_id, parent)
+            self.assertEqual(len(sess.subagents), 1)
+            self.assertEqual(sess.subagents[0].agent_type, "runtime-probe")
+
+    def test_enrich_uses_the_owned_rollouts_runtime_home(self):
+        parent = "22222222-2222-2222-2222-222222222222"
+        with tempfile.TemporaryDirectory() as tmp:
+            default_home = os.path.join(tmp, "default")
+            runtime_home = os.path.join(tmp, "nested")
+            rollout_dir = os.path.join(runtime_home, "sessions", "2026", "07", "20")
+            os.makedirs(default_home)
+            os.makedirs(rollout_dir)
+            self._db(runtime_home, [(parent, "child", "closed")],
+                     [{"id": "child", "agent_role": "qa-team"}])
+            rollout = os.path.join(
+                rollout_dir, "rollout-2026-07-20T00-00-00-%s.jsonl" % parent)
+            with open(rollout, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"type": "session_meta", "payload": {"cwd": "/x"}}) + "\n")
+            sess = Session(harness="codex", pid=88, cwd="/x")
+            codex._PROC_PATHS[88] = rollout
+            with mock.patch.dict(os.environ, {"CODEX_HOME": default_home}):
+                codex.enrich(sess)
+            self.assertEqual(sess.session_id, parent)
+            self.assertEqual(len(sess.subagents), 1)
+            self.assertEqual(sess.subagents[0].agent_type, "qa-team")
+            self.assertFalse(sess.subagents[0].active)
 
 
 def _tool_use_line(tid, agent_type, ts="2026-07-15T10:00:00Z", name="Task"):

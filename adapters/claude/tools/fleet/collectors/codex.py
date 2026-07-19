@@ -29,6 +29,7 @@ import sqlite3
 import time
 import urllib.request
 
+from fleet.model import SESSION_WORK_SEC, SubAgent
 from fleet.token_budget import parse_codex_token_count
 
 # rollout filename tail: rollout-<ISO-ts>-<uuid>.jsonl
@@ -40,6 +41,7 @@ _FALLBACK_CLAIMS = {"ts": 0.0, "sids": set()}  # session ids assigned without a 
 _PROC_PATHS = {}                                  # pid -> rollout reserved at collect tick start
 _CFG = {"ts": 0.0, "model": None, "effort": None}
 _TITLE_INDEX = {"stamp": None, "map": {}}      # native state stamps -> sid: title
+_SUBAGENT_INDEX = {}                  # runtime home -> (read time, stamp, map, available)
 
 
 def _home():
@@ -111,6 +113,189 @@ def _thread_titles(home):
             if connection is not None:
                 connection.close()
     _TITLE_INDEX.update(stamp=stamp, map=mapped)
+    return mapped
+
+
+def _agent_type(agent_role, agent_path=None):
+    """Runtime role, falling back to the final native agent-path component."""
+    if isinstance(agent_role, str) and agent_role.strip():
+        return agent_role.strip()
+    if isinstance(agent_path, str) and agent_path.strip():
+        return os.path.basename(agent_path.strip().rstrip(os.sep)) or None
+    return None
+
+
+def _rollout_home(path):
+    """Runtime home owning a rollout; dispatched Codex sessions may use another home."""
+    marker = os.sep + "sessions" + os.sep
+    absolute = os.path.abspath(path)
+    prefix, found, _tail = absolute.partition(marker)
+    return prefix if found and prefix else None
+
+
+def _latest_task_lifecycle(rollout_path, chunk=65536, max_scan=1048576):
+    """Return the latest validated lifecycle pair, or ``None`` if it is ambiguous.
+
+    Rows are consumed in physical JSONL order from the tail.  A terminal event is
+    trusted only when the immediately preceding lifecycle starts the same turn.
+    Invalid lifecycle rows fail closed instead of exposing an older state.
+    """
+    terminal = {"task_complete", "turn_aborted"}
+    try:
+        end = os.path.getsize(rollout_path)
+        floor = max(0, end - max_scan)
+        carry = b""
+        latest = None
+        with open(rollout_path, "rb") as f:
+            while end > floor:
+                start = max(floor, end - chunk)
+                f.seek(start)
+                data = f.read(end - start) + carry
+                lines = data.splitlines()
+                if start > 0:
+                    carry = lines.pop(0) if lines else data
+                for line in reversed(lines):
+                    try:
+                        row = json.loads(line)
+                    except Exception:
+                        continue
+                    if not isinstance(row, dict) or row.get("type") != "event_msg":
+                        continue
+                    payload = row.get("payload")
+                    event_type = (payload.get("type")
+                                  if isinstance(payload, dict) else None)
+                    if event_type not in terminal | {"task_started"}:
+                        continue
+                    turn_id = payload.get("turn_id")
+                    if not isinstance(turn_id, str) or not turn_id:
+                        return None
+                    if latest is None:
+                        latest = (event_type, turn_id)
+                        if event_type == "task_started":
+                            return latest
+                        continue
+                    # The latest event is terminal: establish its exact matching start.
+                    if event_type != "task_started" or turn_id != latest[1]:
+                        return None
+                    return latest
+                end = start
+    except OSError:
+        return None
+    return None
+
+
+def _subagent_active(edge_status, rollout_path, updated_at=None, updated_at_ms=None,
+                     now=None):
+    """Active/done from the edge plus the child's latest persisted task lifecycle.
+
+    An ``open`` edge means the thread remains available for follow-ups, not that its
+    current turn is still running.  A completed native agent therefore commonly retains
+    an open edge while its rollout ends in ``task_complete``.
+    """
+    normalized = edge_status.strip().lower() if isinstance(edge_status, str) else ""
+    if normalized == "closed":
+        return False
+    if normalized != "open" or not isinstance(rollout_path, str) or not rollout_path:
+        return None
+    lifecycle = _latest_task_lifecycle(rollout_path)
+    if lifecycle is None:
+        return None
+    if lifecycle[0] in ("task_complete", "turn_aborted"):
+        return False
+    try:
+        freshness = os.path.getmtime(rollout_path)
+    except OSError:
+        return None
+    if isinstance(updated_at_ms, (int, float)) and updated_at_ms > 0:
+        freshness = max(freshness, updated_at_ms / 1000.0)
+    elif isinstance(updated_at, (int, float)) and updated_at > 0:
+        freshness = max(freshness, float(updated_at))
+    age = (time.time() if now is None else now) - freshness
+    return True if age <= SESSION_WORK_SEC else None
+
+
+def _thread_subagents(home):
+    """Exact parent-thread subagents from the Codex state DB, read-only and fail-closed.
+
+    ``None`` means the source/schema is unavailable; a mapping means the source was
+    checked (a missing parent key therefore means zero observed children).  The edge is
+    the attribution authority: rollout cwd/mtime/title heuristics never attach children.
+    """
+    db_path = _state_db(home)
+    stamp = (
+        db_path,
+        _file_stamp(db_path),
+        _file_stamp(db_path + "-wal") if db_path else None,
+        _file_stamp(db_path + "-shm") if db_path else None,
+    )
+    now = time.time()
+    cached = _SUBAGENT_INDEX.get(home)
+    if cached and cached[1] == stamp and now - cached[0] < _INDEX_TTL:
+        return cached[2] if cached[3] else None
+    if not db_path:
+        _SUBAGENT_INDEX[home] = (now, stamp, {}, False)
+        return None
+
+    connection = None
+    try:
+        connection = sqlite3.connect("file:" + db_path + "?mode=ro", uri=True)
+        connection.execute("PRAGMA query_only=ON")
+        rows = list(connection.execute(
+            "SELECT e.parent_thread_id, e.child_thread_id, e.status, "
+            "t.agent_role, t.agent_path, t.created_at, t.created_at_ms, "
+            "t.thread_source, t.source, t.rollout_path, t.updated_at, t.updated_at_ms "
+            "FROM thread_spawn_edges AS e "
+            "JOIN threads AS t ON t.id = e.child_thread_id"
+        ))
+    except (OSError, sqlite3.Error):
+        _SUBAGENT_INDEX[home] = (now, stamp, {}, False)
+        return None
+    finally:
+        if connection is not None:
+            connection.close()
+
+    raw_parents = {}
+    for parent_id, child_id, *_rest in rows:
+        if isinstance(parent_id, str) and parent_id and isinstance(child_id, str) and child_id:
+            raw_parents.setdefault(child_id, set()).add(parent_id)
+
+    by_child = {}
+    for (parent_id, child_id, status, role, agent_path, created, created_ms,
+         thread_source, source, rollout_path, updated, updated_ms) in rows:
+        if not (isinstance(parent_id, str) and parent_id and
+                isinstance(child_id, str) and child_id and
+                isinstance(thread_source, str) and thread_source.lower() == "subagent"):
+            continue
+        if len(raw_parents.get(child_id, set())) != 1:
+            continue
+        try:
+            source_data = json.loads(source) if isinstance(source, str) else source
+            source_parent = source_data["subagent"]["thread_spawn"]["parent_thread_id"]
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if source_parent != parent_id:
+            continue
+        active = _subagent_active(status, rollout_path, updated, updated_ms)
+        if active is None:
+            continue
+        started_at = None
+        if isinstance(created_ms, (int, float)) and created_ms > 0:
+            started_at = created_ms / 1000.0
+        elif isinstance(created, (int, float)) and created > 0:
+            started_at = float(created)
+        entry = (parent_id, SubAgent(
+            agent_type=_agent_type(role, agent_path), active=active,
+            started_at=started_at, source="codex-state-db"))
+        by_child.setdefault(child_id, []).append(entry)
+
+    mapped = {}
+    for entries in by_child.values():
+        parents = {parent_id for parent_id, _subagent in entries}
+        if len(parents) != 1:
+            continue                         # ambiguous linkage: omission beats misattribution
+        parent_id, subagent = entries[0]
+        mapped.setdefault(parent_id, []).append(subagent)
+    _SUBAGENT_INDEX[home] = (now, stamp, mapped, True)
     return mapped
 
 
@@ -536,6 +721,9 @@ def enrich(sess):
         sidecar_title = titles.fresh_title(sess.session_id, harness="codex")
         sess.title = sidecar_title or native_title or sess.title
         sess.summary = titles.fresh_summary(sess.session_id, harness="codex")
+        subagent_index = _thread_subagents(_rollout_home(path) or home)
+        if subagent_index is not None:
+            sess.subagents = subagent_index.get(sess.session_id, [])
     try:
         sess.mtime = os.path.getmtime(path)
     except OSError:
