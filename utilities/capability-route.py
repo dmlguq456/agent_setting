@@ -7,6 +7,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("capability_topology", ROOT/"tools/capability_topology.py")
 TOPO = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(TOPO)
+DEFAULTS_SPEC = importlib.util.spec_from_file_location("dispatch_defaults", ROOT/"utilities/dispatch-defaults.py")
+DEFAULTS = importlib.util.module_from_spec(DEFAULTS_SPEC); DEFAULTS_SPEC.loader.exec_module(DEFAULTS)
+VALID_AFFINITY = DEFAULTS.AFFINITY_VALUES | {"unspecified"}
 sys.path.insert(0, str(ROOT/"utilities"))
 from dispatch_contract import resolve_agent_home
 ORDER = {"direct":0,"quick":1,"standard":2,"strong":3,"thorough":4,"adversarial":5}
@@ -155,6 +158,27 @@ def _verify_fallback_chain(node, contract_version=None):
             raise ValueError(f"depth-2 node {node.get('id')} lacks supported depth-0 broker tuple")
     return chain
 
+def _seal_dispatch_defaults(nodes, capability):
+    """Return dispatch_defaults_digest and stamp each depth-2 node's
+    harness_affinity, BEFORE route_hash is computed. Absent config -> all
+    'unspecified' + digest None. Corrupt config -> fail-loud (reused loader
+    validator), surfaced as ValueError so main() exits 64. registry_digest is
+    a separate field and is never touched here."""
+    config_path = DEFAULTS.default_config_path()
+    if not os.path.exists(config_path):
+        for node in nodes:
+            if node.get("depth") == 2:
+                node["harness_affinity"] = "unspecified"
+        return None
+    try:
+        cfg = DEFAULTS.load_and_validate(config_path, DEFAULTS.default_topology_path())
+    except DEFAULTS.DefaultsConfigError as exc:
+        raise ValueError(f"corrupt dispatch-defaults config: {exc}")
+    for node in nodes:
+        if node.get("depth") == 2:
+            node["harness_affinity"] = DEFAULTS.query_stage_affinity(cfg, capability, node["id"])
+    return "sha256:" + hashlib.sha256(canonical(cfg)).hexdigest()
+
 def compile_route(capability, capability_mode, requested_intensity, cwd, artifact_root,
                   predicates=(), signals=(), transport="inline-fallback",
                   transport_evidence="caller-selected", inline_reason=None,
@@ -201,6 +225,7 @@ def compile_route(capability, capability_mode, requested_intensity, cwd, artifac
         for node in nodes:
             if node.get("depth")==2:
                 node["dispatch_fallback"]=json.loads(json.dumps(chain))
+    dispatch_defaults_digest=_seal_dispatch_defaults(nodes, capability)
     spec_touch=any(_scope_touches_spec(scope) for node in nodes for scope in node["write_scope"])
     payload={
       "schema_version":1,"capability":capability,"capability_mode":capability_mode,
@@ -210,6 +235,7 @@ def compile_route(capability, capability_mode, requested_intensity, cwd, artifac
       "tracking":tracking,"tracked_gate_evidence":evidence,"spec_touch":spec_touch,
       "cwd":str(cwd),"artifact_root":str(artifact),"source_commit":_git_commit(cwd),
       "registry_digest":TOPO.registry_digest(registry),
+      "dispatch_defaults_digest":dispatch_defaults_digest,
       "selection":{"direct_predicates":predicates,"promotion_signals":[{"signal":s,"source":"caller"} for s in signals],
                    "selection_basis":selection_basis,
                    "escalation_basis":[{"signal":s,"source":"caller"} for s in signals],
@@ -227,6 +253,12 @@ def verify_route(route, expected_cwd=None):
     if expected_cwd and Path(expected_cwd).resolve()!=Path(route["cwd"]): raise ValueError("route cwd mismatch")
     registry=TOPO.load_registry()
     if route["registry_digest"] != TOPO.registry_digest(registry): raise ValueError("stale registry digest")
+    for node in route.get("nodes", []):
+        if "harness_affinity" in node and node["harness_affinity"] not in VALID_AFFINITY:
+            raise ValueError(f"invalid harness_affinity vocabulary: {node['harness_affinity']!r}")
+    dd_digest=route.get("dispatch_defaults_digest")
+    if dd_digest is not None and (not isinstance(dd_digest, str) or not dd_digest.startswith("sha256:")):
+        raise ValueError("invalid dispatch_defaults_digest format")
     _validate_tracking_evidence(route.get("tracking"), route.get("tracked_gate_evidence"))
     escalation=route.get("selection",{}).get("escalation_basis")
     if not isinstance(escalation,list): raise ValueError("escalation_basis missing")
