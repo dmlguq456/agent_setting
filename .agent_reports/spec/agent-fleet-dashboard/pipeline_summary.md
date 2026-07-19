@@ -2,7 +2,7 @@
 
 - **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec **v11 done + minor #1** (F-17 제목+부제 통합이 F-31을 대체) — 구현·라이브 검증 완료(테스트 660), 등재-미구현 잔여 없음(F-31 재개 조건만 보존)
+- **Status**: spec **v11 done + minor #2** (F-17 제목+부제 통합이 F-31을 대체 · 게이트 배지 퇴역) — 구현·라이브 검증 완료(테스트 664), 등재-미구현 잔여 없음(F-31 재개 조건만 보존)
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## Process Log
@@ -154,3 +154,4 @@
 - **잔여**: F-31(rolling 요약)은 미착수 그대로(F-32 제목 입양이 거친 버전을 선제공). 코드 주석의 임시 명칭 "F-4 (v11)"는 F-33으로 정정 완료.
 
 - 2026-07-19 (v11 minor #1): **F-17 제목+부제 통합 — F-31 대체** — 사용자 확정("제목이랑 내용을 함께, 한번에" + "제목은 오히려 더 압축, 부제 느낌으로"). 같은 haiku 호출이 TITLE(3~6단어·40자)+NOW(대화 언어 1문장) 반환, 사이드카 summary additive·신선 15분, dim 부제 서브 행(스트립 위·무음·F-13), 분사 디바운스 150s. F-31 watcher 설계는 미구현 대체(재개 조건: 장수명 세션 실수요). 구현 = plans/2026-07-19_fleet-title-subtitle quick 사이클, 660 tests, main 288206fa. 라이브 검증: 실세션 제목 압축+한국어 부제 표시 확인.
+- 2026-07-19 (v11 minor #2): **tracked/untracked 게이트 배지 퇴역** — 하네스 전역 tracked/untracked 모드 폐기(사용자 결정 "굳이 의미가 있나"→"없애는 방향이 맞다"; 근거 = 실사용 0·정보량 0·상시 tracked 라벨의 healthy-silent 위반, 유일 기계 효과였던 생성순서 게이트는 성숙 프로젝트에서 구조적 불발)에 따라 그룹 헤더 게이트 배지·세션 행 게이트 태그·wide 태그 공간 예약을 표시 계약에서 제거, 대체 표식 없음. route-record `tracked_gate_evidence` 스키마·spec-read 게이트는 불변. 구현 = plans/2026-07-19_tracked-retirement standard 사이클(worker `452690ff`+harvest fix, 152+8 files, main merge `84dcdf34`), fleet 664 tests·portable-guards 355/355·라이브 스모크 게이트 워드 0건.
