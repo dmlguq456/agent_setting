@@ -141,6 +141,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--registry-digest")
     p.add_argument("--write-scope")
     p.add_argument("--completion-gate")
+    p.add_argument("--harness-affinity")
     p.add_argument(
         "--owner-harness",
         default=os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "codex",
@@ -514,7 +515,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
             f",eligibility_failure_class={args.eligibility_failure_class or '-'}"
             f",eligibility_probe={getattr(args, 'eligibility_probe', None) or '-'}"
         )
-    for key in ("route_file", "route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate"):
+    for key in ("route_file", "route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate", "harness_affinity"):
         value = getattr(args, key)
         if value:
             pipe += f",{key}={value}"
