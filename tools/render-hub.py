@@ -197,11 +197,18 @@ PAGE_TEMPLATE = """<!doctype html>
     --bg-grouped:       #FCFCFC;
 
     /* radius / shadow (agent-note :root --r-card + .hub-root light --shadow-card) */
-    --r-card:      19px;
-    --shadow-card: 0 0 0 0.5px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.05), 0 8px 20px rgba(0,0,0,0.05);
+    --r-card:        19px;
+    --shadow-card:   0 0 0 0.5px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.05), 0 8px 20px rgba(0,0,0,0.05);
+    /* #detail-panel drawer shadow — was inline rgba() at the rule site (2 spots incl. the
+       dark @media override); promoted to a token so color stays centralized in this block. */
+    --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.18);
 
-    /* hub accent palette (agent-note .hub-root, light) */
-    --hub-divider:        #D8D8DE;
+    /* hub accent palette (agent-note .hub-root, light).
+       --hub-divider is agent-note's color-mix(in srgb, --border-strong 50%, --text-3)
+       resolved to its flat sRGB average (#DCDCE0 + #86868B ÷ 2) — a plain hex here keeps
+       the "no raw color outside this block" invariant without needing color-mix at the
+       divider call sites. */
+    --hub-divider:        #B1B1B6;
     --hub-mem:            #4040B8;
     --hub-mem-solid:      #8B8CEF;
     --hub-tk-amber:       #9A6700;
@@ -236,8 +243,11 @@ PAGE_TEMPLATE = """<!doctype html>
       --text-4:           #636366;
       --bg-grouped:       #18181A;
 
-      --shadow-card: 0 0 0 0.5px rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.5);
+      --shadow-card:   0 0 0 0.5px rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.5);
+      --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.5);
 
+      /* dark --hub-divider = agent-note var(--hairline-strong) dark; kept as the
+         --border-strong dark hex stand-in (unchanged this pass — reviewed OK). */
       --hub-divider:        #48484A;
       --hub-mem:            #A5A6F2;
       --hub-mem-solid:      #8B8CEF;
@@ -519,12 +529,11 @@ PAGE_TEMPLATE = """<!doctype html>
   /* ── detail side panel (generic per-item field dump; unchanged behavior) ── */
   #detail-panel {
     position: fixed; right: 0; top: 0; bottom: 0; width: min(360px, 92vw);
-    background: var(--surface); box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
+    background: var(--surface); box-shadow: var(--shadow-drawer);
     border-left: 1px solid var(--border);
     padding: 16px; overflow-y: auto; transform: translateX(100%);
     transition: transform 0.15s ease-out;
   }
-  @media (prefers-color-scheme: dark) { #detail-panel { box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5); } }
   #detail-panel.open { transform: translateX(0); }
   #detail-panel h3 { margin: 0 0 4px; color: var(--text); }
   #detail-panel table { border-collapse: collapse; width: 100%; margin-top: 10px; }
@@ -589,23 +598,47 @@ __HUB_DATA_JSON__
   "use strict";
   var DATA = JSON.parse(document.getElementById("hub-data").textContent);
 
-  // fam -> track accent token. Mirrors the reference groupSkillsByTrack mapping
-  // (doc->document, code|pre->research-lab, app|design->app, else->library).
+  // fam -> accent token, restored to match agent-note's own FAM_COLORS (not the
+  // groupSkillsByTrack track-membership mapping, which is a different axis):
+  // code->research, doc->doc, app|design->app, ops->mem (indigo; distinct from the
+  // governance/hooks amber accent). pre/sub have no AA-safe accent of their own in
+  // the source (its gray there is ~3.62:1, itself sub-AA) — de-emphasize to
+  // --text-2 (~7:1 on white) instead of inheriting the --hub-track-lib amber
+  // fallback, which collided with the governance/hooks "amber = curated" role.
   var FAM_TRACK_TOKEN = {
     doc: "--hub-track-doc",
     code: "--hub-track-research",
-    pre: "--hub-track-research",
     app: "--hub-track-app",
-    design: "--hub-track-app"
+    design: "--hub-track-app",
+    ops: "--hub-track-mem"
   };
   function famToken(fam) {
-    return "var(" + (FAM_TRACK_TOKEN[fam] || "--hub-track-lib") + ")";
+    if (fam === "pre" || fam === "sub") return "var(--text-2)";
+    var token = FAM_TRACK_TOKEN[fam];
+    return token ? "var(" + token + ")" : "var(--text-2)";
   }
   // color_token as stored on a track row: usually a bare "--cat-N" name, but
   // tolerate an already-wrapped var()/hex/rgb value defensively.
   function cssToken(tok, fallback) {
     if (!tok) return fallback || "var(--text-3)";
     return /^(var\(|#|rgb)/.test(tok) ? tok : "var(" + tok + ")";
+  }
+  // manifest tracks[].color_token is a generic --cat-N hue (not AA-tuned for light
+  // mode: e.g. --cat-5 (library) label text on white is ~2.7:1, sub-AA). agent-note's own
+  // HUB_TRACKS uses separate --hub-track-{doc,research,app,lib} tokens tuned darker
+  // for light-mode AA. Map by track.id to those instead; manifest.json itself is
+  // untouched and iteration order/steps/gates still come straight from it — only
+  // the color *interpretation* is replaced. Unknown ids fall back to the raw
+  // color_token so a future track family doesn't silently go uncolored.
+  var TRACK_ID_TO_HUB_TOKEN = {
+    "research-lab": "--hub-track-research",
+    "library": "--hub-track-lib",
+    "document": "--hub-track-doc",
+    "app": "--hub-track-app"
+  };
+  function trackColor(track) {
+    var known = TRACK_ID_TO_HUB_TOKEN[track.id];
+    return known ? "var(" + known + ")" : cssToken(track.color_token, "var(--hub-track-lib)");
   }
 
   function el(tag, attrs, children) {
@@ -705,7 +738,7 @@ __HUB_DATA_JSON__
       return (a.id === "app" ? 1 : 0) - (b.id === "app" ? 1 : 0);
     });
     ordered.forEach(function (track) {
-      var color = cssToken(track.color_token);
+      var color = trackColor(track);
       var row = el("div", { class: "hub-track-row" }, []);
       row.style.setProperty("--tc", color);
       row.appendChild(el("div", { class: "hub-track-label" }, [track.label]));
