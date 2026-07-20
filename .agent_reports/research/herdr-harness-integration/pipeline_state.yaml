@@ -1,0 +1,13 @@
+pipeline: autopilot-research
+query: >-
+  Herdr의 다중 세션 조율·에이전트 간 상호 논의 기능을 조사하고 현재
+  agent_setting 하네스와 비교해, 기존 기능을 제거하지 않는 빠른 이식·확장안을 도출한다.
+mode: technology
+depth: medium
+qa_level: standard
+clarified_intent: >-
+  대체나 감축이 아니라 Herdr의 장점을 현재 세팅에 가산적으로 이식한다.
+last_completed_stage: report
+status: done
+as_of: 2026-07-20
+artifact_dir: /home/Uihyeop/agent_setting/.agent_reports/research/herdr-harness-integration
