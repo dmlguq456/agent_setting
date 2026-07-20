@@ -76,9 +76,40 @@ print("S_CTX=" + shlex.quote(str(cpct)))
 if [ -n "$S_SID" ]; then
   sldir="$AGENT_HOME/.statusline"
   mkdir -p "$sldir" 2>/dev/null || true
+  # 소유 claude pid + /proc starttime 을 tap 에 additive 주입 (F-25 tier-2 식별 증거) —
+  # sessions/<pid>.json registry 가 살아있는 세션에서 소실되면(2026-07-20 실측) fleet 이
+  # pid→sid 를 복구할 유일한 소스가 이 tap 이다. proc_start 는 PID 재사용 오귀속 방지 짝
+  # (F-26). 조상에서 claude 를 못 찾으면 필드 생략(F-3 정직 결손). /proc/<p>/stat 은 comm
+  # 괄호 필드 뒤로 잘라 파싱한다(comm 에 공백 포함 가능 — field 위치 어긋남 함정).
+  tap_pid=""; tap_start=""
+  p=$PPID
+  for _ in 1 2 3 4 5; do
+    [ -n "$p" ] && [ "$p" != 1 ] && [ -r "/proc/$p/comm" ] || break
+    if [ "$(cat "/proc/$p/comm" 2>/dev/null)" = "claude" ]; then
+      st=$(cat "/proc/$p/stat" 2>/dev/null) || break
+      st=${st##*) }                       # comm 뒤 (state 부터); ppid=2번째, starttime=20번째
+      # shellcheck disable=SC2086
+      set -- $st
+      if [ "$#" -ge 20 ]; then tap_pid=$p; tap_start=${20}; fi
+      break
+    fi
+    st=$(cat "/proc/$p/stat" 2>/dev/null) || break
+    st=${st##*) }
+    # shellcheck disable=SC2086
+    set -- $st
+    [ "$#" -ge 2 ] || break
+    p=$2
+  done
+  tap_json=$input
+  case "$tap_pid$tap_start" in
+    ''|*[!0-9]*) ;;                       # 미확보·비정상 값 → 원문 그대로 (주입 생략)
+    *) case "$input" in
+         '{"'*) tap_json='{"pid":'"$tap_pid"',"proc_start":"'"$tap_start"'",'"${input#\{}" ;;
+       esac ;;
+  esac
   # atomic write (temp + rename) so a concurrent reader (tools/fleet dashboard) never sees a
   # half-written file → JSON parse fail → telemetry ('$cost' etc.) flickers to '—' for a tick.
-  if printf '%s' "$input" > "$sldir/.$S_SID.json.tmp" 2>/dev/null; then
+  if printf '%s' "$tap_json" > "$sldir/.$S_SID.json.tmp" 2>/dev/null; then
     mv -f "$sldir/.$S_SID.json.tmp" "$sldir/$S_SID.json" 2>/dev/null || true
   fi
   # stale 청소: mtime > 1일 세션 파일 제거(디렉토리 폭증 방지 — 종료된 세션 잔존물). find 없으면 skip.

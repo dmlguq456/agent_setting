@@ -357,6 +357,45 @@ def _apply_registry(sess, sj):
     sess.updated_at = _ms_to_sec(sj.get("updatedAt"))
 
 
+def _tap_sid_by_pid(home, pid, proc_start):
+    """Tier-2 sid recovery from the per-session statusline tap (§5, F-25).
+
+    The pid registry can vanish while its process lives (observed 2026-07-20: three
+    long-lived teammate sessions lost `sessions/<pid>.json`, leaving their rows
+    sid-less for hours). The tap keeps updating for every live interactive session
+    and now carries the owning claude `pid` + `/proc` `proc_start` (statusline.sh),
+    so a tap whose BOTH halves match this row's live process identity recovers the
+    sid. proc_start absent or mismatched on either side → refuse: a recycled pid
+    would misattribute a neighbor's whole identity (F-26 — misattribution is worse
+    than absence). Newest matching tap wins; every failure path is silence."""
+    if pid is None or not proc_start:
+        return None
+    sldir = os.path.join(home, ".statusline")
+    try:
+        names = os.listdir(sldir)
+    except OSError:
+        return None
+    best_sid, best_m = None, None
+    for name in names:
+        if not name.endswith(".json") or name.startswith("."):
+            continue
+        path = os.path.join(sldir, name)
+        try:
+            with open(path) as f:
+                d = json.load(f)
+        except Exception:
+            continue
+        if not isinstance(d, dict) or d.get("pid") is None:
+            continue
+        if str(d.get("pid")) != str(pid) or str(d.get("proc_start") or "") != str(proc_start):
+            continue
+        sid = d.get("session_id") or name[:-5]
+        m = _mtime(path)
+        if sid and m is not None and (best_m is None or m > best_m):
+            best_sid, best_m = sid, m
+    return best_sid
+
+
 def enrich(sess):
     home = _home()
 
@@ -364,6 +403,13 @@ def enrich(sess):
     sj = read_registry(sess.pid, home)
     if sj is not None:
         _apply_registry(sess, sj)
+
+    # 1a) tap-based sid recovery — only when the registry stayed silent about the sid;
+    # a present registry sessionId always wins the F-25 tier order over the tap.
+    if not sess.session_id:
+        recovered = _tap_sid_by_pid(home, sess.pid, sess.proc_start)
+        if recovered:
+            sess.session_id = recovered
 
     # 2) per-session statusline tap (§5) — telemetry; absent → '—'
     sid = sess.session_id
@@ -401,7 +447,12 @@ def enrich(sess):
     st = titles.fresh_title(sid, harness="claude") if sid else None
     if st:
         sess.title = st
-    elif path:                                     # 3b) F-14 ai-title fallback
+    # 3b) F-14 ai-title fallback — own `<sid>.jsonl` only. A sid-less row's `path` is the
+    # newest NEIGHBOR transcript (liveness heuristic), and adopting its ai-title stamps
+    # another session's name onto this row (observed 2026-07-20: every registry-less
+    # same-cwd row wore the incident session's Korean title). The name falls to registry
+    # name → slug instead (F-26 chain); the mtime borrow above is deliberately unchanged.
+    elif path and sid:
         t = _tail_ai_title(path)
         if t:
             sess.title = t
